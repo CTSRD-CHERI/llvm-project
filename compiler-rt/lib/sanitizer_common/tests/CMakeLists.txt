@@ -26,6 +26,7 @@ set(SANITIZER_UNITTESTS
   sanitizer_posix_test.cc
   sanitizer_printf_test.cc
   sanitizer_procmaps_test.cc
+  sanitizer_ring_buffer_test.cc
   sanitizer_quarantine_test.cc
   sanitizer_stackdepot_test.cc
   sanitizer_stacktrace_printer_test.cc
@@ -34,13 +35,14 @@ set(SANITIZER_UNITTESTS
   sanitizer_suppressions_test.cc
   sanitizer_symbolizer_test.cc
   sanitizer_test_main.cc
-  sanitizer_thread_registry_test.cc)
+  sanitizer_thread_registry_test.cc
+  sanitizer_vector_test.cc)
 
 set(SANITIZER_TEST_HEADERS
   sanitizer_pthread_wrappers.h
   sanitizer_test_config.h
   sanitizer_test_utils.h)
-foreach(header ${SANITIZER_HEADERS})
+foreach(header ${SANITIZER_IMPL_HEADERS})
   list(APPEND SANITIZER_TEST_HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/../${header})
 endforeach()
 
@@ -53,7 +55,8 @@ set(SANITIZER_TEST_CFLAGS_COMMON
   -fno-rtti
   -O2
   -Werror=sign-compare
-  -Wno-non-virtual-dtor)
+  -Wno-non-virtual-dtor
+  -Wno-gnu-zero-variadic-macro-arguments)
 
 if(MSVC)
   # Disable exceptions on Windows until they work reliably.
@@ -177,7 +180,8 @@ if(COMPILER_RT_CAN_EXECUTE_TESTS AND NOT ANDROID)
   if(APPLE)
     add_sanitizer_common_lib("RTSanitizerCommon.test.osx"
                              $<TARGET_OBJECTS:RTSanitizerCommon.osx>
-                             $<TARGET_OBJECTS:RTSanitizerCommonLibc.osx>)
+                             $<TARGET_OBJECTS:RTSanitizerCommonLibc.osx>
+                             $<TARGET_OBJECTS:RTSanitizerCommonSymbolizer.osx>)
   else()
     if(CAN_TARGET_x86_64)
       add_sanitizer_common_lib("RTSanitizerCommon.test.nolibc.x86_64"
@@ -187,7 +191,8 @@ if(COMPILER_RT_CAN_EXECUTE_TESTS AND NOT ANDROID)
     foreach(arch ${SANITIZER_UNITTEST_SUPPORTED_ARCH})
       add_sanitizer_common_lib("RTSanitizerCommon.test.${arch}"
                                $<TARGET_OBJECTS:RTSanitizerCommon.${arch}>
-                               $<TARGET_OBJECTS:RTSanitizerCommonLibc.${arch}>)
+                               $<TARGET_OBJECTS:RTSanitizerCommonLibc.${arch}>
+                               $<TARGET_OBJECTS:RTSanitizerCommonSymbolizer.${arch}>)
     endforeach()
   endif()
   foreach(arch ${SANITIZER_UNITTEST_SUPPORTED_ARCH})
@@ -201,7 +206,8 @@ if(ANDROID)
       ${SANITIZER_UNITTESTS}
       ${COMPILER_RT_GTEST_SOURCE}
       $<TARGET_OBJECTS:RTSanitizerCommon.${arch}>
-      $<TARGET_OBJECTS:RTSanitizerCommonLibc.${arch}>)
+      $<TARGET_OBJECTS:RTSanitizerCommonLibc.${arch}>
+      $<TARGET_OBJECTS:RTSanitizerCommonSymbolizer.${arch}>)
     set_target_compile_flags(SanitizerTest
       ${SANITIZER_COMMON_CFLAGS}
       ${SANITIZER_TEST_CFLAGS_COMMON})

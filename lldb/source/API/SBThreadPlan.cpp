@@ -14,7 +14,6 @@
 #include "lldb/API/SBSymbolContext.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/State.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Symbol/CompileUnit.h"
@@ -31,6 +30,7 @@
 #include "lldb/Target/ThreadPlanStepInstruction.h"
 #include "lldb/Target/ThreadPlanStepOut.h"
 #include "lldb/Target/ThreadPlanStepRange.h"
+#include "lldb/Utility/State.h"
 #include "lldb/Utility/Stream.h"
 #include "lldb/Utility/StructuredData.h"
 
@@ -138,8 +138,7 @@ bool SBThreadPlan::IsValid() {
 // plans...
 //
 // FIXME, you should only be able to queue thread plans from inside the methods
-// of a
-// Scripted Thread Plan.  Need a way to enforce that.
+// of a Scripted Thread Plan.  Need a way to enforce that.
 
 SBThreadPlan
 SBThreadPlan::QueueThreadPlanForStepOverRange(SBAddress &sb_start_address,

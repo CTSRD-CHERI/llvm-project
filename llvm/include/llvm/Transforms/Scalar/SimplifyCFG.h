@@ -15,9 +15,9 @@
 #ifndef LLVM_TRANSFORMS_SCALAR_SIMPLIFYCFG_H
 #define LLVM_TRANSFORMS_SCALAR_SIMPLIFYCFG_H
 
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/Transforms/Utils/Local.h"
 
 namespace llvm {
 
@@ -31,21 +31,22 @@ class SimplifyCFGPass : public PassInfoMixin<SimplifyCFGPass> {
   SimplifyCFGOptions Options;
 
 public:
-  /// The default constructor sets the pass options to create optimal IR,
-  /// rather than canonical IR. That is, by default we do transformations that
-  /// are likely to improve performance but make analysis more difficult.
-  /// FIXME: This is inverted from what most instantiations of the pass should
-  /// be.
+  /// The default constructor sets the pass options to create canonical IR,
+  /// rather than optimal IR. That is, by default we bypass transformations that
+  /// are likely to improve performance but make analysis for other passes more
+  /// difficult.
   SimplifyCFGPass()
       : SimplifyCFGPass(SimplifyCFGOptions()
-                            .forwardSwitchCondToPhi(true)
-                            .convertSwitchToLookupTable(true)
-                            .needCanonicalLoops(false)) {}
+                            .forwardSwitchCondToPhi(false)
+                            .convertSwitchToLookupTable(false)
+                            .needCanonicalLoops(true)
+                            .sinkCommonInsts(false)) {}
+
 
   /// Construct a pass with optional optimizations.
   SimplifyCFGPass(const SimplifyCFGOptions &PassOptions);
 
-  /// \brief Run the pass over the function.
+  /// Run the pass over the function.
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 

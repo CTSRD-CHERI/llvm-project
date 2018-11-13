@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This is a target description file for the WebAssembly architecture,
+/// This is a target description file for the WebAssembly architecture,
 /// which is also known as "wasm".
 ///
 //===----------------------------------------------------------------------===//
@@ -27,6 +27,19 @@ def FeatureSIMD128 : SubtargetFeature<"simd128", "HasSIMD128", "true",
                                       "Enable 128-bit SIMD">;
 def FeatureAtomics : SubtargetFeature<"atomics", "HasAtomics", "true",
                                       "Enable Atomics">;
+def FeatureNontrappingFPToInt :
+      SubtargetFeature<"nontrapping-fptoint",
+                       "HasNontrappingFPToInt", "true",
+                       "Enable non-trapping float-to-int conversion operators">;
+
+def FeatureSignExt :
+      SubtargetFeature<"sign-ext",
+                       "HasSignExt", "true",
+                       "Enable sign extension operators">;
+
+def FeatureExceptionHandling :
+      SubtargetFeature<"exception-handling", "HasExceptionHandling", "true",
+                       "Enable Wasm exception handling">;
 
 //===----------------------------------------------------------------------===//
 // Architectures.
@@ -64,6 +77,20 @@ def : ProcessorModel<"bleeding-edge", NoSchedModel,
 // Target Declaration
 //===----------------------------------------------------------------------===//
 
+def WebAssemblyAsmParser : AsmParser {
+  // The physical register names are not in the binary format or asm text
+  let ShouldEmitMatchRegisterName = 0;
+}
+
+def WebAssemblyAsmWriter : AsmWriter {
+  string AsmWriterClassName  = "InstPrinter";
+  int PassSubtarget = 0;
+  int Variant = 0;
+  bit isMCAsmWriter = 1;
+}
+
 def WebAssembly : Target {
   let InstructionSet = WebAssemblyInstrInfo;
+  let AssemblyParsers  = [WebAssemblyAsmParser];
+  let AssemblyWriters = [WebAssemblyAsmWriter];
 }

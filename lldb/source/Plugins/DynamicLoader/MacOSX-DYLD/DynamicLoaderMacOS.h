@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 // This is the DynamicLoader plugin for Darwin (macOS / iPhoneOS / tvOS /
-// watchOS)
+// watchOS / BridgeOS)
 // platforms late 2016 and newer, where lldb will call dyld SPI functions to get
 // information about shared libraries, information about the shared cache, and
 // the _dyld_debugger_notification function we put a breakpoint on give us an
@@ -28,7 +28,6 @@
 #include "lldb/Target/DynamicLoader.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Utility/FileSpec.h"
-#include "lldb/Utility/SafeMachO.h"
 #include "lldb/Utility/StructuredData.h"
 #include "lldb/Utility/UUID.h"
 

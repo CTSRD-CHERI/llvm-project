@@ -55,11 +55,13 @@ public:
 
   Status DoLoadCore() override;
 
-  DynamicLoader *GetDynamicLoader() override;
+  DynamicLoader *GetDynamicLoader() override { return nullptr; }
 
   ConstString GetPluginName() override;
 
   uint32_t GetPluginVersion() override;
+
+  SystemRuntime *GetSystemRuntime() override { return nullptr; }
 
   Status DoDestroy() override;
 
@@ -99,6 +101,8 @@ protected:
                         ThreadList &new_thread_list) override;
 
   void ReadModuleList();
+
+  JITLoaderList &GetJITLoaders() override;
 
 private:
   FileSpec m_core_file;

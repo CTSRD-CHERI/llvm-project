@@ -62,7 +62,7 @@ MutationDispatcher::MutationDispatcher(Random &Rand,
 
 static char RandCh(Random &Rand) {
   if (Rand.RandBool()) return Rand(256);
-  const char *Special = "!*'();:@&=+$,/?%#[]012Az-`~.\xff\x00";
+  const char Special[] = "!*'();:@&=+$,/?%#[]012Az-`~.\xff\x00";
   return Special[Rand(sizeof(Special) - 1)];
 }
 
@@ -195,7 +195,6 @@ DictionaryEntry MutationDispatcher::MakeDictionaryEntryFromCMP(
     const void *Arg1Mutation, const void *Arg2Mutation,
     size_t ArgSize, const uint8_t *Data,
     size_t Size) {
-  ScopedDoingMyOwnMemOrStr scoped_doing_my_own_mem_os_str;
   bool HandleFirst = Rand.RandBool();
   const void *ExistingBytes, *DesiredBytes;
   Word W;
@@ -339,7 +338,9 @@ size_t MutationDispatcher::InsertPartOf(const uint8_t *From, size_t FromSize,
 size_t MutationDispatcher::Mutate_CopyPart(uint8_t *Data, size_t Size,
                                            size_t MaxSize) {
   if (Size > MaxSize || Size == 0) return 0;
-  if (Rand.RandBool())
+  // If Size == MaxSize, `InsertPartOf(...)` will
+  // fail so there's no point using it in this case.
+  if (Size == MaxSize || Rand.RandBool())
     return CopyPartOf(Data, Size, Data, Size);
   else
     return InsertPartOf(Data, Size, Data, Size, MaxSize);
@@ -523,6 +524,34 @@ size_t MutationDispatcher::MutateImpl(uint8_t *Data, size_t Size,
   }
   *Data = ' ';
   return 1;   // Fallback, should not happen frequently.
+}
+
+// Mask represents the set of Data bytes that are worth mutating.
+size_t MutationDispatcher::MutateWithMask(uint8_t *Data, size_t Size,
+                                          size_t MaxSize,
+                                          const Vector<uint8_t> &Mask) {
+  assert(Size <= Mask.size());
+  // * Copy the worthy bytes into a temporary array T
+  // * Mutate T
+  // * Copy T back.
+  // This is totally unoptimized.
+  auto &T = MutateWithMaskTemp;
+  if (T.size() < Size)
+    T.resize(Size);
+  size_t OneBits = 0;
+  for (size_t I = 0; I < Size; I++)
+    if (Mask[I])
+      T[OneBits++] = Data[I];
+
+  assert(!T.empty());
+  size_t NewSize = Mutate(T.data(), OneBits, OneBits);
+  assert(NewSize <= OneBits);
+  (void)NewSize;
+  // Even if NewSize < OneBits we still use all OneBits bytes.
+  for (size_t I = 0, J = 0; I < Size; I++)
+    if (Mask[I])
+      Data[I] = T[J++];
+  return Size;
 }
 
 void MutationDispatcher::AddWordToManualDictionary(const Word &W) {

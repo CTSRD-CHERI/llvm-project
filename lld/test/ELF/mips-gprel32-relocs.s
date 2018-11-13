@@ -1,10 +1,9 @@
+# REQUIRES: mips
 # Check R_MIPS_GPREL32 relocation calculation.
 
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-linux %s -o %t.o
 # RUN: ld.lld -shared -o %t.so %t.o
 # RUN: llvm-objdump -s -section=.rodata -t %t.so | FileCheck %s
-
-# REQUIRES: mips
 
   .text
   .globl  __start
@@ -21,9 +20,9 @@ v1:
   .gpword bar
 
 # CHECK: Contents of section .rodata:
-# CHECK:  00f4 fffe8014 fffe8018
-#              ^ 0x10004 - 0x27ff0
-#                       ^ 0x10008 - 0x27ff0
+# CHECK:  {{[0-9a-f]+}} fffe8014 fffe8018
+#                       ^ 0x10004 - 0x27ff0
+#                                ^ 0x10008 - 0x27ff0
 
 # CHECK: SYMBOL TABLE:
 # CHECK: 00010008         .text           00000000 bar

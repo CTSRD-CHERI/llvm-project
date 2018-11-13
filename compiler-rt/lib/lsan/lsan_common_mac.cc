@@ -24,6 +24,13 @@
 
 #include <mach/mach.h>
 
+// Only introduced in Mac OS X 10.9.
+#ifdef VM_MEMORY_OS_ALLOC_ONCE
+static const int kSanitizerVmMemoryOsAllocOnce = VM_MEMORY_OS_ALLOC_ONCE;
+#else
+static const int kSanitizerVmMemoryOsAllocOnce = 73;
+#endif
+
 namespace __lsan {
 
 typedef struct {
@@ -112,7 +119,8 @@ void ProcessGlobalRegions(Frontier *frontier) {
   for (auto name : kSkippedSecNames) CHECK(ARRAY_SIZE(name) < kMaxSegName);
 
   MemoryMappingLayout memory_mapping(false);
-  InternalMmapVector<LoadedModule> modules(/*initial_capacity*/ 128);
+  InternalMmapVector<LoadedModule> modules;
+  modules.reserve(128);
   memory_mapping.DumpListOfModules(&modules);
   for (uptr i = 0; i < modules.size(); ++i) {
     // Even when global scanning is disabled, we still need to scan
@@ -134,12 +142,6 @@ void ProcessGlobalRegions(Frontier *frontier) {
 }
 
 void ProcessPlatformSpecificAllocations(Frontier *frontier) {
-  mach_port_name_t port;
-  if (task_for_pid(mach_task_self(), internal_getpid(), &port)
-      != KERN_SUCCESS) {
-    return;
-  }
-
   unsigned depth = 1;
   vm_size_t size = 0;
   vm_address_t address = 0;
@@ -150,14 +152,14 @@ void ProcessPlatformSpecificAllocations(Frontier *frontier) {
 
   while (err == KERN_SUCCESS) {
     struct vm_region_submap_info_64 info;
-    err = vm_region_recurse_64(port, &address, &size, &depth,
+    err = vm_region_recurse_64(mach_task_self(), &address, &size, &depth,
                                (vm_region_info_t)&info, &count);
 
     uptr end_address = address + size;
 
     // libxpc stashes some pointers in the Kernel Alloc Once page,
     // make sure not to report those as leaks.
-    if (info.user_tag == VM_MEMORY_OS_ALLOC_ONCE) {
+    if (info.user_tag == kSanitizerVmMemoryOsAllocOnce) {
       ScanRangeForPointers(address, end_address, frontier, "GLOBAL",
                            kReachable);
 

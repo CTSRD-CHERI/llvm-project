@@ -186,7 +186,8 @@ namespace ISD {
     /// BUILD_PAIR - This is the opposite of EXTRACT_ELEMENT in some ways.
     /// Given two values of the same integer value type, this produces a value
     /// twice as big.  Like EXTRACT_ELEMENT, this can only be used before
-    /// legalization.
+    /// legalization. The lower part of the composite value should be in
+    /// element 0 and the upper part should be in element 1.
     BUILD_PAIR,
 
     /// MERGE_VALUES - This node takes multiple discrete operands and returns
@@ -254,6 +255,14 @@ namespace ISD {
 
     /// Same for multiplication.
     SMULO, UMULO,
+
+    /// RESULT = SADDSAT(LHS, RHS) - Perform signed saturation addition on 2
+    /// integers with the same bit width (W). If the true value of LHS + RHS
+    /// exceeds the largest signed value that can be represented by W bits, the
+    /// resulting value is this maximum value. Otherwise, if this value is less
+    /// than the smallest signed value that can be represented by W bits, the
+    /// resulting value is this minimum value.
+    SADDSAT,
 
     /// Simple binary floating point operators.
     FADD, FSUB, FMUL, FDIV, FREM,
@@ -376,6 +385,8 @@ namespace ISD {
     /// When the 1st operand is a vector, the shift amount must be in the same
     /// type. (TLI.getShiftAmountTy() will return the same type when the input
     /// type is a vector.)
+    /// For rotates, the shift amount is treated as an unsigned amount modulo
+    /// the element size of the first operand.
     SHL, SRA, SRL, ROTL, ROTR,
 
     /// Byte Swap and Counting operators.
@@ -411,19 +422,11 @@ namespace ISD {
     /// then the result type must also be a vector type.
     SETCC,
 
-    /// Like SetCC, ops #0 and #1 are the LHS and RHS operands to compare, and
-    /// op #2 is a *carry value*. This operator checks the result of
-    /// "LHS - RHS - Carry", and can be used to compare two wide integers:
-    /// (setcce lhshi rhshi (subc lhslo rhslo) cc). Only valid for integers.
-    /// FIXME: This node is deprecated in favor of SETCCCARRY.
-    /// It is kept around for now to provide a smooth transition path
-    /// toward the use of SETCCCARRY and will eventually be removed.
-    SETCCE,
-
     /// Like SetCC, ops #0 and #1 are the LHS and RHS operands to compare, but
     /// op #2 is a boolean indicating if there is an incoming carry. This
     /// operator checks the result of "LHS - RHS - Carry", and can be used to
-    /// compare two wide integers: (setcce lhshi rhshi (subc lhslo rhslo) cc).
+    /// compare two wide integers:
+    /// (setcccarry lhshi rhshi (subcarry lhslo rhslo) cc).
     /// Only valid for integers.
     SETCCCARRY,
 
@@ -494,7 +497,8 @@ namespace ISD {
     ZERO_EXTEND_VECTOR_INREG,
 
     /// FP_TO_[US]INT - Convert a floating point value to a signed or unsigned
-    /// integer.
+    /// integer. These have the same semantics as fptosi and fptoui in IR. If
+    /// the FP value cannot fit in the integer type, the results are undefined.
     FP_TO_SINT,
     FP_TO_UINT,
 
@@ -554,11 +558,8 @@ namespace ISD {
     /// is often a storage-only type but has native conversions.
     FP16_TO_FP, FP_TO_FP16,
 
-    /// FNEG, FABS, FSQRT, FSIN, FCOS, FPOWI, FPOW,
-    /// FLOG, FLOG2, FLOG10, FEXP, FEXP2,
-    /// FCEIL, FTRUNC, FRINT, FNEARBYINT, FROUND, FFLOOR - Perform various unary
-    /// floating point operations. These are inspired by libm.
-    FNEG, FABS, FSQRT, FSIN, FCOS, FPOWI, FPOW,
+    /// Perform various unary floating-point operations inspired by libm.
+    FNEG, FABS, FSQRT, FCBRT, FSIN, FCOS, FPOWI, FPOW,
     FLOG, FLOG2, FLOG10, FEXP, FEXP2,
     FCEIL, FTRUNC, FRINT, FNEARBYINT, FROUND, FFLOOR,
     /// FMINNUM/FMAXNUM - Perform floating-point minimum or maximum on two
@@ -567,8 +568,9 @@ namespace ISD {
     ///
     /// The return value of (FMINNUM 0.0, -0.0) could be either 0.0 or -0.0.
     FMINNUM, FMAXNUM,
-    /// FMINNAN/FMAXNAN - Behave identically to FMINNUM/FMAXNUM, except that
-    /// when a single input is NaN, NaN is returned.
+    /// FMINNAN/FMAXNAN - NaN-propagating minimum/maximum that also treat -0.0
+    /// as less than 0.0. While FMINNUM/FMAXNUM follow IEEE 754-2008 semantics,
+    /// FMINNAN/FMAXNAN follow IEEE 754-2018 draft semantics.
     FMINNAN, FMAXNAN,
 
     /// FSINCOS - Compute both fsin and fcos as a single operation.
@@ -778,6 +780,7 @@ namespace ISD {
     ATOMIC_LOAD_ADD,
     ATOMIC_LOAD_SUB,
     ATOMIC_LOAD_AND,
+    ATOMIC_LOAD_CLR,
     ATOMIC_LOAD_OR,
     ATOMIC_LOAD_XOR,
     ATOMIC_LOAD_NAND,
@@ -789,11 +792,20 @@ namespace ISD {
     // Masked load and store - consecutive vector load and store operations
     // with additional mask operand that prevents memory accesses to the
     // masked-off lanes.
+    //
+    // Val, OutChain = MLOAD(BasePtr, Mask, PassThru)
+    // OutChain = MSTORE(Value, BasePtr, Mask)
     MLOAD, MSTORE,
 
     // Masked gather and scatter - load and store operations for a vector of
     // random addresses with additional mask operand that prevents memory
     // accesses to the masked-off lanes.
+    //
+    // Val, OutChain = GATHER(InChain, PassThru, Mask, BasePtr, Index, Scale)
+    // OutChain = SCATTER(InChain, Value, Mask, BasePtr, Index, Scale)
+    //
+    // The Index operand can have more vector elements than the other operands
+    // due to type legalization. The extra elements are ignored.
     MGATHER, MSCATTER,
 
     /// This corresponds to the llvm.lifetime.* intrinsics. The first operand
@@ -838,7 +850,7 @@ namespace ISD {
   /// which do not reference a specific memory location should be less than
   /// this value. Those that do must not be less than this value, and can
   /// be used with SelectionDAG::getMemIntrinsicNode.
-  static const int FIRST_TARGET_MEMORY_OPCODE = BUILTIN_OP_END+300;
+  static const int FIRST_TARGET_MEMORY_OPCODE = BUILTIN_OP_END+400;
 
   //===--------------------------------------------------------------------===//
   /// MemIndexedMode enum - This enum defines the load / store indexed

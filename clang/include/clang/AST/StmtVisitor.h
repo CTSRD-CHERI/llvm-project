@@ -65,6 +65,7 @@ public:
       case BO_GE:        DISPATCH(BinGE,        BinaryOperator);
       case BO_EQ:        DISPATCH(BinEQ,        BinaryOperator);
       case BO_NE:        DISPATCH(BinNE,        BinaryOperator);
+      case BO_Cmp:       DISPATCH(BinCmp,       BinaryOperator);
 
       case BO_And:       DISPATCH(BinAnd,       BinaryOperator);
       case BO_Xor:       DISPATCH(BinXor,       BinaryOperator);
@@ -132,6 +133,8 @@ public:
 
   BINOP_FALLBACK(LT)    BINOP_FALLBACK(GT)   BINOP_FALLBACK(LE)
   BINOP_FALLBACK(GE)    BINOP_FALLBACK(EQ)   BINOP_FALLBACK(NE)
+  BINOP_FALLBACK(Cmp)
+
   BINOP_FALLBACK(And)   BINOP_FALLBACK(Xor)  BINOP_FALLBACK(Or)
   BINOP_FALLBACK(LAnd)  BINOP_FALLBACK(LOr)
 
@@ -191,41 +194,6 @@ class StmtVisitor
 template<typename ImplClass, typename RetTy=void, typename... ParamTys>
 class ConstStmtVisitor
  : public StmtVisitorBase<make_const_ptr, ImplClass, RetTy, ParamTys...> {};
-
-/// \brief This class implements a simple visitor for OMPClause
-/// subclasses.
-template<class ImplClass, template <typename> class Ptr, typename RetTy>
-class OMPClauseVisitorBase {
-public:
-#define PTR(CLASS) typename Ptr<CLASS>::type
-#define DISPATCH(CLASS) \
-  return static_cast<ImplClass*>(this)->Visit##CLASS(static_cast<PTR(CLASS)>(S))
-
-#define OPENMP_CLAUSE(Name, Class)                              \
-  RetTy Visit ## Class (PTR(Class) S) { DISPATCH(Class); }
-#include "clang/Basic/OpenMPKinds.def"
-
-  RetTy Visit(PTR(OMPClause) S) {
-    // Top switch clause: visit each OMPClause.
-    switch (S->getClauseKind()) {
-    default: llvm_unreachable("Unknown clause kind!");
-#define OPENMP_CLAUSE(Name, Class)                              \
-    case OMPC_ ## Name : return Visit ## Class(static_cast<PTR(Class)>(S));
-#include "clang/Basic/OpenMPKinds.def"
-    }
-  }
-  // Base case, ignore it. :)
-  RetTy VisitOMPClause(PTR(OMPClause) Node) { return RetTy(); }
-#undef PTR
-#undef DISPATCH
-};
-
-template<class ImplClass, typename RetTy = void>
-class OMPClauseVisitor :
-      public OMPClauseVisitorBase <ImplClass, make_ptr, RetTy> {};
-template<class ImplClass, typename RetTy = void>
-class ConstOMPClauseVisitor :
-      public OMPClauseVisitorBase <ImplClass, make_const_ptr, RetTy> {};
 
 } // namespace clang
 

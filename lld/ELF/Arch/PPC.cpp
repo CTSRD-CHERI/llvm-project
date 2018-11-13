@@ -21,12 +21,18 @@ using namespace lld::elf;
 namespace {
 class PPC final : public TargetInfo {
 public:
-  PPC() { GotBaseSymOff = 0x8000; }
+  PPC();
   void relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const override;
   RelExpr getRelExpr(RelType Type, const Symbol &S,
                      const uint8_t *Loc) const override;
 };
 } // namespace
+
+PPC::PPC() {
+  NoneRel = R_PPC_NONE;
+  GotBaseSymOff = 0x8000;
+  GotBaseSymInGotPlt = false;
+}
 
 RelExpr PPC::getRelExpr(RelType Type, const Symbol &S,
                         const uint8_t *Loc) const {
@@ -34,6 +40,8 @@ RelExpr PPC::getRelExpr(RelType Type, const Symbol &S,
   case R_PPC_REL24:
   case R_PPC_REL32:
     return R_PC;
+  case R_PPC_PLTREL24:
+    return R_PLT_PC;
   default:
     return R_ABS;
   }
@@ -54,6 +62,7 @@ void PPC::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_PPC_REL32:
     write32be(Loc, Val);
     break;
+  case R_PPC_PLTREL24:
   case R_PPC_REL24:
     write32be(Loc, read32be(Loc) | (Val & 0x3FFFFFC));
     break;

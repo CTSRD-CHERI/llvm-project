@@ -1,6 +1,6 @@
-; RUN: llc < %s -asm-verbose=false -disable-wasm-explicit-locals | FileCheck %s --check-prefix=TYPEINFONAME
-; RUN: llc < %s -asm-verbose=false -disable-wasm-explicit-locals | FileCheck %s --check-prefix=VTABLE
-; RUN: llc < %s -asm-verbose=false -disable-wasm-explicit-locals | FileCheck %s --check-prefix=TYPEINFO
+; RUN: llc < %s -asm-verbose=false -wasm-disable-explicit-locals -wasm-keep-registers | FileCheck %s --check-prefix=TYPEINFONAME
+; RUN: llc < %s -asm-verbose=false -wasm-disable-explicit-locals -wasm-keep-registers | FileCheck %s --check-prefix=VTABLE
+; RUN: llc < %s -asm-verbose=false -wasm-disable-explicit-locals -wasm-keep-registers | FileCheck %s --check-prefix=TYPEINFO
 
 ; Test that simple vtables assemble as expected.
 ;
@@ -12,7 +12,7 @@
 ; Each with a virtual dtor and method foo.
 
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 %struct.A = type { i32 (...)** }
 %struct.B = type { %struct.A }

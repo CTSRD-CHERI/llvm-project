@@ -256,7 +256,7 @@ TEST(STLExtrasTest, CountAdaptor) {
 }
 
 TEST(STLExtrasTest, for_each) {
-  std::vector<int> v{ 0, 1, 2, 3, 4 };
+  std::vector<int> v{0, 1, 2, 3, 4};
   int count = 0;
 
   llvm::for_each(v, [&count](int) { ++count; });
@@ -302,8 +302,8 @@ TEST(STLExtrasTest, PartitionAdaptor) {
   ASSERT_EQ(V.begin() + 4, I);
 
   // Sort the two halves as partition may have messed with the order.
-  std::sort(V.begin(), I);
-  std::sort(I, V.end());
+  llvm::sort(V.begin(), I);
+  llvm::sort(I, V.end());
 
   EXPECT_EQ(2, V[0]);
   EXPECT_EQ(4, V[1]);
@@ -326,4 +326,108 @@ TEST(STLExtrasTest, EraseIf) {
   EXPECT_EQ(7, V[3]);
 }
 
+namespace some_namespace {
+struct some_struct {
+  std::vector<int> data;
+  std::string swap_val;
+};
+
+std::vector<int>::const_iterator begin(const some_struct &s) {
+  return s.data.begin();
 }
+
+std::vector<int>::const_iterator end(const some_struct &s) {
+  return s.data.end();
+}
+
+void swap(some_struct &lhs, some_struct &rhs) {
+  // make swap visible as non-adl swap would even seem to
+  // work with std::swap which defaults to moving
+  lhs.swap_val = "lhs";
+  rhs.swap_val = "rhs";
+}
+} // namespace some_namespace
+
+TEST(STLExtrasTest, ADLTest) {
+  some_namespace::some_struct s{{1, 2, 3, 4, 5}, ""};
+  some_namespace::some_struct s2{{2, 4, 6, 8, 10}, ""};
+
+  EXPECT_EQ(*adl_begin(s), 1);
+  EXPECT_EQ(*(adl_end(s) - 1), 5);
+
+  adl_swap(s, s2);
+  EXPECT_EQ(s.swap_val, "lhs");
+  EXPECT_EQ(s2.swap_val, "rhs");
+
+  int count = 0;
+  llvm::for_each(s, [&count](int) { ++count; });
+  EXPECT_EQ(5, count);
+}
+
+TEST(STLExtrasTest, EarlyIncrementTest) {
+  std::list<int> L = {1, 2, 3, 4};
+
+  auto EIR = make_early_inc_range(L);
+
+  auto I = EIR.begin();
+  auto EI = EIR.end();
+  EXPECT_NE(I, EI);
+
+  EXPECT_EQ(1, *I);
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+#ifndef NDEBUG
+  // Repeated dereferences are not allowed.
+  EXPECT_DEATH(*I, "Cannot dereference");
+  // Comparison after dereference is not allowed.
+  EXPECT_DEATH((void)(I == EI), "Cannot compare");
+  EXPECT_DEATH((void)(I != EI), "Cannot compare");
+#endif
+#endif
+
+  ++I;
+  EXPECT_NE(I, EI);
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+#ifndef NDEBUG
+  // You cannot increment prior to dereference.
+  EXPECT_DEATH(++I, "Cannot increment");
+#endif
+#endif
+  EXPECT_EQ(2, *I);
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+#ifndef NDEBUG
+  // Repeated dereferences are not allowed.
+  EXPECT_DEATH(*I, "Cannot dereference");
+#endif
+#endif
+
+  // Inserting shouldn't break anything. We should be able to keep dereferencing
+  // the currrent iterator and increment. The increment to go to the "next"
+  // iterator from before we inserted.
+  L.insert(std::next(L.begin(), 2), -1);
+  ++I;
+  EXPECT_EQ(3, *I);
+
+  // Erasing the front including the current doesn't break incrementing.
+  L.erase(L.begin(), std::prev(L.end()));
+  ++I;
+  EXPECT_EQ(4, *I);
+  ++I;
+  EXPECT_EQ(EIR.end(), I);
+}
+
+TEST(STLExtrasTest, splat) {
+  std::vector<int> V;
+  EXPECT_FALSE(is_splat(V));
+
+  V.push_back(1);
+  EXPECT_TRUE(is_splat(V));
+
+  V.push_back(1);
+  V.push_back(1);
+  EXPECT_TRUE(is_splat(V));
+
+  V.push_back(2);
+  EXPECT_FALSE(is_splat(V));
+}
+
+} // namespace

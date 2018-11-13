@@ -14,7 +14,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cuda.h>
-#include <cuda_runtime_api.h>
 #include <list>
 #include <string>
 #include <vector>
@@ -81,13 +80,19 @@ struct KernelTy {
       : Func(_Func), ExecutionMode(_ExecutionMode) {}
 };
 
+/// Device envrionment data
+/// Manually sync with the deviceRTL side for now, move to a dedicated header file later.
+struct omptarget_device_environmentTy {
+  int32_t debug_level;
+};
+
 /// List that contains all the kernels.
 /// FIXME: we may need this to be per device and per library.
 std::list<KernelTy> KernelsList;
 
 /// Class containing all the device information.
 class RTLDeviceInfoTy {
-  std::vector<FuncOrGblEntryTy> FuncGblEntries;
+  std::vector<std::list<FuncOrGblEntryTy>> FuncGblEntries;
 
 public:
   int NumberOfDevices;
@@ -117,7 +122,7 @@ public:
   void addOffloadEntry(int32_t device_id, __tgt_offload_entry entry) {
     assert(device_id < (int32_t)FuncGblEntries.size() &&
            "Unexpected device id!");
-    FuncOrGblEntryTy &E = FuncGblEntries[device_id];
+    FuncOrGblEntryTy &E = FuncGblEntries[device_id].back();
 
     E.Entries.push_back(entry);
   }
@@ -126,7 +131,7 @@ public:
   bool findOffloadEntry(int32_t device_id, void *addr) {
     assert(device_id < (int32_t)FuncGblEntries.size() &&
            "Unexpected device id!");
-    FuncOrGblEntryTy &E = FuncGblEntries[device_id];
+    FuncOrGblEntryTy &E = FuncGblEntries[device_id].back();
 
     for (auto &it : E.Entries) {
       if (it.addr == addr)
@@ -140,7 +145,7 @@ public:
   __tgt_target_table *getOffloadEntriesTable(int32_t device_id) {
     assert(device_id < (int32_t)FuncGblEntries.size() &&
            "Unexpected device id!");
-    FuncOrGblEntryTy &E = FuncGblEntries[device_id];
+    FuncOrGblEntryTy &E = FuncGblEntries[device_id].back();
 
     int32_t size = E.Entries.size();
 
@@ -162,7 +167,8 @@ public:
   void clearOffloadEntriesTable(int32_t device_id) {
     assert(device_id < (int32_t)FuncGblEntries.size() &&
            "Unexpected device id!");
-    FuncOrGblEntryTy &E = FuncGblEntries[device_id];
+    FuncGblEntries[device_id].emplace_back();
+    FuncOrGblEntryTy &E = FuncGblEntries[device_id].back();
     E.Entries.clear();
     E.Table.EntriesBegin = E.Table.EntriesEnd = 0;
   }
@@ -279,43 +285,48 @@ int32_t __tgt_rtl_init_device(int32_t device_id) {
     return OFFLOAD_FAIL;
   }
 
-  // scan properties to determine number of threads/block and blocks/grid.
-  struct cudaDeviceProp Properties;
-  cudaError_t error = cudaGetDeviceProperties(&Properties, device_id);
-  if (error != cudaSuccess) {
-    DP("Error getting device Properties, use defaults\n");
+  // Query attributes to determine number of threads/block and blocks/grid.
+  int maxGridDimX;
+  err = cuDeviceGetAttribute(&maxGridDimX, CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X,
+                             cuDevice);
+  if (err != CUDA_SUCCESS) {
+    DP("Error getting max grid dimension, use default\n");
     DeviceInfo.BlocksPerGrid[device_id] = RTLDeviceInfoTy::DefaultNumTeams;
+  } else if (maxGridDimX <= RTLDeviceInfoTy::HardTeamLimit) {
+    DeviceInfo.BlocksPerGrid[device_id] = maxGridDimX;
+    DP("Using %d CUDA blocks per grid\n", maxGridDimX);
+  } else {
+    DeviceInfo.BlocksPerGrid[device_id] = RTLDeviceInfoTy::HardTeamLimit;
+    DP("Max CUDA blocks per grid %d exceeds the hard team limit %d, capping "
+       "at the hard limit\n",
+       maxGridDimX, RTLDeviceInfoTy::HardTeamLimit);
+  }
+
+  // We are only exploiting threads along the x axis.
+  int maxBlockDimX;
+  err = cuDeviceGetAttribute(&maxBlockDimX, CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X,
+                             cuDevice);
+  if (err != CUDA_SUCCESS) {
+    DP("Error getting max block dimension, use default\n");
     DeviceInfo.ThreadsPerBlock[device_id] = RTLDeviceInfoTy::DefaultNumThreads;
+  } else if (maxBlockDimX <= RTLDeviceInfoTy::HardThreadLimit) {
+    DeviceInfo.ThreadsPerBlock[device_id] = maxBlockDimX;
+    DP("Using %d CUDA threads per block\n", maxBlockDimX);
+  } else {
+    DeviceInfo.ThreadsPerBlock[device_id] = RTLDeviceInfoTy::HardThreadLimit;
+    DP("Max CUDA threads per block %d exceeds the hard thread limit %d, capping"
+       "at the hard limit\n",
+       maxBlockDimX, RTLDeviceInfoTy::HardThreadLimit);
+  }
+
+  int warpSize;
+  err =
+      cuDeviceGetAttribute(&warpSize, CU_DEVICE_ATTRIBUTE_WARP_SIZE, cuDevice);
+  if (err != CUDA_SUCCESS) {
+    DP("Error getting warp size, assume default\n");
     DeviceInfo.WarpSize[device_id] = 32;
   } else {
-    // Get blocks per grid
-    if (Properties.maxGridSize[0] <= RTLDeviceInfoTy::HardTeamLimit) {
-      DeviceInfo.BlocksPerGrid[device_id] = Properties.maxGridSize[0];
-      DP("Using %d CUDA blocks per grid\n", Properties.maxGridSize[0]);
-    } else {
-      DeviceInfo.BlocksPerGrid[device_id] = RTLDeviceInfoTy::HardTeamLimit;
-      DP("Max CUDA blocks per grid %d exceeds the hard team limit %d, capping "
-          "at the hard limit\n", Properties.maxGridSize[0],
-          RTLDeviceInfoTy::HardTeamLimit);
-    }
-
-    // Get threads per block, exploit threads only along x axis
-    if (Properties.maxThreadsDim[0] <= RTLDeviceInfoTy::HardThreadLimit) {
-      DeviceInfo.ThreadsPerBlock[device_id] = Properties.maxThreadsDim[0];
-      DP("Using %d CUDA threads per block\n", Properties.maxThreadsDim[0]);
-      if (Properties.maxThreadsDim[0] < Properties.maxThreadsPerBlock) {
-        DP("(fewer than max per block along all xyz dims %d)\n",
-            Properties.maxThreadsPerBlock);
-      }
-    } else {
-      DeviceInfo.ThreadsPerBlock[device_id] = RTLDeviceInfoTy::HardThreadLimit;
-      DP("Max CUDA threads per block %d exceeds the hard thread limit %d, "
-          "capping at the hard limit\n", Properties.maxThreadsDim[0],
-          RTLDeviceInfoTy::HardThreadLimit);
-    }
-
-    // Get warp size
-    DeviceInfo.WarpSize[device_id] = Properties.warpSize;
+    DeviceInfo.WarpSize[device_id] = warpSize;
   }
 
   // Adjust teams to the env variables
@@ -485,6 +496,48 @@ __tgt_target_table *__tgt_rtl_load_binary(int32_t device_id,
     __tgt_offload_entry entry = *e;
     entry.addr = (void *)&KernelsList.back();
     DeviceInfo.addOffloadEntry(device_id, entry);
+  }
+
+  // send device environment data to the device
+  {
+    omptarget_device_environmentTy device_env;
+
+    device_env.debug_level = 0;
+
+#ifdef OMPTARGET_DEBUG
+    if (char *envStr = getenv("LIBOMPTARGET_DEVICE_RTL_DEBUG")) {
+      device_env.debug_level = std::stoi(envStr);
+    }
+#endif
+
+    const char * device_env_Name="omptarget_device_environment";
+    CUdeviceptr device_env_Ptr;
+    size_t cusize;
+
+    err = cuModuleGetGlobal(&device_env_Ptr, &cusize, cumod, device_env_Name);
+
+    if (err == CUDA_SUCCESS) {
+      if ((size_t)cusize != sizeof(device_env)) {
+        DP("Global device_environment '%s' - size mismatch (%zu != %zu)\n",
+            device_env_Name, cusize, sizeof(int32_t));
+        CUDA_ERR_STRING(err);
+        return NULL;
+      }
+
+      err = cuMemcpyHtoD(device_env_Ptr, &device_env, cusize);
+      if (err != CUDA_SUCCESS) {
+        DP("Error when copying data from host to device. Pointers: "
+            "host = " DPxMOD ", device = " DPxMOD ", size = %zu\n",
+            DPxPTR(&device_env), DPxPTR(device_env_Ptr), cusize);
+        CUDA_ERR_STRING(err);
+        return NULL;
+      }
+
+      DP("Sending global device environment data %zu bytes\n", (size_t)cusize);
+    } else {
+      DP("Finding global device environment '%s' - symbol missing.\n", device_env_Name);
+      DP("Continue, considering this is a device RTL which does not accept envrionment setting.\n");
+    }
   }
 
   return DeviceInfo.getOffloadEntriesTable(device_id);
@@ -678,17 +731,16 @@ int32_t __tgt_rtl_run_target_team_region(int32_t device_id, void *tgt_entry_ptr,
   if (err != CUDA_SUCCESS) {
     DP("Device kernel launch failed!\n");
     CUDA_ERR_STRING(err);
-    assert(err == CUDA_SUCCESS && "Unable to launch target execution!");
     return OFFLOAD_FAIL;
   }
 
   DP("Launch of entry point at " DPxMOD " successful!\n",
       DPxPTR(tgt_entry_ptr));
 
-  cudaError_t sync_error = cudaDeviceSynchronize();
-  if (sync_error != cudaSuccess) {
-  DP("Kernel execution error at " DPxMOD ", %s.\n", DPxPTR(tgt_entry_ptr),
-      cudaGetErrorString(sync_error));
+  CUresult sync_err = cuCtxSynchronize();
+  if (sync_err != CUDA_SUCCESS) {
+    DP("Kernel execution error at " DPxMOD "!\n", DPxPTR(tgt_entry_ptr));
+    CUDA_ERR_STRING(sync_err);
     return OFFLOAD_FAIL;
   } else {
     DP("Kernel execution at " DPxMOD " successful!\n", DPxPTR(tgt_entry_ptr));

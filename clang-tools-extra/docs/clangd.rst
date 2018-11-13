@@ -23,8 +23,20 @@ At the moment, `Visual Studio Code <https://code.visualstudio.com/>`_ is mainly
 used in order to test :program:`Clangd` but more clients are likely to make
 use of :program:`Clangd` in the future as it matures and becomes a production
 quality tool. If you are interested in trying :program:`Clangd` in combination
-with Visual Studio Code, you can start by `building Clangd`_, then open Visual
-Studio Code in the clangd-vscode folder and launch the extension.
+with Visual Studio Code, you can start by `installing Clangd`_ or
+`building Clangd`_, then open Visual Studio Code in the clangd-vscode folder and
+launch the extension.
+
+Installing Clangd
+==================
+
+Packages are available for debian-based distributions, see the `LLVM packages
+page <http://apt.llvm.org/>`_. :program:`Clangd` is included in the
+`clang-tools` package.
+However, it is a good idea to check your distribution's packaging system first
+as it might already be available.
+
+Otherwise, you can install :program:`Clangd` by `building Clangd`_ first.
 
 Building Clangd
 ==================
@@ -41,7 +53,8 @@ Here is a list of features that could be useful with the status of whether or
 not they are already implemented in :program:`Clangd` and specified in the
 Language Server Protocol. Note that for some of the features, it is not clear
 whether or not they should be part of the Language Server Protocol, so those
-features might be eventually developed outside :program:`Clangd`.
+features might be eventually developed outside :program:`Clangd` or as an
+extension to the protocol.
 
 +-------------------------------------+------------+----------+
 | C/C++ Editor feature                |  LSP       |  Clangd  |
@@ -51,22 +64,26 @@ features might be eventually developed outside :program:`Clangd`.
 | Completion                          | Yes        |   Yes    |
 +-------------------------------------+------------+----------+
 | Diagnostics                         | Yes        |   Yes    |
-+-------------------------------------+------------+----------+ 
++-------------------------------------+------------+----------+
 | Fix-its                             | Yes        |   Yes    |
 +-------------------------------------+------------+----------+
 | Go to Definition                    | Yes        |   Yes    |
 +-------------------------------------+------------+----------+
-| Source hover                        | Yes        |   No     |
+| Signature Help                      | Yes        |   Yes    |
 +-------------------------------------+------------+----------+
-| Signature Help                      | Yes        |   No     |
+| Document Highlights                 | Yes        |   Yes    |
++-------------------------------------+------------+----------+
+| Rename                              | Yes        |   Yes    |
++-------------------------------------+------------+----------+
+| Source hover                        | Yes        |   Yes    |
 +-------------------------------------+------------+----------+
 | Find References                     | Yes        |   No     |
 +-------------------------------------+------------+----------+
-| Document Highlights                 | Yes        |   No     |
-+-------------------------------------+------------+----------+
-| Rename                              | Yes        |   No     |
-+-------------------------------------+------------+----------+
 | Code Lens                           | Yes        |   No     |
++-------------------------------------+------------+----------+
+| Document Symbols                    | Yes        |   Yes    |
++-------------------------------------+------------+----------+
+| Workspace Symbols                   | Yes        |   Yes    |
 +-------------------------------------+------------+----------+
 | Syntax and Semantic Coloring        | No         |   No     |
 +-------------------------------------+------------+----------+
@@ -91,10 +108,48 @@ features might be eventually developed outside :program:`Clangd`.
 | Gen. Getters/Setters                | No         |   No     |
 +-------------------------------------+------------+----------+
 
+Editor Integration
+==================
+
+Any full-featured Language Server Protocol Client implementation should work
+with :program:`Clangd`. This `list
+<https://langserver.org/#implementations-client>` contains information about
+extensions and plugins that are known to work for different editors.
+
+Vim Integration
+---------------
+
+LanguageClient-neovim
+~~~~~~~~~~~~~~~~~~~~~
+
+One of the options of using :program:`Clangd` in :program:`vim` (or
+:program:`nvim`) is to utilize `LanguageClient-neovim
+<https://github.com/autozimu/LanguageClient-neovim>`_ plugin. Please see the
+`Clangd Wiki page
+<https://github.com/autozimu/LanguageClient-neovim/wiki/Clangd>`_ for
+instructions.
+
+VSCode Integration
+------------------
+
+:program:`VSCode` provides `vscode-clangd
+<https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd>`_
+which is published in Visual Studio Marketplace and can be installed direcetly
+from :program:`VSCode`.
+
+Emacs Integration
+-----------------
+
+:program:`Emacs` provides `lsp-mode <github.com/emacs-lsp/lsp-mode>`_ and
+`Eglot <https://github.com/joaotavora/eglot>`_ plugins for LSP integration.
+
 Getting Involved
 ==================
 
-A good place for interested contributors is the `Clang developer mailing list
+A good place for interested contributors is the `Clangd developer mailing list
+<http://lists.llvm.org/mailman/listinfo/clangd-dev>`_. For discussions with the
+broader community on topics not only related to Clangd, use
+`Clang developer mailing list
 <http://lists.llvm.org/mailman/listinfo/cfe-dev>`_.
 If you're also interested in contributing patches to :program:`Clangd`, take a
 look at the `LLVM Developer Policy

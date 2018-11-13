@@ -37,24 +37,7 @@ namespace lldb
 {
 class SBBreakpointNameImpl {
 public:
-  SBBreakpointNameImpl(SBTarget &sb_target, const char *name)
-  {
-    if (!name || name[0] == '\0')
-      return;
-    m_name.assign(name);
-    
-    if (!sb_target.IsValid())
-      return;
-    
-    TargetSP target_sp = sb_target.GetSP();
-    if (!target_sp)
-      return;
-    
-    m_target_wp = target_sp;
-  }
-  
-  SBBreakpointNameImpl(TargetSP target_sp, const char *name)
-  {
+  SBBreakpointNameImpl(TargetSP target_sp, const char *name) {
     if (!name || name[0] == '\0')
       return;
     m_name.assign(name);
@@ -64,18 +47,13 @@ public:
     
     m_target_wp = target_sp;
   }
-  
-  bool operator==(const SBBreakpointNameImpl &rhs) {
-    return m_name == rhs.m_name
-           && m_target_wp.lock() == rhs.m_target_wp.lock();
-  }
-  
-  bool operator!=(const SBBreakpointNameImpl &rhs) {
-    return m_name != rhs.m_name
-           || m_target_wp.lock() != rhs.m_target_wp.lock();
-  }
-  // For now we take a simple approach and only keep the name, and relook
-  // up the location when we need it.
+
+  SBBreakpointNameImpl(SBTarget &sb_target, const char *name);
+  bool operator==(const SBBreakpointNameImpl &rhs);
+  bool operator!=(const SBBreakpointNameImpl &rhs);
+
+  // For now we take a simple approach and only keep the name, and relook up
+  // the location when we need it.
   
   TargetSP GetTarget() const {
     return m_target_wp.lock();
@@ -88,33 +66,48 @@ public:
   bool IsValid() const {
     return !m_name.empty() && m_target_wp.lock();
   }
-  
-  lldb_private::BreakpointName *GetBreakpointName()
-  {
-    if (!IsValid())
-      return nullptr;
-    TargetSP target_sp = GetTarget();
-    if (!target_sp)
-      return nullptr;
-    Status error;
-    return target_sp->FindBreakpointName(ConstString(m_name), true, error);
-  }
-  
-  const lldb_private::BreakpointName *GetBreakpointName() const
-  {
-    if (!IsValid())
-      return nullptr;
-    TargetSP target_sp = GetTarget();
-    if (!target_sp)
-      return nullptr;
-    Status error;
-    return target_sp->FindBreakpointName(ConstString(m_name), true, error);    
-  }
-  
+
+  lldb_private::BreakpointName *GetBreakpointName() const;
+
 private:
   TargetWP m_target_wp;
   std::string m_name;
 };
+
+SBBreakpointNameImpl::SBBreakpointNameImpl(SBTarget &sb_target,
+                                           const char *name) {
+  if (!name || name[0] == '\0')
+    return;
+  m_name.assign(name);
+
+  if (!sb_target.IsValid())
+    return;
+
+  TargetSP target_sp = sb_target.GetSP();
+  if (!target_sp)
+    return;
+
+  m_target_wp = target_sp;
+}
+
+bool SBBreakpointNameImpl::operator==(const SBBreakpointNameImpl &rhs) {
+  return m_name == rhs.m_name && m_target_wp.lock() == rhs.m_target_wp.lock();
+}
+
+bool SBBreakpointNameImpl::operator!=(const SBBreakpointNameImpl &rhs) {
+  return m_name != rhs.m_name || m_target_wp.lock() != rhs.m_target_wp.lock();
+}
+
+lldb_private::BreakpointName *SBBreakpointNameImpl::GetBreakpointName() const {
+  if (!IsValid())
+    return nullptr;
+  TargetSP target_sp = GetTarget();
+  if (!target_sp)
+    return nullptr;
+  Status error;
+  return target_sp->FindBreakpointName(ConstString(m_name), true, error);
+}
+
 } // namespace lldb
 
 SBBreakpointName::SBBreakpointName() {}
@@ -122,8 +115,7 @@ SBBreakpointName::SBBreakpointName() {}
 SBBreakpointName::SBBreakpointName(SBTarget &sb_target, const char *name)
 {
   m_impl_up.reset(new SBBreakpointNameImpl(sb_target, name));
-  // Call FindBreakpointName here to make sure the name is valid, reset if
-  // not:
+  // Call FindBreakpointName here to make sure the name is valid, reset if not:
   BreakpointName *bp_name = GetBreakpointName();
   if (!bp_name)
     m_impl_up.reset();
@@ -140,8 +132,7 @@ SBBreakpointName::SBBreakpointName(SBBreakpoint &sb_bkpt, const char *name)
 
   m_impl_up.reset(new SBBreakpointNameImpl(target.shared_from_this(), name));
   
-  // Call FindBreakpointName here to make sure the name is valid, reset if
-  // not:
+  // Call FindBreakpointName here to make sure the name is valid, reset if not:
   BreakpointName *bp_name = GetBreakpointName();
   if (!bp_name) {
     m_impl_up.reset();

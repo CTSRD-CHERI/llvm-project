@@ -36,6 +36,8 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DataLayout.h"
@@ -55,8 +57,6 @@
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <cassert>
 #include <cstdint>
 #include <map>
@@ -160,6 +160,8 @@ void MipsAsmPrinter::EmitInstruction(const MachineInstr *MI) {
     PrintDebugValueComment(MI, OS);
     return;
   }
+  if (MI->isDebugLabel())
+    return;
 
   // If we just ended a constant pool, mark it as such.
   if (InConstantPool && Opc != Mips::CONSTPOOL_ENTRY) {
@@ -361,6 +363,7 @@ void MipsAsmPrinter::EmitFunctionEntryLabel() {
   if (Subtarget->inMicroMipsMode()) {
     TS.emitDirectiveSetMicroMips();
     TS.setUsesMicroMips();
+    TS.updateABIInfo(*Subtarget);
   } else
     TS.emitDirectiveSetNoMicroMips();
 
@@ -380,7 +383,7 @@ void MipsAsmPrinter::EmitFunctionBodyStart() {
 
   MCInstLowering.Initialize(&MF->getContext());
 
-  bool IsNakedFunction = MF->getFunction()->hasFnAttribute(Attribute::Naked);
+  bool IsNakedFunction = MF->getFunction().hasFnAttribute(Attribute::Naked);
   if (!IsNakedFunction)
     emitFrameDirective();
 
@@ -498,6 +501,13 @@ bool MipsAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
         return true;
       O << MO.getImm() - 1;
       return false;
+    case 'y': // exact log2
+      if ((MO.getType()) != MachineOperand::MO_Immediate)
+        return true;
+      if (!isPowerOf2_64(MO.getImm()))
+        return true;
+      O << Log2_64(MO.getImm());
+      return false;
     case 'z':
       // $0 if zero, regular printing otherwise
       if (MO.getType() == MachineOperand::MO_Immediate && MO.getImm() == 0) {
@@ -575,17 +585,27 @@ bool MipsAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   assert(OffsetMO.isImm() && "Unexpected offset for inline asm memory operand.");
   int Offset = OffsetMO.getImm();
 
-  // Currently we are expecting either no ExtraCode or 'D'
+  // Currently we are expecting either no ExtraCode or 'D','M','L'.
   if (ExtraCode) {
-    if (ExtraCode[0] == 'D')
+    switch (ExtraCode[0]) {
+    case 'D':
       Offset += 4;
-    else
+      break;
+    case 'M':
+      if (Subtarget->isLittle())
+        Offset += 4;
+      break;
+    case 'L':
+      if (!Subtarget->isLittle())
+        Offset += 4;
+      break;
+    default:
       return true; // Unknown modifier.
-    // FIXME: M = high order bits
-    // FIXME: L = low order bits
+    }
   }
 
-  O << Offset << "($" << MipsInstPrinter::getRegisterName(BaseMO.getReg()) << ")";
+  O << Offset << "($" << MipsInstPrinter::getRegisterName(BaseMO.getReg())
+    << ")";
 
   return false;
 }
@@ -1074,7 +1094,7 @@ void MipsAsmPrinter::EmitSled(const MachineInstr &MI, SledKind Kind) {
   //   ALIGN
   //   B .tmpN
   //   11 NOP instructions (44 bytes)
-  //   ADDIU T9, T9, 52 
+  //   ADDIU T9, T9, 52
   // .tmpN
   //
   // We need the 44 bytes (11 instructions) because at runtime, we'd

@@ -66,7 +66,7 @@ LLVM_YAML_IS_SEQUENCE_VECTOR(CrossModuleExport)
 LLVM_YAML_IS_SEQUENCE_VECTOR(YAMLCrossModuleImport)
 LLVM_YAML_IS_SEQUENCE_VECTOR(YAMLFrameData)
 
-LLVM_YAML_DECLARE_SCALAR_TRAITS(HexFormattedString, false)
+LLVM_YAML_DECLARE_SCALAR_TRAITS(HexFormattedString, QuotingType::None)
 LLVM_YAML_DECLARE_ENUM_TRAITS(DebugSubsectionKind)
 LLVM_YAML_DECLARE_ENUM_TRAITS(FileChecksumKind)
 LLVM_YAML_DECLARE_BITSET_TRAITS(LineFlags)
@@ -511,7 +511,7 @@ std::shared_ptr<DebugSubsection> YAMLFrameDataSubsection::toCodeViewSubsection(
     const codeview::StringsAndChecksums &SC) const {
   assert(SC.hasStrings());
 
-  auto Result = std::make_shared<DebugFrameDataSubsection>();
+  auto Result = std::make_shared<DebugFrameDataSubsection>(true);
   for (const auto &YF : Frames) {
     codeview::FrameData F;
     F.CodeSize = YF.CodeSize;

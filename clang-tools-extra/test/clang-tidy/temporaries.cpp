@@ -1,4 +1,5 @@
-// RUN: clang-tidy -checks='-*,clang-analyzer-core.NullDereference' -analyze-temporary-dtors %s -- | FileCheck %s
+// REQUIRES: static-analyzer
+// RUN: clang-tidy -checks='-*,clang-analyzer-core.NullDereference' %s -- | FileCheck %s
 
 struct NoReturnDtor {
   ~NoReturnDtor() __attribute__((noreturn));
@@ -17,7 +18,8 @@ void testNullPointerDereferencePositive() {
 void testNullPointerDereference() {
   int *value = 0;
   if (check(NoReturnDtor())) {
-    // This unreachable code causes a warning if we don't run with -analyze-temporary-dtors
+    // This unreachable code causes a warning if analysis of temporary
+    // destructors is not enabled.
     *value = 1;
   }
 }

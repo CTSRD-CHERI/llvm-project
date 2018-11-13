@@ -1,4 +1,7 @@
 set(LLVM_LINK_COMPONENTS
+  ${LLVM_TARGETS_TO_BUILD}
+  Analysis
+  AsmParser
   AsmPrinter
   CodeGen
   Core
@@ -8,17 +11,14 @@ set(LLVM_LINK_COMPONENTS
   Target
   )
 
-set(CodeGenSources
+add_llvm_unittest(CodeGenTests
+  AArch64SelectionDAGTest.cpp
   DIEHashTest.cpp
   LowLevelTypeTest.cpp
   MachineInstrBundleIteratorTest.cpp
   MachineInstrTest.cpp
   MachineOperandTest.cpp
   ScalableVectorMVTsTest.cpp
-  )
-
-add_llvm_unittest(CodeGenTests
-  ${CodeGenSources}
   )
 
 add_subdirectory(GlobalISel)

@@ -18,13 +18,15 @@ class TestMoveNearest(TestBase):
         # Find the line number to break inside main().
         self.line1 = line_number('foo.h', '// !BR1')
         self.line2 = line_number('foo.h', '// !BR2')
+        self.line_between = line_number('main.cpp', "// BR_Between")
+        print("BR_Between found at", self.line_between)
         self.line_main = line_number('main.cpp', '// !BR_main')
 
     def test(self):
         """Test target.move-to-nearest logic"""
 
         self.build()
-        target = self.dbg.CreateTarget("a.out")
+        target = self.dbg.CreateTarget(self.getBuildArtifact("a.out"))
         self.assertTrue(target, VALID_TARGET)
 
         lldbutil.run_break_set_by_symbol(self, 'main', sym_exact=True)
@@ -61,3 +63,7 @@ class TestMoveNearest(TestBase):
         # "return .."
         lldbutil.run_break_set_by_file_and_line(self, 'main.cpp',
                 self.line_main+2, extra_options="-m 1")
+
+        # Make sure we don't put move the breakpoint if it is set between two functions:
+        lldbutil.run_break_set_by_file_and_line(self, 'main.cpp',
+                self.line_between, extra_options="-m 1", num_expected_locations=0)

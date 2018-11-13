@@ -1,5 +1,8 @@
 @LIT_SITE_CFG_IN_HEADER@
 
+import lit.util
+
+config.have_dia_sdk = lit.util.pythonize_bool("@LLVM_ENABLE_DIA_SDK@")
 config.llvm_src_root = "@LLVM_SOURCE_DIR@"
 config.llvm_obj_root = "@LLVM_BINARY_DIR@"
 config.llvm_tools_dir = "@LLVM_TOOLS_DIR@"
@@ -22,7 +25,8 @@ except KeyError as e:
     key, = e.args
     lit_config.fatal("unable to find %r parameter, use '--param=%s=VALUE'" % (key,key))
 
-@LIT_SITE_CFG_IN_FOOTER@
+import lit.llvm
+lit.llvm.initialize(lit_config, config)
 
 # Let the main config do the real work.
 lit_config.load_config(config, "@LLD_SOURCE_DIR@/test/lit.cfg.py")

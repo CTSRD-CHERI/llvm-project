@@ -1,10 +1,10 @@
-; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt | FileCheck %s
-; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt -fast-isel -fast-isel-abort=1 | FileCheck %s
+; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt -wasm-keep-registers -wasm-temporary-workarounds=false -mattr=+sign-ext,+simd128 | FileCheck %s
+; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt -wasm-keep-registers -fast-isel -fast-isel-abort=1 -wasm-temporary-workarounds=false -mattr=+sign-ext,+simd128 | FileCheck %s
 
 ; Test that basic call operations assemble as expected.
 
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 declare i32 @i32_nullary()
 declare i32 @i32_unary(i32)
@@ -12,6 +12,7 @@ declare i32 @i32_binary(i32, i32)
 declare i64 @i64_nullary()
 declare float @float_nullary()
 declare double @double_nullary()
+declare <16 x i8> @v128_nullary()
 declare void @void_nullary()
 
 ; CHECK-LABEL: call_i32_nullary:
@@ -48,6 +49,15 @@ define float @call_float_nullary() {
 define double @call_double_nullary() {
   %r = call double @double_nullary()
   ret double %r
+}
+
+; CHECK-LABEL: call_v128_nullary:
+; CHECK-NEXT: .result v128{{$}}
+; CHECK-NEXT: {{^}} v128.call $push[[NUM:[0-9]+]]=, v128_nullary@FUNCTION{{$}}
+; CHECK-NEXT: return $pop[[NUM]]{{$}}
+define <16 x i8> @call_v128_nullary() {
+  %r = call <16 x i8> @v128_nullary()
+  ret <16 x i8> %r
 }
 
 ; CHECK-LABEL: call_void_nullary:
@@ -102,6 +112,50 @@ define i32 @call_indirect_i32(i32 ()* %callee) {
   ret i32 %t
 }
 
+; CHECK-LABEL: call_indirect_i64:
+; CHECK-NEXT: .param i32{{$}}
+; CHECK-NEXT: .result i64{{$}}
+; CHECK-NEXT: get_local $push[[L0:[0-9]+]]=, 0{{$}}
+; CHECK-NEXT: {{^}} i64.call_indirect $push[[NUM:[0-9]+]]=, $pop[[L0]]{{$}}
+; CHECK-NEXT: return $pop[[NUM]]{{$}}
+define i64 @call_indirect_i64(i64 ()* %callee) {
+  %t = call i64 %callee()
+  ret i64 %t
+}
+
+; CHECK-LABEL: call_indirect_float:
+; CHECK-NEXT: .param i32{{$}}
+; CHECK-NEXT: .result f32{{$}}
+; CHECK-NEXT: get_local $push[[L0:[0-9]+]]=, 0{{$}}
+; CHECK-NEXT: {{^}} f32.call_indirect $push[[NUM:[0-9]+]]=, $pop[[L0]]{{$}}
+; CHECK-NEXT: return $pop[[NUM]]{{$}}
+define float @call_indirect_float(float ()* %callee) {
+  %t = call float %callee()
+  ret float %t
+}
+
+; CHECK-LABEL: call_indirect_double:
+; CHECK-NEXT: .param i32{{$}}
+; CHECK-NEXT: .result f64{{$}}
+; CHECK-NEXT: get_local $push[[L0:[0-9]+]]=, 0{{$}}
+; CHECK-NEXT: {{^}} f64.call_indirect $push[[NUM:[0-9]+]]=, $pop[[L0]]{{$}}
+; CHECK-NEXT: return $pop[[NUM]]{{$}}
+define double @call_indirect_double(double ()* %callee) {
+  %t = call double %callee()
+  ret double %t
+}
+
+; CHECK-LABEL: call_indirect_v128:
+; CHECK-NEXT: .param i32{{$}}
+; CHECK-NEXT: .result v128{{$}}
+; CHECK-NEXT: get_local $push[[L0:[0-9]+]]=, 0{{$}}
+; CHECK-NEXT: {{^}} v128.call_indirect $push[[NUM:[0-9]+]]=, $pop[[L0]]{{$}}
+; CHECK-NEXT: return $pop[[NUM]]{{$}}
+define <16 x i8> @call_indirect_v128(<16 x i8> ()* %callee) {
+  %t = call <16 x i8> %callee()
+  ret <16 x i8> %t
+}
+
 ; CHECK-LABEL: call_indirect_arg:
 ; CHECK-NEXT: .param i32, i32{{$}}
 ; CHECK-NEXT: get_local $push[[L0:[0-9]+]]=, 1{{$}}
@@ -153,7 +207,7 @@ define void @coldcc_tail_call_void_nullary() {
 ; CHECK-LABEL: call_constexpr:
 ; CHECK-NEXT: i32.const $push[[L0:[0-9]+]]=, 2{{$}}
 ; CHECK-NEXT: i32.const $push[[L1:[0-9]+]]=, 3{{$}}
-; CHECK-NEXT: call vararg_func@FUNCTION, $pop[[L0]], $pop[[L1]]{{$}}
+; CHECK-NEXT: call .Lvararg_func_bitcast@FUNCTION, $pop[[L0]], $pop[[L1]]{{$}}
 ; CHECK-NEXT: call other_void_nullary@FUNCTION{{$}}
 ; CHECK-NEXT: call void_nullary@FUNCTION{{$}}
 ; CHECK-NEXT: return{{$}}

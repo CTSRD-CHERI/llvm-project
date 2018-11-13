@@ -1,7 +1,3 @@
-include_directories(.)
-include_directories(../POSIX)
-include_directories(../Utility)
-
 add_lldb_library(lldbPluginProcessNetBSD PLUGIN
   NativeProcessNetBSD.cpp
   NativeRegisterContextNetBSD.cpp
@@ -9,7 +5,6 @@ add_lldb_library(lldbPluginProcessNetBSD PLUGIN
   NativeThreadNetBSD.cpp
 
   LINK_LIBS
-    lldbCore
     lldbHost
     lldbSymbol
     lldbTarget

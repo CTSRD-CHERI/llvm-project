@@ -21,6 +21,7 @@ enum DebugInfoKind {
                        /// locations for instructions without actually
                        /// emitting debug info for them (e.g., when -Rpass
                        /// is used).
+  DebugDirectivesOnly, /// Emit only debug directives with the line numbers data
   DebugLineTablesOnly, /// Emit only debug info necessary for generating
                        /// line number tables (-gline-tables-only).
   LimitedDebugInfo,    /// Limit generated debug info to reduce size
@@ -28,7 +29,7 @@ enum DebugInfoKind {
                        /// forward decls for types that could be
                        /// replaced with forward decls in the source
                        /// code. For dynamic C++ classes type info
-                       /// is only emitted int the module that
+                       /// is only emitted into the module that
                        /// contains the classe's vtable.
   FullDebugInfo        /// Generate complete debug info.
 };

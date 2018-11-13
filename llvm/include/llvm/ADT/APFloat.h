@@ -1215,7 +1215,7 @@ inline APFloat abs(APFloat X) {
   return X;
 }
 
-/// \brief Returns the negated value of the argument.
+/// Returns the negated value of the argument.
 inline APFloat neg(APFloat X) {
   X.changeSign();
   return X;
@@ -1240,6 +1240,32 @@ inline APFloat maxnum(const APFloat &A, const APFloat &B) {
     return B;
   if (B.isNaN())
     return A;
+  return (A.compare(B) == APFloat::cmpLessThan) ? B : A;
+}
+
+/// Implements IEEE 754-2018 minimum semantics. Returns the smaller of 2
+/// arguments, propagating NaNs and treating -0 as less than +0.
+LLVM_READONLY
+inline APFloat minimum(const APFloat &A, const APFloat &B) {
+  if (A.isNaN())
+    return A;
+  if (B.isNaN())
+    return B;
+  if (A.isZero() && B.isZero() && (A.isNegative() != B.isNegative()))
+    return A.isNegative() ? A : B;
+  return (B.compare(A) == APFloat::cmpLessThan) ? B : A;
+}
+
+/// Implements IEEE 754-2018 maximum semantics. Returns the larger of 2
+/// arguments, propagating NaNs and treating -0 as less than +0.
+LLVM_READONLY
+inline APFloat maximum(const APFloat &A, const APFloat &B) {
+  if (A.isNaN())
+    return A;
+  if (B.isNaN())
+    return B;
+  if (A.isZero() && B.isZero() && (A.isNegative() != B.isNegative()))
+    return A.isNegative() ? B : A;
   return (A.compare(B) == APFloat::cmpLessThan) ? B : A;
 }
 

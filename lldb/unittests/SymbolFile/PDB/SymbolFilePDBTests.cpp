@@ -154,8 +154,7 @@ TEST_F(SymbolFilePDBTests, TestAbilitiesForPDB) {
   EXPECT_NE(nullptr, symfile);
   EXPECT_EQ(symfile->GetPluginName(), SymbolFilePDB::GetPluginNameStatic());
 
-  uint32_t expected_abilities =
-      SymbolFile::CompileUnits | SymbolFile::LineTables;
+  uint32_t expected_abilities = SymbolFile::kAllAbilities;
   EXPECT_EQ(expected_abilities, symfile->CalculateAbilities());
 }
 
@@ -390,13 +389,41 @@ TEST_F(SymbolFilePDBTests, TestNestedClassTypes) {
   SymbolContext sc;
   llvm::DenseSet<SymbolFile *> searched_files;
   TypeMap results;
-  EXPECT_EQ(1u, symfile->FindTypes(sc, ConstString("Class::NestedClass"),
-                                   nullptr, false, 0, searched_files, results));
+
+  auto clang_ast_ctx = llvm::dyn_cast_or_null<ClangASTContext>(
+      symfile->GetTypeSystemForLanguage(lldb::eLanguageTypeC_plus_plus));
+  EXPECT_NE(nullptr, clang_ast_ctx);
+
+  EXPECT_EQ(1u, symfile->FindTypes(sc, ConstString("Class"), nullptr, false, 0,
+                                   searched_files, results));
   EXPECT_EQ(1u, results.GetSize());
+
+  auto Class = results.GetTypeAtIndex(0);
+  EXPECT_TRUE(Class);
+  EXPECT_TRUE(Class->IsValidType());
+
+  auto ClassCompilerType = Class->GetFullCompilerType();
+  EXPECT_TRUE(ClassCompilerType.IsValid());
+
+  auto ClassDeclCtx = clang_ast_ctx->GetDeclContextForType(ClassCompilerType);
+  EXPECT_NE(nullptr, ClassDeclCtx);
+
+  // There are two symbols for nested classes: one belonging to enclosing class
+  // and one is global. We process correctly this case and create the same
+  // compiler type for both, but `FindTypes` may return more than one type
+  // (with the same compiler type) because the symbols have different IDs.
+  auto ClassCompilerDeclCtx = CompilerDeclContext(clang_ast_ctx, ClassDeclCtx);
+  EXPECT_LE(1u, symfile->FindTypes(sc, ConstString("NestedClass"),
+                                   &ClassCompilerDeclCtx, false, 0,
+                                   searched_files, results));
+  EXPECT_LE(1u, results.GetSize());
+
   lldb::TypeSP udt_type = results.GetTypeAtIndex(0);
-  EXPECT_EQ(ConstString("Class::NestedClass"), udt_type->GetName());
+  EXPECT_EQ(ConstString("NestedClass"), udt_type->GetName());
+
   CompilerType compiler_type = udt_type->GetForwardCompilerType();
   EXPECT_TRUE(ClangASTContext::IsClassType(compiler_type.GetOpaqueQualType()));
+
   EXPECT_EQ(GetGlobalConstantInteger(session, "sizeof_NestedClass"),
             udt_type->GetByteSize());
 }
@@ -413,13 +440,33 @@ TEST_F(SymbolFilePDBTests, TestClassInNamespace) {
   SymbolContext sc;
   llvm::DenseSet<SymbolFile *> searched_files;
   TypeMap results;
-  EXPECT_EQ(1u, symfile->FindTypes(sc, ConstString("NS::NSClass"), nullptr,
+
+  auto clang_ast_ctx = llvm::dyn_cast_or_null<ClangASTContext>(
+      symfile->GetTypeSystemForLanguage(lldb::eLanguageTypeC_plus_plus));
+  EXPECT_NE(nullptr, clang_ast_ctx);
+
+  auto ast_ctx = clang_ast_ctx->getASTContext();
+  EXPECT_NE(nullptr, ast_ctx);
+
+  auto tu = ast_ctx->getTranslationUnitDecl();
+  EXPECT_NE(nullptr, tu);
+
+  symfile->ParseDeclsForContext(CompilerDeclContext(
+      clang_ast_ctx, static_cast<clang::DeclContext *>(tu)));
+
+  auto ns_namespace = symfile->FindNamespace(sc, ConstString("NS"), nullptr);
+  EXPECT_TRUE(ns_namespace.IsValid());
+
+  EXPECT_EQ(1u, symfile->FindTypes(sc, ConstString("NSClass"), &ns_namespace,
                                    false, 0, searched_files, results));
   EXPECT_EQ(1u, results.GetSize());
+
   lldb::TypeSP udt_type = results.GetTypeAtIndex(0);
-  EXPECT_EQ(ConstString("NS::NSClass"), udt_type->GetName());
+  EXPECT_EQ(ConstString("NSClass"), udt_type->GetName());
+
   CompilerType compiler_type = udt_type->GetForwardCompilerType();
   EXPECT_TRUE(ClangASTContext::IsClassType(compiler_type.GetOpaqueQualType()));
+
   EXPECT_EQ(GetGlobalConstantInteger(session, "sizeof_NSClass"),
             udt_type->GetByteSize());
 }
@@ -513,13 +560,15 @@ TEST_F(SymbolFilePDBTests, TestRegexNameMatch) {
   SymbolVendor *plugin = module->GetSymbolVendor();
   SymbolFilePDB *symfile =
       static_cast<SymbolFilePDB *>(plugin->GetSymbolFile());
-  SymbolContext sc;
-  llvm::DenseSet<SymbolFile *> searched_files;
   TypeMap results;
-  uint32_t num_results = symfile->FindTypes(sc, ConstString(".*"), nullptr,
-                                            false, 0, searched_files, results);
-  EXPECT_GT(num_results, 1u);
-  EXPECT_EQ(num_results, results.GetSize());
+   
+  symfile->FindTypesByRegex(RegularExpression(".*"), 0, results);
+  EXPECT_GT(results.GetSize(), 1u);
+
+  // We expect no exception thrown if the given regex can't be compiled
+  results.Clear();
+  symfile->FindTypesByRegex(RegularExpression("**"), 0, results);
+  EXPECT_EQ(0u, results.GetSize());
 }
 
 TEST_F(SymbolFilePDBTests, TestMaxMatches) {
@@ -533,7 +582,8 @@ TEST_F(SymbolFilePDBTests, TestMaxMatches) {
   SymbolContext sc;
   llvm::DenseSet<SymbolFile *> searched_files;
   TypeMap results;
-  uint32_t num_results = symfile->FindTypes(sc, ConstString(".*"), nullptr,
+  const ConstString name("ClassTypedef");
+  uint32_t num_results = symfile->FindTypes(sc, name, nullptr,
                                             false, 0, searched_files, results);
   // Try to limit ourselves from 1 to 10 results, otherwise we could be doing
   // this thousands of times.
@@ -543,7 +593,7 @@ TEST_F(SymbolFilePDBTests, TestMaxMatches) {
   uint32_t iterations = std::min(num_results, 10u);
   for (uint32_t i = 1; i <= iterations; ++i) {
     uint32_t num_limited_results = symfile->FindTypes(
-        sc, ConstString(".*"), nullptr, false, i, searched_files, results);
+        sc, name, nullptr, false, i, searched_files, results);
     EXPECT_EQ(i, num_limited_results);
     EXPECT_EQ(num_limited_results, results.GetSize());
   }

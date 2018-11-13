@@ -38,8 +38,8 @@ protected:
   std::string format(llvm::StringRef Code,
                      const FormatStyle &Style = getLLVMStyle(),
                      StatusCheck CheckComplete = SC_ExpectComplete) {
-    DEBUG(llvm::errs() << "---\n");
-    DEBUG(llvm::errs() << Code << "\n\n");
+    LLVM_DEBUG(llvm::errs() << "---\n");
+    LLVM_DEBUG(llvm::errs() << Code << "\n\n");
     std::vector<tooling::Range> Ranges(1, tooling::Range(0, Code.size()));
     FormattingAttemptStatus Status;
     tooling::Replacements Replaces =
@@ -52,7 +52,7 @@ protected:
     ReplacementCount = Replaces.size();
     auto Result = applyAllReplacements(Code, Replaces);
     EXPECT_TRUE(static_cast<bool>(Result));
-    DEBUG(llvm::errs() << "\n" << *Result << "\n\n");
+    LLVM_DEBUG(llvm::errs() << "\n" << *Result << "\n\n");
     return *Result;
   }
 
@@ -70,6 +70,7 @@ protected:
 
   void verifyFormat(llvm::StringRef Code,
                     const FormatStyle &Style = getLLVMStyle()) {
+    EXPECT_EQ(Code.str(), format(Code, Style)) << "Expected code is not stable";
     EXPECT_EQ(Code.str(), format(test::messUp(Code), Style));
   }
 
@@ -1096,11 +1097,12 @@ TEST_F(FormatTestComments, KeepsLevelOfCommentBeforePPDirective) {
 }
 
 TEST_F(FormatTestComments, SplitsLongLinesInComments) {
+  // FIXME: Do we need to fix up the "  */" at the end?
+  // It doesn't look like any of our current logic triggers this.
   EXPECT_EQ("/* This is a long\n"
             " * comment that\n"
-            " * doesn't\n"
-            " * fit on one line.\n"
-            " */",
+            " * doesn't fit on\n"
+            " * one line.  */",
             format("/* "
                    "This is a long                                         "
                    "comment that "
@@ -1250,6 +1252,12 @@ TEST_F(FormatTestComments, SplitsLongLinesInComments) {
                    " * multiline block comment\n"
                    " *\n"
                    " */",
+                   getLLVMStyleWithColumns(20)));
+
+  // This reproduces a crashing bug where both adaptStartOfLine and
+  // getCommentSplit were trying to wrap after the "/**".
+  EXPECT_EQ("/** multilineblockcommentwithnowrapopportunity */",
+            format("/** multilineblockcommentwithnowrapopportunity */",
                    getLLVMStyleWithColumns(20)));
 
   EXPECT_EQ("/*\n"
@@ -2078,12 +2086,107 @@ TEST_F(FormatTestComments, ReflowsComments) {
                    "       // longsec\n",
                    getLLVMStyleWithColumns(20)));
 
+  // Simple case that correctly handles reflow in parameter lists.
+  EXPECT_EQ("a = f(/* looooooooong\n"
+            "       * long long\n"
+            "       */\n"
+            "      a);",
+            format("a = f(/* looooooooong long\n* long\n*/ a);",
+                   getLLVMStyleWithColumns(22)));
+  // Tricky case that has fewer lines if we reflow the comment, ending up with
+  // fewer lines.
+  EXPECT_EQ("a = f(/* loooooong\n"
+            "       * long long\n"
+            "       */\n"
+            "      a);",
+            format("a = f(/* loooooong long\n* long\n*/ a);",
+                   getLLVMStyleWithColumns(22)));
+
   // Keep empty comment lines.
   EXPECT_EQ("/**/", format(" /**/", getLLVMStyleWithColumns(20)));
   EXPECT_EQ("/* */", format(" /* */", getLLVMStyleWithColumns(20)));
   EXPECT_EQ("/*  */", format(" /*  */", getLLVMStyleWithColumns(20)));
   EXPECT_EQ("//", format(" //  ", getLLVMStyleWithColumns(20)));
   EXPECT_EQ("///", format(" ///  ", getLLVMStyleWithColumns(20)));
+}
+
+TEST_F(FormatTestComments, ReflowsCommentsPrecise) {
+  // FIXME: This assumes we do not continue compressing whitespace once we are
+  // in reflow mode. Consider compressing whitespace.
+
+  // Test that we stop reflowing precisely at the column limit.
+  // After reflowing, "// reflows into   foo" does not fit the column limit,
+  // so we compress the whitespace.
+  EXPECT_EQ("// some text that\n"
+            "// reflows into foo\n",
+            format("// some text that reflows\n"
+                   "// into   foo\n",
+                   getLLVMStyleWithColumns(20)));
+  // Given one more column, "// reflows into   foo" does fit the limit, so we
+  // do not compress the whitespace.
+  EXPECT_EQ("// some text that\n"
+            "// reflows into   foo\n",
+            format("// some text that reflows\n"
+                   "// into   foo\n",
+                   getLLVMStyleWithColumns(21)));
+
+  // Make sure that we correctly account for the space added in the reflow case
+  // when making the reflowing decision.
+  // First, when the next line ends precisely one column over the limit, do not
+  // reflow.
+  EXPECT_EQ("// some text that\n"
+            "// reflows\n"
+            "// into1234567\n",
+            format("// some text that reflows\n"
+                   "// into1234567\n",
+                   getLLVMStyleWithColumns(21)));
+  // Secondly, when the next line ends later, but the first word in that line
+  // is precisely one column over the limit, do not reflow.
+  EXPECT_EQ("// some text that\n"
+            "// reflows\n"
+            "// into1234567 f\n",
+            format("// some text that reflows\n"
+                   "// into1234567 f\n",
+                   getLLVMStyleWithColumns(21)));
+}
+
+TEST_F(FormatTestComments, ReflowsCommentsWithExtraWhitespace) {
+  // Baseline.
+  EXPECT_EQ("// some text\n"
+            "// that re flows\n",
+            format("// some text that\n"
+                   "// re flows\n",
+                   getLLVMStyleWithColumns(16)));
+  EXPECT_EQ("// some text\n"
+            "// that re flows\n",
+            format("// some text that\n"
+                   "// re    flows\n",
+                   getLLVMStyleWithColumns(16)));
+  EXPECT_EQ("/* some text\n"
+            " * that re flows\n"
+            " */\n",
+            format("/* some text that\n"
+                   "*      re       flows\n"
+                   "*/\n",
+                   getLLVMStyleWithColumns(16)));
+  // FIXME: We do not reflow if the indent of two subsequent lines differs;
+  // given that this is different behavior from block comments, do we want
+  // to keep this?
+  EXPECT_EQ("// some text\n"
+            "// that\n"
+            "//     re flows\n",
+            format("// some text that\n"
+                   "//     re       flows\n",
+                   getLLVMStyleWithColumns(16)));
+  // Space within parts of a line that fit.
+  // FIXME: Use the earliest possible split while reflowing to compress the
+  // whitespace within the line.
+  EXPECT_EQ("// some text that\n"
+            "// does re   flow\n"
+            "// more  here\n",
+            format("// some text that does\n"
+                   "// re   flow  more  here\n",
+                   getLLVMStyleWithColumns(21)));
 }
 
 TEST_F(FormatTestComments, IgnoresIf0Contents) {
@@ -2426,9 +2529,13 @@ TEST_F(FormatTestComments, BlockCommentsAtEndOfLine) {
 
 TEST_F(FormatTestComments, BreaksAfterMultilineBlockCommentsInParamLists) {
   EXPECT_EQ("a = f(/* long\n"
-            "         long\n"
-            "       */\n"
+            "         long */\n"
             "      a);",
+            format("a = f(/* long long */ a);", getLLVMStyleWithColumns(16)));
+  EXPECT_EQ("a = f(\n"
+            "    /* long\n"
+            "       long */\n"
+            "    a);",
             format("a = f(/* long long */ a);", getLLVMStyleWithColumns(15)));
 
   EXPECT_EQ("a = f(/* long\n"
@@ -2438,7 +2545,7 @@ TEST_F(FormatTestComments, BreaksAfterMultilineBlockCommentsInParamLists) {
             format("a = f(/* long\n"
                    "         long\n"
                    "       */a);",
-                   getLLVMStyleWithColumns(15)));
+                   getLLVMStyleWithColumns(16)));
 
   EXPECT_EQ("a = f(/* long\n"
             "         long\n"
@@ -2447,7 +2554,7 @@ TEST_F(FormatTestComments, BreaksAfterMultilineBlockCommentsInParamLists) {
             format("a = f(/* long\n"
                    "         long\n"
                    "       */ a);",
-                   getLLVMStyleWithColumns(15)));
+                   getLLVMStyleWithColumns(16)));
 
   EXPECT_EQ("a = f(/* long\n"
             "         long\n"
@@ -2456,23 +2563,36 @@ TEST_F(FormatTestComments, BreaksAfterMultilineBlockCommentsInParamLists) {
             format("a = f(/* long\n"
                    "         long\n"
                    "       */ (1 + 1));",
-                   getLLVMStyleWithColumns(15)));
+                   getLLVMStyleWithColumns(16)));
 
   EXPECT_EQ(
       "a = f(a,\n"
       "      /* long\n"
-      "         long\n"
-      "       */\n"
+      "         long */\n"
       "      b);",
+      format("a = f(a, /* long long */ b);", getLLVMStyleWithColumns(16)));
+
+  EXPECT_EQ(
+      "a = f(\n"
+      "    a,\n"
+      "    /* long\n"
+      "       long */\n"
+      "    b);",
       format("a = f(a, /* long long */ b);", getLLVMStyleWithColumns(15)));
 
-  EXPECT_EQ(
-      "a = f(a,\n"
-      "      /* long\n"
-      "         long\n"
-      "       */\n"
-      "      (1 + 1));",
-      format("a = f(a, /* long long */ (1 + 1));", getLLVMStyleWithColumns(15)));
+  EXPECT_EQ("a = f(a,\n"
+            "      /* long\n"
+            "         long */\n"
+            "      (1 + 1));",
+            format("a = f(a, /* long long */ (1 + 1));",
+                   getLLVMStyleWithColumns(16)));
+  EXPECT_EQ("a = f(\n"
+            "    a,\n"
+            "    /* long\n"
+            "       long */\n"
+            "    (1 + 1));",
+            format("a = f(a, /* long long */ (1 + 1));",
+                   getLLVMStyleWithColumns(15)));
 }
 
 TEST_F(FormatTestComments, IndentLineCommentsInStartOfBlockAtEndOfFile) {
@@ -2856,7 +2976,7 @@ TEST_F(FormatTestComments, AlignsBlockCommentDecorations) {
                    getLLVMStyleWithColumns(20)));
 }
 
-TEST_F(FormatTestComments, NoCrush_Bug34236) {
+TEST_F(FormatTestComments, NoCrash_Bug34236) {
   // This is a test case from a crasher reported in:
   // https://bugs.llvm.org/show_bug.cgi?id=34236
   // Temporarily disable formatting for readability.
@@ -2864,8 +2984,7 @@ TEST_F(FormatTestComments, NoCrush_Bug34236) {
   EXPECT_EQ(
 "/*                                                                */ /*\n"
 "                                                                      *       a\n"
-"                                                                      * b c\n"
-"                                                                      * d*/",
+"                                                                      * b c d*/",
       format(
 "/*                                                                */ /*\n"
 " *       a b\n"
@@ -2966,6 +3085,130 @@ TEST_F(FormatTestComments, PythonStyleComments) {
                    "a:1#commen5 commen6\n"
                    " #commen7",
                    getTextProtoStyleWithColumns(20)));
+}
+
+TEST_F(FormatTestComments, BreaksBeforeTrailingUnbreakableSequence) {
+  // The end of /* trail */ is exactly at 80 columns, but the unbreakable
+  // trailing sequence ); after it exceeds the column limit. Make sure we
+  // correctly break the line in that case.
+  verifyFormat("int a =\n"
+               "    foo(/* trail */);",
+               getLLVMStyleWithColumns(23));
+}
+
+TEST_F(FormatTestComments, ReflowBackslashCrash) {
+// clang-format off
+  EXPECT_EQ(
+"// How to run:\n"
+"// bbbbb run \\\n"
+"// rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr\n"
+"// \\ <log_file> -- --output_directory=\"<output_directory>\"",
+  format(
+"// How to run:\n"
+"// bbbbb run \\\n"
+"// rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr \\\n"
+"// <log_file> -- --output_directory=\"<output_directory>\""));
+// clang-format on
+}
+
+TEST_F(FormatTestComments, IndentsLongJavadocAnnotatedLines) {
+  FormatStyle Style = getGoogleStyle(FormatStyle::LK_Java);
+  Style.ColumnLimit = 60;
+  FormatStyle Style20 = getGoogleStyle(FormatStyle::LK_Java);
+  Style20.ColumnLimit = 20;
+  EXPECT_EQ(
+      "/**\n"
+      " * @param x long long long long long long long long long\n"
+      " *     long\n"
+      " */\n",
+      format("/**\n"
+             " * @param x long long long long long long long long long long\n"
+             " */\n",
+             Style));
+  EXPECT_EQ("/**\n"
+            " * @param x long long long long long long long long long\n"
+            " *     long long long long long long long long long long\n"
+            " */\n",
+            format("/**\n"
+                   " * @param x long long long long long long long long long "
+                   "long long long long long long long long long long\n"
+                   " */\n",
+                   Style));
+  EXPECT_EQ("/**\n"
+            " * @param x long long long long long long long long long\n"
+            " *     long long long long long long long long long long\n"
+            " *     long\n"
+            " */\n",
+            format("/**\n"
+                   " * @param x long long long long long long long long long "
+                   "long long long long long long long long long long long\n"
+                   " */\n",
+                   Style));
+  EXPECT_EQ(
+      "/**\n"
+      " * Sentence that\n"
+      " * should be broken.\n"
+      " * @param short\n"
+      " * keep indentation\n"
+      " */\n", format(
+          "/**\n"
+          " * Sentence that should be broken.\n"
+          " * @param short\n"
+          " * keep indentation\n"
+          " */\n", Style20));
+
+  EXPECT_EQ("/**\n"
+            " * @param l1 long1\n"
+            " *     to break\n"
+            " * @param l2 long2\n"
+            " *     to break\n"
+            " */\n",
+            format("/**\n"
+                   " * @param l1 long1 to break\n"
+                   " * @param l2 long2 to break\n"
+                   " */\n",
+                   Style20));
+
+  EXPECT_EQ("/**\n"
+            " * @param xx to\n"
+            " *     break\n"
+            " * no reflow\n"
+            " */\n",
+            format("/**\n"
+                   " * @param xx to break\n"
+                   " * no reflow\n"
+                   " */\n",
+                   Style20));
+
+  EXPECT_EQ("/**\n"
+            " * @param xx to\n"
+            " *     break yes\n"
+            " *     reflow\n"
+            " */\n",
+            format("/**\n"
+                   " * @param xx to break\n"
+                   " *     yes reflow\n"
+                   " */\n",
+                   Style20));
+
+  FormatStyle JSStyle20 = getGoogleStyle(FormatStyle::LK_JavaScript);
+  JSStyle20.ColumnLimit = 20;
+  EXPECT_EQ("/**\n"
+            " * @param l1 long1\n"
+            " *     to break\n"
+            " */\n",
+            format("/**\n"
+                   " * @param l1 long1 to break\n"
+                   " */\n",
+                   JSStyle20));
+  EXPECT_EQ("/**\n"
+            " * @param {l1 long1\n"
+            " *     to break}\n"
+            " */\n",
+            format("/**\n"
+                   " * @param {l1 long1 to break}\n"
+                   " */\n",
+                   JSStyle20));
 }
 
 } // end namespace

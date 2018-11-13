@@ -1,8 +1,8 @@
+// REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %s -o %t.o
 // RUN: ld.lld -static %t.o -o %tout
 // RUN: llvm-objdump -d %tout | FileCheck %s --check-prefix=DISASM
 // RUN: llvm-readobj -r -symbols -sections %tout | FileCheck %s
-// REQUIRES: x86
 
 // CHECK:      Sections [
 // CHECK:       Section {
@@ -15,11 +15,16 @@
 // CHECK-NEXT:  Address: [[RELA:.*]]
 // CHECK-NEXT:  Offset: 0x158
 // CHECK-NEXT:  Size: 48
-// CHECK-NEXT:  Link: 0
-// CHECK-NEXT:  Info: 0
+// CHECK-NEXT:  Link: [[SYMTAB:.*]]
+// CHECK-NEXT:  Info: [[GOTPLT:.*]]
 // CHECK-NEXT:  AddressAlignment: 8
 // CHECK-NEXT:  EntrySize: 24
 // CHECK-NEXT: }
+// CHECK:      Index: [[GOTPLT]]
+// CHECK-NEXT: Name: .got.plt
+// CHECK:      Index: [[SYMTAB]]
+// CHECK-NEXT: Name: .symtab
+// CHECK-NEXT: Type: SHT_SYMTAB
 // CHECK:      Relocations [
 // CHECK-NEXT:   Section ({{.*}}) .rela.plt {
 // CHECK-NEXT:     0x202000 R_X86_64_IRELATIVE
@@ -102,10 +107,10 @@
 // DISASM-NEXT: .plt:
 // DISASM-NEXT:  201020: {{.*}} jmpq *4058(%rip)
 // DISASM-NEXT:  201026: {{.*}} pushq $0
-// DISASM-NEXT:  20102b: {{.*}} jmp -32 <_start+0xE>
+// DISASM-NEXT:  20102b: {{.*}} jmp -32 <_start+0xe>
 // DISASM-NEXT:  201030: {{.*}} jmpq *4050(%rip)
 // DISASM-NEXT:  201036: {{.*}} pushq $1
-// DISASM-NEXT:  20103b: {{.*}} jmp -48 <_start+0xE>
+// DISASM-NEXT:  20103b: {{.*}} jmp -48 <_start+0xe>
 
 .text
 .type foo STT_GNU_IFUNC

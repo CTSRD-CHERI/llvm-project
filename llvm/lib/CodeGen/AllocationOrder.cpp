@@ -39,11 +39,11 @@ AllocationOrder::AllocationOrder(unsigned VirtReg,
     HardHints = true;
   rewind();
 
-  DEBUG({
+  LLVM_DEBUG({
     if (!Hints.empty()) {
       dbgs() << "hints:";
       for (unsigned I = 0, E = Hints.size(); I != E; ++I)
-        dbgs() << ' ' << PrintReg(Hints[I], TRI);
+        dbgs() << ' ' << printReg(Hints[I], TRI);
       dbgs() << '\n';
     }
   });

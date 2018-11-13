@@ -1,9 +1,9 @@
-; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt | FileCheck %s
+; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt -wasm-keep-registers | FileCheck %s
 
 ; Test that basic 32-bit floating-point operations assemble as expected.
 
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 declare float @llvm.fabs.f32(float)
 declare float @llvm.copysign.f32(float, float)
@@ -123,12 +123,6 @@ define float @nearest32_via_rint(float %x) {
   ret float %a
 }
 
-; Min and max tests. LLVM currently only forms fminnan and fmaxnan nodes in
-; cases where there's a single fcmp with a select and it can prove that one
-; of the arms is never NaN, so we only test that case. In the future if LLVM
-; learns to form fminnan/fmaxnan in more cases, we can write more general
-; tests.
-
 ; CHECK-LABEL: fmin32:
 ; CHECK: f32.min $push1=, $pop{{[0-9]+}}, $pop[[LR]]{{$}}
 ; CHECK-NEXT: return $pop1{{$}}
@@ -145,6 +139,24 @@ define float @fmax32(float %x) {
   %a = fcmp ugt float %x, 0.0
   %b = select i1 %a, float %x, float 0.0
   ret float %b
+}
+
+; CHECK-LABEL: fmin32_intrinsic:
+; CHECK: f32.min $push0=, $pop{{[0-9]+}}, $pop{{[0-9]+}}{{$}}
+; CHECK-NEXT: return $pop0{{$}}
+declare float @llvm.minimum.f32(float, float)
+define float @fmin32_intrinsic(float %x, float %y) {
+  %a = call float @llvm.minimum.f32(float %x, float %y)
+  ret float %a
+}
+
+; CHECK-LABEL: fmax32_intrinsic:
+; CHECK: f32.max $push0=, $pop{{[0-9]+}}, $pop{{[0-9]+}}{{$}}
+; CHECK-NEXT: return $pop0{{$}}
+declare float @llvm.maximum.f32(float, float)
+define float @fmax32_intrinsic(float %x, float %y) {
+  %a = call float @llvm.maximum.f32(float %x, float %y)
+  ret float %a
 }
 
 ; CHECK-LABEL: fma32:

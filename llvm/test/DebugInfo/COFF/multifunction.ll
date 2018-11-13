@@ -23,16 +23,16 @@
 
 
 ; X86-LABEL: _x:
-; X86:      # BB
+; X86:      # %bb.
 ; X86:      .cv_file 1 "D:\\source.c"
-; X86:      .cv_loc 0 1 4 42 is_stmt 0 # source.c:4:42
+; X86:      .cv_loc 0 1 4 42 # source.c:4:42
 ; X86:      calll   _z
 ; X86:      .cv_loc 0 1 5 43 # source.c:5:43
 ; X86:      ret
 ; X86:      [[END_OF_X:.?Lfunc_end.*]]:
 ;
 ; X86-LABEL: _y:
-; X86:      # BB
+; X86:      # %bb.
 ; X86:      .cv_loc 1 1 8 52 # source.c:8:52
 ; X86:      calll   _z
 ; X86:      .cv_loc 1 1 9 53 # source.c:9:53
@@ -40,7 +40,7 @@
 ; X86:      [[END_OF_Y:.?Lfunc_end.*]]:
 ;
 ; X86-LABEL: _f:
-; X86:      # BB
+; X86:      # %bb.
 ; X86:      .cv_loc 2 1 12 62 # source.c:12:62
 ; X86:      calll   _x
 ; X86:      .cv_loc 2 1 13 63 # source.c:13:63
@@ -81,6 +81,17 @@
 ; X86-NEXT: .byte   0
 ; X86-NEXT: .asciz "x"
 ; X86-NEXT: [[PROC_SEGMENT_END]]:
+; X86-NEXT: .short  [[FPROC_END:[^ ]*]]-[[FPROC_BEG:[^ ]*]]           # Record length
+; X86-NEXT: [[FPROC_BEG]]:
+; X86-NEXT: .short  4114                    # Record kind: S_FRAMEPROC
+; X86-NEXT: .long   0                       # FrameSize
+; X86-NEXT: .long   0                       # Padding
+; X86-NEXT: .long   0                       # Offset of padding
+; X86-NEXT: .long   0                       # Bytes of callee saved registers
+; X86-NEXT: .long   0                       # Exception handler offset
+; X86-NEXT: .short  0                       # Exception handler section
+; X86-NEXT: .long   0                       # Flags (defines frame register)
+; X86-NEXT: [[FPROC_END]]:
 ; X86-NEXT: .short  2
 ; X86-NEXT: .short  4431
 ; X86-NEXT: [[F1_END]]:
@@ -107,6 +118,17 @@
 ; X86-NEXT: .byte   0
 ; X86-NEXT: .asciz "y"
 ; X86-NEXT: [[PROC_SEGMENT_END]]:
+; X86-NEXT: .short  [[FPROC_END:[^ ]*]]-[[FPROC_BEG:[^ ]*]]           # Record length
+; X86-NEXT: [[FPROC_BEG]]:
+; X86-NEXT: .short  4114                    # Record kind: S_FRAMEPROC
+; X86-NEXT: .long   0                       # FrameSize
+; X86-NEXT: .long   0                       # Padding
+; X86-NEXT: .long   0                       # Offset of padding
+; X86-NEXT: .long   0                       # Bytes of callee saved registers
+; X86-NEXT: .long   0                       # Exception handler offset
+; X86-NEXT: .short  0                       # Exception handler section
+; X86-NEXT: .long   0                       # Flags (defines frame register)
+; X86-NEXT: [[FPROC_END]]:
 ; X86-NEXT: .short  2
 ; X86-NEXT: .short  4431
 ; X86-NEXT: [[COMPILE_END]]:
@@ -133,6 +155,17 @@
 ; X86-NEXT: .byte   0
 ; X86-NEXT: .asciz "f"
 ; X86-NEXT: [[PROC_SEGMENT_END]]:
+; X86-NEXT: .short  [[FPROC_END:[^ ]*]]-[[FPROC_BEG:[^ ]*]]           # Record length
+; X86-NEXT: [[FPROC_BEG]]:
+; X86-NEXT: .short  4114                    # Record kind: S_FRAMEPROC
+; X86-NEXT: .long   0                       # FrameSize
+; X86-NEXT: .long   0                       # Padding
+; X86-NEXT: .long   0                       # Offset of padding
+; X86-NEXT: .long   0                       # Bytes of callee saved registers
+; X86-NEXT: .long   0                       # Exception handler offset
+; X86-NEXT: .short  0                       # Exception handler section
+; X86-NEXT: .long   0                       # Flags (defines frame register)
+; X86-NEXT: [[FPROC_END]]:
 ; X86-NEXT: .short  2
 ; X86-NEXT: .short  4431
 ; X86-NEXT: [[COMPILE_END]]:
@@ -286,8 +319,8 @@
 ; X64-LABEL: x:
 ; X64-NEXT: .L{{.*}}:
 ; X64:      .cv_file 1 "D:\\source.c"
-; X64:      .cv_loc 0 1 3 0 is_stmt 0 # source.c:3:0
-; X64:      # BB
+; X64:      .cv_loc 0 1 3 0 # source.c:3:0
+; X64:      # %bb.
 ; X64:      subq    $40, %rsp
 ; X64:      .cv_loc 0 1 4 42 # source.c:4:42
 ; X64-NEXT: callq   z
@@ -299,7 +332,7 @@
 ; X64-LABEL: y:
 ; X64-NEXT: .L{{.*}}:
 ; X64:      .cv_loc 1 1 7 0 # source.c:7:0
-; X64:      # BB
+; X64:      # %bb.
 ; X64:      subq    $40, %rsp
 ; X64:      .cv_loc 1 1 8 52 # source.c:8:52
 ; X64-NEXT: callq   z
@@ -311,7 +344,7 @@
 ; X64-LABEL: f:
 ; X64-NEXT: .L{{.*}}:
 ; X64:      .cv_loc 2 1 11 0 # source.c:11:0
-; X64:      # BB
+; X64:      # %bb.
 ; X64:      subq    $40, %rsp
 ; X64:      .cv_loc 2 1 12 62 # source.c:12:62
 ; X64-NEXT: callq   x
@@ -354,6 +387,17 @@
 ; X64-NEXT: .byte   0
 ; X64-NEXT: .asciz "x"
 ; X64-NEXT: [[PROC_SEGMENT_END]]:
+; X64-NEXT: .short  [[FPROC_END:[^ ]*]]-[[FPROC_BEG:[^ ]*]]           # Record length
+; X64-NEXT: [[FPROC_BEG]]:
+; X64-NEXT: .short  4114                    # Record kind: S_FRAMEPROC
+; X64-NEXT: .long   40                       # FrameSize
+; X64-NEXT: .long   0                       # Padding
+; X64-NEXT: .long   0                       # Offset of padding
+; X64-NEXT: .long   0                       # Bytes of callee saved registers
+; X64-NEXT: .long   0                       # Exception handler offset
+; X64-NEXT: .short  0                       # Exception handler section
+; X64-NEXT: .long   81920                       # Flags (defines frame register)
+; X64-NEXT: [[FPROC_END]]:
 ; X64-NEXT: .short  2
 ; X64-NEXT: .short  4431
 ; X64-NEXT: [[F1_END]]:
@@ -379,6 +423,17 @@
 ; X64-NEXT: .byte   0
 ; X64-NEXT: .asciz "y"
 ; X64-NEXT: [[PROC_SEGMENT_END]]:
+; X64-NEXT: .short  [[FPROC_END:[^ ]*]]-[[FPROC_BEG:[^ ]*]]           # Record length
+; X64-NEXT: [[FPROC_BEG]]:
+; X64-NEXT: .short  4114                    # Record kind: S_FRAMEPROC
+; X64-NEXT: .long   40                       # FrameSize
+; X64-NEXT: .long   0                       # Padding
+; X64-NEXT: .long   0                       # Offset of padding
+; X64-NEXT: .long   0                       # Bytes of callee saved registers
+; X64-NEXT: .long   0                       # Exception handler offset
+; X64-NEXT: .short  0                       # Exception handler section
+; X64-NEXT: .long   81920                       # Flags (defines frame register)
+; X64-NEXT: [[FPROC_END]]:
 ; X64-NEXT: .short  2
 ; X64-NEXT: .short  4431
 ; X64-NEXT: [[COMPILE_END]]:
@@ -404,6 +459,17 @@
 ; X64-NEXT: .byte   0
 ; X64-NEXT: .asciz "f"
 ; X64-NEXT: [[PROC_SEGMENT_END]]:
+; X64-NEXT: .short  [[FPROC_END:[^ ]*]]-[[FPROC_BEG:[^ ]*]]           # Record length
+; X64-NEXT: [[FPROC_BEG]]:
+; X64-NEXT: .short  4114                    # Record kind: S_FRAMEPROC
+; X64-NEXT: .long   40                       # FrameSize
+; X64-NEXT: .long   0                       # Padding
+; X64-NEXT: .long   0                       # Offset of padding
+; X64-NEXT: .long   0                       # Bytes of callee saved registers
+; X64-NEXT: .long   0                       # Exception handler offset
+; X64-NEXT: .short  0                       # Exception handler section
+; X64-NEXT: .long   81920                       # Flags (defines frame register)
+; X64-NEXT: [[FPROC_END]]:
 ; X64-NEXT: .short  2
 ; X64-NEXT: .short  4431
 ; X64-NEXT: [[COMPILE_END]]:
@@ -422,16 +488,16 @@
 ; OBJ64:      Relocations [
 ; OBJ64-NEXT:   0x64 IMAGE_REL_AMD64_SECREL x
 ; OBJ64-NEXT:   0x68 IMAGE_REL_AMD64_SECTION x
-; OBJ64-NEXT:   0x7C IMAGE_REL_AMD64_SECREL x
-; OBJ64-NEXT:   0x80 IMAGE_REL_AMD64_SECTION x
-; OBJ64-NEXT:   0xE0 IMAGE_REL_AMD64_SECREL y
-; OBJ64-NEXT:   0xE4 IMAGE_REL_AMD64_SECTION y
-; OBJ64-NEXT:   0xF8 IMAGE_REL_AMD64_SECREL y
-; OBJ64-NEXT:   0xFC IMAGE_REL_AMD64_SECTION y
-; OBJ64-NEXT:   0x15C IMAGE_REL_AMD64_SECREL f
-; OBJ64-NEXT:   0x160 IMAGE_REL_AMD64_SECTION f
-; OBJ64-NEXT:   0x174 IMAGE_REL_AMD64_SECREL f
-; OBJ64-NEXT:   0x178 IMAGE_REL_AMD64_SECTION f
+; OBJ64-NEXT:   0x98 IMAGE_REL_AMD64_SECREL x
+; OBJ64-NEXT:   0x9C IMAGE_REL_AMD64_SECTION x
+; OBJ64-NEXT:   0xFC IMAGE_REL_AMD64_SECREL y
+; OBJ64-NEXT:   0x100 IMAGE_REL_AMD64_SECTION y
+; OBJ64-NEXT:   0x130 IMAGE_REL_AMD64_SECREL y
+; OBJ64-NEXT:   0x134 IMAGE_REL_AMD64_SECTION y
+; OBJ64-NEXT:   0x194 IMAGE_REL_AMD64_SECREL f
+; OBJ64-NEXT:   0x198 IMAGE_REL_AMD64_SECTION f
+; OBJ64-NEXT:   0x1C8 IMAGE_REL_AMD64_SECREL f
+; OBJ64-NEXT:   0x1CC IMAGE_REL_AMD64_SECTION f
 ; OBJ64-NEXT: ]
 ; OBJ64:      Subsection [
 ; OBJ64-NEXT:   SubSectionType: Symbols (0xF1)
@@ -612,13 +678,13 @@ attributes #1 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "
 !0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5 ", isOptimized: false, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "<unknown>", directory: "D:\5C")
 !2 = !{}
-!4 = distinct !DISubprogram(name: "x", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 3, file: !5, scope: !6, type: !7, variables: !2)
+!4 = distinct !DISubprogram(name: "x", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 3, file: !5, scope: !6, type: !7, retainedNodes: !2)
 !5 = !DIFile(filename: "source.c", directory: "D:\5C")
 !6 = !DIFile(filename: "source.c", directory: "D:C")
 !7 = !DISubroutineType(types: !8)
 !8 = !{null}
-!9 = distinct !DISubprogram(name: "y", line: 7, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 7, file: !5, scope: !6, type: !7, variables: !2)
-!10 = distinct !DISubprogram(name: "f", line: 11, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 11, file: !5, scope: !6, type: !7, variables: !2)
+!9 = distinct !DISubprogram(name: "y", line: 7, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 7, file: !5, scope: !6, type: !7, retainedNodes: !2)
+!10 = distinct !DISubprogram(name: "f", line: 11, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 11, file: !5, scope: !6, type: !7, retainedNodes: !2)
 !11 = !{i32 2, !"CodeView", i32 1}
 !12 = !{i32 1, !"Debug Info Version", i32 3}
 !13 = !{!"clang version 3.5 "}

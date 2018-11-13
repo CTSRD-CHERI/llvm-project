@@ -13,7 +13,7 @@
 
 # CHECK:      Section {
 # CHECK:        Index: 2
-# CHECK-NEXT:   Name: .rela.text
+# CHECK:        Name: .rela.text
 # CHECK-NEXT:   Type: SHT_RELA
 # CHECK-NEXT:   Flags [
 # CHECK-NEXT:     SHF_INFO_LINK
@@ -62,6 +62,15 @@
 # CHECK-NEXT:     Type: Section
 # CHECK-NEXT:     Other: 0
 # CHECK-NEXT:     Section: .text
+# CHECK-NEXT:   }
+# CHECK-NEXT:   Symbol {
+# CHECK-NEXT:     Name:
+# CHECK-NEXT:     Value: 0x0
+# CHECK-NEXT:     Size: 0
+# CHECK-NEXT:     Binding: Local
+# CHECK-NEXT:     Type: Section
+# CHECK-NEXT:     Other: 0
+# CHECK-NEXT:     Section: .comment
 # CHECK-NEXT:   }
 # CHECK-NEXT:   Symbol {
 # CHECK-NEXT:     Name: fn

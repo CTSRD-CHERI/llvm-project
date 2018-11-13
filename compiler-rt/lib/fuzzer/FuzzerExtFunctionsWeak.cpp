@@ -13,7 +13,8 @@
 // to clients right now.
 //===----------------------------------------------------------------------===//
 #include "FuzzerDefs.h"
-#if LIBFUZZER_LINUX || LIBFUZZER_NETBSD
+#if LIBFUZZER_LINUX || LIBFUZZER_NETBSD || LIBFUZZER_FUCHSIA ||                \
+    LIBFUZZER_FREEBSD || LIBFUZZER_OPENBSD
 
 #include "FuzzerExtFunctions.h"
 #include "FuzzerIO.h"
@@ -21,7 +22,7 @@
 extern "C" {
 // Declare these symbols as weak to allow them to be optionally defined.
 #define EXT_FUNC(NAME, RETURN_TYPE, FUNC_SIG, WARN)                            \
-  __attribute__((weak)) RETURN_TYPE NAME FUNC_SIG
+  __attribute__((weak, visibility("default"))) RETURN_TYPE NAME FUNC_SIG
 
 #include "FuzzerExtFunctions.def"
 
@@ -51,4 +52,4 @@ ExternalFunctions::ExternalFunctions() {
 
 } // namespace fuzzer
 
-#endif // LIBFUZZER_LINUX || LIBFUZZER_NETBSD
+#endif

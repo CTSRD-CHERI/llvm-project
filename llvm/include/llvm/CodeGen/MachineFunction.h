@@ -73,6 +73,7 @@ class SlotIndexes;
 class TargetMachine;
 class TargetRegisterClass;
 class TargetSubtargetInfo;
+struct WasmEHFuncInfo;
 struct WinEHFuncInfo;
 
 template <> struct ilist_alloc_traits<MachineBasicBlock> {
@@ -80,8 +81,8 @@ template <> struct ilist_alloc_traits<MachineBasicBlock> {
 };
 
 template <> struct ilist_callback_traits<MachineBasicBlock> {
-  void addNodeToList(MachineBasicBlock* MBB);
-  void removeNodeFromList(MachineBasicBlock* MBB);
+  void addNodeToList(MachineBasicBlock* N);
+  void removeNodeFromList(MachineBasicBlock* N);
 
   template <class Iterator>
   void transferNodesFromList(ilist_callback_traits &OldList, Iterator, Iterator) {
@@ -96,7 +97,7 @@ template <> struct ilist_callback_traits<MachineBasicBlock> {
 struct MachineFunctionInfo {
   virtual ~MachineFunctionInfo();
 
-  /// \brief Factory function: default behavior is to call new using the
+  /// Factory function: default behavior is to call new using the
   /// supplied allocator.
   ///
   /// This function can be overridden in a derive class.
@@ -223,7 +224,7 @@ struct LandingPadInfo {
 };
 
 class MachineFunction {
-  const Function *Fn;
+  const Function &F;
   const TargetMachine &Target;
   const TargetSubtargetInfo *STI;
   MCContext &Ctx;
@@ -244,6 +245,10 @@ class MachineFunction {
 
   // Keep track of jump tables for switch instructions
   MachineJumpTableInfo *JumpTableInfo;
+
+  // Keeps track of Wasm exception handling related data. This will be null for
+  // functions that aren't using a wasm EH personality.
+  WasmEHFuncInfo *WasmEHInfo = nullptr;
 
   // Keeps track of Windows exception handling related data. This will be null
   // for functions that aren't using a funclet-based EH personality.
@@ -289,7 +294,7 @@ class MachineFunction {
   bool HasInlineAsm = false;
 
   /// True if any WinCFI instruction have been emitted in this function.
-  Optional<bool> HasWinCFI;
+  bool HasWinCFI = false;
 
   /// Current high-level properties of the IR of the function (e.g. is in SSA
   /// form or whether registers have been allocated)
@@ -319,6 +324,7 @@ class MachineFunction {
 
   bool CallsEHReturn = false;
   bool CallsUnwindInit = false;
+  bool HasEHScopes = false;
   bool HasEHFunclets = false;
 
   /// List of C++ TypeInfo used.
@@ -349,18 +355,39 @@ public:
   struct VariableDbgInfo {
     const DILocalVariable *Var;
     const DIExpression *Expr;
-    unsigned Slot;
+    // The Slot can be negative for fixed stack objects.
+    int Slot;
     const DILocation *Loc;
 
     VariableDbgInfo(const DILocalVariable *Var, const DIExpression *Expr,
-                    unsigned Slot, const DILocation *Loc)
+                    int Slot, const DILocation *Loc)
         : Var(Var), Expr(Expr), Slot(Slot), Loc(Loc) {}
   };
+
+  class Delegate {
+    virtual void anchor();
+
+  public:
+    virtual ~Delegate() = default;
+    virtual void MF_HandleInsertion(const MachineInstr &MI) = 0;
+    virtual void MF_HandleRemoval(const MachineInstr &MI) = 0;
+  };
+
+private:
+  Delegate *TheDelegate = nullptr;
+
+  // Callbacks for insertion and removal.
+  void handleInsertion(const MachineInstr &MI);
+  void handleRemoval(const MachineInstr &MI);
+  friend struct ilist_traits<MachineInstr>;
+
+public:
   using VariableDbgInfoMapTy = SmallVector<VariableDbgInfo, 4>;
   VariableDbgInfoMapTy VariableDbgInfos;
 
-  MachineFunction(const Function *Fn, const TargetMachine &TM,
-                  unsigned FunctionNum, MachineModuleInfo &MMI);
+  MachineFunction(const Function &F, const TargetMachine &Target,
+                  const TargetSubtargetInfo &STI, unsigned FunctionNum,
+                  MachineModuleInfo &MMI);
   MachineFunction(const MachineFunction &) = delete;
   MachineFunction &operator=(const MachineFunction &) = delete;
   ~MachineFunction();
@@ -371,6 +398,23 @@ public:
     init();
   }
 
+  /// Reset the currently registered delegate - otherwise assert.
+  void resetDelegate(Delegate *delegate) {
+    assert(TheDelegate == delegate &&
+           "Only the current delegate can perform reset!");
+    TheDelegate = nullptr;
+  }
+
+  /// Set the delegate. resetDelegate must be called before attempting
+  /// to set.
+  void setDelegate(Delegate *delegate) {
+    assert(delegate && !TheDelegate &&
+           "Attempted to set delegate to null, or to change it without "
+           "first resetting it!");
+
+    TheDelegate = delegate;
+  }
+
   MachineModuleInfo &getMMI() const { return MMI; }
   MCContext &getContext() const { return Ctx; }
 
@@ -379,8 +423,8 @@ public:
   /// Return the DataLayout attached to the Module associated to this MF.
   const DataLayout &getDataLayout() const;
 
-  /// getFunction - Return the LLVM function that this machine code represents
-  const Function *getFunction() const { return Fn; }
+  /// Return the LLVM function that this machine code represents
+  const Function &getFunction() const { return F; }
 
   /// getName - Return the name of the corresponding LLVM function.
   StringRef getName() const;
@@ -429,6 +473,12 @@ public:
   MachineConstantPool *getConstantPool() { return ConstantPool; }
   const MachineConstantPool *getConstantPool() const { return ConstantPool; }
 
+  /// getWasmEHFuncInfo - Return information about how the current function uses
+  /// Wasm exception handling. Returns null for functions that don't use wasm
+  /// exception handling.
+  const WasmEHFuncInfo *getWasmEHFuncInfo() const { return WasmEHInfo; }
+  WasmEHFuncInfo *getWasmEHFuncInfo() { return WasmEHInfo; }
+
   /// getWinEHFuncInfo - Return information about how the current function uses
   /// Windows exception handling. Returns null for functions that don't use
   /// funclets for exception handling.
@@ -470,8 +520,7 @@ public:
   }
 
   bool hasWinCFI() const {
-    assert(HasWinCFI.hasValue() && "HasWinCFI not set yet!");
-    return *HasWinCFI;
+    return HasWinCFI;
   }
   void setHasWinCFI(bool v) { HasWinCFI = v; }
 
@@ -605,10 +654,18 @@ public:
     BasicBlocks.sort(comp);
   }
 
+  /// Return the number of \p MachineInstrs in this \p MachineFunction.
+  unsigned getInstructionCount() const {
+    unsigned InstrCount = 0;
+    for (const MachineBasicBlock &MBB : BasicBlocks)
+      InstrCount += MBB.size();
+    return InstrCount;
+  }
+
   //===--------------------------------------------------------------------===//
   // Internal functions used to automatically number MachineBasicBlocks
 
-  /// \brief Adds the MBB to the internal numbering. Returns the unique number
+  /// Adds the MBB to the internal numbering. Returns the unique number
   /// assigned to the MBB.
   unsigned addToMBBNumbering(MachineBasicBlock *MBB) {
     MBBNumbering.push_back(MBB);
@@ -694,32 +751,17 @@ public:
     OperandRecycler.deallocate(Cap, Array);
   }
 
-  /// \brief Allocate and initialize a register mask with @p NumRegister bits.
-  uint32_t *allocateRegisterMask(unsigned NumRegister) {
-    unsigned Size = (NumRegister + 31) / 32;
-    uint32_t *Mask = Allocator.Allocate<uint32_t>(Size);
-    for (unsigned i = 0; i != Size; ++i)
-      Mask[i] = 0;
-    return Mask;
-  }
+  /// Allocate and initialize a register mask with @p NumRegister bits.
+  uint32_t *allocateRegMask();
 
-  /// allocateMemRefsArray - Allocate an array to hold MachineMemOperand
-  /// pointers.  This array is owned by the MachineFunction.
-  MachineInstr::mmo_iterator allocateMemRefsArray(unsigned long Num);
-
-  /// extractLoadMemRefs - Allocate an array and populate it with just the
-  /// load information from the given MachineMemOperand sequence.
-  std::pair<MachineInstr::mmo_iterator,
-            MachineInstr::mmo_iterator>
-    extractLoadMemRefs(MachineInstr::mmo_iterator Begin,
-                       MachineInstr::mmo_iterator End);
-
-  /// extractStoreMemRefs - Allocate an array and populate it with just the
-  /// store information from the given MachineMemOperand sequence.
-  std::pair<MachineInstr::mmo_iterator,
-            MachineInstr::mmo_iterator>
-    extractStoreMemRefs(MachineInstr::mmo_iterator Begin,
-                        MachineInstr::mmo_iterator End);
+  /// Allocate and construct an extra info structure for a `MachineInstr`.
+  ///
+  /// This is allocated on the function's allocator and so lives the life of
+  /// the function.
+  MachineInstr::ExtraInfo *
+  createMIExtraInfo(ArrayRef<MachineMemOperand *> MMOs,
+                    MCSymbol *PreInstrSymbol = nullptr,
+                    MCSymbol *PostInstrSymbol = nullptr);
 
   /// Allocate a string and populate it with the given external symbol name.
   const char *createExternalSymbolName(StringRef Name);
@@ -758,6 +800,9 @@ public:
   bool callsUnwindInit() const { return CallsUnwindInit; }
   void setCallsUnwindInit(bool b) { CallsUnwindInit = b; }
 
+  bool hasEHScopes() const { return HasEHScopes; }
+  void setHasEHScopes(bool V) { HasEHScopes = V; }
+
   bool hasEHFunclets() const { return HasEHFunclets; }
   void setHasEHFunclets(bool V) { HasEHFunclets = V; }
 
@@ -777,7 +822,9 @@ public:
   void addInvoke(MachineBasicBlock *LandingPad,
                  MCSymbol *BeginLabel, MCSymbol *EndLabel);
 
-  /// Add a new panding pad.  Returns the label ID for the landing pad entry.
+  /// Add a new panding pad, and extract the exception handling information from
+  /// the landingpad instruction. Returns the label ID for the landing pad
+  /// entry.
   MCSymbol *addLandingPad(MachineBasicBlock *LandingPad);
 
   /// Provide the catch typeinfo for a landing pad.
@@ -792,7 +839,7 @@ public:
   void addCleanup(MachineBasicBlock *LandingPad);
 
   void addSEHCatchHandler(MachineBasicBlock *LandingPad, const Function *Filter,
-                          const BlockAddress *RecoverLabel);
+                          const BlockAddress *RecoverBA);
 
   void addSEHCleanupHandler(MachineBasicBlock *LandingPad,
                             const Function *Cleanup);
@@ -859,7 +906,7 @@ public:
 
   /// Collect information used to emit debugging information of a variable.
   void setVariableDbgInfo(const DILocalVariable *Var, const DIExpression *Expr,
-                          unsigned Slot, const DILocation *Loc) {
+                          int Slot, const DILocation *Loc) {
     VariableDbgInfos.emplace_back(Var, Expr, Slot, Loc);
   }
 
@@ -868,15 +915,6 @@ public:
     return VariableDbgInfos;
   }
 };
-
-/// \name Exception Handling
-/// \{
-
-/// Extract the exception handling information from the landingpad instruction
-/// and add them to the specified machine module info.
-void addLandingPadInfo(const LandingPadInst &I, MachineBasicBlock &MBB);
-
-/// \}
 
 //===--------------------------------------------------------------------===//
 // GraphTraits specializations for function basic block graphs (CFGs)

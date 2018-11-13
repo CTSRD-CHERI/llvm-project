@@ -9,11 +9,11 @@
 
 #include "lldb/Core/ValueObjectCast.h"
 
-#include "lldb/Core/Scalar.h" // for operator!=, Scalar
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Symbol/CompilerType.h"
 #include "lldb/Target/ExecutionContext.h"
+#include "lldb/Utility/Scalar.h" // for operator!=, Scalar
 #include "lldb/Utility/Status.h" // for Status
 
 namespace lldb_private {
@@ -71,9 +71,9 @@ bool ValueObjectCast::UpdateValue() {
     m_value.SetCompilerType(compiler_type);
     SetAddressTypeOfChildren(m_parent->GetAddressTypeOfChildren());
     if (!CanProvideValue()) {
-      // this value object represents an aggregate type whose
-      // children have values, but this object does not. So we
-      // say we are changed if our location has changed.
+      // this value object represents an aggregate type whose children have
+      // values, but this object does not. So we say we are changed if our
+      // location has changed.
       SetValueDidChange(m_value.GetValueType() != old_value.GetValueType() ||
                         m_value.GetScalar() != old_value.GetScalar());
     }

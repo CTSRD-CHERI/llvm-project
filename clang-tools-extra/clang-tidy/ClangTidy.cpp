@@ -18,10 +18,12 @@
 #include "ClangTidy.h"
 #include "ClangTidyDiagnosticConsumer.h"
 #include "ClangTidyModuleRegistry.h"
+#include "ClangTidyProfiling.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/Config/config.h"
 #include "clang/Format/Format.h"
 #include "clang/Frontend/ASTConsumers.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -33,8 +35,10 @@
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Rewrite/Frontend/FixItRewriter.h"
 #include "clang/Rewrite/Frontend/FrontendActions.h"
+#if CLANG_ENABLE_STATIC_ANALYZER
 #include "clang/StaticAnalyzer/Core/BugReporter/PathDiagnostic.h"
 #include "clang/StaticAnalyzer/Frontend/AnalysisConsumer.h"
+#endif // CLANG_ENABLE_STATIC_ANALYZER
 #include "clang/Tooling/DiagnosticsYaml.h"
 #include "clang/Tooling/Refactoring.h"
 #include "clang/Tooling/ReplacementsYaml.h"
@@ -55,6 +59,7 @@ namespace clang {
 namespace tidy {
 
 namespace {
+#if CLANG_ENABLE_STATIC_ANALYZER
 static const char *AnalyzerCheckNamePrefix = "clang-analyzer-";
 
 class AnalyzerDiagnosticConsumer : public ento::PathDiagnosticConsumer {
@@ -86,11 +91,13 @@ public:
 private:
   ClangTidyContext &Context;
 };
+#endif // CLANG_ENABLE_STATIC_ANALYZER
 
 class ErrorReporter {
 public:
-  ErrorReporter(ClangTidyContext &Context, bool ApplyFixes)
-      : Files(FileSystemOptions()), DiagOpts(new DiagnosticOptions()),
+  ErrorReporter(ClangTidyContext &Context, bool ApplyFixes,
+                llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> BaseFS)
+      : Files(FileSystemOptions(), BaseFS), DiagOpts(new DiagnosticOptions()),
         DiagPrinter(new TextDiagnosticPrinter(llvm::outs(), &*DiagOpts)),
         Diags(IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs), &*DiagOpts,
               DiagPrinter),
@@ -120,10 +127,6 @@ public:
                   << Message.Message << Name;
       for (const auto &FileAndReplacements : Error.Fix) {
         for (const auto &Repl : FileAndReplacements.second) {
-          // Retrieve the source range for applicable fixes. Macro definitions
-          // on the command line have locations in a virtual buffer and don't
-          // have valid file paths and are therefore not applicable.
-          SourceRange Range;
           SourceLocation FixLoc;
           ++TotalFixes;
           bool CanBeApplied = false;
@@ -164,7 +167,11 @@ public:
             FixLoc = getLocation(FixAbsoluteFilePath, Repl.getOffset());
             SourceLocation FixEndLoc =
                 FixLoc.getLocWithOffset(Repl.getLength());
-            Range = SourceRange(FixLoc, FixEndLoc);
+            // Retrieve the source range for applicable fixes. Macro definitions
+            // on the command line have locations in a virtual buffer and don't
+            // have valid file paths and are therefore not applicable.
+            CharSourceRange Range =
+                CharSourceRange::getCharRange(SourceRange(FixLoc, FixEndLoc));
             Diag << FixItHint::CreateReplacement(Range,
                                                  Repl.getReplacementText());
           }
@@ -266,12 +273,17 @@ private:
 class ClangTidyASTConsumer : public MultiplexConsumer {
 public:
   ClangTidyASTConsumer(std::vector<std::unique_ptr<ASTConsumer>> Consumers,
+                       std::unique_ptr<ClangTidyProfiling> Profiling,
                        std::unique_ptr<ast_matchers::MatchFinder> Finder,
                        std::vector<std::unique_ptr<ClangTidyCheck>> Checks)
-      : MultiplexConsumer(std::move(Consumers)), Finder(std::move(Finder)),
+      : MultiplexConsumer(std::move(Consumers)),
+        Profiling(std::move(Profiling)), Finder(std::move(Finder)),
         Checks(std::move(Checks)) {}
 
 private:
+  // Destructor order matters! Profiling must be destructed last.
+  // Or at least after Finder.
+  std::unique_ptr<ClangTidyProfiling> Profiling;
   std::unique_ptr<ast_matchers::MatchFinder> Finder;
   std::vector<std::unique_ptr<ClangTidyCheck>> Checks;
 };
@@ -289,6 +301,7 @@ ClangTidyASTConsumerFactory::ClangTidyASTConsumerFactory(
   }
 }
 
+#if CLANG_ENABLE_STATIC_ANALYZER
 static void setStaticAnalyzerCheckerOpts(const ClangTidyOptions &Opts,
                                          AnalyzerOptionsRef AnalyzerOptions) {
   StringRef AnalyzerPrefix(AnalyzerCheckNamePrefix);
@@ -302,11 +315,12 @@ static void setStaticAnalyzerCheckerOpts(const ClangTidyOptions &Opts,
 
 typedef std::vector<std::pair<std::string, bool>> CheckersList;
 
-static CheckersList getCheckersControlList(ClangTidyContext &Context) {
+static CheckersList getCheckersControlList(ClangTidyContext &Context,
+                                           bool IncludeExperimental) {
   CheckersList List;
 
   const auto &RegisteredCheckers =
-      AnalyzerOptions::getRegisteredCheckers(/*IncludeExperimental=*/false);
+      AnalyzerOptions::getRegisteredCheckers(IncludeExperimental);
   bool AnalyzerChecksEnabled = false;
   for (StringRef CheckName : RegisteredCheckers) {
     std::string ClangTidyCheckName((AnalyzerCheckNamePrefix + CheckName).str());
@@ -331,6 +345,7 @@ static CheckersList getCheckersControlList(ClangTidyContext &Context) {
   }
   return List;
 }
+#endif // CLANG_ENABLE_STATIC_ANALYZER
 
 std::unique_ptr<clang::ASTConsumer>
 ClangTidyASTConsumerFactory::CreateASTConsumer(
@@ -352,8 +367,13 @@ ClangTidyASTConsumerFactory::CreateASTConsumer(
   CheckFactories->createChecks(&Context, Checks);
 
   ast_matchers::MatchFinder::MatchFinderOptions FinderOptions;
-  if (auto *P = Context.getCheckProfileData())
-    FinderOptions.CheckProfiling.emplace(P->Records);
+
+  std::unique_ptr<ClangTidyProfiling> Profiling;
+  if (Context.getEnableProfiling()) {
+    Profiling = llvm::make_unique<ClangTidyProfiling>(
+        Context.getProfileStorageParams());
+    FinderOptions.CheckProfiling.emplace(Profiling->Records);
+  }
 
   std::unique_ptr<ast_matchers::MatchFinder> Finder(
       new ast_matchers::MatchFinder(std::move(FinderOptions)));
@@ -367,13 +387,10 @@ ClangTidyASTConsumerFactory::CreateASTConsumer(
   if (!Checks.empty())
     Consumers.push_back(Finder->newASTConsumer());
 
+#if CLANG_ENABLE_STATIC_ANALYZER
   AnalyzerOptionsRef AnalyzerOptions = Compiler.getAnalyzerOpts();
-  // FIXME: Remove this option once clang's cfg-temporary-dtors option defaults
-  // to true.
-  AnalyzerOptions->Config["cfg-temporary-dtors"] =
-      Context.getOptions().AnalyzeTemporaryDtors ? "true" : "false";
-
-  AnalyzerOptions->CheckersControlList = getCheckersControlList(Context);
+  AnalyzerOptions->CheckersControlList =
+      getCheckersControlList(Context, Context.canEnableAnalyzerAlphaCheckers());
   if (!AnalyzerOptions->CheckersControlList.empty()) {
     setStaticAnalyzerCheckerOpts(Context.getOptions(), AnalyzerOptions);
     AnalyzerOptions->AnalysisStoreOpt = RegionStoreModel;
@@ -386,8 +403,10 @@ ClangTidyASTConsumerFactory::CreateASTConsumer(
         new AnalyzerDiagnosticConsumer(Context));
     Consumers.push_back(std::move(AnalysisConsumer));
   }
+#endif // CLANG_ENABLE_STATIC_ANALYZER
   return llvm::make_unique<ClangTidyASTConsumer>(
-      std::move(Consumers), std::move(Finder), std::move(Checks));
+      std::move(Consumers), std::move(Profiling), std::move(Finder),
+      std::move(Checks));
 }
 
 std::vector<std::string> ClangTidyASTConsumerFactory::getCheckNames() {
@@ -397,8 +416,11 @@ std::vector<std::string> ClangTidyASTConsumerFactory::getCheckNames() {
       CheckNames.push_back(CheckFactory.first);
   }
 
-  for (const auto &AnalyzerCheck : getCheckersControlList(Context))
+#if CLANG_ENABLE_STATIC_ANALYZER
+  for (const auto &AnalyzerCheck : getCheckersControlList(
+           Context, Context.canEnableAnalyzerAlphaCheckers()))
     CheckNames.push_back(AnalyzerCheckNamePrefix + AnalyzerCheck.first);
+#endif // CLANG_ENABLE_STATIC_ANALYZER
 
   std::sort(CheckNames.begin(), CheckNames.end());
   return CheckNames;
@@ -456,26 +478,35 @@ void OptionsView::store(ClangTidyOptions::OptionMap &Options,
   store(Options, LocalName, llvm::itostr(Value));
 }
 
-std::vector<std::string> getCheckNames(const ClangTidyOptions &Options) {
+std::vector<std::string>
+getCheckNames(const ClangTidyOptions &Options,
+              bool AllowEnablingAnalyzerAlphaCheckers) {
   clang::tidy::ClangTidyContext Context(
       llvm::make_unique<DefaultOptionsProvider>(ClangTidyGlobalOptions(),
-                                                Options));
+                                                Options),
+      AllowEnablingAnalyzerAlphaCheckers);
   ClangTidyASTConsumerFactory Factory(Context);
   return Factory.getCheckNames();
 }
 
-ClangTidyOptions::OptionMap getCheckOptions(const ClangTidyOptions &Options) {
+ClangTidyOptions::OptionMap
+getCheckOptions(const ClangTidyOptions &Options,
+                bool AllowEnablingAnalyzerAlphaCheckers) {
   clang::tidy::ClangTidyContext Context(
       llvm::make_unique<DefaultOptionsProvider>(ClangTidyGlobalOptions(),
-                                                Options));
+                                                Options),
+      AllowEnablingAnalyzerAlphaCheckers);
   ClangTidyASTConsumerFactory Factory(Context);
   return Factory.getCheckOptions();
 }
 
 void runClangTidy(clang::tidy::ClangTidyContext &Context,
                   const CompilationDatabase &Compilations,
-                  ArrayRef<std::string> InputFiles, ProfileData *Profile) {
-  ClangTool Tool(Compilations, InputFiles);
+                  ArrayRef<std::string> InputFiles,
+                  llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> BaseFS,
+                  bool EnableCheckProfile, llvm::StringRef StoreCheckProfile) {
+  ClangTool Tool(Compilations, InputFiles,
+                 std::make_shared<PCHContainerOperations>(), BaseFS);
 
   // Add extra arguments passed by the clang-tidy command-line.
   ArgumentsAdjuster PerFileExtraArgumentsInserter =
@@ -513,8 +544,8 @@ void runClangTidy(clang::tidy::ClangTidyContext &Context,
 
   Tool.appendArgumentsAdjuster(PerFileExtraArgumentsInserter);
   Tool.appendArgumentsAdjuster(PluginArgumentsRemover);
-  if (Profile)
-    Context.setCheckProfileData(Profile);
+  Context.setEnableProfiling(EnableCheckProfile);
+  Context.setProfileStoragePrefix(StoreCheckProfile);
 
   ClangTidyDiagnosticConsumer DiagConsumer(Context);
 
@@ -524,6 +555,18 @@ void runClangTidy(clang::tidy::ClangTidyContext &Context,
   public:
     ActionFactory(ClangTidyContext &Context) : ConsumerFactory(Context) {}
     FrontendAction *create() override { return new Action(&ConsumerFactory); }
+
+    bool runInvocation(std::shared_ptr<CompilerInvocation> Invocation,
+                       FileManager *Files,
+                       std::shared_ptr<PCHContainerOperations> PCHContainerOps,
+                       DiagnosticConsumer *DiagConsumer) override {
+      // Explicitly set ProgramAction to RunAnalysis to make the preprocessor
+      // define __clang_analyzer__ macro. The frontend analyzer action will not
+      // be called here.
+      Invocation->getFrontendOpts().ProgramAction = frontend::RunAnalysis;
+      return FrontendActionFactory::runInvocation(
+          Invocation, Files, PCHContainerOps, DiagConsumer);
+    }
 
   private:
     class Action : public ASTFrontendAction {
@@ -546,9 +589,10 @@ void runClangTidy(clang::tidy::ClangTidyContext &Context,
 }
 
 void handleErrors(ClangTidyContext &Context, bool Fix,
-                  unsigned &WarningsAsErrorsCount) {
-  ErrorReporter Reporter(Context, Fix);
-  vfs::FileSystem &FileSystem =
+                  unsigned &WarningsAsErrorsCount,
+                  llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> BaseFS) {
+  ErrorReporter Reporter(Context, Fix, BaseFS);
+  llvm::vfs::FileSystem &FileSystem =
       *Reporter.getSourceManager().getFileManager().getVirtualFileSystem();
   auto InitialWorkingDir = FileSystem.getCurrentWorkingDirectory();
   if (!InitialWorkingDir)

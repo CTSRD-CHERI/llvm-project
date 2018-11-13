@@ -166,6 +166,9 @@ macro(detect_target_arch)
   check_symbol_exists(__i386__ "" __I386)
   check_symbol_exists(__mips__ "" __MIPS)
   check_symbol_exists(__mips64__ "" __MIPS64)
+  check_symbol_exists(__powerpc64__ "" __PPC64)
+  check_symbol_exists(__powerpc64le__ "" __PPC64LE)
+  check_symbol_exists(__riscv "" __RISCV)
   check_symbol_exists(__s390x__ "" __S390X)
   check_symbol_exists(__wasm32__ "" __WEBASSEMBLY32)
   check_symbol_exists(__wasm64__ "" __WEBASSEMBLY64)
@@ -181,6 +184,18 @@ macro(detect_target_arch)
     add_default_target_arch(mips64)
   elseif(__MIPS)
     add_default_target_arch(mips)
+  elseif(__PPC64)
+    add_default_target_arch(powerpc64)
+  elseif(__PPC64LE)
+    add_default_target_arch(powerpc64le)
+  elseif(__RISCV)
+    if(CMAKE_SIZEOF_VOID_P EQUAL "4")
+      add_default_target_arch(riscv32)
+    elseif(CMAKE_SIZEOF_VOID_P EQUAL "8")
+      add_default_target_arch(riscv64)
+    else()
+      message(FATAL_ERROR "Unsupport XLEN for RISC-V")
+    endif()
   elseif(__S390X)
     add_default_target_arch(s390x)
   elseif(__WEBASSEMBLY32)
@@ -195,47 +210,71 @@ macro(load_llvm_config)
     find_program(LLVM_CONFIG_PATH "llvm-config"
                  DOC "Path to llvm-config binary")
     if (NOT LLVM_CONFIG_PATH)
-      message(FATAL_ERROR "llvm-config not found: specify LLVM_CONFIG_PATH")
+      message(WARNING "UNSUPPORTED COMPILER-RT CONFIGURATION DETECTED: "
+                      "llvm-config not found.\n"
+                      "Reconfigure with -DLLVM_CONFIG_PATH=path/to/llvm-config.")
     endif()
   endif()
-  execute_process(
-    COMMAND ${LLVM_CONFIG_PATH} "--obj-root" "--bindir" "--libdir" "--src-root"
-    RESULT_VARIABLE HAD_ERROR
-    OUTPUT_VARIABLE CONFIG_OUTPUT)
-  if (HAD_ERROR)
-    message(FATAL_ERROR "llvm-config failed with status ${HAD_ERROR}")
+  if (LLVM_CONFIG_PATH)
+    execute_process(
+      COMMAND ${LLVM_CONFIG_PATH} "--obj-root" "--bindir" "--libdir" "--src-root" "--includedir"
+      RESULT_VARIABLE HAD_ERROR
+      OUTPUT_VARIABLE CONFIG_OUTPUT)
+    if (HAD_ERROR)
+      message(FATAL_ERROR "llvm-config failed with status ${HAD_ERROR}")
+    endif()
+    string(REGEX REPLACE "[ \t]*[\r\n]+[ \t]*" ";" CONFIG_OUTPUT ${CONFIG_OUTPUT})
+    list(GET CONFIG_OUTPUT 0 BINARY_DIR)
+    list(GET CONFIG_OUTPUT 1 TOOLS_BINARY_DIR)
+    list(GET CONFIG_OUTPUT 2 LIBRARY_DIR)
+    list(GET CONFIG_OUTPUT 3 MAIN_SRC_DIR)
+    list(GET CONFIG_OUTPUT 4 INCLUDE_DIR)
+
+    set(LLVM_BINARY_DIR ${BINARY_DIR} CACHE PATH "Path to LLVM build tree")
+    set(LLVM_LIBRARY_DIR ${LIBRARY_DIR} CACHE PATH "Path to llvm/lib")
+    set(LLVM_MAIN_SRC_DIR ${MAIN_SRC_DIR} CACHE PATH "Path to LLVM source tree")
+    set(LLVM_TOOLS_BINARY_DIR ${TOOLS_BINARY_DIR} CACHE PATH "Path to llvm/bin")
+    set(LLVM_INCLUDE_DIR ${INCLUDE_DIR} CACHE PATH "Paths to LLVM headers")
+
+    # Detect if we have the LLVMXRay and TestingSupport library installed and
+    # available from llvm-config.
+    execute_process(
+      COMMAND ${LLVM_CONFIG_PATH} "--ldflags" "--libs" "xray" "testingsupport"
+      RESULT_VARIABLE HAD_ERROR
+      OUTPUT_VARIABLE CONFIG_OUTPUT)
+    if (HAD_ERROR)
+      message(WARNING "llvm-config finding xray failed with status ${HAD_ERROR}")
+      set(COMPILER_RT_HAS_LLVMXRAY FALSE)
+    else()
+      string(REGEX REPLACE "[ \t]*[\r\n]+[ \t]*" ";" CONFIG_OUTPUT ${CONFIG_OUTPUT})
+      list(GET CONFIG_OUTPUT 0 LDFLAGS)
+      list(GET CONFIG_OUTPUT 1 LIBLIST)
+      set(LLVM_XRAY_LDFLAGS ${LDFLAGS} CACHE STRING "Linker flags for LLVMXRay library")
+      set(LLVM_XRAY_LIBLIST ${LIBLIST} CACHE STRING "Library list for LLVMXRay")
+      set(COMPILER_RT_HAS_LLVMXRAY TRUE)
+    endif()
+
+    # Make use of LLVM CMake modules.
+    # --cmakedir is supported since llvm r291218 (4.0 release)
+    execute_process(
+      COMMAND ${LLVM_CONFIG_PATH} --cmakedir
+      RESULT_VARIABLE HAD_ERROR
+      OUTPUT_VARIABLE CONFIG_OUTPUT)
+    if(NOT HAD_ERROR)
+      string(STRIP "${CONFIG_OUTPUT}" LLVM_CMAKE_PATH_FROM_LLVM_CONFIG)
+      file(TO_CMAKE_PATH ${LLVM_CMAKE_PATH_FROM_LLVM_CONFIG} LLVM_CMAKE_PATH)
+    else()
+      file(TO_CMAKE_PATH ${LLVM_BINARY_DIR} LLVM_BINARY_DIR_CMAKE_STYLE)
+      set(LLVM_CMAKE_PATH "${LLVM_BINARY_DIR_CMAKE_STYLE}/lib${LLVM_LIBDIR_SUFFIX}/cmake/llvm")
+    endif()
+
+    list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_PATH}")
+    # Get some LLVM variables from LLVMConfig.
+    include("${LLVM_CMAKE_PATH}/LLVMConfig.cmake")
+
+    set(LLVM_LIBRARY_OUTPUT_INTDIR
+      ${LLVM_BINARY_DIR}/${CMAKE_CFG_INTDIR}/lib${LLVM_LIBDIR_SUFFIX})
   endif()
-  string(REGEX REPLACE "[ \t]*[\r\n]+[ \t]*" ";" CONFIG_OUTPUT ${CONFIG_OUTPUT})
-  list(GET CONFIG_OUTPUT 0 BINARY_DIR)
-  list(GET CONFIG_OUTPUT 1 TOOLS_BINARY_DIR)
-  list(GET CONFIG_OUTPUT 2 LIBRARY_DIR)
-  list(GET CONFIG_OUTPUT 3 MAIN_SRC_DIR)
-
-  set(LLVM_BINARY_DIR ${BINARY_DIR} CACHE PATH "Path to LLVM build tree")
-  set(LLVM_TOOLS_BINARY_DIR ${TOOLS_BINARY_DIR} CACHE PATH "Path to llvm/bin")
-  set(LLVM_LIBRARY_DIR ${LIBRARY_DIR} CACHE PATH "Path to llvm/lib")
-  set(LLVM_MAIN_SRC_DIR ${MAIN_SRC_DIR} CACHE PATH "Path to LLVM source tree")
-
-  # Make use of LLVM CMake modules.
-  # --cmakedir is supported since llvm r291218 (4.0 release)
-  execute_process(
-    COMMAND ${LLVM_CONFIG_PATH} --cmakedir
-    RESULT_VARIABLE HAD_ERROR
-    OUTPUT_VARIABLE CONFIG_OUTPUT)
-  if(NOT HAD_ERROR)
-    string(STRIP "${CONFIG_OUTPUT}" LLVM_CMAKE_PATH_FROM_LLVM_CONFIG)
-    file(TO_CMAKE_PATH ${LLVM_CMAKE_PATH_FROM_LLVM_CONFIG} LLVM_CMAKE_PATH)
-  else()
-    file(TO_CMAKE_PATH ${LLVM_BINARY_DIR} LLVM_BINARY_DIR_CMAKE_STYLE)
-    set(LLVM_CMAKE_PATH "${LLVM_BINARY_DIR_CMAKE_STYLE}/lib${LLVM_LIBDIR_SUFFIX}/cmake/llvm")
-  endif()
-
-  list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_PATH}")
-  # Get some LLVM variables from LLVMConfig.
-  include("${LLVM_CMAKE_PATH}/LLVMConfig.cmake")
-
-  set(LLVM_LIBRARY_OUTPUT_INTDIR
-    ${LLVM_BINARY_DIR}/${CMAKE_CFG_INTDIR}/lib${LLVM_LIBDIR_SUFFIX})
 endmacro()
 
 macro(construct_compiler_rt_default_triple)
@@ -257,11 +296,6 @@ macro(construct_compiler_rt_default_triple)
 
   string(REPLACE "-" ";" TARGET_TRIPLE_LIST ${COMPILER_RT_DEFAULT_TARGET_TRIPLE})
   list(GET TARGET_TRIPLE_LIST 0 COMPILER_RT_DEFAULT_TARGET_ARCH)
-  list(GET TARGET_TRIPLE_LIST 1 COMPILER_RT_DEFAULT_TARGET_OS)
-  list(LENGTH TARGET_TRIPLE_LIST TARGET_TRIPLE_LIST_LENGTH)
-  if(TARGET_TRIPLE_LIST_LENGTH GREATER 2)
-    list(GET TARGET_TRIPLE_LIST 2 COMPILER_RT_DEFAULT_TARGET_ABI)
-  endif()
   # Determine if test target triple is specified explicitly, and doesn't match the
   # default.
   if(NOT COMPILER_RT_DEFAULT_TARGET_TRIPLE STREQUAL TARGET_TRIPLE)
@@ -298,4 +332,69 @@ function(filter_builtin_sources output_var exclude_or_include excluded_list)
     endif ()
   endforeach ()
   set(${output_var} ${intermediate} PARENT_SCOPE)
+endfunction()
+
+function(get_compiler_rt_target arch variable)
+  string(FIND ${COMPILER_RT_DEFAULT_TARGET_TRIPLE} "-" dash_index)
+  string(SUBSTRING ${COMPILER_RT_DEFAULT_TARGET_TRIPLE} ${dash_index} -1 triple_suffix)
+  if(ANDROID AND ${arch} STREQUAL "i386")
+    set(target "i686${COMPILER_RT_OS_SUFFIX}${triple_suffix}")
+  else()
+    set(target "${arch}${triple_suffix}")
+  endif()
+  set(${variable} ${target} PARENT_SCOPE)
+endfunction()
+
+function(get_compiler_rt_install_dir arch install_dir)
+  if(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR AND NOT APPLE)
+    get_compiler_rt_target(${arch} target)
+    set(${install_dir} ${COMPILER_RT_INSTALL_PATH}/${target}/lib PARENT_SCOPE)
+  else()
+    set(${install_dir} ${COMPILER_RT_LIBRARY_INSTALL_DIR} PARENT_SCOPE)
+  endif()
+endfunction()
+
+function(get_compiler_rt_output_dir arch output_dir)
+  if(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR AND NOT APPLE)
+    get_compiler_rt_target(${arch} target)
+    set(${output_dir} ${COMPILER_RT_OUTPUT_DIR}/${target}/lib PARENT_SCOPE)
+  else()
+    set(${output_dir} ${COMPILER_RT_LIBRARY_OUTPUT_DIR} PARENT_SCOPE)
+  endif()
+endfunction()
+
+# compiler_rt_process_sources(
+#   <OUTPUT_VAR>
+#   <SOURCE_FILE> ...
+#  [ADDITIONAL_HEADERS <header> ...]
+# )
+#
+# Process the provided sources and write the list of new sources
+# into `<OUTPUT_VAR>`.
+#
+# ADDITIONAL_HEADERS     - Adds the supplied header to list of sources for IDEs.
+#
+# This function is very similar to `llvm_process_sources()` but exists here
+# because we need to support standalone builds of compiler-rt.
+function(compiler_rt_process_sources OUTPUT_VAR)
+  cmake_parse_arguments(
+    ARG
+    ""
+    ""
+    "ADDITIONAL_HEADERS"
+    ${ARGN}
+  )
+  set(sources ${ARG_UNPARSED_ARGUMENTS})
+  set(headers "")
+  if (XCODE OR MSVC_IDE OR CMAKE_EXTRA_GENERATOR)
+    # For IDEs we need to tell CMake about header files.
+    # Otherwise they won't show up in UI.
+    set(headers ${ARG_ADDITIONAL_HEADERS})
+    list(LENGTH headers headers_length)
+    if (${headers_length} GREATER 0)
+      set_source_files_properties(${headers}
+        PROPERTIES HEADER_FILE_ONLY ON)
+    endif()
+  endif()
+  set("${OUTPUT_VAR}" ${sources} ${headers} PARENT_SCOPE)
 endfunction()

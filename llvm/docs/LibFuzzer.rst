@@ -75,11 +75,13 @@ Recent versions of Clang (starting from 6.0) include libFuzzer, and no extra ins
 
 In order to build your fuzzer binary, use the `-fsanitize=fuzzer` flag during the
 compilation and linking. In most cases you may want to combine libFuzzer with
-AddressSanitizer_ (ASAN), UndefinedBehaviorSanitizer_ (UBSAN), or both::
+AddressSanitizer_ (ASAN), UndefinedBehaviorSanitizer_ (UBSAN), or both.  You can
+also build with MemorySanitizer_ (MSAN), but support is experimental::
 
    clang -g -O1 -fsanitize=fuzzer                         mytarget.c # Builds the fuzz target w/o sanitizers
    clang -g -O1 -fsanitize=fuzzer,address                 mytarget.c # Builds the fuzz target with ASAN
    clang -g -O1 -fsanitize=fuzzer,signed-integer-overflow mytarget.c # Builds the fuzz target with a part of UBSAN
+   clang -g -O1 -fsanitize=fuzzer,memory                  mytarget.c # Builds the fuzz target with MSAN
 
 This will perform the necessary instrumentation, as well as linking with the libFuzzer library.
 Note that ``-fsanitize=fuzzer`` links in the libFuzzer's ``main()`` symbol.
@@ -92,10 +94,6 @@ instrumentation without linking::
 
 Then libFuzzer can be linked to the desired driver by passing in
 ``-fsanitize=fuzzer`` during the linking stage.
-
-Using MemorySanitizer_ (MSAN) with libFuzzer is possible too, but tricky.
-The exact details are out of scope, we expect to simplify this in future
-versions.
 
 .. _libfuzzer-corpus:
 
@@ -246,6 +244,10 @@ The most important command line options are:
   the process is treated as a failure case.
   The limit is checked in a separate thread every second.
   If running w/o ASAN/MSAN, you may use 'ulimit -v' instead.
+``-malloc_limit_mb``
+  If non-zero, the fuzzer will exit if the target tries to allocate this
+  number of Mb with one malloc call.
+  If zero (default) same limit as rss_limit_mb is applied.
 ``-timeout_exitcode``
   Exit code (default 77) used if libFuzzer reports a timeout.
 ``-error_exitcode``
@@ -282,6 +284,9 @@ The most important command line options are:
 ``-use_counters``
   Use `coverage counters`_ to generate approximate counts of how often code
   blocks are hit; defaults to 1.
+``-reduce_inputs``
+  Try to reduce the size of inputs while preserving their full feature sets;
+  defaults to 1.
 ``-use_value_profile``
   Use `value profile`_ to guide corpus expansion; defaults to 0.
 ``-only_ascii``
@@ -362,14 +367,16 @@ possible event codes are:
 Each output line also reports the following statistics (when non-zero):
 
 ``cov:``
-  Total number of code blocks or edges covered by the executing the current
-  corpus.
+  Total number of code blocks or edges covered by executing the current corpus.
 ``ft:``
   libFuzzer uses different signals to evaluate the code coverage:
   edge coverage, edge counters, value profiles, indirect caller/callee pairs, etc.
   These signals combined are called *features* (`ft:`).
 ``corp:``
   Number of entries in the current in-memory test corpus and its size in bytes.
+``lim:``
+  Current limit on the length of new entries in the corpus.  Increases over time
+  until the max length (``-max_len``) is reached.
 ``exec/s:``
   Number of fuzzer iterations per second.
 ``rss:``
@@ -703,6 +710,8 @@ Trophies
   <https://bugzilla.gnome.org/buglist.cgi?bug_status=__all__&content=libFuzzer&list_id=68957&order=Importance&product=libxml2&query_format=specific>`_ and `[HT206167] <https://support.apple.com/en-gb/HT206167>`_ (CVE-2015-5312, CVE-2015-7500, CVE-2015-7942)
 
 * `Linux Kernel's BPF verifier <https://github.com/iovisor/bpf-fuzzer>`_
+
+* `Linux Kernel's Crypto code <https://www.spinics.net/lists/stable/msg199712.html>`_
 
 * Capstone: `[1] <https://github.com/aquynh/capstone/issues/600>`__ `[2] <https://github.com/aquynh/capstone/commit/6b88d1d51eadf7175a8f8a11b690684443b11359>`__
 

@@ -160,11 +160,13 @@ static llvm::Value *getMemAccInstPointerOperand(Instruction *Inst) {
 
 void ScopAnnotator::annotateSecondLevel(llvm::Instruction *Inst,
                                         llvm::Value *BasePtr) {
-  auto *PtrSCEV = SE->getSCEV(getMemAccInstPointerOperand(Inst));
+  Value *Ptr = getMemAccInstPointerOperand(Inst);
+  if (!Ptr)
+    return;
+
+  auto *PtrSCEV = SE->getSCEV(Ptr);
   auto *BasePtrSCEV = SE->getPointerBase(PtrSCEV);
 
-  if (!PtrSCEV)
-    return;
   auto SecondLevelAliasScope = SecondLevelAliasScopeMap.lookup(PtrSCEV);
   auto SecondLevelOtherAliasScopeList =
       SecondLevelOtherAliasScopeListMap.lookup(PtrSCEV);
@@ -199,6 +201,12 @@ void ScopAnnotator::annotate(Instruction *Inst) {
 
   // TODO: Use the ScopArrayInfo once available here.
   if (!AliasScopeDomain)
+    return;
+
+  // Do not apply annotations on memory operations that take more than one
+  // pointer. It would be ambiguous to which pointer the annotation applies.
+  // FIXME: How can we specify annotations for all pointer arguments?
+  if (isa<CallInst>(Inst) && !isa<MemSetInst>(Inst))
     return;
 
   auto *Ptr = getMemAccInstPointerOperand(Inst);

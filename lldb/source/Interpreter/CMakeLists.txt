@@ -1,5 +1,4 @@
 add_lldb_library(lldbInterpreter
-  Args.cpp
   CommandAlias.cpp
   CommandHistory.cpp
   CommandInterpreter.cpp
@@ -8,6 +7,7 @@ add_lldb_library(lldbInterpreter
   CommandObjectScript.cpp
   CommandOptionValidators.cpp
   CommandReturnObject.cpp
+  OptionArgParser.cpp
   OptionGroupArchitecture.cpp
   OptionGroupBoolean.cpp
   OptionGroupFile.cpp
@@ -55,3 +55,7 @@ add_lldb_library(lldbInterpreter
   LINK_COMPONENTS
     Support
   )
+
+if (NOT LLDB_DISABLE_LIBEDIT)
+  target_include_directories(lldbInterpreter PRIVATE ${libedit_INCLUDE_DIRS})
+endif()

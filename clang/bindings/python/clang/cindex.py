@@ -881,7 +881,7 @@ CursorKind.INVALID_CODE = CursorKind(73)
 CursorKind.UNEXPOSED_EXPR = CursorKind(100)
 
 # An expression that refers to some value declaration, such as a function,
-# varible, or enumerator.
+# variable, or enumerator.
 CursorKind.DECL_REF_EXPR = CursorKind(101)
 
 # An expression that refers to a member of a struct, union, class, Objective-C
@@ -1479,6 +1479,12 @@ class Cursor(Structure):
         """
         return conf.lib.clang_CXXMethod_isVirtual(self)
 
+    def is_abstract_record(self):
+        """Returns True if the cursor refers to a C++ record declaration
+        that has pure virtual member functions.
+        """
+        return conf.lib.clang_CXXRecord_isAbstract(self)
+
     def is_scoped_enum(self):
         """Returns True if the cursor refers to a scoped enum declaration.
         """
@@ -1495,7 +1501,7 @@ class Cursor(Structure):
         return conf.lib.clang_getCursorDefinition(self)
 
     def get_usr(self):
-        """Return the Unified Symbol Resultion (USR) for the entity referenced
+        """Return the Unified Symbol Resolution (USR) for the entity referenced
         by the given cursor (or None).
 
         A Unified Symbol Resolution (USR) is a string that identifies a
@@ -1504,6 +1510,12 @@ class Cursor(Structure):
         e.g., when references in one translation refer to an entity defined in
         another translation unit."""
         return conf.lib.clang_getCursorUSR(self)
+
+    def get_included_file(self):
+        """Returns the File that is included by the current inclusion cursor."""
+        assert self.kind == CursorKind.INCLUSION_DIRECTIVE
+
+        return conf.lib.clang_getIncludedFile(self)
 
     @property
     def kind(self):
@@ -1638,7 +1650,7 @@ class Cursor(Structure):
     def result_type(self):
         """Retrieve the Type of the result for this Cursor."""
         if not hasattr(self, '_result_type'):
-            self._result_type = conf.lib.clang_getResultType(self.type)
+            self._result_type = conf.lib.clang_getCursorResultType(self)
 
         return self._result_type
 
@@ -2241,6 +2253,12 @@ class Type(Structure):
         res._tu = tu
 
         return res
+
+    def get_num_template_arguments(self):
+        return conf.lib.clang_Type_getNumTemplateArguments(self)
+
+    def get_template_argument_type(self, num):
+        return conf.lib.clang_Type_getTemplateArgumentAsType(self, num)
 
     def get_canonical(self):
         """
@@ -3079,8 +3097,9 @@ class File(ClangObject):
         return "<File: %s>" % (self.name)
 
     @staticmethod
-    def from_cursor_result(res, fn, args):
-        assert isinstance(res, File)
+    def from_result(res, fn, args):
+        assert isinstance(res, c_object_p)
+        res = File(res)
 
         # Copy a reference to the TranslationUnit to prevent premature GC.
         res._tu = args[0]._tu
@@ -3401,6 +3420,10 @@ functionList = [
    [Cursor],
    bool),
 
+  ("clang_CXXRecord_isAbstract",
+   [Cursor],
+   bool),
+
   ("clang_EnumDecl_isScoped",
    [Cursor],
    bool),
@@ -3558,6 +3581,11 @@ functionList = [
    [Cursor, c_uint, c_uint],
    SourceRange),
 
+  ("clang_getCursorResultType",
+   [Cursor],
+   Type,
+   Type.from_result),
+
   ("clang_getCursorSemanticParent",
    [Cursor],
    Cursor,
@@ -3686,8 +3714,8 @@ functionList = [
 
   ("clang_getIncludedFile",
    [Cursor],
-   File,
-   File.from_cursor_result),
+   c_object_p,
+   File.from_result),
 
   ("clang_getInclusions",
    [TranslationUnit, callbacks['translation_unit_includes'], py_object]),
@@ -3974,6 +4002,15 @@ functionList = [
 
   ("clang_Type_getClassType",
    [Type],
+   Type,
+   Type.from_result),
+
+  ("clang_Type_getNumTemplateArguments",
+   [Type],
+   c_int),
+
+  ("clang_Type_getTemplateArgumentAsType",
+   [Type, c_uint],
    Type,
    Type.from_result),
 

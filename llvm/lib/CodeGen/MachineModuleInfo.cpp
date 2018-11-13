@@ -16,7 +16,6 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
@@ -277,7 +276,8 @@ MachineModuleInfo::getOrCreateMachineFunction(const Function &F) {
   MachineFunction *MF;
   if (I.second) {
     // No pre-existing machine function, create a new one.
-    MF = new MachineFunction(&F, TM, NextFnNum++, *this);
+    const TargetSubtargetInfo &STI = *TM.getSubtargetImpl(F);
+    MF = new MachineFunction(F, TM, STI, NextFnNum++, *this);
     // Update the set entry.
     I.first->second.reset(MF);
   } else {
@@ -314,10 +314,10 @@ public:
     MMI.deleteMachineFunctionFor(F);
     return true;
   }
-  
+
   StringRef getPassName() const override {
     return "Free MachineFunction";
-  } 
+  }
 };
 
 } // end anonymous namespace

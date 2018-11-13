@@ -7,22 +7,26 @@ if(NOT LLD_BUILT_STANDALONE)
 endif()
 
 add_lld_library(lldELF
+  AArch64ErrataFix.cpp
   Arch/AArch64.cpp
   Arch/AMDGPU.cpp
   Arch/ARM.cpp
   Arch/AVR.cpp
+  Arch/Hexagon.cpp
   Arch/Mips.cpp
   Arch/MipsArchTree.cpp
   Arch/PPC.cpp
   Arch/PPC64.cpp
+  Arch/RISCV.cpp
   Arch/SPARCV9.cpp
   Arch/X86.cpp
   Arch/X86_64.cpp
+  CallGraphSort.cpp
+  DWARF.cpp
   Driver.cpp
   DriverUtils.cpp
   EhFrame.cpp
   Filesystem.cpp
-  GdbIndex.cpp
   ICF.cpp
   InputFiles.cpp
   InputSection.cpp
@@ -34,7 +38,6 @@ add_lld_library(lldELF
   Relocations.cpp
   ScriptLexer.cpp
   ScriptParser.cpp
-  Strings.cpp
   SymbolTable.cpp
   Symbols.cpp
   SyntheticSections.cpp
@@ -45,9 +48,9 @@ add_lld_library(lldELF
   LINK_COMPONENTS
   ${LLVM_TARGETS_TO_BUILD}
   BinaryFormat
+  BitWriter
   Core
   DebugInfoDWARF
-  Demangle
   LTO
   MC
   Object

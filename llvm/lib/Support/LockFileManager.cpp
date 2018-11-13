@@ -24,7 +24,7 @@
 #include <sys/types.h>
 #include <system_error>
 #include <tuple>
-#if LLVM_ON_WIN32
+#ifdef _WIN32
 #include <windows.h>
 #endif
 #if LLVM_ON_UNIX
@@ -43,7 +43,7 @@
 
 using namespace llvm;
 
-/// \brief Attempt to read the lock file with the given name, if it exists.
+/// Attempt to read the lock file with the given name, if it exists.
 ///
 /// \param LockFileName The name of the lock file to read.
 ///
@@ -295,7 +295,7 @@ LockFileManager::WaitForUnlockResult LockFileManager::waitForUnlock() {
   if (getState() != LFS_Shared)
     return Res_Success;
 
-#if LLVM_ON_WIN32
+#ifdef _WIN32
   unsigned long Interval = 1;
 #else
   struct timespec Interval;
@@ -310,7 +310,7 @@ LockFileManager::WaitForUnlockResult LockFileManager::waitForUnlock() {
     // finish up and remove the lock file.
     // FIXME: Should we hook in to system APIs to get a notification when the
     // lock file is deleted?
-#if LLVM_ON_WIN32
+#ifdef _WIN32
     Sleep(Interval);
 #else
     nanosleep(&Interval, nullptr);
@@ -329,7 +329,7 @@ LockFileManager::WaitForUnlockResult LockFileManager::waitForUnlock() {
       return Res_OwnerDied;
 
     // Exponentially increase the time we wait for the lock to be removed.
-#if LLVM_ON_WIN32
+#ifdef _WIN32
     Interval *= 2;
 #else
     Interval.tv_sec *= 2;
@@ -340,7 +340,7 @@ LockFileManager::WaitForUnlockResult LockFileManager::waitForUnlock() {
     }
 #endif
   } while (
-#if LLVM_ON_WIN32
+#ifdef _WIN32
            Interval < MaxSeconds * 1000
 #else
            Interval.tv_sec < (time_t)MaxSeconds

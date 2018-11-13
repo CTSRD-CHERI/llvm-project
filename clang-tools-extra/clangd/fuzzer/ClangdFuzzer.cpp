@@ -14,17 +14,25 @@
 //===----------------------------------------------------------------------===//
 
 #include "ClangdLSPServer.h"
+#include "ClangdServer.h"
+#include "CodeComplete.h"
 #include <sstream>
+#include <stdio.h>
 
 extern "C" int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
-  clang::clangd::JSONOutput Out(llvm::nulls(), llvm::nulls(), nullptr);
+  if (size == 0)
+    return 0;
+
+  clang::clangd::JSONOutput Out(llvm::nulls(), llvm::nulls(),
+                                clang::clangd::Logger::Error, nullptr);
+  clang::clangd::CodeCompleteOptions CCOpts;
+  CCOpts.EnableSnippets = false;
+  clang::clangd::ClangdServer::Options Opts;
 
   // Initialize and run ClangdLSPServer.
-  clang::clangd::ClangdLSPServer LSPServer(
-      Out, clang::clangd::getDefaultAsyncThreadsCount(),
-      /*EnableSnippets=*/false, llvm::None, llvm::None);
-
-  std::istringstream In(std::string(reinterpret_cast<char *>(data), size));
-  LSPServer.run(In);
+  clang::clangd::ClangdLSPServer LSPServer(Out, CCOpts, llvm::None, false,
+                                           Opts);
+  // fmemopen isn't portable, but I think we only run the fuzzer on Linux.
+  LSPServer.run(fmemopen(data, size, "r"));
   return 0;
 }

@@ -1997,6 +1997,10 @@ def : Thumb2DSPPat<(int_arm_sxtb16 rGPR:$Rn),
                    (t2SXTB16 rGPR:$Rn, 0)>;
 def : Thumb2DSPPat<(int_arm_sxtab16 rGPR:$Rn, rGPR:$Rm),
                    (t2SXTAB16 rGPR:$Rn, rGPR:$Rm, 0)>;
+def : Thumb2DSPPat<(int_arm_sxtb16 (rotr rGPR:$Rn, rot_imm:$rot)),
+                   (t2SXTB16 rGPR:$Rn, rot_imm:$rot)>;
+def : Thumb2DSPPat<(int_arm_sxtab16 rGPR:$Rn, (rotr rGPR:$Rm, rot_imm:$rot)),
+                   (t2SXTAB16 rGPR:$Rn, rGPR:$Rm, rot_imm:$rot)>;
 
 
 // A simple right-shift can also be used in most cases (the exception is the
@@ -2032,6 +2036,8 @@ def : Thumb2DSPPat<(and (rotr rGPR:$Rm, rot_imm:$rot), 0x00FF00FF),
 
 def : Thumb2DSPPat<(int_arm_uxtb16 rGPR:$Rm),
                    (t2UXTB16 rGPR:$Rm, 0)>;
+def : Thumb2DSPPat<(int_arm_uxtb16 (rotr rGPR:$Rn, rot_imm:$rot)),
+                   (t2UXTB16 rGPR:$Rn, rot_imm:$rot)>;
 
 // FIXME: This pattern incorrectly assumes the shl operator is a rotate.
 //        The transformation should probably be done as a combiner action
@@ -2062,6 +2068,8 @@ def : Thumb2DSPPat<(add rGPR:$Rn, (and (srl rGPR:$Rm, imm8_or_16:$rot),
                        (t2UXTAH rGPR:$Rn, rGPR:$Rm, rot_imm:$rot)>;
 def : Thumb2DSPPat<(int_arm_uxtab16 rGPR:$Rn, rGPR:$Rm),
                       (t2UXTAB16 rGPR:$Rn, rGPR:$Rm, 0)>;
+def : Thumb2DSPPat<(int_arm_uxtab16 rGPR:$Rn, (rotr rGPR:$Rm, rot_imm:$rot)),
+                   (t2UXTAB16 rGPR:$Rn, rGPR:$Rm, rot_imm:$rot)>;
 }
 
 
@@ -2103,6 +2111,12 @@ def : t2InstSubst<"addw${p} $rd, $rn, $imm",
 def : t2InstSubst<"sub${s}${p}.w $rd, $rn, $imm",
                  (t2ADDri GPRnopc:$rd, GPRnopc:$rn, t2_so_imm_neg:$imm, pred:$p, s_cc_out:$s)>;
 def : t2InstSubst<"subw${p} $rd, $rn, $imm",
+                 (t2ADDri12 GPRnopc:$rd, GPR:$rn, t2_so_imm_neg:$imm, pred:$p)>;
+def : t2InstSubst<"subw${p} $Rd, $Rn, $imm",
+                 (t2ADDri12 GPRnopc:$Rd, GPR:$Rn, imm0_4095_neg:$imm, pred:$p)>;
+def : t2InstSubst<"sub${s}${p} $rd, $rn, $imm",
+                 (t2ADDri GPRnopc:$rd, GPRnopc:$rn, t2_so_imm_neg:$imm, pred:$p, s_cc_out:$s)>;
+def : t2InstSubst<"sub${p} $rd, $rn, $imm",
                  (t2ADDri12 GPRnopc:$rd, GPR:$rn, t2_so_imm_neg:$imm, pred:$p)>;
 // RSB
 defm t2RSB  : T2I_rbin_irs  <0b1110, "rsb", sub>;
@@ -2336,6 +2350,8 @@ def t2USAT16: T2SatI<(ins imm0_15:$sat_imm, rGPR:$Rn),
 
 def : T2Pat<(ARMssatnoshift GPRnopc:$Rn, imm0_31:$imm),
              (t2SSAT imm0_31:$imm, GPRnopc:$Rn, 0)>;
+def : T2Pat<(ARMusatnoshift GPRnopc:$Rn, imm0_31:$imm),
+             (t2USAT imm0_31:$imm, GPRnopc:$Rn, 0)>;
 def : T2Pat<(int_arm_ssat GPR:$a, imm1_32:$pos),
             (t2SSAT imm1_32:$pos, GPR:$a, 0)>;
 def : T2Pat<(int_arm_usat GPR:$a, imm0_31:$pos),
@@ -2592,6 +2608,18 @@ def : T2Pat<(or      rGPR:$src, t2_so_imm_not:$imm),
 def : T2Pat<(t2_so_imm_not:$src),
             (t2MVNi t2_so_imm_not:$src)>;
 
+// There are shorter Thumb encodings for ADD than ORR, so to increase
+// Thumb2SizeReduction's chances later on we select a t2ADD for an or where
+// possible.
+def : T2Pat<(or AddLikeOrOp:$Rn, t2_so_imm:$imm),
+            (t2ADDri $Rn, t2_so_imm:$imm)>;
+
+def : T2Pat<(or AddLikeOrOp:$Rn, imm0_4095:$Rm),
+            (t2ADDri12 $Rn, imm0_4095:$Rm)>;
+
+def : T2Pat<(or AddLikeOrOp:$Rn, non_imm32:$Rm),
+            (t2ADDrr $Rn, $Rm)>;
+
 //===----------------------------------------------------------------------===//
 //  Multiply Instructions.
 //
@@ -2659,7 +2687,9 @@ class T2SMMUL<bits<4> op7_4, string opc, list<dag> pattern>
 }
 def t2SMMUL : T2SMMUL<0b0000, "smmul", [(set rGPR:$Rd, (mulhs rGPR:$Rn,
                                                               rGPR:$Rm))]>;
-def t2SMMULR : T2SMMUL<0b0001, "smmulr", []>;
+def t2SMMULR :
+  T2SMMUL<0b0001, "smmulr",
+          [(set rGPR:$Rd, (ARMsmmlar rGPR:$Rn, rGPR:$Rm, (i32 0)))]>;
 
 class T2FourRegSMMLA<bits<3> op22_20, bits<4> op7_4, string opc,
                      list<dag> pattern>
@@ -2675,9 +2705,11 @@ class T2FourRegSMMLA<bits<3> op22_20, bits<4> op7_4, string opc,
 
 def t2SMMLA :   T2FourRegSMMLA<0b101, 0b0000, "smmla",
                 [(set rGPR:$Rd, (add (mulhs rGPR:$Rm, rGPR:$Rn), rGPR:$Ra))]>;
-def t2SMMLAR:   T2FourRegSMMLA<0b101, 0b0001, "smmlar", []>;
+def t2SMMLAR:   T2FourRegSMMLA<0b101, 0b0001, "smmlar",
+                [(set rGPR:$Rd, (ARMsmmlar rGPR:$Rn, rGPR:$Rm, rGPR:$Ra))]>;
 def t2SMMLS:    T2FourRegSMMLA<0b110, 0b0000, "smmls", []>;
-def t2SMMLSR:   T2FourRegSMMLA<0b110, 0b0001, "smmlsr", []>;
+def t2SMMLSR:   T2FourRegSMMLA<0b110, 0b0001, "smmlsr",
+                [(set rGPR:$Rd, (ARMsmmlsr rGPR:$Rn, rGPR:$Rm, rGPR:$Ra))]>;
 
 class T2ThreeRegSMUL<bits<3> op22_20, bits<2> op5_4, string opc,
                      list<dag> pattern>
@@ -3191,6 +3223,20 @@ def t2ISB : T2I<(outs), (ins instsyncb_opt:$opt), NoItinerary,
   let Inst{31-4} = 0xf3bf8f6;
   let Inst{3-0} = opt;
 }
+
+let hasNoSchedulingInfo = 1 in
+def t2TSB : T2I<(outs), (ins tsb_opt:$opt), NoItinerary,
+                "tsb", "\t$opt", []>, Requires<[IsThumb, HasV8_4a]> {
+  let Inst{31-0} = 0xf3af8012;
+}
+}
+
+// Armv8.5-A speculation barrier
+def t2SB : Thumb2XI<(outs), (ins), AddrModeNone, 4, NoItinerary, "sb", "", []>,
+           Requires<[IsThumb2, HasSpecCtrl]>, Sched<[]> {
+  let Inst{31-0} = 0xf3bf8f70;
+  let Unpredictable = 0x000f2f0f;
+  let hasSideEffects = 1;
 }
 
 class T2I_ldrex<bits<4> opcod, dag oops, dag iops, AddrMode am, int sz,
@@ -3237,7 +3283,7 @@ def t2LDREXH : T2I_ldrex<0b0101, (outs rGPR:$Rt), (ins addr_offset_none:$addr),
                          [(set rGPR:$Rt, (ldrex_2 addr_offset_none:$addr))]>,
                Requires<[IsThumb, HasV8MBaseline]>;
 def t2LDREX  : Thumb2I<(outs rGPR:$Rt), (ins t2addrmode_imm0_1020s4:$addr),
-                       AddrModeNone, 4, NoItinerary,
+                       AddrModeT2_ldrex, 4, NoItinerary,
                        "ldrex", "\t$Rt, $addr", "",
                      [(set rGPR:$Rt, (ldrex_4 t2addrmode_imm0_1020s4:$addr))]>,
                Requires<[IsThumb, HasV8MBaseline]> {
@@ -3316,7 +3362,7 @@ def t2STREXH : T2I_strex<0b0101, (outs rGPR:$Rd),
 
 def t2STREX  : Thumb2I<(outs rGPR:$Rd), (ins rGPR:$Rt,
                              t2addrmode_imm0_1020s4:$addr),
-                  AddrModeNone, 4, NoItinerary,
+                  AddrModeT2_ldrex, 4, NoItinerary,
                   "strex", "\t$Rd, $Rt, $addr", "",
                   [(set rGPR:$Rd,
                         (strex_4 rGPR:$Rt, t2addrmode_imm0_1020s4:$addr))]>,
@@ -3694,6 +3740,8 @@ def : t2InstAlias<"esb$p.w", (t2HINT 16, pred:$p), 1> {
 def : t2InstAlias<"esb$p", (t2HINT 16, pred:$p), 0> {
   let Predicates = [IsThumb2, HasRAS];
 }
+def : t2InstAlias<"csdb$p.w", (t2HINT 20, pred:$p), 0>;
+def : t2InstAlias<"csdb$p",   (t2HINT 20, pred:$p), 1>;
 
 def t2DBG : T2I<(outs), (ins imm0_15:$opt), NoItinerary, "dbg", "\t$opt",
                 [(int_arm_dbg imm0_15:$opt)]> {
@@ -4507,6 +4555,14 @@ def : InstAlias<"dmb${p}", (t2DMB 0xf, pred:$p), 0>, Requires<[HasDB]>;
 def : InstAlias<"dsb${p}", (t2DSB 0xf, pred:$p), 0>, Requires<[HasDB]>;
 def : InstAlias<"isb${p}", (t2ISB 0xf, pred:$p), 0>, Requires<[HasDB]>;
 
+// Non-predicable aliases of a predicable DSB: the predicate is (14, 0) where
+// 14 = AL (always execute) and 0 = "instruction doesn't read the CPSR".
+def : InstAlias<"ssbb", (t2DSB 0x0, 14, 0), 1>, Requires<[HasDB, IsThumb2]>;
+def : InstAlias<"pssbb", (t2DSB 0x4, 14, 0), 1>, Requires<[HasDB, IsThumb2]>;
+
+// Armv8-R 'Data Full Barrier'
+def : InstAlias<"dfb${p}", (t2DSB 0xc, pred:$p), 1>, Requires<[HasDFB]>;
+
 // Alias for LDR, LDRB, LDRH, LDRSB, and LDRSH without the ".w" optional
 // width specifier.
 def : t2InstAlias<"ldr${p} $Rt, $addr",
@@ -4709,10 +4765,22 @@ def : t2InstSubst<"bic${s}${p} $Rd, $Rn, $imm",
 def : t2InstSubst<"bic${s}${p} $Rdn, $imm",
                   (t2ANDri rGPR:$Rdn, rGPR:$Rdn, t2_so_imm_not:$imm,
                            pred:$p, cc_out:$s)>;
+def : t2InstSubst<"bic${s}${p}.w $Rd, $Rn, $imm",
+                  (t2ANDri rGPR:$Rd, rGPR:$Rn, t2_so_imm_not:$imm,
+                           pred:$p, cc_out:$s)>;
+def : t2InstSubst<"bic${s}${p}.w $Rdn, $imm",
+                  (t2ANDri rGPR:$Rdn, rGPR:$Rdn, t2_so_imm_not:$imm,
+                           pred:$p, cc_out:$s)>;
 def : t2InstSubst<"and${s}${p} $Rd, $Rn, $imm",
                   (t2BICri rGPR:$Rd, rGPR:$Rn, t2_so_imm_not:$imm,
                            pred:$p, cc_out:$s)>;
 def : t2InstSubst<"and${s}${p} $Rdn, $imm",
+                  (t2BICri rGPR:$Rdn, rGPR:$Rdn, t2_so_imm_not:$imm,
+                           pred:$p, cc_out:$s)>;
+def : t2InstSubst<"and${s}${p}.w $Rd, $Rn, $imm",
+                  (t2BICri rGPR:$Rd, rGPR:$Rn, t2_so_imm_not:$imm,
+                           pred:$p, cc_out:$s)>;
+def : t2InstSubst<"and${s}${p}.w $Rdn, $imm",
                   (t2BICri rGPR:$Rdn, rGPR:$Rdn, t2_so_imm_not:$imm,
                            pred:$p, cc_out:$s)>;
 // And ORR <--> ORN

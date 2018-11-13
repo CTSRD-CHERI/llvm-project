@@ -18,6 +18,9 @@ class ExitDuringStepTestCase(TestBase):
     mydir = TestBase.compute_mydir(__file__)
 
     @skipIfFreeBSD  # llvm.org/pr21411: test is hanging
+    # The test is actually flakey on Windows, failing every dozen or so runs, but even with the flakey
+    # decorator it still fails
+    @expectedFailureAll(oslist=["windows"], bugnumber="llvm.org/pr38373")
     def test(self):
         """Test thread exit during step handling."""
         self.build(dictionary=self.getBuildFlags())
@@ -27,6 +30,9 @@ class ExitDuringStepTestCase(TestBase):
             True)
 
     @skipIfFreeBSD  # llvm.org/pr21411: test is hanging
+    # The test is actually flakey on Windows, failing every dozen or so runs, but even with the flakey
+    # decorator it still fails
+    @expectedFailureAll(oslist=["windows"], bugnumber="llvm.org/pr38373")
     def test_step_over(self):
         """Test thread exit during step-over handling."""
         self.build(dictionary=self.getBuildFlags())
@@ -36,6 +42,9 @@ class ExitDuringStepTestCase(TestBase):
             False)
 
     @skipIfFreeBSD  # llvm.org/pr21411: test is hanging
+    # The test is actually flakey on Windows, failing every dozen or so runs, but even with the flakey
+    # decorator it still fails
+    @expectedFailureAll(oslist=["windows"], bugnumber="llvm.org/pr38373")
     def test_step_in(self):
         """Test thread exit during step-in handling."""
         self.build(dictionary=self.getBuildFlags())
@@ -53,7 +62,7 @@ class ExitDuringStepTestCase(TestBase):
 
     def exit_during_step_base(self, step_cmd, step_stop_reason, by_instruction):
         """Test thread exit during step handling."""
-        exe = os.path.join(os.getcwd(), "a.out")
+        exe = self.getBuildArtifact("a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         # This should create a breakpoint in the main thread.

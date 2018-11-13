@@ -26,6 +26,7 @@
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
@@ -56,7 +57,7 @@
 #include "llvm/Support/KnownBits.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/Transforms/Utils.h"
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -140,7 +141,6 @@ namespace {
     bool runOnLoop(Loop *L, LPPassManager &LPM) override;
 
   private:
-    unsigned getStoreSizeInBytes(StoreInst *SI);
     int getSCEVStride(const SCEVAddRecExpr *StoreEv);
     bool isLegalStore(Loop *CurLoop, StoreInst *SI);
     void collectStores(Loop *CurLoop, BasicBlock *BB,
@@ -244,8 +244,8 @@ namespace {
     const Value *V;
   };
 
-  raw_ostream &operator<< (raw_ostream &OS, const PE &P) LLVM_ATTRIBUTE_USED;
-  raw_ostream &operator<< (raw_ostream &OS, const PE &P) {
+  LLVM_ATTRIBUTE_USED
+  raw_ostream &operator<<(raw_ostream &OS, const PE &P) {
     P.C.print(OS, P.V ? P.V : P.C.Root);
     return OS;
   }
@@ -609,9 +609,9 @@ namespace {
     unsigned getInverseMxN(unsigned QP);
     Value *generate(BasicBlock::iterator At, ParsedValues &PV);
 
-    void setupSimplifier();
+    void setupPreSimplifier(Simplifier &S);
+    void setupPostSimplifier(Simplifier &S);
 
-    Simplifier Simp;
     Loop *CurLoop;
     const DataLayout &DL;
     const DominatorTree &DT;
@@ -986,6 +986,7 @@ bool PolynomialMultiplyRecognize::isPromotableTo(Value *Val,
     case Instruction::Xor:
     case Instruction::LShr: // Shift right is ok.
     case Instruction::Select:
+    case Instruction::Trunc:
       return true;
     case Instruction::ICmp:
       if (CmpInst *CI = cast<CmpInst>(In))
@@ -999,6 +1000,8 @@ bool PolynomialMultiplyRecognize::isPromotableTo(Value *Val,
 
 void PolynomialMultiplyRecognize::promoteTo(Instruction *In,
       IntegerType *DestTy, BasicBlock *LoopB) {
+  Type *OrigTy = In->getType();
+
   // Leave boolean values alone.
   if (!In->getType()->isIntegerTy(1))
     In->mutateType(DestTy);
@@ -1029,6 +1032,14 @@ void PolynomialMultiplyRecognize::promoteTo(Instruction *In,
     Z->eraseFromParent();
     return;
   }
+  if (TruncInst *T = dyn_cast<TruncInst>(In)) {
+    IntegerType *TruncTy = cast<IntegerType>(OrigTy);
+    Value *Mask = ConstantInt::get(DestTy, (1u << TruncTy->getBitWidth()) - 1);
+    Value *And = IRBuilder<>(In).CreateAnd(T->getOperand(0), Mask);
+    T->replaceAllUsesWith(And);
+    T->eraseFromParent();
+    return;
+  }
 
   // Promote immediates.
   for (unsigned i = 0, n = In->getNumOperands(); i != n; ++i) {
@@ -1051,14 +1062,11 @@ bool PolynomialMultiplyRecognize::promoteTypes(BasicBlock *LoopB,
   // Check if the exit values have types that are no wider than the type
   // that we want to promote to.
   unsigned DestBW = DestTy->getBitWidth();
-  for (Instruction &In : *ExitB) {
-    PHINode *P = dyn_cast<PHINode>(&In);
-    if (!P)
-      break;
-    if (P->getNumIncomingValues() != 1)
+  for (PHINode &P : ExitB->phis()) {
+    if (P.getNumIncomingValues() != 1)
       return false;
-    assert(P->getIncomingBlock(0) == LoopB);
-    IntegerType *T = dyn_cast<IntegerType>(P->getType());
+    assert(P.getIncomingBlock(0) == LoopB);
+    IntegerType *T = dyn_cast<IntegerType>(P.getType());
     if (!T || T->getBitWidth() > DestBW)
       return false;
   }
@@ -1573,8 +1581,8 @@ static bool hasZeroSignBit(const Value *V) {
   return false;
 }
 
-void PolynomialMultiplyRecognize::setupSimplifier() {
-  Simp.addRule("sink-zext",
+void PolynomialMultiplyRecognize::setupPreSimplifier(Simplifier &S) {
+  S.addRule("sink-zext",
     // Sink zext past bitwise operations.
     [](Instruction *I, LLVMContext &Ctx) -> Value* {
       if (I->getOpcode() != Instruction::ZExt)
@@ -1595,7 +1603,7 @@ void PolynomialMultiplyRecognize::setupSimplifier() {
                            B.CreateZExt(T->getOperand(0), I->getType()),
                            B.CreateZExt(T->getOperand(1), I->getType()));
     });
-  Simp.addRule("xor/and -> and/xor",
+  S.addRule("xor/and -> and/xor",
     // (xor (and x a) (and y a)) -> (and (xor x y) a)
     [](Instruction *I, LLVMContext &Ctx) -> Value* {
       if (I->getOpcode() != Instruction::Xor)
@@ -1613,7 +1621,7 @@ void PolynomialMultiplyRecognize::setupSimplifier() {
       return B.CreateAnd(B.CreateXor(And0->getOperand(0), And1->getOperand(0)),
                          And0->getOperand(1));
     });
-  Simp.addRule("sink binop into select",
+  S.addRule("sink binop into select",
     // (Op (select c x y) z) -> (select c (Op x z) (Op y z))
     // (Op x (select c y z)) -> (select c (Op x y) (Op x z))
     [](Instruction *I, LLVMContext &Ctx) -> Value* {
@@ -1639,7 +1647,7 @@ void PolynomialMultiplyRecognize::setupSimplifier() {
       }
       return nullptr;
     });
-  Simp.addRule("fold select-select",
+  S.addRule("fold select-select",
     // (select c (select c x y) z) -> (select c x z)
     // (select c x (select c y z)) -> (select c x z)
     [](Instruction *I, LLVMContext &Ctx) -> Value* {
@@ -1658,7 +1666,7 @@ void PolynomialMultiplyRecognize::setupSimplifier() {
       }
       return nullptr;
     });
-  Simp.addRule("or-signbit -> xor-signbit",
+  S.addRule("or-signbit -> xor-signbit",
     // (or (lshr x 1) 0x800.0) -> (xor (lshr x 1) 0x800.0)
     [](Instruction *I, LLVMContext &Ctx) -> Value* {
       if (I->getOpcode() != Instruction::Or)
@@ -1670,7 +1678,7 @@ void PolynomialMultiplyRecognize::setupSimplifier() {
         return nullptr;
       return IRBuilder<>(Ctx).CreateXor(I->getOperand(0), Msb);
     });
-  Simp.addRule("sink lshr into binop",
+  S.addRule("sink lshr into binop",
     // (lshr (BitOp x y) c) -> (BitOp (lshr x c) (lshr y c))
     [](Instruction *I, LLVMContext &Ctx) -> Value* {
       if (I->getOpcode() != Instruction::LShr)
@@ -1692,7 +1700,7 @@ void PolynomialMultiplyRecognize::setupSimplifier() {
                 B.CreateLShr(BitOp->getOperand(0), S),
                 B.CreateLShr(BitOp->getOperand(1), S));
     });
-  Simp.addRule("expose bitop-const",
+  S.addRule("expose bitop-const",
     // (BitOp1 (BitOp2 x a) b) -> (BitOp2 x (BitOp1 a b))
     [](Instruction *I, LLVMContext &Ctx) -> Value* {
       auto IsBitOp = [](unsigned Op) -> bool {
@@ -1721,16 +1729,44 @@ void PolynomialMultiplyRecognize::setupSimplifier() {
     });
 }
 
+void PolynomialMultiplyRecognize::setupPostSimplifier(Simplifier &S) {
+  S.addRule("(and (xor (and x a) y) b) -> (and (xor x y) b), if b == b&a",
+    [](Instruction *I, LLVMContext &Ctx) -> Value* {
+      if (I->getOpcode() != Instruction::And)
+        return nullptr;
+      Instruction *Xor = dyn_cast<Instruction>(I->getOperand(0));
+      ConstantInt *C0 = dyn_cast<ConstantInt>(I->getOperand(1));
+      if (!Xor || !C0)
+        return nullptr;
+      if (Xor->getOpcode() != Instruction::Xor)
+        return nullptr;
+      Instruction *And0 = dyn_cast<Instruction>(Xor->getOperand(0));
+      Instruction *And1 = dyn_cast<Instruction>(Xor->getOperand(1));
+      // Pick the first non-null and.
+      if (!And0 || And0->getOpcode() != Instruction::And)
+        std::swap(And0, And1);
+      ConstantInt *C1 = dyn_cast<ConstantInt>(And0->getOperand(1));
+      if (!C1)
+        return nullptr;
+      uint32_t V0 = C0->getZExtValue();
+      uint32_t V1 = C1->getZExtValue();
+      if (V0 != (V0 & V1))
+        return nullptr;
+      IRBuilder<> B(Ctx);
+      return B.CreateAnd(B.CreateXor(And0->getOperand(0), And1), C0);
+    });
+}
+
 bool PolynomialMultiplyRecognize::recognize() {
-  DEBUG(dbgs() << "Starting PolynomialMultiplyRecognize on loop\n"
-               << *CurLoop << '\n');
+  LLVM_DEBUG(dbgs() << "Starting PolynomialMultiplyRecognize on loop\n"
+                    << *CurLoop << '\n');
   // Restrictions:
   // - The loop must consist of a single block.
   // - The iteration count must be known at compile-time.
   // - The loop must have an induction variable starting from 0, and
   //   incremented in each iteration of the loop.
   BasicBlock *LoopB = CurLoop->getHeader();
-  DEBUG(dbgs() << "Loop header:\n" << *LoopB);
+  LLVM_DEBUG(dbgs() << "Loop header:\n" << *LoopB);
 
   if (LoopB != CurLoop->getLoopLatch())
     return false;
@@ -1750,10 +1786,12 @@ bool PolynomialMultiplyRecognize::recognize() {
 
   Value *CIV = getCountIV(LoopB);
   ParsedValues PV;
+  Simplifier PreSimp;
   PV.IterCount = IterCount;
-  DEBUG(dbgs() << "Loop IV: " << *CIV << "\nIterCount: " << IterCount << '\n');
+  LLVM_DEBUG(dbgs() << "Loop IV: " << *CIV << "\nIterCount: " << IterCount
+                    << '\n');
 
-  setupSimplifier();
+  setupPreSimplifier(PreSimp);
 
   // Perform a preliminary scan of select instructions to see if any of them
   // looks like a generator of the polynomial multiply steps. Assume that a
@@ -1776,9 +1814,9 @@ bool PolynomialMultiplyRecognize::recognize() {
       continue;
 
     Simplifier::Context C(SI);
-    Value *T = Simp.simplify(C);
+    Value *T = PreSimp.simplify(C);
     SelectInst *SelI = (T && isa<SelectInst>(T)) ? cast<SelectInst>(T) : SI;
-    DEBUG(dbgs() << "scanSelect(pre-scan): " << PE(C, SelI) << '\n');
+    LLVM_DEBUG(dbgs() << "scanSelect(pre-scan): " << PE(C, SelI) << '\n');
     if (scanSelect(SelI, LoopB, EntryB, CIV, PV, true)) {
       FoundPreScan = true;
       if (SelI != SI) {
@@ -1791,7 +1829,7 @@ bool PolynomialMultiplyRecognize::recognize() {
   }
 
   if (!FoundPreScan) {
-    DEBUG(dbgs() << "Have not found candidates for pmpy\n");
+    LLVM_DEBUG(dbgs() << "Have not found candidates for pmpy\n");
     return false;
   }
 
@@ -1802,6 +1840,24 @@ bool PolynomialMultiplyRecognize::recognize() {
     // wide as the target's pmpy instruction.
     if (!promoteTypes(LoopB, ExitB))
       return false;
+    // Run post-promotion simplifications.
+    Simplifier PostSimp;
+    setupPostSimplifier(PostSimp);
+    for (Instruction &In : *LoopB) {
+      SelectInst *SI = dyn_cast<SelectInst>(&In);
+      if (!SI || !FeedsPHI(SI))
+        continue;
+      Simplifier::Context C(SI);
+      Value *T = PostSimp.simplify(C);
+      SelectInst *SelI = dyn_cast_or_null<SelectInst>(T);
+      if (SelI != SI) {
+        Value *NewSel = C.materialize(LoopB, SI->getIterator());
+        SI->replaceAllUsesWith(NewSel);
+        RecursivelyDeleteTriviallyDeadInstructions(SI, &TLI);
+      }
+      break;
+    }
+
     if (!convertShiftsToLeft(LoopB, ExitB, IterCount))
       return false;
     cleanupLoopBody(LoopB);
@@ -1813,14 +1869,14 @@ bool PolynomialMultiplyRecognize::recognize() {
     SelectInst *SelI = dyn_cast<SelectInst>(&In);
     if (!SelI)
       continue;
-    DEBUG(dbgs() << "scanSelect: " << *SelI << '\n');
+    LLVM_DEBUG(dbgs() << "scanSelect: " << *SelI << '\n');
     FoundScan = scanSelect(SelI, LoopB, EntryB, CIV, PV, false);
     if (FoundScan)
       break;
   }
   assert(FoundScan);
 
-  DEBUG({
+  LLVM_DEBUG({
     StringRef PP = (PV.M ? "(P+M)" : "P");
     if (!PV.Inv)
       dbgs() << "Found pmpy idiom: R = " << PP << ".Q\n";
@@ -1845,13 +1901,6 @@ bool PolynomialMultiplyRecognize::recognize() {
   PV.Res->replaceAllUsesWith(PM);
   PV.Res->eraseFromParent();
   return true;
-}
-
-unsigned HexagonLoopIdiomRecognize::getStoreSizeInBytes(StoreInst *SI) {
-  uint64_t SizeInBits = DL->getTypeSizeInBits(SI->getValueOperand()->getType());
-  assert(((SizeInBits & 7) || (SizeInBits >> 32) == 0) &&
-         "Don't overflow unsigned.");
-  return (unsigned)SizeInBits >> 3;
 }
 
 int HexagonLoopIdiomRecognize::getSCEVStride(const SCEVAddRecExpr *S) {
@@ -1885,7 +1934,7 @@ bool HexagonLoopIdiomRecognize::isLegalStore(Loop *CurLoop, StoreInst *SI) {
   int Stride = getSCEVStride(StoreEv);
   if (Stride == 0)
     return false;
-  unsigned StoreSize = getStoreSizeInBytes(SI);
+  unsigned StoreSize = DL->getTypeStoreSize(SI->getValueOperand()->getType());
   if (StoreSize != unsigned(std::abs(Stride)))
     return false;
 
@@ -1921,7 +1970,7 @@ mayLoopAccessLocation(Value *Ptr, ModRefInfo Access, Loop *L,
   // Get the location that may be stored across the loop.  Since the access
   // is strided positively through memory, we say that the modified location
   // starts at the pointer and has infinite size.
-  uint64_t AccessSize = MemoryLocation::UnknownSize;
+  LocationSize AccessSize = LocationSize::unknown();
 
   // If the loop iterates a fixed number of times, we can refine the access
   // size to be exactly the size of the memset, which is (BECount+1)*StoreSize
@@ -1936,7 +1985,9 @@ mayLoopAccessLocation(Value *Ptr, ModRefInfo Access, Loop *L,
 
   for (auto *B : L->blocks())
     for (auto &I : *B)
-      if (Ignored.count(&I) == 0 && (AA.getModRefInfo(&I, StoreLoc) & Access))
+      if (Ignored.count(&I) == 0 &&
+          isModOrRefSet(
+              intersectModRef(AA.getModRefInfo(&I, StoreLoc), Access)))
         return true;
 
   return false;
@@ -1960,7 +2011,7 @@ bool HexagonLoopIdiomRecognize::processCopyingStore(Loop *CurLoop,
   Value *StorePtr = SI->getPointerOperand();
   auto *StoreEv = cast<SCEVAddRecExpr>(SE->getSCEV(StorePtr));
   unsigned Stride = getSCEVStride(StoreEv);
-  unsigned StoreSize = getStoreSizeInBytes(SI);
+  unsigned StoreSize = DL->getTypeStoreSize(SI->getValueOperand()->getType());
   if (Stride != StoreSize)
     return false;
 
@@ -2015,12 +2066,12 @@ CleanupAndExit:
 
   SmallPtrSet<Instruction*, 2> Ignore1;
   Ignore1.insert(SI);
-  if (mayLoopAccessLocation(StoreBasePtr, MRI_ModRef, CurLoop, BECount,
+  if (mayLoopAccessLocation(StoreBasePtr, ModRefInfo::ModRef, CurLoop, BECount,
                             StoreSize, *AA, Ignore1)) {
     // Check if the load is the offending instruction.
     Ignore1.insert(LI);
-    if (mayLoopAccessLocation(StoreBasePtr, MRI_ModRef, CurLoop, BECount,
-                              StoreSize, *AA, Ignore1)) {
+    if (mayLoopAccessLocation(StoreBasePtr, ModRefInfo::ModRef, CurLoop,
+                              BECount, StoreSize, *AA, Ignore1)) {
       // Still bad. Nothing we can do.
       goto CleanupAndExit;
     }
@@ -2062,8 +2113,8 @@ CleanupAndExit:
 
   SmallPtrSet<Instruction*, 2> Ignore2;
   Ignore2.insert(SI);
-  if (mayLoopAccessLocation(LoadBasePtr, MRI_Mod, CurLoop, BECount, StoreSize,
-                            *AA, Ignore2))
+  if (mayLoopAccessLocation(LoadBasePtr, ModRefInfo::Mod, CurLoop, BECount,
+                            StoreSize, *AA, Ignore2))
     goto CleanupAndExit;
 
   // Check the stride.
@@ -2089,7 +2140,6 @@ CleanupAndExit:
   // pointer size if it isn't already.
   LLVMContext &Ctx = SI->getContext();
   BECount = SE->getTruncateOrZeroExtend(BECount, IntPtrTy);
-  unsigned Alignment = std::min(SI->getAlignment(), LI->getAlignment());
   DebugLoc DLoc = SI->getDebugLoc();
 
   const SCEV *NumBytesS =
@@ -2223,12 +2273,14 @@ CleanupAndExit:
                       : CondBuilder.CreateBitCast(LoadBasePtr, Int32PtrTy);
       NewCall = CondBuilder.CreateCall(Fn, {Op0, Op1, NumWords});
     } else {
-      NewCall = CondBuilder.CreateMemMove(StoreBasePtr, LoadBasePtr,
-                                          NumBytes, Alignment);
+      NewCall = CondBuilder.CreateMemMove(StoreBasePtr, SI->getAlignment(),
+                                          LoadBasePtr, LI->getAlignment(),
+                                          NumBytes);
     }
   } else {
-    NewCall = Builder.CreateMemCpy(StoreBasePtr, LoadBasePtr,
-                                   NumBytes, Alignment);
+    NewCall = Builder.CreateMemCpy(StoreBasePtr, SI->getAlignment(),
+                                   LoadBasePtr, LI->getAlignment(),
+                                   NumBytes);
     // Okay, the memcpy has been formed.  Zap the original store and
     // anything that feeds into it.
     RecursivelyDeleteTriviallyDeadInstructions(SI, TLI);
@@ -2236,15 +2288,16 @@ CleanupAndExit:
 
   NewCall->setDebugLoc(DLoc);
 
-  DEBUG(dbgs() << "  Formed " << (Overlap ? "memmove: " : "memcpy: ")
-               << *NewCall << "\n"
-               << "    from load ptr=" << *LoadEv << " at: " << *LI << "\n"
-               << "    from store ptr=" << *StoreEv << " at: " << *SI << "\n");
+  LLVM_DEBUG(dbgs() << "  Formed " << (Overlap ? "memmove: " : "memcpy: ")
+                    << *NewCall << "\n"
+                    << "    from load ptr=" << *LoadEv << " at: " << *LI << "\n"
+                    << "    from store ptr=" << *StoreEv << " at: " << *SI
+                    << "\n");
 
   return true;
 }
 
-// \brief Check if the instructions in Insts, together with their dependencies
+// Check if the instructions in Insts, together with their dependencies
 // cover the loop in the sense that the loop could be safely eliminated once
 // the instructions in Insts are removed.
 bool HexagonLoopIdiomRecognize::coverLoop(Loop *L,

@@ -33,6 +33,13 @@ RISCVRegisterInfo::RISCVRegisterInfo(unsigned HwMode)
 
 const MCPhysReg *
 RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
+  if (MF->getFunction().hasFnAttribute("interrupt")) {
+    if (MF->getSubtarget<RISCVSubtarget>().hasStdExtD())
+      return CSR_XLEN_F64_Interrupt_SaveList;
+    if (MF->getSubtarget<RISCVSubtarget>().hasStdExtF())
+      return CSR_XLEN_F32_Interrupt_SaveList;
+    return CSR_Interrupt_SaveList;
+  }
   return CSR_SaveList;
 }
 
@@ -50,6 +57,10 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   return Reserved;
 }
 
+bool RISCVRegisterInfo::isConstantPhysReg(unsigned PhysReg) const {
+  return PhysReg == RISCV::X0;
+}
+
 const uint32_t *RISCVRegisterInfo::getNoPreservedMask() const {
   return CSR_NoRegs_RegMask;
 }
@@ -57,39 +68,61 @@ const uint32_t *RISCVRegisterInfo::getNoPreservedMask() const {
 void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                             int SPAdj, unsigned FIOperandNum,
                                             RegScavenger *RS) const {
-  // TODO: this implementation is a temporary placeholder which does just
-  // enough to allow other aspects of code generation to be tested
-
   assert(SPAdj == 0 && "Unexpected non-zero SPAdj value");
 
   MachineInstr &MI = *II;
   MachineFunction &MF = *MI.getParent()->getParent();
-  const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+  const RISCVInstrInfo *TII = MF.getSubtarget<RISCVSubtarget>().getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
 
-  unsigned FrameReg = getFrameRegister(MF);
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
-  int Offset = TFI->getFrameIndexReference(MF, FrameIndex, FrameReg);
-  Offset += MI.getOperand(FIOperandNum + 1).getImm();
+  unsigned FrameReg;
+  int Offset =
+      getFrameLowering(MF)->getFrameIndexReference(MF, FrameIndex, FrameReg) +
+      MI.getOperand(FIOperandNum + 1).getImm();
 
-  assert(TFI->hasFP(MF) && "eliminateFrameIndex currently requires hasFP");
-
-  // Offsets must be directly encoded in a 12-bit immediate field
-  if (!isInt<12>(Offset)) {
+  if (!isInt<32>(Offset)) {
     report_fatal_error(
-        "Frame offsets outside of the signed 12-bit range not supported");
+        "Frame offsets outside of the signed 32-bit range not supported");
   }
 
-  MI.getOperand(FIOperandNum).ChangeToRegister(FrameReg, false);
+  MachineBasicBlock &MBB = *MI.getParent();
+  bool FrameRegIsKill = false;
+
+  if (!isInt<12>(Offset)) {
+    assert(isInt<32>(Offset) && "Int32 expected");
+    // The offset won't fit in an immediate, so use a scratch register instead
+    // Modify Offset and FrameReg appropriately
+    unsigned ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    TII->movImm32(MBB, II, DL, ScratchReg, Offset);
+    BuildMI(MBB, II, DL, TII->get(RISCV::ADD), ScratchReg)
+        .addReg(FrameReg)
+        .addReg(ScratchReg, RegState::Kill);
+    Offset = 0;
+    FrameReg = ScratchReg;
+    FrameRegIsKill = true;
+  }
+
+  MI.getOperand(FIOperandNum)
+      .ChangeToRegister(FrameReg, false, false, FrameRegIsKill);
   MI.getOperand(FIOperandNum + 1).ChangeToImmediate(Offset);
 }
 
 unsigned RISCVRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  return RISCV::X8;
+  const TargetFrameLowering *TFI = getFrameLowering(MF);
+  return TFI->hasFP(MF) ? RISCV::X8 : RISCV::X2;
 }
 
 const uint32_t *
-RISCVRegisterInfo::getCallPreservedMask(const MachineFunction & /*MF*/,
+RISCVRegisterInfo::getCallPreservedMask(const MachineFunction & MF,
                                         CallingConv::ID /*CC*/) const {
+  if (MF.getFunction().hasFnAttribute("interrupt")) {
+    if (MF.getSubtarget<RISCVSubtarget>().hasStdExtD())
+      return CSR_XLEN_F64_Interrupt_RegMask;
+    if (MF.getSubtarget<RISCVSubtarget>().hasStdExtF())
+      return CSR_XLEN_F32_Interrupt_RegMask;
+    return CSR_Interrupt_RegMask;
+  }
   return CSR_RegMask;
 }

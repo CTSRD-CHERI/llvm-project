@@ -20,8 +20,6 @@
 // Project includes
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
-#include "lldb/Core/Scalar.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Symbol/UnwindPlan.h"
@@ -30,6 +28,8 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Scalar.h"
 #include "lldb/Utility/Status.h"
 
 #include "Plugins/Process/Utility/ARMDefines.h"
@@ -1470,8 +1470,8 @@ bool ABISysV_arm::GetArgumentValues(Thread &thread, ValueList &values) const {
   addr_t sp = 0;
 
   for (uint32_t value_idx = 0; value_idx < num_values; ++value_idx) {
-    // We currently only support extracting values with Clang QualTypes.
-    // Do we care about others?
+    // We currently only support extracting values with Clang QualTypes. Do we
+    // care about others?
     Value *value = values.GetValueAtIndex(value_idx);
 
     if (!value)

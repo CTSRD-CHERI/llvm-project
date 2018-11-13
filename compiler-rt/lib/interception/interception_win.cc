@@ -125,9 +125,9 @@
 //                                      addr2:  .bytes <body>
 //===----------------------------------------------------------------------===//
 
-#ifdef _WIN32
-
 #include "interception.h"
+
+#if SANITIZER_WINDOWS
 #include "sanitizer_common/sanitizer_platform.h"
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -223,8 +223,8 @@ static bool IsMemoryPadding(uptr address, uptr size) {
   return true;
 }
 
-static const u8 kHintNop9Bytes[] = {
-  0x66, 0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00
+static const u8 kHintNop8Bytes[] = {
+  0x0F, 0x1F, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
 template<class T>
@@ -239,8 +239,8 @@ static bool FunctionHasPrefix(uptr address, const T &pattern) {
 static bool FunctionHasPadding(uptr address, uptr size) {
   if (IsMemoryPadding(address - size, size))
     return true;
-  if (size <= sizeof(kHintNop9Bytes) &&
-      FunctionHasPrefix(address, kHintNop9Bytes))
+  if (size <= sizeof(kHintNop8Bytes) &&
+      FunctionHasPrefix(address, kHintNop8Bytes))
     return true;
   return false;
 }
@@ -453,6 +453,7 @@ static size_t GetInstructionSize(uptr address, size_t* rel_offset = nullptr) {
   }
 
   switch (*(u16*)(address)) {
+    case 0x018A:  // 8A 01 : mov al, byte ptr [ecx]
     case 0xFF8B:  // 8B FF : mov edi, edi
     case 0xEC8B:  // 8B EC : mov ebp, esp
     case 0xc889:  // 89 C8 : mov eax, ecx
@@ -1013,4 +1014,4 @@ bool OverrideImportedFunction(const char *module_to_patch,
 
 }  // namespace __interception
 
-#endif  // _WIN32
+#endif  // SANITIZER_MAC

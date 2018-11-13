@@ -1,6 +1,6 @@
-; RUN: llc -mtriple=amdgcn-amd-amdhsa -mcpu=fiji -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
-; RUN: llc -mtriple=amdgcn-amd-amdhsa -mcpu=hawaii -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
-; RUN: llc -mtriple=amdgcn-amd-amdhsa -mcpu=gfx900 -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
+; RUN: llc -mtriple=amdgcn-amd-amdhsa -mcpu=fiji -enable-ipra=0 -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
+; RUN: llc -mtriple=amdgcn-amd-amdhsa -mcpu=hawaii -enable-ipra=0 -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
+; RUN: llc -mtriple=amdgcn-amd-amdhsa -mcpu=gfx900 -enable-ipra=0 -verify-machineinstrs < %s | FileCheck -check-prefix=GCN %s
 
 declare void @external_void_func_void() #0
 
@@ -34,9 +34,9 @@ define amdgpu_kernel void @test_kernel_call_external_void_func_void_clobber_s30_
 ; GCN: s_mov_b32 s33, s5
 ; GCN-NEXT: s_swappc_b64
 ; GCN-NEXT: s_mov_b32 s5, s33
+; GCN-NEXT: s_mov_b32 s33, s5
 ; GCN-NEXT: ;;#ASMSTART
 ; GCN-NEXT: ;;#ASMEND
-; GCN-NEXT: s_mov_b32 s33, s5
 ; GCN-NEXT: s_swappc_b64
 ; GCN-NEXT: s_mov_b32 s5, s33
 ; GCN: v_readlane_b32 s37, v32, 4

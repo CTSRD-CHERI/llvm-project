@@ -25,11 +25,39 @@ def FeatureStdExtA
 def HasStdExtA : Predicate<"Subtarget->hasStdExtA()">,
                            AssemblerPredicate<"FeatureStdExtA">;
 
+def FeatureStdExtF
+    : SubtargetFeature<"f", "HasStdExtF", "true",
+                       "'F' (Single-Precision Floating-Point)">;
+def HasStdExtF : Predicate<"Subtarget->hasStdExtF()">,
+                           AssemblerPredicate<"FeatureStdExtF">;
+
+def FeatureStdExtD
+    : SubtargetFeature<"d", "HasStdExtD", "true",
+                       "'D' (Double-Precision Floating-Point)",
+                       [FeatureStdExtF]>;
+def HasStdExtD : Predicate<"Subtarget->hasStdExtD()">,
+                           AssemblerPredicate<"FeatureStdExtD">;
+
+def FeatureStdExtC
+    : SubtargetFeature<"c", "HasStdExtC", "true",
+                       "'C' (Compressed Instructions)">;
+def HasStdExtC : Predicate<"Subtarget->hasStdExtC()">,
+                           AssemblerPredicate<"FeatureStdExtC">;
+
+
 def Feature64Bit
     : SubtargetFeature<"64bit", "HasRV64", "true", "Implements RV64">;
+def IsRV64 : Predicate<"Subtarget->is64Bit()">,
+                       AssemblerPredicate<"Feature64Bit">;
+def IsRV32 : Predicate<"!Subtarget->is64Bit()">,
+                       AssemblerPredicate<"!Feature64Bit">;
 
 def RV64           : HwMode<"+64bit">;
 def RV32           : HwMode<"-64bit">;
+
+def FeatureRelax
+    : SubtargetFeature<"relax", "EnableLinkerRelax", "true",
+                       "Enable Linker relaxation.">;
 
 //===----------------------------------------------------------------------===//
 // Registers, calling conventions, instruction descriptions.
@@ -38,6 +66,12 @@ def RV32           : HwMode<"-64bit">;
 include "RISCVRegisterInfo.td"
 include "RISCVCallingConv.td"
 include "RISCVInstrInfo.td"
+
+//===----------------------------------------------------------------------===//
+// Named operands for CSR instructions.
+//===----------------------------------------------------------------------===//
+
+include "RISCVSystemOperands.td"
 
 //===----------------------------------------------------------------------===//
 // RISC-V processors supported.
@@ -57,9 +91,16 @@ def RISCVInstrInfo : InstrInfo {
 
 def RISCVAsmParser : AsmParser {
   let ShouldEmitMatchRegisterAltName = 1;
+  let AllowDuplicateRegisterNames = 1;
+}
+
+def RISCVAsmWriter : AsmWriter {
+  int PassSubtarget = 1;
 }
 
 def RISCV : Target {
   let InstructionSet = RISCVInstrInfo;
   let AssemblyParsers = [RISCVAsmParser];
+  let AssemblyWriters = [RISCVAsmWriter];
+  let AllowRegisterRenaming = 1;
 }

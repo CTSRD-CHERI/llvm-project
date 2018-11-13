@@ -12,8 +12,8 @@
 
 #include "Chunks.h"
 #include "Config.h"
-#include "Memory.h"
 #include "lld/Common/LLVM.h"
+#include "lld/Common/Memory.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/COFF.h"
@@ -41,7 +41,7 @@ public:
     // The order of these is significant. We start with the regular defined
     // symbols as those are the most prevelant and the zero tag is the cheapest
     // to set. Among the defined kinds, the lower the kind is preferred over
-    // the higher kind when testing wether one symbol should take precedence
+    // the higher kind when testing whether one symbol should take precedence
     // over another.
     DefinedRegularKind = 0,
     DefinedCommonKind,
@@ -66,6 +66,8 @@ public:
   // Returns the symbol name.
   StringRef getName();
 
+  void replaceKeepingName(Symbol *Other, size_t Size);
+
   // Returns the file from which this symbol was created.
   InputFile *getFile();
 
@@ -78,7 +80,7 @@ protected:
   explicit Symbol(Kind K, StringRef N = "")
       : SymbolKind(K), IsExternal(true), IsCOMDAT(false),
         WrittenToSymtab(false), PendingArchiveLoad(false), IsGCRoot(false),
-        Name(N) {}
+        IsRuntimePseudoReloc(false), Name(N) {}
 
   const unsigned SymbolKind : 8;
   unsigned IsExternal : 1;
@@ -101,6 +103,8 @@ public:
 
   /// True if we've already added this symbol to the list of GC roots.
   unsigned IsGCRoot : 1;
+
+  unsigned IsRuntimePseudoReloc : 1;
 
 protected:
   StringRef Name;
@@ -169,7 +173,6 @@ public:
   SectionChunk *getChunk() const { return *Data; }
   uint32_t getValue() const { return Sym->Value; }
 
-private:
   SectionChunk **Data;
 };
 
@@ -214,11 +217,10 @@ public:
   uint64_t getRVA() { return VA - Config->ImageBase; }
   void setVA(uint64_t V) { VA = V; }
 
-  // The sentinel absolute symbol section index. Section index relocations
-  // against absolute symbols resolve to this 16 bit number, and it is the
-  // largest valid section index plus one. This is written by the Writer.
-  static uint16_t OutputSectionIndex;
-  uint16_t getSecIdx() { return OutputSectionIndex; }
+  // Section index relocations against absolute symbols resolve to
+  // this 16 bit number, and it is the largest valid section index
+  // plus one. This variable keeps it.
+  static uint16_t NumOutputSections;
 
 private:
   uint64_t VA;
@@ -333,8 +335,8 @@ private:
   Chunk *Data;
 };
 
-// If you have a symbol "__imp_foo" in your object file, a symbol name
-// "foo" becomes automatically available as a pointer to "__imp_foo".
+// If you have a symbol "foo" in your object file, a symbol name
+// "__imp_foo" becomes automatically available as a pointer to "foo".
 // This class is for such automatically-created symbols.
 // Yes, this is an odd feature. We didn't intend to implement that.
 // This is here just for compatibility with MSVC.
@@ -417,6 +419,8 @@ union SymbolUnion {
 
 template <typename T, typename... ArgT>
 void replaceSymbol(Symbol *S, ArgT &&... Arg) {
+  static_assert(std::is_trivially_destructible<T>(),
+                "Symbol types must be trivially destructible");
   static_assert(sizeof(T) <= sizeof(SymbolUnion), "Symbol too small");
   static_assert(alignof(T) <= alignof(SymbolUnion),
                 "SymbolUnion not aligned enough");

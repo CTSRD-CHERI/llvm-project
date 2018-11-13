@@ -2,8 +2,9 @@ set(LLVM_LINK_COMPONENTS support)
 
 add_clang_library(clangTidyHICPPModule
   ExceptionBaseclassCheck.cpp
-  NoAssemblerCheck.cpp
   HICPPTidyModule.cpp
+  MultiwayPathsCoveredCheck.cpp
+  NoAssemblerCheck.cpp
   SignedBitwiseCheck.cpp
 
   LINK_LIBS
@@ -12,10 +13,12 @@ add_clang_library(clangTidyHICPPModule
   clangBasic
   clangLex
   clangTidy
+  clangTidyBugproneModule
   clangTidyCppCoreGuidelinesModule
   clangTidyGoogleModule
   clangTidyMiscModule
   clangTidyModernizeModule
+  clangTidyPerformanceModule
   clangTidyReadabilityModule
   clangTidyUtils
   )

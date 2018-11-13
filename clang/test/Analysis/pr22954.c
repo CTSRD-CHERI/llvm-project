@@ -3,7 +3,7 @@
 // At the moment the whole of the destination array content is invalidated.
 // If a.s1 region has a symbolic offset, the whole region of 'a' is invalidated.
 // Specific triple set to test structures of size 0.
-// RUN: %clang_analyze_cc1 -triple x86_64-pc-linux-gnu -analyzer-checker=core,unix.Malloc,debug.ExprInspection -analyzer-store=region -verify %s
+// RUN: %clang_analyze_cc1 -triple x86_64-pc-linux-gnu -analyzer-checker=core,unix.Malloc,debug.ExprInspection -analyzer-store=region -verify -analyzer-config eagerly-assume=false %s
 
 typedef __typeof(sizeof(int)) size_t;
 
@@ -624,9 +624,10 @@ int f29(int i, int j, int k, int l, int m) {
   clang_analyzer_eval(m29[i].s3[1] == 1); // expected-warning{{UNKNOWN}}
   clang_analyzer_eval(m29[i].s3[2] == 1); // expected-warning{{UNKNOWN}}
   clang_analyzer_eval(m29[i].s3[3] == 1); // expected-warning{{UNKNOWN}}
-  clang_analyzer_eval(m29[j].s3[k] == 1); // expected-warning{{TRUE}}\
-  expected-warning{{Potential leak of memory pointed to by field 's4'}}
+  clang_analyzer_eval(m29[j].s3[k] == 1); // expected-warning{{TRUE}}
   clang_analyzer_eval(l29->s1[m] == 2); // expected-warning{{UNKNOWN}}
+  // FIXME: Should warn that m29[i].s4 leaks. But not on the previous line,
+  // because l29 and m29 alias.
   return 0;
 }
 

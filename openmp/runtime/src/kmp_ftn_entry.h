@@ -345,8 +345,7 @@ int FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_MAX_THREADS)(void) {
 }
 
 #if OMP_50_ENABLED
-int FTN_STDCALL FTN_CONTROL_TOOL(uint64_t command, uint64_t modifier,
-                                 void *arg) {
+int FTN_STDCALL FTN_CONTROL_TOOL(int command, int modifier, void *arg) {
 #if defined(KMP_STUB) || !OMPT_SUPPORT
   return -2;
 #else
@@ -362,7 +361,35 @@ int FTN_STDCALL FTN_CONTROL_TOOL(uint64_t command, uint64_t modifier,
   return ret;
 #endif
 }
+
+/* OpenMP 5.0 Memory Management support */
+void FTN_STDCALL FTN_SET_DEFAULT_ALLOCATOR(const omp_allocator_t *allocator) {
+#ifndef KMP_STUB
+  __kmpc_set_default_allocator(__kmp_entry_gtid(), allocator);
 #endif
+}
+const omp_allocator_t *FTN_STDCALL FTN_GET_DEFAULT_ALLOCATOR(void) {
+#ifdef KMP_STUB
+  return NULL;
+#else
+  return __kmpc_get_default_allocator(__kmp_entry_gtid());
+#endif
+}
+void *FTN_STDCALL FTN_ALLOC(size_t size, const omp_allocator_t *allocator) {
+#ifdef KMP_STUB
+  return malloc(size);
+#else
+  return __kmpc_alloc(__kmp_entry_gtid(), size, allocator);
+#endif
+}
+void FTN_STDCALL FTN_FREE(void *ptr, const omp_allocator_t *allocator) {
+#ifdef KMP_STUB
+  free(ptr);
+#else
+  __kmpc_free(__kmp_entry_gtid(), ptr, allocator);
+#endif
+}
+#endif /* OMP_50_ENABLED */
 
 int FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_THREAD_NUM)(void) {
 #ifdef KMP_STUB
@@ -600,7 +627,7 @@ kmp_proc_bind_t FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_PROC_BIND)(void) {
 }
 
 #if OMP_45_ENABLED
-int FTN_STDCALL FTN_GET_NUM_PLACES(void) {
+int FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_NUM_PLACES)(void) {
 #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
   return 0;
 #else
@@ -613,7 +640,7 @@ int FTN_STDCALL FTN_GET_NUM_PLACES(void) {
 #endif
 }
 
-int FTN_STDCALL FTN_GET_PLACE_NUM_PROCS(int place_num) {
+int FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_PLACE_NUM_PROCS)(int place_num) {
 #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
   return 0;
 #else
@@ -638,7 +665,8 @@ int FTN_STDCALL FTN_GET_PLACE_NUM_PROCS(int place_num) {
 #endif
 }
 
-void FTN_STDCALL FTN_GET_PLACE_PROC_IDS(int place_num, int *ids) {
+void FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_PLACE_PROC_IDS)(int place_num,
+                                                         int *ids) {
 #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
 // Nothing.
 #else
@@ -662,7 +690,7 @@ void FTN_STDCALL FTN_GET_PLACE_PROC_IDS(int place_num, int *ids) {
 #endif
 }
 
-int FTN_STDCALL FTN_GET_PLACE_NUM(void) {
+int FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_PLACE_NUM)(void) {
 #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
   return -1;
 #else
@@ -681,7 +709,7 @@ int FTN_STDCALL FTN_GET_PLACE_NUM(void) {
 #endif
 }
 
-int FTN_STDCALL FTN_GET_PARTITION_NUM_PLACES(void) {
+int FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_PARTITION_NUM_PLACES)(void) {
 #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
   return 0;
 #else
@@ -692,6 +720,9 @@ int FTN_STDCALL FTN_GET_PARTITION_NUM_PLACES(void) {
   }
   if (!KMP_AFFINITY_CAPABLE())
     return 0;
+  if (KMP_AFFINITY_NON_PROC_BIND) {
+    return 1;
+  }
   gtid = __kmp_entry_gtid();
   thread = __kmp_thread_from_gtid(gtid);
   first_place = thread->th.th_first_place;
@@ -706,7 +737,8 @@ int FTN_STDCALL FTN_GET_PARTITION_NUM_PLACES(void) {
 #endif
 }
 
-void FTN_STDCALL FTN_GET_PARTITION_PLACE_NUMS(int *place_nums) {
+void
+    FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_PARTITION_PLACE_NUMS)(int *place_nums) {
 #if defined(KMP_STUB) || !KMP_AFFINITY_SUPPORTED
 // Nothing.
 #else
@@ -719,6 +751,10 @@ void FTN_STDCALL FTN_GET_PARTITION_PLACE_NUMS(int *place_nums) {
     return;
   gtid = __kmp_entry_gtid();
   thread = __kmp_thread_from_gtid(gtid);
+  if (KMP_AFFINITY_NON_PROC_BIND) {
+    place_nums[0] = thread->th.th_current_place;
+    return;
+  }
   first_place = thread->th.th_first_place;
   last_place = thread->th.th_last_place;
   if (first_place < 0 || last_place < 0)
@@ -1127,7 +1163,7 @@ void *FTN_STDCALL FTN_REALLOC(void *KMP_DEREF ptr, size_t KMP_DEREF size) {
   return kmpc_realloc(KMP_DEREF ptr, KMP_DEREF size);
 }
 
-void FTN_STDCALL FTN_FREE(void *KMP_DEREF ptr) {
+void FTN_STDCALL FTN_KFREE(void *KMP_DEREF ptr) {
   // does nothing if the library is not initialized
   kmpc_free(KMP_DEREF ptr);
 }
@@ -1186,7 +1222,7 @@ int FTN_STDCALL FTN_GET_CANCELLATION_STATUS(int cancel_kind) {
 
 #if OMP_45_ENABLED
 /* returns the maximum allowed task priority */
-int FTN_STDCALL FTN_GET_MAX_TASK_PRIORITY(void) {
+int FTN_STDCALL KMP_EXPAND_NAME(FTN_GET_MAX_TASK_PRIORITY)(void) {
 #ifdef KMP_STUB
   return 0;
 #else
@@ -1285,6 +1321,13 @@ KMP_VERSION_SYMBOL(FTN_IS_INITIAL_DEVICE, 40, "OMP_4.0");
 
 #if OMP_45_ENABLED
 // OMP_4.5 versioned symbols
+KMP_VERSION_SYMBOL(FTN_GET_MAX_TASK_PRIORITY, 45, "OMP_4.5");
+KMP_VERSION_SYMBOL(FTN_GET_NUM_PLACES, 45, "OMP_4.5");
+KMP_VERSION_SYMBOL(FTN_GET_PLACE_NUM_PROCS, 45, "OMP_4.5");
+KMP_VERSION_SYMBOL(FTN_GET_PLACE_PROC_IDS, 45, "OMP_4.5");
+KMP_VERSION_SYMBOL(FTN_GET_PLACE_NUM, 45, "OMP_4.5");
+KMP_VERSION_SYMBOL(FTN_GET_PARTITION_NUM_PLACES, 45, "OMP_4.5");
+KMP_VERSION_SYMBOL(FTN_GET_PARTITION_PLACE_NUMS, 45, "OMP_4.5");
 #endif
 
 #if OMP_50_ENABLED

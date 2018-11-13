@@ -22,12 +22,12 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetOpcodes.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include "llvm/Transforms/Utils/SSAUpdaterImpl.h"
 #include <utility>
 
@@ -204,7 +204,7 @@ unsigned MachineSSAUpdater::GetValueInMiddleOfBlock(MachineBasicBlock *BB) {
   // If the client wants to know about all new instructions, tell it.
   if (InsertedPHIs) InsertedPHIs->push_back(InsertedPHI);
 
-  DEBUG(dbgs() << "  Inserted PHI: " << *InsertedPHI << "\n");
+  LLVM_DEBUG(dbgs() << "  Inserted PHI: " << *InsertedPHI << "\n");
   return InsertedPHI->getOperand(0).getReg();
 }
 
@@ -254,14 +254,14 @@ public:
   private:
     MachineInstr *PHI;
     unsigned idx;
- 
+
   public:
     explicit PHI_iterator(MachineInstr *P) // begin iterator
       : PHI(P), idx(1) {}
     PHI_iterator(MachineInstr *P, bool) // end iterator
       : PHI(P), idx(PHI->getNumOperands()) {}
 
-    PHI_iterator &operator++() { idx += 2; return *this; } 
+    PHI_iterator &operator++() { idx += 2; return *this; }
     bool operator==(const PHI_iterator& x) const { return idx == x.idx; }
     bool operator!=(const PHI_iterator& x) const { return !operator==(x); }
 

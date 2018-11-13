@@ -12,13 +12,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "RISCV.h"
 #include "RISCVMCExpr.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbolELF.h"
 #include "llvm/MC/MCValue.h"
-#include "llvm/Object/ELF.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
@@ -31,7 +31,8 @@ const RISCVMCExpr *RISCVMCExpr::create(const MCExpr *Expr, VariantKind Kind,
 }
 
 void RISCVMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
-  bool HasVariant = getKind() != VK_RISCV_None;
+  bool HasVariant =
+      ((getKind() != VK_RISCV_None) && (getKind() != VK_RISCV_CALL));
   if (HasVariant)
     OS << '%' << getVariantKindName(getKind()) << '(';
   Expr->print(OS, MAI);
@@ -42,7 +43,23 @@ void RISCVMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
 bool RISCVMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
                                             const MCAsmLayout *Layout,
                                             const MCFixup *Fixup) const {
-  return getSubExpr()->evaluateAsRelocatable(Res, Layout, Fixup);
+  if (!getSubExpr()->evaluateAsRelocatable(Res, Layout, Fixup))
+    return false;
+
+  // Some custom fixup types are not valid with symbol difference expressions
+  if (Res.getSymA() && Res.getSymB()) {
+    switch (getKind()) {
+    default:
+      return true;
+    case VK_RISCV_LO:
+    case VK_RISCV_HI:
+    case VK_RISCV_PCREL_LO:
+    case VK_RISCV_PCREL_HI:
+      return false;
+    }
+  }
+
+  return true;
 }
 
 void RISCVMCExpr::visitUsedExpr(MCStreamer &Streamer) const {
@@ -53,6 +70,7 @@ RISCVMCExpr::VariantKind RISCVMCExpr::getVariantKindForName(StringRef name) {
   return StringSwitch<RISCVMCExpr::VariantKind>(name)
       .Case("lo", VK_RISCV_LO)
       .Case("hi", VK_RISCV_HI)
+      .Case("pcrel_lo", VK_RISCV_PCREL_LO)
       .Case("pcrel_hi", VK_RISCV_PCREL_HI)
       .Default(VK_RISCV_Invalid);
 }
@@ -65,6 +83,8 @@ StringRef RISCVMCExpr::getVariantKindName(VariantKind Kind) {
     return "lo";
   case VK_RISCV_HI:
     return "hi";
+  case VK_RISCV_PCREL_LO:
+    return "pcrel_lo";
   case VK_RISCV_PCREL_HI:
     return "pcrel_hi";
   }
@@ -73,7 +93,8 @@ StringRef RISCVMCExpr::getVariantKindName(VariantKind Kind) {
 bool RISCVMCExpr::evaluateAsConstant(int64_t &Res) const {
   MCValue Value;
 
-  if (Kind == VK_RISCV_PCREL_HI)
+  if (Kind == VK_RISCV_PCREL_HI || Kind == VK_RISCV_PCREL_LO ||
+      Kind == VK_RISCV_CALL)
     return false;
 
   if (!getSubExpr()->evaluateAsRelocatable(Value, nullptr, nullptr))

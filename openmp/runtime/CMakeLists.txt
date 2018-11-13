@@ -9,20 +9,12 @@
 #//===----------------------------------------------------------------------===//
 #
 
-# CMAKE libomp
-cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
+if("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
+  message(FATAL_ERROR "Direct configuration not supported, please use parent directory!")
+endif()
 
 # Add cmake directory to search for custom cmake functions
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
-
-# Standalone build or part of LLVM?
-set(LIBOMP_STANDALONE_BUILD FALSE)
-if(OPENMP_STANDALONE_BUILD OR
-   "${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}" OR
-   "${CMAKE_SOURCE_DIR}/runtime" STREQUAL "${CMAKE_CURRENT_SOURCE_DIR}")
-  project(libomp C CXX)
-  set(LIBOMP_STANDALONE_BUILD TRUE)
-endif()
 
 # Set libomp version
 set(LIBOMP_VERSION_MAJOR 5)
@@ -35,23 +27,14 @@ include(LibompHandleFlags)
 include(LibompDefinitions)
 
 # Determine the target architecture
-if(${LIBOMP_STANDALONE_BUILD})
+if(${OPENMP_STANDALONE_BUILD})
   # If adding a new architecture, take a look at cmake/LibompGetArchitecture.cmake
   libomp_get_architecture(LIBOMP_DETECTED_ARCH)
   set(LIBOMP_ARCH ${LIBOMP_DETECTED_ARCH} CACHE STRING
     "The architecture to build for (x86_64/i386/arm/ppc64/ppc64le/aarch64/mic/mips/mips64).")
-  # Allow user to choose a suffix for the installation directory.
-  set(LIBOMP_LIBDIR_SUFFIX "" CACHE STRING
-    "suffix of lib installation directory e.g., 64 => lib64")
   # Should assertions be enabled?  They are on by default.
   set(LIBOMP_ENABLE_ASSERTIONS TRUE CACHE BOOL
     "enable assertions?")
-  set(LIBOMP_ENABLE_WERROR FALSE CACHE BOOL
-    "Enable -Werror flags to turn warnings into errors for supporting compilers.")
-  # CMAKE_BUILD_TYPE was not defined, set default to Release
-  if(NOT CMAKE_BUILD_TYPE)
-    set(CMAKE_BUILD_TYPE Release)
-  endif()
 else() # Part of LLVM build
   # Determine the native architecture from LLVM.
   string(TOLOWER "${LLVM_TARGET_ARCH}" LIBOMP_NATIVE_ARCH)
@@ -80,9 +63,7 @@ else() # Part of LLVM build
     # last ditch effort
     libomp_get_architecture(LIBOMP_ARCH)
   endif ()
-  set(LIBOMP_LIBDIR_SUFFIX ${LLVM_LIBDIR_SUFFIX})
   set(LIBOMP_ENABLE_ASSERTIONS ${LLVM_ENABLE_ASSERTIONS})
-  set(LIBOMP_ENABLE_WERROR ${LLVM_ENABLE_WERROR})
 endif()
 libomp_check_variable(LIBOMP_ARCH 32e x86_64 32 i386 arm ppc64 ppc64le aarch64 mic mips mips64)
 
@@ -318,12 +299,17 @@ if(LIBOMP_USE_VERSION_SYMBOLS AND (NOT LIBOMP_ENABLE_SHARED) )
   set (LIBOMP_USE_VERSION_SYMBOLS FALSE)
 endif()
 
-# OMPT-support
+# OMPT-support defaults to ON for OpenMP 5.0+ and if the requirements in
+# cmake/config-ix.cmake are fulfilled.
+set(OMPT_DEFAULT FALSE)
+if ((${LIBOMP_OMP_VERSION} GREATER 49) AND (LIBOMP_HAVE_OMPT_SUPPORT) AND (NOT WIN32))
+  set(OMPT_DEFAULT TRUE)
+endif()
+set(LIBOMP_OMPT_SUPPORT ${OMPT_DEFAULT} CACHE BOOL
+  "OMPT-support?")
+
 set(LIBOMP_OMPT_DEBUG FALSE CACHE BOOL
   "Trace OMPT initialization?")
-#after testing: turn on ompt support by default for OpenMP 5.0 and higher
-set(LIBOMP_OMPT_SUPPORT FALSE CACHE BOOL
-  "OMPT-support?")
 set(LIBOMP_OMPT_OPTIONAL TRUE CACHE BOOL
   "OMPT-optional?")
 if(LIBOMP_OMPT_SUPPORT AND (NOT LIBOMP_HAVE_OMPT_SUPPORT))
@@ -344,6 +330,10 @@ endif()
 if(LIBOMP_USE_HWLOC AND (NOT LIBOMP_HAVE_HWLOC))
   libomp_error_say("Hwloc requested but not available")
 endif()
+
+# Hierarchical scheduling support
+set(LIBOMP_USE_HIER_SCHED FALSE CACHE BOOL
+  "Hierarchical scheduling support?")
 
 # Setting final library name
 set(LIBOMP_DEFAULT_LIB_NAME libomp)
@@ -372,7 +362,7 @@ set(LIBOMP_INSTALL_ALIASES TRUE CACHE BOOL
   "Install libgomp and libiomp5 library aliases for backwards compatibility")
 
 # Print configuration after all variables are set.
-if(${LIBOMP_STANDALONE_BUILD})
+if(${OPENMP_STANDALONE_BUILD})
   libomp_say("Operating System     -- ${CMAKE_SYSTEM_NAME}")
   libomp_say("Target Architecture  -- ${LIBOMP_ARCH}")
   if(${MIC})

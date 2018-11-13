@@ -20,7 +20,7 @@ using namespace clang;
 using namespace ento;
 using llvm::APSInt;
 
-/// \brief Optionally conjure and return a symbol for offset when processing
+/// Optionally conjure and return a symbol for offset when processing
 /// an expression \p Expression.
 /// If \p Other is a location, conjure a symbol for \p Symbol
 /// (offset) if it is unknown so that memory arithmetic always
@@ -257,13 +257,23 @@ ProgramStateRef ExprEngine::handleLValueBitCast(
     ProgramStateRef state, const Expr* Ex, const LocationContext* LCtx,
     QualType T, QualType ExTy, const CastExpr* CastE, StmtNodeBuilder& Bldr,
     ExplodedNode* Pred) {
+  if (T->isLValueReferenceType()) {
+    assert(!CastE->getType()->isLValueReferenceType());
+    ExTy = getContext().getLValueReferenceType(ExTy);
+  } else if (T->isRValueReferenceType()) {
+    assert(!CastE->getType()->isRValueReferenceType());
+    ExTy = getContext().getRValueReferenceType(ExTy);
+  }
   // Delegate to SValBuilder to process.
-  SVal V = state->getSVal(Ex, LCtx);
-  V = svalBuilder.evalCast(V, T, ExTy);
+  SVal OrigV = state->getSVal(Ex, LCtx);
+  SVal V = svalBuilder.evalCast(OrigV, T, ExTy);
   // Negate the result if we're treating the boolean as a signed i1
   if (CastE->getCastKind() == CK_BooleanToSignedIntegral)
     V = evalMinus(V);
   state = state->BindExpr(CastE, LCtx, V);
+  if (V.isUnknown() && !OrigV.isUnknown()) {
+    state = escapeValue(state, OrigV, PSK_EscapeOther);
+  }
   Bldr.generateNode(CastE, Pred, state);
 
   return state;
@@ -405,7 +415,8 @@ void ExprEngine::VisitCast(const CastExpr *CastE, const Expr *Ex,
       case CK_ZeroToOCLEvent:
       case CK_ZeroToOCLQueue:
       case CK_IntToOCLSampler:
-      case CK_LValueBitCast: {
+      case CK_LValueBitCast:
+      case CK_FixedPointCast: {
         state =
             handleLValueBitCast(state, Ex, LCtx, T, ExTy, CastE, Bldr, Pred);
         continue;
@@ -535,7 +546,7 @@ void ExprEngine::VisitCompoundLiteralExpr(const CompoundLiteralExpr *CL,
   const Expr *Init = CL->getInitializer();
   SVal V = State->getSVal(CL->getInitializer(), LCtx);
 
-  if (isa<CXXConstructExpr>(Init)) {
+  if (isa<CXXConstructExpr>(Init) || isa<CXXStdInitializerListExpr>(Init)) {
     // No work needed. Just pass the value up to this expression.
   } else {
     assert(isa<InitListExpr>(Init));
@@ -580,24 +591,12 @@ void ExprEngine::VisitDeclStmt(const DeclStmt *DS, ExplodedNode *Pred,
       SVal InitVal = state->getSVal(InitEx, LC);
 
       assert(DS->isSingleDecl());
-      if (auto *CtorExpr = findDirectConstructorForCurrentCFGElement()) {
-        assert(InitEx->IgnoreImplicit() == CtorExpr);
-        (void)CtorExpr;
+      if (getObjectUnderConstruction(state, DS, LC)) {
+        state = finishObjectConstruction(state, DS, LC);
         // We constructed the object directly in the variable.
         // No need to bind anything.
         B.generateNode(DS, UpdatedN, state);
       } else {
-        // We bound the temp obj region to the CXXConstructExpr. Now recover
-        // the lazy compound value when the variable is not a reference.
-        if (AMgr.getLangOpts().CPlusPlus && VD->getType()->isRecordType() &&
-            !VD->getType()->isReferenceType()) {
-          if (Optional<loc::MemRegionVal> M =
-                  InitVal.getAs<loc::MemRegionVal>()) {
-            InitVal = state->getSVal(M->getRegion());
-            assert(InitVal.getAs<nonloc::LazyCompoundVal>());
-          }
-        }
-
         // Recover some path-sensitivity if a scalar value evaluated to
         // UnknownVal.
         if (InitVal.isUnknown()) {
@@ -686,7 +685,7 @@ void ExprEngine::VisitLogicalExpr(const BinaryOperator* B, ExplodedNode *Pred,
       // known to be false, 1 if the value is known to be true and a new symbol
       // when the assumption is unknown.
       nonloc::ConcreteInt Zero(getBasicVals().getValue(0, B->getType()));
-      X = evalBinOp(N->getState(), BO_NE, 
+      X = evalBinOp(N->getState(), BO_NE,
                     svalBuilder.evalCast(RHSVal, B->getType(), RHS->getType()),
                     Zero, B->getType());
     }
@@ -760,7 +759,11 @@ void ExprEngine::VisitGuardedExpr(const Expr *Ex,
   for (const ExplodedNode *N = Pred ; N ; N = *N->pred_begin()) {
     ProgramPoint PP = N->getLocation();
     if (PP.getAs<PreStmtPurgeDeadSymbols>() || PP.getAs<BlockEntrance>()) {
-      assert(N->pred_size() == 1);
+      // If the state N has multiple predecessors P, it means that successors
+      // of P are all equivalent.
+      // In turn, that means that all nodes at P are equivalent in terms
+      // of observable behavior at N, and we can follow any of them.
+      // FIXME: a more robust solution which does not walk up the tree.
       continue;
     }
     SrcBlock = PP.castAs<BlockEdge>().getSrc();
@@ -1043,7 +1046,14 @@ void ExprEngine::VisitIncrementDecrementOperator(const UnaryOperator* U,
 
     // Propagate unknown and undefined values.
     if (V2_untested.isUnknownOrUndef()) {
-      Bldr.generateNode(U, *I, state->BindExpr(U, LCtx, V2_untested));
+      state = state->BindExpr(U, LCtx, V2_untested);
+
+      // Perform the store, so that the uninitialized value detection happens.
+      Bldr.takeNodes(*I);
+      ExplodedNodeSet Dst3;
+      evalStore(Dst3, U, U, *I, state, loc, V2_untested);
+      Bldr.addNodes(Dst3);
+
       continue;
     }
     DefinedSVal V2 = V2_untested.castAs<DefinedSVal>();
@@ -1055,6 +1065,7 @@ void ExprEngine::VisitIncrementDecrementOperator(const UnaryOperator* U,
     // constant value. If the UnaryOperator has location type, create the
     // constant with int type and pointer width.
     SVal RHS;
+    SVal Result;
 
     if (U->getType()->isAnyPointerType())
       RHS = svalBuilder.makeArrayIndex(1);
@@ -1063,7 +1074,14 @@ void ExprEngine::VisitIncrementDecrementOperator(const UnaryOperator* U,
     else
       RHS = UnknownVal();
 
-    SVal Result = evalBinOp(state, Op, V2, RHS, U->getType());
+    // The use of an operand of type bool with the ++ operators is deprecated
+    // but valid until C++17. And if the operand of the ++ operator is of type
+    // bool, it is set to true until C++17. Note that for '_Bool', it is also
+    // set to true when it encounters ++ operator.
+    if (U->getType()->isBooleanType() && U->isIncrementOp())
+      Result = svalBuilder.makeTruthVal(true, U->getType());
+    else
+      Result = evalBinOp(state, Op, V2, RHS, U->getType());
 
     // Conjure a new symbol if necessary to recover precision.
     if (Result.isUnknown()){
@@ -1084,7 +1102,6 @@ void ExprEngine::VisitIncrementDecrementOperator(const UnaryOperator* U,
           // Propagate this constraint.
           Constraint = svalBuilder.evalEQ(state, SymVal,
                                        svalBuilder.makeZeroVal(U->getType()));
-
 
           state = state->assume(Constraint, false);
           assert(state);

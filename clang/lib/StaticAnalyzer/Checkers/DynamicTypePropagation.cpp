@@ -22,6 +22,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "ClangSACheckers.h"
+#include "clang/AST/ParentMap.h"
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/Basic/Builtins.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
@@ -58,7 +59,7 @@ class DynamicTypePropagation:
   const ObjCObjectType *getObjectTypeForAllocAndNew(const ObjCMessageExpr *MsgE,
                                                     CheckerContext &C) const;
 
-  /// \brief Return a better dynamic type if one can be derived from the cast.
+  /// Return a better dynamic type if one can be derived from the cast.
   const ObjCObjectPointerType *getBetterObjCType(const Expr *CastE,
                                                  CheckerContext &C) const;
 
@@ -73,7 +74,7 @@ class DynamicTypePropagation:
           new BugType(this, "Generics", categories::CoreFoundationObjectiveC));
   }
 
-  class GenericsBugVisitor : public BugReporterVisitorImpl<GenericsBugVisitor> {
+  class GenericsBugVisitor : public BugReporterVisitor {
   public:
     GenericsBugVisitor(SymbolRef S) : Sym(S) {}
 
@@ -84,7 +85,6 @@ class DynamicTypePropagation:
     }
 
     std::shared_ptr<PathDiagnosticPiece> VisitNode(const ExplodedNode *N,
-                                                   const ExplodedNode *PrevN,
                                                    BugReporterContext &BRC,
                                                    BugReport &BR) override;
 
@@ -262,8 +262,19 @@ void DynamicTypePropagation::checkPostCall(const CallEvent &Call,
       if (const MemRegion *Target = Ctor->getCXXThisVal().getAsRegion()) {
         // We just finished a base constructor. Now we can use the subclass's
         // type when resolving virtual calls.
-        const Decl *D = C.getLocationContext()->getDecl();
-        recordFixedType(Target, cast<CXXConstructorDecl>(D), C);
+        const LocationContext *LCtx = C.getLocationContext();
+
+        // FIXME: In C++17 classes with non-virtual bases may be treated as
+        // aggregates, and in such case no top-frame constructor will be called.
+        // Figure out if we need to do anything in this case.
+        // FIXME: Instead of relying on the ParentMap, we should have the
+        // trigger-statement (InitListExpr in this case) available in this
+        // callback, ideally as part of CallEvent.
+        if (dyn_cast_or_null<InitListExpr>(
+                LCtx->getParentMap().getParent(Ctor->getOriginExpr())))
+          return;
+
+        recordFixedType(Target, cast<CXXConstructorDecl>(LCtx->getDecl()), C);
       }
       return;
     }
@@ -550,7 +561,7 @@ void DynamicTypePropagation::checkPostStmt(const CastExpr *CE,
       DestObjectPtrType->isUnspecialized())
     return;
 
-  SymbolRef Sym = State->getSVal(CE, C.getLocationContext()).getAsSymbol();
+  SymbolRef Sym = C.getSVal(CE).getAsSymbol();
   if (!Sym)
     return;
 
@@ -619,7 +630,7 @@ static const Expr *stripCastsAndSugar(const Expr *E) {
 }
 
 static bool isObjCTypeParamDependent(QualType Type) {
-  // It is illegal to typedef parameterized types inside an interface. Therfore
+  // It is illegal to typedef parameterized types inside an interface. Therefore
   // an Objective-C type can only be dependent on a type parameter when the type
   // parameter structurally present in the type itself.
   class IsObjCTypeParamDependentTypeVisitor
@@ -925,11 +936,10 @@ void DynamicTypePropagation::reportGenericsBug(
 
 std::shared_ptr<PathDiagnosticPiece>
 DynamicTypePropagation::GenericsBugVisitor::VisitNode(const ExplodedNode *N,
-                                                      const ExplodedNode *PrevN,
                                                       BugReporterContext &BRC,
                                                       BugReport &BR) {
   ProgramStateRef state = N->getState();
-  ProgramStateRef statePrev = PrevN->getState();
+  ProgramStateRef statePrev = N->getFirstPred()->getState();
 
   const ObjCObjectPointerType *const *TrackedType =
       state->get<MostSpecializedTypeArgsMap>(Sym);

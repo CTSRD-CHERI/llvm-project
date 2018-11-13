@@ -54,6 +54,9 @@ public:
   // symbols.
   void reportRemainingUndefines();
 
+  void loadMinGWAutomaticImports();
+  bool handleMinGWAutomaticImport(Symbol *Sym, StringRef Name);
+
   // Returns a list of chunks of selected symbols.
   std::vector<Chunk *> getChunks();
 
@@ -83,15 +86,18 @@ public:
   Symbol *addUndefined(StringRef Name, InputFile *F, bool IsWeakAlias);
   void addLazy(ArchiveFile *F, const Archive::Symbol Sym);
   Symbol *addAbsolute(StringRef N, COFFSymbolRef S);
-  Symbol *addRegular(InputFile *F, StringRef N, bool IsCOMDAT,
+  Symbol *addRegular(InputFile *F, StringRef N,
                      const llvm::object::coff_symbol_generic *S = nullptr,
                      SectionChunk *C = nullptr);
+  std::pair<Symbol *, bool>
+  addComdat(InputFile *F, StringRef N,
+            const llvm::object::coff_symbol_generic *S = nullptr);
   Symbol *addCommon(InputFile *F, StringRef N, uint64_t Size,
                     const llvm::object::coff_symbol_generic *S = nullptr,
                     CommonChunk *C = nullptr);
-  DefinedImportData *addImportData(StringRef N, ImportFile *F);
-  DefinedImportThunk *addImportThunk(StringRef Name, DefinedImportData *S,
-                                     uint16_t Machine);
+  Symbol *addImportData(StringRef N, ImportFile *F);
+  Symbol *addImportThunk(StringRef Name, DefinedImportData *S,
+                         uint16_t Machine);
 
   void reportDuplicate(Symbol *Existing, InputFile *NewFile);
 
@@ -100,15 +106,18 @@ public:
 
   // Iterates symbols in non-determinstic hash table order.
   template <typename T> void forEachSymbol(T Callback) {
-    for (auto &Pair : Symtab)
+    for (auto &Pair : SymMap)
       Callback(Pair.second);
   }
 
 private:
+  /// Inserts symbol if not already present.
   std::pair<Symbol *, bool> insert(StringRef Name);
+  /// Same as insert(Name), but also sets IsUsedInRegularObj.
+  std::pair<Symbol *, bool> insert(StringRef Name, InputFile *F);
   StringRef findByPrefix(StringRef Prefix);
 
-  llvm::DenseMap<llvm::CachedHashStringRef, Symbol *> Symtab;
+  llvm::DenseMap<llvm::CachedHashStringRef, Symbol *> SymMap;
   std::unique_ptr<BitcodeCompiler> LTO;
 };
 

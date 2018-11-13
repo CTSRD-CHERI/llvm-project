@@ -111,28 +111,14 @@ def VecElement : Operand<i32> {
 //===----------------------------------------------------------------------===//
 
 
-def hasAtomRedG32 : Predicate<"Subtarget->hasAtomRedG32()">;
-def hasAtomRedS32 : Predicate<"Subtarget->hasAtomRedS32()">;
-def hasAtomRedGen32 : Predicate<"Subtarget->hasAtomRedGen32()">;
-def useAtomRedG32forGen32 :
-  Predicate<"!Subtarget->hasAtomRedGen32() && Subtarget->hasAtomRedG32()">;
-def hasBrkPt : Predicate<"Subtarget->hasBrkPt()">;
-def hasAtomRedG64 : Predicate<"Subtarget->hasAtomRedG64()">;
-def hasAtomRedS64 : Predicate<"Subtarget->hasAtomRedS64()">;
-def hasAtomRedGen64 : Predicate<"Subtarget->hasAtomRedGen64()">;
-def useAtomRedG64forGen64 :
-  Predicate<"!Subtarget->hasAtomRedGen64() && Subtarget->hasAtomRedG64()">;
-def hasAtomAddF32 : Predicate<"Subtarget->hasAtomAddF32()">;
 def hasAtomAddF64 : Predicate<"Subtarget->hasAtomAddF64()">;
 def hasAtomScope : Predicate<"Subtarget->hasAtomScope()">;
 def hasAtomBitwise64 : Predicate<"Subtarget->hasAtomBitwise64()">;
 def hasAtomMinMax64 : Predicate<"Subtarget->hasAtomMinMax64()">;
 def hasVote : Predicate<"Subtarget->hasVote()">;
 def hasDouble : Predicate<"Subtarget->hasDouble()">;
-def reqPTX20 : Predicate<"Subtarget->reqPTX20()">;
 def hasLDG : Predicate<"Subtarget->hasLDG()">;
 def hasLDU : Predicate<"Subtarget->hasLDU()">;
-def hasGenericLdSt : Predicate<"Subtarget->hasGenericLdSt()">;
 
 def doF32FTZ : Predicate<"useF32FTZ()">;
 def doNoF32FTZ : Predicate<"!useF32FTZ()">;
@@ -156,10 +142,12 @@ def true : Predicate<"true">;
 
 def hasPTX31 : Predicate<"Subtarget->getPTXVersion() >= 31">;
 def hasPTX60 : Predicate<"Subtarget->getPTXVersion() >= 60">;
+def hasPTX61 : Predicate<"Subtarget->getPTXVersion() >= 61">;
 
 def hasSM30 : Predicate<"Subtarget->getSmVersion() >= 30">;
 def hasSM70 : Predicate<"Subtarget->getSmVersion() >= 70">;
 
+def useShortPtr : Predicate<"useShortPointers()">;
 def useFP16Math: Predicate<"Subtarget->allowFP16Math()">;
 
 //===----------------------------------------------------------------------===//
@@ -961,13 +949,12 @@ def FDIV321r_prec_ftz :
             (ins f32imm:$a, Float32Regs:$b),
             "rcp.rn.ftz.f32 \t$dst, $b;",
             [(set Float32Regs:$dst, (fdiv FloatConst1:$a, Float32Regs:$b))]>,
-            Requires<[reqPTX20, doF32FTZ]>;
+            Requires<[doF32FTZ]>;
 def FDIV321r_prec :
   NVPTXInst<(outs Float32Regs:$dst),
             (ins f32imm:$a, Float32Regs:$b),
             "rcp.rn.f32 \t$dst, $b;",
-            [(set Float32Regs:$dst, (fdiv FloatConst1:$a, Float32Regs:$b))]>,
-            Requires<[reqPTX20]>;
+            [(set Float32Regs:$dst, (fdiv FloatConst1:$a, Float32Regs:$b))]>;
 //
 // F32 Accurate division
 //
@@ -976,25 +963,23 @@ def FDIV32rr_prec_ftz :
             (ins Float32Regs:$a, Float32Regs:$b),
             "div.rn.ftz.f32 \t$dst, $a, $b;",
             [(set Float32Regs:$dst, (fdiv Float32Regs:$a, Float32Regs:$b))]>,
-            Requires<[doF32FTZ, reqPTX20]>;
+            Requires<[doF32FTZ]>;
 def FDIV32ri_prec_ftz :
   NVPTXInst<(outs Float32Regs:$dst),
             (ins Float32Regs:$a, f32imm:$b),
             "div.rn.ftz.f32 \t$dst, $a, $b;",
             [(set Float32Regs:$dst, (fdiv Float32Regs:$a, fpimm:$b))]>,
-            Requires<[doF32FTZ, reqPTX20]>;
+            Requires<[doF32FTZ]>;
 def FDIV32rr_prec :
   NVPTXInst<(outs Float32Regs:$dst),
             (ins Float32Regs:$a, Float32Regs:$b),
             "div.rn.f32 \t$dst, $a, $b;",
-            [(set Float32Regs:$dst, (fdiv Float32Regs:$a, Float32Regs:$b))]>,
-            Requires<[reqPTX20]>;
+            [(set Float32Regs:$dst, (fdiv Float32Regs:$a, Float32Regs:$b))]>;
 def FDIV32ri_prec :
   NVPTXInst<(outs Float32Regs:$dst),
             (ins Float32Regs:$a, f32imm:$b),
             "div.rn.f32 \t$dst, $a, $b;",
-            [(set Float32Regs:$dst, (fdiv Float32Regs:$a, fpimm:$b))]>,
-            Requires<[reqPTX20]>;
+            [(set Float32Regs:$dst, (fdiv Float32Regs:$a, fpimm:$b))]>;
 
 //
 // FMA
@@ -1544,6 +1529,7 @@ def ADDRri : ComplexPattern<i32, 2, "SelectADDRri", [frameindex],
                             [SDNPWantRoot]>;
 def ADDRri64 : ComplexPattern<i64, 2, "SelectADDRri64", [frameindex],
                               [SDNPWantRoot]>;
+def ADDRvar : ComplexPattern<iPTR, 1, "SelectDirectAddr", [], []>;
 
 def MEMri : Operand<i32> {
   let PrintMethod = "printMemOperand";
@@ -2639,15 +2625,9 @@ def : Pat<(f64 (uint_to_fp Int64Regs:$a)),
 def : Pat<(i1 (fp_to_sint Float16Regs:$a)),
           (SETP_b16ri (BITCONVERT_16_F2I Float16Regs:$a), 0, CmpEQ)>;
 def : Pat<(i16 (fp_to_sint Float16Regs:$a)),
-          (CVT_s16_f16 Float16Regs:$a, CvtRZI_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(i16 (fp_to_sint Float16Regs:$a)),
           (CVT_s16_f16 Float16Regs:$a, CvtRZI)>;
 def : Pat<(i32 (fp_to_sint Float16Regs:$a)),
-          (CVT_s32_f16 Float16Regs:$a, CvtRZI_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(i32 (fp_to_sint Float16Regs:$a)),
           (CVT_s32_f16 Float16Regs:$a, CvtRZI)>;
-def : Pat<(i64 (fp_to_sint Float16Regs:$a)),
-          (CVT_s64_f16 Float16Regs:$a, CvtRZI_FTZ)>, Requires<[doF32FTZ]>;
 def : Pat<(i64 (fp_to_sint Float16Regs:$a)),
           (CVT_s64_f16 Float16Regs:$a, CvtRZI)>;
 
@@ -2655,15 +2635,9 @@ def : Pat<(i64 (fp_to_sint Float16Regs:$a)),
 def : Pat<(i1 (fp_to_uint Float16Regs:$a)),
           (SETP_b16ri (BITCONVERT_16_F2I Float16Regs:$a), 0, CmpEQ)>;
 def : Pat<(i16 (fp_to_uint Float16Regs:$a)),
-          (CVT_u16_f16 Float16Regs:$a, CvtRZI_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(i16 (fp_to_uint Float16Regs:$a)),
           (CVT_u16_f16 Float16Regs:$a, CvtRZI)>;
 def : Pat<(i32 (fp_to_uint Float16Regs:$a)),
-          (CVT_u32_f16 Float16Regs:$a, CvtRZI_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(i32 (fp_to_uint Float16Regs:$a)),
           (CVT_u32_f16 Float16Regs:$a, CvtRZI)>;
-def : Pat<(i64 (fp_to_uint Float16Regs:$a)),
-          (CVT_u64_f16 Float16Regs:$a, CvtRZI_FTZ)>, Requires<[doF32FTZ]>;
 def : Pat<(i64 (fp_to_uint Float16Regs:$a)),
           (CVT_u64_f16 Float16Regs:$a, CvtRZI)>;
 
@@ -2962,13 +2936,9 @@ def : Pat<(i32 (zext (ctpop Int16Regs:$a))),
 
 // fpround f32 -> f16
 def : Pat<(f16 (fpround Float32Regs:$a)),
-          (CVT_f16_f32 Float32Regs:$a, CvtRN_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(f16 (fpround Float32Regs:$a)),
           (CVT_f16_f32 Float32Regs:$a, CvtRN)>;
 
 // fpround f64 -> f16
-def : Pat<(f16 (fpround Float64Regs:$a)),
-          (CVT_f16_f64 Float64Regs:$a, CvtRN_FTZ)>, Requires<[doF32FTZ]>;
 def : Pat<(f16 (fpround Float64Regs:$a)),
           (CVT_f16_f64 Float64Regs:$a, CvtRN)>;
 
@@ -2986,8 +2956,6 @@ def : Pat<(f32 (fpextend Float16Regs:$a)),
 
 // fpextend f16 -> f64
 def : Pat<(f64 (fpextend Float16Regs:$a)),
-          (CVT_f64_f16 Float16Regs:$a, CvtNONE_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(f64 (fpextend Float16Regs:$a)),
           (CVT_f64_f16 Float16Regs:$a, CvtNONE)>;
 
 // fpextend f32 -> f64
@@ -3002,9 +2970,7 @@ def retflag : SDNode<"NVPTXISD::RET_FLAG", SDTNone,
 // fceil, ffloor, fround, ftrunc.
 
 def : Pat<(fceil Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRPI_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(fceil Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRPI)>, Requires<[doNoF32FTZ]>;
+          (CVT_f16_f16 Float16Regs:$a, CvtRPI)>;
 def : Pat<(fceil Float32Regs:$a),
           (CVT_f32_f32 Float32Regs:$a, CvtRPI_FTZ)>, Requires<[doF32FTZ]>;
 def : Pat<(fceil Float32Regs:$a),
@@ -3013,9 +2979,7 @@ def : Pat<(fceil Float64Regs:$a),
           (CVT_f64_f64 Float64Regs:$a, CvtRPI)>;
 
 def : Pat<(ffloor Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRMI_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(ffloor Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRMI)>, Requires<[doNoF32FTZ]>;
+          (CVT_f16_f16 Float16Regs:$a, CvtRMI)>;
 def : Pat<(ffloor Float32Regs:$a),
           (CVT_f32_f32 Float32Regs:$a, CvtRMI_FTZ)>, Requires<[doF32FTZ]>;
 def : Pat<(ffloor Float32Regs:$a),
@@ -3023,10 +2987,8 @@ def : Pat<(ffloor Float32Regs:$a),
 def : Pat<(ffloor Float64Regs:$a),
           (CVT_f64_f64 Float64Regs:$a, CvtRMI)>;
 
-def : Pat<(fround Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRNI_FTZ)>, Requires<[doF32FTZ]>;
 def : Pat<(f16 (fround Float16Regs:$a)),
-          (CVT_f16_f16 Float16Regs:$a, CvtRNI)>, Requires<[doNoF32FTZ]>;
+          (CVT_f16_f16 Float16Regs:$a, CvtRNI)>;
 def : Pat<(fround Float32Regs:$a),
           (CVT_f32_f32 Float32Regs:$a, CvtRNI_FTZ)>, Requires<[doF32FTZ]>;
 def : Pat<(f32 (fround Float32Regs:$a)),
@@ -3035,9 +2997,7 @@ def : Pat<(f64 (fround Float64Regs:$a)),
           (CVT_f64_f64 Float64Regs:$a, CvtRNI)>;
 
 def : Pat<(ftrunc Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRZI_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(ftrunc Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRZI)>, Requires<[doNoF32FTZ]>;
+          (CVT_f16_f16 Float16Regs:$a, CvtRZI)>;
 def : Pat<(ftrunc Float32Regs:$a),
           (CVT_f32_f32 Float32Regs:$a, CvtRZI_FTZ)>, Requires<[doF32FTZ]>;
 def : Pat<(ftrunc Float32Regs:$a),
@@ -3050,9 +3010,7 @@ def : Pat<(ftrunc Float64Regs:$a),
 // matches what CUDA's "libm" does.
 
 def : Pat<(fnearbyint Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRNI_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(fnearbyint Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRNI)>, Requires<[doNoF32FTZ]>;
+          (CVT_f16_f16 Float16Regs:$a, CvtRNI)>;
 def : Pat<(fnearbyint Float32Regs:$a),
           (CVT_f32_f32 Float32Regs:$a, CvtRNI_FTZ)>, Requires<[doF32FTZ]>;
 def : Pat<(fnearbyint Float32Regs:$a),
@@ -3061,9 +3019,7 @@ def : Pat<(fnearbyint Float64Regs:$a),
           (CVT_f64_f64 Float64Regs:$a, CvtRNI)>;
 
 def : Pat<(frint Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRNI_FTZ)>, Requires<[doF32FTZ]>;
-def : Pat<(frint Float16Regs:$a),
-          (CVT_f16_f16 Float16Regs:$a, CvtRNI)>, Requires<[doNoF32FTZ]>;
+          (CVT_f16_f16 Float16Regs:$a, CvtRNI)>;
 def : Pat<(frint Float32Regs:$a),
           (CVT_f32_f32 Float32Regs:$a, CvtRNI_FTZ)>, Requires<[doF32FTZ]>;
 def : Pat<(frint Float32Regs:$a),

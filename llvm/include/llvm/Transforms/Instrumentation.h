@@ -22,25 +22,12 @@
 #include <string>
 #include <vector>
 
-#if defined(__GNUC__) && defined(__linux__) && !defined(ANDROID)
-inline void *getDFSanArgTLSPtrForJIT() {
-  extern __thread __attribute__((tls_model("initial-exec")))
-    void *__dfsan_arg_tls;
-  return (void *)&__dfsan_arg_tls;
-}
-
-inline void *getDFSanRetValTLSPtrForJIT() {
-  extern __thread __attribute__((tls_model("initial-exec")))
-    void *__dfsan_retval_tls;
-  return (void *)&__dfsan_retval_tls;
-}
-#endif
-
 namespace llvm {
 
 class FunctionPass;
 class ModulePass;
 class OptimizationRemarkEmitter;
+class Comdat;
 
 /// Instrumentation passes often insert conditional checks into entry blocks.
 /// Call this function before splitting the entry block to move instructions
@@ -49,6 +36,16 @@ class OptimizationRemarkEmitter;
 /// block.
 BasicBlock::iterator PrepareToSplitEntryBlock(BasicBlock &BB,
                                               BasicBlock::iterator IP);
+
+// Create a constant for Str so that we can pass it to the run-time lib.
+GlobalVariable *createPrivateGlobalForString(Module &M, StringRef Str,
+                                             bool AllowMerging,
+                                             const char *NamePrefix = "");
+
+// Returns F.getComdat() if it exists.
+// Otherwise creates a new comdat, sets F's comdat, and returns it.
+// Returns nullptr on failure.
+Comdat *GetOrCreateFunctionComdat(Function &F, const std::string &ModuleId);
 
 // Insert GCOV profiling instrumentation
 struct GCOVOptions {
@@ -91,9 +88,12 @@ ModulePass *createPGOIndirectCallPromotionLegacyPass(bool InLTO = false,
                                                      bool SamplePGO = false);
 FunctionPass *createPGOMemOPSizeOptLegacyPass();
 
-// Helper function to check if it is legal to promote indirect call \p Inst
-// to a direct call of function \p F. Stores the reason in \p Reason.
-bool isLegalToPromote(Instruction *Inst, Function *F, const char **Reason);
+// The pgo-specific indirect call promotion function declared below is used by
+// the pgo-driven indirect call promotion and sample profile passes. It's a
+// wrapper around llvm::promoteCall, et al. that additionally computes !prof
+// metadata. We place it in a pgo namespace so it's not confused with the
+// generic utilities.
+namespace pgo {
 
 // Helper function that transforms Inst (either an indirect-call instruction, or
 // an invoke instruction , to a conditional call to F. This is like:
@@ -112,6 +112,7 @@ Instruction *promoteIndirectCall(Instruction *Inst, Function *F, uint64_t Count,
                                  uint64_t TotalCount,
                                  bool AttachProfToDirectCall,
                                  OptimizationRemarkEmitter *ORE);
+} // namespace pgo
 
 /// Options for the frontend instrumentation based profiling pass.
 struct InstrProfOptions {
@@ -120,6 +121,9 @@ struct InstrProfOptions {
 
   // Do counter register promotion
   bool DoCounterPromotion = false;
+
+  // Use atomic profile counter increments.
+  bool Atomic = false;
 
   // Name of the profile file to use as output
   std::string InstrProfileOutput;
@@ -141,7 +145,11 @@ ModulePass *createAddressSanitizerModulePass(bool CompileKernel = false,
 
 // Insert MemorySanitizer instrumentation (detection of uninitialized reads)
 FunctionPass *createMemorySanitizerPass(int TrackOrigins = 0,
-                                        bool Recover = false);
+                                        bool Recover = false,
+                                        bool EnableKmsan = false);
+
+FunctionPass *createHWAddressSanitizerPass(bool CompileKernel = false,
+                                           bool Recover = false);
 
 // Insert ThreadSanitizer (race detection) instrumentation
 FunctionPass *createThreadSanitizerPass();
@@ -194,15 +202,7 @@ struct SanitizerCoverageOptions {
 ModulePass *createSanitizerCoverageModulePass(
     const SanitizerCoverageOptions &Options = SanitizerCoverageOptions());
 
-#if defined(__GNUC__) && defined(__linux__) && !defined(ANDROID)
-inline ModulePass *createDataFlowSanitizerPassForJIT(
-    const std::vector<std::string> &ABIListFiles = std::vector<std::string>()) {
-  return createDataFlowSanitizerPass(ABIListFiles, getDFSanArgTLSPtrForJIT,
-                                     getDFSanRetValTLSPtrForJIT);
-}
-#endif
-
-/// \brief Calculate what to divide by to scale counts.
+/// Calculate what to divide by to scale counts.
 ///
 /// Given the maximum count, calculate a divisor that will scale all the
 /// weights to strictly less than std::numeric_limits<uint32_t>::max().
@@ -212,7 +212,7 @@ static inline uint64_t calculateCountScale(uint64_t MaxCount) {
              : MaxCount / std::numeric_limits<uint32_t>::max() + 1;
 }
 
-/// \brief Scale an individual branch count.
+/// Scale an individual branch count.
 ///
 /// Scale a 64-bit weight down to 32-bits using \c Scale.
 ///

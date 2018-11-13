@@ -13,6 +13,7 @@
 #include "lldb/Core/AddressRange.h" // for AddressRange
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/FormatEntity.h" // for FormatEntity
+#include "lldb/Core/Highlighter.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleList.h" // for ModuleList
 #include "lldb/Host/FileSystem.h"
@@ -103,14 +104,26 @@ SourceManager::FileSP SourceManager::GetFile(const FileSpec &file_spec) {
   return file_sp;
 }
 
+static bool should_highlight_source(DebuggerSP debugger_sp) {
+  if (!debugger_sp)
+    return false;
+
+  // We don't use ANSI stop column formatting if the debugger doesn't think it
+  // should be using color.
+  if (!debugger_sp->GetUseColor())
+    return false;
+
+  return debugger_sp->GetHighlightSource();
+}
+
 static bool should_show_stop_column_with_ansi(DebuggerSP debugger_sp) {
   // We don't use ANSI stop column formatting if we can't lookup values from
   // the debugger.
   if (!debugger_sp)
     return false;
 
-  // We don't use ANSI stop column formatting if the debugger doesn't think
-  // it should be using color.
+  // We don't use ANSI stop column formatting if the debugger doesn't think it
+  // should be using color.
   if (!debugger_sp->GetUseColor())
     return false;
 
@@ -128,8 +141,8 @@ static bool should_show_stop_column_with_caret(DebuggerSP debugger_sp) {
   if (!debugger_sp)
     return false;
 
-  // If we're asked to show the first available of ANSI or caret, then
-  // we do show the caret when ANSI is not available.
+  // If we're asked to show the first available of ANSI or caret, then we do
+  // show the caret when ANSI is not available.
   const auto value = debugger_sp->GetStopShowColumn();
   if ((value == eStopShowColumnAnsiOrCaret) && !debugger_sp->GetUseColor())
     return true;
@@ -145,7 +158,9 @@ size_t SourceManager::DisplaySourceLinesWithLineNumbersUsingLastFile(
     const SymbolContextList *bp_locs) {
   if (count == 0)
     return 0;
-  size_t return_value = 0;
+
+  Stream::ByteDelta delta(*s);
+
   if (start_line == 0) {
     if (m_last_line != 0 && m_last_line != UINT32_MAX)
       start_line = m_last_line + m_last_count;
@@ -180,31 +195,37 @@ size_t SourceManager::DisplaySourceLinesWithLineNumbersUsingLastFile(
           ::snprintf(prefix, sizeof(prefix), "    ");
       }
 
-      return_value +=
-          s->Printf("%s%2.2s %-4u\t", prefix,
-                    line == curr_line ? current_line_cstr : "", line);
-      size_t this_line_size = m_last_file_sp->DisplaySourceLines(
-          line, line == curr_line ? column : 0, 0, 0, s);
+      s->Printf("%s%2.2s %-4u\t", prefix,
+                line == curr_line ? current_line_cstr : "", line);
+
+      // So far we treated column 0 as a special 'no column value', but
+      // DisplaySourceLines starts counting columns from 0 (and no column is
+      // expressed by passing an empty optional).
+      llvm::Optional<size_t> columnToHighlight;
+      if (line == curr_line && column)
+        columnToHighlight = column - 1;
+
+      size_t this_line_size =
+          m_last_file_sp->DisplaySourceLines(line, columnToHighlight, 0, 0, s);
       if (column != 0 && line == curr_line &&
           should_show_stop_column_with_caret(m_debugger_wp.lock())) {
         // Display caret cursor.
         std::string src_line;
         m_last_file_sp->GetLine(line, src_line);
-        return_value += s->Printf("    \t");
+        s->Printf("    \t");
         // Insert a space for every non-tab character in the source line.
         for (size_t i = 0; i + 1 < column && i < src_line.length(); ++i)
-          return_value += s->PutChar(src_line[i] == '\t' ? '\t' : ' ');
+          s->PutChar(src_line[i] == '\t' ? '\t' : ' ');
         // Now add the caret.
-        return_value += s->Printf("^\n");
+        s->Printf("^\n");
       }
       if (this_line_size == 0) {
         m_last_line = UINT32_MAX;
         break;
-      } else
-        return_value += this_line_size;
+      }
     }
   }
-  return return_value;
+  return *delta;
 }
 
 size_t SourceManager::DisplaySourceLinesWithLineNumbers(
@@ -255,9 +276,9 @@ size_t SourceManager::DisplayMoreWithLineNumbers(
 
     if (m_last_line > 0) {
       if (reverse) {
-        // If this is the first time we've done a reverse, then back up one more
-        // time so we end
-        // up showing the chunk before the last one we've shown:
+        // If this is the first time we've done a reverse, then back up one
+        // more time so we end up showing the chunk before the last one we've
+        // shown:
         if (m_last_line > m_last_count)
           m_last_line -= m_last_count;
         else
@@ -299,10 +320,9 @@ bool SourceManager::GetDefaultFileAndLine(FileSpec &file_spec, uint32_t &line) {
 
     if (target_sp) {
       // If nobody has set the default file and line then try here.  If there's
-      // no executable, then we
-      // will try again later when there is one.  Otherwise, if we can't find it
-      // we won't look again,
-      // somebody will have to set it (for instance when we stop somewhere...)
+      // no executable, then we will try again later when there is one.
+      // Otherwise, if we can't find it we won't look again, somebody will have
+      // to set it (for instance when we stop somewhere...)
       Module *executable_ptr = target_sp->GetExecutableModulePointer();
       if (executable_ptr) {
         SymbolContextList sc_list;
@@ -410,9 +430,7 @@ void SourceManager::File::CommonInitializer(const FileSpec &file_spec,
         FileSpec new_file_spec;
         // Check target specific source remappings first, then fall back to
         // modules objects can have individual path remappings that were
-        // detected
-        // when the debug info for a module was found.
-        // then
+        // detected when the debug info for a module was found. then
         if (target->GetSourcePathMap().FindFile(m_file_spec, new_file_spec) ||
             target->GetImages().FindSourceFile(m_file_spec, new_file_spec)) {
           m_file_spec = new_file_spec;
@@ -506,7 +524,8 @@ void SourceManager::File::UpdateIfNeeded() {
   }
 }
 
-size_t SourceManager::File::DisplaySourceLines(uint32_t line, uint32_t column,
+size_t SourceManager::File::DisplaySourceLines(uint32_t line,
+                                               llvm::Optional<size_t> column,
                                                uint32_t context_before,
                                                uint32_t context_after,
                                                Stream *s) {
@@ -518,6 +537,27 @@ size_t SourceManager::File::DisplaySourceLines(uint32_t line, uint32_t column,
   if (!m_data_sp)
     return 0;
 
+  size_t bytes_written = s->GetWrittenBytes();
+
+  auto debugger_sp = m_debugger_wp.lock();
+
+  HighlightStyle style;
+  // Use the default Vim style if source highlighting is enabled.
+  if (should_highlight_source(debugger_sp))
+    style = HighlightStyle::MakeVimStyle();
+
+  // If we should mark the stop column with color codes, then copy the prefix
+  // and suffix to our color style.
+  if (should_show_stop_column_with_ansi(debugger_sp))
+    style.selected.Set(debugger_sp->GetStopShowColumnAnsiPrefix(),
+                       debugger_sp->GetStopShowColumnAnsiSuffix());
+
+  HighlighterManager mgr;
+  std::string path = GetFileSpec().GetPath(/*denormalize*/ false);
+  // FIXME: Find a way to get the definitive language this file was written in
+  // and pass it to the highlighter.
+  const auto &h = mgr.getHighlighterFor(lldb::eLanguageTypeUnknown, path);
+
   const uint32_t start_line =
       line <= context_before ? 1 : line - context_before;
   const uint32_t start_line_offset = GetLineOffset(start_line);
@@ -528,71 +568,20 @@ size_t SourceManager::File::DisplaySourceLines(uint32_t line, uint32_t column,
       end_line_offset = m_data_sp->GetByteSize();
 
     assert(start_line_offset <= end_line_offset);
-    size_t bytes_written = 0;
     if (start_line_offset < end_line_offset) {
       size_t count = end_line_offset - start_line_offset;
       const uint8_t *cstr = m_data_sp->GetBytes() + start_line_offset;
 
-      bool displayed_line = false;
+      auto ref = llvm::StringRef(reinterpret_cast<const char *>(cstr), count);
 
-      if (column && (column < count)) {
-        auto debugger_sp = m_debugger_wp.lock();
-        if (should_show_stop_column_with_ansi(debugger_sp) && debugger_sp) {
-          // Check if we have any ANSI codes with which to mark this column.
-          // If not, no need to do this work.
-          auto ansi_prefix_entry = debugger_sp->GetStopShowColumnAnsiPrefix();
-          auto ansi_suffix_entry = debugger_sp->GetStopShowColumnAnsiSuffix();
-
-          // We only bother breaking up the line to format the marked column if
-          // there is any marking specified on both sides of the marked column.
-          // In ANSI-terminal-sequence land, there must be a post if there is a
-          // pre format, and vice versa.
-          if (ansi_prefix_entry && ansi_suffix_entry) {
-            // Mark the current column with the desired escape sequence for
-            // formatting the column (e.g. underline, inverse, etc.)
-
-            // First print the part before the column to mark.
-            bytes_written = s->Write(cstr, column - 1);
-
-            // Write the pre escape sequence.
-            const SymbolContext *sc = nullptr;
-            const ExecutionContext *exe_ctx = nullptr;
-            const Address addr = LLDB_INVALID_ADDRESS;
-            ValueObject *valobj = nullptr;
-            const bool function_changed = false;
-            const bool initial_function = false;
-
-            FormatEntity::Format(*ansi_prefix_entry, *s, sc, exe_ctx, &addr,
-                                 valobj, function_changed, initial_function);
-
-            // Write the marked column.
-            bytes_written += s->Write(cstr + column - 1, 1);
-
-            // Write the post escape sequence.
-            FormatEntity::Format(*ansi_suffix_entry, *s, sc, exe_ctx, &addr,
-                                 valobj, function_changed, initial_function);
-
-            // And finish up with the rest of the line.
-            bytes_written += s->Write(cstr + column, count - column);
-
-            // Keep track of the fact that we just wrote the line.
-            displayed_line = true;
-          }
-        }
-      }
-
-      // If we didn't end up displaying the line with ANSI codes for whatever
-      // reason, display it now sans codes.
-      if (!displayed_line)
-        bytes_written = s->Write(cstr, count);
+      h.Highlight(style, ref, column, "", *s);
 
       // Ensure we get an end of line character one way or another.
-      if (!is_newline_char(cstr[count - 1]))
-        bytes_written += s->EOL();
+      if (!is_newline_char(ref.back()))
+        s->EOL();
     }
-    return bytes_written;
   }
-  return 0;
+  return s->GetWrittenBytes() - bytes_written;
 }
 
 void SourceManager::File::FindLinesMatchingRegex(

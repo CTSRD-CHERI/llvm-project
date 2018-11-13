@@ -1,8 +1,8 @@
+# REQUIRES: sparc
 # RUN: llvm-mc -filetype=obj -triple=sparc64-unknown-openbsd %s -o %t
 # RUN: ld.lld %t -o %t2
 # RUN: llvm-readobj -file-headers -sections -program-headers -symbols %t2 \
 # RUN:   | FileCheck %s
-# REQUIRES: sparc
 
 # exits with return code 42 on OpenBSD/sparc64
 .global _start
@@ -81,7 +81,7 @@ _start:
 # CHECK-NEXT:     Link: 0
 # CHECK-NEXT:     Info: 0
 # CHECK-NEXT:     AddressAlignment: 1
-# CHECK-NEXT:     EntrySize: 0
+# CHECK-NEXT:     EntrySize: 1
 # CHECK-NEXT:   }
 # CHECK-NEXT:   Section {
 # CHECK-NEXT:     Index: 3

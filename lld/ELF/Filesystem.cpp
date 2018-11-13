@@ -14,10 +14,10 @@
 #include "Filesystem.h"
 #include "Config.h"
 #include "lld/Common/Threads.h"
-#include "llvm/Config/config.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/FileOutputBuffer.h"
 #include "llvm/Support/FileSystem.h"
-#if defined(HAVE_UNISTD_H)
+#if LLVM_ON_UNIX
 #include <unistd.h>
 #endif
 #include <thread>
@@ -44,7 +44,7 @@ using namespace lld::elf;
 // The calling thread returns almost immediately.
 void elf::unlinkAsync(StringRef Path) {
 // Removing a file is async on windows.
-#if defined(LLVM_ON_WIN32)
+#if defined(_WIN32)
   sys::fs::remove(Path);
 #else
   if (!ThreadsEnabled || !sys::fs::exists(Path) ||

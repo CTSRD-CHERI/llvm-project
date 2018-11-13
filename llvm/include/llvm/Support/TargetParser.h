@@ -86,6 +86,9 @@ enum ArchExtKind : unsigned {
   AEK_RAS =         1 << 12,
   AEK_SVE =         1 << 13,
   AEK_DOTPROD =     1 << 14,
+  AEK_SHA2    =     1 << 15,
+  AEK_AES     =     1 << 16,
+  AEK_FP16FML =     1 << 17,
   // Unsupported extensions.
   AEK_OS = 0x8000000,
   AEK_IWMMXT = 0x10000000,
@@ -137,6 +140,7 @@ unsigned parseFPU(StringRef FPU);
 ArchKind parseArch(StringRef Arch);
 unsigned parseArchExt(StringRef ArchExt);
 ArchKind parseCPUArch(StringRef CPU);
+void fillValidCPUArchList(SmallVectorImpl<StringRef> &Values);
 ISAKind parseArchISA(StringRef Arch);
 EndianKind parseArchEndian(StringRef Arch);
 ProfileKind parseArchProfile(StringRef Arch);
@@ -170,7 +174,14 @@ enum ArchExtKind : unsigned {
   AEK_SVE =         1 << 9,
   AEK_DOTPROD =     1 << 10,
   AEK_RCPC =        1 << 11,
-  AEK_RDM =         1 << 12
+  AEK_RDM =         1 << 12,
+  AEK_SM4 =         1 << 13,
+  AEK_SHA3 =        1 << 14,
+  AEK_SHA2 =        1 << 15,
+  AEK_AES =         1 << 16,
+  AEK_FP16FML =     1 << 17,
+  AEK_RAND =        1 << 18,
+  AEK_MTE =         1 << 19,
 };
 
 StringRef getCanonicalArchName(StringRef Arch);
@@ -199,16 +210,20 @@ unsigned checkArchVersion(StringRef Arch);
 unsigned  getDefaultFPU(StringRef CPU, ArchKind AK);
 unsigned  getDefaultExtensions(StringRef CPU, ArchKind AK);
 StringRef getDefaultCPU(StringRef Arch);
+AArch64::ArchKind getCPUArchKind(StringRef CPU);
 
 // Parser
 unsigned parseFPU(StringRef FPU);
 AArch64::ArchKind parseArch(StringRef Arch);
-unsigned parseArchExt(StringRef ArchExt);
+ArchExtKind parseArchExt(StringRef ArchExt);
 ArchKind parseCPUArch(StringRef CPU);
+void fillValidCPUArchList(SmallVectorImpl<StringRef> &Values);
 ARM::ISAKind parseArchISA(StringRef Arch);
 ARM::EndianKind parseArchEndian(StringRef Arch);
 ARM::ProfileKind parseArchProfile(StringRef Arch);
 unsigned parseArchVersion(StringRef Arch);
+
+bool isX18ReservedByDefault(const Triple &TT);
 
 } // namespace AArch64
 
@@ -244,7 +259,105 @@ enum ProcessorSubtypes : unsigned {
   CPU_SUBTYPE_MAX
 };
 
+// This should be kept in sync with libcc/compiler-rt as it should be used
+// by clang as a proxy for what's in libgcc/compiler-rt.
+enum ProcessorFeatures {
+#define X86_FEATURE(VAL, ENUM) \
+  ENUM = VAL,
+#include "llvm/Support/X86TargetParser.def"
+
+};
+
 } // namespace X86
+
+namespace AMDGPU {
+
+/// GPU kinds supported by the AMDGPU target.
+enum GPUKind : uint32_t {
+  // Not specified processor.
+  GK_NONE = 0,
+
+  // R600-based processors.
+  GK_R600 = 1,
+  GK_R630 = 2,
+  GK_RS880 = 3,
+  GK_RV670 = 4,
+  GK_RV710 = 5,
+  GK_RV730 = 6,
+  GK_RV770 = 7,
+  GK_CEDAR = 8,
+  GK_CYPRESS = 9,
+  GK_JUNIPER = 10,
+  GK_REDWOOD = 11,
+  GK_SUMO = 12,
+  GK_BARTS = 13,
+  GK_CAICOS = 14,
+  GK_CAYMAN = 15,
+  GK_TURKS = 16,
+
+  GK_R600_FIRST = GK_R600,
+  GK_R600_LAST = GK_TURKS,
+
+  // AMDGCN-based processors.
+  GK_GFX600 = 32,
+  GK_GFX601 = 33,
+
+  GK_GFX700 = 40,
+  GK_GFX701 = 41,
+  GK_GFX702 = 42,
+  GK_GFX703 = 43,
+  GK_GFX704 = 44,
+
+  GK_GFX801 = 50,
+  GK_GFX802 = 51,
+  GK_GFX803 = 52,
+  GK_GFX810 = 53,
+
+  GK_GFX900 = 60,
+  GK_GFX902 = 61,
+  GK_GFX904 = 62,
+  GK_GFX906 = 63,
+
+  GK_AMDGCN_FIRST = GK_GFX600,
+  GK_AMDGCN_LAST = GK_GFX906,
+};
+
+/// Instruction set architecture version.
+struct IsaVersion {
+  unsigned Major;
+  unsigned Minor;
+  unsigned Stepping;
+};
+
+// This isn't comprehensive for now, just things that are needed from the
+// frontend driver.
+enum ArchFeatureKind : uint32_t {
+  FEATURE_NONE = 0,
+
+  // These features only exist for r600, and are implied true for amdgcn.
+  FEATURE_FMA = 1 << 1,
+  FEATURE_LDEXP = 1 << 2,
+  FEATURE_FP64 = 1 << 3,
+
+  // Common features.
+  FEATURE_FAST_FMA_F32 = 1 << 4,
+  FEATURE_FAST_DENORMAL_F32 = 1 << 5
+};
+
+StringRef getArchNameAMDGCN(GPUKind AK);
+StringRef getArchNameR600(GPUKind AK);
+StringRef getCanonicalArchName(StringRef Arch);
+GPUKind parseArchAMDGCN(StringRef CPU);
+GPUKind parseArchR600(StringRef CPU);
+unsigned getArchAttrAMDGCN(GPUKind AK);
+unsigned getArchAttrR600(GPUKind AK);
+
+void fillValidArchListAMDGCN(SmallVectorImpl<StringRef> &Values);
+void fillValidArchListR600(SmallVectorImpl<StringRef> &Values);
+
+IsaVersion getIsaVersion(StringRef GPU);
+
+} // namespace AMDGPU
 
 } // namespace llvm
 

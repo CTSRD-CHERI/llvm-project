@@ -9,6 +9,7 @@ declare i32 @llvm.amdgcn.workitem.id.x() nounwind readnone
 
 ; waitcnt should be inserted after exec modification
 ; SI: v_cmp_lt_i32_e32 vcc, 0,
+; SI: v_mov_b32_e32 {{v[0-9]+}}, 0
 ; SI-NEXT: s_and_saveexec_b64 [[SAVE1:s\[[0-9]+:[0-9]+\]]], vcc
 ; SI-NEXT: s_xor_b64 [[SAVE2:s\[[0-9]+:[0-9]+\]]], exec, [[SAVE1]]
 ; SI-NEXT: ; mask branch [[FLOW_BB:BB[0-9]+_[0-9]+]]
@@ -192,7 +193,7 @@ exit:
 
 ; Load loop limit from buffer
 ; Branch to exit if uniformly not taken
-; SI: ; BB#0:
+; SI: ; %bb.0:
 ; SI: buffer_load_dword [[VBOUND:v[0-9]+]]
 ; SI: v_cmp_lt_i32_e32 vcc
 ; SI: s_and_saveexec_b64 [[OUTER_CMP_SREG:s\[[0-9]+:[0-9]+\]]], vcc
@@ -201,8 +202,7 @@ exit:
 
 ; Initialize inner condition to false
 ; SI: BB{{[0-9]+_[0-9]+}}: ; %bb10.preheader
-; SI: s_mov_b64 [[ZERO:s\[[0-9]+:[0-9]+\]]], 0{{$}}
-; SI: s_mov_b64 [[COND_STATE:s\[[0-9]+:[0-9]+\]]], [[ZERO]]
+; SI: s_mov_b64 [[COND_STATE:s\[[0-9]+:[0-9]+\]]], 0{{$}}
 
 ; Clear exec bits for workitems that load -1s
 ; SI: [[LABEL_LOOP:BB[0-9]+_[0-9]+]]:
@@ -223,7 +223,9 @@ exit:
 ; SI: [[LABEL_FLOW]]:
 ; SI-NEXT: ; in Loop: Header=[[LABEL_LOOP]]
 ; SI-NEXT: s_or_b64 exec, exec, [[ORNEG3]]
-; SI-NEXT: s_or_b64 [[COND_STATE]], [[ORNEG3]], [[TMP]]
+; SI-NEXT: s_mov_b64 [[MOVED_TMP:s\[[0-9]+:[0-9]+\]]], [[TMP]]
+; SI-NEXT: s_and_b64 [[MASKED_ORNEG3:s\[[0-9]+:[0-9]+\]]], exec, [[ORNEG3]]
+; SI-NEXT: s_or_b64 [[COND_STATE]], [[MASKED_ORNEG3]], [[MOVED_TMP]]
 ; SI-NEXT: s_andn2_b64 exec, exec, [[COND_STATE]]
 ; SI-NEXT: s_cbranch_execnz [[LABEL_LOOP]]
 

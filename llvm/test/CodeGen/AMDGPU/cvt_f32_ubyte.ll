@@ -1,5 +1,5 @@
-; RUN: llc -march=amdgcn -mcpu=tahiti -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=SI %s
-; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=VI %s
+; RUN: llc -march=amdgcn -mcpu=tahiti -verify-machineinstrs < %s | FileCheck -allow-deprecated-dag-overlap -check-prefix=GCN -check-prefix=SI %s
+; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -allow-deprecated-dag-overlap -check-prefix=GCN -check-prefix=VI %s
 
 declare i32 @llvm.amdgcn.workitem.id.x() nounwind readnone
 declare i32 @llvm.amdgcn.workitem.id.y() nounwind readnone
@@ -169,7 +169,7 @@ define amdgpu_kernel void @load_v8i8_to_v8f32(<8 x float> addrspace(1)* noalias 
 
 ; GCN-LABEL: {{^}}i8_zext_inreg_i32_to_f32:
 ; GCN: {{buffer|flat}}_load_dword [[LOADREG:v[0-9]+]],
-; GCN: v_add_i32_e32 [[ADD:v[0-9]+]], vcc, 2, [[LOADREG]]
+; GCN: v_add_{{[iu]}}32_e32 [[ADD:v[0-9]+]], vcc, 2, [[LOADREG]]
 ; GCN-NEXT: v_cvt_f32_ubyte0_e32 [[CONV:v[0-9]+]], [[ADD]]
 ; GCN: buffer_store_dword [[CONV]],
 define amdgpu_kernel void @i8_zext_inreg_i32_to_f32(float addrspace(1)* noalias %out, i32 addrspace(1)* noalias %in) nounwind {

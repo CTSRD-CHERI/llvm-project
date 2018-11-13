@@ -21,6 +21,9 @@ namespace modernize {
 namespace {
 
 constexpr char StdMemoryHeader[] = "memory";
+constexpr char ConstructorCall[] = "constructorCall";
+constexpr char ResetCall[] = "resetCall";
+constexpr char NewExpression[] = "newExpression";
 
 std::string GetNewExprName(const CXXNewExpr *NewExpr,
                            const SourceManager &SM,
@@ -30,7 +33,7 @@ std::string GetNewExprName(const CXXNewExpr *NewExpr,
           NewExpr->getAllocatedTypeSourceInfo()->getTypeLoc().getSourceRange()),
       SM, Lang);
   if (NewExpr->isArray()) {
-    return WrittenName.str() + "[]";
+    return (WrittenName + "[]").str();
   }
   return WrittenName.str();
 }
@@ -38,9 +41,6 @@ std::string GetNewExprName(const CXXNewExpr *NewExpr,
 } // namespace
 
 const char MakeSmartPtrCheck::PointerType[] = "pointerType";
-const char MakeSmartPtrCheck::ConstructorCall[] = "constructorCall";
-const char MakeSmartPtrCheck::ResetCall[] = "resetCall";
-const char MakeSmartPtrCheck::NewExpression[] = "newExpression";
 
 MakeSmartPtrCheck::MakeSmartPtrCheck(StringRef Name,
                                      ClangTidyContext* Context,
@@ -61,16 +61,21 @@ void MakeSmartPtrCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
   Options.store(Opts, "IgnoreMacros", IgnoreMacros);
 }
 
+bool MakeSmartPtrCheck::isLanguageVersionSupported(
+    const LangOptions &LangOpts) const {
+  return LangOpts.CPlusPlus11;
+}
+
 void MakeSmartPtrCheck::registerPPCallbacks(CompilerInstance &Compiler) {
-  if (getLangOpts().CPlusPlus11) {
-    Inserter.reset(new utils::IncludeInserter(
-        Compiler.getSourceManager(), Compiler.getLangOpts(), IncludeStyle));
+  if (isLanguageVersionSupported(getLangOpts())) {
+    Inserter = llvm::make_unique<utils::IncludeInserter>(
+        Compiler.getSourceManager(), Compiler.getLangOpts(), IncludeStyle);
     Compiler.getPreprocessor().addPPCallbacks(Inserter->CreatePPCallbacks());
   }
 }
 
 void MakeSmartPtrCheck::registerMatchers(ast_matchers::MatchFinder *Finder) {
-  if (!getLangOpts().CPlusPlus11)
+  if (!isLanguageVersionSupported(getLangOpts()))
     return;
 
   // Calling make_smart_ptr from within a member function of a type with a
@@ -117,12 +122,12 @@ void MakeSmartPtrCheck::check(const MatchFinder::MatchResult &Result) {
     return;
 
   if (Construct)
-    checkConstruct(SM, Construct, Type, New);
+    checkConstruct(SM, Result.Context, Construct, Type, New);
   else if (Reset)
-    checkReset(SM, Reset, New);
+    checkReset(SM, Result.Context, Reset, New);
 }
 
-void MakeSmartPtrCheck::checkConstruct(SourceManager &SM,
+void MakeSmartPtrCheck::checkConstruct(SourceManager &SM, ASTContext *Ctx,
                                        const CXXConstructExpr *Construct,
                                        const QualType *Type,
                                        const CXXNewExpr *New) {
@@ -149,7 +154,7 @@ void MakeSmartPtrCheck::checkConstruct(SourceManager &SM,
     return;
   }
 
-  if (!replaceNew(Diag, New, SM)) {
+  if (!replaceNew(Diag, New, SM, Ctx)) {
     return;
   }
 
@@ -188,15 +193,15 @@ void MakeSmartPtrCheck::checkConstruct(SourceManager &SM,
   insertHeader(Diag, SM.getFileID(ConstructCallStart));
 }
 
-void MakeSmartPtrCheck::checkReset(SourceManager &SM,
+void MakeSmartPtrCheck::checkReset(SourceManager &SM, ASTContext *Ctx,
                                    const CXXMemberCallExpr *Reset,
                                    const CXXNewExpr *New) {
   const auto *Expr = cast<MemberExpr>(Reset->getCallee());
   SourceLocation OperatorLoc = Expr->getOperatorLoc();
   SourceLocation ResetCallStart = Reset->getExprLoc();
-  SourceLocation ExprStart = Expr->getLocStart();
+  SourceLocation ExprStart = Expr->getBeginLoc();
   SourceLocation ExprEnd =
-      Lexer::getLocForEndOfToken(Expr->getLocEnd(), 0, SM, getLangOpts());
+      Lexer::getLocForEndOfToken(Expr->getEndLoc(), 0, SM, getLangOpts());
 
   bool InMacro = ExprStart.isMacroID();
 
@@ -219,7 +224,7 @@ void MakeSmartPtrCheck::checkReset(SourceManager &SM,
     return;
   }
 
-  if (!replaceNew(Diag, New, SM)) {
+  if (!replaceNew(Diag, New, SM, Ctx)) {
     return;
   }
 
@@ -236,10 +241,28 @@ void MakeSmartPtrCheck::checkReset(SourceManager &SM,
 }
 
 bool MakeSmartPtrCheck::replaceNew(DiagnosticBuilder &Diag,
-                                   const CXXNewExpr *New,
-                                   SourceManager& SM) {
-  SourceLocation NewStart = New->getSourceRange().getBegin();
-  SourceLocation NewEnd = New->getSourceRange().getEnd();
+                                   const CXXNewExpr *New, SourceManager &SM,
+                                   ASTContext *Ctx) {
+  auto SkipParensParents = [&](const Expr *E) {
+    for (const Expr *OldE = nullptr; E != OldE;) {
+      OldE = E;
+      for (const auto &Node : Ctx->getParents(*E)) {
+        if (const Expr *Parent = Node.get<ParenExpr>()) {
+          E = Parent;
+          break;
+        }
+      }
+    }
+    return E;
+  };
+
+  SourceRange NewRange = SkipParensParents(New)->getSourceRange();
+  SourceLocation NewStart = NewRange.getBegin();
+  SourceLocation NewEnd = NewRange.getEnd();
+
+  // Skip when the source location of the new expression is invalid.
+  if (NewStart.isInvalid() || NewEnd.isInvalid())
+    return false;
 
   std::string ArraySizeExpr;
   if (const auto* ArraySize = New->getArraySize()) {
@@ -281,13 +304,18 @@ bool MakeSmartPtrCheck::replaceNew(DiagnosticBuilder &Diag,
         if (isa<CXXStdInitializerListExpr>(Arg)) {
           return false;
         }
-        // Check the implicit conversion from the std::initializer_list type to
-        // a class type.
-        if (const auto *ImplicitCE = dyn_cast<CXXConstructExpr>(Arg)) {
-          if (ImplicitCE->isStdInitListInitialization()) {
-            return false;
+        // Check whether we construct a class from a std::initializer_list.
+        // If so, we won't generate the fixes.
+        auto IsStdInitListInitConstructExpr = [](const Expr* E) {
+          assert(E);
+          if (const auto *ImplicitCE = dyn_cast<CXXConstructExpr>(E)) {
+            if (ImplicitCE->isStdInitListInitialization())
+              return true;
           }
-        }
+          return false;
+        };
+        if (IsStdInitListInitConstructExpr(Arg->IgnoreImplicit()))
+          return false;
       }
     }
     if (ArraySizeExpr.empty()) {
@@ -339,7 +367,7 @@ bool MakeSmartPtrCheck::replaceNew(DiagnosticBuilder &Diag,
       // Has to be replaced with:
       //   smart_ptr<Pair>(Pair{first, second});
       InitRange = SourceRange(
-          New->getAllocatedTypeSourceInfo()->getTypeLoc().getLocStart(),
+          New->getAllocatedTypeSourceInfo()->getTypeLoc().getBeginLoc(),
           New->getInitializer()->getSourceRange().getEnd());
     }
     Diag << FixItHint::CreateRemoval(

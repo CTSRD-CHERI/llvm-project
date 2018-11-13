@@ -18,7 +18,6 @@
 #include "llvm/Transforms/IPO/GlobalDCE.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
@@ -166,7 +165,7 @@ PreservedAnalyses GlobalDCEPass::run(Module &M, ModuleAnalysisManager &MAM) {
     // Functions with external linkage are needed if they have a body.
     // Externally visible & appending globals are needed, if they have an
     // initializer.
-    if (!GO.isDeclaration() && !GO.hasAvailableExternallyLinkage())
+    if (!GO.isDeclaration())
       if (!GO.isDiscardableIfUnused())
         MarkLive(GO);
 

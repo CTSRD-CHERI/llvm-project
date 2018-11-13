@@ -21,7 +21,7 @@
 #include "PPCTargetMachine.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/BasicTTIImpl.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
 
@@ -61,7 +61,7 @@ public:
 
   /// \name Vector TTI Implementations
   /// @{
-
+  bool useColdCCForColdCall(Function &F);
   bool enableAggressiveInterleaving(bool LoopHasReductions);
   const TTI::MemCmpExpansionOptions *enableMemCmpExpansion(
       bool IsZeroCmp) const;
@@ -90,7 +90,8 @@ public:
                                  unsigned Factor,
                                  ArrayRef<unsigned> Indices,
                                  unsigned Alignment,
-                                 unsigned AddressSpace);
+                                 unsigned AddressSpace,
+                                 bool IsMasked = false);
 
   /// @}
 };

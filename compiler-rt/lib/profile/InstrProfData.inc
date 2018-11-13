@@ -178,7 +178,7 @@ VALUE_PROF_FUNC_PARAM(uint64_t, LargeValue, Type::getInt64Ty(Ctx))
  * functions are profiled by the instrumented code. The target addresses are
  * written in the raw profile data and converted to target function name's MD5
  * hash by the profile reader during deserialization.  Typically, this happens
- * when the the raw profile data is read during profile merging.
+ * when the raw profile data is read during profile merging.
  *
  * For this remapping the ProfData is used.  ProfData contains both the function
  * name hash and the function address.
@@ -628,7 +628,7 @@ serializeValueProfDataFrom(ValueProfRecordClosure *Closure,
 /* Raw profile format version (start from 1). */
 #define INSTR_PROF_RAW_VERSION 4
 /* Indexed profile format version (start from 1). */
-#define INSTR_PROF_INDEX_VERSION 4
+#define INSTR_PROF_INDEX_VERSION 5
 /* Coverage mapping format vresion (start from 0). */
 #define INSTR_PROF_COVMAP_VERSION 2
 

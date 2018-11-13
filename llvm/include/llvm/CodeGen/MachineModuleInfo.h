@@ -105,7 +105,7 @@ class MachineModuleInfo : public ImmutablePass {
   /// basic block's address of label.
   MMIAddrLabelMap *AddrLabelSymbols;
 
-  // TODO: Ideally, what we'd like is to have a switch that allows emitting 
+  // TODO: Ideally, what we'd like is to have a switch that allows emitting
   // synchronous (precise at call-sites only) CFA into .eh_frame. However,
   // even under this switch, we'd like .debug_frame to be precise when using
   // -g. At this moment, there's no way to specify that some CFI directives
@@ -155,7 +155,6 @@ public:
   const MCContext &getContext() const { return Context; }
   MCContext &getContext() { return Context; }
 
-  void setModule(const Module *M) { TheModule = M; }
   const Module *getModule() const { return TheModule; }
 
   /// Returns the MachineFunction constructed for the IR function \p F.

@@ -28,10 +28,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
-#include "llvm/CodeGen/GlobalISel/IRTranslator.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelect.h"
-#include "llvm/CodeGen/GlobalISel/Legalizer.h"
-#include "llvm/CodeGen/GlobalISel/RegBankSelect.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalValue.h"
@@ -41,8 +38,6 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/TargetParser.h"
 #include "llvm/Target/TargetOptions.h"
-#include <cassert>
-#include <string>
 
 using namespace llvm;
 
@@ -193,8 +188,10 @@ void ARMSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   assert(hasV6T2Ops() || !hasThumb2());
 
   // Execute only support requires movt support
-  if (genExecuteOnly())
-    assert(hasV8MBaselineOps() && !NoMovt && "Cannot generate execute-only code for this target");
+  if (genExecuteOnly()) {
+    NoMovt = false;
+    assert(hasV8MBaselineOps() && "Cannot generate execute-only code for this target");
+  }
 
   // Keep a pointer to static instruction cost data for the specified CPU.
   SchedModel = getSchedModelForCPU(CPUString);
@@ -292,7 +289,13 @@ void ARMSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
   case CortexR7:
   case CortexM3:
   case CortexR52:
-  case ExynosM1:
+    break;
+  case Exynos:
+    LdStMultipleTiming = SingleIssuePlusExtras;
+    MaxInterleaveFactor = 4;
+    if (!isThumb())
+      PrefLoopAlignment = 3;
+    break;
   case Kryo:
     break;
   case Krait:
@@ -306,6 +309,8 @@ void ARMSubtarget::initSubtargetFeatures(StringRef CPU, StringRef FS) {
     break;
   }
 }
+
+bool ARMSubtarget::isTargetHardFloat() const { return TM.isTargetHardFloat(); }
 
 bool ARMSubtarget::isAPCS_ABI() const {
   assert(TM.TargetABI != ARMBaseTargetMachine::ARM_ABI_UNKNOWN);
@@ -353,11 +358,6 @@ unsigned ARMSubtarget::getMispredictionPenalty() const {
   return SchedModel.MispredictPenalty;
 }
 
-bool ARMSubtarget::hasSinCos() const {
-  return isTargetWatchOS() ||
-    (isTargetIOS() && !getTargetTriple().isOSVersionLT(7, 0));
-}
-
 bool ARMSubtarget::enableMachineScheduler() const {
   // Enable the MachineScheduler before register allocation for subtargets
   // with the use-misched feature.
@@ -378,7 +378,8 @@ bool ARMSubtarget::useStride4VFPs(const MachineFunction &MF) const {
   // For general targets, the prologue can grow when VFPs are allocated with
   // stride 4 (more vpush instructions). But WatchOS uses a compact unwind
   // format which it's more important to get right.
-  return isTargetWatchABI() || (isSwift() && !MF.getFunction()->optForMinSize());
+  return isTargetWatchABI() ||
+         (useWideStrideVFP() && !MF.getFunction().optForMinSize());
 }
 
 bool ARMSubtarget::useMovt(const MachineFunction &MF) const {
@@ -386,7 +387,7 @@ bool ARMSubtarget::useMovt(const MachineFunction &MF) const {
   // immediates as it is inherently position independent, and may be out of
   // range otherwise.
   return !NoMovt && hasV8MBaselineOps() &&
-         (isTargetWindows() || !MF.getFunction()->optForMinSize() || genExecuteOnly());
+         (isTargetWindows() || !MF.getFunction().optForMinSize() || genExecuteOnly());
 }
 
 bool ARMSubtarget::useFastISel() const {

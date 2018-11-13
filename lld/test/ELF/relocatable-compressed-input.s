@@ -7,7 +7,7 @@
 # RUN: ld.lld %t1 -o %t2 -r
 # RUN: llvm-readobj -sections -section-data %t2 | FileCheck %s
 
-## Check we decompress section and remove ".z" prefix specific for zlib-gnu compression.
+## Check we uncompress section and remove ".z" prefix specific for zlib-gnu compression.
 # CHECK:      Section {
 # CHECK:        Index:
 # CHECK:        Name: .debug_str
@@ -24,11 +24,11 @@
 # CHECK-NEXT:   AddressAlignment: 1
 # CHECK-NEXT:   EntrySize: 1
 # CHECK-NEXT:   SectionData (
-# CHECK-NEXT:     0000: {{.*}}  |short unsigned i|
-# CHECK-NEXT:     0010: {{.*}}  |nt.unsigned int.|
-# CHECK-NEXT:     0020: {{.*}}  |long unsigned in|
-# CHECK-NEXT:     0030: {{.*}}  |t.char.unsigned |
-# CHECK-NEXT:     0040: {{.*}}  |char.|
+# CHECK-NEXT:     0000: {{.*}}  |long unsigned in|
+# CHECK-NEXT:     0010: {{.*}}  |t.unsigned char.|
+# CHECK-NEXT:     0020: {{.*}}  |unsigned int.cha|
+# CHECK-NEXT:     0030: {{.*}}  |r.short unsigned|
+# CHECK-NEXT:     0040: {{.*}}  | int.|
 # CHECK-NEXT:   )
 # CHECK-NEXT: }
 

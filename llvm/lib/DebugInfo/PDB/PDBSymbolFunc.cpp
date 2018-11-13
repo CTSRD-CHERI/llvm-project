@@ -15,7 +15,6 @@
 #include "llvm/DebugInfo/PDB/PDBSymDumper.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolData.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolTypeFunctionSig.h"
-#include "llvm/DebugInfo/PDB/PDBSymbolTypeUDT.h"
 #include "llvm/DebugInfo/PDB/PDBTypes.h"
 
 #include <unordered_set>
@@ -70,10 +69,6 @@ public:
 
   void reset() override { CurIter = Args.empty() ? Args.end() : Args.begin(); }
 
-  FunctionArgEnumerator *clone() const override {
-    return new FunctionArgEnumerator(Session, Func);
-  }
-
 private:
   typedef std::vector<std::unique_ptr<PDBSymbolData>> ArgListType;
   const IPDBSession &Session;
@@ -81,12 +76,6 @@ private:
   ArgListType Args;
   ArgListType::const_iterator CurIter;
 };
-}
-
-PDBSymbolFunc::PDBSymbolFunc(const IPDBSession &PDBSession,
-                             std::unique_ptr<IPDBRawSymbol> Symbol)
-    : PDBSymbol(PDBSession, std::move(Symbol)) {
-  assert(RawSymbol->getSymTag() == PDB_SymType::Function);
 }
 
 std::unique_ptr<IPDBEnumChildren<PDBSymbolData>>
@@ -105,4 +94,19 @@ bool PDBSymbolFunc::isDestructor() const {
   if (Name == "__vecDelDtor")
     return true;
   return false;
+}
+
+std::unique_ptr<IPDBEnumLineNumbers> PDBSymbolFunc::getLineNumbers() const {
+  auto Len = RawSymbol->getLength();
+  return Session.findLineNumbersByAddress(RawSymbol->getVirtualAddress(),
+                                          Len ? Len : 1);
+}
+
+uint32_t PDBSymbolFunc::getCompilandId() const {
+  if (auto Lines = getLineNumbers()) {
+    if (auto FirstLine = Lines->getNext()) {
+      return FirstLine->getCompilandId();
+    }
+  }
+  return 0;
 }

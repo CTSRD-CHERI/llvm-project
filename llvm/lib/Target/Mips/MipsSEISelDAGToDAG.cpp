@@ -161,7 +161,7 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
     // lui $v0, %hi(%neg(%gp_rel(fname)))
     // daddu $v1, $v0, $t9
     // daddiu $globalbasereg, $v1, %lo(%neg(%gp_rel(fname)))
-    const GlobalValue *FName = MF.getFunction();
+    const GlobalValue *FName = &MF.getFunction();
     BuildMI(MBB, I, DL, TII.get(Mips::LUi64), V0)
       .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
     BuildMI(MBB, I, DL, TII.get(Mips::DADDu), V1).addReg(V0)
@@ -190,7 +190,7 @@ void MipsSEDAGToDAGISel::initGlobalBaseReg(MachineFunction &MF) {
     // lui $v0, %hi(%neg(%gp_rel(fname)))
     // addu $v1, $v0, $t9
     // addiu $globalbasereg, $v1, %lo(%neg(%gp_rel(fname)))
-    const GlobalValue *FName = MF.getFunction();
+    const GlobalValue *FName = &MF.getFunction();
     BuildMI(MBB, I, DL, TII.get(Mips::LUi), V0)
       .addGlobalAddress(FName, 0, MipsII::MO_GPOFF_HI);
     BuildMI(MBB, I, DL, TII.get(Mips::ADDu), V1).addReg(V0).addReg(Mips::T9);
@@ -237,6 +237,18 @@ void MipsSEDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
         break;
       case Mips::WRDSP:
         addDSPCtrlRegOperands(true, MI, MF);
+        break;
+      case Mips::BuildPairF64_64:
+      case Mips::ExtractElementF64_64:
+        if (!Subtarget->useOddSPReg()) {
+          MI.addOperand(MachineOperand::CreateReg(Mips::SP, false, true));
+          break;
+        }
+      // fallthrough
+      case Mips::BuildPairF64:
+      case Mips::ExtractElementF64:
+        if (Subtarget->isABI_FPXX() && !Subtarget->hasMTHC1())
+          MI.addOperand(MachineOperand::CreateReg(Mips::SP, false, true));
         break;
       default:
         replaceUsesWithZeroReg(MRI, MI);
@@ -288,7 +300,7 @@ void MipsSEDAGToDAGISel::selectAddE(SDNode *Node, const SDLoc &DL) const {
                     SDValue(Carry, 0)};
   SDNode *DSPCFWithCarry = CurDAG->getMachineNode(Mips::INS, DL, MVT::i32, Ops);
 
-  // My reading of the the MIPS DSP 3.01 specification isn't as clear as I
+  // My reading of the MIPS DSP 3.01 specification isn't as clear as I
   // would like about whether bit 20 always gets overwritten by addwc.
   // Hence take an extremely conservative view and presume it's sticky. We
   // therefore need to clear it.
@@ -976,9 +988,9 @@ bool MipsSEDAGToDAGISel::trySelect(SDNode *Node) {
     }
 
     SDNode *Rdhwr =
-      CurDAG->getMachineNode(RdhwrOpc, DL,
-                             Node->getValueType(0),
-                             CurDAG->getRegister(Mips::HWR29, MVT::i32));
+        CurDAG->getMachineNode(RdhwrOpc, DL, Node->getValueType(0),
+                               CurDAG->getRegister(Mips::HWR29, MVT::i32),
+                               CurDAG->getTargetConstant(0, DL, MVT::i32));
     SDValue Chain = CurDAG->getCopyToReg(CurDAG->getEntryNode(), DL, DestReg,
                                          SDValue(Rdhwr, 0));
     SDValue ResNode = CurDAG->getCopyFromReg(Chain, DL, DestReg, PtrVT);
@@ -1247,7 +1259,7 @@ bool MipsSEDAGToDAGISel::trySelect(SDNode *Node) {
         // handled by the ldi case.
         if (ResNonZero) {
           IntegerType *Int32Ty =
-              IntegerType::get(MF->getFunction()->getContext(), 32);
+              IntegerType::get(MF->getFunction().getContext(), 32);
           const ConstantInt *Const32 = ConstantInt::get(Int32Ty, 32);
           SDValue Ops[4] = {HiResNonZero ? SDValue(HiRes, 0) : Zero64Val,
                             CurDAG->getConstant(*Const32, DL, MVT::i32),

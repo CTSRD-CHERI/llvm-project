@@ -23,8 +23,8 @@
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
 #include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
 #include "llvm/CodeGen/GlobalISel/RegisterBankInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <string>
 
 #define GET_SUBTARGETINFO_HEADER
@@ -48,6 +48,7 @@ public:
     CortexA75,
     Cyclone,
     ExynosM1,
+    ExynosM3,
     Falkor,
     Kryo,
     Saphira,
@@ -65,6 +66,8 @@ protected:
   bool HasV8_1aOps = false;
   bool HasV8_2aOps = false;
   bool HasV8_3aOps = false;
+  bool HasV8_4aOps = false;
+  bool HasV8_5aOps = false;
 
   bool HasFPARMv8 = false;
   bool HasNEON = false;
@@ -76,16 +79,40 @@ protected:
   bool HasRDM = false;
   bool HasPerfMon = false;
   bool HasFullFP16 = false;
+  bool HasFP16FML = false;
   bool HasSPE = false;
+
+  // ARMv8.4 Crypto extensions
+  bool HasSM4 = true;
+  bool HasSHA3 = true;
+
+  bool HasSHA2 = true;
+  bool HasAES = true;
+
   bool HasLSLFast = false;
   bool HasSVE = false;
   bool HasRCPC = false;
+  bool HasAggressiveFMA = false;
+
+  // Armv8.5-A Extensions
+  bool HasAlternativeNZCV = false;
+  bool HasFRInt3264 = false;
+  bool HasSpecRestrict = false;
+  bool HasSpecCtrl = false;
+  bool HasPredCtrl = false;
+  bool HasCCDP = false;
+  bool HasBTI = false;
+  bool HasRandGen = false;
+  bool HasMTE = false;
 
   // HasZeroCycleRegMove - Has zero-cycle register mov instructions.
   bool HasZeroCycleRegMove = false;
 
   // HasZeroCycleZeroing - Has zero-cycle zeroing instructions.
   bool HasZeroCycleZeroing = false;
+  bool HasZeroCycleZeroingGP = false;
+  bool HasZeroCycleZeroingFP = false;
+  bool HasZeroCycleZeroingFPWorkaround = false;
 
   // StrictAlign - Disallow unaligned memory accesses.
   bool StrictAlign = false;
@@ -100,6 +127,7 @@ protected:
   bool PredictableSelectIsExpensive = false;
   bool BalanceFPOps = false;
   bool CustomAsCheapAsMove = false;
+  bool ExynosAsCheapAsMove = false;
   bool UsePostRAScheduler = false;
   bool Misaligned128StoreIsSlow = false;
   bool Paired128IsSlow = false;
@@ -107,7 +135,10 @@ protected:
   bool UseAlternateSExtLoadCVTF32Pattern = false;
   bool HasArithmeticBccFusion = false;
   bool HasArithmeticCbzFusion = false;
+  bool HasFuseAddress = false;
   bool HasFuseAES = false;
+  bool HasFuseCryptoEOR = false;
+  bool HasFuseCCSelect = false;
   bool HasFuseLiterals = false;
   bool DisableLatencySchedHeuristic = false;
   bool UseRSqrt = false;
@@ -122,8 +153,11 @@ protected:
   unsigned MaxJumpTableSize = 0;
   unsigned WideningBaseCost = 0;
 
-  // ReserveX18 - X18 is not available as a general purpose register.
-  bool ReserveX18;
+  // ReserveXRegister[i] - X#i is not available as a general purpose register.
+  BitVector ReserveXRegister;
+
+  // CustomCallUsedXRegister[i] - X#i call saved.
+  BitVector CustomCallSavedXRegs;
 
   bool IsLittle;
 
@@ -192,10 +226,18 @@ public:
   bool hasV8_1aOps() const { return HasV8_1aOps; }
   bool hasV8_2aOps() const { return HasV8_2aOps; }
   bool hasV8_3aOps() const { return HasV8_3aOps; }
+  bool hasV8_4aOps() const { return HasV8_4aOps; }
+  bool hasV8_5aOps() const { return HasV8_5aOps; }
 
   bool hasZeroCycleRegMove() const { return HasZeroCycleRegMove; }
 
-  bool hasZeroCycleZeroing() const { return HasZeroCycleZeroing; }
+  bool hasZeroCycleZeroingGP() const { return HasZeroCycleZeroingGP; }
+
+  bool hasZeroCycleZeroingFP() const { return HasZeroCycleZeroingFP; }
+
+  bool hasZeroCycleZeroingFPWorkaround() const {
+    return HasZeroCycleZeroingFPWorkaround;
+  }
 
   bool requiresStrictAlign() const { return StrictAlign; }
 
@@ -205,7 +247,12 @@ public:
     return MinVectorRegisterBitWidth;
   }
 
-  bool isX18Reserved() const { return ReserveX18; }
+  bool isXRegisterReserved(size_t i) const { return ReserveXRegister[i]; }
+  unsigned getNumXRegisterReserved() const { return ReserveXRegister.count(); }
+  bool isXRegCustomCalleeSaved(size_t i) const {
+    return CustomCallSavedXRegs[i];
+  }
+  bool hasCustomCallingConv() const { return CustomCallSavedXRegs.any(); }
   bool hasFPARMv8() const { return HasFPARMv8; }
   bool hasNEON() const { return HasNEON; }
   bool hasCrypto() const { return HasCrypto; }
@@ -214,11 +261,16 @@ public:
   bool hasLSE() const { return HasLSE; }
   bool hasRAS() const { return HasRAS; }
   bool hasRDM() const { return HasRDM; }
+  bool hasSM4() const { return HasSM4; }
+  bool hasSHA3() const { return HasSHA3; }
+  bool hasSHA2() const { return HasSHA2; }
+  bool hasAES() const { return HasAES; }
   bool balanceFPOps() const { return BalanceFPOps; }
   bool predictableSelectIsExpensive() const {
     return PredictableSelectIsExpensive;
   }
   bool hasCustomCheapAsMoveHandling() const { return CustomAsCheapAsMove; }
+  bool hasExynosCheapAsMoveHandling() const { return ExynosAsCheapAsMove; }
   bool isMisaligned128StoreSlow() const { return Misaligned128StoreIsSlow; }
   bool isPaired128Slow() const { return Paired128IsSlow; }
   bool isSTRQroSlow() const { return STRQroIsSlow; }
@@ -227,13 +279,16 @@ public:
   }
   bool hasArithmeticBccFusion() const { return HasArithmeticBccFusion; }
   bool hasArithmeticCbzFusion() const { return HasArithmeticCbzFusion; }
+  bool hasFuseAddress() const { return HasFuseAddress; }
   bool hasFuseAES() const { return HasFuseAES; }
+  bool hasFuseCryptoEOR() const { return HasFuseCryptoEOR; }
+  bool hasFuseCCSelect() const { return HasFuseCCSelect; }
   bool hasFuseLiterals() const { return HasFuseLiterals; }
 
-  /// \brief Return true if the CPU supports any kind of instruction fusion.
+  /// Return true if the CPU supports any kind of instruction fusion.
   bool hasFusion() const {
     return hasArithmeticBccFusion() || hasArithmeticCbzFusion() ||
-           hasFuseAES() || hasFuseLiterals();
+           hasFuseAES() || hasFuseCCSelect() || hasFuseLiterals();
   }
 
   bool useRSqrt() const { return UseRSqrt; }
@@ -260,10 +315,21 @@ public:
 
   bool hasPerfMon() const { return HasPerfMon; }
   bool hasFullFP16() const { return HasFullFP16; }
+  bool hasFP16FML() const { return HasFP16FML; }
   bool hasSPE() const { return HasSPE; }
   bool hasLSLFast() const { return HasLSLFast; }
   bool hasSVE() const { return HasSVE; }
   bool hasRCPC() const { return HasRCPC; }
+  bool hasAggressiveFMA() const { return HasAggressiveFMA; }
+  bool hasAlternativeNZCV() const { return HasAlternativeNZCV; }
+  bool hasFRInt3264() const { return HasFRInt3264; }
+  bool hasSpecRestrict() const { return HasSpecRestrict; }
+  bool hasSpecCtrl() const { return HasSpecCtrl; }
+  bool hasPredCtrl() const { return HasPredCtrl; }
+  bool hasCCDP() const { return HasCCDP; }
+  bool hasBTI() const { return HasBTI; }
+  bool hasRandGen() const { return HasRandGen; }
+  bool hasMTE() const { return HasMTE; }
 
   bool isLittleEndian() const { return IsLittle; }
 
@@ -304,13 +370,6 @@ public:
   unsigned char classifyGlobalFunctionReference(const GlobalValue *GV,
                                                 const TargetMachine &TM) const;
 
-  /// This function returns the name of a function which has an interface
-  /// like the non-standard bzero function, if such a function exists on
-  /// the current subtarget and it is considered prefereable over
-  /// memset with zero passed as the second argument. Otherwise it
-  /// returns null.
-  const char *getBZeroEntry() const;
-
   void overrideSchedPolicy(MachineSchedPolicy &Policy,
                            unsigned NumRegionInstrs) const override;
 
@@ -328,6 +387,8 @@ public:
       return false;
     }
   }
+
+  void mirFileLoaded(MachineFunction &MF) const override;
 };
 } // End llvm namespace
 

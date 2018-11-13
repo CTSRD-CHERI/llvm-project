@@ -31,7 +31,7 @@ config.suffixes = ['.c', '.cpp', '.cppm', '.m', '.mm', '.cu',
 # excludes: A list of directories to exclude from the testsuite. The 'Inputs'
 # subdirectories contain auxiliary inputs for various tests in their parent
 # directories.
-config.excludes = ['Inputs', 'CMakeLists.txt', 'README.txt', 'LICENSE.txt']
+config.excludes = ['Inputs', 'CMakeLists.txt', 'README.txt', 'LICENSE.txt', 'debuginfo-tests']
 
 # test_source_root: The root path where tests are located.
 config.test_source_root = os.path.dirname(__file__)
@@ -57,17 +57,21 @@ config.substitutions.append(('%PATH%', config.environment['PATH']))
 tool_dirs = [config.clang_tools_dir, config.llvm_tools_dir]
 
 tools = [
-    'c-index-test', 'clang-check', 'clang-diff', 'clang-format', 'opt',
-    ToolSubst('%test_debuginfo', command=os.path.join(
-        config.llvm_src_root, 'utils', 'test_debuginfo.pl')),
+    'c-index-test', 'clang-check', 'clang-diff', 'clang-format', 'clang-tblgen',
+    'opt',
     ToolSubst('%clang_func_map', command=FindTool(
         'clang-func-mapping'), unresolved='ignore'),
 ]
 
 if config.clang_examples:
+    config.available_features.add('examples')
     tools.append('clang-interpreter')
 
 llvm_config.add_tool_substitutions(tools, tool_dirs)
+
+config.substitutions.append(
+    ('%hmaptool', "'%s' %s" % (config.python_executable,
+                             os.path.join(config.clang_tools_dir, 'hmaptool'))))
 
 # Plugins (loadable modules)
 # TODO: This should be supplied by Makefile or autoconf.
@@ -133,7 +137,7 @@ if os.path.exists('/dev/fd/0') and sys.platform not in ['cygwin']:
     config.available_features.add('dev-fd-fs')
 
 # Not set on native MS environment.
-if not re.match(r'.*-win32$', config.target_triple):
+if not re.match(r'.*-(windows-msvc)$', config.target_triple):
     config.available_features.add('non-ms-sdk')
 
 # Not set on native PS4 environment.
@@ -141,7 +145,7 @@ if not re.match(r'.*-scei-ps4', config.target_triple):
     config.available_features.add('non-ps4-sdk')
 
 # [PR8833] LLP64-incompatible tests
-if not re.match(r'^x86_64.*-(win32|mingw32|windows-gnu)$', config.target_triple):
+if not re.match(r'^x86_64.*-(windows-msvc|windows-gnu)$', config.target_triple):
     config.available_features.add('LP64')
 
 # [PR12920] "clang-driver" -- set if gcc driver is not used.

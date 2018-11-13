@@ -13,8 +13,8 @@
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/LoopInfo.h"
+#include "llvm/CodeGen/CostTable.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
@@ -25,7 +25,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Target/CostTable.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
 #include <cassert>
@@ -77,8 +77,8 @@ int ARMTTIImpl::getIntImmCost(const APInt &Imm, Type *Ty) {
       return 1;
     return ST->hasV6T2Ops() ? 2 : 3;
   }
-  // Thumb1.
-  if (SImmVal >= 0 && SImmVal < 256)
+  // Thumb1, any i8 imm cost 1.
+  if (Bits == 8 || (SImmVal >= 0 && SImmVal < 256))
     return 1;
   if ((~SImmVal < 256) || ARM_AM::isThumbImmShiftedVal(ZImmVal))
     return 2;
@@ -125,6 +125,10 @@ int ARMTTIImpl::getIntImmCost(unsigned Opcode, unsigned Idx, const APInt &Imm,
       // icmp X, #-C -> adds X, #C
       return 0;
   }
+
+  // xor a, -1 can always be folded to MVN
+  if (Opcode == Instruction::Xor && Imm.isAllOnesValue())
+    return 0;
 
   return getIntImmCost(Imm, Ty);
 }
@@ -351,7 +355,7 @@ int ARMTTIImpl::getVectorInstrCost(unsigned Opcode, Type *ValTy,
 int ARMTTIImpl::getCmpSelInstrCost(unsigned Opcode, Type *ValTy, Type *CondTy,
                                    const Instruction *I) {
   int ISD = TLI->InstructionOpcodeToISD(Opcode);
-  // On NEON a a vector select gets lowered to vbsl.
+  // On NEON a vector select gets lowered to vbsl.
   if (ST->hasNEON() && ValTy->isVectorTy() && ISD == ISD::SELECT) {
     // Lowering of some vector selects is currently far from perfect.
     static const TypeConversionCostTblEntry NEONVectorSelectTbl[] = {
@@ -385,7 +389,7 @@ int ARMTTIImpl::getAddressComputationCost(Type *Ty, ScalarEvolution *SE,
   unsigned NumVectorInstToHideOverhead = 10;
   int MaxMergeDistance = 64;
 
-  if (Ty->isVectorTy() && SE && 
+  if (Ty->isVectorTy() && SE &&
       !BaseT::isConstantStridedAccessLessThan(SE, Ptr, MaxMergeDistance + 1))
     return NumVectorInstToHideOverhead;
 
@@ -394,29 +398,10 @@ int ARMTTIImpl::getAddressComputationCost(Type *Ty, ScalarEvolution *SE,
   return 1;
 }
 
-int ARMTTIImpl::getFPOpCost(Type *Ty) {
-  // Use similar logic that's in ARMISelLowering:
-  // Any ARM CPU with VFP2 has floating point, but Thumb1 didn't have access
-  // to VFP.
-
-  if (ST->hasVFP2() && !ST->isThumb1Only()) {
-    if (Ty->isFloatTy()) {
-      return TargetTransformInfo::TCC_Basic;
-    }
-
-    if (Ty->isDoubleTy()) {
-      return ST->isFPOnlySP() ? TargetTransformInfo::TCC_Expensive :
-        TargetTransformInfo::TCC_Basic;
-    }
-  }
-
-  return TargetTransformInfo::TCC_Expensive;
-}
-
 int ARMTTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
                                Type *SubTp) {
-  // We only handle costs of reverse and alternate shuffles for now.
-  if (Kind != TTI::SK_Reverse && Kind != TTI::SK_Alternate)
+  // We only handle costs of reverse and select shuffles for now.
+  if (Kind != TTI::SK_Reverse && Kind != TTI::SK_Select)
     return BaseT::getShuffleCost(Kind, Tp, Index, SubTp);
 
   if (Kind == TTI::SK_Reverse) {
@@ -441,9 +426,9 @@ int ARMTTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
 
     return BaseT::getShuffleCost(Kind, Tp, Index, SubTp);
   }
-  if (Kind == TTI::SK_Alternate) {
-    static const CostTblEntry NEONAltShuffleTbl[] = {
-        // Alt shuffle cost table for ARM. Cost is the number of instructions
+  if (Kind == TTI::SK_Select) {
+    static const CostTblEntry NEONSelShuffleTbl[] = {
+        // Select shuffle cost table for ARM. Cost is the number of instructions
         // required to create the shuffled vector.
 
         {ISD::VECTOR_SHUFFLE, MVT::v2f32, 1},
@@ -460,7 +445,7 @@ int ARMTTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
         {ISD::VECTOR_SHUFFLE, MVT::v16i8, 32}};
 
     std::pair<int, MVT> LT = TLI->getTypeLegalizationCost(DL, Tp);
-    if (const auto *Entry = CostTableLookup(NEONAltShuffleTbl,
+    if (const auto *Entry = CostTableLookup(NEONSelShuffleTbl,
                                             ISD::VECTOR_SHUFFLE, LT.second))
       return LT.first * Entry->Cost;
     return BaseT::getShuffleCost(Kind, Tp, Index, SubTp);
@@ -557,14 +542,16 @@ int ARMTTIImpl::getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
                                            unsigned Factor,
                                            ArrayRef<unsigned> Indices,
                                            unsigned Alignment,
-                                           unsigned AddressSpace) {
+                                           unsigned AddressSpace,
+                                           bool IsMasked) {
   assert(Factor >= 2 && "Invalid interleave factor");
   assert(isa<VectorType>(VecTy) && "Expect a vector type");
 
   // vldN/vstN doesn't support vector types of i64/f64 element.
   bool EltIs64Bits = DL.getTypeSizeInBits(VecTy->getScalarType()) == 64;
 
-  if (Factor <= TLI->getMaxSupportedInterleaveFactor() && !EltIs64Bits) {
+  if (Factor <= TLI->getMaxSupportedInterleaveFactor() && !EltIs64Bits &&
+      !IsMasked) {
     unsigned NumElts = VecTy->getVectorNumElements();
     auto *SubVecTy = VectorType::get(VecTy->getScalarType(), NumElts / Factor);
 
@@ -577,7 +564,7 @@ int ARMTTIImpl::getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
   }
 
   return BaseT::getInterleavedMemoryOpCost(Opcode, VecTy, Factor, Indices,
-                                           Alignment, AddressSpace);
+                                           Alignment, AddressSpace, IsMasked);
 }
 
 void ARMTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
@@ -598,9 +585,9 @@ void ARMTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
 
   SmallVector<BasicBlock*, 4> ExitingBlocks;
   L->getExitingBlocks(ExitingBlocks);
-  DEBUG(dbgs() << "Loop has:\n"
-      << "Blocks: " << L->getNumBlocks() << "\n"
-      << "Exit blocks: " << ExitingBlocks.size() << "\n");
+  LLVM_DEBUG(dbgs() << "Loop has:\n"
+                    << "Blocks: " << L->getNumBlocks() << "\n"
+                    << "Exit blocks: " << ExitingBlocks.size() << "\n");
 
   // Only allow another exit other than the latch. This acts as an early exit
   // as it mirrors the profitability calculation of the runtime unroller.
@@ -631,12 +618,14 @@ void ARMTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
     }
   }
 
-  DEBUG(dbgs() << "Cost of loop: " << Cost << "\n");
+  LLVM_DEBUG(dbgs() << "Cost of loop: " << Cost << "\n");
 
   UP.Partial = true;
   UP.Runtime = true;
   UP.UnrollRemainder = true;
   UP.DefaultUnrollRuntimeCount = 4;
+  UP.UnrollAndJam = true;
+  UP.UnrollAndJamInnerLoopThreshold = 60;
 
   // Force unrolling small loops can be very useful because of the branch
   // taken cost of the backedge.

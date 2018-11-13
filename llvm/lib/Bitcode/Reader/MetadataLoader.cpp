@@ -21,7 +21,6 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitstreamReader.h"
@@ -30,7 +29,6 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/AutoUpgrade.h"
 #include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Comdat.h"
 #include "llvm/IR/Constant.h"
@@ -39,7 +37,6 @@
 #include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/DerivedTypes.h"
-#include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GVMaterializer.h"
@@ -59,7 +56,6 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/ModuleSummaryIndex.h"
 #include "llvm/IR/OperandTraits.h"
-#include "llvm/IR/Operator.h"
 #include "llvm/IR/TrackingMDRef.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/ValueHandle.h"
@@ -169,7 +165,7 @@ public:
   /// necessary.
   Metadata *getMetadataFwdRef(unsigned Idx);
 
-  /// Return the the given metadata only if it is fully resolved.
+  /// Return the given metadata only if it is fully resolved.
   ///
   /// Gives the same result as \a lookup(), unless \a MDNode::isResolved()
   /// would give \c false.
@@ -826,6 +822,7 @@ MetadataLoader::MetadataLoaderImpl::lazyLoadModuleMetadataBlock() {
       case bitc::METADATA_TEMPLATE_VALUE:
       case bitc::METADATA_GLOBAL_VAR:
       case bitc::METADATA_LOCAL_VAR:
+      case bitc::METADATA_LABEL:
       case bitc::METADATA_EXPRESSION:
       case bitc::METADATA_OBJC_PROPERTY:
       case bitc::METADATA_IMPORTED_ENTITY:
@@ -1142,7 +1139,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     break;
   }
   case bitc::METADATA_LOCATION: {
-    if (Record.size() != 5)
+    if (Record.size() != 5 && Record.size() != 6)
       return error("Invalid record");
 
     IsDistinct = Record[0];
@@ -1150,8 +1147,10 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     unsigned Column = Record[2];
     Metadata *Scope = getMD(Record[3]);
     Metadata *InlinedAt = getMDOrNull(Record[4]);
+    bool ImplicitCode = Record.size() == 6 && Record[5];
     MetadataList.assignValue(
-        GET_OR_DISTINCT(DILocation, (Context, Line, Column, Scope, InlinedAt)),
+        GET_OR_DISTINCT(DILocation, (Context, Line, Column, Scope, InlinedAt,
+                                     ImplicitCode)),
         NextMetadataNo);
     NextMetadataNo++;
     break;
@@ -1178,14 +1177,25 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     break;
   }
   case bitc::METADATA_SUBRANGE: {
-    if (Record.size() != 3)
-      return error("Invalid record");
+    Metadata *Val = nullptr;
+    // Operand 'count' is interpreted as:
+    // - Signed integer (version 0)
+    // - Metadata node  (version 1)
+    switch (Record[0] >> 1) {
+    case 0:
+      Val = GET_OR_DISTINCT(DISubrange,
+                            (Context, Record[1], unrotateSign(Record.back())));
+      break;
+    case 1:
+      Val = GET_OR_DISTINCT(DISubrange, (Context, getMDOrNull(Record[1]),
+                                         unrotateSign(Record.back())));
+      break;
+    default:
+      return error("Invalid record: Unsupported version of DISubrange");
+    }
 
-    IsDistinct = Record[0];
-    MetadataList.assignValue(
-        GET_OR_DISTINCT(DISubrange,
-                        (Context, Record[1], unrotateSign(Record[2]))),
-        NextMetadataNo);
+    MetadataList.assignValue(Val, NextMetadataNo);
+    IsDistinct = Record[0] & 1;
     NextMetadataNo++;
     break;
   }
@@ -1193,23 +1203,27 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     if (Record.size() != 3)
       return error("Invalid record");
 
-    IsDistinct = Record[0];
+    IsDistinct = Record[0] & 1;
+    bool IsUnsigned = Record[0] & 2;
     MetadataList.assignValue(
         GET_OR_DISTINCT(DIEnumerator, (Context, unrotateSign(Record[1]),
-                                       getMDString(Record[2]))),
+                                       IsUnsigned, getMDString(Record[2]))),
         NextMetadataNo);
     NextMetadataNo++;
     break;
   }
   case bitc::METADATA_BASIC_TYPE: {
-    if (Record.size() != 6)
+    if (Record.size() < 6 || Record.size() > 7)
       return error("Invalid record");
 
     IsDistinct = Record[0];
+    DINode::DIFlags Flags = (Record.size() > 6) ?
+                    static_cast<DINode::DIFlags>(Record[6]) : DINode::FlagZero;
+
     MetadataList.assignValue(
         GET_OR_DISTINCT(DIBasicType,
                         (Context, Record[1], getMDString(Record[2]), Record[3],
-                         Record[4], Record[5])),
+                         Record[4], Record[5], Flags)),
         NextMetadataNo);
     NextMetadataNo++;
     break;
@@ -1239,7 +1253,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     break;
   }
   case bitc::METADATA_COMPOSITE_TYPE: {
-    if (Record.size() != 16)
+    if (Record.size() < 16 || Record.size() > 17)
       return error("Invalid record");
 
     // If we have a UUID and this is not a forward declaration, lookup the
@@ -1262,6 +1276,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     unsigned RuntimeLang = Record[12];
     Metadata *VTableHolder = nullptr;
     Metadata *TemplateParams = nullptr;
+    Metadata *Discriminator = nullptr;
     auto *Identifier = getMDString(Record[15]);
     // If this module is being parsed so that it can be ThinLTO imported
     // into another module, composite types only need to be imported
@@ -1282,13 +1297,15 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
       Elements = getMDOrNull(Record[11]);
       VTableHolder = getDITypeRefOrNull(Record[13]);
       TemplateParams = getMDOrNull(Record[14]);
+      if (Record.size() > 16)
+        Discriminator = getMDOrNull(Record[16]);
     }
     DICompositeType *CT = nullptr;
     if (Identifier)
       CT = DICompositeType::buildODRType(
           Context, *Identifier, Tag, Name, File, Line, Scope, BaseType,
           SizeInBits, AlignInBits, OffsetInBits, Flags, Elements, RuntimeLang,
-          VTableHolder, TemplateParams);
+          VTableHolder, TemplateParams, Discriminator);
 
     // Create a node if we didn't get a lazy ODR type.
     if (!CT)
@@ -1296,7 +1313,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
                            (Context, Tag, Name, File, Line, Scope, BaseType,
                             SizeInBits, AlignInBits, OffsetInBits, Flags,
                             Elements, RuntimeLang, VTableHolder, TemplateParams,
-                            Identifier));
+                            Identifier, Discriminator));
     if (!IsNotUsedInTypeRef && Identifier)
       MetadataList.addTypeRef(*Identifier, *cast<DICompositeType>(CT));
 
@@ -1339,17 +1356,25 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
   }
 
   case bitc::METADATA_FILE: {
-    if (Record.size() != 3 && Record.size() != 5)
+    if (Record.size() != 3 && Record.size() != 5 && Record.size() != 6)
       return error("Invalid record");
 
     IsDistinct = Record[0];
+    Optional<DIFile::ChecksumInfo<MDString *>> Checksum;
+    // The BitcodeWriter writes null bytes into Record[3:4] when the Checksum
+    // is not present. This matches up with the old internal representation,
+    // and the old encoding for CSK_None in the ChecksumKind. The new
+    // representation reserves the value 0 in the ChecksumKind to continue to
+    // encode None in a backwards-compatible way.
+    if (Record.size() > 4 && Record[3] && Record[4])
+      Checksum.emplace(static_cast<DIFile::ChecksumKind>(Record[3]),
+                       getMDString(Record[4]));
     MetadataList.assignValue(
         GET_OR_DISTINCT(
             DIFile,
-            (Context, getMDString(Record[1]), getMDString(Record[2]),
-             Record.size() == 3 ? DIFile::CSK_None
-                                : static_cast<DIFile::ChecksumKind>(Record[3]),
-             Record.size() == 3 ? nullptr : getMDString(Record[4]))),
+            (Context, getMDString(Record[1]), getMDString(Record[2]), Checksum,
+             Record.size() > 5 ? Optional<MDString *>(getMDString(Record[5]))
+                               : None)),
         NextMetadataNo);
     NextMetadataNo++;
     break;
@@ -1370,7 +1395,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
         Record.size() <= 14 ? 0 : Record[14],
         Record.size() <= 16 ? true : Record[16],
         Record.size() <= 17 ? false : Record[17],
-        Record.size() <= 18 ? false : Record[18]);
+        Record.size() <= 18 ? 0 : Record[18]);
 
     MetadataList.assignValue(CU, NextMetadataNo);
     NextMetadataNo++;
@@ -1419,7 +1444,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
          HasUnit ? CUorFn : nullptr,                        // unit
          getMDOrNull(Record[15 + Offset]),                  // templateParams
          getMDOrNull(Record[16 + Offset]),                  // declaration
-         getMDOrNull(Record[17 + Offset]),                  // variables
+         getMDOrNull(Record[17 + Offset]),                  // retainedNodes
          HasThrownTypes ? getMDOrNull(Record[20]) : nullptr // thrownTypes
          ));
     MetadataList.assignValue(SP, NextMetadataNo);
@@ -1537,21 +1562,35 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     break;
   }
   case bitc::METADATA_GLOBAL_VAR: {
-    if (Record.size() < 11 || Record.size() > 12)
+    if (Record.size() < 11 || Record.size() > 13)
       return error("Invalid record");
 
     IsDistinct = Record[0] & 1;
     unsigned Version = Record[0] >> 1;
 
-    if (Version == 1) {
+    if (Version == 2) {
+      MetadataList.assignValue(
+          GET_OR_DISTINCT(
+              DIGlobalVariable,
+              (Context, getMDOrNull(Record[1]), getMDString(Record[2]),
+               getMDString(Record[3]), getMDOrNull(Record[4]), Record[5],
+               getDITypeRefOrNull(Record[6]), Record[7], Record[8],
+               getMDOrNull(Record[9]), getMDOrNull(Record[10]), Record[11])),
+          NextMetadataNo);
+
+      NextMetadataNo++;
+    } else if (Version == 1) {
+      // No upgrade necessary. A null field will be introduced to indicate
+      // that no parameter information is available.
       MetadataList.assignValue(
           GET_OR_DISTINCT(DIGlobalVariable,
                           (Context, getMDOrNull(Record[1]),
                            getMDString(Record[2]), getMDString(Record[3]),
                            getMDOrNull(Record[4]), Record[5],
                            getDITypeRefOrNull(Record[6]), Record[7], Record[8],
-                           getMDOrNull(Record[10]), Record[11])),
+                           getMDOrNull(Record[10]), nullptr, Record[11])),
           NextMetadataNo);
+
       NextMetadataNo++;
     } else if (Version == 0) {
       // Upgrade old metadata, which stored a global variable reference or a
@@ -1582,7 +1621,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
           (Context, getMDOrNull(Record[1]), getMDString(Record[2]),
            getMDString(Record[3]), getMDOrNull(Record[4]), Record[5],
            getDITypeRefOrNull(Record[6]), Record[7], Record[8],
-           getMDOrNull(Record[10]), AlignInBits));
+           getMDOrNull(Record[10]), nullptr, AlignInBits));
 
       DIGlobalVariableExpression *DGVE = nullptr;
       if (Attach || Expr)
@@ -1624,6 +1663,20 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
                          getMDOrNull(Record[3 + HasTag]), Record[4 + HasTag],
                          getDITypeRefOrNull(Record[5 + HasTag]),
                          Record[6 + HasTag], Flags, AlignInBits)),
+        NextMetadataNo);
+    NextMetadataNo++;
+    break;
+  }
+  case bitc::METADATA_LABEL: {
+    if (Record.size() != 5)
+      return error("Invalid record");
+
+    IsDistinct = Record[0] & 1;
+    MetadataList.assignValue(
+        GET_OR_DISTINCT(DILabel,
+                        (Context, getMDOrNull(Record[1]),
+                         getMDString(Record[2]),
+                         getMDOrNull(Record[3]), Record[4])),
         NextMetadataNo);
     NextMetadataNo++;
     break;

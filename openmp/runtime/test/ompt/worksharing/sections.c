@@ -1,7 +1,8 @@
-// RUN: %libomp-compile-and-run | FileCheck %s
+// RUN: %libomp-compile-and-run | %sort-threads | FileCheck %s
 // REQUIRES: ompt
-// GCC generates code that does not distinguish between sections and loops
-// XFAIL: gcc
+// Some compilers generate code that does not distinguish between sections and loops
+// XFAIL: gcc, clang-3, clang-4, clang-5, icc-16, icc-17
+// UNSUPPORTED: icc-18
 
 #include "callback.h"
 #include <omp.h>
@@ -30,7 +31,6 @@ int main()
 
   // CHECK: {{^}}[[THREAD_ID:[0-9]+]]: ompt_event_sections_begin: parallel_id=[[PARALLEL_ID]], parent_task_id=[[TASK_ID:[0-9]+]], codeptr_ra=[[SECT_BEGIN]], count=2
   // CHECK: {{^}}[[THREAD_ID]]: ompt_event_sections_end: parallel_id=[[PARALLEL_ID]], task_id={{[0-9]+}}, codeptr_ra=[[SECT_END]]
-
 
   return 0;
 }

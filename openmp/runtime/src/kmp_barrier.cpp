@@ -956,14 +956,12 @@ static void __kmp_hierarchical_barrier_gather(
   // All subordinates are gathered; now release parent if not master thread
 
   if (!KMP_MASTER_TID(tid)) { // worker threads release parent in hierarchy
-    KA_TRACE(
-        20,
-        ("__kmp_hierarchical_barrier_gather: T#%d(%d:%d) releasing T#%d(%d:%d) "
-         "arrived(%p): %llu => %llu\n",
-         gtid, team->t.t_id, tid,
-         __kmp_gtid_from_tid(thr_bar->parent_tid, team), team->t.t_id,
-         thr_bar->parent_tid, &thr_bar->b_arrived, thr_bar->b_arrived,
-         thr_bar->b_arrived + KMP_BARRIER_STATE_BUMP));
+    KA_TRACE(20, ("__kmp_hierarchical_barrier_gather: T#%d(%d:%d) releasing"
+                  " T#%d(%d:%d) arrived(%p): %llu => %llu\n",
+                  gtid, team->t.t_id, tid,
+                  __kmp_gtid_from_tid(thr_bar->parent_tid, team), team->t.t_id,
+                  thr_bar->parent_tid, &thr_bar->b_arrived, thr_bar->b_arrived,
+                  thr_bar->b_arrived + KMP_BARRIER_STATE_BUMP));
     /* Mark arrival to parent: After performing this write, a worker thread may
        not assume that the team is valid any more - it could be deallocated by
        the master thread at any time. */
@@ -973,8 +971,8 @@ static void __kmp_hierarchical_barrier_gather(
       ANNOTATE_BARRIER_BEGIN(this_thr);
       kmp_flag_64 flag(&thr_bar->b_arrived, other_threads[thr_bar->parent_tid]);
       flag.release();
-    } else { // Leaf does special release on the "offset" bits of parent's
-      // b_arrived flag
+    } else {
+      // Leaf does special release on "offset" bits of parent's b_arrived flag
       thr_bar->b_arrived = team->t.t_bar[bt].b_arrived + KMP_BARRIER_STATE_BUMP;
       kmp_flag_oncore flag(&thr_bar->parent_bar->b_arrived, thr_bar->offset);
       flag.set_waiter(other_threads[thr_bar->parent_tid]);
@@ -1225,8 +1223,7 @@ int __kmp_barrier(enum barrier_type bt, int gtid, int is_split,
   kmp_info_t *this_thr = __kmp_threads[gtid];
   kmp_team_t *team = this_thr->th.th_team;
   int status = 0;
-  ident_t *loc = __kmp_threads[gtid]->th.th_ident;
-#if OMPT_SUPPORT
+#if OMPT_SUPPORT && OMPT_OPTIONAL
   ompt_data_t *my_task_data;
   ompt_data_t *my_parallel_data;
   void *return_address;
@@ -1353,10 +1350,10 @@ int __kmp_barrier(enum barrier_type bt, int gtid, int is_split,
 #endif
 
 #if OMP_40_ENABLED
+      kmp_int32 cancel_request = KMP_ATOMIC_LD_RLX(&team->t.t_cancel_request);
       // Reset cancellation flag for worksharing constructs
-      if (team->t.t_cancel_request == cancel_loop ||
-          team->t.t_cancel_request == cancel_sections) {
-        team->t.t_cancel_request = cancel_noreq;
+      if (cancel_request == cancel_loop || cancel_request == cancel_sections) {
+        KMP_ATOMIC_ST_RLX(&team->t.t_cancel_request, cancel_noreq);
       }
 #endif
 #if USE_ITT_BUILD
@@ -1375,6 +1372,7 @@ int __kmp_barrier(enum barrier_type bt, int gtid, int is_split,
           this_thr->th.th_teams_microtask == NULL &&
 #endif
           team->t.t_active_level == 1) {
+        ident_t *loc = __kmp_threads[gtid]->th.th_ident;
         kmp_uint64 cur_time = __itt_get_timestamp();
         kmp_info_t **other_threads = team->t.t_threads;
         int nproc = this_thr->th.th_team_nproc;
@@ -1460,8 +1458,8 @@ int __kmp_barrier(enum barrier_type bt, int gtid, int is_split,
     if (__kmp_tasking_mode != tskm_immediate_exec) {
 #if OMP_45_ENABLED
       if (this_thr->th.th_task_team != NULL) {
-        void *itt_sync_obj = NULL;
 #if USE_ITT_NOTIFY
+        void *itt_sync_obj = NULL;
         if (__itt_sync_create_ptr || KMP_ITT_DEBUG) {
           itt_sync_obj = __kmp_itt_barrier_object(gtid, bt, 1);
           __kmp_itt_barrier_starting(gtid, itt_sync_obj);
@@ -1601,10 +1599,10 @@ void __kmp_join_barrier(int gtid) {
 
   ANNOTATE_BARRIER_BEGIN(&team->t.t_bar);
 #if OMPT_SUPPORT
-  ompt_data_t *my_task_data;
-  ompt_data_t *my_parallel_data;
   if (ompt_enabled.enabled) {
 #if OMPT_OPTIONAL
+    ompt_data_t *my_task_data;
+    ompt_data_t *my_parallel_data;
     void *codeptr = NULL;
     int ds_tid = this_thr->th.th_info.ds.ds_tid;
     if (KMP_MASTER_TID(ds_tid) &&
@@ -1623,6 +1621,8 @@ void __kmp_join_barrier(int gtid) {
           ompt_sync_region_barrier, ompt_scope_begin, my_parallel_data,
           my_task_data, codeptr);
     }
+    if (!KMP_MASTER_TID(ds_tid))
+      this_thr->th.ompt_thread_info.task_data = *OMPT_CUR_TASK_DATA(this_thr);
 #endif
     this_thr->th.ompt_thread_info.state = omp_state_wait_barrier_implicit;
   }
@@ -1881,34 +1881,31 @@ void __kmp_fork_barrier(int gtid, int tid) {
   }
 
 #if OMPT_SUPPORT
-  if (ompt_enabled.enabled) {
-    if (this_thr->th.ompt_thread_info.state ==
-        omp_state_wait_barrier_implicit) {
-      int ds_tid = this_thr->th.th_info.ds.ds_tid;
-      ompt_data_t *tId = (team) ? OMPT_CUR_TASK_DATA(this_thr)
-                                : &(this_thr->th.ompt_thread_info.task_data);
-      this_thr->th.ompt_thread_info.state = omp_state_overhead;
+  if (ompt_enabled.enabled &&
+      this_thr->th.ompt_thread_info.state == omp_state_wait_barrier_implicit) {
+    int ds_tid = this_thr->th.th_info.ds.ds_tid;
+    ompt_data_t *task_data = (team)
+                                 ? OMPT_CUR_TASK_DATA(this_thr)
+                                 : &(this_thr->th.ompt_thread_info.task_data);
+    this_thr->th.ompt_thread_info.state = omp_state_overhead;
 #if OMPT_OPTIONAL
-      void *codeptr = NULL;
-      if (KMP_MASTER_TID(ds_tid) &&
-          (ompt_callbacks.ompt_callback(ompt_callback_sync_region_wait) ||
-           ompt_callbacks.ompt_callback(ompt_callback_sync_region)))
-        codeptr = team->t.ompt_team_info.master_return_address;
-      if (ompt_enabled.ompt_callback_sync_region_wait) {
-        ompt_callbacks.ompt_callback(ompt_callback_sync_region_wait)(
-            ompt_sync_region_barrier, ompt_scope_end, NULL, tId, codeptr);
-      }
-      if (ompt_enabled.ompt_callback_sync_region) {
-        ompt_callbacks.ompt_callback(ompt_callback_sync_region)(
-            ompt_sync_region_barrier, ompt_scope_end, NULL, tId, codeptr);
-      }
+    void *codeptr = NULL;
+    if (KMP_MASTER_TID(ds_tid) &&
+        (ompt_callbacks.ompt_callback(ompt_callback_sync_region_wait) ||
+         ompt_callbacks.ompt_callback(ompt_callback_sync_region)))
+      codeptr = team->t.ompt_team_info.master_return_address;
+    if (ompt_enabled.ompt_callback_sync_region_wait) {
+      ompt_callbacks.ompt_callback(ompt_callback_sync_region_wait)(
+          ompt_sync_region_barrier, ompt_scope_end, NULL, task_data, codeptr);
+    }
+    if (ompt_enabled.ompt_callback_sync_region) {
+      ompt_callbacks.ompt_callback(ompt_callback_sync_region)(
+          ompt_sync_region_barrier, ompt_scope_end, NULL, task_data, codeptr);
+    }
 #endif
-      if (!KMP_MASTER_TID(ds_tid) && ompt_enabled.ompt_callback_implicit_task) {
-        ompt_callbacks.ompt_callback(ompt_callback_implicit_task)(
-            ompt_scope_end, NULL, tId, 0, ds_tid);
-      }
-      // return to idle state
-      this_thr->th.ompt_thread_info.state = omp_state_overhead;
+    if (!KMP_MASTER_TID(ds_tid) && ompt_enabled.ompt_callback_implicit_task) {
+      ompt_callbacks.ompt_callback(ompt_callback_implicit_task)(
+          ompt_scope_end, NULL, task_data, 0, ds_tid);
     }
   }
 #endif
@@ -1973,7 +1970,7 @@ void __kmp_fork_barrier(int gtid, int tid) {
 #if KMP_AFFINITY_SUPPORTED
     // Call dynamic affinity settings
     if (__kmp_affinity_type == affinity_balanced && team->t.t_size_changed) {
-      __kmp_balanced_affinity(tid, team->t.t_nproc);
+      __kmp_balanced_affinity(this_thr, team->t.t_nproc);
     }
 #endif // KMP_AFFINITY_SUPPORTED
 #if OMP_40_ENABLED && KMP_AFFINITY_SUPPORTED
@@ -1986,6 +1983,10 @@ void __kmp_fork_barrier(int gtid, int tid) {
       __kmp_affinity_set_place(gtid);
     }
   }
+#endif
+#if OMP_50_ENABLED
+  if (!KMP_MASTER_TID(tid))
+    KMP_CHECK_UPDATE(this_thr->th.th_def_allocator, team->t.t_def_allocator);
 #endif
 
 #if USE_ITT_BUILD && USE_ITT_NOTIFY

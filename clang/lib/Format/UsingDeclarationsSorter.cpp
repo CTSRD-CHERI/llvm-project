@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file implements UsingDeclarationsSorter, a TokenAnalyzer that
+/// This file implements UsingDeclarationsSorter, a TokenAnalyzer that
 /// sorts consecutive using declarations.
 ///
 //===----------------------------------------------------------------------===//
@@ -130,7 +130,27 @@ void endUsingDeclarationBlock(
       UsingDeclarations->begin(), UsingDeclarations->end());
   std::stable_sort(SortedUsingDeclarations.begin(),
                    SortedUsingDeclarations.end());
+  SortedUsingDeclarations.erase(
+      std::unique(SortedUsingDeclarations.begin(),
+                  SortedUsingDeclarations.end(),
+                  [](const UsingDeclaration &a, const UsingDeclaration &b) {
+                    return a.Label == b.Label;
+                  }),
+      SortedUsingDeclarations.end());
   for (size_t I = 0, E = UsingDeclarations->size(); I < E; ++I) {
+    if (I >= SortedUsingDeclarations.size()) {
+      // This using declaration has been deduplicated, delete it.
+      auto Begin =
+          (*UsingDeclarations)[I].Line->First->WhitespaceRange.getBegin();
+      auto End = (*UsingDeclarations)[I].Line->Last->Tok.getEndLoc();
+      auto Range = CharSourceRange::getCharRange(Begin, End);
+      auto Err = Fixes->add(tooling::Replacement(SourceMgr, Range, ""));
+      if (Err) {
+        llvm::errs() << "Error while sorting using declarations: "
+                     << llvm::toString(std::move(Err)) << "\n";
+      }
+      continue;
+    }
     if ((*UsingDeclarations)[I].Line == SortedUsingDeclarations[I].Line)
       continue;
     auto Begin = (*UsingDeclarations)[I].Line->First->Tok.getLocation();
@@ -141,7 +161,7 @@ void endUsingDeclarationBlock(
     StringRef Text(SourceMgr.getCharacterData(SortedBegin),
                    SourceMgr.getCharacterData(SortedEnd) -
                        SourceMgr.getCharacterData(SortedBegin));
-    DEBUG({
+    LLVM_DEBUG({
       StringRef OldText(SourceMgr.getCharacterData(Begin),
                         SourceMgr.getCharacterData(End) -
                             SourceMgr.getCharacterData(Begin));
@@ -167,8 +187,7 @@ std::pair<tooling::Replacements, unsigned> UsingDeclarationsSorter::analyze(
     TokenAnnotator &Annotator, SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
     FormatTokenLexer &Tokens) {
   const SourceManager &SourceMgr = Env.getSourceManager();
-  AffectedRangeMgr.computeAffectedLines(AnnotatedLines.begin(),
-                                        AnnotatedLines.end());
+  AffectedRangeMgr.computeAffectedLines(AnnotatedLines);
   tooling::Replacements Fixes;
   SmallVector<UsingDeclaration, 4> UsingDeclarations;
   for (size_t I = 0, E = AnnotatedLines.size(); I != E; ++I) {

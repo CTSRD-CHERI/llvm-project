@@ -23,6 +23,7 @@ namespace clang {
 namespace tidy {
 namespace modernize {
 
+namespace {
 /// \brief Matches move-constructible classes.
 ///
 /// Given
@@ -44,6 +45,7 @@ AST_MATCHER(CXXRecordDecl, isMoveConstructible) {
   }
   return false;
 }
+} // namespace
 
 static TypeMatcher constRefType() {
   return lValueReferenceType(pointee(isConstQualified()));
@@ -187,12 +189,12 @@ void PassByValueCheck::check(const MatchFinder::MatchResult &Result) {
     return;
 
   // If the parameter is trivial to copy, don't move it. Moving a trivivally
-  // copyable type will cause a problem with misc-move-const-arg
+  // copyable type will cause a problem with performance-move-const-arg
   if (ParamDecl->getType().getNonReferenceType().isTriviallyCopyableType(
           *Result.Context))
     return;
 
-  auto Diag = diag(ParamDecl->getLocStart(), "pass by value and use std::move");
+  auto Diag = diag(ParamDecl->getBeginLoc(), "pass by value and use std::move");
 
   // Iterate over all declarations of the constructor.
   for (const ParmVarDecl *ParmDecl : collectParamDecls(Ctor, ParamDecl)) {
@@ -204,8 +206,8 @@ void PassByValueCheck::check(const MatchFinder::MatchResult &Result) {
       continue;
 
     TypeLoc ValueTL = RefTL.getPointeeLoc();
-    auto TypeRange = CharSourceRange::getTokenRange(ParmDecl->getLocStart(),
-                                                    ParamTL.getLocEnd());
+    auto TypeRange = CharSourceRange::getTokenRange(ParmDecl->getBeginLoc(),
+                                                    ParamTL.getEndLoc());
     std::string ValueStr = Lexer::getSourceText(CharSourceRange::getTokenRange(
                                                     ValueTL.getSourceRange()),
                                                 SM, getLangOpts())

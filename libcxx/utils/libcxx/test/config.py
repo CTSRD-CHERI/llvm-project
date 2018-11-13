@@ -50,6 +50,11 @@ def loadSiteConfig(lit_config, config, param_name, env_name):
         ld_fn(config, site_cfg)
         lit_config.load_config = ld_fn
 
+# Extract the value of a numeric macro such as __cplusplus or a feature-test
+# macro.
+def intMacroValue(token):
+    return int(token.rstrip('LlUu'))
+
 class Configuration(object):
     # pylint: disable=redefined-outer-name
     def __init__(self, lit_config, config):
@@ -317,7 +322,7 @@ class Configuration(object):
             "inferred use_system_cxx_lib as: %r" % self.use_system_cxx_lib)
 
     def configure_availability(self):
-        # See http://llvm.org/docs/AvailabilityMarkup.html
+        # See https://libcxx.llvm.org/docs/DesignDocs/AvailabilityMarkup.html
         self.with_availability = self.get_lit_bool('with_availability', False)
         self.lit_config.note(
             "inferred with_availability as: %r" % self.with_availability)
@@ -473,7 +478,8 @@ class Configuration(object):
         if '__cpp_structured_bindings' not in macros:
             self.config.available_features.add('libcpp-no-structured-bindings')
 
-        if '__cpp_deduction_guides' not in macros:
+        if '__cpp_deduction_guides' not in macros or \
+                intMacroValue(macros['__cpp_deduction_guides']) < 201611:
             self.config.available_features.add('libcpp-no-deduction-guides')
 
         if self.is_windows:
@@ -592,6 +598,9 @@ class Configuration(object):
         # Disable availability unless explicitely requested
         if not self.with_availability:
             self.cxx.flags += ['-D_LIBCPP_DISABLE_AVAILABILITY']
+        # FIXME(EricWF): variant_size.pass.cpp requires a slightly larger
+        # template depth with older Clang versions.
+        self.cxx.addFlagIfSupported('-ftemplate-depth=270')
 
     def configure_compile_flags_header_includes(self):
         support_path = os.path.join(self.libcxx_src_root, 'test', 'support')
@@ -678,7 +687,8 @@ class Configuration(object):
                 if feature_macros[m]:
                     define += '=%s' % (feature_macros[m])
                 self.cxx.compile_flags += [define]
-            if m == '_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS':
+            if m == '_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS' or \
+               m == '_LIBCPP_HIDE_FROM_ABI_PER_TU_BY_DEFAULT':
                 continue
             if m == '_LIBCPP_ABI_VERSION':
                 self.config.available_features.add('libcpp-abi-version-v%s'
@@ -721,13 +731,9 @@ class Configuration(object):
         enable_fs = self.get_lit_bool('enable_filesystem', default=False)
         if not enable_fs:
             return
-        enable_experimental = self.get_lit_bool('enable_experimental', default=False)
-        if not enable_experimental:
-            self.lit_config.fatal(
-                'filesystem is enabled but libc++experimental.a is not.')
         self.config.available_features.add('c++filesystem')
         static_env = os.path.join(self.libcxx_src_root, 'test', 'std',
-                                  'experimental', 'filesystem', 'Inputs', 'static_test_env')
+                                  'input.output', 'filesystems', 'Inputs', 'static_test_env')
         static_env = os.path.realpath(static_env)
         assert os.path.isdir(static_env)
         self.cxx.compile_flags += ['-DLIBCXX_FILESYSTEM_STATIC_TEST_ROOT="%s"' % static_env]
@@ -822,6 +828,10 @@ class Configuration(object):
         if libcxx_experimental:
             self.config.available_features.add('c++experimental')
             self.cxx.link_flags += ['-lc++experimental']
+        libcxx_fs = self.get_lit_bool('enable_filesystem', default=False)
+        if libcxx_fs:
+            self.config.available_features.add('c++fs')
+            self.cxx.link_flags += ['-lc++fs']
         if self.link_shared:
             self.cxx.link_flags += ['-lc++']
         else:
@@ -934,9 +944,6 @@ class Configuration(object):
         # FIXME: Enable the two warnings below.
         self.cxx.addWarningFlagIfSupported('-Wno-conversion')
         self.cxx.addWarningFlagIfSupported('-Wno-unused-local-typedef')
-        # FIXME: Remove this warning once the min/max handling patch lands
-        # See https://reviews.llvm.org/D33080
-        self.cxx.addWarningFlagIfSupported('-Wno-#warnings')
         std = self.get_lit_conf('std', None)
         if std in ['c++98', 'c++03']:
             # The '#define static_assert' provided by libc++ in C++03 mode
@@ -1018,8 +1025,7 @@ class Configuration(object):
                     '__cpp_coroutines is not defined')
             # Consider coroutines supported only when the feature test macro
             # reflects a recent value.
-            val = macros['__cpp_coroutines'].replace('L', '')
-            if int(val) >= 201703:
+            if intMacroValue(macros['__cpp_coroutines']) >= 201703:
                 self.config.available_features.add('fcoroutines-ts')
 
     def configure_modules(self):

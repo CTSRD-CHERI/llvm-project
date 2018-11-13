@@ -44,6 +44,7 @@ unsigned BPFELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
     llvm_unreachable("invalid fixup kind!");
   case FK_SecRel_8:
     return ELF::R_BPF_64_64;
+  case FK_PCRel_4:
   case FK_SecRel_4:
     return ELF::R_BPF_64_32;
   case FK_Data_8:
@@ -53,9 +54,7 @@ unsigned BPFELFObjectWriter::getRelocType(MCContext &Ctx, const MCValue &Target,
   }
 }
 
-std::unique_ptr<MCObjectWriter>
-llvm::createBPFELFObjectWriter(raw_pwrite_stream &OS, uint8_t OSABI,
-                               bool IsLittleEndian) {
-  return createELFObjectWriter(llvm::make_unique<BPFELFObjectWriter>(OSABI), OS,
-                               IsLittleEndian);
+std::unique_ptr<MCObjectTargetWriter>
+llvm::createBPFELFObjectWriter(uint8_t OSABI) {
+  return llvm::make_unique<BPFELFObjectWriter>(OSABI);
 }

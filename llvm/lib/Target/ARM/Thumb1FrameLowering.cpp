@@ -32,6 +32,8 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDwarf.h"
@@ -39,8 +41,6 @@
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Target/TargetOpcodes.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <bitset>
 #include <cassert>
 #include <iterator>
@@ -127,7 +127,7 @@ void Thumb1FrameLowering::emitPrologue(MachineFunction &MF,
   // Debug location must be unknown since the first debug location is used
   // to determine the end of the prologue.
   DebugLoc dl;
-  
+
   unsigned FramePtr = RegInfo->getFrameRegister(MF);
   unsigned BasePtr = RegInfo->getBaseRegister();
   int CFAOffset = 0;
@@ -611,6 +611,12 @@ bool Thumb1FrameLowering::emitPopSpecialFixUp(MachineBasicBlock &MBB,
   unsigned TemporaryReg = 0;
   BitVector PopFriendly =
       TRI.getAllocatableSet(MF, TRI.getRegClass(ARM::tGPRRegClassID));
+  // R7 may be used as a frame pointer, hence marked as not generally
+  // allocatable, however there's no reason to not use it as a temporary for
+  // restoring LR.
+  if (STI.useR7AsFramePointer())
+    PopFriendly.set(ARM::R7);
+
   assert(PopFriendly.any() && "No allocatable pop-friendly register?!");
   // Rebuild the GPRs from the high registers because they are removed
   // form the GPR reg class for thumb1.
@@ -622,17 +628,20 @@ bool Thumb1FrameLowering::emitPopSpecialFixUp(MachineBasicBlock &MBB,
   GPRsNoLRSP.reset(ARM::PC);
   findTemporariesForLR(GPRsNoLRSP, PopFriendly, UsedRegs, PopReg, TemporaryReg);
 
-  // If we couldn't find a pop-friendly register, restore LR before popping the
-  // other callee-saved registers, so we can use one of them as a temporary.
+  // If we couldn't find a pop-friendly register, try restoring LR before
+  // popping the other callee-saved registers, so we could use one of them as a
+  // temporary.
   bool UseLDRSP = false;
   if (!PopReg && MBBI != MBB.begin()) {
     auto PrevMBBI = MBBI;
     PrevMBBI--;
     if (PrevMBBI->getOpcode() == ARM::tPOP) {
-      MBBI = PrevMBBI;
-      UsedRegs.stepBackward(*MBBI);
+      UsedRegs.stepBackward(*PrevMBBI);
       findTemporariesForLR(GPRsNoLRSP, PopFriendly, UsedRegs, PopReg, TemporaryReg);
-      UseLDRSP = true;
+      if (PopReg) {
+        MBBI = PrevMBBI;
+        UseLDRSP = true;
+      }
     }
   }
 
@@ -647,7 +656,7 @@ bool Thumb1FrameLowering::emitPopSpecialFixUp(MachineBasicBlock &MBB,
     BuildMI(MBB, MBBI, dl, TII.get(ARM::tLDRspi))
       .addReg(PopReg, RegState::Define)
       .addReg(ARM::SP)
-      .addImm(MBBI->getNumOperands() - 3)
+      .addImm(MBBI->getNumExplicitOperands() - 2)
       .add(predOps(ARMCC::AL));
     // Move from the temporary register to the LR.
     BuildMI(MBB, MBBI, dl, TII.get(ARM::tMOVr))

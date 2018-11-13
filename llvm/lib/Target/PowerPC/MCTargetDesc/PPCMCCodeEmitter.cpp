@@ -102,7 +102,7 @@ public:
   unsigned getMachineOpValue(const MCInst &MI,const MCOperand &MO,
                              SmallVectorImpl<MCFixup> &Fixups,
                              const MCSubtargetInfo &STI) const;
-  
+
   // getBinaryCodeForInstr - TableGen'erated function for getting the
   // binary encoding for an instruction.
   uint64_t getBinaryCodeForInstr(const MCInst &MI,
@@ -122,30 +122,23 @@ public:
 
     // Output the constant in big/little endian byte order.
     unsigned Size = Desc.getSize();
+    support::endianness E = IsLittleEndian ? support::little : support::big;
     switch (Size) {
     case 0:
       break;
     case 4:
-      if (IsLittleEndian) {
-        support::endian::Writer<support::little>(OS).write<uint32_t>(Bits);
-      } else {
-        support::endian::Writer<support::big>(OS).write<uint32_t>(Bits);
-      }
+      support::endian::write<uint32_t>(OS, Bits, E);
       break;
     case 8:
       // If we emit a pair of instructions, the first one is
       // always in the top 32 bits, even on little-endian.
-      if (IsLittleEndian) {
-        uint64_t Swapped = (Bits << 32) | (Bits >> 32);
-        support::endian::Writer<support::little>(OS).write<uint64_t>(Swapped);
-      } else {
-        support::endian::Writer<support::big>(OS).write<uint64_t>(Bits);
-      }
+      support::endian::write<uint32_t>(OS, Bits >> 32, E);
+      support::endian::write<uint32_t>(OS, Bits, E);
       break;
     default:
       llvm_unreachable("Invalid instruction size");
     }
-    
+
     ++MCNumEmitted;  // Keep track of the # of mi's emitted.
   }
 
@@ -154,7 +147,7 @@ private:
   void verifyInstructionPredicates(const MCInst &MI,
                                    uint64_t AvailableFeatures) const;
 };
-  
+
 } // end anonymous namespace
 
 MCCodeEmitter *llvm::createPPCMCCodeEmitter(const MCInstrInfo &MCII,
@@ -169,7 +162,7 @@ getDirectBrEncoding(const MCInst &MI, unsigned OpNo,
                     const MCSubtargetInfo &STI) const {
   const MCOperand &MO = MI.getOperand(OpNo);
   if (MO.isReg() || MO.isImm()) return getMachineOpValue(MI, MO, Fixups, STI);
-  
+
   // Add a fixup for the branch target.
   Fixups.push_back(MCFixup::create(0, MO.getExpr(),
                                    (MCFixupKind)PPC::fixup_ppc_br24));
@@ -219,7 +212,7 @@ unsigned PPCMCCodeEmitter::getImm16Encoding(const MCInst &MI, unsigned OpNo,
                                        const MCSubtargetInfo &STI) const {
   const MCOperand &MO = MI.getOperand(OpNo);
   if (MO.isReg() || MO.isImm()) return getMachineOpValue(MI, MO, Fixups, STI);
-  
+
   // Add a fixup for the immediate field.
   Fixups.push_back(MCFixup::create(IsLittleEndian? 0 : 2, MO.getExpr(),
                                    (MCFixupKind)PPC::fixup_ppc_half16));
@@ -233,11 +226,11 @@ unsigned PPCMCCodeEmitter::getMemRIEncoding(const MCInst &MI, unsigned OpNo,
   // displacement and the next 5 bits as the register #.
   assert(MI.getOperand(OpNo+1).isReg());
   unsigned RegBits = getMachineOpValue(MI, MI.getOperand(OpNo+1), Fixups, STI) << 16;
-  
+
   const MCOperand &MO = MI.getOperand(OpNo);
   if (MO.isImm())
     return (getMachineOpValue(MI, MO, Fixups, STI) & 0xFFFF) | RegBits;
-  
+
   // Add a fixup for the displacement field.
   Fixups.push_back(MCFixup::create(IsLittleEndian? 0 : 2, MO.getExpr(),
                                    (MCFixupKind)PPC::fixup_ppc_half16));
@@ -251,11 +244,11 @@ unsigned PPCMCCodeEmitter::getMemRIXEncoding(const MCInst &MI, unsigned OpNo,
   // displacement and the next 5 bits as the register #.
   assert(MI.getOperand(OpNo+1).isReg());
   unsigned RegBits = getMachineOpValue(MI, MI.getOperand(OpNo+1), Fixups, STI) << 14;
-  
+
   const MCOperand &MO = MI.getOperand(OpNo);
   if (MO.isImm())
     return ((getMachineOpValue(MI, MO, Fixups, STI) >> 2) & 0x3FFF) | RegBits;
-  
+
   // Add a fixup for the displacement field.
   Fixups.push_back(MCFixup::create(IsLittleEndian? 0 : 2, MO.getExpr(),
                                    (MCFixupKind)PPC::fixup_ppc_half16ds));
@@ -271,10 +264,16 @@ unsigned PPCMCCodeEmitter::getMemRIX16Encoding(const MCInst &MI, unsigned OpNo,
   unsigned RegBits = getMachineOpValue(MI, MI.getOperand(OpNo+1), Fixups, STI) << 12;
 
   const MCOperand &MO = MI.getOperand(OpNo);
-  assert(MO.isImm() && !(MO.getImm() % 16) &&
-         "Expecting an immediate that is a multiple of 16");
+  if (MO.isImm()) {
+    assert(!(MO.getImm() % 16) &&
+           "Expecting an immediate that is a multiple of 16");
+    return ((getMachineOpValue(MI, MO, Fixups, STI) >> 4) & 0xFFF) | RegBits;
+  }
 
-  return ((getMachineOpValue(MI, MO, Fixups, STI) >> 4) & 0xFFF) | RegBits;
+  // Otherwise add a fixup for the displacement field.
+  Fixups.push_back(MCFixup::create(IsLittleEndian? 0 : 2, MO.getExpr(),
+                                   (MCFixupKind)PPC::fixup_ppc_half16ds));
+  return RegBits;
 }
 
 unsigned PPCMCCodeEmitter::getSPE8DisEncoding(const MCInst &MI, unsigned OpNo,
@@ -327,7 +326,7 @@ unsigned PPCMCCodeEmitter::getTLSRegEncoding(const MCInst &MI, unsigned OpNo,
                                        const MCSubtargetInfo &STI) const {
   const MCOperand &MO = MI.getOperand(OpNo);
   if (MO.isReg()) return getMachineOpValue(MI, MO, Fixups, STI);
-  
+
   // Add a fixup for the TLS register, which simply provides a relocation
   // hint to the linker that this statement is part of a relocation sequence.
   // Return the thread-pointer register's encoding.
@@ -361,6 +360,20 @@ get_crbitm_encoding(const MCInst &MI, unsigned OpNo,
   return 0x80 >> CTX.getRegisterInfo()->getEncodingValue(MO.getReg());
 }
 
+// Get the index for this operand in this instruction. This is needed for
+// computing the register number in PPCInstrInfo::getRegNumForOperand() for
+// any instructions that use a different numbering scheme for registers in
+// different operands.
+static unsigned getOpIdxForMO(const MCInst &MI, const MCOperand &MO) {
+  for (unsigned i = 0; i < MI.getNumOperands(); i++) {
+    const MCOperand &Op = MI.getOperand(i);
+    if (&Op == &MO)
+      return i;
+  }
+  llvm_unreachable("This operand is not part of this instruction");
+  return ~0U; // Silence any warnings about no return.
+}
+
 unsigned PPCMCCodeEmitter::
 getMachineOpValue(const MCInst &MI, const MCOperand &MO,
                   SmallVectorImpl<MCFixup> &Fixups,
@@ -371,16 +384,13 @@ getMachineOpValue(const MCInst &MI, const MCOperand &MO,
     assert((MI.getOpcode() != PPC::MTOCRF && MI.getOpcode() != PPC::MTOCRF8 &&
             MI.getOpcode() != PPC::MFOCRF && MI.getOpcode() != PPC::MFOCRF8) ||
            MO.getReg() < PPC::CR0 || MO.getReg() > PPC::CR7);
-    unsigned Reg = MO.getReg();
-    unsigned Encode = CTX.getRegisterInfo()->getEncodingValue(Reg);
-
-    if ((MCII.get(MI.getOpcode()).TSFlags & PPCII::UseVSXReg))
-      if (PPCInstrInfo::isVRRegister(Reg))
-        Encode += 32;
-
-    return Encode;
+    unsigned OpNo = getOpIdxForMO(MI, MO);
+    unsigned Reg =
+      PPCInstrInfo::getRegNumForOperand(MCII.get(MI.getOpcode()),
+                                        MO.getReg(), OpNo);
+    return CTX.getRegisterInfo()->getEncodingValue(Reg);
   }
-  
+
   assert(MO.isImm() &&
          "Relocation required in an instruction that we cannot encode!");
   return MO.getImm();

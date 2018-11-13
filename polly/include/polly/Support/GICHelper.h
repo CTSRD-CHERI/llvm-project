@@ -275,11 +275,6 @@ std::string getIslCompatibleName(const std::string &Prefix,
                                  const std::string &Middle,
                                  const std::string &Suffix);
 
-// Make isl::give available in polly namespace. We do this as there was
-// previously a function polly::give() which did the very same thing and we
-// did not want yet to introduce the isl:: prefix to each call of give.
-using isl::give;
-
 inline llvm::DiagnosticInfoOptimizationBase &
 operator<<(llvm::DiagnosticInfoOptimizationBase &OS,
            const isl::union_map &Obj) {
@@ -396,6 +391,12 @@ public:
     assert(isl_ctx_get_max_operations(IslCtx) == 0 &&
            "Nested max operations not supported");
 
+    // Users of this guard may check whether the last error was isl_error_quota.
+    // Reset the last error such that a previous out-of-quota error is not
+    // mistaken to have occurred in the in this quota, even if the max number of
+    // operations is set to infinite (LocalMaxOps == 0).
+    isl_ctx_reset_error(IslCtx);
+
     if (LocalMaxOps == 0) {
       // No limit on operations; also disable restoring on_error/max_operations.
       this->IslCtx = nullptr;
@@ -424,7 +425,6 @@ public:
     return isl_ctx_last_error(IslCtx) == isl_error_quota;
   }
 };
-
 } // end namespace polly
 
 #endif

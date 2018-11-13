@@ -8,13 +8,12 @@
 //===----------------------------------------------------------------------===//
 //
 // This file contains the serialization code for the LSP structs.
-// FIXME: This is extremely repetetive and ugly. Is there a better way?
 //
 //===----------------------------------------------------------------------===//
 
 #include "Protocol.h"
 #include "Logger.h"
-
+#include "URI.h"
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/Format.h"
@@ -22,1001 +21,564 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 
-using namespace clang;
-using namespace clang::clangd;
+namespace clang {
+namespace clangd {
+using namespace llvm;
 
-namespace {
-void logIgnoredField(llvm::StringRef KeyValue, clangd::Logger &Logger) {
-  Logger.log(llvm::formatv("Ignored unknown field \"{0}\"\n", KeyValue));
-}
-} // namespace
-
-URI URI::fromUri(llvm::StringRef uri) {
-  URI Result;
-  Result.uri = uri;
-  uri.consume_front("file://");
-  // Also trim authority-less URIs
-  uri.consume_front("file:");
-  // For Windows paths e.g. /X:
-  if (uri.size() > 2 && uri[0] == '/' && uri[2] == ':')
-    uri.consume_front("/");
-  // Make sure that file paths are in native separators
-  Result.file = llvm::sys::path::convert_to_slash(uri);
-  return Result;
+URIForFile::URIForFile(std::string AbsPath) {
+  assert(llvm::sys::path::is_absolute(AbsPath) && "the path is relative");
+  File = std::move(AbsPath);
 }
 
-URI URI::fromFile(llvm::StringRef file) {
-  using namespace llvm::sys;
-  URI Result;
-  Result.file = file;
-  Result.uri = "file://";
-  // For Windows paths e.g. X:
-  if (file.size() > 1 && file[1] == ':')
-    Result.uri += "/";
-  // Make sure that uri paths are with posix separators
-  Result.uri += path::convert_to_slash(file, path::Style::posix);
-  return Result;
-}
-
-URI URI::parse(llvm::yaml::ScalarNode *Param) {
-  llvm::SmallString<10> Storage;
-  return URI::fromUri(Param->getValue(Storage));
-}
-
-json::Expr URI::unparse(const URI &U) { return U.uri; }
-
-llvm::Optional<TextDocumentIdentifier>
-TextDocumentIdentifier::parse(llvm::yaml::MappingNode *Params,
-                              clangd::Logger &Logger) {
-  TextDocumentIdentifier Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-
-    if (KeyValue == "uri") {
-      Result.uri = URI::parse(Value);
-    } else if (KeyValue == "version") {
-      // FIXME: parse version, but only for VersionedTextDocumentIdentifiers.
-    } else {
-      logIgnoredField(KeyValue, Logger);
+bool fromJSON(const json::Value &E, URIForFile &R) {
+  if (auto S = E.getAsString()) {
+    auto U = URI::parse(*S);
+    if (!U) {
+      elog("Failed to parse URI {0}: {1}", *S, U.takeError());
+      return false;
     }
-  }
-  return Result;
-}
-
-llvm::Optional<Position> Position::parse(llvm::yaml::MappingNode *Params,
-                                         clangd::Logger &Logger) {
-  Position Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "line") {
-      long long Val;
-      if (llvm::getAsSignedInteger(Value->getValue(Storage), 0, Val))
-        return llvm::None;
-      Result.line = Val;
-    } else if (KeyValue == "character") {
-      long long Val;
-      if (llvm::getAsSignedInteger(Value->getValue(Storage), 0, Val))
-        return llvm::None;
-      Result.character = Val;
-    } else {
-      logIgnoredField(KeyValue, Logger);
+    if (U->scheme() != "file" && U->scheme() != "test") {
+      elog("Clangd only supports 'file' URI scheme for workspace files: {0}",
+           *S);
+      return false;
     }
+    auto Path = URI::resolve(*U);
+    if (!Path) {
+      log("{0}", Path.takeError());
+      return false;
+    }
+    R = URIForFile(*Path);
+    return true;
   }
-  return Result;
+  return false;
 }
 
-json::Expr Position::unparse(const Position &P) {
-  return json::obj{
+json::Value toJSON(const URIForFile &U) { return U.uri(); }
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const URIForFile &U) {
+  return OS << U.uri();
+}
+
+json::Value toJSON(const TextDocumentIdentifier &R) {
+  return json::Object{{"uri", R.uri}};
+}
+
+bool fromJSON(const json::Value &Params, TextDocumentIdentifier &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("uri", R.uri);
+}
+
+bool fromJSON(const json::Value &Params, Position &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("line", R.line) && O.map("character", R.character);
+}
+
+json::Value toJSON(const Position &P) {
+  return json::Object{
       {"line", P.line},
       {"character", P.character},
   };
 }
 
-llvm::Optional<Range> Range::parse(llvm::yaml::MappingNode *Params,
-                                   clangd::Logger &Logger) {
-  Range Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "start") {
-      auto Parsed = Position::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.start = std::move(*Parsed);
-    } else if (KeyValue == "end") {
-      auto Parsed = Position::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.end = std::move(*Parsed);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const Position &P) {
+  return OS << P.line << ':' << P.character;
 }
 
-json::Expr Range::unparse(const Range &P) {
-  return json::obj{
+bool fromJSON(const json::Value &Params, Range &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("start", R.start) && O.map("end", R.end);
+}
+
+json::Value toJSON(const Range &P) {
+  return json::Object{
       {"start", P.start},
       {"end", P.end},
   };
 }
 
-json::Expr Location::unparse(const Location &P) {
-  return json::obj{
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const Range &R) {
+  return OS << R.start << '-' << R.end;
+}
+
+json::Value toJSON(const Location &P) {
+  return json::Object{
       {"uri", P.uri},
       {"range", P.range},
   };
 }
 
-llvm::Optional<TextDocumentItem>
-TextDocumentItem::parse(llvm::yaml::MappingNode *Params,
-                        clangd::Logger &Logger) {
-  TextDocumentItem Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "uri") {
-      Result.uri = URI::parse(Value);
-    } else if (KeyValue == "languageId") {
-      Result.languageId = Value->getValue(Storage);
-    } else if (KeyValue == "version") {
-      long long Val;
-      if (llvm::getAsSignedInteger(Value->getValue(Storage), 0, Val))
-        return llvm::None;
-      Result.version = Val;
-    } else if (KeyValue == "text") {
-      Result.text = Value->getValue(Storage);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const Location &L) {
+  return OS << L.range << '@' << L.uri;
 }
 
-llvm::Optional<Metadata> Metadata::parse(llvm::yaml::MappingNode *Params,
-                                         clangd::Logger &Logger) {
-  Metadata Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value = NextKeyValue.getValue();
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "extraFlags") {
-      auto *Seq = dyn_cast<llvm::yaml::SequenceNode>(Value);
-      if (!Seq)
-        return llvm::None;
-      for (auto &Item : *Seq) {
-        auto *Node = dyn_cast<llvm::yaml::ScalarNode>(&Item);
-        if (!Node)
-          return llvm::None;
-        Result.extraFlags.push_back(Node->getValue(Storage));
-      }
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, TextDocumentItem &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("uri", R.uri) && O.map("languageId", R.languageId) &&
+         O.map("version", R.version) && O.map("text", R.text);
 }
 
-llvm::Optional<TextEdit> TextEdit::parse(llvm::yaml::MappingNode *Params,
-                                         clangd::Logger &Logger) {
-  TextEdit Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value = NextKeyValue.getValue();
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "range") {
-      auto *Map = dyn_cast<llvm::yaml::MappingNode>(Value);
-      if (!Map)
-        return llvm::None;
-      auto Parsed = Range::parse(Map, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.range = std::move(*Parsed);
-    } else if (KeyValue == "newText") {
-      auto *Node = dyn_cast<llvm::yaml::ScalarNode>(Value);
-      if (!Node)
-        return llvm::None;
-      Result.newText = Node->getValue(Storage);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, Metadata &R) {
+  json::ObjectMapper O(Params);
+  if (!O)
+    return false;
+  O.map("extraFlags", R.extraFlags);
+  return true;
 }
 
-json::Expr TextEdit::unparse(const TextEdit &P) {
-  return json::obj{
+bool fromJSON(const json::Value &Params, TextEdit &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("range", R.range) && O.map("newText", R.newText);
+}
+
+json::Value toJSON(const TextEdit &P) {
+  return json::Object{
       {"range", P.range},
       {"newText", P.newText},
   };
 }
 
-namespace {
-TraceLevel getTraceLevel(llvm::StringRef TraceLevelStr,
-                         clangd::Logger &Logger) {
-  if (TraceLevelStr == "off")
-    return TraceLevel::Off;
-  else if (TraceLevelStr == "messages")
-    return TraceLevel::Messages;
-  else if (TraceLevelStr == "verbose")
-    return TraceLevel::Verbose;
-
-  Logger.log(llvm::formatv("Unknown trace level \"{0}\"\n", TraceLevelStr));
-  return TraceLevel::Off;
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const TextEdit &TE) {
+  OS << TE.range << " => \"";
+  printEscapedString(TE.newText, OS);
+  return OS << '"';
 }
-} // namespace
 
-llvm::Optional<InitializeParams>
-InitializeParams::parse(llvm::yaml::MappingNode *Params,
-                        clangd::Logger &Logger) {
-  // If we don't understand the params, proceed with default parameters.
-  auto ParseFailure = [&] {
-    Logger.log("Failed to decode InitializeParams\n");
-    return InitializeParams();
-  };
-  InitializeParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return ParseFailure();
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-    if (!Value)
-      continue;
-
-    if (KeyValue == "processId") {
-      auto *Value =
-          dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-      if (!Value)
-        return ParseFailure();
-      long long Val;
-      if (llvm::getAsSignedInteger(Value->getValue(KeyStorage), 0, Val))
-        return ParseFailure();
-      Result.processId = Val;
-    } else if (KeyValue == "rootPath") {
-      Result.rootPath = Value->getValue(KeyStorage);
-    } else if (KeyValue == "rootUri") {
-      Result.rootUri = URI::parse(Value);
-    } else if (KeyValue == "initializationOptions") {
-      // Not used
-    } else if (KeyValue == "capabilities") {
-      // Not used
-    } else if (KeyValue == "trace") {
-      Result.trace = getTraceLevel(Value->getValue(KeyStorage), Logger);
-    } else {
-      logIgnoredField(KeyValue, Logger);
+bool fromJSON(const json::Value &E, TraceLevel &Out) {
+  if (auto S = E.getAsString()) {
+    if (*S == "off") {
+      Out = TraceLevel::Off;
+      return true;
+    } else if (*S == "messages") {
+      Out = TraceLevel::Messages;
+      return true;
+    } else if (*S == "verbose") {
+      Out = TraceLevel::Verbose;
+      return true;
     }
   }
-  return Result;
+  return false;
 }
 
-llvm::Optional<DidOpenTextDocumentParams>
-DidOpenTextDocumentParams::parse(llvm::yaml::MappingNode *Params,
-                                 clangd::Logger &Logger) {
-  DidOpenTextDocumentParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
+bool fromJSON(const json::Value &Params, CompletionItemClientCapabilities &R) {
+  json::ObjectMapper O(Params);
+  if (!O)
+    return false;
+  O.map("snippetSupport", R.snippetSupport);
+  O.map("commitCharacterSupport", R.commitCharacterSupport);
+  return true;
+}
 
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
+bool fromJSON(const json::Value &Params, CompletionClientCapabilities &R) {
+  json::ObjectMapper O(Params);
+  if (!O)
+    return false;
+  O.map("dynamicRegistration", R.dynamicRegistration);
+  O.map("completionItem", R.completionItem);
+  O.map("contextSupport", R.contextSupport);
+  return true;
+}
 
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "textDocument") {
-      auto Parsed = TextDocumentItem::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.textDocument = std::move(*Parsed);
-    } else if (KeyValue == "metadata") {
-      auto Parsed = Metadata::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.metadata = std::move(*Parsed);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
+bool fromJSON(const llvm::json::Value &Params,
+              PublishDiagnosticsClientCapabilities &R) {
+  json::ObjectMapper O(Params);
+  if (!O)
+    return false;
+  O.map("clangdFixSupport", R.clangdFixSupport);
+  O.map("categorySupport", R.categorySupport);
+  return true;
+}
+
+bool fromJSON(const json::Value &E, SymbolKind &Out) {
+  if (auto T = E.getAsInteger()) {
+    if (*T < static_cast<int>(SymbolKind::File) ||
+        *T > static_cast<int>(SymbolKind::TypeParameter))
+      return false;
+    Out = static_cast<SymbolKind>(*T);
+    return true;
   }
-  return Result;
+  return false;
 }
 
-llvm::Optional<DidCloseTextDocumentParams>
-DidCloseTextDocumentParams::parse(llvm::yaml::MappingNode *Params,
-                                  clangd::Logger &Logger) {
-  DidCloseTextDocumentParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value = NextKeyValue.getValue();
-
-    if (KeyValue == "textDocument") {
-      auto *Map = dyn_cast<llvm::yaml::MappingNode>(Value);
-      if (!Map)
-        return llvm::None;
-      auto Parsed = TextDocumentIdentifier::parse(Map, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.textDocument = std::move(*Parsed);
-    } else {
-      logIgnoredField(KeyValue, Logger);
+bool fromJSON(const json::Value &E, std::vector<SymbolKind> &Out) {
+  if (auto *A = E.getAsArray()) {
+    Out.clear();
+    for (size_t I = 0; I < A->size(); ++I) {
+      SymbolKind KindOut;
+      if (fromJSON((*A)[I], KindOut))
+        Out.push_back(KindOut);
     }
+    return true;
   }
-  return Result;
+  return false;
 }
 
-llvm::Optional<DidChangeTextDocumentParams>
-DidChangeTextDocumentParams::parse(llvm::yaml::MappingNode *Params,
-                                   clangd::Logger &Logger) {
-  DidChangeTextDocumentParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
+bool fromJSON(const json::Value &Params, SymbolKindCapabilities &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("valueSet", R.valueSet);
+}
 
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value = NextKeyValue.getValue();
+SymbolKind adjustKindToCapability(SymbolKind Kind,
+                                  SymbolKindBitset &SupportedSymbolKinds) {
+  auto KindVal = static_cast<size_t>(Kind);
+  if (KindVal >= SymbolKindMin && KindVal <= SupportedSymbolKinds.size() &&
+      SupportedSymbolKinds[KindVal])
+    return Kind;
 
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "textDocument") {
-      auto *Map = dyn_cast<llvm::yaml::MappingNode>(Value);
-      if (!Map)
-        return llvm::None;
-      auto Parsed = TextDocumentIdentifier::parse(Map, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.textDocument = std::move(*Parsed);
-    } else if (KeyValue == "contentChanges") {
-      auto *Seq = dyn_cast<llvm::yaml::SequenceNode>(Value);
-      if (!Seq)
-        return llvm::None;
-      for (auto &Item : *Seq) {
-        auto *I = dyn_cast<llvm::yaml::MappingNode>(&Item);
-        if (!I)
-          return llvm::None;
-        auto Parsed = TextDocumentContentChangeEvent::parse(I, Logger);
-        if (!Parsed)
-          return llvm::None;
-        Result.contentChanges.push_back(std::move(*Parsed));
-      }
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
+  switch (Kind) {
+  // Provide some fall backs for common kinds that are close enough.
+  case SymbolKind::Struct:
+    return SymbolKind::Class;
+  case SymbolKind::EnumMember:
+    return SymbolKind::Enum;
+  default:
+    return SymbolKind::String;
   }
-  return Result;
 }
 
-llvm::Optional<FileEvent> FileEvent::parse(llvm::yaml::MappingNode *Params,
-                                           clangd::Logger &Logger) {
-  llvm::Optional<FileEvent> Result = FileEvent();
-  for (auto &NextKeyValue : *Params) {
-    // We have to consume the whole MappingNode because it doesn't support
-    // skipping and we want to be able to parse further valid events.
-    if (!Result)
-      continue;
+bool fromJSON(const json::Value &Params, WorkspaceSymbolCapabilities &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("symbolKind", R.symbolKind);
+}
 
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString) {
-      Result.reset();
-      continue;
-    }
+bool fromJSON(const json::Value &Params, WorkspaceClientCapabilities &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("symbol", R.symbol);
+}
 
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-    if (!Value) {
-      Result.reset();
-      continue;
-    }
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "uri") {
-      Result->uri = URI::parse(Value);
-    } else if (KeyValue == "type") {
-      long long Val;
-      if (llvm::getAsSignedInteger(Value->getValue(Storage), 0, Val)) {
-        Result.reset();
-        continue;
-      }
-      Result->type = static_cast<FileChangeType>(Val);
-      if (Result->type < FileChangeType::Created ||
-          Result->type > FileChangeType::Deleted)
-        Result.reset();
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
+bool fromJSON(const json::Value &Params, TextDocumentClientCapabilities &R) {
+  json::ObjectMapper O(Params);
+  if (!O)
+    return false;
+  O.map("completion", R.completion);
+  O.map("publishDiagnostics", R.publishDiagnostics);
+  if (auto *CodeAction = Params.getAsObject()->getObject("codeAction"))
+    if (CodeAction->getObject("codeActionLiteralSupport"))
+      R.codeActionLiteralSupport = true;
+  return true;
+}
+
+bool fromJSON(const json::Value &Params, ClientCapabilities &R) {
+  json::ObjectMapper O(Params);
+  if (!O)
+    return false;
+  O.map("textDocument", R.textDocument);
+  O.map("workspace", R.workspace);
+  return true;
+}
+
+bool fromJSON(const json::Value &Params, InitializeParams &R) {
+  json::ObjectMapper O(Params);
+  if (!O)
+    return false;
+  // We deliberately don't fail if we can't parse individual fields.
+  // Failing to handle a slightly malformed initialize would be a disaster.
+  O.map("processId", R.processId);
+  O.map("rootUri", R.rootUri);
+  O.map("rootPath", R.rootPath);
+  O.map("capabilities", R.capabilities);
+  O.map("trace", R.trace);
+  O.map("initializationOptions", R.initializationOptions);
+  return true;
+}
+
+bool fromJSON(const json::Value &Params, DidOpenTextDocumentParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("textDocument", R.textDocument) &&
+         O.map("metadata", R.metadata);
+}
+
+bool fromJSON(const json::Value &Params, DidCloseTextDocumentParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("textDocument", R.textDocument);
+}
+
+bool fromJSON(const json::Value &Params, DidChangeTextDocumentParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("textDocument", R.textDocument) &&
+         O.map("contentChanges", R.contentChanges) &&
+         O.map("wantDiagnostics", R.wantDiagnostics);
+}
+
+bool fromJSON(const json::Value &E, FileChangeType &Out) {
+  if (auto T = E.getAsInteger()) {
+    if (*T < static_cast<int>(FileChangeType::Created) ||
+        *T > static_cast<int>(FileChangeType::Deleted))
+      return false;
+    Out = static_cast<FileChangeType>(*T);
+    return true;
   }
-  return Result;
+  return false;
 }
 
-llvm::Optional<DidChangeWatchedFilesParams>
-DidChangeWatchedFilesParams::parse(llvm::yaml::MappingNode *Params,
-                                   clangd::Logger &Logger) {
-  DidChangeWatchedFilesParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value = NextKeyValue.getValue();
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "changes") {
-      auto *Seq = dyn_cast<llvm::yaml::SequenceNode>(Value);
-      if (!Seq)
-        return llvm::None;
-      for (auto &Item : *Seq) {
-        auto *I = dyn_cast<llvm::yaml::MappingNode>(&Item);
-        if (!I)
-          return llvm::None;
-        auto Parsed = FileEvent::parse(I, Logger);
-        if (Parsed)
-          Result.changes.push_back(std::move(*Parsed));
-        else
-          Logger.log("Failed to decode a FileEvent.\n");
-      }
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, FileEvent &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("uri", R.uri) && O.map("type", R.type);
 }
 
-llvm::Optional<TextDocumentContentChangeEvent>
-TextDocumentContentChangeEvent::parse(llvm::yaml::MappingNode *Params,
-                                      clangd::Logger &Logger) {
-  TextDocumentContentChangeEvent Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "text") {
-      Result.text = Value->getValue(Storage);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, DidChangeWatchedFilesParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("changes", R.changes);
 }
 
-llvm::Optional<FormattingOptions>
-FormattingOptions::parse(llvm::yaml::MappingNode *Params,
-                         clangd::Logger &Logger) {
-  FormattingOptions Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "tabSize") {
-      long long Val;
-      if (llvm::getAsSignedInteger(Value->getValue(Storage), 0, Val))
-        return llvm::None;
-      Result.tabSize = Val;
-    } else if (KeyValue == "insertSpaces") {
-      long long Val;
-      StringRef Str = Value->getValue(Storage);
-      if (llvm::getAsSignedInteger(Str, 0, Val)) {
-        if (Str == "true")
-          Val = 1;
-        else if (Str == "false")
-          Val = 0;
-        else
-          return llvm::None;
-      }
-      Result.insertSpaces = Val;
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, TextDocumentContentChangeEvent &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("range", R.range) && O.map("rangeLength", R.rangeLength) &&
+         O.map("text", R.text);
 }
 
-json::Expr FormattingOptions::unparse(const FormattingOptions &P) {
-  return json::obj{
+bool fromJSON(const json::Value &Params, FormattingOptions &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("tabSize", R.tabSize) &&
+         O.map("insertSpaces", R.insertSpaces);
+}
+
+json::Value toJSON(const FormattingOptions &P) {
+  return json::Object{
       {"tabSize", P.tabSize},
       {"insertSpaces", P.insertSpaces},
   };
 }
 
-llvm::Optional<DocumentRangeFormattingParams>
-DocumentRangeFormattingParams::parse(llvm::yaml::MappingNode *Params,
-                                     clangd::Logger &Logger) {
-  DocumentRangeFormattingParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "textDocument") {
-      auto Parsed = TextDocumentIdentifier::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.textDocument = std::move(*Parsed);
-    } else if (KeyValue == "range") {
-      auto Parsed = Range::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.range = std::move(*Parsed);
-    } else if (KeyValue == "options") {
-      auto Parsed = FormattingOptions::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.options = std::move(*Parsed);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, DocumentRangeFormattingParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("textDocument", R.textDocument) &&
+         O.map("range", R.range) && O.map("options", R.options);
 }
 
-llvm::Optional<DocumentOnTypeFormattingParams>
-DocumentOnTypeFormattingParams::parse(llvm::yaml::MappingNode *Params,
-                                      clangd::Logger &Logger) {
-  DocumentOnTypeFormattingParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-
-    if (KeyValue == "ch") {
-      auto *ScalarValue =
-          dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-      if (!ScalarValue)
-        return llvm::None;
-      llvm::SmallString<10> Storage;
-      Result.ch = ScalarValue->getValue(Storage);
-      continue;
-    }
-
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-    if (KeyValue == "textDocument") {
-      auto Parsed = TextDocumentIdentifier::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.textDocument = std::move(*Parsed);
-    } else if (KeyValue == "position") {
-      auto Parsed = Position::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.position = std::move(*Parsed);
-    } else if (KeyValue == "options") {
-      auto Parsed = FormattingOptions::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.options = std::move(*Parsed);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, DocumentOnTypeFormattingParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("textDocument", R.textDocument) &&
+         O.map("position", R.position) && O.map("ch", R.ch) &&
+         O.map("options", R.options);
 }
 
-llvm::Optional<DocumentFormattingParams>
-DocumentFormattingParams::parse(llvm::yaml::MappingNode *Params,
-                                clangd::Logger &Logger) {
-  DocumentFormattingParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "textDocument") {
-      auto Parsed = TextDocumentIdentifier::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.textDocument = std::move(*Parsed);
-    } else if (KeyValue == "options") {
-      auto Parsed = FormattingOptions::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.options = std::move(*Parsed);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, DocumentFormattingParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("textDocument", R.textDocument) &&
+         O.map("options", R.options);
 }
 
-llvm::Optional<Diagnostic> Diagnostic::parse(llvm::yaml::MappingNode *Params,
-                                             clangd::Logger &Logger) {
-  Diagnostic Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "range") {
-      auto *Value =
-          dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-      if (!Value)
-        return llvm::None;
-      auto Parsed = Range::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.range = std::move(*Parsed);
-    } else if (KeyValue == "severity") {
-      auto *Value =
-          dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-      if (!Value)
-        return llvm::None;
-      long long Val;
-      if (llvm::getAsSignedInteger(Value->getValue(Storage), 0, Val))
-        return llvm::None;
-      Result.severity = Val;
-    } else if (KeyValue == "code") {
-      // Not currently used
-    } else if (KeyValue == "source") {
-      // Not currently used
-    } else if (KeyValue == "message") {
-      auto *Value =
-          dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-      if (!Value)
-        return llvm::None;
-      Result.message = Value->getValue(Storage);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, DocumentSymbolParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("textDocument", R.textDocument);
 }
 
-llvm::Optional<CodeActionContext>
-CodeActionContext::parse(llvm::yaml::MappingNode *Params,
-                         clangd::Logger &Logger) {
-  CodeActionContext Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value = NextKeyValue.getValue();
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "diagnostics") {
-      auto *Seq = dyn_cast<llvm::yaml::SequenceNode>(Value);
-      if (!Seq)
-        return llvm::None;
-      for (auto &Item : *Seq) {
-        auto *I = dyn_cast<llvm::yaml::MappingNode>(&Item);
-        if (!I)
-          return llvm::None;
-        auto Parsed = Diagnostic::parse(I, Logger);
-        if (!Parsed)
-          return llvm::None;
-        Result.diagnostics.push_back(std::move(*Parsed));
-      }
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+llvm::json::Value toJSON(const Diagnostic &D) {
+  json::Object Diag{
+      {"range", D.range},
+      {"severity", D.severity},
+      {"message", D.message},
+  };
+  // FIXME: this should be used for publishDiagnostics.
+  // FIXME: send category and fixes when appropriate.
+  return std::move(Diag);
 }
 
-llvm::Optional<CodeActionParams>
-CodeActionParams::parse(llvm::yaml::MappingNode *Params,
-                        clangd::Logger &Logger) {
-  CodeActionParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "textDocument") {
-      auto Parsed = TextDocumentIdentifier::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.textDocument = std::move(*Parsed);
-    } else if (KeyValue == "range") {
-      auto Parsed = Range::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.range = std::move(*Parsed);
-    } else if (KeyValue == "context") {
-      auto Parsed = CodeActionContext::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.context = std::move(*Parsed);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, Diagnostic &R) {
+  json::ObjectMapper O(Params);
+  if (!O || !O.map("range", R.range) || !O.map("message", R.message))
+    return false;
+  O.map("severity", R.severity);
+  return true;
 }
 
-llvm::Optional<std::map<std::string, std::vector<TextEdit>>>
-parseWorkspaceEditChange(llvm::yaml::MappingNode *Params,
-                         clangd::Logger &Logger) {
-  std::map<std::string, std::vector<TextEdit>> Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    if (Result.count(KeyValue)) {
-      logIgnoredField(KeyValue, Logger);
-      continue;
-    }
-
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::SequenceNode>(NextKeyValue.getValue());
-    if (!Value)
-      return llvm::None;
-    for (auto &Item : *Value) {
-      auto *ItemValue = dyn_cast_or_null<llvm::yaml::MappingNode>(&Item);
-      if (!ItemValue)
-        return llvm::None;
-      auto Parsed = TextEdit::parse(ItemValue, Logger);
-      if (!Parsed)
-        return llvm::None;
-
-      Result[KeyValue].push_back(*Parsed);
-    }
-  }
-
-  return Result;
+bool fromJSON(const json::Value &Params, CodeActionContext &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("diagnostics", R.diagnostics);
 }
 
-llvm::Optional<WorkspaceEdit>
-WorkspaceEdit::parse(llvm::yaml::MappingNode *Params, clangd::Logger &Logger) {
-  WorkspaceEdit Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "changes") {
-      auto *Value =
-          dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-      if (!Value)
-        return llvm::None;
-      auto Parsed = parseWorkspaceEditChange(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.changes = std::move(*Parsed);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
+llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const Diagnostic &D) {
+  OS << D.range << " [";
+  switch (D.severity) {
+    case 1:
+      OS << "error";
+      break;
+    case 2:
+      OS << "warning";
+      break;
+    case 3:
+      OS << "note";
+      break;
+    case 4:
+      OS << "remark";
+      break;
+    default:
+      OS << "diagnostic";
+      break;
   }
-  return Result;
+  return OS << '(' << D.severity << "): " << D.message << "]";
 }
 
-const std::string ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND =
+bool fromJSON(const json::Value &Params, CodeActionParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("textDocument", R.textDocument) &&
+         O.map("range", R.range) && O.map("context", R.context);
+}
+
+bool fromJSON(const json::Value &Params, WorkspaceEdit &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("changes", R.changes);
+}
+
+const llvm::StringLiteral ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND =
     "clangd.applyFix";
+bool fromJSON(const json::Value &Params, ExecuteCommandParams &R) {
+  json::ObjectMapper O(Params);
+  if (!O || !O.map("command", R.command))
+    return false;
 
-llvm::Optional<ExecuteCommandParams>
-ExecuteCommandParams::parse(llvm::yaml::MappingNode *Params,
-                            clangd::Logger &Logger) {
-  ExecuteCommandParams Result;
-  // Depending on which "command" we parse, we will use this function to parse
-  // the command "arguments".
-  std::function<bool(llvm::yaml::MappingNode * Params)> ArgParser = nullptr;
-
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-
-    // Note that "commands" has to be parsed before "arguments" for this to
-    // work properly.
-    if (KeyValue == "command") {
-      auto *ScalarValue =
-          dyn_cast_or_null<llvm::yaml::ScalarNode>(NextKeyValue.getValue());
-      if (!ScalarValue)
-        return llvm::None;
-      llvm::SmallString<10> Storage;
-      Result.command = ScalarValue->getValue(Storage);
-      if (Result.command == ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND) {
-        ArgParser = [&Result, &Logger](llvm::yaml::MappingNode *Params) {
-          auto WE = WorkspaceEdit::parse(Params, Logger);
-          if (WE)
-            Result.workspaceEdit = WE;
-          return WE.hasValue();
-        };
-      } else {
-        return llvm::None;
-      }
-    } else if (KeyValue == "arguments") {
-      auto *Value = NextKeyValue.getValue();
-      auto *Seq = dyn_cast<llvm::yaml::SequenceNode>(Value);
-      if (!Seq)
-        return llvm::None;
-      for (auto &Item : *Seq) {
-        auto *ItemValue = dyn_cast_or_null<llvm::yaml::MappingNode>(&Item);
-        if (!ItemValue || !ArgParser)
-          return llvm::None;
-        if (!ArgParser(ItemValue))
-          return llvm::None;
-      }
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
+  auto Args = Params.getAsObject()->getArray("arguments");
+  if (R.command == ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND) {
+    return Args && Args->size() == 1 &&
+           fromJSON(Args->front(), R.workspaceEdit);
   }
-  if (Result.command.empty())
-    return llvm::None;
-
-  return Result;
+  return false; // Unrecognized command.
 }
 
-json::Expr WorkspaceEdit::unparse(const WorkspaceEdit &WE) {
+json::Value toJSON(const SymbolInformation &P) {
+  return json::Object{
+      {"name", P.name},
+      {"kind", static_cast<int>(P.kind)},
+      {"location", P.location},
+      {"containerName", P.containerName},
+  };
+}
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &O,
+                              const SymbolInformation &SI) {
+  O << SI.containerName << "::" << SI.name << " - " << toJSON(SI);
+  return O;
+}
+
+bool fromJSON(const json::Value &Params, WorkspaceSymbolParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("query", R.query);
+}
+
+json::Value toJSON(const Command &C) {
+  auto Cmd = json::Object{{"title", C.title}, {"command", C.command}};
+  if (C.workspaceEdit)
+    Cmd["arguments"] = {*C.workspaceEdit};
+  return std::move(Cmd);
+}
+
+const llvm::StringLiteral CodeAction::QUICKFIX_KIND = "quickfix";
+
+llvm::json::Value toJSON(const CodeAction &CA) {
+  auto CodeAction = json::Object{{"title", CA.title}};
+  if (CA.kind)
+    CodeAction["kind"] = *CA.kind;
+  if (CA.diagnostics)
+    CodeAction["diagnostics"] = json::Array(*CA.diagnostics);
+  if (CA.edit)
+    CodeAction["edit"] = *CA.edit;
+  if (CA.command)
+    CodeAction["command"] = *CA.command;
+  return std::move(CodeAction);
+}
+
+json::Value toJSON(const WorkspaceEdit &WE) {
   if (!WE.changes)
-    return json::obj{};
-  json::obj FileChanges;
+    return json::Object{};
+  json::Object FileChanges;
   for (auto &Change : *WE.changes)
-    FileChanges[Change.first] = json::ary(Change.second);
-  return json::obj{{"changes", std::move(FileChanges)}};
+    FileChanges[Change.first] = json::Array(Change.second);
+  return json::Object{{"changes", std::move(FileChanges)}};
 }
 
-json::Expr
-ApplyWorkspaceEditParams::unparse(const ApplyWorkspaceEditParams &Params) {
-  return json::obj{{"edit", Params.edit}};
+json::Value toJSON(const ApplyWorkspaceEditParams &Params) {
+  return json::Object{{"edit", Params.edit}};
 }
 
-llvm::Optional<TextDocumentPositionParams>
-TextDocumentPositionParams::parse(llvm::yaml::MappingNode *Params,
-                                  clangd::Logger &Logger) {
-  TextDocumentPositionParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
+bool fromJSON(const json::Value &Params, TextDocumentPositionParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("textDocument", R.textDocument) &&
+         O.map("position", R.position);
+}
 
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-    auto *Value =
-        dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-    if (!Value)
-      continue;
-
-    llvm::SmallString<10> Storage;
-    if (KeyValue == "textDocument") {
-      auto Parsed = TextDocumentIdentifier::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.textDocument = std::move(*Parsed);
-    } else if (KeyValue == "position") {
-      auto Parsed = Position::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.position = std::move(*Parsed);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
+static StringRef toTextKind(MarkupKind Kind) {
+  switch (Kind) {
+  case MarkupKind::PlainText:
+    return "plaintext";
+  case MarkupKind::Markdown:
+    return "markdown";
   }
-  return Result;
+  llvm_unreachable("Invalid MarkupKind");
 }
 
-json::Expr CompletionItem::unparse(const CompletionItem &CI) {
+json::Value toJSON(const MarkupContent &MC) {
+  if (MC.value.empty())
+    return nullptr;
+
+  return json::Object{
+      {"kind", toTextKind(MC.kind)},
+      {"value", MC.value},
+  };
+}
+
+json::Value toJSON(const Hover &H) {
+  json::Object Result{{"contents", toJSON(H.contents)}};
+
+  if (H.range.hasValue())
+    Result["range"] = toJSON(*H.range);
+
+  return std::move(Result);
+}
+
+bool fromJSON(const json::Value &E, CompletionItemKind &Out) {
+  if (auto T = E.getAsInteger()) {
+    if (*T < static_cast<int>(CompletionItemKind::Text) ||
+        *T > static_cast<int>(CompletionItemKind::TypeParameter))
+      return false;
+    Out = static_cast<CompletionItemKind>(*T);
+    return true;
+  }
+  return false;
+}
+
+CompletionItemKind
+adjustKindToCapability(CompletionItemKind Kind,
+                       CompletionItemKindBitset &supportedCompletionItemKinds) {
+  auto KindVal = static_cast<size_t>(Kind);
+  if (KindVal >= CompletionItemKindMin &&
+      KindVal <= supportedCompletionItemKinds.size() &&
+      supportedCompletionItemKinds[KindVal])
+    return Kind;
+
+  switch (Kind) {
+  // Provide some fall backs for common kinds that are close enough.
+  case CompletionItemKind::Folder:
+    return CompletionItemKind::File;
+  case CompletionItemKind::EnumMember:
+    return CompletionItemKind::Enum;
+  case CompletionItemKind::Struct:
+    return CompletionItemKind::Class;
+  default:
+    return CompletionItemKind::Text;
+  }
+}
+
+bool fromJSON(const json::Value &E, std::vector<CompletionItemKind> &Out) {
+  if (auto *A = E.getAsArray()) {
+    Out.clear();
+    for (size_t I = 0; I < A->size(); ++I) {
+      CompletionItemKind KindOut;
+      if (fromJSON((*A)[I], KindOut))
+        Out.push_back(KindOut);
+    }
+    return true;
+  }
+  return false;
+}
+
+bool fromJSON(const json::Value &Params, CompletionItemKindCapabilities &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("valueSet", R.valueSet);
+}
+
+json::Value toJSON(const CompletionItem &CI) {
   assert(!CI.label.empty() && "completion item label is required");
-  json::obj Result{{"label", CI.label}};
+  json::Object Result{{"label", CI.label}};
   if (CI.kind != CompletionItemKind::Missing)
     Result["kind"] = static_cast<int>(CI.kind);
   if (!CI.detail.empty())
@@ -1034,90 +596,121 @@ json::Expr CompletionItem::unparse(const CompletionItem &CI) {
   if (CI.textEdit)
     Result["textEdit"] = *CI.textEdit;
   if (!CI.additionalTextEdits.empty())
-    Result["additionalTextEdits"] = json::ary(CI.additionalTextEdits);
+    Result["additionalTextEdits"] = json::Array(CI.additionalTextEdits);
+  if (CI.deprecated)
+    Result["deprecated"] = CI.deprecated;
   return std::move(Result);
 }
 
-bool clangd::operator<(const CompletionItem &L, const CompletionItem &R) {
+llvm::raw_ostream &operator<<(llvm::raw_ostream &O, const CompletionItem &I) {
+  O << I.label << " - " << toJSON(I);
+  return O;
+}
+
+bool operator<(const CompletionItem &L, const CompletionItem &R) {
   return (L.sortText.empty() ? L.label : L.sortText) <
          (R.sortText.empty() ? R.label : R.sortText);
 }
 
-json::Expr ParameterInformation::unparse(const ParameterInformation &PI) {
+json::Value toJSON(const CompletionList &L) {
+  return json::Object{
+      {"isIncomplete", L.isIncomplete},
+      {"items", json::Array(L.items)},
+  };
+}
+
+json::Value toJSON(const ParameterInformation &PI) {
   assert(!PI.label.empty() && "parameter information label is required");
-  json::obj Result{{"label", PI.label}};
+  json::Object Result{{"label", PI.label}};
   if (!PI.documentation.empty())
     Result["documentation"] = PI.documentation;
   return std::move(Result);
 }
 
-json::Expr SignatureInformation::unparse(const SignatureInformation &SI) {
+json::Value toJSON(const SignatureInformation &SI) {
   assert(!SI.label.empty() && "signature information label is required");
-  json::obj Result{
+  json::Object Result{
       {"label", SI.label},
-      {"parameters", json::ary(SI.parameters)},
+      {"parameters", json::Array(SI.parameters)},
   };
   if (!SI.documentation.empty())
     Result["documentation"] = SI.documentation;
   return std::move(Result);
 }
 
-json::Expr SignatureHelp::unparse(const SignatureHelp &SH) {
+llvm::raw_ostream &operator<<(llvm::raw_ostream &O,
+                              const SignatureInformation &I) {
+  O << I.label << " - " << toJSON(I);
+  return O;
+}
+
+json::Value toJSON(const SignatureHelp &SH) {
   assert(SH.activeSignature >= 0 &&
          "Unexpected negative value for number of active signatures.");
   assert(SH.activeParameter >= 0 &&
          "Unexpected negative value for active parameter index");
-  return json::obj{
+  return json::Object{
       {"activeSignature", SH.activeSignature},
       {"activeParameter", SH.activeParameter},
-      {"signatures", json::ary(SH.signatures)},
+      {"signatures", json::Array(SH.signatures)},
   };
 }
 
-llvm::Optional<RenameParams>
-RenameParams::parse(llvm::yaml::MappingNode *Params, clangd::Logger &Logger) {
-  RenameParams Result;
-  for (auto &NextKeyValue : *Params) {
-    auto *KeyString = dyn_cast<llvm::yaml::ScalarNode>(NextKeyValue.getKey());
-    if (!KeyString)
-      return llvm::None;
-
-    llvm::SmallString<10> KeyStorage;
-    StringRef KeyValue = KeyString->getValue(KeyStorage);
-
-    if (KeyValue == "textDocument") {
-      auto *Value =
-        dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-      if (!Value)
-        continue;
-      auto *Map = dyn_cast<llvm::yaml::MappingNode>(Value);
-      if (!Map)
-        return llvm::None;
-      auto Parsed = TextDocumentIdentifier::parse(Map, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.textDocument = std::move(*Parsed);
-    } else if (KeyValue == "position") {
-      auto *Value =
-          dyn_cast_or_null<llvm::yaml::MappingNode>(NextKeyValue.getValue());
-      if (!Value)
-        continue;
-      auto Parsed = Position::parse(Value, Logger);
-      if (!Parsed)
-        return llvm::None;
-      Result.position = std::move(*Parsed);
-    } else if (KeyValue == "newName") {
-      auto *Value = NextKeyValue.getValue();
-      if (!Value)
-        continue;
-      auto *Node = dyn_cast<llvm::yaml::ScalarNode>(Value);
-      if (!Node)
-        return llvm::None;
-      llvm::SmallString<10> Storage;
-      Result.newName = Node->getValue(Storage);
-    } else {
-      logIgnoredField(KeyValue, Logger);
-    }
-  }
-  return Result;
+bool fromJSON(const json::Value &Params, RenameParams &R) {
+  json::ObjectMapper O(Params);
+  return O && O.map("textDocument", R.textDocument) &&
+         O.map("position", R.position) && O.map("newName", R.newName);
 }
+
+json::Value toJSON(const DocumentHighlight &DH) {
+  return json::Object{
+      {"range", toJSON(DH.range)},
+      {"kind", static_cast<int>(DH.kind)},
+  };
+}
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &O,
+                              const DocumentHighlight &V) {
+  O << V.range;
+  if (V.kind == DocumentHighlightKind::Read)
+    O << "(r)";
+  if (V.kind == DocumentHighlightKind::Write)
+    O << "(w)";
+  return O;
+}
+
+bool fromJSON(const json::Value &Params, DidChangeConfigurationParams &CCP) {
+  json::ObjectMapper O(Params);
+  return O && O.map("settings", CCP.settings);
+}
+
+bool fromJSON(const llvm::json::Value &Params,
+              ClangdCompileCommand &CDbUpdate) {
+  json::ObjectMapper O(Params);
+  return O && O.map("workingDirectory", CDbUpdate.workingDirectory) &&
+         O.map("compilationCommand", CDbUpdate.compilationCommand);
+}
+
+bool fromJSON(const json::Value &Params,
+              ClangdConfigurationParamsChange &CCPC) {
+  json::ObjectMapper O(Params);
+  return O &&
+         O.map("compilationDatabaseChanges", CCPC.compilationDatabaseChanges);
+}
+
+bool fromJSON(const json::Value &Params, ClangdInitializationOptions &Opts) {
+  if (!fromJSON(Params, Opts.ParamsChange)) {
+    return false;
+  }
+
+  json::ObjectMapper O(Params);
+  return O && O.map("compilationDatabasePath", Opts.compilationDatabasePath);
+}
+
+bool fromJSON(const json::Value &Params, ReferenceParams &R) {
+  TextDocumentPositionParams &Base = R;
+  return fromJSON(Params, Base);
+}
+
+} // namespace clangd
+} // namespace clang

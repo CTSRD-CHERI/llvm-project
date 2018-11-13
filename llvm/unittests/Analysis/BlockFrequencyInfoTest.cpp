@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/BlockFrequencyInfo.h"
-#include "llvm/Analysis/BlockFrequencyInfoImpl.h"
 #include "llvm/Analysis/BranchProbabilityInfo.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/AsmParser/Parser.h"
@@ -78,8 +77,10 @@ TEST_F(BlockFrequencyInfoTest, Basic) {
 
   EXPECT_EQ(BFI.getBlockProfileCount(&BB0).getValue(), UINT64_C(100));
   EXPECT_EQ(BFI.getBlockProfileCount(BB3).getValue(), UINT64_C(100));
-  EXPECT_EQ(BFI.getBlockProfileCount(BB1).getValue(), 100 * BB1Freq / BB0Freq);
-  EXPECT_EQ(BFI.getBlockProfileCount(BB2).getValue(), 100 * BB2Freq / BB0Freq);
+  EXPECT_EQ(BFI.getBlockProfileCount(BB1).getValue(),
+            (100 * BB1Freq + BB0Freq / 2) / BB0Freq);
+  EXPECT_EQ(BFI.getBlockProfileCount(BB2).getValue(),
+            (100 * BB2Freq + BB0Freq / 2) / BB0Freq);
 
   // Scale the frequencies of BB0, BB1 and BB2 by a factor of two.
   SmallPtrSet<BasicBlock *, 4> BlocksToScale({BB1, BB2});

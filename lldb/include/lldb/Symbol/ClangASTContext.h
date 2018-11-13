@@ -214,19 +214,24 @@ public:
   static CompilerType GetTypeForDecl(clang::ObjCInterfaceDecl *objc_decl);
 
   template <typename RecordDeclType>
-  CompilerType GetTypeForIdentifier(const ConstString &type_name) {
+  CompilerType
+  GetTypeForIdentifier(const ConstString &type_name,
+                       clang::DeclContext *decl_context = nullptr) {
     CompilerType compiler_type;
 
     if (type_name.GetLength()) {
       clang::ASTContext *ast = getASTContext();
       if (ast) {
+        if (!decl_context)
+          decl_context = ast->getTranslationUnitDecl();
+
         clang::IdentifierInfo &myIdent =
             ast->Idents.get(type_name.GetCString());
         clang::DeclarationName myName =
             ast->DeclarationNames.getIdentifier(&myIdent);
 
         clang::DeclContext::lookup_result result =
-            ast->getTranslationUnitDecl()->lookup(myName);
+            decl_context->lookup(myName);
 
         if (!result.empty()) {
           clang::NamedDecl *named_decl = result[0];
@@ -252,6 +257,9 @@ public:
       const std::initializer_list<std::pair<const char *, CompilerType>>
           &type_fields,
       bool packed = false);
+
+  static bool IsOperator(const char *name,
+                         clang::OverloadedOperatorKind &op_kind);
 
   //------------------------------------------------------------------
   // Structure, Unions, Classes
@@ -301,6 +309,9 @@ public:
   CreateClassTemplateDecl(clang::DeclContext *decl_ctx,
                           lldb::AccessType access_type, const char *class_name,
                           int kind, const TemplateParameterInfos &infos);
+
+  clang::TemplateTemplateParmDecl *
+  CreateTemplateTemplateParmDecl(const char *template_name);
 
   clang::ClassTemplateSpecializationDecl *CreateClassTemplateSpecializationDecl(
       clang::DeclContext *decl_ctx,
@@ -366,13 +377,32 @@ public:
                                          const CompilerType &result_type,
                                          const CompilerType *args,
                                          unsigned num_args, bool is_variadic,
-                                         unsigned type_quals);
+                                         unsigned type_quals,
+                                         clang::CallingConv cc);
+
+  static CompilerType CreateFunctionType(clang::ASTContext *ast,
+                                         const CompilerType &result_type,
+                                         const CompilerType *args,
+                                         unsigned num_args, bool is_variadic,
+                                         unsigned type_quals) {
+    return ClangASTContext::CreateFunctionType(
+        ast, result_type, args, num_args, is_variadic, type_quals, clang::CC_C);
+  }
 
   CompilerType CreateFunctionType(const CompilerType &result_type,
                                   const CompilerType *args, unsigned num_args,
                                   bool is_variadic, unsigned type_quals) {
     return ClangASTContext::CreateFunctionType(
         getASTContext(), result_type, args, num_args, is_variadic, type_quals);
+  }
+
+  CompilerType CreateFunctionType(const CompilerType &result_type,
+                                  const CompilerType *args, unsigned num_args,
+                                  bool is_variadic, unsigned type_quals,
+                                  clang::CallingConv cc) {
+    return ClangASTContext::CreateFunctionType(getASTContext(), result_type,
+                                               args, num_args, is_variadic,
+                                               type_quals, cc);
   }
 
   clang::ParmVarDecl *CreateParameterDeclaration(const char *name,
@@ -632,8 +662,7 @@ public:
   //----------------------------------------------------------------------
 
   // Using the current type, create a new typedef to that type using
-  // "typedef_name"
-  // as the name and "decl_ctx" as the decl context.
+  // "typedef_name" as the name and "decl_ctx" as the decl context.
   static CompilerType
   CreateTypedefType(const CompilerType &type, const char *typedef_name,
                     const CompilerDeclContext &compiler_decl_ctx);
@@ -650,8 +679,7 @@ public:
   GetFullyUnqualifiedType(lldb::opaque_compiler_type_t type) override;
 
   // Returns -1 if this isn't a function of if the function doesn't have a
-  // prototype
-  // Returns a value >= 0 if there is a prototype.
+  // prototype Returns a value >= 0 if there is a prototype.
   int GetFunctionArgumentCount(lldb::opaque_compiler_type_t type) override;
 
   CompilerType GetFunctionArgumentTypeAtIndex(lldb::opaque_compiler_type_t type,
@@ -763,8 +791,8 @@ public:
       bool &child_is_base_class, bool &child_is_deref_of_parent,
       ValueObject *valobj, uint64_t &language_flags) override;
 
-  // Lookup a child given a name. This function will match base class names
-  // and member member names in "clang_type" only, not descendants.
+  // Lookup a child given a name. This function will match base class names and
+  // member member names in "clang_type" only, not descendants.
   uint32_t GetIndexOfChildWithName(lldb::opaque_compiler_type_t type,
                                    const char *name,
                                    bool omit_empty_base_classes) override;
@@ -787,15 +815,15 @@ public:
                           size_t idx) override;
   CompilerType GetTypeTemplateArgument(lldb::opaque_compiler_type_t type,
                                        size_t idx) override;
-  std::pair<llvm::APSInt, CompilerType>
+  llvm::Optional<CompilerType::IntegralTemplateArgument>
   GetIntegralTemplateArgument(lldb::opaque_compiler_type_t type,
                               size_t idx) override;
 
   CompilerType GetTypeForFormatters(void *type) override;
 
 #define LLDB_INVALID_DECL_LEVEL UINT32_MAX
-  // LLDB_INVALID_DECL_LEVEL is returned by CountDeclLevels if
-  // child_decl_ctx could not be found in decl_ctx.
+  // LLDB_INVALID_DECL_LEVEL is returned by CountDeclLevels if child_decl_ctx
+  // could not be found in decl_ctx.
   uint32_t CountDeclLevels(clang::DeclContext *frame_decl_ctx,
                            clang::DeclContext *child_decl_ctx,
                            ConstString *child_name = nullptr,
@@ -821,10 +849,13 @@ public:
 
   clang::CXXMethodDecl *
   AddMethodToCXXRecordType(lldb::opaque_compiler_type_t type, const char *name,
+                           const char *mangled_name,
                            const CompilerType &method_type,
                            lldb::AccessType access, bool is_virtual,
                            bool is_static, bool is_inline, bool is_explicit,
                            bool is_attr_used, bool is_artificial);
+
+  void AddMethodOverridesForCXXRecordType(lldb::opaque_compiler_type_t type);
 
   // C++ Base Classes
   clang::CXXBaseSpecifier *
@@ -874,7 +905,7 @@ public:
   //----------------------------------------------------------------------
   // Modifying Enumeration types
   //----------------------------------------------------------------------
-  bool AddEnumerationValueToEnumerationType(
+  clang::EnumConstantDecl *AddEnumerationValueToEnumerationType(
       lldb::opaque_compiler_type_t type,
       const CompilerType &enumerator_qual_type, const Declaration &decl,
       const char *name, int64_t enum_value, uint32_t enum_value_bit_size);
@@ -885,13 +916,13 @@ public:
   // Pointers & References
   //------------------------------------------------------------------
 
-  // Call this function using the class type when you want to make a
-  // member pointer type to pointee_type.
+  // Call this function using the class type when you want to make a member
+  // pointer type to pointee_type.
   static CompilerType CreateMemberPointerType(const CompilerType &type,
                                               const CompilerType &pointee_type);
 
-  // Converts "s" to a floating point value and place resulting floating
-  // point bytes in the "dst" buffer.
+  // Converts "s" to a floating point value and place resulting floating point
+  // bytes in the "dst" buffer.
   size_t ConvertStringToFloatValue(lldb::opaque_compiler_type_t type,
                                    const char *s, uint8_t *dst,
                                    size_t dst_size) override;
@@ -929,6 +960,8 @@ public:
   static clang::RecordDecl *GetAsRecordDecl(const CompilerType &type);
 
   static clang::TagDecl *GetAsTagDecl(const CompilerType &type);
+
+  static clang::TypedefNameDecl *GetAsTypedefDecl(const CompilerType &type);
 
   clang::CXXRecordDecl *GetAsCXXRecordDecl(lldb::opaque_compiler_type_t type);
 

@@ -1,4 +1,4 @@
-; RUN: opt %loadPolly -polly-optree -analyze < %s | FileCheck %s -match-full-lines
+; RUN: opt %loadPolly -polly-stmt-granularity=bb -polly-optree -analyze < %s | FileCheck %s -match-full-lines
 ;
 ; To forward %val, B[j] cannot be reused in bodyC because it is overwritten
 ; between. Verify that instead the alternative C[j] is used.
@@ -69,7 +69,7 @@ return:
 ; CHECK-NEXT:             }
 ; CHECK-NEXT:     Stmt_bodyB
 ; CHECK-NEXT:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 0]
-; CHECK-NEXT:                 null;
+; CHECK-NEXT:                 ;
 ; CHECK-NEXT:            new: [n] -> { Stmt_bodyB[i0] -> MemRef_B[i0] };
 ; CHECK-NEXT:             MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 0]
 ; CHECK-NEXT:                 [n] -> { Stmt_bodyB[i0] -> MemRef_B[i0] };
@@ -82,7 +82,7 @@ return:
 ; CHECK-NEXT:             }
 ; CHECK-NEXT:     Stmt_bodyC
 ; CHECK-NEXT:             ReadAccess :=       [Reduction Type: NONE] [Scalar: 0]
-; CHECK-NEXT:                 null;
+; CHECK-NEXT:                 ;
 ; CHECK-NEXT:            new: [n] -> { Stmt_bodyC[i0] -> MemRef_C[i0] };
 ; CHECK-NEXT:             MustWriteAccess :=  [Reduction Type: NONE] [Scalar: 0]
 ; CHECK-NEXT:                 [n] -> { Stmt_bodyC[i0] -> MemRef_A[i0] };

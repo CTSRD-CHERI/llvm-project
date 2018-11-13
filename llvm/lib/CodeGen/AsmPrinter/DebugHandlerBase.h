@@ -16,7 +16,7 @@
 #define LLVM_LIB_CODEGEN_ASMPRINTER_DEBUGHANDLERBASE_H
 
 #include "AsmPrinterHandler.h"
-#include "DbgValueHistoryCalculator.h"
+#include "DbgEntityHistoryCalculator.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/CodeGen/LexicalScopes.h"
 #include "llvm/CodeGen/MachineInstr.h"
@@ -82,6 +82,9 @@ protected:
   /// variable.  Variables are listed in order of appearance.
   DbgValueHistoryMap DbgValues;
 
+  /// Mapping of inlined labels and DBG_LABEL machine instruction.
+  DbgLabelInstrMap DbgLabels;
+
   /// Maps instruction with label emitted before instruction.
   /// FIXME: Make this private from DwarfDebug, we have the necessary accessors
   /// for it.
@@ -121,14 +124,6 @@ public:
 
   /// Return Label immediately following the instruction.
   MCSymbol *getLabelAfterInsn(const MachineInstr *MI);
-
-  /// Determine the relative position of the fragments described by P1 and P2.
-  /// Returns -1 if P1 is entirely before P2, 0 if P1 and P2 overlap, 1 if P1 is
-  /// entirely after P2.
-  static int fragmentCmp(const DIExpression *P1, const DIExpression *P2);
-
-  /// Determine whether two variable fragments overlap.
-  static bool fragmentsOverlap(const DIExpression *P1, const DIExpression *P2);
 
   /// If this type is derived from a base type then return base type size.
   static uint64_t getBaseTypeSize(const DITypeRef TyRef);

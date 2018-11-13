@@ -1,4 +1,5 @@
 ; RUN: opt < %s -basicaa -licm -S | FileCheck %s
+; RUN: opt < %s -debugify -basicaa -licm -S | FileCheck %s -check-prefix=DEBUGIFY
 
 declare i32 @strlen(i8*) readonly nounwind
 
@@ -36,6 +37,39 @@ Out:		; preds = %Loop
 ; CHECK-LABEL: @test2(
 ; CHECK: Out:
 ; CHECK-NEXT: call double @sin
+; CHECK-NEXT: ret double %A
+}
+
+; FIXME: Should be able to sink this case
+define i32 @test2b(i32 %X) {
+	br label %Loop
+
+Loop:		; preds = %Loop, %0
+	call void @foo( )
+	%A = sdiv i32 10, %X
+	br i1 true, label %Loop, label %Out
+
+Out:		; preds = %Loop
+	ret i32 %A
+; CHECK-LABEL: @test2b(
+; CHECK: Out:
+; CHECK-NEXT: sdiv
+; CHECK-NEXT: ret i32 %A
+}
+
+define double @test2c(double* %P) {
+	br label %Loop
+
+Loop:		; preds = %Loop, %0
+	call void @foo( )
+	%A = load double, double* %P, !invariant.load !{}
+	br i1 true, label %Loop, label %Out
+
+Out:		; preds = %Loop
+	ret double %A
+; CHECK-LABEL: @test2c(
+; CHECK: Out:
+; CHECK-NEXT: load double
 ; CHECK-NEXT: ret double %A
 }
 
@@ -242,13 +276,23 @@ Out:		; preds = %Loop
 define void @test11() {
 	br label %Loop
 Loop:
-	%dead = getelementptr %Ty, %Ty* @X2, i64 0, i32 0
+	%dead1 = getelementptr %Ty, %Ty* @X2, i64 0, i32 0
+	%dead2 = getelementptr %Ty, %Ty* @X2, i64 0, i32 1
 	br i1 false, label %Loop, label %Out
 Out:
 	ret void
 ; CHECK-LABEL: @test11(
 ; CHECK:     Out:
 ; CHECK-NEXT:  ret void
+
+; The GEP in dead1 is adding a zero offset, so the DIExpression can be kept as
+; a "register location".
+; The GEP in dead2 is adding a 4 bytes to the pointer, so the DIExpression is
+; turned into an "implicit location" using DW_OP_stack_value.
+;
+; DEBUGIFY-LABEL: @test11(
+; DEBUGIFY: call void @llvm.dbg.value(metadata %Ty* @X2, metadata {{.*}}, metadata !DIExpression())
+; DEBUGIFY: call void @llvm.dbg.value(metadata %Ty* @X2, metadata {{.*}}, metadata !DIExpression(DW_OP_plus_uconst, 4, DW_OP_stack_value))
 }
 
 @c = common global [1 x i32] zeroinitializer, align 4
@@ -666,6 +710,67 @@ catch.dispatch:
   %cp = cleanuppad within none []
   store i32 %.lcssa1, i32* %s
   cleanupret from %cp unwind to caller
+try.cont:
+  ret void
+}
+
+; The sinkable call should be sunk into an exit block split. After splitting
+; the exit block, BlockColor for new blocks should be added properly so
+; that we should be able to access valid ColorVector.
+;
+; CHECK-LABEL:@test21_pr36184
+; CHECK-LABEL: Loop
+; CHECK-NOT: %sinkableCall
+; CHECK-LABEL:Out.split.loop.exit
+; CHECK: %sinkableCall
+define i32 @test21_pr36184(i8* %P) personality i32 (...)* @__CxxFrameHandler3 {
+entry:
+  br label %loop.ph
+
+loop.ph:
+  br label %Loop
+
+Loop:
+  %sinkableCall = call i32 @strlen( i8* %P ) readonly
+  br i1 undef, label %ContLoop, label %Out
+
+ContLoop:
+  br i1 undef, label %Loop, label %Out
+
+Out:
+  %idx = phi i32 [ %sinkableCall, %Loop ], [0, %ContLoop ]
+  ret i32 %idx
+}
+
+; We do not support splitting a landingpad block if BlockColors is not empty.
+; CHECK-LABEL: @test22
+; CHECK-LABEL: while.body2
+; CHECK-LABEL: %mul
+; CHECK-NOT: lpadBB.split{{.*}}
+define void @test22(i1 %b, i32 %v1, i32 %v2) personality i32 (...)* @__CxxFrameHandler3 {
+entry:
+  br label %while.cond
+while.cond:
+  br i1 %b, label %try.cont, label %while.body
+
+while.body:
+  invoke void @may_throw()
+          to label %while.body2 unwind label %lpadBB
+
+while.body2:
+  %v = call i32 @getv()
+  %mul = mul i32 %v, %v2
+  invoke void @may_throw2()
+          to label %while.cond unwind label %lpadBB
+lpadBB:
+  %.lcssa1 = phi i32 [ 0, %while.body ], [ %mul, %while.body2 ]
+  landingpad { i8*, i32 }
+               catch i8* null
+  br label %lpadBBSucc1
+
+lpadBBSucc1:
+  ret void
+
 try.cont:
   ret void
 }

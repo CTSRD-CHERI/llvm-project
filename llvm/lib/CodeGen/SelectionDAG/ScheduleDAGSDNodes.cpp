@@ -24,13 +24,14 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/MC/MCInstrItineraries.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetLowering.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "pre-RA-sched"
@@ -144,20 +145,18 @@ static void CloneNodeWithValues(SDNode *N, SelectionDAG *DAG, ArrayRef<EVT> VTs,
     Ops.push_back(ExtraOper);
 
   SDVTList VTList = DAG->getVTList(VTs);
-  MachineSDNode::mmo_iterator Begin = nullptr, End = nullptr;
   MachineSDNode *MN = dyn_cast<MachineSDNode>(N);
 
   // Store memory references.
-  if (MN) {
-    Begin = MN->memoperands_begin();
-    End = MN->memoperands_end();
-  }
+  SmallVector<MachineMemOperand *, 2> MMOs;
+  if (MN)
+    MMOs.assign(MN->memoperands_begin(), MN->memoperands_end());
 
   DAG->MorphNodeTo(N, N->getOpcode(), VTList, Ops);
 
   // Reset the memory references
   if (MN)
-    MN->setMemRefs(Begin, End);
+    DAG->setNodeMemRefs(MN, MMOs);
 }
 
 static bool AddGlue(SDNode *N, SDValue Glue, bool AddGlue, SelectionDAG *DAG) {
@@ -243,7 +242,7 @@ void ScheduleDAGSDNodes::ClusterNeighboringLoads(SDNode *Node) {
     return;
 
   // Sort them in increasing order.
-  std::sort(Offsets.begin(), Offsets.end());
+  llvm::sort(Offsets);
 
   // Check if the loads are close enough.
   SmallVector<SDNode*, 4> Loads;
@@ -649,18 +648,20 @@ void ScheduleDAGSDNodes::computeOperandLatency(SDNode *Def, SDNode *Use,
     dep.setLatency(Latency);
 }
 
-void ScheduleDAGSDNodes::dumpNode(const SUnit *SU) const {
-  // Cannot completely remove virtual function even in release mode.
+void ScheduleDAGSDNodes::dumpNode(const SUnit &SU) const {
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
-  if (!SU->getNode()) {
+  dumpNodeName(SU);
+  dbgs() << ": ";
+
+  if (!SU.getNode()) {
     dbgs() << "PHYS REG COPY\n";
     return;
   }
 
-  SU->getNode()->dump(DAG);
+  SU.getNode()->dump(DAG);
   dbgs() << "\n";
   SmallVector<SDNode *, 4> GluedNodes;
-  for (SDNode *N = SU->getNode()->getGluedNode(); N; N = N->getGluedNode())
+  for (SDNode *N = SU.getNode()->getGluedNode(); N; N = N->getGluedNode())
     GluedNodes.push_back(N);
   while (!GluedNodes.empty()) {
     dbgs() << "    ";
@@ -671,11 +672,22 @@ void ScheduleDAGSDNodes::dumpNode(const SUnit *SU) const {
 #endif
 }
 
+void ScheduleDAGSDNodes::dump() const {
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+  if (EntrySU.getNode() != nullptr)
+    dumpNodeAll(EntrySU);
+  for (const SUnit &SU : SUnits)
+    dumpNodeAll(SU);
+  if (ExitSU.getNode() != nullptr)
+    dumpNodeAll(ExitSU);
+#endif
+}
+
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
 void ScheduleDAGSDNodes::dumpSchedule() const {
   for (unsigned i = 0, e = Sequence.size(); i != e; i++) {
     if (SUnit *SU = Sequence[i])
-      SU->dump(this);
+      dumpNode(*SU);
     else
       dbgs() << "**** NOOP ****\n";
   }
@@ -910,6 +922,39 @@ EmitSchedule(MachineBasicBlock::iterator &InsertPos) {
     MachineBasicBlock *InsertBB = Emitter.getBlock();
     MachineBasicBlock::iterator Pos = InsertBB->getFirstTerminator();
     InsertBB->insert(Pos, DbgMIs.begin(), DbgMIs.end());
+
+    SDDbgInfo::DbgLabelIterator DLI = DAG->DbgLabelBegin();
+    SDDbgInfo::DbgLabelIterator DLE = DAG->DbgLabelEnd();
+    // Now emit the rest according to source order.
+    LastOrder = 0;
+    for (const auto &InstrOrder : Orders) {
+      unsigned Order = InstrOrder.first;
+      MachineInstr *MI = InstrOrder.second;
+      if (!MI)
+        continue;
+
+      // Insert all SDDbgLabel's whose order(s) are before "Order".
+      for (; DLI != DLE &&
+             (*DLI)->getOrder() >= LastOrder && (*DLI)->getOrder() < Order;
+             ++DLI) {
+        MachineInstr *DbgMI = Emitter.EmitDbgLabel(*DLI);
+        if (DbgMI) {
+          if (!LastOrder)
+            // Insert to start of the BB (after PHIs).
+            BB->insert(BBBegin, DbgMI);
+          else {
+            // Insert at the instruction, which may be in a different
+            // block, if the block was split by a custom inserter.
+            MachineBasicBlock::iterator Pos = MI;
+            MI->getParent()->insert(Pos, DbgMI);
+          }
+        }
+      }
+      if (DLI == DLE)
+        break;
+
+      LastOrder = Order;
+    }
   }
 
   InsertPos = Emitter.getInsertPos();

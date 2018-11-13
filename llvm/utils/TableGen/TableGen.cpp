@@ -16,7 +16,6 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Signals.h"
-#include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Main.h"
 #include "llvm/TableGen/Record.h"
 #include "llvm/TableGen/SetTheory.h"
@@ -25,20 +24,25 @@ using namespace llvm;
 
 enum ActionType {
   PrintRecords,
+  DumpJSON,
   GenEmitter,
   GenRegisterInfo,
   GenInstrInfo,
+  GenInstrDocs,
   GenAsmWriter,
   GenAsmMatcher,
   GenDisassembler,
   GenPseudoLowering,
+  GenCompressInst,
   GenCallingConv,
   GenDAGISel,
   GenDFAPacketizer,
   GenFastISel,
   GenSubtarget,
-  GenIntrinsic,
-  GenTgtIntrinsic,
+  GenIntrinsicEnums,
+  GenIntrinsicImpl,
+  GenTgtIntrinsicEnums,
+  GenTgtIntrinsicImpl,
   PrintEnums,
   PrintSets,
   GenOptParserDefs,
@@ -49,6 +53,7 @@ enum ActionType {
   GenX86EVEX2VEXTables,
   GenX86FoldTables,
   GenRegisterBank,
+  GenWebAssemblyStackifier,
 };
 
 namespace {
@@ -56,12 +61,16 @@ namespace {
   Action(cl::desc("Action to perform:"),
          cl::values(clEnumValN(PrintRecords, "print-records",
                                "Print all records to stdout (default)"),
+                    clEnumValN(DumpJSON, "dump-json",
+                               "Dump all records as machine-readable JSON"),
                     clEnumValN(GenEmitter, "gen-emitter",
                                "Generate machine code emitter"),
                     clEnumValN(GenRegisterInfo, "gen-register-info",
                                "Generate registers and register classes info"),
                     clEnumValN(GenInstrInfo, "gen-instr-info",
                                "Generate instruction descriptions"),
+                    clEnumValN(GenInstrDocs, "gen-instr-docs",
+                               "Generate instruction documentation"),
                     clEnumValN(GenCallingConv, "gen-callingconv",
                                "Generate calling convention descriptions"),
                     clEnumValN(GenAsmWriter, "gen-asm-writer",
@@ -70,6 +79,8 @@ namespace {
                                "Generate disassembler"),
                     clEnumValN(GenPseudoLowering, "gen-pseudo-lowering",
                                "Generate pseudo instruction lowering"),
+                    clEnumValN(GenCompressInst, "gen-compress-inst-emitter",
+                               "Generate RISCV compressed instructions."),
                     clEnumValN(GenAsmMatcher, "gen-asm-matcher",
                                "Generate assembly instruction matcher"),
                     clEnumValN(GenDAGISel, "gen-dag-isel",
@@ -80,9 +91,13 @@ namespace {
                                "Generate a \"fast\" instruction selector"),
                     clEnumValN(GenSubtarget, "gen-subtarget",
                                "Generate subtarget enumerations"),
-                    clEnumValN(GenIntrinsic, "gen-intrinsic",
+                    clEnumValN(GenIntrinsicEnums, "gen-intrinsic-enums",
+                               "Generate intrinsic enums"),
+                    clEnumValN(GenIntrinsicImpl, "gen-intrinsic-impl",
                                "Generate intrinsic information"),
-                    clEnumValN(GenTgtIntrinsic, "gen-tgt-intrinsic",
+                    clEnumValN(GenTgtIntrinsicEnums, "gen-tgt-intrinsic-enums",
+                               "Generate target intrinsic enums"),
+                    clEnumValN(GenTgtIntrinsicImpl, "gen-tgt-intrinsic-impl",
                                "Generate target intrinsic information"),
                     clEnumValN(PrintEnums, "print-enums",
                                "Print enum values for a class"),
@@ -103,7 +118,9 @@ namespace {
                     clEnumValN(GenX86FoldTables, "gen-x86-fold-tables",
                                "Generate X86 fold tables"),
                     clEnumValN(GenRegisterBank, "gen-register-bank",
-                               "Generate registers bank descriptions")));
+                               "Generate registers bank descriptions"),
+                    clEnumValN(GenWebAssemblyStackifier, "gen-wasm-stackifier",
+                               "Generate WebAssembly stackification cases")));
 
   cl::OptionCategory PrintEnumsCat("Options for -print-enums");
   cl::opt<std::string>
@@ -115,6 +132,9 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
   case PrintRecords:
     OS << Records;           // No argument, dump all contents
     break;
+  case DumpJSON:
+    EmitJSON(Records, OS);
+    break;
   case GenEmitter:
     EmitCodeEmitter(Records, OS);
     break;
@@ -123,6 +143,9 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
     break;
   case GenInstrInfo:
     EmitInstrInfo(Records, OS);
+    break;
+  case GenInstrDocs:
+    EmitInstrDocs(Records, OS);
     break;
   case GenCallingConv:
     EmitCallingConv(Records, OS);
@@ -139,6 +162,9 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
   case GenPseudoLowering:
     EmitPseudoLowering(Records, OS);
     break;
+  case GenCompressInst:
+    EmitCompressInst(Records, OS);
+    break;
   case GenDAGISel:
     EmitDAGISel(Records, OS);
     break;
@@ -151,11 +177,17 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
   case GenSubtarget:
     EmitSubtarget(Records, OS);
     break;
-  case GenIntrinsic:
-    EmitIntrinsics(Records, OS);
+  case GenIntrinsicEnums:
+    EmitIntrinsicEnums(Records, OS);
     break;
-  case GenTgtIntrinsic:
-    EmitIntrinsics(Records, OS, true);
+  case GenIntrinsicImpl:
+    EmitIntrinsicImpl(Records, OS);
+    break;
+  case GenTgtIntrinsicEnums:
+    EmitIntrinsicEnums(Records, OS, true);
+    break;
+  case GenTgtIntrinsicImpl:
+    EmitIntrinsicImpl(Records, OS, true);
     break;
   case GenOptParserDefs:
     EmitOptParser(Records, OS);
@@ -201,6 +233,9 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
     break;
   case GenX86FoldTables:
     EmitX86FoldTables(Records, OS);
+    break;
+  case GenWebAssemblyStackifier:
+    EmitWebAssemblyStackifier(Records, OS);
     break;
   }
 

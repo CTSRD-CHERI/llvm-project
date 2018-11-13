@@ -15,9 +15,10 @@
 #include <limits.h>
 #include <stdlib.h>
 
+#define __KMP_IMP
+#include "omp.h" // omp_* declarations, must be included before "kmp.h"
 #include "kmp.h" // KMP_DEFAULT_STKSIZE
 #include "kmp_stub.h"
-#include "omp.h" // Function renamings.
 
 #if KMP_OS_WINDOWS
 #include <windows.h>
@@ -46,7 +47,9 @@
 #define kmp_realloc kmpc_realloc
 #define kmp_free kmpc_free
 
+#if KMP_OS_WINDOWS
 static double frequency = 0.0;
+#endif
 
 // Helper functions.
 static size_t __kmps_init() {
@@ -139,34 +142,59 @@ void kmp_set_disp_num_buffers(omp_int_t arg) { i; }
 /* KMP memory management functions. */
 void *kmp_malloc(size_t size) {
   i;
-  return malloc(size);
+  void *res;
+#if KMP_OS_WINDOWS
+  // If succesfull returns a pointer to the memory block, otherwise returns
+  // NULL.
+  // Sets errno to ENOMEM or EINVAL if memory allocation failed or parameter
+  // validation failed.
+  res = _aligned_malloc(size, 1);
+#else
+  res = malloc(size);
+#endif
+  return res;
 }
 void *kmp_aligned_malloc(size_t sz, size_t a) {
   i;
-#if KMP_OS_WINDOWS
-  errno = ENOSYS; // not supported
-  return NULL; // no standard aligned allocator on Windows (pre - C11)
-#else
-  void *res;
   int err;
+  void *res;
+#if KMP_OS_WINDOWS
+  res = _aligned_malloc(sz, a);
+#else
   if (err = posix_memalign(&res, a, sz)) {
     errno = err; // can be EINVAL or ENOMEM
-    return NULL;
+    res = NULL;
   }
-  return res;
 #endif
+  return res;
 }
 void *kmp_calloc(size_t nelem, size_t elsize) {
   i;
-  return calloc(nelem, elsize);
+  void *res;
+#if KMP_OS_WINDOWS
+  res = _aligned_recalloc(NULL, nelem, elsize, 1);
+#else
+  res = calloc(nelem, elsize);
+#endif
+  return res;
 }
 void *kmp_realloc(void *ptr, size_t size) {
   i;
-  return realloc(ptr, size);
+  void *res;
+#if KMP_OS_WINDOWS
+  res = _aligned_realloc(ptr, size, 1);
+#else
+  res = realloc(ptr, size);
+#endif
+  return res;
 }
 void kmp_free(void *ptr) {
   i;
+#if KMP_OS_WINDOWS
+  _aligned_free(ptr);
+#else
   free(ptr);
+#endif
 }
 
 static int __kmps_blocktime = INT_MAX;
@@ -310,5 +338,18 @@ double __kmps_get_wtick(void) {
 #endif
   return wtick;
 } // __kmps_get_wtick
+
+#if OMP_50_ENABLED
+/* OpenMP 5.0 Memory Management */
+const omp_allocator_t *OMP_NULL_ALLOCATOR = NULL;
+const omp_allocator_t *omp_default_mem_alloc = (const omp_allocator_t *)1;
+const omp_allocator_t *omp_large_cap_mem_alloc = (const omp_allocator_t *)2;
+const omp_allocator_t *omp_const_mem_alloc = (const omp_allocator_t *)3;
+const omp_allocator_t *omp_high_bw_mem_alloc = (const omp_allocator_t *)4;
+const omp_allocator_t *omp_low_lat_mem_alloc = (const omp_allocator_t *)5;
+const omp_allocator_t *omp_cgroup_mem_alloc = (const omp_allocator_t *)6;
+const omp_allocator_t *omp_pteam_mem_alloc = (const omp_allocator_t *)7;
+const omp_allocator_t *omp_thread_mem_alloc = (const omp_allocator_t *)8;
+#endif /* OMP_50_ENABLED */
 
 // end of file //

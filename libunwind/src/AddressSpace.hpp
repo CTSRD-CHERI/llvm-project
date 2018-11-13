@@ -18,7 +18,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if !defined(_LIBUNWIND_IS_BAREMETAL) && !defined(_WIN32)
+#ifndef _LIBUNWIND_USE_DLADDR
+  #if !defined(_LIBUNWIND_IS_BAREMETAL) && !defined(_WIN32)
+    #define _LIBUNWIND_USE_DLADDR 1
+  #else
+    #define _LIBUNWIND_USE_DLADDR 0
+  #endif
+#endif
+
+#if _LIBUNWIND_USE_DLADDR
 #include <dlfcn.h>
 #endif
 
@@ -83,6 +91,38 @@ namespace libunwind {
     }
   #endif
 
+#elif defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND) && defined(_LIBUNWIND_IS_BAREMETAL)
+
+// When statically linked on bare-metal, the symbols for the EH table are looked
+// up without going through the dynamic loader.
+
+// The following linker script may be used to produce the necessary sections and symbols.
+// Unless the --eh-frame-hdr linker option is provided, the section is not generated
+// and does not take space in the output file.
+//
+//   .eh_frame :
+//   {
+//       __eh_frame_start = .;
+//       KEEP(*(.eh_frame))
+//       __eh_frame_end = .;
+//   }
+//
+//   .eh_frame_hdr :
+//   {
+//       KEEP(*(.eh_frame_hdr))
+//   }
+//
+//   __eh_frame_hdr_start = SIZEOF(.eh_frame_hdr) > 0 ? ADDR(.eh_frame_hdr) : 0;
+//   __eh_frame_hdr_end = SIZEOF(.eh_frame_hdr) > 0 ? . : 0;
+
+extern char __eh_frame_start;
+extern char __eh_frame_end;
+
+#if defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
+extern char __eh_frame_hdr_start;
+extern char __eh_frame_hdr_end;
+#endif
+
 #elif defined(_LIBUNWIND_ARM_EHABI) && defined(_LIBUNWIND_IS_BAREMETAL)
 
 // When statically linked on bare-metal, the symbols for the EH table are looked
@@ -115,7 +155,7 @@ namespace libunwind {
 struct UnwindInfoSections {
 #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND) || defined(_LIBUNWIND_SUPPORT_DWARF_INDEX) ||       \
     defined(_LIBUNWIND_SUPPORT_COMPACT_UNWIND)
-  // No dso_base for ARM EHABI.
+  // No dso_base for SEH or ARM EHABI.
   uintptr_t       dso_base;
 #endif
 #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
@@ -140,7 +180,7 @@ struct UnwindInfoSections {
 /// LocalAddressSpace is used as a template parameter to UnwindCursor when
 /// unwinding a thread in the same process.  The wrappers compile away,
 /// making local unwinds fast.
-class __attribute__((visibility("hidden"))) LocalAddressSpace {
+class _LIBUNWIND_HIDDEN LocalAddressSpace {
 public:
   typedef uintptr_t pint_t;
   typedef intptr_t  sint_t;
@@ -175,6 +215,7 @@ public:
     return val;
   }
   uintptr_t       getP(pint_t addr);
+  uint64_t        getRegister(pint_t addr);
   static uint64_t getULEB128(pint_t &addr, pint_t end);
   static int64_t  getSLEB128(pint_t &addr, pint_t end);
 
@@ -190,6 +231,14 @@ public:
 
 inline uintptr_t LocalAddressSpace::getP(pint_t addr) {
 #if __SIZEOF_POINTER__ == 8
+  return get64(addr);
+#else
+  return get32(addr);
+#endif
+}
+
+inline uint64_t LocalAddressSpace::getRegister(pint_t addr) {
+#if __SIZEOF_POINTER__ == 8 || defined(__mips64)
   return get64(addr);
 #else
   return get32(addr);
@@ -348,12 +397,26 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
     info.compact_unwind_section_length = dyldInfo.compact_unwind_section_length;
     return true;
   }
+#elif defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND) && defined(_LIBUNWIND_IS_BAREMETAL)
+  // Bare metal is statically linked, so no need to ask the dynamic loader
+  info.dwarf_section_length = (uintptr_t)(&__eh_frame_end - &__eh_frame_start);
+  info.dwarf_section =        (uintptr_t)(&__eh_frame_start);
+  _LIBUNWIND_TRACE_UNWINDING("findUnwindSections: section %p length %p",
+                             (void *)info.dwarf_section, (void *)info.dwarf_section_length);
+#if defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
+  info.dwarf_index_section =        (uintptr_t)(&__eh_frame_hdr_start);
+  info.dwarf_index_section_length = (uintptr_t)(&__eh_frame_hdr_end - &__eh_frame_hdr_start);
+  _LIBUNWIND_TRACE_UNWINDING("findUnwindSections: index section %p length %p",
+                             (void *)info.dwarf_index_section, (void *)info.dwarf_index_section_length);
+#endif
+  if (info.dwarf_section_length)
+    return true;
 #elif defined(_LIBUNWIND_ARM_EHABI) && defined(_LIBUNWIND_IS_BAREMETAL)
   // Bare metal is statically linked, so no need to ask the dynamic loader
   info.arm_section =        (uintptr_t)(&__exidx_start);
   info.arm_section_length = (uintptr_t)(&__exidx_end - &__exidx_start);
-  _LIBUNWIND_TRACE_UNWINDING("findUnwindSections: section %X length %x",
-                             info.arm_section, info.arm_section_length);
+  _LIBUNWIND_TRACE_UNWINDING("findUnwindSections: section %p length %p",
+                             (void *)info.arm_section, (void *)info.arm_section_length);
   if (info.arm_section && info.arm_section_length)
     return true;
 #elif defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND) && defined(_WIN32)
@@ -382,8 +445,6 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
           found_obj = true;
       } else if (!strncmp((const char *)pish->Name, ".eh_frame",
                           IMAGE_SIZEOF_SHORT_NAME)) {
-        // FIXME: This section name actually is truncated, ideally we
-        // should locate and check the full long name instead.
         info.dwarf_section = begin;
         info.dwarf_section_length = pish->Misc.VirtualSize;
         found_hdr = true;
@@ -393,6 +454,10 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
     }
   }
   return false;
+#elif defined(_LIBUNWIND_SUPPORT_SEH_UNWIND) && defined(_WIN32)
+  // Don't even bother, since Windows has functions that do all this stuff
+  // for us.
+  return true;
 #elif defined(_LIBUNWIND_ARM_EHABI) && defined(__BIONIC__) &&                  \
     (__ANDROID_API__ < 21)
   int length = 0;
@@ -523,7 +588,7 @@ inline bool LocalAddressSpace::findOtherFDE(pint_t targetAddr, pint_t &fde) {
 inline bool LocalAddressSpace::findFunctionName(pint_t addr, char *buf,
                                                 size_t bufLen,
                                                 unw_word_t *offset) {
-#if !defined(_LIBUNWIND_IS_BAREMETAL) && !defined(_WIN32)
+#if _LIBUNWIND_USE_DLADDR
   Dl_info dyldInfo;
   if (dladdr((void *)addr, &dyldInfo)) {
     if (dyldInfo.dli_sname != NULL) {
@@ -556,6 +621,7 @@ public:
   uint32_t  get32(pint_t addr);
   uint64_t  get64(pint_t addr);
   pint_t    getP(pint_t addr);
+  uint64_t  getRegister(pint_t addr);
   uint64_t  getULEB128(pint_t &addr, pint_t end);
   int64_t   getSLEB128(pint_t &addr, pint_t end);
   pint_t    getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
@@ -592,7 +658,12 @@ typename P::uint_t RemoteAddressSpace<P>::getP(pint_t addr) {
 }
 
 template <typename P>
-uint64_t RemoteAddressSpace<P>::getULEB128(pint_t &addr, pint_t end) {
+typename P::uint_t OtherAddressSpace<P>::getRegister(pint_t addr) {
+  return P::getRegister(*(uint64_t *)localCopy(addr));
+}
+
+template <typename P>
+uint64_t OtherAddressSpace<P>::getULEB128(pint_t &addr, pint_t end) {
   uintptr_t size = (end - addr);
   LocalAddressSpace::pint_t laddr = (LocalAddressSpace::pint_t) localCopy(addr);
   LocalAddressSpace::pint_t sladdr = laddr;
@@ -651,6 +722,13 @@ struct unw_addr_space_x86_64 : public unw_addr_space {
 struct unw_addr_space_ppc : public unw_addr_space {
   unw_addr_space_ppc(task_t task) : oas(task) {}
   RemoteAddressSpace<Pointer32<BigEndian>> oas;
+};
+
+/// unw_addr_space_ppc is the concrete instance that a unw_addr_space_t points
+/// to when examining a 64-bit PowerPC process.
+struct unw_addr_space_ppc64 : public unw_addr_space {
+  unw_addr_space_ppc64(task_t task) : oas(task) {}
+  RemoteAddressSpace<Pointer64<LittleEndian>> oas;
 };
 
 #endif // UNW_REMOTE

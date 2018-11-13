@@ -34,11 +34,15 @@ public:
   AArch64();
   RelExpr getRelExpr(RelType Type, const Symbol &S,
                      const uint8_t *Loc) const override;
-  bool isPicRel(RelType Type) const override;
+  RelType getDynRel(RelType Type) const override;
   void writeGotPlt(uint8_t *Buf, const Symbol &S) const override;
   void writePltHeader(uint8_t *Buf) const override;
   void writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr, uint64_t PltEntryAddr,
                 int32_t Index, unsigned RelOff) const override;
+  bool needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
+                  uint64_t BranchAddr, const Symbol &S) const override;
+  uint32_t getThunkSectionSpacing() const override;
+  bool inBranchRange(RelType Type, uint64_t Src, uint64_t Dst) const override;
   bool usesOnlyLowPageBits(RelType Type) const override;
   void relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const override;
   RelExpr adjustRelaxExpr(RelType Type, const uint8_t *Data,
@@ -54,6 +58,7 @@ AArch64::AArch64() {
   RelativeRel = R_AARCH64_RELATIVE;
   IRelativeRel = R_AARCH64_IRELATIVE;
   GotRel = R_AARCH64_GLOB_DAT;
+  NoneRel = R_AARCH64_NONE;
   PltRel = R_AARCH64_JUMP_SLOT;
   TlsDescRel = R_AARCH64_TLSDESC;
   TlsGotRel = R_AARCH64_TLS_TPREL64;
@@ -63,9 +68,14 @@ AArch64::AArch64() {
   PltHeaderSize = 32;
   DefaultMaxPageSize = 65536;
 
+  // Align to the 2 MiB page size (known as a superpage or huge page).
+  // FreeBSD automatically promotes 2 MiB-aligned allocations.
+  DefaultImageBase = 0x200000;
+
   // It doesn't seem to be documented anywhere, but tls on aarch64 uses variant
   // 1 of the tls structures and the tcb size is 16.
   TcbSize = 16;
+  NeedsThunks = true;
 }
 
 RelExpr AArch64::getRelExpr(RelType Type, const Symbol &S,
@@ -80,6 +90,11 @@ RelExpr AArch64::getRelExpr(RelType Type, const Symbol &S,
     return R_TLSDESC_CALL;
   case R_AARCH64_TLSLE_ADD_TPREL_HI12:
   case R_AARCH64_TLSLE_ADD_TPREL_LO12_NC:
+  case R_AARCH64_TLSLE_LDST8_TPREL_LO12_NC:
+  case R_AARCH64_TLSLE_LDST16_TPREL_LO12_NC:
+  case R_AARCH64_TLSLE_LDST32_TPREL_LO12_NC:
+  case R_AARCH64_TLSLE_LDST64_TPREL_LO12_NC:
+  case R_AARCH64_TLSLE_LDST128_TPREL_LO12_NC:
     return R_TLS;
   case R_AARCH64_CALL26:
   case R_AARCH64_CONDBR19:
@@ -135,12 +150,14 @@ bool AArch64::usesOnlyLowPageBits(RelType Type) const {
   }
 }
 
-bool AArch64::isPicRel(RelType Type) const {
-  return Type == R_AARCH64_ABS32 || Type == R_AARCH64_ABS64;
+RelType AArch64::getDynRel(RelType Type) const {
+  if (Type == R_AARCH64_ABS32 || Type == R_AARCH64_ABS64)
+    return Type;
+  return R_AARCH64_NONE;
 }
 
 void AArch64::writeGotPlt(uint8_t *Buf, const Symbol &) const {
-  write64le(Buf, InX::Plt->getVA());
+  write64le(Buf, In.Plt->getVA());
 }
 
 void AArch64::writePltHeader(uint8_t *Buf) const {
@@ -156,8 +173,8 @@ void AArch64::writePltHeader(uint8_t *Buf) const {
   };
   memcpy(Buf, PltData, sizeof(PltData));
 
-  uint64_t Got = InX::GotPlt->getVA();
-  uint64_t Plt = InX::Plt->getVA();
+  uint64_t Got = In.GotPlt->getVA();
+  uint64_t Plt = In.Plt->getVA();
   relocateOne(Buf + 4, R_AARCH64_ADR_PREL_PG_HI21,
               getAArch64Page(Got + 16) - getAArch64Page(Plt + 4));
   relocateOne(Buf + 8, R_AARCH64_LDST64_ABS_LO12_NC, Got + 16);
@@ -179,6 +196,38 @@ void AArch64::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
               getAArch64Page(GotPltEntryAddr) - getAArch64Page(PltEntryAddr));
   relocateOne(Buf + 4, R_AARCH64_LDST64_ABS_LO12_NC, GotPltEntryAddr);
   relocateOne(Buf + 8, R_AARCH64_ADD_ABS_LO12_NC, GotPltEntryAddr);
+}
+
+bool AArch64::needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
+                         uint64_t BranchAddr, const Symbol &S) const {
+  // ELF for the ARM 64-bit architecture, section Call and Jump relocations
+  // only permits range extension thunks for R_AARCH64_CALL26 and
+  // R_AARCH64_JUMP26 relocation types.
+  if (Type != R_AARCH64_CALL26 && Type != R_AARCH64_JUMP26)
+    return false;
+  uint64_t Dst = (Expr == R_PLT_PC) ? S.getPltVA() : S.getVA();
+  return !inBranchRange(Type, BranchAddr, Dst);
+}
+
+uint32_t AArch64::getThunkSectionSpacing() const {
+  // See comment in Arch/ARM.cpp for a more detailed explanation of
+  // getThunkSectionSpacing(). For AArch64 the only branches we are permitted to
+  // Thunk have a range of +/- 128 MiB
+  return (128 * 1024 * 1024) - 0x30000;
+}
+
+bool AArch64::inBranchRange(RelType Type, uint64_t Src, uint64_t Dst) const {
+  if (Type != R_AARCH64_CALL26 && Type != R_AARCH64_JUMP26)
+    return true;
+  // The AArch64 call and unconditional branch instructions have a range of
+  // +/- 128 MiB.
+  uint64_t Range = 128 * 1024 * 1024;
+  if (Dst > Src) {
+    // Immediate of branch is signed.
+    Range -= 4;
+    return Dst - Src <= Range;
+  }
+  return Src - Dst <= Range;
 }
 
 static void write32AArch64Addr(uint8_t *L, uint64_t Imm) {
@@ -206,12 +255,12 @@ void AArch64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   switch (Type) {
   case R_AARCH64_ABS16:
   case R_AARCH64_PREL16:
-    checkIntUInt<16>(Loc, Val, Type);
+    checkIntUInt(Loc, Val, 16, Type);
     write16le(Loc, Val);
     break;
   case R_AARCH64_ABS32:
   case R_AARCH64_PREL32:
-    checkIntUInt<32>(Loc, Val, Type);
+    checkIntUInt(Loc, Val, 32, Type);
     write32le(Loc, Val);
     break;
   case R_AARCH64_ABS64:
@@ -226,11 +275,11 @@ void AArch64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_AARCH64_ADR_PREL_PG_HI21:
   case R_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21:
   case R_AARCH64_TLSDESC_ADR_PAGE21:
-    checkInt<33>(Loc, Val, Type);
+    checkInt(Loc, Val, 33, Type);
     write32AArch64Addr(Loc, Val >> 12);
     break;
   case R_AARCH64_ADR_PREL_LO21:
-    checkInt<21>(Loc, Val, Type);
+    checkInt(Loc, Val, 21, Type);
     write32AArch64Addr(Loc, Val);
     break;
   case R_AARCH64_JUMP26:
@@ -244,38 +293,40 @@ void AArch64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     write32le(Loc, 0x14000000);
     LLVM_FALLTHROUGH;
   case R_AARCH64_CALL26:
-    checkInt<28>(Loc, Val, Type);
+    checkInt(Loc, Val, 28, Type);
     or32le(Loc, (Val & 0x0FFFFFFC) >> 2);
     break;
   case R_AARCH64_CONDBR19:
   case R_AARCH64_LD_PREL_LO19:
-    checkAlignment<4>(Loc, Val, Type);
-    checkInt<21>(Loc, Val, Type);
+    checkAlignment(Loc, Val, 4, Type);
+    checkInt(Loc, Val, 21, Type);
     or32le(Loc, (Val & 0x1FFFFC) << 3);
     break;
-  case R_AARCH64_LD64_GOT_LO12_NC:
-  case R_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC:
-  case R_AARCH64_TLSDESC_LD64_LO12:
-    checkAlignment<8>(Loc, Val, Type);
-    or32le(Loc, (Val & 0xFF8) << 7);
-    break;
   case R_AARCH64_LDST8_ABS_LO12_NC:
+  case R_AARCH64_TLSLE_LDST8_TPREL_LO12_NC:
     or32AArch64Imm(Loc, getBits(Val, 0, 11));
     break;
   case R_AARCH64_LDST16_ABS_LO12_NC:
-    checkAlignment<2>(Loc, Val, Type);
+  case R_AARCH64_TLSLE_LDST16_TPREL_LO12_NC:
+    checkAlignment(Loc, Val, 2, Type);
     or32AArch64Imm(Loc, getBits(Val, 1, 11));
     break;
   case R_AARCH64_LDST32_ABS_LO12_NC:
-    checkAlignment<4>(Loc, Val, Type);
+  case R_AARCH64_TLSLE_LDST32_TPREL_LO12_NC:
+    checkAlignment(Loc, Val, 4, Type);
     or32AArch64Imm(Loc, getBits(Val, 2, 11));
     break;
   case R_AARCH64_LDST64_ABS_LO12_NC:
-    checkAlignment<8>(Loc, Val, Type);
+  case R_AARCH64_LD64_GOT_LO12_NC:
+  case R_AARCH64_TLSIE_LD64_GOTTPREL_LO12_NC:
+  case R_AARCH64_TLSLE_LDST64_TPREL_LO12_NC:
+  case R_AARCH64_TLSDESC_LD64_LO12:
+    checkAlignment(Loc, Val, 8, Type);
     or32AArch64Imm(Loc, getBits(Val, 3, 11));
     break;
   case R_AARCH64_LDST128_ABS_LO12_NC:
-    checkAlignment<16>(Loc, Val, Type);
+  case R_AARCH64_TLSLE_LDST128_TPREL_LO12_NC:
+    checkAlignment(Loc, Val, 16, Type);
     or32AArch64Imm(Loc, getBits(Val, 4, 11));
     break;
   case R_AARCH64_MOVW_UABS_G0_NC:
@@ -291,11 +342,11 @@ void AArch64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     or32le(Loc, (Val & 0xFFFF000000000000) >> 43);
     break;
   case R_AARCH64_TSTBR14:
-    checkInt<16>(Loc, Val, Type);
+    checkInt(Loc, Val, 16, Type);
     or32le(Loc, (Val & 0xFFFC) << 3);
     break;
   case R_AARCH64_TLSLE_ADD_TPREL_HI12:
-    checkInt<24>(Loc, Val, Type);
+    checkUInt(Loc, Val, 24, Type);
     or32AArch64Imm(Loc, Val >> 12);
     break;
   case R_AARCH64_TLSLE_ADD_TPREL_LO12_NC:
@@ -319,7 +370,7 @@ void AArch64::relaxTlsGdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const {
   //   movk    x0, #0x10
   //   nop
   //   nop
-  checkUInt<32>(Loc, Val, Type);
+  checkUInt(Loc, Val, 32, Type);
 
   switch (Type) {
   case R_AARCH64_TLSDESC_ADD_LO12:
@@ -369,7 +420,7 @@ void AArch64::relaxTlsGdToIe(uint8_t *Loc, RelType Type, uint64_t Val) const {
 }
 
 void AArch64::relaxTlsIeToLe(uint8_t *Loc, RelType Type, uint64_t Val) const {
-  checkUInt<32>(Loc, Val, Type);
+  checkUInt(Loc, Val, 32, Type);
 
   if (Type == R_AARCH64_TLSIE_ADR_GOTTPREL_PAGE21) {
     // Generate MOVZ.

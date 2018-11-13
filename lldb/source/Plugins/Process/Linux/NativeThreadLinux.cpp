@@ -16,12 +16,12 @@
 #include "NativeRegisterContextLinux.h"
 #include "SingleStepCheck.h"
 
-#include "lldb/Core/State.h"
 #include "lldb/Host/HostNativeThread.h"
 #include "lldb/Host/linux/Ptrace.h"
 #include "lldb/Host/linux/Support.h"
 #include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/State.h"
 #include "lldb/lldb-enumerations.h"
 
 #include "llvm/ADT/SmallString.h"
@@ -211,8 +211,8 @@ Status NativeThreadLinux::Resume(uint32_t signo) {
   m_stop_info.reason = StopReason::eStopReasonNone;
   m_stop_description.clear();
 
-  // If watchpoints have been set, but none on this thread,
-  // then this is a new thread. So set all existing watchpoints.
+  // If watchpoints have been set, but none on this thread, then this is a new
+  // thread. So set all existing watchpoints.
   if (m_watchpoint_index_map.empty()) {
     NativeProcessLinux &process = GetProcess();
 
@@ -263,8 +263,8 @@ Status NativeThreadLinux::SingleStep(uint32_t signo) {
     data = signo;
 
   // If hardware single-stepping is not supported, we just do a continue. The
-  // breakpoint on the
-  // next instruction has been setup in NativeProcessLinux::Resume.
+  // breakpoint on the next instruction has been setup in
+  // NativeProcessLinux::Resume.
   return NativeProcessLinux::PtraceWrapper(
       GetProcess().SupportHardwareSingleStepping() ? PTRACE_SINGLESTEP
                                                    : PTRACE_CONT,

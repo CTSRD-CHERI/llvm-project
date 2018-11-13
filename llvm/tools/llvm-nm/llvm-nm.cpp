@@ -20,10 +20,7 @@
 #include "llvm/BinaryFormat/COFF.h"
 #include "llvm/Demangle/Demangle.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/GlobalAlias.h"
-#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Object/COFFImportFile.h"
@@ -36,20 +33,13 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
-#include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
-#include <algorithm>
-#include <cctype>
-#include <cerrno>
-#include <cstring>
-#include <system_error>
 #include <vector>
-#include <string.h>
 
 using namespace llvm;
 using namespace object;
@@ -90,6 +80,11 @@ cl::opt<bool> ExternalOnly("extern-only",
 cl::alias ExternalOnly2("g", cl::desc("Alias for --extern-only"),
                         cl::aliasopt(ExternalOnly), cl::Grouping,
                         cl::ZeroOrMore);
+
+cl::opt<bool> NoWeakSymbols("no-weak",
+                            cl::desc("Show only non-weak symbols"));
+cl::alias NoWeakSymbols2("W", cl::desc("Alias for --no-weak"),
+                         cl::aliasopt(NoWeakSymbols), cl::Grouping);
 
 cl::opt<bool> BSDFormat("B", cl::desc("Alias for --format=bsd"),
                         cl::Grouping);
@@ -188,6 +183,8 @@ cl::opt<bool> DyldInfoOnly("dyldinfo-only",
 cl::opt<bool> NoLLVMBitcode("no-llvm-bc",
                             cl::desc("Disable LLVM bitcode reader"));
 
+cl::extrahelp HelpResponse("\nPass @FILE as argument to read options from FILE.\n");
+
 bool PrintAddress = true;
 
 bool MultipleFiles = false;
@@ -279,8 +276,16 @@ struct NMSymbol {
 } // anonymous namespace
 
 static bool compareSymbolAddress(const NMSymbol &A, const NMSymbol &B) {
-  bool ADefined = !(A.Sym.getFlags() & SymbolRef::SF_Undefined);
-  bool BDefined = !(B.Sym.getFlags() & SymbolRef::SF_Undefined);
+  bool ADefined;
+  if (A.Sym.getRawDataRefImpl().p)
+    ADefined = !(A.Sym.getFlags() & SymbolRef::SF_Undefined);
+  else
+    ADefined = A.TypeChar != 'U';
+  bool BDefined;
+  if (B.Sym.getRawDataRefImpl().p)
+    BDefined = !(B.Sym.getFlags() & SymbolRef::SF_Undefined);
+  else
+    BDefined = B.TypeChar != 'U';
   return std::make_tuple(ADefined, A.Address, A.Name, A.Size) <
          std::make_tuple(BDefined, B.Address, B.Name, B.Size);
 }
@@ -706,7 +711,7 @@ static void sortAndPrintSymbolList(SymbolicFile &Obj, bool printName,
 
     if (ReverseSort)
       Cmp = [=](const NMSymbol &A, const NMSymbol &B) { return Cmp(B, A); };
-    std::sort(SymbolList.begin(), SymbolList.end(), Cmp);
+    llvm::sort(SymbolList, Cmp);
   }
 
   if (!PrintFileName) {
@@ -754,6 +759,24 @@ static void sortAndPrintSymbolList(SymbolicFile &Obj, bool printName,
     }
   }
 
+  auto writeFileName = [&](raw_ostream &S) {
+    if (!ArchitectureName.empty())
+      S << "(for architecture " << ArchitectureName << "):";
+    if (OutputFormat == posix && !ArchiveName.empty())
+      S << ArchiveName << "[" << CurrentFilename << "]: ";
+    else {
+      if (!ArchiveName.empty())
+        S << ArchiveName << ":";
+      S << CurrentFilename << ": ";
+    }
+  };
+
+  if (SymbolList.empty()) {
+    if (PrintFileName)
+      writeFileName(errs());
+    errs() << "no symbols\n";
+  }
+
   for (SymbolListT::iterator I = SymbolList.begin(), E = SymbolList.end();
        I != E; ++I) {
     uint32_t SymFlags;
@@ -770,20 +793,13 @@ static void sortAndPrintSymbolList(SymbolicFile &Obj, bool printName,
 
     bool Undefined = SymFlags & SymbolRef::SF_Undefined;
     bool Global = SymFlags & SymbolRef::SF_Global;
+    bool Weak = SymFlags & SymbolRef::SF_Weak;
     if ((!Undefined && UndefinedOnly) || (Undefined && DefinedOnly) ||
-        (!Global && ExternalOnly) || (SizeSort && !PrintAddress))
+        (!Global && ExternalOnly) || (SizeSort && !PrintAddress) ||
+        (Weak && NoWeakSymbols))
       continue;
-    if (PrintFileName) {
-      if (!ArchitectureName.empty())
-        outs() << "(for architecture " << ArchitectureName << "):";
-      if (OutputFormat == posix && !ArchiveName.empty())
-        outs() << ArchiveName << "[" << CurrentFilename << "]: ";
-      else {
-        if (!ArchiveName.empty())
-          outs() << ArchiveName << ":";
-        outs() << CurrentFilename << ": ";
-      }
-    }
+    if (PrintFileName)
+      writeFileName(outs());
     if ((JustSymbolName ||
          (UndefinedOnly && MachO && OutputFormat != darwin)) &&
         OutputFormat != posix) {
@@ -1013,6 +1029,10 @@ static char getSymbolNMTypeChar(MachOObjectFile &Obj, basic_symbol_iterator I) {
     StringRef SectionName;
     Obj.getSectionName(Ref, SectionName);
     StringRef SegmentName = Obj.getSectionFinalSegmentName(Ref);
+    if (Obj.is64Bit() && 
+        Obj.getHeader64().filetype == MachO::MH_KEXT_BUNDLE &&
+        SegmentName == "__TEXT_EXEC" && SectionName == "__text")
+      return 't';
     if (SegmentName == "__TEXT" && SectionName == "__text")
       return 't';
     if (SegmentName == "__DATA" && SectionName == "__data")
@@ -1212,6 +1232,8 @@ dumpSymbolNamesFromObject(SymbolicFile &Obj, bool printName,
   raw_string_ostream LOS(LazysNameBuffer);
   std::string WeaksNameBuffer;
   raw_string_ostream WOS(WeaksNameBuffer);
+  std::string FunctionStartsNameBuffer;
+  raw_string_ostream FOS(FunctionStartsNameBuffer);
   if (MachO && !NoDyldInfo) {
     MachO::mach_header H;
     MachO::mach_header_64 H_64;
@@ -1582,6 +1604,93 @@ dumpSymbolNamesFromObject(SymbolicFile &Obj, bool printName,
           I++;
         }
       }
+
+      // Trying adding symbol from the function starts table and LC_MAIN entry
+      // point.
+      SmallVector<uint64_t, 8> FoundFns;
+      uint64_t lc_main_offset = UINT64_MAX;
+      for (const auto &Command : MachO->load_commands()) {
+        if (Command.C.cmd == MachO::LC_FUNCTION_STARTS) {
+          // We found a function starts segment, parse the addresses for 
+          // consumption.
+          MachO::linkedit_data_command LLC =
+            MachO->getLinkeditDataLoadCommand(Command);
+
+          MachO->ReadULEB128s(LLC.dataoff, FoundFns);
+        } else if (Command.C.cmd == MachO::LC_MAIN) {
+          MachO::entry_point_command LCmain =
+            MachO->getEntryPointCommand(Command);
+          lc_main_offset = LCmain.entryoff;
+        }
+      }
+      // See if these addresses are already in the symbol table.
+      unsigned FunctionStartsAdded = 0;
+      for (uint64_t f = 0; f < FoundFns.size(); f++) {
+        bool found = false;
+        for (unsigned J = 0; J < SymbolList.size() && !found; ++J) {
+          if (SymbolList[J].Address == FoundFns[f] + BaseSegmentAddress)
+            found = true;
+        }
+        // See this address is not already in the symbol table fake up an
+        // nlist for it.
+	if (!found) {
+          NMSymbol F;
+          memset(&F, '\0', sizeof(NMSymbol));
+          F.Name = "<redacted function X>";
+          F.Address = FoundFns[f] + BaseSegmentAddress;
+          F.Size = 0;
+          // There is no symbol in the nlist symbol table for this so we set
+          // Sym effectivly to null and the rest of code in here must test for
+          // it and not do things like Sym.getFlags() for it.
+          F.Sym = BasicSymbolRef();
+          F.SymFlags = 0;
+          F.NType = MachO::N_SECT;
+          F.NSect = 0;
+          StringRef SegmentName = StringRef();
+          StringRef SectionName = StringRef();
+          for (const SectionRef &Section : MachO->sections()) {
+            Section.getName(SectionName);
+            SegmentName = MachO->getSectionFinalSegmentName(
+                                                Section.getRawDataRefImpl());
+            F.NSect++;
+            if (F.Address >= Section.getAddress() &&
+                F.Address < Section.getAddress() + Section.getSize()) {
+              F.Section = Section;
+              break;
+            }
+          }
+          if (SegmentName == "__TEXT" && SectionName == "__text")
+            F.TypeChar = 't';
+          else if (SegmentName == "__DATA" && SectionName == "__data")
+            F.TypeChar = 'd';
+          else if (SegmentName == "__DATA" && SectionName == "__bss")
+            F.TypeChar = 'b';
+          else
+            F.TypeChar = 's';
+          F.NDesc = 0;
+          F.IndirectName = StringRef();
+          SymbolList.push_back(F);
+          if (FoundFns[f] == lc_main_offset)
+            FOS << "<redacted LC_MAIN>";
+          else
+            FOS << "<redacted function " << f << ">";
+          FOS << '\0';
+          FunctionStartsAdded++;
+        }
+      }
+      if (FunctionStartsAdded) {
+        FOS.flush();
+        const char *Q = FunctionStartsNameBuffer.c_str();
+        for (unsigned K = 0; K < FunctionStartsAdded; K++) {
+          SymbolList[I].Name = Q;
+          Q += strlen(Q) + 1;
+          if (SymbolList[I].TypeChar == 'I') {
+            SymbolList[I].IndirectName = Q;
+            Q += strlen(Q) + 1;
+          }
+          I++;
+        }
+      }
     }
   }
 
@@ -1646,12 +1755,14 @@ static void dumpSymbolNamesFromFile(std::string &Filename) {
         outs() << "Archive map\n";
         for (; I != E; ++I) {
           Expected<Archive::Child> C = I->getMember();
-          if (!C)
+          if (!C) {
             error(C.takeError(), Filename);
+            break;
+          }
           Expected<StringRef> FileNameOrErr = C->getName();
           if (!FileNameOrErr) {
             error(FileNameOrErr.takeError(), Filename);
-            return;
+            break;
           }
           StringRef SymName = I->getName();
           outs() << SymName << " in " << FileNameOrErr.get() << "\n";
@@ -1924,11 +2035,7 @@ static void dumpSymbolNamesFromFile(std::string &Filename) {
 }
 
 int main(int argc, char **argv) {
-  // Print a stack trace if we signal out.
-  sys::PrintStackTraceOnErrorSignal(argv[0]);
-  PrettyStackTraceProgram X(argc, argv);
-
-  llvm_shutdown_obj Y; // Call llvm_shutdown() on exit.
+  InitLLVM X(argc, argv);
   cl::ParseCommandLineOptions(argc, argv, "llvm symbol table dumper\n");
 
   // llvm-nm only reads binary files.

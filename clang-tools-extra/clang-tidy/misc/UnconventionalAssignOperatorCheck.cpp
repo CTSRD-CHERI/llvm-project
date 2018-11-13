@@ -24,9 +24,9 @@ void UnconventionalAssignOperatorCheck::registerMatchers(
   if (!getLangOpts().CPlusPlus)
     return;
 
-  const auto HasGoodReturnType = cxxMethodDecl(returns(
-      lValueReferenceType(pointee(unless(isConstQualified()),
-                                  hasDeclaration(equalsBoundNode("class"))))));
+  const auto HasGoodReturnType = cxxMethodDecl(returns(lValueReferenceType(
+      pointee(unless(isConstQualified()),
+              anyOf(autoType(), hasDeclaration(equalsBoundNode("class")))))));
 
   const auto IsSelf = qualType(
       anyOf(hasDeclaration(equalsBoundNode("class")),
@@ -72,7 +72,7 @@ void UnconventionalAssignOperatorCheck::registerMatchers(
 void UnconventionalAssignOperatorCheck::check(
     const MatchFinder::MatchResult &Result) {
   if (const auto *RetStmt = Result.Nodes.getNodeAs<ReturnStmt>("returnStmt")) {
-    diag(RetStmt->getLocStart(), "operator=() should always return '*this'");
+    diag(RetStmt->getBeginLoc(), "operator=() should always return '*this'");
   } else {
     static const char *const Messages[][2] = {
         {"ReturnType", "operator=() should return '%0&'"},
@@ -82,7 +82,7 @@ void UnconventionalAssignOperatorCheck::check(
     const auto *Method = Result.Nodes.getNodeAs<CXXMethodDecl>("method");
     for (const auto &Message : Messages) {
       if (Result.Nodes.getNodeAs<Decl>(Message[0]))
-        diag(Method->getLocStart(), Message[1])
+        diag(Method->getBeginLoc(), Message[1])
             << Method->getParent()->getName()
             << (Method->isConst() ? "const" : "virtual");
     }

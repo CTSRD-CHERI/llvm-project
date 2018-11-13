@@ -88,7 +88,7 @@ class LLVMConfig(object):
                         'ASAN_OPTIONS', 'detect_leaks=1', append_path=True)
             if re.match(r'^x86_64.*-linux', target_triple):
                 features.add('x86_64-linux')
-            if re.match(r'.*-win32$', target_triple):
+            if re.match(r'.*-windows-msvc$', target_triple):
                 features.add('target-windows')
 
         use_gmalloc = lit_config.params.get('use_gmalloc', None)
@@ -100,10 +100,6 @@ class LLVMConfig(object):
             if gmalloc_path_str is not None:
                 self.with_environment(
                     'DYLD_INSERT_LIBRARIES', gmalloc_path_str)
-
-        breaking_checks = getattr(config, 'enable_abi_breaking_checks', None)
-        if lit.util.pythonize_bool(breaking_checks):
-            features.add('abi-breaking-checks')
 
     def with_environment(self, variable, value, append_path=False):
         if append_path:
@@ -223,12 +219,15 @@ class LLVMConfig(object):
             return True
 
         if re.match(r'^x86_64.*-apple', triple):
-            version_number = int(
-                re.search(r'version ([0-9]+)\.', version_string).group(1))
+            version_regex = re.search(r'version ([0-9]+)\.([0-9]+).([0-9]+)', version_string)
+            major_version_number = int(version_regex.group(1))
+            minor_version_number = int(version_regex.group(2))
+            patch_version_number = int(version_regex.group(3))
             if 'Apple LLVM' in version_string:
-                return version_number >= 9
+                # Apple LLVM doesn't yet support LSan
+                return False
             else:
-                return version_number >= 5
+                return major_version_number >= 5
 
         return False
 
@@ -237,10 +236,10 @@ class LLVMConfig(object):
         if not m:
             self.lit_config.fatal(
                 "Could not turn '%s' into Itanium ABI triple" % triple)
-        if m.group(3).lower() != 'win32':
-            # All non-win32 triples use the Itanium ABI.
+        if m.group(3).lower() != 'windows':
+            # All non-windows triples use the Itanium ABI.
             return triple
-        return m.group(1) + '-' + m.group(2) + '-mingw32'
+        return m.group(1) + '-' + m.group(2) + '-' + m.group(3) + '-gnu'
 
     def make_msabi_triple(self, triple):
         m = re.match(r'(\w+)-(\w+)-(\w+)', triple)
@@ -250,14 +249,14 @@ class LLVMConfig(object):
         isa = m.group(1).lower()
         vendor = m.group(2).lower()
         os = m.group(3).lower()
-        if os == 'win32':
-            # If the OS is win32, we're done.
+        if os == 'windows' and re.match(r'.*-msvc$', triple):
+            # If the OS is windows and environment is msvc, we're done.
             return triple
         if isa.startswith('x86') or isa == 'amd64' or re.match(r'i\d86', isa):
             # For x86 ISAs, adjust the OS.
-            return isa + '-' + vendor + '-win32'
-        # -win32 is not supported for non-x86 targets; use a default.
-        return 'i686-pc-win32'
+            return isa + '-' + vendor + '-windows-msvc'
+        # -msvc is not supported for non-x86 targets; use a default.
+        return 'i686-pc-windows-msvc'
 
     def add_tool_substitutions(self, tools, search_dirs=None):
         if not search_dirs:
@@ -300,7 +299,8 @@ class LLVMConfig(object):
                 'count'), verbatim=True, unresolved='fatal'),
             ToolSubst(r'\| \bnot\b', command=FindTool('not'), verbatim=True, unresolved='fatal')]
 
-        self.config.substitutions.append(('%python', sys.executable))
+        self.config.substitutions.append(('%python', '"%s"' % (sys.executable)))
+
         self.add_tool_substitutions(
             tool_patterns, [self.config.llvm_tools_dir])
 
@@ -316,7 +316,7 @@ class LLVMConfig(object):
                 return tool
 
         # Otherwise look in the path.
-        tool = lit.util.which(name, self.config.llvm_tools_dir)
+        tool = lit.util.which(name, self.config.environment['PATH'])
 
         if required and not tool:
             message = "couldn't find '{}' program".format(name)
@@ -367,10 +367,10 @@ class LLVMConfig(object):
         self.clear_environment(possibly_dangerous_env_vars)
 
         # Tweak the PATH to include the tools dir and the scripts dir.
-        paths = [self.config.llvm_tools_dir]
-        tools = getattr(self.config, 'clang_tools_dir', None)
-        if tools:
-            paths = paths + [tools]
+        # Put Clang first to avoid LLVM from overriding out-of-tree clang builds.
+        possible_paths = ['clang_tools_dir', 'llvm_tools_dir']
+        paths = [getattr(self.config, pp) for pp in possible_paths
+                 if getattr(self.config, pp, None)]
         self.with_environment('PATH', paths, append_path=True)
 
         paths = [self.config.llvm_shlib_dir, self.config.llvm_libs_dir]
@@ -389,7 +389,7 @@ class LLVMConfig(object):
         builtin_include_dir = self.get_clang_builtin_include_dir(self.config.clang)
         tool_substitutions = [
             ToolSubst('%clang', command=self.config.clang),
-            ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze']),
+            ToolSubst('%clang_analyze_cc1', command='%clang_cc1', extra_args=['-analyze', '%analyze']),
             ToolSubst('%clang_cc1', command=self.config.clang, extra_args=['-cc1', '-internal-isystem', builtin_include_dir, '-nostdsysteminc']),
             ToolSubst('%clang_cpp', command=self.config.clang, extra_args=['--driver-mode=cpp']),
             ToolSubst('%clang_cl', command=self.config.clang, extra_args=['--driver-mode=cl']),
@@ -462,9 +462,6 @@ class LLVMConfig(object):
         self.with_environment('PATH', tool_dirs, append_path=True)
         self.with_environment('LD_LIBRARY_PATH', lib_dirs, append_path=True)
 
-        self.config.substitutions.append(
-            (r"\bld.lld\b", 'ld.lld --full-shutdown'))
-
-        tool_patterns = ['ld.lld', 'lld-link', 'lld']
+        tool_patterns = ['lld', 'ld.lld', 'lld-link', 'ld64.lld', 'wasm-ld']
 
         self.add_tool_substitutions(tool_patterns, tool_dirs)

@@ -48,6 +48,81 @@ protected:
   GlobalVariable *GV;
 };
 
+TEST_F(IRBuilderTest, Intrinsics) {
+  IRBuilder<> Builder(BB);
+  Value *V;
+  Instruction *I;
+  CallInst *Call;
+  IntrinsicInst *II;
+
+  V = Builder.CreateLoad(GV);
+  I = cast<Instruction>(Builder.CreateFAdd(V, V));
+  I->setHasNoInfs(true);
+  I->setHasNoNaNs(false);
+
+  Call = Builder.CreateMinNum(V, V);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::minnum);
+
+  Call = Builder.CreateMaxNum(V, V);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::maxnum);
+
+  Call = Builder.CreateMinimum(V, V);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::minimum);
+
+  Call = Builder.CreateMaximum(V, V);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::maximum);
+
+  Call = Builder.CreateIntrinsic(Intrinsic::readcyclecounter, {}, {});
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::readcyclecounter);
+
+  Call = Builder.CreateUnaryIntrinsic(Intrinsic::fabs, V);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::fabs);
+  EXPECT_FALSE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateUnaryIntrinsic(Intrinsic::fabs, V, I);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::fabs);
+  EXPECT_TRUE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateBinaryIntrinsic(Intrinsic::pow, V, V);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::pow);
+  EXPECT_FALSE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateBinaryIntrinsic(Intrinsic::pow, V, V, I);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::pow);
+  EXPECT_TRUE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateIntrinsic(Intrinsic::fma, {V->getType()}, {V, V, V});
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::fma);
+  EXPECT_FALSE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateIntrinsic(Intrinsic::fma, {V->getType()}, {V, V, V}, I);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::fma);
+  EXPECT_TRUE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateIntrinsic(Intrinsic::fma, {V->getType()}, {V, V, V}, I);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::fma);
+  EXPECT_TRUE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+}
+
 TEST_F(IRBuilderTest, Lifetime) {
   IRBuilder<> Builder(BB);
   AllocaInst *Var1 = Builder.CreateAlloca(Builder.getInt8Ty());
@@ -85,7 +160,7 @@ TEST_F(IRBuilderTest, CreateCondBr) {
   BasicBlock *FBB = BasicBlock::Create(Ctx, "", F);
 
   BranchInst *BI = Builder.CreateCondBr(Builder.getTrue(), TBB, FBB);
-  TerminatorInst *TI = BB->getTerminator();
+  Instruction *TI = BB->getTerminator();
   EXPECT_EQ(BI, TI);
   EXPECT_EQ(2u, TI->getNumSuccessors());
   EXPECT_EQ(TBB, TI->getSuccessor(0));
@@ -436,6 +511,62 @@ TEST_F(IRBuilderTest, DIBuilder) {
   I->setDebugLoc(DebugLoc::get(2, 0, BadScope));
   DIB.finalize();
   EXPECT_TRUE(verifyModule(*M));
+}
+
+TEST_F(IRBuilderTest, createArtificialSubprogram) {
+  IRBuilder<> Builder(BB);
+  DIBuilder DIB(*M);
+  auto File = DIB.createFile("main.c", "/");
+  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_C, File, "clang",
+                                  /*isOptimized=*/true, /*Flags=*/"",
+                                  /*Runtime Version=*/0);
+  auto Type = DIB.createSubroutineType(DIB.getOrCreateTypeArray(None));
+  auto SP = DIB.createFunction(CU, "foo", /*LinkageName=*/"", File,
+                               /*LineNo=*/1, Type, /*isLocalToUnit=*/false,
+                               /*isDefinition=*/true, /*ScopeLine=*/2,
+                               DINode::FlagZero, /*isOptimized=*/true);
+  EXPECT_TRUE(SP->isDistinct());
+
+  F->setSubprogram(SP);
+  AllocaInst *I = Builder.CreateAlloca(Builder.getInt8Ty());
+  ReturnInst *R = Builder.CreateRetVoid();
+  I->setDebugLoc(DebugLoc::get(3, 2, SP));
+  R->setDebugLoc(DebugLoc::get(4, 2, SP));
+  DIB.finalize();
+  EXPECT_FALSE(verifyModule(*M));
+
+  Function *G = Function::Create(F->getFunctionType(),
+                                 Function::ExternalLinkage, "", M.get());
+  BasicBlock *GBB = BasicBlock::Create(Ctx, "", G);
+  Builder.SetInsertPoint(GBB);
+  I->removeFromParent();
+  Builder.Insert(I);
+  Builder.CreateRetVoid();
+  EXPECT_FALSE(verifyModule(*M));
+
+  DISubprogram *GSP = DIBuilder::createArtificialSubprogram(F->getSubprogram());
+  EXPECT_EQ(SP->getFile(), GSP->getFile());
+  EXPECT_EQ(SP->getType(), GSP->getType());
+  EXPECT_EQ(SP->getLine(), GSP->getLine());
+  EXPECT_EQ(SP->getScopeLine(), GSP->getScopeLine());
+  EXPECT_TRUE(GSP->isDistinct());
+
+  G->setSubprogram(GSP);
+  EXPECT_TRUE(verifyModule(*M));
+
+  auto *InlinedAtNode =
+      DILocation::getDistinct(Ctx, GSP->getScopeLine(), 0, GSP);
+  DebugLoc DL = I->getDebugLoc();
+  DenseMap<const MDNode *, MDNode *> IANodes;
+  auto IA = DebugLoc::appendInlinedAt(DL, InlinedAtNode, Ctx, IANodes);
+  auto NewDL = DebugLoc::get(DL.getLine(), DL.getCol(), DL.getScope(), IA);
+  I->setDebugLoc(NewDL);
+  EXPECT_FALSE(verifyModule(*M));
+
+  EXPECT_EQ("foo", SP->getName());
+  EXPECT_EQ("foo", GSP->getName());
+  EXPECT_FALSE(SP->isArtificial());
+  EXPECT_TRUE(GSP->isArtificial());
 }
 
 TEST_F(IRBuilderTest, InsertExtractElement) {

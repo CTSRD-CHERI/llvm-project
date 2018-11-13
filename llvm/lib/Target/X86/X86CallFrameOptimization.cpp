@@ -35,13 +35,13 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCDwarf.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
-#include "llvm/Target/TargetRegisterInfo.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -148,7 +148,7 @@ bool X86CallFrameOptimization::isLegal(MachineFunction &MF) {
   // is a danger of that being generated.
   if (STI->isTargetDarwin() &&
       (!MF.getLandingPads().empty() ||
-       (MF.getFunction()->needsUnwindTableEntry() && !TFL->hasFP(MF))))
+       (MF.getFunction().needsUnwindTableEntry() && !TFL->hasFP(MF))))
     return false;
 
   // It is not valid to change the stack pointer outside the prolog/epilog
@@ -243,7 +243,7 @@ bool X86CallFrameOptimization::runOnMachineFunction(MachineFunction &MF) {
   assert(isPowerOf2_32(SlotSize) && "Expect power of 2 stack slot size");
   Log2SlotSize = Log2_32(SlotSize);
 
-  if (skipFunction(*MF.getFunction()) || !isLegal(MF))
+  if (skipFunction(MF.getFunction()) || !isLegal(MF))
     return false;
 
   unsigned FrameSetupOpcode = TII->getCallFrameSetupOpcode();
@@ -375,7 +375,7 @@ void X86CallFrameOptimization::collectCallInfo(MachineFunction &MF,
   // Skip over DEBUG_VALUE.
   // For globals in PIC mode, we can have some LEAs here. Skip them as well.
   // TODO: Extend this to something that covers more cases.
-  while (I->getOpcode() == X86::LEA32r || I->isDebugValue())
+  while (I->getOpcode() == X86::LEA32r || I->isDebugInstr())
     ++I;
 
   unsigned StackPtr = RegInfo.getStackRegister();

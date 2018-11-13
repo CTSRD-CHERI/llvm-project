@@ -34,7 +34,7 @@ struct ArchTreeEdge {
 };
 
 struct FileFlags {
-  StringRef Filename;
+  InputFile *File;
   uint32_t Flags;
 };
 } // namespace
@@ -65,25 +65,30 @@ static StringRef getNanName(bool IsNan2008) {
 static StringRef getFpName(bool IsFp64) { return IsFp64 ? "64" : "32"; }
 
 static void checkFlags(ArrayRef<FileFlags> Files) {
+  assert(!Files.empty() && "expected non-empty file list");
+
   uint32_t ABI = Files[0].Flags & (EF_MIPS_ABI | EF_MIPS_ABI2);
   bool Nan = Files[0].Flags & EF_MIPS_NAN2008;
   bool Fp = Files[0].Flags & EF_MIPS_FP64;
 
-  for (const FileFlags &F : Files.slice(1)) {
+  for (const FileFlags &F : Files) {
+    if (Config->Is64 && F.Flags & EF_MIPS_MICROMIPS)
+      error(toString(F.File) + ": microMIPS 64-bit is not supported");
+
     uint32_t ABI2 = F.Flags & (EF_MIPS_ABI | EF_MIPS_ABI2);
     if (ABI != ABI2)
-      error("target ABI '" + getAbiName(ABI) + "' is incompatible with '" +
-            getAbiName(ABI2) + "': " + F.Filename);
+      error(toString(F.File) + ": ABI '" + getAbiName(ABI2) +
+            "' is incompatible with target ABI '" + getAbiName(ABI) + "'");
 
     bool Nan2 = F.Flags & EF_MIPS_NAN2008;
     if (Nan != Nan2)
-      error("target -mnan=" + getNanName(Nan) + " is incompatible with -mnan=" +
-            getNanName(Nan2) + ": " + F.Filename);
+      error(toString(F.File) + ": -mnan=" + getNanName(Nan2) +
+            " is incompatible with target -mnan=" + getNanName(Nan));
 
     bool Fp2 = F.Flags & EF_MIPS_FP64;
     if (Fp != Fp2)
-      error("target -mfp" + getFpName(Fp) + " is incompatible with -mfp" +
-            getFpName(Fp2) + ": " + F.Filename);
+      error(toString(F.File) + ": -mfp" + getFpName(Fp2) +
+            " is incompatible with target -mfp" + getFpName(Fp));
   }
 }
 
@@ -102,9 +107,13 @@ static uint32_t getPicFlags(ArrayRef<FileFlags> Files) {
   for (const FileFlags &F : Files.slice(1)) {
     bool IsPic2 = F.Flags & (EF_MIPS_PIC | EF_MIPS_CPIC);
     if (IsPic && !IsPic2)
-      warn("linking abicalls code with non-abicalls file: " + F.Filename);
+      warn(toString(F.File) +
+           ": linking non-abicalls code with abicalls code " +
+           toString(Files[0].File));
     if (!IsPic && IsPic2)
-      warn("linking non-abicalls code with abicalls file: " + F.Filename);
+      warn(toString(F.File) +
+           ": linking abicalls code with non-abicalls code " +
+           toString(Files[0].File));
   }
 
   // Compute the result PIC/non-PIC flag.
@@ -221,10 +230,6 @@ static StringRef getMachName(uint32_t Flags) {
 }
 
 static StringRef getArchName(uint32_t Flags) {
-  StringRef S = getMachName(Flags);
-  if (!S.empty())
-    return S;
-
   switch (Flags & EF_MIPS_ARCH) {
   case EF_MIPS_ARCH_1:
     return "mips1";
@@ -253,6 +258,14 @@ static StringRef getArchName(uint32_t Flags) {
   }
 }
 
+static std::string getFullArchName(uint32_t Flags) {
+  StringRef Arch = getArchName(Flags);
+  StringRef Mach = getMachName(Flags);
+  if (Mach.empty())
+    return Arch.str();
+  return (Arch + " (" + Mach + ")").str();
+}
+
 // There are (arguably too) many MIPS ISAs out there. Their relationships
 // can be represented as a forest. If all input files have ISAs which
 // reachable by repeated proceeding from the single child to the parent,
@@ -272,8 +285,9 @@ static uint32_t getArchFlags(ArrayRef<FileFlags> Files) {
     if (isArchMatched(New, Ret))
       continue;
     if (!isArchMatched(Ret, New)) {
-      error("target ISA '" + getArchName(Ret) + "' is incompatible with '" +
-            getArchName(New) + "': " + F.Filename);
+      error("incompatible target ISA:\n>>> " + toString(Files[0].File) + ": " +
+            getFullArchName(Ret) + "\n>>> " + toString(F.File) + ": " +
+            getFullArchName(New));
       return 0;
     }
     Ret = New;
@@ -284,8 +298,7 @@ static uint32_t getArchFlags(ArrayRef<FileFlags> Files) {
 template <class ELFT> uint32_t elf::calcMipsEFlags() {
   std::vector<FileFlags> V;
   for (InputFile *F : ObjectFiles)
-    V.push_back(
-        {F->getName(), cast<ObjFile<ELFT>>(F)->getObj().getHeader()->e_flags});
+    V.push_back({F, cast<ObjFile<ELFT>>(F)->getObj().getHeader()->e_flags});
   if (V.empty())
     return 0;
   checkFlags(V);
@@ -320,7 +333,7 @@ static StringRef getMipsFpAbiName(uint8_t FpAbi) {
   case Mips::Val_GNU_MIPS_ABI_FP_SOFT:
     return "-msoft-float";
   case Mips::Val_GNU_MIPS_ABI_FP_OLD_64:
-    return "-mips32r2 -mfp64 (old)";
+    return "-mgp32 -mfp64 (old)";
   case Mips::Val_GNU_MIPS_ABI_FP_XX:
     return "-mfpxx";
   case Mips::Val_GNU_MIPS_ABI_FP_64:
@@ -337,9 +350,9 @@ uint8_t elf::getMipsFpAbiFlag(uint8_t OldFlag, uint8_t NewFlag,
   if (compareMipsFpAbi(NewFlag, OldFlag) >= 0)
     return NewFlag;
   if (compareMipsFpAbi(OldFlag, NewFlag) < 0)
-    error("target floating point ABI '" + getMipsFpAbiName(OldFlag) +
-          "' is incompatible with '" + getMipsFpAbiName(NewFlag) +
-          "': " + FileName);
+    error(FileName + ": floating point ABI '" + getMipsFpAbiName(NewFlag) +
+          "' is incompatible with target floating point ABI '" +
+          getMipsFpAbiName(OldFlag) + "'");
   return OldFlag;
 }
 

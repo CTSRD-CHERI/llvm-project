@@ -9,8 +9,6 @@
 
 #include "llvm/DebugInfo/DWARF/DWARFExpression.h"
 #include "llvm/BinaryFormat/Dwarf.h"
-#include "llvm/DebugInfo/DWARF/DWARFCompileUnit.h"
-#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/Format.h"
 #include <cassert>
@@ -260,9 +258,10 @@ bool DWARFExpression::Operation::print(raw_ostream &OS,
   return true;
 }
 
-void DWARFExpression::print(raw_ostream &OS, const MCRegisterInfo *RegInfo) {
+void DWARFExpression::print(raw_ostream &OS, const MCRegisterInfo *RegInfo,
+                            bool IsEH) const {
   for (auto &Op : *this) {
-    if (!Op.print(OS, this, RegInfo, /* isEH */ false)) {
+    if (!Op.print(OS, this, RegInfo, IsEH)) {
       uint32_t FailOffset = Op.getEndOffset();
       while (FailOffset < Data.getData().size())
         OS << format(" %02x", Data.getU8(&FailOffset));

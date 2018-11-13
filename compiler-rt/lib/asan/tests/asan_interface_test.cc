@@ -102,6 +102,7 @@ TEST(AddressSanitizerInterface, GetHeapSizeTest) {
   }
 }
 
+#if !defined(__NetBSD__)
 static const size_t kManyThreadsMallocSizes[] = {5, 1UL<<10, 1UL<<14, 357};
 static const size_t kManyThreadsIterations = 250;
 static const size_t kManyThreadsNumThreads =
@@ -135,6 +136,7 @@ TEST(AddressSanitizerInterface, ManyThreadsWithStatsStressTest) {
   // so we can't check for equality here.
   EXPECT_LT(after_test, before_test + (1UL<<20));
 }
+#endif
 
 static void DoDoubleFree() {
   int *x = Ident(new int);
@@ -153,13 +155,14 @@ TEST(AddressSanitizerInterface, DeathCallbackTest) {
   __asan_set_death_callback(NULL);
 }
 
-static const char* kUseAfterPoisonErrorMessage = "use-after-poison";
-
 #define GOOD_ACCESS(ptr, offset)  \
     EXPECT_FALSE(__asan_address_is_poisoned(ptr + offset))
 
 #define BAD_ACCESS(ptr, offset) \
     EXPECT_TRUE(__asan_address_is_poisoned(ptr + offset))
+
+#if !defined(ASAN_SHADOW_SCALE) || ASAN_SHADOW_SCALE == 3
+static const char* kUseAfterPoisonErrorMessage = "use-after-poison";
 
 TEST(AddressSanitizerInterface, SimplePoisonMemoryRegionTest) {
   char *array = Ident((char*)malloc(120));
@@ -199,6 +202,7 @@ TEST(AddressSanitizerInterface, OverlappingPoisonMemoryRegionTest) {
   BAD_ACCESS(array, 96);
   free(array);
 }
+#endif  // !defined(ASAN_SHADOW_SCALE) || ASAN_SHADOW_SCALE == 3
 
 TEST(AddressSanitizerInterface, PushAndPopWithPoisoningTest) {
   // Vector of capacity 20
@@ -219,6 +223,7 @@ TEST(AddressSanitizerInterface, PushAndPopWithPoisoningTest) {
   free(vec);
 }
 
+#if !defined(ASAN_SHADOW_SCALE) || ASAN_SHADOW_SCALE == 3
 // Make sure that each aligned block of size "2^granularity" doesn't have
 // "true" value before "false" value.
 static void MakeShadowValid(bool *shadow, int length, int granularity) {
@@ -272,6 +277,7 @@ TEST(AddressSanitizerInterface, PoisoningStressTest) {
   }
   free(arr);
 }
+#endif  // !defined(ASAN_SHADOW_SCALE) || ASAN_SHADOW_SCALE == 3
 
 TEST(AddressSanitizerInterface, GlobalRedzones) {
   GOOD_ACCESS(glob1, 1 - 1);

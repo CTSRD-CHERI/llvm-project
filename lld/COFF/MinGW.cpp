@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MinGW.h"
+#include "SymbolTable.h"
 #include "lld/Common/ErrorHandler.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/Path.h"
@@ -18,8 +19,24 @@ using namespace lld::coff;
 using namespace llvm;
 using namespace llvm::COFF;
 
-AutoExporter::AutoExporter() {
-  if (Config->Machine == I386)
+void AutoExporter::initSymbolExcludes() {
+  ExcludeSymbolPrefixes = {
+      // Import symbols
+      "__imp_",
+      "__IMPORT_DESCRIPTOR_",
+      // Extra import symbols from GNU import libraries
+      "__nm_",
+      // C++ symbols
+      "__rtti_",
+      "__builtin_",
+      // Artifical symbols such as .refptr
+      ".",
+  };
+  ExcludeSymbolSuffixes = {
+      "_iname",
+      "_NULL_THUNK_DATA",
+  };
+  if (Config->Machine == I386) {
     ExcludeSymbols = {
         "__NULL_IMPORT_DESCRIPTOR",
         "__pei386_runtime_relocator",
@@ -35,9 +52,10 @@ AutoExporter::AutoExporter() {
         "_DllEntryPoint@12",
         "_DllMainCRTStartup@12",
     };
-  else
+    ExcludeSymbolPrefixes.insert("__head_");
+  } else {
     ExcludeSymbols = {
-        "_NULL_IMPORT_DESCRIPTOR",
+        "__NULL_IMPORT_DESCRIPTOR",
         "_pei386_runtime_relocator",
         "do_pseudo_reloc",
         "impure_ptr",
@@ -51,7 +69,11 @@ AutoExporter::AutoExporter() {
         "DllEntryPoint",
         "DllMainCRTStartup",
     };
+    ExcludeSymbolPrefixes.insert("_head_");
+  }
+}
 
+AutoExporter::AutoExporter() {
   ExcludeLibs = {
       "libgcc",
       "libgcc_s",
@@ -88,20 +110,49 @@ AutoExporter::AutoExporter() {
   };
 }
 
+void AutoExporter::addWholeArchive(StringRef Path) {
+  StringRef LibName = sys::path::filename(Path);
+  // Drop the file extension, to match the processing below.
+  LibName = LibName.substr(0, LibName.rfind('.'));
+  ExcludeLibs.erase(LibName);
+}
+
 bool AutoExporter::shouldExport(Defined *Sym) const {
   if (!Sym || !Sym->isLive() || !Sym->getChunk())
     return false;
+
+  // Only allow the symbol kinds that make sense to export; in particular,
+  // disallow import symbols.
+  if (!isa<DefinedRegular>(Sym) && !isa<DefinedCommon>(Sym))
+    return false;
   if (ExcludeSymbols.count(Sym->getName()))
     return false;
+
+  for (StringRef Prefix : ExcludeSymbolPrefixes.keys())
+    if (Sym->getName().startswith(Prefix))
+      return false;
+  for (StringRef Suffix : ExcludeSymbolSuffixes.keys())
+    if (Sym->getName().endswith(Suffix))
+      return false;
+
+  // If a corresponding __imp_ symbol exists and is defined, don't export it.
+  if (Symtab->find(("__imp_" + Sym->getName()).str()))
+    return false;
+
+  // Check that file is non-null before dereferencing it, symbols not
+  // originating in regular object files probably shouldn't be exported.
+  if (!Sym->getFile())
+    return false;
+
   StringRef LibName = sys::path::filename(Sym->getFile()->ParentName);
+
   // Drop the file extension.
   LibName = LibName.substr(0, LibName.rfind('.'));
-  if (ExcludeLibs.count(LibName))
-    return false;
+  if (!LibName.empty())
+    return !ExcludeLibs.count(LibName);
+
   StringRef FileName = sys::path::filename(Sym->getFile()->getName());
-  if (LibName.empty() && ExcludeObjects.count(FileName))
-    return false;
-  return true;
+  return !ExcludeObjects.count(FileName);
 }
 
 void coff::writeDefFile(StringRef Name) {
@@ -116,7 +167,7 @@ void coff::writeDefFile(StringRef Name) {
        << "@" << E.Ordinal;
     if (auto *Def = dyn_cast_or_null<Defined>(E.Sym)) {
       if (Def && Def->getChunk() &&
-          !(Def->getChunk()->getPermissions() & IMAGE_SCN_MEM_EXECUTE))
+          !(Def->getChunk()->getOutputCharacteristics() & IMAGE_SCN_MEM_EXECUTE))
         OS << " DATA";
     }
     OS << "\n";

@@ -46,7 +46,7 @@ class MisusedMovedObjectChecker
     : public Checker<check::PreCall, check::PostCall, check::EndFunction,
                      check::DeadSymbols, check::RegionChanges> {
 public:
-  void checkEndFunction(CheckerContext &C) const;
+  void checkEndFunction(const ReturnStmt *RS, CheckerContext &C) const;
   void checkPreCall(const CallEvent &MC, CheckerContext &C) const;
   void checkPostCall(const CallEvent &MC, CheckerContext &C) const;
   void checkDeadSymbols(SymbolReaper &SR, CheckerContext &C) const;
@@ -61,7 +61,7 @@ public:
 
 private:
   enum MisuseKind {MK_FunCall, MK_Copy, MK_Move};
-  class MovedBugVisitor : public BugReporterVisitorImpl<MovedBugVisitor> {
+  class MovedBugVisitor : public BugReporterVisitor {
   public:
     MovedBugVisitor(const MemRegion *R) : Region(R), Found(false) {}
 
@@ -72,7 +72,6 @@ private:
     }
 
     std::shared_ptr<PathDiagnosticPiece> VisitNode(const ExplodedNode *N,
-                                                   const ExplodedNode *PrevN,
                                                    BugReporterContext &BRC,
                                                    BugReport &BR) override;
 
@@ -101,8 +100,6 @@ static ProgramStateRef removeFromState(ProgramStateRef State,
                                        const MemRegion *Region) {
   if (!Region)
     return State;
-  // Note: The isSubRegionOf function is not reflexive.
-  State = State->remove<TrackedRegionMap>(Region);
   for (auto &E : State->get<TrackedRegionMap>()) {
     if (E.first->isSubRegionOf(Region))
       State = State->remove<TrackedRegionMap>(E.first);
@@ -121,15 +118,14 @@ static bool isAnyBaseRegionReported(ProgramStateRef State,
 
 std::shared_ptr<PathDiagnosticPiece>
 MisusedMovedObjectChecker::MovedBugVisitor::VisitNode(const ExplodedNode *N,
-                                                      const ExplodedNode *PrevN,
                                                       BugReporterContext &BRC,
-                                                      BugReport &BR) {
+                                                      BugReport &) {
   // We need only the last move of the reported object's region.
   // The visitor walks the ExplodedGraph backwards.
   if (Found)
     return nullptr;
   ProgramStateRef State = N->getState();
-  ProgramStateRef StatePrev = PrevN->getState();
+  ProgramStateRef StatePrev = N->getFirstPred()->getState();
   const RegionState *TrackedObject = State->get<TrackedRegionMap>(Region);
   const RegionState *TrackedObjectPrev =
       StatePrev->get<TrackedRegionMap>(Region);
@@ -224,7 +220,8 @@ ExplodedNode *MisusedMovedObjectChecker::reportBug(const MemRegion *Region,
 
 // Removing the function parameters' MemRegion from the state. This is needed
 // for PODs where the trivial destructor does not even created nor executed.
-void MisusedMovedObjectChecker::checkEndFunction(CheckerContext &C) const {
+void MisusedMovedObjectChecker::checkEndFunction(const ReturnStmt *RS,
+                                                 CheckerContext &C) const {
   auto State = C.getState();
   TrackedRegionMapTy Objects = State->get<TrackedRegionMap>();
   if (Objects.isEmpty())
@@ -317,17 +314,18 @@ bool MisusedMovedObjectChecker::isMoveSafeMethod(
       return true;
   }
   // Function call `empty` can be skipped.
-  if (MethodDec && MethodDec->getDeclName().isIdentifier() &&
+  return (MethodDec && MethodDec->getDeclName().isIdentifier() &&
       (MethodDec->getName().lower() == "empty" ||
-       MethodDec->getName().lower() == "isempty"))
-    return true;
-
-  return false;
+       MethodDec->getName().lower() == "isempty"));
 }
 
 bool MisusedMovedObjectChecker::isStateResetMethod(
     const CXXMethodDecl *MethodDec) const {
-  if (MethodDec && MethodDec->getDeclName().isIdentifier()) {
+  if (!MethodDec)
+      return false;
+  if (MethodDec->hasAttr<ReinitializesAttr>())
+      return true;
+  if (MethodDec->getDeclName().isIdentifier()) {
     std::string MethodName = MethodDec->getName().lower();
     if (MethodName == "reset" || MethodName == "clear" ||
         MethodName == "destroy")
@@ -432,8 +430,7 @@ void MisusedMovedObjectChecker::checkPreCall(const CallEvent &Call,
 
   // We want to investigate the whole object, not only sub-object of a parent
   // class in which the encountered method defined.
-  while (const CXXBaseObjectRegion *BR =
-             dyn_cast<CXXBaseObjectRegion>(ThisRegion))
+  while (const auto *BR = dyn_cast<CXXBaseObjectRegion>(ThisRegion))
     ThisRegion = BR->getSuperRegion();
 
   if (isMoveSafeMethod(MethodDecl))
@@ -490,13 +487,9 @@ ProgramStateRef MisusedMovedObjectChecker::checkRegionChanges(
     ThisRegion = IC->getCXXThisVal().getAsRegion();
   }
 
-  for (ArrayRef<const MemRegion *>::iterator I = ExplicitRegions.begin(),
-                                             E = ExplicitRegions.end();
-       I != E; ++I) {
-    const auto *Region = *I;
-    if (ThisRegion != Region) {
+  for (const auto *Region : ExplicitRegions) {
+    if (ThisRegion != Region)
       State = removeFromState(State, Region);
-    }
   }
 
   return State;

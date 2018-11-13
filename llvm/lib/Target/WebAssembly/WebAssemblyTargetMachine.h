@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file declares the WebAssembly-specific subclass of
+/// This file declares the WebAssembly-specific subclass of
 /// TargetMachine.
 ///
 //===----------------------------------------------------------------------===//
@@ -43,8 +43,7 @@ public:
     return TLOF.get();
   }
 
-  /// \brief Get the TargetIRAnalysis for this target.
-  TargetIRAnalysis getTargetIRAnalysis() override;
+  TargetTransformInfo getTargetTransformInfo(const Function &F) override;
 
   bool usesPhysRegsForPEI() const override { return false; }
 };

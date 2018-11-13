@@ -17,6 +17,7 @@
 #include "clang/Tooling/Tooling.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
 #include <map>
 #include <memory>
 #include <string>
@@ -31,23 +32,30 @@ public:
   DeclarationReporter() = default;
   ~DeclarationReporter() = default;
 
-  void reportDeclaration(llvm::StringRef DeclarationName,
-                         llvm::StringRef Type) {
-    DeclarationList.emplace_back(DeclarationName, Type);
+  void reportDeclaration(llvm::StringRef DeclarationName, llvm::StringRef Type,
+                         bool Templated) {
+    DeclarationList.emplace_back(DeclarationName, Type, Templated);
   };
 
-  // A <DeclarationName, DeclarationKind> pair.
-  // The DeclarationName is a fully qualified name for the declaration, like
-  // A::B::Foo. The DeclarationKind is a string represents the kind of the
-  // declaration, currently only "Function" and "Class" are supported.
-  typedef std::pair<std::string, std::string> DeclarationPair;
+  struct Declaration {
+    Declaration(llvm::StringRef QName, llvm::StringRef Kind, bool Templated)
+        : QualifiedName(QName), Kind(Kind), Templated(Templated) {}
 
-  const std::vector<DeclarationPair> getDeclarationList() const {
+    friend bool operator==(const Declaration &LHS, const Declaration &RHS) {
+      return std::tie(LHS.QualifiedName, LHS.Kind, LHS.Templated) ==
+             std::tie(RHS.QualifiedName, RHS.Kind, RHS.Templated);
+    }
+    std::string QualifiedName; // E.g. A::B::Foo.
+    std::string Kind;          // E.g. Function, Class
+    bool Templated = false;    // Whether the declaration is templated.
+  };
+
+  const std::vector<Declaration> getDeclarationList() const {
     return DeclarationList;
   }
 
 private:
-  std::vector<DeclarationPair> DeclarationList;
+  std::vector<Declaration> DeclarationList;
 };
 
 // Specify declarations being moved. It contains all information of the moved
@@ -176,7 +184,11 @@ private:
   /// The source range for the written file name in #include (i.e. "old.h" for
   /// #include "old.h") in old.cc,  including the enclosing quotes or angle
   /// brackets.
-  clang::CharSourceRange OldHeaderIncludeRange;
+  clang::CharSourceRange OldHeaderIncludeRangeInCC;
+  /// The source range for the written file name in #include (i.e. "old.h" for
+  /// #include "old.h") in old.h,  including the enclosing quotes or angle
+  /// brackets.
+  clang::CharSourceRange OldHeaderIncludeRangeInHeader;
   /// Mapping from FilePath to FileID, which can be used in post processes like
   /// cleanup around replacements.
   llvm::StringMap<FileID> FilePathToFileID;

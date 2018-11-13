@@ -16,6 +16,15 @@
 /*! \brief Create a directory tree. */
 void __llvm_profile_recursive_mkdir(char *Pathname);
 
+/*! Set the mode used when creating profile directories. */
+void __llvm_profile_set_dir_mode(unsigned Mode);
+
+/*! Return the directory creation mode. */
+unsigned __llvm_profile_get_dir_mode(void);
+
+int lprofLockFd(int fd);
+int lprofUnlockFd(int fd);
+
 /*! Open file \c Filename for read+write with write
  * lock for exclusive access. The caller will block
  * if the lock is already held by another process. */

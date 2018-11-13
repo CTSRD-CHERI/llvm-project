@@ -72,7 +72,7 @@ const Target *TargetRegistry::lookupTarget(const std::string &TT,
   auto I = find_if(targets(), ArchMatch);
 
   if (I == targets().end()) {
-    Error = "No available targets are compatible with this triple.";
+    Error = "No available targets are compatible with triple \"" + TT + "\"";
     return nullptr;
   }
 
@@ -86,9 +86,9 @@ const Target *TargetRegistry::lookupTarget(const std::string &TT,
   return &*I;
 }
 
-void TargetRegistry::RegisterTarget(Target &T,
-                                    const char *Name,
+void TargetRegistry::RegisterTarget(Target &T, const char *Name,
                                     const char *ShortDesc,
+                                    const char *BackendName,
                                     Target::ArchMatchFnTy ArchMatchFn,
                                     bool HasJIT) {
   assert(Name && ShortDesc && ArchMatchFn &&
@@ -98,13 +98,14 @@ void TargetRegistry::RegisterTarget(Target &T,
   // convenience to some clients.
   if (T.Name)
     return;
-         
+
   // Add to the list of targets.
   T.Next = FirstTarget;
   FirstTarget = &T;
 
   T.Name = Name;
   T.ShortDesc = ShortDesc;
+  T.BackendName = BackendName;
   T.ArchMatchFn = ArchMatchFn;
   T.HasJIT = HasJIT;
 }

@@ -5,6 +5,12 @@ module Clang_Analysis {
   textual header "Analysis/Analyses/ThreadSafetyOps.def"
 
   module * { export * }
+
+  // FIXME: Exclude these headers to avoid pulling all of the AST matchers
+  // library into clang. Due to inline key functions in the headers,
+  // importing the AST matchers library gives a link dependency on the AST
+  // matchers (and thus the AST), which clang-format should not have.
+  exclude header "Analysis/Analyses/ExprMutationAnalyzer.h"
 }
 
 module Clang_AST {
@@ -42,6 +48,7 @@ module Clang_Basic {
   textual header "Basic/BuiltinsX86_64.def"
   textual header "Basic/BuiltinsXCore.def"
   textual header "Basic/DiagnosticOptions.def"
+  textual header "Basic/Features.def"
   textual header "Basic/LangOptions.def"
   textual header "Basic/OpenCLExtensions.def"
   textual header "Basic/OpenCLImageTypes.def"
@@ -49,6 +56,7 @@ module Clang_Basic {
   textual header "Basic/OperatorKinds.def"
   textual header "Basic/Sanitizers.def"
   textual header "Basic/TokenKinds.def"
+  textual header "Basic/X86Target.def"
 
   module * { export * }
 }
@@ -151,4 +159,9 @@ module Clang_Tooling {
 module Clang_ToolingCore {
   requires cplusplus
   umbrella "Tooling/Core" module * { export * }
+}
+
+module Clang_ToolingInclusions {
+  requires cplusplus
+  umbrella "Tooling/Inclusions" module * { export * }
 }

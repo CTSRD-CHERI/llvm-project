@@ -39,9 +39,9 @@
 # RUN: ld.lld -o %t1 --script %t.script %t
 # RUN: llvm-readobj -program-headers %t1 | FileCheck --check-prefix=DEFHDR %s
 
-## Check that error is reported when trying to use phdr which is not listed 
+## Check that error is reported when trying to use phdr which is not listed
 ## inside PHDRS {} block
-## TODO: If script doesn't contain PHDRS {} block then default phdr is always 
+## TODO: If script doesn't contain PHDRS {} block then default phdr is always
 ## created and error is not reported.
 # RUN: echo "PHDRS { all PT_LOAD; } \
 # RUN:       SECTIONS { .baz : {*(.foo.*)} :bar }" > %t.script
@@ -129,6 +129,14 @@
 # DEFHDR-NEXT:    ]
 
 # BADHDR:       {{.*}}.script:1: section header 'bar' is not listed in PHDRS
+
+# RUN: echo "PHDRS { text PT_LOAD FOOHDR; }" > %t1.script
+# RUN: not ld.lld -o /dev/null --script %t1.script %t 2>&1 | FileCheck --check-prefix=FOOHDR %s
+# FOOHDR: error: {{.*}}.script:1: unexpected header attribute: FOOHDR
+
+# RUN: echo "PHDRS { text PT_FOO FOOHDR; }" > %t1.script
+# RUN: not ld.lld -o /dev/null --script %t1.script %t 2>&1 | FileCheck --check-prefix=PTFOO %s
+# PTFOO: invalid program header type: PT_FOO
 
 .global _start
 _start:

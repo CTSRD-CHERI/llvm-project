@@ -36,6 +36,7 @@ class CppVirtualMadness(TestBase):
     @expectedFailureAll(
         compiler="icc",
         bugnumber="llvm.org/pr16808 lldb does not call the correct virtual function with icc.")
+    @skipIfWindows # This test will hang on windows llvm.org/pr21753
     def test_virtual_madness(self):
         """Test that expression works correctly with virtual inheritance as well as virtual function."""
         self.build()
@@ -45,7 +46,7 @@ class CppVirtualMadness(TestBase):
         self.dbg.SetAsync(False)
 
         # Create a target by the debugger.
-        target = self.dbg.CreateTarget("a.out")
+        target = self.dbg.CreateTarget(self.getBuildArtifact("a.out"))
         self.assertTrue(target, VALID_TARGET)
 
         # Create the breakpoint inside function 'main'.

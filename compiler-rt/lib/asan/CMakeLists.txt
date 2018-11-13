@@ -23,6 +23,7 @@ set(ASAN_SOURCES
   asan_posix.cc
   asan_premap_shadow.cc
   asan_report.cc
+  asan_rtems.cc
   asan_rtl.cc
   asan_shadow_setup.cc
   asan_stack.cc
@@ -37,6 +38,34 @@ set(ASAN_CXX_SOURCES
 set(ASAN_PREINIT_SOURCES
   asan_preinit.cc)
 
+SET(ASAN_HEADERS
+  asan_activation.h
+  asan_activation_flags.inc
+  asan_allocator.h
+  asan_descriptions.h
+  asan_errors.h
+  asan_fake_stack.h
+  asan_flags.h
+  asan_flags.inc
+  asan_init_version.h
+  asan_interceptors.h
+  asan_interceptors_memintrinsics.h
+  asan_interface.inc
+  asan_interface_internal.h
+  asan_internal.h
+  asan_lock.h
+  asan_malloc_local.h
+  asan_mapping.h
+  asan_mapping_myriad.h
+  asan_poisoning.h
+  asan_premap_shadow.h
+  asan_report.h
+  asan_scariness_score.h
+  asan_stack.h
+  asan_stats.h
+  asan_suppressions.h
+  asan_thread.h)
+
 include_directories(..)
 
 set(ASAN_CFLAGS ${SANITIZER_COMMON_CFLAGS})
@@ -47,14 +76,8 @@ append_rtti_flag(OFF ASAN_CFLAGS)
 set(ASAN_DYNAMIC_LINK_FLAGS ${SANITIZER_COMMON_LINK_FLAGS})
 
 if(ANDROID)
-# On Android, -z global does not do what it is documented to do.
-# On Android, -z global moves the library ahead in the lookup order,
-# placing it right after the LD_PRELOADs. This is used to compensate for the fact
-# that Android linker does not look at the dependencies of the main executable
-# that aren't dependencies of the current DSO when resolving symbols from said DSO.
-# As a net result, this allows running ASan executables without LD_PRELOAD-ing the
-# ASan runtime library.
-# The above is applicable to L MR1 or newer.
+# Put most Sanitizer shared libraries in the global group. For more details, see
+# android-changes-for-ndk-developers.md#changes-to-library-search-order
   if (COMPILER_RT_HAS_Z_GLOBAL)
     list(APPEND ASAN_DYNAMIC_LINK_FLAGS -Wl,-z,global)
   endif()
@@ -76,6 +99,7 @@ append_list_if(COMPILER_RT_HAS_LIBRT rt ASAN_DYNAMIC_LIBS)
 append_list_if(COMPILER_RT_HAS_LIBM m ASAN_DYNAMIC_LIBS)
 append_list_if(COMPILER_RT_HAS_LIBPTHREAD pthread ASAN_DYNAMIC_LIBS)
 append_list_if(COMPILER_RT_HAS_LIBLOG log ASAN_DYNAMIC_LIBS)
+append_list_if(MINGW "${MINGW_LIBRARIES}" ASAN_DYNAMIC_LIBS)
 
 # Compile ASan sources into an object library.
 
@@ -83,21 +107,28 @@ add_compiler_rt_object_libraries(RTAsan_dynamic
   OS ${SANITIZER_COMMON_SUPPORTED_OS}
   ARCHS ${ASAN_SUPPORTED_ARCH}
   SOURCES ${ASAN_SOURCES} ${ASAN_CXX_SOURCES}
+  ADDITIONAL_HEADERS ${ASAN_HEADERS}
   CFLAGS ${ASAN_DYNAMIC_CFLAGS}
   DEFS ${ASAN_DYNAMIC_DEFINITIONS})
 
 if(NOT APPLE)
   add_compiler_rt_object_libraries(RTAsan
     ARCHS ${ASAN_SUPPORTED_ARCH}
-    SOURCES ${ASAN_SOURCES} CFLAGS ${ASAN_CFLAGS}
+    SOURCES ${ASAN_SOURCES}
+    ADDITIONAL_HEADERS ${ASAN_HEADERS}
+    CFLAGS ${ASAN_CFLAGS}
     DEFS ${ASAN_COMMON_DEFINITIONS})
   add_compiler_rt_object_libraries(RTAsan_cxx
     ARCHS ${ASAN_SUPPORTED_ARCH}
-    SOURCES ${ASAN_CXX_SOURCES} CFLAGS ${ASAN_CFLAGS}
+    SOURCES ${ASAN_CXX_SOURCES}
+    ADDITIONAL_HEADERS ${ASAN_HEADERS}
+    CFLAGS ${ASAN_CFLAGS}
     DEFS ${ASAN_COMMON_DEFINITIONS})
   add_compiler_rt_object_libraries(RTAsan_preinit
     ARCHS ${ASAN_SUPPORTED_ARCH}
-    SOURCES ${ASAN_PREINIT_SOURCES} CFLAGS ${ASAN_CFLAGS}
+    SOURCES ${ASAN_PREINIT_SOURCES}
+    ADDITIONAL_HEADERS ${ASAN_HEADERS}
+    CFLAGS ${ASAN_CFLAGS}
     DEFS ${ASAN_COMMON_DEFINITIONS})
 
   file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/dummy.cc "")
@@ -116,6 +147,7 @@ if(APPLE)
   add_weak_symbols("lsan" WEAK_SYMBOL_LINK_FLAGS)
   add_weak_symbols("ubsan" WEAK_SYMBOL_LINK_FLAGS)
   add_weak_symbols("sanitizer_common" WEAK_SYMBOL_LINK_FLAGS)
+  add_weak_symbols("xray" WEAK_SYMBOL_LINK_FLAGS)
 
   add_compiler_rt_runtime(clang_rt.asan
     SHARED
@@ -125,6 +157,8 @@ if(APPLE)
                 RTInterception
                 RTSanitizerCommon
                 RTSanitizerCommonLibc
+                RTSanitizerCommonCoverage
+                RTSanitizerCommonSymbolizer
                 RTLSanCommon
                 RTUbsan
     CFLAGS ${ASAN_DYNAMIC_CFLAGS}
@@ -138,6 +172,8 @@ else()
     RTInterception
     RTSanitizerCommon
     RTSanitizerCommonLibc
+    RTSanitizerCommonCoverage
+    RTSanitizerCommonSymbolizer
     RTLSanCommon
     RTUbsan)
 
@@ -175,6 +211,11 @@ else()
                                     EXTRA asan.syms.extra)
       set(VERSION_SCRIPT_FLAG
            -Wl,--version-script,${CMAKE_CURRENT_BINARY_DIR}/clang_rt.asan-dynamic-${arch}.vers)
+      # The Solaris 11.4 linker supports a subset of GNU ld version scripts,
+      # but requires a special option to enable it.
+      if (OS_NAME MATCHES "SunOS")
+          list(APPEND VERSION_SCRIPT_FLAG -Wl,-z,gnu-version-script-compat)
+      endif()
       set_property(SOURCE
         ${CMAKE_CURRENT_BINARY_DIR}/dummy.cc
         APPEND PROPERTY
@@ -184,7 +225,7 @@ else()
     endif()
 
     set(ASAN_DYNAMIC_WEAK_INTERCEPTION)
-    if (MSVC)
+    if (WIN32)
       add_compiler_rt_object_libraries(AsanWeakInterception
         ${SANITIZER_COMMON_SUPPORTED_OS}
         ARCHS ${arch}
@@ -218,7 +259,7 @@ else()
       DEFS ${ASAN_DYNAMIC_DEFINITIONS}
       PARENT_TARGET asan)
 
-    if (UNIX AND NOT ${arch} STREQUAL "i386")
+    if (SANITIZER_USE_SYMBOLS AND NOT ${arch} STREQUAL "i386")
       add_sanitizer_rt_symbols(clang_rt.asan_cxx
         ARCHS ${arch})
       add_dependencies(asan clang_rt.asan_cxx-${arch}-symbols)

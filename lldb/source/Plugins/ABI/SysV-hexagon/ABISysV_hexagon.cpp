@@ -18,7 +18,6 @@
 // Project includes
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectMemory.h"
@@ -32,6 +31,7 @@
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
 #include "lldb/Utility/Status.h"
 
 using namespace lldb;
@@ -1214,8 +1214,8 @@ ValueObjectSP ABISysV_hexagon::GetReturnValueObjectImpl(
   return return_valobj_sp;
 }
 
-// called when we are on the first instruction of a new function
-// for hexagon the return address is in RA (R31)
+// called when we are on the first instruction of a new function for hexagon
+// the return address is in RA (R31)
 bool ABISysV_hexagon::CreateFunctionEntryUnwindPlan(UnwindPlan &unwind_plan) {
   unwind_plan.Clear();
   unwind_plan.SetRegisterKind(eRegisterKindGeneric);

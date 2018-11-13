@@ -31,9 +31,12 @@ endfunction()
 #                                  ARCHS <architectures>
 #                                  SOURCES <source files>
 #                                  CFLAGS <compile flags>
-#                                  DEFS <compile definitions>)
+#                                  DEFS <compile definitions>
+#                                  DEPS <dependencies>
+#                                  ADDITIONAL_HEADERS <header files>)
 function(add_compiler_rt_object_libraries name)
-  cmake_parse_arguments(LIB "" "" "OS;ARCHS;SOURCES;CFLAGS;DEFS" ${ARGN})
+  cmake_parse_arguments(LIB "" "" "OS;ARCHS;SOURCES;CFLAGS;DEFS;DEPS;ADDITIONAL_HEADERS"
+    ${ARGN})
   set(libnames)
   if(APPLE)
     foreach(os ${LIB_OS})
@@ -54,8 +57,18 @@ function(add_compiler_rt_object_libraries name)
     endforeach()
   endif()
 
+  # Add headers to LIB_SOURCES for IDEs
+  compiler_rt_process_sources(LIB_SOURCES
+    ${LIB_SOURCES}
+    ADDITIONAL_HEADERS
+      ${LIB_ADDITIONAL_HEADERS}
+  )
+
   foreach(libname ${libnames})
     add_library(${libname} OBJECT ${LIB_SOURCES})
+    if(LIB_DEPS)
+      add_dependencies(${libname} ${LIB_DEPS})
+    endif()
 
     # Strip out -msse3 if this isn't macOS.
     set(target_flags ${LIB_CFLAGS})
@@ -93,11 +106,26 @@ function(add_compiler_rt_component name)
   add_dependencies(compiler-rt ${name})
 endfunction()
 
-macro(set_output_name output name arch)
-  if(ANDROID AND ${arch} STREQUAL "i386")
-    set(${output} "${name}-i686${COMPILER_RT_OS_SUFFIX}")
+function(add_asm_sources output)
+  set(${output} ${ARGN} PARENT_SCOPE)
+  # Xcode will try to compile asm files as C ('clang -x c'), and that will fail.
+  if (${CMAKE_GENERATOR} STREQUAL "Xcode")
+    enable_language(ASM)
   else()
-    set(${output} "${name}-${arch}${COMPILER_RT_OS_SUFFIX}")
+    # Pass ASM file directly to the C++ compiler.
+    set_source_files_properties(${ARGN} PROPERTIES LANGUAGE C)
+  endif()
+endfunction()
+
+macro(set_output_name output name arch)
+  if(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR)
+    set(${output} ${name})
+  else()
+    if(ANDROID AND ${arch} STREQUAL "i386")
+      set(${output} "${name}-i686${COMPILER_RT_OS_SUFFIX}")
+    else()
+      set(${output} "${name}-${arch}${COMPILER_RT_OS_SUFFIX}")
+    endif()
   endif()
 endmacro()
 
@@ -113,7 +141,8 @@ endmacro()
 #                         DEFS <compile definitions>
 #                         LINK_LIBS <linked libraries> (only for shared library)
 #                         OBJECT_LIBS <object libraries to use as sources>
-#                         PARENT_TARGET <convenience parent target>)
+#                         PARENT_TARGET <convenience parent target>
+#                         ADDITIONAL_HEADERS <header files>)
 function(add_compiler_rt_runtime name type)
   if(NOT type MATCHES "^(STATIC|SHARED)$")
     message(FATAL_ERROR "type argument must be STATIC or SHARED")
@@ -122,7 +151,7 @@ function(add_compiler_rt_runtime name type)
   cmake_parse_arguments(LIB
     ""
     "PARENT_TARGET"
-    "OS;ARCHS;SOURCES;CFLAGS;LINK_FLAGS;DEFS;LINK_LIBS;OBJECT_LIBS"
+    "OS;ARCHS;SOURCES;CFLAGS;LINK_FLAGS;DEFS;LINK_LIBS;OBJECT_LIBS;ADDITIONAL_HEADERS"
     ${ARGN})
   set(libnames)
   # Until we support this some other way, build compiler-rt runtime without LTO
@@ -131,6 +160,18 @@ function(add_compiler_rt_runtime name type)
     set(NO_LTO_FLAGS "-fno-lto")
   else()
     set(NO_LTO_FLAGS "")
+  endif()
+
+  list(LENGTH LIB_SOURCES LIB_SOURCES_LENGTH)
+  if (${LIB_SOURCES_LENGTH} GREATER 0)
+    # Add headers to LIB_SOURCES for IDEs. It doesn't make sense to
+    # do this for a runtime library that only consists of OBJECT
+    # libraries, so only add the headers when source files are present.
+    compiler_rt_process_sources(LIB_SOURCES
+      ${LIB_SOURCES}
+      ADDITIONAL_HEADERS
+        ${LIB_ADDITIONAL_HEADERS}
+    )
   endif()
 
   if(APPLE)
@@ -153,6 +194,8 @@ function(add_compiler_rt_runtime name type)
         set(output_name_${libname} ${libname}${COMPILER_RT_OS_SUFFIX})
         set(sources_${libname} ${LIB_SOURCES})
         format_object_libs(sources_${libname} ${os} ${LIB_OBJECT_LIBS})
+        get_compiler_rt_output_dir(${COMPILER_RT_DEFAULT_TARGET_ARCH} output_dir_${libname})
+        get_compiler_rt_install_dir(${COMPILER_RT_DEFAULT_TARGET_ARCH} install_dir_${libname})
       endif()
     endforeach()
   else()
@@ -178,6 +221,8 @@ function(add_compiler_rt_runtime name type)
       format_object_libs(sources_${libname} ${arch} ${LIB_OBJECT_LIBS})
       set(libnames ${libnames} ${libname})
       set(extra_cflags_${libname} ${TARGET_${arch}_CFLAGS} ${NO_LTO_FLAGS} ${LIB_CFLAGS})
+      get_compiler_rt_output_dir(${arch} output_dir_${libname})
+      get_compiler_rt_install_dir(${arch} install_dir_${libname})
     endforeach()
   endif()
 
@@ -189,6 +234,8 @@ function(add_compiler_rt_runtime name type)
     # If the parent targets aren't created we should create them
     if(NOT TARGET ${LIB_PARENT_TARGET})
       add_custom_target(${LIB_PARENT_TARGET})
+      set_target_properties(${LIB_PARENT_TARGET} PROPERTIES
+                            FOLDER "Compiler-RT Misc")
     endif()
     if(NOT TARGET install-${LIB_PARENT_TARGET})
       # The parent install target specifies the parent component to scrape up
@@ -199,9 +246,18 @@ function(add_compiler_rt_runtime name type)
                         COMMAND "${CMAKE_COMMAND}"
                                 -DCMAKE_INSTALL_COMPONENT=${LIB_PARENT_TARGET}
                                 -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")
+      add_custom_target(install-${LIB_PARENT_TARGET}-stripped
+                        DEPENDS ${LIB_PARENT_TARGET}
+                        COMMAND "${CMAKE_COMMAND}"
+                                -DCMAKE_INSTALL_COMPONENT=${LIB_PARENT_TARGET}
+                                -DCMAKE_INSTALL_DO_STRIP=1
+                                -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")
       set_target_properties(install-${LIB_PARENT_TARGET} PROPERTIES
                             FOLDER "Compiler-RT Misc")
+      set_target_properties(install-${LIB_PARENT_TARGET}-stripped PROPERTIES
+                            FOLDER "Compiler-RT Misc")
       add_dependencies(install-compiler-rt install-${LIB_PARENT_TARGET})
+      add_dependencies(install-compiler-rt-stripped install-${LIB_PARENT_TARGET}-stripped)
     endif()
   endif()
 
@@ -219,7 +275,7 @@ function(add_compiler_rt_runtime name type)
     set_target_link_flags(${libname} ${extra_link_flags_${libname}})
     set_property(TARGET ${libname} APPEND PROPERTY
                 COMPILE_DEFINITIONS ${LIB_DEFS})
-    set_target_output_directories(${libname} ${COMPILER_RT_LIBRARY_OUTPUT_DIR})
+    set_target_output_directories(${libname} ${output_dir_${libname}})
     set_target_properties(${libname} PROPERTIES
         OUTPUT_NAME ${output_name_${libname}})
     set_target_properties(${libname} PROPERTIES FOLDER "Compiler-RT Runtime")
@@ -227,6 +283,9 @@ function(add_compiler_rt_runtime name type)
       target_link_libraries(${libname} ${LIB_LINK_LIBS})
     endif()
     if(${type} STREQUAL "SHARED")
+      if(COMMAND llvm_setup_rpath)
+        llvm_setup_rpath(${libname})
+      endif()
       if(WIN32 AND NOT CYGWIN AND NOT MINGW)
         set_target_properties(${libname} PROPERTIES IMPORT_PREFIX "")
         set_target_properties(${libname} PROPERTIES IMPORT_SUFFIX ".lib")
@@ -241,11 +300,11 @@ function(add_compiler_rt_runtime name type)
       endif()
     endif()
     install(TARGETS ${libname}
-      ARCHIVE DESTINATION ${COMPILER_RT_LIBRARY_INSTALL_DIR}
+      ARCHIVE DESTINATION ${install_dir_${libname}}
               ${COMPONENT_OPTION}
-      LIBRARY DESTINATION ${COMPILER_RT_LIBRARY_INSTALL_DIR}
+      LIBRARY DESTINATION ${install_dir_${libname}}
               ${COMPONENT_OPTION}
-      RUNTIME DESTINATION ${COMPILER_RT_LIBRARY_INSTALL_DIR}
+      RUNTIME DESTINATION ${install_dir_${libname}}
               ${COMPONENT_OPTION})
 
     # We only want to generate per-library install targets if you aren't using
@@ -256,10 +315,17 @@ function(add_compiler_rt_runtime name type)
                         COMMAND "${CMAKE_COMMAND}"
                                 -DCMAKE_INSTALL_COMPONENT=${libname}
                                 -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")
+      add_custom_target(install-${libname}-stripped
+                        DEPENDS ${libname}
+                        COMMAND "${CMAKE_COMMAND}"
+                                -DCMAKE_INSTALL_COMPONENT=${libname}
+                                -DCMAKE_INSTALL_DO_STRIP=1
+                                -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")
       # If you have a parent target specified, we bind the new install target
       # to the parent install target.
       if(LIB_PARENT_TARGET)
         add_dependencies(install-${LIB_PARENT_TARGET} install-${libname})
+        add_dependencies(install-${LIB_PARENT_TARGET}-stripped install-${libname}-stripped)
       endif()
     endif()
     if(APPLE)
@@ -289,6 +355,16 @@ set(COMPILER_RT_GTEST_CFLAGS
   -DGTEST_HAS_RTTI=0
   -I${COMPILER_RT_GTEST_PATH}/include
   -I${COMPILER_RT_GTEST_PATH}
+)
+
+# Mocking support.
+set(COMPILER_RT_GMOCK_PATH ${LLVM_MAIN_SRC_DIR}/utils/unittest/googlemock)
+set(COMPILER_RT_GMOCK_SOURCE ${COMPILER_RT_GMOCK_PATH}/src/gmock-all.cc)
+set(COMPILER_RT_GMOCK_CFLAGS
+  -DGTEST_NO_LLVM_RAW_OSTREAM=1
+  -DGTEST_HAS_RTTI=0
+  -I${COMPILER_RT_GMOCK_PATH}/include
+  -I${COMPILER_RT_GMOCK_PATH}
 )
 
 append_list_if(COMPILER_RT_DEBUG -DSANITIZER_DEBUG=1 COMPILER_RT_UNITTEST_CFLAGS)
@@ -404,7 +480,7 @@ endfunction()
 
 macro(add_compiler_rt_resource_file target_name file_name component)
   set(src_file "${CMAKE_CURRENT_SOURCE_DIR}/${file_name}")
-  set(dst_file "${COMPILER_RT_OUTPUT_DIR}/${file_name}")
+  set(dst_file "${COMPILER_RT_OUTPUT_DIR}/share/${file_name}")
   add_custom_command(OUTPUT ${dst_file}
     DEPENDS ${src_file}
     COMMAND ${CMAKE_COMMAND} -E copy_if_different ${src_file} ${dst_file}
@@ -412,7 +488,7 @@ macro(add_compiler_rt_resource_file target_name file_name component)
   add_custom_target(${target_name} DEPENDS ${dst_file})
   # Install in Clang resource directory.
   install(FILES ${file_name}
-    DESTINATION ${COMPILER_RT_INSTALL_PATH}
+    DESTINATION ${COMPILER_RT_INSTALL_PATH}/share
     COMPONENT ${component})
   add_dependencies(${component} ${target_name})
 
@@ -436,52 +512,123 @@ endmacro(add_compiler_rt_script src name)
 # Can be used to build sanitized versions of libc++ for running unit tests.
 # add_custom_libcxx(<name> <prefix>
 #                   DEPS <list of build deps>
-#                   CFLAGS <list of compile flags>)
+#                   CFLAGS <list of compile flags>
+#                   USE_TOOLCHAIN)
 macro(add_custom_libcxx name prefix)
-  if(NOT COMPILER_RT_HAS_LIBCXX_SOURCES)
+  if(NOT COMPILER_RT_LIBCXX_PATH)
     message(FATAL_ERROR "libcxx not found!")
   endif()
 
-  cmake_parse_arguments(LIBCXX "" "" "DEPS;CFLAGS" ${ARGN})
-  foreach(flag ${LIBCXX_CFLAGS})
-    set(flagstr "${flagstr} ${flag}")
-  endforeach()
-  set(LIBCXX_CFLAGS ${flagstr})
+  cmake_parse_arguments(LIBCXX "USE_TOOLCHAIN" "" "DEPS;CFLAGS;CMAKE_ARGS" ${ARGN})
 
-  if(NOT COMPILER_RT_STANDALONE_BUILD)
-    list(APPEND LIBCXX_DEPS clang)
+  if(LIBCXX_USE_TOOLCHAIN)
+    set(compiler_args -DCMAKE_C_COMPILER=${COMPILER_RT_TEST_COMPILER}
+                      -DCMAKE_CXX_COMPILER=${COMPILER_RT_TEST_CXX_COMPILER})
+    if(NOT COMPILER_RT_STANDALONE_BUILD)
+      set(toolchain_deps $<TARGET_FILE:clang>)
+      set(force_deps DEPENDS $<TARGET_FILE:clang>)
+    endif()
+  else()
+    set(compiler_args -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+                      -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER})
   endif()
 
+  set(STAMP_DIR ${prefix}-stamps/)
+  set(BINARY_DIR ${prefix}-bins/)
+
+  add_custom_target(${name}-clear
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${BINARY_DIR}
+    COMMAND ${CMAKE_COMMAND} -E remove_directory ${STAMP_DIR}
+    COMMENT "Clobbering ${name} build and stamp directories"
+    USES_TERMINAL
+    )
+  set_target_properties(${name}-clear PROPERTIES FOLDER "Compiler-RT Misc")
+
+  add_custom_command(
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${name}-clobber-stamp
+    DEPENDS ${LIBCXX_DEPS} ${toolchain_deps}
+    COMMAND ${CMAKE_COMMAND} -E touch ${BINARY_DIR}/CMakeCache.txt
+    COMMAND ${CMAKE_COMMAND} -E touch ${STAMP_DIR}/${name}-mkdir
+    COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_CURRENT_BINARY_DIR}/${name}-clobber-stamp
+    COMMENT "Clobbering bootstrap build and stamp directories"
+    )
+
+  add_custom_target(${name}-clobber
+    DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${name}-clobber-stamp)
+  set_target_properties(${name}-clobber PROPERTIES FOLDER "Compiler-RT Misc")
+
+  set(PASSTHROUGH_VARIABLES
+    CMAKE_C_COMPILER_TARGET
+    CMAKE_CXX_COMPILER_TARGET
+    CMAKE_INSTALL_PREFIX
+    CMAKE_MAKE_PROGRAM
+    CMAKE_LINKER
+    CMAKE_AR
+    CMAKE_RANLIB
+    CMAKE_NM
+    CMAKE_OBJCOPY
+    CMAKE_OBJDUMP
+    CMAKE_STRIP
+    CMAKE_SYSROOT
+    CMAKE_SYSTEM_NAME)
+  foreach(variable ${PASSTHROUGH_VARIABLES})
+    if(${variable})
+      list(APPEND CMAKE_PASSTHROUGH_VARIABLES -D${variable}=${${variable}})
+    endif()
+  endforeach()
+
+  string(REPLACE ";" " " FLAGS_STRING "${LIBCXX_CFLAGS}")
+  set(LIBCXX_C_FLAGS "${FLAGS_STRING}")
+  set(LIBCXX_CXX_FLAGS "${FLAGS_STRING}")
+
   ExternalProject_Add(${name}
+    DEPENDS ${name}-clobber ${LIBCXX_DEPS}
     PREFIX ${prefix}
     SOURCE_DIR ${COMPILER_RT_LIBCXX_PATH}
-    CMAKE_ARGS -DCMAKE_MAKE_PROGRAM:STRING=${CMAKE_MAKE_PROGRAM}
-               -DCMAKE_C_COMPILER=${COMPILER_RT_TEST_COMPILER}
-               -DCMAKE_CXX_COMPILER=${COMPILER_RT_TEST_CXX_COMPILER}
-               -DCMAKE_C_FLAGS=${LIBCXX_CFLAGS}
-               -DCMAKE_CXX_FLAGS=${LIBCXX_CFLAGS}
+    STAMP_DIR ${STAMP_DIR}
+    BINARY_DIR ${BINARY_DIR}
+    CMAKE_ARGS ${CMAKE_PASSTHROUGH_VARIABLES}
+               ${compiler_args}
+               -DCMAKE_C_FLAGS=${LIBCXX_C_FLAGS}
+               -DCMAKE_CXX_FLAGS=${LIBCXX_CXX_FLAGS}
                -DCMAKE_BUILD_TYPE=Release
-               -DCMAKE_INSTALL_PREFIX:PATH=<INSTALL_DIR>
                -DLLVM_PATH=${LLVM_MAIN_SRC_DIR}
-               -DLIBCXX_STANDALONE_BUILD=On
-    LOG_BUILD 1
-    LOG_CONFIGURE 1
-    LOG_INSTALL 1
+               -DLLVM_BINARY_DIR=${prefix}
+               -DLLVM_LIBRARY_OUTPUT_INTDIR=${prefix}/lib
+               -DLIBCXX_STANDALONE_BUILD=ON
+               ${LIBCXX_CMAKE_ARGS}
+    INSTALL_COMMAND ""
+    STEP_TARGETS configure build
+    BUILD_ALWAYS 1
+    USES_TERMINAL_CONFIGURE 1
+    USES_TERMINAL_BUILD 1
+    USES_TERMINAL_INSTALL 1
+    EXCLUDE_FROM_ALL TRUE
     )
-  set_target_properties(${name} PROPERTIES EXCLUDE_FROM_ALL TRUE)
 
-  ExternalProject_Add_Step(${name} force-reconfigure
-    DEPENDERS configure
-    ALWAYS 1
-    )
+  if (CMAKE_GENERATOR MATCHES "Make")
+    set(run_clean "$(MAKE)" "-C" "${BINARY_DIR}" "clean")
+  else()
+    set(run_clean ${CMAKE_COMMAND} --build ${BINARY_DIR} --target clean
+                                   --config "$<CONFIGURATION>")
+  endif()
 
-  ExternalProject_Add_Step(${name} clobber
-    COMMAND ${CMAKE_COMMAND} -E remove_directory <BINARY_DIR>
-    COMMAND ${CMAKE_COMMAND} -E make_directory <BINARY_DIR>
-    COMMENT "Clobberring ${name} build directory..."
-    DEPENDERS configure
-    DEPENDS ${LIBCXX_DEPS}
+  ExternalProject_Add_Step(${name} clean
+    COMMAND ${run_clean}
+    COMMENT "Cleaning ${name}..."
+    DEPENDEES configure
+    ${force_deps}
+    WORKING_DIRECTORY ${BINARY_DIR}
+    EXCLUDE_FROM_MAIN 1
+    USES_TERMINAL 1
     )
+  ExternalProject_Add_StepTargets(${name} clean)
+
+  if(LIBCXX_USE_TOOLCHAIN)
+    add_dependencies(${name}-clean ${name}-clobber)
+    set_target_properties(${name}-clean PROPERTIES
+      SOURCES ${CMAKE_CURRENT_BINARY_DIR}/${name}-clobber-stamp)
+  endif()
 endmacro()
 
 function(rt_externalize_debuginfo name)
@@ -514,8 +661,10 @@ endfunction()
 function(configure_compiler_rt_lit_site_cfg input output)
   set_llvm_build_mode()
 
+  get_compiler_rt_output_dir(${COMPILER_RT_DEFAULT_TARGET_ARCH} output_dir)
+
   string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} COMPILER_RT_RESOLVED_TEST_COMPILER ${COMPILER_RT_TEST_COMPILER})
-  string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} COMPILER_RT_RESOLVED_LIBRARY_OUTPUT_DIR ${COMPILER_RT_LIBRARY_OUTPUT_DIR})
+  string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} COMPILER_RT_RESOLVED_LIBRARY_OUTPUT_DIR ${output_dir})
 
   configure_lit_site_cfg(${input} ${output})
 endfunction()

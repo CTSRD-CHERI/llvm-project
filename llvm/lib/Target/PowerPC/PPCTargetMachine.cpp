@@ -24,6 +24,7 @@
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
@@ -88,6 +89,10 @@ EnableMachineCombinerPass("ppc-machine-combiner",
                           cl::desc("Enable the machine combiner pass"),
                           cl::init(true), cl::Hidden);
 
+static cl::opt<bool>
+  ReduceCRLogical("ppc-reduce-cr-logicals",
+                  cl::desc("Expand eligible cr-logical binary ops to branches"),
+                  cl::init(false), cl::Hidden);
 extern "C" void LLVMInitializePowerPCTarget() {
   // Register the targets
   RegisterTargetMachine<PPCTargetMachine> A(getThePPC32Target());
@@ -97,7 +102,9 @@ extern "C" void LLVMInitializePowerPCTarget() {
   PassRegistry &PR = *PassRegistry::getPassRegistry();
   initializePPCBoolRetToIntPass(PR);
   initializePPCExpandISELPass(PR);
+  initializePPCPreEmitPeepholePass(PR);
   initializePPCTLSDynamicCallPass(PR);
+  initializePPCMIPeepholePass(PR);
 }
 
 /// Return the datalayout string of a subtarget.
@@ -174,6 +181,9 @@ static std::unique_ptr<TargetLoweringObjectFile> createTLOF(const Triple &TT) {
 
 static PPCTargetMachine::PPCABI computeTargetABI(const Triple &TT,
                                                  const TargetOptions &Options) {
+  if (TT.isOSDarwin())
+    report_fatal_error("Darwin is no longer supported for PowerPC");
+  
   if (Options.MCOptions.getABIName().startswith("elfv1"))
     return PPCTargetMachine::PPC_ABI_ELFv1;
   else if (Options.MCOptions.getABIName().startswith("elfv2"))
@@ -297,7 +307,12 @@ namespace {
 class PPCPassConfig : public TargetPassConfig {
 public:
   PPCPassConfig(PPCTargetMachine &TM, PassManagerBase &PM)
-    : TargetPassConfig(TM, PM) {}
+    : TargetPassConfig(TM, PM) {
+    // At any optimization level above -O0 we use the Machine Scheduler and not
+    // the default Post RA List Scheduler.
+    if (TM.getOptLevel() != CodeGenOpt::None)
+      substitutePass(&PostRASchedulerID, &PostMachineSchedulerID);
+  }
 
   PPCTargetMachine &getPPCTargetMachine() const {
     return getTM<PPCTargetMachine>();
@@ -337,7 +352,7 @@ void PPCPassConfig::addIRPasses() {
     // Call SeparateConstOffsetFromGEP pass to extract constants within indices
     // and lower a GEP with multiple indices to either arithmetic operations or
     // multiple GEPs with single index.
-    addPass(createSeparateConstOffsetFromGEPPass(TM, true));
+    addPass(createSeparateConstOffsetFromGEPPass(true));
     // Call EarlyCSE pass to find and remove subexpressions in the lowered
     // result.
     addPass(createEarlyCSEPass());
@@ -392,6 +407,9 @@ void PPCPassConfig::addMachineSSAOptimization() {
   if (TM->getTargetTriple().getArch() == Triple::ppc64le &&
       !DisableVSXSwapRemoval)
     addPass(createPPCVSXSwapRemovalPass());
+  // Reduce the number of cr-logical ops.
+  if (ReduceCRLogical && getOptLevel() != CodeGenOpt::None)
+    addPass(createPPCReduceCRLogicalsPass());
   // Target-specific peephole cleanups performed after instruction
   // selection.
   if (!DisableMIPeephole) {
@@ -433,6 +451,7 @@ void PPCPassConfig::addPreSched2() {
 }
 
 void PPCPassConfig::addPreEmitPass() {
+  addPass(createPPCPreEmitPeepholePass());
   addPass(createPPCExpandISELPass());
 
   if (getOptLevel() != CodeGenOpt::None)
@@ -441,8 +460,7 @@ void PPCPassConfig::addPreEmitPass() {
   addPass(createPPCBranchSelectionPass(), false);
 }
 
-TargetIRAnalysis PPCTargetMachine::getTargetIRAnalysis() {
-  return TargetIRAnalysis([this](const Function &F) {
-    return TargetTransformInfo(PPCTTIImpl(this, F));
-  });
+TargetTransformInfo
+PPCTargetMachine::getTargetTransformInfo(const Function &F) {
+  return TargetTransformInfo(PPCTTIImpl(this, F));
 }

@@ -18,7 +18,7 @@ namespace tidy {
 namespace modernize {
 
 void UnaryStaticAssertCheck::registerMatchers(MatchFinder *Finder) {
-  if (!getLangOpts().CPlusPlus1z)
+  if (!getLangOpts().CPlusPlus17)
     return;
 
   Finder->addMatcher(staticAssertDecl().bind("static_assert"), this);
@@ -32,7 +32,7 @@ void UnaryStaticAssertCheck::check(const MatchFinder::MatchResult &Result) {
   SourceLocation Loc = MatchedDecl->getLocation();
 
   if (!AssertMessage || AssertMessage->getLength() ||
-      AssertMessage->getLocStart().isMacroID() || Loc.isMacroID())
+      AssertMessage->getBeginLoc().isMacroID() || Loc.isMacroID())
     return;
 
   diag(Loc,

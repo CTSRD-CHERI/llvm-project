@@ -28,9 +28,8 @@ namespace lldb_private {
 
 //----------------------------------------------------------------------
 /// @class FileLineResolver FileLineResolver.h "lldb/Core/FileLineResolver.h"
-/// @brief This class finds address for source file and line.  Optionally, it
-/// will look for inlined
-/// instances of the file and line specification.
+/// This class finds address for source file and line.  Optionally, it will
+/// look for inlined instances of the file and line specification.
 //----------------------------------------------------------------------
 
 class FileLineResolver : public Searcher {
@@ -49,7 +48,7 @@ public:
                                           SymbolContext &context, Address *addr,
                                           bool containing) override;
 
-  Searcher::Depth GetDepth() override;
+  lldb::SearchDepth GetDepth() override;
 
   void GetDescription(Stream *s) override;
 

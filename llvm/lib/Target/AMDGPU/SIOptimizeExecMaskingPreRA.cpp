@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief This pass removes redundant S_OR_B64 instructions enabling lanes in
+/// This pass removes redundant S_OR_B64 instructions enabling lanes in
 /// the exec. If two SI_END_CF (lowered as S_OR_B64) come together without any
 /// vector instructions between them we can only keep outer SI_END_CF, given
 /// that CFG is structured and exec bits of the outer end statement are always
@@ -23,7 +23,8 @@
 #include "AMDGPU.h"
 #include "AMDGPUSubtarget.h"
 #include "SIInstrInfo.h"
-#include "llvm/CodeGen/LiveIntervalAnalysis.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
+#include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 
 using namespace llvm;
@@ -103,10 +104,10 @@ static MachineInstr* getOrExecSource(const MachineInstr &MI,
 }
 
 bool SIOptimizeExecMaskingPreRA::runOnMachineFunction(MachineFunction &MF) {
-  if (skipFunction(*MF.getFunction()))
+  if (skipFunction(MF.getFunction()))
     return false;
 
-  const SISubtarget &ST = MF.getSubtarget<SISubtarget>();
+  const GCNSubtarget &ST = MF.getSubtarget<GCNSubtarget>();
   const SIRegisterInfo *TRI = ST.getRegisterInfo();
   const SIInstrInfo *TII = ST.getInstrInfo();
   MachineRegisterInfo &MRI = MF.getRegInfo();
@@ -118,7 +119,14 @@ bool SIOptimizeExecMaskingPreRA::runOnMachineFunction(MachineFunction &MF) {
 
     // Try to remove unneeded instructions before s_endpgm.
     if (MBB.succ_empty()) {
-      if (MBB.empty() || MBB.back().getOpcode() != AMDGPU::S_ENDPGM)
+      if (MBB.empty())
+        continue;
+
+      // Skip this if the endpgm has any implicit uses, otherwise we would need
+      // to be careful to update / remove them.
+      MachineInstr &Term = MBB.back();
+      if (Term.getOpcode() != AMDGPU::S_ENDPGM ||
+          Term.getNumOperands() != 0)
         continue;
 
       SmallVector<MachineBasicBlock*, 4> Blocks({&MBB});
@@ -134,13 +142,17 @@ bool SIOptimizeExecMaskingPreRA::runOnMachineFunction(MachineFunction &MF) {
         }
 
         while (I != E) {
-          if (I->isDebugValue())
+          if (I->isDebugInstr()) {
+            I = std::next(I);
             continue;
+          }
+
           if (I->mayStore() || I->isBarrier() || I->isCall() ||
               I->hasUnmodeledSideEffects() || I->hasOrderedMemoryRef())
             break;
 
-          DEBUG(dbgs() << "Removing no effect instruction: " << *I << '\n');
+          LLVM_DEBUG(dbgs()
+                     << "Removing no effect instruction: " << *I << '\n');
 
           for (auto &Op : I->operands()) {
             if (Op.isReg())
@@ -190,7 +202,7 @@ bool SIOptimizeExecMaskingPreRA::runOnMachineFunction(MachineFunction &MF) {
         !getOrExecSource(*NextLead, *TII, MRI))
       continue;
 
-    DEBUG(dbgs() << "Redundant EXEC = S_OR_B64 found: " << *Lead << '\n');
+    LLVM_DEBUG(dbgs() << "Redundant EXEC = S_OR_B64 found: " << *Lead << '\n');
 
     auto SaveExec = getOrExecSource(*Lead, *TII, MRI);
     unsigned SaveExecReg = getOrNonExecReg(*Lead, *TII);
@@ -221,7 +233,7 @@ bool SIOptimizeExecMaskingPreRA::runOnMachineFunction(MachineFunction &MF) {
         break;
       }
 
-      DEBUG(dbgs() << "Redundant EXEC COPY: " << *SaveExec << '\n');
+      LLVM_DEBUG(dbgs() << "Redundant EXEC COPY: " << *SaveExec << '\n');
     }
 
     if (SafeToReplace) {

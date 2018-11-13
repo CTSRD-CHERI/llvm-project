@@ -79,6 +79,7 @@ representation.
    yaml2obj
    HowToSubmitABug
    SphinxQuickstartTemplate
+   MarkdownQuickstartTemplate
    Phabricator
    TestingGuide
    tutorial/index
@@ -143,6 +144,9 @@ representation.
 
 :doc:`LLVM Testing Infrastructure Guide <TestingGuide>`
    A reference manual for using the LLVM testing infrastructure.
+
+:doc:`TestSuiteGuide`
+  Describes how to compile and run the test-suite benchmarks.
 
 `How to build the C, C++, ObjC, and ObjC++ front end`__
    Instructions for building the clang front-end from source.
@@ -242,6 +246,8 @@ For developers of applications which use LLVM as a library.
 :doc:`OptBisect`
   A command line option for debugging optimization-induced failures.
 
+.. _index-subsystem-docs:
+
 Subsystem Documentation
 =======================
 
@@ -266,6 +272,7 @@ For API clients and LLVM developers.
    GoldPlugin
    MarkedUpDisassembly
    SystemLibrary
+   SupportLibrary
    SourceLevelDebugging
    Vectorizers
    WritingAnLLVMBackend
@@ -290,6 +297,7 @@ For API clients and LLVM developers.
    XRayFDRFormat
    PDB/index
    CFIVerify
+   SpeculativeLoadHardening
 
 :doc:`WritingAnLLVMPass`
    Information on how to write LLVM transformations and analyses.
@@ -339,8 +347,8 @@ For API clients and LLVM developers.
 :doc:`BitCodeFormat`
    This describes the file format and encoding used for LLVM "bc" files.
 
-:doc:`System Library <SystemLibrary>`
-   This document describes the LLVM System Library (``lib/System``) and
+:doc:`Support Library <SupportLibrary>`
+   This document describes the LLVM Support Library (``lib/Support``) and
    how to keep LLVM source code portable
 
 :doc:`LinkTimeOptimization`
@@ -423,6 +431,9 @@ For API clients and LLVM developers.
 :doc:`CFIVerify`
   A description of the verification tool for Control Flow Integrity.
 
+:doc:`SpeculativeLoadHardening`
+  A description of the Speculative Load Hardening mitigation for Spectre v1.
+
 Development Process Documentation
 =================================
 
@@ -431,6 +442,7 @@ Information about LLVM's development process.
 .. toctree::
    :hidden:
 
+   Contributing
    DeveloperPolicy
    Projects
    LLVMBuild
@@ -438,6 +450,9 @@ Information about LLVM's development process.
    Packaging
    ReleaseProcess
    Phabricator
+
+:doc:`Contributing`
+   An overview on how to contribute to LLVM.
 
 :doc:`DeveloperPolicy`
    The LLVM project's policy towards developers and their contributions.

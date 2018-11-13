@@ -1,10 +1,10 @@
-AC_INIT([isl], [0.18], [isl-development@googlegroups.com])
+AC_INIT([isl], [0.20], [isl-development@googlegroups.com])
 AC_CONFIG_AUX_DIR([.])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([foreign])
 m4_ifdef([AM_SILENT_RULES],[AM_SILENT_RULES([yes])])
 AC_SUBST(versioninfo)
-versioninfo=18:0:3
+versioninfo=20:0:1
 
 if test "x$prefix" != "xNONE"; then
 	prefix_wd=`cd $prefix && pwd`
@@ -39,6 +39,8 @@ CXXCPP="$ac_save_CXXCPP"
 AC_PROG_GREP
 AC_PROG_LIBTOOL
 AC_PROG_SED
+AM_PATH_PYTHON([2.5], [], [:])
+AM_CONDITIONAL([HAVE_PYTHON], [test "$PYTHON" != :])
 
 AC_CHECK_PROG(PERL, perl, perl, [])
 AC_CHECK_PROG(PDFLATEX, pdflatex, pdflatex, [])
@@ -116,6 +118,8 @@ system)
 	;;
 esac
 AM_CONDITIONAL(HAVE_CLANG, test $with_clang = system)
+AM_CONDITIONAL(HAVE_CPP_ISL_H,
+    [test $with_clang = system -o -f $srcdir/include/isl/cpp.h])
 
 AX_SET_WARNING_FLAGS
 

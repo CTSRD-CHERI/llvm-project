@@ -15,10 +15,12 @@ namespace clang {
 namespace tidy {
 namespace boost {
 
+namespace {
 AST_MATCHER(Type, isStrictlyInteger) {
   return Node.isIntegerType() && !Node.isAnyCharacterType() &&
          !Node.isBooleanType();
 }
+} // namespace
 
 void UseToStringCheck::registerMatchers(MatchFinder *Finder) {
   if (!getLangOpts().CPlusPlus)
@@ -54,7 +56,7 @@ void UseToStringCheck::check(const MatchFinder::MatchResult &Result) {
   else
     return;
 
-  auto Loc = Call->getLocStart();
+  auto Loc = Call->getBeginLoc();
   auto Diag =
       diag(Loc, "use std::to_%0 instead of boost::lexical_cast<std::%0>")
       << StringType;
@@ -63,8 +65,8 @@ void UseToStringCheck::check(const MatchFinder::MatchResult &Result) {
     return;
 
   Diag << FixItHint::CreateReplacement(
-      CharSourceRange::getCharRange(Call->getLocStart(),
-                                    Call->getArg(0)->getLocStart()),
+      CharSourceRange::getCharRange(Call->getBeginLoc(),
+                                    Call->getArg(0)->getBeginLoc()),
       (llvm::Twine("std::to_") + StringType + "(").str());
 }
 

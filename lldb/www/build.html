@@ -116,14 +116,15 @@
                 the PYTHONHOME environment variable if it is specified).
               </li>
               <li>
-                <b>LLDB_TEST_COMPILER</b>: The test suite needs to be able to find a copy of clang.exe that it can use to compile
-                inferior programs.  Note that MSVC is not supported here, it <strong>must</strong> be a path to a clang executable.
-                Note that using a release clang.exe is strongly recommended here, as it will make the test suite run much faster.
-                This can be a path to any recent clang.exe, including one you built yourself.
+                <b>LLDB_TEST_C_COMPILER</b> or <b>LLDB_TEST_CXX_COMPILER</b>: The test suite needs to be able to find a copy of clang.exe
+                that it can use to compile inferior programs.  Note that MSVC is not supported here, it <strong>must</strong> be a path to a
+                clang executable.  Note that using a release clang.exe is strongly recommended here, as it will make the test suite run much faster.
+                This can be a path to any recent clang.exe, including one you built yourself.  These variables are ignored unless the respective
+                <strong>LLDB_TEST_USE_CUSTOM_C_COMPILER</strong> and <strong>LLDB_TEST_USE_CUSTOM_CXX_COMPILER</strong> are set to ON.
               </li>
             </ul>
             Sample command line:<br/>
-            <code>cmake -G Ninja -DLLDB_TEST_DEBUG_TEST_CRASHES=1 -DPYTHON_HOME=C:\Python35 -DLLDB_TEST_COMPILER=d:\src\llvmbuild\ninja_release\bin\clang.exe ..\..\llvm</code>
+            <code>cmake -G Ninja -DLLDB_TEST_DEBUG_TEST_CRASHES=1 -DPYTHON_HOME=C:\Python35 -DLLDB_TEST_USE_CUSTOM_C_COMPILER=ON -DLLDB_TEST_C_COMPILER=d:\src\llvmbuild\ninja_release\bin\clang.exe ..\..\llvm</code>
             <h2>Working with both Ninja and MSVC</h2>
             <p>
               Compiling with <code>ninja</code> is both faster and simpler than compiling with MSVC, but chances are you still want
@@ -142,7 +143,7 @@
         <div class="post" id="BuildingLldbOnMacOSX">
           <h1 class="postheader">Building LLDB on Mac OS X</h1>
           <div class="postcontent">
-            <p>Building on Mac OS X is as easy as downloading the code and building the Xcode project or workspace:</p>
+            <p> There are two ways to build LLDB on Mac OS X: Using Xcode and using CMake
           </div>
           <div class="postcontent">
             <h2>Preliminaries</h2>
@@ -150,12 +151,33 @@
               <li>XCode 4.3 or newer requires the "Command Line Tools" component (XCode->Preferences->Downloads->Components).</li>
               <li>Mac OS X Lion or newer requires installing <a href="http://swig.org">Swig</a>.</li>
             </ul>
-            <h2>Building LLDB</h2>
+            <h2>Building LLDB with Xcode</h2>
+            <p>Building on Mac OS X with Xcode is as easy as downloading the code and building the Xcode project or workspace:</p>
             <ul>
               <li><a href="download.html">Download</a> the lldb sources.</li>
               <li>Follow the code signing instructions in <b>lldb/docs/code-signing.txt</b></li>
               <li>In Xcode 3.x: <b>lldb/lldb.xcodeproj</b>, select the <b>lldb-tool</b> target, and build.</li>
               <li>In Xcode 4.x: <b>lldb/lldb.xcworkspace</b>, select the <b>lldb-tool</b> scheme, and build.</li>
+            </ul>
+            <h2>Building LLDB with CMake</h2>
+            <p> First download the LLVM, Clang, and LLDB sources. Refer to <a href="source.html">this page</a> for precise instructions on this step.</p>
+            <p> Refer to the code signing instructions in <b>lldb/docs/code-signing.txt</b> for info on codesigning debugserver during the build.</p>
+            <p> Using CMake is documented on the <a href="http://llvm.org/docs/CMake.html">Building LLVM with CMake</a> page.
+            Ninja is the recommended generator to use when building LLDB with CMake.</p>
+            <code>
+              &gt; cmake $PATH_TO_LLVM -G Ninja
+              <br />&gt; ninja lldb
+            </code>
+            <p>
+               As noted in the "Building LLVM with CMake" page mentioned above, you can pass
+               variables to cmake to change build behavior. If LLDB is built as a part of LLVM,
+               then you can pass LLVM-specific CMake variables to cmake when building LLDB.
+            </p>
+            <p>Here are some commonly used LLDB-specific CMake variables:</p>
+            <ul>
+              <li><code><b>LLDB_EXPORT_ALL_SYMBOLS</b>:BOOL </code>: Exports all symbols. Useful in conjunction with CMAKE_BUILD_TYPE=Debug.</li>
+              <li><code><b>LLDB_BUILD_FRAMEWORK</b>:BOOL </code>: Builds LLDB.framework as Xcode would</li>
+              <li><code><b>LLDB_CODESIGN_IDENTITY</b>:STRING </code>: Determines the codesign identity to use. An empty string means skip building debugserver to avoid codesigning.</li>
             </ul>
           </div>
           <div class="postfooter"></div>

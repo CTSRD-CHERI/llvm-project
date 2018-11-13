@@ -24,10 +24,10 @@ static bool isF128SoftLibCall(const char *CallSym) {
       "__lttf2",       "__multf3",     "__netf2",       "__powitf2",
       "__subtf3",      "__trunctfdf2", "__trunctfsf2",  "__unordtf2",
       "ceill",         "copysignl",    "cosl",          "exp2l",
-      "expl",          "floorl",       "fmal",          "fmodl",
-      "log10l",        "log2l",        "logl",          "nearbyintl",
-      "powl",          "rintl",        "roundl",        "sinl",
-      "sqrtl",         "truncl"};
+      "expl",          "floorl",       "fmal",          "fmaxl",
+      "fmodl",         "log10l",       "log2l",         "logl",
+      "nearbyintl",    "powl",         "rintl",         "roundl",
+      "sinl",          "sqrtl",        "truncl"};
 
   // Check that LibCalls is sorted alphabetically.
   auto Comp = [](const char *S1, const char *S2) { return strcmp(S1, S2) < 0; };
@@ -101,9 +101,9 @@ void MipsCCState::PreAnalyzeReturnForF128(
   const MachineFunction &MF = getMachineFunction();
   for (unsigned i = 0; i < Outs.size(); ++i) {
     OriginalArgWasF128.push_back(
-        originalTypeIsF128(MF.getFunction()->getReturnType(), nullptr));
+        originalTypeIsF128(MF.getFunction().getReturnType(), nullptr));
     OriginalArgWasFloat.push_back(
-        MF.getFunction()->getReturnType()->isFloatingPointTy());
+        MF.getFunction().getReturnType()->isFloatingPointTy());
   }
 }
 
@@ -149,7 +149,7 @@ void MipsCCState::PreAnalyzeFormalArgumentsForF128(
     const SmallVectorImpl<ISD::InputArg> &Ins) {
   const MachineFunction &MF = getMachineFunction();
   for (unsigned i = 0; i < Ins.size(); ++i) {
-    Function::const_arg_iterator FuncArg = MF.getFunction()->arg_begin();
+    Function::const_arg_iterator FuncArg = MF.getFunction().arg_begin();
 
     // SRet arguments cannot originate from f128 or {f128} returns so we just
     // push false. We have to handle this specially since SRet arguments
@@ -161,7 +161,7 @@ void MipsCCState::PreAnalyzeFormalArgumentsForF128(
       continue;
     }
 
-    assert(Ins[i].getOrigArgIndex() < MF.getFunction()->arg_size());
+    assert(Ins[i].getOrigArgIndex() < MF.getFunction().arg_size());
     std::advance(FuncArg, Ins[i].getOrigArgIndex());
 
     OriginalArgWasF128.push_back(

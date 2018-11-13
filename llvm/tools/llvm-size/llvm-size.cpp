@@ -23,10 +23,8 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Format.h"
-#include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/PrettyStackTrace.h"
-#include "llvm/Support/Signals.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <string>
@@ -70,7 +68,7 @@ cl::opt<bool>
 static cl::list<std::string>
 ArchFlags("arch", cl::desc("architecture(s) from a Mach-O file to dump"),
           cl::ZeroOrMore);
-bool ArchAll = false;
+static bool ArchAll = false;
 
 enum RadixTy { octal = 8, decimal = 10, hexadecimal = 16 };
 static cl::opt<unsigned int>
@@ -95,7 +93,7 @@ static cl::alias TotalSizesShort("t", cl::desc("Short for --totals"),
 static cl::list<std::string>
 InputFilenames(cl::Positional, cl::desc("<input files>"), cl::ZeroOrMore);
 
-bool HadError = false;
+static bool HadError = false;
 
 static std::string ToolName;
 
@@ -481,19 +479,25 @@ static void printObjectSectionSizes(ObjectFile *Obj) {
     }
 
     if (!BerkeleyHeaderPrinted) {
-      outs() << "   text    data     bss     "
-             << (Radix == octal ? "oct" : "dec") << "     hex filename\n";
+      outs() << "   text\t"
+                "   data\t"
+                "    bss\t"
+                "    "
+             << (Radix == octal ? "oct" : "dec")
+             << "\t"
+                "    hex\t"
+                "filename\n";
       BerkeleyHeaderPrinted = true;
     }
 
     // Print result.
-    fmt << "%#7" << radix_fmt << " "
-        << "%#7" << radix_fmt << " "
-        << "%#7" << radix_fmt << " ";
+    fmt << "%#7" << radix_fmt << "\t"
+        << "%#7" << radix_fmt << "\t"
+        << "%#7" << radix_fmt << "\t";
     outs() << format(fmt.str().c_str(), total_text, total_data, total_bss);
     fmtbuf.clear();
-    fmt << "%7" << (Radix == octal ? PRIo64 : PRIu64) << " "
-        << "%7" PRIx64 " ";
+    fmt << "%7" << (Radix == octal ? PRIo64 : PRIu64) << "\t"
+        << "%7" PRIx64 "\t";
     outs() << format(fmt.str().c_str(), total, total);
   }
 }
@@ -841,24 +845,20 @@ static void printBerkelyTotals() {
   std::string fmtbuf;
   raw_string_ostream fmt(fmtbuf);
   const char *radix_fmt = getRadixFmt();
-  fmt << "%#7" << radix_fmt << " "
-      << "%#7" << radix_fmt << " "
-      << "%#7" << radix_fmt << " ";
+  fmt << "%#7" << radix_fmt << "\t"
+      << "%#7" << radix_fmt << "\t"
+      << "%#7" << radix_fmt << "\t";
   outs() << format(fmt.str().c_str(), TotalObjectText, TotalObjectData,
                    TotalObjectBss);
   fmtbuf.clear();
-  fmt << "%7" << (Radix == octal ? PRIo64 : PRIu64) << " "
-      << "%7" PRIx64 " ";
+  fmt << "%7" << (Radix == octal ? PRIo64 : PRIu64) << "\t"
+      << "%7" PRIx64 "\t";
   outs() << format(fmt.str().c_str(), TotalObjectTotal, TotalObjectTotal)
          << "(TOTALS)\n";
 }
 
 int main(int argc, char **argv) {
-  // Print a stack trace if we signal out.
-  sys::PrintStackTraceOnErrorSignal(argv[0]);
-  PrettyStackTraceProgram X(argc, argv);
-
-  llvm_shutdown_obj Y; // Call llvm_shutdown() on exit.
+  InitLLVM X(argc, argv);
   cl::ParseCommandLineOptions(argc, argv, "llvm object size dumper\n");
 
   ToolName = argv[0];

@@ -1,3 +1,16 @@
+/*
+ * ompt-general.cpp -- OMPT implementation of interface functions
+ */
+
+//===----------------------------------------------------------------------===//
+//
+//                     The LLVM Compiler Infrastructure
+//
+// This file is dual licensed under the MIT and the University of Illinois Open
+// Source Licenses. See LICENSE.txt for details.
+//
+//===----------------------------------------------------------------------===//
+
 /*****************************************************************************
  * system include files
  ****************************************************************************/
@@ -44,8 +57,8 @@ typedef struct {
 
 typedef struct {
   const char *name;
-  ompt_mutex_impl_t id;
-} ompt_mutex_impl_info_t;
+  kmp_mutex_impl_t id;
+} kmp_mutex_impl_info_t;
 
 enum tool_setting_e {
   omp_tool_error,
@@ -66,10 +79,10 @@ omp_state_info_t omp_state_info[] = {
 #undef omp_state_macro
 };
 
-ompt_mutex_impl_info_t ompt_mutex_impl_info[] = {
-#define ompt_mutex_impl_macro(name, id) {#name, name},
-    FOREACH_OMPT_MUTEX_IMPL(ompt_mutex_impl_macro)
-#undef ompt_mutex_impl_macro
+kmp_mutex_impl_info_t kmp_mutex_impl_info[] = {
+#define kmp_mutex_impl_macro(name, id) {#name, name},
+    FOREACH_KMP_MUTEX_IMPL(kmp_mutex_impl_macro)
+#undef kmp_mutex_impl_macro
 };
 
 ompt_callbacks_internal_t ompt_callbacks;
@@ -218,8 +231,8 @@ ompt_try_start_tool(unsigned int omp_version, const char *runtime_version) {
   const char *sep = ":";
 #endif
 
-  // Try in the current address space
 #if KMP_OS_DARWIN
+  // Try in the current address space
   ret = ompt_tool_darwin(omp_version, runtime_version);
 #elif OMPT_HAVE_WEAK_ATTRIBUTE
   ret = ompt_start_tool(omp_version, runtime_version);
@@ -332,7 +345,13 @@ void ompt_post_init() {
     ompt_enabled.enabled = !!ompt_start_tool_result->initialize(
         ompt_fn_lookup, &(ompt_start_tool_result->tool_data));
 
-    ompt_thread_t *root_thread = ompt_get_thread();
+    if (!ompt_enabled.enabled) {
+      // tool not enabled, zero out the bitmap, and done
+      memset(&ompt_enabled, 0, sizeof(ompt_enabled));
+      return;
+    }
+
+    kmp_info_t *root_thread = ompt_get_thread();
 
     ompt_set_thread_state(root_thread, omp_state_overhead);
 
@@ -387,13 +406,13 @@ OMPT_API_ROUTINE int ompt_enumerate_mutex_impls(int current_impl,
                                                 int *next_impl,
                                                 const char **next_impl_name) {
   const static int len =
-      sizeof(ompt_mutex_impl_info) / sizeof(ompt_mutex_impl_info_t);
+      sizeof(kmp_mutex_impl_info) / sizeof(kmp_mutex_impl_info_t);
   int i = 0;
   for (i = 0; i < len - 1; i++) {
-    if (ompt_mutex_impl_info[i].id != current_impl)
+    if (kmp_mutex_impl_info[i].id != current_impl)
       continue;
-    *next_impl = ompt_mutex_impl_info[i + 1].id;
-    *next_impl_name = ompt_mutex_impl_info[i + 1].name;
+    *next_impl = kmp_mutex_impl_info[i + 1].id;
+    *next_impl_name = kmp_mutex_impl_info[i + 1].name;
     return 1;
   }
   return 0;
@@ -411,9 +430,12 @@ OMPT_API_ROUTINE int ompt_set_callback(ompt_callbacks_t which,
   case event_name:                                                             \
     if (ompt_event_implementation_status(event_name)) {                        \
       ompt_callbacks.ompt_callback(event_name) = (callback_type)callback;      \
-      ompt_enabled.event_name = 1;                                             \
+      ompt_enabled.event_name = (callback != 0);                               \
     }                                                                          \
-    return ompt_event_implementation_status(event_name);
+    if (callback)                                                              \
+      return ompt_event_implementation_status(event_name);                     \
+    else                                                                       \
+      return ompt_set_always;
 
     FOREACH_OMPT_EVENT(ompt_event_macro)
 
@@ -460,7 +482,7 @@ OMPT_API_ROUTINE int ompt_get_parallel_info(int ancestor_level,
                                            team_size);
 }
 
-OMPT_API_ROUTINE omp_state_t ompt_get_state(ompt_wait_id_t *wait_id) {
+OMPT_API_ROUTINE omp_state_t ompt_get_state(omp_wait_id_t *wait_id) {
   omp_state_t thread_state = __ompt_get_state_internal(wait_id);
 
   if (thread_state == omp_state_undefined) {
@@ -480,11 +502,27 @@ OMPT_API_ROUTINE ompt_data_t *ompt_get_thread_data(void) {
 
 OMPT_API_ROUTINE int ompt_get_task_info(int ancestor_level, int *type,
                                         ompt_data_t **task_data,
-                                        ompt_frame_t **task_frame,
+                                        omp_frame_t **task_frame,
                                         ompt_data_t **parallel_data,
                                         int *thread_num) {
   return __ompt_get_task_info_internal(ancestor_level, type, task_data,
                                        task_frame, parallel_data, thread_num);
+}
+
+OMPT_API_ROUTINE int ompt_get_task_memory(void **addr, size_t *size,
+                                          int block) {
+  // stub
+  return 0;
+}
+
+/*****************************************************************************
+ * num_procs
+ ****************************************************************************/
+
+OMPT_API_ROUTINE int ompt_get_num_procs(void) {
+  // copied from kmp_ftn_entry.h (but modified: OMPT can only be called when
+  // runtime is initialized)
+  return __kmp_avail_proc;
 }
 
 /*****************************************************************************
@@ -541,6 +579,9 @@ OMPT_API_ROUTINE int ompt_get_place_num(void) {
 #if !KMP_AFFINITY_SUPPORTED
   return -1;
 #else
+  if (__kmp_get_gtid() < 0)
+    return -1;
+
   int gtid;
   kmp_info_t *thread;
   if (!KMP_AFFINITY_CAPABLE())
@@ -559,6 +600,9 @@ OMPT_API_ROUTINE int ompt_get_partition_place_nums(int place_nums_size,
 #if !KMP_AFFINITY_SUPPORTED
   return 0;
 #else
+  if (__kmp_get_gtid() < 0)
+    return 0;
+
   int i, gtid, place_num, first_place, last_place, start, end;
   kmp_info_t *thread;
   if (!KMP_AFFINITY_CAPABLE())
@@ -582,7 +626,7 @@ OMPT_API_ROUTINE int ompt_get_partition_place_nums(int place_nums_size,
     for (i = 0, place_num = start; place_num <= end; ++place_num, ++i) {
       place_nums[i] = place_num;
     }
-  return end - start;
+  return end - start + 1;
 #endif
 }
 
@@ -591,8 +635,14 @@ OMPT_API_ROUTINE int ompt_get_partition_place_nums(int place_nums_size,
  ****************************************************************************/
 
 OMPT_API_ROUTINE int ompt_get_proc_id(void) {
+  if (__kmp_get_gtid() < 0)
+    return -1;
 #if KMP_OS_LINUX
   return sched_getcpu();
+#elif KMP_OS_WINDOWS
+  PROCESSOR_NUMBER pn;
+  GetCurrentProcessorNumberEx(&pn);
+  return 64 * pn.Group + pn.Number;
 #else
   return -1;
 #endif
@@ -602,7 +652,10 @@ OMPT_API_ROUTINE int ompt_get_proc_id(void) {
  * compatability
  ****************************************************************************/
 
+/*
+ * Currently unused function
 OMPT_API_ROUTINE int ompt_get_ompt_version() { return OMPT_VERSION; }
+*/
 
 /*****************************************************************************
 * application-facing API
@@ -632,6 +685,10 @@ int __kmp_control_tool(uint64_t command, uint64_t modifier, void *arg) {
 
 OMPT_API_ROUTINE uint64_t ompt_get_unique_id(void) {
   return __ompt_get_unique_id_internal();
+}
+
+OMPT_API_ROUTINE void ompt_finalize_tool(void) {
+  // stub
 }
 
 /*****************************************************************************

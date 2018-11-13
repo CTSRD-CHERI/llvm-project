@@ -13,6 +13,7 @@
 
 #include "llvm/IR/Module.h"
 #include "SymbolTableListTraitsImpl.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
@@ -145,7 +146,8 @@ Constant *Module::getOrInsertFunction(StringRef Name, FunctionType *Ty,
   GlobalValue *F = getNamedValue(Name);
   if (!F) {
     // Nope, add it
-    Function *New = Function::Create(Ty, GlobalVariable::ExternalLinkage, Name);
+    Function *New = Function::Create(Ty, GlobalVariable::ExternalLinkage,
+                                     DL.getProgramAddressSpace(), Name);
     if (!New->isIntrinsic())       // Intrinsics get attrs set on construction
       New->setAttributes(AttributeList);
     FunctionList.push_back(New);
@@ -154,8 +156,9 @@ Constant *Module::getOrInsertFunction(StringRef Name, FunctionType *Ty,
 
   // If the function exists but has the wrong type, return a bitcast to the
   // right type.
-  if (F->getType() != PointerType::getUnqual(Ty))
-    return ConstantExpr::getBitCast(F, PointerType::getUnqual(Ty));
+  auto *PTy = PointerType::get(Ty, F->getAddressSpace());
+  if (F->getType() != PTy)
+    return ConstantExpr::getBitCast(F, PTy);
 
   // Otherwise, we just found the existing function or a prototype.
   return F;
@@ -464,6 +467,13 @@ unsigned Module::getCodeViewFlag() const {
   return cast<ConstantInt>(Val->getValue())->getZExtValue();
 }
 
+unsigned Module::getInstructionCount() {
+  unsigned NumInstrs = 0;
+  for (Function &F : FunctionList)
+    NumInstrs += F.getInstructionCount();
+  return NumInstrs;
+}
+
 Comdat *Module::getOrInsertComdat(StringRef Name) {
   auto &Entry = *ComdatSymTab.insert(std::make_pair(Name, Comdat())).first;
   Entry.second.Name = &Entry;
@@ -498,6 +508,24 @@ void Module::setPIELevel(PIELevel::Level PL) {
   addModuleFlag(ModFlagBehavior::Max, "PIE Level", PL);
 }
 
+Optional<CodeModel::Model> Module::getCodeModel() const {
+  auto *Val = cast_or_null<ConstantAsMetadata>(getModuleFlag("Code Model"));
+
+  if (!Val)
+    return None;
+
+  return static_cast<CodeModel::Model>(
+      cast<ConstantInt>(Val->getValue())->getZExtValue());
+}
+
+void Module::setCodeModel(CodeModel::Model CL) {
+  // Linking object files with different code models is undefined behavior
+  // because the compiler would have to generate additional code (to span
+  // longer jumps) if a larger code model is used with a smaller one.
+  // Therefore we will treat attempts to mix code models as an error.
+  addModuleFlag(ModFlagBehavior::Error, "Code Model", CL);
+}
+
 void Module::setProfileSummary(Metadata *M) {
   addModuleFlag(ModFlagBehavior::Error, "ProfileSummary", M);
 }
@@ -508,6 +536,15 @@ Metadata *Module::getProfileSummary() {
 
 void Module::setOwnedMemoryBuffer(std::unique_ptr<MemoryBuffer> MB) {
   OwnedMemoryBuffer = std::move(MB);
+}
+
+bool Module::getRtLibUseGOT() const {
+  auto *Val = cast_or_null<ConstantAsMetadata>(getModuleFlag("RtLibUseGOT"));
+  return Val && (cast<ConstantInt>(Val->getValue())->getZExtValue() > 0);
+}
+
+void Module::setRtLibUseGOT() {
+  addModuleFlag(ModFlagBehavior::Max, "RtLibUseGOT", 1);
 }
 
 GlobalVariable *llvm::collectUsedGlobalVariables(

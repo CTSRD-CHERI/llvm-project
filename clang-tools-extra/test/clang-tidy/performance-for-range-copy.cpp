@@ -4,6 +4,10 @@ namespace std {
 
 template <typename _Tp>
 struct remove_reference { typedef _Tp type; };
+template <typename _Tp>
+struct remove_reference<_Tp&> { typedef _Tp type; };
+template <typename _Tp>
+struct remove_reference<_Tp&&> { typedef _Tp type; };
 
 template <typename _Tp>
 constexpr typename std::remove_reference<_Tp>::type &&move(_Tp &&__t) {
@@ -103,6 +107,7 @@ void f() {
 struct Mutable {
   Mutable() {}
   Mutable(const Mutable &) = default;
+  Mutable(Mutable&&) = default;
   Mutable(const Mutable &, const Mutable &) {}
   void setBool(bool B) {}
   bool constMethod() const {
@@ -115,6 +120,11 @@ struct Mutable {
     return true;
   }
   ~Mutable() {}
+};
+
+struct Point {
+  ~Point() {}
+  int x, y;
 };
 
 Mutable& operator<<(Mutable &Out, bool B) {
@@ -214,6 +224,15 @@ void positiveOnlyUsedAsConstArguments() {
   }
 }
 
+void positiveOnlyAccessedFieldAsConst() {
+  for (auto UsedAsConst : View<Iterator<Point>>()) {
+    // CHECK-MESSAGES: [[@LINE-1]]:13: warning: loop variable is copied but only used as const reference; consider making it a const reference [performance-for-range-copy]
+    // CHECK-FIXES: for (const auto& UsedAsConst : View<Iterator<Point>>()) {
+    use(UsedAsConst.x);
+    use(UsedAsConst.y);
+  }
+}
+
 void positiveOnlyUsedInCopyConstructor() {
   for (auto A : View<Iterator<Mutable>>()) {
     // CHECK-MESSAGES: [[@LINE-1]]:13: warning: loop variable is copied but only used as const reference; consider making it a const reference [performance-for-range-copy]
@@ -244,5 +263,10 @@ void PositiveConstNonMemberOperatorInvoked() {
     // CHECK-MESSAGES: [[@LINE-1]]:13: warning: loop variable is copied but only used as const reference; consider making it a const reference [performance-for-range-copy]
     // CHECK-FIXES: for (const auto& ConstOperatorInvokee : View<Iterator<Mutable>>()) {
     bool result = ConstOperatorInvokee != Mutable();
+  }
+}
+
+void IgnoreLoopVariableNotUsedInLoopBody() {
+  for (auto _ : View<Iterator<S>>()) {
   }
 }

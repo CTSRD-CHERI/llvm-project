@@ -15,6 +15,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/SourceMgr.h"
+#include "llvm/Support/KnownBits.h"
 #include "gtest/gtest.h"
 
 using namespace llvm;
@@ -148,6 +149,64 @@ TEST_F(MatchSelectPatternTest, FMinConstantZeroNsz) {
   expectPattern({SPF_FMINNUM, SPNB_RETURNS_OTHER, true});
 }
 
+TEST_F(MatchSelectPatternTest, VectorFMinNaN) {
+  parseAssembly(
+      "define <4 x float> @test(<4 x float> %a) {\n"
+      "  %1 = fcmp ule <4 x float> %a, \n"
+      "    <float 5.0, float 5.0, float 5.0, float 5.0>\n"
+      "  %A = select <4 x i1> %1, <4 x float> %a,\n"
+      "     <4 x float> <float 5.0, float 5.0, float 5.0, float 5.0>\n"
+      "  ret <4 x float> %A\n"
+      "}\n");
+  // Check that pattern matching works on vectors where each lane has the same
+  // unordered pattern.
+  expectPattern({SPF_FMINNUM, SPNB_RETURNS_NAN, false});
+}
+
+TEST_F(MatchSelectPatternTest, VectorFMinOtherOrdered) {
+  parseAssembly(
+      "define <4 x float> @test(<4 x float> %a) {\n"
+      "  %1 = fcmp ole <4 x float> %a, \n"
+      "    <float 5.0, float 5.0, float 5.0, float 5.0>\n"
+      "  %A = select <4 x i1> %1, <4 x float> %a,\n"
+      "     <4 x float> <float 5.0, float 5.0, float 5.0, float 5.0>\n"
+      "  ret <4 x float> %A\n"
+      "}\n");
+  // Check that pattern matching works on vectors where each lane has the same
+  // ordered pattern.
+  expectPattern({SPF_FMINNUM, SPNB_RETURNS_OTHER, true});
+}
+
+TEST_F(MatchSelectPatternTest, VectorNotFMinNaN) {
+  parseAssembly(
+      "define <4 x float> @test(<4 x float> %a) {\n"
+      "  %1 = fcmp ule <4 x float> %a, \n"
+      "    <float 5.0, float 0x7ff8000000000000, float 5.0, float 5.0>\n"
+      "  %A = select <4 x i1> %1, <4 x float> %a,\n"
+      "     <4 x float> <float 5.0, float 0x7ff8000000000000, float 5.0, float "
+      "5.0>\n"
+      "  ret <4 x float> %A\n"
+      "}\n");
+  // The lane that contains a NaN (0x7ff80...) behaves like a
+  // non-NaN-propagating min and the other lines behave like a NaN-propagating
+  // min, so check that neither is returned.
+  expectPattern({SPF_UNKNOWN, SPNB_NA, false});
+}
+
+TEST_F(MatchSelectPatternTest, VectorNotFMinZero) {
+  parseAssembly(
+      "define <4 x float> @test(<4 x float> %a) {\n"
+      "  %1 = fcmp ule <4 x float> %a, \n"
+      "    <float 5.0, float -0.0, float 5.0, float 5.0>\n"
+      "  %A = select <4 x i1> %1, <4 x float> %a,\n"
+      "     <4 x float> <float 5.0, float 0.0, float 5.0, float 5.0>\n"
+      "  ret <4 x float> %A\n"
+      "}\n");
+  // Always selects the second lane of %a if it is positive or negative zero, so
+  // this is stricter than a min.
+  expectPattern({SPF_UNKNOWN, SPNB_NA, false});
+}
+
 TEST_F(MatchSelectPatternTest, DoubleCastU) {
   parseAssembly(
       "define i32 @test(i8 %a, i8 %b) {\n"
@@ -257,4 +316,58 @@ TEST(ValueTracking, ComputeNumSignBits_PR32045) {
   auto *RVal =
       cast<ReturnInst>(F->getEntryBlock().getTerminator())->getOperand(0);
   EXPECT_EQ(ComputeNumSignBits(RVal, M->getDataLayout()), 1u);
+}
+
+TEST(ValueTracking, ComputeKnownBits) {
+  StringRef Assembly = "define i32 @f(i32 %a, i32 %b) { "
+                       "  %ash = mul i32 %a, 8 "
+                       "  %aad = add i32 %ash, 7 "
+                       "  %aan = and i32 %aad, 4095 "
+                       "  %bsh = shl i32 %b, 4 "
+                       "  %bad = or i32 %bsh, 6 "
+                       "  %ban = and i32 %bad, 4095 "
+                       "  %mul = mul i32 %aan, %ban "
+                       "  ret i32 %mul "
+                       "} ";
+
+  LLVMContext Context;
+  SMDiagnostic Error;
+  auto M = parseAssemblyString(Assembly, Error, Context);
+  assert(M && "Bad assembly?");
+
+  auto *F = M->getFunction("f");
+  assert(F && "Bad assembly?");
+
+  auto *RVal =
+      cast<ReturnInst>(F->getEntryBlock().getTerminator())->getOperand(0);
+  auto Known = computeKnownBits(RVal, M->getDataLayout());
+  ASSERT_FALSE(Known.hasConflict());
+  EXPECT_EQ(Known.One.getZExtValue(), 10u);
+  EXPECT_EQ(Known.Zero.getZExtValue(), 4278190085u);
+}
+
+TEST(ValueTracking, ComputeKnownMulBits) {
+  StringRef Assembly = "define i32 @f(i32 %a, i32 %b) { "
+                       "  %aa = shl i32 %a, 5 "
+                       "  %bb = shl i32 %b, 5 "
+                       "  %aaa = or i32 %aa, 24 "
+                       "  %bbb = or i32 %bb, 28 "
+                       "  %mul = mul i32 %aaa, %bbb "
+                       "  ret i32 %mul "
+                       "} ";
+
+  LLVMContext Context;
+  SMDiagnostic Error;
+  auto M = parseAssemblyString(Assembly, Error, Context);
+  assert(M && "Bad assembly?");
+
+  auto *F = M->getFunction("f");
+  assert(F && "Bad assembly?");
+
+  auto *RVal =
+      cast<ReturnInst>(F->getEntryBlock().getTerminator())->getOperand(0);
+  auto Known = computeKnownBits(RVal, M->getDataLayout());
+  ASSERT_FALSE(Known.hasConflict());
+  EXPECT_EQ(Known.One.getZExtValue(), 32u);
+  EXPECT_EQ(Known.Zero.getZExtValue(), 95u);
 }

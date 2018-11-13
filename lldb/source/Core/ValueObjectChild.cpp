@@ -9,12 +9,12 @@
 
 #include "lldb/Core/ValueObjectChild.h"
 
-#include "lldb/Core/Scalar.h" // for Scalar
-#include "lldb/Core/Value.h"  // for Value, Value::ValueType::e...
+#include "lldb/Core/Value.h" // for Value, Value::ValueType::e...
 #include "lldb/Symbol/CompilerType.h"
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Utility/Flags.h"  // for Flags
+#include "lldb/Utility/Scalar.h" // for Scalar
 #include "lldb/Utility/Status.h" // for Status
 #include "lldb/lldb-forward.h"   // for ProcessSP, ModuleSP
 
@@ -172,8 +172,8 @@ bool ValueObjectChild::UpdateValue() {
           } else if (addr == 0) {
             m_error.SetErrorString("parent is NULL");
           } else {
-            // Set this object's scalar value to the address of its
-            // value by adding its byte offset to the parent address
+            // Set this object's scalar value to the address of its value by
+            // adding its byte offset to the parent address
             m_value.GetScalar() += GetByteOffset();
           }
         } break;

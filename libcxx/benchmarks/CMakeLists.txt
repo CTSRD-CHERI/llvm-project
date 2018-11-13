@@ -59,6 +59,7 @@ if (LIBCXX_BENCHMARK_NATIVE_STDLIB)
           -DBENCHMARK_ENABLE_TESTING:BOOL=OFF)
 endif()
 
+
 #==============================================================================
 # Benchmark tests configuration
 #==============================================================================
@@ -67,7 +68,7 @@ set(BENCHMARK_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
 set(BENCHMARK_LIBCXX_INSTALL ${CMAKE_CURRENT_BINARY_DIR}/benchmark-libcxx)
 set(BENCHMARK_NATIVE_INSTALL ${CMAKE_CURRENT_BINARY_DIR}/benchmark-native)
 set(BENCHMARK_TEST_COMPILE_FLAGS
-    -std=c++14 -O2
+    -std=c++17 -O2
     -I${BENCHMARK_LIBCXX_INSTALL}/include
     -I${LIBCXX_SOURCE_DIR}/test/support
 )
@@ -107,6 +108,9 @@ macro(add_benchmark_test name source_file)
   if (TARGET cxx_experimental)
     target_link_libraries(${libcxx_target} cxx_experimental)
   endif()
+  if (TARGET cxx_filesystem)
+    target_link_libraries(${libcxx_target} cxx_filesystem)
+  endif()
   target_link_libraries(${libcxx_target} -lbenchmark)
   set_target_properties(${libcxx_target}
     PROPERTIES
@@ -123,7 +127,7 @@ macro(add_benchmark_test name source_file)
     if (LIBCXX_BENCHMARK_NATIVE_STDLIB STREQUAL "libstdc++")
       target_link_libraries(${native_target} -lstdc++fs)
     elseif (LIBCXX_BENCHMARK_NATIVE_STDLIB STREQUAL "libc++")
-      target_link_libraries(${native_target} -lc++experimental)
+      target_link_libraries(${native_target} -lc++fs -lc++experimental)
     endif()
     if (LIBCXX_HAS_PTHREAD_LIB)
       target_link_libraries(${native_target} -pthread)

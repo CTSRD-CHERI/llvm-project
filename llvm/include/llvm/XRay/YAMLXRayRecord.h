@@ -37,6 +37,7 @@ struct YAMLXRayRecord {
   std::string Function;
   uint64_t TSC;
   uint32_t TId;
+  uint32_t PId;
   std::vector<uint64_t> CallArgs;
 };
 
@@ -79,21 +80,12 @@ template <> struct MappingTraits<xray::YAMLXRayRecord> {
     IO.mapOptional("args", Record.CallArgs);
     IO.mapRequired("cpu", Record.CPU);
     IO.mapRequired("thread", Record.TId);
+    IO.mapOptional("process", Record.PId, 0U);
     IO.mapRequired("kind", Record.Type);
     IO.mapRequired("tsc", Record.TSC);
   }
 
   static constexpr bool flow = true;
-};
-
-template <> struct SequenceTraits<std::vector<uint64_t>> {
-  static constexpr bool flow = true;
-  static size_t size(IO &IO, std::vector<uint64_t> &V) { return V.size(); }
-  static uint64_t &element(IO &IO, std::vector<uint64_t> &V, size_t Index) {
-    if (Index >= V.size())
-      V.resize(Index + 1);
-    return V[Index];
-  }
 };
 
 template <> struct MappingTraits<xray::YAMLXRayTrace> {

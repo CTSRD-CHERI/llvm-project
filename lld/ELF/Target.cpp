@@ -60,6 +60,8 @@ TargetInfo *elf::getTarget() {
     return getARMTargetInfo();
   case EM_AVR:
     return getAVRTargetInfo();
+  case EM_HEXAGON:
+    return getHexagonTargetInfo();
   case EM_MIPS:
     switch (Config->EKind) {
     case ELF32LEKind:
@@ -77,6 +79,8 @@ TargetInfo *elf::getTarget() {
     return getPPCTargetInfo();
   case EM_PPC64:
     return getPPC64TargetInfo();
+  case EM_RISCV:
+    return getRISCVTargetInfo();
   case EM_SPARCV9:
     return getSPARCV9TargetInfo();
   case EM_X86_64:
@@ -87,29 +91,29 @@ TargetInfo *elf::getTarget() {
   fatal("unknown target machine");
 }
 
-template <class ELFT> static std::string getErrorLoc(const uint8_t *Loc) {
+template <class ELFT> static ErrorPlace getErrPlace(const uint8_t *Loc) {
   for (InputSectionBase *D : InputSections) {
-    auto *IS = dyn_cast_or_null<InputSection>(D);
-    if (!IS || !IS->getParent())
+    auto *IS = cast<InputSection>(D);
+    if (!IS->getParent())
       continue;
 
     uint8_t *ISLoc = IS->getParent()->Loc + IS->OutSecOff;
     if (ISLoc <= Loc && Loc < ISLoc + IS->getSize())
-      return IS->template getLocation<ELFT>(Loc - ISLoc) + ": ";
+      return {IS, IS->template getLocation<ELFT>(Loc - ISLoc) + ": "};
   }
-  return "";
+  return {};
 }
 
-std::string elf::getErrorLocation(const uint8_t *Loc) {
+ErrorPlace elf::getErrorPlace(const uint8_t *Loc) {
   switch (Config->EKind) {
   case ELF32LEKind:
-    return getErrorLoc<ELF32LE>(Loc);
+    return getErrPlace<ELF32LE>(Loc);
   case ELF32BEKind:
-    return getErrorLoc<ELF32BE>(Loc);
+    return getErrPlace<ELF32BE>(Loc);
   case ELF64LEKind:
-    return getErrorLoc<ELF64LE>(Loc);
+    return getErrPlace<ELF64LE>(Loc);
   case ELF64BEKind:
-    return getErrorLoc<ELF64BE>(Loc);
+    return getErrPlace<ELF64BE>(Loc);
   default:
     llvm_unreachable("unknown ELF type");
   }
@@ -126,6 +130,11 @@ bool TargetInfo::usesOnlyLowPageBits(RelType Type) const { return false; }
 bool TargetInfo::needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
                             uint64_t BranchAddr, const Symbol &S) const {
   return false;
+}
+
+bool TargetInfo::adjustPrologueForCrossSplitStack(uint8_t *Loc, uint8_t *End,
+                                                  uint8_t StOther) const {
+  llvm_unreachable("Target doesn't support split stacks.");
 }
 
 bool TargetInfo::inBranchRange(RelType Type, uint64_t Src, uint64_t Dst) const {

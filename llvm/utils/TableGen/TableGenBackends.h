@@ -62,7 +62,10 @@ namespace llvm {
 class raw_ostream;
 class RecordKeeper;
 
-void EmitIntrinsics(RecordKeeper &RK, raw_ostream &OS, bool TargetOnly = false);
+void EmitIntrinsicEnums(RecordKeeper &RK, raw_ostream &OS,
+                        bool TargetOnly = false);
+void EmitIntrinsicImpl(RecordKeeper &RK, raw_ostream &OS,
+                       bool TargetOnly = false);
 void EmitAsmMatcher(RecordKeeper &RK, raw_ostream &OS);
 void EmitAsmWriter(RecordKeeper &RK, raw_ostream &OS);
 void EmitCallingConv(RecordKeeper &RK, raw_ostream &OS);
@@ -72,7 +75,9 @@ void EmitDFAPacketizer(RecordKeeper &RK, raw_ostream &OS);
 void EmitDisassembler(RecordKeeper &RK, raw_ostream &OS);
 void EmitFastISel(RecordKeeper &RK, raw_ostream &OS);
 void EmitInstrInfo(RecordKeeper &RK, raw_ostream &OS);
+void EmitInstrDocs(RecordKeeper &RK, raw_ostream &OS);
 void EmitPseudoLowering(RecordKeeper &RK, raw_ostream &OS);
+void EmitCompressInst(RecordKeeper &RK, raw_ostream &OS);
 void EmitRegisterInfo(RecordKeeper &RK, raw_ostream &OS);
 void EmitSubtarget(RecordKeeper &RK, raw_ostream &OS);
 void EmitMapTable(RecordKeeper &RK, raw_ostream &OS);
@@ -84,6 +89,7 @@ void EmitGlobalISel(RecordKeeper &RK, raw_ostream &OS);
 void EmitX86EVEX2VEXTables(RecordKeeper &RK, raw_ostream &OS);
 void EmitX86FoldTables(RecordKeeper &RK, raw_ostream &OS);
 void EmitRegisterBank(RecordKeeper &RK, raw_ostream &OS);
+void EmitWebAssemblyStackifier(RecordKeeper &RK, raw_ostream &OS);
 
 } // End llvm namespace
 

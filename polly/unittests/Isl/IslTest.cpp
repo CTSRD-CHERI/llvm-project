@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "polly/Support/GICHelper.h"
+#include "polly/Support/ISLOperators.h"
 #include "polly/Support/ISLTools.h"
 #include "gtest/gtest.h"
 #include "isl/stream.h"
@@ -22,9 +23,9 @@ static isl::space parseSpace(isl_ctx *Ctx, const char *Str) {
 
   isl::space Result;
   if (Obj.type == isl_obj_set)
-    Result = give(isl_set_get_space(static_cast<isl_set *>(Obj.v)));
+    Result = isl::manage(isl_set_get_space(static_cast<isl_set *>(Obj.v)));
   else if (Obj.type == isl_obj_map)
-    Result = give(isl_map_get_space(static_cast<isl_map *>(Obj.v)));
+    Result = isl::manage(isl_map_get_space(static_cast<isl_map *>(Obj.v)));
 
   isl_stream_free(Stream);
   if (Obj.type)
@@ -73,6 +74,10 @@ static bool operator==(const isl::union_map &LHS, const isl::union_map &RHS) {
 
 static bool operator==(const isl::val &LHS, const isl::val &RHS) {
   return bool(LHS.eq(RHS));
+}
+
+static bool operator==(const isl::pw_aff &LHS, const isl::pw_aff &RHS) {
+  return bool(LHS.is_equal(RHS));
 }
 } // namespace noexceptions
 } // namespace isl
@@ -140,7 +145,7 @@ TEST(Isl, APIntToIslVal) {
   {
     APInt APNOne(32, (1ull << 32) - 1, false);
     auto IslNOne = valFromAPInt(IslCtx, APNOne, false);
-    auto IslRef = isl::val(IslCtx, 32).two_exp().sub_ui(1);
+    auto IslRef = isl::val(IslCtx, 32).pow2().sub_ui(1);
     EXPECT_EQ(IslNOne, IslRef);
   }
 
@@ -149,7 +154,7 @@ TEST(Isl, APIntToIslVal) {
     APLarge = APLarge.shl(70);
     auto IslLarge = valFromAPInt(IslCtx, APLarge, false);
     auto IslRef = isl::val(IslCtx, 71);
-    IslRef = IslRef.two_exp();
+    IslRef = IslRef.pow2();
     EXPECT_EQ(IslLarge, IslRef);
   }
 
@@ -227,7 +232,7 @@ TEST(Isl, IslValToAPInt) {
   }
 
   {
-    auto IslNOne = isl::val(IslCtx, 32).two_exp().sub_ui(1);
+    auto IslNOne = isl::val(IslCtx, 32).pow2().sub_ui(1);
     auto APNOne = APIntFromVal(IslNOne);
     EXPECT_EQ((1ull << 32) - 1, APNOne);
     EXPECT_EQ(33u, APNOne.getBitWidth());
@@ -235,7 +240,7 @@ TEST(Isl, IslValToAPInt) {
 
   {
     auto IslLargeNum = isl::val(IslCtx, 60);
-    IslLargeNum = IslLargeNum.two_exp();
+    IslLargeNum = IslLargeNum.pow2();
     IslLargeNum = IslLargeNum.sub_ui(1);
     auto APLargeNum = APIntFromVal(IslLargeNum);
     EXPECT_EQ((1ull << 60) - 1, APLargeNum);
@@ -244,7 +249,7 @@ TEST(Isl, IslValToAPInt) {
 
   {
     auto IslExp = isl::val(IslCtx, 500);
-    auto IslLargePow2 = IslExp.two_exp();
+    auto IslLargePow2 = IslExp.pow2();
     auto APLargePow2 = APIntFromVal(IslLargePow2);
     EXPECT_TRUE(APLargePow2.isPowerOf2());
     EXPECT_EQ(502u, APLargePow2.getBitWidth());
@@ -253,7 +258,7 @@ TEST(Isl, IslValToAPInt) {
 
   {
     auto IslExp = isl::val(IslCtx, 500);
-    auto IslLargeNPow2 = IslExp.two_exp().neg();
+    auto IslLargeNPow2 = IslExp.pow2().neg();
     auto APLargeNPow2 = APIntFromVal(IslLargeNPow2);
     EXPECT_EQ(501u, APLargeNPow2.getBitWidth());
     EXPECT_EQ(501u, APLargeNPow2.getMinSignedBits());
@@ -262,7 +267,7 @@ TEST(Isl, IslValToAPInt) {
 
   {
     auto IslExp = isl::val(IslCtx, 512);
-    auto IslLargePow2 = IslExp.two_exp();
+    auto IslLargePow2 = IslExp.pow2();
     auto APLargePow2 = APIntFromVal(IslLargePow2);
     EXPECT_TRUE(APLargePow2.isPowerOf2());
     EXPECT_EQ(514u, APLargePow2.getBitWidth());
@@ -271,7 +276,7 @@ TEST(Isl, IslValToAPInt) {
 
   {
     auto IslExp = isl::val(IslCtx, 512);
-    auto IslLargeNPow2 = IslExp.two_exp().neg();
+    auto IslLargeNPow2 = IslExp.pow2().neg();
     auto APLargeNPow2 = APIntFromVal(IslLargeNPow2);
     EXPECT_EQ(513u, APLargeNPow2.getBitWidth());
     EXPECT_EQ(513u, APLargeNPow2.getMinSignedBits());
@@ -279,6 +284,105 @@ TEST(Isl, IslValToAPInt) {
   }
 
   isl_ctx_free(IslCtx);
+}
+
+TEST(Isl, Operators) {
+  std::unique_ptr<isl_ctx, decltype(&isl_ctx_free)> IslCtx(isl_ctx_alloc(),
+                                                           &isl_ctx_free);
+
+  isl::val ValOne = isl::val(IslCtx.get(), 1);
+  isl::val ValTwo = isl::val(IslCtx.get(), 2);
+  isl::val ValThree = isl::val(IslCtx.get(), 3);
+  isl::val ValFour = isl::val(IslCtx.get(), 4);
+  isl::val ValNegOne = isl::val(IslCtx.get(), -1);
+  isl::val ValNegTwo = isl::val(IslCtx.get(), -2);
+  isl::val ValNegThree = isl::val(IslCtx.get(), -3);
+  isl::val ValNegFour = isl::val(IslCtx.get(), -4);
+
+  isl::space Space = isl::space(IslCtx.get(), 0, 0);
+  isl::local_space LS = isl::local_space(Space);
+
+  isl::pw_aff AffOne = isl::aff(LS, ValOne);
+  isl::pw_aff AffTwo = isl::aff(LS, ValTwo);
+  isl::pw_aff AffThree = isl::aff(LS, ValThree);
+  isl::pw_aff AffFour = isl::aff(LS, ValFour);
+  isl::pw_aff AffNegOne = isl::aff(LS, ValNegOne);
+  isl::pw_aff AffNegTwo = isl::aff(LS, ValNegTwo);
+  isl::pw_aff AffNegThree = isl::aff(LS, ValNegThree);
+  isl::pw_aff AffNegFour = isl::aff(LS, ValNegFour);
+
+  // Addition
+  {
+    EXPECT_EQ(AffOne + AffOne, AffTwo);
+    EXPECT_EQ(AffOne + 1, AffTwo);
+    EXPECT_EQ(1 + AffOne, AffTwo);
+    EXPECT_EQ(AffOne + ValOne, AffTwo);
+    EXPECT_EQ(ValOne + AffOne, AffTwo);
+  }
+
+  // Multiplication
+  {
+    EXPECT_EQ(AffTwo * AffTwo, AffFour);
+    EXPECT_EQ(AffTwo * 2, AffFour);
+    EXPECT_EQ(2 * AffTwo, AffFour);
+    EXPECT_EQ(AffTwo * ValTwo, AffFour);
+    EXPECT_EQ(ValTwo * AffTwo, AffFour);
+  }
+
+  // Subtraction
+  {
+    EXPECT_EQ(AffTwo - AffOne, AffOne);
+    EXPECT_EQ(AffTwo - 1, AffOne);
+    EXPECT_EQ(2 - AffOne, AffOne);
+    EXPECT_EQ(AffTwo - ValOne, AffOne);
+    EXPECT_EQ(ValTwo - AffOne, AffOne);
+  }
+
+  // Division
+  {
+    EXPECT_EQ(AffFour / AffTwo, AffTwo);
+    EXPECT_EQ(AffFour / 2, AffTwo);
+    EXPECT_EQ(4 / AffTwo, AffTwo);
+    EXPECT_EQ(AffFour / ValTwo, AffTwo);
+    EXPECT_EQ(AffFour / 2, AffTwo);
+
+    // Dividend is negative (should be rounded towards zero)
+    EXPECT_EQ(AffNegFour / AffThree, AffNegOne);
+    EXPECT_EQ(AffNegFour / 3, AffNegOne);
+    EXPECT_EQ((-4) / AffThree, AffNegOne);
+    EXPECT_EQ(AffNegFour / ValThree, AffNegOne);
+    EXPECT_EQ(AffNegFour / 3, AffNegOne);
+
+    // Divisor is negative (should be rounded towards zero)
+    EXPECT_EQ(AffFour / AffNegThree, AffNegOne);
+    EXPECT_EQ(AffFour / -3, AffNegOne);
+    EXPECT_EQ(4 / AffNegThree, AffNegOne);
+    EXPECT_EQ(AffFour / ValNegThree, AffNegOne);
+    EXPECT_EQ(AffFour / -3, AffNegOne);
+  }
+
+  // Remainder
+  {
+    EXPECT_EQ(AffThree % AffTwo, AffOne);
+    EXPECT_EQ(AffThree % 2, AffOne);
+    EXPECT_EQ(3 % AffTwo, AffOne);
+    EXPECT_EQ(AffThree % ValTwo, AffOne);
+    EXPECT_EQ(ValThree % AffTwo, AffOne);
+
+    // Dividend is negative (should be rounded towards zero)
+    EXPECT_EQ(AffNegFour % AffThree, AffNegOne);
+    EXPECT_EQ(AffNegFour % 3, AffNegOne);
+    EXPECT_EQ((-4) % AffThree, AffNegOne);
+    EXPECT_EQ(AffNegFour % ValThree, AffNegOne);
+    EXPECT_EQ(AffNegFour % 3, AffNegOne);
+
+    // Divisor is negative (should be rounded towards zero)
+    EXPECT_EQ(AffFour % AffNegThree, AffOne);
+    EXPECT_EQ(AffFour % -3, AffOne);
+    EXPECT_EQ(4 % AffNegThree, AffOne);
+    EXPECT_EQ(AffFour % ValNegThree, AffOne);
+    EXPECT_EQ(AffFour % -3, AffOne);
+  }
 }
 
 TEST(Isl, Foreach) {
@@ -299,86 +403,98 @@ TEST(Isl, Foreach) {
 
   {
     auto NumBMaps = 0;
-    TestMap.foreach_basic_map([&](isl::basic_map BMap) -> isl::stat {
-      EXPECT_EQ(BMap, TestBMap);
-      NumBMaps++;
-      return isl::stat::ok;
-    });
+    isl::stat Stat =
+        TestMap.foreach_basic_map([&](isl::basic_map BMap) -> isl::stat {
+          EXPECT_EQ(BMap, TestBMap);
+          NumBMaps++;
+          return isl::stat::ok();
+        });
+
+    EXPECT_TRUE(Stat.is_ok());
     EXPECT_EQ(1, NumBMaps);
   }
 
   {
     auto NumBSets = 0;
-    TestSet.foreach_basic_set([&](isl::basic_set BSet) -> isl::stat {
-      EXPECT_EQ(BSet, TestBSet);
-      NumBSets++;
-      return isl::stat::ok;
-    });
+    isl::stat Stat =
+        TestSet.foreach_basic_set([&](isl::basic_set BSet) -> isl::stat {
+          EXPECT_EQ(BSet, TestBSet);
+          NumBSets++;
+          return isl::stat::ok();
+        });
+    EXPECT_TRUE(Stat.is_ok());
     EXPECT_EQ(1, NumBSets);
   }
 
   {
     auto NumMaps = 0;
-    TestUMap.foreach_map([&](isl::map Map) -> isl::stat {
+    isl::stat Stat = TestUMap.foreach_map([&](isl::map Map) -> isl::stat {
       EXPECT_EQ(Map, TestMap);
       NumMaps++;
-      return isl::stat::ok;
+      return isl::stat::ok();
     });
+    EXPECT_TRUE(Stat.is_ok());
     EXPECT_EQ(1, NumMaps);
   }
 
   {
     auto NumSets = 0;
-    TestUSet.foreach_set([&](isl::set Set) -> isl::stat {
+    isl::stat Stat = TestUSet.foreach_set([&](isl::set Set) -> isl::stat {
       EXPECT_EQ(Set, TestSet);
       NumSets++;
-      return isl::stat::ok;
+      return isl::stat::ok();
     });
+    EXPECT_TRUE(Stat.is_ok());
     EXPECT_EQ(1, NumSets);
   }
 
   {
     auto UPwAff = isl::union_pw_aff(TestUSet, isl::val::zero(Ctx.get()));
     auto NumPwAffs = 0;
-    UPwAff.foreach_pw_aff([&](isl::pw_aff PwAff) -> isl::stat {
+    isl::stat Stat = UPwAff.foreach_pw_aff([&](isl::pw_aff PwAff) -> isl::stat {
       EXPECT_TRUE(PwAff.is_cst());
       NumPwAffs++;
-      return isl::stat::ok;
+      return isl::stat::ok();
     });
+    EXPECT_TRUE(Stat.is_ok());
     EXPECT_EQ(1, NumPwAffs);
   }
 
   {
     auto NumBMaps = 0;
-    EXPECT_EQ(isl::stat::error,
-              TestMap.foreach_basic_map([&](isl::basic_map BMap) -> isl::stat {
-                EXPECT_EQ(BMap, TestBMap);
-                NumBMaps++;
-                return isl::stat::error;
-              }));
+    EXPECT_TRUE(TestMap
+                    .foreach_basic_map([&](isl::basic_map BMap) -> isl::stat {
+                      EXPECT_EQ(BMap, TestBMap);
+                      NumBMaps++;
+                      return isl::stat::error();
+                    })
+                    .is_error());
     EXPECT_EQ(1, NumBMaps);
   }
 
   {
     auto NumMaps = 0;
-    EXPECT_EQ(isl::stat::error,
-              TestUMap.foreach_map([&](isl::map Map) -> isl::stat {
-                EXPECT_EQ(Map, TestMap);
-                NumMaps++;
-                return isl::stat::error;
-              }));
+    EXPECT_TRUE(TestUMap
+                    .foreach_map([&](isl::map Map) -> isl::stat {
+                      EXPECT_EQ(Map, TestMap);
+                      NumMaps++;
+                      return isl::stat::error();
+                    })
+                    .is_error());
     EXPECT_EQ(1, NumMaps);
   }
 
   {
     auto TestPwAff = isl::pw_aff(TestSet, isl::val::zero(Ctx.get()));
     auto NumPieces = 0;
-    TestPwAff.foreach_piece([&](isl::set Domain, isl::aff Aff) -> isl::stat {
-      EXPECT_EQ(Domain, TestSet);
-      EXPECT_TRUE(Aff.is_cst());
-      NumPieces++;
-      return isl::stat::error;
-    });
+    isl::stat Stat = TestPwAff.foreach_piece(
+        [&](isl::set Domain, isl::aff Aff) -> isl::stat {
+          EXPECT_EQ(Domain, TestSet);
+          EXPECT_TRUE(Aff.is_cst());
+          NumPieces++;
+          return isl::stat::error();
+        });
+    EXPECT_TRUE(Stat.is_error());
     EXPECT_EQ(1, NumPieces);
   }
 }
@@ -1002,5 +1118,4 @@ TEST(DeLICM, apply) {
                 UMAP("{ DomainRangeA[] -> NewDomainRangeA[];"
                      "DomainRangeB[] -> NewDomainRangeB[] }")));
 }
-
 } // anonymous namespace

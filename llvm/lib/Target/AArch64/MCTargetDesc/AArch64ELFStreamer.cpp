@@ -27,6 +27,7 @@
 #include "llvm/MC/MCELFStreamer.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
@@ -87,9 +88,10 @@ public:
   friend class AArch64TargetELFStreamer;
 
   AArch64ELFStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> TAB,
-                     raw_pwrite_stream &OS,
+                     std::unique_ptr<MCObjectWriter> OW,
                      std::unique_ptr<MCCodeEmitter> Emitter)
-      : MCELFStreamer(Context, std::move(TAB), OS, std::move(Emitter)),
+      : MCELFStreamer(Context, std::move(TAB), std::move(OW),
+                      std::move(Emitter)),
         MappingSymbolCounter(0), LastEMS(EMS_None) {}
 
   void ChangeSection(MCSection *Section, const MCExpr *Subsection) override {
@@ -152,6 +154,11 @@ public:
     MCELFStreamer::EmitValueImpl(Value, Size, Loc);
   }
 
+  void emitFill(const MCExpr &NumBytes, uint64_t FillValue,
+                                  SMLoc Loc) override {
+    EmitDataMappingSymbol();
+    MCObjectStreamer::emitFill(NumBytes, FillValue, Loc);
+  }
 private:
   enum ElfMappingSymbol {
     EMS_None,
@@ -209,11 +216,11 @@ MCTargetStreamer *createAArch64AsmTargetStreamer(MCStreamer &S,
 
 MCELFStreamer *createAArch64ELFStreamer(MCContext &Context,
                                         std::unique_ptr<MCAsmBackend> TAB,
-                                        raw_pwrite_stream &OS,
+                                        std::unique_ptr<MCObjectWriter> OW,
                                         std::unique_ptr<MCCodeEmitter> Emitter,
                                         bool RelaxAll) {
-  AArch64ELFStreamer *S =
-      new AArch64ELFStreamer(Context, std::move(TAB), OS, std::move(Emitter));
+  AArch64ELFStreamer *S = new AArch64ELFStreamer(
+      Context, std::move(TAB), std::move(OW), std::move(Emitter));
   if (RelaxAll)
     S->getAssembler().setRelaxAll(true);
   return S;

@@ -28,15 +28,14 @@
 # CHECK-NEXT: Value: 0x[[ADDR1]]
 
 # CHECK:      Name: end
-# 0x19E = begin + sizeof(.foo) = 0x190 + 0xE
-# CHECK-NEXT: Value: 0x19E
+# CHECK-NEXT: Value: 0x236
 
 # Check that we don't crash with --gc-sections
 # RUN: ld.lld --gc-sections -o %t2 --script %t.script %t -shared
 # RUN: llvm-readobj -s -t %t2 | FileCheck %s --check-prefix=GC
 
 # GC:        Name: .foo
-# GC-NEXT:   Type: SHT_PROGBITS
+# GC-NEXT:   Type: SHT_NOBITS
 # GC-NEXT:   Flags [
 # GC-NEXT:     SHF_ALLOC
 # GC-NEXT:   ]

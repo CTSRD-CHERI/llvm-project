@@ -1,38 +1,38 @@
 ===================================================
-Extra Clang Tools 6.0.0 (In-Progress) Release Notes
+Extra Clang Tools 8.0.0 (In-Progress) Release Notes
 ===================================================
 
 .. contents::
    :local:
    :depth: 3
 
-Written by the `LLVM Team <http://llvm.org/>`_
+Written by the `LLVM Team <https://llvm.org/>`_
 
 .. warning::
 
-   These are in-progress notes for the upcoming Extra Clang Tools 6 release.
+   These are in-progress notes for the upcoming Extra Clang Tools 8 release.
    Release notes for previous releases can be found on
-   `the Download Page <http://releases.llvm.org/download.html>`_.
+   `the Download Page <https://releases.llvm.org/download.html>`_.
 
 Introduction
 ============
 
 This document contains the release notes for the Extra Clang Tools, part of the
-Clang release 6.0.0. Here we describe the status of the Extra Clang Tools in
+Clang release 8.0.0. Here we describe the status of the Extra Clang Tools in
 some detail, including major improvements from the previous release and new
 feature work. All LLVM releases may be downloaded from the `LLVM releases web
-site <http://llvm.org/releases/>`_.
+site <https://llvm.org/releases/>`_.
 
 For more information about Clang or LLVM, including information about
-the latest release, please see the `Clang Web Site <http://clang.llvm.org>`_ or
-the `LLVM Web Site <http://llvm.org>`_.
+the latest release, please see the `Clang Web Site <https://clang.llvm.org>`_ or
+the `LLVM Web Site <https://llvm.org>`_.
 
 Note that if you are reading this file from a Subversion checkout or the
 main Clang web page, this document applies to the *next* release, not
 the current one. To see the release notes for a specific release, please
-see the `releases page <http://llvm.org/releases/>`_.
+see the `releases page <https://llvm.org/releases/>`_.
 
-What's New in Extra Clang Tools 6.0.0?
+What's New in Extra Clang Tools 8.0.0?
 ======================================
 
 Some of the major new features and improvements to Extra Clang Tools are listed
@@ -43,6 +43,16 @@ Major New Features
 ------------------
 
 ...
+
+Improvements to clangd
+----------------------
+
+The improvements are...
+
+Improvements to clang-doc
+-------------------------
+
+The improvements are...
 
 Improvements to clang-query
 ---------------------------
@@ -57,132 +67,60 @@ The improvements are...
 Improvements to clang-tidy
 --------------------------
 
-- New `objc-property-declaration
-  <http://clang.llvm.org/extra/clang-tidy/checks/objc-property-declaration.html>`_ check
+- New :doc:`abseil-duration-division
+  <clang-tidy/checks/abseil-duration-division>` check.
 
-  Add new check for Objective-C code to ensure property
-  names follow the naming convention of Apple's programming
-  guide.
+  Checks for uses of ``absl::Duration`` division that is done in a
+  floating-point context, and recommends the use of a function that
+  returns a floating-point value.
 
-- New `google-objc-global-variable-declaration
-  <http://clang.llvm.org/extra/clang-tidy/checks/google-global-variable-declaration.html>`_ check
+- New :doc:`abseil-faster-strsplit-delimiter
+  <clang-tidy/checks/abseil-faster-strsplit-delimiter>` check.
 
-  Add new check for Objective-C code to ensure global 
-  variables follow the naming convention of 'k[A-Z].*' (for constants) 
-  or 'g[A-Z].*' (for variables).
+  Finds instances of ``absl::StrSplit()`` or ``absl::MaxSplits()`` where the
+  delimiter is a single character string literal and replaces with a character.
 
-- New module `objc` for Objective-C style checks.
+- New :doc:`abseil-no-internal-dependencies
+  <clang-tidy/checks/abseil-no-internal-dependencies>` check.
 
-- New `objc-forbidden-subclassing
-  <http://clang.llvm.org/extra/clang-tidy/checks/objc-forbidden-subclassing.html>`_ check
+  Gives a warning if code using Abseil depends on internal details.
 
-  Ensures Objective-C classes do not subclass any classes which are
-  not intended to be subclassed. Includes a list of classes from Foundation
-  and UIKit which are documented as not supporting subclassing.
+- New :doc:`abseil-no-namespace
+  <clang-tidy/checks/abseil-no-namespace>` check.
 
-- Renamed checks to use correct term "implicit conversion" instead of "implicit
-  cast" and modified messages and option names accordingly:
+  Ensures code does not open ``namespace absl`` as that violates Abseil's
+  compatibility guidelines.
 
-    * **performance-implicit-cast-in-loop** was renamed to
-      `performance-implicit-conversion-in-loop
-      <http://clang.llvm.org/extra/clang-tidy/checks/performance-implicit-conversion-in-loop.html>`_
-    * **readability-implicit-bool-cast** was renamed to
-      `readability-implicit-bool-conversion
-      <http://clang.llvm.org/extra/clang-tidy/checks/readability-implicit-bool-conversion.html>`_;
-      the check's options were renamed as follows:
-      ``AllowConditionalIntegerCasts`` -> ``AllowIntegerConditions``,
-      ``AllowConditionalPointerCasts`` -> ``AllowPointerConditions``.
+- New :doc:`abseil-redundant-strcat-calls
+  <clang-tidy/checks/abseil-redundant-strcat-calls>` check.
 
-- New `android-cloexec-accept
-  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-accept.html>`_ check
+  Suggests removal of unnecessary calls to ``absl::StrCat`` when the result is
+  being passed to another ``absl::StrCat`` or ``absl::StrAppend``.
 
-  Detects usage of ``accept()``.
+- New :doc:`abseil-str-cat-append
+  <clang-tidy/checks/abseil-str-cat-append>` check.
 
-- New `android-cloexec-accept4
-  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-accept4.html>`_ check
+  Flags uses of ``absl::StrCat()`` to append to a ``std::string``. Suggests
+  ``absl::StrAppend()`` should be used instead.
 
-  Checks if the required file flag ``SOCK_CLOEXEC`` is present in the argument of
-  ``accept4()``.
+- New :doc:`modernize-concat-nested-namespaces
+  <clang-tidy/checks/modernize-concat-nested-namespaces>` check.
 
-- New `android-cloexec-dup
-  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-dup.html>`_ check
+  Checks for uses of nested namespaces in the form of
+  ``namespace a { namespace b { ... }}`` and offers change to
+  syntax introduced in C++17 standard: ``namespace a::b { ... }``.
 
-  Detects usage of ``dup()``.
+- New :doc:`modernize-deprecated-ios-base-aliases
+  <clang-tidy/checks/modernize-deprecated-ios-base-aliases>` check.
 
-- New `android-cloexec-inotify-init
-  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-inotify-init.html>`_ check
+  Detects usage of the deprecated member types of ``std::ios_base`` and replaces
+  those that have a non-deprecated equivalent.
 
-  Detects usage of ``inotify_init()``.
+- New :doc:`readability-magic-numbers
+  <clang-tidy/checks/readability-magic-numbers>` check.
 
-- New `android-cloexec-epoll-create1
-  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-epoll-create1.html>`_ check
-
-  Checks if the required file flag ``EPOLL_CLOEXEC`` is present in the argument of
-  ``epoll_create1()``.
-
-- New `android-cloexec-epoll-create
-  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-epoll-create.html>`_ check
-
-  Detects usage of ``epoll_create()``.
-
-- New `android-cloexec-memfd_create
-  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-memfd_create.html>`_ check
-
-  Checks if the required file flag ``MFD_CLOEXEC`` is present in the argument
-  of ``memfd_create()``.
-
-- New `bugprone-integer-division
-  <http://clang.llvm.org/extra/clang-tidy/checks/bugprone-integer-division.html>`_ check
-
-  Finds cases where integer division in a floating point context is likely to
-  cause unintended loss of precision.
-
-- New `cppcoreguidelines-owning-memory <http://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines-owning-memory.html>`_ check 
-
-  This check implements the type-based semantic of ``gsl::owner<T*>``, but without
-  flow analysis.
-
-- New `hicpp-exception-baseclass
-  <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-exception-baseclass.html>`_ check
-
-  Ensures that all exception will be instances of ``std::exception`` and classes 
-  that are derived from it.
-
-- New `hicpp-signed-bitwise
-  <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-signed-bitwise.html>`_ check
-
-  Finds uses of bitwise operations on signed integer types, which may lead to 
-  undefined or implementation defined behaviour.
-
-- New `android-cloexec-inotify-init1
-  <http://clang.llvm.org/extra/clang-tidy/checks/android-cloexec-inotify-init1.html>`_ check
-
-  Checks if the required file flag ``IN_CLOEXEC`` is present in the argument of
-  ``inotify_init1()``.
-
-- New `readability-static-accessed-through-instance
-  <http://clang.llvm.org/extra/clang-tidy/checks/readability-static-accessed-through-instance.html>`_ check
-
-  Finds member expressions that access static members through instances and
-  replaces them with uses of the appropriate qualified-id.
-
-- Added `modernize-use-emplace.IgnoreImplicitConstructors
-  <http://clang.llvm.org/extra/clang-tidy/checks/modernize-use-emplace.html#cmdoption-arg-IgnoreImplicitConstructors>`_
-  option.
-
-- Added aliases for the `High Integrity C++ Coding Standard <http://www.codingstandard.com/section/index/>`_ 
-  to already implemented checks in other modules.
-
-  - `hicpp-deprecated-headers <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-deprecated-headers.html>`_
-  - `hicpp-move-const-arg <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-move-const-arg.html>`_
-  - `hicpp-no-array-decay <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-no-array-decay.html>`_
-  - `hicpp-no-malloc <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-no-malloc.html>`_
-  - `hicpp-static-assert <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-static-assert.html>`_
-  - `hicpp-use-auto <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-use-auto.html>`_
-  - `hicpp-use-emplace <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-use-emplace.html>`_
-  - `hicpp-use-noexcept <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-use-noexcept.html>`_
-  - `hicpp-use-nullptr <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-use-nullptr.html>`_
-  - `hicpp-vararg <http://clang.llvm.org/extra/clang-tidy/checks/hicpp-vararg.html>`_
+  Detects usage of magic numbers, numbers that are used as literals instead of
+  introduced via constants or symbols.
 
 Improvements to include-fixer
 -----------------------------

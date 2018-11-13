@@ -18,6 +18,20 @@
 #include "llvm/IR/Type.h"
 using namespace llvm;
 
+void LocationSize::print(raw_ostream &OS) const {
+  OS << "LocationSize::";
+  if (*this == unknown())
+    OS << "unknown";
+  else if (*this == mapEmpty())
+    OS << "mapEmpty";
+  else if (*this == mapTombstone())
+    OS << "mapTombstone";
+  else if (isPrecise())
+    OS << "precise(" << getValue() << ')';
+  else
+    OS << "upperBound(" << getValue() << ')';
+}
+
 MemoryLocation MemoryLocation::get(const LoadInst *LI) {
   AAMDNodes AATags;
   LI->getAAMetadata(AATags);
@@ -41,7 +55,8 @@ MemoryLocation MemoryLocation::get(const VAArgInst *VI) {
   AAMDNodes AATags;
   VI->getAAMetadata(AATags);
 
-  return MemoryLocation(VI->getPointerOperand(), UnknownSize, AATags);
+  return MemoryLocation(VI->getPointerOperand(), LocationSize::unknown(),
+                        AATags);
 }
 
 MemoryLocation MemoryLocation::get(const AtomicCmpXchgInst *CXI) {
@@ -65,7 +80,15 @@ MemoryLocation MemoryLocation::get(const AtomicRMWInst *RMWI) {
 }
 
 MemoryLocation MemoryLocation::getForSource(const MemTransferInst *MTI) {
-  uint64_t Size = UnknownSize;
+  return getForSource(cast<AnyMemTransferInst>(MTI));
+}
+
+MemoryLocation MemoryLocation::getForSource(const AtomicMemTransferInst *MTI) {
+  return getForSource(cast<AnyMemTransferInst>(MTI));
+}
+
+MemoryLocation MemoryLocation::getForSource(const AnyMemTransferInst *MTI) {
+  uint64_t Size = MemoryLocation::UnknownSize;
   if (ConstantInt *C = dyn_cast<ConstantInt>(MTI->getLength()))
     Size = C->getValue().getZExtValue();
 
@@ -77,22 +100,30 @@ MemoryLocation MemoryLocation::getForSource(const MemTransferInst *MTI) {
   return MemoryLocation(MTI->getRawSource(), Size, AATags);
 }
 
-MemoryLocation MemoryLocation::getForDest(const MemIntrinsic *MTI) {
-  uint64_t Size = UnknownSize;
-  if (ConstantInt *C = dyn_cast<ConstantInt>(MTI->getLength()))
+MemoryLocation MemoryLocation::getForDest(const MemIntrinsic *MI) {
+  return getForDest(cast<AnyMemIntrinsic>(MI));
+}
+
+MemoryLocation MemoryLocation::getForDest(const AtomicMemIntrinsic *MI) {
+  return getForDest(cast<AnyMemIntrinsic>(MI));
+}
+
+MemoryLocation MemoryLocation::getForDest(const AnyMemIntrinsic *MI) {
+  uint64_t Size = MemoryLocation::UnknownSize;
+  if (ConstantInt *C = dyn_cast<ConstantInt>(MI->getLength()))
     Size = C->getValue().getZExtValue();
 
   // memcpy/memmove can have AA tags. For memcpy, they apply
   // to both the source and the destination.
   AAMDNodes AATags;
-  MTI->getAAMetadata(AATags);
+  MI->getAAMetadata(AATags);
 
-  return MemoryLocation(MTI->getRawDest(), Size, AATags);
+  return MemoryLocation(MI->getRawDest(), Size, AATags);
 }
 
 MemoryLocation MemoryLocation::getForArgument(ImmutableCallSite CS,
                                               unsigned ArgIdx,
-                                              const TargetLibraryInfo &TLI) {
+                                              const TargetLibraryInfo *TLI) {
   AAMDNodes AATags;
   CS->getAAMetadata(AATags);
   const Value *Arg = CS.getArgument(ArgIdx);
@@ -121,6 +152,10 @@ MemoryLocation MemoryLocation::getForArgument(ImmutableCallSite CS,
           Arg, cast<ConstantInt>(II->getArgOperand(0))->getZExtValue(), AATags);
 
     case Intrinsic::invariant_end:
+      // The first argument to an invariant.end is a "descriptor" type (e.g. a
+      // pointer to a empty struct) which is never actually dereferenced.
+      if (ArgIdx == 0)
+        return MemoryLocation(Arg, 0, AATags);
       assert(ArgIdx == 2 && "Invalid argument index");
       return MemoryLocation(
           Arg, cast<ConstantInt>(II->getArgOperand(1))->getZExtValue(), AATags);
@@ -143,8 +178,9 @@ MemoryLocation MemoryLocation::getForArgument(ImmutableCallSite CS,
   // LoopIdiomRecognizer likes to turn loops into calls to memset_pattern16
   // whenever possible.
   LibFunc F;
-  if (CS.getCalledFunction() && TLI.getLibFunc(*CS.getCalledFunction(), F) &&
-      F == LibFunc_memset_pattern16 && TLI.has(F)) {
+  if (TLI && CS.getCalledFunction() &&
+      TLI->getLibFunc(*CS.getCalledFunction(), F) &&
+      F == LibFunc_memset_pattern16 && TLI->has(F)) {
     assert((ArgIdx == 0 || ArgIdx == 1) &&
            "Invalid argument index for memset_pattern16");
     if (ArgIdx == 1)
@@ -154,5 +190,6 @@ MemoryLocation MemoryLocation::getForArgument(ImmutableCallSite CS,
   }
   // FIXME: Handle memset_pattern4 and memset_pattern8 also.
 
-  return MemoryLocation(CS.getArgument(ArgIdx), UnknownSize, AATags);
+  return MemoryLocation(CS.getArgument(ArgIdx), LocationSize::unknown(),
+                        AATags);
 }

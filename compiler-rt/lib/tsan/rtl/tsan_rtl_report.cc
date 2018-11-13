@@ -393,7 +393,7 @@ void RestoreStack(int tid, const u64 epoch, VarSizeStackTrace *stk,
   const u64 ebegin = RoundDown(eend, kTracePartSize);
   DPrintf("#%d: RestoreStack epoch=%zu ebegin=%zu eend=%zu partidx=%d\n",
           tid, (uptr)epoch, (uptr)ebegin, (uptr)eend, partidx);
-  Vector<uptr> stack(MBlockReportStack);
+  Vector<uptr> stack;
   stack.Resize(hdr->stack0.size + 64);
   for (uptr i = 0; i < hdr->stack0.size; i++) {
     stack[i] = hdr->stack0.trace[i];
@@ -649,8 +649,8 @@ void ReportRace(ThreadState *thr) {
     // callback. Most likely, TraceTopPC will now return a EventTypeFuncExit
     // event. Later we subtract -1 from it (in GetPreviousInstructionPc)
     // and the resulting PC has kExternalPCBit set, so we pass it to
-    // __tsan_symbolize_external. __tsan_symbolize_external is within its rights
-    // to crash since the PC is completely bogus.
+    // __tsan_symbolize_external_ex. __tsan_symbolize_external_ex is within its
+    // rights to crash since the PC is completely bogus.
     // test/tsan/double_race.cc contains a test case for this.
     toppc = 0;
   }
@@ -659,7 +659,7 @@ void ReportRace(ThreadState *thr) {
     return;
 
   // MutexSet is too large to live on stack.
-  Vector<u64> mset_buffer(MBlockScopedBuf);
+  Vector<u64> mset_buffer;
   mset_buffer.Resize(sizeof(MutexSet) / sizeof(u64) + 1);
   MutexSet *mset2 = new(&mset_buffer[0]) MutexSet();
 

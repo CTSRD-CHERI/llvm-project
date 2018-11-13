@@ -120,12 +120,14 @@ struct IntializerInsertion {
     switch (Placement) {
     case InitializerPlacement::New:
       Location = utils::lexer::getPreviousToken(
-                     Context, Constructor.getBody()->getLocStart())
+                     Constructor.getBody()->getBeginLoc(),
+                     Context.getSourceManager(), Context.getLangOpts())
                      .getLocation();
       break;
     case InitializerPlacement::Before:
       Location = utils::lexer::getPreviousToken(
-                     Context, Where->getSourceRange().getBegin())
+                     Where->getSourceRange().getBegin(),
+                     Context.getSourceManager(), Context.getLangOpts())
                      .getLocation();
       break;
     case InitializerPlacement::After:
@@ -230,7 +232,7 @@ void fixInitializerList(const ASTContext &Context, DiagnosticBuilder &Diag,
                         const CXXConstructorDecl *Ctor,
                         const SmallPtrSetImpl<const T *> &DeclsToInit) {
   // Do not propose fixes in macros since we cannot place them correctly.
-  if (Ctor->getLocStart().isMacroID())
+  if (Ctor->getBeginLoc().isMacroID())
     return;
 
   SmallVector<const NamedDecl *, 16> OrderedDecls;
@@ -384,7 +386,7 @@ void ProTypeMemberInitCheck::checkMissingMemberInitializer(
     return;
 
   DiagnosticBuilder Diag =
-      diag(Ctor ? Ctor->getLocStart() : ClassDecl.getLocation(),
+      diag(Ctor ? Ctor->getBeginLoc() : ClassDecl.getLocation(),
            IsUnion
                ? "union constructor should initialize one of these fields: %0"
                : "constructor does not initialize these fields: %0")
@@ -392,7 +394,7 @@ void ProTypeMemberInitCheck::checkMissingMemberInitializer(
 
   // Do not propose fixes for constructors in macros since we cannot place them
   // correctly.
-  if (Ctor && Ctor->getLocStart().isMacroID())
+  if (Ctor && Ctor->getBeginLoc().isMacroID())
     return;
 
   // Collect all fields but only suggest a fix for the first member of unions,
@@ -404,8 +406,9 @@ void ProTypeMemberInitCheck::checkMissingMemberInitializer(
       return;
     // Don't suggest fixes for enums because we don't know a good default.
     // Don't suggest fixes for bitfields because in-class initialization is not
-    // possible.
-    if (F->getType()->isEnumeralType() || F->isBitField())
+    // possible until C++2a.
+    if (F->getType()->isEnumeralType() ||
+        (!getLangOpts().CPlusPlus2a && F->isBitField()))
       return;
     if (!F->getParent()->isUnion() || UnionsSeen.insert(F->getParent()).second)
       FieldsToFix.insert(F);
@@ -461,7 +464,7 @@ void ProTypeMemberInitCheck::checkMissingBaseClassInitializer(
     return;
 
   DiagnosticBuilder Diag =
-      diag(Ctor ? Ctor->getLocStart() : ClassDecl.getLocation(),
+      diag(Ctor ? Ctor->getBeginLoc() : ClassDecl.getLocation(),
            "constructor does not initialize these bases: %0")
       << toCommaSeparatedString(AllBases, BasesToInit);
 
@@ -472,7 +475,7 @@ void ProTypeMemberInitCheck::checkMissingBaseClassInitializer(
 void ProTypeMemberInitCheck::checkUninitializedTrivialType(
     const ASTContext &Context, const VarDecl *Var) {
   DiagnosticBuilder Diag =
-      diag(Var->getLocStart(), "uninitialized record type: %0") << Var;
+      diag(Var->getBeginLoc(), "uninitialized record type: %0") << Var;
 
   Diag << FixItHint::CreateInsertion(
       getLocationForEndOfToken(Context, Var->getSourceRange().getEnd()),

@@ -1,4 +1,4 @@
-//===-- llvm/CodeGen/TargetFrameLowering.h ---------------------------*- C++ -*-===//
+//===-- llvm/CodeGen/TargetFrameLowering.h ----------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -157,6 +157,10 @@ public:
   virtual bool enableStackSlotScavenging(const MachineFunction &MF) const {
     return false;
   }
+
+  /// Returns true if the target can safely skip saving callee-saved registers
+  /// for noreturn nounwind functions.
+  virtual bool enableCalleeSaveSkip(const MachineFunction &MF) const;
 
   /// emitProlog/emitEpilog - These methods insert prolog and epilog code into
   /// the function.
@@ -330,17 +334,25 @@ public:
 
   /// Check if given function is safe for not having callee saved registers.
   /// This is used when interprocedural register allocation is enabled.
-  static bool isSafeForNoCSROpt(const Function *F) {
-    if (!F->hasLocalLinkage() || F->hasAddressTaken() ||
-        !F->hasFnAttribute(Attribute::NoRecurse))
+  static bool isSafeForNoCSROpt(const Function &F) {
+    if (!F.hasLocalLinkage() || F.hasAddressTaken() ||
+        !F.hasFnAttribute(Attribute::NoRecurse))
       return false;
     // Function should not be optimized as tail call.
-    for (const User *U : F->users())
+    for (const User *U : F.users())
       if (auto CS = ImmutableCallSite(U))
         if (CS.isTailCall())
           return false;
     return true;
   }
+
+  /// Return initial CFA offset value i.e. the one valid at the beginning of the
+  /// function (before any stack operations).
+  virtual int getInitialCFAOffset(const MachineFunction &MF) const;
+
+  /// Return initial CFA register value i.e. the one valid at the beginning of
+  /// the function (before any stack operations).
+  virtual unsigned getInitialCFARegister(const MachineFunction &MF) const;
 };
 
 } // End llvm namespace

@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/IPO/InferFunctionAttrs.h"
-#include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
@@ -28,7 +27,7 @@ static bool inferAllPrototypeAttributes(Module &M,
     // We only infer things using the prototype and the name; we don't need
     // definitions.
     if (F.isDeclaration() && !F.hasFnAttribute((Attribute::OptimizeNone)))
-      Changed |= inferLibFuncAttributes(F, TLI);
+      Changed |= inferLibFuncAttributes(&F, TLI);
 
   return Changed;
 }

@@ -51,6 +51,8 @@ from ..support import seven
 
 def is_exe(fpath):
     """Returns true if fpath is an executable."""
+    if fpath == None:
+      return False
     return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
 
 
@@ -299,11 +301,31 @@ def parseOptionsAndInitTestdirs():
                     configuration.compiler = candidate
                     break
 
+    if args.dsymutil:
+      os.environ['DSYMUTIL'] = args.dsymutil
+    elif platform_system == 'Darwin':
+      os.environ['DSYMUTIL'] = seven.get_command_output(
+          'xcrun -find -toolchain default dsymutil')
+
+    if args.filecheck:
+        # The lldb-dotest script produced by the CMake build passes in a path
+        # to a working FileCheck binary. So does one specific Xcode project
+        # target. However, when invoking dotest.py directly, a valid --filecheck
+        # option needs to be given.
+        configuration.filecheck = os.path.abspath(args.filecheck)
+
+    if not configuration.get_filecheck_path():
+        logging.warning('No valid FileCheck executable; some tests may fail...')
+        logging.warning('(Double-check the --filecheck argument to dotest.py)')
+
     if args.channels:
         lldbtest_config.channels = args.channels
 
     if args.log_success:
         lldbtest_config.log_success = args.log_success
+
+    if args.out_of_tree_debugserver:
+        lldbtest_config.out_of_tree_debugserver = args.out_of_tree_debugserver
 
     # Set SDKROOT if we are using an Apple SDK
     if platform_system == 'Darwin' and args.apple_sdk:
@@ -332,7 +354,7 @@ def parseOptionsAndInitTestdirs():
         configuration.categoriesList = []
 
     if args.skipCategories:
-        configuration.skipCategories = test_categories.validate(
+        configuration.skipCategories += test_categories.validate(
             args.skipCategories, False)
 
     if args.E:
@@ -428,7 +450,7 @@ def parseOptionsAndInitTestdirs():
         configuration.num_threads = args.num_threads
 
     if args.test_subdir:
-        configuration.multiprocess_test_subdir = args.test_subdir
+        configuration.exclusive_test_subdir = args.test_subdir
 
     if args.test_runner_name:
         configuration.test_runner_name = args.test_runner_name
@@ -472,6 +494,8 @@ def parseOptionsAndInitTestdirs():
         configuration.lldb_platform_url = args.lldb_platform_url
     if args.lldb_platform_working_dir:
         configuration.lldb_platform_working_dir = args.lldb_platform_working_dir
+    if args.test_build_dir:
+        configuration.test_build_dir = args.test_build_dir
 
     if args.event_add_entries and len(args.event_add_entries) > 0:
         entries = {}
@@ -621,12 +645,19 @@ def setupSysPath():
 
     os.environ["LLDB_TEST"] = scriptPath
 
+    # Set up the root build directory.
+    builddir = configuration.test_build_dir
+    if not configuration.test_build_dir:
+        raise Exception("test_build_dir is not set")
+    os.environ["LLDB_BUILD"] = os.path.abspath(configuration.test_build_dir)
+
     # Set up the LLDB_SRC environment variable, so that the tests can locate
     # the LLDB source code.
     os.environ["LLDB_SRC"] = lldbsuite.lldb_root
 
     pluginPath = os.path.join(scriptPath, 'plugins')
     toolsLLDBMIPath = os.path.join(scriptPath, 'tools', 'lldb-mi')
+    toolsLLDBVSCode = os.path.join(scriptPath, 'tools', 'lldb-vscode')
     toolsLLDBServerPath = os.path.join(scriptPath, 'tools', 'lldb-server')
 
     # Insert script dir, plugin dir, lldb-mi dir and lldb-server dir to the
@@ -635,6 +666,9 @@ def setupSysPath():
     # Adding test/tools/lldb-mi to the path makes it easy
     sys.path.insert(0, toolsLLDBMIPath)
     # to "import lldbmi_testcase" from the MI tests
+    # Adding test/tools/lldb-vscode to the path makes it easy to
+    # "import lldb_vscode_testcase" from the VSCode tests
+    sys.path.insert(0, toolsLLDBVSCode)
     # Adding test/tools/lldb-server to the path makes it easy
     sys.path.insert(0, toolsLLDBServerPath)
     # to "import lldbgdbserverutils" from the lldb-server tests
@@ -703,6 +737,15 @@ def setupSysPath():
             print(
                 "The 'lldb-mi' executable cannot be located.  The lldb-mi tests can not be run as a result.")
             configuration.skipCategories.append("lldb-mi")
+
+    lldbVSCodeExec = os.path.join(lldbDir, "lldb-vscode")
+    if is_exe(lldbVSCodeExec):
+        os.environ["LLDBVSCODE_EXEC"] = lldbVSCodeExec
+    else:
+        if not configuration.shouldSkipBecauseOfCategories(["lldb-vscode"]):
+            print(
+                "The 'lldb-vscode' executable cannot be located.  The lldb-vscode tests can not be run as a result.")
+            configuration.skipCategories.append("lldb-vscode")
 
     lldbPythonDir = None  # The directory that contains 'lldb/__init__.py'
     if not configuration.lldbFrameworkPath and os.path.exists(os.path.join(lldbLibDir, "LLDB.framework")):
@@ -863,6 +906,7 @@ def visit_file(dir, name):
             unittest2.defaultTestLoader.loadTestsFromName(base))
 
 
+# TODO: This should be replaced with a call to find_test_files_in_dir_tree.
 def visit(prefix, dir, names):
     """Visitor function for os.path.walk(path, visit, arg)."""
 
@@ -1085,6 +1129,39 @@ def checkLibcxxSupport():
     print("Libc++ tests will not be run because: " + reason)
     configuration.skipCategories.append("libc++")
 
+def canRunLibstdcxxTests():
+    from lldbsuite.test import lldbplatformutil
+
+    platform = lldbplatformutil.getPlatform()
+    if platform == "linux":
+      return True, "libstdcxx always present"
+    return False, "Don't know how to build with libstdcxx on %s" % platform
+
+def checkLibstdcxxSupport():
+    result, reason = canRunLibstdcxxTests()
+    if result:
+        return # libstdcxx supported
+    if "libstdcxx" in configuration.categoriesList:
+        return # libstdcxx category explicitly requested, let it run.
+    print("libstdcxx tests will not be run because: " + reason)
+    configuration.skipCategories.append("libstdcxx")
+
+def checkDebugInfoSupport():
+    import lldb
+
+    platform = lldb.DBG.GetSelectedPlatform().GetTriple().split('-')[2]
+    compiler = configuration.compiler
+    skipped = []
+    for cat in test_categories.debug_info_categories:
+        if cat in configuration.categoriesList:
+            continue # Category explicitly requested, let it run.
+        if test_categories.is_supported_on_platform(cat, platform, compiler):
+            continue
+        configuration.skipCategories.append(cat)
+        skipped.append(cat)
+    if skipped:
+        print("Skipping following debug info categories:", skipped)
+
 def run_suite():
     # On MacOS X, check to make sure that domain for com.apple.DebugSymbols defaults
     # does not exist before proceeding to running the test suite.
@@ -1107,7 +1184,6 @@ def run_suite():
         from . import dosep
         dosep.main(
             configuration.num_threads,
-            configuration.multiprocess_test_subdir,
             configuration.test_runner_name,
             configuration.results_formatter_object)
         raise Exception("should never get here")
@@ -1117,7 +1193,6 @@ def run_suite():
         signal.signal(signal.SIGINT, signal.SIG_IGN)
 
     setupSysPath()
-    configuration.setupCrashInfoHook()
 
     #
     # If '-l' is specified, do not skip the long running tests.
@@ -1174,31 +1249,44 @@ def run_suite():
             configuration.lldb_platform_working_dir, 448)  # 448 = 0o700
         if error.Fail():
             raise Exception("making remote directory '%s': %s" % (
-                remote_test_dir, error))
+                configuration.lldb_platform_working_dir, error))
 
         if not lldb.remote_platform.SetWorkingDirectory(
                 configuration.lldb_platform_working_dir):
-            raise Exception("failed to set working directory '%s'" % remote_test_dir)
+            raise Exception("failed to set working directory '%s'" % configuration.lldb_platform_working_dir)
         lldb.DBG.SetSelectedPlatform(lldb.remote_platform)
     else:
         lldb.remote_platform = None
         configuration.lldb_platform_working_dir = None
         configuration.lldb_platform_url = None
 
+    # Set up the working directory.
+    # Note that it's not dotest's job to clean this directory.
+    import lldbsuite.test.lldbutil as lldbutil
+    build_dir = configuration.test_build_dir
+    lldbutil.mkdir_p(build_dir)
+
     target_platform = lldb.DBG.GetSelectedPlatform().GetTriple().split('-')[2]
 
     checkLibcxxSupport()
+    checkLibstdcxxSupport()
+    checkDebugInfoSupport()
 
-    # Don't do debugserver tests on everything except OS X.
+    # Don't do debugserver tests on anything except OS X.
     configuration.dont_do_debugserver_test = "linux" in target_platform or "freebsd" in target_platform or "windows" in target_platform
 
     # Don't do lldb-server (llgs) tests on anything except Linux.
     configuration.dont_do_llgs_test = not ("linux" in target_platform)
 
-    #
-    # Walk through the testdirs while collecting tests.
-    #
-    for testdir in configuration.testdirs:
+    # Collect tests from the specified testing directories. If a test
+    # subdirectory filter is explicitly specified, limit the search to that
+    # subdirectory.
+    exclusive_test_subdir = configuration.get_absolute_path_to_exclusive_test_subdir()
+    if exclusive_test_subdir:
+        dirs_to_search = [exclusive_test_subdir]
+    else:
+        dirs_to_search = configuration.testdirs
+    for testdir in dirs_to_search:
         for (dirpath, dirnames, filenames) in os.walk(testdir):
             visit('Test', dirpath, filenames)
 

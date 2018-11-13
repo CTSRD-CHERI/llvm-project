@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file declares classes for handling the YAML representation
+/// This file declares classes for handling the YAML representation
 /// of ELF.
 ///
 //===----------------------------------------------------------------------===//
@@ -123,6 +123,7 @@ struct Section {
   StringRef Link;
   StringRef Info;
   llvm::yaml::Hex64 AddressAlign;
+  Optional<llvm::yaml::Hex64> EntSize;
 
   Section(SectionKind Kind) : Kind(Kind) {}
   virtual ~Section();
@@ -207,6 +208,7 @@ struct Object {
   // top-level key, which automatically ensures that invariants like there
   // being a single SHT_SYMTAB section are upheld.
   LocalGlobalWeakSymbols Symbols;
+  LocalGlobalWeakSymbols DynamicSymbols;
 };
 
 } // end namespace ELFYAML

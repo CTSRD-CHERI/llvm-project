@@ -1,4 +1,5 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=alpha.cplusplus.MisusedMovedObject -std=c++11 -verify -analyzer-output=text %s
+// RUN: %clang_cc1 -analyze -analyzer-checker=alpha.cplusplus.MisusedMovedObject -std=c++11 -verify -analyzer-output=text -analyzer-config exploration_strategy=unexplored_first_queue,eagerly-assume=false %s
+// RUN: %clang_cc1 -analyze -analyzer-checker=alpha.cplusplus.MisusedMovedObject -std=c++11 -analyzer-config exploration_strategy=dfs,eagerly-assume=false -verify -analyzer-output=text -DDFS=1 %s
 
 namespace std {
 
@@ -474,12 +475,16 @@ void differentBranchesTest(int i) {
   // A variation on the theme above.
   {
     A a;
+#ifdef DFS
     a.foo() > 0 ? a.foo() : A(std::move(a)).foo(); // expected-note {{Assuming the condition is false}} expected-note {{'?' condition is false}}
+#else
+    a.foo() > 0 ? a.foo() : A(std::move(a)).foo(); // expected-note {{Assuming the condition is true}} expected-note {{'?' condition is true}}
+#endif
   }
   // Same thing, but with a switch statement.
   {
     A a, b;
-    switch (i) { // expected-note {{Control jumps to 'case 1:'  at line 483}}
+    switch (i) { // expected-note {{Control jumps to 'case 1:'}}
     case 1:
       b = std::move(a); // no-warning
       break;            // expected-note {{Execution jumps to the end of the function}}
@@ -491,7 +496,7 @@ void differentBranchesTest(int i) {
   // However, if there's a fallthrough, we do warn.
   {
     A a, b;
-    switch (i) { // expected-note {{Control jumps to 'case 1:'  at line 495}}
+    switch (i) { // expected-note {{Control jumps to 'case 1:'}}
     case 1:
       b = std::move(a); // expected-note {{'a' became 'moved-from' here}}
     case 2:
@@ -633,7 +638,10 @@ void ifStmtSequencesDeclAndConditionTest() {
   }
 }
 
-class C : public A {};
+struct C : public A {
+  [[clang::reinitializes]] void reinit();
+};
+
 void subRegionMoveTest() {
   {
     A a;
@@ -664,6 +672,13 @@ void resetSuperClass() {
   C c;
   C c1 = std::move(c);
   c.clear();
+  C c2 = c; // no-warning
+}
+
+void resetSuperClass2() {
+  C c;
+  C c1 = std::move(c);
+  c.reinit();
   C c2 = c; // no-warning
 }
 

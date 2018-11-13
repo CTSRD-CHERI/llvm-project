@@ -21,10 +21,12 @@
 #include "llvm/Analysis/LoopInfoImpl.h"
 #include "llvm/Analysis/LoopIterator.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
@@ -47,7 +49,7 @@ bool llvm::VerifyLoopInfo = false;
 #endif
 static cl::opt<bool, true>
     VerifyLoopInfoX("verify-loop-info", cl::location(VerifyLoopInfo),
-                    cl::desc("Verify loop info (time consuming)"));
+                    cl::Hidden, cl::desc("Verify loop info (time consuming)"));
 
 //===----------------------------------------------------------------------===//
 // Loop implementation
@@ -212,33 +214,21 @@ bool Loop::isSafeToClone() const {
 
 MDNode *Loop::getLoopID() const {
   MDNode *LoopID = nullptr;
-  if (BasicBlock *Latch = getLoopLatch()) {
-    LoopID = Latch->getTerminator()->getMetadata(LLVMContext::MD_loop);
-  } else {
-    assert(!getLoopLatch() &&
-           "The loop should have no single latch at this point");
-    // Go through each predecessor of the loop header and check the
-    // terminator for the metadata.
-    BasicBlock *H = getHeader();
-    for (BasicBlock *BB : this->blocks()) {
-      TerminatorInst *TI = BB->getTerminator();
-      MDNode *MD = nullptr;
 
-      // Check if this terminator branches to the loop header.
-      for (BasicBlock *Successor : TI->successors()) {
-        if (Successor == H) {
-          MD = TI->getMetadata(LLVMContext::MD_loop);
-          break;
-        }
-      }
-      if (!MD)
-        return nullptr;
+  // Go through the latch blocks and check the terminator for the metadata.
+  SmallVector<BasicBlock *, 4> LatchesBlocks;
+  getLoopLatches(LatchesBlocks);
+  for (BasicBlock *BB : LatchesBlocks) {
+    Instruction *TI = BB->getTerminator();
+    MDNode *MD = TI->getMetadata(LLVMContext::MD_loop);
 
-      if (!LoopID)
-        LoopID = MD;
-      else if (MD != LoopID)
-        return nullptr;
-    }
+    if (!MD)
+      return nullptr;
+
+    if (!LoopID)
+      LoopID = MD;
+    else if (MD != LoopID)
+      return nullptr;
   }
   if (!LoopID || LoopID->getNumOperands() == 0 ||
       LoopID->getOperand(0) != LoopID)
@@ -260,8 +250,8 @@ void Loop::setLoopID(MDNode *LoopID) const {
          "The loop should have no single latch at this point");
   BasicBlock *H = getHeader();
   for (BasicBlock *BB : this->blocks()) {
-    TerminatorInst *TI = BB->getTerminator();
-    for (BasicBlock *Successor : TI->successors()) {
+    Instruction *TI = BB->getTerminator();
+    for (BasicBlock *Successor : successors(TI)) {
       if (Successor == H)
         TI->setMetadata(LLVMContext::MD_loop, LoopID);
     }
@@ -375,69 +365,6 @@ Loop::LocRange Loop::getLocRange() const {
     return LocRange(HeadBB->getTerminator()->getDebugLoc());
 
   return LocRange();
-}
-
-bool Loop::hasDedicatedExits() const {
-  // Each predecessor of each exit block of a normal loop is contained
-  // within the loop.
-  SmallVector<BasicBlock *, 4> ExitBlocks;
-  getExitBlocks(ExitBlocks);
-  for (BasicBlock *BB : ExitBlocks)
-    for (BasicBlock *Predecessor : predecessors(BB))
-      if (!contains(Predecessor))
-        return false;
-  // All the requirements are met.
-  return true;
-}
-
-void Loop::getUniqueExitBlocks(
-    SmallVectorImpl<BasicBlock *> &ExitBlocks) const {
-  assert(hasDedicatedExits() &&
-         "getUniqueExitBlocks assumes the loop has canonical form exits!");
-
-  SmallVector<BasicBlock *, 32> SwitchExitBlocks;
-  for (BasicBlock *BB : this->blocks()) {
-    SwitchExitBlocks.clear();
-    for (BasicBlock *Successor : successors(BB)) {
-      // If block is inside the loop then it is not an exit block.
-      if (contains(Successor))
-        continue;
-
-      pred_iterator PI = pred_begin(Successor);
-      BasicBlock *FirstPred = *PI;
-
-      // If current basic block is this exit block's first predecessor
-      // then only insert exit block in to the output ExitBlocks vector.
-      // This ensures that same exit block is not inserted twice into
-      // ExitBlocks vector.
-      if (BB != FirstPred)
-        continue;
-
-      // If a terminator has more then two successors, for example SwitchInst,
-      // then it is possible that there are multiple edges from current block
-      // to one exit block.
-      if (std::distance(succ_begin(BB), succ_end(BB)) <= 2) {
-        ExitBlocks.push_back(Successor);
-        continue;
-      }
-
-      // In case of multiple edges from current block to exit block, collect
-      // only one edge in ExitBlocks. Use switchExitBlocks to keep track of
-      // duplicate edges.
-      if (!is_contained(SwitchExitBlocks, Successor)) {
-        SwitchExitBlocks.push_back(Successor);
-        ExitBlocks.push_back(Successor);
-      }
-    }
-  }
-}
-
-BasicBlock *Loop::getUniqueExitBlock() const {
-  SmallVector<BasicBlock *, 8> UniqueExitBlocks;
-  getUniqueExitBlocks(UniqueExitBlocks);
-  if (UniqueExitBlocks.size() == 1)
-    return UniqueExitBlocks[0];
-  return nullptr;
 }
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
@@ -731,12 +658,43 @@ PreservedAnalyses LoopPrinterPass::run(Function &F,
 }
 
 void llvm::printLoop(Loop &L, raw_ostream &OS, const std::string &Banner) {
+
+  if (forcePrintModuleIR()) {
+    // handling -print-module-scope
+    OS << Banner << " (loop: ";
+    L.getHeader()->printAsOperand(OS, false);
+    OS << ")\n";
+
+    // printing whole module
+    OS << *L.getHeader()->getModule();
+    return;
+  }
+
   OS << Banner;
+
+  auto *PreHeader = L.getLoopPreheader();
+  if (PreHeader) {
+    OS << "\n; Preheader:";
+    PreHeader->print(OS);
+    OS << "\n; Loop:";
+  }
+
   for (auto *Block : L.blocks())
     if (Block)
       Block->print(OS);
     else
       OS << "Printing <null> block";
+
+  SmallVector<BasicBlock *, 8> ExitBlocks;
+  L.getExitBlocks(ExitBlocks);
+  if (!ExitBlocks.empty()) {
+    OS << "\n; Exit blocks";
+    for (auto *Block : ExitBlocks)
+      if (Block)
+        Block->print(OS);
+      else
+        OS << "Printing <null> block";
+  }
 }
 
 //===----------------------------------------------------------------------===//

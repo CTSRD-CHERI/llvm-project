@@ -9,6 +9,7 @@ add_clang_tool(clang-refactor
   )
 
 target_link_libraries(clang-refactor
+  PRIVATE
   clangAST
   clangBasic
   clangFormat
@@ -19,5 +20,3 @@ target_link_libraries(clang-refactor
   clangToolingCore
   clangToolingRefactor
   )
-
-install(TARGETS clang-refactor RUNTIME DESTINATION bin)

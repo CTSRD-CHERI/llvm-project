@@ -14,7 +14,7 @@
 #ifndef LLVM_LIB_TARGET_XCORE_XCOREREGISTERINFO_H
 #define LLVM_LIB_TARGET_XCORE_XCOREREGISTERINFO_H
 
-#include "llvm/Target/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 
 #define GET_REGINFO_HEADER
 #include "XCoreGenRegisterInfo.inc"
@@ -32,7 +32,7 @@ public:
   const MCPhysReg *getCalleeSavedRegs(const MachineFunction *MF) const override;
 
   BitVector getReservedRegs(const MachineFunction &MF) const override;
-  
+
   bool requiresRegisterScavenging(const MachineFunction &MF) const override;
 
   bool trackLivenessAfterRegAlloc(const MachineFunction &MF) const override;

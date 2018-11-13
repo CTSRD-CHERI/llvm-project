@@ -53,10 +53,6 @@ def : ProcessorModel<"gfx700", SIQuarterSpeedModel,
   [FeatureISAVersion7_0_0]
 >;
 
-def : ProcessorModel<"bonaire", SIQuarterSpeedModel,
-  [FeatureISAVersion7_0_0]
->;
-
 def : ProcessorModel<"kaveri", SIQuarterSpeedModel,
   [FeatureISAVersion7_0_0]
 >;
@@ -85,17 +81,17 @@ def : ProcessorModel<"mullins", SIQuarterSpeedModel,
   [FeatureISAVersion7_0_3]
 >;
 
+def : ProcessorModel<"gfx704", SIQuarterSpeedModel,
+  [FeatureISAVersion7_0_4]
+>;
+
+def : ProcessorModel<"bonaire", SIQuarterSpeedModel,
+  [FeatureISAVersion7_0_4]
+>;
+
 //===----------------------------------------------------------------------===//
 // GCN GFX8 (Volcanic Islands (VI)).
 //===----------------------------------------------------------------------===//
-
-def : ProcessorModel<"gfx800", SIQuarterSpeedModel,
-  [FeatureISAVersion8_0_0]
->;
-
-def : ProcessorModel<"iceland", SIQuarterSpeedModel,
-  [FeatureISAVersion8_0_0]
->;
 
 def : ProcessorModel<"gfx801", SIQuarterSpeedModel,
   [FeatureISAVersion8_0_1]
@@ -106,6 +102,10 @@ def : ProcessorModel<"carrizo", SIQuarterSpeedModel,
 >;
 
 def : ProcessorModel<"gfx802", SIQuarterSpeedModel,
+  [FeatureISAVersion8_0_2]
+>;
+
+def : ProcessorModel<"iceland", SIQuarterSpeedModel,
   [FeatureISAVersion8_0_2]
 >;
 
@@ -129,10 +129,6 @@ def : ProcessorModel<"polaris11", SIQuarterSpeedModel,
   [FeatureISAVersion8_0_3]
 >;
 
-def : ProcessorModel<"gfx804", SIQuarterSpeedModel,
-  [FeatureISAVersion8_0_4]
->;
-
 def : ProcessorModel<"gfx810", SIQuarterSpeedModel,
   [FeatureISAVersion8_1_0]
 >;
@@ -149,14 +145,14 @@ def : ProcessorModel<"gfx900", SIQuarterSpeedModel,
   [FeatureISAVersion9_0_0]
 >;
 
-def : ProcessorModel<"gfx901", SIQuarterSpeedModel,
-  [FeatureISAVersion9_0_1]
->;
-
 def : ProcessorModel<"gfx902", SIQuarterSpeedModel,
   [FeatureISAVersion9_0_2]
 >;
 
-def : ProcessorModel<"gfx903", SIQuarterSpeedModel,
-  [FeatureISAVersion9_0_3]
+def : ProcessorModel<"gfx904", SIQuarterSpeedModel,
+  [FeatureISAVersion9_0_4]
+>;
+
+def : ProcessorModel<"gfx906", SIQuarterSpeedModel,
+  [FeatureISAVersion9_0_6]
 >;

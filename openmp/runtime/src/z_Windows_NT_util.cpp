@@ -350,7 +350,7 @@ static inline void __kmp_suspend_template(int th_gtid, C *flag) {
         th->th.th_active = FALSE;
         if (th->th.th_active_in_pool) {
           th->th.th_active_in_pool = FALSE;
-          KMP_TEST_THEN_DEC32((kmp_int32 *)&__kmp_thread_pool_active_nth);
+          KMP_ATOMIC_DEC(&__kmp_thread_pool_active_nth);
           KMP_DEBUG_ASSERT(TCR_4(__kmp_thread_pool_active_nth) >= 0);
         }
         deactivated = TRUE;
@@ -375,7 +375,7 @@ static inline void __kmp_suspend_template(int th_gtid, C *flag) {
     if (deactivated) {
       th->th.th_active = TRUE;
       if (TCR_4(th->th.th_in_pool)) {
-        KMP_TEST_THEN_INC32((kmp_int32 *)&__kmp_thread_pool_active_nth);
+        KMP_ATOMIC_INC(&__kmp_thread_pool_active_nth);
         th->th.th_active_in_pool = TRUE;
       }
     }
@@ -620,7 +620,7 @@ void __kmp_runtime_initialize(void) {
 #endif /* KMP_ARCH_X86 || KMP_ARCH_X86_64 */
 
 /* Set up minimum number of threads to switch to TLS gtid */
-#if KMP_OS_WINDOWS && !defined KMP_DYNAMIC_LIB
+#if KMP_OS_WINDOWS && !KMP_DYNAMIC_LIB
   // Windows* OS, static library.
   /* New thread may use stack space previously used by another thread,
      currently terminated. On Windows* OS, in case of static linking, we do not

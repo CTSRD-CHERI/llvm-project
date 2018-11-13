@@ -7,75 +7,25 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file provides an analogue to std::function that supports move semantics.
+// This file provides utilities for callable objects.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_FUNCTION_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_FUNCTION_H
 
-#include "llvm/ADT/STLExtras.h"
-#include <cassert>
-#include <memory>
+#include "llvm/ADT/FunctionExtras.h"
+#include "llvm/Support/Error.h"
 #include <tuple>
-#include <type_traits>
 #include <utility>
 
 namespace clang {
 namespace clangd {
 
-/// A move-only type-erasing function wrapper. Similar to `std::function`, but
-/// allows to store move-only callables.
-template <class> class UniqueFunction;
-
-template <class Ret, class... Args> class UniqueFunction<Ret(Args...)> {
-public:
-  UniqueFunction() = default;
-  UniqueFunction(std::nullptr_t) : UniqueFunction(){};
-
-  UniqueFunction(UniqueFunction const &) = delete;
-  UniqueFunction &operator=(UniqueFunction const &) = delete;
-
-  UniqueFunction(UniqueFunction &&) noexcept = default;
-  UniqueFunction &operator=(UniqueFunction &&) noexcept = default;
-
-  template <class Callable>
-  UniqueFunction(Callable &&Func)
-      : CallablePtr(llvm::make_unique<
-                    FunctionCallImpl<typename std::decay<Callable>::type>>(
-            std::forward<Callable>(Func))) {}
-
-  operator bool() { return CallablePtr; }
-
-  Ret operator()(Args... As) {
-    assert(CallablePtr);
-    return CallablePtr->Call(std::forward<Args>(As)...);
-  }
-
-private:
-  class FunctionCallBase {
-  public:
-    virtual ~FunctionCallBase() = default;
-    virtual Ret Call(Args... As) = 0;
-  };
-
-  template <class Callable>
-  class FunctionCallImpl final : public FunctionCallBase {
-    static_assert(
-        std::is_same<Callable, typename std::decay<Callable>::type>::value,
-        "FunctionCallImpl must be instanstiated with std::decay'ed types");
-
-  public:
-    FunctionCallImpl(Callable Func) : Func(std::move(Func)) {}
-
-    Ret Call(Args... As) override { return Func(std::forward<Args>(As)...); }
-
-  private:
-    Callable Func;
-  };
-
-  std::unique_ptr<FunctionCallBase> CallablePtr;
-};
+/// A Callback<T> is a void function that accepts Expected<T>.
+/// This is accepted by ClangdServer functions that logically return T.
+template <typename T>
+using Callback = llvm::unique_function<void(llvm::Expected<T>)>;
 
 /// Stores a callable object (Func) and arguments (Args) and allows to call the
 /// callable with provided arguments later using `operator ()`. The arguments
@@ -113,7 +63,7 @@ public:
                                  std::forward<RestArgs>(Rest)...)) {
 
 #ifndef NDEBUG
-    assert(!WasCalled && "Can only call result of BindWithForward once.");
+    assert(!WasCalled && "Can only call result of Bind once.");
     WasCalled = true;
 #endif
     return CallImpl(llvm::index_sequence_for<Args...>(),
@@ -128,7 +78,7 @@ public:
 /// The returned object must be called no more than once, as \p As are
 /// std::forwarded'ed (therefore can be moved) into \p F during the call.
 template <class Func, class... Args>
-ForwardBinder<Func, Args...> BindWithForward(Func F, Args &&... As) {
+ForwardBinder<Func, Args...> Bind(Func F, Args &&... As) {
   return ForwardBinder<Func, Args...>(
       std::make_tuple(std::forward<Func>(F), std::forward<Args>(As)...));
 }

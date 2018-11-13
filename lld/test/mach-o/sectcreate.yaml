@@ -1,4 +1,4 @@
-# RUN: lld -flavor darwin -r -arch x86_64 -o %t -sectcreate __DATA __data \
+# RUN: ld64.lld -r -arch x86_64 -o %t -sectcreate __DATA __data \
 # RUN:   %p/Inputs/hw.raw_bytes -print_atoms | FileCheck %s
 
 # CHECK: --- !native
@@ -8,5 +8,5 @@
 # CHECK:     type:            sectcreate
 # CHECK:     content:         [ 68, 65, 6C, 6C, 6F, 0A ]
 # CHECK:     section-choice:  custom-required
-# CHECK:     section-name:    __DATA/__data
+# CHECK:     section-name:    '__DATA/__data'
 # CHECK:     dead-strip:      never

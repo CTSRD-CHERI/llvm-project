@@ -14,9 +14,9 @@
 // CHECK-NEXT:      200: {{.*}} jmp -1
 //              0x10202 - 0x203 == 0xffff
 
-// RUN: not ld.lld -Ttext 0x200 %t.o %t2.o -o %t2 2>&1 | FileCheck --check-prefix=ERR %s
+// RUN: not ld.lld -Ttext 0x200 %t.o %t2.o -o /dev/null 2>&1 | FileCheck --check-prefix=ERR %s
 
-// ERR: {{.*}}:(.text+0x1): relocation R_386_PC16 out of range
+// ERR: {{.*}}:(.text+0x1): relocation R_386_PC16 out of range: 65536 is not in [-65536, 65535]
 
         .global _start
 _start:

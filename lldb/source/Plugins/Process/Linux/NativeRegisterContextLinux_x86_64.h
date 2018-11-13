@@ -15,6 +15,7 @@
 #include "Plugins/Process/Linux/NativeRegisterContextLinux.h"
 #include "Plugins/Process/Utility/RegisterContext_x86.h"
 #include "Plugins/Process/Utility/lldb-x86-register-enums.h"
+#include <sys/uio.h>
 
 namespace lldb_private {
 namespace process_linux {
@@ -109,7 +110,7 @@ private:
   // Private member variables.
   mutable XStateType m_xstate_type;
   FPR m_fpr; // Extended States Area, named FPR for historical reasons.
-  IOVEC m_iovec;
+  struct iovec m_iovec;
   YMM m_ymm_set;
   MPX m_mpx_set;
   RegInfo m_reg_info;
@@ -136,6 +137,8 @@ private:
   bool CopyMPXtoXSTATE(uint32_t reg);
 
   bool IsMPX(uint32_t reg_index) const;
+
+  void UpdateXSTATEforWrite(uint32_t reg_index);
 };
 
 } // namespace process_linux

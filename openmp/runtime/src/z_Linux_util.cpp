@@ -510,7 +510,7 @@ static void *__kmp_launch_worker(void *thr) {
 #if KMP_STATS_ENABLED
   // set thread local index to point to thread-specific stats
   __kmp_stats_thread_ptr = ((kmp_info_t *)thr)->th.th_stats;
-  KMP_START_EXPLICIT_TIMER(OMP_worker_thread_life);
+  __kmp_stats_thread_ptr->startLife();
   KMP_SET_THREAD_STATE(IDLE);
   KMP_INIT_PARTITIONED_TIMERS(OMP_idle);
 #endif
@@ -1253,16 +1253,21 @@ void __kmp_disable(int *old_state) {
 #endif
 }
 
-static void __kmp_atfork_prepare(void) { /*  nothing to do  */
+static void __kmp_atfork_prepare(void) {
+  __kmp_acquire_bootstrap_lock(&__kmp_initz_lock);
+  __kmp_acquire_bootstrap_lock(&__kmp_forkjoin_lock);
 }
 
-static void __kmp_atfork_parent(void) { /*  nothing to do  */
+static void __kmp_atfork_parent(void) {
+  __kmp_release_bootstrap_lock(&__kmp_initz_lock);
+  __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
 }
 
 /* Reset the library so execution in the child starts "all over again" with
    clean data structures in initial states.  Don't worry about freeing memory
    allocated by parent, just abandon it to be safe. */
 static void __kmp_atfork_child(void) {
+  __kmp_release_bootstrap_lock(&__kmp_forkjoin_lock);
   /* TODO make sure this is done right for nested/sibling */
   // ATT:  Memory leaks are here? TODO: Check it and fix.
   /* KMP_ASSERT( 0 ); */
@@ -1307,6 +1312,10 @@ static void __kmp_atfork_child(void) {
   __kmp_all_nth = 0;
   TCW_4(__kmp_nth, 0);
 
+  __kmp_thread_pool = NULL;
+  __kmp_thread_pool_insert_pt = NULL;
+  __kmp_team_pool = NULL;
+
   /* Must actually zero all the *cache arguments passed to __kmpc_threadprivate
      here so threadprivate doesn't use stale data */
   KA_TRACE(10, ("__kmp_atfork_child: checking cache address list %p\n",
@@ -1329,6 +1338,11 @@ static void __kmp_atfork_child(void) {
   __kmp_init_bootstrap_lock(&__kmp_initz_lock);
   __kmp_init_bootstrap_lock(&__kmp_stdio_lock);
   __kmp_init_bootstrap_lock(&__kmp_console_lock);
+  __kmp_init_bootstrap_lock(&__kmp_task_team_lock);
+
+#if USE_ITT_BUILD
+  __kmp_itt_reset(); // reset ITT's global state
+#endif /* USE_ITT_BUILD */
 
   /* This is necessary to make sure no stale data is left around */
   /* AC: customers complain that we use unsafe routines in the atfork
@@ -1420,7 +1434,7 @@ static inline void __kmp_suspend_template(int th_gtid, C *flag) {
 
   KF_TRACE(5, ("__kmp_suspend_template: T#%d set sleep bit for spin(%p)==%x,"
                " was %x\n",
-               th_gtid, flag->get(), *(flag->get()), old_spin));
+               th_gtid, flag->get(), flag->load(), old_spin));
 
   if (flag->done_check_val(old_spin)) {
     old_spin = flag->unset_sleeping();
@@ -1448,7 +1462,7 @@ static inline void __kmp_suspend_template(int th_gtid, C *flag) {
         th->th.th_active = FALSE;
         if (th->th.th_active_in_pool) {
           th->th.th_active_in_pool = FALSE;
-          KMP_TEST_THEN_DEC32(&__kmp_thread_pool_active_nth);
+          KMP_ATOMIC_DEC(&__kmp_thread_pool_active_nth);
           KMP_DEBUG_ASSERT(TCR_4(__kmp_thread_pool_active_nth) >= 0);
         }
         deactivated = TRUE;
@@ -1504,7 +1518,7 @@ static inline void __kmp_suspend_template(int th_gtid, C *flag) {
     if (deactivated) {
       th->th.th_active = TRUE;
       if (TCR_4(th->th.th_in_pool)) {
-        KMP_TEST_THEN_INC32(&__kmp_thread_pool_active_nth);
+        KMP_ATOMIC_INC(&__kmp_thread_pool_active_nth);
         th->th.th_active_in_pool = TRUE;
       }
     }
@@ -1577,7 +1591,7 @@ static inline void __kmp_resume_template(int target_gtid, C *flag) {
       KF_TRACE(5, ("__kmp_resume_template: T#%d exiting, thread T#%d already "
                    "awake: flag(%p): "
                    "%u => %u\n",
-                   gtid, target_gtid, flag->get(), old_spin, *flag->get()));
+                   gtid, target_gtid, flag->get(), old_spin, flag->load()));
       status = pthread_mutex_unlock(&th->th.th_suspend_mx.m_mutex);
       KMP_CHECK_SYSFAIL("pthread_mutex_unlock", status);
       return;
@@ -1585,7 +1599,7 @@ static inline void __kmp_resume_template(int target_gtid, C *flag) {
     KF_TRACE(5, ("__kmp_resume_template: T#%d about to wakeup T#%d, reset "
                  "sleep bit for flag's loc(%p): "
                  "%u => %u\n",
-                 gtid, target_gtid, flag->get(), old_spin, *flag->get()));
+                 gtid, target_gtid, flag->get(), old_spin, flag->load()));
   }
   TCW_PTR(th->th.th_sleep_loc, NULL);
 

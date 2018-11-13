@@ -28,11 +28,12 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
-#include "llvm/CodeGen/MachineValueType.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/StackMaps.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Instruction.h"
@@ -41,9 +42,8 @@
 #include "llvm/IR/Statepoint.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/Support/MachineValueType.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetOpcodes.h"
 #include "llvm/Target/TargetOptions.h"
 #include <cassert>
 #include <cstddef>
@@ -96,7 +96,7 @@ StatepointLoweringState::allocateStackSlot(EVT ValueType,
   NumSlotsAllocatedForStatepoints++;
   MachineFrameInfo &MFI = Builder.DAG.getMachineFunction().getFrameInfo();
 
-  unsigned SpillSize = ValueType.getSizeInBits() / 8;
+  unsigned SpillSize = ValueType.getStoreSize();
   assert((SpillSize * 8) == ValueType.getSizeInBits() && "Size not in bytes?");
 
   // First look for a previously created stack slot which is not in
@@ -419,10 +419,10 @@ static void lowerIncomingStatepointValue(SDValue Incoming, bool LiveInOnly,
                                                   Builder.getFrameIndexTy()));
   } else if (LiveInOnly) {
     // If this value is live in (not live-on-return, or live-through), we can
-    // treat it the same way patchpoint treats it's "live in" values.  We'll 
-    // end up folding some of these into stack references, but they'll be 
+    // treat it the same way patchpoint treats it's "live in" values.  We'll
+    // end up folding some of these into stack references, but they'll be
     // handled by the register allocator.  Note that we do not have the notion
-    // of a late use so these values might be placed in registers which are 
+    // of a late use so these values might be placed in registers which are
     // clobbered by the call.  This is fine for live-in.
     Ops.push_back(Incoming);
   } else {
@@ -498,7 +498,7 @@ lowerStatepointMetaArgs(SmallVectorImpl<SDValue> &Ops,
   auto isGCValue =[&](const Value *V) {
     return is_contained(SI.Ptrs, V) || is_contained(SI.Bases, V);
   };
-  
+
   // Before we actually start lowering (and allocating spill slots for values),
   // reserve any stack slots which we judge to be profitable to reuse for a
   // particular value.  This is purely an optimization over the code below and
@@ -861,7 +861,8 @@ SelectionDAGBuilder::LowerStatepoint(ImmutableStatepoint ISP,
       //       completely and make statepoint call to return a tuple.
       unsigned Reg = FuncInfo.CreateRegs(RetTy);
       RegsForValue RFV(*DAG.getContext(), DAG.getTargetLoweringInfo(),
-                       DAG.getDataLayout(), Reg, RetTy, true);
+                       DAG.getDataLayout(), Reg, RetTy,
+                       ISP.getCallSite().getCallingConv());
       SDValue Chain = DAG.getEntryNode();
 
       RFV.getCopyToRegs(ReturnValue, DAG, getCurSDLoc(), Chain, nullptr);

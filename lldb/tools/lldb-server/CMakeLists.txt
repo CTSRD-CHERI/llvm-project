@@ -34,12 +34,21 @@ if(CMAKE_SYSTEM_NAME MATCHES "NetBSD")
   list(APPEND LLDB_PLUGINS lldbPluginProcessNetBSD)
 endif()
 
-add_lldb_tool(lldb-server INCLUDE_IN_FRAMEWORK
+if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+  list(APPEND LLDB_PLUGINS lldbPluginObjectFileMachO)
+elseif(CMAKE_SYSTEM_NAME MATCHES "Windows")
+  list(APPEND LLDB_PLUGINS lldbPluginObjectFilePECOFF)
+else()
+  list(APPEND LLDB_PLUGINS lldbPluginObjectFileELF)
+endif()
+
+add_lldb_tool(lldb-server INCLUDE_IN_SUITE
     Acceptor.cpp
     lldb-gdbserver.cpp
     lldb-platform.cpp
     lldb-server.cpp
     LLDBServerUtilities.cpp
+    SystemInitializerLLGS.cpp
 
     LINK_LIBS
       lldbBase
@@ -54,4 +63,4 @@ add_lldb_tool(lldb-server INCLUDE_IN_FRAMEWORK
       Support
 )
 
-target_link_libraries(lldb-server ${LLDB_SYSTEM_LIBS})
+target_link_libraries(lldb-server PRIVATE ${LLDB_SYSTEM_LIBS})

@@ -14,6 +14,7 @@
 #include "ARMConstantPoolValue.h"
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/GlobalValue.h"
@@ -292,6 +293,6 @@ void ARMConstantPoolMBB::addSelectionDAGCSEId(FoldingSetNodeID &ID) {
 }
 
 void ARMConstantPoolMBB::print(raw_ostream &O) const {
-  O << "BB#" << MBB->getNumber();
+  O << printMBBReference(*MBB);
   ARMConstantPoolValue::print(O);
 }

@@ -46,7 +46,7 @@ SourceLocation startLocationForType(TypeLoc TLoc) {
       return NestedNameSpecifier.getBeginLoc();
     TLoc = TLoc.getNextTypeLoc();
   }
-  return TLoc.getLocStart();
+  return TLoc.getBeginLoc();
 }
 
 SourceLocation endLocationForType(TypeLoc TLoc) {
@@ -275,7 +275,7 @@ bool isNestedDeclContext(const DeclContext *D, const DeclContext *Context) {
 // Returns true if \p D is visible at \p Loc with DeclContext \p DeclCtx.
 bool isDeclVisibleAtLocation(const SourceManager &SM, const Decl *D,
                              const DeclContext *DeclCtx, SourceLocation Loc) {
-  SourceLocation DeclLoc = SM.getSpellingLoc(D->getLocStart());
+  SourceLocation DeclLoc = SM.getSpellingLoc(D->getBeginLoc());
   Loc = SM.getSpellingLoc(Loc);
   return SM.isBeforeInTranslationUnit(DeclLoc, Loc) &&
          (SM.getFileID(DeclLoc) == SM.getFileID(Loc) &&
@@ -478,13 +478,13 @@ void ChangeNamespaceTool::registerMatchers(ast_matchers::MatchFinder *Finder) {
                                 hasAncestor(namespaceDecl(isAnonymous())),
                                 hasAncestor(cxxRecordDecl()))),
                    hasParent(namespaceDecl()));
-  Finder->addMatcher(decl(forEachDescendant(expr(anyOf(
-                              callExpr(callee(FuncMatcher)).bind("call"),
-                              declRefExpr(to(FuncMatcher.bind("func_decl")))
-                                  .bind("func_ref")))),
-                          IsInMovedNs, unless(isImplicit()))
-                         .bind("dc"),
-                     this);
+  Finder->addMatcher(
+      expr(allOf(hasAncestor(decl().bind("dc")), IsInMovedNs,
+                 unless(hasAncestor(isImplicit())),
+                 anyOf(callExpr(callee(FuncMatcher)).bind("call"),
+                       declRefExpr(to(FuncMatcher.bind("func_decl")))
+                           .bind("func_ref")))),
+      this);
 
   auto GlobalVarMatcher = varDecl(
       hasGlobalStorage(), hasParent(namespaceDecl()),
@@ -552,6 +552,10 @@ void ChangeNamespaceTool::run(
     if (Loc.getTypeLocClass() == TypeLoc::Elaborated) {
       NestedNameSpecifierLoc NestedNameSpecifier =
           Loc.castAs<ElaboratedTypeLoc>().getQualifierLoc();
+      // This happens for friend declaration of a base class with injected class
+      // name.
+      if (!NestedNameSpecifier.getNestedNameSpecifier())
+        return;
       const Type *SpecifierType =
           NestedNameSpecifier.getNestedNameSpecifier()->getAsType();
       if (SpecifierType && SpecifierType->isRecordType())
@@ -630,7 +634,7 @@ static SourceLocation getLocAfterNamespaceLBrace(const NamespaceDecl *NsDecl,
                                                  const SourceManager &SM,
                                                  const LangOptions &LangOpts) {
   std::unique_ptr<Lexer> Lex =
-      getLexerStartingFromLoc(NsDecl->getLocStart(), SM, LangOpts);
+      getLexerStartingFromLoc(NsDecl->getBeginLoc(), SM, LangOpts);
   assert(Lex.get() &&
          "Failed to create lexer from the beginning of namespace.");
   if (!Lex.get())
@@ -705,8 +709,8 @@ void ChangeNamespaceTool::moveOldNamespace(
 void ChangeNamespaceTool::moveClassForwardDeclaration(
     const ast_matchers::MatchFinder::MatchResult &Result,
     const NamedDecl *FwdDecl) {
-  SourceLocation Start = FwdDecl->getLocStart();
-  SourceLocation End = FwdDecl->getLocEnd();
+  SourceLocation Start = FwdDecl->getBeginLoc();
+  SourceLocation End = FwdDecl->getEndLoc();
   const SourceManager &SM = *Result.SourceManager;
   SourceLocation AfterSemi = Lexer::findLocationAfterToken(
       End, tok::semi, SM, Result.Context->getLangOpts(),
@@ -875,7 +879,7 @@ void ChangeNamespaceTool::fixTypeLoc(
     if (!llvm::StringRef(D->getQualifiedNameAsString())
              .startswith(OldNamespace + "::"))
       return false;
-    auto ExpansionLoc = Result.SourceManager->getExpansionLoc(D->getLocStart());
+    auto ExpansionLoc = Result.SourceManager->getExpansionLoc(D->getBeginLoc());
     if (ExpansionLoc.isInvalid())
       return false;
     llvm::StringRef Filename = Result.SourceManager->getFilename(ExpansionLoc);
@@ -906,8 +910,8 @@ void ChangeNamespaceTool::fixTypeLoc(
 void ChangeNamespaceTool::fixUsingShadowDecl(
     const ast_matchers::MatchFinder::MatchResult &Result,
     const UsingDecl *UsingDeclaration) {
-  SourceLocation Start = UsingDeclaration->getLocStart();
-  SourceLocation End = UsingDeclaration->getLocEnd();
+  SourceLocation Start = UsingDeclaration->getBeginLoc();
+  SourceLocation End = UsingDeclaration->getEndLoc();
   if (Start.isInvalid() || End.isInvalid())
     return;
 
@@ -985,7 +989,8 @@ void ChangeNamespaceTool::onEndOfTranslationUnit() {
     // Add replacements referring to the changed code to existing replacements,
     // which refers to the original code.
     Replaces = Replaces.merge(NewReplacements);
-    auto Style = format::getStyle("file", FilePath, FallbackStyle);
+    auto Style =
+        format::getStyle(format::DefaultFormatStyle, FilePath, FallbackStyle);
     if (!Style) {
       llvm::errs() << llvm::toString(Style.takeError()) << "\n";
       continue;

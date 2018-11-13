@@ -1,10 +1,10 @@
-; RUN: llc < %s -asm-verbose=false | FileCheck %s
+; RUN: llc < %s -asm-verbose=false -wasm-keep-registers | FileCheck %s
 
 ; DAGCombiner oddly folds casts into the rhs of copysign. Test that they get
 ; unfolded.
 
 target datalayout = "e-m:e-p:32:32-i64:64-n32:64-S128"
-target triple = "wasm32-unknown-unknown-wasm"
+target triple = "wasm32-unknown-unknown"
 
 declare double @copysign(double, double) nounwind readnone
 declare float @copysignf(float, float) nounwind readnone

@@ -16,7 +16,6 @@
 namespace llvm {
 
 class TargetTransformInfo;
-
 } // namespace llvm
 
 struct isl_schedule_node;
@@ -70,7 +69,6 @@ struct MatMulInfoTy {
 };
 
 extern bool DisablePollyTiling;
-
 } // namespace polly
 
 class ScheduleTreeOptimizer {
@@ -353,5 +351,4 @@ private:
 /// @param ScheduleRange A range of a map, which describes a prefix schedule
 ///                      relation.
 isl::set getPartialTilePrefixes(isl::set ScheduleRange, int VectorWidth);
-
 #endif // POLLY_SCHEDULEOPTIMIZER_H

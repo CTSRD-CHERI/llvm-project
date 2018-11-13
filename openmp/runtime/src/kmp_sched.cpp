@@ -35,6 +35,7 @@ char const *traits_t<int>::spec = "d";
 char const *traits_t<unsigned int>::spec = "u";
 char const *traits_t<long long>::spec = "lld";
 char const *traits_t<unsigned long long>::spec = "llu";
+char const *traits_t<long>::spec = "ld";
 //-------------------------------------------------------------------------
 #endif
 
@@ -50,8 +51,9 @@ static void __kmp_for_static_init(ident_t *loc, kmp_int32 global_tid,
                                   void *codeptr
 #endif
                                   ) {
-  KMP_COUNT_BLOCK(OMP_FOR_static);
-  KMP_TIME_PARTITIONED_BLOCK(FOR_static_scheduling);
+  KMP_COUNT_BLOCK(OMP_LOOP_STATIC);
+  KMP_PUSH_PARTITIONED_TIMER(OMP_loop_static);
+  KMP_PUSH_PARTITIONED_TIMER(OMP_loop_static_scheduling);
 
   typedef typename traits_t<T>::unsigned_t UT;
   typedef typename traits_t<T>::signed_t ST;
@@ -66,7 +68,7 @@ static void __kmp_for_static_init(ident_t *loc, kmp_int32 global_tid,
 #if OMPT_SUPPORT && OMPT_OPTIONAL
   ompt_team_info_t *team_info = NULL;
   ompt_task_info_t *task_info = NULL;
-  ompt_work_type_t ompt_work_type = ompt_work_loop;
+  ompt_work_t ompt_work_type = ompt_work_loop;
 
   static kmp_int8 warn = 0;
 
@@ -150,7 +152,6 @@ static void __kmp_for_static_init(ident_t *loc, kmp_int32 global_tid,
           &(task_info->task_data), 0, codeptr);
     }
 #endif
-    KMP_COUNT_VALUE(FOR_static_iterations, 0);
     return;
   }
 
@@ -253,7 +254,6 @@ static void __kmp_for_static_init(ident_t *loc, kmp_int32 global_tid,
                             loc);
     }
   }
-  KMP_COUNT_VALUE(FOR_static_iterations, trip_count);
 
   /* compute remaining parameters */
   switch (schedtype) {
@@ -389,6 +389,26 @@ static void __kmp_for_static_init(ident_t *loc, kmp_int32 global_tid,
   }
 #endif
 
+#if KMP_STATS_ENABLED
+  {
+    kmp_int64 t;
+    kmp_int64 u = (kmp_int64)(*pupper);
+    kmp_int64 l = (kmp_int64)(*plower);
+    kmp_int64 i = (kmp_int64)incr;
+    /* compute trip count */
+    if (i == 1) {
+      t = u - l + 1;
+    } else if (i == -1) {
+      t = l - u + 1;
+    } else if (i > 0) {
+      t = (u - l) / i + 1;
+    } else {
+      t = (l - u) / (-i) + 1;
+    }
+    KMP_COUNT_VALUE(OMP_loop_static_iterations, t);
+    KMP_POP_PARTITIONED_TIMER();
+  }
+#endif
   return;
 }
 
@@ -455,7 +475,7 @@ static void __kmp_dist_for_static_init(ident_t *loc, kmp_int32 gtid,
   nteams = th->th.th_teams_size.nteams;
 #endif
   team_id = team->t.t_master_tid;
-  KMP_DEBUG_ASSERT(nteams == team->t.t_parent->t.t_nproc);
+  KMP_DEBUG_ASSERT(nteams == (kmp_uint32)team->t.t_parent->t.t_nproc);
 
   // compute global trip count
   if (incr == 1) {
@@ -697,7 +717,7 @@ static void __kmp_team_static_init(ident_t *loc, kmp_int32 gtid,
   nteams = th->th.th_teams_size.nteams;
 #endif
   team_id = team->t.t_master_tid;
-  KMP_DEBUG_ASSERT(nteams == team->t.t_parent->t.t_nproc);
+  KMP_DEBUG_ASSERT(nteams == (kmp_uint32)team->t.t_parent->t.t_nproc);
 
   // compute trip count
   if (incr == 1) {

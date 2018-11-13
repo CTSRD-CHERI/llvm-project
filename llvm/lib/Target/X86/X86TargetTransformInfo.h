@@ -21,7 +21,7 @@
 #include "X86TargetMachine.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/BasicTTIImpl.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
 
@@ -101,13 +101,16 @@ public:
 
   int getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
                                  unsigned Factor, ArrayRef<unsigned> Indices,
-                                 unsigned Alignment, unsigned AddressSpace);
+                                 unsigned Alignment, unsigned AddressSpace,
+                                 bool IsMasked = false);
   int getInterleavedMemoryOpCostAVX512(unsigned Opcode, Type *VecTy,
                                  unsigned Factor, ArrayRef<unsigned> Indices,
-                                 unsigned Alignment, unsigned AddressSpace);
+                                 unsigned Alignment, unsigned AddressSpace,
+                                 bool IsMasked = false);
   int getInterleavedMemoryOpCostAVX2(unsigned Opcode, Type *VecTy,
                                  unsigned Factor, ArrayRef<unsigned> Indices,
-                                 unsigned Alignment, unsigned AddressSpace);
+                                 unsigned Alignment, unsigned AddressSpace,
+                                 bool IsMasked = false);
 
   int getIntImmCost(int64_t);
 
@@ -120,11 +123,13 @@ public:
                     Type *Ty);
   bool isLSRCostLess(TargetTransformInfo::LSRCost &C1,
                      TargetTransformInfo::LSRCost &C2);
+  bool canMacroFuseCmp();
   bool isLegalMaskedLoad(Type *DataType);
   bool isLegalMaskedStore(Type *DataType);
   bool isLegalMaskedGather(Type *DataType);
   bool isLegalMaskedScatter(Type *DataType);
   bool hasDivRemOp(Type *DataType, bool IsSigned);
+  bool isFCmpOrdCheaperThanFCmpZero(Type *Ty);
   bool areInlineCompatible(const Function *Caller,
                            const Function *Callee) const;
   const TTI::MemCmpExpansionOptions *enableMemCmpExpansion(

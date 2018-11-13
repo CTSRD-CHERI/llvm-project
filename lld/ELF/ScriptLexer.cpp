@@ -66,8 +66,6 @@ size_t ScriptLexer::getColumnNumber() {
 
 std::string ScriptLexer::getCurrentLocation() {
   std::string Filename = getCurrentMB().getBufferIdentifier();
-  if (!Pos)
-    return Filename;
   return (Filename + ":" + Twine(getLineNumber())).str();
 }
 
@@ -115,11 +113,20 @@ void ScriptLexer::tokenize(MemoryBufferRef MB) {
       continue;
     }
 
+    // ">foo" is parsed to ">" and "foo", but ">>" is parsed to ">>".
+    // "|", "||", "&" and "&&" are different operators.
+    if (S.startswith("<<") || S.startswith("<=") || S.startswith(">>") ||
+        S.startswith(">=") || S.startswith("||") || S.startswith("&&")) {
+      Vec.push_back(S.substr(0, 2));
+      S = S.substr(2);
+      continue;
+    }
+
     // Unquoted token. This is more relaxed than tokens in C-like language,
     // so that you can write "file-name.cpp" as one bare token, for example.
     size_t Pos = S.find_first_not_of(
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-        "0123456789_.$/\\~=+[]*?-!<>^:");
+        "0123456789_.$/\\~=+[]*?-!^:");
 
     // A character that cannot start a word (which is usually a
     // punctuation) forms a single character token.
@@ -237,6 +244,15 @@ StringRef ScriptLexer::peek() {
   return Tok;
 }
 
+StringRef ScriptLexer::peek2() {
+  skip();
+  StringRef Tok = next();
+  if (errorCount())
+    return "";
+  Pos = Pos - 2;
+  return Tok;
+}
+
 bool ScriptLexer::consume(StringRef Tok) {
   if (peek() == Tok) {
     skip();
@@ -274,10 +290,7 @@ static bool encloses(StringRef S, StringRef T) {
 
 MemoryBufferRef ScriptLexer::getCurrentMB() {
   // Find input buffer containing the current token.
-  assert(!MBs.empty());
-  if (!Pos)
-    return MBs[0];
-
+  assert(!MBs.empty() && Pos > 0);
   for (MemoryBufferRef MB : MBs)
     if (encloses(MB.getBuffer(), Tokens[Pos - 1]))
       return MB;

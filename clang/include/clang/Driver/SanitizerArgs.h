@@ -30,7 +30,7 @@ class SanitizerArgs {
   std::vector<std::string> ExtraDeps;
   int CoverageFeatures = 0;
   int MsanTrackOrigins = 0;
-  bool MsanUseAfterDtor = false;
+  bool MsanUseAfterDtor = true;
   bool CfiCrossDso = false;
   bool CfiICallGeneralizePointers = false;
   int AsanFieldPadding = 0;
@@ -55,12 +55,14 @@ class SanitizerArgs {
   bool needsSharedRt() const { return SharedRuntime; }
 
   bool needsAsanRt() const { return Sanitizers.has(SanitizerKind::Address); }
+  bool needsHwasanRt() const { return Sanitizers.has(SanitizerKind::HWAddress); }
   bool needsTsanRt() const { return Sanitizers.has(SanitizerKind::Thread); }
   bool needsMsanRt() const { return Sanitizers.has(SanitizerKind::Memory); }
   bool needsFuzzer() const { return Sanitizers.has(SanitizerKind::Fuzzer); }
   bool needsLsanRt() const {
     return Sanitizers.has(SanitizerKind::Leak) &&
-           !Sanitizers.has(SanitizerKind::Address);
+           !Sanitizers.has(SanitizerKind::Address) &&
+           !Sanitizers.has(SanitizerKind::HWAddress);
   }
   bool needsUbsanRt() const;
   bool requiresMinimalRuntime() const { return MinimalRuntime; }

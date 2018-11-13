@@ -38,7 +38,7 @@ class MipsRegWithSubRegs<bits<16> Enc, string n, list<Register> subregs>
   let Namespace = "Mips";
 }
 
-// Mips CPU Registers
+// Mips CPU Registers.
 class MipsGPRReg<bits<16> Enc, string n> : MipsReg<Enc, n>;
 
 // Mips 64-bit CPU Registers
@@ -335,6 +335,16 @@ def GPRMM16MoveP : RegisterClass<"Mips", [i32], 32, (add
   // Callee save
   S0, S2, S3, S4)>;
 
+def GPRMM16MovePPairFirst : RegisterClass<"Mips", [i32], 32, (add
+  // Arguments
+  A0, A1, A2)>;
+
+def GPRMM16MovePPairSecond : RegisterClass<"Mips", [i32], 32, (add
+  // Arguments
+  A1, A2, A3,
+  // Callee save
+  S5, S6)>;
+
 def GPR64 : RegisterClass<"Mips", [i64], 64, (add
   // Reserved
   ZERO_64, AT_64,
@@ -348,12 +358,6 @@ def GPR64 : RegisterClass<"Mips", [i64], 64, (add
   T8_64, T9_64,
   // Reserved
   K0_64, K1_64, GP_64, SP_64, FP_64, RA_64)>;
-
-def GPRMM16_64 : RegisterClass<"Mips", [i64], 64, (add
-  // Callee save
-  S0_64, S1_64,
-  // Return Values and Arguments
-  V0_64, V1_64, A0_64, A1_64, A2_64, A3_64)>;
 
 def CPU16Regs : RegisterClass<"Mips", [i32], 32, (add
   // Return Values and Arguments
@@ -528,6 +532,16 @@ def GPRMM16AsmOperandMoveP : MipsAsmRegOperand {
   let PredicateMethod = "isMM16AsmRegMoveP";
 }
 
+def GPRMM16AsmOperandMovePPairFirst : MipsAsmRegOperand {
+  let Name = "GPRMM16AsmRegMovePPairFirst";
+  let PredicateMethod = "isMM16AsmRegMovePPairFirst";
+}
+
+def GPRMM16AsmOperandMovePPairSecond : MipsAsmRegOperand {
+  let Name = "GPRMM16AsmRegMovePPairSecond";
+  let PredicateMethod = "isMM16AsmRegMovePPairSecond";
+}
+
 def ACC64DSPAsmOperand : MipsAsmRegOperand {
   let Name = "ACC64DSPAsmReg";
   let PredicateMethod = "isACCAsmReg";
@@ -617,6 +631,14 @@ def GPRMM16OpndZero : RegisterOperand<GPRMM16Zero> {
 def GPRMM16OpndMoveP : RegisterOperand<GPRMM16MoveP> {
   let ParserMatchClass = GPRMM16AsmOperandMoveP;
   let EncoderMethod = "getMovePRegSingleOpValue";
+}
+
+def GPRMM16OpndMovePPairFirst : RegisterOperand<GPRMM16MovePPairFirst> {
+  let ParserMatchClass = GPRMM16AsmOperandMovePPairFirst;
+}
+
+def GPRMM16OpndMovePPairSecond : RegisterOperand<GPRMM16MovePPairSecond> {
+  let ParserMatchClass = GPRMM16AsmOperandMovePPairSecond;
 }
 
 def GPR64Opnd : RegisterOperand<GPR64> {

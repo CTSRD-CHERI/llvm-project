@@ -17,7 +17,7 @@
 
 #include "ARC.h"
 #include "llvm/CodeGen/SelectionDAG.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
 
@@ -76,7 +76,6 @@ public:
                              Instruction *I = nullptr) const override;
 
 private:
-  const TargetMachine &TM;
   const ARCSubtarget &Subtarget;
 
   // Lower Operand helpers

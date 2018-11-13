@@ -11,6 +11,9 @@
  */
 
 #include <limits.h>
+#include <isl/id.h>
+#include <isl/val.h>
+#include <isl/space.h>
 #include <isl/aff.h>
 #include <isl/constraint.h>
 #include <isl/set.h>
@@ -18,12 +21,32 @@
 #include <isl/union_set.h>
 #include <isl/union_map.h>
 #include <isl/schedule_node.h>
+#include <isl/options.h>
 #include <isl_sort.h>
 #include <isl_tarjan.h>
 #include <isl_ast_private.h>
 #include <isl_ast_build_expr.h>
 #include <isl_ast_build_private.h>
 #include <isl_ast_graft_private.h>
+
+/* Try and reduce the number of disjuncts in the representation of "set",
+ * without dropping explicit representations of local variables.
+ */
+static __isl_give isl_set *isl_set_coalesce_preserve(__isl_take isl_set *set)
+{
+	isl_ctx *ctx;
+	int save_preserve;
+
+	if (!set)
+		return NULL;
+
+	ctx = isl_set_get_ctx(set);
+	save_preserve = isl_options_get_coalesce_preserve_locals(ctx);
+	isl_options_set_coalesce_preserve_locals(ctx, 1);
+	set = isl_set_coalesce(set);
+	isl_options_set_coalesce_preserve_locals(ctx, save_preserve);
+	return set;
+}
 
 /* Data used in generate_domain.
  *
@@ -141,7 +164,7 @@ static isl_stat add_domain(__isl_take isl_map *executed,
 
 	guard = isl_map_domain(isl_map_copy(map));
 	guard = isl_set_compute_divs(guard);
-	guard = isl_set_coalesce(guard);
+	guard = isl_set_coalesce_preserve(guard);
 	guard = isl_set_gist(guard, isl_ast_build_get_generated(build));
 	guard = isl_ast_build_specialize(build, guard);
 
@@ -1453,7 +1476,8 @@ static __isl_give isl_ast_graft *create_node_scaled(
 	__isl_take isl_ast_build *build)
 {
 	int depth;
-	int degenerate, eliminated;
+	int degenerate;
+	isl_bool eliminated;
 	isl_basic_set *hull;
 	isl_basic_set *enforced;
 	isl_set *guard, *hoisted;
@@ -2648,7 +2672,7 @@ static int foreach_iteration(__isl_take isl_set *domain,
  * "executed" and "build" are inputs to compute_domains.
  * "schedule_domain" is the domain of "executed".
  *
- * "option" constains the domains at the current depth that should by
+ * "option" contains the domains at the current depth that should by
  * atomic, separated or unrolled.  These domains are as specified by
  * the user, except that inner dimensions have been eliminated and
  * that they have been made pair-wise disjoint.
@@ -2837,7 +2861,7 @@ static __isl_give isl_set *compute_atomic_domain(
 	}
 
 	domain = isl_ast_build_eliminate(domains->build, domain);
-	domain = isl_set_coalesce(domain);
+	domain = isl_set_coalesce_preserve(domain);
 	bset = isl_set_unshifted_simple_hull(domain);
 	domain = isl_set_from_basic_set(bset);
 	atomic_domain = isl_set_copy(domain);
@@ -2955,7 +2979,7 @@ static isl_stat compute_partial_domains(struct isl_codegen_domains *domains,
 	domain = isl_ast_build_eliminate(domains->build, domain);
 	domain = isl_set_intersect(domain, isl_set_copy(class_domain));
 
-	domain = isl_set_coalesce(domain);
+	domain = isl_set_coalesce_preserve(domain);
 	domain = isl_set_make_disjoint(domain);
 
 	list = isl_basic_set_list_from_set(domain);
@@ -3312,7 +3336,7 @@ static __isl_give isl_ast_graft_list *generate_shifted_component_tree_base(
 								build);
 
 	domain = isl_ast_build_eliminate(build, domain);
-	domain = isl_set_coalesce(domain);
+	domain = isl_set_coalesce_preserve(domain);
 
 	outer_disjunction = has_pure_outer_disjunction(domain, build);
 	if (outer_disjunction < 0)
@@ -3520,6 +3544,12 @@ static __isl_give isl_ast_graft_list *generate_shifted_component_only_after(
  * the remaining iterations (those that are incomparable
  * to the isolated domain).
  * We generate an AST for each piece and concatenate the results.
+ *
+ * If the isolated domain is not convex, then it is replaced
+ * by a convex superset to ensure that the sets of preceding and
+ * following iterations are properly defined and, in particular,
+ * that there are no intermediate iterations that do not belong
+ * to the isolated domain.
  *
  * In the special case where at least one element of the schedule
  * domain that does not belong to the isolated domain needs
@@ -3871,7 +3901,7 @@ static int first_offset(struct isl_set_map_pair *domain, int *order, int n,
  * with "<<" the lexicographic order, proving that the order is preserved
  * in all cases.
  */
-static __isl_give isl_union_map *contruct_shifted_executed(
+static __isl_give isl_union_map *construct_shifted_executed(
 	struct isl_set_map_pair *domain, int *order, int n,
 	__isl_keep isl_val *stride, __isl_keep isl_multi_val *offset,
 	__isl_take isl_ast_build *build)
@@ -3942,9 +3972,9 @@ static __isl_give isl_union_map *contruct_shifted_executed(
  * domain is equal to zero.  The other offsets are reduced modulo stride.
  *
  * Based on this information, we construct a new inverse schedule in
- * contruct_shifted_executed that exposes the stride.
+ * construct_shifted_executed that exposes the stride.
  * Since this involves the introduction of a new schedule dimension,
- * the build needs to be changed accodingly.
+ * the build needs to be changed accordingly.
  * After computing the AST, the newly introduced dimension needs
  * to be removed again from the list of grafts.  We do this by plugging
  * in a mapping that represents the new schedule domain in terms of the
@@ -3976,7 +4006,7 @@ static __isl_give isl_ast_graft_list *generate_shift_component(
 	mv = isl_multi_val_add_val(mv, val);
 	mv = isl_multi_val_mod_val(mv, isl_val_copy(stride));
 
-	executed = contruct_shifted_executed(domain, order, n, stride, mv,
+	executed = construct_shifted_executed(domain, order, n, stride, mv,
 						build);
 	space = isl_ast_build_get_space(build, 1);
 	space = isl_space_map_from_set(space);
@@ -5171,7 +5201,7 @@ static __isl_give isl_ast_graft_list *hoist_out_of_context(
  * to the domain elements executed by those iterations.
  *
  * The context node may introduce additional parameters as well as
- * constraints on the outer schedule dimenions or original parameters.
+ * constraints on the outer schedule dimensions or original parameters.
  *
  * We add the extra parameters to a new build and the context
  * constraints to both the build and (as a single disjunct)
@@ -5735,6 +5765,8 @@ __isl_give isl_ast_node *isl_ast_build_node_from_schedule(
 	ctx = isl_ast_build_get_ctx(build);
 
 	node = isl_schedule_get_root(schedule);
+	if (!node)
+		goto error;
 	isl_schedule_free(schedule);
 
 	build = isl_ast_build_copy(build);

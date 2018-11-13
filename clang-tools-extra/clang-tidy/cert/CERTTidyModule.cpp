@@ -11,16 +11,17 @@
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
 #include "../google/UnnamedNamespaceInHeaderCheck.h"
-#include "../misc/MoveConstructorInitCheck.h"
 #include "../misc/NewDeleteOverloadsCheck.h"
 #include "../misc/NonCopyableObjects.h"
 #include "../misc/StaticAssertCheck.h"
 #include "../misc/ThrowByValueCatchByReferenceCheck.h"
+#include "../performance/MoveConstructorInitCheck.h"
 #include "CommandProcessorCheck.h"
 #include "DontModifyStdNamespaceCheck.h"
 #include "FloatLoopCounter.h"
 #include "LimitedRandomnessCheck.h"
 #include "PostfixOperatorCheck.h"
+#include "ProperlySeededRandomGeneratorCheck.h"
 #include "SetLongJmpCheck.h"
 #include "StaticObjectExceptionCheck.h"
 #include "StrToNumCheck.h"
@@ -46,7 +47,7 @@ public:
     CheckFactories.registerCheck<google::build::UnnamedNamespaceInHeaderCheck>(
         "cert-dcl59-cpp");
     // OOP
-    CheckFactories.registerCheck<misc::MoveConstructorInitCheck>(
+    CheckFactories.registerCheck<performance::MoveConstructorInitCheck>(
         "cert-oop11-cpp");
     // ERR
     CheckFactories.registerCheck<misc::ThrowByValueCatchByReferenceCheck>(
@@ -58,6 +59,8 @@ public:
         "cert-err61-cpp");
     // MSC
     CheckFactories.registerCheck<LimitedRandomnessCheck>("cert-msc50-cpp");
+    CheckFactories.registerCheck<ProperlySeededRandomGeneratorCheck>(
+        "cert-msc51-cpp");
 
     // C checkers
     // DCL
@@ -72,6 +75,8 @@ public:
     CheckFactories.registerCheck<StrToNumCheck>("cert-err34-c");
     // MSC
     CheckFactories.registerCheck<LimitedRandomnessCheck>("cert-msc30-c");
+    CheckFactories.registerCheck<ProperlySeededRandomGeneratorCheck>(
+        "cert-msc32-c");
   }
 };
 

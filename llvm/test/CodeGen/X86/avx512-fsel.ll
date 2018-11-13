@@ -6,7 +6,7 @@ target triple = "x86_64-apple-macosx10.11.0"
 
 define i32 @test(float %a, float %b)  {
 ; CHECK-LABEL: test:
-; CHECK:       ## BB#0:
+; CHECK:       ## %bb.0:
 ; CHECK-NEXT:    pushq %rax
 ; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    vucomiss %xmm1, %xmm0
@@ -19,6 +19,7 @@ define i32 @test(float %a, float %b)  {
 ; CHECK-NEXT:    jmp LBB0_2
 ; CHECK-NEXT:  LBB0_1: ## %L_0
 ; CHECK-NEXT:    callq ___assert_rtn
+; CHECK-NEXT:    ud2
 ; CHECK-NEXT:  LBB0_2: ## %L_1
 ; CHECK-NEXT:    xorl %eax, %eax
 ; CHECK-NEXT:    popq %rcx

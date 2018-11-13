@@ -13,9 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Utils/FunctionImportUtils.h"
-#include "llvm/Analysis/ModuleSummaryAnalysis.h"
 #include "llvm/IR/InstIterator.h"
-#include "llvm/IR/Instructions.h"
 using namespace llvm;
 
 /// Checks if we should import SGV as a definition, otherwise import as a
@@ -208,15 +206,10 @@ void FunctionImportGlobalProcessing::processGlobalForThinLTO(GlobalValue &GV) {
   // definition.
   if (GV.hasName()) {
     ValueInfo VI = ImportIndex.getValueInfo(GV.getGUID());
-    if (VI) {
-      // Need to check all summaries are local in case of hash collisions.
-      bool IsLocal = VI.getSummaryList().size() &&
-          llvm::all_of(VI.getSummaryList(),
-                       [](const std::unique_ptr<GlobalValueSummary> &Summary) {
-                         return Summary->isDSOLocal();
-                       });
-      if (IsLocal)
-        GV.setDSOLocal(true);
+    if (VI && VI.isDSOLocal()) {
+      GV.setDSOLocal(true);
+      if (GV.hasDLLImportStorageClass())
+        GV.setDLLStorageClass(GlobalValue::DefaultStorageClass);
     }
   }
 

@@ -555,6 +555,36 @@ TEST(APFloatTest, MaxNum) {
   EXPECT_EQ(1.0, maxnum(nan, f1).convertToDouble());
 }
 
+TEST(APFloatTest, Minimum) {
+  APFloat f1(1.0);
+  APFloat f2(2.0);
+  APFloat zp(0.0);
+  APFloat zn(-0.0);
+  APFloat nan = APFloat::getNaN(APFloat::IEEEdouble());
+
+  EXPECT_EQ(1.0, minimum(f1, f2).convertToDouble());
+  EXPECT_EQ(1.0, minimum(f2, f1).convertToDouble());
+  EXPECT_EQ(-0.0, minimum(zp, zn).convertToDouble());
+  EXPECT_EQ(-0.0, minimum(zn, zp).convertToDouble());
+  EXPECT_TRUE(std::isnan(minimum(f1, nan).convertToDouble()));
+  EXPECT_TRUE(std::isnan(minimum(nan, f1).convertToDouble()));
+}
+
+TEST(APFloatTest, Maximum) {
+  APFloat f1(1.0);
+  APFloat f2(2.0);
+  APFloat zp(0.0);
+  APFloat zn(-0.0);
+  APFloat nan = APFloat::getNaN(APFloat::IEEEdouble());
+
+  EXPECT_EQ(2.0, maximum(f1, f2).convertToDouble());
+  EXPECT_EQ(2.0, maximum(f2, f1).convertToDouble());
+  EXPECT_EQ(0.0, maximum(zp, zn).convertToDouble());
+  EXPECT_EQ(0.0, maximum(zn, zp).convertToDouble());
+  EXPECT_TRUE(std::isnan(maximum(f1, nan).convertToDouble()));
+  EXPECT_TRUE(std::isnan(maximum(nan, f1).convertToDouble()));
+}
+
 TEST(APFloatTest, Denormal) {
   APFloat::roundingMode rdmd = APFloat::rmNearestTiesToEven;
 
@@ -849,6 +879,23 @@ TEST(APFloatTest, fromDecimalString) {
   EXPECT_EQ(2.71828, convertToDoubleFromString("2.71828"));
 }
 
+TEST(APFloatTest, fromToStringSpecials) {
+  auto expects = [] (const char *first, const char *second) {
+    std::string roundtrip = convertToString(convertToDoubleFromString(second), 0, 3);
+    EXPECT_STREQ(first, roundtrip.c_str());
+  };
+  expects("+Inf", "+Inf");
+  expects("+Inf", "INFINITY");
+  expects("+Inf", "inf");
+  expects("-Inf", "-Inf");
+  expects("-Inf", "-INFINITY");
+  expects("-Inf", "-inf");
+  expects("NaN", "NaN");
+  expects("NaN", "nan");
+  expects("NaN", "-NaN");
+  expects("NaN", "-nan");
+}
+
 TEST(APFloatTest, fromHexadecimalString) {
   EXPECT_EQ( 1.0, APFloat(APFloat::IEEEdouble(),  "0x1p0").convertToDouble());
   EXPECT_EQ(+1.0, APFloat(APFloat::IEEEdouble(), "+0x1p0").convertToDouble());
@@ -966,6 +1013,13 @@ TEST(APFloatTest, toString) {
   ASSERT_EQ("8.73183400000000010e+02", convertToString(873.1834, 0, 0, false));
   ASSERT_EQ("1.79769313486231570e+308",
             convertToString(1.7976931348623157E+308, 0, 0, false));
+
+  {
+    SmallString<64> Str;
+    APFloat UnnormalZero(APFloat::x87DoubleExtended(), APInt(80, {0, 1}));
+    UnnormalZero.toString(Str);
+    ASSERT_EQ("NaN", Str);
+  }
 }
 
 TEST(APFloatTest, toInteger) {

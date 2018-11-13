@@ -9,16 +9,21 @@
 
 #include "Chunks.h"
 #include "Symbols.h"
+#include "lld/Common/Timer.h"
 #include "llvm/ADT/STLExtras.h"
 #include <vector>
 
 namespace lld {
 namespace coff {
 
+static Timer GCTimer("GC", Timer::root());
+
 // Set live bit on for each reachable chunk. Unmarked (unreachable)
 // COMDAT chunks will be ignored by Writer, so they will be excluded
 // from the final output.
-void markLive(const std::vector<Chunk *> &Chunks) {
+void markLive(ArrayRef<Chunk *> Chunks) {
+  ScopedTimer T(GCTimer);
+
   // We build up a worklist of sections which have been marked as live. We only
   // push into the worklist when we discover an unmarked section, and we mark
   // as we push, so sections never appear twice in the list.
@@ -27,13 +32,13 @@ void markLive(const std::vector<Chunk *> &Chunks) {
   // COMDAT section chunks are dead by default. Add non-COMDAT chunks.
   for (Chunk *C : Chunks)
     if (auto *SC = dyn_cast<SectionChunk>(C))
-      if (SC->isLive())
+      if (SC->Live)
         Worklist.push_back(SC);
 
   auto Enqueue = [&](SectionChunk *C) {
-    if (C->isLive())
+    if (C->Live)
       return;
-    C->markLive();
+    C->Live = true;
     Worklist.push_back(C);
   };
 
@@ -43,7 +48,7 @@ void markLive(const std::vector<Chunk *> &Chunks) {
     else if (auto *Sym = dyn_cast<DefinedImportData>(B))
       Sym->File->Live = true;
     else if (auto *Sym = dyn_cast<DefinedImportThunk>(B))
-      Sym->WrappedSym->File->Live = true;
+      Sym->WrappedSym->File->Live = Sym->WrappedSym->File->ThunkLive = true;
   };
 
   // Add GC root chunks.
@@ -52,18 +57,12 @@ void markLive(const std::vector<Chunk *> &Chunks) {
 
   while (!Worklist.empty()) {
     SectionChunk *SC = Worklist.pop_back_val();
-
-    // If this section was discarded, there are relocations referring to
-    // discarded sections. Ignore these sections to avoid crashing. They will be
-    // diagnosed during relocation processing.
-    if (SC->isDiscarded())
-      continue;
-
-    assert(SC->isLive() && "We mark as live when pushing onto the worklist!");
+    assert(SC->Live && "We mark as live when pushing onto the worklist!");
 
     // Mark all symbols listed in the relocation table for this section.
     for (Symbol *B : SC->symbols())
-      AddSym(B);
+      if (B)
+        AddSym(B);
 
     // Mark associative sections if any.
     for (SectionChunk *C : SC->children())

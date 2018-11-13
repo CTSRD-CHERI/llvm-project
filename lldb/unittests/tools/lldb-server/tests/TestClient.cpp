@@ -11,10 +11,11 @@
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/common/TCPSocket.h"
 #include "lldb/Host/posix/ConnectionFileDescriptorPosix.h"
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Target/ProcessLaunchInfo.h"
+#include "lldb/Utility/Args.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Testing/Support/Error.h"
 #include "gtest/gtest.h"
 #include <cstdlib>
 #include <future>
@@ -24,37 +25,55 @@
 using namespace lldb;
 using namespace lldb_private;
 using namespace llvm;
+using namespace llgs_tests;
 
-namespace llgs_tests {
-void TestClient::Initialize() { HostInfo::Initialize(); }
-
-bool TestClient::IsDebugServer() {
-  return sys::path::filename(LLDB_SERVER).contains("debugserver");
+TestClient::TestClient(std::unique_ptr<Connection> Conn) {
+  SetConnection(Conn.release());
+  SetPacketTimeout(std::chrono::seconds(10));
 }
 
-bool TestClient::IsLldbServer() { return !IsDebugServer(); }
+TestClient::~TestClient() {
+  if (!IsConnected())
+    return;
 
-TestClient::TestClient(const std::string &test_name,
-                       const std::string &test_case_name)
-    : m_test_name(test_name), m_test_case_name(test_case_name),
-      m_pc_register(UINT_MAX) {}
+  EXPECT_THAT_ERROR(SendMessage("k"), Succeeded());
+}
 
-TestClient::~TestClient() {}
+Error TestClient::initializeConnection() {
+  if (SendAck() == 0)
+    return make_error<StringError>("Sending initial ACK failed.",
+                                   inconvertibleErrorCode());
 
-llvm::Error TestClient::StartDebugger() {
+  if (Error E = SendMessage("QStartNoAckMode"))
+    return E;
+
+  m_send_acks = false;
+  return Error::success();
+}
+
+Expected<std::unique_ptr<TestClient>> TestClient::launch(StringRef Log) {
+  return launch(Log, {});
+}
+
+Expected<std::unique_ptr<TestClient>> TestClient::launch(StringRef Log, ArrayRef<StringRef> InferiorArgs) {
+  return launchCustom(Log, {}, InferiorArgs);
+}
+
+Expected<std::unique_ptr<TestClient>> TestClient::launchCustom(StringRef Log, ArrayRef<StringRef> ServerArgs, ArrayRef<StringRef> InferiorArgs) {
   const ArchSpec &arch_spec = HostInfo::GetArchitecture();
   Args args;
   args.AppendArgument(LLDB_SERVER);
-  if (IsLldbServer()) {
+  if (IsLldbServer())
     args.AppendArgument("gdbserver");
-    args.AppendArgument("--log-channels=gdb-remote packets");
-  } else {
-    args.AppendArgument("--log-flags=0x800000");
-  }
   args.AppendArgument("--reverse-connect");
-  std::string log_file_name = GenerateLogFileName(arch_spec);
-  if (log_file_name.size())
-    args.AppendArgument("--log-file=" + log_file_name);
+
+  if (!Log.empty()) {
+    args.AppendArgument(("--log-file=" + Log).str());
+    if (IsLldbServer())
+      args.AppendArgument("--log-channels=gdb-remote packets");
+    else
+      args.AppendArgument("--log-flags=0x800000");
+  }
 
   Status status;
   TCPSocket listen_socket(true, false);
@@ -62,47 +81,52 @@ llvm::Error TestClient::StartDebugger() {
   if (status.Fail())
     return status.ToError();
 
-  char connect_remote_address[64];
-  snprintf(connect_remote_address, sizeof(connect_remote_address),
-           "localhost:%u", listen_socket.GetLocalPortNumber());
+  args.AppendArgument(
+      ("localhost:" + Twine(listen_socket.GetLocalPortNumber())).str());
 
-  args.AppendArgument(connect_remote_address);
+  for (StringRef arg : ServerArgs)
+    args.AppendArgument(arg);
 
-  m_server_process_info.SetArchitecture(arch_spec);
-  m_server_process_info.SetArguments(args, true);
-  status = Host::LaunchProcess(m_server_process_info);
+  if (!InferiorArgs.empty()) {
+    args.AppendArgument("--");
+    for (StringRef arg : InferiorArgs)
+      args.AppendArgument(arg);
+  }
+
+  ProcessLaunchInfo Info;
+  Info.SetArchitecture(arch_spec);
+  Info.SetArguments(args, true);
+  Info.GetEnvironment() = Host::GetEnvironment();
+  // TODO: Use this callback to detect botched launches. If lldb-server does not
+  // start, we can print a nice error message here instead of hanging in
+  // Accept().
+  Info.SetMonitorProcessCallback(&ProcessLaunchInfo::NoOpMonitorCallback,
+                                 false);
+
+  status = Host::LaunchProcess(Info);
   if (status.Fail())
     return status.ToError();
 
-  char connect_remote_uri[64];
-  snprintf(connect_remote_uri, sizeof(connect_remote_uri), "connect://%s",
-           connect_remote_address);
   Socket *accept_socket;
   listen_socket.Accept(accept_socket);
-  SetConnection(new ConnectionFileDescriptor(accept_socket));
+  auto Conn = llvm::make_unique<ConnectionFileDescriptor>(accept_socket);
+  auto Client = std::unique_ptr<TestClient>(new TestClient(std::move(Conn)));
 
-  SendAck(); // Send this as a handshake.
-  return llvm::Error::success();
-}
+  if (Error E = Client->initializeConnection())
+    return std::move(E);
 
-llvm::Error TestClient::StopDebugger() {
-  std::string response;
-  // Debugserver (non-conformingly?) sends a reply to the k packet instead of
-  // simply closing the connection.
-  PacketResult result =
-      IsDebugServer() ? PacketResult::Success : PacketResult::ErrorDisconnected;
-  return SendMessage("k", response, result);
+  if (!InferiorArgs.empty()) {
+    if (Error E = Client->queryProcess())
+      return std::move(E);
+  }
+
+  return std::move(Client);
 }
 
 Error TestClient::SetInferior(llvm::ArrayRef<std::string> inferior_args) {
-  StringList env;
-  Host::GetEnvironment(env);
-  for (size_t i = 0; i < env.GetSize(); ++i) {
-    if (SendEnvironmentPacket(env[i].c_str()) != 0) {
-      return make_error<StringError>(
-          formatv("Failed to set environment variable: {0}", env[i]).str(),
-          inconvertibleErrorCode());
-    }
+  if (SendEnvironment(Host::GetEnvironment()) != 0) {
+    return make_error<StringError>("Failed to set launch environment",
+                                   inconvertibleErrorCode());
   }
   std::stringstream command;
   command << "A";
@@ -117,14 +141,8 @@ Error TestClient::SetInferior(llvm::ArrayRef<std::string> inferior_args) {
     return E;
   if (Error E = SendMessage("qLaunchSuccess"))
     return E;
-  std::string response;
-  if (Error E = SendMessage("qProcessInfo", response))
+  if (Error E = queryProcess())
     return E;
-  auto create_or_error = ProcessInfo::Create(response);
-  if (auto create_error = create_or_error.takeError())
-    return create_error;
-
-  m_process_info = *create_or_error;
   return Error::success();
 }
 
@@ -142,23 +160,17 @@ Error TestClient::ContinueThread(unsigned long thread_id) {
   return Continue(formatv("vCont;c:{0:x-}", thread_id).str());
 }
 
-const ProcessInfo &TestClient::GetProcessInfo() { return *m_process_info; }
+const llgs_tests::ProcessInfo &TestClient::GetProcessInfo() {
+  return *m_process_info;
+}
 
-Optional<JThreadsInfo> TestClient::GetJThreadsInfo() {
-  std::string response;
-  if (SendMessage("jThreadsInfo", response))
-    return llvm::None;
-  auto creation = JThreadsInfo::Create(response, m_process_info->GetEndian());
-  if (auto create_error = creation.takeError()) {
-    GTEST_LOG_(ERROR) << toString(std::move(create_error));
-    return llvm::None;
-  }
-
-  return std::move(*creation);
+Expected<JThreadsInfo> TestClient::GetJThreadsInfo() {
+  return SendMessage<JThreadsInfo>("jThreadsInfo", m_register_infos);
 }
 
 const StopReply &TestClient::GetLatestStopReply() {
-  return m_stop_reply.getValue();
+  assert(m_stop_reply);
+  return *m_stop_reply;
 }
 
 Error TestClient::SendMessage(StringRef message) {
@@ -169,13 +181,9 @@ Error TestClient::SendMessage(StringRef message) {
 Error TestClient::SendMessage(StringRef message, std::string &response_string) {
   if (Error E = SendMessage(message, response_string, PacketResult::Success))
     return E;
-  if (response_string[0] == 'E') {
-    return make_error<StringError>(
-        formatv("Error `{0}` while sending message: {1}", response_string,
-                message)
-            .str(),
-        inconvertibleErrorCode());
-  }
+  StringExtractorGDBRemote Extractor(response_string);
+  if (Extractor.IsErrorResponse())
+    return Extractor.GetStatus().ToError();
   return Error::success();
 }
 
@@ -195,63 +203,65 @@ Error TestClient::SendMessage(StringRef message, std::string &response_string,
 }
 
 unsigned int TestClient::GetPcRegisterId() {
-  if (m_pc_register != UINT_MAX)
-    return m_pc_register;
+  assert(m_pc_register != LLDB_INVALID_REGNUM);
+  return m_pc_register;
+}
 
-  for (unsigned int register_id = 0;; register_id++) {
-    std::string message = formatv("qRegisterInfo{0:x-}", register_id).str();
-    std::string response;
-    if (SendMessage(message, response)) {
-      GTEST_LOG_(ERROR) << "Unable to query register ID for PC register.";
-      return UINT_MAX;
-    }
+Error TestClient::qProcessInfo() {
+  m_process_info = None;
+  auto InfoOr = SendMessage<ProcessInfo>("qProcessInfo");
+  if (!InfoOr)
+    return InfoOr.takeError();
+  m_process_info = std::move(*InfoOr);
+  return Error::success();
+}
 
-    auto elements_or_error = SplitUniquePairList("GetPcRegisterId", response);
-    if (auto split_error = elements_or_error.takeError()) {
-      GTEST_LOG_(ERROR) << "GetPcRegisterId: Error splitting response: "
-                        << response;
-      return UINT_MAX;
-    }
-
-    auto elements = *elements_or_error;
-    if (elements["alt-name"] == "pc" || elements["generic"] == "pc") {
-      m_pc_register = register_id;
+Error TestClient::qRegisterInfos() {
+  for (unsigned int Reg = 0;; ++Reg) {
+    std::string Message = formatv("qRegisterInfo{0:x-}", Reg).str();
+    Expected<RegisterInfo> InfoOr = SendMessage<RegisterInfoParser>(Message);
+    if (!InfoOr) {
+      consumeError(InfoOr.takeError());
       break;
     }
+    m_register_infos.emplace_back(std::move(*InfoOr));
+    if (m_register_infos[Reg].kinds[eRegisterKindGeneric] ==
+        LLDB_REGNUM_GENERIC_PC)
+      m_pc_register = Reg;
   }
+  if (m_pc_register == LLDB_INVALID_REGNUM)
+    return make_parsing_error("qRegisterInfo: generic");
+  return Error::success();
+}
 
-  return m_pc_register;
+Error TestClient::queryProcess() {
+  if (Error E = qProcessInfo())
+    return E;
+  if (Error E = qRegisterInfos())
+    return E;
+  return Error::success();
 }
 
 Error TestClient::Continue(StringRef message) {
   assert(m_process_info.hasValue());
 
-  std::string response;
-  if (Error E = SendMessage(message, response))
-    return E;
-  auto creation = StopReply::Create(response, m_process_info->GetEndian());
-  if (Error E = creation.takeError())
-    return E;
+  auto StopReplyOr = SendMessage<StopReply>(
+      message, m_process_info->GetEndian(), m_register_infos);
+  if (!StopReplyOr)
+    return StopReplyOr.takeError();
 
-  m_stop_reply = std::move(*creation);
+  m_stop_reply = std::move(*StopReplyOr);
+  if (!isa<StopReplyStop>(m_stop_reply)) {
+    StringExtractorGDBRemote R;
+    PacketResult result = ReadPacket(R, GetPacketTimeout(), false);
+    if (result != PacketResult::ErrorDisconnected) {
+      return make_error<StringError>(
+          formatv("Expected connection close after sending {0}. Got {1}/{2} "
+                  "instead.",
+                  message, result, R.GetStringRef())
+              .str(),
+          inconvertibleErrorCode());
+    }
+  }
   return Error::success();
 }
-
-std::string TestClient::GenerateLogFileName(const ArchSpec &arch) const {
-  char *log_directory = getenv("LOG_FILE_DIRECTORY");
-  if (!log_directory)
-    return "";
-
-  if (!llvm::sys::fs::is_directory(log_directory)) {
-    GTEST_LOG_(WARNING) << "Cannot access log directory: " << log_directory;
-    return "";
-  }
-
-  std::string log_file_name;
-  raw_string_ostream log_file(log_file_name);
-  log_file << log_directory << "/lldb-" << m_test_case_name << '-'
-           << m_test_name << '-' << arch.GetArchitectureName() << ".log";
-  return log_file.str();
-}
-
-} // namespace llgs_tests

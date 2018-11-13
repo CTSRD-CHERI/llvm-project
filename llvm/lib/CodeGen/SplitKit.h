@@ -25,6 +25,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/LiveInterval.h"
+#include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/SlotIndexes.h"
@@ -76,6 +77,18 @@ public:
   /// Returns the last insert point as an iterator for \pCurLI in \pMBB.
   MachineBasicBlock::iterator getLastInsertPointIter(const LiveInterval &CurLI,
                                                      MachineBasicBlock &MBB);
+
+  /// Return the base index of the first insert point in \pMBB.
+  SlotIndex getFirstInsertPoint(MachineBasicBlock &MBB) {
+    SlotIndex Res = LIS.getMBBStartIdx(&MBB);
+    if (!MBB.empty()) {
+      MachineBasicBlock::iterator MII = MBB.SkipPHIsLabelsAndDebug(MBB.begin());
+      if (MII != MBB.end())
+        Res = LIS.getInstructionIndex(*MII);
+    }
+    return Res;
+  }
+
 };
 
 /// SplitAnalysis - Analyze a LiveInterval, looking for live range splitting
@@ -225,6 +238,10 @@ public:
   MachineBasicBlock::iterator getLastSplitPointIter(MachineBasicBlock *BB) {
     return IPA.getLastInsertPointIter(*CurLI, *BB);
   }
+
+  SlotIndex getFirstSplitPoint(unsigned Num) {
+    return IPA.getFirstInsertPoint(*MF.getBlockNumbered(Num));
+  }
 };
 
 /// SplitEditor - Edit machine code and LiveIntervals for live range
@@ -233,7 +250,7 @@ public:
 /// - Create a SplitEditor from a SplitAnalysis.
 /// - Start a new live interval with openIntv.
 /// - Mark the places where the new interval is entered using enterIntv*
-/// - Mark the ranges where the new interval is used with useIntv* 
+/// - Mark the ranges where the new interval is used with useIntv*
 /// - Mark the places where the interval is exited with exitIntv*.
 /// - Finish the current interval with closeIntv and repeat from 2.
 /// - Rewrite instructions with finish().
@@ -357,7 +374,11 @@ private:
   /// recomputed by LiveRangeCalc::extend regardless of the number of defs.
   /// This is used for values whose live range doesn't match RegAssign exactly.
   /// They could have rematerialized, or back-copies may have been moved.
-  void forceRecompute(unsigned RegIdx, const VNInfo *ParentVNI);
+  void forceRecompute(unsigned RegIdx, const VNInfo &ParentVNI);
+
+  /// Calls forceRecompute() on any affected regidx and on ParentVNI
+  /// predecessors in case of a phi definition.
+  void forceRecomputeVNI(const VNInfo &ParentVNI);
 
   /// defFromParent - Define Reg from ParentVNI at UseIdx using either
   /// rematerialization or a COPY from parent. Return the new value.
@@ -417,7 +438,7 @@ private:
 
   SlotIndex buildSingleSubRegCopy(unsigned FromReg, unsigned ToReg,
       MachineBasicBlock &MB, MachineBasicBlock::iterator InsertBefore,
-      unsigned SubIdx, LiveInterval &DestLI, bool Late, SlotIndex PrevCopy);
+      unsigned SubIdx, LiveInterval &DestLI, bool Late, SlotIndex Def);
 
 public:
   /// Create a new SplitEditor for editing the LiveInterval analyzed by SA.

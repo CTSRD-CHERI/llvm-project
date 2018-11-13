@@ -14,7 +14,6 @@
 // Other libraries and framework includes
 // Project includes
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/State.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/ScriptInterpreter.h"
 #include "lldb/Target/Process.h"
@@ -24,6 +23,7 @@
 #include "lldb/Target/ThreadPlan.h"
 #include "lldb/Target/ThreadPlanPython.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/State.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -59,8 +59,7 @@ bool ThreadPlanPython::ValidatePlan(Stream *error) {
 
 void ThreadPlanPython::DidPush() {
   // We set up the script side in DidPush, so that it can push other plans in
-  // the constructor,
-  // and doesn't have to care about the details of DidPush.
+  // the constructor, and doesn't have to care about the details of DidPush.
 
   if (!m_class_name.empty()) {
     ScriptInterpreter *script_interp = m_thread.GetProcess()

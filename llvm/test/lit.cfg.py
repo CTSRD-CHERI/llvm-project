@@ -98,15 +98,15 @@ lli_args = []
 # we don't support COFF in MCJIT well enough for the tests, force ELF format on
 # Windows.  FIXME: the process target triple should be used here, but this is
 # difficult to obtain on Windows.
-if re.search(r'cygwin|mingw32|windows-gnu|windows-msvc|win32', config.host_triple):
+if re.search(r'cygwin|windows-gnu|windows-msvc', config.host_triple):
     lli_args = ['-mtriple=' + config.host_triple + '-elf']
 
 llc_args = []
 
-# Similarly, have a macro to use llc with DWARF even when the host is win32.
-if re.search(r'win32', config.target_triple):
+# Similarly, have a macro to use llc with DWARF even when the host is Windows
+if re.search(r'windows-msvc', config.target_triple):
     llc_args = [' -mtriple=' +
-                config.target_triple.replace('-win32', '-mingw32')]
+                config.target_triple.replace('-msvc', '-gnu')]
 
 # Provide the path to asan runtime lib if available. On darwin, this lib needs
 # to be loaded via DYLD_INSERT_LIBRARIES before libLTO.dylib in case the files
@@ -123,6 +123,7 @@ if config.have_ocamlopt:
     ocamlopt_command = '%s ocamlopt -cclib -L%s -cclib -Wl,-rpath,%s %s' % (
         config.ocamlfind_executable, config.llvm_lib_dir, config.llvm_lib_dir, config.ocaml_flags)
 
+opt_viewer_cmd = '%s %s/tools/opt-viewer/opt-viewer.py' % (sys.executable, config.llvm_src_root)
 
 tools = [
     ToolSubst('%lli', FindTool('lli'), post='.', extra_args=lli_args),
@@ -132,20 +133,24 @@ tools = [
     ToolSubst('%ld64', ld64_cmd, unresolved='ignore'),
     ToolSubst('%ocamlc', ocamlc_command, unresolved='ignore'),
     ToolSubst('%ocamlopt', ocamlopt_command, unresolved='ignore'),
+    ToolSubst('%opt-viewer', opt_viewer_cmd),
+    ToolSubst('%llvm-objcopy', FindTool('llvm-objcopy')),
+    ToolSubst('%llvm-strip', FindTool('llvm-strip')),
 ]
 
 # FIXME: Why do we have both `lli` and `%lli` that do slightly different things?
 tools.extend([
-    'lli', 'lli-child-target', 'llvm-ar', 'llvm-as', 'llvm-bcanalyzer', 'llvm-config', 'llvm-cov',
-    'llvm-cxxdump', 'llvm-cvtres', 'llvm-diff', 'llvm-dis', 'llvm-dsymutil',
-    'llvm-dwarfdump', 'llvm-extract', 'llvm-isel-fuzzer', 'llvm-lib',
-    'llvm-link', 'llvm-lto', 'llvm-lto2', 'llvm-mc', 'llvm-mcmarkup',
-    'llvm-modextract', 'llvm-nm', 'llvm-objcopy', 'llvm-objdump',
-    'llvm-pdbutil', 'llvm-profdata', 'llvm-ranlib', 'llvm-readobj',
-    'llvm-rtdyld', 'llvm-size', 'llvm-split', 'llvm-strings', 'llvm-tblgen',
-    'llvm-c-test', 'llvm-cxxfilt', 'llvm-xray', 'yaml2obj', 'obj2yaml',
-    'yaml-bench', 'verify-uselistorder',
-    'bugpoint', 'llc', 'llvm-symbolizer', 'opt', 'sancov', 'sanstats'])
+    'dsymutil', 'lli', 'lli-child-target', 'llvm-ar', 'llvm-as',
+    'llvm-bcanalyzer', 'llvm-config', 'llvm-cov', 'llvm-cxxdump', 'llvm-cvtres',
+    'llvm-diff', 'llvm-dis', 'llvm-dwarfdump', 'llvm-exegesis', 'llvm-extract',
+    'llvm-isel-fuzzer', 'llvm-opt-fuzzer', 'llvm-lib', 'llvm-link', 'llvm-lto',
+    'llvm-lto2', 'llvm-mc', 'llvm-mca', 'llvm-modextract', 'llvm-nm',
+    'llvm-objcopy', 'llvm-objdump', 'llvm-pdbutil', 'llvm-profdata',
+    'llvm-ranlib', 'llvm-readobj', 'llvm-rtdyld', 'llvm-size', 'llvm-split',
+    'llvm-strings', 'llvm-strip', 'llvm-tblgen', 'llvm-undname', 'llvm-c-test',
+    'llvm-cxxfilt', 'llvm-xray', 'yaml2obj', 'obj2yaml', 'yaml-bench',
+    'verify-uselistorder', 'bugpoint', 'llc', 'llvm-symbolizer', 'opt',
+    'sancov', 'sanstats'])
 
 # The following tools are optional
 tools.extend([
@@ -192,6 +197,36 @@ if loadable_module:
 if not config.build_shared_libs and not config.link_llvm_dylib:
     config.available_features.add('static-libs')
 
+def have_cxx_shared_library():
+    readobj_exe = lit.util.which('llvm-readobj', config.llvm_tools_dir)
+    if not readobj_exe:
+        print('llvm-readobj not found')
+        return False
+
+    try:
+        readobj_cmd = subprocess.Popen(
+            [readobj_exe, '-needed-libs', readobj_exe], stdout=subprocess.PIPE)
+    except OSError:
+        print('could not exec llvm-readobj')
+        return False
+
+    readobj_out = readobj_cmd.stdout.read().decode('ascii')
+    readobj_cmd.wait()
+
+    regex = re.compile(r'(libc\+\+|libstdc\+\+|msvcp).*\.(so|dylib|dll)')
+    needed_libs = False
+    for line in readobj_out.splitlines():
+        if 'NeededLibraries [' in line:
+            needed_libs = True
+        if ']' in line:
+            needed_libs = False
+        if needed_libs and regex.search(line.lower()):
+            return True
+    return False
+
+if have_cxx_shared_library():
+    config.available_features.add('cxx-shared-library')
+
 # Direct object generation
 if not 'hexagon' in config.target_triple:
     config.available_features.add('object-emission')
@@ -205,7 +240,7 @@ import subprocess
 
 
 def have_ld_plugin_support():
-    if not os.path.exists(os.path.join(config.llvm_shlib_dir, 'LLVMgold.so')):
+    if not os.path.exists(os.path.join(config.llvm_shlib_dir, 'LLVMgold' + config.llvm_shlib_ext)):
         return False
 
     ld_cmd = subprocess.Popen(
@@ -278,11 +313,17 @@ if 'darwin' == sys.platform:
     sysctl_cmd.wait()
 
 # .debug_frame is not emitted for targeting Windows x64.
-if not re.match(r'^x86_64.*-(mingw32|windows-gnu|win32)', config.target_triple):
+if not re.match(r'^x86_64.*-(windows-gnu|windows-msvc)', config.target_triple):
     config.available_features.add('debug_frame')
 
 if config.have_libxar:
     config.available_features.add('xar')
 
+if config.enable_threads:
+    config.available_features.add('thread_support')
+
 if config.llvm_libxml2_enabled == '1':
     config.available_features.add('libxml2')
+
+if config.have_opt_viewer_modules:
+    config.available_features.add('have_opt_viewer_modules')

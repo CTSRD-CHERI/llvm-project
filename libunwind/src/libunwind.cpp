@@ -51,6 +51,8 @@ _LIBUNWIND_EXPORT int unw_init_local(unw_cursor_t *cursor,
 # define REGISTER_KIND Registers_x86
 #elif defined(__x86_64__)
 # define REGISTER_KIND Registers_x86_64
+#elif defined(__powerpc64__)
+# define REGISTER_KIND Registers_ppc64
 #elif defined(__ppc__)
 # define REGISTER_KIND Registers_ppc
 #elif defined(__aarch64__)
@@ -59,8 +61,12 @@ _LIBUNWIND_EXPORT int unw_init_local(unw_cursor_t *cursor,
 # define REGISTER_KIND Registers_arm
 #elif defined(__or1k__)
 # define REGISTER_KIND Registers_or1k
+#elif defined(__mips__) && defined(_ABIO32) && _MIPS_SIM == _ABIO32
+# define REGISTER_KIND Registers_mips_o32
+#elif defined(__mips64)
+# define REGISTER_KIND Registers_mips_newabi
 #elif defined(__mips__)
-# warning The MIPS architecture is not supported.
+# warning The MIPS architecture is not supported with this ABI and environment!
 #else
 # error Architecture not supported
 #endif
@@ -182,8 +188,20 @@ _LIBUNWIND_EXPORT int unw_set_reg(unw_cursor_t *cursor, unw_regnum_t regNum,
     co->setReg(regNum, (pint_t)value);
     // specical case altering IP to re-find info (being called by personality
     // function)
-    if (regNum == UNW_REG_IP)
+    if (regNum == UNW_REG_IP) {
+      unw_proc_info_t info;
+      // First, get the FDE for the old location and then update it.
+      co->getInfo(&info);
       co->setInfoBasedOnIPRegister(false);
+      // If the original call expects stack adjustment, perform this now.
+      // Normal frame unwinding would have included the offset already in the
+      // CFA computation.
+      // Note: for PA-RISC and other platforms where the stack grows up,
+      // this should actually be - info.gp. LLVM doesn't currently support
+      // any such platforms and Clang doesn't export a macro for them.
+      if (info.gp)
+        co->setReg(UNW_REG_SP, co->getReg(UNW_REG_SP) + info.gp);
+    }
     return UNW_ESUCCESS;
   }
   return UNW_EBADREG;

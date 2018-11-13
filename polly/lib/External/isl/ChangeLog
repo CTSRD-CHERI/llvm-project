@@ -1,3 +1,21 @@
+version: 0.20
+date: Sat Jul 21 18:10:08 CEST 2018
+changes:
+	- keep track of domain in 0D isl_multi_pw_aff and isl_multi_union_pw_aff
+	- add isl_aff_eval and isl_pw_aff_eval
+	- add fixed-size rectangular box hull
+---
+version: 0.19
+date: Sat Mar  3 10:44:49 CET 2018
+changes:
+	- minor improvements to coalescing
+	- minor improvement to parametric integer programming
+	- try harder to avoid large coefficients in scheduler
+	- support kill accesses in dependence analysis
+	- drop deprecated isl_int
+	- drop deprecated band forests
+	- drop deprecated functions
+---
 version: 0.18
 date: Sun Dec 18 11:01:58 CET 2016
 changes:

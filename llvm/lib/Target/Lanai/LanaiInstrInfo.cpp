@@ -573,8 +573,8 @@ bool LanaiInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
   while (Instruction != MBB.begin()) {
     --Instruction;
 
-    // Skip over debug values.
-    if (Instruction->isDebugValue())
+    // Skip over debug instructions.
+    if (Instruction->isDebugInstr())
       continue;
 
     // Working from the bottom, when we see a non-terminator
@@ -699,7 +699,7 @@ unsigned LanaiInstrInfo::removeBranch(MachineBasicBlock &MBB,
 
   while (Instruction != MBB.begin()) {
     --Instruction;
-    if (Instruction->isDebugValue())
+    if (Instruction->isDebugInstr())
       continue;
     if (Instruction->getOpcode() != Lanai::BT &&
         Instruction->getOpcode() != Lanai::BRCC) {
@@ -733,8 +733,13 @@ unsigned LanaiInstrInfo::isLoadFromStackSlotPostFE(const MachineInstr &MI,
     if ((Reg = isLoadFromStackSlot(MI, FrameIndex)))
       return Reg;
     // Check for post-frame index elimination operations
-    const MachineMemOperand *Dummy;
-    return hasLoadFromStackSlot(MI, Dummy, FrameIndex);
+    SmallVector<const MachineMemOperand *, 1> Accesses;
+    if (hasLoadFromStackSlot(MI, Accesses)){
+      FrameIndex =
+          cast<FixedStackPseudoSourceValue>(Accesses.front()->getPseudoValue())
+              ->getFrameIndex();
+      return 1;
+    }
   }
   return 0;
 }

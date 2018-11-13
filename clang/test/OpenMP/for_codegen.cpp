@@ -1,8 +1,15 @@
-// RUN: %clang_cc1 -verify -fopenmp -x c++ -triple x86_64-unknown-unknown -emit-llvm %s -fexceptions -fcxx-exceptions -o - | FileCheck %s
+// RUN: %clang_cc1 -verify -fopenmp -x c++ -triple x86_64-unknown-unknown -emit-llvm %s -fexceptions -fcxx-exceptions -o - -fsanitize-address-use-after-scope | FileCheck -allow-deprecated-dag-overlap %s --check-prefix=CHECK --check-prefix=LIFETIME
 // RUN: %clang_cc1 -fopenmp -x c++ -std=c++11 -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -emit-pch -o %t %s
-// RUN: %clang_cc1 -fopenmp -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s
-// RUN: %clang_cc1 -verify -triple x86_64-apple-darwin10 -fopenmp -fexceptions -fcxx-exceptions -debug-info-kind=line-tables-only -x c++ -emit-llvm %s -o - | FileCheck %s --check-prefix=TERM_DEBUG
-// RUN: %clang_cc1 -main-file-name for_codegen.cpp %s -o - -emit-llvm -fprofile-instrument=clang -fprofile-instrument-path=for_codegen-test.profraw | FileCheck %s --check-prefix=PROF-INSTR-PATH
+// RUN: %clang_cc1 -fopenmp -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck -allow-deprecated-dag-overlap %s
+// RUN: %clang_cc1 -verify -triple x86_64-apple-darwin10 -fopenmp -fexceptions -fcxx-exceptions -debug-info-kind=line-tables-only -x c++ -emit-llvm %s -o - | FileCheck -allow-deprecated-dag-overlap %s --check-prefix=TERM_DEBUG
+// RUN: %clang_cc1 -main-file-name for_codegen.cpp %s -o - -emit-llvm -fprofile-instrument=clang -fprofile-instrument-path=for_codegen-test.profraw | FileCheck -allow-deprecated-dag-overlap %s --check-prefix=PROF-INSTR-PATH
+
+// RUN: %clang_cc1 -verify -fopenmp-simd -x c++ -triple x86_64-unknown-unknown -emit-llvm %s -fexceptions -fcxx-exceptions -o - | FileCheck -allow-deprecated-dag-overlap --check-prefix SIMD-ONLY0 %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -std=c++11 -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -emit-pch -o %t %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -triple x86_64-unknown-unknown -fexceptions -fcxx-exceptions -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck -allow-deprecated-dag-overlap --check-prefix SIMD-ONLY0 %s
+// RUN: %clang_cc1 -verify -triple x86_64-apple-darwin10 -fopenmp-simd -fexceptions -fcxx-exceptions -debug-info-kind=line-tables-only -x c++ -emit-llvm %s -o - | FileCheck -allow-deprecated-dag-overlap --check-prefix SIMD-ONLY0 %s
+// RUN: %clang_cc1 -main-file-name for_codegen.cpp %s -o - -emit-llvm -fprofile-instrument=clang -fprofile-instrument-path=for_codegen-test.profraw | FileCheck -allow-deprecated-dag-overlap --check-prefix SIMD-ONLY0 %s
+// SIMD-ONLY0-NOT: {{__kmpc|__tgt}}
 //
 // expected-no-diagnostics
 #ifndef HEADER
@@ -10,12 +17,34 @@
 // PROF-INSTR-PATH: constant [25 x i8] c"for_codegen-test.profraw\00"
 
 // CHECK: [[IDENT_T_TY:%.+]] = type { i32, i32, i32, i32, i8* }
-// CHECK-DAG: [[IMPLICIT_BARRIER_LOC:@.+]] = private unnamed_addr constant %{{.+}} { i32 0, i32 66, i32 0, i32 0, i8*
-// CHECK-DAG: [[LOOP_LOC:@.+]] = private unnamed_addr constant %{{.+}} { i32 0, i32 514, i32 0, i32 0, i8*
+// CHECK-DAG: [[IMPLICIT_BARRIER_LOC:@.+]] = private unnamed_addr global %{{.+}} { i32 0, i32 66, i32 0, i32 0, i8*
+// CHECK-DAG: [[LOOP_LOC:@.+]] = private unnamed_addr global %{{.+}} { i32 0, i32 514, i32 0, i32 0, i8*
 // CHECK-DAG: [[I:@.+]] = global i8 1,
 // CHECK-DAG: [[J:@.+]] = global i8 2,
 // CHECK-DAG: [[K:@.+]] = global i8 3,
 
+// CHECK-LABEL: loop_with_counter_collapse
+void loop_with_counter_collapse() {
+  // LIFETIME: call void @llvm.lifetime.end
+  // LIFETIME: call void @llvm.lifetime.end
+  // CHECK: call void @__kmpc_for_static_init_8(%struct.ident_t* @
+  // CHECK: call void @__kmpc_for_static_fini(%struct.ident_t* @
+  // LIFETIME: call void @llvm.lifetime.end
+  // LIFETIME: call void @llvm.lifetime.end
+  // LIFETIME: call void @llvm.lifetime.end
+  // LIFETIME: call void @llvm.lifetime.end
+  // LIFETIME: call void @llvm.lifetime.end
+  // LIFETIME: call void @llvm.lifetime.end
+  // LIFETIME: call void @llvm.lifetime.end
+  // LIFETIME: call void @llvm.lifetime.end
+  // LIFETIME: call void @llvm.lifetime.end
+  // LIFETIME: call void @llvm.lifetime.end
+  #pragma omp for collapse(2)
+  for (int i = 0; i < 4; i++) {
+    for (int j = i; j < 4; j++) {
+    }
+  }
+}
 // CHECK-LABEL: define {{.*void}} @{{.*}}without_schedule_clause{{.*}}(float* {{.+}}, float* {{.+}}, float* {{.+}}, float* {{.+}})
 void without_schedule_clause(float *a, float *b, float *c, float *d) {
 // CHECK: [[GTID:%.+]] = call i32 @__kmpc_global_thread_num([[IDENT_T_TY]]* [[DEFAULT_LOC:[@%].+]])
@@ -330,8 +359,8 @@ void runtime(float *a, float *b, float *c, float *d) {
 // CHECK-LABEL: test_precond
 void test_precond() {
   // CHECK: [[A_ADDR:%.+]] = alloca i8,
-  // CHECK: [[CAP:%.+]] = alloca i8,
   // CHECK: [[I_ADDR:%.+]] = alloca i8,
+  // CHECK: [[CAP:%.+]] = alloca i8,
   char a = 0;
   // CHECK: store i8 0,
   // CHECK: store i32
@@ -376,7 +405,9 @@ void parallel_for(float *a) {
 char i = 1, j = 2, k = 3;
 // CHECK-LABEL: for_with_global_lcv
 void for_with_global_lcv() {
+// CHECK: alloca i8,
 // CHECK: [[I_ADDR:%.+]] = alloca i8,
+// CHECK: alloca i8,
 // CHECK: [[J_ADDR:%.+]] = alloca i8,
 
 // CHECK: call void @__kmpc_for_static_init_4(

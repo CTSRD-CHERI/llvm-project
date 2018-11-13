@@ -26,6 +26,7 @@
 # RUN:   FileCheck -check-prefix=DEMANGLE %s
 
 # RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %S/Inputs/conflict.s -o %t2.o
+# RUN: rm -f %t3.a
 # RUN: llvm-ar rcs %t3.a %t2.o
 # RUN: not ld.lld %t1.o %t3.a -u baz -o %t2 2>&1 | FileCheck -check-prefix=ARCHIVE %s
 
@@ -34,7 +35,7 @@
 # ARCHIVE-NEXT: >>> defined at {{.*}}:(.text+0x0) in archive {{.*}}.a
 
 # RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %p/Inputs/conflict-debug.s -o %t-dbg.o
-# RUN: not ld.lld %t-dbg.o %t-dbg.o -o %t-dbg 2>&1 | FileCheck -check-prefix=DBGINFO %s
+# RUN: not ld.lld %t-dbg.o %t-dbg.o -o /dev/null 2>&1 | FileCheck -check-prefix=DBGINFO %s
 
 # DBGINFO:      duplicate symbol: zed
 # DBGINFO-NEXT: >>> defined at conflict-debug.s:4

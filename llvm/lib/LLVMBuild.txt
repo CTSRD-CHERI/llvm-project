@@ -35,6 +35,7 @@ subdirectories =
  BinaryFormat
  ObjectYAML
  Option
+ OptRemarks
  Passes
  ProfileData
  Support
@@ -44,6 +45,7 @@ subdirectories =
  ToolDrivers
  Transforms
  WindowsManifest
+ XRay
 
 [component_0]
 type = Group

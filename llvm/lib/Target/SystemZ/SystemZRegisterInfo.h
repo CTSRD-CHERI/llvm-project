@@ -11,7 +11,7 @@
 #define LLVM_LIB_TARGET_SYSTEMZ_SYSTEMZREGISTERINFO_H
 
 #include "SystemZ.h"
-#include "llvm/Target/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 
 #define GET_REGINFO_HEADER
 #include "SystemZGenRegisterInfo.inc"
@@ -44,6 +44,12 @@ public:
     return &SystemZ::ADDR64BitRegClass;
   }
 
+  /// getCrossCopyRegClass - Returns a legal register class to copy a register
+  /// in the specified class to or from. Returns NULL if it is possible to copy
+  /// between a two registers of the specified class.
+  const TargetRegisterClass *
+  getCrossCopyRegClass(const TargetRegisterClass *RC) const override;
+
   bool getRegAllocationHints(unsigned VirtReg,
                              ArrayRef<MCPhysReg> Order,
                              SmallVectorImpl<MCPhysReg> &Hints,
@@ -69,7 +75,7 @@ public:
                            int SPAdj, unsigned FIOperandNum,
                            RegScavenger *RS) const override;
 
-  /// \brief SrcRC and DstRC will be morphed into NewRC if this returns true.
+  /// SrcRC and DstRC will be morphed into NewRC if this returns true.
  bool shouldCoalesce(MachineInstr *MI,
                       const TargetRegisterClass *SrcRC,
                       unsigned SubReg,

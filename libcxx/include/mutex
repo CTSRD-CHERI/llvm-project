@@ -91,9 +91,9 @@ struct defer_lock_t {};
 struct try_to_lock_t {};
 struct adopt_lock_t {};
 
-constexpr defer_lock_t  defer_lock{};
-constexpr try_to_lock_t try_to_lock{};
-constexpr adopt_lock_t  adopt_lock{};
+inline constexpr defer_lock_t  defer_lock{};
+inline constexpr try_to_lock_t try_to_lock{};
+inline constexpr adopt_lock_t  adopt_lock{};
 
 template <class Mutex>
 class lock_guard
@@ -194,6 +194,7 @@ template<class Callable, class ...Args>
 #ifndef _LIBCPP_CXX03_LANG
 #include <tuple>
 #endif
+#include <version>
 #include <__threading_support>
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
@@ -488,7 +489,7 @@ public:
 };
 
 template <class _Mutex>
-class _LIBCPP_TEMPLATE_VIS scoped_lock<_Mutex> {
+class _LIBCPP_TEMPLATE_VIS _LIBCPP_THREAD_SAFETY_ANNOTATION(scoped_lockable) scoped_lock<_Mutex> {
 public:
     typedef _Mutex  mutex_type;
 private:

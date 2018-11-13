@@ -11,7 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -20,6 +20,8 @@
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalVariable.h"
@@ -31,8 +33,6 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <cctype>
 using namespace llvm;
 
@@ -52,13 +52,15 @@ bool TargetLowering::isPositionIndependent() const {
 /// so, it sets Chain to the input chain of the tail call.
 bool TargetLowering::isInTailCallPosition(SelectionDAG &DAG, SDNode *Node,
                                           SDValue &Chain) const {
-  const Function *F = DAG.getMachineFunction().getFunction();
+  const Function &F = DAG.getMachineFunction().getFunction();
 
   // Conservatively require the attributes of the call to match those of
-  // the return. Ignore noalias because it doesn't affect the call sequence.
-  AttributeList CallerAttrs = F->getAttributes();
+  // the return. Ignore NoAlias and NonNull because they don't affect the
+  // call sequence.
+  AttributeList CallerAttrs = F.getAttributes();
   if (AttrBuilder(CallerAttrs, AttributeList::ReturnIndex)
           .removeAttribute(Attribute::NoAlias)
+          .removeAttribute(Attribute::NonNull)
           .hasAttributes())
     return false;
 
@@ -96,7 +98,7 @@ bool TargetLowering::parametersInCSRMatch(const MachineRegisterInfo &MRI,
   return true;
 }
 
-/// \brief Set CallLoweringInfo attribute flags based on a call instruction
+/// Set CallLoweringInfo attribute flags based on a call instruction
 /// and called function attributes.
 void TargetLoweringBase::ArgListEntry::setAttributes(ImmutableCallSite *CS,
                                                      unsigned ArgIdx) {
@@ -431,13 +433,13 @@ bool TargetLowering::ShrinkDemandedOp(SDValue Op, unsigned BitWidth,
 
 bool
 TargetLowering::SimplifyDemandedBits(SDNode *User, unsigned OpIdx,
-                                     const APInt &Demanded,
+                                     const APInt &DemandedBits,
                                      DAGCombinerInfo &DCI,
                                      TargetLoweringOpt &TLO) const {
   SDValue Op = User->getOperand(OpIdx);
   KnownBits Known;
 
-  if (!SimplifyDemandedBits(Op, Demanded, Known, TLO, 0, true))
+  if (!SimplifyDemandedBits(Op, DemandedBits, Known, TLO, 0, true))
     return false;
 
 
@@ -479,21 +481,22 @@ TargetLowering::SimplifyDemandedBits(SDNode *User, unsigned OpIdx,
   return true;
 }
 
-bool TargetLowering::SimplifyDemandedBits(SDValue Op, const APInt &DemandedMask,
+bool TargetLowering::SimplifyDemandedBits(SDValue Op, const APInt &DemandedBits,
                                           DAGCombinerInfo &DCI) const {
-
   SelectionDAG &DAG = DCI.DAG;
   TargetLoweringOpt TLO(DAG, !DCI.isBeforeLegalize(),
                         !DCI.isBeforeLegalizeOps());
   KnownBits Known;
 
-  bool Simplified = SimplifyDemandedBits(Op, DemandedMask, Known, TLO);
-  if (Simplified)
+  bool Simplified = SimplifyDemandedBits(Op, DemandedBits, Known, TLO);
+  if (Simplified) {
+    DCI.AddToWorklist(Op.getNode());
     DCI.CommitTargetLoweringOpt(TLO);
+  }
   return Simplified;
 }
 
-/// Look at Op. At this point, we know that only the DemandedMask bits of the
+/// Look at Op. At this point, we know that only the OriginalDemandedBits of the
 /// result of Op are ever used downstream. If we can use this information to
 /// simplify Op, create a new simplified DAG node and return true, returning the
 /// original and new nodes in Old and New. Otherwise, analyze the expression and
@@ -501,15 +504,15 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op, const APInt &DemandedMask,
 /// caller).  The Known bits may only be accurate for those bits in the
 /// DemandedMask.
 bool TargetLowering::SimplifyDemandedBits(SDValue Op,
-                                          const APInt &DemandedMask,
+                                          const APInt &OriginalDemandedBits,
                                           KnownBits &Known,
                                           TargetLoweringOpt &TLO,
                                           unsigned Depth,
                                           bool AssumeSingleUse) const {
-  unsigned BitWidth = DemandedMask.getBitWidth();
+  unsigned BitWidth = OriginalDemandedBits.getBitWidth();
   assert(Op.getScalarValueSizeInBits() == BitWidth &&
          "Mask size mismatches value type size!");
-  APInt NewMask = DemandedMask;
+  APInt DemandedBits = OriginalDemandedBits;
   SDLoc dl(Op);
   auto &DL = TLO.DAG.getDataLayout();
 
@@ -524,6 +527,7 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
   }
 
   // Other users may use these bits.
+  EVT VT = Op.getValueType();
   if (!Op.getNode()->hasOneUse() && !AssumeSingleUse) {
     if (Depth != 0) {
       // If not at the root, Just compute the Known bits to
@@ -532,12 +536,12 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       return false;
     }
     // If this is the root being simplified, allow it to have multiple uses,
-    // just set the NewMask to all bits.
-    NewMask = APInt::getAllOnesValue(BitWidth);
-  } else if (DemandedMask == 0) {
+    // just set the DemandedBits to all bits.
+    DemandedBits = APInt::getAllOnesValue(BitWidth);
+  } else if (OriginalDemandedBits == 0) {
     // Not demanding any bits from Op.
     if (!Op.isUndef())
-      return TLO.CombineTo(Op, TLO.DAG.getUNDEF(Op.getValueType()));
+      return TLO.CombineTo(Op, TLO.DAG.getUNDEF(VT));
     return false;
   } else if (Depth == 6) {        // Limit search depth.
     return false;
@@ -570,23 +574,37 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       Known.Zero &= Known2.Zero;
     }
     return false;   // Don't fall through, will infinitely loop.
-  case ISD::AND:
+  case ISD::CONCAT_VECTORS:
+    Known.Zero.setAllBits();
+    Known.One.setAllBits();
+    for (SDValue SrcOp : Op->ops()) {
+      if (SimplifyDemandedBits(SrcOp, DemandedBits, Known2, TLO, Depth + 1))
+        return true;
+      // Known bits are the values that are shared by every subvector.
+      Known.One &= Known2.One;
+      Known.Zero &= Known2.Zero;
+    }
+    break;
+  case ISD::AND: {
+    SDValue Op0 = Op.getOperand(0);
+    SDValue Op1 = Op.getOperand(1);
+
     // If the RHS is a constant, check to see if the LHS would be zero without
     // using the bits from the RHS.  Below, we use knowledge about the RHS to
     // simplify the LHS, here we're using information from the LHS to simplify
     // the RHS.
-    if (ConstantSDNode *RHSC = isConstOrConstSplat(Op.getOperand(1))) {
-      SDValue Op0 = Op.getOperand(0);
+    if (ConstantSDNode *RHSC = isConstOrConstSplat(Op1)) {
       KnownBits LHSKnown;
       // Do not increment Depth here; that can cause an infinite loop.
       TLO.DAG.computeKnownBits(Op0, LHSKnown, Depth);
-      // If the LHS already has zeros where RHSC does, this and is dead.
-      if ((LHSKnown.Zero & NewMask) == (~RHSC->getAPIntValue() & NewMask))
+      // If the LHS already has zeros where RHSC does, this 'and' is dead.
+      if ((LHSKnown.Zero & DemandedBits) ==
+          (~RHSC->getAPIntValue() & DemandedBits))
         return TLO.CombineTo(Op, Op0);
 
       // If any of the set bits in the RHS are known zero on the LHS, shrink
       // the constant.
-      if (ShrinkDemandedConstant(Op, ~LHSKnown.Zero & NewMask, TLO))
+      if (ShrinkDemandedConstant(Op, ~LHSKnown.Zero & DemandedBits, TLO))
         return true;
 
       // Bitwise-not (xor X, -1) is a special case: we don't usually shrink its
@@ -596,34 +614,33 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       // and (xor (srl X, 31), -1), 1 --> xor (srl X, 31), 1
       if (isBitwiseNot(Op0) && Op0.hasOneUse() &&
           LHSKnown.One == ~RHSC->getAPIntValue()) {
-        SDValue Xor = TLO.DAG.getNode(ISD::XOR, dl, Op.getValueType(),
-                                      Op0.getOperand(0), Op.getOperand(1));
+        SDValue Xor = TLO.DAG.getNode(ISD::XOR, dl, VT, Op0.getOperand(0), Op1);
         return TLO.CombineTo(Op, Xor);
       }
     }
 
-    if (SimplifyDemandedBits(Op.getOperand(1), NewMask, Known, TLO, Depth+1))
+    if (SimplifyDemandedBits(Op1, DemandedBits, Known, TLO, Depth + 1))
       return true;
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
-    if (SimplifyDemandedBits(Op.getOperand(0), ~Known.Zero & NewMask,
-                             Known2, TLO, Depth+1))
+    if (SimplifyDemandedBits(Op0, ~Known.Zero & DemandedBits, Known2, TLO,
+                             Depth + 1))
       return true;
     assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // If all of the demanded bits are known one on one side, return the other.
     // These bits cannot contribute to the result of the 'and'.
-    if (NewMask.isSubsetOf(Known2.Zero | Known.One))
-      return TLO.CombineTo(Op, Op.getOperand(0));
-    if (NewMask.isSubsetOf(Known.Zero | Known2.One))
-      return TLO.CombineTo(Op, Op.getOperand(1));
+    if (DemandedBits.isSubsetOf(Known2.Zero | Known.One))
+      return TLO.CombineTo(Op, Op0);
+    if (DemandedBits.isSubsetOf(Known.Zero | Known2.One))
+      return TLO.CombineTo(Op, Op1);
     // If all of the demanded bits in the inputs are known zeros, return zero.
-    if (NewMask.isSubsetOf(Known.Zero | Known2.Zero))
-      return TLO.CombineTo(Op, TLO.DAG.getConstant(0, dl, Op.getValueType()));
+    if (DemandedBits.isSubsetOf(Known.Zero | Known2.Zero))
+      return TLO.CombineTo(Op, TLO.DAG.getConstant(0, dl, VT));
     // If the RHS is a constant, see if we can simplify it.
-    if (ShrinkDemandedConstant(Op, ~Known2.Zero & NewMask, TLO))
+    if (ShrinkDemandedConstant(Op, ~Known2.Zero & DemandedBits, TLO))
       return true;
     // If the operation can be done in a smaller type, do so.
-    if (ShrinkDemandedOp(Op, BitWidth, NewMask, TLO))
+    if (ShrinkDemandedOp(Op, BitWidth, DemandedBits, TLO))
       return true;
 
     // Output known-1 bits are only known if set in both the LHS & RHS.
@@ -631,26 +648,29 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     // Output known-0 are known to be clear if zero in either the LHS | RHS.
     Known.Zero |= Known2.Zero;
     break;
-  case ISD::OR:
-    if (SimplifyDemandedBits(Op.getOperand(1), NewMask, Known, TLO, Depth+1))
+  }
+  case ISD::OR: {
+    SDValue Op0 = Op.getOperand(0);
+    SDValue Op1 = Op.getOperand(1);
+
+    if (SimplifyDemandedBits(Op1, DemandedBits, Known, TLO, Depth + 1))
       return true;
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
-    if (SimplifyDemandedBits(Op.getOperand(0), ~Known.One & NewMask,
-                             Known2, TLO, Depth+1))
+    if (SimplifyDemandedBits(Op0, ~Known.One & DemandedBits, Known2, TLO, Depth + 1))
       return true;
     assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // If all of the demanded bits are known zero on one side, return the other.
     // These bits cannot contribute to the result of the 'or'.
-    if (NewMask.isSubsetOf(Known2.One | Known.Zero))
-      return TLO.CombineTo(Op, Op.getOperand(0));
-    if (NewMask.isSubsetOf(Known.One | Known2.Zero))
-      return TLO.CombineTo(Op, Op.getOperand(1));
+    if (DemandedBits.isSubsetOf(Known2.One | Known.Zero))
+      return TLO.CombineTo(Op, Op0);
+    if (DemandedBits.isSubsetOf(Known.One | Known2.Zero))
+      return TLO.CombineTo(Op, Op1);
     // If the RHS is a constant, see if we can simplify it.
-    if (ShrinkDemandedConstant(Op, NewMask, TLO))
+    if (ShrinkDemandedConstant(Op, DemandedBits, TLO))
       return true;
     // If the operation can be done in a smaller type, do so.
-    if (ShrinkDemandedOp(Op, BitWidth, NewMask, TLO))
+    if (ShrinkDemandedOp(Op, BitWidth, DemandedBits, TLO))
       return true;
 
     // Output known-0 bits are only known if clear in both the LHS & RHS.
@@ -658,79 +678,81 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     // Output known-1 are known to be set if set in either the LHS | RHS.
     Known.One |= Known2.One;
     break;
+  }
   case ISD::XOR: {
-    if (SimplifyDemandedBits(Op.getOperand(1), NewMask, Known, TLO, Depth+1))
+    SDValue Op0 = Op.getOperand(0);
+    SDValue Op1 = Op.getOperand(1);
+
+    if (SimplifyDemandedBits(Op1, DemandedBits, Known, TLO, Depth + 1))
       return true;
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
-    if (SimplifyDemandedBits(Op.getOperand(0), NewMask, Known2, TLO, Depth+1))
+    if (SimplifyDemandedBits(Op0, DemandedBits, Known2, TLO, Depth + 1))
       return true;
     assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // If all of the demanded bits are known zero on one side, return the other.
     // These bits cannot contribute to the result of the 'xor'.
-    if (NewMask.isSubsetOf(Known.Zero))
-      return TLO.CombineTo(Op, Op.getOperand(0));
-    if (NewMask.isSubsetOf(Known2.Zero))
-      return TLO.CombineTo(Op, Op.getOperand(1));
+    if (DemandedBits.isSubsetOf(Known.Zero))
+      return TLO.CombineTo(Op, Op0);
+    if (DemandedBits.isSubsetOf(Known2.Zero))
+      return TLO.CombineTo(Op, Op1);
     // If the operation can be done in a smaller type, do so.
-    if (ShrinkDemandedOp(Op, BitWidth, NewMask, TLO))
+    if (ShrinkDemandedOp(Op, BitWidth, DemandedBits, TLO))
       return true;
 
     // If all of the unknown bits are known to be zero on one side or the other
     // (but not both) turn this into an *inclusive* or.
     //    e.g. (A & C1)^(B & C2) -> (A & C1)|(B & C2) iff C1&C2 == 0
-    if ((NewMask & ~Known.Zero & ~Known2.Zero) == 0)
-      return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::OR, dl, Op.getValueType(),
-                                               Op.getOperand(0),
-                                               Op.getOperand(1)));
+    if (DemandedBits.isSubsetOf(Known.Zero | Known2.Zero))
+      return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::OR, dl, VT, Op0, Op1));
 
     // Output known-0 bits are known if clear or set in both the LHS & RHS.
     KnownOut.Zero = (Known.Zero & Known2.Zero) | (Known.One & Known2.One);
     // Output known-1 are known to be set if set in only one of the LHS, RHS.
     KnownOut.One = (Known.Zero & Known2.One) | (Known.One & Known2.Zero);
 
-    // If all of the demanded bits on one side are known, and all of the set
-    // bits on that side are also known to be set on the other side, turn this
-    // into an AND, as we know the bits will be cleared.
-    //    e.g. (X | C1) ^ C2 --> (X | C1) & ~C2 iff (C1&C2) == C2
-    // NB: it is okay if more bits are known than are requested
-    if (NewMask.isSubsetOf(Known.Zero|Known.One)) { // all known on one side
-      if (Known.One == Known2.One) { // set bits are the same on both sides
-        EVT VT = Op.getValueType();
-        SDValue ANDC = TLO.DAG.getConstant(~Known.One & NewMask, dl, VT);
-        return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::AND, dl, VT,
-                                                 Op.getOperand(0), ANDC));
+    if (ConstantSDNode *C = isConstOrConstSplat(Op1)) {
+      // If one side is a constant, and all of the known set bits on the other
+      // side are also set in the constant, turn this into an AND, as we know
+      // the bits will be cleared.
+      //    e.g. (X | C1) ^ C2 --> (X | C1) & ~C2 iff (C1&C2) == C2
+      // NB: it is okay if more bits are known than are requested
+      if (C->getAPIntValue() == Known2.One) {
+        SDValue ANDC =
+            TLO.DAG.getConstant(~C->getAPIntValue() & DemandedBits, dl, VT);
+        return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::AND, dl, VT, Op0, ANDC));
       }
-    }
 
-    // If the RHS is a constant, see if we can change it. Don't alter a -1
-    // constant because that's a 'not' op, and that is better for combining and
-    // codegen.
-    ConstantSDNode *C = isConstOrConstSplat(Op.getOperand(1));
-    if (C && !C->isAllOnesValue()) {
-      if (NewMask.isSubsetOf(C->getAPIntValue())) {
-        // We're flipping all demanded bits. Flip the undemanded bits too.
-        SDValue New = TLO.DAG.getNOT(dl, Op.getOperand(0), Op.getValueType());
-        return TLO.CombineTo(Op, New);
+      // If the RHS is a constant, see if we can change it. Don't alter a -1
+      // constant because that's a 'not' op, and that is better for combining
+      // and codegen.
+      if (!C->isAllOnesValue()) {
+        if (DemandedBits.isSubsetOf(C->getAPIntValue())) {
+          // We're flipping all demanded bits. Flip the undemanded bits too.
+          SDValue New = TLO.DAG.getNOT(dl, Op0, VT);
+          return TLO.CombineTo(Op, New);
+        }
+        // If we can't turn this into a 'not', try to shrink the constant.
+        if (ShrinkDemandedConstant(Op, DemandedBits, TLO))
+          return true;
       }
-      // If we can't turn this into a 'not', try to shrink the constant.
-      if (ShrinkDemandedConstant(Op, NewMask, TLO))
-        return true;
     }
 
     Known = std::move(KnownOut);
     break;
   }
   case ISD::SELECT:
-    if (SimplifyDemandedBits(Op.getOperand(2), NewMask, Known, TLO, Depth+1))
+    if (SimplifyDemandedBits(Op.getOperand(2), DemandedBits, Known, TLO,
+                             Depth + 1))
       return true;
-    if (SimplifyDemandedBits(Op.getOperand(1), NewMask, Known2, TLO, Depth+1))
+    if (SimplifyDemandedBits(Op.getOperand(1), DemandedBits, Known2, TLO,
+                             Depth + 1))
       return true;
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
     assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // If the operands are constants, see if we can simplify them.
-    if (ShrinkDemandedConstant(Op, NewMask, TLO))
+    if (ShrinkDemandedConstant(Op, DemandedBits, TLO))
       return true;
 
     // Only known if known in both the LHS and RHS.
@@ -738,15 +760,17 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     Known.Zero &= Known2.Zero;
     break;
   case ISD::SELECT_CC:
-    if (SimplifyDemandedBits(Op.getOperand(3), NewMask, Known, TLO, Depth+1))
+    if (SimplifyDemandedBits(Op.getOperand(3), DemandedBits, Known, TLO,
+                             Depth + 1))
       return true;
-    if (SimplifyDemandedBits(Op.getOperand(2), NewMask, Known2, TLO, Depth+1))
+    if (SimplifyDemandedBits(Op.getOperand(2), DemandedBits, Known2, TLO,
+                             Depth + 1))
       return true;
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
     assert(!Known2.hasConflict() && "Bits known to be one AND zero?");
 
     // If the operands are constants, see if we can simplify them.
-    if (ShrinkDemandedConstant(Op, NewMask, TLO))
+    if (ShrinkDemandedConstant(Op, DemandedBits, TLO))
       return true;
 
     // Only known if known in both the LHS and RHS.
@@ -760,8 +784,9 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     // If (1) we only need the sign-bit, (2) the setcc operands are the same
     // width as the setcc result, and (3) the result of a setcc conforms to 0 or
     // -1, we may be able to bypass the setcc.
-    if (NewMask.isSignMask() && Op0.getScalarValueSizeInBits() == BitWidth &&
-        getBooleanContents(Op.getValueType()) ==
+    if (DemandedBits.isSignMask() &&
+        Op0.getScalarValueSizeInBits() == BitWidth &&
+        getBooleanContents(VT) ==
             BooleanContent::ZeroOrNegativeOneBooleanContent) {
       // If we're testing X < 0, then this compare isn't needed - just use X!
       // FIXME: We're limiting to integer types here, but this should also work
@@ -780,10 +805,11 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       Known.Zero.setBitsFrom(1);
     break;
   }
-  case ISD::SHL:
-    if (ConstantSDNode *SA = isConstOrConstSplat(Op.getOperand(1))) {
-      SDValue InOp = Op.getOperand(0);
+  case ISD::SHL: {
+    SDValue Op0 = Op.getOperand(0);
+    SDValue Op1 = Op.getOperand(1);
 
+    if (ConstantSDNode *SA = isConstOrConstSplat(Op1)) {
       // If the shift count is an invalid immediate, don't do anything.
       if (SA->getAPIntValue().uge(BitWidth))
         break;
@@ -793,93 +819,91 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       // If this is ((X >>u C1) << ShAmt), see if we can simplify this into a
       // single shift.  We can do this if the bottom bits (which are shifted
       // out) are never demanded.
-      if (InOp.getOpcode() == ISD::SRL) {
-        if (ConstantSDNode *SA2 = isConstOrConstSplat(InOp.getOperand(1))) {
-          if (ShAmt && (NewMask & APInt::getLowBitsSet(BitWidth, ShAmt)) == 0) {
+      if (Op0.getOpcode() == ISD::SRL) {
+        if (ShAmt &&
+            (DemandedBits & APInt::getLowBitsSet(BitWidth, ShAmt)) == 0) {
+          if (ConstantSDNode *SA2 = isConstOrConstSplat(Op0.getOperand(1))) {
             if (SA2->getAPIntValue().ult(BitWidth)) {
               unsigned C1 = SA2->getZExtValue();
               unsigned Opc = ISD::SHL;
-              int Diff = ShAmt-C1;
+              int Diff = ShAmt - C1;
               if (Diff < 0) {
                 Diff = -Diff;
                 Opc = ISD::SRL;
               }
 
-              SDValue NewSA =
-                TLO.DAG.getConstant(Diff, dl, Op.getOperand(1).getValueType());
-              EVT VT = Op.getValueType();
-              return TLO.CombineTo(Op, TLO.DAG.getNode(Opc, dl, VT,
-                                                       InOp.getOperand(0),
-                                                       NewSA));
+              SDValue NewSA = TLO.DAG.getConstant(Diff, dl, Op1.getValueType());
+              return TLO.CombineTo(
+                  Op, TLO.DAG.getNode(Opc, dl, VT, Op0.getOperand(0), NewSA));
             }
           }
         }
       }
 
-      if (SimplifyDemandedBits(InOp, NewMask.lshr(ShAmt), Known, TLO, Depth+1))
+      if (SimplifyDemandedBits(Op0, DemandedBits.lshr(ShAmt), Known, TLO,
+                               Depth + 1))
         return true;
 
       // Convert (shl (anyext x, c)) to (anyext (shl x, c)) if the high bits
       // are not demanded. This will likely allow the anyext to be folded away.
-      if (InOp.getNode()->getOpcode() == ISD::ANY_EXTEND) {
-        SDValue InnerOp = InOp.getOperand(0);
+      if (Op0.getOpcode() == ISD::ANY_EXTEND) {
+        SDValue InnerOp = Op0.getOperand(0);
         EVT InnerVT = InnerOp.getValueType();
         unsigned InnerBits = InnerVT.getScalarSizeInBits();
-        if (ShAmt < InnerBits && NewMask.getActiveBits() <= InnerBits &&
+        if (ShAmt < InnerBits && DemandedBits.getActiveBits() <= InnerBits &&
             isTypeDesirableForOp(ISD::SHL, InnerVT)) {
           EVT ShTy = getShiftAmountTy(InnerVT, DL);
           if (!APInt(BitWidth, ShAmt).isIntN(ShTy.getSizeInBits()))
             ShTy = InnerVT;
           SDValue NarrowShl =
-            TLO.DAG.getNode(ISD::SHL, dl, InnerVT, InnerOp,
-                            TLO.DAG.getConstant(ShAmt, dl, ShTy));
-          return
-            TLO.CombineTo(Op,
-                          TLO.DAG.getNode(ISD::ANY_EXTEND, dl, Op.getValueType(),
-                                          NarrowShl));
+              TLO.DAG.getNode(ISD::SHL, dl, InnerVT, InnerOp,
+                              TLO.DAG.getConstant(ShAmt, dl, ShTy));
+          return TLO.CombineTo(
+              Op, TLO.DAG.getNode(ISD::ANY_EXTEND, dl, VT, NarrowShl));
         }
         // Repeat the SHL optimization above in cases where an extension
         // intervenes: (shl (anyext (shr x, c1)), c2) to
         // (shl (anyext x), c2-c1).  This requires that the bottom c1 bits
         // aren't demanded (as above) and that the shifted upper c1 bits of
         // x aren't demanded.
-        if (InOp.hasOneUse() && InnerOp.getOpcode() == ISD::SRL &&
+        if (Op0.hasOneUse() && InnerOp.getOpcode() == ISD::SRL &&
             InnerOp.hasOneUse()) {
-          if (ConstantSDNode *SA2 = isConstOrConstSplat(InnerOp.getOperand(1))) {
+          if (ConstantSDNode *SA2 =
+                  isConstOrConstSplat(InnerOp.getOperand(1))) {
             unsigned InnerShAmt = SA2->getLimitedValue(InnerBits);
-            if (InnerShAmt < ShAmt &&
-                InnerShAmt < InnerBits &&
-                NewMask.getActiveBits() <= (InnerBits - InnerShAmt + ShAmt) &&
-                NewMask.countTrailingZeros() >= ShAmt) {
-              SDValue NewSA =
-                TLO.DAG.getConstant(ShAmt - InnerShAmt, dl,
-                                    Op.getOperand(1).getValueType());
-              EVT VT = Op.getValueType();
+            if (InnerShAmt < ShAmt && InnerShAmt < InnerBits &&
+                DemandedBits.getActiveBits() <=
+                    (InnerBits - InnerShAmt + ShAmt) &&
+                DemandedBits.countTrailingZeros() >= ShAmt) {
+              SDValue NewSA = TLO.DAG.getConstant(ShAmt - InnerShAmt, dl,
+                                                  Op1.getValueType());
               SDValue NewExt = TLO.DAG.getNode(ISD::ANY_EXTEND, dl, VT,
                                                InnerOp.getOperand(0));
-              return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::SHL, dl, VT,
-                                                       NewExt, NewSA));
+              return TLO.CombineTo(
+                  Op, TLO.DAG.getNode(ISD::SHL, dl, VT, NewExt, NewSA));
             }
           }
         }
       }
 
       Known.Zero <<= ShAmt;
-      Known.One  <<= ShAmt;
+      Known.One <<= ShAmt;
       // low bits known zero.
       Known.Zero.setLowBits(ShAmt);
     }
     break;
-  case ISD::SRL:
-    if (ConstantSDNode *SA = isConstOrConstSplat(Op.getOperand(1))) {
-      SDValue InOp = Op.getOperand(0);
+  }
+  case ISD::SRL: {
+    SDValue Op0 = Op.getOperand(0);
+    SDValue Op1 = Op.getOperand(1);
 
+    if (ConstantSDNode *SA = isConstOrConstSplat(Op1)) {
       // If the shift count is an invalid immediate, don't do anything.
       if (SA->getAPIntValue().uge(BitWidth))
         break;
 
       unsigned ShAmt = SA->getZExtValue();
-      APInt InDemandedMask = (NewMask << ShAmt);
+      APInt InDemandedMask = (DemandedBits << ShAmt);
 
       // If the shift is exact, then it does demand the low bits (and knows that
       // they are zero).
@@ -889,59 +913,56 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       // If this is ((X << C1) >>u ShAmt), see if we can simplify this into a
       // single shift.  We can do this if the top bits (which are shifted out)
       // are never demanded.
-      if (InOp.getOpcode() == ISD::SHL) {
-        if (ConstantSDNode *SA2 = isConstOrConstSplat(InOp.getOperand(1))) {
+      if (Op0.getOpcode() == ISD::SHL) {
+        if (ConstantSDNode *SA2 = isConstOrConstSplat(Op0.getOperand(1))) {
           if (ShAmt &&
-              (NewMask & APInt::getHighBitsSet(BitWidth, ShAmt)) == 0) {
+              (DemandedBits & APInt::getHighBitsSet(BitWidth, ShAmt)) == 0) {
             if (SA2->getAPIntValue().ult(BitWidth)) {
               unsigned C1 = SA2->getZExtValue();
               unsigned Opc = ISD::SRL;
-              int Diff = ShAmt-C1;
+              int Diff = ShAmt - C1;
               if (Diff < 0) {
                 Diff = -Diff;
                 Opc = ISD::SHL;
               }
 
-              SDValue NewSA =
-                TLO.DAG.getConstant(Diff, dl, Op.getOperand(1).getValueType());
-              EVT VT = Op.getValueType();
-              return TLO.CombineTo(Op, TLO.DAG.getNode(Opc, dl, VT,
-                                                       InOp.getOperand(0),
-                                                       NewSA));
+              SDValue NewSA = TLO.DAG.getConstant(Diff, dl, Op1.getValueType());
+              return TLO.CombineTo(
+                  Op, TLO.DAG.getNode(Opc, dl, VT, Op0.getOperand(0), NewSA));
             }
           }
         }
       }
 
       // Compute the new bits that are at the top now.
-      if (SimplifyDemandedBits(InOp, InDemandedMask, Known, TLO, Depth+1))
+      if (SimplifyDemandedBits(Op0, InDemandedMask, Known, TLO, Depth + 1))
         return true;
       assert(!Known.hasConflict() && "Bits known to be one AND zero?");
       Known.Zero.lshrInPlace(ShAmt);
       Known.One.lshrInPlace(ShAmt);
 
-      Known.Zero.setHighBits(ShAmt);  // High bits known zero.
+      Known.Zero.setHighBits(ShAmt); // High bits known zero.
     }
     break;
-  case ISD::SRA:
+  }
+  case ISD::SRA: {
+    SDValue Op0 = Op.getOperand(0);
+    SDValue Op1 = Op.getOperand(1);
+
     // If this is an arithmetic shift right and only the low-bit is set, we can
     // always convert this into a logical shr, even if the shift amount is
     // variable.  The low bit of the shift cannot be an input sign bit unless
     // the shift amount is >= the size of the datatype, which is undefined.
-    if (NewMask.isOneValue())
-      return TLO.CombineTo(Op,
-                           TLO.DAG.getNode(ISD::SRL, dl, Op.getValueType(),
-                                           Op.getOperand(0), Op.getOperand(1)));
+    if (DemandedBits.isOneValue())
+      return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::SRL, dl, VT, Op0, Op1));
 
-    if (ConstantSDNode *SA = isConstOrConstSplat(Op.getOperand(1))) {
-      EVT VT = Op.getValueType();
-
+    if (ConstantSDNode *SA = isConstOrConstSplat(Op1)) {
       // If the shift count is an invalid immediate, don't do anything.
       if (SA->getAPIntValue().uge(BitWidth))
         break;
 
       unsigned ShAmt = SA->getZExtValue();
-      APInt InDemandedMask = (NewMask << ShAmt);
+      APInt InDemandedMask = (DemandedBits << ShAmt);
 
       // If the shift is exact, then it does demand the low bits (and knows that
       // they are zero).
@@ -950,11 +971,10 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
 
       // If any of the demanded bits are produced by the sign extension, we also
       // demand the input sign bit.
-      if (NewMask.countLeadingZeros() < ShAmt)
+      if (DemandedBits.countLeadingZeros() < ShAmt)
         InDemandedMask.setSignBit();
 
-      if (SimplifyDemandedBits(Op.getOperand(0), InDemandedMask, Known, TLO,
-                               Depth+1))
+      if (SimplifyDemandedBits(Op0, InDemandedMask, Known, TLO, Depth + 1))
         return true;
       assert(!Known.hasConflict() && "Bits known to be one AND zero?");
       Known.Zero.lshrInPlace(ShAmt);
@@ -963,22 +983,19 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
       // If the input sign bit is known to be zero, or if none of the top bits
       // are demanded, turn this into an unsigned shift right.
       if (Known.Zero[BitWidth - ShAmt - 1] ||
-          NewMask.countLeadingZeros() >= ShAmt) {
+          DemandedBits.countLeadingZeros() >= ShAmt) {
         SDNodeFlags Flags;
         Flags.setExact(Op->getFlags().hasExact());
-        return TLO.CombineTo(Op,
-                             TLO.DAG.getNode(ISD::SRL, dl, VT, Op.getOperand(0),
-                                             Op.getOperand(1), Flags));
+        return TLO.CombineTo(
+            Op, TLO.DAG.getNode(ISD::SRL, dl, VT, Op0, Op1, Flags));
       }
 
-      int Log2 = NewMask.exactLogBase2();
+      int Log2 = DemandedBits.exactLogBase2();
       if (Log2 >= 0) {
         // The bit must come from the sign.
         SDValue NewSA =
-          TLO.DAG.getConstant(BitWidth - 1 - Log2, dl,
-                              Op.getOperand(1).getValueType());
-        return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::SRL, dl, VT,
-                                                 Op.getOperand(0), NewSA));
+            TLO.DAG.getConstant(BitWidth - 1 - Log2, dl, Op1.getValueType());
+        return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::SRL, dl, VT, Op0, NewSA));
       }
 
       if (Known.One[BitWidth - ShAmt - 1])
@@ -986,44 +1003,43 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
         Known.One.setHighBits(ShAmt);
     }
     break;
+  }
   case ISD::SIGN_EXTEND_INREG: {
+    SDValue Op0 = Op.getOperand(0);
     EVT ExVT = cast<VTSDNode>(Op.getOperand(1))->getVT();
     unsigned ExVTBits = ExVT.getScalarSizeInBits();
 
     // If we only care about the highest bit, don't bother shifting right.
-    if (NewMask.isSignMask()) {
-      SDValue InOp = Op.getOperand(0);
+    if (DemandedBits.isSignMask()) {
       bool AlreadySignExtended =
-        TLO.DAG.ComputeNumSignBits(InOp) >= BitWidth-ExVTBits+1;
+          TLO.DAG.ComputeNumSignBits(Op0) >= BitWidth - ExVTBits + 1;
       // However if the input is already sign extended we expect the sign
       // extension to be dropped altogether later and do not simplify.
       if (!AlreadySignExtended) {
         // Compute the correct shift amount type, which must be getShiftAmountTy
         // for scalar types after legalization.
-        EVT ShiftAmtTy = Op.getValueType();
+        EVT ShiftAmtTy = VT;
         if (TLO.LegalTypes() && !ShiftAmtTy.isVector())
           ShiftAmtTy = getShiftAmountTy(ShiftAmtTy, DL);
 
-        SDValue ShiftAmt = TLO.DAG.getConstant(BitWidth - ExVTBits, dl,
-                                               ShiftAmtTy);
-        return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::SHL, dl,
-                                                 Op.getValueType(), InOp,
-                                                 ShiftAmt));
+        SDValue ShiftAmt =
+            TLO.DAG.getConstant(BitWidth - ExVTBits, dl, ShiftAmtTy);
+        return TLO.CombineTo(Op,
+                             TLO.DAG.getNode(ISD::SHL, dl, VT, Op0, ShiftAmt));
       }
     }
 
     // If none of the extended bits are demanded, eliminate the sextinreg.
-    if (NewMask.getActiveBits() <= ExVTBits)
-      return TLO.CombineTo(Op, Op.getOperand(0));
+    if (DemandedBits.getActiveBits() <= ExVTBits)
+      return TLO.CombineTo(Op, Op0);
 
-    APInt InputDemandedBits = NewMask.getLoBits(ExVTBits);
+    APInt InputDemandedBits = DemandedBits.getLoBits(ExVTBits);
 
     // Since the sign extended bits are demanded, we know that the sign
     // bit is demanded.
     InputDemandedBits.setBit(ExVTBits - 1);
 
-    if (SimplifyDemandedBits(Op.getOperand(0), InputDemandedBits,
-                             Known, TLO, Depth+1))
+    if (SimplifyDemandedBits(Op0, InputDemandedBits, Known, TLO, Depth + 1))
       return true;
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
 
@@ -1032,14 +1048,14 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
 
     // If the input sign bit is known zero, convert this into a zero extension.
     if (Known.Zero[ExVTBits - 1])
-      return TLO.CombineTo(Op, TLO.DAG.getZeroExtendInReg(
-                                   Op.getOperand(0), dl, ExVT.getScalarType()));
+      return TLO.CombineTo(
+          Op, TLO.DAG.getZeroExtendInReg(Op0, dl, ExVT.getScalarType()));
 
     APInt Mask = APInt::getLowBitsSet(BitWidth, ExVTBits);
-    if (Known.One[ExVTBits - 1]) {    // Input sign bit known set
+    if (Known.One[ExVTBits - 1]) { // Input sign bit known set
       Known.One.setBitsFrom(ExVTBits);
       Known.Zero &= Mask;
-    } else {                       // Input sign bit unknown
+    } else { // Input sign bit unknown
       Known.Zero &= Mask;
       Known.One &= Mask;
     }
@@ -1049,8 +1065,8 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     EVT HalfVT = Op.getOperand(0).getValueType();
     unsigned HalfBitWidth = HalfVT.getScalarSizeInBits();
 
-    APInt MaskLo = NewMask.getLoBits(HalfBitWidth).trunc(HalfBitWidth);
-    APInt MaskHi = NewMask.getHiBits(HalfBitWidth).trunc(HalfBitWidth);
+    APInt MaskLo = DemandedBits.getLoBits(HalfBitWidth).trunc(HalfBitWidth);
+    APInt MaskHi = DemandedBits.getHiBits(HalfBitWidth).trunc(HalfBitWidth);
 
     KnownBits KnownLo, KnownHi;
 
@@ -1071,12 +1087,11 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     unsigned OperandBitWidth = Op.getOperand(0).getScalarValueSizeInBits();
 
     // If none of the top bits are demanded, convert this into an any_extend.
-    if (NewMask.getActiveBits() <= OperandBitWidth)
-      return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::ANY_EXTEND, dl,
-                                               Op.getValueType(),
+    if (DemandedBits.getActiveBits() <= OperandBitWidth)
+      return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::ANY_EXTEND, dl, VT,
                                                Op.getOperand(0)));
 
-    APInt InMask = NewMask.trunc(OperandBitWidth);
+    APInt InMask = DemandedBits.trunc(OperandBitWidth);
     if (SimplifyDemandedBits(Op.getOperand(0), InMask, Known, TLO, Depth+1))
       return true;
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
@@ -1085,21 +1100,19 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     break;
   }
   case ISD::SIGN_EXTEND: {
-    unsigned InBits = Op.getOperand(0).getValueType().getScalarSizeInBits();
+    SDValue Src = Op.getOperand(0);
+    unsigned InBits = Src.getScalarValueSizeInBits();
 
     // If none of the top bits are demanded, convert this into an any_extend.
-    if (NewMask.getActiveBits() <= InBits)
-      return TLO.CombineTo(Op,TLO.DAG.getNode(ISD::ANY_EXTEND, dl,
-                                              Op.getValueType(),
-                                              Op.getOperand(0)));
+    if (DemandedBits.getActiveBits() <= InBits)
+      return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::ANY_EXTEND, dl, VT, Src));
 
     // Since some of the sign extended bits are demanded, we know that the sign
     // bit is demanded.
-    APInt InDemandedBits = NewMask.trunc(InBits);
+    APInt InDemandedBits = DemandedBits.trunc(InBits);
     InDemandedBits.setBit(InBits - 1);
 
-    if (SimplifyDemandedBits(Op.getOperand(0), InDemandedBits, Known, TLO,
-                             Depth+1))
+    if (SimplifyDemandedBits(Src, InDemandedBits, Known, TLO, Depth + 1))
       return true;
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
     // If the sign bit is known one, the top bits match.
@@ -1107,14 +1120,31 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
 
     // If the sign bit is known zero, convert this to a zero extend.
     if (Known.isNonNegative())
-      return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::ZERO_EXTEND, dl,
-                                               Op.getValueType(),
-                                               Op.getOperand(0)));
+      return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::ZERO_EXTEND, dl, VT, Src));
+    break;
+  }
+  case ISD::SIGN_EXTEND_VECTOR_INREG: {
+    // TODO - merge this with SIGN_EXTEND above?
+    SDValue Src = Op.getOperand(0);
+    unsigned InBits = Src.getScalarValueSizeInBits();
+
+    APInt InDemandedBits = DemandedBits.trunc(InBits);
+
+    // If some of the sign extended bits are demanded, we know that the sign
+    // bit is demanded.
+    if (InBits < DemandedBits.getActiveBits())
+      InDemandedBits.setBit(InBits - 1);
+
+    if (SimplifyDemandedBits(Src, InDemandedBits, Known, TLO, Depth + 1))
+      return true;
+    assert(!Known.hasConflict() && "Bits known to be one AND zero?");
+    // If the sign bit is known one, the top bits match.
+    Known = Known.sext(BitWidth);
     break;
   }
   case ISD::ANY_EXTEND: {
     unsigned OperandBitWidth = Op.getOperand(0).getScalarValueSizeInBits();
-    APInt InMask = NewMask.trunc(OperandBitWidth);
+    APInt InMask = DemandedBits.trunc(OperandBitWidth);
     if (SimplifyDemandedBits(Op.getOperand(0), InMask, Known, TLO, Depth+1))
       return true;
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
@@ -1122,36 +1152,36 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     break;
   }
   case ISD::TRUNCATE: {
+    SDValue Src = Op.getOperand(0);
+
     // Simplify the input, using demanded bit information, and compute the known
     // zero/one bits live out.
-    unsigned OperandBitWidth = Op.getOperand(0).getScalarValueSizeInBits();
-    APInt TruncMask = NewMask.zext(OperandBitWidth);
-    if (SimplifyDemandedBits(Op.getOperand(0), TruncMask, Known, TLO, Depth+1))
+    unsigned OperandBitWidth = Src.getScalarValueSizeInBits();
+    APInt TruncMask = DemandedBits.zext(OperandBitWidth);
+    if (SimplifyDemandedBits(Src, TruncMask, Known, TLO, Depth + 1))
       return true;
     Known = Known.trunc(BitWidth);
 
     // If the input is only used by this truncate, see if we can shrink it based
     // on the known demanded bits.
-    if (Op.getOperand(0).getNode()->hasOneUse()) {
-      SDValue In = Op.getOperand(0);
-      switch (In.getOpcode()) {
-      default: break;
+    if (Src.getNode()->hasOneUse()) {
+      switch (Src.getOpcode()) {
+      default:
+        break;
       case ISD::SRL:
         // Shrink SRL by a constant if none of the high bits shifted in are
         // demanded.
-        if (TLO.LegalTypes() &&
-            !isTypeDesirableForOp(ISD::SRL, Op.getValueType()))
+        if (TLO.LegalTypes() && !isTypeDesirableForOp(ISD::SRL, VT))
           // Do not turn (vt1 truncate (vt2 srl)) into (vt1 srl) if vt1 is
           // undesirable.
           break;
-        ConstantSDNode *ShAmt = dyn_cast<ConstantSDNode>(In.getOperand(1));
+        ConstantSDNode *ShAmt = dyn_cast<ConstantSDNode>(Src.getOperand(1));
         if (!ShAmt)
           break;
-        SDValue Shift = In.getOperand(1);
+        SDValue Shift = Src.getOperand(1);
         if (TLO.LegalTypes()) {
           uint64_t ShVal = ShAmt->getZExtValue();
-          Shift = TLO.DAG.getConstant(ShVal, dl,
-                                      getShiftAmountTy(Op.getValueType(), DL));
+          Shift = TLO.DAG.getConstant(ShVal, dl, getShiftAmountTy(VT, DL));
         }
 
         if (ShAmt->getZExtValue() < BitWidth) {
@@ -1160,16 +1190,13 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
           HighBits.lshrInPlace(ShAmt->getZExtValue());
           HighBits = HighBits.trunc(BitWidth);
 
-          if (!(HighBits & NewMask)) {
+          if (!(HighBits & DemandedBits)) {
             // None of the shifted in bits are needed.  Add a truncate of the
             // shift input, then shift it.
-            SDValue NewTrunc = TLO.DAG.getNode(ISD::TRUNCATE, dl,
-                                               Op.getValueType(),
-                                               In.getOperand(0));
-            return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::SRL, dl,
-                                                     Op.getValueType(),
-                                                     NewTrunc,
-                                                     Shift));
+            SDValue NewTrunc =
+                TLO.DAG.getNode(ISD::TRUNCATE, dl, VT, Src.getOperand(0));
+            return TLO.CombineTo(
+                Op, TLO.DAG.getNode(ISD::SRL, dl, VT, NewTrunc, Shift));
           }
         }
         break;
@@ -1182,10 +1209,9 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
   case ISD::AssertZext: {
     // AssertZext demands all of the high bits, plus any of the low bits
     // demanded by its users.
-    EVT VT = cast<VTSDNode>(Op.getOperand(1))->getVT();
-    APInt InMask = APInt::getLowBitsSet(BitWidth,
-                                        VT.getSizeInBits());
-    if (SimplifyDemandedBits(Op.getOperand(0), ~InMask | NewMask,
+    EVT ZVT = cast<VTSDNode>(Op.getOperand(1))->getVT();
+    APInt InMask = APInt::getLowBitsSet(BitWidth, ZVT.getSizeInBits());
+    if (SimplifyDemandedBits(Op.getOperand(0), ~InMask | DemandedBits,
                              Known, TLO, Depth+1))
       return true;
     assert(!Known.hasConflict() && "Bits known to be one AND zero?");
@@ -1193,58 +1219,119 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
     Known.Zero |= ~InMask;
     break;
   }
-  case ISD::BITCAST:
+  case ISD::BITCAST: {
+    SDValue Src = Op.getOperand(0);
+    EVT SrcVT = Src.getValueType();
+    unsigned NumSrcEltBits = SrcVT.getScalarSizeInBits();
+
     // If this is an FP->Int bitcast and if the sign bit is the only
     // thing demanded, turn this into a FGETSIGN.
-    if (!TLO.LegalOperations() &&
-        !Op.getValueType().isVector() &&
-        !Op.getOperand(0).getValueType().isVector() &&
-        NewMask == APInt::getSignMask(Op.getValueSizeInBits()) &&
-        Op.getOperand(0).getValueType().isFloatingPoint()) {
-      bool OpVTLegal = isOperationLegalOrCustom(ISD::FGETSIGN, Op.getValueType());
-      bool i32Legal  = isOperationLegalOrCustom(ISD::FGETSIGN, MVT::i32);
-      if ((OpVTLegal || i32Legal) && Op.getValueType().isSimple() &&
-           Op.getOperand(0).getValueType() != MVT::f128) {
+    if (!TLO.LegalOperations() && !VT.isVector() && !SrcVT.isVector() &&
+        DemandedBits == APInt::getSignMask(Op.getValueSizeInBits()) &&
+        SrcVT.isFloatingPoint()) {
+      bool OpVTLegal = isOperationLegalOrCustom(ISD::FGETSIGN, VT);
+      bool i32Legal = isOperationLegalOrCustom(ISD::FGETSIGN, MVT::i32);
+      if ((OpVTLegal || i32Legal) && VT.isSimple() && SrcVT != MVT::f16 &&
+          SrcVT != MVT::f128) {
         // Cannot eliminate/lower SHL for f128 yet.
-        EVT Ty = OpVTLegal ? Op.getValueType() : MVT::i32;
+        EVT Ty = OpVTLegal ? VT : MVT::i32;
         // Make a FGETSIGN + SHL to move the sign bit into the appropriate
         // place.  We expect the SHL to be eliminated by other optimizations.
-        SDValue Sign = TLO.DAG.getNode(ISD::FGETSIGN, dl, Ty, Op.getOperand(0));
+        SDValue Sign = TLO.DAG.getNode(ISD::FGETSIGN, dl, Ty, Src);
         unsigned OpVTSizeInBits = Op.getValueSizeInBits();
         if (!OpVTLegal && OpVTSizeInBits > 32)
-          Sign = TLO.DAG.getNode(ISD::ZERO_EXTEND, dl, Op.getValueType(), Sign);
+          Sign = TLO.DAG.getNode(ISD::ZERO_EXTEND, dl, VT, Sign);
         unsigned ShVal = Op.getValueSizeInBits() - 1;
-        SDValue ShAmt = TLO.DAG.getConstant(ShVal, dl, Op.getValueType());
-        return TLO.CombineTo(Op, TLO.DAG.getNode(ISD::SHL, dl,
-                                                 Op.getValueType(),
-                                                 Sign, ShAmt));
+        SDValue ShAmt = TLO.DAG.getConstant(ShVal, dl, VT);
+        return TLO.CombineTo(Op,
+                             TLO.DAG.getNode(ISD::SHL, dl, VT, Sign, ShAmt));
       }
     }
+    // If bitcast from a vector and the mask covers entire elements, see if we
+    // can use SimplifyDemandedVectorElts.
+    // TODO - bigendian once we have test coverage.
+    // TODO - bool vectors once SimplifyDemandedVectorElts has SETCC support.
+    if (SrcVT.isVector() && NumSrcEltBits > 1 &&
+        (BitWidth % NumSrcEltBits) == 0 &&
+        TLO.DAG.getDataLayout().isLittleEndian()) {
+      unsigned Scale = BitWidth / NumSrcEltBits;
+      auto GetDemandedSubMask = [&](APInt &DemandedSubElts) -> bool {
+        DemandedSubElts = APInt::getNullValue(Scale);
+        for (unsigned i = 0; i != Scale; ++i) {
+          unsigned Offset = i * NumSrcEltBits;
+          APInt Sub = DemandedBits.extractBits(NumSrcEltBits, Offset);
+          if (Sub.isAllOnesValue())
+            DemandedSubElts.setBit(i);
+          else if (!Sub.isNullValue())
+            return false;
+        }
+        return true;
+      };
+
+      APInt DemandedSubElts;
+      if (GetDemandedSubMask(DemandedSubElts)) {
+        unsigned NumSrcElts = SrcVT.getVectorNumElements();
+        APInt DemandedElts = APInt::getSplat(NumSrcElts, DemandedSubElts);
+
+        APInt KnownUndef, KnownZero;
+        if (SimplifyDemandedVectorElts(Src, DemandedElts, KnownUndef, KnownZero,
+                                       TLO, Depth + 1))
+          return true;
+      }
+    }
+    // If this is a bitcast, let computeKnownBits handle it.  Only do this on a
+    // recursive call where Known may be useful to the caller.
+    if (Depth > 0) {
+      TLO.DAG.computeKnownBits(Op, Known, Depth);
+      return false;
+    }
     break;
+  }
   case ISD::ADD:
   case ISD::MUL:
   case ISD::SUB: {
     // Add, Sub, and Mul don't demand any bits in positions beyond that
     // of the highest bit demanded of them.
-    APInt LoMask = APInt::getLowBitsSet(BitWidth,
-                                        BitWidth - NewMask.countLeadingZeros());
-    if (SimplifyDemandedBits(Op.getOperand(0), LoMask, Known2, TLO, Depth+1) ||
-        SimplifyDemandedBits(Op.getOperand(1), LoMask, Known2, TLO, Depth+1) ||
+    SDValue Op0 = Op.getOperand(0), Op1 = Op.getOperand(1);
+    unsigned DemandedBitsLZ = DemandedBits.countLeadingZeros();
+    APInt LoMask = APInt::getLowBitsSet(BitWidth, BitWidth - DemandedBitsLZ);
+    if (SimplifyDemandedBits(Op0, LoMask, Known2, TLO, Depth + 1) ||
+        SimplifyDemandedBits(Op1, LoMask, Known2, TLO, Depth + 1) ||
         // See if the operation should be performed at a smaller bit width.
-        ShrinkDemandedOp(Op, BitWidth, NewMask, TLO)) {
+        ShrinkDemandedOp(Op, BitWidth, DemandedBits, TLO)) {
       SDNodeFlags Flags = Op.getNode()->getFlags();
       if (Flags.hasNoSignedWrap() || Flags.hasNoUnsignedWrap()) {
         // Disable the nsw and nuw flags. We can no longer guarantee that we
         // won't wrap after simplification.
         Flags.setNoSignedWrap(false);
         Flags.setNoUnsignedWrap(false);
-        SDValue NewOp = TLO.DAG.getNode(Op.getOpcode(), dl, Op.getValueType(),
-                                        Op.getOperand(0), Op.getOperand(1),
+        SDValue NewOp = TLO.DAG.getNode(Op.getOpcode(), dl, VT, Op0, Op1,
                                         Flags);
         return TLO.CombineTo(Op, NewOp);
       }
       return true;
     }
+
+    // If we have a constant operand, we may be able to turn it into -1 if we
+    // do not demand the high bits. This can make the constant smaller to
+    // encode, allow more general folding, or match specialized instruction
+    // patterns (eg, 'blsr' on x86). Don't bother changing 1 to -1 because that
+    // is probably not useful (and could be detrimental).
+    ConstantSDNode *C = isConstOrConstSplat(Op1);
+    APInt HighMask = APInt::getHighBitsSet(BitWidth, DemandedBitsLZ);
+    if (C && !C->isAllOnesValue() && !C->isOne() &&
+        (C->getAPIntValue() | HighMask).isAllOnesValue()) {
+      SDValue Neg1 = TLO.DAG.getAllOnesConstant(dl, VT);
+      // We can't guarantee that the new math op doesn't wrap, so explicitly
+      // clear those flags to prevent folding with a potential existing node
+      // that has those flags set.
+      SDNodeFlags Flags;
+      Flags.setNoSignedWrap(false);
+      Flags.setNoUnsignedWrap(false);
+      SDValue NewOp = TLO.DAG.getNode(Op.getOpcode(), dl, VT, Op0, Neg1, Flags);
+      return TLO.CombineTo(Op, NewOp);
+    }
+
     LLVM_FALLTHROUGH;
   }
   default:
@@ -1255,20 +1342,408 @@ bool TargetLowering::SimplifyDemandedBits(SDValue Op,
 
   // If we know the value of all of the demanded bits, return this as a
   // constant.
-  if (NewMask.isSubsetOf(Known.Zero|Known.One)) {
+  if (DemandedBits.isSubsetOf(Known.Zero | Known.One)) {
     // Avoid folding to a constant if any OpaqueConstant is involved.
     const SDNode *N = Op.getNode();
     for (SDNodeIterator I = SDNodeIterator::begin(N),
-         E = SDNodeIterator::end(N); I != E; ++I) {
+                        E = SDNodeIterator::end(N);
+         I != E; ++I) {
       SDNode *Op = *I;
       if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Op))
         if (C->isOpaque())
           return false;
     }
-    return TLO.CombineTo(Op,
-                         TLO.DAG.getConstant(Known.One, dl, Op.getValueType()));
+    return TLO.CombineTo(Op, TLO.DAG.getConstant(Known.One, dl, VT));
   }
 
+  return false;
+}
+
+bool TargetLowering::SimplifyDemandedVectorElts(SDValue Op,
+                                                const APInt &DemandedElts,
+                                                APInt &KnownUndef,
+                                                APInt &KnownZero,
+                                                DAGCombinerInfo &DCI) const {
+  SelectionDAG &DAG = DCI.DAG;
+  TargetLoweringOpt TLO(DAG, !DCI.isBeforeLegalize(),
+                        !DCI.isBeforeLegalizeOps());
+
+  bool Simplified =
+      SimplifyDemandedVectorElts(Op, DemandedElts, KnownUndef, KnownZero, TLO);
+  if (Simplified) {
+    DCI.AddToWorklist(Op.getNode());
+    DCI.CommitTargetLoweringOpt(TLO);
+  }
+  return Simplified;
+}
+
+bool TargetLowering::SimplifyDemandedVectorElts(
+    SDValue Op, const APInt &DemandedEltMask, APInt &KnownUndef,
+    APInt &KnownZero, TargetLoweringOpt &TLO, unsigned Depth,
+    bool AssumeSingleUse) const {
+  EVT VT = Op.getValueType();
+  APInt DemandedElts = DemandedEltMask;
+  unsigned NumElts = DemandedElts.getBitWidth();
+  assert(VT.isVector() && "Expected vector op");
+  assert(VT.getVectorNumElements() == NumElts &&
+         "Mask size mismatches value type element count!");
+
+  KnownUndef = KnownZero = APInt::getNullValue(NumElts);
+
+  // Undef operand.
+  if (Op.isUndef()) {
+    KnownUndef.setAllBits();
+    return false;
+  }
+
+  // If Op has other users, assume that all elements are needed.
+  if (!Op.getNode()->hasOneUse() && !AssumeSingleUse)
+    DemandedElts.setAllBits();
+
+  // Not demanding any elements from Op.
+  if (DemandedElts == 0) {
+    KnownUndef.setAllBits();
+    return TLO.CombineTo(Op, TLO.DAG.getUNDEF(VT));
+  }
+
+  // Limit search depth.
+  if (Depth >= 6)
+    return false;
+
+  SDLoc DL(Op);
+  unsigned EltSizeInBits = VT.getScalarSizeInBits();
+
+  switch (Op.getOpcode()) {
+  case ISD::SCALAR_TO_VECTOR: {
+    if (!DemandedElts[0]) {
+      KnownUndef.setAllBits();
+      return TLO.CombineTo(Op, TLO.DAG.getUNDEF(VT));
+    }
+    KnownUndef.setHighBits(NumElts - 1);
+    break;
+  }
+  case ISD::BITCAST: {
+    SDValue Src = Op.getOperand(0);
+    EVT SrcVT = Src.getValueType();
+
+    // We only handle vectors here.
+    // TODO - investigate calling SimplifyDemandedBits/ComputeKnownBits?
+    if (!SrcVT.isVector())
+      break;
+
+    // Fast handling of 'identity' bitcasts.
+    unsigned NumSrcElts = SrcVT.getVectorNumElements();
+    if (NumSrcElts == NumElts)
+      return SimplifyDemandedVectorElts(Src, DemandedElts, KnownUndef,
+                                        KnownZero, TLO, Depth + 1);
+
+    APInt SrcZero, SrcUndef;
+    APInt SrcDemandedElts = APInt::getNullValue(NumSrcElts);
+
+    // Bitcast from 'large element' src vector to 'small element' vector, we
+    // must demand a source element if any DemandedElt maps to it.
+    if ((NumElts % NumSrcElts) == 0) {
+      unsigned Scale = NumElts / NumSrcElts;
+      for (unsigned i = 0; i != NumElts; ++i)
+        if (DemandedElts[i])
+          SrcDemandedElts.setBit(i / Scale);
+
+      if (SimplifyDemandedVectorElts(Src, SrcDemandedElts, SrcUndef, SrcZero,
+                                     TLO, Depth + 1))
+        return true;
+
+      // If the src element is zero/undef then all the output elements will be -
+      // only demanded elements are guaranteed to be correct.
+      for (unsigned i = 0; i != NumSrcElts; ++i) {
+        if (SrcDemandedElts[i]) {
+          if (SrcZero[i])
+            KnownZero.setBits(i * Scale, (i + 1) * Scale);
+          if (SrcUndef[i])
+            KnownUndef.setBits(i * Scale, (i + 1) * Scale);
+        }
+      }
+    }
+
+    // Bitcast from 'small element' src vector to 'large element' vector, we
+    // demand all smaller source elements covered by the larger demanded element
+    // of this vector.
+    if ((NumSrcElts % NumElts) == 0) {
+      unsigned Scale = NumSrcElts / NumElts;
+      for (unsigned i = 0; i != NumElts; ++i)
+        if (DemandedElts[i])
+          SrcDemandedElts.setBits(i * Scale, (i + 1) * Scale);
+
+      if (SimplifyDemandedVectorElts(Src, SrcDemandedElts, SrcUndef, SrcZero,
+                                     TLO, Depth + 1))
+        return true;
+
+      // If all the src elements covering an output element are zero/undef, then
+      // the output element will be as well, assuming it was demanded.
+      for (unsigned i = 0; i != NumElts; ++i) {
+        if (DemandedElts[i]) {
+          if (SrcZero.extractBits(Scale, i * Scale).isAllOnesValue())
+            KnownZero.setBit(i);
+          if (SrcUndef.extractBits(Scale, i * Scale).isAllOnesValue())
+            KnownUndef.setBit(i);
+        }
+      }
+    }
+    break;
+  }
+  case ISD::BUILD_VECTOR: {
+    // Check all elements and simplify any unused elements with UNDEF.
+    if (!DemandedElts.isAllOnesValue()) {
+      // Don't simplify BROADCASTS.
+      if (llvm::any_of(Op->op_values(),
+                       [&](SDValue Elt) { return Op.getOperand(0) != Elt; })) {
+        SmallVector<SDValue, 32> Ops(Op->op_begin(), Op->op_end());
+        bool Updated = false;
+        for (unsigned i = 0; i != NumElts; ++i) {
+          if (!DemandedElts[i] && !Ops[i].isUndef()) {
+            Ops[i] = TLO.DAG.getUNDEF(Ops[0].getValueType());
+            KnownUndef.setBit(i);
+            Updated = true;
+          }
+        }
+        if (Updated)
+          return TLO.CombineTo(Op, TLO.DAG.getBuildVector(VT, DL, Ops));
+      }
+    }
+    for (unsigned i = 0; i != NumElts; ++i) {
+      SDValue SrcOp = Op.getOperand(i);
+      if (SrcOp.isUndef()) {
+        KnownUndef.setBit(i);
+      } else if (EltSizeInBits == SrcOp.getScalarValueSizeInBits() &&
+                 (isNullConstant(SrcOp) || isNullFPConstant(SrcOp))) {
+        KnownZero.setBit(i);
+      }
+    }
+    break;
+  }
+  case ISD::CONCAT_VECTORS: {
+    EVT SubVT = Op.getOperand(0).getValueType();
+    unsigned NumSubVecs = Op.getNumOperands();
+    unsigned NumSubElts = SubVT.getVectorNumElements();
+    for (unsigned i = 0; i != NumSubVecs; ++i) {
+      SDValue SubOp = Op.getOperand(i);
+      APInt SubElts = DemandedElts.extractBits(NumSubElts, i * NumSubElts);
+      APInt SubUndef, SubZero;
+      if (SimplifyDemandedVectorElts(SubOp, SubElts, SubUndef, SubZero, TLO,
+                                     Depth + 1))
+        return true;
+      KnownUndef.insertBits(SubUndef, i * NumSubElts);
+      KnownZero.insertBits(SubZero, i * NumSubElts);
+    }
+    break;
+  }
+  case ISD::INSERT_SUBVECTOR: {
+    if (!isa<ConstantSDNode>(Op.getOperand(2)))
+      break;
+    SDValue Base = Op.getOperand(0);
+    SDValue Sub = Op.getOperand(1);
+    EVT SubVT = Sub.getValueType();
+    unsigned NumSubElts = SubVT.getVectorNumElements();
+    const APInt& Idx = cast<ConstantSDNode>(Op.getOperand(2))->getAPIntValue();
+    if (Idx.uge(NumElts - NumSubElts))
+      break;
+    unsigned SubIdx = Idx.getZExtValue();
+    APInt SubElts = DemandedElts.extractBits(NumSubElts, SubIdx);
+    APInt SubUndef, SubZero;
+    if (SimplifyDemandedVectorElts(Sub, SubElts, SubUndef, SubZero, TLO,
+                                   Depth + 1))
+      return true;
+    APInt BaseElts = DemandedElts;
+    BaseElts.insertBits(APInt::getNullValue(NumSubElts), SubIdx);
+    if (SimplifyDemandedVectorElts(Base, BaseElts, KnownUndef, KnownZero, TLO,
+                                   Depth + 1))
+      return true;
+    KnownUndef.insertBits(SubUndef, SubIdx);
+    KnownZero.insertBits(SubZero, SubIdx);
+    break;
+  }
+  case ISD::EXTRACT_SUBVECTOR: {
+    SDValue Src = Op.getOperand(0);
+    ConstantSDNode *SubIdx = dyn_cast<ConstantSDNode>(Op.getOperand(1));
+    unsigned NumSrcElts = Src.getValueType().getVectorNumElements();
+    if (SubIdx && SubIdx->getAPIntValue().ule(NumSrcElts - NumElts)) {
+      // Offset the demanded elts by the subvector index.
+      uint64_t Idx = SubIdx->getZExtValue();
+      APInt SrcElts = DemandedElts.zextOrSelf(NumSrcElts).shl(Idx);
+      APInt SrcUndef, SrcZero;
+      if (SimplifyDemandedVectorElts(Src, SrcElts, SrcUndef, SrcZero, TLO,
+                                     Depth + 1))
+        return true;
+      KnownUndef = SrcUndef.extractBits(NumElts, Idx);
+      KnownZero = SrcZero.extractBits(NumElts, Idx);
+    }
+    break;
+  }
+  case ISD::INSERT_VECTOR_ELT: {
+    SDValue Vec = Op.getOperand(0);
+    SDValue Scl = Op.getOperand(1);
+    auto *CIdx = dyn_cast<ConstantSDNode>(Op.getOperand(2));
+
+    // For a legal, constant insertion index, if we don't need this insertion
+    // then strip it, else remove it from the demanded elts.
+    if (CIdx && CIdx->getAPIntValue().ult(NumElts)) {
+      unsigned Idx = CIdx->getZExtValue();
+      if (!DemandedElts[Idx])
+        return TLO.CombineTo(Op, Vec);
+      DemandedElts.clearBit(Idx);
+
+      if (SimplifyDemandedVectorElts(Vec, DemandedElts, KnownUndef,
+                                     KnownZero, TLO, Depth + 1))
+        return true;
+
+      KnownUndef.clearBit(Idx);
+      if (Scl.isUndef())
+        KnownUndef.setBit(Idx);
+
+      KnownZero.clearBit(Idx);
+      if (isNullConstant(Scl) || isNullFPConstant(Scl))
+        KnownZero.setBit(Idx);
+      break;
+    }
+
+    APInt VecUndef, VecZero;
+    if (SimplifyDemandedVectorElts(Vec, DemandedElts, VecUndef, VecZero, TLO,
+                                   Depth + 1))
+      return true;
+    // Without knowing the insertion index we can't set KnownUndef/KnownZero.
+    break;
+  }
+  case ISD::VSELECT: {
+    // Try to transform the select condition based on the current demanded
+    // elements.
+    // TODO: If a condition element is undef, we can choose from one arm of the
+    //       select (and if one arm is undef, then we can propagate that to the
+    //       result).
+    // TODO - add support for constant vselect masks (see IR version of this).
+    APInt UnusedUndef, UnusedZero;
+    if (SimplifyDemandedVectorElts(Op.getOperand(0), DemandedElts, UnusedUndef,
+                                   UnusedZero, TLO, Depth + 1))
+      return true;
+
+    // See if we can simplify either vselect operand.
+    APInt DemandedLHS(DemandedElts);
+    APInt DemandedRHS(DemandedElts);
+    APInt UndefLHS, ZeroLHS;
+    APInt UndefRHS, ZeroRHS;
+    if (SimplifyDemandedVectorElts(Op.getOperand(1), DemandedLHS, UndefLHS,
+                                   ZeroLHS, TLO, Depth + 1))
+      return true;
+    if (SimplifyDemandedVectorElts(Op.getOperand(2), DemandedRHS, UndefRHS,
+                                   ZeroRHS, TLO, Depth + 1))
+      return true;
+
+    KnownUndef = UndefLHS & UndefRHS;
+    KnownZero = ZeroLHS & ZeroRHS;
+    break;
+  }
+  case ISD::VECTOR_SHUFFLE: {
+    ArrayRef<int> ShuffleMask = cast<ShuffleVectorSDNode>(Op)->getMask();
+
+    // Collect demanded elements from shuffle operands..
+    APInt DemandedLHS(NumElts, 0);
+    APInt DemandedRHS(NumElts, 0);
+    for (unsigned i = 0; i != NumElts; ++i) {
+      int M = ShuffleMask[i];
+      if (M < 0 || !DemandedElts[i])
+        continue;
+      assert(0 <= M && M < (int)(2 * NumElts) && "Shuffle index out of range");
+      if (M < (int)NumElts)
+        DemandedLHS.setBit(M);
+      else
+        DemandedRHS.setBit(M - NumElts);
+    }
+
+    // See if we can simplify either shuffle operand.
+    APInt UndefLHS, ZeroLHS;
+    APInt UndefRHS, ZeroRHS;
+    if (SimplifyDemandedVectorElts(Op.getOperand(0), DemandedLHS, UndefLHS,
+                                   ZeroLHS, TLO, Depth + 1))
+      return true;
+    if (SimplifyDemandedVectorElts(Op.getOperand(1), DemandedRHS, UndefRHS,
+                                   ZeroRHS, TLO, Depth + 1))
+      return true;
+
+    // Simplify mask using undef elements from LHS/RHS.
+    bool Updated = false;
+    bool IdentityLHS = true, IdentityRHS = true;
+    SmallVector<int, 32> NewMask(ShuffleMask.begin(), ShuffleMask.end());
+    for (unsigned i = 0; i != NumElts; ++i) {
+      int &M = NewMask[i];
+      if (M < 0)
+        continue;
+      if (!DemandedElts[i] || (M < (int)NumElts && UndefLHS[M]) ||
+          (M >= (int)NumElts && UndefRHS[M - NumElts])) {
+        Updated = true;
+        M = -1;
+      }
+      IdentityLHS &= (M < 0) || (M == (int)i);
+      IdentityRHS &= (M < 0) || ((M - NumElts) == i);
+    }
+
+    // Update legal shuffle masks based on demanded elements if it won't reduce
+    // to Identity which can cause premature removal of the shuffle mask.
+    if (Updated && !IdentityLHS && !IdentityRHS && !TLO.LegalOps &&
+        isShuffleMaskLegal(NewMask, VT))
+      return TLO.CombineTo(Op,
+                           TLO.DAG.getVectorShuffle(VT, DL, Op.getOperand(0),
+                                                    Op.getOperand(1), NewMask));
+
+    // Propagate undef/zero elements from LHS/RHS.
+    for (unsigned i = 0; i != NumElts; ++i) {
+      int M = ShuffleMask[i];
+      if (M < 0) {
+        KnownUndef.setBit(i);
+      } else if (M < (int)NumElts) {
+        if (UndefLHS[M])
+          KnownUndef.setBit(i);
+        if (ZeroLHS[M])
+          KnownZero.setBit(i);
+      } else {
+        if (UndefRHS[M - NumElts])
+          KnownUndef.setBit(i);
+        if (ZeroRHS[M - NumElts])
+          KnownZero.setBit(i);
+      }
+    }
+    break;
+  }
+  case ISD::ADD:
+  case ISD::SUB:
+  case ISD::FADD:
+  case ISD::FSUB:
+  case ISD::FMUL:
+  case ISD::FDIV:
+  case ISD::FREM: {
+    APInt SrcUndef, SrcZero;
+    if (SimplifyDemandedVectorElts(Op.getOperand(1), DemandedElts, SrcUndef,
+                                   SrcZero, TLO, Depth + 1))
+      return true;
+    if (SimplifyDemandedVectorElts(Op.getOperand(0), DemandedElts, KnownUndef,
+                                   KnownZero, TLO, Depth + 1))
+      return true;
+    KnownZero &= SrcZero;
+    KnownUndef &= SrcUndef;
+    break;
+  }
+  case ISD::TRUNCATE:
+    if (SimplifyDemandedVectorElts(Op.getOperand(0), DemandedElts, KnownUndef,
+                                   KnownZero, TLO, Depth + 1))
+      return true;
+    break;
+  default: {
+    if (Op.getOpcode() >= ISD::BUILTIN_OP_END)
+      if (SimplifyDemandedVectorEltsForTargetNode(Op, DemandedElts, KnownUndef,
+                                                  KnownZero, TLO, Depth))
+        return true;
+    break;
+  }
+  }
+
+  assert((KnownUndef & KnownZero) == 0 && "Elements flagged as undef AND zero");
   return false;
 }
 
@@ -1316,6 +1791,31 @@ unsigned TargetLowering::ComputeNumSignBitsForTargetNode(SDValue Op,
   return 1;
 }
 
+bool TargetLowering::SimplifyDemandedVectorEltsForTargetNode(
+    SDValue Op, const APInt &DemandedElts, APInt &KnownUndef, APInt &KnownZero,
+    TargetLoweringOpt &TLO, unsigned Depth) const {
+  assert((Op.getOpcode() >= ISD::BUILTIN_OP_END ||
+          Op.getOpcode() == ISD::INTRINSIC_WO_CHAIN ||
+          Op.getOpcode() == ISD::INTRINSIC_W_CHAIN ||
+          Op.getOpcode() == ISD::INTRINSIC_VOID) &&
+         "Should use SimplifyDemandedVectorElts if you don't know whether Op"
+         " is a target node!");
+  return false;
+}
+
+bool TargetLowering::isKnownNeverNaNForTargetNode(SDValue Op,
+                                                  const SelectionDAG &DAG,
+                                                  bool SNaN,
+                                                  unsigned Depth) const {
+  assert((Op.getOpcode() >= ISD::BUILTIN_OP_END ||
+          Op.getOpcode() == ISD::INTRINSIC_WO_CHAIN ||
+          Op.getOpcode() == ISD::INTRINSIC_W_CHAIN ||
+          Op.getOpcode() == ISD::INTRINSIC_VOID) &&
+         "Should use isKnownNeverNaN if you don't know whether Op"
+         " is a target node!");
+  return false;
+}
+
 // FIXME: Ideally, this would use ISD::isConstantSplatVector(), but that must
 // work with truncating build vectors and vectors with elements of less than
 // 8 bits.
@@ -1351,16 +1851,6 @@ bool TargetLowering::isConstTrueVal(const SDNode *N) const {
   }
 
   llvm_unreachable("Invalid boolean contents");
-}
-
-SDValue TargetLowering::getConstTrueVal(SelectionDAG &DAG, EVT VT,
-                                        const SDLoc &DL) const {
-  unsigned ElementWidth = VT.getScalarSizeInBits();
-  APInt TrueInt =
-      getBooleanContents(VT) == TargetLowering::ZeroOrOneBooleanContent
-          ? APInt(ElementWidth, 1)
-          : APInt::getAllOnesValue(ElementWidth);
-  return DAG.getConstant(TrueInt, DL, VT);
 }
 
 bool TargetLowering::isConstFalseVal(const SDNode *N) const {
@@ -1466,6 +1956,103 @@ SDValue TargetLowering::simplifySetCCWithAnd(EVT VT, SDValue N0, SDValue N1,
   return SDValue();
 }
 
+/// There are multiple IR patterns that could be checking whether certain
+/// truncation of a signed number would be lossy or not. The pattern which is
+/// best at IR level, may not lower optimally. Thus, we want to unfold it.
+/// We are looking for the following pattern: (KeptBits is a constant)
+///   (add %x, (1 << (KeptBits-1))) srccond (1 << KeptBits)
+/// KeptBits won't be bitwidth(x), that will be constant-folded to true/false.
+/// KeptBits also can't be 1, that would have been folded to  %x dstcond 0
+/// We will unfold it into the natural trunc+sext pattern:
+///   ((%x << C) a>> C) dstcond %x
+/// Where  C = bitwidth(x) - KeptBits  and  C u< bitwidth(x)
+SDValue TargetLowering::optimizeSetCCOfSignedTruncationCheck(
+    EVT SCCVT, SDValue N0, SDValue N1, ISD::CondCode Cond, DAGCombinerInfo &DCI,
+    const SDLoc &DL) const {
+  // We must be comparing with a constant.
+  ConstantSDNode *C1;
+  if (!(C1 = dyn_cast<ConstantSDNode>(N1)))
+    return SDValue();
+
+  // N0 should be:  add %x, (1 << (KeptBits-1))
+  if (N0->getOpcode() != ISD::ADD)
+    return SDValue();
+
+  // And we must be 'add'ing a constant.
+  ConstantSDNode *C01;
+  if (!(C01 = dyn_cast<ConstantSDNode>(N0->getOperand(1))))
+    return SDValue();
+
+  SDValue X = N0->getOperand(0);
+  EVT XVT = X.getValueType();
+
+  // Validate constants ...
+
+  APInt I1 = C1->getAPIntValue();
+
+  ISD::CondCode NewCond;
+  if (Cond == ISD::CondCode::SETULT) {
+    NewCond = ISD::CondCode::SETEQ;
+  } else if (Cond == ISD::CondCode::SETULE) {
+    NewCond = ISD::CondCode::SETEQ;
+    // But need to 'canonicalize' the constant.
+    I1 += 1;
+  } else if (Cond == ISD::CondCode::SETUGT) {
+    NewCond = ISD::CondCode::SETNE;
+    // But need to 'canonicalize' the constant.
+    I1 += 1;
+  } else if (Cond == ISD::CondCode::SETUGE) {
+    NewCond = ISD::CondCode::SETNE;
+  } else
+    return SDValue();
+
+  APInt I01 = C01->getAPIntValue();
+
+  auto checkConstants = [&I1, &I01]() -> bool {
+    // Both of them must be power-of-two, and the constant from setcc is bigger.
+    return I1.ugt(I01) && I1.isPowerOf2() && I01.isPowerOf2();
+  };
+
+  if (checkConstants()) {
+    // Great, e.g. got  icmp ult i16 (add i16 %x, 128), 256
+  } else {
+    // What if we invert constants? (and the target predicate)
+    I1.negate();
+    I01.negate();
+    NewCond = getSetCCInverse(NewCond, /*isInteger=*/true);
+    if (!checkConstants())
+      return SDValue();
+    // Great, e.g. got  icmp uge i16 (add i16 %x, -128), -256
+  }
+
+  // They are power-of-two, so which bit is set?
+  const unsigned KeptBits = I1.logBase2();
+  const unsigned KeptBitsMinusOne = I01.logBase2();
+
+  // Magic!
+  if (KeptBits != (KeptBitsMinusOne + 1))
+    return SDValue();
+  assert(KeptBits > 0 && KeptBits < XVT.getSizeInBits() && "unreachable");
+
+  // We don't want to do this in every single case.
+  SelectionDAG &DAG = DCI.DAG;
+  if (!DAG.getTargetLoweringInfo().shouldTransformSignedTruncationCheck(
+          XVT, KeptBits))
+    return SDValue();
+
+  const unsigned MaskedBits = XVT.getSizeInBits() - KeptBits;
+  assert(MaskedBits > 0 && MaskedBits < XVT.getSizeInBits() && "unreachable");
+
+  // Unfold into:  ((%x << C) a>> C) cond %x
+  // Where 'cond' will be either 'eq' or 'ne'.
+  SDValue ShiftAmt = DAG.getConstant(MaskedBits, DL, XVT);
+  SDValue T0 = DAG.getNode(ISD::SHL, DL, XVT, X, ShiftAmt);
+  SDValue T1 = DAG.getNode(ISD::SRA, DL, XVT, T0, ShiftAmt);
+  SDValue T2 = DAG.getSetCC(DL, SCCVT, T1, X, NewCond);
+
+  return T2;
+}
+
 /// Try to simplify a setcc built with the specified operands and cc. If it is
 /// unable to simplify it, return a null SDValue.
 SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
@@ -1473,25 +2060,21 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
                                       DAGCombinerInfo &DCI,
                                       const SDLoc &dl) const {
   SelectionDAG &DAG = DCI.DAG;
+  EVT OpVT = N0.getValueType();
 
   // These setcc operations always fold.
   switch (Cond) {
   default: break;
   case ISD::SETFALSE:
-  case ISD::SETFALSE2: return DAG.getConstant(0, dl, VT);
+  case ISD::SETFALSE2: return DAG.getBoolConstant(false, dl, VT, OpVT);
   case ISD::SETTRUE:
-  case ISD::SETTRUE2: {
-    TargetLowering::BooleanContent Cnt =
-        getBooleanContents(N0->getValueType(0));
-    return DAG.getConstant(
-        Cnt == TargetLowering::ZeroOrNegativeOneBooleanContent ? -1ULL : 1, dl,
-        VT);
-  }
+  case ISD::SETTRUE2:  return DAG.getBoolConstant(true, dl, VT, OpVT);
   }
 
   // Ensure that the constant occurs on the RHS and fold constant comparisons.
+  // TODO: Handle non-splat vector constants. All undef causes trouble.
   ISD::CondCode SwappedCC = ISD::getSetCCSwappedOperands(Cond);
-  if (isa<ConstantSDNode>(N0.getNode()) &&
+  if (isConstOrConstSplat(N0) &&
       (DCI.isBeforeLegalizeOps() ||
        isCondCodeLegal(SwappedCC, N0.getSimpleValueType())))
     return DAG.getSetCC(dl, VT, N1, N0, SwappedCC);
@@ -1737,7 +2320,7 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
         EVT newVT = N0.getOperand(0).getValueType();
         if (DCI.isBeforeLegalizeOps() ||
             (isOperationLegal(ISD::SETCC, newVT) &&
-             getCondCodeAction(Cond, newVT.getSimpleVT()) == Legal)) {
+             isCondCodeLegal(Cond, newVT.getSimpleVT()))) {
           EVT NewSetCCVT =
               getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(), newVT);
           SDValue NewConst = DAG.getConstant(C1.trunc(InSize), dl, newVT);
@@ -1867,8 +2450,18 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
       }
     }
 
+    if (SDValue V =
+            optimizeSetCCOfSignedTruncationCheck(VT, N0, N1, Cond, DCI, dl))
+      return V;
+  }
+
+  // These simplifications apply to splat vectors as well.
+  // TODO: Handle more splat vector cases.
+  if (auto *N1C = isConstOrConstSplat(N1)) {
+    const APInt &C1 = N1C->getAPIntValue();
+
     APInt MinVal, MaxVal;
-    unsigned OperandBitSize = N1C->getValueType(0).getSizeInBits();
+    unsigned OperandBitSize = N1C->getValueType(0).getScalarSizeInBits();
     if (ISD::isSignedIntSetCC(Cond)) {
       MinVal = APInt::getSignedMinValue(OperandBitSize);
       MaxVal = APInt::getSignedMaxValue(OperandBitSize);
@@ -1881,84 +2474,105 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
     if (Cond == ISD::SETGE || Cond == ISD::SETUGE) {
       // X >= MIN --> true
       if (C1 == MinVal)
-        return DAG.getConstant(1, dl, VT);
+        return DAG.getBoolConstant(true, dl, VT, OpVT);
 
-      // X >= C0 --> X > (C0 - 1)
-      APInt C = C1 - 1;
-      ISD::CondCode NewCC = (Cond == ISD::SETGE) ? ISD::SETGT : ISD::SETUGT;
-      if ((DCI.isBeforeLegalizeOps() ||
-           isCondCodeLegal(NewCC, VT.getSimpleVT())) &&
-          (!N1C->isOpaque() || (N1C->isOpaque() && C.getBitWidth() <= 64 &&
-                                isLegalICmpImmediate(C.getSExtValue())))) {
-        return DAG.getSetCC(dl, VT, N0,
-                            DAG.getConstant(C, dl, N1.getValueType()),
-                            NewCC);
+      if (!VT.isVector()) { // TODO: Support this for vectors.
+        // X >= C0 --> X > (C0 - 1)
+        APInt C = C1 - 1;
+        ISD::CondCode NewCC = (Cond == ISD::SETGE) ? ISD::SETGT : ISD::SETUGT;
+        if ((DCI.isBeforeLegalizeOps() ||
+             isCondCodeLegal(NewCC, VT.getSimpleVT())) &&
+            (!N1C->isOpaque() || (C.getBitWidth() <= 64 &&
+                                  isLegalICmpImmediate(C.getSExtValue())))) {
+          return DAG.getSetCC(dl, VT, N0,
+                              DAG.getConstant(C, dl, N1.getValueType()),
+                              NewCC);
+        }
       }
     }
 
     if (Cond == ISD::SETLE || Cond == ISD::SETULE) {
       // X <= MAX --> true
       if (C1 == MaxVal)
-          return DAG.getConstant(1, dl, VT);
+        return DAG.getBoolConstant(true, dl, VT, OpVT);
 
       // X <= C0 --> X < (C0 + 1)
-      APInt C = C1 + 1;
-      ISD::CondCode NewCC = (Cond == ISD::SETLE) ? ISD::SETLT : ISD::SETULT;
-      if ((DCI.isBeforeLegalizeOps() ||
-           isCondCodeLegal(NewCC, VT.getSimpleVT())) &&
-          (!N1C->isOpaque() || (N1C->isOpaque() && C.getBitWidth() <= 64 &&
-                                isLegalICmpImmediate(C.getSExtValue())))) {
-        return DAG.getSetCC(dl, VT, N0,
-                            DAG.getConstant(C, dl, N1.getValueType()),
-                            NewCC);
+      if (!VT.isVector()) { // TODO: Support this for vectors.
+        APInt C = C1 + 1;
+        ISD::CondCode NewCC = (Cond == ISD::SETLE) ? ISD::SETLT : ISD::SETULT;
+        if ((DCI.isBeforeLegalizeOps() ||
+             isCondCodeLegal(NewCC, VT.getSimpleVT())) &&
+            (!N1C->isOpaque() || (C.getBitWidth() <= 64 &&
+                                  isLegalICmpImmediate(C.getSExtValue())))) {
+          return DAG.getSetCC(dl, VT, N0,
+                              DAG.getConstant(C, dl, N1.getValueType()),
+                              NewCC);
+        }
       }
     }
 
-    if ((Cond == ISD::SETLT || Cond == ISD::SETULT) && C1 == MinVal)
-      return DAG.getConstant(0, dl, VT);      // X < MIN --> false
-    if ((Cond == ISD::SETGE || Cond == ISD::SETUGE) && C1 == MinVal)
-      return DAG.getConstant(1, dl, VT);      // X >= MIN --> true
-    if ((Cond == ISD::SETGT || Cond == ISD::SETUGT) && C1 == MaxVal)
-      return DAG.getConstant(0, dl, VT);      // X > MAX --> false
-    if ((Cond == ISD::SETLE || Cond == ISD::SETULE) && C1 == MaxVal)
-      return DAG.getConstant(1, dl, VT);      // X <= MAX --> true
+    if (Cond == ISD::SETLT || Cond == ISD::SETULT) {
+      if (C1 == MinVal)
+        return DAG.getBoolConstant(false, dl, VT, OpVT); // X < MIN --> false
 
-    // Canonicalize setgt X, Min --> setne X, Min
-    if ((Cond == ISD::SETGT || Cond == ISD::SETUGT) && C1 == MinVal)
-      return DAG.getSetCC(dl, VT, N0, N1, ISD::SETNE);
-    // Canonicalize setlt X, Max --> setne X, Max
-    if ((Cond == ISD::SETLT || Cond == ISD::SETULT) && C1 == MaxVal)
-      return DAG.getSetCC(dl, VT, N0, N1, ISD::SETNE);
+      // TODO: Support this for vectors after legalize ops.
+      if (!VT.isVector() || DCI.isBeforeLegalizeOps()) {
+        // Canonicalize setlt X, Max --> setne X, Max
+        if (C1 == MaxVal)
+          return DAG.getSetCC(dl, VT, N0, N1, ISD::SETNE);
 
-    // If we have setult X, 1, turn it into seteq X, 0
-    if ((Cond == ISD::SETLT || Cond == ISD::SETULT) && C1 == MinVal+1)
-      return DAG.getSetCC(dl, VT, N0,
-                          DAG.getConstant(MinVal, dl, N0.getValueType()),
-                          ISD::SETEQ);
-    // If we have setugt X, Max-1, turn it into seteq X, Max
-    if ((Cond == ISD::SETGT || Cond == ISD::SETUGT) && C1 == MaxVal-1)
-      return DAG.getSetCC(dl, VT, N0,
-                          DAG.getConstant(MaxVal, dl, N0.getValueType()),
-                          ISD::SETEQ);
+        // If we have setult X, 1, turn it into seteq X, 0
+        if (C1 == MinVal+1)
+          return DAG.getSetCC(dl, VT, N0,
+                              DAG.getConstant(MinVal, dl, N0.getValueType()),
+                              ISD::SETEQ);
+      }
+    }
+
+    if (Cond == ISD::SETGT || Cond == ISD::SETUGT) {
+      if (C1 == MaxVal)
+        return DAG.getBoolConstant(false, dl, VT, OpVT); // X > MAX --> false
+
+      // TODO: Support this for vectors after legalize ops.
+      if (!VT.isVector() || DCI.isBeforeLegalizeOps()) {
+        // Canonicalize setgt X, Min --> setne X, Min
+        if (C1 == MinVal)
+          return DAG.getSetCC(dl, VT, N0, N1, ISD::SETNE);
+
+        // If we have setugt X, Max-1, turn it into seteq X, Max
+        if (C1 == MaxVal-1)
+          return DAG.getSetCC(dl, VT, N0,
+                              DAG.getConstant(MaxVal, dl, N0.getValueType()),
+                              ISD::SETEQ);
+      }
+    }
 
     // If we have "setcc X, C0", check to see if we can shrink the immediate
     // by changing cc.
+    // TODO: Support this for vectors after legalize ops.
+    if (!VT.isVector() || DCI.isBeforeLegalizeOps()) {
+      // SETUGT X, SINTMAX  -> SETLT X, 0
+      if (Cond == ISD::SETUGT &&
+          C1 == APInt::getSignedMaxValue(OperandBitSize))
+        return DAG.getSetCC(dl, VT, N0,
+                            DAG.getConstant(0, dl, N1.getValueType()),
+                            ISD::SETLT);
 
-    // SETUGT X, SINTMAX  -> SETLT X, 0
-    if (Cond == ISD::SETUGT &&
-        C1 == APInt::getSignedMaxValue(OperandBitSize))
-      return DAG.getSetCC(dl, VT, N0,
-                          DAG.getConstant(0, dl, N1.getValueType()),
-                          ISD::SETLT);
-
-    // SETULT X, SINTMIN  -> SETGT X, -1
-    if (Cond == ISD::SETULT &&
-        C1 == APInt::getSignedMinValue(OperandBitSize)) {
-      SDValue ConstMinusOne =
-          DAG.getConstant(APInt::getAllOnesValue(OperandBitSize), dl,
-                          N1.getValueType());
-      return DAG.getSetCC(dl, VT, N0, ConstMinusOne, ISD::SETGT);
+      // SETULT X, SINTMIN  -> SETGT X, -1
+      if (Cond == ISD::SETULT &&
+          C1 == APInt::getSignedMinValue(OperandBitSize)) {
+        SDValue ConstMinusOne =
+            DAG.getConstant(APInt::getAllOnesValue(OperandBitSize), dl,
+                            N1.getValueType());
+        return DAG.getSetCC(dl, VT, N0, ConstMinusOne, ISD::SETGT);
+      }
     }
+  }
+
+  // Back to non-vector simplifications.
+  // TODO: Can we do these for vector splats?
+  if (auto *N1C = dyn_cast<ConstantSDNode>(N1.getNode())) {
+    const APInt &C1 = N1C->getAPIntValue();
 
     // Fold bit comparisons when we can.
     if ((Cond == ISD::SETEQ || Cond == ISD::SETNE) &&
@@ -1967,9 +2581,8 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
         N0.getOpcode() == ISD::AND) {
       auto &DL = DAG.getDataLayout();
       if (auto *AndRHS = dyn_cast<ConstantSDNode>(N0.getOperand(1))) {
-        EVT ShiftTy = DCI.isBeforeLegalize()
-                          ? getPointerTy(DL)
-                          : getShiftAmountTy(N0.getValueType(), DL);
+        EVT ShiftTy = getShiftAmountTy(N0.getValueType(), DL,
+                                       !DCI.isBeforeLegalize());
         if (Cond == ISD::SETNE && C1 == 0) {// (X & 8) != 0  -->  (X & 8) >> 3
           // Perform the xform if the AND RHS is a single bit.
           if (AndRHS->getAPIntValue().isPowerOf2()) {
@@ -2001,9 +2614,8 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
           if ((-AndRHSC).isPowerOf2() && (AndRHSC & C1) == C1) {
             unsigned ShiftBits = AndRHSC.countTrailingZeros();
             auto &DL = DAG.getDataLayout();
-            EVT ShiftTy = DCI.isBeforeLegalize()
-                              ? getPointerTy(DL)
-                              : getShiftAmountTy(N0.getValueType(), DL);
+            EVT ShiftTy = getShiftAmountTy(N0.getValueType(), DL,
+                                           !DCI.isBeforeLegalize());
             EVT CmpTy = N0.getValueType();
             SDValue Shift = DAG.getNode(ISD::SRL, dl, CmpTy, N0.getOperand(0),
                                         DAG.getConstant(ShiftBits, dl,
@@ -2033,9 +2645,8 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
         if (ShiftBits && NewC.getMinSignedBits() <= 64 &&
           isLegalICmpImmediate(NewC.getSExtValue())) {
           auto &DL = DAG.getDataLayout();
-          EVT ShiftTy = DCI.isBeforeLegalize()
-                            ? getPointerTy(DL)
-                            : getShiftAmountTy(N0.getValueType(), DL);
+          EVT ShiftTy = getShiftAmountTy(N0.getValueType(), DL,
+                                         !DCI.isBeforeLegalize());
           EVT CmpTy = N0.getValueType();
           SDValue Shift = DAG.getNode(ISD::SRL, dl, CmpTy, N0,
                                       DAG.getConstant(ShiftBits, dl, ShiftTy));
@@ -2058,9 +2669,9 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
       switch (ISD::getUnorderedFlavor(Cond)) {
       default: llvm_unreachable("Unknown flavor!");
       case 0:  // Known false.
-        return DAG.getConstant(0, dl, VT);
+        return DAG.getBoolConstant(false, dl, VT, OpVT);
       case 1:  // Known true.
-        return DAG.getConstant(1, dl, VT);
+        return DAG.getBoolConstant(true, dl, VT, OpVT);
       case 2:  // Undefined.
         return DAG.getUNDEF(VT);
       }
@@ -2124,31 +2735,24 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
   if (N0 == N1) {
     // The sext(setcc()) => setcc() optimization relies on the appropriate
     // constant being emitted.
-    uint64_t EqVal = 0;
-    switch (getBooleanContents(N0.getValueType())) {
-    case UndefinedBooleanContent:
-    case ZeroOrOneBooleanContent:
-      EqVal = ISD::isTrueWhenEqual(Cond);
-      break;
-    case ZeroOrNegativeOneBooleanContent:
-      EqVal = ISD::isTrueWhenEqual(Cond) ? -1 : 0;
-      break;
-    }
+
+    bool EqTrue = ISD::isTrueWhenEqual(Cond);
 
     // We can always fold X == X for integer setcc's.
-    if (N0.getValueType().isInteger()) {
-      return DAG.getConstant(EqVal, dl, VT);
-    }
+    if (N0.getValueType().isInteger())
+      return DAG.getBoolConstant(EqTrue, dl, VT, OpVT);
+
     unsigned UOF = ISD::getUnorderedFlavor(Cond);
     if (UOF == 2)   // FP operators that are undefined on NaNs.
-      return DAG.getConstant(EqVal, dl, VT);
-    if (UOF == unsigned(ISD::isTrueWhenEqual(Cond)))
-      return DAG.getConstant(EqVal, dl, VT);
+      return DAG.getBoolConstant(EqTrue, dl, VT, OpVT);
+    if (UOF == unsigned(EqTrue))
+      return DAG.getBoolConstant(EqTrue, dl, VT, OpVT);
     // Otherwise, we can't fold it.  However, we can simplify it to SETUO/SETO
     // if it is not already.
     ISD::CondCode NewCond = UOF == 0 ? ISD::SETO : ISD::SETUO;
-    if (NewCond != Cond && (DCI.isBeforeLegalizeOps() ||
-          getCondCodeAction(NewCond, N0.getSimpleValueType()) == Legal))
+    if (NewCond != Cond &&
+        (DCI.isBeforeLegalizeOps() ||
+         isCondCodeLegal(NewCond, N0.getSimpleValueType())))
       return DAG.getSetCC(dl, VT, N0, N1, NewCond);
   }
 
@@ -2237,7 +2841,8 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
             SDValue SH = DAG.getNode(
                 ISD::SHL, dl, N1.getValueType(), N1,
                 DAG.getConstant(1, dl,
-                                getShiftAmountTy(N1.getValueType(), DL)));
+                                getShiftAmountTy(N1.getValueType(), DL,
+                                                 !DCI.isBeforeLegalize())));
             if (!DCI.isCalledByLegalizer())
               DCI.AddToWorklist(SH.getNode());
             return DAG.getSetCC(dl, VT, N0.getOperand(0), SH, Cond);
@@ -2262,7 +2867,8 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
           // X == (Z-X)  --> X<<1 == Z
           SDValue SH = DAG.getNode(
               ISD::SHL, dl, N1.getValueType(), N0,
-              DAG.getConstant(1, dl, getShiftAmountTy(N0.getValueType(), DL)));
+              DAG.getConstant(1, dl, getShiftAmountTy(N0.getValueType(), DL,
+                                                      !DCI.isBeforeLegalize())));
           if (!DCI.isCalledByLegalizer())
             DCI.AddToWorklist(SH.getNode());
           return DAG.getSetCC(dl, VT, SH, N1.getOperand(0), Cond);
@@ -2276,50 +2882,52 @@ SDValue TargetLowering::SimplifySetCC(EVT VT, SDValue N0, SDValue N1,
 
   // Fold away ALL boolean setcc's.
   SDValue Temp;
-  if (N0.getValueType() == MVT::i1 && foldBooleans) {
+  if (N0.getValueType().getScalarType() == MVT::i1 && foldBooleans) {
+    EVT OpVT = N0.getValueType();
     switch (Cond) {
     default: llvm_unreachable("Unknown integer setcc!");
     case ISD::SETEQ:  // X == Y  -> ~(X^Y)
-      Temp = DAG.getNode(ISD::XOR, dl, MVT::i1, N0, N1);
-      N0 = DAG.getNOT(dl, Temp, MVT::i1);
+      Temp = DAG.getNode(ISD::XOR, dl, OpVT, N0, N1);
+      N0 = DAG.getNOT(dl, Temp, OpVT);
       if (!DCI.isCalledByLegalizer())
         DCI.AddToWorklist(Temp.getNode());
       break;
     case ISD::SETNE:  // X != Y   -->  (X^Y)
-      N0 = DAG.getNode(ISD::XOR, dl, MVT::i1, N0, N1);
+      N0 = DAG.getNode(ISD::XOR, dl, OpVT, N0, N1);
       break;
     case ISD::SETGT:  // X >s Y   -->  X == 0 & Y == 1  -->  ~X & Y
     case ISD::SETULT: // X <u Y   -->  X == 0 & Y == 1  -->  ~X & Y
-      Temp = DAG.getNOT(dl, N0, MVT::i1);
-      N0 = DAG.getNode(ISD::AND, dl, MVT::i1, N1, Temp);
+      Temp = DAG.getNOT(dl, N0, OpVT);
+      N0 = DAG.getNode(ISD::AND, dl, OpVT, N1, Temp);
       if (!DCI.isCalledByLegalizer())
         DCI.AddToWorklist(Temp.getNode());
       break;
     case ISD::SETLT:  // X <s Y   --> X == 1 & Y == 0  -->  ~Y & X
     case ISD::SETUGT: // X >u Y   --> X == 1 & Y == 0  -->  ~Y & X
-      Temp = DAG.getNOT(dl, N1, MVT::i1);
-      N0 = DAG.getNode(ISD::AND, dl, MVT::i1, N0, Temp);
+      Temp = DAG.getNOT(dl, N1, OpVT);
+      N0 = DAG.getNode(ISD::AND, dl, OpVT, N0, Temp);
       if (!DCI.isCalledByLegalizer())
         DCI.AddToWorklist(Temp.getNode());
       break;
     case ISD::SETULE: // X <=u Y  --> X == 0 | Y == 1  -->  ~X | Y
     case ISD::SETGE:  // X >=s Y  --> X == 0 | Y == 1  -->  ~X | Y
-      Temp = DAG.getNOT(dl, N0, MVT::i1);
-      N0 = DAG.getNode(ISD::OR, dl, MVT::i1, N1, Temp);
+      Temp = DAG.getNOT(dl, N0, OpVT);
+      N0 = DAG.getNode(ISD::OR, dl, OpVT, N1, Temp);
       if (!DCI.isCalledByLegalizer())
         DCI.AddToWorklist(Temp.getNode());
       break;
     case ISD::SETUGE: // X >=u Y  --> X == 1 | Y == 0  -->  ~Y | X
     case ISD::SETLE:  // X <=s Y  --> X == 1 | Y == 0  -->  ~Y | X
-      Temp = DAG.getNOT(dl, N1, MVT::i1);
-      N0 = DAG.getNode(ISD::OR, dl, MVT::i1, N0, Temp);
+      Temp = DAG.getNOT(dl, N1, OpVT);
+      N0 = DAG.getNode(ISD::OR, dl, OpVT, N0, Temp);
       break;
     }
-    if (VT != MVT::i1) {
+    if (VT.getScalarType() != MVT::i1) {
       if (!DCI.isCalledByLegalizer())
         DCI.AddToWorklist(N0.getNode());
       // FIXME: If running after legalize, we probably can't do this.
-      N0 = DAG.getNode(ISD::ZERO_EXTEND, dl, VT, N0);
+      ISD::NodeType ExtendCode = getExtendForContent(getBooleanContents(OpVT));
+      N0 = DAG.getNode(ExtendCode, dl, VT, N0);
     }
     return N0;
   }
@@ -2928,59 +3536,90 @@ void TargetLowering::ComputeConstraintToUse(AsmOperandInfo &OpInfo,
   }
 }
 
-/// \brief Given an exact SDIV by a constant, create a multiplication
+/// Given an exact SDIV by a constant, create a multiplication
 /// with the multiplicative inverse of the constant.
-static SDValue BuildExactSDIV(const TargetLowering &TLI, SDValue Op1, APInt d,
+static SDValue BuildExactSDIV(const TargetLowering &TLI, SDNode *N,
                               const SDLoc &dl, SelectionDAG &DAG,
-                              std::vector<SDNode *> &Created) {
-  assert(d != 0 && "Division by zero!");
+                              SmallVectorImpl<SDNode *> &Created) {
+  SDValue Op0 = N->getOperand(0);
+  SDValue Op1 = N->getOperand(1);
+  EVT VT = N->getValueType(0);
+  EVT SVT = VT.getScalarType();
+  EVT ShVT = TLI.getShiftAmountTy(VT, DAG.getDataLayout());
+  EVT ShSVT = ShVT.getScalarType();
 
-  // Shift the value upfront if it is even, so the LSB is one.
-  unsigned ShAmt = d.countTrailingZeros();
-  if (ShAmt) {
-    // TODO: For UDIV use SRL instead of SRA.
-    SDValue Amt =
-        DAG.getConstant(ShAmt, dl, TLI.getShiftAmountTy(Op1.getValueType(),
-                                                        DAG.getDataLayout()));
-    SDNodeFlags Flags;
-    Flags.setExact(true);
-    Op1 = DAG.getNode(ISD::SRA, dl, Op1.getValueType(), Op1, Amt, Flags);
-    Created.push_back(Op1.getNode());
-    d.ashrInPlace(ShAmt);
+  bool UseSRA = false;
+  SmallVector<SDValue, 16> Shifts, Factors;
+
+  auto BuildSDIVPattern = [&](ConstantSDNode *C) {
+    if (C->isNullValue())
+      return false;
+    APInt Divisor = C->getAPIntValue();
+    unsigned Shift = Divisor.countTrailingZeros();
+    if (Shift) {
+      Divisor.ashrInPlace(Shift);
+      UseSRA = true;
+    }
+    // Calculate the multiplicative inverse, using Newton's method.
+    APInt t;
+    APInt Factor = Divisor;
+    while ((t = Divisor * Factor) != 1)
+      Factor *= APInt(Divisor.getBitWidth(), 2) - t;
+    Shifts.push_back(DAG.getConstant(Shift, dl, ShSVT));
+    Factors.push_back(DAG.getConstant(Factor, dl, SVT));
+    return true;
+  };
+
+  // Collect all magic values from the build vector.
+  if (!ISD::matchUnaryPredicate(Op1, BuildSDIVPattern))
+    return SDValue();
+
+  SDValue Shift, Factor;
+  if (VT.isVector()) {
+    Shift = DAG.getBuildVector(ShVT, dl, Shifts);
+    Factor = DAG.getBuildVector(VT, dl, Factors);
+  } else {
+    Shift = Shifts[0];
+    Factor = Factors[0];
   }
 
-  // Calculate the multiplicative inverse, using Newton's method.
-  APInt t, xn = d;
-  while ((t = d*xn) != 1)
-    xn *= APInt(d.getBitWidth(), 2) - t;
+  SDValue Res = Op0;
 
-  SDValue Op2 = DAG.getConstant(xn, dl, Op1.getValueType());
-  SDValue Mul = DAG.getNode(ISD::MUL, dl, Op1.getValueType(), Op1, Op2);
-  Created.push_back(Mul.getNode());
-  return Mul;
+  // Shift the value upfront if it is even, so the LSB is one.
+  if (UseSRA) {
+    // TODO: For UDIV use SRL instead of SRA.
+    SDNodeFlags Flags;
+    Flags.setExact(true);
+    Res = DAG.getNode(ISD::SRA, dl, VT, Res, Shift, Flags);
+    Created.push_back(Res.getNode());
+  }
+
+  return DAG.getNode(ISD::MUL, dl, VT, Res, Factor);
 }
 
 SDValue TargetLowering::BuildSDIVPow2(SDNode *N, const APInt &Divisor,
-                                      SelectionDAG &DAG,
-                                      std::vector<SDNode *> *Created) const {
-  AttributeList Attr = DAG.getMachineFunction().getFunction()->getAttributes();
+                                     SelectionDAG &DAG,
+                                     SmallVectorImpl<SDNode *> &Created) const {
+  AttributeList Attr = DAG.getMachineFunction().getFunction().getAttributes();
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   if (TLI.isIntDivCheap(N->getValueType(0), Attr))
     return SDValue(N,0); // Lower SDIV as SDIV
   return SDValue();
 }
 
-/// \brief Given an ISD::SDIV node expressing a divide by constant,
+/// Given an ISD::SDIV node expressing a divide by constant,
 /// return a DAG expression to select that will generate the same value by
 /// multiplying by a magic number.
 /// Ref: "Hacker's Delight" or "The PowerPC Compiler Writer's Guide".
-SDValue TargetLowering::BuildSDIV(SDNode *N, const APInt &Divisor,
-                                  SelectionDAG &DAG, bool IsAfterLegalization,
-                                  std::vector<SDNode *> *Created) const {
-  assert(Created && "No vector to hold sdiv ops.");
-
-  EVT VT = N->getValueType(0);
+SDValue TargetLowering::BuildSDIV(SDNode *N, SelectionDAG &DAG,
+                                  bool IsAfterLegalization,
+                                  SmallVectorImpl<SDNode *> &Created) const {
   SDLoc dl(N);
+  EVT VT = N->getValueType(0);
+  EVT SVT = VT.getScalarType();
+  EVT ShVT = getShiftAmountTy(VT, DAG.getDataLayout());
+  EVT ShSVT = ShVT.getScalarType();
+  unsigned EltBits = VT.getScalarSizeInBits();
 
   // Check to see if we can do this.
   // FIXME: We should be more aggressive here.
@@ -2989,123 +3628,225 @@ SDValue TargetLowering::BuildSDIV(SDNode *N, const APInt &Divisor,
 
   // If the sdiv has an 'exact' bit we can use a simpler lowering.
   if (N->getFlags().hasExact())
-    return BuildExactSDIV(*this, N->getOperand(0), Divisor, dl, DAG, *Created);
+    return BuildExactSDIV(*this, N, dl, DAG, Created);
 
-  APInt::ms magics = Divisor.magic();
+  SmallVector<SDValue, 16> MagicFactors, Factors, Shifts, ShiftMasks;
 
-  // Multiply the numerator (operand 0) by the magic value
-  // FIXME: We should support doing a MUL in a wider type
+  auto BuildSDIVPattern = [&](ConstantSDNode *C) {
+    if (C->isNullValue())
+      return false;
+
+    const APInt &Divisor = C->getAPIntValue();
+    APInt::ms magics = Divisor.magic();
+    int NumeratorFactor = 0;
+    int ShiftMask = -1;
+
+    if (Divisor.isOneValue() || Divisor.isAllOnesValue()) {
+      // If d is +1/-1, we just multiply the numerator by +1/-1.
+      NumeratorFactor = Divisor.getSExtValue();
+      magics.m = 0;
+      magics.s = 0;
+      ShiftMask = 0;
+    } else if (Divisor.isStrictlyPositive() && magics.m.isNegative()) {
+      // If d > 0 and m < 0, add the numerator.
+      NumeratorFactor = 1;
+    } else if (Divisor.isNegative() && magics.m.isStrictlyPositive()) {
+      // If d < 0 and m > 0, subtract the numerator.
+      NumeratorFactor = -1;
+    }
+
+    MagicFactors.push_back(DAG.getConstant(magics.m, dl, SVT));
+    Factors.push_back(DAG.getConstant(NumeratorFactor, dl, SVT));
+    Shifts.push_back(DAG.getConstant(magics.s, dl, ShSVT));
+    ShiftMasks.push_back(DAG.getConstant(ShiftMask, dl, SVT));
+    return true;
+  };
+
+  SDValue N0 = N->getOperand(0);
+  SDValue N1 = N->getOperand(1);
+
+  // Collect the shifts / magic values from each element.
+  if (!ISD::matchUnaryPredicate(N1, BuildSDIVPattern))
+    return SDValue();
+
+  SDValue MagicFactor, Factor, Shift, ShiftMask;
+  if (VT.isVector()) {
+    MagicFactor = DAG.getBuildVector(VT, dl, MagicFactors);
+    Factor = DAG.getBuildVector(VT, dl, Factors);
+    Shift = DAG.getBuildVector(ShVT, dl, Shifts);
+    ShiftMask = DAG.getBuildVector(VT, dl, ShiftMasks);
+  } else {
+    MagicFactor = MagicFactors[0];
+    Factor = Factors[0];
+    Shift = Shifts[0];
+    ShiftMask = ShiftMasks[0];
+  }
+
+  // Multiply the numerator (operand 0) by the magic value.
+  // FIXME: We should support doing a MUL in a wider type.
   SDValue Q;
-  if (IsAfterLegalization ? isOperationLegal(ISD::MULHS, VT) :
-                            isOperationLegalOrCustom(ISD::MULHS, VT))
-    Q = DAG.getNode(ISD::MULHS, dl, VT, N->getOperand(0),
-                    DAG.getConstant(magics.m, dl, VT));
-  else if (IsAfterLegalization ? isOperationLegal(ISD::SMUL_LOHI, VT) :
-                                 isOperationLegalOrCustom(ISD::SMUL_LOHI, VT))
-    Q = SDValue(DAG.getNode(ISD::SMUL_LOHI, dl, DAG.getVTList(VT, VT),
-                              N->getOperand(0),
-                              DAG.getConstant(magics.m, dl, VT)).getNode(), 1);
-  else
-    return SDValue();       // No mulhs or equvialent
-  // If d > 0 and m < 0, add the numerator
-  if (Divisor.isStrictlyPositive() && magics.m.isNegative()) {
-    Q = DAG.getNode(ISD::ADD, dl, VT, Q, N->getOperand(0));
-    Created->push_back(Q.getNode());
-  }
-  // If d < 0 and m > 0, subtract the numerator.
-  if (Divisor.isNegative() && magics.m.isStrictlyPositive()) {
-    Q = DAG.getNode(ISD::SUB, dl, VT, Q, N->getOperand(0));
-    Created->push_back(Q.getNode());
-  }
-  auto &DL = DAG.getDataLayout();
-  // Shift right algebraic if shift value is nonzero
-  if (magics.s > 0) {
-    Q = DAG.getNode(
-        ISD::SRA, dl, VT, Q,
-        DAG.getConstant(magics.s, dl, getShiftAmountTy(Q.getValueType(), DL)));
-    Created->push_back(Q.getNode());
-  }
-  // Extract the sign bit and add it to the quotient
-  SDValue T =
-      DAG.getNode(ISD::SRL, dl, VT, Q,
-                  DAG.getConstant(VT.getScalarSizeInBits() - 1, dl,
-                                  getShiftAmountTy(Q.getValueType(), DL)));
-  Created->push_back(T.getNode());
+  if (IsAfterLegalization ? isOperationLegal(ISD::MULHS, VT)
+                          : isOperationLegalOrCustom(ISD::MULHS, VT))
+    Q = DAG.getNode(ISD::MULHS, dl, VT, N0, MagicFactor);
+  else if (IsAfterLegalization ? isOperationLegal(ISD::SMUL_LOHI, VT)
+                               : isOperationLegalOrCustom(ISD::SMUL_LOHI, VT)) {
+    SDValue LoHi =
+        DAG.getNode(ISD::SMUL_LOHI, dl, DAG.getVTList(VT, VT), N0, MagicFactor);
+    Q = SDValue(LoHi.getNode(), 1);
+  } else
+    return SDValue(); // No mulhs or equivalent.
+  Created.push_back(Q.getNode());
+
+  // (Optionally) Add/subtract the numerator using Factor.
+  Factor = DAG.getNode(ISD::MUL, dl, VT, N0, Factor);
+  Created.push_back(Factor.getNode());
+  Q = DAG.getNode(ISD::ADD, dl, VT, Q, Factor);
+  Created.push_back(Q.getNode());
+
+  // Shift right algebraic by shift value.
+  Q = DAG.getNode(ISD::SRA, dl, VT, Q, Shift);
+  Created.push_back(Q.getNode());
+
+  // Extract the sign bit, mask it and add it to the quotient.
+  SDValue SignShift = DAG.getConstant(EltBits - 1, dl, ShVT);
+  SDValue T = DAG.getNode(ISD::SRL, dl, VT, Q, SignShift);
+  Created.push_back(T.getNode());
+  T = DAG.getNode(ISD::AND, dl, VT, T, ShiftMask);
+  Created.push_back(T.getNode());
   return DAG.getNode(ISD::ADD, dl, VT, Q, T);
 }
 
-/// \brief Given an ISD::UDIV node expressing a divide by constant,
+/// Given an ISD::UDIV node expressing a divide by constant,
 /// return a DAG expression to select that will generate the same value by
 /// multiplying by a magic number.
 /// Ref: "Hacker's Delight" or "The PowerPC Compiler Writer's Guide".
-SDValue TargetLowering::BuildUDIV(SDNode *N, const APInt &Divisor,
-                                  SelectionDAG &DAG, bool IsAfterLegalization,
-                                  std::vector<SDNode *> *Created) const {
-  assert(Created && "No vector to hold udiv ops.");
-
-  EVT VT = N->getValueType(0);
+SDValue TargetLowering::BuildUDIV(SDNode *N, SelectionDAG &DAG,
+                                  bool IsAfterLegalization,
+                                  SmallVectorImpl<SDNode *> &Created) const {
   SDLoc dl(N);
-  auto &DL = DAG.getDataLayout();
+  EVT VT = N->getValueType(0);
+  EVT SVT = VT.getScalarType();
+  EVT ShVT = getShiftAmountTy(VT, DAG.getDataLayout());
+  EVT ShSVT = ShVT.getScalarType();
+  unsigned EltBits = VT.getScalarSizeInBits();
 
   // Check to see if we can do this.
   // FIXME: We should be more aggressive here.
   if (!isTypeLegal(VT))
     return SDValue();
 
-  // FIXME: We should use a narrower constant when the upper
-  // bits are known to be zero.
-  APInt::mu magics = Divisor.magicu();
+  bool UseNPQ = false;
+  SmallVector<SDValue, 16> PreShifts, PostShifts, MagicFactors, NPQFactors;
 
-  SDValue Q = N->getOperand(0);
+  auto BuildUDIVPattern = [&](ConstantSDNode *C) {
+    if (C->isNullValue())
+      return false;
+    // FIXME: We should use a narrower constant when the upper
+    // bits are known to be zero.
+    APInt Divisor = C->getAPIntValue();
+    APInt::mu magics = Divisor.magicu();
+    unsigned PreShift = 0, PostShift = 0;
 
-  // If the divisor is even, we can avoid using the expensive fixup by shifting
-  // the divided value upfront.
-  if (magics.a != 0 && !Divisor[0]) {
-    unsigned Shift = Divisor.countTrailingZeros();
-    Q = DAG.getNode(
-        ISD::SRL, dl, VT, Q,
-        DAG.getConstant(Shift, dl, getShiftAmountTy(Q.getValueType(), DL)));
-    Created->push_back(Q.getNode());
+    // If the divisor is even, we can avoid using the expensive fixup by
+    // shifting the divided value upfront.
+    if (magics.a != 0 && !Divisor[0]) {
+      PreShift = Divisor.countTrailingZeros();
+      // Get magic number for the shifted divisor.
+      magics = Divisor.lshr(PreShift).magicu(PreShift);
+      assert(magics.a == 0 && "Should use cheap fixup now");
+    }
 
-    // Get magic number for the shifted divisor.
-    magics = Divisor.lshr(Shift).magicu(Shift);
-    assert(magics.a == 0 && "Should use cheap fixup now");
-  }
+    APInt Magic = magics.m;
 
-  // Multiply the numerator (operand 0) by the magic value
-  // FIXME: We should support doing a MUL in a wider type
-  if (IsAfterLegalization ? isOperationLegal(ISD::MULHU, VT) :
-                            isOperationLegalOrCustom(ISD::MULHU, VT))
-    Q = DAG.getNode(ISD::MULHU, dl, VT, Q, DAG.getConstant(magics.m, dl, VT));
-  else if (IsAfterLegalization ? isOperationLegal(ISD::UMUL_LOHI, VT) :
-                                 isOperationLegalOrCustom(ISD::UMUL_LOHI, VT))
-    Q = SDValue(DAG.getNode(ISD::UMUL_LOHI, dl, DAG.getVTList(VT, VT), Q,
-                            DAG.getConstant(magics.m, dl, VT)).getNode(), 1);
-  else
-    return SDValue();       // No mulhu or equivalent
+    unsigned SelNPQ;
+    if (magics.a == 0 || Divisor.isOneValue()) {
+      assert(magics.s < Divisor.getBitWidth() &&
+             "We shouldn't generate an undefined shift!");
+      PostShift = magics.s;
+      SelNPQ = false;
+    } else {
+      PostShift = magics.s - 1;
+      SelNPQ = true;
+    }
 
-  Created->push_back(Q.getNode());
+    PreShifts.push_back(DAG.getConstant(PreShift, dl, ShSVT));
+    MagicFactors.push_back(DAG.getConstant(Magic, dl, SVT));
+    NPQFactors.push_back(
+        DAG.getConstant(SelNPQ ? APInt::getOneBitSet(EltBits, EltBits - 1)
+                               : APInt::getNullValue(EltBits),
+                        dl, SVT));
+    PostShifts.push_back(DAG.getConstant(PostShift, dl, ShSVT));
+    UseNPQ |= SelNPQ;
+    return true;
+  };
 
-  if (magics.a == 0) {
-    assert(magics.s < Divisor.getBitWidth() &&
-           "We shouldn't generate an undefined shift!");
-    return DAG.getNode(
-        ISD::SRL, dl, VT, Q,
-        DAG.getConstant(magics.s, dl, getShiftAmountTy(Q.getValueType(), DL)));
+  SDValue N0 = N->getOperand(0);
+  SDValue N1 = N->getOperand(1);
+
+  // Collect the shifts/magic values from each element.
+  if (!ISD::matchUnaryPredicate(N1, BuildUDIVPattern))
+    return SDValue();
+
+  SDValue PreShift, PostShift, MagicFactor, NPQFactor;
+  if (VT.isVector()) {
+    PreShift = DAG.getBuildVector(ShVT, dl, PreShifts);
+    MagicFactor = DAG.getBuildVector(VT, dl, MagicFactors);
+    NPQFactor = DAG.getBuildVector(VT, dl, NPQFactors);
+    PostShift = DAG.getBuildVector(ShVT, dl, PostShifts);
   } else {
-    SDValue NPQ = DAG.getNode(ISD::SUB, dl, VT, N->getOperand(0), Q);
-    Created->push_back(NPQ.getNode());
-    NPQ = DAG.getNode(
-        ISD::SRL, dl, VT, NPQ,
-        DAG.getConstant(1, dl, getShiftAmountTy(NPQ.getValueType(), DL)));
-    Created->push_back(NPQ.getNode());
-    NPQ = DAG.getNode(ISD::ADD, dl, VT, NPQ, Q);
-    Created->push_back(NPQ.getNode());
-    return DAG.getNode(
-        ISD::SRL, dl, VT, NPQ,
-        DAG.getConstant(magics.s - 1, dl,
-                        getShiftAmountTy(NPQ.getValueType(), DL)));
+    PreShift = PreShifts[0];
+    MagicFactor = MagicFactors[0];
+    PostShift = PostShifts[0];
   }
+
+  SDValue Q = N0;
+  Q = DAG.getNode(ISD::SRL, dl, VT, Q, PreShift);
+  Created.push_back(Q.getNode());
+
+  // FIXME: We should support doing a MUL in a wider type.
+  auto GetMULHU = [&](SDValue X, SDValue Y) {
+    if (IsAfterLegalization ? isOperationLegal(ISD::MULHU, VT)
+                            : isOperationLegalOrCustom(ISD::MULHU, VT))
+      return DAG.getNode(ISD::MULHU, dl, VT, X, Y);
+    if (IsAfterLegalization ? isOperationLegal(ISD::UMUL_LOHI, VT)
+                            : isOperationLegalOrCustom(ISD::UMUL_LOHI, VT)) {
+      SDValue LoHi =
+          DAG.getNode(ISD::UMUL_LOHI, dl, DAG.getVTList(VT, VT), X, Y);
+      return SDValue(LoHi.getNode(), 1);
+    }
+    return SDValue(); // No mulhu or equivalent
+  };
+
+  // Multiply the numerator (operand 0) by the magic value.
+  Q = GetMULHU(Q, MagicFactor);
+  if (!Q)
+    return SDValue();
+
+  Created.push_back(Q.getNode());
+
+  if (UseNPQ) {
+    SDValue NPQ = DAG.getNode(ISD::SUB, dl, VT, N0, Q);
+    Created.push_back(NPQ.getNode());
+
+    // For vectors we might have a mix of non-NPQ/NPQ paths, so use
+    // MULHU to act as a SRL-by-1 for NPQ, else multiply by zero.
+    if (VT.isVector())
+      NPQ = GetMULHU(NPQ, NPQFactor);
+    else
+      NPQ = DAG.getNode(ISD::SRL, dl, VT, NPQ, DAG.getConstant(1, dl, ShVT));
+
+    Created.push_back(NPQ.getNode());
+
+    Q = DAG.getNode(ISD::ADD, dl, VT, NPQ, Q);
+    Created.push_back(Q.getNode());
+  }
+
+  Q = DAG.getNode(ISD::SRL, dl, VT, Q, PostShift);
+  Created.push_back(Q.getNode());
+
+  SDValue One = DAG.getConstant(1, dl, VT);
+  SDValue IsOne = DAG.getSetCC(dl, VT, N1, One, ISD::SETEQ);
+  return DAG.getSelect(dl, VT, IsOne, N0, Q);
 }
 
 bool TargetLowering::
@@ -3388,8 +4129,6 @@ SDValue TargetLowering::scalarizeVectorLoad(LoadSDNode *LD,
   unsigned Stride = SrcEltVT.getSizeInBits() / 8;
   assert(SrcEltVT.isByteSized());
 
-  EVT PtrVT = BasePTR.getValueType();
-
   SmallVector<SDValue, 8> Vals;
   SmallVector<SDValue, 8> LoadChains;
 
@@ -3400,8 +4139,7 @@ SDValue TargetLowering::scalarizeVectorLoad(LoadSDNode *LD,
                        SrcEltVT, MinAlign(LD->getAlignment(), Idx * Stride),
                        LD->getMemOperand()->getFlags(), LD->getAAInfo());
 
-    BasePTR = DAG.getNode(ISD::ADD, SL, PtrVT, BasePTR,
-                          DAG.getConstant(Stride, SL, PtrVT));
+    BasePTR = DAG.getObjectPtrOffset(SL, BasePTR, Stride);
 
     Vals.push_back(ScalarLoad.getValue(0));
     LoadChains.push_back(ScalarLoad.getValue(1));
@@ -3413,9 +4151,6 @@ SDValue TargetLowering::scalarizeVectorLoad(LoadSDNode *LD,
   return DAG.getMergeValues({ Value, NewChain }, SL);
 }
 
-// FIXME: This relies on each element having a byte size, otherwise the stride
-// is 0 and just overwrites the same location. ExpandStore currently expects
-// this broken behavior.
 SDValue TargetLowering::scalarizeVectorStore(StoreSDNode *ST,
                                              SelectionDAG &DAG) const {
   SDLoc SL(ST);
@@ -3432,13 +4167,43 @@ SDValue TargetLowering::scalarizeVectorStore(StoreSDNode *ST,
   // The type of data as saved in memory.
   EVT MemSclVT = StVT.getScalarType();
 
-  EVT PtrVT = BasePtr.getValueType();
-
-  // Store Stride in bytes
-  unsigned Stride = MemSclVT.getSizeInBits() / 8;
   EVT IdxVT = getVectorIdxTy(DAG.getDataLayout());
   unsigned NumElem = StVT.getVectorNumElements();
 
+  // A vector must always be stored in memory as-is, i.e. without any padding
+  // between the elements, since various code depend on it, e.g. in the
+  // handling of a bitcast of a vector type to int, which may be done with a
+  // vector store followed by an integer load. A vector that does not have
+  // elements that are byte-sized must therefore be stored as an integer
+  // built out of the extracted vector elements.
+  if (!MemSclVT.isByteSized()) {
+    unsigned NumBits = StVT.getSizeInBits();
+    EVT IntVT = EVT::getIntegerVT(*DAG.getContext(), NumBits);
+
+    SDValue CurrVal = DAG.getConstant(0, SL, IntVT);
+
+    for (unsigned Idx = 0; Idx < NumElem; ++Idx) {
+      SDValue Elt = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SL, RegSclVT, Value,
+                                DAG.getConstant(Idx, SL, IdxVT));
+      SDValue Trunc = DAG.getNode(ISD::TRUNCATE, SL, MemSclVT, Elt);
+      SDValue ExtElt = DAG.getNode(ISD::ZERO_EXTEND, SL, IntVT, Trunc);
+      unsigned ShiftIntoIdx =
+          (DAG.getDataLayout().isBigEndian() ? (NumElem - 1) - Idx : Idx);
+      SDValue ShiftAmount =
+          DAG.getConstant(ShiftIntoIdx * MemSclVT.getSizeInBits(), SL, IntVT);
+      SDValue ShiftedElt =
+          DAG.getNode(ISD::SHL, SL, IntVT, ExtElt, ShiftAmount);
+      CurrVal = DAG.getNode(ISD::OR, SL, IntVT, CurrVal, ShiftedElt);
+    }
+
+    return DAG.getStore(Chain, SL, CurrVal, BasePtr, ST->getPointerInfo(),
+                        ST->getAlignment(), ST->getMemOperand()->getFlags(),
+                        ST->getAAInfo());
+  }
+
+  // Store Stride in bytes
+  unsigned Stride = MemSclVT.getSizeInBits() / 8;
+  assert (Stride && "Zero stride!");
   // Extract each of the elements from the original vector and save them into
   // memory individually.
   SmallVector<SDValue, 8> Stores;
@@ -3446,8 +4211,7 @@ SDValue TargetLowering::scalarizeVectorStore(StoreSDNode *ST,
     SDValue Elt = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SL, RegSclVT, Value,
                               DAG.getConstant(Idx, SL, IdxVT));
 
-    SDValue Ptr = DAG.getNode(ISD::ADD, SL, PtrVT, BasePtr,
-                              DAG.getConstant(Idx * Stride, SL, PtrVT));
+    SDValue Ptr = DAG.getObjectPtrOffset(SL, BasePtr, Idx * Stride);
 
     // This scalar TruncStore may be illegal, but we legalize it later.
     SDValue Store = DAG.getTruncStore(
@@ -3471,12 +4235,16 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
   EVT LoadedVT = LD->getMemoryVT();
   SDLoc dl(LD);
   auto &MF = DAG.getMachineFunction();
+
   if (VT.isFloatingPoint() || VT.isVector()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), LoadedVT.getSizeInBits());
     if (isTypeLegal(intVT) && isTypeLegal(LoadedVT)) {
-      if (!isOperationLegalOrCustom(ISD::LOAD, intVT)) {
+      if (!isOperationLegalOrCustom(ISD::LOAD, intVT) &&
+          LoadedVT.isVector()) {
         // Scalarize the load and let the individual components be handled.
         SDValue Scalarized = scalarizeVectorLoad(LD, DAG);
+        if (Scalarized->getOpcode() == ISD::MERGE_VALUES)
+          return std::make_pair(Scalarized.getOperand(0), Scalarized.getOperand(1));
         return std::make_pair(Scalarized.getValue(0), Scalarized.getValue(1));
       }
 
@@ -3495,7 +4263,7 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     // Copy the value to a (aligned) stack slot using (unaligned) integer
     // loads and stores, then do a (aligned) load from the stack slot.
     MVT RegVT = getRegisterType(*DAG.getContext(), intVT);
-    unsigned LoadedBytes = LoadedVT.getSizeInBits() / 8;
+    unsigned LoadedBytes = LoadedVT.getStoreSize();
     unsigned RegBytes = RegVT.getSizeInBits() / 8;
     unsigned NumRegs = (LoadedBytes + RegBytes - 1) / RegBytes;
 
@@ -3525,9 +4293,9 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
           MachinePointerInfo::getFixedStack(MF, FrameIndex, Offset)));
       // Increment the pointers.
       Offset += RegBytes;
-      Ptr = DAG.getNode(ISD::ADD, dl, PtrVT, Ptr, PtrIncrement);
-      StackPtr = DAG.getNode(ISD::ADD, dl, StackPtrVT, StackPtr,
-                             StackPtrIncrement);
+
+      Ptr = DAG.getObjectPtrOffset(dl, Ptr, PtrIncrement);
+      StackPtr = DAG.getObjectPtrOffset(dl, StackPtr, StackPtrIncrement);
     }
 
     // The last copy may be partial.  Do an extending load.
@@ -3581,8 +4349,8 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     Lo = DAG.getExtLoad(ISD::ZEXTLOAD, dl, VT, Chain, Ptr, LD->getPointerInfo(),
                         NewLoadedVT, Alignment, LD->getMemOperand()->getFlags(),
                         LD->getAAInfo());
-    Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                      DAG.getConstant(IncrementSize, dl, Ptr.getValueType()));
+
+    Ptr = DAG.getObjectPtrOffset(dl, Ptr, IncrementSize);
     Hi = DAG.getExtLoad(HiExtType, dl, VT, Chain, Ptr,
                         LD->getPointerInfo().getWithOffset(IncrementSize),
                         NewLoadedVT, MinAlign(Alignment, IncrementSize),
@@ -3591,8 +4359,8 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     Hi = DAG.getExtLoad(HiExtType, dl, VT, Chain, Ptr, LD->getPointerInfo(),
                         NewLoadedVT, Alignment, LD->getMemOperand()->getFlags(),
                         LD->getAAInfo());
-    Ptr = DAG.getNode(ISD::ADD, dl, Ptr.getValueType(), Ptr,
-                      DAG.getConstant(IncrementSize, dl, Ptr.getValueType()));
+
+    Ptr = DAG.getObjectPtrOffset(dl, Ptr, IncrementSize);
     Lo = DAG.getExtLoad(ISD::ZEXTLOAD, dl, VT, Chain, Ptr,
                         LD->getPointerInfo().getWithOffset(IncrementSize),
                         NewLoadedVT, MinAlign(Alignment, IncrementSize),
@@ -3622,13 +4390,14 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
   EVT VT = Val.getValueType();
   int Alignment = ST->getAlignment();
   auto &MF = DAG.getMachineFunction();
+  EVT MemVT = ST->getMemoryVT();
 
   SDLoc dl(ST);
-  if (ST->getMemoryVT().isFloatingPoint() ||
-      ST->getMemoryVT().isVector()) {
+  if (MemVT.isFloatingPoint() || MemVT.isVector()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), VT.getSizeInBits());
     if (isTypeLegal(intVT)) {
-      if (!isOperationLegalOrCustom(ISD::STORE, intVT)) {
+      if (!isOperationLegalOrCustom(ISD::STORE, intVT) &&
+          MemVT.isVector()) {
         // Scalarize the store and let the individual components be handled.
         SDValue Result = scalarizeVectorStore(ST, DAG);
 
@@ -3650,7 +4419,7 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                       EVT::getIntegerVT(*DAG.getContext(),
                                         StoredVT.getSizeInBits()));
     EVT PtrVT = Ptr.getValueType();
-    unsigned StoredBytes = StoredVT.getSizeInBits() / 8;
+    unsigned StoredBytes = StoredVT.getStoreSize();
     unsigned RegBytes = RegVT.getSizeInBits() / 8;
     unsigned NumRegs = (StoredBytes + RegBytes - 1) / RegBytes;
 
@@ -3683,9 +4452,8 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                                     ST->getMemOperand()->getFlags()));
       // Increment the pointers.
       Offset += RegBytes;
-      StackPtr = DAG.getNode(ISD::ADD, dl, StackPtrVT,
-                             StackPtr, StackPtrIncrement);
-      Ptr = DAG.getNode(ISD::ADD, dl, PtrVT, Ptr, PtrIncrement);
+      StackPtr = DAG.getObjectPtrOffset(dl, StackPtr, StackPtrIncrement);
+      Ptr = DAG.getObjectPtrOffset(dl, Ptr, PtrIncrement);
     }
 
     // The last store may be partial.  Do a truncating store.  On big-endian
@@ -3731,9 +4499,7 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
                              Ptr, ST->getPointerInfo(), NewStoredVT, Alignment,
                              ST->getMemOperand()->getFlags());
 
-  EVT PtrVT = Ptr.getValueType();
-  Ptr = DAG.getNode(ISD::ADD, dl, PtrVT, Ptr,
-                    DAG.getConstant(IncrementSize, dl, PtrVT));
+  Ptr = DAG.getObjectPtrOffset(dl, Ptr, IncrementSize);
   Alignment = MinAlign(Alignment, IncrementSize);
   Store2 = DAG.getTruncStore(
       Chain, dl, DAG.getDataLayout().isLittleEndian() ? Hi : Lo, Ptr,
@@ -3772,7 +4538,7 @@ TargetLowering::IncrementMemoryAddress(SDValue Addr, SDValue Mask,
                                     AddrVT);
     Increment = DAG.getNode(ISD::MUL, DL, AddrVT, Increment, Scale);
   } else
-    Increment = DAG.getConstant(DataVT.getSizeInBits() / 8, DL, AddrVT);
+    Increment = DAG.getConstant(DataVT.getStoreSize(), DL, AddrVT);
 
   return DAG.getNode(ISD::ADD, DL, AddrVT, Addr, Increment);
 }
@@ -3802,7 +4568,7 @@ SDValue TargetLowering::getVectorElementPointer(SelectionDAG &DAG,
                                                 SDValue Index) const {
   SDLoc dl(Index);
   // Make sure the index type is big enough to compute in.
-  Index = DAG.getZExtOrTrunc(Index, dl, getPointerTy(DAG.getDataLayout()));
+  Index = DAG.getZExtOrTrunc(Index, dl, VecPtr.getValueType());
 
   EVT EltVT = VecVT.getVectorElementType();
 
@@ -3817,7 +4583,7 @@ SDValue TargetLowering::getVectorElementPointer(SelectionDAG &DAG,
 
   Index = DAG.getNode(ISD::MUL, dl, IdxVT, Index,
                       DAG.getConstant(EltSize, dl, IdxVT));
-  return DAG.getNode(ISD::ADD, dl, IdxVT, Index, VecPtr);
+  return DAG.getNode(ISD::ADD, dl, IdxVT, VecPtr, Index);
 }
 
 //===----------------------------------------------------------------------===//
@@ -3884,4 +4650,47 @@ SDValue TargetLowering::lowerCmpEqZeroToCtlzSrl(SDValue Op,
     }
   }
   return SDValue();
+}
+
+SDValue
+TargetLowering::getExpandedSignedSaturationAddition(SDNode *Node,
+                                                    SelectionDAG &DAG) const {
+  assert(Node->getOpcode() == ISD::SADDSAT &&
+         "Expected method to receive SADDSAT node.");
+  assert(Node->getNumOperands() == 2 &&
+         "Expected SADDSAT node to have 2 operands.");
+
+  SDLoc dl(Node);
+  SDValue LHS = Node->getOperand(0);
+  SDValue RHS = Node->getOperand(1);
+  assert(LHS.getValueType().isScalarInteger() &&
+         "Expected operands to be integers. Vector of int arguments should "
+         "already be unrolled.");
+  assert(RHS.getValueType().isScalarInteger() &&
+         "Expected operands to be integers. Vector of int arguments should "
+         "already be unrolled.");
+  assert(LHS.getValueType() == RHS.getValueType() &&
+         "Expected both operands of SADDSAT to be the same type");
+
+  unsigned BitWidth = LHS.getValueSizeInBits();
+  EVT ResultType = LHS.getValueType();
+  EVT BoolVT =
+      getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(), ResultType);
+  SDValue Result =
+      DAG.getNode(ISD::SADDO, dl, DAG.getVTList(ResultType, BoolVT), LHS, RHS);
+  SDValue Sum = Result.getValue(0);
+  SDValue Overflow = Result.getValue(1);
+
+  // SatMax -> Overflow && Sum < 0
+  // SatMin -> Overflow && Sum > 0
+  SDValue Zero = DAG.getConstant(0, dl, LHS.getValueType());
+
+  SDValue SumNeg = DAG.getSetCC(dl, BoolVT, Sum, Zero, ISD::SETLT);
+  APInt MinVal = APInt::getSignedMinValue(BitWidth);
+  APInt MaxVal = APInt::getSignedMaxValue(BitWidth);
+  SDValue SatMin = DAG.getConstant(MinVal, dl, ResultType);
+  SDValue SatMax = DAG.getConstant(MaxVal, dl, ResultType);
+
+  Result = DAG.getSelect(dl, ResultType, SumNeg, SatMax, SatMin);
+  return DAG.getSelect(dl, ResultType, Overflow, Result, Sum);
 }

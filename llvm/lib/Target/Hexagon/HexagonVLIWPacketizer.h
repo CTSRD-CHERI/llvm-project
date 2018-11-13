@@ -49,6 +49,8 @@ class HexagonPacketizerList : public VLIWPacketizerList {
   // schedule this instruction.
   bool FoundSequentialDependence;
 
+  bool MemShufDisabled = false;
+
   // Track MIs with ignored dependence.
   std::vector<MachineInstr*> IgnoreDepMIs;
 
@@ -57,18 +59,20 @@ class HexagonPacketizerList : public VLIWPacketizerList {
   bool PacketStalls = false;
 
 protected:
-  /// \brief A handle to the branch probability pass.
+  /// A handle to the branch probability pass.
   const MachineBranchProbabilityInfo *MBPI;
   const MachineLoopInfo *MLI;
 
 private:
   const HexagonInstrInfo *HII;
   const HexagonRegisterInfo *HRI;
+  const bool Minimal;
 
 public:
   HexagonPacketizerList(MachineFunction &MF, MachineLoopInfo &MLI,
                         AliasAnalysis *AA,
-                        const MachineBranchProbabilityInfo *MBPI);
+                        const MachineBranchProbabilityInfo *MBPI,
+                        bool Minimal);
 
   // initPacketizerState - initialize some internal flags.
   void initPacketizerState() override;
@@ -89,6 +93,7 @@ public:
   // and SUJ.
   bool isLegalToPruneDependencies(SUnit *SUI, SUnit *SUJ) override;
 
+  bool foundLSInPacket();
   MachineBasicBlock::iterator addToPacket(MachineInstr &MI) override;
   void endPacket(MachineBasicBlock *MBB,
                  MachineBasicBlock::iterator MI) override;
@@ -97,6 +102,12 @@ public:
   void unpacketizeSoloInstrs(MachineFunction &MF);
 
 protected:
+  bool getmemShufDisabled() {
+    return MemShufDisabled;
+  };
+  void setmemShufDisabled(bool val) {
+    MemShufDisabled = val;
+  };
   bool isCallDependent(const MachineInstr &MI, SDep::Kind DepType,
                        unsigned DepReg);
   bool promoteToDotCur(MachineInstr &MI, SDep::Kind DepType,

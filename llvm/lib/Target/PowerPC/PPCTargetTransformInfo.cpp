@@ -10,10 +10,10 @@
 #include "PPCTargetTransformInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/BasicTTIImpl.h"
+#include "llvm/CodeGen/CostTable.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Target/CostTable.h"
-#include "llvm/Target/TargetLowering.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "ppctti"
@@ -26,6 +26,11 @@ cl::desc("disable constant hoisting on PPC"), cl::init(false), cl::Hidden);
 static cl::opt<unsigned>
 CacheLineSize("ppc-loop-prefetch-cache-line", cl::Hidden, cl::init(64),
               cl::desc("The loop prefetch cache line size"));
+
+static cl::opt<bool>
+EnablePPCColdCC("ppc-enable-coldcc", cl::Hidden, cl::init(false),
+                cl::desc("Enable using coldcc calling conv for cold "
+                         "internal functions"));
 
 //===----------------------------------------------------------------------===//
 //
@@ -196,7 +201,7 @@ unsigned PPCTTIImpl::getUserCost(const User *U,
     std::pair<int, MVT> LT = TLI->getTypeLegalizationCost(DL, U->getType());
     return LT.first * BaseT::getUserCost(U, Operands);
   }
-  
+
   return BaseT::getUserCost(U, Operands);
 }
 
@@ -213,6 +218,14 @@ void PPCTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
   }
 
   BaseT::getUnrollingPreferences(L, SE, UP);
+}
+
+// This function returns true to allow using coldcc calling convention.
+// Returning true results in coldcc being used for functions which are cold at
+// all call sites when the callers of the functions are not calling any other
+// non coldcc functions.
+bool PPCTTIImpl::useColdCCForColdCall(Function &F) {
+  return EnablePPCColdCC;
 }
 
 bool PPCTTIImpl::enableAggressiveInterleaving(bool LoopHasReductions) {
@@ -460,7 +473,12 @@ int PPCTTIImpl::getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy,
                                            unsigned Factor,
                                            ArrayRef<unsigned> Indices,
                                            unsigned Alignment,
-                                           unsigned AddressSpace) {
+                                           unsigned AddressSpace,
+                                           bool IsMasked) {
+  if (IsMasked)
+    return BaseT::getInterleavedMemoryOpCost(Opcode, VecTy, Factor, Indices,
+                                             Alignment, AddressSpace, IsMasked);
+
   assert(isa<VectorType>(VecTy) &&
          "Expect a vector type for interleaved memory op");
 

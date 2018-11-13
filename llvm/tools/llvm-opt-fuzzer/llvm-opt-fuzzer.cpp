@@ -13,11 +13,9 @@
 
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
-#include "llvm/CodeGen/CommandFlags.h"
+#include "llvm/CodeGen/CommandFlags.inc"
 #include "llvm/FuzzMutate/FuzzerCLI.h"
 #include "llvm/FuzzMutate/IRMutator.h"
-#include "llvm/FuzzMutate/Operations.h"
-#include "llvm/FuzzMutate/Random.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/SourceMgr.h"
@@ -36,42 +34,6 @@ static cl::opt<std::string> PassPipeline(
 
 static std::unique_ptr<IRMutator> Mutator;
 static std::unique_ptr<TargetMachine> TM;
-
-// This function is mostly copied from the llvm-isel-fuzzer.
-// TODO: Move this into FuzzMutate library and reuse.
-static std::unique_ptr<Module> parseModule(const uint8_t *Data, size_t Size,
-                                           LLVMContext &Context) {
-
-  if (Size <= 1)
-    // We get bogus data given an empty corpus - just create a new module.
-    return llvm::make_unique<Module>("M", Context);
-
-  auto Buffer = MemoryBuffer::getMemBuffer(
-      StringRef(reinterpret_cast<const char *>(Data), Size), "Fuzzer input",
-      /*RequiresNullTerminator=*/false);
-
-  SMDiagnostic Err;
-  auto M = parseBitcodeFile(Buffer->getMemBufferRef(), Context);
-  if (Error E = M.takeError()) {
-    errs() << toString(std::move(E)) << "\n";
-    return nullptr;
-  }
-  return std::move(M.get());
-}
-
-// This function is copied from the llvm-isel-fuzzer.
-// TODO: Move this into FuzzMutate library and reuse.
-static size_t writeModule(const Module &M, uint8_t *Dest, size_t MaxSize) {
-  std::string Buf;
-  {
-    raw_string_ostream OS(Buf);
-    WriteBitcodeToFile(&M, OS);
-  }
-  if (Buf.size() > MaxSize)
-      return 0;
-  memcpy(Dest, Buf.data(), Buf.size());
-  return Buf.size();
-}
 
 std::unique_ptr<IRMutator> createOptMutator() {
   std::vector<TypeGetter> Types{
@@ -95,23 +57,49 @@ extern "C" LLVM_ATTRIBUTE_USED size_t LLVMFuzzerCustomMutator(
       "IR mutator should have been created during fuzzer initialization");
 
   LLVMContext Context;
-  auto M = parseModule(Data, Size, Context);
-  if (!M || verifyModule(*M, &errs())) {
+  auto M = parseAndVerify(Data, Size, Context);
+  if (!M) {
     errs() << "error: mutator input module is broken!\n";
     return 0;
   }
 
   Mutator->mutateModule(*M, Seed, Size, MaxSize);
 
-#ifndef NDEBUG
   if (verifyModule(*M, &errs())) {
     errs() << "mutation result doesn't pass verification\n";
+#ifndef NDEBUG
     M->dump();
-    abort();
-  }
 #endif
+    // Avoid adding incorrect test cases to the corpus.
+    return 0;
+  }
+  
+  std::string Buf;
+  {
+    raw_string_ostream OS(Buf);
+    WriteBitcodeToFile(*M, OS);
+  }
+  if (Buf.size() > MaxSize)
+    return 0;
+  
+  // There are some invariants which are not checked by the verifier in favor
+  // of having them checked by the parser. They may be considered as bugs in the
+  // verifier and should be fixed there. However until all of those are covered
+  // we want to check for them explicitly. Otherwise we will add incorrect input
+  // to the corpus and this is going to confuse the fuzzer which will start 
+  // exploration of the bitcode reader error handling code.
+  auto NewM = parseAndVerify(
+      reinterpret_cast<const uint8_t*>(Buf.data()), Buf.size(), Context);
+  if (!NewM) {
+    errs() << "mutator failed to re-read the module\n";
+#ifndef NDEBUG
+    M->dump();
+#endif
+    return 0;
+  }
 
-  return writeModule(*M, Data, MaxSize);
+  memcpy(Data, Buf.data(), Buf.size());
+  return Buf.size();
 }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
@@ -125,8 +113,8 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
   //
 
   LLVMContext Context;
-  auto M = parseModule(Data, Size, Context);
-  if (!M || verifyModule(*M, &errs())) {
+  auto M = parseAndVerify(Data, Size, Context);
+  if (!M) {
     errs() << "error: input module is broken!\n";
     return 0;
   }
@@ -204,6 +192,7 @@ extern "C" LLVM_ATTRIBUTE_USED int LLVMFuzzerInitialize(
   initializeAnalysis(Registry);
   initializeTransformUtils(Registry);
   initializeInstCombine(Registry);
+  initializeAggressiveInstCombine(Registry);
   initializeInstrumentation(Registry);
   initializeTarget(Registry);
 

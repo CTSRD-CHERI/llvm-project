@@ -16,6 +16,7 @@
 
 // CHECK: Module name: DependsOnModule
 // CHECK: Module map file: {{.*}}DependsOnModule.framework{{[/\\]}}module.map
+// CHECK: Imports module 'Module': {{.*}}Module.pcm
 
 // CHECK: Language options:
 // CHECK:   C99: Yes
@@ -43,6 +44,16 @@
 // CHECK:   Predefined macros:
 // CHECK:     -DBLARG
 // CHECK:     -DWIBBLE=WOBBLE
+// CHECK: Input file: {{.*}}DependsOnModulePrivate.h
+// CHECK-NEXT: Input file: {{.*}}Other.h
+// CHECK-NEXT: Input file: {{.*}}SubFramework.h
+// CHECK-NEXT: Input file: {{.*}}not_coroutines.h
+// CHECK-NEXT: Input file: {{.*}}not_cxx.h
+// CHECK-NEXT: Input file: {{.*}}other.h
+// CHECK-NEXT: Input file: {{.*}}module.map
+// CHECK-NEXT: Input file: {{.*}}DependsOnModule.h
+// CHECK-NEXT: Input file: {{.*}}module_private.map
+// CHECK-NEXT: Input file: {{.*}}module.map
 
 // CHECK: Diagnostic options:
 // CHECK:   IgnoreWarnings: Yes

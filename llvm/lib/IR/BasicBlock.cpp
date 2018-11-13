@@ -90,6 +90,24 @@ void BasicBlock::setParent(Function *parent) {
   InstList.setSymTabObject(&Parent, parent);
 }
 
+iterator_range<filter_iterator<BasicBlock::const_iterator,
+                               std::function<bool(const Instruction &)>>>
+BasicBlock::instructionsWithoutDebug() const {
+  std::function<bool(const Instruction &)> Fn = [](const Instruction &I) {
+    return !isa<DbgInfoIntrinsic>(I);
+  };
+  return make_filter_range(*this, Fn);
+}
+
+iterator_range<filter_iterator<BasicBlock::iterator,
+                               std::function<bool(Instruction &)>>>
+BasicBlock::instructionsWithoutDebug() {
+  std::function<bool(Instruction &)> Fn = [](Instruction &I) {
+    return !isa<DbgInfoIntrinsic>(I);
+  };
+  return make_filter_range(*this, Fn);
+}
+
 void BasicBlock::removeFromParent() {
   getParent()->getBasicBlockList().remove(getIterator());
 }
@@ -117,9 +135,10 @@ const Module *BasicBlock::getModule() const {
   return getParent()->getParent();
 }
 
-const TerminatorInst *BasicBlock::getTerminator() const {
-  if (InstList.empty()) return nullptr;
-  return dyn_cast<TerminatorInst>(&InstList.back());
+const Instruction *BasicBlock::getTerminator() const {
+  if (InstList.empty() || !InstList.back().isTerminator())
+    return nullptr;
+  return &InstList.back();
 }
 
 const CallInst *BasicBlock::getTerminatingMustTailCall() const {
@@ -264,7 +283,8 @@ const BasicBlock *BasicBlock::getUniqueSuccessor() const {
 }
 
 iterator_range<BasicBlock::phi_iterator> BasicBlock::phis() {
-  return make_range<phi_iterator>(dyn_cast<PHINode>(&front()), nullptr);
+  PHINode *P = empty() ? nullptr : dyn_cast<PHINode>(&*begin());
+  return make_range<phi_iterator>(P, nullptr);
 }
 
 /// This method is used to notify a BasicBlock that the
@@ -365,7 +385,7 @@ bool BasicBlock::isLegalToHoistInto() const {
   assert(Term->getNumSuccessors() > 0);
 
   // Instructions should not be hoisted across exception handling boundaries.
-  return !Term->isExceptional();
+  return !Term->isExceptionalTerminator();
 }
 
 /// This splits a basic block into two at the specified
@@ -418,12 +438,12 @@ BasicBlock *BasicBlock::splitBasicBlock(iterator I, const Twine &BBName) {
 }
 
 void BasicBlock::replaceSuccessorsPhiUsesWith(BasicBlock *New) {
-  TerminatorInst *TI = getTerminator();
+  Instruction *TI = getTerminator();
   if (!TI)
     // Cope with being called on a BasicBlock that doesn't have a terminator
     // yet. Clang's CodeGenFunction::EmitReturnBlock() likes to do this.
     return;
-  for (BasicBlock *Succ : TI->successors()) {
+  for (BasicBlock *Succ : successors(TI)) {
     // N.B. Succ might not be a complete BasicBlock, so don't assume
     // that it ends with a non-phi instruction.
     for (iterator II = Succ->begin(), IE = Succ->end(); II != IE; ++II) {
@@ -449,7 +469,7 @@ const LandingPadInst *BasicBlock::getLandingPadInst() const {
 }
 
 Optional<uint64_t> BasicBlock::getIrrLoopHeaderWeight() const {
-  const TerminatorInst *TI = getTerminator();
+  const Instruction *TI = getTerminator();
   if (MDNode *MDIrrLoopHeader =
       TI->getMetadata(LLVMContext::MD_irr_loop)) {
     MDString *MDName = cast<MDString>(MDIrrLoopHeader->getOperand(0));
@@ -459,4 +479,10 @@ Optional<uint64_t> BasicBlock::getIrrLoopHeaderWeight() const {
     }
   }
   return Optional<uint64_t>();
+}
+
+BasicBlock::iterator llvm::skipDebugIntrinsics(BasicBlock::iterator It) {
+  while (isa<DbgInfoIntrinsic>(It))
+    ++It;
+  return It;
 }

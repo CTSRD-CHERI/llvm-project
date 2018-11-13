@@ -21,6 +21,7 @@ VERSION {
         # "Normal" symbols.
         #
         omp_*;     # Standard OpenMP functions.
+        OMP_*;     # Standard OpenMP symbols.
 
         #
         # OMPT API
@@ -107,6 +108,8 @@ OMP_3.1 {
 } OMP_3.0;
 OMP_4.0 {
 } OMP_3.1;
+OMP_4.5 {
+} OMP_4.0;
 
 # sets up GCC GOMP_ version dependency chain
 GOMP_1.0 {
@@ -117,5 +120,7 @@ GOMP_3.0 {
 } GOMP_2.0;
 GOMP_4.0 {
 } GOMP_3.0;
+GOMP_4.5 {
+} GOMP_4.0;
 
 # end of file #

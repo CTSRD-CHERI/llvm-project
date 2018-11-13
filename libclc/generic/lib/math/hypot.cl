@@ -1,8 +1,7 @@
 #include <clc/clc.h>
 
-#ifdef cl_khr_fp64
-#pragma OPENCL EXTENSION cl_khr_fp64 : enable
-#endif
+#include <math/clc_hypot.h>
 
-#define __CLC_BODY <hypot.inc>
+#define __CLC_FUNC hypot
+#define __CLC_BODY <clc_sw_binary.inc>
 #include <clc/math/gentype.inc>

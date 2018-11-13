@@ -8,12 +8,41 @@
 //===----------------------------------------------------------------------===//
 
 #include "Logger.h"
+#include "llvm/Support/raw_ostream.h"
+#include <mutex>
 
-using namespace clang::clangd;
+namespace clang {
+namespace clangd {
 
-EmptyLogger &EmptyLogger::getInstance() {
-  static EmptyLogger Logger;
-  return Logger;
+namespace {
+Logger *L = nullptr;
+} // namespace
+
+LoggingSession::LoggingSession(clangd::Logger &Instance) {
+  assert(!L);
+  L = &Instance;
 }
 
-void EmptyLogger::log(const llvm::Twine &Message) {}
+LoggingSession::~LoggingSession() { L = nullptr; }
+
+void detail::log(Logger::Level Level,
+                 const llvm::formatv_object_base &Message) {
+  if (L)
+    L->log(Level, Message);
+  else {
+    static std::mutex Mu;
+    std::lock_guard<std::mutex> Guard(Mu);
+    llvm::errs() << Message << "\n";
+  }
+}
+
+const char *detail::debugType(const char *Filename) {
+  if (const char *Slash = strrchr(Filename, '/'))
+    return Slash + 1;
+  if (const char *Backslash = strrchr(Filename, '\\'))
+    return Backslash + 1;
+  return Filename;
+}
+
+} // namespace clangd
+} // namespace clang
