@@ -15,11 +15,8 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "lldb/Core/DataBufferHeap.h"
-#include "lldb/Core/DataExtractor.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Disassembler.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Expression/IRExecutionUnit.h"
@@ -30,9 +27,13 @@
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/ObjCLanguageRuntime.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/LLDBAssert.h"
+#include "lldb/Utility/Log.h"
 
 #include "lldb/../../source/Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
+#include "lldb/../../source/Plugins/ObjectFile/JIT/ObjectFileJIT.h"
 
 using namespace lldb_private;
 
@@ -50,7 +51,7 @@ IRExecutionUnit::IRExecutionUnit(std::unique_ptr<llvm::LLVMContext> &context_ap,
       m_reported_allocations(false) {}
 
 lldb::addr_t IRExecutionUnit::WriteNow(const uint8_t *bytes, size_t size,
-                                       Error &error) {
+                                       Status &error) {
   const bool zero_memory = false;
   lldb::addr_t allocation_process_addr =
       Malloc(size, 8, lldb::ePermissionsWritable | lldb::ePermissionsReadable,
@@ -62,7 +63,7 @@ lldb::addr_t IRExecutionUnit::WriteNow(const uint8_t *bytes, size_t size,
   WriteMemory(allocation_process_addr, bytes, size, error);
 
   if (!error.Success()) {
-    Error err;
+    Status err;
     Free(allocation_process_addr, err);
 
     return LLDB_INVALID_ADDRESS;
@@ -71,7 +72,7 @@ lldb::addr_t IRExecutionUnit::WriteNow(const uint8_t *bytes, size_t size,
   if (Log *log =
           lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_EXPRESSIONS)) {
     DataBufferHeap my_buffer(size, 0);
-    Error err;
+    Status err;
     ReadMemory(my_buffer.GetBytes(), allocation_process_addr, size, err);
 
     if (err.Success()) {
@@ -90,18 +91,18 @@ void IRExecutionUnit::FreeNow(lldb::addr_t allocation) {
   if (allocation == LLDB_INVALID_ADDRESS)
     return;
 
-  Error err;
+  Status err;
 
   Free(allocation, err);
 }
 
-Error IRExecutionUnit::DisassembleFunction(Stream &stream,
-                                           lldb::ProcessSP &process_wp) {
+Status IRExecutionUnit::DisassembleFunction(Stream &stream,
+                                            lldb::ProcessSP &process_wp) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_EXPRESSIONS));
 
   ExecutionContext exe_ctx(process_wp);
 
-  Error ret;
+  Status ret;
 
   ret.Clear();
 
@@ -152,7 +153,7 @@ Error IRExecutionUnit::DisassembleFunction(Stream &stream,
   lldb::DataBufferSP buffer_sp(new DataBufferHeap(func_range.second, 0));
 
   Process *process = exe_ctx.GetProcessPtr();
-  Error err;
+  Status err;
   process->ReadMemory(func_remote_addr, buffer_sp->GetBytes(),
                       buffer_sp->GetByteSize(), err);
 
@@ -203,7 +204,7 @@ Error IRExecutionUnit::DisassembleFunction(Stream &stream,
 
 static void ReportInlineAsmError(const llvm::SMDiagnostic &diagnostic,
                                  void *Context, unsigned LocCookie) {
-  Error *err = static_cast<Error *>(Context);
+  Status *err = static_cast<Status *>(Context);
 
   if (err && err->Success()) {
     err->SetErrorToGenericError();
@@ -216,7 +217,7 @@ void IRExecutionUnit::ReportSymbolLookupError(const ConstString &name) {
   m_failed_lookups.push_back(name);
 }
 
-void IRExecutionUnit::GetRunnableInfo(Error &error, lldb::addr_t &func_addr,
+void IRExecutionUnit::GetRunnableInfo(Status &error, lldb::addr_t &func_addr,
                                       lldb::addr_t &func_end) {
   lldb::ProcessSP process_sp(GetProcessWP().lock());
 
@@ -260,16 +261,12 @@ void IRExecutionUnit::GetRunnableInfo(Error &error, lldb::addr_t &func_addr,
 
   llvm::Triple triple(m_module->getTargetTriple());
   llvm::Reloc::Model relocModel;
-  llvm::CodeModel::Model codeModel;
 
   if (triple.isOSBinFormatELF()) {
     relocModel = llvm::Reloc::Static;
   } else {
     relocModel = llvm::Reloc::PIC_;
   }
-
-  // This will be small for 32-bit and large for 64-bit.
-  codeModel = llvm::CodeModel::JITDefault;
 
   m_module_ap->getContext().setInlineAsmDiagnosticHandler(ReportInlineAsmError,
                                                           &error);
@@ -281,9 +278,7 @@ void IRExecutionUnit::GetRunnableInfo(Error &error, lldb::addr_t &func_addr,
       .setRelocationModel(relocModel)
       .setMCJITMemoryManager(
           std::unique_ptr<MemoryManager>(new MemoryManager(*this)))
-      .setCodeModel(codeModel)
-      .setOptLevel(llvm::CodeGenOpt::Less)
-      .setUseOrcMCJITReplacement(true);
+      .setOptLevel(llvm::CodeGenOpt::Less);
 
   llvm::StringRef mArch;
   llvm::StringRef mCPU;
@@ -368,13 +363,10 @@ void IRExecutionUnit::GetRunnableInfo(Error &error, lldb::addr_t &func_addr,
   ReportAllocations(*m_execution_engine_ap);
 
   // We have to do this after calling ReportAllocations because for the MCJIT,
-  // getGlobalValueAddress
-  // will cause the JIT to perform all relocations.  That can only be done once,
-  // and has to happen
-  // after we do the remapping from local -> remote.
-  // That means we don't know the local address of the Variables, but we don't
-  // need that for anything,
-  // so that's okay.
+  // getGlobalValueAddress will cause the JIT to perform all relocations.  That
+  // can only be done once, and has to happen after we do the remapping from
+  // local -> remote. That means we don't know the local address of the
+  // Variables, but we don't need that for anything, so that's okay.
 
   std::function<void(llvm::GlobalValue &)> RegisterOneValue = [this](
       llvm::GlobalValue &val) {
@@ -385,8 +377,8 @@ void IRExecutionUnit::GetRunnableInfo(Error &error, lldb::addr_t &func_addr,
       lldb::addr_t remote_addr = GetRemoteAddressForLocal(var_ptr_addr);
 
       // This is a really unfortunae API that sometimes returns local addresses
-      // and sometimes returns remote addresses, based on whether
-      // the variable was relocated during ReportAllocations or not.
+      // and sometimes returns remote addresses, based on whether the variable
+      // was relocated during ReportAllocations or not.
 
       if (remote_addr == LLDB_INVALID_ADDRESS) {
         remote_addr = var_ptr_addr;
@@ -452,7 +444,7 @@ void IRExecutionUnit::GetRunnableInfo(Error &error, lldb::addr_t &func_addr,
 
     StreamString disassembly_stream;
 
-    Error err = DisassembleFunction(disassembly_stream, process_sp);
+    Status err = DisassembleFunction(disassembly_stream, process_sp);
 
     if (!err.Success()) {
       log->Printf("Couldn't disassemble function : %s",
@@ -467,7 +459,7 @@ void IRExecutionUnit::GetRunnableInfo(Error &error, lldb::addr_t &func_addr,
         record.dump(log);
 
         DataBufferHeap my_buffer(record.m_size, 0);
-        Error err;
+        Status err;
         ReadMemory(my_buffer.GetBytes(), record.m_process_address,
                    record.m_size, err);
 
@@ -590,33 +582,9 @@ lldb::SectionType IRExecutionUnit::GetSectionTypeFromSectionName(
       default:
         break;
       }
-    } else if (name.startswith("__apple_") || name.startswith(".apple_")) {
-#if 0
-            const uint32_t name_idx = name[0] == '_' ? 8 : 7;
-            llvm::StringRef apple_name(name.substr(name_idx));
-            switch (apple_name[0])
-            {
-                case 'n':
-                    if (apple_name.equals("names"))
-                        sect_type = lldb::eSectionTypeDWARFAppleNames;
-                    else if (apple_name.equals("namespac") || apple_name.equals("namespaces"))
-                        sect_type = lldb::eSectionTypeDWARFAppleNamespaces;
-                    break;
-                case 't':
-                    if (apple_name.equals("types"))
-                        sect_type = lldb::eSectionTypeDWARFAppleTypes;
-                    break;
-                case 'o':
-                    if (apple_name.equals("objc"))
-                        sect_type = lldb::eSectionTypeDWARFAppleObjC;
-                    break;
-                default:
-                    break;
-            }
-#else
+    } else if (name.startswith("__apple_") || name.startswith(".apple_"))
       sect_type = lldb::eSectionTypeInvalid;
-#endif
-    } else if (name.equals("__objc_imageinfo"))
+    else if (name.equals("__objc_imageinfo"))
       sect_type = lldb::eSectionTypeOther;
   }
   return sect_type;
@@ -643,7 +611,7 @@ uint8_t *IRExecutionUnit::MemoryManager::allocateCodeSection(
   }
 
   if (m_parent.m_reported_allocations) {
-    Error err;
+    Status err;
     lldb::ProcessSP process_sp =
         m_parent.GetBestExecutionContextScope()->CalculateProcess();
 
@@ -675,7 +643,7 @@ uint8_t *IRExecutionUnit::MemoryManager::allocateDataSection(
   }
 
   if (m_parent.m_reported_allocations) {
-    Error err;
+    Status err;
     lldb::ProcessSP process_sp =
         m_parent.GetBestExecutionContextScope()->CalculateProcess();
 
@@ -776,22 +744,9 @@ void IRExecutionUnit::CollectCandidateCPlusPlusNames(
       }
     }
 
-    // Maybe we're looking for a const symbol but the debug info told us it was
-    // const...
-    if (!strncmp(name.GetCString(), "_ZN", 3) &&
-        strncmp(name.GetCString(), "_ZNK", 4)) {
-      std::string fixed_scratch("_ZNK");
-      fixed_scratch.append(name.GetCString() + 3);
-      CPP_specs.push_back(ConstString(fixed_scratch.c_str()));
-    }
-
-    // Maybe we're looking for a static symbol but we thought it was global...
-    if (!strncmp(name.GetCString(), "_Z", 2) &&
-        strncmp(name.GetCString(), "_ZL", 3)) {
-      std::string fixed_scratch("_ZL");
-      fixed_scratch.append(name.GetCString() + 2);
-      CPP_specs.push_back(ConstString(fixed_scratch.c_str()));
-    }
+    std::set<ConstString> alternates;
+    CPlusPlusLanguage::FindAlternateFunctionManglings(name, alternates);
+    CPP_specs.insert(CPP_specs.end(), alternates.begin(), alternates.end());
   }
 }
 
@@ -925,8 +880,8 @@ lldb::addr_t IRExecutionUnit::FindInSymbols(
     if (get_external_load_address(load_address, sc_list, sc)) {
       return load_address;
     }
-    // if there are any searches we try after this, add an sc_list.Clear() in an
-    // "else" clause here
+    // if there are any searches we try after this, add an sc_list.Clear() in
+    // an "else" clause here
 
     if (best_internal_load_address != LLDB_INVALID_ADDRESS) {
       return best_internal_load_address;
@@ -1117,7 +1072,7 @@ IRExecutionUnit::GetRemoteRangeForLocal(lldb::addr_t local_address) {
 }
 
 bool IRExecutionUnit::CommitOneAllocation(lldb::ProcessSP &process_sp,
-                                          Error &error,
+                                          Status &error,
                                           AllocationRecord &record) {
   if (record.m_process_address != LLDB_INVALID_ADDRESS) {
     return true;
@@ -1128,6 +1083,7 @@ bool IRExecutionUnit::CommitOneAllocation(lldb::ProcessSP &process_sp,
   case lldb::eSectionTypeDWARFDebugAbbrev:
   case lldb::eSectionTypeDWARFDebugAddr:
   case lldb::eSectionTypeDWARFDebugAranges:
+  case lldb::eSectionTypeDWARFDebugCuIndex:
   case lldb::eSectionTypeDWARFDebugFrame:
   case lldb::eSectionTypeDWARFDebugInfo:
   case lldb::eSectionTypeDWARFDebugLine:
@@ -1142,6 +1098,7 @@ bool IRExecutionUnit::CommitOneAllocation(lldb::ProcessSP &process_sp,
   case lldb::eSectionTypeDWARFAppleTypes:
   case lldb::eSectionTypeDWARFAppleNamespaces:
   case lldb::eSectionTypeDWARFAppleObjC:
+  case lldb::eSectionTypeDWARFGNUDebugAltLink:
     error.Clear();
     break;
   default:
@@ -1158,7 +1115,7 @@ bool IRExecutionUnit::CommitOneAllocation(lldb::ProcessSP &process_sp,
 bool IRExecutionUnit::CommitAllocations(lldb::ProcessSP &process_sp) {
   bool ret = true;
 
-  lldb_private::Error err;
+  lldb_private::Status err;
 
   for (AllocationRecord &record : m_records) {
     ret = CommitOneAllocation(process_sp, err, record);
@@ -1202,7 +1159,7 @@ bool IRExecutionUnit::WriteData(lldb::ProcessSP &process_sp) {
   bool wrote_something = false;
   for (AllocationRecord &record : m_records) {
     if (record.m_process_address != LLDB_INVALID_ADDRESS) {
-      lldb_private::Error err;
+      lldb_private::Status err;
       WriteMemory(record.m_process_address, (uint8_t *)record.m_host_address,
                   record.m_size, err);
       if (err.Success())
@@ -1269,15 +1226,18 @@ bool IRExecutionUnit::GetArchitecture(lldb_private::ArchSpec &arch) {
 lldb::ModuleSP IRExecutionUnit::GetJITModule() {
   ExecutionContext exe_ctx(GetBestExecutionContextScope());
   Target *target = exe_ctx.GetTargetPtr();
-  if (target) {
-    lldb::ModuleSP jit_module_sp = lldb_private::Module::CreateJITModule(
-        std::static_pointer_cast<lldb_private::ObjectFileJITDelegate>(
-            shared_from_this()));
-    if (jit_module_sp) {
-      bool changed = false;
-      jit_module_sp->SetLoadAddress(*target, 0, true, changed);
-    }
-    return jit_module_sp;
-  }
-  return lldb::ModuleSP();
+  if (!target)
+    return nullptr;
+
+  auto Delegate = std::static_pointer_cast<lldb_private::ObjectFileJITDelegate>(
+      shared_from_this());
+
+  lldb::ModuleSP jit_module_sp =
+      lldb_private::Module::CreateModuleFromObjectFile<ObjectFileJIT>(Delegate);
+  if (!jit_module_sp)
+    return nullptr;
+
+  bool changed = false;
+  jit_module_sp->SetLoadAddress(*target, 0, true, changed);
+  return jit_module_sp;
 }

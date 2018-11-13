@@ -13,9 +13,9 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Core/Stream.h"
-#include "lldb/Core/StringList.h"
-#include "lldb/Interpreter/Args.h"
+#include "lldb/Interpreter/OptionArgParser.h"
+#include "lldb/Utility/Stream.h"
+#include "lldb/Utility/StringList.h"
 #include "llvm/ADT/STLExtras.h"
 
 using namespace lldb;
@@ -36,9 +36,9 @@ void OptionValueChar::DumpValue(const ExecutionContext *exe_ctx, Stream &strm,
   }
 }
 
-Error OptionValueChar::SetValueFromString(llvm::StringRef value,
-                                          VarSetOperationType op) {
-  Error error;
+Status OptionValueChar::SetValueFromString(llvm::StringRef value,
+                                           VarSetOperationType op) {
+  Status error;
   switch (op) {
   case eVarSetOperationClear:
     Clear();
@@ -47,7 +47,7 @@ Error OptionValueChar::SetValueFromString(llvm::StringRef value,
   case eVarSetOperationReplace:
   case eVarSetOperationAssign: {
     bool success = false;
-    char char_value = Args::StringToChar(value, '\0', &success);
+    char char_value = OptionArgParser::ToChar(value, '\0', &success);
     if (success) {
       m_current_value = char_value;
       m_value_was_set = true;

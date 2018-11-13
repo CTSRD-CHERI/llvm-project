@@ -18,10 +18,21 @@
 #include "sanitizer_common/sanitizer_flags.h"
 #include "sanitizer_common/sanitizer_flag_parser.h"
 
+#include <stdlib.h>
+
 namespace __ubsan {
 
 const char *MaybeCallUbsanDefaultOptions() {
   return (&__ubsan_default_options) ? __ubsan_default_options() : "";
+}
+
+static const char *GetFlag(const char *flag) {
+  // We cannot call getenv() from inside a preinit array initializer
+  if (SANITIZER_CAN_USE_PREINIT_ARRAY) {
+    return GetEnv(flag);
+  } else {
+    return getenv(flag);
+  }
 }
 
 Flags ubsan_flags;
@@ -45,6 +56,7 @@ void InitializeFlags() {
     CommonFlags cf;
     cf.CopyFrom(*common_flags());
     cf.print_summary = false;
+    cf.external_symbolizer_path = GetFlag("UBSAN_SYMBOLIZER_PATH");
     OverrideCommonFlags(cf);
   }
 
@@ -58,7 +70,7 @@ void InitializeFlags() {
   // Override from user-specified string.
   parser.ParseString(MaybeCallUbsanDefaultOptions());
   // Override from environment variable.
-  parser.ParseString(GetEnv("UBSAN_OPTIONS"));
+  parser.ParseString(GetFlag("UBSAN_OPTIONS"));
   InitializeCommonFlags();
   if (Verbosity()) ReportUnrecognizedFlags();
 
@@ -67,22 +79,8 @@ void InitializeFlags() {
 
 }  // namespace __ubsan
 
-extern "C" {
-
-#if !SANITIZER_SUPPORTS_WEAK_HOOKS
-SANITIZER_INTERFACE_ATTRIBUTE SANITIZER_WEAK_ATTRIBUTE
-const char *__ubsan_default_options() { return ""; }
-#endif
-
-#if SANITIZER_WINDOWS
-const char *__ubsan_default_default_options() { return ""; }
-# ifdef _WIN64
-#  pragma comment(linker, "/alternatename:__ubsan_default_options=__ubsan_default_default_options")
-# else
-#  pragma comment(linker, "/alternatename:___ubsan_default_options=___ubsan_default_default_options")
-# endif
-#endif
-
-}  // extern "C"
+SANITIZER_INTERFACE_WEAK_DEF(const char *, __ubsan_default_options, void) {
+  return "";
+}
 
 #endif  // CAN_SANITIZE_UB

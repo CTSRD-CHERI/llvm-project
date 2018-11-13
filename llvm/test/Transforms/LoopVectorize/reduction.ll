@@ -325,7 +325,7 @@ for.end:                                          ; preds = %for.body, %entry
 
 ; We can vectorize conditional reductions with multi-input phis.
 ; CHECK: reduction_conditional
-; CHECK: fadd <4 x float>
+; CHECK: fadd fast <4 x float>
 
 define float @reduction_conditional(float* %A, float* %B, float* %C, float %S) {
 entry:
@@ -492,4 +492,89 @@ for.body:
 exit:
   %inc.2 = add nsw i32 %inc511.1.inc4.1, 2
   ret i32 %inc.2
+}
+
+;CHECK-LABEL: @reduction_sum_multiuse(
+;CHECK: phi <4 x i32>
+;CHECK: load <4 x i32>
+;CHECK: add <4 x i32>
+;CHECK: shufflevector <4 x i32> %{{.*}}, <4 x i32> undef, <4 x i32> <i32 2, i32 3, i32 undef, i32 undef>
+;CHECK: add <4 x i32>
+;CHECK: shufflevector <4 x i32> %{{.*}}, <4 x i32> undef, <4 x i32> <i32 1, i32 undef, i32 undef, i32 undef>
+;CHECK: add <4 x i32>
+;CHECK: extractelement <4 x i32> %{{.*}}, i32 0
+;CHECK: %sum.lcssa = phi i32 [ %[[SCALAR:.*]], %.lr.ph ], [ %[[VECTOR:.*]], %middle.block ]
+;CHECK: %sum.copy = phi i32 [ %[[SCALAR]], %.lr.ph ], [ %[[VECTOR]], %middle.block ]
+;CHECK: ret i32
+define i32 @reduction_sum_multiuse(i32 %n, i32* noalias nocapture %A, i32* noalias nocapture %B) {
+  %1 = icmp sgt i32 %n, 0
+  br i1 %1, label %.lr.ph.preheader, label %end
+.lr.ph.preheader:                                 ; preds = %0
+  br label %.lr.ph
+
+.lr.ph:                                           ; preds = %0, %.lr.ph
+  %indvars.iv = phi i64 [ %indvars.iv.next, %.lr.ph ], [ 0, %.lr.ph.preheader ]
+  %sum.02 = phi i32 [ %9, %.lr.ph ], [ 0, %.lr.ph.preheader ]
+  %2 = getelementptr inbounds i32, i32* %A, i64 %indvars.iv
+  %3 = load i32, i32* %2, align 4
+  %4 = getelementptr inbounds i32, i32* %B, i64 %indvars.iv
+  %5 = load i32, i32* %4, align 4
+  %6 = trunc i64 %indvars.iv to i32
+  %7 = add i32 %sum.02, %6
+  %8 = add i32 %7, %3
+  %9 = add i32 %8, %5
+  %indvars.iv.next = add i64 %indvars.iv, 1
+  %lftr.wideiv = trunc i64 %indvars.iv.next to i32
+  %exitcond = icmp eq i32 %lftr.wideiv, %n
+  br i1 %exitcond, label %._crit_edge, label %.lr.ph
+
+._crit_edge:                                      ; preds = %.lr.ph, %0
+  %sum.lcssa = phi i32 [ %9, %.lr.ph ]
+  %sum.copy = phi i32 [ %9, %.lr.ph ]
+  br label %end
+
+end:
+  %f1 = phi i32 [ 0, %0 ], [ %sum.lcssa, %._crit_edge ]
+  %f2 = phi i32 [ 0, %0 ], [ %sum.copy, %._crit_edge ]
+  %final = add i32 %f1, %f2
+  ret i32 %final
+}
+
+; This looks like a predicated reduction, but it is a reset of the reduction
+; variable. We cannot vectorize this.
+; CHECK-LABEL: reduction_reset(
+; CHECK-NOT: <4 x i32>
+define void @reduction_reset(i32 %N, i32* nocapture readonly %arrayA, i32* nocapture %arrayB) { 
+entry:
+  %c4 = icmp sgt i32 %N, 0
+  br i1 %c4, label %.lr.ph.preheader, label %._crit_edge
+
+.lr.ph.preheader:                                 ; preds = %entry
+  %c5 = add i32 %N, -1
+  %wide.trip.count = zext i32 %N to i64
+  br label %.lr.ph
+
+.lr.ph:                                           ; preds = %.lr.ph, %.lr.ph.preheader
+  %indvars.iv = phi i64 [ 0, %.lr.ph.preheader ], [ %indvars.iv.next, %.lr.ph ]
+  %.017 = phi i32 [ 100, %.lr.ph.preheader ], [ %csel, %.lr.ph ]
+  %c6 = getelementptr inbounds i32, i32* %arrayA, i64 %indvars.iv
+  %c7 = load i32, i32* %c6, align 4
+  %c8 = icmp sgt i32 %c7, 0
+  %c9 = add nsw i32 %c7, %.017
+  %csel = select i1 %c8, i32 %c9, i32 0
+  %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
+  %exitcond = icmp eq i64 %indvars.iv.next, %wide.trip.count
+  br i1 %exitcond, label %._crit_edge.loopexit, label %.lr.ph
+
+._crit_edge.loopexit:                             ; preds = %.lr.ph
+  %csel.lcssa = phi i32 [ %csel, %.lr.ph ]
+  %phitmp19 = sext i32 %c5 to i64
+  br label %._crit_edge
+
+._crit_edge:                                      ; preds = %._crit_edge.loopexit, %entry
+  %.015.lcssa = phi i64 [ -1, %entry ], [ %phitmp19, %._crit_edge.loopexit ]
+  %.0.lcssa = phi i32 [ 100, %entry ], [ %csel.lcssa, %._crit_edge.loopexit ]
+  %c10 = getelementptr inbounds i32, i32* %arrayB, i64 %.015.lcssa
+  store i32 %.0.lcssa, i32* %c10, align 4
+  ret void
 }

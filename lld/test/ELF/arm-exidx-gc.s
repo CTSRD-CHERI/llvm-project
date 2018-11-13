@@ -1,8 +1,8 @@
+// REQUIRES: arm
 // RUN: llvm-mc -filetype=obj -triple=armv7a-none-linux-gnueabi %s -o %t
-// RUN: ld.lld %t -o %t2 --gc-sections 2>&1
+// RUN: ld.lld %t --no-merge-exidx-entries -o %t2 --gc-sections 2>&1
 // RUN: llvm-objdump -d -triple=armv7a-none-linux-gnueabi %t2 | FileCheck %s
 // RUN: llvm-objdump -s -triple=armv7a-none-linux-gnueabi %t2 | FileCheck -check-prefix=CHECK-EXIDX %s
-// REQUIRES: arm
 
 // Test the behavior of .ARM.exidx sections under garbage collection
 // A .ARM.exidx section is live if it has a relocation to a live executable
@@ -110,14 +110,15 @@ _start:
 // CHECK-NOT: unusedfunc2
 // CHECK-NOT: __gxx_personality_v1
 
-// CHECK-EXIDX-NOT: Contents of section .ARM.extab.text.unusedfunc2:
 // CHECK-EXIDX: Contents of section .ARM.exidx:
 // 100d4 + f38 = 1100c = func1
-// 100dc + f34 = 11010 = func2 (100e0 + 14 = 100f4 = .ARM.extab.text.func2)
-// CHECK-EXIDX-NEXT: 100d4 380f0000 08849780 340f0000 14000000
+// 100dc + f34 = 11010 = func2 (100e0 + 1c = 100fc = .ARM.extab)
+// CHECK-EXIDX-NEXT: 100d4 380f0000 08849780 340f0000 1c000000
 // 100e4 + f30 = 11014 = __gxx_personality_v0
 // 100ec + f2c = 11018 = __aeabi_unwind_cpp_pr0
 // CHECK-EXIDX-NEXT: 100e4 300f0000 01000000 2c0f0000 01000000
-// CHECK-EXIDX-NEXT: Contents of section .ARM.extab.text.func2:
-// 100f4 + f20 = 11014 = __gxx_personality_v0
-// CHECK-EXIDX-NEXT: 100f4 200f0000 b0b0b000
+// 100f4 + f28 = 1101c = __aeabi_unwind_cpp_pr0 + sizeof(__aeabi_unwind_cpp_pr0)
+// CHECK-EXIDX-NEXT: 100f4 280f0000 01000000
+// CHECK-EXIDX-NEXT: Contents of section .ARM.extab:
+// 100fc + f18 = 11014 = __gxx_personality_v0
+// CHECK-EXIDX-NEXT: 100fc 180f0000 b0b0b000

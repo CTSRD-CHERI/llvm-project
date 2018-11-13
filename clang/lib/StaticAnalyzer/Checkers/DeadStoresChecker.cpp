@@ -189,6 +189,7 @@ public:
 
       case DeadIncrement:
         BugType = "Dead increment";
+        LLVM_FALLTHROUGH;
       case Standard:
         if (!BugType) BugType = "Dead assignment";
         os << "Value stored to '" << *V << "' is never read";
@@ -261,7 +262,7 @@ public:
     currentBlock = block;
 
     // Skip statements in macros.
-    if (S->getLocStart().isMacroID())
+    if (S->getBeginLoc().isMacroID())
       return;
 
     // Only cover dead stores from regular assignments.  ++/-- dead stores

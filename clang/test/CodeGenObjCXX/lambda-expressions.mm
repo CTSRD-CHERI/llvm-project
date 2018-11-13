@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple x86_64-apple-darwin10.0.0 -emit-llvm -o - %s -fexceptions -std=c++11 -fblocks -fobjc-arc | FileCheck -check-prefix=ARC %s
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10.0.0 -emit-llvm -o - %s -fexceptions -std=c++11 -fblocks -fobjc-arc -fobjc-runtime-has-weak -DWEAK_SUPPORTED | FileCheck -check-prefix=ARC %s
 // RUN: %clang_cc1 -triple x86_64-apple-darwin10.0.0 -emit-llvm -o - %s -fexceptions -std=c++11 -fblocks | FileCheck -check-prefix=MRC %s
 
 typedef int (^fp)();
@@ -71,6 +71,10 @@ void take_block(void (^block)()) { block(); }
 // ARC:   %[[CAPTURE1:.*]] = getelementptr inbounds <{ i8*, i32, i32, i8*, %struct.__block_descriptor*, i32 }>, <{ i8*, i32, i32, i8*, %struct.__block_descriptor*, i32 }>* %[[BLOCK]], i32 0, i32 5
 // ARC:   store i32 %{{.*}}, i32* %[[CAPTURE1]]
 
+// ARC-LABEL: define internal void @"_ZZ10-[Foo foo]ENK3$_4clEv"(
+// ARC-NOT: @objc_storeStrong(
+// ARC: ret void
+
 // ARC: define internal void @"___ZZN13LambdaCapture4foo1ERiENK3$_3clEv_block_invoke"
 // ARC:   %[[CAPTURE2:.*]] = getelementptr inbounds <{ i8*, i32, i32, i8*, %struct.__block_descriptor*, i32 }>, <{ i8*, i32, i32, i8*, %struct.__block_descriptor*, i32 }>* %{{.*}}, i32 0, i32 5
 // ARC:   store i32 %{{.*}}, i32* %[[CAPTURE2]]
@@ -124,6 +128,41 @@ namespace BlockInLambda {
   };
 }
 
+@interface NSObject @end
+@interface Foo : NSObject @end
+@implementation Foo
+- (void)foo {
+  [&] {
+    ^{ (void)self; }();
+  }();
+}
+@end
 
-// ARC: attributes [[NUW]] = { nounwind{{.*}} }
-// MRC: attributes [[NUW]] = { nounwind{{.*}} }
+// Check that the delegating invoke function doesn't destruct the Weak object
+// that is passed.
+
+// ARC-LABEL: define internal void @"_ZZN14LambdaDelegate4testEvEN3$_58__invokeENS_4WeakE"(
+// ARC: call void @"_ZZN14LambdaDelegate4testEvENK3$_5clENS_4WeakE"(
+// ARC-NEXT: ret void
+
+// ARC-LABEL: define internal void @"_ZZN14LambdaDelegate4testEvENK3$_5clENS_4WeakE"(
+// ARC: call void @_ZN14LambdaDelegate4WeakD1Ev(
+
+#ifdef WEAK_SUPPORTED
+
+namespace LambdaDelegate {
+
+struct Weak {
+  __weak id x;
+};
+
+void test() {
+  void (*p)(Weak) = [](Weak a) { };
+}
+
+};
+
+#endif
+
+// ARC: attributes [[NUW]] = { noinline nounwind{{.*}} }
+// MRC: attributes [[NUW]] = { noinline nounwind{{.*}} }

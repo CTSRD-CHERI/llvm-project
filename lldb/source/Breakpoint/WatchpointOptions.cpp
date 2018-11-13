@@ -14,12 +14,12 @@
 #include "lldb/Breakpoint/WatchpointOptions.h"
 
 #include "lldb/Breakpoint/StoppointCallbackContext.h"
-#include "lldb/Core/Stream.h"
-#include "lldb/Core/StringList.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/ThreadSpec.h"
+#include "lldb/Utility/Stream.h"
+#include "lldb/Utility/StringList.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -143,8 +143,7 @@ void WatchpointOptions::GetCallbackDescription(
 void WatchpointOptions::GetDescription(Stream *s,
                                        lldb::DescriptionLevel level) const {
   // Figure out if there are any options not at their default value, and only
-  // print
-  // anything if there are:
+  // print anything if there are:
 
   if ((GetThreadSpecNoCreate() != nullptr &&
        GetThreadSpecNoCreate()->HasSpecification())) {

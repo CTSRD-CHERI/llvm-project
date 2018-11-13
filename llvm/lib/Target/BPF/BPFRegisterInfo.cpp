@@ -11,16 +11,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "BPF.h"
 #include "BPFRegisterInfo.h"
+#include "BPF.h"
 #include "BPFSubtarget.h"
-#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Target/TargetFrameLowering.h"
-#include "llvm/Target/TargetInstrInfo.h"
 
 #define GET_REGINFO_TARGET_DESC
 #include "BPFGenRegisterInfo.inc"
@@ -36,9 +37,21 @@ BPFRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
 
 BitVector BPFRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   BitVector Reserved(getNumRegs());
-  Reserved.set(BPF::R10); // R10 is read only frame pointer
-  Reserved.set(BPF::R11); // R11 is pseudo stack pointer
+  markSuperRegs(Reserved, BPF::W10); // [W|R]10 is read only frame pointer
+  markSuperRegs(Reserved, BPF::W11); // [W|R]11 is pseudo stack pointer
   return Reserved;
+}
+
+static void WarnSize(int Offset, MachineFunction &MF, DebugLoc& DL)
+{
+  if (Offset <= -512) {
+      const Function &F = MF.getFunction();
+      DiagnosticInfoUnsupported DiagStackSize(F,
+          "Looks like the BPF stack limit of 512 bytes is exceeded. "
+          "Please move large on stack variables into BPF per-cpu array map.\n",
+          DL);
+      F.getContext().diagnose(DiagStackSize);
+  }
 }
 
 void BPFRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
@@ -48,8 +61,17 @@ void BPFRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   unsigned i = 0;
   MachineInstr &MI = *II;
-  MachineFunction &MF = *MI.getParent()->getParent();
+  MachineBasicBlock &MBB = *MI.getParent();
+  MachineFunction &MF = *MBB.getParent();
   DebugLoc DL = MI.getDebugLoc();
+
+  if (!DL)
+    /* try harder to get some debug loc */
+    for (auto &I : MBB)
+      if (I.getDebugLoc()) {
+        DL = I.getDebugLoc();
+        break;
+      }
 
   while (!MI.getOperand(i).isFI()) {
     ++i;
@@ -59,11 +81,11 @@ void BPFRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   unsigned FrameReg = getFrameRegister(MF);
   int FrameIndex = MI.getOperand(i).getIndex();
   const TargetInstrInfo &TII = *MF.getSubtarget().getInstrInfo();
-  MachineBasicBlock &MBB = *MI.getParent();
 
   if (MI.getOpcode() == BPF::MOV_rr) {
     int Offset = MF.getFrameInfo().getObjectOffset(FrameIndex);
 
+    WarnSize(Offset, MF, DL);
     MI.getOperand(i).ChangeToRegister(FrameReg, false);
     unsigned reg = MI.getOperand(i - 1).getReg();
     BuildMI(MBB, ++II, DL, TII.get(BPF::ADD_ri), reg)
@@ -77,6 +99,8 @@ void BPFRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   if (!isInt<32>(Offset))
     llvm_unreachable("bug in frame offset");
+
+  WarnSize(Offset, MF, DL);
 
   if (MI.getOpcode() == BPF::FI_ri) {
     // architecture does not really support FI_ri, replace it with

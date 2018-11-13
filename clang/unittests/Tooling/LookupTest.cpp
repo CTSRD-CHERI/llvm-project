@@ -14,10 +14,18 @@ using namespace clang;
 namespace {
 struct GetDeclsVisitor : TestVisitor<GetDeclsVisitor> {
   std::function<void(CallExpr *)> OnCall;
+  std::function<void(RecordTypeLoc)> OnRecordTypeLoc;
   SmallVector<Decl *, 4> DeclStack;
 
   bool VisitCallExpr(CallExpr *Expr) {
-    OnCall(Expr);
+    if (OnCall)
+      OnCall(Expr);
+    return true;
+  }
+
+  bool VisitRecordTypeLoc(RecordTypeLoc Loc) {
+    if (OnRecordTypeLoc)
+      OnRecordTypeLoc(Loc);
     return true;
   }
 
@@ -29,7 +37,7 @@ struct GetDeclsVisitor : TestVisitor<GetDeclsVisitor> {
   }
 };
 
-TEST(LookupTest, replaceNestedName) {
+TEST(LookupTest, replaceNestedFunctionName) {
   GetDeclsVisitor Visitor;
 
   auto replaceCallExpr = [&](const CallExpr *Expr,
@@ -60,7 +68,7 @@ TEST(LookupTest, replaceNestedName) {
                   "namespace b { void f() { a::foo(); } }\n");
 
   Visitor.OnCall = [&](CallExpr *Expr) {
-    EXPECT_EQ("a::bar", replaceCallExpr(Expr, "::a::bar"));
+    EXPECT_EQ("::a::bar", replaceCallExpr(Expr, "::a::bar"));
   };
   Visitor.runOver("namespace a { void foo(); }\n"
                   "namespace b { namespace a { void foo(); }\n"
@@ -111,6 +119,81 @@ TEST(LookupTest, replaceNestedName) {
                   "namespace a { namespace b { namespace {"
                   "void f() { foo(); }"
                   "} } }\n");
+
+  Visitor.OnCall = [&](CallExpr *Expr) {
+    EXPECT_EQ("x::bar", replaceCallExpr(Expr, "::a::x::bar"));
+  };
+  Visitor.runOver("namespace a { namespace b { void foo(); } }\n"
+                  "namespace a { namespace b { namespace c {"
+                  "void f() { foo(); }"
+                  "} } }\n");
+
+  // If the shortest name is ambiguous, we need to add more qualifiers.
+  Visitor.OnCall = [&](CallExpr *Expr) {
+    EXPECT_EQ("::a::y::bar", replaceCallExpr(Expr, "::a::y::bar"));
+  };
+  Visitor.runOver(R"(
+    namespace a {
+    namespace b {
+    namespace x { void foo() {} }
+    namespace y { void foo() {} }
+    }
+    }
+
+    namespace a {
+    namespace b {
+    void f() { x::foo(); }
+    }
+    })");
+
+  Visitor.OnCall = [&](CallExpr *Expr) {
+    EXPECT_EQ("y::bar", replaceCallExpr(Expr, "::y::bar"));
+  };
+  Visitor.runOver(R"(
+    namespace a {
+    namespace b {
+    namespace x { void foo() {} }
+    namespace y { void foo() {} }
+    }
+    }
+
+    void f() { a::b::x::foo(); }
+    )");
+}
+
+TEST(LookupTest, replaceNestedClassName) {
+  GetDeclsVisitor Visitor;
+
+  auto replaceRecordTypeLoc = [&](RecordTypeLoc Loc,
+                                  StringRef ReplacementString) {
+    const auto *FD = cast<CXXRecordDecl>(Loc.getDecl());
+    return tooling::replaceNestedName(
+        nullptr, Visitor.DeclStack.back()->getDeclContext(), FD,
+        ReplacementString);
+  };
+
+  Visitor.OnRecordTypeLoc = [&](RecordTypeLoc Type) {
+    // Filter Types by name since there are other `RecordTypeLoc` in the test
+    // file.
+    if (Type.getDecl()->getQualifiedNameAsString() == "a::b::Foo") {
+      EXPECT_EQ("x::Bar", replaceRecordTypeLoc(Type, "::a::x::Bar"));
+    }
+  };
+  Visitor.runOver("namespace a { namespace b {\n"
+                  "class Foo;\n"
+                  "namespace c { Foo f();; }\n"
+                  "} }\n");
+
+  Visitor.OnRecordTypeLoc = [&](RecordTypeLoc Type) {
+    // Filter Types by name since there are other `RecordTypeLoc` in the test
+    // file.
+    // `a::b::Foo` in using shadow decl is not `TypeLoc`.
+    if (Type.getDecl()->getQualifiedNameAsString() == "a::b::Foo") {
+      EXPECT_EQ("Bar", replaceRecordTypeLoc(Type, "::a::x::Bar"));
+    }
+  };
+  Visitor.runOver("namespace a { namespace b { class Foo {}; } }\n"
+                  "namespace c { using a::b::Foo; Foo f();; }\n");
 }
 
 } // end anonymous namespace

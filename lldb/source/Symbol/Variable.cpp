@@ -10,8 +10,6 @@
 #include "lldb/Symbol/Variable.h"
 
 #include "lldb/Core/Module.h"
-#include "lldb/Core/RegularExpression.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Core/ValueObjectVariable.h"
 #include "lldb/Symbol/Block.h"
@@ -30,6 +28,8 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/RegularExpression.h"
+#include "lldb/Utility/Stream.h"
 
 #include "llvm/ADT/Twine.h"
 
@@ -160,7 +160,7 @@ void Variable::Dump(Stream *s, bool show_context) const {
     if (m_owner_scope) {
       ModuleSP module_sp(m_owner_scope->CalculateSymbolContextModule());
       if (module_sp)
-        abi = ABI::FindPlugin(module_sp->GetArchitecture()).get();
+        abi = ABI::FindPlugin(ProcessSP(), module_sp->GetArchitecture()).get();
     }
     m_location.GetDescription(s, lldb::eDescriptionLevelBrief,
                               loclist_base_addr, abi);
@@ -239,9 +239,8 @@ bool Variable::LocationIsValidForFrame(StackFrame *frame) {
               target_sp.get());
       if (loclist_base_load_addr == LLDB_INVALID_ADDRESS)
         return false;
-      // It is a location list. We just need to tell if the location
-      // list contains the current address when converted to a load
-      // address
+      // It is a location list. We just need to tell if the location list
+      // contains the current address when converted to a load address
       return m_location.LocationListContainsAddress(
           loclist_base_load_addr,
           frame->GetFrameCodeAddress().GetLoadAddress(target_sp.get()));
@@ -251,8 +250,8 @@ bool Variable::LocationIsValidForFrame(StackFrame *frame) {
 }
 
 bool Variable::LocationIsValidForAddress(const Address &address) {
-  // Be sure to resolve the address to section offset prior to
-  // calling this function.
+  // Be sure to resolve the address to section offset prior to calling this
+  // function.
   if (address.IsSectionOffset()) {
     SymbolContext sc;
     CalculateSymbolContext(&sc);
@@ -268,9 +267,8 @@ bool Variable::LocationIsValidForAddress(const Address &address) {
             sc.function->GetAddressRange().GetBaseAddress().GetFileAddress();
         if (loclist_base_file_addr == LLDB_INVALID_ADDRESS)
           return false;
-        // It is a location list. We just need to tell if the location
-        // list contains the current address when converted to a load
-        // address
+        // It is a location list. We just need to tell if the location list
+        // contains the current address when converted to a load address
         return m_location.LocationListContainsAddress(loclist_base_file_addr,
                                                       address.GetFileAddress());
       }
@@ -294,8 +292,8 @@ bool Variable::IsInScope(StackFrame *frame) {
   case eValueTypeVariableArgument:
   case eValueTypeVariableLocal:
     if (frame) {
-      // We don't have a location list, we just need to see if the block
-      // that this variable was defined in is currently
+      // We don't have a location list, we just need to see if the block that
+      // this variable was defined in is currently
       Block *deepest_frame_block =
           frame->GetSymbolContext(eSymbolContextBlock).block;
       if (deepest_frame_block) {
@@ -313,8 +311,7 @@ bool Variable::IsInScope(StackFrame *frame) {
           return false;
 
         // If no scope range is specified then it means that the scope is the
-        // same as the
-        // scope of the enclosing lexical block.
+        // same as the scope of the enclosing lexical block.
         if (m_scope_range.IsEmpty())
           return true;
 
@@ -330,130 +327,133 @@ bool Variable::IsInScope(StackFrame *frame) {
   return false;
 }
 
-Error Variable::GetValuesForVariableExpressionPath(
-    const char *variable_expr_path, ExecutionContextScope *scope,
+Status Variable::GetValuesForVariableExpressionPath(
+    llvm::StringRef variable_expr_path, ExecutionContextScope *scope,
     GetVariableCallback callback, void *baton, VariableList &variable_list,
     ValueObjectList &valobj_list) {
-  Error error;
-  if (variable_expr_path && callback) {
-    switch (variable_expr_path[0]) {
-    case '*': {
-      error = Variable::GetValuesForVariableExpressionPath(
-          variable_expr_path + 1, scope, callback, baton, variable_list,
-          valobj_list);
-      if (error.Success()) {
-        for (uint32_t i = 0; i < valobj_list.GetSize();) {
-          Error tmp_error;
-          ValueObjectSP valobj_sp(
-              valobj_list.GetValueObjectAtIndex(i)->Dereference(tmp_error));
-          if (tmp_error.Fail()) {
-            variable_list.RemoveVariableAtIndex(i);
-            valobj_list.RemoveValueObjectAtIndex(i);
-          } else {
-            valobj_list.SetValueObjectAtIndex(i, valobj_sp);
-            ++i;
-          }
-        }
-      } else {
-        error.SetErrorString("unknown error");
-      }
+  Status error;
+  if (!callback || variable_expr_path.empty()) {
+    error.SetErrorString("unknown error");
+    return error;
+  }
+
+  switch (variable_expr_path.front()) {
+  case '*':
+    error = Variable::GetValuesForVariableExpressionPath(
+        variable_expr_path.drop_front(), scope, callback, baton, variable_list,
+        valobj_list);
+    if (error.Fail()) {
+      error.SetErrorString("unknown error");
       return error;
-    } break;
-
-    case '&': {
-      error = Variable::GetValuesForVariableExpressionPath(
-          variable_expr_path + 1, scope, callback, baton, variable_list,
-          valobj_list);
-      if (error.Success()) {
-        for (uint32_t i = 0; i < valobj_list.GetSize();) {
-          Error tmp_error;
-          ValueObjectSP valobj_sp(
-              valobj_list.GetValueObjectAtIndex(i)->AddressOf(tmp_error));
-          if (tmp_error.Fail()) {
-            variable_list.RemoveVariableAtIndex(i);
-            valobj_list.RemoveValueObjectAtIndex(i);
-          } else {
-            valobj_list.SetValueObjectAtIndex(i, valobj_sp);
-            ++i;
-          }
-        }
-      } else {
-        error.SetErrorString("unknown error");
-      }
-      return error;
-    } break;
-
-    default: {
-      static RegularExpression g_regex(
-          llvm::StringRef("^([A-Za-z_:][A-Za-z_0-9:]*)(.*)"));
-      RegularExpression::Match regex_match(1);
-      if (g_regex.Execute(llvm::StringRef::withNullAsEmpty(variable_expr_path),
-                          &regex_match)) {
-        std::string variable_name;
-        if (regex_match.GetMatchAtIndex(variable_expr_path, 1, variable_name)) {
-          variable_list.Clear();
-          if (callback(baton, variable_name.c_str(), variable_list)) {
-            uint32_t i = 0;
-            while (i < variable_list.GetSize()) {
-              VariableSP var_sp(variable_list.GetVariableAtIndex(i));
-              ValueObjectSP valobj_sp;
-              if (var_sp) {
-                ValueObjectSP variable_valobj_sp(
-                    ValueObjectVariable::Create(scope, var_sp));
-                if (variable_valobj_sp) {
-                  const char *variable_sub_expr_path =
-                      variable_expr_path + variable_name.size();
-                  if (*variable_sub_expr_path) {
-                    const char *first_unparsed = nullptr;
-                    ValueObject::ExpressionPathScanEndReason reason_to_stop;
-                    ValueObject::ExpressionPathEndResultType final_value_type;
-                    ValueObject::GetValueForExpressionPathOptions options;
-                    ValueObject::ExpressionPathAftermath final_task_on_target;
-
-                    valobj_sp = variable_valobj_sp->GetValueForExpressionPath(
-                        variable_sub_expr_path, &first_unparsed,
-                        &reason_to_stop, &final_value_type, options,
-                        &final_task_on_target);
-                    if (!valobj_sp) {
-                      error.SetErrorStringWithFormat(
-                          "invalid expression path '%s' for variable '%s'",
-                          variable_sub_expr_path,
-                          var_sp->GetName().GetCString());
-                    }
-                  } else {
-                    // Just the name of a variable with no extras
-                    valobj_sp = variable_valobj_sp;
-                  }
-                }
-              }
-
-              if (!var_sp || !valobj_sp) {
-                variable_list.RemoveVariableAtIndex(i);
-              } else {
-                valobj_list.Append(valobj_sp);
-                ++i;
-              }
-            }
-
-            if (variable_list.GetSize() > 0) {
-              error.Clear();
-              return error;
-            }
-          }
-        }
-      }
-      error.SetErrorStringWithFormat(
-          "unable to extract a variable name from '%s'", variable_expr_path);
-    } break;
     }
+    for (uint32_t i = 0; i < valobj_list.GetSize();) {
+      Status tmp_error;
+      ValueObjectSP valobj_sp(
+          valobj_list.GetValueObjectAtIndex(i)->Dereference(tmp_error));
+      if (tmp_error.Fail()) {
+        variable_list.RemoveVariableAtIndex(i);
+        valobj_list.RemoveValueObjectAtIndex(i);
+      } else {
+        valobj_list.SetValueObjectAtIndex(i, valobj_sp);
+        ++i;
+      }
+    }
+    return error;
+  case '&': {
+    error = Variable::GetValuesForVariableExpressionPath(
+        variable_expr_path.drop_front(), scope, callback, baton, variable_list,
+        valobj_list);
+    if (error.Success()) {
+      for (uint32_t i = 0; i < valobj_list.GetSize();) {
+        Status tmp_error;
+        ValueObjectSP valobj_sp(
+            valobj_list.GetValueObjectAtIndex(i)->AddressOf(tmp_error));
+        if (tmp_error.Fail()) {
+          variable_list.RemoveVariableAtIndex(i);
+          valobj_list.RemoveValueObjectAtIndex(i);
+        } else {
+          valobj_list.SetValueObjectAtIndex(i, valobj_sp);
+          ++i;
+        }
+      }
+    } else {
+      error.SetErrorString("unknown error");
+    }
+    return error;
+  } break;
+
+  default: {
+    static RegularExpression g_regex(
+        llvm::StringRef("^([A-Za-z_:][A-Za-z_0-9:]*)(.*)"));
+    RegularExpression::Match regex_match(1);
+    std::string variable_name;
+    variable_list.Clear();
+    if (!g_regex.Execute(variable_expr_path, &regex_match)) {
+      error.SetErrorStringWithFormat(
+          "unable to extract a variable name from '%s'",
+          variable_expr_path.str().c_str());
+      return error;
+    }
+    if (!regex_match.GetMatchAtIndex(variable_expr_path, 1, variable_name)) {
+      error.SetErrorStringWithFormat(
+          "unable to extract a variable name from '%s'",
+          variable_expr_path.str().c_str());
+      return error;
+    }
+    if (!callback(baton, variable_name.c_str(), variable_list)) {
+      error.SetErrorString("unknown error");
+      return error;
+    }
+    uint32_t i = 0;
+    while (i < variable_list.GetSize()) {
+      VariableSP var_sp(variable_list.GetVariableAtIndex(i));
+      ValueObjectSP valobj_sp;
+      if (!var_sp) {
+        variable_list.RemoveVariableAtIndex(i);
+        continue;
+      }
+      ValueObjectSP variable_valobj_sp(
+          ValueObjectVariable::Create(scope, var_sp));
+      if (!variable_valobj_sp) {
+        variable_list.RemoveVariableAtIndex(i);
+        continue;
+      }
+
+      llvm::StringRef variable_sub_expr_path =
+          variable_expr_path.drop_front(variable_name.size());
+      if (!variable_sub_expr_path.empty()) {
+        valobj_sp = variable_valobj_sp->GetValueForExpressionPath(
+            variable_sub_expr_path);
+        if (!valobj_sp) {
+          error.SetErrorStringWithFormat(
+              "invalid expression path '%s' for variable '%s'",
+              variable_sub_expr_path.str().c_str(),
+              var_sp->GetName().GetCString());
+          variable_list.RemoveVariableAtIndex(i);
+          continue;
+        }
+      } else {
+        // Just the name of a variable with no extras
+        valobj_sp = variable_valobj_sp;
+      }
+
+      valobj_list.Append(valobj_sp);
+      ++i;
+    }
+
+    if (variable_list.GetSize() > 0) {
+      error.Clear();
+      return error;
+    }
+  } break;
   }
   error.SetErrorString("unknown error");
   return error;
 }
 
 bool Variable::DumpLocationForAddress(Stream *s, const Address &address) {
-  // Be sure to resolve the address to section offset prior to
-  // calling this function.
+  // Be sure to resolve the address to section offset prior to calling this
+  // function.
   if (address.IsSectionOffset()) {
     SymbolContext sc;
     CalculateSymbolContext(&sc);
@@ -462,7 +462,7 @@ bool Variable::DumpLocationForAddress(Stream *s, const Address &address) {
       if (m_owner_scope) {
         ModuleSP module_sp(m_owner_scope->CalculateSymbolContextModule());
         if (module_sp)
-          abi = ABI::FindPlugin(module_sp->GetArchitecture()).get();
+          abi = ABI::FindPlugin(ProcessSP(), module_sp->GetArchitecture()).get();
       }
 
       const addr_t file_addr = address.GetFileAddress();
@@ -644,11 +644,12 @@ static void PrivateAutoComplete(
       break;
 
     case '-':
-      if (partial_path[1] == '>' && !prefix_path.str().empty()) {
+      if (partial_path.size() > 1 && partial_path[1] == '>' &&
+          !prefix_path.str().empty()) {
         switch (type_class) {
         case lldb::eTypeClassPointer: {
           CompilerType pointee_type(compiler_type.GetPointeeType());
-          if (partial_path[2]) {
+          if (partial_path.size() > 2 && partial_path[2]) {
             // If there is more after the "->", then search deeper
             PrivateAutoComplete(
                 frame, partial_path.substr(2), prefix_path + "->",
@@ -672,7 +673,7 @@ static void PrivateAutoComplete(
         case lldb::eTypeClassUnion:
         case lldb::eTypeClassStruct:
         case lldb::eTypeClassClass:
-          if (partial_path[1]) {
+          if (partial_path.size() > 1 && partial_path[1]) {
             // If there is more after the ".", then search deeper
             PrivateAutoComplete(frame, partial_path.substr(1),
                                 prefix_path + ".", compiler_type, matches,
@@ -756,13 +757,15 @@ static void PrivateAutoComplete(
 }
 
 size_t Variable::AutoComplete(const ExecutionContext &exe_ctx,
-                              llvm::StringRef partial_path, StringList &matches,
-                              bool &word_complete) {
-  word_complete = false;
+                              CompletionRequest &request) {
   CompilerType compiler_type;
 
-  PrivateAutoComplete(exe_ctx.GetFramePtr(), partial_path, "", compiler_type,
-                      matches, word_complete);
+  bool word_complete = false;
+  StringList matches;
+  PrivateAutoComplete(exe_ctx.GetFramePtr(), request.GetCursorArgumentPrefix(),
+                      "", compiler_type, matches, word_complete);
+  request.SetWordComplete(word_complete);
+  request.AddCompletions(matches);
 
-  return matches.GetSize();
+  return request.GetNumberOfMatches();
 }

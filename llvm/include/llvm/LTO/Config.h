@@ -17,6 +17,7 @@
 
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/Support/CodeGen.h"
+#include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 
 #include <functional>
@@ -33,15 +34,20 @@ namespace lto {
 /// LTO configuration. A linker can configure LTO by setting fields in this data
 /// structure and passing it to the lto::LTO constructor.
 struct Config {
+  // Note: when adding fields here, consider whether they need to be added to
+  // computeCacheKey in LTO.cpp.
   std::string CPU;
-  std::string Features;
   TargetOptions Options;
   std::vector<std::string> MAttrs;
-  Reloc::Model RelocModel = Reloc::PIC_;
-  CodeModel::Model CodeModel = CodeModel::Default;
+  Optional<Reloc::Model> RelocModel = Reloc::PIC_;
+  Optional<CodeModel::Model> CodeModel = None;
   CodeGenOpt::Level CGOptLevel = CodeGenOpt::Default;
+  TargetMachine::CodeGenFileType CGFileType = TargetMachine::CGFT_ObjectFile;
   unsigned OptLevel = 2;
   bool DisableVerify = false;
+
+  /// Use the new pass manager
+  bool UseNewPM = false;
 
   /// Disable entirely the optimizer, including importing for ThinLTO
   bool CodeGenOnly = false;
@@ -63,6 +69,29 @@ struct Config {
   /// Setting this field will replace unspecified target triples in input files
   /// with this triple.
   std::string DefaultTriple;
+
+  /// Sample PGO profile path.
+  std::string SampleProfile;
+
+  /// The directory to store .dwo files.
+  std::string DwoDir;
+
+  /// The path to write a .dwo file to. This should generally only be used when
+  /// running an individual backend directly via thinBackend(), as otherwise
+  /// all .dwo files will be written to the same path.
+  std::string DwoPath;
+
+  /// Optimization remarks file path.
+  std::string RemarksFilename = "";
+
+  /// Whether to emit optimization remarks with hotness informations.
+  bool RemarksWithHotness = false;
+
+  /// Whether to emit the pass manager debuggging informations.
+  bool DebugPassManager = false;
+
+  /// Statistics output file path.
+  std::string StatsFile;
 
   bool ShouldDiscardValueNames = true;
   DiagnosticHandlerFunction DiagHandler;
@@ -153,20 +182,27 @@ struct Config {
                      bool UseInputModulePath = false);
 };
 
+struct LTOLLVMDiagnosticHandler : public DiagnosticHandler {
+  DiagnosticHandlerFunction *Fn;
+  LTOLLVMDiagnosticHandler(DiagnosticHandlerFunction *DiagHandlerFn)
+      : Fn(DiagHandlerFn) {}
+  bool handleDiagnostics(const DiagnosticInfo &DI) override {
+    (*Fn)(DI);
+    return true;
+  }
+};
 /// A derived class of LLVMContext that initializes itself according to a given
 /// Config object. The purpose of this class is to tie ownership of the
 /// diagnostic handler to the context, as opposed to the Config object (which
 /// may be ephemeral).
+// FIXME: This should not be required as diagnostic handler is not callback.
 struct LTOLLVMContext : LLVMContext {
-  static void funcDiagHandler(const DiagnosticInfo &DI, void *Context) {
-    auto *Fn = static_cast<DiagnosticHandlerFunction *>(Context);
-    (*Fn)(DI);
-  }
 
   LTOLLVMContext(const Config &C) : DiagHandler(C.DiagHandler) {
     setDiscardValueNames(C.ShouldDiscardValueNames);
     enableDebugTypeODRUniquing();
-    setDiagnosticHandler(funcDiagHandler, &DiagHandler, true);
+    setDiagnosticHandler(
+        llvm::make_unique<LTOLLVMDiagnosticHandler>(&DiagHandler), true);
   }
   DiagnosticHandlerFunction DiagHandler;
 };

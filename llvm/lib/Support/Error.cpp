@@ -13,13 +13,13 @@
 #include "llvm/Support/ManagedStatic.h"
 #include <system_error>
 
-
 using namespace llvm;
 
 namespace {
 
   enum class ErrorErrorCode : int {
     MultipleErrors = 1,
+    FileError,
     InconvertibleError
   };
 
@@ -38,6 +38,8 @@ namespace {
         return "Inconvertible error value. An error has occurred that could "
                "not be converted to a known std::error_code. Please file a "
                "bug.";
+      case ErrorErrorCode::FileError:
+          return "A file error occurred.";
       }
       llvm_unreachable("Unhandled error code");
     }
@@ -54,6 +56,7 @@ char ErrorInfoBase::ID = 0;
 char ErrorList::ID = 0;
 char ECError::ID = 0;
 char StringError::ID = 0;
+char FileError::ID = 0;
 
 void logAllUnhandledErrors(Error E, raw_ostream &OS, Twine ErrorBanner) {
   if (!E)
@@ -76,6 +79,11 @@ std::error_code inconvertibleErrorCode() {
                          *ErrorErrorCat);
 }
 
+std::error_code FileError::convertToErrorCode() const {
+  return std::error_code(static_cast<int>(ErrorErrorCode::FileError),
+                         *ErrorErrorCat);
+}
+
 Error errorCodeToError(std::error_code EC) {
   if (!EC)
     return Error::success();
@@ -92,13 +100,40 @@ std::error_code errorToErrorCode(Error Err) {
   return EC;
 }
 
-StringError::StringError(const Twine &S, std::error_code EC)
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+void Error::fatalUncheckedError() const {
+  dbgs() << "Program aborted due to an unhandled Error:\n";
+  if (getPtr())
+    getPtr()->log(dbgs());
+  else
+    dbgs() << "Error value was Success. (Note: Success values must still be "
+              "checked prior to being destroyed).\n";
+  abort();
+}
+#endif
+
+StringError::StringError(std::error_code EC, const Twine &S)
     : Msg(S.str()), EC(EC) {}
 
-void StringError::log(raw_ostream &OS) const { OS << Msg; }
+StringError::StringError(const Twine &S, std::error_code EC)
+    : Msg(S.str()), EC(EC), PrintMsgOnly(true) {}
+
+void StringError::log(raw_ostream &OS) const {
+  if (PrintMsgOnly) {
+    OS << Msg;
+  } else {
+    OS << EC.message();
+    if (!Msg.empty())
+      OS << (" " + Msg);
+  }
+}
 
 std::error_code StringError::convertToErrorCode() const {
   return EC;
+}
+
+Error createStringError(std::error_code EC, char const *Msg) {
+  return make_error<StringError>(Msg, EC);
 }
 
 void report_fatal_error(Error Err, bool GenCrashDiag) {
@@ -111,4 +146,39 @@ void report_fatal_error(Error Err, bool GenCrashDiag) {
   report_fatal_error(ErrMsg);
 }
 
+} // end namespace llvm
+
+LLVMErrorTypeId LLVMGetErrorTypeId(LLVMErrorRef Err) {
+  return reinterpret_cast<ErrorInfoBase *>(Err)->dynamicClassID();
 }
+
+void LLVMConsumeError(LLVMErrorRef Err) { consumeError(unwrap(Err)); }
+
+char *LLVMGetErrorMessage(LLVMErrorRef Err) {
+  std::string Tmp = toString(unwrap(Err));
+  char *ErrMsg = new char[Tmp.size() + 1];
+  memcpy(ErrMsg, Tmp.data(), Tmp.size());
+  ErrMsg[Tmp.size()] = '\0';
+  return ErrMsg;
+}
+
+void LLVMDisposeErrorMessage(char *ErrMsg) { delete[] ErrMsg; }
+
+LLVMErrorTypeId LLVMGetStringErrorTypeId() {
+  return reinterpret_cast<void *>(&StringError::ID);
+}
+
+#ifndef _MSC_VER
+namespace llvm {
+
+// One of these two variables will be referenced by a symbol defined in
+// llvm-config.h. We provide a link-time (or load time for DSO) failure when
+// there is a mismatch in the build configuration of the API client and LLVM.
+#if LLVM_ENABLE_ABI_BREAKING_CHECKS
+int EnableABIBreakingChecks;
+#else
+int DisableABIBreakingChecks;
+#endif
+
+} // end namespace llvm
+#endif

@@ -49,6 +49,9 @@ def CC_AArch64_AAPCS : CallingConv<[
   // Pass SwiftSelf in a callee saved register.
   CCIfSwiftSelf<CCIfType<[i64], CCAssignToRegWithShadow<[X20], [W20]>>>,
 
+  // A SwiftError is passed in X21.
+  CCIfSwiftError<CCIfType<[i64], CCAssignToRegWithShadow<[X21], [W21]>>>,
+
   CCIfConsecutiveRegs<CCCustom<"CC_AArch64_Custom_Block">>,
 
   // Handle i1, i8, i16, i32, i64, f32, f64 and v2f64 by passing in registers,
@@ -91,7 +94,7 @@ def RetCC_AArch64_AAPCS : CallingConv<[
   CCIfType<[v2f32], CCBitConvertToType<v2i32>>,
   CCIfType<[v2f64, v4f32], CCBitConvertToType<v2i64>>,
 
-  CCIfSwiftError<CCIfType<[i64], CCAssignToRegWithShadow<[X19], [W19]>>>,
+  CCIfSwiftError<CCIfType<[i64], CCAssignToRegWithShadow<[X21], [W21]>>>,
 
   // Big endian vectors must be passed as if they were 1-element vectors so that
   // their lanes are in a consistent order.
@@ -118,6 +121,13 @@ def RetCC_AArch64_AAPCS : CallingConv<[
       CCAssignToReg<[Q0, Q1, Q2, Q3, Q4, Q5, Q6, Q7]>>
 ]>;
 
+// Vararg functions on windows pass floats in integer registers
+def CC_AArch64_Win64_VarArg : CallingConv<[
+  CCIfType<[f16, f32],    CCPromoteToType<f64>>,
+  CCIfType<[f64], CCBitConvertToType<i64>>,
+  CCDelegateTo<CC_AArch64_AAPCS>
+]>;
+
 
 // Darwin uses a calling convention which differs in only two ways
 // from the standard one at this level:
@@ -138,8 +148,8 @@ def CC_AArch64_DarwinPCS : CallingConv<[
   // Pass SwiftSelf in a callee saved register.
   CCIfSwiftSelf<CCIfType<[i64], CCAssignToRegWithShadow<[X20], [W20]>>>,
 
-  // A SwiftError is passed in X19.
-  CCIfSwiftError<CCIfType<[i64], CCAssignToRegWithShadow<[X19], [W19]>>>,
+  // A SwiftError is passed in X21.
+  CCIfSwiftError<CCIfType<[i64], CCAssignToRegWithShadow<[X21], [W21]>>>,
 
   CCIfConsecutiveRegs<CCCustom<"CC_AArch64_Custom_Block">>,
 
@@ -278,6 +288,12 @@ def CSR_AArch64_AAPCS : CalleeSavedRegs<(add LR, FP, X19, X20, X21, X22,
                                            D8,  D9,  D10, D11,
                                            D12, D13, D14, D15)>;
 
+// AArch64 PCS for vector functions (VPCS)
+// must (additionally) preserve full Q8-Q23 registers
+def CSR_AArch64_AAVPCS : CalleeSavedRegs<(add LR, FP, X19, X20, X21, X22,
+                                          X23, X24, X25, X26, X27, X28,
+                                          (sequence "Q%u", 8, 23))>;
+
 // Constructors and destructors return 'this' in the iOS 64-bit C++ ABI; since
 // 'this' and the pointer return value are both passed in X0 in these cases,
 // this can be partially modelled by treating X0 as a callee-saved register;
@@ -289,7 +305,7 @@ def CSR_AArch64_AAPCS : CalleeSavedRegs<(add LR, FP, X19, X20, X21, X22,
 def CSR_AArch64_AAPCS_ThisReturn : CalleeSavedRegs<(add CSR_AArch64_AAPCS, X0)>;
 
 def CSR_AArch64_AAPCS_SwiftError
-    : CalleeSavedRegs<(sub CSR_AArch64_AAPCS, X19)>;
+    : CalleeSavedRegs<(sub CSR_AArch64_AAPCS, X21)>;
 
 // The function used by Darwin to obtain the address of a thread-local variable
 // guarantees more than a normal AAPCS function. x16 and x17 are used on the
@@ -335,3 +351,24 @@ def CSR_AArch64_NoRegs : CalleeSavedRegs<(add)>;
 def CSR_AArch64_RT_MostRegs :  CalleeSavedRegs<(add CSR_AArch64_AAPCS,
                                                 (sequence "X%u", 9, 15))>;
 
+def CSR_AArch64_StackProbe_Windows
+    : CalleeSavedRegs<(add (sequence "X%u", 0, 15),
+                           (sequence "X%u", 18, 28), FP, SP,
+                           (sequence "Q%u", 0, 31))>;
+
+// Variants of the standard calling conventions for shadow call stack.
+// These all preserve x18 in addition to any other registers.
+def CSR_AArch64_NoRegs_SCS
+    : CalleeSavedRegs<(add CSR_AArch64_NoRegs, X18)>;
+def CSR_AArch64_AllRegs_SCS
+    : CalleeSavedRegs<(add CSR_AArch64_AllRegs, X18)>;
+def CSR_AArch64_CXX_TLS_Darwin_SCS
+    : CalleeSavedRegs<(add CSR_AArch64_CXX_TLS_Darwin, X18)>;
+def CSR_AArch64_AAPCS_SwiftError_SCS
+    : CalleeSavedRegs<(add CSR_AArch64_AAPCS_SwiftError, X18)>;
+def CSR_AArch64_RT_MostRegs_SCS
+    : CalleeSavedRegs<(add CSR_AArch64_RT_MostRegs, X18)>;
+def CSR_AArch64_AAVPCS_SCS
+    : CalleeSavedRegs<(add CSR_AArch64_AAVPCS, X18)>;
+def CSR_AArch64_AAPCS_SCS
+    : CalleeSavedRegs<(add CSR_AArch64_AAPCS, X18)>;

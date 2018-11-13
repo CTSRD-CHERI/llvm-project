@@ -13,8 +13,12 @@
 #include <cstdlib>
 #include <cassert>
 
-#if defined(__clang__)
+#include "test_macros.h"
+
+#if defined(TEST_COMPILER_CLANG)
 #pragma clang diagnostic ignored "-Wtautological-compare"
+#elif defined(TEST_COMPILER_C1XX)
+#pragma warning(disable: 6294) // Ill-defined for-loop:  initial condition does not satisfy test.  Loop body not executed.
 #endif
 
 template <std::size_t N>
@@ -33,7 +37,7 @@ void test_op_and()
     std::bitset<N> v1 = make_bitset<N>();
     std::bitset<N> v2 = make_bitset<N>();
     std::bitset<N> v3 = v1;
-    assert((v1 & v2) == (v3 &= v2));;
+    assert((v1 & v2) == (v3 &= v2));
 }
 
 int main()

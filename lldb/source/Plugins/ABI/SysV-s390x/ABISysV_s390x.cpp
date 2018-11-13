@@ -16,13 +16,8 @@
 #include "llvm/ADT/Triple.h"
 
 // Project includes
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectMemory.h"
@@ -33,6 +28,11 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Status.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -205,11 +205,11 @@ size_t ABISysV_s390x::GetRedZoneSize() const { return 0; }
 //------------------------------------------------------------------
 
 ABISP
-ABISysV_s390x::CreateInstance(const ArchSpec &arch) {
+ABISysV_s390x::CreateInstance(lldb::ProcessSP process_sp, const ArchSpec &arch) {
   static ABISP g_abi_sp;
   if (arch.GetTriple().getArch() == llvm::Triple::systemz) {
     if (!g_abi_sp)
-      g_abi_sp.reset(new ABISysV_s390x);
+      g_abi_sp.reset(new ABISysV_s390x(process_sp));
     return g_abi_sp;
   }
   return ABISP();
@@ -268,7 +268,7 @@ bool ABISysV_s390x::PrepareTrivialCall(Thread &thread, addr_t sp,
       if (!reg_ctx->WriteRegisterFromUnsigned(reg_info, args[i]))
         return false;
     } else {
-      Error error;
+      Status error;
       if (log)
         log->Printf("About to write arg%" PRIu64 " (0x%" PRIx64 ") onto stack",
                     static_cast<uint64_t>(i + 1), args[i]);
@@ -321,7 +321,7 @@ static bool ReadIntegerArgument(Scalar &scalar, unsigned int bit_width,
       scalar.SignExtend(bit_width);
   } else {
     uint32_t byte_size = (bit_width + (8 - 1)) / 8;
-    Error error;
+    Status error;
     if (thread.GetProcess()->ReadScalarIntegerFromMemory(
             current_stack_argument + 8 - byte_size, byte_size, is_signed,
             scalar, error)) {
@@ -380,8 +380,8 @@ bool ABISysV_s390x::GetArgumentValues(Thread &thread, ValueList &values) const {
     if (!value)
       return false;
 
-    // We currently only support extracting values with Clang QualTypes.
-    // Do we care about others?
+    // We currently only support extracting values with Clang QualTypes. Do we
+    // care about others?
     CompilerType compiler_type = value->GetCompilerType();
     if (!compiler_type)
       return false;
@@ -401,9 +401,9 @@ bool ABISysV_s390x::GetArgumentValues(Thread &thread, ValueList &values) const {
   return true;
 }
 
-Error ABISysV_s390x::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
-                                          lldb::ValueObjectSP &new_value_sp) {
-  Error error;
+Status ABISysV_s390x::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
+                                           lldb::ValueObjectSP &new_value_sp) {
+  Status error;
   if (!new_value_sp) {
     error.SetErrorString("Empty value object for return value.");
     return error;
@@ -429,7 +429,7 @@ Error ABISysV_s390x::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
     const RegisterInfo *reg_info = reg_ctx->GetRegisterInfoByName("r2", 0);
 
     DataExtractor data;
-    Error data_error;
+    Status data_error;
     size_t num_bytes = new_value_sp->GetData(data, data_error);
     if (data_error.Fail()) {
       error.SetErrorStringWithFormat(
@@ -457,7 +457,7 @@ Error ABISysV_s390x::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
         const RegisterInfo *f0_info = reg_ctx->GetRegisterInfoByName("f0", 0);
         RegisterValue f0_value;
         DataExtractor data;
-        Error data_error;
+        Status data_error;
         size_t num_bytes = new_value_sp->GetData(data, data_error);
         if (data_error.Fail()) {
           error.SetErrorStringWithFormat(
@@ -483,8 +483,8 @@ Error ABISysV_s390x::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
 
   if (!set_it_simple) {
     // Okay we've got a structure or something that doesn't fit in a simple
-    // register.
-    // We should figure out where it really goes, but we don't support this yet.
+    // register. We should figure out where it really goes, but we don't
+    // support this yet.
     error.SetErrorString("We only support setting simple integer and float "
                          "return types at present.");
   }
@@ -618,9 +618,8 @@ ValueObjectSP ABISysV_s390x::GetReturnValueObjectImpl(
     // FIXME: This is just taking a guess, r2 may very well no longer hold the
     // return storage location.
     // If we are going to do this right, when we make a new frame we should
-    // check to see if it uses a memory
-    // return, and if we are at the first instruction and if so stash away the
-    // return location.  Then we would
+    // check to see if it uses a memory return, and if we are at the first
+    // instruction and if so stash away the return location.  Then we would
     // only return the memory return value if we know it is valid.
 
     unsigned r2_id =
@@ -654,8 +653,8 @@ bool ABISysV_s390x::CreateFunctionEntryUnwindPlan(UnwindPlan &unwind_plan) {
 }
 
 bool ABISysV_s390x::CreateDefaultUnwindPlan(UnwindPlan &unwind_plan) {
-  // There's really no default way to unwind on s390x.
-  // Trust the .eh_frame CFI, which should always be good.
+  // There's really no default way to unwind on s390x. Trust the .eh_frame CFI,
+  // which should always be good.
   return false;
 }
 
@@ -663,8 +662,8 @@ bool ABISysV_s390x::GetFallbackRegisterLocation(
     const RegisterInfo *reg_info,
     UnwindPlan::Row::RegisterLocation &unwind_regloc) {
   // If a volatile register is being requested, we don't want to forward the
-  // next frame's register contents
-  // up the stack -- the register is not retrievable at this frame.
+  // next frame's register contents up the stack -- the register is not
+  // retrievable at this frame.
   if (RegisterIsVolatile(reg_info)) {
     unwind_regloc.SetUndefined();
     return true;

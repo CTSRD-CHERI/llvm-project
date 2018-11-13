@@ -81,6 +81,15 @@ public:
                                            const char *method_name,
                                            Event *event_sp, bool &got_error);
 
+  typedef void *(*SWIGPythonCreateScriptedBreakpointResolver)(
+      const char *python_class_name, const char *session_dictionary_name,
+      lldb_private::StructuredDataImpl *args_impl,
+      lldb::BreakpointSP &bkpt_sp);
+
+  typedef unsigned int (*SWIGPythonCallBreakpointResolver)(void *implementor,
+                                          const char *method_name,
+                                          lldb_private::SymbolContext *sym_ctx);
+
   typedef void *(*SWIGPythonCreateOSPlugin)(const char *python_class_name,
                                             const char *session_dictionary_name,
                                             const lldb::ProcessSP &process_sp);
@@ -151,21 +160,21 @@ public:
   bool Interrupt() override;
 
   bool ExecuteOneLine(
-      const char *command, CommandReturnObject *result,
+      llvm::StringRef command, CommandReturnObject *result,
       const ExecuteScriptOptions &options = ExecuteScriptOptions()) override;
 
   void ExecuteInterpreterLoop() override;
 
   bool ExecuteOneLineWithReturn(
-      const char *in_string, ScriptInterpreter::ScriptReturnType return_type,
-      void *ret_value,
+      llvm::StringRef in_string,
+      ScriptInterpreter::ScriptReturnType return_type, void *ret_value,
       const ExecuteScriptOptions &options = ExecuteScriptOptions()) override;
 
-  lldb_private::Error ExecuteMultipleLines(
+  lldb_private::Status ExecuteMultipleLines(
       const char *in_string,
       const ExecuteScriptOptions &options = ExecuteScriptOptions()) override;
 
-  Error
+  Status
   ExportFunctionDefinitionToInterpreter(StringList &function_def) override;
 
   bool GenerateTypeScriptFunction(StringList &input, std::string &output,
@@ -208,6 +217,19 @@ public:
   lldb::StateType
   ScriptedThreadPlanGetRunState(StructuredData::ObjectSP implementor_sp,
                                 bool &script_error) override;
+                                
+  StructuredData::GenericSP
+  CreateScriptedBreakpointResolver(const char *class_name,
+                                   StructuredDataImpl *args_data,
+                                   lldb::BreakpointSP &bkpt_sp) override;
+  bool
+  ScriptedBreakpointResolverSearchCallback(StructuredData::GenericSP
+                                               implementor_sp,
+                                           SymbolContext *sym_ctx) override;
+
+  lldb::SearchDepth
+  ScriptedBreakpointResolverSearchDepth(StructuredData::GenericSP
+                                            implementor_sp) override;
 
   StructuredData::GenericSP
   OSPlugin_CreatePluginObject(const char *class_name,
@@ -229,12 +251,12 @@ public:
 
   StructuredData::ObjectSP
   LoadPluginModule(const FileSpec &file_spec,
-                   lldb_private::Error &error) override;
+                   lldb_private::Status &error) override;
 
   StructuredData::DictionarySP
   GetDynamicSettings(StructuredData::ObjectSP plugin_module_sp, Target *target,
                      const char *setting_name,
-                     lldb_private::Error &error) override;
+                     lldb_private::Status &error) override;
 
   size_t CalculateNumChildren(const StructuredData::ObjectSP &implementor,
                               uint32_t max) override;
@@ -259,24 +281,23 @@ public:
   GetSyntheticTypeName(const StructuredData::ObjectSP &implementor) override;
 
   bool
-  RunScriptBasedCommand(const char *impl_function, const char *args,
+  RunScriptBasedCommand(const char *impl_function, llvm::StringRef args,
                         ScriptedCommandSynchronicity synchronicity,
                         lldb_private::CommandReturnObject &cmd_retobj,
-                        Error &error,
+                        Status &error,
                         const lldb_private::ExecutionContext &exe_ctx) override;
 
-  bool
-  RunScriptBasedCommand(StructuredData::GenericSP impl_obj_sp, const char *args,
-                        ScriptedCommandSynchronicity synchronicity,
-                        lldb_private::CommandReturnObject &cmd_retobj,
-                        Error &error,
-                        const lldb_private::ExecutionContext &exe_ctx) override;
+  bool RunScriptBasedCommand(
+      StructuredData::GenericSP impl_obj_sp, llvm::StringRef args,
+      ScriptedCommandSynchronicity synchronicity,
+      lldb_private::CommandReturnObject &cmd_retobj, Status &error,
+      const lldb_private::ExecutionContext &exe_ctx) override;
 
-  Error GenerateFunction(const char *signature,
-                         const StringList &input) override;
+  Status GenerateFunction(const char *signature,
+                          const StringList &input) override;
 
-  Error GenerateBreakpointCommandCallbackData(StringList &input,
-                                              std::string &output) override;
+  Status GenerateBreakpointCommandCallbackData(StringList &input,
+                                               std::string &output) override;
 
   bool GenerateWatchpointCommandCallbackData(StringList &input,
                                              std::string &output) override;
@@ -332,23 +353,23 @@ public:
   }
 
   bool RunScriptFormatKeyword(const char *impl_function, Process *process,
-                              std::string &output, Error &error) override;
+                              std::string &output, Status &error) override;
 
   bool RunScriptFormatKeyword(const char *impl_function, Thread *thread,
-                              std::string &output, Error &error) override;
+                              std::string &output, Status &error) override;
 
   bool RunScriptFormatKeyword(const char *impl_function, Target *target,
-                              std::string &output, Error &error) override;
+                              std::string &output, Status &error) override;
 
   bool RunScriptFormatKeyword(const char *impl_function, StackFrame *frame,
-                              std::string &output, Error &error) override;
+                              std::string &output, Status &error) override;
 
   bool RunScriptFormatKeyword(const char *impl_function, ValueObject *value,
-                              std::string &output, Error &error) override;
+                              std::string &output, Status &error) override;
 
   bool
   LoadScriptingModule(const char *filename, bool can_reload, bool init_session,
-                      lldb_private::Error &error,
+                      lldb_private::Status &error,
                       StructuredData::ObjectSP *module_sp = nullptr) override;
 
   bool IsReservedWord(const char *word) override;
@@ -364,14 +385,14 @@ public:
                                           CommandReturnObject &result) override;
 
   /// Set the callback body text into the callback for the breakpoint.
-  Error SetBreakpointCommandCallback(BreakpointOptions *bp_options,
-                                     const char *callback_body) override;
+  Status SetBreakpointCommandCallback(BreakpointOptions *bp_options,
+                                      const char *callback_body) override;
 
   void SetBreakpointCommandCallbackFunction(BreakpointOptions *bp_options,
                                             const char *function_name) override;
 
   /// This one is for deserialization:
-  Error SetBreakpointCommandCallback(
+  Status SetBreakpointCommandCallback(
       BreakpointOptions *bp_options,
       std::unique_ptr<BreakpointOptions::CommandData> &data_up) override;
 
@@ -412,7 +433,9 @@ public:
       SWIGPythonScriptKeyword_Value swig_run_script_keyword_value,
       SWIGPython_GetDynamicSetting swig_plugin_get,
       SWIGPythonCreateScriptedThreadPlan swig_thread_plan_script,
-      SWIGPythonCallThreadPlan swig_call_thread_plan);
+      SWIGPythonCallThreadPlan swig_call_thread_plan,
+      SWIGPythonCreateScriptedBreakpointResolver swig_bkpt_resolver_script,
+      SWIGPythonCallBreakpointResolver swig_call_breakpoint_resolver);
 
   const char *GetDictionaryName() { return m_dictionary_name.c_str(); }
 
@@ -444,6 +467,8 @@ public:
   static lldb_private::ConstString GetPluginNameStatic();
 
   static const char *GetPluginDescriptionStatic();
+
+  static FileSpec GetPythonDir();
 
   //------------------------------------------------------------------
   // PluginInterface protocol
@@ -508,6 +533,10 @@ protected:
   enum class AddLocation { Beginning, End };
 
   static void AddToSysPath(AddLocation location, std::string path);
+
+  static void ComputePythonDirForApple(llvm::SmallVectorImpl<char> &path);
+  static void ComputePythonDirForPosix(llvm::SmallVectorImpl<char> &path);
+  static void ComputePythonDirForWindows(llvm::SmallVectorImpl<char> &path);
 
   bool EnterSession(uint16_t on_entry_flags, FILE *in, FILE *out, FILE *err);
 

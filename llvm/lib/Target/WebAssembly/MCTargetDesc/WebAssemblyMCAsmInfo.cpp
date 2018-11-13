@@ -8,13 +8,14 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file contains the declarations of the WebAssemblyMCAsmInfo
+/// This file contains the declarations of the WebAssemblyMCAsmInfo
 /// properties.
 ///
 //===----------------------------------------------------------------------===//
 
 #include "WebAssemblyMCAsmInfo.h"
 #include "llvm/ADT/Triple.h"
+
 using namespace llvm;
 
 #define DEBUG_TYPE "wasm-mc-asm-info"
@@ -22,7 +23,7 @@ using namespace llvm;
 WebAssemblyMCAsmInfo::~WebAssemblyMCAsmInfo() {}
 
 WebAssemblyMCAsmInfo::WebAssemblyMCAsmInfo(const Triple &T) {
-  PointerSize = CalleeSaveStackSlotSize = T.isArch64Bit() ? 8 : 4;
+  CodePointerSize = CalleeSaveStackSlotSize = T.isArch64Bit() ? 8 : 4;
 
   // TODO: What should MaxInstLength be?
 
@@ -43,11 +44,5 @@ WebAssemblyMCAsmInfo::WebAssemblyMCAsmInfo(const Triple &T) {
 
   SupportsDebugInformation = true;
 
-  // For now, WebAssembly does not support exceptions.
-  ExceptionsType = ExceptionHandling::None;
-
   // TODO: UseIntegratedAssembler?
-
-  // WebAssembly's stack is never executable.
-  UsesNonexecutableStackSection = false;
 }

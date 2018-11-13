@@ -134,8 +134,9 @@ class SizeClassMap {
 
   static const uptr kMaxSize = 1UL << kMaxSizeLog;
   static const uptr kNumClasses =
-      kMidClass + ((kMaxSizeLog - kMidSizeLog) << S) + 1;
+      kMidClass + ((kMaxSizeLog - kMidSizeLog) << S) + 1 + 1;
   static const uptr kLargestClassID = kNumClasses - 2;
+  static const uptr kBatchClassID = kNumClasses - 1;
   COMPILER_CHECK(kNumClasses >= 16 && kNumClasses <= 256);
   static const uptr kNumClassesRounded =
       kNumClasses <= 32  ? 32 :
@@ -143,6 +144,11 @@ class SizeClassMap {
       kNumClasses <= 128 ? 128 : 256;
 
   static uptr Size(uptr class_id) {
+    // Estimate the result for kBatchClassID because this class does not know
+    // the exact size of TransferBatch. It's OK since we are using the actual
+    // sizeof(TransferBatch) where it matters.
+    if (UNLIKELY(class_id == kBatchClassID))
+      return kMaxNumCachedHint * sizeof(uptr);
     if (class_id <= kMidClass)
       return kMinSize * class_id;
     class_id -= kMidClass;
@@ -151,20 +157,28 @@ class SizeClassMap {
   }
 
   static uptr ClassID(uptr size) {
+    if (UNLIKELY(size > kMaxSize))
+      return 0;
     if (size <= kMidSize)
       return (size + kMinSize - 1) >> kMinSizeLog;
-    if (size > kMaxSize) return 0;
-    uptr l = MostSignificantSetBitIndex(size);
-    uptr hbits = (size >> (l - S)) & M;
-    uptr lbits = size & ((1 << (l - S)) - 1);
-    uptr l1 = l - kMidSizeLog;
+    const uptr l = MostSignificantSetBitIndex(size);
+    const uptr hbits = (size >> (l - S)) & M;
+    const uptr lbits = size & ((1U << (l - S)) - 1);
+    const uptr l1 = l - kMidSizeLog;
     return kMidClass + (l1 << S) + hbits + (lbits > 0);
   }
 
-  static uptr MaxCachedHint(uptr class_id) {
-    if (class_id == 0) return 0;
-    uptr n = (1UL << kMaxBytesCachedLog) / Size(class_id);
-    return Max<uptr>(1, Min(kMaxNumCachedHint, n));
+  static uptr MaxCachedHint(uptr size) {
+    DCHECK_LE(size, kMaxSize);
+    if (UNLIKELY(size == 0))
+      return 0;
+    uptr n;
+    // Force a 32-bit division if the template parameters allow for it.
+    if (kMaxBytesCachedLog > 31 || kMaxSizeLog > 31)
+      n = (1UL << kMaxBytesCachedLog) / size;
+    else
+      n = (1U << kMaxBytesCachedLog) / static_cast<u32>(size);
+    return Max<uptr>(1U, Min(kMaxNumCachedHint, n));
   }
 
   static void Print() {
@@ -177,10 +191,12 @@ class SizeClassMap {
       uptr d = s - prev_s;
       uptr p = prev_s ? (d * 100 / prev_s) : 0;
       uptr l = s ? MostSignificantSetBitIndex(s) : 0;
-      uptr cached = MaxCachedHint(i) * s;
+      uptr cached = MaxCachedHint(s) * s;
+      if (i == kBatchClassID)
+        d = p = l = 0;
       Printf("c%02zd => s: %zd diff: +%zd %02zd%% l %zd "
              "cached: %zd %zd; id %zd\n",
-             i, Size(i), d, p, l, MaxCachedHint(i), cached, ClassID(s));
+             i, Size(i), d, p, l, MaxCachedHint(s), cached, ClassID(s));
       total_cached += cached;
       prev_s = s;
     }
@@ -192,12 +208,13 @@ class SizeClassMap {
       // Printf("Validate: c%zd\n", c);
       uptr s = Size(c);
       CHECK_NE(s, 0U);
+      if (c == kBatchClassID)
+        continue;
       CHECK_EQ(ClassID(s), c);
-      if (c != kNumClasses - 1)
+      if (c < kLargestClassID)
         CHECK_EQ(ClassID(s + 1), c + 1);
       CHECK_EQ(ClassID(s - 1), c);
-      if (c)
-        CHECK_GT(Size(c), Size(c-1));
+      CHECK_GT(Size(c), Size(c - 1));
     }
     CHECK_EQ(ClassID(kMaxSize + 1), 0);
 
@@ -207,7 +224,7 @@ class SizeClassMap {
       CHECK_LT(c, kNumClasses);
       CHECK_GE(Size(c), s);
       if (c > 0)
-        CHECK_LT(Size(c-1), s);
+        CHECK_LT(Size(c - 1), s);
     }
   }
 };
@@ -215,3 +232,8 @@ class SizeClassMap {
 typedef SizeClassMap<3, 4, 8, 17, 128, 16> DefaultSizeClassMap;
 typedef SizeClassMap<3, 4, 8, 17, 64, 14> CompactSizeClassMap;
 typedef SizeClassMap<2, 5, 9, 16, 64, 14> VeryCompactSizeClassMap;
+
+// The following SizeClassMap only holds a way small number of cached entries,
+// allowing for denser per-class arrays, smaller memory footprint and usually
+// better performances in threaded environments.
+typedef SizeClassMap<3, 4, 8, 17, 8, 10> DenseSizeClassMap;

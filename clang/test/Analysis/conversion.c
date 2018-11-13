@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -Wno-conversion -analyze -analyzer-checker=core,alpha.core.Conversion -verify %s
+// RUN: %clang_analyze_cc1 -Wno-conversion -Wno-tautological-constant-compare -analyzer-checker=core,apiModeling,alpha.core.Conversion -verify %s
 
 unsigned char U8;
 signed char S8;
@@ -9,9 +9,67 @@ void assign(unsigned U, signed S) {
   if (U > 300)
     S8 = U; // expected-warning {{Loss of precision in implicit conversion}}
   if (S > 10)
-    U8 = S;
+    U8 = S; // no-warning
   if (U < 200)
-    S8 = U;
+    S8 = U; // no-warning
+}
+
+void addAssign() {
+  unsigned long L = 1000;
+  int I = -100;
+  U8 += L; // expected-warning {{Loss of precision in implicit conversion}}
+  L += I; // no-warning
+}
+
+void subAssign() {
+  unsigned long L = 1000;
+  int I = -100;
+  U8 -= L; // expected-warning {{Loss of precision in implicit conversion}}
+  L -= I; // no-warning
+}
+
+void mulAssign() {
+  unsigned long L = 1000;
+  int I = -1;
+  U8 *= L; // expected-warning {{Loss of precision in implicit conversion}}
+  L *= I;  // expected-warning {{Loss of sign in implicit conversion}}
+  I = 10;
+  L *= I; // no-warning
+}
+
+void divAssign() {
+  unsigned long L = 1000;
+  int I = -1;
+  U8 /= L; // no-warning
+  L /= I; // expected-warning {{Loss of sign in implicit conversion}}
+}
+
+void remAssign() {
+  unsigned long L = 1000;
+  int I = -1;
+  U8 %= L; // no-warning
+  L %= I; // expected-warning {{Loss of sign in implicit conversion}}
+}
+
+void andAssign() {
+  unsigned long L = 1000;
+  int I = -1;
+  U8 &= L; // no-warning
+  L &= I; // expected-warning {{Loss of sign in implicit conversion}}
+}
+
+void orAssign() {
+  unsigned long L = 1000;
+  int I = -1;
+  U8 |= L; // expected-warning {{Loss of precision in implicit conversion}}
+  L |= I;  // expected-warning {{Loss of sign in implicit conversion}}
+}
+
+void xorAssign() {
+  unsigned long L = 1000;
+  int I = -1;
+  U8 ^= L; // expected-warning {{Loss of precision in implicit conversion}}
+  L ^= I;  // expected-warning {{Loss of sign in implicit conversion}}
 }
 
 void init1() {
@@ -21,7 +79,7 @@ void init1() {
 
 void relational(unsigned U, signed S) {
   if (S > 10) {
-    if (U < S) {
+    if (U < S) { // no-warning
     }
   }
   if (S < -10) {
@@ -32,14 +90,14 @@ void relational(unsigned U, signed S) {
 
 void multiplication(unsigned U, signed S) {
   if (S > 5)
-    S = U * S;
+    S = U * S; // no-warning
   if (S < -10)
     S = U * S; // expected-warning {{Loss of sign}}
 }
 
 void division(unsigned U, signed S) {
   if (S > 5)
-    S = U / S;
+    S = U / S; // no-warning
   if (S < -10)
     S = U / S; // expected-warning {{Loss of sign}}
 }
@@ -80,15 +138,14 @@ void dontwarn5() {
 }
 
 
-// false positives..
+// C library functions, handled via apiModeling.StdCLibraryFunctions
 
 int isascii(int c);
-void falsePositive1() {
+void libraryFunction1() {
   char kb2[5];
   int X = 1000;
   if (isascii(X)) {
-    // FIXME: should not warn here:
-    kb2[0] = X; // expected-warning {{Loss of precision}}
+    kb2[0] = X; // no-warning
   }
 }
 
@@ -98,7 +155,7 @@ typedef struct FILE {} FILE; int getc(FILE *stream);
 char reply_string[8192];
 FILE *cin;
 extern int dostuff (void);
-int falsePositive2() {
+int libraryFunction2() {
   int c, n;
   int dig;
   char *cp = reply_string;
@@ -117,8 +174,7 @@ int falsePositive2() {
       if (c == EOF)
         return(4);
       if (cp < &reply_string[sizeof(reply_string) - 1])
-        // FIXME: should not warn here:
-        *cp++ = c; // expected-warning {{Loss of precision}}
+        *cp++ = c; // no-warning
     }
   }
 }

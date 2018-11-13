@@ -12,28 +12,49 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/PostDominators.h"
-#include "llvm/ADT/DepthFirstIterator.h"
-#include "llvm/ADT/SetOperations.h"
-#include "llvm/IR/CFG.h"
-#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/GenericDomTreeConstruction.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/raw_ostream.h"
+
 using namespace llvm;
 
 #define DEBUG_TYPE "postdomtree"
+
+#ifdef EXPENSIVE_CHECKS
+static constexpr bool ExpensiveChecksEnabled = true;
+#else
+static constexpr bool ExpensiveChecksEnabled = false;
+#endif
 
 //===----------------------------------------------------------------------===//
 //  PostDominatorTree Implementation
 //===----------------------------------------------------------------------===//
 
 char PostDominatorTreeWrapperPass::ID = 0;
+
 INITIALIZE_PASS(PostDominatorTreeWrapperPass, "postdomtree",
                 "Post-Dominator Tree Construction", true, true)
+
+bool PostDominatorTree::invalidate(Function &F, const PreservedAnalyses &PA,
+                                   FunctionAnalysisManager::Invalidator &) {
+  // Check whether the analysis, all analyses on functions, or the function's
+  // CFG have been preserved.
+  auto PAC = PA.getChecker<PostDominatorTreeAnalysis>();
+  return !(PAC.preserved() || PAC.preservedSet<AllAnalysesOn<Function>>() ||
+           PAC.preservedSet<CFGAnalyses>());
+}
 
 bool PostDominatorTreeWrapperPass::runOnFunction(Function &F) {
   DT.recalculate(F);
   return false;
+}
+
+void PostDominatorTreeWrapperPass::verifyAnalysis() const {
+  if (VerifyDomInfo)
+    assert(DT.verify(PostDominatorTree::VerificationLevel::Full));
+  else if (ExpensiveChecksEnabled)
+    assert(DT.verify(PostDominatorTree::VerificationLevel::Basic));
 }
 
 void PostDominatorTreeWrapperPass::print(raw_ostream &OS, const Module *) const {
@@ -44,12 +65,11 @@ FunctionPass* llvm::createPostDomTree() {
   return new PostDominatorTreeWrapperPass();
 }
 
-char PostDominatorTreeAnalysis::PassID;
+AnalysisKey PostDominatorTreeAnalysis::Key;
 
 PostDominatorTree PostDominatorTreeAnalysis::run(Function &F,
                                                  FunctionAnalysisManager &) {
-  PostDominatorTree PDT;
-  PDT.recalculate(F);
+  PostDominatorTree PDT(F);
   return PDT;
 }
 

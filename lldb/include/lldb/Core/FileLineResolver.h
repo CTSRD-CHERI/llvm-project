@@ -10,17 +10,26 @@
 #ifndef liblldb_FileLineResolver_h_
 #define liblldb_FileLineResolver_h_
 
-// Project includes
-#include "lldb/Core/AddressResolver.h"
+#include "lldb/Core/SearchFilter.h" // for Searcher, Searcher::CallbackR...
 #include "lldb/Symbol/SymbolContext.h"
+#include "lldb/Utility/FileSpec.h" // for FileSpec
+#include "lldb/lldb-defines.h"     // for DISALLOW_COPY_AND_ASSIGN
+
+#include <stdint.h> // for uint32_t, UINT32_MAX
+
+namespace lldb_private {
+class Address;
+}
+namespace lldb_private {
+class Stream;
+}
 
 namespace lldb_private {
 
 //----------------------------------------------------------------------
 /// @class FileLineResolver FileLineResolver.h "lldb/Core/FileLineResolver.h"
-/// @brief This class finds address for source file and line.  Optionally, it
-/// will look for inlined
-/// instances of the file and line specification.
+/// This class finds address for source file and line.  Optionally, it will
+/// look for inlined instances of the file and line specification.
 //----------------------------------------------------------------------
 
 class FileLineResolver : public Searcher {
@@ -39,7 +48,7 @@ public:
                                           SymbolContext &context, Address *addr,
                                           bool containing) override;
 
-  Searcher::Depth GetDepth() override;
+  lldb::SearchDepth GetDepth() override;
 
   void GetDescription(Stream *s) override;
 

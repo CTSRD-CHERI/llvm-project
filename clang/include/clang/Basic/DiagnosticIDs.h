@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Defines the Diagnostic IDs-related interfaces.
+/// Defines the Diagnostic IDs-related interfaces.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -18,6 +18,7 @@
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "llvm/ADT/StringRef.h"
+#include <vector>
 
 namespace clang {
   class DiagnosticsEngine;
@@ -25,24 +26,41 @@ namespace clang {
 
   // Import the diagnostic enums themselves.
   namespace diag {
+    // Size of each of the diagnostic categories.
+    enum {
+      DIAG_SIZE_COMMON        =  300,
+      DIAG_SIZE_DRIVER        =  200,
+      DIAG_SIZE_FRONTEND      =  150,
+      DIAG_SIZE_SERIALIZATION =  120,
+      DIAG_SIZE_LEX           =  400,
+      DIAG_SIZE_PARSE         =  500,
+      DIAG_SIZE_AST           =  150,
+      DIAG_SIZE_COMMENT       =  100,
+      DIAG_SIZE_CROSSTU       =  100,
+      DIAG_SIZE_SEMA          = 3500,
+      DIAG_SIZE_ANALYSIS      =  100,
+      DIAG_SIZE_REFACTORING   = 1000,
+    };
     // Start position for diagnostics.
     enum {
-      DIAG_START_COMMON        =                                 0,
-      DIAG_START_DRIVER        = DIAG_START_COMMON          +  300,
-      DIAG_START_FRONTEND      = DIAG_START_DRIVER          +  200,
-      DIAG_START_SERIALIZATION = DIAG_START_FRONTEND        +  100,
-      DIAG_START_LEX           = DIAG_START_SERIALIZATION   +  120,
-      DIAG_START_PARSE         = DIAG_START_LEX             +  300,
-      DIAG_START_AST           = DIAG_START_PARSE           +  500,
-      DIAG_START_COMMENT       = DIAG_START_AST             +  110,
-      DIAG_START_SEMA          = DIAG_START_COMMENT         +  100,
-      DIAG_START_ANALYSIS      = DIAG_START_SEMA            + 3500,
-      DIAG_UPPER_LIMIT         = DIAG_START_ANALYSIS        +  100
+      DIAG_START_COMMON        =                          0,
+      DIAG_START_DRIVER        = DIAG_START_COMMON        + DIAG_SIZE_COMMON,
+      DIAG_START_FRONTEND      = DIAG_START_DRIVER        + DIAG_SIZE_DRIVER,
+      DIAG_START_SERIALIZATION = DIAG_START_FRONTEND      + DIAG_SIZE_FRONTEND,
+      DIAG_START_LEX           = DIAG_START_SERIALIZATION + DIAG_SIZE_SERIALIZATION,
+      DIAG_START_PARSE         = DIAG_START_LEX           + DIAG_SIZE_LEX,
+      DIAG_START_AST           = DIAG_START_PARSE         + DIAG_SIZE_PARSE,
+      DIAG_START_COMMENT       = DIAG_START_AST           + DIAG_SIZE_AST,
+      DIAG_START_CROSSTU       = DIAG_START_COMMENT       + DIAG_SIZE_CROSSTU,
+      DIAG_START_SEMA          = DIAG_START_CROSSTU       + DIAG_SIZE_COMMENT,
+      DIAG_START_ANALYSIS      = DIAG_START_SEMA          + DIAG_SIZE_SEMA,
+      DIAG_START_REFACTORING   = DIAG_START_ANALYSIS      + DIAG_SIZE_ANALYSIS,
+      DIAG_UPPER_LIMIT         = DIAG_START_REFACTORING   + DIAG_SIZE_REFACTORING
     };
 
     class CustomDiagInfo;
 
-    /// \brief All of the diagnostics that can be emitted by the frontend.
+    /// All of the diagnostics that can be emitted by the frontend.
     typedef unsigned kind;
 
     // Get typedefs for common diagnostics.
@@ -84,6 +102,7 @@ class DiagnosticMapping {
   unsigned IsPragma : 1;
   unsigned HasNoWarningAsError : 1;
   unsigned HasNoErrorAsFatal : 1;
+  unsigned WasUpgradedFromWarning : 1;
 
 public:
   static DiagnosticMapping Make(diag::Severity Severity, bool IsUser,
@@ -94,6 +113,7 @@ public:
     Result.IsPragma = IsPragma;
     Result.HasNoWarningAsError = 0;
     Result.HasNoErrorAsFatal = 0;
+    Result.WasUpgradedFromWarning = 0;
     return Result;
   }
 
@@ -103,32 +123,60 @@ public:
   bool isUser() const { return IsUser; }
   bool isPragma() const { return IsPragma; }
 
+  bool isErrorOrFatal() const {
+    return getSeverity() == diag::Severity::Error ||
+           getSeverity() == diag::Severity::Fatal;
+  }
+
   bool hasNoWarningAsError() const { return HasNoWarningAsError; }
   void setNoWarningAsError(bool Value) { HasNoWarningAsError = Value; }
 
   bool hasNoErrorAsFatal() const { return HasNoErrorAsFatal; }
   void setNoErrorAsFatal(bool Value) { HasNoErrorAsFatal = Value; }
+
+  /// Whether this mapping attempted to map the diagnostic to a warning, but
+  /// was overruled because the diagnostic was already mapped to an error or
+  /// fatal error.
+  bool wasUpgradedFromWarning() const { return WasUpgradedFromWarning; }
+  void setUpgradedFromWarning(bool Value) { WasUpgradedFromWarning = Value; }
+
+  /// Serialize this mapping as a raw integer.
+  unsigned serialize() const {
+    return (IsUser << 7) | (IsPragma << 6) | (HasNoWarningAsError << 5) |
+           (HasNoErrorAsFatal << 4) | (WasUpgradedFromWarning << 3) | Severity;
+  }
+  /// Deserialize a mapping.
+  static DiagnosticMapping deserialize(unsigned Bits) {
+    DiagnosticMapping Result;
+    Result.IsUser = (Bits >> 7) & 1;
+    Result.IsPragma = (Bits >> 6) & 1;
+    Result.HasNoWarningAsError = (Bits >> 5) & 1;
+    Result.HasNoErrorAsFatal = (Bits >> 4) & 1;
+    Result.WasUpgradedFromWarning = (Bits >> 3) & 1;
+    Result.Severity = Bits & 0x7;
+    return Result;
+  }
 };
 
-/// \brief Used for handling and querying diagnostic IDs.
+/// Used for handling and querying diagnostic IDs.
 ///
 /// Can be used and shared by multiple Diagnostics for multiple translation units.
 class DiagnosticIDs : public RefCountedBase<DiagnosticIDs> {
 public:
-  /// \brief The level of the diagnostic, after it has been through mapping.
+  /// The level of the diagnostic, after it has been through mapping.
   enum Level {
     Ignored, Note, Remark, Warning, Error, Fatal
   };
 
 private:
-  /// \brief Information for uniquing and looking up custom diags.
+  /// Information for uniquing and looking up custom diags.
   diag::CustomDiagInfo *CustomDiagInfo;
 
 public:
   DiagnosticIDs();
   ~DiagnosticIDs();
 
-  /// \brief Return an ID for a diagnostic with the specified format string and
+  /// Return an ID for a diagnostic with the specified format string and
   /// level.
   ///
   /// If this is the first request for this diagnostic, it is registered and
@@ -143,31 +191,31 @@ public:
   // Diagnostic classification and reporting interfaces.
   //
 
-  /// \brief Given a diagnostic ID, return a description of the issue.
+  /// Given a diagnostic ID, return a description of the issue.
   StringRef getDescription(unsigned DiagID) const;
 
-  /// \brief Return true if the unmapped diagnostic levelof the specified
+  /// Return true if the unmapped diagnostic levelof the specified
   /// diagnostic ID is a Warning or Extension.
   ///
   /// This only works on builtin diagnostics, not custom ones, and is not
   /// legal to call on NOTEs.
   static bool isBuiltinWarningOrExtension(unsigned DiagID);
 
-  /// \brief Return true if the specified diagnostic is mapped to errors by
+  /// Return true if the specified diagnostic is mapped to errors by
   /// default.
   static bool isDefaultMappingAsError(unsigned DiagID);
 
-  /// \brief Determine whether the given built-in diagnostic ID is a Note.
+  /// Determine whether the given built-in diagnostic ID is a Note.
   static bool isBuiltinNote(unsigned DiagID);
 
-  /// \brief Determine whether the given built-in diagnostic ID is for an
+  /// Determine whether the given built-in diagnostic ID is for an
   /// extension of some sort.
   static bool isBuiltinExtensionDiag(unsigned DiagID) {
     bool ignored;
     return isBuiltinExtensionDiag(DiagID, ignored);
   }
-  
-  /// \brief Determine whether the given built-in diagnostic ID is for an
+
+  /// Determine whether the given built-in diagnostic ID is for an
   /// extension of some sort, and whether it is enabled by default.
   ///
   /// This also returns EnabledByDefault, which is set to indicate whether the
@@ -175,55 +223,55 @@ public:
   /// treated as a warning/error by default.
   ///
   static bool isBuiltinExtensionDiag(unsigned DiagID, bool &EnabledByDefault);
-  
 
-  /// \brief Return the lowest-level warning option that enables the specified
+
+  /// Return the lowest-level warning option that enables the specified
   /// diagnostic.
   ///
   /// If there is no -Wfoo flag that controls the diagnostic, this returns null.
   static StringRef getWarningOptionForDiag(unsigned DiagID);
-  
-  /// \brief Return the category number that a specified \p DiagID belongs to,
+
+  /// Return the category number that a specified \p DiagID belongs to,
   /// or 0 if no category.
   static unsigned getCategoryNumberForDiag(unsigned DiagID);
 
-  /// \brief Return the number of diagnostic categories.
+  /// Return the number of diagnostic categories.
   static unsigned getNumberOfCategories();
 
-  /// \brief Given a category ID, return the name of the category.
+  /// Given a category ID, return the name of the category.
   static StringRef getCategoryNameFromID(unsigned CategoryID);
-  
-  /// \brief Return true if a given diagnostic falls into an ARC diagnostic
+
+  /// Return true if a given diagnostic falls into an ARC diagnostic
   /// category.
   static bool isARCDiagnostic(unsigned DiagID);
 
-  /// \brief Enumeration describing how the emission of a diagnostic should
+  /// Enumeration describing how the emission of a diagnostic should
   /// be treated when it occurs during C++ template argument deduction.
   enum SFINAEResponse {
-    /// \brief The diagnostic should not be reported, but it should cause
+    /// The diagnostic should not be reported, but it should cause
     /// template argument deduction to fail.
     ///
-    /// The vast majority of errors that occur during template argument 
+    /// The vast majority of errors that occur during template argument
     /// deduction fall into this category.
     SFINAE_SubstitutionFailure,
-    
-    /// \brief The diagnostic should be suppressed entirely.
+
+    /// The diagnostic should be suppressed entirely.
     ///
     /// Warnings generally fall into this category.
     SFINAE_Suppress,
-    
-    /// \brief The diagnostic should be reported.
+
+    /// The diagnostic should be reported.
     ///
-    /// The diagnostic should be reported. Various fatal errors (e.g., 
+    /// The diagnostic should be reported. Various fatal errors (e.g.,
     /// template instantiation depth exceeded) fall into this category.
     SFINAE_Report,
-    
-    /// \brief The diagnostic is an access-control diagnostic, which will be
+
+    /// The diagnostic is an access-control diagnostic, which will be
     /// substitution failures in some contexts and reported in others.
     SFINAE_AccessControl
   };
-  
-  /// \brief Determines whether the given built-in diagnostic ID is
+
+  /// Determines whether the given built-in diagnostic ID is
   /// for an error that is suppressed if it occurs during C++ template
   /// argument deduction.
   ///
@@ -233,25 +281,32 @@ public:
   /// are not SFINAE errors.
   static SFINAEResponse getDiagnosticSFINAEResponse(unsigned DiagID);
 
-  /// \brief Get the set of all diagnostic IDs in the group with the given name.
+  /// Get the string of all diagnostic flags.
+  ///
+  /// \returns A list of all diagnostics flags as they would be written in a
+  /// command line invocation including their `no-` variants. For example:
+  /// `{"-Wempty-body", "-Wno-empty-body", ...}`
+  static std::vector<std::string> getDiagnosticFlags();
+
+  /// Get the set of all diagnostic IDs in the group with the given name.
   ///
   /// \param[out] Diags - On return, the diagnostics in the group.
   /// \returns \c true if the given group is unknown, \c false otherwise.
   bool getDiagnosticsInGroup(diag::Flavor Flavor, StringRef Group,
                              SmallVectorImpl<diag::kind> &Diags) const;
 
-  /// \brief Get the set of all diagnostic IDs.
-  void getAllDiagnostics(diag::Flavor Flavor,
-                         SmallVectorImpl<diag::kind> &Diags) const;
+  /// Get the set of all diagnostic IDs.
+  static void getAllDiagnostics(diag::Flavor Flavor,
+                                std::vector<diag::kind> &Diags);
 
-  /// \brief Get the diagnostic option with the closest edit distance to the
+  /// Get the diagnostic option with the closest edit distance to the
   /// given group name.
   static StringRef getNearestOption(diag::Flavor Flavor, StringRef Group);
 
 private:
-  /// \brief Classify the specified diagnostic ID into a Level, consumable by
+  /// Classify the specified diagnostic ID into a Level, consumable by
   /// the DiagnosticClient.
-  /// 
+  ///
   /// The classification is based on the way the client configured the
   /// DiagnosticsEngine object.
   ///
@@ -265,17 +320,17 @@ private:
   getDiagnosticSeverity(unsigned DiagID, SourceLocation Loc,
                         const DiagnosticsEngine &Diag) const LLVM_READONLY;
 
-  /// \brief Used to report a diagnostic that is finally fully formed.
+  /// Used to report a diagnostic that is finally fully formed.
   ///
   /// \returns \c true if the diagnostic was emitted, \c false if it was
   /// suppressed.
   bool ProcessDiag(DiagnosticsEngine &Diag) const;
 
-  /// \brief Used to emit a diagnostic that is finally fully formed,
+  /// Used to emit a diagnostic that is finally fully formed,
   /// ignoring suppression.
   void EmitDiag(DiagnosticsEngine &Diag, Level DiagLevel) const;
 
-  /// \brief Whether the diagnostic may leave the AST in a state where some
+  /// Whether the diagnostic may leave the AST in a state where some
   /// invariants can break.
   bool isUnrecoverable(unsigned DiagID) const;
 

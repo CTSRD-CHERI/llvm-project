@@ -84,7 +84,7 @@ attributes #0 = { "no-frame-pointer-elim"="true" }
 
 ;; Ensures that tied in and out gets allocated properly.
 ; CHECK-LABEL: test_i64_inout:
-; CHECK: sethi 0, %o2
+; CHECK: mov %g0, %o2
 ; CHECK: mov 5, %o3
 ; CHECK: xor %o2, %g0, %o2
 ; CHECK: mov %o2, %o0
@@ -93,4 +93,40 @@ define i64 @test_i64_inout() {
 entry:
   %0 = call i64 asm sideeffect "xor $1, %g0, $0", "=r,0,~{i1}"(i64 5);
   ret i64 %0
+}
+
+
+;; Ensures that inline-asm accepts and uses 'f' and 'e' register constraints.
+; CHECK-LABEL: fadds:
+; CHECK: fadds  %f0, %f1, %f0
+define float @fadds(float, float) local_unnamed_addr #2 {
+entry:
+  %2 = tail call float asm sideeffect "fadds  $1, $2, $0;", "=f,f,e"(float %0, float %1) #7
+  ret float %2
+}
+
+; CHECK-LABEL: faddd:
+; CHECK: faddd  %f0, %f2, %f0
+define double @faddd(double, double) local_unnamed_addr #2 {
+entry:
+  %2 = tail call double asm sideeffect "faddd  $1, $2, $0;", "=f,f,e"(double %0, double %1) #7
+  ret double %2
+}
+
+; CHECK-LABEL: test_addressing_mode_i64:
+; CHECK: std %l0, [%o0]
+define void @test_addressing_mode_i64(i64* %out) {
+entry:
+  call void asm "std %l0, $0", "=*m,r"(i64* nonnull %out, i64 0)
+  ret void
+}
+
+; CHECK-LABEL: test_constraint_float_reg:
+; CHECK: fadds %f20, %f20, %f20
+; CHECK: faddd %f20, %f20, %f20
+define void @test_constraint_float_reg() {
+entry:
+  tail call void asm sideeffect "fadds $0,$1,$2", "{f20},{f20},{f20}"(float 6.0, float 7.0, float 8.0)
+  tail call void asm sideeffect "faddd $0,$1,$2", "{f20},{f20},{f20}"(double 9.0, double 10.0, double 11.0)
+  ret void
 }

@@ -97,7 +97,8 @@ static const char *processFDE(const char *Entry, bool isDeregister) {
 void RTDyldMemoryManager::registerEHFramesInProcess(uint8_t *Addr,
                                                     size_t Size) {
   // On OS X OS X __register_frame takes a single FDE as an argument.
-  // See http://lists.llvm.org/pipermail/llvm-dev/2013-April/061768.html
+  // See http://lists.llvm.org/pipermail/llvm-dev/2013-April/061737.html
+  // and projects/libunwind/src/UnwindLevel1-gcc-ext.c.
   const char *P = (const char *)Addr;
   const char *End = P + Size;
   do  {
@@ -118,10 +119,10 @@ void RTDyldMemoryManager::deregisterEHFramesInProcess(uint8_t *Addr,
 
 void RTDyldMemoryManager::registerEHFramesInProcess(uint8_t *Addr,
                                                     size_t Size) {
-  // On Linux __register_frame takes a single argument: 
+  // On Linux __register_frame takes a single argument:
   // a pointer to the start of the .eh_frame section.
 
-  // How can it find the end? Because crtendS.o is linked 
+  // How can it find the end? Because crtendS.o is linked
   // in and it has an .eh_frame section with four zero chars.
   __register_frame(Addr);
 }
@@ -132,6 +133,18 @@ void RTDyldMemoryManager::deregisterEHFramesInProcess(uint8_t *Addr,
 }
 
 #endif
+
+void RTDyldMemoryManager::registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
+                                          size_t Size) {
+  registerEHFramesInProcess(Addr, Size);
+  EHFrames.push_back({Addr, Size});
+}
+
+void RTDyldMemoryManager::deregisterEHFrames() {
+  for (auto &Frame : EHFrames)
+    deregisterEHFramesInProcess(Frame.Addr, Frame.Size);
+  EHFrames.clear();
+}
 
 static int jit_noop() {
   return 0;
@@ -242,7 +255,7 @@ RTDyldMemoryManager::getSymbolAddressInProcess(const std::string &Name) {
     return (uint64_t)&__morestack;
 #endif
 #endif // __linux__ && __GLIBC__
-  
+
   // See ARM_MATH_IMPORTS definition for explanation
 #if defined(__BIONIC__) && defined(__arm__)
   if (Name.compare(0, 8, "__aeabi_") == 0) {
@@ -285,4 +298,6 @@ void *RTDyldMemoryManager::getPointerToNamedFunction(const std::string &Name,
   return (void*)Addr;
 }
 
+void RTDyldMemoryManager::anchor() {}
+void MCJITMemoryManager::anchor() {}
 } // namespace llvm

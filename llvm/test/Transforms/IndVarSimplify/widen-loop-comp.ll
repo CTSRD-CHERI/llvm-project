@@ -64,7 +64,7 @@ for.end:
 ; CHECK-LABEL: @test2
 ; CHECK: for.body4.us
 ; CHECK: %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
-; CHECK: %cmp2.us = icmp slt i64
+; CHECK: %cmp2.us = icmp ult i64
 ; CHECK-NOT: %2 = trunc i64 %indvars.iv.next to i32
 ; CHECK-NOT: %cmp2.us = icmp slt i32
 
@@ -332,12 +332,12 @@ define i32 @test10(i32 %v) {
   br label %loop
 
  loop:
+; CHECK: [[WIDE_V:%[a-z0-9]+]] = sext i32 %v to i64
 ; CHECK: loop:
 ; CHECK: %indvars.iv = phi i64 [ %indvars.iv.next, %loop ], [ 0, %entry ]
 ; CHECK: %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
 ; CHECK: [[MUL:%[a-z0-9]+]] = mul nsw i64 %indvars.iv, -1
-; CHECK: [[MUL_TRUNC:%[a-z0-9]+]] = trunc i64 [[MUL]] to i32
-; CHECK: [[CMP:%[a-z0-9]+]] = icmp eq i32 [[MUL_TRUNC]], %v
+; CHECK: [[CMP:%[a-z0-9]+]] = icmp eq i64 [[MUL]], [[WIDE_V]]
 ; CHECK: call void @consume.i1(i1 [[CMP]])
 
   %i = phi i32 [ 0, %entry ], [ %i.inc, %loop ]

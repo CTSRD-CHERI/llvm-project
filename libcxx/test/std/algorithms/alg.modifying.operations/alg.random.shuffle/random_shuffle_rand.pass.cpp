@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 // <algorithm>
+// REQUIRES: c++98 || c++03 || c++11 || c++14
 
 // template<RandomAccessIterator Iter, Callable<auto, Iter::difference_type> Rand>
 //   requires ShuffleIterator<Iter>
@@ -17,12 +18,13 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 
 #include "test_macros.h"
 
 struct gen
 {
-    int operator()(int n)
+    std::ptrdiff_t operator()(std::ptrdiff_t n)
     {
         return n-1;
     }

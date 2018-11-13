@@ -7,7 +7,7 @@
 ; so listing %t2.o first is sufficient to ensure that this copy is
 ; preempted. Also, set the import-instr-limit to 0 to prevent f() from
 ; being imported from %t2.o which hides the problem.
-; RUN: %gold -m elf_x86_64 -plugin %llvmshlibdir/LLVMgold.so \
+; RUN: %gold -m elf_x86_64 -plugin %llvmshlibdir/LLVMgold%shlibext \
 ; RUN:     --plugin-opt=thinlto \
 ; RUN:     --plugin-opt=-import-instr-limit=0 \
 ; RUN:     --plugin-opt=save-temps \
@@ -23,6 +23,7 @@
 ; OPT-NOT: @f()
 ; OPT2: define weak_odr hidden void @f()
 
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
 define i32 @g() {
   call void @f()

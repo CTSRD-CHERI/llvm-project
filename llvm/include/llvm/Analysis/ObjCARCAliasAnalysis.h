@@ -29,7 +29,7 @@
 namespace llvm {
 namespace objcarc {
 
-/// \brief This is a simple alias analysis implementation that uses knowledge
+/// This is a simple alias analysis implementation that uses knowledge
 /// of ARC constructs to answer queries.
 ///
 /// TODO: This class could be generalized to know about other ObjC-specific
@@ -48,7 +48,10 @@ public:
   /// Handle invalidation events from the new pass manager.
   ///
   /// By definition, this result is stateless and so remains valid.
-  bool invalidate(Function &, const PreservedAnalyses &) { return false; }
+  bool invalidate(Function &, const PreservedAnalyses &,
+                  FunctionAnalysisManager::Invalidator &) {
+    return false;
+  }
 
   AliasResult alias(const MemoryLocation &LocA, const MemoryLocation &LocB);
   bool pointsToConstantMemory(const MemoryLocation &Loc, bool OrLocal);
@@ -63,7 +66,7 @@ public:
 /// Analysis pass providing a never-invalidated alias analysis result.
 class ObjCARCAA : public AnalysisInfoMixin<ObjCARCAA> {
   friend AnalysisInfoMixin<ObjCARCAA>;
-  static char PassID;
+  static AnalysisKey Key;
 
 public:
   typedef ObjCARCAAResult Result;

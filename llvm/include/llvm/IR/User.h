@@ -1,4 +1,4 @@
-//===-- llvm/User.h - User class definition ---------------------*- C++ -*-===//
+//===- llvm/User.h - User class definition ----------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -21,25 +21,30 @@
 
 #include "llvm/ADT/iterator.h"
 #include "llvm/ADT/iterator_range.h"
+#include "llvm/IR/Use.h"
 #include "llvm/IR/Value.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
 
 namespace llvm {
 
 template <typename T> class ArrayRef;
 template <typename T> class MutableArrayRef;
 
-/// \brief Compile-time customization of User operands.
+/// Compile-time customization of User operands.
 ///
 /// Customizes operand-related allocators and accessors.
 template <class>
 struct OperandTraits;
 
 class User : public Value {
-  User(const User &) = delete;
   template <unsigned>
   friend struct HungoffOperandTraits;
-  virtual void anchor();
 
   LLVM_ATTRIBUTE_ALWAYS_INLINE inline static void *
   allocateFixedOperandUser(size_t, unsigned, unsigned);
@@ -76,43 +81,73 @@ protected:
            "Error in initializing hung off uses for User");
   }
 
-  /// \brief Allocate the array of Uses, followed by a pointer
+  /// Allocate the array of Uses, followed by a pointer
   /// (with bottom bit set) to the User.
   /// \param IsPhi identifies callers which are phi nodes and which need
   /// N BasicBlock* allocated along with N
   void allocHungoffUses(unsigned N, bool IsPhi = false);
 
-  /// \brief Grow the number of hung off uses.  Note that allocHungoffUses
+  /// Grow the number of hung off uses.  Note that allocHungoffUses
   /// should be called if there are no uses.
   void growHungoffUses(unsigned N, bool IsPhi = false);
 
+protected:
+  ~User() = default; // Use deleteValue() to delete a generic Instruction.
+
 public:
-  ~User() override {
-  }
-  /// \brief Free memory allocated for User and Use objects.
+  User(const User &) = delete;
+
+  /// Free memory allocated for User and Use objects.
   void operator delete(void *Usr);
-  /// \brief Placement delete - required by std, but never called.
-  void operator delete(void*, unsigned) {
+  /// Placement delete - required by std, called if the ctor throws.
+  void operator delete(void *Usr, unsigned) {
+    // Note: If a subclass manipulates the information which is required to calculate the
+    // Usr memory pointer, e.g. NumUserOperands, the operator delete of that subclass has
+    // to restore the changed information to the original value, since the dtor of that class
+    // is not called if the ctor fails.
+    User::operator delete(Usr);
+
+#ifndef LLVM_ENABLE_EXCEPTIONS
     llvm_unreachable("Constructor throws?");
+#endif
   }
-  /// \brief Placement delete - required by std, but never called.
-  void operator delete(void*, unsigned, bool) {
+  /// Placement delete - required by std, called if the ctor throws.
+  void operator delete(void *Usr, unsigned, bool) {
+    // Note: If a subclass manipulates the information which is required to calculate the
+    // Usr memory pointer, e.g. NumUserOperands, the operator delete of that subclass has
+    // to restore the changed information to the original value, since the dtor of that class
+    // is not called if the ctor fails.
+    User::operator delete(Usr);
+
+#ifndef LLVM_ENABLE_EXCEPTIONS
     llvm_unreachable("Constructor throws?");
+#endif
   }
+
 protected:
   template <int Idx, typename U> static Use &OpFrom(const U *that) {
     return Idx < 0
       ? OperandTraits<U>::op_end(const_cast<U*>(that))[Idx]
       : OperandTraits<U>::op_begin(const_cast<U*>(that))[Idx];
   }
+
   template <int Idx> Use &Op() {
     return OpFrom<Idx>(this);
   }
   template <int Idx> const Use &Op() const {
     return OpFrom<Idx>(this);
   }
+
 private:
+  const Use *getHungOffOperands() const {
+    return *(reinterpret_cast<const Use *const *>(this) - 1);
+  }
+
   Use *&getHungOffOperands() { return *(reinterpret_cast<Use **>(this) - 1); }
+
+  const Use *getIntrusiveOperands() const {
+    return reinterpret_cast<const Use *>(this) - NumUserOperands;
+  }
 
   Use *getIntrusiveOperands() {
     return reinterpret_cast<Use *>(this) - NumUserOperands;
@@ -123,17 +158,20 @@ private:
            "Setting operand list only required for hung off uses");
     getHungOffOperands() = NewList;
   }
+
 public:
-  Use *getOperandList() {
+  const Use *getOperandList() const {
     return HasHungOffUses ? getHungOffOperands() : getIntrusiveOperands();
   }
-  const Use *getOperandList() const {
-    return const_cast<User *>(this)->getOperandList();
+  Use *getOperandList() {
+    return const_cast<Use *>(static_cast<const User *>(this)->getOperandList());
   }
+
   Value *getOperand(unsigned i) const {
     assert(i < NumUserOperands && "getOperand() out of range!");
     return getOperandList()[i];
   }
+
   void setOperand(unsigned i, Value *Val) {
     assert(i < NumUserOperands && "setOperand() out of range!");
     assert((!isa<Constant>((const Value*)this) ||
@@ -141,6 +179,7 @@ public:
            "Cannot mutate a constant with setOperand!");
     getOperandList()[i] = Val;
   }
+
   const Use &getOperandUse(unsigned i) const {
     assert(i < NumUserOperands && "getOperandUse() out of range!");
     return getOperandList()[i];
@@ -171,7 +210,7 @@ public:
     NumUserOperands = NumOps;
   }
 
-  /// \brief Subclasses with hung off uses need to manage the operand count
+  /// Subclasses with hung off uses need to manage the operand count
   /// themselves.  In these instances, the operand count isn't used to find the
   /// OperandList, so there's no issue in having the operand count change.
   void setNumHungOffUseOperands(unsigned NumOps) {
@@ -183,10 +222,10 @@ public:
   // ---------------------------------------------------------------------------
   // Operand Iterator interface...
   //
-  typedef Use*       op_iterator;
-  typedef const Use* const_op_iterator;
-  typedef iterator_range<op_iterator> op_range;
-  typedef iterator_range<const_op_iterator> const_op_range;
+  using op_iterator = Use*;
+  using const_op_iterator = const Use*;
+  using op_range = iterator_range<op_iterator>;
+  using const_op_range = iterator_range<const_op_iterator>;
 
   op_iterator       op_begin()       { return getOperandList(); }
   const_op_iterator op_begin() const { return getOperandList(); }
@@ -203,7 +242,7 @@ public:
     return const_op_range(op_begin(), op_end());
   }
 
-  /// \brief Iterator for directly iterating over the operand Values.
+  /// Iterator for directly iterating over the operand Values.
   struct value_op_iterator
       : iterator_adaptor_base<value_op_iterator, op_iterator,
                               std::random_access_iterator_tag, Value *,
@@ -224,7 +263,28 @@ public:
     return make_range(value_op_begin(), value_op_end());
   }
 
-  /// \brief Drop all references to operands.
+  struct const_value_op_iterator
+      : iterator_adaptor_base<const_value_op_iterator, const_op_iterator,
+                              std::random_access_iterator_tag, const Value *,
+                              ptrdiff_t, const Value *, const Value *> {
+    explicit const_value_op_iterator(const Use *U = nullptr) :
+      iterator_adaptor_base(U) {}
+
+    const Value *operator*() const { return *I; }
+    const Value *operator->() const { return operator*(); }
+  };
+
+  const_value_op_iterator value_op_begin() const {
+    return const_value_op_iterator(op_begin());
+  }
+  const_value_op_iterator value_op_end() const {
+    return const_value_op_iterator(op_end());
+  }
+  iterator_range<const_value_op_iterator> operand_values() const {
+    return make_range(value_op_begin(), value_op_end());
+  }
+
+  /// Drop all references to operands.
   ///
   /// This function is in charge of "letting go" of all objects that this User
   /// refers to.  This allows one to 'delete' a whole class at a time, even
@@ -237,17 +297,18 @@ public:
       U.set(nullptr);
   }
 
-  /// \brief Replace uses of one Value with another.
+  /// Replace uses of one Value with another.
   ///
   /// Replaces all references to the "From" definition with references to the
   /// "To" definition.
   void replaceUsesOfWith(Value *From, Value *To);
 
   // Methods for support type inquiry through isa, cast, and dyn_cast:
-  static inline bool classof(const Value *V) {
+  static bool classof(const Value *V) {
     return isa<Instruction>(V) || isa<Constant>(V);
   }
 };
+
 // Either Use objects, or a Use pointer can be prepended to User.
 static_assert(alignof(Use) >= alignof(User),
               "Alignment is insufficient after objects prepended to User");
@@ -255,18 +316,20 @@ static_assert(alignof(Use *) >= alignof(User),
               "Alignment is insufficient after objects prepended to User");
 
 template<> struct simplify_type<User::op_iterator> {
-  typedef Value* SimpleType;
+  using SimpleType = Value*;
+
   static SimpleType getSimplifiedValue(User::op_iterator &Val) {
     return Val->get();
   }
 };
 template<> struct simplify_type<User::const_op_iterator> {
-  typedef /*const*/ Value* SimpleType;
+  using SimpleType = /*const*/ Value*;
+
   static SimpleType getSimplifiedValue(User::const_op_iterator &Val) {
     return Val->get();
   }
 };
 
-} // End llvm namespace
+} // end namespace llvm
 
-#endif
+#endif // LLVM_IR_USER_H

@@ -4,12 +4,15 @@ set(SANITIZER_COMMON_TEST_DEPS ${SANITIZER_COMMON_LIT_TEST_DEPS})
 set(SANITIZER_COMMON_TESTSUITES)
 
 set(SUPPORTED_TOOLS)
-if(CMAKE_SYSTEM_NAME MATCHES "Darwin|Linux|FreeBSD" AND NOT ANDROID)
+if(CMAKE_SYSTEM_NAME MATCHES "Darwin|Linux|FreeBSD|NetBSD|SunOS")
   list(APPEND SUPPORTED_TOOLS asan)
 endif()
-if(CMAKE_SYSTEM_NAME MATCHES "Linux" AND NOT ANDROID)
+if(CMAKE_SYSTEM_NAME MATCHES "NetBSD" OR (CMAKE_SYSTEM_NAME MATCHES "Linux" AND NOT ANDROID))
   list(APPEND SUPPORTED_TOOLS tsan)
   list(APPEND SUPPORTED_TOOLS msan)
+  list(APPEND SUPPORTED_TOOLS ubsan)
+endif()
+if(CMAKE_SYSTEM_NAME MATCHES "Linux" AND NOT ANDROID)
   list(APPEND SUPPORTED_TOOLS lsan)
 endif()
 
@@ -27,14 +30,7 @@ foreach(tool ${SUPPORTED_TOOLS})
   foreach(arch ${TEST_ARCH})
     set(SANITIZER_COMMON_LIT_TEST_MODE ${tool})
     set(SANITIZER_COMMON_TEST_TARGET_ARCH ${arch})
-    if(${arch} MATCHES "arm|aarch64")
-      # This is only true if we're cross-compiling.
-      set(SANITIZER_COMMON_TEST_TARGET_CFLAGS
-          ${COMPILER_RT_TEST_COMPILER_CFLAGS})
-    else()
-      get_target_flags_for_arch(${arch} SANITIZER_COMMON_TEST_TARGET_CFLAGS)
-      string(REPLACE ";" " " SANITIZER_COMMON_TEST_TARGET_CFLAGS "${SANITIZER_COMMON_TEST_TARGET_CFLAGS}")
-    endif()
+    get_test_cc_for_arch(${arch} SANITIZER_COMMON_TEST_TARGET_CC SANITIZER_COMMON_TEST_TARGET_CFLAGS)
     set(CONFIG_NAME ${tool}-${arch}-${OS_NAME})
     configure_lit_site_cfg(
       ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.in
@@ -49,8 +45,11 @@ if(COMPILER_RT_INCLUDE_TESTS)
   configure_lit_site_cfg(
     ${CMAKE_CURRENT_SOURCE_DIR}/Unit/lit.site.cfg.in
     ${CMAKE_CURRENT_BINARY_DIR}/Unit/lit.site.cfg)
-  list(APPEND SANITIZER_COMMON_TESTSUITES ${CMAKE_CURRENT_BINARY_DIR}/Unit)
-  list(APPEND SANITIZER_COMMON_TEST_DEPS SanitizerUnitTests)
+  # FIXME: support unit test in the android test runner
+  if (NOT ANDROID)
+    list(APPEND SANITIZER_COMMON_TESTSUITES ${CMAKE_CURRENT_BINARY_DIR}/Unit)
+    list(APPEND SANITIZER_COMMON_TEST_DEPS SanitizerUnitTests)
+  endif()
 endif()
 
 if(SANITIZER_COMMON_TESTSUITES)

@@ -14,6 +14,8 @@ RUN: llvm-readobj -s %p/Inputs/trivial.obj.macho-ppc64 \
 RUN:   | FileCheck %s -check-prefix MACHO-PPC64
 RUN: llvm-readobj -s %p/Inputs/trivial.obj.macho-arm \
 RUN:   | FileCheck %s -check-prefix MACHO-ARM
+RUN: llvm-readobj -s %p/Inputs/trivial.obj.wasm \
+RUN:   | FileCheck %s -check-prefix WASM
 
 COFF:      Sections [
 COFF-NEXT:   Section {
@@ -490,3 +492,50 @@ MACHO-ARM-NEXT:    Reserved1: 0x0
 MACHO-ARM-NEXT:    Reserved2: 0x0
 MACHO-ARM-NEXT:  }
 MACHO-ARM-NEXT:]
+
+WASM:      Sections [
+WASM-NEXT:   Section {
+WASM-NEXT:     Type: TYPE (0x1)
+WASM-NEXT:     Size: 14
+WASM-NEXT:     Offset: 8
+WASM-NEXT:   }
+WASM-NEXT:   Section {
+WASM-NEXT:     Type: IMPORT (0x2)
+WASM-NEXT:     Size: 93
+WASM-NEXT:     Offset: 28
+WASM-NEXT:   }
+WASM-NEXT:   Section {
+WASM-NEXT:     Type: FUNCTION (0x3)
+WASM-NEXT:     Size: 2
+WASM-NEXT:     Offset: 127
+WASM-NEXT:   }
+WASM-NEXT:   Section {
+WASM-NEXT:     Type: CODE (0xA)
+WASM-NEXT:     Size: 25
+WASM-NEXT:     Offset: 135
+WASM-NEXT:   }
+WASM-NEXT:   Section {
+WASM-NEXT:     Type: DATA (0xB)
+WASM-NEXT:     Size: 19
+WASM-NEXT:     Offset: 166
+WASM-NEXT:     Segments [
+WASM-NEXT:       Segment {
+WASM-NEXT:         Name: .rodata..L.str
+WASM-NEXT:         Size: 13
+WASM-NEXT:         Offset: 0
+WASM-NEXT:       }
+WASM-NEXT:     ]
+WASM-NEXT:   }
+WASM-NEXT:   Section {
+WASM-NEXT:     Type: CUSTOM (0x0)
+WASM-NEXT:     Size: 61
+WASM-NEXT:     Offset: 191
+WASM-NEXT:     Name: linking
+WASM-NEXT:   }
+WASM-NEXT:   Section {
+WASM-NEXT:     Type: CUSTOM (0x0)
+WASM-NEXT:     Size: 12
+WASM-NEXT:     Offset: 266
+WASM-NEXT:     Name: reloc.CODE
+WASM-NEXT:   }
+WASM-NEXT: ]

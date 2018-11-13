@@ -8,14 +8,14 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file defines the WebAssembly-specific TargetTransformInfo
+/// This file defines the WebAssembly-specific TargetTransformInfo
 /// implementation.
 ///
 //===----------------------------------------------------------------------===//
 
 #include "WebAssemblyTargetTransformInfo.h"
+#include "llvm/CodeGen/CostTable.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Target/CostTable.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "wasmtti"
@@ -36,7 +36,7 @@ unsigned WebAssemblyTTIImpl::getNumberOfRegisters(bool Vector) {
   return Result;
 }
 
-unsigned WebAssemblyTTIImpl::getRegisterBitWidth(bool Vector) {
+unsigned WebAssemblyTTIImpl::getRegisterBitWidth(bool Vector) const {
   if (Vector && getST()->hasSIMD128())
     return 128;
 
@@ -46,7 +46,7 @@ unsigned WebAssemblyTTIImpl::getRegisterBitWidth(bool Vector) {
 unsigned WebAssemblyTTIImpl::getArithmeticInstrCost(
     unsigned Opcode, Type *Ty, TTI::OperandValueKind Opd1Info,
     TTI::OperandValueKind Opd2Info, TTI::OperandValueProperties Opd1PropInfo,
-    TTI::OperandValueProperties Opd2PropInfo) {
+    TTI::OperandValueProperties Opd2PropInfo, ArrayRef<const Value *> Args) {
 
   unsigned Cost = BasicTTIImplBase<WebAssemblyTTIImpl>::getArithmeticInstrCost(
       Opcode, Ty, Opd1Info, Opd2Info, Opd1PropInfo, Opd2PropInfo);

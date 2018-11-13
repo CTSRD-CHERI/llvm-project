@@ -12,12 +12,14 @@
 #include "lldb/API/SBFileSpec.h"
 #include "lldb/API/SBLaunchInfo.h"
 #include "lldb/API/SBUnixSignals.h"
-#include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/Error.h"
 #include "lldb/Host/File.h"
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/ArchSpec.h"
+#include "lldb/Utility/Args.h"
+#include "lldb/Utility/Status.h"
+
+#include "llvm/Support/FileSystem.h"
 
 #include <functional>
 
@@ -51,8 +53,7 @@ struct PlatformConnectOptions {
 //----------------------------------------------------------------------
 struct PlatformShellCommand {
   PlatformShellCommand(const char *shell_command = NULL)
-      : m_command(), m_working_dir(), m_status(0), m_signo(0),
-        m_timeout_sec(UINT32_MAX) {
+      : m_command(), m_working_dir(), m_status(0), m_signo(0) {
     if (shell_command && shell_command[0])
       m_command = shell_command;
   }
@@ -64,7 +65,7 @@ struct PlatformShellCommand {
   std::string m_output;
   int m_status;
   int m_signo;
-  uint32_t m_timeout_sec;
+  Timeout<std::ratio<1>> m_timeout = llvm::None;
 };
 //----------------------------------------------------------------------
 // SBPlatformConnectOptions
@@ -180,11 +181,16 @@ void SBPlatformShellCommand::SetWorkingDirectory(const char *path) {
 }
 
 uint32_t SBPlatformShellCommand::GetTimeoutSeconds() {
-  return m_opaque_ptr->m_timeout_sec;
+  if (m_opaque_ptr->m_timeout)
+    return m_opaque_ptr->m_timeout->count();
+  return UINT32_MAX;
 }
 
 void SBPlatformShellCommand::SetTimeoutSeconds(uint32_t sec) {
-  m_opaque_ptr->m_timeout_sec = sec;
+  if (sec == UINT32_MAX)
+    m_opaque_ptr->m_timeout = llvm::None;
+  else
+    m_opaque_ptr->m_timeout = std::chrono::seconds(sec);
 }
 
 int SBPlatformShellCommand::GetSignal() { return m_opaque_ptr->m_signo; }
@@ -203,7 +209,7 @@ const char *SBPlatformShellCommand::GetOutput() {
 SBPlatform::SBPlatform() : m_opaque_sp() {}
 
 SBPlatform::SBPlatform(const char *platform_name) : m_opaque_sp() {
-  Error error;
+  Status error;
   if (platform_name && platform_name[0])
     m_opaque_sp = Platform::Create(ConstString(platform_name), error);
 }
@@ -269,7 +275,7 @@ void SBPlatform::DisconnectRemote() {
 bool SBPlatform::IsConnected() {
   PlatformSP platform_sp(GetSP());
   if (platform_sp)
-    platform_sp->IsConnected();
+    return platform_sp->IsConnected();
   return false;
 }
 
@@ -324,27 +330,24 @@ const char *SBPlatform::GetHostname() {
 }
 
 uint32_t SBPlatform::GetOSMajorVersion() {
-  uint32_t major, minor, update;
-  PlatformSP platform_sp(GetSP());
-  if (platform_sp && platform_sp->GetOSVersion(major, minor, update))
-    return major;
-  return UINT32_MAX;
+  llvm::VersionTuple version;
+  if (PlatformSP platform_sp = GetSP())
+    version = platform_sp->GetOSVersion();
+  return version.empty() ? UINT32_MAX : version.getMajor();
 }
 
 uint32_t SBPlatform::GetOSMinorVersion() {
-  uint32_t major, minor, update;
-  PlatformSP platform_sp(GetSP());
-  if (platform_sp && platform_sp->GetOSVersion(major, minor, update))
-    return minor;
-  return UINT32_MAX;
+  llvm::VersionTuple version;
+  if (PlatformSP platform_sp = GetSP())
+    version = platform_sp->GetOSVersion();
+  return version.getMinor().getValueOr(UINT32_MAX);
 }
 
 uint32_t SBPlatform::GetOSUpdateVersion() {
-  uint32_t major, minor, update;
-  PlatformSP platform_sp(GetSP());
-  if (platform_sp && platform_sp->GetOSVersion(major, minor, update))
-    return update;
-  return UINT32_MAX;
+  llvm::VersionTuple version;
+  if (PlatformSP platform_sp = GetSP())
+    version = platform_sp->GetOSVersion();
+  return version.getSubminor().getValueOr(UINT32_MAX);
 }
 
 SBError SBPlatform::Get(SBFileSpec &src, SBFileSpec &dst) {
@@ -363,7 +366,7 @@ SBError SBPlatform::Put(SBFileSpec &src, SBFileSpec &dst) {
     if (src.Exists()) {
       uint32_t permissions = src.ref().GetPermissions();
       if (permissions == 0) {
-        if (src.ref().GetFileType() == FileSpec::eFileTypeDirectory)
+        if (llvm::sys::fs::is_directory(src.ref().GetPath()))
           permissions = eFilePermissionsDirectoryDefault;
         else
           permissions = eFilePermissionsFileDefault;
@@ -372,7 +375,7 @@ SBError SBPlatform::Put(SBFileSpec &src, SBFileSpec &dst) {
       return platform_sp->PutFile(src.ref(), dst.ref(), permissions);
     }
 
-    Error error;
+    Status error;
     error.SetErrorStringWithFormat("'src' argument doesn't exist: '%s'",
                                    src.ref().GetPath().c_str());
     return error;
@@ -384,7 +387,7 @@ SBError SBPlatform::Install(SBFileSpec &src, SBFileSpec &dst) {
     if (src.Exists())
       return platform_sp->Install(src.ref(), dst.ref());
 
-    Error error;
+    Status error;
     error.SetErrorStringWithFormat("'src' argument doesn't exist: '%s'",
                                    src.ref().GetPath().c_str());
     return error;
@@ -395,7 +398,7 @@ SBError SBPlatform::Run(SBPlatformShellCommand &shell_command) {
   return ExecuteConnected([&](const lldb::PlatformSP &platform_sp) {
     const char *command = shell_command.GetCommand();
     if (!command)
-      return Error("invalid shell command (empty)");
+      return Status("invalid shell command (empty)");
 
     const char *working_dir = shell_command.GetWorkingDirectory();
     if (working_dir == NULL) {
@@ -403,18 +406,20 @@ SBError SBPlatform::Run(SBPlatformShellCommand &shell_command) {
       if (working_dir)
         shell_command.SetWorkingDirectory(working_dir);
     }
-    return platform_sp->RunShellCommand(
-        command, FileSpec{working_dir, false},
-        &shell_command.m_opaque_ptr->m_status,
-        &shell_command.m_opaque_ptr->m_signo,
-        &shell_command.m_opaque_ptr->m_output,
-        shell_command.m_opaque_ptr->m_timeout_sec);
+    return platform_sp->RunShellCommand(command, FileSpec{working_dir, false},
+                                        &shell_command.m_opaque_ptr->m_status,
+                                        &shell_command.m_opaque_ptr->m_signo,
+                                        &shell_command.m_opaque_ptr->m_output,
+                                        shell_command.m_opaque_ptr->m_timeout);
   });
 }
 
 SBError SBPlatform::Launch(SBLaunchInfo &launch_info) {
   return ExecuteConnected([&](const lldb::PlatformSP &platform_sp) {
-    return platform_sp->LaunchProcess(launch_info.ref());
+    ProcessLaunchInfo info = launch_info.ref();
+    Status error = platform_sp->LaunchProcess(info);
+    launch_info.set_ref(info);
+    return error;
   });
 }
 
@@ -425,7 +430,7 @@ SBError SBPlatform::Kill(const lldb::pid_t pid) {
 }
 
 SBError SBPlatform::ExecuteConnected(
-    const std::function<Error(const lldb::PlatformSP &)> &func) {
+    const std::function<Status(const lldb::PlatformSP &)> &func) {
   SBError sb_error;
   const auto platform_sp(GetSP());
   if (platform_sp) {

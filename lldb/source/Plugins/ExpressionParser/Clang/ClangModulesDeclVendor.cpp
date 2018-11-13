@@ -20,26 +20,30 @@
 #include "clang/Parse/Parser.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Serialization/ASTReader.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/Threading.h"
 
 // Project includes
+#include "ClangHost.h"
 #include "ClangModulesDeclVendor.h"
 
-#include "lldb/Core/Log.h"
-#include "lldb/Core/StreamString.h"
-#include "lldb/Host/FileSpec.h"
+#include "lldb/Core/ModuleList.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/LLDBAssert.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb_private;
 
 namespace {
-// Any Clang compiler requires a consumer for diagnostics.  This one stores them
-// as strings
-// so we can provide them to the user in case a module failed to load.
+// Any Clang compiler requires a consumer for diagnostics.  This one stores
+// them as strings so we can provide them to the user in case a module failed
+// to load.
 class StoringDiagnosticConsumer : public clang::DiagnosticConsumer {
 public:
   StoringDiagnosticConsumer();
@@ -59,15 +63,14 @@ private:
 };
 
 // The private implementation of our ClangModulesDeclVendor.  Contains all the
-// Clang state required
-// to load modules.
+// Clang state required to load modules.
 class ClangModulesDeclVendorImpl : public ClangModulesDeclVendor {
 public:
   ClangModulesDeclVendorImpl(
-      llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine> &diagnostics_engine,
-      llvm::IntrusiveRefCntPtr<clang::CompilerInvocation> &compiler_invocation,
-      std::unique_ptr<clang::CompilerInstance> &&compiler_instance,
-      std::unique_ptr<clang::Parser> &&parser);
+      llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine> diagnostics_engine,
+      std::shared_ptr<clang::CompilerInvocation> compiler_invocation,
+      std::unique_ptr<clang::CompilerInstance> compiler_instance,
+      std::unique_ptr<clang::Parser> parser);
 
   ~ClangModulesDeclVendorImpl() override = default;
 
@@ -83,6 +86,7 @@ public:
   void ForEachMacro(const ModuleVector &modules,
                     std::function<bool(const std::string &)> handler) override;
 
+  clang::ExternalASTMerger::ImporterSource GetImporterSource() override;
 private:
   void
   ReportModuleExportsHelper(std::set<ClangModulesDeclVendor::ModuleID> &exports,
@@ -96,7 +100,7 @@ private:
   bool m_enabled = false;
 
   llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine> m_diagnostics_engine;
-  llvm::IntrusiveRefCntPtr<clang::CompilerInvocation> m_compiler_invocation;
+  std::shared_ptr<clang::CompilerInvocation> m_compiler_invocation;
   std::unique_ptr<clang::CompilerInstance> m_compiler_instance;
   std::unique_ptr<clang::Parser> m_parser;
   size_t m_source_location_index =
@@ -107,6 +111,7 @@ private:
   typedef std::set<ModuleID> ImportedModuleSet;
   ImportedModuleMap m_imported_modules;
   ImportedModuleSet m_user_imported_modules;
+  const clang::ExternalASTMerger::OriginMap m_origin_map;
 };
 } // anonymous namespace
 
@@ -140,31 +145,19 @@ void StoringDiagnosticConsumer::DumpDiagnostics(Stream &error_stream) {
   }
 }
 
-static FileSpec GetResourceDir() {
-  static FileSpec g_cached_resource_dir;
-
-  static std::once_flag g_once_flag;
-
-  std::call_once(g_once_flag, []() {
-    HostInfo::GetLLDBPath(lldb::ePathTypeClangDir, g_cached_resource_dir);
-  });
-
-  return g_cached_resource_dir;
-}
-
 ClangModulesDeclVendor::ClangModulesDeclVendor() {}
 
 ClangModulesDeclVendor::~ClangModulesDeclVendor() {}
 
 ClangModulesDeclVendorImpl::ClangModulesDeclVendorImpl(
-    llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine> &diagnostics_engine,
-    llvm::IntrusiveRefCntPtr<clang::CompilerInvocation> &compiler_invocation,
-    std::unique_ptr<clang::CompilerInstance> &&compiler_instance,
-    std::unique_ptr<clang::Parser> &&parser)
-    : ClangModulesDeclVendor(), m_diagnostics_engine(diagnostics_engine),
-      m_compiler_invocation(compiler_invocation),
+    llvm::IntrusiveRefCntPtr<clang::DiagnosticsEngine> diagnostics_engine,
+    std::shared_ptr<clang::CompilerInvocation> compiler_invocation,
+    std::unique_ptr<clang::CompilerInstance> compiler_instance,
+    std::unique_ptr<clang::Parser> parser)
+    : m_diagnostics_engine(std::move(diagnostics_engine)),
+      m_compiler_invocation(std::move(compiler_invocation)),
       m_compiler_instance(std::move(compiler_instance)),
-      m_parser(std::move(parser)), m_imported_modules() {}
+      m_parser(std::move(parser)), m_origin_map() {}
 
 void ClangModulesDeclVendorImpl::ReportModuleExportsHelper(
     std::set<ClangModulesDeclVendor::ModuleID> &exports,
@@ -449,16 +442,16 @@ void ClangModulesDeclVendorImpl::ForEachMacro(
 
           bool first_arg = true;
 
-          for (clang::MacroInfo::arg_iterator ai = macro_info->arg_begin(),
-                                              ae = macro_info->arg_end();
-               ai != ae; ++ai) {
+          for (auto pi = macro_info->param_begin(),
+                    pe = macro_info->param_end();
+               pi != pe; ++pi) {
             if (!first_arg) {
               macro_expansion.append(", ");
             } else {
               first_arg = false;
             }
 
-            macro_expansion.append((*ai)->getName().str());
+            macro_expansion.append((*pi)->getName().str());
           }
 
           if (macro_info->isC99Varargs()) {
@@ -498,7 +491,7 @@ void ClangModulesDeclVendorImpl::ForEachMacro(
                       ti->getLocation(), &invalid);
 
               if (invalid) {
-                lldbassert(!"Unhandled token kind");
+                lldbassert(0 && "Unhandled token kind");
                 macro_expansion.append("<unknown literal value>");
               } else {
                 macro_expansion.append(
@@ -546,6 +539,12 @@ ClangModulesDeclVendorImpl::DoGetModule(clang::ModuleIdPath path,
                                          is_inclusion_directive);
 }
 
+clang::ExternalASTMerger::ImporterSource
+ClangModulesDeclVendorImpl::GetImporterSource() {
+  return {m_compiler_instance->getASTContext(),
+          m_compiler_instance->getFileManager(), m_origin_map};
+}
+
 static const char *ModuleImportBufferName = "LLDBModulesMemoryBuffer";
 
 lldb_private::ClangModulesDeclVendor *
@@ -580,14 +579,11 @@ ClangModulesDeclVendor::Create(Target &target) {
   // Add additional search paths with { "-I", path } or { "-F", path } here.
 
   {
-    llvm::SmallString<128> DefaultModuleCache;
-    const bool erased_on_reboot = false;
-    llvm::sys::path::system_temp_directory(erased_on_reboot,
-                                           DefaultModuleCache);
-    llvm::sys::path::append(DefaultModuleCache, "org.llvm.clang");
-    llvm::sys::path::append(DefaultModuleCache, "ModuleCache");
+    llvm::SmallString<128> path;
+    auto props = ModuleList::GetGlobalModuleListProperties();
+    props.GetClangModulesCachePath().GetPath(path);
     std::string module_cache_argument("-fmodules-cache-path=");
-    module_cache_argument.append(DefaultModuleCache.str().str());
+    module_cache_argument.append(path.str());
     compiler_invocation_arguments.push_back(module_cache_argument);
   }
 
@@ -603,9 +599,9 @@ ClangModulesDeclVendor::Create(Target &target) {
   }
 
   {
-    FileSpec clang_resource_dir = GetResourceDir();
+    FileSpec clang_resource_dir = GetClangResourceDir();
 
-    if (clang_resource_dir.IsDirectory()) {
+    if (llvm::sys::fs::is_directory(clang_resource_dir.GetPath())) {
       compiler_invocation_arguments.push_back("-resource-dir");
       compiler_invocation_arguments.push_back(clang_resource_dir.GetPath());
     }
@@ -621,9 +617,9 @@ ClangModulesDeclVendor::Create(Target &target) {
     compiler_invocation_argument_cstrs.push_back(arg.c_str());
   }
 
-  llvm::IntrusiveRefCntPtr<clang::CompilerInvocation> invocation(
+  std::shared_ptr<clang::CompilerInvocation> invocation =
       clang::createInvocationFromCommandLine(compiler_invocation_argument_cstrs,
-                                             diagnostics_engine));
+                                             diagnostics_engine);
 
   if (!invocation)
     return nullptr;
@@ -640,7 +636,7 @@ ClangModulesDeclVendor::Create(Target &target) {
       new clang::CompilerInstance);
 
   instance->setDiagnostics(diagnostics_engine.get());
-  instance->setInvocation(invocation.get());
+  instance->setInvocation(invocation);
 
   std::unique_ptr<clang::FrontendAction> action(new clang::SyntaxOnlyAction);
 
@@ -674,6 +670,7 @@ ClangModulesDeclVendor::Create(Target &target) {
   while (!parser->ParseTopLevelDecl(parsed))
     ;
 
-  return new ClangModulesDeclVendorImpl(diagnostics_engine, invocation,
+  return new ClangModulesDeclVendorImpl(std::move(diagnostics_engine),
+                                        std::move(invocation),
                                         std::move(instance), std::move(parser));
 }

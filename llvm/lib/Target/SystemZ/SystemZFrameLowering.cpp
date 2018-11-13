@@ -71,7 +71,7 @@ void SystemZFrameLowering::determineCalleeSaves(MachineFunction &MF,
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   bool HasFP = hasFP(MF);
   SystemZMachineFunctionInfo *MFI = MF.getInfo<SystemZMachineFunctionInfo>();
-  bool IsVarArg = MF.getFunction()->isVarArg();
+  bool IsVarArg = MF.getFunction().isVarArg();
 
   // va_start stores incoming FPR varargs in the normal way, but delegates
   // the saving of incoming GPR varargs to spillCalleeSavedRegisters().
@@ -82,7 +82,7 @@ void SystemZFrameLowering::determineCalleeSaves(MachineFunction &MF,
       SavedRegs.set(SystemZ::ArgGPRs[I]);
 
   // If there are any landing pads, entering them will modify r6/r7.
-  if (!MF.getMMI().getLandingPads().empty()) {
+  if (!MF.getLandingPads().empty()) {
     SavedRegs.set(SystemZ::R6D);
     SavedRegs.set(SystemZ::R7D);
   }
@@ -139,7 +139,7 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
   MachineFunction &MF = *MBB.getParent();
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   SystemZMachineFunctionInfo *ZFI = MF.getInfo<SystemZMachineFunctionInfo>();
-  bool IsVarArg = MF.getFunction()->isVarArg();
+  bool IsVarArg = MF.getFunction().isVarArg();
   DebugLoc DL;
 
   // Scan the call-saved GPRs and find the bounds of the register spill area.
@@ -204,13 +204,18 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
         addSavedGPR(MBB, MIB, SystemZ::ArgGPRs[I], true);
   }
 
-  // Save FPRs in the normal TargetInstrInfo way.
+  // Save FPRs/VRs in the normal TargetInstrInfo way.
   for (unsigned I = 0, E = CSI.size(); I != E; ++I) {
     unsigned Reg = CSI[I].getReg();
     if (SystemZ::FP64BitRegClass.contains(Reg)) {
       MBB.addLiveIn(Reg);
       TII->storeRegToStackSlot(MBB, MBBI, Reg, true, CSI[I].getFrameIdx(),
                                &SystemZ::FP64BitRegClass, TRI);
+    }
+    if (SystemZ::VR128BitRegClass.contains(Reg)) {
+      MBB.addLiveIn(Reg);
+      TII->storeRegToStackSlot(MBB, MBBI, Reg, true, CSI[I].getFrameIdx(),
+                               &SystemZ::VR128BitRegClass, TRI);
     }
   }
 
@@ -220,7 +225,7 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
 bool SystemZFrameLowering::
 restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator MBBI,
-                            const std::vector<CalleeSavedInfo> &CSI,
+                            std::vector<CalleeSavedInfo> &CSI,
                             const TargetRegisterInfo *TRI) const {
   if (CSI.empty())
     return false;
@@ -231,12 +236,15 @@ restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
   bool HasFP = hasFP(MF);
   DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
 
-  // Restore FPRs in the normal TargetInstrInfo way.
+  // Restore FPRs/VRs in the normal TargetInstrInfo way.
   for (unsigned I = 0, E = CSI.size(); I != E; ++I) {
     unsigned Reg = CSI[I].getReg();
     if (SystemZ::FP64BitRegClass.contains(Reg))
       TII->loadRegFromStackSlot(MBB, MBBI, Reg, CSI[I].getFrameIdx(),
                                 &SystemZ::FP64BitRegClass, TRI);
+    if (SystemZ::VR128BitRegClass.contains(Reg))
+      TII->loadRegFromStackSlot(MBB, MBBI, Reg, CSI[I].getFrameIdx(),
+                                &SystemZ::VR128BitRegClass, TRI);
   }
 
   // Restore call-saved GPRs (but not call-clobbered varargs, which at
@@ -277,8 +285,21 @@ void SystemZFrameLowering::
 processFunctionBeforeFrameFinalized(MachineFunction &MF,
                                     RegScavenger *RS) const {
   MachineFrameInfo &MFFrame = MF.getFrameInfo();
-  uint64_t MaxReach = (MFFrame.estimateStackSize(MF) +
-                       SystemZMC::CallFrameSize * 2);
+  // Get the size of our stack frame to be allocated ...
+  uint64_t StackSize = (MFFrame.estimateStackSize(MF) +
+                        SystemZMC::CallFrameSize);
+  // ... and the maximum offset we may need to reach into the
+  // caller's frame to access the save area or stack arguments.
+  int64_t MaxArgOffset = SystemZMC::CallFrameSize;
+  for (int I = MFFrame.getObjectIndexBegin(); I != 0; ++I)
+    if (MFFrame.getObjectOffset(I) >= 0) {
+      int64_t ArgOffset = SystemZMC::CallFrameSize +
+                          MFFrame.getObjectOffset(I) +
+                          MFFrame.getObjectSize(I);
+      MaxArgOffset = std::max(MaxArgOffset, ArgOffset);
+    }
+
+  uint64_t MaxReach = StackSize + MaxArgOffset;
   if (!isUInt<12>(MaxReach)) {
     // We may need register scavenging slots if some parts of the frame
     // are outside the reach of an unsigned 12-bit displacement.
@@ -350,7 +371,7 @@ void SystemZFrameLowering::emitPrologue(MachineFunction &MF,
       unsigned Reg = Save.getReg();
       if (SystemZ::GR64BitRegClass.contains(Reg)) {
         int64_t Offset = SPOffsetFromCFA + RegSpillOffsets[Reg];
-        unsigned CFIIndex = MMI.addFrameInst(MCCFIInstruction::createOffset(
+        unsigned CFIIndex = MF.addFrameInst(MCCFIInstruction::createOffset(
             nullptr, MRI->getDwarfRegNum(Reg, true), Offset));
         BuildMI(MBB, MBBI, DL, ZII->get(TargetOpcode::CFI_INSTRUCTION))
             .addCFIIndex(CFIIndex);
@@ -358,10 +379,18 @@ void SystemZFrameLowering::emitPrologue(MachineFunction &MF,
     }
   }
 
-  uint64_t StackSize = getAllocatedStackSize(MF);
+  uint64_t StackSize = MFFrame.getStackSize();
+  // We need to allocate the ABI-defined 160-byte base area whenever
+  // we allocate stack space for our own use and whenever we call another
+  // function.
+  if (StackSize || MFFrame.hasVarSizedObjects() || MFFrame.hasCalls()) {
+    StackSize += SystemZMC::CallFrameSize;
+    MFFrame.setStackSize(StackSize);
+  }
+
   if (StackSize) {
     // Determine if we want to store a backchain.
-    bool StoreBackchain = MF.getFunction()->hasFnAttribute("backchain");
+    bool StoreBackchain = MF.getFunction().hasFnAttribute("backchain");
 
     // If we need backchain, save current stack pointer.  R1 is free at this
     // point.
@@ -374,7 +403,7 @@ void SystemZFrameLowering::emitPrologue(MachineFunction &MF,
     emitIncrement(MBB, MBBI, DL, SystemZ::R15D, Delta, ZII);
 
     // Add CFI for the allocation.
-    unsigned CFIIndex = MMI.addFrameInst(
+    unsigned CFIIndex = MF.addFrameInst(
         MCCFIInstruction::createDefCfaOffset(nullptr, SPOffsetFromCFA + Delta));
     BuildMI(MBB, MBBI, DL, ZII->get(TargetOpcode::CFI_INSTRUCTION))
         .addCFIIndex(CFIIndex);
@@ -392,7 +421,7 @@ void SystemZFrameLowering::emitPrologue(MachineFunction &MF,
 
     // Add CFI for the new frame location.
     unsigned HardFP = MRI->getDwarfRegNum(SystemZ::R11D, true);
-    unsigned CFIIndex = MMI.addFrameInst(
+    unsigned CFIIndex = MF.addFrameInst(
         MCCFIInstruction::createDefCfaRegister(nullptr, HardFP));
     BuildMI(MBB, MBBI, DL, ZII->get(TargetOpcode::CFI_INSTRUCTION))
         .addCFIIndex(CFIIndex);
@@ -404,7 +433,7 @@ void SystemZFrameLowering::emitPrologue(MachineFunction &MF,
       I->addLiveIn(SystemZ::R11D);
   }
 
-  // Skip over the FPR saves.
+  // Skip over the FPR/VR saves.
   SmallVector<unsigned, 8> CFIIndexes;
   for (auto &Save : CSI) {
     unsigned Reg = Save.getReg();
@@ -415,19 +444,26 @@ void SystemZFrameLowering::emitPrologue(MachineFunction &MF,
         ++MBBI;
       else
         llvm_unreachable("Couldn't skip over FPR save");
+    } else if (SystemZ::VR128BitRegClass.contains(Reg)) {
+      if (MBBI != MBB.end() &&
+          MBBI->getOpcode() == SystemZ::VST)
+        ++MBBI;
+      else
+        llvm_unreachable("Couldn't skip over VR save");
+    } else
+      continue;
 
-      // Add CFI for the this save.
-      unsigned DwarfReg = MRI->getDwarfRegNum(Reg, true);
-      unsigned IgnoredFrameReg;
-      int64_t Offset =
-          getFrameIndexReference(MF, Save.getFrameIdx(), IgnoredFrameReg);
+    // Add CFI for the this save.
+    unsigned DwarfReg = MRI->getDwarfRegNum(Reg, true);
+    unsigned IgnoredFrameReg;
+    int64_t Offset =
+        getFrameIndexReference(MF, Save.getFrameIdx(), IgnoredFrameReg);
 
-      unsigned CFIIndex = MMI.addFrameInst(MCCFIInstruction::createOffset(
+    unsigned CFIIndex = MF.addFrameInst(MCCFIInstruction::createOffset(
           nullptr, DwarfReg, SPOffsetFromCFA + Offset));
-      CFIIndexes.push_back(CFIIndex);
-    }
+    CFIIndexes.push_back(CFIIndex);
   }
-  // Complete the CFI for the FPR saves, modelling them as taking effect
+  // Complete the CFI for the FPR/VR saves, modelling them as taking effect
   // after the last save.
   for (auto CFIIndex : CFIIndexes) {
     BuildMI(MBB, MBBI, DL, ZII->get(TargetOpcode::CFI_INSTRUCTION))
@@ -441,11 +477,12 @@ void SystemZFrameLowering::emitEpilogue(MachineFunction &MF,
   auto *ZII =
       static_cast<const SystemZInstrInfo *>(MF.getSubtarget().getInstrInfo());
   SystemZMachineFunctionInfo *ZFI = MF.getInfo<SystemZMachineFunctionInfo>();
+  MachineFrameInfo &MFFrame = MF.getFrameInfo();
 
   // Skip the return instruction.
   assert(MBBI->isReturn() && "Can only insert epilogue into returning blocks");
 
-  uint64_t StackSize = getAllocatedStackSize(MF);
+  uint64_t StackSize = MFFrame.getStackSize();
   if (ZFI->getLowSavedGPR()) {
     --MBBI;
     unsigned Opcode = MBBI->getOpcode();
@@ -480,46 +517,6 @@ bool SystemZFrameLowering::hasFP(const MachineFunction &MF) const {
   return (MF.getTarget().Options.DisableFramePointerElim(MF) ||
           MF.getFrameInfo().hasVarSizedObjects() ||
           MF.getInfo<SystemZMachineFunctionInfo>()->getManipulatesSP());
-}
-
-int SystemZFrameLowering::getFrameIndexReference(const MachineFunction &MF,
-                                                 int FI,
-                                                 unsigned &FrameReg) const {
-  const MachineFrameInfo &MFFrame = MF.getFrameInfo();
-  const TargetRegisterInfo *RI = MF.getSubtarget().getRegisterInfo();
-
-  // Fill in FrameReg output argument.
-  FrameReg = RI->getFrameRegister(MF);
-
-  // Start with the offset of FI from the top of the caller-allocated frame
-  // (i.e. the top of the 160 bytes allocated by the caller).  This initial
-  // offset is therefore negative.
-  int64_t Offset = (MFFrame.getObjectOffset(FI) +
-                    MFFrame.getOffsetAdjustment());
-
-  // Make the offset relative to the incoming stack pointer.
-  Offset -= getOffsetOfLocalArea();
-
-  // Make the offset relative to the bottom of the frame.
-  Offset += getAllocatedStackSize(MF);
-
-  return Offset;
-}
-
-uint64_t SystemZFrameLowering::
-getAllocatedStackSize(const MachineFunction &MF) const {
-  const MachineFrameInfo &MFFrame = MF.getFrameInfo();
-
-  // Start with the size of the local variables and spill slots.
-  uint64_t StackSize = MFFrame.getStackSize();
-
-  // We need to allocate the ABI-defined 160-byte base area whenever
-  // we allocate stack space for our own use and whenever we call another
-  // function.
-  if (StackSize || MFFrame.hasVarSizedObjects() || MFFrame.hasCalls())
-    StackSize += SystemZMC::CallFrameSize;
-
-  return StackSize;
 }
 
 bool

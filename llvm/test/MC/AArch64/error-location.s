@@ -31,18 +31,8 @@
 // CHECK: :[[@LINE+1]]:{{[0-9]+}}: error: invalid fixup for 16-bit load/store instruction
   ldrh w0, [x1, :gottprel_lo12:undef]
 
-// CHECK: :[[@LINE+1]]:{{[0-9]+}}: error: invalid fixup for 32-bit load/store instruction
+// CHECK: :[[@LINE+1]]:{{[0-9]+}}: error: LP64 32-bit load/store relocation not supported (ILP32 eqv: TLSIE_LD32_GOTTPREL_LO12_NC)
   ldr w0, [x1, :gottprel_lo12:undef]
-
-// CHECK: <unknown>:0: error: expression could not be evaluated
-  .set v1, -undef
-
-  .comm common, 4
-// CHECK: <unknown>:0: error: Common symbol 'common' cannot be used in assignment expr
-  .set v3, common
-
-// CHECK: <unknown>:0: error: symbol 'undef' could not be evaluated in a subtraction expression
-  .set v2, a-undef
 
 
 

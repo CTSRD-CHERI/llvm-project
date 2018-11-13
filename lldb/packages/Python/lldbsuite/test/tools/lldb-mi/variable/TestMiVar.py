@@ -17,6 +17,8 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
 
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
+    @skipIfDarwin
     def test_lldbmi_eval(self):
         """Test that 'lldb-mi --interpreter' works for evaluating."""
 
@@ -158,6 +160,8 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     @skipIfLinux  # llvm.org/pr22841: lldb-mi tests fail on all Linux buildbots
+    @skipIfDarwin
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     def test_lldbmi_var_update(self):
         """Test that 'lldb-mi --interpreter' works for -var-update."""
 
@@ -227,6 +231,8 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
 
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
+    @skipIfDarwin
     def test_lldbmi_var_create_register(self):
         """Test that 'lldb-mi --interpreter' works for -var-create $regname."""
 
@@ -270,6 +276,8 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     @skipIfLinux  # llvm.org/pr22841: lldb-mi tests fail on all Linux buildbots
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
+    @skipIfDarwin
     def test_lldbmi_var_list_children(self):
         """Test that 'lldb-mi --interpreter' works for -var-list-children."""
 
@@ -389,6 +397,8 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     @skipIfLinux  # llvm.org/pr22841: lldb-mi tests fail on all Linux buildbots
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
+    @skipIfDarwin
     def test_lldbmi_var_create_for_stl_types(self):
         """Test that 'lldb-mi --interpreter' print summary for STL types."""
 
@@ -414,6 +424,8 @@ class MiVarTestCase(lldbmi_testcase.MiTestCaseBase):
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     @skipIfLinux  # llvm.org/pr22841: lldb-mi tests fail on all Linux buildbots
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
+    @skipIfDarwin
     def test_lldbmi_var_create_for_unnamed_objects(self):
         """Test that 'lldb-mi --interpreter' can expand unnamed structures and unions."""
 

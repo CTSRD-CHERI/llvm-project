@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm-c/Core.h"
+#include "llvm-c/Linker.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/IR/BasicBlock.h"
@@ -16,8 +18,6 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Linker/Linker.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm-c/Core.h"
-#include "llvm-c/Linker.h"
 #include "gtest/gtest.h"
 
 using namespace llvm;
@@ -98,7 +98,7 @@ TEST_F(LinkModuleTest, BlockAddress) {
   Builder.CreateRet(ConstantPointerNull::get(Type::getInt8PtrTy(Ctx)));
 
   Module *LinkedModule = new Module("MyModuleLinked", Ctx);
-  Ctx.setDiagnosticHandler(expectNoDiags);
+  Ctx.setDiagnosticHandlerCallBack(expectNoDiags);
   Linker::linkModules(*LinkedModule, std::move(M));
 
   // Check that the global "@switch.bas" is well-formed.
@@ -172,14 +172,14 @@ static Module *getInternal(LLVMContext &Ctx) {
 TEST_F(LinkModuleTest, EmptyModule) {
   std::unique_ptr<Module> InternalM(getInternal(Ctx));
   std::unique_ptr<Module> EmptyM(new Module("EmptyModule1", Ctx));
-  Ctx.setDiagnosticHandler(expectNoDiags);
+  Ctx.setDiagnosticHandlerCallBack(expectNoDiags);
   Linker::linkModules(*EmptyM, std::move(InternalM));
 }
 
 TEST_F(LinkModuleTest, EmptyModule2) {
   std::unique_ptr<Module> InternalM(getInternal(Ctx));
   std::unique_ptr<Module> EmptyM(new Module("EmptyModule1", Ctx));
-  Ctx.setDiagnosticHandler(expectNoDiags);
+  Ctx.setDiagnosticHandlerCallBack(expectNoDiags);
   Linker::linkModules(*InternalM, std::move(EmptyM));
 }
 
@@ -195,7 +195,7 @@ TEST_F(LinkModuleTest, TypeMerge) {
                       "@t2 = weak global %t zeroinitializer\n";
   std::unique_ptr<Module> M2 = parseAssemblyString(M2Str, Err, C);
 
-  Ctx.setDiagnosticHandler(expectNoDiags);
+  Ctx.setDiagnosticHandlerCallBack(expectNoDiags);
   Linker::linkModules(*M1, std::move(M2));
 
   EXPECT_EQ(M1->getNamedGlobal("t1")->getType(),
@@ -280,7 +280,7 @@ TEST_F(LinkModuleTest, MoveDistinctMDs) {
   // Link into destination module.
   auto Dst = llvm::make_unique<Module>("Linked", C);
   ASSERT_TRUE(Dst.get());
-  Ctx.setDiagnosticHandler(expectNoDiags);
+  Ctx.setDiagnosticHandlerCallBack(expectNoDiags);
   Linker::linkModules(*Dst, std::move(Src));
 
   // Check that distinct metadata was moved, not cloned.  Even !4, the uniqued
@@ -317,46 +317,46 @@ TEST_F(LinkModuleTest, RemangleIntrinsics) {
   const char *FooStr =
     "%struct.rtx_def = type { i16 }\n"
     "define void @foo(%struct.rtx_def* %a, i8 %b, i32 %c) {\n"
-    "  call void  @llvm.memset.p0struct.rtx_def.i32(%struct.rtx_def* %a, i8 %b, i32 %c, i32 4, i1 true)\n"
+    "  call void  @llvm.memset.p0s_struct.rtx_defs.i32(%struct.rtx_def* %a, i8 %b, i32 %c, i32 4, i1 true)\n"
     "  ret void\n"
     "}\n"
-    "declare void @llvm.memset.p0struct.rtx_def.i32(%struct.rtx_def*, i8, i32, i32, i1)\n";
+    "declare void @llvm.memset.p0s_struct.rtx_defs.i32(%struct.rtx_def*, i8, i32, i32, i1)\n";
 
   const char *BarStr =
     "%struct.rtx_def = type { i16 }\n"
     "define void @bar(%struct.rtx_def* %a, i8 %b, i32 %c) {\n"
-    "  call void  @llvm.memset.p0struct.rtx_def.i32(%struct.rtx_def* %a, i8 %b, i32 %c, i32 4, i1 true)\n"
+    "  call void  @llvm.memset.p0s_struct.rtx_defs.i32(%struct.rtx_def* %a, i8 %b, i32 %c, i32 4, i1 true)\n"
     "  ret void\n"
     "}\n"
-    "declare void @llvm.memset.p0struct.rtx_def.i32(%struct.rtx_def*, i8, i32, i32, i1)\n";
+    "declare void @llvm.memset.p0s_struct.rtx_defs.i32(%struct.rtx_def*, i8, i32, i32, i1)\n";
 
   std::unique_ptr<Module> Foo = parseAssemblyString(FooStr, Err, C);
   assert(Foo);
   ASSERT_TRUE(Foo.get());
   // Foo is loaded first, so the type and the intrinsic have theis original
   // names.
-  ASSERT_TRUE(Foo->getFunction("llvm.memset.p0struct.rtx_def.i32"));
-  ASSERT_FALSE(Foo->getFunction("llvm.memset.p0struct.rtx_def.0.i32"));
+  ASSERT_TRUE(Foo->getFunction("llvm.memset.p0s_struct.rtx_defs.i32"));
+  ASSERT_FALSE(Foo->getFunction("llvm.memset.p0s_struct.rtx_defs.0.i32"));
 
   std::unique_ptr<Module> Bar = parseAssemblyString(BarStr, Err, C);
   assert(Bar);
   ASSERT_TRUE(Bar.get());
   // Bar is loaded after Foo, so the type is renamed to struct.rtx_def.0. Check
   // that the intrinsic is also renamed.
-  ASSERT_FALSE(Bar->getFunction("llvm.memset.p0struct.rtx_def.i32"));
-  ASSERT_TRUE(Bar->getFunction("llvm.memset.p0struct.rtx_def.0.i32"));
+  ASSERT_FALSE(Bar->getFunction("llvm.memset.p0s_struct.rtx_defs.i32"));
+  ASSERT_TRUE(Bar->getFunction("llvm.memset.p0s_struct.rtx_def.0s.i32"));
 
   // Link two modules together.
   auto Dst = llvm::make_unique<Module>("Linked", C);
   ASSERT_TRUE(Dst.get());
-  Ctx.setDiagnosticHandler(expectNoDiags);
+  Ctx.setDiagnosticHandlerCallBack(expectNoDiags);
   bool Failed = Linker::linkModules(*Foo, std::move(Bar));
   ASSERT_FALSE(Failed);
 
   // "struct.rtx_def" from Foo and "struct.rtx_def.0" from Bar are isomorphic
   // types, so they must be uniquified by linker. Check that they use the same
   // intrinsic definition.
-  Function *F = Foo->getFunction("llvm.memset.p0struct.rtx_def.i32");
+  Function *F = Foo->getFunction("llvm.memset.p0s_struct.rtx_defs.i32");
   ASSERT_EQ(F->getNumUses(), (unsigned)2);
 }
 

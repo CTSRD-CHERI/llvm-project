@@ -1,11 +1,10 @@
+# REQUIRES: mips
 # Check R_MIPS_GOT_HI16 / R_MIPS_GOT_LO16 relocations calculation.
 
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-linux %s -o %t.o
 # RUN: ld.lld %t.o -shared -o %t.so
 # RUN: llvm-objdump -d %t.so | FileCheck %s
 # RUN: llvm-readobj -r -mips-plt-got %t.so | FileCheck -check-prefix=GOT %s
-
-# REQUIRES: mips
 
 # CHECK:      Disassembly of section .text:
 # CHECK-NEXT: foo:
@@ -20,22 +19,22 @@
 # GOT-NEXT: ]
 
 # GOT:      Primary GOT {
-# GOT-NEXT:   Canonical gp value: 0x27FF0
+# GOT-NEXT:   Canonical gp value:
 # GOT:        Local entries [
 # GOT-NEXT:     Entry {
-# GOT-NEXT:       Address: 0x20008
+# GOT-NEXT:       Address:
 # GOT-NEXT:       Access: -32744
-# GOT-NEXT:       Initial: 0x30000
+# GOT-NEXT:       Initial: 0x20000
 # GOT-NEXT:     }
 # GOT-NEXT:     Entry {
-# GOT-NEXT:       Address: 0x2000C
+# GOT-NEXT:       Address:
 # GOT-NEXT:       Access: -32740
-# GOT-NEXT:       Initial: 0x30004
+# GOT-NEXT:       Initial: 0x20004
 # GOT-NEXT:     }
 # GOT-NEXT:   ]
 # GOT-NEXT:   Global entries [
 # GOT-NEXT:     Entry {
-# GOT-NEXT:       Address: 0x20010
+# GOT-NEXT:       Address:
 # GOT-NEXT:       Access: -32736
 # GOT-NEXT:       Initial: 0x0
 # GOT-NEXT:       Value: 0x0

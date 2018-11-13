@@ -15,6 +15,7 @@ package llvm
 
 /*
 #include "llvm-c/Core.h"
+#include "llvm-c/Comdat.h"
 #include "IRBindings.h"
 #include <stdlib.h>
 */
@@ -37,6 +38,9 @@ type (
 	Value struct {
 		C C.LLVMValueRef
 	}
+	Comdat struct {
+		C C.LLVMComdatRef
+	}
 	BasicBlock struct {
 		C C.LLVMBasicBlockRef
 	}
@@ -58,14 +62,19 @@ type (
 	Metadata struct {
 		C C.LLVMMetadataRef
 	}
-	Opcode           C.LLVMOpcode
-	TypeKind         C.LLVMTypeKind
-	Linkage          C.LLVMLinkage
-	Visibility       C.LLVMVisibility
-	CallConv         C.LLVMCallConv
-	IntPredicate     C.LLVMIntPredicate
-	FloatPredicate   C.LLVMRealPredicate
-	LandingPadClause C.LLVMLandingPadClauseTy
+	Attribute struct {
+		C C.LLVMAttributeRef
+	}
+	Opcode              C.LLVMOpcode
+	TypeKind            C.LLVMTypeKind
+	Linkage             C.LLVMLinkage
+	Visibility          C.LLVMVisibility
+	CallConv            C.LLVMCallConv
+	ComdatSelectionKind C.LLVMComdatSelectionKind
+	IntPredicate        C.LLVMIntPredicate
+	FloatPredicate      C.LLVMRealPredicate
+	LandingPadClause    C.LLVMLandingPadClauseTy
+	InlineAsmDialect    C.LLVMInlineAsmDialect
 )
 
 func (c Context) IsNil() bool        { return c.C == nil }
@@ -78,6 +87,7 @@ func (c ModuleProvider) IsNil() bool { return c.C == nil }
 func (c MemoryBuffer) IsNil() bool   { return c.C == nil }
 func (c PassManager) IsNil() bool    { return c.C == nil }
 func (c Use) IsNil() bool            { return c.C == nil }
+func (c Attribute) IsNil() bool      { return c.C == nil }
 
 // helpers
 func llvmTypeRefPtr(t *Type) *C.LLVMTypeRef    { return (*C.LLVMTypeRef)(unsafe.Pointer(t)) }
@@ -202,6 +212,7 @@ const (
 	PointerTypeKind   TypeKind = C.LLVMPointerTypeKind
 	VectorTypeKind    TypeKind = C.LLVMVectorTypeKind
 	MetadataTypeKind  TypeKind = C.LLVMMetadataTypeKind
+	TokenTypeKind     TypeKind = C.LLVMTokenTypeKind
 )
 
 //-------------------------------------------------------------------------
@@ -242,6 +253,18 @@ const (
 	ColdCallConv        CallConv = C.LLVMColdCallConv
 	X86StdcallCallConv  CallConv = C.LLVMX86StdcallCallConv
 	X86FastcallCallConv CallConv = C.LLVMX86FastcallCallConv
+)
+
+//-------------------------------------------------------------------------
+// llvm.ComdatSelectionKind
+//-------------------------------------------------------------------------
+
+const (
+	AnyComdatSelectionKind          ComdatSelectionKind = C.LLVMAnyComdatSelectionKind
+	ExactMatchComdatSelectionKind   ComdatSelectionKind = C.LLVMExactMatchComdatSelectionKind
+	LargestComdatSelectionKind      ComdatSelectionKind = C.LLVMLargestComdatSelectionKind
+	NoDuplicatesComdatSelectionKind ComdatSelectionKind = C.LLVMNoDuplicatesComdatSelectionKind
+	SameSizeComdatSelectionKind     ComdatSelectionKind = C.LLVMSameSizeComdatSelectionKind
 )
 
 //-------------------------------------------------------------------------
@@ -294,6 +317,15 @@ const (
 )
 
 //-------------------------------------------------------------------------
+// llvm.InlineAsmDialect
+//-------------------------------------------------------------------------
+
+const (
+	InlineAsmDialectATT   InlineAsmDialect = C.LLVMInlineAsmDialectATT
+	InlineAsmDialectIntel InlineAsmDialect = C.LLVMInlineAsmDialectIntel
+)
+
+//-------------------------------------------------------------------------
 // llvm.Context
 //-------------------------------------------------------------------------
 
@@ -313,6 +345,63 @@ func MDKindID(name string) (id int) {
 	defer C.free(unsafe.Pointer(cname))
 	id = int(C.LLVMGetMDKindID(cname, C.unsigned(len(name))))
 	return
+}
+
+//-------------------------------------------------------------------------
+// llvm.Attribute
+//-------------------------------------------------------------------------
+
+func AttributeKindID(name string) (id uint) {
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+	id = uint(C.LLVMGetEnumAttributeKindForName(cname, C.size_t(len(name))))
+	return
+}
+
+func (c Context) CreateEnumAttribute(kind uint, val uint64) (a Attribute) {
+  a.C = C.LLVMCreateEnumAttribute(c.C, C.unsigned(kind), C.uint64_t(val))
+  return
+}
+
+func (a Attribute) GetEnumKind() (id int) {
+  id = int(C.LLVMGetEnumAttributeKind(a.C))
+  return
+}
+
+func (a Attribute) GetEnumValue() (val uint64) {
+  val = uint64(C.LLVMGetEnumAttributeValue(a.C))
+  return
+}
+
+func (c Context) CreateStringAttribute(kind string, val string) (a Attribute) {
+  ckind := C.CString(kind)
+  defer C.free(unsafe.Pointer(ckind))
+  cval := C.CString(val)
+  defer C.free(unsafe.Pointer(cval))
+  a.C = C.LLVMCreateStringAttribute(c.C,
+                                    ckind, C.unsigned(len(kind)),
+                                    cval, C.unsigned(len(val)))
+  return
+}
+
+func (a Attribute) GetStringKind() string {
+  length := C.unsigned(0)
+  ckind := C.LLVMGetStringAttributeKind(a.C, &length)
+  return C.GoStringN(ckind, C.int(length))
+}
+
+func (a Attribute) GetStringValue() string {
+  length := C.unsigned(0)
+  ckind := C.LLVMGetStringAttributeValue(a.C, &length)
+  return C.GoStringN(ckind, C.int(length))
+}
+
+func (a Attribute) IsEnum() bool {
+  return C.LLVMIsEnumAttribute(a.C) != 0;
+}
+
+func (a Attribute) IsString() bool {
+  return C.LLVMIsStringAttribute(a.C) != 0;
 }
 
 //-------------------------------------------------------------------------
@@ -550,6 +639,12 @@ func (t Type) StructElementTypes() []Type {
 }
 
 // Operations on array, pointer, and vector types (sequence types)
+func (t Type) Subtypes() (ret []Type) {
+	ret = make([]Type, C.LLVMGetNumContainedTypes(t.C))
+	C.LLVMGetSubtypes(t.C, llvmTypeRefPtr(&ret[0]))
+	return
+}
+
 func ArrayType(elementType Type, elementCount int) (t Type) {
 	t.C = C.LLVMArrayType(elementType.C, C.unsigned(elementCount))
 	return
@@ -571,6 +666,7 @@ func (t Type) VectorSize() int          { return int(C.LLVMGetVectorSize(t.C)) }
 // Operations on other types
 func (c Context) VoidType() (t Type)  { t.C = C.LLVMVoidTypeInContext(c.C); return }
 func (c Context) LabelType() (t Type) { t.C = C.LLVMLabelTypeInContext(c.C); return }
+func (c Context) TokenType() (t Type) { t.C = C.LLVMTokenTypeInContext(c.C); return }
 
 func VoidType() (t Type)  { t.C = C.LLVMVoidType(); return }
 func LabelType() (t Type) { t.C = C.LLVMLabelType(); return }
@@ -698,11 +794,6 @@ func (c Context) MDString(str string) (md Metadata) {
 func (c Context) MDNode(mds []Metadata) (md Metadata) {
 	ptr, nvals := llvmMetadataRefs(mds)
 	md.C = C.LLVMMDNode2(c.C, ptr, nvals)
-	return
-}
-func (c Context) TemporaryMDNode(mds []Metadata) (md Metadata) {
-	ptr, nvals := llvmMetadataRefs(mds)
-	md.C = C.LLVMTemporaryMDNode(c.C, ptr, nvals)
 	return
 }
 func (v Value) ConstantAsMetadata() (md Metadata) {
@@ -953,6 +1044,8 @@ func (v Value) IsThreadLocal() bool       { return C.LLVMIsThreadLocal(v.C) != 0
 func (v Value) SetThreadLocal(tl bool)    { C.LLVMSetThreadLocal(v.C, boolToLLVMBool(tl)) }
 func (v Value) IsGlobalConstant() bool    { return C.LLVMIsGlobalConstant(v.C) != 0 }
 func (v Value) SetGlobalConstant(gc bool) { C.LLVMSetGlobalConstant(v.C, boolToLLVMBool(gc)) }
+func (v Value) IsVolatile() bool          { return C.LLVMGetVolatile(v.C) != 0 }
+func (v Value) SetVolatile(volatile bool) { C.LLVMSetVolatile(v.C, boolToLLVMBool(volatile)) }
 
 // Operations on aliases
 func AddAlias(m Module, t Type, aliasee Value, name string) (v Value) {
@@ -960,6 +1053,25 @@ func AddAlias(m Module, t Type, aliasee Value, name string) (v Value) {
 	defer C.free(unsafe.Pointer(cname))
 	v.C = C.LLVMAddAlias(m.C, t.C, aliasee.C, cname)
 	return
+}
+
+// Operations on comdat
+func (m Module) Comdat(name string) (c Comdat) {
+	cname := C.CString(name)
+	defer C.free(unsafe.Pointer(cname))
+	c.C = C.LLVMGetOrInsertComdat(m.C, cname)
+	return
+}
+
+func (v Value) Comdat() (c Comdat) { c.C = C.LLVMGetComdat(v.C); return }
+func (v Value) SetComdat(c Comdat) { C.LLVMSetComdat(v.C, c.C) }
+
+func (c Comdat) SelectionKind() ComdatSelectionKind {
+	return ComdatSelectionKind(C.LLVMGetComdatSelectionKind(c.C))
+}
+
+func (c Comdat) SetSelectionKind(k ComdatSelectionKind) {
+	C.LLVMSetComdatSelectionKind(c.C, (C.LLVMComdatSelectionKind)(k))
 }
 
 // Operations on functions
@@ -993,6 +1105,38 @@ func (v Value) SetGC(name string) {
 	defer C.free(unsafe.Pointer(cname))
 	C.LLVMSetGC(v.C, cname)
 }
+func (v Value) AddAttributeAtIndex(i int, a Attribute) {
+  C.LLVMAddAttributeAtIndex(v.C, C.LLVMAttributeIndex(i), a.C)
+}
+func (v Value) AddFunctionAttr(a Attribute) {
+  v.AddAttributeAtIndex(C.LLVMAttributeFunctionIndex, a);
+}
+func (v Value) GetEnumAttributeAtIndex(i int, kind uint) (a Attribute) {
+  a.C = C.LLVMGetEnumAttributeAtIndex(v.C, C.LLVMAttributeIndex(i), C.unsigned(kind))
+  return
+}
+func (v Value) GetEnumFunctionAttribute(kind uint) Attribute {
+  return v.GetEnumAttributeAtIndex(C.LLVMAttributeFunctionIndex, kind)
+}
+func (v Value) GetStringAttributeAtIndex(i int, kind string) (a Attribute) {
+  ckind := C.CString(kind)
+  defer C.free(unsafe.Pointer(ckind))
+  a.C = C.LLVMGetStringAttributeAtIndex(v.C, C.LLVMAttributeIndex(i),
+                                        ckind, C.unsigned(len(kind)))
+  return
+}
+func (v Value) RemoveEnumAttributeAtIndex(i int, kind uint) {
+  C.LLVMRemoveEnumAttributeAtIndex(v.C, C.LLVMAttributeIndex(i), C.unsigned(kind))
+}
+func (v Value) RemoveEnumFunctionAttribute(kind uint) {
+  v.RemoveEnumAttributeAtIndex(C.LLVMAttributeFunctionIndex, kind);
+}
+func (v Value) RemoveStringAttributeAtIndex(i int, kind string) {
+  ckind := C.CString(kind)
+  defer C.free(unsafe.Pointer(ckind))
+  C.LLVMRemoveStringAttributeAtIndex(v.C, C.LLVMAttributeIndex(i),
+                                     ckind, C.unsigned(len(kind)))
+}
 func (v Value) AddTargetDependentFunctionAttr(attr, value string) {
 	cattr := C.CString(attr)
 	defer C.free(unsafe.Pointer(cattr))
@@ -1002,9 +1146,6 @@ func (v Value) AddTargetDependentFunctionAttr(attr, value string) {
 }
 func (v Value) SetPersonality(p Value) {
 	C.LLVMSetPersonalityFn(v.C, p.C)
-}
-func (v Value) SetSubprogram(sp Metadata) {
-	C.LLVMSetSubprogram(v.C, sp.C)
 }
 
 // Operations on parameters
@@ -1082,6 +1223,9 @@ func (v Value) SetInstructionCallConv(cc CallConv) {
 func (v Value) InstructionCallConv() CallConv {
 	return CallConv(C.LLVMCallConv(C.LLVMGetInstructionCallConv(v.C)))
 }
+func (v Value) AddCallSiteAttribute(i int, a Attribute) {
+	C.LLVMAddCallSiteAttribute(v.C, C.LLVMAttributeIndex(i), a.C)
+}
 func (v Value) SetInstrParamAlignment(i int, align int) {
 	C.LLVMSetInstrParamAlignment(v.C, C.unsigned(i), C.unsigned(align))
 }
@@ -1102,6 +1246,16 @@ func (v Value) IncomingValue(i int) (rv Value) {
 }
 func (v Value) IncomingBlock(i int) (bb BasicBlock) {
 	bb.C = C.LLVMGetIncomingBlock(v.C, C.unsigned(i))
+	return
+}
+
+// Operations on inline assembly
+func InlineAsm(t Type, asmString, constraints string, hasSideEffects, isAlignStack bool, dialect InlineAsmDialect) (rv Value) {
+	casm := C.CString(asmString)
+	defer C.free(unsafe.Pointer(casm))
+	cconstraints := C.CString(constraints)
+	defer C.free(unsafe.Pointer(cconstraints))
+	rv.C = C.LLVMGetInlineAsm(t.C, casm, C.size_t(len(asmString)), cconstraints, C.size_t(len(constraints)), boolToLLVMBool(hasSideEffects), boolToLLVMBool(isAlignStack), C.LLVMInlineAsmDialect(dialect))
 	return
 }
 
@@ -1130,8 +1284,22 @@ func (b Builder) InsertWithName(instr Value, name string) {
 func (b Builder) Dispose() { C.LLVMDisposeBuilder(b.C) }
 
 // Metadata
+type DebugLoc struct {
+	Line, Col      uint
+	Scope          Metadata
+	InlinedAt      Metadata
+}
 func (b Builder) SetCurrentDebugLocation(line, col uint, scope, inlinedAt Metadata) {
 	C.LLVMSetCurrentDebugLocation2(b.C, C.unsigned(line), C.unsigned(col), scope.C, inlinedAt.C)
+}
+// Get current debug location. Please do not call this function until setting debug location with SetCurrentDebugLocation()
+func (b Builder) GetCurrentDebugLocation() (loc DebugLoc) {
+	md := C.LLVMGetCurrentDebugLocation2(b.C)
+	loc.Line = uint(md.Line)
+	loc.Col = uint(md.Col)
+	loc.Scope = Metadata{C: md.Scope}
+	loc.InlinedAt = Metadata{C: md.InlinedAt}
+	return
 }
 func (b Builder) SetInstDebugLocation(v Value) { C.LLVMSetInstDebugLocation(b.C, v.C) }
 func (b Builder) InsertDeclare(module Module, storage Value, md Value) Value {
@@ -1756,7 +1924,7 @@ func (pm PassManager) InitializeFunc() bool { return C.LLVMInitializeFunctionPas
 // See llvm::FunctionPassManager::run(Function&).
 func (pm PassManager) RunFunc(f Value) bool { return C.LLVMRunFunctionPassManager(pm.C, f.C) != 0 }
 
-// Finalizes all of the function passes scheduled in in the function pass
+// Finalizes all of the function passes scheduled in the function pass
 // manager. Returns 1 if any of the passes modified the module, 0 otherwise.
 // See llvm::FunctionPassManager::doFinalization.
 func (pm PassManager) FinalizeFunc() bool { return C.LLVMFinalizeFunctionPassManager(pm.C) != 0 }
@@ -1765,11 +1933,3 @@ func (pm PassManager) FinalizeFunc() bool { return C.LLVMFinalizeFunctionPassMan
 // the module provider.
 // See llvm::PassManagerBase::~PassManagerBase.
 func (pm PassManager) Dispose() { C.LLVMDisposePassManager(pm.C) }
-
-//-------------------------------------------------------------------------
-// llvm.Metadata
-//-------------------------------------------------------------------------
-
-func (md Metadata) ReplaceAllUsesWith(new Metadata) {
-	C.LLVMMetadataReplaceAllUsesWith(md.C, new.C)
-}

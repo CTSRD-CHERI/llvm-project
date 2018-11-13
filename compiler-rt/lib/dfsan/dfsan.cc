@@ -21,6 +21,7 @@
 
 #include "sanitizer_common/sanitizer_atomic.h"
 #include "sanitizer_common/sanitizer_common.h"
+#include "sanitizer_common/sanitizer_file.h"
 #include "sanitizer_common/sanitizer_flags.h"
 #include "sanitizer_common/sanitizer_flag_parser.h"
 #include "sanitizer_common/sanitizer_libc.h"
@@ -424,7 +425,8 @@ static void dfsan_init(int argc, char **argv, char **envp) {
 
   InitializePlatformEarly();
 
-  MmapFixedNoReserve(ShadowAddr(), UnusedAddr() - ShadowAddr());
+  if (!MmapFixedNoReserve(ShadowAddr(), UnusedAddr() - ShadowAddr()))
+    Die();
 
   // Protect the region of memory we don't use, to preserve the one-to-one
   // mapping from application to shadow memory. But if ASLR is disabled, Linux

@@ -13,10 +13,7 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Expression/DiagnosticManager.h"
 #include "lldb/Expression/FunctionCaller.h"
@@ -27,6 +24,9 @@
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -118,9 +118,9 @@ void AppleGetQueuesHandler::Detach() {
 }
 
 // Construct a CompilerType for the structure that
-// g_get_current_queues_function_code will return by value
-// so we can extract the fields after performing the function call.
-// i.e. we are getting this struct returned to us:
+// g_get_current_queues_function_code will return by value so we can extract
+// the fields after performing the function call. i.e. we are getting this
+// struct returned to us:
 //
 //    struct get_current_queues_return_values
 //    {
@@ -130,11 +130,9 @@ void AppleGetQueuesHandler::Detach() {
 //    };
 
 // Compile our __lldb_backtrace_recording_get_current_queues() function (from
-// the
-// source above in g_get_current_queues_function_code) if we don't find that
-// function in the inferior
-// already with USE_BUILTIN_FUNCTION defined.  (e.g. this would be the case for
-// testing.)
+// the source above in g_get_current_queues_function_code) if we don't find
+// that function in the inferior already with USE_BUILTIN_FUNCTION defined.
+// (e.g. this would be the case for testing.)
 //
 // Insert the __lldb_backtrace_recording_get_current_queues into the inferior
 // process if needed.
@@ -143,8 +141,7 @@ void AppleGetQueuesHandler::Detach() {
 // the call.
 //
 // Returns the address of the arguments written down in the inferior process,
-// which can be used to
-// make the function call.
+// which can be used to make the function call.
 
 lldb::addr_t
 AppleGetQueuesHandler::SetupGetQueuesFunction(Thread &thread,
@@ -167,7 +164,7 @@ AppleGetQueuesHandler::SetupGetQueuesFunction(Thread &thread,
 
     if (!m_get_queues_impl_code_up.get()) {
       if (g_get_current_queues_function_code != NULL) {
-        Error error;
+        Status error;
         m_get_queues_impl_code_up.reset(
             exe_ctx.GetTargetRef().GetUtilityFunctionForLanguage(
                 g_get_current_queues_function_code, eLanguageTypeC,
@@ -202,7 +199,7 @@ AppleGetQueuesHandler::SetupGetQueuesFunction(Thread &thread,
         thread.GetProcess()->GetTarget().GetScratchClangASTContext();
     CompilerType get_queues_return_type =
         clang_ast_context->GetBasicType(eBasicTypeVoid).GetPointerType();
-    Error error;
+    Status error;
     get_queues_caller = m_get_queues_impl_code_up->MakeFunctionCaller(
         get_queues_return_type, get_queues_arglist, thread_sp, error);
     if (error.Fail() || get_queues_caller == nullptr) {
@@ -217,10 +214,9 @@ AppleGetQueuesHandler::SetupGetQueuesFunction(Thread &thread,
   diagnostics.Clear();
 
   // Now write down the argument values for this particular call.  This looks
-  // like it might be a race condition
-  // if other threads were calling into here, but actually it isn't because we
-  // allocate a new args structure for
-  // this call by passing args_addr = LLDB_INVALID_ADDRESS...
+  // like it might be a race condition if other threads were calling into here,
+  // but actually it isn't because we allocate a new args structure for this
+  // call by passing args_addr = LLDB_INVALID_ADDRESS...
 
   if (!get_queues_caller->WriteFunctionArguments(
           exe_ctx, args_addr, get_queues_arglist, diagnostics)) {
@@ -237,7 +233,7 @@ AppleGetQueuesHandler::SetupGetQueuesFunction(Thread &thread,
 AppleGetQueuesHandler::GetQueuesReturnInfo
 AppleGetQueuesHandler::GetCurrentQueues(Thread &thread, addr_t page_to_free,
                                         uint64_t page_to_free_size,
-                                        Error &error) {
+                                        Status &error) {
   lldb::StackFrameSP thread_cur_frame = thread.GetStackFrameAtIndex(0);
   ProcessSP process_sp(thread.CalculateProcess());
   TargetSP target_sp(thread.CalculateTarget());
@@ -280,8 +276,7 @@ AppleGetQueuesHandler::GetCurrentQueues(Thread &thread, addr_t page_to_free,
   //                                          uint64_t page_to_free_size);
 
   // Where the return_buffer argument points to a 24 byte region of memory
-  // already allocated by lldb in
-  // the inferior process.
+  // already allocated by lldb in the inferior process.
 
   CompilerType clang_void_ptr_type =
       clang_ast_context->GetBasicType(eBasicTypeVoid).GetPointerType();
@@ -357,8 +352,9 @@ AppleGetQueuesHandler::GetCurrentQueues(Thread &thread, addr_t page_to_free,
   options.SetUnwindOnError(true);
   options.SetIgnoreBreakpoints(true);
   options.SetStopOthers(true);
-  options.SetTimeoutUsec(500000);
+  options.SetTimeout(std::chrono::milliseconds(500));
   options.SetTryAllThreads(false);
+  options.SetIsForUtilityExpr(true);
   thread.CalculateExecutionContext(exe_ctx);
 
   ExpressionResults func_call_ret;

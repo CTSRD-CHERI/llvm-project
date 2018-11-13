@@ -28,7 +28,7 @@ class BreakpointOptionsTestCase(TestBase):
 
     def breakpoint_options_test(self):
         """Test breakpoint command for different options."""
-        exe = os.path.join(os.getcwd(), "a.out")
+        exe = self.getBuildArtifact("a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         # This should create a breakpoint with 1 locations.
@@ -45,14 +45,6 @@ class BreakpointOptionsTestCase(TestBase):
             extra_options="-K 0",
             num_expected_locations=1)
 
-        # This should create a breakpoint 0 locations.
-        lldbutil.run_break_set_by_file_and_line(
-            self,
-            "main.cpp",
-            self.line,
-            extra_options="-m 0",
-            num_expected_locations=0)
-
         # Run the program.
         self.runCmd("run", RUN_SUCCEEDED)
 
@@ -68,8 +60,6 @@ class BreakpointOptionsTestCase(TestBase):
                 "1: file = 'main.cpp', line = %d, exact_match = 0, locations = 1" %
                 self.line,
                 "2: file = 'main.cpp', line = %d, exact_match = 0, locations = 1" %
-                self.line,
-                "3: file = 'main.cpp', line = %d, exact_match = 1, locations = 0" %
                 self.line])
 
         # Continue the program, there should be another stop.
@@ -88,7 +78,7 @@ class BreakpointOptionsTestCase(TestBase):
 
     def breakpoint_options_language_test(self):
         """Test breakpoint command for language option."""
-        exe = os.path.join(os.getcwd(), "a.out")
+        exe = self.getBuildArtifact("a.out")
         self.runCmd("file " + exe, CURRENT_EXECUTABLE_SET)
 
         # This should create a breakpoint with 1 locations.

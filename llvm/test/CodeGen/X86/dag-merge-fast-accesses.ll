@@ -7,13 +7,13 @@
 
 define void @merge_const_vec_store(i64* %ptr) {
 ; FAST-LABEL: merge_const_vec_store:
-; FAST:       # BB#0:
+; FAST:       # %bb.0:
 ; FAST-NEXT:    xorps %xmm0, %xmm0
 ; FAST-NEXT:    movups %xmm0, (%rdi)
 ; FAST-NEXT:    retq
 ;
 ; SLOW-LABEL: merge_const_vec_store:
-; SLOW:       # BB#0:
+; SLOW:       # %bb.0:
 ; SLOW-NEXT:    movq $0, (%rdi)
 ; SLOW-NEXT:    movq $0, 8(%rdi)
 ; SLOW-NEXT:    retq
@@ -29,12 +29,12 @@ define void @merge_const_vec_store(i64* %ptr) {
 
 define void @merge_vec_element_store(<4 x double> %v, double* %ptr) {
 ; FAST-LABEL: merge_vec_element_store:
-; FAST:       # BB#0:
+; FAST:       # %bb.0:
 ; FAST-NEXT:    movups %xmm0, (%rdi)
 ; FAST-NEXT:    retq
 ;
 ; SLOW-LABEL: merge_vec_element_store:
-; SLOW:       # BB#0:
+; SLOW:       # %bb.0:
 ; SLOW-NEXT:    movlpd %xmm0, (%rdi)
 ; SLOW-NEXT:    movhpd %xmm0, 8(%rdi)
 ; SLOW-NEXT:    retq
@@ -51,23 +51,15 @@ define void @merge_vec_element_store(<4 x double> %v, double* %ptr) {
 }
 
 
-;; TODO: FAST *should* be:
-;;    movups (%rdi), %xmm0
-;;    movups %xmm0, 40(%rdi)
-;; ..but is not currently. See the UseAA FIXME in DAGCombiner.cpp
-;; visitSTORE.
-
 define void @merge_vec_load_and_stores(i64 *%ptr) {
 ; FAST-LABEL: merge_vec_load_and_stores:
-; FAST:       # BB#0:
-; FAST-NEXT:    movq (%rdi), %rax
-; FAST-NEXT:    movq 8(%rdi), %rcx
-; FAST-NEXT:    movq %rax, 40(%rdi)
-; FAST-NEXT:    movq %rcx, 48(%rdi)
+; FAST:       # %bb.0:
+; FAST-NEXT:    movups (%rdi), %xmm0
+; FAST-NEXT:    movups %xmm0, 40(%rdi)
 ; FAST-NEXT:    retq
 ;
 ; SLOW-LABEL: merge_vec_load_and_stores:
-; SLOW:       # BB#0:
+; SLOW:       # %bb.0:
 ; SLOW-NEXT:    movq (%rdi), %rax
 ; SLOW-NEXT:    movq 8(%rdi), %rcx
 ; SLOW-NEXT:    movq %rax, 40(%rdi)

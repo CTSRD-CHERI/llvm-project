@@ -8,6 +8,14 @@
 //===----------------------------------------------------------------------===//
 
 // UNSUPPORTED: c++98, c++03, c++11, c++14
+
+// XFAIL: with_system_cxx_lib=macosx10.12
+// XFAIL: with_system_cxx_lib=macosx10.11
+// XFAIL: with_system_cxx_lib=macosx10.10
+// XFAIL: with_system_cxx_lib=macosx10.9
+// XFAIL: with_system_cxx_lib=macosx10.7
+// XFAIL: with_system_cxx_lib=macosx10.8
+
 // <optional>
 
 // constexpr T& optional<T>::value() &;
@@ -61,7 +69,7 @@ int main()
         optional<X> opt;
         try
         {
-            opt.value();
+            (void)opt.value();
             assert(false);
         }
         catch (const bad_optional_access&)

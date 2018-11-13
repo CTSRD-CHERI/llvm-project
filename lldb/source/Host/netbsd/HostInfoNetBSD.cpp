@@ -21,34 +21,26 @@
 
 using namespace lldb_private;
 
-uint32_t HostInfoNetBSD::GetMaxThreadNameLength() {
-  return PTHREAD_MAX_NAMELEN_NP;
-}
-
-bool HostInfoNetBSD::GetOSVersion(uint32_t &major, uint32_t &minor,
-                                  uint32_t &update) {
+llvm::VersionTuple HostInfoNetBSD::GetOSVersion() {
   struct utsname un;
 
   ::memset(&un, 0, sizeof(un));
   if (::uname(&un) < 0)
-    return false;
+    return llvm::VersionTuple();
 
   /* Accept versions like 7.99.21 and 6.1_STABLE */
+  uint32_t major, minor, update;
   int status = ::sscanf(un.release, "%" PRIu32 ".%" PRIu32 ".%" PRIu32, &major,
                         &minor, &update);
   switch (status) {
-  case 0:
-    return false;
   case 1:
-    minor = 0;
-  /* FALLTHROUGH */
+    return llvm::VersionTuple(major);
   case 2:
-    update = 0;
-  /* FALLTHROUGH */
+    return llvm::VersionTuple(major, minor);
   case 3:
-  default:
-    return true;
+    return llvm::VersionTuple(major, minor, update);
   }
+  return llvm::VersionTuple();
 }
 
 bool HostInfoNetBSD::GetOSBuildString(std::string &s) {
@@ -85,15 +77,15 @@ FileSpec HostInfoNetBSD::GetProgramFileSpec() {
   static FileSpec g_program_filespec;
 
   if (!g_program_filespec) {
-    ssize_t len;
-    static char buf[PATH_MAX];
-    char name[PATH_MAX];
+    static const int name[] = {
+        CTL_KERN, KERN_PROC_ARGS, -1, KERN_PROC_PATHNAME,
+    };
+    char path[MAXPATHLEN];
+    size_t len;
 
-    ::snprintf(name, PATH_MAX, "/proc/%d/exe", ::getpid());
-    len = ::readlink(name, buf, PATH_MAX - 1);
-    if (len != -1) {
-      buf[len] = '\0';
-      g_program_filespec.SetFile(buf, false);
+    len = sizeof(path);
+    if (sysctl(name, __arraycount(name), path, &len, NULL, 0) != -1) {
+      g_program_filespec.SetFile(path, false, FileSpec::Style::native);
     }
   }
   return g_program_filespec;

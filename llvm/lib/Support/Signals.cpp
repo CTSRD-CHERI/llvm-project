@@ -12,9 +12,10 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Support/Signals.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Config/config.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FileUtilities.h"
@@ -23,31 +24,68 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Mutex.h"
 #include "llvm/Support/Program.h"
-#include "llvm/Support/Signals.h"
 #include "llvm/Support/StringSaver.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/Options.h"
 #include <vector>
-
-namespace llvm {
-using namespace sys;
 
 //===----------------------------------------------------------------------===//
 //=== WARNING: Implementation here must contain only TRULY operating system
 //===          independent code.
 //===----------------------------------------------------------------------===//
 
-static ManagedStatic<std::vector<std::pair<void (*)(void *), void *>>>
-    CallBacksToRun;
+using namespace llvm;
+
+// Use explicit storage to avoid accessing cl::opt in a signal handler.
+static bool DisableSymbolicationFlag = false;
+static cl::opt<bool, true>
+    DisableSymbolication("disable-symbolication",
+                         cl::desc("Disable symbolizing crash backtraces."),
+                         cl::location(DisableSymbolicationFlag), cl::Hidden);
+
+// Callbacks to run in signal handler must be lock-free because a signal handler
+// could be running as we add new callbacks. We don't add unbounded numbers of
+// callbacks, an array is therefore sufficient.
+struct CallbackAndCookie {
+  sys::SignalHandlerCallback Callback;
+  void *Cookie;
+  enum class Status { Empty, Initializing, Initialized, Executing };
+  std::atomic<Status> Flag;
+};
+static constexpr size_t MaxSignalHandlerCallbacks = 8;
+static CallbackAndCookie CallBacksToRun[MaxSignalHandlerCallbacks];
+
+// Signal-safe.
 void sys::RunSignalHandlers() {
-  if (!CallBacksToRun.isConstructed())
-    return;
-  for (auto &I : *CallBacksToRun)
-    I.first(I.second);
-  CallBacksToRun->clear();
-}
+  for (size_t I = 0; I < MaxSignalHandlerCallbacks; ++I) {
+    auto &RunMe = CallBacksToRun[I];
+    auto Expected = CallbackAndCookie::Status::Initialized;
+    auto Desired = CallbackAndCookie::Status::Executing;
+    if (!RunMe.Flag.compare_exchange_strong(Expected, Desired))
+      continue;
+    (*RunMe.Callback)(RunMe.Cookie);
+    RunMe.Callback = nullptr;
+    RunMe.Cookie = nullptr;
+    RunMe.Flag.store(CallbackAndCookie::Status::Empty);
+  }
 }
 
-using namespace llvm;
+// Signal-safe.
+static void insertSignalHandler(sys::SignalHandlerCallback FnPtr,
+                                void *Cookie) {
+  for (size_t I = 0; I < MaxSignalHandlerCallbacks; ++I) {
+    auto &SetMe = CallBacksToRun[I];
+    auto Expected = CallbackAndCookie::Status::Empty;
+    auto Desired = CallbackAndCookie::Status::Initializing;
+    if (!SetMe.Flag.compare_exchange_strong(Expected, Desired))
+      continue;
+    SetMe.Callback = FnPtr;
+    SetMe.Cookie = Cookie;
+    SetMe.Flag.store(CallbackAndCookie::Status::Initialized);
+    return;
+  }
+  report_fatal_error("too many signal callbacks already registered");
+}
 
 static bool findModulesAndOffsets(void **StackTrace, int Depth,
                                   const char **Modules, intptr_t *Offsets,
@@ -62,15 +100,13 @@ static FormattedNumber format_ptr(void *PC) {
   return format_hex((uint64_t)PC, PtrWidth);
 }
 
-static bool printSymbolizedStackTrace(StringRef Argv0,
-                                      void **StackTrace, int Depth,
-                                      llvm::raw_ostream &OS)
-  LLVM_ATTRIBUTE_USED;
-
 /// Helper that launches llvm-symbolizer and symbolizes a backtrace.
-static bool printSymbolizedStackTrace(StringRef Argv0,
-                                      void **StackTrace, int Depth,
-                                      llvm::raw_ostream &OS) {
+LLVM_ATTRIBUTE_USED
+static bool printSymbolizedStackTrace(StringRef Argv0, void **StackTrace,
+                                      int Depth, llvm::raw_ostream &OS) {
+  if (DisableSymbolicationFlag)
+    return false;
+
   // Don't recursively invoke the llvm-symbolizer binary.
   if (Argv0.find("llvm-symbolizer") != std::string::npos)
     return false;
@@ -118,21 +154,18 @@ static bool printSymbolizedStackTrace(StringRef Argv0,
     }
   }
 
-  StringRef InputFileStr(InputFile);
-  StringRef OutputFileStr(OutputFile);
-  StringRef StderrFileStr;
-  const StringRef *Redirects[] = {&InputFileStr, &OutputFileStr,
-                                  &StderrFileStr};
-  const char *Args[] = {"llvm-symbolizer", "--functions=linkage", "--inlining",
-#ifdef LLVM_ON_WIN32
-                        // Pass --relative-address on Windows so that we don't
-                        // have to add ImageBase from PE file.
-                        // FIXME: Make this the default for llvm-symbolizer.
-                        "--relative-address",
+  Optional<StringRef> Redirects[] = {StringRef(InputFile),
+                                     StringRef(OutputFile), llvm::None};
+  StringRef Args[] = {"llvm-symbolizer", "--functions=linkage", "--inlining",
+#ifdef _WIN32
+                      // Pass --relative-address on Windows so that we don't
+                      // have to add ImageBase from PE file.
+                      // FIXME: Make this the default for llvm-symbolizer.
+                      "--relative-address",
 #endif
-                        "--demangle", nullptr};
+                      "--demangle"};
   int RunResult =
-      sys::ExecuteAndWait(LLVMSymbolizerPath, Args, nullptr, Redirects);
+      sys::ExecuteAndWait(LLVMSymbolizerPath, Args, None, Redirects);
   if (RunResult != 0)
     return false;
 
@@ -179,6 +212,6 @@ static bool printSymbolizedStackTrace(StringRef Argv0,
 #ifdef LLVM_ON_UNIX
 #include "Unix/Signals.inc"
 #endif
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
 #include "Windows/Signals.inc"
 #endif

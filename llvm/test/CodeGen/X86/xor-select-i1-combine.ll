@@ -6,11 +6,11 @@
 
 define i32 @main(i8 %small) {
 ; CHECK-LABEL: main:
-; CHECK:       # BB#0: # %entry
-; CHECK-NEXT:    movl $n, %eax
-; CHECK-NEXT:    movl $m, %ecx
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    testb $1, %dil
-; CHECK-NEXT:    cmovneq %rax, %rcx
+; CHECK-NEXT:    movl $m, %eax
+; CHECK-NEXT:    movl $n, %ecx
+; CHECK-NEXT:    cmoveq %rax, %rcx
 ; CHECK-NEXT:    movl (%rcx), %eax
 ; CHECK-NEXT:    retq
 entry:
@@ -24,7 +24,7 @@ entry:
 
 define i32 @main2(i8 %small) {
 ; CHECK-LABEL: main2:
-; CHECK:       # BB#0: # %entry
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    movl $m, %eax
 ; CHECK-NEXT:    movl $n, %ecx
 ; CHECK-NEXT:    testb $1, %dil

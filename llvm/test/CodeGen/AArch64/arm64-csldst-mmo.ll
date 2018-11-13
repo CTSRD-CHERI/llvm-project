@@ -1,5 +1,5 @@
 ; REQUIRES: asserts
-; RUN: llc < %s -mtriple=arm64-linux-gnu -mcpu=cortex-a57 -enable-misched=0 -debug-only=misched -o - 2>&1 > /dev/null | FileCheck %s
+; RUN: llc < %s -mtriple=arm64-linux-gnu -mcpu=cortex-a57 -enable-misched=0 -debug-only=machine-scheduler -o - 2>&1 > /dev/null | FileCheck %s
 ; REQUIRES: asserts
 
 @G = external global [0 x i32], align 4
@@ -10,12 +10,12 @@
 ;
 ; CHECK: Before post-MI-sched:
 ; CHECK-LABEL: # Machine code for function test1:
-; CHECK: SU(2):   STRWui %WZR
-; CHECK: SU(3):   %X21<def>, %X20<def> = LDPXi %SP
+; CHECK: SU(2):   STRWui $wzr
+; CHECK: SU(3):   $x21, $x20 = frame-destroy LDPXi $sp, 2
 ; CHECK:  Predecessors:
-; CHECK-NEXT:   out  SU(0)
-; CHECK-NEXT:   out  SU(0)
-; CHECK-NEXT:   ord  SU(0)
+; CHECK-NEXT:   SU(0): Out
+; CHECK-NEXT:   SU(0): Out
+; CHECK-NEXT:   SU(0): Ord
 ; CHECK-NEXT:  Successors:
 define void @test1() {
 entry:

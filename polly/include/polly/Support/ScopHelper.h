@@ -36,6 +36,7 @@ class GetElementPtrInst;
 
 namespace polly {
 class Scop;
+class ScopStmt;
 
 /// Type to remap values.
 using ValueMapT = llvm::DenseMap<llvm::AssertingVH<llvm::Value>,
@@ -72,7 +73,7 @@ using BoxedLoopsSetTy = llvm::SetVector<const llvm::Loop *>;
 /// those from llvm/Support/Casting.h. Partial template function specialization
 /// is currently not supported in C++ such that those cannot be used directly.
 /// (llvm::isa could, but then llvm:cast etc. would not have the expected
-/// behaviour)
+/// behavior)
 class MemAccInst {
 private:
   llvm::Instruction *I;
@@ -198,8 +199,11 @@ public:
       return asLoad()->getAlignment();
     if (isStore())
       return asStore()->getAlignment();
+    if (isMemTransferInst())
+      return std::min(asMemTransferInst()->getDestAlignment(),
+                      asMemTransferInst()->getSourceAlignment());
     if (isMemIntrinsic())
-      return asMemIntrinsic()->getAlignment();
+      return asMemIntrinsic()->getDestAlignment();
     if (isCallInst())
       return 0;
     llvm_unreachable("Operation not supported on nullptr");
@@ -293,15 +297,6 @@ template <> struct simplify_type<polly::MemAccInst> {
 
 namespace polly {
 
-/// Check if the PHINode has any incoming Invoke edge.
-///
-/// @param PN The PHINode to check.
-///
-/// @return If the PHINode has an incoming BB that jumps to the parent BB
-///         of the PHINode with an invoke instruction, return true,
-///         otherwise, return false.
-bool hasInvokeEdge(const llvm::PHINode *PN);
-
 /// Simplify the region to have a single unconditional entry edge and a
 /// single exit edge.
 ///
@@ -324,6 +319,16 @@ void simplifyRegion(llvm::Region *R, llvm::DominatorTree *DT,
 ///
 void splitEntryBlockForAlloca(llvm::BasicBlock *EntryBlock, llvm::Pass *P);
 
+/// Split the entry block of a function to store the newly inserted
+///        allocations outside of all Scops.
+///
+/// @param DT DominatorTree to be updated.
+/// @param LI LoopInfo to be updated.
+/// @param RI RegionInfo to be updated.
+void splitEntryBlockForAlloca(llvm::BasicBlock *EntryBlock,
+                              llvm::DominatorTree *DT, llvm::LoopInfo *LI,
+                              llvm::RegionInfo *RI);
+
 /// Wrapper for SCEVExpander extended to all Polly features.
 ///
 /// This wrapper will internally call the SCEVExpander but also makes sure that
@@ -340,7 +345,7 @@ void splitEntryBlockForAlloca(llvm::BasicBlock *EntryBlock, llvm::Pass *P);
 /// @param E     The expression for which code is actually generated.
 /// @param Ty    The type of the resulting code.
 /// @param IP    The insertion point for the new code.
-/// @param VMap  A remaping of values used in @p E.
+/// @param VMap  A remapping of values used in @p E.
 /// @param RTCBB The last block of the RTC. Used to insert loop-invariant
 ///              instructions in rare cases.
 llvm::Value *expandCodeFor(Scop &S, llvm::ScalarEvolution &SE,
@@ -351,7 +356,7 @@ llvm::Value *expandCodeFor(Scop &S, llvm::ScalarEvolution &SE,
 
 /// Check if the block is a error block.
 ///
-/// A error block is currently any block that fullfills at least one of
+/// A error block is currently any block that fulfills at least one of
 /// the following conditions:
 ///
 ///  - It is terminated by an unreachable instruction
@@ -359,7 +364,7 @@ llvm::Value *expandCodeFor(Scop &S, llvm::ScalarEvolution &SE,
 ///    dominated by a loop header and that does not dominate the region exit.
 ///    This is a heuristic to pick only error blocks that are conditionally
 ///    executed and can be assumed to be not executed at all without the domains
-///    beeing available.
+///    being available.
 ///
 /// @param BB The block to check.
 /// @param R  The analyzed region.
@@ -386,10 +391,12 @@ llvm::Value *getConditionFromTerminator(llvm::TerminatorInst *TI);
 /// @param LI    The loop info.
 /// @param SE    The scalar evolution analysis.
 /// @param DT    The dominator tree of the function.
+/// @param KnownInvariantLoads The invariant load set.
 ///
 /// @return True if @p LInst can be hoisted in @p R.
 bool isHoistableLoad(llvm::LoadInst *LInst, llvm::Region &R, llvm::LoopInfo &LI,
-                     llvm::ScalarEvolution &SE, const llvm::DominatorTree &DT);
+                     llvm::ScalarEvolution &SE, const llvm::DominatorTree &DT,
+                     const InvariantLoadsSetTy &KnownInvariantLoads);
 
 /// Return true iff @p V is an intrinsic that we ignore during code
 ///        generation.
@@ -403,15 +410,13 @@ bool isIgnoredIntrinsic(const llvm::Value *V);
 ///
 /// @param V The value to check.
 /// @param S The current SCoP.
-/// @param LI The LoopInfo analysis.
 /// @param SE The scalar evolution database.
 /// @param Scope Location where the value would by synthesized.
 /// @return If the instruction I can be regenerated from its
 ///         scalar evolution representation, return true,
 ///         otherwise return false.
 bool canSynthesize(const llvm::Value *V, const Scop &S,
-                   const llvm::LoopInfo *LI, llvm::ScalarEvolution *SE,
-                   llvm::Loop *Scope);
+                   llvm::ScalarEvolution *SE, llvm::Loop *Scope);
 
 /// Return the block in which a value is used.
 ///
@@ -420,7 +425,7 @@ bool canSynthesize(const llvm::Value *V, const Scop &S,
 /// operand must be defined (i.e. its definition dominates this block).
 /// Non-instructions do not use operands at a specific point such that in this
 /// case this function returns nullptr.
-llvm::BasicBlock *getUseBlock(llvm::Use &U);
+llvm::BasicBlock *getUseBlock(const llvm::Use &U);
 
 /// Derive the individual index expressions from a GEP instruction.
 ///
@@ -437,5 +442,43 @@ llvm::BasicBlock *getUseBlock(llvm::Use &U);
 std::tuple<std::vector<const llvm::SCEV *>, std::vector<int>>
 getIndexExpressionsFromGEP(llvm::GetElementPtrInst *GEP,
                            llvm::ScalarEvolution &SE);
+
+// If the loop is nonaffine/boxed, return the first non-boxed surrounding loop
+// for Polly. If the loop is affine, return the loop itself.
+//
+// @param L             Pointer to the Loop object to analyze.
+// @param LI            Reference to the LoopInfo.
+// @param BoxedLoops    Set of Boxed Loops we get from the SCoP.
+llvm::Loop *getFirstNonBoxedLoopFor(llvm::Loop *L, llvm::LoopInfo &LI,
+                                    const BoxedLoopsSetTy &BoxedLoops);
+
+// If the Basic Block belongs to a loop that is nonaffine/boxed, return the
+// first non-boxed surrounding loop for Polly. If the loop is affine, return
+// the loop itself.
+//
+// @param BB            Pointer to the Basic Block to analyze.
+// @param LI            Reference to the LoopInfo.
+// @param BoxedLoops    Set of Boxed Loops we get from the SCoP.
+llvm::Loop *getFirstNonBoxedLoopFor(llvm::BasicBlock *BB, llvm::LoopInfo &LI,
+                                    const BoxedLoopsSetTy &BoxedLoops);
+
+/// Is the given instruction a call to a debug function?
+///
+/// A debug function can be used to insert output in Polly-optimized code which
+/// normally does not allow function calls with side-effects. For instance, a
+/// printf can be inserted to check whether a value still has the expected value
+/// after Polly generated code:
+///
+///     int sum = 0;
+///     for (int i = 0; i < 16; i+=1) {
+///       sum += i;
+///       printf("The value of sum at i=%d is %d\n", sum, i);
+///     }
+bool isDebugCall(llvm::Instruction *Inst);
+
+/// Does the statement contain a call to a debug function?
+///
+/// Such a statement must not be removed, even if has no side-effects.
+bool hasDebugCall(ScopStmt *Stmt);
 } // namespace polly
 #endif

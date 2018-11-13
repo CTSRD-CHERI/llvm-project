@@ -23,15 +23,15 @@ GetAddrOfVTTVTable(CodeGenVTables &CGVT, CodeGenModule &CGM,
                    const CXXRecordDecl *MostDerivedClass,
                    const VTTVTable &VTable,
                    llvm::GlobalVariable::LinkageTypes Linkage,
-                   llvm::DenseMap<BaseSubobject, uint64_t> &AddressPoints) {
+                   VTableLayout::AddressPointsMapTy &AddressPoints) {
   if (VTable.getBase() == MostDerivedClass) {
     assert(VTable.getBaseOffset().isZero() &&
            "Most derived class vtable must have a zero offset!");
     // This is a regular vtable.
     return CGM.getCXXABI().getAddrOfVTable(MostDerivedClass, CharUnits());
   }
-  
-  return CGVT.GenerateConstructionVTable(MostDerivedClass, 
+
+  return CGVT.GenerateConstructionVTable(MostDerivedClass,
                                          VTable.getBaseSubobject(),
                                          VTable.isVirtual(),
                                          Linkage,
@@ -45,7 +45,7 @@ CodeGenVTables::EmitVTTDefinition(llvm::GlobalVariable *VTT,
   VTTBuilder Builder(CGM.getContext(), RD, /*GenerateDefinition=*/true);
 
   llvm::Type *Int8PtrTy = CGM.Int8PtrTy, *Int32Ty = CGM.Int32Ty;
-  llvm::ArrayType *ArrayType = 
+  llvm::ArrayType *ArrayType =
     llvm::ArrayType::get(Int8PtrTy, Builder.getVTTComponents().size());
 
   SmallVector<llvm::GlobalVariable *, 8> VTables;
@@ -62,25 +62,27 @@ CodeGenVTables::EmitVTTDefinition(llvm::GlobalVariable *VTT,
                           *e = Builder.getVTTComponents().end(); i != e; ++i) {
     const VTTVTable &VTTVT = Builder.getVTTVTables()[i->VTableIndex];
     llvm::GlobalVariable *VTable = VTables[i->VTableIndex];
-    uint64_t AddressPoint;
+    VTableLayout::AddressPointLocation AddressPoint;
     if (VTTVT.getBase() == RD) {
       // Just get the address point for the regular vtable.
       AddressPoint =
           getItaniumVTableContext().getVTableLayout(RD).getAddressPoint(
               i->VTableBase);
-      assert(AddressPoint != 0 && "Did not find vtable address point!");
     } else {
       AddressPoint = VTableAddressPoints[i->VTableIndex].lookup(i->VTableBase);
-      assert(AddressPoint != 0 && "Did not find ctor vtable address point!");
+      assert(AddressPoint.AddressPointIndex != 0 &&
+             "Did not find ctor vtable address point!");
     }
 
      llvm::Value *Idxs[] = {
        llvm::ConstantInt::get(Int32Ty, 0),
-       llvm::ConstantInt::get(Int32Ty, AddressPoint)
+       llvm::ConstantInt::get(Int32Ty, AddressPoint.VTableIndex),
+       llvm::ConstantInt::get(Int32Ty, AddressPoint.AddressPointIndex),
      };
 
-     llvm::Constant *Init = llvm::ConstantExpr::getInBoundsGetElementPtr(
-         VTable->getValueType(), VTable, Idxs);
+     llvm::Constant *Init = llvm::ConstantExpr::getGetElementPtr(
+         VTable->getValueType(), VTable, Idxs, /*InBounds=*/true,
+         /*InRangeIndex=*/1);
 
      Init = llvm::ConstantExpr::getBitCast(Init, Int8PtrTy);
 
@@ -98,7 +100,7 @@ CodeGenVTables::EmitVTTDefinition(llvm::GlobalVariable *VTT,
     VTT->setComdat(CGM.getModule().getOrInsertComdat(VTT->getName()));
 
   // Set the right visibility.
-  CGM.setGlobalVisibility(VTT, RD);
+  CGM.setGVProperties(VTT, RD);
 }
 
 llvm::GlobalVariable *CodeGenVTables::GetAddrOfVTT(const CXXRecordDecl *RD) {
@@ -115,42 +117,42 @@ llvm::GlobalVariable *CodeGenVTables::GetAddrOfVTT(const CXXRecordDecl *RD) {
 
   VTTBuilder Builder(CGM.getContext(), RD, /*GenerateDefinition=*/false);
 
-  llvm::ArrayType *ArrayType = 
+  llvm::ArrayType *ArrayType =
     llvm::ArrayType::get(CGM.Int8PtrTy, Builder.getVTTComponents().size());
+  unsigned Align = CGM.getDataLayout().getABITypeAlignment(CGM.Int8PtrTy);
 
-  llvm::GlobalVariable *GV =
-    CGM.CreateOrReplaceCXXRuntimeVariable(Name, ArrayType, 
-                                          llvm::GlobalValue::ExternalLinkage);
+  llvm::GlobalVariable *GV = CGM.CreateOrReplaceCXXRuntimeVariable(
+      Name, ArrayType, llvm::GlobalValue::ExternalLinkage, Align);
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   return GV;
 }
 
-uint64_t CodeGenVTables::getSubVTTIndex(const CXXRecordDecl *RD, 
+uint64_t CodeGenVTables::getSubVTTIndex(const CXXRecordDecl *RD,
                                         BaseSubobject Base) {
   BaseSubobjectPairTy ClassSubobjectPair(RD, Base);
 
   SubVTTIndiciesMapTy::iterator I = SubVTTIndicies.find(ClassSubobjectPair);
   if (I != SubVTTIndicies.end())
     return I->second;
-  
+
   VTTBuilder Builder(CGM.getContext(), RD, /*GenerateDefinition=*/false);
 
   for (llvm::DenseMap<BaseSubobject, uint64_t>::const_iterator I =
-       Builder.getSubVTTIndicies().begin(), 
+       Builder.getSubVTTIndicies().begin(),
        E = Builder.getSubVTTIndicies().end(); I != E; ++I) {
     // Insert all indices.
     BaseSubobjectPairTy ClassSubobjectPair(RD, I->first);
-    
+
     SubVTTIndicies.insert(std::make_pair(ClassSubobjectPair, I->second));
   }
-    
+
   I = SubVTTIndicies.find(ClassSubobjectPair);
   assert(I != SubVTTIndicies.end() && "Did not find index!");
-  
+
   return I->second;
 }
 
-uint64_t 
+uint64_t
 CodeGenVTables::getSecondaryVirtualPointerIndex(const CXXRecordDecl *RD,
                                                 BaseSubobject Base) {
   SecondaryVirtualPointerIndicesMapTy::iterator I =
@@ -162,17 +164,17 @@ CodeGenVTables::getSecondaryVirtualPointerIndex(const CXXRecordDecl *RD,
   VTTBuilder Builder(CGM.getContext(), RD, /*GenerateDefinition=*/false);
 
   // Insert all secondary vpointer indices.
-  for (llvm::DenseMap<BaseSubobject, uint64_t>::const_iterator I = 
+  for (llvm::DenseMap<BaseSubobject, uint64_t>::const_iterator I =
        Builder.getSecondaryVirtualPointerIndices().begin(),
        E = Builder.getSecondaryVirtualPointerIndices().end(); I != E; ++I) {
     std::pair<const CXXRecordDecl *, BaseSubobject> Pair =
       std::make_pair(RD, I->first);
-    
+
     SecondaryVirtualPointerIndices.insert(std::make_pair(Pair, I->second));
   }
 
   I = SecondaryVirtualPointerIndices.find(std::make_pair(RD, Base));
   assert(I != SecondaryVirtualPointerIndices.end() && "Did not find index!");
-  
+
   return I->second;
 }

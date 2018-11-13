@@ -37,7 +37,7 @@ class AsanTestCase(TestBase):
         self.line_breakpoint = line_number('main.c', '// break line')
 
     def asan_tests(self):
-        exe = os.path.join(os.getcwd(), "a.out")
+        exe = self.getBuildArtifact("a.out")
         self.expect(
             "file " + exe,
             patterns=["Current executable set to .*a.out"])
@@ -121,7 +121,7 @@ class AsanTestCase(TestBase):
             "Process should be stopped due to ASan report",
             substrs=[
                 'stopped',
-                'stop reason = Use of deallocated memory detected'])
+                'stop reason = Use of deallocated memory'])
 
         # make sure the 'memory history' command still works even when we're
         # generating a report now

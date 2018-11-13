@@ -21,17 +21,17 @@
  *===-----------------------------------------------------------------------===
  */
 
-#ifndef _POPCNTINTRIN_H
-#define _POPCNTINTRIN_H
+#ifndef __POPCNTINTRIN_H
+#define __POPCNTINTRIN_H
 
 /* Define the default attributes for the functions in this file. */
 #define __DEFAULT_FN_ATTRS __attribute__((__always_inline__, __nodebug__, __target__("popcnt")))
 
-/// \brief Counts the number of bits in the source operand having a value of 1.
+/// Counts the number of bits in the source operand having a value of 1.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c POPCNT instruction.
+/// This intrinsic corresponds to the <c> POPCNT </c> instruction.
 ///
 /// \param __A
 ///    An unsigned 32-bit integer operand.
@@ -43,11 +43,11 @@ _mm_popcnt_u32(unsigned int __A)
   return __builtin_popcount(__A);
 }
 
-/// \brief Counts the number of bits in the source operand having a value of 1.
+/// Counts the number of bits in the source operand having a value of 1.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c POPCNT instruction.
+/// This intrinsic corresponds to the <c> POPCNT </c> instruction.
 ///
 /// \param __A
 ///    A signed 32-bit integer operand.
@@ -60,11 +60,11 @@ _popcnt32(int __A)
 }
 
 #ifdef __x86_64__
-/// \brief Counts the number of bits in the source operand having a value of 1.
+/// Counts the number of bits in the source operand having a value of 1.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c POPCNT instruction.
+/// This intrinsic corresponds to the <c> POPCNT </c> instruction.
 ///
 /// \param __A
 ///    An unsigned 64-bit integer operand.
@@ -76,11 +76,11 @@ _mm_popcnt_u64(unsigned long long __A)
   return __builtin_popcountll(__A);
 }
 
-/// \brief Counts the number of bits in the source operand having a value of 1.
+/// Counts the number of bits in the source operand having a value of 1.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c POPCNT instruction.
+/// This intrinsic corresponds to the <c> POPCNT </c> instruction.
 ///
 /// \param __A
 ///    A signed 64-bit integer operand.
@@ -95,4 +95,4 @@ _popcnt64(long long __A)
 
 #undef __DEFAULT_FN_ATTRS
 
-#endif /* _POPCNTINTRIN_H */
+#endif /* __POPCNTINTRIN_H */

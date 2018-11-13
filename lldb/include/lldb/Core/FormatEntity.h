@@ -10,19 +10,39 @@
 #ifndef liblldb_FormatEntity_h_
 #define liblldb_FormatEntity_h_
 
-// C Includes
-// C++ Includes
+#include "lldb/Utility/CompletionRequest.h"
+#include "lldb/Utility/FileSpec.h" // for FileSpec
+#include "lldb/Utility/Status.h"
+#include "lldb/lldb-enumerations.h" // for Format::eFormatDefault, Format
+#include "lldb/lldb-types.h"        // for addr_t
+#include <algorithm>                // for min
+#include <stddef.h>                 // for size_t
+#include <stdint.h>                 // for uint32_t, uint64_t
+
 #include <string>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/Error.h"
-#include "lldb/lldb-private.h"
-
+namespace lldb_private {
+class Address;
+}
+namespace lldb_private {
+class ExecutionContext;
+}
+namespace lldb_private {
+class Stream;
+}
+namespace lldb_private {
+class StringList;
+}
+namespace lldb_private {
+class SymbolContext;
+}
+namespace lldb_private {
+class ValueObject;
+}
 namespace llvm {
 class StringRef;
-} // namespace llvm
+}
 
 namespace lldb_private {
 class FormatEntity {
@@ -68,6 +88,7 @@ public:
       FrameRegisterFP,
       FrameRegisterFlags,
       FrameRegisterByName,
+      FrameIsArtificial,
       ScriptFrame,
       FunctionID,
       FunctionDidChange,
@@ -84,6 +105,7 @@ public:
       FunctionIsOptimized,
       LineEntryFile,
       LineEntryLineNumber,
+      LineEntryColumn,
       LineEntryStartAddress,
       LineEntryEndAddress,
       CurrentPCArrow
@@ -186,31 +208,29 @@ public:
                             const Address *addr, ValueObject *valobj,
                             bool function_changed, bool initial_function);
 
-  static Error Parse(const llvm::StringRef &format, Entry &entry);
+  static Status Parse(const llvm::StringRef &format, Entry &entry);
 
-  static Error ExtractVariableInfo(llvm::StringRef &format_str,
-                                   llvm::StringRef &variable_name,
-                                   llvm::StringRef &variable_format);
+  static Status ExtractVariableInfo(llvm::StringRef &format_str,
+                                    llvm::StringRef &variable_name,
+                                    llvm::StringRef &variable_format);
 
-  static size_t AutoComplete(llvm::StringRef s, int match_start_point,
-                             int max_return_elements, bool &word_complete,
-                             StringList &matches);
+  static size_t AutoComplete(lldb_private::CompletionRequest &request);
 
   //----------------------------------------------------------------------
   // Format the current elements into the stream \a s.
   //
-  // The root element will be stripped off and the format str passed in
-  // will be either an empty string (print a description of this object),
-  // or contain a . separated series like a domain name that identifies
-  // further sub elements to display.
+  // The root element will be stripped off and the format str passed in will be
+  // either an empty string (print a description of this object), or contain a
+  // `.`-separated series like a domain name that identifies further
+  //  sub-elements to display.
   //----------------------------------------------------------------------
   static bool FormatFileSpec(const FileSpec &file, Stream &s,
                              llvm::StringRef elements,
                              llvm::StringRef element_format);
 
 protected:
-  static Error ParseInternal(llvm::StringRef &format, Entry &parent_entry,
-                             uint32_t depth);
+  static Status ParseInternal(llvm::StringRef &format, Entry &parent_entry,
+                              uint32_t depth);
 };
 } // namespace lldb_private
 

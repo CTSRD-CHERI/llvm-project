@@ -90,7 +90,8 @@ public:
                           StringRef FileName, bool IsAngled,
                           CharSourceRange FilenameRange, const FileEntry *File,
                           StringRef SearchPath, StringRef RelativePath,
-                          const Module *Imported) override {
+                          const Module *Imported,
+                          SrcMgr::CharacteristicKind FileType) override {
     Checker.collectUmbrellaHeaderHeader(File->getName());
   }
 
@@ -150,12 +151,12 @@ CoverageChecker::CoverageChecker(StringRef ModuleMapPath,
 
 // Create instance of CoverageChecker, to simplify setting up
 // subordinate objects.
-CoverageChecker *CoverageChecker::createCoverageChecker(
-  StringRef ModuleMapPath, std::vector<std::string> &IncludePaths,
-  ArrayRef<std::string> CommandLine, clang::ModuleMap *ModuleMap) {
+std::unique_ptr<CoverageChecker> CoverageChecker::createCoverageChecker(
+    StringRef ModuleMapPath, std::vector<std::string> &IncludePaths,
+    ArrayRef<std::string> CommandLine, clang::ModuleMap *ModuleMap) {
 
-  return new CoverageChecker(ModuleMapPath, IncludePaths, CommandLine,
-    ModuleMap);
+  return llvm::make_unique<CoverageChecker>(ModuleMapPath, IncludePaths,
+                                            CommandLine, ModuleMap);
 }
 
 // Do checks.
@@ -225,9 +226,8 @@ bool CoverageChecker::collectModuleHeaders(const Module &Mod) {
       ModuleMapHeadersSet.insert(ModularizeUtilities::getCanonicalPath(
         Header.Entry->getName()));
 
-  for (Module::submodule_const_iterator MI = Mod.submodule_begin(),
-      MIEnd = Mod.submodule_end();
-      MI != MIEnd; ++MI)
+  for (auto MI = Mod.submodule_begin(), MIEnd = Mod.submodule_end();
+       MI != MIEnd; ++MI)
     collectModuleHeaders(**MI);
 
   return true;
@@ -243,14 +243,15 @@ bool CoverageChecker::collectUmbrellaHeaders(StringRef UmbrellaDirName) {
     Directory = ".";
   // Walk the directory.
   std::error_code EC;
-  sys::fs::file_status Status;
   for (sys::fs::directory_iterator I(Directory.str(), EC), E; I != E;
     I.increment(EC)) {
     if (EC)
       return false;
     std::string File(I->path());
-    I->status(Status);
-    sys::fs::file_type Type = Status.type();
+    llvm::ErrorOr<sys::fs::basic_file_status> Status = I->status();
+    if (!Status)
+      return false;
+    sys::fs::file_type Type = Status->type();
     // If the file is a directory, ignore the name and recurse.
     if (Type == sys::fs::file_type::directory_file) {
       if (!collectUmbrellaHeaders(File))
@@ -364,7 +365,6 @@ bool CoverageChecker::collectFileSystemHeaders(StringRef IncludePath) {
 
   // Recursively walk the directory tree.
   std::error_code EC;
-  sys::fs::file_status Status;
   int Count = 0;
   for (sys::fs::recursive_directory_iterator I(Directory.str(), EC), E; I != E;
     I.increment(EC)) {
@@ -372,8 +372,10 @@ bool CoverageChecker::collectFileSystemHeaders(StringRef IncludePath) {
       return false;
     //std::string file(I->path());
     StringRef file(I->path());
-    I->status(Status);
-    sys::fs::file_type type = Status.type();
+    llvm::ErrorOr<sys::fs::basic_file_status> Status = I->status();
+    if (!Status)
+      return false;
+    sys::fs::file_type type = Status->type();
     // If the file is a directory, ignore the name (but still recurses).
     if (type == sys::fs::file_type::directory_file)
       continue;

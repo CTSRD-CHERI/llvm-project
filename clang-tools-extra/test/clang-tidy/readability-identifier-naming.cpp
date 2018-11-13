@@ -1,3 +1,6 @@
+// Remove UNSUPPORTED for powerpc64le when the problem introduced by
+// r288563 is resolved.
+// UNSUPPORTED: powerpc64le
 // RUN: %check_clang_tidy %s readability-identifier-naming %t -- \
 // RUN:   -config='{CheckOptions: [ \
 // RUN:     {key: readability-identifier-naming.AbstractClassCase, value: CamelCase}, \
@@ -64,7 +67,19 @@
 // RUN:     {key: readability-identifier-naming.MacroDefinitionCase, value: UPPER_CASE}, \
 // RUN:     {key: readability-identifier-naming.TypeAliasCase, value: camel_Snake_Back}, \
 // RUN:     {key: readability-identifier-naming.TypeAliasSuffix, value: '_t'}, \
-// RUN:     {key: readability-identifier-naming.IgnoreFailedSplit, value: 0} \
+// RUN:     {key: readability-identifier-naming.IgnoreFailedSplit, value: 0}, \
+// RUN:     {key: readability-identifier-naming.GlobalPointerCase, value: CamelCase}, \
+// RUN:     {key: readability-identifier-naming.GlobalPointerSuffix, value: '_Ptr'}, \
+// RUN:     {key: readability-identifier-naming.GlobalConstantPointerCase, value: UPPER_CASE}, \
+// RUN:     {key: readability-identifier-naming.GlobalConstantPointerSuffix, value: '_Ptr'}, \
+// RUN:     {key: readability-identifier-naming.PointerParameterCase, value: lower_case}, \
+// RUN:     {key: readability-identifier-naming.PointerParameterPrefix, value: 'p_'}, \
+// RUN:     {key: readability-identifier-naming.ConstantPointerParameterCase, value: CamelCase}, \
+// RUN:     {key: readability-identifier-naming.ConstantPointerParameterPrefix, value: 'cp_'}, \
+// RUN:     {key: readability-identifier-naming.LocalPointerCase, value: CamelCase}, \
+// RUN:     {key: readability-identifier-naming.LocalPointerPrefix, value: 'l_'}, \
+// RUN:     {key: readability-identifier-naming.LocalConstantPointerCase, value: CamelCase}, \
+// RUN:     {key: readability-identifier-naming.LocalConstantPointerPrefix, value: 'lc_'}, \
 // RUN:   ]}' -- -std=c++11 -fno-delayed-template-parsing \
 // RUN:   -I%S/Inputs/readability-identifier-naming \
 // RUN:   -isystem %S/Inputs/readability-identifier-naming/system
@@ -172,6 +187,9 @@ private:
   int member2 = 2;
 // CHECK-MESSAGES: :[[@LINE-1]]:7: warning: invalid case style for private member 'member2'
 // CHECK-FIXES: {{^}}  int __member2 = 2;{{$}}
+  int _memberWithExtraUnderscores_ = 42;
+// CHECK-MESSAGES: :[[@LINE-1]]:7: warning: invalid case style for private member '_memberWithExtraUnderscores_'
+// CHECK-FIXES: {{^}}  int __memberWithExtraUnderscores = 42;{{$}}
 
 private:
     int private_member = 3;
@@ -229,8 +247,8 @@ public:
   CMyWellNamedClass2() = default;
   CMyWellNamedClass2(CMyWellNamedClass2 const&) = default;
   CMyWellNamedClass2(CMyWellNamedClass2 &&) = default;
-  CMyWellNamedClass2(t_t a_v, void *a_p) : my_class(a_p), my_Bad_Member(a_v) {}
-  // CHECK-FIXES: {{^}}  CMyWellNamedClass2(t_t a_v, void *a_p) : CMyClass(a_p), __my_Bad_Member(a_v) {}{{$}}
+  CMyWellNamedClass2(t_t a_v, void *p_p) : my_class(p_p), my_Bad_Member(a_v) {}
+  // CHECK-FIXES: {{^}}  CMyWellNamedClass2(t_t a_v, void *p_p) : CMyClass(p_p), __my_Bad_Member(a_v) {}{{$}}
 
   CMyWellNamedClass2(t_t a_v) : my_class(), my_Bad_Member(a_v), my_Other_Bad_Member(11) {}
   // CHECK-FIXES: {{^}}  CMyWellNamedClass2(t_t a_v) : CMyClass(), __my_Bad_Member(a_v), __my_Other_Bad_Member(11) {}{{$}}
@@ -399,6 +417,38 @@ static void static_Function() {
 
   using ::FOO_NS::InlineNamespace::CE_function;
 // CHECK-FIXES: {{^}}  using ::foo_ns::inline_namespace::ce_function;{{$}}
+
+  unsigned MY_LOCAL_array[] = {1,2,3};
+// CHECK-MESSAGES: :[[@LINE-1]]:12: warning: invalid case style for local variable 'MY_LOCAL_array'
+// CHECK-FIXES: {{^}}  unsigned my_local_array[] = {1,2,3};{{$}}
+
+  unsigned const MyConstLocal_array[] = {1,2,3};
+// CHECK-MESSAGES: :[[@LINE-1]]:18: warning: invalid case style for local constant 'MyConstLocal_array'
+// CHECK-FIXES: {{^}}  unsigned const kMyConstLocalArray[] = {1,2,3};{{$}}
+
+  static unsigned MY_STATIC_array[] = {1,2,3};
+// CHECK-MESSAGES: :[[@LINE-1]]:19: warning: invalid case style for static variable 'MY_STATIC_array'
+// CHECK-FIXES: {{^}}  static unsigned s_myStaticArray[] = {1,2,3};{{$}}
+
+  static unsigned const MyConstStatic_array[] = {1,2,3};
+// CHECK-MESSAGES: :[[@LINE-1]]:25: warning: invalid case style for static constant 'MyConstStatic_array'
+// CHECK-FIXES: {{^}}  static unsigned const MY_CONST_STATIC_ARRAY[] = {1,2,3};{{$}}
+
+  char MY_LOCAL_string[] = "123";
+// CHECK-MESSAGES: :[[@LINE-1]]:8: warning: invalid case style for local variable 'MY_LOCAL_string'
+// CHECK-FIXES: {{^}}  char my_local_string[] = "123";{{$}}
+
+  char const MyConstLocal_string[] = "123";
+// CHECK-MESSAGES: :[[@LINE-1]]:14: warning: invalid case style for local constant 'MyConstLocal_string'
+// CHECK-FIXES: {{^}}  char const kMyConstLocalString[] = "123";{{$}}
+
+  static char MY_STATIC_string[] = "123";
+// CHECK-MESSAGES: :[[@LINE-1]]:15: warning: invalid case style for static variable 'MY_STATIC_string'
+// CHECK-FIXES: {{^}}  static char s_myStaticString[] = "123";{{$}}
+
+  static char const MyConstStatic_string[] = "123";
+// CHECK-MESSAGES: :[[@LINE-1]]:21: warning: invalid case style for static constant 'MyConstStatic_string'
+// CHECK-FIXES: {{^}}  static char const MY_CONST_STATIC_STRING[] = "123";{{$}}
 }
 
 #define MY_TEST_Macro(X) X()
@@ -412,6 +462,42 @@ void MY_TEST_Macro(function) {}
 
 template <typename t_t> struct a {
   typename t_t::template b<> c;
+
+  char const MY_ConstMember_string[4] = "123";
+// CHECK-MESSAGES: :[[@LINE-1]]:14: warning: invalid case style for constant member 'MY_ConstMember_string'
+// CHECK-FIXES: {{^}}  char const my_const_member_string[4] = "123";{{$}}
+
+  static char const MyConstClass_string[];
+// CHECK-MESSAGES: :[[@LINE-1]]:21: warning: invalid case style for class constant 'MyConstClass_string'
+// CHECK-FIXES: {{^}}  static char const kMyConstClassString[];{{$}}
 };
 
+template<typename t_t>
+char const a<t_t>::MyConstClass_string[] = "123";
+// CHECK-MESSAGES: :[[@LINE-1]]:20: warning: invalid case style for class constant 'MyConstClass_string'
+// CHECK-FIXES: {{^}}char const a<t_t>::kMyConstClassString[] = "123";{{$}}
+
 template <template <typename> class A> struct b { A<int> c; };
+
+unsigned MY_GLOBAL_array[] = {1,2,3};
+// CHECK-MESSAGES: :[[@LINE-1]]:10: warning: invalid case style for global variable 'MY_GLOBAL_array'
+// CHECK-FIXES: {{^}}unsigned g_my_global_array[] = {1,2,3};{{$}}
+
+unsigned const MyConstGlobal_array[] = {1,2,3};
+// CHECK-MESSAGES: :[[@LINE-1]]:16: warning: invalid case style for global constant 'MyConstGlobal_array'
+// CHECK-FIXES: {{^}}unsigned const MY_CONST_GLOBAL_ARRAY[] = {1,2,3};{{$}}
+
+int * MyGlobal_Ptr;// -> ok
+int * const MyConstantGlobalPointer = nullptr;
+// CHECK-MESSAGES: :[[@LINE-1]]:13: warning: invalid case style for global constant pointer 'MyConstantGlobalPointer'
+// CHECK-FIXES: {{^}}int * const MY_CONSTANT_GLOBAL_POINTER_Ptr = nullptr;{{$}}
+
+void MyPoiterFunction(int * p_normal_pointer, int * const constant_ptr){
+// CHECK-MESSAGES: :[[@LINE-1]]:59: warning: invalid case style for constant pointer parameter 'constant_ptr'
+// CHECK-FIXES: {{^}}void MyPoiterFunction(int * p_normal_pointer, int * const cp_ConstantPtr){{{$}}
+    int * l_PointerA;
+    int * const pointer_b = nullptr;
+// CHECK-MESSAGES: :[[@LINE-1]]:17: warning: invalid case style for local constant pointer 'pointer_b'
+// CHECK-FIXES: {{^}}    int * const lc_PointerB = nullptr;{{$}}
+}
+

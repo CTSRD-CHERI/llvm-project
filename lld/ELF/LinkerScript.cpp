@@ -8,38 +8,28 @@
 //===----------------------------------------------------------------------===//
 //
 // This file contains the parser/evaluator of the linker script.
-// It parses a linker script and write the result to Config or ScriptConfig
-// objects.
-//
-// If SECTIONS command is used, a ScriptConfig contains an AST
-// of the command which will later be consumed by createSections() and
-// assignAddresses().
 //
 //===----------------------------------------------------------------------===//
 
 #include "LinkerScript.h"
 #include "Config.h"
-#include "Driver.h"
 #include "InputSection.h"
-#include "Memory.h"
 #include "OutputSections.h"
-#include "ScriptParser.h"
-#include "Strings.h"
 #include "SymbolTable.h"
 #include "Symbols.h"
+#include "SyntheticSections.h"
 #include "Target.h"
 #include "Writer.h"
+#include "lld/Common/Memory.h"
+#include "lld/Common/Strings.h"
+#include "lld/Common/Threads.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/StringSwitch.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/Support/Casting.h"
-#include "llvm/Support/ELF.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/MathExtras.h"
-#include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
 #include <algorithm>
 #include <cassert>
@@ -47,9 +37,7 @@
 #include <cstdint>
 #include <iterator>
 #include <limits>
-#include <memory>
 #include <string>
-#include <tuple>
 #include <vector>
 
 using namespace llvm;
@@ -59,522 +47,880 @@ using namespace llvm::support::endian;
 using namespace lld;
 using namespace lld::elf;
 
-LinkerScriptBase *elf::ScriptBase;
-ScriptConfiguration *elf::ScriptConfig;
+LinkerScript *elf::Script;
 
-template <class ELFT> static void addRegular(SymbolAssignment *Cmd) {
-  uint8_t Visibility = Cmd->Hidden ? STV_HIDDEN : STV_DEFAULT;
-  Symbol *Sym = Symtab<ELFT>::X->addRegular(Cmd->Name, Visibility, STT_NOTYPE,
-                                            0, 0, STB_GLOBAL, nullptr, nullptr);
-  Cmd->Sym = Sym->body();
-
-  // If we have no SECTIONS then we don't have '.' and don't call
-  // assignAddresses(). We calculate symbol value immediately in this case.
-  if (!ScriptConfig->HasSections)
-    cast<DefinedRegular<ELFT>>(Cmd->Sym)->Value = Cmd->Expression(0);
+static uint64_t getOutputSectionVA(SectionBase *InputSec, StringRef Loc) {
+  if (OutputSection *OS = InputSec->getOutputSection())
+    return OS->Addr;
+  error(Loc + ": unable to evaluate expression: input section " +
+        InputSec->Name + " has no output section assigned");
+  return 0;
 }
 
-template <class ELFT> static void addSynthetic(SymbolAssignment *Cmd) {
-  // If we have SECTIONS block then output sections haven't been created yet.
-  const OutputSectionBase *Sec =
-      ScriptConfig->HasSections ? nullptr : Cmd->Expression.Section();
-  Symbol *Sym = Symtab<ELFT>::X->addSynthetic(
-      Cmd->Name, Sec, 0, Cmd->Hidden ? STV_HIDDEN : STV_DEFAULT);
-  Cmd->Sym = Sym->body();
-
-  // If we already know section then we can calculate symbol value immediately.
+uint64_t ExprValue::getValue() const {
   if (Sec)
-    cast<DefinedSynthetic<ELFT>>(Cmd->Sym)->Value =
-        Cmd->Expression(0) - Sec->Addr;
+    return alignTo(Sec->getOffset(Val) + getOutputSectionVA(Sec, Loc),
+                   Alignment);
+  return alignTo(Val, Alignment);
 }
 
-template <class ELFT> static void addSymbol(SymbolAssignment *Cmd) {
-  if (Cmd->Expression.IsAbsolute())
-    addRegular<ELFT>(Cmd);
-  else
-    addSynthetic<ELFT>(Cmd);
+uint64_t ExprValue::getSecAddr() const {
+  if (Sec)
+    return Sec->getOffset(0) + getOutputSectionVA(Sec, Loc);
+  return 0;
 }
-// If a symbol was in PROVIDE(), we need to define it only when
-// it is an undefined symbol.
-template <class ELFT> static bool shouldDefine(SymbolAssignment *Cmd) {
+
+uint64_t ExprValue::getSectionOffset() const {
+  // If the alignment is trivial, we don't have to compute the full
+  // value to know the offset. This allows this function to succeed in
+  // cases where the output section is not yet known.
+  if (Alignment == 1 && (!Sec || !Sec->getOutputSection()))
+    return Val;
+  return getValue() - getSecAddr();
+}
+
+OutputSection *LinkerScript::createOutputSection(StringRef Name,
+                                                 StringRef Location) {
+  OutputSection *&SecRef = NameToOutputSection[Name];
+  OutputSection *Sec;
+  if (SecRef && SecRef->Location.empty()) {
+    // There was a forward reference.
+    Sec = SecRef;
+  } else {
+    Sec = make<OutputSection>(Name, SHT_NOBITS, 0);
+    if (!SecRef)
+      SecRef = Sec;
+  }
+  Sec->Location = Location;
+  return Sec;
+}
+
+OutputSection *LinkerScript::getOrCreateOutputSection(StringRef Name) {
+  OutputSection *&CmdRef = NameToOutputSection[Name];
+  if (!CmdRef)
+    CmdRef = make<OutputSection>(Name, SHT_PROGBITS, 0);
+  return CmdRef;
+}
+
+// Expands the memory region by the specified size.
+static void expandMemoryRegion(MemoryRegion *MemRegion, uint64_t Size,
+                               StringRef RegionName, StringRef SecName) {
+  MemRegion->CurPos += Size;
+  uint64_t NewSize = MemRegion->CurPos - MemRegion->Origin;
+  if (NewSize > MemRegion->Length)
+    error("section '" + SecName + "' will not fit in region '" + RegionName +
+          "': overflowed by " + Twine(NewSize - MemRegion->Length) + " bytes");
+}
+
+void LinkerScript::expandMemoryRegions(uint64_t Size) {
+  if (Ctx->MemRegion)
+    expandMemoryRegion(Ctx->MemRegion, Size, Ctx->MemRegion->Name,
+                       Ctx->OutSec->Name);
+  // Only expand the LMARegion if it is different from MemRegion.
+  if (Ctx->LMARegion && Ctx->MemRegion != Ctx->LMARegion)
+    expandMemoryRegion(Ctx->LMARegion, Size, Ctx->LMARegion->Name,
+                       Ctx->OutSec->Name);
+}
+
+void LinkerScript::expandOutputSection(uint64_t Size) {
+  Ctx->OutSec->Size += Size;
+  expandMemoryRegions(Size);
+}
+
+void LinkerScript::setDot(Expr E, const Twine &Loc, bool InSec) {
+  uint64_t Val = E().getValue();
+  if (Val < Dot && InSec)
+    error(Loc + ": unable to move location counter backward for: " +
+          Ctx->OutSec->Name);
+
+  // Update to location counter means update to section size.
+  if (InSec)
+    expandOutputSection(Val - Dot);
+  else
+    expandMemoryRegions(Val - Dot);
+
+  Dot = Val;
+}
+
+// Used for handling linker symbol assignments, for both finalizing
+// their values and doing early declarations. Returns true if symbol
+// should be defined from linker script.
+static bool shouldDefineSym(SymbolAssignment *Cmd) {
   if (Cmd->Name == ".")
     return false;
+
   if (!Cmd->Provide)
     return true;
-  SymbolBody *B = Symtab<ELFT>::X->find(Cmd->Name);
-  return B && B->isUndefined();
-}
 
-bool SymbolAssignment::classof(const BaseCommand *C) {
-  return C->Kind == AssignmentKind;
-}
-
-bool OutputSectionCommand::classof(const BaseCommand *C) {
-  return C->Kind == OutputSectionKind;
-}
-
-bool InputSectionDescription::classof(const BaseCommand *C) {
-  return C->Kind == InputSectionKind;
-}
-
-bool AssertCommand::classof(const BaseCommand *C) {
-  return C->Kind == AssertKind;
-}
-
-bool BytesDataCommand::classof(const BaseCommand *C) {
-  return C->Kind == BytesDataKind;
-}
-
-template <class ELFT> LinkerScript<ELFT>::LinkerScript() = default;
-template <class ELFT> LinkerScript<ELFT>::~LinkerScript() = default;
-
-template <class ELFT>
-bool LinkerScript<ELFT>::shouldKeep(InputSectionBase<ELFT> *S) {
-  for (InputSectionDescription *ID : Opt.KeptSections) {
-    StringRef Filename = S->getFile()->getName();
-    if (!ID->FilePat.match(sys::path::filename(Filename)))
-      continue;
-
-    for (SectionPattern &P : ID->SectionPatterns)
-      if (P.SectionPat.match(S->Name))
-        return true;
-  }
+  // If a symbol was in PROVIDE(), we need to define it only
+  // when it is a referenced undefined symbol.
+  Symbol *B = Symtab->find(Cmd->Name);
+  if (B && !B->isDefined())
+    return true;
   return false;
 }
 
-static bool comparePriority(InputSectionData *A, InputSectionData *B) {
-  return getPriority(A->Name) < getPriority(B->Name);
+// This function is called from processSectionCommands,
+// while we are fixing the output section layout.
+void LinkerScript::addSymbol(SymbolAssignment *Cmd) {
+  if (!shouldDefineSym(Cmd))
+    return;
+
+  // Define a symbol.
+  Symbol *Sym;
+  uint8_t Visibility = Cmd->Hidden ? STV_HIDDEN : STV_DEFAULT;
+  std::tie(Sym, std::ignore) = Symtab->insert(Cmd->Name, /*Type*/ 0, Visibility,
+                                              /*CanOmitFromDynSym*/ false,
+                                              /*File*/ nullptr);
+  ExprValue Value = Cmd->Expression();
+  SectionBase *Sec = Value.isAbsolute() ? nullptr : Value.Sec;
+
+  // When this function is called, section addresses have not been
+  // fixed yet. So, we may or may not know the value of the RHS
+  // expression.
+  //
+  // For example, if an expression is `x = 42`, we know x is always 42.
+  // However, if an expression is `x = .`, there's no way to know its
+  // value at the moment.
+  //
+  // We want to set symbol values early if we can. This allows us to
+  // use symbols as variables in linker scripts. Doing so allows us to
+  // write expressions like this: `alignment = 16; . = ALIGN(., alignment)`.
+  uint64_t SymValue = Value.Sec ? 0 : Value.getValue();
+
+  replaceSymbol<Defined>(Sym, nullptr, Cmd->Name, STB_GLOBAL, Visibility,
+                         STT_NOTYPE, SymValue, 0, Sec);
+  Cmd->Sym = cast<Defined>(Sym);
 }
 
-static bool compareName(InputSectionData *A, InputSectionData *B) {
-  return A->Name < B->Name;
+// This function is called from LinkerScript::declareSymbols.
+// It creates a placeholder symbol if needed.
+static void declareSymbol(SymbolAssignment *Cmd) {
+  if (!shouldDefineSym(Cmd))
+    return;
+
+  // We can't calculate final value right now.
+  Symbol *Sym;
+  uint8_t Visibility = Cmd->Hidden ? STV_HIDDEN : STV_DEFAULT;
+  std::tie(Sym, std::ignore) = Symtab->insert(Cmd->Name, /*Type*/ 0, Visibility,
+                                              /*CanOmitFromDynSym*/ false,
+                                              /*File*/ nullptr);
+  replaceSymbol<Defined>(Sym, nullptr, Cmd->Name, STB_GLOBAL, Visibility,
+                         STT_NOTYPE, 0, 0, nullptr);
+  Cmd->Sym = cast<Defined>(Sym);
+  Cmd->Provide = false;
+  Sym->ScriptDefined = true;
 }
 
-static bool compareAlignment(InputSectionData *A, InputSectionData *B) {
-  // ">" is not a mistake. Larger alignments are placed before smaller
-  // alignments in order to reduce the amount of padding necessary.
-  // This is compatible with GNU.
-  return A->Alignment > B->Alignment;
+// This method is used to handle INSERT AFTER statement. Here we rebuild
+// the list of script commands to mix sections inserted into.
+void LinkerScript::processInsertCommands() {
+  std::vector<BaseCommand *> V;
+  auto Insert = [&](std::vector<BaseCommand *> &From) {
+    V.insert(V.end(), From.begin(), From.end());
+    From.clear();
+  };
+
+  for (BaseCommand *Base : SectionCommands) {
+    if (auto *OS = dyn_cast<OutputSection>(Base)) {
+      Insert(InsertBeforeCommands[OS->Name]);
+      V.push_back(Base);
+      Insert(InsertAfterCommands[OS->Name]);
+      continue;
+    }
+    V.push_back(Base);
+  }
+
+  for (auto &Cmds : {InsertBeforeCommands, InsertAfterCommands})
+    for (const std::pair<StringRef, std::vector<BaseCommand *>> &P : Cmds)
+      if (!P.second.empty())
+        error("unable to INSERT AFTER/BEFORE " + P.first +
+              ": section not defined");
+
+  SectionCommands = std::move(V);
 }
 
-static std::function<bool(InputSectionData *, InputSectionData *)>
+// Symbols defined in script should not be inlined by LTO. At the same time
+// we don't know their final values until late stages of link. Here we scan
+// over symbol assignment commands and create placeholder symbols if needed.
+void LinkerScript::declareSymbols() {
+  assert(!Ctx);
+  for (BaseCommand *Base : SectionCommands) {
+    if (auto *Cmd = dyn_cast<SymbolAssignment>(Base)) {
+      declareSymbol(Cmd);
+      continue;
+    }
+
+    // If the output section directive has constraints,
+    // we can't say for sure if it is going to be included or not.
+    // Skip such sections for now. Improve the checks if we ever
+    // need symbols from that sections to be declared early.
+    auto *Sec = cast<OutputSection>(Base);
+    if (Sec->Constraint != ConstraintKind::NoConstraint)
+      continue;
+    for (BaseCommand *Base2 : Sec->SectionCommands)
+      if (auto *Cmd = dyn_cast<SymbolAssignment>(Base2))
+        declareSymbol(Cmd);
+  }
+}
+
+// This function is called from assignAddresses, while we are
+// fixing the output section addresses. This function is supposed
+// to set the final value for a given symbol assignment.
+void LinkerScript::assignSymbol(SymbolAssignment *Cmd, bool InSec) {
+  if (Cmd->Name == ".") {
+    setDot(Cmd->Expression, Cmd->Location, InSec);
+    return;
+  }
+
+  if (!Cmd->Sym)
+    return;
+
+  ExprValue V = Cmd->Expression();
+  if (V.isAbsolute()) {
+    Cmd->Sym->Section = nullptr;
+    Cmd->Sym->Value = V.getValue();
+  } else {
+    Cmd->Sym->Section = V.Sec;
+    Cmd->Sym->Value = V.getSectionOffset();
+  }
+}
+
+static std::string getFilename(InputFile *File) {
+  if (!File)
+    return "";
+  if (File->ArchiveName.empty())
+    return File->getName();
+  return (File->ArchiveName + "(" + File->getName() + ")").str();
+}
+
+bool LinkerScript::shouldKeep(InputSectionBase *S) {
+  if (KeptSections.empty())
+    return false;
+  std::string Filename = getFilename(S->File);
+  for (InputSectionDescription *ID : KeptSections)
+    if (ID->FilePat.match(Filename))
+      for (SectionPattern &P : ID->SectionPatterns)
+        if (P.SectionPat.match(S->Name))
+          return true;
+  return false;
+}
+
+// A helper function for the SORT() command.
+static std::function<bool(InputSectionBase *, InputSectionBase *)>
 getComparator(SortSectionPolicy K) {
   switch (K) {
   case SortSectionPolicy::Alignment:
-    return compareAlignment;
+    return [](InputSectionBase *A, InputSectionBase *B) {
+      // ">" is not a mistake. Sections with larger alignments are placed
+      // before sections with smaller alignments in order to reduce the
+      // amount of padding necessary. This is compatible with GNU.
+      return A->Alignment > B->Alignment;
+    };
   case SortSectionPolicy::Name:
-    return compareName;
+    return [](InputSectionBase *A, InputSectionBase *B) {
+      return A->Name < B->Name;
+    };
   case SortSectionPolicy::Priority:
-    return comparePriority;
+    return [](InputSectionBase *A, InputSectionBase *B) {
+      return getPriority(A->Name) < getPriority(B->Name);
+    };
   default:
     llvm_unreachable("unknown sort policy");
   }
 }
 
-template <class ELFT>
-static bool matchConstraints(ArrayRef<InputSectionBase<ELFT> *> Sections,
+// A helper function for the SORT() command.
+static bool matchConstraints(ArrayRef<InputSection *> Sections,
                              ConstraintKind Kind) {
   if (Kind == ConstraintKind::NoConstraint)
     return true;
-  bool IsRW = llvm::any_of(Sections, [=](InputSectionData *Sec2) {
-    auto *Sec = static_cast<InputSectionBase<ELFT> *>(Sec2);
-    return Sec->Flags & SHF_WRITE;
-  });
+
+  bool IsRW = llvm::any_of(
+      Sections, [](InputSection *Sec) { return Sec->Flags & SHF_WRITE; });
+
   return (IsRW && Kind == ConstraintKind::ReadWrite) ||
          (!IsRW && Kind == ConstraintKind::ReadOnly);
 }
 
-static void sortSections(InputSectionData **Begin, InputSectionData **End,
+static void sortSections(MutableArrayRef<InputSection *> Vec,
                          SortSectionPolicy K) {
   if (K != SortSectionPolicy::Default && K != SortSectionPolicy::None)
-    std::stable_sort(Begin, End, getComparator(K));
+    std::stable_sort(Vec.begin(), Vec.end(), getComparator(K));
+}
+
+// Sort sections as instructed by SORT-family commands and --sort-section
+// option. Because SORT-family commands can be nested at most two depth
+// (e.g. SORT_BY_NAME(SORT_BY_ALIGNMENT(.text.*))) and because the command
+// line option is respected even if a SORT command is given, the exact
+// behavior we have here is a bit complicated. Here are the rules.
+//
+// 1. If two SORT commands are given, --sort-section is ignored.
+// 2. If one SORT command is given, and if it is not SORT_NONE,
+//    --sort-section is handled as an inner SORT command.
+// 3. If one SORT command is given, and if it is SORT_NONE, don't sort.
+// 4. If no SORT command is given, sort according to --sort-section.
+static void sortInputSections(MutableArrayRef<InputSection *> Vec,
+                              const SectionPattern &Pat) {
+  if (Pat.SortOuter == SortSectionPolicy::None)
+    return;
+
+  if (Pat.SortInner == SortSectionPolicy::Default)
+    sortSections(Vec, Config->SortSection);
+  else
+    sortSections(Vec, Pat.SortInner);
+  sortSections(Vec, Pat.SortOuter);
 }
 
 // Compute and remember which sections the InputSectionDescription matches.
-template <class ELFT>
-void LinkerScript<ELFT>::computeInputSections(InputSectionDescription *I) {
-  // Collects all sections that satisfy constraints of I
-  // and attach them to I.
-  for (SectionPattern &Pat : I->SectionPatterns) {
-    size_t SizeBefore = I->Sections.size();
+std::vector<InputSection *>
+LinkerScript::computeInputSections(const InputSectionDescription *Cmd) {
+  std::vector<InputSection *> Ret;
 
-    for (InputSectionBase<ELFT> *S : Symtab<ELFT>::X->Sections) {
-      if (!S->Live || S->OutSec)
+  // Collects all sections that satisfy constraints of Cmd.
+  for (const SectionPattern &Pat : Cmd->SectionPatterns) {
+    size_t SizeBefore = Ret.size();
+
+    for (InputSectionBase *Sec : InputSections) {
+      if (!Sec->Live || Sec->Assigned)
         continue;
 
-      StringRef Filename;
-      if (elf::ObjectFile<ELFT> *F = S->getFile())
-        Filename = sys::path::filename(F->getName());
+      // For -emit-relocs we have to ignore entries like
+      //   .rela.dyn : { *(.rela.data) }
+      // which are common because they are in the default bfd script.
+      // We do not ignore SHT_REL[A] linker-synthesized sections here because
+      // want to support scripts that do custom layout for them.
+      if (auto *IS = dyn_cast<InputSection>(Sec))
+        if (IS->getRelocatedSection())
+          continue;
 
-      if (I->FilePat.match(Filename) && !Pat.ExcludedFilePat.match(Filename) &&
-          Pat.SectionPat.match(S->Name))
-        I->Sections.push_back(S);
+      std::string Filename = getFilename(Sec->File);
+      if (!Cmd->FilePat.match(Filename) ||
+          Pat.ExcludedFilePat.match(Filename) ||
+          !Pat.SectionPat.match(Sec->Name))
+        continue;
+
+      // It is safe to assume that Sec is an InputSection
+      // because mergeable or EH input sections have already been
+      // handled and eliminated.
+      Ret.push_back(cast<InputSection>(Sec));
+      Sec->Assigned = true;
     }
 
-    // Sort sections as instructed by SORT-family commands and --sort-section
-    // option. Because SORT-family commands can be nested at most two depth
-    // (e.g. SORT_BY_NAME(SORT_BY_ALIGNMENT(.text.*))) and because the command
-    // line option is respected even if a SORT command is given, the exact
-    // behavior we have here is a bit complicated. Here are the rules.
-    //
-    // 1. If two SORT commands are given, --sort-section is ignored.
-    // 2. If one SORT command is given, and if it is not SORT_NONE,
-    //    --sort-section is handled as an inner SORT command.
-    // 3. If one SORT command is given, and if it is SORT_NONE, don't sort.
-    // 4. If no SORT command is given, sort according to --sort-section.
-    InputSectionData **Begin = I->Sections.data() + SizeBefore;
-    InputSectionData **End = I->Sections.data() + I->Sections.size();
-    if (Pat.SortOuter != SortSectionPolicy::None) {
-      if (Pat.SortInner == SortSectionPolicy::Default)
-        sortSections(Begin, End, Config->SortSection);
-      else
-        sortSections(Begin, End, Pat.SortInner);
-      sortSections(Begin, End, Pat.SortOuter);
-    }
+    sortInputSections(MutableArrayRef<InputSection *>(Ret).slice(SizeBefore),
+                      Pat);
   }
-
-  // We do not add duplicate input sections, so mark them with a dummy output
-  // section for now.
-  for (InputSectionData *S : I->Sections) {
-    auto *S2 = static_cast<InputSectionBase<ELFT> *>(S);
-    S2->OutSec = (OutputSectionBase *)-1;
-  }
-}
-
-template <class ELFT>
-void LinkerScript<ELFT>::discard(ArrayRef<InputSectionBase<ELFT> *> V) {
-  for (InputSectionBase<ELFT> *S : V) {
-    S->Live = false;
-    reportDiscarded(S);
-  }
-}
-
-template <class ELFT>
-std::vector<InputSectionBase<ELFT> *>
-LinkerScript<ELFT>::createInputSectionList(OutputSectionCommand &OutCmd) {
-  std::vector<InputSectionBase<ELFT> *> Ret;
-
-  for (const std::unique_ptr<BaseCommand> &Base : OutCmd.Commands) {
-    auto *Cmd = dyn_cast<InputSectionDescription>(Base.get());
-    if (!Cmd)
-      continue;
-    computeInputSections(Cmd);
-    for (InputSectionData *S : Cmd->Sections)
-      Ret.push_back(static_cast<InputSectionBase<ELFT> *>(S));
-  }
-
-  // After we created final list we should now set OutSec pointer to null,
-  // instead of -1. Otherwise we may get a crash when writing relocs, in
-  // case section is discarded by linker script
-  for (InputSectionBase<ELFT> *S : Ret)
-    S->OutSec = nullptr;
-
   return Ret;
 }
 
-template <class ELFT>
-static SectionKey<ELFT::Is64Bits> createKey(InputSectionBase<ELFT> *C,
-                                            StringRef OutsecName) {
-  // When using linker script the merge rules are different.
-  // Unfortunately, linker scripts are name based. This means that expressions
-  // like *(.foo*) can refer to multiple input sections that would normally be
-  // placed in different output sections. We cannot put them in different
-  // output sections or we would produce wrong results for
+void LinkerScript::discard(ArrayRef<InputSection *> V) {
+  for (InputSection *S : V) {
+    if (S == In.ShStrTab || S == In.Dynamic || S == In.DynSymTab ||
+        S == In.DynStrTab || S == In.RelaPlt || S == In.RelaDyn ||
+        S == In.RelrDyn)
+      error("discarding " + S->Name + " section is not allowed");
+
+    // You can discard .hash and .gnu.hash sections by linker scripts. Since
+    // they are synthesized sections, we need to handle them differently than
+    // other regular sections.
+    if (S == In.GnuHashTab)
+      In.GnuHashTab = nullptr;
+    if (S == In.HashTab)
+      In.HashTab = nullptr;
+
+    S->Assigned = false;
+    S->Live = false;
+    discard(S->DependentSections);
+  }
+}
+
+std::vector<InputSection *>
+LinkerScript::createInputSectionList(OutputSection &OutCmd) {
+  std::vector<InputSection *> Ret;
+
+  for (BaseCommand *Base : OutCmd.SectionCommands) {
+    if (auto *Cmd = dyn_cast<InputSectionDescription>(Base)) {
+      Cmd->Sections = computeInputSections(Cmd);
+      Ret.insert(Ret.end(), Cmd->Sections.begin(), Cmd->Sections.end());
+    }
+  }
+  return Ret;
+}
+
+void LinkerScript::processSectionCommands() {
+  // A symbol can be assigned before any section is mentioned in the linker
+  // script. In an DSO, the symbol values are addresses, so the only important
+  // section values are:
+  // * SHN_UNDEF
+  // * SHN_ABS
+  // * Any value meaning a regular section.
+  // To handle that, create a dummy aether section that fills the void before
+  // the linker scripts switches to another section. It has an index of one
+  // which will map to whatever the first actual section is.
+  Aether = make<OutputSection>("", 0, SHF_ALLOC);
+  Aether->SectionIndex = 1;
+
+  // Ctx captures the local AddressState and makes it accessible deliberately.
+  // This is needed as there are some cases where we cannot just
+  // thread the current state through to a lambda function created by the
+  // script parser.
+  auto Deleter = make_unique<AddressState>();
+  Ctx = Deleter.get();
+  Ctx->OutSec = Aether;
+
+  size_t I = 0;
+  // Add input sections to output sections.
+  for (BaseCommand *Base : SectionCommands) {
+    // Handle symbol assignments outside of any output section.
+    if (auto *Cmd = dyn_cast<SymbolAssignment>(Base)) {
+      addSymbol(Cmd);
+      continue;
+    }
+
+    if (auto *Sec = dyn_cast<OutputSection>(Base)) {
+      std::vector<InputSection *> V = createInputSectionList(*Sec);
+
+      // The output section name `/DISCARD/' is special.
+      // Any input section assigned to it is discarded.
+      if (Sec->Name == "/DISCARD/") {
+        discard(V);
+        Sec->SectionCommands.clear();
+        continue;
+      }
+
+      // This is for ONLY_IF_RO and ONLY_IF_RW. An output section directive
+      // ".foo : ONLY_IF_R[OW] { ... }" is handled only if all member input
+      // sections satisfy a given constraint. If not, a directive is handled
+      // as if it wasn't present from the beginning.
+      //
+      // Because we'll iterate over SectionCommands many more times, the easy
+      // way to "make it as if it wasn't present" is to make it empty.
+      if (!matchConstraints(V, Sec->Constraint)) {
+        for (InputSectionBase *S : V)
+          S->Assigned = false;
+        Sec->SectionCommands.clear();
+        continue;
+      }
+
+      // A directive may contain symbol definitions like this:
+      // ".foo : { ...; bar = .; }". Handle them.
+      for (BaseCommand *Base : Sec->SectionCommands)
+        if (auto *OutCmd = dyn_cast<SymbolAssignment>(Base))
+          addSymbol(OutCmd);
+
+      // Handle subalign (e.g. ".foo : SUBALIGN(32) { ... }"). If subalign
+      // is given, input sections are aligned to that value, whether the
+      // given value is larger or smaller than the original section alignment.
+      if (Sec->SubalignExpr) {
+        uint32_t Subalign = Sec->SubalignExpr().getValue();
+        for (InputSectionBase *S : V)
+          S->Alignment = Subalign;
+      }
+
+      // Add input sections to an output section.
+      for (InputSection *S : V)
+        Sec->addSection(S);
+
+      Sec->SectionIndex = I++;
+      if (Sec->Noload)
+        Sec->Type = SHT_NOBITS;
+      if (Sec->NonAlloc)
+        Sec->Flags &= ~(uint64_t)SHF_ALLOC;
+    }
+  }
+  Ctx = nullptr;
+}
+
+static OutputSection *findByName(ArrayRef<BaseCommand *> Vec,
+                                 StringRef Name) {
+  for (BaseCommand *Base : Vec)
+    if (auto *Sec = dyn_cast<OutputSection>(Base))
+      if (Sec->Name == Name)
+        return Sec;
+  return nullptr;
+}
+
+static OutputSection *createSection(InputSectionBase *IS,
+                                    StringRef OutsecName) {
+  OutputSection *Sec = Script->createOutputSection(OutsecName, "<internal>");
+  Sec->addSection(cast<InputSection>(IS));
+  return Sec;
+}
+
+static OutputSection *addInputSec(StringMap<OutputSection *> &Map,
+                                  InputSectionBase *IS, StringRef OutsecName) {
+  // Sections with SHT_GROUP or SHF_GROUP attributes reach here only when the -r
+  // option is given. A section with SHT_GROUP defines a "section group", and
+  // its members have SHF_GROUP attribute. Usually these flags have already been
+  // stripped by InputFiles.cpp as section groups are processed and uniquified.
+  // However, for the -r option, we want to pass through all section groups
+  // as-is because adding/removing members or merging them with other groups
+  // change their semantics.
+  if (IS->Type == SHT_GROUP || (IS->Flags & SHF_GROUP))
+    return createSection(IS, OutsecName);
+
+  // Imagine .zed : { *(.foo) *(.bar) } script. Both foo and bar may have
+  // relocation sections .rela.foo and .rela.bar for example. Most tools do
+  // not allow multiple REL[A] sections for output section. Hence we
+  // should combine these relocation sections into single output.
+  // We skip synthetic sections because it can be .rela.dyn/.rela.plt or any
+  // other REL[A] sections created by linker itself.
+  if (!isa<SyntheticSection>(IS) &&
+      (IS->Type == SHT_REL || IS->Type == SHT_RELA)) {
+    auto *Sec = cast<InputSection>(IS);
+    OutputSection *Out = Sec->getRelocatedSection()->getOutputSection();
+
+    if (Out->RelocationSection) {
+      Out->RelocationSection->addSection(Sec);
+      return nullptr;
+    }
+
+    Out->RelocationSection = createSection(IS, OutsecName);
+    return Out->RelocationSection;
+  }
+
+  // When control reaches here, mergeable sections have already been merged into
+  // synthetic sections. For relocatable case we want to create one output
+  // section per syntetic section so that they have a valid sh_entsize.
+  if (Config->Relocatable && (IS->Flags & SHF_MERGE))
+    return createSection(IS, OutsecName);
+
+  //  The ELF spec just says
+  // ----------------------------------------------------------------
+  // In the first phase, input sections that match in name, type and
+  // attribute flags should be concatenated into single sections.
+  // ----------------------------------------------------------------
+  //
+  // However, it is clear that at least some flags have to be ignored for
+  // section merging. At the very least SHF_GROUP and SHF_COMPRESSED have to be
+  // ignored. We should not have two output .text sections just because one was
+  // in a group and another was not for example.
+  //
+  // It also seems that wording was a late addition and didn't get the
+  // necessary scrutiny.
+  //
+  // Merging sections with different flags is expected by some users. One
+  // reason is that if one file has
+  //
+  // int *const bar __attribute__((section(".foo"))) = (int *)0;
+  //
+  // gcc with -fPIC will produce a read only .foo section. But if another
+  // file has
+  //
+  // int zed;
+  // int *const bar __attribute__((section(".foo"))) = (int *)&zed;
+  //
+  // gcc with -fPIC will produce a read write section.
+  //
+  // Last but not least, when using linker script the merge rules are forced by
+  // the script. Unfortunately, linker scripts are name based. This means that
+  // expressions like *(.foo*) can refer to multiple input sections with
+  // different flags. We cannot put them in different output sections or we
+  // would produce wrong results for
+  //
   // start = .; *(.foo.*) end = .; *(.bar)
+  //
   // and a mapping of .foo1 and .bar1 to one section and .foo2 and .bar2 to
   // another. The problem is that there is no way to layout those output
-  // sections such that the .foo sections are the only thing between the
-  // start and end symbols.
-
-  // An extra annoyance is that we cannot simply disable merging of the contents
-  // of SHF_MERGE sections, but our implementation requires one output section
-  // per "kind" (string or not, which size/aligment).
-  // Fortunately, creating symbols in the middle of a merge section is not
-  // supported by bfd or gold, so we can just create multiple section in that
-  // case.
-  typedef typename ELFT::uint uintX_t;
-  uintX_t Flags = C->Flags & (SHF_MERGE | SHF_STRINGS);
-
-  uintX_t Alignment = 0;
-  if (isa<MergeInputSection<ELFT>>(C))
-    Alignment = std::max<uintX_t>(C->Alignment, C->Entsize);
-
-  return SectionKey<ELFT::Is64Bits>{OutsecName, /*Type*/ 0, Flags, Alignment};
-}
-
-template <class ELFT>
-void LinkerScript<ELFT>::addSection(OutputSectionFactory<ELFT> &Factory,
-                                    InputSectionBase<ELFT> *Sec,
-                                    StringRef Name) {
-  OutputSectionBase *OutSec;
-  bool IsNew;
-  std::tie(OutSec, IsNew) = Factory.create(createKey(Sec, Name), Sec);
-  if (IsNew)
-    OutputSections->push_back(OutSec);
-  OutSec->addSection(Sec);
-}
-
-template <class ELFT>
-void LinkerScript<ELFT>::processCommands(OutputSectionFactory<ELFT> &Factory) {
-  for (unsigned I = 0; I < Opt.Commands.size(); ++I) {
-    auto Iter = Opt.Commands.begin() + I;
-    const std::unique_ptr<BaseCommand> &Base1 = *Iter;
-    if (auto *Cmd = dyn_cast<SymbolAssignment>(Base1.get())) {
-      if (shouldDefine<ELFT>(Cmd))
-        addSymbol<ELFT>(Cmd);
-      continue;
-    }
-    if (auto *Cmd = dyn_cast<AssertCommand>(Base1.get())) {
-      // If we don't have SECTIONS then output sections have already been
-      // created by Writer<ELFT>. The LinkerScript<ELFT>::assignAddresses
-      // will not be called, so ASSERT should be evaluated now.
-      if (!Opt.HasSections)
-        Cmd->Expression(0);
-      continue;
-    }
-
-    if (auto *Cmd = dyn_cast<OutputSectionCommand>(Base1.get())) {
-      std::vector<InputSectionBase<ELFT> *> V = createInputSectionList(*Cmd);
-
-      if (Cmd->Name == "/DISCARD/") {
-        discard(V);
-        continue;
-      }
-
-      if (!matchConstraints<ELFT>(V, Cmd->Constraint)) {
-        for (InputSectionBase<ELFT> *S : V)
-          S->OutSec = nullptr;
-        Opt.Commands.erase(Iter);
-        --I;
-        continue;
-      }
-
-      for (const std::unique_ptr<BaseCommand> &Base : Cmd->Commands)
-        if (auto *OutCmd = dyn_cast<SymbolAssignment>(Base.get()))
-          if (shouldDefine<ELFT>(OutCmd))
-            addSymbol<ELFT>(OutCmd);
-
-      if (V.empty())
-        continue;
-
-      for (InputSectionBase<ELFT> *Sec : V) {
-        addSection(Factory, Sec, Cmd->Name);
-        if (uint32_t Subalign = Cmd->SubalignExpr ? Cmd->SubalignExpr(0) : 0)
-          Sec->Alignment = Subalign;
-      }
-    }
+  // sections such that the .foo sections are the only thing between the start
+  // and end symbols.
+  //
+  // Given the above issues, we instead merge sections by name and error on
+  // incompatible types and flags.
+  OutputSection *&Sec = Map[OutsecName];
+  if (Sec) {
+    Sec->addSection(cast<InputSection>(IS));
+    return nullptr;
   }
+
+  Sec = createSection(IS, OutsecName);
+  return Sec;
 }
 
-template <class ELFT>
-void LinkerScript<ELFT>::createSections(OutputSectionFactory<ELFT> &Factory) {
-  processCommands(Factory);
+// Add sections that didn't match any sections command.
+void LinkerScript::addOrphanSections() {
+  unsigned End = SectionCommands.size();
+  StringMap<OutputSection *> Map;
+  std::vector<OutputSection *> V;
 
-  // Add orphan sections.
-  for (InputSectionBase<ELFT> *S : Symtab<ELFT>::X->Sections)
-    if (S->Live && !S->OutSec)
-      addSection(Factory, S, getOutputSectionName(S->Name));
-}
+  auto Add = [&](InputSectionBase *S) {
+    if (!S->Live || S->Parent)
+      return;
 
-// Sets value of a section-defined symbol. Two kinds of
-// symbols are processed: synthetic symbols, whose value
-// is an offset from beginning of section and regular
-// symbols whose value is absolute.
-template <class ELFT>
-static void assignSectionSymbol(SymbolAssignment *Cmd,
-                                typename ELFT::uint Value) {
-  if (!Cmd->Sym)
-    return;
+    StringRef Name = getOutputSectionName(S);
 
-  if (auto *Body = dyn_cast<DefinedSynthetic<ELFT>>(Cmd->Sym)) {
-    Body->Section = Cmd->Expression.Section();
-    Body->Value = Cmd->Expression(Value) - Body->Section->Addr;
-    return;
+    if (Config->OrphanHandling == OrphanHandlingPolicy::Error)
+      error(toString(S) + " is being placed in '" + Name + "'");
+    else if (Config->OrphanHandling == OrphanHandlingPolicy::Warn)
+      warn(toString(S) + " is being placed in '" + Name + "'");
+
+    if (OutputSection *Sec =
+            findByName(makeArrayRef(SectionCommands).slice(0, End), Name)) {
+      Sec->addSection(cast<InputSection>(S));
+      return;
+    }
+
+    if (OutputSection *OS = addInputSec(Map, S, Name))
+      V.push_back(OS);
+    assert(S->getOutputSection()->SectionIndex == UINT32_MAX);
+  };
+
+  // For futher --emit-reloc handling code we need target output section
+  // to be created before we create relocation output section, so we want
+  // to create target sections first. We do not want priority handling
+  // for synthetic sections because them are special.
+  for (InputSectionBase *IS : InputSections) {
+    if (auto *Sec = dyn_cast<InputSection>(IS))
+      if (InputSectionBase *Rel = Sec->getRelocatedSection())
+        if (auto *RelIS = dyn_cast_or_null<InputSectionBase>(Rel->Parent))
+          Add(RelIS);
+    Add(IS);
   }
-  auto *Body = cast<DefinedRegular<ELFT>>(Cmd->Sym);
-  Body->Value = Cmd->Expression(Value);
+
+  // If no SECTIONS command was given, we should insert sections commands
+  // before others, so that we can handle scripts which refers them,
+  // for example: "foo = ABSOLUTE(ADDR(.text)));".
+  // When SECTIONS command is present we just add all orphans to the end.
+  if (HasSectionsCommand)
+    SectionCommands.insert(SectionCommands.end(), V.begin(), V.end());
+  else
+    SectionCommands.insert(SectionCommands.begin(), V.begin(), V.end());
 }
 
-template <class ELFT> static bool isTbss(OutputSectionBase *Sec) {
-  return (Sec->Flags & SHF_TLS) && Sec->Type == SHT_NOBITS;
+uint64_t LinkerScript::advance(uint64_t Size, unsigned Alignment) {
+  bool IsTbss =
+      (Ctx->OutSec->Flags & SHF_TLS) && Ctx->OutSec->Type == SHT_NOBITS;
+  uint64_t Start = IsTbss ? Dot + Ctx->ThreadBssOffset : Dot;
+  Start = alignTo(Start, Alignment);
+  uint64_t End = Start + Size;
+
+  if (IsTbss)
+    Ctx->ThreadBssOffset = End - Dot;
+  else
+    Dot = End;
+  return End;
 }
 
-template <class ELFT> void LinkerScript<ELFT>::output(InputSection<ELFT> *S) {
-  if (!AlreadyOutputIS.insert(S).second)
-    return;
-  bool IsTbss = isTbss<ELFT>(CurOutSec);
-
-  uintX_t Pos = IsTbss ? Dot + ThreadBssOffset : Dot;
-  Pos = alignTo(Pos, S->Alignment);
-  S->OutSecOff = Pos - CurOutSec->Addr;
-  Pos += S->getSize();
+void LinkerScript::output(InputSection *S) {
+  assert(Ctx->OutSec == S->getParent());
+  uint64_t Before = advance(0, 1);
+  uint64_t Pos = advance(S->getSize(), S->Alignment);
+  S->OutSecOff = Pos - S->getSize() - Ctx->OutSec->Addr;
 
   // Update output section size after adding each section. This is so that
   // SIZEOF works correctly in the case below:
   // .foo { *(.aaa) a = SIZEOF(.foo); *(.bbb) }
-  CurOutSec->Size = Pos - CurOutSec->Addr;
-
-  if (IsTbss)
-    ThreadBssOffset = Pos - Dot;
-  else
-    Dot = Pos;
+  expandOutputSection(Pos - Before);
 }
 
-template <class ELFT> void LinkerScript<ELFT>::flush() {
-  if (!CurOutSec || !AlreadyOutputOS.insert(CurOutSec).second)
-    return;
-  if (auto *OutSec = dyn_cast<OutputSection<ELFT>>(CurOutSec)) {
-    for (InputSection<ELFT> *I : OutSec->Sections)
-      output(I);
-  } else {
-    Dot += CurOutSec->Size;
+void LinkerScript::switchTo(OutputSection *Sec) {
+  Ctx->OutSec = Sec;
+
+  uint64_t Before = advance(0, 1);
+  Ctx->OutSec->Addr = advance(0, Ctx->OutSec->Alignment);
+  expandMemoryRegions(Ctx->OutSec->Addr - Before);
+}
+
+// This function searches for a memory region to place the given output
+// section in. If found, a pointer to the appropriate memory region is
+// returned. Otherwise, a nullptr is returned.
+MemoryRegion *LinkerScript::findMemoryRegion(OutputSection *Sec) {
+  // If a memory region name was specified in the output section command,
+  // then try to find that region first.
+  if (!Sec->MemoryRegionName.empty()) {
+    if (MemoryRegion *M = MemoryRegions.lookup(Sec->MemoryRegionName))
+      return M;
+    error("memory region '" + Sec->MemoryRegionName + "' not declared");
+    return nullptr;
   }
+
+  // If at least one memory region is defined, all sections must
+  // belong to some memory region. Otherwise, we don't need to do
+  // anything for memory regions.
+  if (MemoryRegions.empty())
+    return nullptr;
+
+  // See if a region can be found by matching section flags.
+  for (auto &Pair : MemoryRegions) {
+    MemoryRegion *M = Pair.second;
+    if ((M->Flags & Sec->Flags) && (M->NegFlags & Sec->Flags) == 0)
+      return M;
+  }
+
+  // Otherwise, no suitable region was found.
+  if (Sec->Flags & SHF_ALLOC)
+    error("no memory region specified for section '" + Sec->Name + "'");
+  return nullptr;
 }
 
-template <class ELFT>
-void LinkerScript<ELFT>::switchTo(OutputSectionBase *Sec) {
-  if (CurOutSec == Sec)
-    return;
-  if (AlreadyOutputOS.count(Sec))
-    return;
+static OutputSection *findFirstSection(PhdrEntry *Load) {
+  for (OutputSection *Sec : OutputSections)
+    if (Sec->PtLoad == Load)
+      return Sec;
+  return nullptr;
+}
 
-  flush();
-  CurOutSec = Sec;
+// This function assigns offsets to input sections and an output section
+// for a single sections command (e.g. ".text { *(.text); }").
+void LinkerScript::assignOffsets(OutputSection *Sec) {
+  if (!(Sec->Flags & SHF_ALLOC))
+    Dot = 0;
+  else if (Sec->AddrExpr)
+    setDot(Sec->AddrExpr, Sec->Location, false);
 
-  Dot = alignTo(Dot, CurOutSec->Addralign);
-  CurOutSec->Addr = isTbss<ELFT>(CurOutSec) ? Dot + ThreadBssOffset : Dot;
+  Ctx->MemRegion = Sec->MemRegion;
+  Ctx->LMARegion = Sec->LMARegion;
+  if (Ctx->MemRegion)
+    Dot = Ctx->MemRegion->CurPos;
+
+  switchTo(Sec);
+
+  if (Sec->LMAExpr)
+    Ctx->LMAOffset = Sec->LMAExpr().getValue() - Dot;
+
+  if (MemoryRegion *MR = Sec->LMARegion)
+    Ctx->LMAOffset = MR->CurPos - Dot;
 
   // If neither AT nor AT> is specified for an allocatable section, the linker
   // will set the LMA such that the difference between VMA and LMA for the
   // section is the same as the preceding output section in the same region
   // https://sourceware.org/binutils/docs-2.20/ld/Output-Section-LMA.html
-  CurOutSec->setLMAOffset(LMAOffset);
-}
+  // This, however, should only be done by the first "non-header" section
+  // in the segment.
+  if (PhdrEntry *L = Ctx->OutSec->PtLoad)
+    if (Sec == findFirstSection(L))
+      L->LMAOffset = Ctx->LMAOffset;
 
-template <class ELFT> void LinkerScript<ELFT>::process(BaseCommand &Base) {
-  // This handles the assignments to symbol or to a location counter (.)
-  if (auto *AssignCmd = dyn_cast<SymbolAssignment>(&Base)) {
-    if (AssignCmd->Name == ".") {
-      // Update to location counter means update to section size.
-      Dot = AssignCmd->Expression(Dot);
-      CurOutSec->Size = Dot - CurOutSec->Addr;
-      return;
+  // We can call this method multiple times during the creation of
+  // thunks and want to start over calculation each time.
+  Sec->Size = 0;
+
+  // We visited SectionsCommands from processSectionCommands to
+  // layout sections. Now, we visit SectionsCommands again to fix
+  // section offsets.
+  for (BaseCommand *Base : Sec->SectionCommands) {
+    // This handles the assignments to symbol or to the dot.
+    if (auto *Cmd = dyn_cast<SymbolAssignment>(Base)) {
+      Cmd->Addr = Dot;
+      assignSymbol(Cmd, true);
+      Cmd->Size = Dot - Cmd->Addr;
+      continue;
     }
-    assignSectionSymbol<ELFT>(AssignCmd, Dot);
-    return;
-  }
 
-  // Handle BYTE(), SHORT(), LONG(), or QUAD().
-  if (auto *DataCmd = dyn_cast<BytesDataCommand>(&Base)) {
-    DataCmd->Offset = Dot - CurOutSec->Addr;
-    Dot += DataCmd->Size;
-    CurOutSec->Size = Dot - CurOutSec->Addr;
-    return;
-  }
+    // Handle BYTE(), SHORT(), LONG(), or QUAD().
+    if (auto *Cmd = dyn_cast<ByteCommand>(Base)) {
+      Cmd->Offset = Dot - Ctx->OutSec->Addr;
+      Dot += Cmd->Size;
+      expandOutputSection(Cmd->Size);
+      continue;
+    }
 
-  // It handles single input section description command,
-  // calculates and assigns the offsets for each section and also
-  // updates the output section size.
-  auto &ICmd = cast<InputSectionDescription>(Base);
-  for (InputSectionData *ID : ICmd.Sections) {
-    auto *IB = static_cast<InputSectionBase<ELFT> *>(ID);
-    switchTo(IB->OutSec);
-    if (auto *I = dyn_cast<InputSection<ELFT>>(IB))
-      output(I);
-    else
-      flush();
+    // Handle a single input section description command.
+    // It calculates and assigns the offsets for each section and also
+    // updates the output section size.
+    for (InputSection *Sec : cast<InputSectionDescription>(Base)->Sections)
+      output(Sec);
   }
 }
 
-template <class ELFT>
-static std::vector<OutputSectionBase *>
-findSections(StringRef Name, const std::vector<OutputSectionBase *> &Sections) {
-  std::vector<OutputSectionBase *> Ret;
-  for (OutputSectionBase *Sec : Sections)
-    if (Sec->getName() == Name)
-      Ret.push_back(Sec);
-  return Ret;
+static bool isDiscardable(OutputSection &Sec) {
+  // We do not remove empty sections that are explicitly
+  // assigned to any segment.
+  if (!Sec.Phdrs.empty())
+    return false;
+
+  // We do not want to remove sections that reference symbols in address and
+  // other expressions. We add script symbols as undefined, and want to ensure
+  // all of them are defined in the output, hence have to keep them.
+  if (Sec.ExpressionsUseSymbols)
+    return false;
+
+  for (BaseCommand *Base : Sec.SectionCommands) {
+    if (auto Cmd = dyn_cast<SymbolAssignment>(Base))
+      // Don't create empty output sections just for unreferenced PROVIDE
+      // symbols.
+      if (Cmd->Name != "." && !Cmd->Sym)
+        continue;
+
+    if (!isa<InputSectionDescription>(*Base))
+      return false;
+  }
+  return true;
 }
 
-template <class ELFT>
-void LinkerScript<ELFT>::assignOffsets(OutputSectionCommand *Cmd) {
-  if (Cmd->LMAExpr)
-    LMAOffset = Cmd->LMAExpr(Dot) - Dot;
-  std::vector<OutputSectionBase *> Sections =
-      findSections<ELFT>(Cmd->Name, *OutputSections);
-  if (Sections.empty())
-    return;
-  switchTo(Sections[0]);
-  // Find the last section output location. We will output orphan sections
-  // there so that end symbols point to the correct location.
-  auto E = std::find_if(Cmd->Commands.rbegin(), Cmd->Commands.rend(),
-                        [](const std::unique_ptr<BaseCommand> &Cmd) {
-                          return !isa<SymbolAssignment>(*Cmd);
-                        })
-               .base();
-  for (auto I = Cmd->Commands.begin(); I != E; ++I)
-    process(**I);
-  for (OutputSectionBase *Base : Sections)
-    switchTo(Base);
-  flush();
-  std::for_each(E, Cmd->Commands.end(),
-                [this](std::unique_ptr<BaseCommand> &B) { process(*B.get()); });
-}
+void LinkerScript::adjustSectionsBeforeSorting() {
+  // If the output section contains only symbol assignments, create a
+  // corresponding output section. The issue is what to do with linker script
+  // like ".foo : { symbol = 42; }". One option would be to convert it to
+  // "symbol = 42;". That is, move the symbol out of the empty section
+  // description. That seems to be what bfd does for this simple case. The
+  // problem is that this is not completely general. bfd will give up and
+  // create a dummy section too if there is a ". = . + 1" inside the section
+  // for example.
+  // Given that we want to create the section, we have to worry what impact
+  // it will have on the link. For example, if we just create a section with
+  // 0 for flags, it would change which PT_LOADs are created.
+  // We could remember that particular section is dummy and ignore it in
+  // other parts of the linker, but unfortunately there are quite a few places
+  // that would need to change:
+  //   * The program header creation.
+  //   * The orphan section placement.
+  //   * The address assignment.
+  // The other option is to pick flags that minimize the impact the section
+  // will have on the rest of the linker. That is why we copy the flags from
+  // the previous sections. Only a few flags are needed to keep the impact low.
+  uint64_t Flags = SHF_ALLOC;
 
-template <class ELFT> void LinkerScript<ELFT>::removeEmptyCommands() {
+  for (BaseCommand *&Cmd : SectionCommands) {
+    auto *Sec = dyn_cast<OutputSection>(Cmd);
+    if (!Sec)
+      continue;
+
+    // Handle align (e.g. ".foo : ALIGN(16) { ... }").
+    if (Sec->AlignExpr)
+      Sec->Alignment =
+          std::max<uint32_t>(Sec->Alignment, Sec->AlignExpr().getValue());
+
+    // A live output section means that some input section was added to it. It
+    // might have been removed (if it was empty synthetic section), but we at
+    // least know the flags.
+    if (Sec->Live)
+      Flags = Sec->Flags;
+
+    // We do not want to keep any special flags for output section
+    // in case it is empty.
+    bool IsEmpty = getInputSections(Sec).empty();
+    if (IsEmpty)
+      Sec->Flags = Flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR);
+
+    if (IsEmpty && isDiscardable(*Sec)) {
+      Sec->Live = false;
+      Cmd = nullptr;
+    }
+  }
+
   // It is common practice to use very generic linker scripts. So for any
   // given run some of the output sections in the script will be empty.
   // We could create corresponding empty output sections, but that would
   // clutter the output.
   // We instead remove trivially empty sections. The bfd linker seems even
   // more aggressive at removing them.
-  auto Pos = std::remove_if(
-      Opt.Commands.begin(), Opt.Commands.end(),
-      [&](const std::unique_ptr<BaseCommand> &Base) {
-        auto *Cmd = dyn_cast<OutputSectionCommand>(Base.get());
-        if (!Cmd)
-          return false;
-        return findSections<ELFT>(Cmd->Name, *OutputSections).empty();
-      });
-  Opt.Commands.erase(Pos, Opt.Commands.end());
+  llvm::erase_if(SectionCommands, [&](BaseCommand *Base) { return !Base; });
 }
 
-static bool isAllSectionDescription(const OutputSectionCommand &Cmd) {
-  for (const std::unique_ptr<BaseCommand> &I : Cmd.Commands)
-    if (!isa<InputSectionDescription>(*I))
-      return false;
-  return true;
-}
-
-template <class ELFT> void LinkerScript<ELFT>::adjustSectionsBeforeSorting() {
-  // If the output section contains only symbol assignments, create a
-  // corresponding output section. The bfd linker seems to only create them if
-  // '.' is assigned to, but creating these section should not have any bad
-  // consequeces and gives us a section to put the symbol in.
-  uintX_t Flags = SHF_ALLOC;
-  uint32_t Type = 0;
-  for (const std::unique_ptr<BaseCommand> &Base : Opt.Commands) {
-    auto *Cmd = dyn_cast<OutputSectionCommand>(Base.get());
-    if (!Cmd)
-      continue;
-    std::vector<OutputSectionBase *> Secs =
-        findSections<ELFT>(Cmd->Name, *OutputSections);
-    if (!Secs.empty()) {
-      Flags = Secs[0]->Flags;
-      Type = Secs[0]->Type;
-      continue;
+void LinkerScript::adjustSectionsAfterSorting() {
+  // Try and find an appropriate memory region to assign offsets in.
+  for (BaseCommand *Base : SectionCommands) {
+    if (auto *Sec = dyn_cast<OutputSection>(Base)) {
+      if (!Sec->LMARegionName.empty()) {
+        if (MemoryRegion *M = MemoryRegions.lookup(Sec->LMARegionName))
+          Sec->LMARegion = M;
+        else
+          error("memory region '" + Sec->LMARegionName + "' not declared");
+      }
+      Sec->MemRegion = findMemoryRegion(Sec);
     }
-
-    if (isAllSectionDescription(*Cmd))
-      continue;
-
-    auto *OutSec = make<OutputSection<ELFT>>(Cmd->Name, Type, Flags);
-    OutputSections->push_back(OutSec);
   }
-}
-
-template <class ELFT> void LinkerScript<ELFT>::adjustSectionsAfterSorting() {
-  placeOrphanSections();
 
   // If output section command doesn't specify any segments,
   // and we haven't previously assigned any section to segment,
@@ -583,1323 +929,218 @@ template <class ELFT> void LinkerScript<ELFT>::adjustSectionsAfterSorting() {
   // PHDRS { seg PT_LOAD; }
   // SECTIONS { .aaa : { *(.aaa) } }
   std::vector<StringRef> DefPhdrs;
-  auto FirstPtLoad =
-      std::find_if(Opt.PhdrsCommands.begin(), Opt.PhdrsCommands.end(),
-                   [](const PhdrsCommand &Cmd) { return Cmd.Type == PT_LOAD; });
-  if (FirstPtLoad != Opt.PhdrsCommands.end())
+  auto FirstPtLoad = llvm::find_if(PhdrsCommands, [](const PhdrsCommand &Cmd) {
+    return Cmd.Type == PT_LOAD;
+  });
+  if (FirstPtLoad != PhdrsCommands.end())
     DefPhdrs.push_back(FirstPtLoad->Name);
 
   // Walk the commands and propagate the program headers to commands that don't
   // explicitly specify them.
-  for (const std::unique_ptr<BaseCommand> &Base : Opt.Commands) {
-    auto *Cmd = dyn_cast<OutputSectionCommand>(Base.get());
-    if (!Cmd)
+  for (BaseCommand *Base : SectionCommands) {
+    auto *Sec = dyn_cast<OutputSection>(Base);
+    if (!Sec)
       continue;
-    if (Cmd->Phdrs.empty())
-      Cmd->Phdrs = DefPhdrs;
-    else
-      DefPhdrs = Cmd->Phdrs;
-  }
 
-  removeEmptyCommands();
-}
-
-// When placing orphan sections, we want to place them after symbol assignments
-// so that an orphan after
-//   begin_foo = .;
-//   foo : { *(foo) }
-//   end_foo = .;
-// doesn't break the intended meaning of the begin/end symbols.
-// We don't want to go over sections since Writer<ELFT>::sortSections is the
-// one in charge of deciding the order of the sections.
-// We don't want to go over alignments, since doing so in
-//  rx_sec : { *(rx_sec) }
-//  . = ALIGN(0x1000);
-//  /* The RW PT_LOAD starts here*/
-//  rw_sec : { *(rw_sec) }
-// would mean that the RW PT_LOAD would become unaligned.
-static bool shouldSkip(const BaseCommand &Cmd) {
-  if (isa<OutputSectionCommand>(Cmd))
-    return false;
-  const auto *Assign = dyn_cast<SymbolAssignment>(&Cmd);
-  if (!Assign)
-    return true;
-  return Assign->Name != ".";
-}
-
-// Orphan sections are sections present in the input files which are not
-// explicitly placed into the output file by the linker script. This just
-// places them in the order already decided in OutputSections.
-template <class ELFT>
-void LinkerScript<ELFT>::placeOrphanSections() {
-  // The OutputSections are already in the correct order.
-  // This loops creates or moves commands as needed so that they are in the
-  // correct order.
-  int CmdIndex = 0;
-  for (OutputSectionBase *Sec : *OutputSections) {
-    StringRef Name = Sec->getName();
-
-    // Find the last spot where we can insert a command and still get the
-    // correct result.
-    auto CmdIter = Opt.Commands.begin() + CmdIndex;
-    auto E = Opt.Commands.end();
-    while (CmdIter != E && shouldSkip(**CmdIter)) {
-      ++CmdIter;
-      ++CmdIndex;
+    if (Sec->Phdrs.empty()) {
+      // To match the bfd linker script behaviour, only propagate program
+      // headers to sections that are allocated.
+      if (Sec->Flags & SHF_ALLOC)
+        Sec->Phdrs = DefPhdrs;
+    } else {
+      DefPhdrs = Sec->Phdrs;
     }
-
-    auto Pos =
-        std::find_if(CmdIter, E, [&](const std::unique_ptr<BaseCommand> &Base) {
-          auto *Cmd = dyn_cast<OutputSectionCommand>(Base.get());
-          return Cmd && Cmd->Name == Name;
-        });
-    if (Pos == E) {
-      Opt.Commands.insert(CmdIter,
-                          llvm::make_unique<OutputSectionCommand>(Name));
-      ++CmdIndex;
-      continue;
-    }
-
-    // Continue from where we found it.
-    CmdIndex = (Pos - Opt.Commands.begin()) + 1;
   }
 }
 
-template <class ELFT>
-void LinkerScript<ELFT>::assignAddresses(std::vector<PhdrEntry<ELFT>> &Phdrs) {
-  // Assign addresses as instructed by linker script SECTIONS sub-commands.
-  Dot = 0;
+static uint64_t computeBase(uint64_t Min, bool AllocateHeaders) {
+  // If there is no SECTIONS or if the linkerscript is explicit about program
+  // headers, do our best to allocate them.
+  if (!Script->HasSectionsCommand || AllocateHeaders)
+    return 0;
+  // Otherwise only allocate program headers if that would not add a page.
+  return alignDown(Min, Config->MaxPageSize);
+}
 
-  for (const std::unique_ptr<BaseCommand> &Base : Opt.Commands) {
-    if (auto *Cmd = dyn_cast<SymbolAssignment>(Base.get())) {
-      if (Cmd->Name == ".") {
-        Dot = Cmd->Expression(Dot);
-      } else if (Cmd->Sym) {
-        assignSectionSymbol<ELFT>(Cmd, Dot);
-      }
-      continue;
-    }
-
-    if (auto *Cmd = dyn_cast<AssertCommand>(Base.get())) {
-      Cmd->Expression(Dot);
-      continue;
-    }
-
-    auto *Cmd = cast<OutputSectionCommand>(Base.get());
-
-    if (Cmd->AddrExpr)
-      Dot = Cmd->AddrExpr(Dot);
-
-    assignOffsets(Cmd);
-  }
-
-  uintX_t MinVA = std::numeric_limits<uintX_t>::max();
-  for (OutputSectionBase *Sec : *OutputSections) {
+// Try to find an address for the file and program headers output sections,
+// which were unconditionally added to the first PT_LOAD segment earlier.
+//
+// When using the default layout, we check if the headers fit below the first
+// allocated section. When using a linker script, we also check if the headers
+// are covered by the output section. This allows omitting the headers by not
+// leaving enough space for them in the linker script; this pattern is common
+// in embedded systems.
+//
+// If there isn't enough space for these sections, we'll remove them from the
+// PT_LOAD segment, and we'll also remove the PT_PHDR segment.
+void LinkerScript::allocateHeaders(std::vector<PhdrEntry *> &Phdrs) {
+  uint64_t Min = std::numeric_limits<uint64_t>::max();
+  for (OutputSection *Sec : OutputSections)
     if (Sec->Flags & SHF_ALLOC)
-      MinVA = std::min<uint64_t>(MinVA, Sec->Addr);
-    else
-      Sec->Addr = 0;
-  }
+      Min = std::min<uint64_t>(Min, Sec->Addr);
 
-  uintX_t HeaderSize = getHeaderSize();
-  auto FirstPTLoad =
-      std::find_if(Phdrs.begin(), Phdrs.end(), [](const PhdrEntry<ELFT> &E) {
-        return E.H.p_type == PT_LOAD;
-      });
-  if (FirstPTLoad == Phdrs.end())
+  auto It = llvm::find_if(
+      Phdrs, [](const PhdrEntry *E) { return E->p_type == PT_LOAD; });
+  if (It == Phdrs.end())
     return;
+  PhdrEntry *FirstPTLoad = *It;
 
-  if (HeaderSize <= MinVA) {
-    // If linker script specifies program headers and first PT_LOAD doesn't
-    // have both PHDRS and FILEHDR attributes then do nothing
-    if (!Opt.PhdrsCommands.empty()) {
-      size_t SegNum = std::distance(Phdrs.begin(), FirstPTLoad);
-      if (!Opt.PhdrsCommands[SegNum].HasPhdrs ||
-          !Opt.PhdrsCommands[SegNum].HasFilehdr)
-        return;
-    }
-    // ELF and Program headers need to be right before the first section in
-    // memory. Set their addresses accordingly.
-    MinVA = alignDown(MinVA - HeaderSize, Target->PageSize);
-    Out<ELFT>::ElfHeader->Addr = MinVA;
-    Out<ELFT>::ProgramHeaders->Addr = Out<ELFT>::ElfHeader->Size + MinVA;
-    FirstPTLoad->First = Out<ELFT>::ElfHeader;
-    if (!FirstPTLoad->Last)
-      FirstPTLoad->Last = Out<ELFT>::ProgramHeaders;
-  } else if (!FirstPTLoad->First) {
-    // Sometimes the very first PT_LOAD segment can be empty.
-    // This happens if (all conditions met):
-    //  - Linker script is used
-    //  - First section in ELF image is not RO
-    //  - Not enough space for program headers.
-    // The code below removes empty PT_LOAD segment and updates
-    // program headers size.
-    Phdrs.erase(FirstPTLoad);
-    Out<ELFT>::ProgramHeaders->Size =
-        sizeof(typename ELFT::Phdr) * Phdrs.size();
+  bool HasExplicitHeaders =
+      llvm::any_of(PhdrsCommands, [](const PhdrsCommand &Cmd) {
+        return Cmd.HasPhdrs || Cmd.HasFilehdr;
+      });
+  uint64_t HeaderSize = getHeaderSize();
+  if (HeaderSize <= Min - computeBase(Min, HasExplicitHeaders)) {
+    Min = alignDown(Min - HeaderSize, Config->MaxPageSize);
+    Out::ElfHeader->Addr = Min;
+    Out::ProgramHeaders->Addr = Min + Out::ElfHeader->Size;
+    return;
   }
+
+  // Error if we were explicitly asked to allocate headers.
+  if (HasExplicitHeaders)
+    error("could not allocate headers");
+
+  Out::ElfHeader->PtLoad = nullptr;
+  Out::ProgramHeaders->PtLoad = nullptr;
+  FirstPTLoad->FirstSec = findFirstSection(FirstPTLoad);
+
+  llvm::erase_if(Phdrs,
+                 [](const PhdrEntry *E) { return E->p_type == PT_PHDR; });
+}
+
+LinkerScript::AddressState::AddressState() {
+  for (auto &MRI : Script->MemoryRegions) {
+    MemoryRegion *MR = MRI.second;
+    MR->CurPos = MR->Origin;
+  }
+}
+
+static uint64_t getInitialDot() {
+  // By default linker scripts use an initial value of 0 for '.',
+  // but prefer -image-base if set.
+  if (Script->HasSectionsCommand)
+    return Config->ImageBase ? *Config->ImageBase : 0;
+
+  uint64_t StartAddr = UINT64_MAX;
+  // The Sections with -T<section> have been sorted in order of ascending
+  // address. We must lower StartAddr if the lowest -T<section address> as
+  // calls to setDot() must be monotonically increasing.
+  for (auto &KV : Config->SectionStartMap)
+    StartAddr = std::min(StartAddr, KV.second);
+  return std::min(StartAddr, Target->getImageBase() + elf::getHeaderSize());
+}
+
+// Here we assign addresses as instructed by linker script SECTIONS
+// sub-commands. Doing that allows us to use final VA values, so here
+// we also handle rest commands like symbol assignments and ASSERTs.
+void LinkerScript::assignAddresses() {
+  Dot = getInitialDot();
+
+  auto Deleter = make_unique<AddressState>();
+  Ctx = Deleter.get();
+  ErrorOnMissingSection = true;
+  switchTo(Aether);
+
+  for (BaseCommand *Base : SectionCommands) {
+    if (auto *Cmd = dyn_cast<SymbolAssignment>(Base)) {
+      Cmd->Addr = Dot;
+      assignSymbol(Cmd, false);
+      Cmd->Size = Dot - Cmd->Addr;
+      continue;
+    }
+    assignOffsets(cast<OutputSection>(Base));
+  }
+  Ctx = nullptr;
 }
 
 // Creates program headers as instructed by PHDRS linker script command.
-template <class ELFT>
-std::vector<PhdrEntry<ELFT>> LinkerScript<ELFT>::createPhdrs() {
-  std::vector<PhdrEntry<ELFT>> Ret;
+std::vector<PhdrEntry *> LinkerScript::createPhdrs() {
+  std::vector<PhdrEntry *> Ret;
 
   // Process PHDRS and FILEHDR keywords because they are not
   // real output sections and cannot be added in the following loop.
-  for (const PhdrsCommand &Cmd : Opt.PhdrsCommands) {
-    Ret.emplace_back(Cmd.Type, Cmd.Flags == UINT_MAX ? PF_R : Cmd.Flags);
-    PhdrEntry<ELFT> &Phdr = Ret.back();
+  for (const PhdrsCommand &Cmd : PhdrsCommands) {
+    PhdrEntry *Phdr = make<PhdrEntry>(Cmd.Type, Cmd.Flags ? *Cmd.Flags : PF_R);
 
     if (Cmd.HasFilehdr)
-      Phdr.add(Out<ELFT>::ElfHeader);
+      Phdr->add(Out::ElfHeader);
     if (Cmd.HasPhdrs)
-      Phdr.add(Out<ELFT>::ProgramHeaders);
+      Phdr->add(Out::ProgramHeaders);
 
     if (Cmd.LMAExpr) {
-      Phdr.H.p_paddr = Cmd.LMAExpr(0);
-      Phdr.HasLMA = true;
+      Phdr->p_paddr = Cmd.LMAExpr().getValue();
+      Phdr->HasLMA = true;
     }
+    Ret.push_back(Phdr);
   }
 
   // Add output sections to program headers.
-  for (OutputSectionBase *Sec : *OutputSections) {
-    if (!(Sec->Flags & SHF_ALLOC))
-      break;
-
+  for (OutputSection *Sec : OutputSections) {
     // Assign headers specified by linker script
-    for (size_t Id : getPhdrIndices(Sec->getName())) {
-      Ret[Id].add(Sec);
-      if (Opt.PhdrsCommands[Id].Flags == UINT_MAX)
-        Ret[Id].H.p_flags |= Sec->getPhdrFlags();
+    for (size_t Id : getPhdrIndices(Sec)) {
+      Ret[Id]->add(Sec);
+      if (!PhdrsCommands[Id].Flags.hasValue())
+        Ret[Id]->p_flags |= Sec->getPhdrFlags();
     }
   }
   return Ret;
 }
 
-template <class ELFT> bool LinkerScript<ELFT>::ignoreInterpSection() {
-  // Ignore .interp section in case we have PHDRS specification
-  // and PT_INTERP isn't listed.
-  return !Opt.PhdrsCommands.empty() &&
-         llvm::find_if(Opt.PhdrsCommands, [](const PhdrsCommand &Cmd) {
-           return Cmd.Type == PT_INTERP;
-         }) == Opt.PhdrsCommands.end();
-}
-
-template <class ELFT>
-ArrayRef<uint8_t> LinkerScript<ELFT>::getFiller(StringRef Name) {
-  for (const std::unique_ptr<BaseCommand> &Base : Opt.Commands)
-    if (auto *Cmd = dyn_cast<OutputSectionCommand>(Base.get()))
-      if (Cmd->Name == Name)
-        return Cmd->Filler;
-  return {};
-}
-
-template <class ELFT>
-static void writeInt(uint8_t *Buf, uint64_t Data, uint64_t Size) {
-  const endianness E = ELFT::TargetEndianness;
-
-  switch (Size) {
-  case 1:
-    *Buf = (uint8_t)Data;
-    break;
-  case 2:
-    write16<E>(Buf, Data);
-    break;
-  case 4:
-    write32<E>(Buf, Data);
-    break;
-  case 8:
-    write64<E>(Buf, Data);
-    break;
-  default:
-    llvm_unreachable("unsupported Size argument");
-  }
-}
-
-template <class ELFT>
-void LinkerScript<ELFT>::writeDataBytes(StringRef Name, uint8_t *Buf) {
-  int I = getSectionIndex(Name);
-  if (I == INT_MAX)
-    return;
-
-  OutputSectionCommand *Cmd =
-      dyn_cast<OutputSectionCommand>(Opt.Commands[I].get());
-  for (const std::unique_ptr<BaseCommand> &Base2 : Cmd->Commands)
-    if (auto *DataCmd = dyn_cast<BytesDataCommand>(Base2.get()))
-      writeInt<ELFT>(&Buf[DataCmd->Offset], DataCmd->Data, DataCmd->Size);
-}
-
-template <class ELFT> bool LinkerScript<ELFT>::hasLMA(StringRef Name) {
-  for (const std::unique_ptr<BaseCommand> &Base : Opt.Commands)
-    if (auto *Cmd = dyn_cast<OutputSectionCommand>(Base.get()))
-      if (Cmd->LMAExpr && Cmd->Name == Name)
-        return true;
-  return false;
-}
-
-// Returns the index of the given section name in linker script
-// SECTIONS commands. Sections are laid out as the same order as they
-// were in the script. If a given name did not appear in the script,
-// it returns INT_MAX, so that it will be laid out at end of file.
-template <class ELFT> int LinkerScript<ELFT>::getSectionIndex(StringRef Name) {
-  int I = 0;
-  for (std::unique_ptr<BaseCommand> &Base : Opt.Commands) {
-    if (auto *Cmd = dyn_cast<OutputSectionCommand>(Base.get()))
-      if (Cmd->Name == Name)
-        return I;
-    ++I;
-  }
-  return INT_MAX;
-}
-
-template <class ELFT> bool LinkerScript<ELFT>::hasPhdrsCommands() {
-  return !Opt.PhdrsCommands.empty();
-}
-
-template <class ELFT>
-const OutputSectionBase *LinkerScript<ELFT>::getOutputSection(StringRef Name) {
-  static OutputSectionBase FakeSec("", 0, 0);
-
-  for (OutputSectionBase *Sec : *OutputSections)
-    if (Sec->getName() == Name)
-      return Sec;
-  error("undefined section " + Name);
-  return &FakeSec;
-}
-
-// This function is essentially the same as getOutputSection(Name)->Size,
-// but it won't print out an error message if a given section is not found.
+// Returns true if we should emit an .interp section.
 //
-// Linker script does not create an output section if its content is empty.
-// We want to allow SIZEOF(.foo) where .foo is a section which happened to
-// be empty. That is why this function is different from getOutputSection().
-template <class ELFT>
-uint64_t LinkerScript<ELFT>::getOutputSectionSize(StringRef Name) {
-  for (OutputSectionBase *Sec : *OutputSections)
-    if (Sec->getName() == Name)
-      return Sec->Size;
-  return 0;
-}
-
-template <class ELFT> uint64_t LinkerScript<ELFT>::getHeaderSize() {
-  return elf::getHeaderSize<ELFT>();
-}
-
-template <class ELFT> uint64_t LinkerScript<ELFT>::getSymbolValue(StringRef S) {
-  if (SymbolBody *B = Symtab<ELFT>::X->find(S))
-    return B->getVA<ELFT>();
-  error("symbol not found: " + S);
-  return 0;
-}
-
-template <class ELFT> bool LinkerScript<ELFT>::isDefined(StringRef S) {
-  return Symtab<ELFT>::X->find(S) != nullptr;
-}
-
-template <class ELFT> bool LinkerScript<ELFT>::isAbsolute(StringRef S) {
-  SymbolBody *Sym = Symtab<ELFT>::X->find(S);
-  auto *DR = dyn_cast_or_null<DefinedRegular<ELFT>>(Sym);
-  return DR && !DR->Section;
-}
-
-// Gets section symbol belongs to. Symbol "." doesn't belong to any
-// specific section but isn't absolute at the same time, so we try
-// to find suitable section for it as well.
-template <class ELFT>
-const OutputSectionBase *LinkerScript<ELFT>::getSymbolSection(StringRef S) {
-  SymbolBody *Sym = Symtab<ELFT>::X->find(S);
-  if (!Sym) {
-    if (OutputSections->empty())
-      return nullptr;
-    return CurOutSec ? CurOutSec : (*OutputSections)[0];
-  }
-
-  if (auto *DR = dyn_cast_or_null<DefinedRegular<ELFT>>(Sym))
-    return DR->Section ? DR->Section->OutSec : nullptr;
-  if (auto *DS = dyn_cast_or_null<DefinedSynthetic<ELFT>>(Sym))
-    return DS->Section;
-
-  return nullptr;
-}
-
-// Returns indices of ELF headers containing specific section, identified
-// by Name. Each index is a zero based number of ELF header listed within
-// PHDRS {} script block.
-template <class ELFT>
-std::vector<size_t> LinkerScript<ELFT>::getPhdrIndices(StringRef SectionName) {
-  for (const std::unique_ptr<BaseCommand> &Base : Opt.Commands) {
-    auto *Cmd = dyn_cast<OutputSectionCommand>(Base.get());
-    if (!Cmd || Cmd->Name != SectionName)
-      continue;
-
-    std::vector<size_t> Ret;
-    for (StringRef PhdrName : Cmd->Phdrs)
-      Ret.push_back(getPhdrIndex(PhdrName));
-    return Ret;
-  }
-  return {};
-}
-
-template <class ELFT>
-size_t LinkerScript<ELFT>::getPhdrIndex(StringRef PhdrName) {
-  size_t I = 0;
-  for (PhdrsCommand &Cmd : Opt.PhdrsCommands) {
-    if (Cmd.Name == PhdrName)
-      return I;
-    ++I;
-  }
-  error("section header '" + PhdrName + "' is not listed in PHDRS");
-  return 0;
-}
-
-class elf::ScriptParser : public ScriptParserBase {
-  typedef void (ScriptParser::*Handler)();
-
-public:
-  ScriptParser(StringRef S, bool B) : ScriptParserBase(S), IsUnderSysroot(B) {}
-
-  void readLinkerScript();
-  void readVersionScript();
-
-private:
-  void addFile(StringRef Path);
-
-  void readAsNeeded();
-  void readEntry();
-  void readExtern();
-  void readGroup();
-  void readInclude();
-  void readOutput();
-  void readOutputArch();
-  void readOutputFormat();
-  void readPhdrs();
-  void readSearchDir();
-  void readSections();
-  void readVersion();
-  void readVersionScriptCommand();
-
-  SymbolAssignment *readAssignment(StringRef Name);
-  BytesDataCommand *readBytesDataCommand(StringRef Tok);
-  std::vector<uint8_t> readFill();
-  OutputSectionCommand *readOutputSectionDescription(StringRef OutSec);
-  std::vector<uint8_t> readOutputSectionFiller(StringRef Tok);
-  std::vector<StringRef> readOutputSectionPhdrs();
-  InputSectionDescription *readInputSectionDescription(StringRef Tok);
-  StringMatcher readFilePatterns();
-  std::vector<SectionPattern> readInputSectionsList();
-  InputSectionDescription *readInputSectionRules(StringRef FilePattern);
-  unsigned readPhdrType();
-  SortSectionPolicy readSortKind();
-  SymbolAssignment *readProvideHidden(bool Provide, bool Hidden);
-  SymbolAssignment *readProvideOrAssignment(StringRef Tok);
-  void readSort();
-  Expr readAssert();
-
-  Expr readExpr();
-  Expr readExpr1(Expr Lhs, int MinPrec);
-  StringRef readParenLiteral();
-  Expr readPrimary();
-  Expr readTernary(Expr Cond);
-  Expr readParenExpr();
-
-  // For parsing version script.
-  void readVersionExtern(std::vector<SymbolVersion> *Globals);
-  void readVersionDeclaration(StringRef VerStr);
-  void readGlobal(StringRef VerStr);
-  void readLocal(StringRef VerStr);
-  void readSymbols(std::vector<SymbolVersion> &V);
-
-  ScriptConfiguration &Opt = *ScriptConfig;
-  bool IsUnderSysroot;
-};
-
-void ScriptParser::readVersionScript() {
-  readVersionScriptCommand();
-  if (!atEOF())
-    setError("EOF expected, but got " + next());
-}
-
-void ScriptParser::readVersionScriptCommand() {
-  if (consume("{")) {
-    readVersionDeclaration("");
-    return;
-  }
-
-  while (!atEOF() && !Error && peek() != "}") {
-    StringRef VerStr = next();
-    if (VerStr == "{") {
-      setError("anonymous version definition is used in "
-               "combination with other version definitions");
-      return;
-    }
-    expect("{");
-    readVersionDeclaration(VerStr);
-  }
-}
-
-void ScriptParser::readVersion() {
-  expect("{");
-  readVersionScriptCommand();
-  expect("}");
-}
-
-void ScriptParser::readLinkerScript() {
-  while (!atEOF()) {
-    StringRef Tok = next();
-    if (Tok == ";")
-      continue;
-
-    if (Tok == "ASSERT") {
-      Opt.Commands.emplace_back(new AssertCommand(readAssert()));
-    } else if (Tok == "ENTRY") {
-      readEntry();
-    } else if (Tok == "EXTERN") {
-      readExtern();
-    } else if (Tok == "GROUP" || Tok == "INPUT") {
-      readGroup();
-    } else if (Tok == "INCLUDE") {
-      readInclude();
-    } else if (Tok == "OUTPUT") {
-      readOutput();
-    } else if (Tok == "OUTPUT_ARCH") {
-      readOutputArch();
-    } else if (Tok == "OUTPUT_FORMAT") {
-      readOutputFormat();
-    } else if (Tok == "PHDRS") {
-      readPhdrs();
-    } else if (Tok == "SEARCH_DIR") {
-      readSearchDir();
-    } else if (Tok == "SECTIONS") {
-      readSections();
-    } else if (Tok == "VERSION") {
-      readVersion();
-    } else if (SymbolAssignment *Cmd = readProvideOrAssignment(Tok)) {
-      Opt.Commands.emplace_back(Cmd);
-    } else {
-      setError("unknown directive: " + Tok);
-    }
-  }
-}
-
-void ScriptParser::addFile(StringRef S) {
-  if (IsUnderSysroot && S.startswith("/")) {
-    SmallString<128> PathData;
-    StringRef Path = (Config->Sysroot + S).toStringRef(PathData);
-    if (sys::fs::exists(Path)) {
-      Driver->addFile(Saver.save(Path));
-      return;
-    }
-  }
-
-  if (sys::path::is_absolute(S)) {
-    Driver->addFile(S);
-  } else if (S.startswith("=")) {
-    if (Config->Sysroot.empty())
-      Driver->addFile(S.substr(1));
-    else
-      Driver->addFile(Saver.save(Config->Sysroot + "/" + S.substr(1)));
-  } else if (S.startswith("-l")) {
-    Driver->addLibrary(S.substr(2));
-  } else if (sys::fs::exists(S)) {
-    Driver->addFile(S);
-  } else {
-    std::string Path = findFromSearchPaths(S);
-    if (Path.empty())
-      setError("unable to find " + S);
-    else
-      Driver->addFile(Saver.save(Path));
-  }
-}
-
-void ScriptParser::readAsNeeded() {
-  expect("(");
-  bool Orig = Config->AsNeeded;
-  Config->AsNeeded = true;
-  while (!Error && !consume(")"))
-    addFile(unquote(next()));
-  Config->AsNeeded = Orig;
-}
-
-void ScriptParser::readEntry() {
-  // -e <symbol> takes predecence over ENTRY(<symbol>).
-  expect("(");
-  StringRef Tok = next();
-  if (Config->Entry.empty())
-    Config->Entry = Tok;
-  expect(")");
-}
-
-void ScriptParser::readExtern() {
-  expect("(");
-  while (!Error && !consume(")"))
-    Config->Undefined.push_back(next());
-}
-
-void ScriptParser::readGroup() {
-  expect("(");
-  while (!Error && !consume(")")) {
-    StringRef Tok = next();
-    if (Tok == "AS_NEEDED")
-      readAsNeeded();
-    else
-      addFile(unquote(Tok));
-  }
-}
-
-void ScriptParser::readInclude() {
-  StringRef Tok = next();
-  auto MBOrErr = MemoryBuffer::getFile(unquote(Tok));
-  if (!MBOrErr) {
-    setError("cannot open " + Tok);
-    return;
-  }
-  std::unique_ptr<MemoryBuffer> &MB = *MBOrErr;
-  StringRef S = Saver.save(MB->getMemBufferRef().getBuffer());
-  std::vector<StringRef> V = tokenize(S);
-  Tokens.insert(Tokens.begin() + Pos, V.begin(), V.end());
-}
-
-void ScriptParser::readOutput() {
-  // -o <file> takes predecence over OUTPUT(<file>).
-  expect("(");
-  StringRef Tok = next();
-  if (Config->OutputFile.empty())
-    Config->OutputFile = unquote(Tok);
-  expect(")");
-}
-
-void ScriptParser::readOutputArch() {
-  // Error checking only for now.
-  expect("(");
-  skip();
-  expect(")");
-}
-
-void ScriptParser::readOutputFormat() {
-  // Error checking only for now.
-  expect("(");
-  skip();
-  StringRef Tok = next();
-  if (Tok == ")")
-    return;
-  if (Tok != ",") {
-    setError("unexpected token: " + Tok);
-    return;
-  }
-  skip();
-  expect(",");
-  skip();
-  expect(")");
-}
-
-void ScriptParser::readPhdrs() {
-  expect("{");
-  while (!Error && !consume("}")) {
-    StringRef Tok = next();
-    Opt.PhdrsCommands.push_back(
-        {Tok, PT_NULL, false, false, UINT_MAX, nullptr});
-    PhdrsCommand &PhdrCmd = Opt.PhdrsCommands.back();
-
-    PhdrCmd.Type = readPhdrType();
-    do {
-      Tok = next();
-      if (Tok == ";")
-        break;
-      if (Tok == "FILEHDR")
-        PhdrCmd.HasFilehdr = true;
-      else if (Tok == "PHDRS")
-        PhdrCmd.HasPhdrs = true;
-      else if (Tok == "AT")
-        PhdrCmd.LMAExpr = readParenExpr();
-      else if (Tok == "FLAGS") {
-        expect("(");
-        // Passing 0 for the value of dot is a bit of a hack. It means that
-        // we accept expressions like ".|1".
-        PhdrCmd.Flags = readExpr()(0);
-        expect(")");
-      } else
-        setError("unexpected header attribute: " + Tok);
-    } while (!Error);
-  }
-}
-
-void ScriptParser::readSearchDir() {
-  expect("(");
-  StringRef Tok = next();
-  if (!Config->Nostdlib)
-    Config->SearchPaths.push_back(unquote(Tok));
-  expect(")");
-}
-
-void ScriptParser::readSections() {
-  Opt.HasSections = true;
-  expect("{");
-  while (!Error && !consume("}")) {
-    StringRef Tok = next();
-    BaseCommand *Cmd = readProvideOrAssignment(Tok);
-    if (!Cmd) {
-      if (Tok == "ASSERT")
-        Cmd = new AssertCommand(readAssert());
-      else
-        Cmd = readOutputSectionDescription(Tok);
-    }
-    Opt.Commands.emplace_back(Cmd);
-  }
-}
-
-static int precedence(StringRef Op) {
-  return StringSwitch<int>(Op)
-      .Cases("*", "/", 5)
-      .Cases("+", "-", 4)
-      .Cases("<<", ">>", 3)
-      .Cases("<", "<=", ">", ">=", "==", "!=", 2)
-      .Cases("&", "|", 1)
-      .Default(-1);
-}
-
-StringMatcher ScriptParser::readFilePatterns() {
-  std::vector<StringRef> V;
-  while (!Error && !consume(")"))
-    V.push_back(next());
-  return StringMatcher(V);
-}
-
-SortSectionPolicy ScriptParser::readSortKind() {
-  if (consume("SORT") || consume("SORT_BY_NAME"))
-    return SortSectionPolicy::Name;
-  if (consume("SORT_BY_ALIGNMENT"))
-    return SortSectionPolicy::Alignment;
-  if (consume("SORT_BY_INIT_PRIORITY"))
-    return SortSectionPolicy::Priority;
-  if (consume("SORT_NONE"))
-    return SortSectionPolicy::None;
-  return SortSectionPolicy::Default;
-}
-
-// Method reads a list of sequence of excluded files and section globs given in
-// a following form: ((EXCLUDE_FILE(file_pattern+))? section_pattern+)+
-// Example: *(.foo.1 EXCLUDE_FILE (*a.o) .foo.2 EXCLUDE_FILE (*b.o) .foo.3)
-// The semantics of that is next:
-// * Include .foo.1 from every file.
-// * Include .foo.2 from every file but a.o
-// * Include .foo.3 from every file but b.o
-std::vector<SectionPattern> ScriptParser::readInputSectionsList() {
-  std::vector<SectionPattern> Ret;
-  while (!Error && peek() != ")") {
-    StringMatcher ExcludeFilePat;
-    if (consume("EXCLUDE_FILE")) {
-      expect("(");
-      ExcludeFilePat = readFilePatterns();
-    }
-
-    std::vector<StringRef> V;
-    while (!Error && peek() != ")" && peek() != "EXCLUDE_FILE")
-      V.push_back(next());
-
-    if (!V.empty())
-      Ret.push_back({std::move(ExcludeFilePat), StringMatcher(V)});
-    else
-      setError("section pattern is expected");
-  }
-  return Ret;
-}
-
-// Section pattern grammar can have complex expressions, for example:
-// *(SORT(.foo.* EXCLUDE_FILE (*file1.o) .bar.*) .bar.* SORT(.zed.*))
-// Generally is a sequence of globs and excludes that may be wrapped in a SORT()
-// commands, like: SORT(glob0) glob1 glob2 SORT(glob4)
-// This methods handles wrapping sequences of excluded files and section globs
-// into SORT() if that needed and reads them all.
-InputSectionDescription *
-ScriptParser::readInputSectionRules(StringRef FilePattern) {
-  auto *Cmd = new InputSectionDescription(FilePattern);
-  expect("(");
-  while (!HasError && !consume(")")) {
-    SortSectionPolicy Outer = readSortKind();
-    SortSectionPolicy Inner = SortSectionPolicy::Default;
-    std::vector<SectionPattern> V;
-    if (Outer != SortSectionPolicy::Default) {
-      expect("(");
-      Inner = readSortKind();
-      if (Inner != SortSectionPolicy::Default) {
-        expect("(");
-        V = readInputSectionsList();
-        expect(")");
-      } else {
-        V = readInputSectionsList();
-      }
-      expect(")");
-    } else {
-      V = readInputSectionsList();
-    }
-
-    for (SectionPattern &Pat : V) {
-      Pat.SortInner = Inner;
-      Pat.SortOuter = Outer;
-    }
-
-    std::move(V.begin(), V.end(), std::back_inserter(Cmd->SectionPatterns));
-  }
-  return Cmd;
-}
-
-InputSectionDescription *
-ScriptParser::readInputSectionDescription(StringRef Tok) {
-  // Input section wildcard can be surrounded by KEEP.
-  // https://sourceware.org/binutils/docs/ld/Input-Section-Keep.html#Input-Section-Keep
-  if (Tok == "KEEP") {
-    expect("(");
-    StringRef FilePattern = next();
-    InputSectionDescription *Cmd = readInputSectionRules(FilePattern);
-    expect(")");
-    Opt.KeptSections.push_back(Cmd);
-    return Cmd;
-  }
-  return readInputSectionRules(Tok);
-}
-
-void ScriptParser::readSort() {
-  expect("(");
-  expect("CONSTRUCTORS");
-  expect(")");
-}
-
-Expr ScriptParser::readAssert() {
-  expect("(");
-  Expr E = readExpr();
-  expect(",");
-  StringRef Msg = unquote(next());
-  expect(")");
-  return [=](uint64_t Dot) {
-    uint64_t V = E(Dot);
-    if (!V)
-      error(Msg);
-    return V;
-  };
-}
-
-// Reads a FILL(expr) command. We handle the FILL command as an
-// alias for =fillexp section attribute, which is different from
-// what GNU linkers do.
-// https://sourceware.org/binutils/docs/ld/Output-Section-Data.html
-std::vector<uint8_t> ScriptParser::readFill() {
-  expect("(");
-  std::vector<uint8_t> V = readOutputSectionFiller(next());
-  expect(")");
-  expect(";");
-  return V;
-}
-
-OutputSectionCommand *
-ScriptParser::readOutputSectionDescription(StringRef OutSec) {
-  OutputSectionCommand *Cmd = new OutputSectionCommand(OutSec);
-
-  // Read an address expression.
-  // https://sourceware.org/binutils/docs/ld/Output-Section-Address.html#Output-Section-Address
-  if (peek() != ":")
-    Cmd->AddrExpr = readExpr();
-
-  expect(":");
-
-  if (consume("AT"))
-    Cmd->LMAExpr = readParenExpr();
-  if (consume("ALIGN"))
-    Cmd->AlignExpr = readParenExpr();
-  if (consume("SUBALIGN"))
-    Cmd->SubalignExpr = readParenExpr();
-
-  // Parse constraints.
-  if (consume("ONLY_IF_RO"))
-    Cmd->Constraint = ConstraintKind::ReadOnly;
-  if (consume("ONLY_IF_RW"))
-    Cmd->Constraint = ConstraintKind::ReadWrite;
-  expect("{");
-
-  while (!Error && !consume("}")) {
-    StringRef Tok = next();
-    if (SymbolAssignment *Assignment = readProvideOrAssignment(Tok))
-      Cmd->Commands.emplace_back(Assignment);
-    else if (BytesDataCommand *Data = readBytesDataCommand(Tok))
-      Cmd->Commands.emplace_back(Data);
-    else if (Tok == "FILL")
-      Cmd->Filler = readFill();
-    else if (Tok == "SORT")
-      readSort();
-    else if (peek() == "(")
-      Cmd->Commands.emplace_back(readInputSectionDescription(Tok));
-    else
-      setError("unknown command " + Tok);
-  }
-  Cmd->Phdrs = readOutputSectionPhdrs();
-
-  if (consume("="))
-    Cmd->Filler = readOutputSectionFiller(next());
-  else if (peek().startswith("="))
-    Cmd->Filler = readOutputSectionFiller(next().drop_front());
-
-  return Cmd;
-}
-
-// Read "=<number>" where <number> is an octal/decimal/hexadecimal number.
-// https://sourceware.org/binutils/docs/ld/Output-Section-Fill.html
-//
-// ld.gold is not fully compatible with ld.bfd. ld.bfd handles
-// hexstrings as blobs of arbitrary sizes, while ld.gold handles them
-// as 32-bit big-endian values. We will do the same as ld.gold does
-// because it's simpler than what ld.bfd does.
-std::vector<uint8_t> ScriptParser::readOutputSectionFiller(StringRef Tok) {
-  uint32_t V;
-  if (Tok.getAsInteger(0, V)) {
-    setError("invalid filler expression: " + Tok);
-    return {};
-  }
-  return {uint8_t(V >> 24), uint8_t(V >> 16), uint8_t(V >> 8), uint8_t(V)};
-}
-
-SymbolAssignment *ScriptParser::readProvideHidden(bool Provide, bool Hidden) {
-  expect("(");
-  SymbolAssignment *Cmd = readAssignment(next());
-  Cmd->Provide = Provide;
-  Cmd->Hidden = Hidden;
-  expect(")");
-  expect(";");
-  return Cmd;
-}
-
-SymbolAssignment *ScriptParser::readProvideOrAssignment(StringRef Tok) {
-  SymbolAssignment *Cmd = nullptr;
-  if (peek() == "=" || peek() == "+=") {
-    Cmd = readAssignment(Tok);
-    expect(";");
-  } else if (Tok == "PROVIDE") {
-    Cmd = readProvideHidden(true, false);
-  } else if (Tok == "HIDDEN") {
-    Cmd = readProvideHidden(false, true);
-  } else if (Tok == "PROVIDE_HIDDEN") {
-    Cmd = readProvideHidden(true, true);
-  }
-  return Cmd;
-}
-
-static uint64_t getSymbolValue(StringRef S, uint64_t Dot) {
-  if (S == ".")
-    return Dot;
-  return ScriptBase->getSymbolValue(S);
-}
-
-static bool isAbsolute(StringRef S) {
-  if (S == ".")
-    return false;
-  return ScriptBase->isAbsolute(S);
-}
-
-SymbolAssignment *ScriptParser::readAssignment(StringRef Name) {
-  StringRef Op = next();
-  Expr E;
-  assert(Op == "=" || Op == "+=");
-  if (consume("ABSOLUTE")) {
-    // The RHS may be something like "ABSOLUTE(.) & 0xff".
-    // Call readExpr1 to read the whole expression.
-    E = readExpr1(readParenExpr(), 0);
-    E.IsAbsolute = []() { return true; };
-  } else {
-    E = readExpr();
-  }
-  if (Op == "+=")
-    E = [=](uint64_t Dot) { return getSymbolValue(Name, Dot) + E(Dot); };
-  return new SymbolAssignment(Name, E);
-}
-
-// This is an operator-precedence parser to parse a linker
-// script expression.
-Expr ScriptParser::readExpr() { return readExpr1(readPrimary(), 0); }
-
-static Expr combine(StringRef Op, Expr L, Expr R) {
-  if (Op == "*")
-    return [=](uint64_t Dot) { return L(Dot) * R(Dot); };
-  if (Op == "/") {
-    return [=](uint64_t Dot) -> uint64_t {
-      uint64_t RHS = R(Dot);
-      if (RHS == 0) {
-        error("division by zero");
-        return 0;
-      }
-      return L(Dot) / RHS;
-    };
-  }
-  if (Op == "+")
-    return {[=](uint64_t Dot) { return L(Dot) + R(Dot); },
-            [=]() { return L.IsAbsolute() && R.IsAbsolute(); },
-            [=]() {
-              const OutputSectionBase *S = L.Section();
-              return S ? S : R.Section();
-            }};
-  if (Op == "-")
-    return [=](uint64_t Dot) { return L(Dot) - R(Dot); };
-  if (Op == "<<")
-    return [=](uint64_t Dot) { return L(Dot) << R(Dot); };
-  if (Op == ">>")
-    return [=](uint64_t Dot) { return L(Dot) >> R(Dot); };
-  if (Op == "<")
-    return [=](uint64_t Dot) { return L(Dot) < R(Dot); };
-  if (Op == ">")
-    return [=](uint64_t Dot) { return L(Dot) > R(Dot); };
-  if (Op == ">=")
-    return [=](uint64_t Dot) { return L(Dot) >= R(Dot); };
-  if (Op == "<=")
-    return [=](uint64_t Dot) { return L(Dot) <= R(Dot); };
-  if (Op == "==")
-    return [=](uint64_t Dot) { return L(Dot) == R(Dot); };
-  if (Op == "!=")
-    return [=](uint64_t Dot) { return L(Dot) != R(Dot); };
-  if (Op == "&")
-    return [=](uint64_t Dot) { return L(Dot) & R(Dot); };
-  if (Op == "|")
-    return [=](uint64_t Dot) { return L(Dot) | R(Dot); };
-  llvm_unreachable("invalid operator");
-}
-
-// This is a part of the operator-precedence parser. This function
-// assumes that the remaining token stream starts with an operator.
-Expr ScriptParser::readExpr1(Expr Lhs, int MinPrec) {
-  while (!atEOF() && !Error) {
-    // Read an operator and an expression.
-    StringRef Op1 = peek();
-    if (Op1 == "?")
-      return readTernary(Lhs);
-    if (precedence(Op1) < MinPrec)
-      break;
-    skip();
-    Expr Rhs = readPrimary();
-
-    // Evaluate the remaining part of the expression first if the
-    // next operator has greater precedence than the previous one.
-    // For example, if we have read "+" and "3", and if the next
-    // operator is "*", then we'll evaluate 3 * ... part first.
-    while (!atEOF()) {
-      StringRef Op2 = peek();
-      if (precedence(Op2) <= precedence(Op1))
-        break;
-      Rhs = readExpr1(Rhs, precedence(Op2));
-    }
-
-    Lhs = combine(Op1, Lhs, Rhs);
-  }
-  return Lhs;
-}
-
-uint64_t static getConstant(StringRef S) {
-  if (S == "COMMONPAGESIZE")
-    return Target->PageSize;
-  if (S == "MAXPAGESIZE")
-    return Config->MaxPageSize;
-  error("unknown constant: " + S);
-  return 0;
-}
-
-// Parses Tok as an integer. Returns true if successful.
-// It recognizes hexadecimal (prefixed with "0x" or suffixed with "H")
-// and decimal numbers. Decimal numbers may have "K" (kilo) or
-// "M" (mega) prefixes.
-static bool readInteger(StringRef Tok, uint64_t &Result) {
-  if (Tok.startswith("-")) {
-    if (!readInteger(Tok.substr(1), Result))
-      return false;
-    Result = -Result;
+// We usually do. But if PHDRS commands are given, and
+// no PT_INTERP is there, there's no place to emit an
+// .interp, so we don't do that in that case.
+bool LinkerScript::needsInterpSection() {
+  if (PhdrsCommands.empty())
     return true;
-  }
-  if (Tok.startswith_lower("0x"))
-    return !Tok.substr(2).getAsInteger(16, Result);
-  if (Tok.endswith_lower("H"))
-    return !Tok.drop_back().getAsInteger(16, Result);
-
-  int Suffix = 1;
-  if (Tok.endswith_lower("K")) {
-    Suffix = 1024;
-    Tok = Tok.drop_back();
-  } else if (Tok.endswith_lower("M")) {
-    Suffix = 1024 * 1024;
-    Tok = Tok.drop_back();
-  }
-  if (Tok.getAsInteger(10, Result))
-    return false;
-  Result *= Suffix;
-  return true;
-}
-
-BytesDataCommand *ScriptParser::readBytesDataCommand(StringRef Tok) {
-  int Size = StringSwitch<unsigned>(Tok)
-                 .Case("BYTE", 1)
-                 .Case("SHORT", 2)
-                 .Case("LONG", 4)
-                 .Case("QUAD", 8)
-                 .Default(-1);
-  if (Size == -1)
-    return nullptr;
-
-  expect("(");
-  uint64_t Val = 0;
-  StringRef S = next();
-  if (!readInteger(S, Val))
-    setError("unexpected value: " + S);
-  expect(")");
-  return new BytesDataCommand(Val, Size);
-}
-
-StringRef ScriptParser::readParenLiteral() {
-  expect("(");
-  StringRef Tok = next();
-  expect(")");
-  return Tok;
-}
-
-Expr ScriptParser::readPrimary() {
-  if (peek() == "(")
-    return readParenExpr();
-
-  StringRef Tok = next();
-
-  if (Tok == "~") {
-    Expr E = readPrimary();
-    return [=](uint64_t Dot) { return ~E(Dot); };
-  }
-  if (Tok == "-") {
-    Expr E = readPrimary();
-    return [=](uint64_t Dot) { return -E(Dot); };
-  }
-
-  // Built-in functions are parsed here.
-  // https://sourceware.org/binutils/docs/ld/Builtin-Functions.html.
-  if (Tok == "ADDR") {
-    StringRef Name = readParenLiteral();
-    return {
-        [=](uint64_t Dot) { return ScriptBase->getOutputSection(Name)->Addr; },
-        [=]() { return false; },
-        [=]() { return ScriptBase->getOutputSection(Name); }};
-  }
-  if (Tok == "LOADADDR") {
-    StringRef Name = readParenLiteral();
-    return [=](uint64_t Dot) {
-      return ScriptBase->getOutputSection(Name)->getLMA();
-    };
-  }
-  if (Tok == "ASSERT")
-    return readAssert();
-  if (Tok == "ALIGN") {
-    Expr E = readParenExpr();
-    return [=](uint64_t Dot) { return alignTo(Dot, E(Dot)); };
-  }
-  if (Tok == "CONSTANT") {
-    StringRef Name = readParenLiteral();
-    return [=](uint64_t Dot) { return getConstant(Name); };
-  }
-  if (Tok == "DEFINED") {
-    StringRef Name = readParenLiteral();
-    return [=](uint64_t Dot) { return ScriptBase->isDefined(Name) ? 1 : 0; };
-  }
-  if (Tok == "SEGMENT_START") {
-    expect("(");
-    skip();
-    expect(",");
-    Expr E = readExpr();
-    expect(")");
-    return [=](uint64_t Dot) { return E(Dot); };
-  }
-  if (Tok == "DATA_SEGMENT_ALIGN") {
-    expect("(");
-    Expr E = readExpr();
-    expect(",");
-    readExpr();
-    expect(")");
-    return [=](uint64_t Dot) { return alignTo(Dot, E(Dot)); };
-  }
-  if (Tok == "DATA_SEGMENT_END") {
-    expect("(");
-    expect(".");
-    expect(")");
-    return [](uint64_t Dot) { return Dot; };
-  }
-  // GNU linkers implements more complicated logic to handle
-  // DATA_SEGMENT_RELRO_END. We instead ignore the arguments and just align to
-  // the next page boundary for simplicity.
-  if (Tok == "DATA_SEGMENT_RELRO_END") {
-    expect("(");
-    readExpr();
-    expect(",");
-    readExpr();
-    expect(")");
-    return [](uint64_t Dot) { return alignTo(Dot, Target->PageSize); };
-  }
-  if (Tok == "SIZEOF") {
-    StringRef Name = readParenLiteral();
-    return [=](uint64_t Dot) { return ScriptBase->getOutputSectionSize(Name); };
-  }
-  if (Tok == "ALIGNOF") {
-    StringRef Name = readParenLiteral();
-    return [=](uint64_t Dot) {
-      return ScriptBase->getOutputSection(Name)->Addralign;
-    };
-  }
-  if (Tok == "SIZEOF_HEADERS")
-    return [=](uint64_t Dot) { return ScriptBase->getHeaderSize(); };
-
-  // Tok is a literal number.
-  uint64_t V;
-  if (readInteger(Tok, V))
-    return [=](uint64_t Dot) { return V; };
-
-  // Tok is a symbol name.
-  if (Tok != "." && !isValidCIdentifier(Tok))
-    setError("malformed number: " + Tok);
-  return {[=](uint64_t Dot) { return getSymbolValue(Tok, Dot); },
-          [=]() { return isAbsolute(Tok); },
-          [=]() { return ScriptBase->getSymbolSection(Tok); }};
-}
-
-Expr ScriptParser::readTernary(Expr Cond) {
-  skip();
-  Expr L = readExpr();
-  expect(":");
-  Expr R = readExpr();
-  return [=](uint64_t Dot) { return Cond(Dot) ? L(Dot) : R(Dot); };
-}
-
-Expr ScriptParser::readParenExpr() {
-  expect("(");
-  Expr E = readExpr();
-  expect(")");
-  return E;
-}
-
-std::vector<StringRef> ScriptParser::readOutputSectionPhdrs() {
-  std::vector<StringRef> Phdrs;
-  while (!Error && peek().startswith(":")) {
-    StringRef Tok = next();
-    Phdrs.push_back((Tok.size() == 1) ? next() : Tok.substr(1));
-  }
-  return Phdrs;
-}
-
-// Read a program header type name. The next token must be a
-// name of a program header type or a constant (e.g. "0x3").
-unsigned ScriptParser::readPhdrType() {
-  StringRef Tok = next();
-  uint64_t Val;
-  if (readInteger(Tok, Val))
-    return Val;
-
-  unsigned Ret = StringSwitch<unsigned>(Tok)
-                     .Case("PT_NULL", PT_NULL)
-                     .Case("PT_LOAD", PT_LOAD)
-                     .Case("PT_DYNAMIC", PT_DYNAMIC)
-                     .Case("PT_INTERP", PT_INTERP)
-                     .Case("PT_NOTE", PT_NOTE)
-                     .Case("PT_SHLIB", PT_SHLIB)
-                     .Case("PT_PHDR", PT_PHDR)
-                     .Case("PT_TLS", PT_TLS)
-                     .Case("PT_GNU_EH_FRAME", PT_GNU_EH_FRAME)
-                     .Case("PT_GNU_STACK", PT_GNU_STACK)
-                     .Case("PT_GNU_RELRO", PT_GNU_RELRO)
-                     .Case("PT_OPENBSD_RANDOMIZE", PT_OPENBSD_RANDOMIZE)
-                     .Case("PT_OPENBSD_WXNEEDED", PT_OPENBSD_WXNEEDED)
-                     .Default(-1);
-
-  if (Ret == (unsigned)-1) {
-    setError("invalid program header type: " + Tok);
-    return PT_NULL;
-  }
-  return Ret;
-}
-
-void ScriptParser::readVersionDeclaration(StringRef VerStr) {
-  // Identifiers start at 2 because 0 and 1 are reserved
-  // for VER_NDX_LOCAL and VER_NDX_GLOBAL constants.
-  uint16_t VersionId = Config->VersionDefinitions.size() + 2;
-  Config->VersionDefinitions.push_back({VerStr, VersionId});
-
-  if (consume("global:") || peek() != "local:")
-    readGlobal(VerStr);
-  if (consume("local:"))
-    readLocal(VerStr);
-  expect("}");
-
-  // Each version may have a parent version. For example, "Ver2" defined as
-  // "Ver2 { global: foo; local: *; } Ver1;" has "Ver1" as a parent. This
-  // version hierarchy is, probably against your instinct, purely for human; the
-  // runtime doesn't care about them at all. In LLD, we simply skip the token.
-  if (!VerStr.empty() && peek() != ";")
-    skip();
-  expect(";");
-}
-
-void ScriptParser::readSymbols(std::vector<SymbolVersion> &V) {
-  for (;;) {
-    if (consume("extern"))
-      readVersionExtern(&V);
-
-    if (peek() == "}" || peek() == "local:" || Error)
-      return;
-    StringRef Tok = next();
-    V.push_back({unquote(Tok), false, hasWildcard(Tok)});
-    expect(";");
-  }
-}
-
-void ScriptParser::readLocal(StringRef VerStr) {
-  if (consume("*")) {
-    Config->DefaultSymbolVersion = VER_NDX_LOCAL;
-    expect(";");
-    return;
-  }
-
-  if (VerStr.empty())
-    setError("locals list for anonymous version is not supported");
-
-  readSymbols(Config->VersionScriptLocals);
-}
-
-void ScriptParser::readVersionExtern(std::vector<SymbolVersion> *V) {
-  expect("\"C++\"");
-  expect("{");
-
-  while (!Error && peek() != "}") {
-    StringRef Tok = next();
-    bool HasWildcard = !Tok.startswith("\"") && hasWildcard(Tok);
-    V->push_back({unquote(Tok), true, HasWildcard});
-    expect(";");
-  }
-
-  expect("}");
-  expect(";");
-}
-
-void ScriptParser::readGlobal(StringRef VerStr) {
-  if (VerStr.empty())
-    readSymbols(Config->VersionScriptGlobals);
-  else
-    readSymbols(Config->VersionDefinitions.back().Globals);
-}
-
-static bool isUnderSysroot(StringRef Path) {
-  if (Config->Sysroot == "")
-    return false;
-  for (; !Path.empty(); Path = sys::path::parent_path(Path))
-    if (sys::fs::equivalent(Config->Sysroot, Path))
+  for (PhdrsCommand &Cmd : PhdrsCommands)
+    if (Cmd.Type == PT_INTERP)
       return true;
   return false;
 }
 
-void elf::readLinkerScript(MemoryBufferRef MB) {
-  StringRef Path = MB.getBufferIdentifier();
-  ScriptParser(MB.getBuffer(), isUnderSysroot(Path)).readLinkerScript();
+ExprValue LinkerScript::getSymbolValue(StringRef Name, const Twine &Loc) {
+  if (Name == ".") {
+    if (Ctx)
+      return {Ctx->OutSec, false, Dot - Ctx->OutSec->Addr, Loc};
+    error(Loc + ": unable to get location counter value");
+    return 0;
+  }
+
+  if (Symbol *Sym = Symtab->find(Name)) {
+    if (auto *DS = dyn_cast<Defined>(Sym))
+      return {DS->Section, false, DS->Value, Loc};
+    if (isa<SharedSymbol>(Sym))
+      if (!ErrorOnMissingSection)
+        return {nullptr, false, 0, Loc};
+  }
+
+  error(Loc + ": symbol not found: " + Name);
+  return 0;
 }
 
-void elf::readVersionScript(MemoryBufferRef MB) {
-  ScriptParser(MB.getBuffer(), false).readVersionScript();
+// Returns the index of the segment named Name.
+static Optional<size_t> getPhdrIndex(ArrayRef<PhdrsCommand> Vec,
+                                     StringRef Name) {
+  for (size_t I = 0; I < Vec.size(); ++I)
+    if (Vec[I].Name == Name)
+      return I;
+  return None;
 }
 
-template class elf::LinkerScript<ELF32LE>;
-template class elf::LinkerScript<ELF32BE>;
-template class elf::LinkerScript<ELF64LE>;
-template class elf::LinkerScript<ELF64BE>;
+// Returns indices of ELF headers containing specific section. Each index is a
+// zero based number of ELF header listed within PHDRS {} script block.
+std::vector<size_t> LinkerScript::getPhdrIndices(OutputSection *Cmd) {
+  std::vector<size_t> Ret;
+
+  for (StringRef S : Cmd->Phdrs) {
+    if (Optional<size_t> Idx = getPhdrIndex(PhdrsCommands, S))
+      Ret.push_back(*Idx);
+    else if (S != "NONE")
+      error(Cmd->Location + ": section header '" + S +
+            "' is not listed in PHDRS");
+  }
+  return Ret;
+}

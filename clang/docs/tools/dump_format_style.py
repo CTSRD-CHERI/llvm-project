@@ -10,6 +10,7 @@ import urllib2
 
 CLANG_DIR = os.path.join(os.path.dirname(__file__), '../..')
 FORMAT_STYLE_FILE = os.path.join(CLANG_DIR, 'include/clang/Format/Format.h')
+INCLUDE_STYLE_FILE = os.path.join(CLANG_DIR, 'include/clang/Tooling/Inclusions/IncludeStyle.h')
 DOC_FILE = os.path.join(CLANG_DIR, 'docs/ClangFormatStyleOptions.rst')
 
 
@@ -19,16 +20,15 @@ def substitute(text, tag, contents):
   return re.sub(pattern, '%s', text, flags=re.S) % replacement
 
 def doxygen2rst(text):
-  text = re.sub(r'([^/\*])\*', r'\1\\*', text)
   text = re.sub(r'<tt>\s*(.*?)\s*<\/tt>', r'``\1``', text)
   text = re.sub(r'\\c ([^ ,;\.]+)', r'``\1``', text)
   text = re.sub(r'\\\w+ ', '', text)
   return text
 
-def indent(text, columns):
+def indent(text, columns, indent_first_line=True):
   indent = ' ' * columns
   s = re.sub(r'\n([^\n])', '\n' + indent + '\\1', text, flags=re.S)
-  if s.startswith('\n'):
+  if not indent_first_line or s.startswith('\n'):
     return s
   return indent + s
 
@@ -65,7 +65,9 @@ class NestedField:
     self.comment = comment.strip()
 
   def __str__(self):
-    return '* ``%s`` %s' % (self.name, doxygen2rst(self.comment))
+    return '\n* ``%s`` %s' % (
+        self.name,
+        doxygen2rst(indent(self.comment, 2, indent_first_line=False)))
 
 class Enum:
   def __init__(self, name, comment):
@@ -114,7 +116,7 @@ def read_options(header):
   for line in header:
     line = line.strip()
     if state == State.BeforeStruct:
-      if line == 'struct FormatStyle {':
+      if line == 'struct FormatStyle {' or line == 'struct IncludeStyle {':
         state = State.InStruct
     elif state == State.InStruct:
       if line.startswith('///'):
@@ -176,16 +178,18 @@ def read_options(header):
   for option in options:
     if not option.type in ['bool', 'unsigned', 'int', 'std::string',
                            'std::vector<std::string>',
-                           'std::vector<IncludeCategory>']:
+                           'std::vector<IncludeCategory>',
+                           'std::vector<RawStringFormat>']:
       if enums.has_key(option.type):
         option.enum = enums[option.type]
       elif nested_structs.has_key(option.type):
-        option.nested_struct = nested_structs[option.type];
+        option.nested_struct = nested_structs[option.type]
       else:
         raise Exception('Unknown type: %s' % option.type)
   return options
 
 options = read_options(open(FORMAT_STYLE_FILE))
+options += read_options(open(INCLUDE_STYLE_FILE))
 
 options = sorted(options, key=lambda x: x.name)
 options_text = '\n\n'.join(map(str, options))
@@ -196,4 +200,3 @@ contents = substitute(contents, 'FORMAT_STYLE_OPTIONS', options_text)
 
 with open(DOC_FILE, 'wb') as output:
   output.write(contents)
-

@@ -19,9 +19,9 @@
 #include "PPCInstrInfo.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/MC/MCInstrItineraries.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 #include <string>
 
 #define GET_SUBTARGETINFO_HEADER
@@ -46,6 +46,7 @@ namespace PPC {
     DIR_750,
     DIR_970,
     DIR_A2,
+    DIR_E500,
     DIR_E500mc,
     DIR_E5500,
     DIR_PWR3,
@@ -94,6 +95,7 @@ protected:
   bool HasHardFloat;
   bool IsPPC64;
   bool HasAltivec;
+  bool HasFPU;
   bool HasSPE;
   bool HasQPX;
   bool HasVSX;
@@ -133,6 +135,7 @@ protected:
   bool HasFloat128;
   bool IsISA3_0;
   bool UseLongCalls;
+  bool SecurePlt;
 
   POPCNTDKind HasPOPCNTD;
 
@@ -238,6 +241,7 @@ public:
   bool hasFPCVT() const { return HasFPCVT; }
   bool hasAltivec() const { return HasAltivec; }
   bool hasSPE() const { return HasSPE; }
+  bool hasFPU() const { return HasFPU; }
   bool hasQPX() const { return HasQPX; }
   bool hasVSX() const { return HasVSX; }
   bool hasP8Vector() const { return HasP8Vector; }
@@ -255,6 +259,7 @@ public:
   bool hasOnlyMSYNC() const { return HasOnlyMSYNC; }
   bool isPPC4xx() const { return IsPPC4xx; }
   bool isPPC6xx() const { return IsPPC6xx; }
+  bool isSecurePlt() const {return SecurePlt; }
   bool isE500() const { return IsE500; }
   bool isFeatureMFTB() const { return FeatureMFTB; }
   bool isDeprecatedDST() const { return DeprecatedDST; }
@@ -272,6 +277,13 @@ public:
 
     return 16;
   }
+
+  // DarwinABI has a 224-byte red zone. PPC32 SVR4ABI(Non-DarwinABI) has no
+  // red zone and PPC64 SVR4ABI has a 288-byte red zone.
+  unsigned  getRedZoneSize() const {
+    return isDarwinABI() ? 224 : (isPPC64() ? 288 : 0);
+  }
+
   bool hasHTM() const { return HasHTM; }
   bool hasFusion() const { return HasFusion; }
   bool hasFloat128() const { return HasFloat128; }
@@ -298,7 +310,9 @@ public:
   bool isSVR4ABI() const { return !isDarwinABI(); }
   bool isELFv2ABI() const;
 
-  bool enableEarlyIfConversion() const override { return hasISEL(); }
+  /// Originally, this function return hasISEL(). Now we always enable it,
+  /// but may expand the ISEL instruction later.
+  bool enableEarlyIfConversion() const override { return true; }
 
   // Scheduling customization.
   bool enableMachineScheduler() const override;
@@ -316,6 +330,8 @@ public:
   /// classifyGlobalReference - Classify a global variable reference for the
   /// current subtarget accourding to how we should reference it.
   unsigned char classifyGlobalReference(const GlobalValue *GV) const;
+
+  bool isXRaySupported() const override { return IsPPC64 && IsLittleEndian; }
 };
 } // End llvm namespace
 

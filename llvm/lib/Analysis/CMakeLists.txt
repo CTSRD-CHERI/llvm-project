@@ -18,21 +18,24 @@ add_llvm_library(LLVMAnalysis
   CallGraphSCCPass.cpp
   CallPrinter.cpp
   CaptureTracking.cpp
+  CmpInstAnalysis.cpp
   CostModel.cpp
   CodeMetrics.cpp
   ConstantFolding.cpp
   Delinearization.cpp
   DemandedBits.cpp
   DependenceAnalysis.cpp
-  DivergenceAnalysis.cpp
   DomPrinter.cpp
   DominanceFrontier.cpp
   EHPersonalities.cpp
   GlobalsModRef.cpp
+  GuardUtils.cpp
+  IVDescriptors.cpp
   IVUsers.cpp
   IndirectCallPromotionAnalysis.cpp
   InlineCost.cpp
   InstCount.cpp
+  InstructionPrecedenceTracking.cpp
   InstructionSimplify.cpp
   Interval.cpp
   IntervalPartition.cpp
@@ -41,26 +44,32 @@ add_llvm_library(LLVMAnalysis
   LazyBlockFrequencyInfo.cpp
   LazyCallGraph.cpp
   LazyValueInfo.cpp
+  LegacyDivergenceAnalysis.cpp
   Lint.cpp
   Loads.cpp
   LoopAccessAnalysis.cpp
+  LoopAnalysisManager.cpp
   LoopUnrollAnalyzer.cpp
   LoopInfo.cpp
   LoopPass.cpp
-  LoopPassManager.cpp
   MemDepPrinter.cpp
   MemDerefPrinter.cpp
   MemoryBuiltins.cpp
   MemoryDependenceAnalysis.cpp
   MemoryLocation.cpp
+  MemorySSA.cpp
+  MemorySSAUpdater.cpp
   ModuleDebugInfoPrinter.cpp
   ModuleSummaryAnalysis.cpp
+  MustExecute.cpp
   ObjCARCAliasAnalysis.cpp
   ObjCARCAnalysisUtils.cpp
   ObjCARCInstKind.cpp
-  OptimizationDiagnosticInfo.cpp
+  OptimizationRemarkEmitter.cpp
   OrderedBasicBlock.cpp
+  OrderedInstructions.cpp
   PHITransAddr.cpp
+  PhiValues.cpp
   PostDominators.cpp
   ProfileSummaryInfo.cpp
   PtrUseVisitor.cpp
@@ -71,13 +80,15 @@ add_llvm_library(LLVMAnalysis
   ScalarEvolutionAliasAnalysis.cpp
   ScalarEvolutionExpander.cpp
   ScalarEvolutionNormalization.cpp
-  SparsePropagation.cpp
+  SyntheticCountsUtils.cpp
   TargetLibraryInfo.cpp
   TargetTransformInfo.cpp
   Trace.cpp
   TypeBasedAliasAnalysis.cpp
   TypeMetadataUtils.cpp
   ScopedNoAliasAA.cpp
+  ValueLattice.cpp
+  ValueLatticeUtils.cpp
   ValueTracking.cpp
   VectorUtils.cpp
 

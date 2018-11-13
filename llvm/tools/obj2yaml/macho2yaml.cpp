@@ -9,6 +9,7 @@
 
 #include "Error.h"
 #include "obj2yaml.h"
+#include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/Object/MachOUniversal.h"
 #include "llvm/ObjectYAML/ObjectYAML.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -34,6 +35,10 @@ class MachODumper {
                        ArrayRef<uint8_t> OpcodeBuffer, bool Lazy = false);
   void dumpExportTrie(std::unique_ptr<MachOYAML::Object> &Y);
   void dumpSymbols(std::unique_ptr<MachOYAML::Object> &Y);
+  void dumpDebugAbbrev(DWARFContext &DCtx,
+                       std::unique_ptr<MachOYAML::Object> &Y);
+  void dumpDebugStrings(DWARFContext &DCtx,
+                        std::unique_ptr<MachOYAML::Object> &Y);
 
 public:
   MachODumper(const object::MachOObjectFile &O) : Obj(O) {}
@@ -158,11 +163,33 @@ const char *MachODumper::processLoadCommandData<MachO::rpath_command>(
   return readString<MachO::rpath_command>(LC, LoadCmd);
 }
 
+template <>
+const char *MachODumper::processLoadCommandData<MachO::build_version_command>(
+    MachOYAML::LoadCommand &LC,
+    const llvm::object::MachOObjectFile::LoadCommandInfo &LoadCmd) {
+  auto Start = LoadCmd.Ptr + sizeof(MachO::build_version_command);
+  auto NTools = LC.Data.build_version_command_data.ntools;
+  for (unsigned i = 0; i < NTools; ++i) {
+    auto Curr = Start + i * sizeof(MachO::build_tool_version);
+    MachO::build_tool_version BV;
+    memcpy((void *)&BV, Curr, sizeof(MachO::build_tool_version));
+    if (Obj.isLittleEndian() != sys::IsLittleEndianHost)
+      MachO::swapStruct(BV);
+    LC.Tools.push_back(BV);
+  }
+  return Start + NTools * sizeof(MachO::build_tool_version);
+}
+
 Expected<std::unique_ptr<MachOYAML::Object>> MachODumper::dump() {
   auto Y = make_unique<MachOYAML::Object>();
+  Y->IsLittleEndian = Obj.isLittleEndian();
   dumpHeader(Y);
   dumpLoadCommands(Y);
   dumpLinkEdit(Y);
+
+  std::unique_ptr<DWARFContext> DICtx = DWARFContext::create(Obj);
+  if (auto Err = dwarf2yaml(*DICtx, Y->DWARF))
+    return errorCodeToError(Err);
   return std::move(Y);
 }
 
@@ -189,7 +216,7 @@ void MachODumper::dumpLoadCommands(std::unique_ptr<MachOYAML::Object> &Y) {
         MachO::swapStruct(LC.Data.load_command_data);
       EndPtr = processLoadCommandData<MachO::load_command>(LC, LoadCmd);
       break;
-#include "llvm/Support/MachO.def"
+#include "llvm/BinaryFormat/MachO.def"
     }
     auto RemainingBytes = LoadCmd.C.cmdsize - (EndPtr - LoadCmd.Ptr);
     if (!std::all_of(EndPtr, &EndPtr[RemainingBytes],
@@ -234,6 +261,7 @@ void MachODumper::dumpRebaseOpcodes(std::unique_ptr<MachOYAML::Object> &Y) {
       ULEB = decodeULEB128(OpCode + 1, &Count);
       RebaseOp.ExtraData.push_back(ULEB);
       OpCode += Count;
+      LLVM_FALLTHROUGH;
     // Intentionally no break here -- This opcode has two ULEB values
     case MachO::REBASE_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB:
     case MachO::REBASE_OPCODE_ADD_ADDR_ULEB:
@@ -281,6 +309,7 @@ void MachODumper::dumpBindOpcodes(
       ULEB = decodeULEB128(OpCode + 1, &Count);
       BindOp.ULEBExtraData.push_back(ULEB);
       OpCode += Count;
+      LLVM_FALLTHROUGH;
     // Intentionally no break here -- this opcode has two ULEB values
 
     case MachO::BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB:
@@ -442,12 +471,11 @@ void MachODumper::dumpSymbols(std::unique_ptr<MachOYAML::Object> &Y) {
 
   for (auto Symbol : Obj.symbols()) {
     MachOYAML::NListEntry NLE =
-        Obj.is64Bit() ? constructNameList<MachO::nlist_64>(
-                            *reinterpret_cast<const MachO::nlist_64 *>(
-                                Symbol.getRawDataRefImpl().p))
-                      : constructNameList<MachO::nlist>(
-                            *reinterpret_cast<const MachO::nlist *>(
-                                Symbol.getRawDataRefImpl().p));
+        Obj.is64Bit()
+            ? constructNameList<MachO::nlist_64>(
+                  Obj.getSymbol64TableEntry(Symbol.getRawDataRefImpl()))
+            : constructNameList<MachO::nlist>(
+                  Obj.getSymbolTableEntry(Symbol.getRawDataRefImpl()));
     LEData.NameList.push_back(NLE);
   }
 
@@ -520,6 +548,6 @@ std::error_code macho2yaml(raw_ostream &Out, const object::Binary &Binary) {
     }
     return obj2yaml_error::success;
   }
-  
+
   return obj2yaml_error::unsupported_obj_file_format;
 }

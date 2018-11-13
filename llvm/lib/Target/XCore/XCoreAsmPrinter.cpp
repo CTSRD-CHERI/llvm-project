@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "XCore.h"
 #include "InstPrinter/XCoreInstPrinter.h"
+#include "XCore.h"
 #include "XCoreInstrInfo.h"
 #include "XCoreMCInstLower.h"
 #include "XCoreSubtarget.h"
@@ -146,15 +146,14 @@ void XCoreAsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
   }
 
   EmitAlignment(Align > 2 ? Align : 2, GV);
-  
+
   if (GV->isThreadLocal()) {
     report_fatal_error("TLS is not supported by this target!");
   }
   unsigned Size = DL.getTypeAllocSize(C->getType());
   if (MAI->hasDotTypeDotSizeDirective()) {
     OutStreamer->EmitSymbolAttribute(GVSym, MCSA_ELF_TypeObject);
-    OutStreamer->emitELFSize(cast<MCSymbolELF>(GVSym),
-                             MCConstantExpr::create(Size, OutContext));
+    OutStreamer->emitELFSize(GVSym, MCConstantExpr::create(Size, OutContext));
   }
   OutStreamer->EmitLabel(GVSym);
 
@@ -163,7 +162,7 @@ void XCoreAsmPrinter::EmitGlobalVariable(const GlobalVariable *GV) {
   // are padded to 32 bits.
   if (Size < 4)
     OutStreamer->EmitZeros(4 - Size);
-  
+
   // Mark the end of the global
   getTargetStreamer().emitCCBottomData(GVSym->getName());
 }
@@ -296,6 +295,6 @@ void XCoreAsmPrinter::EmitInstruction(const MachineInstr *MI) {
 }
 
 // Force static initialization.
-extern "C" void LLVMInitializeXCoreAsmPrinter() { 
+extern "C" void LLVMInitializeXCoreAsmPrinter() {
   RegisterAsmPrinter<XCoreAsmPrinter> X(getTheXCoreTarget());
 }

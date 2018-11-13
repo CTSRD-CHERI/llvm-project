@@ -15,19 +15,18 @@
 #include "llvm/Transforms/IPO/AlwaysInliner.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/Analysis/AssumptionCache.h"
-#include "llvm/Analysis/CallGraph.h"
 #include "llvm/Analysis/InlineCost.h"
-#include "llvm/Analysis/ProfileSummaryInfo.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
-#include "llvm/Transforms/IPO/InlinerPass.h"
+#include "llvm/Transforms/IPO.h"
+#include "llvm/Transforms/IPO/Inliner.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Utils/ModuleUtils.h"
 
 using namespace llvm;
 
@@ -37,6 +36,7 @@ PreservedAnalyses AlwaysInlinerPass::run(Module &M, ModuleAnalysisManager &) {
   InlineFunctionInfo IFI;
   SmallSetVector<CallSite, 16> Calls;
   bool Changed = false;
+  SmallVector<Function *, 16> InlinedFunctions;
   for (Function &F : M)
     if (!F.isDeclaration() && F.hasFnAttribute(Attribute::AlwaysInline) &&
         isInlineViable(F)) {
@@ -50,8 +50,36 @@ PreservedAnalyses AlwaysInlinerPass::run(Module &M, ModuleAnalysisManager &) {
       for (CallSite CS : Calls)
         // FIXME: We really shouldn't be able to fail to inline at this point!
         // We should do something to log or check the inline failures here.
-        Changed |= InlineFunction(CS, IFI);
+        Changed |=
+            InlineFunction(CS, IFI, /*CalleeAAR=*/nullptr, InsertLifetime);
+
+      // Remember to try and delete this function afterward. This both avoids
+      // re-walking the rest of the module and avoids dealing with any iterator
+      // invalidation issues while deleting functions.
+      InlinedFunctions.push_back(&F);
     }
+
+  // Remove any live functions.
+  erase_if(InlinedFunctions, [&](Function *F) {
+    F->removeDeadConstantUsers();
+    return !F->isDefTriviallyDead();
+  });
+
+  // Delete the non-comdat ones from the module and also from our vector.
+  auto NonComdatBegin = partition(
+      InlinedFunctions, [&](Function *F) { return F->hasComdat(); });
+  for (Function *F : make_range(NonComdatBegin, InlinedFunctions.end()))
+    M.getFunctionList().erase(F);
+  InlinedFunctions.erase(NonComdatBegin, InlinedFunctions.end());
+
+  if (!InlinedFunctions.empty()) {
+    // Now we just have the comdat functions. Filter out the ones whose comdats
+    // are not actually dead.
+    filterDeadComdatFunctions(M, InlinedFunctions);
+    // The remaining functions are actually dead.
+    for (Function *F : InlinedFunctions)
+      M.getFunctionList().erase(F);
+  }
 
   return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }
@@ -62,14 +90,15 @@ namespace {
 ///
 /// Unlike the \c AlwaysInlinerPass, this uses the more heavyweight \c Inliner
 /// base class to provide several facilities such as array alloca merging.
-class AlwaysInlinerLegacyPass : public Inliner {
+class AlwaysInlinerLegacyPass : public LegacyInlinerBase {
 
 public:
-  AlwaysInlinerLegacyPass() : Inliner(ID, /*InsertLifetime*/ true) {
+  AlwaysInlinerLegacyPass() : LegacyInlinerBase(ID, /*InsertLifetime*/ true) {
     initializeAlwaysInlinerLegacyPassPass(*PassRegistry::getPassRegistry());
   }
 
-  AlwaysInlinerLegacyPass(bool InsertLifetime) : Inliner(ID, InsertLifetime) {
+  AlwaysInlinerLegacyPass(bool InsertLifetime)
+      : LegacyInlinerBase(ID, InsertLifetime) {
     initializeAlwaysInlinerLegacyPassPass(*PassRegistry::getPassRegistry());
   }
 
@@ -101,7 +130,7 @@ Pass *llvm::createAlwaysInlinerLegacyPass(bool InsertLifetime) {
   return new AlwaysInlinerLegacyPass(InsertLifetime);
 }
 
-/// \brief Get the inline cost for the always-inliner.
+/// Get the inline cost for the always-inliner.
 ///
 /// The always inliner *only* handles functions which are marked with the
 /// attribute to force inlining. As such, it is dramatically simpler and avoids
@@ -121,7 +150,7 @@ InlineCost AlwaysInlinerLegacyPass::getInlineCost(CallSite CS) {
   // declarations.
   if (Callee && !Callee->isDeclaration() &&
       CS.hasFnAttr(Attribute::AlwaysInline) && isInlineViable(*Callee))
-    return InlineCost::getAlways();
+    return InlineCost::getAlways("always inliner");
 
-  return InlineCost::getNever();
+  return InlineCost::getNever("always inliner");
 }

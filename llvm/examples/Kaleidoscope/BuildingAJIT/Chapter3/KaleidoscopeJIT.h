@@ -1,4 +1,4 @@
-//===----- KaleidoscopeJIT.h - A simple JIT for Kaleidoscope ----*- C++ -*-===//
+//===- KaleidoscopeJIT.h - A simple JIT for Kaleidoscope --------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -17,21 +17,28 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JITSymbol.h"
-#include "llvm/ExecutionEngine/RuntimeDyld.h"
-#include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/ExecutionEngine/Orc/CompileOnDemandLayer.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/IRTransformLayer.h"
 #include "llvm/ExecutionEngine/Orc/LambdaResolver.h"
-#include "llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h"
+#include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
+#include "llvm/ExecutionEngine/RTDyldMemoryManager.h"
+#include "llvm/ExecutionEngine/RuntimeDyld.h"
+#include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Mangler.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/GVN.h"
 #include <algorithm>
+#include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -40,13 +47,15 @@ namespace orc {
 
 class KaleidoscopeJIT {
 private:
+  ExecutionSession ES;
+  std::map<VModuleKey, std::shared_ptr<SymbolResolver>> Resolvers;
   std::unique_ptr<TargetMachine> TM;
   const DataLayout DL;
-  ObjectLinkingLayer<> ObjectLayer;
-  IRCompileLayer<decltype(ObjectLayer)> CompileLayer;
+  RTDyldObjectLinkingLayer ObjectLayer;
+  IRCompileLayer<decltype(ObjectLayer), SimpleCompiler> CompileLayer;
 
-  typedef std::function<std::unique_ptr<Module>(std::unique_ptr<Module>)>
-    OptimizeFunction;
+  using OptimizeFunction =
+      std::function<std::unique_ptr<Module>(std::unique_ptr<Module>)>;
 
   IRTransformLayer<decltype(CompileLayer), OptimizeFunction> OptimizeLayer;
 
@@ -54,54 +63,57 @@ private:
   CompileOnDemandLayer<decltype(OptimizeLayer)> CODLayer;
 
 public:
-  typedef decltype(CODLayer)::ModuleSetHandleT ModuleHandle;
-
   KaleidoscopeJIT()
       : TM(EngineBuilder().selectTarget()), DL(TM->createDataLayout()),
+        ObjectLayer(ES,
+                    [this](VModuleKey K) {
+                      return RTDyldObjectLinkingLayer::Resources{
+                          std::make_shared<SectionMemoryManager>(),
+                          Resolvers[K]};
+                    }),
         CompileLayer(ObjectLayer, SimpleCompiler(*TM)),
         OptimizeLayer(CompileLayer,
                       [this](std::unique_ptr<Module> M) {
                         return optimizeModule(std::move(M));
                       }),
-        CompileCallbackManager(
-            orc::createLocalCompileCallbackManager(TM->getTargetTriple(), 0)),
-        CODLayer(OptimizeLayer,
-                 [this](Function &F) { return std::set<Function*>({&F}); },
+        CompileCallbackManager(cantFail(orc::createLocalCompileCallbackManager(
+            TM->getTargetTriple(), ES, 0))),
+        CODLayer(ES, OptimizeLayer,
+                 [&](orc::VModuleKey K) { return Resolvers[K]; },
+                 [&](orc::VModuleKey K, std::shared_ptr<SymbolResolver> R) {
+                   Resolvers[K] = std::move(R);
+                 },
+                 [](Function &F) { return std::set<Function *>({&F}); },
                  *CompileCallbackManager,
                  orc::createLocalIndirectStubsManagerBuilder(
-                   TM->getTargetTriple())) {
+                     TM->getTargetTriple())) {
     llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr);
   }
 
   TargetMachine &getTargetMachine() { return *TM; }
 
-  ModuleHandle addModule(std::unique_ptr<Module> M) {
-    // Build our symbol resolver:
-    // Lambda 1: Look back into the JIT itself to find symbols that are part of
-    //           the same "logical dylib".
-    // Lambda 2: Search for external symbols in the host process.
-    auto Resolver = createLambdaResolver(
-        [&](const std::string &Name) {
-          if (auto Sym = CODLayer.findSymbol(Name, false))
+  VModuleKey addModule(std::unique_ptr<Module> M) {
+    // Create a new VModuleKey.
+    VModuleKey K = ES.allocateVModule();
+
+    // Build a resolver and associate it with the new key.
+    Resolvers[K] = createLegacyLookupResolver(
+        ES,
+        [this](const std::string &Name) -> JITSymbol {
+          if (auto Sym = CompileLayer.findSymbol(Name, false))
             return Sym;
-          return JITSymbol(nullptr);
-        },
-        [](const std::string &Name) {
+          else if (auto Err = Sym.takeError())
+            return std::move(Err);
           if (auto SymAddr =
-                RTDyldMemoryManager::getSymbolAddressInProcess(Name))
+                  RTDyldMemoryManager::getSymbolAddressInProcess(Name))
             return JITSymbol(SymAddr, JITSymbolFlags::Exported);
-          return JITSymbol(nullptr);
-        });
+          return nullptr;
+        },
+        [](Error Err) { cantFail(std::move(Err), "lookupFlags failed"); });
 
-    // Build a singleton module set to hold our module.
-    std::vector<std::unique_ptr<Module>> Ms;
-    Ms.push_back(std::move(M));
-
-    // Add the set to the JIT with the resolver we created above and a newly
-    // created SectionMemoryManager.
-    return CODLayer.addModuleSet(std::move(Ms),
-                                 make_unique<SectionMemoryManager>(),
-                                 std::move(Resolver));
+    // Add the module to the JIT with the new key.
+    cantFail(CODLayer.addModule(K, std::move(M)));
+    return K;
   }
 
   JITSymbol findSymbol(const std::string Name) {
@@ -111,12 +123,11 @@ public:
     return CODLayer.findSymbol(MangledNameStream.str(), true);
   }
 
-  void removeModule(ModuleHandle H) {
-    CODLayer.removeModuleSet(H);
+  void removeModule(VModuleKey K) {
+    cantFail(CODLayer.removeModule(K));
   }
 
 private:
-
   std::unique_ptr<Module> optimizeModule(std::unique_ptr<Module> M) {
     // Create a function pass manager.
     auto FPM = llvm::make_unique<legacy::FunctionPassManager>(M.get());
@@ -135,7 +146,6 @@ private:
 
     return M;
   }
-
 };
 
 } // end namespace orc

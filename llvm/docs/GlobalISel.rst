@@ -304,10 +304,13 @@ As opposed to SelectionDAG, there are no legalization phases.  In particular,
 Legalization is iterative, and all state is contained in GMIR.  To maintain the
 validity of the intermediate code, instructions are introduced:
 
-* ``G_SEQUENCE`` --- concatenate multiple registers into a single wider
-  register.
+* ``G_MERGE_VALUES`` --- concatenate multiple registers of the same
+  size into a single wider register.
 
-* ``G_EXTRACT`` --- extract multiple registers (as contiguous sequences of bits)
+* ``G_UNMERGE_VALUES`` --- extract multiple registers of the same size
+  from a single wider register.
+
+* ``G_EXTRACT`` --- extract a simple register (as contiguous sequences of bits)
   from a single wider register.
 
 As they are expected to be temporary byproducts of the legalization process,
@@ -357,41 +360,6 @@ Moreover, we could use TableGen to initially infer legality of operation from
 existing patterns (as any pattern we can select is by definition legal).
 Expanding that to describe legalization actions is a much larger but
 potentially useful project.
-
-.. _milegalizer-scalar-narrow:
-
-Scalar narrow types
-^^^^^^^^^^^^^^^^^^^
-
-In the AArch64 port, we currently mark as legal operations on narrow integer
-types that have a legal equivalent in a wider type.
-
-For example, this:
-
-     %2(GPR,s8) = G_ADD %0, %1
-
-is selected to a 32-bit instruction:
-
-     %2(GPR32) = ADDWrr %0, %1
-
-This avoids unnecessarily legalizing operations that can be seen as legal:
-8-bit additions are supported, but happen to have a 32-bit result with the high
-24 bits undefined.
-
-``TODO``:
-This has implications regarding vreg classes (as narrow values can now be
-represented by wider vregs) and should be investigated further.
-
-``TODO``:
-In particular, s1 comparison results can be represented as wider values in
-different ways.
-SelectionDAG has the notion of BooleanContents, which allows targets to choose
-what true and false are when in a larger register:
-
-* ``ZeroOrOne`` --- if only 0 and 1 are valid bools, even in a larger register.
-* ``ZeroOrMinusOne`` --- if -1 is true (common for vector instructions,
-  where compares produce -1).
-* ``Undefined`` --- if only the low bit is relevant in determining truth.
 
 .. _milegalizer-non-power-of-2:
 
@@ -535,16 +503,69 @@ The simple API consists of:
 This target-provided method is responsible for mutating (or replacing) a
 possibly-generic MI into a fully target-specific equivalent.
 It is also responsible for doing the necessary constraining of gvregs into the
-appropriate register classes.
+appropriate register classes as well as passing through COPY instructions to
+the register allocator.
 
 The ``InstructionSelector`` can fold other instructions into the selected MI,
 by walking the use-def chain of the vreg operands.
 As GlobalISel is Global, this folding can occur across basic blocks.
 
-``TODO``:
-Currently, the Select pass is implemented with hand-written c++, similar to
-FastISel, rather than backed by tblgen'erated pattern-matching.
-We intend to eventually reuse SelectionDAG patterns.
+SelectionDAG Rule Imports
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+TableGen will import SelectionDAG rules and provide the following function to
+execute them:
+
+  .. code-block:: c++
+
+    bool selectImpl(MachineInstr &MI)
+
+The ``--stats`` option can be used to determine what proportion of rules were
+successfully imported. The easiest way to use this is to copy the
+``-gen-globalisel`` tablegen command from ``ninja -v`` and modify it.
+
+Similarly, the ``--warn-on-skipped-patterns`` option can be used to obtain the
+reasons that rules weren't imported. This can be used to focus on the most
+important rejection reasons.
+
+PatLeaf Predicates
+^^^^^^^^^^^^^^^^^^
+
+PatLeafs cannot be imported because their C++ is implemented in terms of
+``SDNode`` objects. PatLeafs that handle immediate predicates should be
+replaced by ``ImmLeaf``, ``IntImmLeaf``, or ``FPImmLeaf`` as appropriate.
+
+There's no standard answer for other PatLeafs. Some standard predicates have
+been baked into TableGen but this should not generally be done.
+
+Custom SDNodes
+^^^^^^^^^^^^^^
+
+Custom SDNodes should be mapped to Target Pseudos using ``GINodeEquiv``. This
+will cause the instruction selector to import them but you will also need to
+ensure the target pseudo is introduced to the MIR before the instruction
+selector. Any preceeding pass is suitable but the legalizer will be a
+particularly common choice.
+
+ComplexPatterns
+^^^^^^^^^^^^^^^
+
+ComplexPatterns cannot be imported because their C++ is implemented in terms of
+``SDNode`` objects. GlobalISel versions should be defined with
+``GIComplexOperandMatcher`` and mapped to ComplexPattern with
+``GIComplexPatternEquiv``.
+
+The following predicates are useful for porting ComplexPattern:
+
+* isBaseWithConstantOffset() - Check for base+offset structures
+* isOperandImmEqual() - Check for a particular constant
+* isObviouslySafeToFold() - Check for reasons an instruction can't be sunk and folded into another.
+
+There are some important points for the C++ implementation:
+
+* Don't modify MIR in the predicate
+* Renderer lambdas should capture by value to avoid use-after-free. They will be used after the predicate returns.
+* Only create instructions in a renderer lambda. GlobalISel won't clean up things you create but don't use.
 
 
 .. _maintainability:
@@ -668,5 +689,14 @@ Additionally:
 
 * ``TargetPassConfig`` --- create the passes constituting the pipeline,
   including additional passes not included in the :ref:`pipeline`.
-* ``GISelAccessor`` --- setup the various subtarget-provided classes, with a
-  graceful fallback to no-op when GlobalISel isn't enabled.
+
+.. _other_resources:
+
+Resources
+=========
+
+* `Global Instruction Selection - A Proposal by Quentin Colombet @LLVMDevMeeting 2015 <https://www.youtube.com/watch?v=F6GGbYtae3g>`_
+* `Global Instruction Selection - Status by Quentin Colombet, Ahmed Bougacha, and Tim Northover @LLVMDevMeeting 2016 <https://www.youtube.com/watch?v=6tfb344A7w8>`_
+* `GlobalISel - LLVM's Latest Instruction Selection Framework by Diana Picus @FOSDEM17 <https://www.youtube.com/watch?v=d6dF6E4BPeU>`_
+* GlobalISel: Past, Present, and Future by Quentin Colombet and Ahmed Bougacha @LLVMDevMeeting 2017
+* Head First into GlobalISel by Daniel Sanders, Aditya Nandakumar, and Justin Bogner @LLVMDevMeeting 2017

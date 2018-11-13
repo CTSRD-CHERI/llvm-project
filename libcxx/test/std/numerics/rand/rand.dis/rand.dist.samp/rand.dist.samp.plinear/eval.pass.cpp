@@ -44,7 +44,6 @@ void
 test1()
 {
     typedef std::piecewise_linear_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937_64 G;
     G g;
     double b[] = {10, 14, 16, 17};
@@ -53,7 +52,7 @@ test1()
     D d(b, b+Np+1, p);
     const int N = 1000000;
     std::vector<D::result_type> u;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         D::result_type v = d(g);
         assert(d.min() <= v && v < d.max());
@@ -67,16 +66,16 @@ test1()
     double c = std::numeric_limits<double>::quiet_NaN();
     std::vector<double> areas(Np);
     double S = 0;
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
     {
         areas[i] = (p[i]+p[i+1])*(b[i+1]-b[i])/2;
         S += areas[i];
     }
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
         areas[i] /= S;
-    for (int i = 0; i < Np+1; ++i)
+    for (size_t i = 0; i < Np+1; ++i)
         p[i] /= S;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         int k = std::lower_bound(b, b+Np+1, u[i]) - b - 1;
         if (k != kp)
@@ -97,7 +96,6 @@ void
 test2()
 {
     typedef std::piecewise_linear_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937_64 G;
     G g;
     double b[] = {10, 14, 16, 17};
@@ -106,7 +104,7 @@ test2()
     D d(b, b+Np+1, p);
     const int N = 1000000;
     std::vector<D::result_type> u;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         D::result_type v = d(g);
         assert(d.min() <= v && v < d.max());
@@ -120,16 +118,16 @@ test2()
     double c = std::numeric_limits<double>::quiet_NaN();
     std::vector<double> areas(Np);
     double S = 0;
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
     {
         areas[i] = (p[i]+p[i+1])*(b[i+1]-b[i])/2;
         S += areas[i];
     }
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
         areas[i] /= S;
-    for (int i = 0; i < Np+1; ++i)
+    for (size_t i = 0; i < Np+1; ++i)
         p[i] /= S;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         int k = std::lower_bound(b, b+Np+1, u[i]) - b - 1;
         if (k != kp)
@@ -150,16 +148,15 @@ void
 test3()
 {
     typedef std::piecewise_linear_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937_64 G;
     G g;
     double b[] = {10, 14, 16, 17};
     double p[] = {1, 0, 0, 0};
     const size_t Np = sizeof(p) / sizeof(p[0]) - 1;
     D d(b, b+Np+1, p);
-    const int N = 1000000;
+    const size_t N = 1000000;
     std::vector<D::result_type> u;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         D::result_type v = d(g);
         assert(d.min() <= v && v < d.max());
@@ -173,16 +170,16 @@ test3()
     double c = std::numeric_limits<double>::quiet_NaN();
     std::vector<double> areas(Np);
     double S = 0;
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
     {
         areas[i] = (p[i]+p[i+1])*(b[i+1]-b[i])/2;
         S += areas[i];
     }
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
         areas[i] /= S;
-    for (int i = 0; i < Np+1; ++i)
+    for (size_t i = 0; i < Np+1; ++i)
         p[i] /= S;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         int k = std::lower_bound(b, b+Np+1, u[i]) - b - 1;
         if (k != kp)
@@ -203,7 +200,6 @@ void
 test4()
 {
     typedef std::piecewise_linear_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937_64 G;
     G g;
     double b[] = {10, 14, 16};
@@ -212,7 +208,7 @@ test4()
     D d(b, b+Np+1, p);
     const int N = 1000000;
     std::vector<D::result_type> u;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         D::result_type v = d(g);
         assert(d.min() <= v && v < d.max());
@@ -226,16 +222,16 @@ test4()
     double c = std::numeric_limits<double>::quiet_NaN();
     std::vector<double> areas(Np);
     double S = 0;
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
     {
         areas[i] = (p[i]+p[i+1])*(b[i+1]-b[i])/2;
         S += areas[i];
     }
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
         areas[i] /= S;
-    for (int i = 0; i < Np+1; ++i)
+    for (size_t i = 0; i < Np+1; ++i)
         p[i] /= S;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         int k = std::lower_bound(b, b+Np+1, u[i]) - b - 1;
         if (k != kp)
@@ -243,7 +239,7 @@ test4()
             a = 0;
             for (int j = 0; j < k; ++j)
                 a += areas[j];
-            assert(k < Np);
+            assert(k < static_cast<int>(Np));
             m = (p[k+1] - p[k]) / (b[k+1] - b[k]);
             bk = b[k];
             c = (b[k+1]*p[k] - b[k]*p[k+1]) / (b[k+1] - b[k]);
@@ -257,7 +253,6 @@ void
 test5()
 {
     typedef std::piecewise_linear_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937_64 G;
     G g;
     double b[] = {10, 14};
@@ -266,7 +261,7 @@ test5()
     D d(b, b+Np+1, p);
     const int N = 1000000;
     std::vector<D::result_type> u;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         D::result_type v = d(g);
         assert(d.min() <= v && v < d.max());
@@ -280,17 +275,17 @@ test5()
     double c = std::numeric_limits<double>::quiet_NaN();
     std::vector<double> areas(Np);
     double S = 0;
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
     {
         assert(i < Np);
         areas[i] = (p[i]+p[i+1])*(b[i+1]-b[i])/2;
         S += areas[i];
     }
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
         areas[i] /= S;
-    for (int i = 0; i < Np+1; ++i)
+    for (size_t i = 0; i < Np+1; ++i)
         p[i] /= S;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         int k = std::lower_bound(b, b+Np+1, u[i]) - b - 1;
         if (k != kp)
@@ -298,7 +293,7 @@ test5()
             a = 0;
             for (int j = 0; j < k; ++j)
                 a += areas[j];
-            assert(k < Np);
+            assert(k < static_cast<int>(Np));
             m = (p[k+1] - p[k]) / (b[k+1] - b[k]);
             bk = b[k];
             c = (b[k+1]*p[k] - b[k]*p[k+1]) / (b[k+1] - b[k]);
@@ -312,7 +307,6 @@ void
 test6()
 {
     typedef std::piecewise_linear_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937_64 G;
     G g;
     double b[] = {10, 14, 16, 17};
@@ -321,7 +315,7 @@ test6()
     D d(b, b+Np+1, p);
     const int N = 1000000;
     std::vector<D::result_type> u;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         D::result_type v = d(g);
         assert(d.min() <= v && v < d.max());
@@ -335,16 +329,16 @@ test6()
     double c = std::numeric_limits<double>::quiet_NaN();
     std::vector<double> areas(Np);
     double S = 0;
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
     {
         areas[i] = (p[i]+p[i+1])*(b[i+1]-b[i])/2;
         S += areas[i];
     }
-    for (int i = 0; i < areas.size(); ++i)
+    for (size_t i = 0; i < areas.size(); ++i)
         areas[i] /= S;
-    for (int i = 0; i < Np+1; ++i)
+    for (size_t i = 0; i < Np+1; ++i)
         p[i] /= S;
-    for (int i = 0; i < N; ++i)
+    for (size_t i = 0; i < N; ++i)
     {
         int k = std::lower_bound(b, b+Np+1, u[i]) - b - 1;
         if (k != kp)

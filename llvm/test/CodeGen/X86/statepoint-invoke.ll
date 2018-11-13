@@ -1,4 +1,4 @@
-; RUN: llc < %s 2>&1 | FileCheck %s
+; RUN: llc -verify-machineinstrs < %s 2>&1 | FileCheck %s
 
 target triple = "x86_64-pc-linux-gnu"
 
@@ -38,8 +38,8 @@ exceptional_return:
   ret i64 addrspace(1)* %obj1.relocated1
 }
 ; CHECK-LABEL: GCC_except_table{{[0-9]+}}:
-; CHECK: .long  .Ltmp{{[0-9]+}}-.Ltmp{{[0-9]+}}
-; CHECK: .long  .Ltmp{{[0-9]+}}-.Lfunc_begin{{[0-9]+}}
+; CHECK: .uleb128  .Ltmp{{[0-9]+}}-.Ltmp{{[0-9]+}}
+; CHECK: .uleb128  .Ltmp{{[0-9]+}}-.Lfunc_begin{{[0-9]+}}
 ; CHECK: .byte  0
 ; CHECK: .p2align 4
 
@@ -68,8 +68,8 @@ exceptional_return:
   ret i64 addrspace(1)* %obj.relocated
 }
 ; CHECK-LABEL: GCC_except_table{{[0-9]+}}:
-; CHECK: .long .Ltmp{{[0-9]+}}-.Ltmp{{[0-9]+}}
-; CHECK: .long .Ltmp{{[0-9]+}}-.Lfunc_begin{{[0-9]+}}
+; CHECK: .uleb128 .Ltmp{{[0-9]+}}-.Ltmp{{[0-9]+}}
+; CHECK: .uleb128 .Ltmp{{[0-9]+}}-.Lfunc_begin{{[0-9]+}}
 ; CHECK: .byte 0
 ; CHECK: .p2align 4
 
@@ -95,8 +95,8 @@ left.relocs:
 
 right:
   ; CHECK-LABEL: %right
-  ; CHECK: movq
   ; CHECK: movq %rdx, (%rsp)
+  ; CHECK: movq
   ; CHECK: callq some_call
   %sp2 = invoke token (i64, i32, void (i64 addrspace(1)*)*, i32, i32, ...) @llvm.experimental.gc.statepoint.p0f_isVoidp1i64f(i64 0, i32 0, void (i64 addrspace(1)*)* @some_call, i32 1, i32 0, i64 addrspace(1)* %val1, i32 0, i32 5, i32 0, i32 -1, i32 0, i32 0, i32 0, i64 addrspace(1)* %val2, i64 addrspace(1)* %val3)
            to label %right.relocs unwind label %exceptional_return.right
@@ -142,6 +142,7 @@ normal_return:
   ; CHECK-LABEL: %normal_return
   ; CHECK: xorl %eax, %eax
   ; CHECK-NEXT: popq
+  ; CHECK-NEXT: .cfi_def_cfa_offset 8
   ; CHECK-NEXT: retq
   %null.relocated = call coldcc i64 addrspace(1)* @llvm.experimental.gc.relocate.p1i64(token %sp1, i32 13, i32 13)
   %undef.relocated = call coldcc i64 addrspace(1)* @llvm.experimental.gc.relocate.p1i64(token %sp1, i32 14, i32 14)
@@ -169,6 +170,7 @@ entry:
 normal_return:
   ; CHECK: leaq
   ; CHECK-NEXT: popq
+  ; CHECK-NEXT: .cfi_def_cfa_offset 8
   ; CHECK-NEXT: retq
   %aa.rel = call coldcc i32 addrspace(1)* @llvm.experimental.gc.relocate.p1i32(token %sp, i32 13, i32 13)
   %aa.converted = bitcast i32 addrspace(1)* %aa.rel to i64 addrspace(1)*
@@ -177,6 +179,7 @@ normal_return:
 exceptional_return:
   ; CHECK: movl	$15
   ; CHECK-NEXT: popq
+  ; CHECK-NEXT: .cfi_def_cfa_offset 8
   ; CHECK-NEXT: retq
   %landing_pad = landingpad token
           cleanup

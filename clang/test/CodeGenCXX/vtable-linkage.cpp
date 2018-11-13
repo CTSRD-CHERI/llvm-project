@@ -1,6 +1,10 @@
 // RUN: %clang_cc1 %s -triple=x86_64-pc-linux -emit-llvm -o %t
-// RUN: %clang_cc1 %s -triple=x86_64-apple-darwin10 -disable-llvm-optzns -O3 -emit-llvm -o %t.opt
+// RUN: %clang_cc1 %s -triple=x86_64-pc-linux -emit-llvm -std=c++03 -o %t.03
+// RUN: %clang_cc1 %s -triple=x86_64-pc-linux -emit-llvm -std=c++11 -o %t.11
+// RUN: %clang_cc1 %s -triple=x86_64-apple-darwin10 -disable-llvm-passes -O3 -emit-llvm -o %t.opt
 // RUN: FileCheck %s < %t
+// RUN: FileCheck %s < %t.03
+// RUN: FileCheck %s < %t.11
 // RUN: FileCheck --check-prefix=CHECK-OPT %s < %t.opt
 
 namespace {
@@ -32,6 +36,11 @@ struct D {
 void D::f() { }
 
 static struct : D { } e;
+
+// Force 'e' to be constructed and therefore have a vtable defined.
+void use_e() {
+  e.f();
+}
 
 // The destructor is the key function.
 template<typename T>
@@ -89,10 +98,10 @@ void use_F() {
 
 // C has no key function, so its vtable should have weak_odr linkage
 // and hidden visibility (rdar://problem/7523229).
-// CHECK-DAG: @_ZTV1C = linkonce_odr unnamed_addr constant {{.*}}, comdat,
-// CHECK-DAG: @_ZTS1C = linkonce_odr constant {{.*}}, comdat{{$}}
-// CHECK-DAG: @_ZTI1C = linkonce_odr constant {{.*}}, comdat{{$}}
-// CHECK-DAG: @_ZTT1C = linkonce_odr unnamed_addr constant {{.*}}, comdat{{$}}
+// CHECK-DAG: @_ZTV1C = linkonce_odr unnamed_addr constant {{.*}}, comdat, align 8{{$}}
+// CHECK-DAG: @_ZTS1C = linkonce_odr constant {{.*}}, comdat, align 1{{$}}
+// CHECK-DAG: @_ZTI1C = linkonce_odr constant {{.*}}, comdat, align 8{{$}}
+// CHECK-DAG: @_ZTT1C = linkonce_odr unnamed_addr constant {{.*}}, comdat, align 8{{$}}
 
 // D has a key function that is defined in this translation unit so its vtable is
 // defined in the translation unit.
@@ -111,37 +120,39 @@ void use_F() {
 // defined in this translation unit, so its vtable should have
 // weak_odr linkage.
 // CHECK-DAG: @_ZTV1EIsE = weak_odr unnamed_addr constant {{.*}}, comdat,
-// CHECK-DAG: @_ZTS1EIsE = weak_odr constant {{.*}}, comdat{{$}}
-// CHECK-DAG: @_ZTI1EIsE = weak_odr constant {{.*}}, comdat{{$}}
+// CHECK-DAG: @_ZTS1EIsE = weak_odr constant {{.*}}, comdat, align 1{{$}}
+// CHECK-DAG: @_ZTI1EIsE = weak_odr constant {{.*}}, comdat, align 8{{$}}
 
 // F<short> is an explicit template instantiation without a key
 // function, so its vtable should have weak_odr linkage
 // CHECK-DAG: @_ZTV1FIsE = weak_odr unnamed_addr constant {{.*}}, comdat,
-// CHECK-DAG: @_ZTS1FIsE = weak_odr constant {{.*}}, comdat{{$}}
-// CHECK-DAG: @_ZTI1FIsE = weak_odr constant {{.*}}, comdat{{$}}
+// CHECK-DAG: @_ZTS1FIsE = weak_odr constant {{.*}}, comdat, align 1{{$}}
+// CHECK-DAG: @_ZTI1FIsE = weak_odr constant {{.*}}, comdat, align 8{{$}}
 
 // E<long> is an implicit template instantiation with a key function
 // defined in this translation unit, so its vtable should have
 // linkonce_odr linkage.
 // CHECK-DAG: @_ZTV1EIlE = linkonce_odr unnamed_addr constant {{.*}}, comdat,
-// CHECK-DAG: @_ZTS1EIlE = linkonce_odr constant {{.*}}, comdat{{$}}
-// CHECK-DAG: @_ZTI1EIlE = linkonce_odr constant {{.*}}, comdat{{$}}
+// CHECK-DAG: @_ZTS1EIlE = linkonce_odr constant {{.*}}, comdat, align 1{{$}}
+// CHECK-DAG: @_ZTI1EIlE = linkonce_odr constant {{.*}}, comdat, align 8{{$}}
 
 // F<long> is an implicit template instantiation with no key function,
 // so its vtable should have linkonce_odr linkage.
 // CHECK-DAG: @_ZTV1FIlE = linkonce_odr unnamed_addr constant {{.*}}, comdat,
-// CHECK-DAG: @_ZTS1FIlE = linkonce_odr constant {{.*}}, comdat{{$}}
-// CHECK-DAG: @_ZTI1FIlE = linkonce_odr constant {{.*}}, comdat{{$}}
+// CHECK-DAG: @_ZTS1FIlE = linkonce_odr constant {{.*}}, comdat, align 1{{$}}
+// CHECK-DAG: @_ZTI1FIlE = linkonce_odr constant {{.*}}, comdat, align 8{{$}}
 
 // F<int> is an explicit template instantiation declaration without a
 // key function, so its vtable should have external linkage.
 // CHECK-DAG: @_ZTV1FIiE = external unnamed_addr constant
-// CHECK-OPT-DAG: @_ZTV1FIiE = external unnamed_addr constant
+// CHECK-OPT-DAG: @_ZTV1FIiE = available_externally unnamed_addr constant
 
 // E<int> is an explicit template instantiation declaration. It has a
 // key function is not instantiated, so we know that vtable definition
 // will be generated in TU where key function will be defined
-// so we can mark it as available_externally (only with optimizations)
+// so we can mark it as external (without optimizations) and
+// available_externally (with optimizations) because all of the inline
+// virtual functions have been emitted.
 // CHECK-DAG: @_ZTV1EIiE = external unnamed_addr constant
 // CHECK-OPT-DAG: @_ZTV1EIiE = available_externally unnamed_addr constant
 
@@ -160,8 +171,8 @@ void use_F() {
 // F<char> is an explicit specialization without a key function, so
 // its vtable should have linkonce_odr linkage.
 // CHECK-DAG: @_ZTV1FIcE = linkonce_odr unnamed_addr constant {{.*}}, comdat,
-// CHECK-DAG: @_ZTS1FIcE = linkonce_odr constant {{.*}}, comdat{{$}}
-// CHECK-DAG: @_ZTI1FIcE = linkonce_odr constant {{.*}}, comdat{{$}}
+// CHECK-DAG: @_ZTS1FIcE = linkonce_odr constant {{.*}}, comdat, align 1{{$}}
+// CHECK-DAG: @_ZTI1FIcE = linkonce_odr constant {{.*}}, comdat, align 8{{$}}
 
 // CHECK-DAG: @_ZTV1GIiE = linkonce_odr unnamed_addr constant {{.*}}, comdat,
 template <typename T>

@@ -13,6 +13,7 @@
 
 #include <list>
 #include <cassert>
+#include <cstddef>
 #include "test_macros.h"
 #include "DefaultOnly.h"
 #include "test_allocator.h"
@@ -24,13 +25,15 @@ test3(unsigned n, Allocator const &alloc = Allocator())
 {
 #if TEST_STD_VER > 11
     typedef std::list<T, Allocator> C;
-    typedef typename C::const_iterator const_iterator;
     {
     C d(n, alloc);
     assert(d.size() == n);
-    assert(std::distance(d.begin(), d.end()) == n);
+    assert(static_cast<std::size_t>(std::distance(d.begin(), d.end())) == n);
     assert(d.get_allocator() == alloc);
     }
+#else
+    ((void)n);
+    ((void)alloc);
 #endif
 }
 
@@ -75,14 +78,12 @@ int main()
         test3<int, min_allocator<int>> (3);
     }
 #endif
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#if TEST_STD_VER >= 11
     {
         std::list<DefaultOnly> l(3);
         assert(l.size() == 3);
         assert(std::distance(l.begin(), l.end()) == 3);
     }
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
-#if TEST_STD_VER >= 11
     {
         std::list<int, min_allocator<int>> l(3);
         assert(l.size() == 3);
@@ -94,12 +95,10 @@ int main()
         ++i;
         assert(*i == 0);
     }
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
     {
         std::list<DefaultOnly, min_allocator<DefaultOnly>> l(3);
         assert(l.size() == 3);
         assert(std::distance(l.begin(), l.end()) == 3);
     }
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
 #endif
 }

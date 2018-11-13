@@ -14,11 +14,12 @@
 
 
 #include "sanitizer_common/sanitizer_platform.h"
-#if SANITIZER_LINUX || SANITIZER_FREEBSD
+#if SANITIZER_LINUX || SANITIZER_FREEBSD || SANITIZER_NETBSD
 
 #include "sanitizer_common/sanitizer_common.h"
 #include "sanitizer_common/sanitizer_libc.h"
 #include "sanitizer_common/sanitizer_linux.h"
+#include "sanitizer_common/sanitizer_platform_limits_netbsd.h"
 #include "sanitizer_common/sanitizer_platform_limits_posix.h"
 #include "sanitizer_common/sanitizer_posix.h"
 #include "sanitizer_common/sanitizer_procmaps.h"
@@ -47,7 +48,6 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <errno.h>
 #include <sched.h>
 #include <dlfcn.h>
 #if SANITIZER_LINUX
@@ -134,7 +134,7 @@ void WriteMemoryProfile(char *buf, uptr buf_size, uptr nthread, uptr nlive) {
 void FlushShadowMemoryCallback(
     const SuspendedThreadsList &suspended_threads_list,
     void *argument) {
-  ReleaseMemoryToOS(ShadowBeg(), ShadowEnd() - ShadowBeg());
+  ReleaseMemoryPagesToOS(ShadowBeg(), ShadowEnd());
 }
 #endif
 
@@ -168,11 +168,11 @@ static void MapRodata() {
   fd_t fd = openrv;
   // Fill the file with kShadowRodata.
   const uptr kMarkerSize = 512 * 1024 / sizeof(u64);
-  InternalScopedBuffer<u64> marker(kMarkerSize);
+  InternalMmapVector<u64> marker(kMarkerSize);
   // volatile to prevent insertion of memset
   for (volatile u64 *p = marker.data(); p < marker.data() + kMarkerSize; p++)
     *p = kShadowRodata;
-  internal_write(fd, marker.data(), marker.size());
+  internal_write(fd, marker.data(), marker.size() * sizeof(u64));
   // Map the file into memory.
   uptr page = internal_mmap(0, GetPageSizeCached(), PROT_READ | PROT_WRITE,
                             MAP_PRIVATE | MAP_ANONYMOUS, fd, 0);
@@ -182,19 +182,18 @@ static void MapRodata() {
   }
   // Map the file into shadow of .rodata sections.
   MemoryMappingLayout proc_maps(/*cache_enabled*/true);
-  uptr start, end, offset, prot;
   // Reusing the buffer 'name'.
-  while (proc_maps.Next(&start, &end, &offset, name, ARRAY_SIZE(name), &prot)) {
-    if (name[0] != 0 && name[0] != '['
-        && (prot & MemoryMappingLayout::kProtectionRead)
-        && (prot & MemoryMappingLayout::kProtectionExecute)
-        && !(prot & MemoryMappingLayout::kProtectionWrite)
-        && IsAppMem(start)) {
+  MemoryMappedSegment segment(name, ARRAY_SIZE(name));
+  while (proc_maps.Next(&segment)) {
+    if (segment.filename[0] != 0 && segment.filename[0] != '[' &&
+        segment.IsReadable() && segment.IsExecutable() &&
+        !segment.IsWritable() && IsAppMem(segment.start)) {
       // Assume it's .rodata
-      char *shadow_start = (char*)MemToShadow(start);
-      char *shadow_end = (char*)MemToShadow(end);
-      for (char *p = shadow_start; p < shadow_end; p += marker.size()) {
-        internal_mmap(p, Min<uptr>(marker.size(), shadow_end - p),
+      char *shadow_start = (char *)MemToShadow(segment.start);
+      char *shadow_end = (char *)MemToShadow(segment.end);
+      for (char *p = shadow_start; p < shadow_end;
+           p += marker.size() * sizeof(u64)) {
+        internal_mmap(p, Min<uptr>(marker.size() * sizeof(u64), shadow_end - p),
                       PROT_READ, MAP_PRIVATE | MAP_FIXED, fd, 0);
       }
     }
@@ -213,17 +212,33 @@ void InitializePlatformEarly() {
   vmaSize =
     (MostSignificantSetBitIndex(GET_CURRENT_FRAME()) + 1);
 #if defined(__aarch64__)
+# if !SANITIZER_GO
   if (vmaSize != 39 && vmaSize != 42 && vmaSize != 48) {
     Printf("FATAL: ThreadSanitizer: unsupported VMA range\n");
-    Printf("FATAL: Found %d - Supported 39, 42 and 48\n", vmaSize);
+    Printf("FATAL: Found %zd - Supported 39, 42 and 48\n", vmaSize);
     Die();
   }
-#elif defined(__powerpc64__)
-  if (vmaSize != 44 && vmaSize != 46) {
+#else
+  if (vmaSize != 48) {
     Printf("FATAL: ThreadSanitizer: unsupported VMA range\n");
-    Printf("FATAL: Found %d - Supported 44 and 46\n", vmaSize);
+    Printf("FATAL: Found %zd - Supported 48\n", vmaSize);
     Die();
   }
+#endif
+#elif defined(__powerpc64__)
+# if !SANITIZER_GO
+  if (vmaSize != 44 && vmaSize != 46 && vmaSize != 47) {
+    Printf("FATAL: ThreadSanitizer: unsupported VMA range\n");
+    Printf("FATAL: Found %zd - Supported 44, 46, and 47\n", vmaSize);
+    Die();
+  }
+# else
+  if (vmaSize != 46 && vmaSize != 47) {
+    Printf("FATAL: ThreadSanitizer: unsupported VMA range\n");
+    Printf("FATAL: Found %zd - Supported 46, and 47\n", vmaSize);
+    Die();
+  }
+# endif
 #endif
 #endif
 }
@@ -289,7 +304,7 @@ void InitializePlatform() {
 int ExtractResolvFDs(void *state, int *fds, int nfd) {
 #if SANITIZER_LINUX && !SANITIZER_ANDROID
   int cnt = 0;
-  __res_state *statp = (__res_state*)state;
+  struct __res_state *statp = (struct __res_state*)state;
   for (int i = 0; i < MAXNS && cnt < nfd; i++) {
     if (statp->_u._ext.nsaddrs[i] && statp->_u._ext.nssocks[i] != -1)
       fds[cnt++] = statp->_u._ext.nssocks[i];
@@ -320,6 +335,20 @@ int ExtractRecvmsgFDs(void *msgp, int *fds, int nfd) {
   return res;
 }
 
+void ImitateTlsWrite(ThreadState *thr, uptr tls_addr, uptr tls_size) {
+  // Check that the thr object is in tls;
+  const uptr thr_beg = (uptr)thr;
+  const uptr thr_end = (uptr)thr + sizeof(*thr);
+  CHECK_GE(thr_beg, tls_addr);
+  CHECK_LE(thr_beg, tls_addr + tls_size);
+  CHECK_GE(thr_end, tls_addr);
+  CHECK_LE(thr_end, tls_addr + tls_size);
+  // Since the thr object is huge, skip it.
+  MemoryRangeImitateWrite(thr, /*pc=*/2, tls_addr, thr_beg - tls_addr);
+  MemoryRangeImitateWrite(thr, /*pc=*/2, thr_end,
+                          tls_addr + tls_size - thr_end);
+}
+
 // Note: this function runs with async signals enabled,
 // so it must not touch any tsan state.
 int call_pthread_cancel_with_cleanup(int(*fn)(void *c, void *m,
@@ -341,36 +370,22 @@ void ReplaceSystemMalloc() { }
 
 #if !SANITIZER_GO
 #if SANITIZER_ANDROID
-
-#if defined(__aarch64__)
-# define __get_tls() \
-    ({ void** __val; __asm__("mrs %0, tpidr_el0" : "=r"(__val)); __val; })
-#elif defined(__x86_64__)
-# define __get_tls() \
-    ({ void** __val; __asm__("mov %%fs:0, %0" : "=r"(__val)); __val; })
-#else
-#error unsupported architecture
-#endif
-
-// On Android, __thread is not supported. So we store the pointer to ThreadState
-// in TLS_SLOT_TSAN, which is the tls slot allocated by Android bionic for tsan.
-static const int TLS_SLOT_TSAN = 8;
 // On Android, one thread can call intercepted functions after
 // DestroyThreadState(), so add a fake thread state for "dead" threads.
 static ThreadState *dead_thread_state = nullptr;
 
 ThreadState *cur_thread() {
-  ThreadState* thr = (ThreadState*)__get_tls()[TLS_SLOT_TSAN];
+  ThreadState* thr = reinterpret_cast<ThreadState*>(*get_android_tls_ptr());
   if (thr == nullptr) {
     __sanitizer_sigset_t emptyset;
     internal_sigfillset(&emptyset);
     __sanitizer_sigset_t oldset;
     CHECK_EQ(0, internal_sigprocmask(SIG_SETMASK, &emptyset, &oldset));
-    thr = reinterpret_cast<ThreadState*>(__get_tls()[TLS_SLOT_TSAN]);
+    thr = reinterpret_cast<ThreadState*>(*get_android_tls_ptr());
     if (thr == nullptr) {
       thr = reinterpret_cast<ThreadState*>(MmapOrDie(sizeof(ThreadState),
                                                      "ThreadState"));
-      __get_tls()[TLS_SLOT_TSAN] = thr;
+      *get_android_tls_ptr() = reinterpret_cast<uptr>(thr);
       if (dead_thread_state == nullptr) {
         dead_thread_state = reinterpret_cast<ThreadState*>(
             MmapOrDie(sizeof(ThreadState), "ThreadState"));
@@ -392,9 +407,9 @@ void cur_thread_finalize() {
   internal_sigfillset(&emptyset);
   __sanitizer_sigset_t oldset;
   CHECK_EQ(0, internal_sigprocmask(SIG_SETMASK, &emptyset, &oldset));
-  ThreadState* thr = (ThreadState*)__get_tls()[TLS_SLOT_TSAN];
+  ThreadState* thr = reinterpret_cast<ThreadState*>(*get_android_tls_ptr());
   if (thr != dead_thread_state) {
-    __get_tls()[TLS_SLOT_TSAN] = dead_thread_state;
+    *get_android_tls_ptr() = reinterpret_cast<uptr>(dead_thread_state);
     UnmapOrDie(thr, sizeof(ThreadState));
   }
   CHECK_EQ(0, internal_sigprocmask(SIG_SETMASK, &oldset, nullptr));
@@ -404,4 +419,4 @@ void cur_thread_finalize() {
 
 }  // namespace __tsan
 
-#endif  // SANITIZER_LINUX || SANITIZER_FREEBSD
+#endif  // SANITIZER_LINUX || SANITIZER_FREEBSD || SANITIZER_NETBSD

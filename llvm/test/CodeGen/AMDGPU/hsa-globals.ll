@@ -6,10 +6,10 @@
 @common_global_program = common addrspace(1) global i32 0
 @external_global_program = addrspace(1) global i32 0
 
-@internal_readonly = internal unnamed_addr addrspace(2) constant i32 0
-@external_readonly = unnamed_addr addrspace(2) constant i32 0
+@internal_readonly = internal unnamed_addr addrspace(4) constant i32 0
+@external_readonly = unnamed_addr addrspace(4) constant i32 0
 
-define void @test() {
+define amdgpu_kernel void @test() {
   ret void
 }
 

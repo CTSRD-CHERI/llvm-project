@@ -1,11 +1,21 @@
 // RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 %s
 
+// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 100 %s
+
 int main(int argc, char **argv) {
 #pragma omp cancellation       // expected-error {{expected an OpenMP directive}}
 #pragma omp cancel // expected-error {{one of 'for', 'parallel', 'sections' or 'taskgroup' is expected}}
   ;
+#pragma omp parallel
+  {
+#pragma omp cancel // expected-error {{one of 'for', 'parallel', 'sections' or 'taskgroup' is expected}}
+  }
 #pragma omp cancel parallel untied // expected-error {{unexpected OpenMP clause 'untied' in directive '#pragma omp cancel'}}
 #pragma omp cancel unknown         // expected-error {{one of 'for', 'parallel', 'sections' or 'taskgroup' is expected}}
+#pragma omp parallel
+  {
+#pragma omp cancel unknown         // expected-error {{one of 'for', 'parallel', 'sections' or 'taskgroup' is expected}}
+  }
 #pragma omp cancel sections(       // expected-warning {{extra tokens at the end of '#pragma omp cancel' are ignored}}
 #pragma omp cancel for, )          // expected-warning {{extra tokens at the end of '#pragma omp cancel' are ignored}}
 #pragma omp cancel taskgroup()     // expected-warning {{extra tokens at the end of '#pragma omp cancel' are ignored}}

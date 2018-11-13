@@ -4,6 +4,7 @@
 # RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %p/Inputs/relocatable2.s -o %t3.o
 # RUN: ld.lld -r %t1.o %t2.o %t3.o -o %t
 # RUN: llvm-readobj -file-headers -sections -program-headers -symbols -r %t | FileCheck %s
+# RUN: llvm-objdump -section-headers %t | FileCheck -check-prefix=SECTION %s
 # RUN: llvm-objdump -s -d %t | FileCheck -check-prefix=CHECKTEXT %s
 
 ## Test --relocatable alias
@@ -30,15 +31,15 @@
 # CHECK-NEXT:  Version: 1
 # CHECK-NEXT:  Entry: 0x0
 # CHECK-NEXT:  ProgramHeaderOffset: 0x0
-# CHECK-NEXT:  SectionHeaderOffset: 0x2C0
+# CHECK-NEXT:  SectionHeaderOffset:
 # CHECK-NEXT:  Flags [
 # CHECK-NEXT:  ]
 # CHECK-NEXT:  HeaderSize: 64
 # CHECK-NEXT:  ProgramHeaderEntrySize: 0
 # CHECK-NEXT:  ProgramHeaderCount: 0
 # CHECK-NEXT:  SectionHeaderEntrySize: 64
-# CHECK-NEXT:  SectionHeaderCount: 7
-# CHECK-NEXT:  StringTableSectionIndex: 5
+# CHECK-NEXT:  SectionHeaderCount: 8
+# CHECK-NEXT:  StringTableSectionIndex: 6
 # CHECK-NEXT:  }
 
 # CHECK:       Relocations [
@@ -50,6 +51,17 @@
 # CHECK-NEXT:    0x43 R_X86_64_32S xxx 0x0
 # CHECK-NEXT:    0x4E R_X86_64_32S yyy 0x0
 # CHECK-NEXT:  }
+
+# SECTION: Sections:
+# SECTION: Idx Name          Size      Address          Type
+# SECTION:   0               00000000 0000000000000000
+# SECTION:   1 .text         00000056 0000000000000000 TEXT
+# SECTION:   2 .rela.text    00000090 0000000000000000
+# SECTION:   3 .bss          00000018 0000000000000000 BSS
+# SECTION:   4 .note.GNU-stack 00000000 0000000000000000
+# SECTION:   5 .symtab       00000168 0000000000000000
+# SECTION:   6 .shstrtab     00000041 0000000000000000
+# SECTION:   7 .strtab       0000002d 0000000000000000
 
 # CHECKTEXT:      Disassembly of section .text:
 # CHECKTEXT-NEXT: main:
@@ -79,9 +91,9 @@
 # CHECKEXE-NEXT:    Type: Executable
 # CHECKEXE-NEXT:    Machine: EM_X86_64
 # CHECKEXE-NEXT:    Version: 1
-# CHECKEXE-NEXT:    Entry: 0x11000
+# CHECKEXE-NEXT:    Entry: 0x201000
 # CHECKEXE-NEXT:    ProgramHeaderOffset: 0x40
-# CHECKEXE-NEXT:    SectionHeaderOffset: 0x11F8
+# CHECKEXE-NEXT:    SectionHeaderOffset: 0x21A0
 # CHECKEXE-NEXT:    Flags [
 # CHECKEXE-NEXT:    ]
 # CHECKEXE-NEXT:    HeaderSize: 64

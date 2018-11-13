@@ -1,12 +1,13 @@
 ; REQUIRES: asserts
 ; RUN: opt -loop-unswitch -disable-output -stats -info-output-file - < %s | FileCheck --check-prefix=STATS %s
+; RUN: opt -loop-unswitch -enable-mssa-loop-dependency=true -verify-memoryssa -disable-output -stats -info-output-file - < %s | FileCheck --check-prefix=STATS %s
 ; RUN: opt -loop-unswitch -simplifycfg -S < %s | FileCheck %s
 ; PR5373
 
 ; Loop unswitching shouldn't trivially unswitch the true case of condition %a
 ; in the code here because it leads to an infinite loop. While this doesn't
 ; contain any instructions with side effects, it's still a kind of side effect.
-; It can trivially unswitch on the false cas of condition %a though.
+; It can trivially unswitch on the false case of condition %a though.
 
 ; STATS: 2 loop-unswitch - Number of branches unswitched
 ; STATS: 2 loop-unswitch - Number of unswitches that are trivial

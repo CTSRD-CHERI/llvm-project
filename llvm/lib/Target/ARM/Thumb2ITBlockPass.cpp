@@ -9,13 +9,26 @@
 
 #include "ARM.h"
 #include "ARMMachineFunctionInfo.h"
+#include "ARMSubtarget.h"
+#include "MCTargetDesc/ARMBaseInfo.h"
 #include "Thumb2InstrInfo.h"
 #include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineInstrBundle.h"
+#include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/IR/DebugLoc.h"
+#include "llvm/MC/MCInstrDesc.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include <cassert>
+#include <new>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "thumb2-it"
@@ -24,15 +37,17 @@ STATISTIC(NumITs,        "Number of IT blocks inserted");
 STATISTIC(NumMovedInsts, "Number of predicated instructions moved");
 
 namespace {
+
   class Thumb2ITBlockPass : public MachineFunctionPass {
   public:
     static char ID;
-    Thumb2ITBlockPass() : MachineFunctionPass(ID) {}
 
     bool restrictIT;
     const Thumb2InstrInfo *TII;
     const TargetRegisterInfo *TRI;
     ARMFunctionInfo *AFI;
+
+    Thumb2ITBlockPass() : MachineFunctionPass(ID) {}
 
     bool runOnMachineFunction(MachineFunction &Fn) override;
 
@@ -52,8 +67,10 @@ namespace {
                               SmallSet<unsigned, 4> &Uses);
     bool InsertITInstructions(MachineBasicBlock &MBB);
   };
+
   char Thumb2ITBlockPass::ID = 0;
-}
+
+} // end anonymous namespace
 
 /// TrackDefUses - Tracking what registers are being defined and used by
 /// instructions in the IT block. This also tracks "dependencies", i.e. uses
@@ -166,7 +183,7 @@ Thumb2ITBlockPass::MoveCopyOutOfITBlock(MachineInstr *MI,
   // If not, then there is nothing to be gained by moving the copy.
   MachineBasicBlock::iterator I = MI; ++I;
   MachineBasicBlock::iterator E = MI->getParent()->end();
-  while (I != E && I->isDebugValue())
+  while (I != E && I->isDebugInstr())
     ++I;
   if (I != E) {
     unsigned NPredReg = 0;
@@ -220,7 +237,7 @@ bool Thumb2ITBlockPass::InsertITInstructions(MachineBasicBlock &MBB) {
       // block so check the instruction we just put in the block.
       for (; MBBI != E && Pos &&
              (!MI->isBranch() && !MI->isReturn()) ; ++MBBI) {
-        if (MBBI->isDebugValue())
+        if (MBBI->isDebugInstr())
           continue;
 
         MachineInstr *NMI = &*MBBI;

@@ -16,16 +16,22 @@
 //   sort(Iter first, Iter last);
 
 #include <algorithm>
+#include <iterator>
+#include <random>
 #include <cassert>
+
+std::mt19937 randomness;
 
 template <class RI>
 void
 test_sort_helper(RI f, RI l)
 {
     typedef typename std::iterator_traits<RI>::value_type value_type;
+    typedef typename std::iterator_traits<RI>::difference_type difference_type;
+
     if (f != l)
     {
-        long len = l - f;
+        difference_type len = l - f;
         value_type* save(new value_type[len]);
         do
         {
@@ -60,7 +66,7 @@ test_sort_driver(RI f, RI l, int start)
     test_sort_driver_driver(f, l, start, l);
 }
 
-template <unsigned sa>
+template <int sa>
 void
 test_sort_()
 {
@@ -72,7 +78,7 @@ test_sort_()
 }
 
 void
-test_larger_sorts(unsigned N, unsigned M)
+test_larger_sorts(int N, int M)
 {
     assert(N != 0);
     assert(M != 0);
@@ -89,7 +95,7 @@ test_larger_sorts(unsigned N, unsigned M)
     std::sort(array, array+N);
     assert(std::is_sorted(array, array+N));
     // test random pattern
-    std::random_shuffle(array, array+N);
+    std::shuffle(array, array+N, randomness);
     std::sort(array, array+N);
     assert(std::is_sorted(array, array+N));
     // test sorted pattern
@@ -112,7 +118,7 @@ test_larger_sorts(unsigned N, unsigned M)
 }
 
 void
-test_larger_sorts(unsigned N)
+test_larger_sorts(int N)
 {
     test_larger_sorts(N, 1);
     test_larger_sorts(N, 2);

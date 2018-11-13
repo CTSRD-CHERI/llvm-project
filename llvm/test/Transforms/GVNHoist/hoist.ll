@@ -8,8 +8,8 @@ target triple = "x86_64-unknown-linux-gnu"
 ;
 ; CHECK-LABEL: @scalarsHoisting
 ; CHECK: fsub
-; CHECK: fsub
 ; CHECK: fmul
+; CHECK: fsub
 ; CHECK: fmul
 ; CHECK-NOT: fmul
 ; CHECK-NOT: fsub
@@ -48,8 +48,8 @@ if.end:                                           ; preds = %if.else, %if.then
 ; CHECK: load
 ; CHECK: load
 ; CHECK: fsub
-; CHECK: fsub
 ; CHECK: fmul
+; CHECK: fsub
 ; CHECK: fmul
 ; CHECK-NOT: load
 ; CHECK-NOT: fmul
@@ -148,8 +148,8 @@ if.end:                                           ; preds = %if.else, %if.then
 ; CHECK: load
 ; CHECK: load
 ; CHECK: fsub
-; CHECK: fsub
 ; CHECK: fmul
+; CHECK: fsub
 ; CHECK: fmul
 ; CHECK-NOT: load
 ; CHECK-NOT: fmul
@@ -265,8 +265,8 @@ if.end:
 ; CHECK: load
 ; CHECK: load
 ; CHECK: fsub
-; CHECK: fsub
 ; CHECK: fmul
+; CHECK: fsub
 ; CHECK: fmul
 ; CHECK-NOT: load
 ; CHECK-NOT: fmul
@@ -300,106 +300,6 @@ if.end:                                          ; preds = %entry
 
   %x = fadd float %p1, %mul6
   %y = fadd float %p2, %mul4
-  %z = fadd float %x, %y
-  ret float %z
-}
-
-; Check that we hoist load and scalar expressions in dominator.
-; CHECK-LABEL: @dominatorHoisting
-; CHECK: load
-; CHECK: load
-; CHECK: fsub
-; CHECK: fmul
-; CHECK: load
-; CHECK: fsub
-; CHECK: fmul
-; CHECK-NOT: load
-; CHECK-NOT: fmul
-; CHECK-NOT: fsub
-define float @dominatorHoisting(float %d, float* %min, float* %max, float* %a) {
-entry:
-  %div = fdiv float 1.000000e+00, %d
-  %0 = load float, float* %min, align 4
-  %1 = load float, float* %a, align 4
-  %sub = fsub float %0, %1
-  %mul = fmul float %sub, %div
-  %2 = load float, float* %max, align 4
-  %sub1 = fsub float %2, %1
-  %mul2 = fmul float %sub1, %div
-  %cmp = fcmp oge float %div, 0.000000e+00
-  br i1 %cmp, label %if.then, label %if.end
-
-if.then:                                          ; preds = %entry
-  %3 = load float, float* %max, align 4
-  %4 = load float, float* %a, align 4
-  %sub3 = fsub float %3, %4
-  %mul4 = fmul float %sub3, %div
-  %5 = load float, float* %min, align 4
-  %sub5 = fsub float %5, %4
-  %mul6 = fmul float %sub5, %div
-  br label %if.end
-
-if.end:                                          ; preds = %entry
-  %p1 = phi float [ %mul4, %if.then ], [ 0.000000e+00, %entry ]
-  %p2 = phi float [ %mul6, %if.then ], [ 0.000000e+00, %entry ]
-
-  %x = fadd float %p1, %mul2
-  %y = fadd float %p2, %mul
-  %z = fadd float %x, %y
-  ret float %z
-}
-
-; Check that we hoist load and scalar expressions in dominator.
-; CHECK-LABEL: @domHoisting
-; CHECK: load
-; CHECK: load
-; CHECK: fsub
-; CHECK: fmul
-; CHECK: load
-; CHECK: fsub
-; CHECK: fmul
-; CHECK-NOT: load
-; CHECK-NOT: fmul
-; CHECK-NOT: fsub
-define float @domHoisting(float %d, float* %min, float* %max, float* %a) {
-entry:
-  %div = fdiv float 1.000000e+00, %d
-  %0 = load float, float* %min, align 4
-  %1 = load float, float* %a, align 4
-  %sub = fsub float %0, %1
-  %mul = fmul float %sub, %div
-  %2 = load float, float* %max, align 4
-  %sub1 = fsub float %2, %1
-  %mul2 = fmul float %sub1, %div
-  %cmp = fcmp oge float %div, 0.000000e+00
-  br i1 %cmp, label %if.then, label %if.else
-
-if.then:
-  %3 = load float, float* %max, align 4
-  %4 = load float, float* %a, align 4
-  %sub3 = fsub float %3, %4
-  %mul4 = fmul float %sub3, %div
-  %5 = load float, float* %min, align 4
-  %sub5 = fsub float %5, %4
-  %mul6 = fmul float %sub5, %div
-  br label %if.end
-
-if.else:
-  %6 = load float, float* %max, align 4
-  %7 = load float, float* %a, align 4
-  %sub9 = fsub float %6, %7
-  %mul10 = fmul float %sub9, %div
-  %8 = load float, float* %min, align 4
-  %sub12 = fsub float %8, %7
-  %mul13 = fmul float %sub12, %div
-  br label %if.end
-
-if.end:
-  %p1 = phi float [ %mul4, %if.then ], [ %mul10, %if.else ]
-  %p2 = phi float [ %mul6, %if.then ], [ %mul13, %if.else ]
-
-  %x = fadd float %p1, %mul2
-  %y = fadd float %p2, %mul
   %z = fadd float %x, %y
   ret float %z
 }
@@ -711,3 +611,36 @@ return:                                           ; preds = %if.end, %if.then
 ; CHECK: %[[load:.*]] = load i32, i32* %y, align 1
 ; CHECK: %[[phi:.*]] = phi i32 [ %[[load]], %{{.*}} ], [ %[[load]], %{{.*}} ]
 ; CHECK: i32 %[[phi]]
+
+
+declare i8 @pr30991_f() nounwind readonly
+declare void @pr30991_f1(i8)
+define i8 @pr30991(i8* %sp, i8* %word, i1 %b1, i1 %b2) {
+entry:
+  br i1 %b1, label %a, label %b
+
+a:
+  %r0 = load i8, i8* %word, align 1
+  %incdec.ptr = getelementptr i8, i8* %sp, i32 1
+  %rr0 = call i8 @pr30991_f() nounwind readonly
+  call void @pr30991_f1(i8 %r0)
+  ret i8 %rr0
+
+b:
+  br i1 %b2, label %c, label %x
+
+c:
+  %r1 = load i8, i8* %word, align 1
+  %incdec.ptr115 = getelementptr i8, i8* %sp, i32 1
+  %rr1 = call i8 @pr30991_f() nounwind readonly
+  call void @pr30991_f1(i8 %r1)
+  ret i8 %rr1
+
+x:
+  %r2 = load i8, i8* %word, align 1
+  ret i8 %r2
+}
+
+; CHECK-LABEL: define i8 @pr30991
+; CHECK:  %r0 = load i8, i8* %word, align 1
+; CHECK-NEXT:  br i1 %b1, label %a, label %b

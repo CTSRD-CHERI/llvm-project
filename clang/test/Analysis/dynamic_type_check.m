@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core,alpha.core.DynamicTypeChecker -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,alpha.core.DynamicTypeChecker -verify %s
 
 
 #define nil 0
@@ -36,7 +36,7 @@ void testTypeCheck(NSString* str) {
 
 void testForwardDeclarations(NSString* str) {
   id obj = str;
-  // Do not warn, since no information is available wether MyType is a sub or
+  // Do not warn, since no information is available whether MyType is a sub or
   // super class of any other type.
   MyType *num = obj; // no warning
   (void)num;

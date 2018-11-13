@@ -27,7 +27,7 @@ lexer, parser, AST, and LLVM code emitter. This example is nice, because
 it shows how easy it is to "grow" a language over time, incrementally
 extending it as new ideas are discovered.
 
-Before we get going on "how" we add this extension, lets talk about
+Before we get going on "how" we add this extension, let's talk about
 "what" we want. The basic idea is that we want to be able to write this
 sort of thing:
 
@@ -54,7 +54,7 @@ false, the second subexpression is evaluated and returned. Since
 Kaleidoscope allows side-effects, this behavior is important to nail
 down.
 
-Now that we know what we "want", lets break this down into its
+Now that we know what we "want", let's break this down into its
 constituent pieces.
 
 Lexer Extensions for If/Then/Else
@@ -103,7 +103,8 @@ To represent the new expression we add a new AST node for it:
       IfExprAST(std::unique_ptr<ExprAST> Cond, std::unique_ptr<ExprAST> Then,
                 std::unique_ptr<ExprAST> Else)
         : Cond(std::move(Cond)), Then(std::move(Then)), Else(std::move(Else)) {}
-      virtual Value *codegen();
+
+      Value *codegen() override;
     };
 
 The AST node just has pointers to the various subexpressions.
@@ -175,7 +176,7 @@ of the if/then/else example, because this is where it starts to
 introduce new concepts. All of the code above has been thoroughly
 described in previous chapters.
 
-To motivate the code we want to produce, lets take a look at a simple
+To motivate the code we want to produce, let's take a look at a simple
 example. Consider:
 
 ::
@@ -268,14 +269,14 @@ Phi nodes:
 #. Values that are implicit in the structure of your AST, such as the
    Phi node in this case.
 
-In `Chapter 7 <LangImpl7.html>`_ of this tutorial ("mutable variables"),
+In `Chapter 7 <LangImpl07.html>`_ of this tutorial ("mutable variables"),
 we'll talk about #1 in depth. For now, just believe me that you don't
 need SSA construction to handle this case. For #2, you have the choice
 of using the techniques that we will describe for #1, or you can insert
 Phi nodes directly, if convenient. In this case, it is really
 easy to generate the Phi node, so we choose to do it directly.
 
-Okay, enough of the motivation and overview, lets generate code!
+Okay, enough of the motivation and overview, let's generate code!
 
 Code Generation for If/Then/Else
 --------------------------------
@@ -290,9 +291,9 @@ for ``IfExprAST``:
       if (!CondV)
         return nullptr;
 
-      // Convert condition to a bool by comparing equal to 0.0.
+      // Convert condition to a bool by comparing non-equal to 0.0.
       CondV = Builder.CreateFCmpONE(
-          CondV, ConstantFP::get(LLVMContext, APFloat(0.0)), "ifcond");
+          CondV, ConstantFP::get(TheContext, APFloat(0.0)), "ifcond");
 
 This code is straightforward and similar to what we saw before. We emit
 the expression for the condition, then compare that value to zero to get
@@ -305,9 +306,9 @@ a truth value as a 1-bit (bool) value.
       // Create blocks for the then and else cases.  Insert the 'then' block at the
       // end of the function.
       BasicBlock *ThenBB =
-          BasicBlock::Create(LLVMContext, "then", TheFunction);
-      BasicBlock *ElseBB = BasicBlock::Create(LLVMContext, "else");
-      BasicBlock *MergeBB = BasicBlock::Create(LLVMContext, "ifcont");
+          BasicBlock::Create(TheContext, "then", TheFunction);
+      BasicBlock *ElseBB = BasicBlock::Create(TheContext, "else");
+      BasicBlock *MergeBB = BasicBlock::Create(TheContext, "ifcont");
 
       Builder.CreateCondBr(CondV, ThenBB, ElseBB);
 
@@ -400,7 +401,7 @@ code:
       TheFunction->getBasicBlockList().push_back(MergeBB);
       Builder.SetInsertPoint(MergeBB);
       PHINode *PN =
-        Builder.CreatePHI(Type::getDoubleTy(LLVMContext), 2, "iftmp");
+        Builder.CreatePHI(Type::getDoubleTy(TheContext), 2, "iftmp");
 
       PN->addIncoming(ThenV, ThenBB);
       PN->addIncoming(ElseV, ElseBB);
@@ -428,12 +429,12 @@ languages...
 =====================
 
 Now that we know how to add basic control flow constructs to the
-language, we have the tools to add more powerful things. Lets add
+language, we have the tools to add more powerful things. Let's add
 something more aggressive, a 'for' expression:
 
 ::
 
-     extern putchard(char)
+     extern putchard(char);
      def printstar(n)
        for i = 1, i < n, 1.0 in
          putchard(42);  # ascii 42 = '*'
@@ -449,7 +450,7 @@ it executes its body expression. Because we don't have anything better
 to return, we'll just define the loop as always returning 0.0. In the
 future when we have mutable variables, it will get more useful.
 
-As before, lets talk about the changes that we need to Kaleidoscope to
+As before, let's talk about the changes that we need to Kaleidoscope to
 support this.
 
 Lexer Extensions for the 'for' Loop
@@ -500,7 +501,8 @@ variable name and the constituent expressions in the node.
                  std::unique_ptr<ExprAST> Body)
         : VarName(VarName), Start(std::move(Start)), End(std::move(End)),
           Step(std::move(Step)), Body(std::move(Body)) {}
-      virtual Value *codegen();
+
+      Value *codegen() override;
     };
 
 Parser Extensions for the 'for' Loop
@@ -561,6 +563,27 @@ value to null in the AST node:
                                            std::move(Body));
     }
 
+And again we hook it up as a primary expression:
+
+.. code-block:: c++
+
+    static std::unique_ptr<ExprAST> ParsePrimary() {
+      switch (CurTok) {
+      default:
+        return LogError("unknown token when expecting an expression");
+      case tok_identifier:
+        return ParseIdentifierExpr();
+      case tok_number:
+        return ParseNumberExpr();
+      case '(':
+        return ParseParenExpr();
+      case tok_if:
+        return ParseIfExpr();
+      case tok_for:
+        return ParseForExpr();
+      }
+    }
+
 LLVM IR for the 'for' Loop
 --------------------------
 
@@ -596,7 +619,7 @@ this dump is generated with optimizations disabled for clarity):
     }
 
 This loop contains all the same constructs we saw before: a phi node,
-several expressions, and some basic blocks. Lets see how this fits
+several expressions, and some basic blocks. Let's see how this fits
 together.
 
 Code Generation for the 'for' Loop
@@ -610,7 +633,8 @@ expression for the loop value:
     Value *ForExprAST::codegen() {
       // Emit the start code first, without 'variable' in scope.
       Value *StartVal = Start->codegen();
-      if (StartVal == 0) return 0;
+      if (!StartVal)
+        return nullptr;
 
 With this out of the way, the next step is to set up the LLVM basic
 block for the start of the loop body. In the case above, the whole loop
@@ -625,7 +649,7 @@ expression).
       Function *TheFunction = Builder.GetInsertBlock()->getParent();
       BasicBlock *PreheaderBB = Builder.GetInsertBlock();
       BasicBlock *LoopBB =
-          BasicBlock::Create(LLVMContext, "loop", TheFunction);
+          BasicBlock::Create(TheContext, "loop", TheFunction);
 
       // Insert an explicit fall through from the current block to the LoopBB.
       Builder.CreateBr(LoopBB);
@@ -642,7 +666,7 @@ the two blocks.
       Builder.SetInsertPoint(LoopBB);
 
       // Start the PHI node with an entry for Start.
-      PHINode *Variable = Builder.CreatePHI(Type::getDoubleTy(LLVMContext),
+      PHINode *Variable = Builder.CreatePHI(Type::getDoubleTy(TheContext),
                                             2, VarName.c_str());
       Variable->addIncoming(StartVal, PreheaderBB);
 
@@ -693,7 +717,7 @@ table.
           return nullptr;
       } else {
         // If not specified, use 1.0.
-        StepVal = ConstantFP::get(LLVMContext, APFloat(1.0));
+        StepVal = ConstantFP::get(TheContext, APFloat(1.0));
       }
 
       Value *NextVar = Builder.CreateFAdd(Variable, StepVal, "nextvar");
@@ -710,9 +734,9 @@ iteration of the loop.
       if (!EndCond)
         return nullptr;
 
-      // Convert condition to a bool by comparing equal to 0.0.
+      // Convert condition to a bool by comparing non-equal to 0.0.
       EndCond = Builder.CreateFCmpONE(
-          EndCond, ConstantFP::get(LLVMContext, APFloat(0.0)), "loopcond");
+          EndCond, ConstantFP::get(TheContext, APFloat(0.0)), "loopcond");
 
 Finally, we evaluate the exit value of the loop, to determine whether
 the loop should exit. This mirrors the condition evaluation for the
@@ -723,7 +747,7 @@ if/then/else statement.
       // Create the "after loop" block and insert it.
       BasicBlock *LoopEndBB = Builder.GetInsertBlock();
       BasicBlock *AfterBB =
-          BasicBlock::Create(LLVMContext, "afterloop", TheFunction);
+          BasicBlock::Create(TheContext, "afterloop", TheFunction);
 
       // Insert the conditional branch into the end of LoopEndBB.
       Builder.CreateCondBr(EndCond, LoopBB, AfterBB);
@@ -751,7 +775,7 @@ insertion position to it.
         NamedValues.erase(VarName);
 
       // for expr always returns 0.0.
-      return Constant::getNullValue(Type::getDoubleTy(LLVMContext));
+      return Constant::getNullValue(Type::getDoubleTy(TheContext));
     }
 
 The final code handles various cleanups: now that we have the "NextVar"
@@ -766,13 +790,13 @@ of the tutorial. In this chapter we added two control flow constructs,
 and used them to motivate a couple of aspects of the LLVM IR that are
 important for front-end implementors to know. In the next chapter of our
 saga, we will get a bit crazier and add `user-defined
-operators <LangImpl6.html>`_ to our poor innocent language.
+operators <LangImpl06.html>`_ to our poor innocent language.
 
 Full Code Listing
 =================
 
 Here is the complete code listing for our running example, enhanced with
-the if/then/else and for expressions.. To build this example, use:
+the if/then/else and for expressions. To build this example, use:
 
 .. code-block:: bash
 

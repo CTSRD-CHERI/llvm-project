@@ -6,8 +6,10 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+//
 /// \file
-/// \brief Defines the virtual file system interface vfs::FileSystem.
+/// Defines the virtual file system interface vfs::FileSystem.
+//
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_BASIC_VIRTUALFILESYSTEM_H
@@ -15,22 +17,35 @@
 
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/IntrusiveRefCntPtr.h"
+#include "llvm/ADT/None.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
 #include "llvm/Support/Chrono.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/SourceMgr.h"
-#include "llvm/Support/raw_ostream.h"
+#include <cassert>
+#include <cstdint>
+#include <ctime>
+#include <memory>
+#include <stack>
+#include <string>
+#include <system_error>
 #include <utility>
+#include <vector>
 
 namespace llvm {
+
 class MemoryBuffer;
-}
+
+} // namespace llvm
 
 namespace clang {
 namespace vfs {
 
-/// \brief The result of a \p status operation.
+/// The result of a \p status operation.
 class Status {
   std::string Name;
   llvm::sys::fs::UniqueID UID;
@@ -38,14 +53,14 @@ class Status {
   uint32_t User;
   uint32_t Group;
   uint64_t Size;
-  llvm::sys::fs::file_type Type;
+  llvm::sys::fs::file_type Type = llvm::sys::fs::file_type::status_error;
   llvm::sys::fs::perms Perms;
 
 public:
-  bool IsVFSMapped; // FIXME: remove when files support multiple names
+   // FIXME: remove when files support multiple names
+  bool IsVFSMapped = false;
 
-public:
-  Status() : Type(llvm::sys::fs::file_type::status_error) {}
+  Status() = default;
   Status(const llvm::sys::fs::file_status &Status);
   Status(StringRef Name, llvm::sys::fs::UniqueID UID,
          llvm::sys::TimePoint<> MTime, uint32_t User, uint32_t Group,
@@ -57,7 +72,7 @@ public:
   static Status copyWithNewName(const llvm::sys::fs::file_status &In,
                                 StringRef NewName);
 
-  /// \brief Returns the name that should be used for this file or directory.
+  /// Returns the name that should be used for this file or directory.
   StringRef getName() const { return Name; }
 
   /// @name Status interface from llvm::sys::fs
@@ -83,43 +98,66 @@ public:
   /// @}
 };
 
-/// \brief Represents an open file.
+/// Represents an open file.
 class File {
 public:
-  /// \brief Destroy the file after closing it (if open).
+  /// Destroy the file after closing it (if open).
   /// Sub-classes should generally call close() inside their destructors.  We
   /// cannot do that from the base class, since close is virtual.
   virtual ~File();
-  /// \brief Get the status of the file.
+
+  /// Get the status of the file.
   virtual llvm::ErrorOr<Status> status() = 0;
-  /// \brief Get the name of the file
+
+  /// Get the name of the file
   virtual llvm::ErrorOr<std::string> getName() {
     if (auto Status = status())
       return Status->getName().str();
     else
       return Status.getError();
   }
-  /// \brief Get the contents of the file as a \p MemoryBuffer.
+
+  /// Get the contents of the file as a \p MemoryBuffer.
   virtual llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>>
   getBuffer(const Twine &Name, int64_t FileSize = -1,
             bool RequiresNullTerminator = true, bool IsVolatile = false) = 0;
-  /// \brief Closes the file.
+
+  /// Closes the file.
   virtual std::error_code close() = 0;
 };
 
+/// A member of a directory, yielded by a directory_iterator.
+/// Only information available on most platforms is included.
+class directory_entry {
+  std::string Path;
+  llvm::sys::fs::file_type Type;
+
+public:
+  directory_entry() = default;
+  directory_entry(std::string Path, llvm::sys::fs::file_type Type)
+      : Path(std::move(Path)), Type(Type) {}
+
+  llvm::StringRef path() const { return Path; }
+  llvm::sys::fs::file_type type() const { return Type; }
+};
+
 namespace detail {
-/// \brief An interface for virtual file systems to provide an iterator over the
+
+/// An interface for virtual file systems to provide an iterator over the
 /// (non-recursive) contents of a directory.
 struct DirIterImpl {
   virtual ~DirIterImpl();
-  /// \brief Sets \c CurrentEntry to the next entry in the directory on success,
-  /// or returns a system-defined \c error_code.
-  virtual std::error_code increment() = 0;
-  Status CurrentEntry;
-};
-} // end namespace detail
 
-/// \brief An input iterator over the entries in a virtual path, similar to
+  /// Sets \c CurrentEntry to the next entry in the directory on success,
+  /// to directory_entry() at end,  or returns a system-defined \c error_code.
+  virtual std::error_code increment() = 0;
+
+  directory_entry CurrentEntry;
+};
+
+} // namespace detail
+
+/// An input iterator over the entries in a virtual path, similar to
 /// llvm::sys::fs::directory_iterator.
 class directory_iterator {
   std::shared_ptr<detail::DirIterImpl> Impl; // Input iterator semantics on copy
@@ -128,28 +166,28 @@ public:
   directory_iterator(std::shared_ptr<detail::DirIterImpl> I)
       : Impl(std::move(I)) {
     assert(Impl.get() != nullptr && "requires non-null implementation");
-    if (!Impl->CurrentEntry.isStatusKnown())
+    if (Impl->CurrentEntry.path().empty())
       Impl.reset(); // Normalize the end iterator to Impl == nullptr.
   }
 
-  /// \brief Construct an 'end' iterator.
-  directory_iterator() { }
+  /// Construct an 'end' iterator.
+  directory_iterator() = default;
 
-  /// \brief Equivalent to operator++, with an error code.
+  /// Equivalent to operator++, with an error code.
   directory_iterator &increment(std::error_code &EC) {
     assert(Impl && "attempting to increment past end");
     EC = Impl->increment();
-    if (EC || !Impl->CurrentEntry.isStatusKnown())
+    if (Impl->CurrentEntry.path().empty())
       Impl.reset(); // Normalize the end iterator to Impl == nullptr.
     return *this;
   }
 
-  const Status &operator*() const { return Impl->CurrentEntry; }
-  const Status *operator->() const { return &Impl->CurrentEntry; }
+  const directory_entry &operator*() const { return Impl->CurrentEntry; }
+  const directory_entry *operator->() const { return &Impl->CurrentEntry; }
 
   bool operator==(const directory_iterator &RHS) const {
     if (Impl && RHS.Impl)
-      return Impl->CurrentEntry.equivalent(RHS.Impl->CurrentEntry);
+      return Impl->CurrentEntry.path() == RHS.Impl->CurrentEntry.path();
     return !Impl && !RHS.Impl;
   }
   bool operator!=(const directory_iterator &RHS) const {
@@ -159,11 +197,11 @@ public:
 
 class FileSystem;
 
-/// \brief An input iterator over the recursive contents of a virtual path,
+/// An input iterator over the recursive contents of a virtual path,
 /// similar to llvm::sys::fs::recursive_directory_iterator.
 class recursive_directory_iterator {
-  typedef std::stack<directory_iterator, std::vector<directory_iterator>>
-      IterState;
+  using IterState =
+      std::stack<directory_iterator, std::vector<directory_iterator>>;
 
   FileSystem *FS;
   std::shared_ptr<IterState> State; // Input iterator semantics on copy.
@@ -171,14 +209,15 @@ class recursive_directory_iterator {
 public:
   recursive_directory_iterator(FileSystem &FS, const Twine &Path,
                                std::error_code &EC);
-  /// \brief Construct an 'end' iterator.
-  recursive_directory_iterator() { }
 
-  /// \brief Equivalent to operator++, with an error code.
+  /// Construct an 'end' iterator.
+  recursive_directory_iterator() = default;
+
+  /// Equivalent to operator++, with an error code.
   recursive_directory_iterator &increment(std::error_code &EC);
 
-  const Status &operator*() const { return *State->top(); }
-  const Status *operator->() const { return &*State->top(); }
+  const directory_entry &operator*() const { return *State->top(); }
+  const directory_entry *operator->() const { return &*State->top(); }
 
   bool operator==(const recursive_directory_iterator &Other) const {
     return State == Other.State; // identity
@@ -186,21 +225,23 @@ public:
   bool operator!=(const recursive_directory_iterator &RHS) const {
     return !(*this == RHS);
   }
-  /// \brief Gets the current level. Starting path is at level 0.
+
+  /// Gets the current level. Starting path is at level 0.
   int level() const {
-    assert(State->size() && "Cannot get level without any iteration state");
+    assert(!State->empty() && "Cannot get level without any iteration state");
     return State->size()-1;
   }
 };
 
-/// \brief The virtual file system interface.
+/// The virtual file system interface.
 class FileSystem : public llvm::ThreadSafeRefCountedBase<FileSystem> {
 public:
   virtual ~FileSystem();
 
-  /// \brief Get the status of the entry at \p Path, if one exists.
+  /// Get the status of the entry at \p Path, if one exists.
   virtual llvm::ErrorOr<Status> status(const Twine &Path) = 0;
-  /// \brief Get a \p File object for the file at \p Path, if one exists.
+
+  /// Get a \p File object for the file at \p Path, if one exists.
   virtual llvm::ErrorOr<std::unique_ptr<File>>
   openFileForRead(const Twine &Path) = 0;
 
@@ -210,7 +251,7 @@ public:
   getBufferForFile(const Twine &Name, int64_t FileSize = -1,
                    bool RequiresNullTerminator = true, bool IsVolatile = false);
 
-  /// \brief Get a directory_iterator for \p Dir.
+  /// Get a directory_iterator for \p Dir.
   /// \note The 'end' iterator is directory_iterator().
   virtual directory_iterator dir_begin(const Twine &Dir,
                                        std::error_code &EC) = 0;
@@ -218,8 +259,15 @@ public:
   /// Set the working directory. This will affect all following operations on
   /// this file system and may propagate down for nested file systems.
   virtual std::error_code setCurrentWorkingDirectory(const Twine &Path) = 0;
+
   /// Get the working directory of this file system.
   virtual llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const = 0;
+
+  /// Gets real path of \p Path e.g. collapse all . and .. patterns, resolve
+  /// symlinks. For real file system, this uses `llvm::sys::fs::real_path`.
+  /// This returns errc::operation_not_permitted if not implemented by subclass.
+  virtual std::error_code getRealPath(const Twine &Path,
+                                      SmallVectorImpl<char> &Output) const;
 
   /// Check whether a file exists. Provided for convenience.
   bool exists(const Twine &Path);
@@ -238,11 +286,11 @@ public:
   std::error_code makeAbsolute(SmallVectorImpl<char> &Path) const;
 };
 
-/// \brief Gets an \p vfs::FileSystem for the 'real' file system, as seen by
+/// Gets an \p vfs::FileSystem for the 'real' file system, as seen by
 /// the operating system.
 IntrusiveRefCntPtr<FileSystem> getRealFileSystem();
 
-/// \brief A file system that allows overlaying one \p AbstractFileSystem on top
+/// A file system that allows overlaying one \p AbstractFileSystem on top
 /// of another.
 ///
 /// Consists of a stack of >=1 \p FileSystem objects, which are treated as being
@@ -253,14 +301,16 @@ IntrusiveRefCntPtr<FileSystem> getRealFileSystem();
 /// that exists in more than one file system, the file in the top-most file
 /// system overrides the other(s).
 class OverlayFileSystem : public FileSystem {
-  typedef SmallVector<IntrusiveRefCntPtr<FileSystem>, 1> FileSystemList;
-  /// \brief The stack of file systems, implemented as a list in order of
+  using FileSystemList = SmallVector<IntrusiveRefCntPtr<FileSystem>, 1>;
+
+  /// The stack of file systems, implemented as a list in order of
   /// their addition.
   FileSystemList FSList;
 
 public:
   OverlayFileSystem(IntrusiveRefCntPtr<FileSystem> Base);
-  /// \brief Pushes a file system on top of the stack.
+
+  /// Pushes a file system on top of the stack.
   void pushOverlay(IntrusiveRefCntPtr<FileSystem> FS);
 
   llvm::ErrorOr<Status> status(const Twine &Path) override;
@@ -269,20 +319,64 @@ public:
   directory_iterator dir_begin(const Twine &Dir, std::error_code &EC) override;
   llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const override;
   std::error_code setCurrentWorkingDirectory(const Twine &Path) override;
+  std::error_code getRealPath(const Twine &Path,
+                              SmallVectorImpl<char> &Output) const override;
 
-  typedef FileSystemList::reverse_iterator iterator;
-  
-  /// \brief Get an iterator pointing to the most recently added file system.
+  using iterator = FileSystemList::reverse_iterator;
+  using const_iterator = FileSystemList::const_reverse_iterator;
+
+  /// Get an iterator pointing to the most recently added file system.
   iterator overlays_begin() { return FSList.rbegin(); }
+  const_iterator overlays_begin() const { return FSList.rbegin(); }
 
-  /// \brief Get an iterator pointing one-past the least recently added file
+  /// Get an iterator pointing one-past the least recently added file
   /// system.
   iterator overlays_end() { return FSList.rend(); }
+  const_iterator overlays_end() const { return FSList.rend(); }
+};
+
+/// By default, this delegates all calls to the underlying file system. This
+/// is useful when derived file systems want to override some calls and still
+/// proxy other calls.
+class ProxyFileSystem : public FileSystem {
+public:
+  explicit ProxyFileSystem(IntrusiveRefCntPtr<FileSystem> FS)
+      : FS(std::move(FS)) {}
+
+  llvm::ErrorOr<Status> status(const Twine &Path) override {
+    return FS->status(Path);
+  }
+  llvm::ErrorOr<std::unique_ptr<File>>
+  openFileForRead(const Twine &Path) override {
+    return FS->openFileForRead(Path);
+  }
+  directory_iterator dir_begin(const Twine &Dir, std::error_code &EC) override {
+    return FS->dir_begin(Dir, EC);
+  }
+  llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const override {
+    return FS->getCurrentWorkingDirectory();
+  }
+  std::error_code setCurrentWorkingDirectory(const Twine &Path) override {
+    return FS->setCurrentWorkingDirectory(Path);
+  }
+  std::error_code getRealPath(const Twine &Path,
+                              SmallVectorImpl<char> &Output) const override {
+    return FS->getRealPath(Path, Output);
+  }
+
+protected:
+  FileSystem &getUnderlyingFS() { return *FS; }
+
+private:
+  IntrusiveRefCntPtr<FileSystem> FS;
 };
 
 namespace detail {
+
 class InMemoryDirectory;
-} // end namespace detail
+class InMemoryFile;
+
+} // namespace detail
 
 /// An in-memory file system.
 class InMemoryFileSystem : public FileSystem {
@@ -290,20 +384,60 @@ class InMemoryFileSystem : public FileSystem {
   std::string WorkingDirectory;
   bool UseNormalizedPaths = true;
 
+  /// If HardLinkTarget is non-null, a hardlink is created to the To path which
+  /// must be a file. If it is null then it adds the file as the public addFile.
+  bool addFile(const Twine &Path, time_t ModificationTime,
+               std::unique_ptr<llvm::MemoryBuffer> Buffer,
+               Optional<uint32_t> User, Optional<uint32_t> Group,
+               Optional<llvm::sys::fs::file_type> Type,
+               Optional<llvm::sys::fs::perms> Perms,
+               const detail::InMemoryFile *HardLinkTarget);
+
 public:
   explicit InMemoryFileSystem(bool UseNormalizedPaths = true);
   ~InMemoryFileSystem() override;
-  /// Add a buffer to the VFS with a path. The VFS owns the buffer.
-  /// \return true if the file was successfully added, false if the file already
-  /// exists in the file system with different contents.
+
+  /// Add a file containing a buffer or a directory to the VFS with a
+  /// path. The VFS owns the buffer.  If present, User, Group, Type
+  /// and Perms apply to the newly-created file or directory.
+  /// \return true if the file or directory was successfully added,
+  /// false if the file or directory already exists in the file system with
+  /// different contents.
   bool addFile(const Twine &Path, time_t ModificationTime,
-               std::unique_ptr<llvm::MemoryBuffer> Buffer);
+               std::unique_ptr<llvm::MemoryBuffer> Buffer,
+               Optional<uint32_t> User = None, Optional<uint32_t> Group = None,
+               Optional<llvm::sys::fs::file_type> Type = None,
+               Optional<llvm::sys::fs::perms> Perms = None);
+
+  /// Add a hard link to a file.
+  /// Here hard links are not intended to be fully equivalent to the classical
+  /// filesystem. Both the hard link and the file share the same buffer and
+  /// status (and thus have the same UniqueID). Because of this there is no way
+  /// to distinguish between the link and the file after the link has been
+  /// added.
+  ///
+  /// The To path must be an existing file or a hardlink. The From file must not
+  /// have been added before. The To Path must not be a directory. The From Node
+  /// is added as a hard link which points to the resolved file of To Node.
+  /// \return true if the above condition is satisfied and hardlink was
+  /// successfully created, false otherwise.
+  bool addHardLink(const Twine &From, const Twine &To);
+
   /// Add a buffer to the VFS with a path. The VFS does not own the buffer.
-  /// \return true if the file was successfully added, false if the file already
-  /// exists in the file system with different contents.
+  /// If present, User, Group, Type and Perms apply to the newly-created file
+  /// or directory.
+  /// \return true if the file or directory was successfully added,
+  /// false if the file or directory already exists in the file system with
+  /// different contents.
   bool addFileNoOwn(const Twine &Path, time_t ModificationTime,
-                    llvm::MemoryBuffer *Buffer);
+                    llvm::MemoryBuffer *Buffer,
+                    Optional<uint32_t> User = None,
+                    Optional<uint32_t> Group = None,
+                    Optional<llvm::sys::fs::file_type> Type = None,
+                    Optional<llvm::sys::fs::perms> Perms = None);
+
   std::string toString() const;
+
   /// Return true if this file system normalizes . and .. in paths.
   bool useNormalizedPaths() const { return UseNormalizedPaths; }
 
@@ -311,16 +445,26 @@ public:
   llvm::ErrorOr<std::unique_ptr<File>>
   openFileForRead(const Twine &Path) override;
   directory_iterator dir_begin(const Twine &Dir, std::error_code &EC) override;
+
   llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const override {
     return WorkingDirectory;
   }
+  /// Canonicalizes \p Path by combining with the current working
+  /// directory and normalizing the path (e.g. remove dots). If the current
+  /// working directory is not set, this returns errc::operation_not_permitted.
+  ///
+  /// This doesn't resolve symlinks as they are not supported in in-memory file
+  /// system.
+  std::error_code getRealPath(const Twine &Path,
+                              SmallVectorImpl<char> &Output) const override;
+
   std::error_code setCurrentWorkingDirectory(const Twine &Path) override;
 };
 
-/// \brief Get a globally unique ID for a virtual file or directory.
+/// Get a globally unique ID for a virtual file or directory.
 llvm::sys::fs::UniqueID getNextVirtualUniqueID();
 
-/// \brief Gets a \p FileSystem for a virtual file system described in YAML
+/// Gets a \p FileSystem for a virtual file system described in YAML
 /// format.
 IntrusiveRefCntPtr<FileSystem>
 getVFSFromYAML(std::unique_ptr<llvm::MemoryBuffer> Buffer,
@@ -336,6 +480,16 @@ struct YAMLVFSEntry {
   std::string RPath;
 };
 
+/// Collect all pairs of <virtual path, real path> entries from the
+/// \p YAMLFilePath. This is used by the module dependency collector to forward
+/// the entries into the reproducer output VFS YAML file.
+void collectVFSFromYAML(
+    std::unique_ptr<llvm::MemoryBuffer> Buffer,
+    llvm::SourceMgr::DiagHandlerTy DiagHandler, StringRef YAMLFilePath,
+    SmallVectorImpl<YAMLVFSEntry> &CollectedEntries,
+    void *DiagContext = nullptr,
+    IntrusiveRefCntPtr<FileSystem> ExternalFS = getRealFileSystem());
+
 class YAMLVFSWriter {
   std::vector<YAMLVFSEntry> Mappings;
   Optional<bool> IsCaseSensitive;
@@ -345,17 +499,22 @@ class YAMLVFSWriter {
   std::string OverlayDir;
 
 public:
-  YAMLVFSWriter() {}
+  YAMLVFSWriter() = default;
+
   void addFileMapping(StringRef VirtualPath, StringRef RealPath);
+
   void setCaseSensitivity(bool CaseSensitive) {
     IsCaseSensitive = CaseSensitive;
   }
+
   void setUseExternalNames(bool UseExtNames) {
     UseExternalNames = UseExtNames;
   }
+
   void setIgnoreNonExistentContents(bool IgnoreContents) {
     IgnoreNonExistentContents = IgnoreContents;
   }
+
   void setOverlayDir(StringRef OverlayDirectory) {
     IsOverlayRelative = true;
     OverlayDir.assign(OverlayDirectory.str());
@@ -364,6 +523,7 @@ public:
   void write(llvm::raw_ostream &OS);
 };
 
-} // end namespace vfs
-} // end namespace clang
-#endif
+} // namespace vfs
+} // namespace clang
+
+#endif // LLVM_CLANG_BASIC_VIRTUALFILESYSTEM_H

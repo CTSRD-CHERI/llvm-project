@@ -12,9 +12,10 @@
 #include "llvm/DebugInfo/PDB/ConcreteSymbolEnumerator.h"
 #include "llvm/DebugInfo/PDB/IPDBEnumChildren.h"
 #include "llvm/DebugInfo/PDB/IPDBSession.h"
-#include "llvm/DebugInfo/PDB/PDBSymbol.h"
-#include "llvm/DebugInfo/PDB/PDBSymbolTypeFunctionArg.h"
 #include "llvm/DebugInfo/PDB/PDBSymDumper.h"
+#include "llvm/DebugInfo/PDB/PDBSymbol.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolTypeBuiltin.h"
+#include "llvm/DebugInfo/PDB/PDBSymbolTypeFunctionArg.h"
 
 #include <utility>
 
@@ -55,23 +56,10 @@ public:
 
   void reset() override { Enumerator->reset(); }
 
-  MyType *clone() const override {
-    std::unique_ptr<ArgEnumeratorType> Clone(Enumerator->clone());
-    return new FunctionArgEnumerator(Session, std::move(Clone));
-  }
-
 private:
   const IPDBSession &Session;
   std::unique_ptr<ArgEnumeratorType> Enumerator;
 };
-}
-
-PDBSymbolTypeFunctionSig::PDBSymbolTypeFunctionSig(
-    const IPDBSession &PDBSession, std::unique_ptr<IPDBRawSymbol> Symbol)
-    : PDBSymbol(PDBSession, std::move(Symbol)) {}
-
-std::unique_ptr<PDBSymbol> PDBSymbolTypeFunctionSig::getReturnType() const {
-  return Session.getSymbolById(getTypeId());
 }
 
 std::unique_ptr<IPDBEnumSymbols>
@@ -79,13 +67,28 @@ PDBSymbolTypeFunctionSig::getArguments() const {
   return llvm::make_unique<FunctionArgEnumerator>(Session, *this);
 }
 
-std::unique_ptr<PDBSymbol> PDBSymbolTypeFunctionSig::getClassParent() const {
-  uint32_t ClassId = getClassParentId();
-  if (ClassId == 0)
-    return nullptr;
-  return Session.getSymbolById(ClassId);
-}
-
 void PDBSymbolTypeFunctionSig::dump(PDBSymDumper &Dumper) const {
   Dumper.dump(*this);
+}
+
+void PDBSymbolTypeFunctionSig::dumpRight(PDBSymDumper &Dumper) const {
+  Dumper.dumpRight(*this);
+}
+
+bool PDBSymbolTypeFunctionSig::isCVarArgs() const {
+  auto SigArguments = getArguments();
+  if (!SigArguments)
+    return false;
+  uint32_t NumArgs = SigArguments->getChildCount();
+  if (NumArgs == 0)
+    return false;
+  auto Last = SigArguments->getChildAtIndex(NumArgs - 1);
+  if (auto Builtin = llvm::dyn_cast_or_null<PDBSymbolTypeBuiltin>(Last.get())) {
+    if (Builtin->getBuiltinType() == PDB_BuiltinType::None)
+      return true;
+  }
+
+  // Note that for a variadic template signature, this method always returns
+  // false since the parameters of the template are specialized.
+  return false;
 }

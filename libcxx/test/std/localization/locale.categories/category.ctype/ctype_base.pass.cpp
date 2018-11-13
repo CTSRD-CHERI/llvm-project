@@ -9,8 +9,8 @@
 //
 // This test uses new symbols that were not defined in the libc++ shipped on
 // darwin11 and darwin12:
-// XFAIL: with_system_cxx_lib=x86_64-apple-darwin11
-// XFAIL: with_system_cxx_lib=x86_64-apple-darwin12
+// XFAIL: with_system_cxx_lib=macosx10.7
+// XFAIL: with_system_cxx_lib=macosx10.8
 
 // <locale>
 
@@ -36,8 +36,8 @@
 #include <locale>
 #include <cassert>
 
-template <class _Tp>
-void test(const _Tp &) {}
+template <class T>
+void test(const T &) {}
 
 int main()
 {

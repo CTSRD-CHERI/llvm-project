@@ -15,6 +15,13 @@ using namespace llvm;
 
 namespace {
 
+static_assert(std::is_const<std::remove_pointer<
+                  DenseSet<int>::const_iterator::pointer>::type>::value,
+              "Iterator pointer type should be const");
+static_assert(std::is_const<std::remove_reference<
+                  DenseSet<int>::const_iterator::reference>::type>::value,
+              "Iterator reference type should be const");
+
 // Test hashing with a set of only two entries.
 TEST(DenseSetTest, DoubleEntrySetTest) {
   llvm::DenseSet<unsigned> set(2);
@@ -71,6 +78,22 @@ TYPED_TEST(DenseSetTest, InitializerList) {
   EXPECT_EQ(1u, set.count(2));
   EXPECT_EQ(1u, set.count(4));
   EXPECT_EQ(0u, set.count(3));
+}
+
+TYPED_TEST(DenseSetTest, ConstIteratorComparison) {
+  TypeParam set({1});
+  const TypeParam &cset = set;
+  EXPECT_EQ(set.begin(), cset.begin());
+  EXPECT_EQ(set.end(), cset.end());
+  EXPECT_NE(set.end(), cset.begin());
+  EXPECT_NE(set.begin(), cset.end());
+}
+
+TYPED_TEST(DenseSetTest, DefaultConstruction) {
+  typename TypeParam::iterator I, J;
+  typename TypeParam::const_iterator CI, CJ;
+  EXPECT_EQ(I, J);
+  EXPECT_EQ(CI, CJ);
 }
 
 TYPED_TEST(DenseSetTest, EmptyInitializerList) {
@@ -165,8 +188,21 @@ TEST(DenseSetCustomTest, ReserveTest) {
     EXPECT_EQ(MemorySize, Set.getMemorySize());
     // Check that move was called the expected number of times
     EXPECT_EQ(Size, CountCopyAndMove::Move);
-    // Check that no copy occured
+    // Check that no copy occurred
     EXPECT_EQ(0, CountCopyAndMove::Copy);
   }
+}
+TEST(DenseSetCustomTest, ConstTest) {
+  // Test that const pointers work okay for count and find, even when the
+  // underlying map is a non-const pointer.
+  DenseSet<int *> Map;
+  int A;
+  int *B = &A;
+  const int *C = &A;
+  Map.insert(B);
+  EXPECT_EQ(Map.count(B), 1u);
+  EXPECT_EQ(Map.count(C), 1u);
+  EXPECT_NE(Map.find(B), Map.end());
+  EXPECT_NE(Map.find(C), Map.end());
 }
 }

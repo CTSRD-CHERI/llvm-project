@@ -1,4 +1,4 @@
-; RUN: llc -verify-machineinstrs -mcpu=pwr8 -mtriple=powerpc64le-unknown-unknown < %s | FileCheck %s
+; RUN: llc -verify-machineinstrs -mcpu=pwr8 -mtriple=powerpc64le-unknown-unknown -ppc-late-peephole=true < %s | FileCheck %s
 ; RUN: llc -verify-machineinstrs -mcpu=pwr8 -mtriple=powerpc64-unknown-unknown < %s | FileCheck %s \
 ; RUN:  --check-prefix=CHECK-BE
 ; RUN: llc -verify-machineinstrs -mcpu=pwr7 -mtriple=powerpc64-unknown-unknown < %s | FileCheck %s \
@@ -23,9 +23,9 @@ entry:
 ; CHECK: mfvsrd [[TOGPR:[0-9]+]],
 ; CHECK: srd [[RSHREG:[0-9]+]], [[TOGPR]], [[SHAMREG]]
 ; CHECK: extsw 3, [[RSHREG]]
-; CHECK-P7-DAG: sldi [[ELEMOFFREG:[0-9]+]], 5, 2
+; CHECK-P7-DAG: rlwinm [[ELEMOFFREG:[0-9]+]], 5, 2, 28, 29
 ; CHECK-P7-DAG: stxvw4x 34,
-; CHECK-P7: lwax 3, [[ELEMOFFREG]],
+; CHECK-P7: lwax 3, 3, [[ELEMOFFREG]]
 ; CHECK-BE-DAG: andi. [[ANDREG:[0-9]+]], 5, 2
 ; CHECK-BE-DAG: sldi [[SLREG:[0-9]+]], [[ANDREG]], 2
 ; CHECK-BE-DAG: lvsl [[SHMSKREG:[0-9]+]], 0, [[SLREG]]
@@ -52,9 +52,9 @@ entry:
 ; CHECK-DAG: lvsl [[SHMSKREG:[0-9]+]], 0, [[SHIFTREG]]
 ; CHECK-DAG: vperm [[PERMVEC:[0-9]+]], 2, 2, [[SHMSKREG]]
 ; CHECK: mfvsrd 3,
-; CHECK-P7-DAG: sldi [[ELEMOFFREG:[0-9]+]], 5, 3
+; CHECK-P7-DAG: rlwinm [[ELEMOFFREG:[0-9]+]], 5, 3, 28, 28
 ; CHECK-P7-DAG: stxvd2x 34,
-; CHECK-P7: ldx 3, [[ELEMOFFREG]],
+; CHECK-P7: ldx 3, 3, [[ELEMOFFREG]]
 ; CHECK-BE-DAG: andi. [[ANDREG:[0-9]+]], 5, 1
 ; CHECK-BE-DAG: sldi [[SLREG:[0-9]+]], [[ANDREG]], 3
 ; CHECK-BE-DAG: lvsl [[SHMSKREG:[0-9]+]], 0, [[SLREG]]
@@ -70,14 +70,14 @@ entry:
 ; CHECK-LABEL: @getf
 ; CHECK-P7-LABEL: @getf
 ; CHECK-BE-LABEL: @getf
-; CHECK: li [[IMMREG:[0-9]+]], 3
-; CHECK: xor [[TRUNCREG:[0-9]+]], [[IMMREG]], 5
-; CHECK: lvsl [[SHMSKREG:[0-9]+]], 0, [[TRUNCREG]]
+; CHECK: xori [[TRUNCREG:[0-9]+]], 5, 3
+; CHECK: sldi [[SHIFTREG:[0-9]+]], [[TRUNCREG]], 2
+; CHECK: lvsl [[SHMSKREG:[0-9]+]], 0, [[SHIFTREG]]
 ; CHECK: vperm {{[0-9]+}}, 2, 2, [[SHMSKREG]]
 ; CHECK: xscvspdpn 1,
-; CHECK-P7-DAG: sldi [[ELEMOFFREG:[0-9]+]], 5, 2
+; CHECK-P7-DAG: rlwinm [[ELEMOFFREG:[0-9]+]], 5, 2, 28, 29
 ; CHECK-P7-DAG: stxvw4x 34,
-; CHECK-P7: lfsx 1, [[ELEMOFFREG]],
+; CHECK-P7: lfsx 1, 3, [[ELEMOFFREG]]
 ; CHECK-BE: sldi [[ELNOREG:[0-9]+]], 5, 2
 ; CHECK-BE: lvsl [[SHMSKREG:[0-9]+]], 0, [[ELNOREG]]
 ; CHECK-BE: vperm {{[0-9]+}}, 2, 2, [[SHMSKREG]]

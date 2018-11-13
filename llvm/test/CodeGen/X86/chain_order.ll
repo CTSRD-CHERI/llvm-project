@@ -4,16 +4,16 @@
 ; A test from pifft (after SLP-vectorization) that fails when we drop the chain on newly merged loads.
 define void @cftx020(double* nocapture %a) {
 ; CHECK-LABEL: cftx020:
-; CHECK:       # BB#0: # %entry
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    vmovsd {{.*#+}} xmm0 = mem[0],zero
 ; CHECK-NEXT:    vmovsd {{.*#+}} xmm1 = mem[0],zero
 ; CHECK-NEXT:    vmovhpd {{.*#+}} xmm0 = xmm0[0],mem[0]
 ; CHECK-NEXT:    vmovhpd {{.*#+}} xmm1 = xmm1[0],mem[0]
 ; CHECK-NEXT:    vaddpd %xmm1, %xmm0, %xmm0
 ; CHECK-NEXT:    vmovupd (%rdi), %xmm1
-; CHECK-NEXT:    vsubpd 16(%rdi), %xmm1, %xmm1
 ; CHECK-NEXT:    vmovupd %xmm0, (%rdi)
-; CHECK-NEXT:    vmovupd %xmm1, 16(%rdi)
+; CHECK-NEXT:    vsubpd 16(%rdi), %xmm1, %xmm0
+; CHECK-NEXT:    vmovupd %xmm0, 16(%rdi)
 ; CHECK-NEXT:    retq
 entry:
   %0 = load double, double* %a, align 8

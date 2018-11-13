@@ -12,11 +12,14 @@
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/LangOptions.h"
+#include "clang/Basic/MemoryBufferCache.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
 #include "clang/Lex/HeaderSearch.h"
 #include "clang/Lex/HeaderSearchOptions.h"
+#include "clang/Lex/MacroArgs.h"
+#include "clang/Lex/MacroInfo.h"
 #include "clang/Lex/ModuleLoader.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Lex/PreprocessorOptions.h"
@@ -26,24 +29,6 @@ using namespace clang;
 
 namespace {
 
-class VoidModuleLoader : public ModuleLoader {
-  ModuleLoadResult loadModule(SourceLocation ImportLoc, 
-                              ModuleIdPath Path,
-                              Module::NameVisibilityKind Visibility,
-                              bool IsInclusionDirective) override {
-    return ModuleLoadResult();
-  }
-
-  void makeModuleVisible(Module *Mod,
-                         Module::NameVisibilityKind Visibility,
-                         SourceLocation ImportLoc) override { }
-
-  GlobalModuleIndex *loadGlobalModuleIndex(SourceLocation TriggerLoc) override
-    { return nullptr; }
-  bool lookupMissingImports(StringRef Name, SourceLocation TriggerLoc) override
-    { return 0; }
-};
-
 // The test fixture.
 class LexerTest : public ::testing::Test {
 protected:
@@ -52,30 +37,39 @@ protected:
       DiagID(new DiagnosticIDs()),
       Diags(DiagID, new DiagnosticOptions, new IgnoringDiagConsumer()),
       SourceMgr(Diags, FileMgr),
-      TargetOpts(new TargetOptions) 
+      TargetOpts(new TargetOptions)
   {
     TargetOpts->Triple = "x86_64-apple-darwin11.1.0";
     Target = TargetInfo::CreateTargetInfo(Diags, TargetOpts);
   }
 
-  std::vector<Token> Lex(StringRef Source) {
+  std::unique_ptr<Preprocessor> CreatePP(StringRef Source,
+                                         TrivialModuleLoader &ModLoader) {
     std::unique_ptr<llvm::MemoryBuffer> Buf =
         llvm::MemoryBuffer::getMemBuffer(Source);
     SourceMgr.setMainFileID(SourceMgr.createFileID(std::move(Buf)));
 
-    VoidModuleLoader ModLoader;
-    HeaderSearch HeaderInfo(new HeaderSearchOptions, SourceMgr, Diags, LangOpts,
-                            Target.get());
-    Preprocessor PP(new PreprocessorOptions(), Diags, LangOpts, SourceMgr,
-                    HeaderInfo, ModLoader, /*IILookup =*/nullptr,
-                    /*OwnsHeaderSearch =*/false);
-    PP.Initialize(*Target);
-    PP.EnterMainSourceFile();
+    MemoryBufferCache PCMCache;
+    HeaderSearch HeaderInfo(std::make_shared<HeaderSearchOptions>(), SourceMgr,
+                            Diags, LangOpts, Target.get());
+    std::unique_ptr<Preprocessor> PP = llvm::make_unique<Preprocessor>(
+        std::make_shared<PreprocessorOptions>(), Diags, LangOpts, SourceMgr,
+        PCMCache, HeaderInfo, ModLoader,
+        /*IILookup =*/nullptr,
+        /*OwnsHeaderSearch =*/false);
+    PP->Initialize(*Target);
+    PP->EnterMainSourceFile();
+    return PP;
+  }
+
+  std::vector<Token> Lex(StringRef Source) {
+    TrivialModuleLoader ModLoader;
+    auto PP = CreatePP(Source, ModLoader);
 
     std::vector<Token> toks;
     while (1) {
       Token tok;
-      PP.Lex(tok);
+      PP->Lex(tok);
       if (tok.is(tok::eof))
         break;
       toks.push_back(tok);
@@ -292,9 +286,7 @@ TEST_F(LexerTest, LexAPI) {
   SourceLocation lsqrLoc = toks[0].getLocation();
   SourceLocation idLoc = toks[1].getLocation();
   SourceLocation rsqrLoc = toks[2].getLocation();
-  std::pair<SourceLocation,SourceLocation>
-    macroPair = SourceMgr.getExpansionRange(lsqrLoc);
-  SourceRange macroRange = SourceRange(macroPair.first, macroPair.second);
+  CharSourceRange macroRange = SourceMgr.getExpansionRange(lsqrLoc);
 
   SourceLocation Loc;
   EXPECT_TRUE(Lexer::isAtStartOfMacroExpansion(lsqrLoc, SourceMgr, LangOpts, &Loc));
@@ -303,6 +295,7 @@ TEST_F(LexerTest, LexAPI) {
   EXPECT_FALSE(Lexer::isAtEndOfMacroExpansion(idLoc, SourceMgr, LangOpts));
   EXPECT_TRUE(Lexer::isAtEndOfMacroExpansion(rsqrLoc, SourceMgr, LangOpts, &Loc));
   EXPECT_EQ(Loc, macroRange.getEnd());
+  EXPECT_TRUE(macroRange.isTokenRange());
 
   CharSourceRange range = Lexer::makeFileCharRange(
            CharSourceRange::getTokenRange(lsqrLoc, idLoc), SourceMgr, LangOpts);
@@ -340,11 +333,11 @@ TEST_F(LexerTest, LexAPI) {
   EXPECT_EQ(SourceRange(fileIdLoc, fileRsqrLoc.getLocWithOffset(1)),
             range.getAsRange());
 
-  macroPair = SourceMgr.getExpansionRange(macroLsqrLoc);
+  macroRange = SourceMgr.getExpansionRange(macroLsqrLoc);
   range = Lexer::makeFileCharRange(
                      CharSourceRange::getTokenRange(macroLsqrLoc, macroRsqrLoc),
                      SourceMgr, LangOpts);
-  EXPECT_EQ(SourceRange(macroPair.first, macroPair.second.getLocWithOffset(1)),
+  EXPECT_EQ(SourceRange(macroRange.getBegin(), macroRange.getEnd().getLocWithOffset(1)),
             range.getAsRange());
 
   text = Lexer::getSourceText(
@@ -378,6 +371,149 @@ TEST_F(LexerTest, DontMergeMacroArgsFromDifferentMacroFiles) {
   // sure that we get the correct end location (the comma after "helper1").
   SourceLocation helper1ArgLoc = toks[20].getLocation();
   EXPECT_EQ(SourceMgr.getFileIDSize(SourceMgr.getFileID(helper1ArgLoc)), 8U);
+}
+
+TEST_F(LexerTest, DontOverallocateStringifyArgs) {
+  TrivialModuleLoader ModLoader;
+  auto PP = CreatePP("\"StrArg\", 5, 'C'", ModLoader);
+
+  llvm::BumpPtrAllocator Allocator;
+  std::array<IdentifierInfo *, 3> ParamList;
+  MacroInfo *MI = PP->AllocateMacroInfo({});
+  MI->setIsFunctionLike();
+  MI->setParameterList(ParamList, Allocator);
+  EXPECT_EQ(3u, MI->getNumParams());
+  EXPECT_TRUE(MI->isFunctionLike());
+
+  Token Eof;
+  Eof.setKind(tok::eof);
+  std::vector<Token> ArgTokens;
+  while (1) {
+    Token tok;
+    PP->Lex(tok);
+    if (tok.is(tok::eof)) {
+      ArgTokens.push_back(Eof);
+      break;
+    }
+    if (tok.is(tok::comma))
+      ArgTokens.push_back(Eof);
+    else
+      ArgTokens.push_back(tok);
+  }
+
+  auto MacroArgsDeleter = [&PP](MacroArgs *M) { M->destroy(*PP); };
+  std::unique_ptr<MacroArgs, decltype(MacroArgsDeleter)> MA(
+      MacroArgs::create(MI, ArgTokens, false, *PP), MacroArgsDeleter);
+  Token Result = MA->getStringifiedArgument(0, *PP, {}, {});
+  EXPECT_EQ(tok::string_literal, Result.getKind());
+  EXPECT_STREQ("\"\\\"StrArg\\\"\"", Result.getLiteralData());
+  Result = MA->getStringifiedArgument(1, *PP, {}, {});
+  EXPECT_EQ(tok::string_literal, Result.getKind());
+  EXPECT_STREQ("\"5\"", Result.getLiteralData());
+  Result = MA->getStringifiedArgument(2, *PP, {}, {});
+  EXPECT_EQ(tok::string_literal, Result.getKind());
+  EXPECT_STREQ("\"'C'\"", Result.getLiteralData());
+#if !defined(NDEBUG) && GTEST_HAS_DEATH_TEST
+  EXPECT_DEATH(MA->getStringifiedArgument(3, *PP, {}, {}),
+               "Invalid argument number!");
+#endif
+}
+
+TEST_F(LexerTest, IsNewLineEscapedValid) {
+  auto hasNewLineEscaped = [](const char *S) {
+    return Lexer::isNewLineEscaped(S, S + strlen(S) - 1);
+  };
+
+  EXPECT_TRUE(hasNewLineEscaped("\\\r"));
+  EXPECT_TRUE(hasNewLineEscaped("\\\n"));
+  EXPECT_TRUE(hasNewLineEscaped("\\\r\n"));
+  EXPECT_TRUE(hasNewLineEscaped("\\\n\r"));
+  EXPECT_TRUE(hasNewLineEscaped("\\ \t\v\f\r"));
+  EXPECT_TRUE(hasNewLineEscaped("\\ \t\v\f\r\n"));
+
+  EXPECT_FALSE(hasNewLineEscaped("\\\r\r"));
+  EXPECT_FALSE(hasNewLineEscaped("\\\r\r\n"));
+  EXPECT_FALSE(hasNewLineEscaped("\\\n\n"));
+  EXPECT_FALSE(hasNewLineEscaped("\r"));
+  EXPECT_FALSE(hasNewLineEscaped("\n"));
+  EXPECT_FALSE(hasNewLineEscaped("\r\n"));
+  EXPECT_FALSE(hasNewLineEscaped("\n\r"));
+  EXPECT_FALSE(hasNewLineEscaped("\r\r"));
+  EXPECT_FALSE(hasNewLineEscaped("\n\n"));
+}
+
+TEST_F(LexerTest, GetBeginningOfTokenWithEscapedNewLine) {
+  // Each line should have the same length for
+  // further offset calculation to be more straightforward.
+  const unsigned IdentifierLength = 8;
+  std::string TextToLex = "rabarbar\n"
+                          "foo\\\nbar\n"
+                          "foo\\\rbar\n"
+                          "fo\\\r\nbar\n"
+                          "foo\\\n\rba\n";
+  std::vector<tok::TokenKind> ExpectedTokens{5, tok::identifier};
+  std::vector<Token> LexedTokens = CheckLex(TextToLex, ExpectedTokens);
+
+  for (const Token &Tok : LexedTokens) {
+    std::pair<FileID, unsigned> OriginalLocation =
+        SourceMgr.getDecomposedLoc(Tok.getLocation());
+    for (unsigned Offset = 0; Offset < IdentifierLength; ++Offset) {
+      SourceLocation LookupLocation =
+          Tok.getLocation().getLocWithOffset(Offset);
+
+      std::pair<FileID, unsigned> FoundLocation =
+          SourceMgr.getDecomposedExpansionLoc(
+              Lexer::GetBeginningOfToken(LookupLocation, SourceMgr, LangOpts));
+
+      // Check that location returned by the GetBeginningOfToken
+      // is the same as original token location reported by Lexer.
+      EXPECT_EQ(FoundLocation.second, OriginalLocation.second);
+    }
+  }
+}
+
+TEST_F(LexerTest, AvoidPastEndOfStringDereference) {
+  EXPECT_TRUE(Lex("  //  \\\n").empty());
+  EXPECT_TRUE(Lex("#include <\\\\").empty());
+  EXPECT_TRUE(Lex("#include <\\\\\n").empty());
+}
+
+TEST_F(LexerTest, StringizingRasString) {
+  // For "std::string Lexer::Stringify(StringRef Str, bool Charify)".
+  std::string String1 = R"(foo
+    {"bar":[]}
+    baz)";
+  // For "void Lexer::Stringify(SmallVectorImpl<char> &Str)".
+  SmallString<128> String2;
+  String2 += String1.c_str();
+
+  // Corner cases.
+  std::string String3 = R"(\
+    \n
+    \\n
+    \\)";
+  SmallString<128> String4;
+  String4 += String3.c_str();
+  std::string String5 = R"(a\
+
+
+    \\b)";
+  SmallString<128> String6;
+  String6 += String5.c_str();
+
+  String1 = Lexer::Stringify(StringRef(String1));
+  Lexer::Stringify(String2);
+  String3 = Lexer::Stringify(StringRef(String3));
+  Lexer::Stringify(String4);
+  String5 = Lexer::Stringify(StringRef(String5));
+  Lexer::Stringify(String6);
+
+  EXPECT_EQ(String1, R"(foo\n    {\"bar\":[]}\n    baz)");
+  EXPECT_EQ(String2, R"(foo\n    {\"bar\":[]}\n    baz)");
+  EXPECT_EQ(String3, R"(\\\n    \\n\n    \\\\n\n    \\\\)");
+  EXPECT_EQ(String4, R"(\\\n    \\n\n    \\\\n\n    \\\\)");
+  EXPECT_EQ(String5, R"(a\\\n\n\n    \\\\b)");
+  EXPECT_EQ(String6, R"(a\\\n\n\n    \\\\b)");
 }
 
 } // anonymous namespace

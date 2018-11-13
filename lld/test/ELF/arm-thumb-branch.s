@@ -1,5 +1,6 @@
-// RUN: llvm-mc -filetype=obj -triple=thumbv7a-none-linux-gnueabi %s -o %t
-// RUN: llvm-mc -filetype=obj -triple=thumbv7a-none-linux-gnueabi %S/Inputs/far-arm-thumb-abs.s -o %tfar
+// REQUIRES: arm
+// RUN: llvm-mc -arm-add-build-attributes -filetype=obj -triple=thumbv7a-none-linux-gnueabi %s -o %t
+// RUN: llvm-mc -arm-add-build-attributes -filetype=obj -triple=thumbv7a-none-linux-gnueabi %S/Inputs/far-arm-thumb-abs.s -o %tfar
 // RUN: echo "SECTIONS { \
 // RUN:          . = 0xb4; \
 // RUN:          .callee1 : { *(.callee_low) } \
@@ -7,7 +8,6 @@
 // RUN:          .callee2 : { *(.callee_high) } } " > %t.script
 // RUN: ld.lld --script %t.script %t %tfar -o %t2 2>&1
 // RUN: llvm-objdump -d -triple=thumbv7a-none-linux-gnueabi %t2 | FileCheck  %s
-// REQUIRES: arm
 
  .syntax unified
  .thumb
@@ -54,7 +54,7 @@ callee_high:
 // CHECK-NEXT:   1001c:       ff f3 fd 97     b.w     #16777210
 // CHECK-NEXT:   10020:       3f f3 ff af     bgt.w   #1048574
 // CHECK-NEXT:   10024:       70 47   bx      lr
-// CHECK-NEXT:   10026:       00 00   movs    r0, r0
+// CHECK-NEXT:   10026:
 // CHECK-NEXT: Disassembly of section .callee2:
 // CHECK-NEXT: callee_high:
 // CHECK-NEXT:   10028:       70 47   bx      lr

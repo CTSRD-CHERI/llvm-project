@@ -19,9 +19,9 @@
 // Project includes
 #include "lldb/Breakpoint/StoppointLocation.h"
 #include "lldb/Breakpoint/WatchpointOptions.h"
-#include "lldb/Core/UserID.h"
 #include "lldb/Symbol/CompilerType.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/UserID.h"
 #include "lldb/lldb-private.h"
 
 namespace lldb_private {
@@ -71,9 +71,9 @@ public:
 
   bool IsEnabled() const;
 
-  // This doesn't really enable/disable the watchpoint.  
-  // It is currently just for use in the Process plugin's
-  // {Enable,Disable}Watchpoint, which should be used instead.
+  // This doesn't really enable/disable the watchpoint.   It is currently just
+  // for use in the Process plugin's {Enable,Disable}Watchpoint, which should
+  // be used instead.
   
   void SetEnabled(bool enabled, bool notify = true);
 
@@ -100,7 +100,7 @@ public:
   void DumpSnapshots(Stream *s, const char *prefix = nullptr) const;
   void DumpWithLevel(Stream *s, lldb::DescriptionLevel description_level) const;
   Target &GetTarget() { return m_target; }
-  const Error &GetError() { return m_error; }
+  const Status &GetError() { return m_error; }
 
   //------------------------------------------------------------------
   /// Returns the WatchpointOptions structure set for this watchpoint.
@@ -197,10 +197,8 @@ private:
   uint32_t m_disabled_count; // Keep track of the count that the watchpoint is
                              // disabled while in ephemeral mode.
   // At the end of the ephemeral mode when the watchpoint is to be enabled
-  // again,
-  // we check the count, if it is more than 1, it means the user-supplied
-  // actions
-  // actually want the watchpoint to be disabled!
+  // again, we check the count, if it is more than 1, it means the user-
+  // supplied actions actually want the watchpoint to be disabled!
   uint32_t m_watch_read : 1, // 1 if we stop when the watched data is read from
       m_watch_write : 1,     // 1 if we stop when the watched data is written to
       m_watch_was_read : 1, // Set to 1 when watchpoint is hit for a read access
@@ -213,8 +211,8 @@ private:
   lldb::ValueObjectSP m_old_value_sp;
   lldb::ValueObjectSP m_new_value_sp;
   CompilerType m_type;
-  Error m_error; // An error object describing errors associated with this
-                 // watchpoint.
+  Status m_error; // An error object describing errors associated with this
+                  // watchpoint.
   WatchpointOptions
       m_options; // Settable watchpoint options, which is a delegate to handle
                  // the callback machinery.

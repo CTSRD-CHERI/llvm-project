@@ -31,6 +31,14 @@ def warn_cxx98_compat_less_colon_colon : Warning<
   "'<::' is treated as digraph '<:' (aka '[') followed by ':' in C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
 
+def warn_cxx17_compat_spaceship : Warning<
+  "'<=>' operator is incompatible with C++ standards before C++2a">,
+  InGroup<CXXPre2aCompat>, DefaultIgnore;
+def warn_cxx2a_compat_spaceship : Warning<
+  "'<=>' is a single token in C++2a; "
+  "add a space to avoid a change in behavior">,
+  InGroup<CXX2aCompat>;
+
 // Trigraphs.
 def trigraph_ignored : Warning<"trigraph ignored">, InGroup<Trigraphs>;
 def trigraph_ignored_block_comment : Warning<
@@ -45,7 +53,7 @@ def ext_multi_line_line_comment : Extension<"multi-line // comment">,
 def ext_line_comment : Extension<
   "// comments are not allowed in this language">,
   InGroup<Comment>;
-def ext_no_newline_eof : Extension<"no newline at end of file">, 
+def ext_no_newline_eof : Extension<"no newline at end of file">,
   InGroup<NewlineEOF>;
 def warn_no_newline_eof : Warning<"no newline at end of file">,
   InGroup<NewlineEOF>, DefaultIgnore;
@@ -71,6 +79,8 @@ def ext_token_used : Extension<"extension used">,
 
 def warn_cxx11_keyword : Warning<"'%0' is a keyword in C++11">,
   InGroup<CXX11Compat>, DefaultIgnore;
+def warn_cxx2a_keyword : Warning<"'%0' is a keyword in C++2a">,
+  InGroup<CXX2aCompat>, DefaultIgnore;
 
 def ext_unterminated_char_or_string : ExtWarn<
   "missing terminating %select{'|'\"'}0 character">, InGroup<InvalidPPToken>;
@@ -109,6 +119,12 @@ def err_non_ascii : Error<
 def ext_unicode_whitespace : ExtWarn<
   "treating Unicode character as whitespace">,
   InGroup<DiagGroup<"unicode-whitespace">>;
+def warn_utf8_symbol_homoglyph : Warning<
+  "treating Unicode character <U+%0> as identifier character rather than "
+  "as '%1' symbol">, InGroup<DiagGroup<"unicode-homoglyph">>;
+def warn_utf8_symbol_zero_width : Warning<
+  "identifier contains Unicode character <U+%0> that is invisible in "
+  "some environments">, InGroup<DiagGroup<"unicode-zero-width">>;
 
 def err_hex_escape_no_digits : Error<
   "\\%0 used with no following hex digits">;
@@ -173,26 +189,24 @@ def warn_char_constant_too_large : Warning<
 def err_multichar_utf_character_literal : Error<
   "Unicode character literals may not contain multiple characters">;
 def err_exponent_has_no_digits : Error<"exponent has no digits">;
-def ext_imaginary_constant : Extension<
-  "imaginary constants are a GNU extension">, InGroup<GNUImaginaryConstant>;
 def err_hex_constant_requires : Error<
   "hexadecimal floating %select{constant|literal}0 requires "
   "%select{an exponent|a significand}1">;
 def ext_hex_constant_invalid : Extension<
   "hexadecimal floating constants are a C99 feature">, InGroup<C99>;
 def ext_hex_literal_invalid : Extension<
-  "hexadecimal floating literals are a C++1z feature">, InGroup<CXX1z>;
-def warn_cxx1z_hex_literal : Warning<
+  "hexadecimal floating literals are a C++17 feature">, InGroup<CXX17>;
+def warn_cxx17_hex_literal : Warning<
   "hexadecimal floating literals are incompatible with "
-  "C++ standards before C++1z">,
-  InGroup<CXXPre1zCompatPedantic>, DefaultIgnore;
+  "C++ standards before C++17">,
+  InGroup<CXXPre17CompatPedantic>, DefaultIgnore;
 def ext_binary_literal : Extension<
   "binary integer literals are a GNU extension">, InGroup<GNUBinaryLiteral>;
 def ext_binary_literal_cxx14 : Extension<
   "binary integer literals are a C++14 extension">, InGroup<CXX14BinaryLiteral>;
 def warn_cxx11_compat_binary_literal : Warning<
   "binary integer literals are incompatible with C++ standards before C++14">,
-  InGroup<CXXPre14CompatPedantic>, DefaultIgnore;
+  InGroup<CXXPre14CompatBinaryLiteral>, DefaultIgnore;
 def err_pascal_string_too_long : Error<"Pascal string is too long">;
 def err_escape_too_large : Error<
   "%select{hex|octal}0 escape sequence out of range">;
@@ -208,8 +222,8 @@ def warn_cxx98_compat_unicode_literal : Warning<
   "unicode literals are incompatible with C++98">,
   InGroup<CXX98Compat>, DefaultIgnore;
 def warn_cxx14_compat_u8_character_literal : Warning<
-  "unicode literals are incompatible with C++ standards before C++1z">,
-  InGroup<CXXPre1zCompat>, DefaultIgnore;
+  "unicode literals are incompatible with C++ standards before C++17">,
+  InGroup<CXXPre17Compat>, DefaultIgnore;
 def warn_cxx11_compat_user_defined_literal : Warning<
   "identifier after literal will be treated as a user-defined literal suffix "
   "in C++11">, InGroup<CXX11Compat>, DefaultIgnore;
@@ -242,6 +256,7 @@ def warn_bad_character_encoding : ExtWarn<
   "illegal character encoding in character literal">,
   InGroup<InvalidSourceEncoding>;
 def err_lexing_string : Error<"failure when lexing a string">;
+def err_placeholder_in_source : Error<"editor placeholder in source file">;
 
 
 //===----------------------------------------------------------------------===//
@@ -282,7 +297,7 @@ def pp_nonportable_path : NonportablePath,
   InGroup<DiagGroup<"nonportable-include-path">>;
 def pp_nonportable_system_path : NonportablePath, DefaultIgnore,
   InGroup<DiagGroup<"nonportable-system-include-path">>;
-  
+
 def pp_pragma_once_in_main_file : Warning<"#pragma once in main file">,
   InGroup<DiagGroup<"pragma-once-outside-header">>;
 def pp_pragma_sysheader_in_main_file : Warning<
@@ -341,10 +356,27 @@ def ext_pp_warning_directive : Extension<"#warning is a language extension">;
 
 def ext_pp_extra_tokens_at_eol : ExtWarn<
   "extra tokens at end of #%0 directive">, InGroup<ExtraTokens>;
-  
+
 def ext_pp_comma_expr : Extension<"comma operator in operand of #if">;
 def ext_pp_bad_vaargs_use : Extension<
   "__VA_ARGS__ can only appear in the expansion of a C99 variadic macro">;
+
+def ext_pp_bad_vaopt_use
+    : ExtWarn<
+          "__VA_OPT__ can only appear in the expansion of a variadic macro">,
+      InGroup<VariadicMacros>;
+
+def err_pp_missing_lparen_in_vaopt_use : Error<
+  "missing '(' following __VA_OPT__">;
+def err_pp_vaopt_nested_use : Error<
+  "__VA_OPT__ cannot be nested within its own replacement tokens">;
+
+def err_vaopt_paste_at_start : Error<
+  "'##' cannot appear at start of __VA_OPT__ argument">;
+
+def err_vaopt_paste_at_end
+    : Error<"'##' cannot appear at end of __VA_OPT__ argument">;
+
 def ext_pp_macro_redef : ExtWarn<"%0 macro redefined">, InGroup<MacroRedefined>;
 def ext_variadic_macro : Extension<"variadic macros are a C99 feature">,
   InGroup<VariadicMacros>;
@@ -375,8 +407,25 @@ def err_pp_invalid_directive : Error<"invalid preprocessing directive">;
 def err_pp_directive_required : Error<
   "%0 must be used within a preprocessing directive">;
 def err_pp_file_not_found : Error<"'%0' file not found">, DefaultFatal;
-def err_pp_file_not_found_not_fatal : Error<
+def err_pp_through_header_not_found : Error<
+  "'%0' required for precompiled header not found">, DefaultFatal;
+def err_pp_through_header_not_seen : Error<
+  "#include of '%0' not seen while attempting to "
+  "%select{create|use}1 precompiled header">, DefaultFatal;
+def err_pp_pragma_hdrstop_not_seen : Error<
+  "#pragma hdrstop not seen while attempting to use precompiled header">,
+  DefaultFatal;
+def warn_pp_macro_def_mismatch_with_pch : Warning<
+  "definition of macro %0 does not match definition in precompiled header">,
+  InGroup<ClangClPch>;
+def warn_pp_hdrstop_filename_ignored : Warning<
+  "#pragma hdrstop filename not supported, "
+  "/Fp can be used to specify precompiled header filename">,
+  InGroup<ClangClPch>;
+def err_pp_file_not_found_angled_include_not_fatal : Error<
   "'%0' file not found with <angled> include; use \"quotes\" instead">;
+def err_pp_file_not_found_typo_not_fatal
+    : Error<"'%0' file not found, did you mean '%1'?">;
 def err_pp_error_opening_file : Error<
   "error opening file '%0': %1">, DefaultFatal;
 def err_pp_empty_filename : Error<"empty filename">;
@@ -476,16 +525,11 @@ def warn_pragma_message : Warning<"%0">,
 def err_pragma_message : Error<"%0">;
 def warn_pragma_ignored : Warning<"unknown pragma ignored">,
    InGroup<UnknownPragmas>, DefaultIgnore;
-def ext_stdc_pragma_ignored : ExtWarn<"unknown pragma in STDC namespace">,
-   InGroup<UnknownPragmas>;
 def ext_on_off_switch_syntax :
    ExtWarn<"expected 'ON' or 'OFF' or 'DEFAULT' in pragma">,
    InGroup<UnknownPragmas>;
 def ext_pragma_syntax_eod :
    ExtWarn<"expected end of directive in pragma">,
-   InGroup<UnknownPragmas>;
-def warn_stdc_fenv_access_not_supported :
-   Warning<"pragma STDC FENV_ACCESS ON is not supported, ignoring pragma">,
    InGroup<UnknownPragmas>;
 def warn_pragma_diagnostic_invalid :
    ExtWarn<"pragma diagnostic expected 'error', 'warning', 'ignored', 'fatal',"
@@ -502,12 +546,34 @@ def warn_pragma_diagnostic_invalid_token :
    InGroup<UnknownPragmas>;
 def warn_pragma_diagnostic_unknown_warning :
    ExtWarn<"unknown warning group '%0', ignored">,
-   InGroup<UnknownPragmas>;
+   InGroup<UnknownWarningOption>;
 // - #pragma __debug
 def warn_pragma_debug_unexpected_command : Warning<
   "unexpected debug command '%0'">, InGroup<IgnoredPragmas>;
 def warn_pragma_debug_missing_argument : Warning<
   "missing argument to debug command '%0'">, InGroup<IgnoredPragmas>;
+// #pragma module
+def err_pp_expected_module_name : Error<
+  "expected %select{identifier after '.' in |}0module name">;
+def err_pp_module_begin_wrong_module : Error<
+  "must specify '-fmodule-name=%0' to enter %select{|submodule of }1"
+  "this module%select{ (current module is %3)|}2">;
+def err_pp_module_begin_no_module_map : Error<
+  "no module map available for module %0">;
+def err_pp_module_begin_no_submodule : Error<
+  "submodule %0.%1 not declared in module map">;
+def err_pp_module_begin_without_module_end : Error<
+  "no matching '#pragma clang module end' for this "
+  "'#pragma clang module begin'">;
+def err_pp_module_end_without_module_begin : Error<
+  "no matching '#pragma clang module begin' for this "
+  "'#pragma clang module end'">;
+def note_pp_module_begin_here : Note<
+  "entering module '%0' due to this pragma">;
+def err_pp_module_build_pth : Error<
+  "'#pragma clang module build' not supported in pretokenized header">;
+def err_pp_module_build_missing_end : Error<
+  "no matching '#pragma clang module endbuild' for this '#pragma clang module build'">;
 
 def err_defined_macro_name : Error<"'defined' cannot be used as a macro name">;
 def err_paste_at_start : Error<
@@ -540,7 +606,7 @@ def err_pp_illegal_floating_literal : Error<
 def err_pp_line_requires_integer : Error<
   "#line directive requires a positive integer argument">;
 def ext_pp_line_zero : Extension<
-  "#line directive with zero argument is a GNU extension">, 
+  "#line directive with zero argument is a GNU extension">,
   InGroup<GNUZeroLineDirective>;
 def err_pp_line_invalid_filename : Error<
   "invalid filename for #line directive">;
@@ -594,8 +660,6 @@ def err_mmap_expected_mmap_file : Error<"expected a module map file name">;
 def err_mmap_module_redefinition : Error<
   "redefinition of module '%0'">;
 def note_mmap_prev_definition : Note<"previously defined here">;
-def err_mmap_umbrella_dir_not_found : Error<
-  "umbrella directory '%0' not found">;
 def err_mmap_umbrella_clash : Error<
   "umbrella for module '%0' already covers this directory">;
 def err_mmap_module_id : Error<
@@ -642,6 +706,41 @@ def err_mmap_expected_feature : Error<"expected a feature name">;
 def err_mmap_expected_attribute : Error<"expected an attribute name">;
 def warn_mmap_unknown_attribute : Warning<"unknown attribute '%0'">,
   InGroup<IgnoredAttributes>;
+def warn_mmap_mismatched_private_submodule : Warning<
+  "private submodule '%0' in private module map, expected top-level module">,
+  InGroup<PrivateModule>;
+def warn_mmap_mismatched_private_module_name : Warning<
+  "expected canonical name for private module '%0'">,
+  InGroup<PrivateModule>;
+def note_mmap_rename_top_level_private_module : Note<
+  "rename '%0' to ensure it can be found by name">;
+def warn_mmap_incomplete_framework_module_declaration : Warning<
+  "skipping '%0' because module declaration of '%1' lacks the 'framework' qualifier">,
+  InGroup<IncompleteFrameworkModuleDeclaration>;
+def note_mmap_add_framework_keyword : Note<
+  "use 'framework module' to declare module '%0'">;
+
+def err_mmap_duplicate_header_attribute : Error<
+  "header attribute '%0' specified multiple times">;
+def err_mmap_invalid_header_attribute_value : Error<
+  "expected integer literal as value for header attribute '%0'">;
+def err_mmap_expected_header_attribute : Error<
+  "expected a header attribute name ('size' or 'mtime')">;
+def err_mmap_conflicting_export_as : Error<
+  "conflicting re-export of module '%0' as '%1' or '%2'">;
+def warn_mmap_redundant_export_as : Warning<
+  "module '%0' already re-exported as '%1'">,
+  InGroup<PrivateModule>;
+def err_mmap_submodule_export_as : Error<
+  "only top-level modules can be re-exported as public">;
+
+def warn_quoted_include_in_framework_header : Warning<
+  "double-quoted include \"%0\" in framework header, "
+  "expected angle-bracketed instead"
+  >, InGroup<FrameworkHdrQuotedInclude>, DefaultIgnore;
+def warn_framework_include_private_from_public : Warning<
+  "public framework header includes private framework header '%0'"
+  >, InGroup<FrameworkIncludePrivateFromPublic>;
 
 def warn_auto_module_import : Warning<
   "treating #%select{include|import|include_next|__include_macros}0 as an "
@@ -649,7 +748,10 @@ def warn_auto_module_import : Warning<
 def note_implicit_top_level_module_import_here : Note<
   "submodule of top-level module '%0' implicitly imported here">;
 def warn_uncovered_module_header : Warning<
-  "umbrella header for module '%0' does not include header '%1'">, 
+  "umbrella header for module '%0' does not include header '%1'">,
+  InGroup<IncompleteUmbrella>;
+def warn_mmap_umbrella_dir_not_found : Warning<
+  "umbrella directory '%0' not found">,
   InGroup<IncompleteUmbrella>;
 def err_expected_id_building_module : Error<
   "expected a module name in '__building_module' expression">;
@@ -665,7 +767,7 @@ def warn_non_modular_include_in_module : Warning<
   "include of non-modular header inside module '%0': '%1'">,
   InGroup<NonModularIncludeInModule>, DefaultIgnore;
 def warn_module_conflict : Warning<
-  "module '%0' conflicts with already-imported module '%1': %2">, 
+  "module '%0' conflicts with already-imported module '%1': %2">,
   InGroup<ModuleConflict>;
 
 def warn_header_guard : Warning<

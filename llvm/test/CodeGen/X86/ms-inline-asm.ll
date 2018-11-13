@@ -1,4 +1,4 @@
-; RUN: llc < %s -march=x86 -mcpu=core2 -no-integrated-as | FileCheck %s
+; RUN: llc < %s -mtriple=i686-- -mcpu=core2 -no-integrated-as | FileCheck %s
 
 define i32 @t1() nounwind {
 entry:
@@ -123,6 +123,37 @@ entry:
 ; CHECK: .att_syntax
 ; CHECK: {{## InlineAsm End|#NO_APP}}
 ; CHECK: movl (%esp), %eax
+; CHECK: ret
+}
+
+; Make sure ${:uid} works. Clang uses it for MS inline asm labels.
+;
+; C source:
+; int uid() {
+;   int r;
+;   __asm {
+;     xor eax, eax
+; wloop:
+;     inc eax
+;     cmp eax, 42
+;     jne wloop
+;     mov r, eax
+;   }
+;   return r;
+; }
+define i32 @uid() {
+entry:
+  %r = alloca i32, align 4
+  %0 = bitcast i32* %r to i8*
+  call void asm sideeffect inteldialect "xor eax, eax\0A\09.L__MSASMLABEL_.${:uid}__wloop:\0A\09inc eax\0A\09cmp eax, $$42\0A\09jne .L__MSASMLABEL_.${:uid}__wloop\0A\09mov dword ptr $0, eax", "=*m,~{eax},~{flags},~{dirflag},~{fpsr},~{flags}"(i32* nonnull %r)
+  %1 = load i32, i32* %r, align 4
+  ret i32 %1
+; CHECK-LABEL: uid:
+; CHECK: {{## InlineAsm Start|#APP}}
+; CHECK: .L__MSASMLABEL_.0__wloop:
+; CHECK: jne .L__MSASMLABEL_.0__wloop
+; CHECK: .att_syntax
+; CHECK: {{## InlineAsm End|#NO_APP}}
 ; CHECK: ret
 }
 

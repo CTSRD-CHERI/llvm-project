@@ -1,4 +1,4 @@
-//===-- llvm/MC/MCAsmLexer.h - Abstract Asm Lexer Interface -----*- C++ -*-===//
+//===- llvm/MC/MCAsmLexer.h - Abstract Asm Lexer Interface ------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,123 +10,30 @@
 #ifndef LLVM_MC_MCPARSER_MCASMLEXER_H
 #define LLVM_MC_MCPARSER_MCASMLEXER_H
 
-#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/Support/Compiler.h"
-#include "llvm/Support/DataTypes.h"
-#include "llvm/Support/SMLoc.h"
-#include <utility>
+#include "llvm/MC/MCAsmMacro.h"
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <string>
 
 namespace llvm {
 
-/// Target independent representation for an assembler token.
-class AsmToken {
+/// A callback class which is notified of each comment in an assembly file as
+/// it is lexed.
+class AsmCommentConsumer {
 public:
-  enum TokenKind {
-    // Markers
-    Eof, Error,
+  virtual ~AsmCommentConsumer() = default;
 
-    // String values.
-    Identifier,
-    String,
-
-    // Integer values.
-    Integer,
-    BigNum, // larger than 64 bits
-
-    // Real values.
-    Real,
-
-    // Comments
-    Comment,
-    HashDirective,
-    // No-value.
-    EndOfStatement,
-    Colon,
-    Space,
-    Plus, Minus, Tilde,
-    Slash,     // '/'
-    BackSlash, // '\'
-    LParen, RParen, LBrac, RBrac, LCurly, RCurly,
-    Star, Dot, Comma, Dollar, Equal, EqualEqual,
-
-    Pipe, PipePipe, Caret,
-    Amp, AmpAmp, Exclaim, ExclaimEqual, Percent, Hash,
-    Less, LessEqual, LessLess, LessGreater,
-    Greater, GreaterEqual, GreaterGreater, At,
-
-    // MIPS unary expression operators such as %neg.
-    PercentCall16, PercentCall_Hi, PercentCall_Lo, PercentDtprel_Hi,
-    PercentDtprel_Lo, PercentGot, PercentGot_Disp, PercentGot_Hi, PercentGot_Lo,
-    PercentGot_Ofst, PercentGot_Page, PercentGottprel, PercentGp_Rel, PercentHi,
-    PercentHigher, PercentHighest, PercentLo, PercentNeg, PercentPcrel_Hi,
-    PercentPcrel_Lo, PercentTlsgd, PercentTlsldm, PercentTprel_Hi,
-    PercentTprel_Lo
-  };
-
-private:
-  TokenKind Kind;
-
-  /// A reference to the entire token contents; this is always a pointer into
-  /// a memory buffer owned by the source manager.
-  StringRef Str;
-
-  APInt IntVal;
-
-public:
-  AsmToken() {}
-  AsmToken(TokenKind Kind, StringRef Str, APInt IntVal)
-      : Kind(Kind), Str(Str), IntVal(std::move(IntVal)) {}
-  AsmToken(TokenKind Kind, StringRef Str, int64_t IntVal = 0)
-      : Kind(Kind), Str(Str), IntVal(64, IntVal, true) {}
-
-  TokenKind getKind() const { return Kind; }
-  bool is(TokenKind K) const { return Kind == K; }
-  bool isNot(TokenKind K) const { return Kind != K; }
-
-  SMLoc getLoc() const;
-  SMLoc getEndLoc() const;
-  SMRange getLocRange() const;
-
-  /// Get the contents of a string token (without quotes).
-  StringRef getStringContents() const {
-    assert(Kind == String && "This token isn't a string!");
-    return Str.slice(1, Str.size() - 1);
-  }
-
-  /// Get the identifier string for the current token, which should be an
-  /// identifier or a string. This gets the portion of the string which should
-  /// be used as the identifier, e.g., it does not include the quotes on
-  /// strings.
-  StringRef getIdentifier() const {
-    if (Kind == Identifier)
-      return getString();
-    return getStringContents();
-  }
-
-  /// Get the string for the current token, this includes all characters (for
-  /// example, the quotes on strings) in the token.
-  ///
-  /// The returned StringRef points into the source manager's memory buffer, and
-  /// is safe to store across calls to Lex().
-  StringRef getString() const { return Str; }
-
-  // FIXME: Don't compute this in advance, it makes every token larger, and is
-  // also not generally what we want (it is nicer for recovery etc. to lex 123br
-  // as a single token, then diagnose as an invalid number).
-  int64_t getIntVal() const {
-    assert(Kind == Integer && "This token isn't an integer!");
-    return IntVal.getZExtValue();
-  }
-
-  APInt getAPIntVal() const {
-    assert((Kind == Integer || Kind == BigNum) &&
-           "This token isn't an integer!");
-    return IntVal;
-  }
+  /// Callback function for when a comment is lexed. Loc is the start of the
+  /// comment text (excluding the comment-start marker). CommentText is the text
+  /// of the comment, excluding the comment start and end markers, and the
+  /// newline for single-line comments.
+  virtual void HandleComment(SMLoc Loc, StringRef CommentText) = 0;
 };
+
 
 /// Generic assembler lexer interface, for use by target specific assembly
 /// lexers.
@@ -138,13 +45,12 @@ class MCAsmLexer {
   SMLoc ErrLoc;
   std::string Err;
 
-  MCAsmLexer(const MCAsmLexer &) = delete;
-  void operator=(const MCAsmLexer &) = delete;
 protected: // Can only create subclasses.
-  const char *TokStart;
-  bool SkipSpace;
+  const char *TokStart = nullptr;
+  bool SkipSpace = true;
   bool AllowAtInIdentifier;
-  bool IsAtStartOfStatement;
+  bool IsAtStartOfStatement = true;
+  AsmCommentConsumer *CommentConsumer = nullptr;
 
   MCAsmLexer();
 
@@ -156,11 +62,13 @@ protected: // Can only create subclasses.
   }
 
 public:
+  MCAsmLexer(const MCAsmLexer &) = delete;
+  MCAsmLexer &operator=(const MCAsmLexer &) = delete;
   virtual ~MCAsmLexer();
 
   /// Consume the next token from the input stream and return it.
   ///
-  /// The lexer will continuosly return the end-of-file token once the end of
+  /// The lexer will continuously return the end-of-file token once the end of
   /// the main input file has been reached.
   const AsmToken &Lex() {
     assert(!CurTok.empty());
@@ -234,8 +142,12 @@ public:
 
   bool getAllowAtInIdentifier() { return AllowAtInIdentifier; }
   void setAllowAtInIdentifier(bool v) { AllowAtInIdentifier = v; }
+
+  void setCommentConsumer(AsmCommentConsumer *CommentConsumer) {
+    this->CommentConsumer = CommentConsumer;
+  }
 };
 
-} // End llvm namespace
+} // end namespace llvm
 
-#endif
+#endif // LLVM_MC_MCPARSER_MCASMLEXER_H

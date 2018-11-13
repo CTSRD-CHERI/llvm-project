@@ -10,18 +10,31 @@
 #ifndef liblldb_SourceManager_h_
 #define liblldb_SourceManager_h_
 
-// Project includes
-#include "lldb/Host/FileSpec.h"
-#include "lldb/lldb-private.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/lldb-defines.h" // for DISALLOW_COPY_AND_ASSIGN
+#include "lldb/lldb-forward.h" // for DebuggerSP, DebuggerWP, DataBufferSP
 
-// Other libraries and framework includes
 #include "llvm/Support/Chrono.h"
 
-// C Includes
-// C++ Includes
+#include <cstdint> // for uint32_t, UINT32_MAX
 #include <map>
 #include <memory>
+#include <stddef.h> // for size_t
+#include <string>   // for string
 #include <vector>
+
+namespace lldb_private {
+class RegularExpression;
+}
+namespace lldb_private {
+class Stream;
+}
+namespace lldb_private {
+class SymbolContextList;
+}
+namespace lldb_private {
+class Target;
+}
 
 namespace lldb_private {
 
@@ -39,7 +52,7 @@ public:
 
     void UpdateIfNeeded();
 
-    size_t DisplaySourceLines(uint32_t line, uint32_t column,
+    size_t DisplaySourceLines(uint32_t line, llvm::Optional<size_t> column,
                               uint32_t context_before, uint32_t context_after,
                               Stream *s);
     void FindLinesMatchingRegex(RegularExpression &regex, uint32_t start_line,
@@ -93,9 +106,8 @@ public:
 
 #ifndef SWIG
   // The SourceFileCache class separates the source manager from the cache of
-  // source files, so the
-  // cache can be stored in the Debugger, but the source managers can be per
-  // target.
+  // source files, so the cache can be stored in the Debugger, but the source
+  // managers can be per target.
   class SourceFileCache {
   public:
     SourceFileCache() = default;

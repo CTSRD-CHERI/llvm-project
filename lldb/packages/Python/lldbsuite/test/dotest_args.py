@@ -69,10 +69,9 @@ def create_parser():
         '-A',
         '--arch',
         metavar='arch',
-        action='append',
-        dest='archs',
+        dest='arch',
         help=textwrap.dedent('''Specify the architecture(s) to test. This option can be specified more than once'''))
-    group.add_argument('-C', '--compiler', metavar='compiler', dest='compilers', action='append', help=textwrap.dedent(
+    group.add_argument('-C', '--compiler', metavar='compiler', dest='compiler', help=textwrap.dedent(
         '''Specify the compiler(s) used to build the inferior executables. The compiler path can be an executable basename or a full path to a compiler executable. This option can be specified multiple times.'''))
     if sys.platform == 'darwin':
         group.add_argument('--apple-sdk', metavar='apple_sdk', dest='apple_sdk', default="macosx", help=textwrap.dedent(
@@ -83,6 +82,10 @@ def create_parser():
         metavar='extra-flags',
         help=textwrap.dedent('''Specify the extra flags to be passed to the toolchain when building the inferior programs to be debugged
                                                            suggestions: do not lump the "-A arch1 -A arch2" together such that the -E option applies to only one of the architectures'''))
+
+    group.add_argument('--dsymutil', metavar='dsymutil', dest='dsymutil', help=textwrap.dedent('Specify which dsymutil to use.'))
+
+    group.add_argument('--filecheck', metavar='filecheck', dest='filecheck', help=textwrap.dedent('Specify which FileCheck binary to use.'))
 
     # Test filtering options
     group = parser.add_argument_group('Test filtering options')
@@ -124,6 +127,15 @@ def create_parser():
         metavar='executable-path',
         help='The path to the lldb executable')
     group.add_argument(
+        '--server',
+        metavar='server-path',
+        help='The path to the debug server executable to use')
+    group.add_argument(
+        '--out-of-tree-debugserver',
+        dest='out_of_tree_debugserver',
+        action='store_true',
+        help='A flag to indicate an out-of-tree debug server is being used')
+    group.add_argument(
         '-s',
         metavar='name',
         help='Specify the name of the dir created to store the session files of tests with errored or failed status. If not specified, the test driver uses the timestamp as the session dir name')
@@ -156,6 +168,12 @@ def create_parser():
         metavar='Codesigning identity',
         default='lldb_codesign',
         help='The codesigning identity to use')
+    group.add_argument(
+        '--build-dir',
+        dest='test_build_dir',
+        metavar='Test build directory',
+        default='lldb-test-build.noindex',
+        help='The root build directory for the tests. It will be removed before running.')
 
     # Configuration options
     group = parser.add_argument_group('Remote platform options')

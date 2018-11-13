@@ -1,7 +1,7 @@
-# RUN: llvm-mc -filetype=obj -triple=powerpc-unknown-freebsd %s -o %t
-# RUN: ld.lld -discard-all -shared %t -o %t2
-# RUN: llvm-readobj -file-headers -sections -section-data -program-headers %t2 | FileCheck %s
 # REQUIRES: ppc
+# RUN: llvm-mc -filetype=obj -triple=powerpc-unknown-freebsd %s -o %t
+# RUN: ld.lld --hash-style=sysv -discard-all -shared %t -o %t2
+# RUN: llvm-readobj -file-headers -sections -section-data -program-headers %t2 | FileCheck %s
 
 # exits with return code 42 on FreeBSD
 .text
@@ -26,7 +26,7 @@
 // CHECK-NEXT:   Type: SharedObject (0x3)
 // CHECK-NEXT:   Machine: EM_PPC (0x14)
 // CHECK-NEXT:   Version: 1
-// CHECK-NEXT:   Entry: 0x0
+// CHECK-NEXT:   Entry: 0x1000
 // CHECK-NEXT:   ProgramHeaderOffset: 0x34
 // CHECK-NEXT:   SectionHeaderOffset: 0x20AC
 // CHECK-NEXT:   Flags [ (0x0)
@@ -144,9 +144,9 @@
 // CHECK-NEXT:     AddressAlignment: 4
 // CHECK-NEXT:     EntrySize: 8
 // CHECK-NEXT:     SectionData (
-// CHECK-NEXT:       0000: 00000006 00000114 0000000B 00000010  |................|
-// CHECK-NEXT:       0010: 00000005 00000134 0000000A 00000001  |.......4........|
-// CHECK-NEXT:       0020: 00000004 00000124 00000000 00000000  |.......$........|
+// CHECK-NEXT:       0000: 00000006 00000114 0000000B 00000010
+// CHECK-NEXT:       0010: 00000005 00000134 0000000A 00000001
+// CHECK-NEXT:       0020: 00000004 00000124 00000000 00000000
 // CHECK-NEXT:     )
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Section {
@@ -165,7 +165,7 @@
 // CHECK-NEXT:     AddressAlignment: 1
 // CHECK-NEXT:     EntrySize: 1
 // CHECK-NEXT:     SectionData (
-// CHECK-NEXT:       0000: 4C4C4420 312E3000 |LLD 1.0.|
+// CHECK-NEXT:       0000: 4C4C4420 312E3000                    |LLD 1.0.|
 // CHECK-NEXT:     )
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Section {
@@ -178,7 +178,7 @@
 // CHECK-NEXT:     Offset: 0x2038
 // CHECK-NEXT:     Size: 32
 // CHECK-NEXT:     Link: 9
-// CHECK-NEXT:     Info: 1
+// CHECK-NEXT:     Info: 2
 // CHECK-NEXT:     AddressAlignment: 4
 // CHECK-NEXT:     EntrySize: 16
 // CHECK-NEXT:     SectionData (
@@ -215,7 +215,7 @@
 // CHECK-NEXT:     ]
 // CHECK-NEXT:     Address: 0x0
 // CHECK-NEXT:     Offset: 0x20A1
-// CHECK-NEXT:     Size: 1
+// CHECK-NEXT:     Size: 10
 // CHECK-NEXT:     Link: 0
 // CHECK-NEXT:     Info: 0
 // CHECK-NEXT:     AddressAlignment: 1
@@ -295,7 +295,7 @@
 // CHECK-NEXT:     VirtualAddress: 0x2000
 // CHECK-NEXT:     PhysicalAddress: 0x2000
 // CHECK-NEXT:     FileSize: 48
-// CHECK-NEXT:     MemSize: 48
+// CHECK-NEXT:     MemSize: 4096
 // CHECK-NEXT:     Flags [ (0x4)
 // CHECK-NEXT:       PF_R (0x4)
 // CHECK-NEXT:     ]

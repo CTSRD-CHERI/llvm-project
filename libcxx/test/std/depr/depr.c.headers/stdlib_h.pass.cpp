@@ -12,6 +12,8 @@
 #include <stdlib.h>
 #include <type_traits>
 
+#include "test_macros.h"
+
 // As of 1/10/2015 clang emits a -Wnonnull warnings even if the warning occurs
 // in an unevaluated context. For this reason we manually suppress the warning.
 #if defined(__clang__)
@@ -83,6 +85,14 @@ int main()
     static_assert((std::is_same<decltype(strtoull("", endptr,0)), unsigned long long>::value), "");
     static_assert((std::is_same<decltype(rand()), int>::value), "");
     static_assert((std::is_same<decltype(srand(0)), void>::value), "");
+
+//  Microsoft does not implement aligned_alloc in their C library
+#ifndef TEST_COMPILER_C1XX
+#if TEST_STD_VER > 14 && defined(TEST_HAS_C11_FEATURES)
+    static_assert((std::is_same<decltype(aligned_alloc(0,0)), void*>::value), "");
+#endif
+#endif
+
     static_assert((std::is_same<decltype(calloc(0,0)), void*>::value), "");
     static_assert((std::is_same<decltype(free(0)), void>::value), "");
     static_assert((std::is_same<decltype(malloc(0)), void*>::value), "");
@@ -104,11 +114,9 @@ int main()
     wchar_t* pw = 0;
     const wchar_t* pwc = 0;
     char* pc = 0;
-#ifndef _LIBCPP_HAS_NO_THREAD_UNSAFE_C_FUNCTIONS
     static_assert((std::is_same<decltype(mblen("",0)), int>::value), "");
     static_assert((std::is_same<decltype(mbtowc(pw,"",0)), int>::value), "");
     static_assert((std::is_same<decltype(wctomb(pc,L' ')), int>::value), "");
-#endif
     static_assert((std::is_same<decltype(mbstowcs(pw,"",0)), size_t>::value), "");
     static_assert((std::is_same<decltype(wcstombs(pc,pwc,0)), size_t>::value), "");
 }

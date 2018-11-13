@@ -1,4 +1,4 @@
-//===-- llvm/Bitcode/BitcodeReader.h - Bitcode reader ----*- C++ -*-===//
+//===- llvm/Bitcode/BitcodeReader.h - Bitcode reader ------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,18 +14,23 @@
 #ifndef LLVM_BITCODE_BITCODEREADER_H
 #define LLVM_BITCODE_BITCODEREADER_H
 
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Bitcode/BitCodes.h"
-#include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/ModuleSummaryIndex.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorOr.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include <cstdint>
 #include <memory>
-
+#include <string>
+#include <system_error>
+#include <vector>
 namespace llvm {
-  class LLVMContext;
-  class Module;
+
+class LLVMContext;
+class Module;
 
   // These functions are for converting Expected/Error values to
   // ErrorOr/std::error_code for compatibility with legacy clients. FIXME:
@@ -40,10 +45,22 @@ namespace llvm {
     return std::move(*Val);
   }
 
+  struct BitcodeFileContents;
+
+  /// Basic information extracted from a bitcode module to be used for LTO.
+  struct BitcodeLTOInfo {
+    bool IsThinLTO;
+    bool HasSummary;
+  };
+
   /// Represents a module in a bitcode file.
   class BitcodeModule {
+    // This covers the identification (if present) and module blocks.
     ArrayRef<uint8_t> Buffer;
     StringRef ModuleIdentifier;
+
+    // The string table used to interpret this module.
+    StringRef Strtab;
 
     // The bitstream location of the IDENTIFICATION_BLOCK.
     uint64_t IdentificationBit;
@@ -57,22 +74,58 @@ namespace llvm {
           IdentificationBit(IdentificationBit), ModuleBit(ModuleBit) {}
 
     // Calls the ctor.
-    friend Expected<std::vector<BitcodeModule>>
-    getBitcodeModuleList(MemoryBufferRef Buffer);
+    friend Expected<BitcodeFileContents>
+    getBitcodeFileContents(MemoryBufferRef Buffer);
 
-    Expected<std::unique_ptr<Module>>
-    getModuleImpl(LLVMContext &Context, bool MaterializeAll,
-                  bool ShouldLazyLoadMetadata);
+    Expected<std::unique_ptr<Module>> getModuleImpl(LLVMContext &Context,
+                                                    bool MaterializeAll,
+                                                    bool ShouldLazyLoadMetadata,
+                                                    bool IsImporting);
 
   public:
+    StringRef getBuffer() const {
+      return StringRef((const char *)Buffer.begin(), Buffer.size());
+    }
+
+    StringRef getStrtab() const { return Strtab; }
+
+    StringRef getModuleIdentifier() const { return ModuleIdentifier; }
+
     /// Read the bitcode module and prepare for lazy deserialization of function
     /// bodies. If ShouldLazyLoadMetadata is true, lazily load metadata as well.
-    Expected<std::unique_ptr<Module>>
-    getLazyModule(LLVMContext &Context, bool ShouldLazyLoadMetadata);
+    /// If IsImporting is true, this module is being parsed for ThinLTO
+    /// importing into another module.
+    Expected<std::unique_ptr<Module>> getLazyModule(LLVMContext &Context,
+                                                    bool ShouldLazyLoadMetadata,
+                                                    bool IsImporting);
 
     /// Read the entire bitcode module and return it.
     Expected<std::unique_ptr<Module>> parseModule(LLVMContext &Context);
+
+    /// Returns information about the module to be used for LTO: whether to
+    /// compile with ThinLTO, and whether it has a summary.
+    Expected<BitcodeLTOInfo> getLTOInfo();
+
+    /// Parse the specified bitcode buffer, returning the module summary index.
+    Expected<std::unique_ptr<ModuleSummaryIndex>> getSummary();
+
+    /// Parse the specified bitcode buffer and merge its module summary index
+    /// into CombinedIndex.
+    Error readSummary(ModuleSummaryIndex &CombinedIndex, StringRef ModulePath,
+                      uint64_t ModuleId);
   };
+
+  struct BitcodeFileContents {
+    std::vector<BitcodeModule> Mods;
+    StringRef Symtab, StrtabForSymtab;
+  };
+
+  /// Returns the contents of a bitcode file. This includes the raw contents of
+  /// the symbol table embedded in the bitcode file. Clients which require a
+  /// symbol table should prefer to use irsymtab::read instead of this function
+  /// because it creates a reader for the irsymtab and handles upgrading bitcode
+  /// files without a symbol table or with an old symbol table.
+  Expected<BitcodeFileContents> getBitcodeFileContents(MemoryBufferRef Buffer);
 
   /// Returns a list of modules in the specified bitcode buffer.
   Expected<std::vector<BitcodeModule>>
@@ -80,18 +133,20 @@ namespace llvm {
 
   /// Read the header of the specified bitcode buffer and prepare for lazy
   /// deserialization of function bodies. If ShouldLazyLoadMetadata is true,
-  /// lazily load metadata as well.
+  /// lazily load metadata as well. If IsImporting is true, this module is
+  /// being parsed for ThinLTO importing into another module.
   Expected<std::unique_ptr<Module>>
   getLazyBitcodeModule(MemoryBufferRef Buffer, LLVMContext &Context,
-                       bool ShouldLazyLoadMetadata = false);
+                       bool ShouldLazyLoadMetadata = false,
+                       bool IsImporting = false);
 
   /// Like getLazyBitcodeModule, except that the module takes ownership of
   /// the memory buffer if successful. If successful, this moves Buffer. On
-  /// error, this *does not* move Buffer.
-  Expected<std::unique_ptr<Module>>
-  getOwningLazyBitcodeModule(std::unique_ptr<MemoryBuffer> &&Buffer,
-                             LLVMContext &Context,
-                             bool ShouldLazyLoadMetadata = false);
+  /// error, this *does not* move Buffer. If IsImporting is true, this module is
+  /// being parsed for ThinLTO importing into another module.
+  Expected<std::unique_ptr<Module>> getOwningLazyBitcodeModule(
+      std::unique_ptr<MemoryBuffer> &&Buffer, LLVMContext &Context,
+      bool ShouldLazyLoadMetadata = false, bool IsImporting = false);
 
   /// Read the header of the specified bitcode buffer and extract just the
   /// triple information. If successful, this returns a string. On error, this
@@ -111,16 +166,28 @@ namespace llvm {
   Expected<std::unique_ptr<Module>> parseBitcodeFile(MemoryBufferRef Buffer,
                                                      LLVMContext &Context);
 
-  /// Check if the given bitcode buffer contains a summary block.
-  Expected<bool> hasGlobalValueSummary(MemoryBufferRef Buffer);
+  /// Returns LTO information for the specified bitcode file.
+  Expected<BitcodeLTOInfo> getBitcodeLTOInfo(MemoryBufferRef Buffer);
 
   /// Parse the specified bitcode buffer, returning the module summary index.
   Expected<std::unique_ptr<ModuleSummaryIndex>>
   getModuleSummaryIndex(MemoryBufferRef Buffer);
 
+  /// Parse the specified bitcode buffer and merge the index into CombinedIndex.
+  Error readModuleSummaryIndex(MemoryBufferRef Buffer,
+                               ModuleSummaryIndex &CombinedIndex,
+                               uint64_t ModuleId);
+
+  /// Parse the module summary index out of an IR file and return the module
+  /// summary index object if found, or an empty summary if not. If Path refers
+  /// to an empty file and IgnoreEmptyThinLTOIndexFile is true, then
+  /// this function will return nullptr.
+  Expected<std::unique_ptr<ModuleSummaryIndex>>
+  getModuleSummaryIndexForFile(StringRef Path,
+                               bool IgnoreEmptyThinLTOIndexFile = false);
+
   /// isBitcodeWrapper - Return true if the given bytes are the magic bytes
   /// for an LLVM IR bitcode wrapper.
-  ///
   inline bool isBitcodeWrapper(const unsigned char *BufPtr,
                                const unsigned char *BufEnd) {
     // See if you can find the hidden message in the magic bytes :-).
@@ -134,7 +201,6 @@ namespace llvm {
 
   /// isRawBitcode - Return true if the given bytes are the magic bytes for
   /// raw LLVM IR bitcode (without a wrapper).
-  ///
   inline bool isRawBitcode(const unsigned char *BufPtr,
                            const unsigned char *BufEnd) {
     // These bytes sort of have a hidden message, but it's not in
@@ -148,7 +214,6 @@ namespace llvm {
 
   /// isBitcode - Return true if the given bytes are the magic bytes for
   /// LLVM IR bitcode, either with or without a wrapper.
-  ///
   inline bool isBitcode(const unsigned char *BufPtr,
                         const unsigned char *BufEnd) {
     return isBitcodeWrapper(BufPtr, BufEnd) ||
@@ -196,10 +261,12 @@ namespace llvm {
     return std::error_code(static_cast<int>(E), BitcodeErrorCategory());
   }
 
-} // End llvm namespace
+} // end namespace llvm
 
 namespace std {
-template <> struct is_error_code_enum<llvm::BitcodeError> : std::true_type {};
-}
 
-#endif
+template <> struct is_error_code_enum<llvm::BitcodeError> : std::true_type {};
+
+} // end namespace std
+
+#endif // LLVM_BITCODE_BITCODEREADER_H

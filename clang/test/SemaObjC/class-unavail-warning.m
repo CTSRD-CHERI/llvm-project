@@ -2,7 +2,7 @@
 // rdar://9092208
 
 __attribute__((unavailable("not available")))
-@interface MyClass { // expected-note 8 {{'MyClass' has been explicitly marked unavailable here}}
+@interface MyClass { // expected-note 7 {{'MyClass' has been explicitly marked unavailable here}}
 @public
     void *_test;
     MyClass *ivar; // no error.
@@ -28,7 +28,7 @@ __attribute__((unavailable("not available")))
 @interface MyClass (Cat2) // no error.
 @end
 
-@implementation MyClass (Cat2) // expected-error {{unavailable}}
+@implementation MyClass (Cat2) // no error.
 @end
 
 int main() {
@@ -115,9 +115,9 @@ UNAVAILABLE __attribute__((objc_root_class))
 }
 @end
 
-typedef int unavailable_int UNAVAILABLE;
+typedef int unavailable_int UNAVAILABLE; // expected-note {{'unavailable_int' has been explicitly marked unavailable here}}
 
 UNAVAILABLE
 @interface A
-extern unavailable_int global_unavailable; // FIXME: this should be an error!
+extern unavailable_int global_unavailable; // expected-error {{'unavailable_int' is unavailable: not available}}
 @end

@@ -31,7 +31,7 @@ bar:
 // OBJ-NEXT:    )
 
 
-// RUN: ld.lld %t.o -o %t -shared
+// RUN: ld.lld --hash-style=sysv %t.o -o %t -shared
 // RUN: llvm-readobj -s -section-data %t | FileCheck %s
 
 // Check that the size of the CIE was changed to (0x1C + 4) and the FDE one was
@@ -51,7 +51,7 @@ bar:
 // CHECK-NEXT: EntrySize:
 // CHECK-NEXT: SectionData (
 // CHECK-NEXT:   0000: 1C000000 00000000 017A5052 00017810
-// CHECK-NEXT:   0010: 061B260E 00001B0C 07089001 00000000
-// CHECK-NEXT:   0020: 14000000 24000000 100E0000 00000000
+// CHECK-NEXT:   0010: 061BF60D 00001B0C 07089001 00000000
+// CHECK-NEXT:   0020: 14000000 24000000 E00D0000 00000000
 // CHECK-NEXT:   0030: 00000000 00000000
 // CHECK-NEXT: )

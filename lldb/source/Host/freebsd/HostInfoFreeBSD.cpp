@@ -14,21 +14,21 @@
 #include <sys/sysctl.h>
 #include <sys/types.h>
 #include <sys/utsname.h>
+#include <unistd.h>
 
 using namespace lldb_private;
 
-uint32_t HostInfoFreeBSD::GetMaxThreadNameLength() { return 16; }
-
-bool HostInfoFreeBSD::GetOSVersion(uint32_t &major, uint32_t &minor,
-                                   uint32_t &update) {
+llvm::VersionTuple HostInfoFreeBSD::GetOSVersion() {
   struct utsname un;
 
   ::memset(&un, 0, sizeof(utsname));
   if (uname(&un) < 0)
-    return false;
+    return llvm::VersionTuple();
 
-  int status = sscanf(un.release, "%u.%u", &major, &minor);
-  return status == 2;
+  unsigned major, minor;
+  if (2 == sscanf(un.release, "%u.%u", &major, &minor))
+    return llvm::VersionTuple(major, minor);
+  return llvm::VersionTuple();
 }
 
 bool HostInfoFreeBSD::GetOSBuildString(std::string &s) {
@@ -69,7 +69,7 @@ FileSpec HostInfoFreeBSD::GetProgramFileSpec() {
     if (sysctl(exe_path_mib, 4, NULL, &exe_path_size, NULL, 0) == 0) {
       char *exe_path = new char[exe_path_size];
       if (sysctl(exe_path_mib, 4, exe_path, &exe_path_size, NULL, 0) == 0)
-        g_program_filespec.SetFile(exe_path, false);
+        g_program_filespec.SetFile(exe_path, false, FileSpec::Style::native);
       delete[] exe_path;
     }
   }

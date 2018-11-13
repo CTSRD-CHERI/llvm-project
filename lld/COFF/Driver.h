@@ -12,14 +12,17 @@
 
 #include "Config.h"
 #include "SymbolTable.h"
-#include "lld/Core/LLVM.h"
-#include "lld/Core/Reproduce.h"
+#include "lld/Common/LLVM.h"
+#include "lld/Common/Reproduce.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringSet.h"
+#include "llvm/Object/Archive.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
-#include "llvm/Support/StringSaver.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/TarWriter.h"
 #include <memory>
 #include <set>
 #include <vector>
@@ -33,50 +36,50 @@ extern LinkerDriver *Driver;
 using llvm::COFF::MachineTypes;
 using llvm::COFF::WindowsSubsystem;
 using llvm::Optional;
-class InputFile;
 
-// Implemented in MarkLive.cpp.
-void markLive(const std::vector<Chunk *> &Chunks);
-
-// Implemented in ICF.cpp.
-void doICF(const std::vector<Chunk *> &Chunks);
+class COFFOptTable : public llvm::opt::OptTable {
+public:
+  COFFOptTable();
+};
 
 class ArgParser {
 public:
-  ArgParser() : Alloc(AllocAux) {}
-  // Parses command line options.
-  llvm::opt::InputArgList parse(llvm::ArrayRef<const char *> Args);
-
-  // Concatenate LINK environment varirable and given arguments and parse them.
-  llvm::opt::InputArgList parseLINK(llvm::ArrayRef<const char *> Args);
+  // Concatenate LINK environment variable and given arguments and parse them.
+  llvm::opt::InputArgList parseLINK(std::vector<const char *> Args);
 
   // Tokenizes a given string and then parses as command line options.
   llvm::opt::InputArgList parse(StringRef S) { return parse(tokenize(S)); }
 
+  // Tokenizes a given string and then parses as command line options in
+  // .drectve section. /EXPORT options are returned in second element
+  // to be processed in fastpath.
+  std::pair<llvm::opt::InputArgList, std::vector<StringRef>>
+  parseDirectives(StringRef S);
+
 private:
+  // Parses command line options.
+  llvm::opt::InputArgList parse(llvm::ArrayRef<const char *> Args);
+
   std::vector<const char *> tokenize(StringRef S);
 
-  std::vector<const char *> replaceResponseFiles(std::vector<const char *>);
-
-  llvm::BumpPtrAllocator AllocAux;
-  llvm::StringSaver Alloc;
+  COFFOptTable Table;
 };
 
 class LinkerDriver {
 public:
-  LinkerDriver() : Alloc(AllocAux) {}
   void link(llvm::ArrayRef<const char *> Args);
 
   // Used by the resolver to parse .drectve section contents.
   void parseDirectives(StringRef S);
 
-  std::unique_ptr<CpioFile> Cpio; // for /linkrepro
+  // Used by ArchiveFile to enqueue members.
+  void enqueueArchiveMember(const Archive::Child &C, StringRef SymName,
+                            StringRef ParentName);
+
+  MemoryBufferRef takeBuffer(std::unique_ptr<MemoryBuffer> MB);
 
 private:
-  llvm::BumpPtrAllocator AllocAux;
-  llvm::StringSaver Alloc;
-  ArgParser Parser;
-  SymbolTable Symtab;
+  std::unique_ptr<llvm::TarWriter> Tar; // for /linkrepro
 
   // Opens a file. Path has to be resolved already.
   MemoryBufferRef openFile(StringRef Path);
@@ -92,10 +95,14 @@ private:
 
   // Library search path. The first element is always "" (current directory).
   std::vector<StringRef> SearchPaths;
-  std::set<std::string> VisitedFiles;
 
-  Undefined *addUndefined(StringRef Sym);
-  StringRef mangle(StringRef Sym);
+  // We don't want to add the same file more than once.
+  // Files are uniquified by their filesystem and file number.
+  std::set<llvm::sys::fs::UniqueID> VisitedFiles;
+
+  std::set<std::string> VisitedLibs;
+
+  Symbol *addUndefined(StringRef Sym);
 
   // Windows specific -- "main" is not the only main function in Windows.
   // You can choose one from these four -- {w,}{WinMain,main}.
@@ -107,13 +114,21 @@ private:
   StringRef findDefaultEntry();
   WindowsSubsystem inferSubsystem();
 
-  // Driver is the owner of all opened files.
-  // InputFiles have MemoryBufferRefs to them.
-  std::vector<std::unique_ptr<MemoryBuffer>> OwningMBs;
-};
+  void addBuffer(std::unique_ptr<MemoryBuffer> MB, bool WholeArchive);
+  void addArchiveBuffer(MemoryBufferRef MBRef, StringRef SymName,
+                        StringRef ParentName);
 
-void parseModuleDefs(MemoryBufferRef MB, llvm::StringSaver *Alloc);
-void writeImportLibrary();
+  void enqueuePath(StringRef Path, bool WholeArchive);
+
+  void enqueueTask(std::function<void()> Task);
+  bool run();
+
+  std::list<std::function<void()>> TaskQueue;
+  std::vector<StringRef> FilePaths;
+  std::vector<MemoryBufferRef> Resources;
+
+  llvm::StringSet<> DirectivesExports;
+};
 
 // Functions below this line are defined in DriverUtils.cpp.
 
@@ -126,6 +141,8 @@ StringRef machineToStr(MachineTypes MT);
 // Parses a string in the form of "<integer>[,<integer>]".
 void parseNumbers(StringRef Arg, uint64_t *Addr, uint64_t *Size = nullptr);
 
+void parseGuard(StringRef Arg);
+
 // Parses a string in the form of "<integer>[.<integer>]".
 // Minor's default value is 0.
 void parseVersion(StringRef Arg, uint32_t *Major, uint32_t *Minor);
@@ -137,6 +154,7 @@ void parseSubsystem(StringRef Arg, WindowsSubsystem *Sys, uint32_t *Major,
 void parseAlternateName(StringRef);
 void parseMerge(StringRef);
 void parseSection(StringRef);
+void parseAligncomm(StringRef);
 
 // Parses a string in the form of "EMBED[,=<integer>]|NO".
 void parseManifest(StringRef Arg);
@@ -159,15 +177,15 @@ void assignExportOrdinals();
 // incompatible objects.
 void checkFailIfMismatch(StringRef Arg);
 
-// Convert Windows resource files (.res files) to a .obj file
-// using cvtres.exe.
-std::unique_ptr<MemoryBuffer>
-convertResToCOFF(const std::vector<MemoryBufferRef> &MBs);
+// Convert Windows resource files (.res files) to a .obj file.
+MemoryBufferRef convertResToCOFF(ArrayRef<MemoryBufferRef> MBs);
+
+void runMSVCLinker(std::string Rsp, ArrayRef<StringRef> Objects);
 
 // Create enum with OPT_xxx values for each option in Options.td
 enum {
   OPT_INVALID = 0,
-#define OPTION(_1, _2, ID, _4, _5, _6, _7, _8, _9, _10, _11) OPT_##ID,
+#define OPTION(_1, _2, ID, _4, _5, _6, _7, _8, _9, _10, _11, _12) OPT_##ID,
 #include "Options.inc"
 #undef OPTION
 };

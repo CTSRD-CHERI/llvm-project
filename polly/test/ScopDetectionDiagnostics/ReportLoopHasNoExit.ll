@@ -1,3 +1,9 @@
+; XFAIL: *
+
+; The test case stopped making sense after r310940 that added infinite loops to
+; the PostDominatorTree. Infinite loops are postdominated ony by the virtual
+; root, which causes them not to appear in regions in ScopDetection anymore.
+
 ; RUN: opt %loadPolly -pass-remarks-missed="polly-detect" -polly-allow-nonaffine-loops -analyze  -polly-detect < %s 2>&1 | FileCheck %s
 ; RUN: opt %loadPolly -pass-remarks-missed="polly-detect" -polly-allow-nonaffine-loops=false -analyze  -polly-detect < %s 2>&1 | FileCheck %s
 
@@ -89,7 +95,7 @@ attributes #1 = { nounwind readnone }
 !3 = !{i32 2, !"Dwarf Version", i32 4}
 !4 = !{i32 2, !"Debug Info Version", i32 3}
 !5 = !{!"clang version 3.9.0 "}
-!6 = distinct !DISubprogram(name: "func", scope: !1, file: !1, line: 1,  isLocal: false, isDefinition: true, scopeLine: 2, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!6 = distinct !DISubprogram(name: "func", scope: !1, file: !1, line: 1,  isLocal: false, isDefinition: true, scopeLine: 2, flags: DIFlagPrototyped, isOptimized: false, unit: !0, retainedNodes: !2)
 !19 = distinct !DILexicalBlock(scope: !6, file: !1, line: 3, column: 3)
 !23 = !DILexicalBlockFile(scope: !24, file: !1, discriminator: 1)
 !24 = distinct !DILexicalBlock(scope: !19, file: !1, line: 3, column: 3)

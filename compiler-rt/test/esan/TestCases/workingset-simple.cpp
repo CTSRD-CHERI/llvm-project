@@ -1,6 +1,11 @@
 // RUN: %clang_esan_wset -O0 %s -o %t 2>&1
 // RUN: %run %t 2>&1 | FileCheck %s
 
+// FIXME: Re-enable once PR33590 is fixed.
+// UNSUPPORTED: x86_64
+// Stucks at init and no clone feature equivalent.
+// UNSUPPORTED: freebsd
+
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>

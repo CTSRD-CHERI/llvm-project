@@ -14,49 +14,73 @@
 #ifndef LLVM_ANALYSIS_BASICALIASANALYSIS_H
 #define LLVM_ANALYSIS_BASICALIASANALYSIS_H
 
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/GetElementPtrTypeIterator.h"
-#include "llvm/IR/Instruction.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
+#include "llvm/Analysis/MemoryLocation.h"
+#include "llvm/IR/CallSite.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Pass.h"
+#include <algorithm>
+#include <cstdint>
+#include <memory>
+#include <utility>
 
 namespace llvm {
+
+struct AAMDNodes;
+class APInt;
 class AssumptionCache;
+class BasicBlock;
+class DataLayout;
 class DominatorTree;
+class Function;
+class GEPOperator;
 class LoopInfo;
+class PHINode;
+class SelectInst;
+class TargetLibraryInfo;
+class PhiValues;
+class Value;
 
 /// This is the AA result object for the basic, local, and stateless alias
 /// analysis. It implements the AA query interface in an entirely stateless
-/// manner. As one consequence, it is never invalidated. While it does retain
-/// some storage, that is used as an optimization and not to preserve
-/// information from query to query.
+/// manner. As one consequence, it is never invalidated due to IR changes.
+/// While it does retain some storage, that is used as an optimization and not
+/// to preserve information from query to query. However it does retain handles
+/// to various other analyses and must be recomputed when those analyses are.
 class BasicAAResult : public AAResultBase<BasicAAResult> {
   friend AAResultBase<BasicAAResult>;
 
   const DataLayout &DL;
+  const Function &F;
   const TargetLibraryInfo &TLI;
   AssumptionCache &AC;
   DominatorTree *DT;
   LoopInfo *LI;
+  PhiValues *PV;
 
 public:
-  BasicAAResult(const DataLayout &DL, const TargetLibraryInfo &TLI,
-                AssumptionCache &AC, DominatorTree *DT = nullptr,
-                LoopInfo *LI = nullptr)
-      : AAResultBase(), DL(DL), TLI(TLI), AC(AC), DT(DT), LI(LI) {}
+  BasicAAResult(const DataLayout &DL, const Function &F,
+                const TargetLibraryInfo &TLI, AssumptionCache &AC,
+                DominatorTree *DT = nullptr, LoopInfo *LI = nullptr,
+                PhiValues *PV = nullptr)
+      : AAResultBase(), DL(DL), F(F), TLI(TLI), AC(AC), DT(DT), LI(LI), PV(PV)
+        {}
 
   BasicAAResult(const BasicAAResult &Arg)
-      : AAResultBase(Arg), DL(Arg.DL), TLI(Arg.TLI), AC(Arg.AC), DT(Arg.DT),
-        LI(Arg.LI) {}
+      : AAResultBase(Arg), DL(Arg.DL), F(Arg.F), TLI(Arg.TLI), AC(Arg.AC),
+        DT(Arg.DT),  LI(Arg.LI), PV(Arg.PV) {}
   BasicAAResult(BasicAAResult &&Arg)
-      : AAResultBase(std::move(Arg)), DL(Arg.DL), TLI(Arg.TLI), AC(Arg.AC),
-        DT(Arg.DT), LI(Arg.LI) {}
+      : AAResultBase(std::move(Arg)), DL(Arg.DL), F(Arg.F), TLI(Arg.TLI),
+        AC(Arg.AC), DT(Arg.DT), LI(Arg.LI), PV(Arg.PV) {}
+
+  /// Handle invalidation events in the new pass manager.
+  bool invalidate(Function &Fn, const PreservedAnalyses &PA,
+                  FunctionAnalysisManager::Invalidator &Inv);
 
   AliasResult alias(const MemoryLocation &LocA, const MemoryLocation &LocB);
 
@@ -75,13 +99,12 @@ public:
 
   /// Returns the behavior when calling the given function. For use when the
   /// call site is not known.
-  FunctionModRefBehavior getModRefBehavior(const Function *F);
+  FunctionModRefBehavior getModRefBehavior(const Function *Fn);
 
 private:
   // A linear transformation of a Value; this class represents ZExt(SExt(V,
   // SExtBits), ZExtBits) * Scale + Offset.
   struct VariableGEPIndex {
-
     // An opaque Value - we can't decompose this further.
     const Value *V;
 
@@ -119,8 +142,8 @@ private:
   };
 
   /// Track alias queries to guard against recursion.
-  typedef std::pair<MemoryLocation, MemoryLocation> LocPair;
-  typedef SmallDenseMap<LocPair, AliasResult, 8> AliasCacheTy;
+  using LocPair = std::pair<MemoryLocation, MemoryLocation>;
+  using AliasCacheTy = SmallDenseMap<LocPair, AliasResult, 8>;
   AliasCacheTy AliasCache;
 
   /// Tracks phi nodes we have visited.
@@ -153,9 +176,9 @@ private:
 
   static bool isGEPBaseAtNegativeOffset(const GEPOperator *GEPOp,
       const DecomposedGEP &DecompGEP, const DecomposedGEP &DecompObject,
-      uint64_t ObjectAccessSize);
+      LocationSize ObjectAccessSize);
 
-  /// \brief A Heuristic for aliasGEP that searches for a constant offset
+  /// A Heuristic for aliasGEP that searches for a constant offset
   /// between the variables.
   ///
   /// GetLinearExpression has some limitations, as generally zext(%x + 1)
@@ -165,41 +188,44 @@ private:
   /// the addition overflows.
   bool
   constantOffsetHeuristic(const SmallVectorImpl<VariableGEPIndex> &VarIndices,
-                          uint64_t V1Size, uint64_t V2Size, int64_t BaseOffset,
-                          AssumptionCache *AC, DominatorTree *DT);
+                          LocationSize V1Size, LocationSize V2Size,
+                          int64_t BaseOffset, AssumptionCache *AC,
+                          DominatorTree *DT);
 
   bool isValueEqualInPotentialCycles(const Value *V1, const Value *V2);
 
   void GetIndexDifference(SmallVectorImpl<VariableGEPIndex> &Dest,
                           const SmallVectorImpl<VariableGEPIndex> &Src);
 
-  AliasResult aliasGEP(const GEPOperator *V1, uint64_t V1Size,
+  AliasResult aliasGEP(const GEPOperator *V1, LocationSize V1Size,
                        const AAMDNodes &V1AAInfo, const Value *V2,
-                       uint64_t V2Size, const AAMDNodes &V2AAInfo,
+                       LocationSize V2Size, const AAMDNodes &V2AAInfo,
                        const Value *UnderlyingV1, const Value *UnderlyingV2);
 
-  AliasResult aliasPHI(const PHINode *PN, uint64_t PNSize,
+  AliasResult aliasPHI(const PHINode *PN, LocationSize PNSize,
                        const AAMDNodes &PNAAInfo, const Value *V2,
-                       uint64_t V2Size, const AAMDNodes &V2AAInfo,
+                       LocationSize V2Size, const AAMDNodes &V2AAInfo,
                        const Value *UnderV2);
 
-  AliasResult aliasSelect(const SelectInst *SI, uint64_t SISize,
+  AliasResult aliasSelect(const SelectInst *SI, LocationSize SISize,
                           const AAMDNodes &SIAAInfo, const Value *V2,
-                          uint64_t V2Size, const AAMDNodes &V2AAInfo,
+                          LocationSize V2Size, const AAMDNodes &V2AAInfo,
                           const Value *UnderV2);
 
-  AliasResult aliasCheck(const Value *V1, uint64_t V1Size, AAMDNodes V1AATag,
-                         const Value *V2, uint64_t V2Size, AAMDNodes V2AATag,
+  AliasResult aliasCheck(const Value *V1, LocationSize V1Size,
+                         AAMDNodes V1AATag, const Value *V2,
+                         LocationSize V2Size, AAMDNodes V2AATag,
                          const Value *O1 = nullptr, const Value *O2 = nullptr);
 };
 
 /// Analysis pass providing a never-invalidated alias analysis result.
 class BasicAA : public AnalysisInfoMixin<BasicAA> {
   friend AnalysisInfoMixin<BasicAA>;
-  static char PassID;
+
+  static AnalysisKey Key;
 
 public:
-  typedef BasicAAResult Result;
+  using Result = BasicAAResult;
 
   BasicAAResult run(Function &F, FunctionAnalysisManager &AM);
 };
@@ -228,6 +254,24 @@ FunctionPass *createBasicAAWrapperPass();
 /// populated to the best of our ability for a particular function when inside
 /// of a \c ModulePass or a \c CallGraphSCCPass.
 BasicAAResult createLegacyPMBasicAAResult(Pass &P, Function &F);
-}
 
-#endif
+/// This class is a functor to be used in legacy module or SCC passes for
+/// computing AA results for a function. We store the results in fields so that
+/// they live long enough to be queried, but we re-use them each time.
+class LegacyAARGetter {
+  Pass &P;
+  Optional<BasicAAResult> BAR;
+  Optional<AAResults> AAR;
+
+public:
+  LegacyAARGetter(Pass &P) : P(P) {}
+  AAResults &operator()(Function &F) {
+    BAR.emplace(createLegacyPMBasicAAResult(P, F));
+    AAR.emplace(createLegacyPMAAResults(P, F, *BAR));
+    return *AAR;
+  }
+};
+
+} // end namespace llvm
+
+#endif // LLVM_ANALYSIS_BASICALIASANALYSIS_H

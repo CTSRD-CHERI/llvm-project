@@ -18,7 +18,6 @@
 #include <stdlib.h>
 
 #include "dwarf2.h"
-#include "AddressSpace.hpp"
 #include "Registers.hpp"
 #include "DwarfParser.hpp"
 #include "config.h"
@@ -65,9 +64,18 @@ private:
 
   static pint_t getCFA(A &addressSpace, const PrologInfo &prolog,
                        const R &registers) {
-    if (prolog.cfaRegister != 0)
-      return (registers.getRegister((int)prolog.cfaRegister) +
+    if (prolog.cfaRegister != 0) {
+#if defined(__mips__) && defined(__CHERI_PURE_CAPABILITY__)
+      // This is an ugly hack that's required because DWARF assumes that
+      // there's a single register for the stack.
+      return registers.getRegister(UNW_MIPS_C11) +
+          registers.getRegister((int)prolog.cfaRegister) +
+             prolog.cfaRegisterOffset;
+#else
+      return (pint_t)((sint_t)registers.getRegister((int)prolog.cfaRegister) +
              prolog.cfaRegisterOffset);
+#endif
+    }
     if (prolog.cfaExpression != 0)
       return evaluateExpression((pint_t)prolog.cfaExpression, addressSpace, 
                                 registers, 0);
@@ -84,16 +92,16 @@ typename A::pint_t DwarfInstructions<A, R>::getSavedRegister(
   switch (savedReg.location) {
   case CFI_Parser<A>::kRegisterInCFA:
 #ifdef __CHERI_PURE_CAPABILITY__
-          // FIXME: This is not the correct way of doing this, but we currently
-          // don't have a way of differentiating pointers and integers.
+    // FIXME: This is not the correct way of doing this, but we currently
+    // don't have a way of differentiating pointers and integers.
     if (reg < UNW_MIPS_C0)
       return addressSpace.get64(cfa + (pint_t)savedReg.value);
 #endif
-    return addressSpace.getP(cfa + (pint_t)savedReg.value);
+    return addressSpace.getRegister(cfa + (pint_t)savedReg.value);
 
   case CFI_Parser<A>::kRegisterAtExpression:
     *(volatile char*)savedReg.value;
-    return addressSpace.getP(
+    return addressSpace.getRegister(
         evaluateExpression((pint_t)savedReg.value, addressSpace,
                             registers, cfa));
 
@@ -175,7 +183,7 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pint_t pc,
       R newRegisters = registers;
       pint_t returnAddress = 0;
       const int lastReg = R::lastDwarfRegNum();
-      assert((int)CFI_Parser<A>::kMaxRegisterNumber > lastReg &&
+      assert(static_cast<int>(CFI_Parser<A>::kMaxRegisterNumber) >= lastReg &&
              "register range too large");
       assert(lastReg >= (int)cieInfo.returnAddressRegister &&
              "register range does not contain return address register");
@@ -492,7 +500,7 @@ DwarfInstructions<A, R>::evaluateExpression(pint_t expression, A &addressSpace,
 
     case DW_OP_plus_uconst:
       // pop stack, add uelb128 constant, push result
-      *sp += addressSpace.getULEB128(p, expressionEnd);
+      *sp += static_cast<pint_t>(addressSpace.getULEB128(p, expressionEnd));
       if (log)
         fprintf(stderr, "add constant\n");
       break;

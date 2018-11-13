@@ -20,16 +20,16 @@ entry:
 ; CHECK: ret i32
 
 
-declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i32, i1)
-declare void @llvm.memmove.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i32, i1)
-declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i32, i1)
+declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i1)
+declare void @llvm.memmove.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i1)
+declare void @llvm.memset.p0i8.i64(i8* nocapture, i8, i64, i1)
 
 
 ; Check that tsan converts mem intrinsics back to function calls.
 
 define void @MemCpyTest(i8* nocapture %x, i8* nocapture %y) sanitize_thread {
 entry:
-    tail call void @llvm.memcpy.p0i8.p0i8.i64(i8* %x, i8* %y, i64 16, i32 4, i1 false)
+    tail call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 4 %x, i8* align 4 %y, i64 16, i1 false)
     ret void
 ; CHECK: define void @MemCpyTest
 ; CHECK: call i8* @memcpy
@@ -38,7 +38,7 @@ entry:
 
 define void @MemMoveTest(i8* nocapture %x, i8* nocapture %y) sanitize_thread {
 entry:
-    tail call void @llvm.memmove.p0i8.p0i8.i64(i8* %x, i8* %y, i64 16, i32 4, i1 false)
+    tail call void @llvm.memmove.p0i8.p0i8.i64(i8* align 4 %x, i8* align 4 %y, i64 16, i1 false)
     ret void
 ; CHECK: define void @MemMoveTest
 ; CHECK: call i8* @memmove
@@ -47,11 +47,35 @@ entry:
 
 define void @MemSetTest(i8* nocapture %x) sanitize_thread {
 entry:
-    tail call void @llvm.memset.p0i8.i64(i8* %x, i8 77, i64 16, i32 4, i1 false)
+    tail call void @llvm.memset.p0i8.i64(i8* align 4 %x, i8 77, i64 16, i1 false)
     ret void
 ; CHECK: define void @MemSetTest
 ; CHECK: call i8* @memset
 ; CHECK: ret void
+}
+
+; CHECK-LABEL: @SwiftError
+; CHECK-NOT: __tsan_read
+; CHECK-NOT: __tsan_write
+; CHECK: ret
+define void @SwiftError(i8** swifterror) sanitize_thread {
+  %swifterror_ptr_value = load i8*, i8** %0
+  store i8* null, i8** %0
+  %swifterror_addr = alloca swifterror i8*
+  %swifterror_ptr_value_2 = load i8*, i8** %swifterror_addr
+  store i8* null, i8** %swifterror_addr
+  ret void
+}
+
+; CHECK-LABEL: @SwiftErrorCall
+; CHECK-NOT: __tsan_read
+; CHECK-NOT: __tsan_write
+; CHECK: ret
+define void @SwiftErrorCall(i8** swifterror) sanitize_thread {
+  %swifterror_addr = alloca swifterror i8*
+  store i8* null, i8** %0
+  call void @SwiftError(i8** %0)
+  ret void
 }
 
 ; CHECK: define internal void @tsan.module_ctor()

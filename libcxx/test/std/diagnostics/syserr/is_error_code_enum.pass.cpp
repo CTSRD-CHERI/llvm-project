@@ -28,8 +28,8 @@ test()
 }
 
 class A {
-	A();
-	operator std::error_code () const { return std::error_code(); }
+    A();
+    operator std::error_code () const { return std::error_code(); }
 };
 
 // Specialize the template for my class
@@ -39,7 +39,7 @@ namespace std
   struct is_error_code_enum<A> : public std::true_type {};
 }
 
-	
+
 int main()
 {
     test<false, void>();

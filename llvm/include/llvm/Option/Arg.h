@@ -1,4 +1,4 @@
-//===--- Arg.h - Parsed Argument Classes ------------------------*- C++ -*-===//
+//===- Arg.h - Parsed Argument Classes --------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief Defines the llvm::Arg class for parsed arguments.
+/// Defines the llvm::Arg class for parsed arguments.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -21,41 +21,42 @@
 #include <string>
 
 namespace llvm {
+
+class raw_ostream;
+
 namespace opt {
+
 class ArgList;
 
-/// \brief A concrete instance of a particular driver option.
+/// A concrete instance of a particular driver option.
 ///
 /// The Arg class encodes just enough information to be able to
 /// derive the argument values efficiently.
 class Arg {
-  Arg(const Arg &) = delete;
-  void operator=(const Arg &) = delete;
-
 private:
-  /// \brief The option this argument is an instance of.
+  /// The option this argument is an instance of.
   const Option Opt;
 
-  /// \brief The argument this argument was derived from (during tool chain
+  /// The argument this argument was derived from (during tool chain
   /// argument translation), if any.
   const Arg *BaseArg;
 
-  /// \brief How this instance of the option was spelled.
+  /// How this instance of the option was spelled.
   StringRef Spelling;
 
-  /// \brief The index at which this argument appears in the containing
+  /// The index at which this argument appears in the containing
   /// ArgList.
   unsigned Index;
 
-  /// \brief Was this argument used to effect compilation?
+  /// Was this argument used to effect compilation?
   ///
   /// This is used for generating "argument unused" diagnostics.
   mutable unsigned Claimed : 1;
 
-  /// \brief Does this argument own its values?
+  /// Does this argument own its values?
   mutable unsigned OwnsValues : 1;
 
-  /// \brief The argument values, as C strings.
+  /// The argument values, as C strings.
   SmallVector<const char *, 2> Values;
 
 public:
@@ -65,13 +66,15 @@ public:
       const char *Value0, const Arg *BaseArg = nullptr);
   Arg(const Option Opt, StringRef Spelling, unsigned Index,
       const char *Value0, const char *Value1, const Arg *BaseArg = nullptr);
+  Arg(const Arg &) = delete;
+  Arg &operator=(const Arg &) = delete;
   ~Arg();
 
   const Option &getOption() const { return Opt; }
   StringRef getSpelling() const { return Spelling; }
   unsigned getIndex() const { return Index; }
 
-  /// \brief Return the base argument which generated this arg.
+  /// Return the base argument which generated this arg.
   ///
   /// This is either the argument itself or the argument it was
   /// derived from during tool chain specific argument translation.
@@ -85,10 +88,11 @@ public:
 
   bool isClaimed() const { return getBaseArg().Claimed; }
 
-  /// \brief Set the Arg claimed bit.
+  /// Set the Arg claimed bit.
   void claim() const { getBaseArg().Claimed = true; }
 
   unsigned getNumValues() const { return Values.size(); }
+
   const char *getValue(unsigned N = 0) const {
     return Values[N];
   }
@@ -103,10 +107,10 @@ public:
     return false;
   }
 
-  /// \brief Append the argument onto the given array as strings.
+  /// Append the argument onto the given array as strings.
   void render(const ArgList &Args, ArgStringList &Output) const;
 
-  /// \brief Append the argument, render as an input, onto the given
+  /// Append the argument, render as an input, onto the given
   /// array as strings.
   ///
   /// The distinction is that some options only render their values
@@ -116,12 +120,13 @@ public:
   void print(raw_ostream &O) const;
   void dump() const;
 
-  /// \brief Return a formatted version of the argument and
+  /// Return a formatted version of the argument and
   /// its values, for debugging and diagnostics.
   std::string getAsString(const ArgList &Args) const;
 };
 
 } // end namespace opt
+
 } // end namespace llvm
 
-#endif
+#endif // LLVM_OPTION_ARG_H

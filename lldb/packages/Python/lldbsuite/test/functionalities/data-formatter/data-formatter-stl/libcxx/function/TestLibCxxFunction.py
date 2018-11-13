@@ -23,12 +23,11 @@ class LibCxxFunctionTestCase(TestBase):
         var.SetPreferSyntheticValue(True)
         return var
 
-    @skipIf(compiler="gcc")
-    @skipIfWindows  # libc++ not ported to Windows yet
+    @add_test_categories(["libc++"])
     def test(self):
         """Test that std::function as defined by libc++ is correctly printed by LLDB"""
         self.build()
-        self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
+        self.runCmd("file " + self.getBuildArtifact("a.out"), CURRENT_EXECUTABLE_SET)
 
         bkpt = self.target().FindBreakpointByID(
             lldbutil.run_break_set_by_source_regexp(
@@ -36,21 +35,22 @@ class LibCxxFunctionTestCase(TestBase):
 
         self.runCmd("run", RUN_SUCCEEDED)
 
-        lldbutil.skip_if_library_missing(
-            self, self.target(), lldbutil.PrintableRegex("libc\+\+"))
-
         # The stop reason of the thread should be breakpoint.
         self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
                     substrs=['stopped',
                              'stop reason = breakpoint'])
 
-        f1 = self.get_variable('f1')
-        f2 = self.get_variable('f2')
+        self.expect("frame variable f1",
+                    substrs=['f1 =  Function = foo(int, int)'])
 
-        if self.TraceOn():
-            print(f1)
-        if self.TraceOn():
-            print(f2)
+        self.expect("frame variable f2",
+                    substrs=['f2 =  Lambda in File main.cpp at Line 27'])
 
-        self.assertTrue(f1.GetValueAsUnsigned(0) != 0, 'f1 has a valid value')
-        self.assertTrue(f2.GetValueAsUnsigned(0) != 0, 'f2 has a valid value')
+        self.expect("frame variable f3",
+                    substrs=['f3 =  Lambda in File main.cpp at Line 31'])
+
+        self.expect("frame variable f4",
+                    substrs=['f4 =  Function in File main.cpp at Line 17'])
+
+        self.expect("frame variable f5",
+                    substrs=['f5 =  Function = Bar::add_num(int) const'])

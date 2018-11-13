@@ -1,4 +1,4 @@
-//===-- llvm/CodeGen/MachineModuleInfoImpls.h -------------------*- C++ -*-===//
+//===- llvm/CodeGen/MachineModuleInfoImpls.h --------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -15,9 +15,12 @@
 #ifndef LLVM_CODEGEN_MACHINEMODULEINFOIMPLS_H
 #define LLVM_CODEGEN_MACHINEMODULEINFOIMPLS_H
 
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
+#include <cassert>
 
 namespace llvm {
+
 class MCSymbol;
 
 /// MachineModuleInfoMachO - This is a MachineModuleInfoImpl implementation
@@ -34,6 +37,7 @@ class MachineModuleInfoMachO : public MachineModuleInfoImpl {
   DenseMap<MCSymbol *, StubValueTy> ThreadLocalGVStubs;
 
   virtual void anchor(); // Out of line virtual method.
+
 public:
   MachineModuleInfoMachO(const MachineModuleInfo &) {}
 
@@ -62,6 +66,7 @@ class MachineModuleInfoELF : public MachineModuleInfoImpl {
   DenseMap<MCSymbol *, StubValueTy> GVStubs;
 
   virtual void anchor(); // Out of line virtual method.
+
 public:
   MachineModuleInfoELF(const MachineModuleInfo &) {}
 
@@ -75,6 +80,28 @@ public:
   SymbolListTy GetGVStubList() { return getSortedStubs(GVStubs); }
 };
 
+/// MachineModuleInfoCOFF - This is a MachineModuleInfoImpl implementation
+/// for COFF targets.
+class MachineModuleInfoCOFF : public MachineModuleInfoImpl {
+  /// GVStubs - These stubs are used to materialize global addresses in PIC
+  /// mode.
+  DenseMap<MCSymbol *, StubValueTy> GVStubs;
+
+  virtual void anchor(); // Out of line virtual method.
+
+public:
+  MachineModuleInfoCOFF(const MachineModuleInfo &) {}
+
+  StubValueTy &getGVStubEntry(MCSymbol *Sym) {
+    assert(Sym && "Key cannot be null");
+    return GVStubs[Sym];
+  }
+
+  /// Accessor methods to return the set of stubs in sorted order.
+
+  SymbolListTy GetGVStubList() { return getSortedStubs(GVStubs); }
+};
+
 } // end namespace llvm
 
-#endif
+#endif // LLVM_CODEGEN_MACHINEMODULEINFOIMPLS_H

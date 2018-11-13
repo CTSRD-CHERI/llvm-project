@@ -1,6 +1,6 @@
 ; RUN: llvm-as %s -o %t.o
 ; RUN: llvm-as %p/Inputs/comdat.ll -o %t2.o
-; RUN: llvm-lto2 -save-temps -o %t3.o %t.o %t2.o \
+; RUN: llvm-lto2 run -save-temps -o %t3.o %t.o %t2.o \
 ; RUN:  -r=%t.o,f1,plx \
 ; RUN:  -r=%t.o,v1,px \
 ; RUN:  -r=%t.o,r11,px \
@@ -70,7 +70,7 @@ bb11:
 ; CHECK-DAG: @a23 = alias i32 (i8*), i32 (i8*)* @f1.2{{$}}
 ; CHECK-DAG: @a24 = alias i16, bitcast (i32 (i8*)* @f1.2 to i16*)
 
-; CHECK:      define weak_odr i32 @f1(i8*) comdat($c1) {
+; CHECK:      define weak_odr dso_local i32 @f1(i8*) comdat($c1) {
 ; CHECK-NEXT: bb10:
 ; CHECK-NEXT:   br label %bb11{{$}}
 ; CHECK:      bb11:

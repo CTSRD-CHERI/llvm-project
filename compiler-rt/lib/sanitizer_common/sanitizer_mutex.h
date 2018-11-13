@@ -73,19 +73,24 @@ class SpinMutex : public StaticSpinMutex {
 
 class BlockingMutex {
  public:
-#if SANITIZER_WINDOWS
-  // Windows does not currently support LinkerInitialized
-  explicit BlockingMutex(LinkerInitialized);
-#else
   explicit constexpr BlockingMutex(LinkerInitialized)
-      : opaque_storage_ {0, }, owner_(0) {}
-#endif
+      : opaque_storage_ {0, }, owner_ {0} {}
   BlockingMutex();
   void Lock();
   void Unlock();
+
+  // This function does not guarantee an explicit check that the calling thread
+  // is the thread which owns the mutex. This behavior, while more strictly
+  // correct, causes problems in cases like StopTheWorld, where a parent thread
+  // owns the mutex but a child checks that it is locked. Rather than
+  // maintaining complex state to work around those situations, the check only
+  // checks that the mutex is owned, and assumes callers to be generally
+  // well-behaved.
   void CheckLocked();
+
  private:
-  uptr opaque_storage_[10];
+  // Solaris mutex_t has a member that requires 64-bit alignment.
+  ALIGNED(8) uptr opaque_storage_[10];
   uptr owner_;  // for debugging
 };
 

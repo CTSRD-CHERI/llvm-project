@@ -11,6 +11,7 @@
 #define LLVM_LIB_CODEGEN_ASMPRINTER_DEBUGLOCENTRY_H
 
 #include "DebugLocStream.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugInfo.h"
 #include "llvm/MC/MCSymbol.h"
@@ -20,7 +21,7 @@
 namespace llvm {
 class AsmPrinter;
 
-/// \brief This struct describes location entries emitted in the .debug_loc
+/// This struct describes location entries emitted in the .debug_loc
 /// section.
 class DebugLocEntry {
   /// Begin and end symbols for the address range that this location is valid.
@@ -28,7 +29,7 @@ class DebugLocEntry {
   const MCSymbol *End;
 
 public:
-  /// \brief A single location or constant.
+  /// A single location or constant.
   struct Value {
     Value(const DIExpression *Expr, int64_t i)
         : Expression(Expr), EntryKind(E_Integer) {
@@ -72,15 +73,16 @@ public:
     const ConstantFP *getConstantFP() const { return Constant.CFP; }
     const ConstantInt *getConstantInt() const { return Constant.CIP; }
     MachineLocation getLoc() const { return Loc; }
-    bool isBitPiece() const { return getExpression()->isBitPiece(); }
+    bool isFragment() const { return getExpression()->isFragment(); }
     const DIExpression *getExpression() const { return Expression; }
     friend bool operator==(const Value &, const Value &);
     friend bool operator<(const Value &, const Value &);
-    void dump() const {
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+    LLVM_DUMP_METHOD void dump() const {
       if (isLocation()) {
         llvm::dbgs() << "Loc = { reg=" << Loc.getReg() << " ";
         if (Loc.isIndirect())
-          llvm::dbgs() << '+' << Loc.getOffset();
+          llvm::dbgs() << "+0";
         llvm::dbgs() << "} ";
       }
       else if (isConstantInt())
@@ -90,6 +92,7 @@ public:
       if (Expression)
         Expression->dump();
     }
+#endif
   };
 
 private:
@@ -103,13 +106,13 @@ public:
     Values.push_back(std::move(Val));
   }
 
-  /// \brief If this and Next are describing different pieces of the same
+  /// If this and Next are describing different pieces of the same
   /// variable, merge them by appending Next's values to the current
   /// list of values.
   /// Return true if the merge was successful.
   bool MergeValues(const DebugLocEntry &Next);
 
-  /// \brief Attempt to merge this DebugLocEntry with Next and return
+  /// Attempt to merge this DebugLocEntry with Next and return
   /// true if the merge was successful. Entries can be merged if they
   /// share the same Loc/Constant and if Next immediately follows this
   /// Entry.
@@ -129,14 +132,14 @@ public:
     Values.append(Vals.begin(), Vals.end());
     sortUniqueValues();
     assert(all_of(Values, [](DebugLocEntry::Value V) {
-          return V.isBitPiece();
+          return V.isFragment();
         }) && "value must be a piece");
   }
 
-  // \brief Sort the pieces by offset.
+  // Sort the pieces by offset.
   // Remove any duplicate entries by dropping all but the first.
   void sortUniqueValues() {
-    std::sort(Values.begin(), Values.end());
+    llvm::sort(Values);
     Values.erase(
         std::unique(
             Values.begin(), Values.end(), [](const Value &A, const Value &B) {
@@ -145,12 +148,12 @@ public:
         Values.end());
   }
 
-  /// \brief Lower this entry into a DWARF expression.
+  /// Lower this entry into a DWARF expression.
   void finalize(const AsmPrinter &AP, DebugLocStream::ListBuilder &List,
                 const DIBasicType *BT);
 };
 
-/// \brief Compare two Values for equality.
+/// Compare two Values for equality.
 inline bool operator==(const DebugLocEntry::Value &A,
                        const DebugLocEntry::Value &B) {
   if (A.EntryKind != B.EntryKind)
@@ -172,11 +175,11 @@ inline bool operator==(const DebugLocEntry::Value &A,
   llvm_unreachable("unhandled EntryKind");
 }
 
-/// \brief Compare two pieces based on their offset.
+/// Compare two fragments based on their offset.
 inline bool operator<(const DebugLocEntry::Value &A,
                       const DebugLocEntry::Value &B) {
-  return A.getExpression()->getBitPieceOffset() <
-         B.getExpression()->getBitPieceOffset();
+  return A.getExpression()->getFragmentInfo()->OffsetInBits <
+         B.getExpression()->getFragmentInfo()->OffsetInBits;
 }
 
 }

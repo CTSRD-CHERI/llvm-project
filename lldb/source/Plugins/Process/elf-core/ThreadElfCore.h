@@ -10,14 +10,11 @@
 #ifndef liblldb_ThreadElfCore_h_
 #define liblldb_ThreadElfCore_h_
 
-// C Includes
-// C++ Includes
-#include <string>
-
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/DataExtractor.h"
+#include "Plugins/Process/elf-core/RegisterUtilities.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "llvm/ADT/DenseMap.h"
+#include <string>
 
 struct compat_timeval {
   alignas(8) uint64_t tv_sec;
@@ -57,30 +54,40 @@ struct ELFLinuxPrStatus {
 
   ELFLinuxPrStatus();
 
-  lldb_private::Error Parse(lldb_private::DataExtractor &data,
-                            lldb_private::ArchSpec &arch);
+  lldb_private::Status Parse(const lldb_private::DataExtractor &data,
+                             const lldb_private::ArchSpec &arch);
 
   // Return the bytesize of the structure
   // 64 bit - just sizeof
   // 32 bit - hardcoded because we are reusing the struct, but some of the
   // members are smaller -
   // so the layout is not the same
-  static size_t GetSize(lldb_private::ArchSpec &arch) {
-    switch (arch.GetCore()) {
-    case lldb_private::ArchSpec::eCore_s390x_generic:
-    case lldb_private::ArchSpec::eCore_x86_64_x86_64:
-      return sizeof(ELFLinuxPrStatus);
-    case lldb_private::ArchSpec::eCore_x86_32_i386:
-    case lldb_private::ArchSpec::eCore_x86_32_i486:
-      return 72;
-    default:
-      return 0;
-    }
-  }
+  static size_t GetSize(const lldb_private::ArchSpec &arch);
 };
 
 static_assert(sizeof(ELFLinuxPrStatus) == 112,
               "sizeof ELFLinuxPrStatus is not correct!");
+
+struct ELFLinuxSigInfo {
+  int32_t si_signo;
+  int32_t si_code;
+  int32_t si_errno;
+
+  ELFLinuxSigInfo();
+
+  lldb_private::Status Parse(const lldb_private::DataExtractor &data,
+                             const lldb_private::ArchSpec &arch);
+
+  // Return the bytesize of the structure
+  // 64 bit - just sizeof
+  // 32 bit - hardcoded because we are reusing the struct, but some of the
+  // members are smaller -
+  // so the layout is not the same
+  static size_t GetSize(const lldb_private::ArchSpec &arch);
+};
+
+static_assert(sizeof(ELFLinuxSigInfo) == 12,
+              "sizeof ELFLinuxSigInfo is not correct!");
 
 // PRPSINFO structure's size differs based on architecture.
 // This is the layout in the x86-64 arch case.
@@ -103,26 +110,15 @@ struct ELFLinuxPrPsInfo {
 
   ELFLinuxPrPsInfo();
 
-  lldb_private::Error Parse(lldb_private::DataExtractor &data,
-                            lldb_private::ArchSpec &arch);
+  lldb_private::Status Parse(const lldb_private::DataExtractor &data,
+                             const lldb_private::ArchSpec &arch);
 
   // Return the bytesize of the structure
   // 64 bit - just sizeof
   // 32 bit - hardcoded because we are reusing the struct, but some of the
   // members are smaller -
   // so the layout is not the same
-  static size_t GetSize(lldb_private::ArchSpec &arch) {
-    switch (arch.GetCore()) {
-    case lldb_private::ArchSpec::eCore_s390x_generic:
-    case lldb_private::ArchSpec::eCore_x86_64_x86_64:
-      return sizeof(ELFLinuxPrPsInfo);
-    case lldb_private::ArchSpec::eCore_x86_32_i386:
-    case lldb_private::ArchSpec::eCore_x86_32_i486:
-      return 124;
-    default:
-      return 0;
-    }
-  }
+  static size_t GetSize(const lldb_private::ArchSpec &arch);
 };
 
 static_assert(sizeof(ELFLinuxPrPsInfo) == 136,
@@ -130,10 +126,10 @@ static_assert(sizeof(ELFLinuxPrPsInfo) == 136,
 
 struct ThreadData {
   lldb_private::DataExtractor gpregset;
-  lldb_private::DataExtractor fpregset;
-  lldb_private::DataExtractor vregset;
+  std::vector<lldb_private::CoreNote> notes;
   lldb::tid_t tid;
-  int signo;
+  int signo = 0;
+  int prstatus_sig = 0;
   std::string name;
 };
 
@@ -149,8 +145,6 @@ public:
 
   lldb::RegisterContextSP
   CreateRegisterContextForFrame(lldb_private::StackFrame *frame) override;
-
-  void ClearStackFrames() override;
 
   static bool ThreadIDIsValid(lldb::tid_t thread) { return thread != 0; }
 
@@ -177,8 +171,7 @@ protected:
   int m_signo;
 
   lldb_private::DataExtractor m_gpregset_data;
-  lldb_private::DataExtractor m_fpregset_data;
-  lldb_private::DataExtractor m_vregset_data;
+  std::vector<lldb_private::CoreNote> m_notes;
 
   bool CalculateStopInfo() override;
 };

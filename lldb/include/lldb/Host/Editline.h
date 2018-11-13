@@ -23,8 +23,8 @@
 // broken, which is why we're
 //    working around it here.
 // c) When resizing the terminal window, if the cursor moves between rows
-// libedit will get confused.
-// d) The incremental search uses escape to cancel input, so it's confused by
+// libedit will get confused. d) The incremental search uses escape to cancel
+// input, so it's confused by
 // ANSI sequences starting with escape.
 // e) Emoji support is fairly terrible, presumably it doesn't understand
 // composed characters?
@@ -33,32 +33,20 @@
 #define liblldb_Editline_h_
 #if defined(__cplusplus)
 
+#if LLDB_EDITLINE_USE_WCHAR
+#include <codecvt>
+#endif
 #include <locale>
 #include <sstream>
 #include <vector>
-
-// components needed to handle wide characters ( <codecvt>, codecvt_utf8,
-// libedit built with '--enable-widec' )
-// are available on some platforms. The wchar_t versions of libedit functions
-// will only be
-// used in cases where this is true.  This is a compile time dependecy, for now
-// selected per target Platform
-#if defined(__APPLE__) || defined(__NetBSD__)
-#define LLDB_EDITLINE_USE_WCHAR 1
-#include <codecvt>
-#else
-#define LLDB_EDITLINE_USE_WCHAR 0
-#endif
 
 #include "lldb/Host/ConnectionFileDescriptor.h"
 #include "lldb/lldb-private.h"
 
 #if defined(_WIN32)
 #include "lldb/Host/windows/editlinewin.h"
-#else
-#if !defined(__ANDROID_NDK__)
+#elif !defined(__ANDROID__)
 #include <histedit.h>
-#endif
 #endif
 
 #include <mutex>
@@ -66,8 +54,8 @@
 #include <vector>
 
 #include "lldb/Host/ConnectionFileDescriptor.h"
-#include "lldb/Host/FileSpec.h"
-#include "lldb/Host/Predicate.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/Predicate.h"
 
 namespace lldb_private {
 namespace line_editor {
@@ -83,8 +71,18 @@ using EditLineStringStreamType = std::stringstream;
 using EditLineCharType = char;
 #endif
 
+// At one point the callback type of el_set getchar callback changed from char
+// to wchar_t. It is not possible to detect differentiate between the two
+// versions exactly, but this is a pretty good approximation and allows us to
+// build against almost any editline version out there.
+#if LLDB_EDITLINE_USE_WCHAR || defined(EL_CLIENTDATA) || LLDB_HAVE_EL_RFUNC_T
+using EditLineGetCharType = wchar_t;
+#else
+using EditLineGetCharType = char;
+#endif
+
 typedef int (*EditlineGetCharCallbackType)(::EditLine *editline,
-                                           EditLineCharType *c);
+                                           EditLineGetCharType *c);
 typedef unsigned char (*EditlineCommandCallbackType)(::EditLine *editline,
                                                      int ch);
 typedef const char *(*EditlinePromptCallbackType)(::EditLine *editline);
@@ -103,7 +101,8 @@ typedef int (*FixIndentationCallbackType)(Editline *editline,
 typedef int (*CompleteCallbackType)(const char *current_line,
                                     const char *cursor, const char *last_char,
                                     int skip_first_n_matches, int max_matches,
-                                    StringList &matches, void *baton);
+                                    StringList &matches,
+                                    StringList &descriptions, void *baton);
 
 /// Status used to decide when and how to start editing another line in
 /// multi-line sessions
@@ -271,7 +270,7 @@ private:
 
   /// Character reading implementation for EditLine that supports our multi-line
   /// editing trickery.
-  int GetCharacter(EditLineCharType *c);
+  int GetCharacter(EditLineGetCharType *c);
 
   /// Prompt implementation for EditLine.
   const char *Prompt();
@@ -323,6 +322,8 @@ private:
   /// Ensures that the current EditLine instance is properly configured for
   /// single or multi-line editing.
   void ConfigureEditor(bool multiline);
+
+  bool CompleteCharacter(char ch, EditLineGetCharType &out);
 
 private:
 #if LLDB_EDITLINE_USE_WCHAR

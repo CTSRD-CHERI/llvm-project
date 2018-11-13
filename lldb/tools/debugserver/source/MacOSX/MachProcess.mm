@@ -112,7 +112,9 @@ static bool CallBoardSystemServiceOpenApplication(NSString *bundleIDNSStr,
   if (!cstr)
     cstr = "<Unknown Bundle ID>";
 
-  DNBLog("About to launch process for bundle ID: %s", cstr);
+  NSString *description = [options description];
+  DNBLog("About to launch process for bundle ID: %s - options:\n%s", cstr,
+    [description UTF8String]);
   [system_service
       openApplication:bundleIDNSStr
               options:options
@@ -157,7 +159,7 @@ static bool CallBoardSystemServiceOpenApplication(NSString *bundleIDNSStr,
 
   ];
 
-  const uint32_t timeout_secs = 9;
+  const uint32_t timeout_secs = 30;
 
   dispatch_time_t timeout =
       dispatch_time(DISPATCH_TIME_NOW, timeout_secs * NSEC_PER_SEC);
@@ -185,6 +187,28 @@ static bool CallBoardSystemServiceOpenApplication(NSString *bundleIDNSStr,
   }
 
   return success;
+}
+#endif
+
+#if defined(WITH_BKS) || defined(WITH_FBS)
+static void SplitEventData(const char *data, std::vector<std::string> &elements)
+{
+  elements.clear();
+  if (!data)
+    return;
+
+  const char *start = data;
+
+  while (*start != '\0') {
+    const char *token = strchr(start, ':');
+    if (!token) {
+      elements.push_back(std::string(start));
+      return;
+    }
+    if (token != start)
+      elements.push_back(std::string(start, token - start));
+    start = ++token;
+  }
 }
 #endif
 
@@ -222,21 +246,31 @@ static void SetBKSError(NSInteger error_code, DNBError &error) {
 static bool BKSAddEventDataToOptions(NSMutableDictionary *options,
                                      const char *event_data,
                                      DNBError &option_error) {
-  if (strcmp(event_data, "BackgroundContentFetching") == 0) {
-    DNBLog("Setting ActivateForEvent key in options dictionary.");
-    NSDictionary *event_details = [NSDictionary dictionary];
-    NSDictionary *event_dictionary = [NSDictionary
-        dictionaryWithObject:event_details
-                      forKey:
-                          BKSActivateForEventOptionTypeBackgroundContentFetching];
-    [options setObject:event_dictionary
-                forKey:BKSOpenApplicationOptionKeyActivateForEvent];
-    return true;
-  } else {
-    DNBLogError("Unrecognized event type: %s.  Ignoring.", event_data);
-    option_error.SetErrorString("Unrecognized event data.");
-    return false;
+  std::vector<std::string> values;
+  SplitEventData(event_data, values);
+  bool found_one = false;
+  for (std::string value : values)
+  {
+      if (value.compare("BackgroundContentFetching") == 0) {
+        DNBLog("Setting ActivateForEvent key in options dictionary.");
+        NSDictionary *event_details = [NSDictionary dictionary];
+        NSDictionary *event_dictionary = [NSDictionary
+            dictionaryWithObject:event_details
+                          forKey:
+                              BKSActivateForEventOptionTypeBackgroundContentFetching];
+        [options setObject:event_dictionary
+                    forKey:BKSOpenApplicationOptionKeyActivateForEvent];
+        found_one = true;
+      } else if (value.compare("ActivateSuspended") == 0) {
+        DNBLog("Setting ActivateSuspended key in options dictionary.");
+        [options setObject:@YES forKey: BKSOpenApplicationOptionKeyActivateSuspended];
+        found_one = true;
+      } else {
+        DNBLogError("Unrecognized event type: %s.  Ignoring.", value.c_str());
+        option_error.SetErrorString("Unrecognized event data");
+      }
   }
+  return found_one;
 }
 
 static NSMutableDictionary *BKSCreateOptionsDictionary(
@@ -322,21 +356,31 @@ static void SetFBSError(NSInteger error_code, DNBError &error) {
 static bool FBSAddEventDataToOptions(NSMutableDictionary *options,
                                      const char *event_data,
                                      DNBError &option_error) {
-  if (strcmp(event_data, "BackgroundContentFetching") == 0) {
-    DNBLog("Setting ActivateForEvent key in options dictionary.");
-    NSDictionary *event_details = [NSDictionary dictionary];
-    NSDictionary *event_dictionary = [NSDictionary
-        dictionaryWithObject:event_details
-                      forKey:
-                          FBSActivateForEventOptionTypeBackgroundContentFetching];
-    [options setObject:event_dictionary
-                forKey:FBSOpenApplicationOptionKeyActivateForEvent];
-    return true;
-  } else {
-    DNBLogError("Unrecognized event type: %s.  Ignoring.", event_data);
-    option_error.SetErrorString("Unrecognized event data.");
-    return false;
+  std::vector<std::string> values;
+  SplitEventData(event_data, values);
+  bool found_one = false;
+  for (std::string value : values)
+  {
+      if (value.compare("BackgroundContentFetching") == 0) {
+        DNBLog("Setting ActivateForEvent key in options dictionary.");
+        NSDictionary *event_details = [NSDictionary dictionary];
+        NSDictionary *event_dictionary = [NSDictionary
+            dictionaryWithObject:event_details
+                          forKey:
+                              FBSActivateForEventOptionTypeBackgroundContentFetching];
+        [options setObject:event_dictionary
+                    forKey:FBSOpenApplicationOptionKeyActivateForEvent];
+        found_one = true;
+      } else if (value.compare("ActivateSuspended") == 0) {
+        DNBLog("Setting ActivateSuspended key in options dictionary.");
+        [options setObject:@YES forKey: FBSOpenApplicationOptionKeyActivateSuspended];
+        found_one = true;
+      } else {
+        DNBLogError("Unrecognized event type: %s.  Ignoring.", value.c_str());
+        option_error.SetErrorString("Unrecognized event data.");
+      }
   }
+  return found_one;
 }
 
 static NSMutableDictionary *
@@ -528,6 +572,76 @@ nub_addr_t MachProcess::GetTSDAddressForThread(
       plo_pthread_tsd_entry_size);
 }
 
+
+const char *MachProcess::GetDeploymentInfo(const struct load_command& lc,
+                                           uint64_t load_command_address,
+                                           uint32_t& major_version,
+                                           uint32_t& minor_version,
+                                           uint32_t& patch_version) {
+  uint32_t cmd = lc.cmd & ~LC_REQ_DYLD;
+  bool lc_cmd_known =
+    cmd == LC_VERSION_MIN_IPHONEOS || cmd == LC_VERSION_MIN_MACOSX ||
+    cmd == LC_VERSION_MIN_TVOS || cmd == LC_VERSION_MIN_WATCHOS;
+
+  if (lc_cmd_known) {
+    struct version_min_command vers_cmd;
+    if (ReadMemory(load_command_address, sizeof(struct version_min_command),
+                   &vers_cmd) != sizeof(struct version_min_command)) {
+      return nullptr;
+    }
+    major_version = vers_cmd.sdk >> 16;
+    minor_version = (vers_cmd.sdk >> 8) & 0xffu;
+    patch_version = vers_cmd.sdk & 0xffu;
+
+    switch (cmd) {
+    case LC_VERSION_MIN_IPHONEOS:
+      return "ios";
+    case LC_VERSION_MIN_MACOSX:
+      return "macosx";
+    case LC_VERSION_MIN_TVOS:
+      return "tvos";
+    case LC_VERSION_MIN_WATCHOS:
+      return "watchos";
+    default:
+      return nullptr;
+    }
+  }
+#if defined (LC_BUILD_VERSION)
+#ifndef PLATFORM_IOSSIMULATOR
+#define PLATFORM_IOSSIMULATOR 7
+#define PLATFORM_TVOSSIMULATOR 8
+#define PLATFORM_WATCHOSSIMULATOR 9
+#endif
+  if (cmd == LC_BUILD_VERSION) {
+    struct build_version_command build_vers;
+    if (ReadMemory(load_command_address, sizeof(struct build_version_command),
+                   &build_vers) != sizeof(struct build_version_command)) {
+      return nullptr;
+    }
+    major_version = build_vers.sdk >> 16;;
+    minor_version = (build_vers.sdk >> 8) & 0xffu;
+    patch_version = build_vers.sdk & 0xffu;
+
+    switch (build_vers.platform) {
+    case PLATFORM_MACOS:
+      return "macosx";
+    case PLATFORM_IOS:
+    case PLATFORM_IOSSIMULATOR:
+      return "ios";
+    case PLATFORM_TVOS:
+    case PLATFORM_TVOSSIMULATOR:
+      return "tvos";
+    case PLATFORM_WATCHOS:
+    case PLATFORM_WATCHOSSIMULATOR:
+      return "watchos";
+    case PLATFORM_BRIDGEOS:
+      return "bridgeos";
+    }
+  }
+#endif
+  return nullptr;
+}
+
 // Given an address, read the mach-o header and load commands out of memory to
 // fill in
 // the mach_o_information "inf" object.
@@ -626,52 +740,22 @@ bool MachProcess::GetMachOInformationFromMemory(
           sizeof(struct uuid_command))
         uuid_copy(inf.uuid, uuidcmd.uuid);
     }
-    bool lc_cmd_known =
-        lc.cmd == LC_VERSION_MIN_IPHONEOS || lc.cmd == LC_VERSION_MIN_MACOSX;
-#if defined(LC_VERSION_MIN_TVOS)
-    lc_cmd_known |= lc.cmd == LC_VERSION_MIN_TVOS;
-#endif
-#if defined(LC_VERSION_MIN_WATCHOS)
-    lc_cmd_known |= lc.cmd == LC_VERSION_MIN_WATCHOS;
-#endif
-    if (lc_cmd_known) {
-      struct version_min_command vers_cmd;
-      if (ReadMemory(load_cmds_p, sizeof(struct version_min_command),
-                     &vers_cmd) != sizeof(struct version_min_command)) {
-        return false;
-      }
-      switch (lc.cmd) {
-      case LC_VERSION_MIN_IPHONEOS:
-        inf.min_version_os_name = "iphoneos";
-        break;
-      case LC_VERSION_MIN_MACOSX:
-        inf.min_version_os_name = "macosx";
-        break;
-#if defined(LC_VERSION_MIN_TVOS)
-      case LC_VERSION_MIN_TVOS:
-        inf.min_version_os_name = "tvos";
-        break;
-#endif
-#if defined(LC_VERSION_MIN_WATCHOS)
-      case LC_VERSION_MIN_WATCHOS:
-        inf.min_version_os_name = "watchos";
-        break;
-#endif
-      default:
-        return false;
-      }
-      uint32_t xxxx = vers_cmd.sdk >> 16;
-      uint32_t yy = (vers_cmd.sdk >> 8) & 0xffu;
-      uint32_t zz = vers_cmd.sdk & 0xffu;
+
+    uint32_t major_version, minor_version, patch_version;
+    if (const char *platform = GetDeploymentInfo(lc, load_cmds_p,
+                                                 major_version, minor_version,
+                                                 patch_version)) {
+      inf.min_version_os_name = platform;
       inf.min_version_os_version = "";
-      inf.min_version_os_version += std::to_string(xxxx);
+      inf.min_version_os_version += std::to_string(major_version);
       inf.min_version_os_version += ".";
-      inf.min_version_os_version += std::to_string(yy);
-      if (zz != 0) {
+      inf.min_version_os_version += std::to_string(minor_version);
+      if (patch_version != 0) {
         inf.min_version_os_version += ".";
-        inf.min_version_os_version += std::to_string(zz);
+        inf.min_version_os_version += std::to_string(patch_version);
       }
     }
+
     load_cmds_p += lc.cmdsize;
   }
   return true;
@@ -719,6 +803,8 @@ JSONGenerator::ObjectSP MachProcess::FormatDynamicLibrariesIntoJSON(
         (uint32_t)image_infos[i].macho_info.mach_header.cpusubtype);
     mach_header_dict_sp->AddIntegerItem(
         "filetype", image_infos[i].macho_info.mach_header.filetype);
+    mach_header_dict_sp->AddIntegerItem ("flags", 
+                         image_infos[i].macho_info.mach_header.flags);
 
     //          DynamicLoaderMacOSX doesn't currently need these fields, so
     //          don't send them.
@@ -726,8 +812,6 @@ JSONGenerator::ObjectSP MachProcess::FormatDynamicLibrariesIntoJSON(
     //            image_infos[i].macho_info.mach_header.ncmds);
     //            mach_header_dict_sp->AddIntegerItem ("sizeofcmds",
     //            image_infos[i].macho_info.mach_header.sizeofcmds);
-    //            mach_header_dict_sp->AddIntegerItem ("flags",
-    //            image_infos[i].macho_info.mach_header.flags);
     image_info_dict_sp->AddItem("mach_header", mach_header_dict_sp);
 
     JSONGenerator::ArraySP segments_sp(new JSONGenerator::Array());
@@ -1215,7 +1299,7 @@ bool MachProcess::Kill(const struct timespec *timeout_abstime) {
   err.SetErrorToErrno();
   DNBLogThreadedIf(LOG_PROCESS, "MachProcess::Kill() DoSIGSTOP() ::ptrace "
                                 "(PT_KILL, pid=%u, 0, 0) => 0x%8.8x (%s)",
-                   m_pid, err.Error(), err.AsString());
+                   m_pid, err.Status(), err.AsString());
   m_thread_actions = DNBThreadResumeActions(eStateRunning, 0);
   PrivateResume();
 
@@ -1269,7 +1353,7 @@ bool MachProcess::Interrupt() {
 bool MachProcess::Signal(int signal, const struct timespec *timeout_abstime) {
   DNBLogThreadedIf(LOG_PROCESS,
                    "MachProcess::Signal (signal = %d, timeout = %p)", signal,
-                   timeout_abstime);
+                   reinterpret_cast<const void *>(timeout_abstime));
   nub_state_t state = GetState();
   if (::kill(ProcessID(), signal) == 0) {
     // If we were running and we have a timeout, wait for the signal to stop
@@ -1277,20 +1361,21 @@ bool MachProcess::Signal(int signal, const struct timespec *timeout_abstime) {
       DNBLogThreadedIf(LOG_PROCESS, "MachProcess::Signal (signal = %d, timeout "
                                     "= %p) waiting for signal to stop "
                                     "process...",
-                       signal, timeout_abstime);
+                       signal, reinterpret_cast<const void *>(timeout_abstime));
       m_private_events.WaitForSetEvents(eEventProcessStoppedStateChanged,
                                         timeout_abstime);
       state = GetState();
       DNBLogThreadedIf(
           LOG_PROCESS,
           "MachProcess::Signal (signal = %d, timeout = %p) state = %s", signal,
-          timeout_abstime, DNBStateAsString(state));
+          reinterpret_cast<const void *>(timeout_abstime),
+          DNBStateAsString(state));
       return !IsRunning(state);
     }
     DNBLogThreadedIf(
         LOG_PROCESS,
         "MachProcess::Signal (signal = %d, timeout = %p) not waiting...",
-        signal, timeout_abstime);
+        signal, reinterpret_cast<const void *>(timeout_abstime));
     return true;
   }
   DNBError err(errno, DNBError::POSIX);
@@ -1409,7 +1494,7 @@ bool MachProcess::Detach() {
   // Resume our task
   m_task.Resume();
 
-  // NULL our task out as we have already retored all exception ports
+  // NULL our task out as we have already restored all exception ports
   m_task.Clear();
 
   // Clear out any notion of the process we once were
@@ -1596,7 +1681,8 @@ DNBBreakpoint *MachProcess::CreateBreakpoint(nub_addr_t addr, nub_size_t length,
   if (EnableBreakpoint(addr)) {
     DNBLogThreadedIf(LOG_BREAKPOINTS, "MachProcess::CreateBreakpoint ( addr = "
                                       "0x%8.8llx, length = %llu) => %p",
-                     (uint64_t)addr, (uint64_t)length, bp);
+                     (uint64_t)addr, (uint64_t)length,
+                     reinterpret_cast<void *>(bp));
     return bp;
   } else if (bp->Release() == 0) {
     m_breakpoints.Remove(addr);
@@ -1627,7 +1713,8 @@ DNBBreakpoint *MachProcess::CreateWatchpoint(nub_addr_t addr, nub_size_t length,
   if (EnableWatchpoint(addr)) {
     DNBLogThreadedIf(LOG_WATCHPOINTS, "MachProcess::CreateWatchpoint ( addr = "
                                       "0x%8.8llx, length = %llu) => %p",
-                     (uint64_t)addr, (uint64_t)length, wp);
+                     (uint64_t)addr, (uint64_t)length,
+                     reinterpret_cast<void *>(wp));
     return wp;
   } else {
     DNBLogThreadedIf(LOG_WATCHPOINTS, "MachProcess::CreateWatchpoint ( addr = "
@@ -1718,7 +1805,7 @@ bool MachProcess::DisableBreakpoint(nub_addr_t addr, bool remove) {
           break_op_size) {
         bool verify = false;
         if (bp->IsEnabled()) {
-          // Make sure we have the a breakpoint opcode exists at this address
+          // Make sure a breakpoint opcode exists at this address
           if (memcmp(curr_break_op, break_op, break_op_size) == 0) {
             break_op_found = true;
             // We found a valid breakpoint opcode at this address, now restore
@@ -2156,7 +2243,7 @@ void MachProcess::AppendSTDOUT(char *s, size_t len) {
 
 size_t MachProcess::GetAvailableSTDOUT(char *buf, size_t buf_size) {
   DNBLogThreadedIf(LOG_PROCESS, "MachProcess::%s (&%p[%llu]) ...", __FUNCTION__,
-                   buf, (uint64_t)buf_size);
+                   reinterpret_cast<void *>(buf), (uint64_t)buf_size);
   PTHREAD_MUTEX_LOCKER(locker, m_stdio_mutex);
   size_t bytes_available = m_stdout_data.size();
   if (bytes_available > 0) {
@@ -2316,7 +2403,7 @@ void MachProcess::SignalAsyncProfileData(const char *info) {
 
 size_t MachProcess::GetAsyncProfileData(char *buf, size_t buf_size) {
   DNBLogThreadedIf(LOG_PROCESS, "MachProcess::%s (&%p[%llu]) ...", __FUNCTION__,
-                   buf, (uint64_t)buf_size);
+                   reinterpret_cast<void *>(buf), (uint64_t)buf_size);
   PTHREAD_MUTEX_LOCKER(locker, m_profile_data_mutex);
   if (m_profile_data.empty())
     return 0;
@@ -2839,9 +2926,12 @@ pid_t MachProcess::LaunchForDebug(
   // Clear out and clean up from any current state
   Clear();
 
-  DNBLogThreadedIf(LOG_PROCESS, "%s( path = '%s', argv = %p, envp = %p, "
-                                "launch_flavor = %u, disable_aslr = %d )",
-                   __FUNCTION__, path, argv, envp, launch_flavor, disable_aslr);
+  DNBLogThreadedIf(LOG_PROCESS,
+                   "%s( path = '%s', argv = %p, envp = %p, "
+                   "launch_flavor = %u, disable_aslr = %d )",
+                   __FUNCTION__, path, reinterpret_cast<const void *>(argv),
+                   reinterpret_cast<const void *>(envp), launch_flavor,
+                   disable_aslr);
 
   // Fork a child process for debugging
   SetState(eStateLaunching);
@@ -2964,7 +3054,8 @@ pid_t MachProcess::LaunchForDebug(
         DNBError ptrace_err(errno, DNBError::POSIX);
         DNBLogThreadedIf(LOG_PROCESS, "error: failed to attach to spawned pid "
                                       "%d (err = %i, errno = %i (%s))",
-                         m_pid, err, ptrace_err.Error(), ptrace_err.AsString());
+                         m_pid, err, ptrace_err.Status(),
+                         ptrace_err.AsString());
         launch_err.SetError(NUB_GENERIC_ERROR, DNBError::Generic);
       }
     } else {
@@ -2984,7 +3075,8 @@ pid_t MachProcess::PosixSpawnChildForPTraceDebugging(
   DNBLogThreadedIf(LOG_PROCESS, "%s ( path='%s', argv=%p, envp=%p, "
                                 "working_dir=%s, stdin=%s, stdout=%s "
                                 "stderr=%s, no-stdio=%i)",
-                   __FUNCTION__, path, argv, envp, working_directory,
+                   __FUNCTION__, path, reinterpret_cast<const void *>(argv),
+                   reinterpret_cast<const void *>(envp), working_directory,
                    stdin_path, stdout_path, stderr_path, no_stdio);
 
   err.SetError(::posix_spawnattr_init(&attr), DNBError::POSIX);
@@ -3097,7 +3189,8 @@ pid_t MachProcess::PosixSpawnChildForPTraceDebugging(
       ::chdir(working_directory);
 
     err.SetError(::posix_spawnp(&pid, path, &file_actions, &attr,
-                                (char *const *)argv, (char *const *)envp),
+                                const_cast<char *const *>(argv),
+                                const_cast<char *const *>(envp)),
                  DNBError::POSIX);
     if (err.Fail() || DNBLogCheckLogBit(LOG_PROCESS))
       err.LogThreaded("::posix_spawnp ( pid => %i, path = '%s', file_actions = "
@@ -3109,8 +3202,9 @@ pid_t MachProcess::PosixSpawnChildForPTraceDebugging(
     if (working_directory)
       ::chdir(working_directory);
 
-    err.SetError(::posix_spawnp(&pid, path, NULL, &attr, (char *const *)argv,
-                                (char *const *)envp),
+    err.SetError(::posix_spawnp(&pid, path, NULL, &attr,
+                                const_cast<char *const *>(argv),
+                                const_cast<char *const *>(envp)),
                  DNBError::POSIX);
     if (err.Fail() || DNBLogCheckLogBit(LOG_PROCESS))
       err.LogThreaded("::posix_spawnp ( pid => %i, path = '%s', file_actions = "
@@ -3174,7 +3268,7 @@ pid_t MachProcess::ForkChildForPTraceDebugging(const char *path,
                                                char const *envp[],
                                                MachProcess *process,
                                                DNBError &launch_err) {
-  PseudoTerminal::Error pty_error = PseudoTerminal::success;
+  PseudoTerminal::Status pty_error = PseudoTerminal::success;
 
   // Use a fork that ties the child process's stdin/out/err to a pseudo
   // terminal so we can read it in our MachProcess::STDIOThread
@@ -3184,7 +3278,7 @@ pid_t MachProcess::ForkChildForPTraceDebugging(const char *path,
 
   if (pid < 0) {
     //--------------------------------------------------------------
-    // Error during fork.
+    // Status during fork.
     //--------------------------------------------------------------
     return pid;
   } else if (pid == 0) {
@@ -3207,7 +3301,7 @@ pid_t MachProcess::ForkChildForPTraceDebugging(const char *path,
       ::sleep(1);
 
       // Turn this process into
-      ::execv(path, (char *const *)argv);
+      ::execv(path, const_cast<char *const *>(argv));
     }
     // Exit with error code. Child process should have taken
     // over in above exec call and if the exec fails it will
@@ -3399,7 +3493,7 @@ pid_t MachProcess::SBForkChildForPTraceDebugging(
 
   PseudoTerminal pty;
   if (!no_stdio) {
-    PseudoTerminal::Error pty_err =
+    PseudoTerminal::Status pty_err =
         pty.OpenFirstAvailableMaster(O_RDWR | O_NOCTTY);
     if (pty_err == PseudoTerminal::success) {
       const char *slave_name = pty.SlaveName();
@@ -3600,7 +3694,7 @@ pid_t MachProcess::BoardServiceForkChildForPTraceDebugging(
 
   PseudoTerminal pty;
   if (!no_stdio) {
-    PseudoTerminal::Error pty_err =
+    PseudoTerminal::Status pty_err =
         pty.OpenFirstAvailableMaster(O_RDWR | O_NOCTTY);
     if (pty_err == PseudoTerminal::success) {
       const char *slave_name = pty.SlaveName();

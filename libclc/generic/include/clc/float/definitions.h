@@ -31,6 +31,10 @@
 #define M_SQRT2_F       0x1.6a09e6p+0f
 #define M_SQRT1_2_F     0x1.6a09e6p-1f
 
+#ifdef __CLC_INTERNAL
+#define M_LOG210_F      0x1.a934f0p+1f
+#endif
+
 #ifdef cl_khr_fp64
 
 #define HUGE_VAL        __builtin_huge_val()
@@ -59,6 +63,10 @@
 #define M_SQRT2         0x1.6a09e667f3bcdp+0
 #define M_SQRT1_2       0x1.6a09e667f3bcdp-1
 
+#ifdef __CLC_INTERNAL
+#define M_LOG210        0x1.a934f0979a371p+1
+#endif
+
 #endif
 
 #ifdef cl_khr_fp16
@@ -71,6 +79,11 @@
 #define HALF_MAX_EXP    +16
 #define HALF_MIN_10_EXP -4
 #define HALF_MIN_EXP    -13
+
+#define HALF_RADIX      2
+#define HALF_MAX        0x1.ffcp15h
+#define HALF_MIN        0x1.0p-14h
+#define HALF_EPSILON    0x1.0p-10h
 
 #endif
 

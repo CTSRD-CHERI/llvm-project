@@ -17,18 +17,12 @@
 #include "llvm/Support/type_traits.h"
 #include "gtest/gtest.h"
 #include <algorithm>
+#include <random>
 #include <vector>
 
 using namespace llvm;
 
 namespace {
-
-// The world's worst RNG, but it is deterministic and makes it easy to get
-// *some* shuffling of elements.
-static ptrdiff_t test_shuffle_rng(ptrdiff_t i) {
-  return (i + i * 33) % i;
-}
-static ptrdiff_t (*test_shuffle_rng_p)(ptrdiff_t) = &test_shuffle_rng;
 
 template <typename VectorT>
 class TinyPtrVectorTest : public testing::Test {
@@ -46,7 +40,7 @@ protected:
     for (size_t i = 0, e = array_lengthof(TestValues); i != e; ++i)
       TestPtrs.push_back(&TestValues[i]);
 
-    std::random_shuffle(TestPtrs.begin(), TestPtrs.end(), test_shuffle_rng_p);
+    std::shuffle(TestPtrs.begin(), TestPtrs.end(), std::mt19937{});
   }
 
   ArrayRef<PtrT> testArray(size_t N) {
@@ -158,6 +152,12 @@ TYPED_TEST(TinyPtrVectorTest, CopyAndMoveCtorTest) {
   TypeParam Move(std::move(Copy2));
   this->expectValues(Move, this->testArray(42));
   this->expectValues(Copy2, this->testArray(0));
+
+  TypeParam MultipleElements(this->testArray(2));
+  TypeParam SingleElement(this->testArray(1));
+  MultipleElements = std::move(SingleElement);
+  this->expectValues(MultipleElements, this->testArray(1));
+  this->expectValues(SingleElement, this->testArray(0));
 }
 
 TYPED_TEST(TinyPtrVectorTest, CopyAndMoveTest) {

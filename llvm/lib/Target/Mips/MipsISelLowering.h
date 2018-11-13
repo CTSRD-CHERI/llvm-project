@@ -1,4 +1,4 @@
-//===-- MipsISelLowering.h - Mips DAG Lowering Interface --------*- C++ -*-===//
+//===- MipsISelLowering.h - Mips DAG Lowering Interface ---------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -17,16 +17,46 @@
 
 #include "MCTargetDesc/MipsABIInfo.h"
 #include "MCTargetDesc/MipsBaseInfo.h"
+#include "MCTargetDesc/MipsMCTargetDesc.h"
 #include "Mips.h"
 #include "llvm/CodeGen/CallingConvLower.h"
+#include "llvm/CodeGen/ISDOpcodes.h"
+#include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/SelectionDAG.h"
-#include "llvm/IR/Function.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/ValueTypes.h"
+#include "llvm/IR/CallingConv.h"
+#include "llvm/IR/InlineAsm.h"
+#include "llvm/IR/Type.h"
+#include "llvm/Support/MachineValueType.h"
+#include "llvm/Target/TargetMachine.h"
+#include <algorithm>
+#include <cassert>
 #include <deque>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace llvm {
+
+class Argument;
+class CCState;
+class CCValAssign;
+class FastISel;
+class FunctionLoweringInfo;
+class MachineBasicBlock;
+class MachineFrameInfo;
+class MachineInstr;
+class MipsCCState;
+class MipsFunctionInfo;
+class MipsSubtarget;
+class MipsTargetMachine;
+class TargetLibraryInfo;
+class TargetRegisterClass;
+
   namespace MipsISD {
+
     enum NodeType : unsigned {
       // Start the numbering from where ISD NodeType finishes.
       FIRST_NUMBER = ISD::BUILTIN_OP_END,
@@ -37,13 +67,25 @@ namespace llvm {
       // Tail call
       TailCall,
 
-      // Get the Higher 16 bits from a 32-bit immediate
+      // Get the Highest (63-48) 16 bits from a 64-bit immediate
+      Highest,
+
+      // Get the Higher (47-32) 16 bits from a 64-bit immediate
+      Higher,
+
+      // Get the High 16 bits from a 32/64-bit immediate
       // No relation with Mips Hi register
       Hi,
 
-      // Get the Lower 16 bits from a 32-bit immediate
+      // Get the Lower 16 bits from a 32/64-bit immediate
       // No relation with Mips Lo register
       Lo,
+
+      // Get the High 16 bits from a 32 bit immediate for accessing the GOT.
+      GotHi,
+
+      // Get the High 16 bits from a 32-bit immediate for accessing TLS.
+      TlsHi,
 
       // Handle gp_rel (small data/bss sections) relocation.
       GPRel,
@@ -51,11 +93,20 @@ namespace llvm {
       // Thread Pointer
       ThreadPointer,
 
+      // Vector Floating Point Multiply and Subtract
+      FMS,
+
       // Floating Point Branch Conditional
       FPBrcond,
 
       // Floating Point Compare
       FPCmp,
+
+      // Floating point select
+      FSELECT,
+
+      // Node used to generate an MTC1 i32 to f64 instruction
+      MTC1_D64,
 
       // Floating Point Conditional Moves
       CMovFP_T,
@@ -107,6 +158,7 @@ namespace llvm {
 
       Ext,
       Ins,
+      CIns,
 
       // EXTR.W instrinsic nodes.
       EXTP,
@@ -172,12 +224,6 @@ namespace llvm {
       VCLT_S,
       VCLT_U,
 
-      // Element-wise vector max/min.
-      VSMAX,
-      VSMIN,
-      VUMAX,
-      VUMIN,
-
       // Vector Shuffle with mask as an operand
       VSHF,  // Generic shuffle
       SHF,   // 4-element set shuffle.
@@ -208,17 +254,16 @@ namespace llvm {
       SDL,
       SDR
     };
-  }
+
+  } // ene namespace MipsISD
 
   //===--------------------------------------------------------------------===//
   // TargetLowering Implementation
   //===--------------------------------------------------------------------===//
-  class MipsFunctionInfo;
-  class MipsSubtarget;
-  class MipsCCState;
 
   class MipsTargetLowering : public TargetLowering  {
     bool isMicroMips;
+
   public:
     explicit MipsTargetLowering(const MipsTargetMachine &TM,
                                 const MipsSubtarget &STI);
@@ -235,8 +280,35 @@ namespace llvm {
       return MVT::i32;
     }
 
+    EVT getTypeForExtReturn(LLVMContext &Context, EVT VT,
+                            ISD::NodeType) const override;
+
     bool isCheapToSpeculateCttz() const override;
     bool isCheapToSpeculateCtlz() const override;
+
+    /// Return the register type for a given MVT, ensuring vectors are treated
+    /// as a series of gpr sized integers.
+    MVT getRegisterTypeForCallingConv(LLVMContext &Context, CallingConv::ID CC,
+                                      EVT VT) const override;
+
+    /// Return the number of registers for a given MVT, ensuring vectors are
+    /// treated as a series of gpr sized integers.
+    unsigned getNumRegistersForCallingConv(LLVMContext &Context,
+                                           CallingConv::ID CC,
+                                           EVT VT) const override;
+
+    /// Break down vectors to the correct number of gpr sized integers.
+    unsigned getVectorTypeBreakdownForCallingConv(
+        LLVMContext &Context, CallingConv::ID CC, EVT VT, EVT &IntermediateVT,
+        unsigned &NumIntermediates, MVT &RegisterVT) const override;
+
+    /// Return the correct alignment for the current calling convention.
+    unsigned getABIAlignmentForCallingConv(Type *ArgTy,
+                                           DataLayout DL) const override {
+      if (ArgTy->isVectorTy())
+        return std::min(DL.getABITypeAlignment(ArgTy), 8U);
+      return DL.getABITypeAlignment(ArgTy);
+    }
 
     ISD::NodeType getExtendForAtomicOps() const override {
       return ISD::SIGN_EXTEND;
@@ -297,8 +369,12 @@ namespace llvm {
     }
 
     bool isJumpTableRelative() const override {
-      return getTargetMachine().isPositionIndependent() || ABI.IsN64();
+      return getTargetMachine().isPositionIndependent();
     }
+
+   CCAssignFn *CCAssignFnForCall() const;
+
+   CCAssignFn *CCAssignFnForReturn() const;
 
   protected:
     SDValue getGlobalReg(SelectionDAG &DAG, EVT Ty) const;
@@ -344,8 +420,8 @@ namespace llvm {
                                   SelectionDAG &DAG, unsigned HiFlag,
                                   unsigned LoFlag, SDValue Chain,
                                   const MachinePointerInfo &PtrInfo) const {
-      SDValue Hi =
-          DAG.getNode(MipsISD::Hi, DL, Ty, getTargetNode(N, Ty, DAG, HiFlag));
+      SDValue Hi = DAG.getNode(MipsISD::GotHi, DL, Ty,
+                               getTargetNode(N, Ty, DAG, HiFlag));
       Hi = DAG.getNode(ISD::ADD, DL, Ty, Hi, getGlobalReg(DAG, Ty));
       SDValue Wrapper = DAG.getNode(MipsISD::Wrapper, DL, Ty, Hi,
                                     getTargetNode(N, Ty, DAG, LoFlag));
@@ -356,6 +432,8 @@ namespace llvm {
     // computing a symbol's address in non-PIC mode:
     //
     // (add %hi(sym), %lo(sym))
+    //
+    // This method covers O32, N32 and N64 in sym32 mode.
     template <class NodeTy>
     SDValue getAddrNonPIC(NodeTy *N, const SDLoc &DL, EVT Ty,
                           SelectionDAG &DAG) const {
@@ -364,7 +442,37 @@ namespace llvm {
       return DAG.getNode(ISD::ADD, DL, Ty,
                          DAG.getNode(MipsISD::Hi, DL, Ty, Hi),
                          DAG.getNode(MipsISD::Lo, DL, Ty, Lo));
-    }
+   }
+
+   // This method creates the following nodes, which are necessary for
+   // computing a symbol's address in non-PIC mode for N64.
+   //
+   // (add (shl (add (shl (add %highest(sym), %higher(sim)), 16), %high(sym)),
+   //            16), %lo(%sym))
+   //
+   // FIXME: This method is not efficent for (micro)MIPS64R6.
+   template <class NodeTy>
+   SDValue getAddrNonPICSym64(NodeTy *N, const SDLoc &DL, EVT Ty,
+                          SelectionDAG &DAG) const {
+      SDValue Hi = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_HI);
+      SDValue Lo = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_LO);
+
+      SDValue Highest =
+          DAG.getNode(MipsISD::Highest, DL, Ty,
+                      getTargetNode(N, Ty, DAG, MipsII::MO_HIGHEST));
+      SDValue Higher = getTargetNode(N, Ty, DAG, MipsII::MO_HIGHER);
+      SDValue HigherPart =
+          DAG.getNode(ISD::ADD, DL, Ty, Highest,
+                      DAG.getNode(MipsISD::Higher, DL, Ty, Higher));
+      SDValue Cst = DAG.getConstant(16, DL, MVT::i32);
+      SDValue Shift = DAG.getNode(ISD::SHL, DL, Ty, HigherPart, Cst);
+      SDValue Add = DAG.getNode(ISD::ADD, DL, Ty, Shift,
+                                DAG.getNode(MipsISD::Hi, DL, Ty, Hi));
+      SDValue Shift2 = DAG.getNode(ISD::SHL, DL, Ty, Add, Cst);
+
+      return DAG.getNode(ISD::ADD, DL, Ty, Shift2,
+                         DAG.getNode(MipsISD::Lo, DL, Ty, Lo));
+   }
 
     // This method creates the following nodes, which are necessary for
     // computing a symbol's address using gp-relative addressing:
@@ -372,13 +480,12 @@ namespace llvm {
     // (add $gp, %gp_rel(sym))
     template <class NodeTy>
     SDValue getAddrGPRel(NodeTy *N, const SDLoc &DL, EVT Ty,
-                         SelectionDAG &DAG) const {
-      assert(Ty == MVT::i32);
+                         SelectionDAG &DAG, bool IsN64) const {
       SDValue GPRel = getTargetNode(N, Ty, DAG, MipsII::MO_GPREL);
-      return DAG.getNode(ISD::ADD, DL, Ty,
-                         DAG.getRegister(Mips::GP, Ty),
-                         DAG.getNode(MipsISD::GPRel, DL, DAG.getVTList(Ty),
-                                     GPRel));
+      return DAG.getNode(
+          ISD::ADD, DL, Ty,
+          DAG.getRegister(IsN64 ? Mips::GP_64 : Mips::GP, Ty),
+          DAG.getNode(MipsISD::GPRel, DL, DAG.getVTList(Ty), GPRel));
     }
 
     /// This function fills Ops, which is the list of operands that will later
@@ -386,7 +493,7 @@ namespace llvm {
     /// copyToReg nodes to set up argument registers.
     virtual void
     getOpndList(SmallVectorImpl<SDValue> &Ops,
-                std::deque< std::pair<unsigned, SDValue> > &RegsToPass,
+                std::deque<std::pair<unsigned, SDValue>> &RegsToPass,
                 bool IsPICCall, bool GlobalOrExternal, bool InternalLinkage,
                 bool IsCallReloc, CallLoweringInfo &CLI, SDValue Callee,
                 SDValue Chain) const;
@@ -550,7 +657,8 @@ namespace llvm {
     }
 
     bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM,
-                               Type *Ty, unsigned AS) const override;
+                               Type *Ty, unsigned AS,
+                               Instruction *I = nullptr) const override;
 
     bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
@@ -578,17 +686,13 @@ namespace llvm {
                                                 unsigned Size, unsigned DstReg,
                                                 unsigned SrcRec) const;
 
-    MachineBasicBlock *emitAtomicBinary(MachineInstr &MI, MachineBasicBlock *BB,
-                                        unsigned Size, unsigned BinOpcode,
-                                        bool Nand = false) const;
+    MachineBasicBlock *emitAtomicBinary(MachineInstr &MI,
+                                        MachineBasicBlock *BB) const;
     MachineBasicBlock *emitAtomicBinaryPartword(MachineInstr &MI,
                                                 MachineBasicBlock *BB,
-                                                unsigned Size,
-                                                unsigned BinOpcode,
-                                                bool Nand = false) const;
+                                                unsigned Size) const;
     MachineBasicBlock *emitAtomicCmpSwap(MachineInstr &MI,
-                                         MachineBasicBlock *BB,
-                                         unsigned Size) const;
+                                         MachineBasicBlock *BB) const;
     MachineBasicBlock *emitAtomicCmpSwapPartword(MachineInstr &MI,
                                                  MachineBasicBlock *BB,
                                                  unsigned Size) const;
@@ -605,10 +709,13 @@ namespace llvm {
   createMipsSETargetLowering(const MipsTargetMachine &TM,
                              const MipsSubtarget &STI);
 
-  namespace Mips {
-    FastISel *createFastISel(FunctionLoweringInfo &funcInfo,
-                             const TargetLibraryInfo *libInfo);
-  }
-}
+namespace Mips {
 
-#endif
+FastISel *createFastISel(FunctionLoweringInfo &funcInfo,
+                         const TargetLibraryInfo *libInfo);
+
+} // end namespace Mips
+
+} // end namespace llvm
+
+#endif // LLVM_LIB_TARGET_MIPS_MIPSISELLOWERING_H

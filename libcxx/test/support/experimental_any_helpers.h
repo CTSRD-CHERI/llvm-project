@@ -22,13 +22,13 @@
 #define RTTI_ASSERT(X)
 #endif
 
-template <class _Tp>
+template <class T>
   struct IsSmallObject
     : public std::integral_constant<bool
-        , sizeof(_Tp) <= (sizeof(void*)*3)
+        , sizeof(T) <= (sizeof(void*)*3)
           && std::alignment_of<void*>::value
-             % std::alignment_of<_Tp>::value == 0
-          && std::is_nothrow_move_constructible<_Tp>::value
+             % std::alignment_of<T>::value == 0
+          && std::is_nothrow_move_constructible<T>::value
         >
   {};
 
@@ -55,6 +55,7 @@ void assertEmpty(std::experimental::any const& a) {
 
 // Assert that an 'any' object stores the specified 'Type' and 'value'.
 template <class Type>
+_LIBCPP_AVAILABILITY_THROW_BAD_ANY_CAST
 void assertContains(std::experimental::any const& a, int value = 1) {
     assert(!a.empty());
     RTTI_ASSERT(a.type() == typeid(Type));
@@ -64,6 +65,7 @@ void assertContains(std::experimental::any const& a, int value = 1) {
 // Modify the value of a "test type" stored within an any to the specified
 // 'value'.
 template <class Type>
+_LIBCPP_AVAILABILITY_THROW_BAD_ANY_CAST
 void modifyValue(std::experimental::any& a, int value) {
     assert(!a.empty());
     RTTI_ASSERT(a.type() == typeid(Type));

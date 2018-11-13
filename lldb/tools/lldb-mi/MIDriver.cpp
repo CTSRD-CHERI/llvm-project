@@ -9,6 +9,8 @@
 
 // Third party headers:
 #include "lldb/API/SBError.h"
+#include <cassert>
+#include <csignal>
 #include <fstream>
 
 // In-house headers:
@@ -380,6 +382,7 @@ lldb::SBError CMIDriver::DoParseArgs(const int argc, const char *argv[],
 //          that are only handled by *this driver:
 //              --executable <file>
 //              --source <file> or -s <file>
+//              --synchronous
 //          The application's options --interpreter and --executable in code act
 //          very similar.
 //          The --executable is necessary to differentiate whether the MI Driver
@@ -395,6 +398,7 @@ lldb::SBError CMIDriver::DoParseArgs(const int argc, const char *argv[],
 //          argument for a debug session. Using --interpreter on the command
 //          line does not
 //          issue additional commands to initialise a debug session.
+//          Option --synchronous disables an asynchronous mode in the lldb-mi driver.
 // Type:    Overridden.
 // Args:    argc        - (R)   An integer that contains the count of arguments
 // that follow in
@@ -467,6 +471,8 @@ lldb::SBError CMIDriver::ParseArgs(const int argc, const char *argv[],
                                                     // command line
       {                                             // See fn description.
         bHaveExecutableLongOption = true;
+      } else if (strArg.compare("--synchronous") == 0) {
+        CMICmnLLDBDebugSessionInfo::Instance().GetDebugger().SetAsync(false);
       }
     }
   }
@@ -509,7 +515,7 @@ bool CMIDriver::StartWorkerThreads() {
     const CMIUtilString errMsg = CMIUtilString::Format(
         MIRSRC(IDS_THREADMGR_ERR_THREAD_FAIL_CREATE),
         CMICmnThreadMgrStd::Instance().GetErrorDescription().c_str());
-    SetErrorDescriptionn(errMsg);
+    SetErrorDescription(errMsg);
     return MIstatus::failure;
   }
 
@@ -710,7 +716,7 @@ const CMIUtilString &CMIDriver::GetDriverId() const { return GetId(); }
 //          Check the error message if the function returns a failure.
 // Type:    Overridden.
 // Args:    vCmd        - (R) Command instruction to interpret.
-//          vwErrMsg    - (W) Error description on command failing.
+//          vwErrMsg    - (W) Status description on command failing.
 // Return:  MIstatus::success - Command succeeded.
 //          MIstatus::failure - Command failed.
 // Throws:  None.

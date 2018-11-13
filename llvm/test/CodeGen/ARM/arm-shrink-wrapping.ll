@@ -327,7 +327,7 @@ declare void @somethingElse(...)
 ; DISABLE-NEXT: pop {r4, r7, pc}
 ;
 ; ENABLE-NEXT: bx lr
-define i32 @loopInfoRestoreOutsideLoop(i32 %cond, i32 %N) "no-frame-pointer-elim"="true" #0 {
+define i32 @loopInfoRestoreOutsideLoop(i32 %cond, i32 %N) "no-frame-pointer-elim"="true" nounwind {
 entry:
   %tobool = icmp eq i32 %cond, 0
   br i1 %tobool, label %if.else, label %if.then
@@ -638,14 +638,13 @@ declare double @llvm.pow.f64(double, double)
 ; during PEI with shrink-wrapping enable.
 ; CHECK-LABEL: debug_info:
 ;
-; ENABLE: tst{{(\.w)?}}  r2, #1
+; ENABLE: {{tst  r2, #1|lsls r1, r2, #31}}
 ; ENABLE-NEXT: beq      [[BB13:LBB[0-9_]+]]
 ;
 ; CHECK: push
 ;
-; DISABLE: tst{{(\.w)?}}  r2, #1
-; DISABLE-NEXT: vst1.64
-; DISABLE-NEXT: beq      [[BB13:LBB[0-9_]+]]
+; DISABLE: {{tst  r2, #1|lsls r1, r2, #31}}
+; DISABLE: beq      [[BB13:LBB[0-9_]+]]
 ;
 ; CHECK: bl{{x?}} _pow
 ;
@@ -656,6 +655,9 @@ declare double @llvm.pow.f64(double, double)
 ; CHECK: vldr
 ;
 ; DISABLE: pop
+;
+; FIXME: This is flakey passing by finding 'bl' somewhere amongst the debug
+; info (like labels named 'line_table) not because it's found a bl instruction.
 ;
 ; CHECK: bl
 define float @debug_info(float %gamma, float %slopeLimit, i1 %or.cond, double %tmp) "no-frame-pointer-elim"="true" {
@@ -682,7 +684,9 @@ bb13:                                             ; preds = %bb3, %bb
 !llvm.dbg.cu = !{!0}
 !llvm.module.flags = !{!3}
 
-!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !1, producer: "LLVM", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
+!0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !1, producer: "LLVM", isOptimized: true, runtimeVersion: 0, emissionKind: FullDebug, enums: !2, retainedTypes: !4, globals: !2, imports: !2)
 !1 = !DIFile(filename: "a.cpp", directory: "b")
 !2 = !{}
 !3 = !{i32 2, !"Debug Info Version", i32 3}
+!4 = !{!5}
+!5 = !DIBasicType(name: "int", size: 32, encoding: DW_ATE_signed)

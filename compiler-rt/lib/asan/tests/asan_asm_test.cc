@@ -12,7 +12,8 @@
 //===----------------------------------------------------------------------===//
 #include "asan_test_utils.h"
 
-#if defined(__linux__)
+#if defined(__linux__) &&                                                      \
+    (!defined(ASAN_SHADOW_SCALE) || ASAN_SHADOW_SCALE == 3)
 
 // Assembly instrumentation is broken on x86 Android (x86 + PIC + shared runtime
 // library). See https://github.com/google/sanitizers/issues/353
@@ -57,12 +58,13 @@ template<> Type asm_read<Type>(Type *ptr) {        \
   return res;                                      \
 }
 
-#define DECLARE_ASM_REP_MOVS(Type, Movs)                                       \
-  template <> void asm_rep_movs<Type>(Type * dst, Type * src, size_t size) {   \
-    __asm__("rep " Movs " \n\t"                                                \
-            :                                                                  \
-            : "D"(dst), "S"(src), "c"(size)                                    \
-            : "rsi", "rdi", "rcx", "memory");                                  \
+#define DECLARE_ASM_REP_MOVS(Type, Movs)                         \
+  template <>                                                    \
+  void asm_rep_movs<Type>(Type * dst, Type * src, size_t size) { \
+    __asm__("rep " Movs " \n\t"                                  \
+            : "+D"(dst), "+S"(src), "+c"(size)                   \
+            :                                                    \
+            : "memory");                                         \
   }
 
 DECLARE_ASM_WRITE(U8, "8", "movq", "r");
@@ -99,12 +101,13 @@ template<> Type asm_read<Type>(Type *ptr) {        \
   return res;                                      \
 }
 
-#define DECLARE_ASM_REP_MOVS(Type, Movs)                                       \
-  template <> void asm_rep_movs<Type>(Type * dst, Type * src, size_t size) {   \
-    __asm__("rep " Movs " \n\t"                                                \
-            :                                                                  \
-            : "D"(dst), "S"(src), "c"(size)                                    \
-            : "esi", "edi", "ecx", "memory");                                  \
+#define DECLARE_ASM_REP_MOVS(Type, Movs)                         \
+  template <>                                                    \
+  void asm_rep_movs<Type>(Type * dst, Type * src, size_t size) { \
+    __asm__("rep " Movs " \n\t"                                  \
+            : "+D"(dst), "+S"(src), "+c"(size)                   \
+            :                                                    \
+            : "memory");                                         \
   }
 
 } // End of anonymous namespace

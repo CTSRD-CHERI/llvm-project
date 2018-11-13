@@ -8,11 +8,17 @@
 // This run uses getrusage. We can only test getrusage when allocator_may_return_null=0
 // because getrusage gives us max-rss, not current-rss.
 // RUN: %env_tool_opts=soft_rss_limit_mb=220:quarantine_size=1:allocator_may_return_null=0:can_use_proc_maps_statm=0 not %run %t 2>&1 | FileCheck %s -check-prefix=CHECK_MAY_RETURN_0
+// REQUIRES: stable-runtime
 
 // FIXME: make it work for other sanitizers.
 // XFAIL: lsan
 // XFAIL: tsan
 // XFAIL: msan
+// XFAIL: ubsan
+
+// https://github.com/google/sanitizers/issues/981
+// UNSUPPORTED: android-26
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -63,4 +69,4 @@ int main() {
 // CHECK_MAY_RETURN_0: allocating 128 times
 // CHECK_MAY_RETURN_0: Some of the malloc calls returned non-null: 128
 // CHECK_MAY_RETURN_0: allocating 256 times
-// CHECK_MAY_RETURN_0: allocator is terminating the process instead of returning
+// CHECK_MAY_RETURN_0: {{SUMMARY: .*Sanitizer: rss-limit-exceeded}}

@@ -16,14 +16,38 @@
 #define LLVM_LIB_CODEGEN_ASMPRINTER_DEBUGHANDLERBASE_H
 
 #include "AsmPrinterHandler.h"
-#include "DbgValueHistoryCalculator.h"
+#include "DbgEntityHistoryCalculator.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/CodeGen/LexicalScopes.h"
 #include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 
 namespace llvm {
 
 class AsmPrinter;
+class MachineInstr;
 class MachineModuleInfo;
+
+/// Represents the location at which a variable is stored.
+struct DbgVariableLocation {
+  /// Base register.
+  unsigned Register;
+
+  /// Chain of offsetted loads necessary to load the value if it lives in
+  /// memory. Every load except for the last is pointer-sized.
+  SmallVector<int64_t, 1> LoadChain;
+
+  /// Present if the location is part of a larger variable.
+  llvm::Optional<llvm::DIExpression::FragmentInfo> FragmentInfo;
+
+  /// Extract a VariableLocation from a MachineInstr.
+  /// This will only work if Instruction is a debug value instruction
+  /// and the associated DIExpression is in one of the supported forms.
+  /// If these requirements are not met, the returned Optional will not
+  /// have a value.
+  static Optional<DbgVariableLocation>
+  extractFromMachineInstruction(const MachineInstr &Instruction);
+};
 
 /// Base class for debug information backends. Common functionality related to
 /// tracking which variables and scopes are alive at a given PC live here.
@@ -38,10 +62,12 @@ protected:
   MachineModuleInfo *MMI;
 
   /// Previous instruction's location information. This is used to
-  /// determine label location to indicate scope boundries in dwarf
-  /// debug info.
+  /// determine label location to indicate scope boundaries in debug info.
+  /// We track the previous instruction's source location (if not line 0),
+  /// whether it was a label, and its parent BB.
   DebugLoc PrevInstLoc;
   MCSymbol *PrevLabel = nullptr;
+  const MachineBasicBlock *PrevInstBB = nullptr;
 
   /// This location indicates end of function prologue and beginning of
   /// function body.
@@ -55,6 +81,9 @@ protected:
   /// History of DBG_VALUE and clobber instructions for each user
   /// variable.  Variables are listed in order of appearance.
   DbgValueHistoryMap DbgValues;
+
+  /// Mapping of inlined labels and DBG_LABEL machine instruction.
+  DbgLabelInstrMap DbgLabels;
 
   /// Maps instruction with label emitted before instruction.
   /// FIXME: Make this private from DwarfDebug, we have the necessary accessors
@@ -78,6 +107,10 @@ protected:
     LabelsAfterInsn.insert(std::make_pair(MI, nullptr));
   }
 
+  virtual void beginFunctionImpl(const MachineFunction *MF) = 0;
+  virtual void endFunctionImpl(const MachineFunction *MF) = 0;
+  virtual void skippedNonDebugFunction() {}
+
   // AsmPrinterHandler overrides.
 public:
   void beginInstruction(const MachineInstr *MI) override;
@@ -91,14 +124,6 @@ public:
 
   /// Return Label immediately following the instruction.
   MCSymbol *getLabelAfterInsn(const MachineInstr *MI);
-
-  /// Determine the relative position of the pieces described by P1 and P2.
-  /// Returns  -1 if P1 is entirely before P2, 0 if P1 and P2 overlap,
-  /// 1 if P1 is entirely after P2.
-  static int pieceCmp(const DIExpression *P1, const DIExpression *P2);
-
-  /// Determine whether two variable pieces overlap.
-  static bool piecesOverlap(const DIExpression *P1, const DIExpression *P2);
 
   /// If this type is derived from a base type then return base type size.
   static uint64_t getBaseTypeSize(const DITypeRef TyRef);

@@ -76,6 +76,10 @@
 # RUN: ld.lld --sort-section alignment -o %t8 --script %t7.script %t1.o %t2.o
 # RUN: llvm-objdump -s %t8 | FileCheck -check-prefix=SORTED_ALIGNMENT %s
 
+## Check --sort-section= form.
+# RUN: ld.lld --sort-section=alignment -o %t8_1 --script %t7.script %t1.o %t2.o
+# RUN: llvm-objdump -s %t8_1 | FileCheck -check-prefix=SORTED_ALIGNMENT %s
+
 ## Check --sort-section name option.
 # RUN: echo "SECTIONS { .aaa : { *(.aaa.*) } }" > %t8.script
 # RUN: ld.lld --sort-section name -o %t9 --script %t8.script %t1.o %t2.o
@@ -90,6 +94,11 @@
 # RUN: echo "SECTIONS { .aaa : { *(SORT_BY_NAME(SORT_NONE(.aaa.*))) } }" > %t10.script
 # RUN: ld.lld -o %t11 --script %t10.script %t2.o %t1.o
 # RUN: llvm-objdump -s %t11 | FileCheck -check-prefix=SORTED_A %s
+
+## There is no SORTFOO command, check we handle it properly.
+# RUN: echo "SECTIONS { .aaa : { SORTFOO } }" > %t3.script
+# RUN: not ld.lld -o %t3 --script %t3.script %t1.o 2>&1 | FileCheck %s -check-prefix=SORTFOO
+# SORTFOO: unknown command SORTFOO
 
 .global _start
 _start:

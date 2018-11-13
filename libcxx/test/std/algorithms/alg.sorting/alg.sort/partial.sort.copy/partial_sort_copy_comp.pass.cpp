@@ -21,19 +21,22 @@
 
 #include <algorithm>
 #include <functional>
+#include <random>
 #include <cassert>
 
 #include "test_iterators.h"
 
+std::mt19937 randomness;
+
 template <class Iter>
 void
-test_larger_sorts(unsigned N, unsigned M)
+test_larger_sorts(int N, int M)
 {
     int* input = new int[N];
     int* output = new int[M];
     for (int i = 0; i < N; ++i)
         input[i] = i;
-    std::random_shuffle(input, input+N);
+    std::shuffle(input, input+N, randomness);
     int* r = std::partial_sort_copy(Iter(input), Iter(input+N), output, output+M,
                                     std::greater<int>());
     int* e = output + std::min(N, M);
@@ -47,7 +50,7 @@ test_larger_sorts(unsigned N, unsigned M)
 
 template <class Iter>
 void
-test_larger_sorts(unsigned N)
+test_larger_sorts(int N)
 {
     test_larger_sorts<Iter>(N, 0);
     test_larger_sorts<Iter>(N, 1);

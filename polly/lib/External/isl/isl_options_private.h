@@ -34,6 +34,7 @@ struct isl_options {
 	int			convex;
 
 	int			coalesce_bounded_wrapping;
+	int			coalesce_preserve_locals;
 
 	int			schedule_max_coefficient;
 	int			schedule_max_constant_term;
@@ -46,6 +47,7 @@ struct isl_options {
 	int			schedule_separate_components;
 	int			schedule_whole_component;
 	unsigned		schedule_algorithm;
+	int			schedule_carry_self_first;
 	int			schedule_serialize_sccs;
 
 	int			tile_scale_tile_loops;

@@ -25,8 +25,8 @@ test1()
     E e1;
     E e2 = e1;
     assert(e1 == e2);
-    e1();
-    e2();
+    (void)e1();
+    (void)e2();
     assert(e1 == e2);
 }
 
@@ -37,7 +37,7 @@ test()
     test1<T, 0, 0, 0>();
     test1<T, 0, 1, 2>();
     test1<T, 1, 1, 2>();
-    const T M(~0);
+    const T M(static_cast<T>(-1));
     test1<T, 0, 0, M>();
     test1<T, 0, M-2, M>();
     test1<T, 0, M-1, M>();

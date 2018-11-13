@@ -10,7 +10,7 @@
 ; #6 }
 
 ; bar(5):     discriminator 0
-; bar(3):     discriminator 1
+; bar(3):     discriminator 2
 
 ; Function Attrs: uwtable
 define void @_Z3fooi(i32 %i) #0 !dbg !4 {
@@ -50,7 +50,7 @@ attributes #2 = { "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-
 !0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !1, producer: "clang version 3.8.0 (trunk 253273)", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !2)
 !1 = !DIFile(filename: "a.cc", directory: "/tmp")
 !2 = !{}
-!4 = distinct !DISubprogram(name: "foo", linkageName: "_Z3fooi", scope: !1, file: !1, line: 3, type: !5, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!4 = distinct !DISubprogram(name: "foo", linkageName: "_Z3fooi", scope: !1, file: !1, line: 3, type: !5, isLocal: false, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: false, unit: !0, retainedNodes: !2)
 !5 = !DISubroutineType(types: !6)
 !6 = !{null, !7}
 !7 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
@@ -69,4 +69,4 @@ attributes #2 = { "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-
 !20 = !DILocation(line: 6, column: 1, scope: !4)
 
 ; CHECK: ![[ELSE]] = !DILocation(line: 5, column: 18, scope: ![[ELSEBLOCK:[0-9]+]])
-; CHECK: ![[ELSEBLOCK]] = !DILexicalBlockFile({{.*}} discriminator: 1)
+; CHECK: ![[ELSEBLOCK]] = !DILexicalBlockFile({{.*}} discriminator: 2)

@@ -8,10 +8,8 @@
 define i32 @main4k() nounwind {
 entry:
 ; WIN_X64-LABEL:main4k:
-; WIN_X64: # BB#0:
+; WIN_X64: # %bb.0:
 ; WIN_X64:      movl    $4096, %eax
-; WIN_X64:      movq    %rcx, 8(%rsp)
-; WIN_X64:	movq	%rdx, 16(%rsp)
 ; WIN_X64:	xorq	%rcx, %rcx
 ; WIN_X64:	movq	%rsp, %rdx
 ; WIN_X64:	subq	%rax, %rdx
@@ -19,7 +17,7 @@ entry:
 ; WIN_X64:	movq	%gs:16, %rcx
 ; WIN_X64:	cmpq	%rcx, %rdx
 ; WIN_X64:	jae	.LBB0_3
-; WIN_X64:# BB#1:
+; WIN_X64:# %bb.1:
 ; WIN_X64:	andq	$-4096, %rdx
 ; WIN_X64:.LBB0_2:
 ; WIN_X64:	leaq	-4096(%rcx), %rcx
@@ -27,8 +25,6 @@ entry:
 ; WIN_X64:	cmpq	%rcx, %rdx
 ; WIN_X64:	jne	.LBB0_2
 ; WIN_X64:.LBB0_3:
-; WIN_X64:	movq	8(%rsp), %rcx
-; WIN_X64:	movq	16(%rsp), %rdx
 ; WIN_X64:	subq	%rax, %rsp
 ; WIN_X64:	xorl	%eax, %eax
 ; WIN_X64:	addq	$4096, %rsp
@@ -45,7 +41,6 @@ entry:
 define i32 @main4k_frame() nounwind "no-frame-pointer-elim"="true" {
 entry:
 ; WIN_X64-LABEL:main4k_frame:
-; WIN_X64:      movq    %rcx,   16(%rsp)
 ; WIN_X64:      movq    %gs:16, %rcx
 ; LINUX-LABEL:main4k_frame:
 ; LINUX-NOT:    movq    %gs:16, %rcx
@@ -58,7 +53,6 @@ entry:
 ; Case with INT args
 define i32 @main4k_intargs(i32 %x, i32 %y) nounwind {
 entry:
-; WIN_X64:      movq    %rcx,   8(%rsp)
 ; WIN_X64:      movq    %gs:16, %rcx
 ; LINUX-NOT:    movq    %gs:16, %rcx
 ; LINUX: 	retq
@@ -71,7 +65,6 @@ entry:
 ; Case with FP regs
 define i32 @main4k_fpargs(double %x, double %y) nounwind {
 entry:
-; WIN_X64:      movq    %rcx,   8(%rsp)
 ; WIN_X64:      movq    %gs:16, %rcx
 ; LINUX-NOT:    movq    %gs:16, %rcx
 ; LINUX: 	retq
@@ -103,7 +96,7 @@ entry:
 
 ; Make sure we don't emit the probe sequence if not on windows even if the
 ; caller has the Win64 calling convention.
-define x86_64_win64cc i32 @main4k_win64() nounwind {
+define win64cc i32 @main4k_win64() nounwind {
 entry:
 ; WIN_X64:      movq    %gs:16, %rcx
 ; LINUX-NOT:    movq    %gs:16, %rcx
@@ -115,7 +108,7 @@ entry:
 declare i32 @bar(i8*) nounwind
 
 ; Within-body inline probe expansion
-define x86_64_win64cc i32 @main4k_alloca(i64 %n) nounwind {
+define win64cc i32 @main4k_alloca(i64 %n) nounwind {
 entry:
 ; WIN_X64: 	callq	bar
 ; WIN_X64:  	movq	%gs:16, [[R:%r.*]]

@@ -1,4 +1,4 @@
-//===--- StringMap.h - String Hash table map interface ----------*- C++ -*-===//
+//===- StringMap.h - String Hash table map interface ------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -15,27 +15,34 @@
 #define LLVM_ADT_STRINGMAP_H
 
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/iterator.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/PointerLikeTypeTraits.h"
+#include "llvm/Support/ErrorHandling.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <cstdlib>
 #include <cstring>
+#include <initializer_list>
+#include <iterator>
 #include <utility>
 
 namespace llvm {
-  template<typename ValueT>
-  class StringMapConstIterator;
-  template<typename ValueT>
-  class StringMapIterator;
-  template<typename ValueTy>
-  class StringMapEntry;
+
+template<typename ValueTy> class StringMapConstIterator;
+template<typename ValueTy> class StringMapIterator;
+template<typename ValueTy> class StringMapKeyIterator;
 
 /// StringMapEntryBase - Shared base class of StringMapEntry instances.
 class StringMapEntryBase {
-  unsigned StrLen;
+  size_t StrLen;
 
 public:
-  explicit StringMapEntryBase(unsigned Len) : StrLen(Len) {}
+  explicit StringMapEntryBase(size_t Len) : StrLen(Len) {}
 
-  unsigned getKeyLength() const { return StrLen; }
+  size_t getKeyLength() const { return StrLen; }
 };
 
 /// StringMapImpl - This is the base class of StringMap that is shared among
@@ -45,17 +52,15 @@ protected:
   // Array of NumBuckets pointers to entries, null pointers are holes.
   // TheTable[NumBuckets] contains a sentinel value for easy iteration. Followed
   // by an array of the actual hash values as unsigned integers.
-  StringMapEntryBase **TheTable;
-  unsigned NumBuckets;
-  unsigned NumItems;
-  unsigned NumTombstones;
+  StringMapEntryBase **TheTable = nullptr;
+  unsigned NumBuckets = 0;
+  unsigned NumItems = 0;
+  unsigned NumTombstones = 0;
   unsigned ItemSize;
 
 protected:
   explicit StringMapImpl(unsigned itemSize)
-      : TheTable(nullptr),
-        // Initialize the map with zero buckets to allocation.
-        NumBuckets(0), NumItems(0), NumTombstones(0), ItemSize(itemSize) {}
+      : ItemSize(itemSize) {}
   StringMapImpl(StringMapImpl &&RHS)
       : TheTable(RHS.TheTable), NumBuckets(RHS.NumBuckets),
         NumItems(RHS.NumItems), NumTombstones(RHS.NumTombstones),
@@ -119,16 +124,15 @@ public:
 /// and data.
 template<typename ValueTy>
 class StringMapEntry : public StringMapEntryBase {
-  StringMapEntry(StringMapEntry &E) = delete;
-
 public:
   ValueTy second;
 
-  explicit StringMapEntry(unsigned strLen)
+  explicit StringMapEntry(size_t strLen)
     : StringMapEntryBase(strLen), second() {}
   template <typename... InitTy>
-  StringMapEntry(unsigned strLen, InitTy &&... InitVals)
+  StringMapEntry(size_t strLen, InitTy &&... InitVals)
       : StringMapEntryBase(strLen), second(std::forward<InitTy>(InitVals)...) {}
+  StringMapEntry(StringMapEntry &E) = delete;
 
   StringRef getKey() const {
     return StringRef(getKeyData(), getKeyLength());
@@ -151,16 +155,16 @@ public:
   template <typename AllocatorTy, typename... InitTy>
   static StringMapEntry *Create(StringRef Key, AllocatorTy &Allocator,
                                 InitTy &&... InitVals) {
-    unsigned KeyLength = Key.size();
+    size_t KeyLength = Key.size();
 
     // Allocate a new item with space for the string at the end and a null
     // terminator.
-    unsigned AllocSize = static_cast<unsigned>(sizeof(StringMapEntry))+
-      KeyLength+1;
-    unsigned Alignment = alignof(StringMapEntry);
+    size_t AllocSize = sizeof(StringMapEntry) + KeyLength + 1;
+    size_t Alignment = alignof(StringMapEntry);
 
     StringMapEntry *NewItem =
       static_cast<StringMapEntry*>(Allocator.Allocate(AllocSize,Alignment));
+    assert(NewItem && "Unhandled out-of-memory");
 
     // Construct the value.
     new (NewItem) StringMapEntry(KeyLength, std::forward<InitTy>(InitVals)...);
@@ -196,8 +200,7 @@ public:
   template<typename AllocatorTy>
   void Destroy(AllocatorTy &Allocator) {
     // Free memory referenced by the item.
-    unsigned AllocSize =
-        static_cast<unsigned>(sizeof(StringMapEntry)) + getKeyLength() + 1;
+    size_t AllocSize = sizeof(StringMapEntry) + getKeyLength() + 1;
     this->~StringMapEntry();
     Allocator.Deallocate(static_cast<void *>(this), AllocSize);
   }
@@ -218,9 +221,10 @@ class StringMap : public StringMapImpl {
   AllocatorTy Allocator;
 
 public:
-  typedef StringMapEntry<ValueTy> MapEntryTy;
+  using MapEntryTy = StringMapEntry<ValueTy>;
 
   StringMap() : StringMapImpl(static_cast<unsigned>(sizeof(MapEntryTy))) {}
+
   explicit StringMap(unsigned InitialSize)
     : StringMapImpl(InitialSize, static_cast<unsigned>(sizeof(MapEntryTy))) {}
 
@@ -240,12 +244,6 @@ public:
 
   StringMap(StringMap &&RHS)
       : StringMapImpl(std::move(RHS)), Allocator(std::move(RHS.Allocator)) {}
-
-  StringMap &operator=(StringMap RHS) {
-    StringMapImpl::swap(RHS);
-    std::swap(Allocator, RHS.Allocator);
-    return *this;
-  }
 
   StringMap(const StringMap &RHS) :
     StringMapImpl(static_cast<unsigned>(sizeof(MapEntryTy))),
@@ -282,16 +280,37 @@ public:
     // not worthwhile.
   }
 
+  StringMap &operator=(StringMap RHS) {
+    StringMapImpl::swap(RHS);
+    std::swap(Allocator, RHS.Allocator);
+    return *this;
+  }
+
+  ~StringMap() {
+    // Delete all the elements in the map, but don't reset the elements
+    // to default values.  This is a copy of clear(), but avoids unnecessary
+    // work not required in the destructor.
+    if (!empty()) {
+      for (unsigned I = 0, E = NumBuckets; I != E; ++I) {
+        StringMapEntryBase *Bucket = TheTable[I];
+        if (Bucket && Bucket != getTombstoneVal()) {
+          static_cast<MapEntryTy*>(Bucket)->Destroy(Allocator);
+        }
+      }
+    }
+    free(TheTable);
+  }
+
   AllocatorTy &getAllocator() { return Allocator; }
   const AllocatorTy &getAllocator() const { return Allocator; }
 
-  typedef const char* key_type;
-  typedef ValueTy mapped_type;
-  typedef StringMapEntry<ValueTy> value_type;
-  typedef size_t size_type;
+  using key_type = const char*;
+  using mapped_type = ValueTy;
+  using value_type = StringMapEntry<ValueTy>;
+  using size_type = size_t;
 
-  typedef StringMapConstIterator<ValueTy> const_iterator;
-  typedef StringMapIterator<ValueTy> iterator;
+  using const_iterator = StringMapConstIterator<ValueTy>;
+  using iterator = StringMapIterator<ValueTy>;
 
   iterator begin() {
     return iterator(TheTable, NumBuckets == 0);
@@ -304,6 +323,11 @@ public:
   }
   const_iterator end() const {
     return const_iterator(TheTable+NumBuckets, true);
+  }
+
+  iterator_range<StringMapKeyIterator<ValueTy>> keys() const {
+    return make_range(StringMapKeyIterator<ValueTy>(begin()),
+                      StringMapKeyIterator<ValueTy>(end()));
   }
 
   iterator find(StringRef Key) {
@@ -421,59 +445,41 @@ public:
     erase(I);
     return true;
   }
-
-  ~StringMap() {
-    // Delete all the elements in the map, but don't reset the elements
-    // to default values.  This is a copy of clear(), but avoids unnecessary
-    // work not required in the destructor.
-    if (!empty()) {
-      for (unsigned I = 0, E = NumBuckets; I != E; ++I) {
-        StringMapEntryBase *Bucket = TheTable[I];
-        if (Bucket && Bucket != getTombstoneVal()) {
-          static_cast<MapEntryTy*>(Bucket)->Destroy(Allocator);
-        }
-      }
-    }
-    free(TheTable);
-  }
 };
 
-template <typename ValueTy> class StringMapConstIterator {
+template <typename DerivedTy, typename ValueTy>
+class StringMapIterBase
+    : public iterator_facade_base<DerivedTy, std::forward_iterator_tag,
+                                  ValueTy> {
 protected:
-  StringMapEntryBase **Ptr;
+  StringMapEntryBase **Ptr = nullptr;
 
 public:
-  typedef StringMapEntry<ValueTy> value_type;
+  StringMapIterBase() = default;
 
-  StringMapConstIterator() : Ptr(nullptr) { }
-
-  explicit StringMapConstIterator(StringMapEntryBase **Bucket,
-                                  bool NoAdvance = false)
-  : Ptr(Bucket) {
+  explicit StringMapIterBase(StringMapEntryBase **Bucket,
+                             bool NoAdvance = false)
+      : Ptr(Bucket) {
     if (!NoAdvance) AdvancePastEmptyBuckets();
   }
 
-  const value_type &operator*() const {
-    return *static_cast<StringMapEntry<ValueTy>*>(*Ptr);
-  }
-  const value_type *operator->() const {
-    return static_cast<StringMapEntry<ValueTy>*>(*Ptr);
+  DerivedTy &operator=(const DerivedTy &Other) {
+    Ptr = Other.Ptr;
+    return static_cast<DerivedTy &>(*this);
   }
 
-  bool operator==(const StringMapConstIterator &RHS) const {
-    return Ptr == RHS.Ptr;
-  }
-  bool operator!=(const StringMapConstIterator &RHS) const {
-    return Ptr != RHS.Ptr;
-  }
+  bool operator==(const DerivedTy &RHS) const { return Ptr == RHS.Ptr; }
 
-  inline StringMapConstIterator& operator++() {   // Preincrement
+  DerivedTy &operator++() { // Preincrement
     ++Ptr;
     AdvancePastEmptyBuckets();
-    return *this;
+    return static_cast<DerivedTy &>(*this);
   }
-  StringMapConstIterator operator++(int) {        // Postincrement
-    StringMapConstIterator tmp = *this; ++*this; return tmp;
+
+  DerivedTy operator++(int) { // Post-increment
+    DerivedTy Tmp(Ptr);
+    ++*this;
+    return Tmp;
   }
 
 private:
@@ -483,21 +489,68 @@ private:
   }
 };
 
-template<typename ValueTy>
-class StringMapIterator : public StringMapConstIterator<ValueTy> {
+template <typename ValueTy>
+class StringMapConstIterator
+    : public StringMapIterBase<StringMapConstIterator<ValueTy>,
+                               const StringMapEntry<ValueTy>> {
+  using base = StringMapIterBase<StringMapConstIterator<ValueTy>,
+                                 const StringMapEntry<ValueTy>>;
+
 public:
-  StringMapIterator() {}
-  explicit StringMapIterator(StringMapEntryBase **Bucket,
-                             bool NoAdvance = false)
-    : StringMapConstIterator<ValueTy>(Bucket, NoAdvance) {
-  }
-  StringMapEntry<ValueTy> &operator*() const {
-    return *static_cast<StringMapEntry<ValueTy>*>(*this->Ptr);
-  }
-  StringMapEntry<ValueTy> *operator->() const {
-    return static_cast<StringMapEntry<ValueTy>*>(*this->Ptr);
+  StringMapConstIterator() = default;
+  explicit StringMapConstIterator(StringMapEntryBase **Bucket,
+                                  bool NoAdvance = false)
+      : base(Bucket, NoAdvance) {}
+
+  const StringMapEntry<ValueTy> &operator*() const {
+    return *static_cast<const StringMapEntry<ValueTy> *>(*this->Ptr);
   }
 };
-}
 
-#endif
+template <typename ValueTy>
+class StringMapIterator : public StringMapIterBase<StringMapIterator<ValueTy>,
+                                                   StringMapEntry<ValueTy>> {
+  using base =
+      StringMapIterBase<StringMapIterator<ValueTy>, StringMapEntry<ValueTy>>;
+
+public:
+  StringMapIterator() = default;
+  explicit StringMapIterator(StringMapEntryBase **Bucket,
+                             bool NoAdvance = false)
+      : base(Bucket, NoAdvance) {}
+
+  StringMapEntry<ValueTy> &operator*() const {
+    return *static_cast<StringMapEntry<ValueTy> *>(*this->Ptr);
+  }
+
+  operator StringMapConstIterator<ValueTy>() const {
+    return StringMapConstIterator<ValueTy>(this->Ptr, true);
+  }
+};
+
+template <typename ValueTy>
+class StringMapKeyIterator
+    : public iterator_adaptor_base<StringMapKeyIterator<ValueTy>,
+                                   StringMapConstIterator<ValueTy>,
+                                   std::forward_iterator_tag, StringRef> {
+  using base = iterator_adaptor_base<StringMapKeyIterator<ValueTy>,
+                                     StringMapConstIterator<ValueTy>,
+                                     std::forward_iterator_tag, StringRef>;
+
+public:
+  StringMapKeyIterator() = default;
+  explicit StringMapKeyIterator(StringMapConstIterator<ValueTy> Iter)
+      : base(std::move(Iter)) {}
+
+  StringRef &operator*() {
+    Key = this->wrapped()->getKey();
+    return Key;
+  }
+
+private:
+  StringRef Key;
+};
+
+} // end namespace llvm
+
+#endif // LLVM_ADT_STRINGMAP_H

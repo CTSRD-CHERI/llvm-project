@@ -45,6 +45,10 @@ namespace std {
       any& operator=(ValueType&& rhs);
 
     // 6.3.3 any modifiers
+    template <class ValueType, class... Args>
+      decay_t<ValueType>& emplace(Args&&... args);
+    template <class ValueType, class U, class... Args>
+      decay_t<ValueType>& emplace(initializer_list<U>, Args&&...);
     void reset() noexcept;
     void swap(any& rhs) noexcept;
 
@@ -73,8 +77,6 @@ namespace std {
   template<class ValueType>
     ValueType* any_cast(any* operand) noexcept;
 
-} // namespace fundamentals_v1
-} // namespace experimental
 } // namespace std
 
 */
@@ -85,6 +87,7 @@ namespace std {
 #include <typeinfo>
 #include <type_traits>
 #include <cstdlib>
+#include <version>
 
 #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
 #pragma GCC system_header
@@ -102,18 +105,18 @@ _LIBCPP_BEGIN_NAMESPACE_STD
 
 #if _LIBCPP_STD_VER > 14
 
-_LIBCPP_NORETURN inline _LIBCPP_ALWAYS_INLINE
+_LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_bad_any_cast()
 {
 #ifndef _LIBCPP_NO_EXCEPTIONS
     throw bad_any_cast();
 #else
-	_VSTD::abort();
+    _VSTD::abort();
 #endif
 }
 
 // Forward declarations
-class _LIBCPP_TYPE_VIS_ONLY any;
+class _LIBCPP_TEMPLATE_VIS any;
 
 template <class _ValueType>
 _LIBCPP_INLINE_VISIBILITY
@@ -148,7 +151,7 @@ namespace __any_imp
   template <class _Tp> struct _LargeHandler;
 
   template <class _Tp>
-  struct  _LIBCPP_TYPE_VIS_ONLY __unique_typeinfo { static constexpr int __id = 0; };
+  struct  _LIBCPP_TEMPLATE_VIS __unique_typeinfo { static constexpr int __id = 0; };
   template <class _Tp> constexpr int __unique_typeinfo<_Tp>::__id;
 
   template <class _Tp>
@@ -176,7 +179,7 @@ namespace __any_imp
 
 } // namespace __any_imp
 
-class _LIBCPP_TYPE_VIS_ONLY any
+class _LIBCPP_TEMPLATE_VIS any
 {
 public:
   // construct/destruct
@@ -258,7 +261,7 @@ public:
         is_copy_constructible<_Tp>::value>
     >
   _LIBCPP_INLINE_VISIBILITY
-  void emplace(_Args&&... args);
+  _Tp& emplace(_Args&&... args);
 
   template <class _ValueType, class _Up, class ..._Args,
     class _Tp = decay_t<_ValueType>,
@@ -267,7 +270,7 @@ public:
         is_copy_constructible<_Tp>::value>
   >
   _LIBCPP_INLINE_VISIBILITY
-  void emplace(initializer_list<_Up>, _Args&&...);
+  _Tp& emplace(initializer_list<_Up>, _Args&&...);
 
   // 6.3.3 any modifiers
   _LIBCPP_INLINE_VISIBILITY
@@ -302,7 +305,7 @@ private:
         __any_imp::_Buffer __buf;
     };
 
-    _LIBCPP_ALWAYS_INLINE
+    _LIBCPP_INLINE_VISIBILITY
     void * __call(_Action __a, any * __other = nullptr,
                   type_info const * __info = nullptr,
                    const void* __fallback_info = nullptr) const
@@ -310,7 +313,7 @@ private:
         return __h(__a, this, __other, __info, __fallback_info);
     }
 
-    _LIBCPP_ALWAYS_INLINE
+    _LIBCPP_INLINE_VISIBILITY
     void * __call(_Action __a, any * __other = nullptr,
                   type_info const * __info = nullptr,
                   const void* __fallback_info = nullptr)
@@ -338,7 +341,7 @@ private:
 namespace __any_imp
 {
   template <class _Tp>
-  struct _LIBCPP_TYPE_VIS_ONLY _SmallHandler
+  struct _LIBCPP_TEMPLATE_VIS _SmallHandler
   {
      _LIBCPP_INLINE_VISIBILITY
      static void* __handle(_Action __act, any const * __this, any * __other,
@@ -364,9 +367,10 @@ namespace __any_imp
 
     template <class ..._Args>
     _LIBCPP_INLINE_VISIBILITY
-    static void __create(any & __dest, _Args&&... __args) {
-        ::new (static_cast<void*>(&__dest.__s.__buf)) _Tp(_VSTD::forward<_Args>(__args)...);
+    static _Tp& __create(any & __dest, _Args&&... __args) {
+        _Tp* __ret = ::new (static_cast<void*>(&__dest.__s.__buf)) _Tp(_VSTD::forward<_Args>(__args)...);
         __dest.__h = &_SmallHandler::__handle;
+        return *__ret;
     }
 
   private:
@@ -412,7 +416,7 @@ namespace __any_imp
   };
 
   template <class _Tp>
-  struct _LIBCPP_TYPE_VIS_ONLY _LargeHandler
+  struct _LIBCPP_TEMPLATE_VIS _LargeHandler
   {
     _LIBCPP_INLINE_VISIBILITY
     static void* __handle(_Action __act, any const * __this,
@@ -439,14 +443,15 @@ namespace __any_imp
 
     template <class ..._Args>
     _LIBCPP_INLINE_VISIBILITY
-    static void __create(any & __dest, _Args&&... __args) {
+    static _Tp& __create(any & __dest, _Args&&... __args) {
         typedef allocator<_Tp> _Alloc;
         typedef __allocator_destructor<_Alloc> _Dp;
         _Alloc __a;
         unique_ptr<_Tp, _Dp> __hold(__a.allocate(1), _Dp(__a, 1));
-        ::new ((void*)__hold.get()) _Tp(_VSTD::forward<_Args>(__args)...);
+        _Tp* __ret = ::new ((void*)__hold.get()) _Tp(_VSTD::forward<_Args>(__args)...);
         __dest.__s.__ptr = __hold.release();
         __dest.__h = &_LargeHandler::__handle;
+        return *__ret;
     }
 
   private:
@@ -519,16 +524,16 @@ any & any::operator=(_ValueType && __v)
 
 template <class _ValueType, class ..._Args, class _Tp, class>
 inline _LIBCPP_INLINE_VISIBILITY
-void any::emplace(_Args&&... __args) {
+_Tp& any::emplace(_Args&&... __args) {
   reset();
-  __any_imp::_Handler<_Tp>::__create(*this, _VSTD::forward<_Args>(__args)...);
+  return __any_imp::_Handler<_Tp>::__create(*this, _VSTD::forward<_Args>(__args)...);
 }
 
 template <class _ValueType, class _Up, class ..._Args, class _Tp, class>
 inline _LIBCPP_INLINE_VISIBILITY
-void any::emplace(initializer_list<_Up> __il, _Args&&... __args) {
+_Tp& any::emplace(initializer_list<_Up> __il, _Args&&... __args) {
   reset();
-  __any_imp::_Handler<_Tp>::__create(*this, __il, _VSTD::forward<_Args>(__args)...);
+  return __any_imp::_Handler<_Tp>::__create(*this, __il, _VSTD::forward<_Args>(__args)...);
 }
 
 inline _LIBCPP_INLINE_VISIBILITY

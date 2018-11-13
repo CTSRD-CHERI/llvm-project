@@ -1,4 +1,4 @@
-; RUN: opt < %s -simplifycfg -S | FileCheck %s
+; RUN: opt < %s -simplifycfg -sink-common-insts -S | FileCheck -enable-var-scope %s
 
 define zeroext i1 @test1(i1 zeroext %flag, i32 %blksA, i32 %blksB, i32 %nblks) {
 entry:
@@ -340,7 +340,7 @@ if.end:
 ; CHECK-LABEL: test13
 ; CHECK-DAG: select
 ; CHECK-DAG: load volatile
-; CHECK: store volatile {{.*}}, !tbaa ![[TBAA:[0-9]]]
+; CHECK: store volatile {{.*}}, !tbaa ![[$TBAA:[0-9]]]
 ; CHECK-NOT: load
 ; CHECK-NOT: store
 
@@ -384,7 +384,7 @@ if.else:
   %gepb = getelementptr inbounds %struct.anon, %struct.anon* %s, i32 0, i32 1
   %sv2 = load i32, i32* %gepb
   %cmp2 = icmp eq i32 %sv2, 57
-  call void @llvm.dbg.value(metadata i32 0, i64 0, metadata !9, metadata !DIExpression()), !dbg !11
+  call void @llvm.dbg.value(metadata i32 0, metadata !9, metadata !DIExpression()), !dbg !11
   br label %if.end
 
 if.end:
@@ -392,7 +392,7 @@ if.end:
   ret i32 1
 }
 
-declare void @llvm.dbg.value(metadata, i64, metadata, metadata)
+declare void @llvm.dbg.value(metadata, metadata, metadata)
 !llvm.module.flags = !{!5, !6}
 !llvm.dbg.cu = !{!7}
 
@@ -768,6 +768,30 @@ if.end:
 ; CHECK-NOT: exact
 ; CHECK: }
 
+; Check that simplifycfg doesn't sink and merge inline-asm instructions.
+
+define i32 @test_inline_asm1(i32 %c, i32 %r6) {
+entry:
+  %tobool = icmp eq i32 %c, 0
+  br i1 %tobool, label %if.else, label %if.then
+
+if.then:
+  %0 = call i32 asm "rorl $2, $0", "=&r,0,n,~{dirflag},~{fpsr},~{flags}"(i32 %r6, i32 8)
+  br label %if.end
+
+if.else:
+  %1 = call i32 asm "rorl $2, $0", "=&r,0,n,~{dirflag},~{fpsr},~{flags}"(i32 %r6, i32 6)
+  br label %if.end
+
+if.end:
+  %r6.addr.0 = phi i32 [ %0, %if.then ], [ %1, %if.else ]
+  ret i32 %r6.addr.0
+}
+
+; CHECK-LABEL: @test_inline_asm1(
+; CHECK: call i32 asm "rorl $2, $0", "=&r,0,n,~{dirflag},~{fpsr},~{flags}"(i32 %r6, i32 8)
+; CHECK: call i32 asm "rorl $2, $0", "=&r,0,n,~{dirflag},~{fpsr},~{flags}"(i32 %r6, i32 6)
+
 declare i32 @call_target()
 
 define void @test_operand_bundles(i1 %cond, i32* %ptr) {
@@ -794,6 +818,30 @@ merge:
 ; CHECK: right:
 ; CHECK-NEXT:   %val1 = call i32 @call_target() [ "deopt"(i32 20) ]
 
-; CHECK: ![[TBAA]] = !{![[TYPE:[0-9]]], ![[TYPE]], i64 0}
+%T = type {i32, i32}
+
+define i32 @test_insertvalue(i1 zeroext %flag, %T %P) {
+entry:
+  br i1 %flag, label %if.then, label %if.else
+
+if.then:
+  %t1 = insertvalue %T %P, i32 0, 0
+  br label %if.end
+
+if.else:
+  %t2 = insertvalue %T %P, i32 1, 0
+  br label %if.end
+
+if.end:
+  %t = phi %T [%t1, %if.then], [%t2, %if.else]
+  ret i32 1
+}
+
+; CHECK-LABEL: @test_insertvalue
+; CHECK: select
+; CHECK: insertvalue
+; CHECK-NOT: insertvalue
+
+; CHECK: ![[$TBAA]] = !{![[TYPE:[0-9]]], ![[TYPE]], i64 0}
 ; CHECK: ![[TYPE]] = !{!"float", ![[TEXT:[0-9]]]}
 ; CHECK: ![[TEXT]] = !{!"an example type tree"}

@@ -3,7 +3,7 @@ macro(add_pdb_impl_folder group)
   source_group(${group} FILES ${ARGN})
 endmacro()
 
-if(HAVE_DIA_SDK)
+if(LLVM_ENABLE_DIA_SDK)
   include_directories(${MSVC_DIA_SDK_DIR}/include)
   set(LIBPDB_LINK_FOLDERS "${MSVC_DIA_SDK_DIR}\\lib")
   if (CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -14,44 +14,70 @@ if(HAVE_DIA_SDK)
   add_pdb_impl_folder(DIA
     DIA/DIADataStream.cpp
     DIA/DIAEnumDebugStreams.cpp
+    DIA/DIAEnumInjectedSources.cpp
     DIA/DIAEnumLineNumbers.cpp
+    DIA/DIAEnumSectionContribs.cpp
     DIA/DIAEnumSourceFiles.cpp
     DIA/DIAEnumSymbols.cpp
+    DIA/DIAEnumTables.cpp
     DIA/DIAError.cpp
+    DIA/DIAInjectedSource.cpp
     DIA/DIALineNumber.cpp
     DIA/DIARawSymbol.cpp
+    DIA/DIASectionContrib.cpp
     DIA/DIASession.cpp
     DIA/DIASourceFile.cpp
+    DIA/DIATable.cpp
     )
 
     set(LIBPDB_ADDITIONAL_HEADER_DIRS "${LLVM_MAIN_INCLUDE_DIR}/llvm/DebugInfo/PDB/DIA")
 endif()
 
-add_pdb_impl_folder(Raw
-  Raw/DbiStream.cpp
-  Raw/DbiStreamBuilder.cpp
-  Raw/EnumTables.cpp
-  Raw/GlobalsStream.cpp
-  Raw/GSI.cpp
-  Raw/Hash.cpp
-  Raw/InfoStream.cpp
-  Raw/InfoStreamBuilder.cpp
-  Raw/ModInfo.cpp
-  Raw/ModStream.cpp
-  Raw/NameHashTable.cpp
-  Raw/NameMap.cpp
-  Raw/NameMapBuilder.cpp
-  Raw/PDBFile.cpp
-  Raw/PDBFileBuilder.cpp
-  Raw/PublicsStream.cpp
-  Raw/RawError.cpp
-  Raw/RawSession.cpp
-  Raw/SymbolStream.cpp
-  Raw/TpiHashing.cpp
-  Raw/TpiStream.cpp
-  Raw/TpiStreamBuilder.cpp)
+add_pdb_impl_folder(Native
+  Native/DbiModuleDescriptor.cpp
+  Native/DbiModuleDescriptorBuilder.cpp
+  Native/DbiModuleList.cpp
+  Native/DbiStream.cpp
+  Native/DbiStreamBuilder.cpp
+  Native/EnumTables.cpp
+  Native/GlobalsStream.cpp
+  Native/Hash.cpp
+  Native/HashTable.cpp
+  Native/InfoStream.cpp
+  Native/InfoStreamBuilder.cpp
+  Native/ModuleDebugStream.cpp
+  Native/NativeCompilandSymbol.cpp
+  Native/NativeEnumGlobals.cpp
+  Native/NativeEnumModules.cpp
+  Native/NativeEnumTypes.cpp
+  Native/NativeExeSymbol.cpp
+  Native/NativeRawSymbol.cpp
+  Native/NativeSymbolEnumerator.cpp
+  Native/NativeTypeArray.cpp
+  Native/NativeTypeBuiltin.cpp
+  Native/NativeTypeEnum.cpp
+  Native/NativeTypeFunctionSig.cpp
+  Native/NativeTypePointer.cpp
+  Native/NativeTypeTypedef.cpp
+  Native/NativeTypeUDT.cpp
+  Native/NativeTypeVTShape.cpp
+  Native/NamedStreamMap.cpp
+  Native/NativeSession.cpp
+  Native/PDBFile.cpp
+  Native/PDBFileBuilder.cpp
+  Native/PDBStringTable.cpp
+  Native/PDBStringTableBuilder.cpp
+  Native/PublicsStream.cpp
+  Native/GSIStreamBuilder.cpp
+  Native/RawError.cpp
+  Native/SymbolCache.cpp
+  Native/SymbolStream.cpp
+  Native/TpiHashing.cpp
+  Native/TpiStream.cpp
+  Native/TpiStreamBuilder.cpp
+  )
 
-list(APPEND LIBPDB_ADDITIONAL_HEADER_DIRS "${LLVM_MAIN_INCLUDE_DIR}/llvm/DebugInfo/PDB/Raw")
+list(APPEND LIBPDB_ADDITIONAL_HEADER_DIRS "${LLVM_MAIN_INCLUDE_DIR}/llvm/DebugInfo/PDB/Native")
 list(APPEND LIBPDB_ADDITIONAL_HEADER_DIRS "${LLVM_MAIN_INCLUDE_DIR}/llvm/DebugInfo/PDB")
 
 add_llvm_library(LLVMDebugInfoPDB
@@ -94,6 +120,7 @@ add_llvm_library(LLVMDebugInfoPDB
   PDBSymbolUnknown.cpp
   PDBSymbolUsingNamespace.cpp
   PDBSymDumper.cpp
+  UDTLayout.cpp
   ${PDB_IMPL_SOURCES}
 
   ADDITIONAL_HEADER_DIRS

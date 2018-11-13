@@ -7,12 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/CodeGen/DIE.h"
 #include "../lib/CodeGen/AsmPrinter/DIEHash.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/BinaryFormat/Dwarf.h"
+#include "llvm/CodeGen/DIE.h"
 #include "llvm/CodeGen/DwarfStringPoolEntry.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/Dwarf.h"
 #include "llvm/Support/Format.h"
 #include "gtest/gtest.h"
 
@@ -31,8 +31,8 @@ private:
 public:
   DIEString getString(StringRef S) {
     DwarfStringPoolEntry Entry = {nullptr, 1, 1};
-    return DIEString(
-        DwarfStringPoolEntryRef(*Pool.insert(std::make_pair(S, Entry)).first));
+    return DIEString(DwarfStringPoolEntryRef(
+        *Pool.insert(std::make_pair(S, Entry)).first, Entry.isIndexed()));
   }
 };
 

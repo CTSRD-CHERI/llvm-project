@@ -8,6 +8,7 @@ LLVM Testing Infrastructure Guide
 .. toctree::
    :hidden:
 
+   TestSuiteGuide
    TestSuiteMakefileGuide
 
 Overview
@@ -25,11 +26,7 @@ In order to use the LLVM testing infrastructure, you will need all of the
 software required to build LLVM, as well as `Python <http://python.org>`_ 2.7 or
 later.
 
-If you intend to run the :ref:`test-suite <test-suite-overview>`, you will also
-need a development version of zlib (zlib1g-dev is known to work on several Linux
-distributions).
-
-LLVM testing infrastructure organization
+LLVM Testing Infrastructure Organization
 ========================================
 
 The LLVM testing infrastructure contains two major categories of tests:
@@ -77,6 +74,8 @@ LLVM compiles, optimizes, and generates code.
 
 The test-suite is located in the ``test-suite`` Subversion module.
 
+See the :doc:`TestSuiteGuide` for details.
+
 Debugging Information tests
 ---------------------------
 
@@ -96,9 +95,8 @@ regressions tests are in the main "llvm" module under the directory
 ``llvm/test`` (so you get these tests for free with the main LLVM tree).
 Use ``make check-all`` to run the regression tests after building LLVM.
 
-The more comprehensive test suite that includes whole programs in C and C++
-is in the ``test-suite`` module. See :ref:`test-suite Quickstart
-<test-suite-quickstart>` for more information on running these tests.
+The ``test-suite`` module contains more comprehensive tests including whole C
+and C++ programs. See the :doc:`TestSuiteGuide` for details.
 
 Regression tests
 ----------------
@@ -313,7 +311,7 @@ default outputs a ``ModuleID``:
       ret i32 0
   }
 
-``ModuleID`` can unexpetedly match against ``CHECK`` lines.  For example:
+``ModuleID`` can unexpectedly match against ``CHECK`` lines.  For example:
 
 .. code-block:: llvm
 
@@ -387,23 +385,49 @@ depends on special features of sub-architectures, you must add the specific
 triple, test with the specific FileCheck and put it into the specific
 directory that will filter out all other architectures.
 
-REQUIRES and REQUIRES-ANY directive
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Some tests can be enabled only in specific situation - like having
-debug build. Use ``REQUIRES`` directive to specify those requirements.
+Constraining test execution
+---------------------------
+
+Some tests can be run only in specific configurations, such as
+with debug builds or on particular platforms. Use ``REQUIRES``
+and ``UNSUPPORTED`` to control when the test is enabled.
+
+Some tests are expected to fail. For example, there may be a known bug
+that the test detect. Use ``XFAIL`` to mark a test as an expected failure.
+An ``XFAIL`` test will be successful if its execution fails, and
+will be a failure if its execution succeeds.
 
 .. code-block:: llvm
 
-    ; This test will be only enabled in the build with asserts
+    ; This test will be only enabled in the build with asserts.
     ; REQUIRES: asserts
+    ; This test is disabled on Linux.
+    ; UNSUPPORTED: -linux-
+    ; This test is expected to fail on PowerPC.
+    ; XFAIL: powerpc
 
-You can separate requirements by a comma.
-``REQUIRES`` means all listed requirements must be satisfied.
-``REQUIRES-ANY`` means at least one must be satisfied.
+``REQUIRES`` and ``UNSUPPORTED`` and ``XFAIL`` all accept a comma-separated
+list of boolean expressions. The values in each expression may be:
 
-List of features that can be used in ``REQUIRES`` and ``REQUIRES-ANY`` can be
-found in lit.cfg files.
+- Features added to ``config.available_features`` by 
+  configuration files such as ``lit.cfg``.
+- Substrings of the target triple (``UNSUPPORTED`` and ``XFAIL`` only).
+
+| ``REQUIRES`` enables the test if all expressions are true.
+| ``UNSUPPORTED`` disables the test if any expression is true.
+| ``XFAIL`` expects the test to fail if any expression is true.
+
+As a special case, ``XFAIL: *`` is expected to fail everywhere.
+
+.. code-block:: llvm
+
+    ; This test is disabled on Windows,
+    ; and is disabled on Linux, except for Android Linux.
+    ; UNSUPPORTED: windows, linux && !android
+    ; This test is expected to fail on both PowerPC and ARM.
+    ; XFAIL: powerpc || arm
+
 
 Substitutions
 -------------
@@ -434,13 +458,35 @@ RUN lines:
    Example: ``/home/user/llvm.build/test/MC/ELF/Output/foo_test.s.tmp``
 
 ``%T``
-   Directory of ``%t``.
+   Directory of ``%t``. Deprecated. Shouldn't be used, because it can be easily
+   misused and cause race conditions between tests.
+
+   Use ``rm -rf %t && mkdir %t`` instead if a temporary directory is necessary.
 
    Example: ``/home/user/llvm.build/test/MC/ELF/Output``
 
 ``%{pathsep}``
 
    Expands to the path separator, i.e. ``:`` (or ``;`` on Windows).
+
+``%/s, %/S, %/t, %/T:``
+
+  Act like the corresponding substitution above but replace any ``\``
+  character with a ``/``. This is useful to normalize path separators.
+
+   Example: ``%s:  C:\Desktop Files/foo_test.s.tmp``
+   
+   Example: ``%/s: C:/Desktop Files/foo_test.s.tmp``
+
+``%:s, %:S, %:t, %:T:``
+
+  Act like the corresponding substitution above but remove colons at
+  the beginning of Windows paths. This is useful to allow concatenation
+  of absolute paths on Windows to produce a legal path.
+
+   Example: ``%s:  C:\Desktop Files\foo_test.s.tmp``
+
+   Example: ``%:s: C\Desktop Files\foo_test.s.tmp``
 
 
 **LLVM-specific substitutions:**
@@ -520,24 +566,6 @@ their name. For example:
    This program runs its arguments and then inverts the result code from it.
    Zero result codes become 1. Non-zero result codes become 0.
 
-Sometimes it is necessary to mark a test case as "expected fail" or
-XFAIL. You can easily mark a test as XFAIL just by including ``XFAIL:``
-on a line near the top of the file. This signals that the test case
-should succeed if the test fails. Such test cases are counted separately
-by the testing tool. To specify an expected fail, use the XFAIL keyword
-in the comments of the test program followed by a colon and one or more
-failure patterns. Each failure pattern can be either ``*`` (to specify
-fail everywhere), or a part of a target triple (indicating the test
-should fail on that platform), or the name of a configurable feature
-(for example, ``loadable_module``). If there is a match, the test is
-expected to fail. If not, the test is expected to succeed. To XFAIL
-everywhere just specify ``XFAIL: *``. Here is an example of an ``XFAIL``
-line:
-
-.. code-block:: llvm
-
-    ; XFAIL: darwin,sun
-
 To make the output more useful, :program:`lit` will scan
 the lines of the test case for ones that contain a pattern that matches
 ``PR[0-9]+``. This is the syntax for specifying a PR (Problem Report) number
@@ -555,65 +583,3 @@ the last RUN: line. This has two side effects:
 
 (b) it speeds things up for really big test cases by avoiding
     interpretation of the remainder of the file.
-
-.. _test-suite-overview:
-
-``test-suite`` Overview
-=======================
-
-The ``test-suite`` module contains a number of programs that can be
-compiled and executed. The ``test-suite`` includes reference outputs for
-all of the programs, so that the output of the executed program can be
-checked for correctness.
-
-``test-suite`` tests are divided into three types of tests: MultiSource,
-SingleSource, and External.
-
--  ``test-suite/SingleSource``
-
-   The SingleSource directory contains test programs that are only a
-   single source file in size. These are usually small benchmark
-   programs or small programs that calculate a particular value. Several
-   such programs are grouped together in each directory.
-
--  ``test-suite/MultiSource``
-
-   The MultiSource directory contains subdirectories which contain
-   entire programs with multiple source files. Large benchmarks and
-   whole applications go here.
-
--  ``test-suite/External``
-
-   The External directory contains Makefiles for building code that is
-   external to (i.e., not distributed with) LLVM. The most prominent
-   members of this directory are the SPEC 95 and SPEC 2000 benchmark
-   suites. The ``External`` directory does not contain these actual
-   tests, but only the Makefiles that know how to properly compile these
-   programs from somewhere else. When using ``LNT``, use the
-   ``--test-externals`` option to include these tests in the results.
-
-.. _test-suite-quickstart:
-
-``test-suite`` Quickstart
--------------------------
-
-The modern way of running the ``test-suite`` is focused on testing and
-benchmarking complete compilers using the
-`LNT <http://llvm.org/docs/lnt>`_ testing infrastructure.
-
-For more information on using LNT to execute the ``test-suite``, please
-see the `LNT Quickstart <http://llvm.org/docs/lnt/quickstart.html>`_
-documentation.
-
-``test-suite`` Makefiles
-------------------------
-
-Historically, the ``test-suite`` was executed using a complicated setup
-of Makefiles. The LNT based approach above is recommended for most
-users, but there are some testing scenarios which are not supported by
-the LNT approach. In addition, LNT currently uses the Makefile setup
-under the covers and so developers who are interested in how LNT works
-under the hood may want to understand the Makefile based setup.
-
-For more information on the ``test-suite`` Makefile setup, please see
-the :doc:`Test Suite Makefile Guide <TestSuiteMakefileGuide>`.

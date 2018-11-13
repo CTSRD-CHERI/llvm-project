@@ -3,7 +3,7 @@
 ; Test various conditions where OptimizeLoopTermCond doesn't look at a
 ; memory instruction use and fails to find the address space.
 
-target datalayout = "e-p:32:32-p1:64:64-p2:64:64-p3:32:32-p4:64:64-p5:32:32-p24:64:64-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64"
+target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:32:32-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64-S32-A5"
 
 ; CHECK-LABEL: @local_cmp_user(
 ; CHECK: bb11:
@@ -16,7 +16,7 @@ target datalayout = "e-p:32:32-p1:64:64-p2:64:64-p3:32:32-p4:64:64-p5:32:32-p24:
 ; CHECK: bb:
 ; CHECK: inttoptr i32 %lsr.iv.next2 to i8 addrspace(3)*
 ; CHECK: %c1 = icmp ne i8 addrspace(3)*
-define void @local_cmp_user(i32 %arg0) nounwind {
+define amdgpu_kernel void @local_cmp_user(i32 %arg0) nounwind {
 entry:
   br label %bb11
 
@@ -47,7 +47,7 @@ bb13:
 ; CHECK: bb:
 ; CHECK: inttoptr i64 %lsr.iv.next2 to i8 addrspace(1)*
 ; CHECK: icmp ne i8 addrspace(1)* %t
-define void @global_cmp_user(i64 %arg0) nounwind {
+define amdgpu_kernel void @global_cmp_user(i64 %arg0) nounwind {
 entry:
   br label %bb11
 
@@ -78,7 +78,7 @@ bb13:
 ; CHECK: bb:
 ; CHECK: %idxprom = sext i32 %lsr.iv1 to i64
 ; CHECK: getelementptr i8, i8 addrspace(1)* %t, i64 %idxprom
-define void @global_gep_user(i32 %arg0) nounwind {
+define amdgpu_kernel void @global_gep_user(i32 %arg0) nounwind {
 entry:
   br label %bb11
 
@@ -108,7 +108,7 @@ bb13:
 
 ; CHECK: bb
 ; CHECK: %p = getelementptr i8, i8 addrspace(1)* %t, i64 %ii.ext
-define void @global_sext_scale_user(i32 %arg0) nounwind {
+define amdgpu_kernel void @global_sext_scale_user(i32 %arg0) nounwind {
 entry:
   br label %bb11
 

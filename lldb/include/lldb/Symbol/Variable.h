@@ -15,9 +15,10 @@
 
 #include "lldb/Core/Mangled.h"
 #include "lldb/Core/RangeMap.h"
-#include "lldb/Core/UserID.h"
 #include "lldb/Expression/DWARFExpression.h"
 #include "lldb/Symbol/Declaration.h"
+#include "lldb/Utility/CompletionRequest.h"
+#include "lldb/Utility/UserID.h"
 #include "lldb/lldb-enumerations.h"
 #include "lldb/lldb-private.h"
 
@@ -53,11 +54,11 @@ public:
 
   SymbolContextScope *GetSymbolContextScope() const { return m_owner_scope; }
 
-  // Since a variable can have a basename "i" and also a mangled
-  // named "_ZN12_GLOBAL__N_11iE" and a demangled mangled name
-  // "(anonymous namespace)::i", this function will allow a generic match
-  // function that can be called by commands and expression parsers to make
-  // sure we match anything we come across.
+  // Since a variable can have a basename "i" and also a mangled named
+  // "_ZN12_GLOBAL__N_11iE" and a demangled mangled name "(anonymous
+  // namespace)::i", this function will allow a generic match function that can
+  // be called by commands and expression parsers to make sure we match
+  // anything we come across.
   bool NameMatches(const ConstString &name) const;
 
   bool NameMatches(const RegularExpression &regex) const;
@@ -97,14 +98,13 @@ public:
   typedef size_t (*GetVariableCallback)(void *baton, const char *name,
                                         VariableList &var_list);
 
-  static Error GetValuesForVariableExpressionPath(
-      const char *variable_expr_path, ExecutionContextScope *scope,
+  static Status GetValuesForVariableExpressionPath(
+      llvm::StringRef variable_expr_path, ExecutionContextScope *scope,
       GetVariableCallback callback, void *baton, VariableList &variable_list,
       ValueObjectList &valobj_list);
 
   static size_t AutoComplete(const ExecutionContext &exe_ctx,
-                             llvm::StringRef name, StringList &matches,
-                             bool &word_complete);
+                             CompletionRequest &request);
 
   CompilerDeclContext GetDeclContext();
 

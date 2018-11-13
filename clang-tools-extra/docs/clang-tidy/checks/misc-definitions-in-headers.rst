@@ -26,6 +26,7 @@ from multiple translation units.
    static int b = 1;
    const int c = 1;
    const char* const str2 = "foo";
+   constexpr int k = 1;
 
    // Warning: function definition.
    int g() {
@@ -73,6 +74,14 @@ from multiple translation units.
    // OK: member function definition of a class template is allowed.
    template <typename T>
    void B<T>::f1() {}
+
+   class CE {
+     constexpr static int i = 5; // OK: inline variable definition.
+   };
+
+   inline int i = 5; // OK: inline variable definition.
+
+   constexpr int f10() { return 0; } // OK: constexpr function implies inline.
 
 Options
 -------

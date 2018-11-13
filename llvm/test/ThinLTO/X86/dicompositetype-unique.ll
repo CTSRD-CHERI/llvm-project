@@ -1,11 +1,11 @@
 ; RUN: opt -module-summary -o %t1.bc %s
 ; RUN: opt -module-summary -o %t2.bc %S/Inputs/dicompositetype-unique.ll
 
-; RUN: llvm-lto2 %t1.bc %t2.bc -o %t --save-temps \
+; RUN: llvm-lto2 run %t1.bc %t2.bc -o %t --save-temps \
 ; RUN:    -r %t1.bc,_foo,lx \
 ; RUN:    -r %t1.bc,_main,plx \
 ; RUN:    -r %t2.bc,_foo,plx
-; RUN: llvm-dis %t.0.3.import.bc -o - | FileCheck %s
+; RUN: llvm-dis %t.1.3.import.bc -o - | FileCheck %s
 
 
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"

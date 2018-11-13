@@ -1,5 +1,5 @@
 ; RUN: opt < %s -licm -S | FileCheck %s
-; RUN: opt -aa-pipeline=basic-aa -passes='require<aa>,require<targetir>,require<scalar-evolution>,loop(licm)' < %s -S | FileCheck %s
+; RUN: opt -aa-pipeline=basic-aa -passes='require<aa>,require<targetir>,require<scalar-evolution>,require<opt-remark-emit>,loop(licm)' < %s -S | FileCheck %s
 
 target datalayout = "e-m:x-p:32:32-i64:64-f80:32-n8:16:32-a:0:32-S32"
 target triple = "i386-pc-windows-msvc18.0.0"
@@ -97,9 +97,11 @@ else:                                             ; preds = %postinvoke
 }
 
 ; CHECK-LABEL: define void @test3(
-; CHECK:      catchswitch within none
+; CHECK-LABEL: forbody.preheader:
 ; CHECK:      store i32 1, i32* %bc, align 4
 ; CHECK:      store i32 2, i32* %bc2, align 4
+; CHECK:      catchswitch within none
+; CHECK-LABEL: forbody:
 
 declare void @may_throw()
 

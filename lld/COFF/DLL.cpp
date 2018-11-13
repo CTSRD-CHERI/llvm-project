@@ -18,8 +18,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "Chunks.h"
 #include "DLL.h"
+#include "Chunks.h"
 #include "llvm/Object/COFF.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Path.h"
@@ -61,7 +61,7 @@ private:
 // A chunk for the import descriptor table.
 class LookupChunk : public Chunk {
 public:
-  explicit LookupChunk(Chunk *C) : HintName(C) {}
+  explicit LookupChunk(Chunk *C) : HintName(C) { Alignment = ptrSize(); }
   size_t getSize() const override { return ptrSize(); }
 
   void writeTo(uint8_t *Buf) const override {
@@ -76,7 +76,7 @@ public:
 // See Microsoft PE/COFF spec 7.1. Import Header for details.
 class OrdinalOnlyChunk : public Chunk {
 public:
-  explicit OrdinalOnlyChunk(uint16_t V) : Ordinal(V) {}
+  explicit OrdinalOnlyChunk(uint16_t V) : Ordinal(V) { Alignment = ptrSize(); }
   size_t getSize() const override { return ptrSize(); }
 
   void writeTo(uint8_t *Buf) const override {
@@ -117,7 +117,6 @@ public:
   explicit NullChunk(size_t N) : Size(N) {}
   bool hasData() const override { return false; }
   size_t getSize() const override { return Size; }
-  void setAlign(size_t N) { Align = N; }
 
 private:
   size_t Size;
@@ -136,9 +135,9 @@ binImports(const std::vector<DefinedImportData *> &Imports) {
     M[Sym->getDLLName().lower()].push_back(Sym);
 
   std::vector<std::vector<DefinedImportData *>> V;
-  for (auto &P : M) {
+  for (auto &KV : M) {
     // Sort symbols by name for each group.
-    std::vector<DefinedImportData *> &Syms = P.second;
+    std::vector<DefinedImportData *> &Syms = KV.second;
     std::sort(Syms.begin(), Syms.end(),
               [](DefinedImportData *A, DefinedImportData *B) {
                 return A->getName() < B->getName();
@@ -215,6 +214,52 @@ static const uint8_t ThunkX86[] = {
     0xFF, 0xE0,        // jmp   eax
 };
 
+static const uint8_t ThunkARM[] = {
+    0x40, 0xf2, 0x00, 0x0c, // mov.w   ip, #0 __imp_<FUNCNAME>
+    0xc0, 0xf2, 0x00, 0x0c, // mov.t   ip, #0 __imp_<FUNCNAME>
+    0x2d, 0xe9, 0x0f, 0x48, // push.w  {r0, r1, r2, r3, r11, lr}
+    0x0d, 0xf2, 0x10, 0x0b, // addw    r11, sp, #16
+    0x2d, 0xed, 0x10, 0x0b, // vpush   {d0, d1, d2, d3, d4, d5, d6, d7}
+    0x61, 0x46,             // mov     r1, ip
+    0x40, 0xf2, 0x00, 0x00, // mov.w   r0, #0 DELAY_IMPORT_DESCRIPTOR
+    0xc0, 0xf2, 0x00, 0x00, // mov.t   r0, #0 DELAY_IMPORT_DESCRIPTOR
+    0x00, 0xf0, 0x00, 0xd0, // bl      #0 __delayLoadHelper2
+    0x84, 0x46,             // mov     ip, r0
+    0xbd, 0xec, 0x10, 0x0b, // vpop    {d0, d1, d2, d3, d4, d5, d6, d7}
+    0xbd, 0xe8, 0x0f, 0x48, // pop.w   {r0, r1, r2, r3, r11, lr}
+    0x60, 0x47,             // bx      ip
+};
+
+static const uint8_t ThunkARM64[] = {
+    0x11, 0x00, 0x00, 0x90, // adrp    x17, #0      __imp_<FUNCNAME>
+    0x31, 0x02, 0x00, 0x91, // add     x17, x17, #0 :lo12:__imp_<FUNCNAME>
+    0xfd, 0x7b, 0xb3, 0xa9, // stp     x29, x30, [sp, #-208]!
+    0xfd, 0x03, 0x00, 0x91, // mov     x29, sp
+    0xe0, 0x07, 0x01, 0xa9, // stp     x0, x1, [sp, #16]
+    0xe2, 0x0f, 0x02, 0xa9, // stp     x2, x3, [sp, #32]
+    0xe4, 0x17, 0x03, 0xa9, // stp     x4, x5, [sp, #48]
+    0xe6, 0x1f, 0x04, 0xa9, // stp     x6, x7, [sp, #64]
+    0xe0, 0x87, 0x02, 0xad, // stp     q0, q1, [sp, #80]
+    0xe2, 0x8f, 0x03, 0xad, // stp     q2, q3, [sp, #112]
+    0xe4, 0x97, 0x04, 0xad, // stp     q4, q5, [sp, #144]
+    0xe6, 0x9f, 0x05, 0xad, // stp     q6, q7, [sp, #176]
+    0xe1, 0x03, 0x11, 0xaa, // mov     x1, x17
+    0x00, 0x00, 0x00, 0x90, // adrp    x0, #0     DELAY_IMPORT_DESCRIPTOR
+    0x00, 0x00, 0x00, 0x91, // add     x0, x0, #0 :lo12:DELAY_IMPORT_DESCRIPTOR
+    0x00, 0x00, 0x00, 0x94, // bl      #0 __delayLoadHelper2
+    0xf0, 0x03, 0x00, 0xaa, // mov     x16, x0
+    0xe6, 0x9f, 0x45, 0xad, // ldp     q6, q7, [sp, #176]
+    0xe4, 0x97, 0x44, 0xad, // ldp     q4, q5, [sp, #144]
+    0xe2, 0x8f, 0x43, 0xad, // ldp     q2, q3, [sp, #112]
+    0xe0, 0x87, 0x42, 0xad, // ldp     q0, q1, [sp, #80]
+    0xe6, 0x1f, 0x44, 0xa9, // ldp     x6, x7, [sp, #64]
+    0xe4, 0x17, 0x43, 0xa9, // ldp     x4, x5, [sp, #48]
+    0xe2, 0x0f, 0x42, 0xa9, // ldp     x2, x3, [sp, #32]
+    0xe0, 0x07, 0x41, 0xa9, // ldp     x0, x1, [sp, #16]
+    0xfd, 0x7b, 0xcd, 0xa8, // ldp     x29, x30, [sp], #208
+    0x00, 0x02, 0x1f, 0xd6, // br      x16
+};
+
 // A chunk for the delay import thunk.
 class ThunkChunkX64 : public Chunk {
 public:
@@ -259,17 +304,67 @@ public:
   Defined *Helper = nullptr;
 };
 
+class ThunkChunkARM : public Chunk {
+public:
+  ThunkChunkARM(Defined *I, Chunk *D, Defined *H)
+      : Imp(I), Desc(D), Helper(H) {}
+
+  size_t getSize() const override { return sizeof(ThunkARM); }
+
+  void writeTo(uint8_t *Buf) const override {
+    memcpy(Buf + OutputSectionOff, ThunkARM, sizeof(ThunkARM));
+    applyMOV32T(Buf + OutputSectionOff + 0, Imp->getRVA() + Config->ImageBase);
+    applyMOV32T(Buf + OutputSectionOff + 22, Desc->getRVA() + Config->ImageBase);
+    applyBranch24T(Buf + OutputSectionOff + 30, Helper->getRVA() - RVA - 34);
+  }
+
+  void getBaserels(std::vector<Baserel> *Res) override {
+    Res->emplace_back(RVA + 0, IMAGE_REL_BASED_ARM_MOV32T);
+    Res->emplace_back(RVA + 22, IMAGE_REL_BASED_ARM_MOV32T);
+  }
+
+  Defined *Imp = nullptr;
+  Chunk *Desc = nullptr;
+  Defined *Helper = nullptr;
+};
+
+class ThunkChunkARM64 : public Chunk {
+public:
+  ThunkChunkARM64(Defined *I, Chunk *D, Defined *H)
+      : Imp(I), Desc(D), Helper(H) {}
+
+  size_t getSize() const override { return sizeof(ThunkARM64); }
+
+  void writeTo(uint8_t *Buf) const override {
+    memcpy(Buf + OutputSectionOff, ThunkARM64, sizeof(ThunkARM64));
+    applyArm64Addr(Buf + OutputSectionOff + 0, Imp->getRVA(), RVA + 0, 12);
+    applyArm64Imm(Buf + OutputSectionOff + 4, Imp->getRVA() & 0xfff, 0);
+    applyArm64Addr(Buf + OutputSectionOff + 52, Desc->getRVA(), RVA + 52, 12);
+    applyArm64Imm(Buf + OutputSectionOff + 56, Desc->getRVA() & 0xfff, 0);
+    applyArm64Branch26(Buf + OutputSectionOff + 60,
+                       Helper->getRVA() - RVA - 60);
+  }
+
+  Defined *Imp = nullptr;
+  Chunk *Desc = nullptr;
+  Defined *Helper = nullptr;
+};
+
 // A chunk for the import descriptor table.
 class DelayAddressChunk : public Chunk {
 public:
-  explicit DelayAddressChunk(Chunk *C) : Thunk(C) {}
+  explicit DelayAddressChunk(Chunk *C) : Thunk(C) { Alignment = ptrSize(); }
   size_t getSize() const override { return ptrSize(); }
 
   void writeTo(uint8_t *Buf) const override {
     if (Config->is64()) {
       write64le(Buf + OutputSectionOff, Thunk->getRVA() + Config->ImageBase);
     } else {
-      write32le(Buf + OutputSectionOff, Thunk->getRVA() + Config->ImageBase);
+      uint32_t Bit = 0;
+      // Pointer to thumb code must have the LSB set, so adjust it.
+      if (Config->Machine == ARMNT)
+        Bit = 1;
+      write32le(Buf + OutputSectionOff, (Thunk->getRVA() + Config->ImageBase) | Bit);
     }
   }
 
@@ -319,12 +414,16 @@ public:
   size_t getSize() const override { return Size * 4; }
 
   void writeTo(uint8_t *Buf) const override {
-    for (Export &E : Config->Exports) {
+    for (const Export &E : Config->Exports) {
       uint8_t *P = Buf + OutputSectionOff + E.Ordinal * 4;
+      uint32_t Bit = 0;
+      // Pointer to thumb code must have the LSB set, so adjust it.
+      if (Config->Machine == ARMNT && !E.Data)
+        Bit = 1;
       if (E.ForwardChunk) {
-        write32le(P, E.ForwardChunk->getRVA());
+        write32le(P, E.ForwardChunk->getRVA() | Bit);
       } else {
-        write32le(P, cast<Defined>(E.Sym->repl())->getRVA());
+        write32le(P, cast<Defined>(E.Sym)->getRVA() | Bit);
       }
     }
   }
@@ -371,43 +470,11 @@ private:
 
 } // anonymous namespace
 
-uint64_t IdataContents::getDirSize() {
-  return Dirs.size() * sizeof(ImportDirectoryTableEntry);
-}
-
-uint64_t IdataContents::getIATSize() {
-  return Addresses.size() * ptrSize();
-}
-
-// Returns a list of .idata contents.
-// See Microsoft PE/COFF spec 5.4 for details.
-std::vector<Chunk *> IdataContents::getChunks() {
-  create();
-  std::vector<Chunk *> V;
-  // The loader assumes a specific order of data.
-  // Add each type in the correct order.
-  for (std::unique_ptr<Chunk> &C : Dirs)
-    V.push_back(C.get());
-  for (std::unique_ptr<Chunk> &C : Lookups)
-    V.push_back(C.get());
-  for (std::unique_ptr<Chunk> &C : Addresses)
-    V.push_back(C.get());
-  for (std::unique_ptr<Chunk> &C : Hints)
-    V.push_back(C.get());
-  for (auto &P : DLLNames) {
-    std::unique_ptr<Chunk> &C = P.second;
-    V.push_back(C.get());
-  }
-  return V;
-}
-
 void IdataContents::create() {
   std::vector<std::vector<DefinedImportData *>> V = binImports(Imports);
 
   // Create .idata contents for each DLL.
   for (std::vector<DefinedImportData *> &Syms : V) {
-    StringRef Name = Syms[0]->getDLLName();
-
     // Create lookup and address tables. If they have external names,
     // we need to create HintName chunks to store the names.
     // If they don't (if they are import-by-ordinals), we store only
@@ -416,55 +483,46 @@ void IdataContents::create() {
     for (DefinedImportData *S : Syms) {
       uint16_t Ord = S->getOrdinal();
       if (S->getExternalName().empty()) {
-        Lookups.push_back(make_unique<OrdinalOnlyChunk>(Ord));
-        Addresses.push_back(make_unique<OrdinalOnlyChunk>(Ord));
+        Lookups.push_back(make<OrdinalOnlyChunk>(Ord));
+        Addresses.push_back(make<OrdinalOnlyChunk>(Ord));
         continue;
       }
-      auto C = make_unique<HintNameChunk>(S->getExternalName(), Ord);
-      Lookups.push_back(make_unique<LookupChunk>(C.get()));
-      Addresses.push_back(make_unique<LookupChunk>(C.get()));
-      Hints.push_back(std::move(C));
+      auto *C = make<HintNameChunk>(S->getExternalName(), Ord);
+      Lookups.push_back(make<LookupChunk>(C));
+      Addresses.push_back(make<LookupChunk>(C));
+      Hints.push_back(C);
     }
     // Terminate with null values.
-    Lookups.push_back(make_unique<NullChunk>(ptrSize()));
-    Addresses.push_back(make_unique<NullChunk>(ptrSize()));
+    Lookups.push_back(make<NullChunk>(ptrSize()));
+    Addresses.push_back(make<NullChunk>(ptrSize()));
 
     for (int I = 0, E = Syms.size(); I < E; ++I)
-      Syms[I]->setLocation(Addresses[Base + I].get());
+      Syms[I]->setLocation(Addresses[Base + I]);
 
     // Create the import table header.
-    if (!DLLNames.count(Name))
-      DLLNames[Name] = make_unique<StringChunk>(Name);
-    auto Dir = make_unique<ImportDirectoryChunk>(DLLNames[Name].get());
-    Dir->LookupTab = Lookups[Base].get();
-    Dir->AddressTab = Addresses[Base].get();
-    Dirs.push_back(std::move(Dir));
+    DLLNames.push_back(make<StringChunk>(Syms[0]->getDLLName()));
+    auto *Dir = make<ImportDirectoryChunk>(DLLNames.back());
+    Dir->LookupTab = Lookups[Base];
+    Dir->AddressTab = Addresses[Base];
+    Dirs.push_back(Dir);
   }
   // Add null terminator.
-  Dirs.push_back(make_unique<NullChunk>(sizeof(ImportDirectoryTableEntry)));
+  Dirs.push_back(make<NullChunk>(sizeof(ImportDirectoryTableEntry)));
 }
 
 std::vector<Chunk *> DelayLoadContents::getChunks() {
   std::vector<Chunk *> V;
-  for (std::unique_ptr<Chunk> &C : Dirs)
-    V.push_back(C.get());
-  for (std::unique_ptr<Chunk> &C : Names)
-    V.push_back(C.get());
-  for (std::unique_ptr<Chunk> &C : HintNames)
-    V.push_back(C.get());
-  for (auto &P : DLLNames) {
-    std::unique_ptr<Chunk> &C = P.second;
-    V.push_back(C.get());
-  }
+  V.insert(V.end(), Dirs.begin(), Dirs.end());
+  V.insert(V.end(), Names.begin(), Names.end());
+  V.insert(V.end(), HintNames.begin(), HintNames.end());
+  V.insert(V.end(), DLLNames.begin(), DLLNames.end());
   return V;
 }
 
 std::vector<Chunk *> DelayLoadContents::getDataChunks() {
   std::vector<Chunk *> V;
-  for (std::unique_ptr<Chunk> &C : ModuleHandles)
-    V.push_back(C.get());
-  for (std::unique_ptr<Chunk> &C : Addresses)
-    V.push_back(C.get());
+  V.insert(V.end(), ModuleHandles.begin(), ModuleHandles.end());
+  V.insert(V.end(), Addresses.begin(), Addresses.end());
   return V;
 }
 
@@ -478,55 +536,55 @@ void DelayLoadContents::create(Defined *H) {
 
   // Create .didat contents for each DLL.
   for (std::vector<DefinedImportData *> &Syms : V) {
-    StringRef Name = Syms[0]->getDLLName();
-
     // Create the delay import table header.
-    if (!DLLNames.count(Name))
-      DLLNames[Name] = make_unique<StringChunk>(Name);
-    auto Dir = make_unique<DelayDirectoryChunk>(DLLNames[Name].get());
+    DLLNames.push_back(make<StringChunk>(Syms[0]->getDLLName()));
+    auto *Dir = make<DelayDirectoryChunk>(DLLNames.back());
 
     size_t Base = Addresses.size();
     for (DefinedImportData *S : Syms) {
-      Chunk *T = newThunkChunk(S, Dir.get());
-      auto A = make_unique<DelayAddressChunk>(T);
-      Addresses.push_back(std::move(A));
-      Thunks.push_back(std::unique_ptr<Chunk>(T));
+      Chunk *T = newThunkChunk(S, Dir);
+      auto *A = make<DelayAddressChunk>(T);
+      Addresses.push_back(A);
+      Thunks.push_back(T);
       StringRef ExtName = S->getExternalName();
       if (ExtName.empty()) {
-        Names.push_back(make_unique<OrdinalOnlyChunk>(S->getOrdinal()));
+        Names.push_back(make<OrdinalOnlyChunk>(S->getOrdinal()));
       } else {
-        auto C = make_unique<HintNameChunk>(ExtName, 0);
-        Names.push_back(make_unique<LookupChunk>(C.get()));
-        HintNames.push_back(std::move(C));
+        auto *C = make<HintNameChunk>(ExtName, 0);
+        Names.push_back(make<LookupChunk>(C));
+        HintNames.push_back(C);
       }
     }
     // Terminate with null values.
-    Addresses.push_back(make_unique<NullChunk>(8));
-    Names.push_back(make_unique<NullChunk>(8));
+    Addresses.push_back(make<NullChunk>(8));
+    Names.push_back(make<NullChunk>(8));
 
     for (int I = 0, E = Syms.size(); I < E; ++I)
-      Syms[I]->setLocation(Addresses[Base + I].get());
-    auto *MH = new NullChunk(8);
-    MH->setAlign(8);
-    ModuleHandles.push_back(std::unique_ptr<Chunk>(MH));
+      Syms[I]->setLocation(Addresses[Base + I]);
+    auto *MH = make<NullChunk>(8);
+    MH->Alignment = 8;
+    ModuleHandles.push_back(MH);
 
     // Fill the delay import table header fields.
     Dir->ModuleHandle = MH;
-    Dir->AddressTab = Addresses[Base].get();
-    Dir->NameTab = Names[Base].get();
-    Dirs.push_back(std::move(Dir));
+    Dir->AddressTab = Addresses[Base];
+    Dir->NameTab = Names[Base];
+    Dirs.push_back(Dir);
   }
   // Add null terminator.
-  Dirs.push_back(
-      make_unique<NullChunk>(sizeof(delay_import_directory_table_entry)));
+  Dirs.push_back(make<NullChunk>(sizeof(delay_import_directory_table_entry)));
 }
 
 Chunk *DelayLoadContents::newThunkChunk(DefinedImportData *S, Chunk *Dir) {
   switch (Config->Machine) {
   case AMD64:
-    return new ThunkChunkX64(S, Dir, Helper);
+    return make<ThunkChunkX64>(S, Dir, Helper);
   case I386:
-    return new ThunkChunkX86(S, Dir, Helper);
+    return make<ThunkChunkX86>(S, Dir, Helper);
+  case ARMNT:
+    return make<ThunkChunkARM>(S, Dir, Helper);
+  case ARM64:
+    return make<ThunkChunkARM64>(S, Dir, Helper);
   default:
     llvm_unreachable("unsupported machine type");
   }
@@ -537,34 +595,32 @@ EdataContents::EdataContents() {
   for (Export &E : Config->Exports)
     MaxOrdinal = std::max(MaxOrdinal, E.Ordinal);
 
-  auto *DLLName = new StringChunk(sys::path::filename(Config->OutputFile));
-  auto *AddressTab = new AddressTableChunk(MaxOrdinal);
+  auto *DLLName = make<StringChunk>(sys::path::filename(Config->OutputFile));
+  auto *AddressTab = make<AddressTableChunk>(MaxOrdinal);
   std::vector<Chunk *> Names;
   for (Export &E : Config->Exports)
     if (!E.Noname)
-      Names.push_back(new StringChunk(E.ExportName));
+      Names.push_back(make<StringChunk>(E.ExportName));
 
   std::vector<Chunk *> Forwards;
   for (Export &E : Config->Exports) {
     if (E.ForwardTo.empty())
       continue;
-    E.ForwardChunk = new StringChunk(E.ForwardTo);
+    E.ForwardChunk = make<StringChunk>(E.ForwardTo);
     Forwards.push_back(E.ForwardChunk);
   }
 
-  auto *NameTab = new NamePointersChunk(Names);
-  auto *OrdinalTab = new ExportOrdinalChunk(Names.size());
-  auto *Dir = new ExportDirectoryChunk(MaxOrdinal, Names.size(), DLLName,
-                                       AddressTab, NameTab, OrdinalTab);
-  Chunks.push_back(std::unique_ptr<Chunk>(Dir));
-  Chunks.push_back(std::unique_ptr<Chunk>(DLLName));
-  Chunks.push_back(std::unique_ptr<Chunk>(AddressTab));
-  Chunks.push_back(std::unique_ptr<Chunk>(NameTab));
-  Chunks.push_back(std::unique_ptr<Chunk>(OrdinalTab));
-  for (Chunk *C : Names)
-    Chunks.push_back(std::unique_ptr<Chunk>(C));
-  for (Chunk *C : Forwards)
-    Chunks.push_back(std::unique_ptr<Chunk>(C));
+  auto *NameTab = make<NamePointersChunk>(Names);
+  auto *OrdinalTab = make<ExportOrdinalChunk>(Names.size());
+  auto *Dir = make<ExportDirectoryChunk>(MaxOrdinal, Names.size(), DLLName,
+                                         AddressTab, NameTab, OrdinalTab);
+  Chunks.push_back(Dir);
+  Chunks.push_back(DLLName);
+  Chunks.push_back(AddressTab);
+  Chunks.push_back(NameTab);
+  Chunks.push_back(OrdinalTab);
+  Chunks.insert(Chunks.end(), Names.begin(), Names.end());
+  Chunks.insert(Chunks.end(), Forwards.begin(), Forwards.end());
 }
 
 } // namespace coff

@@ -16,6 +16,7 @@
 
 // CHECK: Module name: DependsOnModule
 // CHECK: Module map file: {{.*}}DependsOnModule.framework{{[/\\]}}module.map
+// CHECK: Imports module 'Module': {{.*}}Module.pcm
 
 // CHECK: Language options:
 // CHECK:   C99: Yes
@@ -29,13 +30,9 @@
 // CHECK:     CPU:
 // CHECK:     ABI:
 
-// CHECK: Diagnostic options:
-// CHECK:   IgnoreWarnings: Yes
-// CHECK:   Diagnostic flags:
-// CHECK:     -Wunused
-
 // CHECK: Header search options:
 // CHECK:   System root [-isysroot=]: '/'
+// CHECK:   Resource dir [ -resource-dir=]: '{{.*}}clang{{.*}}'
 // CHECK:   Use builtin include directories [-nobuiltininc]: Yes
 // CHECK:   Use standard system include directories [-nostdinc]: No
 // CHECK:   Use standard C++ include directories [-nostdinc++]: Yes
@@ -47,3 +44,18 @@
 // CHECK:   Predefined macros:
 // CHECK:     -DBLARG
 // CHECK:     -DWIBBLE=WOBBLE
+// CHECK: Input file: {{.*}}DependsOnModulePrivate.h
+// CHECK-NEXT: Input file: {{.*}}Other.h
+// CHECK-NEXT: Input file: {{.*}}SubFramework.h
+// CHECK-NEXT: Input file: {{.*}}not_coroutines.h
+// CHECK-NEXT: Input file: {{.*}}not_cxx.h
+// CHECK-NEXT: Input file: {{.*}}other.h
+// CHECK-NEXT: Input file: {{.*}}module.map
+// CHECK-NEXT: Input file: {{.*}}DependsOnModule.h
+// CHECK-NEXT: Input file: {{.*}}module_private.map
+// CHECK-NEXT: Input file: {{.*}}module.map
+
+// CHECK: Diagnostic options:
+// CHECK:   IgnoreWarnings: Yes
+// CHECK:   Diagnostic flags:
+// CHECK:     -Wunused

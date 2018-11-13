@@ -11,15 +11,15 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/BPFMCTargetDesc.h"
 #include "BPF.h"
-#include "BPFMCTargetDesc.h"
-#include "BPFMCAsmInfo.h"
 #include "InstPrinter/BPFInstPrinter.h"
+#include "MCTargetDesc/BPFMCAsmInfo.h"
+#include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/Host.h"
 #include "llvm/Support/TargetRegistry.h"
 
 #define GET_INSTRINFO_MC_DESC
@@ -50,11 +50,13 @@ static MCSubtargetInfo *createBPFMCSubtargetInfo(const Triple &TT,
   return createBPFMCSubtargetInfoImpl(TT, CPU, FS);
 }
 
-static MCStreamer *createBPFMCStreamer(const Triple &T,
-                                       MCContext &Ctx, MCAsmBackend &MAB,
-                                       raw_pwrite_stream &OS, MCCodeEmitter *Emitter,
+static MCStreamer *createBPFMCStreamer(const Triple &T, MCContext &Ctx,
+                                       std::unique_ptr<MCAsmBackend> &&MAB,
+                                       std::unique_ptr<MCObjectWriter> &&OW,
+                                       std::unique_ptr<MCCodeEmitter> &&Emitter,
                                        bool RelaxAll) {
-  return createELFStreamer(Ctx, MAB, OS, Emitter, RelaxAll);
+  return createELFStreamer(Ctx, std::move(MAB), std::move(OW), std::move(Emitter),
+                           RelaxAll);
 }
 
 static MCInstPrinter *createBPFMCInstPrinter(const Triple &T,
@@ -64,7 +66,36 @@ static MCInstPrinter *createBPFMCInstPrinter(const Triple &T,
                                              const MCRegisterInfo &MRI) {
   if (SyntaxVariant == 0)
     return new BPFInstPrinter(MAI, MII, MRI);
-  return 0;
+  return nullptr;
+}
+
+namespace {
+
+class BPFMCInstrAnalysis : public MCInstrAnalysis {
+public:
+  explicit BPFMCInstrAnalysis(const MCInstrInfo *Info)
+      : MCInstrAnalysis(Info) {}
+
+  bool evaluateBranch(const MCInst &Inst, uint64_t Addr, uint64_t Size,
+                      uint64_t &Target) const override {
+    // The target is the 3rd operand of cond inst and the 1st of uncond inst.
+    int16_t Imm;
+    if (isConditionalBranch(Inst)) {
+      Imm = Inst.getOperand(2).getImm();
+    } else if (isUnconditionalBranch(Inst))
+      Imm = Inst.getOperand(0).getImm();
+    else
+      return false;
+
+    Target = Addr + Size + Imm * Size;
+    return true;
+  }
+};
+
+} // end anonymous namespace
+
+static MCInstrAnalysis *createBPFInstrAnalysis(const MCInstrInfo *Info) {
+  return new BPFMCInstrAnalysis(Info);
 }
 
 extern "C" void LLVMInitializeBPFTargetMC() {
@@ -88,6 +119,9 @@ extern "C" void LLVMInitializeBPFTargetMC() {
 
     // Register the MCInstPrinter.
     TargetRegistry::RegisterMCInstPrinter(*T, createBPFMCInstPrinter);
+
+    // Register the MC instruction analyzer.
+    TargetRegistry::RegisterMCInstrAnalysis(*T, createBPFInstrAnalysis);
   }
 
   // Register the MC code emitter
@@ -113,4 +147,5 @@ extern "C" void LLVMInitializeBPFTargetMC() {
     TargetRegistry::RegisterMCAsmBackend(getTheBPFTarget(),
                                          createBPFbeAsmBackend);
   }
+
 }

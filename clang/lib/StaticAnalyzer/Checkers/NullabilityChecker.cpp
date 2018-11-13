@@ -30,6 +30,7 @@
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
+#include "clang/StaticAnalyzer/Core/PathSensitive/CheckerHelpers.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CheckerContext.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
 
@@ -40,24 +41,9 @@ using namespace clang;
 using namespace ento;
 
 namespace {
-// Do not reorder! The getMostNullable method relies on the order.
-// Optimization: Most pointers expected to be unspecified. When a symbol has an
-// unspecified or nonnull type non of the rules would indicate any problem for
-// that symbol. For this reason only nullable and contradicted nullability are
-// stored for a symbol. When a symbol is already contradicted, it can not be
-// casted back to nullable.
-enum class Nullability : char {
-  Contradicted, // Tracked nullability is contradicted by an explicit cast. Do
-                // not report any nullability related issue for this symbol.
-                // This nullability is propagated agressively to avoid false
-                // positive results. See the comment on getMostNullable method.
-  Nullable,
-  Unspecified,
-  Nonnull
-};
 
 /// Returns the most nullable nullability. This is used for message expressions
-/// like [reciever method], where the nullability of this expression is either
+/// like [receiver method], where the nullability of this expression is either
 /// the nullability of the receiver or the nullability of the return type of the
 /// method, depending on which is more nullable. Contradicted is considered to
 /// be the most nullable, to avoid false positive results.
@@ -142,8 +128,7 @@ public:
   DefaultBool NeedTracking;
 
 private:
-  class NullabilityBugVisitor
-      : public BugReporterVisitorImpl<NullabilityBugVisitor> {
+  class NullabilityBugVisitor : public BugReporterVisitor {
   public:
     NullabilityBugVisitor(const MemRegion *M) : Region(M) {}
 
@@ -153,10 +138,9 @@ private:
       ID.AddPointer(Region);
     }
 
-    PathDiagnosticPiece *VisitNode(const ExplodedNode *N,
-                                   const ExplodedNode *PrevN,
-                                   BugReporterContext &BRC,
-                                   BugReport &BR) override;
+    std::shared_ptr<PathDiagnosticPiece> VisitNode(const ExplodedNode *N,
+                                                   BugReporterContext &BRC,
+                                                   BugReport &BR) override;
 
   private:
     // The tracked region.
@@ -178,7 +162,7 @@ private:
                  const MemRegion *Region, BugReporter &BR,
                  const Stmt *ValueExpr = nullptr) const {
     if (!BT)
-      BT.reset(new BugType(this, "Nullability", "Memory error"));
+      BT.reset(new BugType(this, "Nullability", categories::MemoryError));
 
     auto R = llvm::make_unique<BugReport>(*BT, Msg, N);
     if (Region) {
@@ -265,7 +249,7 @@ REGISTER_MAP_WITH_PROGRAMSTATE(NullabilityMap, const MemRegion *,
 // initial direct violation has been discovered, and (3) warning after a direct
 // violation that has been implicitly or explicitly suppressed (for
 // example, with a cast of NULL to _Nonnull). In essence, once an invariant
-// violation is detected on a path, this checker will be esentially turned off
+// violation is detected on a path, this checker will be essentially turned off
 // for the rest of the analysis
 //
 // The analyzer takes this approach (rather than generating a sink node) to
@@ -306,11 +290,12 @@ NullabilityChecker::getTrackRegion(SVal Val, bool CheckSuperRegion) const {
   return dyn_cast<SymbolicRegion>(Region);
 }
 
-PathDiagnosticPiece *NullabilityChecker::NullabilityBugVisitor::VisitNode(
-    const ExplodedNode *N, const ExplodedNode *PrevN, BugReporterContext &BRC,
-    BugReport &BR) {
+std::shared_ptr<PathDiagnosticPiece>
+NullabilityChecker::NullabilityBugVisitor::VisitNode(const ExplodedNode *N,
+                                                     BugReporterContext &BRC,
+                                                     BugReport &BR) {
   ProgramStateRef State = N->getState();
-  ProgramStateRef StatePrev = PrevN->getState();
+  ProgramStateRef StatePrev = N->getFirstPred()->getState();
 
   const NullabilityState *TrackedNullab = State->get<NullabilityMap>(Region);
   const NullabilityState *TrackedNullabPrev =
@@ -324,7 +309,7 @@ PathDiagnosticPiece *NullabilityChecker::NullabilityBugVisitor::VisitNode(
 
   // Retrieve the associated statement.
   const Stmt *S = TrackedNullab->getNullabilitySource();
-  if (!S) {
+  if (!S || S->getBeginLoc().isInvalid()) {
     S = PathDiagnosticLocation::getStmt(N);
   }
 
@@ -333,24 +318,14 @@ PathDiagnosticPiece *NullabilityChecker::NullabilityBugVisitor::VisitNode(
 
   std::string InfoText =
       (llvm::Twine("Nullability '") +
-       getNullabilityString(TrackedNullab->getValue()) + "' is infered")
+       getNullabilityString(TrackedNullab->getValue()) + "' is inferred")
           .str();
 
   // Generate the extra diagnostic.
   PathDiagnosticLocation Pos(S, BRC.getSourceManager(),
                              N->getLocationContext());
-  return new PathDiagnosticEventPiece(Pos, InfoText, true, nullptr);
-}
-
-static Nullability getNullabilityAnnotation(QualType Type) {
-  const auto *AttrType = Type->getAs<AttributedType>();
-  if (!AttrType)
-    return Nullability::Unspecified;
-  if (AttrType->getAttrKind() == AttributedType::attr_nullable)
-    return Nullability::Nullable;
-  else if (AttrType->getAttrKind() == AttributedType::attr_nonnull)
-    return Nullability::Nonnull;
-  return Nullability::Unspecified;
+  return std::make_shared<PathDiagnosticEventPiece>(Pos, InfoText, true,
+                                                    nullptr);
 }
 
 /// Returns true when the value stored at the given location is null
@@ -557,8 +532,7 @@ void NullabilityChecker::checkPreStmt(const ReturnStmt *S,
   if (State->get<InvariantViolated>())
     return;
 
-  auto RetSVal =
-      State->getSVal(S, C.getLocationContext()).getAs<DefinedOrUnknownSVal>();
+  auto RetSVal = C.getSVal(S).getAs<DefinedOrUnknownSVal>();
   if (!RetSVal)
     return;
 
@@ -610,9 +584,9 @@ void NullabilityChecker::checkPreStmt(const ReturnStmt *S,
 
     SmallString<256> SBuf;
     llvm::raw_svector_ostream OS(SBuf);
-    OS << "Null is returned from a " << C.getDeclDescription(D) <<
+    OS << (RetExpr->getType()->isObjCObjectPointerType() ? "nil" : "Null");
+    OS << " returned from a " << C.getDeclDescription(D) <<
           " that is expected to return a non-null value";
-
     reportBugIfInvariantHolds(OS.str(),
                               ErrorKind::NilReturnedToNonnull, N, nullptr, C,
                               RetExpr);
@@ -707,9 +681,11 @@ void NullabilityChecker::checkPreCall(const CallEvent &Call,
       ExplodedNode *N = C.generateErrorNode(State);
       if (!N)
         return;
+
       SmallString<256> SBuf;
       llvm::raw_svector_ostream OS(SBuf);
-      OS << "Null passed to a callee that requires a non-null " << ParamIdx
+      OS << (Param->getType()->isObjCObjectPointerType() ? "nil" : "Null");
+      OS << " passed to a callee that requires a non-null " << ParamIdx
          << llvm::getOrdinalSuffix(ParamIdx) << " parameter";
       reportBugIfInvariantHolds(OS.str(), ErrorKind::NilPassedToNonnull, N,
                                 nullptr, C,
@@ -788,7 +764,7 @@ void NullabilityChecker::checkPostCall(const CallEvent &Call,
   // CG headers are misannotated. Do not warn for symbols that are the results
   // of CG calls.
   const SourceManager &SM = C.getSourceManager();
-  StringRef FilePath = SM.getFilename(SM.getSpellingLoc(Decl->getLocStart()));
+  StringRef FilePath = SM.getFilename(SM.getSpellingLoc(Decl->getBeginLoc()));
   if (llvm::sys::path::filename(FilePath).startswith("CG")) {
     State = State->set<NullabilityMap>(Region, Nullability::Contradicted);
     C.addTransition(State);
@@ -868,7 +844,7 @@ void NullabilityChecker::checkPostObjCMessage(const ObjCMethodCall &M,
     // are either item retrieval related or not interesting nullability wise.
     // Using this fact, to keep the code easier to read just ignore the return
     // value of every instance method of dictionaries.
-    if (M.isInstanceMessage() && Name.find("Dictionary") != StringRef::npos) {
+    if (M.isInstanceMessage() && Name.contains("Dictionary")) {
       State =
           State->set<NullabilityMap>(ReturnRegion, Nullability::Contradicted);
       C.addTransition(State);
@@ -876,7 +852,7 @@ void NullabilityChecker::checkPostObjCMessage(const ObjCMethodCall &M,
     }
     // For similar reasons ignore some methods of Cocoa arrays.
     StringRef FirstSelectorSlot = M.getSelector().getNameForSlot(0);
-    if (Name.find("Array") != StringRef::npos &&
+    if (Name.contains("Array") &&
         (FirstSelectorSlot == "firstObject" ||
          FirstSelectorSlot == "lastObject")) {
       State =
@@ -889,7 +865,7 @@ void NullabilityChecker::checkPostObjCMessage(const ObjCMethodCall &M,
     // encodings are used. Using lossless encodings is so frequent that ignoring
     // this class of methods reduced the emitted diagnostics by about 30% on
     // some projects (and all of that was false positives).
-    if (Name.find("String") != StringRef::npos) {
+    if (Name.contains("String")) {
       for (auto Param : M.parameters()) {
         if (Param->getName() == "encoding") {
           State = State->set<NullabilityMap>(ReturnRegion,
@@ -972,8 +948,7 @@ void NullabilityChecker::checkPostStmt(const ExplicitCastExpr *CE,
   if (DestNullability == Nullability::Unspecified)
     return;
 
-  auto RegionSVal =
-      State->getSVal(CE, C.getLocationContext()).getAs<DefinedOrUnknownSVal>();
+  auto RegionSVal = C.getSVal(CE).getAs<DefinedOrUnknownSVal>();
   const MemRegion *Region = getTrackRegion(*RegionSVal);
   if (!Region)
     return;
@@ -1128,8 +1103,11 @@ void NullabilityChecker::checkBind(SVal L, SVal V, const Stmt *S,
     if (ValueExpr)
       ValueStmt = ValueExpr;
 
-    reportBugIfInvariantHolds("Null is assigned to a pointer which is "
-                              "expected to have non-null value",
+    SmallString<256> SBuf;
+    llvm::raw_svector_ostream OS(SBuf);
+    OS << (LocType->isObjCObjectPointerType() ? "nil" : "Null");
+    OS << " assigned to a pointer which is expected to have non-null value";
+    reportBugIfInvariantHolds(OS.str(),
                               ErrorKind::NilAssignedToNonnull, N, nullptr, C,
                               ValueStmt);
     return;

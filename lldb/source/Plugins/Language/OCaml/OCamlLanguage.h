@@ -19,8 +19,8 @@
 #include "llvm/ADT/StringRef.h"
 
 // Project includes
-#include "lldb/Core/ConstString.h"
 #include "lldb/Target/Language.h"
+#include "lldb/Utility/ConstString.h"
 #include "lldb/lldb-private.h"
 
 namespace lldb_private {
@@ -30,6 +30,8 @@ public:
   lldb::LanguageType GetLanguageType() const override {
     return lldb::eLanguageTypeOCaml;
   }
+
+  bool IsSourceFile(llvm::StringRef file_path) const override;
 
   static void Initialize();
 

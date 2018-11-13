@@ -222,9 +222,23 @@ TEST(HasDeclaration, HasDeclarationOfEnumType) {
 }
 
 TEST(HasDeclaration, HasGetDeclTraitTest) {
-  EXPECT_TRUE(internal::has_getDecl<TypedefType>::value);
-  EXPECT_TRUE(internal::has_getDecl<RecordType>::value);
-  EXPECT_FALSE(internal::has_getDecl<TemplateSpecializationType>::value);
+  static_assert(internal::has_getDecl<TypedefType>::value,
+                "Expected TypedefType to have a getDecl.");
+  static_assert(internal::has_getDecl<RecordType>::value,
+                "Expected RecordType to have a getDecl.");
+  static_assert(!internal::has_getDecl<TemplateSpecializationType>::value,
+                "Expected TemplateSpecializationType to *not* have a getDecl.");
+}
+
+TEST(HasDeclaration, ElaboratedType) {
+  EXPECT_TRUE(matches(
+      "namespace n { template <typename T> struct X {}; }"
+      "void f(n::X<int>);",
+      parmVarDecl(hasType(qualType(hasDeclaration(cxxRecordDecl()))))));
+  EXPECT_TRUE(matches(
+      "namespace n { template <typename T> struct X {}; }"
+      "void f(n::X<int>);",
+      parmVarDecl(hasType(elaboratedType(hasDeclaration(cxxRecordDecl()))))));
 }
 
 TEST(HasDeclaration, HasDeclarationOfTypeWithDecl) {
@@ -239,12 +253,34 @@ TEST(HasDeclaration, HasDeclarationOfTemplateSpecializationType) {
   EXPECT_TRUE(matches("template <typename T> class A {}; A<int> a;",
                       varDecl(hasType(templateSpecializationType(
                         hasDeclaration(namedDecl(hasName("A"))))))));
+  EXPECT_TRUE(matches("template <typename T> class A {};"
+                      "template <typename T> class B { A<T> a; };",
+                      fieldDecl(hasType(templateSpecializationType(
+                        hasDeclaration(namedDecl(hasName("A"))))))));
+  EXPECT_TRUE(matches("template <typename T> class A {}; A<int> a;",
+                      varDecl(hasType(templateSpecializationType(
+                          hasDeclaration(cxxRecordDecl()))))));
 }
 
 TEST(HasDeclaration, HasDeclarationOfCXXNewExpr) {
   EXPECT_TRUE(
       matches("int *A = new int();",
               cxxNewExpr(hasDeclaration(functionDecl(parameterCountIs(1))))));
+}
+
+TEST(HasDeclaration, HasDeclarationOfTypeAlias) {
+  EXPECT_TRUE(matches("template <typename T> using C = T; C<int> c;",
+                      varDecl(hasType(templateSpecializationType(
+                          hasDeclaration(typeAliasTemplateDecl()))))));
+}
+
+TEST(HasUnqualifiedDesugaredType, DesugarsUsing) {
+  EXPECT_TRUE(
+      matches("struct A {}; using B = A; B b;",
+              varDecl(hasType(hasUnqualifiedDesugaredType(recordType())))));
+  EXPECT_TRUE(
+      matches("struct A {}; using B = A; using C = B; C b;",
+              varDecl(hasType(hasUnqualifiedDesugaredType(recordType())))));
 }
 
 TEST(HasUnderlyingDecl, Matches) {
@@ -367,16 +403,71 @@ TEST(Matcher, Argument) {
 }
 
 TEST(Matcher, AnyArgument) {
-  StatementMatcher CallArgumentY = callExpr(
-    hasAnyArgument(
-      ignoringParenImpCasts(declRefExpr(to(varDecl(hasName("y")))))));
+  auto HasArgumentY = hasAnyArgument(
+      ignoringParenImpCasts(declRefExpr(to(varDecl(hasName("y"))))));
+  StatementMatcher CallArgumentY = callExpr(HasArgumentY);
+  StatementMatcher CtorArgumentY = cxxConstructExpr(HasArgumentY);
+  StatementMatcher UnresolvedCtorArgumentY =
+      cxxUnresolvedConstructExpr(HasArgumentY);
+  StatementMatcher ObjCCallArgumentY = objcMessageExpr(HasArgumentY);
   EXPECT_TRUE(matches("void x(int, int) { int y; x(1, y); }", CallArgumentY));
   EXPECT_TRUE(matches("void x(int, int) { int y; x(y, 42); }", CallArgumentY));
+  EXPECT_TRUE(matches("struct Y { Y(int, int); };"
+                      "void x() { int y; (void)Y(1, y); }",
+                      CtorArgumentY));
+  EXPECT_TRUE(matches("struct Y { Y(int, int); };"
+                      "void x() { int y; (void)Y(y, 42); }",
+                      CtorArgumentY));
+  EXPECT_TRUE(matches("template <class Y> void x() { int y; (void)Y(1, y); }",
+                      UnresolvedCtorArgumentY));
+  EXPECT_TRUE(matches("template <class Y> void x() { int y; (void)Y(y, 42); }",
+                      UnresolvedCtorArgumentY));
+  EXPECT_TRUE(matchesObjC("@interface I -(void)f:(int) y; @end "
+                          "void x(I* i) { int y; [i f:y]; }",
+                          ObjCCallArgumentY));
+  EXPECT_FALSE(matchesObjC("@interface I -(void)f:(int) z; @end "
+                           "void x(I* i) { int z; [i f:z]; }",
+                           ObjCCallArgumentY));
   EXPECT_TRUE(notMatches("void x(int, int) { x(1, 2); }", CallArgumentY));
+  EXPECT_TRUE(notMatches("struct Y { Y(int, int); };"
+                         "void x() { int y; (void)Y(1, 2); }",
+                         CtorArgumentY));
+  EXPECT_TRUE(notMatches("template <class Y>"
+                         "void x() { int y; (void)Y(1, 2); }",
+                         UnresolvedCtorArgumentY));
 
   StatementMatcher ImplicitCastedArgument = callExpr(
     hasAnyArgument(implicitCastExpr()));
   EXPECT_TRUE(matches("void x(long) { int y; x(y); }", ImplicitCastedArgument));
+}
+
+TEST(Matcher, HasReceiver) {
+  EXPECT_TRUE(matchesObjC(
+      "@interface NSString @end "
+      "void f(NSString *x) {"
+      "[x containsString];"
+      "}",
+      objcMessageExpr(hasReceiver(declRefExpr(to(varDecl(hasName("x"))))))));
+
+  EXPECT_FALSE(matchesObjC(
+      "@interface NSString +(NSString *) stringWithFormat; @end "
+      "void f() { [NSString stringWithFormat]; }",
+      objcMessageExpr(hasReceiver(declRefExpr(to(varDecl(hasName("x"))))))));
+}
+
+TEST(Matcher, isInstanceMessage) {
+  EXPECT_TRUE(matchesObjC(
+      "@interface NSString @end "
+      "void f(NSString *x) {"
+      "[x containsString];"
+      "}",
+      objcMessageExpr(isInstanceMessage())));
+
+  EXPECT_FALSE(matchesObjC(
+      "@interface NSString +(NSString *) stringWithFormat; @end "
+      "void f() { [NSString stringWithFormat]; }",
+      objcMessageExpr(isInstanceMessage())));
+
 }
 
 TEST(ForEachArgumentWithParam, ReportsNoFalsePositives) {
@@ -496,6 +587,10 @@ TEST(HasParameter, CallsInnerMatcher) {
                       cxxMethodDecl(hasParameter(0, varDecl()))));
   EXPECT_TRUE(notMatches("class X { void x(int) {} };",
                          cxxMethodDecl(hasParameter(0, hasName("x")))));
+  EXPECT_TRUE(matchesObjC("@interface I -(void)f:(int) x; @end",
+                          objcMethodDecl(hasParameter(0, hasName("x")))));
+  EXPECT_TRUE(matchesObjC("int main() { void (^b)(int) = ^(int p) {}; }",
+                          blockDecl(hasParameter(0, hasName("p")))));
 }
 
 TEST(HasParameter, DoesNotMatchIfIndexOutOfBounds) {
@@ -525,6 +620,10 @@ TEST(HasAnyParameter, MatchesIndependentlyOfPosition) {
   EXPECT_TRUE(matches(
     "class Y {}; class X { void x(Y y, X x) {} };",
     cxxMethodDecl(hasAnyParameter(hasType(recordDecl(hasName("X")))))));
+  EXPECT_TRUE(matchesObjC("@interface I -(void)f:(int) x; @end",
+                          objcMethodDecl(hasAnyParameter(hasName("x")))));
+  EXPECT_TRUE(matchesObjC("int main() { void (^b)(int) = ^(int p) {}; }",
+                          blockDecl(hasAnyParameter(hasName("p")))));
 }
 
 TEST(Returns, MatchesReturnTypes) {
@@ -679,7 +778,7 @@ TEST(TemplateTypeParmDecl, VarTemplatePartialSpecializationDecl) {
       "};\n"
       "template<typename U>\n"
       "template<typename U2>\n"
-      "int Struct<U>::field<char> = 123;\n";
+      "int Struct<U>::field<U2*> = 123;\n";
   EXPECT_TRUE(matches(input, templateTypeParmDecl(hasName("T"))));
   EXPECT_TRUE(matches(input, templateTypeParmDecl(hasName("T2"))));
   EXPECT_TRUE(matches(input, templateTypeParmDecl(hasName("U"))));
@@ -694,7 +793,7 @@ TEST(TemplateTypeParmDecl, ClassTemplatePartialSpecializationDecl) {
       "};\n"
       "template<typename U>\n"
       "template<typename U2>\n"
-      "struct Class<U>::Struct<int> {};\n";
+      "struct Class<U>::Struct<U2*> {};\n";
   EXPECT_TRUE(matches(input, templateTypeParmDecl(hasName("T"))));
   EXPECT_TRUE(matches(input, templateTypeParmDecl(hasName("T2"))));
   EXPECT_TRUE(matches(input, templateTypeParmDecl(hasName("U"))));
@@ -773,14 +872,18 @@ TEST(HasAnyConstructorInitializer, ForField) {
   static const char Code[] =
     "class Baz { };"
       "class Foo {"
-      "  Foo() : foo_() { }"
+      "  Foo() : foo_(), bar_() { }"
       "  Baz foo_;"
-      "  Baz bar_;"
+      "  struct {"
+      "    Baz bar_;"
+      "  };"
       "};";
   EXPECT_TRUE(matches(Code, cxxConstructorDecl(hasAnyConstructorInitializer(
     forField(hasType(recordDecl(hasName("Baz"))))))));
   EXPECT_TRUE(matches(Code, cxxConstructorDecl(hasAnyConstructorInitializer(
     forField(hasName("foo_"))))));
+  EXPECT_TRUE(matches(Code, cxxConstructorDecl(hasAnyConstructorInitializer(
+    forField(hasName("bar_"))))));
   EXPECT_TRUE(notMatches(Code, cxxConstructorDecl(hasAnyConstructorInitializer(
     forField(hasType(recordDecl(hasName("Bar"))))))));
 }
@@ -1216,6 +1319,45 @@ TEST(HasImplicitDestinationType, DoesNotMatchIncorrectly) {
 TEST(IgnoringImplicit, MatchesImplicit) {
   EXPECT_TRUE(matches("class C {}; C a = C();",
                       varDecl(has(ignoringImplicit(cxxConstructExpr())))));
+}
+
+TEST(IgnoringImplicit, MatchesNestedImplicit) {
+  StringRef Code = R"(
+
+struct OtherType;
+
+struct SomeType
+{
+    SomeType() {}
+    SomeType(const OtherType&) {}
+    SomeType& operator=(OtherType const&) { return *this; }
+};
+
+struct OtherType
+{
+    OtherType() {}
+    ~OtherType() {}
+};
+
+OtherType something()
+{
+    return {};
+}
+
+int main()
+{
+    SomeType i = something();
+}
+)";
+  EXPECT_TRUE(matches(Code, varDecl(
+      hasName("i"),
+      hasInitializer(exprWithCleanups(has(
+        cxxConstructExpr(has(expr(ignoringImplicit(cxxConstructExpr(
+          has(expr(ignoringImplicit(callExpr())))
+          )))))
+        )))
+      )
+  ));
 }
 
 TEST(IgnoringImplicit, DoesNotMatchIncorrectly) {
@@ -2193,6 +2335,30 @@ TEST(Matcher, HasAnyDeclaration) {
                                hasParameter(0, parmVarDecl(hasName("p3"))))))));
   EXPECT_TRUE(notMatches(Fragment, unresolvedLookupExpr(hasAnyDeclaration(
                                        functionDecl(hasName("bar"))))));
+}
+
+TEST(SubstTemplateTypeParmType, HasReplacementType) {
+  std::string Fragment = "template<typename T>"
+                         "double F(T t);"
+                         "int i;"
+                         "double j = F(i);";
+  EXPECT_TRUE(matches(Fragment, substTemplateTypeParmType(hasReplacementType(
+                                    qualType(asString("int"))))));
+  EXPECT_TRUE(notMatches(Fragment, substTemplateTypeParmType(hasReplacementType(
+                                       qualType(asString("double"))))));
+  EXPECT_TRUE(
+      notMatches("template<int N>"
+                 "double F();"
+                 "double j = F<5>();",
+                 substTemplateTypeParmType(hasReplacementType(qualType()))));
+}
+
+TEST(ClassTemplateSpecializationDecl, HasSpecializedTemplate) {
+  auto Matcher = classTemplateSpecializationDecl(
+      hasSpecializedTemplate(classTemplateDecl()));
+  EXPECT_TRUE(
+      matches("template<typename T> class A {}; typedef A<int> B;", Matcher));
+  EXPECT_TRUE(notMatches("template<typename T> class A {};", Matcher));
 }
 
 } // namespace ast_matchers

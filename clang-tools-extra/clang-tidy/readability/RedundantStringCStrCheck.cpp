@@ -77,7 +77,8 @@ void RedundantStringCStrCheck::registerMatchers(
     return;
 
   // Match expressions of type 'string' or 'string*'.
-  const auto StringDecl = cxxRecordDecl(hasName("::std::basic_string"));
+  const auto StringDecl = type(hasUnqualifiedDesugaredType(recordType(
+      hasDeclaration(cxxRecordDecl(hasName("::std::basic_string"))))));
   const auto StringExpr =
       expr(anyOf(hasType(StringDecl), hasType(qualType(pointsTo(StringDecl)))));
 
@@ -177,9 +178,9 @@ void RedundantStringCStrCheck::registerMatchers(
 }
 
 void RedundantStringCStrCheck::check(const MatchFinder::MatchResult &Result) {
-  const auto *Call = Result.Nodes.getStmtAs<CallExpr>("call");
-  const auto *Arg = Result.Nodes.getStmtAs<Expr>("arg");
-  const auto *Member = Result.Nodes.getStmtAs<MemberExpr>("member");
+  const auto *Call = Result.Nodes.getNodeAs<CallExpr>("call");
+  const auto *Arg = Result.Nodes.getNodeAs<Expr>("arg");
+  const auto *Member = Result.Nodes.getNodeAs<MemberExpr>("member");
   bool Arrow = Member->isArrow();
   // Replace the "call" node with the "arg" node, prefixed with '*'
   // if the call was using '->' rather than '.'.
@@ -188,7 +189,7 @@ void RedundantStringCStrCheck::check(const MatchFinder::MatchResult &Result) {
   if (ArgText.empty())
     return;
 
-  diag(Call->getLocStart(), "redundant call to %0")
+  diag(Call->getBeginLoc(), "redundant call to %0")
       << Member->getMemberDecl()
       << FixItHint::CreateReplacement(Call->getSourceRange(), ArgText);
 }

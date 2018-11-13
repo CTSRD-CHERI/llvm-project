@@ -21,17 +21,66 @@
 #ifndef LLVM_IR_VERIFIER_H
 #define LLVM_IR_VERIFIER_H
 
+#include "llvm/ADT/DenseMap.h"
 #include "llvm/IR/PassManager.h"
+#include <utility>
 
 namespace llvm {
 
+class APInt;
 class Function;
 class FunctionPass;
-class ModulePass;
+class Instruction;
+class MDNode;
 class Module;
 class raw_ostream;
+struct VerifierSupport;
 
-/// \brief Check a function for errors, useful for use when debugging a
+/// Verify that the TBAA Metadatas are valid.
+class TBAAVerifier {
+  VerifierSupport *Diagnostic = nullptr;
+
+  /// Helper to diagnose a failure
+  template <typename... Tys> void CheckFailed(Tys &&... Args);
+
+  /// Cache of TBAA base nodes that have already been visited.  This cachce maps
+  /// a node that has been visited to a pair (IsInvalid, BitWidth) where
+  ///
+  ///  \c IsInvalid is true iff the node is invalid.
+  ///  \c BitWidth, if non-zero, is the bitwidth of the integer used to denoting
+  ///    the offset of the access.  If zero, only a zero offset is allowed.
+  ///
+  /// \c BitWidth has no meaning if \c IsInvalid is true.
+  using TBAABaseNodeSummary = std::pair<bool, unsigned>;
+  DenseMap<const MDNode *, TBAABaseNodeSummary> TBAABaseNodes;
+
+  /// Maps an alleged scalar TBAA node to a boolean that is true if the said
+  /// TBAA node is a valid scalar TBAA node or false otherwise.
+  DenseMap<const MDNode *, bool> TBAAScalarNodes;
+
+  /// \name Helper functions used by \c visitTBAAMetadata.
+  /// @{
+  MDNode *getFieldNodeFromTBAABaseNode(Instruction &I, const MDNode *BaseNode,
+                                       APInt &Offset, bool IsNewFormat);
+  TBAAVerifier::TBAABaseNodeSummary verifyTBAABaseNode(Instruction &I,
+                                                       const MDNode *BaseNode,
+                                                       bool IsNewFormat);
+  TBAABaseNodeSummary verifyTBAABaseNodeImpl(Instruction &I,
+                                             const MDNode *BaseNode,
+                                             bool IsNewFormat);
+
+  bool isValidScalarTBAANode(const MDNode *MD);
+  /// @}
+
+public:
+  TBAAVerifier(VerifierSupport *Diagnostic = nullptr)
+      : Diagnostic(Diagnostic) {}
+  /// Visit an instruction and return true if it is valid, return false if an
+  /// invalid TBAA is attached.
+  bool visitTBAAMetadata(Instruction &I, const MDNode *MD);
+};
+
+/// Check a function for errors, useful for use when debugging a
 /// pass.
 ///
 /// If there are no errors, the function returns false. If an error is found,
@@ -39,7 +88,7 @@ class raw_ostream;
 /// returned.
 bool verifyFunction(const Function &F, raw_ostream *OS = nullptr);
 
-/// \brief Check a module for errors.
+/// Check a module for errors.
 ///
 /// If there are no errors, the function returns false. If an error is
 /// found, a message describing the error is written to OS (if
@@ -58,13 +107,14 @@ FunctionPass *createVerifierPass(bool FatalErrors = true);
 /// and debug info errors.
 class VerifierAnalysis : public AnalysisInfoMixin<VerifierAnalysis> {
   friend AnalysisInfoMixin<VerifierAnalysis>;
-  static char PassID;
+
+  static AnalysisKey Key;
 
 public:
   struct Result {
     bool IRBroken, DebugInfoBroken;
   };
-  static void *ID() { return (void *)&PassID; }
+
   Result run(Module &M, ModuleAnalysisManager &);
   Result run(Function &F, FunctionAnalysisManager &);
 };
@@ -74,7 +124,7 @@ public:
 /// "recovered" from by stripping the debug info.
 bool verifyModule(bool &BrokenDebugInfo, const Module &M, raw_ostream *OS);
 
-/// \brief Create a verifier pass.
+/// Create a verifier pass.
 ///
 /// Check a module or function for validity. This is essentially a pass wrapped
 /// around the above verifyFunction and verifyModule routines and
@@ -94,7 +144,6 @@ public:
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 
+} // end namespace llvm
 
-} // End llvm namespace
-
-#endif
+#endif // LLVM_IR_VERIFIER_H

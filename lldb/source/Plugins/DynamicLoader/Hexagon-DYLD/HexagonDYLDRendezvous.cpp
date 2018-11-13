@@ -7,17 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-#include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Symbol/Symbol.h"
 #include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
 
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/Process.h"
@@ -33,7 +29,7 @@ using namespace lldb_private;
 static addr_t ResolveRendezvousAddress(Process *process) {
   addr_t info_location;
   addr_t info_addr;
-  Error error;
+  Status error;
 
   info_location = process->GetImageInfoAddress();
 
@@ -119,8 +115,8 @@ bool HexagonDYLDRendezvous::UpdateSOEntries() {
   if (m_current.map_addr == 0)
     return false;
 
-  // When the previous and current states are consistent this is the first
-  // time we have been asked to update.  Just take a snapshot of the currently
+  // When the previous and current states are consistent this is the first time
+  // we have been asked to update.  Just take a snapshot of the currently
   // loaded modules.
   if (m_previous.state == eConsistent && m_current.state == eConsistent)
     return TakeSnapshot(m_soentries);
@@ -130,8 +126,8 @@ bool HexagonDYLDRendezvous::UpdateSOEntries() {
   if (m_current.state == eAdd || m_current.state == eDelete) {
     // this is a fudge so that we can clear the assert below.
     m_previous.state = eConsistent;
-    // We hit this assert on the 2nd run of this function after running the calc
-    // example
+    // We hit this assert on the 2nd run of this function after running the
+    // calc example
     assert(m_previous.state == eConsistent);
     m_soentries.clear();
     m_added_soentries.clear();
@@ -163,9 +159,9 @@ bool HexagonDYLDRendezvous::UpdateSOEntriesForAddition() {
     if (!ReadSOEntryFromMemory(cursor, entry))
       return false;
 
-    // Only add shared libraries and not the executable.
-    // On Linux this is indicated by an empty path in the entry.
-    // On FreeBSD it is the name of the executable.
+    // Only add shared libraries and not the executable. On Linux this is
+    // indicated by an empty path in the entry. On FreeBSD it is the name of
+    // the executable.
     if (entry.path.empty() || ::strcmp(entry.path.c_str(), m_exe_path) == 0)
       continue;
 
@@ -208,9 +204,9 @@ bool HexagonDYLDRendezvous::TakeSnapshot(SOEntryList &entry_list) {
     if (!ReadSOEntryFromMemory(cursor, entry))
       return false;
 
-    // Only add shared libraries and not the executable.
-    // On Linux this is indicated by an empty path in the entry.
-    // On FreeBSD it is the name of the executable.
+    // Only add shared libraries and not the executable. On Linux this is
+    // indicated by an empty path in the entry. On FreeBSD it is the name of
+    // the executable.
     if (entry.path.empty() || ::strcmp(entry.path.c_str(), m_exe_path) == 0)
       continue;
 
@@ -222,7 +218,7 @@ bool HexagonDYLDRendezvous::TakeSnapshot(SOEntryList &entry_list) {
 
 addr_t HexagonDYLDRendezvous::ReadWord(addr_t addr, uint64_t *dst,
                                        size_t size) {
-  Error error;
+  Status error;
 
   *dst = m_process->ReadUnsignedIntegerFromMemory(addr, size, 0, error);
   if (error.Fail())
@@ -232,7 +228,7 @@ addr_t HexagonDYLDRendezvous::ReadWord(addr_t addr, uint64_t *dst,
 }
 
 addr_t HexagonDYLDRendezvous::ReadPointer(addr_t addr, addr_t *dst) {
-  Error error;
+  Status error;
 
   *dst = m_process->ReadPointerFromMemory(addr, error);
   if (error.Fail())
@@ -243,7 +239,7 @@ addr_t HexagonDYLDRendezvous::ReadPointer(addr_t addr, addr_t *dst) {
 
 std::string HexagonDYLDRendezvous::ReadStringFromMemory(addr_t addr) {
   std::string str;
-  Error error;
+  Status error;
   size_t size;
   char c;
 
@@ -304,7 +300,7 @@ bool HexagonDYLDRendezvous::FindMetadata(const char *name, PThreadField field,
   if (addr == LLDB_INVALID_ADDRESS)
     return false;
 
-  Error error;
+  Status error;
   value = (uint32_t)m_process->ReadUnsignedIntegerFromMemory(
       addr + field * sizeof(uint32_t), sizeof(uint32_t), 0, error);
   if (error.Fail())

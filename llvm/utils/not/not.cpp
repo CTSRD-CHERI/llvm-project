@@ -12,7 +12,6 @@
 //   not --crash cmd
 //     Will return true if cmd crashes (e.g. for testing crash reporting).
 
-#include "llvm/Support/Path.h"
 #include "llvm/Support/Program.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
@@ -39,9 +38,12 @@ int main(int argc, const char **argv) {
     return 1;
   }
 
+  std::vector<StringRef> Argv;
+  Argv.reserve(argc);
+  for (int i = 0; i < argc; ++i)
+    Argv.push_back(argv[i]);
   std::string ErrMsg;
-  int Result = sys::ExecuteAndWait(*Program, argv, nullptr, nullptr, 0, 0,
-                                   &ErrMsg);
+  int Result = sys::ExecuteAndWait(*Program, Argv, None, {}, 0, 0, &ErrMsg);
 #ifdef _WIN32
   // Handle abort() in msvcrt -- It has exit code as 3.  abort(), aka
   // unreachable, should be recognized as a crash.  However, some binaries use

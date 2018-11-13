@@ -46,6 +46,7 @@ static void AsanDie() {
     // Don't die twice - run a busy loop.
     while (1) { }
   }
+  if (common_flags()->print_module_map >= 1) PrintModuleMap();
   if (flags()->sleep_before_dying) {
     Report("Sleeping for %d second(s)\n", flags()->sleep_before_dying);
     SleepForSeconds(flags()->sleep_before_dying);
@@ -55,7 +56,8 @@ static void AsanDie() {
       UnmapOrDie((void*)kLowShadowBeg, kMidMemBeg - kLowShadowBeg);
       UnmapOrDie((void*)kMidMemEnd, kHighShadowEnd - kMidMemEnd);
     } else {
-      UnmapOrDie((void*)kLowShadowBeg, kHighShadowEnd - kLowShadowBeg);
+      if (kHighShadowEnd)
+        UnmapOrDie((void*)kLowShadowBeg, kHighShadowEnd - kLowShadowBeg);
     }
   }
 }
@@ -64,8 +66,14 @@ static void AsanCheckFailed(const char *file, int line, const char *cond,
                             u64 v1, u64 v2) {
   Report("AddressSanitizer CHECK failed: %s:%d \"%s\" (0x%zx, 0x%zx)\n", file,
          line, cond, (uptr)v1, (uptr)v2);
-  // FIXME: check for infinite recursion without a thread-local counter here.
-  PRINT_CURRENT_STACK_CHECK();
+
+  // Print a stack trace the first time we come here. Otherwise, we probably
+  // failed a CHECK during symbolization.
+  static atomic_uint32_t num_calls;
+  if (atomic_fetch_add(&num_calls, 1, memory_order_relaxed) == 0) {
+    PRINT_CURRENT_STACK_CHECK();
+  }
+
   Die();
 }
 
@@ -81,26 +89,6 @@ uptr kHighMemEnd, kMidMemBeg, kMidMemEnd;
 void ShowStatsAndAbort() {
   __asan_print_accumulated_stats();
   Die();
-}
-
-// ---------------------- mmap -------------------- {{{1
-// Reserve memory range [beg, end].
-// We need to use inclusive range because end+1 may not be representable.
-void ReserveShadowMemoryRange(uptr beg, uptr end, const char *name) {
-  CHECK_EQ((beg % GetMmapGranularity()), 0);
-  CHECK_EQ(((end + 1) % GetMmapGranularity()), 0);
-  uptr size = end - beg + 1;
-  DecreaseTotalMmap(size);  // Don't count the shadow against mmap_limit_mb.
-  void *res = MmapFixedNoReserve(beg, size, name);
-  if (res != (void*)beg) {
-    Report("ReserveShadowMemoryRange failed while trying to map 0x%zx bytes. "
-           "Perhaps you're using ulimit -v\n", size);
-    Abort();
-  }
-  if (common_flags()->no_huge_pages_for_shadow)
-    NoHugePagesInRegion(beg, size);
-  if (common_flags()->use_madv_dontdump)
-    DontDumpShadowMemory(beg, size);
 }
 
 // --------------- LowLevelAllocateCallbac ---------- {{{1
@@ -159,6 +147,8 @@ ASAN_REPORT_ERROR_N(load, false)
 ASAN_REPORT_ERROR_N(store, true)
 
 #define ASAN_MEMORY_ACCESS_CALLBACK_BODY(type, is_write, size, exp_arg, fatal) \
+    if (SANITIZER_MYRIAD2 && !AddrIsInMem(addr) && !AddrIsInShadow(addr))      \
+      return;                                                                  \
     uptr sp = MEM_TO_SHADOW(addr);                                             \
     uptr s = size <= SHADOW_GRANULARITY ? *reinterpret_cast<u8 *>(sp)          \
                                         : *reinterpret_cast<u16 *>(sp);        \
@@ -325,59 +315,24 @@ static void asan_atexit() {
 }
 
 static void InitializeHighMemEnd() {
+#if !SANITIZER_MYRIAD2
 #if !ASAN_FIXED_MAPPING
-  kHighMemEnd = GetMaxVirtualAddress();
+  kHighMemEnd = GetMaxUserVirtualAddress();
   // Increase kHighMemEnd to make sure it's properly
   // aligned together with kHighMemBeg:
   kHighMemEnd |= SHADOW_GRANULARITY * GetMmapGranularity() - 1;
 #endif  // !ASAN_FIXED_MAPPING
   CHECK_EQ((kHighMemBeg % GetMmapGranularity()), 0);
+#endif  // !SANITIZER_MYRIAD2
 }
 
-static void ProtectGap(uptr addr, uptr size) {
-  if (!flags()->protect_shadow_gap) {
-    // The shadow gap is unprotected, so there is a chance that someone
-    // is actually using this memory. Which means it needs a shadow...
-    uptr GapShadowBeg = RoundDownTo(MEM_TO_SHADOW(addr), GetPageSizeCached());
-    uptr GapShadowEnd =
-        RoundUpTo(MEM_TO_SHADOW(addr + size), GetPageSizeCached()) - 1;
-    if (Verbosity())
-      Printf("protect_shadow_gap=0:"
-             " not protecting shadow gap, allocating gap's shadow\n"
-             "|| `[%p, %p]` || ShadowGap's shadow ||\n", GapShadowBeg,
-             GapShadowEnd);
-    ReserveShadowMemoryRange(GapShadowBeg, GapShadowEnd,
-                             "unprotected gap shadow");
-    return;
+void PrintAddressSpaceLayout() {
+  if (kHighMemBeg) {
+    Printf("|| `[%p, %p]` || HighMem    ||\n",
+           (void*)kHighMemBeg, (void*)kHighMemEnd);
+    Printf("|| `[%p, %p]` || HighShadow ||\n",
+           (void*)kHighShadowBeg, (void*)kHighShadowEnd);
   }
-  void *res = MmapFixedNoAccess(addr, size, "shadow gap");
-  if (addr == (uptr)res)
-    return;
-  // A few pages at the start of the address space can not be protected.
-  // But we really want to protect as much as possible, to prevent this memory
-  // being returned as a result of a non-FIXED mmap().
-  if (addr == kZeroBaseShadowStart) {
-    uptr step = GetMmapGranularity();
-    while (size > step && addr < kZeroBaseMaxShadowStart) {
-      addr += step;
-      size -= step;
-      void *res = MmapFixedNoAccess(addr, size, "shadow gap");
-      if (addr == (uptr)res)
-        return;
-    }
-  }
-
-  Report("ERROR: Failed to protect the shadow gap. "
-         "ASan cannot proceed correctly. ABORTING.\n");
-  DumpProcessMap();
-  Die();
-}
-
-static void PrintAddressSpaceLayout() {
-  Printf("|| `[%p, %p]` || HighMem    ||\n",
-         (void*)kHighMemBeg, (void*)kHighMemEnd);
-  Printf("|| `[%p, %p]` || HighShadow ||\n",
-         (void*)kHighShadowBeg, (void*)kHighShadowEnd);
   if (kMidMemBeg) {
     Printf("|| `[%p, %p]` || ShadowGap3 ||\n",
            (void*)kShadowGap3Beg, (void*)kShadowGap3End);
@@ -396,11 +351,14 @@ static void PrintAddressSpaceLayout() {
     Printf("|| `[%p, %p]` || LowMem     ||\n",
            (void*)kLowMemBeg, (void*)kLowMemEnd);
   }
-  Printf("MemToShadow(shadow): %p %p %p %p",
+  Printf("MemToShadow(shadow): %p %p",
          (void*)MEM_TO_SHADOW(kLowShadowBeg),
-         (void*)MEM_TO_SHADOW(kLowShadowEnd),
-         (void*)MEM_TO_SHADOW(kHighShadowBeg),
-         (void*)MEM_TO_SHADOW(kHighShadowEnd));
+         (void*)MEM_TO_SHADOW(kLowShadowEnd));
+  if (kHighMemBeg) {
+    Printf(" %p %p",
+           (void*)MEM_TO_SHADOW(kHighShadowBeg),
+           (void*)MEM_TO_SHADOW(kHighShadowEnd));
+  }
   if (kMidMemBeg) {
     Printf(" %p %p",
            (void*)MEM_TO_SHADOW(kMidShadowBeg),
@@ -410,6 +368,8 @@ static void PrintAddressSpaceLayout() {
   Printf("redzone=%zu\n", (uptr)flags()->redzone);
   Printf("max_redzone=%zu\n", (uptr)flags()->max_redzone);
   Printf("quarantine_size_mb=%zuM\n", (uptr)flags()->quarantine_size_mb);
+  Printf("thread_local_quarantine_size_kb=%zuK\n",
+         (uptr)flags()->thread_local_quarantine_size_kb);
   Printf("malloc_context_size=%zu\n",
          (uptr)common_flags()->malloc_context_size);
 
@@ -430,6 +390,7 @@ static void AsanInitInternal() {
   asan_init_is_running = true;
 
   CacheBinaryName();
+  CheckASLR();
 
   // Initialize flags. This must be done early, because most of the
   // initialization steps look at flags().
@@ -463,6 +424,7 @@ static void AsanInitInternal() {
   MaybeReexec();
 
   // Setup internal allocator callback.
+  SetLowLevelAllocateMinAlignment(SHADOW_GRANULARITY);
   SetLowLevelAllocateCallback(OnLowLevelAllocate);
 
   InitializeAsanInterceptors();
@@ -474,78 +436,9 @@ static void AsanInitInternal() {
 
   ReplaceSystemMalloc();
 
-  // Set the shadow memory address to uninitialized.
-  __asan_shadow_memory_dynamic_address = kDefaultShadowSentinel;
-
-  uptr shadow_start = kLowShadowBeg;
-  // Detect if a dynamic shadow address must used and find a available location
-  // when necessary. When dynamic address is used, the macro |kLowShadowBeg|
-  // expands to |__asan_shadow_memory_dynamic_address| which is
-  // |kDefaultShadowSentinel|.
-  if (shadow_start == kDefaultShadowSentinel) {
-    __asan_shadow_memory_dynamic_address = 0;
-    CHECK_EQ(0, kLowShadowBeg);
-
-    uptr granularity = GetMmapGranularity();
-    uptr alignment = 8 * granularity;
-    uptr left_padding = granularity;
-    uptr space_size = kHighShadowEnd + left_padding;
-
-    shadow_start = FindAvailableMemoryRange(space_size, alignment, granularity);
-    CHECK_NE((uptr)0, shadow_start);
-    CHECK(IsAligned(shadow_start, alignment));
-  }
-  // Update the shadow memory address (potentially) used by instrumentation.
-  __asan_shadow_memory_dynamic_address = shadow_start;
-
-  if (kLowShadowBeg)
-    shadow_start -= GetMmapGranularity();
-  bool full_shadow_is_available =
-      MemoryRangeIsAvailable(shadow_start, kHighShadowEnd);
-
-#if SANITIZER_LINUX && defined(__x86_64__) && defined(_LP64) &&                \
-    !ASAN_FIXED_MAPPING
-  if (!full_shadow_is_available) {
-    kMidMemBeg = kLowMemEnd < 0x3000000000ULL ? 0x3000000000ULL : 0;
-    kMidMemEnd = kLowMemEnd < 0x3000000000ULL ? 0x4fffffffffULL : 0;
-  }
-#endif
-
-  if (Verbosity()) PrintAddressSpaceLayout();
-
   DisableCoreDumperIfNecessary();
 
-  if (full_shadow_is_available) {
-    // mmap the low shadow plus at least one page at the left.
-    if (kLowShadowBeg)
-      ReserveShadowMemoryRange(shadow_start, kLowShadowEnd, "low shadow");
-    // mmap the high shadow.
-    ReserveShadowMemoryRange(kHighShadowBeg, kHighShadowEnd, "high shadow");
-    // protect the gap.
-    ProtectGap(kShadowGapBeg, kShadowGapEnd - kShadowGapBeg + 1);
-    CHECK_EQ(kShadowGapEnd, kHighShadowBeg - 1);
-  } else if (kMidMemBeg &&
-      MemoryRangeIsAvailable(shadow_start, kMidMemBeg - 1) &&
-      MemoryRangeIsAvailable(kMidMemEnd + 1, kHighShadowEnd)) {
-    CHECK(kLowShadowBeg != kLowShadowEnd);
-    // mmap the low shadow plus at least one page at the left.
-    ReserveShadowMemoryRange(shadow_start, kLowShadowEnd, "low shadow");
-    // mmap the mid shadow.
-    ReserveShadowMemoryRange(kMidShadowBeg, kMidShadowEnd, "mid shadow");
-    // mmap the high shadow.
-    ReserveShadowMemoryRange(kHighShadowBeg, kHighShadowEnd, "high shadow");
-    // protect the gaps.
-    ProtectGap(kShadowGapBeg, kShadowGapEnd - kShadowGapBeg + 1);
-    ProtectGap(kShadowGap2Beg, kShadowGap2End - kShadowGap2Beg + 1);
-    ProtectGap(kShadowGap3Beg, kShadowGap3End - kShadowGap3Beg + 1);
-  } else {
-    Report("Shadow memory range interleaves with an existing memory mapping. "
-           "ASan cannot proceed correctly. ABORTING.\n");
-    Report("ASan shadow was supposed to be located in the [%p-%p] range.\n",
-           shadow_start, kHighShadowEnd);
-    DumpProcessMap();
-    Die();
-  }
+  InitializeShadowMemory();
 
   AsanTSDInit(PlatformTSDDtor);
   InstallDeadlySignalHandlers(AsanOnDeadlySignal);
@@ -576,20 +469,18 @@ static void AsanInitInternal() {
   InitTlsSize();
 
   // Create main thread.
-  AsanThread *main_thread = AsanThread::Create(
-      /* start_routine */ nullptr, /* arg */ nullptr, /* parent_tid */ 0,
-      /* stack */ nullptr, /* detached */ true);
+  AsanThread *main_thread = CreateMainThread();
   CHECK_EQ(0, main_thread->tid());
-  SetCurrentThread(main_thread);
-  main_thread->ThreadStart(internal_getpid(),
-                           /* signal_thread_is_registered */ nullptr);
   force_interface_symbols();  // no-op.
   SanitizerInitializeUnwinder();
 
   if (CAN_SANITIZE_LEAKS) {
     __lsan::InitCommonLsan();
     if (common_flags()->detect_leaks && common_flags()->leak_check_at_exit) {
-      Atexit(__lsan::DoLeakCheck);
+      if (flags()->halt_on_error)
+        Atexit(__lsan::DoLeakCheck);
+      else
+        Atexit(__lsan::DoRecoverableLeakCheckVoid);
     }
   }
 
@@ -609,6 +500,11 @@ static void AsanInitInternal() {
   }
 
   VReport(1, "AddressSanitizer Init done\n");
+
+  if (flags()->sleep_after_init) {
+    Report("Sleeping for %d second(s)\n", flags()->sleep_after_init);
+    SleepForSeconds(flags()->sleep_after_init);
+  }
 }
 
 // Initialize as requested from some part of ASan runtime library (interceptors,
@@ -647,7 +543,11 @@ void NOINLINE __asan_handle_no_return() {
   if (curr_thread) {
     top = curr_thread->stack_top();
     bottom = ((uptr)&local_stack - PageSize) & ~(PageSize - 1);
+  } else if (SANITIZER_RTEMS) {
+    // Give up On RTEMS.
+    return;
   } else {
+    CHECK(!SANITIZER_FUCHSIA);
     // If we haven't seen this thread, try asking the OS for stack bounds.
     uptr tls_addr, tls_size, stack_size;
     GetThreadStackAndTls(/*main=*/false, &bottom, &stack_size, &tls_addr,

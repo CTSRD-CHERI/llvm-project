@@ -40,6 +40,7 @@ public:
   Symtab(ObjectFile *objfile);
   ~Symtab();
 
+  void PreloadSymbols();
   void Reserve(size_t count);
   Symbol *Resize(size_t count);
   uint32_t AddSymbol(const Symbol &symbol);
@@ -195,6 +196,15 @@ private:
 
   void SymbolIndicesToSymbolContextList(std::vector<uint32_t> &symbol_indexes,
                                         SymbolContextList &sc_list);
+
+  void RegisterMangledNameEntry(
+      NameToIndexMap::Entry &entry, std::set<const char *> &class_contexts,
+      std::vector<std::pair<NameToIndexMap::Entry, const char *>> &backlog,
+      RichManglingContext &rmc);
+
+  void RegisterBacklogEntry(const NameToIndexMap::Entry &entry,
+                            const char *decl_context,
+                            const std::set<const char *> &class_contexts);
 
   DISALLOW_COPY_AND_ASSIGN(Symtab);
 };

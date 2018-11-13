@@ -1,7 +1,7 @@
-; RUN: opt %loadPolly -polly-scops -analyze -polly-allow-modref-calls \
+; RUN: opt %loadPolly -polly-stmt-granularity=bb -polly-scops -analyze -polly-allow-modref-calls \
 ; RUN: -polly-invariant-load-hoisting=true \
 ; RUN: < %s | FileCheck %s
-; RUN: opt %loadPolly -polly-scops -polly-allow-nonaffine -analyze \
+; RUN: opt %loadPolly -polly-stmt-granularity=bb -polly-scops -polly-allow-nonaffine -analyze \
 ; RUN: -polly-invariant-load-hoisting=true \
 ; RUN: -polly-allow-modref-calls < %s | FileCheck %s --check-prefix=NONAFFINE
 
@@ -25,13 +25,13 @@
 ; CHECK-NEXT:    p0: %tmp14
 ; CHECK-NEXT:    p1: {0,+,(0 smax %tmp)}<%bb12>
 ; CHECK-NEXT:    Arrays {
-; CHECK-NEXT:        i64 MemRef_tmp13; // Element size 8
 ; CHECK-NEXT:        i64 MemRef_arg1[*]; // Element size 8
+; CHECK-NEXT:        i64 MemRef_tmp13; // Element size 8
 ; CHECK-NEXT:        double MemRef_arg4[*]; // Element size 8
 ; CHECK-NEXT:    }
 ; CHECK-NEXT:    Arrays (Bounds as pw_affs) {
-; CHECK-NEXT:        i64 MemRef_tmp13; // Element size 8
 ; CHECK-NEXT:        i64 MemRef_arg1[*]; // Element size 8
+; CHECK-NEXT:        i64 MemRef_tmp13; // Element size 8
 ; CHECK-NEXT:        double MemRef_arg4[*]; // Element size 8
 ; CHECK-NEXT:    }
 ; CHECK-NEXT:    Alias Groups (0):
@@ -74,19 +74,19 @@
 ; NONAFFINE-NEXT:    Assumed Context:
 ; NONAFFINE-NEXT:    [tmp9, tmp14] -> {  :  }
 ; NONAFFINE-NEXT:    Invalid Context:
-; NONAFFINE-NEXT:    [tmp9, tmp14] -> {  : 1 = 0 }
+; NONAFFINE-NEXT:    [tmp9, tmp14] -> {  : false }
 ; NONAFFINE-NEXT:    p0: %tmp9
 ; NONAFFINE-NEXT:    p1: %tmp14
 ; NONAFFINE-NEXT:    Arrays {
-; NONAFFINE-NEXT:        i64 MemRef_arg1[*]; // Element size 8
 ; NONAFFINE-NEXT:        i64 MemRef_arg[*]; // Element size 8
+; NONAFFINE-NEXT:        i64 MemRef_arg1[*]; // Element size 8
 ; NONAFFINE-NEXT:        i64 MemRef_tmp7; // Element size 8
 ; NONAFFINE-NEXT:        i64 MemRef_tmp8; // Element size 8
 ; NONAFFINE-NEXT:        double MemRef_arg4[*]; // Element size 8
 ; NONAFFINE-NEXT:    }
 ; NONAFFINE-NEXT:    Arrays (Bounds as pw_affs) {
-; NONAFFINE-NEXT:        i64 MemRef_arg1[*]; // Element size 8
 ; NONAFFINE-NEXT:        i64 MemRef_arg[*]; // Element size 8
+; NONAFFINE-NEXT:        i64 MemRef_arg1[*]; // Element size 8
 ; NONAFFINE-NEXT:        i64 MemRef_tmp7; // Element size 8
 ; NONAFFINE-NEXT:        i64 MemRef_tmp8; // Element size 8
 ; NONAFFINE-NEXT:        double MemRef_arg4[*]; // Element size 8
@@ -113,11 +113,11 @@
 ; NONAFFINE-NEXT:            ReadAccess :=	[Reduction Type: NONE] [Scalar: 1]
 ; NONAFFINE-NEXT:                [tmp9, tmp14] -> { Stmt_bb17[i0, i1] -> MemRef_tmp8[] };
 ; NONAFFINE-NEXT:            MayWriteAccess :=	[Reduction Type: NONE] [Scalar: 0]
-; NONAFFINE-NEXT:                [tmp9, tmp14] -> { Stmt_bb17[i0, i1] -> MemRef_arg4[o0] : -1152921504606846976 <= o0 <= 1152921504606846975 };
-; NONAFFINE-NEXT:            ReadAccess :=	[Reduction Type: NONE] [Scalar: 0]
-; NONAFFINE-NEXT:                [tmp9, tmp14] -> { Stmt_bb17[i0, i1] -> MemRef_arg1[o0] };
+; NONAFFINE-NEXT:                [tmp9, tmp14] -> { Stmt_bb17[i0, i1] -> MemRef_arg4[o0] };
 ; NONAFFINE-NEXT:            ReadAccess :=	[Reduction Type: NONE] [Scalar: 0]
 ; NONAFFINE-NEXT:                [tmp9, tmp14] -> { Stmt_bb17[i0, i1] -> MemRef_arg[o0] };
+; NONAFFINE-NEXT:            ReadAccess :=	[Reduction Type: NONE] [Scalar: 0]
+; NONAFFINE-NEXT:                [tmp9, tmp14] -> { Stmt_bb17[i0, i1] -> MemRef_arg1[o0] };
 ; NONAFFINE-NEXT:            ReadAccess :=	[Reduction Type: NONE] [Scalar: 0]
 ; NONAFFINE-NEXT:                [tmp9, tmp14] -> { Stmt_bb17[i0, i1] -> MemRef_arg4[o0] };
 

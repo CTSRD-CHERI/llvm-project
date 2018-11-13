@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -Wunused-variable -analyze -analyzer-checker=core,deadcode.DeadStores -fblocks -verify -Wno-unreachable-code -analyzer-opt-analyze-nested-blocks %s
-// RUN: %clang_cc1 -Wunused-variable -analyze -analyzer-checker=core,deadcode.DeadStores -analyzer-store=region -analyzer-constraints=range -fblocks -verify -Wno-unreachable-code -analyzer-opt-analyze-nested-blocks %s
+// RUN: %clang_analyze_cc1 -Wunused-variable -analyzer-checker=core,deadcode.DeadStores -fblocks -verify -Wno-unreachable-code -analyzer-opt-analyze-nested-blocks %s
+// RUN: %clang_analyze_cc1 -Wunused-variable -analyzer-checker=core,deadcode.DeadStores -analyzer-store=region -fblocks -verify -Wno-unreachable-code -analyzer-opt-analyze-nested-blocks %s
 
 void f1() {
   int k, y; // expected-warning{{unused variable 'k'}} expected-warning{{unused variable 'y'}}
@@ -525,7 +525,7 @@ void rdar8405222() {
     rdar8405222_aux(i);
 }
 
-// Look through chains of assignements, e.g.: int x = y = 0, when employing
+// Look through chains of assignments, e.g.: int x = y = 0, when employing
 // silencing heuristics.
 int radar11185138_foo() {
   int x, y;

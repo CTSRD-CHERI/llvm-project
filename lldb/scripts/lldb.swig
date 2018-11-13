@@ -31,8 +31,30 @@ o SBLineEntry: Specifies an association with a contiguous range of instructions
       and a source file location. SBCompileUnit contains SBLineEntry(s)."
 %enddef
 
+/*
+Since version 3.0.9, swig's logic for importing the native module has changed in
+a way that is incompatible with our usage of the python module as __init__.py
+(See swig bug #769).  Fortunately, since version 3.0.11, swig provides a way for
+us to override the module import logic to suit our needs. This does that.
+
+Older swig versions will simply ignore this setting.
+*/
+%define MODULEIMPORT
+"try:
+    # Try a relative import first
+    from . import $module
+except ImportError:
+    # Maybe absolute import will work (if we're being loaded from lldb, it
+    # should).
+    import $module"
+%enddef
+// These versions will not generate working python modules, so error out early.
+#if SWIG_VERSION >= 0x030009 && SWIG_VERSION < 0x030011
+#error Swig versions 3.0.9 and 3.0.10 are incompatible with lldb.
+#endif
+
 // The name of the module to be created.
-%module(docstring=DOCSTRING) lldb
+%module(docstring=DOCSTRING, moduleimport=MODULEIMPORT) lldb
 
 // Parameter types will be used in the autodoc string.
 %feature("autodoc", "1");
@@ -60,6 +82,7 @@ import six
 #include "lldb/API/SBBlock.h"
 #include "lldb/API/SBBreakpoint.h"
 #include "lldb/API/SBBreakpointLocation.h"
+#include "lldb/API/SBBreakpointName.h"
 #include "lldb/API/SBBroadcaster.h"
 #include "lldb/API/SBCommandInterpreter.h"
 #include "lldb/API/SBCommandReturnObject.h"
@@ -89,6 +112,7 @@ import six
 #include "lldb/API/SBModuleSpec.h"
 #include "lldb/API/SBPlatform.h"
 #include "lldb/API/SBProcess.h"
+#include "lldb/API/SBProcessInfo.h"
 #include "lldb/API/SBQueue.h"
 #include "lldb/API/SBQueueItem.h"
 #include "lldb/API/SBSection.h"
@@ -103,6 +127,8 @@ import six
 #include "lldb/API/SBThread.h"
 #include "lldb/API/SBThreadCollection.h"
 #include "lldb/API/SBThreadPlan.h"
+#include "lldb/API/SBTrace.h"
+#include "lldb/API/SBTraceOptions.h"
 #include "lldb/API/SBType.h"
 #include "lldb/API/SBTypeCategory.h"
 #include "lldb/API/SBTypeEnumMember.h"
@@ -143,6 +169,7 @@ import six
 %include "./interface/SBBlock.i"
 %include "./interface/SBBreakpoint.i"
 %include "./interface/SBBreakpointLocation.i"
+%include "./interface/SBBreakpointName.i"
 %include "./interface/SBBroadcaster.i"
 %include "./interface/SBCommandInterpreter.i"
 %include "./interface/SBCommandReturnObject.i"
@@ -172,6 +199,7 @@ import six
 %include "./interface/SBModuleSpec.i"
 %include "./interface/SBPlatform.i"
 %include "./interface/SBProcess.i"
+%include "./interface/SBProcessInfo.i"
 %include "./interface/SBQueue.i"
 %include "./interface/SBQueueItem.i"
 %include "./interface/SBSection.i"
@@ -186,6 +214,8 @@ import six
 %include "./interface/SBThread.i"
 %include "./interface/SBThreadCollection.i"
 %include "./interface/SBThreadPlan.i"
+%include "./interface/SBTrace.i"
+%include "./interface/SBTraceOptions.i"
 %include "./interface/SBType.i"
 %include "./interface/SBTypeCategory.i"
 %include "./interface/SBTypeEnumMember.i"

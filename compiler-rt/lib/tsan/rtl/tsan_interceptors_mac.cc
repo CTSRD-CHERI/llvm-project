@@ -21,7 +21,10 @@
 #include "tsan_interface_ann.h"
 
 #include <libkern/OSAtomic.h>
+
+#if defined(__has_include) && __has_include(<xpc/xpc.h>)
 #include <xpc/xpc.h>
+#endif  // #if defined(__has_include) && __has_include(<xpc/xpc.h>)
 
 typedef long long_t;  // NOLINT
 
@@ -97,7 +100,7 @@ OSATOMIC_INTERCEPTORS_BITWISE(OSAtomicXor, fetch_xor,
   TSAN_INTERCEPTOR(bool, f, t old_value, t new_value, t volatile *ptr) {    \
     SCOPED_TSAN_INTERCEPTOR(f, old_value, new_value, ptr);                  \
     return tsan_atomic_f##_compare_exchange_strong(                         \
-        (tsan_t *)ptr, (tsan_t *)&old_value, (tsan_t)new_value,             \
+        (volatile tsan_t *)ptr, (tsan_t *)&old_value, (tsan_t)new_value,    \
         kMacOrderNonBarrier, kMacOrderNonBarrier);                          \
   }                                                                         \
                                                                             \
@@ -105,7 +108,7 @@ OSATOMIC_INTERCEPTORS_BITWISE(OSAtomicXor, fetch_xor,
                    t volatile *ptr) {                                       \
     SCOPED_TSAN_INTERCEPTOR(f##Barrier, old_value, new_value, ptr);         \
     return tsan_atomic_f##_compare_exchange_strong(                         \
-        (tsan_t *)ptr, (tsan_t *)&old_value, (tsan_t)new_value,             \
+        (volatile tsan_t *)ptr, (tsan_t *)&old_value, (tsan_t)new_value,    \
         kMacOrderBarrier, kMacOrderNonBarrier);                             \
   }
 
@@ -119,14 +122,14 @@ OSATOMIC_INTERCEPTORS_CAS(OSAtomicCompareAndSwap32, __tsan_atomic32, a32,
 OSATOMIC_INTERCEPTORS_CAS(OSAtomicCompareAndSwap64, __tsan_atomic64, a64,
                           int64_t)
 
-#define OSATOMIC_INTERCEPTOR_BITOP(f, op, clear, mo)          \
-  TSAN_INTERCEPTOR(bool, f, uint32_t n, volatile void *ptr) { \
-    SCOPED_TSAN_INTERCEPTOR(f, n, ptr);                       \
-    char *byte_ptr = ((char *)ptr) + (n >> 3);                \
-    char bit = 0x80u >> (n & 7);                              \
-    char mask = clear ? ~bit : bit;                           \
-    char orig_byte = op((a8 *)byte_ptr, mask, mo);            \
-    return orig_byte & bit;                                   \
+#define OSATOMIC_INTERCEPTOR_BITOP(f, op, clear, mo)             \
+  TSAN_INTERCEPTOR(bool, f, uint32_t n, volatile void *ptr) {    \
+    SCOPED_TSAN_INTERCEPTOR(f, n, ptr);                          \
+    volatile char *byte_ptr = ((volatile char *)ptr) + (n >> 3); \
+    char bit = 0x80u >> (n & 7);                                 \
+    char mask = clear ? ~bit : bit;                              \
+    char orig_byte = op((volatile a8 *)byte_ptr, mask, mo);      \
+    return orig_byte & bit;                                      \
   }
 
 #define OSATOMIC_INTERCEPTORS_BITOP(f, op, clear)               \
@@ -235,6 +238,8 @@ TSAN_INTERCEPTOR(void, os_lock_unlock, void *lock) {
   REAL(os_lock_unlock)(lock);
 }
 
+#if defined(__has_include) && __has_include(<xpc/xpc.h>)
+
 TSAN_INTERCEPTOR(void, xpc_connection_set_event_handler,
                  xpc_connection_t connection, xpc_handler_t handler) {
   SCOPED_TSAN_INTERCEPTOR(xpc_connection_set_event_handler, connection,
@@ -281,6 +286,51 @@ TSAN_INTERCEPTOR(void, xpc_connection_send_message_with_reply,
   (connection, message, replyq, new_handler);
 }
 
+TSAN_INTERCEPTOR(void, xpc_connection_cancel, xpc_connection_t connection) {
+  SCOPED_TSAN_INTERCEPTOR(xpc_connection_cancel, connection);
+  Release(thr, pc, (uptr)connection);
+  REAL(xpc_connection_cancel)(connection);
+}
+
+#endif  // #if defined(__has_include) && __has_include(<xpc/xpc.h>)
+
+// Is the Obj-C object a tagged pointer (i.e. isn't really a valid pointer and
+// contains data in the pointers bits instead)?
+static bool IsTaggedObjCPointer(void *obj) {
+  const uptr kPossibleTaggedBits = 0x8000000000000001ull;
+  return ((uptr)obj & kPossibleTaggedBits) != 0;
+}
+
+// Return an address on which we can synchronize (Acquire and Release) for a
+// Obj-C tagged pointer (which is not a valid pointer). Ideally should be a
+// derived address from 'obj', but for now just return the same global address.
+// TODO(kubamracek): Return different address for different pointers.
+static uptr SyncAddressForTaggedPointer(void *obj) {
+  (void)obj;
+  static u64 addr;
+  return (uptr)&addr;
+}
+
+// Address on which we can synchronize for an Objective-C object. Supports
+// tagged pointers.
+static uptr SyncAddressForObjCObject(void *obj) {
+  if (IsTaggedObjCPointer(obj)) return SyncAddressForTaggedPointer(obj);
+  return (uptr)obj;
+}
+
+TSAN_INTERCEPTOR(int, objc_sync_enter, void *obj) {
+  SCOPED_TSAN_INTERCEPTOR(objc_sync_enter, obj);
+  int result = REAL(objc_sync_enter)(obj);
+  if (obj) Acquire(thr, pc, SyncAddressForObjCObject(obj));
+  return result;
+}
+
+TSAN_INTERCEPTOR(int, objc_sync_exit, void *obj) {
+  SCOPED_TSAN_INTERCEPTOR(objc_sync_enter, obj);
+  if (obj) Release(thr, pc, SyncAddressForObjCObject(obj));
+  return REAL(objc_sync_exit)(obj);
+}
+
 // On macOS, libc++ is always linked dynamically, so intercepting works the
 // usual way.
 #define STDCXX_INTERCEPTOR TSAN_INTERCEPTOR
@@ -297,18 +347,20 @@ struct fake_shared_weak_count {
 };
 }  // namespace
 
-// This adds a libc++ interceptor for:
+// The following code adds libc++ interceptors for:
 //     void __shared_weak_count::__release_shared() _NOEXCEPT;
+//     bool __shared_count::__release_shared() _NOEXCEPT;
 // Shared and weak pointers in C++ maintain reference counts via atomics in
 // libc++.dylib, which are TSan-invisible, and this leads to false positives in
-// destructor code.  This interceptor re-implements the whole function so that
+// destructor code. These interceptors re-implements the whole functions so that
 // the mo_acq_rel semantics of the atomic decrement are visible.
 //
-// Unfortunately, this interceptor cannot simply Acquire/Release some sync
+// Unfortunately, the interceptors cannot simply Acquire/Release some sync
 // object and call the original function, because it would have a race between
 // the sync and the destruction of the object.  Calling both under a lock will
 // not work because the destructor can invoke this interceptor again (and even
 // in a different thread, so recursive locks don't help).
+
 STDCXX_INTERCEPTOR(void, _ZNSt3__119__shared_weak_count16__release_sharedEv,
                    fake_shared_weak_count *o) {
   if (!flags()->shared_ptr_interceptor)
@@ -325,6 +377,20 @@ STDCXX_INTERCEPTOR(void, _ZNSt3__119__shared_weak_count16__release_sharedEv,
       o->on_zero_shared_weak();
     }
   }
+}
+
+STDCXX_INTERCEPTOR(bool, _ZNSt3__114__shared_count16__release_sharedEv,
+                   fake_shared_weak_count *o) {
+  if (!flags()->shared_ptr_interceptor)
+    return REAL(_ZNSt3__114__shared_count16__release_sharedEv)(o);
+
+  SCOPED_TSAN_INTERCEPTOR(_ZNSt3__114__shared_count16__release_sharedEv, o);
+  if (__tsan_atomic64_fetch_add(&o->shared_owners, -1, mo_release) == 0) {
+    Acquire(thr, pc, (uptr)&o->shared_owners);
+    o->on_zero_shared();
+    return true;
+  }
+  return false;
 }
 
 namespace {

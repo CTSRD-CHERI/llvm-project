@@ -1,4 +1,4 @@
-//===----- TargetFrameLoweringImpl.cpp - Implement target frame interface --==//
+//===- TargetFrameLoweringImpl.cpp - Implement target frame interface ------==//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,24 +14,33 @@
 #include "llvm/ADT/BitVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
-#include "llvm/CodeGen/MachineModuleInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/IR/Attributes.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Function.h"
-#include "llvm/Target/TargetFrameLowering.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
-#include <cstdlib>
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/Support/Compiler.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetOptions.h"
+
 using namespace llvm;
 
-TargetFrameLowering::~TargetFrameLowering() {
-}
+TargetFrameLowering::~TargetFrameLowering() = default;
 
 /// The default implementation just looks at attribute "no-frame-pointer-elim".
 bool TargetFrameLowering::noFramePointerElim(const MachineFunction &MF) const {
-  auto Attr = MF.getFunction()->getFnAttribute("no-frame-pointer-elim");
+  auto Attr = MF.getFunction().getFnAttribute("no-frame-pointer-elim");
   return Attr.getValueAsString() == "true";
+}
+
+bool TargetFrameLowering::enableCalleeSaveSkip(const MachineFunction &MF) const {
+  assert(MF.getFunction().hasFnAttribute(Attribute::NoReturn) &&
+         MF.getFunction().hasFnAttribute(Attribute::NoUnwind) &&
+         !MF.getFunction().hasFnAttribute(Attribute::UWTable));
+  return false;
 }
 
 /// Returns the displacement from the frame register to the stack
@@ -73,18 +82,31 @@ void TargetFrameLowering::determineCalleeSaves(MachineFunction &MF,
     return;
 
   // Get the callee saved register list...
-  const MCPhysReg *CSRegs = TRI.getCalleeSavedRegs(&MF);
+  const MCPhysReg *CSRegs = MF.getRegInfo().getCalleeSavedRegs();
 
   // Early exit if there are no callee saved registers.
   if (!CSRegs || CSRegs[0] == 0)
     return;
 
   // In Naked functions we aren't going to save any registers.
-  if (MF.getFunction()->hasFnAttribute(Attribute::Naked))
+  if (MF.getFunction().hasFnAttribute(Attribute::Naked))
+    return;
+
+  // Noreturn+nounwind functions never restore CSR, so no saves are needed.
+  // Purely noreturn functions may still return through throws, so those must
+  // save CSR for caller exception handlers.
+  //
+  // If the function uses longjmp to break out of its current path of
+  // execution we do not need the CSR spills either: setjmp stores all CSRs
+  // it was called with into the jmp_buf, which longjmp then restores.
+  if (MF.getFunction().hasFnAttribute(Attribute::NoReturn) &&
+        MF.getFunction().hasFnAttribute(Attribute::NoUnwind) &&
+        !MF.getFunction().hasFnAttribute(Attribute::UWTable) &&
+        enableCalleeSaveSkip(MF))
     return;
 
   // Functions which call __builtin_unwind_init get all their registers saved.
-  bool CallsUnwindInit = MF.getMMI().callsUnwindInit();
+  bool CallsUnwindInit = MF.callsUnwindInit();
   const MachineRegisterInfo &MRI = MF.getRegInfo();
   for (unsigned i = 0; CSRegs[i]; ++i) {
     unsigned Reg = CSRegs[i];
@@ -97,8 +119,17 @@ unsigned TargetFrameLowering::getStackAlignmentSkew(
     const MachineFunction &MF) const {
   // When HHVM function is called, the stack is skewed as the return address
   // is removed from the stack before we enter the function.
-  if (LLVM_UNLIKELY(MF.getFunction()->getCallingConv() == CallingConv::HHVM))
-    return MF.getTarget().getPointerSize();
+  if (LLVM_UNLIKELY(MF.getFunction().getCallingConv() == CallingConv::HHVM))
+    return MF.getTarget().getAllocaPointerSize();
 
   return 0;
+}
+
+int TargetFrameLowering::getInitialCFAOffset(const MachineFunction &MF) const {
+  llvm_unreachable("getInitialCFAOffset() not implemented!");
+}
+
+unsigned TargetFrameLowering::getInitialCFARegister(const MachineFunction &MF)
+    const {
+  llvm_unreachable("getInitialCFARegister() not implemented!");
 }

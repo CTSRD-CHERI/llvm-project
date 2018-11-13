@@ -15,10 +15,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Analysis/Passes.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/Passes.h"
 #include "llvm/IR/DebugInfo.h"
-#include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
@@ -91,7 +90,8 @@ void ModuleDebugInfoPrinter::print(raw_ostream &O, const Module *M) const {
     O << '\n';
   }
 
-  for (const DIGlobalVariable *GV : Finder.global_variables()) {
+  for (auto GVU : Finder.global_variables()) {
+    const auto *GV = GVU->getVariable();
     O << "Global variable: " << GV->getName();
     printFile(O, GV->getFilename(), GV->getDirectory(), GV->getLine());
     if (!GV->getLinkageName().empty())

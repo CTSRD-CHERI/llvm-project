@@ -232,7 +232,7 @@ RNBRunLoopMode RNBRunLoopLaunchInferior(RNBRemote *remote,
   // were given and hope for the best
   if (!DNBResolveExecutablePath(inferior_argv[0], resolved_path,
                                 sizeof(resolved_path)))
-    ::strncpy(resolved_path, inferior_argv[0], sizeof(resolved_path));
+    ::strlcpy(resolved_path, inferior_argv[0], sizeof(resolved_path));
 
   char launch_err_str[PATH_MAX];
   launch_err_str[0] = '\0';
@@ -676,7 +676,7 @@ static void PortWasBoundCallbackUnixSocket(const void *baton, in_port_t port) {
     }
 
     saddr_un.sun_family = AF_UNIX;
-    ::strncpy(saddr_un.sun_path, unix_socket_name,
+    ::strlcpy(saddr_un.sun_path, unix_socket_name,
               sizeof(saddr_un.sun_path) - 1);
     saddr_un.sun_path[sizeof(saddr_un.sun_path) - 1] = '\0';
     saddr_un.sun_len = SUN_LEN(&saddr_un);
@@ -876,8 +876,8 @@ static struct option g_long_options[] = {
      'u'}, // If we need to handshake with our parent process, an option will be
            // passed down that specifies a unix socket name to use
     {"fd", required_argument, NULL,
-     'FDSC'}, // A file descriptor was passed to this process when spawned that
-              // is already open and ready for communication
+     '2'}, // A file descriptor was passed to this process when spawned that
+           // is already open and ready for communication
     {"named-pipe", required_argument, NULL, 'P'},
     {"reverse-connect", no_argument, NULL, 'R'},
     {"env", required_argument, NULL,
@@ -1020,6 +1020,7 @@ int main(int argc, char *argv[]) {
   optind = 1;
 #endif
 
+  bool forward_env = false;
   while ((ch = getopt_long_only(argc, argv, short_options, g_long_options,
                                 &long_option_index)) != -1) {
     DNBLogDebug("option: ch == %c (0x%2.2x) --%s%c%s\n", ch, (uint8_t)ch,
@@ -1251,17 +1252,10 @@ int main(int argc, char *argv[]) {
       break;
 
     case 'F':
-      // Pass the current environment down to the process that gets launched
-      {
-        char **host_env = *_NSGetEnviron();
-        char *env_entry;
-        size_t i;
-        for (i = 0; (env_entry = host_env[i]) != NULL; ++i)
-          remote->Context().PushEnvironment(env_entry);
-      }
+      forward_env = true;
       break;
 
-    case 'FDSC':
+    case '2':
       // File descriptor passed to this process during fork/exec and is already
       // open and ready for communication.
       communication_fd = atoi(optarg);
@@ -1345,10 +1339,18 @@ int main(int argc, char *argv[]) {
       show_usage_and_exit(1);
     }
     // accept 'localhost:' prefix on port number
-
-    int items_scanned = ::sscanf(argv[0], "%[^:]:%i", str, &port);
-    if (items_scanned == 2) {
-      host = str;
+    std::string host_specifier = argv[0];
+    auto colon_location = host_specifier.rfind(':');
+    if (colon_location != std::string::npos) {
+      host = host_specifier.substr(0, colon_location);
+      std::string port_str =
+          host_specifier.substr(colon_location + 1, std::string::npos);
+      char *end_ptr;
+      port = strtoul(port_str.c_str(), &end_ptr, 0);
+      if (end_ptr < port_str.c_str() + port_str.size())
+        show_usage_and_exit(2);
+      if (host.front() == '[' && host.back() == ']')
+        host = host.substr(1, host.size() - 2);
       DNBLogDebug("host = '%s'  port = %i", host.c_str(), port);
     } else {
       // No hostname means "localhost"
@@ -1358,7 +1360,7 @@ int main(int argc, char *argv[]) {
         DNBLogDebug("host = '%s'  port = %i", host.c_str(), port);
       } else if (argv[0][0] == '/') {
         port = INT32_MAX;
-        strncpy(str, argv[0], sizeof(str));
+        strlcpy(str, argv[0], sizeof(str));
       } else {
         show_usage_and_exit(2);
       }
@@ -1411,6 +1413,18 @@ int main(int argc, char *argv[]) {
 
   if (start_mode == eRNBRunLoopModeExit)
     return -1;
+
+  if (forward_env || start_mode == eRNBRunLoopModeInferiorLaunching) {
+    // Pass the current environment down to the process that gets launched
+    // This happens automatically in the "launching" mode. For the rest, we
+    // only do that if the user explicitly requested this via --forward-env
+    // argument.
+    char **host_env = *_NSGetEnviron();
+    char *env_entry;
+    size_t i;
+    for (i = 0; (env_entry = host_env[i]) != NULL; ++i)
+      remote->Context().PushEnvironmentIfNeeded(env_entry);
+  }
 
   RNBRunLoopMode mode = start_mode;
   char err_str[1024] = {'\0'};

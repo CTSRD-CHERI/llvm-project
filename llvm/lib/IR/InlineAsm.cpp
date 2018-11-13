@@ -1,4 +1,4 @@
-//===-- InlineAsm.cpp - Implement the InlineAsm class ---------------------===//
+//===- InlineAsm.cpp - Implement the InlineAsm class ----------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,14 +14,30 @@
 #include "llvm/IR/InlineAsm.h"
 #include "ConstantsContext.h"
 #include "LLVMContextImpl.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Compiler.h"
 #include <algorithm>
+#include <cassert>
 #include <cctype>
+#include <cstddef>
+#include <cstdlib>
+
 using namespace llvm;
 
-// Implement the first virtual method in this class in this file so the
-// InlineAsm vtable is emitted here.
-InlineAsm::~InlineAsm() {
+InlineAsm::InlineAsm(FunctionType *FTy, const std::string &asmString,
+                     const std::string &constraints, bool hasSideEffects,
+                     bool isAlignStack, AsmDialect asmDialect)
+    : Value(PointerType::getUnqual(FTy), Value::InlineAsmVal),
+      AsmString(asmString), Constraints(constraints), FTy(FTy),
+      HasSideEffects(hasSideEffects), IsAlignStack(isAlignStack),
+      Dialect(asmDialect) {
+  // Do various checks on the constraint string and type.
+  assert(Verify(getFunctionType(), constraints) &&
+         "Function type not legal for constraints!");
 }
 
 InlineAsm *InlineAsm::get(FunctionType *FTy, StringRef AsmString,
@@ -33,19 +49,6 @@ InlineAsm *InlineAsm::get(FunctionType *FTy, StringRef AsmString,
   return pImpl->InlineAsms.getOrCreate(PointerType::getUnqual(FTy), Key);
 }
 
-InlineAsm::InlineAsm(FunctionType *FTy, const std::string &asmString,
-                     const std::string &constraints, bool hasSideEffects,
-                     bool isAlignStack, AsmDialect asmDialect)
-    : Value(PointerType::getUnqual(FTy), Value::InlineAsmVal),
-      AsmString(asmString), Constraints(constraints), FTy(FTy),
-      HasSideEffects(hasSideEffects), IsAlignStack(isAlignStack),
-      Dialect(asmDialect) {
-
-  // Do various checks on the constraint string and type.
-  assert(Verify(getFunctionType(), constraints) &&
-         "Function type not legal for constraints!");
-}
-
 void InlineAsm::destroyConstant() {
   getType()->getContext().pImpl->InlineAsms.remove(this);
   delete this;
@@ -53,14 +56,6 @@ void InlineAsm::destroyConstant() {
 
 FunctionType *InlineAsm::getFunctionType() const {
   return FTy;
-}
-    
-///Default constructor.
-InlineAsm::ConstraintInfo::ConstraintInfo() :
-  Type(isInput), isEarlyClobber(false),
-  MatchingInput(-1), isCommutative(false),
-  isIndirect(false), isMultipleAlternative(false),
-  currentAlternativeIndex(0) {
 }
 
 /// Parse - Analyze the specified string (e.g. "==&{eax}") and fill in the
@@ -85,7 +80,7 @@ bool InlineAsm::ConstraintInfo::Parse(StringRef Str,
   isCommutative = false;
   isIndirect = false;
   currentAlternativeIndex = 0;
-  
+
   // Parse prefixes.
   if (*I == '~') {
     Type = isClobber;
@@ -105,7 +100,7 @@ bool InlineAsm::ConstraintInfo::Parse(StringRef Str,
   }
 
   if (I == E) return true;  // Just a prefix, like "==" or "~".
-  
+
   // Parse the modifiers.
   bool DoneWithModifiers = false;
   while (!DoneWithModifiers) {
@@ -129,13 +124,13 @@ bool InlineAsm::ConstraintInfo::Parse(StringRef Str,
     case '*':     // Register preferencing.
       return true;     // Not supported.
     }
-    
+
     if (!DoneWithModifiers) {
       ++I;
       if (I == E) return true;   // Just prefixes and modifiers!
     }
   }
-  
+
   // Parse the various constraints.
   while (I != E) {
     if (*I == '{') {   // Physical register reference.
@@ -155,7 +150,7 @@ bool InlineAsm::ConstraintInfo::Parse(StringRef Str,
       if (N >= ConstraintsSoFar.size() || ConstraintsSoFar[N].Type != isOutput||
           Type != isInput)
         return true;  // Invalid constraint number.
-      
+
       // If Operand N already has a matching input, reject this.  An output
       // can't be constrained to the same value as multiple inputs.
       if (isMultipleAlternative) {
@@ -168,6 +163,7 @@ bool InlineAsm::ConstraintInfo::Parse(StringRef Str,
           return true;
         // Note that operand #n has a matching input.
         scInfo.MatchingInput = ConstraintsSoFar.size();
+        assert(scInfo.MatchingInput >= 0);
       } else {
         if (ConstraintsSoFar[N].hasMatchingInput() &&
             (size_t)ConstraintsSoFar[N].MatchingInput !=
@@ -175,6 +171,7 @@ bool InlineAsm::ConstraintInfo::Parse(StringRef Str,
           return true;
         // Note that operand #n has a matching input.
         ConstraintsSoFar[N].MatchingInput = ConstraintsSoFar.size();
+        assert(ConstraintsSoFar[N].MatchingInput >= 0);
         }
     } else if (*I == '|') {
       multipleAlternativeIndex++;
@@ -210,7 +207,7 @@ void InlineAsm::ConstraintInfo::selectAlternative(unsigned index) {
 InlineAsm::ConstraintInfoVector
 InlineAsm::ParseConstraints(StringRef Constraints) {
   ConstraintInfoVector Result;
-  
+
   // Scan the constraints string.
   for (StringRef::iterator I = Constraints.begin(),
          E = Constraints.end(); I != E; ) {
@@ -226,7 +223,7 @@ InlineAsm::ParseConstraints(StringRef Constraints) {
     }
 
     Result.push_back(Info);
-    
+
     // ConstraintEnd may be either the next comma or the end of the string.  In
     // the former case, we skip the comma.
     I = ConstraintEnd;
@@ -238,7 +235,7 @@ InlineAsm::ParseConstraints(StringRef Constraints) {
       } // don't allow "xyz,"
     }
   }
-  
+
   return Result;
 }
 
@@ -246,15 +243,15 @@ InlineAsm::ParseConstraints(StringRef Constraints) {
 /// specified function type, and otherwise validate the constraint string.
 bool InlineAsm::Verify(FunctionType *Ty, StringRef ConstStr) {
   if (Ty->isVarArg()) return false;
-  
+
   ConstraintInfoVector Constraints = ParseConstraints(ConstStr);
-  
+
   // Error parsing constraints.
   if (Constraints.empty() && !ConstStr.empty()) return false;
-  
+
   unsigned NumOutputs = 0, NumInputs = 0, NumClobbers = 0;
   unsigned NumIndirect = 0;
-  
+
   for (unsigned i = 0, e = Constraints.size(); i != e; ++i) {
     switch (Constraints[i].Type) {
     case InlineAsm::isOutput:
@@ -275,7 +272,7 @@ bool InlineAsm::Verify(FunctionType *Ty, StringRef ConstStr) {
       break;
     }
   }
-  
+
   switch (NumOutputs) {
   case 0:
     if (!Ty->getReturnType()->isVoidTy()) return false;
@@ -288,8 +285,8 @@ bool InlineAsm::Verify(FunctionType *Ty, StringRef ConstStr) {
     if (!STy || STy->getNumElements() != NumOutputs)
       return false;
     break;
-  }      
-  
+  }
+
   if (Ty->getNumParams() != NumInputs) return false;
   return true;
 }

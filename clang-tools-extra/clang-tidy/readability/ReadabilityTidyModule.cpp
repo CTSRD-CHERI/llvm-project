@@ -13,23 +13,30 @@
 #include "AvoidConstParamsInDecls.h"
 #include "BracesAroundStatementsCheck.h"
 #include "ContainerSizeEmptyCheck.h"
+#include "DeleteNullPointerCheck.h"
 #include "DeletedDefaultCheck.h"
 #include "ElseAfterReturnCheck.h"
 #include "FunctionSizeCheck.h"
 #include "IdentifierNamingCheck.h"
-#include "ImplicitBoolCastCheck.h"
+#include "ImplicitBoolConversionCheck.h"
 #include "InconsistentDeclarationParameterNameCheck.h"
+#include "MagicNumbersCheck.h"
+#include "MisleadingIndentationCheck.h"
 #include "MisplacedArrayIndexCheck.h"
 #include "NamedParameterCheck.h"
 #include "NonConstParameterCheck.h"
 #include "RedundantControlFlowCheck.h"
 #include "RedundantDeclarationCheck.h"
+#include "RedundantFunctionPtrDereferenceCheck.h"
 #include "RedundantMemberInitCheck.h"
 #include "RedundantSmartptrGetCheck.h"
 #include "RedundantStringCStrCheck.h"
 #include "RedundantStringInitCheck.h"
 #include "SimplifyBooleanExprCheck.h"
+#include "SimplifySubscriptExprCheck.h"
+#include "StaticAccessedThroughInstanceCheck.h"
 #include "StaticDefinitionInAnonymousNamespaceCheck.h"
+#include "StringCompareCheck.h"
 #include "UniqueptrDeleteReleaseCheck.h"
 
 namespace clang {
@@ -45,6 +52,8 @@ public:
         "readability-braces-around-statements");
     CheckFactories.registerCheck<ContainerSizeEmptyCheck>(
         "readability-container-size-empty");
+    CheckFactories.registerCheck<DeleteNullPointerCheck>(
+        "readability-delete-null-pointer");
     CheckFactories.registerCheck<DeletedDefaultCheck>(
         "readability-deleted-default");
     CheckFactories.registerCheck<ElseAfterReturnCheck>(
@@ -53,16 +62,28 @@ public:
         "readability-function-size");
     CheckFactories.registerCheck<IdentifierNamingCheck>(
         "readability-identifier-naming");
-    CheckFactories.registerCheck<ImplicitBoolCastCheck>(
-        "readability-implicit-bool-cast");
+    CheckFactories.registerCheck<ImplicitBoolConversionCheck>(
+        "readability-implicit-bool-conversion");
     CheckFactories.registerCheck<InconsistentDeclarationParameterNameCheck>(
         "readability-inconsistent-declaration-parameter-name");
+    CheckFactories.registerCheck<MagicNumbersCheck>(
+        "readability-magic-numbers");
+    CheckFactories.registerCheck<MisleadingIndentationCheck>(
+        "readability-misleading-indentation");
     CheckFactories.registerCheck<MisplacedArrayIndexCheck>(
         "readability-misplaced-array-index");
+    CheckFactories.registerCheck<RedundantFunctionPtrDereferenceCheck>(
+        "readability-redundant-function-ptr-dereference");
     CheckFactories.registerCheck<RedundantMemberInitCheck>(
         "readability-redundant-member-init");
+    CheckFactories.registerCheck<SimplifySubscriptExprCheck>(
+        "readability-simplify-subscript-expr");
+    CheckFactories.registerCheck<StaticAccessedThroughInstanceCheck>(
+        "readability-static-accessed-through-instance");
     CheckFactories.registerCheck<StaticDefinitionInAnonymousNamespaceCheck>(
         "readability-static-definition-in-anonymous-namespace");
+    CheckFactories.registerCheck<StringCompareCheck>(
+        "readability-string-compare");
     CheckFactories.registerCheck<readability::NamedParameterCheck>(
         "readability-named-parameter");
     CheckFactories.registerCheck<NonConstParameterCheck>(

@@ -33,7 +33,6 @@ int main()
 {
     {
         typedef std::gamma_distribution<> D;
-        typedef D::param_type P;
         typedef std::mt19937 G;
         G g;
         D d(0.5, 2);
@@ -49,7 +48,7 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (unsigned i = 0; i < u.size(); ++i)
         {
             double dbl = (u[i] - mean);
             double d2 = sqr(dbl);
@@ -73,7 +72,6 @@ int main()
     }
     {
         typedef std::gamma_distribution<> D;
-        typedef D::param_type P;
         typedef std::mt19937 G;
         G g;
         D d(1, .5);
@@ -89,7 +87,7 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (unsigned i = 0; i < u.size(); ++i)
         {
             double dbl = (u[i] - mean);
             double d2 = sqr(dbl);
@@ -113,7 +111,6 @@ int main()
     }
     {
         typedef std::gamma_distribution<> D;
-        typedef D::param_type P;
         typedef std::mt19937 G;
         G g;
         D d(2, 3);
@@ -129,7 +126,7 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (unsigned i = 0; i < u.size(); ++i)
         {
             double dbl = (u[i] - mean);
             double d2 = sqr(dbl);

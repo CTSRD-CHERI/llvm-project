@@ -19,18 +19,20 @@
 #include "lldb/Breakpoint/BreakpointResolver.h"
 #include "lldb/Breakpoint/BreakpointResolverFileLine.h"
 #include "lldb/Core/Address.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/SearchFilter.h"
 #include "lldb/Core/Section.h"
-#include "lldb/Core/Stream.h"
-#include "lldb/Core/StreamString.h"
+#include "lldb/Target/SectionLoadList.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/Function.h"
+#include "lldb/Symbol/Symbol.h"
 #include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/ThreadSpec.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Stream.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -52,7 +54,7 @@ Breakpoint::Breakpoint(Target &target, SearchFilterSP &filter_sp,
                        bool resolve_indirect_symbols)
     : m_being_created(true), m_hardware(hardware), m_target(target),
       m_filter_sp(filter_sp), m_resolver_sp(resolver_sp),
-      m_options_up(new BreakpointOptions()), m_locations(*this),
+      m_options_up(new BreakpointOptions(true)), m_locations(*this),
       m_resolve_indirect_symbols(resolve_indirect_symbols), m_hit_count(0) {
   m_being_created = false;
 }
@@ -126,7 +128,7 @@ StructuredData::ObjectSP Breakpoint::SerializeToStructuredData() {
 }
 
 lldb::BreakpointSP Breakpoint::CreateFromStructuredData(
-    Target &target, StructuredData::ObjectSP &object_data, Error &error) {
+    Target &target, StructuredData::ObjectSP &object_data, Status &error) {
   BreakpointSP result_sp;
 
   StructuredData::Dictionary *breakpoint_dict = object_data->GetAsDictionary();
@@ -145,7 +147,7 @@ lldb::BreakpointSP Breakpoint::CreateFromStructuredData(
     return result_sp;
   }
 
-  Error create_error;
+  Status create_error;
   BreakpointResolverSP resolver_sp =
       BreakpointResolver::CreateFromStructuredData(*resolver_dict,
                                                    create_error);
@@ -206,10 +208,10 @@ lldb::BreakpointSP Breakpoint::CreateFromStructuredData(
   if (success && names_array) {
     size_t num_names = names_array->GetSize();
     for (size_t i = 0; i < num_names; i++) {
-      std::string name;
-      Error error;
+      llvm::StringRef name;
+      Status error;
       success = names_array->GetItemAtIndexAsString(i, name);
-      result_sp->AddName(name.c_str(), error);
+      target.AddNameToBreakpoint(result_sp, name.str().c_str(), error);
     }
   }
 
@@ -241,7 +243,7 @@ bool Breakpoint::SerializedBreakpointMatchesNames(
   std::vector<std::string>::iterator end = names.end();
 
   for (size_t i = 0; i < num_names; i++) {
-    std::string name;
+    llvm::StringRef name;
     if (names_array->GetItemAtIndexAsString(i, name)) {
       if (std::find(begin, end, name) != end) {
         return true;
@@ -283,13 +285,13 @@ void Breakpoint::RemoveInvalidLocations(const ArchSpec &arch) {
   m_locations.RemoveInvalidLocations(arch);
 }
 
-// For each of the overall options we need to decide how they propagate to
-// the location options.  This will determine the precedence of options on
-// the breakpoint vs. its locations.
+// For each of the overall options we need to decide how they propagate to the
+// location options.  This will determine the precedence of options on the
+// breakpoint vs. its locations.
 
-// Disable at the breakpoint level should override the location settings.
-// That way you can conveniently turn off a whole breakpoint without messing
-// up the individual settings.
+// Disable at the breakpoint level should override the location settings. That
+// way you can conveniently turn off a whole breakpoint without messing up the
+// individual settings.
 
 void Breakpoint::SetEnabled(bool enable) {
   if (enable == m_options_up->IsEnabled())
@@ -329,10 +331,8 @@ bool Breakpoint::IgnoreCountShouldStop() {
   uint32_t ignore = GetIgnoreCount();
   if (ignore != 0) {
     // When we get here we know the location that caused the stop doesn't have
-    // an ignore count,
-    // since by contract we call it first...  So we don't have to find &
-    // decrement it, we only have
-    // to decrement our own ignore count.
+    // an ignore count, since by contract we call it first...  So we don't have
+    // to find & decrement it, we only have to decrement our own ignore count.
     DecrementIgnoreCount();
     return false;
   } else
@@ -345,6 +345,14 @@ bool Breakpoint::IsOneShot() const { return m_options_up->IsOneShot(); }
 
 void Breakpoint::SetOneShot(bool one_shot) {
   m_options_up->SetOneShot(one_shot);
+}
+
+bool Breakpoint::IsAutoContinue() const { 
+  return m_options_up->IsAutoContinue();
+}
+
+void Breakpoint::SetAutoContinue(bool auto_continue) {
+  m_options_up->SetAutoContinue(auto_continue);
 }
 
 void Breakpoint::SetThreadID(lldb::tid_t thread_id) {
@@ -421,8 +429,8 @@ const char *Breakpoint::GetConditionText() const {
 // This function is used when "baton" doesn't need to be freed
 void Breakpoint::SetCallback(BreakpointHitCallback callback, void *baton,
                              bool is_synchronous) {
-  // The default "Baton" class will keep a copy of "baton" and won't free
-  // or delete it when it goes goes out of scope.
+  // The default "Baton" class will keep a copy of "baton" and won't free or
+  // delete it when it goes goes out of scope.
   m_options_up->SetCallback(callback, std::make_shared<UntypedBaton>(baton),
                             is_synchronous);
 
@@ -446,6 +454,10 @@ bool Breakpoint::InvokeCallback(StoppointCallbackContext *context,
 
 BreakpointOptions *Breakpoint::GetOptions() { return m_options_up.get(); }
 
+const BreakpointOptions *Breakpoint::GetOptions() const {
+  return m_options_up.get();
+}
+
 void Breakpoint::ResolveBreakpoint() {
   if (m_resolver_sp)
     m_resolver_sp->ResolveBreakpoint(*m_filter_sp);
@@ -464,8 +476,7 @@ void Breakpoint::ResolveBreakpointInModules(ModuleList &module_list,
                                             bool send_event) {
   if (m_resolver_sp) {
     // If this is not an internal breakpoint, set up to record the new
-    // locations, then dispatch
-    // an event with the new locations.
+    // locations, then dispatch an event with the new locations.
     if (!IsInternal() && send_event) {
       BreakpointEventData *new_locations_event = new BreakpointEventData(
           eBreakpointEventTypeLocationsAdded, shared_from_this());
@@ -503,8 +514,8 @@ void Breakpoint::ModulesChanged(ModuleList &module_list, bool load,
   std::lock_guard<std::recursive_mutex> guard(module_list.GetMutex());
   if (load) {
     // The logic for handling new modules is:
-    // 1) If the filter rejects this module, then skip it.
-    // 2) Run through the current location list and if there are any locations
+    // 1) If the filter rejects this module, then skip it. 2) Run through the
+    // current location list and if there are any locations
     //    for that module, we mark the module as "seen" and we don't try to
     //    re-resolve
     //    breakpoint locations for that module.
@@ -514,20 +525,37 @@ void Breakpoint::ModulesChanged(ModuleList &module_list, bool load,
 
     ModuleList new_modules; // We'll stuff the "unseen" modules in this list,
                             // and then resolve
-    // them after the locations pass.  Have to do it this way because
-    // resolving breakpoints will add new locations potentially.
+    // them after the locations pass.  Have to do it this way because resolving
+    // breakpoints will add new locations potentially.
 
     for (ModuleSP module_sp : module_list.ModulesNoLocking()) {
       bool seen = false;
       if (!m_filter_sp->ModulePasses(module_sp))
         continue;
 
+      BreakpointLocationCollection locations_with_no_section;
       for (BreakpointLocationSP break_loc_sp :
            m_locations.BreakpointLocations()) {
+
+        // If the section for this location was deleted, that means it's Module
+        // has gone away but somebody forgot to tell us. Let's clean it up
+        // here.
+        Address section_addr(break_loc_sp->GetAddress());
+        if (section_addr.SectionWasDeleted()) {
+          locations_with_no_section.Add(break_loc_sp);
+          continue;
+        }
+          
         if (!break_loc_sp->IsEnabled())
           continue;
-        SectionSP section_sp(break_loc_sp->GetAddress().GetSection());
-        if (!section_sp || section_sp->GetModule() == module_sp) {
+        
+        SectionSP section_sp(section_addr.GetSection());
+        
+        // If we don't have a Section, that means this location is a raw
+        // address that we haven't resolved to a section yet.  So we'll have to
+        // look in all the new modules to resolve this location. Otherwise, if
+        // it was set in this module, re-resolve it here.
+        if (section_sp && section_sp->GetModule() == module_sp) {
           if (!seen)
             seen = true;
 
@@ -539,6 +567,11 @@ void Breakpoint::ModulesChanged(ModuleList &module_list, bool load,
           }
         }
       }
+      
+      size_t num_to_delete = locations_with_no_section.GetSize();
+      
+      for (size_t i = 0; i < num_to_delete; i++)
+        m_locations.RemoveLocation(locations_with_no_section.GetByIndex(i));
 
       if (!seen)
         new_modules.AppendIfNeeded(module_sp);
@@ -570,10 +603,9 @@ void Breakpoint::ModulesChanged(ModuleList &module_list, bool load,
           BreakpointLocationSP break_loc_sp(m_locations.GetByIndex(loc_idx));
           SectionSP section_sp(break_loc_sp->GetAddress().GetSection());
           if (section_sp && section_sp->GetModule() == module_sp) {
-            // Remove this breakpoint since the shared library is
-            // unloaded, but keep the breakpoint location around
-            // so we always get complete hit count and breakpoint
-            // lifetime info
+            // Remove this breakpoint since the shared library is unloaded, but
+            // keep the breakpoint location around so we always get complete
+            // hit count and breakpoint lifetime info
             break_loc_sp->ClearBreakpointSite();
             if (removed_locations_event) {
               removed_locations_event->GetBreakpointLocationCollection().Add(
@@ -601,7 +633,8 @@ static bool SymbolContextsMightBeEquivalent(SymbolContext &old_sc,
   bool equivalent_scs = false;
 
   if (old_sc.module_sp.get() == new_sc.module_sp.get()) {
-    // If these come from the same module, we can directly compare the pointers:
+    // If these come from the same module, we can directly compare the
+    // pointers:
     if (old_sc.comp_unit && new_sc.comp_unit &&
         (old_sc.comp_unit == new_sc.comp_unit)) {
       if (old_sc.function && new_sc.function &&
@@ -658,15 +691,13 @@ void Breakpoint::ModuleReplaced(ModuleSP old_module_sp,
     temp_list.Append(new_module_sp);
     ResolveBreakpointInModules(temp_list);
   } else {
-    // First search the new module for locations.
-    // Then compare this with the old list, copy over locations that "look the
-    // same"
-    // Then delete the old locations.
-    // Finally remember to post the creation event.
+    // First search the new module for locations. Then compare this with the
+    // old list, copy over locations that "look the same" Then delete the old
+    // locations. Finally remember to post the creation event.
     //
-    // Two locations are the same if they have the same comp unit & function (by
-    // name) and there are the same number
-    // of locations in the old function as in the new one.
+    // Two locations are the same if they have the same comp unit & function
+    // (by name) and there are the same number of locations in the old function
+    // as in the new one.
 
     ModuleList temp_list;
     temp_list.Append(new_module_sp);
@@ -679,8 +710,8 @@ void Breakpoint::ModuleReplaced(ModuleSP old_module_sp,
 
     if (num_new_locations > 0) {
       // Break out the case of one location -> one location since that's the
-      // most common one, and there's no need
-      // to build up the structures needed for the merge in that case.
+      // most common one, and there's no need to build up the structures needed
+      // for the merge in that case.
       if (num_new_locations == 1 && num_old_locations == 1) {
         bool equivalent_locations = false;
         SymbolContext old_sc, new_sc;
@@ -703,8 +734,7 @@ void Breakpoint::ModuleReplaced(ModuleSP old_module_sp,
         }
       } else {
         // We don't want to have to keep computing the SymbolContexts for these
-        // addresses over and over,
-        // so lets get them up front:
+        // addresses over and over, so lets get them up front:
 
         typedef std::map<lldb::break_id_t, SymbolContext> IDToSCMap;
         IDToSCMap old_sc_map;
@@ -727,7 +757,8 @@ void Breakpoint::ModuleReplaced(ModuleSP old_module_sp,
           lldb::break_id_t old_id = old_sc_map.begin()->first;
           SymbolContext &old_sc = old_sc_map.begin()->second;
 
-          // Count the number of entries equivalent to this SC for the old list:
+          // Count the number of entries equivalent to this SC for the old
+          // list:
           std::vector<lldb::break_id_t> old_id_vec;
           old_id_vec.push_back(old_id);
 
@@ -747,17 +778,15 @@ void Breakpoint::ModuleReplaced(ModuleSP old_module_sp,
           }
 
           // Alright, if we have the same number of potentially equivalent
-          // locations in the old
-          // and new modules, we'll just map them one to one in ascending ID
-          // order (assuming the
-          // resolver's order would match the equivalent ones.
-          // Otherwise, we'll dump all the old ones, and just take the new ones,
-          // erasing the elements
-          // from both maps as we go.
+          // locations in the old and new modules, we'll just map them one to
+          // one in ascending ID order (assuming the resolver's order would
+          // match the equivalent ones. Otherwise, we'll dump all the old ones,
+          // and just take the new ones, erasing the elements from both maps as
+          // we go.
 
           if (old_id_vec.size() == new_id_vec.size()) {
-            sort(old_id_vec.begin(), old_id_vec.end());
-            sort(new_id_vec.begin(), new_id_vec.end());
+            llvm::sort(old_id_vec);
+            llvm::sort(new_id_vec);
             size_t num_elements = old_id_vec.size();
             for (size_t idx = 0; idx < num_elements; idx++) {
               BreakpointLocationSP old_loc_sp =
@@ -785,11 +814,9 @@ void Breakpoint::ModuleReplaced(ModuleSP old_module_sp,
     }
 
     // Now remove the remaining old locations, and cons up a removed locations
-    // event.
-    // Note, we don't put the new locations that were swapped with an old
-    // location on the locations_to_remove
-    // list, so we don't need to worry about telling the world about removing a
-    // location we didn't tell them
+    // event. Note, we don't put the new locations that were swapped with an
+    // old location on the locations_to_remove list, so we don't need to worry
+    // about telling the world about removing a location we didn't tell them
     // about adding.
 
     BreakpointEventData *locations_event;
@@ -825,25 +852,15 @@ void Breakpoint::ModuleReplaced(ModuleSP old_module_sp,
 void Breakpoint::Dump(Stream *) {}
 
 size_t Breakpoint::GetNumResolvedLocations() const {
-  // Return the number of breakpoints that are actually resolved and set
-  // down in the inferior process.
+  // Return the number of breakpoints that are actually resolved and set down
+  // in the inferior process.
   return m_locations.GetNumResolvedLocations();
 }
 
 size_t Breakpoint::GetNumLocations() const { return m_locations.GetSize(); }
 
-bool Breakpoint::AddName(const char *new_name, Error &error) {
-  if (!new_name)
-    return false;
-  if (!BreakpointID::StringIsBreakpointName(llvm::StringRef(new_name), error)) {
-    error.SetErrorStringWithFormat("input name \"%s\" not a breakpoint name.",
-                                   new_name);
-    return false;
-  }
-  if (!error.Success())
-    return false;
-
-  m_name_list.insert(new_name);
+bool Breakpoint::AddName(llvm::StringRef new_name) {
+  m_name_list.insert(new_name.str().c_str());
   return true;
 }
 
@@ -863,9 +880,8 @@ void Breakpoint::GetDescription(Stream *s, lldb::DescriptionLevel level,
   const size_t num_resolved_locations = GetNumResolvedLocations();
 
   // They just made the breakpoint, they don't need to be told HOW they made
-  // it...
-  // Also, we'll print the breakpoint number differently depending on whether
-  // there is 1 or more locations.
+  // it... Also, we'll print the breakpoint number differently depending on
+  // whether there is 1 or more locations.
   if (level != eDescriptionLevelInitial) {
     s->Printf("%i: ", GetID());
     GetResolverDescription(s);
@@ -882,8 +898,7 @@ void Breakpoint::GetDescription(Stream *s, lldb::DescriptionLevel level,
                   (uint64_t)num_resolved_locations, GetHitCount());
     } else {
       // Don't print the pending notification for exception resolvers since we
-      // don't generally
-      // know how to set them until the target is run.
+      // don't generally know how to set them until the target is run.
       if (m_resolver_sp->getResolverID() !=
           BreakpointResolver::ExceptionResolver)
         s->Printf(", locations = 0 (pending)");
@@ -939,8 +954,7 @@ void Breakpoint::GetDescription(Stream *s, lldb::DescriptionLevel level,
   }
 
   // The brief description is just the location name (1.2 or whatever).  That's
-  // pointless to
-  // show in the breakpoint's description, so suppress it.
+  // pointless to show in the breakpoint's description, so suppress it.
   if (show_locations && level != lldb::eDescriptionLevelBrief) {
     s->IndentMore();
     for (size_t i = 0; i < num_locations; ++i) {
@@ -996,8 +1010,9 @@ bool Breakpoint::BreakpointPrecondition::EvaluatePrecondition(
 void Breakpoint::BreakpointPrecondition::GetDescription(
     Stream &stream, lldb::DescriptionLevel level) {}
 
-Error Breakpoint::BreakpointPrecondition::ConfigurePrecondition(Args &options) {
-  Error error;
+Status
+Breakpoint::BreakpointPrecondition::ConfigurePrecondition(Args &options) {
+  Status error;
   error.SetErrorString("Base breakpoint precondition has no options.");
   return error;
 }

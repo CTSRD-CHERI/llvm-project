@@ -9,8 +9,8 @@
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DIBuilder.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/LLVMContext.h"
@@ -47,6 +47,73 @@ protected:
   BasicBlock *BB;
   GlobalVariable *GV;
 };
+
+TEST_F(IRBuilderTest, Intrinsics) {
+  IRBuilder<> Builder(BB);
+  Value *V;
+  Instruction *I;
+  CallInst *Call;
+  IntrinsicInst *II;
+
+  V = Builder.CreateLoad(GV);
+  I = cast<Instruction>(Builder.CreateFAdd(V, V));
+  I->setHasNoInfs(true);
+  I->setHasNoNaNs(false);
+
+  Call = Builder.CreateMinNum(V, V);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::minnum);
+
+  Call = Builder.CreateMaxNum(V, V);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::maxnum);
+
+  Call = Builder.CreateIntrinsic(Intrinsic::readcyclecounter, {}, {});
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::readcyclecounter);
+
+  Call = Builder.CreateUnaryIntrinsic(Intrinsic::fabs, V);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::fabs);
+  EXPECT_FALSE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateUnaryIntrinsic(Intrinsic::fabs, V, I);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::fabs);
+  EXPECT_TRUE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateBinaryIntrinsic(Intrinsic::pow, V, V);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::pow);
+  EXPECT_FALSE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateBinaryIntrinsic(Intrinsic::pow, V, V, I);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::pow);
+  EXPECT_TRUE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateIntrinsic(Intrinsic::fma, {V->getType()}, {V, V, V});
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::fma);
+  EXPECT_FALSE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateIntrinsic(Intrinsic::fma, {V->getType()}, {V, V, V}, I);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::fma);
+  EXPECT_TRUE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+
+  Call = Builder.CreateIntrinsic(Intrinsic::fma, {V->getType()}, {V, V, V}, I);
+  II = cast<IntrinsicInst>(Call);
+  EXPECT_EQ(II->getIntrinsicID(), Intrinsic::fma);
+  EXPECT_TRUE(II->hasNoInfs());
+  EXPECT_FALSE(II->hasNoNaNs());
+}
 
 TEST_F(IRBuilderTest, Lifetime) {
   IRBuilder<> Builder(BB);
@@ -144,17 +211,40 @@ TEST_F(IRBuilderTest, FastMathFlags) {
   FastMathFlags FMF;
   Builder.setFastMathFlags(FMF);
 
+  // By default, no flags are set.
   F = Builder.CreateFAdd(F, F);
   EXPECT_FALSE(Builder.getFastMathFlags().any());
+  ASSERT_TRUE(isa<Instruction>(F));
+  FAdd = cast<Instruction>(F);
+  EXPECT_FALSE(FAdd->hasNoNaNs());
+  EXPECT_FALSE(FAdd->hasNoInfs());
+  EXPECT_FALSE(FAdd->hasNoSignedZeros());
+  EXPECT_FALSE(FAdd->hasAllowReciprocal());
+  EXPECT_FALSE(FAdd->hasAllowContract());
+  EXPECT_FALSE(FAdd->hasAllowReassoc());
+  EXPECT_FALSE(FAdd->hasApproxFunc());
 
-  FMF.setUnsafeAlgebra();
+  // Set all flags in the instruction.
+  FAdd->setFast(true);
+  EXPECT_TRUE(FAdd->hasNoNaNs());
+  EXPECT_TRUE(FAdd->hasNoInfs());
+  EXPECT_TRUE(FAdd->hasNoSignedZeros());
+  EXPECT_TRUE(FAdd->hasAllowReciprocal());
+  EXPECT_TRUE(FAdd->hasAllowContract());
+  EXPECT_TRUE(FAdd->hasAllowReassoc());
+  EXPECT_TRUE(FAdd->hasApproxFunc());
+
+  // All flags are set in the builder.
+  FMF.setFast();
   Builder.setFastMathFlags(FMF);
 
   F = Builder.CreateFAdd(F, F);
   EXPECT_TRUE(Builder.getFastMathFlags().any());
+  EXPECT_TRUE(Builder.getFastMathFlags().all());
   ASSERT_TRUE(isa<Instruction>(F));
   FAdd = cast<Instruction>(F);
   EXPECT_TRUE(FAdd->hasNoNaNs());
+  EXPECT_TRUE(FAdd->isFast());
 
   // Now, try it with CreateBinOp
   F = Builder.CreateBinOp(Instruction::FAdd, F, F);
@@ -162,21 +252,23 @@ TEST_F(IRBuilderTest, FastMathFlags) {
   ASSERT_TRUE(isa<Instruction>(F));
   FAdd = cast<Instruction>(F);
   EXPECT_TRUE(FAdd->hasNoNaNs());
+  EXPECT_TRUE(FAdd->isFast());
 
   F = Builder.CreateFDiv(F, F);
-  EXPECT_TRUE(Builder.getFastMathFlags().any());
-  EXPECT_TRUE(Builder.getFastMathFlags().UnsafeAlgebra);
+  EXPECT_TRUE(Builder.getFastMathFlags().all());
   ASSERT_TRUE(isa<Instruction>(F));
   FDiv = cast<Instruction>(F);
   EXPECT_TRUE(FDiv->hasAllowReciprocal());
 
+  // Clear all FMF in the builder.
   Builder.clearFastMathFlags();
 
   F = Builder.CreateFDiv(F, F);
   ASSERT_TRUE(isa<Instruction>(F));
   FDiv = cast<Instruction>(F);
   EXPECT_FALSE(FDiv->hasAllowReciprocal());
-
+ 
+  // Try individual flags.
   FMF.clear();
   FMF.setAllowReciprocal();
   Builder.setFastMathFlags(FMF);
@@ -207,7 +299,44 @@ TEST_F(IRBuilderTest, FastMathFlags) {
   EXPECT_TRUE(FCmp->hasAllowReciprocal());
 
   Builder.clearFastMathFlags();
- 
+
+  // Test FP-contract
+  FC = Builder.CreateFAdd(F, F);
+  ASSERT_TRUE(isa<Instruction>(FC));
+  FAdd = cast<Instruction>(FC);
+  EXPECT_FALSE(FAdd->hasAllowContract());
+
+  FMF.clear();
+  FMF.setAllowContract(true);
+  Builder.setFastMathFlags(FMF);
+
+  FC = Builder.CreateFAdd(F, F);
+  EXPECT_TRUE(Builder.getFastMathFlags().any());
+  EXPECT_TRUE(Builder.getFastMathFlags().AllowContract);
+  ASSERT_TRUE(isa<Instruction>(FC));
+  FAdd = cast<Instruction>(FC);
+  EXPECT_TRUE(FAdd->hasAllowContract());
+
+  FMF.setApproxFunc();
+  Builder.clearFastMathFlags();
+  Builder.setFastMathFlags(FMF);
+  // Now 'aml' and 'contract' are set.
+  F = Builder.CreateFMul(F, F);
+  FAdd = cast<Instruction>(F);
+  EXPECT_TRUE(FAdd->hasApproxFunc());
+  EXPECT_TRUE(FAdd->hasAllowContract());
+  EXPECT_FALSE(FAdd->hasAllowReassoc());
+  
+  FMF.setAllowReassoc();
+  Builder.clearFastMathFlags();
+  Builder.setFastMathFlags(FMF);
+  // Now 'aml' and 'contract' and 'reassoc' are set.
+  F = Builder.CreateFMul(F, F);
+  FAdd = cast<Instruction>(F);
+  EXPECT_TRUE(FAdd->hasApproxFunc());
+  EXPECT_TRUE(FAdd->hasAllowContract());
+  EXPECT_TRUE(FAdd->hasAllowReassoc());
+
   // Test a call with FMF.
   auto CalleeTy = FunctionType::get(Type::getFloatTy(Ctx),
                                     /*isVarArg=*/false);
@@ -245,6 +374,7 @@ TEST_F(IRBuilderTest, FastMathFlags) {
   EXPECT_FALSE(FDiv->getFastMathFlags().any());
   FDiv->setHasAllowReciprocal(true);
   FAdd->setHasAllowReciprocal(false);
+  FAdd->setHasNoNaNs(true);
   FDiv->copyFastMathFlags(FAdd);
   EXPECT_TRUE(FDiv->hasNoNaNs());
   EXPECT_FALSE(FDiv->hasAllowReciprocal());
@@ -336,12 +466,32 @@ TEST_F(IRBuilderTest, RAIIHelpersTest) {
   EXPECT_EQ(BB, Builder.GetInsertBlock());
 }
 
+TEST_F(IRBuilderTest, createFunction) {
+  IRBuilder<> Builder(BB);
+  DIBuilder DIB(*M);
+  auto File = DIB.createFile("error.swift", "/");
+  auto CU =
+      DIB.createCompileUnit(dwarf::DW_LANG_Swift, File, "swiftc", true, "", 0);
+  auto Type = DIB.createSubroutineType(DIB.getOrCreateTypeArray(None));
+  auto NoErr = DIB.createFunction(CU, "noerr", "", File, 1, Type, false, true, 1,
+                               DINode::FlagZero, true);
+  EXPECT_TRUE(!NoErr->getThrownTypes());
+  auto Int = DIB.createBasicType("Int", 64, dwarf::DW_ATE_signed);
+  auto Error = DIB.getOrCreateArray({Int});
+  auto Err =
+      DIB.createFunction(CU, "err", "", File, 1, Type, false, true, 1,
+      DINode::FlagZero, true, nullptr, nullptr, Error.get());
+  EXPECT_TRUE(Err->getThrownTypes().get() == Error.get());
+  DIB.finalize();
+}
+
 TEST_F(IRBuilderTest, DIBuilder) {
   IRBuilder<> Builder(BB);
   DIBuilder DIB(*M);
   auto File = DIB.createFile("F.CBL", "/");
-  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_Cobol74, "F.CBL", "/",
-                                  "llvm-cobol74", true, "", 0);
+  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_Cobol74,
+                                  DIB.createFile("F.CBL", "/"), "llvm-cobol74",
+                                  true, "", 0);
   auto Type = DIB.createSubroutineType(DIB.getOrCreateTypeArray(None));
   auto SP = DIB.createFunction(CU, "foo", "", File, 1, Type, false, true, 1,
                                DINode::FlagZero, true);
@@ -353,6 +503,62 @@ TEST_F(IRBuilderTest, DIBuilder) {
   I->setDebugLoc(DebugLoc::get(2, 0, BadScope));
   DIB.finalize();
   EXPECT_TRUE(verifyModule(*M));
+}
+
+TEST_F(IRBuilderTest, createArtificialSubprogram) {
+  IRBuilder<> Builder(BB);
+  DIBuilder DIB(*M);
+  auto File = DIB.createFile("main.c", "/");
+  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_C, File, "clang",
+                                  /*isOptimized=*/true, /*Flags=*/"",
+                                  /*Runtime Version=*/0);
+  auto Type = DIB.createSubroutineType(DIB.getOrCreateTypeArray(None));
+  auto SP = DIB.createFunction(CU, "foo", /*LinkageName=*/"", File,
+                               /*LineNo=*/1, Type, /*isLocalToUnit=*/false,
+                               /*isDefinition=*/true, /*ScopeLine=*/2,
+                               DINode::FlagZero, /*isOptimized=*/true);
+  EXPECT_TRUE(SP->isDistinct());
+
+  F->setSubprogram(SP);
+  AllocaInst *I = Builder.CreateAlloca(Builder.getInt8Ty());
+  ReturnInst *R = Builder.CreateRetVoid();
+  I->setDebugLoc(DebugLoc::get(3, 2, SP));
+  R->setDebugLoc(DebugLoc::get(4, 2, SP));
+  DIB.finalize();
+  EXPECT_FALSE(verifyModule(*M));
+
+  Function *G = Function::Create(F->getFunctionType(),
+                                 Function::ExternalLinkage, "", M.get());
+  BasicBlock *GBB = BasicBlock::Create(Ctx, "", G);
+  Builder.SetInsertPoint(GBB);
+  I->removeFromParent();
+  Builder.Insert(I);
+  Builder.CreateRetVoid();
+  EXPECT_FALSE(verifyModule(*M));
+
+  DISubprogram *GSP = DIBuilder::createArtificialSubprogram(F->getSubprogram());
+  EXPECT_EQ(SP->getFile(), GSP->getFile());
+  EXPECT_EQ(SP->getType(), GSP->getType());
+  EXPECT_EQ(SP->getLine(), GSP->getLine());
+  EXPECT_EQ(SP->getScopeLine(), GSP->getScopeLine());
+  EXPECT_TRUE(GSP->isDistinct());
+
+  G->setSubprogram(GSP);
+  EXPECT_TRUE(verifyModule(*M));
+
+  auto *InlinedAtNode =
+      DILocation::getDistinct(Ctx, GSP->getScopeLine(), 0, GSP);
+  DebugLoc DL = I->getDebugLoc();
+  DenseMap<const MDNode *, MDNode *> IANodes;
+  auto IA = DebugLoc::appendInlinedAt(DL, InlinedAtNode, Ctx, IANodes);
+  auto NewDL = DebugLoc::get(DL.getLine(), DL.getCol(), DL.getScope(), IA);
+  I->setDebugLoc(NewDL);
+  EXPECT_FALSE(verifyModule(*M));
+
+  EXPECT_EQ("foo", SP->getName());
+  EXPECT_EQ("foo", GSP->getName());
+  EXPECT_FALSE(SP->isArtificial());
+  EXPECT_TRUE(GSP->isArtificial());
 }
 
 TEST_F(IRBuilderTest, InsertExtractElement) {
@@ -392,8 +598,9 @@ TEST_F(IRBuilderTest, DebugLoc) {
 
   DIBuilder DIB(*M);
   auto File = DIB.createFile("tmp.cpp", "/");
-  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_C_plus_plus_11, "tmp.cpp", "/",
-                                  "", true, "", 0);
+  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_C_plus_plus_11,
+                                  DIB.createFile("tmp.cpp", "/"), "", true, "",
+                                  0);
   auto SPType = DIB.createSubroutineType(DIB.getOrCreateTypeArray(None));
   auto SP =
       DIB.createFunction(CU, "foo", "foo", File, 1, SPType, false, true, 1);
@@ -422,14 +629,85 @@ TEST_F(IRBuilderTest, DebugLoc) {
 TEST_F(IRBuilderTest, DIImportedEntity) {
   IRBuilder<> Builder(BB);
   DIBuilder DIB(*M);
-  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_Cobol74, "F.CBL", "/",
-    "llvm-cobol74", true, "", 0);
-  DIB.createImportedDeclaration(CU, nullptr, 1);
-  DIB.createImportedDeclaration(CU, nullptr, 1);
-  DIB.createImportedModule(CU, (DIImportedEntity *)nullptr, 2);
-  DIB.createImportedModule(CU, (DIImportedEntity *)nullptr, 2);
+  auto F = DIB.createFile("F.CBL", "/");
+  auto CU = DIB.createCompileUnit(dwarf::DW_LANG_Cobol74,
+                                  F, "llvm-cobol74",
+                                  true, "", 0);
+  DIB.createImportedDeclaration(CU, nullptr, F, 1);
+  DIB.createImportedDeclaration(CU, nullptr, F, 1);
+  DIB.createImportedModule(CU, (DIImportedEntity *)nullptr, F, 2);
+  DIB.createImportedModule(CU, (DIImportedEntity *)nullptr, F, 2);
   DIB.finalize();
   EXPECT_TRUE(verifyModule(*M));
   EXPECT_TRUE(CU->getImportedEntities().size() == 2);
+}
+
+//  0: #define M0 V0          <-- command line definition
+//  0: main.c                 <-- main file
+//     3:   #define M1 V1     <-- M1 definition in main.c
+//     5:   #include "file.h" <-- inclusion of file.h from main.c
+//          1: #define M2     <-- M2 definition in file.h with no value
+//     7:   #undef M1 V1      <-- M1 un-definition in main.c
+TEST_F(IRBuilderTest, DIBuilderMacro) {
+  IRBuilder<> Builder(BB);
+  DIBuilder DIB(*M);
+  auto File1 = DIB.createFile("main.c", "/");
+  auto File2 = DIB.createFile("file.h", "/");
+  auto CU = DIB.createCompileUnit(
+      dwarf::DW_LANG_C, DIB.createFile("main.c", "/"), "llvm-c", true, "", 0);
+  auto MDef0 =
+      DIB.createMacro(nullptr, 0, dwarf::DW_MACINFO_define, "M0", "V0");
+  auto TMF1 = DIB.createTempMacroFile(nullptr, 0, File1);
+  auto MDef1 = DIB.createMacro(TMF1, 3, dwarf::DW_MACINFO_define, "M1", "V1");
+  auto TMF2 = DIB.createTempMacroFile(TMF1, 5, File2);
+  auto MDef2 = DIB.createMacro(TMF2, 1, dwarf::DW_MACINFO_define, "M2");
+  auto MUndef1 = DIB.createMacro(TMF1, 7, dwarf::DW_MACINFO_undef, "M1");
+
+  EXPECT_EQ(dwarf::DW_MACINFO_define, MDef1->getMacinfoType());
+  EXPECT_EQ(3u, MDef1->getLine());
+  EXPECT_EQ("M1", MDef1->getName());
+  EXPECT_EQ("V1", MDef1->getValue());
+
+  EXPECT_EQ(dwarf::DW_MACINFO_undef, MUndef1->getMacinfoType());
+  EXPECT_EQ(7u, MUndef1->getLine());
+  EXPECT_EQ("M1", MUndef1->getName());
+  EXPECT_EQ("", MUndef1->getValue());
+
+  EXPECT_EQ(dwarf::DW_MACINFO_start_file, TMF2->getMacinfoType());
+  EXPECT_EQ(5u, TMF2->getLine());
+  EXPECT_EQ(File2, TMF2->getFile());
+
+  DIB.finalize();
+
+  SmallVector<Metadata *, 4> Elements;
+  Elements.push_back(MDef2);
+  auto MF2 = DIMacroFile::get(Ctx, dwarf::DW_MACINFO_start_file, 5, File2,
+                              DIB.getOrCreateMacroArray(Elements));
+
+  Elements.clear();
+  Elements.push_back(MDef1);
+  Elements.push_back(MF2);
+  Elements.push_back(MUndef1);
+  auto MF1 = DIMacroFile::get(Ctx, dwarf::DW_MACINFO_start_file, 0, File1,
+                              DIB.getOrCreateMacroArray(Elements));
+
+  Elements.clear();
+  Elements.push_back(MDef0);
+  Elements.push_back(MF1);
+  auto MN0 = MDTuple::get(Ctx, Elements);
+  EXPECT_EQ(MN0, CU->getRawMacros());
+
+  Elements.clear();
+  Elements.push_back(MDef1);
+  Elements.push_back(MF2);
+  Elements.push_back(MUndef1);
+  auto MN1 = MDTuple::get(Ctx, Elements);
+  EXPECT_EQ(MN1, MF1->getRawElements());
+
+  Elements.clear();
+  Elements.push_back(MDef2);
+  auto MN2 = MDTuple::get(Ctx, Elements);
+  EXPECT_EQ(MN2, MF2->getRawElements());
+  EXPECT_TRUE(verifyModule(*M));
 }
 }

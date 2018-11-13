@@ -9,22 +9,14 @@
 
 #include "lldb/Core/Disassembler.h"
 
-// C Includes
-// C++ Includes
-#include <cstdio>
-#include <cstring>
-
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/DataBufferHeap.h"
-#include "lldb/Core/DataExtractor.h"
+#include "lldb/Core/AddressRange.h" // for AddressRange
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/EmulateInstruction.h"
-#include "lldb/Core/Error.h"
+#include "lldb/Core/Mangled.h" // for Mangled, Mangled...
 #include "lldb/Core/Module.h"
+#include "lldb/Core/ModuleList.h" // for ModuleList
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegularExpression.h"
-#include "lldb/Core/Timer.h"
+#include "lldb/Core/SourceManager.h" // for SourceManager
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Interpreter/OptionValue.h"
 #include "lldb/Interpreter/OptionValueArray.h"
@@ -33,13 +25,31 @@
 #include "lldb/Interpreter/OptionValueString.h"
 #include "lldb/Interpreter/OptionValueUInt64.h"
 #include "lldb/Symbol/Function.h"
-#include "lldb/Symbol/ObjectFile.h"
+#include "lldb/Symbol/Symbol.h"        // for Symbol
+#include "lldb/Symbol/SymbolContext.h" // for SymbolContext
 #include "lldb/Target/ExecutionContext.h"
-#include "lldb/Target/Process.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
-#include "lldb/lldb-private.h"
+#include "lldb/Target/Thread.h" // for Thread
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/RegularExpression.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/Stream.h"       // for Stream
+#include "lldb/Utility/StreamString.h" // for StreamString
+#include "lldb/Utility/Timer.h"
+#include "lldb/lldb-private-enumerations.h" // for InstructionType:...
+#include "lldb/lldb-private-interfaces.h"   // for DisassemblerCrea...
+#include "lldb/lldb-private-types.h"        // for RegisterInfo
+#include "llvm/ADT/Triple.h"                // for Triple, Triple::...
+#include "llvm/Support/Compiler.h"          // for LLVM_PRETTY_FUNC...
+
+#include <cstdint> // for uint32_t, UINT32...
+#include <cstring>
+#include <utility> // for pair
+
+#include <assert.h> // for assert
 
 #define DEFAULT_DISASM_BYTE_SIZE 32
 
@@ -49,7 +59,8 @@ using namespace lldb_private;
 DisassemblerSP Disassembler::FindPlugin(const ArchSpec &arch,
                                         const char *flavor,
                                         const char *plugin_name) {
-  Timer scoped_timer(LLVM_PRETTY_FUNCTION,
+  static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
+  Timer scoped_timer(func_cat,
                      "Disassembler::FindPlugin (arch = %s, plugin_name = %s)",
                      arch.GetArchitectureName(), plugin_name);
 
@@ -85,8 +96,8 @@ DisassemblerSP Disassembler::FindPluginForTarget(const TargetSP target_sp,
                                                  const char *plugin_name) {
   if (target_sp && flavor == nullptr) {
     // FIXME - we don't have the mechanism in place to do per-architecture
-    // settings.  But since we know that for now
-    // we only support flavors on x86 & x86_64,
+    // settings.  But since we know that for now we only support flavors on x86
+    // & x86_64,
     if (arch.GetTriple().getArch() == llvm::Triple::x86 ||
         arch.GetTriple().getArch() == llvm::Triple::x86_64)
       flavor = target_sp->GetDisassemblyFlavor();
@@ -97,19 +108,19 @@ DisassemblerSP Disassembler::FindPluginForTarget(const TargetSP target_sp,
 static void ResolveAddress(const ExecutionContext &exe_ctx, const Address &addr,
                            Address &resolved_addr) {
   if (!addr.IsSectionOffset()) {
-    // If we weren't passed in a section offset address range,
-    // try and resolve it to something
+    // If we weren't passed in a section offset address range, try and resolve
+    // it to something
     Target *target = exe_ctx.GetTargetPtr();
     if (target) {
-      if (target->GetSectionLoadList().IsEmpty()) {
-        target->GetImages().ResolveFileAddress(addr.GetOffset(), resolved_addr);
-      } else {
-        target->GetSectionLoadList().ResolveLoadAddress(addr.GetOffset(),
-                                                        resolved_addr);
-      }
-      // We weren't able to resolve the address, just treat it as a
-      // raw address
-      if (resolved_addr.IsValid())
+      bool is_resolved =
+          target->GetSectionLoadList().IsEmpty() ?
+              target->GetImages().ResolveFileAddress(addr.GetOffset(),
+                                                     resolved_addr) :
+              target->GetSectionLoadList().ResolveLoadAddress(addr.GetOffset(),
+                                                              resolved_addr);
+
+      // We weren't able to resolve the address, just treat it as a raw address
+      if (is_resolved && resolved_addr.IsValid())
         return;
     }
   }
@@ -330,7 +341,7 @@ bool Disassembler::ElideMixedSourceAndDisassemblyLine(
   } else {
     TargetSP target_sp = exe_ctx.GetTargetSP();
     if (target_sp) {
-      Error error;
+      Status error;
       OptionValueSP value_sp = target_sp->GetDebugger().GetPropertyValue(
           &exe_ctx, "target.process.thread.step-avoid-regexp", false, error);
       if (value_sp && value_sp->GetType() == OptionValue::eTypeRegex) {
@@ -399,15 +410,13 @@ bool Disassembler::PrintInstructions(Disassembler *disasm_ptr,
     disassembly_format = &format;
   }
 
-  // First pass: step through the list of instructions,
-  // find how long the initial addresses strings are, insert padding
-  // in the second pass so the opcodes all line up nicely.
+  // First pass: step through the list of instructions, find how long the
+  // initial addresses strings are, insert padding in the second pass so the
+  // opcodes all line up nicely.
 
   // Also build up the source line mapping if this is mixed source & assembly
-  // mode.
-  // Calculate the source line for each assembly instruction (eliding inlined
-  // functions
-  // which the user wants to skip).
+  // mode. Calculate the source line for each assembly instruction (eliding
+  // inlined functions which the user wants to skip).
 
   std::map<FileSpec, std::set<uint32_t>> source_lines_seen;
   Symbol *previous_symbol = nullptr;
@@ -484,17 +493,13 @@ bool Disassembler::PrintInstructions(Disassembler *disasm_ptr,
           if (mixed_source_and_assembly) {
 
             // If we've started a new function (non-inlined), print all of the
-            // source lines from the
-            // function declaration until the first line table entry - typically
-            // the opening curly brace of
-            // the function.
+            // source lines from the function declaration until the first line
+            // table entry - typically the opening curly brace of the function.
             if (previous_symbol != sc.symbol) {
-              // The default disassembly format puts an extra blank line between
-              // functions - so
-              // when we're displaying the source context for a function, we
-              // don't want to add
-              // a blank line after the source context or we'll end up with two
-              // of them.
+              // The default disassembly format puts an extra blank line
+              // between functions - so when we're displaying the source
+              // context for a function, we don't want to add a blank line
+              // after the source context or we'll end up with two of them.
               if (previous_symbol != nullptr)
                 source_lines_to_display.print_source_context_end_eol = false;
 
@@ -509,9 +514,9 @@ bool Disassembler::PrintInstructions(Disassembler *disasm_ptr,
                                                       func_decl_line);
                   if (func_decl_file == prologue_end_line.file ||
                       func_decl_file == prologue_end_line.original_file) {
-                    // Add all the lines between the function declaration
-                    // and the first non-prologue source line to the list
-                    // of lines to print.
+                    // Add all the lines between the function declaration and
+                    // the first non-prologue source line to the list of lines
+                    // to print.
                     for (uint32_t lineno = func_decl_line;
                          lineno <= prologue_end_line.line; lineno++) {
                       SourceLine this_line;
@@ -519,8 +524,8 @@ bool Disassembler::PrintInstructions(Disassembler *disasm_ptr,
                       this_line.line = lineno;
                       source_lines_to_display.lines.push_back(this_line);
                     }
-                    // Mark the last line as the "current" one.  Usually
-                    // this is the open curly brace.
+                    // Mark the last line as the "current" one.  Usually this
+                    // is the open curly brace.
                     if (source_lines_to_display.lines.size() > 0)
                       source_lines_to_display.current_source_line =
                           source_lines_to_display.lines.size() - 1;
@@ -531,8 +536,8 @@ bool Disassembler::PrintInstructions(Disassembler *disasm_ptr,
                                  current_source_line_range);
             }
 
-            // If we've left a previous source line's address range, print a new
-            // source line
+            // If we've left a previous source line's address range, print a
+            // new source line
             if (!current_source_line_range.ContainsFileAddress(addr)) {
               sc.GetAddressRange(scope, 0, use_inline_block_range,
                                  current_source_line_range);
@@ -547,8 +552,8 @@ bool Disassembler::PrintInstructions(Disassembler *disasm_ptr,
                   // Only print this source line if it is different from the
                   // last source line we printed.  There may have been inlined
                   // functions between these lines that we elided, resulting in
-                  // the same line being printed twice in a row for a contiguous
-                  // block of assembly instructions.
+                  // the same line being printed twice in a row for a
+                  // contiguous block of assembly instructions.
                   if (this_line != previous_line) {
 
                     std::vector<uint32_t> previous_lines;
@@ -672,7 +677,7 @@ Instruction::Instruction(const Address &address, AddressClass addr_class)
 Instruction::~Instruction() = default;
 
 AddressClass Instruction::GetAddressClass() {
-  if (m_address_class == eAddressClassInvalid)
+  if (m_address_class == AddressClass::eInvalid)
     m_address_class = m_address.GetAddressClass();
   return m_address_class;
 }
@@ -699,16 +704,16 @@ void Instruction::Dump(lldb_private::Stream *s, uint32_t max_opcode_byte_size,
 
   if (show_bytes) {
     if (m_opcode.GetType() == Opcode::eTypeBytes) {
-      // x86_64 and i386 are the only ones that use bytes right now so
-      // pad out the byte dump to be able to always show 15 bytes (3 chars each)
-      // plus a space
+      // x86_64 and i386 are the only ones that use bytes right now so pad out
+      // the byte dump to be able to always show 15 bytes (3 chars each) plus a
+      // space
       if (max_opcode_byte_size > 0)
         m_opcode.Dump(&ss, max_opcode_byte_size * 3 + 1);
       else
         m_opcode.Dump(&ss, 15 * 3 + 1);
     } else {
-      // Else, we have ARM or MIPS which can show up to a uint32_t
-      // 0x00000000 (10 spaces) plus two for padding...
+      // Else, we have ARM or MIPS which can show up to a uint32_t 0x00000000
+      // (10 spaces) plus two for padding...
       if (max_opcode_byte_size > 0)
         m_opcode.Dump(&ss, max_opcode_byte_size * 3 + 1);
       else
@@ -749,6 +754,10 @@ bool Instruction::DumpEmulation(const ArchSpec &arch) {
   return false;
 }
 
+bool Instruction::CanSetBreakpoint () {
+  return !HasDelaySlot();
+}
+
 bool Instruction::HasDelaySlot() {
   // Default is false.
   return false;
@@ -759,7 +768,7 @@ OptionValueSP Instruction::ReadArray(FILE *in_file, Stream *out_stream,
   bool done = false;
   char buffer[1024];
 
-  OptionValueSP option_value_sp(new OptionValueArray(1u << data_type));
+  auto option_value_sp = std::make_shared<OptionValueArray>(1u << data_type);
 
   int idx = 0;
   while (!done) {
@@ -797,12 +806,12 @@ OptionValueSP Instruction::ReadArray(FILE *in_file, Stream *out_stream,
       OptionValueSP data_value_sp;
       switch (data_type) {
       case OptionValue::eTypeUInt64:
-        data_value_sp.reset(new OptionValueUInt64(0, 0));
+        data_value_sp = std::make_shared<OptionValueUInt64>(0, 0);
         data_value_sp->SetValueFromString(value);
         break;
       // Other types can be added later as needed.
       default:
-        data_value_sp.reset(new OptionValueString(value.c_str(), ""));
+        data_value_sp = std::make_shared<OptionValueString>(value.c_str(), "");
         break;
       }
 
@@ -818,7 +827,7 @@ OptionValueSP Instruction::ReadDictionary(FILE *in_file, Stream *out_stream) {
   bool done = false;
   char buffer[1024];
 
-  OptionValueSP option_value_sp(new OptionValueDictionary());
+  auto option_value_sp = std::make_shared<OptionValueDictionary>();
   static ConstString encoding_key("data_encoding");
   OptionValue::Type data_type = OptionValue::eTypeInvalid;
 
@@ -888,16 +897,17 @@ OptionValueSP Instruction::ReadDictionary(FILE *in_file, Stream *out_stream) {
           option_value_sp.reset();
           return option_value_sp;
         }
-        // We've used the data_type to read an array; re-set the type to Invalid
+        // We've used the data_type to read an array; re-set the type to
+        // Invalid
         data_type = OptionValue::eTypeInvalid;
       } else if ((value[0] == '0') && (value[1] == 'x')) {
-        value_sp.reset(new OptionValueUInt64(0, 0));
+        value_sp = std::make_shared<OptionValueUInt64>(0, 0);
         value_sp->SetValueFromString(value);
       } else {
         size_t len = value.size();
         if ((value[0] == '"') && (value[len - 1] == '"'))
           value = value.substr(1, len - 2);
-        value_sp.reset(new OptionValueString(value.c_str(), ""));
+        value_sp = std::make_shared<OptionValueString>(value.c_str(), "");
       }
 
       if (const_key == encoding_key) {
@@ -1092,9 +1102,9 @@ InstructionList::GetIndexOfNextBranchInstruction(uint32_t start,
     }
   }
 
-  // Hexagon needs the first instruction of the packet with the branch.
-  // Go backwards until we find an instruction marked end-of-packet, or
-  // until we hit start.
+  // Hexagon needs the first instruction of the packet with the branch. Go
+  // backwards until we find an instruction marked end-of-packet, or until we
+  // hit start.
   if (target.GetArchitecture().GetTriple().getArch() == llvm::Triple::hexagon) {
     // If we didn't find a branch, find the last packet start.
     if (next_branch == UINT32_MAX) {
@@ -1104,7 +1114,7 @@ InstructionList::GetIndexOfNextBranchInstruction(uint32_t start,
     while (i > start) {
       --i;
 
-      Error error;
+      Status error;
       uint32_t inst_bytes;
       bool prefer_file_cache = false; // Read from process if process is running
       lldb::addr_t load_addr = LLDB_INVALID_ADDRESS;
@@ -1113,8 +1123,8 @@ InstructionList::GetIndexOfNextBranchInstruction(uint32_t start,
       // If we have an error reading memory, return start
       if (!error.Success())
         return start;
-      // check if this is the last instruction in a packet
-      // bits 15:14 will be 11b or 00b for a duplex
+      // check if this is the last instruction in a packet bits 15:14 will be
+      // 11b or 00b for a duplex
       if (((inst_bytes & 0xC000) == 0xC000) ||
           ((inst_bytes & 0xC000) == 0x0000)) {
         // instruction after this should be the start of next packet
@@ -1163,18 +1173,17 @@ size_t Disassembler::ParseInstructions(const ExecutionContext *exe_ctx,
         !range.GetBaseAddress().IsValid())
       return 0;
 
-    DataBufferHeap *heap_buffer = new DataBufferHeap(byte_size, '\0');
-    DataBufferSP data_sp(heap_buffer);
+    auto data_sp = std::make_shared<DataBufferHeap>(byte_size, '\0');
 
-    Error error;
+    Status error;
     lldb::addr_t load_addr = LLDB_INVALID_ADDRESS;
     const size_t bytes_read = target->ReadMemory(
-        range.GetBaseAddress(), prefer_file_cache, heap_buffer->GetBytes(),
-        heap_buffer->GetByteSize(), error, &load_addr);
+        range.GetBaseAddress(), prefer_file_cache, data_sp->GetBytes(),
+        data_sp->GetByteSize(), error, &load_addr);
 
     if (bytes_read > 0) {
-      if (bytes_read != heap_buffer->GetByteSize())
-        heap_buffer->SetByteSize(bytes_read);
+      if (bytes_read != data_sp->GetByteSize())
+        data_sp->SetByteSize(bytes_read);
       DataExtractor data(data_sp, m_arch.GetByteOrder(),
                          m_arch.GetAddressByteSize());
       const bool data_from_file = load_addr == LLDB_INVALID_ADDRESS;
@@ -1211,7 +1220,7 @@ size_t Disassembler::ParseInstructions(const ExecutionContext *exe_ctx,
   DataBufferHeap *heap_buffer = new DataBufferHeap(byte_size, '\0');
   DataBufferSP data_sp(heap_buffer);
 
-  Error error;
+  Status error;
   lldb::addr_t load_addr = LLDB_INVALID_ADDRESS;
   const size_t bytes_read =
       target->ReadMemory(start, prefer_file_cache, heap_buffer->GetBytes(),
@@ -1243,8 +1252,7 @@ Disassembler::Disassembler(const ArchSpec &arch, const char *flavor)
     m_flavor.assign(flavor);
 
   // If this is an arm variant that can only include thumb (T16, T32)
-  // instructions, force the arch triple to be "thumbv.." instead of
-  // "armv..."
+  // instructions, force the arch triple to be "thumbv.." instead of "armv..."
   if (arch.IsAlwaysThumbInstructions()) {
     std::string thumb_arch_name(arch.GetTriple().getArchName().str());
     // Replace "arm" with "thumb" so we get all thumb variants correct
@@ -1271,7 +1279,7 @@ const InstructionList &Disassembler::GetInstructionList() const {
 //----------------------------------------------------------------------
 
 PseudoInstruction::PseudoInstruction()
-    : Instruction(Address(), eAddressClassUnknown), m_description() {}
+    : Instruction(Address(), AddressClass::eUnknown), m_description() {}
 
 PseudoInstruction::~PseudoInstruction() = default;
 
@@ -1447,4 +1455,3 @@ std::function<bool(const Instruction::Operand &)>
 lldb_private::OperandMatchers::MatchOpType(Instruction::Operand::Type type) {
   return [type](const Instruction::Operand &op) { return op.m_type == type; };
 }
-

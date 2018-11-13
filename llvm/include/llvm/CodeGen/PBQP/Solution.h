@@ -1,4 +1,4 @@
-//===-- Solution.h ------- PBQP Solution ------------------------*- C++ -*-===//
+//===- Solution.h - PBQP Solution -------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,38 +14,33 @@
 #ifndef LLVM_CODEGEN_PBQP_SOLUTION_H
 #define LLVM_CODEGEN_PBQP_SOLUTION_H
 
-#include "Graph.h"
-#include "Math.h"
+#include "llvm/CodeGen/PBQP/Graph.h"
+#include <cassert>
 #include <map>
 
 namespace llvm {
 namespace PBQP {
 
-  /// \brief Represents a solution to a PBQP problem.
+  /// Represents a solution to a PBQP problem.
   ///
   /// To get the selection for each node in the problem use the getSelection method.
   class Solution {
   private:
-
-    typedef std::map<GraphBase::NodeId, unsigned> SelectionsMap;
+    using SelectionsMap = std::map<GraphBase::NodeId, unsigned>;
     SelectionsMap selections;
 
-    unsigned r0Reductions, r1Reductions, r2Reductions, rNReductions;
-
   public:
+    /// Initialise an empty solution.
+    Solution() = default;
 
-    /// \brief Initialise an empty solution.
-    Solution()
-      : r0Reductions(0), r1Reductions(0), r2Reductions(0), rNReductions(0) {}
-
-    /// \brief Set the selection for a given node.
+    /// Set the selection for a given node.
     /// @param nodeId Node id.
     /// @param selection Selection for nodeId.
     void setSelection(GraphBase::NodeId nodeId, unsigned selection) {
       selections[nodeId] = selection;
     }
 
-    /// \brief Get a node's selection.
+    /// Get a node's selection.
     /// @param nodeId Node id.
     /// @return The selection for nodeId;
     unsigned getSelection(GraphBase::NodeId nodeId) const {
@@ -53,10 +48,9 @@ namespace PBQP {
       assert(sItr != selections.end() && "No selection for node.");
       return sItr->second;
     }
-
   };
 
-} // namespace PBQP
-} // namespace llvm
+} // end namespace PBQP
+} // end namespace llvm
 
 #endif // LLVM_CODEGEN_PBQP_SOLUTION_H

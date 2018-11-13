@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -emit-llvm -fblocks -fobjc-arc -O2 -disable-llvm-optzns -o - %s | FileCheck %s
+// RUN: %clang_cc1 -triple x86_64-apple-darwin10 -emit-llvm -fblocks -fobjc-arc -O2 -disable-llvm-passes -o - %s | FileCheck %s
 
 typedef const void *CFTypeRef;
 typedef const struct __CFString *CFStringRef;
@@ -97,3 +97,11 @@ void bridge_of_cf(int *i) {
   // CHECK-NEXT: ret void
 }
 
+// CHECK-LABEL: define %struct.__CFString* @bridge_of_paren_expr()
+CFStringRef bridge_of_paren_expr() {
+  // CHECK-NOT: call i8* @objc_retainAutoreleasedReturnValue(
+  // CHECK-NOT: call void @objc_release(
+  CFStringRef r = (__bridge CFStringRef)(CreateNSString());
+  r = (__bridge CFStringRef)((NSString *)(CreateNSString()));
+  return r;
+}

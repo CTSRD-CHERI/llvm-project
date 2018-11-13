@@ -7,12 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/IR/Value.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/ModuleSlotTracker.h"
-#include "llvm/IR/Value.h"
 #include "llvm/Support/SourceMgr.h"
 #include "gtest/gtest.h"
 using namespace llvm;
@@ -40,7 +40,7 @@ TEST(ValueTest, UsedInBasicBlock) {
   Function *F = M->getFunction("f");
 
   EXPECT_FALSE(F->isUsedInBasicBlock(&F->front()));
-  EXPECT_TRUE((++F->arg_begin())->isUsedInBasicBlock(&F->front()));
+  EXPECT_TRUE(std::next(F->arg_begin())->isUsedInBasicBlock(&F->front()));
   EXPECT_TRUE(F->arg_begin()->isUsedInBasicBlock(&F->front()));
 }
 
@@ -112,7 +112,13 @@ TEST(ValueTest, printSlots) {
   // without a slot tracker.
   LLVMContext C;
 
-  const char *ModuleString = "define void @f(i32 %x, i32 %y) {\n"
+  const char *ModuleString = "@g0 = external global %500\n"
+                             "@g1 = external global %900\n"
+                             "\n"
+                             "%900 = type { i32, i32 }\n"
+                             "%500 = type { i32 }\n"
+                             "\n"
+                             "define void @f(i32 %x, i32 %y) {\n"
                              "entry:\n"
                              "  %0 = add i32 %y, 1\n"
                              "  %1 = add i32 %y, 1\n"
@@ -131,6 +137,11 @@ TEST(ValueTest, printSlots) {
   ASSERT_TRUE(I0);
   Instruction *I1 = &*++BB.begin();
   ASSERT_TRUE(I1);
+
+  GlobalVariable *G0 = M->getGlobalVariable("g0");
+  ASSERT_TRUE(G0);
+  GlobalVariable *G1 = M->getGlobalVariable("g1");
+  ASSERT_TRUE(G1);
 
   ModuleSlotTracker MST(M.get());
 
@@ -172,6 +183,8 @@ TEST(ValueTest, printSlots) {
   CHECK_PRINT_AS_OPERAND(I1, false, "%1");
   CHECK_PRINT_AS_OPERAND(I0, true, "i32 %0");
   CHECK_PRINT_AS_OPERAND(I1, true, "i32 %1");
+  CHECK_PRINT_AS_OPERAND(G0, true, "%0* @g0");
+  CHECK_PRINT_AS_OPERAND(G1, true, "%1* @g1");
 #undef CHECK_PRINT_AS_OPERAND
 }
 

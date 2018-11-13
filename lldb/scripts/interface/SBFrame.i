@@ -133,6 +133,14 @@ public:
 
     const char *
     GetFunctionName() const;
+             
+    %feature("docstring", "
+    /// Returns the language of the frame's SBFunction, or if there.
+    /// is no SBFunction, guess the language from the mangled name.
+    /// .
+    ") GuessLanguage;
+    lldb::LanguageType
+    GuessLanguage() const;
 
     %feature("docstring", "
     /// Return true if this frame represents an inlined function.
@@ -144,6 +152,17 @@ public:
 
     bool
     IsInlined() const;
+
+    %feature("docstring", "
+    /// Return true if this frame is artificial (e.g a frame synthesized to
+    /// capture a tail call). Local variables may not be available in an artificial
+    /// frame.
+    ") IsArtificial;
+    bool
+    IsArtificial();
+
+    bool
+    IsArtificial() const;
 
     %feature("docstring", "
     /// The version that doesn't supply a 'use_dynamic' value will use the

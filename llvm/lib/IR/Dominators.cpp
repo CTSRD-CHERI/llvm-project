@@ -17,7 +17,9 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/Support/CommandLine.h"
@@ -27,15 +29,16 @@
 #include <algorithm>
 using namespace llvm;
 
-// Always verify dominfo if expensive checking is enabled.
+bool llvm::VerifyDomInfo = false;
+static cl::opt<bool, true>
+    VerifyDomInfoX("verify-dom-info", cl::location(VerifyDomInfo), cl::Hidden,
+                   cl::desc("Verify dominator info (time consuming)"));
+
 #ifdef EXPENSIVE_CHECKS
-static bool VerifyDomInfo = true;
+static constexpr bool ExpensiveChecksEnabled = true;
 #else
-static bool VerifyDomInfo = false;
+static constexpr bool ExpensiveChecksEnabled = false;
 #endif
-static cl::opt<bool,true>
-VerifyDomInfoX("verify-dom-info", cl::location(VerifyDomInfo),
-               cl::desc("Verify dominator info (time consuming)"));
 
 bool BasicBlockEdge::isSingleEdge() const {
   const TerminatorInst *TI = Start->getTerminator();
@@ -61,17 +64,51 @@ bool BasicBlockEdge::isSingleEdge() const {
 //===----------------------------------------------------------------------===//
 
 template class llvm::DomTreeNodeBase<BasicBlock>;
-template class llvm::DominatorTreeBase<BasicBlock>;
+template class llvm::DominatorTreeBase<BasicBlock, false>; // DomTreeBase
+template class llvm::DominatorTreeBase<BasicBlock, true>; // PostDomTreeBase
 
-template void llvm::Calculate<Function, BasicBlock *>(
-    DominatorTreeBase<
-        typename std::remove_pointer<GraphTraits<BasicBlock *>::NodeRef>::type>
-        &DT,
-    Function &F);
-template void llvm::Calculate<Function, Inverse<BasicBlock *>>(
-    DominatorTreeBase<typename std::remove_pointer<
-        GraphTraits<Inverse<BasicBlock *>>::NodeRef>::type> &DT,
-    Function &F);
+template class llvm::cfg::Update<BasicBlock *>;
+
+template void llvm::DomTreeBuilder::Calculate<DomTreeBuilder::BBDomTree>(
+    DomTreeBuilder::BBDomTree &DT);
+template void
+llvm::DomTreeBuilder::CalculateWithUpdates<DomTreeBuilder::BBDomTree>(
+    DomTreeBuilder::BBDomTree &DT, BBUpdates U);
+
+template void llvm::DomTreeBuilder::Calculate<DomTreeBuilder::BBPostDomTree>(
+    DomTreeBuilder::BBPostDomTree &DT);
+// No CalculateWithUpdates<PostDomTree> instantiation, unless a usecase arises.
+
+template void llvm::DomTreeBuilder::InsertEdge<DomTreeBuilder::BBDomTree>(
+    DomTreeBuilder::BBDomTree &DT, BasicBlock *From, BasicBlock *To);
+template void llvm::DomTreeBuilder::InsertEdge<DomTreeBuilder::BBPostDomTree>(
+    DomTreeBuilder::BBPostDomTree &DT, BasicBlock *From, BasicBlock *To);
+
+template void llvm::DomTreeBuilder::DeleteEdge<DomTreeBuilder::BBDomTree>(
+    DomTreeBuilder::BBDomTree &DT, BasicBlock *From, BasicBlock *To);
+template void llvm::DomTreeBuilder::DeleteEdge<DomTreeBuilder::BBPostDomTree>(
+    DomTreeBuilder::BBPostDomTree &DT, BasicBlock *From, BasicBlock *To);
+
+template void llvm::DomTreeBuilder::ApplyUpdates<DomTreeBuilder::BBDomTree>(
+    DomTreeBuilder::BBDomTree &DT, DomTreeBuilder::BBUpdates);
+template void llvm::DomTreeBuilder::ApplyUpdates<DomTreeBuilder::BBPostDomTree>(
+    DomTreeBuilder::BBPostDomTree &DT, DomTreeBuilder::BBUpdates);
+
+template bool llvm::DomTreeBuilder::Verify<DomTreeBuilder::BBDomTree>(
+    const DomTreeBuilder::BBDomTree &DT,
+    DomTreeBuilder::BBDomTree::VerificationLevel VL);
+template bool llvm::DomTreeBuilder::Verify<DomTreeBuilder::BBPostDomTree>(
+    const DomTreeBuilder::BBPostDomTree &DT,
+    DomTreeBuilder::BBPostDomTree::VerificationLevel VL);
+
+bool DominatorTree::invalidate(Function &F, const PreservedAnalyses &PA,
+                               FunctionAnalysisManager::Invalidator &) {
+  // Check whether the analysis, all analyses on functions, or the function's
+  // CFG have been preserved.
+  auto PAC = PA.getChecker<DominatorTreeAnalysis>();
+  return !(PAC.preserved() || PAC.preservedSet<AllAnalysesOn<Function>>() ||
+           PAC.preservedSet<CFGAnalyses>());
+}
 
 // dominates - Return true if Def dominates a use in User. This performs
 // the special checks necessary if Def and User are in the same basic block.
@@ -141,12 +178,6 @@ bool DominatorTree::dominates(const Instruction *Def,
 
 bool DominatorTree::dominates(const BasicBlockEdge &BBE,
                               const BasicBlock *UseBB) const {
-  // Assert that we have a single edge. We could handle them by simply
-  // returning false, but since isSingleEdge is linear on the number of
-  // edges, the callers can normally handle them more efficiently.
-  assert(BBE.isSingleEdge() &&
-         "This function is not efficient in handling multiple edges");
-
   // If the BB the edge ends in doesn't dominate the use BB, then the
   // edge also doesn't.
   const BasicBlock *Start = BBE.getStart();
@@ -179,11 +210,17 @@ bool DominatorTree::dominates(const BasicBlockEdge &BBE,
   // trivially dominates itself, so we only have to find if it dominates the
   // other predecessors. Since the only way out of X is via NormalDest, X can
   // only properly dominate a node if NormalDest dominates that node too.
+  int IsDuplicateEdge = 0;
   for (const_pred_iterator PI = pred_begin(End), E = pred_end(End);
        PI != E; ++PI) {
     const BasicBlock *BB = *PI;
-    if (BB == Start)
+    if (BB == Start) {
+      // If there are multiple edges between Start and End, by definition they
+      // can't dominate anything.
+      if (IsDuplicateEdge++)
+        return false;
       continue;
+    }
 
     if (!dominates(End, BB))
       return false;
@@ -192,12 +229,6 @@ bool DominatorTree::dominates(const BasicBlockEdge &BBE,
 }
 
 bool DominatorTree::dominates(const BasicBlockEdge &BBE, const Use &U) const {
-  // Assert that we have a single edge. We could handle them by simply
-  // returning false, but since isSingleEdge is linear on the number of
-  // edges, the callers can normally handle them more efficiently.
-  assert(BBE.isSingleEdge() &&
-         "This function is not efficient in handling multiple edges");
-
   Instruction *UserInst = cast<Instruction>(U.getUser());
   // A PHI in the end of the edge is dominated by it.
   PHINode *PN = dyn_cast<PHINode>(UserInst);
@@ -281,20 +312,6 @@ bool DominatorTree::isReachableFromEntry(const Use &U) const {
   return isReachableFromEntry(I->getParent());
 }
 
-void DominatorTree::verifyDomTree() const {
-  Function &F = *getRoot()->getParent();
-
-  DominatorTree OtherDT;
-  OtherDT.recalculate(F);
-  if (compare(OtherDT)) {
-    errs() << "DominatorTree is not up to date!\nComputed:\n";
-    print(errs());
-    errs() << "\nActual:\n";
-    OtherDT.print(errs());
-    abort();
-  }
-}
-
 //===----------------------------------------------------------------------===//
 //  DominatorTreeAnalysis and related pass implementations
 //===----------------------------------------------------------------------===//
@@ -311,7 +328,7 @@ DominatorTree DominatorTreeAnalysis::run(Function &F,
   return DT;
 }
 
-char DominatorTreeAnalysis::PassID;
+AnalysisKey DominatorTreeAnalysis::Key;
 
 DominatorTreePrinterPass::DominatorTreePrinterPass(raw_ostream &OS) : OS(OS) {}
 
@@ -325,8 +342,9 @@ PreservedAnalyses DominatorTreePrinterPass::run(Function &F,
 
 PreservedAnalyses DominatorTreeVerifierPass::run(Function &F,
                                                  FunctionAnalysisManager &AM) {
-  AM.getResult<DominatorTreeAnalysis>(F).verifyDomTree();
-
+  auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
+  assert(DT.verify());
+  (void)DT;
   return PreservedAnalyses::all();
 }
 
@@ -349,8 +367,10 @@ bool DominatorTreeWrapperPass::runOnFunction(Function &F) {
 }
 
 void DominatorTreeWrapperPass::verifyAnalysis() const {
-    if (VerifyDomInfo)
-      DT.verifyDomTree();
+  if (VerifyDomInfo)
+    assert(DT.verify(DominatorTree::VerificationLevel::Full));
+  else if (ExpensiveChecksEnabled)
+    assert(DT.verify(DominatorTree::VerificationLevel::Basic));
 }
 
 void DominatorTreeWrapperPass::print(raw_ostream &OS, const Module *) const {

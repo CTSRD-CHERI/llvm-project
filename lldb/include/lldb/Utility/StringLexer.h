@@ -1,5 +1,4 @@
-//===--------------------- StringLexer.h -------------------------*- C++
-//-*-===//
+//===--------------------- StringLexer.h ------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,9 +10,9 @@
 #ifndef utility_StringLexer_h_
 #define utility_StringLexer_h_
 
-#include <initializer_list>
-#include <list>
-#include <string>
+#include <initializer_list> // for initializer_list
+#include <string>           // for string
+#include <utility>          // for pair
 
 namespace lldb_utility {
 
@@ -40,8 +39,6 @@ public:
   Character Next();
 
   bool HasAtLeast(Size s);
-
-  bool HasAny(Character c);
 
   std::string GetUnlexed();
 

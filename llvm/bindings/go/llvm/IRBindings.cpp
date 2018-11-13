@@ -14,6 +14,7 @@
 #include "IRBindings.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/DebugLoc.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
@@ -35,13 +36,6 @@ LLVMMetadataRef LLVMMDNode2(LLVMContextRef C, LLVMMetadataRef *MDs,
       MDNode::get(*unwrap(C), ArrayRef<Metadata *>(unwrap(MDs), Count)));
 }
 
-LLVMMetadataRef LLVMTemporaryMDNode(LLVMContextRef C, LLVMMetadataRef *MDs,
-                                    unsigned Count) {
-  return wrap(MDTuple::getTemporary(*unwrap(C),
-                                    ArrayRef<Metadata *>(unwrap(MDs), Count))
-                  .release());
-}
-
 void LLVMAddNamedMetadataOperand2(LLVMModuleRef M, const char *name,
                                   LLVMMetadataRef Val) {
   NamedMDNode *N = unwrap(M)->getOrInsertNamedMetadata(name);
@@ -57,12 +51,6 @@ void LLVMSetMetadata2(LLVMValueRef Inst, unsigned KindID, LLVMMetadataRef MD) {
   unwrap<Instruction>(Inst)->setMetadata(KindID, N);
 }
 
-void LLVMMetadataReplaceAllUsesWith(LLVMMetadataRef MD, LLVMMetadataRef New) {
-  auto *Node = unwrap<MDNode>(MD);
-  Node->replaceAllUsesWith(unwrap<Metadata>(New));
-  MDNode::deleteTemporary(Node);
-}
-
 void LLVMSetCurrentDebugLocation2(LLVMBuilderRef Bref, unsigned Line,
                                   unsigned Col, LLVMMetadataRef Scope,
                                   LLVMMetadataRef InlinedAt) {
@@ -71,6 +59,15 @@ void LLVMSetCurrentDebugLocation2(LLVMBuilderRef Bref, unsigned Line,
                     InlinedAt ? unwrap<MDNode>(InlinedAt) : nullptr));
 }
 
-void LLVMSetSubprogram(LLVMValueRef Func, LLVMMetadataRef SP) {
-  unwrap<Function>(Func)->setSubprogram(unwrap<DISubprogram>(SP));
+LLVMDebugLocMetadata LLVMGetCurrentDebugLocation2(LLVMBuilderRef Bref) {
+  const auto& Loc = unwrap(Bref)->getCurrentDebugLocation();
+  const auto* InlinedAt = Loc.getInlinedAt();
+  const LLVMDebugLocMetadata md{
+    Loc.getLine(),
+    Loc.getCol(),
+    wrap(Loc.getScope()),
+    InlinedAt == nullptr ? nullptr : wrap(InlinedAt->getRawInlinedAt()),
+  };
+  return md;
 }
+

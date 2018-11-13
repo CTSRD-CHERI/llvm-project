@@ -7,12 +7,15 @@
 //
 //===----------------------------------------------------------------------===//
 
+// XFAIL: with_system_cxx_lib=macosx10.7
+// XFAIL: with_system_cxx_lib=macosx10.8
+
 // <istream>
 
 // basic_istream<charT,traits>&
 //    ignore(streamsize n = 1, int_type delim = traits::eof());
 
-// http://llvm.org/bugs/show_bug.cgi?id=16427
+// https://bugs.llvm.org/show_bug.cgi?id=16427
 
 #include <sstream>
 #include <cassert>
@@ -27,8 +30,8 @@ int main()
 
     std::istringstream is(s);
     const unsigned int ignoreLen=10;
-    size_t a=is.tellg();
+    std::istringstream::pos_type a=is.tellg();
     is.ignore(ignoreLen);
-    size_t b=is.tellg();
+    std::istringstream::pos_type b=is.tellg();
     assert((b-a)==ignoreLen);
 }

@@ -1,6 +1,11 @@
 // RUN: %clang_esan_wset -O0 %s -o %t 2>&1
 // RUN: %run %t 2>&1 | FileCheck %s
 
+// FIXME: Re-enable once PR33590 is fixed.
+// UNSUPPORTED: x86_64
+// Stucks at init and no clone feature equivalent.
+// UNSUPPORTED: freebsd
+
 #include <sanitizer/esan_interface.h>
 #include <sched.h>
 #include <stdlib.h>
@@ -8,7 +13,6 @@
 #include <sys/mman.h>
 
 const int size = 0x1 << 25; // 523288 cache lines
-const int iters = 6;
 
 int main(int argc, char **argv) {
   char *buf = (char *)mmap(0, size, PROT_READ | PROT_WRITE,

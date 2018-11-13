@@ -1,5 +1,5 @@
-; RUN: llc < %s -mtriple=arm-linux-androideabi -verify-machineinstrs | FileCheck %s -check-prefix=ARM-android
-; RUN: llc < %s -mtriple=arm-linux-unknown-gnueabi -verify-machineinstrs | FileCheck %s -check-prefix=ARM-linux
+; RUN: llc < %s -mtriple=arm-linux-androideabi -mattr=+v4t -verify-machineinstrs | FileCheck %s -check-prefix=ARM-android
+; RUN: llc < %s -mtriple=arm-linux-unknown-gnueabi -mattr=+v4t  -verify-machineinstrs | FileCheck %s -check-prefix=ARM-linux
 
 ; We used to crash with filetype=obj
 ; RUN: llc < %s -mtriple=arm-linux-androideabi -filetype=obj
@@ -244,6 +244,24 @@ define void @test_nostack() #0 {
 
 ; ARM-android-LABEL: test_nostack:
 ; ARM-android-NOT:   bl __morestack
+}
+
+; Test to make sure that a morestack call is generated if there is a
+; sibling call, even if the function in question has no stack frame
+; (PR37807).
+
+declare i32 @callee(i32)
+
+define i32 @test_sibling_call_empty_frame(i32 %x) #0 {
+  %call = tail call i32 @callee(i32 %x) #0
+  ret i32 %call
+
+; ARM-linux:      test_sibling_call_empty_frame:
+; ARM-linux:      bl      __morestack
+
+; ARM-android:      test_sibling_call_empty_frame:
+; ARM-android:      bl      __morestack
+
 }
 
 attributes #0 = { "split-stack" }

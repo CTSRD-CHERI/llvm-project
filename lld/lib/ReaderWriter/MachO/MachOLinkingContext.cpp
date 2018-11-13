@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "lld/Common/ErrorHandler.h"
 #include "lld/ReaderWriter/MachOLinkingContext.h"
 #include "ArchHandler.h"
 #include "File.h"
@@ -14,20 +15,19 @@
 #include "MachONormalizedFile.h"
 #include "MachOPasses.h"
 #include "SectCreateFile.h"
+#include "lld/Common/Driver.h"
 #include "lld/Core/ArchiveLibraryFile.h"
 #include "lld/Core/PassManager.h"
 #include "lld/Core/Reader.h"
 #include "lld/Core/Writer.h"
-#include "lld/Driver/Driver.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/Triple.h"
-#include "llvm/Config/config.h"
+#include "llvm/BinaryFormat/MachO.h"
 #include "llvm/Demangle/Demangle.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/Host.h"
-#include "llvm/Support/MachO.h"
 #include "llvm/Support/Path.h"
 #include <algorithm>
 
@@ -580,29 +580,26 @@ MachOLinkingContext::findPathForFramework(StringRef fwName) const{
   return llvm::None;
 }
 
-bool MachOLinkingContext::validateImpl(raw_ostream &diagnostics) {
+bool MachOLinkingContext::validateImpl() {
   // TODO: if -arch not specified, look at arch of first .o file.
 
   if (_currentVersion && _outputMachOType != MH_DYLIB) {
-    diagnostics << "error: -current_version can only be used with dylibs\n";
+    error("-current_version can only be used with dylibs");
     return false;
   }
 
   if (_compatibilityVersion && _outputMachOType != MH_DYLIB) {
-    diagnostics
-        << "error: -compatibility_version can only be used with dylibs\n";
+    error("-compatibility_version can only be used with dylibs");
     return false;
   }
 
   if (_deadStrippableDylib && _outputMachOType != MH_DYLIB) {
-    diagnostics
-        << "error: -mark_dead_strippable_dylib can only be used with dylibs.\n";
+    error("-mark_dead_strippable_dylib can only be used with dylibs");
     return false;
   }
 
   if (!_bundleLoader.empty() && outputMachOType() != MH_BUNDLE) {
-    diagnostics
-        << "error: -bundle_loader can only be used with Mach-O bundles\n";
+    error("-bundle_loader can only be used with Mach-O bundles");
     return false;
   }
 

@@ -31,6 +31,8 @@ using namespace __esan; // NOLINT
 // Get the per-platform defines for what is possible to intercept
 #include "sanitizer_common/sanitizer_platform_interceptors.h"
 
+DECLARE_REAL_AND_INTERCEPTOR(void *, malloc, uptr)
+
 // TODO(bruening): tsan disables several interceptors (getpwent, etc.) claiming
 // that interception is a perf hit: should we do the same?
 
@@ -173,6 +175,15 @@ using namespace __esan; // NOLINT
   do {                                                                         \
   } while (false)
 
+#define COMMON_INTERCEPTOR_MMAP_IMPL(ctx, mmap, addr, sz, prot, flags, fd,     \
+                                     off)                                      \
+  do {                                                                         \
+    if (!fixMmapAddr(&addr, sz, flags))                                        \
+      return (void *)-1;                                                       \
+    void *result = REAL(mmap)(addr, sz, prot, flags, fd, off);                 \
+    return (void *)checkMmapResult((uptr)result, sz);                          \
+  } while (false)
+
 #include "sanitizer_common/sanitizer_common_interceptors.inc"
 
 //===----------------------------------------------------------------------===//
@@ -230,6 +241,7 @@ using namespace __esan; // NOLINT
   } while (false)
 
 #include "sanitizer_common/sanitizer_common_syscalls.inc"
+#include "sanitizer_common/sanitizer_syscalls_netbsd.inc"
 
 //===----------------------------------------------------------------------===//
 // Custom interceptors
@@ -304,27 +316,6 @@ INTERCEPTOR(int, unlink, char *path) {
   return REAL(unlink)(path);
 }
 
-INTERCEPTOR(uptr, fread, void *ptr, uptr size, uptr nmemb, void *f) {
-  void *ctx;
-  COMMON_INTERCEPTOR_ENTER(ctx, fread, ptr, size, nmemb, f);
-  COMMON_INTERCEPTOR_WRITE_RANGE(ctx, ptr, size * nmemb);
-  return REAL(fread)(ptr, size, nmemb, f);
-}
-
-INTERCEPTOR(uptr, fwrite, const void *p, uptr size, uptr nmemb, void *f) {
-  void *ctx;
-  COMMON_INTERCEPTOR_ENTER(ctx, fwrite, p, size, nmemb, f);
-  COMMON_INTERCEPTOR_READ_RANGE(ctx, p, size * nmemb);
-  return REAL(fwrite)(p, size, nmemb, f);
-}
-
-INTERCEPTOR(int, puts, const char *s) {
-  void *ctx;
-  COMMON_INTERCEPTOR_ENTER(ctx, puts, s);
-  COMMON_INTERCEPTOR_READ_RANGE(ctx, s, internal_strlen(s));
-  return REAL(puts)(s);
-}
-
 INTERCEPTOR(int, rmdir, char *path) {
   void *ctx;
   COMMON_INTERCEPTOR_ENTER(ctx, rmdir, path);
@@ -333,48 +324,10 @@ INTERCEPTOR(int, rmdir, char *path) {
 }
 
 //===----------------------------------------------------------------------===//
-// Shadow-related interceptors
-//===----------------------------------------------------------------------===//
-
-// These are candidates for sharing with all sanitizers if shadow memory
-// support is also standardized.
-
-INTERCEPTOR(void *, mmap, void *addr, SIZE_T sz, int prot, int flags,
-                 int fd, OFF_T off) {
-  if (UNLIKELY(REAL(mmap) == nullptr)) {
-    // With esan init during interceptor init and a static libc preventing
-    // our early-calloc from triggering, we can end up here before our
-    // REAL pointer is set up.
-    return (void *)internal_mmap(addr, sz, prot, flags, fd, off);
-  }
-  void *ctx;
-  COMMON_INTERCEPTOR_ENTER(ctx, mmap, addr, sz, prot, flags, fd, off);
-  if (!fixMmapAddr(&addr, sz, flags))
-    return (void *)-1;
-  void *result = REAL(mmap)(addr, sz, prot, flags, fd, off);
-  return (void *)checkMmapResult((uptr)result, sz);
-}
-
-#if SANITIZER_LINUX
-INTERCEPTOR(void *, mmap64, void *addr, SIZE_T sz, int prot, int flags,
-                 int fd, OFF64_T off) {
-  void *ctx;
-  COMMON_INTERCEPTOR_ENTER(ctx, mmap64, addr, sz, prot, flags, fd, off);
-  if (!fixMmapAddr(&addr, sz, flags))
-    return (void *)-1;
-  void *result = REAL(mmap64)(addr, sz, prot, flags, fd, off);
-  return (void *)checkMmapResult((uptr)result, sz);
-}
-#define ESAN_MAYBE_INTERCEPT_MMAP64 INTERCEPT_FUNCTION(mmap64)
-#else
-#define ESAN_MAYBE_INTERCEPT_MMAP64
-#endif
-
-//===----------------------------------------------------------------------===//
 // Signal-related interceptors
 //===----------------------------------------------------------------------===//
 
-#if SANITIZER_LINUX
+#if SANITIZER_LINUX || SANITIZER_FREEBSD
 typedef void (*signal_handler_t)(int);
 INTERCEPTOR(signal_handler_t, signal, int signum, signal_handler_t handler) {
   void *ctx;
@@ -391,7 +344,7 @@ INTERCEPTOR(signal_handler_t, signal, int signum, signal_handler_t handler) {
 #define ESAN_MAYBE_INTERCEPT_SIGNAL
 #endif
 
-#if SANITIZER_LINUX
+#if SANITIZER_LINUX || SANITIZER_FREEBSD
 DECLARE_REAL(int, sigaction, int signum, const struct sigaction *act,
              struct sigaction *oldact)
 INTERCEPTOR(int, sigaction, int signum, const struct sigaction *act,
@@ -410,7 +363,11 @@ int real_sigaction(int signum, const void *act, void *oldact) {
   if (REAL(sigaction) == nullptr) {
     // With an instrumented allocator, this is called during interceptor init
     // and we need a raw syscall solution.
+#if SANITIZER_LINUX
     return internal_sigaction_syscall(signum, act, oldact);
+#else
+    return internal_sigaction(signum, act, oldact);
+#endif
   }
   return REAL(sigaction)(signum, (const struct sigaction *)act,
                          (struct sigaction *)oldact);
@@ -423,7 +380,7 @@ int real_sigaction(int signum, const void *act, void *oldact) {
 #define ESAN_MAYBE_INTERCEPT_SIGACTION
 #endif
 
-#if SANITIZER_LINUX
+#if SANITIZER_LINUX || SANITIZER_FREEBSD
 INTERCEPTOR(int, sigprocmask, int how, __sanitizer_sigset_t *set,
             __sanitizer_sigset_t *oldset) {
   void *ctx;
@@ -533,13 +490,7 @@ void initializeInterceptors() {
   INTERCEPT_FUNCTION(creat);
   ESAN_MAYBE_INTERCEPT_CREAT64;
   INTERCEPT_FUNCTION(unlink);
-  INTERCEPT_FUNCTION(fread);
-  INTERCEPT_FUNCTION(fwrite);
-  INTERCEPT_FUNCTION(puts);
   INTERCEPT_FUNCTION(rmdir);
-
-  INTERCEPT_FUNCTION(mmap);
-  ESAN_MAYBE_INTERCEPT_MMAP64;
 
   ESAN_MAYBE_INTERCEPT_SIGNAL;
   ESAN_MAYBE_INTERCEPT_SIGACTION;

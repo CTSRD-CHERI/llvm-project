@@ -10,32 +10,69 @@
 #ifndef liblldb_ValueObject_h_
 #define liblldb_ValueObject_h_
 
-// C Includes
-// C++ Includes
+#include "lldb/Core/Value.h"
+#include "lldb/Symbol/CompilerType.h"
+#include "lldb/Symbol/Type.h" // for TypeImpl
+#include "lldb/Target/ExecutionContext.h"
+#include "lldb/Target/Process.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/SharedCluster.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/UserID.h"
+#include "lldb/lldb-defines.h"              // for LLDB_INVALID...
+#include "lldb/lldb-enumerations.h"         // for DynamicValue...
+#include "lldb/lldb-forward.h"              // for ValueObjectSP
+#include "lldb/lldb-private-enumerations.h" // for AddressType
+#include "lldb/lldb-types.h"                // for addr_t, offs...
+
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/Optional.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h" // for StringRef
+
 #include <functional>
 #include <initializer_list>
 #include <map>
-#include <vector>
+#include <mutex>   // for recursive_mutex
+#include <string>  // for string
+#include <utility> // for pair
 
-// Other libraries and framework includes
-#include "llvm/ADT/Optional.h"
-#include "llvm/ADT/SmallVector.h"
-
-// Project includes
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Flags.h"
-#include "lldb/Core/UserID.h"
-#include "lldb/Core/Value.h"
-#include "lldb/Symbol/CompilerType.h"
-#include "lldb/Target/ExecutionContext.h"
-#include "lldb/Target/ExecutionContextScope.h"
-#include "lldb/Target/Process.h"
-#include "lldb/Target/StackID.h"
-#include "lldb/Utility/SharedCluster.h"
-#include "lldb/lldb-private.h"
-
+#include <stddef.h> // for size_t
+#include <stdint.h> // for uint32_t
+namespace lldb_private {
+class Declaration;
+}
+namespace lldb_private {
+class DumpValueObjectOptions;
+}
+namespace lldb_private {
+class EvaluateExpressionOptions;
+}
+namespace lldb_private {
+class ExecutionContextScope;
+}
+namespace lldb_private {
+class Log;
+}
+namespace lldb_private {
+class Scalar;
+}
+namespace lldb_private {
+class Stream;
+}
+namespace lldb_private {
+class SymbolContextScope;
+}
+namespace lldb_private {
+class TypeFormatImpl;
+}
+namespace lldb_private {
+class TypeSummaryImpl;
+}
+namespace lldb_private {
+class TypeSummaryOptions;
+}
 namespace lldb_private {
 
 /// ValueObject:
@@ -251,10 +288,10 @@ public:
       return m_exe_ctx_ref;
     }
 
-    // Set the EvaluationPoint to the values in exe_scope,
-    // Return true if the Evaluation Point changed.
-    // Since the ExecutionContextScope is always going to be valid currently,
-    // the Updated Context will also always be valid.
+    // Set the EvaluationPoint to the values in exe_scope, Return true if the
+    // Evaluation Point changed. Since the ExecutionContextScope is always
+    // going to be valid currently, the Updated Context will also always be
+    // valid.
 
     //        bool
     //        SetContext (ExecutionContextScope *exe_scope);
@@ -292,8 +329,7 @@ public:
 
     void SetInvalid() {
       // Use the stop id to mark us as invalid, leave the thread id and the
-      // stack id around for logging and
-      // history purposes.
+      // stack id around for logging and history purposes.
       m_mod_id.SetInvalid();
 
       // Can't update an invalid state.
@@ -394,16 +430,7 @@ public:
       GetExpressionPathFormat = eGetExpressionPathFormatDereferencePointers);
 
   lldb::ValueObjectSP GetValueForExpressionPath(
-      const char *expression, const char **first_unparsed = nullptr,
-      ExpressionPathScanEndReason *reason_to_stop = nullptr,
-      ExpressionPathEndResultType *final_value_type = nullptr,
-      const GetValueForExpressionPathOptions &options =
-          GetValueForExpressionPathOptions::DefaultOptions(),
-      ExpressionPathAftermath *final_task_on_target = nullptr);
-
-  int GetValuesForExpressionPath(
-      const char *expression, lldb::ValueObjectListSP &list,
-      const char **first_unparsed = nullptr,
+      llvm::StringRef expression,
       ExpressionPathScanEndReason *reason_to_stop = nullptr,
       ExpressionPathEndResultType *final_value_type = nullptr,
       const GetValueForExpressionPathOptions &options =
@@ -436,19 +463,18 @@ public:
 
   virtual int64_t GetValueAsSigned(int64_t fail_value, bool *success = nullptr);
 
-  virtual bool SetValueFromCString(const char *value_str, Error &error);
+  virtual bool SetValueFromCString(const char *value_str, Status &error);
 
-  // Return the module associated with this value object in case the
-  // value is from an executable file and might have its data in
-  // sections of the file. This can be used for variables.
+  // Return the module associated with this value object in case the value is
+  // from an executable file and might have its data in sections of the file.
+  // This can be used for variables.
   virtual lldb::ModuleSP GetModule();
 
   ValueObject *GetRoot();
 
   // Given a ValueObject, loop over itself and its parent, and its parent's
-  // parent, ..
-  // until either the given callback returns false, or you end up at a null
-  // pointer
+  // parent, .. until either the given callback returns false, or you end up at
+  // a null pointer
   ValueObject *FollowParentChain(std::function<bool(ValueObject *)>);
 
   virtual bool GetDeclaration(Declaration &decl);
@@ -456,42 +482,26 @@ public:
   //------------------------------------------------------------------
   // The functions below should NOT be modified by subclasses
   //------------------------------------------------------------------
-  const Error &GetError();
+  const Status &GetError();
 
   const ConstString &GetName() const;
 
   virtual lldb::ValueObjectSP GetChildAtIndex(size_t idx, bool can_create);
 
   // this will always create the children if necessary
-  lldb::ValueObjectSP
-  GetChildAtIndexPath(const std::initializer_list<size_t> &idxs,
-                      size_t *index_of_error = nullptr);
-
-  lldb::ValueObjectSP GetChildAtIndexPath(const std::vector<size_t> &idxs,
+  lldb::ValueObjectSP GetChildAtIndexPath(llvm::ArrayRef<size_t> idxs,
                                           size_t *index_of_error = nullptr);
 
-  lldb::ValueObjectSP GetChildAtIndexPath(
-      const std::initializer_list<std::pair<size_t, bool>> &idxs,
-      size_t *index_of_error = nullptr);
-
   lldb::ValueObjectSP
-  GetChildAtIndexPath(const std::vector<std::pair<size_t, bool>> &idxs,
+  GetChildAtIndexPath(llvm::ArrayRef<std::pair<size_t, bool>> idxs,
                       size_t *index_of_error = nullptr);
 
   // this will always create the children if necessary
-  lldb::ValueObjectSP
-  GetChildAtNamePath(const std::initializer_list<ConstString> &names,
-                     ConstString *name_of_error = nullptr);
-
-  lldb::ValueObjectSP GetChildAtNamePath(const std::vector<ConstString> &names,
+  lldb::ValueObjectSP GetChildAtNamePath(llvm::ArrayRef<ConstString> names,
                                          ConstString *name_of_error = nullptr);
 
-  lldb::ValueObjectSP GetChildAtNamePath(
-      const std::initializer_list<std::pair<ConstString, bool>> &names,
-      ConstString *name_of_error = nullptr);
-
   lldb::ValueObjectSP
-  GetChildAtNamePath(const std::vector<std::pair<ConstString, bool>> &names,
+  GetChildAtNamePath(llvm::ArrayRef<std::pair<ConstString, bool>> names,
                      ConstString *name_of_error = nullptr);
 
   virtual lldb::ValueObjectSP GetChildMemberWithName(const ConstString &name,
@@ -507,10 +517,10 @@ public:
 
   virtual bool ResolveValue(Scalar &scalar);
 
-  // return 'false' whenever you set the error, otherwise
-  // callers may assume true means everything is OK - this will
-  // break breakpoint conditions among potentially a few others
-  virtual bool IsLogicalTrue(Error &error);
+  // return 'false' whenever you set the error, otherwise callers may assume
+  // true means everything is OK - this will break breakpoint conditions among
+  // potentially a few others
+  virtual bool IsLogicalTrue(Status &error);
 
   virtual const char *GetLocationAsCString();
 
@@ -561,6 +571,9 @@ public:
 
   lldb::ValueObjectSP GetSP() { return m_manager->GetSharedPointer(this); }
 
+  // Change the name of the current ValueObject. Should *not* be used from a
+  // synthetic child provider as it would change the name of the non synthetic
+  // child as well.
   void SetName(const ConstString &name);
 
   virtual lldb::addr_t GetAddressOf(bool scalar_is_load_address = true,
@@ -607,9 +620,15 @@ public:
 
   virtual lldb::ValueObjectSP CreateConstantValue(const ConstString &name);
 
-  virtual lldb::ValueObjectSP Dereference(Error &error);
+  virtual lldb::ValueObjectSP Dereference(Status &error);
 
-  virtual lldb::ValueObjectSP AddressOf(Error &error);
+  // Creates a copy of the ValueObject with a new name and setting the current
+  // ValueObject as its parent. It should be used when we want to change the
+  // name of a ValueObject without modifying the actual ValueObject itself
+  // (e.g. sythetic child provider).
+  virtual lldb::ValueObjectSP Clone(const ConstString &new_name);
+
+  virtual lldb::ValueObjectSP AddressOf(Status &error);
 
   virtual lldb::addr_t GetLiveAddress() { return LLDB_INVALID_ADDRESS; }
 
@@ -627,8 +646,8 @@ public:
   virtual lldb::ValueObjectSP CastPointerType(const char *name,
                                               lldb::TypeSP &type_sp);
 
-  // The backing bits of this value object were updated, clear any
-  // descriptive string, so we know we have to refetch them
+  // The backing bits of this value object were updated, clear any descriptive
+  // string, so we know we have to refetch them
   virtual void ValueUpdated() {
     ClearUserVisibleData(eClearUserVisibleDataItemsValue |
                          eClearUserVisibleDataItemsSummary |
@@ -675,22 +694,21 @@ public:
 
   lldb::ValueObjectSP Persist();
 
-  // returns true if this is a char* or a char[]
-  // if it is a char* and check_pointer is true,
-  // it also checks that the pointer is valid
+  // returns true if this is a char* or a char[] if it is a char* and
+  // check_pointer is true, it also checks that the pointer is valid
   bool IsCStringContainer(bool check_pointer = false);
 
   std::pair<size_t, bool>
-  ReadPointedString(lldb::DataBufferSP &buffer_sp, Error &error,
+  ReadPointedString(lldb::DataBufferSP &buffer_sp, Status &error,
                     uint32_t max_length = 0, bool honor_array = true,
                     lldb::Format item_format = lldb::eFormatCharArray);
 
   virtual size_t GetPointeeData(DataExtractor &data, uint32_t item_idx = 0,
                                 uint32_t item_count = 1);
 
-  virtual uint64_t GetData(DataExtractor &data, Error &error);
+  virtual uint64_t GetData(DataExtractor &data, Status &error);
 
-  virtual bool SetData(DataExtractor &data, Error &error);
+  virtual bool SetData(DataExtractor &data, Status &error);
 
   virtual bool GetIsConstant() const { return m_update_point.IsConstant(); }
 
@@ -757,11 +775,9 @@ public:
   }
 
   // Use GetParent for display purposes, but if you want to tell the parent to
-  // update itself
-  // then use m_parent.  The ValueObjectDynamicValue's parent is not the correct
-  // parent for
-  // displaying, they are really siblings, so for display it needs to route
-  // through to its grandparent.
+  // update itself then use m_parent.  The ValueObjectDynamicValue's parent is
+  // not the correct parent for displaying, they are really siblings, so for
+  // display it needs to route through to its grandparent.
   virtual ValueObject *GetParent() { return m_parent; }
 
   virtual const ValueObject *GetParent() const { return m_parent; }
@@ -861,8 +877,9 @@ protected:
   DataExtractor
       m_data; // A data extractor that can be used to extract the value.
   Value m_value;
-  Error m_error; // An error object that can describe any errors that occur when
-                 // updating values.
+  Status
+      m_error; // An error object that can describe any errors that occur when
+               // updating values.
   std::string m_value_str; // Cached value string that will get cleared if/when
                            // the value is updated.
   std::string m_old_value_str; // Cached old value string from the last time the
@@ -884,9 +901,9 @@ protected:
   ValueObjectManager *m_manager; // This object is managed by the root object
                                  // (any ValueObject that gets created
   // without a parent.)  The manager gets passed through all the generations of
-  // dependent objects, and will keep the whole cluster of objects alive as long
-  // as a shared pointer to any of them has been handed out.  Shared pointers to
-  // value objects must always be made with the GetSP method.
+  // dependent objects, and will keep the whole cluster of objects alive as
+  // long as a shared pointer to any of them has been handed out.  Shared
+  // pointers to value objects must always be made with the GetSP method.
 
   ChildrenManager m_children;
   std::map<ConstString, ValueObject *> m_synthetic_children;
@@ -934,21 +951,19 @@ protected:
   // Constructors and Destructors
   //------------------------------------------------------------------
 
-  // Use the no-argument constructor to make a constant variable object (with no
-  // ExecutionContextScope.)
+  // Use the no-argument constructor to make a constant variable object (with
+  // no ExecutionContextScope.)
 
   ValueObject();
 
   // Use this constructor to create a "root variable object".  The ValueObject
-  // will be locked to this context
-  // through-out its lifespan.
+  // will be locked to this context through-out its lifespan.
 
   ValueObject(ExecutionContextScope *exe_scope,
               AddressType child_ptr_or_ref_addr_type = eAddressTypeLoad);
 
   // Use this constructor to create a ValueObject owned by another ValueObject.
-  // It will inherit the ExecutionContext
-  // of its parent.
+  // It will inherit the ExecutionContext of its parent.
 
   ValueObject(ValueObject &parent);
 
@@ -970,8 +985,8 @@ protected:
 
   virtual void CalculateSyntheticValue(bool use_synthetic = true);
 
-  // Should only be called by ValueObject::GetChildAtIndex()
-  // Returns a ValueObject managed by this ValueObject's manager.
+  // Should only be called by ValueObject::GetChildAtIndex() Returns a
+  // ValueObject managed by this ValueObject's manager.
   virtual ValueObject *CreateChildAtIndex(size_t idx,
                                           bool synthetic_array_member,
                                           int32_t synthetic_index);
@@ -1011,25 +1026,56 @@ private:
   virtual CompilerType MaybeCalculateCompleteType();
 
   lldb::ValueObjectSP GetValueForExpressionPath_Impl(
-      const char *expression_cstr, const char **first_unparsed,
-      ExpressionPathScanEndReason *reason_to_stop,
-      ExpressionPathEndResultType *final_value_type,
-      const GetValueForExpressionPathOptions &options,
-      ExpressionPathAftermath *final_task_on_target);
-
-  // this method will ONLY expand [] expressions into a VOList and return
-  // the number of elements it added to the VOList
-  // it will NOT loop through expanding the follow-up of the expression_cstr
-  // for all objects in the list
-  int ExpandArraySliceExpression(
-      const char *expression_cstr, const char **first_unparsed,
-      lldb::ValueObjectSP root, lldb::ValueObjectListSP &list,
+      llvm::StringRef expression_cstr,
       ExpressionPathScanEndReason *reason_to_stop,
       ExpressionPathEndResultType *final_value_type,
       const GetValueForExpressionPathOptions &options,
       ExpressionPathAftermath *final_task_on_target);
 
   DISALLOW_COPY_AND_ASSIGN(ValueObject);
+};
+
+//------------------------------------------------------------------------------
+// A value object manager class that is seeded with the static variable value
+// and it vends the user facing value object. If the type is dynamic it can
+// vend the dynamic type. If this user type also has a synthetic type
+// associated with it, it will vend the synthetic type. The class watches the
+// process' stop
+// ID and will update the user type when needed.
+//------------------------------------------------------------------------------
+class ValueObjectManager {
+  // The root value object is the static typed variable object.
+  lldb::ValueObjectSP m_root_valobj_sp;
+  // The user value object is the value object the user wants to see.
+  lldb::ValueObjectSP m_user_valobj_sp;
+  lldb::DynamicValueType m_use_dynamic;
+  uint32_t m_stop_id; // The stop ID that m_user_valobj_sp is valid for.
+  bool m_use_synthetic;
+
+public:
+  ValueObjectManager() {}
+  
+  ValueObjectManager(lldb::ValueObjectSP in_valobj_sp,
+                     lldb::DynamicValueType use_dynamic, bool use_synthetic);
+  
+  bool IsValid() const;
+  
+  lldb::ValueObjectSP GetRootSP() const { return m_root_valobj_sp; }
+  
+  // Gets the correct value object from the root object for a given process
+  // stop ID. If dynamic values are enabled, or if synthetic children are
+  // enabled, the value object that the user wants to see might change while
+  // debugging.
+  lldb::ValueObjectSP GetSP();
+  
+  void SetUseDynamic(lldb::DynamicValueType use_dynamic);
+  void SetUseSynthetic(bool use_synthetic);
+  lldb::DynamicValueType GetUseDynamic() const { return m_use_dynamic; }
+  bool GetUseSynthetic() const { return m_use_synthetic; }
+  lldb::TargetSP GetTargetSP() const;
+  lldb::ProcessSP GetProcessSP() const;
+  lldb::ThreadSP GetThreadSP() const;
+  lldb::StackFrameSP GetFrameSP() const;
 };
 
 } // namespace lldb_private

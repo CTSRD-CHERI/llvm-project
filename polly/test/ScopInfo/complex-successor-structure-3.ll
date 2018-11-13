@@ -7,13 +7,13 @@
 ; CHECK:         Assumed Context:
 ; CHECK-NEXT:    [tmp5, tmp, tmp8, tmp11, tmp14, tmp17, tmp20, tmp23, tmp26] -> {  :  }
 ; CHECK-NEXT:    Invalid Context:
-; CHECK-NEXT:    [tmp5, tmp, tmp8, tmp11, tmp14, tmp17, tmp20, tmp23, tmp26] -> {  : 1 = 0 }
+; CHECK-NEXT:    [tmp5, tmp, tmp8, tmp11, tmp14, tmp17, tmp20, tmp23, tmp26] -> {  : false }
 ;
 ; CHECK:         Stmt_FINAL
 ; CHECK-NEXT:            Domain :=
 ; CHECK-NEXT:                [tmp5, tmp, tmp8, tmp11, tmp14, tmp17, tmp20, tmp23, tmp26] -> { Stmt_FINAL[] };
 ; CHECK-NEXT:            Schedule :=
-; CHECK-NEXT:                [tmp5, tmp, tmp8, tmp11, tmp14, tmp17, tmp20, tmp23, tmp26] -> { Stmt_FINAL[] -> [22] };
+; CHECK-NEXT:                [tmp5, tmp, tmp8, tmp11, tmp14, tmp17, tmp20, tmp23, tmp26] -> { Stmt_FINAL[] -> [16] };
 ;
 ;
 ;    void f(short *restrict In, int *restrict Out) {

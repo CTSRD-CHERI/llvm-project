@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This class prints an WebAssembly MCInst to wasm file syntax.
+/// This class prints an WebAssembly MCInst to wasm file syntax.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -16,8 +16,9 @@
 #define LLVM_LIB_TARGET_WEBASSEMBLY_INSTPRINTER_WEBASSEMBLYINSTPRINTER_H
 
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/CodeGen/MachineValueType.h"
+#include "llvm/BinaryFormat/Wasm.h"
 #include "llvm/MC/MCInstPrinter.h"
+#include "llvm/Support/MachineValueType.h"
 
 namespace llvm {
 
@@ -49,7 +50,7 @@ public:
 
 namespace WebAssembly {
 
-const char *TypeToString(MVT Ty);
+const char *TypeToString(wasm::ValType Ty);
 
 } // end namespace WebAssembly
 

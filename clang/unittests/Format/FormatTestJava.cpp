@@ -21,13 +21,13 @@ class FormatTestJava : public ::testing::Test {
 protected:
   static std::string format(llvm::StringRef Code, unsigned Offset,
                             unsigned Length, const FormatStyle &Style) {
-    DEBUG(llvm::errs() << "---\n");
-    DEBUG(llvm::errs() << Code << "\n\n");
+    LLVM_DEBUG(llvm::errs() << "---\n");
+    LLVM_DEBUG(llvm::errs() << Code << "\n\n");
     std::vector<tooling::Range> Ranges(1, tooling::Range(Offset, Length));
     tooling::Replacements Replaces = reformat(Style, Code, Ranges);
     auto Result = applyAllReplacements(Code, Replaces);
     EXPECT_TRUE(static_cast<bool>(Result));
-    DEBUG(llvm::errs() << "\n" << *Result << "\n\n");
+    LLVM_DEBUG(llvm::errs() << "\n" << *Result << "\n\n");
     return *Result;
   }
 
@@ -46,6 +46,7 @@ protected:
   static void verifyFormat(
       llvm::StringRef Code,
       const FormatStyle &Style = getGoogleStyle(FormatStyle::LK_Java)) {
+    EXPECT_EQ(Code.str(), format(Code, Style)) << "Expected code is not stable";
     EXPECT_EQ(Code.str(), format(test::messUp(Code), Style));
   }
 };
@@ -144,6 +145,7 @@ TEST_F(FormatTestJava, ClassDeclarations) {
   verifyFormat("public interface SomeInterface {\n"
                "  void doStuff(int theStuff);\n"
                "  void doMoreStuff(int moreStuff);\n"
+               "  default void doStuffWithDefault() {}\n"
                "}");
   verifyFormat("@interface SomeInterface {\n"
                "  void doStuff(int theStuff);\n"
@@ -225,12 +227,22 @@ TEST_F(FormatTestJava, EnumDeclarations) {
                "    }\n"
                "  };\n"
                "}");
+  verifyFormat("public enum VeryLongEnum {\n"
+               "  ENUM_WITH_MANY_PARAMETERS(\n"
+               "      \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"bbbbbbbbbbbbbbbb\", "
+               "\"cccccccccccccccccccccccc\"),\n"
+               "  SECOND_ENUM(\"a\", \"b\", \"c\");\n"
+               "  private VeryLongEnum(String a, String b, String c) {}\n"
+               "}\n");
 }
 
 TEST_F(FormatTestJava, ArrayInitializers) {
   verifyFormat("new int[] {1, 2, 3, 4};");
   verifyFormat("new int[] {\n"
-               "    1, 2, 3, 4,\n"
+               "    1,\n"
+               "    2,\n"
+               "    3,\n"
+               "    4,\n"
                "};");
 
   FormatStyle Style = getStyleWithColumns(65);
@@ -323,6 +335,11 @@ TEST_F(FormatTestJava, Generics) {
   verifyFormat("Iterable<? extends SomeObject> a;");
 
   verifyFormat("A.<B>doSomething();");
+  verifyFormat("A.<B<C>>doSomething();");
+  verifyFormat("A.<B<C<D>>>doSomething();");
+  verifyFormat("A.<B<C<D<E>>>>doSomething();");
+
+  verifyFormat("OrderedPair<String, List<Box<Integer>>> p = null;");
 
   verifyFormat("@Override\n"
                "public Map<String, ?> getAll() {}");
@@ -402,6 +419,7 @@ TEST_F(FormatTestJava, SynchronizedKeyword) {
 
 TEST_F(FormatTestJava, AssertKeyword) {
   verifyFormat("assert a && b;");
+  verifyFormat("assert (a && b);");
 }
 
 TEST_F(FormatTestJava, PackageDeclarations) {
@@ -423,6 +441,22 @@ TEST_F(FormatTestJava, MethodDeclarations) {
   verifyFormat("void methodName(\n"
                "    Object arg1, Object arg2) {}",
                getStyleWithColumns(40));
+}
+
+TEST_F(FormatTestJava, MethodReference) {
+  EXPECT_EQ(
+      "private void foo() {\n"
+      "  f(this::methodReference);\n"
+      "  f(C.super::methodReference);\n"
+      "  Consumer<String> c = System.out::println;\n"
+      "  Iface<Integer> mRef = Ty::<Integer>meth;\n"
+      "}",
+      format("private void foo() {\n"
+             "  f(this ::methodReference);\n"
+             "  f(C.super ::methodReference);\n"
+             "  Consumer<String> c = System.out ::println;\n"
+             "  Iface<Integer> mRef = Ty :: <Integer> meth;\n"
+             "}"));
 }
 
 TEST_F(FormatTestJava, CppKeywords) {
@@ -514,6 +548,27 @@ TEST_F(FormatTestJava, AlignsBlockComments) {
                    "   */\n"
                    "  void f() {}"));
 }
+
+TEST_F(FormatTestJava, KeepsDelimitersOnOwnLineInJavaDocComments) {
+  EXPECT_EQ("/**\n"
+            " * javadoc line 1\n"
+            " * javadoc line 2\n"
+            " */",
+            format("/** javadoc line 1\n"
+                   " * javadoc line 2 */"));
+}
+
+TEST_F(FormatTestJava, RetainsLogicalShifts) {
+    verifyFormat("void f() {\n"
+                 "  int a = 1;\n"
+                 "  a >>>= 1;\n"
+                 "}");
+    verifyFormat("void f() {\n"
+                 "  int a = 1;\n"
+                 "  a = a >>> 1;\n"
+                 "}");
+}
+
 
 } // end namespace tooling
 } // end namespace clang

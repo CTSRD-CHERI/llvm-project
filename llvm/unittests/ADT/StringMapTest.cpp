@@ -8,9 +8,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Support/DataTypes.h"
 #include "gtest/gtest.h"
+#include <limits>
 #include <tuple>
 using namespace llvm;
 
@@ -269,6 +271,34 @@ TEST_F(StringMapTest, InsertRehashingPairTest) {
   EXPECT_EQ(42u, It->second);
 }
 
+TEST_F(StringMapTest, IterMapKeys) {
+  StringMap<int> Map;
+  Map["A"] = 1;
+  Map["B"] = 2;
+  Map["C"] = 3;
+  Map["D"] = 3;
+
+  auto Keys = to_vector<4>(Map.keys());
+  llvm::sort(Keys);
+
+  SmallVector<StringRef, 4> Expected = {"A", "B", "C", "D"};
+  EXPECT_EQ(Expected, Keys);
+}
+
+TEST_F(StringMapTest, IterSetKeys) {
+  StringSet<> Set;
+  Set.insert("A");
+  Set.insert("B");
+  Set.insert("C");
+  Set.insert("D");
+
+  auto Keys = to_vector<4>(Set.keys());
+  llvm::sort(Keys);
+
+  SmallVector<StringRef, 4> Expected = {"A", "B", "C", "D"};
+  EXPECT_EQ(Expected, Keys);
+}
+
 // Create a non-default constructable value
 struct StringMapTestStruct {
   StringMapTestStruct(int i) : i(i) {}
@@ -425,7 +455,7 @@ TEST(StringMapCustomTest, InitialSizeTest) {
       Map.insert(std::pair<std::string, CountCtorCopyAndMove>(
           std::piecewise_construct, std::forward_as_tuple(Twine(i).str()),
           std::forward_as_tuple(i)));
-    // After the inital move, the map will move the Elts in the Entry.
+    // After the initial move, the map will move the Elts in the Entry.
     EXPECT_EQ((unsigned)Size * 2, CountCtorCopyAndMove::Move);
     // We copy once the pair from the Elts vector
     EXPECT_EQ(0u, CountCtorCopyAndMove::Copy);
@@ -461,6 +491,45 @@ TEST(StringMapCustomTest, EmplaceTest) {
   Map.try_emplace("abcd", 42);
   EXPECT_EQ(1u, Map.count("abcd"));
   EXPECT_EQ(42, Map["abcd"].Data);
+}
+
+// Test that StringMapEntryBase can handle size_t wide sizes.
+TEST(StringMapCustomTest, StringMapEntryBaseSize) {
+  size_t LargeValue;
+
+  // Test that the entry can represent max-unsigned.
+  if (sizeof(size_t) <= sizeof(unsigned))
+    LargeValue = std::numeric_limits<unsigned>::max();
+  else
+    LargeValue = std::numeric_limits<unsigned>::max() + 1ULL;
+  StringMapEntryBase LargeBase(LargeValue);
+  EXPECT_EQ(LargeValue, LargeBase.getKeyLength());
+
+  // Test that the entry can hold at least max size_t.
+  LargeValue = std::numeric_limits<size_t>::max();
+  StringMapEntryBase LargerBase(LargeValue);
+  LargeValue = std::numeric_limits<size_t>::max();
+  EXPECT_EQ(LargeValue, LargerBase.getKeyLength());
+}
+
+// Test that StringMapEntry can handle size_t wide sizes.
+TEST(StringMapCustomTest, StringMapEntrySize) {
+  size_t LargeValue;
+
+  // Test that the entry can represent max-unsigned.
+  if (sizeof(size_t) <= sizeof(unsigned))
+    LargeValue = std::numeric_limits<unsigned>::max();
+  else
+    LargeValue = std::numeric_limits<unsigned>::max() + 1ULL;
+  StringMapEntry<int> LargeEntry(LargeValue);
+  StringRef Key = LargeEntry.getKey();
+  EXPECT_EQ(LargeValue, Key.size());
+
+  // Test that the entry can hold at least max size_t.
+  LargeValue = std::numeric_limits<size_t>::max();
+  StringMapEntry<int> LargerEntry(LargeValue);
+  Key = LargerEntry.getKey();
+  EXPECT_EQ(LargeValue, Key.size());
 }
 
 } // end anonymous namespace

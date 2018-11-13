@@ -48,6 +48,9 @@ void UnusedUsingDeclsCheck::registerMatchers(MatchFinder *Finder) {
 }
 
 void UnusedUsingDeclsCheck::check(const MatchFinder::MatchResult &Result) {
+  if (Result.Context->getDiagnostics().hasUncompilableErrorOccurred())
+    return;
+
   if (const auto *Using = Result.Nodes.getNodeAs<UsingDecl>("using")) {
     // Ignores using-declarations defined in macros.
     if (Using->getLocation().isMacroID())
@@ -65,9 +68,9 @@ void UnusedUsingDeclsCheck::check(const MatchFinder::MatchResult &Result) {
 
     UsingDeclContext Context(Using);
     Context.UsingDeclRange = CharSourceRange::getCharRange(
-        Using->getLocStart(),
+        Using->getBeginLoc(),
         Lexer::findLocationAfterToken(
-            Using->getLocEnd(), tok::semi, *Result.SourceManager, getLangOpts(),
+            Using->getEndLoc(), tok::semi, *Result.SourceManager, getLangOpts(),
             /*SkipTrailingWhitespaceAndNewLine=*/true));
     for (const auto *UsingShadow : Using->shadows()) {
       const auto *TargetDecl = UsingShadow->getTargetDecl()->getCanonicalDecl();

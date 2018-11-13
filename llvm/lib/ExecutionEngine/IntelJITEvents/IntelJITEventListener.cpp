@@ -12,10 +12,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Config/config.h"
 #include "IntelJITEventsWrapper.h"
+#include "llvm-c/ExecutionEngine.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/Config/config.h"
 #include "llvm/DebugInfo/DIContext.h"
 #include "llvm/DebugInfo/DWARF/DWARFContext.h"
 #include "llvm/ExecutionEngine/JITEventListener.h"
@@ -100,15 +101,17 @@ void IntelJITEventListener::NotifyObjectEmitted(
                                        const RuntimeDyld::LoadedObjectInfo &L) {
 
   OwningBinary<ObjectFile> DebugObjOwner = L.getObjectForDebug(Obj);
-  const ObjectFile &DebugObj = *DebugObjOwner.getBinary();
+  const ObjectFile *DebugObj = DebugObjOwner.getBinary();
+  if (!DebugObj)
+    return;
 
   // Get the address of the object image for use as a unique identifier
-  const void* ObjData = DebugObj.getData().data();
-  DIContext* Context = new DWARFContextInMemory(DebugObj);
+  const void* ObjData = DebugObj->getData().data();
+  std::unique_ptr<DIContext> Context = DWARFContext::create(*DebugObj);
   MethodAddressVector Functions;
 
   // Use symbol info to iterate functions in the object.
-  for (const std::pair<SymbolRef, uint64_t> &P : computeSymbolSizes(DebugObj)) {
+  for (const std::pair<SymbolRef, uint64_t> &P : computeSymbolSizes(*DebugObj)) {
     SymbolRef Sym = P.first;
     std::vector<LineNumberInfo> LineInfo;
     std::string SourceFileName;
@@ -238,3 +241,7 @@ JITEventListener *JITEventListener::createIntelJITEventListener(
 
 } // namespace llvm
 
+LLVMJITEventListenerRef LLVMCreateIntelJITEventListener(void)
+{
+  return wrap(JITEventListener::createIntelJITEventListener());
+}

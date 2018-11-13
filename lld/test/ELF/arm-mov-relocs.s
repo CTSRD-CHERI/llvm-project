@@ -1,10 +1,10 @@
+// REQUIRES: arm
 // RUN: llvm-mc -filetype=obj -triple=armv7a-unknown-linux-gnueabi %s -o %t
 // RUN: ld.lld %t -o %t2
 // RUN: llvm-objdump -d %t2 -triple=armv7a-unknown-linux-gnueabi | FileCheck %s
 // RUN: llvm-mc -filetype=obj -triple=thumbv7a-unknown-linux-gnueabi %s -o %t3
 // RUN: ld.lld %t3 -o %t4
 // RUN: llvm-objdump -d %t4 -triple=thumbv7a-unknown-linux-gnueabi | FileCheck %s
-// REQUIRES: arm
 
 // Test the R_ARM_MOVW_ABS_NC and R_ARM_MOVT_ABS relocations as well as
 // the R_ARM_THM_MOVW_ABS_NC and R_ARM_THM_MOVT_ABS relocations.
@@ -26,14 +26,9 @@ _start:
  .section .R_ARM_MOVT_ABS, "ax",%progbits
  movt r0, :upper16:label
  movt r1, :upper16:label1
-// FIXME: We shouldn't need to multiply by 65536.
-// arguably llvm-mc incorrectly assembles addends for
-// SHT_REL relocated movt instructions. When there is a relocation
-// the interpretation of the addend for SHT_REL is not shifted
- movt r2, :upper16:label2 + (4 * 65536)
+ movt r2, :upper16:label2 + 4
  movt r3, :upper16:label3
-// FIXME: We shouldn't need to multiply by 65536 see comment above.
- movt r4, :upper16:label3 + (4 * 65536)
+ movt r4, :upper16:label3 + 4
 // CHECK: Disassembly of section .R_ARM_MOVT_ABS
 // CHECK: movt	r0, #2
 // CHECK: movt	r1, #2

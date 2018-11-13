@@ -1,4 +1,5 @@
-; RUN: llc %s -o - -enable-shrink-wrap=true | FileCheck %s --check-prefix=CHECK --check-prefix=ENABLE
+; RUN: llc %s -o - -enable-shrink-wrap=true -pass-remarks-output=%t | FileCheck %s --check-prefix=CHECK --check-prefix=ENABLE
+; RUN: cat %t | FileCheck %s --check-prefix=REMARKS
 ; RUN: llc %s -o - -enable-shrink-wrap=false | FileCheck %s --check-prefix=CHECK --check-prefix=DISABLE
 ;
 ; Note: Lots of tests use inline asm instead of regular calls.
@@ -17,7 +18,7 @@ target triple = "x86_64-apple-macosx"
 ; Compare the arguments and jump to exit.
 ; No prologue needed.
 ; ENABLE: movl %edi, [[ARG0CPY:%e[a-z]+]]
-; ENABLE-NEXT: cmpl %esi, [[ARG0CPY]]
+; ENABLE-NEXT: cmpl %esi, %edi
 ; ENABLE-NEXT: jge [[EXIT_LABEL:LBB[0-9_]+]]
 ;
 ; Prologue code.
@@ -27,7 +28,7 @@ target triple = "x86_64-apple-macosx"
 ; Compare the arguments and jump to exit.
 ; After the prologue is set.
 ; DISABLE: movl %edi, [[ARG0CPY:%e[a-z]+]]
-; DISABLE-NEXT: cmpl %esi, [[ARG0CPY]]
+; DISABLE-NEXT: cmpl %esi, %edi
 ; DISABLE-NEXT: jge [[EXIT_LABEL:LBB[0-9_]+]]
 ;
 ; Store %a in the alloca.
@@ -82,9 +83,7 @@ declare i32 @doSomething(i32, i32*)
 ; DISABLE: testl %edi, %edi
 ; DISABLE: je [[ELSE_LABEL:LBB[0-9_]+]]
 ;
-; SUM is in %esi because it is coalesced with the second
-; argument on the else path.
-; CHECK: xorl [[SUM:%esi]], [[SUM]]
+; CHECK: xorl [[SUM:%eax]], [[SUM]]
 ; CHECK-NEXT: movl $10, [[IV:%e[a-z]+]]
 ;
 ; Next BB.
@@ -98,23 +97,22 @@ declare i32 @doSomething(i32, i32*)
 ; SUM << 3.
 ; CHECK: shll $3, [[SUM]]
 ;
-; Jump to epilogue.
-; DISABLE: jmp [[EPILOG_BB:LBB[0-9_]+]]
+; DISABLE: popq
+; DISABLE: retq
 ;
 ; DISABLE: [[ELSE_LABEL]]: ## %if.else
-; Shift second argument by one and store into returned register.
-; DISABLE: addl %esi, %esi
-; DISABLE: [[EPILOG_BB]]: ## %if.end
+; Shift second argument by one in returned register.
+; DISABLE: movl %esi, %eax
+; DISABLE: addl %esi, %eax
 ;
 ; Epilogue code.
 ; CHECK-DAG: popq %rbx
-; CHECK-DAG: movl %esi, %eax
 ; CHECK: retq
 ;
 ; ENABLE: [[ELSE_LABEL]]: ## %if.else
 ; Shift second argument by one and store into returned register.
-; ENABLE: addl %esi, %esi
-; ENABLE-NEXT: movl %esi, %eax
+; ENABLE: movl %esi, %eax
+; ENABLE: addl %esi, %eax
 ; ENABLE-NEXT: retq
 define i32 @freqSaveAndRestoreOutsideLoop(i32 %cond, i32 %N) {
 entry:
@@ -209,7 +207,7 @@ for.end:                                          ; preds = %for.body
 ; DISABLE-NEXT: je [[ELSE_LABEL:LBB[0-9_]+]]
 ;
 ; CHECK: nop
-; CHECK: xorl [[SUM:%esi]], [[SUM]]
+; CHECK: xorl [[SUM:%eax]], [[SUM]]
 ; CHECK-NEXT: movl $10, [[IV:%e[a-z]+]]
 ;
 ; CHECK: [[LOOP_LABEL:LBB[0-9_]+]]: ## %for.body
@@ -221,22 +219,22 @@ for.end:                                          ; preds = %for.body
 ; CHECK: nop
 ; CHECK: shll $3, [[SUM]]
 ;
-; DISABLE: jmp [[EPILOG_BB:LBB[0-9_]+]]
+; DISABLE: popq
+; DISABLE: retq
 ;
 ; DISABLE: [[ELSE_LABEL]]: ## %if.else
-; Shift second argument by one and store into returned register.
-; DISABLE: addl %esi, %esi
-; DISABLE: [[EPILOG_BB]]: ## %if.end
+; Shift second argument by one in returned register.
+; DISABLE: movl %esi, %eax
+; DISABLE: addl %esi, %eax
 ;
 ; Epilogue code.
 ; CHECK-DAG: popq %rbx
-; CHECK-DAG: movl %esi, %eax
 ; CHECK: retq
 ;
 ; ENABLE: [[ELSE_LABEL]]: ## %if.else
 ; Shift second argument by one and store into returned register.
-; ENABLE: addl %esi, %esi
-; ENABLE-NEXT: movl %esi, %eax
+; ENABLE: movl %esi, %eax
+; ENABLE: addl %esi, %eax
 ; ENABLE-NEXT: retq
 define i32 @loopInfoSaveOutsideLoop(i32 %cond, i32 %N) {
 entry:
@@ -270,8 +268,6 @@ if.end:                                           ; preds = %if.else, %for.end
   ret i32 %sum.1
 }
 
-declare void @somethingElse(...)
-
 ; Check with a more complex case that we do not have restore within the loop and
 ; save outside.
 ; CHECK-LABEL: loopInfoRestoreOutsideLoop:
@@ -287,7 +283,7 @@ declare void @somethingElse(...)
 ; DISABLE-NEXT: je [[ELSE_LABEL:LBB[0-9_]+]]
 ;
 ; CHECK: nop
-; CHECK: xorl [[SUM:%esi]], [[SUM]]
+; CHECK: xorl [[SUM:%eax]], [[SUM]]
 ; CHECK-NEXT: movl $10, [[IV:%e[a-z]+]]
 ;
 ; CHECK: [[LOOP_LABEL:LBB[0-9_]+]]: ## %for.body
@@ -298,25 +294,25 @@ declare void @somethingElse(...)
 ; Next BB.
 ; CHECK: shll $3, [[SUM]]
 ;
-; DISABLE: jmp [[EPILOG_BB:LBB[0-9_]+]]
+; DISABLE: popq
+; DISABLE: retq
 ;
 ; DISABLE: [[ELSE_LABEL]]: ## %if.else
 
-; Shift second argument by one and store into returned register.
-; DISABLE: addl %esi, %esi
-; DISABLE: [[EPILOG_BB]]: ## %if.end
+; Shift second argument by one in returned register.
+; DISABLE: movl %esi, %eax
+; DISABLE: addl %esi, %eax
 ;
 ; Epilogue code.
 ; CHECK-DAG: popq %rbx
-; CHECK-DAG: movl %esi, %eax
 ; CHECK: retq
 ;
 ; ENABLE: [[ELSE_LABEL]]: ## %if.else
 ; Shift second argument by one and store into returned register.
-; ENABLE: addl %esi, %esi
-; ENABLE-NEXT: movl %esi, %eax
+; ENABLE: movl %esi, %eax
+; ENABLE: addl %esi, %eax
 ; ENABLE-NEXT: retq
-define i32 @loopInfoRestoreOutsideLoop(i32 %cond, i32 %N) #0 {
+define i32 @loopInfoRestoreOutsideLoop(i32 %cond, i32 %N) nounwind {
 entry:
   %tobool = icmp eq i32 %cond, 0
   br i1 %tobool, label %if.else, label %if.then
@@ -380,24 +376,24 @@ entry:
 ; CHECK-NEXT: jne [[LOOP_LABEL]]
 ; Next BB.
 ; CHECK: nop
-; CHECK: xorl %esi, %esi
+; CHECK: xorl %eax, %eax
 ;
-; DISABLE: jmp [[EPILOG_BB:LBB[0-9_]+]]
+; DISABLE: popq
+; DISABLE: retq
 ;
 ; DISABLE: [[ELSE_LABEL]]: ## %if.else
-; Shift second argument by one and store into returned register.
-; DISABLE: addl %esi, %esi
-; DISABLE: [[EPILOG_BB]]: ## %if.end
+; Shift second argument by one in returned register.
+; DISABLE: movl %esi, %eax
+; DISABLE: addl %esi, %eax
 ;
 ; Epilogue code.
 ; CHECK-DAG: popq %rbx
-; CHECK-DAG: movl %esi, %eax
 ; CHECK: retq
 ;
 ; ENABLE: [[ELSE_LABEL]]: ## %if.else
 ; Shift second argument by one and store into returned register.
-; ENABLE: addl %esi, %esi
-; ENABLE-NEXT: movl %esi, %eax
+; ENABLE: movl %esi, %eax
+; ENABLE: addl %esi, %eax
 ; ENABLE-NEXT: retq
 define i32 @inlineAsm(i32 %cond, i32 %N) {
 entry:
@@ -520,8 +516,7 @@ declare hidden fastcc %struct.temp_slot* @find_temp_slot_from_address(%struct.rt
 ; CHECK: testq   %rdi, %rdi
 ; CHECK-NEXT: je      [[CLEANUP:LBB[0-9_]+]]
 ;
-; CHECK: movzwl  (%rdi), [[BF_LOAD:%e[a-z]+]]
-; CHECK-NEXT: cmpl $66, [[BF_LOAD]]
+; CHECK: cmpw $66, (%rdi)
 ; CHECK-NEXT: jne [[CLEANUP]]
 ;
 ; CHECK: movq 8(%rdi), %rdi
@@ -810,10 +805,9 @@ end:
 ; DISABLE-NEXT: subq $16, %rsp
 ;
 ; Load the value of b.
-; CHECK: movb _b(%rip), [[BOOL:%cl]]
 ; Create the zero value for the select assignment.
-; CHECK-NEXT: xorl [[CMOVE_VAL:%eax]], [[CMOVE_VAL]]
-; CHECK-NEXT: testb [[BOOL]], [[BOOL]]
+; CHECK: xorl [[CMOVE_VAL:%eax]], [[CMOVE_VAL]]
+; CHECK-NEXT: cmpb $0, _b(%rip)
 ; CHECK-NEXT: jne [[STOREC_LABEL:LBB[0-9_]+]]
 ;
 ; CHECK: movb $48, [[CMOVE_VAL:%al]]
@@ -943,6 +937,13 @@ attributes #3 = { nounwind }
 ; CHECK: popq
 ; CHECK-NEXT: popq
 ; CHECK-NEXT: retq
+; Make sure we emit missed optimization remarks for this.
+; REMARKS: Pass:            shrink-wrap
+; REMARKS-NEXT: Name:            UnsupportedIrreducibleCFG
+; REMARKS-NEXT: Function:        irreducibleCFG
+; REMARKS-NEXT: Args:
+; REMARKS-NEXT:   - String:          Irreducible CFGs are not supported yet
+
 define i32 @irreducibleCFG() #4 {
 entry:
   %i0 = load i32, i32* @irreducibleCFGa, align 4
@@ -982,3 +983,54 @@ for.inc:
 }
 
 attributes #4 = { "no-frame-pointer-elim"="true" }
+
+@x = external global i32, align 4
+@y = external global i32, align 4
+
+; The post-dominator tree does not include the branch containing the infinite
+; loop, which can occur into a misplacement of the restore block, if we're
+; looking for the nearest common post-dominator of an "unreachable" block.
+
+; CHECK-LABEL: infiniteLoopNoSuccessor:
+; CHECK: ## %bb.0:
+; Make sure the prologue happens in the entry block.
+; CHECK-NEXT: pushq %rbp
+; ...
+; Make sure we don't shrink-wrap.
+; CHECK: ## %bb.1
+; CHECK-NOT: pushq %rbp
+; ...
+; Make sure the epilogue happens in the exit block.
+; CHECK: ## %bb.5
+; CHECK: popq %rbp
+; CHECK-NEXT: retq
+define void @infiniteLoopNoSuccessor() #5 {
+  %1 = load i32, i32* @x, align 4
+  %2 = icmp ne i32 %1, 0
+  br i1 %2, label %3, label %4
+
+; <label>:3:
+  store i32 0, i32* @x, align 4
+  br label %4
+
+; <label>:4:
+  call void (...) @somethingElse()
+  %5 = load i32, i32* @y, align 4
+  %6 = icmp ne i32 %5, 0
+  br i1 %6, label %10, label %7
+
+; <label>:7:
+  %8 = call i32 (...) @something()
+  br label %9
+
+; <label>:9:
+  call void (...) @somethingElse()
+  br label %9
+
+; <label>:10:
+  ret void
+}
+
+declare void @somethingElse(...)
+
+attributes #5 = { nounwind  "no-frame-pointer-elim-non-leaf" }

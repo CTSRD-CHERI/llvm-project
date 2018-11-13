@@ -13,7 +13,7 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Utility/Utils.h"
+#include "lldb/Host/OptionParser.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -25,12 +25,12 @@ OptionGroupOutputFile::~OptionGroupOutputFile() {}
 
 static const uint32_t SHORT_OPTION_APND = 0x61706e64; // 'apnd'
 
-static OptionDefinition g_option_table[] = {
+static constexpr OptionDefinition g_option_table[] = {
     {LLDB_OPT_SET_1, false, "outfile", 'o', OptionParser::eRequiredArgument,
-     nullptr, nullptr, 0, eArgTypeFilename,
+     nullptr, {}, 0, eArgTypeFilename,
      "Specify a path for capturing command output."},
     {LLDB_OPT_SET_1, false, "append-outfile", SHORT_OPTION_APND,
-     OptionParser::eNoArgument, nullptr, nullptr, 0, eArgTypeNone,
+     OptionParser::eNoArgument, nullptr, {}, 0, eArgTypeNone,
      "Append to the file specified with '--outfile <path>'."},
 };
 
@@ -38,10 +38,11 @@ llvm::ArrayRef<OptionDefinition> OptionGroupOutputFile::GetDefinitions() {
   return llvm::makeArrayRef(g_option_table);
 }
 
-Error OptionGroupOutputFile::SetOptionValue(
-    uint32_t option_idx, llvm::StringRef option_arg,
-    ExecutionContext *execution_context) {
-  Error error;
+Status
+OptionGroupOutputFile::SetOptionValue(uint32_t option_idx,
+                                      llvm::StringRef option_arg,
+                                      ExecutionContext *execution_context) {
+  Status error;
   const int short_option = g_option_table[option_idx].short_option;
 
   switch (short_option) {

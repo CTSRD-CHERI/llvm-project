@@ -20,6 +20,17 @@
 
 namespace __sanitizer {
 
+struct MemoryMappingLayoutData {
+  int current_image;
+  u32 current_magic;
+  u32 current_filetype;
+  ModuleArch current_arch;
+  u8 current_uuid[kModuleUUIDSize];
+  int current_load_cmd_count;
+  const char *current_load_cmd_addr;
+  bool current_instrumented;
+};
+
 enum MacosVersion {
   MACOS_VERSION_UNINITIALIZED = 0,
   MACOS_VERSION_UNKNOWN,
@@ -29,12 +40,18 @@ enum MacosVersion {
   MACOS_VERSION_MOUNTAIN_LION,
   MACOS_VERSION_MAVERICKS,
   MACOS_VERSION_YOSEMITE,
+  MACOS_VERSION_EL_CAPITAN,
+  MACOS_VERSION_SIERRA,
+  MACOS_VERSION_HIGH_SIERRA,
+  MACOS_VERSION_MOJAVE,
   MACOS_VERSION_UNKNOWN_NEWER
 };
 
 MacosVersion GetMacosVersion();
 
 char **GetEnviron();
+
+void RestrictMemoryToMaxAddress(uptr max_address);
 
 }  // namespace __sanitizer
 

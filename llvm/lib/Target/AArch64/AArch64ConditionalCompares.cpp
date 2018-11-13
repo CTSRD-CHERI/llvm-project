@@ -22,6 +22,7 @@
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/CodeGen/MachineBranchProbabilityInfo.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -30,12 +31,12 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/MachineTraceMetrics.h"
 #include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/Target/TargetSubtargetInfo.h"
 
 using namespace llvm;
 
@@ -139,6 +140,7 @@ class SSACCmpConv {
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
   MachineRegisterInfo *MRI;
+  const MachineBranchProbabilityInfo *MBPI;
 
 public:
   /// The first block containing a conditional branch, dominating everything
@@ -186,8 +188,10 @@ private:
 
 public:
   /// runOnMachineFunction - Initialize per-function data structures.
-  void runOnMachineFunction(MachineFunction &MF) {
+  void runOnMachineFunction(MachineFunction &MF,
+                            const MachineBranchProbabilityInfo *MBPI) {
     this->MF = &MF;
+    this->MBPI = MBPI;
     TII = MF.getSubtarget().getInstrInfo();
     TRI = MF.getSubtarget().getRegisterInfo();
     MRI = &MF.getRegInfo();
@@ -307,7 +311,7 @@ MachineInstr *SSACCmpConv::findConvertibleCompare(MachineBasicBlock *MBB) {
       return &*I;
     }
     ++NumCmpTermRejs;
-    DEBUG(dbgs() << "Flags not used by terminator: " << *I);
+    LLVM_DEBUG(dbgs() << "Flags not used by terminator: " << *I);
     return nullptr;
   }
 
@@ -325,7 +329,7 @@ MachineInstr *SSACCmpConv::findConvertibleCompare(MachineBasicBlock *MBB) {
       // Check that the immediate operand is within range, ccmp wants a uimm5.
       // Rd = SUBSri Rn, imm, shift
       if (I->getOperand(3).getImm() || !isUInt<5>(I->getOperand(2).getImm())) {
-        DEBUG(dbgs() << "Immediate out of range for ccmp: " << *I);
+        LLVM_DEBUG(dbgs() << "Immediate out of range for ccmp: " << *I);
         ++NumImmRangeRejs;
         return nullptr;
       }
@@ -336,7 +340,8 @@ MachineInstr *SSACCmpConv::findConvertibleCompare(MachineBasicBlock *MBB) {
     case AArch64::ADDSXrr:
       if (isDeadDef(I->getOperand(0).getReg()))
         return &*I;
-      DEBUG(dbgs() << "Can't convert compare with live destination: " << *I);
+      LLVM_DEBUG(dbgs() << "Can't convert compare with live destination: "
+                        << *I);
       ++NumLiveDstRejs;
       return nullptr;
     case AArch64::FCMPSrr:
@@ -354,18 +359,19 @@ MachineInstr *SSACCmpConv::findConvertibleCompare(MachineBasicBlock *MBB) {
       // The ccmp doesn't produce exactly the same flags as the original
       // compare, so reject the transform if there are uses of the flags
       // besides the terminators.
-      DEBUG(dbgs() << "Can't create ccmp with multiple uses: " << *I);
+      LLVM_DEBUG(dbgs() << "Can't create ccmp with multiple uses: " << *I);
       ++NumMultNZCVUses;
       return nullptr;
     }
 
     if (PRI.Defined || PRI.Clobbered) {
-      DEBUG(dbgs() << "Not convertible compare: " << *I);
+      LLVM_DEBUG(dbgs() << "Not convertible compare: " << *I);
       ++NumUnknNZCVDefs;
       return nullptr;
     }
   }
-  DEBUG(dbgs() << "Flags not defined in BB#" << MBB->getNumber() << '\n');
+  LLVM_DEBUG(dbgs() << "Flags not defined in " << printMBBReference(*MBB)
+                    << '\n');
   return nullptr;
 }
 
@@ -379,7 +385,7 @@ bool SSACCmpConv::canSpeculateInstrs(MachineBasicBlock *MBB,
   // Reject any live-in physregs. It's probably NZCV/EFLAGS, and very hard to
   // get right.
   if (!MBB->livein_empty()) {
-    DEBUG(dbgs() << "BB#" << MBB->getNumber() << " has live-ins.\n");
+    LLVM_DEBUG(dbgs() << printMBBReference(*MBB) << " has live-ins.\n");
     return false;
   }
 
@@ -388,18 +394,18 @@ bool SSACCmpConv::canSpeculateInstrs(MachineBasicBlock *MBB,
   // Check all instructions, except the terminators. It is assumed that
   // terminators never have side effects or define any used register values.
   for (auto &I : make_range(MBB->begin(), MBB->getFirstTerminator())) {
-    if (I.isDebugValue())
+    if (I.isDebugInstr())
       continue;
 
     if (++InstrCount > BlockInstrLimit && !Stress) {
-      DEBUG(dbgs() << "BB#" << MBB->getNumber() << " has more than "
-                   << BlockInstrLimit << " instructions.\n");
+      LLVM_DEBUG(dbgs() << printMBBReference(*MBB) << " has more than "
+                        << BlockInstrLimit << " instructions.\n");
       return false;
     }
 
     // There shouldn't normally be any phis in a single-predecessor block.
     if (I.isPHI()) {
-      DEBUG(dbgs() << "Can't hoist: " << I);
+      LLVM_DEBUG(dbgs() << "Can't hoist: " << I);
       return false;
     }
 
@@ -407,20 +413,20 @@ bool SSACCmpConv::canSpeculateInstrs(MachineBasicBlock *MBB,
     // speculate GOT or constant pool loads that are guaranteed not to trap,
     // but we don't support that for now.
     if (I.mayLoad()) {
-      DEBUG(dbgs() << "Won't speculate load: " << I);
+      LLVM_DEBUG(dbgs() << "Won't speculate load: " << I);
       return false;
     }
 
     // We never speculate stores, so an AA pointer isn't necessary.
     bool DontMoveAcrossStore = true;
     if (!I.isSafeToMove(nullptr, DontMoveAcrossStore)) {
-      DEBUG(dbgs() << "Can't speculate: " << I);
+      LLVM_DEBUG(dbgs() << "Can't speculate: " << I);
       return false;
     }
 
     // Only CmpMI is allowed to clobber the flags.
     if (&I != CmpMI && I.modifiesRegister(AArch64::NZCV, TRI)) {
-      DEBUG(dbgs() << "Clobbers flags: " << I);
+      LLVM_DEBUG(dbgs() << "Clobbers flags: " << I);
       return false;
     }
   }
@@ -454,8 +460,9 @@ bool SSACCmpConv::canConvert(MachineBasicBlock *MBB) {
     return false;
 
   // The CFG topology checks out.
-  DEBUG(dbgs() << "\nTriangle: BB#" << Head->getNumber() << " -> BB#"
-               << CmpBB->getNumber() << " -> BB#" << Tail->getNumber() << '\n');
+  LLVM_DEBUG(dbgs() << "\nTriangle: " << printMBBReference(*Head) << " -> "
+                    << printMBBReference(*CmpBB) << " -> "
+                    << printMBBReference(*Tail) << '\n');
   ++NumConsidered;
 
   // Tail is allowed to have many predecessors, but we can't handle PHIs yet.
@@ -465,13 +472,13 @@ bool SSACCmpConv::canConvert(MachineBasicBlock *MBB) {
   // always be safe to sink the ccmp down to immediately before the CmpBB
   // terminators.
   if (!trivialTailPHIs()) {
-    DEBUG(dbgs() << "Can't handle phis in Tail.\n");
+    LLVM_DEBUG(dbgs() << "Can't handle phis in Tail.\n");
     ++NumPhiRejs;
     return false;
   }
 
   if (!Tail->livein_empty()) {
-    DEBUG(dbgs() << "Can't handle live-in physregs in Tail.\n");
+    LLVM_DEBUG(dbgs() << "Can't handle live-in physregs in Tail.\n");
     ++NumPhysRejs;
     return false;
   }
@@ -479,13 +486,13 @@ bool SSACCmpConv::canConvert(MachineBasicBlock *MBB) {
   // CmpBB should never have PHIs since Head is its only predecessor.
   // FIXME: Clean them up if it happens.
   if (!CmpBB->empty() && CmpBB->front().isPHI()) {
-    DEBUG(dbgs() << "Can't handle phis in CmpBB.\n");
+    LLVM_DEBUG(dbgs() << "Can't handle phis in CmpBB.\n");
     ++NumPhi2Rejs;
     return false;
   }
 
   if (!CmpBB->livein_empty()) {
-    DEBUG(dbgs() << "Can't handle live-in physregs in CmpBB.\n");
+    LLVM_DEBUG(dbgs() << "Can't handle live-in physregs in CmpBB.\n");
     ++NumPhysRejs;
     return false;
   }
@@ -494,7 +501,7 @@ bool SSACCmpConv::canConvert(MachineBasicBlock *MBB) {
   HeadCond.clear();
   MachineBasicBlock *TBB = nullptr, *FBB = nullptr;
   if (TII->analyzeBranch(*Head, TBB, FBB, HeadCond)) {
-    DEBUG(dbgs() << "Head branch not analyzable.\n");
+    LLVM_DEBUG(dbgs() << "Head branch not analyzable.\n");
     ++NumHeadBranchRejs;
     return false;
   }
@@ -502,13 +509,14 @@ bool SSACCmpConv::canConvert(MachineBasicBlock *MBB) {
   // This is weird, probably some sort of degenerate CFG, or an edge to a
   // landing pad.
   if (!TBB || HeadCond.empty()) {
-    DEBUG(dbgs() << "AnalyzeBranch didn't find conditional branch in Head.\n");
+    LLVM_DEBUG(
+        dbgs() << "AnalyzeBranch didn't find conditional branch in Head.\n");
     ++NumHeadBranchRejs;
     return false;
   }
 
   if (!parseCond(HeadCond, HeadCmpBBCC)) {
-    DEBUG(dbgs() << "Unsupported branch type on Head\n");
+    LLVM_DEBUG(dbgs() << "Unsupported branch type on Head\n");
     ++NumHeadBranchRejs;
     return false;
   }
@@ -522,19 +530,20 @@ bool SSACCmpConv::canConvert(MachineBasicBlock *MBB) {
   CmpBBCond.clear();
   TBB = FBB = nullptr;
   if (TII->analyzeBranch(*CmpBB, TBB, FBB, CmpBBCond)) {
-    DEBUG(dbgs() << "CmpBB branch not analyzable.\n");
+    LLVM_DEBUG(dbgs() << "CmpBB branch not analyzable.\n");
     ++NumCmpBranchRejs;
     return false;
   }
 
   if (!TBB || CmpBBCond.empty()) {
-    DEBUG(dbgs() << "AnalyzeBranch didn't find conditional branch in CmpBB.\n");
+    LLVM_DEBUG(
+        dbgs() << "AnalyzeBranch didn't find conditional branch in CmpBB.\n");
     ++NumCmpBranchRejs;
     return false;
   }
 
   if (!parseCond(CmpBBCond, CmpBBTailCC)) {
-    DEBUG(dbgs() << "Unsupported branch type on CmpBB\n");
+    LLVM_DEBUG(dbgs() << "Unsupported branch type on CmpBB\n");
     ++NumCmpBranchRejs;
     return false;
   }
@@ -542,9 +551,10 @@ bool SSACCmpConv::canConvert(MachineBasicBlock *MBB) {
   if (TBB != Tail)
     CmpBBTailCC = AArch64CC::getInvertedCondCode(CmpBBTailCC);
 
-  DEBUG(dbgs() << "Head->CmpBB on " << AArch64CC::getCondCodeName(HeadCmpBBCC)
-               << ", CmpBB->Tail on " << AArch64CC::getCondCodeName(CmpBBTailCC)
-               << '\n');
+  LLVM_DEBUG(dbgs() << "Head->CmpBB on "
+                    << AArch64CC::getCondCodeName(HeadCmpBBCC)
+                    << ", CmpBB->Tail on "
+                    << AArch64CC::getCondCodeName(CmpBBTailCC) << '\n');
 
   CmpMI = findConvertibleCompare(CmpBB);
   if (!CmpMI)
@@ -558,14 +568,47 @@ bool SSACCmpConv::canConvert(MachineBasicBlock *MBB) {
 }
 
 void SSACCmpConv::convert(SmallVectorImpl<MachineBasicBlock *> &RemovedBlocks) {
-  DEBUG(dbgs() << "Merging BB#" << CmpBB->getNumber() << " into BB#"
-               << Head->getNumber() << ":\n" << *CmpBB);
+  LLVM_DEBUG(dbgs() << "Merging " << printMBBReference(*CmpBB) << " into "
+                    << printMBBReference(*Head) << ":\n"
+                    << *CmpBB);
 
   // All CmpBB instructions are moved into Head, and CmpBB is deleted.
   // Update the CFG first.
   updateTailPHIs();
-  Head->removeSuccessor(CmpBB, true);
-  CmpBB->removeSuccessor(Tail, true);
+
+  // Save successor probabilties before removing CmpBB and Tail from their
+  // parents.
+  BranchProbability Head2CmpBB = MBPI->getEdgeProbability(Head, CmpBB);
+  BranchProbability CmpBB2Tail = MBPI->getEdgeProbability(CmpBB, Tail);
+
+  Head->removeSuccessor(CmpBB);
+  CmpBB->removeSuccessor(Tail);
+
+  // If Head and CmpBB had successor probabilties, udpate the probabilities to
+  // reflect the ccmp-conversion.
+  if (Head->hasSuccessorProbabilities() && CmpBB->hasSuccessorProbabilities()) {
+
+    // Head is allowed two successors. We've removed CmpBB, so the remaining
+    // successor is Tail. We need to increase the successor probability for
+    // Tail to account for the CmpBB path we removed.
+    //
+    // Pr(Tail|Head) += Pr(CmpBB|Head) * Pr(Tail|CmpBB).
+    assert(*Head->succ_begin() == Tail && "Head successor is not Tail");
+    BranchProbability Head2Tail = MBPI->getEdgeProbability(Head, Tail);
+    Head->setSuccProbability(Head->succ_begin(),
+                             Head2Tail + Head2CmpBB * CmpBB2Tail);
+
+    // We will transfer successors of CmpBB to Head in a moment without
+    // normalizing the successor probabilities. Set the successor probabilites
+    // before doing so.
+    //
+    // Pr(I|Head) = Pr(CmpBB|Head) * Pr(I|CmpBB).
+    for (auto I = CmpBB->succ_begin(), E = CmpBB->succ_end(); I != E; ++I) {
+      BranchProbability CmpBB2I = MBPI->getEdgeProbability(CmpBB, *I);
+      CmpBB->setSuccProbability(I, Head2CmpBB * CmpBB2I);
+    }
+  }
+
   Head->transferSuccessorsAndUpdatePHIs(CmpBB);
   DebugLoc TermDL = Head->getFirstTerminator()->getDebugLoc();
   TII->removeBranch(*Head);
@@ -594,7 +637,7 @@ void SSACCmpConv::convert(SmallVectorImpl<MachineBasicBlock *> &RemovedBlocks) {
     // Insert a SUBS Rn, #0 instruction instead of the cbz / cbnz.
     BuildMI(*Head, Head->end(), TermDL, MCID)
         .addReg(DestReg, RegState::Define | RegState::Dead)
-        .addOperand(HeadCond[2])
+        .add(HeadCond[2])
         .addImm(0)
         .addImm(0);
     // SUBS uses the GPR*sp register classes.
@@ -650,13 +693,12 @@ void SSACCmpConv::convert(SmallVectorImpl<MachineBasicBlock *> &RemovedBlocks) {
   if (CmpMI->getOperand(FirstOp + 1).isReg())
     MRI->constrainRegClass(CmpMI->getOperand(FirstOp + 1).getReg(),
                            TII->getRegClass(MCID, 1, TRI, *MF));
-  MachineInstrBuilder MIB =
-      BuildMI(*Head, CmpMI, CmpMI->getDebugLoc(), MCID)
-          .addOperand(CmpMI->getOperand(FirstOp)); // Register Rn
+  MachineInstrBuilder MIB = BuildMI(*Head, CmpMI, CmpMI->getDebugLoc(), MCID)
+                                .add(CmpMI->getOperand(FirstOp)); // Register Rn
   if (isZBranch)
     MIB.addImm(0); // cbz/cbnz Rn -> ccmp Rn, #0
   else
-    MIB.addOperand(CmpMI->getOperand(FirstOp + 1)); // Register Rm / Immediate
+    MIB.add(CmpMI->getOperand(FirstOp + 1)); // Register Rm / Immediate
   MIB.addImm(NZCV).addImm(HeadCmpBBCC);
 
   // If CmpMI was a terminator, we need a new conditional branch to replace it.
@@ -666,14 +708,14 @@ void SSACCmpConv::convert(SmallVectorImpl<MachineBasicBlock *> &RemovedBlocks) {
                 CmpMI->getOpcode() == AArch64::CBNZX;
     BuildMI(*Head, CmpMI, CmpMI->getDebugLoc(), TII->get(AArch64::Bcc))
         .addImm(isNZ ? AArch64CC::NE : AArch64CC::EQ)
-        .addOperand(CmpMI->getOperand(1)); // Branch target.
+        .add(CmpMI->getOperand(1)); // Branch target.
   }
   CmpMI->eraseFromParent();
   Head->updateTerminator();
 
   RemovedBlocks.push_back(CmpBB);
   CmpBB->eraseFromParent();
-  DEBUG(dbgs() << "Result:\n" << *Head);
+  LLVM_DEBUG(dbgs() << "Result:\n" << *Head);
   ++NumConverted;
 }
 
@@ -718,6 +760,7 @@ int SSACCmpConv::expectedCodeSizeDelta() const {
 
 namespace {
 class AArch64ConditionalCompares : public MachineFunctionPass {
+  const MachineBranchProbabilityInfo *MBPI;
   const TargetInstrInfo *TII;
   const TargetRegisterInfo *TRI;
   MCSchedModel SchedModel;
@@ -754,6 +797,7 @@ char AArch64ConditionalCompares::ID = 0;
 
 INITIALIZE_PASS_BEGIN(AArch64ConditionalCompares, "aarch64-ccmp",
                       "AArch64 CCMP Pass", false, false)
+INITIALIZE_PASS_DEPENDENCY(MachineBranchProbabilityInfo)
 INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
 INITIALIZE_PASS_DEPENDENCY(MachineTraceMetrics)
 INITIALIZE_PASS_END(AArch64ConditionalCompares, "aarch64-ccmp",
@@ -764,6 +808,7 @@ FunctionPass *llvm::createAArch64ConditionalCompares() {
 }
 
 void AArch64ConditionalCompares::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<MachineBranchProbabilityInfo>();
   AU.addRequired<MachineDominatorTree>();
   AU.addPreserved<MachineDominatorTree>();
   AU.addRequired<MachineLoopInfo>();
@@ -820,13 +865,13 @@ bool AArch64ConditionalCompares::shouldConvert() {
   // If code size is the main concern
   if (MinSize) {
     int CodeSizeDelta = CmpConv.expectedCodeSizeDelta();
-    DEBUG(dbgs() << "Code size delta:  " << CodeSizeDelta << '\n');
+    LLVM_DEBUG(dbgs() << "Code size delta:  " << CodeSizeDelta << '\n');
     // If we are minimizing the code size, do the conversion whatever
     // the cost is.
     if (CodeSizeDelta < 0)
       return true;
     if (CodeSizeDelta > 0) {
-      DEBUG(dbgs() << "Code size is increasing, give up on this one.\n");
+      LLVM_DEBUG(dbgs() << "Code size is increasing, give up on this one.\n");
       return false;
     }
     // CodeSizeDelta == 0, continue with the regular heuristics
@@ -845,24 +890,24 @@ bool AArch64ConditionalCompares::shouldConvert() {
       Trace.getInstrCycles(*CmpConv.Head->getFirstTerminator()).Depth;
   unsigned CmpBBDepth =
       Trace.getInstrCycles(*CmpConv.CmpBB->getFirstTerminator()).Depth;
-  DEBUG(dbgs() << "Head depth:  " << HeadDepth
-               << "\nCmpBB depth: " << CmpBBDepth << '\n');
+  LLVM_DEBUG(dbgs() << "Head depth:  " << HeadDepth
+                    << "\nCmpBB depth: " << CmpBBDepth << '\n');
   if (CmpBBDepth > HeadDepth + DelayLimit) {
-    DEBUG(dbgs() << "Branch delay would be larger than " << DelayLimit
-                 << " cycles.\n");
+    LLVM_DEBUG(dbgs() << "Branch delay would be larger than " << DelayLimit
+                      << " cycles.\n");
     return false;
   }
 
   // Check the resource depth at the bottom of CmpBB - these instructions will
   // be speculated.
   unsigned ResDepth = Trace.getResourceDepth(true);
-  DEBUG(dbgs() << "Resources:   " << ResDepth << '\n');
+  LLVM_DEBUG(dbgs() << "Resources:   " << ResDepth << '\n');
 
   // Heuristic: The speculatively executed instructions must all be able to
   // merge into the Head block. The Head critical path should dominate the
   // resource cost of the speculated instructions.
   if (ResDepth > HeadDepth) {
-    DEBUG(dbgs() << "Too many instructions to speculate.\n");
+    LLVM_DEBUG(dbgs() << "Too many instructions to speculate.\n");
     return false;
   }
   return true;
@@ -882,9 +927,9 @@ bool AArch64ConditionalCompares::tryConvert(MachineBasicBlock *MBB) {
 }
 
 bool AArch64ConditionalCompares::runOnMachineFunction(MachineFunction &MF) {
-  DEBUG(dbgs() << "********** AArch64 Conditional Compares **********\n"
-               << "********** Function: " << MF.getName() << '\n');
-  if (skipFunction(*MF.getFunction()))
+  LLVM_DEBUG(dbgs() << "********** AArch64 Conditional Compares **********\n"
+                    << "********** Function: " << MF.getName() << '\n');
+  if (skipFunction(MF.getFunction()))
     return false;
 
   TII = MF.getSubtarget().getInstrInfo();
@@ -893,12 +938,13 @@ bool AArch64ConditionalCompares::runOnMachineFunction(MachineFunction &MF) {
   MRI = &MF.getRegInfo();
   DomTree = &getAnalysis<MachineDominatorTree>();
   Loops = getAnalysisIfAvailable<MachineLoopInfo>();
+  MBPI = &getAnalysis<MachineBranchProbabilityInfo>();
   Traces = &getAnalysis<MachineTraceMetrics>();
   MinInstr = nullptr;
-  MinSize = MF.getFunction()->optForMinSize();
+  MinSize = MF.getFunction().optForMinSize();
 
   bool Changed = false;
-  CmpConv.runOnMachineFunction(MF);
+  CmpConv.runOnMachineFunction(MF, MBPI);
 
   // Visit blocks in dominator tree pre-order. The pre-order enables multiple
   // cmp-conversions from the same head block.

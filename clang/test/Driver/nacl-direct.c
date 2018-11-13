@@ -46,7 +46,7 @@
 // RUN:   | FileCheck --check-prefix=CHECK-ARM %s
 // CHECK-ARM: {{.*}}clang{{.*}}" "-cc1"
 // CHECK-ARM: "-fuse-init-array"
-// CHECK-ARM: "-target-cpu" "cortex-a8"
+// CHECK-ARM: "-target-cpu" "generic"
 // CHECK-ARM: "-target-abi" "aapcs-linux"
 // CHECK-ARM: "-mfloat-abi" "hard"
 // CHECK-ARM: "-resource-dir" "foo"
@@ -92,7 +92,7 @@
 // RUN: %clang -no-canonical-prefixes -### -o %t.o %s 2>&1 \
 // RUN:     -target arm-nacl \
 // RUN:   | FileCheck --check-prefix=CHECK-ARM-NOV7 %s
-// CHECK-ARM-NOV7: "-triple" "armv7--nacl-gnueabihf"
+// CHECK-ARM-NOV7: "-triple" "armv7-unknown-nacl-gnueabihf"
 // CHECK-ARM-NOV7: "-target-abi" "aapcs-linux"
 // CHECK-ARM-NOV7: "-mfloat-abi" "hard"
 // CHECK-ARM-NOV7: as{{(.exe)?}}"

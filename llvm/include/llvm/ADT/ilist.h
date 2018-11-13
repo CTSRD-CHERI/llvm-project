@@ -25,11 +25,9 @@
 #define LLVM_ADT_ILIST_H
 
 #include "llvm/ADT/simple_ilist.h"
-#include "llvm/Support/Compiler.h"
 #include <cassert>
 #include <cstddef>
 #include <iterator>
-#include <type_traits>
 
 namespace llvm {
 
@@ -86,21 +84,11 @@ template <typename NodeTy>
 struct ilist_node_traits : ilist_alloc_traits<NodeTy>,
                            ilist_callback_traits<NodeTy> {};
 
-/// Default template traits for intrusive list.
-///
-/// By inheriting from this, you can easily use default implementations for all
-/// common operations.
-///
-/// TODO: Remove this customization point.  Specializing ilist_traits is
-/// already fully general.
-template <typename NodeTy>
-struct ilist_default_traits : public ilist_node_traits<NodeTy> {};
-
 /// Template traits for intrusive list.
 ///
 /// Customize callbacks and allocation semantics.
 template <typename NodeTy>
-struct ilist_traits : public ilist_default_traits<NodeTy> {};
+struct ilist_traits : public ilist_node_traits<NodeTy> {};
 
 /// Const traits should never be instantiated.
 template <typename Ty> struct ilist_traits<const Ty> {};
@@ -180,9 +168,6 @@ template <class IntrusiveListT, class TraitsT>
 class iplist_impl : public TraitsT, IntrusiveListT {
   typedef IntrusiveListT base_list_type;
 
-protected:
-  typedef iplist_impl iplist_impl_type;
-
 public:
   typedef typename base_list_type::pointer pointer;
   typedef typename base_list_type::const_pointer const_pointer;
@@ -208,12 +193,12 @@ private:
   static bool op_less(const_reference L, const_reference R) { return L < R; }
   static bool op_equal(const_reference L, const_reference R) { return L == R; }
 
-  // Copying intrusively linked nodes doesn't make sense.
-  iplist_impl(const iplist_impl &) = delete;
-  void operator=(const iplist_impl &) = delete;
-
 public:
   iplist_impl() = default;
+
+  iplist_impl(const iplist_impl &) = delete;
+  iplist_impl &operator=(const iplist_impl &) = delete;
+
   iplist_impl(iplist_impl &&X)
       : TraitsT(std::move(X)), IntrusiveListT(std::move(X)) {}
   iplist_impl &operator=(iplist_impl &&X) {
@@ -221,6 +206,7 @@ public:
     *static_cast<IntrusiveListT *>(this) = std::move(X);
     return *this;
   }
+
   ~iplist_impl() { clear(); }
 
   // Miscellaneous inspection routines.
@@ -308,7 +294,6 @@ private:
   }
 
 public:
-
   //===----------------------------------------------------------------------===
   // Functionality derived from other functions defined above...
   //
@@ -371,26 +356,26 @@ public:
 
   using base_list_type::sort;
 
-  /// \brief Get the previous node, or \c nullptr for the list head.
+  /// Get the previous node, or \c nullptr for the list head.
   pointer getPrevNode(reference N) const {
     auto I = N.getIterator();
     if (I == begin())
       return nullptr;
     return &*std::prev(I);
   }
-  /// \brief Get the previous node, or \c nullptr for the list head.
+  /// Get the previous node, or \c nullptr for the list head.
   const_pointer getPrevNode(const_reference N) const {
     return getPrevNode(const_cast<reference >(N));
   }
 
-  /// \brief Get the next node, or \c nullptr for the list tail.
+  /// Get the next node, or \c nullptr for the list tail.
   pointer getNextNode(reference N) const {
     auto Next = std::next(N.getIterator());
     if (Next == end())
       return nullptr;
     return &*Next;
   }
-  /// \brief Get the next node, or \c nullptr for the list tail.
+  /// Get the next node, or \c nullptr for the list tail.
   const_pointer getNextNode(const_reference N) const {
     return getNextNode(const_cast<reference >(N));
   }
@@ -404,29 +389,33 @@ public:
 template <class T, class... Options>
 class iplist
     : public iplist_impl<simple_ilist<T, Options...>, ilist_traits<T>> {
-  typedef typename iplist::iplist_impl_type iplist_impl_type;
+  using iplist_impl_type = typename iplist::iplist_impl;
 
 public:
   iplist() = default;
-  iplist(iplist &&X) : iplist_impl_type(std::move(X)) {}
+
   iplist(const iplist &X) = delete;
+  iplist &operator=(const iplist &X) = delete;
+
+  iplist(iplist &&X) : iplist_impl_type(std::move(X)) {}
   iplist &operator=(iplist &&X) {
     *static_cast<iplist_impl_type *>(this) = std::move(X);
     return *this;
   }
-  iplist &operator=(const iplist &X) = delete;
 };
 
 template <class T, class... Options> using ilist = iplist<T, Options...>;
 
-} // End llvm namespace
+} // end namespace llvm
 
 namespace std {
+
   // Ensure that swap uses the fast list swap...
   template<class Ty>
   void swap(llvm::iplist<Ty> &Left, llvm::iplist<Ty> &Right) {
     Left.swap(Right);
   }
-}  // End 'std' extensions...
+
+} // end namespace std
 
 #endif // LLVM_ADT_ILIST_H

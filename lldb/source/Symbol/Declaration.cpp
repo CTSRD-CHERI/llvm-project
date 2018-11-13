@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Symbol/Declaration.h"
-#include "lldb/Core/Stream.h"
+#include "lldb/Utility/Stream.h"
 
 using namespace lldb_private;
 
@@ -42,7 +42,7 @@ void Declaration::Dump(Stream *s, bool show_fullpaths) const {
 
 bool Declaration::DumpStopContext(Stream *s, bool show_fullpaths) const {
   if (m_file) {
-    if (show_fullpaths || s->GetVerbose())
+    if (show_fullpaths)
       *s << m_file;
     else
       m_file.GetFilename().Dump(s);
@@ -91,7 +91,7 @@ bool lldb_private::operator==(const Declaration &lhs, const Declaration &rhs) {
       return lhs.GetFile() == rhs.GetFile();
 #else
   if (lhs.GetLine() == rhs.GetLine())
-    return FileSpec::Equal(lhs.GetFile(), rhs.GetFile(), true, true);
+    return FileSpec::Equal(lhs.GetFile(), rhs.GetFile(), true);
 #endif
   return false;
 }

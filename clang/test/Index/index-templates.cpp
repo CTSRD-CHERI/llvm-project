@@ -49,9 +49,9 @@ template class vector<int*>;
 struct Z4 {
   template<typename T> T getAs();
 };
-
+template<typename T, T> struct value { };
 void template_exprs() {
-  f<Unsigned, OneDimension, array>(array<Unsigned, OneDimension>());
+  f<Unsigned, OneDimension, value>(value<Unsigned, OneDimension>());
   Z4().getAs<Unsigned>();
 }
 
@@ -173,7 +173,7 @@ using alias = T;
 // CHECK-LOAD: index-templates.cpp:54:3: DeclRefExpr=f:4:6 RefName=[54:3 - 54:4] RefName=[54:4 - 54:35] Extent=[54:3 - 54:35]
 // CHECK-LOAD: index-templates.cpp:54:5: TypeRef=Unsigned:42:18 Extent=[54:5 - 54:13]
 // CHECK-LOAD: index-templates.cpp:54:15: DeclRefExpr=OneDimension:35:16 Extent=[54:15 - 54:27]
-// CHECK-LOAD: index-templates.cpp:54:29: TemplateRef=array:37:8 Extent=[54:29 - 54:34]
+// CHECK-LOAD: index-templates.cpp:54:29: TemplateRef=value:52:32 Extent=[54:29 - 54:34]
 // CHECK-LOAD: index-templates.cpp:55:8: MemberRefExpr=getAs:50:26 SingleRefName=[55:8 - 55:13] RefName=[55:8 - 55:13] Extent=[55:3 - 55:23]
 // CHECK-LOAD: index-templates.cpp:55:3: CallExpr=Z4:49:8 Extent=[55:3 - 55:7]
 // CHECK-LOAD: index-templates.cpp:55:14: TypeRef=Unsigned:42:18 Extent=[55:14 - 55:22]
@@ -219,6 +219,6 @@ using alias = T;
 // CHECK-USRS: index-templates.cpp c:@ST>2#T#T@Y Extent=[27:1 - 31:2]
 // CHECK-USRS: index-templates.cpp c:index-templates.cpp@443 Extent=[27:10 - 27:20]
 // CHECK-USRS: index-templates.cpp c:index-templates.cpp@455 Extent=[27:22 - 27:32]
-// CHECK-USRS-NOT: type
+// CHECK-USRS: index-templates.cpp c:index-templates.cpp@ST>2#T#T@Y@UUT@T::type Extent=[29:3 - 29:25]
 // CHECK-USRS: index-templates.cpp c:@S@Z3 Extent=[33:1 - 33:14]
 // CHECK-USRS: index-templates.cpp c:@F@f#$@S@map>#$@S@Z4#$@S@Pair>#I#S1_#$@S@compare>#$@S@Pair>#S1_#S2_#$@S@allocator>#S4_#

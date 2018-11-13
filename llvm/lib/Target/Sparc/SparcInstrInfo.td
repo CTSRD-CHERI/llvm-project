@@ -27,6 +27,9 @@ def Is32Bit : Predicate<"!Subtarget->is64Bit()">;
 // True when generating 64-bit code. This also implies HasV9.
 def Is64Bit : Predicate<"Subtarget->is64Bit()">;
 
+def UseSoftMulDiv : Predicate<"Subtarget->useSoftMulDiv()">,
+              AssemblerPredicate<"FeatureSoftMulDiv">;
+
 // HasV9 - This predicate is true when the target processor supports V9
 // instructions.  Note that the machine may be running in 32-bit mode.
 def HasV9   : Predicate<"Subtarget->isV9()">,
@@ -53,13 +56,18 @@ def HasHardQuad : Predicate<"Subtarget->hasHardQuad()">;
 // instruction
 def HasLeonCASA : Predicate<"Subtarget->hasLeonCasa()">;
 
+// HasPWRPSR - This is true when the target processor supports partial
+// writes to the PSR register that only affects the ET field.
+def HasPWRPSR : Predicate<"Subtarget->hasPWRPSR()">,
+                AssemblerPredicate<"FeaturePWRPSR">;
+
 // HasUMAC_SMAC - This is true when the target processor supports the
 // UMAC and SMAC instructions
 def HasUMAC_SMAC : Predicate<"Subtarget->hasUmacSmac()">;
 
 def HasNoFdivSqrtFix : Predicate<"!Subtarget->fixAllFDIVSQRT()">;
-def HasNoFmulsFix : Predicate<"!Subtarget->replaceFMULS()">;
-def HasNoFsmuldFix : Predicate<"!Subtarget->fixFSMULD()">;
+def HasFMULS : Predicate<"!Subtarget->hasNoFMULS()">;
+def HasFSMULD : Predicate<"!Subtarget->hasNoFSMULD()">;
 
 // UseDeprecatedInsts - This predicate is true when the target processor is a
 // V8, or when it is V9 but the V8 deprecated instructions are efficient enough
@@ -86,9 +94,21 @@ def HI22 : SDNodeXForm<imm, [{
                                    MVT::i32);
 }]>;
 
+// Return the complement of a HI22 immediate value.
+def HI22_not : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant(~(unsigned)N->getZExtValue() >> 10, SDLoc(N),
+                                   MVT::i32);
+}]>;
+
 def SETHIimm : PatLeaf<(imm), [{
   return isShiftedUInt<22, 10>(N->getZExtValue());
 }], HI22>;
+
+// The N->hasOneUse() prevents the immediate from being instantiated in both
+// normal and complement form.
+def SETHIimm_not : PatLeaf<(i32 imm), [{
+  return N->hasOneUse() && isShiftedUInt<22, 10>(~(unsigned)N->getZExtValue());
+}], HI22_not>;
 
 // Addressing modes.
 def ADDRrr : ComplexPattern<iPTR, 2, "SelectADDRrr", [], []>;
@@ -166,9 +186,6 @@ SDTypeProfile<1, 3, [SDTCisInt<0>, SDTCisSameAs<0, 1>, SDTCisPtrTy<2>]>;
 def SDTSPtlsld :
 SDTypeProfile<1, 2, [SDTCisPtrTy<0>, SDTCisPtrTy<1>]>;
 
-def SDTSPeh_sjlj_setjmp : SDTypeProfile<1, 1, [SDTCisInt<0>, SDTCisPtrTy<1>]>;
-def SDTSPeh_sjlj_longjmp: SDTypeProfile<0, 1, [SDTCisPtrTy<0>]>;
-
 def SPcmpicc : SDNode<"SPISD::CMPICC", SDTSPcmpicc, [SDNPOutGlue]>;
 def SPcmpfcc : SDNode<"SPISD::CMPFCC", SDTSPcmpfcc, [SDNPOutGlue]>;
 def SPbricc : SDNode<"SPISD::BRICC", SDTSPbrcc, [SDNPHasChain, SDNPInGlue]>;
@@ -187,15 +204,9 @@ def SPselecticc : SDNode<"SPISD::SELECT_ICC", SDTSPselectcc, [SDNPInGlue]>;
 def SPselectxcc : SDNode<"SPISD::SELECT_XCC", SDTSPselectcc, [SDNPInGlue]>;
 def SPselectfcc : SDNode<"SPISD::SELECT_FCC", SDTSPselectcc, [SDNPInGlue]>;
 
-def SPsjlj_setjmp: SDNode<"SPISD::EH_SJLJ_SETJMP",
-                          SDTSPeh_sjlj_setjmp,
-                          [SDNPHasChain, SDNPSideEffect]>;
-def SPsjlj_longjmp: SDNode<"SPISD::EH_SJLJ_LONGJMP",
-                           SDTSPeh_sjlj_longjmp,
-                           [SDNPHasChain, SDNPSideEffect]>;
-
 //  These are target-independent nodes, but have target-specific formats.
-def SDT_SPCallSeqStart : SDCallSeqStart<[ SDTCisVT<0, i32> ]>;
+def SDT_SPCallSeqStart : SDCallSeqStart<[ SDTCisVT<0, i32>,
+                                          SDTCisVT<1, i32> ]>;
 def SDT_SPCallSeqEnd   : SDCallSeqEnd<[ SDTCisVT<0, i32>,
                                         SDTCisVT<1, i32> ]>;
 
@@ -404,9 +415,9 @@ let Defs = [O7] in {
 }
 
 let Defs = [O6], Uses = [O6] in {
-def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i32imm:$amt),
-                               "!ADJCALLSTACKDOWN $amt",
-                               [(callseq_start timm:$amt)]>;
+def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                               "!ADJCALLSTACKDOWN $amt1, $amt2",
+                               [(callseq_start timm:$amt1, timm:$amt2)]>;
 def ADJCALLSTACKUP : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
                             "!ADJCALLSTACKUP $amt1",
                             [(callseq_end timm:$amt1, timm:$amt2)]>;
@@ -417,7 +428,7 @@ let hasSideEffects = 1, mayStore = 1 in {
     def FLUSHW : F3_1<0b10, 0b101011, (outs), (ins),
                       "flushw",
                       [(flushw)]>, Requires<[HasV9]>;
-  let rd = 0, rs1 = 1, simm13 = 3 in
+  let rd = 8, rs1 = 0, simm13 = 3 in
     def TA3 : F3_2<0b10, 0b111010, (outs), (ins),
                    "ta 3",
                    [(flushw)]>;
@@ -467,27 +478,6 @@ let usesCustomInserter = 1, Uses = [FCC0] in {
    : Pseudo<(outs QFPRegs:$dst), (ins QFPRegs:$T, QFPRegs:$F, i32imm:$Cond),
             "; SELECT_CC_QFP_FCC PSEUDO!",
             [(set f128:$dst, (SPselectfcc f128:$T, f128:$F, imm:$Cond))]>;
-}
-
-let hasSideEffects = 1, isBarrier = 1, usesCustomInserter = 1 in {
-  let Defs = [WIM] in
-  def EH_SJLJ_SETJMP32ri  : Pseudo<(outs IntRegs:$dst), (ins MEMri:$buf),
-                            "#EH_SJLJ_SETJMP32",
-                            [(set i32:$dst, (SPsjlj_setjmp ADDRri:$buf))]>,
-                            Requires<[Is32Bit]>;
-  def EH_SJLJ_SETJMP32rr  : Pseudo<(outs IntRegs:$dst), (ins MEMrr:$buf),
-                            "#EH_SJLJ_SETJMP32",
-                            [(set i32:$dst, (SPsjlj_setjmp ADDRrr:$buf))]>,
-                            Requires<[Is32Bit]>;
-  let isTerminator = 1 in
-  def EH_SJLJ_LONGJMP32ri : Pseudo<(outs), (ins MEMri:$buf),
-                            "#EH_SJLJ_LONGJMP32",
-                            [(SPsjlj_longjmp ADDRri:$buf)]>,
-                            Requires<[Is32Bit]>;
-  def EH_SJLJ_LONGJMP32rr : Pseudo<(outs), (ins MEMrr:$buf),
-                            "#EH_SJLJ_LONGJMP32",
-                            [(SPsjlj_longjmp ADDRrr:$buf)]>,
-                            Requires<[Is32Bit]>;
 }
 
 // Section B.1 - Load Integer Instructions, p. 90
@@ -675,6 +665,12 @@ def XNORrr  : F3_1<2, 0b000111,
 def XNORri  : F3_2<2, 0b000111,
                    (outs IntRegs:$rd), (ins IntRegs:$rs1, simm13Op:$simm13),
                    "xnor $rs1, $simm13, $rd", []>;
+
+def : Pat<(and IntRegs:$rs1, SETHIimm_not:$rs2),
+          (ANDNrr i32:$rs1, (SETHIi SETHIimm_not:$rs2))>;
+
+def : Pat<(or IntRegs:$rs1, SETHIimm_not:$rs2),
+          (ORNrr i32:$rs1,  (SETHIi SETHIimm_not:$rs2))>;
 
 let Defs = [ICC] in {
   defm ANDCC  : F3_12np<"andcc",  0b010001>;
@@ -1005,6 +1001,9 @@ let DecoderNamespace = "SparcV9", DecoderMethod = "DecodeTRAP", Predicates = [Ha
 let isBarrier = 1, isTerminator = 1, rd = 0b01000, rs1 = 0, simm13 = 5 in
   def TA5 : F3_2<0b10, 0b111010, (outs), (ins), "ta 5", [(trap)]>;
 
+let hasSideEffects = 1, rd = 0b01000, rs1 = 0, simm13 = 1 in
+  def TA1 : F3_2<0b10, 0b111010, (outs), (ins), "ta 1", [(debugtrap)]>;
+
 // Section B.28 - Read State Register Instructions
 let rs2 = 0 in
   def RDASR : F3_1<2, 0b101000,
@@ -1232,14 +1231,12 @@ def FSUBQ  : F3_3<2, 0b110100, 0b001000111,
 
 
 // Floating-point Multiply and Divide Instructions, p. 147
-// FMULS generates an erratum on LEON processors, so by disabling this instruction
-// this will be promoted to use FMULD with doubles instead.
-let Predicates = [HasNoFmulsFix] in 
 def FMULS  : F3_3<2, 0b110100, 0b001001001,
                   (outs FPRegs:$rd), (ins FPRegs:$rs1, FPRegs:$rs2),
                   "fmuls $rs1, $rs2, $rd",
                   [(set f32:$rd, (fmul f32:$rs1, f32:$rs2))],
-                  IIC_fpu_muls>;
+                  IIC_fpu_muls>,
+		  Requires<[HasFMULS]>;
 def FMULD  : F3_3<2, 0b110100, 0b001001010,
                   (outs DFPRegs:$rd), (ins DFPRegs:$rs1, DFPRegs:$rs2),
                   "fmuld $rs1, $rs2, $rd",
@@ -1251,13 +1248,13 @@ def FMULQ  : F3_3<2, 0b110100, 0b001001011,
                   [(set f128:$rd, (fmul f128:$rs1, f128:$rs2))]>,
                   Requires<[HasHardQuad]>;
 
-let Predicates = [HasNoFsmuldFix] in
 def FSMULD : F3_3<2, 0b110100, 0b001101001,
                   (outs DFPRegs:$rd), (ins FPRegs:$rs1, FPRegs:$rs2),
                   "fsmuld $rs1, $rs2, $rd",
                   [(set f64:$rd, (fmul (fpextend f32:$rs1),
                                         (fpextend f32:$rs2)))],
-                  IIC_fpu_muld>;
+                  IIC_fpu_muld>,
+		  Requires<[HasFSMULD]>;
 def FDMULQ : F3_3<2, 0b110100, 0b001101110,
                   (outs QFPRegs:$rd), (ins DFPRegs:$rs1, DFPRegs:$rs2),
                   "fdmulq $rs1, $rs2, $rd",
@@ -1311,7 +1308,7 @@ let Defs = [FCC0], rd = 0, isCodeGenOnly = 1 in {
 //===----------------------------------------------------------------------===//
 // Instructions for Thread Local Storage(TLS).
 //===----------------------------------------------------------------------===//
-let isCodeGenOnly = 1, isAsmParserOnly = 1 in {
+let isAsmParserOnly = 1 in {
 def TLS_ADDrr : F3_1<2, 0b000000,
                     (outs IntRegs:$rd),
                     (ins IntRegs:$rs1, IntRegs:$rs2, TLSSym:$sym),
@@ -1564,6 +1561,17 @@ let Predicates = [HasUMAC_SMAC], Defs = [Y, ASR18], Uses = [Y, ASR18] in {
                    [], IIC_smac_umac>;
 }
 
+// The partial write WRPSR instruction has a non-zero destination
+// register value to separate it from the standard instruction.
+let Predicates = [HasPWRPSR], Defs = [PSR], rd=1 in {
+  def PWRPSRrr : F3_1<2, 0b110001,
+     (outs), (ins IntRegs:$rs1, IntRegs:$rs2),
+     "pwr $rs1, $rs2, %psr", []>;
+  def PWRPSRri : F3_2<2, 0b110001,
+     (outs), (ins IntRegs:$rs1, simm13Op:$simm13),
+     "pwr $rs1, $simm13, %psr", []>;
+}
+
 let Defs = [ICC] in {
 defm TADDCC   : F3_12np<"taddcc",   0b100000>;
 defm TSUBCC   : F3_12np<"tsubcc",   0b100001>;
@@ -1597,6 +1605,9 @@ let Predicates = [HasV9] in {
 // Non-Instruction Patterns
 //===----------------------------------------------------------------------===//
 
+// Zero immediate.
+def : Pat<(i32 0),
+          (ORrr (i32 G0), (i32 G0))>;
 // Small immediates.
 def : Pat<(i32 simm13:$val),
           (ORri (i32 G0), imm:$val)>;

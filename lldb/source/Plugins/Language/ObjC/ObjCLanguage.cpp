@@ -15,9 +15,7 @@
 // Project includes
 #include "ObjCLanguage.h"
 
-#include "lldb/Core/ConstString.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/DataFormatters/DataVisualization.h"
 #include "lldb/DataFormatters/FormattersHelpers.h"
@@ -25,6 +23,10 @@
 #include "lldb/Symbol/CompilerType.h"
 #include "lldb/Target/ObjCLanguageRuntime.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/StreamString.h"
+
+#include "llvm/Support/Threading.h"
 
 #include "CF.h"
 #include "Cocoa.h"
@@ -88,12 +90,11 @@ bool ObjCLanguage::MethodName::SetName(llvm::StringRef name, bool strict) {
   if (name.empty())
     return IsValid(strict);
 
-  // If "strict" is true. then the method must be specified with a
-  // '+' or '-' at the beginning. If "strict" is false, then the '+'
-  // or '-' can be omitted
+  // If "strict" is true. then the method must be specified with a '+' or '-'
+  // at the beginning. If "strict" is false, then the '+' or '-' can be omitted
   bool valid_prefix = false;
 
-  if (name[0] == '+' || name[0] == '-') {
+  if (name.size() > 1 && (name[0] == '+' || name[0] == '-')) {
     valid_prefix = name[1] == '[';
     if (name[0] == '+')
       m_type = eTypeClassMethod;
@@ -106,7 +107,7 @@ bool ObjCLanguage::MethodName::SetName(llvm::StringRef name, bool strict) {
 
   if (valid_prefix) {
     int name_len = name.size();
-    // Objective C methods must have at least:
+    // Objective-C methods must have at least:
     //      "-[" or "+[" prefix
     //      One character for a class name
     //      One character for the space between the class name
@@ -132,8 +133,8 @@ const ConstString &ObjCLanguage::MethodName::GetClassName() {
       if (paren_pos) {
         m_class.SetCStringWithLength(class_start, paren_pos - class_start);
       } else {
-        // No '(' was found in the full name, we can definitively say
-        // that our category was valid (and empty).
+        // No '(' was found in the full name, we can definitively say that our
+        // category was valid (and empty).
         m_category_is_valid = true;
         const char *space_pos = strchr(full, ' ');
         if (space_pos) {
@@ -162,8 +163,8 @@ const ConstString &ObjCLanguage::MethodName::GetClassNameWithCategory() {
         // contain a '(', then we can also fill in the m_class
         if (!m_class && strchr(m_class_category.GetCString(), '(') == nullptr) {
           m_class = m_class_category;
-          // No '(' was found in the full name, we can definitively say
-          // that our category was valid (and empty).
+          // No '(' was found in the full name, we can definitively say that
+          // our category was valid (and empty).
           m_category_is_valid = true;
         }
       }
@@ -762,6 +763,10 @@ static void LoadObjCFormatters(TypeCategoryImplSP objc_category_sp) {
   AddCXXSummary(
       objc_category_sp, lldb_private::formatters::NSNumberSummaryProvider,
       "NSNumber summary provider", ConstString("NSCFNumber"), appkit_flags);
+  AddCXXSummary(objc_category_sp,
+                lldb_private::formatters::NSNumberSummaryProvider,
+                "NSDecimalNumber summary provider",
+                ConstString("NSDecimalNumber"), appkit_flags);
 
   AddCXXSummary(objc_category_sp,
                 lldb_private::formatters::NSURLSummaryProvider,
@@ -794,8 +799,8 @@ static void LoadObjCFormatters(TypeCategoryImplSP objc_category_sp) {
       objc_category_sp, lldb_private::formatters::NSTimeZoneSummaryProvider,
       "NSTimeZone summary provider", ConstString("__NSTimeZone"), appkit_flags);
 
-  // CFAbsoluteTime is actually a double rather than a pointer to an object
-  // we do not care about the numeric value, since it is probably meaningless to
+  // CFAbsoluteTime is actually a double rather than a pointer to an object we
+  // do not care about the numeric value, since it is probably meaningless to
   // users
   appkit_flags.SetDontShowValue(true);
   AddCXXSummary(objc_category_sp,
@@ -857,10 +862,10 @@ static void LoadCoreMediaFormatters(TypeCategoryImplSP objc_category_sp) {
 }
 
 lldb::TypeCategoryImplSP ObjCLanguage::GetFormatters() {
-  static std::once_flag g_initialize;
+  static llvm::once_flag g_initialize;
   static TypeCategoryImplSP g_category;
 
-  std::call_once(g_initialize, [this]() -> void {
+  llvm::call_once(g_initialize, [this]() -> void {
     DataVisualization::Categories::GetCategory(GetPluginName(), g_category);
     if (g_category) {
       LoadCoreMediaFormatters(g_category);
@@ -1024,6 +1029,7 @@ bool ObjCLanguage::GetFormatterPrefixSuffix(ValueObject &valobj,
   static ConstString g_NSNumberShort("NSNumber:short");
   static ConstString g_NSNumberInt("NSNumber:int");
   static ConstString g_NSNumberLong("NSNumber:long");
+  static ConstString g_NSNumberInt128("NSNumber:int128_t");
   static ConstString g_NSNumberFloat("NSNumber:float");
   static ConstString g_NSNumberDouble("NSNumber:double");
 
@@ -1059,6 +1065,10 @@ bool ObjCLanguage::GetFormatterPrefixSuffix(ValueObject &valobj,
     prefix = "(long)";
     return true;
   }
+  if (type_hint == g_NSNumberInt128) {
+    prefix = "(int128_t)";
+    return true;
+  }
   if (type_hint == g_NSNumberFloat) {
     prefix = "(float)";
     return true;
@@ -1091,4 +1101,13 @@ bool ObjCLanguage::IsNilReference(ValueObject &valobj) {
   bool canReadValue = true;
   bool isZero = valobj.GetValueAsUnsigned(0, &canReadValue) == 0;
   return canReadValue && isZero;
+}
+
+bool ObjCLanguage::IsSourceFile(llvm::StringRef file_path) const {
+  const auto suffixes = {".h", ".m", ".M"};
+  for (auto suffix : suffixes) {
+    if (file_path.endswith_lower(suffix))
+      return true;
+  }
+  return false;
 }

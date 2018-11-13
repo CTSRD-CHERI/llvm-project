@@ -13,12 +13,20 @@
 #include <type_traits>
 #include <new>
 #include <memory>
+#include <utility>
 #include <cstddef>
 #include <cstdlib>
 #include <climits>
 #include <cassert>
 
 #include "test_macros.h"
+
+template <class Alloc>
+inline typename std::allocator_traits<Alloc>::size_type
+alloc_max_size(Alloc const &a) {
+  typedef std::allocator_traits<Alloc> AT;
+  return AT::max_size(a);
+}
 
 class test_alloc_base
 {
@@ -28,19 +36,44 @@ public:
     static int throw_after;
     static int count;
     static int alloc_count;
+    static int copied;
+    static int moved;
+    static int converted;
+
+    const static int destructed_value = -1;
+    const static int default_value = 0;
+    const static int moved_value = INT_MAX;
+
+    static void clear() {
+      assert(count == 0 && "clearing leaking allocator data?");
+      count = 0;
+      time_to_throw = 0;
+      alloc_count = 0;
+      throw_after = INT_MAX;
+      clear_ctor_counters();
+    }
+
+    static void clear_ctor_counters() {
+      copied = 0;
+      moved = 0;
+      converted = 0;
+    }
 };
 
 int test_alloc_base::count = 0;
 int test_alloc_base::time_to_throw = 0;
 int test_alloc_base::alloc_count = 0;
 int test_alloc_base::throw_after = INT_MAX;
+int test_alloc_base::copied = 0;
+int test_alloc_base::moved = 0;
+int test_alloc_base::converted = 0;
 
 template <class T>
 class test_allocator
     : public test_alloc_base
 {
-    int data_;
-
+    int data_; // participates in equality
+    int id_; // unique identifier, doesn't participate in equality
     template <class U> friend class test_allocator;
 public:
 
@@ -54,13 +87,39 @@ public:
 
     template <class U> struct rebind {typedef test_allocator<U> other;};
 
-    test_allocator() throw() : data_(0) {++count;}
-    explicit test_allocator(int i) throw() : data_(i) {++count;}
-    test_allocator(const test_allocator& a) throw()
-        : data_(a.data_) {++count;}
-    template <class U> test_allocator(const test_allocator<U>& a) throw()
-        : data_(a.data_) {++count;}
-    ~test_allocator() throw() {assert(data_ >= 0); --count; data_ = -1;}
+    test_allocator() TEST_NOEXCEPT : data_(0), id_(0) {++count;}
+    explicit test_allocator(int i, int id = 0) TEST_NOEXCEPT : data_(i), id_(id)
+      {++count;}
+    test_allocator(const test_allocator& a) TEST_NOEXCEPT : data_(a.data_),
+                                                            id_(a.id_) {
+      ++count;
+      ++copied;
+      assert(a.data_ != destructed_value && a.id_ != destructed_value &&
+             "copying from destroyed allocator");
+    }
+#if TEST_STD_VER >= 11
+    test_allocator(test_allocator&& a) TEST_NOEXCEPT : data_(a.data_),
+                                                       id_(a.id_) {
+      ++count;
+      ++moved;
+      assert(a.data_ != destructed_value && a.id_ != destructed_value &&
+             "moving from destroyed allocator");
+      a.data_ = moved_value;
+      a.id_ = moved_value;
+    }
+#endif
+    template <class U>
+    test_allocator(const test_allocator<U>& a) TEST_NOEXCEPT : data_(a.data_),
+                                                               id_(a.id_) {
+      ++count;
+      ++converted;
+    }
+    ~test_allocator() TEST_NOEXCEPT {
+      assert(data_ >= 0); assert(id_ >= 0);
+      --count;
+      data_ = destructed_value;
+      id_ = destructed_value;
+    }
     pointer address(reference x) const {return &x;}
     const_pointer address(const_reference x) const {return &x;}
     pointer allocate(size_type n, const void* = 0)
@@ -79,7 +138,7 @@ public:
         }
     void deallocate(pointer p, size_type)
         {assert(data_ >= 0); --alloc_count; ::operator delete((void*)p);}
-    size_type max_size() const throw()
+    size_type max_size() const TEST_NOEXCEPT
         {return UINT_MAX / sizeof(T);}
 #if TEST_STD_VER < 11
     void construct(pointer p, const T& val)
@@ -94,6 +153,9 @@ public:
         {return x.data_ == y.data_;}
     friend bool operator!=(const test_allocator& x, const test_allocator& y)
         {return !(x == y);}
+
+    int get_data() const { return data_; }
+    int get_id() const { return id_; }
 };
 
 template <class T>
@@ -115,13 +177,13 @@ public:
 
     template <class U> struct rebind {typedef non_default_test_allocator<U> other;};
 
-//    non_default_test_allocator() throw() : data_(0) {++count;}
-    explicit non_default_test_allocator(int i) throw() : data_(i) {++count;}
-    non_default_test_allocator(const non_default_test_allocator& a) throw()
+//    non_default_test_allocator() TEST_NOEXCEPT : data_(0) {++count;}
+    explicit non_default_test_allocator(int i) TEST_NOEXCEPT : data_(i) {++count;}
+    non_default_test_allocator(const non_default_test_allocator& a) TEST_NOEXCEPT
         : data_(a.data_) {++count;}
-    template <class U> non_default_test_allocator(const non_default_test_allocator<U>& a) throw()
+    template <class U> non_default_test_allocator(const non_default_test_allocator<U>& a) TEST_NOEXCEPT
         : data_(a.data_) {++count;}
-    ~non_default_test_allocator() throw() {assert(data_ >= 0); --count; data_ = -1;}
+    ~non_default_test_allocator() TEST_NOEXCEPT {assert(data_ >= 0); --count; data_ = -1;}
     pointer address(reference x) const {return &x;}
     const_pointer address(const_reference x) const {return &x;}
     pointer allocate(size_type n, const void* = 0)
@@ -140,7 +202,7 @@ public:
         }
     void deallocate(pointer p, size_type)
         {assert(data_ >= 0); --alloc_count; ::operator delete((void*)p); }
-    size_type max_size() const throw()
+    size_type max_size() const TEST_NOEXCEPT
         {return UINT_MAX / sizeof(T);}
 #if TEST_STD_VER < 11
     void construct(pointer p, const T& val)
@@ -162,6 +224,7 @@ class test_allocator<void>
     : public test_alloc_base
 {
     int data_;
+    int id_;
 
     template <class U> friend class test_allocator;
 public:
@@ -174,13 +237,16 @@ public:
 
     template <class U> struct rebind {typedef test_allocator<U> other;};
 
-    test_allocator() throw() : data_(0) {}
-    explicit test_allocator(int i) throw() : data_(i) {}
-    test_allocator(const test_allocator& a) throw()
-        : data_(a.data_) {}
-    template <class U> test_allocator(const test_allocator<U>& a) throw()
-        : data_(a.data_) {}
-    ~test_allocator() throw() {data_ = -1;}
+    test_allocator() TEST_NOEXCEPT : data_(0), id_(0) {}
+    explicit test_allocator(int i, int id = 0) TEST_NOEXCEPT : data_(i), id_(id) {}
+    test_allocator(const test_allocator& a) TEST_NOEXCEPT
+        : data_(a.data_), id_(a.id_) {}
+    template <class U> test_allocator(const test_allocator<U>& a) TEST_NOEXCEPT
+        : data_(a.data_), id_(a.id_) {}
+    ~test_allocator() TEST_NOEXCEPT {data_ = -1; id_ = -1; }
+
+    int get_id() const { return id_; }
+    int get_data() const { return data_; }
 
     friend bool operator==(const test_allocator& x, const test_allocator& y)
         {return x.data_ == y.data_;}

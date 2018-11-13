@@ -6,14 +6,14 @@
 define void @C1(%Object addrspace(1)* %param0) gc "coreclr" {
 entry:
 
-; WIN_X64: # BB#0:
+; WIN_X64: # %bb.0:
 ; WIN_X64:	pushq	%rax
-; LINUX:   # BB#0:                                 # %entry
+; LINUX:   # %bb.0:                                 # %entry
 ; LINUX:	movq	$0, -8(%rsp)
 
   %this = alloca %Object addrspace(1)*
-  store %Object addrspace(1)* null, %Object addrspace(1)** %this
-  store %Object addrspace(1)* %param0, %Object addrspace(1)** %this
+  store volatile %Object addrspace(1)* null, %Object addrspace(1)** %this
+  store volatile %Object addrspace(1)* %param0, %Object addrspace(1)** %this
   br label %0
 
 ; <label>:0                                       ; preds = %entry

@@ -33,7 +33,6 @@ void
 test1()
 {
     typedef std::lognormal_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937 G;
     G g;
     D d(-1./8192, 0.015625);
@@ -49,7 +48,7 @@ test1()
     double var = 0;
     double skew = 0;
     double kurtosis = 0;
-    for (int i = 0; i < u.size(); ++i)
+    for (unsigned i = 0; i < u.size(); ++i)
     {
         double dbl = (u[i] - mean);
         double d2 = sqr(dbl);
@@ -78,7 +77,6 @@ void
 test2()
 {
     typedef std::lognormal_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937 G;
     G g;
     D d(-1./32, 0.25);
@@ -94,7 +92,7 @@ test2()
     double var = 0;
     double skew = 0;
     double kurtosis = 0;
-    for (int i = 0; i < u.size(); ++i)
+    for (unsigned i = 0; i < u.size(); ++i)
     {
         double dbl = (u[i] - mean);
         double d2 = sqr(dbl);
@@ -123,7 +121,6 @@ void
 test3()
 {
     typedef std::lognormal_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937 G;
     G g;
     D d(-1./8, 0.5);
@@ -139,7 +136,7 @@ test3()
     double var = 0;
     double skew = 0;
     double kurtosis = 0;
-    for (int i = 0; i < u.size(); ++i)
+    for (unsigned i = 0; i < u.size(); ++i)
     {
         double dbl = (u[i] - mean);
         double d2 = sqr(dbl);
@@ -168,7 +165,6 @@ void
 test4()
 {
     typedef std::lognormal_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937 G;
     G g;
     D d;
@@ -184,7 +180,7 @@ test4()
     double var = 0;
     double skew = 0;
     double kurtosis = 0;
-    for (int i = 0; i < u.size(); ++i)
+    for (unsigned i = 0; i < u.size(); ++i)
     {
         double dbl = (u[i] - mean);
         double d2 = sqr(dbl);
@@ -213,7 +209,6 @@ void
 test5()
 {
     typedef std::lognormal_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937 G;
     G g;
     D d(-0.78125, 1.25);
@@ -229,7 +224,7 @@ test5()
     double var = 0;
     double skew = 0;
     double kurtosis = 0;
-    for (int i = 0; i < u.size(); ++i)
+    for (unsigned i = 0; i < u.size(); ++i)
     {
         double dbl = (u[i] - mean);
         double d2 = sqr(dbl);

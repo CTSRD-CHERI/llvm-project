@@ -124,5 +124,15 @@ OrcMCJITReplacement::runFunction(Function *F,
   llvm_unreachable("Full-featured argument passing not supported yet!");
 }
 
+void OrcMCJITReplacement::runStaticConstructorsDestructors(bool isDtors) {
+  auto &CtorDtorsMap = isDtors ? UnexecutedDestructors : UnexecutedConstructors;
+
+  for (auto &KV : CtorDtorsMap)
+    cantFail(CtorDtorRunner<LazyEmitLayerT>(std::move(KV.second), KV.first)
+                 .runViaLayer(LazyEmitLayer));
+
+  CtorDtorsMap.clear();
+}
+
 } // End namespace orc.
 } // End namespace llvm.

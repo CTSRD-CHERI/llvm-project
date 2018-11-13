@@ -1,6 +1,6 @@
-; RUN: llc -asm-verbose=false < %s -mattr=+vfp3,+fp16 | FileCheck %s -check-prefix=CHECK-FP16  --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL
-; RUN: llc -asm-verbose=false < %s | FileCheck %s -check-prefix=CHECK-LIBCALL --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL --check-prefix=CHECK-LIBCALL-VFP
-; RUN: llc -asm-verbose=false < %s -mattr=-vfp2 | FileCheck %s --check-prefix=CHECK-LIBCALL -check-prefix=CHECK-NOVFP -check-prefix=CHECK-ALL
+; RUN: llc -asm-verbose=false < %s -mattr=+vfp3,+fp16 | FileCheck -allow-deprecated-dag-overlap %s -check-prefix=CHECK-FP16  --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL
+; RUN: llc -asm-verbose=false < %s | FileCheck -allow-deprecated-dag-overlap %s -check-prefix=CHECK-LIBCALL --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL --check-prefix=CHECK-LIBCALL-VFP
+; RUN: llc -asm-verbose=false < %s -mattr=-vfp2 | FileCheck -allow-deprecated-dag-overlap %s --check-prefix=CHECK-LIBCALL -check-prefix=CHECK-NOVFP -check-prefix=CHECK-ALL
 
 target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-n32"
 target triple = "armv7---eabihf"
@@ -161,17 +161,19 @@ define void @test_select(half* %p, half* %q, i1 zeroext %c) #0 {
   ret void
 }
 
-; Test only two variants of fcmp.  These get translated to f32 vcmpe
+; Test only two variants of fcmp.  These get translated to f32 vcmp
 ; instructions anyway.
 ; CHECK-ALL-LABEL: test_fcmp_une:
 ; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-LIBCALL: bl __aeabi_h2f
-; CHECK-VFP: vcmpe.f32
+; CHECK-VFP: vcmp.f32
 ; CHECK-NOVFP: bl __aeabi_fcmpeq
-; CHECK-FP16: vmrs APSR_nzcv, fpscr
-; CHECK-ALL: movw{{ne|eq}}
+; CHECK-VFP-NEXT: vmrs APSR_nzcv, fpscr
+; CHECK-VFP-NEXT: movwne
+; CHECK-NOVFP-NEXT: clz r0, r0
+; CHECK-NOVFP-NEXT: lsr r0, r0, #5
 define i1 @test_fcmp_une(half* %p, half* %q) #0 {
   %a = load half, half* %p, align 2
   %b = load half, half* %q, align 2
@@ -184,7 +186,7 @@ define i1 @test_fcmp_une(half* %p, half* %q) #0 {
 ; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-LIBCALL: bl __aeabi_h2f
-; CHECK-VFP: vcmpe.f32
+; CHECK-VFP: vcmp.f32
 ; CHECK-NOVFP: bl __aeabi_fcmpeq
 ; CHECK-FP16: vmrs APSR_nzcv, fpscr
 ; CHECK-LIBCALL: movw{{ne|eq}}
@@ -597,7 +599,7 @@ define void @test_fma(half* %p, half* %q, half* %r) #0 {
 ; CHECK-FP16: vcvtb.f16.f32
 ; CHECK-LIBCALL-LABEL: test_fabs:
 ; CHECK-LIBCALL: bl __aeabi_h2f
-; CHECK-LIBCALL: bfc
+; CHECK-LIBCALL: bic
 ; CHECK-LIBCALL: bl __aeabi_f2h
 define void @test_fabs(half* %p) {
   %a = load half, half* %p, align 2
@@ -643,10 +645,11 @@ define void @test_maxnum(half* %p, half* %q) #0 {
 }
 
 ; CHECK-ALL-LABEL: test_minnan:
-; CHECK-FP16: vcvtb.f32.f16
+; CHECK-FP16: vmov.f32 s0, #1.000000e+00
 ; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-LIBCALL: bl __aeabi_h2f
-; CHECK-LIBCALL: bl __aeabi_h2f
+; CHECK-LIBCALL-VFP: vmov.f32 s{{[0-9]+}}, #1.000000e+00
+; CHECK-NOVFP: mov r{{[0-9]+}}, #1065353216
 ; CHECK-VFP: vmin.f32
 ; CHECK-NOVFP: bl __aeabi_fcmpge
 ; CHECK-FP16: vcvtb.f16.f32
@@ -660,10 +663,11 @@ define void @test_minnan(half* %p) #0 {
 }
 
 ; CHECK-ALL-LABEL: test_maxnan:
-; CHECK-FP16: vcvtb.f32.f16
+; CHECK-FP16: vmov.f32 s0, #1.000000e+00
 ; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-LIBCALL: bl __aeabi_h2f
-; CHECK-LIBCALL: bl __aeabi_h2f
+; CHECK-LIBCALL-VFP: vmov.f32 s0, #1.000000e+00
+; CHECK-NOVFP: mov r{{[0-9]+}}, #1065353216
 ; CHECK-VFP: vmax.f32
 ; CHECK-NOVFP: bl __aeabi_fcmple
 ; CHECK-FP16: vcvtb.f16.f32
@@ -685,8 +689,8 @@ define void @test_maxnan(half* %p) #0 {
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-LIBCALL: bl __aeabi_h2f
 ; CHECK-VFP-LIBCALL: vbsl
-; CHECK-NOVFP: bfc
 ; CHECK-NOVFP: and
+; CHECK-NOVFP: bic
 ; CHECK-NOVFP: orr
 ; CHECK-LIBCALL: bl __aeabi_f2h
 define void @test_copysign(half* %p, half* %q) #0 {
@@ -815,26 +819,37 @@ define void @test_fmuladd(half* %p, half* %q, half* %r) #0 {
 
 ; CHECK-ALL-LABEL: test_insertelement:
 ; CHECK-ALL: sub sp, sp, #8
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: mov
-; CHECK-ALL-DAG: ldrh
-; CHECK-ALL-DAG: add
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
-; CHECK-ALL: ldrh
-; CHECK-ALL: strh
+
+; CHECK-VFP:	and	
+; CHECK-VFP:	mov	
+; CHECK-VFP:	ldrd	
+; CHECK-VFP:	orr	
+; CHECK-VFP:	ldrh	
+; CHECK-VFP:	stm	
+; CHECK-VFP:	strh	
+; CHECK-VFP:	ldm	
+; CHECK-VFP:	stm	
+
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP: ldrh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: mov
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: orr
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: ldrh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+; CHECK-NOVFP-DAG: strh
+
 ; CHECK-ALL: add sp, sp, #8
 define void @test_insertelement(half* %p, <4 x half>* %q, i32 %i) #0 {
   %a = load half, half* %p, align 2
@@ -845,21 +860,15 @@ define void @test_insertelement(half* %p, <4 x half>* %q, i32 %i) #0 {
 }
 
 ; CHECK-ALL-LABEL: test_extractelement:
+; CHECK-VFP: push {{{.*}}, lr}
 ; CHECK-VFP: sub sp, sp, #8
-; CHECK-VFP: ldrh
-; CHECK-VFP: ldrh
-; CHECK-VFP: orr
-; CHECK-VFP: str
-; CHECK-VFP: ldrh
-; CHECK-VFP: ldrh
-; CHECK-VFP: orr
-; CHECK-VFP: str
+; CHECK-VFP: ldrd
 ; CHECK-VFP: mov
-; CHECK-VFP: add
+; CHECK-VFP: orr
 ; CHECK-VFP: ldrh
 ; CHECK-VFP: strh
 ; CHECK-VFP: add sp, sp, #8
-; CHECK-VFP: bx lr
+; CHECK-VFP: pop {{{.*}}, pc}
 ; CHECK-NOVFP: ldrh
 ; CHECK-NOVFP: strh
 ; CHECK-NOVFP: ldrh

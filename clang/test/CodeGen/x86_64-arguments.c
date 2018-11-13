@@ -434,7 +434,7 @@ void test51(struct test51_s *s, __builtin_va_list argList) {
 // CHECK-NEXT: [[CASTED_VALUE_ADDR:%.*]] = bitcast i8* [[VALUE_ADDR]] to [[STRUCT_TEST51]]
 // CHECK-NEXT: [[CASTED_TMP_ADDR:%.*]] = bitcast [[STRUCT_TEST51]]* [[TMP_ADDR]] to i8*
 // CHECK-NEXT: [[RECASTED_VALUE_ADDR:%.*]] = bitcast [[STRUCT_TEST51]]* [[CASTED_VALUE_ADDR]] to i8*
-// CHECK-NEXT: call void @llvm.memcpy.p0i8.p0i8.i64(i8* [[CASTED_TMP_ADDR]], i8* [[RECASTED_VALUE_ADDR]], i64 16, i32 8, i1 false)
+// CHECK-NEXT: call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 [[CASTED_TMP_ADDR]], i8* align 8 [[RECASTED_VALUE_ADDR]], i64 16, i1 false)
 // CHECK-NEXT: add i32 {{.*}}, 16
 // CHECK-NEXT: store i32 {{.*}}, i32* {{.*}}
 // CHECK-NEXT: br label
@@ -460,7 +460,7 @@ void test54() {
   test54_helper(x54, x54, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0i);
 }
 // AVX: @test54_helper(<8 x float> {{%[a-zA-Z0-9]+}}, <8 x float> {{%[a-zA-Z0-9]+}}, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double {{%[a-zA-Z0-9]+}}, double {{%[a-zA-Z0-9]+}})
-// AVX: @test54_helper(<8 x float> {{%[a-zA-Z0-9]+}}, <8 x float> {{%[a-zA-Z0-9]+}}, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, { double, double }* byval align 8 {{%[a-zA-Z0-9]+}})
+// AVX: @test54_helper(<8 x float> {{%[a-zA-Z0-9]+}}, <8 x float> {{%[a-zA-Z0-9]+}}, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, { double, double }* byval align 8 {{%[^)]+}})
 
 typedef float __m512 __attribute__ ((__vector_size__ (64)));
 typedef struct {
@@ -529,7 +529,7 @@ void f63(__m512 *m, __builtin_va_list argList) {
 }
 
 // AVX512: @f64_helper(<16 x float> {{%[a-zA-Z0-9]+}}, <16 x float> {{%[a-zA-Z0-9]+}}, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double {{%[a-zA-Z0-9]+}}, double {{%[a-zA-Z0-9]+}})
-// AVX512: @f64_helper(<16 x float> {{%[a-zA-Z0-9]+}}, <16 x float> {{%[a-zA-Z0-9]+}}, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, { double, double }* byval align 8 {{%[a-zA-Z0-9]+}})
+// AVX512: @f64_helper(<16 x float> {{%[a-zA-Z0-9]+}}, <16 x float> {{%[a-zA-Z0-9]+}}, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, double 1.000000e+00, { double, double }* byval align 8 {{%[^)]+}})
 void f64_helper(__m512, ...);
 __m512 x64;
 void f64() {

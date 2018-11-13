@@ -1,5 +1,9 @@
 // RUN: %clang_cc1 -fsyntax-only -verify %s
 // rdar://9584012
+//
+// Verify All warnings are still issued with the option -fno-delete-null-pointer-checks
+// if nullptr is passed to function with nonnull attribute.
+// RUN: %clang_cc1 -fsyntax-only -fno-delete-null-pointer-checks -verify %s
 
 typedef struct {
 	char *str;
@@ -37,7 +41,7 @@ int test_int_returns_nonnull(void) __attribute__((returns_nonnull)); // expected
 void *test_ptr_returns_nonnull(void) __attribute__((returns_nonnull)); // no-warning
 
 int i __attribute__((nonnull)); // expected-warning {{'nonnull' attribute only applies to functions, methods, and parameters}}
-int j __attribute__((returns_nonnull)); // expected-warning {{'returns_nonnull' attribute only applies to functions and methods}}
+int j __attribute__((returns_nonnull)); // expected-warning {{'returns_nonnull' attribute only applies to Objective-C methods and functions}}
 void *test_no_fn_proto() __attribute__((returns_nonnull)); // no-warning
 void *test_with_fn_proto(void) __attribute__((returns_nonnull)); // no-warning
 
@@ -166,4 +170,11 @@ void returns_nonnull_warning_tests() {
 
   int and_again = !returns_nonnull_whee(); // expected-warning {{nonnull function call 'returns_nonnull_whee()' will evaluate to 'true' on first encounter}}
   and_again = !returns_nonnull_whee(); // expected-warning {{nonnull function call 'returns_nonnull_whee()' will evaluate to 'true' on first encounter}}
+}
+
+void pr30828(char *p __attribute__((nonnull)));
+void pr30828(char *p) {}
+
+void call_pr30828() {
+  pr30828(0); // expected-warning {{null passed to a callee that requires a non-null argument}}
 }

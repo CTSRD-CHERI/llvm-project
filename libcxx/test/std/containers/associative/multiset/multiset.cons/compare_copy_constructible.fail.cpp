@@ -9,21 +9,21 @@
 
 // <set>
 
-// Check that std::multiset fails to instantiate if the comparison predicate is 
+// Check that std::multiset fails to instantiate if the comparison predicate is
 // not copy-constructible. This is LWG issue 2436
 
 #include <set>
 
 template <class T>
 struct Comp {
-	bool operator () (const T& lhs, const T& rhs) const { return lhs < rhs; }
+    bool operator () (const T& lhs, const T& rhs) const { return lhs < rhs; }
 
-	Comp () {}
+    Comp () {}
 private:
-	Comp (const Comp &); // declared but not defined
-	};
+    Comp (const Comp &); // declared but not defined
+    };
 
 
 int main() {
-	std::multiset<int, Comp<int> > m;
+    std::multiset<int, Comp<int> > m;
 }

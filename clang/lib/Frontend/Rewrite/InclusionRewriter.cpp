@@ -32,8 +32,10 @@ class InclusionRewriter : public PPCallbacks {
   struct IncludedFile {
     FileID Id;
     SrcMgr::CharacteristicKind FileType;
-    IncludedFile(FileID Id, SrcMgr::CharacteristicKind FileType)
-        : Id(Id), FileType(FileType) {}
+    const DirectoryLookup *DirLookup;
+    IncludedFile(FileID Id, SrcMgr::CharacteristicKind FileType,
+                 const DirectoryLookup *DirLookup)
+        : Id(Id), FileType(FileType), DirLookup(DirLookup) {}
   };
   Preprocessor &PP; ///< Used to find inclusion directives.
   SourceManager &SM; ///< Used to read and manage source files.
@@ -46,17 +48,25 @@ class InclusionRewriter : public PPCallbacks {
   std::map<unsigned, IncludedFile> FileIncludes;
   /// Tracks where inclusions that import modules are found.
   std::map<unsigned, const Module *> ModuleIncludes;
+  /// Tracks where inclusions that enter modules (in a module build) are found.
+  std::map<unsigned, const Module *> ModuleEntryIncludes;
   /// Used transitively for building up the FileIncludes mapping over the
   /// various \c PPCallbacks callbacks.
   SourceLocation LastInclusionLocation;
 public:
   InclusionRewriter(Preprocessor &PP, raw_ostream &OS, bool ShowLineMarkers,
                     bool UseLineDirectives);
-  bool Process(FileID FileId, SrcMgr::CharacteristicKind FileType);
+  void Process(FileID FileId, SrcMgr::CharacteristicKind FileType,
+               const DirectoryLookup *DirLookup);
   void setPredefinesBuffer(const llvm::MemoryBuffer *Buf) {
     PredefinesBuffer = Buf;
   }
   void detectMainFileEOL();
+  void handleModuleBegin(Token &Tok) {
+    assert(Tok.getKind() == tok::annot_module_begin);
+    ModuleEntryIncludes.insert({Tok.getLocation().getRawEncoding(),
+                                (Module *)Tok.getAnnotationValue()});
+  }
 private:
   void FileChanged(SourceLocation Loc, FileChangeReason Reason,
                    SrcMgr::CharacteristicKind FileType,
@@ -67,7 +77,8 @@ private:
                           StringRef FileName, bool IsAngled,
                           CharSourceRange FilenameRange, const FileEntry *File,
                           StringRef SearchPath, StringRef RelativePath,
-                          const Module *Imported) override;
+                          const Module *Imported,
+                          SrcMgr::CharacteristicKind FileType) override;
   void WriteLineInfo(StringRef Filename, int Line,
                      SrcMgr::CharacteristicKind FileType,
                      StringRef Extra = StringRef());
@@ -84,6 +95,7 @@ private:
                         bool &FileExists);
   const IncludedFile *FindIncludeAtLocation(SourceLocation Loc) const;
   const Module *FindModuleAtLocation(SourceLocation Loc) const;
+  const Module *FindEnteredModule(SourceLocation Loc) const;
   StringRef NextIdentifierName(Lexer &RawLex, Token &RawToken);
 };
 
@@ -132,7 +144,7 @@ void InclusionRewriter::WriteLineInfo(StringRef Filename, int Line,
 }
 
 void InclusionRewriter::WriteImplicitModuleImport(const Module *Mod) {
-  OS << "@import " << Mod->getFullModuleName() << ";"
+  OS << "#pragma clang module import " << Mod->getFullModuleName(true)
      << " /* clang -frewrite-includes: implicit import */" << MainEOL;
 }
 
@@ -148,8 +160,9 @@ void InclusionRewriter::FileChanged(SourceLocation Loc,
     // we didn't reach this file (eg: the main file) via an inclusion directive
     return;
   FileID Id = FullSourceLoc(Loc, SM).getFileID();
-  auto P = FileIncludes.insert(std::make_pair(
-      LastInclusionLocation.getRawEncoding(), IncludedFile(Id, NewFileType)));
+  auto P = FileIncludes.insert(
+      std::make_pair(LastInclusionLocation.getRawEncoding(),
+                     IncludedFile(Id, NewFileType, PP.GetCurDirLookup())));
   (void)P;
   assert(P.second && "Unexpected revisitation of the same include directive");
   LastInclusionLocation = SourceLocation();
@@ -169,7 +182,9 @@ void InclusionRewriter::FileSkipped(const FileEntry &/*SkippedFile*/,
 /// directives. It does not say whether the file has been included, but it
 /// provides more information about the directive (hash location instead
 /// of location inside the included file). It is assumed that the matching
-/// FileChanged() or FileSkipped() is called after this.
+/// FileChanged() or FileSkipped() is called after this (or neither is
+/// called if this #include results in an error or does not textually include
+/// anything).
 void InclusionRewriter::InclusionDirective(SourceLocation HashLoc,
                                            const Token &/*IncludeTok*/,
                                            StringRef /*FileName*/,
@@ -178,10 +193,8 @@ void InclusionRewriter::InclusionDirective(SourceLocation HashLoc,
                                            const FileEntry * /*File*/,
                                            StringRef /*SearchPath*/,
                                            StringRef /*RelativePath*/,
-                                           const Module *Imported) {
-  assert(LastInclusionLocation.isInvalid() &&
-         "Another inclusion directive was found before the previous one "
-         "was processed");
+                                           const Module *Imported,
+                                           SrcMgr::CharacteristicKind FileType){
   if (Imported) {
     auto P = ModuleIncludes.insert(
         std::make_pair(HashLoc.getRawEncoding(), Imported));
@@ -207,6 +220,16 @@ const Module *
 InclusionRewriter::FindModuleAtLocation(SourceLocation Loc) const {
   const auto I = ModuleIncludes.find(Loc.getRawEncoding());
   if (I != ModuleIncludes.end())
+    return I->second;
+  return nullptr;
+}
+
+/// Simple lookup for a SourceLocation (specifically one denoting the hash in
+/// an inclusion directive) in the map of module entry information.
+const Module *
+InclusionRewriter::FindEnteredModule(SourceLocation Loc) const {
+  const auto I = ModuleEntryIncludes.find(Loc.getRawEncoding());
+  if (I != ModuleEntryIncludes.end())
     return I->second;
   return nullptr;
 }
@@ -391,8 +414,8 @@ bool InclusionRewriter::HandleHasInclude(
   Includers.push_back(std::make_pair(FileEnt, FileEnt->getDir()));
   // FIXME: Why don't we call PP.LookupFile here?
   const FileEntry *File = PP.getHeaderSearchInfo().LookupFile(
-      Filename, SourceLocation(), isAngled, nullptr, CurDir, Includers, nullptr,
-      nullptr, nullptr, nullptr, false);
+      Filename, SourceLocation(), isAngled, Lookup, CurDir, Includers, nullptr,
+      nullptr, nullptr, nullptr, nullptr);
 
   FileExists = File != nullptr;
   return true;
@@ -400,9 +423,9 @@ bool InclusionRewriter::HandleHasInclude(
 
 /// Use a raw lexer to analyze \p FileId, incrementally copying parts of it
 /// and including content of included files recursively.
-bool InclusionRewriter::Process(FileID FileId,
-                                SrcMgr::CharacteristicKind FileType)
-{
+void InclusionRewriter::Process(FileID FileId,
+                                SrcMgr::CharacteristicKind FileType,
+                                const DirectoryLookup *DirLookup) {
   bool Invalid;
   const MemoryBuffer &FromFile = *SM.getBuffer(FileId, &Invalid);
   assert(!Invalid && "Attempting to process invalid inclusion");
@@ -419,7 +442,7 @@ bool InclusionRewriter::Process(FileID FileId,
     WriteLineInfo(FileName, 1, FileType, " 1");
 
   if (SM.getFileIDSize(FileId) == 0)
-    return false;
+    return;
 
   // The next byte to be copied from the source file, which may be non-zero if
   // the lexer handled a BOM.
@@ -450,19 +473,24 @@ bool InclusionRewriter::Process(FileID FileId,
               WriteLineInfo(FileName, Line - 1, FileType, "");
             StringRef LineInfoExtra;
             SourceLocation Loc = HashToken.getLocation();
-            if (const Module *Mod = PP.getLangOpts().ObjC2
-                                        ? FindModuleAtLocation(Loc)
-                                        : nullptr)
+            if (const Module *Mod = FindModuleAtLocation(Loc))
               WriteImplicitModuleImport(Mod);
             else if (const IncludedFile *Inc = FindIncludeAtLocation(Loc)) {
-              // include and recursively process the file
-              if (Process(Inc->Id, Inc->FileType)) {
-                // and set lineinfo back to this file, if the nested one was
-                // actually included
-                // `2' indicates returning to a file (after having included
-                // another file.
-                LineInfoExtra = " 2";
-              }
+              const Module *Mod = FindEnteredModule(Loc);
+              if (Mod)
+                OS << "#pragma clang module begin "
+                   << Mod->getFullModuleName(true) << "\n";
+
+              // Include and recursively process the file.
+              Process(Inc->Id, Inc->FileType, Inc->DirLookup);
+
+              if (Mod)
+                OS << "#pragma clang module end /*"
+                   << Mod->getFullModuleName(true) << "*/\n";
+
+              // Add line marker to indicate we're returning from an included
+              // file.
+              LineInfoExtra = " 2";
             }
             // fix up lineinfo (since commented out directive changed line
             // numbers) for inclusions that were skipped due to header guards
@@ -511,11 +539,10 @@ bool InclusionRewriter::Process(FileID FileId,
                   // Rewrite __has_include_next(x)
                 } else if (RawToken.getIdentifierInfo()->isStr(
                                "__has_include_next")) {
-                  const DirectoryLookup *Lookup = PP.GetCurDirLookup();
-                  if (Lookup)
-                    ++Lookup;
+                  if (DirLookup)
+                    ++DirLookup;
 
-                  if (!HandleHasInclude(FileId, RawLex, Lookup, RawToken,
+                  if (!HandleHasInclude(FileId, RawLex, DirLookup, RawToken,
                                         HasFile))
                     continue;
                 } else {
@@ -571,7 +598,6 @@ bool InclusionRewriter::Process(FileID FileId,
   OutputContentUpTo(FromFile, NextToWrite,
                     SM.getFileOffset(SM.getLocForEndOfFile(FileId)), LocalEOL,
                     Line, /*EnsureNewline=*/true);
-  return true;
 }
 
 /// InclusionRewriterInInput - Implement -frewrite-includes mode.
@@ -597,9 +623,11 @@ void clang::RewriteIncludesInInput(Preprocessor &PP, raw_ostream *OS,
   PP.SetMacroExpansionOnlyInDirectives();
   do {
     PP.Lex(Tok);
+    if (Tok.is(tok::annot_module_begin))
+      Rewrite->handleModuleBegin(Tok);
   } while (Tok.isNot(tok::eof));
   Rewrite->setPredefinesBuffer(SM.getBuffer(PP.getPredefinesFileID()));
-  Rewrite->Process(PP.getPredefinesFileID(), SrcMgr::C_User);
-  Rewrite->Process(SM.getMainFileID(), SrcMgr::C_User);
+  Rewrite->Process(PP.getPredefinesFileID(), SrcMgr::C_User, nullptr);
+  Rewrite->Process(SM.getMainFileID(), SrcMgr::C_User, nullptr);
   OS->flush();
 }

@@ -10,15 +10,19 @@
 #ifndef liblldb_ClangExpressionParser_h_
 #define liblldb_ClangExpressionParser_h_
 
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Core/ClangForward.h"
-#include "lldb/Core/Error.h"
 #include "lldb/Expression/DiagnosticManager.h"
 #include "lldb/Expression/ExpressionParser.h"
+#include "lldb/Utility/ArchSpec.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/lldb-public.h"
 
 #include <string>
 #include <vector>
+
+namespace clang {
+class CodeCompleteConsumer;
+}
 
 namespace lldb_private {
 
@@ -26,14 +30,14 @@ class IRExecutionUnit;
 
 //----------------------------------------------------------------------
 /// @class ClangExpressionParser ClangExpressionParser.h
-/// "lldb/Expression/ClangExpressionParser.h"
-/// @brief Encapsulates an instance of Clang that can parse expressions.
+/// "lldb/Expression/ClangExpressionParser.h" Encapsulates an instance of
+/// Clang that can parse expressions.
 ///
 /// ClangExpressionParser is responsible for preparing an instance of
 /// ClangExpression for execution.  ClangExpressionParser uses ClangExpression
 /// as a glorified parameter list, performing the required parsing and
-/// conversion to formats (DWARF bytecode, or JIT compiled machine code)
-/// that can be executed.
+/// conversion to formats (DWARF bytecode, or JIT compiled machine code) that
+/// can be executed.
 //----------------------------------------------------------------------
 class ClangExpressionParser : public ExpressionParser {
 public:
@@ -58,9 +62,12 @@ public:
   //------------------------------------------------------------------
   ~ClangExpressionParser() override;
 
+  bool Complete(CompletionRequest &request, unsigned line, unsigned pos,
+                unsigned typed_pos) override;
+
   //------------------------------------------------------------------
-  /// Parse a single expression and convert it to IR using Clang.  Don't
-  /// wrap the expression in anything at all.
+  /// Parse a single expression and convert it to IR using Clang.  Don't wrap
+  /// the expression in anything at all.
   ///
   /// @param[in] diagnostic_manager
   ///     The diagnostic manager to report errors to.
@@ -74,8 +81,8 @@ public:
   bool RewriteExpression(DiagnosticManager &diagnostic_manager) override;
 
   //------------------------------------------------------------------
-  /// Ready an already-parsed expression for execution, possibly
-  /// evaluating it statically.
+  /// Ready an already-parsed expression for execution, possibly evaluating it
+  /// statically.
   ///
   /// @param[out] func_addr
   ///     The address to which the function has been written.
@@ -110,7 +117,7 @@ public:
   ///     An error code indicating the success or failure of the operation.
   ///     Test with Success().
   //------------------------------------------------------------------
-  Error
+  Status
   PrepareForExecution(lldb::addr_t &func_addr, lldb::addr_t &func_end,
                       lldb::IRExecutionUnitSP &execution_unit_sp,
                       ExecutionContext &exe_ctx, bool &can_interpret,
@@ -128,8 +135,8 @@ public:
   /// @return
   ///     The error code indicating the
   //------------------------------------------------------------------
-  Error RunStaticInitializers(lldb::IRExecutionUnitSP &execution_unit_sp,
-                              ExecutionContext &exe_ctx);
+  Status RunStaticInitializers(lldb::IRExecutionUnitSP &execution_unit_sp,
+                               ExecutionContext &exe_ctx);
 
   //------------------------------------------------------------------
   /// Returns a string representing current ABI.
@@ -143,16 +150,39 @@ public:
   std::string GetClangTargetABI(const ArchSpec &target_arch);
 
 private:
+  //------------------------------------------------------------------
+  /// Parses the expression.
+  ///
+  /// @param[in] diagnostic_manager
+  ///     The diagnostic manager that should receive the diagnostics
+  ///     from the parsing process.
+  ///
+  /// @param[in] completion
+  ///     The completion consumer that should be used during parsing
+  ///     (or a nullptr if no consumer should be attached).
+  ///
+  /// @param[in] completion_line
+  ///     The line in which the completion marker should be placed.
+  ///     The first line is represented by the value 0.
+  ///
+  /// @param[in] completion_column
+  ///     The column in which the completion marker should be placed.
+  ///     The first column is represented by the value 0.
+  ///
+  /// @return
+  ///    The number of parsing errors.
+  //-------------------------------------------------------------------
+  unsigned ParseInternal(DiagnosticManager &diagnostic_manager,
+                         clang::CodeCompleteConsumer *completion = nullptr,
+                         unsigned completion_line = 0,
+                         unsigned completion_column = 0);
+
   std::unique_ptr<llvm::LLVMContext>
       m_llvm_context; ///< The LLVM context to generate IR into
   std::unique_ptr<clang::FileManager>
       m_file_manager; ///< The Clang file manager object used by the compiler
   std::unique_ptr<clang::CompilerInstance>
       m_compiler; ///< The Clang compiler used to parse expressions into IR
-  std::unique_ptr<clang::Builtin::Context>
-      m_builtin_context; ///< Context for Clang built-ins
-  std::unique_ptr<clang::SelectorTable>
-      m_selector_table; ///< Selector table for Objective-C methods
   std::unique_ptr<clang::CodeGenerator>
       m_code_generator; ///< The Clang object that generates IR
 

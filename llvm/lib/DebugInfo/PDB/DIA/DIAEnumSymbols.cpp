@@ -7,10 +7,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/DebugInfo/PDB/PDBSymbol.h"
 #include "llvm/DebugInfo/PDB/DIA/DIAEnumSymbols.h"
 #include "llvm/DebugInfo/PDB/DIA/DIARawSymbol.h"
 #include "llvm/DebugInfo/PDB/DIA/DIASession.h"
+#include "llvm/DebugInfo/PDB/PDBSymbol.h"
 
 using namespace llvm;
 using namespace llvm::pdb;
@@ -46,10 +46,3 @@ std::unique_ptr<PDBSymbol> DIAEnumSymbols::getNext() {
 }
 
 void DIAEnumSymbols::reset() { Enumerator->Reset(); }
-
-DIAEnumSymbols *DIAEnumSymbols::clone() const {
-  CComPtr<IDiaEnumSymbols> EnumeratorClone;
-  if (S_OK != Enumerator->Clone(&EnumeratorClone))
-    return nullptr;
-  return new DIAEnumSymbols(Session, EnumeratorClone);
-}

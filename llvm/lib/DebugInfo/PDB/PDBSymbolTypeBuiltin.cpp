@@ -16,10 +16,6 @@
 using namespace llvm;
 using namespace llvm::pdb;
 
-PDBSymbolTypeBuiltin::PDBSymbolTypeBuiltin(
-    const IPDBSession &PDBSession, std::unique_ptr<IPDBRawSymbol> Symbol)
-    : PDBSymbol(PDBSession, std::move(Symbol)) {}
-
 void PDBSymbolTypeBuiltin::dump(PDBSymDumper &Dumper) const {
   Dumper.dump(*this);
 }

@@ -15,6 +15,20 @@ void mutate(ExpensiveToCopyType *);
 void useAsConstReference(const ExpensiveToCopyType &);
 void useByValue(ExpensiveToCopyType);
 
+template <class T> class Vector {
+ public:
+  using iterator = T*;
+  using const_iterator = const T*;
+
+  Vector(const Vector&);
+  Vector& operator=(const Vector&);
+
+  iterator begin();
+  iterator end();
+  const_iterator begin() const;
+  const_iterator end() const;
+};
+
 // This class simulates std::pair<>. It is trivially copy constructible
 // and trivially destructible, but not trivially copy assignable.
 class SomewhatTrivial {
@@ -59,6 +73,14 @@ void positiveExpensiveValue(ExpensiveToCopyType Obj) {
   useByValue(Obj);
 }
 
+void positiveVector(Vector<ExpensiveToCopyType> V) {
+  // CHECK-MESSAGES: [[@LINE-1]]:49: warning: the parameter 'V' is copied for each invocation but only used as a const reference; consider making it a const reference [performance-unnecessary-value-param]
+  // CHECK-FIXES: void positiveVector(const Vector<ExpensiveToCopyType>& V) {
+  for (const auto& Obj : V) {
+    useByValue(Obj);
+  }
+}
+
 void positiveWithComment(const ExpensiveToCopyType /* important */ S);
 // CHECK-FIXES: void positiveWithComment(const ExpensiveToCopyType& /* important */ S);
 void positiveWithComment(const ExpensiveToCopyType /* important */ S) {
@@ -82,6 +104,7 @@ void positiveAndNegative(const ExpensiveToCopyType ConstCopy, const ExpensiveToC
 struct PositiveConstValueConstructor {
   PositiveConstValueConstructor(const ExpensiveToCopyType ConstCopy) {}
   // CHECK-MESSAGES: [[@LINE-1]]:59: warning: the const qualified parameter 'ConstCopy'
+  // CHECK-FIXES: PositiveConstValueConstructor(const ExpensiveToCopyType& ConstCopy) {}
 };
 
 template <typename T> void templateWithNonTemplatizedParameter(const ExpensiveToCopyType S, T V) {
@@ -143,8 +166,29 @@ void negativeValueNonConstMethodIsCalled(ExpensiveToCopyType Obj) {
   Obj.nonConstMethod();
 }
 
-struct NegativeValueCopyConstructor {
-  NegativeValueCopyConstructor(ExpensiveToCopyType Copy) {}
+struct PositiveValueUnusedConstructor {
+  PositiveValueUnusedConstructor(ExpensiveToCopyType Copy) {}
+  // CHECK-MESSAGES: [[@LINE-1]]:54: warning: the parameter 'Copy'
+  // CHECK-FIXES: PositiveValueUnusedConstructor(const ExpensiveToCopyType& Copy) {}
+};
+
+struct PositiveValueCopiedConstructor {
+  PositiveValueCopiedConstructor(ExpensiveToCopyType Copy) : Field(Copy) {}
+  // CHECK-MESSAGES: [[@LINE-1]]:54: warning: the parameter 'Copy'
+  // CHECK-FIXES: PositiveValueCopiedConstructor(const ExpensiveToCopyType& Copy) : Field(Copy) {}
+  ExpensiveToCopyType Field;
+};
+
+struct PositiveValueMovableConstructor {
+  PositiveValueMovableConstructor(ExpensiveMovableType Copy) : Field(Copy) {}
+  // CHECK-MESSAGES: [[@LINE-1]]:70: warning: parameter 'Copy'
+  // CHECK-FIXES: PositiveValueMovableConstructor(ExpensiveMovableType Copy) : Field(std::move(Copy)) {}
+  ExpensiveMovableType Field;
+};
+
+struct NegativeValueMovedConstructor {
+  NegativeValueMovedConstructor(ExpensiveMovableType Copy) : Field(static_cast<ExpensiveMovableType &&>(Copy)) {}
+  ExpensiveMovableType Field;
 };
 
 template <typename T>
@@ -225,6 +269,26 @@ void PositiveMoveOnCopyAssignment(ExpensiveMovableType E) {
   // CHECK-FIXES: F = std::move(E);
 }
 
+struct NotCopyAssigned {
+  NotCopyAssigned &operator=(const ExpensiveMovableType &);
+};
+
+void PositiveNoMoveForNonCopyAssigmentOperator(ExpensiveMovableType E) {
+  // CHECK-MESSAGES: [[@LINE-1]]:69: warning: the parameter 'E' is copied
+  // CHECK-FIXES: void PositiveNoMoveForNonCopyAssigmentOperator(const ExpensiveMovableType& E) {
+  NotCopyAssigned N;
+  N = E;
+}
+
+// The argument could be moved but is not since copy statement is inside a loop.
+void PositiveNoMoveInsideLoop(ExpensiveMovableType E) {
+  // CHECK-MESSAGES: [[@LINE-1]]:52: warning: the parameter 'E' is copied
+  // CHECK-FIXES: void PositiveNoMoveInsideLoop(const ExpensiveMovableType& E) {
+  for (;;) {
+    auto F = E;
+  }
+}
+
 void PositiveConstRefNotMoveConstructible(ExpensiveToCopyType T) {
   // CHECK-MESSAGES: [[@LINE-1]]:63: warning: the parameter 'T' is copied
   // CHECK-FIXES: void PositiveConstRefNotMoveConstructible(const ExpensiveToCopyType& T) {
@@ -270,4 +334,50 @@ void PositiveMessageAndFixAsFunctionIsCalled(ExpensiveToCopyType A) {
 
 void ReferenceFunctionByCallingIt() {
   PositiveMessageAndFixAsFunctionIsCalled(ExpensiveToCopyType());
+}
+
+// Virtual method overrides of dependent types cannot be recognized unless they
+// are marked as override or final. Test that check is not triggered on methods
+// marked with override or final.
+template <typename T>
+struct NegativeDependentTypeInterface {
+  virtual void Method(ExpensiveToCopyType E) = 0;
+};
+
+template <typename T>
+struct NegativeOverrideImpl : public NegativeDependentTypeInterface<T> {
+  void Method(ExpensiveToCopyType E) override {}
+};
+
+template <typename T>
+struct NegativeFinalImpl : public NegativeDependentTypeInterface<T> {
+  void Method(ExpensiveToCopyType E) final {}
+};
+
+struct PositiveConstructor {
+  PositiveConstructor(ExpensiveToCopyType E) : E(E) {}
+  // CHECK-MESSAGES: [[@LINE-1]]:43: warning: the parameter 'E' is copied
+  // CHECK-FIXES: PositiveConstructor(const ExpensiveToCopyType& E) : E(E) {}
+
+  ExpensiveToCopyType E;
+};
+
+struct NegativeUsingConstructor : public PositiveConstructor {
+  using PositiveConstructor::PositiveConstructor;
+};
+
+void fun() {
+  ExpensiveToCopyType E;
+  NegativeUsingConstructor S(E);
+}
+
+template<typename T>
+void templateFunction(T) {
+}
+
+template<>
+void templateFunction<ExpensiveToCopyType>(ExpensiveToCopyType E) {
+  // CHECK-MESSAGES: [[@LINE-1]]:64: warning: the parameter 'E' is copied
+  // CHECK-FIXES: void templateFunction<ExpensiveToCopyType>(ExpensiveToCopyType E) {
+  E.constReference();
 }

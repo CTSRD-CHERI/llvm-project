@@ -4,6 +4,7 @@
 # RUN: ld.lld %t -o %t2
 # RUN: llvm-readobj -file-headers -sections -program-headers -symbols %t2 \
 # RUN:   | FileCheck %s
+# RUN: ld.lld %t -o /dev/null
 
 # exits with return code 42 on linux
 .globl _start
@@ -27,7 +28,7 @@ _start:
 # CHECK-NEXT:   Version: 1
 # CHECK-NEXT:   Entry: [[ENTRY:0x[0-9A-F]+]]
 # CHECK-NEXT:   ProgramHeaderOffset: 0x40
-# CHECK-NEXT:   SectionHeaderOffset: 0x1080
+# CHECK-NEXT:   SectionHeaderOffset: 0x2070
 # CHECK-NEXT:   Flags [ (0x0)
 # CHECK-NEXT:   ]
 # CHECK-NEXT:   HeaderSize: 64
@@ -60,7 +61,7 @@ _start:
 # CHECK-NEXT:       SHF_ALLOC (0x2)
 # CHECK-NEXT:       SHF_EXECINSTR (0x4)
 # CHECK-NEXT:     ]
-# CHECK-NEXT:     Address: 0x11000
+# CHECK-NEXT:     Address: 0x201000
 # CHECK-NEXT:     Offset: 0x1000
 # CHECK-NEXT:     Size: 16
 # CHECK-NEXT:     Link: 0
@@ -77,7 +78,7 @@ _start:
 # CHECK-NEXT:       SHF_STRINGS (0x20)
 # CHECK-NEXT:     ]
 # CHECK-NEXT:     Address: 0x0
-# CHECK-NEXT:     Offset: 0x1010
+# CHECK-NEXT:     Offset: 0x2000
 # CHECK-NEXT:     Size: 8
 # CHECK-NEXT:     Link: 0
 # CHECK-NEXT:     Info: 0
@@ -91,7 +92,7 @@ _start:
 # CHECK-NEXT:     Flags [ (0x0)
 # CHECK-NEXT:     ]
 # CHECK-NEXT:     Address: 0x0
-# CHECK-NEXT:     Offset: 0x1018
+# CHECK-NEXT:     Offset: 0x2008
 # CHECK-NEXT:     Size: 48
 # CHECK-NEXT:     Link: 5
 # CHECK-NEXT:     Info: 1
@@ -105,7 +106,7 @@ _start:
 # CHECK-NEXT:     Flags [ (0x0)
 # CHECK-NEXT:     ]
 # CHECK-NEXT:     Address: 0x0
-# CHECK-NEXT:     Offset: 0x1048
+# CHECK-NEXT:     Offset: 0x2038
 # CHECK-NEXT:     Size: 42
 # CHECK-NEXT:     Link: 0
 # CHECK-NEXT:     Info: 0
@@ -119,7 +120,7 @@ _start:
 # CHECK-NEXT:     Flags [ (0x0)
 # CHECK-NEXT:     ]
 # CHECK-NEXT:     Address: 0x0
-# CHECK-NEXT:     Offset: 0x1072
+# CHECK-NEXT:     Offset: 0x2062
 # CHECK-NEXT:     Size: 8
 # CHECK-NEXT:     Link: 0
 # CHECK-NEXT:     Info: 0
@@ -151,8 +152,8 @@ _start:
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_PHDR (0x6)
 # CHECK-NEXT:     Offset: 0x40
-# CHECK-NEXT:     VirtualAddress: 0x10040
-# CHECK-NEXT:     PhysicalAddress: 0x10040
+# CHECK-NEXT:     VirtualAddress: 0x200040
+# CHECK-NEXT:     PhysicalAddress: 0x200040
 # CHECK-NEXT:     FileSize: 224
 # CHECK-NEXT:     MemSize: 224
 # CHECK-NEXT:     Flags [ (0x4)
@@ -163,8 +164,8 @@ _start:
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_LOAD (0x1)
 # CHECK-NEXT:     Offset: 0x0
-# CHECK-NEXT:     VirtualAddress: 0x10000
-# CHECK-NEXT:     PhysicalAddress: 0x10000
+# CHECK-NEXT:     VirtualAddress: 0x200000
+# CHECK-NEXT:     PhysicalAddress: 0x200000
 # CHECK-NEXT:     FileSize: 288
 # CHECK-NEXT:     MemSize: 288
 # CHECK-NEXT:     Flags [
@@ -175,10 +176,10 @@ _start:
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_LOAD (0x1)
 # CHECK-NEXT:     Offset: 0x1000
-# CHECK-NEXT:     VirtualAddress: 0x11000
-# CHECK-NEXT:     PhysicalAddress: 0x11000
-# CHECK-NEXT:     FileSize: 16
-# CHECK-NEXT:     MemSize: 16
+# CHECK-NEXT:     VirtualAddress: 0x201000
+# CHECK-NEXT:     PhysicalAddress: 0x201000
+# CHECK-NEXT:     FileSize: 4096
+# CHECK-NEXT:     MemSize: 4096
 # CHECK-NEXT:     Flags [ (0x5)
 # CHECK-NEXT:       PF_R (0x4)
 # CHECK-NEXT:       PF_X (0x1)
@@ -230,21 +231,24 @@ _start:
 # CANNOT_OPEN: cannot open {{.*}}.no.such.file: {{[Nn]}}o such file or directory
 
 # RUN: not ld.lld %t -o 2>&1 | FileCheck --check-prefix=NO_O_VAL %s
-# NO_O_VAL: missing arg value for "-o", expected 1 argument.
+# NO_O_VAL: -o: missing argument
 
 # RUN: not ld.lld --foo 2>&1 | FileCheck --check-prefix=UNKNOWN %s
 # UNKNOWN: unknown argument: --foo
 
 # RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %s -o %t
 # RUN: not ld.lld %t %t -o %t2 2>&1 | FileCheck --check-prefix=DUP %s
-# DUP: {{.*}} (.text+0x0): duplicate symbol '_start'
-# DUP: {{.*}} (.text+0x0): previous definition was here
+# DUP:      duplicate symbol: _start
+# DUP-NEXT: >>> defined at {{.*}}:(.text+0x0)
+# DUP-NEXT: >>> defined at {{.*}}:(.text+0x0)
 
 # RUN: not ld.lld %t -o %t -m wrong_emul_fbsd 2>&1 | FileCheck --check-prefix=UNKNOWN_EMUL %s
 # UNKNOWN_EMUL: unknown emulation: wrong_emul_fbsd
 
 # RUN: not ld.lld %t --lto-partitions=0 2>&1 | FileCheck --check-prefix=NOTHREADS %s
+# RUN: not ld.lld %t --plugin-opt=lto-partitions=0 2>&1 | FileCheck --check-prefix=NOTHREADS %s
 # NOTHREADS: --lto-partitions: number of threads must be > 0
 
 # RUN: not ld.lld %t --thinlto-jobs=0 2>&1 | FileCheck --check-prefix=NOTHREADSTHIN %s
+# RUN: not ld.lld %t --plugin-opt=jobs=0 2>&1 | FileCheck --check-prefix=NOTHREADSTHIN %s
 # NOTHREADSTHIN: --thinlto-jobs: number of threads must be > 0

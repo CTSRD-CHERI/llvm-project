@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 -std=c++98 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors -Wno-bind-to-temporary-copy
 // RUN: %clang_cc1 -std=c++11 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors -triple %itanium_abi_triple
 // RUN: %clang_cc1 -std=c++14 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors -triple %itanium_abi_triple
-// RUN: %clang_cc1 -std=c++1z %s -verify -fexceptions -fcxx-exceptions -pedantic-errors -triple %itanium_abi_triple
+// RUN: %clang_cc1 -std=c++17 %s -verify -fexceptions -fcxx-exceptions -pedantic-errors -triple %itanium_abi_triple
 
 namespace dr1 { // dr1: no
   namespace X { extern "C" void dr1_f(int a = 1); }
@@ -248,7 +248,7 @@ namespace dr20 { // dr20: yes
   private:
     X(const X&); // expected-note {{here}}
   };
-  X f();
+  X &f();
   X x = f(); // expected-error {{private}}
 }
 
@@ -276,9 +276,9 @@ namespace dr23 { // dr23: yes
 
 namespace dr25 { // dr25: yes
   struct A {
-    void f() throw(int);
+    void f() throw(int); // expected-error 0-1{{ISO C++17 does not allow}} expected-note 0-1{{use 'noexcept}}
   };
-  void (A::*f)() throw (int);
+  void (A::*f)() throw (int); // expected-error 0-1{{ISO C++17 does not allow}} expected-note 0-1{{use 'noexcept}}
   void (A::*g)() throw () = f;
 #if __cplusplus <= 201402L
   // expected-error@-2 {{is not superset of source}}
@@ -286,7 +286,7 @@ namespace dr25 { // dr25: yes
   // expected-error@-4 {{different exception specifications}}
 #endif
   void (A::*g2)() throw () = 0;
-  void (A::*h)() throw (int, char) = f;
+  void (A::*h)() throw (int, char) = f; // expected-error 0-1{{ISO C++17 does not allow}} expected-note 0-1{{use 'noexcept}}
   void (A::*i)() throw () = &A::f;
 #if __cplusplus <= 201402L
   // expected-error@-2 {{is not superset of source}}
@@ -294,7 +294,7 @@ namespace dr25 { // dr25: yes
   // expected-error@-4 {{different exception specifications}}
 #endif
   void (A::*i2)() throw () = 0;
-  void (A::*j)() throw (int, char) = &A::f;
+  void (A::*j)() throw (int, char) = &A::f; // expected-error 0-1{{ISO C++17 does not allow}} expected-note 0-1{{use 'noexcept}}
   void x() {
     g2 = f;
 #if __cplusplus <= 201402L
@@ -316,8 +316,15 @@ namespace dr25 { // dr25: yes
 namespace dr26 { // dr26: yes
   struct A { A(A, const A & = A()); }; // expected-error {{must pass its first argument by reference}}
   struct B {
-    B(); // expected-note {{candidate}}
-    B(const B &, B = B()); // expected-error {{no matching constructor}} expected-note {{candidate}} expected-note {{here}}
+    B(); // expected-note 0-1{{candidate}}
+    B(const B &, B = B());
+#if __cplusplus <= 201402L
+    // expected-error@-2 {{no matching constructor}} expected-note@-2 {{candidate}} expected-note@-2 {{here}}
+#endif
+  };
+  struct C {
+    static C &f();
+    C(const C &, C = f()); // expected-error {{no matching constructor}} expected-note {{candidate}} expected-note {{here}}
   };
 }
 
@@ -326,7 +333,7 @@ namespace dr27 { // dr27: yes
   E &m = true ? n : n;
 }
 
-// dr28: na
+// dr28: na lib
 
 namespace dr29 { // dr29: 3.4
   void dr29_f0(); // expected-note {{here}}
@@ -492,10 +499,10 @@ namespace dr42 { // dr42: yes
 
 // dr43: na
 
-namespace dr44 { // dr44: yes
+namespace dr44 { // dr44: sup 727
   struct A {
     template<int> void f();
-    template<> void f<0>(); // expected-error {{explicit specialization of 'f' in class scope}}
+    template<> void f<0>();
   };
 }
 
@@ -662,24 +669,32 @@ namespace dr58 { // dr58: yes
 
 namespace dr59 { // dr59: yes
   template<typename T> struct convert_to { operator T() const; };
-  struct A {}; // expected-note 2{{volatile qualifier}} expected-note 2{{requires 0 arguments}}
-  struct B : A {}; // expected-note 2{{volatile qualifier}} expected-note 2{{requires 0 arguments}}
-#if __cplusplus >= 201103L // move constructors
-  // expected-note@-3 2{{volatile qualifier}}
-  // expected-note@-3 2{{volatile qualifier}}
-#endif
+  struct A {}; // expected-note 5+{{candidate}}
+  struct B : A {}; // expected-note 0+{{candidate}}
 
   A a1 = convert_to<A>();
   A a2 = convert_to<A&>();
   A a3 = convert_to<const A>();
-  A a4 = convert_to<const volatile A>(); // expected-error {{no viable}}
+  A a4 = convert_to<const volatile A>();
+#if __cplusplus <= 201402L
+  // expected-error@-2 {{no viable}}
+#endif
   A a5 = convert_to<const volatile A&>(); // expected-error {{no viable}}
 
   B b1 = convert_to<B>();
   B b2 = convert_to<B&>();
   B b3 = convert_to<const B>();
-  B b4 = convert_to<const volatile B>(); // expected-error {{no viable}}
+  B b4 = convert_to<const volatile B>();
+#if __cplusplus <= 201402L
+  // expected-error@-2 {{no viable}}
+#endif
   B b5 = convert_to<const volatile B&>(); // expected-error {{no viable}}
+
+  A c1 = convert_to<B>();
+  A c2 = convert_to<B&>();
+  A c3 = convert_to<const B>();
+  A c4 = convert_to<const volatile B>(); // expected-error {{no viable}}
+  A c5 = convert_to<const volatile B&>(); // expected-error {{no viable}}
 
   int n1 = convert_to<int>();
   int n2 = convert_to<int&>();
@@ -896,9 +911,8 @@ namespace dr80 { // dr80: yes
     static int B; // expected-error {{same name as its class}}
   };
   struct C {
-    int C; // expected-note {{hidden by}}
-    // FIXME: These diagnostics aren't very good.
-    C(); // expected-error {{must use 'struct' tag to refer to}} expected-error {{expected member name}}
+    int C; // expected-error {{same name as its class}}
+    C();
   };
   struct D {
     D();
@@ -920,14 +934,17 @@ namespace dr84 { // dr84: yes
   struct A { operator B() const; };
   struct C {};
   struct B {
-    B(B&); // expected-note {{candidate}}
-    B(C); // expected-note {{no known conversion from 'dr84::B' to 'dr84::C'}}
+    B(B&); // expected-note 0-1{{candidate}}
+    B(C); // expected-note 0-1{{no known conversion from 'dr84::B' to 'dr84::C'}}
     operator C() const;
   };
   A a;
   // Cannot use B(C) / operator C() pair to construct the B from the B temporary
-  // here.
-  B b = a; // expected-error {{no viable}}
+  // here. In C++17, we initialize the B object directly using 'A::operator B()'.
+  B b = a;
+#if __cplusplus <= 201402L
+  // expected-error@-2 {{no viable}}
+#endif
 }
 
 namespace dr85 { // dr85: yes
@@ -1014,15 +1031,15 @@ namespace dr91 { // dr91: yes
   int k = f(U());
 }
 
-namespace dr92 { // dr92: 4.0 c++17
-  void f() throw(int, float);
-  void (*p)() throw(int) = &f;
+namespace dr92 { // dr92: 4 c++17
+  void f() throw(int, float); // expected-error 0-1{{ISO C++17 does not allow}} expected-note 0-1{{use 'noexcept}}
+  void (*p)() throw(int) = &f; // expected-error 0-1{{ISO C++17 does not allow}} expected-note 0-1{{use 'noexcept}}
 #if __cplusplus <= 201402L
   // expected-error@-2 {{target exception specification is not superset of source}}
 #else
   // expected-warning@-4 {{target exception specification is not superset of source}}
 #endif
-  void (*q)() throw(int);
+  void (*q)() throw(int); // expected-error 0-1{{ISO C++17 does not allow}} expected-note 0-1{{use 'noexcept}}
   void (**pp)() throw() = &q;
 #if __cplusplus <= 201402L
   // expected-error@-2 {{exception specifications are not allowed}}
@@ -1046,7 +1063,7 @@ namespace dr92 { // dr92: 4.0 c++17
   // expected-error@-2 {{not implicitly convertible}}
 #endif
 
-  template<void() throw(int)> struct Y {};
+  template<void() throw(int)> struct Y {}; // expected-error 0-1{{ISO C++17 does not allow}} expected-note 0-1{{use 'noexcept}}
   Y<&h> yp; // ok
 }
 

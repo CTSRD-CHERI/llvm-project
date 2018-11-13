@@ -8,11 +8,10 @@
 //===----------------------------------------------------------------------===//
 
 // UNSUPPORTED: c++98, c++03
-// REQUIRES-ANY: c++11, c++14
 
 // <functional>
 
-// See https://llvm.org/bugs/show_bug.cgi?id=20002
+// See https://bugs.llvm.org/show_bug.cgi?id=20002
 
 #include <functional>
 #include <type_traits>
@@ -25,5 +24,7 @@ struct S : public std::function<void()> { using function::function; };
 int main() {
     S s( [](){} );
     S f1( s );
+#if TEST_STD_VER <= 14
     S f2(std::allocator_arg, std::allocator<int>{}, s);
+#endif
 }

@@ -221,14 +221,14 @@ void Test19(void)
                                     // expected-note {{change size argument to be the size of the destination}}
         __builtin___strlcpy_chk(buf, b, sizeof(b), __builtin_object_size(buf, 0)); // expected-warning {{size argument in '__builtin___strlcpy_chk' call appears to be size of the source; expected the size of the destination}} \
                                     // expected-note {{change size argument to be the size of the destination}} \
-				    // expected-warning {{'__builtin___strlcpy_chk' will always overflow destination buffer}}
+				    // expected-warning {{'__builtin___strlcpy_chk' will always overflow; destination buffer has size 20, but size argument is 40}}
 
         strlcat(buf, b, sizeof(b)); // expected-warning {{size argument in 'strlcat' call appears to be size of the source; expected the size of the destination}} \
                                     // expected-note {{change size argument to be the size of the destination}}
 				    
         __builtin___strlcat_chk(buf, b, sizeof(b), __builtin_object_size(buf, 0)); // expected-warning {{size argument in '__builtin___strlcat_chk' call appears to be size of the source; expected the size of the destination}} \
                                                                                    // expected-note {{change size argument to be the size of the destination}} \
-				                                                   // expected-warning {{'__builtin___strlcat_chk' will always overflow destination buffer}}
+				                                                   // expected-warning {{'__builtin___strlcat_chk' will always overflow; destination buffer has size 20, but size argument is 40}}
 }
 
 // rdar://11076881
@@ -236,7 +236,7 @@ char * Test20(char *p, const char *in, unsigned n)
 {
     static char buf[10];
 
-    __builtin___memcpy_chk (&buf[6], in, 5, __builtin_object_size (&buf[6], 0)); // expected-warning {{'__builtin___memcpy_chk' will always overflow destination buffer}}
+    __builtin___memcpy_chk (&buf[6], in, 5, __builtin_object_size (&buf[6], 0)); // expected-warning {{'__builtin___memcpy_chk' will always overflow; destination buffer has size 4, but size argument is 5}}
 
     __builtin___memcpy_chk (p, "abcde", n, __builtin_object_size (p, 0));
 
@@ -244,7 +244,46 @@ char * Test20(char *p, const char *in, unsigned n)
 
     __builtin___memcpy_chk (&buf[5], "abcde", n, __builtin_object_size (&buf[5], 0));
 
-    __builtin___memcpy_chk (&buf[6], "abcde", 5, __builtin_object_size (&buf[6], 0)); // expected-warning {{'__builtin___memcpy_chk' will always overflow destination buffer}}
+    __builtin___memcpy_chk (&buf[6], "abcde", 5, __builtin_object_size (&buf[6], 0)); // expected-warning {{'__builtin___memcpy_chk' will always overflow; destination buffer has size 4, but size argument is 5}}
 
     return buf;
+}
+
+void test21(const int *ptr) {
+  __sync_fetch_and_add(ptr, 1); // expected-error{{address argument to atomic builtin cannot be const-qualified ('const int *' invalid)}}
+  __atomic_fetch_add(ptr, 1, 0);  // expected-error {{address argument to atomic operation must be a pointer to non-const type ('const int *' invalid)}}
+}
+
+void test22(void) {
+  (void)__builtin_signbit(); // expected-error{{too few arguments to function call, expected 1, have 0}}
+  (void)__builtin_signbit(1.0, 2.0, 3.0); // expected-error{{too many arguments to function call, expected 1, have 3}}
+  (void)__builtin_signbit(1); // expected-error {{floating point classification requires argument of floating point type (passed in 'int')}}
+  (void)__builtin_signbit(1.0);
+  (void)__builtin_signbit(1.0f);
+  (void)__builtin_signbit(1.0L);
+
+  (void)__builtin_signbitf(); // expected-error{{too few arguments to function call, expected 1, have 0}}
+  (void)__builtin_signbitf(1.0, 2.0, 3.0); // expected-error{{too many arguments to function call, expected 1, have 3}}
+  (void)__builtin_signbitf(1);
+  (void)__builtin_signbitf(1.0);
+  (void)__builtin_signbitf(1.0f);
+  (void)__builtin_signbitf(1.0L);
+
+  (void)__builtin_signbitl(); // expected-error{{too few arguments to function call, expected 1, have 0}}
+  (void)__builtin_signbitl(1.0, 2.0, 3.0); // expected-error{{too many arguments to function call, expected 1, have 3}}
+  (void)__builtin_signbitl(1);
+  (void)__builtin_signbitl(1.0);
+  (void)__builtin_signbitl(1.0f);
+  (void)__builtin_signbitl(1.0L);
+}
+
+// rdar://43909200
+#define memcpy(x,y,z) __builtin___memcpy_chk(x,y,z, __builtin_object_size(x,0))
+#define my_memcpy(x,y,z) __builtin___memcpy_chk(x,y,z, __builtin_object_size(x,0))
+
+void test23() {
+  char src[1024];
+  char buf[10];
+  memcpy(buf, src, 11); // expected-warning{{'memcpy' will always overflow; destination buffer has size 10, but size argument is 11}}
+  my_memcpy(buf, src, 11); // expected-warning{{'__builtin___memcpy_chk' will always overflow; destination buffer has size 10, but size argument is 11}}
 }

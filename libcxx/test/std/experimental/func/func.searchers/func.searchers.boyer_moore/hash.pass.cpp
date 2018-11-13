@@ -39,11 +39,11 @@
 #include "test_iterators.h"
 
 template <typename T> struct MyHash {
-	size_t operator () (T t) const { return static_cast<size_t>(t); }
+    size_t operator () (T t) const { return static_cast<size_t>(t); }
 };
 
 template <typename Iter1, typename Iter2>
-void do_search(Iter1 b1, Iter1 e1, Iter2 b2, Iter2 e2, Iter1 result, unsigned max_count) {
+void do_search(Iter1 b1, Iter1 e1, Iter2 b2, Iter2 e2, Iter1 result, unsigned /*max_count*/) {
     std::experimental::boyer_moore_searcher<Iter2,
                  MyHash<typename std::remove_cv<typename std::iterator_traits<Iter2>::value_type>::type>>
           s{b2, e2};

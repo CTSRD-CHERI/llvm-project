@@ -15,7 +15,9 @@
 #define LLVM_LIB_TARGET_AARCH64_INSTPRINTER_AARCH64INSTPRINTER_H
 
 #include "MCTargetDesc/AArch64MCTargetDesc.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/MC/MCInstPrinter.h"
+#include "../Utils/AArch64BaseInfo.h"
 
 namespace llvm {
 
@@ -37,9 +39,11 @@ public:
                                        unsigned PrintMethodIdx,
                                        const MCSubtargetInfo &STI,
                                        raw_ostream &O);
+
   virtual StringRef getRegName(unsigned RegNo) const {
     return getRegisterName(RegNo);
   }
+
   static const char *getRegisterName(unsigned RegNo,
                                      unsigned AltIdx = AArch64::NoRegAltName);
 
@@ -53,6 +57,7 @@ protected:
                 raw_ostream &O);
   void printImmHex(const MCInst *MI, unsigned OpNo, const MCSubtargetInfo &STI,
                    raw_ostream &O);
+  template <typename T> void printImmSVE(T Value, raw_ostream &O);
   void printPostIncOperand(const MCInst *MI, unsigned OpNo, unsigned Imm,
                            raw_ostream &O);
   template <int Amount>
@@ -67,10 +72,9 @@ protected:
                          const MCSubtargetInfo &STI, raw_ostream &O);
   void printAddSubImm(const MCInst *MI, unsigned OpNum,
                       const MCSubtargetInfo &STI, raw_ostream &O);
-  void printLogicalImm32(const MCInst *MI, unsigned OpNum,
-                         const MCSubtargetInfo &STI, raw_ostream &O);
-  void printLogicalImm64(const MCInst *MI, unsigned OpNum,
-                         const MCSubtargetInfo &STI, raw_ostream &O);
+  template <typename T>
+  void printLogicalImm(const MCInst *MI, unsigned OpNum,
+                       const MCSubtargetInfo &STI, raw_ostream &O);
   void printShifter(const MCInst *MI, unsigned OpNum,
                     const MCSubtargetInfo &STI, raw_ostream &O);
   void printShiftedRegister(const MCInst *MI, unsigned OpNum,
@@ -87,7 +91,9 @@ protected:
                       const MCSubtargetInfo &STI, raw_ostream &O) {
     printMemExtend(MI, OpNum, O, SrcRegKind, Width);
   }
-
+  template <bool SignedExtend, int ExtWidth, char SrcRegKind, char Suffix>
+  void printRegWithShiftExtend(const MCInst *MI, unsigned OpNum,
+                               const MCSubtargetInfo &STI, raw_ostream &O);
   void printCondCode(const MCInst *MI, unsigned OpNum,
                      const MCSubtargetInfo &STI, raw_ostream &O);
   void printInverseCondCode(const MCInst *MI, unsigned OpNum,
@@ -118,10 +124,14 @@ protected:
   void printImmScale(const MCInst *MI, unsigned OpNum,
                      const MCSubtargetInfo &STI, raw_ostream &O);
 
+  template <bool IsSVEPrefetch = false>
   void printPrefetchOp(const MCInst *MI, unsigned OpNum,
                        const MCSubtargetInfo &STI, raw_ostream &O);
 
   void printPSBHintOp(const MCInst *MI, unsigned OpNum,
+                      const MCSubtargetInfo &STI, raw_ostream &O);
+
+  void printBTIHintOp(const MCInst *MI, unsigned OpNum,
                       const MCSubtargetInfo &STI, raw_ostream &O);
 
   void printFPImmOperand(const MCInst *MI, unsigned OpNum,
@@ -155,10 +165,32 @@ protected:
                               const MCSubtargetInfo &STI, raw_ostream &O);
   void printSIMDType10Operand(const MCInst *MI, unsigned OpNum,
                               const MCSubtargetInfo &STI, raw_ostream &O);
+  template<int64_t Angle, int64_t Remainder>
+  void printComplexRotationOp(const MCInst *MI, unsigned OpNo,
+                            const MCSubtargetInfo &STI, raw_ostream &O);
   template<unsigned size>
   void printGPRSeqPairsClassOperand(const MCInst *MI, unsigned OpNum,
                                     const MCSubtargetInfo &STI,
                                     raw_ostream &O);
+  template <typename T>
+  void printImm8OptLsl(const MCInst *MI, unsigned OpNum,
+                       const MCSubtargetInfo &STI, raw_ostream &O);
+  template <typename T>
+  void printSVELogicalImm(const MCInst *MI, unsigned OpNum,
+                          const MCSubtargetInfo &STI, raw_ostream &O);
+  void printSVEPattern(const MCInst *MI, unsigned OpNum,
+                       const MCSubtargetInfo &STI, raw_ostream &O);
+  template <char = 0>
+  void printSVERegOp(const MCInst *MI, unsigned OpNum,
+                    const MCSubtargetInfo &STI, raw_ostream &O);
+  void printGPR64as32(const MCInst *MI, unsigned OpNum,
+                      const MCSubtargetInfo &STI, raw_ostream &O);
+  template <int Width>
+  void printZPRasFPR(const MCInst *MI, unsigned OpNum,
+                     const MCSubtargetInfo &STI, raw_ostream &O);
+  template <unsigned ImmIs0, unsigned ImmIs1>
+  void printExactFPImm(const MCInst *MI, unsigned OpNum,
+                       const MCSubtargetInfo &STI, raw_ostream &O);
 };
 
 class AArch64AppleInstPrinter : public AArch64InstPrinter {
@@ -177,12 +209,15 @@ public:
                                unsigned PrintMethodIdx,
                                const MCSubtargetInfo &STI,
                                raw_ostream &O) override;
+
   StringRef getRegName(unsigned RegNo) const override {
     return getRegisterName(RegNo);
   }
+
   static const char *getRegisterName(unsigned RegNo,
                                      unsigned AltIdx = AArch64::NoRegAltName);
 };
-}
 
-#endif
+} // end namespace llvm
+
+#endif // LLVM_LIB_TARGET_AARCH64_INSTPRINTER_AARCH64INSTPRINTER_H

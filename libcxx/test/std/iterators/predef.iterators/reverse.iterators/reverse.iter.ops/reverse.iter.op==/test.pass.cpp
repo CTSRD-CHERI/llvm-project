@@ -16,7 +16,7 @@
 //   constexpr bool
 //   operator==(const reverse_iterator<Iter1>& x, const reverse_iterator<Iter2>& y);
 //
-//   constexpr in c++17
+//   constexpr in C++17
 
 #include <iterator>
 #include <cassert>
@@ -42,7 +42,7 @@ int main()
     test(random_access_iterator<const char*>(s), random_access_iterator<const char*>(s+1), false);
     test(s, s, true);
     test(s, s+1, false);
-    
+
 #if TEST_STD_VER > 14
     {
         constexpr const char *p = "123456789";

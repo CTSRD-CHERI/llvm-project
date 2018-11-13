@@ -23,6 +23,7 @@ namespace clang {
 namespace tidy {
 namespace modernize {
 
+namespace {
 /// \brief Matches move-constructible classes.
 ///
 /// Given
@@ -44,6 +45,7 @@ AST_MATCHER(CXXRecordDecl, isMoveConstructible) {
   }
   return false;
 }
+} // namespace
 
 static TypeMatcher constRefType() {
   return lValueReferenceType(pointee(isConstQualified()));
@@ -119,11 +121,13 @@ collectParamDecls(const CXXConstructorDecl *Ctor,
 PassByValueCheck::PassByValueCheck(StringRef Name, ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
       IncludeStyle(utils::IncludeSorter::parseIncludeStyle(
-          Options.get("IncludeStyle", "llvm"))) {}
+          Options.getLocalOrGlobal("IncludeStyle", "llvm"))),
+      ValuesOnly(Options.get("ValuesOnly", 0) != 0) {}
 
 void PassByValueCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
   Options.store(Opts, "IncludeStyle",
                 utils::IncludeSorter::toString(IncludeStyle));
+  Options.store(Opts, "ValuesOnly", ValuesOnly);
 }
 
 void PassByValueCheck::registerMatchers(MatchFinder *Finder) {
@@ -136,7 +140,8 @@ void PassByValueCheck::registerMatchers(MatchFinder *Finder) {
       cxxConstructorDecl(
           forEachConstructorInitializer(
               cxxCtorInitializer(
-                  // Clang builds a CXXConstructExpr only whin it knows which
+                  unless(isBaseInitializer()),
+                  // Clang builds a CXXConstructExpr only when it knows which
                   // constructor will be called. In dependent contexts a
                   // ParenListExpr is generated instead of a CXXConstructExpr,
                   // filtering out templates automatically for us.
@@ -147,7 +152,9 @@ void PassByValueCheck::registerMatchers(MatchFinder *Finder) {
                                   // Match only const-ref or a non-const value
                                   // parameters. Rvalues and const-values
                                   // shouldn't be modified.
-                                  anyOf(constRefType(), nonConstValueType()))))
+                                  ValuesOnly ? nonConstValueType()
+                                             : anyOf(constRefType(),
+                                                     nonConstValueType()))))
                               .bind("Param"))))),
                       hasDeclaration(cxxConstructorDecl(
                           isCopyConstructor(), unless(isDeleted()),
@@ -182,11 +189,12 @@ void PassByValueCheck::check(const MatchFinder::MatchResult &Result) {
     return;
 
   // If the parameter is trivial to copy, don't move it. Moving a trivivally
-  // copyable type will cause a problem with misc-move-const-arg
-  if (ParamDecl->getType().isTriviallyCopyableType(*Result.Context))
+  // copyable type will cause a problem with performance-move-const-arg
+  if (ParamDecl->getType().getNonReferenceType().isTriviallyCopyableType(
+          *Result.Context))
     return;
 
-  auto Diag = diag(ParamDecl->getLocStart(), "pass by value and use std::move");
+  auto Diag = diag(ParamDecl->getBeginLoc(), "pass by value and use std::move");
 
   // Iterate over all declarations of the constructor.
   for (const ParmVarDecl *ParmDecl : collectParamDecls(Ctor, ParamDecl)) {
@@ -198,8 +206,8 @@ void PassByValueCheck::check(const MatchFinder::MatchResult &Result) {
       continue;
 
     TypeLoc ValueTL = RefTL.getPointeeLoc();
-    auto TypeRange = CharSourceRange::getTokenRange(ParmDecl->getLocStart(),
-                                                    ParamTL.getLocEnd());
+    auto TypeRange = CharSourceRange::getTokenRange(ParmDecl->getBeginLoc(),
+                                                    ParamTL.getEndLoc());
     std::string ValueStr = Lexer::getSourceText(CharSourceRange::getTokenRange(
                                                     ValueTL.getSourceRange()),
                                                 SM, getLangOpts())

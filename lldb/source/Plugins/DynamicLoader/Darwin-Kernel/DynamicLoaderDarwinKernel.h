@@ -17,11 +17,14 @@
 #include <vector>
 
 // Other libraries and framework includes
+
+#include "lldb/Host/SafeMachO.h"
+
 // Project includes
-#include "lldb/Core/UUID.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Target/DynamicLoader.h"
 #include "lldb/Target/Process.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/UUID.h"
 
 class DynamicLoaderDarwinKernel : public lldb_private::DynamicLoader {
 public:
@@ -61,7 +64,7 @@ public:
   lldb::ThreadPlanSP GetStepThroughTrampolinePlan(lldb_private::Thread &thread,
                                                   bool stop_others) override;
 
-  lldb_private::Error CanLoadImage() override;
+  lldb_private::Status CanLoadImage() override;
 
   //------------------------------------------------------------------
   // PluginInterface protocol
@@ -283,6 +286,9 @@ protected:
 
   static lldb::addr_t
   SearchForKernelViaExhaustiveSearch(lldb_private::Process *process);
+
+  static bool
+  ReadMachHeader(lldb::addr_t addr, lldb_private::Process *process, llvm::MachO::mach_header &mh);
 
   static lldb_private::UUID
   CheckForKernelImageAtAddress(lldb::addr_t addr,

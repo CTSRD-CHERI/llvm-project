@@ -20,7 +20,8 @@ namespace __sanitizer {
 uptr StackTrace::GetNextInstructionPc(uptr pc) {
 #if defined(__mips__)
   return pc + 8;
-#elif defined(__powerpc__)
+#elif defined(__powerpc__) || defined(__sparc__) || defined(__arm__) || \
+    defined(__aarch64__)
   return pc + 4;
 #else
   return pc + 1;
@@ -39,6 +40,9 @@ void BufferedStackTrace::Init(const uptr *pcs, uptr cnt, uptr extra_top_pc) {
     trace_buffer[cnt] = extra_top_pc;
   top_frame_bp = 0;
 }
+
+// Sparc implemention is in its own file.
+#if !defined(__sparc__)
 
 // In GCC on ARM bp points to saved lr, not fp, so we should check the next
 // cell in stack to be a saved frame pointer. GetCanonicFrame returns the
@@ -106,9 +110,7 @@ void BufferedStackTrace::FastUnwindStack(uptr pc, uptr bp, uptr stack_top,
   }
 }
 
-static bool MatchPc(uptr cur_pc, uptr trace_pc, uptr threshold) {
-  return cur_pc - trace_pc <= threshold || trace_pc - cur_pc <= threshold;
-}
+#endif  // !defined(__sparc__)
 
 void BufferedStackTrace::PopStackFrames(uptr count) {
   CHECK_LT(count, size);
@@ -118,15 +120,14 @@ void BufferedStackTrace::PopStackFrames(uptr count) {
   }
 }
 
+static uptr Distance(uptr a, uptr b) { return a < b ? b - a : a - b; }
+
 uptr BufferedStackTrace::LocatePcInTrace(uptr pc) {
-  // Use threshold to find PC in stack trace, as PC we want to unwind from may
-  // slightly differ from return address in the actual unwinded stack trace.
-  const int kPcThreshold = 350;
-  for (uptr i = 0; i < size; ++i) {
-    if (MatchPc(pc, trace[i], kPcThreshold))
-      return i;
+  uptr best = 0;
+  for (uptr i = 1; i < size; ++i) {
+    if (Distance(trace[i], pc) < Distance(trace[best], pc)) best = i;
   }
-  return 0;
+  return best;
 }
 
 }  // namespace __sanitizer

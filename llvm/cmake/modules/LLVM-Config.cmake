@@ -8,33 +8,67 @@ function(link_system_libs target)
   message(AUTHOR_WARNING "link_system_libs no longer needed")
 endfunction()
 
-
+# is_llvm_target_library(
+#   library
+#     Name of the LLVM library to check
+#   return_var
+#     Output variable name
+#   ALL_TARGETS;INCLUDED_TARGETS;OMITTED_TARGETS
+#     ALL_TARGETS - default looks at the full list of known targets
+#     INCLUDED_TARGETS - looks only at targets being configured
+#     OMITTED_TARGETS - looks only at targets that are not being configured
+# )
 function(is_llvm_target_library library return_var)
+  cmake_parse_arguments(ARG "ALL_TARGETS;INCLUDED_TARGETS;OMITTED_TARGETS" "" "" ${ARGN})
   # Sets variable `return_var' to ON if `library' corresponds to a
   # LLVM supported target. To OFF if it doesn't.
   set(${return_var} OFF PARENT_SCOPE)
   string(TOUPPER "${library}" capitalized_lib)
-  string(TOUPPER "${LLVM_ALL_TARGETS}" targets)
+  if(ARG_INCLUDED_TARGETS)
+    string(TOUPPER "${LLVM_TARGETS_TO_BUILD}" targets)
+  elseif(ARG_OMITTED_TARGETS)
+    set(omitted_targets ${LLVM_ALL_TARGETS})
+    list(REMOVE_ITEM omitted_targets ${LLVM_TARGETS_TO_BUILD})
+    string(TOUPPER "${omitted_targets}" targets)
+  else()
+    string(TOUPPER "${LLVM_ALL_TARGETS}" targets)
+  endif()
   foreach(t ${targets})
     if( capitalized_lib STREQUAL t OR
-        capitalized_lib STREQUAL "LLVM${t}" OR
-        capitalized_lib STREQUAL "LLVM${t}CODEGEN" OR
-        capitalized_lib STREQUAL "LLVM${t}ASMPARSER" OR
-        capitalized_lib STREQUAL "LLVM${t}ASMPRINTER" OR
-        capitalized_lib STREQUAL "LLVM${t}DISASSEMBLER" OR
-        capitalized_lib STREQUAL "LLVM${t}INFO" )
+        capitalized_lib STREQUAL "${t}" OR
+        capitalized_lib STREQUAL "${t}DESC" OR
+        capitalized_lib STREQUAL "${t}CODEGEN" OR
+        capitalized_lib STREQUAL "${t}ASMPARSER" OR
+        capitalized_lib STREQUAL "${t}ASMPRINTER" OR
+        capitalized_lib STREQUAL "${t}DISASSEMBLER" OR
+        capitalized_lib STREQUAL "${t}INFO" OR
+        capitalized_lib STREQUAL "${t}UTILS" )
       set(${return_var} ON PARENT_SCOPE)
       break()
     endif()
   endforeach()
 endfunction(is_llvm_target_library)
 
+function(is_llvm_target_specifier library return_var)
+  is_llvm_target_library(${library} ${return_var} ${ARGN})
+  string(TOUPPER "${library}" capitalized_lib)
+  if(NOT ${return_var})
+    if( capitalized_lib STREQUAL "ALLTARGETSASMPARSERS" OR
+        capitalized_lib STREQUAL "ALLTARGETSDESCS" OR
+        capitalized_lib STREQUAL "ALLTARGETSDISASSEMBLERS" OR
+        capitalized_lib STREQUAL "ALLTARGETSINFOS" OR
+        capitalized_lib STREQUAL "NATIVE" OR
+        capitalized_lib STREQUAL "NATIVECODEGEN" )
+      set(${return_var} ON PARENT_SCOPE)
+    endif()
+  endif()
+endfunction()
 
 macro(llvm_config executable)
   cmake_parse_arguments(ARG "USE_SHARED" "" "" ${ARGN})
   set(link_components ${ARG_UNPARSED_ARGUMENTS})
 
-  if(USE_SHARED)
+  if(ARG_USE_SHARED)
     # If USE_SHARED is specified, then we link against libLLVM,
     # but also against the component libraries below. This is
     # done in case libLLVM does not contain all of the components
@@ -53,7 +87,7 @@ macro(llvm_config executable)
       endif()
     endif()
 
-    target_link_libraries(${executable} LLVM)
+    target_link_libraries(${executable} PRIVATE LLVM)
   endif()
 
   explicit_llvm_config(${executable} ${link_components})
@@ -65,9 +99,9 @@ function(explicit_llvm_config executable)
 
   llvm_map_components_to_libnames(LIBRARIES ${link_components})
   get_target_property(t ${executable} TYPE)
-  if("x${t}" STREQUAL "xSTATIC_LIBRARY")
+  if(t STREQUAL "STATIC_LIBRARY")
     target_link_libraries(${executable} INTERFACE ${LIBRARIES})
-  elseif("x${t}" STREQUAL "xSHARED_LIBRARY" OR "x${t}" STREQUAL "xMODULE_LIBRARY")
+  elseif(t STREQUAL "EXECUTABLE" OR t STREQUAL "SHARED_LIBRARY" OR t STREQUAL "MODULE_LIBRARY")
     target_link_libraries(${executable} PRIVATE ${LIBRARIES})
   else()
     # Use plain form for legacy user.
@@ -92,6 +126,21 @@ function(llvm_map_components_to_libnames out_libs)
     get_property(LLVM_AVAILABLE_LIBS GLOBAL PROPERTY LLVM_LIBS)
   endif()
   string(TOUPPER "${LLVM_AVAILABLE_LIBS}" capitalized_libs)
+
+  get_property(LLVM_TARGETS_CONFIGURED GLOBAL PROPERTY LLVM_TARGETS_CONFIGURED)
+
+  # Generally in our build system we avoid order-dependence. Unfortunately since
+  # not all targets create the same set of libraries we actually need to ensure
+  # that all build targets associated with a target are added before we can
+  # process target dependencies.
+  if(NOT LLVM_TARGETS_CONFIGURED)
+    foreach(c ${link_components})
+      is_llvm_target_specifier(${c} iltl_result ALL_TARGETS)
+      if(iltl_result)
+        message(FATAL_ERROR "Specified target library before target registration is complete.")
+      endif()
+    endforeach()
+  endif()
 
   # Expand some keywords:
   list(FIND LLVM_TARGETS_TO_BUILD "${LLVM_NATIVE_ARCH}" have_native_backend)
@@ -126,20 +175,23 @@ function(llvm_map_components_to_libnames out_libs)
           message(FATAL_ERROR "Target ${c} is not in the set of libraries.")
         endif()
       endif()
-      if( TARGET LLVM${c}AsmPrinter )
-        list(APPEND expanded_components "LLVM${c}AsmPrinter")
-      endif()
       if( TARGET LLVM${c}AsmParser )
         list(APPEND expanded_components "LLVM${c}AsmParser")
+      endif()
+      if( TARGET LLVM${c}AsmPrinter )
+        list(APPEND expanded_components "LLVM${c}AsmPrinter")
       endif()
       if( TARGET LLVM${c}Desc )
         list(APPEND expanded_components "LLVM${c}Desc")
       endif()
+      if( TARGET LLVM${c}Disassembler )
+        list(APPEND expanded_components "LLVM${c}Disassembler")
+      endif()
       if( TARGET LLVM${c}Info )
         list(APPEND expanded_components "LLVM${c}Info")
       endif()
-      if( TARGET LLVM${c}Disassembler )
-        list(APPEND expanded_components "LLVM${c}Disassembler")
+      if( TARGET LLVM${c}Utils )
+        list(APPEND expanded_components "LLVM${c}Utils")
       endif()
     elseif( c STREQUAL "native" )
       # already processed
@@ -198,9 +250,16 @@ function(llvm_map_components_to_libnames out_libs)
       list(FIND capitalized_libs LLVM${capitalized} lib_idx)
       if( lib_idx LESS 0 )
         # The component is unknown. Maybe is an omitted target?
-        is_llvm_target_library(${c} iltl_result)
-        if( NOT iltl_result )
-          message(FATAL_ERROR "Library `${c}' not found in list of llvm libraries.")
+        is_llvm_target_library(${c} iltl_result OMITTED_TARGETS)
+        if(iltl_result)
+          # A missing library to a directly referenced omitted target would be bad.
+          message(FATAL_ERROR "Library '${c}' is a direct reference to a target library for an omitted target.")
+        else()
+          # If it is not an omitted target we should assume it is a component
+          # that hasn't yet been processed by CMake. Missing components will
+          # cause errors later in the configuration, so we can safely assume
+          # that this is valid here.
+          list(APPEND expanded_components LLVM${c})
         endif()
       else( lib_idx LESS 0 )
         list(GET LLVM_AVAILABLE_LIBS ${lib_idx} canonical_lib)
@@ -243,7 +302,9 @@ function(llvm_expand_dependencies out_libs)
     expand_topologically(${lib} "${required_libs}" "${visited_libs}")
   endforeach()
 
-  list(REVERSE required_libs)
+  if(required_libs)
+    list(REVERSE required_libs)
+  endif()
   set(${out_libs} ${required_libs} PARENT_SCOPE)
 endfunction()
 

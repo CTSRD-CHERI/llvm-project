@@ -14,11 +14,16 @@
 
 #include "sanitizer_allocator.h"
 
+#include "sanitizer_allocator_checks.h"
 #include "sanitizer_allocator_internal.h"
 #include "sanitizer_atomic.h"
 #include "sanitizer_common.h"
 
 namespace __sanitizer {
+
+// Default allocator names.
+const char *PrimaryAllocatorName = "SizeClassAllocator";
+const char *SecondaryAllocatorName = "LargeMmapAllocator";
 
 // ThreadSanitizer for Go uses libc malloc/free.
 #if SANITIZER_GO || defined(SANITIZER_USE_MALLOC)
@@ -94,7 +99,7 @@ InternalAllocator *internal_allocator() {
     SpinMutexLock l(&internal_alloc_init_mu);
     if (atomic_load(&internal_allocator_initialized, memory_order_relaxed) ==
         0) {
-      internal_allocator_instance->Init(/* may_return_null*/ false);
+      internal_allocator_instance->Init(kReleaseToOSIntervalNever);
       atomic_store(&internal_allocator_initialized, 1, memory_order_release);
     }
   }
@@ -107,9 +112,9 @@ static void *RawInternalAlloc(uptr size, InternalAllocatorCache *cache,
   if (cache == 0) {
     SpinMutexLock l(&internal_allocator_cache_mu);
     return internal_allocator()->Allocate(&internal_allocator_cache, size,
-                                          alignment, false);
+                                          alignment);
   }
-  return internal_allocator()->Allocate(cache, size, alignment, false);
+  return internal_allocator()->Allocate(cache, size, alignment);
 }
 
 static void *RawInternalRealloc(void *ptr, uptr size,
@@ -135,12 +140,19 @@ static void RawInternalFree(void *ptr, InternalAllocatorCache *cache) {
 
 const u64 kBlockMagic = 0x6A6CB03ABCEBC041ull;
 
+static void NORETURN ReportInternalAllocatorOutOfMemory(uptr requested_size) {
+  SetAllocatorOutOfMemory();
+  Report("FATAL: %s: internal allocator is out of memory trying to allocate "
+         "0x%zx bytes\n", SanitizerToolName, requested_size);
+  Die();
+}
+
 void *InternalAlloc(uptr size, InternalAllocatorCache *cache, uptr alignment) {
   if (size + sizeof(u64) < size)
     return nullptr;
   void *p = RawInternalAlloc(size + sizeof(u64), cache, alignment);
-  if (!p)
-    return nullptr;
+  if (UNLIKELY(!p))
+    ReportInternalAllocatorOutOfMemory(size + sizeof(u64));
   ((u64*)p)[0] = kBlockMagic;
   return (char*)p + sizeof(u64);
 }
@@ -154,16 +166,21 @@ void *InternalRealloc(void *addr, uptr size, InternalAllocatorCache *cache) {
   size = size + sizeof(u64);
   CHECK_EQ(kBlockMagic, ((u64*)addr)[0]);
   void *p = RawInternalRealloc(addr, size, cache);
-  if (!p)
-    return nullptr;
+  if (UNLIKELY(!p))
+    ReportInternalAllocatorOutOfMemory(size);
   return (char*)p + sizeof(u64);
 }
 
 void *InternalCalloc(uptr count, uptr size, InternalAllocatorCache *cache) {
-  if (CallocShouldReturnNullDueToOverflow(count, size))
-    return internal_allocator()->ReturnNullOrDieOnBadRequest();
+  if (UNLIKELY(CheckForCallocOverflow(count, size))) {
+    Report("FATAL: %s: calloc parameters overflow: count * size (%zd * %zd) "
+           "cannot be represented in type size_t\n", SanitizerToolName, count,
+           size);
+    Die();
+  }
   void *p = InternalAlloc(count * size, cache);
-  if (p) internal_memset(p, 0, count * size);
+  if (LIKELY(p))
+    internal_memset(p, 0, count * size);
   return p;
 }
 
@@ -177,11 +194,13 @@ void InternalFree(void *addr, InternalAllocatorCache *cache) {
 }
 
 // LowLevelAllocator
+constexpr uptr kLowLevelAllocatorDefaultAlignment = 8;
+static uptr low_level_alloc_min_alignment = kLowLevelAllocatorDefaultAlignment;
 static LowLevelAllocateCallback low_level_alloc_callback;
 
 void *LowLevelAllocator::Allocate(uptr size) {
   // Align allocation size.
-  size = RoundUpTo(size, 8);
+  size = RoundUpTo(size, low_level_alloc_min_alignment);
   if (allocated_end_ - allocated_current_ < (sptr)size) {
     uptr size_to_allocate = Max(size, GetPageSizeCached());
     allocated_current_ =
@@ -198,27 +217,40 @@ void *LowLevelAllocator::Allocate(uptr size) {
   return res;
 }
 
+void SetLowLevelAllocateMinAlignment(uptr alignment) {
+  CHECK(IsPowerOfTwo(alignment));
+  low_level_alloc_min_alignment = Max(alignment, low_level_alloc_min_alignment);
+}
+
 void SetLowLevelAllocateCallback(LowLevelAllocateCallback callback) {
   low_level_alloc_callback = callback;
 }
 
-bool CallocShouldReturnNullDueToOverflow(uptr size, uptr n) {
-  if (!size) return false;
-  uptr max = (uptr)-1L;
-  return (max / size) < n;
+// Allocator's OOM and other errors handling support.
+
+static atomic_uint8_t allocator_out_of_memory = {0};
+static atomic_uint8_t allocator_may_return_null = {0};
+
+bool IsAllocatorOutOfMemory() {
+  return atomic_load_relaxed(&allocator_out_of_memory);
 }
 
-static atomic_uint8_t reporting_out_of_memory = {0};
+void SetAllocatorOutOfMemory() {
+  atomic_store_relaxed(&allocator_out_of_memory, 1);
+}
 
-bool IsReportingOOM() { return atomic_load_relaxed(&reporting_out_of_memory); }
+bool AllocatorMayReturnNull() {
+  return atomic_load(&allocator_may_return_null, memory_order_relaxed);
+}
 
-void NORETURN ReportAllocatorCannotReturnNull(bool out_of_memory) {
-  if (out_of_memory) atomic_store_relaxed(&reporting_out_of_memory, 1);
-  Report("%s's allocator is terminating the process instead of returning 0\n",
-         SanitizerToolName);
-  Report("If you don't like this behavior set allocator_may_return_null=1\n");
-  CHECK(0);
-  Die();
+void SetAllocatorMayReturnNull(bool may_return_null) {
+  atomic_store(&allocator_may_return_null, may_return_null,
+               memory_order_relaxed);
+}
+
+void PrintHintAllocatorCannotReturnNull() {
+  Report("HINT: if you don't care about these errors you may set "
+         "allocator_may_return_null=1\n");
 }
 
 } // namespace __sanitizer

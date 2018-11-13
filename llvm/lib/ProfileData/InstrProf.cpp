@@ -1,4 +1,4 @@
-//=-- InstrProf.cpp - Instrumented profiling format support -----------------=//
+//===- InstrProf.cpp - Instrumented profiling format support --------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -13,28 +13,67 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ProfileData/InstrProf.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/Compression.h"
+#include "llvm/Support/Endian.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/LEB128.h"
 #include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/SwapByteOrder.h"
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <string>
+#include <system_error>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 
 static cl::opt<bool> StaticFuncFullModulePrefix(
-    "static-func-full-module-prefix", cl::init(false),
+    "static-func-full-module-prefix", cl::init(true), cl::Hidden,
     cl::desc("Use full module build paths in the profile counter names for "
              "static functions."));
 
-namespace {
-std::string getInstrProfErrString(instrprof_error Err) {
+// This option is tailored to users that have different top-level directory in
+// profile-gen and profile-use compilation. Users need to specific the number
+// of levels to strip. A value larger than the number of directories in the
+// source file will strip all the directory names and only leave the basename.
+//
+// Note current ThinLTO module importing for the indirect-calls assumes
+// the source directory name not being stripped. A non-zero option value here
+// can potentially prevent some inter-module indirect-call-promotions.
+static cl::opt<unsigned> StaticFuncStripDirNamePrefix(
+    "static-func-strip-dirname-prefix", cl::init(0), cl::Hidden,
+    cl::desc("Strip specified level of directory name from source path in "
+             "the profile counter name for static functions."));
+
+static std::string getInstrProfErrString(instrprof_error Err) {
   switch (Err) {
   case instrprof_error::success:
     return "Success";
@@ -72,19 +111,25 @@ std::string getInstrProfErrString(instrprof_error Err) {
     return "Failed to uncompress data (zlib)";
   case instrprof_error::empty_raw_profile:
     return "Empty raw profile file";
+  case instrprof_error::zlib_unavailable:
+    return "Profile uses zlib compression but the profile reader was built without zlib support";
   }
   llvm_unreachable("A value of instrprof_error has no message.");
 }
+
+namespace {
 
 // FIXME: This class is only here to support the transition to llvm::Error. It
 // will be removed once this transition is complete. Clients should prefer to
 // deal with the Error value directly, rather than converting to error_code.
 class InstrProfErrorCategoryType : public std::error_category {
   const char *name() const noexcept override { return "llvm.instrprof"; }
+
   std::string message(int IE) const override {
     return getInstrProfErrString(static_cast<instrprof_error>(IE));
   }
 };
+
 } // end anonymous namespace
 
 static ManagedStatic<InstrProfErrorCategoryType> ErrorCategory;
@@ -93,7 +138,48 @@ const std::error_category &llvm::instrprof_category() {
   return *ErrorCategory;
 }
 
+namespace {
+
+const char *InstrProfSectNameCommon[] = {
+#define INSTR_PROF_SECT_ENTRY(Kind, SectNameCommon, SectNameCoff, Prefix)      \
+  SectNameCommon,
+#include "llvm/ProfileData/InstrProfData.inc"
+};
+
+const char *InstrProfSectNameCoff[] = {
+#define INSTR_PROF_SECT_ENTRY(Kind, SectNameCommon, SectNameCoff, Prefix)      \
+  SectNameCoff,
+#include "llvm/ProfileData/InstrProfData.inc"
+};
+
+const char *InstrProfSectNamePrefix[] = {
+#define INSTR_PROF_SECT_ENTRY(Kind, SectNameCommon, SectNameCoff, Prefix)      \
+  Prefix,
+#include "llvm/ProfileData/InstrProfData.inc"
+};
+
+} // namespace
+
 namespace llvm {
+
+std::string getInstrProfSectionName(InstrProfSectKind IPSK,
+                                    Triple::ObjectFormatType OF,
+                                    bool AddSegmentInfo) {
+  std::string SectName;
+
+  if (OF == Triple::MachO && AddSegmentInfo)
+    SectName = InstrProfSectNamePrefix[IPSK];
+
+  if (OF == Triple::COFF)
+    SectName += InstrProfSectNameCoff[IPSK];
+  else
+    SectName += InstrProfSectNameCommon[IPSK];
+
+  if (OF == Triple::MachO && IPSK == IPSK_data && AddSegmentInfo)
+    SectName += ",regular,live_support";
+
+  return SectName;
+}
 
 void SoftInstrProfErrors::addError(instrprof_error IE) {
   if (IE == instrprof_error::success)
@@ -133,6 +219,24 @@ std::string getPGOFuncName(StringRef RawFuncName,
   return GlobalValue::getGlobalIdentifier(RawFuncName, Linkage, FileName);
 }
 
+// Strip NumPrefix level of directory name from PathNameStr. If the number of
+// directory separators is less than NumPrefix, strip all the directories and
+// leave base file name only.
+static StringRef stripDirPrefix(StringRef PathNameStr, uint32_t NumPrefix) {
+  uint32_t Count = NumPrefix;
+  uint32_t Pos = 0, LastPos = 0;
+  for (auto & CI : PathNameStr) {
+    ++Pos;
+    if (llvm::sys::path::is_separator(CI)) {
+      LastPos = Pos;
+      --Count;
+    }
+    if (Count == 0)
+      break;
+  }
+  return PathNameStr.substr(LastPos);
+}
+
 // Return the PGOFuncName. This function has some special handling when called
 // in LTO optimization. The following only applies when calling in LTO passes
 // (when \c InLTO is true): LTO's internalization privatizes many global linkage
@@ -151,6 +255,8 @@ std::string getPGOFuncName(const Function &F, bool InLTO, uint64_t Version) {
     StringRef FileName = (StaticFuncFullModulePrefix
                               ? F.getParent()->getName()
                               : sys::path::filename(F.getParent()->getName()));
+    if (StaticFuncFullModulePrefix && StaticFuncStripDirNamePrefix != 0)
+      FileName = stripDirPrefix(FileName, StaticFuncStripDirNamePrefix);
     return getPGOFuncName(F.getName(), F.getLinkage(), FileName, Version);
   }
 
@@ -198,7 +304,6 @@ std::string getPGOFuncNameVarName(StringRef FuncName,
 GlobalVariable *createPGOFuncNameVar(Module &M,
                                      GlobalValue::LinkageTypes Linkage,
                                      StringRef PGOFuncName) {
-
   // We generally want to match the function's linkage, but available_externally
   // and extern_weak both have the wrong semantics, and anything that doesn't
   // need to link across compilation units doesn't need to be visible at all.
@@ -227,23 +332,52 @@ GlobalVariable *createPGOFuncNameVar(Function &F, StringRef PGOFuncName) {
   return createPGOFuncNameVar(*F.getParent(), F.getLinkage(), PGOFuncName);
 }
 
-void InstrProfSymtab::create(Module &M, bool InLTO) {
+Error InstrProfSymtab::create(Module &M, bool InLTO) {
   for (Function &F : M) {
     // Function may not have a name: like using asm("") to overwrite the name.
     // Ignore in this case.
     if (!F.hasName())
       continue;
     const std::string &PGOFuncName = getPGOFuncName(F, InLTO);
-    addFuncName(PGOFuncName);
+    if (Error E = addFuncName(PGOFuncName))
+      return E;
     MD5FuncMap.emplace_back(Function::getGUID(PGOFuncName), &F);
+    // In ThinLTO, local function may have been promoted to global and have
+    // suffix added to the function name. We need to add the stripped function
+    // name to the symbol table so that we can find a match from profile.
+    if (InLTO) {
+      auto pos = PGOFuncName.find('.');
+      if (pos != std::string::npos) {
+        const std::string &OtherFuncName = PGOFuncName.substr(0, pos);
+        if (Error E = addFuncName(OtherFuncName))
+          return E;
+        MD5FuncMap.emplace_back(Function::getGUID(OtherFuncName), &F);
+      }
+    }
   }
-
+  Sorted = false;
   finalizeSymtab();
+  return Error::success();
 }
 
-Error collectPGOFuncNameStrings(const std::vector<std::string> &NameStrs,
+uint64_t InstrProfSymtab::getFunctionHashFromAddress(uint64_t Address) {
+  finalizeSymtab();
+  auto Result =
+      std::lower_bound(AddrToMD5Map.begin(), AddrToMD5Map.end(), Address,
+                       [](const std::pair<uint64_t, uint64_t> &LHS,
+                          uint64_t RHS) { return LHS.first < RHS; });
+  // Raw function pointer collected by value profiler may be from
+  // external functions that are not instrumented. They won't have
+  // mapping data to be used by the deserializer. Force the value to
+  // be 0 in this case.
+  if (Result != AddrToMD5Map.end() && Result->first == Address)
+    return (uint64_t)Result->second;
+  return 0;
+}
+
+Error collectPGOFuncNameStrings(ArrayRef<std::string> NameStrs,
                                 bool doCompression, std::string &Result) {
-  assert(NameStrs.size() && "No name data to emit");
+  assert(!NameStrs.empty() && "No name data to emit");
 
   uint8_t Header[16], *P = Header;
   std::string UncompressedNameStrings =
@@ -271,12 +405,12 @@ Error collectPGOFuncNameStrings(const std::vector<std::string> &NameStrs,
   }
 
   SmallString<128> CompressedNameStrings;
-  zlib::Status Success =
-      zlib::compress(StringRef(UncompressedNameStrings), CompressedNameStrings,
-                     zlib::BestSizeCompression);
-
-  if (Success != zlib::StatusOK)
+  Error E = zlib::compress(StringRef(UncompressedNameStrings),
+                           CompressedNameStrings, zlib::BestSizeCompression);
+  if (E) {
+    consumeError(std::move(E));
     return make_error<InstrProfError>(instrprof_error::compress_failed);
+  }
 
   return WriteStringToResult(CompressedNameStrings.size(),
                              CompressedNameStrings);
@@ -289,7 +423,7 @@ StringRef getPGOFuncNameVarInitializer(GlobalVariable *NameVar) {
   return NameStr;
 }
 
-Error collectPGOFuncNameStrings(const std::vector<GlobalVariable *> &NameVars,
+Error collectPGOFuncNameStrings(ArrayRef<GlobalVariable *> NameVars,
                                 std::string &Result, bool doCompression) {
   std::vector<std::string> NameStrs;
   for (auto *NameVar : NameVars) {
@@ -313,11 +447,17 @@ Error readPGOFuncNameStrings(StringRef NameStrings, InstrProfSymtab &Symtab) {
     SmallString<128> UncompressedNameStrings;
     StringRef NameStrings;
     if (isCompressed) {
+      if (!llvm::zlib::isAvailable())
+        return make_error<InstrProfError>(instrprof_error::zlib_unavailable);
+
       StringRef CompressedNameStrings(reinterpret_cast<const char *>(P),
                                       CompressedSize);
-      if (zlib::uncompress(CompressedNameStrings, UncompressedNameStrings,
-                           UncompressedSize) != zlib::StatusOK)
+      if (Error E =
+              zlib::uncompress(CompressedNameStrings, UncompressedNameStrings,
+                               UncompressedSize)) {
+        consumeError(std::move(E));
         return make_error<InstrProfError>(instrprof_error::uncompress_failed);
+      }
       P += CompressedSize;
       NameStrings = StringRef(UncompressedNameStrings.data(),
                               UncompressedNameStrings.size());
@@ -330,18 +470,18 @@ Error readPGOFuncNameStrings(StringRef NameStrings, InstrProfSymtab &Symtab) {
     SmallVector<StringRef, 0> Names;
     NameStrings.split(Names, getInstrProfNameSeparator());
     for (StringRef &Name : Names)
-      Symtab.addFuncName(Name);
+      if (Error E = Symtab.addFuncName(Name))
+        return E;
 
     while (P < EndP && *P == 0)
       P++;
   }
-  Symtab.finalizeSymtab();
   return Error::success();
 }
 
-void InstrProfValueSiteRecord::merge(SoftInstrProfErrors &SIPE,
-                                     InstrProfValueSiteRecord &Input,
-                                     uint64_t Weight) {
+void InstrProfValueSiteRecord::merge(InstrProfValueSiteRecord &Input,
+                                     uint64_t Weight,
+                                     function_ref<void(instrprof_error)> Warn) {
   this->sortByTargetValues();
   Input.sortByTargetValues();
   auto I = ValueData.begin();
@@ -354,7 +494,7 @@ void InstrProfValueSiteRecord::merge(SoftInstrProfErrors &SIPE,
       bool Overflowed;
       I->Count = SaturatingMultiplyAdd(J->Count, Weight, I->Count, &Overflowed);
       if (Overflowed)
-        SIPE.addError(instrprof_error::counter_overflow);
+        Warn(instrprof_error::counter_overflow);
       ++I;
       continue;
     }
@@ -362,40 +502,43 @@ void InstrProfValueSiteRecord::merge(SoftInstrProfErrors &SIPE,
   }
 }
 
-void InstrProfValueSiteRecord::scale(SoftInstrProfErrors &SIPE,
-                                     uint64_t Weight) {
+void InstrProfValueSiteRecord::scale(uint64_t Weight,
+                                     function_ref<void(instrprof_error)> Warn) {
   for (auto I = ValueData.begin(), IE = ValueData.end(); I != IE; ++I) {
     bool Overflowed;
     I->Count = SaturatingMultiply(I->Count, Weight, &Overflowed);
     if (Overflowed)
-      SIPE.addError(instrprof_error::counter_overflow);
+      Warn(instrprof_error::counter_overflow);
   }
 }
 
 // Merge Value Profile data from Src record to this record for ValueKind.
 // Scale merged value counts by \p Weight.
-void InstrProfRecord::mergeValueProfData(uint32_t ValueKind,
-                                         InstrProfRecord &Src,
-                                         uint64_t Weight) {
+void InstrProfRecord::mergeValueProfData(
+    uint32_t ValueKind, InstrProfRecord &Src, uint64_t Weight,
+    function_ref<void(instrprof_error)> Warn) {
   uint32_t ThisNumValueSites = getNumValueSites(ValueKind);
   uint32_t OtherNumValueSites = Src.getNumValueSites(ValueKind);
   if (ThisNumValueSites != OtherNumValueSites) {
-    SIPE.addError(instrprof_error::value_site_count_mismatch);
+    Warn(instrprof_error::value_site_count_mismatch);
     return;
   }
+  if (!ThisNumValueSites)
+    return;
   std::vector<InstrProfValueSiteRecord> &ThisSiteRecords =
-      getValueSitesForKind(ValueKind);
-  std::vector<InstrProfValueSiteRecord> &OtherSiteRecords =
+      getOrCreateValueSitesForKind(ValueKind);
+  MutableArrayRef<InstrProfValueSiteRecord> OtherSiteRecords =
       Src.getValueSitesForKind(ValueKind);
   for (uint32_t I = 0; I < ThisNumValueSites; I++)
-    ThisSiteRecords[I].merge(SIPE, OtherSiteRecords[I], Weight);
+    ThisSiteRecords[I].merge(OtherSiteRecords[I], Weight, Warn);
 }
 
-void InstrProfRecord::merge(InstrProfRecord &Other, uint64_t Weight) {
+void InstrProfRecord::merge(InstrProfRecord &Other, uint64_t Weight,
+                            function_ref<void(instrprof_error)> Warn) {
   // If the number of counters doesn't match we either have bad data
   // or a hash collision.
   if (Counts.size() != Other.Counts.size()) {
-    SIPE.addError(instrprof_error::count_mismatch);
+    Warn(instrprof_error::count_mismatch);
     return;
   }
 
@@ -404,65 +547,52 @@ void InstrProfRecord::merge(InstrProfRecord &Other, uint64_t Weight) {
     Counts[I] =
         SaturatingMultiplyAdd(Other.Counts[I], Weight, Counts[I], &Overflowed);
     if (Overflowed)
-      SIPE.addError(instrprof_error::counter_overflow);
+      Warn(instrprof_error::counter_overflow);
   }
 
   for (uint32_t Kind = IPVK_First; Kind <= IPVK_Last; ++Kind)
-    mergeValueProfData(Kind, Other, Weight);
+    mergeValueProfData(Kind, Other, Weight, Warn);
 }
 
-void InstrProfRecord::scaleValueProfData(uint32_t ValueKind, uint64_t Weight) {
-  uint32_t ThisNumValueSites = getNumValueSites(ValueKind);
-  std::vector<InstrProfValueSiteRecord> &ThisSiteRecords =
-      getValueSitesForKind(ValueKind);
-  for (uint32_t I = 0; I < ThisNumValueSites; I++)
-    ThisSiteRecords[I].scale(SIPE, Weight);
+void InstrProfRecord::scaleValueProfData(
+    uint32_t ValueKind, uint64_t Weight,
+    function_ref<void(instrprof_error)> Warn) {
+  for (auto &R : getValueSitesForKind(ValueKind))
+    R.scale(Weight, Warn);
 }
 
-void InstrProfRecord::scale(uint64_t Weight) {
+void InstrProfRecord::scale(uint64_t Weight,
+                            function_ref<void(instrprof_error)> Warn) {
   for (auto &Count : this->Counts) {
     bool Overflowed;
     Count = SaturatingMultiply(Count, Weight, &Overflowed);
     if (Overflowed)
-      SIPE.addError(instrprof_error::counter_overflow);
+      Warn(instrprof_error::counter_overflow);
   }
   for (uint32_t Kind = IPVK_First; Kind <= IPVK_Last; ++Kind)
-    scaleValueProfData(Kind, Weight);
+    scaleValueProfData(Kind, Weight, Warn);
 }
 
 // Map indirect call target name hash to name string.
 uint64_t InstrProfRecord::remapValue(uint64_t Value, uint32_t ValueKind,
-                                     ValueMapType *ValueMap) {
-  if (!ValueMap)
+                                     InstrProfSymtab *SymTab) {
+  if (!SymTab)
     return Value;
-  switch (ValueKind) {
-  case IPVK_IndirectCallTarget: {
-    auto Result =
-        std::lower_bound(ValueMap->begin(), ValueMap->end(), Value,
-                         [](const std::pair<uint64_t, uint64_t> &LHS,
-                            uint64_t RHS) { return LHS.first < RHS; });
-   // Raw function pointer collected by value profiler may be from 
-   // external functions that are not instrumented. They won't have
-   // mapping data to be used by the deserializer. Force the value to
-   // be 0 in this case.
-    if (Result != ValueMap->end() && Result->first == Value)
-      Value = (uint64_t)Result->second;
-    else
-      Value = 0;
-    break;
-  }
-  }
+
+  if (ValueKind == IPVK_IndirectCallTarget)
+    return SymTab->getFunctionHashFromAddress(Value);
+
   return Value;
 }
 
 void InstrProfRecord::addValueData(uint32_t ValueKind, uint32_t Site,
                                    InstrProfValueData *VData, uint32_t N,
-                                   ValueMapType *ValueMap) {
+                                   InstrProfSymtab *ValueMap) {
   for (uint32_t I = 0; I < N; I++) {
     VData[I].Value = remapValue(VData[I].Value, ValueKind, ValueMap);
   }
   std::vector<InstrProfValueSiteRecord> &ValueSites =
-      getValueSitesForKind(ValueKind);
+      getOrCreateValueSitesForKind(ValueKind);
   if (N == 0)
     ValueSites.emplace_back();
   else
@@ -473,7 +603,7 @@ void InstrProfRecord::addValueData(uint32_t ValueKind, uint32_t Site,
 #include "llvm/ProfileData/InstrProfData.inc"
 
 /*!
- * \brief ValueProfRecordClosure Interface implementation for  InstrProfRecord
+ * ValueProfRecordClosure Interface implementation for  InstrProfRecord
  *  class. These C wrappers are used as adaptors so that C++ code can be
  *  invoked as callbacks.
  */
@@ -521,8 +651,9 @@ static ValueProfRecordClosure InstrProfRecordClosure = {
 
 // Wrapper implementation using the closure mechanism.
 uint32_t ValueProfData::getSize(const InstrProfRecord &Record) {
-  InstrProfRecordClosure.Record = &Record;
-  return getValueProfDataSize(&InstrProfRecordClosure);
+  auto Closure = InstrProfRecordClosure;
+  Closure.Record = &Record;
+  return getValueProfDataSize(&Closure);
 }
 
 // Wrapper implementation using the closure mechanism.
@@ -536,13 +667,13 @@ ValueProfData::serializeFrom(const InstrProfRecord &Record) {
 }
 
 void ValueProfRecord::deserializeTo(InstrProfRecord &Record,
-                                    InstrProfRecord::ValueMapType *VMap) {
+                                    InstrProfSymtab *SymTab) {
   Record.reserveSites(Kind, NumValueSites);
 
   InstrProfValueData *ValueData = getValueProfRecordValueData(this);
   for (uint64_t VSite = 0; VSite < NumValueSites; ++VSite) {
     uint8_t ValueDataCount = this->SiteCountArray[VSite];
-    Record.addValueData(Kind, VSite, ValueData, ValueDataCount, VMap);
+    Record.addValueData(Kind, VSite, ValueData, ValueDataCount, SymTab);
     ValueData += ValueDataCount;
   }
 }
@@ -553,6 +684,7 @@ void ValueProfRecord::deserializeTo(InstrProfRecord &Record,
 void ValueProfRecord::swapBytes(support::endianness Old,
                                 support::endianness New) {
   using namespace support;
+
   if (Old == New)
     return;
 
@@ -575,13 +707,13 @@ void ValueProfRecord::swapBytes(support::endianness Old,
 }
 
 void ValueProfData::deserializeTo(InstrProfRecord &Record,
-                                  InstrProfRecord::ValueMapType *VMap) {
+                                  InstrProfSymtab *SymTab) {
   if (NumValueKinds == 0)
     return;
 
   ValueProfRecord *VR = getFirstValueProfRecord(this);
   for (uint32_t K = 0; K < NumValueKinds; K++) {
-    VR->deserializeTo(Record, VMap);
+    VR->deserializeTo(Record, SymTab);
     VR = getValueProfRecordNext(VR);
   }
 }
@@ -589,6 +721,7 @@ void ValueProfData::deserializeTo(InstrProfRecord &Record,
 template <class T>
 static T swapToHostOrder(const unsigned char *&D, support::endianness Orig) {
   using namespace support;
+
   if (Orig == little)
     return endian::readNext<T, little, unaligned>(D);
   else
@@ -623,6 +756,7 @@ ValueProfData::getValueProfData(const unsigned char *D,
                                 const unsigned char *const BufferEnd,
                                 support::endianness Endianness) {
   using namespace support;
+
   if (D + sizeof(ValueProfData) > BufferEnd)
     return make_error<InstrProfError>(instrprof_error::truncated);
 
@@ -645,6 +779,7 @@ ValueProfData::getValueProfData(const unsigned char *D,
 
 void ValueProfData::swapBytesToHost(support::endianness Endianness) {
   using namespace support;
+
   if (Endianness == getHostEndianness())
     return;
 
@@ -660,6 +795,7 @@ void ValueProfData::swapBytesToHost(support::endianness Endianness) {
 
 void ValueProfData::swapBytesFromHost(support::endianness Endianness) {
   using namespace support;
+
   if (Endianness == getHostEndianness())
     return;
 
@@ -790,8 +926,7 @@ bool needsComdatForCounter(const Function &F, const Module &M) {
   if (F.hasComdat())
     return true;
 
-  Triple TT(M.getTargetTriple());
-  if (!TT.isOSBinFormatELF())
+  if (!Triple(M.getTargetTriple()).supportsCOMDAT())
     return false;
 
   // See createPGOFuncNameVar for more details. To avoid link errors, profile
@@ -811,4 +946,69 @@ bool needsComdatForCounter(const Function &F, const Module &M) {
 
   return true;
 }
+
+// Check if INSTR_PROF_RAW_VERSION_VAR is defined.
+bool isIRPGOFlagSet(const Module *M) {
+  auto IRInstrVar =
+      M->getNamedGlobal(INSTR_PROF_QUOTE(INSTR_PROF_RAW_VERSION_VAR));
+  if (!IRInstrVar || IRInstrVar->isDeclaration() ||
+      IRInstrVar->hasLocalLinkage())
+    return false;
+
+  // Check if the flag is set.
+  if (!IRInstrVar->hasInitializer())
+    return false;
+
+  const Constant *InitVal = IRInstrVar->getInitializer();
+  if (!InitVal)
+    return false;
+
+  return (dyn_cast<ConstantInt>(InitVal)->getZExtValue() &
+          VARIANT_MASK_IR_PROF) != 0;
+}
+
+// Check if we can safely rename this Comdat function.
+bool canRenameComdatFunc(const Function &F, bool CheckAddressTaken) {
+  if (F.getName().empty())
+    return false;
+  if (!needsComdatForCounter(F, *(F.getParent())))
+    return false;
+  // Unsafe to rename the address-taken function (which can be used in
+  // function comparison).
+  if (CheckAddressTaken && F.hasAddressTaken())
+    return false;
+  // Only safe to do if this function may be discarded if it is not used
+  // in the compilation unit.
+  if (!GlobalValue::isDiscardableIfUnused(F.getLinkage()))
+    return false;
+
+  // For AvailableExternallyLinkage functions.
+  if (!F.hasComdat()) {
+    assert(F.getLinkage() == GlobalValue::AvailableExternallyLinkage);
+    return true;
+  }
+  return true;
+}
+
+// Parse the value profile options.
+void getMemOPSizeRangeFromOption(StringRef MemOPSizeRange, int64_t &RangeStart,
+                                 int64_t &RangeLast) {
+  static const int64_t DefaultMemOPSizeRangeStart = 0;
+  static const int64_t DefaultMemOPSizeRangeLast = 8;
+  RangeStart = DefaultMemOPSizeRangeStart;
+  RangeLast = DefaultMemOPSizeRangeLast;
+
+  if (!MemOPSizeRange.empty()) {
+    auto Pos = MemOPSizeRange.find(':');
+    if (Pos != std::string::npos) {
+      if (Pos > 0)
+        MemOPSizeRange.substr(0, Pos).getAsInteger(10, RangeStart);
+      if (Pos < MemOPSizeRange.size() - 1)
+        MemOPSizeRange.substr(Pos + 1).getAsInteger(10, RangeLast);
+    } else
+      MemOPSizeRange.getAsInteger(10, RangeLast);
+  }
+  assert(RangeLast >= RangeStart);
+}
+
 } // end namespace llvm

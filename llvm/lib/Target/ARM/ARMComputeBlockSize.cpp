@@ -8,7 +8,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "ARM.h"
+#include "ARMBaseInstrInfo.h"
 #include "ARMBasicBlockInfo.h"
+#include "ARMMachineFunctionInfo.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include <vector>
+
 using namespace llvm;
 
 namespace llvm {
@@ -27,6 +35,7 @@ mayOptimizeThumb2Instruction(const MachineInstr *MI) {
     case ARM::tBcc:
     // optimizeThumb2JumpTables.
     case ARM::t2BR_JT:
+    case ARM::tBR_JTr:
       return true;
   }
   return false;
@@ -69,4 +78,4 @@ std::vector<BasicBlockInfo> computeAllBlockSizes(MachineFunction *MF) {
   return BBInfo;
 }
 
-} // end namespace
+} // end namespace llvm

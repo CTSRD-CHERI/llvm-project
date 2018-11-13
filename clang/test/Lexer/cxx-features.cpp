@@ -1,23 +1,26 @@
 // RUN: %clang_cc1 -std=c++98 -fcxx-exceptions -verify %s
 // RUN: %clang_cc1 -std=c++11 -fcxx-exceptions -verify %s
-// RUN: %clang_cc1 -std=c++1y -fcxx-exceptions -fsized-deallocation -verify %s
 // RUN: %clang_cc1 -std=c++14 -fcxx-exceptions -fsized-deallocation -verify %s
-// RUN: %clang_cc1 -std=c++1z -fcxx-exceptions -fsized-deallocation -verify %s
-// RUN: %clang_cc1 -std=c++1z -fcxx-exceptions -fsized-deallocation -fconcepts-ts -DCONCEPTS_TS=1 -verify %s
-// RUN: %clang_cc1 -fno-rtti -verify %s -DNO_EXCEPTIONS -DNO_RTTI
-// RUN: %clang_cc1 -fcoroutines-ts -DNO_EXCEPTIONS -DCOROUTINES -verify %s
+// RUN: %clang_cc1 -std=c++17 -fcxx-exceptions -fsized-deallocation -verify %s
+// RUN: %clang_cc1 -std=c++2a -fcxx-exceptions -fsized-deallocation -verify %s
+//
+// RUN: %clang_cc1 -std=c++17 -fcxx-exceptions -fsized-deallocation -frelaxed-template-template-args -DRELAXED_TEMPLATE_TEMPLATE_ARGS=1 -verify %s
+// RUN: %clang_cc1 -std=c++17 -fcxx-exceptions -fsized-deallocation -fconcepts-ts -DCONCEPTS_TS=1 -verify %s
+// RUN: %clang_cc1 -fno-rtti -fno-threadsafe-statics -verify %s -DNO_EXCEPTIONS -DNO_RTTI -DNO_THREADSAFE_STATICS -fsized-deallocation
+// RUN: %clang_cc1 -fcoroutines-ts -DNO_EXCEPTIONS -DCOROUTINES -verify -fsized-deallocation %s
+// RUN: %clang_cc1 -fchar8_t -DNO_EXCEPTIONS -DCHAR8_T -verify -fsized-deallocation %s
 
 // expected-no-diagnostics
 
 // FIXME using `defined` in a macro has undefined behavior.
 #if __cplusplus < 201103L
-#define check(macro, cxx98, cxx11, cxx14, cxx1z) cxx98 == 0 ? defined(__cpp_##macro) : __cpp_##macro != cxx98
+#define check(macro, cxx98, cxx11, cxx14, cxx17) cxx98 == 0 ? defined(__cpp_##macro) : __cpp_##macro != cxx98
 #elif __cplusplus < 201402L
-#define check(macro, cxx98, cxx11, cxx14, cxx1z) cxx11 == 0 ? defined(__cpp_##macro) : __cpp_##macro != cxx11
+#define check(macro, cxx98, cxx11, cxx14, cxx17) cxx11 == 0 ? defined(__cpp_##macro) : __cpp_##macro != cxx11
 #elif __cplusplus < 201406L
-#define check(macro, cxx98, cxx11, cxx14, cxx1z) cxx14 == 0 ? defined(__cpp_##macro) : __cpp_##macro != cxx14
+#define check(macro, cxx98, cxx11, cxx14, cxx17) cxx14 == 0 ? defined(__cpp_##macro) : __cpp_##macro != cxx14
 #else
-#define check(macro, cxx98, cxx11, cxx14, cxx1z) cxx1z == 0 ? defined(__cpp_##macro) : __cpp_##macro != cxx1z
+#define check(macro, cxx98, cxx11, cxx14, cxx17) cxx17 == 0 ? defined(__cpp_##macro) : __cpp_##macro != cxx17
 #endif
 
 // --- C++17 features ---
@@ -26,16 +29,19 @@
 #error "wrong value for __cpp_hex_float"
 #endif
 
-#if check(inline_variables, 0, 0, 0, 201606) // FIXME: provisional name
+#if check(inline_variables, 0, 0, 0, 201606)
 #error "wrong value for __cpp_inline_variables"
 #endif
 
-#if check(aligned_new, 0, 0, 0, 201606) // FIXME: provisional name
+#if check(aligned_new, 0, 0, 0, 201606)
 #error "wrong value for __cpp_aligned_new"
 #endif
 
-#if check(noexcept_function_type, 0, 0, 0, 0)
-// FIXME: value shuld be 201510 for cxx1z once implemented
+#if check(guaranteed_copy_elision, 0, 0, 0, 201606)
+#error "wrong value for __cpp_guaranteed_copy_elision"
+#endif
+
+#if check(noexcept_function_type, 0, 0, 0, 201510)
 #error "wrong value for __cpp_noexcept_function_type"
 #endif
 
@@ -47,9 +53,9 @@
 #error "wrong value for __cpp_capture_star_this"
 #endif
 
-// FIXME: bump __cpp_constexpr to 201603 for constexpr lambda support
+// constexpr checked below
 
-#if check(if_constexpr, 0, 0, 0, 201606) // FIXME: provisional name
+#if check(if_constexpr, 0, 0, 0, 201606)
 #error "wrong value for __cpp_if_constexpr"
 #endif
 
@@ -57,7 +63,17 @@
 
 // static_assert checked below
 
-#if check(template_auto, 0, 0, 0, 201606) // FIXME: provisional name
+#if check(deduction_guides, 0, 0, 0, 201703)
+#error "wrong value for __cpp_deduction_guides"
+#endif
+
+#if check(nontype_template_parameter_auto, 0, 0, 0, 201606)
+#error "wrong value for __cpp_nontype_template_parameter_auto"
+#endif
+
+// This is the old name (from P0096R4) for
+// __cpp_nontype_template_parameter_auto
+#if check(template_auto, 0, 0, 0, 201606)
 #error "wrong value for __cpp_template_auto"
 #endif
 
@@ -71,19 +87,33 @@
 #error "wrong value for __cpp_enumerator_attributes"
 #endif
 
+// This is an old name (from P0096R4), now removed from SD-6.
 #if check(nested_namespace_definitions, 0, 0, 0, 201411)
 #error "wrong value for __cpp_nested_namespace_definitions"
+#endif
+
+// inheriting_constructors checked below
+
+#if check(variadic_using, 0, 0, 0, 201611)
+#error "wrong value for __cpp_variadic_using"
 #endif
 
 #if check(aggregate_bases, 0, 0, 0, 201603)
 #error "wrong value for __cpp_aggregate_bases"
 #endif
 
-// FIXME: structured_bindings / decomposition_decl name not yet settled, and
-// Clang implementation is incomplete.
+#if check(structured_bindings, 0, 0, 0, 201606)
+#error "wrong value for __cpp_structured_bindings"
+#endif
 
 #if check(nontype_template_args, 0, 0, 0, 201411)
 #error "wrong value for __cpp_nontype_template_args"
+#endif
+
+#if defined(RELAXED_TEMPLATE_TEMPLATE_ARGS) \
+    ? check(template_template_args, 0, 0, 0, 201611) \
+    : check(template_template_args, 0, 0, 0, 0)
+#error "wrong value for __cpp_template_template_args"
 #endif
 
 // --- C++14 features ---
@@ -149,11 +179,15 @@
 #error "wrong value for __cpp_user_defined_literals"
 #endif
 
+#if defined(NO_THREADSAFE_STATICS) ? check(threadsafe_static_init, 0, 0, 0, 0) : check(threadsafe_static_init, 200806, 200806, 200806, 200806)
+#error "wrong value for __cpp_threadsafe_static_init"
+#endif
+
 #if check(lambdas, 0, 200907, 200907, 200907)
 #error "wrong value for __cpp_lambdas"
 #endif
 
-#if check(constexpr, 0, 200704, 201304, 201304)
+#if check(constexpr, 0, 200704, 201304, 201603)
 #error "wrong value for __cpp_constexpr"
 #endif
 
@@ -221,6 +255,12 @@
 #error "wrong value for __cpp_experimental_concepts"
 #endif
 
-#if (COROUTINES && !__cpp_coroutines) || (!COROUTINES && __cpp_coroutines)
+#if defined(COROUTINES) ? check(coroutines, 201703L, 201703L, 201703L, 201703L) : check(coroutines, 0, 0, 0, 0)
 #error "wrong value for __cpp_coroutines"
+#endif
+
+// --- not-yet-standard features --
+
+#if defined(CHAR8_T) ? check(char8_t, 201803, 201803, 201803, 201803) : check(char8_t, 0, 0, 0, 0)
+#error "wrong value for __cpp_char8_t"
 #endif

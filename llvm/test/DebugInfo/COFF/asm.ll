@@ -14,7 +14,7 @@
 
 ; X86-LABEL: _f:
 ; X86:      .cv_file 1 "D:\\asm.c"
-; X86:      .cv_loc 0 1 4 0 is_stmt 0
+; X86:      .cv_loc 0 1 4 0
 ; X86:      .cv_loc 0 1 5 0
 ; X86:      calll   _g
 ; X86:      .cv_loc 0 1 6 0
@@ -35,7 +35,7 @@
 ; OBJ32:    CodeViewDebugInfo [
 ; OBJ32:      Subsection [
 ; OBJ32-NEXT:   SubSectionType: Symbols (0xF1)
-; OBJ32:        ProcStart {
+; OBJ32:        {{.*}}Proc{{.*}}Sym {
 ; OBJ32:          CodeSize: 0x6
 ; OBJ32:          DisplayName: f
 ; OBJ32:          LinkageName: _f
@@ -71,7 +71,7 @@
 
 ; X64-LABEL: f:
 ; X64:      .cv_file 1 "D:\\asm.c"
-; X64:      .cv_loc 0 1 3 0 is_stmt 0
+; X64:      .cv_loc 0 1 3 0
 ; X64:      subq    $40, %rsp
 ; X64:      .cv_loc 0 1 4 0
 ; X64:      .cv_loc 0 1 5 0
@@ -94,13 +94,13 @@
 ; OBJ64:      ]
 ; OBJ64:      Subsection [
 ; OBJ64-NEXT:   SubSectionType: Symbols (0xF1)
-; OBJ64:        ProcStart {
+; OBJ64:        {{.*}}Proc{{.*}}Sym {
 ; OBJ64:          CodeSize: 0xE
 ; OBJ64:          DisplayName: f
 ; OBJ64:          LinkageName: f
 ; OBJ64:        }
-; OBJ64-NEXT:   ProcEnd {
-; OBJ64-NEXT:   }
+; OBJ64:        ProcEnd {
+; OBJ64:        }
 ; OBJ64-NEXT: ]
 ; OBJ64:      FunctionLineTable [
 ; OBJ64-NEXT:   Name: f
@@ -154,7 +154,7 @@ attributes #2 = { nounwind }
 !0 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang version 3.5 ", isOptimized: false, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "<unknown>", directory: "D:\5C")
 !2 = !{}
-!4 = distinct !DISubprogram(name: "f", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 3, file: !5, scope: !6, type: !7, variables: !2)
+!4 = distinct !DISubprogram(name: "f", line: 3, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 3, file: !5, scope: !6, type: !7, retainedNodes: !2)
 !5 = !DIFile(filename: "asm.c", directory: "D:\5C")
 !6 = !DIFile(filename: "asm.c", directory: "D:C")
 !7 = !DISubroutineType(types: !8)

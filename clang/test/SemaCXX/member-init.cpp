@@ -1,7 +1,7 @@
 // RUN: %clang_cc1 -fsyntax-only -fcxx-exceptions -verify -std=c++11 -Wall %s
 
 struct Bitfield {
-  int n : 3 = 7; // expected-error {{bitfield member cannot have an in-class initializer}}
+  int n : 3 = 7; // expected-warning {{C++2a extension}} expected-warning {{changes value from 7 to -1}}
 };
 
 int a;
@@ -13,10 +13,10 @@ public:
 
 bool b();
 int k;
-struct Recurse {
-  int &n = // expected-error {{cannot use defaulted default constructor of 'Recurse' within the class outside of member functions because 'n' has an initializer}}
+struct Recurse { // expected-error {{initializer for 'n' needed}}
+  int &n = // expected-note {{declared here}}
       b() ?
-      Recurse().n : // expected-note {{implicit default constructor for 'Recurse' first required here}}
+      Recurse().n : // expected-note {{in evaluation of exception spec}}
       k;
 };
 
@@ -86,9 +86,8 @@ namespace PR14838 {
   };
   struct thing {};
   struct another {
-    another() : r(thing()) {}
-    // expected-error@-1 {{temporary of type 'const PR14838::function' has private destructor}}
-    // expected-warning@-2 {{binding reference member 'r' to a temporary value}}
+    another() : r(thing()) {} // expected-error {{binds to a temporary object}}
+    // expected-error@-1 {{temporary of type 'PR14838::function' has private destructor}}
     const function &r; // expected-note {{reference member declared here}}
   } af;
 }
@@ -101,7 +100,7 @@ namespace rdar14084171 {
   struct Sprite {
     Point location = Point(0,0); // expected-error {{no matching constructor for initialization of 'rdar14084171::Point'}}
   };
-  void f(Sprite& x) { x = x; }
+  void f(Sprite& x) { x = x; } // expected-warning {{explicitly assigning value of variable}}
 }
 
 namespace PR18560 {
@@ -128,21 +127,19 @@ A::A() {}
 namespace template_default_ctor {
 struct A {
   template <typename T>
-  struct B {
-    int m1 = 0; // expected-error {{cannot use defaulted default constructor of 'B' within 'A' outside of member functions because 'm1' has an initializer}}
+  struct B { // expected-error {{initializer for 'm1' needed}}
+    int m1 = 0; // expected-note {{declared here}}
   };
-  // expected-note@+1 {{implicit default constructor for 'template_default_ctor::A::B<int>' first required here}}
-  enum { NOE = noexcept(B<int>()) };
+  enum { NOE = noexcept(B<int>()) }; // expected-note {{in evaluation of exception spec}}
 };
 }
 
 namespace default_ctor {
 struct A {
-  struct B {
-    int m1 = 0; // expected-error {{cannot use defaulted default constructor of 'B' within 'A' outside of member functions because 'm1' has an initializer}}
+  struct B { // expected-error {{initializer for 'm1' needed}}
+    int m1 = 0; // expected-note {{declared here}}
   };
-  // expected-note@+1 {{implicit default constructor for 'default_ctor::A::B' first required here}}
-  enum { NOE = noexcept(B()) };
+  enum { NOE = noexcept(B()) }; // expected-note {{in evaluation of exception spec}}
 };
 }
 
@@ -150,19 +147,17 @@ namespace member_template {
 struct A {
   template <typename T>
   struct B {
-    struct C {
-      int m1 = 0; // expected-error {{cannot use defaulted default constructor of 'C' within 'A' outside of member functions because 'm1' has an initializer}}
+    struct C { // expected-error {{initializer for 'm1' needed}}
+      int m1 = 0; // expected-note {{declared here}}
     };
     template <typename U>
-    struct D {
-      int m1 = 0; // expected-error {{cannot use defaulted default constructor of 'D' within 'A' outside of member functions because 'm1' has an initializer}}
+    struct D { // expected-error {{initializer for 'm1' needed}}
+      int m1 = 0; // expected-note {{declared here}}
     };
   };
   enum {
-    // expected-note@+1 {{implicit default constructor for 'member_template::A::B<int>::C' first required here}}
-    NOE1 = noexcept(B<int>::C()),
-    // expected-note@+1 {{implicit default constructor for 'member_template::A::B<int>::D<int>' first required here}}
-    NOE2 = noexcept(B<int>::D<int>())
+    NOE1 = noexcept(B<int>::C()), // expected-note {{in evaluation of exception spec}}
+    NOE2 = noexcept(B<int>::D<int>()) // expected-note {{in evaluation of exception spec}}
   };
 };
 }

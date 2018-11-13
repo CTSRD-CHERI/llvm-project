@@ -52,9 +52,9 @@
 #include <system_error>
 
 // These includes must be last.
-#include <Windows.h>
-#include <WinError.h>
-#include <Dbghelp.h>
+#include <windows.h>
+#include <winerror.h>
+#include <dbghelp.h>
 #include <psapi.h>
 
 using namespace llvm;
@@ -218,7 +218,7 @@ static std::error_code GetFileNameFromHandle(HANDLE FileHandle,
   }
 }
 
-/// @brief Find program using shell lookup rules.
+/// Find program using shell lookup rules.
 /// @param Program This is either an absolute path, relative path, or simple a
 ///        program name. Look in PATH for any programs that match. If no
 ///        extension is present, try all extensions in PATHEXT.
@@ -349,7 +349,7 @@ int main(int argc, char **argv) {
   ::_set_error_mode(_OUT_TO_STDERR);
 
   BOOL success = ::CreateProcessA(ProgramToRun.c_str(),
-                            LPSTR(CommandLine.c_str()),
+                                  const_cast<LPSTR>(CommandLine.c_str()),
                                   NULL,
                                   NULL,
                                   FALSE,

@@ -32,7 +32,7 @@ bool CanPoisonMemory() {
 }
 
 void PoisonShadow(uptr addr, uptr size, u8 value) {
-  if (!CanPoisonMemory()) return;
+  if (value && !CanPoisonMemory()) return;
   CHECK(AddrIsAlignedByGranularity(addr));
   CHECK(AddrIsInMem(addr));
   CHECK(AddrIsAlignedByGranularity(addr + size));
@@ -64,12 +64,9 @@ struct ShadowSegmentEndpoint {
 };
 
 void FlushUnneededASanShadowMemory(uptr p, uptr size) {
-    // Since asan's mapping is compacting, the shadow chunk may be
-    // not page-aligned, so we only flush the page-aligned portion.
-    uptr page_size = GetPageSizeCached();
-    uptr shadow_beg = RoundUpTo(MemToShadow(p), page_size);
-    uptr shadow_end = RoundDownTo(MemToShadow(p + size), page_size);
-    ReleaseMemoryToOS(shadow_beg, shadow_end - shadow_beg);
+  // Since asan's mapping is compacting, the shadow chunk may be
+  // not page-aligned, so we only flush the page-aligned portion.
+  ReleaseMemoryPagesToOS(MemToShadow(p), MemToShadow(p + size));
 }
 
 void AsanPoisonOrUnpoisonIntraObjectRedzone(uptr ptr, uptr size, bool poison) {
@@ -185,8 +182,15 @@ int __asan_address_is_poisoned(void const volatile *addr) {
 uptr __asan_region_is_poisoned(uptr beg, uptr size) {
   if (!size) return 0;
   uptr end = beg + size;
-  if (!AddrIsInMem(beg)) return beg;
-  if (!AddrIsInMem(end)) return end;
+  if (SANITIZER_MYRIAD2) {
+    // On Myriad, address not in DRAM range need to be treated as
+    // unpoisoned.
+    if (!AddrIsInMem(beg) && !AddrIsInShadow(beg)) return 0;
+    if (!AddrIsInMem(end) && !AddrIsInShadow(end)) return 0;
+  } else {
+    if (!AddrIsInMem(beg)) return beg;
+    if (!AddrIsInMem(end)) return end;
+  }
   CHECK_LT(beg, end);
   uptr aligned_b = RoundUpTo(beg, SHADOW_GRANULARITY);
   uptr aligned_e = RoundDownTo(end, SHADOW_GRANULARITY);
@@ -220,7 +224,7 @@ uptr __asan_region_is_poisoned(uptr beg, uptr size) {
       uptr __bad = __asan_region_is_poisoned(__p, __size);    \
       __asan_report_error(pc, bp, sp, __bad, isWrite, __size, 0);\
     }                                                         \
-  } while (false);                                            \
+  } while (false)
 
 
 extern "C" SANITIZER_INTERFACE_ATTRIBUTE
@@ -412,7 +416,7 @@ const void *__sanitizer_contiguous_container_find_bad_address(
   // ending with end.
   uptr kMaxRangeToCheck = 32;
   uptr r1_beg = beg;
-  uptr r1_end = Min(end + kMaxRangeToCheck, mid);
+  uptr r1_end = Min(beg + kMaxRangeToCheck, mid);
   uptr r2_beg = Max(beg, mid - kMaxRangeToCheck);
   uptr r2_end = Min(end, mid + kMaxRangeToCheck);
   uptr r3_beg = Max(end - kMaxRangeToCheck, mid);
@@ -455,4 +459,3 @@ bool WordIsPoisoned(uptr addr) {
   return (__asan_region_is_poisoned(addr, sizeof(uptr)) != 0);
 }
 }
-

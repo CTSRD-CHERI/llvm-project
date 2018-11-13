@@ -7,14 +7,14 @@
 
 define void @shift1a(<2 x i64> %val, <2 x i64>* %dst) nounwind {
 ; X32-LABEL: shift1a:
-; X32:       # BB#0: # %entry
+; X32:       # %bb.0: # %entry
 ; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    psllq $32, %xmm0
 ; X32-NEXT:    movdqa %xmm0, (%eax)
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: shift1a:
-; X64:       # BB#0: # %entry
+; X64:       # %bb.0: # %entry
 ; X64-NEXT:    psllq $32, %xmm0
 ; X64-NEXT:    movdqa %xmm0, (%rdi)
 ; X64-NEXT:    retq
@@ -26,20 +26,17 @@ entry:
 
 define void @shift1b(<2 x i64> %val, <2 x i64>* %dst, i64 %amt) nounwind {
 ; X32-LABEL: shift1b:
-; X32:       # BB#0: # %entry
+; X32:       # %bb.0: # %entry
 ; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32-NEXT:    movd {{.*#+}} xmm1 = mem[0],zero,zero,zero
-; X32-NEXT:    pshufd {{.*#+}} xmm1 = xmm1[0,0,1,1]
-; X32-NEXT:    movd {{.*#+}} xmm2 = mem[0],zero,zero,zero
-; X32-NEXT:    pshufd {{.*#+}} xmm2 = xmm2[0,0,1,1]
-; X32-NEXT:    punpckldq {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1]
-; X32-NEXT:    psllq %xmm2, %xmm0
+; X32-NEXT:    movq {{.*#+}} xmm1 = mem[0],zero
+; X32-NEXT:    pshufd {{.*#+}} xmm1 = xmm1[0,1,0,1]
+; X32-NEXT:    psllq %xmm1, %xmm0
 ; X32-NEXT:    movdqa %xmm0, (%eax)
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: shift1b:
-; X64:       # BB#0: # %entry
-; X64-NEXT:    movd %rsi, %xmm1
+; X64:       # %bb.0: # %entry
+; X64-NEXT:    movq %rsi, %xmm1
 ; X64-NEXT:    psllq %xmm1, %xmm0
 ; X64-NEXT:    movdqa %xmm0, (%rdi)
 ; X64-NEXT:    retq
@@ -54,14 +51,14 @@ entry:
 
 define void @shift2a(<4 x i32> %val, <4 x i32>* %dst) nounwind {
 ; X32-LABEL: shift2a:
-; X32:       # BB#0: # %entry
+; X32:       # %bb.0: # %entry
 ; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    pslld $5, %xmm0
 ; X32-NEXT:    movdqa %xmm0, (%eax)
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: shift2a:
-; X64:       # BB#0: # %entry
+; X64:       # %bb.0: # %entry
 ; X64-NEXT:    pslld $5, %xmm0
 ; X64-NEXT:    movdqa %xmm0, (%rdi)
 ; X64-NEXT:    retq
@@ -73,7 +70,7 @@ entry:
 
 define void @shift2b(<4 x i32> %val, <4 x i32>* %dst, i32 %amt) nounwind {
 ; X32-LABEL: shift2b:
-; X32:       # BB#0: # %entry
+; X32:       # %bb.0: # %entry
 ; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd {{.*#+}} xmm1 = mem[0],zero,zero,zero
 ; X32-NEXT:    pslld %xmm1, %xmm0
@@ -81,7 +78,7 @@ define void @shift2b(<4 x i32> %val, <4 x i32>* %dst, i32 %amt) nounwind {
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: shift2b:
-; X64:       # BB#0: # %entry
+; X64:       # %bb.0: # %entry
 ; X64-NEXT:    movd %esi, %xmm1
 ; X64-NEXT:    pslld %xmm1, %xmm0
 ; X64-NEXT:    movdqa %xmm0, (%rdi)
@@ -98,14 +95,14 @@ entry:
 
 define void @shift3a(<8 x i16> %val, <8 x i16>* %dst) nounwind {
 ; X32-LABEL: shift3a:
-; X32:       # BB#0: # %entry
+; X32:       # %bb.0: # %entry
 ; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    psllw $5, %xmm0
 ; X32-NEXT:    movdqa %xmm0, (%eax)
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: shift3a:
-; X64:       # BB#0: # %entry
+; X64:       # %bb.0: # %entry
 ; X64-NEXT:    psllw $5, %xmm0
 ; X64-NEXT:    movdqa %xmm0, (%rdi)
 ; X64-NEXT:    retq
@@ -118,7 +115,7 @@ entry:
 ; Make sure the shift amount is properly zero extended.
 define void @shift3b(<8 x i16> %val, <8 x i16>* %dst, i16 %amt) nounwind {
 ; X32-LABEL: shift3b:
-; X32:       # BB#0: # %entry
+; X32:       # %bb.0: # %entry
 ; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movzwl {{[0-9]+}}(%esp), %ecx
 ; X32-NEXT:    movd %ecx, %xmm1
@@ -127,7 +124,7 @@ define void @shift3b(<8 x i16> %val, <8 x i16>* %dst, i16 %amt) nounwind {
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: shift3b:
-; X64:       # BB#0: # %entry
+; X64:       # %bb.0: # %entry
 ; X64-NEXT:    movzwl %si, %eax
 ; X64-NEXT:    movd %eax, %xmm1
 ; X64-NEXT:    psllw %xmm1, %xmm0

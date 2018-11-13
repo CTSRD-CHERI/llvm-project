@@ -2,17 +2,21 @@ set(LLVM_TARGET_DEFINITIONS Options.td)
 tablegen(LLVM Options.inc -gen-opt-parser-defs)
 add_public_tablegen_target(COFFOptionsTableGen)
 
+if(NOT LLD_BUILT_STANDALONE)
+  set(tablegen_deps intrinsics_gen)
+endif()
+
 add_lld_library(lldCOFF
   Chunks.cpp
   DLL.cpp
   Driver.cpp
   DriverUtils.cpp
-  Error.cpp
   ICF.cpp
   InputFiles.cpp
-  Librarian.cpp
+  LTO.cpp
+  MapFile.cpp
   MarkLive.cpp
-  ModuleDef.cpp
+  MinGW.cpp
   PDB.cpp
   SymbolTable.cpp
   Symbols.cpp
@@ -20,23 +24,24 @@ add_lld_library(lldCOFF
 
   LINK_COMPONENTS
   ${LLVM_TARGETS_TO_BUILD}
+  BinaryFormat
   Core
+  DebugInfoCodeView
   DebugInfoMSF
   DebugInfoPDB
-  LTO
   LibDriver
-  Object
+  LTO
   MC
-  MCDisassembler
-  Target
+  Object
   Option
   Support
+  WindowsManifest
 
   LINK_LIBS
-  lldCore
-  ${PTHREAD_LIB}
+  lldCommon
+  ${LLVM_PTHREAD_LIB}
 
   DEPENDS
   COFFOptionsTableGen
-  intrinsics_gen
+  ${tablegen_deps}
   )

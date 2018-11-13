@@ -57,7 +57,7 @@ namespace llvm {
 
     /// isValid - returns the error encountered during regex compilation, or
     /// matching, if any.
-    bool isValid(std::string &Error);
+    bool isValid(std::string &Error) const;
 
     /// getNumMatches - In a valid regex, return the number of parenthesized
     /// matches it contains.  The number filled in by match will include this
@@ -86,11 +86,11 @@ namespace llvm {
     std::string sub(StringRef Repl, StringRef String,
                     std::string *Error = nullptr);
 
-    /// \brief If this function returns true, ^Str$ is an extended regular
+    /// If this function returns true, ^Str$ is an extended regular
     /// expression that matches Str and only Str.
     static bool isLiteralERE(StringRef Str);
 
-    /// \brief Turn String into a regex by escaping its special characters.
+    /// Turn String into a regex by escaping its special characters.
     static std::string escape(StringRef String);
 
   private:

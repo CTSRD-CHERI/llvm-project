@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """Utility for opening a file using the default application in a cross-platform
 manner. Modified from http://code.activestate.com/recipes/511443/.
 """
@@ -59,7 +62,7 @@ class Controller(BaseController):
                                 preexec_fn=setsid, startupinfo=startupinfo)
 
         # It is assumed that this kind of tools (gnome-open, kfmclient,
-        # exo-open, xdg-open and open for OSX) immediately exit after lauching
+        # exo-open, xdg-open and open for OSX) immediately exit after launching
         # the specific application
         returncode = pipe.wait()
         if hasattr(self, 'fixreturncode'):
@@ -82,7 +85,7 @@ class Controller(BaseController):
 if sys.platform[:3] == 'win':
 
     class Start(BaseController):
-        '''Controller for the win32 start progam through os.startfile.'''
+        '''Controller for the win32 start program through os.startfile.'''
 
         def open(self, filename):
             try:
@@ -198,6 +201,6 @@ else:
 
 
 def open(filename):
-    '''Open a file or an URL in the registered default application.'''
+    '''Open a file or a URL in the registered default application.'''
 
     return _open(filename)

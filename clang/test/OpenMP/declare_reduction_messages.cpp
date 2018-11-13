@@ -1,4 +1,10 @@
 // RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 %s
+// RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 -std=c++98 %s
+// RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 -std=c++11 %s
+
+// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 100 %s
+// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 100 -std=c++98 %s
+// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 100 -std=c++11 %s
 
 int temp; // expected-note 7 {{'temp' declared here}}
 
@@ -51,7 +57,17 @@ class Class2 : public Class1<T> {
 #pragma omp declare reduction(fun222 : long : omp_out += omp_in)                                        // expected-error {{redefinition of user-defined reduction for type 'long'}}
 #pragma omp declare reduction(fun1 : long : omp_out += omp_in) initializer                              // expected-error {{expected '(' after 'initializer'}}
 #pragma omp declare reduction(fun2 : long : omp_out += omp_in) initializer {                            // expected-error {{expected '(' after 'initializer'}} expected-error {{expected expression}} expected-warning {{extra tokens at the end of '#pragma omp declare reduction' are ignored}}
-#pragma omp declare reduction(fun3 : long : omp_out += omp_in) initializer[                             // expected-error {{expected '(' after 'initializer'}} expected-error {{expected expression}} expected-warning {{extra tokens at the end of '#pragma omp declare reduction' are ignored}}
+#pragma omp declare reduction(fun3 : long : omp_out += omp_in) initializer[
+#if __cplusplus <= 199711L
+// expected-error@-2 {{expected '(' after 'initializer'}}
+// expected-error@-3 {{expected expression}}
+// expected-warning@-4 {{extra tokens at the end of '#pragma omp declare reduction' are ignored}}
+#else
+// expected-error@-6 {{expected '(' after 'initializer'}}
+// expected-error@-7 {{expected variable name or 'this' in lambda capture list}}
+// expected-error@-8 {{expected ')'}}
+// expected-note@-9 {{to match this '('}}
+#endif
 #pragma omp declare reduction(fun4 : long : omp_out += omp_in) initializer()                            // expected-error {{expected expression}}
 #pragma omp declare reduction(fun5 : long : omp_out += omp_in) initializer(temp)                        // expected-error {{only 'omp_priv' or 'omp_orig' variables are allowed in initializer expression}}
 #pragma omp declare reduction(fun6 : long : omp_out += omp_in) initializer(omp_orig                     // expected-error {{expected ')'}} expected-note {{to match this '('}}
@@ -122,3 +138,37 @@ int main() {
   }
   return fun(15) + foo(15); // expected-note {{in instantiation of function template specialization 'foo<int>' requested here}}
 }
+
+#if __cplusplus == 201103L
+struct A {
+  A() {}
+  A& operator=(A&&) = default;
+};
+
+int A_TEST() {
+  A test;
+#pragma omp declare reduction(+ : A : omp_out) initializer(omp_priv = A())
+#pragma omp parallel reduction(+ : test)
+  {}
+  return 0;
+}
+
+struct U
+{
+  void foo(U&, bool);
+  U();
+};
+template <int N>
+struct S
+{
+  int s;
+  // expected-note@+1 {{'foo' declared here}}
+  void foo(S &x) {};
+  // expected-error@+1 {{too many arguments to function call, expected single argument 'x', have 2 arguments}}
+  #pragma omp declare reduction (foo : U, S : omp_out.foo(omp_in, false))
+};
+// expected-warning@+2 {{extra tokens at the end of '#pragma omp declare reduction' are ignored}}
+// expected-note@+1 {{in instantiation of template class 'S<1>' requested here}}
+#pragma omp declare reduction (bar : S<1> : omp_out.foo(omp_in))
+
+#endif

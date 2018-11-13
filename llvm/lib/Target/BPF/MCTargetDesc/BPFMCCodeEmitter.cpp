@@ -12,32 +12,36 @@
 //===----------------------------------------------------------------------===//
 
 #include "MCTargetDesc/BPFMCTargetDesc.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/MC/MCSymbol.h"
-#include "llvm/ADT/Statistic.h"
+#include "llvm/Support/Endian.h"
 #include "llvm/Support/EndianStream.h"
-#include "llvm/Support/raw_ostream.h"
+#include <cassert>
+#include <cstdint>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "mccodeemitter"
 
 namespace {
+
 class BPFMCCodeEmitter : public MCCodeEmitter {
-  BPFMCCodeEmitter(const BPFMCCodeEmitter &) = delete;
-  void operator=(const BPFMCCodeEmitter &) = delete;
+  const MCInstrInfo &MCII;
   const MCRegisterInfo &MRI;
   bool IsLittleEndian;
 
 public:
-  BPFMCCodeEmitter(const MCRegisterInfo &mri, bool IsLittleEndian)
-    : MRI(mri), IsLittleEndian(IsLittleEndian) {}
-
-  ~BPFMCCodeEmitter() {}
+  BPFMCCodeEmitter(const MCInstrInfo &mcii, const MCRegisterInfo &mri,
+                   bool IsLittleEndian)
+      : MCII(mcii), MRI(mri), IsLittleEndian(IsLittleEndian) {}
+  BPFMCCodeEmitter(const BPFMCCodeEmitter &) = delete;
+  void operator=(const BPFMCCodeEmitter &) = delete;
+  ~BPFMCCodeEmitter() override = default;
 
   // getBinaryCodeForInstr - TableGen'erated function for getting the
   // binary encoding for an instruction.
@@ -58,19 +62,25 @@ public:
   void encodeInstruction(const MCInst &MI, raw_ostream &OS,
                          SmallVectorImpl<MCFixup> &Fixups,
                          const MCSubtargetInfo &STI) const override;
+
+private:
+  uint64_t computeAvailableFeatures(const FeatureBitset &FB) const;
+  void verifyInstructionPredicates(const MCInst &MI,
+                                   uint64_t AvailableFeatures) const;
 };
-}
+
+} // end anonymous namespace
 
 MCCodeEmitter *llvm::createBPFMCCodeEmitter(const MCInstrInfo &MCII,
                                             const MCRegisterInfo &MRI,
                                             MCContext &Ctx) {
-  return new BPFMCCodeEmitter(MRI, true);
+  return new BPFMCCodeEmitter(MCII, MRI, true);
 }
 
 MCCodeEmitter *llvm::createBPFbeMCCodeEmitter(const MCInstrInfo &MCII,
                                               const MCRegisterInfo &MRI,
                                               MCContext &Ctx) {
-  return new BPFMCCodeEmitter(MRI, false);
+  return new BPFMCCodeEmitter(MCII, MRI, false);
 }
 
 unsigned BPFMCCodeEmitter::getMachineOpValue(const MCInst &MI,
@@ -90,7 +100,7 @@ unsigned BPFMCCodeEmitter::getMachineOpValue(const MCInst &MI,
 
   if (MI.getOpcode() == BPF::JAL)
     // func call name
-    Fixups.push_back(MCFixup::create(0, Expr, FK_SecRel_4));
+    Fixups.push_back(MCFixup::create(0, Expr, FK_PCRel_4));
   else if (MI.getOpcode() == BPF::LD_imm64)
     Fixups.push_back(MCFixup::create(0, Expr, FK_SecRel_8));
   else
@@ -108,45 +118,39 @@ static uint8_t SwapBits(uint8_t Val)
 void BPFMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
                                          SmallVectorImpl<MCFixup> &Fixups,
                                          const MCSubtargetInfo &STI) const {
+  verifyInstructionPredicates(MI,
+                              computeAvailableFeatures(STI.getFeatureBits()));
+
   unsigned Opcode = MI.getOpcode();
-  support::endian::Writer<support::little> LE(OS);
-  support::endian::Writer<support::big> BE(OS);
+  support::endian::Writer OSE(OS,
+                              IsLittleEndian ? support::little : support::big);
 
   if (Opcode == BPF::LD_imm64 || Opcode == BPF::LD_pseudo) {
     uint64_t Value = getBinaryCodeForInstr(MI, Fixups, STI);
-    LE.write<uint8_t>(Value >> 56);
+    OS << char(Value >> 56);
     if (IsLittleEndian)
-      LE.write<uint8_t>((Value >> 48) & 0xff);
+      OS << char((Value >> 48) & 0xff);
     else
-      LE.write<uint8_t>(SwapBits((Value >> 48) & 0xff));
-    LE.write<uint16_t>(0);
-    if (IsLittleEndian)
-      LE.write<uint32_t>(Value & 0xffffFFFF);
-    else
-      BE.write<uint32_t>(Value & 0xffffFFFF);
+      OS << char(SwapBits((Value >> 48) & 0xff));
+    OSE.write<uint16_t>(0);
+    OSE.write<uint32_t>(Value & 0xffffFFFF);
 
     const MCOperand &MO = MI.getOperand(1);
     uint64_t Imm = MO.isImm() ? MO.getImm() : 0;
-    LE.write<uint8_t>(0);
-    LE.write<uint8_t>(0);
-    LE.write<uint16_t>(0);
-    if (IsLittleEndian)
-      LE.write<uint32_t>(Imm >> 32);
-    else
-      BE.write<uint32_t>(Imm >> 32);
+    OSE.write<uint8_t>(0);
+    OSE.write<uint8_t>(0);
+    OSE.write<uint16_t>(0);
+    OSE.write<uint32_t>(Imm >> 32);
   } else {
     // Get instruction encoding and emit it
     uint64_t Value = getBinaryCodeForInstr(MI, Fixups, STI);
-    LE.write<uint8_t>(Value >> 56);
-    if (IsLittleEndian) {
-      LE.write<uint8_t>((Value >> 48) & 0xff);
-      LE.write<uint16_t>((Value >> 32) & 0xffff);
-      LE.write<uint32_t>(Value & 0xffffFFFF);
-    } else {
-      LE.write<uint8_t>(SwapBits((Value >> 48) & 0xff));
-      BE.write<uint16_t>((Value >> 32) & 0xffff);
-      BE.write<uint32_t>(Value & 0xffffFFFF);
-    }
+    OS << char(Value >> 56);
+    if (IsLittleEndian)
+      OS << char((Value >> 48) & 0xff);
+    else
+      OS << char(SwapBits((Value >> 48) & 0xff));
+    OSE.write<uint16_t>((Value >> 32) & 0xffff);
+    OSE.write<uint32_t>(Value & 0xffffFFFF);
   }
 }
 
@@ -165,4 +169,5 @@ uint64_t BPFMCCodeEmitter::getMemoryOpValue(const MCInst &MI, unsigned Op,
   return Encoding;
 }
 
+#define ENABLE_INSTR_PREDICATE_VERIFIER
 #include "BPFGenMCCodeEmitter.inc"

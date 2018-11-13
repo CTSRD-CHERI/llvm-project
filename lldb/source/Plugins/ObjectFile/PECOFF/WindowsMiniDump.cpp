@@ -11,19 +11,19 @@
 // collisions with WinAPI preprocessor macros.
 
 #include "WindowsMiniDump.h"
-#include "lldb/Host/FileSpec.h"
+#include "lldb/Utility/FileSpec.h"
 #include "llvm/Support/ConvertUTF.h"
 
 #ifdef _WIN32
 #include "lldb/Host/windows/windows.h"
-#include <DbgHelp.h> // for MiniDumpWriteDump
+#include <dbghelp.h> // for MiniDumpWriteDump
 #endif
 
 namespace lldb_private {
 
 bool SaveMiniDump(const lldb::ProcessSP &process_sp,
                   const lldb_private::FileSpec &outfile,
-                  lldb_private::Error &error) {
+                  lldb_private::Status &error) {
   if (!process_sp)
     return false;
 #ifdef _WIN32

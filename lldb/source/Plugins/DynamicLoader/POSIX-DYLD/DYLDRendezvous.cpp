@@ -7,12 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-#include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/Symbol.h"
@@ -20,6 +14,9 @@
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/ArchSpec.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
 
 #include "llvm/Support/Path.h"
 
@@ -34,7 +31,7 @@ static addr_t ResolveRendezvousAddress(Process *process) {
   Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_DYNAMIC_LOADER));
   addr_t info_location;
   addr_t info_addr;
-  Error error;
+  Status error;
 
   if (!process) {
     if (log)
@@ -48,8 +45,8 @@ static addr_t ResolveRendezvousAddress(Process *process) {
   if (log)
     log->Printf("%s info_location = 0x%" PRIx64, __FUNCTION__, info_location);
 
-  // If the process fails to return an address, fall back to seeing if the local
-  // object file can help us find it.
+  // If the process fails to return an address, fall back to seeing if the
+  // local object file can help us find it.
   if (info_location == LLDB_INVALID_ADDRESS) {
     Target *target = &process->GetTarget();
     if (target) {
@@ -193,8 +190,8 @@ bool DYLDRendezvous::UpdateSOEntries(bool fromRemote) {
   if (!fromRemote && m_current.map_addr == 0)
     return false;
 
-  // When the previous and current states are consistent this is the first
-  // time we have been asked to update.  Just take a snapshot of the currently
+  // When the previous and current states are consistent this is the first time
+  // we have been asked to update.  Just take a snapshot of the currently
   // loaded modules.
   if (m_previous.state == eConsistent && m_current.state == eConsistent)
     return fromRemote ? SaveSOEntriesFromRemote(module_list)
@@ -203,9 +200,9 @@ bool DYLDRendezvous::UpdateSOEntries(bool fromRemote) {
   // If we are about to add or remove a shared object clear out the current
   // state and take a snapshot of the currently loaded images.
   if (m_current.state == eAdd || m_current.state == eDelete) {
-    // Some versions of the android dynamic linker might send two
-    // notifications with state == eAdd back to back. Ignore them
-    // until we get an eConsistent notification.
+    // Some versions of the android dynamic linker might send two notifications
+    // with state == eAdd back to back. Ignore them until we get an eConsistent
+    // notification.
     if (!(m_previous.state == eConsistent ||
           (m_previous.state == eAdd && m_current.state == eDelete)))
       return false;
@@ -246,7 +243,7 @@ bool DYLDRendezvous::FillSOEntryFromModuleInfo(
   entry.base_addr = base_addr;
   entry.dyn_addr = dyn_addr;
 
-  entry.file_spec.SetFile(name, false);
+  entry.file_spec.SetFile(name, false, FileSpec::Style::native);
 
   UpdateBaseAddrIfNecessary(entry, name);
 
@@ -379,12 +376,13 @@ bool DYLDRendezvous::RemoveSOEntries() {
 }
 
 bool DYLDRendezvous::SOEntryIsMainExecutable(const SOEntry &entry) {
-  // On Linux the executable is indicated by an empty path in the entry. On
-  // FreeBSD and on Android it is the full path to the executable.
+  // On some systes the executable is indicated by an empty path in the entry.
+  // On others it is the full path to the executable.
 
   auto triple = m_process->GetTarget().GetArchitecture().GetTriple();
   switch (triple.getOS()) {
   case llvm::Triple::FreeBSD:
+  case llvm::Triple::NetBSD:
     return entry.file_spec == m_exe_file_spec;
   case llvm::Triple::Linux:
     if (triple.isAndroid())
@@ -419,7 +417,7 @@ bool DYLDRendezvous::TakeSnapshot(SOEntryList &entry_list) {
 }
 
 addr_t DYLDRendezvous::ReadWord(addr_t addr, uint64_t *dst, size_t size) {
-  Error error;
+  Status error;
 
   *dst = m_process->ReadUnsignedIntegerFromMemory(addr, size, 0, error);
   if (error.Fail())
@@ -429,7 +427,7 @@ addr_t DYLDRendezvous::ReadWord(addr_t addr, uint64_t *dst, size_t size) {
 }
 
 addr_t DYLDRendezvous::ReadPointer(addr_t addr, addr_t *dst) {
-  Error error;
+  Status error;
 
   *dst = m_process->ReadPointerFromMemory(addr, error);
   if (error.Fail())
@@ -440,7 +438,7 @@ addr_t DYLDRendezvous::ReadPointer(addr_t addr, addr_t *dst) {
 
 std::string DYLDRendezvous::ReadStringFromMemory(addr_t addr) {
   std::string str;
-  Error error;
+  Status error;
 
   if (addr == LLDB_INVALID_ADDRESS)
     return std::string();
@@ -451,16 +449,13 @@ std::string DYLDRendezvous::ReadStringFromMemory(addr_t addr) {
 }
 
 // Returns true if the load bias reported by the linker is incorrect for the
-// given entry. This
-// function is used to handle cases where we want to work around a bug in the
-// system linker.
+// given entry. This function is used to handle cases where we want to work
+// around a bug in the system linker.
 static bool isLoadBiasIncorrect(Target &target, const std::string &file_path) {
   // On Android L (API 21, 22) the load address of the "/system/bin/linker"
-  // isn't filled in
-  // correctly.
-  uint32_t os_major = 0, os_minor = 0, os_update = 0;
+  // isn't filled in correctly.
+  unsigned os_major = target.GetPlatform()->GetOSVersion().getMajor();
   if (target.GetArchitecture().GetTriple().isAndroid() &&
-      target.GetPlatform()->GetOSVersion(os_major, os_minor, os_update) &&
       (os_major == 21 || os_major == 22) &&
       (file_path == "/system/bin/linker" ||
        file_path == "/system/bin/linker64")) {
@@ -473,12 +468,11 @@ static bool isLoadBiasIncorrect(Target &target, const std::string &file_path) {
 void DYLDRendezvous::UpdateBaseAddrIfNecessary(SOEntry &entry,
                                                std::string const &file_path) {
   // If the load bias reported by the linker is incorrect then fetch the load
-  // address of the file
-  // from the proc file system.
+  // address of the file from the proc file system.
   if (isLoadBiasIncorrect(m_process->GetTarget(), file_path)) {
     lldb::addr_t load_addr = LLDB_INVALID_ADDRESS;
     bool is_loaded = false;
-    Error error =
+    Status error =
         m_process->GetFileLoadAddress(entry.file_spec, is_loaded, load_addr);
     if (error.Success() && is_loaded)
       entry.base_addr = load_addr;
@@ -493,8 +487,8 @@ bool DYLDRendezvous::ReadSOEntryFromMemory(lldb::addr_t addr, SOEntry &entry) {
   if (!(addr = ReadPointer(addr, &entry.base_addr)))
     return false;
 
-  // mips adds an extra load offset field to the link map struct on
-  // FreeBSD and NetBSD (need to validate other OSes).
+  // mips adds an extra load offset field to the link map struct on FreeBSD and
+  // NetBSD (need to validate other OSes).
   // http://svnweb.freebsd.org/base/head/sys/sys/link_elf.h?revision=217153&view=markup#l57
   const ArchSpec &arch = m_process->GetTarget().GetArchitecture();
   if ((arch.GetTriple().getOS() == llvm::Triple::FreeBSD ||
@@ -523,7 +517,7 @@ bool DYLDRendezvous::ReadSOEntryFromMemory(lldb::addr_t addr, SOEntry &entry) {
     return false;
 
   std::string file_path = ReadStringFromMemory(entry.path_addr);
-  entry.file_spec.SetFile(file_path, false);
+  entry.file_spec.SetFile(file_path, false, FileSpec::Style::native);
 
   UpdateBaseAddrIfNecessary(entry, file_path);
 
@@ -544,7 +538,7 @@ bool DYLDRendezvous::FindMetadata(const char *name, PThreadField field,
   if (addr == LLDB_INVALID_ADDRESS)
     return false;
 
-  Error error;
+  Status error;
   value = (uint32_t)m_process->ReadUnsignedIntegerFromMemory(
       addr + field * sizeof(uint32_t), sizeof(uint32_t), 0, error);
   if (error.Fail())

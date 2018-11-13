@@ -295,15 +295,15 @@ long isl_val_get_num_si(__isl_keep isl_val *v)
  *
  * If "v" is not a rational value, then the result is undefined.
  */
-int isl_val_get_num_isl_int(__isl_keep isl_val *v, isl_int *n)
+isl_stat isl_val_get_num_isl_int(__isl_keep isl_val *v, isl_int *n)
 {
 	if (!v)
-		return -1;
+		return isl_stat_error;
 	if (!isl_val_is_rat(v))
 		isl_die(isl_val_get_ctx(v), isl_error_invalid,
-			"expecting rational value", return -1);
+			"expecting rational value", return isl_stat_error);
 	isl_int_set(*n, v->n);
-	return 0;
+	return isl_stat_ok;
 }
 
 /* Extract the denominator of a rational value "v" as an integer.
@@ -528,7 +528,7 @@ __isl_give isl_val *isl_val_trunc(__isl_take isl_val *v)
 
 /* Return 2^v, where v is an integer (that is not too large).
  */
-__isl_give isl_val *isl_val_2exp(__isl_take isl_val *v)
+__isl_give isl_val *isl_val_pow2(__isl_take isl_val *v)
 {
 	unsigned long exp;
 	int neg;
@@ -555,6 +555,13 @@ __isl_give isl_val *isl_val_2exp(__isl_take isl_val *v)
 	}
 
 	return v;
+}
+
+/* This is an alternative name for the function above.
+ */
+__isl_give isl_val *isl_val_2exp(__isl_take isl_val *v)
+{
+	return isl_val_pow2(v);
 }
 
 /* Return the minimum of "v1" and "v2".
@@ -916,6 +923,31 @@ error:
 }
 
 /* Divide "v1" by "v2".
+ */
+__isl_give isl_val *isl_val_div_ui(__isl_take isl_val *v1, unsigned long v2)
+{
+	if (!v1)
+		return NULL;
+	if (isl_val_is_nan(v1))
+		return v1;
+	if (v2 == 0)
+		return isl_val_set_nan(v1);
+	if (v2 == 1)
+		return v1;
+	if (isl_val_is_zero(v1))
+		return v1;
+	if (isl_val_is_infty(v1) || isl_val_is_neginfty(v1))
+		return v1;
+	v1 = isl_val_cow(v1);
+	if (!v1)
+		return NULL;
+
+	isl_int_mul_ui(v1->d, v1->d, v2);
+
+	return isl_val_normalize(v1);
+}
+
+/* Divide "v1" by "v2".
  *
  * This is a private copy of isl_val_div for use in the generic
  * isl_multi_*_scale_down_val instantiated for isl_val.
@@ -1170,6 +1202,9 @@ isl_bool isl_val_is_one(__isl_keep isl_val *v)
 	if (!v)
 		return isl_bool_error;
 
+	if (isl_val_is_nan(v))
+		return isl_bool_false;
+
 	return isl_int_eq(v->n, v->d);
 }
 
@@ -1282,6 +1317,31 @@ isl_bool isl_val_lt(__isl_keep isl_val *v1, __isl_keep isl_val *v2)
 isl_bool isl_val_gt(__isl_keep isl_val *v1, __isl_keep isl_val *v2)
 {
 	return isl_val_lt(v2, v1);
+}
+
+/* Is "v" (strictly) greater than "i"?
+ */
+isl_bool isl_val_gt_si(__isl_keep isl_val *v, long i)
+{
+	isl_val *vi;
+	isl_bool res;
+
+	if (!v)
+		return isl_bool_error;
+	if (isl_val_is_int(v))
+		return isl_int_cmp_si(v->n, i) > 0;
+	if (isl_val_is_nan(v))
+		return isl_bool_false;
+	if (isl_val_is_infty(v))
+		return isl_bool_true;
+	if (isl_val_is_neginfty(v))
+		return isl_bool_false;
+
+	vi = isl_val_int_from_si(isl_val_get_ctx(v), i);
+	res = isl_val_gt(v, vi);
+	isl_val_free(vi);
+
+	return res;
 }
 
 /* Is "v1" less than or equal to "v2"?
@@ -1438,15 +1498,15 @@ int isl_val_plain_is_equal(__isl_keep isl_val *val1, __isl_keep isl_val *val2)
  * This function is only meant to be used in the generic isl_multi_*
  * functions which have to deal with base objects that have an associated
  * space.  Since an isl_val does not have any coefficients, this function
- * always return 0.
+ * always returns isl_bool_false.
  */
-int isl_val_involves_dims(__isl_keep isl_val *v, enum isl_dim_type type,
+isl_bool isl_val_involves_dims(__isl_keep isl_val *v, enum isl_dim_type type,
 	unsigned first, unsigned n)
 {
 	if (!v)
-		return -1;
+		return isl_bool_error;
 
-	return 0;
+	return isl_bool_false;
 }
 
 /* Insert "n" dimensions of type "type" at position "first".
@@ -1462,7 +1522,7 @@ __isl_give isl_val *isl_val_insert_dims(__isl_take isl_val *v,
 	return v;
 }
 
-/* Drop the the "n" first dimensions of type "type" at position "first".
+/* Drop the "n" first dimensions of type "type" at position "first".
  *
  * This function is only meant to be used in the generic isl_multi_*
  * functions which have to deal with base objects that have an associated
@@ -1578,31 +1638,32 @@ __isl_give isl_val *isl_val_zero_on_domain(__isl_take isl_local_space *ls)
  * This function is only meant to be used in the generic isl_multi_*
  * functions which have to deal with base objects that have an associated
  * space.  Since an isl_val does not have an associated space, this function
- * simply returns 1, except if "v" or "space" are NULL.
+ * simply returns true, except if "v" or "space" are NULL.
  */
-int isl_val_matching_params(__isl_keep isl_val *v, __isl_keep isl_space *space)
+isl_bool isl_val_matching_params(__isl_keep isl_val *v,
+	__isl_keep isl_space *space)
 {
 	if (!v || !space)
-		return -1;
-	return 1;
+		return isl_bool_error;
+	return isl_bool_true;
 }
 
 /* Check that the domain space of "v" matches "space".
- *
- * Return 0 on success and -1 on error.
  *
  * This function is only meant to be used in the generic isl_multi_*
  * functions which have to deal with base objects that have an associated
  * space.  Since an isl_val does not have an associated space, this function
  * simply returns 0, except if "v" or "space" are NULL.
  */
-int isl_val_check_match_domain_space(__isl_keep isl_val *v,
+isl_stat isl_val_check_match_domain_space(__isl_keep isl_val *v,
 	__isl_keep isl_space *space)
 {
 	if (!v || !space)
-		return -1;
-	return 0;
+		return isl_stat_error;
+	return isl_stat_ok;
 }
+
+#define isl_val_involves_nan isl_val_is_nan
 
 #undef BASE
 #define BASE val
@@ -1611,7 +1672,9 @@ int isl_val_check_match_domain_space(__isl_keep isl_val *v,
 #define NO_IDENTITY
 #define NO_FROM_BASE
 #define NO_MOVE_DIMS
+#include <isl_multi_no_explicit_domain.c>
 #include <isl_multi_templ.c>
+#include <isl_multi_dims.c>
 
 /* Apply "fn" to each of the elements of "mv" with as second argument "v".
  */
@@ -1628,8 +1691,8 @@ static __isl_give isl_multi_val *isl_multi_val_fn_val(
 		goto error;
 
 	for (i = 0; i < mv->n; ++i) {
-		mv->p[i] = fn(mv->p[i], isl_val_copy(v));
-		if (!mv->p[i])
+		mv->u.p[i] = fn(mv->u.p[i], isl_val_copy(v));
+		if (!mv->u.p[i])
 			goto error;
 	}
 

@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -verify %s
 // expected-no-diagnostics
 
 extern void __assert_fail (__const char *__assertion, __const char *__file,
@@ -71,3 +71,33 @@ void test(int *p1, int *p2) {
   idc(p1);
 	Foo f(p1);
 }
+
+struct Bar {
+  int x;
+};
+void idcBar(Bar *b) {
+  if (b)
+    ;
+}
+void testRefToField(Bar *b) {
+  idcBar(b);
+  int &x = b->x; // no-warning
+  x = 5;
+}
+
+namespace get_deref_expr_with_cleanups {
+struct S {
+~S();
+};
+S *conjure();
+// The argument won't be used, but it'll cause cleanups
+// to appear around the call site.
+S *get_conjured(S _) {
+  S *s = conjure();
+  if (s) {}
+  return s;
+}
+void test_conjured() {
+  S &s = *get_conjured(S()); // no-warning
+}
+} // namespace get_deref_expr_with_cleanups

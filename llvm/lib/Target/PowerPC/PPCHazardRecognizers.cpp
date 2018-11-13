@@ -50,7 +50,7 @@ bool PPCDispatchGroupSBHazardRecognizer::isLoadAfterStore(SUnit *SU) {
         return true;
   }
 
-  return false; 
+  return false;
 }
 
 bool PPCDispatchGroupSBHazardRecognizer::isBCTRAfterSet(SUnit *SU) {
@@ -76,7 +76,7 @@ bool PPCDispatchGroupSBHazardRecognizer::isBCTRAfterSet(SUnit *SU) {
         return true;
   }
 
-  return false; 
+  return false;
 }
 
 // FIXME: Remove this when we don't need this:
@@ -180,9 +180,8 @@ void PPCDispatchGroupSBHazardRecognizer::EmitInstruction(SUnit *SU) {
       CurGroup.clear();
       CurSlots = CurBranches = 0;
     } else {
-      DEBUG(dbgs() << "**** Adding to dispatch group: SU(" <<
-                      SU->NodeNum << "): ");
-      DEBUG(DAG->dumpNode(SU));
+      LLVM_DEBUG(dbgs() << "**** Adding to dispatch group: ");
+      LLVM_DEBUG(DAG->dumpNode(*SU));
 
       unsigned NSlots;
       bool MustBeFirst = mustComeFirst(MCID, NSlots);
@@ -268,7 +267,7 @@ PPCHazardRecognizer970::PPCHazardRecognizer970(const ScheduleDAG &DAG)
 }
 
 void PPCHazardRecognizer970::EndDispatchGroup() {
-  DEBUG(errs() << "=== Start of dispatch group\n");
+  LLVM_DEBUG(errs() << "=== Start of dispatch group\n");
   NumIssued = 0;
 
   // Structural hazard info.
@@ -330,7 +329,7 @@ getHazardType(SUnit *SU, int Stalls) {
 
   MachineInstr *MI = SU->getInstr();
 
-  if (MI->isDebugValue())
+  if (MI->isDebugInstr())
     return NoHazard;
 
   unsigned Opcode = MI->getOpcode();
@@ -388,7 +387,7 @@ getHazardType(SUnit *SU, int Stalls) {
 void PPCHazardRecognizer970::EmitInstruction(SUnit *SU) {
   MachineInstr *MI = SU->getInstr();
 
-  if (MI->isDebugValue())
+  if (MI->isDebugInstr())
     return;
 
   unsigned Opcode = MI->getOpcode();

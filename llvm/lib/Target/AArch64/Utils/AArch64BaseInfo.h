@@ -266,84 +266,133 @@ inline static unsigned getNZCVToSatisfyCondCode(CondCode Code) {
 }
 } // end namespace AArch64CC
 
-namespace AArch64AT{
-  struct AT {
-    const char *Name;
-    uint16_t Encoding;
-  };
+struct SysAlias {
+  const char *Name;
+  uint16_t Encoding;
+  FeatureBitset FeaturesRequired;
 
+  SysAlias (const char *N, uint16_t E) : Name(N), Encoding(E) {};
+  SysAlias (const char *N, uint16_t E, FeatureBitset F) :
+    Name(N), Encoding(E), FeaturesRequired(F) {};
+
+  bool haveFeatures(FeatureBitset ActiveFeatures) const {
+    return (FeaturesRequired & ActiveFeatures) == FeaturesRequired;
+  }
+
+  FeatureBitset getRequiredFeatures() const { return FeaturesRequired; }
+};
+
+struct SysAliasReg : SysAlias {
+  bool NeedsReg;
+  SysAliasReg(const char *N, uint16_t E, bool R) : SysAlias(N, E), NeedsReg(R) {};
+  SysAliasReg(const char *N, uint16_t E, bool R, FeatureBitset F) : SysAlias(N, E, F),
+    NeedsReg(R) {};
+};
+
+namespace AArch64AT{
+  struct AT : SysAlias {
+    using SysAlias::SysAlias;
+  };
   #define GET_AT_DECL
   #include "AArch64GenSystemOperands.inc"
-
 }
-namespace AArch64DB {
-  struct DB {
-    const char *Name;
-    uint16_t Encoding;
-  };
 
+namespace AArch64DB {
+  struct DB : SysAlias {
+    using SysAlias::SysAlias;
+  };
   #define GET_DB_DECL
   #include "AArch64GenSystemOperands.inc"
 }
 
 namespace  AArch64DC {
-  struct DC {
-    const char *Name;
-    uint16_t Encoding;
+  struct DC : SysAlias {
+    using SysAlias::SysAlias;
   };
-
   #define GET_DC_DECL
   #include "AArch64GenSystemOperands.inc"
 }
 
 namespace  AArch64IC {
-  struct IC {
-    const char *Name;
-    uint16_t Encoding;
-    bool NeedsReg;
+  struct IC : SysAliasReg {
+    using SysAliasReg::SysAliasReg;
   };
   #define GET_IC_DECL
   #include "AArch64GenSystemOperands.inc"
 }
 
 namespace  AArch64ISB {
-  struct ISB {
-    const char *Name;
-    uint16_t Encoding;
+  struct ISB : SysAlias {
+    using SysAlias::SysAlias;
   };
   #define GET_ISB_DECL
   #include "AArch64GenSystemOperands.inc"
 }
 
+namespace  AArch64TSB {
+  struct TSB : SysAlias {
+    using SysAlias::SysAlias;
+  };
+  #define GET_TSB_DECL
+  #include "AArch64GenSystemOperands.inc"
+}
+
 namespace AArch64PRFM {
-  struct PRFM {
-    const char *Name;
-    uint16_t Encoding;
+  struct PRFM : SysAlias {
+    using SysAlias::SysAlias;
   };
   #define GET_PRFM_DECL
   #include "AArch64GenSystemOperands.inc"
 }
 
-namespace AArch64PState {
-  struct PState {
+namespace AArch64SVEPRFM {
+  struct SVEPRFM : SysAlias {
+    using SysAlias::SysAlias;
+  };
+#define GET_SVEPRFM_DECL
+#include "AArch64GenSystemOperands.inc"
+}
+
+namespace AArch64SVEPredPattern {
+  struct SVEPREDPAT {
     const char *Name;
     uint16_t Encoding;
-    FeatureBitset FeaturesRequired;
+  };
+#define GET_SVEPREDPAT_DECL
+#include "AArch64GenSystemOperands.inc"
+}
 
-    bool haveFeatures(FeatureBitset ActiveFeatures) const {
-      return (FeaturesRequired & ActiveFeatures) == FeaturesRequired;
-    }
+namespace AArch64ExactFPImm {
+  struct ExactFPImm {
+    const char *Name;
+    int Enum;
+    const char *Repr;
+  };
+#define GET_EXACTFPIMM_DECL
+#include "AArch64GenSystemOperands.inc"
+}
+
+namespace AArch64PState {
+  struct PState : SysAlias{
+    using SysAlias::SysAlias;
   };
   #define GET_PSTATE_DECL
   #include "AArch64GenSystemOperands.inc"
 }
 
 namespace AArch64PSBHint {
-  struct PSB {
-    const char *Name;
-    uint16_t Encoding;
+  struct PSB : SysAlias {
+    using SysAlias::SysAlias;
   };
   #define GET_PSB_DECL
+  #include "AArch64GenSystemOperands.inc"
+}
+
+namespace AArch64BTIHint {
+  struct BTI : SysAlias {
+    using SysAlias::SysAlias;
+  };
+  #define GET_BTI_DECL
   #include "AArch64GenSystemOperands.inc"
 }
 
@@ -451,12 +500,18 @@ namespace AArch64SysReg {
 }
 
 namespace AArch64TLBI {
-  struct TLBI {
-    const char *Name;
-    uint16_t Encoding;
-    bool NeedsReg;
+  struct TLBI : SysAliasReg {
+    using SysAliasReg::SysAliasReg;
   };
   #define GET_TLBI_DECL
+  #include "AArch64GenSystemOperands.inc"
+}
+
+namespace AArch64PRCTX {
+  struct PRCTX : SysAliasReg {
+    using SysAliasReg::SysAliasReg;
+  };
+  #define GET_PRCTX_DECL
   #include "AArch64GenSystemOperands.inc"
 }
 
@@ -468,7 +523,7 @@ namespace AArch64II {
 
     MO_NO_FLAG,
 
-    MO_FRAGMENT = 0xf,
+    MO_FRAGMENT = 0x7,
 
     /// MO_PAGE - A symbol operand with this flag represents the pc-relative
     /// offset of the 4K page containing the symbol.  This is used with the
@@ -501,6 +556,11 @@ namespace AArch64II {
     /// by-12-bits instruction.
     MO_HI12 = 7,
 
+    /// MO_COFFSTUB - On a symbol operand "FOO", this indicates that the
+    /// reference is actually to the ".refptrp.FOO" symbol.  This is used for
+    /// stub symbols on windows.
+    MO_COFFSTUB = 0x8,
+
     /// MO_GOT - This flag indicates that a symbol operand represents the
     /// address of the GOT entry for the symbol, rather than the address of
     /// the symbol itself.
@@ -515,7 +575,12 @@ namespace AArch64II {
     /// thread-local symbol. On Darwin, only one type of thread-local access
     /// exists (pre linker-relaxation), but on ELF the TLSModel used for the
     /// referee will affect interpretation.
-    MO_TLS = 0x40
+    MO_TLS = 0x40,
+
+    /// MO_DLLIMPORT - On a symbol operand, this represents that the reference
+    /// to the symbol is for an import stub.  This is used for DLL import
+    /// storage class indication on Windows.
+    MO_DLLIMPORT = 0x80,
   };
 } // end namespace AArch64II
 

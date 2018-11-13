@@ -46,6 +46,7 @@
    int64_t Value = 0; \
    if (!expectAbsExpression(MCParser, Value, Err)) \
      return false; \
+   C.compute_pgm_resource_registers &= ~(SetMacro(0xFFFFFFFFFFFFFFFFULL) << Shift); \
    C.compute_pgm_resource_registers |= SetMacro(Value) << Shift; \
    return true; \
 }
@@ -73,7 +74,6 @@ FIELD2(amd_machine_version_stepping,  machine_version_stepping,   amd_machine_ve
 
 FIELD(kernel_code_entry_byte_offset),
 FIELD(kernel_code_prefetch_byte_size),
-FIELD(max_scratch_backing_memory_byte_size),
 
 COMPPGM1(granulated_workitem_vgpr_count,  compute_pgm_rsrc1_vgprs,          VGPRS),
 COMPPGM1(granulated_wavefront_sgpr_count, compute_pgm_rsrc1_sgprs,          SGPRS),
@@ -87,7 +87,7 @@ COMPPGM1(enable_ieee_mode,                compute_pgm_rsrc1_ieee_mode,      IEEE
 // TODO: cdbg_user
 COMPPGM2(enable_sgpr_private_segment_wave_byte_offset, compute_pgm_rsrc2_scratch_en, SCRATCH_EN),
 COMPPGM2(user_sgpr_count,                 compute_pgm_rsrc2_user_sgpr,      USER_SGPR),
-// TODO: enable_trap_handler
+COMPPGM2(enable_trap_handler,             compute_pgm_rsrc2_trap_handler,   TRAP_HANDLER),
 COMPPGM2(enable_sgpr_workgroup_id_x,      compute_pgm_rsrc2_tgid_x_en,      TGID_X_EN),
 COMPPGM2(enable_sgpr_workgroup_id_y,      compute_pgm_rsrc2_tgid_y_en,      TGID_Y_EN),
 COMPPGM2(enable_sgpr_workgroup_id_z,      compute_pgm_rsrc2_tgid_z_en,      TGID_Z_EN),

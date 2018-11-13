@@ -12,6 +12,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/BranchProbability.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
@@ -32,7 +33,9 @@ raw_ostream &BranchProbability::print(raw_ostream &OS) const {
                       Percent);
 }
 
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
 LLVM_DUMP_METHOD void BranchProbability::dump() const { print(dbgs()) << '\n'; }
+#endif
 
 BranchProbability::BranchProbability(uint32_t Numerator, uint32_t Denominator) {
   assert(Denominator > 0 && "Denominator cannot be 0!");

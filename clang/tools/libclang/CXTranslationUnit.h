@@ -33,12 +33,19 @@ struct CXTranslationUnitImpl {
   void *Diagnostics;
   void *OverridenCursorsPool;
   clang::index::CommentToXMLConverter *CommentToXML;
+  unsigned ParsingOptions;
+  std::vector<std::string> Arguments;
+};
+
+struct CXTargetInfoImpl {
+  CXTranslationUnit TranslationUnit;
 };
 
 namespace clang {
 namespace cxtu {
 
-CXTranslationUnitImpl *MakeCXTranslationUnit(CIndexer *CIdx, ASTUnit *AU);
+CXTranslationUnitImpl *MakeCXTranslationUnit(CIndexer *CIdx,
+                                             std::unique_ptr<ASTUnit> AU);
 
 static inline ASTUnit *getASTUnit(CXTranslationUnit TU) {
   if (!TU)

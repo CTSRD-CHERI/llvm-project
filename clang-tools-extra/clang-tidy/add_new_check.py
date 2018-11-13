@@ -9,10 +9,12 @@
 #
 #===------------------------------------------------------------------------===#
 
+from __future__ import print_function
+
+import argparse
 import os
 import re
 import sys
-
 
 # Adapts the module's CMakelist file. Returns 'True' if it could add a new entry
 # and 'False' if the entry already existed.
@@ -29,7 +31,7 @@ def adapt_cmake(module_path, check_name_camel):
       return False
 
   print('Updating %s...' % filename)
-  with open(filename, 'wb') as f:
+  with open(filename, 'w') as f:
     cpp_found = False
     file_added = False
     for line in lines:
@@ -49,13 +51,13 @@ def write_header(module_path, module, check_name, check_name_camel):
   check_name_dashes = module + '-' + check_name
   filename = os.path.join(module_path, check_name_camel) + '.h'
   print('Creating %s...' % filename)
-  with open(filename, 'wb') as f:
+  with open(filename, 'w') as f:
     header_guard = ('LLVM_CLANG_TOOLS_EXTRA_CLANG_TIDY_' + module.upper() + '_'
-                    + check_name.upper().replace('-', '_') + '_H')
+                    + check_name_camel.upper() + '_H')
     f.write('//===--- ')
     f.write(os.path.basename(filename))
-    f.write(' - clang-tidy')
-    f.write('-' * max(0, 43 - len(os.path.basename(filename))))
+    f.write(' - clang-tidy ')
+    f.write('-' * max(0, 42 - len(os.path.basename(filename))))
     f.write('*- C++ -*-===//')
     f.write("""
 //
@@ -102,11 +104,11 @@ public:
 def write_implementation(module_path, module, check_name_camel):
   filename = os.path.join(module_path, check_name_camel) + '.cpp'
   print('Creating %s...' % filename)
-  with open(filename, 'wb') as f:
+  with open(filename, 'w') as f:
     f.write('//===--- ')
     f.write(os.path.basename(filename))
-    f.write(' - clang-tidy')
-    f.write('-' * max(0, 52 - len(os.path.basename(filename))))
+    f.write(' - clang-tidy ')
+    f.write('-' * max(0, 51 - len(os.path.basename(filename))))
     f.write('-===//')
     f.write("""
 //
@@ -151,14 +153,15 @@ void %(check_name)s::check(const MatchFinder::MatchResult &Result) {
 
 # Modifies the module to include the new check.
 def adapt_module(module_path, module, check_name, check_name_camel):
-  modulecpp = filter(lambda p: p.lower() == module.lower() + 'tidymodule.cpp',
-                     os.listdir(module_path))[0]
+  modulecpp = list(filter(
+      lambda p: p.lower() == module.lower() + 'tidymodule.cpp',
+      os.listdir(module_path)))[0]
   filename = os.path.join(module_path, modulecpp)
   with open(filename, 'r') as f:
     lines = f.readlines()
 
   print('Updating %s...' % filename)
-  with open(filename, 'wb') as f:
+  with open(filename, 'w') as f:
     header_added = False
     header_found = False
     check_added = False
@@ -189,13 +192,44 @@ def adapt_module(module_path, module, check_name, check_name_camel):
       f.write(line)
 
 
+# Adds a release notes entry.
+def add_release_notes(module_path, module, check_name):
+  check_name_dashes = module + '-' + check_name
+  filename = os.path.normpath(os.path.join(module_path,
+                                           '../../docs/ReleaseNotes.rst'))
+  with open(filename, 'r') as f:
+    lines = f.readlines()
+
+  print('Updating %s...' % filename)
+  with open(filename, 'w') as f:
+    note_added = False
+    header_found = False
+
+    for line in lines:
+      if not note_added:
+        match = re.search('Improvements to clang-tidy', line)
+        if match:
+          header_found = True
+        elif header_found:
+          if not line.startswith('----'):
+            f.write("""
+- New :doc:`%s
+  <clang-tidy/checks/%s>` check.
+
+  FIXME: add release notes.
+""" % (check_name_dashes, check_name_dashes))
+            note_added = True
+
+      f.write(line)
+
+
 # Adds a test for the check.
-def write_test(module_path, module, check_name):
+def write_test(module_path, module, check_name, test_extension):
   check_name_dashes = module + '-' + check_name
   filename = os.path.normpath(os.path.join(module_path, '../../test/clang-tidy',
-                                           check_name_dashes + '.cpp'))
+                                           check_name_dashes + '.' + test_extension))
   print('Creating %s...' % filename)
-  with open(filename, 'wb') as f:
+  with open(filename, 'w') as f:
     f.write("""// RUN: %%check_clang_tidy %%s %(check_name_dashes)s %%t
 
 // FIXME: Add something that triggers the check here.
@@ -219,15 +253,20 @@ def update_checks_list(clang_tidy_path):
   filename = os.path.normpath(os.path.join(docs_dir, 'list.rst'))
   with open(filename, 'r') as f:
     lines = f.readlines()
-  doc_files = filter(lambda s: s.endswith('.rst') and s != 'list.rst',
-                     os.listdir(docs_dir))
+  doc_files = list(filter(lambda s: s.endswith('.rst') and s != 'list.rst',
+                     os.listdir(docs_dir)))
   doc_files.sort()
 
   def format_link(doc_file):
     check_name = doc_file.replace('.rst', '')
     with open(os.path.join(docs_dir, doc_file), 'r') as doc:
+      content = doc.read()
+      match = re.search('.*:orphan:.*', content)
+      if match:
+        return ''
+
       match = re.search('.*:http-equiv=refresh: \d+;URL=(.*).html.*',
-                        doc.read())
+                        content)
       if match:
         return '   %(check)s (redirects to %(target)s) <%(check)s>\n' % {
             'check': check_name,
@@ -238,7 +277,7 @@ def update_checks_list(clang_tidy_path):
   checks = map(format_link, doc_files)
 
   print('Updating %s...' % filename)
-  with open(filename, 'wb') as f:
+  with open(filename, 'w') as f:
     for line in lines:
       f.write(line)
       if line.startswith('.. toctree::'):
@@ -252,7 +291,7 @@ def write_docs(module_path, module, check_name):
   filename = os.path.normpath(os.path.join(
       module_path, '../../docs/clang-tidy/checks/', check_name_dashes + '.rst'))
   print('Creating %s...' % filename)
-  with open(filename, 'wb') as f:
+  with open(filename, 'w') as f:
     f.write(""".. title:: clang-tidy - %(check_name_dashes)s
 
 %(check_name_dashes)s
@@ -264,26 +303,48 @@ FIXME: Describe what patterns does the check detect and why. Give examples.
 
 
 def main():
-  if len(sys.argv) == 2 and sys.argv[1] == '--update-docs':
+  language_to_extension = {
+      'c': 'c',
+      'c++': 'cpp',
+      'objc': 'm',
+      'objc++': 'mm',
+  }
+  parser = argparse.ArgumentParser()
+  parser.add_argument(
+      '--update-docs',
+      action='store_true',
+      help='just update the list of documentation files, then exit')
+  parser.add_argument(
+      '--language',
+      help='language to use for new check (defaults to c++)',
+      choices=language_to_extension.keys(),
+      default='c++',
+      metavar='LANG')
+  parser.add_argument(
+      'module',
+      nargs='?',
+      help='module directory under which to place the new tidy check (e.g., misc)')
+  parser.add_argument(
+      'check',
+      nargs='?',
+      help='name of new tidy check to add (e.g. foo-do-the-stuff)')
+  args = parser.parse_args()
+
+  if args.update_docs:
     update_checks_list(os.path.dirname(sys.argv[0]))
     return
 
-  if len(sys.argv) != 3:
-    print """\
-Usage: add_new_check.py <module> <check>, e.g.
-  add_new_check.py misc awesome-functions
-
-Alternatively, run 'add_new_check.py --update-docs' to just update the list of
-documentation files."""
-
+  if not args.module or not args.check:
+    print('Module and check must be specified.')
+    parser.print_usage()
     return
 
-  module = sys.argv[1]
-  check_name = sys.argv[2]
+  module = args.module
+  check_name = args.check
 
   if check_name.startswith(module):
-    print 'Check name "%s" must not start with the module "%s". Exiting.' % (
-        check_name, module)
+    print('Check name "%s" must not start with the module "%s". Exiting.' % (
+        check_name, module))
     return
   check_name_camel = ''.join(map(lambda elem: elem.capitalize(),
                                  check_name.split('-'))) + 'Check'
@@ -295,7 +356,9 @@ documentation files."""
   write_header(module_path, module, check_name, check_name_camel)
   write_implementation(module_path, module, check_name_camel)
   adapt_module(module_path, module, check_name, check_name_camel)
-  write_test(module_path, module, check_name)
+  add_release_notes(module_path, module, check_name)
+  test_extension = language_to_extension.get(args.language)
+  write_test(module_path, module, check_name, test_extension)
   write_docs(module_path, module, check_name)
   update_checks_list(clang_tidy_path)
   print('Done. Now it\'s your turn!')

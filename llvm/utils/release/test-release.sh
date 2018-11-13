@@ -33,10 +33,13 @@ do_asserts="no"
 do_compare="yes"
 do_rt="yes"
 do_libs="yes"
+do_libcxxabi="yes"
 do_libunwind="yes"
 do_test_suite="yes"
 do_openmp="yes"
+do_lld="yes"
 do_lldb="no"
+do_polly="yes"
 BuildDir="`pwd`"
 ExtraConfigureFlags=""
 ExportBranch=""
@@ -60,11 +63,14 @@ function usage() {
     echo "                      For example -svn-path trunk or -svn-path branches/release_37"
     echo " -no-rt               Disable check-out & build Compiler-RT"
     echo " -no-libs             Disable check-out & build libcxx/libcxxabi/libunwind"
+    echo " -no-libcxxabi        Disable check-out & build libcxxabi"
     echo " -no-libunwind        Disable check-out & build libunwind"
     echo " -no-test-suite       Disable check-out & build test-suite"
     echo " -no-openmp           Disable check-out & build libomp"
+    echo " -no-lld              Disable check-out & build lld"
     echo " -lldb                Enable check-out & build lldb"
     echo " -no-lldb             Disable check-out & build lldb (default)"
+    echo " -no-polly            Disable check-out & build Polly"
 }
 
 while [ $# -gt 0 ]; do
@@ -131,6 +137,9 @@ while [ $# -gt 0 ]; do
         -no-libs )
             do_libs="no"
             ;;
+        -no-libcxxabi )
+            do_libcxxabi="no"
+            ;;
         -no-libunwind )
             do_libunwind="no"
             ;;
@@ -140,11 +149,17 @@ while [ $# -gt 0 ]; do
         -no-openmp )
             do_openmp="no"
             ;;
+        -no-lld )
+            do_lld="no"
+            ;;
         -lldb )
             do_lldb="yes"
             ;;
         -no-lldb )
             do_lldb="no"
+            ;;
+        -no-polly )
+            do_polly="no"
             ;;
         -help | --help | -h | --h | -\? )
             usage
@@ -158,13 +173,6 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-
-if [ "$do_test_suite" = "yes" ]; then
-  # See llvm.org/PR26146.
-  echo Skipping test-suite build when using CMake.
-  echo It will still be exported.
-  do_test_suite="export-only"
-fi
 
 # Check required arguments.
 if [ -z "$Release" ]; then
@@ -203,7 +211,10 @@ if [ $do_rt = "yes" ]; then
   projects="$projects compiler-rt"
 fi
 if [ $do_libs = "yes" ]; then
-  projects="$projects libcxx libcxxabi"
+  projects="$projects libcxx"
+  if [ $do_libcxxabi = "yes" ]; then
+    projects="$projects libcxxabi"
+  fi
   if [ $do_libunwind = "yes" ]; then
     projects="$projects libunwind"
   fi
@@ -216,8 +227,14 @@ esac
 if [ $do_openmp = "yes" ]; then
   projects="$projects openmp"
 fi
+if [ $do_lld = "yes" ]; then
+  projects="$projects lld"
+fi
 if [ $do_lldb = "yes" ]; then
   projects="$projects lldb"
+fi
+if [ $do_polly = "yes" ]; then
+  projects="$projects polly"
 fi
 
 # Go to the build directory (may be different from CWD)
@@ -285,7 +302,7 @@ function export_sources() {
         cfe)
             projsrc=llvm.src/tools/clang
             ;;
-        lldb)
+        lld|lldb|polly)
             projsrc=llvm.src/tools/$proj
             ;;
         clang-tools-extra)
@@ -295,11 +312,7 @@ function export_sources() {
             projsrc=llvm.src/projects/$proj
             ;;
         test-suite)
-            if [ $do_test_suite = 'yes' ]; then
-              projsrc=llvm.src/projects/$proj
-            else
-              projsrc=$proj.src
-            fi
+            projsrc=$proj.src
             ;;
         *)
             echo "error: unknown project $proj"
@@ -397,6 +410,15 @@ function test_llvmCore() {
       deferred_error $Phase $Flavor "check-all failed"
     fi
 
+    if [ $do_test_suite = 'yes' ]; then
+      cd $TestSuiteBuildDir
+      env CC="$c_compiler" CXX="$cxx_compiler" \
+          cmake $TestSuiteSrcDir -DTEST_SUITE_LIT=$Lit
+      if ! ( ${MAKE} -j $NumJobs -k check \
+          2>&1 | tee $LogDir/llvm.check-Phase$Phase-$Flavor.log ) ; then
+        deferred_error $Phase $Flavor "test suite failed"
+      fi
+    fi
     cd $BuildDir
 }
 
@@ -442,6 +464,19 @@ set -o pipefail
 
 if [ "$do_checkout" = "yes" ]; then
     export_sources
+fi
+
+# Setup the test-suite.  Do this early so we can catch failures before
+# we do the full 3 stage build.
+if [ $do_test_suite = "yes" ]; then
+  SandboxDir="$BuildDir/sandbox"
+  Lit=$SandboxDir/bin/lit
+  TestSuiteBuildDir="$BuildDir/test-suite-build"
+  TestSuiteSrcDir="$BuildDir/test-suite.src"
+
+  virtualenv $SandboxDir
+  $SandboxDir/bin/python $BuildDir/llvm.src/utils/lit/setup.py install
+  mkdir -p $TestSuiteBuildDir
 fi
 
 (
@@ -523,6 +558,8 @@ for Flavor in $Flavors ; do
 
     ########################################################################
     # Testing: Test phase 3
+    c_compiler=$llvmCore_phase3_destdir/usr/local/bin/clang
+    cxx_compiler=$llvmCore_phase3_destdir/usr/local/bin/clang++
     echo "# Testing - built with clang"
     test_llvmCore 3 $Flavor $llvmCore_phase3_objdir
 
@@ -538,7 +575,7 @@ for Flavor in $Flavors ; do
             # case there are build paths in the debug info. On some systems,
             # sed adds a newline to the output, so pass $p3 through sed too.
             if ! cmp -s \
-                <(env LC_CTYPE=C sed -e 's,Phase2,Phase3,g' $p2) \
+                <(env LC_CTYPE=C sed -e 's,Phase2,Phase3,g' -e 's,Phase1,Phase2,g' $p2) \
                 <(env LC_CTYPE=C sed -e '' $p3) 16 16; then
                 echo "file `basename $p2` differs between phase 2 and phase 3"
             fi
@@ -548,17 +585,17 @@ done
 
 ) 2>&1 | tee $LogDir/testing.$Release-$RC.log
 
+if [ "$use_gzip" = "yes" ]; then
+  echo "# Packaging the release as $Package.tar.gz"
+else
+  echo "# Packaging the release as $Package.tar.xz"
+fi
 package_release
 
 set +e
 
 # Woo hoo!
 echo "### Testing Finished ###"
-if [ "$use_gzip" = "yes" ]; then
-  echo "### Package: $Package.tar.gz"
-else
-  echo "### Package: $Package.tar.xz"
-fi
 echo "### Logs: $LogDir"
 
 echo "### Errors:"

@@ -11,16 +11,16 @@
 #include <errno.h>
 #include <stdint.h>
 
-#include "lldb/Core/DataBufferHeap.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/RegisterValue.h"
-#include "lldb/Core/Scalar.h"
-#include "lldb/Host/Endian.h"
+#include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Endian.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Scalar.h"
 #include "llvm/Support/Compiler.h"
 
-#include "Plugins/Process/elf-core/ProcessElfCore.h"
 #include "RegisterContextPOSIX_x86.h"
 #include "RegisterContext_x86.h"
 
@@ -365,18 +365,7 @@ RegisterContextPOSIX_x86::RegisterContextPOSIX_x86(
     break;
   }
 
-  // Initialize m_iovec to point to the buffer and buffer size
-  // using the conventions of Berkeley style UIO structures, as required
-  // by PTRACE extensions.
-  m_iovec.iov_base = &m_fpr.xstate.xsave;
-  m_iovec.iov_len = sizeof(m_fpr.xstate.xsave);
-
   ::memset(&m_fpr, 0, sizeof(FPR));
-
-  // elf-core yet to support ReadFPR()
-  ProcessSP base = CalculateProcess();
-  if (base.get()->GetPluginName() == ProcessElfCore::GetPluginNameStatic())
-    return;
 
   m_fpr_type = eNotValid;
 }
@@ -419,10 +408,14 @@ size_t RegisterContextPOSIX_x86::GetGPRSize() {
   return m_register_info_ap->GetGPRSize();
 }
 
+size_t RegisterContextPOSIX_x86::GetFXSAVEOffset() {
+  return GetRegisterInfo()[m_reg_info.first_fpr].byte_offset;
+}
+
 const RegisterInfo *RegisterContextPOSIX_x86::GetRegisterInfo() {
   // Commonly, this method is overridden and g_register_infos is copied and
-  // specialized.
-  // So, use GetRegisterInfo() rather than g_register_infos in this scope.
+  // specialized. So, use GetRegisterInfo() rather than g_register_infos in
+  // this scope.
   return m_register_info_ap->GetRegisterInfo();
 }
 
@@ -482,19 +475,19 @@ bool RegisterContextPOSIX_x86::CopyYMMtoXSTATE(uint32_t reg,
     return false;
 
   if (byte_order == eByteOrderLittle) {
-    ::memcpy(m_fpr.xstate.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
+    ::memcpy(m_fpr.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
              m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes, sizeof(XMMReg));
-    ::memcpy(m_fpr.xstate.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
+    ::memcpy(m_fpr.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
              m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes + sizeof(XMMReg),
              sizeof(YMMHReg));
     return true;
   }
 
   if (byte_order == eByteOrderBig) {
-    ::memcpy(m_fpr.xstate.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
+    ::memcpy(m_fpr.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
              m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes + sizeof(XMMReg),
              sizeof(XMMReg));
-    ::memcpy(m_fpr.xstate.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
+    ::memcpy(m_fpr.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
              m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes, sizeof(YMMHReg));
     return true;
   }
@@ -509,20 +502,20 @@ bool RegisterContextPOSIX_x86::CopyXSTATEtoYMM(uint32_t reg,
 
   if (byte_order == eByteOrderLittle) {
     ::memcpy(m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes,
-             m_fpr.xstate.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
+             m_fpr.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
              sizeof(XMMReg));
     ::memcpy(m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes + sizeof(XMMReg),
-             m_fpr.xstate.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
+             m_fpr.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
              sizeof(YMMHReg));
     return true;
   }
 
   if (byte_order == eByteOrderBig) {
     ::memcpy(m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes + sizeof(XMMReg),
-             m_fpr.xstate.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
+             m_fpr.fxsave.xmm[reg - m_reg_info.first_ymm].bytes,
              sizeof(XMMReg));
     ::memcpy(m_ymm_set.ymm[reg - m_reg_info.first_ymm].bytes,
-             m_fpr.xstate.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
+             m_fpr.xsave.ymmh[reg - m_reg_info.first_ymm].bytes,
              sizeof(YMMHReg));
     return true;
   }
@@ -538,8 +531,8 @@ bool RegisterContextPOSIX_x86::IsRegisterSetAvailable(size_t set_index) {
   return (set_index < num_sets);
 }
 
-// Used when parsing DWARF and EH frame information and any other
-// object file sections that contain register numbers in them.
+// Used when parsing DWARF and EH frame information and any other object file
+// sections that contain register numbers in them.
 uint32_t RegisterContextPOSIX_x86::ConvertRegisterKindToRegisterNumber(
     lldb::RegisterKind kind, uint32_t num) {
   const uint32_t num_regs = GetRegisterCount();

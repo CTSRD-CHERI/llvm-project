@@ -13,10 +13,7 @@
 
 // Project includes
 #include "lldb/Expression/FunctionCaller.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
-#include "lldb/Core/State.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Core/ValueObjectList.h"
 #include "lldb/Expression/DiagnosticManager.h"
@@ -31,6 +28,9 @@
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadPlan.h"
 #include "lldb/Target/ThreadPlanCallFunction.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/State.h"
 
 using namespace lldb_private;
 
@@ -48,7 +48,8 @@ FunctionCaller::FunctionCaller(ExecutionContextScope &exe_scope,
       m_function_return_type(return_type),
       m_wrapper_function_name("__lldb_caller_function"),
       m_wrapper_struct_name("__lldb_caller_struct"), m_wrapper_args_addrs(),
-      m_arg_values(arg_value_list), m_compiled(false), m_JITted(false) {
+      m_struct_valid(false), m_arg_values(arg_value_list), m_compiled(false),
+      m_JITted(false) {
   m_jit_process_wp = lldb::ProcessWP(exe_scope.CalculateProcess());
   // Can't make a FunctionCaller without a process.
   assert(m_jit_process_wp.lock());
@@ -86,12 +87,16 @@ bool FunctionCaller::WriteFunctionWrapper(
 
   bool can_interpret = false; // should stay that way
 
-  Error jit_error(m_parser->PrepareForExecution(
+  Status jit_error(m_parser->PrepareForExecution(
       m_jit_start_addr, m_jit_end_addr, m_execution_unit_sp, exe_ctx,
       can_interpret, eExecutionPolicyAlways));
 
-  if (!jit_error.Success())
+  if (!jit_error.Success()) {
+    diagnostic_manager.Printf(eDiagnosticSeverityError,
+                              "Error in PrepareForExecution: %s.",
+                              jit_error.AsCString());
     return false;
+  }
 
   if (m_parser->GetGenerateDebugInfo()) {
     lldb::ModuleSP jit_module_sp(m_execution_unit_sp->GetJITModule());
@@ -135,7 +140,7 @@ bool FunctionCaller::WriteFunctionArguments(
     return false;
   }
 
-  Error error;
+  Status error;
   lldb::ExpressionResults return_value = lldb::eExpressionSetupError;
 
   Process *process = exe_ctx.GetProcessPtr();
@@ -172,7 +177,7 @@ bool FunctionCaller::WriteFunctionArguments(
 
   // FIXME: We will need to extend this for Variadic functions.
 
-  Error value_error;
+  Status value_error;
 
   size_t num_args = arg_values.GetSize();
   if (num_args != m_arg_values.GetSize()) {
@@ -289,7 +294,7 @@ bool FunctionCaller::FetchFunctionResults(ExecutionContext &exe_ctx,
   if (process != jit_process_sp.get())
     return false;
 
-  Error error;
+  Status error;
   ret_value.GetScalar() = process->ReadUnsignedIntegerFromMemory(
       args_addr + m_return_offset, m_return_size, 0, error);
 
@@ -318,9 +323,9 @@ lldb::ExpressionResults FunctionCaller::ExecuteFunction(
     DiagnosticManager &diagnostic_manager, Value &results) {
   lldb::ExpressionResults return_value = lldb::eExpressionSetupError;
 
-  // FunctionCaller::ExecuteFunction execution is always just to get the result.
-  // Do make sure we ignore
-  // breakpoints, unwind on error, and don't try to debug it.
+  // FunctionCaller::ExecuteFunction execution is always just to get the
+  // result. Do make sure we ignore breakpoints, unwind on error, and don't try
+  // to debug it.
   EvaluateExpressionOptions real_options = options;
   real_options.SetDebug(false);
   real_options.SetUnwindOnError(true);
@@ -355,9 +360,8 @@ lldb::ExpressionResults FunctionCaller::ExecuteFunction(
     return lldb::eExpressionSetupError;
 
   // We need to make sure we record the fact that we are running an expression
-  // here
-  // otherwise this fact will fail to be recorded when fetching an Objective-C
-  // object description
+  // here otherwise this fact will fail to be recorded when fetching an
+  // Objective-C object description
   if (exe_ctx.GetProcessPtr())
     exe_ctx.GetProcessPtr()->SetRunningUserExpression(true);
 

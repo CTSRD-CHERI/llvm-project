@@ -34,3 +34,55 @@ template<int ...N> int bad9() { return (3 + ... * N); } // expected-error {{oper
 template<int ...N> int bad10() { return (3 ? ... : N); } // expected-error +{{}} expected-note {{to match}}
 template<int ...N> int bad11() { return (N + ... 0); } // expected-error {{expected a foldable binary operator}} expected-error {{expected expression}}
 template<int ...N> int bad12() { return (... N); } // expected-error {{expected expression}}
+
+template<typename ...T> void as_operand_of_cast(int a, T ...t) {
+  return
+    (int)(a + ... + undeclared_junk) + // expected-error {{undeclared}} expected-error {{does not contain any unexpanded}}
+    (int)(t + ... + undeclared_junk) + // expected-error {{undeclared}}
+    (int)(... + undeclared_junk) + // expected-error {{undeclared}} expected-error {{does not contain any unexpanded}}
+    (int)(undeclared_junk + ...) + // expected-error {{undeclared}}
+    (int)(a + ...); // expected-error {{does not contain any unexpanded}}
+}
+
+// fold-operator can be '>' or '>>'.
+template <int... N> constexpr bool greaterThan() { return (N > ...); }
+template <int... N> constexpr int rightShift() { return (N >> ...); }
+
+static_assert(greaterThan<2, 1>());
+static_assert(rightShift<10, 1>() == 5);
+
+template <auto V> constexpr auto Identity = V;
+
+// Support fold operators within templates.
+template <int... N> constexpr int nestedFoldOperator() {
+  return Identity<(Identity<0> >> ... >> N)> +
+    Identity<(N >> ... >> Identity<0>)>;
+}
+
+static_assert(nestedFoldOperator<3, 1>() == 1);
+
+// A fold-expression is a primary-expression.
+template <typename T, typename... Ts>
+constexpr auto castSum(Ts... Args) {
+  return (T)(Args + ...).Value; // expected-error{{member reference base type 'int' is not a structure or union}}
+}
+
+template <typename... Ts>
+constexpr auto simpleSum(Ts... Args) {
+  return (... + Args).Value; // expected-error{{member reference base type 'int' is not a structure or union}}
+}
+
+void prim() {
+  castSum<int>(1, 2);
+  // expected-note@-1{{in instantiation of function template specialization}}
+  simpleSum(1, 2);
+  // expected-note@-1{{in instantiation of function template specialization}}
+
+  struct Number {
+    int Value;
+    constexpr Number operator+(Number Rhs) const { return {Rhs.Value + Value}; }
+  };
+
+  static_assert(castSum<long>(Number{1}, Number{2}) == 3);
+  static_assert(simpleSum(Number{1}, Number{2}) == 3);
+}

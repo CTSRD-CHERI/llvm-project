@@ -10,77 +10,86 @@
 #ifndef liblldb_Communication_h_
 #define liblldb_Communication_h_
 
-// C Includes
-// C++ Includes
+#include "lldb/Core/Broadcaster.h"
+#include "lldb/Host/HostThread.h"
+#include "lldb/Utility/Timeout.h"
+#include "lldb/lldb-defines.h"      // for DISALLOW_COPY_AND_ASSIGN
+#include "lldb/lldb-enumerations.h" // for ConnectionStatus, FLAGS_ANONYMOU...
+#include "lldb/lldb-forward.h"      // for ConnectionSP
+#include "lldb/lldb-types.h"        // for thread_arg_t, thread_result_t
+
 #include <atomic>
 #include <mutex>
+#include <ratio> // for micro
 #include <string>
 
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/Broadcaster.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Host/HostThread.h"
-#include "lldb/lldb-private.h"
-#include "lldb/lldb-private.h"
+#include <stddef.h> // for size_t
+#include <stdint.h> // for uint8_t
+
+namespace lldb_private {
+class Connection;
+}
+namespace lldb_private {
+class ConstString;
+}
+namespace lldb_private {
+class Status;
+}
 
 namespace lldb_private {
 
 //----------------------------------------------------------------------
-/// @class Communication Communication.h "lldb/Core/Communication.h"
-/// @brief An abstract communications class.
+/// @class Communication Communication.h "lldb/Core/Communication.h" An
+/// abstract communications class.
 ///
-/// Communication is an class that handles data communication
-/// between two data sources. It uses a Connection class to do the
-/// real communication. This approach has a couple of advantages: it
-/// allows a single instance of this class to be used even though its
-/// connection can change. Connections could negotiate for different
-/// connections based on abilities like starting with Bluetooth and
-/// negotiating up to WiFi if available. It also allows this class to be
-/// subclassed by any interfaces that don't want to give bytes but want
-/// to validate and give out packets. This can be done by overriding:
+/// Communication is an class that handles data communication between two data
+/// sources. It uses a Connection class to do the real communication. This
+/// approach has a couple of advantages: it allows a single instance of this
+/// class to be used even though its connection can change. Connections could
+/// negotiate for different connections based on abilities like starting with
+/// Bluetooth and negotiating up to WiFi if available. It also allows this
+/// class to be subclassed by any interfaces that don't want to give bytes but
+/// want to validate and give out packets. This can be done by overriding:
 ///
 /// AppendBytesToCache (const uint8_t *src, size_t src_len, bool broadcast);
 ///
-/// Communication inherits from Broadcaster which means it can be
-/// used in conjunction with Listener to wait for multiple broadcaster
-/// objects and multiple events from each of those objects.
-/// Communication defines a set of pre-defined event bits (see
-/// enumerations definitions that start with "eBroadcastBit" below).
+/// Communication inherits from Broadcaster which means it can be used in
+/// conjunction with Listener to wait for multiple broadcaster objects and
+/// multiple events from each of those objects. Communication defines a set of
+/// pre-defined event bits (see enumerations definitions that start with
+/// "eBroadcastBit" below).
 ///
 /// There are two modes in which communications can occur:
 ///     @li single-threaded
 ///     @li multi-threaded
 ///
-/// In single-threaded mode, all reads and writes happen synchronously
-/// on the calling thread.
+/// In single-threaded mode, all reads and writes happen synchronously on the
+/// calling thread.
 ///
-/// In multi-threaded mode, a read thread is spawned that continually
-/// reads data and caches any received bytes. To start the read thread
-/// clients call:
+/// In multi-threaded mode, a read thread is spawned that continually reads
+/// data and caches any received bytes. To start the read thread clients call:
 ///
-///     bool Communication::StartReadThread (Error *);
+///     bool Communication::StartReadThread (Status *);
 ///
-/// If true is returned a read thread has been spawned that will
-/// continually execute a call to the pure virtual DoRead function:
+/// If true is returned a read thread has been spawned that will continually
+/// execute a call to the pure virtual DoRead function:
 ///
 ///     size_t Communication::ReadFromConnection (void *, size_t, uint32_t);
 ///
-/// When bytes are received the data gets cached in \a m_bytes and this
-/// class will broadcast a \b eBroadcastBitReadThreadGotBytes event.
-/// Clients that want packet based communication should override
-/// AppendBytesToCache. The subclasses can choose to call the
-/// built in AppendBytesToCache with the \a broadcast parameter set to
-/// false. This will cause the \b eBroadcastBitReadThreadGotBytes event
-/// not get broadcast, and then the subclass can post a \b
-/// eBroadcastBitPacketAvailable event when a full packet of data has
-/// been received.
+/// When bytes are received the data gets cached in \a m_bytes and this class
+/// will broadcast a \b eBroadcastBitReadThreadGotBytes event. Clients that
+/// want packet based communication should override AppendBytesToCache. The
+/// subclasses can choose to call the built in AppendBytesToCache with the \a
+/// broadcast parameter set to false. This will cause the \b
+/// eBroadcastBitReadThreadGotBytes event not get broadcast, and then the
+/// subclass can post a \b eBroadcastBitPacketAvailable event when a full
+/// packet of data has been received.
 ///
-/// If the connection is disconnected a \b eBroadcastBitDisconnected
-/// event gets broadcast. If the read thread exits a \b
-/// eBroadcastBitReadThreadDidExit event will be broadcast. Clients
-/// can also post a \b eBroadcastBitReadThreadShouldExit event to this
-/// object which will cause the read thread to exit.
+/// If the connection is disconnected a \b eBroadcastBitDisconnected event
+/// gets broadcast. If the read thread exits a \b
+/// eBroadcastBitReadThreadDidExit event will be broadcast. Clients can also
+/// post a \b eBroadcastBitReadThreadShouldExit event to this object which
+/// will cause the read thread to exit.
 //----------------------------------------------------------------------
 class Communication : public Broadcaster {
 public:
@@ -108,8 +117,8 @@ public:
                                           size_t src_len);
 
   //------------------------------------------------------------------
-  /// Construct the Communication object with the specified name for
-  /// the Broadcaster that this object inherits from.
+  /// Construct the Communication object with the specified name for the
+  /// Broadcaster that this object inherits from.
   ///
   /// @param[in] broadcaster_name
   ///     The name of the broadcaster object.  This name should be as
@@ -129,9 +138,8 @@ public:
   void Clear();
 
   //------------------------------------------------------------------
-  /// Connect using the current connection by passing \a url to its
-  /// connect function.
-  /// string.
+  /// Connect using the current connection by passing \a url to its connect
+  /// function. string.
   ///
   /// @param[in] url
   ///     A string that contains all information needed by the
@@ -142,24 +150,23 @@ public:
   ///     internal error object should be filled in with an
   ///     appropriate value based on the result of this function.
   ///
-  /// @see Error& Communication::GetError ();
+  /// @see Status& Communication::GetError ();
   /// @see bool Connection::Connect (const char *url);
   //------------------------------------------------------------------
-  lldb::ConnectionStatus Connect(const char *url, Error *error_ptr);
+  lldb::ConnectionStatus Connect(const char *url, Status *error_ptr);
 
   //------------------------------------------------------------------
-  /// Disconnect the communications connection if one is currently
-  /// connected.
+  /// Disconnect the communications connection if one is currently connected.
   ///
   /// @return
   ///     \b True if the disconnect succeeded, \b false otherwise. The
   ///     internal error object should be filled in with an
   ///     appropriate value based on the result of this function.
   ///
-  /// @see Error& Communication::GetError ();
+  /// @see Status& Communication::GetError ();
   /// @see bool Connection::Disconnect ();
   //------------------------------------------------------------------
-  lldb::ConnectionStatus Disconnect(Error *error_ptr = nullptr);
+  lldb::ConnectionStatus Disconnect(Status *error_ptr = nullptr);
 
   //------------------------------------------------------------------
   /// Check if the connection is valid.
@@ -177,16 +184,15 @@ public:
   //------------------------------------------------------------------
   /// Read bytes from the current connection.
   ///
-  /// If no read thread is running, this function call the
-  /// connection's Connection::Read(...) function to get any available.
+  /// If no read thread is running, this function call the connection's
+  /// Connection::Read(...) function to get any available.
   ///
-  /// If a read thread has been started, this function will check for
-  /// any cached bytes that have already been read and return any
-  /// currently available bytes. If no bytes are cached, it will wait
-  /// for the bytes to become available by listening for the \a
-  /// eBroadcastBitReadThreadGotBytes event. If this function consumes
-  /// all of the bytes in the cache, it will reset the
-  /// \a eBroadcastBitReadThreadGotBytes event bit.
+  /// If a read thread has been started, this function will check for any
+  /// cached bytes that have already been read and return any currently
+  /// available bytes. If no bytes are cached, it will wait for the bytes to
+  /// become available by listening for the \a eBroadcastBitReadThreadGotBytes
+  /// event. If this function consumes all of the bytes in the cache, it will
+  /// reset the \a eBroadcastBitReadThreadGotBytes event bit.
   ///
   /// @param[in] dst
   ///     A destination buffer that must be at least \a dst_len bytes
@@ -196,20 +202,20 @@ public:
   ///     The number of bytes to attempt to read, and also the max
   ///     number of bytes that can be placed into \a dst.
   ///
-  /// @param[in] timeout_usec
-  ///     A timeout value in micro-seconds.
+  /// @param[in] timeout
+  ///     A timeout value or llvm::None for no timeout.
   ///
   /// @return
   ///     The number of bytes actually read.
   ///
   /// @see size_t Connection::Read (void *, size_t);
   //------------------------------------------------------------------
-  size_t Read(void *dst, size_t dst_len, uint32_t timeout_usec,
-              lldb::ConnectionStatus &status, Error *error_ptr);
+  size_t Read(void *dst, size_t dst_len, const Timeout<std::micro> &timeout,
+              lldb::ConnectionStatus &status, Status *error_ptr);
 
   //------------------------------------------------------------------
-  /// The actual write function that attempts to write to the
-  /// communications protocol.
+  /// The actual write function that attempts to write to the communications
+  /// protocol.
   ///
   /// Subclasses must override this function.
   ///
@@ -225,16 +231,15 @@ public:
   ///     The number of bytes actually Written.
   //------------------------------------------------------------------
   size_t Write(const void *src, size_t src_len, lldb::ConnectionStatus &status,
-               Error *error_ptr);
+               Status *error_ptr);
 
   //------------------------------------------------------------------
   /// Sets the connection that it to be used by this class.
   ///
-  /// By making a communication class that uses different connections
-  /// it allows a single communication interface to negotiate and
-  /// change its connection without any interruption to the client.
-  /// It also allows the Communication class to be subclassed for
-  /// packet based communication.
+  /// By making a communication class that uses different connections it
+  /// allows a single communication interface to negotiate and change its
+  /// connection without any interruption to the client. It also allows the
+  /// Communication class to be subclassed for packet based communication.
   ///
   /// @param[in] connection
   ///     A connection that this class will own and destroy.
@@ -245,19 +250,19 @@ public:
   void SetConnection(Connection *connection);
 
   //------------------------------------------------------------------
-  /// Starts a read thread whose sole purpose it to read bytes from
-  /// the current connection. This function will call connection's
-  /// read function:
+  /// Starts a read thread whose sole purpose it to read bytes from the
+  /// current connection. This function will call connection's read function:
   ///
   /// size_t Connection::Read (void *, size_t);
   ///
   /// When bytes are read and cached, this function will call:
   ///
-  /// Communication::AppendBytesToCache (const uint8_t * bytes, size_t len, bool
+  /// Communication::AppendBytesToCache (const uint8_t * bytes, size_t len,
+  /// bool
   /// broadcast);
   ///
-  /// Subclasses should override this function if they wish to override
-  /// the default action of caching the bytes and broadcasting a \b
+  /// Subclasses should override this function if they wish to override the
+  /// default action of caching the bytes and broadcasting a \b
   /// eBroadcastBitReadThreadGotBytes event.
   ///
   /// @return
@@ -265,10 +270,10 @@ public:
   ///     false otherwise.
   ///
   /// @see size_t Connection::Read (void *, size_t);
-  /// @see void Communication::AppendBytesToCache (const uint8_t * bytes, size_t
-  /// len, bool broadcast);
+  /// @see void Communication::AppendBytesToCache (const uint8_t * bytes,
+  ///                                              size_t len, bool broadcast);
   //------------------------------------------------------------------
-  virtual bool StartReadThread(Error *error_ptr = nullptr);
+  virtual bool StartReadThread(Status *error_ptr = nullptr);
 
   //------------------------------------------------------------------
   /// Stops the read thread by cancelling it.
@@ -277,9 +282,9 @@ public:
   ///     \b True if the read thread was successfully canceled, \b
   ///     false otherwise.
   //------------------------------------------------------------------
-  virtual bool StopReadThread(Error *error_ptr = nullptr);
+  virtual bool StopReadThread(Status *error_ptr = nullptr);
 
-  virtual bool JoinReadThread(Error *error_ptr = nullptr);
+  virtual bool JoinReadThread(Status *error_ptr = nullptr);
   //------------------------------------------------------------------
   /// Checks if there is a currently running read thread.
   ///
@@ -289,11 +294,10 @@ public:
   bool ReadThreadIsRunning();
 
   //------------------------------------------------------------------
-  /// The static read thread function. This function will call
-  /// the "DoRead" function continuously and wait for data to become
-  /// available. When data is received it will append the available
-  /// data to the internal cache and broadcast a
-  /// \b eBroadcastBitReadThreadGotBytes event.
+  /// The static read thread function. This function will call the "DoRead"
+  /// function continuously and wait for data to become available. When data
+  /// is received it will append the available data to the internal cache and
+  /// broadcast a \b eBroadcastBitReadThreadGotBytes event.
   ///
   /// @param[in] comm_ptr
   ///     A pointer to an instance of this class.
@@ -347,22 +351,22 @@ protected:
   void *m_callback_baton;
   bool m_close_on_eof;
 
-  size_t ReadFromConnection(void *dst, size_t dst_len, uint32_t timeout_usec,
-                            lldb::ConnectionStatus &status, Error *error_ptr);
+  size_t ReadFromConnection(void *dst, size_t dst_len,
+                            const Timeout<std::micro> &timeout,
+                            lldb::ConnectionStatus &status, Status *error_ptr);
 
   //------------------------------------------------------------------
-  /// Append new bytes that get read from the read thread into the
-  /// internal object byte cache. This will cause a \b
-  /// eBroadcastBitReadThreadGotBytes event to be broadcast if \a
-  /// broadcast is true.
+  /// Append new bytes that get read from the read thread into the internal
+  /// object byte cache. This will cause a \b eBroadcastBitReadThreadGotBytes
+  /// event to be broadcast if \a broadcast is true.
   ///
-  /// Subclasses can override this function in order to inspect the
-  /// received data and check if a packet is available.
+  /// Subclasses can override this function in order to inspect the received
+  /// data and check if a packet is available.
   ///
-  /// Subclasses can also still call this function from the
-  /// overridden method to allow the caching to correctly happen and
-  /// suppress the broadcasting of the \a eBroadcastBitReadThreadGotBytes
-  /// event by setting \a broadcast to false.
+  /// Subclasses can also still call this function from the overridden method
+  /// to allow the caching to correctly happen and suppress the broadcasting
+  /// of the \a eBroadcastBitReadThreadGotBytes event by setting \a broadcast
+  /// to false.
   ///
   /// @param[in] src
   ///     A source buffer that must be at least \a src_len bytes
@@ -376,9 +380,9 @@ protected:
                                   lldb::ConnectionStatus status);
 
   //------------------------------------------------------------------
-  /// Get any available bytes from our data cache. If this call
-  /// empties the data cache, the \b eBroadcastBitReadThreadGotBytes event
-  /// will be reset to signify no more bytes are available.
+  /// Get any available bytes from our data cache. If this call empties the
+  /// data cache, the \b eBroadcastBitReadThreadGotBytes event will be reset
+  /// to signify no more bytes are available.
   ///
   /// @param[in] dst
   ///     A destination buffer that must be at least \a dst_len bytes

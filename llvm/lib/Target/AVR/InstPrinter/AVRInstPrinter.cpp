@@ -106,7 +106,7 @@ void AVRInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
   if (Op.isReg()) {
     bool isPtrReg = (MOI.RegClass == AVR::PTRREGSRegClassID) ||
                     (MOI.RegClass == AVR::PTRDISPREGSRegClassID) ||
-                    (MOI.RegClass == AVR::ZREGSRegClassID);
+                    (MOI.RegClass == AVR::ZREGRegClassID);
 
     if (isPtrReg) {
       O << getRegisterName(Op.getReg(), AVR::ptr);
@@ -145,10 +145,9 @@ void AVRInstPrinter::printPCRelImm(const MCInst *MI, unsigned OpNo,
 
 void AVRInstPrinter::printMemri(const MCInst *MI, unsigned OpNo,
                                 raw_ostream &O) {
-  const MCOperand &RegOp = MI->getOperand(OpNo);
-  const MCOperand &OffsetOp = MI->getOperand(OpNo + 1);
+  assert(MI->getOperand(OpNo).isReg() && "Expected a register for the first operand");
 
-  assert(RegOp.isReg() && "Expected a register");
+  const MCOperand &OffsetOp = MI->getOperand(OpNo + 1);
 
   // Print the register.
   printOperand(MI, OpNo, O);

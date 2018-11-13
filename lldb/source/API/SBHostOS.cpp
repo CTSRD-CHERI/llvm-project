@@ -7,15 +7,24 @@
 //
 //===----------------------------------------------------------------------===//
 
+#ifndef LLDB_DISABLE_PYTHON
+#include "Plugins/ScriptInterpreter/Python/lldb-python.h"
+#endif
+
 #include "lldb/API/SBHostOS.h"
 #include "lldb/API/SBError.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/HostNativeThread.h"
 #include "lldb/Host/HostThread.h"
 #include "lldb/Host/ThreadLauncher.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/Log.h"
+
+#include "Plugins/ExpressionParser/Clang/ClangHost.h"
+#ifndef LLDB_DISABLE_PYTHON
+#include "Plugins/ScriptInterpreter/Python/ScriptInterpreterPython.h"
+#endif
 
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/Path.h"
@@ -30,19 +39,45 @@ SBFileSpec SBHostOS::GetProgramFileSpec() {
 }
 
 SBFileSpec SBHostOS::GetLLDBPythonPath() {
-  SBFileSpec sb_lldb_python_filespec;
-  FileSpec lldb_python_spec;
-  if (HostInfo::GetLLDBPath(ePathTypePythonDir, lldb_python_spec)) {
-    sb_lldb_python_filespec.SetFileSpec(lldb_python_spec);
-  }
-  return sb_lldb_python_filespec;
+  return GetLLDBPath(ePathTypePythonDir);
 }
 
 SBFileSpec SBHostOS::GetLLDBPath(lldb::PathType path_type) {
-  SBFileSpec sb_fspec;
   FileSpec fspec;
-  if (HostInfo::GetLLDBPath(path_type, fspec))
-    sb_fspec.SetFileSpec(fspec);
+  switch (path_type) {
+  case ePathTypeLLDBShlibDir:
+    fspec = HostInfo::GetShlibDir();
+    break;
+  case ePathTypeSupportExecutableDir:
+    fspec = HostInfo::GetSupportExeDir();
+    break;
+  case ePathTypeHeaderDir:
+    fspec = HostInfo::GetHeaderDir();
+    break;
+  case ePathTypePythonDir:
+#ifndef LLDB_DISABLE_PYTHON
+    fspec = ScriptInterpreterPython::GetPythonDir();
+#endif
+    break;
+  case ePathTypeLLDBSystemPlugins:
+    fspec = HostInfo::GetSystemPluginDir();
+    break;
+  case ePathTypeLLDBUserPlugins:
+    fspec = HostInfo::GetUserPluginDir();
+    break;
+  case ePathTypeLLDBTempSystemDir:
+    fspec = HostInfo::GetProcessTempDir();
+    break;
+  case ePathTypeGlobalLLDBTempSystemDir:
+    fspec = HostInfo::GetGlobalTempDir();
+    break;
+  case ePathTypeClangDir:
+    fspec = GetClangResourceDir();
+    break;
+  }
+
+  SBFileSpec sb_fspec;
+  sb_fspec.SetFileSpec(fspec);
   return sb_fspec;
 }
 
@@ -80,7 +115,7 @@ lldb::thread_t SBHostOS::ThreadCreate(const char *name,
 void SBHostOS::ThreadCreated(const char *name) {}
 
 bool SBHostOS::ThreadCancel(lldb::thread_t thread, SBError *error_ptr) {
-  Error error;
+  Status error;
   HostThread host_thread(thread);
   error = host_thread.Cancel();
   if (error_ptr)
@@ -90,7 +125,7 @@ bool SBHostOS::ThreadCancel(lldb::thread_t thread, SBError *error_ptr) {
 }
 
 bool SBHostOS::ThreadDetach(lldb::thread_t thread, SBError *error_ptr) {
-  Error error;
+  Status error;
 #if defined(_WIN32)
   if (error_ptr)
     error_ptr->SetErrorString("ThreadDetach is not supported on this platform");
@@ -106,7 +141,7 @@ bool SBHostOS::ThreadDetach(lldb::thread_t thread, SBError *error_ptr) {
 
 bool SBHostOS::ThreadJoin(lldb::thread_t thread, lldb::thread_result_t *result,
                           SBError *error_ptr) {
-  Error error;
+  Status error;
   HostThread host_thread(thread);
   error = host_thread.Join(result);
   if (error_ptr)

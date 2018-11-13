@@ -23,6 +23,60 @@ class MiniDumpNewTestCase(TestBase):
     _linux_x86_64_not_crashed_pid = 29939
     _linux_x86_64_not_crashed_pid_offset = 0xD967
 
+    def setUp(self):
+        super(MiniDumpNewTestCase, self).setUp()
+        self._initial_platform = lldb.DBG.GetSelectedPlatform()
+
+    def tearDown(self):
+        lldb.DBG.SetSelectedPlatform(self._initial_platform)
+        super(MiniDumpNewTestCase, self).tearDown()
+
+    def check_state(self):
+        with open(os.devnull) as devnul:
+            # sanitize test output
+            self.dbg.SetOutputFileHandle(devnul, False)
+            self.dbg.SetErrorFileHandle(devnul, False)
+
+            self.assertTrue(self.process.is_stopped)
+
+            # Process.Continue
+            error = self.process.Continue()
+            self.assertFalse(error.Success())
+            self.assertTrue(self.process.is_stopped)
+
+            # Thread.StepOut
+            thread = self.process.GetSelectedThread()
+            thread.StepOut()
+            self.assertTrue(self.process.is_stopped)
+
+            # command line
+            self.dbg.HandleCommand('s')
+            self.assertTrue(self.process.is_stopped)
+            self.dbg.HandleCommand('c')
+            self.assertTrue(self.process.is_stopped)
+
+            # restore file handles
+            self.dbg.SetOutputFileHandle(None, False)
+            self.dbg.SetErrorFileHandle(None, False)
+
+    def test_loadcore_error_status(self):
+        """Test the SBTarget.LoadCore(core, error) overload."""
+        self.dbg.CreateTarget(None)
+        self.target = self.dbg.GetSelectedTarget()
+        error = lldb.SBError()
+        self.process = self.target.LoadCore("linux-x86_64.dmp", error)
+        self.assertTrue(self.process, PROCESS_IS_VALID)
+        self.assertTrue(error.Success())
+
+    def test_loadcore_error_status_failure(self):
+        """Test the SBTarget.LoadCore(core, error) overload."""
+        self.dbg.CreateTarget(None)
+        self.target = self.dbg.GetSelectedTarget()
+        error = lldb.SBError()
+        self.process = self.target.LoadCore("non-existent.dmp", error)
+        self.assertFalse(self.process, PROCESS_IS_VALID)
+        self.assertTrue(error.Fail())
+
     def test_process_info_in_minidump(self):
         """Test that lldb can read the process information from the Minidump."""
         # target create -c linux-x86_64.dmp
@@ -32,6 +86,58 @@ class MiniDumpNewTestCase(TestBase):
         self.assertTrue(self.process, PROCESS_IS_VALID)
         self.assertEqual(self.process.GetNumThreads(), 1)
         self.assertEqual(self.process.GetProcessID(), self._linux_x86_64_pid)
+        self.check_state()
+
+    def test_modules_in_mini_dump(self):
+        """Test that lldb can read the list of modules from the minidump."""
+        # target create -c linux-x86_64.dmp
+        self.dbg.CreateTarget(None)
+        self.target = self.dbg.GetSelectedTarget()
+        self.process = self.target.LoadCore("linux-x86_64.dmp")
+        self.assertTrue(self.process, PROCESS_IS_VALID)
+        expected_modules = [
+            {
+                'filename' : 'linux-gate.so',
+                'uuid' : '4EAD28F8-88EF-3520-872B-73C6F2FE7306-C41AF22F',
+            },
+            {
+                'filename' : 'libm-2.19.so',
+                'uuid' : 'D144258E-6149-00B2-55A3-1F3FD2283A87-8670D5BC',
+            },
+            {
+                'filename' : 'libstdc++.so.6.0.19',
+                'uuid' : '76190E92-2AF7-457D-078F-75C9B15FA184-E83EB506',
+            },
+            {
+                'filename' : 'libc-2.19.so',
+                'uuid' : 'CF699A15-CAAE-64F5-0311-FC4655B86DC3-9A479789',
+            },
+            {
+                'filename' : 'linux-x86_64',
+                'uuid' : 'E35C283B-C327-C287-62DB-788BF5A4078B-E2351448',
+            },
+            {
+                'filename' : 'libgcc_s.so.1',
+                'uuid' : '36311B44-5771-0AE5-578C-4BF00791DED7-359DBB92',
+            },
+            {
+                'filename' : 'libpthread-2.19.so',
+                'uuid' : '31E9F21A-E8C1-0396-171F-1E13DA157809-86FA696C',
+            },
+            {
+                'filename' : 'ld-2.19.so',
+                'uuid' : 'D0F53790-4076-D73F-29E4-A37341F8A449-E2EF6CD0',
+            },
+            {
+                'filename' : 'libbreakpad.so',
+                'uuid' : '784FD549-332D-826E-D23F-18C17C6F320A',
+            },
+        ]
+        self.assertEqual(self.target.GetNumModules(), len(expected_modules))
+        for module, expected in zip(self.target.modules, expected_modules):
+            self.assertTrue(module.IsValid())
+            self.assertEqual(module.file.basename, expected['filename'])
+            self.assertEqual(module.GetUUIDString(), expected['uuid'])
 
     def test_thread_info_in_minidump(self):
         """Test that lldb can read the thread information from the Minidump."""
@@ -39,6 +145,7 @@ class MiniDumpNewTestCase(TestBase):
         self.dbg.CreateTarget(None)
         self.target = self.dbg.GetSelectedTarget()
         self.process = self.target.LoadCore("linux-x86_64.dmp")
+        self.check_state()
         # This process crashed due to a segmentation fault in its
         # one and only thread.
         self.assertEqual(self.process.GetNumThreads(), 1)
@@ -53,6 +160,7 @@ class MiniDumpNewTestCase(TestBase):
         self.dbg.CreateTarget("linux-x86_64")
         self.target = self.dbg.GetSelectedTarget()
         self.process = self.target.LoadCore("linux-x86_64.dmp")
+        self.check_state()
         self.assertEqual(self.process.GetNumThreads(), 1)
         self.assertEqual(self.process.GetProcessID(), self._linux_x86_64_pid)
         thread = self.process.GetThreadAtIndex(0)
@@ -61,6 +169,7 @@ class MiniDumpNewTestCase(TestBase):
         self.assertEqual(thread.GetNumFrames(), 2)
         frame = thread.GetFrameAtIndex(0)
         self.assertTrue(frame.IsValid())
+        self.assertTrue(frame.GetModule().IsValid())
         pc = frame.GetPC()
         eip = frame.FindRegister("pc")
         self.assertTrue(eip.IsValid())
@@ -73,11 +182,167 @@ class MiniDumpNewTestCase(TestBase):
         self.dbg.CreateTarget(None)
         self.target = self.dbg.GetSelectedTarget()
         self.process = self.target.LoadCore("linux-x86_64_not_crashed.dmp")
+        self.check_state()
         self.assertEqual(self.process.GetNumThreads(), 1)
         thread = self.process.GetThreadAtIndex(0)
         self.assertEqual(thread.GetStopReason(), lldb.eStopReasonNone)
         stop_description = thread.GetStopDescription(256)
-        self.assertEqual(stop_description, None)
+        self.assertEqual(stop_description, "")
+
+    def check_register_unsigned(self, set, name, expected):
+        reg_value = set.GetChildMemberWithName(name)
+        self.assertTrue(reg_value.IsValid(),
+                        'Verify we have a register named "%s"' % (name))
+        self.assertEqual(reg_value.GetValueAsUnsigned(), expected,
+                         'Verify "%s" == %i' % (name, expected))
+
+    def check_register_string_value(self, set, name, expected, format):
+        reg_value = set.GetChildMemberWithName(name)
+        self.assertTrue(reg_value.IsValid(),
+                        'Verify we have a register named "%s"' % (name))
+        if format is not None:
+            reg_value.SetFormat(format)
+        self.assertEqual(reg_value.GetValue(), expected,
+                         'Verify "%s" has string value "%s"' % (name,
+                                                                expected))
+
+    def test_arm64_registers(self):
+        """Test ARM64 registers from a breakpad created minidump."""
+        # target create -c arm64-macos.dmp
+        self.dbg.CreateTarget(None)
+        self.target = self.dbg.GetSelectedTarget()
+        self.process = self.target.LoadCore("arm64-macos.dmp")
+        self.check_state()
+        self.assertEqual(self.process.GetNumThreads(), 1)
+        thread = self.process.GetThreadAtIndex(0)
+        self.assertEqual(thread.GetStopReason(), lldb.eStopReasonNone)
+        stop_description = thread.GetStopDescription(256)
+        self.assertEqual(stop_description, "")
+        registers = thread.GetFrameAtIndex(0).GetRegisters()
+        # Verify the GPR registers are all correct
+        # Verify x0 - x31 register values
+        gpr = registers.GetValueAtIndex(0)
+        for i in range(32):
+            v = i+1 | i+2 << 32 | i+3 << 48
+            w = i+1
+            self.check_register_unsigned(gpr, 'x%i' % (i), v)
+            self.check_register_unsigned(gpr, 'w%i' % (i), w)
+        # Verify arg1 - arg8 register values
+        for i in range(1, 9):
+            v = i | i+1 << 32 | i+2 << 48
+            self.check_register_unsigned(gpr, 'arg%i' % (i), v)
+        i = 29
+        v = i+1 | i+2 << 32 | i+3 << 48
+        self.check_register_unsigned(gpr, 'fp', v)
+        i = 30
+        v = i+1 | i+2 << 32 | i+3 << 48
+        self.check_register_unsigned(gpr, 'lr', v)
+        i = 31
+        v = i+1 | i+2 << 32 | i+3 << 48
+        self.check_register_unsigned(gpr, 'sp', v)
+        self.check_register_unsigned(gpr, 'pc', 0x1000)
+        self.check_register_unsigned(gpr, 'cpsr', 0x11223344)
+        self.check_register_unsigned(gpr, 'psr', 0x11223344)
+
+        # Verify the FPR registers are all correct
+        fpr = registers.GetValueAtIndex(1)
+        for i in range(32):
+            v = "0x"
+            d = "0x"
+            s = "0x"
+            h = "0x"
+            for j in range(i+15, i-1, -1):
+                v += "%2.2x" % (j)
+            for j in range(i+7, i-1, -1):
+                d += "%2.2x" % (j)
+            for j in range(i+3, i-1, -1):
+                s += "%2.2x" % (j)
+            for j in range(i+1, i-1, -1):
+                h += "%2.2x" % (j)
+            self.check_register_string_value(fpr, "v%i" % (i), v,
+                                             lldb.eFormatHex)
+            self.check_register_string_value(fpr, "d%i" % (i), d,
+                                             lldb.eFormatHex)
+            self.check_register_string_value(fpr, "s%i" % (i), s,
+                                             lldb.eFormatHex)
+            self.check_register_string_value(fpr, "h%i" % (i), h,
+                                             lldb.eFormatHex)
+        self.check_register_unsigned(gpr, 'fpsr', 0x55667788)
+        self.check_register_unsigned(gpr, 'fpcr', 0x99aabbcc)
+
+    def verify_arm_registers(self, apple=False):
+        """
+            Verify values of all ARM registers from a breakpad created
+            minidump.
+        """
+        self.dbg.CreateTarget(None)
+        self.target = self.dbg.GetSelectedTarget()
+        if apple:
+            self.process = self.target.LoadCore("arm-macos.dmp")
+        else:
+            self.process = self.target.LoadCore("arm-linux.dmp")
+        self.check_state()
+        self.assertEqual(self.process.GetNumThreads(), 1)
+        thread = self.process.GetThreadAtIndex(0)
+        self.assertEqual(thread.GetStopReason(), lldb.eStopReasonNone)
+        stop_description = thread.GetStopDescription(256)
+        self.assertEqual(stop_description, "")
+        registers = thread.GetFrameAtIndex(0).GetRegisters()
+        # Verify the GPR registers are all correct
+        # Verify x0 - x31 register values
+        gpr = registers.GetValueAtIndex(0)
+        for i in range(1, 16):
+            self.check_register_unsigned(gpr, 'r%i' % (i), i+1)
+        # Verify arg1 - arg4 register values
+        for i in range(1, 5):
+            self.check_register_unsigned(gpr, 'arg%i' % (i), i)
+        if apple:
+            self.check_register_unsigned(gpr, 'fp', 0x08)
+        else:
+            self.check_register_unsigned(gpr, 'fp', 0x0c)
+        self.check_register_unsigned(gpr, 'lr', 0x0f)
+        self.check_register_unsigned(gpr, 'sp', 0x0e)
+        self.check_register_unsigned(gpr, 'pc', 0x10)
+        self.check_register_unsigned(gpr, 'cpsr', 0x11223344)
+
+        # Verify the FPR registers are all correct
+        fpr = registers.GetValueAtIndex(1)
+        # Check d0 - d31
+        self.check_register_unsigned(gpr, 'fpscr', 0x55667788aabbccdd)
+        for i in range(32):
+            value = (i+1) | (i+1) << 8 | (i+1) << 32 | (i+1) << 48
+            self.check_register_unsigned(fpr, "d%i" % (i), value)
+        # Check s0 - s31
+        for i in range(32):
+            i_val = (i >> 1) + 1
+            if i & 1:
+                value = "%#8.8x" % (i_val | i_val << 16)
+            else:
+                value = "%#8.8x" % (i_val | i_val << 8)
+            self.check_register_string_value(fpr, "s%i" % (i), value,
+                                             lldb.eFormatHex)
+        # Check q0 - q15
+        for i in range(15):
+            a = i * 2 + 1
+            b = a + 1
+            value = ("0x00%2.2x00%2.2x0000%2.2x%2.2x"
+                     "00%2.2x00%2.2x0000%2.2x%2.2x") % (b, b, b, b, a, a, a, a)
+            self.check_register_string_value(fpr, "q%i" % (i), value,
+                                             lldb.eFormatHex)
+
+    def test_linux_arm_registers(self):
+        """Test Linux ARM registers from a breakpad created minidump.
+
+           The frame pointer is R11 for linux.
+        """
+        self.verify_arm_registers(apple=False)
+
+    def test_apple_arm_registers(self):
+        """Test Apple ARM registers from a breakpad created minidump.
+
+           The frame pointer is R7 for linux.
+        """
+        self.verify_arm_registers(apple=True)
 
     def do_test_deeper_stack(self, binary, core, pid):
         target = self.dbg.CreateTarget(binary)
@@ -122,40 +387,34 @@ class MiniDumpNewTestCase(TestBase):
     def test_deeper_stack_in_minidump_with_same_pid_running(self):
         """Test that we read the information from the core correctly even if we
         have a running process with the same PID"""
-        try:
-            self.do_change_pid_in_minidump("linux-x86_64_not_crashed.dmp",
-                                           "linux-x86_64_not_crashed-pid.dmp",
-                                           self._linux_x86_64_not_crashed_pid_offset,
-                                           str(self._linux_x86_64_not_crashed_pid),
-                                           str(os.getpid()))
-            self.do_test_deeper_stack("linux-x86_64_not_crashed",
-                                      "linux-x86_64_not_crashed-pid.dmp",
-                                      os.getpid())
-        finally:
-            self.RemoveTempFile("linux-x86_64_not_crashed-pid.dmp")
+        new_core = self.getBuildArtifact("linux-x86_64_not_crashed-pid.dmp")
+        self.do_change_pid_in_minidump("linux-x86_64_not_crashed.dmp",
+                                       new_core,
+                                       self._linux_x86_64_not_crashed_pid_offset,
+                                       str(self._linux_x86_64_not_crashed_pid),
+                                       str(os.getpid()))
+        self.do_test_deeper_stack("linux-x86_64_not_crashed", new_core, os.getpid())
 
     def test_two_cores_same_pid(self):
         """Test that we handle the situation if we have two core files with the same PID """
-        try:
-            self.do_change_pid_in_minidump("linux-x86_64_not_crashed.dmp",
-                                           "linux-x86_64_not_crashed-pid.dmp",
-                                           self._linux_x86_64_not_crashed_pid_offset,
-                                           str(self._linux_x86_64_not_crashed_pid),
-                                           str(self._linux_x86_64_pid))
-            self.do_test_deeper_stack("linux-x86_64_not_crashed",
-                                      "linux-x86_64_not_crashed-pid.dmp",
-                                      self._linux_x86_64_pid)
-            self.test_stack_info_in_minidump()
-        finally:
-            self.RemoveTempFile("linux-x86_64_not_crashed-pid.dmp")
+        new_core = self.getBuildArtifact("linux-x86_64_not_crashed-pid.dmp")
+        self.do_change_pid_in_minidump("linux-x86_64_not_crashed.dmp",
+                                       new_core,
+                                       self._linux_x86_64_not_crashed_pid_offset,
+                                       str(self._linux_x86_64_not_crashed_pid),
+                                       str(self._linux_x86_64_pid))
+        self.do_test_deeper_stack("linux-x86_64_not_crashed",
+                                  new_core, self._linux_x86_64_pid)
+        self.test_stack_info_in_minidump()
 
     def test_local_variables_in_minidump(self):
         """Test that we can examine local variables in a Minidump."""
         # Launch with the Minidump, and inspect a local variable.
         # target create linux-x86_64_not_crashed -c linux-x86_64_not_crashed.dmp
-        target = self.dbg.CreateTarget("linux-x86_64_not_crashed")
-        process = target.LoadCore("linux-x86_64_not_crashed.dmp")
-        thread = process.GetThreadAtIndex(0)
+        self.target = self.dbg.CreateTarget("linux-x86_64_not_crashed")
+        self.process = self.target.LoadCore("linux-x86_64_not_crashed.dmp")
+        self.check_state()
+        thread = self.process.GetThreadAtIndex(0)
         frame = thread.GetFrameAtIndex(1)
         value = frame.EvaluateExpression('x')
         self.assertEqual(value.GetValueAsSigned(), 3)

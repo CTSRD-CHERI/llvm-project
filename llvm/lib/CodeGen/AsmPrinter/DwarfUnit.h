@@ -65,16 +65,13 @@ public:
 //===----------------------------------------------------------------------===//
 /// This dwarf writer support class manages information associated with a
 /// source file.
-class DwarfUnit {
+class DwarfUnit : public DIEUnit {
 protected:
   /// MDNode for the compile unit.
   const DICompileUnit *CUNode;
 
   // All DIEValues are allocated through this allocator.
   BumpPtrAllocator DIEValueAllocator;
-
-  /// Unit debug information entry.
-  DIE &UnitDie;
 
   /// Target of Dwarf emission.
   AsmPrinter *Asm;
@@ -83,7 +80,7 @@ protected:
   DwarfDebug *DD;
   DwarfFile *DU;
 
-  /// An anonymous type for index type.  Owned by UnitDie.
+  /// An anonymous type for index type.  Owned by DIEUnit.
   DIE *IndexTyDie;
 
   /// Tracks the mapping of unit level debug information variables to debug
@@ -101,32 +98,24 @@ protected:
   /// corresponds to the MDNode mapped with the subprogram DIE.
   DenseMap<DIE *, const DINode *> ContainingTypeMap;
 
-  /// The section this unit will be emitted in.
-  MCSection *Section;
-
-  DwarfUnit(dwarf::Tag, const DICompileUnit *CU, AsmPrinter *A, DwarfDebug *DW,
+  DwarfUnit(dwarf::Tag, const DICompileUnit *Node, AsmPrinter *A, DwarfDebug *DW,
             DwarfFile *DWU);
 
   bool applySubprogramDefinitionAttributes(const DISubprogram *SP, DIE &SPDie);
 
+  bool shareAcrossDWOCUs() const;
+  bool isShareableAcrossCUs(const DINode *D) const;
+
 public:
-  virtual ~DwarfUnit();
-
-  void initSection(MCSection *Section);
-
-  MCSection *getSection() const {
-    assert(Section);
-    return Section;
-  }
-
   // Accessors.
   AsmPrinter* getAsmPrinter() const { return Asm; }
   uint16_t getLanguage() const { return CUNode->getSourceLanguage(); }
   const DICompileUnit *getCUNode() const { return CUNode; }
-  DIE &getUnitDie() { return UnitDie; }
+
+  uint16_t getDwarfVersion() const { return DD->getDwarfVersion(); }
 
   /// Return true if this compile unit has something to write out.
-  bool hasContent() const { return UnitDie.hasChildren(); }
+  bool hasContent() const { return getUnitDie().hasChildren(); }
 
   /// Get string containing language specific context for a global name.
   ///
@@ -138,12 +127,12 @@ public:
   std::string getParentContextString(const DIScope *Context) const;
 
   /// Add a new global name to the compile unit.
-  virtual void addGlobalName(StringRef Name, DIE &Die, const DIScope *Context) {
-  }
+  virtual void addGlobalName(StringRef Name, const DIE &Die,
+                             const DIScope *Context) = 0;
 
   /// Add a new global type to the compile unit.
   virtual void addGlobalType(const DIType *Ty, const DIE &Die,
-                             const DIScope *Context) {}
+                             const DIScope *Context) = 0;
 
   /// Returns the DIE map slot for the specified debug variable.
   ///
@@ -198,7 +187,7 @@ public:
 
   /// Add a dwarf op address data and value using the form given and an
   /// op of either DW_FORM_addr or DW_FORM_GNU_addr_index.
-  void addOpAddress(DIELoc &Die, const MCSymbol *Label);
+  void addOpAddress(DIELoc &Die, const MCSymbol *Sym);
 
   /// Add a label delta attribute data and value.
   void addLabelDelta(DIE &Die, dwarf::Attribute Attribute, const MCSymbol *Hi,
@@ -212,24 +201,20 @@ public:
 
   /// Add a type's DW_AT_signature and set the  declaration flag.
   void addDIETypeSignature(DIE &Die, uint64_t Signature);
-  /// Add an attribute containing the type signature for a unique identifier.
-  void addDIETypeSignature(DIE &Die, dwarf::Attribute Attribute,
-                           StringRef Identifier);
 
   /// Add block data.
-  void addBlock(DIE &Die, dwarf::Attribute Attribute, DIELoc *Block);
+  void addBlock(DIE &Die, dwarf::Attribute Attribute, DIELoc *Loc);
 
   /// Add block data.
   void addBlock(DIE &Die, dwarf::Attribute Attribute, DIEBlock *Block);
 
   /// Add location information to specified debug information entry.
-  void addSourceLine(DIE &Die, unsigned Line, StringRef File,
-                     StringRef Directory);
+  void addSourceLine(DIE &Die, unsigned Line, const DIFile *File);
   void addSourceLine(DIE &Die, const DILocalVariable *V);
   void addSourceLine(DIE &Die, const DIGlobalVariable *G);
   void addSourceLine(DIE &Die, const DISubprogram *SP);
+  void addSourceLine(DIE &Die, const DILabel *L);
   void addSourceLine(DIE &Die, const DIType *Ty);
-  void addSourceLine(DIE &Die, const DINamespace *NS);
   void addSourceLine(DIE &Die, const DIObjCProperty *Ty);
 
   /// Add constant value entry in variable DIE.
@@ -249,16 +234,8 @@ public:
   /// Add template parameters in buffer.
   void addTemplateParams(DIE &Buffer, DINodeArray TParams);
 
-  /// Add register operand.
-  /// \returns false if the register does not exist, e.g., because it was never
-  /// materialized.
-  bool addRegisterOpPiece(DIELoc &TheDie, unsigned Reg,
-                          unsigned SizeInBits = 0, unsigned OffsetInBits = 0);
-
-  /// Add register offset.
-  /// \returns false if the register does not exist, e.g., because it was never
-  /// materialized.
-  bool addRegisterOffset(DIELoc &TheDie, unsigned Reg, int64_t Offset);
+  /// Add thrown types.
+  void addThrownTypes(DIE &Die, DINodeArray ThrownTypes);
 
   // FIXME: Should be reformulated in terms of addComplexAddress.
   /// Start with the address based on the location provided, and generate the
@@ -281,13 +258,10 @@ public:
   DIE *getOrCreateSubprogramDIE(const DISubprogram *SP, bool Minimal = false);
 
   void applySubprogramAttributes(const DISubprogram *SP, DIE &SPDie,
-                                 bool Minimal = false);
+                                 bool SkipSPAttributes = false);
 
   /// Find existing DIE or create new DIE for the given type.
-  DIE *getOrCreateTypeDIE(const MDNode *N);
-
-  /// Get context owner's DIE.
-  DIE *createTypeDIE(const DICompositeType *Ty);
+  DIE *getOrCreateTypeDIE(const MDNode *TyNode);
 
   /// Get context owner's DIE.
   DIE *getOrCreateContextDIE(const DIScope *Context);
@@ -302,28 +276,58 @@ public:
   /// call insertDIE if MD is not null.
   DIE &createAndAddDIE(unsigned Tag, DIE &Parent, const DINode *N = nullptr);
 
+  bool useSegmentedStringOffsetsTable() const {
+    return DD->useSegmentedStringOffsetsTable();
+  }
+
   /// Compute the size of a header for this unit, not including the initial
   /// length field.
   virtual unsigned getHeaderSize() const {
     return sizeof(int16_t) + // DWARF version number
            sizeof(int32_t) + // Offset Into Abbrev. Section
-           sizeof(int8_t);   // Pointer Size (in bytes)
+           sizeof(int8_t) +  // Pointer Size (in bytes)
+           (DD->getDwarfVersion() >= 5 ? sizeof(int8_t)
+                                       : 0); // DWARF v5 unit type
   }
 
   /// Emit the header for this unit, not including the initial length field.
-  virtual void emitHeader(bool UseOffsets);
+  virtual void emitHeader(bool UseOffsets) = 0;
+
+  /// Add the DW_AT_str_offsets_base attribute to the unit DIE.
+  void addStringOffsetsStart();
+
+  /// Add the DW_AT_rnglists_base attribute to the unit DIE.
+  void addRnglistsBase();
+
+  /// Add the DW_AT_addr_base attribute to the unit DIE.
+  void addAddrTableBase();
 
   virtual DwarfCompileUnit &getCU() = 0;
 
   void constructTypeDIE(DIE &Buffer, const DICompositeType *CTy);
 
+  /// addSectionDelta - Add a label delta attribute data and value.
+  DIE::value_iterator addSectionDelta(DIE &Die, dwarf::Attribute Attribute,
+                                      const MCSymbol *Hi, const MCSymbol *Lo);
+
+  /// Add a Dwarf section label attribute data and value.
+  DIE::value_iterator addSectionLabel(DIE &Die, dwarf::Attribute Attribute,
+                                      const MCSymbol *Label,
+                                      const MCSymbol *Sec);
+
+  /// If the \p File has an MD5 checksum, return it as an MD5Result
+  /// allocated in the MCContext.
+  MD5::MD5Result *getMD5AsBytes(const DIFile *File) const;
+
 protected:
+  ~DwarfUnit();
+
   /// Create new static data member DIE.
   DIE *getOrCreateStaticMemberDIE(const DIDerivedType *DT);
 
-  /// Look up the source ID with the given directory and source file names. If
-  /// none currently exists, create a new ID and insert it in the line table.
-  virtual unsigned getOrCreateSourceID(StringRef File, StringRef Directory) = 0;
+  /// Look up the source ID for the given file. If none currently exists,
+  /// create a new ID and insert it in the line table.
+  virtual unsigned getOrCreateSourceID(const DIFile *File) = 0;
 
   /// Look in the DwarfDebug map for the MDNode that corresponds to the
   /// reference.
@@ -331,14 +335,22 @@ protected:
     return Ref.resolve();
   }
 
+  /// If this is a named finished type then include it in the list of types for
+  /// the accelerator tables.
+  void updateAcceleratorTables(const DIScope *Context, const DIType *Ty,
+                               const DIE &TyDIE);
+
+  /// Emit the common part of the header for this unit.
+  void emitCommonHeader(bool UseOffsets, dwarf::UnitType UT);
+
 private:
   void constructTypeDIE(DIE &Buffer, const DIBasicType *BTy);
   void constructTypeDIE(DIE &Buffer, const DIDerivedType *DTy);
-  void constructTypeDIE(DIE &Buffer, const DISubroutineType *DTy);
+  void constructTypeDIE(DIE &Buffer, const DISubroutineType *CTy);
   void constructSubrangeDIE(DIE &Buffer, const DISubrange *SR, DIE *IndexTy);
   void constructArrayTypeDIE(DIE &Buffer, const DICompositeType *CTy);
   void constructEnumTypeDIE(DIE &Buffer, const DICompositeType *CTy);
-  void constructMemberDIE(DIE &Buffer, const DIDerivedType *DT);
+  DIE &constructMemberDIE(DIE &Buffer, const DIDerivedType *DT);
   void constructTemplateTypeParameterDIE(DIE &Buffer,
                                          const DITemplateTypeParameter *TP);
   void constructTemplateValueParameterDIE(DIE &Buffer,
@@ -355,21 +367,18 @@ private:
   /// Set D as anonymous type for index which can be reused later.
   void setIndexTyDie(DIE *D) { IndexTyDie = D; }
 
-  /// If this is a named finished type then include it in the list of types for
-  /// the accelerator tables.
-  void updateAcceleratorTables(const DIScope *Context, const DIType *Ty,
-                               const DIE &TyDIE);
-
   virtual bool isDwoUnit() const = 0;
+  const MCSymbol *getCrossSectionRelativeBaseAddress() const override;
 };
 
-class DwarfTypeUnit : public DwarfUnit {
+class DwarfTypeUnit final : public DwarfUnit {
   uint64_t TypeSignature;
   const DIE *Ty;
   DwarfCompileUnit &CU;
   MCDwarfDwoLineTable *SplitLineTable;
+  bool UsedLineTable = false;
 
-  unsigned getOrCreateSourceID(StringRef File, StringRef Directory) override;
+  unsigned getOrCreateSourceID(const DIFile *File) override;
   bool isDwoUnit() const override;
 
 public:
@@ -379,12 +388,19 @@ public:
   void setTypeSignature(uint64_t Signature) { TypeSignature = Signature; }
   void setType(const DIE *Ty) { this->Ty = Ty; }
 
+  /// Get context owner's DIE.
+  DIE *createTypeDIE(const DICompositeType *Ty);
+
   /// Emit the header for this unit, not including the initial length field.
   void emitHeader(bool UseOffsets) override;
   unsigned getHeaderSize() const override {
     return DwarfUnit::getHeaderSize() + sizeof(uint64_t) + // Type Signature
            sizeof(uint32_t);                               // Type DIE Offset
   }
+  void addGlobalName(StringRef Name, const DIE &Die,
+                     const DIScope *Context) override;
+  void addGlobalType(const DIType *Ty, const DIE &Die,
+                     const DIScope *Context) override;
   DwarfCompileUnit &getCU() override { return CU; }
 };
 } // end llvm namespace

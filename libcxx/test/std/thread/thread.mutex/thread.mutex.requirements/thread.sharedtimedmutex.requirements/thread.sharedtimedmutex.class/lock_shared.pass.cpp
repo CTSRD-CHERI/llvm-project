@@ -8,9 +8,9 @@
 //===----------------------------------------------------------------------===//
 //
 // UNSUPPORTED: libcpp-has-no-threads
-// UNSUPPORTED: c++03, c++98, c++11
+// UNSUPPORTED: c++98, c++03, c++11
 
-// FLAKY_TEST
+// FLAKY_TEST.
 
 // <shared_mutex>
 

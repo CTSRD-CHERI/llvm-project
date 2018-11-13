@@ -1,5 +1,5 @@
-; RUN: llc -split-dwarf=Enable -O0 < %s -mtriple=x86_64-unknown-linux-gnu -filetype=obj > %t
-; RUN: llvm-dwarfdump -debug-dump=info %t | FileCheck %s
+; RUN: llc -split-dwarf-file=foo.dwo -O0 < %s -mtriple=x86_64-unknown-linux-gnu -filetype=obj > %t
+; RUN: llvm-dwarfdump -v -debug-info %t | FileCheck %s
 ; RUN: llvm-objdump -r %t | FileCheck --check-prefix=RELOCS %s
 
 ; Test the emission of gmlt-like inlining information into the skeleton unit.
@@ -71,6 +71,7 @@
 ; CHECK:     DW_AT_call_file
 ; CHECK-NEXT:     DW_AT_call_line {{.*}} (18)
 ; CHECK-NOT: DW_
+; CHECK: .debug_info.dwo contents:
 
 ; RELOCS-NOT: RELOCATION RECORDS FOR [.rela.debug_ranges]
 
@@ -101,8 +102,8 @@ attributes #1 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "n
 !6 = !DISubprogram(name: "f3", linkageName: "_ZN3foo2f3Ez", line: 4, isLocal: false, isDefinition: false, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 4, file: !1, scope: !4, type: !7)
 !7 = !DISubroutineType(types: !8)
 !8 = !{null, null}
-!10 = distinct !DISubprogram(name: "f3", linkageName: "_ZN3foo2f3Ez", line: 15, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 15, file: !1, scope: !4, type: !7, declaration: !6, variables: !2)
-!11 = distinct !DISubprogram(name: "f2<int>", linkageName: "_ZN3foo2f2IiEEvv", line: 10, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 10, file: !1, scope: !4, type: !12, templateParams: !14, declaration: !17, variables: !2)
+!10 = distinct !DISubprogram(name: "f3", linkageName: "_ZN3foo2f3Ez", line: 15, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 15, file: !1, scope: !4, type: !7, declaration: !6, retainedNodes: !2)
+!11 = distinct !DISubprogram(name: "f2<int>", linkageName: "_ZN3foo2f2IiEEvv", line: 10, isLocal: false, isDefinition: true, flags: DIFlagPrototyped, isOptimized: false, unit: !0, scopeLine: 10, file: !1, scope: !4, type: !12, templateParams: !14, declaration: !17, retainedNodes: !2)
 !12 = !DISubroutineType(types: !13)
 !13 = !{null}
 !14 = !{!15}
@@ -110,7 +111,7 @@ attributes #1 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "n
 !16 = !DIBasicType(tag: DW_TAG_base_type, name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
 !17 = !DISubprogram(name: "f2<int>", linkageName: "_ZN3foo2f2IiEEvv", line: 10, isLocal: false, isDefinition: false, flags: DIFlagPrototyped, isOptimized: false, scopeLine: 10, file: !1, scope: !4, type: !12, templateParams: !14)
 !18 = !{!19}
-!19 = !DIImportedEntity(tag: DW_TAG_imported_declaration, line: 19, scope: !20, entity: !4)
+!19 = !DIImportedEntity(tag: DW_TAG_imported_declaration, file: !1, line: 19, scope: !20, entity: !4)
 !20 = distinct !DILexicalBlock(line: 16, column: 13, file: !1, scope: !21)
 !21 = distinct !DILexicalBlock(line: 16, column: 7, file: !1, scope: !10)
 !22 = !{i32 2, !"Dwarf Version", i32 4}

@@ -1,4 +1,4 @@
-//===-- llvm/CallingConvLower.h - Calling Conventions -----------*- C++ -*-===//
+//===- llvm/CallingConvLower.h - Calling Conventions ------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -18,11 +18,12 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/TargetCallingConv.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/Target/TargetCallingConv.h"
 
 namespace llvm {
+
 class CCState;
 class MVT;
 class TargetMachine;
@@ -183,11 +184,6 @@ typedef bool CCCustomFn(unsigned &ValNo, MVT &ValVT,
                         MVT &LocVT, CCValAssign::LocInfo &LocInfo,
                         ISD::ArgFlagsTy &ArgFlags, CCState &State);
 
-/// ParmContext - This enum tracks whether calling convention lowering is in
-/// the context of prologue or call generation. Not all backends make use of
-/// this information.
-typedef enum { Unknown, Prologue, Call } ParmContext;
-
 /// CCState - This class holds information needed while lowering arguments and
 /// return values.  It captures which registers are already assigned and which
 /// stack slots are used.  It provides accessors to allocate these values.
@@ -205,6 +201,7 @@ private:
   unsigned MaxStackArgAlign;
   SmallVector<uint32_t, 16> UsedRegs;
   SmallVector<CCValAssign, 4> PendingLocs;
+  SmallVector<ISD::ArgFlagsTy, 4> PendingArgFlags;
 
   // ByValInfo and SmallVector<ByValInfo, 4> ByValRegs:
   //
@@ -256,9 +253,6 @@ private:
   // during argument analysis.
   unsigned InRegsParamsProcessed;
 
-protected:
-  ParmContext CallOrPrologue;
-
 public:
   CCState(CallingConv::ID CC, bool isVarArg, MachineFunction &MF,
           SmallVectorImpl<CCValAssign> &locs, LLVMContext &C);
@@ -296,6 +290,12 @@ public:
   void AnalyzeFormalArguments(const SmallVectorImpl<ISD::InputArg> &Ins,
                               CCAssignFn Fn);
 
+  /// The function will invoke AnalyzeFormalArguments.
+  void AnalyzeArguments(const SmallVectorImpl<ISD::InputArg> &Ins,
+                        CCAssignFn Fn) {
+    AnalyzeFormalArguments(Ins, Fn);
+  }
+
   /// AnalyzeReturn - Analyze the returned values of a return,
   /// incorporating info about the result values into this state.
   void AnalyzeReturn(const SmallVectorImpl<ISD::OutputArg> &Outs,
@@ -304,7 +304,7 @@ public:
   /// CheckReturn - Analyze the return values of a function, returning
   /// true if the return can be performed without sret-demotion, and
   /// false otherwise.
-  bool CheckReturn(const SmallVectorImpl<ISD::OutputArg> &ArgsFlags,
+  bool CheckReturn(const SmallVectorImpl<ISD::OutputArg> &Outs,
                    CCAssignFn Fn);
 
   /// AnalyzeCallOperands - Analyze the outgoing arguments to a call,
@@ -318,10 +318,21 @@ public:
                            SmallVectorImpl<ISD::ArgFlagsTy> &Flags,
                            CCAssignFn Fn);
 
+  /// The function will invoke AnalyzeCallOperands.
+  void AnalyzeArguments(const SmallVectorImpl<ISD::OutputArg> &Outs,
+                        CCAssignFn Fn) {
+    AnalyzeCallOperands(Outs, Fn);
+  }
+
   /// AnalyzeCallResult - Analyze the return values of a call,
   /// incorporating info about the passed values into this state.
   void AnalyzeCallResult(const SmallVectorImpl<ISD::InputArg> &Ins,
                          CCAssignFn Fn);
+
+  /// A shadow allocated register is a register that was allocated
+  /// but wasn't added to the location list (Locs).
+  /// \returns true if the register was allocated as shadow or false otherwise.
+  bool IsShadowAllocatedReg(unsigned Reg) const;
 
   /// AnalyzeCallResult - Same as above except it's specialized for calls which
   /// produce a single value.
@@ -493,11 +504,14 @@ public:
     InRegsParamsProcessed = 0;
   }
 
-  ParmContext getCallOrPrologue() const { return CallOrPrologue; }
-
   // Get list of pending assignments
-  SmallVectorImpl<llvm::CCValAssign> &getPendingLocs() {
+  SmallVectorImpl<CCValAssign> &getPendingLocs() {
     return PendingLocs;
+  }
+
+  // Get a list of argflags for pending assignments.
+  SmallVectorImpl<ISD::ArgFlagsTy> &getPendingArgFlags() {
+    return PendingArgFlags;
   }
 
   /// Compute the remaining unused register parameters that would be used for
@@ -521,13 +535,42 @@ public:
                                 const SmallVectorImpl<ISD::InputArg> &Ins,
                                 CCAssignFn CalleeFn, CCAssignFn CallerFn);
 
+  /// The function runs an additional analysis pass over function arguments.
+  /// It will mark each argument with the attribute flag SecArgPass.
+  /// After running, it will sort the locs list.
+  template <class T>
+  void AnalyzeArgumentsSecondPass(const SmallVectorImpl<T> &Args,
+                                  CCAssignFn Fn) {
+    unsigned NumFirstPassLocs = Locs.size();
+
+    /// Creates similar argument list to \p Args in which each argument is
+    /// marked using SecArgPass flag.
+    SmallVector<T, 16> SecPassArg;
+    // SmallVector<ISD::InputArg, 16> SecPassArg;
+    for (auto Arg : Args) {
+      Arg.Flags.setSecArgPass();
+      SecPassArg.push_back(Arg);
+    }
+
+    // Run the second argument pass
+    AnalyzeArguments(SecPassArg, Fn);
+
+    // Sort the locations of the arguments according to their original position.
+    SmallVector<CCValAssign, 16> TmpArgLocs;
+    std::swap(TmpArgLocs, Locs);
+    auto B = TmpArgLocs.begin(), E = TmpArgLocs.end();
+    std::merge(B, B + NumFirstPassLocs, B + NumFirstPassLocs, E,
+               std::back_inserter(Locs),
+               [](const CCValAssign &A, const CCValAssign &B) -> bool {
+                 return A.getValNo() < B.getValNo();
+               });
+  }
+
 private:
   /// MarkAllocated - Mark a register and all of its aliases as allocated.
   void MarkAllocated(unsigned Reg);
 };
 
-
-
 } // end namespace llvm
 
-#endif
+#endif // LLVM_CODEGEN_CALLINGCONVLOWER_H

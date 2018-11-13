@@ -10,7 +10,8 @@
 // UNSUPPORTED: c++98, c++03, c++11, c++14
 // UNSUPPORTED: sanitizer-new-delete
 
-// XFAIL: no-aligned-allocation
+// NOTE: GCC doesn't provide the -faligned-allocation flag to test for
+// XFAIL: no-aligned-allocation && !gcc
 
 // test operator new replacement
 
@@ -21,7 +22,9 @@
 #include <cassert>
 #include <limits>
 
-constexpr auto OverAligned = alignof(std::max_align_t) * 2;
+#include "test_macros.h"
+
+constexpr auto OverAligned = __STDCPP_DEFAULT_NEW_ALIGNMENT__ * 2;
 
 int A_constructed = 0;
 
@@ -44,20 +47,23 @@ int new_called = 0;
 
 alignas(OverAligned) char DummyData[OverAligned * 4];
 
-void* operator new[](std::size_t s, std::align_val_t a) throw(std::bad_alloc)
+void* operator new[](std::size_t s, std::align_val_t a) TEST_THROW_SPEC(std::bad_alloc)
 {
     assert(new_called == 0); // We already allocated
     assert(s <= sizeof(DummyData));
     assert(static_cast<std::size_t>(a) == OverAligned);
     ++new_called;
-    return DummyData;
+    void *Ret = DummyData;
+    DoNotOptimize(Ret);
+    return Ret;
 }
 
-void  operator delete[](void* p, std::align_val_t a) throw()
+void  operator delete[](void* p, std::align_val_t) TEST_NOEXCEPT
 {
     assert(new_called == 1);
     --new_called;
     assert(p == DummyData);
+    DoNotOptimize(p);
 }
 
 

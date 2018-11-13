@@ -1,11 +1,11 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -analyzer-config suppress-null-return-paths=false -verify %s
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -verify -DSUPPRESSED=1 %s
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -fobjc-arc -verify -DSUPPRESSED=1 %s
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -analyzer-config avoid-suppressing-null-argument-paths=true -DSUPPRESSED=1 -DNULL_ARGS=1 -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -analyzer-config suppress-null-return-paths=false -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -verify -DSUPPRESSED=1 %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -fobjc-arc -verify -DSUPPRESSED=1 %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -analyzer-config avoid-suppressing-null-argument-paths=true -DSUPPRESSED=1 -DNULL_ARGS=1 -verify %s
 
 #define ARC __has_feature(objc_arc)
 
-#if defined(SUPPRESSED) && !ARC
+#ifdef SUPPRESSED
 // expected-no-diagnostics
 #endif
 
@@ -27,9 +27,8 @@ void testNilReceiverHelperA(int *x) {
 
 void testNilReceiverHelperB(int *x) {
   *x = 1;
-// FIXME: Suppression for this case isn't working under ARC. It should.
-#if !defined(SUPPRESSED) || (defined(SUPPRESSED) && ARC)
-  // expected-warning@-3 {{Dereference of null pointer}}
+#if !defined(SUPPRESSED)
+  // expected-warning@-2 {{Dereference of null pointer}}
 #endif
 }
 

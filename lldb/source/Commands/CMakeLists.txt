@@ -1,7 +1,6 @@
 add_lldb_library(lldbCommands
   CommandCompletions.cpp
   CommandObjectApropos.cpp
-  CommandObjectArgs.cpp
   CommandObjectBreakpoint.cpp
   CommandObjectBreakpointCommand.cpp
   CommandObjectBugreport.cpp
@@ -21,7 +20,7 @@ add_lldb_library(lldbCommands
   CommandObjectRegister.cpp
   CommandObjectSettings.cpp
   CommandObjectSource.cpp
-  CommandObjectSyntax.cpp
+  CommandObjectStats.cpp
   CommandObjectTarget.cpp
   CommandObjectThread.cpp
   CommandObjectType.cpp
@@ -29,4 +28,20 @@ add_lldb_library(lldbCommands
   CommandObjectWatchpoint.cpp
   CommandObjectWatchpointCommand.cpp
   CommandObjectLanguage.cpp
+
+  LINK_LIBS
+    lldbBase
+    lldbBreakpoint
+    lldbCore
+    lldbDataFormatters
+    lldbExpression
+    lldbHost
+    lldbInterpreter
+    lldbSymbol
+    lldbTarget
+    lldbUtility
+    lldbPluginExpressionParserClang
+
+  LINK_COMPONENTS
+    Support
   )

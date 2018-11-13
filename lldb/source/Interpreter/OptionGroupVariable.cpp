@@ -13,59 +13,59 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Core/Error.h"
 #include "lldb/DataFormatters/DataVisualization.h"
+#include "lldb/Host/OptionParser.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Target/Target.h"
-#include "lldb/Utility/Utils.h"
+#include "lldb/Utility/Status.h"
 
 using namespace lldb;
 using namespace lldb_private;
 
 // if you add any options here, remember to update the counters in
 // OptionGroupVariable::GetNumDefinitions()
-static OptionDefinition g_variable_options[] = {
+static constexpr OptionDefinition g_variable_options[] = {
     {LLDB_OPT_SET_1 | LLDB_OPT_SET_2, false, "no-args", 'a',
-     OptionParser::eNoArgument, nullptr, nullptr, 0, eArgTypeNone,
+     OptionParser::eNoArgument, nullptr, {}, 0, eArgTypeNone,
      "Omit function arguments."},
     {LLDB_OPT_SET_1 | LLDB_OPT_SET_2, false, "no-locals", 'l',
-     OptionParser::eNoArgument, nullptr, nullptr, 0, eArgTypeNone,
+     OptionParser::eNoArgument, nullptr, {}, 0, eArgTypeNone,
      "Omit local variables."},
     {LLDB_OPT_SET_1 | LLDB_OPT_SET_2, false, "show-globals", 'g',
-     OptionParser::eNoArgument, nullptr, nullptr, 0, eArgTypeNone,
+     OptionParser::eNoArgument, nullptr, {}, 0, eArgTypeNone,
      "Show the current frame source file global and static variables."},
     {LLDB_OPT_SET_1 | LLDB_OPT_SET_2, false, "show-declaration", 'c',
-     OptionParser::eNoArgument, nullptr, nullptr, 0, eArgTypeNone,
+     OptionParser::eNoArgument, nullptr, {}, 0, eArgTypeNone,
      "Show variable declaration information (source file and line where the "
      "variable was declared)."},
     {LLDB_OPT_SET_1 | LLDB_OPT_SET_2, false, "regex", 'r',
-     OptionParser::eNoArgument, nullptr, nullptr, 0, eArgTypeRegularExpression,
+     OptionParser::eNoArgument, nullptr, {}, 0, eArgTypeRegularExpression,
      "The <variable-name> argument for name lookups are regular expressions."},
     {LLDB_OPT_SET_1 | LLDB_OPT_SET_2, false, "scope", 's',
-     OptionParser::eNoArgument, nullptr, nullptr, 0, eArgTypeNone,
+     OptionParser::eNoArgument, nullptr, {}, 0, eArgTypeNone,
      "Show variable scope (argument, local, global, static)."},
     {LLDB_OPT_SET_1, false, "summary", 'y', OptionParser::eRequiredArgument,
-     nullptr, nullptr, 0, eArgTypeName,
+     nullptr, {}, 0, eArgTypeName,
      "Specify the summary that the variable output should use."},
     {LLDB_OPT_SET_2, false, "summary-string", 'z',
-     OptionParser::eRequiredArgument, nullptr, nullptr, 0, eArgTypeName,
+     OptionParser::eRequiredArgument, nullptr, {}, 0, eArgTypeName,
      "Specify a summary string to use to format the variable output."},
 };
 
-static Error ValidateNamedSummary(const char *str, void *) {
+static Status ValidateNamedSummary(const char *str, void *) {
   if (!str || !str[0])
-    return Error("must specify a valid named summary");
+    return Status("must specify a valid named summary");
   TypeSummaryImplSP summary_sp;
   if (DataVisualization::NamedSummaryFormats::GetSummaryFormat(
           ConstString(str), summary_sp) == false)
-    return Error("must specify a valid named summary");
-  return Error();
+    return Status("must specify a valid named summary");
+  return Status();
 }
 
-static Error ValidateSummaryString(const char *str, void *) {
+static Status ValidateSummaryString(const char *str, void *) {
   if (!str || !str[0])
-    return Error("must specify a non-empty summary string");
-  return Error();
+    return Status("must specify a non-empty summary string");
+  return Status();
 }
 
 OptionGroupVariable::OptionGroupVariable(bool show_frame_options)
@@ -74,10 +74,11 @@ OptionGroupVariable::OptionGroupVariable(bool show_frame_options)
 
 OptionGroupVariable::~OptionGroupVariable() {}
 
-Error OptionGroupVariable::SetOptionValue(uint32_t option_idx,
-                                          llvm::StringRef option_arg,
-                                          ExecutionContext *execution_context) {
-  Error error;
+Status
+OptionGroupVariable::SetOptionValue(uint32_t option_idx,
+                                    llvm::StringRef option_arg,
+                                    ExecutionContext *execution_context) {
+  Status error;
   if (!include_frame_options)
     option_idx += 3;
   const int short_option = g_variable_options[option_idx].short_option;
@@ -131,12 +132,12 @@ void OptionGroupVariable::OptionParsingStarting(
 
 llvm::ArrayRef<OptionDefinition> OptionGroupVariable::GetDefinitions() {
   auto result = llvm::makeArrayRef(g_variable_options);
-  // Show the "--no-args", "--no-locals" and "--show-globals"
-  // options if we are showing frame specific options
+  // Show the "--no-args", "--no-locals" and "--show-globals" options if we are
+  // showing frame specific options
   if (include_frame_options)
     return result;
 
-  // Skip the "--no-args", "--no-locals" and "--show-globals"
-  // options if we are not showing frame specific options (globals only)
+  // Skip the "--no-args", "--no-locals" and "--show-globals" options if we are
+  // not showing frame specific options (globals only)
   return result.drop_front(NUM_FRAME_OPTS);
 }

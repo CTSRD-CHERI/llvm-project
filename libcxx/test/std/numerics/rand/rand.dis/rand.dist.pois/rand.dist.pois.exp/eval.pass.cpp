@@ -20,6 +20,7 @@
 #include <cassert>
 #include <vector>
 #include <numeric>
+#include <cstddef>
 
 template <class T>
 inline
@@ -33,7 +34,6 @@ int main()
 {
     {
         typedef std::exponential_distribution<> D;
-        typedef D::param_type P;
         typedef std::mt19937 G;
         G g;
         D d(.75);
@@ -49,7 +49,7 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
             double dbl = (u[i] - mean);
             double d2 = sqr(dbl);
@@ -73,7 +73,6 @@ int main()
     }
     {
         typedef std::exponential_distribution<> D;
-        typedef D::param_type P;
         typedef std::mt19937 G;
         G g;
         D d(1);
@@ -89,7 +88,7 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
             double dbl = (u[i] - mean);
             double d2 = sqr(dbl);
@@ -113,7 +112,6 @@ int main()
     }
     {
         typedef std::exponential_distribution<> D;
-        typedef D::param_type P;
         typedef std::mt19937 G;
         G g;
         D d(10);
@@ -129,7 +127,7 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
             double dbl = (u[i] - mean);
             double d2 = sqr(dbl);

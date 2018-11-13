@@ -9,21 +9,26 @@
 
 #include "lldb/Core/Broadcaster.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/Event.h"
 #include "lldb/Core/Listener.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Core/StreamString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Logging.h" // for GetLogIfAnyCategoriesSet, Get...
+#include "lldb/Utility/Stream.h"  // for Stream
+#include "lldb/Utility/StreamString.h"
+
+#include <algorithm>   // for find_if
+#include <memory>      // for make_shared
+#include <type_traits> // for move
+
+#include <assert.h> // for assert
+#include <stddef.h> // for size_t
 
 using namespace lldb;
 using namespace lldb_private;
 
 Broadcaster::Broadcaster(BroadcasterManagerSP manager_sp, const char *name)
-    : m_broadcaster_sp(new BroadcasterImpl(*this)), m_manager_sp(manager_sp),
-      m_broadcaster_name(name) {
+    : m_broadcaster_sp(std::make_shared<BroadcasterImpl>(*this)),
+      m_manager_sp(manager_sp), m_broadcaster_name(name) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_OBJECT));
   if (log)
     log->Printf("%p Broadcaster::Broadcaster(\"%s\")",
@@ -69,9 +74,8 @@ Broadcaster::BroadcasterImpl::GetListeners() {
 void Broadcaster::BroadcasterImpl::Clear() {
   std::lock_guard<std::recursive_mutex> guard(m_listeners_mutex);
 
-  // Make sure the listener forgets about this broadcaster. We do
-  // this in the broadcaster in case the broadcaster object initiates
-  // the removal.
+  // Make sure the listener forgets about this broadcaster. We do this in the
+  // broadcaster in case the broadcaster object initiates the removal.
   for (auto &pair : GetListeners())
     pair.first->BroadcasterWillDestruct(&m_broadcaster);
 
@@ -242,19 +246,19 @@ void Broadcaster::BroadcasterImpl::PrivateBroadcastEvent(EventSP &event_sp,
 
 void Broadcaster::BroadcasterImpl::BroadcastEvent(uint32_t event_type,
                                                   EventData *event_data) {
-  EventSP event_sp(new Event(event_type, event_data));
+  auto event_sp = std::make_shared<Event>(event_type, event_data);
   PrivateBroadcastEvent(event_sp, false);
 }
 
 void Broadcaster::BroadcasterImpl::BroadcastEvent(
     uint32_t event_type, const lldb::EventDataSP &event_data_sp) {
-  EventSP event_sp(new Event(event_type, event_data_sp));
+  auto event_sp = std::make_shared<Event>(event_type, event_data_sp);
   PrivateBroadcastEvent(event_sp, false);
 }
 
 void Broadcaster::BroadcasterImpl::BroadcastEventIfUnique(
     uint32_t event_type, EventData *event_data) {
-  EventSP event_sp(new Event(event_type, event_data));
+  auto event_sp = std::make_shared<Event>(event_type, event_data);
   PrivateBroadcastEvent(event_sp, true);
 }
 
@@ -329,7 +333,7 @@ operator=(const BroadcastEventSpec &rhs) = default;
 BroadcasterManager::BroadcasterManager() : m_manager_mutex() {}
 
 lldb::BroadcasterManagerSP BroadcasterManager::MakeBroadcasterManager() {
-  return BroadcasterManagerSP(new BroadcasterManager());
+  return lldb::BroadcasterManagerSP(new BroadcasterManager());
 }
 
 uint32_t BroadcasterManager::RegisterListenerForEvents(

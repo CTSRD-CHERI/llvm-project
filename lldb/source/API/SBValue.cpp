@@ -17,12 +17,8 @@
 #include "lldb/API/SBTypeSynthetic.h"
 
 #include "lldb/Breakpoint/Watchpoint.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
-#include "lldb/Core/Scalar.h"
 #include "lldb/Core/Section.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObject.h"
@@ -39,6 +35,10 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Scalar.h"
+#include "lldb/Utility/Stream.h"
 
 #include "lldb/API/SBDebugger.h"
 #include "lldb/API/SBExpressionOptions.h"
@@ -89,16 +89,13 @@ public:
       // FIXME: This check is necessary but not sufficient.  We for sure don't
       // want to touch SBValues whose owning
       // targets have gone away.  This check is a little weak in that it
-      // enforces that restriction when you call
-      // IsValid, but since IsValid doesn't lock the target, you have no
-      // guarantee that the SBValue won't go
-      // invalid after you call this...
-      // Also, an SBValue could depend on data from one of the modules in the
-      // target, and those could go away
-      // independently of the target, for instance if a module is unloaded.  But
-      // right now, neither SBValues
-      // nor ValueObjects know which modules they depend on.  So I have no good
-      // way to make that check without
+      // enforces that restriction when you call IsValid, but since IsValid
+      // doesn't lock the target, you have no guarantee that the SBValue won't
+      // go invalid after you call this... Also, an SBValue could depend on
+      // data from one of the modules in the target, and those could go away
+      // independently of the target, for instance if a module is unloaded.
+      // But right now, neither SBValues nor ValueObjects know which modules
+      // they depend on.  So I have no good way to make that check without
       // tracking that in all the ValueObject subclasses.
       TargetSP target_sp = m_valobj_sp->GetTargetSP();
       if (target_sp && target_sp->IsValid())
@@ -112,7 +109,7 @@ public:
 
   lldb::ValueObjectSP GetSP(Process::StopLocker &stop_locker,
                             std::unique_lock<std::recursive_mutex> &lock,
-                            Error &error) {
+                            Status &error) {
     Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
     if (!m_valobj_sp) {
       error.SetErrorString("invalid value object");
@@ -129,9 +126,9 @@ public:
 
     ProcessSP process_sp(value_sp->GetProcessSP());
     if (process_sp && !stop_locker.TryLock(&process_sp->GetRunLock())) {
-      // We don't allow people to play around with ValueObject if the process is
-      // running.
-      // If you want to look at values, pause the process, then look.
+      // We don't allow people to play around with ValueObject if the process
+      // is running. If you want to look at values, pause the process, then
+      // look.
       if (log)
         log->Printf("SBValue(%p)::GetSP() => error: process is running",
                     static_cast<void *>(value_sp.get()));
@@ -171,10 +168,8 @@ public:
 
   // All the derived values that we would make from the m_valobj_sp will share
   // the ExecutionContext with m_valobj_sp, so we don't need to do the
-  // calculations
-  // in GetSP to return the Target, Process, Thread or Frame.  It is convenient
-  // to
-  // provide simple accessors for these, which I do here.
+  // calculations in GetSP to return the Target, Process, Thread or Frame.  It
+  // is convenient to provide simple accessors for these, which I do here.
   TargetSP GetTargetSP() {
     if (m_valobj_sp)
       return m_valobj_sp->GetTargetSP();
@@ -218,12 +213,12 @@ public:
     return in_value.GetSP(m_stop_locker, m_lock, m_lock_error);
   }
 
-  Error &GetError() { return m_lock_error; }
+  Status &GetError() { return m_lock_error; }
 
 private:
   Process::StopLocker m_stop_locker;
   std::unique_lock<std::recursive_mutex> m_lock;
-  Error m_lock_error;
+  Status m_lock_error;
 };
 
 SBValue::SBValue() : m_opaque_sp() {}
@@ -242,9 +237,9 @@ SBValue &SBValue::operator=(const SBValue &rhs) {
 SBValue::~SBValue() {}
 
 bool SBValue::IsValid() {
-  // If this function ever changes to anything that does more than just
-  // check if the opaque shared pointer is non NULL, then we need to update
-  // all "if (m_opaque_sp)" code in this file.
+  // If this function ever changes to anything that does more than just check
+  // if the opaque shared pointer is non NULL, then we need to update all "if
+  // (m_opaque_sp)" code in this file.
   return m_opaque_sp.get() != NULL && m_opaque_sp->IsValid() &&
          m_opaque_sp->GetRootSP().get() != NULL;
 }
@@ -1112,7 +1107,7 @@ SBValue SBValue::Dereference() {
   ValueLocker locker;
   lldb::ValueObjectSP value_sp(GetSP(locker));
   if (value_sp) {
-    Error error;
+    Status error;
     sb_value = value_sp->Dereference(error);
   }
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
@@ -1336,7 +1331,7 @@ lldb::SBValue SBValue::AddressOf() {
   ValueLocker locker;
   lldb::ValueObjectSP value_sp(GetSP(locker));
   if (value_sp) {
-    Error error;
+    Status error;
     sb_value.SetSP(value_sp->AddressOf(error), GetPreferDynamicValue(),
                    GetPreferSyntheticValue());
   }
@@ -1397,11 +1392,9 @@ lldb::SBAddress SBValue::GetAddress() {
         if (module_sp)
           module_sp->ResolveFileAddress(value, addr);
       } else if (addr_type == eAddressTypeLoad) {
-        // no need to check the return value on this.. if it can actually do the
-        // resolve
-        // addr will be in the form (section,offset), otherwise it will simply
-        // be returned
-        // as (NULL, value)
+        // no need to check the return value on this.. if it can actually do
+        // the resolve addr will be in the form (section,offset), otherwise it
+        // will simply be returned as (NULL, value)
         addr.SetLoadAddress(value, target_sp.get());
       }
     }
@@ -1445,7 +1438,7 @@ lldb::SBData SBValue::GetData() {
   lldb::ValueObjectSP value_sp(GetSP(locker));
   if (value_sp) {
     DataExtractorSP data_sp(new DataExtractor());
-    Error error;
+    Status error;
     value_sp->GetData(*data_sp, error);
     if (error.Success())
       *sb_data = data_sp;
@@ -1475,7 +1468,7 @@ bool SBValue::SetData(lldb::SBData &data, SBError &error) {
       error.SetErrorString("No data to set");
       ret = false;
     } else {
-      Error set_error;
+      Status set_error;
 
       value_sp->SetData(*data_extractor, set_error);
 
@@ -1541,7 +1534,7 @@ lldb::SBWatchpoint SBValue::Watch(bool resolve_location, bool read, bool write,
     if (write)
       watch_type |= LLDB_WATCH_TYPE_WRITE;
 
-    Error rc;
+    Status rc;
     CompilerType type(value_sp->GetCompilerType());
     WatchpointSP watchpoint_sp =
         target_sp->CreateWatchpoint(addr, byte_size, &type, watch_type, rc);

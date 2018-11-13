@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCValue.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -37,9 +38,11 @@ void MCValue::print(raw_ostream &OS) const {
     OS << " + " << getConstant();
 }
 
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
 LLVM_DUMP_METHOD void MCValue::dump() const {
   print(dbgs());
 }
+#endif
 
 MCSymbolRefExpr::VariantKind MCValue::getAccessVariant() const {
   const MCSymbolRefExpr *B = getSymB();

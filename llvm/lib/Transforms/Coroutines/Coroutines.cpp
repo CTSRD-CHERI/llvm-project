@@ -1,4 +1,4 @@
-//===-- Coroutines.cpp ----------------------------------------------------===//
+//===- Coroutines.cpp -----------------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,18 +6,39 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+//
 // This file implements the common infrastructure for Coroutine Passes.
+//
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Transforms/Coroutines.h"
+#include "llvm-c/Transforms/Coroutines.h"
+#include "CoroInstr.h"
 #include "CoroInternal.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Analysis/CallGraph.h"
 #include "llvm/Analysis/CallGraphSCCPass.h"
+#include "llvm/Transforms/Utils/Local.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/CallSite.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/InstIterator.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LegacyPassManager.h"
-#include "llvm/IR/Verifier.h"
-#include "llvm/InitializePasses.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
-#include "llvm/Transforms/Utils/Local.h"
+#include <cassert>
+#include <cstddef>
+#include <utility>
 
 using namespace llvm;
 
@@ -105,9 +126,10 @@ static bool isCoroutineIntrinsicName(StringRef Name) {
   static const char *const CoroIntrinsics[] = {
       "llvm.coro.alloc",   "llvm.coro.begin",   "llvm.coro.destroy",
       "llvm.coro.done",    "llvm.coro.end",     "llvm.coro.frame",
-      "llvm.coro.free",    "llvm.coro.id",      "llvm.coro.param",
-      "llvm.coro.promise", "llvm.coro.resume",  "llvm.coro.save",
-      "llvm.coro.size",    "llvm.coro.subfn.addr", "llvm.coro.suspend",
+      "llvm.coro.free",    "llvm.coro.id",      "llvm.coro.noop",
+      "llvm.coro.param",   "llvm.coro.promise", "llvm.coro.resume",
+      "llvm.coro.save",    "llvm.coro.size",    "llvm.coro.subfn.addr",
+      "llvm.coro.suspend",
   };
   return Intrinsic::lookupLLVMIntrinsicByName(CoroIntrinsics, Name) != -1;
 }
@@ -117,7 +139,6 @@ static bool isCoroutineIntrinsicName(StringRef Name) {
 // that names are intrinsic names.
 bool coro::declaresIntrinsics(Module &M,
                               std::initializer_list<StringRef> List) {
-
   for (StringRef Name : List) {
     assert(isCoroutineIntrinsicName(Name) && "not a coroutine intrinsic");
     if (M.getNamedValue(Name))
@@ -218,6 +239,8 @@ void coro::Shape::buildFrom(Function &F) {
   size_t FinalSuspendIndex = 0;
   clear(*this);
   SmallVector<CoroFrameInst *, 8> CoroFrames;
+  SmallVector<CoroSaveInst *, 2> UnusedCoroSaves;
+
   for (Instruction &I : instructions(F)) {
     if (auto II = dyn_cast<IntrinsicInst>(&I)) {
       switch (II->getIntrinsicID()) {
@@ -228,6 +251,12 @@ void coro::Shape::buildFrom(Function &F) {
         break;
       case Intrinsic::coro_frame:
         CoroFrames.push_back(cast<CoroFrameInst>(II));
+        break;
+      case Intrinsic::coro_save:
+        // After optimizations, coro_suspends using this coro_save might have
+        // been removed, remember orphaned coro_saves to remove them later.
+        if (II->use_empty())
+          UnusedCoroSaves.push_back(cast<CoroSaveInst>(II));
         break;
       case Intrinsic::coro_suspend:
         CoroSuspends.push_back(cast<CoroSuspendInst>(II));
@@ -245,9 +274,9 @@ void coro::Shape::buildFrom(Function &F) {
           if (CoroBegin)
             report_fatal_error(
                 "coroutine should have exactly one defining @llvm.coro.begin");
-          CB->addAttribute(AttributeSet::ReturnIndex, Attribute::NonNull);
-          CB->addAttribute(AttributeSet::ReturnIndex, Attribute::NoAlias);
-          CB->removeAttribute(AttributeSet::FunctionIndex,
+          CB->addAttribute(AttributeList::ReturnIndex, Attribute::NonNull);
+          CB->addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
+          CB->removeAttribute(AttributeList::FunctionIndex,
                               Attribute::NoDuplicate);
           CoroBegin = CB;
         }
@@ -311,4 +340,24 @@ void coro::Shape::buildFrom(Function &F) {
   if (HasFinalSuspend &&
       FinalSuspendIndex != CoroSuspends.size() - 1)
     std::swap(CoroSuspends[FinalSuspendIndex], CoroSuspends.back());
+
+  // Remove orphaned coro.saves.
+  for (CoroSaveInst *CoroSave : UnusedCoroSaves)
+    CoroSave->eraseFromParent();
+}
+
+void LLVMAddCoroEarlyPass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createCoroEarlyPass());
+}
+
+void LLVMAddCoroSplitPass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createCoroSplitPass());
+}
+
+void LLVMAddCoroElidePass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createCoroElidePass());
+}
+
+void LLVMAddCoroCleanupPass(LLVMPassManagerRef PM) {
+  unwrap(PM)->add(createCoroCleanupPass());
 }

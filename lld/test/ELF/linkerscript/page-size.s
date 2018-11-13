@@ -8,8 +8,8 @@
 # CHECK:        ProgramHeader {
 # CHECK:          Type: PT_LOAD
 # CHECK-NEXT:     Offset: 0x0
-# CHECK-NEXT:     VirtualAddress: 0x10000
-# CHECK-NEXT:     PhysicalAddress: 0x10000
+# CHECK-NEXT:     VirtualAddress: 0x200000
+# CHECK-NEXT:     PhysicalAddress: 0x200000
 # CHECK-NEXT:     FileSize: 344
 # CHECK-NEXT:     MemSize: 344
 # CHECK-NEXT:     Flags [
@@ -20,8 +20,8 @@
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_LOAD
 # CHECK-NEXT:     Offset: 0x4000
-# CHECK-NEXT:     VirtualAddress: 0x14000
-# CHECK-NEXT:     PhysicalAddress: 0x14000
+# CHECK-NEXT:     VirtualAddress: 0x204000
+# CHECK-NEXT:     PhysicalAddress: 0x204000
 # CHECK-NEXT:     FileSize: 1
 # CHECK-NEXT:     MemSize: 1
 # CHECK-NEXT:     Flags [
@@ -33,8 +33,8 @@
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_LOAD
 # CHECK-NEXT:     Offset: 0x8000
-# CHECK-NEXT:     VirtualAddress: 0x18000
-# CHECK-NEXT:     PhysicalAddress: 0x18000
+# CHECK-NEXT:     VirtualAddress: 0x208000
+# CHECK-NEXT:     PhysicalAddress: 0x208000
 # CHECK-NEXT:     FileSize: 8
 # CHECK-NEXT:     MemSize: 8
 # CHECK-NEXT:     Flags [
@@ -44,9 +44,7 @@
 # CHECK-NEXT:     Alignment: 16384
 # CHECK-NEXT:   }
 
-# RUN: echo "SECTIONS { \
-# RUN:         symbol = CONSTANT(MAXPAGESIZE); \
-# RUN:       }" > %t.script
+# RUN: echo "SECTIONS { symbol = CONSTANT(MAXPAGESIZE); }" > %t.script
 # RUN: ld.lld -z max-page-size=0x4000 -o %t1 --script %t.script %t
 # RUN: llvm-objdump -t %t1 | FileCheck -check-prefix CHECK-SCRIPT %s
 

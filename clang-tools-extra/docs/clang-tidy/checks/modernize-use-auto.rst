@@ -160,7 +160,11 @@ cast expression. In this cases, the declaration type can be replaced with
   auto *my_pointer = static_cast<TypeName>(my_param);
 
 The check handles ``static_cast``, ``dynamic_cast``, ``const_cast``,
-``reinterpret_cast``, functional casts and C-style casts.
+``reinterpret_cast``, functional casts, C-style casts and function templates
+that behave as casts, such as ``llvm::dyn_cast``, ``boost::lexical_cast`` and
+``gsl::narrow_cast``.  Calls to function templates are considered to behave as
+casts if the first template argument is explicit and is a type, and the function
+returns that type, or a pointer or reference to it.
 
 Known Limitations
 -----------------
@@ -170,11 +174,45 @@ Known Limitations
 
 * User-defined iterators are not handled at this time.
 
-* Function templates that behave as casts, such as ``llvm::dyn_cast``,
-  ``boost::lexical_cast`` or ``gsl::narrow_cast`` are not handled.
-
 Options
 -------
+
+.. option:: MinTypeNameLength
+
+   If the option is set to non-zero (default `5`), the check will ignore type
+   names having a length less than the option value. The option affects
+   expressions only, not iterators.
+   Spaces between multi-lexeme type names (``long int``) are considered as one.
+   If ``RemoveStars`` option (see below) is set to non-zero, then ``*s`` in
+   the type are also counted as a part of the type name.
+
+.. code-block:: c++
+
+  // MinTypeNameLength = 0, RemoveStars=0
+
+  int a = static_cast<int>(foo());            // ---> auto a = ...
+  // length(bool *) = 4
+  bool *b = new bool;                         // ---> auto *b = ...
+  unsigned c = static_cast<unsigned>(foo());  // ---> auto c = ...
+
+  // MinTypeNameLength = 5, RemoveStars=0
+
+  int a = static_cast<int>(foo());                 // ---> int  a = ...
+  bool b = static_cast<bool>(foo());               // ---> bool b = ...
+  bool *pb = static_cast<bool*>(foo());            // ---> bool *pb = ...
+  unsigned c = static_cast<unsigned>(foo());       // ---> auto c = ...
+  // length(long <on-or-more-spaces> int) = 8
+  long int d = static_cast<long int>(foo());       // ---> auto d = ...
+
+  // MinTypeNameLength = 5, RemoveStars=1
+
+  int a = static_cast<int>(foo());                 // ---> int  a = ...
+  // length(int * * ) = 5
+  int **pa = static_cast<int**>(foo());            // ---> auto pa = ...
+  bool b = static_cast<bool>(foo());               // ---> bool b = ...
+  bool *pb = static_cast<bool*>(foo());            // ---> auto pb = ...
+  unsigned c = static_cast<unsigned>(foo());       // ---> auto c = ...
+  long int d = static_cast<long int>(foo());       // ---> auto d = ...
 
 .. option:: RemoveStars
 

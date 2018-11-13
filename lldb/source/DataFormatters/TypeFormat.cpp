@@ -19,13 +19,15 @@
 #include "lldb/lldb-enumerations.h"
 #include "lldb/lldb-public.h"
 
-#include "lldb/Core/StreamString.h"
+#include "lldb/Core/DumpDataExtractor.h"
 #include "lldb/DataFormatters/FormatManager.h"
 #include "lldb/Symbol/CompilerType.h"
 #include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Symbol/SymbolFile.h"
 #include "lldb/Symbol/TypeList.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -54,15 +56,15 @@ bool TypeFormatImpl_Format::FormatObject(ValueObject *valobj,
     if (context_type == Value::eContextTypeRegisterInfo) {
       const RegisterInfo *reg_info = value.GetRegisterInfo();
       if (reg_info) {
-        Error error;
+        Status error;
         valobj->GetData(data, error);
         if (error.Fail())
           return false;
 
         StreamString reg_sstr;
-        data.Dump(&reg_sstr, 0, GetFormat(), reg_info->byte_size, 1, UINT32_MAX,
-                  LLDB_INVALID_ADDRESS, 0, 0,
-                  exe_ctx.GetBestExecutionContextScope());
+        DumpDataExtractor(data, &reg_sstr, 0, GetFormat(), reg_info->byte_size,
+                          1, UINT32_MAX, LLDB_INVALID_ADDRESS, 0, 0,
+                          exe_ctx.GetBestExecutionContextScope());
         dest = reg_sstr.GetString();
       }
     } else {
@@ -80,7 +82,7 @@ bool TypeFormatImpl_Format::FormatObject(ValueObject *valobj,
             TargetSP target_sp(valobj->GetTargetSP());
             if (target_sp) {
               size_t max_len = target_sp->GetMaximumSizeOfStringSummary();
-              Error error;
+              Status error;
               DataBufferSP buffer_sp(new DataBufferHeap(max_len + 1, 0));
               Address address(valobj->GetPointerValue());
               if (target_sp->ReadCStringFromMemory(
@@ -90,7 +92,7 @@ bool TypeFormatImpl_Format::FormatObject(ValueObject *valobj,
             }
           }
         } else {
-          Error error;
+          Status error;
           valobj->GetData(data, error);
           if (error.Fail())
             return false;
@@ -109,12 +111,12 @@ bool TypeFormatImpl_Format::FormatObject(ValueObject *valobj,
             valobj->GetBitfieldBitSize(),   // Bitfield bit size
             valobj->GetBitfieldBitOffset(), // Bitfield bit offset
             exe_scope);
-        // Given that we do not want to set the ValueObject's m_error
-        // for a formatting error (or else we wouldn't be able to reformat
-        // until a next update), an empty string is treated as a "false"
-        // return from here, but that's about as severe as we get
-        // CompilerType::DumpTypeValue() should always return
-        // something, even if that something is an error message
+        // Given that we do not want to set the ValueObject's m_error for a
+        // formatting error (or else we wouldn't be able to reformat until a
+        // next update), an empty string is treated as a "false" return from
+        // here, but that's about as severe as we get
+        // CompilerType::DumpTypeValue() should always return something, even
+        // if that something is an error message
         dest = sstr.GetString();
       }
     }
@@ -183,7 +185,7 @@ bool TypeFormatImpl_EnumType::FormatObject(ValueObject *valobj,
   if (valobj_enum_type.IsValid() == false)
     return false;
   DataExtractor data;
-  Error error;
+  Status error;
   valobj->GetData(data, error);
   if (error.Fail())
     return false;

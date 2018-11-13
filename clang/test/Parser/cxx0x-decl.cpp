@@ -79,7 +79,7 @@ enum E
 namespace PR5066 {
   using T = int (*f)(); // expected-error {{type-id cannot have a name}}
   template<typename T> using U = int (*f)(); // expected-error {{type-id cannot have a name}}
-  auto f() -> int (*f)(); // expected-error {{type-id cannot have a name}}
+  auto f() -> int (*f)(); // expected-error {{only variables can be initialized}} expected-error {{expected ';'}}
   auto g = []() -> int (*f)() {}; // expected-error {{type-id cannot have a name}}
 }
 
@@ -123,6 +123,28 @@ namespace ColonColonDecltype {
   ::decltype(S())::T invalid; // expected-error {{expected unqualified-id}}
 }
 
+namespace AliasDeclEndLocation {
+  template<typename T> struct A {};
+  // Ensure that we correctly determine the end of this declaration to be the
+  // end of the annotation token, not the beginning.
+  using B = AliasDeclEndLocation::A<int
+    > // expected-error {{expected ';' after alias declaration}}
+    +;
+  using C = AliasDeclEndLocation::A<int
+    >\
+> // expected-error {{expected ';' after alias declaration}}
+    ;
+  using D = AliasDeclEndLocation::A<int
+    > // expected-error {{expected ';' after alias declaration}}
+  // FIXME: After splitting this >> into two > tokens, we incorrectly determine
+  // the end of the template-id to be after the *second* '>'.
+  using E = AliasDeclEndLocation::A<int>>;
+#define GGG >>>
+  using F = AliasDeclEndLocation::A<int GGG;
+  // expected-error@-1 {{expected ';' after alias declaration}}
+  B something_else;
+}
+
 struct Base { virtual void f() = 0; virtual void g() = 0; virtual void h() = 0; };
 struct MemberComponentOrder : Base {
   void f() override __asm__("foobar") __attribute__(( )) {}
@@ -136,5 +158,5 @@ template<int ...N> void NoMissingSemicolonHereEither(struct S
                                                      ... [N]);
 
 // This must be at the end of the file; we used to look ahead past the EOF token here.
-// expected-error@+1 {{expected unqualified-id}}
+// expected-error@+1 {{expected unqualified-id}} expected-error@+1{{expected ';'}}
 using

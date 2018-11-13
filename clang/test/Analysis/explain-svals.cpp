@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -triple i386-apple-darwin10 -analyze -analyzer-checker=core.builtin,debug.ExprInspection,unix.cstring -verify %s
+// RUN: %clang_analyze_cc1 -triple i386-apple-darwin10 -analyzer-checker=core.builtin,debug.ExprInspection,unix.cstring -verify %s
 
 typedef unsigned long size_t;
 
@@ -47,7 +47,7 @@ void test_2(char *ptr, int ext) {
   clang_analyzer_explain(glob_ptr); // expected-warning-re{{{{^value derived from \(symbol of type 'int' conjured at statement 'conjure\(\)'\) for global variable 'glob_ptr'$}}}}
   clang_analyzer_explain(clang_analyzer_getExtent(ptr)); // expected-warning-re{{{{^extent of pointee of argument 'ptr'$}}}}
   int *x = new int[ext];
-  clang_analyzer_explain(x); // expected-warning-re{{{{^pointer to element of type 'int' with index 0 of pointee of symbol of type 'int \*' conjured at statement 'new int \[ext\]'$}}}}
+  clang_analyzer_explain(x); // expected-warning-re{{{{^pointer to element of type 'int' with index 0 of heap segment that starts at symbol of type 'int \*' conjured at statement 'new int \[ext\]'$}}}}
   // Sic! What gets computed is the extent of the element-region.
   clang_analyzer_explain(clang_analyzer_getExtent(x)); // expected-warning-re{{{{^signed 32-bit integer '4'$}}}}
   delete[] x;
@@ -69,14 +69,14 @@ void test_4(int x, int y) {
   static int stat;
   clang_analyzer_explain(x + 1); // expected-warning-re{{{{^\(argument 'x'\) \+ 1$}}}}
   clang_analyzer_explain(1 + y); // expected-warning-re{{{{^\(argument 'y'\) \+ 1$}}}}
-  clang_analyzer_explain(x + y); // expected-warning-re{{{{^unknown value$}}}}
+  clang_analyzer_explain(x + y); // expected-warning-re{{{{^\(argument 'x'\) \+ \(argument 'y'\)$}}}}
   clang_analyzer_explain(z); // expected-warning-re{{{{^undefined value$}}}}
   clang_analyzer_explain(&z); // expected-warning-re{{{{^pointer to local variable 'z'$}}}}
   clang_analyzer_explain(stat); // expected-warning-re{{{{^signed 32-bit integer '0'$}}}}
   clang_analyzer_explain(&stat); // expected-warning-re{{{{^pointer to static local variable 'stat'$}}}}
   clang_analyzer_explain(stat_glob); // expected-warning-re{{{{^initial value of global variable 'stat_glob'$}}}}
   clang_analyzer_explain(&stat_glob); // expected-warning-re{{{{^pointer to global variable 'stat_glob'$}}}}
-  clang_analyzer_explain((int[]){1, 2, 3}); // expected-warning-re{{{{^pointer to element of type 'int' with index 0 of compound literal \(int \[3\]\)\{1, 2, 3\}$}}}}
+  clang_analyzer_explain((int[]){1, 2, 3}); // expected-warning-re{{{{^pointer to element of type 'int' with index 0 of temporary object constructed at statement '\(int \[3\]\)\{1, 2, 3\}'$}}}}
 }
 
 namespace {
@@ -94,5 +94,5 @@ public:
 
 void test_6() {
   clang_analyzer_explain(conjure_S()); // expected-warning-re{{{{^lazily frozen compound value of temporary object constructed at statement 'conjure_S\(\)'$}}}}
-  clang_analyzer_explain(conjure_S().z); // expected-warning-re{{{{^value derived from \(symbol of type 'struct S' conjured at statement 'conjure_S\(\)'\) for field 'z' of temporary object constructed at statement 'conjure_S\(\)'$}}}}
+  clang_analyzer_explain(conjure_S().z); // expected-warning-re{{{{^value derived from \(symbol of type 'int' conjured at statement 'conjure_S\(\)'\) for field 'z' of temporary object constructed at statement 'conjure_S\(\)'$}}}}
 }

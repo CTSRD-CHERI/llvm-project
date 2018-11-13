@@ -33,7 +33,7 @@ define i64* @foo4(i64* %a, i64 %b)  {
 }
 
 ; s6Ext
-; CHECK: if (p0.new) memw(r0+#0)=#-1
+; CHECK: if (p0.new) memw(r0+#0) = #-1
 define void @foo5(i32* %a, i1 %b) {
 br i1 %b, label %x, label %y
 x:
@@ -44,7 +44,7 @@ y:
 }
 
 ; s10Ext
-; CHECK: p0 = cmp.eq(r0, #-1)
+; CHECK: p0 = cmp.eq(r0,#-1)
 define i1 @foo7(i32 %a) {
   %b = icmp eq i32 %a, -1
   ret i1 %b
@@ -83,9 +83,9 @@ define void @foo11(i64* %a, i64 %b) {
 }
 
 ; s12Ext
-; CHECK: if (p0.new) r0 = #-1
+; CHECK: r1 = mux(p0,#-1,r0)
 define i32 @foo12(i32 %a, i1 %b) {
-br i1 %b, label %x, label %y
+  br i1 %b, label %x, label %y
 x:
   ret i32 -1
 y:

@@ -12,13 +12,13 @@
 // Other libraries and framework includes
 // Project includes
 #include "lldb/Target/ThreadPlanStepInstruction.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/StopInfo.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Stream.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -76,8 +76,8 @@ void ThreadPlanStepInstruction::GetDescription(Stream *s,
 }
 
 bool ThreadPlanStepInstruction::ValidatePlan(Stream *error) {
-  // Since we read the instruction we're stepping over from the thread,
-  // this plan will always work.
+  // Since we read the instruction we're stepping over from the thread, this
+  // plan will always work.
   return true;
 }
 
@@ -94,11 +94,20 @@ bool ThreadPlanStepInstruction::IsPlanStale() {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_STEP));
   StackID cur_frame_id = m_thread.GetStackFrameAtIndex(0)->GetStackID();
   if (cur_frame_id == m_stack_id) {
+    // Set plan Complete when we reach next instruction
+    uint64_t pc = m_thread.GetRegisterContext()->GetPC(0);
+    uint32_t max_opcode_size = m_thread.CalculateTarget()
+        ->GetArchitecture().GetMaximumOpcodeByteSize();
+    bool next_instruction_reached = (pc > m_instruction_addr) &&
+        (pc <= m_instruction_addr + max_opcode_size);
+    if (next_instruction_reached) {
+      SetPlanComplete();
+    }
     return (m_thread.GetRegisterContext()->GetPC(0) != m_instruction_addr);
   } else if (cur_frame_id < m_stack_id) {
     // If the current frame is younger than the start frame and we are stepping
-    // over, then we need to continue,
-    // but if we are doing just one step, we're done.
+    // over, then we need to continue, but if we are doing just one step, we're
+    // done.
     return !m_step_over;
   } else {
     if (log) {
@@ -131,8 +140,7 @@ bool ThreadPlanStepInstruction::ShouldStop(Event *event_ptr) {
           return true;
         } else {
           // We are still stepping, reset the start pc, and in case we've
-          // stepped out,
-          // reset the current stack id.
+          // stepped out, reset the current stack id.
           SetUpState();
           return false;
         }
@@ -145,9 +153,8 @@ bool ThreadPlanStepInstruction::ShouldStop(Event *event_ptr) {
         if (return_frame->GetStackID() != m_parent_frame_id ||
             m_start_has_symbol) {
           // next-instruction shouldn't step out of inlined functions.  But we
-          // may have stepped into a
-          // real function that starts with an inlined function, and we do want
-          // to step out of that...
+          // may have stepped into a real function that starts with an inlined
+          // function, and we do want to step out of that...
 
           if (cur_frame_sp->IsInlined()) {
             StackFrameSP parent_frame_sp =
@@ -181,9 +188,8 @@ bool ThreadPlanStepInstruction::ShouldStop(Event *event_ptr) {
             log->Printf("%s.", s.GetData());
           }
 
-          // StepInstruction should probably have the tri-state RunMode, but for
-          // now it is safer to
-          // run others.
+          // StepInstruction should probably have the tri-state RunMode, but
+          // for now it is safer to run others.
           const bool stop_others = false;
           m_thread.QueueThreadPlanForStepOutNoShouldStop(
               false, nullptr, true, stop_others, eVoteNo, eVoteNoOpinion, 0);
@@ -213,8 +219,7 @@ bool ThreadPlanStepInstruction::ShouldStop(Event *event_ptr) {
         return true;
       } else {
         // We are still stepping, reset the start pc, and in case we've stepped
-        // in or out,
-        // reset the current stack id.
+        // in or out, reset the current stack id.
         SetUpState();
         return false;
       }

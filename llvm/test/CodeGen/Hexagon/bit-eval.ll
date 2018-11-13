@@ -1,6 +1,5 @@
-; RUN: llc < %s | FileCheck %s
+; RUN: llc -march=hexagon < %s | FileCheck %s
 
-target datalayout = "e-m:e-p:32:32-i1:32-i64:64-a:0-v32:32-n16:32"
 target triple = "hexagon"
 
 ; CHECK-LABEL: test1:
@@ -20,7 +19,7 @@ entry:
 }
 
 ; CHECK-LABEL: test3:
-; CHECK: r1:0 = combine(#0, #1)
+; CHECK: r1:0 = combine(#0,#1)
 define i64 @test3() #0 {
 entry:
   %0 = tail call i64 @llvm.hexagon.S4.extractp(i64 -1, i32 63, i32 63)

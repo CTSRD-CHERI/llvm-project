@@ -6,7 +6,7 @@
 // RUN: %env_asan_opts=intercept_strstr=false:replace_str=false %run %t 2>&1
 
 // There's no interceptor for strcasestr on Windows
-// XFAIL: win32
+// XFAIL: windows-msvc
 
 #define _GNU_SOURCE
 #include <assert.h>
@@ -19,7 +19,7 @@ int main(int argc, char **argv) {
   char s1[4] = "abC";
   __asan_poison_memory_region ((char *)&s1[2], 2);
   r = strcasestr(s1, s2);
-  // CHECK:'s1' <== Memory access at offset {{[0-9]+}} partially overflows this variable
+  // CHECK:'s1'{{.*}} <== Memory access at offset {{[0-9]+}} partially overflows this variable
   assert(r == s1 + 2);
   return 0;
 }

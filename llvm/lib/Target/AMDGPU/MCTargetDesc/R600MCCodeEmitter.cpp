@@ -9,56 +9,69 @@
 //
 /// \file
 ///
-/// \brief The R600 code emitter produces machine code that can be executed
+/// The R600 code emitter produces machine code that can be executed
 /// directly on the GPU device.
 //
 //===----------------------------------------------------------------------===//
 
-#include "R600Defines.h"
 #include "MCTargetDesc/AMDGPUFixupKinds.h"
-#include "MCTargetDesc/AMDGPUMCCodeEmitter.h"
 #include "MCTargetDesc/AMDGPUMCTargetDesc.h"
+#include "R600Defines.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/Support/Endian.h"
 #include "llvm/Support/EndianStream.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cassert>
+#include <cstdint>
 
 using namespace llvm;
 
 namespace {
 
-class R600MCCodeEmitter : public AMDGPUMCCodeEmitter {
-  R600MCCodeEmitter(const R600MCCodeEmitter &) = delete;
-  void operator=(const R600MCCodeEmitter &) = delete;
-  const MCInstrInfo &MCII;
+class R600MCCodeEmitter : public MCCodeEmitter {
   const MCRegisterInfo &MRI;
+  const MCInstrInfo &MCII;
 
 public:
   R600MCCodeEmitter(const MCInstrInfo &mcii, const MCRegisterInfo &mri)
-    : MCII(mcii), MRI(mri) { }
+    : MRI(mri), MCII(mcii) {}
+  R600MCCodeEmitter(const R600MCCodeEmitter &) = delete;
+  R600MCCodeEmitter &operator=(const R600MCCodeEmitter &) = delete;
 
-  /// \brief Encode the instruction and write it to the OS.
+  /// Encode the instruction and write it to the OS.
   void encodeInstruction(const MCInst &MI, raw_ostream &OS,
                          SmallVectorImpl<MCFixup> &Fixups,
-                         const MCSubtargetInfo &STI) const override;
+                         const MCSubtargetInfo &STI) const;
 
   /// \returns the encoding for an MCOperand.
   uint64_t getMachineOpValue(const MCInst &MI, const MCOperand &MO,
                              SmallVectorImpl<MCFixup> &Fixups,
-                             const MCSubtargetInfo &STI) const override;
+                             const MCSubtargetInfo &STI) const;
 
 private:
+
   void Emit(uint32_t value, raw_ostream &OS) const;
   void Emit(uint64_t value, raw_ostream &OS) const;
 
   unsigned getHWReg(unsigned regNo) const;
+
+  uint64_t getBinaryCodeForInstr(const MCInst &MI,
+                                 SmallVectorImpl<MCFixup> &Fixups,
+                                 const MCSubtargetInfo &STI) const;
+  uint64_t computeAvailableFeatures(const FeatureBitset &FB) const;
+  void verifyInstructionPredicates(const MCInst &MI,
+                                   uint64_t AvailableFeatures) const;
+
 };
 
-} // End anonymous namespace
+} // end anonymous namespace
 
 enum RegElement {
   ELEMENT_X = 0,
@@ -86,17 +99,20 @@ MCCodeEmitter *llvm::createR600MCCodeEmitter(const MCInstrInfo &MCII,
 void R600MCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
                                        SmallVectorImpl<MCFixup> &Fixups,
                                        const MCSubtargetInfo &STI) const {
+  verifyInstructionPredicates(MI,
+                              computeAvailableFeatures(STI.getFeatureBits()));
+
   const MCInstrDesc &Desc = MCII.get(MI.getOpcode());
-  if (MI.getOpcode() == AMDGPU::RETURN ||
-    MI.getOpcode() == AMDGPU::FETCH_CLAUSE ||
-    MI.getOpcode() == AMDGPU::ALU_CLAUSE ||
-    MI.getOpcode() == AMDGPU::BUNDLE ||
-    MI.getOpcode() == AMDGPU::KILL) {
+  if (MI.getOpcode() == R600::RETURN ||
+    MI.getOpcode() == R600::FETCH_CLAUSE ||
+    MI.getOpcode() == R600::ALU_CLAUSE ||
+    MI.getOpcode() == R600::BUNDLE ||
+    MI.getOpcode() == R600::KILL) {
     return;
   } else if (IS_VTX(Desc)) {
     uint64_t InstWord01 = getBinaryCodeForInstr(MI, Fixups, STI);
     uint32_t InstWord2 = MI.getOperand(2).getImm(); // Offset
-    if (!(STI.getFeatureBits()[AMDGPU::FeatureCaymanISA])) {
+    if (!(STI.getFeatureBits()[R600::FeatureCaymanISA])) {
       InstWord2 |= 1 << 19; // Mega-Fetch bit
     }
 
@@ -129,7 +145,7 @@ void R600MCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
       Emit((uint32_t) 0, OS);
   } else {
     uint64_t Inst = getBinaryCodeForInstr(MI, Fixups, STI);
-    if ((STI.getFeatureBits()[AMDGPU::FeatureR600ALUInst]) &&
+    if ((STI.getFeatureBits()[R600::FeatureR600ALUInst]) &&
        ((Desc.TSFlags & R600_InstFlag::OP1) ||
          Desc.TSFlags & R600_InstFlag::OP2)) {
       uint64_t ISAOpCode = Inst & (0x3FFULL << 39);
@@ -141,11 +157,11 @@ void R600MCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 }
 
 void R600MCCodeEmitter::Emit(uint32_t Value, raw_ostream &OS) const {
-  support::endian::Writer<support::little>(OS).write(Value);
+  support::endian::write(OS, Value, support::little);
 }
 
 void R600MCCodeEmitter::Emit(uint64_t Value, raw_ostream &OS) const {
-  support::endian::Writer<support::little>(OS).write(Value);
+  support::endian::write(OS, Value, support::little);
 }
 
 unsigned R600MCCodeEmitter::getHWReg(unsigned RegNo) const {
@@ -178,4 +194,5 @@ uint64_t R600MCCodeEmitter::getMachineOpValue(const MCInst &MI,
   return MO.getImm();
 }
 
-#include "AMDGPUGenMCCodeEmitter.inc"
+#define ENABLE_INSTR_PREDICATE_VERIFIER
+#include "R600GenMCCodeEmitter.inc"

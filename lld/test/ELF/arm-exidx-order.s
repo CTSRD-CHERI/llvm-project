@@ -1,6 +1,7 @@
+// REQUIRES: arm
 // RUN: llvm-mc -filetype=obj -triple=armv7a-none-linux-gnueabi %s -o %t
 // RUN: llvm-mc -filetype=obj -triple=armv7a-none-linux-gnueabi %S/Inputs/arm-exidx-cantunwind.s -o %tcantunwind
-// RUN: ld.lld %t %tcantunwind -o %t2 2>&1
+// RUN: ld.lld --no-merge-exidx-entries %t %tcantunwind -o %t2 2>&1
 // RUN: llvm-objdump -d -triple=armv7a-none-linux-gnueabi %t2 | FileCheck %s
 // RUN: llvm-objdump -s -triple=armv7a-none-linux-gnueabi %t2 | FileCheck -check-prefix=CHECK-EXIDX %s
 // RUN: llvm-readobj --program-headers --sections %t2 | FileCheck -check-prefix=CHECK-PT %s
@@ -8,10 +9,9 @@
 // RUN: echo "SECTIONS { \
 // RUN:          .text 0x11000 : { *(.text*) } \
 // RUN:          .ARM.exidx : { *(.ARM.exidx) } } " > %t.script
-// RUN: ld.lld --script %t.script %tcantunwind %t -o %t3 2>&1
+// RUN: ld.lld --no-merge-exidx-entries --script %t.script %tcantunwind %t -o %t3 2>&1
 // RUN: llvm-objdump -d -triple=armv7a-none-linux-gnueabi %t3 | FileCheck -check-prefix=CHECK-SCRIPT %s
 // RUN: llvm-objdump -s -triple=armv7a-none-linux-gnueabi %t3 | FileCheck -check-prefix=CHECK-SCRIPT-EXIDX %s
-// REQUIRES: arm
 
 // Each assembler created .ARM.exidx section has the SHF_LINK_ORDER flag set
 // with the sh_link containing the section index of the executable section
@@ -109,14 +109,14 @@ f3:
 // CHECK-PT-NEXT:     ]
 // CHECK-PT-NEXT:     Address: 0x100D4
 // CHECK-PT-NEXT:     Offset: 0xD4
-// CHECK-PT-NEXT:     Size: 72
+// CHECK-PT-NEXT:     Size: 80
 
 // CHECK-PT:          Type: PT_ARM_EXIDX (0x70000001)
 // CHECK-PT-NEXT:     Offset: 0xD4
 // CHECK-PT-NEXT:     VirtualAddress: 0x100D4
 // CHECK-PT-NEXT:     PhysicalAddress: 0x100D4
-// CHECK-PT-NEXT:     FileSize: 72
-// CHECK-PT-NEXT:     MemSize: 72
+// CHECK-PT-NEXT:     FileSize: 80
+// CHECK-PT-NEXT:     MemSize: 80
 // CHECK-PT-NEXT:     Flags [ (0x4)
 // CHECK-PT-NEXT:       PF_R (0x4)
 // CHECK-PT-NEXT:     ]
@@ -142,28 +142,28 @@ f3:
 // CHECK-SCRIPT-NEXT:    11014:       1e ff 2f e1     bx      lr
 // CHECK-SCRIPT-NEXT: Disassembly of section .func1:
 // CHECK-SCRIPT-NEXT: func1:
-// CHECK-SCRIPT-NEXT:    11060:       1e ff 2f e1     bx      lr
+// CHECK-SCRIPT-NEXT:    11018:       1e ff 2f e1     bx      lr
 // CHECK-SCRIPT-NEXT: Disassembly of section .func2:
 // CHECK-SCRIPT-NEXT: func2:
-// CHECK-SCRIPT-NEXT:    11064:       1e ff 2f e1     bx      lr
+// CHECK-SCRIPT-NEXT:    1101c:       1e ff 2f e1     bx      lr
 // CHECK-SCRIPT-NEXT: Disassembly of section .func3:
 // CHECK-SCRIPT-NEXT: func3:
-// CHECK-SCRIPT-NEXT:    11068:       1e ff 2f e1     bx      lr
+// CHECK-SCRIPT-NEXT:    11020:       1e ff 2f e1     bx      lr
 
 // Check that the .ARM.exidx section is sorted in order as the functions
 // The offset in field 1, is 32-bit so in the binary the most significant bit
-// CHECK-SCRIPT-EXIDX: Contents of section .ARM.exidx:
-// 11018 - 18 = 11000 func4
-// 11020 - 1c = 11004 func5
-// CHECK-SCRIPT-EXIDX-NEXT:  11018 e8ffff7f 01000000 e4ffff7f 01000000
-// 11028 - 20 = 11008 _start
-// 11030 - 24 = 1100c f1
-// CHECK-SCRIPT-EXIDX-NEXT:  11028 e0ffff7f 01000000 dcffff7f 01000000
-// 11038 - 28 = 11010 f2
-// 11040 - 2c = 11014 f3
-// CHECK-SCRIPT-EXIDX-NEXT:  11038 d8ffff7f 01000000 d4ffff7f 01000000
-// 11048 + 18 = 11060 = func1
-// 11050 + 14 = 11064 = func2
-// CHECK-SCRIPT-EXIDX-NEXT:  11048 18000000 01000000 14000000 01000000
-// 11058 + 10 = 11068 = func3
-// CHECK-SCRIPT-EXIDX-NEXT:  11058 10000000 01000000
+// 11024 - 24 = 11000 func4
+// 1102c - 28 = 11004 func5
+// CHECK-SCRIPT-EXIDX:       11024 dcffff7f 01000000 d8ffff7f 01000000
+// 11034 - 2c = 11008 _start
+// 1103c - 30 = 1100c f1
+// CHECK-SCRIPT-EXIDX-NEXT:  11034 d4ffff7f 01000000 d0ffff7f 01000000
+// 11044 - 34 = 11010 f2
+// 1104c - 38 = 11014 f3
+// CHECK-SCRIPT-EXIDX-NEXT:  11044 ccffff7f 01000000 c8ffff7f 01000000
+// 11054 - 3c = 11018 func1
+// 1105c - 40 = 1101c func2
+// CHECK-SCRIPT-EXIDX-NEXT:  11054 c4ffff7f 01000000 c0ffff7f 01000000
+// 11064 - 44 = 11020 func3
+// 11068 - 48 = 11024 func3 + sizeof(func3)
+// CHECK-SCRIPT-EXIDX-NEXT:  11064 bcffff7f 01000000 b8ffff7f 01000000

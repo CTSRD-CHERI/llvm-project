@@ -14,15 +14,10 @@
 #include "clang/AST/Type.h"
 
 #include "lldb/Breakpoint/BreakpointLocation.h"
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/Scalar.h"
 #include "lldb/Core/Section.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Expression/DiagnosticManager.h"
 #include "lldb/Expression/FunctionCaller.h"
@@ -34,13 +29,18 @@
 #include "lldb/Target/StopInfo.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Scalar.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StreamString.h"
 
 #include <vector>
 
 using namespace lldb;
 using namespace lldb_private;
 
-#define PO_FUNCTION_TIMEOUT_USEC 15 * 1000 * 1000
+static constexpr std::chrono::seconds g_po_function_timeout(15);
 
 AppleObjCRuntime::~AppleObjCRuntime() {}
 
@@ -54,23 +54,20 @@ bool AppleObjCRuntime::GetObjectDescription(Stream &str, ValueObject &valobj) {
   CompilerType compiler_type(valobj.GetCompilerType());
   bool is_signed;
   // ObjC objects can only be pointers (or numbers that actually represents
-  // pointers
-  // but haven't been typecast, because reasons..)
+  // pointers but haven't been typecast, because reasons..)
   if (!compiler_type.IsIntegerType(is_signed) && !compiler_type.IsPointerType())
     return false;
 
-  // Make the argument list: we pass one arg, the address of our pointer, to the
-  // print function.
+  // Make the argument list: we pass one arg, the address of our pointer, to
+  // the print function.
   Value val;
 
   if (!valobj.ResolveValue(val.GetScalar()))
     return false;
 
   // Value Objects may not have a process in their ExecutionContextRef.  But we
-  // need to have one
-  // in the ref we pass down to eventually call description.  Get it from the
-  // target if it isn't
-  // present.
+  // need to have one in the ref we pass down to eventually call description.
+  // Get it from the target if it isn't present.
   ExecutionContext exe_ctx;
   if (valobj.GetProcessSP()) {
     exe_ctx = ExecutionContext(valobj.GetExecutionContextRef());
@@ -145,7 +142,7 @@ bool AppleObjCRuntime::GetObjectDescription(Stream &strm, Value &value,
   lldb::addr_t wrapper_struct_addr = LLDB_INVALID_ADDRESS;
 
   if (!m_print_object_caller_up) {
-    Error error;
+    Status error;
     m_print_object_caller_up.reset(
         exe_scope->CalculateTarget()->GetFunctionCallerForLanguage(
             eLanguageTypeObjC, return_compiler_type, *function_address,
@@ -169,7 +166,8 @@ bool AppleObjCRuntime::GetObjectDescription(Stream &strm, Value &value,
   options.SetTryAllThreads(true);
   options.SetStopOthers(true);
   options.SetIgnoreBreakpoints(true);
-  options.SetTimeoutUsec(PO_FUNCTION_TIMEOUT_USEC);
+  options.SetTimeout(g_po_function_timeout);
+  options.SetIsForUtilityExpr(true);
 
   ExpressionResults results = m_print_object_caller_up->ExecuteFunction(
       exe_ctx, &wrapper_struct_addr, options, diagnostics, ret);
@@ -185,7 +183,7 @@ bool AppleObjCRuntime::GetObjectDescription(Stream &strm, Value &value,
   size_t full_buffer_len = sizeof(buf) - 1;
   size_t curr_len = full_buffer_len;
   while (curr_len == full_buffer_len) {
-    Error error;
+    Status error;
     curr_len = process->ReadCStringFromMemory(result_ptr + cstr_len, buf,
                                               sizeof(buf), error);
     strm.Write(buf, curr_len);
@@ -257,10 +255,9 @@ AppleObjCRuntime::FixUpDynamicType(const TypeAndOrName &type_and_or_name,
   TypeAndOrName ret(type_and_or_name);
   if (type_and_or_name.HasType()) {
     // The type will always be the type of the dynamic object.  If our parent's
-    // type was a pointer,
-    // then our type should be a pointer to the type of the dynamic object.  If
-    // a reference, then the original type
-    // should be okay...
+    // type was a pointer, then our type should be a pointer to the type of the
+    // dynamic object.  If a reference, then the original type should be
+    // okay...
     CompilerType orig_type = type_and_or_name.GetCompilerType();
     CompilerType corrected_type = orig_type;
     if (static_type_flags.AllSet(eTypeIsPointer))
@@ -297,16 +294,14 @@ bool AppleObjCRuntime::AppleIsModuleObjCLibrary(const ModuleSP &module_sp) {
 uint32_t AppleObjCRuntime::GetFoundationVersion() {
   if (!m_Foundation_major.hasValue()) {
     const ModuleList &modules = m_process->GetTarget().GetImages();
-    uint32_t major = UINT32_MAX;
     for (uint32_t idx = 0; idx < modules.GetSize(); idx++) {
       lldb::ModuleSP module_sp = modules.GetModuleAtIndex(idx);
       if (!module_sp)
         continue;
       if (strcmp(module_sp->GetFileSpec().GetFilename().AsCString(""),
                  "Foundation") == 0) {
-        module_sp->GetVersion(&major, 1);
-        m_Foundation_major = major;
-        return major;
+        m_Foundation_major = module_sp->GetVersion().getMajor();
+        return *m_Foundation_major;
       }
     }
     return LLDB_INVALID_MODULE_VERSION;
@@ -325,8 +320,8 @@ bool AppleObjCRuntime::IsModuleObjCLibrary(const ModuleSP &module_sp) {
 
 bool AppleObjCRuntime::ReadObjCLibrary(const ModuleSP &module_sp) {
   // Maybe check here and if we have a handler already, and the UUID of this
-  // module is the same as the one in the
-  // current module, then we don't have to reread it?
+  // module is the same as the one in the current module, then we don't have to
+  // reread it?
   m_objc_trampoline_handler_ap.reset(
       new AppleObjCTrampolineHandler(m_process->shared_from_this(), module_sp));
   if (m_objc_trampoline_handler_ap.get() != NULL) {
@@ -365,11 +360,9 @@ AppleObjCRuntime::GetObjCVersion(Process *process, ModuleSP &objc_module_sp) {
   for (size_t i = 0; i < num_images; i++) {
     ModuleSP module_sp = target_modules.GetModuleAtIndexUnlocked(i);
     // One tricky bit here is that we might get called as part of the initial
-    // module loading, but
-    // before all the pre-run libraries get winnowed from the module list.  So
-    // there might actually
-    // be an old and incorrect ObjC library sitting around in the list, and we
-    // don't want to look at that.
+    // module loading, but before all the pre-run libraries get winnowed from
+    // the module list.  So there might actually be an old and incorrect ObjC
+    // library sitting around in the list, and we don't want to look at that.
     // That's why we call IsLoadedInTarget.
 
     if (AppleIsModuleObjCLibrary(module_sp) &&

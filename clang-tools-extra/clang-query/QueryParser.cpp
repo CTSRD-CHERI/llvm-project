@@ -37,6 +37,11 @@ StringRef QueryParser::lexWord() {
     ++Begin;
   }
 
+  if (*Begin == '#') {
+    End = Begin;
+    return StringRef();
+  }
+
   const char *WordBegin = Begin;
 
   while (true) {
@@ -50,25 +55,35 @@ StringRef QueryParser::lexWord() {
 // This is the StringSwitch-alike used by lexOrCompleteWord below. See that
 // function for details.
 template <typename T> struct QueryParser::LexOrCompleteWord {
+  StringRef Word;
   StringSwitch<T> Switch;
 
   QueryParser *P;
-  StringRef Word;
   // Set to the completion point offset in Word, or StringRef::npos if
   // completion point not in Word.
   size_t WordCompletionPos;
 
-  LexOrCompleteWord(QueryParser *P, StringRef Word, size_t WCP)
-      : Switch(Word), P(P), Word(Word), WordCompletionPos(WCP) {}
+  // Lexes a word and stores it in Word. Returns a LexOrCompleteWord<T> object
+  // that can be used like a llvm::StringSwitch<T>, but adds cases as possible
+  // completions if the lexed word contains the completion point.
+  LexOrCompleteWord(QueryParser *P, StringRef &OutWord)
+      : Word(P->lexWord()), Switch(Word), P(P),
+        WordCompletionPos(StringRef::npos) {
+    OutWord = Word;
+    if (P->CompletionPos && P->CompletionPos <= Word.data() + Word.size()) {
+      if (P->CompletionPos < Word.data())
+        WordCompletionPos = 0;
+      else
+        WordCompletionPos = P->CompletionPos - Word.data();
+    }
+  }
 
-  template <unsigned N>
-  LexOrCompleteWord &Case(const char (&S)[N], const T &Value,
+  LexOrCompleteWord &Case(llvm::StringLiteral CaseStr, const T &Value,
                           bool IsCompletion = true) {
-    StringRef CaseStr(S, N - 1);
 
     if (WordCompletionPos == StringRef::npos)
-      Switch.Case(S, Value);
-    else if (N != 1 && IsCompletion && WordCompletionPos <= CaseStr.size() &&
+      Switch.Case(CaseStr, Value);
+    else if (CaseStr.size() != 0 && IsCompletion && WordCompletionPos <= CaseStr.size() &&
              CaseStr.substr(0, WordCompletionPos) ==
                  Word.substr(0, WordCompletionPos))
       P->Completions.push_back(LineEditor::Completion(
@@ -76,29 +91,12 @@ template <typename T> struct QueryParser::LexOrCompleteWord {
     return *this;
   }
 
-  T Default(const T &Value) const { return Switch.Default(Value); }
+  T Default(T Value) { return Switch.Default(Value); }
 };
-
-// Lexes a word and stores it in Word. Returns a LexOrCompleteWord<T> object
-// that can be used like a llvm::StringSwitch<T>, but adds cases as possible
-// completions if the lexed word contains the completion point.
-template <typename T>
-QueryParser::LexOrCompleteWord<T>
-QueryParser::lexOrCompleteWord(StringRef &Word) {
-  Word = lexWord();
-  size_t WordCompletionPos = StringRef::npos;
-  if (CompletionPos && CompletionPos <= Word.data() + Word.size()) {
-    if (CompletionPos < Word.data())
-      WordCompletionPos = 0;
-    else
-      WordCompletionPos = CompletionPos - Word.data();
-  }
-  return LexOrCompleteWord<T>(this, Word, WordCompletionPos);
-}
 
 QueryRef QueryParser::parseSetBool(bool QuerySession::*Var) {
   StringRef ValStr;
-  unsigned Value = lexOrCompleteWord<unsigned>(ValStr)
+  unsigned Value = LexOrCompleteWord<unsigned>(this, ValStr)
                        .Case("false", 0)
                        .Case("true", 1)
                        .Default(~0u);
@@ -110,7 +108,7 @@ QueryRef QueryParser::parseSetBool(bool QuerySession::*Var) {
 
 QueryRef QueryParser::parseSetOutputKind() {
   StringRef ValStr;
-  unsigned OutKind = lexOrCompleteWord<unsigned>(ValStr)
+  unsigned OutKind = LexOrCompleteWord<unsigned>(this, ValStr)
                          .Case("diag", OK_Diag)
                          .Case("print", OK_Print)
                          .Case("dump", OK_Dump)
@@ -134,6 +132,7 @@ namespace {
 
 enum ParsedQueryKind {
   PQK_Invalid,
+  PQK_Comment,
   PQK_NoOp,
   PQK_Help,
   PQK_Let,
@@ -158,9 +157,7 @@ QueryRef QueryParser::completeMatcherExpression() {
   std::vector<MatcherCompletion> Comps = Parser::completeExpression(
       StringRef(Begin, End - Begin), CompletionPos - Begin, nullptr,
       &QS.NamedValues);
-  for (std::vector<MatcherCompletion>::iterator I = Comps.begin(),
-                                                E = Comps.end();
-       I != E; ++I) {
+  for (auto I = Comps.begin(), E = Comps.end(); I != E; ++I) {
     Completions.push_back(LineEditor::Completion(I->TypedText, I->MatcherDecl));
   }
   return QueryRef();
@@ -168,18 +165,22 @@ QueryRef QueryParser::completeMatcherExpression() {
 
 QueryRef QueryParser::doParse() {
   StringRef CommandStr;
-  ParsedQueryKind QKind = lexOrCompleteWord<ParsedQueryKind>(CommandStr)
+  ParsedQueryKind QKind = LexOrCompleteWord<ParsedQueryKind>(this, CommandStr)
                               .Case("", PQK_NoOp)
+                              .Case("#", PQK_Comment, /*IsCompletion=*/false)
                               .Case("help", PQK_Help)
-                              .Case("m", PQK_Match, /*IsCompletion=*/false)
+                              .Case("l", PQK_Let, /*IsCompletion=*/false)
                               .Case("let", PQK_Let)
+                              .Case("m", PQK_Match, /*IsCompletion=*/false)
                               .Case("match", PQK_Match)
+                              .Case("q", PQK_Quit,  /*IsCompletion=*/false)
+                              .Case("quit", PQK_Quit)
                               .Case("set", PQK_Set)
                               .Case("unlet", PQK_Unlet)
-                              .Case("quit", PQK_Quit)
                               .Default(PQK_Invalid);
 
   switch (QKind) {
+  case PQK_Comment:
   case PQK_NoOp:
     return new NoOpQuery;
 
@@ -223,7 +224,8 @@ QueryRef QueryParser::doParse() {
 
   case PQK_Set: {
     StringRef VarStr;
-    ParsedQueryVariable Var = lexOrCompleteWord<ParsedQueryVariable>(VarStr)
+    ParsedQueryVariable Var = LexOrCompleteWord<ParsedQueryVariable>(this,
+                                                                     VarStr)
                                   .Case("output", PQV_Output)
                                   .Case("bind-root", PQV_BindRoot)
                                   .Default(PQV_Invalid);

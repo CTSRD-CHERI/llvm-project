@@ -1,8 +1,8 @@
+# REQUIRES: aarch64
 # RUN: llvm-mc -filetype=obj -triple=aarch64-unknown-freebsd %s -o %t
 # RUN: ld.lld %t -o %t2
 # RUN: llvm-readobj -file-headers -sections -program-headers -symbols %t2 \
 # RUN:   | FileCheck %s
-# REQUIRES: aarch64
 
 # exits with return code 42 on FreeBSD/AArch64
 .globl _start
@@ -26,7 +26,7 @@ _start:
 # CHECK-NEXT:   Version: 1
 # CHECK-NEXT:   Entry: [[ENTRY:0x[0-9A-F]+]]
 # CHECK-NEXT:   ProgramHeaderOffset: 0x40
-# CHECK-NEXT:   SectionHeaderOffset: 0x10098
+# CHECK-NEXT:   SectionHeaderOffset: 0x11088
 # CHECK-NEXT:   Flags [ (0x0)
 # CHECK-NEXT:   ]
 # CHECK-NEXT:   HeaderSize: 64
@@ -59,7 +59,7 @@ _start:
 # CHECK-NEXT:       SHF_ALLOC (0x2)
 # CHECK-NEXT:       SHF_EXECINSTR (0x4)
 # CHECK-NEXT:     ]
-# CHECK-NEXT:     Address: 0x20000
+# CHECK-NEXT:     Address: 0x210000
 # CHECK-NEXT:     Offset: 0x10000
 # CHECK-NEXT:     Size: 12
 # CHECK-NEXT:     Link: 0
@@ -76,7 +76,7 @@ _start:
 # CHECK-NEXT:       SHF_STRINGS (0x20)
 # CHECK-NEXT:     ]
 # CHECK-NEXT:     Address: 0x0
-# CHECK-NEXT:     Offset: 0x1000C
+# CHECK-NEXT:     Offset: 0x11000
 # CHECK-NEXT:     Size: 8
 # CHECK-NEXT:     Link: 0
 # CHECK-NEXT:     Info: 0
@@ -90,7 +90,7 @@ _start:
 # CHECK-NEXT:     Flags [ (0x0)
 # CHECK-NEXT:     ]
 # CHECK-NEXT:     Address: 0x0
-# CHECK-NEXT:     Offset: 0x10018
+# CHECK-NEXT:     Offset: 0x11008
 # CHECK-NEXT:     Size: 72
 # CHECK-NEXT:     Link: 5
 # CHECK-NEXT:     Info: 2
@@ -104,7 +104,7 @@ _start:
 # CHECK-NEXT:     Flags [ (0x0)
 # CHECK-NEXT:     ]
 # CHECK-NEXT:     Address: 0x0
-# CHECK-NEXT:     Offset: 0x10060
+# CHECK-NEXT:     Offset: 0x11050
 # CHECK-NEXT:     Size: 42
 # CHECK-NEXT:     Link: 0
 # CHECK-NEXT:     Info: 0
@@ -118,7 +118,7 @@ _start:
 # CHECK-NEXT:     Flags [ (0x0)
 # CHECK-NEXT:     ]
 # CHECK-NEXT:     Address: 0x0
-# CHECK-NEXT:     Offset: 0x1008A
+# CHECK-NEXT:     Offset: 0x1107A
 # CHECK-NEXT:     Size: 13
 # CHECK-NEXT:     Link: 0
 # CHECK-NEXT:     Info: 0
@@ -138,7 +138,7 @@ _start:
 # CHECK-NEXT:   }
 # CHECK-NEXT:   Symbol {
 # CHECK-NEXT:     Name: $x.0
-# CHECK-NEXT:     Value: 0x20000
+# CHECK-NEXT:     Value: 0x210000
 # CHECK-NEXT:     Size: 0
 # CHECK-NEXT:     Binding: Local (0x0)
 # CHECK-NEXT:     Type: None (0x0)
@@ -159,8 +159,8 @@ _start:
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_PHDR (0x6)
 # CHECK-NEXT:     Offset: 0x40
-# CHECK-NEXT:     VirtualAddress: 0x10040
-# CHECK-NEXT:     PhysicalAddress: 0x10040
+# CHECK-NEXT:     VirtualAddress: 0x200040
+# CHECK-NEXT:     PhysicalAddress: 0x200040
 # CHECK-NEXT:     FileSize: 224
 # CHECK-NEXT:     MemSize: 224
 # CHECK-NEXT:     Flags [ (0x4)
@@ -171,8 +171,8 @@ _start:
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_LOAD (0x1)
 # CHECK-NEXT:     Offset: 0x0
-# CHECK-NEXT:     VirtualAddress: 0x10000
-# CHECK-NEXT:     PhysicalAddress: 0x10000
+# CHECK-NEXT:     VirtualAddress: 0x200000
+# CHECK-NEXT:     PhysicalAddress: 0x200000
 # CHECK-NEXT:     FileSize: 288
 # CHECK-NEXT:     MemSize: 288
 # CHECK-NEXT:     Flags [
@@ -183,10 +183,10 @@ _start:
 # CHECK-NEXT:   ProgramHeader {
 # CHECK-NEXT:     Type: PT_LOAD (0x1)
 # CHECK-NEXT:     Offset: 0x1000
-# CHECK-NEXT:     VirtualAddress: 0x20000
-# CHECK-NEXT:     PhysicalAddress: 0x20000
-# CHECK-NEXT:     FileSize: 12
-# CHECK-NEXT:     MemSize: 12
+# CHECK-NEXT:     VirtualAddress: 0x210000
+# CHECK-NEXT:     PhysicalAddress: 0x210000
+# CHECK-NEXT:     FileSize: 4096
+# CHECK-NEXT:     MemSize: 4096
 # CHECK-NEXT:     Flags [ (0x5)
 # CHECK-NEXT:       PF_R (0x4)
 # CHECK-NEXT:       PF_X (0x1)

@@ -78,7 +78,7 @@ private:
 
   /// Bug visitor class to find the node where the request region was previously
   /// used in order to include it into the BugReport path.
-  class RequestNodeVisitor : public BugReporterVisitorImpl<RequestNodeVisitor> {
+  class RequestNodeVisitor : public BugReporterVisitor {
   public:
     RequestNodeVisitor(const MemRegion *const MemoryRegion,
                        const std::string &ErrText)
@@ -90,10 +90,9 @@ private:
       ID.AddPointer(RequestRegion);
     }
 
-    PathDiagnosticPiece *VisitNode(const ExplodedNode *N,
-                                   const ExplodedNode *PrevN,
-                                   BugReporterContext &BRC,
-                                   BugReport &BR) override;
+    std::shared_ptr<PathDiagnosticPiece> VisitNode(const ExplodedNode *N,
+                                                   BugReporterContext &BRC,
+                                                   BugReport &BR) override;
 
   private:
     const MemRegion *const RequestRegion;

@@ -44,7 +44,7 @@ typedef bool lto_bool_t;
  * @{
  */
 
-#define LTO_API_VERSION 20
+#define LTO_API_VERSION 23
 
 /**
  * \since prior to LTO_API_VERSION=3
@@ -190,7 +190,7 @@ lto_module_create_from_memory_with_path(const void* mem, size_t length,
                                         const char *path);
 
 /**
- * \brief Loads an object file in its own context.
+ * Loads an object file in its own context.
  *
  * Loads an object file in its own LLVMContext.  This function call is
  * thread-safe.  However, modules created this way should not be merged into an
@@ -205,7 +205,7 @@ lto_module_create_in_local_context(const void *mem, size_t length,
                                    const char *path);
 
 /**
- * \brief Loads an object file in the codegen context.
+ * Loads an object file in the codegen context.
  *
  * Loads an object file into the same context as \c cg.  The module is safe to
  * add using \a lto_codegen_add_module().
@@ -345,7 +345,7 @@ extern lto_code_gen_t
 lto_codegen_create(void);
 
 /**
- * \brief Instantiate a code generator in its own context.
+ * Instantiate a code generator in its own context.
  *
  * Instantiates a code generator in its own context.  Modules added via \a
  * lto_codegen_add_module() must have all been created in the same context,
@@ -539,7 +539,7 @@ lto_codegen_set_should_internalize(lto_code_gen_t cg,
                                    lto_bool_t ShouldInternalize);
 
 /**
- * \brief Set whether to embed uselists in bitcode.
+ * Set whether to embed uselists in bitcode.
  *
  * Sets whether \a lto_codegen_write_merged_modules() should embed uselists in
  * output bitcode.  This should be turned on for all -save-temps output.
@@ -551,7 +551,7 @@ lto_codegen_set_should_embed_uselists(lto_code_gen_t cg,
                                       lto_bool_t ShouldEmbedUselists);
 
 /**
- * @}
+ * @} // endgoup LLVMCLTO
  * @defgroup LLVMCTLTO ThinLTO
  * @ingroup LLVMC
  *
@@ -637,6 +637,29 @@ extern LTOObjectBuffer thinlto_module_get_object(thinlto_code_gen_t cg,
                                                  unsigned int index);
 
 /**
+ * Returns the number of object files produced by the ThinLTO CodeGenerator.
+ *
+ * It usually matches the number of input files, but this is not a guarantee of
+ * the API and may change in future implementation, so the client should not
+ * assume it.
+ *
+ * \since LTO_API_VERSION=21
+ */
+unsigned int thinlto_module_get_num_object_files(thinlto_code_gen_t cg);
+
+/**
+ * Returns the path to the ith object file produced by the ThinLTO
+ * CodeGenerator.
+ *
+ * Client should use \p thinlto_module_get_num_object_files() to get the number
+ * of available objects.
+ *
+ * \since LTO_API_VERSION=21
+ */
+const char *thinlto_module_get_object_file(thinlto_code_gen_t cg,
+                                           unsigned int index);
+
+/**
  * Sets which PIC code model to generate.
  * Returns true on error (check lto_get_error_message() for details).
  *
@@ -644,75 +667,6 @@ extern LTOObjectBuffer thinlto_module_get_object(thinlto_code_gen_t cg,
  */
 extern lto_bool_t thinlto_codegen_set_pic_model(thinlto_code_gen_t cg,
                                                 lto_codegen_model);
-
-/**
- * @}
- * @defgroup LLVMCTLTO_CACHING ThinLTO Cache Control
- * @ingroup LLVMCTLTO
- *
- * These entry points control the ThinLTO cache. The cache is intended to
- * support incremental build, and thus needs to be persistent accross build.
- * The client enabled the cache by supplying a path to an existing directory.
- * The code generator will use this to store objects files that may be reused
- * during a subsequent build.
- * To avoid filling the disk space, a few knobs are provided:
- *  - The pruning interval limit the frequency at which the garbage collector
- *    will try to scan the cache directory to prune it from expired entries.
- *    Setting to -1 disable the pruning (default).
- *  - The pruning expiration time indicates to the garbage collector how old an
- *    entry needs to be to be removed.
- *  - Finally, the garbage collector can be instructed to prune the cache till
- *    the occupied space goes below a threshold.
- * @{
- */
-
-/**
- * Sets the path to a directory to use as a cache storage for incremental build.
- * Setting this activates caching.
- *
- * \since LTO_API_VERSION=18
- */
-extern void thinlto_codegen_set_cache_dir(thinlto_code_gen_t cg,
-                                          const char *cache_dir);
-
-/**
- * Sets the cache pruning interval (in seconds). A negative value disable the
- * pruning. An unspecified default value will be applied, and a value of 0 will
- * be ignored.
- *
- * \since LTO_API_VERSION=18
- */
-extern void thinlto_codegen_set_cache_pruning_interval(thinlto_code_gen_t cg,
-                                                       int interval);
-
-/**
- * Sets the maximum cache size that can be persistent across build, in terms of
- * percentage of the available space on the the disk. Set to 100 to indicate
- * no limit, 50 to indicate that the cache size will not be left over half the
- * available space. A value over 100 will be reduced to 100, a value of 0 will
- * be ignored. An unspecified default value will be applied.
- *
- * The formula looks like:
- *  AvailableSpace = FreeSpace + ExistingCacheSize
- *  NewCacheSize = AvailableSpace * P/100
- *
- * \since LTO_API_VERSION=18
- */
-extern void thinlto_codegen_set_final_cache_size_relative_to_available_space(
-    thinlto_code_gen_t cg, unsigned percentage);
-
-/**
- * Sets the expiration (in seconds) for an entry in the cache. An unspecified
- * default value will be applied. A value of 0 will be ignored.
- *
- * \since LTO_API_VERSION=18
- */
-extern void thinlto_codegen_set_cache_entry_expiration(thinlto_code_gen_t cg,
-                                                       unsigned expiration);
-
-/**
- * @}
- */
 
 /**
  * Sets the path to a directory to use as a storage for temporary bitcode files.
@@ -723,6 +677,17 @@ extern void thinlto_codegen_set_cache_entry_expiration(thinlto_code_gen_t cg,
  */
 extern void thinlto_codegen_set_savetemps_dir(thinlto_code_gen_t cg,
                                               const char *save_temps_dir);
+
+/**
+ * Set the path to a directory where to save generated object files. This
+ * path can be used by a linker to request on-disk files instead of in-memory
+ * buffers. When set, results are available through
+ * thinlto_module_get_object_file() instead of thinlto_module_get_object().
+ *
+ * \since LTO_API_VERSION=21
+ */
+void thinlto_set_generated_objects_dir(thinlto_code_gen_t cg,
+                                       const char *save_temps_dir);
 
 /**
  * Sets the cpu to generate code for.
@@ -786,12 +751,109 @@ extern void thinlto_codegen_add_cross_referenced_symbol(thinlto_code_gen_t cg,
                                                         const char *name,
                                                         int length);
 
+/**
+ * @} // endgoup LLVMCTLTO
+ * @defgroup LLVMCTLTO_CACHING ThinLTO Cache Control
+ * @ingroup LLVMCTLTO
+ *
+ * These entry points control the ThinLTO cache. The cache is intended to
+ * support incremental builds, and thus needs to be persistent across builds.
+ * The client enables the cache by supplying a path to an existing directory.
+ * The code generator will use this to store objects files that may be reused
+ * during a subsequent build.
+ * To avoid filling the disk space, a few knobs are provided:
+ *  - The pruning interval limits the frequency at which the garbage collector
+ *    will try to scan the cache directory to prune expired entries.
+ *    Setting to a negative number disables the pruning.
+ *  - The pruning expiration time indicates to the garbage collector how old an
+ *    entry needs to be to be removed.
+ *  - Finally, the garbage collector can be instructed to prune the cache until
+ *    the occupied space goes below a threshold.
+ * @{
+ */
+
+/**
+ * Sets the path to a directory to use as a cache storage for incremental build.
+ * Setting this activates caching.
+ *
+ * \since LTO_API_VERSION=18
+ */
+extern void thinlto_codegen_set_cache_dir(thinlto_code_gen_t cg,
+                                          const char *cache_dir);
+
+/**
+ * Sets the cache pruning interval (in seconds). A negative value disables the
+ * pruning. An unspecified default value will be applied, and a value of 0 will
+ * force prunning to occur.
+ *
+ * \since LTO_API_VERSION=18
+ */
+extern void thinlto_codegen_set_cache_pruning_interval(thinlto_code_gen_t cg,
+                                                       int interval);
+
+/**
+ * Sets the maximum cache size that can be persistent across build, in terms of
+ * percentage of the available space on the disk. Set to 100 to indicate
+ * no limit, 50 to indicate that the cache size will not be left over half the
+ * available space. A value over 100 will be reduced to 100, a value of 0 will
+ * be ignored. An unspecified default value will be applied.
+ *
+ * The formula looks like:
+ *  AvailableSpace = FreeSpace + ExistingCacheSize
+ *  NewCacheSize = AvailableSpace * P/100
+ *
+ * \since LTO_API_VERSION=18
+ */
+extern void thinlto_codegen_set_final_cache_size_relative_to_available_space(
+    thinlto_code_gen_t cg, unsigned percentage);
+
+/**
+ * Sets the expiration (in seconds) for an entry in the cache. An unspecified
+ * default value will be applied. A value of 0 will be ignored.
+ *
+ * \since LTO_API_VERSION=18
+ */
+extern void thinlto_codegen_set_cache_entry_expiration(thinlto_code_gen_t cg,
+                                                       unsigned expiration);
+
+/**
+ * Sets the maximum size of the cache directory (in bytes). A value over the
+ * amount of available space on the disk will be reduced to the amount of
+ * available space. An unspecified default value will be applied. A value of 0
+ * will be ignored.
+ *
+ * \since LTO_API_VERSION=22
+ */
+extern void thinlto_codegen_set_cache_size_bytes(thinlto_code_gen_t cg,
+                                                 unsigned max_size_bytes);
+
+/**
+ * Same as thinlto_codegen_set_cache_size_bytes, except the maximum size is in
+ * megabytes (2^20 bytes).
+ *
+ * \since LTO_API_VERSION=23
+ */
+extern void
+thinlto_codegen_set_cache_size_megabytes(thinlto_code_gen_t cg,
+                                         unsigned max_size_megabytes);
+
+/**
+ * Sets the maximum number of files in the cache directory. An unspecified
+ * default value will be applied. A value of 0 will be ignored.
+ *
+ * \since LTO_API_VERSION=22
+ */
+extern void thinlto_codegen_set_cache_size_files(thinlto_code_gen_t cg,
+                                                 unsigned max_size_files);
+
+
+
+/**
+ * @} // endgroup LLVMCTLTO_CACHING
+ */
+
 #ifdef __cplusplus
 }
 #endif
-
-/**
- * @}
- */
 
 #endif /* LLVM_C_LTO_H */

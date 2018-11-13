@@ -137,7 +137,7 @@ define void @test_32bit_complexmask(i32 *%existing, i32 *%new) {
   ret void
 }
 
-; Neither mask is is a contiguous set of 1s. BFI can't be used
+; Neither mask is a contiguous set of 1s. BFI can't be used
 define void @test_32bit_badmask(i32 *%existing, i32 *%new) {
 ; CHECK-LABEL: test_32bit_badmask:
 ; CHECK-NOT: bfi
@@ -428,8 +428,8 @@ define i32 @test5(i32 %a) {
 ; BFXIL will use the same constant as the ORR, so we don't care how the constant
 ; is materialized (it's an equal cost either way).
 ; CHECK-LABEL: @test6
-; CHECK: mov [[REG:w[0-9]+]], #720896
-; CHECK: movk [[REG]], #23250
+; CHECK: mov [[REG:w[0-9]+]], #23250
+; CHECK: movk [[REG]], #11, lsl #16
 ; CHECK: bfxil w0, [[REG]], #0, #20
 define i32 @test6(i32 %a) {
   %1 = and i32 %a, 4293918720 ; 0xfff00000
@@ -440,8 +440,8 @@ define i32 @test6(i32 %a) {
 ; BFIs that require the same number of instruction to materialize the constant
 ; as the original ORR are okay.
 ; CHECK-LABEL: @test7
-; CHECK: mov [[REG:w[0-9]+]], #327680
-; CHECK: movk [[REG]], #44393
+; CHECK: mov [[REG:w[0-9]+]], #44393
+; CHECK: movk [[REG]], #5, lsl #16
 ; CHECK: bfi w0, [[REG]], #1, #19
 define i32 @test7(i32 %a) {
   %1 = and i32 %a, 4293918721 ; 0xfff00001
@@ -454,9 +454,9 @@ define i32 @test7(i32 %a) {
 ; 'and' with a 'movk', which would decrease ILP while using the same number of
 ; instructions.
 ; CHECK-LABEL: @test8
-; CHECK: mov [[REG2:x[0-9]+]], #157599529959424
+; CHECK: mov [[REG2:x[0-9]+]], #2035482624
 ; CHECK: and [[REG1:x[0-9]+]], x0, #0xff000000000000ff
-; CHECK: movk [[REG2]], #31059, lsl #16
+; CHECK: movk [[REG2]], #36694, lsl #32
 ; CHECK: orr x0, [[REG1]], [[REG2]]
 define i64 @test8(i64 %a) {
   %1 = and i64 %a, -72057594037927681 ; 0xff000000000000ff
@@ -479,4 +479,21 @@ define i32 @test9(i64 %b, i32 %e) {
   %g = and i32 %e, -8388608
   %h = or i32 %g, %f
   ret i32 %h
+}
+
+; CHECK-LABEL: test_complex_type:
+; CHECK: ldr d0, [x0], #8
+; CHECK: orr [[BOTH:x[0-9]+]], x0, x1, lsl #32
+; CHECK: str [[BOTH]], [x2]
+define <2 x i32> @test_complex_type(<2 x i32>* %addr, i64 %in, i64* %bf ) {
+  %vec = load <2 x i32>, <2 x i32>* %addr
+
+  %vec.next = getelementptr <2 x i32>, <2 x i32>* %addr, i32 1
+  %lo = ptrtoint <2 x i32>* %vec.next to i64
+
+  %hi = shl i64 %in, 32
+  %both = or i64 %lo, %hi
+  store i64 %both, i64* %bf
+
+  ret <2 x i32> %vec
 }

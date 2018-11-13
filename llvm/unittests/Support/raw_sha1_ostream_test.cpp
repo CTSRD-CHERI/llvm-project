@@ -7,9 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "gtest/gtest.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_sha1_ostream.h"
+#include "gtest/gtest.h"
 
 #include <string>
 
@@ -34,6 +34,13 @@ TEST(raw_sha1_ostreamTest, Basic) {
   Sha1Stream << "Hello World!";
   auto Hash = toHex(Sha1Stream.sha1());
 
+  ASSERT_EQ("2EF7BDE608CE5404E97D5F042F95F89F1C232871", Hash);
+}
+
+TEST(sha1_hash_test, Basic) {
+  ArrayRef<uint8_t> Input((const uint8_t *)"Hello World!", 12);
+  std::array<uint8_t, 20> Vec = SHA1::hash(Input);
+  std::string Hash = toHex({(const char *)Vec.data(), 20});
   ASSERT_EQ("2EF7BDE608CE5404E97D5F042F95F89F1C232871", Hash);
 }
 

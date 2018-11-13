@@ -12,15 +12,23 @@
 #include "Hexagon.h"
 #include "HexagonInstrInfo.h"
 #include "HexagonSubtarget.h"
-#include "HexagonTargetMachine.h"
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/PassSupport.h"
+#include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cassert>
+#include <cstdint>
+#include <cstdlib>
+#include <iterator>
 
 using namespace llvm;
 
@@ -30,14 +38,18 @@ static cl::opt<uint32_t> BranchRelaxSafetyBuffer("branch-relax-safety-buffer",
   cl::init(200), cl::Hidden, cl::ZeroOrMore, cl::desc("safety buffer size"));
 
 namespace llvm {
+
   FunctionPass *createHexagonBranchRelaxation();
   void initializeHexagonBranchRelaxationPass(PassRegistry&);
-}
+
+} // end namespace llvm
 
 namespace {
+
   struct HexagonBranchRelaxation : public MachineFunctionPass {
   public:
     static char ID;
+
     HexagonBranchRelaxation() : MachineFunctionPass(ID) {
       initializeHexagonBranchRelaxationPass(*PassRegistry::getPassRegistry());
     }
@@ -67,6 +79,7 @@ namespace {
   };
 
   char HexagonBranchRelaxation::ID = 0;
+
 } // end anonymous namespace
 
 INITIALIZE_PASS(HexagonBranchRelaxation, "hexagon-brelax",
@@ -76,9 +89,8 @@ FunctionPass *llvm::createHexagonBranchRelaxation() {
   return new HexagonBranchRelaxation();
 }
 
-
 bool HexagonBranchRelaxation::runOnMachineFunction(MachineFunction &MF) {
-  DEBUG(dbgs() << "****** Hexagon Branch Relaxation ******\n");
+  LLVM_DEBUG(dbgs() << "****** Hexagon Branch Relaxation ******\n");
 
   auto &HST = MF.getSubtarget<HexagonSubtarget>();
   HII = HST.getInstrInfo();
@@ -88,7 +100,6 @@ bool HexagonBranchRelaxation::runOnMachineFunction(MachineFunction &MF) {
   Changed = relaxBranches(MF);
   return Changed;
 }
-
 
 void HexagonBranchRelaxation::computeOffset(MachineFunction &MF,
       DenseMap<MachineBasicBlock*, unsigned> &OffsetMap) {
@@ -103,11 +114,14 @@ void HexagonBranchRelaxation::computeOffset(MachineFunction &MF,
       InstOffset = (InstOffset + ByteAlign) & ~(ByteAlign);
     }
     OffsetMap[&B] = InstOffset;
-    for (auto &MI : B.instrs())
+    for (auto &MI : B.instrs()) {
       InstOffset += HII->getSize(MI);
+      // Assume that all extendable branches will be extended.
+      if (MI.isBranch() && HII->isExtendable(MI))
+        InstOffset += HEXAGON_INSTR_SIZE;
+    }
   }
 }
-
 
 /// relaxBranches - For Hexagon, if the jump target/loop label is too far from
 /// the jump/loop instruction then, we need to make sure that we have constant
@@ -124,7 +138,6 @@ bool HexagonBranchRelaxation::relaxBranches(MachineFunction &MF) {
   return reGenerateBranch(MF, BlockToInstOffset);
 }
 
-
 /// Check if a given instruction is:
 /// - a jump to a distant target
 /// - that exceeds its immediate range
@@ -136,6 +149,9 @@ bool HexagonBranchRelaxation::isJumpOutOfRange(MachineInstr &MI,
   if (FirstTerm == B.instr_end())
     return false;
 
+  if (HII->isExtended(MI))
+    return false;
+
   unsigned InstOffset = BlockToInstOffset[&B];
   unsigned Distance = 0;
 
@@ -144,7 +160,7 @@ bool HexagonBranchRelaxation::isJumpOutOfRange(MachineInstr &MI,
   // Number of instructions times typical instruction size.
   InstOffset += HII->nonDbgBBSize(&B) * HEXAGON_INSTR_SIZE;
 
-  MachineBasicBlock *TBB = NULL, *FBB = NULL;
+  MachineBasicBlock *TBB = nullptr, *FBB = nullptr;
   SmallVector<MachineOperand, 4> Cond;
 
   // Try to analyze this branch.
@@ -176,7 +192,6 @@ bool HexagonBranchRelaxation::isJumpOutOfRange(MachineInstr &MI,
   return false;
 }
 
-
 bool HexagonBranchRelaxation::reGenerateBranch(MachineFunction &MF,
       DenseMap<MachineBasicBlock*, unsigned> &BlockToInstOffset) {
   bool Changed = false;
@@ -185,14 +200,14 @@ bool HexagonBranchRelaxation::reGenerateBranch(MachineFunction &MF,
     for (auto &MI : B) {
       if (!MI.isBranch() || !isJumpOutOfRange(MI, BlockToInstOffset))
         continue;
-      DEBUG(dbgs() << "Long distance jump. isExtendable("
-                   << HII->isExtendable(MI) << ") isConstExtended("
-                   << HII->isConstExtended(MI) << ") " << MI);
+      LLVM_DEBUG(dbgs() << "Long distance jump. isExtendable("
+                        << HII->isExtendable(MI) << ") isConstExtended("
+                        << HII->isConstExtended(MI) << ") " << MI);
 
       // Since we have not merged HW loops relaxation into
       // this code (yet), soften our approach for the moment.
       if (!HII->isExtendable(MI) && !HII->isExtended(MI)) {
-        DEBUG(dbgs() << "\tUnderimplemented relax branch instruction.\n");
+        LLVM_DEBUG(dbgs() << "\tUnderimplemented relax branch instruction.\n");
       } else {
         // Find which operand is expandable.
         int ExtOpNum = HII->getCExtOpNum(MI);

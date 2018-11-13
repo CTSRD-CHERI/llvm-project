@@ -1,4 +1,4 @@
-//===-- RegisterContextCorePOSIX_arm64.cpp ----------------------*- C++ -*-===//
+//===-- RegisterContextPOSIXCore_arm64.cpp ----------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,15 +8,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "RegisterContextPOSIXCore_arm64.h"
-
-#include "lldb/Core/RegisterValue.h"
+#include "Plugins/Process/elf-core/RegisterUtilities.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/RegisterValue.h"
 
 using namespace lldb_private;
 
 RegisterContextCorePOSIX_arm64::RegisterContextCorePOSIX_arm64(
     Thread &thread, RegisterInfoInterface *register_info,
-    const DataExtractor &gpregset, const DataExtractor &fpregset)
+    const DataExtractor &gpregset, llvm::ArrayRef<CoreNote> notes)
     : RegisterContextPOSIX_arm64(thread, 0, register_info) {
   m_gpr_buffer.reset(
       new DataBufferHeap(gpregset.GetDataStart(), gpregset.GetByteSize()));

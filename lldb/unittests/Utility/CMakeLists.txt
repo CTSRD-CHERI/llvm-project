@@ -1,8 +1,44 @@
 add_lldb_unittest(UtilityTests
-  ModuleCacheTest.cpp
+  AnsiTerminalTest.cpp
+  ArgsTest.cpp
+  OptionsWithRawTest.cpp
+  ArchSpecTest.cpp
+  CleanUpTest.cpp
+  ConstStringTest.cpp
+  CompletionRequestTest.cpp
+  EnvironmentTest.cpp
+  FileSpecTest.cpp
+  FlagsTest.cpp
+  JSONTest.cpp
+  LogTest.cpp
+  NameMatchesTest.cpp
+  PredicateTest.cpp
+  RegisterValueTest.cpp
+  ScalarTest.cpp
+  StateTest.cpp
+  StatusTest.cpp
+  StreamTeeTest.cpp
+  StreamTest.cpp
   StringExtractorTest.cpp
-  TaskPoolTest.cpp
+  StringLexerTest.cpp
+  StringListTest.cpp
+  StructuredDataTest.cpp
+  TildeExpressionResolverTest.cpp
+  TimeoutTest.cpp
+  TimerTest.cpp
   UriParserTest.cpp
+  UUIDTest.cpp
+  VASprintfTest.cpp
+  VMRangeTest.cpp
+
+  LINK_LIBS
+      lldbUtility
+      lldbUtilityHelpers
+      LLVMTestingSupport
+  LINK_COMPONENTS
+    Support
   )
 
-add_unittest_inputs(UtilityTests TestModule.so)
+add_unittest_inputs(UtilityTests
+  StructuredData-basic.json
+  )

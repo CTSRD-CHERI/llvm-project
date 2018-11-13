@@ -244,11 +244,48 @@ This diagnostic is an error by default, but the flag ``-Wno-address-of-temporary
 ------------------
 This diagnostic flag exists for GCC compatibility, and has no effect in Clang.
 
+-Waligned-allocation-unavailable
+--------------------------------
+This diagnostic is an error by default, but the flag ``-Wno-aligned-allocation-unavailable`` can be used to disable the error.
+
+**Diagnostic text:**
+
++--------------------------------------------------+--------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:error:`error:` |nbsp| :diagtext:`aligned` |nbsp| |+------------------------+| |nbsp| :diagtext:`function of type '`:placeholder:`B`:diagtext:`' is only available on` |nbsp| :placeholder:`C` |nbsp| :placeholder:`D` |nbsp| :diagtext:`or newer`|
+|                                                  ||:diagtext:`allocation`  ||                                                                                                                                                                    |
+|                                                  |+------------------------+|                                                                                                                                                                    |
+|                                                  ||:diagtext:`deallocation`||                                                                                                                                                                    |
+|                                                  |+------------------------+|                                                                                                                                                                    |
++--------------------------------------------------+--------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
 -Wall
 -----
 Some of the diagnostics controlled by this flag are enabled by default.
 
 Controls `-Wmost`_, `-Wparentheses`_, `-Wswitch`_, `-Wswitch-bool`_.
+
+
+-Walloca-with-align-alignof
+---------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++--------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`second argument to \_\_builtin\_alloca\_with\_align is supposed to be in bits`|
++--------------------------------------------------------------------------------------------------------------------+
+
+
+-Wambiguous-delete
+------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`multiple suitable` |nbsp| :placeholder:`A` |nbsp| :diagtext:`functions for` |nbsp| :placeholder:`B`:diagtext:`; no 'operator delete' function will be invoked if initialization throws an exception`|
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wambiguous-ellipsis
@@ -482,7 +519,24 @@ This diagnostic is enabled by default.
 
 -Wasm
 -----
-Synonym for `-Wasm-operand-widths`_.
+This diagnostic is enabled by default.
+
+Controls `-Wasm-ignored-qualifier`_, `-Wasm-operand-widths`_.
+
+
+-Wasm-ignored-qualifier
+-----------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++----------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`ignored` |nbsp| :placeholder:`A` |nbsp| :diagtext:`qualifier on asm`|
++----------------------------------------------------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`meaningless 'volatile' on asm outside function`|
++-------------------------------------------------------------------------------------+
 
 
 -Wasm-operand-widths
@@ -697,21 +751,6 @@ This diagnostic is enabled by default.
 +-------------------------------------------------------------------------------+
 
 
--Wbad-array-new-length
-----------------------
-This diagnostic is enabled by default.
-
-**Diagnostic text:**
-
-+--------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`array is too large (`:placeholder:`A` |nbsp| :diagtext:`elements)`|
-+--------------------------------------------------------------------------------------------------------+
-
-+-------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`array size is negative`|
-+-------------------------------------------------------------+
-
-
 -Wbad-function-cast
 -------------------
 **Diagnostic text:**
@@ -719,6 +758,11 @@ This diagnostic is enabled by default.
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`cast from function call of type` |nbsp| :placeholder:`A` |nbsp| :diagtext:`to non-matching type` |nbsp| :placeholder:`B`|
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+-Wbinary-literal
+----------------
+Controls `-Wc++14-binary-literal`_, `-Wc++98-c++11-compat-binary-literal`_, `-Wgnu-binary-literal`_.
 
 
 -Wbind-to-temporary-copy
@@ -768,9 +812,26 @@ This diagnostic is enabled by default.
 
 **Diagnostic text:**
 
-+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`implicit truncation from` |nbsp| :placeholder:`C` |nbsp| :diagtext:`to bitfield changes value from` |nbsp| :placeholder:`A` |nbsp| :diagtext:`to` |nbsp| :placeholder:`B`|
-+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`implicit truncation from` |nbsp| :placeholder:`C` |nbsp| :diagtext:`to bit-field changes value from` |nbsp| :placeholder:`A` |nbsp| :diagtext:`to` |nbsp| :placeholder:`B`|
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+-Wbitfield-enum-conversion
+--------------------------
+**Diagnostic text:**
+
++------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`bit-field` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is not wide enough to store all enumerators of` |nbsp| :placeholder:`B`|
++------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`signed bit-field` |nbsp| :placeholder:`A` |nbsp| :diagtext:`needs an extra bit to represent the largest positive enumerators of` |nbsp| :placeholder:`B`|
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`assigning value of signed enum type` |nbsp| :placeholder:`B` |nbsp| :diagtext:`to unsigned bit-field` |nbsp| :placeholder:`A`:diagtext:`; negative enumerators of enum` |nbsp| :placeholder:`B` |nbsp| :diagtext:`will be converted to positive values`|
++---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wbitfield-width
@@ -805,6 +866,17 @@ This diagnostic is enabled by default.
 +-----------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`'`:placeholder:`A`:diagtext:`' within '`:placeholder:`B`:diagtext:`'`|
 +-----------------------------------------------------------------------------------------------------------+
+
+
+-Wblock-capture-autoreleasing
+-----------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++-----------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`block captures an autoreleasing out-parameter, which may result in use-after-free bugs`|
++-----------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wbool-conversion
@@ -920,7 +992,7 @@ Synonym for `-Wc++11-narrowing`_.
 --------------
 Some of the diagnostics controlled by this flag are enabled by default.
 
-Also controls `-Wc++11-compat-deprecated-writable-strings`_, `-Wc++11-compat-reserved-user-defined-literal`_, `-Wc++11-narrowing`_, `-Wc++98-c++11-c++14-compat`_, `-Wc++98-c++11-compat`_.
+Also controls `-Wc++11-compat-deprecated-writable-strings`_, `-Wc++11-compat-reserved-user-defined-literal`_, `-Wc++11-narrowing`_, `-Wc++98-c++11-c++14-c++17-compat`_, `-Wc++98-c++11-c++14-compat`_, `-Wc++98-c++11-compat`_.
 
 **Diagnostic text:**
 
@@ -986,7 +1058,9 @@ This diagnostic is enabled by default.
 
 -Wc++11-compat-pedantic
 -----------------------
-Controls `-Wc++98-c++11-c++14-compat-pedantic`_, `-Wc++98-c++11-compat-pedantic`_.
+Some of the diagnostics controlled by this flag are enabled by default.
+
+Controls `-Wc++11-compat`_, `-Wc++98-c++11-c++14-c++17-compat-pedantic`_, `-Wc++98-c++11-c++14-compat-pedantic`_, `-Wc++98-c++11-compat-pedantic`_.
 
 
 -Wc++11-compat-reserved-user-defined-literal
@@ -1236,12 +1310,12 @@ Some of the diagnostics controlled by this flag are enabled by default.
 
 -Wc++14-compat
 --------------
-Synonym for `-Wc++98-c++11-c++14-compat`_.
+Controls `-Wc++98-c++11-c++14-c++17-compat`_, `-Wc++98-c++11-c++14-compat`_.
 
 
 -Wc++14-compat-pedantic
 -----------------------
-Synonym for `-Wc++98-c++11-c++14-compat-pedantic`_.
+Controls `-Wc++14-compat`_, `-Wc++98-c++11-c++14-c++17-compat-pedantic`_, `-Wc++98-c++11-c++14-compat-pedantic`_.
 
 
 -Wc++14-extensions
@@ -1297,6 +1371,114 @@ Also controls `-Wc++14-binary-literal`_.
 +-------------------------------------------------------------------------------+
 
 
+-Wc++17-compat
+--------------
+Some of the diagnostics controlled by this flag are enabled by default.
+
+Controls `-Wc++17-compat-mangling`_, `-Wc++98-c++11-c++14-c++17-compat`_, `-Wdeprecated-increment-bool`_, `-Wdeprecated-register`_.
+
+
+-Wc++17-compat-mangling
+-----------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`mangled name of` |nbsp| :placeholder:`A` |nbsp| :diagtext:`will change in C++17 due to non-throwing exception specification in function signature`|
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+-Wc++17-compat-pedantic
+-----------------------
+Some of the diagnostics controlled by this flag are enabled by default.
+
+Controls `-Wc++17-compat`_, `-Wc++98-c++11-c++14-c++17-compat-pedantic`_.
+
+
+-Wc++17-extensions
+------------------
+Some of the diagnostics controlled by this flag are enabled by default.
+
+**Diagnostic text:**
+
++------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`constexpr if is a C++17 extension`|
++------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`'constexpr' on lambda expressions is a C++17 extension`|
++---------------------------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`use of the` |nbsp| :placeholder:`A` |nbsp| :diagtext:`attribute is a C++17 extension`|
++---------------------------------------------------------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`decomposition declarations are a C++17 extension`|
++---------------------------------------------------------------------------------------+
+
++--------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`pack fold expression is a C++17 extension`|
++--------------------------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`'begin' and 'end' returning different types (`:placeholder:`A` |nbsp| :diagtext:`and` |nbsp| :placeholder:`B`:diagtext:`) is a C++17 extension`|
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
++----------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`hexadecimal floating literals are a C++17 feature`|
++----------------------------------------------------------------------------------------+
+
++----------------------------------------+--------------------+-------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`'`|+------------------+|:diagtext:`' initialization statements are a C++17 extension`|
+|                                        ||:diagtext:`if`    ||                                                             |
+|                                        |+------------------+|                                                             |
+|                                        ||:diagtext:`switch`||                                                             |
+|                                        |+------------------+|                                                             |
++----------------------------------------+--------------------+-------------------------------------------------------------+
+
++-----------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`inline variables are a C++17 extension`|
++-----------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`use of multiple declarators in a single using declaration is a C++17 extension`|
++---------------------------------------------------------------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`nested namespace definition is a C++17 extension; define each namespace separately`|
++-------------------------------------------------------------------------------------------------------------------------+
+
++------------------------------------------------------------+---------------------------+-----------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`attributes on` |nbsp| |+-------------------------+| |nbsp| :diagtext:`declaration are a C++17 extension`|
+|                                                            ||:diagtext:`a namespace`  ||                                                     |
+|                                                            |+-------------------------+|                                                     |
+|                                                            ||:diagtext:`an enumerator`||                                                     |
+|                                                            |+-------------------------+|                                                     |
++------------------------------------------------------------+---------------------------+-----------------------------------------------------+
+
++---------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`capture of '\*this' by copy is a C++17 extension`|
++---------------------------------------------------------------------------------------+
+
++------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`static\_assert with no message is a C++17 extension`|
++------------------------------------------------------------------------------------------+
+
++--------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`template template parameter using 'typename' is a C++17 extension`|
++--------------------------------------------------------------------------------------------------------+
+
++--------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`default scope specifier for attributes is a C++17 extension`|
++--------------------------------------------------------------------------------------------------+
+
++-----------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`pack expansion of using declaration is a C++17 extension`|
++-----------------------------------------------------------------------------------------------+
+
+
 -Wc++1y-extensions
 ------------------
 Synonym for `-Wc++14-extensions`_.
@@ -1304,128 +1486,146 @@ Synonym for `-Wc++14-extensions`_.
 
 -Wc++1z-compat
 --------------
-This diagnostic is enabled by default.
+Synonym for `-Wc++17-compat`_.
 
-Controls `-Wdeprecated-increment-bool`_, `-Wdeprecated-register`_.
+
+-Wc++1z-compat-mangling
+-----------------------
+Synonym for `-Wc++17-compat-mangling`_.
 
 
 -Wc++1z-extensions
+------------------
+Synonym for `-Wc++17-extensions`_.
+
+
+-Wc++2a-compat
+--------------
+**Diagnostic text:**
+
++-------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`'`:placeholder:`A`:diagtext:`' is a keyword in C++2a`|
++-------------------------------------------------------------------------------------------+
+
+
+-Wc++2a-compat-pedantic
+-----------------------
+Synonym for `-Wc++2a-compat`_.
+
+
+-Wc++2a-extensions
 ------------------
 Some of the diagnostics controlled by this flag are enabled by default.
 
 **Diagnostic text:**
 
-+------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`constexpr if is a C++1z extension`|
-+------------------------------------------------------------------------+
++----------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`default member initializer for bit-field is a C++2a extension`|
++----------------------------------------------------------------------------------------------------+
 
-+---------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`'constexpr' on lambda expressions is a C++1z extension`|
-+---------------------------------------------------------------------------------------------+
++--------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`explicit capture of 'this' with a capture default of '=' is a C++2a extension`|
++--------------------------------------------------------------------------------------------------------------------+
 
-+---------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`use of the` |nbsp| :placeholder:`A` |nbsp| :diagtext:`attribute is a C++1z extension`|
-+---------------------------------------------------------------------------------------------------------------------------+
++--------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`invoking a pointer to a 'const &' member function on an rvalue is a C++2a extension`|
++--------------------------------------------------------------------------------------------------------------------------+
 
-+---------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`decomposition declarations are a C++1z extension`|
-+---------------------------------------------------------------------------------------+
 
-+--------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`pack fold expression is a C++1z extension`|
-+--------------------------------------------------------------------------------+
+-Wc++98-c++11-c++14-c++17-compat
+--------------------------------
+**Diagnostic text:**
 
-+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`'begin' and 'end' returning different types (`:placeholder:`A` |nbsp| :diagtext:`and` |nbsp| :placeholder:`B`:diagtext:`) is a C++1z extension`|
-+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
++-------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`default member initializer for bit-field is incompatible with C++ standards before C++2a`|
++-------------------------------------------------------------------------------------------------------------------------------+
 
-+----------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`hexadecimal floating literals are a C++1z feature`|
-+----------------------------------------------------------------------------------------+
++-----------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`explicit capture of 'this' with a capture default of '=' is incompatible with C++ standards before C++2a`|
++-----------------------------------------------------------------------------------------------------------------------------------------------+
 
-+-----------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`inline variables are a C++1z extension`|
-+-----------------------------------------------------------------------------+
 
-+-------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`nested namespace definition is a C++1z extension; define each namespace separately`|
-+-------------------------------------------------------------------------------------------------------------------------+
+-Wc++98-c++11-c++14-c++17-compat-pedantic
+-----------------------------------------
+Also controls `-Wc++98-c++11-c++14-c++17-compat`_.
 
-+---------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`capture of '\*this' by copy is a C++1z extension`|
-+---------------------------------------------------------------------------------------+
+**Diagnostic text:**
 
-+------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`static\_assert with no message is a C++1z extension`|
-+------------------------------------------------------------------------------------------+
-
-+--------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`template template parameter using 'typename' is a C++1z extension`|
-+--------------------------------------------------------------------------------------------------------+
-
-+--------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`default scope specifier for attributes is a C++1z extension`|
-+--------------------------------------------------------------------------------------------------+
++-----------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`invoking a pointer to a 'const &' member function on an rvalue is incompatible with C++ standards before C++2a`|
++-----------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wc++98-c++11-c++14-compat
 --------------------------
 **Diagnostic text:**
 
-+------------------------------------------------------------+---------------------------+--------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`attributes on` |nbsp| |+-------------------------+| |nbsp| :diagtext:`declaration are incompatible with C++ standards before C++1z`|
-|                                                            ||:diagtext:`a namespace`  ||                                                                                |
-|                                                            |+-------------------------+|                                                                                |
-|                                                            ||:diagtext:`an enumerator`||                                                                                |
-|                                                            |+-------------------------+|                                                                                |
-+------------------------------------------------------------+---------------------------+--------------------------------------------------------------------------------+
-
 +---------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`constexpr if is incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`constexpr if is incompatible with C++ standards before C++17`|
 +---------------------------------------------------------------------------------------------------+
 
 +----------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`constexpr on lambda expressions is incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`constexpr on lambda expressions is incompatible with C++ standards before C++17`|
 +----------------------------------------------------------------------------------------------------------------------+
 
 +------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`decomposition declarations are incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`decomposition declarations are incompatible with C++ standards before C++17`|
 +------------------------------------------------------------------------------------------------------------------+
 
 +-----------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`pack fold expression is incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`pack fold expression is incompatible with C++ standards before C++17`|
 +-----------------------------------------------------------------------------------------------------------+
 
++---------------------------+--------------------+----------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| |+------------------+| |nbsp| :diagtext:`initialization statements are incompatible with C++ standards before C++17`|
+|                           ||:diagtext:`if`    ||                                                                                              |
+|                           |+------------------+|                                                                                              |
+|                           ||:diagtext:`switch`||                                                                                              |
+|                           |+------------------+|                                                                                              |
++---------------------------+--------------------+----------------------------------------------------------------------------------------------+
+
 +--------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`inline variables are incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`inline variables are incompatible with C++ standards before C++17`|
 +--------------------------------------------------------------------------------------------------------+
 
 +------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`nested namespace definition is incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`nested namespace definition is incompatible with C++ standards before C++17`|
 +------------------------------------------------------------------------------------------------------------------+
 
 +-------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`by value capture of '\*this' is incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`by value capture of '\*this' is incompatible with C++ standards before C++17`|
 +-------------------------------------------------------------------------------------------------------------------+
 
 +---------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`static\_assert with no message is incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`static\_assert with no message is incompatible with C++ standards before C++17`|
 +---------------------------------------------------------------------------------------------------------------------+
 
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`non-type template parameters declared with` |nbsp| :placeholder:`A` |nbsp| :diagtext:`are incompatible with C++ standards before C++17`|
++-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
 +-----------------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`template template parameter using 'typename' is incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`template template parameter using 'typename' is incompatible with C++ standards before C++17`|
 +-----------------------------------------------------------------------------------------------------------------------------------+
 
 +--------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`unicode literals are incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`unicode literals are incompatible with C++ standards before C++17`|
 +--------------------------------------------------------------------------------------------------------+
 
 +-----------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`default scope specifier for attributes is incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`default scope specifier for attributes is incompatible with C++ standards before C++17`|
 +-----------------------------------------------------------------------------------------------------------------------------+
+
++------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`use of multiple declarators in a single using declaration is incompatible with C++ standards before C++17`|
++------------------------------------------------------------------------------------------------------------------------------------------------+
+
++-----------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`pack expansion using declaration is incompatible with C++ standards before C++17`|
++-----------------------------------------------------------------------------------------------------------------------+
 
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`'begin' and 'end' returning different types (`:placeholder:`A` |nbsp| :diagtext:`and` |nbsp| :placeholder:`B`:diagtext:`) is incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`'begin' and 'end' returning different types (`:placeholder:`A` |nbsp| :diagtext:`and` |nbsp| :placeholder:`B`:diagtext:`) is incompatible with C++ standards before C++17`|
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
@@ -1435,8 +1635,16 @@ Also controls `-Wc++98-c++11-c++14-compat`_.
 
 **Diagnostic text:**
 
++------------------------------------------------------------+---------------------------+--------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`attributes on` |nbsp| |+-------------------------+| |nbsp| :diagtext:`declaration are incompatible with C++ standards before C++17`|
+|                                                            ||:diagtext:`a namespace`  ||                                                                                |
+|                                                            |+-------------------------+|                                                                                |
+|                                                            ||:diagtext:`an enumerator`||                                                                                |
+|                                                            |+-------------------------+|                                                                                |
++------------------------------------------------------------+---------------------------+--------------------------------------------------------------------------------+
+
 +---------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`hexidecimal floating literals are incompatible with C++ standards before C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`hexadecimal floating literals are incompatible with C++ standards before C++17`|
 +---------------------------------------------------------------------------------------------------------------------+
 
 
@@ -1493,10 +1701,8 @@ Also controls `-Wc++98-c++11-c++14-compat`_.
 +----------------------------------------------------------------------------------------------------------+
 
 
--Wc++98-c++11-compat-pedantic
------------------------------
-Also controls `-Wc++98-c++11-compat`_.
-
+-Wc++98-c++11-compat-binary-literal
+-----------------------------------
 **Diagnostic text:**
 
 +---------------------------------------------------------------------------------------------------------------+
@@ -1504,9 +1710,14 @@ Also controls `-Wc++98-c++11-compat`_.
 +---------------------------------------------------------------------------------------------------------------+
 
 
+-Wc++98-c++11-compat-pedantic
+-----------------------------
+Controls `-Wc++98-c++11-compat`_, `-Wc++98-c++11-compat-binary-literal`_.
+
+
 -Wc++98-compat
 --------------
-Also controls `-Wc++98-c++11-c++14-compat`_, `-Wc++98-c++11-compat`_, `-Wc++98-compat-local-type-template-args`_, `-Wc++98-compat-unnamed-type-template-args`_.
+Also controls `-Wc++98-c++11-c++14-c++17-compat`_, `-Wc++98-c++11-c++14-compat`_, `-Wc++98-c++11-compat`_, `-Wc++98-compat-local-type-template-args`_, `-Wc++98-compat-unnamed-type-template-args`_.
 
 **Diagnostic text:**
 
@@ -1847,7 +2058,7 @@ Also controls `-Wc++98-c++11-c++14-compat`_, `-Wc++98-c++11-compat`_, `-Wc++98-c
 
 -Wc++98-compat-pedantic
 -----------------------
-Also controls `-Wc++98-c++11-c++14-compat-pedantic`_, `-Wc++98-c++11-compat-pedantic`_, `-Wc++98-compat`_, `-Wc++98-compat-bind-to-temporary-copy`_.
+Also controls `-Wc++98-c++11-c++14-c++17-compat-pedantic`_, `-Wc++98-c++11-c++14-compat-pedantic`_, `-Wc++98-c++11-compat-pedantic`_, `-Wc++98-compat`_, `-Wc++98-compat-bind-to-temporary-copy`_.
 
 **Diagnostic text:**
 
@@ -2176,10 +2387,6 @@ This diagnostic is enabled by default.
 |:warning:`warning:` |nbsp| :diagtext:`comparison of distinct pointer types`|
 +---------------------------------------------------------------------------+
 
-+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`comparison of distinct pointer types (`:placeholder:`A` |nbsp| :diagtext:`and` |nbsp| :placeholder:`B`:diagtext:`) uses non-standard composite pointer type` |nbsp| :placeholder:`C`|
-+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-
 
 -Wcomplex-component-init
 ------------------------
@@ -2309,7 +2516,7 @@ This diagnostic is enabled by default.
 ------------
 Some of the diagnostics controlled by this flag are enabled by default.
 
-Also controls `-Wbool-conversion`_, `-Wconstant-conversion`_, `-Wenum-conversion`_, `-Wfloat-conversion`_, `-Wint-conversion`_, `-Wliteral-conversion`_, `-Wnon-literal-null-conversion`_, `-Wnull-conversion`_, `-Wobjc-literal-conversion`_, `-Wshorten-64-to-32`_, `-Wsign-conversion`_, `-Wstring-conversion`_.
+Also controls `-Wbitfield-enum-conversion`_, `-Wbool-conversion`_, `-Wconstant-conversion`_, `-Wenum-conversion`_, `-Wfloat-conversion`_, `-Wint-conversion`_, `-Wliteral-conversion`_, `-Wnon-literal-null-conversion`_, `-Wnull-conversion`_, `-Wobjc-literal-conversion`_, `-Wshorten-64-to-32`_, `-Wsign-conversion`_, `-Wstring-conversion`_.
 
 **Diagnostic text:**
 
@@ -2343,15 +2550,20 @@ Also controls `-Wbool-conversion`_, `-Wconstant-conversion`_, `-Wenum-conversion
 Synonym for `-Wnull-conversion`_.
 
 
--Wcoreturn-without-coawait
---------------------------
+-Wcoroutine
+-----------
+Synonym for `-Wcoroutine-missing-unhandled-exception`_.
+
+
+-Wcoroutine-missing-unhandled-exception
+---------------------------------------
 This diagnostic is enabled by default.
 
 **Diagnostic text:**
 
-+--------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`'co\_return' used in a function that uses neither 'co\_await' nor 'co\_yield'`|
-+--------------------------------------------------------------------------------------------------------------------+
++-----------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is required to declare the member 'unhandled\_exception()' when exceptions are enabled`|
++-----------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wcovered-switch-default
@@ -2361,6 +2573,11 @@ This diagnostic is enabled by default.
 +--------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`default label in switch which covers all enumeration values`|
 +--------------------------------------------------------------------------------------------------+
+
+
+-Wcpp
+-----
+Synonym for `-W#warnings`_.
 
 
 -Wcstring-format-directive
@@ -2389,6 +2606,10 @@ Some of the diagnostics controlled by this flag are enabled by default.
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`attribute parameter` |nbsp| :placeholder:`B` |nbsp| :diagtext:`is negative and will be ignored`|
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`nvcc does not allow '\_\_`:placeholder:`A`:diagtext:`\_\_' to appear after '()' in lambdas`|
++---------------------------------------------------------------------------------------------------------------------------------+
 
 +------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`ignored 'inline' attribute on kernel function` |nbsp| :placeholder:`A`|
@@ -2558,7 +2779,7 @@ Some of the diagnostics controlled by this flag are enabled by default.
 ------------
 Some of the diagnostics controlled by this flag are enabled by default.
 
-Also controls `-Wdeprecated-attributes`_, `-Wdeprecated-declarations`_, `-Wdeprecated-increment-bool`_, `-Wdeprecated-register`_, `-Wdeprecated-writable-strings`_.
+Also controls `-Wdeprecated-attributes`_, `-Wdeprecated-declarations`_, `-Wdeprecated-dynamic-exception-spec`_, `-Wdeprecated-increment-bool`_, `-Wdeprecated-register`_, `-Wdeprecated-writable-strings`_.
 
 **Diagnostic text:**
 
@@ -2596,10 +2817,6 @@ Also controls `-Wdeprecated-attributes`_, `-Wdeprecated-declarations`_, `-Wdepre
 |:warning:`warning:` |nbsp| :diagtext:`treating '`:placeholder:`A`:diagtext:`' input as '`:placeholder:`B`:diagtext:`' when in C++ mode, this behavior is deprecated`|
 +--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
-+--------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`dynamic exception specifications are deprecated`|
-+--------------------------------------------------------------------------------------+
-
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`OpenCL version` |nbsp| :placeholder:`A` |nbsp| :diagtext:`does not support the option '`:placeholder:`B`:diagtext:`'`|
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -2626,6 +2843,10 @@ This diagnostic is enabled by default.
 
 **Diagnostic text:**
 
++--------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`specifying 'uuid' as an ATL attribute is deprecated; use \_\_declspec instead`|
++--------------------------------------------------------------------------------------------------------------------+
+
 +-----------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`use of C-style parameters in Objective-C method declarations is deprecated`|
 +-----------------------------------------------------------------------------------------------------------------+
@@ -2647,12 +2868,21 @@ This diagnostic is enabled by default.
 +-------------------------------------------------------------------------------------------------------------------------------------+
 
 
+-Wdeprecated-dynamic-exception-spec
+-----------------------------------
+**Diagnostic text:**
+
++--------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`dynamic exception specifications are deprecated`|
++--------------------------------------------------------------------------------------+
+
+
 -Wdeprecated-implementations
 ----------------------------
 **Diagnostic text:**
 
 +----------------------------------------------------------------------+----------------------+
-|:warning:`warning:` |nbsp| :diagtext:`Implementing deprecated` |nbsp| |+--------------------+|
+|:warning:`warning:` |nbsp| :diagtext:`implementing deprecated` |nbsp| |+--------------------+|
 |                                                                      ||:diagtext:`method`  ||
 |                                                                      |+--------------------+|
 |                                                                      ||:diagtext:`class`   ||
@@ -2660,6 +2890,10 @@ This diagnostic is enabled by default.
 |                                                                      ||:diagtext:`category`||
 |                                                                      |+--------------------+|
 +----------------------------------------------------------------------+----------------------+
+
++----------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`implementing unavailable method`|
++----------------------------------------------------------------------+
 
 
 -Wdeprecated-increment-bool
@@ -2669,7 +2903,7 @@ This diagnostic is enabled by default.
 **Diagnostic text:**
 
 +---------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`incrementing expression of type bool is deprecated and incompatible with C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`incrementing expression of type bool is deprecated and incompatible with C++17`|
 +---------------------------------------------------------------------------------------------------------------------+
 
 
@@ -2719,7 +2953,7 @@ This diagnostic is enabled by default.
 **Diagnostic text:**
 
 +-------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`'register' storage class specifier is deprecated and incompatible with C++1z`|
+|:warning:`warning:` |nbsp| :diagtext:`'register' storage class specifier is deprecated and incompatible with C++17`|
 +-------------------------------------------------------------------------------------------------------------------+
 
 
@@ -3089,6 +3323,17 @@ This diagnostic is enabled by default.
 +-----------------------------------------------------------------------------------------------------------------------------------+
 
 
+-Wduplicate-protocol
+--------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++-----------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`duplicate protocol definition of` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is ignored`|
++-----------------------------------------------------------------------------------------------------------------------------+
+
+
 -Wdynamic-class-memaccess
 -------------------------
 This diagnostic is enabled by default.
@@ -3106,6 +3351,19 @@ This diagnostic is enabled by default.
 |                           ||:diagtext:`second operand of`||                                                                                                |                                        |                                                                                             ||:diagtext:`compared`   ||
 |                           |+-----------------------------+|                                                                                                |                                        |                                                                                             |+-----------------------+|
 +---------------------------+-------------------------------+------------------------------------------------------------------------------------------------+----------------------------------------+---------------------------------------------------------------------------------------------+-------------------------+
+
+
+-Wdynamic-exception-spec
+------------------------
+Some of the diagnostics controlled by this flag are enabled by default.
+
+Also controls `-Wdeprecated-dynamic-exception-spec`_.
+
+**Diagnostic text:**
+
++--------------------------------------------------------------------------------------------+
+|:error:`error:` |nbsp| :diagtext:`ISO C++17 does not allow dynamic exception specifications`|
++--------------------------------------------------------------------------------------------+
 
 
 -Weffc++
@@ -3156,7 +3414,7 @@ This diagnostic is enabled by default.
 **Diagnostic text:**
 
 +-------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`ISO C++1z does not allow a decomposition group to be empty`|
+|:warning:`warning:` |nbsp| :diagtext:`ISO C++17 does not allow a decomposition group to be empty`|
 +-------------------------------------------------------------------------------------------------+
 
 
@@ -3189,11 +3447,24 @@ Synonym for `-Wextra-tokens`_.
 --------------
 This diagnostic is enabled by default.
 
+Also controls `-Wenum-compare-switch`_.
+
 **Diagnostic text:**
 
 +------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`comparison of two values with different enumeration types`|
 +------------------------------------------------------------------------------------------------+
+
+
+-Wenum-compare-switch
+---------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++--------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`comparison of two values with different enumeration types in switch statement`|
++--------------------------------------------------------------------------------------------------------------------+
 
 
 -Wenum-conversion
@@ -3239,6 +3510,10 @@ This diagnostic is enabled by default.
 +-------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`exception of type` |nbsp| :placeholder:`A` |nbsp| :diagtext:`will be caught by earlier handler`|
 +-------------------------------------------------------------------------------------------------------------------------------------+
+
++-----------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`has a non-throwing exception specification but can still throw`|
++-----------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wexit-time-destructors
@@ -3328,7 +3603,13 @@ This diagnostic is enabled by default.
 -------
 Some of the diagnostics controlled by this flag are enabled by default.
 
-Controls `-Wignored-qualifiers`_, `-Winitializer-overrides`_, `-Wmissing-field-initializers`_, `-Wmissing-method-return-type`_, `-Wsemicolon-before-method-body`_, `-Wsign-compare`_, `-Wunused-parameter`_.
+Also controls `-Wignored-qualifiers`_, `-Winitializer-overrides`_, `-Wmissing-field-initializers`_, `-Wmissing-method-return-type`_, `-Wnull-pointer-arithmetic`_, `-Wsemicolon-before-method-body`_, `-Wsign-compare`_, `-Wunused-parameter`_.
+
+**Diagnostic text:**
+
++-----------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`call to function without interrupt attribute could clobber interruptee's VFP registers`|
++-----------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wextra-qualification
@@ -3498,6 +3779,10 @@ Also controls `-Wformat-extra-args`_, `-Wformat-invalid-specifier`_, `-Wformat-s
 
 **Diagnostic text:**
 
++-------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`using '%%P' format specifier without precision`|
++-------------------------------------------------------------------------------------+
+
 +---------------------------+----------------------------------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| |+--------------------------------------------+| |nbsp| :diagtext:`'`:placeholder:`A`:diagtext:`' should not be used as format arguments; add an explicit cast to` |nbsp| :placeholder:`B` |nbsp| :diagtext:`instead`|
 |                           ||:diagtext:`values of type`                  ||                                                                                                                                                                     |
@@ -3513,6 +3798,10 @@ Also controls `-Wformat-extra-args`_, `-Wformat-invalid-specifier`_, `-Wformat-s
 |                                                                                                                                    ||:diagtext:`underlying type`||                        |
 |                                                                                                                                    |+---------------------------+|                        |
 +------------------------------------------------------------------------------------------------------------------------------------+-----------------------------+------------------------+
+
++----------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`using '`:placeholder:`A`:diagtext:`' format specifier annotation outside of os\_log()/os\_trace()`|
++----------------------------------------------------------------------------------------------------------------------------------------+
 
 +-----------------------------------------------------------------------------+-----------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`invalid position specified for` |nbsp| |+---------------------------+|
@@ -3755,6 +4044,10 @@ This diagnostic flag exists for GCC compatibility, and has no effect in Clang.
 Some of the diagnostics controlled by this flag are enabled by default.
 
 **Diagnostic text:**
+
++--------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`'diagnose\_if' is a clang extension`|
++--------------------------------------------------------------------------+
 
 +------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`'enable\_if' is a clang extension`|
@@ -4176,6 +4469,10 @@ This diagnostic is enabled by default.
 |:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`attribute ignored`|
 +--------------------------------------------------------------------------------+
 
++--------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`attribute ignored for field of type` |nbsp| :placeholder:`B`|
++--------------------------------------------------------------------------------------------------------------------------+
+
 +---------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`attribute ignored on inline function`|
 +---------------------------------------------------------------------------------------------------+
@@ -4268,6 +4565,8 @@ This diagnostic is enabled by default.
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`variables and functions`                                                                             ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
+|                                                                                                ||:diagtext:`functions and global variables`                                                                      ||
+|                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`functions, variables, and Objective-C interfaces`                                                    ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`functions and methods`                                                                               ||
@@ -4279,6 +4578,8 @@ This diagnostic is enabled by default.
 |                                                                                                ||:diagtext:`functions, methods, and classes`                                                                     ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`functions, methods, and parameters`                                                                  ||
+|                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
+|                                                                                                ||:diagtext:`functions, methods, and global variables`                                                            ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`classes`                                                                                             ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
@@ -4308,6 +4609,8 @@ This diagnostic is enabled by default.
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`methods and properties`                                                                              ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
+|                                                                                                ||:diagtext:`functions, methods, and properties`                                                                  ||
+|                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`struct or union`                                                                                     ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`struct, union or class`                                                                              ||
@@ -4326,7 +4629,7 @@ This diagnostic is enabled by default.
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`variables with static or thread storage duration`                                                    ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
-|                                                                                                ||:diagtext:`functions and global variables`                                                                      ||
+|                                                                                                ||:diagtext:`functions, methods, properties, and global variables`                                                ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`structs, unions, and typedefs`                                                                       ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
@@ -4345,6 +4648,10 @@ This diagnostic is enabled by default.
 |                                                                                                ||:diagtext:`structs, classes, variables, functions, and inline namespaces`                                       ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 |                                                                                                ||:diagtext:`variables, functions, methods, types, enumerations, enumerators, labels, and non-static data members`||
+|                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
+|                                                                                                ||:diagtext:`classes and enumerations`                                                                            ||
+|                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
+|                                                                                                ||:diagtext:`named declarations`                                                                                  ||
 |                                                                                                |+----------------------------------------------------------------------------------------------------------------+|
 +------------------------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------+
 
@@ -4496,9 +4803,13 @@ This diagnostic is enabled by default.
 |:warning:`warning:` |nbsp| :diagtext:`\_\_declspec attribute` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is not supported`|
 +-------------------------------------------------------------------------------------------------------------------------+
 
-+-------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`Ignoring unsupported '`:placeholder:`A`:diagtext:`' in the target attribute string`|
-+-------------------------------------------------------------------------------------------------------------------------+
++-------------------------------------------------------+-------------------------+----------------------------------+---------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`ignoring` |nbsp| |+-----------------------+|+--------------------------------+| |nbsp| :diagtext:`'`:placeholder:`C`:diagtext:`' in the target attribute string`|
+|                                                       ||:diagtext:`unsupported`|||                                ||                                                                                 |
+|                                                       |+-----------------------+|+--------------------------------+|                                                                                 |
+|                                                       ||:diagtext:`duplicate`  ||| |nbsp| :diagtext:`architecture`||                                                                                 |
+|                                                       |+-----------------------+|+--------------------------------+|                                                                                 |
++-------------------------------------------------------+-------------------------+----------------------------------+---------------------------------------------------------------------------------+
 
 
 -Wignored-optimization-argument
@@ -4516,9 +4827,26 @@ This diagnostic is enabled by default.
 +--------------------------------------------------------------------------------------------------------+
 
 
+-Wignored-pragma-intrinsic
+--------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is not a recognized builtin`|+----------------------------------------------------------------------------+|
+|                                                                                          ||                                                                            ||
+|                                                                                          |+----------------------------------------------------------------------------+|
+|                                                                                          ||:diagtext:`; consider including <intrin.h> to access non-builtin intrinsics`||
+|                                                                                          |+----------------------------------------------------------------------------+|
++------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
+
+
 -Wignored-pragmas
 -----------------
 This diagnostic is enabled by default.
+
+Also controls `-Wignored-pragma-intrinsic`_.
 
 **Diagnostic text:**
 
@@ -4537,6 +4865,10 @@ This diagnostic is enabled by default.
 |                                                                                   ||:diagtext:`options align`||                       |
 |                                                                                   |+-------------------------+|                       |
 +-----------------------------------------------------------------------------------+---------------------------+-----------------------+
+
++-----------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`OpenCL extension end directive mismatches begin directive - ignoring`|
++-----------------------------------------------------------------------------------------------------------+
 
 +----------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`'#pragma comment` |nbsp| :placeholder:`A`:diagtext:`' ignored`|
@@ -4562,10 +4894,6 @@ This diagnostic is enabled by default.
 |:warning:`warning:` |nbsp| :diagtext:`missing ':' or ')' after` |nbsp| :placeholder:`A` |nbsp| :diagtext:`- ignoring`|
 +---------------------------------------------------------------------------------------------------------------------+
 
-+--------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`expected 'enable' or 'disable' - ignoring`|
-+--------------------------------------------------------------------------------+
-
 +---------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`expected identifier in '#pragma` |nbsp| :placeholder:`A`:diagtext:`' - ignored`|
 +---------------------------------------------------------------------------------------------------------------------+
@@ -4585,6 +4913,14 @@ This diagnostic is enabled by default.
 +------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`expected non-wide string literal in '#pragma` |nbsp| :placeholder:`A`:diagtext:`'`|
 +------------------------------------------------------------------------------------------------------------------------+
+
++-------------------------------------------------------+---------------------------------------------------+------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`expected` |nbsp| |+-------------------------------------------------+| |nbsp| :diagtext:`- ignoring`|
+|                                                       ||:diagtext:`'enable', 'disable', 'begin' or 'end'`||                              |
+|                                                       |+-------------------------------------------------+|                              |
+|                                                       ||:diagtext:`'disable'`                            ||                              |
+|                                                       |+-------------------------------------------------+|                              |
++-------------------------------------------------------+---------------------------------------------------+------------------------------+
 
 +-----------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`expected ')' or ',' in '#pragma` |nbsp| :placeholder:`A`:diagtext:`'`|
@@ -4610,17 +4946,13 @@ This diagnostic is enabled by default.
 |:warning:`warning:` |nbsp| :diagtext:`extra tokens at end of '#pragma` |nbsp| :placeholder:`A`:diagtext:`' - ignored`|
 +---------------------------------------------------------------------------------------------------------------------+
 
++----------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`incorrect use of #pragma clang force\_cuda\_host\_device begin\|end`|
++----------------------------------------------------------------------------------------------------------+
+
 +-------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`'#pragma init\_seg' is only supported when targeting a Microsoft environment`|
 +-------------------------------------------------------------------------------------------------------------------+
-
-+------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is not a recognized builtin`|+----------------------------------------------------------------------------+|
-|                                                                                          ||                                                                            ||
-|                                                                                          |+----------------------------------------------------------------------------+|
-|                                                                                          ||:diagtext:`; consider including <intrin.h> to access non-builtin intrinsics`||
-|                                                                                          |+----------------------------------------------------------------------------+|
-+------------------------------------------------------------------------------------------+------------------------------------------------------------------------------+
 
 +-----------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`unknown action for '#pragma` |nbsp| :placeholder:`A`:diagtext:`' - ignored`|
@@ -4800,9 +5132,13 @@ Some of the diagnostics controlled by this flag are enabled by default.
 
 **Diagnostic text:**
 
-+------------------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`implicit declaration of function` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is invalid in C99`|
-+------------------------------------------------------------------------------------------------------------------------------------+
++----------------------------------------------------------------------------------------------------------------------------------------+--------------------+
+|:warning:`warning:` |nbsp| :diagtext:`implicit declaration of function` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is invalid in` |nbsp| |+------------------+|
+|                                                                                                                                        ||:diagtext:`C99`   ||
+|                                                                                                                                        |+------------------+|
+|                                                                                                                                        ||:diagtext:`OpenCL`||
+|                                                                                                                                        |+------------------+|
++----------------------------------------------------------------------------------------------------------------------------------------+--------------------+
 
 +---------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`implicitly declaring library function '`:placeholder:`A`:diagtext:`' with type` |nbsp| :placeholder:`B`|
@@ -4892,6 +5228,25 @@ This diagnostic is enabled by default.
 +----------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`#include\_next in primary source file`|
 +----------------------------------------------------------------------------+
+
+
+-Wincompatible-exception-spec
+-----------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++--------------------------------------------------------------------------+----------------------+--------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`exception specifications of` |nbsp| |+--------------------+| |nbsp| :diagtext:`types differ`|
+|                                                                          ||:diagtext:`return`  ||                                |
+|                                                                          |+--------------------+|                                |
+|                                                                          ||:diagtext:`argument`||                                |
+|                                                                          |+--------------------+|                                |
++--------------------------------------------------------------------------+----------------------+--------------------------------+
+
++-----------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`target exception specification is not superset of source`|
++-----------------------------------------------------------------------------------------------+
 
 
 -Wincompatible-function-pointer-types
@@ -5061,6 +5416,10 @@ This diagnostic is enabled by default.
 |:warning:`warning:` |nbsp| :diagtext:`missing submodule '`:placeholder:`A`:diagtext:`'`|
 +---------------------------------------------------------------------------------------+
 
++--------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`umbrella directory '`:placeholder:`A`:diagtext:`' not found`|
++--------------------------------------------------------------------------------------------------+
+
 +-------------------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`umbrella header for module '`:placeholder:`A`:diagtext:`' does not include header '`:placeholder:`B`:diagtext:`'`|
 +-------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -5079,6 +5438,15 @@ This diagnostic is enabled by default.
 +------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`redeclared without 'dllimport' attribute: 'dllexport' attribute added`|
 +------------------------------------------------------------------------------------------------------------------------------------+
+
+
+-Winconsistent-missing-destructor-override
+------------------------------------------
+**Diagnostic text:**
+
++------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`overrides a destructor but is not marked 'override'`|
++------------------------------------------------------------------------------------------------------------------+
 
 
 -Winconsistent-missing-override
@@ -5101,7 +5469,7 @@ Also controls `-Wdeprecated-increment-bool`_.
 **Diagnostic text:**
 
 +------------------------------------------------------------------------------------------------+
-|:error:`error:` |nbsp| :diagtext:`ISO C++1z does not allow incrementing expression of type bool`|
+|:error:`error:` |nbsp| :diagtext:`ISO C++17 does not allow incrementing expression of type bool`|
 +------------------------------------------------------------------------------------------------+
 
 
@@ -5131,6 +5499,21 @@ This diagnostic is enabled by default.
 +---------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`subobject initialization overrides initialization of other fields within its enclosing subobject`|
 +---------------------------------------------------------------------------------------------------------------------------------------+
+
+
+-Winjected-class-name
+---------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------+--------------------------------------------------------------+------------------------+---------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`ISO C++ specifies that qualified reference to` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is a constructor name rather than a` |nbsp| |+-------------------------+| |nbsp| :diagtext:`in this context, despite preceding` |nbsp| |+----------------------+| |nbsp| :diagtext:`keyword`|
+|                                                                                                                                                                           ||:diagtext:`template name`||                                                              ||:diagtext:`'typename'`||                           |
+|                                                                                                                                                                           |+-------------------------+|                                                              |+----------------------+|                           |
+|                                                                                                                                                                           ||:diagtext:`type`         ||                                                              ||:diagtext:`'template'`||                           |
+|                                                                                                                                                                           |+-------------------------+|                                                              |+----------------------+|                           |
++---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------------------------+--------------------------------------------------------------+------------------------+---------------------------+
 
 
 -Winline
@@ -5259,6 +5642,10 @@ Also controls `-Wignored-optimization-argument`_.
 
 **Diagnostic text:**
 
++-----------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`the object size sanitizer has no effect at -O0, but is explicitly enabled:` |nbsp| :placeholder:`A`|
++-----------------------------------------------------------------------------------------------------------------------------------------+
+
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`optimization level '`:placeholder:`A`:diagtext:`' is not supported; using '`:placeholder:`B`:placeholder:`C`:diagtext:`' instead`|
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -5309,6 +5696,17 @@ This diagnostic is enabled by default.
 +--------------------------------------------------------------------------------------------------------------+
 
 
+-Winvalid-ios-deployment-target
+-------------------------------
+This diagnostic is an error by default, but the flag ``-Wno-invalid-ios-deployment-target`` can be used to disable the error.
+
+**Diagnostic text:**
+
++------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:error:`error:` |nbsp| :diagtext:`invalid iOS deployment version '`:placeholder:`A`:diagtext:`', iOS 10 is the maximum deployment target for 32-bit targets`|
++------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
 -Winvalid-noreturn
 ------------------
 This diagnostic is enabled by default.
@@ -5352,6 +5750,21 @@ Some of the diagnostics controlled by this flag are enabled by default.
 +------------------------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`unable to find` |nbsp| :placeholder:`A` |nbsp| :diagtext:`directory, expected to be in '`:placeholder:`B`:diagtext:`'`|
 +------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+-Winvalid-partial-specialization
+--------------------------------
+This diagnostic is an error by default, but the flag ``-Wno-invalid-partial-specialization`` can be used to disable the error.
+
+**Diagnostic text:**
+
++-----------------------+----------------------+-----------------------------------------------------------------------------------------------------+
+|:error:`error:` |nbsp| |+--------------------+| |nbsp| :diagtext:`template partial specialization is not more specialized than the primary template`|
+|                       ||:diagtext:`class`   ||                                                                                                     |
+|                       |+--------------------+|                                                                                                     |
+|                       ||:diagtext:`variable`||                                                                                                     |
+|                       |+--------------------+|                                                                                                     |
++-----------------------+----------------------+-----------------------------------------------------------------------------------------------------+
 
 
 -Winvalid-pch
@@ -5475,14 +5888,7 @@ This diagnostic is enabled by default.
 
 -Wliblto
 --------
-This diagnostic is enabled by default.
-
-**Diagnostic text:**
-
-+-------------------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`libLTO.dylib relative to clang installed dir not found; using 'ld' default search path instead`|
-+-------------------------------------------------------------------------------------------------------------------------------------+
-
+This diagnostic flag exists for GCC compatibility, and has no effect in Clang.
 
 -Wliteral-conversion
 --------------------
@@ -5529,9 +5935,13 @@ This diagnostic is enabled by default.
 
 **Diagnostic text:**
 
-+-----------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`logical not is only applied to the left hand side of this comparison`|
-+-----------------------------------------------------------------------------------------------------------+
++--------------------------------------------------------------------------------------------------------+------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`logical not is only applied to the left hand side of this` |nbsp| |+----------------------------+|
+|                                                                                                        ||:diagtext:`comparison`      ||
+|                                                                                                        |+----------------------------+|
+|                                                                                                        ||:diagtext:`bitwise operator`||
+|                                                                                                        |+----------------------------+|
++--------------------------------------------------------------------------------------------------------+------------------------------+
 
 
 -Wlogical-op-parentheses
@@ -5598,6 +6008,10 @@ Some of the diagnostics controlled by this flag are enabled by default.
 |:warning:`warning:` |nbsp| :diagtext:`variable named 'main' with external linkage has undefined behavior`|
 +---------------------------------------------------------------------------------------------------------+
 
++------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`bool literal returned from 'main'`|
++------------------------------------------------------------------------+
+
 +---------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`'main' should not be declared static`|
 +---------------------------------------------------------------------------+
@@ -5634,6 +6048,21 @@ This diagnostic is enabled by default.
 +--------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`too many braces around scalar initializer`|
 +--------------------------------------------------------------------------------+
+
+
+-Wmax-unsigned-zero
+-------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++----------------------------------------------------------------+---------------------------------------+------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`taking the max of` |nbsp| |+-------------------------------------+| |nbsp| :diagtext:`is always equal to the other value`|
+|                                                                ||:diagtext:`a value and unsigned zero`||                                                      |
+|                                                                |+-------------------------------------+|                                                      |
+|                                                                ||:diagtext:`unsigned zero and a value`||                                                      |
+|                                                                |+-------------------------------------+|                                                      |
++----------------------------------------------------------------+---------------------------------------+------------------------------------------------------+
 
 
 -Wmemsize-comparison
@@ -5769,6 +6198,8 @@ This diagnostic is enabled by default.
 
 -Wmicrosoft-enum-forward-reference
 ----------------------------------
+This diagnostic is enabled by default.
+
 **Diagnostic text:**
 
 +---------------------------------------------------------------------------------------------------+
@@ -5778,8 +6209,6 @@ This diagnostic is enabled by default.
 
 -Wmicrosoft-enum-value
 ----------------------
-This diagnostic is enabled by default.
-
 **Diagnostic text:**
 
 +---------------------------------------------------------------------------------------------------------------------------+
@@ -6189,6 +6618,17 @@ This diagnostic flag exists for GCC compatibility, and has no effect in Clang.
 +--------------------------------------------------------------------------------------------+
 
 
+-Wmissing-noescape
+------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++----------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`parameter of overriding method should be annotated with \_\_attribute\_\_((noescape))`|
++----------------------------------------------------------------------------------------------------------------------------+
+
+
 -Wmissing-noreturn
 ------------------
 **Diagnostic text:**
@@ -6269,6 +6709,14 @@ This diagnostic is enabled by default.
 |:remark:`remark:` |nbsp| :diagtext:`finished building module '`:placeholder:`A`:diagtext:`'`|
 +--------------------------------------------------------------------------------------------+
 
++-----------------------------------------------------------------------------------------------------------------------------------+
+|:remark:`remark:` |nbsp| :diagtext:`could not acquire lock file for module '`:placeholder:`A`:diagtext:`':` |nbsp| :placeholder:`B`|
++-----------------------------------------------------------------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------------------------------+
+|:remark:`remark:` |nbsp| :diagtext:`timed out waiting to acquire lock file for module '`:placeholder:`A`:diagtext:`'`|
++---------------------------------------------------------------------------------------------------------------------+
+
 
 -Wmodule-conflict
 -----------------
@@ -6279,6 +6727,10 @@ This diagnostic is enabled by default.
 +---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`module '`:placeholder:`A`:diagtext:`' conflicts with already-imported module '`:placeholder:`B`:diagtext:`':` |nbsp| :placeholder:`C`|
 +---------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`module file '`:placeholder:`A`:diagtext:`' was validated as a system module and is now being imported as a non-system module; any difference in diagnostic options will be ignored`|
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wmodule-file-config-mismatch
@@ -6340,7 +6792,7 @@ This diagnostic is an error by default, but the flag ``-Wno-modules-import-neste
 ------
 Some of the diagnostics controlled by this flag are enabled by default.
 
-Controls `-Wcast-of-sel-type`_, `-Wchar-subscripts`_, `-Wcomment`_, `-Wdelete-non-virtual-dtor`_, `-Wextern-c-compat`_, `-Wfor-loop-analysis`_, `-Wformat`_, `-Wimplicit`_, `-Winfinite-recursion`_, `-Wmismatched-tags`_, `-Wmissing-braces`_, `-Wmove`_, `-Wmultichar`_, `-Wobjc-designated-initializers`_, `-Wobjc-missing-super-calls`_, `-Woverloaded-virtual`_, `-Wprivate-extern`_, `-Wreorder`_, `-Wreturn-type`_, `-Wself-assign`_, `-Wself-move`_, `-Wsizeof-array-argument`_, `-Wsizeof-array-decay`_, `-Wstring-plus-int`_, `-Wtrigraphs`_, `-Wuninitialized`_, `-Wunknown-pragmas`_, `-Wunused`_, `-Wvolatile-register-var`_.
+Controls `-Wcast-of-sel-type`_, `-Wchar-subscripts`_, `-Wcomment`_, `-Wdelete-non-virtual-dtor`_, `-Wextern-c-compat`_, `-Wfor-loop-analysis`_, `-Wformat`_, `-Wimplicit`_, `-Winfinite-recursion`_, `-Wmismatched-tags`_, `-Wmissing-braces`_, `-Wmove`_, `-Wmultichar`_, `-Wobjc-designated-initializers`_, `-Wobjc-flexible-array`_, `-Wobjc-missing-super-calls`_, `-Woverloaded-virtual`_, `-Wprivate-extern`_, `-Wreorder`_, `-Wreturn-type`_, `-Wself-assign`_, `-Wself-move`_, `-Wsizeof-array-argument`_, `-Wsizeof-array-decay`_, `-Wstring-plus-int`_, `-Wtrigraphs`_, `-Wuninitialized`_, `-Wunknown-pragmas`_, `-Wunused`_, `-Wuser-defined-warnings`_, `-Wvolatile-register-var`_.
 
 
 -Wmove
@@ -6351,6 +6803,17 @@ Controls `-Wpessimizing-move`_, `-Wredundant-move`_, `-Wself-move`_.
 -Wmsvc-include
 --------------
 Synonym for `-Wmicrosoft-include`_.
+
+
+-Wmsvc-not-found
+----------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++-------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`unable to find a Visual Studio installation; try running Clang from a developer command prompt`|
++-------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wmultichar
@@ -6425,6 +6888,11 @@ This diagnostic is enabled by default.
 +----------------------------------------------------------------+
 
 
+-Wnoexcept-type
+---------------
+Synonym for `-Wc++17-compat-mangling`_.
+
+
 -Wnon-gcc
 ---------
 Some of the diagnostics controlled by this flag are enabled by default.
@@ -6447,9 +6915,9 @@ This diagnostic is enabled by default.
 -----------------------------------------
 **Diagnostic text:**
 
-+---------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`include of non-modular header inside framework module '`:placeholder:`A`:diagtext:`'`|
-+---------------------------------------------------------------------------------------------------------------------------+
++-----------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`include of non-modular header inside framework module '`:placeholder:`A`:diagtext:`': '`:placeholder:`B`:diagtext:`'`|
++-----------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wnon-modular-include-in-module
@@ -6458,9 +6926,9 @@ Also controls `-Wnon-modular-include-in-framework-module`_.
 
 **Diagnostic text:**
 
-+-----------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`include of non-modular header inside module '`:placeholder:`A`:diagtext:`'`|
-+-----------------------------------------------------------------------------------------------------------------+
++-------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`include of non-modular header inside module '`:placeholder:`A`:diagtext:`': '`:placeholder:`B`:diagtext:`'`|
++-------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wnon-pod-varargs
@@ -6565,6 +7033,32 @@ This diagnostic is enabled by default.
 +---------------------------------------------------------------------------------------------------------------------+
 
 
+-Wnsconsumed-mismatch
+---------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++---------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`overriding method has mismatched ns\_consumed attribute on its parameter`|
++---------------------------------------------------------------------------------------------------------------+
+
+
+-Wnsreturns-mismatch
+--------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++-------------------------------------------------------------------------------------+---------------------------+------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`overriding method has mismatched ns\_returns\_`|+-------------------------+| |nbsp| :diagtext:`attributes`|
+|                                                                                     ||:diagtext:`not\_retained`||                              |
+|                                                                                     |+-------------------------+|                              |
+|                                                                                     ||:diagtext:`retained`     ||                              |
+|                                                                                     |+-------------------------+|                              |
++-------------------------------------------------------------------------------------+---------------------------+------------------------------+
+
+
 -Wnull-arithmetic
 -----------------
 This diagnostic is enabled by default.
@@ -6637,6 +7131,23 @@ This diagnostic is enabled by default.
 +---------------------------------------------------------------------------------------------------------+
 
 
+-Wnull-pointer-arithmetic
+-------------------------
+**Diagnostic text:**
+
++--------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`arithmetic on a null pointer treated as a cast from integer to pointer is a GNU extension`|
++--------------------------------------------------------------------------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------------------------------+----------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`performing pointer arithmetic on a null pointer has undefined behavior`|+--------------------------------------------+|
+|                                                                                                             ||                                            ||
+|                                                                                                             |+--------------------------------------------+|
+|                                                                                                             || |nbsp| :diagtext:`if the offset is nonzero`||
+|                                                                                                             |+--------------------------------------------+|
++-------------------------------------------------------------------------------------------------------------+----------------------------------------------+
+
+
 -Wnullability
 -------------
 This diagnostic is enabled by default.
@@ -6668,6 +7179,8 @@ This diagnostic is enabled by default.
 --------------------------
 This diagnostic is enabled by default.
 
+Also controls `-Wnullability-completeness-on-arrays`_.
+
 **Diagnostic text:**
 
 +---------------------------+----------------------------+-----------------------------------------------------------------------------------------------------------+
@@ -6679,6 +7192,17 @@ This diagnostic is enabled by default.
 |                           ||:diagtext:`member pointer`||                                                                                                           |
 |                           |+--------------------------+|                                                                                                           |
 +---------------------------+----------------------------+-----------------------------------------------------------------------------------------------------------+
+
+
+-Wnullability-completeness-on-arrays
+------------------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++----------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`array parameter is missing a nullability type specifier (\_Nonnull, \_Nullable, or \_Null\_unspecified)`|
++----------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wnullability-declspec
@@ -6709,6 +7233,21 @@ This diagnostic is an error by default, but the flag ``-Wno-nullability-declspec
 +---------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`type nullability specifier` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is a Clang extension`|
 +---------------------------------------------------------------------------------------------------------------------------------+
+
+
+-Wnullability-inferred-on-nested-type
+-------------------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++--------------------------------------------------------------------------------------------+-----------------------+---------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`inferring '\_Nonnull' for pointer type within` |nbsp| |+---------------------+| |nbsp| :diagtext:`is deprecated`|
+|                                                                                            ||:diagtext:`array`    ||                                 |
+|                                                                                            |+---------------------+|                                 |
+|                                                                                            ||:diagtext:`reference`||                                 |
+|                                                                                            |+---------------------+|                                 |
++--------------------------------------------------------------------------------------------+-----------------------+---------------------------------+
 
 
 -Wnullable-to-nonnull-conversion
@@ -6780,6 +7319,21 @@ This diagnostic is enabled by default.
 +----------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`convenience initializer should not invoke an initializer on 'super'`|
 +----------------------------------------------------------------------------------------------------------+
+
+
+-Wobjc-flexible-array
+---------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`field` |nbsp| :placeholder:`A` |nbsp| :diagtext:`can overwrite instance variable` |nbsp| :placeholder:`B` |nbsp| :diagtext:`with variable sized type` |nbsp| :placeholder:`C` |nbsp| :diagtext:`in superclass` |nbsp| :placeholder:`D`|
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`field` |nbsp| :placeholder:`A` |nbsp| :diagtext:`with variable sized type` |nbsp| :placeholder:`B` |nbsp| :diagtext:`is not visible to subclasses and can conflict with their instance variables`|
++---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wobjc-forward-class-redefinition
@@ -6855,6 +7409,15 @@ This diagnostic is enabled by default.
 +-------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`ignoring redefinition of Objective-C qualifier macro`|
 +-------------------------------------------------------------------------------------------+
+
+
+-Wobjc-messaging-id
+-------------------
+**Diagnostic text:**
+
++---------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`messaging unqualified id`|
++---------------------------------------------------------------+
 
 
 -Wobjc-method-access
@@ -6992,9 +7555,9 @@ This diagnostic is enabled by default.
 
 **Diagnostic text:**
 
-+------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`default property attribute 'assign' not appropriate for non-GC object`|
-+------------------------------------------------------------------------------------------------------------+
++-----------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`default property attribute 'assign' not appropriate for object`|
++-----------------------------------------------------------------------------------------------------+
 
 +--------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`no 'assign', 'retain', or 'copy' attribute is specified - 'assign' is assumed`|
@@ -7113,6 +7676,23 @@ This diagnostic is enabled by default.
 +-------------------------------------------------------------------------------------------------------------------------+
 
 
+-Wobjc-unsafe-perform-selector
+------------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++-------------------------------------------------------------------------------------------------------------------+--------------------+------------------------+
+|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is incompatible with selectors that return a` |nbsp| |+------------------+| |nbsp| :diagtext:`type`|
+|                                                                                                                   ||:diagtext:`struct`||                        |
+|                                                                                                                   |+------------------+|                        |
+|                                                                                                                   ||:diagtext:`union` ||                        |
+|                                                                                                                   |+------------------+|                        |
+|                                                                                                                   ||:diagtext:`vector`||                        |
+|                                                                                                                   |+------------------+|                        |
++-------------------------------------------------------------------------------------------------------------------+--------------------+------------------------+
+
+
 -Wodr
 -----
 This diagnostic is enabled by default.
@@ -7188,6 +7768,10 @@ This diagnostic is enabled by default.
 
 **Diagnostic text:**
 
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`The OpenMP offloading target '`:placeholder:`A`:diagtext:`' is similar to target '`:placeholder:`B`:diagtext:`' already specified - will be ignored.`|
++-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
 +-----------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`declaration is not declared in any declare target region`|
 +-----------------------------------------------------------------------------------------------+
@@ -7199,9 +7783,25 @@ This diagnostic is enabled by default.
 
 **Diagnostic text:**
 
++------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`option '-ffine-grained-bitfield-accesses' cannot be enabled together with a sanitizer; flag ignored`|
++------------------------------------------------------------------------------------------------------------------------------------------+
+
 +----------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`option '`:placeholder:`A`:diagtext:`' was ignored by the PS4 toolchain, using '-fPIC'`|
 +----------------------------------------------------------------------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`ignoring '-mabicalls' option as it cannot be used with non position-independent code and the N64 ABI`|
++-------------------------------------------------------------------------------------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------------------------------------+-------------------------------------------+----------------------+
+|:warning:`warning:` |nbsp| :diagtext:`ignoring '-mlong-calls' option as it is not currently supported with` |nbsp| |+-----------------------------------------+|:diagtext:`-mabicalls`|
+|                                                                                                                   ||                                         ||                      |
+|                                                                                                                   |+-----------------------------------------+|                      |
+|                                                                                                                   ||:diagtext:`the implicit usage of` |nbsp| ||                      |
+|                                                                                                                   |+-----------------------------------------+|                      |
++-------------------------------------------------------------------------------------------------------------------+-------------------------------------------+----------------------+
 
 
 -Wout-of-line-declaration
@@ -7213,6 +7813,21 @@ This diagnostic is an error by default, but the flag ``-Wno-out-of-line-declarat
 +-------------------------------------------------------------------------------------------+
 |:error:`error:` |nbsp| :diagtext:`out-of-line declaration of a member must be a definition`|
 +-------------------------------------------------------------------------------------------+
+
+
+-Wout-of-scope-function
+-----------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++-------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`use of out-of-scope declaration of` |nbsp| :placeholder:`A`|+-------------------------------------------------------------------------------------+|
+|                                                                                                 ||                                                                                     ||
+|                                                                                                 |+-------------------------------------------------------------------------------------+|
+|                                                                                                 || |nbsp| :diagtext:`whose type is not compatible with that of an implicit declaration`||
+|                                                                                                 |+-------------------------------------------------------------------------------------+|
++-------------------------------------------------------------------------------------------------+---------------------------------------------------------------------------------------+
 
 
 -Wover-aligned
@@ -7460,13 +8075,17 @@ This diagnostic is enabled by default.
 
 -Wpedantic
 ----------
-Also controls `-Wc++11-extra-semi`_, `-Wc++11-long-long`_, `-Wc++14-binary-literal`_, `-Wc11-extensions`_, `-Wcomplex-component-init`_, `-Wdeclaration-after-statement`_, `-Wdollar-in-identifier-extension`_, `-Wembedded-directive`_, `-Wempty-translation-unit`_, `-Wextended-offsetof`_, `-Wflexible-array-extensions`_, `-Wformat-pedantic`_, `-Wfour-char-constants`_, `-Wgnu-anonymous-struct`_, `-Wgnu-auto-type`_, `-Wgnu-binary-literal`_, `-Wgnu-case-range`_, `-Wgnu-complex-integer`_, `-Wgnu-compound-literal-initializer`_, `-Wgnu-conditional-omitted-operand`_, `-Wgnu-empty-initializer`_, `-Wgnu-empty-struct`_, `-Wgnu-flexible-array-initializer`_, `-Wgnu-flexible-array-union-member`_, `-Wgnu-folding-constant`_, `-Wgnu-imaginary-constant`_, `-Wgnu-include-next`_, `-Wgnu-label-as-value`_, `-Wgnu-redeclared-enum`_, `-Wgnu-statement-expression`_, `-Wgnu-union-cast`_, `-Wgnu-zero-line-directive`_, `-Wgnu-zero-variadic-macro-arguments`_, `-Wimport-preprocessor-directive-pedantic`_, `-Wkeyword-macro`_, `-Wlanguage-extension-token`_, `-Wlong-long`_, `-Wmicrosoft-charize`_, `-Wmicrosoft-comment-paste`_, `-Wmicrosoft-cpp-macro`_, `-Wmicrosoft-end-of-file`_, `-Wmicrosoft-enum-forward-reference`_, `-Wmicrosoft-fixed-enum`_, `-Wmicrosoft-flexible-array`_, `-Wmicrosoft-redeclare-static`_, `-Wnested-anon-types`_, `-Wnullability-extension`_, `-Woverlength-strings`_, `-Wretained-language-linkage`_, `-Wvariadic-macros`_, `-Wvla-extension`_, `-Wzero-length-array`_.
+Also controls `-Wc++11-extra-semi`_, `-Wc++11-long-long`_, `-Wc++14-binary-literal`_, `-Wc11-extensions`_, `-Wcomplex-component-init`_, `-Wdeclaration-after-statement`_, `-Wdollar-in-identifier-extension`_, `-Wembedded-directive`_, `-Wempty-translation-unit`_, `-Wextended-offsetof`_, `-Wflexible-array-extensions`_, `-Wformat-pedantic`_, `-Wfour-char-constants`_, `-Wgnu-anonymous-struct`_, `-Wgnu-auto-type`_, `-Wgnu-binary-literal`_, `-Wgnu-case-range`_, `-Wgnu-complex-integer`_, `-Wgnu-compound-literal-initializer`_, `-Wgnu-conditional-omitted-operand`_, `-Wgnu-empty-initializer`_, `-Wgnu-empty-struct`_, `-Wgnu-flexible-array-initializer`_, `-Wgnu-flexible-array-union-member`_, `-Wgnu-folding-constant`_, `-Wgnu-imaginary-constant`_, `-Wgnu-include-next`_, `-Wgnu-label-as-value`_, `-Wgnu-redeclared-enum`_, `-Wgnu-statement-expression`_, `-Wgnu-union-cast`_, `-Wgnu-zero-line-directive`_, `-Wgnu-zero-variadic-macro-arguments`_, `-Wimport-preprocessor-directive-pedantic`_, `-Wkeyword-macro`_, `-Wlanguage-extension-token`_, `-Wlong-long`_, `-Wmicrosoft-charize`_, `-Wmicrosoft-comment-paste`_, `-Wmicrosoft-cpp-macro`_, `-Wmicrosoft-end-of-file`_, `-Wmicrosoft-enum-value`_, `-Wmicrosoft-fixed-enum`_, `-Wmicrosoft-flexible-array`_, `-Wmicrosoft-redeclare-static`_, `-Wnested-anon-types`_, `-Wnullability-extension`_, `-Woverlength-strings`_, `-Wretained-language-linkage`_, `-Wundefined-internal-type`_, `-Wvla-extension`_, `-Wzero-length-array`_.
 
 **Diagnostic text:**
 
 +------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`'enable\_if' is a clang extension`|
 +------------------------------------------------------------------------+
+
++--------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`'diagnose\_if' is a clang extension`|
++--------------------------------------------------------------------------+
 
 +--------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`designated initializers are a C99 feature`|
@@ -7521,6 +8140,10 @@ Also controls `-Wc++11-extra-semi`_, `-Wc++11-long-long`_, `-Wc++14-binary-liter
 +--------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`parameter` |nbsp| :placeholder:`A` |nbsp| :diagtext:`was not declared, defaulting to type 'int'`|
 +--------------------------------------------------------------------------------------------------------------------------------------+
+
++--------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`invoking a pointer to a 'const &' member function on an rvalue is a C++2a extension`|
++--------------------------------------------------------------------------------------------------------------------------+
 
 +----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`qualifier in explicit instantiation of` |nbsp| :placeholder:`A` |nbsp| :diagtext:`requires a template-id (a typedef is not permitted)`|
@@ -7675,7 +8298,7 @@ Also controls `-Wc++11-extra-semi`_, `-Wc++11-long-long`_, `-Wc++14-binary-liter
 +---------------------------------------------------------------------------------------------------------------------------+
 
 +---------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`use of the` |nbsp| :placeholder:`A` |nbsp| :diagtext:`attribute is a C++1z extension`|
+|:warning:`warning:` |nbsp| :diagtext:`use of the` |nbsp| :placeholder:`A` |nbsp| :diagtext:`attribute is a C++17 extension`|
 +---------------------------------------------------------------------------------------------------------------------------+
 
 +-----------------------------------------------------------------------------+--------------------+---------------------------------------------+
@@ -7760,6 +8383,14 @@ Also controls `-Wc++11-extra-semi`_, `-Wc++11-long-long`_, `-Wc++14-binary-liter
 |:warning:`warning:` |nbsp| :diagtext:`exception specification of '...' is a Microsoft extension`|
 +------------------------------------------------------------------------------------------------+
 
++------------------------------------------------------------+---------------------------+-----------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`attributes on` |nbsp| |+-------------------------+| |nbsp| :diagtext:`declaration are a C++17 extension`|
+|                                                            ||:diagtext:`a namespace`  ||                                                     |
+|                                                            |+-------------------------+|                                                     |
+|                                                            ||:diagtext:`an enumerator`||                                                     |
+|                                                            |+-------------------------+|                                                     |
++------------------------------------------------------------+---------------------------+-----------------------------------------------------+
+
 +-----------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`extern templates are a C++11 extension`|
 +-----------------------------------------------------------------------------+
@@ -7785,7 +8416,7 @@ Also controls `-Wc++11-extra-semi`_, `-Wc++11-long-long`_, `-Wc++14-binary-liter
 +---------------------------------------------------------------------------------------+
 
 +----------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`hexadecimal floating literals are a C++1z feature`|
+|:warning:`warning:` |nbsp| :diagtext:`hexadecimal floating literals are a C++17 feature`|
 +----------------------------------------------------------------------------------------+
 
 +---------------------------------------------------------------------+
@@ -7803,6 +8434,14 @@ Also controls `-Wc++11-extra-semi`_, `-Wc++11-long-long`_, `-Wc++14-binary-liter
 +----------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`\_\_VA\_ARGS\_\_ can only appear in the expansion of a C99 variadic macro`|
 +----------------------------------------------------------------------------------------------------------------+
+
++------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`variadic macros are a C99 feature`|
++------------------------------------------------------------------------+
+
++--------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`named variadic macros are a GNU extension`|
++--------------------------------------------------------------------------------+
 
 +------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`empty macro arguments are a C99 feature`|
@@ -7968,6 +8607,17 @@ This diagnostic is enabled by default.
 +----------------------------------------------------------------------------------------------------------------------------------+
 
 
+-Wpragma-clang-attribute
+------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++-------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`unused attribute` |nbsp| :placeholder:`A` |nbsp| :diagtext:`in '#pragma clang attribute push' region`|
++-------------------------------------------------------------------------------------------------------------------------------------------+
+
+
 -Wpragma-once-outside-header
 ----------------------------
 This diagnostic is enabled by default.
@@ -7977,6 +8627,32 @@ This diagnostic is enabled by default.
 +----------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`#pragma once in main file`|
 +----------------------------------------------------------------+
+
+
+-Wpragma-pack
+-------------
+Some of the diagnostics controlled by this flag are enabled by default.
+
+Also controls `-Wpragma-pack-suspicious-include`_.
+
+**Diagnostic text:**
+
++----------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`the current #pragma pack alignment value is modified in the included file`|
++----------------------------------------------------------------------------------------------------------------+
+
++---------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`unterminated '#pragma pack (push, ...)' at end of file`|
++---------------------------------------------------------------------------------------------+
+
+
+-Wpragma-pack-suspicious-include
+--------------------------------
+**Diagnostic text:**
+
++-------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`non-default #pragma pack value changes the alignment of struct or union members in the included file`|
++-------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wpragma-system-header-outside-header
@@ -7994,7 +8670,7 @@ This diagnostic is enabled by default.
 ---------
 Some of the diagnostics controlled by this flag are enabled by default.
 
-Also controls `-Wignored-pragmas`_, `-Wunknown-pragmas`_.
+Also controls `-Wignored-pragmas`_, `-Wpragma-clang-attribute`_, `-Wpragma-pack`_, `-Wunknown-pragmas`_.
 
 **Diagnostic text:**
 
@@ -8040,19 +8716,47 @@ This diagnostic is an error by default, but the flag ``-Wno-private-header`` can
 +----------------------------------------------------------------------------------------------------------------+
 
 
+-Wprivate-module
+----------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`top-level module '`:placeholder:`A`:diagtext:`' in private module map, expected a submodule of '`:placeholder:`B`:diagtext:`'`|
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
++----------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`module '`:placeholder:`A`:diagtext:`' already re-exported as '`:placeholder:`B`:diagtext:`'`|
++----------------------------------------------------------------------------------------------------------------------------------+
+
+
+-Wprofile-instr-missing
+-----------------------
+**Diagnostic text:**
+
++-----------------------------------------------------------------------------------------------------------------------------+---------------+---------------------------------------------+-------------------+---------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`profile data may be incomplete: of` |nbsp| :placeholder:`A` |nbsp| :diagtext:`function`|+-------------+|:diagtext:`,` |nbsp| :placeholder:`B` |nbsp| |+-----------------+| |nbsp| :diagtext:`no data`|
+|                                                                                                                             ||             ||                                             ||:diagtext:`:has` ||                           |
+|                                                                                                                             |+-------------+|                                             |+-----------------+|                           |
+|                                                                                                                             ||:diagtext:`s`||                                             ||:diagtext:`:have`||                           |
+|                                                                                                                             |+-------------+|                                             |+-----------------+|                           |
++-----------------------------------------------------------------------------------------------------------------------------+---------------+---------------------------------------------+-------------------+---------------------------+
+
+
 -Wprofile-instr-out-of-date
 ---------------------------
 This diagnostic is enabled by default.
 
 **Diagnostic text:**
 
-+------------------------------------------------------------------------------------------------------------------------------+---------------+---------------------------------------------+-------------------+---------------------------------------------------------------+-------------------+--------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`profile data may be out of date: of` |nbsp| :placeholder:`A` |nbsp| :diagtext:`function`|+-------------+|:diagtext:`,` |nbsp| :placeholder:`B` |nbsp| |+-----------------+| |nbsp| :diagtext:`no data and` |nbsp| :placeholder:`C` |nbsp| |+-----------------+| |nbsp| :diagtext:`mismatched data that will be ignored`|
-|                                                                                                                              ||             ||                                             ||:diagtext:`:has` ||                                                               ||:diagtext:`:has` ||                                                        |
-|                                                                                                                              |+-------------+|                                             |+-----------------+|                                                               |+-----------------+|                                                        |
-|                                                                                                                              ||:diagtext:`s`||                                             ||:diagtext:`:have`||                                                               ||:diagtext:`:have`||                                                        |
-|                                                                                                                              |+-------------+|                                             |+-----------------+|                                                               |+-----------------+|                                                        |
-+------------------------------------------------------------------------------------------------------------------------------+---------------+---------------------------------------------+-------------------+---------------------------------------------------------------+-------------------+--------------------------------------------------------+
++------------------------------------------------------------------------------------------------------------------------------+---------------+---------------------------------------------+-------------------+--------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`profile data may be out of date: of` |nbsp| :placeholder:`A` |nbsp| :diagtext:`function`|+-------------+|:diagtext:`,` |nbsp| :placeholder:`B` |nbsp| |+-----------------+| |nbsp| :diagtext:`mismatched data that will be ignored`|
+|                                                                                                                              ||             ||                                             ||:diagtext:`:has` ||                                                        |
+|                                                                                                                              |+-------------+|                                             |+-----------------+|                                                        |
+|                                                                                                                              ||:diagtext:`s`||                                             ||:diagtext:`:have`||                                                        |
+|                                                                                                                              |+-------------+|                                             |+-----------------+|                                                        |
++------------------------------------------------------------------------------------------------------------------------------+---------------+---------------------------------------------+-------------------+--------------------------------------------------------+
 
 
 -Wprofile-instr-unprofiled
@@ -8117,9 +8821,29 @@ This diagnostic is enabled by default.
 
 **Diagnostic text:**
 
-+-----------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`property of type` |nbsp| :placeholder:`A` |nbsp| :diagtext:`was selected for synthesis`|
-+-----------------------------------------------------------------------------------------------------------------------------+
++-------------------------------------------------------+----------------------------------------------------------------+----------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`property` |nbsp| |+--------------------------------------------------------------+| |nbsp| :diagtext:`was selected for synthesis`|
+|                                                       ||+-------------------------------------------+                 ||                                              |
+|                                                       |||:diagtext:`of type` |nbsp| :placeholder:`B`|                 ||                                              |
+|                                                       ||+-------------------------------------------+                 ||                                              |
+|                                                       |+--------------------------------------------------------------+|                                              |
+|                                                       ||+---------------------------------------------------------+   ||                                              |
+|                                                       |||:diagtext:`with attribute '`:placeholder:`B`:diagtext:`'`|   ||                                              |
+|                                                       ||+---------------------------------------------------------+   ||                                              |
+|                                                       |+--------------------------------------------------------------+|                                              |
+|                                                       ||+------------------------------------------------------------+||                                              |
+|                                                       |||:diagtext:`without attribute '`:placeholder:`B`:diagtext:`'`|||                                              |
+|                                                       ||+------------------------------------------------------------+||                                              |
+|                                                       |+--------------------------------------------------------------+|                                              |
+|                                                       ||+-----------------------------------------------+             ||                                              |
+|                                                       |||:diagtext:`with getter` |nbsp| :placeholder:`B`|             ||                                              |
+|                                                       ||+-----------------------------------------------+             ||                                              |
+|                                                       |+--------------------------------------------------------------+|                                              |
+|                                                       ||+-----------------------------------------------+             ||                                              |
+|                                                       |||:diagtext:`with setter` |nbsp| :placeholder:`B`|             ||                                              |
+|                                                       ||+-----------------------------------------------+             ||                                              |
+|                                                       |+--------------------------------------------------------------+|                                              |
++-------------------------------------------------------+----------------------------------------------------------------+----------------------------------------------+
 
 
 -Wqualified-void-return-type
@@ -8211,6 +8935,15 @@ This diagnostic flag exists for GCC compatibility, and has no effect in Clang.
 +-------------------------------------------------------------------------+
 
 
+-Wredundant-parens
+------------------
+**Diagnostic text:**
+
++-----------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`redundant parentheses surrounding declarator`|
++-----------------------------------------------------------------------------------+
+
+
 -Wregister
 ----------
 This diagnostic is enabled by default.
@@ -8220,7 +8953,7 @@ Also controls `-Wdeprecated-register`_.
 **Diagnostic text:**
 
 +----------------------------------------------------------------------------------------------+
-|:error:`error:` |nbsp| :diagtext:`ISO C++1z does not allow 'register' storage class specifier`|
+|:error:`error:` |nbsp| :diagtext:`ISO C++17 does not allow 'register' storage class specifier`|
 +----------------------------------------------------------------------------------------------+
 
 
@@ -8364,6 +9097,10 @@ Also controls `-Wreturn-type-c-linkage`_.
 |                                                   |+--------------------+|                                                                 |
 +---------------------------------------------------+----------------------+-----------------------------------------------------------------+
 
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`control reaches end of coroutine; which is undefined behavior because the promise type` |nbsp| :placeholder:`A` |nbsp| :diagtext:`does not declare 'return\_void()'`|
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
 +-------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`control reaches end of non-void function`|
 +-------------------------------------------------------------------------------+
@@ -8371,6 +9108,10 @@ Also controls `-Wreturn-type-c-linkage`_.
 +-----------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`control reaches end of non-void lambda`|
 +-----------------------------------------------------------------------------+
+
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`control may reach end of coroutine; which is undefined behavior because the promise type` |nbsp| :placeholder:`A` |nbsp| :diagtext:`does not declare 'return\_void()'`|
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 +---------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`control may reach end of non-void function`|
@@ -8449,6 +9190,10 @@ This diagnostic is enabled by default.
 This diagnostic is enabled by default.
 
 **Diagnostic text:**
+
++--------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`section attribute is specified on redeclared variable`|
++--------------------------------------------------------------------------------------------+
 
 +----------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`section does not match previous declaration`|
@@ -8586,6 +9331,14 @@ Also controls `-Wshadow-field-in-constructor-modified`_, `-Wshadow-ivar`_.
 |                                                                    |||:diagtext:`field of` |nbsp| :placeholder:`C`|             ||
 |                                                                    ||+--------------------------------------------+             ||
 |                                                                    |+-----------------------------------------------------------+|
+|                                                                    ||+----------------------------------------------+           ||
+|                                                                    |||:diagtext:`typedef in` |nbsp| :placeholder:`C`|           ||
+|                                                                    ||+----------------------------------------------+           ||
+|                                                                    |+-----------------------------------------------------------+|
+|                                                                    ||+-------------------------------------------------+        ||
+|                                                                    |||:diagtext:`type alias in` |nbsp| :placeholder:`C`|        ||
+|                                                                    ||+-------------------------------------------------+        ||
+|                                                                    |+-----------------------------------------------------------+|
 +--------------------------------------------------------------------+-------------------------------------------------------------+
 
 
@@ -8593,7 +9346,16 @@ Also controls `-Wshadow-field-in-constructor-modified`_, `-Wshadow-ivar`_.
 ------------
 Some of the diagnostics controlled by this flag are enabled by default.
 
-Controls `-Wshadow`_, `-Wshadow-field-in-constructor`_.
+Controls `-Wshadow`_, `-Wshadow-field`_, `-Wshadow-field-in-constructor`_, `-Wshadow-uncaptured-local`_.
+
+
+-Wshadow-field
+--------------
+**Diagnostic text:**
+
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`non-static data member '`:placeholder:`A`:diagtext:`' of '`:placeholder:`B`:diagtext:`' shadows member inherited from type '`:placeholder:`C`:diagtext:`'`|
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wshadow-field-in-constructor
@@ -8625,6 +9387,37 @@ This diagnostic is enabled by default.
 +------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`local declaration of` |nbsp| :placeholder:`A` |nbsp| :diagtext:`hides instance variable`|
 +------------------------------------------------------------------------------------------------------------------------------+
+
+
+-Wshadow-uncaptured-local
+-------------------------
+**Diagnostic text:**
+
++--------------------------------------------------------------------+-------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`declaration shadows a` |nbsp| |+-----------------------------------------------------------+|
+|                                                                    ||:diagtext:`local variable`                                 ||
+|                                                                    |+-----------------------------------------------------------+|
+|                                                                    ||+-----------------------------------------------+          ||
+|                                                                    |||:diagtext:`variable in` |nbsp| :placeholder:`C`|          ||
+|                                                                    ||+-----------------------------------------------+          ||
+|                                                                    |+-----------------------------------------------------------+|
+|                                                                    ||+---------------------------------------------------------+||
+|                                                                    |||:diagtext:`static data member of` |nbsp| :placeholder:`C`|||
+|                                                                    ||+---------------------------------------------------------+||
+|                                                                    |+-----------------------------------------------------------+|
+|                                                                    ||+--------------------------------------------+             ||
+|                                                                    |||:diagtext:`field of` |nbsp| :placeholder:`C`|             ||
+|                                                                    ||+--------------------------------------------+             ||
+|                                                                    |+-----------------------------------------------------------+|
+|                                                                    ||+----------------------------------------------+           ||
+|                                                                    |||:diagtext:`typedef in` |nbsp| :placeholder:`C`|           ||
+|                                                                    ||+----------------------------------------------+           ||
+|                                                                    |+-----------------------------------------------------------+|
+|                                                                    ||+-------------------------------------------------+        ||
+|                                                                    |||:diagtext:`type alias in` |nbsp| :placeholder:`C`|        ||
+|                                                                    ||+-------------------------------------------------+        ||
+|                                                                    |+-----------------------------------------------------------+|
++--------------------------------------------------------------------+-------------------------------------------------------------+
 
 
 -Wshift-count-negative
@@ -8726,6 +9519,15 @@ This diagnostic is enabled by default.
 ------------
 This diagnostic flag exists for GCC compatibility, and has no effect in Clang.
 
+-Wsigned-enum-bitfield
+----------------------
+**Diagnostic text:**
+
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`enums in the Microsoft ABI are signed integers by default; consider giving the enum` |nbsp| :placeholder:`A` |nbsp| :diagtext:`an unsigned underlying type to make this code portable`|
++----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
 -Wsizeof-array-argument
 -----------------------
 This diagnostic is enabled by default.
@@ -8765,6 +9567,17 @@ This diagnostic is enabled by default.
 |                                                                                                                                                                                                 ||:diagtext:`source`     ||                                                                                       |
 |                                                                                                                                                                                                 |+-----------------------+|                                                                                       |
 +-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------+---------------------------------------------------------------------------------------+
+
+
+-Wslash-u-filename
+------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++--------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`'/U`:placeholder:`A`:diagtext:`' treated as the '/U' option`|
++--------------------------------------------------------------------------------------------------+
 
 
 -Wsometimes-uninitialized
@@ -8957,7 +9770,33 @@ This diagnostic flag exists for GCC compatibility, and has no effect in Clang.
 
 -Wstrict-prototypes
 -------------------
-This diagnostic flag exists for GCC compatibility, and has no effect in Clang.
+**Diagnostic text:**
+
++---------------------------------------------------+--------------------------------------------------------------+-------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`this` |nbsp| |+------------------------------------------------------------+| |nbsp| :diagtext:`a prototype`|
+|                                                   ||:diagtext:`function declaration is not`                     ||                               |
+|                                                   |+------------------------------------------------------------+|                               |
+|                                                   ||:diagtext:`block declaration is not`                        ||                               |
+|                                                   |+------------------------------------------------------------+|                               |
+|                                                   ||:diagtext:`old-style function definition is not preceded by`||                               |
+|                                                   |+------------------------------------------------------------+|                               |
++---------------------------------------------------+--------------------------------------------------------------+-------------------------------+
+
+
+-Wstrict-prototypes
+-------------------
+**Diagnostic text:**
+
++---------------------------------------------------+--------------------------------------------------------------+-------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`this` |nbsp| |+------------------------------------------------------------+| |nbsp| :diagtext:`a prototype`|
+|                                                   ||:diagtext:`function declaration is not`                     ||                               |
+|                                                   |+------------------------------------------------------------+|                               |
+|                                                   ||:diagtext:`block declaration is not`                        ||                               |
+|                                                   |+------------------------------------------------------------+|                               |
+|                                                   ||:diagtext:`old-style function definition is not preceded by`||                               |
+|                                                   |+------------------------------------------------------------+|                               |
++---------------------------------------------------+--------------------------------------------------------------+-------------------------------+
+
 
 -Wstrict-selector-match
 -----------------------
@@ -9147,7 +9986,7 @@ This diagnostic flag exists for GCC compatibility, and has no effect in Clang.
 ----------------------
 Some of the diagnostics controlled by this flag are enabled by default.
 
-Also controls `-Wtautological-constant-out-of-range-compare`_, `-Wtautological-overlap-compare`_, `-Wtautological-pointer-compare`_, `-Wtautological-undefined-compare`_.
+Also controls `-Wtautological-constant-compare`_, `-Wtautological-overlap-compare`_, `-Wtautological-pointer-compare`_, `-Wtautological-undefined-compare`_.
 
 **Diagnostic text:**
 
@@ -9169,21 +10008,22 @@ Also controls `-Wtautological-constant-out-of-range-compare`_, `-Wtautological-o
 |                                                                                     |+-----------------+|
 +-------------------------------------------------------------------------------------+-------------------+
 
-+-------------------------------------------------------------+--------------------------+-----------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`comparison of unsigned`|+------------------------+| |nbsp| :diagtext:`expression` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is always` |nbsp| :placeholder:`B`|
-|                                                             ||                        ||                                                                                                           |
-|                                                             |+------------------------+|                                                                                                           |
-|                                                             || |nbsp| :diagtext:`enum`||                                                                                                           |
-|                                                             |+------------------------+|                                                                                                           |
-+-------------------------------------------------------------+--------------------------+-----------------------------------------------------------------------------------------------------------+
 
-+--------------------------------------------------------------------------------------------------------+--------------------------+----------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`comparison of` |nbsp| :placeholder:`A` |nbsp| :diagtext:`unsigned`|+------------------------+| |nbsp| :diagtext:`expression is always` |nbsp| :placeholder:`B`|
-|                                                                                                        ||                        ||                                                                |
-|                                                                                                        |+------------------------+|                                                                |
-|                                                                                                        || |nbsp| :diagtext:`enum`||                                                                |
-|                                                                                                        |+------------------------+|                                                                |
-+--------------------------------------------------------------------------------------------------------+--------------------------+----------------------------------------------------------------+
+-Wtautological-constant-compare
+-------------------------------
+This diagnostic is enabled by default.
+
+Also controls `-Wtautological-constant-out-of-range-compare`_, `-Wtautological-unsigned-enum-zero-compare`_, `-Wtautological-unsigned-zero-compare`_.
+
+**Diagnostic text:**
+
++---------------------------------------------------------+------------------+--------------------------------+------------------+-------------------------------------+-------------------+
+|:warning:`warning:` |nbsp| :diagtext:`comparison` |nbsp| |+----------------+| |nbsp| :placeholder:`C` |nbsp| |+----------------+| |nbsp| :diagtext:`is always` |nbsp| |+-----------------+|
+|                                                         ||:placeholder:`D`||                                ||:placeholder:`B`||                                     ||:diagtext:`false`||
+|                                                         |+----------------+|                                |+----------------+|                                     |+-----------------+|
+|                                                         ||:placeholder:`B`||                                ||:placeholder:`D`||                                     ||:diagtext:`true` ||
+|                                                         |+----------------+|                                |+----------------+|                                     |+-----------------+|
++---------------------------------------------------------+------------------+--------------------------------+------------------+-------------------------------------+-------------------+
 
 
 -Wtautological-constant-out-of-range-compare
@@ -9264,6 +10104,36 @@ This diagnostic is enabled by default.
 |                                                                                                                                                      ||:diagtext:`false`||
 |                                                                                                                                                      |+-----------------+|
 +------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------+
+
+
+-Wtautological-unsigned-enum-zero-compare
+-----------------------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++------------------------------------------------------------+--------------------------------------+--------------------------------+--------------------------------------+-------------------------------------+-------------------+
+|:warning:`warning:` |nbsp| :diagtext:`comparison of` |nbsp| |+------------------------------------+| |nbsp| :placeholder:`C` |nbsp| |+------------------------------------+| |nbsp| :diagtext:`is always` |nbsp| |+-----------------+|
+|                                                            ||:placeholder:`D`                    ||                                ||:diagtext:`unsigned enum expression`||                                     ||:diagtext:`false`||
+|                                                            |+------------------------------------+|                                |+------------------------------------+|                                     |+-----------------+|
+|                                                            ||:diagtext:`unsigned enum expression`||                                ||:placeholder:`D`                    ||                                     ||:diagtext:`true` ||
+|                                                            |+------------------------------------+|                                |+------------------------------------+|                                     |+-----------------+|
++------------------------------------------------------------+--------------------------------------+--------------------------------+--------------------------------------+-------------------------------------+-------------------+
+
+
+-Wtautological-unsigned-zero-compare
+------------------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++------------------------------------------------------------+---------------------------------+--------------------------------+---------------------------------+-------------------------------------+-------------------+
+|:warning:`warning:` |nbsp| :diagtext:`comparison of` |nbsp| |+-------------------------------+| |nbsp| :placeholder:`C` |nbsp| |+-------------------------------+| |nbsp| :diagtext:`is always` |nbsp| |+-----------------+|
+|                                                            ||:placeholder:`D`               ||                                ||:diagtext:`unsigned expression`||                                     ||:diagtext:`false`||
+|                                                            |+-------------------------------+|                                |+-------------------------------+|                                     |+-----------------+|
+|                                                            ||:diagtext:`unsigned expression`||                                ||:placeholder:`D`               ||                                     ||:diagtext:`true` ||
+|                                                            |+-------------------------------+|                                |+-------------------------------+|                                     |+-----------------+|
++------------------------------------------------------------+---------------------------------+--------------------------------+---------------------------------+-------------------------------------+-------------------+
 
 
 -Wtentative-definition-incomplete-type
@@ -9587,6 +10457,17 @@ This diagnostic is enabled by default.
 +-------------------------------------------------------------------------------------------------------------------------------------+
 
 
+-Wunable-to-open-stats-file
+---------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++-------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`unable to open statistics output file '`:placeholder:`A`:diagtext:`': '`:placeholder:`B`:diagtext:`'`|
++-------------------------------------------------------------------------------------------------------------------------------------------+
+
+
 -Wunavailable-declarations
 --------------------------
 This diagnostic is enabled by default.
@@ -9670,6 +10551,19 @@ This diagnostic is enabled by default.
 +---------------------------+----------------------+-----------------------------------------------------------------------------------+
 
 
+-Wundefined-internal-type
+-------------------------
+**Diagnostic text:**
+
++---------------------------------------------------------------------------------------------------------+----------------------+----------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`ISO C++ requires a definition in this translation unit for` |nbsp| |+--------------------+| |nbsp| :placeholder:`B` |nbsp| :diagtext:`because its type does not have linkage`|
+|                                                                                                         ||:diagtext:`function`||                                                                                  |
+|                                                                                                         |+--------------------+|                                                                                  |
+|                                                                                                         ||:diagtext:`variable`||                                                                                  |
+|                                                                                                         |+--------------------+|                                                                                  |
++---------------------------------------------------------------------------------------------------------+----------------------+----------------------------------------------------------------------------------+
+
+
 -Wundefined-reinterpret-cast
 ----------------------------
 **Diagnostic text:**
@@ -9709,19 +10603,22 @@ Also controls `-Wpotentially-evaluated-expression`_.
 
 -Wunguarded-availability
 ------------------------
+Some of the diagnostics controlled by this flag are enabled by default.
+
+Also controls `-Wunguarded-availability-new`_.
+
 **Diagnostic text:**
 
-+----------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is only available conditionally`|
-+----------------------------------------------------------------------------------------------+
++---------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is only available on` |nbsp| :placeholder:`B` |nbsp| :placeholder:`C` |nbsp| :diagtext:`or newer`|
++---------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
-+------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`may be partial because the receiver type is unknown`|
-+------------------------------------------------------------------------------------------------------------------+
 
-+--------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is partial:` |nbsp| :placeholder:`B`|
-+--------------------------------------------------------------------------------------------------+
+-Wunguarded-availability-new
+----------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
 
 +---------------------------------------------------------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is only available on` |nbsp| :placeholder:`B` |nbsp| :placeholder:`C` |nbsp| :diagtext:`or newer`|
@@ -9874,10 +10771,6 @@ Some of the diagnostics controlled by this flag are enabled by default.
 |:warning:`warning:` |nbsp| :diagtext:`unexpected token in pragma diagnostic`|
 +----------------------------------------------------------------------------+
 
-+----------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`unknown warning group '`:placeholder:`A`:diagtext:`', ignored`|
-+----------------------------------------------------------------------------------------------------+
-
 +-------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`unknown pragma ignored`|
 +-------------------------------------------------------------+
@@ -9935,6 +10828,10 @@ This diagnostic is enabled by default.
 This diagnostic is enabled by default.
 
 **Diagnostic text:**
+
++----------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`unknown warning group '`:placeholder:`A`:diagtext:`', ignored`|
++----------------------------------------------------------------------------------------------------+
 
 +------------------------------------------------------+---------------------+---------------------------------------------------------+--------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`unknown` |nbsp| |+-------------------+| |nbsp| :diagtext:`option '`:placeholder:`B`:diagtext:`'`|+------------------------------------------------------------+|
@@ -10048,6 +10945,36 @@ This diagnostic is enabled by default.
 +-----------------------------------------------------------------------------------------------------+
 
 
+-Wunsupported-abs
+-----------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++-----------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`ignoring '-mabs=2008' option because the '`:placeholder:`A`:diagtext:`' architecture does not support it`|
++-----------------------------------------------------------------------------------------------------------------------------------------------+
+
++-------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`ignoring '-mabs=legacy' option because the '`:placeholder:`A`:diagtext:`' architecture does not support it`|
++-------------------------------------------------------------------------------------------------------------------------------------------------+
+
+
+-Wunsupported-availability-guard
+--------------------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++---------------------------+------------------------------------+--------------------------------------------------------------+------------------------------------+---------------------+
+|:warning:`warning:` |nbsp| |+----------------------------------+| |nbsp| :diagtext:`does not guard availability here; use if (`|+----------------------------------+|:diagtext:`) instead`|
+|                           ||:diagtext:`@available`            ||                                                              ||:diagtext:`@available`            ||                     |
+|                           |+----------------------------------+|                                                              |+----------------------------------+|                     |
+|                           ||:diagtext:`\_\_builtin\_available`||                                                              ||:diagtext:`\_\_builtin\_available`||                     |
+|                           |+----------------------------------+|                                                              |+----------------------------------+|                     |
++---------------------------+------------------------------------+--------------------------------------------------------------+------------------------------------+---------------------+
+
+
 -Wunsupported-cb
 ----------------
 This diagnostic is enabled by default.
@@ -10087,6 +11014,21 @@ This diagnostic is enabled by default.
 +-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+-Wunsupported-gpopt
+-------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
++--------------------------------------------------------------------------------------------------+-------------------------------------------+----------------------+
+|:warning:`warning:` |nbsp| :diagtext:`ignoring '-mgpopt' option as it cannot be used with` |nbsp| |+-----------------------------------------+|:diagtext:`-mabicalls`|
+|                                                                                                  ||                                         ||                      |
+|                                                                                                  |+-----------------------------------------+|                      |
+|                                                                                                  ||:diagtext:`the implicit usage of` |nbsp| ||                      |
+|                                                                                                  |+-----------------------------------------+|                      |
++--------------------------------------------------------------------------------------------------+-------------------------------------------+----------------------+
+
+
 -Wunsupported-nan
 -----------------
 This diagnostic is enabled by default.
@@ -10113,11 +11055,26 @@ This diagnostic is enabled by default.
 +------------------------------------------------------------------------------------------------------+
 
 
+-Wunusable-partial-specialization
+---------------------------------
+This diagnostic is an error by default, but the flag ``-Wno-unusable-partial-specialization`` can be used to disable the error.
+
+**Diagnostic text:**
+
++-----------------------+----------------------+--------------------------------------------------------------------+----------------------------------+------------------------------------------------------------------------------------------+
+|:error:`error:` |nbsp| |+--------------------+| |nbsp| :diagtext:`template partial specialization contains` |nbsp| |+--------------------------------+| |nbsp| :diagtext:`that cannot be deduced; this partial specialization will never be used`|
+|                       ||:diagtext:`class`   ||                                                                    ||:diagtext:`a template parameter`||                                                                                          |
+|                       |+--------------------+|                                                                    |+--------------------------------+|                                                                                          |
+|                       ||:diagtext:`variable`||                                                                    ||:diagtext:`template parameters` ||                                                                                          |
+|                       |+--------------------+|                                                                    |+--------------------------------+|                                                                                          |
++-----------------------+----------------------+--------------------------------------------------------------------+----------------------------------+------------------------------------------------------------------------------------------+
+
+
 -Wunused
 --------
 Some of the diagnostics controlled by this flag are enabled by default.
 
-Controls `-Wunused-argument`_, `-Wunused-function`_, `-Wunused-label`_, `-Wunused-local-typedef`_, `-Wunused-private-field`_, `-Wunused-property-ivar`_, `-Wunused-value`_, `-Wunused-variable`_.
+Controls `-Wunused-argument`_, `-Wunused-function`_, `-Wunused-label`_, `-Wunused-lambda-capture`_, `-Wunused-local-typedef`_, `-Wunused-private-field`_, `-Wunused-property-ivar`_, `-Wunused-value`_, `-Wunused-variable`_.
 
 
 -Wunused-argument
@@ -10130,13 +11087,13 @@ This diagnostic is enabled by default.
 
 **Diagnostic text:**
 
++-------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`argument '`:placeholder:`A`:diagtext:`' requires profile-guided optimization information`|
++-------------------------------------------------------------------------------------------------------------------------------+
+
 +---------------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`joined argument expects additional value: '`:placeholder:`A`:diagtext:`'`|
 +---------------------------------------------------------------------------------------------------------------+
-
-+-----------------------------------------------------------------------------------------------------------------------------+
-|:warning:`warning:` |nbsp| :diagtext:`argument '-fdiagnostics-show-hotness' requires profile-guided optimization information`|
-+-----------------------------------------------------------------------------------------------------------------------------+
 
 +----------------------------------------------------------------------------------------------------+----------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :placeholder:`A`:diagtext:`: '`:placeholder:`B`:diagtext:`' input unused`|+--------------------------------------------------------------------+|
@@ -10165,6 +11122,10 @@ This diagnostic is enabled by default.
 +---------------------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`argument unused during compilation: '`:placeholder:`A`:diagtext:`'`|
 +---------------------------------------------------------------------------------------------------------+
+
++----------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`the flag '`:placeholder:`A`:diagtext:`' has been deprecated and will be ignored`|
++----------------------------------------------------------------------------------------------------------------------+
 
 
 -Wunused-comparison
@@ -10235,6 +11196,19 @@ This diagnostic is enabled by default.
 +---------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`unused label` |nbsp| :placeholder:`A`|
 +---------------------------------------------------------------------------+
+
+
+-Wunused-lambda-capture
+-----------------------
+**Diagnostic text:**
+
++---------------------------------------------------------------------------------------------------------------+--------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`lambda capture` |nbsp| :placeholder:`A` |nbsp| :diagtext:`is not` |nbsp| |+------------------------------------------------+|
+|                                                                                                               ||:diagtext:`used`                                ||
+|                                                                                                               |+------------------------------------------------+|
+|                                                                                                               ||:diagtext:`required to be captured for this use`||
+|                                                                                                               |+------------------------------------------------+|
++---------------------------------------------------------------------------------------------------------------+--------------------------------------------------+
 
 
 -Wunused-local-typedef
@@ -10313,6 +11287,21 @@ This diagnostic is enabled by default.
 +-------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+-Wunused-template
+-----------------
+Also controls `-Wunneeded-internal-declaration`_.
+
+**Diagnostic text:**
+
++-----------------------------------------------------+----------------------+----------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`unused` |nbsp| |+--------------------+| |nbsp| :diagtext:`template` |nbsp| :placeholder:`B`|
+|                                                     ||:diagtext:`function`||                                                    |
+|                                                     |+--------------------+|                                                    |
+|                                                     ||:diagtext:`variable`||                                                    |
+|                                                     |+--------------------+|                                                    |
++-----------------------------------------------------+----------------------+----------------------------------------------------+
+
+
 -Wunused-value
 --------------
 This diagnostic is enabled by default.
@@ -10384,6 +11373,15 @@ This diagnostic is enabled by default.
 +--------------------------------------------------------------------------------------------------------+----------------------------------------------------+
 
 
+-Wuser-defined-warnings
+-----------------------
+This diagnostic is enabled by default.
+
+**Diagnostic text:**
+
+The text of this diagnostic is not controlled by Clang.
+
+
 -Wvarargs
 ---------
 This diagnostic is enabled by default.
@@ -10411,15 +11409,32 @@ This diagnostic is enabled by default.
 
 -Wvariadic-macros
 -----------------
+Some of the diagnostics controlled by this flag are enabled by default.
+
 **Diagnostic text:**
 
 +--------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`named variadic macros are a GNU extension`|
 +--------------------------------------------------------------------------------+
 
++-----------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`\_\_VA\_OPT\_\_ can only appear in the expansion of a variadic macro`|
++-----------------------------------------------------------------------------------------------------------+
+
 +------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`variadic macros are a C99 feature`|
 +------------------------------------------------------------------------+
+
+
+-Wvec-elem-size
+---------------
+This diagnostic is an error by default, but the flag ``-Wno-vec-elem-size`` can be used to disable the error.
+
+**Diagnostic text:**
+
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:error:`error:` |nbsp| :diagtext:`vector operands do not have the same elements sizes (`:placeholder:`A` |nbsp| :diagtext:`and` |nbsp| :placeholder:`B`:diagtext:`)`|
++--------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wvector-conversion
@@ -10463,6 +11478,10 @@ This diagnostic is enabled by default.
 +-----------------------------------------------------------------------------------------------+
 |:warning:`warning:` |nbsp| :diagtext:`parentheses were disambiguated as a function declaration`|
 +-----------------------------------------------------------------------------------------------+
+
++-----------------------------------------------------------------------------------------------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`parentheses were disambiguated as redundant parentheses around declaration of variable named` |nbsp| :placeholder:`A`|
++-----------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
 -Wvisibility
@@ -10547,6 +11566,15 @@ Also controls `-Wdeprecated-writable-strings`_.
 -Wwrite-strings
 ---------------
 Synonym for `-Wwritable-strings`_.
+
+
+-Wzero-as-null-pointer-constant
+-------------------------------
+**Diagnostic text:**
+
++--------------------------------------------------------------------+
+|:warning:`warning:` |nbsp| :diagtext:`zero as null pointer constant`|
++--------------------------------------------------------------------+
 
 
 -Wzero-length-array

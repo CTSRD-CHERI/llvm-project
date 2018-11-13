@@ -17,14 +17,8 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Triple.h"
 
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
-#include "lldb/Core/Scalar.h"
-#include "lldb/Core/Value.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Symbol/UnwindPlan.h"
@@ -32,6 +26,11 @@
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Scalar.h"
+#include "lldb/Utility/Status.h"
 
 #include "Utility/ARM64_DWARF_Registers.h"
 
@@ -1667,7 +1666,7 @@ size_t ABIMacOSX_arm64::GetRedZoneSize() const { return 128; }
 //------------------------------------------------------------------
 
 ABISP
-ABIMacOSX_arm64::CreateInstance(const ArchSpec &arch) {
+ABIMacOSX_arm64::CreateInstance(ProcessSP process_sp, const ArchSpec &arch) {
   static ABISP g_abi_sp;
   const llvm::Triple::ArchType arch_type = arch.GetTriple().getArch();
   const llvm::Triple::VendorType vendor_type = arch.GetTriple().getVendor();
@@ -1675,7 +1674,7 @@ ABIMacOSX_arm64::CreateInstance(const ArchSpec &arch) {
   if (vendor_type == llvm::Triple::Apple) {
     if (arch_type == llvm::Triple::aarch64) {
       if (!g_abi_sp)
-        g_abi_sp.reset(new ABIMacOSX_arm64);
+        g_abi_sp.reset(new ABIMacOSX_arm64(process_sp));
       return g_abi_sp;
     }
   }
@@ -1761,8 +1760,8 @@ bool ABIMacOSX_arm64::GetArgumentValues(Thread &thread,
   addr_t sp = 0;
 
   for (uint32_t value_idx = 0; value_idx < num_values; ++value_idx) {
-    // We currently only support extracting values with Clang QualTypes.
-    // Do we care about others?
+    // We currently only support extracting values with Clang QualTypes. Do we
+    // care about others?
     Value *value = values.GetValueAtIndex(value_idx);
 
     if (!value)
@@ -1841,7 +1840,7 @@ bool ABIMacOSX_arm64::GetArgumentValues(Thread &thread,
 
           // Arguments 5 on up are on the stack
           const uint32_t arg_byte_size = (bit_width + (8 - 1)) / 8;
-          Error error;
+          Status error;
           if (!exe_ctx.GetProcessRef().ReadScalarIntegerFromMemory(
                   sp, arg_byte_size, is_signed, value->GetScalar(), error))
             return false;
@@ -1860,9 +1859,10 @@ bool ABIMacOSX_arm64::GetArgumentValues(Thread &thread,
   return true;
 }
 
-Error ABIMacOSX_arm64::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
-                                            lldb::ValueObjectSP &new_value_sp) {
-  Error error;
+Status
+ABIMacOSX_arm64::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
+                                      lldb::ValueObjectSP &new_value_sp) {
+  Status error;
   if (!new_value_sp) {
     error.SetErrorString("Empty value object for return value.");
     return error;
@@ -1880,7 +1880,7 @@ Error ABIMacOSX_arm64::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
 
   if (reg_ctx) {
     DataExtractor data;
-    Error data_error;
+    Status data_error;
     const uint64_t byte_size = new_value_sp->GetData(data, data_error);
     if (data_error.Fail()) {
       error.SetErrorStringWithFormat(
@@ -2022,10 +2022,9 @@ bool ABIMacOSX_arm64::CreateDefaultUnwindPlan(UnwindPlan &unwind_plan) {
 }
 
 // AAPCS64 (Procedure Call Standard for the ARM 64-bit Architecture) says
-// registers x19 through x28 and sp are callee preserved.
-// v8-v15 are non-volatile (and specifically only the lower 8 bytes of these
-// regs),
-// the rest of the fp/SIMD registers are volatile.
+// registers x19 through x28 and sp are callee preserved. v8-v15 are non-
+// volatile (and specifically only the lower 8 bytes of these regs), the rest
+// of the fp/SIMD registers are volatile.
 
 // We treat x29 as callee preserved also, else the unwinder won't try to
 // retrieve fp saves.
@@ -2124,7 +2123,7 @@ static bool LoadValueFromConsecutiveGPRRegisters(
   std::unique_ptr<DataBufferHeap> heap_data_ap(
       new DataBufferHeap(byte_size, 0));
   const ByteOrder byte_order = exe_ctx.GetProcessRef().GetByteOrder();
-  Error error;
+  Status error;
 
   CompilerType base_type;
   const uint32_t homogeneous_count =
@@ -2209,14 +2208,14 @@ static bool LoadValueFromConsecutiveGPRRegisters(
   } else {
     const RegisterInfo *reg_info = nullptr;
     if (is_return_value) {
-      // We are assuming we are decoding this immediately after returning
-      // from a function call and that the address of the structure is in x8
+      // We are assuming we are decoding this immediately after returning from
+      // a function call and that the address of the structure is in x8
       reg_info = reg_ctx->GetRegisterInfoByName("x8", 0);
     } else {
       // We are assuming we are stopped at the first instruction in a function
-      // and that the ABI is being respected so all parameters appear where they
-      // should be (functions with no external linkage can legally violate the
-      // ABI).
+      // and that the ABI is being respected so all parameters appear where
+      // they should be (functions with no external linkage can legally violate
+      // the ABI).
       if (NGRN >= 8)
         return false;
 
@@ -2305,7 +2304,7 @@ ValueObjectSP ABIMacOSX_arm64::GetReturnValueObjectImpl(
                   RegisterValue x1_reg_value;
                   if (reg_ctx->ReadRegister(x0_reg_info, x0_reg_value) &&
                       reg_ctx->ReadRegister(x1_reg_info, x1_reg_value)) {
-                    Error error;
+                    Status error;
                     if (x0_reg_value.GetAsMemoryData(
                             x0_reg_info, heap_data_ap->GetBytes() + 0, 8,
                             byte_order, error) &&
@@ -2402,7 +2401,7 @@ ValueObjectSP ABIMacOSX_arm64::GetReturnValueObjectImpl(
           const ByteOrder byte_order = exe_ctx.GetProcessRef().GetByteOrder();
           RegisterValue reg_value;
           if (reg_ctx->ReadRegister(v0_info, reg_value)) {
-            Error error;
+            Status error;
             if (reg_value.GetAsMemoryData(v0_info, heap_data_ap->GetBytes(),
                                           heap_data_ap->GetByteSize(),
                                           byte_order, error)) {

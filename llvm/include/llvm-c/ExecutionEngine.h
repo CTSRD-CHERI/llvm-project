@@ -19,9 +19,9 @@
 #ifndef LLVM_C_EXECUTIONENGINE_H
 #define LLVM_C_EXECUTIONENGINE_H
 
-#include "llvm-c/Types.h"
 #include "llvm-c/Target.h"
 #include "llvm-c/TargetMachine.h"
+#include "llvm-c/Types.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -181,6 +181,13 @@ LLVMMCJITMemoryManagerRef LLVMCreateSimpleMCJITMemoryManager(
   LLVMMemoryManagerDestroyCallback Destroy);
 
 void LLVMDisposeMCJITMemoryManager(LLVMMCJITMemoryManagerRef MM);
+
+/*===-- JIT Event Listener functions -------------------------------------===*/
+
+LLVMJITEventListenerRef LLVMCreateGDBRegistrationListener(void);
+LLVMJITEventListenerRef LLVMCreateIntelJITEventListener(void);
+LLVMJITEventListenerRef LLVMCreateOprofileJITEventListener(void);
+LLVMJITEventListenerRef LLVMCreatePerfJITEventListener(void);
 
 /**
  * @}

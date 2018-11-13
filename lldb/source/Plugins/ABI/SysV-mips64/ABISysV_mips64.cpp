@@ -16,13 +16,8 @@
 #include "llvm/ADT/Triple.h"
 
 // Project includes
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectMemory.h"
@@ -33,6 +28,11 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Status.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -559,13 +559,13 @@ size_t ABISysV_mips64::GetRedZoneSize() const { return 0; }
 //------------------------------------------------------------------
 
 ABISP
-ABISysV_mips64::CreateInstance(const ArchSpec &arch) {
+ABISysV_mips64::CreateInstance(lldb::ProcessSP process_sp, const ArchSpec &arch) {
   static ABISP g_abi_sp;
   const llvm::Triple::ArchType arch_type = arch.GetTriple().getArch();
   if ((arch_type == llvm::Triple::mips64) ||
       (arch_type == llvm::Triple::mips64el)) {
     if (!g_abi_sp)
-      g_abi_sp.reset(new ABISysV_mips64);
+      g_abi_sp.reset(new ABISysV_mips64(process_sp));
     return g_abi_sp;
   }
   return ABISP();
@@ -617,7 +617,7 @@ bool ABISysV_mips64::PrepareTrivialCall(Thread &thread, addr_t sp,
 
   sp &= ~(0xfull); // 16-byte alignment
 
-  Error error;
+  Status error;
   const RegisterInfo *pc_reg_info =
       reg_ctx->GetRegisterInfo(eRegisterKindGeneric, LLDB_REGNUM_GENERIC_PC);
   const RegisterInfo *sp_reg_info =
@@ -661,8 +661,8 @@ bool ABISysV_mips64::PrepareTrivialCall(Thread &thread, addr_t sp,
   if (log)
     log->Printf("Writing r25: 0x%" PRIx64, (uint64_t)func_addr);
 
-  // All callers of position independent functions must place the address of the
-  // called function in t9 (r25)
+  // All callers of position independent functions must place the address of
+  // the called function in t9 (r25)
   if (!reg_ctx->WriteRegisterFromUnsigned(r25_info, func_addr))
     return false;
 
@@ -674,9 +674,9 @@ bool ABISysV_mips64::GetArgumentValues(Thread &thread,
   return false;
 }
 
-Error ABISysV_mips64::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
-                                           lldb::ValueObjectSP &new_value_sp) {
-  Error error;
+Status ABISysV_mips64::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
+                                            lldb::ValueObjectSP &new_value_sp) {
+  Status error;
   if (!new_value_sp) {
     error.SetErrorString("Empty value object for return value.");
     return error;
@@ -696,7 +696,7 @@ Error ABISysV_mips64::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
     error.SetErrorString("no registers are available");
 
   DataExtractor data;
-  Error data_error;
+  Status data_error;
   size_t num_bytes = new_value_sp->GetData(data, data_error);
   if (data_error.Fail()) {
     error.SetErrorStringWithFormat(
@@ -754,7 +754,7 @@ ValueObjectSP ABISysV_mips64::GetReturnValueObjectImpl(
     Thread &thread, CompilerType &return_compiler_type) const {
   ValueObjectSP return_valobj_sp;
   Value value;
-  Error error;
+  Status error;
 
   ExecutionContext exe_ctx(thread.shared_from_this());
   if (exe_ctx.GetTargetPtr() == nullptr || exe_ctx.GetProcessPtr() == nullptr)
@@ -1035,10 +1035,9 @@ ValueObjectSP ABISysV_mips64::GetReturnValueObjectImpl(
         }
       }
 
-      // If we reach here, it means this structure either contains more than two
-      // fields or
-      // it contains at least one non floating point type.
-      // In that case, all fields are returned in GP return registers.
+      // If we reach here, it means this structure either contains more than
+      // two fields or it contains at least one non floating point type. In
+      // that case, all fields are returned in GP return registers.
       for (uint32_t idx = 0; idx < num_children; idx++) {
         uint64_t field_bit_offset = 0;
         bool is_signed;
@@ -1049,8 +1048,8 @@ ValueObjectSP ABISysV_mips64::GetReturnValueObjectImpl(
         const size_t field_byte_width =
             field_compiler_type.GetByteSize(nullptr);
 
-        // if we don't know the size of the field (e.g. invalid type), just bail
-        // out
+        // if we don't know the size of the field (e.g. invalid type), just
+        // bail out
         if (field_byte_width == 0)
           break;
 
@@ -1078,16 +1077,15 @@ ValueObjectSP ABISysV_mips64::GetReturnValueObjectImpl(
             }
           }
           // We already have consumed at-least 8 bytes that means r2 is done,
-          // and this field will be in r3.
-          // Check if this field can fit in r3.
+          // and this field will be in r3. Check if this field can fit in r3.
           else if (integer_bytes + field_byte_width + padding <= 16) {
             integer_bytes = integer_bytes + field_byte_width + padding;
             use_r3 = 1;
           } else {
-            // There isn't any space left for this field, this should not happen
-            // as we have already checked
-            // the overall size is not greater than 16 bytes. For now, return a
-            // nullptr return value object.
+            // There isn't any space left for this field, this should not
+            // happen as we have already checked the overall size is not
+            // greater than 16 bytes. For now, return a nullptr return value
+            // object.
             return return_valobj_sp;
           }
         }
@@ -1123,15 +1121,16 @@ ValueObjectSP ABISysV_mips64::GetReturnValueObjectImpl(
         sucess = 1;
       }
       if (sucess) {
-        // The result is in our data buffer.  Create a variable object out of it
+        // The result is in our data buffer.  Create a variable object out of
+        // it
         return_valobj_sp = ValueObjectConstResult::Create(
             &thread, return_compiler_type, ConstString(""), return_ext);
       }
       return return_valobj_sp;
     }
 
-    // Any structure/vector greater than 16 bytes in size is returned in memory.
-    // The pointer to that memory is returned in r2.
+    // Any structure/vector greater than 16 bytes in size is returned in
+    // memory. The pointer to that memory is returned in r2.
     uint64_t mem_address = reg_ctx->ReadRegisterAsUnsigned(
         reg_ctx->GetRegisterInfoByName("r2", 0), 0);
 

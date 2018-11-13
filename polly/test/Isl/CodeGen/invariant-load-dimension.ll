@@ -1,5 +1,5 @@
-; RUN: opt < %s -analyze -polly-scops -polly-process-unprofitable -polly-invariant-load-hoisting | FileCheck %s -check-prefix=SCOPS
-; RUN: opt -S < %s -polly-codegen -polly-process-unprofitable -polly-invariant-load-hoisting | FileCheck %s -check-prefix=CODEGEN
+; RUN: opt %loadPolly < %s -analyze -polly-scops -polly-process-unprofitable -polly-invariant-load-hoisting | FileCheck %s -check-prefix=SCOPS
+; RUN: opt %loadPolly -S < %s -polly-codegen -polly-process-unprofitable -polly-invariant-load-hoisting | FileCheck %s -check-prefix=CODEGEN
 
 target datalayout = "e-m:e-p:32:32-i64:64-v128:64:128-a:0:32-n8:16:32-S64"
 
@@ -17,7 +17,7 @@ define void @test(%S* %cpi, i1 %b) {
 ; SCOPS-NEXT:            Execution Context: [l2, l1] -> {  : l2 > 0 }
 ; SCOPS-NEXT:    }
 ; SCOPS:         Arrays {
-; SCOPS-NEXT:        i32 MemRef_cpi[*][%l1]; // Element size 4
+; SCOPS-NEXT:        i32 MemRef_cpi[*][(10 * %l1)]; // Element size 4
 ; SCOPS-NEXT:    }
 
 ; FIXME: Figure out how to actually generate code for this loop.

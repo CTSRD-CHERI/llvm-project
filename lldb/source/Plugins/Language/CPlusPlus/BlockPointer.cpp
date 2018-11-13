@@ -44,7 +44,7 @@ public:
       return;
     }
 
-    Error err;
+    Status err;
     TypeSystem *type_system = target_sp->GetScratchTypeSystemForLanguage(
         &err, lldb::eLanguageTypeC_plus_plus);
 
@@ -133,7 +133,7 @@ public:
       return lldb::ValueObjectSP();
     }
 
-    Error err;
+    Status err;
     ValueObjectSP struct_sp = struct_pointer_sp->Dereference(err);
 
     if (!struct_sp || !err.Success()) {
@@ -147,9 +147,8 @@ public:
     return child_sp;
   }
 
-  // return true if this object is now safe to use forever without
-  // ever updating again; the typical (and tested) answer here is
-  // 'false'
+  // return true if this object is now safe to use forever without ever
+  // updating again; the typical (and tested) answer here is 'false'
   bool Update() override { return false; }
 
   // maybe return false if the block pointer is, say, null

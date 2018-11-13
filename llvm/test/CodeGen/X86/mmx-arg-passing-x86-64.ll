@@ -8,9 +8,9 @@
 
 define void @t3() nounwind  {
 ; X86-64-LABEL: t3:
-; X86-64:       ## BB#0:
+; X86-64:       ## %bb.0:
 ; X86-64-NEXT:    movq _g_v8qi@{{.*}}(%rip), %rax
-; X86-64-NEXT:    movq {{.*#+}} xmm0 = mem[0],zero
+; X86-64-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero
 ; X86-64-NEXT:    movb $1, %al
 ; X86-64-NEXT:    jmp _pass_v8qi ## TAILCALL
   %tmp3 = load <8 x i8>, <8 x i8>* @g_v8qi, align 8
@@ -21,7 +21,7 @@ define void @t3() nounwind  {
 
 define void @t4(x86_mmx %v1, x86_mmx %v2) nounwind  {
 ; X86-64-LABEL: t4:
-; X86-64:       ## BB#0:
+; X86-64:       ## %bb.0:
 ; X86-64-NEXT:    movdq2q %xmm1, %mm0
 ; X86-64-NEXT:    movq %mm0, -{{[0-9]+}}(%rsp)
 ; X86-64-NEXT:    movdq2q %xmm0, %mm0
@@ -41,7 +41,7 @@ define void @t4(x86_mmx %v1, x86_mmx %v2) nounwind  {
 
 define void @t5() nounwind  {
 ; X86-64-LABEL: t5:
-; X86-64:       ## BB#0:
+; X86-64:       ## %bb.0:
 ; X86-64-NEXT:    pushq %rax
 ; X86-64-NEXT:    xorl %edi, %edi
 ; X86-64-NEXT:    callq _pass_v1di

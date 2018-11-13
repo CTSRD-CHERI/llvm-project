@@ -2,26 +2,34 @@ set(LLVM_LINK_COMPONENTS support)
 
 add_clang_library(clangTidyModernizeModule
   AvoidBindCheck.cpp
+  ConcatNestedNamespacesCheck.cpp
   DeprecatedHeadersCheck.cpp
+  DeprecatedIosBaseAliasesCheck.cpp
   LoopConvertCheck.cpp
   LoopConvertUtils.cpp
-  MakeSmartPtrCheck.cpp
   MakeSharedCheck.cpp
+  MakeSmartPtrCheck.cpp
   MakeUniqueCheck.cpp
   ModernizeTidyModule.cpp
   PassByValueCheck.cpp
   RawStringLiteralCheck.cpp
   RedundantVoidArgCheck.cpp
   ReplaceAutoPtrCheck.cpp
+  ReplaceRandomShuffleCheck.cpp
+  ReturnBracedInitListCheck.cpp
   ShrinkToFitCheck.cpp
+  UnaryStaticAssertCheck.cpp
   UseAutoCheck.cpp
   UseBoolLiteralsCheck.cpp
-  UseDefaultCheck.cpp
+  UseDefaultMemberInitCheck.cpp
   UseEmplaceCheck.cpp
+  UseEqualsDefaultCheck.cpp
   UseEqualsDeleteCheck.cpp
+  UseNoexceptCheck.cpp
   UseNullptrCheck.cpp
   UseOverrideCheck.cpp
   UseTransparentFunctorsCheck.cpp
+  UseUncaughtExceptionsCheck.cpp
   UseUsingCheck.cpp
 
   LINK_LIBS
@@ -32,4 +40,5 @@ add_clang_library(clangTidyModernizeModule
   clangTidy
   clangTidyReadabilityModule
   clangTidyUtils
+  clangTooling
   )

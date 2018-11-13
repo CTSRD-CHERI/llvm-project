@@ -21,6 +21,7 @@ namespace llvm {
 
 class DataLayout;
 template <typename T> class SmallVectorImpl;
+class Triple;
 class Twine;
 class raw_ostream;
 
@@ -45,6 +46,12 @@ public:
   static void getNameWithPrefix(SmallVectorImpl<char> &OutName,
                                 const Twine &GVName, const DataLayout &DL);
 };
+
+void emitLinkerFlagsForGlobalCOFF(raw_ostream &OS, const GlobalValue *GV,
+                                  const Triple &TT, Mangler &Mangler);
+
+void emitLinkerFlagsForUsedCOFF(raw_ostream &OS, const GlobalValue *GV,
+                                const Triple &T, Mangler &M);
 
 } // End llvm namespace
 

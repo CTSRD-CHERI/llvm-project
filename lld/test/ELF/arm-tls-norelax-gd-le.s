@@ -1,9 +1,9 @@
+// REQUIRES: arm
 // RUN: llvm-mc -filetype=obj -triple=armv7a-none-linux-gnueabi %p/Inputs/arm-tls-get-addr.s -o %t1
 // RUN: ld.lld %t1 --shared -o %t1.so
 // RUN: llvm-mc %s -o %t.o -filetype=obj -triple=armv7a-linux-gnueabi
-// RUN: ld.lld %t1.so %t.o -o %t
-// RUN: llvm-readobj -s -dyn-relocations %t | FileCheck %s
-// REQUIRES: arm
+// RUN: ld.lld --hash-style=sysv %t1.so %t.o -o %t
+// RUN: llvm-objdump -s %t | FileCheck %s
 
 // This tls global-dynamic sequence is with respect to a non-preemptible
 // symbol in an application so a relaxation to Local Exec would normally be
@@ -31,7 +31,11 @@ x:
  .space 4
  .type  x, %object
 
-// CHECK: Dynamic Relocations {
-// CHECK-NEXT:   0x12078 R_ARM_TLS_DTPMOD32
-// CHECK-NEXT:   0x1300C R_ARM_JUMP_SLOT __tls_get_addr
+// CHECK:       Contents of section .got:
+// Module index is always 1 for executable
+// CHECK-NEXT:  13060 01000000 00000000
 
+
+// Without any definition of __tls_get_addr we get an error
+// RUN: not ld.lld  %t.o -o %t 2>&1 | FileCheck --check-prefix=ERR %s
+// ERR: error: undefined symbol: __tls_get_addr

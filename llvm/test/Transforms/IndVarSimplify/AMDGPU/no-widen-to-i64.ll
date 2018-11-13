@@ -9,12 +9,12 @@
 ; twice as expensive as that on a 32-bit integer, or split into 2
 ; 32-bit components.
 
-target datalayout = "e-p:32:32-p1:64:64-p2:64:64-p3:32:32-p4:64:64-p5:32:32-p24:64:64-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64"
+target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:32:32-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64-S32-A5"
 
 ; CHECK-LABEL: @indvar_32_bit(
 ; CHECK-NOT: sext i32
 ; CHECK: phi i32
-define void @indvar_32_bit(i32 %n, i32* nocapture %output) {
+define amdgpu_kernel void @indvar_32_bit(i32 %n, i32* nocapture %output) {
 entry:
   %cmp5 = icmp sgt i32 %n, 0
   br i1 %cmp5, label %for.body.preheader, label %for.end
@@ -46,7 +46,7 @@ for.end:                                          ; preds = %for.end.loopexit, %
 ; CHECK-NOT: ashr i64
 ; CHECK-NOT: mul nsw i64
 ; CHECK-NOT: add nsw i64
-define void @no_promote_i32(i32 addrspace(1)* %out, i32 %a, i32 %b) {
+define amdgpu_kernel void @no_promote_i32(i32 addrspace(1)* %out, i32 %a, i32 %b) {
 entry:
   br label %for.body
 
@@ -72,7 +72,7 @@ for.end:
 ; be legalized anyway.
 
 ; CHECK-LABEL: @indvar_48_bit(
-define void @indvar_48_bit(i48 %n, i48* nocapture %output) {
+define amdgpu_kernel void @indvar_48_bit(i48 %n, i48* nocapture %output) {
 entry:
   %cmp5 = icmp sgt i48 %n, 0
   br i1 %cmp5, label %for.body.preheader, label %for.end

@@ -1,4 +1,4 @@
-# RUN: lld -flavor darwin -arch x86_64 -macosx_version_min 10.8 \
+# RUN: ld64.lld -arch x86_64 -macosx_version_min 10.8 \
 # RUN:      %s %p/Inputs/x86_64/libSystem.yaml -o %t  && \
 # RUN: llvm-objdump -exports-trie %t | FileCheck %s
 #
@@ -42,5 +42,5 @@ global-symbols:
 ...
 
 # CHECK-NOT:  _myHidden
-# CHECK:      0x00000FFD  _myRegular
-# CHECK:      0x00000FFE  _myWeak [weak_def]
+# CHECK:      0x100000FFD  _myRegular
+# CHECK:      0x100000FFE  _myWeak [weak_def]

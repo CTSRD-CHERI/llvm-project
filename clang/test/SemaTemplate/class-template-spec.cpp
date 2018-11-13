@@ -78,9 +78,6 @@ template<> struct ::A<double>;
 
 namespace N {
   template<typename T> struct B; // expected-note {{explicitly specialized}}
-#if __cplusplus <= 199711L
-  // expected-note@-2 {{explicitly specialized}}
-#endif
 
   template<> struct ::N::B<char>; // okay
   template<> struct ::N::B<short>; // okay
@@ -92,9 +89,6 @@ namespace N {
 template<> struct N::B<int> { }; // okay
 
 template<> struct N::B<float> { };
-#if __cplusplus <= 199711L
-// expected-warning@-2 {{first declaration of class template specialization of 'B' outside namespace 'N' is a C++11 extension}}
-#endif
 
 
 namespace M {
@@ -121,9 +115,9 @@ class Wibble<int> { }; // expected-error{{cannot specialize a template template 
 
 namespace rdar9676205 {
   template<typename T>
-  struct X {
+  struct X { // expected-note {{here}}
     template<typename U>
-    struct X<U*> { // expected-error{{explicit specialization of 'X' in class scope}}
+    struct X<U*> { // expected-error{{partial specialization of 'X' not in a namespace enclosing}}
     };
   };
 
@@ -137,12 +131,16 @@ namespace PR18009 {
   A<int>::S<8, sizeof(int)> a; // ok
 
   template <typename T> struct B {
-    template <int N, int M> struct S; // expected-note {{declared here}}
-    template <int N> struct S<N, sizeof(T) +
-        N // expected-error {{non-type template argument depends on a template parameter of the partial specialization}}
-        > {};
+    template <int N, int M> struct S;
+    template <int N> struct S<N, sizeof(T) + N> {}; // ok (dr1315)
   };
-  B<int>::S<8, sizeof(int) + 8> s; // expected-error {{undefined}}
+  B<int>::S<8, sizeof(int) + 8> b;
+
+  template <typename T> struct C {
+    template <int N, int M> struct S;
+    template <int N> struct S<N, N ? **(T(*)[N])0 : 0> {}; // expected-error {{depends on a template parameter of the partial specialization}}
+  };
+  C<int> c; // expected-note {{in instantiation of}}
 
   template<int A> struct outer {
     template<int B, int C> struct inner {};
@@ -167,10 +165,16 @@ namespace PR16519 {
   // expected-warning@-2 {{variadic templates are a C++11 extension}}
 #endif
 
-  template<typename T, T ...N, T ...Extra> struct __make_integer_sequence_impl<integer_sequence<T, N...>, Extra...> {
+  // Note that the following seemingly-equivalent template parameter list is
+  // not OK; it would result in a partial specialization that is not more
+  // specialized than the primary template. (See NTTPTypeVsPartialOrder below.)
+  //
+  //    template<typename T, T ...N, T ...Extra>
+  template<typename T, T ...N, typename integer_sequence<T, N...>::value_type ...Extra>
 #if __cplusplus <= 199711L
-  // expected-warning@-2 2 {{variadic templates are a C++11 extension}}
+  // expected-warning@-2 2{{variadic templates are a C++11 extension}}
 #endif
+  struct __make_integer_sequence_impl<integer_sequence<T, N...>, Extra...> {
     typedef integer_sequence<T, N..., sizeof...(N) + N..., Extra...> type;
   };
 
@@ -193,13 +197,32 @@ namespace PR16519 {
 #endif
 }
 
+namespace NTTPTypeVsPartialOrder {
+  struct X { typedef int value_type; };
+  template<typename T> struct Y { typedef T value_type; };
+
+  template<typename T, typename T::value_type N> struct A;
+  template<int N> struct A<X, N> {};
+  template<typename T, T N> struct A<Y<T>, N> {};
+  A<X, 0> ax;
+  A<Y<int>, 0> ay;
+
+
+  template<int, typename T, typename T::value_type> struct B;
+  template<typename T, typename T::value_type N> struct B<0, T, N>;
+  template<int N> struct B<0, X, N> {};
+  template<typename T, T N> struct B<0, Y<T>, N> {};
+  B<0, X, 0> bx;
+  B<0, Y<int>, 0> by;
+}
+
 namespace DefaultArgVsPartialSpec {
   // Check that the diagnostic points at the partial specialization, not just at
   // the default argument.
   template<typename T, int N =
-      sizeof(T) // expected-note {{template parameter is used in default argument declared here}}
+      sizeof(T) // ok (dr1315)
   > struct X {};
-  template<typename T> struct X<T> {}; // expected-error {{non-type template argument depends on a template parameter of the partial specialization}}
+  template<typename T> struct X<T> {};
 
   template<typename T,
       T N = 0 // expected-note {{template parameter is declared here}}

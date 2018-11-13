@@ -273,18 +273,35 @@ bool LanaiDAGToDAGISel::SelectInlineAsmMemoryOperand(
 void LanaiDAGToDAGISel::Select(SDNode *Node) {
   unsigned Opcode = Node->getOpcode();
 
-  // Dump information about the Node being selected
-  DEBUG(errs() << "Selecting: "; Node->dump(CurDAG); errs() << "\n");
-
   // If we have a custom node, we already have selected!
   if (Node->isMachineOpcode()) {
-    DEBUG(errs() << "== "; Node->dump(CurDAG); errs() << "\n");
+    LLVM_DEBUG(errs() << "== "; Node->dump(CurDAG); errs() << "\n");
     return;
   }
 
-  // Instruction Selection not handled by the auto-generated
-  // tablegen selection should be handled here.
+  // Instruction Selection not handled by the auto-generated tablegen selection
+  // should be handled here.
+  EVT VT = Node->getValueType(0);
   switch (Opcode) {
+  case ISD::Constant:
+    if (VT == MVT::i32) {
+      ConstantSDNode *ConstNode = cast<ConstantSDNode>(Node);
+      // Materialize zero constants as copies from R0. This allows the coalescer
+      // to propagate these into other instructions.
+      if (ConstNode->isNullValue()) {
+        SDValue New = CurDAG->getCopyFromReg(CurDAG->getEntryNode(),
+                                             SDLoc(Node), Lanai::R0, MVT::i32);
+        return ReplaceNode(Node, New.getNode());
+      }
+      // Materialize all ones constants as copies from R1. This allows the
+      // coalescer to propagate these into other instructions.
+      if (ConstNode->isAllOnesValue()) {
+        SDValue New = CurDAG->getCopyFromReg(CurDAG->getEntryNode(),
+                                             SDLoc(Node), Lanai::R1, MVT::i32);
+        return ReplaceNode(Node, New.getNode());
+      }
+    }
+    break;
   case ISD::FrameIndex:
     selectFrameIndex(Node);
     return;
@@ -299,7 +316,7 @@ void LanaiDAGToDAGISel::Select(SDNode *Node) {
 void LanaiDAGToDAGISel::selectFrameIndex(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Imm = CurDAG->getTargetConstant(0, DL, MVT::i32);
-  int FI = dyn_cast<FrameIndexSDNode>(Node)->getIndex();
+  int FI = cast<FrameIndexSDNode>(Node)->getIndex();
   EVT VT = Node->getValueType(0);
   SDValue TFI = CurDAG->getTargetFrameIndex(FI, VT);
   unsigned Opc = Lanai::ADD_I_LO;

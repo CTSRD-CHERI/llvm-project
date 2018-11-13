@@ -10,7 +10,7 @@
 // This file is part of the X86 Disassembler Emitter.
 // It contains the interface of a single recognizable instruction.
 // Documentation for the disassembler emitter in general can be found in
-//  X86DisasemblerEmitter.h.
+//  X86DisassemblerEmitter.h.
 //
 //===----------------------------------------------------------------------===//
 
@@ -23,6 +23,128 @@
 #include "llvm/TableGen/Record.h"
 
 namespace llvm {
+
+#define X86_INSTR_MRM_MAPPING     \
+  MAP(C0, 64)                     \
+  MAP(C1, 65)                     \
+  MAP(C2, 66)                     \
+  MAP(C3, 67)                     \
+  MAP(C4, 68)                     \
+  MAP(C5, 69)                     \
+  MAP(C6, 70)                     \
+  MAP(C7, 71)                     \
+  MAP(C8, 72)                     \
+  MAP(C9, 73)                     \
+  MAP(CA, 74)                     \
+  MAP(CB, 75)                     \
+  MAP(CC, 76)                     \
+  MAP(CD, 77)                     \
+  MAP(CE, 78)                     \
+  MAP(CF, 79)                     \
+  MAP(D0, 80)                     \
+  MAP(D1, 81)                     \
+  MAP(D2, 82)                     \
+  MAP(D3, 83)                     \
+  MAP(D4, 84)                     \
+  MAP(D5, 85)                     \
+  MAP(D6, 86)                     \
+  MAP(D7, 87)                     \
+  MAP(D8, 88)                     \
+  MAP(D9, 89)                     \
+  MAP(DA, 90)                     \
+  MAP(DB, 91)                     \
+  MAP(DC, 92)                     \
+  MAP(DD, 93)                     \
+  MAP(DE, 94)                     \
+  MAP(DF, 95)                     \
+  MAP(E0, 96)                     \
+  MAP(E1, 97)                     \
+  MAP(E2, 98)                     \
+  MAP(E3, 99)                     \
+  MAP(E4, 100)                    \
+  MAP(E5, 101)                    \
+  MAP(E6, 102)                    \
+  MAP(E7, 103)                    \
+  MAP(E8, 104)                    \
+  MAP(E9, 105)                    \
+  MAP(EA, 106)                    \
+  MAP(EB, 107)                    \
+  MAP(EC, 108)                    \
+  MAP(ED, 109)                    \
+  MAP(EE, 110)                    \
+  MAP(EF, 111)                    \
+  MAP(F0, 112)                    \
+  MAP(F1, 113)                    \
+  MAP(F2, 114)                    \
+  MAP(F3, 115)                    \
+  MAP(F4, 116)                    \
+  MAP(F5, 117)                    \
+  MAP(F6, 118)                    \
+  MAP(F7, 119)                    \
+  MAP(F8, 120)                    \
+  MAP(F9, 121)                    \
+  MAP(FA, 122)                    \
+  MAP(FB, 123)                    \
+  MAP(FC, 124)                    \
+  MAP(FD, 125)                    \
+  MAP(FE, 126)                    \
+  MAP(FF, 127)
+
+// A clone of X86 since we can't depend on something that is generated.
+namespace X86Local {
+  enum {
+    Pseudo        = 0,
+    RawFrm        = 1,
+    AddRegFrm     = 2,
+    RawFrmMemOffs = 3,
+    RawFrmSrc     = 4,
+    RawFrmDst     = 5,
+    RawFrmDstSrc  = 6,
+    RawFrmImm8    = 7,
+    RawFrmImm16   = 8,
+    MRMDestMem     = 32,
+    MRMSrcMem      = 33,
+    MRMSrcMem4VOp3 = 34,
+    MRMSrcMemOp4   = 35,
+    MRMXm = 39,
+    MRM0m = 40, MRM1m = 41, MRM2m = 42, MRM3m = 43,
+    MRM4m = 44, MRM5m = 45, MRM6m = 46, MRM7m = 47,
+    MRMDestReg     = 48,
+    MRMSrcReg      = 49,
+    MRMSrcReg4VOp3 = 50,
+    MRMSrcRegOp4   = 51,
+    MRMXr = 55,
+    MRM0r = 56, MRM1r = 57, MRM2r = 58, MRM3r = 59,
+    MRM4r = 60, MRM5r = 61, MRM6r = 62, MRM7r = 63,
+#define MAP(from, to) MRM_##from = to,
+    X86_INSTR_MRM_MAPPING
+#undef MAP
+  };
+
+  enum {
+    OB = 0, TB = 1, T8 = 2, TA = 3, XOP8 = 4, XOP9 = 5, XOPA = 6, ThreeDNow = 7
+  };
+
+  enum {
+    PD = 1, XS = 2, XD = 3, PS = 4
+  };
+
+  enum {
+    VEX = 1, XOP = 2, EVEX = 3
+  };
+
+  enum {
+    OpSize16 = 1, OpSize32 = 2
+  };
+
+  enum {
+    AdSize16 = 1, AdSize32 = 2, AdSize64 = 3
+  };
+
+  enum {
+    VEX_W0 = 0, VEX_W1 = 1, VEX_WIG = 2, VEX_W1X = 3
+  };
+}
 
 namespace X86Disassembler {
 
@@ -55,8 +177,8 @@ private:
   bool HasREX_WPrefix;
   /// The hasVEX_4V field from the record
   bool HasVEX_4V;
-  /// The hasVEX_WPrefix field from the record
-  bool HasVEX_WPrefix;
+  /// The VEX_WPrefix field from the record
+  uint8_t VEX_WPrefix;
   /// Inferred from the operands; indicates whether the L bit in the VEX prefix is set
   bool HasVEX_LPrefix;
   /// The ignoreVEX_L field from the record
@@ -69,6 +191,8 @@ private:
   bool HasEVEX_KZ;
   /// The hasEVEX_B field from the record
   bool HasEVEX_B;
+  /// Indicates that the instruction uses the L and L' fields for RC.
+  bool EncodeRC;
   /// The isCodeGenOnly field from the record
   bool IsCodeGenOnly;
   /// The ForceDisassemble field from the record
@@ -86,12 +210,12 @@ private:
   /// Indicates whether the instruction should be emitted into the decode
   /// tables; regardless, it will be emitted into the instruction info table
   bool ShouldBeEmitted;
-  
+
   /// The operands of the instruction, as listed in the CodeGenInstruction.
   /// They are not one-to-one with operands listed in the MCInst; for example,
   /// memory operands expand to 5 operands in the MCInst
   const std::vector<CGIOperandList::OperandInfo>* Operands;
-  
+
   /// The description of the instruction that is emitted into the instruction
   /// info table
   InstructionSpecifier* Spec;
@@ -148,7 +272,7 @@ private:
   static OperandEncoding writemaskRegisterEncodingFromString(const std::string &s,
                                                              uint8_t OpSize);
 
-  /// \brief Adjust the encoding type for an operand based on the instruction.
+  /// Adjust the encoding type for an operand based on the instruction.
   void adjustOperandEncoding(OperandEncoding &encoding);
 
   /// handleOperand - Converts a single operand from the LLVM table format to
@@ -159,7 +283,7 @@ private:
   ///                               operand exists.
   /// @param operandIndex         - The index into the generated operand table.
   ///                               Incremented by this function one or more
-  ///                               times to reflect possible duplicate 
+  ///                               times to reflect possible duplicate
   ///                               operands).
   /// @param physicalOperandIndex - The index of the current operand into the
   ///                               set of non-duplicate ('physical') operands.
@@ -190,12 +314,12 @@ private:
   bool shouldBeEmitted() const {
     return ShouldBeEmitted;
   }
-  
+
   /// emitInstructionSpecifier - Loads the instruction specifier for the current
   ///   instruction into a DisassemblerTables.
   ///
   void emitInstructionSpecifier();
-  
+
   /// emitDecodePath - Populates the proper fields in the decode tables
   ///   corresponding to the decode paths for this instruction.
   ///
@@ -225,7 +349,7 @@ public:
                            const CodeGenInstruction &insn,
                            InstrUID uid);
 };
-  
+
 } // namespace X86Disassembler
 
 } // namespace llvm

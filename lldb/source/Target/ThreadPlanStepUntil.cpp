@@ -12,12 +12,14 @@
 // Other libraries and framework includes
 // Project includes
 #include "lldb/Target/ThreadPlanStepUntil.h"
+
 #include "lldb/Breakpoint/Breakpoint.h"
-#include "lldb/Core/Log.h"
+#include "lldb/Symbol/SymbolContextScope.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/StopInfo.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/Log.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -149,8 +151,8 @@ void ThreadPlanStepUntil::AnalyzeStop() {
     StopReason reason = stop_info_sp->GetStopReason();
 
     if (reason == eStopReasonBreakpoint) {
-      // If this is OUR breakpoint, we're fine, otherwise we don't know why this
-      // happened...
+      // If this is OUR breakpoint, we're fine, otherwise we don't know why
+      // this happened...
       BreakpointSiteSP this_site =
           m_thread.GetProcess()->GetBreakpointSiteList().FindByID(
               stop_info_sp->GetValue());
@@ -161,18 +163,13 @@ void ThreadPlanStepUntil::AnalyzeStop() {
 
       if (this_site->IsBreakpointAtThisSite(m_return_bp_id)) {
         // If we are at our "step out" breakpoint, and the stack depth has
-        // shrunk, then
-        // this is indeed our stop.
-        // If the stack depth has grown, then we've hit our step out breakpoint
-        // recursively.
-        // If we are the only breakpoint at that location, then we do explain
-        // the stop, and
-        // we'll just continue.
-        // If there was another breakpoint here, then we don't explain the stop,
-        // but we won't
-        // mark ourselves Completed, because maybe that breakpoint will
-        // continue, and then
-        // we'll finish the "until".
+        // shrunk, then this is indeed our stop. If the stack depth has grown,
+        // then we've hit our step out breakpoint recursively. If we are the
+        // only breakpoint at that location, then we do explain the stop, and
+        // we'll just continue. If there was another breakpoint here, then we
+        // don't explain the stop, but we won't mark ourselves Completed,
+        // because maybe that breakpoint will continue, and then we'll finish
+        // the "until".
         bool done;
         StackID cur_frame_zero_id;
 
@@ -207,8 +204,8 @@ void ThreadPlanStepUntil::AnalyzeStop() {
             else {
               StackFrameSP older_frame_sp = m_thread.GetStackFrameAtIndex(1);
 
-              // But if we can't even unwind one frame we should just get out of
-              // here & stop...
+              // But if we can't even unwind one frame we should just get out
+              // of here & stop...
               if (older_frame_sp) {
                 const SymbolContext &older_context =
                     older_frame_sp->GetSymbolContext(eSymbolContextEverything);
@@ -228,8 +225,8 @@ void ThreadPlanStepUntil::AnalyzeStop() {
 
             // Otherwise we've hit this breakpoint recursively.  If we're the
             // only breakpoint here, then we do explain the stop, and we'll
-            // continue.
-            // If not then we should let higher plans handle this stop.
+            // continue. If not then we should let higher plans handle this
+            // stop.
             if (this_site->GetNumberOfOwners() == 1)
               m_explains_stop = true;
             else {
@@ -240,8 +237,8 @@ void ThreadPlanStepUntil::AnalyzeStop() {
           }
         }
       }
-      // If we get here we haven't hit any of our breakpoints, so let the higher
-      // plans take care of the stop.
+      // If we get here we haven't hit any of our breakpoints, so let the
+      // higher plans take care of the stop.
       m_explains_stop = false;
       return;
     } else if (IsUsuallyUnexplainedStopReason(reason)) {
@@ -254,16 +251,15 @@ void ThreadPlanStepUntil::AnalyzeStop() {
 
 bool ThreadPlanStepUntil::DoPlanExplainsStop(Event *event_ptr) {
   // We don't explain signals or breakpoints (breakpoints that handle stepping
-  // in or
-  // out will be handled by a child plan.
+  // in or out will be handled by a child plan.
   AnalyzeStop();
   return m_explains_stop;
 }
 
 bool ThreadPlanStepUntil::ShouldStop(Event *event_ptr) {
-  // If we've told our self in ExplainsStop that we plan to continue, then
-  // do so here.  Otherwise, as long as this thread has stopped for a reason,
-  // we will stop.
+  // If we've told our self in ExplainsStop that we plan to continue, then do
+  // so here.  Otherwise, as long as this thread has stopped for a reason, we
+  // will stop.
 
   StopInfoSP stop_info_sp = GetPrivateStopInfo();
   if (!stop_info_sp || stop_info_sp->GetStopReason() == eStopReasonNone)

@@ -15,54 +15,58 @@
 #ifndef LLVM_EXECUTIONENGINE_EXECUTIONENGINE_H
 #define LLVM_EXECUTIONENGINE_EXECUTIONENGINE_H
 
-#include "RuntimeDyld.h"
 #include "llvm-c/ExecutionEngine.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ExecutionEngine/JITSymbol.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/ValueHandle.h"
-#include "llvm/IR/ValueMap.h"
 #include "llvm/Object/Binary.h"
+#include "llvm/Support/CBindingWrapping.h"
+#include "llvm/Support/CodeGen.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Mutex.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include <algorithm>
+#include <cstdint>
+#include <functional>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
-#include <functional>
 
 namespace llvm {
 
-struct GenericValue;
 class Constant;
-class DataLayout;
-class ExecutionEngine;
 class Function;
-class GlobalVariable;
+struct GenericValue;
 class GlobalValue;
+class GlobalVariable;
 class JITEventListener;
-class MachineCodeInfo;
 class MCJITMemoryManager;
-class MutexGuard;
 class ObjectCache;
 class RTDyldMemoryManager;
 class Triple;
 class Type;
 
 namespace object {
-  class Archive;
-  class ObjectFile;
-}
 
-/// \brief Helper class for helping synchronize access to the global address map
+class Archive;
+class ObjectFile;
+
+} // end namespace object
+
+/// Helper class for helping synchronize access to the global address map
 /// table.  Access to this class should be serialized under a mutex.
 class ExecutionEngineState {
 public:
-  typedef StringMap<uint64_t> GlobalAddressMapTy;
+  using GlobalAddressMapTy = StringMap<uint64_t>;
 
 private:
-
   /// GlobalAddressMap - A mapping between LLVM global symbol names values and
   /// their actualized version...
   GlobalAddressMapTy GlobalAddressMap;
@@ -74,7 +78,6 @@ private:
   std::map<uint64_t, std::string> GlobalAddressReverseMap;
 
 public:
-
   GlobalAddressMapTy &getGlobalAddressMap() {
     return GlobalAddressMap;
   }
@@ -83,7 +86,7 @@ public:
     return GlobalAddressReverseMap;
   }
 
-  /// \brief Erase an entry from the mapping table.
+  /// Erase an entry from the mapping table.
   ///
   /// \returns The address that \p ToUnmap was happed to.
   uint64_t RemoveMapping(StringRef Name);
@@ -91,7 +94,7 @@ public:
 
 using FunctionCreator = std::function<void *(const std::string &)>;
 
-/// \brief Abstract interface for implementation execution of LLVM modules,
+/// Abstract interface for implementation execution of LLVM modules,
 /// designed to support both interpreter and just-in-time (JIT) compiler
 /// implementations.
 class ExecutionEngine {
@@ -134,17 +137,15 @@ protected:
   virtual char *getMemoryForGV(const GlobalVariable *GV);
 
   static ExecutionEngine *(*MCJITCtor)(
-                                std::unique_ptr<Module> M,
-                                std::string *ErrorStr,
-                                std::shared_ptr<MCJITMemoryManager> MM,
-                                std::shared_ptr<JITSymbolResolver> SR,
-                                std::unique_ptr<TargetMachine> TM);
+      std::unique_ptr<Module> M, std::string *ErrorStr,
+      std::shared_ptr<MCJITMemoryManager> MM,
+      std::shared_ptr<LegacyJITSymbolResolver> SR,
+      std::unique_ptr<TargetMachine> TM);
 
   static ExecutionEngine *(*OrcMCJITReplacementCtor)(
-                                std::string *ErrorStr,
-                                std::shared_ptr<MCJITMemoryManager> MM,
-                                std::shared_ptr<JITSymbolResolver> SR,
-                                std::unique_ptr<TargetMachine> TM);
+      std::string *ErrorStr, std::shared_ptr<MCJITMemoryManager> MM,
+      std::shared_ptr<LegacyJITSymbolResolver> SR,
+      std::unique_ptr<TargetMachine> TM);
 
   static ExecutionEngine *(*InterpCtor)(std::unique_ptr<Module> M,
                                         std::string *ErrorStr);
@@ -509,13 +510,15 @@ private:
 };
 
 namespace EngineKind {
+
   // These are actually bitmasks that get or-ed together.
   enum Kind {
     JIT         = 0x1,
     Interpreter = 0x2
   };
   const static Kind Either = (Kind)(JIT | Interpreter);
-}
+
+} // end namespace EngineKind
 
 /// Builder class for ExecutionEngines. Use this by stack-allocating a builder,
 /// chaining the various set* methods, and terminating it with a .create()
@@ -527,15 +530,16 @@ private:
   std::string *ErrorStr;
   CodeGenOpt::Level OptLevel;
   std::shared_ptr<MCJITMemoryManager> MemMgr;
-  std::shared_ptr<JITSymbolResolver> Resolver;
+  std::shared_ptr<LegacyJITSymbolResolver> Resolver;
   TargetOptions Options;
   Optional<Reloc::Model> RelocModel;
-  CodeModel::Model CMModel;
+  Optional<CodeModel::Model> CMModel;
   std::string MArch;
   std::string MCPU;
   SmallVector<std::string, 4> MAttrs;
   bool VerifyModules;
   bool UseOrcMCJITReplacement;
+  bool EmulatedTLS = true;
 
 public:
   /// Default constructor for EngineBuilder.
@@ -565,8 +569,7 @@ public:
   EngineBuilder&
   setMemoryManager(std::unique_ptr<MCJITMemoryManager> MM);
 
-  EngineBuilder&
-  setSymbolResolver(std::unique_ptr<JITSymbolResolver> SR);
+  EngineBuilder &setSymbolResolver(std::unique_ptr<LegacyJITSymbolResolver> SR);
 
   /// setErrorStr - Set the error string to write to on error.  This option
   /// defaults to NULL.
@@ -631,9 +634,13 @@ public:
     return *this;
   }
 
-  // \brief Use OrcMCJITReplacement instead of MCJIT. Off by default.
+  // Use OrcMCJITReplacement instead of MCJIT. Off by default.
   void setUseOrcMCJITReplacement(bool UseOrcMCJITReplacement) {
     this->UseOrcMCJITReplacement = UseOrcMCJITReplacement;
+  }
+
+  void setEmulatedTLS(bool EmulatedTLS) {
+    this->EmulatedTLS = EmulatedTLS;
   }
 
   TargetMachine *selectTarget();
@@ -655,6 +662,6 @@ public:
 // Create wrappers for C Binding types (see CBindingWrapping.h).
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(ExecutionEngine, LLVMExecutionEngineRef)
 
-} // End llvm namespace
+} // end namespace llvm
 
-#endif
+#endif // LLVM_EXECUTIONENGINE_EXECUTIONENGINE_H

@@ -6,11 +6,12 @@
 
 ; CHECK:   [[r1:%[a-z0-9\.]+]] = sub i64 %sub.ptr.lhs.cast, %sub.ptr.rhs.cast
 ; CHECK:   [[r2:%[a-z0-9\.]+]] = lshr exact i64 [[r1]], 1
+; CHECK:   [[r3:%[a-z0-9\.]+]] = bitcast i64 [[r2]] to i64
 ; CHECK: for.body.lr.ph:
-; CHECK:   [[r3:%[a-z0-9]+]] = shl i64 [[r2]], 1
+; CHECK:   [[r4:%[a-z0-9]+]] = shl i64 [[r3]], 1
 ; CHECK:   br label %for.body
 ; CHECK: for.body:
-; CHECK:   %lsr.iv2 = phi i64 [ %lsr.iv.next, %for.body ], [ [[r3]], %for.body.lr.ph ]
+; CHECK:   %lsr.iv2 = phi i64 [ %lsr.iv.next, %for.body ], [ [[r4]], %for.body.lr.ph ]
 ; CHECK:   %lsr.iv.next = add i64 %lsr.iv2, -2
 ; CHECK:   %lsr.iv.next3 = inttoptr i64 %lsr.iv.next to i16*
 ; CHECK:   %cmp27 = icmp eq i16* %lsr.iv.next3, null
@@ -25,6 +26,8 @@ define void @_Z15IntegerToStringjjR7Vector2(i32 %i, i32 %radix, %struct.Vector2*
 entry:
   %buffer = alloca [33 x i16], align 16
   %add.ptr = getelementptr inbounds [33 x i16], [33 x i16]* %buffer, i64 0, i64 33
+  %sub.ptr.lhs.cast = ptrtoint i16* %add.ptr to i64
+  %sub.ptr.rhs.cast = ptrtoint i16* %add.ptr to i64
   br label %do.body
 
 do.body:                                          ; preds = %do.body, %entry
@@ -46,8 +49,6 @@ do.body:                                          ; preds = %do.body, %entry
 do.end:                                           ; preds = %do.body
   %xap.0 = inttoptr i64 %0 to i1*
   %cap.0 = ptrtoint i1* %xap.0 to i64
-  %sub.ptr.lhs.cast = ptrtoint i16* %add.ptr to i64
-  %sub.ptr.rhs.cast = ptrtoint i16* %incdec.ptr to i64
   %sub.ptr.sub = sub i64 %sub.ptr.lhs.cast, %sub.ptr.rhs.cast
   %sub.ptr.div39 = lshr exact i64 %sub.ptr.sub, 1
   %conv11 = trunc i64 %sub.ptr.div39 to i32

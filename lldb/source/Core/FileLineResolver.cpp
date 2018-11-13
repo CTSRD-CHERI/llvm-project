@@ -10,10 +10,17 @@
 #include "lldb/Core/FileLineResolver.h"
 
 // Project includes
-#include "lldb/Core/Log.h"
-#include "lldb/Core/StreamString.h"
+#include "lldb/Core/FileSpecList.h" // for FileSpecList
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/LineTable.h"
+#include "lldb/Utility/ConstString.h" // for ConstString
+#include "lldb/Utility/Stream.h"      // for Stream
+
+#include <string> // for string
+
+namespace lldb_private {
+class Address;
+}
 
 using namespace lldb;
 using namespace lldb_private;
@@ -47,8 +54,8 @@ FileLineResolver::SearchCallback(SearchFilter &filter, SymbolContext &context,
           while (file_idx != UINT32_MAX) {
             line_table->FineLineEntriesForFileIndex(file_idx, append,
                                                     m_sc_list);
-            // Get the next file index in case we have multiple file
-            // entries for the same file
+            // Get the next file index in case we have multiple file entries
+            // for the same file
             file_idx = cu->GetSupportFiles().FindFileIndex(file_idx + 1,
                                                            m_file_spec, false);
           }
@@ -61,8 +68,8 @@ FileLineResolver::SearchCallback(SearchFilter &filter, SymbolContext &context,
   return Searcher::eCallbackReturnContinue;
 }
 
-Searcher::Depth FileLineResolver::GetDepth() {
-  return Searcher::eDepthCompUnit;
+lldb::SearchDepth FileLineResolver::GetDepth() {
+  return lldb::eSearchDepthCompUnit;
 }
 
 void FileLineResolver::GetDescription(Stream *s) {

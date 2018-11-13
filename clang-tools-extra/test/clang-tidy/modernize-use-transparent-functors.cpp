@@ -18,7 +18,7 @@ struct plus {
 template <>
 struct plus<void> {
   template <typename T, typename U>
-  constexpr auto operator()(T &&Lhs, U &&Rhs) const -> 
+  constexpr auto operator()(T &&Lhs, U &&Rhs) const ->
     decltype(forward<T>(Lhs) + forward<U>(Rhs));
 };
 
@@ -104,4 +104,7 @@ int main() {
   std::set2<int> control;
 }
 
-
+struct ImplicitTypeLoc : std::set2<std::less<int>> {
+  // CHECK-MESSAGES: :[[@LINE-1]]:36: warning: prefer transparent functors
+  ImplicitTypeLoc() {}
+};

@@ -17,6 +17,7 @@
 #include "polly/Support/SCEVValidator.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/RegionInfo.h"
+#include "llvm/Analysis/RegionInfoImpl.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
@@ -35,14 +36,12 @@ static cl::opt<bool> PollyAllowErrorBlocks(
     cl::desc("Allow to speculate on the execution of 'error blocks'."),
     cl::Hidden, cl::init(true), cl::ZeroOrMore, cl::cat(PollyCategory));
 
-bool polly::hasInvokeEdge(const PHINode *PN) {
-  for (unsigned i = 0, e = PN->getNumIncomingValues(); i < e; ++i)
-    if (InvokeInst *II = dyn_cast<InvokeInst>(PN->getIncomingValue(i)))
-      if (II->getParent() == PN->getIncomingBlock(i))
-        return true;
-
-  return false;
-}
+static cl::list<std::string> DebugFunctions(
+    "polly-debug-func",
+    cl::desc("Allow calls to the specified functions in SCoPs even if their "
+             "side-effects are unknown. This can be used to do debug output in "
+             "Polly-transformed code."),
+    cl::Hidden, cl::ZeroOrMore, cl::CommaSeparated, cl::cat(PollyCategory));
 
 // Ensures that there is just one predecessor to the entry node from outside the
 // region.
@@ -203,13 +202,19 @@ static BasicBlock *splitBlock(BasicBlock *Old, Instruction *SplitPt,
   return NewBlock;
 }
 
-void polly::splitEntryBlockForAlloca(BasicBlock *EntryBlock, Pass *P) {
-  // Find first non-alloca instruction. Every basic block has a non-alloc
+void polly::splitEntryBlockForAlloca(BasicBlock *EntryBlock, DominatorTree *DT,
+                                     LoopInfo *LI, RegionInfo *RI) {
+  // Find first non-alloca instruction. Every basic block has a non-alloca
   // instruction, as every well formed basic block has a terminator.
   BasicBlock::iterator I = EntryBlock->begin();
   while (isa<AllocaInst>(I))
     ++I;
 
+  // splitBlock updates DT, LI and RI.
+  splitBlock(EntryBlock, &*I, DT, LI, RI);
+}
+
+void polly::splitEntryBlockForAlloca(BasicBlock *EntryBlock, Pass *P) {
   auto *DTWP = P->getAnalysisIfAvailable<DominatorTreeWrapperPass>();
   auto *DT = DTWP ? &DTWP->getDomTree() : nullptr;
   auto *LIWP = P->getAnalysisIfAvailable<LoopInfoWrapperPass>();
@@ -218,7 +223,7 @@ void polly::splitEntryBlockForAlloca(BasicBlock *EntryBlock, Pass *P) {
   RegionInfo *RI = RIP ? &RIP->getRegionInfo() : nullptr;
 
   // splitBlock updates DT, LI and RI.
-  splitBlock(EntryBlock, &*I, DT, LI, RI);
+  polly::splitEntryBlockForAlloca(EntryBlock, DT, LI, RI);
 }
 
 /// The SCEVExpander will __not__ generate any code for an existing SDiv/SRem
@@ -245,6 +250,17 @@ struct ScopExpander : SCEVVisitor<ScopExpander, const SCEV *> {
     return Expander.expandCodeFor(E, Ty, I);
   }
 
+  const SCEV *visit(const SCEV *E) {
+    // Cache the expansion results for intermediate SCEV expressions. A SCEV
+    // expression can refer to an operand multiple times (e.g. "x*x), so
+    // a naive visitor takes exponential time.
+    if (SCEVCache.count(E))
+      return SCEVCache[E];
+    const SCEV *Result = SCEVVisitor::visit(E);
+    SCEVCache[E] = Result;
+    return Result;
+  }
+
 private:
   SCEVExpander Expander;
   ScalarEvolution &SE;
@@ -252,6 +268,7 @@ private:
   const Region &R;
   ValueMapT *VMap;
   BasicBlock *RTCBB;
+  DenseMap<const SCEV *, const SCEV *> SCEVCache;
 
   const SCEV *visitGenericInst(const SCEVUnknown *E, Instruction *Inst,
                                Instruction *IP) {
@@ -389,28 +406,30 @@ bool polly::isErrorBlock(BasicBlock &BB, const Region &R, LoopInfo &LI,
   // Basic blocks that are always executed are not considered error blocks,
   // as their execution can not be a rare event.
   bool DominatesAllPredecessors = true;
-  for (auto Pred : predecessors(R.getExit()))
-    if (R.contains(Pred) && !DT.dominates(&BB, Pred))
-      DominatesAllPredecessors = false;
+  if (R.isTopLevelRegion()) {
+    for (BasicBlock &I : *R.getEntry()->getParent())
+      if (isa<ReturnInst>(I.getTerminator()) && !DT.dominates(&BB, &I))
+        DominatesAllPredecessors = false;
+  } else {
+    for (auto Pred : predecessors(R.getExit()))
+      if (R.contains(Pred) && !DT.dominates(&BB, Pred))
+        DominatesAllPredecessors = false;
+  }
 
   if (DominatesAllPredecessors)
     return false;
 
-  // FIXME: This is a simple heuristic to determine if the load is executed
-  //        in a conditional. However, we actually would need the control
-  //        condition, i.e., the post dominance frontier. Alternatively we
-  //        could walk up the dominance tree until we find a block that is
-  //        not post dominated by the load and check if it is a conditional
-  //        or a loop header.
-  auto *DTNode = DT.getNode(&BB);
-  auto *IDomBB = DTNode->getIDom()->getBlock();
-  if (LI.isLoopHeader(IDomBB))
-    return false;
-
   for (Instruction &Inst : BB)
     if (CallInst *CI = dyn_cast<CallInst>(&Inst)) {
+      if (isDebugCall(CI))
+        continue;
+
       if (isIgnoredIntrinsic(CI))
-        return false;
+        continue;
+
+      // memset, memcpy and memmove are modeled intrinsics.
+      if (isa<MemSetInst>(CI) || isa<MemTransferInst>(CI))
+        continue;
 
       if (!CI->doesNotAccessMemory())
         return true;
@@ -435,10 +454,40 @@ Value *polly::getConditionFromTerminator(TerminatorInst *TI) {
   return nullptr;
 }
 
+static bool hasVariantIndex(GetElementPtrInst *Gep, Loop *L, Region &R,
+                            ScalarEvolution &SE) {
+  for (const Use &Val : llvm::drop_begin(Gep->operands(), 1)) {
+    const SCEV *PtrSCEV = SE.getSCEVAtScope(Val, L);
+    Loop *OuterLoop = R.outermostLoopInRegion(L);
+    if (!SE.isLoopInvariant(PtrSCEV, OuterLoop))
+      return true;
+  }
+  return false;
+}
+
 bool polly::isHoistableLoad(LoadInst *LInst, Region &R, LoopInfo &LI,
-                            ScalarEvolution &SE, const DominatorTree &DT) {
+                            ScalarEvolution &SE, const DominatorTree &DT,
+                            const InvariantLoadsSetTy &KnownInvariantLoads) {
   Loop *L = LI.getLoopFor(LInst->getParent());
   auto *Ptr = LInst->getPointerOperand();
+
+  // A LoadInst is hoistable if the address it is loading from is also
+  // invariant; in this case: another invariant load (whether that address
+  // is also not written to has to be checked separately)
+  // TODO: This only checks for a LoadInst->GetElementPtrInst->LoadInst
+  // pattern generated by the Chapel frontend, but generally this applies
+  // for any chain of instruction that does not also depend on any
+  // induction variable
+  if (auto *GepInst = dyn_cast<GetElementPtrInst>(Ptr)) {
+    if (!hasVariantIndex(GepInst, L, R, SE)) {
+      if (auto *DecidingLoad =
+              dyn_cast<LoadInst>(GepInst->getPointerOperand())) {
+        if (KnownInvariantLoads.count(DecidingLoad))
+          return true;
+      }
+    }
+  }
+
   const SCEV *PtrSCEV = SE.getSCEVAtScope(Ptr, L);
   while (L && R.contains(L)) {
     if (!SE.isLoopInvariant(PtrSCEV, L))
@@ -454,10 +503,19 @@ bool polly::isHoistableLoad(LoadInst *LInst, Region &R, LoopInfo &LI,
       continue;
 
     auto &BB = *UserI->getParent();
+    if (DT.dominates(&BB, LInst->getParent()))
+      return false;
+
     bool DominatesAllPredecessors = true;
-    for (auto Pred : predecessors(R.getExit()))
-      if (R.contains(Pred) && !DT.dominates(&BB, Pred))
-        DominatesAllPredecessors = false;
+    if (R.isTopLevelRegion()) {
+      for (BasicBlock &I : *R.getEntry()->getParent())
+        if (isa<ReturnInst>(I.getTerminator()) && !DT.dominates(&BB, &I))
+          DominatesAllPredecessors = false;
+    } else {
+      for (auto Pred : predecessors(R.getExit()))
+        if (R.contains(Pred) && !DT.dominates(&BB, Pred))
+          DominatesAllPredecessors = false;
+    }
 
     if (!DominatesAllPredecessors)
       continue;
@@ -483,8 +541,7 @@ bool polly::isIgnoredIntrinsic(const Value *V) {
     case llvm::Intrinsic::annotation:
     case llvm::Intrinsic::donothing:
     case llvm::Intrinsic::assume:
-    case llvm::Intrinsic::expect:
-    // Some debug info intrisics are supported/ignored.
+    // Some debug info intrinsics are supported/ignored.
     case llvm::Intrinsic::dbg_value:
     case llvm::Intrinsic::dbg_declare:
       return true;
@@ -495,21 +552,21 @@ bool polly::isIgnoredIntrinsic(const Value *V) {
   return false;
 }
 
-bool polly::canSynthesize(const Value *V, const Scop &S,
-                          const llvm::LoopInfo *LI, ScalarEvolution *SE,
+bool polly::canSynthesize(const Value *V, const Scop &S, ScalarEvolution *SE,
                           Loop *Scope) {
   if (!V || !SE->isSCEVable(V->getType()))
     return false;
 
+  const InvariantLoadsSetTy &ILS = S.getRequiredInvariantLoads();
   if (const SCEV *Scev = SE->getSCEVAtScope(const_cast<Value *>(V), Scope))
     if (!isa<SCEVCouldNotCompute>(Scev))
-      if (!hasScalarDepsInsideRegion(Scev, &S.getRegion(), Scope, false))
+      if (!hasScalarDepsInsideRegion(Scev, &S.getRegion(), Scope, false, ILS))
         return true;
 
   return false;
 }
 
-llvm::BasicBlock *polly::getUseBlock(llvm::Use &U) {
+llvm::BasicBlock *polly::getUseBlock(const llvm::Use &U) {
   Instruction *UI = dyn_cast<Instruction>(U.getUser());
   if (!UI)
     return nullptr;
@@ -567,4 +624,60 @@ polly::getIndexExpressionsFromGEP(GetElementPtrInst *GEP, ScalarEvolution &SE) {
   }
 
   return std::make_tuple(Subscripts, Sizes);
+}
+
+llvm::Loop *polly::getFirstNonBoxedLoopFor(llvm::Loop *L, llvm::LoopInfo &LI,
+                                           const BoxedLoopsSetTy &BoxedLoops) {
+  while (BoxedLoops.count(L))
+    L = L->getParentLoop();
+  return L;
+}
+
+llvm::Loop *polly::getFirstNonBoxedLoopFor(llvm::BasicBlock *BB,
+                                           llvm::LoopInfo &LI,
+                                           const BoxedLoopsSetTy &BoxedLoops) {
+  Loop *L = LI.getLoopFor(BB);
+  return getFirstNonBoxedLoopFor(L, LI, BoxedLoops);
+}
+
+bool polly::isDebugCall(Instruction *Inst) {
+  auto *CI = dyn_cast<CallInst>(Inst);
+  if (!CI)
+    return false;
+
+  Function *CF = CI->getCalledFunction();
+  if (!CF)
+    return false;
+
+  return std::find(DebugFunctions.begin(), DebugFunctions.end(),
+                   CF->getName()) != DebugFunctions.end();
+}
+
+static bool hasDebugCall(BasicBlock *BB) {
+  for (Instruction &Inst : *BB) {
+    if (isDebugCall(&Inst))
+      return true;
+  }
+  return false;
+}
+
+bool polly::hasDebugCall(ScopStmt *Stmt) {
+  // Quick skip if no debug functions have been defined.
+  if (DebugFunctions.empty())
+    return false;
+
+  if (!Stmt)
+    return false;
+
+  for (Instruction *Inst : Stmt->getInstructions())
+    if (isDebugCall(Inst))
+      return true;
+
+  if (Stmt->isRegionStmt()) {
+    for (BasicBlock *RBB : Stmt->getRegion()->blocks())
+      if (RBB != Stmt->getEntryBlock() && ::hasDebugCall(RBB))
+        return true;
+  }
+
+  return false;
 }

@@ -1,5 +1,5 @@
-; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt | FileCheck %s
-; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt -fast-isel -fast-isel-abort=1 | FileCheck %s
+; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt -wasm-keep-registers | FileCheck %s
+; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt -wasm-keep-registers -fast-isel -fast-isel-abort=1 | FileCheck %s
 
 ; Test that basic loads are assembled properly.
 
@@ -9,7 +9,8 @@ target triple = "wasm32-unknown-unknown"
 ; CHECK-LABEL: ldi32:
 ; CHECK-NEXT: .param i32{{$}}
 ; CHECK-NEXT: .result i32{{$}}
-; CHECK-NEXT: i32.load $push[[NUM:[0-9]+]]=, 0($0){{$}}
+; CHECK-NEXT: get_local $push[[L0:[0-9]+]]=, 0{{$}}
+; CHECK-NEXT: i32.load $push[[NUM:[0-9]+]]=, 0($pop[[L0]]){{$}}
 ; CHECK-NEXT: return $pop[[NUM]]{{$}}
 define i32 @ldi32(i32 *%p) {
   %v = load i32, i32* %p
@@ -19,7 +20,8 @@ define i32 @ldi32(i32 *%p) {
 ; CHECK-LABEL: ldi64:
 ; CHECK-NEXT: .param i32{{$}}
 ; CHECK-NEXT: .result i64{{$}}
-; CHECK-NEXT: i64.load $push[[NUM:[0-9]+]]=, 0($0){{$}}
+; CHECK-NEXT: get_local $push[[L0:[0-9]+]]=, 0{{$}}
+; CHECK-NEXT: i64.load $push[[NUM:[0-9]+]]=, 0($pop[[L0]]){{$}}
 ; CHECK-NEXT: return $pop[[NUM]]{{$}}
 define i64 @ldi64(i64 *%p) {
   %v = load i64, i64* %p
@@ -29,7 +31,8 @@ define i64 @ldi64(i64 *%p) {
 ; CHECK-LABEL: ldf32:
 ; CHECK-NEXT: .param i32{{$}}
 ; CHECK-NEXT: .result f32{{$}}
-; CHECK-NEXT: f32.load $push[[NUM:[0-9]+]]=, 0($0){{$}}
+; CHECK-NEXT: get_local $push[[L0:[0-9]+]]=, 0{{$}}
+; CHECK-NEXT: f32.load $push[[NUM:[0-9]+]]=, 0($pop[[L0]]){{$}}
 ; CHECK-NEXT: return $pop[[NUM]]{{$}}
 define float @ldf32(float *%p) {
   %v = load float, float* %p
@@ -39,7 +42,8 @@ define float @ldf32(float *%p) {
 ; CHECK-LABEL: ldf64:
 ; CHECK-NEXT: .param i32{{$}}
 ; CHECK-NEXT: .result f64{{$}}
-; CHECK-NEXT: f64.load $push[[NUM:[0-9]+]]=, 0($0){{$}}
+; CHECK-NEXT: get_local $push[[L0:[0-9]+]]=, 0{{$}}
+; CHECK-NEXT: f64.load $push[[NUM:[0-9]+]]=, 0($pop[[L0]]){{$}}
 ; CHECK-NEXT: return $pop[[NUM]]{{$}}
 define double @ldf64(double *%p) {
   %v = load double, double* %p

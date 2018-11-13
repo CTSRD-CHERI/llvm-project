@@ -92,7 +92,7 @@ The compiler relies on co-operation from the linker in order to assemble
 the bit vectors for the whole program. It currently does this using LLVM's
 `type metadata`_ mechanism together with link-time optimization.
 
-.. _address point: https://mentorembedded.github.io/cxx-abi/abi.html#vtable-general
+.. _address point: http://itanium-cxx-abi.github.io/cxx-abi/abi.html#vtable-general
 .. _type metadata: http://llvm.org/docs/TypeMetadata.html
 .. _ByteArrayBuilder: http://llvm.org/docs/doxygen/html/structllvm_1_1ByteArrayBuilder.html
 
@@ -274,6 +274,154 @@ If the bit vector is all ones, the bit vector check is redundant; we simply
 need to check that the address is in range and well aligned. This is more
 likely to occur if the virtual tables are padded.
 
+Forward-Edge CFI for Virtual Calls by Interleaving Virtual Tables
+-----------------------------------------------------------------
+
+Dimitar et. al. proposed a novel approach that interleaves virtual tables in [1]_.  
+This approach is more efficient in terms of space because padding and bit vectors are no longer needed. 
+At the same time, it is also more efficient in terms of performance because in the interleaved layout 
+address points of the virtual tables are consecutive, thus the validity check of a virtual 
+vtable pointer is always a range check. 
+
+At a high level, the interleaving scheme consists of three steps: 1) split virtual table groups into 
+separate virtual tables, 2) order virtual tables by a pre-order traversal of the class hierarchy 
+and 3) interleave virtual tables.
+
+The interleaving scheme implemented in LLVM is inspired by [1]_ but has its own
+enhancements (more in `Interleave virtual tables`_).
+
+.. [1] `Protecting C++ Dynamic Dispatch Through VTable Interleaving <https://cseweb.ucsd.edu/~lerner/papers/ivtbl-ndss16.pdf>`_. Dimitar Bounov, Rami Gökhan Kıcı, Sorin Lerner.
+
+Split virtual table groups into separate virtual tables
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Itanium C++ ABI glues multiple individual virtual tables for a class into a combined virtual table (virtual table group). 
+The interleaving scheme, however, can only work with individual virtual tables so it must split the combined virtual tables first.
+In comparison, the old scheme does not require the splitting but it is more efficient when the combined virtual tables have been split.
+The `GlobalSplit`_ pass is responsible for splitting combined virtual tables into individual ones. 
+
+.. _GlobalSplit: https://llvm.org/viewvc/llvm-project/llvm/trunk/lib/Transforms/IPO/GlobalSplit.cpp?view=markup
+
+Order virtual tables by a pre-order traversal of the class hierarchy 
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This step is common to both the old scheme described above and the interleaving scheme. 
+For the interleaving scheme, since the combined virtual tables have been split in the previous step, 
+this step ensures that for any class all the compatible virtual tables will appear consecutively. 
+For the old scheme, the same property may not hold since it may work on combined virtual tables. 
+
+For example, consider the following four C++ classes:
+
+.. code-block:: c++
+
+  struct A {
+    virtual void f1();
+  };
+
+  struct B : A {
+    virtual void f1();
+    virtual void f2();
+  };
+
+  struct C : A {
+    virtual void f1();
+    virtual void f3();
+  };
+
+  struct D : B {
+    virtual void f1();
+    virtual void f2();
+  };
+
+This step will arrange the virtual tables for A, B, C, and D in the order of *vtable-of-A, vtable-of-B, vtable-of-D, vtable-of-C*.
+
+Interleave virtual tables
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This step is where the interleaving scheme deviates from the old scheme. Instead of laying out 
+whole virtual tables in the previously computed order, the interleaving scheme lays out table 
+entries of the virtual tables strategically to ensure the following properties:  
+
+(1) offset-to-top and RTTI fields layout property
+
+The Itanium C++ ABI specifies that offset-to-top and RTTI fields appear at the offsets behind the 
+address point. Note that libraries like libcxxabi do assume this property. 
+
+(2) virtual function entry layout property
+
+For each virtual function the distance between an virtual table entry for this function and the corresponding 
+address point is always the same. This property ensures that dynamic dispatch still works with the interleaving layout.
+
+Note that the interleaving scheme in the CFI implementation guarantees both properties above whereas the original scheme proposed   
+in [1]_ only guarantees the second property. 
+
+To illustrate how the interleaving algorithm works, let us continue with the running example.
+The algorithm first separates all the virtual table entries into two work lists. To do so, 
+it starts by allocating two work lists, one initialized with all the offset-to-top entries of virtual tables in the order 
+computed in the last step, one initialized with all the RTTI entries in the same order. 
+
+.. csv-table:: Work list 1 Layout 
+  :header: 0, 1, 2, 3
+  
+  A::offset-to-top, B::offset-to-top, D::offset-to-top, C::offset-to-top
+
+
+.. csv-table:: Work list 2 layout
+  :header: 0, 1, 2, 3,
+  
+  &A::rtti, &B::rtti, &D::rtti, &C::rtti 
+
+Then for each virtual function the algorithm goes through all the virtual tables in the previously computed order
+to collect all the related entries into a virtual function list. 
+After this step, there are the following virtual function lists:
+
+.. csv-table:: f1 list 
+  :header: 0, 1, 2, 3
+
+  &A::f1, &B::f1, &D::f1, &C::f1
+
+
+.. csv-table:: f2 list 
+  :header: 0, 1
+
+  &B::f2, &D::f2
+
+
+.. csv-table:: f3 list 
+  :header: 0
+
+  &C::f3
+
+Next, the algorithm picks the longest remaining virtual function list and appends the whole list to the shortest work list
+until no function lists are left, and pads the shorter work list so that they are of the same length. 
+In the example, f1 list will be first added to work list 1, then f2 list will be added 
+to work list 2, and finally f3 list will be added to the work list 2. Since work list 1 now has one more entry than 
+work list 2, a padding entry is added to the latter. After this step, the two work lists look like: 
+
+.. csv-table:: Work list 1 Layout 
+  :header: 0, 1, 2, 3, 4, 5, 6, 7
+
+  A::offset-to-top, B::offset-to-top, D::offset-to-top, C::offset-to-top, &A::f1, &B::f1, &D::f1, &C::f1
+
+
+.. csv-table:: Work list 2 layout
+  :header: 0, 1, 2, 3, 4, 5, 6, 7
+
+  &A::rtti, &B::rtti, &D::rtti, &C::rtti, &B::f2, &D::f2, &C::f3, padding  
+
+Finally, the algorithm merges the two work lists into the interleaved layout by alternatingly 
+moving the head of each list to the final layout. After this step, the final interleaved layout looks like:
+
+.. csv-table:: Interleaved layout
+  :header: 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15 
+
+  A::offset-to-top, &A::rtti, B::offset-to-top, &B::rtti, D::offset-to-top, &D::rtti, C::offset-to-top, &C::rtti, &A::f1, &B::f2, &B::f1, &D::f2, &D::f1, &C::f3, &C::f1, padding
+
+In the above interleaved layout, each virtual table's offset-to-top and RTTI are always adjacent, which shows that the layout has the first property.
+For the second property, let us look at f2 as an example. In the interleaved layout,
+there are two entries for f2: B::f2 and D::f2. The distance between &B::f2 
+and its address point D::offset-to-top (the entry immediately after &B::rtti) is 5 entry-length, so is the distance between &D::f2 and C::offset-to-top (the entry immediately after &D::rtti).
+
 Forward-Edge CFI for Indirect Function Calls
 ============================================
 
@@ -437,12 +585,17 @@ export this information, every DSO implements
 
 .. code-block:: none
 
-   void __cfi_check(uint64 CallSiteTypeId, void *TargetAddr)
+   void __cfi_check(uint64 CallSiteTypeId, void *TargetAddr, void *DiagData)
 
-This function provides external modules with access to CFI checks for the
-targets inside this DSO.  For each known ``CallSiteTypeId``, this function
-performs an ``llvm.type.test`` with the corresponding type identifier. It
-aborts if the type is unknown, or if the check fails.
+This function provides external modules with access to CFI checks for
+the targets inside this DSO.  For each known ``CallSiteTypeId``, this
+function performs an ``llvm.type.test`` with the corresponding type
+identifier. It reports an error if the type is unknown, or if the
+check fails. Depending on the values of compiler flags
+``-fsanitize-trap`` and ``-fsanitize-recover``, this function may
+print an error, abort and/or return to the caller. ``DiagData`` is an
+opaque pointer to the diagnostic information about the error, or
+``null`` if the caller does not provide this information.
 
 The basic implementation is a large switch statement over all values
 of CallSiteTypeId supported by this DSO, and each case is similar to
@@ -452,11 +605,10 @@ CFI Shadow
 ----------
 
 To route CFI checks to the target DSO's __cfi_check function, a
-mapping from possible virtual / indirect call targets to
-the corresponding __cfi_check functions is maintained. This mapping is
+mapping from possible virtual / indirect call targets to the
+corresponding __cfi_check functions is maintained. This mapping is
 implemented as a sparse array of 2 bytes for every possible page (4096
-bytes) of memory. The table is kept readonly (FIXME: not yet) most of
-the time.
+bytes) of memory. The table is kept readonly most of the time.
 
 There are 3 types of shadow values:
 
@@ -481,14 +633,24 @@ them.
 CFI_SlowPath
 ------------
 
-The slow path check is implemented in compiler-rt library as
+The slow path check is implemented in a runtime support library as
 
 .. code-block:: none
 
   void __cfi_slowpath(uint64 CallSiteTypeId, void *TargetAddr)
+  void __cfi_slowpath_diag(uint64 CallSiteTypeId, void *TargetAddr, void *DiagData)
 
-This functions loads a shadow value for ``TargetAddr``, finds the
-address of __cfi_check as described above and calls that.
+These functions loads a shadow value for ``TargetAddr``, finds the
+address of ``__cfi_check`` as described above and calls
+that. ``DiagData`` is an opaque pointer to diagnostic data which is
+passed verbatim to ``__cfi_check``, and ``__cfi_slowpath`` passes
+``nullptr`` instead.
+
+Compiler-RT library contains reference implementations of slowpath
+functions, but they have unresolvable issues with correctness and
+performance in the handling of dlopen(). It is recommended that
+platforms provide their own implementations, usually as part of libc
+or libdl.
 
 Position-independent executable requirement
 -------------------------------------------
@@ -498,12 +660,100 @@ In non-PIE executables the address of an external function (taken from
 the main executable) is the address of that function’s PLT record in
 the main executable. This would break the CFI checks.
 
+Backward-edge CFI for return statements (RCFI)
+==============================================
+
+This section is a proposal. As of March 2017 it is not implemented.
+
+Backward-edge control flow (`RET` instructions) can be hijacked
+via overwriting the return address (`RA`) on stack.
+Various mitigation techniques (e.g. `SafeStack`_, `RFG`_, `Intel CET`_)
+try to detect or prevent `RA` corruption on stack.
+
+RCFI enforces the expected control flow in several different ways described below.
+RCFI heavily relies on LTO.
+
+Leaf Functions
+--------------
+If `f()` is a leaf function (i.e. it has no calls
+except maybe no-return calls) it can be called using a special calling convention
+that stores `RA` in a dedicated register `R` before the `CALL` instruction.
+`f()` does not spill `R` and does not use the `RET` instruction,
+instead it uses the value in `R` to `JMP` to `RA`.
+
+This flavour of CFI is *precise*, i.e. the function is guaranteed to return
+to the point exactly following the call.
+
+An alternative approach is to
+copy `RA` from stack to `R` in the first instruction of `f()`,
+then `JMP` to `R`.
+This approach is simpler to implement (does not require changing the caller)
+but weaker (there is a small window when `RA` is actually stored on stack).
+
+
+Functions called once
+---------------------
+Suppose `f()` is called in just one place in the program
+(assuming we can verify this in LTO mode).
+In this case we can replace the `RET` instruction with a `JMP` instruction
+with the immediate constant for `RA`.
+This will *precisely* enforce the return control flow no matter what is stored on stack.
+
+Another variant is to compare `RA` on stack with the known constant and abort
+if they don't match; then `JMP` to the known constant address.
+
+Functions called in a small number of call sites
+------------------------------------------------
+We may extend the above approach to cases where `f()`
+is called more than once (but still a small number of times).
+With LTO we know all possible values of `RA` and we check them
+one-by-one (or using binary search) against the value on stack.
+If the match is found, we `JMP` to the known constant address, otherwise abort.
+
+This protection is *near-precise*, i.e. it guarantees that the control flow will
+be transferred to one of the valid return addresses for this function,
+but not necessary to the point of the most recent `CALL`.
+
+General case
+------------
+For functions called multiple times a *return jump table* is constructed
+in the same manner as jump tables for indirect function calls (see above).
+The correct jump table entry (or it's index) is passed by `CALL` to `f()`
+(as an extra argument) and then spilled to stack.
+The `RET` instruction is replaced with a load of the jump table entry,
+jump table range check, and `JMP` to the jump table entry.
+
+This protection is also *near-precise*.
+
+Returns from functions called indirectly
+----------------------------------------
+
+If a function is called indirectly, the return jump table is constructed for the
+equivalence class of functions instead of a single function.
+
+Cross-DSO calls
+---------------
+Consider two instrumented DSOs, `A` and `B`. `A` defines `f()` and `B` calls it.
+
+This case will be handled similarly to the cross-DSO scheme using the slow path callback.
+
+Non-goals
+---------
+
+RCFI does not protect `RET` instructions:
+  * in non-instrumented DSOs,
+  * in instrumented DSOs for functions that are called from non-instrumented DSOs,
+  * embedded into other instructions (e.g. `0f4fc3 cmovg %ebx,%eax`).
+
+.. _SafeStack: https://clang.llvm.org/docs/SafeStack.html
+.. _RFG: http://xlab.tencent.com/en/2016/11/02/return-flow-guard
+.. _Intel CET: https://software.intel.com/en-us/blogs/2016/06/09/intel-release-new-technology-specifications-protect-rop-attacks
 
 Hardware support
 ================
 
 We believe that the above design can be efficiently implemented in hardware.
-A single new instruction added to an ISA would allow to perform the CFI check
+A single new instruction added to an ISA would allow to perform the forward-edge CFI check
 with fewer bytes per check (smaller code size overhead) and potentially more
 efficiently. The current software-only instrumentation requires at least
 32-bytes per check (on x86_64).
@@ -540,7 +790,7 @@ The bit vector lookup is probably too complex for a hardware implementation.
            Jump(kFailedCheckTarget);
   }
 
-An alternative and more compact enconding would not use `kFailedCheckTarget`,
+An alternative and more compact encoding would not use `kFailedCheckTarget`,
 and will trap on check failure instead.
 This will allow us to fit the instruction into **8-9 bytes**.
 The cross-DSO checks will be performed by a trap handler and

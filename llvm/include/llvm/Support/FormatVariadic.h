@@ -26,17 +26,18 @@
 #ifndef LLVM_SUPPORT_FORMATVARIADIC_H
 #define LLVM_SUPPORT_FORMATVARIADIC_H
 
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Support/DataTypes.h"
 #include "llvm/Support/FormatCommon.h"
 #include "llvm/Support/FormatProviders.h"
 #include "llvm/Support/FormatVariadicDetails.h"
 #include "llvm/Support/raw_ostream.h"
-
+#include <cstddef>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 namespace llvm {
@@ -44,13 +45,14 @@ namespace llvm {
 enum class ReplacementType { Empty, Format, Literal };
 
 struct ReplacementItem {
-  ReplacementItem() {}
+  ReplacementItem() = default;
   explicit ReplacementItem(StringRef Literal)
       : Type(ReplacementType::Literal), Spec(Literal) {}
   ReplacementItem(StringRef Spec, size_t Index, size_t Align, AlignStyle Where,
                   char Pad, StringRef Options)
       : Type(ReplacementType::Format), Spec(Spec), Index(Index), Align(Align),
         Where(Where), Pad(Pad), Options(Options) {}
+
   ReplacementType Type = ReplacementType::Empty;
   StringRef Spec;
   size_t Index = 0;
@@ -69,15 +71,15 @@ protected:
   // parameters in a template class that derives from a non-template superclass.
   // Essentially, we are converting a std::tuple<Derived<Ts...>> to a
   // std::vector<Base*>.
-  struct create_wrappers {
+  struct create_adapters {
     template <typename... Ts>
-    std::vector<detail::format_wrapper *> operator()(Ts &... Items) {
-      return std::vector<detail::format_wrapper *>{&Items...};
+    std::vector<detail::format_adapter *> operator()(Ts &... Items) {
+      return std::vector<detail::format_adapter *>{&Items...};
     }
   };
 
   StringRef Fmt;
-  std::vector<detail::format_wrapper *> Wrappers;
+  std::vector<detail::format_adapter *> Adapters;
   std::vector<ReplacementItem> Replacements;
 
   static bool consumeFieldLayout(StringRef &Spec, AlignStyle &Where,
@@ -89,9 +91,17 @@ protected:
 public:
   formatv_object_base(StringRef Fmt, std::size_t ParamCount)
       : Fmt(Fmt), Replacements(parseFormatString(Fmt)) {
-    Wrappers.reserve(ParamCount);
-    return;
+    Adapters.reserve(ParamCount);
   }
+
+  formatv_object_base(formatv_object_base const &rhs) = delete;
+
+  formatv_object_base(formatv_object_base &&rhs)
+      : Fmt(std::move(rhs.Fmt)),
+        Adapters(), // Adapters are initialized by formatv_object
+        Replacements(std::move(rhs.Replacements)) {
+    Adapters.reserve(rhs.Adapters.size());
+  };
 
   void format(raw_ostream &S) const {
     for (auto &R : Replacements) {
@@ -101,14 +111,14 @@ public:
         S << R.Spec;
         continue;
       }
-      if (R.Index >= Wrappers.size()) {
+      if (R.Index >= Adapters.size()) {
         S << R.Spec;
         continue;
       }
 
-      auto W = Wrappers[R.Index];
+      auto W = Adapters[R.Index];
 
-      FmtAlign Align(*W, R.Where, R.Align);
+      FmtAlign Align(*W, R.Where, R.Align, R.Pad);
       Align.format(S, R.Options);
     }
   }
@@ -124,7 +134,7 @@ public:
     return Result;
   }
 
-  template <unsigned N> llvm::SmallString<N> sstr() const {
+  template <unsigned N> SmallString<N> sstr() const {
     SmallString<N> Result;
     raw_svector_ostream Stream(Result);
     Stream << *this;
@@ -137,7 +147,7 @@ public:
 };
 
 template <typename Tuple> class formatv_object : public formatv_object_base {
-  // Storage for the parameter wrappers.  Since the base class erases the type
+  // Storage for the parameter adapters.  Since the base class erases the type
   // of the parameters, we have to own the storage for the parameters here, and
   // have the base class store type-erased pointers into this tuple.
   Tuple Parameters;
@@ -146,11 +156,19 @@ public:
   formatv_object(StringRef Fmt, Tuple &&Params)
       : formatv_object_base(Fmt, std::tuple_size<Tuple>::value),
         Parameters(std::move(Params)) {
-    Wrappers = apply_tuple(create_wrappers(), Parameters);
+    Adapters = apply_tuple(create_adapters(), Parameters);
+  }
+
+  formatv_object(formatv_object const &rhs) = delete;
+
+  formatv_object(formatv_object &&rhs)
+      : formatv_object_base(std::move(rhs)),
+        Parameters(std::move(rhs.Parameters)) {
+    Adapters = apply_tuple(create_adapters(), Parameters);
   }
 };
 
-// \brief Format text given a format string and replacement parameters.
+// Format text given a format string and replacement parameters.
 //
 // ===General Description===
 //
@@ -195,7 +213,7 @@ public:
 // "}}" to print a literal '}'.
 //
 // ===Parameter Indexing===
-// `index` specifies the index of the paramter in the parameter pack to format
+// `index` specifies the index of the parameter in the parameter pack to format
 // into the output.  Note that it is possible to refer to the same parameter
 // index multiple times in a given format string.  This makes it possible to
 // output the same value multiple times without passing it multiple times to the
@@ -212,14 +230,15 @@ public:
 // For a given parameter of type T, the following steps are executed in order
 // until a match is found:
 //
-//   1. If the parameter is of class type, and contains a method
-//      void format(raw_ostream &Stream, StringRef Options)
-//      Then this method is invoked to produce the formatted output.  The
+//   1. If the parameter is of class type, and inherits from format_adapter,
+//      Then format() is invoked on it to produce the formatted output.  The
 //      implementation should write the formatted text into `Stream`.
 //   2. If there is a suitable template specialization of format_provider<>
 //      for type T containing a method whose signature is:
 //      void format(const T &Obj, raw_ostream &Stream, StringRef Options)
 //      Then this method is invoked as described in Step 1.
+//   3. If an appropriate operator<< for raw_ostream exists, it will be used.
+//      For this to work, (raw_ostream& << const T&) must return raw_ostream&.
 //
 // If a match cannot be found through either of the above methods, a compiler
 // error is generated.
@@ -233,14 +252,14 @@ public:
 //
 template <typename... Ts>
 inline auto formatv(const char *Fmt, Ts &&... Vals) -> formatv_object<decltype(
-    std::make_tuple(detail::build_format_wrapper(std::forward<Ts>(Vals))...))> {
+    std::make_tuple(detail::build_format_adapter(std::forward<Ts>(Vals))...))> {
   using ParamTuple = decltype(
-      std::make_tuple(detail::build_format_wrapper(std::forward<Ts>(Vals))...));
+      std::make_tuple(detail::build_format_adapter(std::forward<Ts>(Vals))...));
   return formatv_object<ParamTuple>(
       Fmt,
-      std::make_tuple(detail::build_format_wrapper(std::forward<Ts>(Vals))...));
+      std::make_tuple(detail::build_format_adapter(std::forward<Ts>(Vals))...));
 }
 
 } // end namespace llvm
 
-#endif
+#endif // LLVM_SUPPORT_FORMATVARIADIC_H

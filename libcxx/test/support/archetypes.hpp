@@ -5,6 +5,7 @@
 #include <cassert>
 
 #include "test_macros.h"
+#include "test_workarounds.h"
 
 #if TEST_STD_VER >= 11
 
@@ -14,7 +15,9 @@ template <bool, class T>
 struct DepType : T {};
 
 struct NullBase {
+#ifndef TEST_WORKAROUND_C1XX_BROKEN_ZA_CTOR_CHECK
 protected:
+#endif // !TEST_WORKAROUND_C1XX_BROKEN_ZA_CTOR_CHECK
   NullBase() = default;
   NullBase(NullBase const&) = default;
   NullBase& operator=(NullBase const&) = default;
@@ -69,11 +72,11 @@ struct TestBase {
     }
     template <bool Dummy = true, typename std::enable_if<Dummy && Explicit, bool>::type = true>
     explicit TestBase(std::initializer_list<int>& il, int = 0) noexcept
-      : value(il.size()) {
+      : value(static_cast<int>(il.size())) {
         ++alive; ++constructed; ++value_constructed;
     }
     template <bool Dummy = true, typename std::enable_if<Dummy && !Explicit, bool>::type = true>
-    explicit TestBase(std::initializer_list<int>& il, int = 0) noexcept : value(il.size()) {
+    explicit TestBase(std::initializer_list<int>& il, int = 0) noexcept : value(static_cast<int>(il.size())) {
         ++alive; ++constructed; ++value_constructed;
     }
     TestBase& operator=(int xvalue) noexcept {
@@ -81,7 +84,9 @@ struct TestBase {
       ++assigned; ++value_assigned;
       return *this;
     }
+#ifndef TEST_WORKAROUND_C1XX_BROKEN_ZA_CTOR_CHECK
 protected:
+#endif // !TEST_WORKAROUND_C1XX_BROKEN_ZA_CTOR_CHECK
     ~TestBase() {
       assert(value != -999); assert(alive > 0);
       --alive; ++destroyed; value = -999;
@@ -135,16 +140,18 @@ struct ValueBase {
     template <bool Dummy = true, typename std::enable_if<Dummy && !Explicit, bool>::type = true>
     constexpr ValueBase(int, int y) : value(y) {}
     template <bool Dummy = true, typename std::enable_if<Dummy && Explicit, bool>::type = true>
-    explicit constexpr ValueBase(std::initializer_list<int>& il, int = 0) : value(il.size()) {}
+    explicit constexpr ValueBase(std::initializer_list<int>& il, int = 0) : value(static_cast<int>(il.size())) {}
     template <bool Dummy = true, typename std::enable_if<Dummy && !Explicit, bool>::type = true>
-    constexpr ValueBase(std::initializer_list<int>& il, int = 0) : value(il.size()) {}
+    constexpr ValueBase(std::initializer_list<int>& il, int = 0) : value(static_cast<int>(il.size())) {}
     TEST_CONSTEXPR_CXX14 ValueBase& operator=(int xvalue) noexcept {
         value = xvalue;
         return *this;
     }
     //~ValueBase() { assert(value != -999); value = -999; }
     int value;
+#ifndef TEST_WORKAROUND_C1XX_BROKEN_ZA_CTOR_CHECK
 protected:
+#endif // !TEST_WORKAROUND_C1XX_BROKEN_ZA_CTOR_CHECK
     constexpr static int check_value(int const& val) {
 #if TEST_STD_VER < 14
       return val == -1 || val == 999 ? (TEST_THROW(42), 0) : val;
@@ -193,11 +200,13 @@ struct TrivialValueBase {
     template <bool Dummy = true, typename std::enable_if<Dummy && !Explicit, bool>::type = true>
     constexpr TrivialValueBase(int, int y) : value(y) {}
     template <bool Dummy = true, typename std::enable_if<Dummy && Explicit, bool>::type = true>
-    explicit constexpr TrivialValueBase(std::initializer_list<int>& il, int = 0) : value(il.size()) {}
+    explicit constexpr TrivialValueBase(std::initializer_list<int>& il, int = 0) : value(static_cast<int>(il.size())) {}
     template <bool Dummy = true, typename std::enable_if<Dummy && !Explicit, bool>::type = true>
-    constexpr TrivialValueBase(std::initializer_list<int>& il, int = 0) : value(il.size()) {};
+    constexpr TrivialValueBase(std::initializer_list<int>& il, int = 0) : value(static_cast<int>(il.size())) {}
     int value;
+#ifndef TEST_WORKAROUND_C1XX_BROKEN_ZA_CTOR_CHECK
 protected:
+#endif // !TEST_WORKAROUND_C1XX_BROKEN_ZA_CTOR_CHECK
     constexpr TrivialValueBase() noexcept : value(0) {}
 };
 

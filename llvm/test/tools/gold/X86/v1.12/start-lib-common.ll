@@ -4,10 +4,13 @@
 ; RUN: llvm-as %s -o %t1.o
 ; RUN: llvm-as %p/Inputs/start-lib-common.ll -o %t2.o
 
-; RUN: %gold -plugin %llvmshlibdir/LLVMgold.so \
+; RUN: %gold -plugin %llvmshlibdir/LLVMgold%shlibext \
 ; RUN:    --plugin-opt=emit-llvm \
 ; RUN:    -shared %t1.o --start-lib %t2.o --end-lib -o %t3.o
 ; RUN: llvm-dis %t3.o -o - | FileCheck %s
+
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
 
 @x = common global i32 0, align 4
 

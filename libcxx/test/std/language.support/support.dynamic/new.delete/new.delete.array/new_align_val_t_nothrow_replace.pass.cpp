@@ -10,7 +10,31 @@
 // UNSUPPORTED: c++98, c++03, c++11, c++14
 // UNSUPPORTED: sanitizer-new-delete
 
-// XFAIL: no-aligned-allocation
+// dylibs shipped before macosx10.13 do not provide aligned allocation, so our
+// custom aligned allocation functions are not called and the test fails
+// UNSUPPORTED: with_system_cxx_lib=macosx10.12
+// UNSUPPORTED: with_system_cxx_lib=macosx10.11
+// UNSUPPORTED: with_system_cxx_lib=macosx10.10
+// UNSUPPORTED: with_system_cxx_lib=macosx10.9
+// UNSUPPORTED: with_system_cxx_lib=macosx10.8
+// UNSUPPORTED: with_system_cxx_lib=macosx10.7
+
+// Our custom aligned allocation functions are not called when deploying to
+// platforms older than macosx10.13, since those platforms don't support
+// aligned allocation.
+// UNSUPPORTED: macosx10.12
+// UNSUPPORTED: macosx10.11
+// UNSUPPORTED: macosx10.10
+// UNSUPPORTED: macosx10.9
+// UNSUPPORTED: macosx10.8
+// UNSUPPORTED: macosx10.7
+
+// XFAIL: no-aligned-allocation && !gcc
+
+// On Windows libc++ doesn't provide its own definitions for new/delete
+// but instead depends on the ones in VCRuntime. However VCRuntime does not
+// yet provide aligned new/delete definitions so this test fails.
+// XFAIL: LIBCXX-WINDOWS-FIXME
 
 // test operator new nothrow by replacing only operator new
 
@@ -20,7 +44,9 @@
 #include <cassert>
 #include <limits>
 
-constexpr auto OverAligned = alignof(std::max_align_t) * 2;
+#include "test_macros.h"
+
+constexpr auto OverAligned = __STDCPP_DEFAULT_NEW_ALIGNMENT__ * 2;
 
 int A_constructed = 0;
 
@@ -41,7 +67,7 @@ struct B {
 int new_called = 0;
 alignas(OverAligned) char Buff[OverAligned * 3];
 
-void* operator new[](std::size_t s, std::align_val_t a) throw(std::bad_alloc)
+void* operator new[](std::size_t s, std::align_val_t a) TEST_THROW_SPEC(std::bad_alloc)
 {
     assert(!new_called);
     assert(s <= sizeof(Buff));
@@ -50,7 +76,7 @@ void* operator new[](std::size_t s, std::align_val_t a) throw(std::bad_alloc)
     return Buff;
 }
 
-void  operator delete[](void* p, std::align_val_t a) throw()
+void  operator delete[](void* p, std::align_val_t a) TEST_NOEXCEPT
 {
     assert(p == Buff);
     assert(static_cast<std::size_t>(a) == OverAligned);

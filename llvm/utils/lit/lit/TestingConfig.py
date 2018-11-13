@@ -22,10 +22,11 @@ class TestingConfig:
             }
 
         pass_vars = ['LIBRARY_PATH', 'LD_LIBRARY_PATH', 'SYSTEMROOT', 'TERM',
-                     'LD_PRELOAD', 'ASAN_OPTIONS', 'UBSAN_OPTIONS',
+                     'CLANG', 'LD_PRELOAD', 'ASAN_OPTIONS', 'UBSAN_OPTIONS',
                      'LSAN_OPTIONS', 'ADB', 'ANDROID_SERIAL',
                      'SANITIZER_IGNORE_CVE_2016_2143', 'TMPDIR', 'TMP', 'TEMP',
-                     'TEMPDIR']
+                     'TEMPDIR', 'AVRLIT_BOARD', 'AVRLIT_PORT',
+                     'FILECHECK_DUMP_INPUT_ON_FAILURE']
         for var in pass_vars:
             val = os.environ.get(var, '')
             # Check for empty string as some variables such as LD_PRELOAD cannot be empty
@@ -106,7 +107,7 @@ class TestingConfig:
                  environment, substitutions, unsupported,
                  test_exec_root, test_source_root, excludes,
                  available_features, pipefail, limit_to_features = [],
-                 is_early = False):
+                 is_early = False, parallelism_group = ""):
         self.parent = parent
         self.name = str(name)
         self.suffixes = set(suffixes)
@@ -125,6 +126,7 @@ class TestingConfig:
         self.limit_to_features = set(limit_to_features)
         # Whether the suite should be tested early in a given run.
         self.is_early = bool(is_early)
+        self.parallelism_group = parallelism_group
 
     def finish(self, litConfig):
         """finish() - Finish this config object, after loading is complete."""
@@ -150,4 +152,29 @@ class TestingConfig:
             return self
         else:
             return self.parent.root
+
+class SubstituteCaptures:
+    """
+    Helper class to indicate that the substitutions contains backreferences.
+
+    This can be used as the following in lit.cfg to mark subsitutions as having
+    back-references::
+
+        config.substutions.append(('\b[^ ]*.cpp', SubstituteCaptures('\0.txt')))
+
+    """
+    def __init__(self, substitution):
+        self.substitution = substitution
+
+    def replace(self, pattern, replacement):
+        return self.substitution
+
+    def __str__(self):
+        return self.substitution
+
+    def __len__(self):
+        return len(self.substitution)
+
+    def __getitem__(self, item):
+        return self.substitution.__getitem__(item)
 

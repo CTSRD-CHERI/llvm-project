@@ -20,6 +20,7 @@
 #include <cassert>
 #include <vector>
 #include <numeric>
+#include <cstddef>
 
 template <class T>
 inline
@@ -33,7 +34,6 @@ int main()
 {
     {
         typedef std::normal_distribution<> D;
-        typedef D::param_type P;
         typedef std::minstd_rand G;
         G g;
         D d(5, 4);
@@ -45,7 +45,7 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (std::size_t i = 0; i < u.size(); ++i)
         {
             double dbl = (u[i] - mean);
             double d2 = sqr(dbl);

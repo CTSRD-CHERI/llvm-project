@@ -1,4 +1,4 @@
-//===-- DWARFDebugArangeSet.cpp -------------------------------------------===//
+//===- DWARFDebugArangeSet.cpp --------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,9 +10,19 @@
 #include "llvm/DebugInfo/DWARF/DWARFDebugArangeSet.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
-#include <algorithm>
 #include <cassert>
+#include <cinttypes>
+#include <cstdint>
+#include <cstring>
+
 using namespace llvm;
+
+void DWARFDebugArangeSet::Descriptor::dump(raw_ostream &OS,
+                                           uint32_t AddressSize) const {
+  OS << format("[0x%*.*" PRIx64 ", ", AddressSize * 2, AddressSize * 2, Address)
+     << format(" 0x%*.*" PRIx64 ")", AddressSize * 2, AddressSize * 2,
+               getEndAddress());
+}
 
 void DWARFDebugArangeSet::clear() {
   Offset = -1U;
@@ -95,10 +105,8 @@ void DWARFDebugArangeSet::dump(raw_ostream &OS) const {
      << format("cu_offset = 0x%8.8x, addr_size = 0x%2.2x, seg_size = 0x%2.2x\n",
                HeaderData.CuOffset, HeaderData.AddrSize, HeaderData.SegSize);
 
-  const uint32_t hex_width = HeaderData.AddrSize * 2;
   for (const auto &Desc : ArangeDescriptors) {
-    OS << format("[0x%*.*" PRIx64 " -", hex_width, hex_width, Desc.Address)
-       << format(" 0x%*.*" PRIx64 ")\n",
-                 hex_width, hex_width, Desc.getEndAddress());
+    Desc.dump(OS, HeaderData.AddrSize);
+    OS << '\n';
   }
 }

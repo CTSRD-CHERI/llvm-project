@@ -1,3 +1,4 @@
+# REQUIRES: x86
 # RUN: yaml2obj < %s > %t1.obj
 # RUN: yaml2obj < %s > %t2.obj
 # RUN: not lld-link /out:%t.exe %t1.obj %t2.obj >& %t.log
@@ -8,7 +9,7 @@
 # RUN: not lld-link /out:%t.exe %t.lto1.obj %t.lto2.obj >& %t.log
 # RUN: FileCheck %s < %t.log
 
-# CHECK: duplicate symbol: foo {{.+}}1.obj and foo {{.+}}2.obj
+# CHECK: duplicate symbol: foo in {{.+}}1.obj and in {{.+}}2.obj
 
 --- !COFF
 header:

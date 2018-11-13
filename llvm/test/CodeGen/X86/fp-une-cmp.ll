@@ -23,21 +23,21 @@
 
 define double @rdar_7859988(double %x, double %y) nounwind readnone optsize ssp {
 ; CHECK-LABEL: rdar_7859988:
-; CHECK:       # BB#0: # %entry
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    mulsd %xmm1, %xmm0
 ; CHECK-NEXT:    xorpd %xmm1, %xmm1
 ; CHECK-NEXT:    ucomisd %xmm1, %xmm0
 ; CHECK-NEXT:    jne .LBB0_2
 ; CHECK-NEXT:    jp .LBB0_2
-; CHECK-NEXT:  # BB#1: # %bb1
+; CHECK-NEXT:  # %bb.1: # %bb1
 ; CHECK-NEXT:    addsd {{.*}}(%rip), %xmm0
 ; CHECK-NEXT:  .LBB0_2: # %bb2
 ; CHECK-NEXT:    retq
 
 entry:
   %mul = fmul double %x, %y
-  %cmp = fcmp une double %mul, 0.000000e+00
-  br i1 %cmp, label %bb2, label %bb1
+  %cmp = fcmp oeq double %mul, 0.000000e+00
+  br i1 %cmp, label %bb1, label %bb2
 
 bb1:
   %add = fadd double %mul, -1.000000e+00
@@ -50,7 +50,7 @@ bb2:
 
 define double @profile_metadata(double %x, double %y) {
 ; CHECK-LABEL: profile_metadata:
-; CHECK:       # BB#0: # %entry
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    mulsd %xmm1, %xmm0
 ; CHECK-NEXT:    xorpd %xmm1, %xmm1
 ; CHECK-NEXT:    ucomisd %xmm1, %xmm0
@@ -81,7 +81,7 @@ bb2:
 
 define void @foo(float %f) {
 ; CHECK-LABEL: foo:
-; CHECK:       # BB#0: # %entry
+; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    xorps %xmm1, %xmm1
 ; CHECK-NEXT:    ucomiss %xmm1, %xmm0
 ; CHECK-NEXT:    jne .LBB2_2

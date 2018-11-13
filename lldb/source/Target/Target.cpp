@@ -21,23 +21,23 @@
 #include "lldb/Breakpoint/BreakpointResolverFileLine.h"
 #include "lldb/Breakpoint/BreakpointResolverFileRegex.h"
 #include "lldb/Breakpoint/BreakpointResolverName.h"
+#include "lldb/Breakpoint/BreakpointResolverScripted.h"
 #include "lldb/Breakpoint/Watchpoint.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Event.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
+#include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Section.h"
+#include "lldb/Core/SearchFilter.h"
 #include "lldb/Core/SourceManager.h"
-#include "lldb/Core/State.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StreamString.h"
-#include "lldb/Core/Timer.h"
+#include "lldb/Core/StructuredDataImpl.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Expression/REPL.h"
 #include "lldb/Expression/UserExpression.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Host/PosixApi.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
 #include "lldb/Interpreter/OptionGroupWatchpoint.h"
@@ -57,10 +57,27 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadSpec.h"
+#include "lldb/Utility/FileSpec.h"
 #include "lldb/Utility/LLDBAssert.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/State.h"
+#include "lldb/Utility/StreamString.h"
+#include "lldb/Utility/Timer.h"
 
 using namespace lldb;
 using namespace lldb_private;
+
+constexpr std::chrono::milliseconds EvaluateExpressionOptions::default_timeout;
+
+Target::Arch::Arch(const ArchSpec &spec)
+    : m_spec(spec),
+      m_plugin_up(PluginManager::CreateArchitectureInstance(spec)) {}
+
+const Target::Arch& Target::Arch::operator=(const ArchSpec &spec) {
+  m_spec = spec;
+  m_plugin_up = PluginManager::CreateArchitectureInstance(spec);
+  return *this;
+}
 
 ConstString &Target::GetStaticBroadcasterClass() {
   static ConstString class_name("lldb.target");
@@ -79,7 +96,8 @@ Target::Target(Debugger &debugger, const ArchSpec &target_arch,
       m_image_search_paths(ImageSearchPathsChanged, this), m_ast_importer_sp(),
       m_source_manager_ap(), m_stop_hooks(), m_stop_hook_next_id(0),
       m_valid(true), m_suppress_stop_hooks(false),
-      m_is_dummy_target(is_dummy_target)
+      m_is_dummy_target(is_dummy_target),
+      m_stats_storage(static_cast<int>(StatisticKind::StatisticMax))
 
 {
   SetEventName(eBroadcastBitBreakpointChanged, "breakpoint-changed");
@@ -93,10 +111,11 @@ Target::Target(Debugger &debugger, const ArchSpec &target_arch,
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_OBJECT));
   if (log)
     log->Printf("%p Target::Target()", static_cast<void *>(this));
-  if (m_arch.IsValid()) {
-    LogIfAnyCategoriesSet(
-        LIBLLDB_LOG_TARGET, "Target::Target created with architecture %s (%s)",
-        m_arch.GetArchitectureName(), m_arch.GetTriple().getTriple().c_str());
+  if (target_arch.IsValid()) {
+    LogIfAnyCategoriesSet(LIBLLDB_LOG_TARGET,
+                          "Target::Target created with architecture %s (%s)",
+                          target_arch.GetArchitectureName(),
+                          target_arch.GetTriple().getTriple().c_str());
   }
 }
 
@@ -119,6 +138,13 @@ void Target::PrimeFromDummyTarget(Target *target) {
 
     BreakpointSP new_bp(new Breakpoint(*this, *breakpoint_sp.get()));
     AddBreakpoint(new_bp, false);
+  }
+  
+  for (auto bp_name_entry : target->m_breakpoint_names)
+  {
+    
+    BreakpointName *new_bp_name = new BreakpointName(*bp_name_entry.second);
+    AddBreakpointName(new_bp_name);
   }
 }
 
@@ -180,7 +206,7 @@ const lldb::ProcessSP &Target::CreateProcess(ListenerSP listener_sp,
 
 const lldb::ProcessSP &Target::GetProcessSP() const { return m_process_sp; }
 
-lldb::REPLSP Target::GetREPL(Error &err, lldb::LanguageType language,
+lldb::REPLSP Target::GetREPL(Status &err, lldb::LanguageType language,
                              const char *repl_options, bool can_create) {
   if (language == eLanguageTypeUnknown) {
     std::set<LanguageType> repl_languages;
@@ -240,7 +266,7 @@ void Target::Destroy() {
   m_valid = false;
   DeleteCurrentProcess();
   m_platform_sp.reset();
-  m_arch.Clear();
+  m_arch = ArchSpec();
   ClearModules(true);
   m_section_load_history.Clear();
   const bool notify = false;
@@ -299,17 +325,13 @@ BreakpointSP Target::CreateSourceRegexBreakpoint(
 
 BreakpointSP Target::CreateBreakpoint(const FileSpecList *containingModules,
                                       const FileSpec &file, uint32_t line_no,
-                                      lldb::addr_t offset,
+                                      uint32_t column, lldb::addr_t offset,
                                       LazyBool check_inlines,
                                       LazyBool skip_prologue, bool internal,
                                       bool hardware,
                                       LazyBool move_to_nearest_code) {
   FileSpec remapped_file;
-  ConstString remapped_path;
-  if (GetSourcePathMap().ReverseRemapPath(ConstString(file.GetPath().c_str()),
-                                          remapped_path))
-    remapped_file.SetFile(remapped_path.AsCString(), true);
-  else
+  if (!GetSourcePathMap().ReverseRemapPath(file, remapped_file))
     remapped_file = file;
 
   if (check_inlines == eLazyBoolCalculate) {
@@ -347,8 +369,8 @@ BreakpointSP Target::CreateBreakpoint(const FileSpecList *containingModules,
     move_to_nearest_code = GetMoveToNearestCode() ? eLazyBoolYes : eLazyBoolNo;
 
   BreakpointResolverSP resolver_sp(new BreakpointResolverFileLine(
-      nullptr, remapped_file, line_no, offset, check_inlines, skip_prologue,
-      !static_cast<bool>(move_to_nearest_code)));
+      nullptr, remapped_file, line_no, column, offset, check_inlines,
+      skip_prologue, !static_cast<bool>(move_to_nearest_code)));
   return CreateBreakpoint(filter_sp, resolver_sp, internal, hardware, true);
 }
 
@@ -359,8 +381,8 @@ BreakpointSP Target::CreateBreakpoint(lldb::addr_t addr, bool internal,
   // Check for any reason we want to move this breakpoint to other address.
   addr = GetBreakableLoadAddress(addr);
 
-  // Attempt to resolve our load address if possible, though it is ok if
-  // it doesn't resolve to section/offset.
+  // Attempt to resolve our load address if possible, though it is ok if it
+  // doesn't resolve to section/offset.
 
   // Try and resolve as a load address if possible
   GetSectionLoadList().ResolveLoadAddress(addr, so_addr);
@@ -514,8 +536,7 @@ SearchFilterSP Target::GetSearchFilterForModuleAndCUList(
   SearchFilterSP filter_sp;
   if (containingModules == nullptr) {
     // We could make a special "CU List only SearchFilter".  Better yet was if
-    // these could be composable,
-    // but that will take a little reworking.
+    // these could be composable, but that will take a little reworking.
 
     filter_sp.reset(new SearchFilterByModuleListAndCU(
         shared_from_this(), FileSpecList(), *containingSourceFiles));
@@ -545,7 +566,7 @@ BreakpointSP Target::CreateFuncRegexBreakpoint(
 lldb::BreakpointSP
 Target::CreateExceptionBreakpoint(enum lldb::LanguageType language,
                                   bool catch_bp, bool throw_bp, bool internal,
-                                  Args *additional_args, Error *error) {
+                                  Args *additional_args, Status *error) {
   BreakpointSP exc_bkpt_sp = LanguageRuntime::CreateExceptionBreakpoint(
       *this, language, catch_bp, throw_bp, internal);
   if (exc_bkpt_sp && additional_args) {
@@ -560,6 +581,48 @@ Target::CreateExceptionBreakpoint(enum lldb::LanguageType language,
   }
   return exc_bkpt_sp;
 }
+
+lldb::BreakpointSP
+Target::CreateScriptedBreakpoint(const llvm::StringRef class_name,
+                                 const FileSpecList *containingModules,
+                                 const FileSpecList *containingSourceFiles,
+                                 bool internal,
+                                 bool request_hardware,
+                                 StructuredData::ObjectSP extra_args_sp,
+                                 Status *creation_error)
+{
+  SearchFilterSP filter_sp;
+  
+  lldb::SearchDepth depth = lldb::eSearchDepthTarget;
+  bool has_files = containingSourceFiles && containingSourceFiles->GetSize() > 0;
+  bool has_modules = containingModules && containingModules->GetSize() > 0;
+  
+  if (has_files && has_modules) {
+    filter_sp = GetSearchFilterForModuleAndCUList(
+      containingModules, containingSourceFiles);
+  } else if (has_files) {
+    filter_sp = GetSearchFilterForModuleAndCUList(
+      nullptr, containingSourceFiles);
+  } else if (has_modules) {
+    filter_sp = GetSearchFilterForModuleList(containingModules);
+  } else {
+    filter_sp.reset(new SearchFilterForUnconstrainedSearches(shared_from_this()));
+  }
+  
+  StructuredDataImpl *extra_args_impl = new StructuredDataImpl();
+  if (extra_args_sp)
+    extra_args_impl->SetObjectSP(extra_args_sp);
+  
+  BreakpointResolverSP resolver_sp(new 
+                                   BreakpointResolverScripted(nullptr, class_name,
+                                   depth,
+                                   extra_args_impl,
+                                   *GetDebugger().GetCommandInterpreter()
+                                       .GetScriptInterpreter()));
+  return CreateBreakpoint(filter_sp, resolver_sp, internal, false, true);
+
+}
+
 
 BreakpointSP Target::CreateBreakpoint(SearchFilterSP &filter_sp,
                                       BreakpointResolverSP &resolver_sp,
@@ -598,13 +661,119 @@ void Target::AddBreakpoint(lldb::BreakpointSP bp_sp, bool internal) {
   }
 }
 
+void Target::AddNameToBreakpoint(BreakpointID &id,
+                                 const char *name,
+                                 Status &error)
+ {
+   BreakpointSP bp_sp 
+       = m_breakpoint_list.FindBreakpointByID(id.GetBreakpointID());
+   if (!bp_sp)
+   {
+     StreamString s;
+     id.GetDescription(&s, eDescriptionLevelBrief);
+     error.SetErrorStringWithFormat("Could not find breakpoint %s", 
+                                    s.GetData());
+     return;
+   }
+   AddNameToBreakpoint(bp_sp, name, error);
+ }
+
+void Target::AddNameToBreakpoint(BreakpointSP &bp_sp,
+                                 const char *name, 
+                                 Status &error)
+ {
+   if (!bp_sp)
+     return;
+     
+   BreakpointName *bp_name = FindBreakpointName(ConstString(name), true, error);
+   if (!bp_name)
+     return;
+
+   bp_name->ConfigureBreakpoint(bp_sp);
+   bp_sp->AddName(name);
+ }
+
+void Target::AddBreakpointName(BreakpointName *bp_name) {
+  m_breakpoint_names.insert(std::make_pair(bp_name->GetName(), bp_name));
+}
+
+BreakpointName *Target::FindBreakpointName(const ConstString &name, 
+                                           bool can_create, 
+                                           Status &error)
+{
+  BreakpointID::StringIsBreakpointName(name.GetStringRef(), error);
+  if (!error.Success())
+    return nullptr;
+
+  BreakpointNameList::iterator iter = m_breakpoint_names.find(name);
+  if (iter == m_breakpoint_names.end()) {
+    if (!can_create)
+    {
+      error.SetErrorStringWithFormat("Breakpoint name \"%s\" doesn't exist and "
+                                     "can_create is false.", name.AsCString());
+      return nullptr;
+    }
+
+    iter = m_breakpoint_names.insert(std::make_pair(name,
+                                                    new BreakpointName(name)))
+                                                        .first;
+  }
+  return (iter->second);
+}
+
+void
+Target::DeleteBreakpointName(const ConstString &name)
+{
+  BreakpointNameList::iterator iter = m_breakpoint_names.find(name);
+  
+  if (iter != m_breakpoint_names.end()) {
+    const char *name_cstr = name.AsCString();
+    m_breakpoint_names.erase(iter);
+    for (auto bp_sp : m_breakpoint_list.Breakpoints())
+      bp_sp->RemoveName(name_cstr);
+  }
+}
+
+void Target::RemoveNameFromBreakpoint(lldb::BreakpointSP &bp_sp,
+                                const ConstString &name)
+{
+  bp_sp->RemoveName(name.AsCString());
+}
+
+void Target::ConfigureBreakpointName(BreakpointName &bp_name,
+                               const BreakpointOptions &new_options,
+                               const BreakpointName::Permissions &new_permissions)
+{
+  bp_name.GetOptions().CopyOverSetOptions(new_options);
+  bp_name.GetPermissions().MergeInto(new_permissions);
+  ApplyNameToBreakpoints(bp_name);
+}
+
+void Target::ApplyNameToBreakpoints(BreakpointName &bp_name) {
+  BreakpointList bkpts_with_name(false);
+  m_breakpoint_list.FindBreakpointsByName(bp_name.GetName().AsCString(), 
+                                          bkpts_with_name);
+
+  for (auto bp_sp : bkpts_with_name.Breakpoints())
+    bp_name.ConfigureBreakpoint(bp_sp);
+}
+
+void Target::GetBreakpointNames(std::vector<std::string> &names)
+{
+  names.clear();
+  for (auto bp_name : m_breakpoint_names) {
+    names.push_back(bp_name.first.AsCString());
+  }
+  std::sort(names.begin(), names.end());
+}
+
 bool Target::ProcessIsValid() {
   return (m_process_sp && m_process_sp->IsAlive());
 }
 
-static bool CheckIfWatchpointsExhausted(Target *target, Error &error) {
+static bool CheckIfWatchpointsExhausted(Target *target, Status &error) {
   uint32_t num_supported_hardware_watchpoints;
-  Error rc = target->GetProcessSP()->GetWatchpointSupportInfo(
+  Status rc = target->GetProcessSP()->GetWatchpointSupportInfo(
       num_supported_hardware_watchpoints);
   if (num_supported_hardware_watchpoints == 0) {
     error.SetErrorStringWithFormat(
@@ -615,11 +784,11 @@ static bool CheckIfWatchpointsExhausted(Target *target, Error &error) {
   return true;
 }
 
-// See also Watchpoint::SetWatchpointType(uint32_t type) and
-// the OptionGroupWatchpoint::WatchType enum type.
+// See also Watchpoint::SetWatchpointType(uint32_t type) and the
+// OptionGroupWatchpoint::WatchType enum type.
 WatchpointSP Target::CreateWatchpoint(lldb::addr_t addr, size_t size,
                                       const CompilerType *type, uint32_t kind,
-                                      Error &error) {
+                                      Status &error) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_WATCHPOINTS));
   if (log)
     log->Printf("Target::%s (addr = 0x%8.8" PRIx64 " size = %" PRIu64
@@ -647,8 +816,8 @@ WatchpointSP Target::CreateWatchpoint(lldb::addr_t addr, size_t size,
   if (!CheckIfWatchpointsExhausted(this, error))
     return wp_sp;
 
-  // Currently we only support one watchpoint per address, with total number
-  // of watchpoints limited by the hardware which the inferior is running on.
+  // Currently we only support one watchpoint per address, with total number of
+  // watchpoints limited by the hardware which the inferior is running on.
 
   // Grab the list mutex while doing operations.
   const bool notify = false; // Don't notify about all the state changes we do
@@ -685,9 +854,8 @@ WatchpointSP Target::CreateWatchpoint(lldb::addr_t addr, size_t size,
                 wp_sp->GetID());
 
   if (error.Fail()) {
-    // Enabling the watchpoint on the device side failed.
-    // Remove the said watchpoint from the list maintained by the target
-    // instance.
+    // Enabling the watchpoint on the device side failed. Remove the said
+    // watchpoint from the list maintained by the target instance.
     m_watchpoint_list.Remove(wp_sp->GetID(), true);
     // See if we could provide more helpful error message.
     if (!OptionGroupWatchpoint::IsWatchSizeSupported(size))
@@ -698,6 +866,17 @@ WatchpointSP Target::CreateWatchpoint(lldb::addr_t addr, size_t size,
   } else
     m_last_created_watchpoint = wp_sp;
   return wp_sp;
+}
+
+void Target::RemoveAllowedBreakpoints ()
+{
+  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_BREAKPOINTS));
+  if (log)
+    log->Printf("Target::%s \n", __FUNCTION__);
+
+  m_breakpoint_list.RemoveAllowed(true);
+  
+  m_last_created_breakpoint.reset();
 }
 
 void Target::RemoveAllBreakpoints(bool internal_also) {
@@ -724,6 +903,14 @@ void Target::DisableAllBreakpoints(bool internal_also) {
     m_internal_breakpoint_list.SetEnabledAll(false);
 }
 
+void Target::DisableAllowedBreakpoints() {
+  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_BREAKPOINTS));
+  if (log)
+    log->Printf("Target::%s", __FUNCTION__);
+
+  m_breakpoint_list.SetEnabledAllowed(false);
+}
+
 void Target::EnableAllBreakpoints(bool internal_also) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_BREAKPOINTS));
   if (log)
@@ -733,6 +920,14 @@ void Target::EnableAllBreakpoints(bool internal_also) {
   m_breakpoint_list.SetEnabledAll(true);
   if (internal_also)
     m_internal_breakpoint_list.SetEnabledAll(true);
+}
+
+void Target::EnableAllowedBreakpoints() {
+  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_BREAKPOINTS));
+  if (log)
+    log->Printf("Target::%s", __FUNCTION__);
+
+  m_breakpoint_list.SetEnabledAllowed(true);
 }
 
 bool Target::RemoveBreakpointByID(break_id_t break_id) {
@@ -795,10 +990,10 @@ bool Target::EnableBreakpointByID(break_id_t break_id) {
   return false;
 }
 
-Error Target::SerializeBreakpointsToFile(const FileSpec &file,
-                                         const BreakpointIDList &bp_ids,
-                                         bool append) {
-  Error error;
+Status Target::SerializeBreakpointsToFile(const FileSpec &file,
+                                          const BreakpointIDList &bp_ids,
+                                          bool append) {
+  Status error;
 
   if (!file) {
     error.SetErrorString("Invalid FileSpec.");
@@ -872,8 +1067,7 @@ Error Target::SerializeBreakpointsToFile(const FileSpec &file,
         Breakpoint *bp = GetBreakpointByID(bp_id).get();
         StructuredData::ObjectSP bkpt_save_sp = bp->SerializeToStructuredData();
         // If the user explicitly asked to serialize a breakpoint, and we
-        // can't, then
-        // raise an error:
+        // can't, then raise an error:
         if (!bkpt_save_sp) {
           error.SetErrorStringWithFormat("Unable to serialize breakpoint %d",
                                          bp_id);
@@ -889,19 +1083,19 @@ Error Target::SerializeBreakpointsToFile(const FileSpec &file,
   return error;
 }
 
-Error Target::CreateBreakpointsFromFile(const FileSpec &file,
-                                        BreakpointIDList &new_bps) {
+Status Target::CreateBreakpointsFromFile(const FileSpec &file,
+                                         BreakpointIDList &new_bps) {
   std::vector<std::string> no_names;
   return CreateBreakpointsFromFile(file, no_names, new_bps);
 }
 
-Error Target::CreateBreakpointsFromFile(const FileSpec &file,
-                                        std::vector<std::string> &names,
-                                        BreakpointIDList &new_bps) {
+Status Target::CreateBreakpointsFromFile(const FileSpec &file,
+                                         std::vector<std::string> &names,
+                                         BreakpointIDList &new_bps) {
   std::unique_lock<std::recursive_mutex> lock;
   GetBreakpointList().GetListMutex(lock);
 
-  Error error;
+  Status error;
   StructuredData::ObjectSP input_data_sp =
       StructuredData::ParseJSONFromFile(file, error);
   if (!error.Success()) {
@@ -977,7 +1171,7 @@ bool Target::RemoveAllWatchpoints(bool end_to_end) {
     if (!wp_sp)
       return false;
 
-    Error rc = m_process_sp->DisableWatchpoint(wp_sp.get());
+    Status rc = m_process_sp->DisableWatchpoint(wp_sp.get());
     if (rc.Fail())
       return false;
   }
@@ -986,8 +1180,8 @@ bool Target::RemoveAllWatchpoints(bool end_to_end) {
   return true; // Success!
 }
 
-// Assumption: Caller holds the list mutex lock for m_watchpoint_list for end to
-// end operations.
+// Assumption: Caller holds the list mutex lock for m_watchpoint_list for end
+// to end operations.
 bool Target::DisableAllWatchpoints(bool end_to_end) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_WATCHPOINTS));
   if (log)
@@ -1009,15 +1203,15 @@ bool Target::DisableAllWatchpoints(bool end_to_end) {
     if (!wp_sp)
       return false;
 
-    Error rc = m_process_sp->DisableWatchpoint(wp_sp.get());
+    Status rc = m_process_sp->DisableWatchpoint(wp_sp.get());
     if (rc.Fail())
       return false;
   }
   return true; // Success!
 }
 
-// Assumption: Caller holds the list mutex lock for m_watchpoint_list for end to
-// end operations.
+// Assumption: Caller holds the list mutex lock for m_watchpoint_list for end
+// to end operations.
 bool Target::EnableAllWatchpoints(bool end_to_end) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_WATCHPOINTS));
   if (log)
@@ -1039,7 +1233,7 @@ bool Target::EnableAllWatchpoints(bool end_to_end) {
     if (!wp_sp)
       return false;
 
-    Error rc = m_process_sp->EnableWatchpoint(wp_sp.get());
+    Status rc = m_process_sp->EnableWatchpoint(wp_sp.get());
     if (rc.Fail())
       return false;
   }
@@ -1080,8 +1274,8 @@ bool Target::ClearAllWatchpointHistoricValues() {
   return true; // Success!
 }
 
-// Assumption: Caller holds the list mutex lock for m_watchpoint_list
-// during these operations.
+// Assumption: Caller holds the list mutex lock for m_watchpoint_list during
+// these operations.
 bool Target::IgnoreAllWatchpoints(uint32_t ignore_count) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_WATCHPOINTS));
   if (log)
@@ -1112,7 +1306,7 @@ bool Target::DisableWatchpointByID(lldb::watch_id_t watch_id) {
 
   WatchpointSP wp_sp = m_watchpoint_list.FindByID(watch_id);
   if (wp_sp) {
-    Error rc = m_process_sp->DisableWatchpoint(wp_sp.get());
+    Status rc = m_process_sp->DisableWatchpoint(wp_sp.get());
     if (rc.Success())
       return true;
 
@@ -1132,7 +1326,7 @@ bool Target::EnableWatchpointByID(lldb::watch_id_t watch_id) {
 
   WatchpointSP wp_sp = m_watchpoint_list.FindByID(watch_id);
   if (wp_sp) {
-    Error rc = m_process_sp->EnableWatchpoint(wp_sp.get());
+    Status rc = m_process_sp->EnableWatchpoint(wp_sp.get());
     if (rc.Success())
       return true;
 
@@ -1196,7 +1390,7 @@ Module *Target::GetExecutableModulePointer() {
 
 static void LoadScriptingResourceForModule(const ModuleSP &module_sp,
                                            Target *target) {
-  Error error;
+  Status error;
   StreamString feedback_stream;
   if (module_sp &&
       !module_sp->LoadScriptingResourceInTarget(target, error,
@@ -1223,17 +1417,18 @@ void Target::ClearModules(bool delete_locations) {
 
 void Target::DidExec() {
   // When a process exec's we need to know about it so we can do some cleanup.
-  m_breakpoint_list.RemoveInvalidLocations(m_arch);
-  m_internal_breakpoint_list.RemoveInvalidLocations(m_arch);
+  m_breakpoint_list.RemoveInvalidLocations(m_arch.GetSpec());
+  m_internal_breakpoint_list.RemoveInvalidLocations(m_arch.GetSpec());
 }
 
 void Target::SetExecutableModule(ModuleSP &executable_sp,
-                                 bool get_dependent_files) {
+                                 LoadDependentFiles load_dependent_files) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_TARGET));
   ClearModules(false);
 
   if (executable_sp) {
-    Timer scoped_timer(LLVM_PRETTY_FUNCTION,
+    static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
+    Timer scoped_timer(func_cat,
                        "Target::SetExecutableModule (executable = '%s')",
                        executable_sp->GetFileSpec().GetPath().c_str());
 
@@ -1241,19 +1436,30 @@ void Target::SetExecutableModule(ModuleSP &executable_sp,
 
     // If we haven't set an architecture yet, reset our architecture based on
     // what we found in the executable module.
-    if (!m_arch.IsValid()) {
+    if (!m_arch.GetSpec().IsValid()) {
       m_arch = executable_sp->GetArchitecture();
-      if (log)
-        log->Printf("Target::SetExecutableModule setting architecture to %s "
-                    "(%s) based on executable file",
-                    m_arch.GetArchitectureName(),
-                    m_arch.GetTriple().getTriple().c_str());
+      LLDB_LOG(log,
+               "setting architecture to {0} ({1}) based on executable file",
+               m_arch.GetSpec().GetArchitectureName(),
+               m_arch.GetSpec().GetTriple().getTriple());
     }
 
     FileSpecList dependent_files;
     ObjectFile *executable_objfile = executable_sp->GetObjectFile();
+    bool load_dependents = true;
+    switch (load_dependent_files) {
+    case eLoadDependentsDefault:
+      load_dependents = executable_sp->IsExecutable();
+      break;
+    case eLoadDependentsYes:
+      load_dependents = true;
+      break;
+    case eLoadDependentsNo:
+      load_dependents = false;
+      break;
+    }
 
-    if (executable_objfile && get_dependent_files) {
+    if (executable_objfile && load_dependents) {
       executable_objfile->GetDependentModules(dependent_files);
       for (uint32_t i = 0; i < dependent_files.GetSize(); i++) {
         FileSpec dependent_file_spec(
@@ -1265,7 +1471,7 @@ void Target::SetExecutableModule(ModuleSP &executable_sp,
         else
           platform_dependent_file_spec = dependent_file_spec;
 
-        ModuleSpec module_spec(platform_dependent_file_spec, m_arch);
+        ModuleSpec module_spec(platform_dependent_file_spec, m_arch.GetSpec());
         ModuleSP image_module_sp(GetSharedModule(module_spec));
         if (image_module_sp) {
           ObjectFile *objfile = image_module_sp->GetObjectFile();
@@ -1277,23 +1483,43 @@ void Target::SetExecutableModule(ModuleSP &executable_sp,
   }
 }
 
-bool Target::SetArchitecture(const ArchSpec &arch_spec) {
+bool Target::SetArchitecture(const ArchSpec &arch_spec, bool set_platform) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_TARGET));
-  bool missing_local_arch = !m_arch.IsValid();
+  bool missing_local_arch = !m_arch.GetSpec().IsValid();
   bool replace_local_arch = true;
   bool compatible_local_arch = false;
   ArchSpec other(arch_spec);
 
-  if (!missing_local_arch) {
-    if (m_arch.IsCompatibleMatch(arch_spec)) {
-      other.MergeFrom(m_arch);
+  // Changing the architecture might mean that the currently selected platform
+  // isn't compatible. Set the platform correctly if we are asked to do so,
+  // otherwise assume the user will set the platform manually.
+  if (set_platform) {
+    if (other.IsValid()) {
+      auto platform_sp = GetPlatform();
+      if (!platform_sp ||
+          !platform_sp->IsCompatibleArchitecture(other, false, nullptr)) {
+        ArchSpec platform_arch;
+        auto arch_platform_sp =
+            Platform::GetPlatformForArchitecture(other, &platform_arch);
+        if (arch_platform_sp) {
+          SetPlatform(arch_platform_sp);
+          if (platform_arch.IsValid())
+            other = platform_arch;
+        }
+      }
+    }
+  }
 
-      if (m_arch.IsCompatibleMatch(other)) {
+  if (!missing_local_arch) {
+    if (m_arch.GetSpec().IsCompatibleMatch(arch_spec)) {
+      other.MergeFrom(m_arch.GetSpec());
+
+      if (m_arch.GetSpec().IsCompatibleMatch(other)) {
         compatible_local_arch = true;
         bool arch_changed, vendor_changed, os_changed, os_ver_changed,
             env_changed;
 
-        m_arch.PiecewiseTripleCompare(other, arch_changed, vendor_changed,
+        m_arch.GetSpec().PiecewiseTripleCompare(other, arch_changed, vendor_changed,
                                       os_changed, os_ver_changed, env_changed);
 
         if (!arch_changed && !vendor_changed && !os_changed && !env_changed)
@@ -1304,13 +1530,13 @@ bool Target::SetArchitecture(const ArchSpec &arch_spec) {
 
   if (compatible_local_arch || missing_local_arch) {
     // If we haven't got a valid arch spec, or the architectures are compatible
-    // update the architecture, unless the one we already have is more specified
+    // update the architecture, unless the one we already have is more
+    // specified
     if (replace_local_arch)
       m_arch = other;
-    if (log)
-      log->Printf("Target::SetArchitecture set architecture to %s (%s)",
-                  m_arch.GetArchitectureName(),
-                  m_arch.GetTriple().getTriple().c_str());
+    LLDB_LOG(log, "set architecture to {0} ({1})",
+             m_arch.GetSpec().GetArchitectureName(),
+             m_arch.GetSpec().GetTriple().getTriple());
     return true;
   }
 
@@ -1333,12 +1559,12 @@ bool Target::SetArchitecture(const ArchSpec &arch_spec) {
                   arch_spec.GetArchitectureName(),
                   arch_spec.GetTriple().getTriple().c_str());
     ModuleSpec module_spec(executable_sp->GetFileSpec(), other);
-    Error error = ModuleList::GetSharedModule(module_spec, executable_sp,
-                                              &GetExecutableSearchPaths(),
-                                              nullptr, nullptr);
+    Status error = ModuleList::GetSharedModule(module_spec, executable_sp,
+                                               &GetExecutableSearchPaths(),
+                                               nullptr, nullptr);
 
     if (!error.Fail() && executable_sp) {
-      SetExecutableModule(executable_sp, true);
+      SetExecutableModule(executable_sp, eLoadDependentsYes);
       return true;
     }
   }
@@ -1347,12 +1573,12 @@ bool Target::SetArchitecture(const ArchSpec &arch_spec) {
 
 bool Target::MergeArchitecture(const ArchSpec &arch_spec) {
   if (arch_spec.IsValid()) {
-    if (m_arch.IsCompatibleMatch(arch_spec)) {
-      // The current target arch is compatible with "arch_spec", see if we
-      // can improve our current architecture using bits from "arch_spec"
+    if (m_arch.GetSpec().IsCompatibleMatch(arch_spec)) {
+      // The current target arch is compatible with "arch_spec", see if we can
+      // improve our current architecture using bits from "arch_spec"
 
       // Merge bits from arch_spec into "merged_arch" and set our architecture
-      ArchSpec merged_arch(m_arch);
+      ArchSpec merged_arch(m_arch.GetSpec());
       merged_arch.MergeFrom(arch_spec);
       return SetArchitecture(merged_arch);
     } else {
@@ -1472,7 +1698,7 @@ bool Target::ModuleIsExcludedForUnconstrainedSearches(
 }
 
 size_t Target::ReadMemoryFromFileCache(const Address &addr, void *dst,
-                                       size_t dst_len, Error &error) {
+                                       size_t dst_len, Status &error) {
   SectionSP section_sp(addr.GetSection());
   if (section_sp) {
     // If the contents of this section are encrypted, the on-disk file is
@@ -1504,12 +1730,12 @@ size_t Target::ReadMemoryFromFileCache(const Address &addr, void *dst,
 }
 
 size_t Target::ReadMemory(const Address &addr, bool prefer_file_cache,
-                          void *dst, size_t dst_len, Error &error,
+                          void *dst, size_t dst_len, Status &error,
                           lldb::addr_t *load_addr_ptr) {
   error.Clear();
 
-  // if we end up reading this from process memory, we will fill this
-  // with the actual load address
+  // if we end up reading this from process memory, we will fill this with the
+  // actual load address
   if (load_addr_ptr)
     *load_addr_ptr = LLDB_INVALID_ADDRESS;
 
@@ -1521,16 +1747,16 @@ size_t Target::ReadMemory(const Address &addr, bool prefer_file_cache,
   if (!addr.IsSectionOffset()) {
     SectionLoadList &section_load_list = GetSectionLoadList();
     if (section_load_list.IsEmpty()) {
-      // No sections are loaded, so we must assume we are not running
-      // yet and anything we are given is a file address.
+      // No sections are loaded, so we must assume we are not running yet and
+      // anything we are given is a file address.
       file_addr = addr.GetOffset(); // "addr" doesn't have a section, so its
                                     // offset is the file address
       m_images.ResolveFileAddress(file_addr, resolved_addr);
     } else {
-      // We have at least one section loaded. This can be because
-      // we have manually loaded some sections with "target modules load ..."
-      // or because we have have a live process that has sections loaded
-      // through the dynamic loader
+      // We have at least one section loaded. This can be because we have
+      // manually loaded some sections with "target modules load ..." or
+      // because we have have a live process that has sections loaded through
+      // the dynamic loader
       load_addr = addr.GetOffset(); // "addr" doesn't have a section, so its
                                     // offset is the load address
       section_load_list.ResolveLoadAddress(load_addr, resolved_addr);
@@ -1552,11 +1778,9 @@ size_t Target::ReadMemory(const Address &addr, bool prefer_file_cache,
     if (load_addr == LLDB_INVALID_ADDRESS) {
       ModuleSP addr_module_sp(resolved_addr.GetModule());
       if (addr_module_sp && addr_module_sp->GetFileSpec())
-        error.SetErrorStringWithFormat(
-            "%s[0x%" PRIx64 "] can't be resolved, %s in not currently loaded",
-            addr_module_sp->GetFileSpec().GetFilename().AsCString("<Unknown>"),
-            resolved_addr.GetFileAddress(),
-            addr_module_sp->GetFileSpec().GetFilename().AsCString("<Unknonw>"));
+        error.SetErrorStringWithFormatv(
+            "{0:F}[{1:x+}] can't be resolved, {0:F} is not currently loaded",
+            addr_module_sp->GetFileSpec(), resolved_addr.GetFileAddress());
       else
         error.SetErrorStringWithFormat("0x%" PRIx64 " can't be resolved",
                                        resolved_addr.GetFileAddress());
@@ -1579,26 +1803,26 @@ size_t Target::ReadMemory(const Address &addr, bool prefer_file_cache,
           *load_addr_ptr = load_addr;
         return bytes_read;
       }
-      // If the address is not section offset we have an address that
-      // doesn't resolve to any address in any currently loaded shared
-      // libraries and we failed to read memory so there isn't anything
-      // more we can do. If it is section offset, we might be able to
-      // read cached memory from the object file.
+      // If the address is not section offset we have an address that doesn't
+      // resolve to any address in any currently loaded shared libraries and we
+      // failed to read memory so there isn't anything more we can do. If it is
+      // section offset, we might be able to read cached memory from the object
+      // file.
       if (!resolved_addr.IsSectionOffset())
         return 0;
     }
   }
 
   if (!prefer_file_cache && resolved_addr.IsSectionOffset()) {
-    // If we didn't already try and read from the object file cache, then
-    // try it after failing to read from the process.
+    // If we didn't already try and read from the object file cache, then try
+    // it after failing to read from the process.
     return ReadMemoryFromFileCache(resolved_addr, dst, dst_len, error);
   }
   return 0;
 }
 
 size_t Target::ReadCStringFromMemory(const Address &addr, std::string &out_str,
-                                     Error &error) {
+                                     Status &error) {
   char buf[256];
   out_str.clear();
   addr_t curr_addr = addr.GetLoadAddress(this);
@@ -1608,8 +1832,8 @@ size_t Target::ReadCStringFromMemory(const Address &addr, std::string &out_str,
     if (length == 0)
       break;
     out_str.append(buf, length);
-    // If we got "length - 1" bytes, we didn't get the whole C string, we
-    // need to read some more characters
+    // If we got "length - 1" bytes, we didn't get the whole C string, we need
+    // to read some more characters
     if (length == sizeof(buf) - 1)
       curr_addr += length;
     else
@@ -1620,19 +1844,19 @@ size_t Target::ReadCStringFromMemory(const Address &addr, std::string &out_str,
 }
 
 size_t Target::ReadCStringFromMemory(const Address &addr, char *dst,
-                                     size_t dst_max_len, Error &result_error) {
+                                     size_t dst_max_len, Status &result_error) {
   size_t total_cstr_len = 0;
   if (dst && dst_max_len) {
     result_error.Clear();
     // NULL out everything just to be safe
     memset(dst, 0, dst_max_len);
-    Error error;
+    Status error;
     addr_t curr_addr = addr.GetLoadAddress(this);
     Address address(addr);
 
-    // We could call m_process_sp->GetMemoryCacheLineSize() but I don't
-    // think this really needs to be tied to the memory cache subsystem's
-    // cache line size, so leave this as a fixed constant.
+    // We could call m_process_sp->GetMemoryCacheLineSize() but I don't think
+    // this really needs to be tied to the memory cache subsystem's cache line
+    // size, so leave this as a fixed constant.
     const size_t cache_line_size = 512;
 
     size_t bytes_left = dst_max_len - 1;
@@ -1675,15 +1899,15 @@ size_t Target::ReadCStringFromMemory(const Address &addr, char *dst,
 size_t Target::ReadScalarIntegerFromMemory(const Address &addr,
                                            bool prefer_file_cache,
                                            uint32_t byte_size, bool is_signed,
-                                           Scalar &scalar, Error &error) {
+                                           Scalar &scalar, Status &error) {
   uint64_t uval;
 
   if (byte_size <= sizeof(uval)) {
     size_t bytes_read =
         ReadMemory(addr, prefer_file_cache, &uval, byte_size, error);
     if (bytes_read == byte_size) {
-      DataExtractor data(&uval, sizeof(uval), m_arch.GetByteOrder(),
-                         m_arch.GetAddressByteSize());
+      DataExtractor data(&uval, sizeof(uval), m_arch.GetSpec().GetByteOrder(),
+                         m_arch.GetSpec().GetAddressByteSize());
       lldb::offset_t offset = 0;
       if (byte_size <= 4)
         scalar = data.GetMaxU32(&offset, byte_size);
@@ -1705,7 +1929,7 @@ uint64_t Target::ReadUnsignedIntegerFromMemory(const Address &addr,
                                                bool prefer_file_cache,
                                                size_t integer_byte_size,
                                                uint64_t fail_value,
-                                               Error &error) {
+                                               Status &error) {
   Scalar scalar;
   if (ReadScalarIntegerFromMemory(addr, prefer_file_cache, integer_byte_size,
                                   false, scalar, error))
@@ -1714,27 +1938,27 @@ uint64_t Target::ReadUnsignedIntegerFromMemory(const Address &addr,
 }
 
 bool Target::ReadPointerFromMemory(const Address &addr, bool prefer_file_cache,
-                                   Error &error, Address &pointer_addr) {
+                                   Status &error, Address &pointer_addr) {
   Scalar scalar;
   if (ReadScalarIntegerFromMemory(addr, prefer_file_cache,
-                                  m_arch.GetAddressByteSize(), false, scalar,
+                                  m_arch.GetSpec().GetAddressByteSize(), false, scalar,
                                   error)) {
     addr_t pointer_vm_addr = scalar.ULongLong(LLDB_INVALID_ADDRESS);
     if (pointer_vm_addr != LLDB_INVALID_ADDRESS) {
       SectionLoadList &section_load_list = GetSectionLoadList();
       if (section_load_list.IsEmpty()) {
-        // No sections are loaded, so we must assume we are not running
-        // yet and anything we are given is a file address.
+        // No sections are loaded, so we must assume we are not running yet and
+        // anything we are given is a file address.
         m_images.ResolveFileAddress(pointer_vm_addr, pointer_addr);
       } else {
-        // We have at least one section loaded. This can be because
-        // we have manually loaded some sections with "target modules load ..."
-        // or because we have have a live process that has sections loaded
-        // through the dynamic loader
+        // We have at least one section loaded. This can be because we have
+        // manually loaded some sections with "target modules load ..." or
+        // because we have have a live process that has sections loaded through
+        // the dynamic loader
         section_load_list.ResolveLoadAddress(pointer_vm_addr, pointer_addr);
       }
-      // We weren't able to resolve the pointer value, so just return
-      // an address with no section
+      // We weren't able to resolve the pointer value, so just return an
+      // address with no section
       if (!pointer_addr.IsValid())
         pointer_addr.SetOffset(pointer_vm_addr);
       return true;
@@ -1744,15 +1968,14 @@ bool Target::ReadPointerFromMemory(const Address &addr, bool prefer_file_cache,
 }
 
 ModuleSP Target::GetSharedModule(const ModuleSpec &module_spec,
-                                 Error *error_ptr) {
+                                 Status *error_ptr) {
   ModuleSP module_sp;
 
-  Error error;
+  Status error;
 
   // First see if we already have this module in our module list.  If we do,
-  // then we're done, we don't need
-  // to consult the shared modules list.  But only do this if we are passed a
-  // UUID.
+  // then we're done, we don't need to consult the shared modules list.  But
+  // only do this if we are passed a UUID.
 
   if (module_spec.GetUUID().IsValid())
     module_sp = m_images.FindFirstModule(module_spec);
@@ -1807,8 +2030,8 @@ ModuleSP Target::GetSharedModule(const ModuleSpec &module_spec,
     }
 
     // We found a module that wasn't in our target list.  Let's make sure that
-    // there wasn't an equivalent
-    // module in the list already, and if there was, let's remove it.
+    // there wasn't an equivalent module in the list already, and if there was,
+    // let's remove it.
     if (module_sp) {
       ObjectFile *objfile = module_sp->GetObjectFile();
       if (objfile) {
@@ -1842,18 +2065,14 @@ ModuleSP Target::GetSharedModule(const ModuleSpec &module_spec,
           return ModuleSP();
         }
         // GetSharedModule is not guaranteed to find the old shared module, for
-        // instance
-        // in the common case where you pass in the UUID, it is only going to
-        // find the one
-        // module matching the UUID.  In fact, it has no good way to know what
-        // the "old module"
-        // relevant to this target is, since there might be many copies of a
-        // module with this file spec
-        // in various running debug sessions, but only one of them will belong
-        // to this target.
-        // So let's remove the UUID from the module list, and look in the
-        // target's module list.
-        // Only do this if there is SOMETHING else in the module spec...
+        // instance in the common case where you pass in the UUID, it is only
+        // going to find the one module matching the UUID.  In fact, it has no
+        // good way to know what the "old module" relevant to this target is,
+        // since there might be many copies of a module with this file spec in
+        // various running debug sessions, but only one of them will belong to
+        // this target. So let's remove the UUID from the module list, and look
+        // in the target's module list. Only do this if there is SOMETHING else
+        // in the module spec...
         if (!old_module_sp) {
           if (module_spec.GetUUID().IsValid() &&
               !module_spec.GetFileSpec().GetFilename().IsEmpty() &&
@@ -1869,6 +2088,11 @@ ModuleSP Target::GetSharedModule(const ModuleSpec &module_spec,
             }
           }
         }
+
+        // Preload symbols outside of any lock, so hopefully we can do this for
+        // each library in parallel.
+        if (GetPreloadSymbols())
+          module_sp->PreloadSymbols();
 
         if (old_module_sp &&
             m_images.GetIndexForModule(old_module_sp.get()) !=
@@ -1910,10 +2134,10 @@ void Target::ImageSearchPathsChanged(const PathMappingList &path_list,
   Target *target = (Target *)baton;
   ModuleSP exe_module_sp(target->GetExecutableModule());
   if (exe_module_sp)
-    target->SetExecutableModule(exe_module_sp, true);
+    target->SetExecutableModule(exe_module_sp, eLoadDependentsYes);
 }
 
-TypeSystem *Target::GetScratchTypeSystemForLanguage(Error *error,
+TypeSystem *Target::GetScratchTypeSystemForLanguage(Status *error,
                                                     lldb::LanguageType language,
                                                     bool create_on_demand) {
   if (!m_valid)
@@ -1963,8 +2187,8 @@ Target::GetPersistentExpressionStateForLanguage(lldb::LanguageType language) {
 UserExpression *Target::GetUserExpressionForLanguage(
     llvm::StringRef expr, llvm::StringRef prefix, lldb::LanguageType language,
     Expression::ResultType desired_type,
-    const EvaluateExpressionOptions &options, Error &error) {
-  Error type_system_error;
+    const EvaluateExpressionOptions &options, Status &error) {
+  Status type_system_error;
 
   TypeSystem *type_system =
       GetScratchTypeSystemForLanguage(&type_system_error, language);
@@ -1991,8 +2215,8 @@ UserExpression *Target::GetUserExpressionForLanguage(
 FunctionCaller *Target::GetFunctionCallerForLanguage(
     lldb::LanguageType language, const CompilerType &return_type,
     const Address &function_address, const ValueList &arg_value_list,
-    const char *name, Error &error) {
-  Error type_system_error;
+    const char *name, Status &error) {
+  Status type_system_error;
   TypeSystem *type_system =
       GetScratchTypeSystemForLanguage(&type_system_error, language);
   FunctionCaller *persistent_fn = nullptr;
@@ -2018,8 +2242,8 @@ FunctionCaller *Target::GetFunctionCallerForLanguage(
 UtilityFunction *
 Target::GetUtilityFunctionForLanguage(const char *text,
                                       lldb::LanguageType language,
-                                      const char *name, Error &error) {
-  Error type_system_error;
+                                      const char *name, Status &error) {
+  Status type_system_error;
   TypeSystem *type_system =
       GetScratchTypeSystemForLanguage(&type_system_error, language);
   UtilityFunction *utility_fn = nullptr;
@@ -2128,8 +2352,8 @@ ExpressionResults Target::EvaluateExpression(
   if (expr.empty())
     return execution_results;
 
-  // We shouldn't run stop hooks in expressions.
-  // Be sure to reset this if you return anywhere within this function.
+  // We shouldn't run stop hooks in expressions. Be sure to reset this if you
+  // return anywhere within this function.
   bool old_suppress_value = m_suppress_stop_hooks;
   m_suppress_stop_hooks = true;
 
@@ -2143,8 +2367,8 @@ ExpressionResults Target::EvaluateExpression(
     CalculateExecutionContext(exe_ctx);
   }
 
-  // Make sure we aren't just trying to see the value of a persistent
-  // variable (something like "$0")
+  // Make sure we aren't just trying to see the value of a persistent variable
+  // (something like "$0")
   lldb::ExpressionVariableSP persistent_var_sp;
   // Only check for persistent variables the expression starts with a '$'
   if (expr[0] == '$')
@@ -2156,8 +2380,8 @@ ExpressionResults Target::EvaluateExpression(
     result_valobj_sp = persistent_var_sp->GetValueObject();
     execution_results = eExpressionCompleted;
   } else {
-    const char *prefix = GetExpressionPrefixContentsAsCString();
-    Error error;
+    llvm::StringRef prefix = GetExpressionPrefixContents();
+    Status error;
     execution_results = UserExpression::Evaluate(exe_ctx, options, expr, prefix,
                                                  result_valobj_sp, error,
                                                  0, // Line Number
@@ -2173,7 +2397,7 @@ lldb::ExpressionVariableSP
 Target::GetPersistentVariable(const ConstString &name) {
   lldb::ExpressionVariableSP variable_sp;
   m_scratch_type_system_map.ForEach(
-      [this, name, &variable_sp](TypeSystem *type_system) -> bool {
+      [name, &variable_sp](TypeSystem *type_system) -> bool {
         if (PersistentExpressionState *persistent_state =
                 type_system->GetPersistentExpressionState()) {
           variable_sp = persistent_state->GetVariable(name);
@@ -2190,7 +2414,7 @@ lldb::addr_t Target::GetPersistentSymbol(const ConstString &name) {
   lldb::addr_t address = LLDB_INVALID_ADDRESS;
 
   m_scratch_type_system_map.ForEach(
-      [this, name, &address](TypeSystem *type_system) -> bool {
+      [name, &address](TypeSystem *type_system) -> bool {
         if (PersistentExpressionState *persistent_state =
                 type_system->GetPersistentExpressionState()) {
           address = persistent_state->LookupSymbol(name);
@@ -2204,251 +2428,22 @@ lldb::addr_t Target::GetPersistentSymbol(const ConstString &name) {
 
 lldb::addr_t Target::GetCallableLoadAddress(lldb::addr_t load_addr,
                                             AddressClass addr_class) const {
-  addr_t code_addr = load_addr;
-  switch (m_arch.GetMachine()) {
-  case llvm::Triple::mips:
-  case llvm::Triple::mipsel:
-  case llvm::Triple::mips64:
-  case llvm::Triple::mips64el:
-    switch (addr_class) {
-    case eAddressClassData:
-    case eAddressClassDebug:
-      return LLDB_INVALID_ADDRESS;
-
-    case eAddressClassUnknown:
-    case eAddressClassInvalid:
-    case eAddressClassCode:
-    case eAddressClassCodeAlternateISA:
-    case eAddressClassRuntime:
-      if ((code_addr & 2ull) || (addr_class == eAddressClassCodeAlternateISA))
-        code_addr |= 1ull;
-      break;
-    }
-    break;
-
-  case llvm::Triple::arm:
-  case llvm::Triple::thumb:
-    switch (addr_class) {
-    case eAddressClassData:
-    case eAddressClassDebug:
-      return LLDB_INVALID_ADDRESS;
-
-    case eAddressClassUnknown:
-    case eAddressClassInvalid:
-    case eAddressClassCode:
-    case eAddressClassCodeAlternateISA:
-    case eAddressClassRuntime:
-      // Check if bit zero it no set?
-      if ((code_addr & 1ull) == 0) {
-        // Bit zero isn't set, check if the address is a multiple of 2?
-        if (code_addr & 2ull) {
-          // The address is a multiple of 2 so it must be thumb, set bit zero
-          code_addr |= 1ull;
-        } else if (addr_class == eAddressClassCodeAlternateISA) {
-          // We checked the address and the address claims to be the alternate
-          // ISA
-          // which means thumb, so set bit zero.
-          code_addr |= 1ull;
-        }
-      }
-      break;
-    }
-    break;
-
-  default:
-    break;
-  }
-  return code_addr;
+  auto arch_plugin = GetArchitecturePlugin();
+  return arch_plugin ?
+      arch_plugin->GetCallableLoadAddress(load_addr, addr_class) : load_addr;
 }
 
 lldb::addr_t Target::GetOpcodeLoadAddress(lldb::addr_t load_addr,
                                           AddressClass addr_class) const {
-  addr_t opcode_addr = load_addr;
-  switch (m_arch.GetMachine()) {
-  case llvm::Triple::mips:
-  case llvm::Triple::mipsel:
-  case llvm::Triple::mips64:
-  case llvm::Triple::mips64el:
-  case llvm::Triple::arm:
-  case llvm::Triple::thumb:
-    switch (addr_class) {
-    case eAddressClassData:
-    case eAddressClassDebug:
-      return LLDB_INVALID_ADDRESS;
-
-    case eAddressClassInvalid:
-    case eAddressClassUnknown:
-    case eAddressClassCode:
-    case eAddressClassCodeAlternateISA:
-    case eAddressClassRuntime:
-      opcode_addr &= ~(1ull);
-      break;
-    }
-    break;
-
-  default:
-    break;
-  }
-  return opcode_addr;
+  auto arch_plugin = GetArchitecturePlugin();
+  return arch_plugin ?
+      arch_plugin->GetOpcodeLoadAddress(load_addr, addr_class) : load_addr;
 }
 
 lldb::addr_t Target::GetBreakableLoadAddress(lldb::addr_t addr) {
-  addr_t breakable_addr = addr;
-  Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_BREAKPOINTS));
-
-  switch (m_arch.GetMachine()) {
-  default:
-    break;
-  case llvm::Triple::mips:
-  case llvm::Triple::mipsel:
-  case llvm::Triple::mips64:
-  case llvm::Triple::mips64el: {
-    addr_t function_start = 0;
-    addr_t current_offset = 0;
-    uint32_t loop_count = 0;
-    Address resolved_addr;
-    uint32_t arch_flags = m_arch.GetFlags();
-    bool IsMips16 = arch_flags & ArchSpec::eMIPSAse_mips16;
-    bool IsMicromips = arch_flags & ArchSpec::eMIPSAse_micromips;
-    SectionLoadList &section_load_list = GetSectionLoadList();
-
-    if (section_load_list.IsEmpty())
-      // No sections are loaded, so we must assume we are not running yet
-      // and need to operate only on file address.
-      m_images.ResolveFileAddress(addr, resolved_addr);
-    else
-      section_load_list.ResolveLoadAddress(addr, resolved_addr);
-
-    // Get the function boundaries to make sure we don't scan back before the
-    // beginning of the current function.
-    ModuleSP temp_addr_module_sp(resolved_addr.GetModule());
-    if (temp_addr_module_sp) {
-      SymbolContext sc;
-      uint32_t resolve_scope = eSymbolContextFunction | eSymbolContextSymbol;
-      temp_addr_module_sp->ResolveSymbolContextForAddress(resolved_addr,
-                                                          resolve_scope, sc);
-      Address sym_addr;
-      if (sc.function)
-        sym_addr = sc.function->GetAddressRange().GetBaseAddress();
-      else if (sc.symbol)
-        sym_addr = sc.symbol->GetAddress();
-
-      function_start = sym_addr.GetLoadAddress(this);
-      if (function_start == LLDB_INVALID_ADDRESS)
-        function_start = sym_addr.GetFileAddress();
-
-      if (function_start)
-        current_offset = addr - function_start;
-    }
-
-    // If breakpoint address is start of function then we dont have to do
-    // anything.
-    if (current_offset == 0)
-      return breakable_addr;
-    else
-      loop_count = current_offset / 2;
-
-    if (loop_count > 3) {
-      // Scan previous 6 bytes
-      if (IsMips16 | IsMicromips)
-        loop_count = 3;
-      // For mips-only, instructions are always 4 bytes, so scan previous 4
-      // bytes only.
-      else
-        loop_count = 2;
-    }
-
-    // Create Disassembler Instance
-    lldb::DisassemblerSP disasm_sp(
-        Disassembler::FindPlugin(m_arch, nullptr, nullptr));
-
-    ExecutionContext exe_ctx;
-    CalculateExecutionContext(exe_ctx);
-    InstructionList instruction_list;
-    InstructionSP prev_insn;
-    bool prefer_file_cache = true; // Read from file
-    uint32_t inst_to_choose = 0;
-
-    for (uint32_t i = 1; i <= loop_count; i++) {
-      // Adjust the address to read from.
-      resolved_addr.Slide(-2);
-      AddressRange range(resolved_addr, i * 2);
-      uint32_t insn_size = 0;
-
-      disasm_sp->ParseInstructions(&exe_ctx, range, nullptr, prefer_file_cache);
-
-      uint32_t num_insns = disasm_sp->GetInstructionList().GetSize();
-      if (num_insns) {
-        prev_insn = disasm_sp->GetInstructionList().GetInstructionAtIndex(0);
-        insn_size = prev_insn->GetOpcode().GetByteSize();
-        if (i == 1 && insn_size == 2) {
-          // This looks like a valid 2-byte instruction (but it could be a part
-          // of upper 4 byte instruction).
-          instruction_list.Append(prev_insn);
-          inst_to_choose = 1;
-        } else if (i == 2) {
-          // Here we may get one 4-byte instruction or two 2-byte instructions.
-          if (num_insns == 2) {
-            // Looks like there are two 2-byte instructions above our breakpoint
-            // target address.
-            // Now the upper 2-byte instruction is either a valid 2-byte
-            // instruction or could be a part of it's upper 4-byte instruction.
-            // In both cases we don't care because in this case lower 2-byte
-            // instruction is definitely a valid instruction
-            // and whatever i=1 iteration has found out is true.
-            inst_to_choose = 1;
-            break;
-          } else if (insn_size == 4) {
-            // This instruction claims its a valid 4-byte instruction. But it
-            // could be a part of it's upper 4-byte instruction.
-            // Lets try scanning upper 2 bytes to verify this.
-            instruction_list.Append(prev_insn);
-            inst_to_choose = 2;
-          }
-        } else if (i == 3) {
-          if (insn_size == 4)
-            // FIXME: We reached here that means instruction at [target - 4] has
-            // already claimed to be a 4-byte instruction,
-            // and now instruction at [target - 6] is also claiming that it's a
-            // 4-byte instruction. This can not be true.
-            // In this case we can not decide the valid previous instruction so
-            // we let lldb set the breakpoint at the address given by user.
-            inst_to_choose = 0;
-          else
-            // This is straight-forward
-            inst_to_choose = 2;
-          break;
-        }
-      } else {
-        // Decode failed, bytes do not form a valid instruction. So whatever
-        // previous iteration has found out is true.
-        if (i > 1) {
-          inst_to_choose = i - 1;
-          break;
-        }
-      }
-    }
-
-    // Check if we are able to find any valid instruction.
-    if (inst_to_choose) {
-      if (inst_to_choose > instruction_list.GetSize())
-        inst_to_choose--;
-      prev_insn = instruction_list.GetInstructionAtIndex(inst_to_choose - 1);
-
-      if (prev_insn->HasDelaySlot()) {
-        uint32_t shift_size = prev_insn->GetOpcode().GetByteSize();
-        // Adjust the breakable address
-        breakable_addr = addr - shift_size;
-        if (log)
-          log->Printf("Target::%s Breakpoint at 0x%8.8" PRIx64
-                      " is adjusted to 0x%8.8" PRIx64 " due to delay slot\n",
-                      __FUNCTION__, addr, breakable_addr);
-      }
-    }
-    break;
-  }
-  }
-  return breakable_addr;
+  auto arch_plugin = GetArchitecturePlugin();
+  return arch_plugin ?
+      arch_plugin->GetBreakableLoadAddress(addr, *this) : addr;
 }
 
 SourceManager &Target::GetSourceManager() {
@@ -2522,10 +2517,14 @@ void Target::RunStopHooks() {
 
   if (!m_process_sp)
     return;
+    
+  // Somebody might have restarted the process:
+  if (m_process_sp->GetState() != eStateStopped)
+    return;
 
   // <rdar://problem/12027563> make sure we check that we are not stopped
-  // because of us running a user expression
-  // since in that case we do not want to run the stop-hooks
+  // because of us running a user expression since in that case we do not want
+  // to run the stop-hooks
   if (m_process_sp->GetModIDRef().IsLastResumeForUserExpression())
     return;
 
@@ -2627,9 +2626,12 @@ void Target::RunStopHooks() {
         // running the stop hooks.
         if ((result.GetStatus() == eReturnStatusSuccessContinuingNoResult) ||
             (result.GetStatus() == eReturnStatusSuccessContinuingResult)) {
-          result.AppendMessageWithFormat("Aborting stop hooks, hook %" PRIu64
-                                         " set the program running.",
-                                         cur_hook_sp->GetID());
+          // But only complain if there were more stop hooks to do:
+          StopHookCollection::iterator tmp = pos;
+          if (++tmp != end)
+            result.AppendMessageWithFormat("\nAborting stop hooks, hook %" PRIu64
+                                           " set the program running.\n",
+                                           cur_hook_sp->GetID());
           keep_going = false;
         }
       }
@@ -2648,8 +2650,8 @@ const TargetPropertiesSP &Target::GetGlobalProperties() {
   return *g_settings_sp_ptr;
 }
 
-Error Target::Install(ProcessLaunchInfo *launch_info) {
-  Error error;
+Status Target::Install(ProcessLaunchInfo *launch_info) {
+  Status error;
   PlatformSP platform_sp(GetPlatform());
   if (platform_sp) {
     if (platform_sp->IsRemote()) {
@@ -2779,8 +2781,8 @@ bool Target::SetSectionUnloaded(const lldb::SectionSP &section_sp,
 
 void Target::ClearAllLoadedSections() { m_section_load_history.Clear(); }
 
-Error Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
-  Error error;
+Status Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
+  Status error;
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_TARGET));
 
   if (log)
@@ -2811,18 +2813,16 @@ Error Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
   launch_info.GetFlags().Set(eLaunchFlagDebug);
 
   // Get the value of synchronous execution here.  If you wait till after you
-  // have started to
-  // run, then you could have hit a breakpoint, whose command might switch the
-  // value, and
-  // then you'll pick up that incorrect value.
+  // have started to run, then you could have hit a breakpoint, whose command
+  // might switch the value, and then you'll pick up that incorrect value.
   Debugger &debugger = GetDebugger();
   const bool synchronous_execution =
       debugger.GetCommandInterpreter().GetSynchronous();
 
   PlatformSP platform_sp(GetPlatform());
 
-  // Finalize the file actions, and if none were given, default to opening
-  // up a pseudo terminal
+  // Finalize the file actions, and if none were given, default to opening up a
+  // pseudo terminal
   const bool default_to_use_pty = platform_sp ? platform_sp->IsHost() : false;
   if (log)
     log->Printf("Target::%s have platform=%s, platform_sp->IsHost()=%s, "
@@ -2861,10 +2861,10 @@ Error Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
         GetPlatform()->DebugProcess(launch_info, debugger, this, error);
 
     // Cleanup the old process since someone might still have a strong
-    // reference to this process and we would like to allow it to cleanup
-    // as much as it can without the object being destroyed. We try to
-    // lock the shared pointer and if that works, then someone else still
-    // has a strong reference to the process.
+    // reference to this process and we would like to allow it to cleanup as
+    // much as it can without the object being destroyed. We try to lock the
+    // shared pointer and if that works, then someone else still has a strong
+    // reference to the process.
 
     ProcessSP old_process_sp(process_wp.lock());
     if (old_process_sp)
@@ -2907,8 +2907,7 @@ Error Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
       }
 
       StateType state = m_process_sp->WaitForProcessToStop(
-          std::chrono::microseconds(0), nullptr, false, hijack_listener_sp,
-          nullptr);
+          llvm::None, nullptr, false, hijack_listener_sp, nullptr);
 
       if (state == eStateStopped) {
         if (!launch_info.GetFlags().Test(eLaunchFlagStopAtEntry)) {
@@ -2916,8 +2915,7 @@ Error Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
             error = m_process_sp->PrivateResume();
             if (error.Success()) {
               state = m_process_sp->WaitForProcessToStop(
-                  std::chrono::microseconds(0), nullptr, true,
-                  hijack_listener_sp, stream);
+                  llvm::None, nullptr, true, hijack_listener_sp, stream);
               const bool must_be_alive =
                   false; // eStateExited is ok, so this must be false
               if (!StateIsStoppedState(state, must_be_alive)) {
@@ -2930,7 +2928,7 @@ Error Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
             error = m_process_sp->PrivateResume();
           }
           if (!error.Success()) {
-            Error error2;
+            Status error2;
             error2.SetErrorStringWithFormat(
                 "process resume at entry point failed: %s", error.AsCString());
             error = error2;
@@ -2968,7 +2966,7 @@ Error Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
     }
     m_process_sp->RestoreProcessEvents();
   } else {
-    Error error2;
+    Status error2;
     error2.SetErrorStringWithFormat("process launch failed: %s",
                                     error.AsCString());
     error = error2;
@@ -2976,30 +2974,30 @@ Error Target::Launch(ProcessLaunchInfo &launch_info, Stream *stream) {
   return error;
 }
 
-Error Target::Attach(ProcessAttachInfo &attach_info, Stream *stream) {
+Status Target::Attach(ProcessAttachInfo &attach_info, Stream *stream) {
   auto state = eStateInvalid;
   auto process_sp = GetProcessSP();
   if (process_sp) {
     state = process_sp->GetState();
     if (process_sp->IsAlive() && state != eStateConnected) {
       if (state == eStateAttaching)
-        return Error("process attach is in progress");
-      return Error("a process is already being debugged");
+        return Status("process attach is in progress");
+      return Status("a process is already being debugged");
     }
   }
 
   const ModuleSP old_exec_module_sp = GetExecutableModule();
 
-  // If no process info was specified, then use the target executable
-  // name as the process to attach to by default
+  // If no process info was specified, then use the target executable name as
+  // the process to attach to by default
   if (!attach_info.ProcessInfoSpecified()) {
     if (old_exec_module_sp)
       attach_info.GetExecutableFile().GetFilename() =
           old_exec_module_sp->GetPlatformFileSpec().GetFilename();
 
     if (!attach_info.ProcessInfoSpecified()) {
-      return Error("no process specified, create a target with a file, or "
-                   "specify the --pid or --name");
+      return Status("no process specified, create a target with a file, or "
+                    "specify the --pid or --name");
     }
   }
 
@@ -3013,7 +3011,7 @@ Error Target::Attach(ProcessAttachInfo &attach_info, Stream *stream) {
     attach_info.SetHijackListener(hijack_listener_sp);
   }
 
-  Error error;
+  Status error;
   if (state != eStateConnected && platform_sp != nullptr &&
       platform_sp->CanDebugProcess()) {
     SetPlatform(platform_sp);
@@ -3041,8 +3039,7 @@ Error Target::Attach(ProcessAttachInfo &attach_info, Stream *stream) {
       process_sp->RestoreProcessEvents();
     } else {
       state = process_sp->WaitForProcessToStop(
-          std::chrono::microseconds(0), nullptr, false,
-          attach_info.GetHijackListener(), stream);
+          llvm::None, nullptr, false, attach_info.GetHijackListener(), stream);
       process_sp->RestoreProcessEvents();
 
       if (state != eStateStopped) {
@@ -3128,16 +3125,19 @@ void Target::StopHook::GetDescription(Stream *s,
 // class TargetProperties
 //--------------------------------------------------------------
 
-OptionEnumValueElement lldb_private::g_dynamic_value_types[] = {
+static constexpr OptionEnumValueElement g_dynamic_value_types[] = {
     {eNoDynamicValues, "no-dynamic-values",
      "Don't calculate the dynamic type of values"},
     {eDynamicCanRunTarget, "run-target", "Calculate the dynamic type of values "
                                          "even if you have to run the target."},
     {eDynamicDontRunTarget, "no-run-target",
-     "Calculate the dynamic type of values, but don't run the target."},
-    {0, nullptr, nullptr}};
+     "Calculate the dynamic type of values, but don't run the target."} };
 
-static OptionEnumValueElement g_inline_breakpoint_enums[] = {
+OptionEnumValues lldb_private::GetDynamicValueTypes() {
+  return OptionEnumValues(g_dynamic_value_types);
+}
+
+static constexpr OptionEnumValueElement g_inline_breakpoint_enums[] = {
     {eInlineBreakpointsNever, "never", "Never look for inline breakpoint "
                                        "locations (fastest). This setting "
                                        "should only be used if you know that "
@@ -3148,8 +3148,7 @@ static OptionEnumValueElement g_inline_breakpoint_enums[] = {
      "files (default)."},
     {eInlineBreakpointsAlways, "always",
      "Always look for inline breakpoint locations when setting file and line "
-     "breakpoints (slower but most accurate)."},
-    {0, nullptr, nullptr}};
+     "breakpoints (slower but most accurate)."} };
 
 typedef enum x86DisassemblyFlavor {
   eX86DisFlavorDefault,
@@ -3157,36 +3156,33 @@ typedef enum x86DisassemblyFlavor {
   eX86DisFlavorATT
 } x86DisassemblyFlavor;
 
-static OptionEnumValueElement g_x86_dis_flavor_value_types[] = {
+static constexpr OptionEnumValueElement g_x86_dis_flavor_value_types[] = {
     {eX86DisFlavorDefault, "default", "Disassembler default (currently att)."},
     {eX86DisFlavorIntel, "intel", "Intel disassembler flavor."},
-    {eX86DisFlavorATT, "att", "AT&T disassembler flavor."},
-    {0, nullptr, nullptr}};
+    {eX86DisFlavorATT, "att", "AT&T disassembler flavor."} };
 
-static OptionEnumValueElement g_hex_immediate_style_values[] = {
+static constexpr OptionEnumValueElement g_hex_immediate_style_values[] = {
     {Disassembler::eHexStyleC, "c", "C-style (0xffff)."},
-    {Disassembler::eHexStyleAsm, "asm", "Asm-style (0ffffh)."},
-    {0, nullptr, nullptr}};
+    {Disassembler::eHexStyleAsm, "asm", "Asm-style (0ffffh)."} };
 
-static OptionEnumValueElement g_load_script_from_sym_file_values[] = {
+static constexpr OptionEnumValueElement g_load_script_from_sym_file_values[] = {
     {eLoadScriptFromSymFileTrue, "true",
      "Load debug scripts inside symbol files"},
     {eLoadScriptFromSymFileFalse, "false",
      "Do not load debug scripts inside symbol files."},
     {eLoadScriptFromSymFileWarn, "warn",
-     "Warn about debug scripts inside symbol files but do not load them."},
-    {0, nullptr, nullptr}};
+     "Warn about debug scripts inside symbol files but do not load them."} };
 
-static OptionEnumValueElement g_load_current_working_dir_lldbinit_values[] = {
+static constexpr
+OptionEnumValueElement g_load_current_working_dir_lldbinit_values[] = {
     {eLoadCWDlldbinitTrue, "true",
      "Load .lldbinit files from current directory"},
     {eLoadCWDlldbinitFalse, "false",
      "Do not load .lldbinit files from current directory"},
     {eLoadCWDlldbinitWarn, "warn",
-     "Warn about loading .lldbinit files from current directory"},
-    {0, nullptr, nullptr}};
+     "Warn about loading .lldbinit files from current directory"} };
 
-static OptionEnumValueElement g_memory_module_load_level_values[] = {
+static constexpr OptionEnumValueElement g_memory_module_load_level_values[] = {
     {eMemoryModuleLoadLevelMinimal, "minimal",
      "Load minimal information when loading modules from memory. Currently "
      "this setting loads sections only."},
@@ -3195,28 +3191,27 @@ static OptionEnumValueElement g_memory_module_load_level_values[] = {
      "this setting loads sections and function bounds."},
     {eMemoryModuleLoadLevelComplete, "complete",
      "Load complete information when loading modules from memory. Currently "
-     "this setting loads sections and all symbols."},
-    {0, nullptr, nullptr}};
+     "this setting loads sections and all symbols."} };
 
-static PropertyDefinition g_properties[] = {
-    {"default-arch", OptionValue::eTypeArch, true, 0, nullptr, nullptr,
+static constexpr PropertyDefinition g_properties[] = {
+    {"default-arch", OptionValue::eTypeArch, true, 0, nullptr, {},
      "Default architecture to choose, when there's a choice."},
     {"move-to-nearest-code", OptionValue::eTypeBoolean, false, true, nullptr,
-     nullptr, "Move breakpoints to nearest code."},
+     {}, "Move breakpoints to nearest code."},
     {"language", OptionValue::eTypeLanguage, false, eLanguageTypeUnknown,
-     nullptr, nullptr,
+     nullptr, {},
      "The language to use when interpreting expressions entered in commands."},
-    {"expr-prefix", OptionValue::eTypeFileSpec, false, 0, nullptr, nullptr,
+    {"expr-prefix", OptionValue::eTypeFileSpec, false, 0, nullptr, {},
      "Path to a file containing expressions to be prepended to all "
      "expressions."},
     {"prefer-dynamic-value", OptionValue::eTypeEnum, false,
-     eDynamicDontRunTarget, nullptr, g_dynamic_value_types,
+     eDynamicDontRunTarget, nullptr, OptionEnumValues(g_dynamic_value_types),
      "Should printed values be shown as their dynamic value."},
     {"enable-synthetic-value", OptionValue::eTypeBoolean, false, true, nullptr,
-     nullptr, "Should synthetic values be used by default whenever available."},
-    {"skip-prologue", OptionValue::eTypeBoolean, false, true, nullptr, nullptr,
+     {}, "Should synthetic values be used by default whenever available."},
+    {"skip-prologue", OptionValue::eTypeBoolean, false, true, nullptr, {},
      "Skip function prologues when setting breakpoints by name."},
-    {"source-map", OptionValue::eTypePathMap, false, 0, nullptr, nullptr,
+    {"source-map", OptionValue::eTypePathMap, false, 0, nullptr, {},
      "Source path remappings are used to track the change of location between "
      "a source file when built, and "
      "where it exists on the current system.  It consists of an array of "
@@ -3228,64 +3223,67 @@ static PropertyDefinition g_properties[] = {
      "Each element of the array is checked in order and the first one that "
      "results in a match wins."},
     {"exec-search-paths", OptionValue::eTypeFileSpecList, false, 0, nullptr,
-     nullptr, "Executable search paths to use when locating executable files "
-              "whose paths don't match the local file system."},
+     {}, "Executable search paths to use when locating executable files "
+         "whose paths don't match the local file system."},
     {"debug-file-search-paths", OptionValue::eTypeFileSpecList, false, 0,
-     nullptr, nullptr,
+     nullptr, {},
      "List of directories to be searched when locating debug symbol files."},
     {"clang-module-search-paths", OptionValue::eTypeFileSpecList, false, 0,
-     nullptr, nullptr,
+     nullptr, {},
      "List of directories to be searched when locating modules for Clang."},
     {"auto-import-clang-modules", OptionValue::eTypeBoolean, false, true,
-     nullptr, nullptr,
+     nullptr, {},
      "Automatically load Clang modules referred to by the program."},
     {"auto-apply-fixits", OptionValue::eTypeBoolean, false, true, nullptr,
-     nullptr, "Automatically apply fix-it hints to expressions."},
+     {}, "Automatically apply fix-it hints to expressions."},
     {"notify-about-fixits", OptionValue::eTypeBoolean, false, true, nullptr,
-     nullptr, "Print the fixed expression text."},
+     {}, "Print the fixed expression text."},
     {"save-jit-objects", OptionValue::eTypeBoolean, false, false, nullptr,
-     nullptr, "Save intermediate object files generated by the LLVM JIT"},
+     {}, "Save intermediate object files generated by the LLVM JIT"},
     {"max-children-count", OptionValue::eTypeSInt64, false, 256, nullptr,
-     nullptr, "Maximum number of children to expand in any level of depth."},
+     {}, "Maximum number of children to expand in any level of depth."},
     {"max-string-summary-length", OptionValue::eTypeSInt64, false, 1024,
-     nullptr, nullptr,
+     nullptr, {},
      "Maximum number of characters to show when using %s in summary strings."},
     {"max-memory-read-size", OptionValue::eTypeSInt64, false, 1024, nullptr,
-     nullptr, "Maximum number of bytes that 'memory read' will fetch before "
-              "--force must be specified."},
+     {}, "Maximum number of bytes that 'memory read' will fetch before "
+         "--force must be specified."},
     {"breakpoints-use-platform-avoid-list", OptionValue::eTypeBoolean, false,
-     true, nullptr, nullptr, "Consult the platform module avoid list when "
-                             "setting non-module specific breakpoints."},
-    {"arg0", OptionValue::eTypeString, false, 0, nullptr, nullptr,
+     true, nullptr, {}, "Consult the platform module avoid list when "
+                        "setting non-module specific breakpoints."},
+    {"arg0", OptionValue::eTypeString, false, 0, nullptr, {},
      "The first argument passed to the program in the argument array which can "
      "be different from the executable itself."},
-    {"run-args", OptionValue::eTypeArgs, false, 0, nullptr, nullptr,
+    {"run-args", OptionValue::eTypeArgs, false, 0, nullptr, {},
      "A list containing all the arguments to be passed to the executable when "
      "it is run. Note that this does NOT include the argv[0] which is in "
      "target.arg0."},
     {"env-vars", OptionValue::eTypeDictionary, false, OptionValue::eTypeString,
-     nullptr, nullptr, "A list of all the environment variables to be passed "
-                       "to the executable's environment, and their values."},
-    {"inherit-env", OptionValue::eTypeBoolean, false, true, nullptr, nullptr,
+     nullptr, {}, "A list of all the environment variables to be passed "
+                  "to the executable's environment, and their values."},
+    {"inherit-env", OptionValue::eTypeBoolean, false, true, nullptr, {},
      "Inherit the environment from the process that is running LLDB."},
-    {"input-path", OptionValue::eTypeFileSpec, false, 0, nullptr, nullptr,
+    {"input-path", OptionValue::eTypeFileSpec, false, 0, nullptr, {},
      "The file/path to be used by the executable program for reading its "
      "standard input."},
-    {"output-path", OptionValue::eTypeFileSpec, false, 0, nullptr, nullptr,
+    {"output-path", OptionValue::eTypeFileSpec, false, 0, nullptr, {},
      "The file/path to be used by the executable program for writing its "
      "standard output."},
-    {"error-path", OptionValue::eTypeFileSpec, false, 0, nullptr, nullptr,
+    {"error-path", OptionValue::eTypeFileSpec, false, 0, nullptr, {},
      "The file/path to be used by the executable program for writing its "
      "standard error."},
     {"detach-on-error", OptionValue::eTypeBoolean, false, true, nullptr,
-     nullptr, "debugserver will detach (rather than killing) a process if it "
+     {}, "debugserver will detach (rather than killing) a process if it "
               "loses connection with lldb."},
-    {"disable-aslr", OptionValue::eTypeBoolean, false, true, nullptr, nullptr,
+    {"preload-symbols", OptionValue::eTypeBoolean, false, true, nullptr, {},
+     "Enable loading of symbol tables before they are needed."},
+    {"disable-aslr", OptionValue::eTypeBoolean, false, true, nullptr, {},
      "Disable Address Space Layout Randomization (ASLR)"},
-    {"disable-stdio", OptionValue::eTypeBoolean, false, false, nullptr, nullptr,
+    {"disable-stdio", OptionValue::eTypeBoolean, false, false, nullptr, {},
      "Disable stdin/stdout for process (e.g. for a GUI application)"},
     {"inline-breakpoint-strategy", OptionValue::eTypeEnum, false,
-     eInlineBreakpointsAlways, nullptr, g_inline_breakpoint_enums,
+     eInlineBreakpointsAlways, nullptr,
+     OptionEnumValues(g_inline_breakpoint_enums),
      "The strategy to use when settings breakpoints by file and line. "
      "Breakpoint locations can end up being inlined by the compiler, so that a "
      "compile unit 'a.c' might contain an inlined function from another source "
@@ -3305,25 +3303,29 @@ static PropertyDefinition g_properties[] = {
     // FIXME: This is the wrong way to do per-architecture settings, but we
     // don't have a general per architecture settings system in place yet.
     {"x86-disassembly-flavor", OptionValue::eTypeEnum, false,
-     eX86DisFlavorDefault, nullptr, g_x86_dis_flavor_value_types,
+     eX86DisFlavorDefault, nullptr,
+     OptionEnumValues(g_x86_dis_flavor_value_types),
      "The default disassembly flavor to use for x86 or x86-64 targets."},
     {"use-hex-immediates", OptionValue::eTypeBoolean, false, true, nullptr,
-     nullptr, "Show immediates in disassembly as hexadecimal."},
+     {}, "Show immediates in disassembly as hexadecimal."},
     {"hex-immediate-style", OptionValue::eTypeEnum, false,
-     Disassembler::eHexStyleC, nullptr, g_hex_immediate_style_values,
+     Disassembler::eHexStyleC, nullptr,
+     OptionEnumValues(g_hex_immediate_style_values),
      "Which style to use for printing hexadecimal disassembly values."},
     {"use-fast-stepping", OptionValue::eTypeBoolean, false, true, nullptr,
-     nullptr, "Use a fast stepping algorithm based on running from branch to "
-              "branch rather than instruction single-stepping."},
+     {}, "Use a fast stepping algorithm based on running from branch to "
+         "branch rather than instruction single-stepping."},
     {"load-script-from-symbol-file", OptionValue::eTypeEnum, false,
-     eLoadScriptFromSymFileWarn, nullptr, g_load_script_from_sym_file_values,
+     eLoadScriptFromSymFileWarn, nullptr,
+     OptionEnumValues(g_load_script_from_sym_file_values),
      "Allow LLDB to load scripting resources embedded in symbol files when "
      "available."},
     {"load-cwd-lldbinit", OptionValue::eTypeEnum, false, eLoadCWDlldbinitWarn,
-     nullptr, g_load_current_working_dir_lldbinit_values,
+     nullptr, OptionEnumValues(g_load_current_working_dir_lldbinit_values),
      "Allow LLDB to .lldbinit files from the current directory automatically."},
     {"memory-module-load-level", OptionValue::eTypeEnum, false,
-     eMemoryModuleLoadLevelComplete, nullptr, g_memory_module_load_level_values,
+     eMemoryModuleLoadLevelComplete, nullptr,
+     OptionEnumValues(g_memory_module_load_level_values),
      "Loading modules from memory can be slow as reading the symbol tables and "
      "other data can take a long time depending on your connection to the "
      "debug target. "
@@ -3339,20 +3341,18 @@ static PropertyDefinition g_properties[] = {
      "symbols, but should rarely be used as stack frames in these memory "
      "regions will be inaccurate and not provide any context (fastest). "},
     {"display-expression-in-crashlogs", OptionValue::eTypeBoolean, false, false,
-     nullptr, nullptr, "Expressions that crash will show up in crash logs if "
-                       "the host system supports executable specific crash log "
-                       "strings and this setting is set to true."},
+     nullptr, {}, "Expressions that crash will show up in crash logs if "
+                  "the host system supports executable specific crash log "
+                  "strings and this setting is set to true."},
     {"trap-handler-names", OptionValue::eTypeArray, true,
-     OptionValue::eTypeString, nullptr, nullptr,
+     OptionValue::eTypeString, nullptr, {},
      "A list of trap handler function names, e.g. a common Unix user process "
      "one is _sigtramp."},
     {"display-runtime-support-values", OptionValue::eTypeBoolean, false, false,
-     nullptr, nullptr, "If true, LLDB will show variables that are meant to "
-                       "support the operation of a language's runtime "
-                       "support."},
-    {"non-stop-mode", OptionValue::eTypeBoolean, false, 0, nullptr, nullptr,
-     "Disable lock-step debugging, instead control threads independently."},
-    {nullptr, OptionValue::eTypeInvalid, false, 0, nullptr, nullptr, nullptr}};
+     nullptr, {}, "If true, LLDB will show variables that are meant to "
+                  "support the operation of a language's runtime support."},
+    {"non-stop-mode", OptionValue::eTypeBoolean, false, 0, nullptr, {},
+     "Disable lock-step debugging, instead control threads independently."}};
 
 enum {
   ePropertyDefaultArch,
@@ -3382,6 +3382,7 @@ enum {
   ePropertyOutputPath,
   ePropertyErrorPath,
   ePropertyDetachOnError,
+  ePropertyPreloadSymbols,
   ePropertyDisableASLR,
   ePropertyDisableSTDIO,
   ePropertyInlineStrategy,
@@ -3416,9 +3417,8 @@ public:
                                      bool will_modify,
                                      uint32_t idx) const override {
     // When getting the value for a key from the target options, we will always
-    // try and grab the setting from the current target if there is one. Else we
-    // just
-    // use the one from this instance.
+    // try and grab the setting from the current target if there is one. Else
+    // we just use the one from this instance.
     if (idx == ePropertyEnvVars)
       GetHostEnvironmentIfNeeded();
 
@@ -3447,36 +3447,19 @@ protected:
                 nullptr, idx, g_properties[idx].default_uint_value != 0)) {
           PlatformSP platform_sp(m_target->GetPlatform());
           if (platform_sp) {
-            StringList env;
-            if (platform_sp->GetEnvironment(env)) {
-              OptionValueDictionary *env_dict =
-                  GetPropertyAtIndexAsOptionValueDictionary(nullptr,
-                                                            ePropertyEnvVars);
-              if (env_dict) {
-                const bool can_replace = false;
-                const size_t envc = env.GetSize();
-                for (size_t idx = 0; idx < envc; idx++) {
-                  const char *env_entry = env.GetStringAtIndex(idx);
-                  if (env_entry) {
-                    const char *equal_pos = ::strchr(env_entry, '=');
-                    ConstString key;
-                    // It is ok to have environment variables with no values
-                    const char *value = nullptr;
-                    if (equal_pos) {
-                      key.SetCStringWithLength(env_entry,
-                                               equal_pos - env_entry);
-                      if (equal_pos[1])
-                        value = equal_pos + 1;
-                    } else {
-                      key.SetCString(env_entry);
-                    }
-                    // Don't allow existing keys to be replaced with ones we get
-                    // from the platform environment
-                    env_dict->SetValueForKey(
-                        key, OptionValueSP(new OptionValueString(value)),
-                        can_replace);
-                  }
-                }
+            Environment env = platform_sp->GetEnvironment();
+            OptionValueDictionary *env_dict =
+                GetPropertyAtIndexAsOptionValueDictionary(nullptr,
+                                                          ePropertyEnvVars);
+            if (env_dict) {
+              const bool can_replace = false;
+              for (const auto &KV : env) {
+                // Don't allow existing keys to be replaced with ones we get
+                // from the platform environment
+                env_dict->SetValueForKey(
+                    ConstString(KV.first()),
+                    OptionValueSP(new OptionValueString(KV.second.c_str())),
+                    can_replace);
               }
             }
           }
@@ -3491,16 +3474,17 @@ protected:
 //----------------------------------------------------------------------
 // TargetProperties
 //----------------------------------------------------------------------
-static PropertyDefinition g_experimental_properties[]{
+static constexpr PropertyDefinition g_experimental_properties[]{
     {"inject-local-vars", OptionValue::eTypeBoolean, true, true, nullptr,
-     nullptr,
+     {},
      "If true, inject local variables explicitly into the expression text.  "
      "This will fix symbol resolution when there are name collisions between "
      "ivars and local variables.  "
      "But it can make expressions run much more slowly."},
-    {nullptr, OptionValue::eTypeInvalid, true, 0, nullptr, nullptr, nullptr}};
+    {"use-modern-type-lookup", OptionValue::eTypeBoolean, true, false, nullptr,
+     {}, "If true, use Clang's modern type lookup infrastructure."}};
 
-enum { ePropertyInjectLocalVars = 0 };
+enum { ePropertyInjectLocalVars = 0, ePropertyUseModernTypeLookup };
 
 class TargetExperimentalOptionValueProperties : public OptionValueProperties {
 public:
@@ -3524,8 +3508,8 @@ TargetProperties::TargetProperties(Target *target)
     m_collection_sp.reset(
         new TargetOptionValueProperties(target, Target::GetGlobalProperties()));
 
-    // Set callbacks to update launch_info whenever "settins set" updated any of
-    // these properties
+    // Set callbacks to update launch_info whenever "settins set" updated any
+    // of these properties
     m_collection_sp->SetValueChangedCallback(
         ePropertyArg0, TargetProperties::Arg0ValueChangedCallback, this);
     m_collection_sp->SetValueChangedCallback(
@@ -3611,6 +3595,18 @@ void TargetProperties::SetInjectLocalVariables(ExecutionContext *exe_ctx,
                                             true);
 }
 
+bool TargetProperties::GetUseModernTypeLookup() const {
+  const Property *exp_property = m_collection_sp->GetPropertyAtIndex(
+      nullptr, false, ePropertyExperimental);
+  OptionValueProperties *exp_values =
+      exp_property->GetValue()->GetAsProperties();
+  if (exp_values)
+    return exp_values->GetPropertyAtIndexAsBoolean(
+        nullptr, ePropertyUseModernTypeLookup, true);
+  else
+    return true;
+}
+
 ArchSpec TargetProperties::GetDefaultArchitecture() const {
   OptionValueArch *value = m_collection_sp->GetPropertyAtIndexAsOptionValueArch(
       nullptr, ePropertyDefaultArch);
@@ -3642,6 +3638,17 @@ lldb::DynamicValueType TargetProperties::GetPreferDynamicValue() const {
 bool TargetProperties::SetPreferDynamicValue(lldb::DynamicValueType d) {
   const uint32_t idx = ePropertyPreferDynamic;
   return m_collection_sp->SetPropertyAtIndexAsEnumeration(nullptr, idx, d);
+}
+
+bool TargetProperties::GetPreloadSymbols() const {
+  const uint32_t idx = ePropertyPreloadSymbols;
+  return m_collection_sp->GetPropertyAtIndexAsBoolean(
+      nullptr, idx, g_properties[idx].default_uint_value != 0);
+}
+
+void TargetProperties::SetPreloadSymbols(bool b) {
+  const uint32_t idx = ePropertyPreloadSymbols;
+  m_collection_sp->SetPropertyAtIndexAsBoolean(nullptr, idx, b);
 }
 
 bool TargetProperties::GetDisableASLR() const {
@@ -3717,15 +3724,19 @@ void TargetProperties::SetRunArguments(const Args &args) {
   m_launch_info.GetArguments() = args;
 }
 
-size_t TargetProperties::GetEnvironmentAsArgs(Args &env) const {
+Environment TargetProperties::GetEnvironment() const {
+  // TODO: Get rid of the Args intermediate step
+  Args env;
   const uint32_t idx = ePropertyEnvVars;
-  return m_collection_sp->GetPropertyAtIndexAsArgs(nullptr, idx, env);
+  m_collection_sp->GetPropertyAtIndexAsArgs(nullptr, idx, env);
+  return Environment(env);
 }
 
-void TargetProperties::SetEnvironmentFromArgs(const Args &env) {
+void TargetProperties::SetEnvironment(Environment env) {
+  // TODO: Get rid of the Args intermediate step
   const uint32_t idx = ePropertyEnvVars;
-  m_collection_sp->SetPropertyAtIndexFromArgs(nullptr, idx, env);
-  m_launch_info.GetEnvironmentEntries() = env;
+  m_collection_sp->SetPropertyAtIndexFromArgs(nullptr, idx, Args(env));
+  m_launch_info.GetEnvironment() = std::move(env);
 }
 
 bool TargetProperties::GetSkipPrologue() const {
@@ -3857,18 +3868,19 @@ LanguageType TargetProperties::GetLanguage() const {
   return LanguageType();
 }
 
-const char *TargetProperties::GetExpressionPrefixContentsAsCString() {
+llvm::StringRef TargetProperties::GetExpressionPrefixContents() {
   const uint32_t idx = ePropertyExprPrefix;
   OptionValueFileSpec *file =
       m_collection_sp->GetPropertyAtIndexAsOptionValueFileSpec(nullptr, false,
                                                                idx);
   if (file) {
-    const bool null_terminate = true;
-    DataBufferSP data_sp(file->GetFileContents(null_terminate));
+    DataBufferSP data_sp(file->GetFileContents());
     if (data_sp)
-      return (const char *)data_sp->GetBytes();
+      return llvm::StringRef(
+          reinterpret_cast<const char *>(data_sp->GetBytes()),
+          data_sp->GetByteSize());
   }
-  return nullptr;
+  return "";
 }
 
 bool TargetProperties::GetBreakpointsConsultPlatformAvoidList() {
@@ -3962,7 +3974,7 @@ void TargetProperties::SetProcessLaunchInfo(
   m_launch_info = launch_info;
   SetArg0(launch_info.GetArg0());
   SetRunArguments(launch_info.GetArguments());
-  SetEnvironmentFromArgs(launch_info.GetEnvironmentEntries());
+  SetEnvironment(launch_info.GetEnvironment());
   const FileAction *input_file_action =
       launch_info.GetFileActionForFD(STDIN_FILENO);
   if (input_file_action) {
@@ -4003,9 +4015,7 @@ void TargetProperties::EnvVarsValueChangedCallback(void *target_property_ptr,
                                                    OptionValue *) {
   TargetProperties *this_ =
       reinterpret_cast<TargetProperties *>(target_property_ptr);
-  Args args;
-  if (this_->GetEnvironmentAsArgs(args))
-    this_->m_launch_info.GetEnvironmentEntries() = args;
+  this_->m_launch_info.GetEnvironment() = this_->GetEnvironment();
 }
 
 void TargetProperties::InputPathValueChangedCallback(void *target_property_ptr,

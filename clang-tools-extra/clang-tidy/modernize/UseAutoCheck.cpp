@@ -11,6 +11,8 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/ASTMatchers/ASTMatchers.h"
+#include "clang/Basic/CharInfo.h"
+#include "clang/Tooling/FixIt.h"
 
 using namespace clang;
 using namespace clang::ast_matchers;
@@ -24,6 +26,35 @@ namespace {
 const char IteratorDeclStmtId[] = "iterator_decl";
 const char DeclWithNewId[] = "decl_new";
 const char DeclWithCastId[] = "decl_cast";
+const char DeclWithTemplateCastId[] = "decl_template";
+
+size_t GetTypeNameLength(bool RemoveStars, StringRef Text) {
+  enum CharType { Space, Alpha, Punctuation };
+  CharType LastChar = Space, BeforeSpace = Punctuation;
+  size_t NumChars = 0;
+  int TemplateTypenameCntr = 0;
+  for (const unsigned char C : Text) {
+    if (C == '<')
+      ++TemplateTypenameCntr;
+    else if (C == '>')
+      --TemplateTypenameCntr;
+    const CharType NextChar =
+        isAlphanumeric(C)
+            ? Alpha
+            : (isWhitespace(C) ||
+               (!RemoveStars && TemplateTypenameCntr == 0 && C == '*'))
+                  ? Space
+                  : Punctuation;
+    if (NextChar != Space) {
+      ++NumChars; // Count the non-space character.
+      if (LastChar == Space && NextChar == Alpha && BeforeSpace == Alpha)
+        ++NumChars; // Count a single space character between two words.
+      BeforeSpace = NextChar;
+    }
+    LastChar = NextChar;
+  }
+  return NumChars;
+}
 
 /// \brief Matches variable declarations that have explicit initializers that
 /// are not initializer lists.
@@ -169,6 +200,14 @@ AST_MATCHER(Decl, isFromStdNamespace) {
   return (Info && Info->isStr("std"));
 }
 
+/// Matches declaration reference or member expressions with explicit template
+/// arguments.
+AST_POLYMORPHIC_MATCHER(hasExplicitTemplateArgs,
+                        AST_POLYMORPHIC_SUPPORTED_TYPES(DeclRefExpr,
+                                                        MemberExpr)) {
+  return Node.hasExplicitTemplateArgs();
+}
+
 /// \brief Returns a DeclarationMatcher that matches standard iterators nested
 /// inside records with a standard container name.
 DeclarationMatcher standardIterator() {
@@ -240,27 +279,49 @@ StatementMatcher makeDeclWithCastMatcher() {
       .bind(DeclWithCastId);
 }
 
+StatementMatcher makeDeclWithTemplateCastMatcher() {
+  auto ST =
+      substTemplateTypeParmType(hasReplacementType(equalsBoundNode("arg")));
+
+  auto ExplicitCall =
+      anyOf(has(memberExpr(hasExplicitTemplateArgs())),
+            has(ignoringImpCasts(declRefExpr(hasExplicitTemplateArgs()))));
+
+  auto TemplateArg =
+      hasTemplateArgument(0, refersToType(qualType().bind("arg")));
+
+  auto TemplateCall = callExpr(
+      ExplicitCall,
+      callee(functionDecl(TemplateArg,
+                          returns(anyOf(ST, pointsTo(ST), references(ST))))));
+
+  return declStmt(unless(has(varDecl(
+                      unless(hasInitializer(ignoringImplicit(TemplateCall)))))))
+      .bind(DeclWithTemplateCastId);
+}
+
 StatementMatcher makeCombinedMatcher() {
   return declStmt(
       // At least one varDecl should be a child of the declStmt to ensure
       // it's a declaration list and avoid matching other declarations,
       // e.g. using directives.
-      has(varDecl()),
+      has(varDecl(unless(isImplicit()))),
       // Skip declarations that are already using auto.
       unless(has(varDecl(anyOf(hasType(autoType()),
-                               hasType(pointerType(pointee(autoType()))),
-                               hasType(referenceType(pointee(autoType()))))))),
+                               hasType(qualType(hasDescendant(autoType()))))))),
       anyOf(makeIteratorDeclMatcher(), makeDeclWithNewMatcher(),
-            makeDeclWithCastMatcher()));
+            makeDeclWithCastMatcher(), makeDeclWithTemplateCastMatcher()));
 }
 
 } // namespace
 
 UseAutoCheck::UseAutoCheck(StringRef Name, ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
+      MinTypeNameLength(Options.get("MinTypeNameLength", 5)),
       RemoveStars(Options.get("RemoveStars", 0)) {}
 
 void UseAutoCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
+  Options.store(Opts, "MinTypeNameLength", MinTypeNameLength);
   Options.store(Opts, "RemoveStars", RemoveStars ? 1 : 0);
 }
 
@@ -323,9 +384,9 @@ void UseAutoCheck::replaceIterators(const DeclStmt *D, ASTContext *Context) {
       << FixItHint::CreateReplacement(Range, "auto");
 }
 
-void UseAutoCheck::replaceExpr(const DeclStmt *D, ASTContext *Context,
-                               std::function<QualType(const Expr *)> GetType,
-                               StringRef Message) {
+void UseAutoCheck::replaceExpr(
+    const DeclStmt *D, ASTContext *Context,
+    llvm::function_ref<QualType(const Expr *)> GetType, StringRef Message) {
   const auto *FirstDecl = dyn_cast<VarDecl>(*D->decl_begin());
   // Ensure that there is at least one VarDecl within the DeclStmt.
   if (!FirstDecl)
@@ -385,10 +446,20 @@ void UseAutoCheck::replaceExpr(const DeclStmt *D, ASTContext *Context,
     Loc = Loc.getNextTypeLoc();
   }
   SourceRange Range(Loc.getSourceRange());
+
+  if (MinTypeNameLength != 0 &&
+      GetTypeNameLength(RemoveStars,
+                        tooling::fixit::getText(Loc.getSourceRange(),
+                                                FirstDecl->getASTContext())) <
+          MinTypeNameLength)
+    return;
+
   auto Diag = diag(Range.getBegin(), Message);
 
   // Space after 'auto' to handle cases where the '*' in the pointer type is
   // next to the identifier. This avoids changing 'int *p' into 'autop'.
+  // FIXME: This doesn't work for function pointers because the variable name
+  // is inside the type.
   Diag << FixItHint::CreateReplacement(Range, RemoveStars ? "auto " : "auto")
        << StarRemovals;
 }
@@ -411,6 +482,17 @@ void UseAutoCheck::check(const MatchFinder::MatchResult &Result) {
         },
         "use auto when initializing with a cast to avoid duplicating the type "
         "name");
+  } else if (const auto *Decl =
+                 Result.Nodes.getNodeAs<DeclStmt>(DeclWithTemplateCastId)) {
+    replaceExpr(
+        Decl, Result.Context,
+        [](const Expr *Expr) {
+          return cast<CallExpr>(Expr->IgnoreImplicit())
+              ->getDirectCallee()
+              ->getReturnType();
+        },
+        "use auto when initializing with a template cast to avoid duplicating "
+        "the type name");
   } else {
     llvm_unreachable("Bad Callback. No node provided.");
   }

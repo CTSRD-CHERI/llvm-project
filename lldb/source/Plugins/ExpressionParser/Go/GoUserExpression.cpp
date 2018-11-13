@@ -26,14 +26,8 @@
 // Project includes
 #include "GoUserExpression.h"
 
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/DataBufferHeap.h"
-#include "lldb/Core/DataEncoder.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectRegister.h"
 #include "lldb/Expression/DiagnosticManager.h"
@@ -49,6 +43,12 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/ThreadPlan.h"
 #include "lldb/Target/ThreadPlanCallUserExpression.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/DataEncoder.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 #include "lldb/lldb-private.h"
 
 #include "Plugins/ExpressionParser/Go/GoAST.h"
@@ -150,7 +150,7 @@ public:
 
   CompilerType EvaluateType(const GoASTExpr *e);
 
-  Error &error() { return m_error; }
+  Status &error() { return m_error; }
 
 private:
   std::nullptr_t NotImplemented(const GoASTExpr *e) {
@@ -163,7 +163,7 @@ private:
   lldb::StackFrameSP m_frame;
   GoParser m_parser;
   DynamicValueType m_use_dynamic;
-  Error m_error;
+  Status m_error;
   llvm::StringRef m_package;
   std::vector<std::unique_ptr<GoASTStmt>> m_statements;
 };
@@ -171,12 +171,11 @@ private:
 VariableSP FindGlobalVariable(TargetSP target, llvm::Twine name) {
   ConstString fullname(name.str());
   VariableList variable_list;
-  const bool append = true;
   if (!target) {
     return nullptr;
   }
-  const uint32_t match_count = target->GetImages().FindGlobalVariables(
-      fullname, append, 1, variable_list);
+  const uint32_t match_count =
+      target->GetImages().FindGlobalVariables(fullname, 1, variable_list);
   if (match_count == 1) {
     return variable_list.GetVariableAtIndex(0);
   }
@@ -254,7 +253,7 @@ GoUserExpression::DoExecute(DiagnosticManager &diagnostic_manager,
 
   m_interpreter->set_use_dynamic(options.GetUseDynamic());
   ValueObjectSP result_val_sp = m_interpreter->Evaluate(exe_ctx);
-  Error err = m_interpreter->error();
+  Status err = m_interpreter->error();
   m_interpreter.reset();
 
   if (!result_val_sp) {
@@ -272,7 +271,8 @@ GoUserExpression::DoExecute(DiagnosticManager &diagnostic_manager,
   PersistentExpressionState *pv =
       target->GetPersistentExpressionStateForLanguage(eLanguageTypeGo);
   if (pv != nullptr) {
-    result->SetName(pv->GetNextPersistentVariableName());
+    result->SetName(pv->GetNextPersistentVariableName(
+        *target, pv->GetPersistentVariablePrefix()));
     pv->AddVariable(result);
   }
   return lldb::eExpressionCompleted;
@@ -400,8 +400,7 @@ ValueObjectSP GoUserExpression::GoInterpreter::VisitIdent(const GoASTIdent *e) {
         val = m_frame->GetValueObjectForFrameVariable(var_sp, m_use_dynamic);
       else {
         // When a variable is on the heap instead of the stack, go records a
-        // variable
-        // '&x' instead of 'x'.
+        // variable '&x' instead of 'x'.
         var_sp = var_list_sp->FindVariable(ConstString("&" + varname));
         if (var_sp) {
           val = m_frame->GetValueObjectForFrameVariable(var_sp, m_use_dynamic);
@@ -650,15 +649,6 @@ ValueObjectSP GoUserExpression::GoInterpreter::VisitCallExpr(
 
 GoPersistentExpressionState::GoPersistentExpressionState()
     : PersistentExpressionState(eKindGo) {}
-
-ConstString GoPersistentExpressionState::GetNextPersistentVariableName() {
-  char name_cstr[256];
-  // We can't use the same variable format as clang.
-  ::snprintf(name_cstr, sizeof(name_cstr), "$go%u",
-             m_next_persistent_variable_id++);
-  ConstString name(name_cstr);
-  return name;
-}
 
 void GoPersistentExpressionState::RemovePersistentVariable(
     lldb::ExpressionVariableSP variable) {

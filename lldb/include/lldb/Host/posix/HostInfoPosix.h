@@ -10,8 +10,8 @@
 #ifndef lldb_Host_posix_HostInfoPosix_h_
 #define lldb_Host_posix_HostInfoPosix_h_
 
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/HostInfoBase.h"
+#include "lldb/Utility/FileSpec.h"
 
 namespace lldb_private {
 
@@ -33,13 +33,12 @@ public:
 
   static bool GetEnvironmentVar(const std::string &var_name, std::string &var);
 
+  static bool ComputePathRelativeToLibrary(FileSpec &file_spec,
+                                           llvm::StringRef dir);
+
 protected:
   static bool ComputeSupportExeDirectory(FileSpec &file_spec);
   static bool ComputeHeaderDirectory(FileSpec &file_spec);
-  static bool ComputePythonDirectory(FileSpec &file_spec);
-  static bool ComputeClangDirectory(FileSpec &file_spec);
-  static bool ComputePathRelativeToLibrary(FileSpec &file_spec,
-                                           llvm::StringRef dir);
 };
 }
 

@@ -28,7 +28,9 @@ The core routine of LibFormat is ``reformat()``:
 
 This reads a token stream out of the lexer ``Lex`` and reformats all the code
 ranges in ``Ranges``. The ``FormatStyle`` controls basic decisions made during
-formatting. A list of options can be found under :ref:`style-options`. 
+formatting. A list of options can be found under :ref:`style-options`.
+
+The style options are described in :doc:`ClangFormatStyleOptions`.
 
 
 .. _style-options:
@@ -42,11 +44,11 @@ two style guides are hard-coded:
 
 .. code-block:: c++
 
-  /// \brief Returns a format style complying with the LLVM coding standards:
+  /// Returns a format style complying with the LLVM coding standards:
   /// http://llvm.org/docs/CodingStandards.html.
   FormatStyle getLLVMStyle();
 
-  /// \brief Returns a format style complying with Google's C++ style guide:
+  /// Returns a format style complying with Google's C++ style guide:
   /// http://google-styleguide.googlecode.com/svn/trunk/cppguide.xml.
   FormatStyle getGoogleStyle();
 

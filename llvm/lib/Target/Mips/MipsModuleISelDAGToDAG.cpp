@@ -10,6 +10,8 @@
 
 #include "Mips.h"
 #include "MipsTargetMachine.h"
+#include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/CodeGen/StackProtector.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -22,29 +24,33 @@ namespace {
   public:
     static char ID;
 
-    explicit MipsModuleDAGToDAGISel(MipsTargetMachine &TM_)
-      : MachineFunctionPass(ID), TM(TM_) {}
+    MipsModuleDAGToDAGISel() : MachineFunctionPass(ID) {}
 
     // Pass Name
     StringRef getPassName() const override {
       return "MIPS DAG->DAG Pattern Instruction Selection";
     }
 
-    bool runOnMachineFunction(MachineFunction &MF) override;
+    void getAnalysisUsage(AnalysisUsage &AU) const override {
+      AU.addRequired<TargetPassConfig>();
+      AU.addPreserved<StackProtector>();
+      MachineFunctionPass::getAnalysisUsage(AU);
+    }
 
-  protected:
-    MipsTargetMachine &TM;
+    bool runOnMachineFunction(MachineFunction &MF) override;
   };
 
   char MipsModuleDAGToDAGISel::ID = 0;
 }
 
 bool MipsModuleDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
-  DEBUG(errs() << "In MipsModuleDAGToDAGISel::runMachineFunction\n");
+  LLVM_DEBUG(errs() << "In MipsModuleDAGToDAGISel::runMachineFunction\n");
+  auto &TPC = getAnalysis<TargetPassConfig>();
+  auto &TM = TPC.getTM<MipsTargetMachine>();
   TM.resetSubtarget(&MF);
   return false;
 }
 
-llvm::FunctionPass *llvm::createMipsModuleISelDagPass(MipsTargetMachine &TM) {
-  return new MipsModuleDAGToDAGISel(TM);
+llvm::FunctionPass *llvm::createMipsModuleISelDagPass() {
+  return new MipsModuleDAGToDAGISel();
 }

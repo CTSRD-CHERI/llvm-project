@@ -73,12 +73,14 @@
   addeq r0, #1
 label:
   addeq r0, #1
-5:
+five:
   addeq r0, #1
 @ CHECK: it eq
 @ CHECK: addeq
+@ CHECK: label
 @ CHECK: it eq
 @ CHECK: addeq
+@ CHECK: five
 @ CHECK: it eq
 @ CHECK: addeq
 
@@ -394,12 +396,12 @@ label:
   .endr
 @ CHECK: itete eq
 @ CHECK:  addeq r0, r1
-@ CHECK:  subne.w r0, r0, r1
+@ CHECK:  subne r0, r0, r1
 @ CHECK:  addeq r0, r1
-@ CHECK:  subne.w r0, r0, r1
+@ CHECK:  subne r0, r0, r1
 @ CHECK: ite eq
 @ CHECK:  addeq r0, r1
-@ CHECK:  subne.w r0, r0, r1
+@ CHECK:  subne r0, r0, r1
 
 @ Flush at end of file
   .section test99

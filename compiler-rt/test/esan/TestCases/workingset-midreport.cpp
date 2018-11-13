@@ -4,6 +4,11 @@
 // RUN: %clang -O0 %s -o %t 2>&1
 // RUN: %run %t 2>&1 | FileCheck %s --check-prefix=CHECK-NO-ESAN
 
+// FIXME: Re-enable once PR33590 is fixed.
+// UNSUPPORTED: x86_64
+// Stucks at init and no clone feature equivalent.
+// UNSUPPORTED: freebsd
+
 #include <sanitizer/esan_interface.h>
 #include <sched.h>
 #include <stdio.h>

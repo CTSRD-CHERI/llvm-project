@@ -3,7 +3,7 @@
 <!-- Material used from: HTML 4.01 specs: http://www.w3.org/TR/html401/ -->
 <html>
 <head>
-  <meta http-equiv="content-type" content="text/html; charset=iso-8859-1">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
   <title>libc++ Upcoming Meeting Status</title>
   <link type="text/css" rel="stylesheet" href="menu.css">
   <link type="text/css" rel="stylesheet" href="content.css">
@@ -12,7 +12,7 @@
 <body>
 <div id="menu">
   <div>
-    <a href="http://llvm.org/">LLVM Home</a>
+    <a href="https://llvm.org/">LLVM Home</a>
   </div>
 
   <div class="submenu">
@@ -22,21 +22,21 @@
 
   <div class="submenu">
     <label>Quick Links</label>
-    <a href="http://lists.llvm.org/mailman/listinfo/cfe-dev">cfe-dev</a>
-    <a href="http://lists.llvm.org/mailman/listinfo/cfe-commits">cfe-commits</a>
-    <a href="http://llvm.org/bugs/">Bug Reports</a>
-    <a href="http://llvm.org/svn/llvm-project/libcxx/trunk/">Browse SVN</a>
-    <a href="http://llvm.org/viewvc/llvm-project/libcxx/trunk/">Browse ViewVC</a>
+    <a href="https://lists.llvm.org/mailman/listinfo/cfe-dev">cfe-dev</a>
+    <a href="https://lists.llvm.org/mailman/listinfo/cfe-commits">cfe-commits</a>
+    <a href="https://bugs.llvm.org/">Bug Reports</a>
+    <a href="https://llvm.org/svn/llvm-project/libcxx/trunk/">Browse SVN</a>
+    <a href="https://llvm.org/viewvc/llvm-project/libcxx/trunk/">Browse ViewVC</a>
   </div>
 </div>
 
 <div id="content">
   <!--*********************************************************************-->
-  <h1>libc++ Issaquah Status</h1>
+  <h1>libc++ Upcoming Meeting Status</h1>
   <!--*********************************************************************-->
 
-  <p>This is a temporary page; please check the c++1z status <a href="http://libcxx.llvm.org/cxx1z_status.html">here</a></p>
-  <p>This page shows the status of the papers and issues that are expected to be adopted in Issaquah.</p>
+  <p>This is a temporary page; please check the c++2a status <a href="cxx2a_status.html">here</a></p>
+  <p>This page shows the status of the papers and issues that are expected to be adopted in the next WG21 Meeting.</p>
 
   <p>The groups that have contributed papers:
   <ul>
@@ -45,177 +45,106 @@
     <li>SG1 - Study group #1 (Concurrency working group)</li>
   </ul>
   </p>
-  
+
   <h3>Paper Status</h3>
-  <table id="papers" border="1">
-	<tr><th>Paper #</th><th>Group</th><th>Paper Name</th><th>Meeting</th><th>Status</th><th>First released version</th></tr>
-<!--
-	<tr><td><a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2012/n3346.pdf">3346</a></td><td>LWG</td><td>Terminology for Container Element Requirements - Rev 1</td><td>Kona</td><td>Complete</td><td>3.4</td></tr>
--->
-<!--  	<tr><td></td><td></td><td></td><td></td><td></td><td></td></tr> -->
-  </table>
+	<table border="1">
+	<tr><th>Paper #</th><th>Group</th><th>Paper Name</th><th>Meeting</th><th>Status</th></tr>
+	<tr><td><a href="https://wg21.link/P0487R0">P0487R0</a></td><td>LWG</td><td>Fixing operator&gt;&gt; (basic_istream&amp;, CharT*) (LWG 2499)</td><td>San Diego</td><td><i> </i></td></tr>
+	<tr><td><a href="https://wg21.link/P0602R3">P0602R3</a></td><td>LWG</td><td>variant and optional should propagate copy/move triviality</td><td>San Diego</td><td><i> </i></td></tr>
+	<tr><td><a href="https://wg21.link/P0655R0">P0655R0</a></td><td>LWG</td><td>visit&lt;R&gt;: Explicit Return Type for visit</td><td>San Diego</td><td><i> </i></td></tr>
+	<tr><td><a href="https://wg21.link/P0972R0">P0972R0</a></td><td>LWG</td><td>&lt;chrono&gt; zero(), min(), and max() should be noexcept</td><td>San Diego</td><td><i> </i></td></tr>
+	<tr><td><a href="https://wg21.link/P1004R0">P1004R0</a></td><td>LWG</td><td>Making std::vector constexpr</td><td>San Diego</td><td><i> </i></td></tr>
+	<tr><td><a href="https://wg21.link/P1006R0">P1006R0</a></td><td>LWG</td><td>Constexpr in std::pointer_traits</td><td>San Diego</td><td><i> </i></td></tr>
+	<tr><td><a href="https://wg21.link/P1032R0">P1032R0</a></td><td>LWG</td><td>Misc constexpr bits</td><td>San Diego</td><td><i> </i></td></tr>
+	<tr><td><a href="http://wiki.edg.com/pub/LWGBatavia2018/LibraryWorkingGroup/D1148R0a.pdf">D1148</a></td><td>LWG</td><td>Cleaning up Clause 20</td><td>San Diego</td><td><i> </i></td></tr>
+	<tr><td><a href="http://wiki.edg.com/pub/LWGBatavia2018/LibraryWorkingGroup/D1163R0V2.pdf">D1163</a></td><td>LWG</td><td>Explicitly Implicifying explicit Constructors</td><td>San Diego</td><td><i> </i></td></tr>
+	</table>
+
 
   <h3>Library Working group Issues Status</h3>
   <table id="issues" border="1">
 	<tr><th>Issue #</th><th>Issue Name</th><th>Meeting</th><th>Status</th></tr>
 
-	 <tr><td><a href="http://wg21.link/LWG2062">2062</a></td><td>Effect contradictions w/o no-throw guarantee of std::function swaps</td><td>Issaquah</td><td>Nothing to do.</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2166">2166</a></td><td>Heap property underspecified?</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2221">2221</a></td><td>No formatted output operator for nullptr</td><td>Issaquah</td><td>Patch ready</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2223">2223</a></td><td>shrink_to_fit effect on iterator validity</td><td>Issaquah</td><td>Nothing to do.</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2261">2261</a></td><td>Are containers required to use their 'pointer' type internally?</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2394">2394</a></td><td>locale::name specification unclear - what is implementation-defined?</td><td>Issaquah</td><td>Nothing to do.</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2460">2460</a></td><td>LWG issue 2408 and value categories</td><td>Issaquah</td><td>Nothing to do.</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2468">2468</a></td><td>Self-move-assignment of library types</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2475">2475</a></td><td>Allow overwriting of std::basic_string terminator with charT() to allow cleaner interoperation with legacy APIs</td><td>Issaquah</td><td>Nothing to do.</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2503">2503</a></td><td>multiline option should be added to syntax_option_type</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2510">2510</a></td><td>Tag types should not be DefaultConstructible</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2514">2514</a></td><td>Type traits must not be final</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2519">2519</a></td><td>Iterator operator-= has gratuitous undefined behaviour</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2531">2531</a></td><td>future::get should explicitly state that the shared state is released</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2534">2534</a></td><td>Constrain rvalue stream operators</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2536">2536</a></td><td>What should &lt;complex.h&gt; do?</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2540">2540</a></td><td>unordered_multimap::insert hint iterator</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2543">2543</a></td><td>LWG 2148 (hash support for enum types) seems under-specified</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2544">2544</a></td><td>istreambuf_iterator(basic_streambuf<charT, traits>* s) effects unclear when s is 0</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2556">2556</a></td><td>Wide contract for future::share()</td><td>Issaquah</td><td>Patch ready</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2562">2562</a></td><td>Consistent total ordering of pointers by comparison functors</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2567">2567</a></td><td>Specification of logical operator traits uses BaseCharacteristic, which is defined only for UnaryTypeTraits and BinaryTypeTraits</td><td>Issaquah</td><td>Nothing to do.</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2569">2569</a></td><td>conjunction and disjunction requirements are too strict</td><td>Issaquah</td><td>Nothing to do.</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2570">2570</a></td><td>[fund.ts.v2] conjunction and disjunction requirements are too strict</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2578">2578</a></td><td>Iterator requirements should reference iterator traits</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2584">2584</a></td><td><regex> ECMAScript IdentityEscape is ambiguous</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2589">2589</a></td><td>match_results can't satisfy the requirements of a container</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2591">2591</a></td><td>std::function's member template target() should not lead to undefined behaviour</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2598">2598</a></td><td>addressof works on temporaries</td><td>Issaquah</td><td>Patch ready</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2664">2664</a></td><td>operator/ (and other append) semantics not useful if argument has root</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2665">2665</a></td><td>remove_filename() post condition is incorrect</td><td>Issaquah</td><td>See Below</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2672">2672</a></td><td>Should is_empty use error_code in its specification?</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2678">2678</a></td><td>std::filesystem enum classes overspecified</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2679">2679</a></td><td>Inconsistent Use of Effects and Equivalent To</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2680">2680</a></td><td>Add "Equivalent to" to filesystem</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2681">2681</a></td><td>filesystem::copy() cannot copy symlinks</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2682">2682</a></td><td>filesystem::copy() won't create a symlink to a directory</td><td>Issaquah</td><td>Implemented in trunk</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2686">2686</a></td><td>Why is std::hash specialized for error_code, but not error_condition?</td><td>Issaquah</td><td>Patch ready</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2694">2694</a></td><td>Application of LWG 436 accidentally deleted definition of "facet"</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2696">2696</a></td><td>Interaction between make_shared and enable_shared_from_this is underspecified</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2699">2699</a></td><td>Missing restriction in [numeric.requirements]</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2712">2712</a></td><td>copy_file(from, to, ...) has a number of unspecified error conditions</td><td>Issaquah</td><td>Implemented in trunk</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2722">2722</a></td><td>equivalent incorrectly specifies throws clause</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2729">2729</a></td><td>Missing SFINAE on std::pair::operator=</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2732">2732</a></td><td>Questionable specification of path::operator/= and path::append</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2733">2733</a></td><td>[fund.ts.v2] gcd / lcm and bool</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2735">2735</a></td><td>std::abs(short), std::abs(signed char) and others should return int instead of double in order to be compatible with C++98 and C</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2736">2736</a></td><td>nullopt_t insufficiently constrained</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2738">2738</a></td><td>is_constructible with void types</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2739">2739</a></td><td>Issue with time_point non-member subtraction with an unsigned duration</td><td>Issaquah</td><td>Patch Ready</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2740">2740</a></td><td>constexpr optional<T>::operator-></td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2742">2742</a></td><td>Inconsistent string interface taking string_view</td><td>Issaquah</td><td>Patch Ready</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2744">2744</a></td><td>any's in_place constructors</td><td>Issaquah</td><td>Implemented in trunk</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2745">2745</a></td><td>[fund.ts.v2] Implementability of LWG 2451</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2747">2747</a></td><td>Possibly redundant std::move in [alg.foreach]</td><td>Issaquah</td><td>Patch ready</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2748">2748</a></td><td>swappable traits for optionals</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2749">2749</a></td><td>swappable traits for variants</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2750">2750</a></td><td>[fund.ts.v2] LWG 2451 conversion constructor constraint</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2752">2752</a></td><td>"Throws:" clauses of async and packaged_task are unimplementable</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2753">2753</a></td><td>Optional's constructors and assignments need constraints</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2754">2754</a></td><td>The in_place constructors and emplace functions added by P0032R3 don't require CopyConstructible</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2755">2755</a></td><td>§[string.view.io] uses non-existent basic_string_view::to_string function</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2756">2756</a></td><td>C++ WP optional<T> should 'forward' T's implicit conversions</td><td>Issaquah</td><td>Implemented in trunk</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2758">2758</a></td><td>std::string{}.assign("ABCDE", 0, 1) is ambiguous</td><td>We already do this</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2759">2759</a></td><td>gcd / lcm and bool for the WP</td><td>Issaquah</td><td>Patch ready</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2760">2760</a></td><td>non-const basic_string::data should not invalidate iterators</td><td>Issaquah</td><td>Nothing to do</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2765">2765</a></td><td>Did LWG 1123 go too far?</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2767">2767</a></td><td>not_fn call_wrapper can form invalid types</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2768">2768</a></td><td>any_cast and move semantics</td><td>Issaquah</td><td>Resolved by LWG 2769</td></tr>
-     <tr><td><a href="http://wg21.link/LWG2769">2769</a></td><td>Redundant const in the return type of any_cast(const any&)</td><td>Issaquah</td><td>Implemented in trunk</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2771">2771</a></td><td>Broken Effects of some basic_string::compare functions in terms of basic_string_view</td><td>Issaquah</td><td>We already do this</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2773">2773</a></td><td>Making std::ignore constexpr</td><td>Issaquah</td><td></td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2777">2777</a></td><td>basic_string_view::copy should use char_traits::copy</td><td>Issaquah</td><td>Patch Ready</td></tr>
-	 <tr><td><a href="http://wg21.link/LWG2778">2778</a></td><td>basic_string_view is missing constexpr</td><td>Issaquah</td><td></td></tr>
-  </table>
+<tr><td><a href="https://wg21.link/LWG2183">2183</a></td><td>Muddled allocator requirements for <tt>match_results</tt> constructors</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG2184">2184</a></td><td>Muddled allocator requirements for <tt>match_results</tt> assignments</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG2412">2412</a></td><td><tt>promise::set_value()</tt> and <tt>promise::get_future()</tt> should not race</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG2682">2682</a></td><td><code>filesystem::copy()</code> won't create a symlink to a directory</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG2697">2697</a></td><td>[concurr.ts] Behavior of <tt>future/shared_future</tt> unwrapping constructor when given an invalid <tt>future</tt></td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG2936">2936</a></td><td>Path comparison is defined in terms of the generic format</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG2943">2943</a></td><td>Problematic specification of the wide version of <tt>basic_filebuf::open</tt></td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG2960">2960</a></td><td>[fund.ts.v3] <tt>nonesuch</tt> is insufficiently useless</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG2995">2995</a></td><td><tt>basic_stringbuf</tt> default constructor forbids it from using SSO capacity</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG2996">2996</a></td><td>Missing rvalue overloads for <tt>shared_ptr</tt> operations</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3008">3008</a></td><td><tt>make_shared</tt> (sub)object destruction semantics are not specified</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3025">3025</a></td><td>Map-like container deduction guides should use <tt>pair&lt;Key, T&gt;</tt>, not <tt>pair&lt;const Key, T&gt;</tt></td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3031">3031</a></td><td>Algorithms and predicates with non-const reference arguments</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3037">3037</a></td><td><tt>polymorphic_allocator</tt> and incomplete types</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3038">3038</a></td><td><tt>polymorphic_allocator::allocate</tt> should not allow integer overflow to create vulnerabilities</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3054">3054</a></td><td><tt>uninitialized_copy</tt> appears to not be able to meet its exception-safety guarantee</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3065">3065</a></td><td>LWG 2989 missed that all <tt>path</tt>'s other operators should be hidden friends as well</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3096">3096</a></td><td><tt>path::lexically_relative</tt> is confused by trailing slashes</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3116">3116</a></td><td><tt><i>OUTERMOST_ALLOC_TRAITS</i></tt> needs <tt>remove_reference_t</tt></td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3122">3122</a></td><td><tt>__cpp_lib_chrono_udls</tt> was accidentally dropped</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3127">3127</a></td><td><tt>basic_osyncstream::rdbuf</tt> needs a <tt>const_cast</tt></td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3128">3128</a></td><td><tt>strstream::rdbuf</tt> needs a <tt>const_cast</tt></td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3129">3129</a></td><td><tt>regex_token_iterator</tt> constructor uses wrong pointer arithmetic</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3130">3130</a></td><td>&sect;[input.output] needs many <tt>addressof</tt></td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3131">3131</a></td><td><tt>addressof</tt> all the things</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3132">3132</a></td><td>Library needs to ban macros named <tt>expects</tt> or <tt>ensures</tt></td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3134">3134</a></td><td>[fund.ts.v3] LFTSv3 contains extraneous [meta] variable templates that should have been deleted by P09961</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3137">3137</a></td><td>Header for <tt>__cpp_lib_to_chars</tt></td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3145">3145</a></td><td><tt>file_clock</tt> breaks ABI for C++17 implementations</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3147">3147</a></td><td>Definitions of "likely" and "unlikely" are likely to cause problems</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3148">3148</a></td><td><tt>&lt;concepts&gt;</tt> should be freestanding</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3153">3153</a></td><td><tt>Common</tt> and <tt>common_type</tt> have too little in common</td><td>San Diego</td><td></td></tr>
+<tr><td><a href="https://wg21.link/LWG3154">3154</a></td><td><tt>Common</tt> and <tt>CommonReference</tt> have a common defect</td><td>San Diego</td><td></td></tr>
+
+</table>
+
+<h3>Issues to "Review"</h3>
+<table border="1">
+<tr><th>Issue #</th><th>Issue Name</th><th>Meeting</th><th>Status</th></tr>
+</table>
+
 
 <h3>Comments about the issues</h3>
 <ul>
-<li>2062 - We already do this; added some tests to make sure we keep doing so.</li>
-<li>2166 - I <b>suspect</b> that this is just better specification of the existing structure. Probably need more tests for this.</li>
-<li>2221 - Patch and tests ready</li>
-<li>2223 - This is just wording cleanup. </li>
-<li>2261 - <b>Survey our containers to make sure we do this.</b> Ideally, this will result in no code changes.</li>
-<li>2394 - This is just wording cleanup.</li>
-<li>2460 - This is just wording cleanup.</li>
-<li>2468 - <i>I think we already do this; but will need to survey the libray to be sure</i></li>
-<li>2475 - Nothing to do here. </li>
-<li>2503 - </li>
-<li>2510 - <b>Need to write tests for all the tag types</b></li>
-<li>2514 - Nothing to do; We don't mark any of the type traits as final. </li>
-<li>2519 - This is just wording cleanup. </li>
-<li>2531 - This <b>should be</b> just wording cleanup. </li>
-<li>2534 - </li>
-<li>2536 - We already do this. </li>
-<li>2540 - We already do this, and have tests for it.</li>
-<li>2543 - </li>
-<li>2544 - We already do this; I've added tests to make sure we keep doing so</li>
-<li>2556 - Patch and tests ready</li>
-<li>2562 - I <b>suspect</b> that this is just better specification of the existing structure. Probably need more tests for this.</li>
-<li>2567 - This is just wording cleanup.</li>
-<li>2569 - This is just wording cleanup.</li>
-<li>2570 - Same as 2569, but applied to LFTS</li>
-<li>2578 - This is just wording cleanup. </li>
-<li>2584 - </li>
-<li>2589 - This is just wording cleanup. </li>
-<li>2591 - I <b>suspect</b> that this is just better specification of the existing structure. Probably need more tests for this.</li>
-<li>2598 - Patch and tests ready</li>
-<li>2664 - No change needed. _LIBCPP_DEBUG mode tests the new requirements.</li>
-<li>2665 - PR is incorrect as-is. We implement a modified version</li>
-<li>2672 - Patch and tests in tree. </li>
-<li>2678 - No change needed. Mostly wording cleanup. </li>
-<li>2679 - This is just wording cleanup. </li>
-<li>2680 - This is just wording cleanup. </li>
-<li>2681 - LGTM </li>
-<li>2682 - Current PR is incorrect. A modified version has been implemented</li>
-<li>2686 - Patch and tests ready</li>
-<li>2694 - Restoring inadvertently deleted text. No code changes needed.</li>
-<li>2696 - I <b>suspect</b> that this is just better specification of the existing structure. Probably need more tests for this.</li>
-<li>2699 - I don't think this requires any code changes; look more closely.</li>
-<li>2712 - LGTM. </li>
-<li>2722 - LGTM </li>
-<li>2729 - </li>
-<li>2732 - Our implementation is already equivalent. </li>
-<li>2733 - LFTS; same as 2759</li>
-<li>2735 - I <b>suspect</b> that this is just better specification of the existing structure. Probably need more tests for this.</li>
-<li>2736 - </li>
-<li>2738 - We already do this; I added tests for cv-void</li>
-<li>2739 - Patch and tests ready</li>
-<li>2740 - <i>std::optional</i>: The resolution LGTM. </li>
-<li>2742 - Patch and tests ready</li>
-<li>2744 - <i>std::any</i>: We already do this. We also check for a decayed in_place_type_t. </li>
-<li>2745 - <i>std::optional</i> for LFTS -- should be considered for C++17</li>
-<li>2747 - Patch ready, but I can't think of any way to test it.</li>
-<li>2748 - <i>std::optional</i>: LGTM. </li>
-<li>2749 - <i>std::variant</i></li>
-<li>2750 - <i>std::optional</i> for LFTS -- should be considered for C++17</li>
-<li>2752 - </li>
-<li>2753 - <i>std::optional</i>: LGTM. </li>
-<li>2754 - <i>std::any</i>: LGTM. </li>
-<li>2755 - Both string and string_view call a common routine for output; so no code changes needed.</li>
-<li>2756 - <i>std::optional</i>: Very large change. It is fully implemented and tested. </li>
-<li>2758 - We already do this. </li>
-<li>2759 - Patch and tests ready</li>
-<li>2760 - This is just wording cleanup; no code or test changes needed.</li>
-<li>2765 - is this just wording cleanup????? I don't think this actually requires code changes. </li>
-<li>2767 - The test case on the issue is incorrect. See not_fn.pass.cpp for the correct test case. </li>
-<li>2768 - <i>std::any</i>: There is no PR for this issue. It is resolved by LWG 2769. </li>
-<li>2769 - <i>std::any</i>: The PR looks good except that
-	<code>remove_reference_t&lt;remove_cv_t&lt;T&gt;&gt;</code> should read
-	<code>remove_cv_t&lt;remove_reference_t&lt;T&gt;&gt;</code>. </li>
-<li>2771 - We already do this.</li>
-<li>2773 - </li>
-<li>2777 - Patch ready; existing tests should suffice</li>
-<li>2778 - This is mostly tests.</li>
+<li>2183 - </li>
+<li>2184 - </li>
+<li>2412 - </li>
+<li>2682 - </li>
+<li>2697 - </li>
+<li>2936 - </li>
+<li>2943 - </li>
+<li>2960 - </li>
+<li>2995 - </li>
+<li>2996 - </li>
+<li>3008 - </li>
+<li>3025 - </li>
+<li>3031 - Marshall says: I don't think we have to do anything for this issue. Maybe some tests; maybe a static_assert.</li>
+<li>3037 - Marshall says: We don't have std::polymorphic_allocator yet.</li>
+<li>3038 - Marshall says: We don't have std::polymorphic_allocator yet.</li>
+<li>3054 - Marshall says: We already do this; may need to update some tests.</li>
+<li>3065 - </li>
+<li>3096 - Eric? </li>
+<li>3116 - </li>
+<li>3122 - </li>
+<li>3127 - </li>
+<li>3128 - </li>
+<li>3129 - Marshall says: This is an easy change; I think this is more wording cleanup than anything. I will prepare a patch</li>
+<li>3130 - </li>
+<li>3131 - </li>
+<li>3132 - Marshall says: I don't think we have to do anything for this issue</li>
+<li>3134 - Marshall says: I don't think we have to do anything for this issue</li>
+<li>3137 - Marshall says: This is an easy change; I will prepare a patch</li>
+<li>3145 - Eric? </li>
+<li>3147 - Marshall - I don't think we have to do anything for this issue</li>
+<li>3148 - </li>
+<li>3153 - </li>
+<li>3154 - </li>
 </ul>
 
-<p>Last Updated: 10-Oct-2016</p>
+<p>Last Updated: 6-Oct-2018</p>
 </div>
 </body>
 </html>

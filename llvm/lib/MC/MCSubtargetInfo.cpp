@@ -1,4 +1,4 @@
-//===-- MCSubtargetInfo.cpp - Subtarget Information -----------------------===//
+//===- MCSubtargetInfo.cpp - Subtarget Information ------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,12 +8,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCSubtargetInfo.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Triple.h"
 #include "llvm/MC/MCInstrItineraries.h"
+#include "llvm/MC/MCSchedule.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
+#include <cassert>
+#include <cstring>
 
 using namespace llvm;
 
@@ -48,8 +51,6 @@ MCSubtargetInfo::MCSubtargetInfo(
   InitMCProcessorInfo(CPU, FS);
 }
 
-/// ToggleFeature - Toggle a feature and returns the re-computed feature
-/// bits. This version does not change the implied bits.
 FeatureBitset MCSubtargetInfo::ToggleFeature(uint64_t FB) {
   FeatureBits.flip(FB);
   return FeatureBits;
@@ -60,8 +61,6 @@ FeatureBitset MCSubtargetInfo::ToggleFeature(const FeatureBitset &FB) {
   return FeatureBits;
 }
 
-/// ToggleFeature - Toggle a feature and returns the re-computed feature
-/// bits. This version will also change all implied bits.
 FeatureBitset MCSubtargetInfo::ToggleFeature(StringRef FS) {
   SubtargetFeatures::ToggleFeature(FeatureBits, FS, ProcFeatures);
   return FeatureBits;
@@ -70,6 +69,18 @@ FeatureBitset MCSubtargetInfo::ToggleFeature(StringRef FS) {
 FeatureBitset MCSubtargetInfo::ApplyFeatureFlag(StringRef FS) {
   SubtargetFeatures::ApplyFeatureFlag(FeatureBits, FS, ProcFeatures);
   return FeatureBits;
+}
+
+bool MCSubtargetInfo::checkFeatures(StringRef FS) const {
+  SubtargetFeatures T(FS);
+  FeatureBitset Set, All;
+  for (std::string F : T.getFeatures()) {
+    SubtargetFeatures::ApplyFeatureFlag(Set, F, ProcFeatures);
+    if (F[0] == '-')
+      F[0] = '+';
+    SubtargetFeatures::ApplyFeatureFlag(All, F, ProcFeatures);
+  }
+  return (FeatureBits & All) == Set;
 }
 
 const MCSchedModel &MCSubtargetInfo::getSchedModelForCPU(StringRef CPU) const {
@@ -99,11 +110,10 @@ const MCSchedModel &MCSubtargetInfo::getSchedModelForCPU(StringRef CPU) const {
 
 InstrItineraryData
 MCSubtargetInfo::getInstrItineraryForCPU(StringRef CPU) const {
-  const MCSchedModel SchedModel = getSchedModelForCPU(CPU);
+  const MCSchedModel &SchedModel = getSchedModelForCPU(CPU);
   return InstrItineraryData(SchedModel, Stages, OperandCycles, ForwardingPaths);
 }
 
-/// Initialize an InstrItineraryData instance.
 void MCSubtargetInfo::initInstrItins(InstrItineraryData &InstrItins) const {
   InstrItins = InstrItineraryData(getSchedModel(), Stages, OperandCycles,
                                   ForwardingPaths);

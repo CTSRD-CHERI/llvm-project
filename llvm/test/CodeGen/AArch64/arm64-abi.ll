@@ -1,5 +1,5 @@
 ; RUN: llc     -mtriple=arm64-apple-darwin -mcpu=cyclone -enable-misched=false < %s | FileCheck %s
-; RUN: llc -O0 -mtriple=arm64-apple-darwin                                     < %s | FileCheck --check-prefix=FAST %s
+; RUN: llc -O0 -fast-isel -mtriple=arm64-apple-darwin                          < %s | FileCheck --check-prefix=FAST %s
 
 ; rdar://9932559
 define i64 @i8i16callee(i64 %a1, i64 %a2, i64 %a3, i8 signext %a4, i16 signext %a5, i64 %a6, i64 %a7, i64 %a8, i8 signext %b1, i16 signext %b2, i8 signext %b3, i8 signext %b4) nounwind readnone noinline {
@@ -43,9 +43,7 @@ entry:
 ; CHECK-LABEL: i8i16caller
 ; The 8th, 9th, 10th and 11th arguments are passed at sp, sp+2, sp+4, sp+5.
 ; They are i8, i16, i8 and i8.
-; CHECK-DAG: strb {{w[0-9]+}}, [sp, #5]
-; CHECK-DAG: strb {{w[0-9]+}}, [sp, #4]
-; CHECK-DAG: strh {{w[0-9]+}}, [sp, #2]
+; CHECK-DAG: stur {{w[0-9]+}}, [sp, #2]
 ; CHECK-DAG: strb {{w[0-9]+}}, [sp]
 ; CHECK: bl
 ; FAST-LABEL: i8i16caller
@@ -205,10 +203,7 @@ declare i32 @args_i32(i32, i32, i32, i32, i32, i32, i32, i32, i16 signext, i32,
 define i32 @test8(i32 %argc, i8** nocapture %argv) nounwind {
 entry:
 ; CHECK-LABEL: test8
-; CHECK: strb {{w[0-9]+}}, [sp, #3]
-; CHECK: strb wzr, [sp, #2]
-; CHECK: strb {{w[0-9]+}}, [sp, #1]
-; CHECK: strb wzr, [sp]
+; CHECK: str w8, [sp]
 ; CHECK: bl
 ; FAST-LABEL: test8
 ; FAST: strb {{w[0-9]+}}, [sp]

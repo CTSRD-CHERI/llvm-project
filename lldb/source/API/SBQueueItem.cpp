@@ -13,10 +13,10 @@
 #include "lldb/API/SBQueueItem.h"
 #include "lldb/API/SBThread.h"
 #include "lldb/Core/Address.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/QueueItem.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/Log.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -112,8 +112,7 @@ SBThread SBQueueItem::GetExtendedBacktraceThread(const char *type) {
       thread_sp = m_queue_item_sp->GetExtendedBacktraceThread(type_const);
       if (thread_sp) {
         // Save this in the Process' ExtendedThreadList so a strong pointer
-        // retains the
-        // object
+        // retains the object
         process_sp->GetExtendedThreadList().AddThread(thread_sp);
         result.SetThread(thread_sp);
         if (log) {

@@ -95,9 +95,10 @@ of the buffer."
 (defun clang-format--replace (offset length &optional text)
   "Replace the region defined by OFFSET and LENGTH with TEXT.
 OFFSET and LENGTH are measured in bytes, not characters.  OFFSET
-is a zero-based file offset."
-  (let ((start (clang-format--filepos-to-bufferpos offset 'exact))
-        (end (clang-format--filepos-to-bufferpos (+ offset length) 'exact)))
+is a zero-based file offset, assuming ‘utf-8-unix’ coding."
+  (let ((start (clang-format--filepos-to-bufferpos offset 'exact 'utf-8-unix))
+        (end (clang-format--filepos-to-bufferpos (+ offset length) 'exact
+                                                 'utf-8-unix)))
     (goto-char start)
     (delete-region start end)
     (when text
@@ -118,10 +119,12 @@ is a zero-based file offset."
       (byte-to-position (1+ byte)))))
 
 ;;;###autoload
-(defun clang-format-region (start end &optional style)
+(defun clang-format-region (start end &optional style assume-file-name)
   "Use clang-format to format the code between START and END according to STYLE.
-If called interactively uses the region or the current statement if there
-is no active region.  If no style is given uses `clang-format-style'."
+If called interactively uses the region or the current statement if there is no
+no active region. If no STYLE is given uses `clang-format-style'. Use
+ASSUME-FILE-NAME to locate a style config file, if no ASSUME-FILE-NAME is given
+uses the function `buffer-file-name'."
   (interactive
    (if (use-region-p)
        (list (region-beginning) (region-end))
@@ -130,22 +133,37 @@ is no active region.  If no style is given uses `clang-format-style'."
   (unless style
     (setq style clang-format-style))
 
-  (let ((file-start (clang-format--bufferpos-to-filepos start 'approximate))
-        (file-end (clang-format--bufferpos-to-filepos end 'approximate))
-        (cursor (clang-format--bufferpos-to-filepos (point) 'exact))
-        (temp-buffer (generate-new-buffer " *clang-format-temp*"))
-        (temp-file (make-temp-file "clang-format")))
-    (unwind-protect
-        (let ((status (call-process-region
-                       nil nil clang-format-executable
-                       nil `(,temp-buffer ,temp-file) nil
+  (unless assume-file-name
+    (setq assume-file-name buffer-file-name))
 
-                       "-output-replacements-xml"
-                       "-assume-filename" (or (buffer-file-name) "")
-                       "-style" style
-                       "-offset" (number-to-string file-start)
-                       "-length" (number-to-string (- file-end file-start))
-                       "-cursor" (number-to-string cursor)))
+  (let ((file-start (clang-format--bufferpos-to-filepos start 'approximate
+                                                        'utf-8-unix))
+        (file-end (clang-format--bufferpos-to-filepos end 'approximate
+                                                      'utf-8-unix))
+        (cursor (clang-format--bufferpos-to-filepos (point) 'exact 'utf-8-unix))
+        (temp-buffer (generate-new-buffer " *clang-format-temp*"))
+        (temp-file (make-temp-file "clang-format"))
+        ;; Output is XML, which is always UTF-8.  Input encoding should match
+        ;; the encoding used to convert between buffer and file positions,
+        ;; otherwise the offsets calculated above are off.  For simplicity, we
+        ;; always use ‘utf-8-unix’ and ignore the buffer coding system.
+        (default-process-coding-system '(utf-8-unix . utf-8-unix)))
+    (unwind-protect
+        (let ((status (apply #'call-process-region
+                             nil nil clang-format-executable
+                             nil `(,temp-buffer ,temp-file) nil
+                             `("-output-replacements-xml"
+                               ;; Guard against a nil assume-file-name.
+                               ;; If the clang-format option -assume-filename
+                               ;; is given a blank string it will crash as per
+                               ;; the following bug report
+                               ;; https://bugs.llvm.org/show_bug.cgi?id=34667
+                               ,@(and assume-file-name
+                                      (list "-assume-filename" assume-file-name))
+                               "-style" ,style
+                               "-offset" ,(number-to-string file-start)
+                               "-length" ,(number-to-string (- file-end file-start))
+                               "-cursor" ,(number-to-string cursor))))
               (stderr (with-temp-buffer
                         (unless (zerop (cadr (insert-file-contents temp-file)))
                           (insert ": "))
@@ -164,7 +182,8 @@ is no active region.  If no style is given uses `clang-format-style'."
               (dolist (rpl replacements)
                 (apply #'clang-format--replace rpl)))
             (when cursor
-              (goto-char (clang-format--filepos-to-bufferpos cursor 'exact)))
+              (goto-char (clang-format--filepos-to-bufferpos cursor 'exact
+                                                             'utf-8-unix)))
             (if incomplete-format
                 (message "(clang-format: incomplete (syntax errors)%s)" stderr)
               (message "(clang-format: success%s)" stderr))))
@@ -172,10 +191,13 @@ is no active region.  If no style is given uses `clang-format-style'."
       (when (buffer-name temp-buffer) (kill-buffer temp-buffer)))))
 
 ;;;###autoload
-(defun clang-format-buffer (&optional style)
-  "Use clang-format to format the current buffer according to STYLE."
+(defun clang-format-buffer (&optional style assume-file-name)
+  "Use clang-format to format the current buffer according to STYLE.
+If no STYLE is given uses `clang-format-style'. Use ASSUME-FILE-NAME
+to locate a style config file. If no ASSUME-FILE-NAME is given uses
+the function `buffer-file-name'."
   (interactive)
-  (clang-format-region (point-min) (point-max) style))
+  (clang-format-region (point-min) (point-max) style assume-file-name))
 
 ;;;###autoload
 (defalias 'clang-format 'clang-format-region)

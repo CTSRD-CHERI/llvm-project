@@ -7,18 +7,17 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/IR/Verifier.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/Verifier.h"
 #include "gtest/gtest.h"
 
 namespace llvm {
@@ -52,9 +51,9 @@ TEST(VerifierTest, InvalidRetAttribute) {
   Module M("M", C);
   FunctionType *FTy = FunctionType::get(Type::getInt32Ty(C), /*isVarArg=*/false);
   Function *F = cast<Function>(M.getOrInsertFunction("foo", FTy));
-  AttributeSet AS = F->getAttributes();
-  F->setAttributes(AS.addAttribute(C, AttributeSet::ReturnIndex,
-                                   Attribute::UWTable));
+  AttributeList AS = F->getAttributes();
+  F->setAttributes(
+      AS.addAttribute(C, AttributeList::ReturnIndex, Attribute::UWTable));
 
   std::string Error;
   raw_string_ostream ErrorOS(Error);
@@ -149,13 +148,13 @@ TEST(VerifierTest, InvalidFunctionLinkage) {
                                           "have external or weak linkage!"));
 }
 
-TEST(VerifierTest, StripInvalidDebugInfo) {
+TEST(VerifierTest, DetectInvalidDebugInfo) {
   {
     LLVMContext C;
     Module M("M", C);
     DIBuilder DIB(M);
-    DIB.createCompileUnit(dwarf::DW_LANG_C89, "broken.c", "/", "unittest",
-                          false, "", 0);
+    DIB.createCompileUnit(dwarf::DW_LANG_C89, DIB.createFile("broken.c", "/"),
+                          "unittest", false, "", 0);
     DIB.finalize();
     EXPECT_FALSE(verifyModule(M));
 
@@ -164,19 +163,13 @@ TEST(VerifierTest, StripInvalidDebugInfo) {
     NamedMDNode *NMD = M.getOrInsertNamedMetadata("llvm.dbg.cu");
     NMD->addOperand(File);
     EXPECT_TRUE(verifyModule(M));
-
-    ModulePassManager MPM(true);
-    MPM.addPass(VerifierPass(false));
-    ModuleAnalysisManager MAM(true);
-    MAM.registerPass([&] { return VerifierAnalysis(); });
-    MPM.run(M, MAM);
-    EXPECT_FALSE(verifyModule(M));
   }
   {
     LLVMContext C;
     Module M("M", C);
     DIBuilder DIB(M);
-    auto *CU = DIB.createCompileUnit(dwarf::DW_LANG_C89, "broken.c", "/",
+    auto *CU = DIB.createCompileUnit(dwarf::DW_LANG_C89,
+                                     DIB.createFile("broken.c", "/"),
                                      "unittest", false, "", 0);
     new GlobalVariable(M, Type::getInt8Ty(C), false,
                        GlobalValue::ExternalLinkage, nullptr, "g");
@@ -194,35 +187,7 @@ TEST(VerifierTest, StripInvalidDebugInfo) {
     // Now break it by not listing the CU at all.
     M.eraseNamedMetadata(M.getOrInsertNamedMetadata("llvm.dbg.cu"));
     EXPECT_TRUE(verifyModule(M));
-
-    ModulePassManager MPM(true);
-    MPM.addPass(VerifierPass(false));
-    ModuleAnalysisManager MAM(true);
-    MAM.registerPass([&] { return VerifierAnalysis(); });
-    MPM.run(M, MAM);
-    EXPECT_FALSE(verifyModule(M));
   }
-}
-
-TEST(VerifierTest, StripInvalidDebugInfoLegacy) {
-  LLVMContext C;
-  Module M("M", C);
-  DIBuilder DIB(M);
-  DIB.createCompileUnit(dwarf::DW_LANG_C89, "broken.c", "/",
-                        "unittest", false, "", 0);
-  DIB.finalize();
-  EXPECT_FALSE(verifyModule(M));
-
-  // Now break it.
-  auto *File = DIB.createFile("not-a-CU.f", ".");
-  NamedMDNode *NMD = M.getOrInsertNamedMetadata("llvm.dbg.cu");
-  NMD->addOperand(File);
-  EXPECT_TRUE(verifyModule(M));
-
-  legacy::PassManager Passes;
-  Passes.add(createVerifierPass(false));
-  Passes.run(M);
-  EXPECT_FALSE(verifyModule(M));
 }
 
 } // end anonymous namespace

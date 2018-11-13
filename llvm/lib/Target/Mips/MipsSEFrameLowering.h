@@ -1,4 +1,4 @@
-//===-- MipsSEFrameLowering.h - Mips32/64 frame lowering --------*- C++ -*-===//
+//===- MipsSEFrameLowering.h - Mips32/64 frame lowering ---------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,17 +6,18 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-//
-//
-//
-//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_LIB_TARGET_MIPS_MIPSSEFRAMELOWERING_H
 #define LLVM_LIB_TARGET_MIPS_MIPSSEFRAMELOWERING_H
 
 #include "MipsFrameLowering.h"
+#include <vector>
 
 namespace llvm {
+
+class MachineBasicBlock;
+class MachineFunction;
+class MipsSubtarget;
 
 class MipsSEFrameLowering : public MipsFrameLowering {
 public:
@@ -39,7 +40,6 @@ public:
 
   void determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,
                             RegScavenger *RS) const override;
-  unsigned ehDataReg(unsigned I) const;
 
 private:
   void emitInterruptEpilogueStub(MachineFunction &MF,
@@ -47,6 +47,7 @@ private:
   void emitInterruptPrologueStub(MachineFunction &MF,
                                  MachineBasicBlock &MBB) const;
 };
-} // End llvm namespace
 
-#endif
+} // end namespace llvm
+
+#endif // LLVM_LIB_TARGET_MIPS_MIPSSEFRAMELOWERING_H

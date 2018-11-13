@@ -24,40 +24,6 @@ import unittest2
 import lldbsuite
 
 
-def __setCrashInfoHook_Mac(text):
-    from . import crashinfo
-    crashinfo.setCrashReporterDescription(text)
-
-
-def setupCrashInfoHook():
-    if platform.system() == "Darwin":
-        from . import lock
-        test_dir = os.environ['LLDB_TEST']
-        if not test_dir or not os.path.exists(test_dir):
-            return
-        dylib_lock = os.path.join(test_dir, "crashinfo.lock")
-        dylib_src = os.path.join(test_dir, "crashinfo.c")
-        dylib_dst = os.path.join(test_dir, "crashinfo.so")
-        try:
-            compile_lock = lock.Lock(dylib_lock)
-            compile_lock.acquire()
-            if not os.path.isfile(dylib_dst) or os.path.getmtime(
-                    dylib_dst) < os.path.getmtime(dylib_src):
-                # we need to compile
-                cmd = "SDKROOT= xcrun clang %s -o %s -framework Python -Xlinker -dylib -iframework /System/Library/Frameworks/ -Xlinker -F /System/Library/Frameworks/" % (
-                    dylib_src, dylib_dst)
-                if subprocess.call(
-                        cmd, shell=True) != 0 or not os.path.isfile(dylib_dst):
-                    raise Exception('command failed: "{}"'.format(cmd))
-        finally:
-            compile_lock.release()
-            del compile_lock
-
-        setCrashInfoHook = __setCrashInfoHook_Mac
-
-    else:
-        pass
-
 # The test suite.
 suite = unittest2.TestSuite()
 
@@ -66,7 +32,7 @@ categoriesList = None
 # set to true if we are going to use categories for cherry-picking test cases
 useCategories = False
 # Categories we want to skip
-skipCategories = []
+skipCategories = ["darwin-log"]
 # use this to track per-category failures
 failuresPerCategory = {}
 
@@ -76,11 +42,12 @@ lldbFrameworkPath = None
 # Test suite repeat count.  Can be overwritten with '-# count'.
 count = 1
 
-# The 'archs' and 'compilers' can be specified via command line.  The corresponding
-# options can be specified more than once. For example, "-A x86_64 -A i386"
-# => archs=['x86_64', 'i386'] and "-C gcc -C clang" => compilers=['gcc', 'clang'].
-archs = None        # Must be initialized after option parsing
-compilers = None    # Must be initialized after option parsing
+# The 'arch' and 'compiler' can be specified via command line.
+arch = None        # Must be initialized after option parsing
+compiler = None    # Must be initialized after option parsing
+
+# Path to the FileCheck testing tool. Not optional.
+filecheck = None
 
 # The arch might dictate some specific CFLAGS to be passed to the toolchain to build
 # the inferior programs.  The global variable cflags_extras provides a hook to do
@@ -143,9 +110,16 @@ lldb_platform_name = None
 lldb_platform_url = None
 lldb_platform_working_dir = None
 
+# The base directory in which the tests are being built.
+test_build_dir = None
+
+# The only directory to scan for tests. If multiple test directories are
+# specified, and an exclusive test subdirectory is specified, the latter option
+# takes precedence.
+exclusive_test_subdir = None
+
 # Parallel execution settings
 is_inferior_test_runner = False
-multiprocess_test_subdir = None
 num_threads = None
 no_multiprocess_test_runner = False
 test_runner_name = None
@@ -166,10 +140,6 @@ rerun_max_file_threhold = 0
 # same base name.
 all_tests = set()
 
-# safe default
-setCrashInfoHook = lambda x: None
-
-
 def shouldSkipBecauseOfCategories(test_categories):
     if useCategories:
         if len(test_categories) == 0 or len(
@@ -181,3 +151,42 @@ def shouldSkipBecauseOfCategories(test_categories):
             return True
 
     return False
+
+
+def get_absolute_path_to_exclusive_test_subdir():
+    """
+    If an exclusive test subdirectory is specified, return its absolute path.
+    Otherwise return None.
+    """
+    test_directory = os.path.dirname(os.path.realpath(__file__))
+
+    if not exclusive_test_subdir:
+        return
+
+    if len(exclusive_test_subdir) > 0:
+        test_subdir = os.path.join(test_directory, exclusive_test_subdir)
+        if os.path.isdir(test_subdir):
+            return test_subdir
+
+        print('specified test subdirectory {} is not a valid directory\n'
+                .format(test_subdir))
+
+
+def get_absolute_path_to_root_test_dir():
+    """
+    If an exclusive test subdirectory is specified, return its absolute path.
+    Otherwise, return the absolute path of the root test directory.
+    """
+    test_subdir = get_absolute_path_to_exclusive_test_subdir()
+    if test_subdir:
+        return test_subdir
+
+    return os.path.dirname(os.path.realpath(__file__))
+
+
+def get_filecheck_path():
+    """
+    Get the path to the FileCheck testing tool.
+    """
+    assert os.path.lexists(filecheck)
+    return filecheck

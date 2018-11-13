@@ -7,6 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+// 'do_bytes' throws a std::range_error unexpectedly
+// XFAIL: LIBCXX-WINDOWS-FIXME
+
 // UNSUPPORTED: c++98, c++03
 
 // <locale>
@@ -27,9 +30,9 @@ int main()
     // interesting state.
     Myconv myconv;
     myconv.from_bytes("\xF1\x80\x80\x83");
-    const int old_converted = myconv.converted();
+    const auto old_converted = myconv.converted();
     assert(myconv.converted() == 4);
     // move construct a new converter and make sure the state is the same.
     Myconv myconv2(std::move(myconv));
-    assert(myconv2.converted() == 4);
+    assert(myconv2.converted() == old_converted);
 }

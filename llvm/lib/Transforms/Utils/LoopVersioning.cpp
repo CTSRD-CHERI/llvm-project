@@ -36,7 +36,7 @@ LoopVersioning::LoopVersioning(const LoopAccessInfo &LAI, Loop *L, LoopInfo *LI,
     : VersionedLoop(L), NonVersionedLoop(nullptr), LAI(LAI), LI(LI), DT(DT),
       SE(SE) {
   assert(L->getExitBlock() && "No single exit block");
-  assert(L->getLoopPreheader() && "No preheader");
+  assert(L->isLoopSimplifyForm() && "Loop is not in loop-simplify form");
   if (UseLAIChecks) {
     setAliasChecks(LAI.getRuntimePointerChecking()->getChecks());
     setSCEVChecks(LAI.getPSE().getUnionPredicate());
@@ -140,9 +140,12 @@ void LoopVersioning::addPHINodes(
     if (!PN) {
       PN = PHINode::Create(Inst->getType(), 2, Inst->getName() + ".lver",
                            &PHIBlock->front());
-      for (auto *User : Inst->users())
-        if (!VersionedLoop->contains(cast<Instruction>(User)->getParent()))
-          User->replaceUsesOfWith(Inst, PN);
+      SmallVector<User*, 8> UsersToUpdate;
+      for (User *U : Inst->users())
+        if (!VersionedLoop->contains(cast<Instruction>(U)->getParent()))
+          UsersToUpdate.push_back(U);
+      for (User *U : UsersToUpdate)
+        U->replaceUsesOfWith(Inst, PN);
       PN->addIncoming(Inst, VersionedLoop->getExitingBlock());
     }
   }
@@ -248,7 +251,7 @@ void LoopVersioning::annotateInstWithNoAlias(Instruction *VersionedInst,
 }
 
 namespace {
-/// \brief Also expose this is a pass.  Currently this is only used for
+/// Also expose this is a pass.  Currently this is only used for
 /// unit-testing.  It adds all memchecks necessary to remove all may-aliasing
 /// array accesses from the loop.
 class LoopVersioningPass : public FunctionPass {
@@ -278,8 +281,8 @@ public:
     bool Changed = false;
     for (Loop *L : Worklist) {
       const LoopAccessInfo &LAI = LAA->getInfo(L);
-      if (LAI.getNumRuntimePointerChecks() ||
-          !LAI.getPSE().getUnionPredicate().isAlwaysTrue()) {
+      if (L->isLoopSimplifyForm() && (LAI.getNumRuntimePointerChecks() ||
+          !LAI.getPSE().getUnionPredicate().isAlwaysTrue())) {
         LoopVersioning LVer(LAI, L, LI, DT, SE);
         LVer.versionLoop();
         LVer.annotateLoopWithNoAlias();

@@ -3,10 +3,21 @@ macro(add_host_subdirectory group)
   source_group(${group} FILES ${ARGN})
 endmacro()
 
+# Removes all module flags from the current CMAKE_CXX_FLAGS. Used for
+# the Objective-C++ code in lldb which we don't want to build with modules.
+# Reasons for this are that modules with Objective-C++ would require that
+# all LLVM/Clang modules are Objective-C++ compatible (which they are likely
+# not) and we would have rebuild a second set of modules just for the few
+# Objective-C++ files in lldb (which slows down the build process).
+macro(remove_module_flags)
+  string(REGEX REPLACE "-fmodules-cache-path=[^ ]+" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REGEX REPLACE "-fmodules" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REGEX REPLACE "-fcxx-modules" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+endmacro()
+
 add_host_subdirectory(common
   common/File.cpp
   common/FileCache.cpp
-  common/FileSpec.cpp
   common/FileSystem.cpp
   common/GetOptInc.cpp
   common/Host.cpp
@@ -14,36 +25,31 @@ add_host_subdirectory(common
   common/HostNativeThreadBase.cpp
   common/HostProcess.cpp
   common/HostThread.cpp
-  common/IOObject.cpp
   common/LockFileBase.cpp
+  common/MainLoop.cpp
   common/MonitoringProcessLauncher.cpp
   common/NativeBreakpoint.cpp
   common/NativeBreakpointList.cpp
   common/NativeWatchpointList.cpp
   common/NativeProcessProtocol.cpp
   common/NativeRegisterContext.cpp
-  common/NativeRegisterContextRegisterInfo.cpp
   common/NativeThreadProtocol.cpp
   common/OptionParser.cpp
   common/PipeBase.cpp
   common/ProcessRunLock.cpp
+  common/PseudoTerminal.cpp
   common/Socket.cpp
   common/SocketAddress.cpp
   common/SoftwareBreakpoint.cpp
   common/StringConvert.cpp
   common/Symbols.cpp
+  common/TaskPool.cpp
   common/TCPSocket.cpp
   common/Terminal.cpp
-  common/ThisThread.cpp
   common/ThreadLauncher.cpp
   common/XML.cpp
   common/UDPSocket.cpp
   )
-
-# Keep track of whether we want to provide a define for the
-# Python's architecture-specific lib path (i.e. where a
-# Python lldb module would go).
-set (get_python_libdir 0)
 
 if (NOT LLDB_DISABLE_LIBEDIT)
   add_host_subdirectory(common
@@ -68,15 +74,9 @@ if (CMAKE_SYSTEM_NAME MATCHES "Windows")
     windows/PipeWindows.cpp
     windows/ProcessLauncherWindows.cpp
     windows/ProcessRunLock.cpp
-    windows/ThisThread.cpp
     windows/Windows.cpp
     )
 else()
-  if (NOT LLDB_DISABLE_PYTHON)
-    # We'll grab the arch-specific python libdir on POSIX systems.
-    set (get_python_libdir 1)
-  endif()
-
   add_host_subdirectory(posix
     posix/DomainSocket.cpp
     posix/FileSystem.cpp
@@ -84,24 +84,16 @@ else()
     posix/HostProcessPosix.cpp
     posix/HostThreadPosix.cpp
     posix/LockFilePosix.cpp
-    posix/MainLoopPosix.cpp
     posix/PipePosix.cpp
+    posix/ProcessLauncherPosixFork.cpp
     )
-
-  if (NOT __ANDROID_NDK__)
-    add_host_subdirectory(posix
-      posix/ProcessLauncherPosix.cpp
-      )
-  endif()
 
   if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     include_directories(SYSTEM ${LIBXML2_INCLUDE_DIR})
-    add_host_subdirectory(macosx
-      macosx/Host.mm
-      macosx/HostInfoMacOSX.mm
-      macosx/HostThreadMacOSX.mm
+    add_subdirectory(macosx/objcxx)
+    set(LLDBObjCLibs lldbHostMacOSXObjCXX)
+    add_host_subdirectory(maqcosx
       macosx/Symbols.cpp
-      macosx/ThisThread.cpp
       macosx/cfcpp/CFCBundle.cpp
       macosx/cfcpp/CFCData.cpp
       macosx/cfcpp/CFCMutableArray.cpp
@@ -109,57 +101,80 @@ else()
       macosx/cfcpp/CFCMutableSet.cpp
       macosx/cfcpp/CFCString.cpp
       )
+    if(IOS)
+      set_property(SOURCE macosx/Host.mm APPEND PROPERTY 
+               COMPILE_DEFINITIONS "NO_XPC_SERVICES=1")
+    endif()
 
-  elseif (CMAKE_SYSTEM_NAME MATCHES "Linux")
-    if (__ANDROID_NDK__)
+
+  elseif (CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
+    add_host_subdirectory(linux
+      linux/AbstractSocket.cpp
+      linux/Host.cpp
+      linux/HostInfoLinux.cpp
+      linux/LibcGlue.cpp
+      linux/Support.cpp
+      )
+    if (CMAKE_SYSTEM_NAME MATCHES "Android")
       add_host_subdirectory(android
         android/HostInfoAndroid.cpp
         android/LibcGlue.cpp
         )
     endif()
-    add_host_subdirectory(linux
-      linux/AbstractSocket.cpp
-      linux/Host.cpp
-      linux/HostInfoLinux.cpp
-      linux/HostThreadLinux.cpp
-      linux/LibcGlue.cpp
-      linux/ProcessLauncherLinux.cpp
-      linux/ThisThread.cpp
-      )
-
   elseif (CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
     add_host_subdirectory(freebsd
       freebsd/Host.cpp
       freebsd/HostInfoFreeBSD.cpp
-      freebsd/HostThreadFreeBSD.cpp
-      freebsd/ThisThread.cpp
       )
 
   elseif (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
     add_host_subdirectory(netbsd
       netbsd/Host.cpp
       netbsd/HostInfoNetBSD.cpp
-      netbsd/HostThreadNetBSD.cpp
-      netbsd/ThisThread.cpp
+      )
+
+  elseif (CMAKE_SYSTEM_NAME MATCHES "OpenBSD")
+    add_host_subdirectory(openbsd
+      openbsd/Host.cpp
+      openbsd/HostInfoOpenBSD.cpp
       )
   endif()
 endif()
 
-if (${get_python_libdir})
-  # Call a python script to gather the arch-specific libdir for
-  # modules like the lldb module.
-  execute_process(
-    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/get_relative_lib_dir.py
-    RESULT_VARIABLE get_libdir_status
-    OUTPUT_VARIABLE relative_libdir
-    )
-  if (get_libdir_status EQUAL 0)
-    add_definitions(-DLLDB_PYTHON_RELATIVE_LIBDIR="${relative_libdir}")
+set(EXTRA_LIBS)
+if (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
+  list(APPEND EXTRA_LIBS kvm)
+endif ()
+if (APPLE)
+  list(APPEND EXTRA_LIBS xml2)
+else ()
+  if (LIBXML2_FOUND)
+    list(APPEND EXTRA_LIBS ${LIBXML2_LIBRARIES})
   endif()
+endif ()
+if (HAVE_LIBDL)
+  list(APPEND EXTRA_LIBS ${CMAKE_DL_LIBS})
+endif()
+if (NOT LLDB_DISABLE_LIBEDIT)
+  list(APPEND EXTRA_LIBS edit)
 endif()
 
-add_lldb_library(lldbHost ${HOST_SOURCES})
+add_lldb_library(lldbHost
+  ${HOST_SOURCES}
 
-if (CMAKE_SYSTEM_NAME MATCHES "NetBSD")
-target_link_libraries(lldbHost kvm)
-endif ()
+  LINK_LIBS
+    lldbCore
+    lldbSymbol
+    lldbTarget
+    lldbUtility
+    ${EXTRA_LIBS}
+    ${LLDBObjCLibs}
+
+  LINK_COMPONENTS
+    Object
+    Support
+  )
+
+if (NOT LLDB_DISABLE_LIBEDIT)
+  target_include_directories(lldbHost PUBLIC ${libedit_INCLUDE_DIRS})
+endif()

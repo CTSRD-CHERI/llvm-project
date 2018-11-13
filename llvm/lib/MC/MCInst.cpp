@@ -8,8 +8,11 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCInst.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInstPrinter.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -34,10 +37,29 @@ void MCOperand::print(raw_ostream &OS) const {
   OS << ">";
 }
 
+bool MCOperand::evaluateAsConstantImm(int64_t &Imm) const {
+  if (isImm()) {
+    Imm = getImm();
+    return true;
+  }
+  return false;
+}
+
+bool MCOperand::isBareSymbolRef() const {
+  assert(isExpr() &&
+         "isBareSymbolRef expects only expressions");
+  const MCExpr *Expr = getExpr();
+  MCExpr::ExprKind Kind = getExpr()->getKind();
+  return Kind == MCExpr::SymbolRef &&
+    cast<MCSymbolRefExpr>(Expr)->getKind() == MCSymbolRefExpr::VK_None;
+}
+
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
 LLVM_DUMP_METHOD void MCOperand::dump() const {
   print(dbgs());
   dbgs() << "\n";
 }
+#endif
 
 void MCInst::print(raw_ostream &OS) const {
   OS << "<MCInst " << getOpcode();
@@ -63,7 +85,9 @@ void MCInst::dump_pretty(raw_ostream &OS, const MCInstPrinter *Printer,
   OS << ">";
 }
 
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
 LLVM_DUMP_METHOD void MCInst::dump() const {
   print(dbgs());
   dbgs() << "\n";
 }
+#endif

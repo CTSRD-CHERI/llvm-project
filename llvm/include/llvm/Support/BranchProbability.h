@@ -73,7 +73,7 @@ public:
 
   void dump() const;
 
-  /// \brief Scale a large integer.
+  /// Scale a large integer.
   ///
   /// Scales \c Num.  Guarantees full precision.  Returns the floor of the
   /// result.
@@ -81,7 +81,7 @@ public:
   /// \return \c Num times \c this.
   uint64_t scale(uint64_t Num) const;
 
-  /// \brief Scale a large integer by the inverse.
+  /// Scale a large integer by the inverse.
   ///
   /// Scales \c Num by the inverse of \c this.  Guarantees full precision.
   /// Returns the floor of the result.
@@ -112,6 +112,13 @@ public:
     return *this;
   }
 
+  BranchProbability &operator*=(uint32_t RHS) {
+    assert(N != UnknownN &&
+           "Unknown probability cannot participate in arithmetics.");
+    N = (uint64_t(N) * RHS > D) ? D : N * RHS;
+    return *this;
+  }
+
   BranchProbability &operator/=(uint32_t RHS) {
     assert(N != UnknownN &&
            "Unknown probability cannot participate in arithmetics.");
@@ -131,6 +138,11 @@ public:
   }
 
   BranchProbability operator*(BranchProbability RHS) const {
+    BranchProbability Prob(*this);
+    return Prob *= RHS;
+  }
+
+  BranchProbability operator*(uint32_t RHS) const {
     BranchProbability Prob(*this);
     return Prob *= RHS;
   }

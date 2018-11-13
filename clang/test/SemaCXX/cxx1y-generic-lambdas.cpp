@@ -181,7 +181,7 @@ int test() {
     int (*fp2)(int) = [](auto b) -> int {  return b; };
     int (*fp3)(char) = [](auto c) -> int { return c; };
     char (*fp4)(int) = [](auto d) { return d; }; //expected-error{{no viable conversion}}\
-                                                 //expected-note{{candidate template ignored}}
+                                                 //expected-note{{candidate function [with $0 = int]}}
     char (*fp5)(char) = [](auto e) -> int { return e; }; //expected-error{{no viable conversion}}\
                                                  //expected-note{{candidate template ignored}}
 
@@ -207,12 +207,22 @@ int variadic_test() {
 } // end ns
 
 namespace conversion_operator {
-void test() {
-    auto L = [](auto a) -> int { return a; };
+  void test() {
+    auto L = [](auto a) -> int { return a; }; // expected-error {{cannot initialize}}
     int (*fp)(int) = L; 
     int (&fp2)(int) = [](auto a) { return a; };  // expected-error{{non-const lvalue}}
     int (&&fp3)(int) = [](auto a) { return a; };  // expected-error{{no viable conversion}}\
                                                   //expected-note{{candidate}}
+
+    using F = int(int);
+    using G = int(void*);
+    L.operator F*();
+    L.operator G*(); // expected-note-re {{instantiation of function template specialization '{{.*}}::operator()<void *>'}}
+
+    // Here, the conversion function is named 'operator auto (*)(int)', and
+    // there is no way to write that name in valid C++.
+    auto M = [](auto a) -> auto { return a; };
+    M.operator F*(); // expected-error {{no member named 'operator int (*)(int)'}}
   }
 }
 }
@@ -912,7 +922,7 @@ struct X1 {
 template<class T> 
 template<class U>
 int X1::X2<T>::fooG3(T (*fp)(U)) { return 0; } 
-X1::X2<int> x2; //expected-note 3{{in instantiation of}}
+X1::X2<int> x2; //expected-note {{in instantiation of}}
 int run1 = x2.fooG2();
 int run2 = x2.fooG3();
 } // end ns
@@ -985,4 +995,11 @@ class Enclosing3 {
     return d; }(0)
   );
 };
+}
+
+namespace PR32638 {
+ //https://bugs.llvm.org/show_bug.cgi?id=32638
+ void test() {
+    [](auto x) noexcept(noexcept(x)) { } (0);
+ }
 }

@@ -15,35 +15,28 @@
 #ifndef LLVM_IR_OPERATOR_H
 #define LLVM_IR_OPERATOR_H
 
+#include "llvm/ADT/None.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/IR/Constants.h"
-#include "llvm/IR/DataLayout.h"
-#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Type.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/Casting.h"
+#include <cstddef>
 
 namespace llvm {
-
-class GetElementPtrInst;
-class BinaryOperator;
-class ConstantExpr;
 
 /// This is a utility class that provides an abstraction for the common
 /// functionality between Instructions and ConstantExprs.
 class Operator : public User {
-private:
+public:
   // The Operator class is intended to be used as a utility, and is never itself
   // instantiated.
-  void *operator new(size_t, unsigned) = delete;
-  void *operator new(size_t s) = delete;
   Operator() = delete;
+  ~Operator() = delete;
 
-protected:
-  // NOTE: Cannot use = delete because it's not legal to delete
-  // an overridden method that's not deleted in the base class. Cannot leave
-  // this unimplemented because that leads to an ODR-violation.
-  ~Operator() override;
+  void *operator new(size_t s) = delete;
 
-public:
   /// Return the opcode for this Instruction or ConstantExpr.
   unsigned getOpcode() const {
     if (const Instruction *I = dyn_cast<Instruction>(this))
@@ -61,16 +54,16 @@ public:
     return Instruction::UserOp1;
   }
 
-  static inline bool classof(const Instruction *) { return true; }
-  static inline bool classof(const ConstantExpr *) { return true; }
-  static inline bool classof(const Value *V) {
+  static bool classof(const Instruction *) { return true; }
+  static bool classof(const ConstantExpr *) { return true; }
+  static bool classof(const Value *V) {
     return isa<Instruction>(V) || isa<ConstantExpr>(V);
   }
 };
 
-/// Utility class for integer arithmetic operators which may exhibit overflow -
-/// Add, Sub, and Mul. It does not include SDiv, despite that operator having
-/// the potential for overflow.
+/// Utility class for integer operators which may exhibit overflow - Add, Sub,
+/// Mul, and Shl. It does not include SDiv, despite that operator having the
+/// potential for overflow.
 class OverflowingBinaryOperator : public Operator {
 public:
   enum {
@@ -81,6 +74,7 @@ public:
 private:
   friend class Instruction;
   friend class ConstantExpr;
+
   void setHasNoUnsignedWrap(bool B) {
     SubclassOptionalData =
       (SubclassOptionalData & ~NoUnsignedWrap) | (B * NoUnsignedWrap);
@@ -103,19 +97,19 @@ public:
     return (SubclassOptionalData & NoSignedWrap) != 0;
   }
 
-  static inline bool classof(const Instruction *I) {
+  static bool classof(const Instruction *I) {
     return I->getOpcode() == Instruction::Add ||
            I->getOpcode() == Instruction::Sub ||
            I->getOpcode() == Instruction::Mul ||
            I->getOpcode() == Instruction::Shl;
   }
-  static inline bool classof(const ConstantExpr *CE) {
+  static bool classof(const ConstantExpr *CE) {
     return CE->getOpcode() == Instruction::Add ||
            CE->getOpcode() == Instruction::Sub ||
            CE->getOpcode() == Instruction::Mul ||
            CE->getOpcode() == Instruction::Shl;
   }
-  static inline bool classof(const Value *V) {
+  static bool classof(const Value *V) {
     return (isa<Instruction>(V) && classof(cast<Instruction>(V))) ||
            (isa<ConstantExpr>(V) && classof(cast<ConstantExpr>(V)));
   }
@@ -132,6 +126,7 @@ public:
 private:
   friend class Instruction;
   friend class ConstantExpr;
+
   void setIsExact(bool B) {
     SubclassOptionalData = (SubclassOptionalData & ~IsExact) | (B * IsExact);
   }
@@ -148,13 +143,14 @@ public:
            OpC == Instruction::AShr ||
            OpC == Instruction::LShr;
   }
-  static inline bool classof(const ConstantExpr *CE) {
+
+  static bool classof(const ConstantExpr *CE) {
     return isPossiblyExactOpcode(CE->getOpcode());
   }
-  static inline bool classof(const Instruction *I) {
+  static bool classof(const Instruction *I) {
     return isPossiblyExactOpcode(I->getOpcode());
   }
-  static inline bool classof(const Value *V) {
+  static bool classof(const Value *V) {
     return (isa<Instruction>(V) && classof(cast<Instruction>(V))) ||
            (isa<ConstantExpr>(V) && classof(cast<ConstantExpr>(V)));
   }
@@ -164,52 +160,80 @@ public:
 class FastMathFlags {
 private:
   friend class FPMathOperator;
-  unsigned Flags;
-  FastMathFlags(unsigned F) : Flags(F) { }
+
+  unsigned Flags = 0;
+
+  FastMathFlags(unsigned F) {
+    // If all 7 bits are set, turn this into -1. If the number of bits grows,
+    // this must be updated. This is intended to provide some forward binary
+    // compatibility insurance for the meaning of 'fast' in case bits are added.
+    if (F == 0x7F) Flags = ~0U;
+    else Flags = F;
+  }
 
 public:
+  // This is how the bits are used in Value::SubclassOptionalData so they
+  // should fit there too.
+  // WARNING: We're out of space. SubclassOptionalData only has 7 bits. New
+  // functionality will require a change in how this information is stored.
   enum {
-    UnsafeAlgebra   = (1 << 0),
+    AllowReassoc    = (1 << 0),
     NoNaNs          = (1 << 1),
     NoInfs          = (1 << 2),
     NoSignedZeros   = (1 << 3),
-    AllowReciprocal = (1 << 4)
+    AllowReciprocal = (1 << 4),
+    AllowContract   = (1 << 5),
+    ApproxFunc      = (1 << 6)
   };
 
-  FastMathFlags() : Flags(0)
-  { }
+  FastMathFlags() = default;
 
-  /// Whether any flag is set
   bool any() const { return Flags != 0; }
+  bool none() const { return Flags == 0; }
+  bool all() const { return Flags == ~0U; }
 
-  /// Set all the flags to false
   void clear() { Flags = 0; }
+  void set()   { Flags = ~0U; }
 
   /// Flag queries
+  bool allowReassoc() const    { return 0 != (Flags & AllowReassoc); }
   bool noNaNs() const          { return 0 != (Flags & NoNaNs); }
   bool noInfs() const          { return 0 != (Flags & NoInfs); }
   bool noSignedZeros() const   { return 0 != (Flags & NoSignedZeros); }
   bool allowReciprocal() const { return 0 != (Flags & AllowReciprocal); }
-  bool unsafeAlgebra() const   { return 0 != (Flags & UnsafeAlgebra); }
+  bool allowContract() const   { return 0 != (Flags & AllowContract); }
+  bool approxFunc() const      { return 0 != (Flags & ApproxFunc); }
+  /// 'Fast' means all bits are set.
+  bool isFast() const          { return all(); }
 
   /// Flag setters
-  void setNoNaNs()          { Flags |= NoNaNs; }
-  void setNoInfs()          { Flags |= NoInfs; }
-  void setNoSignedZeros()   { Flags |= NoSignedZeros; }
-  void setAllowReciprocal() { Flags |= AllowReciprocal; }
-  void setUnsafeAlgebra() {
-    Flags |= UnsafeAlgebra;
-    setNoNaNs();
-    setNoInfs();
-    setNoSignedZeros();
-    setAllowReciprocal();
+  void setAllowReassoc(bool B = true) {
+    Flags = (Flags & ~AllowReassoc) | B * AllowReassoc;
   }
+  void setNoNaNs(bool B = true) {
+    Flags = (Flags & ~NoNaNs) | B * NoNaNs;
+  }
+  void setNoInfs(bool B = true) {
+    Flags = (Flags & ~NoInfs) | B * NoInfs;
+  }
+  void setNoSignedZeros(bool B = true) {
+    Flags = (Flags & ~NoSignedZeros) | B * NoSignedZeros;
+  }
+  void setAllowReciprocal(bool B = true) {
+    Flags = (Flags & ~AllowReciprocal) | B * AllowReciprocal;
+  }
+  void setAllowContract(bool B = true) {
+    Flags = (Flags & ~AllowContract) | B * AllowContract;
+  }
+  void setApproxFunc(bool B = true) {
+    Flags = (Flags & ~ApproxFunc) | B * ApproxFunc;
+  }
+  void setFast(bool B = true) { B ? set() : clear(); }
 
   void operator&=(const FastMathFlags &OtherFlags) {
     Flags &= OtherFlags.Flags;
   }
 };
-
 
 /// Utility class for floating point operations which can have
 /// information about relaxed accuracy requirements attached to them.
@@ -217,38 +241,57 @@ class FPMathOperator : public Operator {
 private:
   friend class Instruction;
 
-  void setHasUnsafeAlgebra(bool B) {
-    SubclassOptionalData =
-      (SubclassOptionalData & ~FastMathFlags::UnsafeAlgebra) |
-      (B * FastMathFlags::UnsafeAlgebra);
-
-    // Unsafe algebra implies all the others
-    if (B) {
-      setHasNoNaNs(true);
-      setHasNoInfs(true);
-      setHasNoSignedZeros(true);
-      setHasAllowReciprocal(true);
-    }
+  /// 'Fast' means all bits are set.
+  void setFast(bool B) {
+    setHasAllowReassoc(B);
+    setHasNoNaNs(B);
+    setHasNoInfs(B);
+    setHasNoSignedZeros(B);
+    setHasAllowReciprocal(B);
+    setHasAllowContract(B);
+    setHasApproxFunc(B);
   }
+
+  void setHasAllowReassoc(bool B) {
+    SubclassOptionalData =
+    (SubclassOptionalData & ~FastMathFlags::AllowReassoc) |
+    (B * FastMathFlags::AllowReassoc);
+  }
+
   void setHasNoNaNs(bool B) {
     SubclassOptionalData =
       (SubclassOptionalData & ~FastMathFlags::NoNaNs) |
       (B * FastMathFlags::NoNaNs);
   }
+
   void setHasNoInfs(bool B) {
     SubclassOptionalData =
       (SubclassOptionalData & ~FastMathFlags::NoInfs) |
       (B * FastMathFlags::NoInfs);
   }
+
   void setHasNoSignedZeros(bool B) {
     SubclassOptionalData =
       (SubclassOptionalData & ~FastMathFlags::NoSignedZeros) |
       (B * FastMathFlags::NoSignedZeros);
   }
+
   void setHasAllowReciprocal(bool B) {
     SubclassOptionalData =
       (SubclassOptionalData & ~FastMathFlags::AllowReciprocal) |
       (B * FastMathFlags::AllowReciprocal);
+  }
+
+  void setHasAllowContract(bool B) {
+    SubclassOptionalData =
+        (SubclassOptionalData & ~FastMathFlags::AllowContract) |
+        (B * FastMathFlags::AllowContract);
+  }
+
+  void setHasApproxFunc(bool B) {
+    SubclassOptionalData =
+        (SubclassOptionalData & ~FastMathFlags::ApproxFunc) |
+        (B * FastMathFlags::ApproxFunc);
   }
 
   /// Convenience function for setting multiple fast-math flags.
@@ -264,34 +307,51 @@ private:
   }
 
 public:
-  /// Test whether this operation is permitted to be
-  /// algebraically transformed, aka the 'A' fast-math property.
-  bool hasUnsafeAlgebra() const {
-    return (SubclassOptionalData & FastMathFlags::UnsafeAlgebra) != 0;
+  /// Test if this operation allows all non-strict floating-point transforms.
+  bool isFast() const {
+    return ((SubclassOptionalData & FastMathFlags::AllowReassoc) != 0 &&
+            (SubclassOptionalData & FastMathFlags::NoNaNs) != 0 &&
+            (SubclassOptionalData & FastMathFlags::NoInfs) != 0 &&
+            (SubclassOptionalData & FastMathFlags::NoSignedZeros) != 0 &&
+            (SubclassOptionalData & FastMathFlags::AllowReciprocal) != 0 &&
+            (SubclassOptionalData & FastMathFlags::AllowContract) != 0 &&
+            (SubclassOptionalData & FastMathFlags::ApproxFunc) != 0);
   }
 
-  /// Test whether this operation's arguments and results are to be
-  /// treated as non-NaN, aka the 'N' fast-math property.
+  /// Test if this operation may be simplified with reassociative transforms.
+  bool hasAllowReassoc() const {
+    return (SubclassOptionalData & FastMathFlags::AllowReassoc) != 0;
+  }
+
+  /// Test if this operation's arguments and results are assumed not-NaN.
   bool hasNoNaNs() const {
     return (SubclassOptionalData & FastMathFlags::NoNaNs) != 0;
   }
 
-  /// Test whether this operation's arguments and results are to be
-  /// treated as NoN-Inf, aka the 'I' fast-math property.
+  /// Test if this operation's arguments and results are assumed not-infinite.
   bool hasNoInfs() const {
     return (SubclassOptionalData & FastMathFlags::NoInfs) != 0;
   }
 
-  /// Test whether this operation can treat the sign of zero
-  /// as insignificant, aka the 'S' fast-math property.
+  /// Test if this operation can ignore the sign of zero.
   bool hasNoSignedZeros() const {
     return (SubclassOptionalData & FastMathFlags::NoSignedZeros) != 0;
   }
 
-  /// Test whether this operation is permitted to use
-  /// reciprocal instead of division, aka the 'R' fast-math property.
+  /// Test if this operation can use reciprocal multiply instead of division.
   bool hasAllowReciprocal() const {
     return (SubclassOptionalData & FastMathFlags::AllowReciprocal) != 0;
+  }
+
+  /// Test if this operation can be floating-point contracted (FMA).
+  bool hasAllowContract() const {
+    return (SubclassOptionalData & FastMathFlags::AllowContract) != 0;
+  }
+
+  /// Test if this operation allows approximations of math library functions or
+  /// intrinsics.
+  bool hasApproxFunc() const {
+    return (SubclassOptionalData & FastMathFlags::ApproxFunc) != 0;
   }
 
   /// Convenience function for getting all the fast-math flags
@@ -304,27 +364,40 @@ public:
   /// precision.
   float getFPAccuracy() const;
 
-  static inline bool classof(const Instruction *I) {
-    return I->getType()->isFPOrFPVectorTy() ||
-      I->getOpcode() == Instruction::FCmp;
-  }
-  static inline bool classof(const Value *V) {
-    return isa<Instruction>(V) && classof(cast<Instruction>(V));
+  static bool classof(const Value *V) {
+    unsigned Opcode;
+    if (auto *I = dyn_cast<Instruction>(V))
+      Opcode = I->getOpcode();
+    else if (auto *CE = dyn_cast<ConstantExpr>(V))
+      Opcode = CE->getOpcode();
+    else
+      return false;
+
+    switch (Opcode) {
+    case Instruction::FCmp:
+      return true;
+    // non math FP Operators (no FMF)
+    case Instruction::ExtractElement:
+    case Instruction::ShuffleVector:
+    case Instruction::InsertElement:
+      return false;
+    default:
+      return V->getType()->isFPOrFPVectorTy();
+    }
   }
 };
-
 
 /// A helper template for defining operators for individual opcodes.
 template<typename SuperClass, unsigned Opc>
 class ConcreteOperator : public SuperClass {
 public:
-  static inline bool classof(const Instruction *I) {
+  static bool classof(const Instruction *I) {
     return I->getOpcode() == Opc;
   }
-  static inline bool classof(const ConstantExpr *CE) {
+  static bool classof(const ConstantExpr *CE) {
     return CE->getOpcode() == Opc;
   }
-  static inline bool classof(const Value *V) {
+  static bool classof(const Value *V) {
     return (isa<Instruction>(V) && classof(cast<Instruction>(V))) ||
            (isa<ConstantExpr>(V) && classof(cast<ConstantExpr>(V)));
   }
@@ -343,7 +416,6 @@ class ShlOperator
   : public ConcreteOperator<OverflowingBinaryOperator, Instruction::Shl> {
 };
 
-
 class SDivOperator
   : public ConcreteOperator<PossiblyExactOperator, Instruction::SDiv> {
 };
@@ -357,19 +429,18 @@ class LShrOperator
   : public ConcreteOperator<PossiblyExactOperator, Instruction::LShr> {
 };
 
-
 class ZExtOperator : public ConcreteOperator<Operator, Instruction::ZExt> {};
-
 
 class GEPOperator
   : public ConcreteOperator<Operator, Instruction::GetElementPtr> {
+  friend class GetElementPtrInst;
+  friend class ConstantExpr;
+
   enum {
     IsInBounds = (1 << 0),
     // InRangeIndex: bits 1-6
   };
 
-  friend class GetElementPtrInst;
-  friend class ConstantExpr;
   void setIsInBounds(bool B) {
     SubclassOptionalData =
       (SubclassOptionalData & ~IsInBounds) | (B * IsInBounds);
@@ -380,6 +451,7 @@ public:
   bool isInBounds() const {
     return SubclassOptionalData & IsInBounds;
   }
+
   /// Returns the offset of the index with an inrange attachment, or None if
   /// none.
   Optional<unsigned> getInRangeIndex() const {
@@ -447,7 +519,13 @@ public:
     return true;
   }
 
-  /// \brief Accumulate the constant address offset of this GEP if possible.
+  unsigned countNonConstantIndices() const {
+    return count_if(make_range(idx_begin(), idx_end()), [](const Use& use) {
+        return !isa<ConstantInt>(*use);
+      });
+  }
+
+  /// Accumulate the constant address offset of this GEP if possible.
   ///
   /// This routine accepts an APInt into which it will accumulate the constant
   /// offset of this GEP if the GEP is in fact constant. If the GEP is not
@@ -470,6 +548,7 @@ public:
   const Value *getPointerOperand() const {
     return getOperand(0);
   }
+
   static unsigned getPointerOperandIndex() {
     return 0U;                      // get index for modifying correct operand
   }
@@ -500,6 +579,6 @@ public:
   }
 };
 
-} // End llvm namespace
+} // end namespace llvm
 
-#endif
+#endif // LLVM_IR_OPERATOR_H

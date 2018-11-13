@@ -4,16 +4,16 @@
 
 define <2 x i64> @PR25554(<2 x i64> %v0, <2 x i64> %v1) {
 ; SSE-LABEL: PR25554:
-; SSE:       # BB#0:
+; SSE:       # %bb.0:
 ; SSE-NEXT:    movl $1, %eax
-; SSE-NEXT:    movd %rax, %xmm1
+; SSE-NEXT:    movq %rax, %xmm1
 ; SSE-NEXT:    por %xmm1, %xmm0
 ; SSE-NEXT:    pslldq {{.*#+}} xmm1 = zero,zero,zero,zero,zero,zero,zero,zero,xmm1[0,1,2,3,4,5,6,7]
 ; SSE-NEXT:    paddq %xmm1, %xmm0
 ; SSE-NEXT:    retq
 ;
 ; AVX-LABEL: PR25554:
-; AVX:       # BB#0:
+; AVX:       # %bb.0:
 ; AVX-NEXT:    movl $1, %eax
 ; AVX-NEXT:    vmovq %rax, %xmm1
 ; AVX-NEXT:    vpor %xmm1, %xmm0, %xmm0

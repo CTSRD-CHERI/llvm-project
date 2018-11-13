@@ -15,6 +15,7 @@
 
 #include "CGObjCRuntime.h"
 #include "CGCleanup.h"
+#include "CGCXXABI.h"
 #include "CGRecordLayout.h"
 #include "CodeGenFunction.h"
 #include "CodeGenModule.h"
@@ -22,65 +23,32 @@
 #include "clang/AST/StmtObjC.h"
 #include "clang/CodeGen/CGFunctionInfo.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/Support/SaveAndRestore.h"
 
 using namespace clang;
 using namespace CodeGen;
 
-static uint64_t LookupFieldBitOffset(CodeGen::CodeGenModule &CGM,
-                                     const ObjCInterfaceDecl *OID,
-                                     const ObjCImplementationDecl *ID,
-                                     const ObjCIvarDecl *Ivar) {
-  const ObjCInterfaceDecl *Container = Ivar->getContainingInterface();
-
-  // FIXME: We should eliminate the need to have ObjCImplementationDecl passed
-  // in here; it should never be necessary because that should be the lexical
-  // decl context for the ivar.
-
-  // If we know have an implementation (and the ivar is in it) then
-  // look up in the implementation layout.
-  const ASTRecordLayout *RL;
-  if (ID && declaresSameEntity(ID->getClassInterface(), Container))
-    RL = &CGM.getContext().getASTObjCImplementationLayout(ID);
-  else
-    RL = &CGM.getContext().getASTObjCInterfaceLayout(Container);
-
-  // Compute field index.
-  //
-  // FIXME: The index here is closely tied to how ASTContext::getObjCLayout is
-  // implemented. This should be fixed to get the information from the layout
-  // directly.
-  unsigned Index = 0;
-
-  for (const ObjCIvarDecl *IVD = Container->all_declared_ivar_begin(); 
-       IVD; IVD = IVD->getNextIvar()) {
-    if (Ivar == IVD)
-      break;
-    ++Index;
-  }
-  assert(Index < RL->getFieldCount() && "Ivar is not inside record layout!");
-
-  return RL->getFieldOffset(Index);
-}
-
 uint64_t CGObjCRuntime::ComputeIvarBaseOffset(CodeGen::CodeGenModule &CGM,
                                               const ObjCInterfaceDecl *OID,
                                               const ObjCIvarDecl *Ivar) {
-  return LookupFieldBitOffset(CGM, OID, nullptr, Ivar) /
-    CGM.getContext().getCharWidth();
+  return CGM.getContext().lookupFieldBitOffset(OID, nullptr, Ivar) /
+         CGM.getContext().getCharWidth();
 }
 
 uint64_t CGObjCRuntime::ComputeIvarBaseOffset(CodeGen::CodeGenModule &CGM,
                                               const ObjCImplementationDecl *OID,
                                               const ObjCIvarDecl *Ivar) {
-  return LookupFieldBitOffset(CGM, OID->getClassInterface(), OID, Ivar) / 
-    CGM.getContext().getCharWidth();
+  return CGM.getContext().lookupFieldBitOffset(OID->getClassInterface(), OID,
+                                               Ivar) /
+         CGM.getContext().getCharWidth();
 }
 
 unsigned CGObjCRuntime::ComputeBitfieldBitOffset(
     CodeGen::CodeGenModule &CGM,
     const ObjCInterfaceDecl *ID,
     const ObjCIvarDecl *Ivar) {
-  return LookupFieldBitOffset(CGM, ID, ID->getImplementation(), Ivar);
+  return CGM.getContext().lookupFieldBitOffset(ID, ID->getImplementation(),
+                                               Ivar);
 }
 
 LValue CGObjCRuntime::EmitValueForIvarAtOffset(CodeGen::CodeGenFunction &CGF,
@@ -90,7 +58,11 @@ LValue CGObjCRuntime::EmitValueForIvarAtOffset(CodeGen::CodeGenFunction &CGF,
                                                unsigned CVRQualifiers,
                                                llvm::Value *Offset) {
   // Compute (type*) ( (char *) BaseValue + Offset)
-  QualType IvarTy = Ivar->getType().withCVRQualifiers(CVRQualifiers);
+  QualType InterfaceTy{OID->getTypeForDecl(), 0};
+  QualType ObjectPtrTy =
+      CGF.CGM.getContext().getObjCObjectPointerType(InterfaceTy);
+  QualType IvarTy =
+      Ivar->getUsageType(ObjectPtrTy).withCVRQualifiers(CVRQualifiers);
   llvm::Type *LTy = CGF.CGM.getTypes().ConvertTypeForMem(IvarTy);
   llvm::Value *V = CGF.Builder.CreateBitCast(BaseValue, CGF.Int8PtrTy);
   V = CGF.Builder.CreateInBoundsGEP(V, Offset, "add.ptr");
@@ -115,7 +87,8 @@ LValue CGObjCRuntime::EmitValueForIvarAtOffset(CodeGen::CodeGenFunction &CGF,
   // Note, there is a subtle invariant here: we can only call this routine on
   // non-synthesized ivars but we may be called for synthesized ivars.  However,
   // a synthesized ivar can never be a bit-field, so this is safe.
-  uint64_t FieldBitOffset = LookupFieldBitOffset(CGF.CGM, OID, nullptr, Ivar);
+  uint64_t FieldBitOffset =
+      CGF.CGM.getContext().lookupFieldBitOffset(OID, nullptr, Ivar);
   uint64_t BitOffset = FieldBitOffset % CGF.CGM.getContext().getCharWidth();
   uint64_t AlignmentBits = CGF.CGM.getTarget().getCharAlign();
   uint64_t BitFieldSize = Ivar->getBitWidthValue(CGF.getContext());
@@ -138,7 +111,9 @@ LValue CGObjCRuntime::EmitValueForIvarAtOffset(CodeGen::CodeGenFunction &CGF,
   Addr = CGF.Builder.CreateElementBitCast(Addr,
                                    llvm::Type::getIntNTy(CGF.getLLVMContext(),
                                                          Info->StorageSize));
-  return LValue::MakeBitfield(Addr, *Info, IvarTy, AlignmentSource::Decl);
+  return LValue::MakeBitfield(Addr, *Info, IvarTy,
+                              LValueBaseInfo(AlignmentSource::Decl),
+                              TBAAAccessInfo());
 }
 
 namespace {
@@ -147,6 +122,8 @@ namespace {
     const Stmt *Body;
     llvm::BasicBlock *Block;
     llvm::Constant *TypeInfo;
+    /// Flags used to differentiate cleanups and catchalls in Windows SEH
+    unsigned Flags;
   };
 
   struct CallObjCEndCatch final : EHScopeStack::Cleanup {
@@ -175,12 +152,16 @@ void CGObjCRuntime::EmitTryCatchStmt(CodeGenFunction &CGF,
   if (S.getNumCatchStmts())
     Cont = CGF.getJumpDestInCurrentScope("eh.cont");
 
+  bool useFunclets = EHPersonality::get(CGF).usesFuncletPads();
+
   CodeGenFunction::FinallyInfo FinallyInfo;
-  if (const ObjCAtFinallyStmt *Finally = S.getFinallyStmt())
-    FinallyInfo.enter(CGF, Finally->getFinallyBody(),
-                      beginCatchFn, endCatchFn, exceptionRethrowFn);
+  if (!useFunclets)
+    if (const ObjCAtFinallyStmt *Finally = S.getFinallyStmt())
+      FinallyInfo.enter(CGF, Finally->getFinallyBody(),
+                        beginCatchFn, endCatchFn, exceptionRethrowFn);
 
   SmallVector<CatchHandler, 8> Handlers;
+
 
   // Enter the catch, if there is one.
   if (S.getNumCatchStmts()) {
@@ -193,10 +174,13 @@ void CGObjCRuntime::EmitTryCatchStmt(CodeGenFunction &CGF,
       Handler.Variable = CatchDecl;
       Handler.Body = CatchStmt->getCatchBody();
       Handler.Block = CGF.createBasicBlock("catch");
+      Handler.Flags = 0;
 
       // @catch(...) always matches.
       if (!CatchDecl) {
-        Handler.TypeInfo = nullptr; // catch-all
+        auto catchAll = getCatchAllTypeInfo();
+        Handler.TypeInfo = catchAll.RTTI;
+        Handler.Flags = catchAll.Flags;
         // Don't consider any other catches.
         break;
       }
@@ -206,8 +190,30 @@ void CGObjCRuntime::EmitTryCatchStmt(CodeGenFunction &CGF,
 
     EHCatchScope *Catch = CGF.EHStack.pushCatch(Handlers.size());
     for (unsigned I = 0, E = Handlers.size(); I != E; ++I)
-      Catch->setHandler(I, Handlers[I].TypeInfo, Handlers[I].Block);
+      Catch->setHandler(I, { Handlers[I].TypeInfo, Handlers[I].Flags }, Handlers[I].Block);
   }
+
+  if (useFunclets)
+    if (const ObjCAtFinallyStmt *Finally = S.getFinallyStmt()) {
+        CodeGenFunction HelperCGF(CGM, /*suppressNewContext=*/true);
+        if (!CGF.CurSEHParent)
+            CGF.CurSEHParent = cast<NamedDecl>(CGF.CurFuncDecl);
+        // Outline the finally block.
+        const Stmt *FinallyBlock = Finally->getFinallyBody();
+        HelperCGF.startOutlinedSEHHelper(CGF, /*isFilter*/false, FinallyBlock);
+
+        // Emit the original filter expression, convert to i32, and return.
+        HelperCGF.EmitStmt(FinallyBlock);
+
+        HelperCGF.FinishFunction(FinallyBlock->getEndLoc());
+
+        llvm::Function *FinallyFunc = HelperCGF.CurFn;
+
+
+        // Push a cleanup for __finally blocks.
+        CGF.pushSEHCleanup(NormalAndEHCleanup, FinallyFunc);
+    }
+
   
   // Emit the try body.
   CGF.EmitStmt(S.getTryBody());
@@ -224,6 +230,13 @@ void CGObjCRuntime::EmitTryCatchStmt(CodeGenFunction &CGF,
     CatchHandler &Handler = Handlers[I];
 
     CGF.EmitBlock(Handler.Block);
+    llvm::CatchPadInst *CPI = nullptr;
+    SaveAndRestore<llvm::Instruction *> RestoreCurrentFuncletPad(CGF.CurrentFuncletPad);
+    if (useFunclets)
+      if ((CPI = dyn_cast_or_null<llvm::CatchPadInst>(Handler.Block->getFirstNonPHI()))) {
+        CGF.CurrentFuncletPad = CPI;
+        CPI->setOperand(2, CGF.getExceptionSlot().getPointer());
+      }
     llvm::Value *RawExn = CGF.getExceptionFromSlot();
 
     // Enter the catch.
@@ -250,6 +263,8 @@ void CGObjCRuntime::EmitTryCatchStmt(CodeGenFunction &CGF,
       CGF.EmitAutoVarDecl(*CatchParam);
       EmitInitOfCatchParam(CGF, CastExn, CatchParam);
     }
+    if (CPI)
+        CGF.EHStack.pushCleanup<CatchRetScope>(NormalCleanup, CPI);
 
     CGF.ObjCEHValueStack.push_back(Exn);
     CGF.EmitStmt(Handler.Body);
@@ -265,7 +280,7 @@ void CGObjCRuntime::EmitTryCatchStmt(CodeGenFunction &CGF,
   CGF.Builder.restoreIP(SavedIP);
 
   // Pop out of the finally.
-  if (S.getFinallyStmt())
+  if (!useFunclets && S.getFinallyStmt())
     FinallyInfo.exit(CGF);
 
   if (Cont.isValid())
@@ -304,7 +319,7 @@ namespace {
       : SyncExitFn(SyncExitFn), SyncArg(SyncArg) {}
 
     void Emit(CodeGenFunction &CGF, Flags flags) override {
-      CGF.Builder.CreateCall(SyncExitFn, SyncArg)->setDoesNotThrow();
+      CGF.EmitNounwindRuntimeCall(SyncExitFn, SyncArg);
     }
   };
 }

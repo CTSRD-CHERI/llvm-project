@@ -62,7 +62,7 @@
                 versions of Python can be made to work by compiling your own distribution from source,
                 but this workflow is unsupported and you are own your own.
               </li>
-              <li><a href="http://martine.github.io/ninja/">Ninja build tool</a> (strongly recommended)</li>
+              <li><a href="https://ninja-build.org/">Ninja build tool</a> (strongly recommended)</li>
               <li><a href="http://gnuwin32.sourceforge.net/">GnuWin32</a></li>
               <li><a href="http://www.swig.org/download.html">SWIG for Windows (version 3+)</a></li>
             </ul>
@@ -116,14 +116,15 @@
                 the PYTHONHOME environment variable if it is specified).
               </li>
               <li>
-                <b>LLDB_TEST_COMPILER</b>: The test suite needs to be able to find a copy of clang.exe that it can use to compile
-                inferior programs.  Note that MSVC is not supported here, it <strong>must</strong> be a path to a clang executable.
-                Note that using a release clang.exe is strongly recommended here, as it will make the test suite run much faster.
-                This can be a path to any recent clang.exe, including one you built yourself.
+                <b>LLDB_TEST_C_COMPILER</b> or <b>LLDB_TEST_CXX_COMPILER</b>: The test suite needs to be able to find a copy of clang.exe
+                that it can use to compile inferior programs.  Note that MSVC is not supported here, it <strong>must</strong> be a path to a
+                clang executable.  Note that using a release clang.exe is strongly recommended here, as it will make the test suite run much faster.
+                This can be a path to any recent clang.exe, including one you built yourself.  These variables are ignored unless the respective
+                <strong>LLDB_TEST_USE_CUSTOM_C_COMPILER</strong> and <strong>LLDB_TEST_USE_CUSTOM_CXX_COMPILER</strong> are set to ON.
               </li>
             </ul>
             Sample command line:<br/>
-            <code>cmake -G Ninja -DLLDB_TEST_DEBUG_TEST_CRASHES=1 -DPYTHON_HOME=C:\Python35 -DLLDB_TEST_COMPILER=d:\src\llvmbuild\ninja_release\bin\clang.exe ..\..\llvm</code>
+            <code>cmake -G Ninja -DLLDB_TEST_DEBUG_TEST_CRASHES=1 -DPYTHON_HOME=C:\Python35 -DLLDB_TEST_USE_CUSTOM_C_COMPILER=ON -DLLDB_TEST_C_COMPILER=d:\src\llvmbuild\ninja_release\bin\clang.exe ..\..\llvm</code>
             <h2>Working with both Ninja and MSVC</h2>
             <p>
               Compiling with <code>ninja</code> is both faster and simpler than compiling with MSVC, but chances are you still want
@@ -142,7 +143,7 @@
         <div class="post" id="BuildingLldbOnMacOSX">
           <h1 class="postheader">Building LLDB on Mac OS X</h1>
           <div class="postcontent">
-            <p>Building on Mac OS X is as easy as downloading the code and building the Xcode project or workspace:</p>
+            <p> There are two ways to build LLDB on Mac OS X: Using Xcode and using CMake
           </div>
           <div class="postcontent">
             <h2>Preliminaries</h2>
@@ -150,12 +151,33 @@
               <li>XCode 4.3 or newer requires the "Command Line Tools" component (XCode->Preferences->Downloads->Components).</li>
               <li>Mac OS X Lion or newer requires installing <a href="http://swig.org">Swig</a>.</li>
             </ul>
-            <h2>Building LLDB</h2>
+            <h2>Building LLDB with Xcode</h2>
+            <p>Building on Mac OS X with Xcode is as easy as downloading the code and building the Xcode project or workspace:</p>
             <ul>
               <li><a href="download.html">Download</a> the lldb sources.</li>
               <li>Follow the code signing instructions in <b>lldb/docs/code-signing.txt</b></li>
               <li>In Xcode 3.x: <b>lldb/lldb.xcodeproj</b>, select the <b>lldb-tool</b> target, and build.</li>
               <li>In Xcode 4.x: <b>lldb/lldb.xcworkspace</b>, select the <b>lldb-tool</b> scheme, and build.</li>
+            </ul>
+            <h2>Building LLDB with CMake</h2>
+            <p> First download the LLVM, Clang, and LLDB sources. Refer to <a href="source.html">this page</a> for precise instructions on this step.</p>
+            <p> Refer to the code signing instructions in <b>lldb/docs/code-signing.txt</b> for info on codesigning debugserver during the build.</p>
+            <p> Using CMake is documented on the <a href="http://llvm.org/docs/CMake.html">Building LLVM with CMake</a> page.
+            Ninja is the recommended generator to use when building LLDB with CMake.</p>
+            <code>
+              &gt; cmake $PATH_TO_LLVM -G Ninja
+              <br />&gt; ninja lldb
+            </code>
+            <p>
+               As noted in the "Building LLVM with CMake" page mentioned above, you can pass
+               variables to cmake to change build behavior. If LLDB is built as a part of LLVM,
+               then you can pass LLVM-specific CMake variables to cmake when building LLDB.
+            </p>
+            <p>Here are some commonly used LLDB-specific CMake variables:</p>
+            <ul>
+              <li><code><b>LLDB_EXPORT_ALL_SYMBOLS</b>:BOOL </code>: Exports all symbols. Useful in conjunction with CMAKE_BUILD_TYPE=Debug.</li>
+              <li><code><b>LLDB_BUILD_FRAMEWORK</b>:BOOL </code>: Builds LLDB.framework as Xcode would</li>
+              <li><code><b>LLDB_CODESIGN_IDENTITY</b>:STRING </code>: Determines the codesign identity to use. An empty string means skip building debugserver to avoid codesigning.</li>
             </ul>
           </div>
           <div class="postfooter"></div>
@@ -354,9 +376,8 @@
               the target architecture. Since you already have a checkout of clang and lldb, you
               can compile a host version of clang in a separate folder and use that.
               Alternatively you can use system clang or even cross-gcc if your distribution
-              provides such packages (e.g., <code>g++-aarch64-linux-gnu</code> on Ubuntu). On
-              Android, a working toolchain can be produced by downloading the Android NDK and
-              running the contained <code>make-standalone-toolchain.sh</code> script.
+              provides such packages (e.g., <code>g++-aarch64-linux-gnu</code>
+              on Ubuntu).
             </p>
 
             <p>
@@ -378,11 +399,6 @@
             <p>
               In this case you, will often not need anything other than the standard C and C++
               libraries.
-            </p>
-
-            <p>
-              In the case of Android, all required headers and libraries are provided by the
-              aforementioned <code>make-standalone-toolchain.sh</code> script.
             </p>
 
             <p>
@@ -472,38 +488,37 @@
             <h3>Example 2: Cross-compiling for Android on Linux</h3>
 
             <p>
-              All tools needed to build LLDB for android are available in the Android NDK. For
-              example, we can produce an x86 toolchain along with all the libraries and headers
-              by running
-            </p>
-            <code>
-              ./build/tools/make-standalone-toolchain.sh \<br/>
-              --platform=android-21 \<br/>
-              --toolchain=x86-4.9 \<br/>
-              --install-dir=$HOME/Toolchains/x86-android-toolchain
-            </code>
-            <p>
-              from inside the unzipped NDK. Toolchains for other architectures can be produced in
-              a similar manner.
+              In the case of Android, the toolchain and all required headers and
+              libraries are available in the Android NDK.
             </p>
 
             <p>
-              For Android we provide a Android.cmake script which sets a lot of the required
-              options automatically. A cmake build can therefore be prepared with the following parameters:
+              The NDK also contains a cmake toolchain file, which makes
+              configuring the build much simpler.  The compiler, include and
+              library paths will be configured by the toolchain file and all you
+              need to do is to select the architecture (ANDROID_ABI) and
+              platform level (ANDROID_PLATFORM, should be at least 21). You will
+              also need to set ANDROID_ALLOW_UNDEFINED_SYMBOLS=On, as the
+              toolchain file defaults to "no undefined symbols in shared
+              libraries", which is not compatible with some llvm libraries. The
+              first version of NDK which supports this approach is r14.
+            </p>
+            <p>
+              For example, the following arguments are sufficient to configure
+              an android arm64 build:
             </p>
             <code>
-              -DCMAKE_TOOLCHAIN_FILE=cmake/platforms/Android.cmake \<br/>
-              -DANDROID_TOOLCHAIN_DIR=$HOME/Toolchains/x86-android-toolchain \<br/>
-              -DANDROID_ABI=x86 \<br/>
-              -DLLVM_HOST_TRIPLE=i386-unknown-linux-android \<br/>
-              -DLLVM_TABLEGEN=&lt;path-to-host&gt;/bin/llvm-tblgen \<br/>
-              -DCLANG_TABLEGEN=&lt;path-to-host&gt;/bin/clang-tblgen
+              -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake \<br/>
+              -DANDROID_ABI=arm64-v8a \<br/>
+              -DANDROID_PLATFORM=android-21 \<br/>
+              -DANDROID_ALLOW_UNDEFINED_SYMBOLS=On \<br/>
+              -DLLVM_HOST_TRIPLE=aarch64-unknown-linux-android \<br/>
+              -DCROSS_TOOLCHAIN_FLAGS_NATIVE='-DCMAKE_C_COMPILER=cc;-DCMAKE_CXX_COMPILER=c++' <br/>
             </code>
 
             <p>
-              Note that the full LLVM build is not functional on android yet, so simply running
-              <code>ninja</code> will not work. You will need to manually specify the target you
-              want to build: <code>lldb</code>, <code>lldb-server</code>, etc.
+              Note that currently only lldb-server is functional on android. The
+              lldb client is not supported and unlikely to work.
             </p>
           </div>
           <div class="postfooter"></div>

@@ -1,4 +1,4 @@
-//===----- EditedSource.cpp - Collection of source edits ------------------===//
+//===- EditedSource.cpp - Collection of source edits ----------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -9,12 +9,21 @@
 
 #include "clang/Edit/EditedSource.h"
 #include "clang/Basic/CharInfo.h"
+#include "clang/Basic/LLVM.h"
+#include "clang/Basic/SourceLocation.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Edit/Commit.h"
 #include "clang/Edit/EditsReceiver.h"
+#include "clang/Edit/FileOffset.h"
 #include "clang/Lex/Lexer.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
+#include <algorithm>
+#include <cassert>
+#include <tuple>
+#include <utility>
 
 using namespace clang;
 using namespace edit;
@@ -25,17 +34,23 @@ void EditsReceiver::remove(CharSourceRange range) {
 
 void EditedSource::deconstructMacroArgLoc(SourceLocation Loc,
                                           SourceLocation &ExpansionLoc,
-                                          IdentifierInfo *&II) {
+                                          MacroArgUse &ArgUse) {
   assert(SourceMgr.isMacroArgExpansion(Loc));
-  SourceLocation DefArgLoc = SourceMgr.getImmediateExpansionRange(Loc).first;
-  ExpansionLoc = SourceMgr.getImmediateExpansionRange(DefArgLoc).first;
+  SourceLocation DefArgLoc =
+      SourceMgr.getImmediateExpansionRange(Loc).getBegin();
+  SourceLocation ImmediateExpansionLoc =
+      SourceMgr.getImmediateExpansionRange(DefArgLoc).getBegin();
+  ExpansionLoc = ImmediateExpansionLoc;
+  while (SourceMgr.isMacroBodyExpansion(ExpansionLoc))
+    ExpansionLoc =
+        SourceMgr.getImmediateExpansionRange(ExpansionLoc).getBegin();
   SmallString<20> Buf;
   StringRef ArgName = Lexer::getSpelling(SourceMgr.getSpellingLoc(DefArgLoc),
                                          Buf, SourceMgr, LangOpts);
-  II = nullptr;
-  if (!ArgName.empty()) {
-    II = &IdentTable.get(ArgName);
-  }
+  ArgUse = MacroArgUse{nullptr, SourceLocation(), SourceLocation()};
+  if (!ArgName.empty())
+    ArgUse = {&IdentTable.get(ArgName), ImmediateExpansionLoc,
+              SourceMgr.getSpellingLoc(DefArgLoc)};
 }
 
 void EditedSource::startingCommit() {}
@@ -43,12 +58,11 @@ void EditedSource::startingCommit() {}
 void EditedSource::finishedCommit() {
   for (auto &ExpArg : CurrCommitMacroArgExps) {
     SourceLocation ExpLoc;
-    IdentifierInfo *II;
-    std::tie(ExpLoc, II) = ExpArg;
-    auto &ArgNames = ExpansionToArgMap[ExpLoc.getRawEncoding()];
-    if (std::find(ArgNames.begin(), ArgNames.end(), II) == ArgNames.end()) {
-      ArgNames.push_back(II);
-    }
+    MacroArgUse ArgUse;
+    std::tie(ExpLoc, ArgUse) = ExpArg;
+    auto &ArgUses = ExpansionToArgMap[ExpLoc.getRawEncoding()];
+    if (std::find(ArgUses.begin(), ArgUses.end(), ArgUse) == ArgUses.end())
+      ArgUses.push_back(ArgUse);
   }
   CurrCommitMacroArgExps.clear();
 }
@@ -66,12 +80,16 @@ bool EditedSource::canInsertInOffset(SourceLocation OrigLoc, FileOffset Offs) {
   }
 
   if (SourceMgr.isMacroArgExpansion(OrigLoc)) {
-    IdentifierInfo *II;
     SourceLocation ExpLoc;
-    deconstructMacroArgLoc(OrigLoc, ExpLoc, II);
+    MacroArgUse ArgUse;
+    deconstructMacroArgLoc(OrigLoc, ExpLoc, ArgUse);
     auto I = ExpansionToArgMap.find(ExpLoc.getRawEncoding());
     if (I != ExpansionToArgMap.end() &&
-        std::find(I->second.begin(), I->second.end(), II) != I->second.end()) {
+        find_if(I->second, [&](const MacroArgUse &U) {
+          return ArgUse.Identifier == U.Identifier &&
+                 std::tie(ArgUse.ImmediateExpansionLoc, ArgUse.UseLoc) !=
+                     std::tie(U.ImmediateExpansionLoc, U.UseLoc);
+        }) != I->second.end()) {
       // Trying to write in a macro argument input that has already been
       // written by a previous commit for another expansion of the same macro
       // argument name. For example:
@@ -88,7 +106,6 @@ bool EditedSource::canInsertInOffset(SourceLocation OrigLoc, FileOffset Offs) {
       return false;
     }
   }
-
   return true;
 }
 
@@ -101,13 +118,13 @@ bool EditedSource::commitInsert(SourceLocation OrigLoc,
     return true;
 
   if (SourceMgr.isMacroArgExpansion(OrigLoc)) {
-    IdentifierInfo *II;
+    MacroArgUse ArgUse;
     SourceLocation ExpLoc;
-    deconstructMacroArgLoc(OrigLoc, ExpLoc, II);
-    if (II)
-      CurrCommitMacroArgExps.emplace_back(ExpLoc, II);
+    deconstructMacroArgLoc(OrigLoc, ExpLoc, ArgUse);
+    if (ArgUse.Identifier)
+      CurrCommitMacroArgExps.emplace_back(ExpLoc, ArgUse);
   }
-  
+
   FileEdit &FA = FileEdits[Offs];
   if (FA.Text.empty()) {
     FA.Text = copyString(text);
@@ -263,9 +280,11 @@ bool EditedSource::commit(const Commit &commit) {
 
   struct CommitRAII {
     EditedSource &Editor;
+
     CommitRAII(EditedSource &Editor) : Editor(Editor) {
       Editor.startingCommit();
     }
+
     ~CommitRAII() {
       Editor.finishedCommit();
     }
@@ -292,7 +311,7 @@ bool EditedSource::commit(const Commit &commit) {
   return true;
 }
 
-// \brief Returns true if it is ok to make the two given characters adjacent.
+// Returns true if it is ok to make the two given characters adjacent.
 static bool canBeJoined(char left, char right, const LangOptions &LangOpts) {
   // FIXME: Should use TokenConcatenation to make sure we don't allow stuff like
   // making two '<' adjacent.
@@ -300,7 +319,7 @@ static bool canBeJoined(char left, char right, const LangOptions &LangOpts) {
            Lexer::isIdentifierBodyChar(right, LangOpts));
 }
 
-/// \brief Returns true if it is ok to eliminate the trailing whitespace between
+/// Returns true if it is ok to eliminate the trailing whitespace between
 /// the given characters.
 static bool canRemoveWhitespace(char left, char beforeWSpace, char right,
                                 const LangOptions &LangOpts) {
@@ -313,7 +332,7 @@ static bool canRemoveWhitespace(char left, char beforeWSpace, char right,
   return true;
 }
 
-/// \brief Check the range that we are going to remove and:
+/// Check the range that we are going to remove and:
 /// -Remove any trailing whitespace if possible.
 /// -Insert a space if removing the range is going to mess up the source tokens.
 static void adjustRemoval(const SourceManager &SM, const LangOptions &LangOpts,
@@ -363,13 +382,14 @@ static void adjustRemoval(const SourceManager &SM, const LangOptions &LangOpts,
 
 static void applyRewrite(EditsReceiver &receiver,
                          StringRef text, FileOffset offs, unsigned len,
-                         const SourceManager &SM, const LangOptions &LangOpts) {
+                         const SourceManager &SM, const LangOptions &LangOpts,
+                         bool shouldAdjustRemovals) {
   assert(offs.getFID().isValid());
   SourceLocation Loc = SM.getLocForStartOfFile(offs.getFID());
   Loc = Loc.getLocWithOffset(offs.getOffset());
   assert(Loc.isFileID());
 
-  if (text.empty())
+  if (text.empty() && shouldAdjustRemovals)
     adjustRemoval(SM, LangOpts, Loc, offs, len, text);
 
   CharSourceRange range = CharSourceRange::getCharRange(Loc,
@@ -387,7 +407,8 @@ static void applyRewrite(EditsReceiver &receiver,
     receiver.insert(Loc, text);
 }
 
-void EditedSource::applyRewrites(EditsReceiver &receiver) {
+void EditedSource::applyRewrites(EditsReceiver &receiver,
+                                 bool shouldAdjustRemovals) {
   SmallString<128> StrVec;
   FileOffset CurOffs, CurEnd;
   unsigned CurLen;
@@ -414,14 +435,16 @@ void EditedSource::applyRewrites(EditsReceiver &receiver) {
       continue;
     }
 
-    applyRewrite(receiver, StrVec, CurOffs, CurLen, SourceMgr, LangOpts);
+    applyRewrite(receiver, StrVec, CurOffs, CurLen, SourceMgr, LangOpts,
+                 shouldAdjustRemovals);
     CurOffs = offs;
     StrVec = act.Text;
     CurLen = act.RemoveLen;
     CurEnd = CurOffs.getWithOffset(CurLen);
   }
 
-  applyRewrite(receiver, StrVec, CurOffs, CurLen, SourceMgr, LangOpts);
+  applyRewrite(receiver, StrVec, CurOffs, CurLen, SourceMgr, LangOpts,
+               shouldAdjustRemovals);
 }
 
 void EditedSource::clearRewrites() {

@@ -35,14 +35,10 @@
 extern "C" {
 #endif
 
-#define _TEXASR_PTR(TM_BUF) \
-  ((texasr_t *)((TM_BUF)+0))
-#define _TEXASRU_PTR(TM_BUF) \
-  ((texasru_t *)((TM_BUF)+0))
-#define _TEXASRL_PTR(TM_BUF) \
-  ((texasrl_t *)((TM_BUF)+4))
-#define _TFIAR_PTR(TM_BUF) \
-  ((tfiar_t *)((TM_BUF)+8))
+#define _TEXASR_PTR(TM_BUF) ((texasr_t *)((char *)(TM_BUF) + 0))
+#define _TEXASRU_PTR(TM_BUF) ((texasru_t *)((char *)(TM_BUF) + 0))
+#define _TEXASRL_PTR(TM_BUF) ((texasrl_t *)((char *)(TM_BUF) + 4))
+#define _TFIAR_PTR(TM_BUF) ((tfiar_t *)((char *)(TM_BUF) + 8))
 
 typedef char TM_buff_type[16];
 
@@ -178,7 +174,7 @@ extern __inline long
 __attribute__ ((__gnu_inline__, __always_inline__, __artificial__))
 __TM_is_conflict(void* const __TM_buff)
 {
-  texasru_t texasru = *_TEXASRU_PTR (TM_buff);
+  texasru_t texasru = *_TEXASRU_PTR (__TM_buff);
   /* Return TEXASR bits 11 (Self-Induced Conflict) through
      14 (Translation Invalidation Conflict).  */
   return (_TEXASRU_EXTRACT_BITS (texasru, 14, 4)) ? 1 : 0;
@@ -218,7 +214,7 @@ __TM_failure_code(void* const __TM_buff)
 
 /* These intrinsics are being made available for compatibility with
    the IBM XL compiler.  For documentation please see the "z/OS XL
-   C/C++ Programming Guide" publically available on the web.  */
+   C/C++ Programming Guide" publicly available on the web.  */
 
 static __inline long __attribute__((__always_inline__, __nodebug__))
 __TM_simple_begin ()

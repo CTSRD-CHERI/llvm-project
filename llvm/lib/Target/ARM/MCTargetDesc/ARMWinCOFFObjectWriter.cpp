@@ -9,33 +9,42 @@
 
 #include "MCTargetDesc/ARMFixupKinds.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/BinaryFormat/COFF.h"
 #include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCFixupKindInfo.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/MC/MCWinCOFFObjectWriter.h"
-#include "llvm/Support/COFF.h"
-#include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
+#include <cassert>
 
 using namespace llvm;
 
 namespace {
+
 class ARMWinCOFFObjectWriter : public MCWinCOFFObjectTargetWriter {
 public:
   ARMWinCOFFObjectWriter(bool Is64Bit)
     : MCWinCOFFObjectTargetWriter(COFF::IMAGE_FILE_MACHINE_ARMNT) {
     assert(!Is64Bit && "AArch64 support not yet implemented");
   }
-  ~ARMWinCOFFObjectWriter() override {}
 
-  unsigned getRelocType(const MCValue &Target, const MCFixup &Fixup,
-                        bool IsCrossSection,
+  ~ARMWinCOFFObjectWriter() override = default;
+
+  unsigned getRelocType(MCContext &Ctx, const MCValue &Target,
+                        const MCFixup &Fixup, bool IsCrossSection,
                         const MCAsmBackend &MAB) const override;
 
   bool recordRelocation(const MCFixup &) const override;
 };
 
-unsigned ARMWinCOFFObjectWriter::getRelocType(const MCValue &Target,
+} // end anonymous namespace
+
+unsigned ARMWinCOFFObjectWriter::getRelocType(MCContext &Ctx,
+                                              const MCValue &Target,
                                               const MCFixup &Fixup,
                                               bool IsCrossSection,
                                               const MCAsmBackend &MAB) const {
@@ -66,8 +75,8 @@ unsigned ARMWinCOFFObjectWriter::getRelocType(const MCValue &Target,
   case ARM::fixup_t2_condbranch:
     return COFF::IMAGE_REL_ARM_BRANCH20T;
   case ARM::fixup_t2_uncondbranch:
-    return COFF::IMAGE_REL_ARM_BRANCH24T;
   case ARM::fixup_arm_thumb_bl:
+    return COFF::IMAGE_REL_ARM_BRANCH24T;
   case ARM::fixup_arm_thumb_blx:
     return COFF::IMAGE_REL_ARM_BLX23T;
   case ARM::fixup_t2_movw_lo16:
@@ -79,13 +88,12 @@ unsigned ARMWinCOFFObjectWriter::getRelocType(const MCValue &Target,
 bool ARMWinCOFFObjectWriter::recordRelocation(const MCFixup &Fixup) const {
   return static_cast<unsigned>(Fixup.getKind()) != ARM::fixup_t2_movt_hi16;
 }
-}
 
 namespace llvm {
-MCObjectWriter *createARMWinCOFFObjectWriter(raw_pwrite_stream &OS,
-                                             bool Is64Bit) {
-  MCWinCOFFObjectTargetWriter *MOTW = new ARMWinCOFFObjectWriter(Is64Bit);
-  return createWinCOFFObjectWriter(MOTW, OS);
-}
+
+std::unique_ptr<MCObjectTargetWriter>
+createARMWinCOFFObjectWriter(bool Is64Bit) {
+  return llvm::make_unique<ARMWinCOFFObjectWriter>(Is64Bit);
 }
 
+} // end namespace llvm

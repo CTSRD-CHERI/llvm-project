@@ -14,7 +14,6 @@
 // Project includes
 #include "AppleThreadPlanStepThroughObjCTrampoline.h"
 #include "AppleObjCTrampolineHandler.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Expression/DiagnosticManager.h"
 #include "lldb/Expression/FunctionCaller.h"
 #include "lldb/Expression/UtilityFunction.h"
@@ -24,6 +23,7 @@
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadPlanRunToAddress.h"
 #include "lldb/Target/ThreadPlanStepOut.h"
+#include "lldb/Utility/Log.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -52,8 +52,8 @@ AppleThreadPlanStepThroughObjCTrampoline::
 
 void AppleThreadPlanStepThroughObjCTrampoline::DidPush() {
   // Setting up the memory space for the called function text might require
-  // allocations,
-  // i.e. a nested function call.  This needs to be done as a PreResumeAction.
+  // allocations, i.e. a nested function call.  This needs to be done as a
+  // PreResumeAction.
   m_thread.GetProcess()->AddPreResumeAction(PreResumeInitializeFunctionCaller,
                                             (void *)this);
 }
@@ -110,8 +110,7 @@ bool AppleThreadPlanStepThroughObjCTrampoline::DoPlanExplainsStop(
     Event *event_ptr) {
   // If we get asked to explain the stop it will be because something went
   // wrong (like the implementation for selector function crashed...  We're
-  // going
-  // to figure out what to do about that, so we do explain the stop.
+  // going to figure out what to do about that, so we do explain the stop.
   return true;
 }
 
@@ -135,8 +134,7 @@ bool AppleThreadPlanStepThroughObjCTrampoline::ShouldStop(Event *event_ptr) {
   }
 
   // Second stage, if all went well with the function calling, then fetch the
-  // target address, and
-  // queue up a "run to that address" plan.
+  // target address, and queue up a "run to that address" plan.
   if (!m_run_to_sp) {
     Value target_addr_value;
     ExecutionContext exc_ctx;
@@ -201,8 +199,8 @@ bool AppleThreadPlanStepThroughObjCTrampoline::ShouldStop(Event *event_ptr) {
   return false;
 }
 
-// The base class MischiefManaged does some cleanup - so you have to call it
-// in your MischiefManaged derived class.
+// The base class MischiefManaged does some cleanup - so you have to call it in
+// your MischiefManaged derived class.
 bool AppleThreadPlanStepThroughObjCTrampoline::MischiefManaged() {
   if (IsPlanComplete())
     return true;

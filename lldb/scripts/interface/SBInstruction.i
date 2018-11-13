@@ -30,8 +30,6 @@ public:
     lldb::SBAddress
     GetAddress();
 
-    lldb::AddressClass
-    GetAddressClass ();
     
     const char *
     GetMnemonic (lldb::SBTarget target);
@@ -53,6 +51,9 @@ public:
 
     bool
     HasDelaySlot ();
+
+    bool
+    CanSetBreakpoint ();
 
     void
     Print (FILE *out);

@@ -49,7 +49,7 @@ entry:
 ; We won't test the way the global address is calculated in this test. This is
 ; just to get the register number for the other checks.
 ; SYM32-DAG:           addiu [[R2:\$[0-9]+]], ${{[0-9]+}}, %lo(doubles)
-; SYM64-DAG:           ld [[R2:\$[0-9]]], %got_disp(doubles)(
+; SYM64-DAG:           daddiu [[R2:\$[0-9]]], ${{[0-9]+}}, %lo(doubles)
 
 ; The first argument is floating point so floating point registers are used.
 ; The first argument is the same for O32/N32/N64 but the second argument differs
@@ -111,8 +111,8 @@ entry:
 ; ALL-LABEL: float_args:
 ; We won't test the way the global address is calculated in this test. This is
 ; just to get the register number for the other checks.
-; SYM32-DAG:           addiu [[R1:\$[0-9]+]], ${{[0-9]+}}, %lo(floats)
-; SYM64-DAG:           ld [[R1:\$[0-9]]], %got_disp(floats)(
+; SYM32-DAG:           addiu  [[R1:\$[0-9]+]], ${{[0-9]+}}, %lo(floats)
+; SYM64-DAG:           daddiu [[R1:\$[0-9]]], ${{[0-9]+}}, %lo(floats)
 
 ; The first argument is floating point so floating point registers are used.
 ; The first argument is the same for O32/N32/N64 but the second argument differs
@@ -125,9 +125,11 @@ entry:
 ; I've yet to find a reference in the documentation about this but GCC uses up
 ; the remaining two argument slots in the GPR's first. We'll do the same for
 ; compatibility.
-; O32-DAG:           sw $6, 12([[R1]])
+; O32-DAG:           mtc1 $6, $f0
+; O32-DAG:           swc1 $f0, 12([[R1]])
 ; NEW-DAG:           swc1 $f14, 12([[R1]])
-; O32-DAG:           sw $7, 16([[R1]])
+; O32-DAG:           mtc1 $7, $f0
+; O32-DAG:           swc1 $f0, 16([[R1]])
 ; NEW-DAG:           swc1 $f15, 16([[R1]])
 
 ; O32 is definitely out of registers now and switches to the stack.
@@ -164,9 +166,9 @@ entry:
 ; We won't test the way the global address is calculated in this test. This is
 ; just to get the register number for the other checks.
 ; SYM32-DAG:           addiu [[R1:\$[0-9]+]], ${{[0-9]+}}, %lo(bytes)
-; SYM64-DAG:           ld [[R1:\$[0-9]]], %got_disp(bytes)(
+; SYM64-DAG:           daddiu [[R1:\$[0-9]]], ${{[0-9]+}}, %lo(bytes)
 ; SYM32-DAG:           addiu [[R2:\$[0-9]+]], ${{[0-9]+}}, %lo(doubles)
-; SYM64-DAG:           ld [[R2:\$[0-9]]], %got_disp(doubles)(
+; SYM64-DAG:           daddiu [[R2:\$[0-9]]], ${{[0-9]+}}, %lo(doubles)
 
 ; The first argument is the same in O32/N32/N64.
 ; ALL-DAG:           sb $4, 1([[R1]])
@@ -195,9 +197,9 @@ entry:
 ; We won't test the way the global address is calculated in this test. This is
 ; just to get the register number for the other checks.
 ; SYM32-DAG:           addiu [[R1:\$[0-9]+]], ${{[0-9]+}}, %lo(bytes)
-; SYM64-DAG:           ld [[R1:\$[0-9]]], %got_disp(bytes)(
+; SYM64-DAG:           daddiu [[R1:\$[0-9]]], ${{[0-9]+}}, %lo(bytes)
 ; SYM32-DAG:           addiu [[R2:\$[0-9]+]], ${{[0-9]+}}, %lo(floats)
-; SYM64-DAG:           ld [[R2:\$[0-9]]], %got_disp(floats)(
+; SYM64-DAG:           daddiu [[R2:\$[0-9]]], ${{[0-9]+}}, %lo(floats)
 
 ; The first argument is the same in O32/N32/N64.
 ; ALL-DAG:           sb $4, 1([[R1]])
@@ -207,5 +209,6 @@ entry:
 ; MD00305 and GCC disagree on this one. MD00305 says that floats are treated
 ; as 8-byte aligned and occupy two slots on O32. GCC is treating them as 4-byte
 ; aligned and occupying one slot. We'll use GCC's definition.
-; O32-DAG:           sw $5, 4([[R2]])
+; O32-DAG:           mtc1 $5, $f0
+; O32-DAG:           swc1 $f0, 4([[R2]])
 ; NEW-DAG:           swc1 $f13, 4([[R2]])

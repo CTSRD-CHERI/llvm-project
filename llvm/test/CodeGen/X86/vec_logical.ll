@@ -4,14 +4,14 @@
 
 define void @t(<4 x float> %A) {
 ; SSE-LABEL: t:
-; SSE:       # BB#0:
-; SSE-NEXT:    xorps .LCPI0_0, %xmm0
+; SSE:       # %bb.0:
+; SSE-NEXT:    xorps {{\.LCPI.*}}, %xmm0
 ; SSE-NEXT:    movaps %xmm0, 0
 ; SSE-NEXT:    retl
 ;
 ; AVX-LABEL: t:
-; AVX:       # BB#0:
-; AVX-NEXT:    vxorps .LCPI0_0, %xmm0, %xmm0
+; AVX:       # %bb.0:
+; AVX-NEXT:    vxorps {{\.LCPI.*}}, %xmm0, %xmm0
 ; AVX-NEXT:    vmovaps %xmm0, 0
 ; AVX-NEXT:    retl
   %tmp1277 = fsub <4 x float> < float -0.000000e+00, float -0.000000e+00, float -0.000000e+00, float -0.000000e+00 >, %A
@@ -21,12 +21,12 @@ define void @t(<4 x float> %A) {
 
 define <4 x float> @t1(<4 x float> %a, <4 x float> %b) {
 ; SSE-LABEL: t1:
-; SSE:       # BB#0: # %entry
+; SSE:       # %bb.0: # %entry
 ; SSE-NEXT:    xorps %xmm1, %xmm0
 ; SSE-NEXT:    retl
 ;
 ; AVX-LABEL: t1:
-; AVX:       # BB#0: # %entry
+; AVX:       # %bb.0: # %entry
 ; AVX-NEXT:    vxorps %xmm1, %xmm0, %xmm0
 ; AVX-NEXT:    retl
 entry:
@@ -39,12 +39,12 @@ entry:
 
 define <2 x double> @t2(<2 x double> %a, <2 x double> %b) {
 ; SSE-LABEL: t2:
-; SSE:       # BB#0: # %entry
+; SSE:       # %bb.0: # %entry
 ; SSE-NEXT:    andps %xmm1, %xmm0
 ; SSE-NEXT:    retl
 ;
 ; AVX-LABEL: t2:
-; AVX:       # BB#0: # %entry
+; AVX:       # %bb.0: # %entry
 ; AVX-NEXT:    vandps %xmm1, %xmm0, %xmm0
 ; AVX-NEXT:    retl
 entry:
@@ -57,7 +57,7 @@ entry:
 
 define void @t3(<4 x float> %a, <4 x float> %b, <4 x float>* %c, <4 x float>* %d) {
 ; SSE-LABEL: t3:
-; SSE:       # BB#0: # %entry
+; SSE:       # %bb.0: # %entry
 ; SSE-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; SSE-NEXT:    movl {{[0-9]+}}(%esp), %ecx
 ; SSE-NEXT:    andnps %xmm1, %xmm0
@@ -66,7 +66,7 @@ define void @t3(<4 x float> %a, <4 x float> %b, <4 x float>* %c, <4 x float>* %d
 ; SSE-NEXT:    retl
 ;
 ; AVX-LABEL: t3:
-; AVX:       # BB#0: # %entry
+; AVX:       # %bb.0: # %entry
 ; AVX-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; AVX-NEXT:    movl {{[0-9]+}}(%esp), %ecx
 ; AVX-NEXT:    vandnps %xmm1, %xmm0, %xmm0
@@ -85,3 +85,22 @@ entry:
   store <4 x float> %tmp30, <4 x float>* %d
   ret void
 }
+
+define <2 x i64> @andn_double_xor(<2 x i64> %a, <2 x i64> %b, <2 x i64> %c) {
+; SSE-LABEL: andn_double_xor:
+; SSE:       # %bb.0:
+; SSE-NEXT:    xorps %xmm2, %xmm1
+; SSE-NEXT:    andnps %xmm1, %xmm0
+; SSE-NEXT:    retl
+;
+; AVX-LABEL: andn_double_xor:
+; AVX:       # %bb.0:
+; AVX-NEXT:    vxorps %xmm2, %xmm1, %xmm1
+; AVX-NEXT:    vandnps %xmm1, %xmm0, %xmm0
+; AVX-NEXT:    retl
+  %1 = xor <2 x i64> %a, <i64 -1, i64 -1>
+  %2 = xor <2 x i64> %b, %c
+  %3 = and <2 x i64> %1, %2
+  ret <2 x i64> %3
+}
+

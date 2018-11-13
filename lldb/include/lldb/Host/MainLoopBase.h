@@ -10,31 +10,25 @@
 #ifndef lldb_Host_posix_MainLoopBase_h_
 #define lldb_Host_posix_MainLoopBase_h_
 
-#include <functional>
-
+#include "lldb/Utility/IOObject.h"
+#include "lldb/Utility/Status.h"
 #include "llvm/Support/ErrorHandling.h"
-
-#include "lldb/Core/Error.h"
-#include "lldb/Host/IOObject.h"
+#include <functional>
 
 namespace lldb_private {
 
 // The purpose of this class is to enable multiplexed processing of data from
-// different sources
-// without resorting to multi-threading. Clients can register IOObjects, which
-// will be monitored
-// for readability, and when they become ready, the specified callback will be
-// invoked.
-// Monitoring for writability is not supported, but can be easily added if
-// needed.
+// different sources without resorting to multi-threading. Clients can register
+// IOObjects, which will be monitored for readability, and when they become
+// ready, the specified callback will be invoked. Monitoring for writability is
+// not supported, but can be easily added if needed.
 //
 // The RegisterReadObject function return a handle, which controls the duration
-// of the monitoring. When
-// this handle is destroyed, the callback is deregistered.
+// of the monitoring. When this handle is destroyed, the callback is
+// deregistered.
 //
 // This class simply defines the interface common for all platforms, actual
-// implementations are
-// platform-specific.
+// implementations are platform-specific.
 class MainLoopBase {
 private:
   class ReadHandle;
@@ -49,14 +43,13 @@ public:
 
   virtual ReadHandleUP RegisterReadObject(const lldb::IOObjectSP &object_sp,
                                           const Callback &callback,
-                                          Error &error) {
+                                          Status &error) {
     llvm_unreachable("Not implemented");
   }
 
   // Waits for registered events and invoke the proper callbacks. Returns when
-  // all callbacks
-  // deregister themselves or when someone requests termination.
-  virtual Error Run() { llvm_unreachable("Not implemented"); }
+  // all callbacks deregister themselves or when someone requests termination.
+  virtual Status Run() { llvm_unreachable("Not implemented"); }
 
   // Requests the exit of the Run() function.
   virtual void RequestTermination() { llvm_unreachable("Not implemented"); }

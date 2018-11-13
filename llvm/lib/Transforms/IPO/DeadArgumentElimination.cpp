@@ -1,4 +1,4 @@
-//===-- DeadArgumentElimination.cpp - Eliminate dead arguments ------------===//
+//===- DeadArgumentElimination.cpp - Eliminate dead arguments -------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -20,35 +20,48 @@
 #include "llvm/Transforms/IPO/DeadArgumentElimination.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/ADT/StringExtras.h"
+#include "llvm/IR/Argument.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
-#include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Constant.h"
-#include "llvm/IR/DIBuilder.h"
-#include "llvm/IR/DebugInfo.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/PassManager.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Use.h"
+#include "llvm/IR/User.h"
+#include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include <set>
-#include <tuple>
+#include <cassert>
+#include <cstdint>
+#include <utility>
+#include <vector>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "deadargelim"
 
 STATISTIC(NumArgumentsEliminated, "Number of unread args removed");
 STATISTIC(NumRetValsEliminated  , "Number of unused return values removed");
-STATISTIC(NumArgumentsReplacedWithUndef, 
+STATISTIC(NumArgumentsReplacedWithUndef,
           "Number of unread args replaced with undef");
+
 namespace {
+
   /// DAE - The dead argument elimination pass.
-  ///
   class DAE : public ModulePass {
   protected:
     // DAH uses this to specify a different ID.
@@ -56,6 +69,7 @@ namespace {
 
   public:
     static char ID; // Pass identification, replacement for typeid
+
     DAE() : ModulePass(ID) {
       initializeDAEPass(*PassRegistry::getPassRegistry());
     }
@@ -71,33 +85,38 @@ namespace {
 
     virtual bool ShouldHackArguments() const { return false; }
   };
-}
 
+} // end anonymous namespace
 
 char DAE::ID = 0;
+
 INITIALIZE_PASS(DAE, "deadargelim", "Dead Argument Elimination", false, false)
 
 namespace {
+
   /// DAH - DeadArgumentHacking pass - Same as dead argument elimination, but
   /// deletes arguments to functions which are external.  This is only for use
   /// by bugpoint.
   struct DAH : public DAE {
     static char ID;
+
     DAH() : DAE(ID) {}
 
     bool ShouldHackArguments() const override { return true; }
   };
-}
+
+} // end anonymous namespace
 
 char DAH::ID = 0;
-INITIALIZE_PASS(DAH, "deadarghaX0r", 
+
+INITIALIZE_PASS(DAH, "deadarghaX0r",
                 "Dead Argument Hacking (BUGPOINT USE ONLY; DO NOT USE)",
                 false, false)
 
 /// createDeadArgEliminationPass - This pass removes arguments from functions
 /// which are not used by the body of the function.
-///
 ModulePass *llvm::createDeadArgEliminationPass() { return new DAE(); }
+
 ModulePass *llvm::createDeadArgHackingPass() { return new DAH(); }
 
 /// DeleteDeadVarargs - If this is an function that takes a ... list, and if
@@ -140,7 +159,7 @@ bool DeadArgumentEliminationPass::DeleteDeadVarargs(Function &Fn) {
   // the old function, but doesn't have isVarArg set.
   FunctionType *FTy = Fn.getFunctionType();
 
-  std::vector<Type*> Params(FTy->param_begin(), FTy->param_end());
+  std::vector<Type *> Params(FTy->param_begin(), FTy->param_end());
   FunctionType *NFTy = FunctionType::get(FTy->getReturnType(),
                                                 Params, false);
   unsigned NumArgs = Params.size();
@@ -155,7 +174,7 @@ bool DeadArgumentEliminationPass::DeleteDeadVarargs(Function &Fn) {
   // Loop over all of the callers of the function, transforming the call sites
   // to pass in a smaller number of arguments into the new function.
   //
-  std::vector<Value*> Args;
+  std::vector<Value *> Args;
   for (Value::user_iterator I = Fn.user_begin(), E = Fn.user_end(); I != E; ) {
     CallSite CS(*I++);
     if (!CS)
@@ -166,41 +185,40 @@ bool DeadArgumentEliminationPass::DeleteDeadVarargs(Function &Fn) {
     Args.assign(CS.arg_begin(), CS.arg_begin() + NumArgs);
 
     // Drop any attributes that were on the vararg arguments.
-    AttributeSet PAL = CS.getAttributes();
-    if (!PAL.isEmpty() && PAL.getSlotIndex(PAL.getNumSlots() - 1) > NumArgs) {
-      SmallVector<AttributeSet, 8> AttributesVec;
-      for (unsigned i = 0; PAL.getSlotIndex(i) <= NumArgs; ++i)
-        AttributesVec.push_back(PAL.getSlotAttributes(i));
-      if (PAL.hasAttributes(AttributeSet::FunctionIndex))
-        AttributesVec.push_back(AttributeSet::get(Fn.getContext(),
-                                                  PAL.getFnAttributes()));
-      PAL = AttributeSet::get(Fn.getContext(), AttributesVec);
+    AttributeList PAL = CS.getAttributes();
+    if (!PAL.isEmpty()) {
+      SmallVector<AttributeSet, 8> ArgAttrs;
+      for (unsigned ArgNo = 0; ArgNo < NumArgs; ++ArgNo)
+        ArgAttrs.push_back(PAL.getParamAttributes(ArgNo));
+      PAL = AttributeList::get(Fn.getContext(), PAL.getFnAttributes(),
+                               PAL.getRetAttributes(), ArgAttrs);
     }
 
     SmallVector<OperandBundleDef, 1> OpBundles;
     CS.getOperandBundlesAsDefs(OpBundles);
 
-    Instruction *New;
+    CallSite NewCS;
     if (InvokeInst *II = dyn_cast<InvokeInst>(Call)) {
-      New = InvokeInst::Create(NF, II->getNormalDest(), II->getUnwindDest(),
-                               Args, OpBundles, "", Call);
-      cast<InvokeInst>(New)->setCallingConv(CS.getCallingConv());
-      cast<InvokeInst>(New)->setAttributes(PAL);
+      NewCS = InvokeInst::Create(NF, II->getNormalDest(), II->getUnwindDest(),
+                                 Args, OpBundles, "", Call);
     } else {
-      New = CallInst::Create(NF, Args, OpBundles, "", Call);
-      cast<CallInst>(New)->setCallingConv(CS.getCallingConv());
-      cast<CallInst>(New)->setAttributes(PAL);
-      if (cast<CallInst>(Call)->isTailCall())
-        cast<CallInst>(New)->setTailCall();
+      NewCS = CallInst::Create(NF, Args, OpBundles, "", Call);
+      cast<CallInst>(NewCS.getInstruction())
+          ->setTailCallKind(cast<CallInst>(Call)->getTailCallKind());
     }
-    New->setDebugLoc(Call->getDebugLoc());
+    NewCS.setCallingConv(CS.getCallingConv());
+    NewCS.setAttributes(PAL);
+    NewCS->setDebugLoc(Call->getDebugLoc());
+    uint64_t W;
+    if (Call->extractProfTotalWeight(W))
+      NewCS->setProfWeight(W);
 
     Args.clear();
 
     if (!Call->use_empty())
-      Call->replaceAllUsesWith(New);
+      Call->replaceAllUsesWith(NewCS.getInstruction());
 
-    New->takeName(Call);
+    NewCS->takeName(Call);
 
     // Finally, remove the old call from the program, reducing the use-count of
     // F.
@@ -215,7 +233,6 @@ bool DeadArgumentEliminationPass::DeleteDeadVarargs(Function &Fn) {
   // Loop over the argument list, transferring uses of the old arguments over to
   // the new arguments, also transferring over the names as well.  While we're at
   // it, remove the dead arguments from the DeadArguments list.
-  //
   for (Function::arg_iterator I = Fn.arg_begin(), E = Fn.arg_end(),
        I2 = NF->arg_begin(); I != E; ++I, ++I2) {
     // Move the name and users over to the new version.
@@ -223,8 +240,11 @@ bool DeadArgumentEliminationPass::DeleteDeadVarargs(Function &Fn) {
     I2->takeName(&*I);
   }
 
-  // Patch the pointer to LLVM function in debug info descriptor.
-  NF->setSubprogram(Fn.getSubprogram());
+  // Clone metadatas from the old function, including debug info descriptor.
+  SmallVector<std::pair<unsigned, MDNode *>, 1> MDs;
+  Fn.getAllMetadata(MDs);
+  for (auto MD : MDs)
+    NF->addMetadata(MD.first, *MD.second);
 
   // Fix up any BlockAddresses that refer to the function.
   Fn.replaceAllUsesWith(ConstantExpr::getBitCast(NF, Fn.getType()));
@@ -236,7 +256,7 @@ bool DeadArgumentEliminationPass::DeleteDeadVarargs(Function &Fn) {
   return true;
 }
 
-/// RemoveDeadArgumentsFromCallers - Checks if the given function has any 
+/// RemoveDeadArgumentsFromCallers - Checks if the given function has any
 /// arguments that are unused, and changes the caller parameters to be undefined
 /// instead.
 bool DeadArgumentEliminationPass::RemoveDeadArgumentsFromCallers(Function &Fn) {
@@ -269,15 +289,20 @@ bool DeadArgumentEliminationPass::RemoveDeadArgumentsFromCallers(Function &Fn) {
     return false;
 
   SmallVector<unsigned, 8> UnusedArgs;
+  bool Changed = false;
+
   for (Argument &Arg : Fn.args()) {
-    if (!Arg.hasSwiftErrorAttr() && Arg.use_empty() && !Arg.hasByValOrInAllocaAttr())
+    if (!Arg.hasSwiftErrorAttr() && Arg.use_empty() && !Arg.hasByValOrInAllocaAttr()) {
+      if (Arg.isUsedByMetadata()) {
+        Arg.replaceAllUsesWith(UndefValue::get(Arg.getType()));
+        Changed = true;
+      }
       UnusedArgs.push_back(Arg.getArgNo());
+    }
   }
 
   if (UnusedArgs.empty())
     return false;
-
-  bool Changed = false;
 
   for (Use &U : Fn.uses()) {
     CallSite CS(U.getUser());
@@ -343,7 +368,6 @@ DeadArgumentEliminationPass::MarkIfNotLive(RetOrArg Use,
   MaybeLiveUses.push_back(Use);
   return MaybeLive;
 }
-
 
 /// SurveyUse - This looks at a single use of an argument or return value
 /// and determines if it should be alive or not. Adds this use to MaybeLiveUses
@@ -461,7 +485,6 @@ DeadArgumentEliminationPass::SurveyUses(const Value *V,
 //
 // We consider arguments of non-internal functions to be intrinsically alive as
 // well as arguments to functions which have their "address taken".
-//
 void DeadArgumentEliminationPass::SurveyFunction(const Function &F) {
   // Functions with inalloca parameters are expecting args in a particular
   // register and memory layout.
@@ -479,35 +502,56 @@ void DeadArgumentEliminationPass::SurveyFunction(const Function &F) {
   }
 
   unsigned RetCount = NumRetVals(&F);
+
   // Assume all return values are dead
-  typedef SmallVector<Liveness, 5> RetVals;
+  using RetVals = SmallVector<Liveness, 5>;
+
   RetVals RetValLiveness(RetCount, MaybeLive);
 
-  typedef SmallVector<UseVector, 5> RetUses;
+  using RetUses = SmallVector<UseVector, 5>;
+
   // These vectors map each return value to the uses that make it MaybeLive, so
   // we can add those to the Uses map if the return value really turns out to be
   // MaybeLive. Initialized to a list of RetCount empty lists.
   RetUses MaybeLiveRetUses(RetCount);
 
-  for (Function::const_iterator BB = F.begin(), E = F.end(); BB != E; ++BB)
-    if (const ReturnInst *RI = dyn_cast<ReturnInst>(BB->getTerminator()))
+  bool HasMustTailCalls = false;
+
+  for (Function::const_iterator BB = F.begin(), E = F.end(); BB != E; ++BB) {
+    if (const ReturnInst *RI = dyn_cast<ReturnInst>(BB->getTerminator())) {
       if (RI->getNumOperands() != 0 && RI->getOperand(0)->getType()
           != F.getFunctionType()->getReturnType()) {
         // We don't support old style multiple return values.
         MarkLive(F);
         return;
       }
+    }
+
+    // If we have any returns of `musttail` results - the signature can't
+    // change
+    if (BB->getTerminatingMustTailCall() != nullptr)
+      HasMustTailCalls = true;
+  }
+
+  if (HasMustTailCalls) {
+    LLVM_DEBUG(dbgs() << "DeadArgumentEliminationPass - " << F.getName()
+                      << " has musttail calls\n");
+  }
 
   if (!F.hasLocalLinkage() && (!ShouldHackArguments || F.isIntrinsic())) {
     MarkLive(F);
     return;
   }
 
-  DEBUG(dbgs() << "DeadArgumentEliminationPass - Inspecting callers for fn: "
-               << F.getName() << "\n");
+  LLVM_DEBUG(
+      dbgs() << "DeadArgumentEliminationPass - Inspecting callers for fn: "
+             << F.getName() << "\n");
   // Keep track of the number of live retvals, so we can skip checks once all
   // of them turn out to be live.
   unsigned NumLiveRetVals = 0;
+
+  bool HasMustTailCallers = false;
+
   // Loop all uses of the function.
   for (const Use &U : F.uses()) {
     // If the function is PASSED IN as an argument, its address has been
@@ -517,6 +561,11 @@ void DeadArgumentEliminationPass::SurveyFunction(const Function &F) {
       MarkLive(F);
       return;
     }
+
+    // The number of arguments for `musttail` call must match the number of
+    // arguments of the caller
+    if (CS.isMustTailCall())
+      HasMustTailCallers = true;
 
     // If this use is anything other than a call site, the function is alive.
     const Instruction *TheCall = CS.getInstruction();
@@ -562,12 +611,17 @@ void DeadArgumentEliminationPass::SurveyFunction(const Function &F) {
     }
   }
 
+  if (HasMustTailCallers) {
+    LLVM_DEBUG(dbgs() << "DeadArgumentEliminationPass - " << F.getName()
+                      << " has musttail callers\n");
+  }
+
   // Now we've inspected all callers, record the liveness of our return values.
   for (unsigned i = 0; i != RetCount; ++i)
     MarkValue(CreateRet(&F, i), RetValLiveness[i], MaybeLiveRetUses[i]);
 
-  DEBUG(dbgs() << "DeadArgumentEliminationPass - Inspecting args for fn: "
-               << F.getName() << "\n");
+  LLVM_DEBUG(dbgs() << "DeadArgumentEliminationPass - Inspecting args for fn: "
+                    << F.getName() << "\n");
 
   // Now, check all of our arguments.
   unsigned i = 0;
@@ -575,16 +629,23 @@ void DeadArgumentEliminationPass::SurveyFunction(const Function &F) {
   for (Function::const_arg_iterator AI = F.arg_begin(),
        E = F.arg_end(); AI != E; ++AI, ++i) {
     Liveness Result;
-    if (F.getFunctionType()->isVarArg()) {
+    if (F.getFunctionType()->isVarArg() || HasMustTailCallers ||
+        HasMustTailCalls) {
       // Variadic functions will already have a va_arg function expanded inside
       // them, making them potentially very sensitive to ABI changes resulting
       // from removing arguments entirely, so don't. For example AArch64 handles
       // register and stack HFAs very differently, and this is reflected in the
       // IR which has already been generated.
+      //
+      // `musttail` calls to this function restrict argument removal attempts.
+      // The signature of the caller must match the signature of the function.
+      //
+      // `musttail` calls in this function prevents us from changing its
+      // signature
       Result = Live;
     } else {
       // See what the effect of this use is (recording any uses that cause
-      // MaybeLive in MaybeLiveArgUses). 
+      // MaybeLive in MaybeLiveArgUses).
       Result = SurveyUses(&*AI, MaybeLiveArgUses);
     }
 
@@ -602,15 +663,15 @@ void DeadArgumentEliminationPass::SurveyFunction(const Function &F) {
 void DeadArgumentEliminationPass::MarkValue(const RetOrArg &RA, Liveness L,
                                             const UseVector &MaybeLiveUses) {
   switch (L) {
-    case Live: MarkLive(RA); break;
+    case Live:
+      MarkLive(RA);
+      break;
     case MaybeLive:
-    {
       // Note any uses of this value, so this return value can be
       // marked live whenever one of the uses becomes live.
       for (const auto &MaybeLiveUse : MaybeLiveUses)
         Uses.insert(std::make_pair(MaybeLiveUse, RA));
       break;
-    }
   }
 }
 
@@ -619,8 +680,8 @@ void DeadArgumentEliminationPass::MarkValue(const RetOrArg &RA, Liveness L,
 /// mark any values that are used as this function's parameters or by its return
 /// values (according to Uses) live as well.
 void DeadArgumentEliminationPass::MarkLive(const Function &F) {
-  DEBUG(dbgs() << "DeadArgumentEliminationPass - Intrinsically live fn: "
-               << F.getName() << "\n");
+  LLVM_DEBUG(dbgs() << "DeadArgumentEliminationPass - Intrinsically live fn: "
+                    << F.getName() << "\n");
   // Mark the function as live.
   LiveFunctions.insert(&F);
   // Mark all arguments as live.
@@ -641,8 +702,8 @@ void DeadArgumentEliminationPass::MarkLive(const RetOrArg &RA) {
   if (!LiveValues.insert(RA).second)
     return; // We were already marked Live.
 
-  DEBUG(dbgs() << "DeadArgumentEliminationPass - Marking "
-               << RA.getDescription() << " live\n");
+  LLVM_DEBUG(dbgs() << "DeadArgumentEliminationPass - Marking "
+                    << RA.getDescription() << " live\n");
   PropagateLiveness(RA);
 }
 
@@ -681,8 +742,8 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
   bool HasLiveReturnedArg = false;
 
   // Set up to build a new list of parameter attributes.
-  SmallVector<AttributeSet, 8> AttributesVec;
-  const AttributeSet &PAL = F->getAttributes();
+  SmallVector<AttributeSet, 8> ArgAttrVec;
+  const AttributeList &PAL = F->getAttributes();
 
   // Remember which arguments are still alive.
   SmallVector<bool, 10> ArgAlive(FTy->getNumParams(), false);
@@ -696,21 +757,13 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
     if (LiveValues.erase(Arg)) {
       Params.push_back(I->getType());
       ArgAlive[i] = true;
-
-      // Get the original parameter attributes (skipping the first one, that is
-      // for the return value.
-      if (PAL.hasAttributes(i + 1)) {
-        AttrBuilder B(PAL, i + 1);
-        if (B.contains(Attribute::Returned))
-          HasLiveReturnedArg = true;
-        AttributesVec.
-          push_back(AttributeSet::get(F->getContext(), Params.size(), B));
-      }
+      ArgAttrVec.push_back(PAL.getParamAttributes(i));
+      HasLiveReturnedArg |= PAL.hasParamAttribute(i, Attribute::Returned);
     } else {
       ++NumArgumentsEliminated;
-      DEBUG(dbgs() << "DeadArgumentEliminationPass - Removing argument " << i
-                   << " (" << I->getName() << ") from " << F->getName()
-                   << "\n");
+      LLVM_DEBUG(dbgs() << "DeadArgumentEliminationPass - Removing argument "
+                        << i << " (" << I->getName() << ") from "
+                        << F->getName() << "\n");
     }
   }
 
@@ -729,7 +782,7 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
   //    argument.
   // 2) Retain the 'returned' attribute and treat the return value (but not the
   //    entire function) as live so that it is not eliminated.
-  // 
+  //
   // It's not clear in the general case which option is more profitable because,
   // even in the absence of explicit uses of the return value, code generation
   // is free to use the 'returned' attribute to do things like eliding
@@ -753,8 +806,9 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
         NewRetIdxs[i] = RetTypes.size() - 1;
       } else {
         ++NumRetValsEliminated;
-        DEBUG(dbgs() << "DeadArgumentEliminationPass - Removing return value "
-                     << i << " from " << F->getName() << "\n");
+        LLVM_DEBUG(
+            dbgs() << "DeadArgumentEliminationPass - Removing return value "
+                   << i << " from " << F->getName() << "\n");
       }
     }
     if (RetTypes.size() > 1) {
@@ -771,7 +825,7 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
       // One return type? Just a simple value then, but only if we didn't use to
       // return a struct with that simple value before.
       NRetTy = RetTypes.front();
-    else if (RetTypes.size() == 0)
+    else if (RetTypes.empty())
       // No return types? Make it void, but only if we didn't use to return {}.
       NRetTy = Type::getVoidTy(F->getContext());
   }
@@ -779,30 +833,28 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
   assert(NRetTy && "No new return type found?");
 
   // The existing function return attributes.
-  AttributeSet RAttrs = PAL.getRetAttributes();
+  AttrBuilder RAttrs(PAL.getRetAttributes());
 
   // Remove any incompatible attributes, but only if we removed all return
   // values. Otherwise, ensure that we don't have any conflicting attributes
   // here. Currently, this should not be possible, but special handling might be
   // required when new return value attributes are added.
   if (NRetTy->isVoidTy())
-    RAttrs = RAttrs.removeAttributes(NRetTy->getContext(),
-                                     AttributeSet::ReturnIndex,
-                                     AttributeFuncs::typeIncompatible(NRetTy));
+    RAttrs.remove(AttributeFuncs::typeIncompatible(NRetTy));
   else
-    assert(!AttrBuilder(RAttrs, AttributeSet::ReturnIndex).
-             overlaps(AttributeFuncs::typeIncompatible(NRetTy)) &&
+    assert(!RAttrs.overlaps(AttributeFuncs::typeIncompatible(NRetTy)) &&
            "Return attributes no longer compatible?");
 
-  if (RAttrs.hasAttributes(AttributeSet::ReturnIndex))
-    AttributesVec.push_back(AttributeSet::get(NRetTy->getContext(), RAttrs));
+  AttributeSet RetAttrs = AttributeSet::get(F->getContext(), RAttrs);
 
-  if (PAL.hasAttributes(AttributeSet::FunctionIndex))
-    AttributesVec.push_back(AttributeSet::get(F->getContext(),
-                                              PAL.getFnAttributes()));
+  // Strip allocsize attributes. They might refer to the deleted arguments.
+  AttributeSet FnAttrs = PAL.getFnAttributes().removeAttribute(
+      F->getContext(), Attribute::AllocSize);
 
   // Reconstruct the AttributesList based on the vector we constructed.
-  AttributeSet NewPAL = AttributeSet::get(F->getContext(), AttributesVec);
+  assert(ArgAttrVec.size() == Params.size());
+  AttributeList NewPAL =
+      AttributeList::get(F->getContext(), FnAttrs, RetAttrs, ArgAttrVec);
 
   // Create the new function type based on the recomputed parameters.
   FunctionType *NFTy = FunctionType::get(NRetTy, Params, FTy->isVarArg());
@@ -823,24 +875,19 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
 
   // Loop over all of the callers of the function, transforming the call sites
   // to pass in a smaller number of arguments into the new function.
-  //
   std::vector<Value*> Args;
   while (!F->use_empty()) {
     CallSite CS(F->user_back());
     Instruction *Call = CS.getInstruction();
 
-    AttributesVec.clear();
-    const AttributeSet &CallPAL = CS.getAttributes();
+    ArgAttrVec.clear();
+    const AttributeList &CallPAL = CS.getAttributes();
 
-    // The call return attributes.
-    AttributeSet RAttrs = CallPAL.getRetAttributes();
-
-    // Adjust in case the function was changed to return void.
-    RAttrs = RAttrs.removeAttributes(NRetTy->getContext(),
-                                     AttributeSet::ReturnIndex,
-                        AttributeFuncs::typeIncompatible(NF->getReturnType()));
-    if (RAttrs.hasAttributes(AttributeSet::ReturnIndex))
-      AttributesVec.push_back(AttributeSet::get(NF->getContext(), RAttrs));
+    // Adjust the call return attributes in case the function was changed to
+    // return void.
+    AttrBuilder RAttrs(CallPAL.getRetAttributes());
+    RAttrs.remove(AttributeFuncs::typeIncompatible(NRetTy));
+    AttributeSet RetAttrs = AttributeSet::get(F->getContext(), RAttrs);
 
     // Declare these outside of the loops, so we can reuse them for the second
     // loop, which loops the varargs.
@@ -852,57 +899,61 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
       if (ArgAlive[i]) {
         Args.push_back(*I);
         // Get original parameter attributes, but skip return attributes.
-        if (CallPAL.hasAttributes(i + 1)) {
-          AttrBuilder B(CallPAL, i + 1);
+        AttributeSet Attrs = CallPAL.getParamAttributes(i);
+        if (NRetTy != RetTy && Attrs.hasAttribute(Attribute::Returned)) {
           // If the return type has changed, then get rid of 'returned' on the
           // call site. The alternative is to make all 'returned' attributes on
           // call sites keep the return value alive just like 'returned'
-          // attributes on function declaration but it's less clearly a win
-          // and this is not an expected case anyway
-          if (NRetTy != RetTy && B.contains(Attribute::Returned))
-            B.removeAttribute(Attribute::Returned);
-          AttributesVec.
-            push_back(AttributeSet::get(F->getContext(), Args.size(), B));
+          // attributes on function declaration but it's less clearly a win and
+          // this is not an expected case anyway
+          ArgAttrVec.push_back(AttributeSet::get(
+              F->getContext(),
+              AttrBuilder(Attrs).removeAttribute(Attribute::Returned)));
+        } else {
+          // Otherwise, use the original attributes.
+          ArgAttrVec.push_back(Attrs);
         }
       }
 
     // Push any varargs arguments on the list. Don't forget their attributes.
     for (CallSite::arg_iterator E = CS.arg_end(); I != E; ++I, ++i) {
       Args.push_back(*I);
-      if (CallPAL.hasAttributes(i + 1)) {
-        AttrBuilder B(CallPAL, i + 1);
-        AttributesVec.
-          push_back(AttributeSet::get(F->getContext(), Args.size(), B));
-      }
+      ArgAttrVec.push_back(CallPAL.getParamAttributes(i));
     }
 
-    if (CallPAL.hasAttributes(AttributeSet::FunctionIndex))
-      AttributesVec.push_back(AttributeSet::get(Call->getContext(),
-                                                CallPAL.getFnAttributes()));
-
     // Reconstruct the AttributesList based on the vector we constructed.
-    AttributeSet NewCallPAL = AttributeSet::get(F->getContext(), AttributesVec);
+    assert(ArgAttrVec.size() == Args.size());
+
+    // Again, be sure to remove any allocsize attributes, since their indices
+    // may now be incorrect.
+    AttributeSet FnAttrs = CallPAL.getFnAttributes().removeAttribute(
+        F->getContext(), Attribute::AllocSize);
+
+    AttributeList NewCallPAL = AttributeList::get(
+        F->getContext(), FnAttrs, RetAttrs, ArgAttrVec);
 
     SmallVector<OperandBundleDef, 1> OpBundles;
     CS.getOperandBundlesAsDefs(OpBundles);
 
-    Instruction *New;
+    CallSite NewCS;
     if (InvokeInst *II = dyn_cast<InvokeInst>(Call)) {
-      New = InvokeInst::Create(NF, II->getNormalDest(), II->getUnwindDest(),
-                               Args, OpBundles, "", Call->getParent());
-      cast<InvokeInst>(New)->setCallingConv(CS.getCallingConv());
-      cast<InvokeInst>(New)->setAttributes(NewCallPAL);
+      NewCS = InvokeInst::Create(NF, II->getNormalDest(), II->getUnwindDest(),
+                                 Args, OpBundles, "", Call->getParent());
     } else {
-      New = CallInst::Create(NF, Args, OpBundles, "", Call);
-      cast<CallInst>(New)->setCallingConv(CS.getCallingConv());
-      cast<CallInst>(New)->setAttributes(NewCallPAL);
-      if (cast<CallInst>(Call)->isTailCall())
-        cast<CallInst>(New)->setTailCall();
+      NewCS = CallInst::Create(NF, Args, OpBundles, "", Call);
+      cast<CallInst>(NewCS.getInstruction())
+          ->setTailCallKind(cast<CallInst>(Call)->getTailCallKind());
     }
-    New->setDebugLoc(Call->getDebugLoc());
-
+    NewCS.setCallingConv(CS.getCallingConv());
+    NewCS.setAttributes(NewCallPAL);
+    NewCS->setDebugLoc(Call->getDebugLoc());
+    uint64_t W;
+    if (Call->extractProfTotalWeight(W))
+      NewCS->setProfWeight(W);
     Args.clear();
+    ArgAttrVec.clear();
 
+    Instruction *New = NewCS.getInstruction();
     if (!Call->use_empty()) {
       if (New->getType() == Call->getType()) {
         // Return type not changed? Just replace users then.
@@ -1020,8 +1071,11 @@ bool DeadArgumentEliminationPass::RemoveDeadStuffFromFunction(Function *F) {
         BB.getInstList().erase(RI);
       }
 
-  // Patch the pointer to LLVM function in debug info descriptor.
-  NF->setSubprogram(F->getSubprogram());
+  // Clone metadatas from the old function, including debug info descriptor.
+  SmallVector<std::pair<unsigned, MDNode *>, 1> MDs;
+  F->getAllMetadata(MDs);
+  for (auto MD : MDs)
+    NF->addMetadata(MD.first, *MD.second);
 
   // Now that the old function is dead, delete it.
   F->eraseFromParent();
@@ -1037,7 +1091,7 @@ PreservedAnalyses DeadArgumentEliminationPass::run(Module &M,
   // removed.  We can do this if they never call va_start.  This loop cannot be
   // fused with the next loop, because deleting a function invalidates
   // information computed while surveying other functions.
-  DEBUG(dbgs() << "DeadArgumentEliminationPass - Deleting dead varargs\n");
+  LLVM_DEBUG(dbgs() << "DeadArgumentEliminationPass - Deleting dead varargs\n");
   for (Module::iterator I = M.begin(), E = M.end(); I != E; ) {
     Function &F = *I++;
     if (F.getFunctionType()->isVarArg())
@@ -1048,7 +1102,7 @@ PreservedAnalyses DeadArgumentEliminationPass::run(Module &M,
   // We assume all arguments are dead unless proven otherwise (allowing us to
   // determine that dead arguments passed into recursive functions are dead).
   //
-  DEBUG(dbgs() << "DeadArgumentEliminationPass - Determining liveness\n");
+  LLVM_DEBUG(dbgs() << "DeadArgumentEliminationPass - Determining liveness\n");
   for (auto &F : M)
     SurveyFunction(F);
 

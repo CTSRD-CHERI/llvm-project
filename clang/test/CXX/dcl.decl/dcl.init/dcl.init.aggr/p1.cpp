@@ -111,6 +111,11 @@ struct NonAggr6 { // expected-note 3 {{candidate constructor}}
 };
 NonAggr6 na6 = { 42 }; // expected-error {{no matching constructor for initialization of 'NonAggr6'}}
 
+struct NonAggr7 : NonAggr6 { // expected-note 3 {{candidate constructor}}
+  int n;
+};
+NonAggr7 na7 = {{}, 42}; // expected-error {{no matching constructor for initialization of 'NonAggr7'}}
+
 struct DefaultedAggr {
   int n;
 
@@ -122,3 +127,39 @@ struct DefaultedAggr {
   ~DefaultedAggr() = default;
 };
 DefaultedAggr da = { 42 } ;
+
+struct ExplicitDefaultedAggr {
+  int n;
+  explicit ExplicitDefaultedAggr() = default; // expected-note {{candidate}}
+  ExplicitDefaultedAggr(const ExplicitDefaultedAggr &) = default; // expected-note {{candidate}}
+  ExplicitDefaultedAggr(ExplicitDefaultedAggr &&) = default; // expected-note {{candidate}}
+};
+ExplicitDefaultedAggr eda = { 42 }; // expected-error {{no matching constructor}}
+ExplicitDefaultedAggr eda2{};
+
+struct DefaultedBase {
+  int n;
+  DefaultedBase() = default;
+  DefaultedBase(DefaultedBase const&) = default;
+  DefaultedBase(DefaultedBase &&) = default;
+};
+
+struct InheritingConstructors : DefaultedBase { // expected-note 3 {{candidate}}
+  using DefaultedBase::DefaultedBase;
+};
+InheritingConstructors ic = { 42 }; // expected-error {{no matching constructor}}
+
+struct NonInheritingConstructors : DefaultedBase {}; // expected-note 0+ {{candidate}}
+NonInheritingConstructors nic = { 42 };
+#if __cplusplus <= 201402L
+// expected-error@-2 {{no matching constructor}}
+#endif
+
+struct NonAggrBase {
+  NonAggrBase(int) {}
+};
+struct HasNonAggrBase : NonAggrBase {}; // expected-note 0+ {{candidate}}
+HasNonAggrBase hnab = {42};
+#if __cplusplus <= 201402L
+// expected-error@-2 {{no matching constructor}}
+#endif

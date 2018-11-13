@@ -16,26 +16,15 @@
 #ifndef LLVM_SUPPORT_ERROROR_H
 #define LLVM_SUPPORT_ERROROR_H
 
-#include "llvm/ADT/PointerIntPair.h"
 #include "llvm/Support/AlignOf.h"
 #include <cassert>
 #include <system_error>
 #include <type_traits>
+#include <utility>
 
 namespace llvm {
-/// \brief Stores a reference that can be changed.
-template <typename T>
-class ReferenceStorage {
-  T *Storage;
 
-public:
-  ReferenceStorage(T &Ref) : Storage(&Ref) {}
-
-  operator T &() const { return *Storage; }
-  T &get() const { return *Storage; }
-};
-
-/// \brief Represents either an error or a value T.
+/// Represents either an error or a value T.
 ///
 /// ErrorOr<T> is a pointer-like class that represents the result of an
 /// operation. The result is either an error, or a value of type T. This is
@@ -67,17 +56,19 @@ public:
 template<class T>
 class ErrorOr {
   template <class OtherT> friend class ErrorOr;
+
   static const bool isRef = std::is_reference<T>::value;
-  typedef ReferenceStorage<typename std::remove_reference<T>::type> wrap;
+
+  using wrap = std::reference_wrapper<typename std::remove_reference<T>::type>;
 
 public:
-  typedef typename std::conditional<isRef, wrap, T>::type storage_type;
+  using storage_type = typename std::conditional<isRef, wrap, T>::type;
 
 private:
-  typedef typename std::remove_reference<T>::type &reference;
-  typedef const typename std::remove_reference<T>::type &const_reference;
-  typedef typename std::remove_reference<T>::type *pointer;
-  typedef const typename std::remove_reference<T>::type *const_pointer;
+  using reference = typename std::remove_reference<T>::type &;
+  using const_reference = const typename std::remove_reference<T>::type &;
+  using pointer = typename std::remove_reference<T>::type *;
+  using const_pointer = const typename std::remove_reference<T>::type *;
 
 public:
   template <class E>
@@ -158,7 +149,7 @@ public:
       getStorage()->~storage_type();
   }
 
-  /// \brief Return false if there is an error.
+  /// Return false if there is an error.
   explicit operator bool() const {
     return !HasError;
   }
@@ -282,6 +273,7 @@ typename std::enable_if<std::is_error_code_enum<E>::value ||
 operator==(const ErrorOr<T> &Err, E Code) {
   return Err.getError() == Code;
 }
+
 } // end namespace llvm
 
 #endif // LLVM_SUPPORT_ERROROR_H

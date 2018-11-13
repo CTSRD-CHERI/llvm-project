@@ -17,11 +17,8 @@
 #include <string>
 
 #include "Plugins/ExpressionParser/Clang/ClangPersistentVariables.h"
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Expression/DiagnosticManager.h"
 #include "lldb/Expression/ExpressionSourceCode.h"
@@ -43,6 +40,9 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/ThreadPlan.h"
 #include "lldb/Target/ThreadPlanCallUserExpression.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb_private;
 
@@ -101,7 +101,7 @@ bool UserExpression::MatchesContext(ExecutionContext &exe_ctx) {
 
 lldb::addr_t UserExpression::GetObjectPointer(lldb::StackFrameSP frame_sp,
                                               ConstString &object_name,
-                                              Error &err) {
+                                              Status &err) {
   err.Clear();
 
   if (!frame_sp) {
@@ -140,7 +140,7 @@ lldb::addr_t UserExpression::GetObjectPointer(lldb::StackFrameSP frame_sp,
 lldb::ExpressionResults UserExpression::Evaluate(
     ExecutionContext &exe_ctx, const EvaluateExpressionOptions &options,
     llvm::StringRef expr, llvm::StringRef prefix,
-    lldb::ValueObjectSP &result_valobj_sp, Error &error, uint32_t line_offset,
+    lldb::ValueObjectSP &result_valobj_sp, Status &error, uint32_t line_offset,
     std::string *fixed_expression, lldb::ModuleSP *jit_module_sp_ptr) {
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_EXPRESSIONS |
                                                   LIBLLDB_LOG_STEP));
@@ -179,9 +179,8 @@ lldb::ExpressionResults UserExpression::Evaluate(
     execution_policy = eExecutionPolicyNever;
 
   // We need to set the expression execution thread here, turns out parse can
-  // call functions in the process of
-  // looking up symbols, which will escape the context set by exe_ctx passed to
-  // Execute.
+  // call functions in the process of looking up symbols, which will escape the
+  // context set by exe_ctx passed to Execute.
   lldb::ThreadSP thread_sp = exe_ctx.GetThreadSP();
   ThreadList::ExpressionExecutionThreadPusher execution_thread_pusher(
       thread_sp);
@@ -198,9 +197,9 @@ lldb::ExpressionResults UserExpression::Evaluate(
   else
     full_prefix = option_prefix;
 
-  // If the language was not specified in the expression command,
-  // set it to the language in the target's properties if
-  // specified, else default to the langage for the frame.
+  // If the language was not specified in the expression command, set it to the
+  // language in the target's properties if specified, else default to the
+  // langage for the frame.
   if (language == lldb::eLanguageTypeUnknown) {
     if (target->GetLanguage() != lldb::eLanguageTypeUnknown)
       language = target->GetLanguage();

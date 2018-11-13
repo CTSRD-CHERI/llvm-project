@@ -12,15 +12,19 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ADT/Statistic.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
-#include "llvm/CodeGen/CommandFlags.h"
+#include "llvm/CodeGen/CommandFlags.inc"
 #include "llvm/Config/config.h" // plugin-api.h requires HAVE_STDINT_H
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/LTO/Caching.h"
 #include "llvm/LTO/LTO.h"
+#include "llvm/Object/Error.h"
+#include "llvm/Support/CachePruning.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
@@ -40,8 +44,17 @@
 
 #define LDPT_GET_SYMBOLS_V3 28
 
+// FIXME: Remove when binutils 2.31 (containing gold 1.16) is the minimum
+// required version.
+#define LDPT_GET_WRAP_SYMBOLS 32
+
 using namespace llvm;
 using namespace lto;
+
+// FIXME: Remove when binutils 2.31 (containing gold 1.16) is the minimum
+// required version.
+typedef enum ld_plugin_status (*ld_plugin_get_wrap_symbols)(
+    uint64_t *num_symbols, const char ***wrap_symbol_list);
 
 static ld_plugin_status discard_message(int level, const char *format, ...) {
   // Die loudly. Recent versions of Gold pass ld_plugin_message as the first
@@ -52,6 +65,7 @@ static ld_plugin_status discard_message(int level, const char *format, ...) {
 static ld_plugin_release_input_file release_input_file = nullptr;
 static ld_plugin_get_input_file get_input_file = nullptr;
 static ld_plugin_message message = discard_message;
+static ld_plugin_get_wrap_symbols get_wrap_symbols = nullptr;
 
 namespace {
 struct claimed_file {
@@ -89,6 +103,8 @@ struct PluginInputFile {
 struct ResolutionInfo {
   bool CanOmitFromDynSym = true;
   bool DefaultVisibility = true;
+  bool CanInline = true;
+  bool IsUsedInRegularObj = false;
 };
 
 }
@@ -99,14 +115,13 @@ static ld_plugin_add_input_file add_input_file = nullptr;
 static ld_plugin_set_extra_library_path set_extra_library_path = nullptr;
 static ld_plugin_get_view get_view = nullptr;
 static bool IsExecutable = false;
-static Optional<Reloc::Model> RelocationModel;
+static bool SplitSections = true;
+static Optional<Reloc::Model> RelocationModel = None;
 static std::string output_name = "";
 static std::list<claimed_file> Modules;
 static DenseMap<int, void *> FDToLeaderHandle;
 static StringMap<ResolutionInfo> ResInfo;
 static std::vector<std::string> Cleanup;
-static llvm::TargetOptions TargetOpts;
-static size_t MaxTasks;
 
 namespace options {
   enum OutputType {
@@ -165,12 +180,34 @@ namespace options {
   // corresponding bitcode file, will use a path formed by replacing the
   // bitcode file's path prefix matching oldprefix with newprefix.
   static std::string thinlto_prefix_replace;
+  // Option to control the name of modules encoded in the individual index
+  // files for a distributed backend. This enables the use of minimized
+  // bitcode files for the thin link, assuming the name of the full bitcode
+  // file used in the backend differs just in some part of the file suffix.
+  // If specified, expects a string of the form "oldsuffix:newsuffix".
+  static std::string thinlto_object_suffix_replace;
   // Optional path to a directory for caching ThinLTO objects.
   static std::string cache_dir;
+  // Optional pruning policy for ThinLTO caches.
+  static std::string cache_policy;
   // Additional options to pass into the code generator.
   // Note: This array will contain all plugin options which are not claimed
   // as plugin exclusive to pass to the code generator.
   static std::vector<const char *> extra;
+  // Sample profile file path
+  static std::string sample_profile;
+  // New pass manager
+  static bool new_pass_manager = false;
+  // Debug new pass manager
+  static bool debug_pass_manager = false;
+  // Directory to store the .dwo files.
+  static std::string dwo_dir;
+  /// Statistics output filename.
+  static std::string stats_file;
+
+  // Optimization remarks filename and hotness options
+  static std::string OptRemarksFilename;
+  static bool OptRemarksWithHotness = false;
 
   static void process_plugin_option(const char *opt_)
   {
@@ -203,10 +240,18 @@ namespace options {
       thinlto_emit_imports_files = true;
     } else if (opt.startswith("thinlto-prefix-replace=")) {
       thinlto_prefix_replace = opt.substr(strlen("thinlto-prefix-replace="));
-      if (thinlto_prefix_replace.find(";") == std::string::npos)
+      if (thinlto_prefix_replace.find(';') == std::string::npos)
         message(LDPL_FATAL, "thinlto-prefix-replace expects 'old;new' format");
+    } else if (opt.startswith("thinlto-object-suffix-replace=")) {
+      thinlto_object_suffix_replace =
+          opt.substr(strlen("thinlto-object-suffix-replace="));
+      if (thinlto_object_suffix_replace.find(';') == std::string::npos)
+        message(LDPL_FATAL,
+                "thinlto-object-suffix-replace expects 'old;new' format");
     } else if (opt.startswith("cache-dir=")) {
       cache_dir = opt.substr(strlen("cache-dir="));
+    } else if (opt.startswith("cache-policy=")) {
+      cache_policy = opt.substr(strlen("cache-policy="));
     } else if (opt.size() == 2 && opt[0] == 'O') {
       if (opt[1] < '0' || opt[1] > '3')
         message(LDPL_FATAL, "Optimization level must be between 0 and 3");
@@ -220,6 +265,20 @@ namespace options {
         message(LDPL_FATAL, "Invalid codegen partition level: %s", opt_ + 5);
     } else if (opt == "disable-verify") {
       DisableVerify = true;
+    } else if (opt.startswith("sample-profile=")) {
+      sample_profile= opt.substr(strlen("sample-profile="));
+    } else if (opt == "new-pass-manager") {
+      new_pass_manager = true;
+    } else if (opt == "debug-pass-manager") {
+      debug_pass_manager = true;
+    } else if (opt.startswith("dwo_dir=")) {
+      dwo_dir = opt.substr(strlen("dwo_dir="));
+    } else if (opt.startswith("opt-remarks-filename=")) {
+      OptRemarksFilename = opt.substr(strlen("opt-remarks-filename="));
+    } else if (opt == "opt-remarks-with-hotness") {
+      OptRemarksWithHotness = true;
+    } else if (opt.startswith("stats-file=")) {
+      stats_file = opt.substr(strlen("stats-file="));
     } else {
       // Save this option to pass to the code generator.
       // ParseCommandLineOptions() expects argv[0] to be program name. Lazily
@@ -265,6 +324,9 @@ ld_plugin_status onload(ld_plugin_tv *tv) {
     case LDPT_LINKER_OUTPUT:
       switch (tv->tv_u.tv_val) {
       case LDPO_REL: // .o
+        IsExecutable = false;
+        SplitSections = false;
+        break;
       case LDPO_DYN: // .so
         IsExecutable = false;
         RelocationModel = Reloc::PIC_;
@@ -338,6 +400,13 @@ ld_plugin_status onload(ld_plugin_tv *tv) {
       break;
     case LDPT_MESSAGE:
       message = tv->tv_u.tv_message;
+      break;
+    case LDPT_GET_WRAP_SYMBOLS:
+      // FIXME: When binutils 2.31 (containing gold 1.16) is the minimum
+      // required version, this should be changed to:
+      // get_wrap_symbols = tv->tv_u.tv_get_wrap_symbols;
+      get_wrap_symbols =
+          (ld_plugin_get_wrap_symbols)tv->tv_u.tv_message;
       break;
     default:
       break;
@@ -448,7 +517,7 @@ static ld_plugin_status claim_file_hook(const ld_plugin_input_file *file,
           EC == object::object_error::bitcode_section_not_found)
         *claimed = 0;
       else
-        message(LDPL_ERROR,
+        message(LDPL_FATAL,
                 "LLVM gold plugin has failed to create LTO module: %s",
                 EI.message().c_str());
     });
@@ -458,7 +527,7 @@ static ld_plugin_status claim_file_hook(const ld_plugin_input_file *file,
 
   std::unique_ptr<InputFile> Obj = std::move(*ObjOrErr);
 
-  Modules.resize(Modules.size() + 1);
+  Modules.emplace_back();
   claimed_file &cf = Modules.back();
 
   cf.handle = file->handle;
@@ -481,8 +550,6 @@ static ld_plugin_status claim_file_hook(const ld_plugin_input_file *file,
                sys::path::filename(Obj->getSourceFileName()).str();
 
   for (auto &Sym : Obj->symbols()) {
-    uint32_t Symflags = Sym.getFlags();
-
     cf.syms.push_back(ld_plugin_symbol());
     ld_plugin_symbol &sym = cf.syms.back();
     sym.version = nullptr;
@@ -508,20 +575,20 @@ static ld_plugin_status claim_file_hook(const ld_plugin_input_file *file,
       break;
     }
 
-    if (Symflags & object::BasicSymbolRef::SF_Undefined) {
+    if (Sym.isUndefined()) {
       sym.def = LDPK_UNDEF;
-      if (Symflags & object::BasicSymbolRef::SF_Weak)
+      if (Sym.isWeak())
         sym.def = LDPK_WEAKUNDEF;
-    } else if (Symflags & object::BasicSymbolRef::SF_Common)
+    } else if (Sym.isCommon())
       sym.def = LDPK_COMMON;
-    else if (Symflags & object::BasicSymbolRef::SF_Weak)
+    else if (Sym.isWeak())
       sym.def = LDPK_WEAKDEF;
     else
       sym.def = LDPK_DEF;
 
     sym.size = 0;
     sym.comdat_key = nullptr;
-    int CI = check(Sym.getComdatIndex());
+    int CI = Sym.getComdatIndex();
     if (CI != -1) {
       StringRef C = Obj->getComdatTable()[CI];
       sym.comdat_key = strdup(C.str().c_str());
@@ -534,6 +601,29 @@ static ld_plugin_status claim_file_hook(const ld_plugin_input_file *file,
     if (add_symbols(cf.handle, cf.syms.size(), cf.syms.data()) != LDPS_OK) {
       message(LDPL_ERROR, "Unable to add symbols!");
       return LDPS_ERR;
+    }
+  }
+
+  // Handle any --wrap options passed to gold, which are than passed
+  // along to the plugin.
+  if (get_wrap_symbols) {
+    const char **wrap_symbols;
+    uint64_t count = 0;
+    if (get_wrap_symbols(&count, &wrap_symbols) != LDPS_OK) {
+      message(LDPL_ERROR, "Unable to get wrap symbols!");
+      return LDPS_ERR;
+    }
+    for (uint64_t i = 0; i < count; i++) {
+      StringRef Name = wrap_symbols[i];
+      ResolutionInfo &Res = ResInfo[Name];
+      ResolutionInfo &WrapRes = ResInfo["__wrap_" + Name.str()];
+      ResolutionInfo &RealRes = ResInfo["__real_" + Name.str()];
+      // Tell LTO not to inline symbols that will be overwritten.
+      Res.CanInline = false;
+      RealRes.CanInline = false;
+      // Tell LTO not to eliminate symbols that will be used after renaming.
+      Res.IsUsedInRegularObj = true;
+      WrapRes.IsUsedInRegularObj = true;
     }
   }
 
@@ -563,8 +653,40 @@ static const void *getSymbolsAndView(claimed_file &F) {
   return View;
 }
 
-static void addModule(LTO &Lto, claimed_file &F, const void *View) {
-  MemoryBufferRef BufferRef(StringRef((const char *)View, F.filesize), F.name);
+/// Parse the thinlto-object-suffix-replace option into the \p OldSuffix and
+/// \p NewSuffix strings, if it was specified.
+static void getThinLTOOldAndNewSuffix(std::string &OldSuffix,
+                                      std::string &NewSuffix) {
+  assert(options::thinlto_object_suffix_replace.empty() ||
+         options::thinlto_object_suffix_replace.find(";") != StringRef::npos);
+  StringRef SuffixReplace = options::thinlto_object_suffix_replace;
+  std::tie(OldSuffix, NewSuffix) = SuffixReplace.split(';');
+}
+
+/// Given the original \p Path to an output file, replace any filename
+/// suffix matching \p OldSuffix with \p NewSuffix.
+static std::string getThinLTOObjectFileName(StringRef Path, StringRef OldSuffix,
+                                            StringRef NewSuffix) {
+  if (Path.consume_back(OldSuffix))
+    return (Path + NewSuffix).str();
+  return Path;
+}
+
+// Returns true if S is valid as a C language identifier.
+static bool isValidCIdentifier(StringRef S) {
+  return !S.empty() && (isAlpha(S[0]) || S[0] == '_') &&
+         std::all_of(S.begin() + 1, S.end(),
+                     [](char C) { return C == '_' || isAlnum(C); });
+}
+
+static bool isUndefined(ld_plugin_symbol &Sym) {
+  return Sym.def == LDPK_UNDEF || Sym.def == LDPK_WEAKUNDEF;
+}
+
+static void addModule(LTO &Lto, claimed_file &F, const void *View,
+                      StringRef Filename) {
+  MemoryBufferRef BufferRef(StringRef((const char *)View, F.filesize),
+                            Filename);
   Expected<std::unique_ptr<InputFile>> ObjOrErr = InputFile::create(BufferRef);
 
   if (!ObjOrErr)
@@ -572,8 +694,12 @@ static void addModule(LTO &Lto, claimed_file &F, const void *View) {
             toString(ObjOrErr.takeError()).c_str());
 
   unsigned SymNum = 0;
+  std::unique_ptr<InputFile> Input = std::move(ObjOrErr.get());
+  auto InputFileSyms = Input->symbols();
+  assert(InputFileSyms.size() == F.syms.size());
   std::vector<SymbolResolution> Resols(F.syms.size());
   for (ld_plugin_symbol &Sym : F.syms) {
+    const InputFile::Symbol &InpSym = InputFileSyms[SymNum];
     SymbolResolution &R = Resols[SymNum++];
 
     ld_plugin_symbol_resolution Resolution =
@@ -594,57 +720,77 @@ static void addModule(LTO &Lto, claimed_file &F, const void *View) {
       break;
 
     case LDPR_PREVAILING_DEF_IRONLY:
-      R.Prevailing = true;
+      R.Prevailing = !isUndefined(Sym);
       break;
 
     case LDPR_PREVAILING_DEF:
-      R.Prevailing = true;
+      R.Prevailing = !isUndefined(Sym);
       R.VisibleToRegularObj = true;
       break;
 
     case LDPR_PREVAILING_DEF_IRONLY_EXP:
-      R.Prevailing = true;
+      R.Prevailing = !isUndefined(Sym);
       if (!Res.CanOmitFromDynSym)
         R.VisibleToRegularObj = true;
       break;
     }
 
+    // If the symbol has a C identifier section name, we need to mark
+    // it as visible to a regular object so that LTO will keep it around
+    // to ensure the linker generates special __start_<secname> and
+    // __stop_<secname> symbols which may be used elsewhere.
+    if (isValidCIdentifier(InpSym.getSectionName()))
+      R.VisibleToRegularObj = true;
+
     if (Resolution != LDPR_RESOLVED_DYN && Resolution != LDPR_UNDEF &&
         (IsExecutable || !Res.DefaultVisibility))
       R.FinalDefinitionInLinkageUnit = true;
 
+    if (!Res.CanInline)
+      R.LinkerRedefined = true;
+
+    if (Res.IsUsedInRegularObj)
+      R.VisibleToRegularObj = true;
+
     freeSymName(Sym);
   }
 
-  check(Lto.add(std::move(*ObjOrErr), Resols),
+  check(Lto.add(std::move(Input), Resols),
         std::string("Failed to link module ") + F.name);
 }
 
-static void recordFile(std::string Filename, bool TempOutFile) {
+static void recordFile(const std::string &Filename, bool TempOutFile) {
   if (add_input_file(Filename.c_str()) != LDPS_OK)
     message(LDPL_FATAL,
             "Unable to add .o file to the link. File left behind in: %s",
             Filename.c_str());
   if (TempOutFile)
-    Cleanup.push_back(Filename.c_str());
+    Cleanup.push_back(Filename);
 }
 
 /// Return the desired output filename given a base input name, a flag
 /// indicating whether a temp file should be generated, and an optional task id.
 /// The new filename generated is returned in \p NewFilename.
-static void getOutputFileName(SmallString<128> InFilename, bool TempOutFile,
-                              SmallString<128> &NewFilename, int TaskID = -1) {
+static int getOutputFileName(StringRef InFilename, bool TempOutFile,
+                             SmallString<128> &NewFilename, int TaskID) {
+  int FD = -1;
   if (TempOutFile) {
     std::error_code EC =
-        sys::fs::createTemporaryFile("lto-llvm", "o", NewFilename);
+        sys::fs::createTemporaryFile("lto-llvm", "o", FD, NewFilename);
     if (EC)
       message(LDPL_FATAL, "Could not create temporary file: %s",
               EC.message().c_str());
   } else {
     NewFilename = InFilename;
-    if (TaskID >= 0)
+    if (TaskID > 0)
       NewFilename += utostr(TaskID);
+    std::error_code EC =
+        sys::fs::openFileForWrite(NewFilename, FD, sys::fs::CD_CreateAlways);
+    if (EC)
+      message(LDPL_FATAL, "Could not open file %s: %s", NewFilename.c_str(),
+              EC.message().c_str());
   }
+  return FD;
 }
 
 static CodeGenOpt::Level getCGOptLevel() {
@@ -667,12 +813,15 @@ static void getThinLTOOldAndNewPrefix(std::string &OldPrefix,
                                       std::string &NewPrefix) {
   StringRef PrefixReplace = options::thinlto_prefix_replace;
   assert(PrefixReplace.empty() || PrefixReplace.find(";") != StringRef::npos);
-  std::pair<StringRef, StringRef> Split = PrefixReplace.split(";");
-  OldPrefix = Split.first.str();
-  NewPrefix = Split.second.str();
+  std::tie(OldPrefix, NewPrefix) = PrefixReplace.split(';');
 }
 
-static std::unique_ptr<LTO> createLTO() {
+/// Creates instance of LTO.
+/// OnIndexWrite is callback to let caller know when LTO writes index files.
+/// LinkedObjectsFile is an output stream to write the list of object files for
+/// the final ThinLTO linking. Can be nullptr.
+static std::unique_ptr<LTO> createLTO(IndexWriteCallback OnIndexWrite,
+                                      raw_fd_ostream *LinkedObjectsFile) {
   Config Conf;
   ThinBackend Backend;
 
@@ -683,8 +832,13 @@ static std::unique_ptr<LTO> createLTO() {
   // FIXME: Check the gold version or add a new option to enable them.
   Conf.Options.RelaxELFRelocations = false;
 
+  // Toggle function/data sections.
+  Conf.Options.FunctionSections = SplitSections;
+  Conf.Options.DataSections = SplitSections;
+
   Conf.MAttrs = MAttrs;
-  Conf.RelocModel = *RelocationModel;
+  Conf.RelocModel = RelocationModel;
+  Conf.CodeModel = getCodeModel();
   Conf.CGOptLevel = getCGOptLevel();
   Conf.DisableVerify = options::DisableVerify;
   Conf.OptLevel = options::OptLevel;
@@ -693,9 +847,9 @@ static std::unique_ptr<LTO> createLTO() {
   if (options::thinlto_index_only) {
     std::string OldPrefix, NewPrefix;
     getThinLTOOldAndNewPrefix(OldPrefix, NewPrefix);
-    Backend = createWriteIndexesThinBackend(
-        OldPrefix, NewPrefix, options::thinlto_emit_imports_files,
-        options::thinlto_linked_objects_file);
+    Backend = createWriteIndexesThinBackend(OldPrefix, NewPrefix,
+                                            options::thinlto_emit_imports_files,
+                                            LinkedObjectsFile, OnIndexWrite);
   }
 
   Conf.OverrideTriple = options::triple;
@@ -717,7 +871,7 @@ static std::unique_ptr<LTO> createLTO() {
       raw_fd_ostream OS(output_name, EC, sys::fs::OpenFlags::F_None);
       if (EC)
         message(LDPL_FATAL, "Failed to write the output file.");
-      WriteBitcodeToFile(&M, OS, /* ShouldPreserveUseListOrder */ false);
+      WriteBitcodeToFile(M, OS, /* ShouldPreserveUseListOrder */ false);
       return false;
     };
     break;
@@ -728,6 +882,21 @@ static std::unique_ptr<LTO> createLTO() {
     break;
   }
 
+  if (!options::sample_profile.empty())
+    Conf.SampleProfile = options::sample_profile;
+
+  Conf.DwoDir = options::dwo_dir;
+
+  // Set up optimization remarks handling.
+  Conf.RemarksFilename = options::OptRemarksFilename;
+  Conf.RemarksWithHotness = options::OptRemarksWithHotness;
+
+  // Use new pass manager if set in driver
+  Conf.UseNewPM = options::new_pass_manager;
+  // Debug new pass manager if requested
+  Conf.DebugPassManager = options::debug_pass_manager;
+
+  Conf.StatsFile = options::stats_file;
   return llvm::make_unique<LTO>(std::move(Conf), Backend,
                                 options::ParallelCodeGenParallelismLevel);
 }
@@ -738,9 +907,14 @@ static std::unique_ptr<LTO> createLTO() {
 // final link. Frequently the distributed build system will want to
 // confirm that all expected outputs are created based on all of the
 // modules provided to the linker.
-static void writeEmptyDistributedBuildOutputs(std::string &ModulePath,
-                                              std::string &OldPrefix,
-                                              std::string &NewPrefix) {
+// If SkipModule is true then .thinlto.bc should contain just
+// SkipModuleByDistributedBackend flag which requests distributed backend
+// to skip the compilation of the corresponding module and produce an empty
+// object file.
+static void writeEmptyDistributedBuildOutputs(const std::string &ModulePath,
+                                              const std::string &OldPrefix,
+                                              const std::string &NewPrefix,
+                                              bool SkipModule) {
   std::string NewModulePath =
       getThinLTOOutputFile(ModulePath, OldPrefix, NewPrefix);
   std::error_code EC;
@@ -750,6 +924,12 @@ static void writeEmptyDistributedBuildOutputs(std::string &ModulePath,
     if (EC)
       message(LDPL_FATAL, "Failed to write '%s': %s",
               (NewModulePath + ".thinlto.bc").c_str(), EC.message().c_str());
+
+    if (SkipModule) {
+      ModuleSummaryIndex Index(/*HaveGVs*/ false);
+      Index.setSkipModuleByDistributedBackend();
+      WriteIndexToFile(Index, OS, nullptr);
+    }
   }
   if (options::thinlto_emit_imports_files) {
     raw_fd_ostream OS(NewModulePath + ".imports", EC,
@@ -758,6 +938,108 @@ static void writeEmptyDistributedBuildOutputs(std::string &ModulePath,
       message(LDPL_FATAL, "Failed to write '%s': %s",
               (NewModulePath + ".imports").c_str(), EC.message().c_str());
   }
+}
+
+// Creates and returns output stream with a list of object files for final
+// linking of distributed ThinLTO.
+static std::unique_ptr<raw_fd_ostream> CreateLinkedObjectsFile() {
+  if (options::thinlto_linked_objects_file.empty())
+    return nullptr;
+  assert(options::thinlto_index_only);
+  std::error_code EC;
+  auto LinkedObjectsFile = llvm::make_unique<raw_fd_ostream>(
+      options::thinlto_linked_objects_file, EC, sys::fs::OpenFlags::F_None);
+  if (EC)
+    message(LDPL_FATAL, "Failed to create '%s': %s",
+            options::thinlto_linked_objects_file.c_str(), EC.message().c_str());
+  return LinkedObjectsFile;
+}
+
+/// Runs LTO and return a list of pairs <FileName, IsTemporary>.
+static std::vector<std::pair<SmallString<128>, bool>> runLTO() {
+  // Map to own RAII objects that manage the file opening and releasing
+  // interfaces with gold. This is needed only for ThinLTO mode, since
+  // unlike regular LTO, where addModule will result in the opened file
+  // being merged into a new combined module, we need to keep these files open
+  // through Lto->run().
+  DenseMap<void *, std::unique_ptr<PluginInputFile>> HandleToInputFile;
+
+  // Owns string objects and tells if index file was already created.
+  StringMap<bool> ObjectToIndexFileState;
+
+  std::unique_ptr<raw_fd_ostream> LinkedObjects = CreateLinkedObjectsFile();
+  std::unique_ptr<LTO> Lto = createLTO(
+      [&ObjectToIndexFileState](const std::string &Identifier) {
+        ObjectToIndexFileState[Identifier] = true;
+      },
+      LinkedObjects.get());
+
+  std::string OldPrefix, NewPrefix;
+  if (options::thinlto_index_only)
+    getThinLTOOldAndNewPrefix(OldPrefix, NewPrefix);
+
+  std::string OldSuffix, NewSuffix;
+  getThinLTOOldAndNewSuffix(OldSuffix, NewSuffix);
+
+  for (claimed_file &F : Modules) {
+    if (options::thinlto && !HandleToInputFile.count(F.leader_handle))
+      HandleToInputFile.insert(std::make_pair(
+          F.leader_handle, llvm::make_unique<PluginInputFile>(F.handle)));
+    // In case we are thin linking with a minimized bitcode file, ensure
+    // the module paths encoded in the index reflect where the backends
+    // will locate the full bitcode files for compiling/importing.
+    std::string Identifier =
+        getThinLTOObjectFileName(F.name, OldSuffix, NewSuffix);
+    auto ObjFilename = ObjectToIndexFileState.insert({Identifier, false});
+    assert(ObjFilename.second);
+    if (const void *View = getSymbolsAndView(F))
+      addModule(*Lto, F, View, ObjFilename.first->first());
+    else if (options::thinlto_index_only) {
+      ObjFilename.first->second = true;
+      writeEmptyDistributedBuildOutputs(Identifier, OldPrefix, NewPrefix,
+                                        /* SkipModule */ true);
+    }
+  }
+
+  SmallString<128> Filename;
+  // Note that getOutputFileName will append a unique ID for each task
+  if (!options::obj_path.empty())
+    Filename = options::obj_path;
+  else if (options::TheOutputType == options::OT_SAVE_TEMPS)
+    Filename = output_name + ".o";
+  bool SaveTemps = !Filename.empty();
+
+  size_t MaxTasks = Lto->getMaxTasks();
+  std::vector<std::pair<SmallString<128>, bool>> Files(MaxTasks);
+
+  auto AddStream =
+      [&](size_t Task) -> std::unique_ptr<lto::NativeObjectStream> {
+    Files[Task].second = !SaveTemps;
+    int FD = getOutputFileName(Filename, /* TempOutFile */ !SaveTemps,
+                               Files[Task].first, Task);
+    return llvm::make_unique<lto::NativeObjectStream>(
+        llvm::make_unique<llvm::raw_fd_ostream>(FD, true));
+  };
+
+  auto AddBuffer = [&](size_t Task, std::unique_ptr<MemoryBuffer> MB) {
+    *AddStream(Task)->OS << MB->getBuffer();
+  };
+
+  NativeObjectCache Cache;
+  if (!options::cache_dir.empty())
+    Cache = check(localCache(options::cache_dir, AddBuffer));
+
+  check(Lto->run(AddStream, Cache));
+
+  // Write empty output files that may be expected by the distributed build
+  // system.
+  if (options::thinlto_index_only)
+    for (auto &Identifier : ObjectToIndexFileState)
+      if (!Identifier.getValue())
+        writeEmptyDistributedBuildOutputs(Identifier.getKey(), OldPrefix,
+                                          NewPrefix, /* SkipModule */ false);
+
+  return Files;
 }
 
 /// gold informs us that all symbols have been read. At this point, we use
@@ -770,80 +1052,21 @@ static ld_plugin_status allSymbolsReadHook() {
   if (unsigned NumOpts = options::extra.size())
     cl::ParseCommandLineOptions(NumOpts, &options::extra[0]);
 
-  // Map to own RAII objects that manage the file opening and releasing
-  // interfaces with gold. This is needed only for ThinLTO mode, since
-  // unlike regular LTO, where addModule will result in the opened file
-  // being merged into a new combined module, we need to keep these files open
-  // through Lto->run().
-  DenseMap<void *, std::unique_ptr<PluginInputFile>> HandleToInputFile;
-
-  std::unique_ptr<LTO> Lto = createLTO();
-
-  std::string OldPrefix, NewPrefix;
-  if (options::thinlto_index_only)
-    getThinLTOOldAndNewPrefix(OldPrefix, NewPrefix);
-
-  for (claimed_file &F : Modules) {
-    if (options::thinlto && !HandleToInputFile.count(F.leader_handle))
-      HandleToInputFile.insert(std::make_pair(
-          F.leader_handle, llvm::make_unique<PluginInputFile>(F.handle)));
-    const void *View = getSymbolsAndView(F);
-    if (!View) {
-      if (options::thinlto_index_only)
-        // Write empty output files that may be expected by the distributed
-        // build system.
-        writeEmptyDistributedBuildOutputs(F.name, OldPrefix, NewPrefix);
-      continue;
-    }
-    addModule(*Lto, F, View);
-  }
-
-  SmallString<128> Filename;
-  // Note that getOutputFileName will append a unique ID for each task
-  if (!options::obj_path.empty())
-    Filename = options::obj_path;
-  else if (options::TheOutputType == options::OT_SAVE_TEMPS)
-    Filename = output_name + ".o";
-  bool SaveTemps = !Filename.empty();
-
-  MaxTasks = Lto->getMaxTasks();
-  std::vector<uintptr_t> IsTemporary(MaxTasks);
-  std::vector<SmallString<128>> Filenames(MaxTasks);
-
-  auto AddStream =
-      [&](size_t Task) -> std::unique_ptr<lto::NativeObjectStream> {
-    IsTemporary[Task] = !SaveTemps;
-    getOutputFileName(Filename, /*TempOutFile=*/!SaveTemps, Filenames[Task],
-                      MaxTasks > 1 ? Task : -1);
-    int FD;
-    std::error_code EC =
-        sys::fs::openFileForWrite(Filenames[Task], FD, sys::fs::F_None);
-    if (EC)
-      message(LDPL_FATAL, "Could not open file: %s", EC.message().c_str());
-    return llvm::make_unique<lto::NativeObjectStream>(
-        llvm::make_unique<llvm::raw_fd_ostream>(FD, true));
-  };
-
-  auto AddFile = [&](size_t Task, StringRef Path) { Filenames[Task] = Path; };
-
-  NativeObjectCache Cache;
-  if (!options::cache_dir.empty())
-    Cache = localCache(options::cache_dir, AddFile);
-
-  check(Lto->run(AddStream, Cache));
+  std::vector<std::pair<SmallString<128>, bool>> Files = runLTO();
 
   if (options::TheOutputType == options::OT_DISABLE ||
       options::TheOutputType == options::OT_BC_ONLY)
     return LDPS_OK;
 
   if (options::thinlto_index_only) {
+    llvm_shutdown();
     cleanup_hook();
     exit(0);
   }
 
-  for (unsigned I = 0; I != MaxTasks; ++I)
-    if (!Filenames[I].empty())
-      recordFile(Filenames[I].str(), IsTemporary[I]);
+  for (const auto &F : Files)
+    if (!F.first.empty())
+      recordFile(F.first.str(), F.second);
 
   if (!options::extra_library_path.empty() &&
       set_extra_library_path(options::extra_library_path.c_str()) != LDPS_OK)
@@ -878,6 +1101,12 @@ static ld_plugin_status cleanup_hook(void) {
     if (EC)
       message(LDPL_ERROR, "Failed to delete '%s': %s", Name.c_str(),
               EC.message().c_str());
+  }
+
+  // Prune cache
+  if (!options::cache_dir.empty()) {
+    CachePruningPolicy policy = check(parseCachePruningPolicy(options::cache_policy));
+    pruneCache(options::cache_dir, policy);
   }
 
   return LDPS_OK;

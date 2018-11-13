@@ -1,4 +1,4 @@
-// RUN: %check_clang_tidy %s modernize-raw-string-literal %t
+// RUN: %check_clang_tidy %s modernize-raw-string-literal %t -- -config="{CheckOptions: [{key: modernize-raw-string-literal.ReplaceShorterLiterals, value: 1}]}" -- -std=c++11
 
 char const *const BackSlash("goink\\frob");
 // CHECK-MESSAGES: :[[@LINE-1]]:29: warning: escaped string literal can be written as a raw string literal [modernize-raw-string-literal]
@@ -40,6 +40,8 @@ char const *const Rs("goink\\\036");
 char const *const Us("goink\\\037");
 char const *const HexNonPrintable("\\\x03");
 char const *const Delete("\\\177");
+char const *const MultibyteSnowman("\xE2\x98\x83");
+// CHECK-FIXES: {{^}}char const *const MultibyteSnowman("\xE2\x98\x83");{{$}}
 
 char const *const TrailingSpace("A line \\with space. \n");
 char const *const TrailingNewLine("A single \\line.\n");

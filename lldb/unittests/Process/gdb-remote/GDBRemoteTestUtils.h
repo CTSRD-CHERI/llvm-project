@@ -19,11 +19,12 @@ namespace process_gdb_remote {
 class GDBRemoteTest : public testing::Test {
 public:
   static void SetUpTestCase();
-
   static void TearDownTestCase();
-};
 
-void Connect(GDBRemoteCommunication &client, GDBRemoteCommunication &server);
+protected:
+  llvm::Error Connect(GDBRemoteCommunication &client,
+                      GDBRemoteCommunication &server);
+};
 
 struct MockServer : public GDBRemoteCommunicationServer {
   MockServer()
@@ -36,10 +37,9 @@ struct MockServer : public GDBRemoteCommunicationServer {
   }
 
   PacketResult GetPacket(StringExtractorGDBRemote &response) {
-    const unsigned timeout_usec = 1000000; // 1s
     const bool sync_on_timeout = false;
-    return WaitForPacketWithTimeoutMicroSecondsNoLock(response, timeout_usec,
-                                                      sync_on_timeout);
+    return WaitForPacketNoLock(response, std::chrono::seconds(1),
+                               sync_on_timeout);
   }
 
   using GDBRemoteCommunicationServer::SendOKResponse;

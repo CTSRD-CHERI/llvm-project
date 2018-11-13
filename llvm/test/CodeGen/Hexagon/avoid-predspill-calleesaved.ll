@@ -1,13 +1,12 @@
 ; Check that a callee-saved register will be saved correctly if
 ; the predicate-to-GPR spilling code uses it.
 ;
-; RUN: llc -march=hexagon < %s | FileCheck %s
+; RUN: llc -march=hexagon -hexagon-initial-cfg-cleanup=0 < %s | FileCheck %s
 ;
 ; We expect to spill p0 into a general-purpose register and keep it there,
 ; without adding an extra spill of that register.
 ;
 ; CHECK: PredSpill:
-; CHECK: memd(r29{{.*}}) = r17:16
 ; CHECK-DAG: r{{[0-9]+}} = p0
 ; CHECK-DAG: p0 = r{{[0-9]+}}
 ; CHECK-NOT: = memw(r29

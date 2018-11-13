@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <deque>
 
 // deque(deque&&);
@@ -20,7 +22,6 @@
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
     {
         int ab[] = {3, 4, 2, 8, 0, 1, 44, 34, 45, 96, 80, 1, 13, 31, 45};
         int* an = ab + sizeof(ab)/sizeof(ab[0]);
@@ -31,10 +32,12 @@ int main()
         std::deque<MoveOnly, A> c2(A(2));
         for (int* p = ab; p < an; ++p)
             c2.push_back(MoveOnly(*p));
+        A old_a = c1.get_allocator();
         std::deque<MoveOnly, A> c3 = std::move(c1);
         assert(c2 == c3);
         assert(c1.size() == 0);
-        assert(c3.get_allocator() == c1.get_allocator());
+        assert(c3.get_allocator() == old_a);
+        assert(c1.get_allocator() == A(test_alloc_base::moved_value));
     }
     {
         int ab[] = {3, 4, 2, 8, 0, 1, 44, 34, 45, 96, 80, 1, 13, 31, 45};
@@ -51,7 +54,6 @@ int main()
         assert(c1.size() == 0);
         assert(c3.get_allocator() == c1.get_allocator());
     }
-#if TEST_STD_VER >= 11
     {
         int ab[] = {3, 4, 2, 8, 0, 1, 44, 34, 45, 96, 80, 1, 13, 31, 45};
         int* an = ab + sizeof(ab)/sizeof(ab[0]);
@@ -67,6 +69,4 @@ int main()
         assert(c1.size() == 0);
         assert(c3.get_allocator() == c1.get_allocator());
     }
-#endif
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
 }

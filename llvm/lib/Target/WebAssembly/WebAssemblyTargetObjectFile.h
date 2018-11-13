@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file declares the WebAssembly-specific subclass of
+/// This file declares the WebAssembly-specific subclass of
 /// TargetLoweringObjectFile.
 ///
 //===----------------------------------------------------------------------===//
@@ -20,7 +20,7 @@
 
 namespace llvm {
 
-class WebAssemblyTargetObjectFile final : public TargetLoweringObjectFileELF {
+class WebAssemblyTargetObjectFile final : public TargetLoweringObjectFileWasm {
 public:
   void Initialize(MCContext &Ctx, const TargetMachine &TM) override;
 };

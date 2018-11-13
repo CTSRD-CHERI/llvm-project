@@ -55,12 +55,7 @@
 #include <string.h>
 #endif
 
-namespace __cxxabiv1
-{
-
-#pragma GCC visibility push(hidden)
-
-inline
+static inline
 bool
 is_equal(const std::type_info* x, const std::type_info* y, bool use_strcmp)
 {
@@ -69,10 +64,13 @@ is_equal(const std::type_info* x, const std::type_info* y, bool use_strcmp)
         return x == y;
     return strcmp(x->name(), y->name()) == 0;
 #else
+    (void) use_strcmp;
     return (x == y) || (strcmp(x->name(), y->name()) == 0);
 #endif
 }
 
+namespace __cxxabiv1
+{
 
 // __shim_type_info
 
@@ -103,45 +101,6 @@ __array_type_info::~__array_type_info()
 
 __function_type_info::~__function_type_info()
 {
-}
-
-// __qualified_function_type_info
-
-__qualified_function_type_info::~__qualified_function_type_info()
-{
-}
-
-// Determine if a function pointer conversion can convert a pointer (or pointer
-// to member) to type x into a pointer (or pointer to member) to type y.
-static bool is_function_pointer_conversion(const std::type_info* x,
-                                           const std::type_info* y)
-{
-    const unsigned int discardable_quals =
-        __qualified_function_type_info::__noexcept_mask |
-        __qualified_function_type_info::__transaction_safe_mask |
-        __qualified_function_type_info::__noreturn_mask;
-
-    // If x has only discardable qualifiers and y is unqualified, then
-    // conversion is permitted.
-    const __qualified_function_type_info* qual_x =
-        dynamic_cast<const __qualified_function_type_info *>(x);
-    if (!qual_x)
-        return false;
-    if ((qual_x->__qualifiers & ~discardable_quals) == 0 &&
-        is_equal(qual_x->__base_type, y, false))
-        return true;
-
-    // Otherwise, x's qualifiers must be the same as y's, plus some discardable
-    // ones.
-    const __qualified_function_type_info* qual_y =
-        dynamic_cast<const __qualified_function_type_info *>(y);
-    if (!qual_y)
-        return false;
-    if (qual_y->__qualifiers & ~qual_x->__qualifiers)
-        return false;
-    if (qual_x->__qualifiers & ~qual_y->__qualifiers & ~discardable_quals)
-        return false;
-    return is_equal(qual_x->__base_type, qual_y->__base_type, false);
 }
 
 // __enum_type_info
@@ -271,7 +230,7 @@ __class_type_info::can_catch(const __shim_type_info* thrown_type,
     if (thrown_class_type == 0)
         return false;
     // bullet 2
-    __dynamic_cast_info info = {thrown_class_type, 0, this, -1, 0};
+    __dynamic_cast_info info = {thrown_class_type, 0, this, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,};
     info.number_of_dst_type = 1;
     thrown_class_type->has_unambiguous_public_base(&info, adjustedPtr, public_path);
     if (info.path_dst_ptr_to_static_ptr == public_path)
@@ -429,15 +388,13 @@ __pointer_type_info::can_catch(const __shim_type_info* thrown_type,
     // Do the dereference adjustment
     if (adjustedPtr != NULL)
         adjustedPtr = *static_cast<void**>(adjustedPtr);
-    // bullet 3B
-    if (thrown_pointer_type->__flags & ~__flags)
+    // bullet 3B and 3C
+    if (thrown_pointer_type->__flags & ~__flags & __no_remove_flags_mask)
+        return false;
+    if (__flags & ~thrown_pointer_type->__flags & __no_add_flags_mask)
         return false;
     if (is_equal(__pointee, thrown_pointer_type->__pointee, false))
         return true;
-    // bullet 3C
-    if (is_function_pointer_conversion(thrown_pointer_type->__pointee,
-                                       __pointee))
-      return true;
     // bullet 3A
     if (is_equal(__pointee, &typeid(void), false)) {
         // pointers to functions cannot be converted to void*.
@@ -471,7 +428,7 @@ __pointer_type_info::can_catch(const __shim_type_info* thrown_type,
         dynamic_cast<const __class_type_info*>(thrown_pointer_type->__pointee);
     if (thrown_class_type == 0)
         return false;
-    __dynamic_cast_info info = {thrown_class_type, 0, catch_class_type, -1, 0};
+    __dynamic_cast_info info = {thrown_class_type, 0, catch_class_type, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,};
     info.number_of_dst_type = 1;
     thrown_class_type->has_unambiguous_public_base(&info, adjustedPtr, public_path);
     if (info.path_dst_ptr_to_static_ptr == public_path)
@@ -543,11 +500,11 @@ bool __pointer_to_member_type_info::can_catch(
         dynamic_cast<const __pointer_to_member_type_info*>(thrown_type);
     if (thrown_pointer_type == 0)
         return false;
-    if (thrown_pointer_type->__flags & ~__flags)
+    if (thrown_pointer_type->__flags & ~__flags & __no_remove_flags_mask)
         return false;
-    if (!is_equal(__pointee, thrown_pointer_type->__pointee, false) &&
-        !is_function_pointer_conversion(thrown_pointer_type->__pointee,
-                                        __pointee))
+    if (__flags & ~thrown_pointer_type->__flags & __no_add_flags_mask)
+        return false;
+    if (!is_equal(__pointee, thrown_pointer_type->__pointee, false))
         return false;
     if (is_equal(__context, thrown_pointer_type->__context, false))
         return true;
@@ -578,9 +535,6 @@ bool __pointer_to_member_type_info::can_catch_nested(
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-
-#pragma GCC visibility pop
-#pragma GCC visibility push(default)
 
 #ifdef __clang__
 #pragma clang diagnostic push
@@ -680,7 +634,7 @@ __dynamic_cast(const void *static_ptr, const __class_type_info *static_type,
     //    be returned.
     const void* dst_ptr = 0;
     // Initialize info struct for this search.
-    __dynamic_cast_info info = {dst_type, static_ptr, static_type, src2dst_offset, 0};
+    __dynamic_cast_info info = {dst_type, static_ptr, static_type, src2dst_offset, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,};
 
     // Find out if we can use a giant short cut in the search
     if (is_equal(dynamic_type, dst_type, false))
@@ -720,8 +674,8 @@ __dynamic_cast(const void *static_ptr, const __class_type_info *static_type,
             info.path_dynamic_ptr_to_static_ptr == unknown)
         {
             syslog(LOG_ERR, "dynamic_cast error 2: One or more of the following type_info's "
-                            " has hidden visibility.  They should all have public visibility.  "
-                            " %s, %s, %s.\n", static_type->name(), dynamic_type->name(),
+                            "has hidden visibility.  They should all have public visibility.  "
+                            "%s, %s, %s.\n", static_type->name(), dynamic_type->name(),
                     dst_type->name());
             // Redo the search comparing type_info's using strcmp
             info = {dst_type, static_ptr, static_type, src2dst_offset, 0};
@@ -755,9 +709,6 @@ __dynamic_cast(const void *static_ptr, const __class_type_info *static_type,
 #ifdef __clang__
 #pragma clang diagnostic pop
 #endif
-
-#pragma GCC visibility pop
-#pragma GCC visibility push(hidden)
 
 // Call this function when you hit a static_type which is a base (above) a dst_type.
 // Let caller know you hit a static_type.  But only start recording details if
@@ -909,13 +860,14 @@ __vmi_class_type_info::search_below_dst(__dynamic_cast_info* info,
             // Record the access path that got us here
             //   If there is more than one dst_type this path doesn't matter.
             info->path_dynamic_ptr_to_dst_ptr = path_below;
+            bool does_dst_type_point_to_our_static_type = false;
             // Only search above here if dst_type derives from static_type, or
             //    if it is unknown if dst_type derives from static_type.
             if (info->is_dst_type_derived_from_static_type != no)
             {
                 // Set up flags to record results from all base classes
                 bool is_dst_type_derived_from_static_type = false;
-                bool does_dst_type_point_to_our_static_type = false;
+
                 // We've found a dst_type with a potentially public path to here.
                 // We have to assume the path is public because it may become
                 //   public later (if we get back to here with a public path).
@@ -959,21 +911,6 @@ __vmi_class_type_info::search_below_dst(__dynamic_cast_info* info,
                         }
                     }
                 }
-                if (!does_dst_type_point_to_our_static_type)
-                {
-                    // We found a dst_type that doesn't point to (static_ptr, static_type)
-                    // So record the address of this dst_ptr and increment the
-                    // count of the number of such dst_types found in the tree.
-                    info->dst_ptr_not_leading_to_static_ptr = current_ptr;
-                    info->number_to_dst_ptr += 1;
-                    // If there exists another dst with a private path to
-                    //    (static_ptr, static_type), then the cast from 
-                    //     (dynamic_ptr, dynamic_type) to dst_type is now ambiguous,
-                    //      so stop search.
-                    if (info->number_to_static_ptr == 1 &&
-                            info->path_dst_ptr_to_static_ptr == not_public_path)
-                        info->search_done = true;
-                }
                 // If we found no static_type,s then dst_type doesn't derive
                 //   from static_type, else it does.  Record this result so that
                 //   next time we hit a dst_type we will know not to search above
@@ -982,7 +919,22 @@ __vmi_class_type_info::search_below_dst(__dynamic_cast_info* info,
                     info->is_dst_type_derived_from_static_type = yes;
                 else
                     info->is_dst_type_derived_from_static_type = no;
-            }
+              }
+              if (!does_dst_type_point_to_our_static_type)
+              {
+                  // We found a dst_type that doesn't point to (static_ptr, static_type)
+                  // So record the address of this dst_ptr and increment the
+                  // count of the number of such dst_types found in the tree.
+                  info->dst_ptr_not_leading_to_static_ptr = current_ptr;
+                  info->number_to_dst_ptr += 1;
+                  // If there exists another dst with a private path to
+                  //    (static_ptr, static_type), then the cast from
+                  //     (dynamic_ptr, dynamic_type) to dst_type is now ambiguous,
+                  //      so stop search.
+                  if (info->number_to_static_ptr == 1 &&
+                          info->path_dst_ptr_to_static_ptr == not_public_path)
+                      info->search_done = true;
+              }
         }
     }
     else
@@ -1080,13 +1032,13 @@ __si_class_type_info::search_below_dst(__dynamic_cast_info* info,
             // Record the access path that got us here
             //   If there is more than one dst_type this path doesn't matter.
             info->path_dynamic_ptr_to_dst_ptr = path_below;
+            bool does_dst_type_point_to_our_static_type = false;
             // Only search above here if dst_type derives from static_type, or
             //    if it is unknown if dst_type derives from static_type.
             if (info->is_dst_type_derived_from_static_type != no)
             {
                 // Set up flags to record results from all base classes
                 bool is_dst_type_derived_from_static_type = false;
-                bool does_dst_type_point_to_our_static_type = false;
                 // Zero out found flags
                 info->found_our_static_ptr = false;
                 info->found_any_static_type = false;
@@ -1097,20 +1049,6 @@ __si_class_type_info::search_below_dst(__dynamic_cast_info* info,
                     if (info->found_our_static_ptr)
                         does_dst_type_point_to_our_static_type = true;
                 }
-                if (!does_dst_type_point_to_our_static_type)
-                {
-                    // We found a dst_type that doesn't point to (static_ptr, static_type)
-                    // So record the address of this dst_ptr and increment the
-                    // count of the number of such dst_types found in the tree.
-                    info->dst_ptr_not_leading_to_static_ptr = current_ptr;
-                    info->number_to_dst_ptr += 1;
-                    // If there exists another dst with a private path to
-                    //    (static_ptr, static_type), then the cast from 
-                    //     (dynamic_ptr, dynamic_type) to dst_type is now ambiguous.
-                    if (info->number_to_static_ptr == 1 &&
-                            info->path_dst_ptr_to_static_ptr == not_public_path)
-                        info->search_done = true;
-                }
                 // If we found no static_type,s then dst_type doesn't derive
                 //   from static_type, else it does.  Record this result so that
                 //   next time we hit a dst_type we will know not to search above
@@ -1119,6 +1057,20 @@ __si_class_type_info::search_below_dst(__dynamic_cast_info* info,
                     info->is_dst_type_derived_from_static_type = yes;
                 else
                     info->is_dst_type_derived_from_static_type = no;
+            }
+            if (!does_dst_type_point_to_our_static_type)
+            {
+                // We found a dst_type that doesn't point to (static_ptr, static_type)
+                // So record the address of this dst_ptr and increment the
+                // count of the number of such dst_types found in the tree.
+                info->dst_ptr_not_leading_to_static_ptr = current_ptr;
+                info->number_to_dst_ptr += 1;
+                // If there exists another dst with a private path to
+                //    (static_ptr, static_type), then the cast from
+                //     (dynamic_ptr, dynamic_type) to dst_type is now ambiguous.
+                if (info->number_to_static_ptr == 1 &&
+                        info->path_dst_ptr_to_static_ptr == not_public_path)
+                    info->search_done = true;
             }
         }
     }
@@ -1231,6 +1183,8 @@ __vmi_class_type_info::search_above_dst(__dynamic_cast_info* info,
         info->found_our_static_ptr = false;
         info->found_any_static_type = false;
         p->search_above_dst(info, dst_ptr, current_ptr, path_below, use_strcmp);
+        found_our_static_ptr |= info->found_our_static_ptr;
+        found_any_static_type |= info->found_any_static_type;
         if (++p < e)
         {
             do
@@ -1260,6 +1214,8 @@ __vmi_class_type_info::search_above_dst(__dynamic_cast_info* info,
                 info->found_our_static_ptr = false;
                 info->found_any_static_type = false;
                 p->search_above_dst(info, dst_ptr, current_ptr, path_below, use_strcmp);
+                found_our_static_ptr |= info->found_our_static_ptr;
+                found_any_static_type |= info->found_any_static_type;
             } while (++p < e);
         }
         // Restore flags
@@ -1340,7 +1296,5 @@ __base_class_type_info::search_below_dst(__dynamic_cast_info* info,
                                       not_public_path,
                                   use_strcmp);
 }
-
-#pragma GCC visibility pop
 
 }  // __cxxabiv1

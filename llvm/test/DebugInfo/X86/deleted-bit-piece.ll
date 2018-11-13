@@ -14,14 +14,14 @@ entry:
   br i1 undef, label %exit, label %bb
 
 bb:                                               ; preds = %entry
-  call void @llvm.dbg.value(metadata i8* undef, i64 0, metadata !15, metadata !16), !dbg !17
+  call void @llvm.dbg.value(metadata i8* undef, metadata !15, metadata !16), !dbg !17
   br label %exit
 
 exit:                                             ; preds = %bb, %entry
   ret void
 }
 
-declare void @llvm.dbg.value(metadata, i64, metadata, metadata)
+declare void @llvm.dbg.value(metadata, metadata, metadata)
 
 !llvm.module.flags = !{!0, !1}
 !llvm.dbg.cu = !{!2}
@@ -41,5 +41,5 @@ declare void @llvm.dbg.value(metadata, i64, metadata, metadata)
 !13 = !DISubroutineType(types: !14)
 !14 = !{null}
 !15 = !DILocalVariable(name: "v", scope: !12, type: !6)
-!16 = !DIExpression(DW_OP_bit_piece, 32, 32)
+!16 = !DIExpression(DW_OP_LLVM_fragment, 32, 32)
 !17 = !DILocation(line: 2755, column: 9, scope: !12)

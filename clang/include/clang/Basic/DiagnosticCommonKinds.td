@@ -16,7 +16,7 @@ let Component = "Common" in {
 // Basic.
 
 def fatal_too_many_errors
-  : Error<"too many errors emitted, stopping now">, DefaultFatal; 
+  : Error<"too many errors emitted, stopping now">, DefaultFatal;
 
 def note_declared_at : Note<"declared here">;
 def note_previous_definition : Note<"previous definition is here">;
@@ -45,7 +45,9 @@ def err_expected_colon_after_setter_name : Error<
   "must end with ':'">;
 def err_expected_string_literal : Error<"expected string literal "
   "%select{in %1|for diagnostic message in static_assert|"
-          "for optional message in 'availability' attribute}0">;
+          "for optional message in 'availability' attribute|"
+          "for %select{language|source container}1 name in "
+          "'external_source_symbol' attribute}0">;
 def err_invalid_string_udl : Error<
   "string literal with user-defined suffix cannot be used here">;
 def err_invalid_character_udl : Error<
@@ -88,15 +90,18 @@ def err_module_unavailable : Error<
   "module '%0' %select{is incompatible with|requires}1 feature '%2'">;
 def err_module_header_missing : Error<
   "%select{|umbrella }0header '%1' not found">;
-def err_module_lock_failure : Error<
-  "could not acquire lock file for module '%0': %1">, DefaultFatal;
-def err_module_lock_timeout : Error<
-  "timed out waiting to acquire lock file for module '%0'">, DefaultFatal;
-def err_module_cycle : Error<"cyclic dependency in module '%0': %1">, 
+def remark_module_lock_failure : Remark<
+  "could not acquire lock file for module '%0': %1">, InGroup<ModuleBuild>;
+def remark_module_lock_timeout : Remark<
+  "timed out waiting to acquire lock file for module '%0'">, InGroup<ModuleBuild>;
+def err_module_shadowed : Error<"import of shadowed module '%0'">, DefaultFatal;
+def err_module_build_shadowed_submodule : Error<
+  "build a shadowed submodule '%0'">, DefaultFatal;
+def err_module_cycle : Error<"cyclic dependency in module '%0': %1">,
   DefaultFatal;
 def err_module_prebuilt : Error<
   "error in loading module '%0' from prebuilt module path">, DefaultFatal;
-def note_pragma_entered_here : Note<"#pragma entered here">;  
+def note_pragma_entered_here : Note<"#pragma entered here">;
 def note_decl_hiding_tag_type : Note<
   "%1 %0 is hidden by a non-type declaration of %0 here">;
 def err_attribute_not_type_attr : Error<
@@ -110,7 +115,7 @@ let CategoryName = "Nullability Issue" in {
 def warn_nullability_duplicate : Warning<
   "duplicate nullability specifier %0">,
   InGroup<Nullability>;
-  
+
 def warn_conflicting_nullability_attr_overriding_ret_types : Warning<
   "conflicting nullability specifier on return types, %0 "
   "conflicts with existing specifier %1">,
@@ -161,6 +166,12 @@ def ext_old_implicitly_unsigned_long_cxx : ExtWarn<
   InGroup<CXX11Compat>;
 def ext_clang_enable_if : Extension<"'enable_if' is a clang extension">,
                           InGroup<GccCompat>;
+def ext_clang_diagnose_if : Extension<"'diagnose_if' is a clang extension">,
+                            InGroup<GccCompat>;
+def err_too_large_for_fixed_point : Error<
+  "this value is too large for this fixed point type">;
+def err_fixed_point_not_enabled : Error<"compile with "
+  "'-ffixed-point' to enable fixed point types">;
 
 // SEH
 def err_seh_expected_handler : Error<
@@ -181,17 +192,29 @@ def note_invalid_subexpr_in_const_expr : Note<
 def err_target_unknown_triple : Error<
   "unknown target triple '%0', please use -triple or -arch">;
 def err_target_unknown_cpu : Error<"unknown target CPU '%0'">;
+def note_valid_options : Note<"valid target CPU values are: %0">;
+def err_target_unsupported_cpu_for_micromips : Error<
+  "micromips is not supported for target CPU '%0'">;
 def err_target_unknown_abi : Error<"unknown target ABI '%0'">;
 def err_target_unsupported_abi : Error<"ABI '%0' is not supported on CPU '%1'">;
 def err_target_unsupported_abi_for_triple : Error<
   "ABI '%0' is not supported for '%1'">;
+def err_unsupported_abi_for_opt : Error<"'%0' can only be used with the '%1' ABI">;
+def err_mips_fp64_req : Error<
+    "'%0' can only be used if the target supports the mfhc1 and mthc1 instructions">;
 def err_target_unknown_fpmath : Error<"unknown FP unit '%0'">;
 def err_target_unsupported_fpmath : Error<
     "the '%0' unit is not supported with this instruction set">;
 def err_target_unsupported_unaligned : Error<
   "the %0 sub-architecture does not support unaligned accesses">;
+def err_target_unsupported_execute_only : Error<
+  "execute only is not supported for the %0 sub-architecture">;
 def err_opt_not_valid_with_opt : Error<
   "option '%0' cannot be specified with '%1'">;
+def err_opt_not_valid_without_opt : Error<
+  "option '%0' cannot be specified without '%1'">;
+def err_opt_not_valid_on_target : Error<
+  "option '%0' cannot be specified on this target">;
 
 // Source manager
 def err_cannot_open_file : Error<"cannot open file '%0': %1">, DefaultFatal;
@@ -203,7 +226,7 @@ def err_unable_to_rename_temp : Error<
   "unable to rename temporary '%0' to output file '%1': '%2'">;
 def err_unable_to_make_temp : Error<
   "unable to make temporary file: %0">;
-  
+
 // Modules
 def err_module_format_unhandled : Error<
   "no handler registered for module format '%0'">, DefaultFatal;
@@ -217,6 +240,10 @@ def note_mt_message : Note<"[rewriter] %0">;
 // ARCMigrate
 def warn_arcmt_nsalloc_realloc : Warning<"[rewriter] call returns pointer to GC managed memory; it will become unmanaged in ARC">;
 def err_arcmt_nsinvocation_ownership : Error<"NSInvocation's %0 is not safe to be used with an object with ownership other than __unsafe_unretained">;
+
+// OpenCL C++.
+def err_openclcxx_not_supported : Error<
+  "'%0' is not supported in OpenCL C++">;
 
 // OpenMP
 def err_omp_more_one_clause : Error<

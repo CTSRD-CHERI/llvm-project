@@ -9,7 +9,7 @@
 ; Note that gold picks the first copy of weakfunc() as the prevailing one,
 ; so listing %t2.o first is sufficient to ensure that this copy is
 ; preempted.
-; RUN: %gold -m elf_x86_64 -plugin %llvmshlibdir/LLVMgold.so \
+; RUN: %gold -m elf_x86_64 -plugin %llvmshlibdir/LLVMgold%shlibext \
 ; RUN:     --plugin-opt=thinlto \
 ; RUN:     --plugin-opt=save-temps \
 ; RUN:     -o %t3.o %t2.o %t.o
@@ -27,6 +27,7 @@
 ; OPT: define hidden void @weakfunc.llvm.0()
 ; OPT2: define weak void @weakfunc()
 
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
 
 @weakfuncAlias = alias void (...), bitcast (void ()* @weakfunc to void (...)*)

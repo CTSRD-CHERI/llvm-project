@@ -24,21 +24,30 @@
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/None.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/OperandTraits.h"
+#include "llvm/IR/User.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Compiler.h"
+#include "llvm/Support/ErrorHandling.h"
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
 
 namespace llvm {
 
 class ArrayType;
 class IntegerType;
-class StructType;
 class PointerType;
-class VectorType;
 class SequentialType;
-
-struct ConstantExprKeyType;
+class StructType;
+class VectorType;
 template <class ConstantClass> struct ConstantAggrKeyType;
 
 /// Base class for constants with no operands.
@@ -47,21 +56,20 @@ template <class ConstantClass> struct ConstantAggrKeyType;
 /// Since they can be in use by unrelated modules (and are never based on
 /// GlobalValues), it never makes sense to RAUW them.
 class ConstantData : public Constant {
-  void anchor() override;
-  void *operator new(size_t, unsigned) = delete;
-  ConstantData() = delete;
-  ConstantData(const ConstantData &) = delete;
-
   friend class Constant;
+
   Value *handleOperandChangeImpl(Value *From, Value *To) {
     llvm_unreachable("Constant data does not have operands!");
   }
 
 protected:
   explicit ConstantData(Type *Ty, ValueTy VT) : Constant(Ty, VT, nullptr, 0) {}
+
   void *operator new(size_t s) { return User::operator new(s, 0); }
 
 public:
+  ConstantData(const ConstantData &) = delete;
+
   /// Methods to support type inquiry through isa, cast, and dyn_cast.
   static bool classof(const Value *V) {
     return V->getValueID() >= ConstantDataFirstVal &&
@@ -72,17 +80,19 @@ public:
 //===----------------------------------------------------------------------===//
 /// This is the shared class of boolean and integer constants. This class
 /// represents both boolean and integral constants.
-/// @brief Class for constant integers.
+/// Class for constant integers.
 class ConstantInt final : public ConstantData {
-  void anchor() override;
-  ConstantInt(const ConstantInt &) = delete;
-  ConstantInt(IntegerType *Ty, const APInt& V);
+  friend class Constant;
+
   APInt Val;
 
-  friend class Constant;
+  ConstantInt(IntegerType *Ty, const APInt& V);
+
   void destroyConstantImpl();
 
 public:
+  ConstantInt(const ConstantInt &) = delete;
+
   static ConstantInt *getTrue(LLVMContext &Context);
   static ConstantInt *getFalse(LLVMContext &Context);
   static Constant *getTrue(Type *Ty);
@@ -97,7 +107,7 @@ public:
   /// to fit the type, unless isSigned is true, in which case the value will
   /// be interpreted as a 64-bit signed integer and sign-extended to fit
   /// the type.
-  /// @brief Get a ConstantInt for a specific value.
+  /// Get a ConstantInt for a specific value.
   static ConstantInt *get(IntegerType *Ty, uint64_t V,
                           bool isSigned = false);
 
@@ -105,7 +115,7 @@ public:
   /// value V will be canonicalized to a an unsigned APInt. Accessing it with
   /// either getSExtValue() or getZExtValue() will yield a correctly sized and
   /// signed value for the type Ty.
-  /// @brief Get a ConstantInt for a specific signed value.
+  /// Get a ConstantInt for a specific signed value.
   static ConstantInt *getSigned(IntegerType *Ty, int64_t V);
   static Constant *getSigned(Type *Ty, int64_t V);
 
@@ -123,8 +133,8 @@ public:
   static Constant *get(Type* Ty, const APInt& V);
 
   /// Return the constant as an APInt value reference. This allows clients to
-  /// obtain a copy of the value, with all its precision in tact.
-  /// @brief Return the constant's value.
+  /// obtain a full-precision copy of the value.
+  /// Return the constant's value.
   inline const APInt &getValue() const {
     return Val;
   }
@@ -135,7 +145,7 @@ public:
   /// Return the constant as a 64-bit unsigned integer value after it
   /// has been zero extended as appropriate for the type of this constant. Note
   /// that this method can assert if the value does not fit in 64 bits.
-  /// @brief Return the zero extended value.
+  /// Return the zero extended value.
   inline uint64_t getZExtValue() const {
     return Val.getZExtValue();
   }
@@ -143,7 +153,7 @@ public:
   /// Return the constant as a 64-bit integer value after it has been sign
   /// extended as appropriate for the type of this constant. Note that
   /// this method can assert if the value does not fit in 64 bits.
-  /// @brief Return the sign extended value.
+  /// Return the sign extended value.
   inline int64_t getSExtValue() const {
     return Val.getSExtValue();
   }
@@ -151,7 +161,7 @@ public:
   /// A helper method that can be used to determine if the constant contained
   /// within is equal to a constant.  This only works for very small values,
   /// because this is all that can be represented with all types.
-  /// @brief Determine if this constant's value is same as an unsigned char.
+  /// Determine if this constant's value is same as an unsigned char.
   bool equalsInt(uint64_t V) const {
     return Val == V;
   }
@@ -171,7 +181,7 @@ public:
   /// the signed version avoids callers having to convert a signed quantity
   /// to the appropriate unsigned type before calling the method.
   /// @returns true if V is a valid value for type Ty
-  /// @brief Determine if the value is in range for the given type.
+  /// Determine if the value is in range for the given type.
   static bool isValueValidForType(Type *Ty, uint64_t V);
   static bool isValueValidForType(Type *Ty, int64_t V);
 
@@ -181,21 +191,21 @@ public:
   /// common code. It also correctly performs the comparison without the
   /// potential for an assertion from getZExtValue().
   bool isZero() const {
-    return Val == 0;
+    return Val.isNullValue();
   }
 
   /// This is just a convenience method to make client code smaller for a
   /// common case. It also correctly performs the comparison without the
   /// potential for an assertion from getZExtValue().
-  /// @brief Determine if the value is one.
+  /// Determine if the value is one.
   bool isOne() const {
-    return Val == 1;
+    return Val.isOneValue();
   }
 
   /// This function will return true iff every bit in this constant is set
   /// to true.
   /// @returns true iff this constant's bits are all set to true.
-  /// @brief Determine if the value is all ones.
+  /// Determine if the value is all ones.
   bool isMinusOne() const {
     return Val.isAllOnesValue();
   }
@@ -204,7 +214,7 @@ public:
   /// value that may be represented by the constant's type.
   /// @returns true iff this is the largest value that may be represented
   /// by this type.
-  /// @brief Determine if the value is maximal.
+  /// Determine if the value is maximal.
   bool isMaxValue(bool isSigned) const {
     if (isSigned)
       return Val.isMaxSignedValue();
@@ -216,7 +226,7 @@ public:
   /// value that may be represented by this constant's type.
   /// @returns true if this is the smallest value that may be represented by
   /// this type.
-  /// @brief Determine if the value is minimal.
+  /// Determine if the value is minimal.
   bool isMinValue(bool isSigned) const {
     if (isSigned)
       return Val.isMinSignedValue();
@@ -228,41 +238,41 @@ public:
   /// active bits bigger than 64 bits or a value greater than the given uint64_t
   /// value.
   /// @returns true iff this constant is greater or equal to the given number.
-  /// @brief Determine if the value is greater or equal to the given number.
+  /// Determine if the value is greater or equal to the given number.
   bool uge(uint64_t Num) const {
-    return Val.getActiveBits() > 64 || Val.getZExtValue() >= Num;
+    return Val.uge(Num);
   }
 
   /// getLimitedValue - If the value is smaller than the specified limit,
   /// return it, otherwise return the limit value.  This causes the value
   /// to saturate to the limit.
   /// @returns the min of the value of the constant and the specified value
-  /// @brief Get the constant's value with a saturation limit
+  /// Get the constant's value with a saturation limit
   uint64_t getLimitedValue(uint64_t Limit = ~0ULL) const {
     return Val.getLimitedValue(Limit);
   }
 
-  /// @brief Methods to support type inquiry through isa, cast, and dyn_cast.
+  /// Methods to support type inquiry through isa, cast, and dyn_cast.
   static bool classof(const Value *V) {
     return V->getValueID() == ConstantIntVal;
   }
 };
 
-
 //===----------------------------------------------------------------------===//
 /// ConstantFP - Floating Point Values [float, double]
 ///
 class ConstantFP final : public ConstantData {
-  APFloat Val;
-  void anchor() override;
-  ConstantFP(const ConstantFP &) = delete;
-
   friend class Constant;
-  void destroyConstantImpl();
+
+  APFloat Val;
 
   ConstantFP(Type *Ty, const APFloat& V);
 
+  void destroyConstantImpl();
+
 public:
+  ConstantFP(const ConstantFP &) = delete;
+
   /// Floating point negation must be implemented with f(x) = -0.0 - x. This
   /// method returns the negative zero constant for floating point or vector
   /// floating point types; for all other types, it returns the null value.
@@ -273,6 +283,11 @@ public:
   /// for simple constant values like 2.0/1.0 etc, that are known-valid both as
   /// host double and as the target format.
   static Constant *get(Type* Ty, double V);
+
+  /// If Ty is a vector type, return a Constant with a splat of the given
+  /// value. Otherwise return a ConstantFP for the given value.
+  static Constant *get(Type *Ty, const APFloat &V);
+
   static Constant *get(Type* Ty, StringRef Str);
   static ConstantFP *get(LLVMContext &Context, const APFloat &V);
   static Constant *getNaN(Type *Ty, bool Negative = false, unsigned type = 0);
@@ -309,6 +324,7 @@ public:
     FV.convert(Val.getSemantics(), APFloat::rmNearestTiesToEven, &ignored);
     return isExactlyValue(FV);
   }
+
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
   static bool classof(const Value *V) {
     return V->getValueID() == ConstantFPVal;
@@ -319,15 +335,16 @@ public:
 /// All zero aggregate value
 ///
 class ConstantAggregateZero final : public ConstantData {
-  ConstantAggregateZero(const ConstantAggregateZero &) = delete;
-
   friend class Constant;
-  void destroyConstantImpl();
 
   explicit ConstantAggregateZero(Type *Ty)
       : ConstantData(Ty, ConstantAggregateZeroVal) {}
 
+  void destroyConstantImpl();
+
 public:
+  ConstantAggregateZero(const ConstantAggregateZero &) = delete;
+
   static ConstantAggregateZero *get(Type *Ty);
 
   /// If this CAZ has array or vector type, return a zero with the right element
@@ -393,10 +410,11 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(ConstantAggregate, Constant)
 class ConstantArray final : public ConstantAggregate {
   friend struct ConstantAggrKeyType<ConstantArray>;
   friend class Constant;
-  void destroyConstantImpl();
-  Value *handleOperandChangeImpl(Value *From, Value *To);
 
   ConstantArray(ArrayType *T, ArrayRef<Constant *> Val);
+
+  void destroyConstantImpl();
+  Value *handleOperandChangeImpl(Value *From, Value *To);
 
 public:
   // ConstantArray accessors
@@ -424,15 +442,23 @@ public:
 class ConstantStruct final : public ConstantAggregate {
   friend struct ConstantAggrKeyType<ConstantStruct>;
   friend class Constant;
-  void destroyConstantImpl();
-  Value *handleOperandChangeImpl(Value *From, Value *To);
 
   ConstantStruct(StructType *T, ArrayRef<Constant *> Val);
+
+  void destroyConstantImpl();
+  Value *handleOperandChangeImpl(Value *From, Value *To);
 
 public:
   // ConstantStruct accessors
   static Constant *get(StructType *T, ArrayRef<Constant*> V);
-  static Constant *get(StructType *T, ...) LLVM_END_WITH_NULL;
+
+  template <typename... Csts>
+  static typename std::enable_if<are_base_of<Constant, Csts...>::value,
+                                 Constant *>::type
+  get(StructType *T, Csts *... Vs) {
+    SmallVector<Constant *, 8> Values({Vs...});
+    return get(T, Values);
+  }
 
   /// Return an anonymous struct that has the specified elements.
   /// If the struct is possibly empty, then you must specify a context.
@@ -464,17 +490,17 @@ public:
   }
 };
 
-
 //===----------------------------------------------------------------------===//
 /// Constant Vector Declarations
 ///
 class ConstantVector final : public ConstantAggregate {
   friend struct ConstantAggrKeyType<ConstantVector>;
   friend class Constant;
-  void destroyConstantImpl();
-  Value *handleOperandChangeImpl(Value *From, Value *To);
 
   ConstantVector(VectorType *T, ArrayRef<Constant *> Val);
+
+  void destroyConstantImpl();
+  Value *handleOperandChangeImpl(Value *From, Value *To);
 
 public:
   // ConstantVector accessors
@@ -507,15 +533,16 @@ public:
 /// A constant pointer value that points to null
 ///
 class ConstantPointerNull final : public ConstantData {
-  ConstantPointerNull(const ConstantPointerNull &) = delete;
-
   friend class Constant;
-  void destroyConstantImpl();
 
   explicit ConstantPointerNull(PointerType *T)
       : ConstantData(T, Value::ConstantPointerNullVal) {}
 
+  void destroyConstantImpl();
+
 public:
+  ConstantPointerNull(const ConstantPointerNull &) = delete;
+
   /// Static factory methods - Return objects of the specified value
   static ConstantPointerNull *get(PointerType *T);
 
@@ -542,6 +569,8 @@ public:
 ///
 class ConstantDataSequential : public ConstantData {
   friend class LLVMContextImpl;
+  friend class Constant;
+
   /// A pointer to the bytes underlying this constant (which is owned by the
   /// uniquing StringMap).
   const char *DataElements;
@@ -551,19 +580,19 @@ class ConstantDataSequential : public ConstantData {
   /// element array of i8, or a 1-element array of i32.  They'll both end up in
   /// the same StringMap bucket, linked up.
   ConstantDataSequential *Next;
-  ConstantDataSequential(const ConstantDataSequential &) = delete;
 
-  friend class Constant;
   void destroyConstantImpl();
 
 protected:
   explicit ConstantDataSequential(Type *ty, ValueTy VT, const char *Data)
       : ConstantData(ty, VT), DataElements(Data), Next(nullptr) {}
-  ~ConstantDataSequential() override { delete Next; }
+  ~ConstantDataSequential() { delete Next; }
 
   static Constant *getImpl(StringRef Bytes, Type *Ty);
 
 public:
+  ConstantDataSequential(const ConstantDataSequential &) = delete;
+
   /// Return true if a ConstantDataSequential can be formed with a vector or
   /// array of the specified element type.
   /// ConstantDataArray only works with normal float and int types that are
@@ -573,6 +602,10 @@ public:
   /// If this is a sequential container of integers (of any size), return the
   /// specified element in the low bits of a uint64_t.
   uint64_t getElementAsInteger(unsigned i) const;
+
+  /// If this is a sequential container of integers (of any size), return the
+  /// specified element as an APInt.
+  APInt getElementAsAPInt(unsigned i) const;
 
   /// If this is a sequential container of floating point type, return the
   /// specified element as an APFloat.
@@ -607,8 +640,8 @@ public:
   /// The size of the elements is known to be a multiple of one byte.
   uint64_t getElementByteSize() const;
 
-  /// This method returns true if this is an array of i8.
-  bool isString() const;
+  /// This method returns true if this is an array of \p CharSize integers.
+  bool isString(unsigned CharSize = 8) const;
 
   /// This method returns true if the array "isString", ends with a null byte,
   /// and does not contains any other null bytes.
@@ -639,6 +672,7 @@ public:
     return V->getValueID() == ConstantDataArrayVal ||
            V->getValueID() == ConstantDataVectorVal;
   }
+
 private:
   const char *getElementPointer(unsigned Elt) const;
 };
@@ -650,27 +684,41 @@ private:
 /// stores all of the elements of the constant as densely packed data, instead
 /// of as Value*'s.
 class ConstantDataArray final : public ConstantDataSequential {
-  void *operator new(size_t, unsigned) = delete;
-  ConstantDataArray(const ConstantDataArray &) = delete;
-  void anchor() override;
   friend class ConstantDataSequential;
+
   explicit ConstantDataArray(Type *ty, const char *Data)
       : ConstantDataSequential(ty, ConstantDataArrayVal, Data) {}
-  /// Allocate space for exactly zero operands.
-  void *operator new(size_t s) {
-    return User::operator new(s, 0);
-  }
 
 public:
-  /// get() constructors - Return a constant with array type with an element
+  ConstantDataArray(const ConstantDataArray &) = delete;
+
+  /// get() constructor - Return a constant with array type with an element
   /// count and element type matching the ArrayRef passed in.  Note that this
   /// can return a ConstantAggregateZero object.
-  static Constant *get(LLVMContext &Context, ArrayRef<uint8_t> Elts);
-  static Constant *get(LLVMContext &Context, ArrayRef<uint16_t> Elts);
-  static Constant *get(LLVMContext &Context, ArrayRef<uint32_t> Elts);
-  static Constant *get(LLVMContext &Context, ArrayRef<uint64_t> Elts);
-  static Constant *get(LLVMContext &Context, ArrayRef<float> Elts);
-  static Constant *get(LLVMContext &Context, ArrayRef<double> Elts);
+  template <typename ElementTy>
+  static Constant *get(LLVMContext &Context, ArrayRef<ElementTy> Elts) {
+    const char *Data = reinterpret_cast<const char *>(Elts.data());
+    return getRaw(StringRef(Data, Elts.size() * sizeof(ElementTy)), Elts.size(),
+                  Type::getScalarTy<ElementTy>(Context));
+  }
+
+  /// get() constructor - ArrayTy needs to be compatible with
+  /// ArrayRef<ElementTy>. Calls get(LLVMContext, ArrayRef<ElementTy>).
+  template <typename ArrayTy>
+  static Constant *get(LLVMContext &Context, ArrayTy &Elts) {
+    return ConstantDataArray::get(Context, makeArrayRef(Elts));
+  }
+
+  /// get() constructor - Return a constant with array type with an element
+  /// count and element type matching the NumElements and ElementTy parameters
+  /// passed in. Note that this can return a ConstantAggregateZero object.
+  /// ElementTy needs to be one of i8/i16/i32/i64/float/double. Data is the
+  /// buffer containing the elements. Be careful to make sure Data uses the
+  /// right endianness, the buffer will be used as-is.
+  static Constant *getRaw(StringRef Data, uint64_t NumElements, Type *ElementTy) {
+    Type *Ty = ArrayType::get(ElementTy, NumElements);
+    return getImpl(Data, Ty);
+  }
 
   /// getFP() constructors - Return a constant with array type with an element
   /// count and element type of float with precision matching the number of
@@ -708,18 +756,14 @@ public:
 /// stores all of the elements of the constant as densely packed data, instead
 /// of as Value*'s.
 class ConstantDataVector final : public ConstantDataSequential {
-  void *operator new(size_t, unsigned) = delete;
-  ConstantDataVector(const ConstantDataVector &) = delete;
-  void anchor() override;
   friend class ConstantDataSequential;
+
   explicit ConstantDataVector(Type *ty, const char *Data)
       : ConstantDataSequential(ty, ConstantDataVectorVal, Data) {}
-  // allocate space for exactly zero operands.
-  void *operator new(size_t s) {
-    return User::operator new(s, 0);
-  }
 
 public:
+  ConstantDataVector(const ConstantDataVector &) = delete;
+
   /// get() constructors - Return a constant with vector type with an element
   /// count and element type matching the ArrayRef passed in.  Note that this
   /// can return a ConstantAggregateZero object.
@@ -744,6 +788,10 @@ public:
   /// i32/i64/float/double) and must be a ConstantFP or ConstantInt.
   static Constant *getSplat(unsigned NumElts, Constant *Elt);
 
+  /// Returns true if this is a splat constant, meaning that all elements have
+  /// the same value.
+  bool isSplat() const;
+
   /// If this is a splat constant, meaning that all of the elements have the
   /// same value, return that value. Otherwise return NULL.
   Constant *getSplatValue() const;
@@ -764,19 +812,20 @@ public:
 /// A constant token which is empty
 ///
 class ConstantTokenNone final : public ConstantData {
-  ConstantTokenNone(const ConstantTokenNone &) = delete;
-
   friend class Constant;
-  void destroyConstantImpl();
 
   explicit ConstantTokenNone(LLVMContext &Context)
       : ConstantData(Type::getTokenTy(Context), ConstantTokenNoneVal) {}
 
+  void destroyConstantImpl();
+
 public:
+  ConstantTokenNone(const ConstantTokenNone &) = delete;
+
   /// Return the ConstantTokenNone.
   static ConstantTokenNone *get(LLVMContext &Context);
 
-  /// @brief Methods to support type inquiry through isa, cast, and dyn_cast.
+  /// Methods to support type inquiry through isa, cast, and dyn_cast.
   static bool classof(const Value *V) {
     return V->getValueID() == ConstantTokenNoneVal;
   }
@@ -785,11 +834,12 @@ public:
 /// The address of a basic block.
 ///
 class BlockAddress final : public Constant {
-  void *operator new(size_t, unsigned) = delete;
-  void *operator new(size_t s) { return User::operator new(s, 2); }
+  friend class Constant;
+
   BlockAddress(Function *F, BasicBlock *BB);
 
-  friend class Constant;
+  void *operator new(size_t s) { return User::operator new(s, 2); }
+
   void destroyConstantImpl();
   Value *handleOperandChangeImpl(Value *From, Value *To);
 
@@ -813,7 +863,7 @@ public:
   BasicBlock *getBasicBlock() const { return (BasicBlock*)Op<1>().get(); }
 
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
-  static inline bool classof(const Value *V) {
+  static bool classof(const Value *V) {
     return V->getValueID() == BlockAddressVal;
   }
 };
@@ -825,7 +875,6 @@ struct OperandTraits<BlockAddress> :
 
 DEFINE_TRANSPARENT_OPERAND_ACCESSORS(BlockAddress, Value)
 
-
 //===----------------------------------------------------------------------===//
 /// A constant value that is initialized with an expression using
 /// other constant values.
@@ -835,8 +884,8 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(BlockAddress, Value)
 /// maintained in the Value::SubclassData field.
 class ConstantExpr : public Constant {
   friend struct ConstantExprKeyType;
-
   friend class Constant;
+
   void destroyConstantImpl();
   Value *handleOperandChangeImpl(Value *From, Value *To);
 
@@ -920,47 +969,64 @@ public:
 
   static Constant *getNSWNeg(Constant *C) { return getNeg(C, false, true); }
   static Constant *getNUWNeg(Constant *C) { return getNeg(C, true, false); }
+
   static Constant *getNSWAdd(Constant *C1, Constant *C2) {
     return getAdd(C1, C2, false, true);
   }
+
   static Constant *getNUWAdd(Constant *C1, Constant *C2) {
     return getAdd(C1, C2, true, false);
   }
+
   static Constant *getNSWSub(Constant *C1, Constant *C2) {
     return getSub(C1, C2, false, true);
   }
+
   static Constant *getNUWSub(Constant *C1, Constant *C2) {
     return getSub(C1, C2, true, false);
   }
+
   static Constant *getNSWMul(Constant *C1, Constant *C2) {
     return getMul(C1, C2, false, true);
   }
+
   static Constant *getNUWMul(Constant *C1, Constant *C2) {
     return getMul(C1, C2, true, false);
   }
+
   static Constant *getNSWShl(Constant *C1, Constant *C2) {
     return getShl(C1, C2, false, true);
   }
+
   static Constant *getNUWShl(Constant *C1, Constant *C2) {
     return getShl(C1, C2, true, false);
   }
+
   static Constant *getExactSDiv(Constant *C1, Constant *C2) {
     return getSDiv(C1, C2, true);
   }
+
   static Constant *getExactUDiv(Constant *C1, Constant *C2) {
     return getUDiv(C1, C2, true);
   }
+
   static Constant *getExactAShr(Constant *C1, Constant *C2) {
     return getAShr(C1, C2, true);
   }
+
   static Constant *getExactLShr(Constant *C1, Constant *C2) {
     return getLShr(C1, C2, true);
   }
 
-  /// Return the identity for the given binary operation,
-  /// i.e. a constant C such that X op C = X and C op X = X for every X.  It
-  /// returns null if the operator doesn't have an identity.
-  static Constant *getBinOpIdentity(unsigned Opcode, Type *Ty);
+  /// Return the identity constant for a binary opcode.
+  /// The identity constant C is defined as X op C = X and C op X = X for every
+  /// X when the binary operation is commutative. If the binop is not
+  /// commutative, callers can acquire the operand 1 identity constant by
+  /// setting AllowRHSConstant to true. For example, any shift has a zero
+  /// identity constant for operand 1: X shift 0 = X.
+  /// Return nullptr if the operator does not have an identity constant.
+  static Constant *getBinOpIdentity(unsigned Opcode, Type *Ty,
+                                    bool AllowRHSConstant = false);
 
   /// Return the absorbing element for the given binary
   /// operation, i.e. a constant C such that X op C = C and C op X = C for
@@ -971,7 +1037,7 @@ public:
   /// Transparently provide more efficient getOperand methods.
   DECLARE_TRANSPARENT_OPERAND_ACCESSORS(Constant);
 
-  /// \brief Convenience function for getting a Cast operation.
+  /// Convenience function for getting a Cast operation.
   ///
   /// \param ops The opcode for the conversion
   /// \param C  The constant to be converted
@@ -980,62 +1046,62 @@ public:
   static Constant *getCast(unsigned ops, Constant *C, Type *Ty,
                            bool OnlyIfReduced = false);
 
-  // @brief Create a ZExt or BitCast cast constant expression
+  // Create a ZExt or BitCast cast constant expression
   static Constant *getZExtOrBitCast(
     Constant *C,   ///< The constant to zext or bitcast
     Type *Ty ///< The type to zext or bitcast C to
   );
 
-  // @brief Create a SExt or BitCast cast constant expression
+  // Create a SExt or BitCast cast constant expression
   static Constant *getSExtOrBitCast(
     Constant *C,   ///< The constant to sext or bitcast
     Type *Ty ///< The type to sext or bitcast C to
   );
 
-  // @brief Create a Trunc or BitCast cast constant expression
+  // Create a Trunc or BitCast cast constant expression
   static Constant *getTruncOrBitCast(
     Constant *C,   ///< The constant to trunc or bitcast
     Type *Ty ///< The type to trunc or bitcast C to
   );
 
-  /// @brief Create a BitCast, AddrSpaceCast, or a PtrToInt cast constant
+  /// Create a BitCast, AddrSpaceCast, or a PtrToInt cast constant
   /// expression.
   static Constant *getPointerCast(
     Constant *C,   ///< The pointer value to be casted (operand 0)
     Type *Ty ///< The type to which cast should be made
   );
 
-  /// @brief Create a BitCast or AddrSpaceCast for a pointer type depending on
+  /// Create a BitCast or AddrSpaceCast for a pointer type depending on
   /// the address space.
   static Constant *getPointerBitCastOrAddrSpaceCast(
     Constant *C,   ///< The constant to addrspacecast or bitcast
     Type *Ty ///< The type to bitcast or addrspacecast C to
   );
 
-  /// @brief Create a ZExt, Bitcast or Trunc for integer -> integer casts
+  /// Create a ZExt, Bitcast or Trunc for integer -> integer casts
   static Constant *getIntegerCast(
     Constant *C,    ///< The integer constant to be casted
     Type *Ty, ///< The integer type to cast to
     bool isSigned   ///< Whether C should be treated as signed or not
   );
 
-  /// @brief Create a FPExt, Bitcast or FPTrunc for fp -> fp casts
+  /// Create a FPExt, Bitcast or FPTrunc for fp -> fp casts
   static Constant *getFPCast(
     Constant *C,    ///< The integer constant to be casted
     Type *Ty ///< The integer type to cast to
   );
 
-  /// @brief Return true if this is a convert constant expression
+  /// Return true if this is a convert constant expression
   bool isCast() const;
 
-  /// @brief Return true if this is a compare constant expression
+  /// Return true if this is a compare constant expression
   bool isCompare() const;
 
-  /// @brief Return true if this is an insertvalue or extractvalue expression,
+  /// Return true if this is an insertvalue or extractvalue expression,
   /// and the getIndices() method may be used.
   bool hasIndices() const;
 
-  /// @brief Return true if this is a getelementptr expression and all
+  /// Return true if this is a getelementptr expression and all
   /// the index operands are compile-time known integers within the
   /// corresponding notional static array extents. Note that this is
   /// not equivalant to, a subset of, or a superset of the "inbounds"
@@ -1055,7 +1121,7 @@ public:
   static Constant *get(unsigned Opcode, Constant *C1, Constant *C2,
                        unsigned Flags = 0, Type *OnlyIfReducedTy = nullptr);
 
-  /// \brief Return an ICmp or FCmp comparison operator constant expression.
+  /// Return an ICmp or FCmp comparison operator constant expression.
   ///
   /// \param OnlyIfReduced see \a getWithOperands() docs.
   static Constant *getCompare(unsigned short pred, Constant *C1, Constant *C2,
@@ -1177,7 +1243,7 @@ public:
   Instruction *getAsInstruction();
 
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
-  static inline bool classof(const Value *V) {
+  static bool classof(const Value *V) {
     return V->getValueID() == ConstantExprVal;
   }
 
@@ -1207,14 +1273,15 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(ConstantExpr, Constant)
 /// LangRef.html#undefvalues for details.
 ///
 class UndefValue final : public ConstantData {
-  UndefValue(const UndefValue &) = delete;
-
   friend class Constant;
-  void destroyConstantImpl();
 
   explicit UndefValue(Type *T) : ConstantData(T, UndefValueVal) {}
 
+  void destroyConstantImpl();
+
 public:
+  UndefValue(const UndefValue &) = delete;
+
   /// Static factory methods - Return an 'undef' object of the specified type.
   static UndefValue *get(Type *T);
 
@@ -1242,6 +1309,6 @@ public:
   }
 };
 
-} // End llvm namespace
+} // end namespace llvm
 
-#endif
+#endif // LLVM_IR_CONSTANTS_H

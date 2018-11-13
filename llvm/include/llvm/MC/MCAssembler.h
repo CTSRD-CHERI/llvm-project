@@ -10,33 +10,36 @@
 #ifndef LLVM_MC_MCASSEMBLER_H
 #define LLVM_MC_MCASSEMBLER_H
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/ilist.h"
-#include "llvm/ADT/ilist_node.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/iterator.h"
+#include "llvm/ADT/iterator_range.h"
+#include "llvm/BinaryFormat/MachO.h"
 #include "llvm/MC/MCDirectives.h"
 #include "llvm/MC/MCDwarf.h"
 #include "llvm/MC/MCFixup.h"
 #include "llvm/MC/MCFragment.h"
-#include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCLinkerOptimizationHint.h"
-#include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace llvm {
-class raw_ostream;
+
+class MCAsmBackend;
 class MCAsmLayout;
-class MCAssembler;
 class MCContext;
 class MCCodeEmitter;
-class MCExpr;
 class MCFragment;
 class MCObjectWriter;
 class MCSection;
-class MCSubtargetInfo;
 class MCValue;
-class MCAsmBackend;
 
 // FIXME: This really doesn't belong here. See comments below.
 struct IndirectSymbolData {
@@ -58,48 +61,49 @@ class MCAssembler {
   friend class MCAsmLayout;
 
 public:
-  typedef std::vector<MCSection *> SectionListType;
-  typedef std::vector<const MCSymbol *> SymbolDataListType;
+  using SectionListType = std::vector<MCSection *>;
+  using SymbolDataListType = std::vector<const MCSymbol *>;
 
-  typedef pointee_iterator<SectionListType::const_iterator> const_iterator;
-  typedef pointee_iterator<SectionListType::iterator> iterator;
+  using const_iterator = pointee_iterator<SectionListType::const_iterator>;
+  using iterator = pointee_iterator<SectionListType::iterator>;
 
-  typedef pointee_iterator<SymbolDataListType::const_iterator>
-  const_symbol_iterator;
-  typedef pointee_iterator<SymbolDataListType::iterator> symbol_iterator;
+  using const_symbol_iterator =
+      pointee_iterator<SymbolDataListType::const_iterator>;
+  using symbol_iterator = pointee_iterator<SymbolDataListType::iterator>;
 
-  typedef iterator_range<symbol_iterator> symbol_range;
-  typedef iterator_range<const_symbol_iterator> const_symbol_range;
+  using symbol_range = iterator_range<symbol_iterator>;
+  using const_symbol_range = iterator_range<const_symbol_iterator>;
 
-  typedef std::vector<IndirectSymbolData>::const_iterator
-      const_indirect_symbol_iterator;
-  typedef std::vector<IndirectSymbolData>::iterator indirect_symbol_iterator;
+  using const_indirect_symbol_iterator =
+      std::vector<IndirectSymbolData>::const_iterator;
+  using indirect_symbol_iterator = std::vector<IndirectSymbolData>::iterator;
 
-  typedef std::vector<DataRegionData>::const_iterator
-      const_data_region_iterator;
-  typedef std::vector<DataRegionData>::iterator data_region_iterator;
+  using const_data_region_iterator =
+      std::vector<DataRegionData>::const_iterator;
+  using data_region_iterator = std::vector<DataRegionData>::iterator;
 
   /// MachO specific deployment target version info.
   // A Major version of 0 indicates that no version information was supplied
   // and so the corresponding load command should not be emitted.
-  typedef struct {
-    MCVersionMinType Kind;
+  using VersionInfoType = struct {
+    bool EmitBuildVersion;
+    union {
+      MCVersionMinType Type;          ///< Used when EmitBuildVersion==false.
+      MachO::PlatformType Platform;   ///< Used when EmitBuildVersion==true.
+    } TypeOrPlatform;
     unsigned Major;
     unsigned Minor;
     unsigned Update;
-  } VersionMinInfoType;
+  };
 
 private:
-  MCAssembler(const MCAssembler &) = delete;
-  void operator=(const MCAssembler &) = delete;
-
   MCContext &Context;
 
-  MCAsmBackend &Backend;
+  std::unique_ptr<MCAsmBackend> Backend;
 
-  MCCodeEmitter &Emitter;
+  std::unique_ptr<MCCodeEmitter> Emitter;
 
-  MCObjectWriter &Writer;
+  std::unique_ptr<MCObjectWriter> Writer;
 
   SectionListType Sections;
 
@@ -126,14 +130,14 @@ private:
   // refactoring too.
   mutable SmallPtrSet<const MCSymbol *, 32> ThumbFuncs;
 
-  /// \brief The bundle alignment size currently set in the assembler.
+  /// The bundle alignment size currently set in the assembler.
   ///
   /// By default it's 0, which means bundling is disabled.
   unsigned BundleAlignSize;
 
-  unsigned RelaxAll : 1;
-  unsigned SubsectionsViaSymbols : 1;
-  unsigned IncrementalLinkerCompatible : 1;
+  bool RelaxAll : 1;
+  bool SubsectionsViaSymbols : 1;
+  bool IncrementalLinkerCompatible : 1;
 
   /// ELF specific e_header flags
   // It would be good if there were an MCELFAssembler class to hold this.
@@ -146,9 +150,8 @@ private:
   /// the Streamer and the .o writer
   MCLOHContainer LOHContainer;
 
-  VersionMinInfoType VersionMinInfo;
+  VersionInfoType VersionInfo;
 
-private:
   /// Evaluate a fixup to a relocatable expression and the value which should be
   /// placed into the fixup.
   ///
@@ -159,12 +162,14 @@ private:
   /// evaluates to.
   /// \param Value [out] On return, the value of the fixup as currently laid
   /// out.
+  /// \param WasForced [out] On return, the value in the fixup is set to the
+  /// correct value if WasForced is true, even if evaluateFixup returns false.
   /// \return Whether the fixup value was fully resolved. This is true if the
   /// \p Value result is fixed, otherwise the value may change due to
   /// relocation.
   bool evaluateFixup(const MCAsmLayout &Layout, const MCFixup &Fixup,
                      const MCFragment *DF, MCValue &Target,
-                     uint64_t &Value) const;
+                     uint64_t &Value, bool &WasForced) const;
 
   /// Check whether a fixup can be satisfied, or whether it needs to be relaxed
   /// (increased in size, in order to hold its value correctly).
@@ -175,15 +180,17 @@ private:
   bool fragmentNeedsRelaxation(const MCRelaxableFragment *IF,
                                const MCAsmLayout &Layout) const;
 
-  /// \brief Perform one layout iteration and return true if any offsets
+  /// Perform one layout iteration and return true if any offsets
   /// were adjusted.
   bool layoutOnce(MCAsmLayout &Layout);
 
-  /// \brief Perform one layout iteration of the given section and return true
+  /// Perform one layout iteration of the given section and return true
   /// if any offsets were adjusted.
   bool layoutSectionOnce(MCAsmLayout &Layout, MCSection &Sec);
 
   bool relaxInstruction(MCAsmLayout &Layout, MCRelaxableFragment &IF);
+
+  bool relaxPaddingFragment(MCAsmLayout &Layout, MCPaddingFragment &PF);
 
   bool relaxLEB(MCAsmLayout &Layout, MCLEBFragment &IF);
 
@@ -197,10 +204,25 @@ private:
   /// finishLayout - Finalize a layout, including fragment lowering.
   void finishLayout(MCAsmLayout &Layout);
 
-  std::pair<uint64_t, bool> handleFixup(const MCAsmLayout &Layout,
-                                        MCFragment &F, const MCFixup &Fixup);
+  std::tuple<MCValue, uint64_t, bool>
+  handleFixup(const MCAsmLayout &Layout, MCFragment &F, const MCFixup &Fixup);
 
 public:
+  std::vector<std::pair<StringRef, const MCSymbol *>> Symvers;
+
+  /// Construct a new assembler instance.
+  //
+  // FIXME: How are we going to parameterize this? Two obvious options are stay
+  // concrete and require clients to pass in a target like object. The other
+  // option is to make this abstract, and have targets provide concrete
+  // implementations as we do with AsmParser.
+  MCAssembler(MCContext &Context, std::unique_ptr<MCAsmBackend> Backend,
+              std::unique_ptr<MCCodeEmitter> Emitter,
+              std::unique_ptr<MCObjectWriter> Writer);
+  MCAssembler(const MCAssembler &) = delete;
+  MCAssembler &operator=(const MCAssembler &) = delete;
+  ~MCAssembler();
+
   /// Compute the effective fragment size assuming it is laid out at the given
   /// \p SectionAddress and \p FragmentOffset.
   uint64_t computeFragmentSize(const MCAsmLayout &Layout,
@@ -216,8 +238,8 @@ public:
   /// defining a separate atom.
   bool isSymbolLinkerVisible(const MCSymbol &SD) const;
 
-  /// Emit the section contents using the given object writer.
-  void writeSectionData(const MCSection *Section,
+  /// Emit the section contents to \p OS.
+  void writeSectionData(raw_ostream &OS, const MCSection *Section,
                         const MCAsmLayout &Layout) const;
 
   /// Check whether a given symbol has been flagged with .thumb_func.
@@ -231,25 +253,23 @@ public:
   void setELFHeaderEFlags(unsigned Flags) { ELFHeaderEFlags = Flags; }
 
   /// MachO deployment target version information.
-  const VersionMinInfoType &getVersionMinInfo() const { return VersionMinInfo; }
-  void setVersionMinInfo(MCVersionMinType Kind, unsigned Major, unsigned Minor,
-                         unsigned Update) {
-    VersionMinInfo.Kind = Kind;
-    VersionMinInfo.Major = Major;
-    VersionMinInfo.Minor = Minor;
-    VersionMinInfo.Update = Update;
+  const VersionInfoType &getVersionInfo() const { return VersionInfo; }
+  void setVersionMin(MCVersionMinType Type, unsigned Major, unsigned Minor,
+                     unsigned Update) {
+    VersionInfo.EmitBuildVersion = false;
+    VersionInfo.TypeOrPlatform.Type = Type;
+    VersionInfo.Major = Major;
+    VersionInfo.Minor = Minor;
+    VersionInfo.Update = Update;
   }
-
-public:
-  /// Construct a new assembler instance.
-  //
-  // FIXME: How are we going to parameterize this? Two obvious options are stay
-  // concrete and require clients to pass in a target like object. The other
-  // option is to make this abstract, and have targets provide concrete
-  // implementations as we do with AsmParser.
-  MCAssembler(MCContext &Context, MCAsmBackend &Backend,
-              MCCodeEmitter &Emitter, MCObjectWriter &Writer);
-  ~MCAssembler();
+  void setBuildVersion(MachO::PlatformType Platform, unsigned Major,
+                       unsigned Minor, unsigned Update) {
+    VersionInfo.EmitBuildVersion = true;
+    VersionInfo.TypeOrPlatform.Platform = Platform;
+    VersionInfo.Major = Major;
+    VersionInfo.Minor = Minor;
+    VersionInfo.Update = Update;
+  }
 
   /// Reuse an assembler instance
   ///
@@ -257,11 +277,17 @@ public:
 
   MCContext &getContext() const { return Context; }
 
-  MCAsmBackend &getBackend() const { return Backend; }
+  MCAsmBackend *getBackendPtr() const { return Backend.get(); }
 
-  MCCodeEmitter &getEmitter() const { return Emitter; }
+  MCCodeEmitter *getEmitterPtr() const { return Emitter.get(); }
 
-  MCObjectWriter &getWriter() const { return Writer; }
+  MCObjectWriter *getWriterPtr() const { return Writer.get(); }
+
+  MCAsmBackend &getBackend() const { return *Backend; }
+
+  MCCodeEmitter &getEmitter() const { return *Emitter; }
+
+  MCObjectWriter &getWriter() const { return *Writer; }
 
   MCDwarfLineTableParams getDWARFLinetableParams() const { return LTParams; }
   void setDWARFLinetableParams(MCDwarfLineTableParams P) { LTParams = P; }
@@ -392,6 +418,13 @@ public:
   const MCLOHContainer &getLOHContainer() const {
     return const_cast<MCAssembler *>(this)->getLOHContainer();
   }
+
+  struct CGProfileEntry {
+    const MCSymbolRefExpr *From;
+    const MCSymbolRefExpr *To;
+    uint64_t Count;
+  };
+  std::vector<CGProfileEntry> CGProfile;
   /// @}
   /// \name Backend Data Access
   /// @{
@@ -407,22 +440,23 @@ public:
       FileNames.push_back(FileName);
   }
 
-  /// \brief Write the necessary bundle padding to the given object writer.
+  /// Write the necessary bundle padding to \p OS.
   /// Expects a fragment \p F containing instructions and its size \p FSize.
-  void writeFragmentPadding(const MCFragment &F, uint64_t FSize,
-                            MCObjectWriter *OW) const;
+  void writeFragmentPadding(raw_ostream &OS, const MCEncodedFragment &F,
+                            uint64_t FSize) const;
 
   /// @}
 
-  void dump();
+  void dump() const;
 };
 
-/// \brief Compute the amount of padding required before the fragment \p F to
+/// Compute the amount of padding required before the fragment \p F to
 /// obey bundling restrictions, where \p FOffset is the fragment's offset in
 /// its section and \p FSize is the fragment's size.
-uint64_t computeBundlePadding(const MCAssembler &Assembler, const MCFragment *F,
-                              uint64_t FOffset, uint64_t FSize);
+uint64_t computeBundlePadding(const MCAssembler &Assembler,
+                              const MCEncodedFragment *F, uint64_t FOffset,
+                              uint64_t FSize);
 
 } // end namespace llvm
 
-#endif
+#endif // LLVM_MC_MCASSEMBLER_H

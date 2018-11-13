@@ -5,7 +5,7 @@
 
 define void @return_void() {
 ; CHECK: return_void:{{[a-zA-Z0-9 #@]*}}
-; CHECK-NEXT: #{{[a-zA-Z0-9 #@]*}}
+; CHECK-NEXT: {{.*}}:
 ; CHECK-NEXT: ret
     ret void
 }
@@ -18,7 +18,7 @@ define i8 @return8_imm() {
 
 define i8 @return8_arg(i8 %x) {
 ; CHECK: return8_arg:{{[a-zA-Z0-9 #@]*}}
-; CHECK-NEXT: #{{[a-zA-Z0-9 #@]*}}
+; CHECK-NEXT: {{.*}}:
 ; CHECK-NEXT: ret
     ret i8 %x
 }
@@ -38,7 +38,7 @@ define i16 @return16_imm() {
 
 define i16 @return16_arg(i16 %x) {
 ; CHECK: return16_arg:{{[a-zA-Z0-9 #@]*}}
-; CHECK-NEXT: #{{[a-zA-Z0-9 #@]*}}
+; CHECK-NEXT: {{.*}}:
 ; CHECK-NEXT: ret
     ret i16 %x
 }
@@ -60,7 +60,7 @@ define i32 @return32_imm() {
 
 define i32 @return32_arg(i32 %x) {
 ; CHECK: return32_arg:{{[a-zA-Z0-9 #@]*}}
-; CHECK-NEXT: #{{[a-zA-Z0-9 #@]*}}
+; CHECK-NEXT: {{.*}}:
 ; CHECK-NEXT: ret
     ret i32 %x
 }
@@ -87,7 +87,7 @@ define i64 @return64_imm() {
 
 define i64 @return64_arg(i64 %x) {
 ; CHECK: return64_arg:{{[a-zA-Z0-9 #@]*}}
-; CHECK-NEXT: #{{[a-zA-Z0-9 #@]*}}
+; CHECK-NEXT: {{.*}}:
 ; CHECK-NEXT: ret
     ret i64 %x
 }
@@ -96,14 +96,14 @@ define i64 @return64_arg2(i64 %x, i64 %y, i64 %z) {
 ; CHECK-LABEL: return64_arg2:
 ; CHECK: push r28
 ; CHECK: push r29
-; CHECK: ldd r18, Y+5
-; CHECK: ldd r19, Y+6
-; CHECK: ldd r20, Y+7
-; CHECK: ldd r21, Y+8
-; CHECK: ldd r22, Y+9
-; CHECK: ldd r23, Y+10
-; CHECK: ldd r24, Y+11
-; CHECK: ldd r25, Y+12
+; CHECK: ldd r18, Y+3
+; CHECK: ldd r19, Y+4
+; CHECK: ldd r20, Y+5
+; CHECK: ldd r21, Y+6
+; CHECK: ldd r22, Y+7
+; CHECK: ldd r23, Y+8
+; CHECK: ldd r24, Y+9
+; CHECK: ldd r25, Y+10
 ; CHECK: pop r29
 ; CHECK: pop r28
     ret i64 %z
@@ -113,10 +113,10 @@ define i32 @return64_trunc(i32 %a, i32 %b, i32 %c, i64 %d) {
 ; CHECK-LABEL: return64_trunc:
 ; CHECK: push r28
 ; CHECK: push r29
-; CHECK: ldd r22, Y+5
-; CHECK: ldd r23, Y+6
-; CHECK: ldd r24, Y+7
-; CHECK: ldd r25, Y+8
+; CHECK: ldd r22, Y+3
+; CHECK: ldd r23, Y+4
+; CHECK: ldd r24, Y+5
+; CHECK: ldd r25, Y+6
 ; CHECK: pop r29
 ; CHECK: pop r28
   %result = trunc i64 %d to i32

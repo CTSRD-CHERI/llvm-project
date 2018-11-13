@@ -15,37 +15,49 @@
 //===----------------------------------------------------------------------===//
 
 #include "AMDGPU.h"
+#include "AMDGPUSubtarget.h"
 #include "R600Defines.h"
 #include "R600InstrInfo.h"
-#include "R600MachineFunctionInfo.h"
 #include "R600RegisterInfo.h"
-#include "AMDGPUSubtarget.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
-#include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/ErrorHandling.h"
+#include <cassert>
+#include <cstdint>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 
 namespace llvm {
+
   void initializeR600EmitClauseMarkersPass(PassRegistry&);
-}
+
+} // end namespace llvm
 
 namespace {
 
 class R600EmitClauseMarkers : public MachineFunctionPass {
-
 private:
-  const R600InstrInfo *TII;
-  int Address;
+  const R600InstrInfo *TII = nullptr;
+  int Address = 0;
 
   unsigned OccupiedDwords(MachineInstr &MI) const {
     switch (MI.getOpcode()) {
-    case AMDGPU::INTERP_PAIR_XY:
-    case AMDGPU::INTERP_PAIR_ZW:
-    case AMDGPU::INTERP_VEC_LOAD:
-    case AMDGPU::DOT_4:
+    case R600::INTERP_PAIR_XY:
+    case R600::INTERP_PAIR_ZW:
+    case R600::INTERP_VEC_LOAD:
+    case R600::DOT_4:
       return 4;
-    case AMDGPU::KILL:
+    case R600::KILL:
       return 0;
     default:
       break;
@@ -65,7 +77,7 @@ private:
                                     E = MI.operands_end();
          It != E; ++It) {
       MachineOperand &MO = *It;
-      if (MO.isReg() && MO.getReg() == AMDGPU::ALU_LITERAL_X)
+      if (MO.isReg() && MO.getReg() == R600::ALU_LITERAL_X)
         ++NumLiteral;
     }
     return 1 + NumLiteral;
@@ -77,12 +89,12 @@ private:
     if (TII->isVector(MI) || TII->isCubeOp(MI.getOpcode()))
       return true;
     switch (MI.getOpcode()) {
-    case AMDGPU::PRED_X:
-    case AMDGPU::INTERP_PAIR_XY:
-    case AMDGPU::INTERP_PAIR_ZW:
-    case AMDGPU::INTERP_VEC_LOAD:
-    case AMDGPU::COPY:
-    case AMDGPU::DOT_4:
+    case R600::PRED_X:
+    case R600::INTERP_PAIR_XY:
+    case R600::INTERP_PAIR_ZW:
+    case R600::INTERP_VEC_LOAD:
+    case R600::COPY:
+    case R600::DOT_4:
       return true;
     default:
       return false;
@@ -91,9 +103,9 @@ private:
 
   bool IsTrivialInst(MachineInstr &MI) const {
     switch (MI.getOpcode()) {
-    case AMDGPU::KILL:
-    case AMDGPU::RETURN:
-    case AMDGPU::IMPLICIT_DEF:
+    case R600::KILL:
+    case R600::RETURN:
+    case R600::IMPLICIT_DEF:
       return true;
     default:
       return false;
@@ -118,18 +130,18 @@ private:
   SubstituteKCacheBank(MachineInstr &MI,
                        std::vector<std::pair<unsigned, unsigned>> &CachedConsts,
                        bool UpdateInstr = true) const {
-    std::vector<std::pair<unsigned, unsigned> > UsedKCache;
+    std::vector<std::pair<unsigned, unsigned>> UsedKCache;
 
-    if (!TII->isALUInstr(MI.getOpcode()) && MI.getOpcode() != AMDGPU::DOT_4)
+    if (!TII->isALUInstr(MI.getOpcode()) && MI.getOpcode() != R600::DOT_4)
       return true;
 
     const SmallVectorImpl<std::pair<MachineOperand *, int64_t>> &Consts =
         TII->getSrcs(MI);
     assert(
-        (TII->isALUInstr(MI.getOpcode()) || MI.getOpcode() == AMDGPU::DOT_4) &&
+        (TII->isALUInstr(MI.getOpcode()) || MI.getOpcode() == R600::DOT_4) &&
         "Can't assign Const");
     for (unsigned i = 0, n = Consts.size(); i < n; ++i) {
-      if (Consts[i].first->getReg() != AMDGPU::ALU_CONST)
+      if (Consts[i].first->getReg() != R600::ALU_CONST)
         continue;
       unsigned Sel = Consts[i].second;
       unsigned Chan = Sel & 3, Index = ((Sel >> 2) - 512) & 31;
@@ -160,16 +172,16 @@ private:
       return true;
 
     for (unsigned i = 0, j = 0, n = Consts.size(); i < n; ++i) {
-      if (Consts[i].first->getReg() != AMDGPU::ALU_CONST)
+      if (Consts[i].first->getReg() != R600::ALU_CONST)
         continue;
       switch(UsedKCache[j].first) {
       case 0:
         Consts[i].first->setReg(
-            AMDGPU::R600_KC0RegClass.getRegister(UsedKCache[j].second));
+            R600::R600_KC0RegClass.getRegister(UsedKCache[j].second));
         break;
       case 1:
         Consts[i].first->setReg(
-            AMDGPU::R600_KC1RegClass.getRegister(UsedKCache[j].second));
+            R600::R600_KC1RegClass.getRegister(UsedKCache[j].second));
         break;
       default:
         llvm_unreachable("Wrong Cache Line");
@@ -181,10 +193,11 @@ private:
 
   bool canClauseLocalKillFitInClause(
                         unsigned AluInstCount,
-                        std::vector<std::pair<unsigned, unsigned> > KCacheBanks,
+                        std::vector<std::pair<unsigned, unsigned>> KCacheBanks,
                         MachineBasicBlock::iterator Def,
                         MachineBasicBlock::iterator BBEnd) {
     const R600RegisterInfo &TRI = TII->getRegisterInfo();
+    //TODO: change this to defs?
     for (MachineInstr::const_mop_iterator
            MOI = Def->operands_begin(),
            MOE = Def->operands_end(); MOI != MOE; ++MOI) {
@@ -207,15 +220,17 @@ private:
         if (AluInstCount >= TII->getMaxAlusPerClause())
           return false;
 
+        // TODO: Is this true? kill flag appears to work OK below
         // Register kill flags have been cleared by the time we get to this
         // pass, but it is safe to assume that all uses of this register
         // occur in the same basic block as its definition, because
         // it is illegal for the scheduler to schedule them in
         // different blocks.
-        if (UseI->findRegisterUseOperandIdx(MOI->getReg()))
+        if (UseI->readsRegister(MOI->getReg()))
           LastUseCount = AluInstCount;
 
-        if (UseI != Def && UseI->findRegisterDefOperandIdx(MOI->getReg()) != -1)
+        // Exit early if the current use kills the register
+        if (UseI != Def && UseI->killsRegister(MOI->getReg()))
           break;
       }
       if (LastUseCount)
@@ -228,7 +243,7 @@ private:
   MachineBasicBlock::iterator
   MakeALUClause(MachineBasicBlock &MBB, MachineBasicBlock::iterator I) {
     MachineBasicBlock::iterator ClauseHead = I;
-    std::vector<std::pair<unsigned, unsigned> > KCacheBanks;
+    std::vector<std::pair<unsigned, unsigned>> KCacheBanks;
     bool PushBeforeModifier = false;
     unsigned AluInstCount = 0;
     for (MachineBasicBlock::iterator E = MBB.end(); I != E; ++I) {
@@ -238,7 +253,7 @@ private:
         break;
       if (AluInstCount > TII->getMaxAlusPerClause())
         break;
-      if (I->getOpcode() == AMDGPU::PRED_X) {
+      if (I->getOpcode() == R600::PRED_X) {
         // We put PRED_X in its own clause to ensure that ifcvt won't create
         // clauses with more than 128 insts.
         // IfCvt is indeed checking that "then" and "else" branches of an if
@@ -274,7 +289,7 @@ private:
       AluInstCount += OccupiedDwords(*I);
     }
     unsigned Opcode = PushBeforeModifier ?
-        AMDGPU::CF_ALU_PUSH_BEFORE : AMDGPU::CF_ALU;
+        R600::CF_ALU_PUSH_BEFORE : R600::CF_ALU;
     BuildMI(MBB, ClauseHead, MBB.findDebugLoc(ClauseHead), TII->get(Opcode))
     // We don't use the ADDR field until R600ControlFlowFinalizer pass, where
     // it is safe to assume it is 0. However if we always put 0 here, the ifcvt
@@ -294,8 +309,8 @@ private:
 
 public:
   static char ID;
-  R600EmitClauseMarkers() : MachineFunctionPass(ID), TII(nullptr), Address(0) {
 
+  R600EmitClauseMarkers() : MachineFunctionPass(ID) {
     initializeR600EmitClauseMarkersPass(*PassRegistry::getPassRegistry());
   }
 
@@ -307,12 +322,14 @@ public:
                                                     BB != BB_E; ++BB) {
       MachineBasicBlock &MBB = *BB;
       MachineBasicBlock::iterator I = MBB.begin();
-      if (I != MBB.end() && I->getOpcode() == AMDGPU::CF_ALU)
+      if (I != MBB.end() && I->getOpcode() == R600::CF_ALU)
         continue; // BB was already parsed
       for (MachineBasicBlock::iterator E = MBB.end(); I != E;) {
-        if (isALU(*I))
-          I = MakeALUClause(MBB, I);
-        else
+        if (isALU(*I)) {
+          auto next = MakeALUClause(MBB, I);
+          assert(next != I);
+          I = next;
+        } else
           ++I;
       }
     }
@@ -333,7 +350,6 @@ INITIALIZE_PASS_BEGIN(R600EmitClauseMarkers, "emitclausemarkers",
 INITIALIZE_PASS_END(R600EmitClauseMarkers, "emitclausemarkers",
                       "R600 Emit Clause Markters", false, false)
 
-llvm::FunctionPass *llvm::createR600EmitClauseMarkers() {
+FunctionPass *llvm::createR600EmitClauseMarkers() {
   return new R600EmitClauseMarkers();
 }
-

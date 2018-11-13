@@ -5,24 +5,24 @@
 ; latency regardless of whether they are barriers or not.
 
 ; CHECK: ** List Scheduling
-; CHECK: SU(2){{.*}}STR{{.*}}Volatile
-; CHECK-NOT: ord SU
-; CHECK: ord SU(3): Latency=1
-; CHECK-NOT: ord SU
-; CHECK: SU(3){{.*}}LDR{{.*}}Volatile
-; CHECK-NOT: ord SU
-; CHECK: ord SU(2): Latency=1
-; CHECK-NOT: ord SU
+; CHECK: SU(2){{.*}}STR{{.*}}(volatile
+; CHECK-NOT: SU({{.*}}): Ord
+; CHECK: SU(3): Ord Latency=1
+; CHECK-NOT: SU({{.*}}): Ord
+; CHECK: SU(3){{.*}}LDR{{.*}}(volatile
+; CHECK-NOT: SU({{.*}}): Ord
+; CHECK: SU(2): Ord Latency=1
+; CHECK-NOT: SU({{.*}}): Ord
 ; CHECK: Successors:
 ; CHECK: ** List Scheduling
 ; CHECK: SU(2){{.*}}STR{{.*}}
-; CHECK-NOT: ord SU
-; CHECK: ord SU(3): Latency=1
-; CHECK-NOT: ord SU
+; CHECK-NOT: SU({{.*}}): Ord
+; CHECK: SU(3): Ord Latency=1
+; CHECK-NOT: SU({{.*}}): Ord
 ; CHECK: SU(3){{.*}}LDR{{.*}}
-; CHECK-NOT: ord SU
-; CHECK: ord SU(2): Latency=1
-; CHECK-NOT: ord SU
+; CHECK-NOT: SU({{.*}}): Ord
+; CHECK: SU(2): Ord Latency=1
+; CHECK-NOT: SU({{.*}}): Ord
 ; CHECK: Successors:
 define i32 @f1(i32* nocapture %p1, i32* nocapture %p2) nounwind {
 entry:

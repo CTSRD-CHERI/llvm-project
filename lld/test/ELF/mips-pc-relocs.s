@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # Check R_MIPS_PCxxx relocations calculation.
 
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-linux \
@@ -6,8 +7,6 @@
 # RUN:         -mcpu=mips32r6 %S/Inputs/mips-dynamic.s -o %t2.o
 # RUN: ld.lld %t1.o %t2.o -o %t.exe
 # RUN: llvm-objdump -mcpu=mips32r6 -d -t -s %t.exe | FileCheck %s
-
-# REQUIRES: mips
 
   .text
   .globl  __start
@@ -38,8 +37,8 @@ __start:
 #                                      ^-- %lo(0x20020-0x20014)
 
 # CHECK: Contents of section .data:
-# CHECK-NEXT: 40000 fffe0028 00000000 00000000 00000000
-#                   ^-- 0x20020 + 8 - 0x40000
+# CHECK-NEXT: 30000 ffff0028 00000000 00000000 00000000
+#                   ^-- 0x20020 + 8 - 0x30000
 
 # CHECK: 00020000         .text           00000000 __start
 # CHECK: 00020020         .text           00000000 _foo

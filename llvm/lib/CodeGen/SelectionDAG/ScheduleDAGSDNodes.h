@@ -15,10 +15,20 @@
 #ifndef LLVM_LIB_CODEGEN_SELECTIONDAG_SCHEDULEDAGSDNODES_H
 #define LLVM_LIB_CODEGEN_SELECTIONDAG_SCHEDULEDAGSDNODES_H
 
+#include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/ScheduleDAG.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/MachineValueType.h"
+#include <cassert>
+#include <string>
+#include <vector>
 
 namespace llvm {
+
+class InstrItineraryData;
+
   /// ScheduleDAGSDNodes - A ScheduleDAG for scheduling SDNode-based DAGs.
   ///
   /// Edges between SUnits are initially based on edges in the SelectionDAG,
@@ -44,7 +54,7 @@ namespace llvm {
 
     explicit ScheduleDAGSDNodes(MachineFunction &mf);
 
-    ~ScheduleDAGSDNodes() override {}
+    ~ScheduleDAGSDNodes() override = default;
 
     /// Run - perform scheduling.
     ///
@@ -78,7 +88,7 @@ namespace llvm {
     /// Clone - Creates a clone of the specified SUnit. It does not copy the
     /// predecessors / successors info nor the temporary scheduling states.
     ///
-    SUnit *Clone(SUnit *N);
+    SUnit *Clone(SUnit *Old);
 
     /// BuildSchedGraph - Build the SUnit graph from the selection dag that we
     /// are input.  This SUnit graph is similar to the SelectionDAG, but
@@ -112,8 +122,8 @@ namespace llvm {
     virtual MachineBasicBlock*
     EmitSchedule(MachineBasicBlock::iterator &InsertPos);
 
-    void dumpNode(const SUnit *SU) const override;
-
+    void dumpNode(const SUnit &SU) const override;
+    void dump() const override;
     void dumpSchedule() const;
 
     std::string getGraphNodeLabel(const SUnit *SU) const override;
@@ -131,6 +141,7 @@ namespace llvm {
       unsigned DefIdx;
       unsigned NodeNumDefs;
       MVT ValueType;
+
     public:
       RegDefIter(const SUnit *SU, const ScheduleDAGSDNodes *SD);
 
@@ -150,6 +161,7 @@ namespace llvm {
       }
 
       void Advance();
+
     private:
       void InitNodeNumDefs();
     };
@@ -175,6 +187,7 @@ namespace llvm {
     void EmitPhysRegCopy(SUnit *SU, DenseMap<SUnit*, unsigned> &VRBaseMap,
                          MachineBasicBlock::iterator InsertPos);
   };
-}
 
-#endif
+} // end namespace llvm
+
+#endif // LLVM_LIB_CODEGEN_SELECTIONDAG_SCHEDULEDAGSDNODES_H

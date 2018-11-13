@@ -41,9 +41,9 @@ public:
   CXXCatchStmt(EmptyShell Empty)
   : Stmt(CXXCatchStmtClass), ExceptionDecl(nullptr), HandlerBlock(nullptr) {}
 
-  SourceLocation getLocStart() const LLVM_READONLY { return CatchLoc; }
-  SourceLocation getLocEnd() const LLVM_READONLY {
-    return HandlerBlock->getLocEnd();
+  SourceLocation getBeginLoc() const LLVM_READONLY { return CatchLoc; }
+  SourceLocation getEndLoc() const LLVM_READONLY {
+    return HandlerBlock->getEndLoc();
   }
 
   SourceLocation getCatchLoc() const { return CatchLoc; }
@@ -62,21 +62,22 @@ public:
 
 /// CXXTryStmt - A C++ try block, including all handlers.
 ///
-class CXXTryStmt : public Stmt {
+class CXXTryStmt final : public Stmt,
+                         private llvm::TrailingObjects<CXXTryStmt, Stmt *> {
+
+  friend TrailingObjects;
+  friend class ASTStmtReader;
+
   SourceLocation TryLoc;
   unsigned NumHandlers;
+  size_t numTrailingObjects(OverloadToken<Stmt *>) const { return NumHandlers; }
 
   CXXTryStmt(SourceLocation tryLoc, Stmt *tryBlock, ArrayRef<Stmt*> handlers);
-
   CXXTryStmt(EmptyShell Empty, unsigned numHandlers)
     : Stmt(CXXTryStmtClass), NumHandlers(numHandlers) { }
 
-  Stmt const * const *getStmts() const {
-    return reinterpret_cast<Stmt const * const*>(this + 1);
-  }
-  Stmt **getStmts() {
-    return reinterpret_cast<Stmt **>(this + 1);
-  }
+  Stmt *const *getStmts() const { return getTrailingObjects<Stmt *>(); }
+  Stmt **getStmts() { return getTrailingObjects<Stmt *>(); }
 
 public:
   static CXXTryStmt *Create(const ASTContext &C, SourceLocation tryLoc,
@@ -85,12 +86,11 @@ public:
   static CXXTryStmt *Create(const ASTContext &C, EmptyShell Empty,
                             unsigned numHandlers);
 
-  SourceLocation getLocStart() const LLVM_READONLY { return getTryLoc(); }
-  SourceLocation getLocEnd() const LLVM_READONLY { return getEndLoc(); }
+  SourceLocation getBeginLoc() const LLVM_READONLY { return getTryLoc(); }
 
   SourceLocation getTryLoc() const { return TryLoc; }
   SourceLocation getEndLoc() const {
-    return getStmts()[NumHandlers]->getLocEnd();
+    return getStmts()[NumHandlers]->getEndLoc();
   }
 
   CompoundStmt *getTryBlock() {
@@ -115,19 +115,18 @@ public:
   child_range children() {
     return child_range(getStmts(), getStmts() + getNumHandlers() + 1);
   }
-
-  friend class ASTStmtReader;
 };
 
 /// CXXForRangeStmt - This represents C++0x [stmt.ranged]'s ranged for
-/// statement, represented as 'for (range-declarator : range-expression)'.
+/// statement, represented as 'for (range-declarator : range-expression)'
+/// or 'for (init-statement range-declarator : range-expression)'.
 ///
 /// This is stored in a partially-desugared form to allow full semantic
 /// analysis of the constituent components. The original syntactic components
 /// can be extracted using getLoopVariable and getRangeInit.
 class CXXForRangeStmt : public Stmt {
   SourceLocation ForLoc;
-  enum { RANGE, BEGINSTMT, ENDSTMT, COND, INC, LOOPVAR, BODY, END };
+  enum { INIT, RANGE, BEGINSTMT, ENDSTMT, COND, INC, LOOPVAR, BODY, END };
   // SubExprs[RANGE] is an expression or declstmt.
   // SubExprs[COND] and SubExprs[INC] are expressions.
   Stmt *SubExprs[END];
@@ -137,16 +136,17 @@ class CXXForRangeStmt : public Stmt {
 
   friend class ASTStmtReader;
 public:
-  CXXForRangeStmt(DeclStmt *Range, DeclStmt *Begin, DeclStmt *End,
-                  Expr *Cond, Expr *Inc, DeclStmt *LoopVar, Stmt *Body,
-                  SourceLocation FL, SourceLocation CAL, SourceLocation CL,
-                  SourceLocation RPL);
+  CXXForRangeStmt(Stmt *InitStmt, DeclStmt *Range, DeclStmt *Begin,
+                  DeclStmt *End, Expr *Cond, Expr *Inc, DeclStmt *LoopVar,
+                  Stmt *Body, SourceLocation FL, SourceLocation CAL,
+                  SourceLocation CL, SourceLocation RPL);
   CXXForRangeStmt(EmptyShell Empty) : Stmt(CXXForRangeStmtClass, Empty) { }
 
-
+  Stmt *getInit() { return SubExprs[INIT]; }
   VarDecl *getLoopVariable();
   Expr *getRangeInit();
 
+  const Stmt *getInit() const { return SubExprs[INIT]; }
   const VarDecl *getLoopVariable() const;
   const Expr *getRangeInit() const;
 
@@ -181,6 +181,7 @@ public:
   }
   const Stmt *getBody() const { return SubExprs[BODY]; }
 
+  void setInit(Stmt *S) { SubExprs[INIT] = S; }
   void setRangeInit(Expr *E) { SubExprs[RANGE] = reinterpret_cast<Stmt*>(E); }
   void setRangeStmt(Stmt *S) { SubExprs[RANGE] = S; }
   void setBeginStmt(Stmt *S) { SubExprs[BEGINSTMT] = S; }
@@ -195,9 +196,9 @@ public:
   SourceLocation getColonLoc() const { return ColonLoc; }
   SourceLocation getRParenLoc() const { return RParenLoc; }
 
-  SourceLocation getLocStart() const LLVM_READONLY { return ForLoc; }
-  SourceLocation getLocEnd() const LLVM_READONLY {
-    return SubExprs[BODY]->getLocEnd();
+  SourceLocation getBeginLoc() const LLVM_READONLY { return ForLoc; }
+  SourceLocation getEndLoc() const LLVM_READONLY {
+    return SubExprs[BODY]->getEndLoc();
   }
 
   static bool classof(const Stmt *T) {
@@ -210,7 +211,7 @@ public:
   }
 };
 
-/// \brief Representation of a Microsoft __if_exists or __if_not_exists
+/// Representation of a Microsoft __if_exists or __if_not_exists
 /// statement with a dependent name.
 ///
 /// The __if_exists statement can be used to include a sequence of statements
@@ -257,32 +258,34 @@ public:
     QualifierLoc(QualifierLoc), NameInfo(NameInfo),
     SubStmt(reinterpret_cast<Stmt *>(SubStmt)) { }
 
-  /// \brief Retrieve the location of the __if_exists or __if_not_exists
+  /// Retrieve the location of the __if_exists or __if_not_exists
   /// keyword.
   SourceLocation getKeywordLoc() const { return KeywordLoc; }
 
-  /// \brief Determine whether this is an __if_exists statement.
+  /// Determine whether this is an __if_exists statement.
   bool isIfExists() const { return IsIfExists; }
 
-  /// \brief Determine whether this is an __if_exists statement.
+  /// Determine whether this is an __if_exists statement.
   bool isIfNotExists() const { return !IsIfExists; }
 
-  /// \brief Retrieve the nested-name-specifier that qualifies this name, if
+  /// Retrieve the nested-name-specifier that qualifies this name, if
   /// any.
   NestedNameSpecifierLoc getQualifierLoc() const { return QualifierLoc; }
 
-  /// \brief Retrieve the name of the entity we're testing for, along with
+  /// Retrieve the name of the entity we're testing for, along with
   /// location information
   DeclarationNameInfo getNameInfo() const { return NameInfo; }
 
-  /// \brief Retrieve the compound statement that will be included in the
+  /// Retrieve the compound statement that will be included in the
   /// program only if the existence of the symbol matches the initial keyword.
   CompoundStmt *getSubStmt() const {
     return reinterpret_cast<CompoundStmt *>(SubStmt);
   }
 
-  SourceLocation getLocStart() const LLVM_READONLY { return KeywordLoc; }
-  SourceLocation getLocEnd() const LLVM_READONLY { return SubStmt->getLocEnd();}
+  SourceLocation getBeginLoc() const LLVM_READONLY { return KeywordLoc; }
+  SourceLocation getEndLoc() const LLVM_READONLY {
+    return SubStmt->getEndLoc();
+  }
 
   child_range children() {
     return child_range(&SubStmt, &SubStmt+1);
@@ -293,10 +296,12 @@ public:
   }
 };
 
-/// \brief Represents the body of a coroutine. This wraps the normal function
+/// Represents the body of a coroutine. This wraps the normal function
 /// body and holds the additional semantic context required to set up and tear
 /// down the coroutine frame.
-class CoroutineBodyStmt : public Stmt {
+class CoroutineBodyStmt final
+    : public Stmt,
+      private llvm::TrailingObjects<CoroutineBodyStmt, Stmt *> {
   enum SubStmt {
     Body,          ///< The body of the coroutine.
     Promise,       ///< The promise statement.
@@ -306,66 +311,109 @@ class CoroutineBodyStmt : public Stmt {
     OnFallthrough, ///< Handler for control flow falling off the body.
     Allocate,      ///< Coroutine frame memory allocation.
     Deallocate,    ///< Coroutine frame memory deallocation.
-    ReturnValue,   ///< Return value for thunk function.
+    ReturnValue,   ///< Return value for thunk function: p.get_return_object().
+    ResultDecl,    ///< Declaration holding the result of get_return_object.
+    ReturnStmt,    ///< Return statement for the thunk function.
+    ReturnStmtOnAllocFailure, ///< Return statement if allocation failed.
     FirstParamMove ///< First offset for move construction of parameter copies.
   };
-  Stmt *SubStmts[SubStmt::FirstParamMove];
+  unsigned NumParams;
 
   friend class ASTStmtReader;
+  friend class ASTReader;
+  friend TrailingObjects;
+
+  Stmt **getStoredStmts() { return getTrailingObjects<Stmt *>(); }
+
+  Stmt *const *getStoredStmts() const { return getTrailingObjects<Stmt *>(); }
+
 public:
-  CoroutineBodyStmt(Stmt *Body, Stmt *Promise, Stmt *InitSuspend,
-                    Stmt *FinalSuspend, Stmt *OnException, Stmt *OnFallthrough,
-                    Expr *Allocate, Stmt *Deallocate,
-                    Expr *ReturnValue, ArrayRef<Expr *> ParamMoves)
-      : Stmt(CoroutineBodyStmtClass) {
-    SubStmts[CoroutineBodyStmt::Body] = Body;
-    SubStmts[CoroutineBodyStmt::Promise] = Promise;
-    SubStmts[CoroutineBodyStmt::InitSuspend] = InitSuspend;
-    SubStmts[CoroutineBodyStmt::FinalSuspend] = FinalSuspend;
-    SubStmts[CoroutineBodyStmt::OnException] = OnException;
-    SubStmts[CoroutineBodyStmt::OnFallthrough] = OnFallthrough;
-    SubStmts[CoroutineBodyStmt::Allocate] = Allocate;
-    SubStmts[CoroutineBodyStmt::Deallocate] = Deallocate;
-    SubStmts[CoroutineBodyStmt::ReturnValue] = ReturnValue;
-    // FIXME: Tail-allocate space for parameter move expressions and store them.
-    assert(ParamMoves.empty() && "not implemented yet");
+
+  struct CtorArgs {
+    Stmt *Body = nullptr;
+    Stmt *Promise = nullptr;
+    Expr *InitialSuspend = nullptr;
+    Expr *FinalSuspend = nullptr;
+    Stmt *OnException = nullptr;
+    Stmt *OnFallthrough = nullptr;
+    Expr *Allocate = nullptr;
+    Expr *Deallocate = nullptr;
+    Expr *ReturnValue = nullptr;
+    Stmt *ResultDecl = nullptr;
+    Stmt *ReturnStmt = nullptr;
+    Stmt *ReturnStmtOnAllocFailure = nullptr;
+    ArrayRef<Stmt *> ParamMoves;
+  };
+
+private:
+
+  CoroutineBodyStmt(CtorArgs const& Args);
+
+public:
+  static CoroutineBodyStmt *Create(const ASTContext &C, CtorArgs const &Args);
+  static CoroutineBodyStmt *Create(const ASTContext &C, EmptyShell,
+                                   unsigned NumParams);
+
+  bool hasDependentPromiseType() const {
+    return getPromiseDecl()->getType()->isDependentType();
   }
 
-  /// \brief Retrieve the body of the coroutine as written. This will be either
+  /// Retrieve the body of the coroutine as written. This will be either
   /// a CompoundStmt or a TryStmt.
   Stmt *getBody() const {
-    return SubStmts[SubStmt::Body];
+    return getStoredStmts()[SubStmt::Body];
   }
 
-  Stmt *getPromiseDeclStmt() const { return SubStmts[SubStmt::Promise]; }
+  Stmt *getPromiseDeclStmt() const {
+    return getStoredStmts()[SubStmt::Promise];
+  }
   VarDecl *getPromiseDecl() const {
     return cast<VarDecl>(cast<DeclStmt>(getPromiseDeclStmt())->getSingleDecl());
   }
 
-  Stmt *getInitSuspendStmt() const { return SubStmts[SubStmt::InitSuspend]; }
-  Stmt *getFinalSuspendStmt() const { return SubStmts[SubStmt::FinalSuspend]; }
+  Stmt *getInitSuspendStmt() const {
+    return getStoredStmts()[SubStmt::InitSuspend];
+  }
+  Stmt *getFinalSuspendStmt() const {
+    return getStoredStmts()[SubStmt::FinalSuspend];
+  }
 
-  Stmt *getExceptionHandler() const { return SubStmts[SubStmt::OnException]; }
+  Stmt *getExceptionHandler() const {
+    return getStoredStmts()[SubStmt::OnException];
+  }
   Stmt *getFallthroughHandler() const {
-    return SubStmts[SubStmt::OnFallthrough];
+    return getStoredStmts()[SubStmt::OnFallthrough];
   }
 
-  Expr *getAllocate() const { return cast<Expr>(SubStmts[SubStmt::Allocate]); }
-  Stmt *getDeallocate() const { return SubStmts[SubStmt::Deallocate]; }
-
+  Expr *getAllocate() const {
+    return cast_or_null<Expr>(getStoredStmts()[SubStmt::Allocate]);
+  }
+  Expr *getDeallocate() const {
+    return cast_or_null<Expr>(getStoredStmts()[SubStmt::Deallocate]);
+  }
   Expr *getReturnValueInit() const {
-    return cast<Expr>(SubStmts[SubStmt::ReturnValue]);
+    return cast<Expr>(getStoredStmts()[SubStmt::ReturnValue]);
+  }
+  Stmt *getResultDecl() const { return getStoredStmts()[SubStmt::ResultDecl]; }
+  Stmt *getReturnStmt() const { return getStoredStmts()[SubStmt::ReturnStmt]; }
+  Stmt *getReturnStmtOnAllocFailure() const {
+    return getStoredStmts()[SubStmt::ReturnStmtOnAllocFailure];
+  }
+  ArrayRef<Stmt const *> getParamMoves() const {
+    return {getStoredStmts() + SubStmt::FirstParamMove, NumParams};
   }
 
-  SourceLocation getLocStart() const LLVM_READONLY {
-    return getBody()->getLocStart();
+  SourceLocation getBeginLoc() const LLVM_READONLY {
+    return getBody() ? getBody()->getBeginLoc()
+                     : getPromiseDecl()->getBeginLoc();
   }
-  SourceLocation getLocEnd() const LLVM_READONLY {
-    return getBody()->getLocEnd();
+  SourceLocation getEndLoc() const LLVM_READONLY {
+    return getBody() ? getBody()->getEndLoc() : getPromiseDecl()->getEndLoc();
   }
 
   child_range children() {
-    return child_range(SubStmts, SubStmts + SubStmt::FirstParamMove);
+    return child_range(getStoredStmts(),
+                       getStoredStmts() + SubStmt::FirstParamMove + NumParams);
   }
 
   static bool classof(const Stmt *T) {
@@ -373,7 +421,7 @@ public:
   }
 };
 
-/// \brief Represents a 'co_return' statement in the C++ Coroutines TS.
+/// Represents a 'co_return' statement in the C++ Coroutines TS.
 ///
 /// This statament models the initialization of the coroutine promise
 /// (encapsulating the eventual notional return value) from an expression
@@ -390,30 +438,39 @@ class CoreturnStmt : public Stmt {
   enum SubStmt { Operand, PromiseCall, Count };
   Stmt *SubStmts[SubStmt::Count];
 
+  bool IsImplicit : 1;
+
   friend class ASTStmtReader;
 public:
-  CoreturnStmt(SourceLocation CoreturnLoc, Stmt *Operand, Stmt *PromiseCall)
-      : Stmt(CoreturnStmtClass), CoreturnLoc(CoreturnLoc) {
+  CoreturnStmt(SourceLocation CoreturnLoc, Stmt *Operand, Stmt *PromiseCall,
+               bool IsImplicit = false)
+      : Stmt(CoreturnStmtClass), CoreturnLoc(CoreturnLoc),
+        IsImplicit(IsImplicit) {
     SubStmts[SubStmt::Operand] = Operand;
     SubStmts[SubStmt::PromiseCall] = PromiseCall;
   }
 
+  CoreturnStmt(EmptyShell) : CoreturnStmt({}, {}, {}) {}
+
   SourceLocation getKeywordLoc() const { return CoreturnLoc; }
 
-  /// \brief Retrieve the operand of the 'co_return' statement. Will be nullptr
+  /// Retrieve the operand of the 'co_return' statement. Will be nullptr
   /// if none was specified.
   Expr *getOperand() const { return static_cast<Expr*>(SubStmts[Operand]); }
 
-  /// \brief Retrieve the promise call that results from this 'co_return'
+  /// Retrieve the promise call that results from this 'co_return'
   /// statement. Will be nullptr if either the coroutine has not yet been
   /// finalized or the coroutine has no eventual return type.
   Expr *getPromiseCall() const {
     return static_cast<Expr*>(SubStmts[PromiseCall]);
   }
 
-  SourceLocation getLocStart() const LLVM_READONLY { return CoreturnLoc; }
-  SourceLocation getLocEnd() const LLVM_READONLY {
-    return getOperand() ? getOperand()->getLocEnd() : getLocStart();
+  bool isImplicit() const { return IsImplicit; }
+  void setIsImplicit(bool value = true) { IsImplicit = value; }
+
+  SourceLocation getBeginLoc() const LLVM_READONLY { return CoreturnLoc; }
+  SourceLocation getEndLoc() const LLVM_READONLY {
+    return getOperand() ? getOperand()->getEndLoc() : getBeginLoc();
   }
 
   child_range children() {

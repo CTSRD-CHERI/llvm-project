@@ -16,13 +16,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/CodeGen/Passes.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/EHPersonalities.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/WinEHFuncInfo.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/MC/MCSymbol.h"
@@ -31,7 +32,6 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
-#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/SSAUpdater.h"
 
 using namespace llvm;
@@ -41,7 +41,7 @@ using namespace llvm;
 static cl::opt<bool> DisableDemotion(
     "disable-demotion", cl::Hidden,
     cl::desc(
-        "Clone multicolor basic blocks but do not demote cross funclet values"),
+        "Clone multicolor basic blocks but do not demote cross scopes"),
     cl::init(false));
 
 static cl::opt<bool> DisableCleanups(
@@ -49,12 +49,17 @@ static cl::opt<bool> DisableCleanups(
     cl::desc("Do not remove implausible terminators or other similar cleanups"),
     cl::init(false));
 
+static cl::opt<bool> DemoteCatchSwitchPHIOnlyOpt(
+    "demote-catchswitch-only", cl::Hidden,
+    cl::desc("Demote catchswitch BBs only (for wasm EH)"), cl::init(false));
+
 namespace {
-  
+
 class WinEHPrepare : public FunctionPass {
 public:
   static char ID; // Pass identification, replacement for typeid.
-  WinEHPrepare(const TargetMachine *TM = nullptr) : FunctionPass(ID) {}
+  WinEHPrepare(bool DemoteCatchSwitchPHIOnly = false)
+      : FunctionPass(ID), DemoteCatchSwitchPHIOnly(DemoteCatchSwitchPHIOnly) {}
 
   bool runOnFunction(Function &Fn) override;
 
@@ -77,15 +82,18 @@ private:
   bool prepareExplicitEH(Function &F);
   void colorFunclets(Function &F);
 
-  void demotePHIsOnFunclets(Function &F);
+  void demotePHIsOnFunclets(Function &F, bool DemoteCatchSwitchPHIOnly);
   void cloneCommonBlocks(Function &F);
   void removeImplausibleInstructions(Function &F);
   void cleanupPreparedFunclets(Function &F);
   void verifyPreparedFunclets(Function &F);
 
+  bool DemoteCatchSwitchPHIOnly;
+
   // All fields are reset by runOnFunction.
   EHPersonality Personality = EHPersonality::Unknown;
 
+  const DataLayout *DL = nullptr;
   DenseMap<BasicBlock *, ColorVector> BlockColors;
   MapVector<BasicBlock *, std::vector<BasicBlock *>> FuncletBlocks;
 };
@@ -93,11 +101,11 @@ private:
 } // end anonymous namespace
 
 char WinEHPrepare::ID = 0;
-INITIALIZE_TM_PASS(WinEHPrepare, "winehprepare", "Prepare Windows exceptions",
-                   false, false)
+INITIALIZE_PASS(WinEHPrepare, DEBUG_TYPE, "Prepare Windows exceptions",
+                false, false)
 
-FunctionPass *llvm::createWinEHPass(const TargetMachine *TM) {
-  return new WinEHPrepare(TM);
+FunctionPass *llvm::createWinEHPass(bool DemoteCatchSwitchPHIOnly) {
+  return new WinEHPrepare(DemoteCatchSwitchPHIOnly);
 }
 
 bool WinEHPrepare::runOnFunction(Function &Fn) {
@@ -107,10 +115,11 @@ bool WinEHPrepare::runOnFunction(Function &Fn) {
   // Classify the personality to see what kind of preparation we need.
   Personality = classifyEHPersonality(Fn.getPersonalityFn());
 
-  // Do nothing if this is not a funclet-based personality.
-  if (!isFuncletEHPersonality(Personality))
+  // Do nothing if this is not a scope-based personality.
+  if (!isScopedEHPersonality(Personality))
     return false;
 
+  DL = &Fn.getParent()->getDataLayout();
   return prepareExplicitEH(Fn);
 }
 
@@ -271,10 +280,11 @@ static void calculateCXXStateNumbers(WinEHFuncInfo &FuncInfo,
     }
     int CatchHigh = FuncInfo.getLastStateNumber();
     addTryBlockMapEntry(FuncInfo, TryLow, TryHigh, CatchHigh, Handlers);
-    DEBUG(dbgs() << "TryLow[" << BB->getName() << "]: " << TryLow << '\n');
-    DEBUG(dbgs() << "TryHigh[" << BB->getName() << "]: " << TryHigh << '\n');
-    DEBUG(dbgs() << "CatchHigh[" << BB->getName() << "]: " << CatchHigh
-                 << '\n');
+    LLVM_DEBUG(dbgs() << "TryLow[" << BB->getName() << "]: " << TryLow << '\n');
+    LLVM_DEBUG(dbgs() << "TryHigh[" << BB->getName() << "]: " << TryHigh
+                      << '\n');
+    LLVM_DEBUG(dbgs() << "CatchHigh[" << BB->getName() << "]: " << CatchHigh
+                      << '\n');
   } else {
     auto *CleanupPad = cast<CleanupPadInst>(FirstNonPHI);
 
@@ -285,8 +295,8 @@ static void calculateCXXStateNumbers(WinEHFuncInfo &FuncInfo,
 
     int CleanupState = addUnwindMapEntry(FuncInfo, ParentState, BB);
     FuncInfo.EHPadStateMap[CleanupPad] = CleanupState;
-    DEBUG(dbgs() << "Assigning state #" << CleanupState << " to BB "
-                 << BB->getName() << '\n');
+    LLVM_DEBUG(dbgs() << "Assigning state #" << CleanupState << " to BB "
+                      << BB->getName() << '\n');
     for (const BasicBlock *PredBlock : predecessors(BB)) {
       if ((PredBlock = getEHPadFromPredecessor(PredBlock,
                                                CleanupPad->getParentPad()))) {
@@ -351,8 +361,8 @@ static void calculateSEHStateNumbers(WinEHFuncInfo &FuncInfo,
 
     // Everything in the __try block uses TryState as its parent state.
     FuncInfo.EHPadStateMap[CatchSwitch] = TryState;
-    DEBUG(dbgs() << "Assigning state #" << TryState << " to BB "
-                 << CatchPadBB->getName() << '\n');
+    LLVM_DEBUG(dbgs() << "Assigning state #" << TryState << " to BB "
+                      << CatchPadBB->getName() << '\n');
     for (const BasicBlock *PredBlock : predecessors(BB))
       if ((PredBlock = getEHPadFromPredecessor(PredBlock,
                                                CatchSwitch->getParentPad())))
@@ -387,8 +397,8 @@ static void calculateSEHStateNumbers(WinEHFuncInfo &FuncInfo,
 
     int CleanupState = addSEHFinally(FuncInfo, ParentState, BB);
     FuncInfo.EHPadStateMap[CleanupPad] = CleanupState;
-    DEBUG(dbgs() << "Assigning state #" << CleanupState << " to BB "
-                 << BB->getName() << '\n');
+    LLVM_DEBUG(dbgs() << "Assigning state #" << CleanupState << " to BB "
+                      << BB->getName() << '\n');
     for (const BasicBlock *PredBlock : predecessors(BB))
       if ((PredBlock =
                getEHPadFromPredecessor(PredBlock, CleanupPad->getParentPad())))
@@ -521,7 +531,7 @@ void llvm::calculateClrEHStateNumbers(const Function *Fn,
 
     if (const auto *Cleanup = dyn_cast<CleanupPadInst>(Pad)) {
       // Create the entry for this cleanup with the appropriate handler
-      // properties.  Finaly and fault handlers are distinguished by arity.
+      // properties.  Finally and fault handlers are distinguished by arity.
       ClrHandlerType HandlerType =
           (Cleanup->getNumArgOperands() ? ClrHandlerType::Fault
                                         : ClrHandlerType::Finally);
@@ -677,13 +687,17 @@ void WinEHPrepare::colorFunclets(Function &F) {
   }
 }
 
-void WinEHPrepare::demotePHIsOnFunclets(Function &F) {
+void WinEHPrepare::demotePHIsOnFunclets(Function &F,
+                                        bool DemoteCatchSwitchPHIOnly) {
   // Strip PHI nodes off of EH pads.
   SmallVector<PHINode *, 16> PHINodes;
   for (Function::iterator FI = F.begin(), FE = F.end(); FI != FE;) {
     BasicBlock *BB = &*FI++;
     if (!BB->isEHPad())
       continue;
+    if (DemoteCatchSwitchPHIOnly && !isa<CatchSwitchInst>(BB->getFirstNonPHI()))
+      continue;
+
     for (BasicBlock::iterator BI = BB->begin(), BE = BB->end(); BI != BE;) {
       Instruction *I = &*BI++;
       auto *PN = dyn_cast<PHINode>(I);
@@ -708,7 +722,7 @@ void WinEHPrepare::demotePHIsOnFunclets(Function &F) {
 
 void WinEHPrepare::cloneCommonBlocks(Function &F) {
   // We need to clone all blocks which belong to multiple funclets.  Values are
-  // remapped throughout the funclet to propogate both the new instructions
+  // remapped throughout the funclet to propagate both the new instructions
   // *and* the new basic blocks themselves.
   for (auto &Funclets : FuncletBlocks) {
     BasicBlock *FuncletPadBB = Funclets.first;
@@ -838,17 +852,11 @@ void WinEHPrepare::cloneCommonBlocks(Function &F) {
     for (auto &BBMapping : Orig2Clone) {
       BasicBlock *OldBlock = BBMapping.first;
       BasicBlock *NewBlock = BBMapping.second;
-      for (Instruction &OldI : *OldBlock) {
-        auto *OldPN = dyn_cast<PHINode>(&OldI);
-        if (!OldPN)
-          break;
-        UpdatePHIOnClonedBlock(OldPN, /*IsForOldBlock=*/true);
+      for (PHINode &OldPN : OldBlock->phis()) {
+        UpdatePHIOnClonedBlock(&OldPN, /*IsForOldBlock=*/true);
       }
-      for (Instruction &NewI : *NewBlock) {
-        auto *NewPN = dyn_cast<PHINode>(&NewI);
-        if (!NewPN)
-          break;
-        UpdatePHIOnClonedBlock(NewPN, /*IsForOldBlock=*/false);
+      for (PHINode &NewPN : NewBlock->phis()) {
+        UpdatePHIOnClonedBlock(&NewPN, /*IsForOldBlock=*/false);
       }
     }
 
@@ -858,17 +866,13 @@ void WinEHPrepare::cloneCommonBlocks(Function &F) {
       BasicBlock *OldBlock = BBMapping.first;
       BasicBlock *NewBlock = BBMapping.second;
       for (BasicBlock *SuccBB : successors(NewBlock)) {
-        for (Instruction &SuccI : *SuccBB) {
-          auto *SuccPN = dyn_cast<PHINode>(&SuccI);
-          if (!SuccPN)
-            break;
-
+        for (PHINode &SuccPN : SuccBB->phis()) {
           // Ok, we have a PHI node.  Figure out what the incoming value was for
           // the OldBlock.
-          int OldBlockIdx = SuccPN->getBasicBlockIndex(OldBlock);
+          int OldBlockIdx = SuccPN.getBasicBlockIndex(OldBlock);
           if (OldBlockIdx == -1)
             break;
-          Value *IV = SuccPN->getIncomingValue(OldBlockIdx);
+          Value *IV = SuccPN.getIncomingValue(OldBlockIdx);
 
           // Remap the value if necessary.
           if (auto *Inst = dyn_cast<Instruction>(IV)) {
@@ -877,7 +881,7 @@ void WinEHPrepare::cloneCommonBlocks(Function &F) {
               IV = I->second;
           }
 
-          SuccPN->addIncoming(IV, NewBlock);
+          SuccPN.addIncoming(IV, NewBlock);
         }
       }
     }
@@ -1014,6 +1018,7 @@ void WinEHPrepare::cleanupPreparedFunclets(Function &F) {
   removeUnreachableBlocks(F);
 }
 
+#ifndef NDEBUG
 void WinEHPrepare::verifyPreparedFunclets(Function &F) {
   for (BasicBlock &BB : F) {
     size_t NumColors = BlockColors[&BB].size();
@@ -1026,6 +1031,7 @@ void WinEHPrepare::verifyPreparedFunclets(Function &F) {
            "EH Pad still has a PHI!");
   }
 }
+#endif
 
 bool WinEHPrepare::prepareExplicitEH(Function &F) {
   // Remove unreachable blocks.  It is not valuable to assign them a color and
@@ -1039,20 +1045,21 @@ bool WinEHPrepare::prepareExplicitEH(Function &F) {
   cloneCommonBlocks(F);
 
   if (!DisableDemotion)
-    demotePHIsOnFunclets(F);
+    demotePHIsOnFunclets(F, DemoteCatchSwitchPHIOnly ||
+                                DemoteCatchSwitchPHIOnlyOpt);
 
   if (!DisableCleanups) {
-    DEBUG(verifyFunction(F));
+    LLVM_DEBUG(verifyFunction(F));
     removeImplausibleInstructions(F);
 
-    DEBUG(verifyFunction(F));
+    LLVM_DEBUG(verifyFunction(F));
     cleanupPreparedFunclets(F);
   }
 
-  DEBUG(verifyPreparedFunclets(F));
+  LLVM_DEBUG(verifyPreparedFunclets(F));
   // Recolor the CFG to verify that all is well.
-  DEBUG(colorFunclets(F));
-  DEBUG(verifyPreparedFunclets(F));
+  LLVM_DEBUG(colorFunclets(F));
+  LLVM_DEBUG(verifyPreparedFunclets(F));
 
   BlockColors.clear();
   FuncletBlocks.clear();
@@ -1067,10 +1074,10 @@ AllocaInst *WinEHPrepare::insertPHILoads(PHINode *PN, Function &F) {
   AllocaInst *SpillSlot = nullptr;
   Instruction *EHPad = PHIBlock->getFirstNonPHI();
 
-  if (!isa<TerminatorInst>(EHPad)) {
+  if (!EHPad->isTerminator()) {
     // If the EHPad isn't a terminator, then we can insert a load in this block
     // that will dominate all uses.
-    SpillSlot = new AllocaInst(PN->getType(), nullptr,
+    SpillSlot = new AllocaInst(PN->getType(), DL->getAllocaAddrSpace(), nullptr,
                                Twine(PN->getName(), ".wineh.spillslot"),
                                &F.getEntryBlock().front());
     Value *V = new LoadInst(SpillSlot, Twine(PN->getName(), ".wineh.reload"),
@@ -1141,8 +1148,7 @@ void WinEHPrepare::insertPHIStore(
     BasicBlock *PredBlock, Value *PredVal, AllocaInst *SpillSlot,
     SmallVectorImpl<std::pair<BasicBlock *, Value *>> &Worklist) {
 
-  if (PredBlock->isEHPad() &&
-      isa<TerminatorInst>(PredBlock->getFirstNonPHI())) {
+  if (PredBlock->isEHPad() && PredBlock->getFirstNonPHI()->isTerminator()) {
     // Pred is unsplittable, so we need to queue it on the worklist.
     Worklist.push_back({PredBlock, PredVal});
     return;
@@ -1157,7 +1163,7 @@ void WinEHPrepare::replaceUseWithLoad(Value *V, Use &U, AllocaInst *&SpillSlot,
                                       Function &F) {
   // Lazilly create the spill slot.
   if (!SpillSlot)
-    SpillSlot = new AllocaInst(V->getType(), nullptr,
+    SpillSlot = new AllocaInst(V->getType(), DL->getAllocaAddrSpace(), nullptr,
                                Twine(V->getName(), ".wineh.spillslot"),
                                &F.getEntryBlock().front());
 
@@ -1202,8 +1208,12 @@ void WinEHPrepare::replaceUseWithLoad(Value *V, Use &U, AllocaInst *&SpillSlot,
       Goto->setSuccessor(0, PHIBlock);
       CatchRet->setSuccessor(NewBlock);
       // Update the color mapping for the newly split edge.
+      // Grab a reference to the ColorVector to be inserted before getting the
+      // reference to the vector we are copying because inserting the new
+      // element in BlockColors might cause the map to be reallocated.
+      ColorVector &ColorsForNewBlock = BlockColors[NewBlock];
       ColorVector &ColorsForPHIBlock = BlockColors[PHIBlock];
-      BlockColors[NewBlock] = ColorsForPHIBlock;
+      ColorsForNewBlock = ColorsForPHIBlock;
       for (BasicBlock *FuncletPad : ColorsForPHIBlock)
         FuncletBlocks[FuncletPad].push_back(NewBlock);
       // Treat the new block as incoming for load insertion.

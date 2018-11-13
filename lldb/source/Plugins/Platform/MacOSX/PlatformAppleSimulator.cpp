@@ -19,11 +19,12 @@
 #include <thread>
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Core/Error.h"
-#include "lldb/Core/StreamString.h"
+#include "lldb/Host/PseudoTerminal.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Utility/LLDBAssert.h"
-#include "lldb/Utility/PseudoTerminal.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StreamString.h"
+#include "llvm/Support/Threading.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -54,14 +55,14 @@ PlatformAppleSimulator::PlatformAppleSimulator()
 //------------------------------------------------------------------
 PlatformAppleSimulator::~PlatformAppleSimulator() {}
 
-lldb_private::Error PlatformAppleSimulator::LaunchProcess(
+lldb_private::Status PlatformAppleSimulator::LaunchProcess(
     lldb_private::ProcessLaunchInfo &launch_info) {
 #if defined(__APPLE__)
   LoadCoreSimulator();
   CoreSimulatorSupport::Device device(GetSimulatorDevice());
 
   if (device.GetState() != CoreSimulatorSupport::Device::State::Booted) {
-    Error boot_err;
+    Status boot_err;
     device.Boot(boot_err);
     if (boot_err.Fail())
       return boot_err;
@@ -71,11 +72,11 @@ lldb_private::Error PlatformAppleSimulator::LaunchProcess(
 
   if (spawned) {
     launch_info.SetProcessID(spawned.GetPID());
-    return Error();
+    return Status();
   } else
     return spawned.GetError();
 #else
-  Error err;
+  Status err;
   err.SetErrorString(UNSUPPORTED_ERROR);
   return err;
 #endif
@@ -83,8 +84,8 @@ lldb_private::Error PlatformAppleSimulator::LaunchProcess(
 
 void PlatformAppleSimulator::GetStatus(Stream &strm) {
 #if defined(__APPLE__)
-  // This will get called by subclasses, so just output status on the
-  // current simulator
+  // This will get called by subclasses, so just output status on the current
+  // simulator
   PlatformAppleSimulator::LoadCoreSimulator();
 
   CoreSimulatorSupport::DeviceSet devices =
@@ -123,9 +124,9 @@ void PlatformAppleSimulator::GetStatus(Stream &strm) {
 #endif
 }
 
-Error PlatformAppleSimulator::ConnectRemote(Args &args) {
+Status PlatformAppleSimulator::ConnectRemote(Args &args) {
 #if defined(__APPLE__)
-  Error error;
+  Status error;
   if (args.GetArgumentCount() == 1) {
     if (m_device)
       DisconnectRemote();
@@ -155,18 +156,18 @@ Error PlatformAppleSimulator::ConnectRemote(Args &args) {
   }
   return error;
 #else
-  Error err;
+  Status err;
   err.SetErrorString(UNSUPPORTED_ERROR);
   return err;
 #endif
 }
 
-Error PlatformAppleSimulator::DisconnectRemote() {
+Status PlatformAppleSimulator::DisconnectRemote() {
 #if defined(__APPLE__)
   m_device.reset();
-  return Error();
+  return Status();
 #else
-  Error err;
+  Status err;
   err.SetErrorString(UNSUPPORTED_ERROR);
   return err;
 #endif
@@ -176,14 +177,14 @@ lldb::ProcessSP PlatformAppleSimulator::DebugProcess(
     ProcessLaunchInfo &launch_info, Debugger &debugger,
     Target *target, // Can be NULL, if NULL create a new target, else use
                     // existing one
-    Error &error) {
+    Status &error) {
 #if defined(__APPLE__)
   ProcessSP process_sp;
   // Make sure we stop at the entry point
   launch_info.GetFlags().Set(eLaunchFlagDebug);
   // We always launch the process we are going to debug in a separate process
-  // group, since then we can handle ^C interrupts ourselves w/o having to worry
-  // about the target getting them as well.
+  // group, since then we can handle ^C interrupts ourselves w/o having to
+  // worry about the target getting them as well.
   launch_info.SetLaunchInSeparateProcessGroup(true);
 
   error = LaunchProcess(launch_info);
@@ -200,12 +201,12 @@ lldb::ProcessSP PlatformAppleSimulator::DebugProcess(
         // process if this happens.
         process_sp->SetShouldDetach(false);
 
-        // If we didn't have any file actions, the pseudo terminal might
-        // have been used where the slave side was given as the file to
-        // open for stdin/out/err after we have already opened the master
-        // so we can read/write stdin/out/err.
+        // If we didn't have any file actions, the pseudo terminal might have
+        // been used where the slave side was given as the file to open for
+        // stdin/out/err after we have already opened the master so we can
+        // read/write stdin/out/err.
         int pty_fd = launch_info.GetPTY().ReleaseMasterFileDescriptor();
-        if (pty_fd != lldb_utility::PseudoTerminal::invalid_fd) {
+        if (pty_fd != PseudoTerminal::invalid_fd) {
           process_sp->SetSTDIOFileDescriptor(pty_fd);
         }
       }
@@ -242,8 +243,8 @@ FileSpec PlatformAppleSimulator::GetCoreSimulatorPath() {
 
 void PlatformAppleSimulator::LoadCoreSimulator() {
 #if defined(__APPLE__)
-  static std::once_flag g_load_core_sim_flag;
-  std::call_once(g_load_core_sim_flag, [this] {
+  static llvm::once_flag g_load_core_sim_flag;
+  llvm::call_once(g_load_core_sim_flag, [this] {
     const std::string core_sim_path(GetCoreSimulatorPath().GetPath());
     if (core_sim_path.size())
       dlopen(core_sim_path.c_str(), RTLD_LAZY);

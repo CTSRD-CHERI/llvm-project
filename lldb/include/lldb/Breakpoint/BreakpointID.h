@@ -57,7 +57,7 @@ public:
 
   //------------------------------------------------------------------
   /// Takes an input string containing the description of a breakpoint or
-  /// breakpoint and location and returns the a BreakpointID filled out with
+  /// breakpoint and location and returns a BreakpointID filled out with
   /// the proper id and location.
   ///
   /// @param[in] input
@@ -84,7 +84,7 @@ public:
   ///     \b true if the name is a breakpoint name (as opposed to an ID or
   ///     range) false otherwise.
   //------------------------------------------------------------------
-  static bool StringIsBreakpointName(llvm::StringRef str, Error &error);
+  static bool StringIsBreakpointName(llvm::StringRef str, Status &error);
 
   //------------------------------------------------------------------
   /// Takes a breakpoint ID and the breakpoint location id and returns

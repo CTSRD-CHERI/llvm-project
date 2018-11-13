@@ -74,7 +74,7 @@ public:
                                           SymbolContext &context, Address *addr,
                                           bool containing) override;
 
-  Searcher::Depth GetDepth() override { return Searcher::eDepthModule; }
+  lldb::SearchDepth GetDepth() override { return lldb::eSearchDepthModule; }
 
   lldb::BreakpointResolverSP
   CopyForBreakpoint(Breakpoint &breakpoint) override {
@@ -124,7 +124,7 @@ public:
                                           SymbolContext &context, Address *addr,
                                           bool containing) override;
 
-  Searcher::Depth GetDepth() override { return Searcher::eDepthModule; }
+  lldb::SearchDepth GetDepth() override { return lldb::eSearchDepthModule; }
 
   lldb::BreakpointResolverSP
   CopyForBreakpoint(Breakpoint &breakpoint) override {
@@ -203,6 +203,11 @@ struct RSReductionDescriptor {
 };
 
 class RSModuleDescriptor {
+  std::string m_slang_version;
+  std::string m_bcc_version;
+
+  bool ParseVersionInfo(llvm::StringRef *, size_t n_lines);
+
   bool ParseExportForeachCount(llvm::StringRef *, size_t n_lines);
 
   bool ParseExportVarCount(llvm::StringRef *, size_t n_lines);
@@ -221,6 +226,8 @@ public:
   bool ParseRSInfo();
 
   void Dump(Stream &strm) const;
+
+  void WarnIfVersionMismatch(Stream *s) const;
 
   const lldb::ModuleSP m_module;
   std::vector<RSKernelDescriptor> m_kernels;
@@ -262,7 +269,7 @@ public:
                                           SymbolContext &context, Address *addr,
                                           bool containing) override;
 
-  Searcher::Depth GetDepth() override { return Searcher::eDepthModule; }
+  lldb::SearchDepth GetDepth() override { return lldb::eSearchDepthModule; }
 
   lldb::BreakpointResolverSP
   CopyForBreakpoint(Breakpoint &breakpoint) override {
@@ -367,7 +374,7 @@ public:
 
   void SetBreakAllKernels(bool do_break, lldb::TargetSP target);
 
-  void Status(Stream &strm) const;
+  void DumpStatus(Stream &strm) const;
 
   void ModulesDidLoad(const ModuleList &module_list) override;
 

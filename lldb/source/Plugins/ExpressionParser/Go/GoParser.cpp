@@ -12,7 +12,7 @@
 #include "GoParser.h"
 
 #include "Plugins/ExpressionParser/Go/GoAST.h"
-#include "lldb/Core/Error.h"
+#include "lldb/Utility/Status.h"
 #include "llvm/ADT/SmallString.h"
 
 using namespace lldb_private;
@@ -67,7 +67,9 @@ private:
   size_t m_pos;
 };
 
-GoParser::GoParser(const char *src) : m_lexer(src), m_pos(0), m_failed(false) {}
+GoParser::GoParser(const char *src)
+    : m_lexer(src), m_pos(0), m_last_tok(GoLexer::TOK_INVALID),
+      m_failed(false) {}
 
 GoASTStmt *GoParser::Statement() {
   Rule r("Statement", this);
@@ -437,8 +439,10 @@ GoASTExpr *GoParser::CompositeLit() {
   if (!type)
     return r.error();
   GoASTCompositeLit *lit = LiteralValue();
-  if (!lit)
+  if (!lit) {
+    delete type;
     return r.error();
+  }
   lit->SetType(type);
   return lit;
 }
@@ -546,6 +550,7 @@ GoASTExpr *GoParser::Arguments(GoASTExpr *e) {
 GoASTExpr *GoParser::Conversion() {
   Rule r("Conversion", this);
   if (GoASTExpr *t = Type2()) {
+    std::unique_ptr<GoASTExpr> owner(t);
     if (match(GoLexer::OP_LPAREN)) {
       GoASTExpr *v = Expression();
       if (!v)
@@ -555,6 +560,7 @@ GoASTExpr *GoParser::Conversion() {
         return r.error();
       GoASTCallExpr *call = new GoASTCallExpr(false);
       call->SetFun(t);
+      owner.release();
       call->AddArgs(v);
       return call;
     }
@@ -860,7 +866,7 @@ llvm::StringRef GoParser::CopyString(llvm::StringRef s) {
   return m_strings.insert(std::make_pair(s, 'x')).first->getKey();
 }
 
-void GoParser::GetError(Error &error) {
+void GoParser::GetError(Status &error) {
   llvm::StringRef want;
   if (m_failed)
     want =

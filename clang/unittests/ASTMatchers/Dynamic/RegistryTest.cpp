@@ -440,7 +440,8 @@ TEST_F(RegistryTest, Errors) {
       Error.get()).isNull());
   EXPECT_EQ("Incorrect type for arg 1. "
             "(Expected = Matcher<CXXRecordDecl>) != "
-            "(Actual = Matcher<CXXRecordDecl>&Matcher<MemberExpr>)",
+            "(Actual = Matcher<CXXRecordDecl>&Matcher"
+            "<MemberExpr|UnresolvedMemberExpr|CXXDependentScopeMemberExpr>)",
             Error->toString());
 }
 
@@ -509,6 +510,49 @@ TEST_F(RegistryTest, ParenExpr) {
   Matcher<Stmt> Value = constructMatcher("parenExpr").getTypedMatcher<Stmt>();
   EXPECT_TRUE(matches("int i = (1);", Value));
   EXPECT_FALSE(matches("int i = 1;", Value));
+}
+
+TEST_F(RegistryTest, EqualsMatcher) {
+  Matcher<Stmt> BooleanStmt = constructMatcher(
+      "cxxBoolLiteral", constructMatcher("equals", VariantValue(true)))
+      .getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("bool x = true;", BooleanStmt));
+  EXPECT_FALSE(matches("bool x = false;", BooleanStmt));
+  EXPECT_FALSE(matches("bool x = 0;", BooleanStmt));
+
+  BooleanStmt = constructMatcher(
+      "cxxBoolLiteral", constructMatcher("equals", VariantValue(0)))
+      .getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("bool x = false;", BooleanStmt));
+  EXPECT_FALSE(matches("bool x = true;", BooleanStmt));
+  EXPECT_FALSE(matches("bool x = 0;", BooleanStmt));
+
+  Matcher<Stmt> DoubleStmt = constructMatcher(
+      "floatLiteral", constructMatcher("equals", VariantValue(1.2)))
+      .getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("double x = 1.2;", DoubleStmt));
+#if 0
+  // FIXME floatLiteral matching should work regardless of suffix.
+  EXPECT_TRUE(matches("double x = 1.2f;", DoubleStmt));
+  EXPECT_TRUE(matches("double x = 1.2l;", DoubleStmt));
+#endif
+  EXPECT_TRUE(matches("double x = 12e-1;", DoubleStmt));
+  EXPECT_FALSE(matches("double x = 1.23;", DoubleStmt));
+
+  Matcher<Stmt> IntegerStmt = constructMatcher(
+      "integerLiteral", constructMatcher("equals", VariantValue(42)))
+      .getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("int x = 42;", IntegerStmt));
+  EXPECT_FALSE(matches("int x = 1;", IntegerStmt));
+
+  Matcher<Stmt> CharStmt = constructMatcher(
+      "characterLiteral", constructMatcher("equals", VariantValue('x')))
+      .getTypedMatcher<Stmt>();
+  EXPECT_TRUE(matches("int x = 'x';", CharStmt));
+  EXPECT_TRUE(matches("int x = L'x';", CharStmt));
+  EXPECT_TRUE(matches("int x = u'x';", CharStmt));
+  EXPECT_TRUE(matches("int x = U'x';", CharStmt));
+  EXPECT_FALSE(matches("int x = 120;", CharStmt));
 }
 
 } // end anonymous namespace

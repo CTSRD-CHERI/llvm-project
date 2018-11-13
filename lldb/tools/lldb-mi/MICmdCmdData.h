@@ -34,7 +34,6 @@
 #pragma once
 
 // Third party headers:
-#include "lldb/API/SBCommandReturnObject.h"
 #include "lldb/API/SBError.h"
 
 // In-house headers:
@@ -42,6 +41,7 @@
 #include "MICmnLLDBDebugSessionInfoVarObj.h"
 #include "MICmnMIValueList.h"
 #include "MICmnMIValueTuple.h"
+#include "MICmnMIResultRecord.h"
 
 //++
 //============================================================================
@@ -77,7 +77,7 @@ private:
   bool m_bExpressionValid;     // True = yes is valid, false = not valid
   bool m_bEvaluatedExpression; // True = yes is expression evaluated, false =
                                // failed
-  lldb::SBError m_Error;       // Error object, which is examined when
+  lldb::SBError m_Error;       // Status object, which is examined when
                                // m_bEvaluatedExpression is false
   CMIUtilString m_strValue;
   CMICmnMIValueTuple m_miValueTuple;
@@ -377,6 +377,6 @@ public:
 
   // Attributes:
 private:
-  lldb::SBCommandReturnObject m_lldbResult;
   const CMIUtilString m_constStrArgLocation;
+  CMICmnMIResultRecord m_resultRecord;
 };

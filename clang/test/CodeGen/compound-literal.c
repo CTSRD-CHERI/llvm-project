@@ -1,5 +1,10 @@
 // RUN: %clang_cc1 -triple x86_64-apple-darwin -emit-llvm %s -o - | FileCheck %s
 
+// Capture the type and name so matching later is cleaner.
+struct CompoundTy { int a; };
+// CHECK: @MyCLH = constant [[MY_CLH:[^,]+]]
+const struct CompoundTy *const MyCLH = &(struct CompoundTy){3};
+
 int* a = &(int){1};
 struct s {int a, b, c;} * b = &(struct s) {1, 2, 3};
 _Complex double * x = &(_Complex double){1.0f};
@@ -28,7 +33,7 @@ void f() {
   // CHECK-NEXT: store i32 [[TMP]], i32* [[CY]]
   // CHECK-NEXT: [[SI8:%[a-zA-Z0-9.]+]] = bitcast [[STRUCT]]* [[S]] to i8*
   // CHECK-NEXT: [[COMPOUNDLITI8:%[a-zA-Z0-9.]+]] = bitcast [[STRUCT]]* [[COMPOUNDLIT]] to i8*
-  // CHECK-NEXT: call void @llvm.memcpy{{.*}}(i8* [[SI8]], i8* [[COMPOUNDLITI8]]
+  // CHECK-NEXT: call void @llvm.memcpy{{.*}}(i8* align {{[0-9]+}} [[SI8]], i8* align {{[0-9]+}} [[COMPOUNDLITI8]]
   s = (S){s.y,s.x};
   // CHECK-NEXT: ret void
 }
@@ -62,7 +67,18 @@ struct G g(int x, int y, int z) {
 
   // CHECK-NEXT: [[T0:%.*]] = bitcast i48* [[COERCE_TEMP]] to i8*
   // CHECK-NEXT: [[T1:%.*]] = bitcast [[G]]* [[RESULT]] to i8*
-  // CHECK-NEXT: call void @llvm.memcpy.p0i8.p0i8.i64(i8* [[T0]], i8* [[T1]], i64 6
+  // CHECK-NEXT: call void @llvm.memcpy.p0i8.p0i8.i64(i8* align {{[0-9]+}} [[T0]], i8* align {{[0-9]+}} [[T1]], i64 6
   // CHECK-NEXT: [[T0:%.*]] = load i48, i48* [[COERCE_TEMP]]
   // CHECK-NEXT: ret i48 [[T0]]
+}
+
+// We had a bug where we'd emit a new GlobalVariable for each time we used a
+// const pointer to a variable initialized by a compound literal.
+// CHECK-LABEL: define i32 @compareMyCLH() #0
+int compareMyCLH() {
+  // CHECK: store i8* bitcast ([[MY_CLH]] to i8*)
+  const void *a = MyCLH;
+  // CHECK: store i8* bitcast ([[MY_CLH]] to i8*)
+  const void *b = MyCLH;
+  return a == b;
 }

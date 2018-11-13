@@ -102,7 +102,7 @@ for.body.i.i:                                     ; preds = %entry, %for.body.i.
   %cmp.i.i = icmp eq i32* %ptrincdec.i.i, %end
   br i1 %cmp.i.i, label %_ZSt4fillIPiiEvT_S1_RKT0_.exit, label %for.body.i.i
 ; CHECK: Loop %for.body.i.i: backedge-taken count is ((-4 + (-1 * %begin) + %end) /u 4)
-; CHECK: Loop %for.body.i.i: max backedge-taken count is ((-4 + (-1 * %begin) + %end) /u 4)
+; CHECK: Loop %for.body.i.i: max backedge-taken count is 4611686018427387903
 _ZSt4fillIPiiEvT_S1_RKT0_.exit:                   ; preds = %for.body.i.i, %entry
   ret void
 }
@@ -126,7 +126,7 @@ exit:
 }
 
 ; CHECK-LABEL: PR12375
-; CHECK: -->  {(4 + %arg)<nsw>,+,4}<nuw><%bb1>{{ U: [^ ]+ S: [^ ]+}}{{ *}}Exits: (4 + (4 * ((-1 + (-1 * %arg) + ((4 + %arg)<nsw> umax (8 + %arg)<nsw>)) /u 4)) + %arg)
+; CHECK: -->  {(4 + %arg)<nsw>,+,4}<nuw><%bb1>{{ U: [^ ]+ S: [^ ]+}}{{ *}}Exits: (4 + (4 * ((-1 + (-1 * %arg) + ((4 + %arg)<nsw> umax (8 + %arg)<nsw>)) /u 4))<nuw> + %arg)
 define i32 @PR12375(i32* readnone %arg) {
 bb:
   %tmp = getelementptr inbounds i32, i32* %arg, i64 2
@@ -145,7 +145,7 @@ bb7:                                              ; preds = %bb1
 }
 
 ; CHECK-LABEL: PR12376
-; CHECK: -->  {(4 + %arg)<nsw>,+,4}<nuw><%bb2>{{ U: [^ ]+ S: [^ ]+}}{{ *}}Exits: (4 + (4 * ((-1 + (-1 * %arg) + ((4 + %arg)<nsw> umax %arg1)) /u 4)) + %arg)
+; CHECK: -->  {(4 + %arg)<nsw>,+,4}<nuw><%bb2>{{ U: [^ ]+ S: [^ ]+}}{{ *}}Exits: (4 + (4 * ((-1 + (-1 * %arg) + ((4 + %arg)<nsw> umax %arg1)) /u 4))<nuw> + %arg)
 define void @PR12376(i32* nocapture %arg, i32* nocapture %arg1)  {
 bb:
   br label %bb2

@@ -21,7 +21,7 @@
 #include "NVPTXTargetMachine.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/BasicTTIImpl.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
 
 namespace llvm {
 
@@ -45,6 +45,43 @@ public:
 
   bool isSourceOfDivergence(const Value *V);
 
+  unsigned getFlatAddressSpace() const {
+    return AddressSpace::ADDRESS_SPACE_GENERIC;
+  }
+
+  // Loads and stores can be vectorized if the alignment is at least as big as
+  // the load/store we want to vectorize.
+  bool isLegalToVectorizeLoadChain(unsigned ChainSizeInBytes,
+                                   unsigned Alignment,
+                                   unsigned AddrSpace) const {
+    return Alignment >= ChainSizeInBytes;
+  }
+  bool isLegalToVectorizeStoreChain(unsigned ChainSizeInBytes,
+                                    unsigned Alignment,
+                                    unsigned AddrSpace) const {
+    return isLegalToVectorizeLoadChain(ChainSizeInBytes, Alignment, AddrSpace);
+  }
+
+  // NVPTX has infinite registers of all kinds, but the actual machine doesn't.
+  // We conservatively return 1 here which is just enough to enable the
+  // vectorizers but disables heuristics based on the number of registers.
+  // FIXME: Return a more reasonable number, while keeping an eye on
+  // LoopVectorizer's unrolling heuristics.
+  unsigned getNumberOfRegisters(bool Vector) const { return 1; }
+
+  // Only <2 x half> should be vectorized, so always return 32 for the vector
+  // register size.
+  unsigned getRegisterBitWidth(bool Vector) const { return 32; }
+  unsigned getMinVectorRegisterBitWidth() const { return 32; }
+
+  // We don't want to prevent inlining because of target-cpu and -features
+  // attributes that were added to newer versions of LLVM/Clang: There are
+  // no incompatible functions in PTX, ptxas will throw errors in such cases.
+  bool areInlineCompatible(const Function *Caller,
+                           const Function *Callee) const {
+    return true;
+  }
+
   // Increase the inlining cost threshold by a factor of 5, reflecting that
   // calls are particularly expensive in NVPTX.
   unsigned getInliningThresholdMultiplier() { return 5; }
@@ -54,9 +91,27 @@ public:
       TTI::OperandValueKind Opd1Info = TTI::OK_AnyValue,
       TTI::OperandValueKind Opd2Info = TTI::OK_AnyValue,
       TTI::OperandValueProperties Opd1PropInfo = TTI::OP_None,
-      TTI::OperandValueProperties Opd2PropInfo = TTI::OP_None);
+      TTI::OperandValueProperties Opd2PropInfo = TTI::OP_None,
+      ArrayRef<const Value *> Args = ArrayRef<const Value *>());
 
-  void getUnrollingPreferences(Loop *L, TTI::UnrollingPreferences &UP);
+  void getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
+                               TTI::UnrollingPreferences &UP);
+  bool hasVolatileVariant(Instruction *I, unsigned AddrSpace) {
+    // Volatile loads/stores are only supported for shared and global address
+    // spaces, or for generic AS that maps to them.
+    if (!(AddrSpace == llvm::ADDRESS_SPACE_GENERIC ||
+          AddrSpace == llvm::ADDRESS_SPACE_GLOBAL ||
+          AddrSpace == llvm::ADDRESS_SPACE_SHARED))
+      return false;
+
+    switch(I->getOpcode()){
+    default:
+      return false;
+    case Instruction::Load:
+    case Instruction::Store:
+      return true;
+    }
+  }
 };
 
 } // end namespace llvm

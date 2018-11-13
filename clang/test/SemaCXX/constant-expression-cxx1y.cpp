@@ -852,7 +852,6 @@ namespace Lifetime {
   static_assert(h(2) == 0, ""); // expected-error {{constant expression}} expected-note {{in call}}
   static_assert(h(3) == 0, ""); // expected-error {{constant expression}} expected-note {{in call}}
 
-  // FIXME: This function should be treated as non-constant.
   constexpr void lifetime_versus_loops() {
     int *p = 0;
     for (int i = 0; i != 2; ++i) {
@@ -862,10 +861,10 @@ namespace Lifetime {
       if (i)
         // This modifies the 'n' from the previous iteration of the loop outside
         // its lifetime.
-        ++*q;
+        ++*q; // expected-note {{increment of object outside its lifetime}}
     }
   }
-  static_assert((lifetime_versus_loops(), true), "");
+  static_assert((lifetime_versus_loops(), true), ""); // expected-error {{constant expression}} expected-note {{in call}}
 }
 
 namespace Bitfields {
@@ -957,3 +956,145 @@ namespace PR27989 {
   }
   static_assert(f(0) == 1, "");
 }
+
+namespace const_char {
+template <int N>
+constexpr int sum(const char (&Arr)[N]) {
+  int S = 0;
+  for (unsigned I = 0; I != N; ++I)
+    S += Arr[I]; // expected-note 2{{read of non-constexpr variable 'Cs' is not allowed}}
+  return S;
+}
+
+// As an extension, we support evaluating some things that are `const` as though
+// they were `constexpr` when folding, but it should not be allowed in normal
+// constexpr evaluation.
+const char Cs[] = {'a', 'b'};
+void foo() __attribute__((enable_if(sum(Cs) == 'a' + 'b', "")));
+void run() { foo(); }
+
+static_assert(sum(Cs) == 'a' + 'b', ""); // expected-error{{not an integral constant expression}} expected-note{{in call to 'sum(Cs)'}}
+constexpr int S = sum(Cs); // expected-error{{must be initialized by a constant expression}} expected-note{{in call}}
+}
+
+constexpr void PR28739(int n) { // expected-error {{never produces a constant}}
+  int *p = &n;
+  p += (__int128)(unsigned long)-1; // expected-note {{cannot refer to element 18446744073709551615 of non-array object in a constant expression}}
+}
+
+constexpr void Void(int n) {
+  void(n + 1);
+  void();
+}
+constexpr int void_test = (Void(0), 1);
+
+namespace PR19741 {
+constexpr void addone(int &m) { m++; }
+
+struct S {
+  int m = 0;
+  constexpr S() { addone(m); }
+};
+constexpr bool evalS() {
+  constexpr S s;
+  return s.m == 1;
+}
+static_assert(evalS(), "");
+
+struct Nested {
+  struct First { int x = 42; };
+  union {
+    First first;
+    int second;
+  };
+  int x;
+  constexpr Nested(int x) : first(), x(x) { x = 4; }
+  constexpr Nested() : Nested(42) {
+    addone(first.x);
+    x = 3;
+  }
+};
+constexpr bool evalNested() {
+  constexpr Nested N;
+  return N.first.x == 43;
+}
+static_assert(evalNested(), "");
+} // namespace PR19741
+
+namespace Mutable {
+  struct A { mutable int n; }; // expected-note 2{{here}}
+  constexpr int k = A{123}.n; // ok
+  static_assert(k == 123, "");
+
+  struct Q { A &&a; int b = a.n; };
+  constexpr Q q = { A{456} }; // expected-note {{temporary}}
+  static_assert(q.b == 456, "");
+  static_assert(q.a.n == 456, ""); // expected-error {{constant expression}} expected-note {{outside the expression that created the temporary}}
+
+  constexpr A a = {123};
+  constexpr int m = a.n; // expected-error {{constant expression}} expected-note {{mutable}}
+
+  constexpr Q r = { static_cast<A&&>(const_cast<A&>(a)) }; // expected-error {{constant expression}} expected-note@-8 {{mutable}}
+
+  struct B {
+    mutable int n; // expected-note {{here}}
+    int m;
+    constexpr B() : n(1), m(n) {} // ok
+  };
+  constexpr B b;
+  constexpr int p = b.n; // expected-error {{constant expression}} expected-note {{mutable}}
+}
+
+namespace IndirectFields {
+
+// Reference indirect field.
+struct A {
+  struct {
+    union {
+      int x = x = 3; // expected-note {{outside its lifetime}}
+    };
+  };
+  constexpr A() {}
+};
+static_assert(A().x == 3, ""); // expected-error{{not an integral constant expression}} expected-note{{in call to 'A()'}}
+
+// Reference another indirect field, with different 'this'.
+struct B {
+  struct {
+    union {
+      int x = 3;
+    };
+    int y = x;
+  };
+  constexpr B() {}
+};
+static_assert(B().y == 3, "");
+
+// Nested evaluation of indirect field initializers.
+struct C {
+  union {
+    int x = 1;
+  };
+};
+struct D {
+  struct {
+    C c;
+    int y = c.x + 1;
+  };
+};
+static_assert(D().y == 2, "");
+
+// Explicit 'this'.
+struct E {
+  int n = 0;
+  struct {
+    void *x = this;
+  };
+  void *y = this;
+};
+constexpr E e1 = E();
+static_assert(e1.x != e1.y, "");
+constexpr E e2 = E{0};
+static_assert(e2.x != e2.y, "");
+
+} // namespace IndirectFields

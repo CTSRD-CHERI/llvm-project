@@ -1,4 +1,4 @@
-; RUN: llc < %s | FileCheck %s
+; RUN: llc -verify-machineinstrs < %s | FileCheck %s
 ; This file contains a collection of basic tests to ensure we didn't
 ; screw up normal call lowering when a statepoint is a GC transition.
 
@@ -67,8 +67,9 @@ define i1 @test_relocate(i32 addrspace(1)* %a) gc "statepoint-example" {
 ; Check that an ununsed relocate has no code-generation impact
 ; CHECK: pushq %rax
 ; CHECK: callq return_i1
-; CHECK-NEXT: .Ltmp9:
+; CHECK-NEXT: .Ltmp4:
 ; CHECK-NEXT: popq %rcx
+; CHECK-NEXT: .cfi_def_cfa_offset 8
 ; CHECK-NEXT: retq
 entry:
   %safepoint_token = tail call token (i64, i32, i1 ()*, i32, i32, ...) @llvm.experimental.gc.statepoint.p0f_i1f(i64 0, i32 0, i1 ()* @return_i1, i32 0, i32 1, i32 0, i32 0, i32 addrspace(1)* %a)

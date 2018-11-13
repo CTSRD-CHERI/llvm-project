@@ -8,26 +8,32 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file is part of the WebAssembly Disassembler.
+/// This file is part of the WebAssembly Disassembler.
 ///
 /// It contains code to translate the data produced by the decoder into
 /// MCInsts.
 ///
 //===----------------------------------------------------------------------===//
 
-#include "WebAssembly.h"
 #include "MCTargetDesc/WebAssemblyMCTargetDesc.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCDisassembler/MCDisassembler.h"
+#include "llvm/MC/MCFixedLenDisassembler.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Endian.h"
+#include "llvm/Support/LEB128.h"
 #include "llvm/Support/TargetRegistry.h"
+
 using namespace llvm;
 
 #define DEBUG_TYPE "wasm-disassembler"
+
+using DecodeStatus = MCDisassembler::DecodeStatus;
+
+#include "WebAssemblyGenDisassemblerTables.inc"
 
 namespace {
 class WebAssemblyDisassembler final : public MCDisassembler {
@@ -60,92 +66,142 @@ extern "C" void LLVMInitializeWebAssemblyDisassembler() {
                                          createWebAssemblyDisassembler);
 }
 
+static int nextByte(ArrayRef<uint8_t> Bytes, uint64_t &Size) {
+  if (Size >= Bytes.size())
+    return -1;
+  auto V = Bytes[Size];
+  Size++;
+  return V;
+}
+
+static bool parseLEBImmediate(MCInst &MI, uint64_t &Size,
+                              ArrayRef<uint8_t> Bytes, bool Signed) {
+  unsigned N = 0;
+  const char *Error = nullptr;
+  auto Val = Signed ? decodeSLEB128(Bytes.data() + Size, &N,
+                                    Bytes.data() + Bytes.size(), &Error)
+                    : static_cast<int64_t>(
+                          decodeULEB128(Bytes.data() + Size, &N,
+                                        Bytes.data() + Bytes.size(), &Error));
+  if (Error)
+    return false;
+  Size += N;
+  MI.addOperand(MCOperand::createImm(Val));
+  return true;
+}
+
+template <typename T>
+bool parseImmediate(MCInst &MI, uint64_t &Size, ArrayRef<uint8_t> Bytes) {
+  if (Size + sizeof(T) > Bytes.size())
+    return false;
+  T Val;
+  memcpy(&Val, Bytes.data() + Size, sizeof(T));
+  support::endian::byte_swap<T, support::endianness::little>(Val);
+  Size += sizeof(T);
+  if (std::is_floating_point<T>::value) {
+    MI.addOperand(MCOperand::createFPImm(static_cast<double>(Val)));
+  } else {
+    MI.addOperand(MCOperand::createImm(static_cast<int64_t>(Val)));
+  }
+  return true;
+}
+
 MCDisassembler::DecodeStatus WebAssemblyDisassembler::getInstruction(
     MCInst &MI, uint64_t &Size, ArrayRef<uint8_t> Bytes, uint64_t /*Address*/,
-    raw_ostream &OS, raw_ostream &CS) const {
+    raw_ostream & /*OS*/, raw_ostream &CS) const {
+  CommentStream = &CS;
   Size = 0;
-  uint64_t Pos = 0;
-
-  // Read the opcode.
-  if (Pos + sizeof(uint64_t) > Bytes.size())
+  auto Opc = nextByte(Bytes, Size);
+  if (Opc < 0)
     return MCDisassembler::Fail;
-  uint64_t Opcode = support::endian::read64le(Bytes.data() + Pos);
-  Pos += sizeof(uint64_t);
-
-  if (Opcode >= WebAssembly::INSTRUCTION_LIST_END)
-    return MCDisassembler::Fail;
-
-  MI.setOpcode(Opcode);
-  const MCInstrDesc &Desc = MCII->get(Opcode);
-  unsigned NumFixedOperands = Desc.NumOperands;
-
-  // If it's variadic, read the number of extra operands.
-  unsigned NumExtraOperands = 0;
-  if (Desc.isVariadic()) {
-    if (Pos + sizeof(uint64_t) > Bytes.size())
+  const auto *WasmInst = &InstructionTable0[Opc];
+  // If this is a prefix byte, indirect to another table.
+  if (WasmInst->ET == ET_Prefix) {
+    WasmInst = nullptr;
+    // Linear search, so far only 2 entries.
+    for (auto PT = PrefixTable; PT->Table; PT++) {
+      if (PT->Prefix == Opc) {
+        WasmInst = PT->Table;
+        break;
+      }
+    }
+    if (!WasmInst)
       return MCDisassembler::Fail;
-    NumExtraOperands = support::endian::read64le(Bytes.data() + Pos);
-    Pos += sizeof(uint64_t);
+    Opc = nextByte(Bytes, Size);
+    if (Opc < 0)
+      return MCDisassembler::Fail;
+    WasmInst += Opc;
   }
-
-  // Read the fixed operands. These are described by the MCInstrDesc.
-  for (unsigned i = 0; i < NumFixedOperands; ++i) {
-    const MCOperandInfo &Info = Desc.OpInfo[i];
-    switch (Info.OperandType) {
-    case MCOI::OPERAND_IMMEDIATE:
+  if (WasmInst->ET == ET_Unused)
+    return MCDisassembler::Fail;
+  // At this point we must have a valid instruction to decode.
+  assert(WasmInst->ET == ET_Instruction);
+  MI.setOpcode(WasmInst->Opcode);
+  // Parse any operands.
+  for (uint8_t OPI = 0; OPI < WasmInst->NumOperands; OPI++) {
+    switch (OperandTable[WasmInst->OperandStart + OPI]) {
+    // ULEB operands:
+    case WebAssembly::OPERAND_BASIC_BLOCK:
     case WebAssembly::OPERAND_LOCAL:
+    case WebAssembly::OPERAND_GLOBAL:
+    case WebAssembly::OPERAND_FUNCTION32:
+    case WebAssembly::OPERAND_OFFSET32:
     case WebAssembly::OPERAND_P2ALIGN:
-    case WebAssembly::OPERAND_BASIC_BLOCK: {
-      if (Pos + sizeof(uint64_t) > Bytes.size())
+    case WebAssembly::OPERAND_TYPEINDEX:
+    case MCOI::OPERAND_IMMEDIATE: {
+      if (!parseLEBImmediate(MI, Size, Bytes, false))
         return MCDisassembler::Fail;
-      uint64_t Imm = support::endian::read64le(Bytes.data() + Pos);
-      Pos += sizeof(uint64_t);
-      MI.addOperand(MCOperand::createImm(Imm));
       break;
     }
-    case MCOI::OPERAND_REGISTER: {
-      if (Pos + sizeof(uint64_t) > Bytes.size())
+    // SLEB operands:
+    case WebAssembly::OPERAND_I32IMM:
+    case WebAssembly::OPERAND_I64IMM:
+    case WebAssembly::OPERAND_SIGNATURE: {
+      if (!parseLEBImmediate(MI, Size, Bytes, true))
         return MCDisassembler::Fail;
-      uint64_t Reg = support::endian::read64le(Bytes.data() + Pos);
-      Pos += sizeof(uint64_t);
-      MI.addOperand(MCOperand::createReg(Reg));
       break;
     }
-    case WebAssembly::OPERAND_F32IMM:
+    // FP operands.
+    case WebAssembly::OPERAND_F32IMM: {
+      if (!parseImmediate<float>(MI, Size, Bytes))
+        return MCDisassembler::Fail;
+      break;
+    }
     case WebAssembly::OPERAND_F64IMM: {
-      // TODO: MC converts all floating point immediate operands to double.
-      // This is fine for numeric values, but may cause NaNs to change bits.
-      if (Pos + sizeof(uint64_t) > Bytes.size())
+      if (!parseImmediate<double>(MI, Size, Bytes))
         return MCDisassembler::Fail;
-      uint64_t Bits = support::endian::read64le(Bytes.data() + Pos);
-      Pos += sizeof(uint64_t);
-      double Imm;
-      memcpy(&Imm, &Bits, sizeof(Imm));
-      MI.addOperand(MCOperand::createFPImm(Imm));
       break;
     }
+    // Vector lane operands (not LEB encoded).
+    case WebAssembly::OPERAND_VEC_I8IMM: {
+      if (!parseImmediate<uint8_t>(MI, Size, Bytes))
+        return MCDisassembler::Fail;
+      break;
+    }
+    case WebAssembly::OPERAND_VEC_I16IMM: {
+      if (!parseImmediate<uint16_t>(MI, Size, Bytes))
+        return MCDisassembler::Fail;
+      break;
+    }
+    case WebAssembly::OPERAND_VEC_I32IMM: {
+      if (!parseImmediate<uint32_t>(MI, Size, Bytes))
+        return MCDisassembler::Fail;
+      break;
+    }
+    case WebAssembly::OPERAND_VEC_I64IMM: {
+      if (!parseImmediate<uint64_t>(MI, Size, Bytes))
+        return MCDisassembler::Fail;
+      break;
+    }
+    case MCOI::OPERAND_REGISTER:
+      // The tablegen header currently does not have any register operands since
+      // we use only the stack (_S) instructions.
+      // If you hit this that probably means a bad instruction definition in
+      // tablegen.
+      llvm_unreachable("Register operand in WebAssemblyDisassembler");
     default:
-      llvm_unreachable("unimplemented operand kind");
+      llvm_unreachable("Unknown operand type in WebAssemblyDisassembler");
     }
   }
-
-  // Read the extra operands.
-  assert(NumExtraOperands == 0 || Desc.isVariadic());
-  for (unsigned i = 0; i < NumExtraOperands; ++i) {
-    if (Pos + sizeof(uint64_t) > Bytes.size())
-      return MCDisassembler::Fail;
-    if (Desc.TSFlags & WebAssemblyII::VariableOpIsImmediate) {
-      // Decode extra immediate operands.
-      uint64_t Imm = support::endian::read64le(Bytes.data() + Pos);
-      MI.addOperand(MCOperand::createImm(Imm));
-    } else {
-      // Decode extra register operands.
-      uint64_t Reg = support::endian::read64le(Bytes.data() + Pos);
-      MI.addOperand(MCOperand::createReg(Reg));
-    }
-    Pos += sizeof(uint64_t);
-  }
-
-  Size = Pos;
   return MCDisassembler::Success;
 }

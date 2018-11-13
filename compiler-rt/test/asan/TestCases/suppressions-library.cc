@@ -1,4 +1,4 @@
-// RUN: %clangxx_asan -O0 -DSHARED_LIB %s -fPIC -shared -o %dynamiclib %ld_flags_rpath_so
+// RUN: %clangxx_asan -O0 -DSHARED_LIB %s %fPIC -shared -o %dynamiclib %ld_flags_rpath_so
 // RUN: %clangxx_asan -O0 %s -o %t %ld_flags_rpath_exe
 
 // Check that without suppressions, we catch the issue.
@@ -7,7 +7,7 @@
 // FIXME: Remove usage of backticks around basename below.
 // REQUIRES: shell
 
-// RUN: echo "interceptor_via_lib:"`basename %dynamiclib` > %t.supp
+// RUN: echo "interceptor_via_lib:"%xdynamiclib_filename > %t.supp
 // RUN: %env_asan_opts=suppressions='"%t.supp"' %run %t 2>&1 | FileCheck --check-prefix=CHECK-IGNORE %s
 
 // XFAIL: android

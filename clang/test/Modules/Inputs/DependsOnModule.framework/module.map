@@ -22,12 +22,37 @@ framework module DependsOnModule {
   explicit module CustomReq2 {
     requires custom_req2
   }
-
+  explicit module Coroutines {
+    requires coroutines
+    header "coroutines.h"
+  }
+  explicit module NotCoroutines {
+    requires !coroutines
+    header "not_coroutines.h"
+  }
   explicit framework module SubFramework {
     umbrella header "SubFramework.h"
 
     module * {
       export *
     }
+  }
+  explicit module CXX11 {
+    requires cplusplus11
+  }
+  explicit module CXX14 {
+    requires cplusplus14
+  }
+  explicit module CXX17 {
+    requires cplusplus17
+  }
+  explicit module C99 {
+    requires c99
+  }
+  explicit module C11 {
+    requires c11
+  }
+  explicit module C17 {
+    requires c17
   }
 }

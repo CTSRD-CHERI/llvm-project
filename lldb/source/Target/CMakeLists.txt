@@ -1,5 +1,3 @@
-include_directories(../Plugins/Process/Utility)
-
 add_lldb_library(lldbTarget
   ABI.cpp
   CPPLanguageRuntime.cpp
@@ -13,6 +11,7 @@ add_lldb_library(lldbTarget
   LanguageRuntime.cpp
   Memory.cpp
   MemoryHistory.cpp
+  ModuleCache.cpp
   ObjCLanguageRuntime.cpp
   OperatingSystem.cpp
   PathMappingList.cpp
@@ -24,6 +23,7 @@ add_lldb_library(lldbTarget
   QueueItem.cpp
   QueueList.cpp
   RegisterContext.cpp
+  RegisterNumber.cpp
   SectionLoadHistory.cpp
   SectionLoadList.cpp
   StackFrame.cpp
@@ -58,4 +58,19 @@ add_lldb_library(lldbTarget
   ThreadSpec.cpp
   UnixSignals.cpp
   UnwindAssembly.cpp
+
+  LINK_LIBS
+    lldbBreakpoint
+    lldbCore
+    lldbExpression
+    lldbHost
+    lldbInterpreter
+    lldbSymbol
+    lldbUtility
+    lldbPluginExpressionParserClang
+    lldbPluginObjCLanguage
+    lldbPluginProcessUtility
+
+  LINK_COMPONENTS
+    Support
   )

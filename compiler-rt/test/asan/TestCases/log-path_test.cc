@@ -1,5 +1,6 @@
 // FIXME: https://code.google.com/p/address-sanitizer/issues/detail?id=316
 // XFAIL: android
+// UNSUPPORTED: ios
 //
 // The for loop in the backticks below requires bash.
 // REQUIRES: shell
@@ -30,7 +31,7 @@
 // RUN: not cat %t.log.*
 
 // FIXME: log_path is not supported on Windows yet.
-// XFAIL: win32
+// XFAIL: windows-msvc
 
 #include <stdlib.h>
 #include <string.h>

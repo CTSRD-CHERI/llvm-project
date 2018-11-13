@@ -12,11 +12,11 @@
 #include "lldb/API/SBSection.h"
 #include "lldb/API/SBStream.h"
 #include "lldb/Core/Address.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Symbol/LineEntry.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -53,6 +53,12 @@ const SBAddress &SBAddress::operator=(const SBAddress &rhs) {
       m_opaque_ap.reset(new Address());
   }
   return *this;
+}
+
+bool lldb::operator==(const SBAddress &lhs, const SBAddress &rhs) {
+  if (lhs.IsValid() && rhs.IsValid())
+    return lhs.ref() == rhs.ref();
+  return false;
 }
 
 bool SBAddress::IsValid() const {
@@ -114,10 +120,9 @@ void SBAddress::SetLoadAddress(lldb::addr_t load_addr, lldb::SBTarget &target) {
   else
     m_opaque_ap->Clear();
 
-  // Check if we weren't were able to resolve a section offset address.
-  // If we weren't it is ok, the load address might be a location on the
-  // stack or heap, so we should just have an address with no section and
-  // a valid offset
+  // Check if we weren't were able to resolve a section offset address. If we
+  // weren't it is ok, the load address might be a location on the stack or
+  // heap, so we should just have an address with no section and a valid offset
   if (!m_opaque_ap->IsValid())
     m_opaque_ap->SetOffset(load_addr);
 }
@@ -157,9 +162,8 @@ Address &SBAddress::ref() {
 }
 
 const Address &SBAddress::ref() const {
-  // This object should already have checked with "IsValid()"
-  // prior to calling this function. In case you didn't we will assert
-  // and die to let you know.
+  // This object should already have checked with "IsValid()" prior to calling
+  // this function. In case you didn't we will assert and die to let you know.
   assert(m_opaque_ap.get());
   return *m_opaque_ap;
 }
@@ -235,10 +239,4 @@ SBLineEntry SBAddress::GetLineEntry() {
       sb_line_entry.SetLineEntry(line_entry);
   }
   return sb_line_entry;
-}
-
-AddressClass SBAddress::GetAddressClass() {
-  if (m_opaque_ap->IsValid())
-    return m_opaque_ap->GetAddressClass();
-  return eAddressClassInvalid;
 }

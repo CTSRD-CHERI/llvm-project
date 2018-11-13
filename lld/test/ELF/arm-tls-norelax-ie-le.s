@@ -1,9 +1,9 @@
+// REQUIRES: arm
 // RUN: llvm-mc -filetype=obj -triple=armv7a-none-linux-gnueabi %p/Inputs/arm-tls-get-addr.s -o %t1
 // RUN: ld.lld %t1 --shared -o %t1.so
 // RUN: llvm-mc %s -o %t.o -filetype=obj -triple=armv7a-linux-gnueabi
-// RUN: ld.lld %t1.so %t.o -o %t
-// RUN: llvm-objdump -s -triple=armv7a-linux-gnueabi %t
-// REQUIRES: arm
+// RUN: ld.lld --hash-style=sysv %t1.so %t.o -o %t
+// RUN: llvm-objdump -s -triple=armv7a-linux-gnueabi %t | FileCheck %s
 
 // This tls Initial Exec sequence is with respect to a non-preemptible symbol
 // so a relaxation would normally be possible. This would result in an assertion
@@ -36,6 +36,6 @@ x2:
  .space 4
  .type x2, %object
 
-// CHECK: Contents of section .got
-// x1 at offset 0 from TP, x2 at offset 4 from TP
-// 12064 00000000 04000000
+// CHECK: Contents of section .got:
+// x1 at offset 8 from TP, x2 at offset c from TP. Offsets include TCB size of 8
+// CHECK-NEXT: 13064 08000000 0c000000

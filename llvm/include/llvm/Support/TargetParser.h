@@ -17,6 +17,7 @@
 
 // FIXME: vector is used because that's what clang uses for subtarget feature
 // lists, but SmallVector would probably be better
+#include "llvm/ADT/Triple.h"
 #include <vector>
 
 namespace llvm {
@@ -30,6 +31,30 @@ class StringRef;
 // back-end to TableGen to create these clean tables.
 namespace ARM {
 
+// FPU Version
+enum class FPUVersion {
+  NONE,
+  VFPV2,
+  VFPV3,
+  VFPV3_FP16,
+  VFPV4,
+  VFPV5
+};
+
+// An FPU name restricts the FPU in one of three ways:
+enum class FPURestriction {
+  None = 0, ///< No restriction
+  D16,      ///< Only 16 D registers
+  SP_D16    ///< Only single-precision instructions, with 16 D registers
+};
+
+// An FPU name implies one of three levels of Neon support:
+enum class NeonSupportLevel {
+  None = 0, ///< No Neon
+  Neon,     ///< Neon
+  Crypto    ///< Neon with Crypto
+};
+
 // FPU names.
 enum FPUKind {
 #define ARM_FPU(NAME, KIND, VERSION, NEON_SUPPORT, RESTRICTION) KIND,
@@ -37,53 +62,33 @@ enum FPUKind {
   FK_LAST
 };
 
-// FPU Version
-enum FPUVersion {
-  FV_NONE = 0,
-  FV_VFPV2,
-  FV_VFPV3,
-  FV_VFPV3_FP16,
-  FV_VFPV4,
-  FV_VFPV5
-};
-
-// An FPU name implies one of three levels of Neon support:
-enum NeonSupportLevel {
-  NS_None = 0, ///< No Neon
-  NS_Neon,     ///< Neon
-  NS_Crypto    ///< Neon with Crypto
-};
-
-// An FPU name restricts the FPU in one of three ways:
-enum FPURestriction {
-  FR_None = 0, ///< No restriction
-  FR_D16,      ///< Only 16 D registers
-  FR_SP_D16    ///< Only single-precision instructions, with 16 D registers
-};
-
 // Arch names.
-enum ArchKind {
+enum class ArchKind {
 #define ARM_ARCH(NAME, ID, CPU_ATTR, SUB_ARCH, ARCH_ATTR, ARCH_FPU, ARCH_BASE_EXT) ID,
 #include "ARMTargetParser.def"
-  AK_LAST
 };
 
 // Arch extension modifiers for CPUs.
 enum ArchExtKind : unsigned {
-  AEK_INVALID = 0x0,
-  AEK_NONE = 0x1,
-  AEK_CRC = 0x2,
-  AEK_CRYPTO = 0x4,
-  AEK_FP = 0x8,
-  AEK_HWDIV = 0x10,
-  AEK_HWDIVARM = 0x20,
-  AEK_MP = 0x40,
-  AEK_SIMD = 0x80,
-  AEK_SEC = 0x100,
-  AEK_VIRT = 0x200,
-  AEK_DSP = 0x400,
-  AEK_FP16 = 0x800,
-  AEK_RAS = 0x1000,
+  AEK_INVALID =     0,
+  AEK_NONE =        1,
+  AEK_CRC =         1 << 1,
+  AEK_CRYPTO =      1 << 2,
+  AEK_FP =          1 << 3,
+  AEK_HWDIVTHUMB =  1 << 4,
+  AEK_HWDIVARM =    1 << 5,
+  AEK_MP =          1 << 6,
+  AEK_SIMD =        1 << 7,
+  AEK_SEC =         1 << 8,
+  AEK_VIRT =        1 << 9,
+  AEK_DSP =         1 << 10,
+  AEK_FP16 =        1 << 11,
+  AEK_RAS =         1 << 12,
+  AEK_SVE =         1 << 13,
+  AEK_DOTPROD =     1 << 14,
+  AEK_SHA2    =     1 << 15,
+  AEK_AES     =     1 << 16,
+  AEK_FP16FML =     1 << 17,
   // Unsupported extensions.
   AEK_OS = 0x8000000,
   AEK_IWMMXT = 0x10000000,
@@ -93,22 +98,22 @@ enum ArchExtKind : unsigned {
 };
 
 // ISA kinds.
-enum ISAKind { IK_INVALID = 0, IK_ARM, IK_THUMB, IK_AARCH64 };
+enum class ISAKind { INVALID = 0, ARM, THUMB, AARCH64 };
 
 // Endianness
 // FIXME: BE8 vs. BE32?
-enum EndianKind { EK_INVALID = 0, EK_LITTLE, EK_BIG };
+enum class EndianKind { INVALID = 0, LITTLE, BIG };
 
 // v6/v7/v8 Profile
-enum ProfileKind { PK_INVALID = 0, PK_A, PK_R, PK_M };
+enum class ProfileKind { INVALID = 0, A, R, M };
 
 StringRef getCanonicalArchName(StringRef Arch);
 
 // Information by ID
 StringRef getFPUName(unsigned FPUKind);
-unsigned getFPUVersion(unsigned FPUKind);
-unsigned getFPUNeonSupportLevel(unsigned FPUKind);
-unsigned getFPURestriction(unsigned FPUKind);
+FPUVersion getFPUVersion(unsigned FPUKind);
+NeonSupportLevel getFPUNeonSupportLevel(unsigned FPUKind);
+FPURestriction getFPURestriction(unsigned FPUKind);
 
 // FIXME: These should be moved to TargetTuple once it exists
 bool getFPUFeatures(unsigned FPUKind, std::vector<StringRef> &Features);
@@ -116,93 +121,244 @@ bool getHWDivFeatures(unsigned HWDivKind, std::vector<StringRef> &Features);
 bool getExtensionFeatures(unsigned Extensions,
                           std::vector<StringRef> &Features);
 
-StringRef getArchName(unsigned ArchKind);
-unsigned getArchAttr(unsigned ArchKind);
-StringRef getCPUAttr(unsigned ArchKind);
-StringRef getSubArch(unsigned ArchKind);
+StringRef getArchName(ArchKind AK);
+unsigned getArchAttr(ArchKind AK);
+StringRef getCPUAttr(ArchKind AK);
+StringRef getSubArch(ArchKind AK);
 StringRef getArchExtName(unsigned ArchExtKind);
 StringRef getArchExtFeature(StringRef ArchExt);
 StringRef getHWDivName(unsigned HWDivKind);
 
 // Information by Name
-unsigned  getDefaultFPU(StringRef CPU, unsigned ArchKind);
-unsigned  getDefaultExtensions(StringRef CPU, unsigned ArchKind);
+unsigned  getDefaultFPU(StringRef CPU, ArchKind AK);
+unsigned  getDefaultExtensions(StringRef CPU, ArchKind AK);
 StringRef getDefaultCPU(StringRef Arch);
 
 // Parser
 unsigned parseHWDiv(StringRef HWDiv);
 unsigned parseFPU(StringRef FPU);
-unsigned parseArch(StringRef Arch);
+ArchKind parseArch(StringRef Arch);
 unsigned parseArchExt(StringRef ArchExt);
-unsigned parseCPUArch(StringRef CPU);
-unsigned parseArchISA(StringRef Arch);
-unsigned parseArchEndian(StringRef Arch);
-unsigned parseArchProfile(StringRef Arch);
+ArchKind parseCPUArch(StringRef CPU);
+void fillValidCPUArchList(SmallVectorImpl<StringRef> &Values);
+ISAKind parseArchISA(StringRef Arch);
+EndianKind parseArchEndian(StringRef Arch);
+ProfileKind parseArchProfile(StringRef Arch);
 unsigned parseArchVersion(StringRef Arch);
+
+StringRef computeDefaultTargetABI(const Triple &TT, StringRef CPU);
 
 } // namespace ARM
 
-// FIXME:This should be made into class design,to avoid dupplication. 
+// FIXME:This should be made into class design,to avoid dupplication.
 namespace AArch64 {
 
 // Arch names.
 enum class ArchKind {
 #define AARCH64_ARCH(NAME, ID, CPU_ATTR, SUB_ARCH, ARCH_ATTR, ARCH_FPU, ARCH_BASE_EXT) ID,
 #include "AArch64TargetParser.def"
-  AK_LAST
 };
 
 // Arch extension modifiers for CPUs.
 enum ArchExtKind : unsigned {
-  AEK_INVALID = 0x0,
-  AEK_NONE = 0x1,
-  AEK_CRC = 0x2,
-  AEK_CRYPTO = 0x4,
-  AEK_FP = 0x8,
-  AEK_SIMD = 0x10,
-  AEK_FP16 = 0x20,
-  AEK_PROFILE = 0x40,
-  AEK_RAS = 0x80
+  AEK_INVALID =     0,
+  AEK_NONE =        1,
+  AEK_CRC =         1 << 1,
+  AEK_CRYPTO =      1 << 2,
+  AEK_FP =          1 << 3,
+  AEK_SIMD =        1 << 4,
+  AEK_FP16 =        1 << 5,
+  AEK_PROFILE =     1 << 6,
+  AEK_RAS =         1 << 7,
+  AEK_LSE =         1 << 8,
+  AEK_SVE =         1 << 9,
+  AEK_DOTPROD =     1 << 10,
+  AEK_RCPC =        1 << 11,
+  AEK_RDM =         1 << 12,
+  AEK_SM4 =         1 << 13,
+  AEK_SHA3 =        1 << 14,
+  AEK_SHA2 =        1 << 15,
+  AEK_AES =         1 << 16,
+  AEK_FP16FML =     1 << 17,
+  AEK_RAND =        1 << 18,
+  AEK_MTE =         1 << 19,
 };
 
 StringRef getCanonicalArchName(StringRef Arch);
 
 // Information by ID
 StringRef getFPUName(unsigned FPUKind);
-unsigned getFPUVersion(unsigned FPUKind);
-unsigned getFPUNeonSupportLevel(unsigned FPUKind);
-unsigned getFPURestriction(unsigned FPUKind);
+ARM::FPUVersion getFPUVersion(unsigned FPUKind);
+ARM::NeonSupportLevel getFPUNeonSupportLevel(unsigned FPUKind);
+ARM::FPURestriction getFPURestriction(unsigned FPUKind);
 
 // FIXME: These should be moved to TargetTuple once it exists
 bool getFPUFeatures(unsigned FPUKind, std::vector<StringRef> &Features);
 bool getExtensionFeatures(unsigned Extensions,
                                    std::vector<StringRef> &Features);
-bool getArchFeatures(unsigned ArchKind, std::vector<StringRef> &Features);
+bool getArchFeatures(ArchKind AK, std::vector<StringRef> &Features);
 
-StringRef getArchName(unsigned ArchKind);
-unsigned getArchAttr(unsigned ArchKind);
-StringRef getCPUAttr(unsigned ArchKind);
-StringRef getSubArch(unsigned ArchKind);
+StringRef getArchName(ArchKind AK);
+unsigned getArchAttr(ArchKind AK);
+StringRef getCPUAttr(ArchKind AK);
+StringRef getSubArch(ArchKind AK);
 StringRef getArchExtName(unsigned ArchExtKind);
 StringRef getArchExtFeature(StringRef ArchExt);
 unsigned checkArchVersion(StringRef Arch);
 
 // Information by Name
-unsigned  getDefaultFPU(StringRef CPU, unsigned ArchKind);
-unsigned  getDefaultExtensions(StringRef CPU, unsigned ArchKind);
+unsigned  getDefaultFPU(StringRef CPU, ArchKind AK);
+unsigned  getDefaultExtensions(StringRef CPU, ArchKind AK);
 StringRef getDefaultCPU(StringRef Arch);
+AArch64::ArchKind getCPUArchKind(StringRef CPU);
 
 // Parser
 unsigned parseFPU(StringRef FPU);
-unsigned parseArch(StringRef Arch);
-unsigned parseArchExt(StringRef ArchExt);
-unsigned parseCPUArch(StringRef CPU);
-unsigned parseArchISA(StringRef Arch);
-unsigned parseArchEndian(StringRef Arch);
-unsigned parseArchProfile(StringRef Arch);
+AArch64::ArchKind parseArch(StringRef Arch);
+ArchExtKind parseArchExt(StringRef ArchExt);
+ArchKind parseCPUArch(StringRef CPU);
+void fillValidCPUArchList(SmallVectorImpl<StringRef> &Values);
+ARM::ISAKind parseArchISA(StringRef Arch);
+ARM::EndianKind parseArchEndian(StringRef Arch);
+ARM::ProfileKind parseArchProfile(StringRef Arch);
 unsigned parseArchVersion(StringRef Arch);
 
+bool isX18ReservedByDefault(const Triple &TT);
+
 } // namespace AArch64
+
+namespace X86 {
+
+// This should be kept in sync with libcc/compiler-rt as its included by clang
+// as a proxy for what's in libgcc/compiler-rt.
+enum ProcessorVendors : unsigned {
+  VENDOR_DUMMY,
+#define X86_VENDOR(ENUM, STRING) \
+  ENUM,
+#include "llvm/Support/X86TargetParser.def"
+  VENDOR_OTHER
+};
+
+// This should be kept in sync with libcc/compiler-rt as its included by clang
+// as a proxy for what's in libgcc/compiler-rt.
+enum ProcessorTypes : unsigned {
+  CPU_TYPE_DUMMY,
+#define X86_CPU_TYPE(ARCHNAME, ENUM) \
+  ENUM,
+#include "llvm/Support/X86TargetParser.def"
+  CPU_TYPE_MAX
+};
+
+// This should be kept in sync with libcc/compiler-rt as its included by clang
+// as a proxy for what's in libgcc/compiler-rt.
+enum ProcessorSubtypes : unsigned {
+  CPU_SUBTYPE_DUMMY,
+#define X86_CPU_SUBTYPE(ARCHNAME, ENUM) \
+  ENUM,
+#include "llvm/Support/X86TargetParser.def"
+  CPU_SUBTYPE_MAX
+};
+
+// This should be kept in sync with libcc/compiler-rt as it should be used
+// by clang as a proxy for what's in libgcc/compiler-rt.
+enum ProcessorFeatures {
+#define X86_FEATURE(VAL, ENUM) \
+  ENUM = VAL,
+#include "llvm/Support/X86TargetParser.def"
+
+};
+
+} // namespace X86
+
+namespace AMDGPU {
+
+/// GPU kinds supported by the AMDGPU target.
+enum GPUKind : uint32_t {
+  // Not specified processor.
+  GK_NONE = 0,
+
+  // R600-based processors.
+  GK_R600 = 1,
+  GK_R630 = 2,
+  GK_RS880 = 3,
+  GK_RV670 = 4,
+  GK_RV710 = 5,
+  GK_RV730 = 6,
+  GK_RV770 = 7,
+  GK_CEDAR = 8,
+  GK_CYPRESS = 9,
+  GK_JUNIPER = 10,
+  GK_REDWOOD = 11,
+  GK_SUMO = 12,
+  GK_BARTS = 13,
+  GK_CAICOS = 14,
+  GK_CAYMAN = 15,
+  GK_TURKS = 16,
+
+  GK_R600_FIRST = GK_R600,
+  GK_R600_LAST = GK_TURKS,
+
+  // AMDGCN-based processors.
+  GK_GFX600 = 32,
+  GK_GFX601 = 33,
+
+  GK_GFX700 = 40,
+  GK_GFX701 = 41,
+  GK_GFX702 = 42,
+  GK_GFX703 = 43,
+  GK_GFX704 = 44,
+
+  GK_GFX801 = 50,
+  GK_GFX802 = 51,
+  GK_GFX803 = 52,
+  GK_GFX810 = 53,
+
+  GK_GFX900 = 60,
+  GK_GFX902 = 61,
+  GK_GFX904 = 62,
+  GK_GFX906 = 63,
+
+  GK_AMDGCN_FIRST = GK_GFX600,
+  GK_AMDGCN_LAST = GK_GFX906,
+};
+
+/// Instruction set architecture version.
+struct IsaVersion {
+  unsigned Major;
+  unsigned Minor;
+  unsigned Stepping;
+};
+
+// This isn't comprehensive for now, just things that are needed from the
+// frontend driver.
+enum ArchFeatureKind : uint32_t {
+  FEATURE_NONE = 0,
+
+  // These features only exist for r600, and are implied true for amdgcn.
+  FEATURE_FMA = 1 << 1,
+  FEATURE_LDEXP = 1 << 2,
+  FEATURE_FP64 = 1 << 3,
+
+  // Common features.
+  FEATURE_FAST_FMA_F32 = 1 << 4,
+  FEATURE_FAST_DENORMAL_F32 = 1 << 5
+};
+
+StringRef getArchNameAMDGCN(GPUKind AK);
+StringRef getArchNameR600(GPUKind AK);
+StringRef getCanonicalArchName(StringRef Arch);
+GPUKind parseArchAMDGCN(StringRef CPU);
+GPUKind parseArchR600(StringRef CPU);
+unsigned getArchAttrAMDGCN(GPUKind AK);
+unsigned getArchAttrR600(GPUKind AK);
+
+void fillValidArchListAMDGCN(SmallVectorImpl<StringRef> &Values);
+void fillValidArchListR600(SmallVectorImpl<StringRef> &Values);
+
+IsaVersion getIsaVersion(StringRef GPU);
+
+} // namespace AMDGPU
+
 } // namespace llvm
 
 #endif

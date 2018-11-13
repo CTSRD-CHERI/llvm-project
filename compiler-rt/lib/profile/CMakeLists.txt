@@ -38,6 +38,14 @@ int main() {
 
 " COMPILER_RT_TARGET_HAS_FCNTL_LCK)
 
+CHECK_CXX_SOURCE_COMPILES("
+#include <sys/utsname.h>
+int main() {
+ return 0;
+}
+
+" COMPILER_RT_TARGET_HAS_UNAME)
+
 add_compiler_rt_component(profile)
 
 set(PROFILE_SOURCES
@@ -48,18 +56,28 @@ set(PROFILE_SOURCES
   InstrProfilingFile.c
   InstrProfilingMerge.c
   InstrProfilingMergeFile.c
+  InstrProfilingNameVar.c
   InstrProfilingWriter.c
   InstrProfilingPlatformDarwin.c
+  InstrProfilingPlatformFuchsia.c
   InstrProfilingPlatformLinux.c
   InstrProfilingPlatformOther.c
   InstrProfilingRuntime.cc
   InstrProfilingUtil.c)
 
+set(PROFILE_HEADERS
+  InstrProfData.inc
+  InstrProfiling.h
+  InstrProfilingInternal.h
+  InstrProfilingPort.h
+  InstrProfilingUtil.h
+  WindowsMMap.h)
+
 if(WIN32)
     list(APPEND PROFILE_SOURCES WindowsMMap.c)
 endif()
 
-if(UNIX)
+if(FUCHSIA OR UNIX)
  set(EXTRA_FLAGS
      -fPIC
      -Wno-pedantic)
@@ -77,6 +95,12 @@ if(COMPILER_RT_TARGET_HAS_FCNTL_LCK)
      -DCOMPILER_RT_HAS_FCNTL_LCK=1)
 endif()
 
+if(COMPILER_RT_TARGET_HAS_UNAME)
+ set(EXTRA_FLAGS
+     ${EXTRA_FLAGS}
+     -DCOMPILER_RT_HAS_UNAME=1)
+endif()
+
 # This appears to be a C-only warning banning the use of locals in aggregate
 # initializers. All other compilers accept this, though.
 # nonstandard extension used : 'identifier' : cannot be initialized using address of automatic variable
@@ -89,6 +113,7 @@ if(APPLE)
     ARCHS ${PROFILE_SUPPORTED_ARCH}
     CFLAGS ${EXTRA_FLAGS}
     SOURCES ${PROFILE_SOURCES}
+    ADDITIONAL_HEADERS ${PROFILE_HEADERS}
     PARENT_TARGET profile)
 else()
   add_compiler_rt_runtime(clang_rt.profile
@@ -96,5 +121,6 @@ else()
     ARCHS ${PROFILE_SUPPORTED_ARCH}
     CFLAGS ${EXTRA_FLAGS}
     SOURCES ${PROFILE_SOURCES}
+    ADDITIONAL_HEADERS ${PROFILE_HEADERS}
     PARENT_TARGET profile)
 endif()

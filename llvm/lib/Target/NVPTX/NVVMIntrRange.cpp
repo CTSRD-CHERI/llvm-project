@@ -15,8 +15,8 @@
 #include "NVPTX.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/InstIterator.h"
-#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/Intrinsics.h"
 
 using namespace llvm;
 
@@ -65,6 +65,10 @@ INITIALIZE_PASS(NVVMIntrRange, "nvvm-intr-range",
 // Adds the passed-in [Low,High) range information as metadata to the
 // passed-in call instruction.
 static bool addRangeMetadata(uint64_t Low, uint64_t High, CallInst *C) {
+  // This call already has range metadata, nothing to do.
+  if (C->getMetadata(LLVMContext::MD_range))
+    return false;
+
   LLVMContext &Context = C->getParent()->getContext();
   IntegerType *Int32Ty = Type::getInt32Ty(Context);
   Metadata *LowAndHigh[] = {

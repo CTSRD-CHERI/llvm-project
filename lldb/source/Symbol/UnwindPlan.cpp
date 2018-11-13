@@ -9,11 +9,11 @@
 
 #include "lldb/Symbol/UnwindPlan.h"
 
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Log.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -46,8 +46,7 @@ operator==(const UnwindPlan::Row::RegisterLocation &rhs) const {
 }
 
 // This function doesn't copy the dwarf expression bytes; they must remain in
-// allocated
-// memory for the lifespan of this UnwindPlan object.
+// allocated memory for the lifespan of this UnwindPlan object.
 void UnwindPlan::Row::RegisterLocation::SetAtDWARFExpression(
     const uint8_t *opcodes, uint32_t len) {
   m_type = atDWARFExpression;
@@ -56,8 +55,7 @@ void UnwindPlan::Row::RegisterLocation::SetAtDWARFExpression(
 }
 
 // This function doesn't copy the dwarf expression bytes; they must remain in
-// allocated
-// memory for the lifespan of this UnwindPlan object.
+// allocated memory for the lifespan of this UnwindPlan object.
 void UnwindPlan::Row::RegisterLocation::SetIsDWARFExpression(
     const uint8_t *opcodes, uint32_t len) {
   m_type = isDWARFExpression;

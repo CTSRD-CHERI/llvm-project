@@ -22,11 +22,137 @@ declare i32 @__nvvm_reflect(i8*)
 ; Use an opaque pointer type for all the (possibly opaque) structs.
 %opaque = type opaque
 
+; CHECK: declare double @__acos_finite(double)
+declare double @__acos_finite(double)
+
+; CHECK: declare float @__acosf_finite(float)
+declare float @__acosf_finite(float)
+
+; CHECK: declare double @__acosh_finite(double)
+declare double @__acosh_finite(double)
+
+; CHECK: declare float @__acoshf_finite(float)
+declare float @__acoshf_finite(float)
+
+; CHECK: declare x86_fp80 @__acoshl_finite(x86_fp80)
+declare x86_fp80 @__acoshl_finite(x86_fp80)
+
+; CHECK: declare x86_fp80 @__acosl_finite(x86_fp80)
+declare x86_fp80 @__acosl_finite(x86_fp80)
+
+; CHECK: declare double @__asin_finite(double)
+declare double @__asin_finite(double)
+
+; CHECK: declare float @__asinf_finite(float)
+declare float @__asinf_finite(float)
+
+; CHECK: declare x86_fp80 @__asinl_finite(x86_fp80)
+declare x86_fp80 @__asinl_finite(x86_fp80)
+
+; CHECK: declare double @__atan2_finite(double, double)
+declare double @__atan2_finite(double, double)
+
+; CHECK: declare float @__atan2f_finite(float, float)
+declare float @__atan2f_finite(float, float)
+
+; CHECK: declare x86_fp80 @__atan2l_finite(x86_fp80, x86_fp80)
+declare x86_fp80 @__atan2l_finite(x86_fp80, x86_fp80)
+
+; CHECK: declare double @__atanh_finite(double)
+declare double @__atanh_finite(double)
+
+; CHECK: declare float @__atanhf_finite(float)
+declare float @__atanhf_finite(float)
+
+; CHECK: declare x86_fp80 @__atanhl_finite(x86_fp80)
+declare x86_fp80 @__atanhl_finite(x86_fp80)
+
+; CHECK: declare double @__cosh_finite(double)
+declare double @__cosh_finite(double)
+
+; CHECK: declare float @__coshf_finite(float)
+declare float @__coshf_finite(float)
+
+; CHECK: declare x86_fp80 @__coshl_finite(x86_fp80)
+declare x86_fp80 @__coshl_finite(x86_fp80)
+
 ; CHECK: declare double @__cospi(double)
 declare double @__cospi(double)
 
 ; CHECK: declare float @__cospif(float)
 declare float @__cospif(float)
+
+; CHECK: declare double @__exp10_finite(double)
+declare double @__exp10_finite(double)
+
+; CHECK: declare float @__exp10f_finite(float)
+declare float @__exp10f_finite(float)
+
+; CHECK: declare x86_fp80 @__exp10l_finite(x86_fp80)
+declare x86_fp80 @__exp10l_finite(x86_fp80)
+
+; CHECK: declare double @__exp2_finite(double)
+declare double @__exp2_finite(double)
+
+; CHECK: declare float @__exp2f_finite(float)
+declare float @__exp2f_finite(float)
+
+; CHECK: declare x86_fp80 @__exp2l_finite(x86_fp80)
+declare x86_fp80 @__exp2l_finite(x86_fp80)
+
+; CHECK: declare double @__exp_finite(double)
+declare double @__exp_finite(double)
+
+; CHECK: declare float @__expf_finite(float)
+declare float @__expf_finite(float)
+
+; CHECK: declare x86_fp80 @__expl_finite(x86_fp80)
+declare x86_fp80 @__expl_finite(x86_fp80)
+
+; CHECK: declare double @__log10_finite(double)
+declare double @__log10_finite(double)
+
+; CHECK: declare float @__log10f_finite(float)
+declare float @__log10f_finite(float)
+
+; CHECK: declare x86_fp80 @__log10l_finite(x86_fp80)
+declare x86_fp80 @__log10l_finite(x86_fp80)
+
+; CHECK: declare double @__log2_finite(double)
+declare double @__log2_finite(double)
+
+; CHECK: declare float @__log2f_finite(float)
+declare float @__log2f_finite(float)
+
+; CHECK: declare x86_fp80 @__log2l_finite(x86_fp80)
+declare x86_fp80 @__log2l_finite(x86_fp80)
+
+; CHECK: declare double @__log_finite(double)
+declare double @__log_finite(double)
+
+; CHECK: declare float @__logf_finite(float)
+declare float @__logf_finite(float)
+
+; CHECK: declare x86_fp80 @__logl_finite(x86_fp80)
+declare x86_fp80 @__logl_finite(x86_fp80)
+
+; CHECK: declare double @__pow_finite(double, double)
+declare double @__pow_finite(double, double)
+
+; CHECK: declare float @__powf_finite(float, float)
+declare float @__powf_finite(float, float)
+
+; CHECK: declare x86_fp80 @__powl_finite(x86_fp80, x86_fp80)
+declare x86_fp80 @__powl_finite(x86_fp80, x86_fp80)
+
+; CHECK: declare double @__sinh_finite(double)
+declare double @__sinh_finite(double)
+
+; CHECK: declare float @__sinhf_finite(float)
+declare float @__sinhf_finite(float)
+
+; CHECK: declare x86_fp80 @__sinhl_finite(x86_fp80)
+declare x86_fp80 @__sinhl_finite(x86_fp80)
 
 ; CHECK: declare double @__sinpi(double)
 declare double @__sinpi(double)
@@ -388,6 +514,9 @@ declare i32 @getc_unlocked(%opaque*)
 ; CHECK: declare i32 @getchar()
 declare i32 @getchar()
 
+; CHECK: declare i32 @getchar_unlocked()
+declare i32 @getchar_unlocked()
+
 ; CHECK: declare i8* @getenv(i8* nocapture) [[G1]]
 declare i8* @getenv(i8*)
 
@@ -496,13 +625,13 @@ declare i8* @memchr(i8*, i32, i64)
 ; CHECK: declare i32 @memcmp(i8* nocapture, i8* nocapture, i64) [[G1]]
 declare i32 @memcmp(i8*, i8*, i64)
 
-; CHECK: declare i8* @memcpy(i8*, i8* nocapture readonly, i64) [[G0]]
+; CHECK: declare i8* @memcpy(i8* returned, i8* nocapture readonly, i64) [[G0]]
 declare i8* @memcpy(i8*, i8*, i64)
 
 ; CHECK: declare i8* @mempcpy(i8*, i8* nocapture readonly, i64) [[G0]]
 declare i8* @mempcpy(i8*, i8*, i64)
 
-; CHECK: declare i8* @memmove(i8*, i8* nocapture readonly, i64) [[G0]]
+; CHECK: declare i8* @memmove(i8* returned, i8* nocapture readonly, i64) [[G0]]
 declare i8* @memmove(i8*, i8*, i64)
 
 ; CHECK: declare i8* @memset(i8*, i32, i64)
@@ -573,6 +702,9 @@ declare i32 @putc(i32, %opaque*)
 
 ; CHECK: declare i32 @putchar(i32)
 declare i32 @putchar(i32)
+
+; CHECK: declare i32 @putchar_unlocked(i32)
+declare i32 @putchar_unlocked(i32)
 
 ; CHECK: declare i32 @puts(i8* nocapture readonly) [[G0]]
 declare i32 @puts(i8*)
@@ -697,7 +829,7 @@ declare i8* @stpncpy(i8*, i8*, i64)
 ; CHECK: declare i32 @strcasecmp(i8* nocapture, i8* nocapture) [[G1]]
 declare i32 @strcasecmp(i8*, i8*)
 
-; CHECK: declare i8* @strcat(i8*, i8* nocapture readonly) [[G0]]
+; CHECK: declare i8* @strcat(i8* returned, i8* nocapture readonly) [[G0]]
 declare i8* @strcat(i8*, i8*)
 
 ; CHECK: declare i8* @strchr(i8*, i32) [[G1]]
@@ -709,7 +841,7 @@ declare i32 @strcmp(i8*, i8*)
 ; CHECK: declare i32 @strcoll(i8* nocapture, i8* nocapture) [[G1]]
 declare i32 @strcoll(i8*, i8*)
 
-; CHECK: declare i8* @strcpy(i8*, i8* nocapture readonly) [[G0]]
+; CHECK: declare i8* @strcpy(i8* returned, i8* nocapture readonly) [[G0]]
 declare i8* @strcpy(i8*, i8*)
 
 ; CHECK: declare i64 @strcspn(i8* nocapture, i8* nocapture) [[G1]]
@@ -718,19 +850,19 @@ declare i64 @strcspn(i8*, i8*)
 ; CHECK: declare noalias i8* @strdup(i8* nocapture readonly) [[G0]]
 declare i8* @strdup(i8*)
 
-; CHECK: declare i64 @strlen(i8* nocapture) [[G1]]
+; CHECK: declare i64 @strlen(i8* nocapture) [[G2:#[0-9]+]]
 declare i64 @strlen(i8*)
 
 ; CHECK: declare i32 @strncasecmp(i8* nocapture, i8* nocapture, i64) [[G1]]
 declare i32 @strncasecmp(i8*, i8*, i64)
 
-; CHECK: declare i8* @strncat(i8*, i8* nocapture readonly, i64) [[G0]]
+; CHECK: declare i8* @strncat(i8* returned, i8* nocapture readonly, i64) [[G0]]
 declare i8* @strncat(i8*, i8*, i64)
 
 ; CHECK: declare i32 @strncmp(i8* nocapture, i8* nocapture, i64) [[G1]]
 declare i32 @strncmp(i8*, i8*, i64)
 
-; CHECK: declare i8* @strncpy(i8*, i8* nocapture readonly, i64) [[G0]]
+; CHECK: declare i8* @strncpy(i8* returned, i8* nocapture readonly, i64) [[G0]]
 declare i8* @strncpy(i8*, i8*, i64)
 
 ; CHECK: declare noalias i8* @strndup(i8* nocapture readonly, i64) [[G0]]
@@ -870,10 +1002,11 @@ declare i64 @write(i32, i8*, i64)
 
 
 ; memset_pattern16 isn't available everywhere.
-; CHECK-DARWIN: declare void @memset_pattern16(i8* nocapture, i8* nocapture readonly, i64) [[G2:#[0-9]+]]
+; CHECK-DARWIN: declare void @memset_pattern16(i8* nocapture, i8* nocapture readonly, i64) [[G3:#[0-9]+]]
 declare void @memset_pattern16(i8*, i8*, i64)
 
 
 ; CHECK: attributes [[G0]] = { nounwind }
 ; CHECK: attributes [[G1]] = { nounwind readonly }
-; CHECK-DARWIN: attributes [[G2]] = { argmemonly }
+; CHECK: attributes [[G2]] = { argmemonly nounwind readonly }
+; CHECK-DARWIN: attributes [[G3]] = { argmemonly }

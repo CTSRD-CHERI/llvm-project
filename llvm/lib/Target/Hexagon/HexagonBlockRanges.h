@@ -1,4 +1,4 @@
-//===--- HexagonBlockRanges.h ---------------------------------------------===//
+//===- HexagonBlockRanges.h -------------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,39 +6,39 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-#ifndef HEXAGON_BLOCK_RANGES_H
-#define HEXAGON_BLOCK_RANGES_H
+
+#ifndef LLVM_LIB_TARGET_HEXAGON_HEXAGONBLOCKRANGES_H
+#define LLVM_LIB_TARGET_HEXAGON_HEXAGONBLOCKRANGES_H
 
 #include "llvm/ADT/BitVector.h"
-#include "llvm/CodeGen/MachineBasicBlock.h"
-#include "llvm/MC/MCRegisterInfo.h"  // For MCPhysReg.
+#include <cassert>
 #include <map>
 #include <set>
+#include <utility>
 #include <vector>
 
 namespace llvm {
-  class Function;
-  class HexagonSubtarget;
-  class MachineBasicBlock;
-  class MachineFunction;
-  class MachineInstr;
-  class MCInstrDesc;
-  class raw_ostream;
-  class TargetInstrInfo;
-  class TargetRegisterClass;
-  class TargetRegisterInfo;
-  class Type;
+
+class HexagonSubtarget;
+class MachineBasicBlock;
+class MachineFunction;
+class MachineInstr;
+class MachineRegisterInfo;
+class raw_ostream;
+class TargetInstrInfo;
+class TargetRegisterInfo;
 
 struct HexagonBlockRanges {
   HexagonBlockRanges(MachineFunction &MF);
 
   struct RegisterRef {
     unsigned Reg, Sub;
+
     bool operator<(RegisterRef R) const {
       return Reg < R.Reg || (Reg == R.Reg && Sub < R.Sub);
     }
   };
-  typedef std::set<RegisterRef> RegisterSet;
+  using RegisterSet = std::set<RegisterRef>;
 
   // This is to represent an "index", which is an abstraction of a position
   // of an instruction within a basic block.
@@ -50,10 +50,12 @@ struct HexagonBlockRanges {
       Exit  = 2,
       First = 11  // 10th + 1st
     };
+
+    IndexType() {}
+    IndexType(unsigned Idx) : Index(Idx) {}
+
     static bool isInstr(IndexType X) { return X.Index >= First; }
 
-    IndexType() : Index(None) {}
-    IndexType(unsigned Idx) : Index(Idx) {}
     operator unsigned() const;
     bool operator== (unsigned x) const;
     bool operator== (IndexType Idx) const;
@@ -68,7 +70,7 @@ struct HexagonBlockRanges {
     bool operator>  (IndexType Idx) const;
     bool operator>= (IndexType Idx) const;
 
-    unsigned Index;
+    unsigned Index = None;
   };
 
   // A range of indices, essentially a representation of a live range.
@@ -76,21 +78,23 @@ struct HexagonBlockRanges {
   // register is dead.
   class IndexRange : public std::pair<IndexType,IndexType> {
   public:
-    IndexRange() : Fixed(false), TiedEnd(false) {}
+    IndexRange() = default;
     IndexRange(IndexType Start, IndexType End, bool F = false, bool T = false)
       : std::pair<IndexType,IndexType>(Start, End), Fixed(F), TiedEnd(T) {}
+
     IndexType start() const { return first; }
     IndexType end() const   { return second; }
 
     bool operator< (const IndexRange &A) const {
       return start() < A.start();
     }
+
     bool overlaps(const IndexRange &A) const;
     bool contains(const IndexRange &A) const;
     void merge(const IndexRange &A);
 
-    bool Fixed;      // Can be renamed?  "Fixed" means "no".
-    bool TiedEnd;    // The end is not a use, but a dead def tied to a use.
+    bool Fixed = false;   // Can be renamed?  "Fixed" means "no".
+    bool TiedEnd = false; // The end is not a use, but a dead def tied to a use.
 
   private:
     void setStart(const IndexType &S) { first = S; }
@@ -107,6 +111,7 @@ struct HexagonBlockRanges {
     void add(const IndexRange &Range) {
       push_back(Range);
     }
+
     void include(const RangeList &RL);
     void unionize(bool MergeAdjacent = false);
     void subtract(const IndexRange &Range);
@@ -118,6 +123,7 @@ struct HexagonBlockRanges {
   class InstrIndexMap {
   public:
     InstrIndexMap(MachineBasicBlock &B);
+
     MachineInstr *getInstr(IndexType Idx) const;
     IndexType getIndex(MachineInstr *MI) const;
     MachineBasicBlock &getBlock() const { return Block; }
@@ -126,6 +132,7 @@ struct HexagonBlockRanges {
     void replaceInstr(MachineInstr *OldMI, MachineInstr *NewMI);
 
     friend raw_ostream &operator<< (raw_ostream &OS, const InstrIndexMap &Map);
+
     IndexType First, Last;
 
   private:
@@ -133,7 +140,8 @@ struct HexagonBlockRanges {
     std::map<IndexType,MachineInstr*> Map;
   };
 
-  typedef std::map<RegisterRef,RangeList> RegToRangeMap;
+  using RegToRangeMap = std::map<RegisterRef, RangeList>;
+
   RegToRangeMap computeLiveMap(InstrIndexMap &IndexMap);
   RegToRangeMap computeDeadMap(InstrIndexMap &IndexMap, RegToRangeMap &LiveMap);
   static RegisterSet expandToSubRegs(RegisterRef R,
@@ -144,6 +152,7 @@ struct HexagonBlockRanges {
         : Map(M), TRI(I) {}
 
     friend raw_ostream &operator<< (raw_ostream &OS, const PrintRangeMap &P);
+
   private:
     const RegToRangeMap &Map;
     const TargetRegisterInfo &TRI;
@@ -162,7 +171,6 @@ private:
   const TargetRegisterInfo &TRI;
   BitVector Reserved;
 };
-
 
 inline HexagonBlockRanges::IndexType::operator unsigned() const {
   assert(Index >= First);
@@ -224,7 +232,6 @@ inline bool HexagonBlockRanges::IndexType::operator<= (IndexType Idx) const {
   return operator==(Idx) || operator<(Idx);
 }
 
-
 raw_ostream &operator<< (raw_ostream &OS, HexagonBlockRanges::IndexType Idx);
 raw_ostream &operator<< (raw_ostream &OS,
       const HexagonBlockRanges::IndexRange &IR);
@@ -235,6 +242,6 @@ raw_ostream &operator<< (raw_ostream &OS,
 raw_ostream &operator<< (raw_ostream &OS,
       const HexagonBlockRanges::PrintRangeMap &P);
 
-} // namespace llvm
+} // end namespace llvm
 
-#endif
+#endif // LLVM_LIB_TARGET_HEXAGON_HEXAGONBLOCKRANGES_H

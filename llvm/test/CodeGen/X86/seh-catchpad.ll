@@ -117,7 +117,7 @@ __except.ret:                                     ; preds = %catch.dispatch.7
 ; CHECK:         jmp     .LBB1_[[epilogue]]
 
 ; CHECK:         .seh_handlerdata
-; CHECK-NEXT:         .Lmain$parent_frame_offset = 32
+; CHECK-NEXT:         .set .Lmain$parent_frame_offset, 32
 ; CHECK-NEXT:         .long   (.Llsda_end0-.Llsda_begin0)/16
 ; CHECK-NEXT: .Llsda_begin0:
 ; CHECK-NEXT:         .long   .Ltmp0@IMGREL+1
@@ -147,7 +147,7 @@ __except.ret:                                     ; preds = %catch.dispatch.7
 
 ; CHECK: "?dtor$[[finbb]]@?0?main@4HA":
 ; CHECK: .seh_proc "?dtor$[[finbb]]@?0?main@4HA"
-; CHECK:         .seh_handler __C_specific_handler, @unwind, @except
+; CHECK-NOT:         .seh_handler
 ; CHECK: .LBB1_[[finbb]]:                                # %ehcleanup
 ; CHECK:         movq    %rdx, 16(%rsp)
 ; CHECK:         pushq   %rbp

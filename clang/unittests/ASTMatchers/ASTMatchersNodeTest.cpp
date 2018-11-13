@@ -27,7 +27,7 @@ TEST(Finder, DynamicOnlyAcceptsSomeMatchers) {
                                        nullptr));
 
   // Do not accept non-toplevel matchers.
-  EXPECT_FALSE(Finder.addDynamicMatcher(isArrow(), nullptr));
+  EXPECT_FALSE(Finder.addDynamicMatcher(isMain(), nullptr));
   EXPECT_FALSE(Finder.addDynamicMatcher(hasName("x"), nullptr));
 }
 
@@ -158,6 +158,16 @@ TEST(ValueDecl, Matches) {
                       valueDecl(hasType(asString("enum EnumType")))));
   EXPECT_TRUE(matches("void FunctionDecl();",
                       valueDecl(hasType(asString("void (void)")))));
+}
+
+TEST(FriendDecl, Matches) {
+  EXPECT_TRUE(matches("class Y { friend class X; };",
+                      friendDecl(hasType(asString("class X")))));
+  EXPECT_TRUE(matches("class Y { friend class X; };",
+                      friendDecl(hasType(recordDecl(hasName("X"))))));
+
+  EXPECT_TRUE(matches("class Y { friend void f(); };",
+                      functionDecl(hasName("f"), hasParent(friendDecl()))));
 }
 
 TEST(Enum, DoesNotMatchClasses) {
@@ -412,10 +422,17 @@ TEST(UnaryExprOrTypeTraitExpr, MatchesSizeOfAndAlignOf) {
 
 TEST(MemberExpression, DoesNotMatchClasses) {
   EXPECT_TRUE(notMatches("class Y { void x() {} };", memberExpr()));
+  EXPECT_TRUE(notMatches("class Y { void x() {} };", unresolvedMemberExpr()));
+  EXPECT_TRUE(
+      notMatches("class Y { void x() {} };", cxxDependentScopeMemberExpr()));
 }
 
 TEST(MemberExpression, MatchesMemberFunctionCall) {
   EXPECT_TRUE(matches("class Y { void x() { x(); } };", memberExpr()));
+  EXPECT_TRUE(matches("class Y { template <class T> void x() { x<T>(); } };",
+                      unresolvedMemberExpr()));
+  EXPECT_TRUE(matches("template <class T> void x() { T t; t.f(); }",
+                      cxxDependentScopeMemberExpr()));
 }
 
 TEST(MemberExpression, MatchesVariable) {
@@ -425,6 +442,13 @@ TEST(MemberExpression, MatchesVariable) {
     matches("class Y { void x() { y; } int y; };", memberExpr()));
   EXPECT_TRUE(
     matches("class Y { void x() { Y y; y.y; } int y; };", memberExpr()));
+  EXPECT_TRUE(matches("template <class T>"
+                      "class X : T { void f() { this->T::v; } };",
+                      cxxDependentScopeMemberExpr()));
+  EXPECT_TRUE(matches("template <class T> class X : T { void f() { T::v; } };",
+                      cxxDependentScopeMemberExpr()));
+  EXPECT_TRUE(matches("template <class T> void x() { T t; t.v; }",
+                      cxxDependentScopeMemberExpr()));
 }
 
 TEST(MemberExpression, MatchesStaticVariable) {
@@ -594,7 +618,7 @@ TEST(MaterializeTemporaryExpr, MatchesTemporary) {
                materializeTemporaryExpr()));
 
   EXPECT_TRUE(
-    notMatches(ClassString +
+    matches(ClassString +
                  "string GetStringByValue();"
                    "void run() { int k = GetStringByValue().length(); }",
                materializeTemporaryExpr()));
@@ -666,6 +690,12 @@ TEST(Matcher, IntegerLiterals) {
   EXPECT_TRUE(notMatches("int i = 'a';", HasIntLiteral));
   EXPECT_TRUE(notMatches("int i = 1e10;", HasIntLiteral));
   EXPECT_TRUE(notMatches("int i = 10.0;", HasIntLiteral));
+
+  // Negative integers.
+  EXPECT_TRUE(
+      matches("int i = -10;",
+              unaryOperator(hasOperatorName("-"),
+                            hasUnaryOperand(integerLiteral(equals(10))))));
 }
 
 TEST(Matcher, FloatLiterals) {
@@ -1020,6 +1050,29 @@ TEST(InitListExpression, MatchesInitListExpression) {
     matches("int i[1] = {42, [0] = 43};", integerLiteral(equals(42))));
 }
 
+TEST(CXXStdInitializerListExpression, MatchesCXXStdInitializerListExpression) {
+  const std::string code = "namespace std {"
+                           "template <typename> class initializer_list {"
+                           "  public: initializer_list() noexcept {}"
+                           "};"
+                           "}"
+                           "struct A {"
+                           "  A(std::initializer_list<int>) {}"
+                           "};";
+  EXPECT_TRUE(matches(code + "A a{0};",
+                      cxxConstructExpr(has(cxxStdInitializerListExpr()),
+                                       hasDeclaration(cxxConstructorDecl(
+                                           ofClass(hasName("A")))))));
+  EXPECT_TRUE(matches(code + "A a = {0};",
+                      cxxConstructExpr(has(cxxStdInitializerListExpr()),
+                                       hasDeclaration(cxxConstructorDecl(
+                                           ofClass(hasName("A")))))));
+
+  EXPECT_TRUE(notMatches("int a[] = { 1, 2 };", cxxStdInitializerListExpr()));
+  EXPECT_TRUE(notMatches("struct B { int x, y; }; B b = { 5, 6 };",
+                         cxxStdInitializerListExpr()));
+}
+
 TEST(UsingDeclaration, MatchesUsingDeclarations) {
   EXPECT_TRUE(matches("namespace X { int x; } using X::x;",
                       usingDecl()));
@@ -1155,12 +1208,22 @@ TEST(TypeMatching, MatchesAutoTypes) {
   EXPECT_TRUE(matches("int v[] = { 2, 3 }; void f() { for (int i : v) {} }",
                       autoType()));
 
+  EXPECT_TRUE(matches("auto i = 2;", varDecl(hasType(isInteger()))));
+  EXPECT_TRUE(matches("struct X{}; auto x = X{};",
+                      varDecl(hasType(recordDecl(hasName("X"))))));
+
   // FIXME: Matching against the type-as-written can't work here, because the
   //        type as written was not deduced.
   //EXPECT_TRUE(matches("auto a = 1;",
   //                    autoType(hasDeducedType(isInteger()))));
   //EXPECT_TRUE(notMatches("auto b = 2.0;",
   //                       autoType(hasDeducedType(isInteger()))));
+}
+
+TEST(TypeMatching, MatchesDeclTypes) {
+  EXPECT_TRUE(matches("decltype(1 + 1) sum = 1 + 1;", decltypeType()));
+  EXPECT_TRUE(matches("decltype(1 + 1) sum = 1 + 1;",
+                      decltypeType(hasUnderlyingType(isInteger()))));
 }
 
 TEST(TypeMatching, MatchesFunctionTypes) {
@@ -1417,6 +1480,10 @@ TEST(NNS, MatchesNestedNameSpecifierPrefixes) {
     "struct A { struct B { struct C {}; }; }; A::B::C c;",
     nestedNameSpecifierLoc(hasPrefix(
       specifiesTypeLoc(loc(qualType(asString("struct A"))))))));
+  EXPECT_TRUE(matches(
+    "namespace N { struct A { struct B { struct C {}; }; }; } N::A::B::C c;",
+    nestedNameSpecifierLoc(hasPrefix(
+      specifiesTypeLoc(loc(qualType(asString("struct N::A"))))))));
 }
 
 
@@ -1494,15 +1561,32 @@ TEST(TypedefNameDeclMatcher, Match) {
                       typedefNameDecl(hasName("typedefNameDeclTest2"))));
 }
 
+TEST(TypeAliasTemplateDeclMatcher, Match) {
+  std::string Code = R"(
+    template <typename T>
+    class X { T t; };
+
+    template <typename T>
+    using typeAliasTemplateDecl = X<T>;
+
+    using typeAliasDecl = X<int>;
+  )";
+  EXPECT_TRUE(
+      matches(Code, typeAliasTemplateDecl(hasName("typeAliasTemplateDecl"))));
+  EXPECT_TRUE(
+      notMatches(Code, typeAliasTemplateDecl(hasName("typeAliasDecl"))));
+}
+
 TEST(ObjCMessageExprMatcher, SimpleExprs) {
   // don't find ObjCMessageExpr where none are present
   EXPECT_TRUE(notMatchesObjC("", objcMessageExpr(anything())));
 
   std::string Objc1String =
     "@interface Str "
-      " - (Str *)uppercaseString:(Str *)str;"
+      " - (Str *)uppercaseString;"
       "@end "
       "@interface foo "
+      "- (void)contents;"
       "- (void)meth:(Str *)text;"
       "@end "
       " "
@@ -1515,9 +1599,20 @@ TEST(ObjCMessageExprMatcher, SimpleExprs) {
   EXPECT_TRUE(matchesObjC(
     Objc1String,
     objcMessageExpr(anything())));
+  EXPECT_TRUE(matchesObjC(Objc1String,
+                          objcMessageExpr(hasAnySelector({
+                                          "contents", "meth:"}))
+
+                         ));
   EXPECT_TRUE(matchesObjC(
     Objc1String,
     objcMessageExpr(hasSelector("contents"))));
+  EXPECT_TRUE(matchesObjC(
+    Objc1String,
+    objcMessageExpr(hasAnySelector("contents", "contentsA"))));
+  EXPECT_FALSE(matchesObjC(
+    Objc1String,
+    objcMessageExpr(hasAnySelector("contentsB", "contentsC"))));
   EXPECT_TRUE(matchesObjC(
     Objc1String,
     objcMessageExpr(matchesSelector("cont*"))));
@@ -1538,6 +1633,90 @@ TEST(ObjCMessageExprMatcher, SimpleExprs) {
     objcMessageExpr(matchesSelector("uppercase*"),
                     argumentCountIs(0)
     )));
+}
+
+TEST(ObjCDeclMatcher, CoreDecls) {
+  std::string ObjCString =
+    "@protocol Proto "
+    "- (void)protoDidThing; "
+    "@end "
+    "@interface Thing "
+    "@property int enabled; "
+    "@end "
+    "@interface Thing (ABC) "
+    "- (void)abc_doThing; "
+    "@end "
+    "@implementation Thing "
+    "{ id _ivar; } "
+    "- (void)anything {} "
+    "@end "
+    "@implementation Thing (ABC) "
+    "- (void)abc_doThing {} "
+    "@end "
+    ;
+
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcProtocolDecl(hasName("Proto"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcImplementationDecl(hasName("Thing"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcCategoryDecl(hasName("ABC"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcCategoryImplDecl(hasName("ABC"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcMethodDecl(hasName("protoDidThing"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcMethodDecl(hasName("abc_doThing"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcMethodDecl(hasName("anything"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcIvarDecl(hasName("_ivar"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcPropertyDecl(hasName("enabled"))));
+}
+
+TEST(ObjCStmtMatcher, ExceptionStmts) {
+  std::string ObjCString =
+    "void f(id obj) {"
+    "  @try {"
+    "    @throw obj;"
+    "  } @catch (...) {"
+    "  } @finally {}"
+    "}";
+
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcTryStmt()));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcThrowStmt()));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcCatchStmt()));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcFinallyStmt()));
+}
+
+TEST(ObjCAutoreleaseMatcher, AutoreleasePool) {
+  std::string ObjCString =
+    "void f() {"
+    "@autoreleasepool {"
+    "  int x = 1;"
+    "}"
+    "}";
+  EXPECT_TRUE(matchesObjC(ObjCString, autoreleasePoolStmt()));
+  std::string ObjCStringNoPool = "void f() { int x = 1; }";
+  EXPECT_FALSE(matchesObjC(ObjCStringNoPool, autoreleasePoolStmt()));
 }
 
 } // namespace ast_matchers

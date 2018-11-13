@@ -16,11 +16,11 @@
 
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Core/ConstString.h"
 #include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/UniqueCStringMap.h"
 #include "lldb/Interpreter/OptionValue.h"
 #include "lldb/Interpreter/Property.h"
+#include "lldb/Utility/ConstString.h"
 
 namespace lldb_private {
 
@@ -43,7 +43,7 @@ public:
 
   lldb::OptionValueSP DeepCopy() const override;
 
-  Error
+  Status
   SetValueFromString(llvm::StringRef value,
                      VarSetOperationType op = eVarSetOperationAssign) override;
 
@@ -52,9 +52,9 @@ public:
 
   ConstString GetName() const override { return m_name; }
 
-  virtual Error DumpPropertyValue(const ExecutionContext *exe_ctx, Stream &strm,
-    llvm::StringRef property_path,
-                                  uint32_t dump_mask);
+  virtual Status DumpPropertyValue(const ExecutionContext *exe_ctx,
+                                   Stream &strm, llvm::StringRef property_path,
+                                   uint32_t dump_mask);
 
   virtual void DumpAllDescriptions(CommandInterpreter &interpreter,
                                    Stream &strm) const;
@@ -62,7 +62,7 @@ public:
   void Apropos(llvm::StringRef keyword,
                std::vector<const Property *> &matching_properties) const;
 
-  void Initialize(const PropertyDefinition *setting_definitions);
+  void Initialize(const PropertyDefinitions &setting_definitions);
 
   //    bool
   //    GetQualifiedName (Stream &strm);
@@ -75,15 +75,15 @@ public:
 
   //---------------------------------------------------------------------
   // Get the index of a property given its exact name in this property
-  // collection, "name" can't be a path to a property path that refers
-  // to a property within a property
+  // collection, "name" can't be a path to a property path that refers to a
+  // property within a property
   //---------------------------------------------------------------------
   virtual uint32_t GetPropertyIndex(const ConstString &name) const;
 
   //---------------------------------------------------------------------
-  // Get a property by exact name exists in this property collection, name
-  // can not be a path to a property path that refers to a property within
-  // a property
+  // Get a property by exact name exists in this property collection, name can
+  // not be a path to a property path that refers to a property within a
+  // property
   //---------------------------------------------------------------------
   virtual const Property *GetProperty(const ExecutionContext *exe_ctx,
                                       bool will_modify,
@@ -110,11 +110,12 @@ public:
                                              bool value_will_be_modified) const;
 
   lldb::OptionValueSP GetSubValue(const ExecutionContext *exe_ctx,
-    llvm::StringRef name, bool value_will_be_modified,
-                                  Error &error) const override;
+                                  llvm::StringRef name,
+                                  bool value_will_be_modified,
+                                  Status &error) const override;
 
-  Error SetSubValue(const ExecutionContext *exe_ctx, VarSetOperationType op,
-    llvm::StringRef path, llvm::StringRef value) override;
+  Status SetSubValue(const ExecutionContext *exe_ctx, VarSetOperationType op,
+                     llvm::StringRef path, llvm::StringRef value) override;
 
   virtual bool PredicateMatches(const ExecutionContext *exe_ctx,
     llvm::StringRef predicate) const {

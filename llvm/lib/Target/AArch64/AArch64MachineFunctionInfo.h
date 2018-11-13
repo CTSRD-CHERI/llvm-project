@@ -14,17 +14,21 @@
 #ifndef LLVM_LIB_TARGET_AARCH64_AARCH64MACHINEFUNCTIONINFO_H
 #define LLVM_LIB_TARGET_AARCH64_AARCH64MACHINEFUNCTIONINFO_H
 
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/MC/MCLinkerOptimizationHint.h"
+#include <cassert>
 
 namespace llvm {
+
+class MachineInstr;
 
 /// AArch64FunctionInfo - This class is derived from MachineFunctionInfo and
 /// contains private AArch64-specific information for each MachineFunction.
 class AArch64FunctionInfo final : public MachineFunctionInfo {
-
   /// Number of bytes of arguments this function has on the stack. If the callee
   /// is expected to restore the argument stack this should be a multiple of 16,
   /// all usable during a tail call.
@@ -34,74 +38,75 @@ class AArch64FunctionInfo final : public MachineFunctionInfo {
   /// space to a function with 16-bytes then misalignment of this value would
   /// make a stack adjustment necessary, which could not be undone by the
   /// callee.
-  unsigned BytesInStackArgArea;
+  unsigned BytesInStackArgArea = 0;
 
   /// The number of bytes to restore to deallocate space for incoming
   /// arguments. Canonically 0 in the C calling convention, but non-zero when
   /// callee is expected to pop the args.
-  unsigned ArgumentStackToRestore;
+  unsigned ArgumentStackToRestore = 0;
 
   /// HasStackFrame - True if this function has a stack frame. Set by
   /// determineCalleeSaves().
-  bool HasStackFrame;
+  bool HasStackFrame = false;
 
-  /// \brief Amount of stack frame size, not including callee-saved registers.
+  /// Amount of stack frame size, not including callee-saved registers.
   unsigned LocalStackSize;
 
-  /// \brief Amount of stack frame size used for saving callee-saved registers.
+  /// Amount of stack frame size used for saving callee-saved registers.
   unsigned CalleeSavedStackSize;
 
-  /// \brief Number of TLS accesses using the special (combinable)
+  /// Number of TLS accesses using the special (combinable)
   /// _TLS_MODULE_BASE_ symbol.
-  unsigned NumLocalDynamicTLSAccesses;
+  unsigned NumLocalDynamicTLSAccesses = 0;
 
-  /// \brief FrameIndex for start of varargs area for arguments passed on the
+  /// FrameIndex for start of varargs area for arguments passed on the
   /// stack.
-  int VarArgsStackIndex;
+  int VarArgsStackIndex = 0;
 
-  /// \brief FrameIndex for start of varargs area for arguments passed in
+  /// FrameIndex for start of varargs area for arguments passed in
   /// general purpose registers.
-  int VarArgsGPRIndex;
+  int VarArgsGPRIndex = 0;
 
-  /// \brief Size of the varargs area for arguments passed in general purpose
+  /// Size of the varargs area for arguments passed in general purpose
   /// registers.
-  unsigned VarArgsGPRSize;
+  unsigned VarArgsGPRSize = 0;
 
-  /// \brief FrameIndex for start of varargs area for arguments passed in
+  /// FrameIndex for start of varargs area for arguments passed in
   /// floating-point registers.
-  int VarArgsFPRIndex;
+  int VarArgsFPRIndex = 0;
 
-  /// \brief Size of the varargs area for arguments passed in floating-point
+  /// Size of the varargs area for arguments passed in floating-point
   /// registers.
-  unsigned VarArgsFPRSize;
+  unsigned VarArgsFPRSize = 0;
 
   /// True if this function has a subset of CSRs that is handled explicitly via
   /// copies.
-  bool IsSplitCSR;
+  bool IsSplitCSR = false;
 
   /// True when the stack gets realigned dynamically because the size of stack
   /// frame is unknown at compile time. e.g., in case of VLAs.
-  bool StackRealigned;
+  bool StackRealigned = false;
 
   /// True when the callee-save stack area has unused gaps that may be used for
   /// other stack allocations.
-  bool CalleeSaveStackHasFreeSpace;
+  bool CalleeSaveStackHasFreeSpace = false;
+
+  /// Has a value when it is known whether or not the function uses a
+  /// redzone, and no value otherwise.
+  /// Initialized during frame lowering, unless the function has the noredzone
+  /// attribute, in which case it is set to false at construction.
+  Optional<bool> HasRedZone;
 
 public:
-  AArch64FunctionInfo()
-      : BytesInStackArgArea(0), ArgumentStackToRestore(0), HasStackFrame(false),
-        NumLocalDynamicTLSAccesses(0), VarArgsStackIndex(0), VarArgsGPRIndex(0),
-        VarArgsGPRSize(0), VarArgsFPRIndex(0), VarArgsFPRSize(0),
-        IsSplitCSR(false), StackRealigned(false),
-        CalleeSaveStackHasFreeSpace(false) {}
+  AArch64FunctionInfo() = default;
 
-  explicit AArch64FunctionInfo(MachineFunction &MF)
-      : BytesInStackArgArea(0), ArgumentStackToRestore(0), HasStackFrame(false),
-        NumLocalDynamicTLSAccesses(0), VarArgsStackIndex(0), VarArgsGPRIndex(0),
-        VarArgsGPRSize(0), VarArgsFPRIndex(0), VarArgsFPRSize(0),
-        IsSplitCSR(false), StackRealigned(false),
-        CalleeSaveStackHasFreeSpace(false) {
+  explicit AArch64FunctionInfo(MachineFunction &MF) {
     (void)MF;
+
+    // If we already know that the function doesn't have a redzone, set
+    // HasRedZone here.
+    if (MF.getFunction().hasFnAttribute(Attribute::NoRedZone))
+      HasRedZone = false;
   }
 
   unsigned getBytesInStackArgArea() const { return BytesInStackArgArea; }
@@ -139,6 +144,9 @@ public:
     return NumLocalDynamicTLSAccesses;
   }
 
+  Optional<bool> hasRedZone() const { return HasRedZone; }
+  void setHasRedZone(bool s) { HasRedZone = s; }
+
   int getVarArgsStackIndex() const { return VarArgsStackIndex; }
   void setVarArgsStackIndex(int Index) { VarArgsStackIndex = Index; }
 
@@ -154,7 +162,7 @@ public:
   unsigned getVarArgsFPRSize() const { return VarArgsFPRSize; }
   void setVarArgsFPRSize(unsigned Size) { VarArgsFPRSize = Size; }
 
-  typedef SmallPtrSet<const MachineInstr *, 16> SetOfInstructions;
+  using SetOfInstructions = SmallPtrSet<const MachineInstr *, 16>;
 
   const SetOfInstructions &getLOHRelated() const { return LOHRelated; }
 
@@ -166,7 +174,7 @@ public:
     SmallVector<const MachineInstr *, 3> Args;
 
   public:
-    typedef ArrayRef<const MachineInstr *> LOHArgs;
+    using LOHArgs = ArrayRef<const MachineInstr *>;
 
     MILOHDirective(MCLOHType Kind, LOHArgs Args)
         : Kind(Kind), Args(Args.begin(), Args.end()) {
@@ -177,8 +185,8 @@ public:
     LOHArgs getArgs() const { return Args; }
   };
 
-  typedef MILOHDirective::LOHArgs MILOHArgs;
-  typedef SmallVector<MILOHDirective, 32> MILOHContainer;
+  using MILOHArgs = MILOHDirective::LOHArgs;
+  using MILOHContainer = SmallVector<MILOHDirective, 32>;
 
   const MILOHContainer &getLOHContainer() const { return LOHContainerSet; }
 
@@ -193,6 +201,7 @@ private:
   MILOHContainer LOHContainerSet;
   SetOfInstructions LOHRelated;
 };
-} // End llvm namespace
 
-#endif
+} // end namespace llvm
+
+#endif // LLVM_LIB_TARGET_AARCH64_AARCH64MACHINEFUNCTIONINFO_H

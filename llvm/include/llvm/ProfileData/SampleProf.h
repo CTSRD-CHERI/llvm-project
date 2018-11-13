@@ -1,4 +1,4 @@
-//=-- SampleProf.h - Sampling profiling format support --------------------===//
+//===- SampleProf.h - Sampling profiling format support ---------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,19 +12,29 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_PROFILEDATA_SAMPLEPROF_H_
-#define LLVM_PROFILEDATA_SAMPLEPROF_H_
+#ifndef LLVM_PROFILEDATA_SAMPLEPROF_H
+#define LLVM_PROFILEDATA_SAMPLEPROF_H
 
+#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorOr.h"
-#include "llvm/Support/raw_ostream.h"
-
+#include "llvm/Support/MathExtras.h"
+#include <algorithm>
+#include <cstdint>
 #include <map>
+#include <string>
 #include <system_error>
+#include <utility>
 
 namespace llvm {
+
+class raw_ostream;
 
 const std::error_category &sampleprof_category();
 
@@ -39,7 +49,8 @@ enum class sampleprof_error {
   unsupported_writing_format,
   truncated_name_table,
   not_implemented,
-  counter_overflow
+  counter_overflow,
+  ostream_seek_unsupported
 };
 
 inline std::error_code make_error_code(sampleprof_error E) {
@@ -59,19 +70,38 @@ inline sampleprof_error MergeResult(sampleprof_error &Accumulator,
 } // end namespace llvm
 
 namespace std {
+
 template <>
 struct is_error_code_enum<llvm::sampleprof_error> : std::true_type {};
-}
+
+} // end namespace std
 
 namespace llvm {
-
 namespace sampleprof {
 
-static inline uint64_t SPMagic() {
+enum SampleProfileFormat {
+  SPF_None = 0,
+  SPF_Text = 0x1,
+  SPF_Compact_Binary = 0x2,
+  SPF_GCC = 0x3,
+  SPF_Binary = 0xff
+};
+
+static inline uint64_t SPMagic(SampleProfileFormat Format = SPF_Binary) {
   return uint64_t('S') << (64 - 8) | uint64_t('P') << (64 - 16) |
          uint64_t('R') << (64 - 24) | uint64_t('O') << (64 - 32) |
          uint64_t('F') << (64 - 40) | uint64_t('4') << (64 - 48) |
-         uint64_t('2') << (64 - 56) | uint64_t(0xff);
+         uint64_t('2') << (64 - 56) | uint64_t(Format);
+}
+
+// Get the proper representation of a string in the input Format.
+static inline StringRef getRepInFormat(StringRef Name,
+                                       SampleProfileFormat Format,
+                                       std::string &GUIDBuf) {
+  if (Name.empty())
+    return Name;
+  GUIDBuf = std::to_string(Function::getGUID(Name));
+  return (Format == SPF_Compact_Binary) ? StringRef(GUIDBuf) : Name;
 }
 
 static inline uint64_t SPVersion() { return 103; }
@@ -87,8 +117,10 @@ static inline uint64_t SPVersion() { return 103; }
 /// (e.g., the two post-increment instructions in "if (p) x++; else y++;").
 struct LineLocation {
   LineLocation(uint32_t L, uint32_t D) : LineOffset(L), Discriminator(D) {}
+
   void print(raw_ostream &OS) const;
   void dump() const;
+
   bool operator<(const LineLocation &O) const {
     return LineOffset < O.LineOffset ||
            (LineOffset == O.LineOffset && Discriminator < O.Discriminator);
@@ -112,9 +144,9 @@ raw_ostream &operator<<(raw_ostream &OS, const LineLocation &Loc);
 /// will be a list of one or more functions.
 class SampleRecord {
 public:
-  typedef StringMap<uint64_t> CallTargetMap;
+  using CallTargetMap = StringMap<uint64_t>;
 
-  SampleRecord() : NumSamples(0), CallTargets() {}
+  SampleRecord() = default;
 
   /// Increment the number of samples for this record by \p S.
   /// Optionally scale sample count \p S by \p Weight.
@@ -144,7 +176,7 @@ public:
   }
 
   /// Return true if this sample record contains function calls.
-  bool hasCalls() const { return CallTargets.size() > 0; }
+  bool hasCalls() const { return !CallTargets.empty(); }
 
   uint64_t getSamples() const { return NumSamples; }
   const CallTargetMap &getCallTargets() const { return CallTargets; }
@@ -163,15 +195,19 @@ public:
   void dump() const;
 
 private:
-  uint64_t NumSamples;
+  uint64_t NumSamples = 0;
   CallTargetMap CallTargets;
 };
 
 raw_ostream &operator<<(raw_ostream &OS, const SampleRecord &Sample);
 
-typedef std::map<LineLocation, SampleRecord> BodySampleMap;
 class FunctionSamples;
-typedef std::map<LineLocation, FunctionSamples> CallsiteSampleMap;
+
+using BodySampleMap = std::map<LineLocation, SampleRecord>;
+// NOTE: Using a StringMap here makes parsed profiles consume around 17% more
+// memory, which is *very* significant for large profiles.
+using FunctionSamplesMap = std::map<std::string, FunctionSamples>;
+using CallsiteSampleMap = std::map<LineLocation, FunctionSamplesMap>;
 
 /// Representation of the samples collected for a function.
 ///
@@ -180,9 +216,11 @@ typedef std::map<LineLocation, FunctionSamples> CallsiteSampleMap;
 /// within the body of the function.
 class FunctionSamples {
 public:
-  FunctionSamples() : Name(), TotalSamples(0), TotalHeadSamples(0) {}
+  FunctionSamples() = default;
+
   void print(raw_ostream &OS = dbgs(), unsigned Indent = 0) const;
   void dump() const;
+
   sampleprof_error addTotalSamples(uint64_t Num, uint64_t Weight = 1) {
     bool Overflowed;
     TotalSamples =
@@ -190,6 +228,7 @@ public:
     return Overflowed ? sampleprof_error::counter_overflow
                       : sampleprof_error::success;
   }
+
   sampleprof_error addHeadSamples(uint64_t Num, uint64_t Weight = 1) {
     bool Overflowed;
     TotalHeadSamples =
@@ -197,15 +236,17 @@ public:
     return Overflowed ? sampleprof_error::counter_overflow
                       : sampleprof_error::success;
   }
+
   sampleprof_error addBodySamples(uint32_t LineOffset, uint32_t Discriminator,
                                   uint64_t Num, uint64_t Weight = 1) {
     return BodySamples[LineLocation(LineOffset, Discriminator)].addSamples(
         Num, Weight);
   }
+
   sampleprof_error addCalledTargetSamples(uint32_t LineOffset,
                                           uint32_t Discriminator,
-                                          const std::string &FName,
-                                          uint64_t Num, uint64_t Weight = 1) {
+                                          StringRef FName, uint64_t Num,
+                                          uint64_t Weight = 1) {
     return BodySamples[LineLocation(LineOffset, Discriminator)].addCalledTarget(
         FName, Num, Weight);
   }
@@ -222,34 +263,56 @@ public:
       return ret->second.getSamples();
   }
 
-  /// Return the total number of call target samples collected at a given
-  /// location. Each location is specified by \p LineOffset and
-  /// \p Discriminator. If the location is not found in profile, return error.
-  ErrorOr<uint64_t> findCallSamplesAt(uint32_t LineOffset,
-                                      uint32_t Discriminator) const {
+  /// Returns the call target map collected at a given location.
+  /// Each location is specified by \p LineOffset and \p Discriminator.
+  /// If the location is not found in profile, return error.
+  ErrorOr<SampleRecord::CallTargetMap>
+  findCallTargetMapAt(uint32_t LineOffset, uint32_t Discriminator) const {
     const auto &ret = BodySamples.find(LineLocation(LineOffset, Discriminator));
     if (ret == BodySamples.end())
       return std::error_code();
-    uint64_t T = 0;
-    for (const auto &t_c : ret->second.getCallTargets()) {
-      T += t_c.second;
-    }
-    return T;
+    return ret->second.getCallTargets();
   }
 
   /// Return the function samples at the given callsite location.
-  FunctionSamples &functionSamplesAt(const LineLocation &Loc) {
+  FunctionSamplesMap &functionSamplesAt(const LineLocation &Loc) {
     return CallsiteSamples[Loc];
   }
 
-  /// Return a pointer to function samples at the given callsite location.
-  const FunctionSamples *findFunctionSamplesAt(const LineLocation &Loc) const {
+  /// Returns the FunctionSamplesMap at the given \p Loc.
+  const FunctionSamplesMap *
+  findFunctionSamplesMapAt(const LineLocation &Loc) const {
     auto iter = CallsiteSamples.find(Loc);
-    if (iter == CallsiteSamples.end()) {
+    if (iter == CallsiteSamples.end())
       return nullptr;
-    } else {
-      return &iter->second;
-    }
+    return &iter->second;
+  }
+
+  /// Returns a pointer to FunctionSamples at the given callsite location \p Loc
+  /// with callee \p CalleeName. If no callsite can be found, relax the
+  /// restriction to return the FunctionSamples at callsite location \p Loc
+  /// with the maximum total sample count.
+  const FunctionSamples *findFunctionSamplesAt(const LineLocation &Loc,
+                                               StringRef CalleeName) const {
+    std::string CalleeGUID;
+    CalleeName = getRepInFormat(CalleeName, Format, CalleeGUID);
+
+    auto iter = CallsiteSamples.find(Loc);
+    if (iter == CallsiteSamples.end())
+      return nullptr;
+    auto FS = iter->second.find(CalleeName);
+    if (FS != iter->second.end())
+      return &FS->second;
+    // If we cannot find exact match of the callee name, return the FS with
+    // the max total count.
+    uint64_t MaxTotalSamples = 0;
+    const FunctionSamples *R = nullptr;
+    for (const auto &NameFS : iter->second)
+      if (NameFS.second.getTotalSamples() >= MaxTotalSamples) {
+        MaxTotalSamples = NameFS.second.getTotalSamples();
+        R = &NameFS.second;
+      }
+    return R;
   }
 
   bool empty() const { return TotalSamples == 0; }
@@ -257,9 +320,32 @@ public:
   /// Return the total number of samples collected inside the function.
   uint64_t getTotalSamples() const { return TotalSamples; }
 
-  /// Return the total number of samples collected at the head of the
-  /// function.
+  /// Return the total number of branch samples that have the function as the
+  /// branch target. This should be equivalent to the sample of the first
+  /// instruction of the symbol. But as we directly get this info for raw
+  /// profile without referring to potentially inaccurate debug info, this
+  /// gives more accurate profile data and is preferred for standalone symbols.
   uint64_t getHeadSamples() const { return TotalHeadSamples; }
+
+  /// Return the sample count of the first instruction of the function.
+  /// The function can be either a standalone symbol or an inlined function.
+  uint64_t getEntrySamples() const {
+    // Use either BodySamples or CallsiteSamples which ever has the smaller
+    // lineno.
+    if (!BodySamples.empty() &&
+        (CallsiteSamples.empty() ||
+         BodySamples.begin()->first < CallsiteSamples.begin()->first))
+      return BodySamples.begin()->second.getSamples();
+    if (!CallsiteSamples.empty()) {
+      uint64_t T = 0;
+      // An indirect callsite may be promoted to several inlined direct calls.
+      // We need to get the sum of them.
+      for (const auto &N_FS : CallsiteSamples.begin()->second)
+        T += N_FS.second.getEntrySamples();
+      return T;
+    }
+    return 0;
+  }
 
   /// Return all the samples collected in the body of the function.
   const BodySampleMap &getBodySamples() const { return BodySamples; }
@@ -283,17 +369,130 @@ public:
     }
     for (const auto &I : Other.getCallsiteSamples()) {
       const LineLocation &Loc = I.first;
-      const FunctionSamples &Rec = I.second;
-      MergeResult(Result, functionSamplesAt(Loc).merge(Rec, Weight));
+      FunctionSamplesMap &FSMap = functionSamplesAt(Loc);
+      for (const auto &Rec : I.second)
+        MergeResult(Result, FSMap[Rec.first].merge(Rec.second, Weight));
     }
     return Result;
+  }
+
+  /// Recursively traverses all children, if the total sample count of the
+  /// corresponding function is no less than \p Threshold, add its corresponding
+  /// GUID to \p S. Also traverse the BodySamples to add hot CallTarget's GUID
+  /// to \p S.
+  void findInlinedFunctions(DenseSet<GlobalValue::GUID> &S, const Module *M,
+                            uint64_t Threshold) const {
+    if (TotalSamples <= Threshold)
+      return;
+    S.insert(getGUID(Name));
+    // Import hot CallTargets, which may not be available in IR because full
+    // profile annotation cannot be done until backend compilation in ThinLTO.
+    for (const auto &BS : BodySamples)
+      for (const auto &TS : BS.second.getCallTargets())
+        if (TS.getValue() > Threshold) {
+          const Function *Callee =
+              M->getFunction(getNameInModule(TS.getKey(), M));
+          if (!Callee || !Callee->getSubprogram())
+            S.insert(getGUID(TS.getKey()));
+        }
+    for (const auto &CS : CallsiteSamples)
+      for (const auto &NameFS : CS.second)
+        NameFS.second.findInlinedFunctions(S, M, Threshold);
   }
 
   /// Set the name of the function.
   void setName(StringRef FunctionName) { Name = FunctionName; }
 
   /// Return the function name.
-  const StringRef &getName() const { return Name; }
+  StringRef getName() const { return Name; }
+
+  /// Return the original function name if it exists in Module \p M.
+  StringRef getFuncNameInModule(const Module *M) const {
+    return getNameInModule(Name, M);
+  }
+
+  /// Translate \p Name into its original name in Module.
+  /// When the Format is not SPF_Compact_Binary, \p Name needs no translation.
+  /// When the Format is SPF_Compact_Binary, \p Name in current FunctionSamples
+  /// is actually GUID of the original function name. getNameInModule will
+  /// translate \p Name in current FunctionSamples into its original name.
+  /// If the original name doesn't exist in \p M, return empty StringRef.
+  StringRef getNameInModule(StringRef Name, const Module *M) const {
+    if (Format != SPF_Compact_Binary)
+      return Name;
+    // Expect CurrentModule to be initialized by GUIDToFuncNameMapper.
+    if (M != CurrentModule)
+      llvm_unreachable("Input Module should be the same as CurrentModule");
+    auto iter = GUIDToFuncNameMap.find(std::stoull(Name.data()));
+    if (iter == GUIDToFuncNameMap.end())
+      return StringRef();
+    return iter->second;
+  }
+
+  /// Returns the line offset to the start line of the subprogram.
+  /// We assume that a single function will not exceed 65535 LOC.
+  static unsigned getOffset(const DILocation *DIL);
+
+  /// Get the FunctionSamples of the inline instance where DIL originates
+  /// from.
+  ///
+  /// The FunctionSamples of the instruction (Machine or IR) associated to
+  /// \p DIL is the inlined instance in which that instruction is coming from.
+  /// We traverse the inline stack of that instruction, and match it with the
+  /// tree nodes in the profile.
+  ///
+  /// \returns the FunctionSamples pointer to the inlined instance.
+  const FunctionSamples *findFunctionSamples(const DILocation *DIL) const;
+
+  static SampleProfileFormat Format;
+  /// GUIDToFuncNameMap saves the mapping from GUID to the symbol name, for
+  /// all the function symbols defined or declared in CurrentModule.
+  static DenseMap<uint64_t, StringRef> GUIDToFuncNameMap;
+  static Module *CurrentModule;
+
+  class GUIDToFuncNameMapper {
+  public:
+    GUIDToFuncNameMapper(Module &M) {
+      if (Format != SPF_Compact_Binary)
+        return;
+
+      for (const auto &F : M) {
+        StringRef OrigName = F.getName();
+        GUIDToFuncNameMap.insert({Function::getGUID(OrigName), OrigName});
+        /// Local to global var promotion used by optimization like thinlto
+        /// will rename the var and add suffix like ".llvm.xxx" to the
+        /// original local name. In sample profile, the suffixes of function
+        /// names are all stripped. Since it is possible that the mapper is
+        /// built in post-thin-link phase and var promotion has been done,
+        /// we need to add the substring of function name without the suffix
+        /// into the GUIDToFuncNameMap.
+        auto pos = OrigName.find('.');
+        if (pos != StringRef::npos) {
+          StringRef NewName = OrigName.substr(0, pos);
+          GUIDToFuncNameMap.insert({Function::getGUID(NewName), NewName});
+        }
+      }
+      CurrentModule = &M;
+    }
+
+    ~GUIDToFuncNameMapper() {
+      if (Format != SPF_Compact_Binary)
+        return;
+
+      GUIDToFuncNameMap.clear();
+      CurrentModule = nullptr;
+    }
+  };
+
+  // Assume the input \p Name is a name coming from FunctionSamples itself.
+  // If the format is SPF_Compact_Binary, the name is already a GUID and we
+  // don't want to return the GUID of GUID.
+  static uint64_t getGUID(StringRef Name) {
+    if (Format == SPF_Compact_Binary)
+      errs() << Name << '\n';
+    return (Format == SPF_Compact_Binary) ? std::stoull(Name.data())
+                                          : Function::getGUID(Name);
+  }
 
 private:
   /// Mangled name of the function.
@@ -303,12 +502,12 @@ private:
   ///
   /// Samples are cumulative, they include all the samples collected
   /// inside this function and all its inlined callees.
-  uint64_t TotalSamples;
+  uint64_t TotalSamples = 0;
 
   /// Total number of samples collected at the head of the function.
   /// This is an approximation of the number of calls made to this function
   /// at runtime.
-  uint64_t TotalHeadSamples;
+  uint64_t TotalHeadSamples = 0;
 
   /// Map instruction locations to collected samples.
   ///
@@ -344,8 +543,8 @@ raw_ostream &operator<<(raw_ostream &OS, const FunctionSamples &FS);
 /// order of LocationT.
 template <class LocationT, class SampleT> class SampleSorter {
 public:
-  typedef std::pair<const LocationT, SampleT> SamplesWithLoc;
-  typedef SmallVector<const SamplesWithLoc *, 20> SamplesWithLocList;
+  using SamplesWithLoc = std::pair<const LocationT, SampleT>;
+  using SamplesWithLocList = SmallVector<const SamplesWithLoc *, 20>;
 
   SampleSorter(const std::map<LocationT, SampleT> &Samples) {
     for (const auto &I : Samples)
@@ -355,6 +554,7 @@ public:
                        return A->first < B->first;
                      });
   }
+
   const SamplesWithLocList &get() const { return V; }
 
 private:
@@ -362,7 +562,6 @@ private:
 };
 
 } // end namespace sampleprof
-
 } // end namespace llvm
 
-#endif // LLVM_PROFILEDATA_SAMPLEPROF_H_
+#endif // LLVM_PROFILEDATA_SAMPLEPROF_H

@@ -3,7 +3,7 @@
 ; rdar://13625505
 ; Here we have 9 fixed integer arguments the 9th argument in on stack, the
 ; varargs start right after at 8-byte alignment.
-define void @fn9(i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6, i32 %a7, i32 %a8, i32 %a9, ...) nounwind noinline ssp {
+define void @fn9(i32* %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6, i32 %a7, i32 %a8, i32 %a9, ...) nounwind noinline ssp {
 ; CHECK-LABEL: fn9:
 ; 9th fixed argument
 ; CHECK: ldr {{w[0-9]+}}, [sp, #64]
@@ -11,12 +11,10 @@ define void @fn9(i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6, i32 %a7, 
 ; CHECK: add {{x[0-9]+}}, [[ARGS]], #8
 ; First vararg
 ; CHECK: ldr {{w[0-9]+}}, [sp, #72]
-; CHECK: add {{x[0-9]+}}, {{x[0-9]+}}, #8
 ; Second vararg
-; CHECK: ldr {{w[0-9]+}}, [{{x[0-9]+}}]
-; CHECK: add {{x[0-9]+}}, {{x[0-9]+}}, #8
+; CHECK: ldr {{w[0-9]+}}, [{{x[0-9]+}}], #8
 ; Third vararg
-; CHECK: ldr {{w[0-9]+}}, [{{x[0-9]+}}]
+; CHECK: ldr {{w[0-9]+}}, [{{x[0-9]+}}], #8
   %1 = alloca i32, align 4
   %2 = alloca i32, align 4
   %3 = alloca i32, align 4
@@ -30,7 +28,6 @@ define void @fn9(i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6, i32 %a7, 
   %a10 = alloca i32, align 4
   %a11 = alloca i32, align 4
   %a12 = alloca i32, align 4
-  store i32 %a1, i32* %1, align 4
   store i32 %a2, i32* %2, align 4
   store i32 %a3, i32* %3, align 4
   store i32 %a4, i32* %4, align 4
@@ -39,6 +36,7 @@ define void @fn9(i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6, i32 %a7, 
   store i32 %a7, i32* %7, align 4
   store i32 %a8, i32* %8, align 4
   store i32 %a9, i32* %9, align 4
+  store i32 %a9, i32* %a1
   %10 = bitcast i8** %args to i8*
   call void @llvm.va_start(i8* %10)
   %11 = va_arg i8** %args, i32
@@ -93,7 +91,7 @@ define i32 @main() nounwind ssp {
   %10 = load i32, i32* %a10, align 4
   %11 = load i32, i32* %a11, align 4
   %12 = load i32, i32* %a12, align 4
-  call void (i32, i32, i32, i32, i32, i32, i32, i32, i32, ...) @fn9(i32 %1, i32 %2, i32 %3, i32 %4, i32 %5, i32 %6, i32 %7, i32 %8, i32 %9, i32 %10, i32 %11, i32 %12)
+  call void (i32*, i32, i32, i32, i32, i32, i32, i32, i32, ...) @fn9(i32* %a1, i32 %2, i32 %3, i32 %4, i32 %5, i32 %6, i32 %7, i32 %8, i32 %9, i32 %10, i32 %11, i32 %12)
   ret i32 0
 }
 
@@ -102,9 +100,8 @@ define i32 @main() nounwind ssp {
 define void @foo(i8* %fmt, ...) nounwind {
 entry:
 ; CHECK-LABEL: foo:
-; CHECK: orr {{x[0-9]+}}, {{x[0-9]+}}, #0x8
 ; CHECK: ldr {{w[0-9]+}}, [sp, #48]
-; CHECK: add {{x[0-9]+}}, {{x[0-9]+}}, #15
+; CHECK: add {{x[0-9]+}}, {{x[0-9]+}}, #23
 ; CHECK: and x[[ADDR:[0-9]+]], {{x[0-9]+}}, #0xfffffffffffffff0
 ; CHECK: ldr {{q[0-9]+}}, [x[[ADDR]]]
   %fmt.addr = alloca i8*, align 8
@@ -143,9 +140,8 @@ entry:
 define void @foo2(i8* %fmt, ...) nounwind {
 entry:
 ; CHECK-LABEL: foo2:
-; CHECK: orr {{x[0-9]+}}, {{x[0-9]+}}, #0x8
 ; CHECK: ldr {{w[0-9]+}}, [sp, #48]
-; CHECK: add {{x[0-9]+}}, {{x[0-9]+}}, #15
+; CHECK: add {{x[0-9]+}}, {{x[0-9]+}}, #23
 ; CHECK: and x[[ADDR:[0-9]+]], {{x[0-9]+}}, #0xfffffffffffffff0
 ; CHECK: ldr {{q[0-9]+}}, [x[[ADDR]]]
   %fmt.addr = alloca i8*, align 8
@@ -167,10 +163,10 @@ entry:
   %4 = bitcast i8* %ap.align to %struct.s41*
   %5 = bitcast %struct.s41* %vs to i8*
   %6 = bitcast %struct.s41* %4 to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %5, i8* %6, i64 16, i32 16, i1 false)
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* align 16 %5, i8* align 16 %6, i64 16, i1 false)
   ret void
 }
-declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i32, i1) nounwind
+declare void @llvm.memcpy.p0i8.p0i8.i64(i8* nocapture, i8* nocapture, i64, i1) nounwind
 
 define void @bar2(i32 %x, i128 %s41.coerce) nounwind {
 entry:

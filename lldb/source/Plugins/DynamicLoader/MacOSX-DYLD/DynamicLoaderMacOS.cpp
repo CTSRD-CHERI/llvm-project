@@ -9,11 +9,9 @@
 
 #include "lldb/Breakpoint/StoppointCallbackContext.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Section.h"
-#include "lldb/Core/State.h"
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/SymbolVendor.h"
@@ -21,6 +19,8 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/State.h"
 
 #include "DynamicLoaderDarwin.h"
 #include "DynamicLoaderMacOS.h"
@@ -29,9 +29,9 @@ using namespace lldb;
 using namespace lldb_private;
 
 //----------------------------------------------------------------------
-// Create an instance of this class. This function is filled into
-// the plugin info class that gets handed out by the plugin factory and
-// allows the lldb to instantiate an instance of this class.
+// Create an instance of this class. This function is filled into the plugin
+// info class that gets handed out by the plugin factory and allows the lldb to
+// instantiate an instance of this class.
 //----------------------------------------------------------------------
 DynamicLoader *DynamicLoaderMacOS::CreateInstance(Process *process,
                                                   bool force) {
@@ -139,17 +139,24 @@ bool DynamicLoaderMacOS::DidSetNotificationBreakpoint() {
 void DynamicLoaderMacOS::ClearNotificationBreakpoint() {
   if (LLDB_BREAK_ID_IS_VALID(m_break_id)) {
     m_process->GetTarget().RemoveBreakpointByID(m_break_id);
+    m_break_id = LLDB_INVALID_BREAK_ID;
   }
 }
 
 //----------------------------------------------------------------------
-// Try and figure out where dyld is by first asking the Process
-// if it knows (which currently calls down in the lldb::Process
-// to get the DYLD info (available on SnowLeopard only). If that fails,
-// then check in the default addresses.
+// Try and figure out where dyld is by first asking the Process if it knows
+// (which currently calls down in the lldb::Process to get the DYLD info
+// (available on SnowLeopard only). If that fails, then check in the default
+// addresses.
 //----------------------------------------------------------------------
 void DynamicLoaderMacOS::DoInitialImageFetch() {
   Log *log(lldb_private::GetLogIfAnyCategoriesSet(LIBLLDB_LOG_DYNAMIC_LOADER));
+
+  // Remove any binaries we pre-loaded in the Target before
+  // launching/attaching. If the same binaries are present in the process,
+  // we'll get them from the shared module cache, we won't need to re-load them
+  // from disk.
+  UnloadAllImages();
 
   StructuredData::ObjectSP all_image_info_json_sp(
       m_process->GetLoadedDynamicLibrariesInfos());
@@ -178,9 +185,9 @@ bool DynamicLoaderMacOS::NeedToDoInitialImageFetch() { return true; }
 
 //----------------------------------------------------------------------
 // Static callback function that gets called when our DYLD notification
-// breakpoint gets hit. We update all of our image infos and then
-// let our super class DynamicLoader class decide if we should stop
-// or not (based on global preference).
+// breakpoint gets hit. We update all of our image infos and then let our super
+// class DynamicLoader class decide if we should stop or not (based on global
+// preference).
 //----------------------------------------------------------------------
 bool DynamicLoaderMacOS::NotifyBreakpointHit(void *baton,
                                              StoppointCallbackContext *context,
@@ -188,11 +195,10 @@ bool DynamicLoaderMacOS::NotifyBreakpointHit(void *baton,
                                              lldb::user_id_t break_loc_id) {
   // Let the event know that the images have changed
   // DYLD passes three arguments to the notification breakpoint.
-  // Arg1: enum dyld_notify_mode mode - 0 = adding, 1 = removing, 2 = remove all
-  // Arg2: unsigned long icount        - Number of shared libraries
-  // added/removed
-  // Arg3: uint64_t mach_headers[]     - Array of load addresses of binaries
-  // added/removed
+  // Arg1: enum dyld_notify_mode mode - 0 = adding, 1 = removing, 2 = remove
+  // all Arg2: unsigned long icount        - Number of shared libraries
+  // added/removed Arg3: uint64_t mach_headers[]     - Array of load addresses
+  // of binaries added/removed
 
   DynamicLoaderMacOS *dyld_instance = (DynamicLoaderMacOS *)baton;
 
@@ -264,7 +270,7 @@ bool DynamicLoaderMacOS::NotifyBreakpointHit(void *baton,
           if (header_array != static_cast<uint64_t>(-1)) {
             std::vector<addr_t> image_load_addresses;
             for (uint64_t i = 0; i < image_infos_count; i++) {
-              Error error;
+              Status error;
               addr_t addr = process->ReadUnsignedIntegerFromMemory(
                   header_array + (8 * i), 8, LLDB_INVALID_ADDRESS, error);
               if (addr != LLDB_INVALID_ADDRESS) {
@@ -322,8 +328,8 @@ void DynamicLoaderMacOS::AddBinaries(
   }
 }
 
-// Dump the _dyld_all_image_infos members and all current image infos
-// that we have parsed to the file handle provided.
+// Dump the _dyld_all_image_infos members and all current image infos that we
+// have parsed to the file handle provided.
 //----------------------------------------------------------------------
 void DynamicLoaderMacOS::PutToLog(Log *log) const {
   if (log == NULL)
@@ -391,8 +397,8 @@ DynamicLoaderMacOS::GetDyldLockVariableAddressFromModule(Module *module) {
 //  0;
 //
 //  in libdyld.dylib.
-Error DynamicLoaderMacOS::CanLoadImage() {
-  Error error;
+Status DynamicLoaderMacOS::CanLoadImage() {
+  Status error;
   addr_t symbol_address = LLDB_INVALID_ADDRESS;
   Target &target = m_process->GetTarget();
   const ModuleList &target_modules = target.GetImages();
@@ -426,9 +432,8 @@ Error DynamicLoaderMacOS::CanLoadImage() {
     }
   }
 
-  // Default assumption is that it is OK to load images.
-  // Only say that we cannot load images if we find the symbol in libdyld and it
-  // indicates that
+  // Default assumption is that it is OK to load images. Only say that we
+  // cannot load images if we find the symbol in libdyld and it indicates that
   // we cannot.
 
   if (symbol_address != LLDB_INVALID_ADDRESS) {
@@ -436,16 +441,18 @@ Error DynamicLoaderMacOS::CanLoadImage() {
       int lock_held =
           m_process->ReadUnsignedIntegerFromMemory(symbol_address, 4, 0, error);
       if (lock_held != 0) {
-        error.SetErrorToGenericError();
+        error.SetErrorString("dyld lock held - unsafe to load images.");
       }
     }
   } else {
-    // If we were unable to find _dyld_global_lock_held in any modules, or it is
-    // not loaded into
-    // memory yet, we may be at process startup (sitting at _dyld_start) - so we
-    // should not allow
-    // dlopen calls.
-    error.SetErrorToGenericError();
+    // If we were unable to find _dyld_global_lock_held in any modules, or it
+    // is not loaded into memory yet, we may be at process startup (sitting  at
+    // _dyld_start) - so we should not allow dlopen calls. But if we found more
+    // than one module then we are clearly past _dyld_start so in that case
+    // we'll default to "it's safe".
+    if (num_modules <= 1)
+        error.SetErrorString("could not find the dyld library or "
+                                       "the dyld lock symbol");
   }
   return error;
 }
@@ -465,7 +472,9 @@ bool DynamicLoaderMacOS::GetSharedCacheInformation(
       info_dict = info->GetAsDictionary();
     }
 
-    // {"shared_cache_base_address":140735683125248,"shared_cache_uuid":"DDB8D70C-C9A2-3561-B2C8-BE48A4F33F96","no_shared_cache":false,"shared_cache_private_cache":false}
+    // {"shared_cache_base_address":140735683125248,"shared_cache_uuid
+    // ":"DDB8D70C-
+    // C9A2-3561-B2C8-BE48A4F33F96","no_shared_cache":false,"shared_cache_private_cache":false}
 
     if (info_dict && info_dict->HasKey("shared_cache_uuid") &&
         info_dict->HasKey("no_shared_cache") &&
@@ -475,7 +484,7 @@ bool DynamicLoaderMacOS::GetSharedCacheInformation(
       std::string uuid_str =
           info_dict->GetValueForKey("shared_cache_uuid")->GetStringValue();
       if (!uuid_str.empty())
-        uuid.SetFromCString(uuid_str.c_str());
+        uuid.SetFromStringRef(uuid_str);
       if (info_dict->GetValueForKey("no_shared_cache")->GetBooleanValue() ==
           false)
         using_shared_cache = eLazyBoolYes;

@@ -2,6 +2,8 @@
 
 // REQUIRES: stable-runtime
 
+// XFAIL: ubsan
+
 #include <sanitizer/common_interface_defs.h>
 #include <stdio.h>
 
@@ -23,7 +25,10 @@ void MaybeInit(int *uninitialized) {
 
 __attribute__((noinline))
 void Leak() {
-  sink = new char[100];  // trigger lsan report.
+  // Trigger lsan report. Two attempts in case the address of the first
+  // allocation remained on the stack.
+  sink = new char[100];
+  sink = new char[100];
 }
 
 int main(int argc, char **argv) {

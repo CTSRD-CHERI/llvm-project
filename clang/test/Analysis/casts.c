@@ -1,5 +1,7 @@
-// RUN: %clang_cc1 -triple x86_64-apple-darwin9 -analyze -analyzer-checker=core,alpha.core,debug.ExprInspection -analyzer-store=region -verify %s
-// RUN: %clang_cc1 -triple i386-apple-darwin9 -analyze -analyzer-checker=core,alpha.core,debug.ExprInspection -analyzer-store=region -verify %s
+// RUN: %clang_analyze_cc1 -triple x86_64-apple-darwin9 -analyzer-checker=core,alpha.core,debug.ExprInspection -analyzer-store=region -verify -analyzer-config eagerly-assume=false %s
+// RUN: %clang_analyze_cc1 -triple i386-apple-darwin9 -analyzer-checker=core,alpha.core,debug.ExprInspection -analyzer-store=region -verify -analyzer-config eagerly-assume=false %s
+// RUN: %clang_analyze_cc1 -triple x86_64-apple-darwin9 -analyzer-checker=core,alpha.core,debug.ExprInspection -verify -DEAGERLY_ASSUME=1 -w %s
+// RUN: %clang_analyze_cc1 -triple i386-apple-darwin9 -analyzer-checker=core,alpha.core,debug.ExprInspection -verify -DEAGERLY_ASSUME=1 -DBIT32=1 -w %s
 
 extern void clang_analyzer_eval(_Bool);
 
@@ -15,6 +17,8 @@ struct sockaddr { sa_family_t sa_family; };
 struct sockaddr_storage {};
 
 void getsockname();
+
+#ifndef EAGERLY_ASSUME
 
 void f(int sock) {
   struct sockaddr_storage storage;
@@ -118,3 +122,94 @@ void castsToBool() {
   extern float globalFloat;
   clang_analyzer_eval(globalFloat); // expected-warning{{UNKNOWN}}
 }
+
+void locAsIntegerCasts(void *p) {
+  int x = (int) p;
+  clang_analyzer_eval(++x < 10); // no-crash // expected-warning{{UNKNOWN}}
+}
+
+void multiDimensionalArrayPointerCasts() {
+  static int x[10][10];
+  int *y1 = &(x[3][5]);
+  char *z = ((char *) y1) + 2;
+  int *y2 = (int *)(z - 2);
+  int *y3 = ((int *)x) + 35; // This is offset for [3][5].
+
+  clang_analyzer_eval(y1 == y2); // expected-warning{{TRUE}}
+
+  // FIXME: should be FALSE (i.e. equal pointers).
+  clang_analyzer_eval(y1 - y2); // expected-warning{{UNKNOWN}}
+  // FIXME: should be TRUE (i.e. same symbol).
+  clang_analyzer_eval(*y1 == *y2); // expected-warning{{UNKNOWN}}
+
+  clang_analyzer_eval(*((char *)y1) == *((char *) y2)); // expected-warning{{TRUE}}
+
+  clang_analyzer_eval(y1 == y3); // expected-warning{{TRUE}}
+
+  // FIXME: should be FALSE (i.e. equal pointers).
+  clang_analyzer_eval(y1 - y3); // expected-warning{{UNKNOWN}}
+  // FIXME: should be TRUE (i.e. same symbol).
+  clang_analyzer_eval(*y1 == *y3); // expected-warning{{UNKNOWN}}
+
+  clang_analyzer_eval(*((char *)y1) == *((char *) y3)); // expected-warning{{TRUE}}
+}
+
+void *getVoidPtr();
+
+void testCastVoidPtrToIntPtrThroughIntTypedAssignment() {
+  int *x;
+  (*((int *)(&x))) = (int)getVoidPtr();
+  *x = 1; // no-crash
+}
+
+void testCastUIntPtrToIntPtrThroughIntTypedAssignment() {
+  unsigned u;
+  int *x;
+  (*((int *)(&x))) = (int)&u;
+  *x = 1;
+  clang_analyzer_eval(u == 1); // expected-warning{{TRUE}}
+}
+
+void testCastVoidPtrToIntPtrThroughUIntTypedAssignment() {
+  int *x;
+  (*((int *)(&x))) = (int)(unsigned *)getVoidPtr();
+  *x = 1; // no-crash
+}
+
+void testLocNonLocSymbolAssume(int a, int *b) {
+  if ((int)b < a) {} // no-crash
+}
+
+void testLocNonLocSymbolRemainder(int a, int *b) {
+  int c = ((int)b) % a;
+  if (a == 1) {
+    c += 1;
+  }
+}
+
+void testSwitchWithSizeofs() {
+  switch (sizeof(char) == 1) { // expected-warning{{switch condition has boolean value}}
+  case sizeof(char):; // no-crash
+  }
+}
+
+#endif
+
+#ifdef EAGERLY_ASSUME
+
+int globalA;
+extern int globalFunc();
+void no_crash_on_symsym_cast_to_long() {
+  char c = globalFunc() - 5;
+  c == 0;
+  globalA -= c;
+  globalA == 3;
+  (long)globalA << 48;
+  #ifdef BIT32
+  // expected-warning@-2{{The result of the left shift is undefined due to shifting by '48', which is greater or equal to the width of type 'long'}}
+  #else
+  // expected-no-diagnostics
+  #endif
+}
+
+#endif

@@ -1,4 +1,4 @@
-//===-- StatepointLowering.cpp - SDAGBuilder's statepoint code -----------===//
+//===- StatepointLowering.cpp - SDAGBuilder's statepoint code -------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,21 +14,44 @@
 
 #include "StatepointLowering.h"
 #include "SelectionDAGBuilder.h"
-#include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/None.h"
+#include "llvm/ADT/Optional.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/FunctionLoweringInfo.h"
-#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/GCMetadata.h"
 #include "llvm/CodeGen/GCStrategy.h"
+#include "llvm/CodeGen/ISDOpcodes.h"
+#include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineMemOperand.h"
+#include "llvm/CodeGen/RuntimeLibcalls.h"
 #include "llvm/CodeGen/SelectionDAG.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/StackMaps.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Statepoint.h"
-#include "llvm/Target/TargetLowering.h"
-#include <algorithm>
+#include "llvm/IR/Type.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/MachineValueType.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetOptions.h"
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <tuple>
+#include <utility>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "statepoint-lowering"
@@ -55,7 +78,8 @@ void StatepointLoweringState::startNewStatepoint(SelectionDAGBuilder &Builder) {
   NextSlotToAllocate = 0;
   // Need to resize this on each safepoint - we need the two to stay in sync and
   // the clear patterns of a SelectionDAGBuilder have no relation to
-  // FunctionLoweringInfo.  SmallBitVector::reset initializes all bits to false.
+  // FunctionLoweringInfo.  Also need to ensure used bits get cleared.
+  AllocatedStackSlots.clear();
   AllocatedStackSlots.resize(Builder.FuncInfo.StatepointStackSlots.size());
 }
 
@@ -72,7 +96,7 @@ StatepointLoweringState::allocateStackSlot(EVT ValueType,
   NumSlotsAllocatedForStatepoints++;
   MachineFrameInfo &MFI = Builder.DAG.getMachineFunction().getFrameInfo();
 
-  unsigned SpillSize = ValueType.getSizeInBits() / 8;
+  unsigned SpillSize = ValueType.getStoreSize();
   assert((SpillSize * 8) == ValueType.getSizeInBits() && "Size not in bytes?");
 
   // First look for a previously created stack slot which is not in
@@ -82,9 +106,8 @@ StatepointLoweringState::allocateStackSlot(EVT ValueType,
   const size_t NumSlots = AllocatedStackSlots.size();
   assert(NextSlotToAllocate <= NumSlots && "Broken invariant");
 
-  // The stack slots in StatepointStackSlots beyond the first NumSlots were
-  // added in this instance of StatepointLoweringState, and cannot be re-used.
-  assert(NumSlots <= Builder.FuncInfo.StatepointStackSlots.size() &&
+  assert(AllocatedStackSlots.size() ==
+         Builder.FuncInfo.StatepointStackSlots.size() &&
          "Broken invariant");
 
   for (; NextSlotToAllocate < NumSlots; NextSlotToAllocate++) {
@@ -92,6 +115,7 @@ StatepointLoweringState::allocateStackSlot(EVT ValueType,
       const int FI = Builder.FuncInfo.StatepointStackSlots[NextSlotToAllocate];
       if (MFI.getObjectSize(FI) == SpillSize) {
         AllocatedStackSlots.set(NextSlotToAllocate);
+        // TODO: Is ValueType the right thing to use here?
         return Builder.DAG.getFrameIndex(FI, ValueType);
       }
     }
@@ -104,9 +128,13 @@ StatepointLoweringState::allocateStackSlot(EVT ValueType,
   MFI.markAsStatepointSpillSlotObjectIndex(FI);
 
   Builder.FuncInfo.StatepointStackSlots.push_back(FI);
+  AllocatedStackSlots.resize(AllocatedStackSlots.size()+1, true);
+  assert(AllocatedStackSlots.size() ==
+         Builder.FuncInfo.StatepointStackSlots.size() &&
+         "Broken invariant");
 
-  StatepointMaxSlotsRequired = std::max<unsigned long>(
-      StatepointMaxSlotsRequired, Builder.FuncInfo.StatepointStackSlots.size());
+  StatepointMaxSlotsRequired.updateMax(
+      Builder.FuncInfo.StatepointStackSlots.size());
 
   return SpillSlot;
 }
@@ -195,7 +223,6 @@ static Optional<int> findPreviousSpillSlot(const Value *Val,
 /// values on the stack between calls.
 static void reservePreviousStackSlotForValue(const Value *IncomingValue,
                                              SelectionDAGBuilder &Builder) {
-
   SDValue Incoming = Builder.getValue(IncomingValue);
 
   if (isa<ConstantSDNode>(Incoming) || isa<FrameIndexSDNode>(Incoming)) {
@@ -237,7 +264,8 @@ static void reservePreviousStackSlotForValue(const Value *IncomingValue,
 
   // Cache this slot so we find it when going through the normal
   // assignment loop.
-  SDValue Loc = Builder.DAG.getTargetFrameIndex(*Index, Incoming.getValueType());
+  SDValue Loc =
+      Builder.DAG.getTargetFrameIndex(*Index, Builder.getFrameIndexTy());
   Builder.StatepointLowering.setLocation(Incoming, Loc);
 }
 
@@ -286,7 +314,6 @@ removeDuplicateGCPtrs(SmallVectorImpl<const Value *> &Bases,
 static std::pair<SDValue, SDNode *> lowerCallFromStatepointLoweringInfo(
     SelectionDAGBuilder::StatepointLoweringInfo &SI,
     SelectionDAGBuilder &Builder, SmallVectorImpl<SDValue> &PendingExports) {
-
   SDValue ReturnValue, CallEndVal;
   std::tie(ReturnValue, CallEndVal) =
       Builder.lowerInvokable(SI.CLI, SI.EHPadBB);
@@ -338,7 +365,7 @@ spillIncomingStatepointValue(SDValue Incoming, SDValue Chain,
                                                        Builder);
     int Index = cast<FrameIndexSDNode>(Loc)->getIndex();
     // We use TargetFrameIndex so that isel will not select it into LEA
-    Loc = Builder.DAG.getTargetFrameIndex(Index, Incoming.getValueType());
+    Loc = Builder.DAG.getTargetFrameIndex(Index, Builder.getFrameIndexTy());
 
     // TODO: We can create TokenFactor node instead of
     //       chaining stores one after another, this may allow
@@ -386,14 +413,16 @@ static void lowerIncomingStatepointValue(SDValue Incoming, bool LiveInOnly,
     // This handles allocas as arguments to the statepoint (this is only
     // really meaningful for a deopt value.  For GC, we'd be trying to
     // relocate the address of the alloca itself?)
+    assert(Incoming.getValueType() == Builder.getFrameIndexTy() &&
+           "Incoming value is a frame index!");
     Ops.push_back(Builder.DAG.getTargetFrameIndex(FI->getIndex(),
-                                                  Incoming.getValueType()));
+                                                  Builder.getFrameIndexTy()));
   } else if (LiveInOnly) {
     // If this value is live in (not live-on-return, or live-through), we can
-    // treat it the same way patchpoint treats it's "live in" values.  We'll 
-    // end up folding some of these into stack references, but they'll be 
+    // treat it the same way patchpoint treats it's "live in" values.  We'll
+    // end up folding some of these into stack references, but they'll be
     // handled by the register allocator.  Note that we do not have the notion
-    // of a late use so these values might be placed in registers which are 
+    // of a late use so these values might be placed in registers which are
     // clobbered by the call.  This is fine for live-in.
     Ops.push_back(Incoming);
   } else {
@@ -469,7 +498,7 @@ lowerStatepointMetaArgs(SmallVectorImpl<SDValue> &Ops,
   auto isGCValue =[&](const Value *V) {
     return is_contained(SI.Ptrs, V) || is_contained(SI.Bases, V);
   };
-  
+
   // Before we actually start lowering (and allocating spill slots for values),
   // reserve any stack slots which we judge to be profitable to reuse for a
   // particular value.  This is purely an optimization over the code below and
@@ -522,8 +551,10 @@ lowerStatepointMetaArgs(SmallVectorImpl<SDValue> &Ops,
     SDValue Incoming = Builder.getValue(V);
     if (FrameIndexSDNode *FI = dyn_cast<FrameIndexSDNode>(Incoming)) {
       // This handles allocas as arguments to the statepoint
+      assert(Incoming.getValueType() == Builder.getFrameIndexTy() &&
+             "Incoming value is a frame index!");
       Ops.push_back(Builder.DAG.getTargetFrameIndex(FI->getIndex(),
-                                                    Incoming.getValueType()));
+                                                    Builder.getFrameIndexTy()));
     }
   }
 
@@ -808,7 +839,7 @@ SelectionDAGBuilder::LowerStatepoint(ImmutableStatepoint ISP,
   SI.GCTransitionArgs =
       ArrayRef<const Use>(ISP.gc_args_begin(), ISP.gc_args_end());
   SI.ID = ISP.getID();
-  SI.DeoptState = ArrayRef<const Use>(ISP.vm_state_begin(), ISP.vm_state_end());
+  SI.DeoptState = ArrayRef<const Use>(ISP.deopt_begin(), ISP.deopt_end());
   SI.StatepointFlags = ISP.getFlags();
   SI.NumPatchBytes = ISP.getNumPatchBytes();
   SI.EHPadBB = EHPadBB;
@@ -830,7 +861,8 @@ SelectionDAGBuilder::LowerStatepoint(ImmutableStatepoint ISP,
       //       completely and make statepoint call to return a tuple.
       unsigned Reg = FuncInfo.CreateRegs(RetTy);
       RegsForValue RFV(*DAG.getContext(), DAG.getTargetLoweringInfo(),
-                       DAG.getDataLayout(), Reg, RetTy);
+                       DAG.getDataLayout(), Reg, RetTy,
+                       ISP.getCallSite().getCallingConv());
       SDValue Chain = DAG.getEntryNode();
 
       RFV.getCopyToRegs(ReturnValue, DAG, getCurSDLoc(), Chain, nullptr);
@@ -918,7 +950,7 @@ void SelectionDAGBuilder::visitGCResult(const GCResultInst &CI) {
 void SelectionDAGBuilder::visitGCRelocate(const GCRelocateInst &Relocate) {
 #ifndef NDEBUG
   // Consistency check
-  // We skip this check for relocates not in the same basic block as thier
+  // We skip this check for relocates not in the same basic block as their
   // statepoint. It would be too expensive to preserve validation info through
   // different basic blocks.
   if (Relocate.getStatepoint()->getParent() == Relocate.getParent())
@@ -944,8 +976,8 @@ void SelectionDAGBuilder::visitGCRelocate(const GCRelocateInst &Relocate) {
     return;
   }
 
-  SDValue SpillSlot = DAG.getTargetFrameIndex(*DerivedPtrLocation,
-                                              SD.getValueType());
+  SDValue SpillSlot =
+      DAG.getTargetFrameIndex(*DerivedPtrLocation, getFrameIndexTy());
 
   // Be conservative: flush all pending loads
   // TODO: Probably we can be less restrictive on this,
@@ -953,7 +985,9 @@ void SelectionDAGBuilder::visitGCRelocate(const GCRelocateInst &Relocate) {
   SDValue Chain = getRoot();
 
   SDValue SpillLoad =
-      DAG.getLoad(SpillSlot.getValueType(), getCurSDLoc(), Chain, SpillSlot,
+      DAG.getLoad(DAG.getTargetLoweringInfo().getValueType(DAG.getDataLayout(),
+                                                           Relocate.getType()),
+                  getCurSDLoc(), Chain, SpillSlot,
                   MachinePointerInfo::getFixedStack(DAG.getMachineFunction(),
                                                     *DerivedPtrLocation));
 

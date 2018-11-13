@@ -1,38 +1,38 @@
 ===================================================
-Extra Clang Tools 4.0.0 (In-Progress) Release Notes
+Extra Clang Tools 8.0.0 (In-Progress) Release Notes
 ===================================================
 
 .. contents::
    :local:
    :depth: 3
 
-Written by the `LLVM Team <http://llvm.org/>`_
+Written by the `LLVM Team <https://llvm.org/>`_
 
 .. warning::
 
-   These are in-progress notes for the upcoming Extra Clang Tools 4.0 release.
-   You may prefer the `Extra Clang Tools 3.9 Release Notes
-   <http://llvm.org/releases/3.9.0/tools/clang/tools/extra/docs/ReleaseNotes.html>`_.
+   These are in-progress notes for the upcoming Extra Clang Tools 8 release.
+   Release notes for previous releases can be found on
+   `the Download Page <https://releases.llvm.org/download.html>`_.
 
 Introduction
 ============
 
 This document contains the release notes for the Extra Clang Tools, part of the
-Clang release 4.0.0. Here we describe the status of the Extra Clang Tools in
+Clang release 8.0.0. Here we describe the status of the Extra Clang Tools in
 some detail, including major improvements from the previous release and new
 feature work. All LLVM releases may be downloaded from the `LLVM releases web
-site <http://llvm.org/releases/>`_.
+site <https://llvm.org/releases/>`_.
 
 For more information about Clang or LLVM, including information about
-the latest release, please see the `Clang Web Site <http://clang.llvm.org>`_ or
-the `LLVM Web Site <http://llvm.org>`_.
+the latest release, please see the `Clang Web Site <https://clang.llvm.org>`_ or
+the `LLVM Web Site <https://llvm.org>`_.
 
 Note that if you are reading this file from a Subversion checkout or the
 main Clang web page, this document applies to the *next* release, not
 the current one. To see the release notes for a specific release, please
-see the `releases page <http://llvm.org/releases/>`_.
+see the `releases page <https://llvm.org/releases/>`_.
 
-What's New in Extra Clang Tools 4.0.0?
+What's New in Extra Clang Tools 8.0.0?
 ======================================
 
 Some of the major new features and improvements to Extra Clang Tools are listed
@@ -52,115 +52,70 @@ The improvements are...
 Improvements to clang-rename
 ----------------------------
 
-- Emacs integration was added.
+The improvements are...
 
 Improvements to clang-tidy
 --------------------------
 
-- New `cppcoreguidelines-slicing
-  <http://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines-slicing.html>`_ check
+- New :doc:`abseil-duration-division
+  <clang-tidy/checks/abseil-duration-division>` check.
 
-  Flags slicing of member variables or vtable.
+  Checks for uses of ``absl::Duration`` division that is done in a
+  floating-point context, and recommends the use of a function that
+  returns a floating-point value.
 
-- New `cppcoreguidelines-special-member-functions
-  <http://clang.llvm.org/extra/clang-tidy/checks/cppcoreguidelines-special-member-functions.html>`_ check
+- New :doc:`abseil-faster-strsplit-delimiter
+  <clang-tidy/checks/abseil-faster-strsplit-delimiter>` check.
 
-  Flags classes where some, but not all, special member functions are user-defined.
+  Finds instances of ``absl::StrSplit()`` or ``absl::MaxSplits()`` where the
+  delimiter is a single character string literal and replaces with a character.
 
-- New `misc-move-forwarding-reference
-  <http://clang.llvm.org/extra/clang-tidy/checks/misc-move-forwarding-reference.html>`_ check
+- New :doc:`abseil-no-internal-dependencies
+  <clang-tidy/checks/abseil-no-internal-dependencies>` check.
 
-  Warns when ``std::move`` is applied to a forwarding reference instead of
-  ``std::forward``.
+  Gives a warning if code using Abseil depends on internal details.
 
-- `misc-pointer-and-integral-operation` check was removed.
+- New :doc:`abseil-no-namespace
+  <clang-tidy/checks/abseil-no-namespace>` check.
 
-- New `misc-use-after-move
-  <http://clang.llvm.org/extra/clang-tidy/checks/misc-use-after-move.html>`_ check
+  Ensures code does not open ``namespace absl`` as that violates Abseil's
+  compatibility guidelines.
 
-  Warns if an object is used after it has been moved, without an intervening
-  reinitialization.
+- New :doc:`abseil-redundant-strcat-calls
+  <clang-tidy/checks/abseil-redundant-strcat-calls>` check.
 
-- `modernize-make-unique
-  <http://clang.llvm.org/extra/clang-tidy/checks/modernize-make-unique.html>`_
-  and `modernize-make-shared
-  <http://clang.llvm.org/extra/clang-tidy/checks/modernize-make-shared.html>`_
-  now handle calls to the smart pointer's ``reset()`` method.
+  Suggests removal of unnecessary calls to ``absl::StrCat`` when the result is
+  being passed to another ``absl::StrCat`` or ``absl::StrAppend``.
 
-- The `modernize-use-auto
-  <http://clang.llvm.org/extra/clang-tidy/checks/modernize-use-auto.html>`_ check
-  now warns about variable declarations that are initialized with a cast.
+- New :doc:`abseil-str-cat-append
+  <clang-tidy/checks/abseil-str-cat-append>` check.
 
-- New `modernize-use-equals-delete
-  <http://clang.llvm.org/extra/clang-tidy/checks/modernize-use-equals-delete.html>`_ check
+  Flags uses of ``absl::StrCat()`` to append to a ``std::string``. Suggests
+  ``absl::StrAppend()`` should be used instead.
 
-  Adds ``= delete`` to unimplemented private special member functions.
+- New :doc:`modernize-concat-nested-namespaces
+  <clang-tidy/checks/modernize-concat-nested-namespaces>` check.
 
-- New `modernize-use-transparent-functors
-  <http://clang.llvm.org/extra/clang-tidy/checks/modernize-use-transparent-functors.html>`_ check
+  Checks for uses of nested namespaces in the form of
+  ``namespace a { namespace b { ... }}`` and offers change to
+  syntax introduced in C++17 standard: ``namespace a::b { ... }``.
+  
+- New :doc:`modernize-deprecated-ios-base-aliases
+  <clang-tidy/checks/modernize-deprecated-ios-base-aliases>` check.
 
-  Replaces uses of non-transparent functors with transparent ones where applicable.
+  This check warns the uses of the deprecated member types of ``std::ios_base``
+  and replaces those that have a non-deprecated equivalent.
 
-- New `mpi-buffer-deref
-  <http://clang.llvm.org/extra/clang-tidy/checks/mpi-buffer-deref.html>`_ check
+- New :doc:`readability-magic-numbers
+  <clang-tidy/checks/readability-magic-numbers>` check.
 
-  Flags buffers which are insufficiently dereferenced when passed to an MPI function call.
-
-- New `mpi-type-mismatch
-  <http://clang.llvm.org/extra/clang-tidy/checks/mpi-type-mismatch.html>`_ check
-
-  Flags MPI function calls with a buffer type and MPI data type mismatch.
-
-- New `performance-inefficient-string-concatenation
-  <http://clang.llvm.org/extra/clang-tidy/checks/performance-inefficient-string-concatenation.html>`_ check
-
-  Warns about the performance overhead arising from concatenating strings using
-  the ``operator+``, instead of ``operator+=``.
-
-- `readability-container-size-empty
-  <http://clang.llvm.org/extra/clang-tidy/checks/readability-container-size-empty.html>`_ check
-  supports arbitrary containers with with suitable ``empty()`` and ``size()``
-  methods.
-
-- New `readability-misplaced-array-index
-  <http://clang.llvm.org/extra/clang-tidy/checks/readability-misplaced-array-index.html>`_ check
-
-  Warns when there is array index before the [] instead of inside it.
-
-- New `readability-non-const-parameter
-  <http://clang.llvm.org/extra/clang-tidy/checks/readability-non-const-parameter.html>`_ check
-
-  Flags function parameters of a pointer type that could be changed to point to
-  a constant type instead.
-
-- New `readability-redundant-declaration
-  <http://clang.llvm.org/extra/clang-tidy/checks/readability-redundant-declaration.html>`_ check
-
-  Finds redundant variable and function declarations.
-
-- New `readability-redundant-member-init
-  <http://clang.llvm.org/extra/clang-tidy/checks/readability-redundant-member-init.html>`_ check
-
-  Flags member initializations that are unnecessary because the same default
-  constructor would be called if they were not present.
-
-- The `readability-redundant-string-cstr
-  <http://clang.llvm.org/extra/clang-tidy/checks/readability-redundant-string-cstr.html>`_ check
-  now warns about redundant calls to data() too.
-
-Fixed bugs:
-
-- `modernize-make-unique
-  <http://clang.llvm.org/extra/clang-tidy/checks/modernize-make-unique.html>`_
-  and `modernize-make-shared
-  <http://clang.llvm.org/extra/clang-tidy/checks/modernize-make-shared.html>`_
-  Calling ``make_{unique|shared}`` from within a member function of a type
-  with a private or protected constructor would be ill-formed.
+  Detects usage of magic numbers, numbers that are used as literals instead of
+  introduced via constants or symbols.
 
 Improvements to include-fixer
 -----------------------------
 
-- Emacs integration was added.
+The improvements are...
 
 Improvements to modularize
 --------------------------

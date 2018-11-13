@@ -1,4 +1,4 @@
-//===- ConstantPools.cpp - ConstantPool class --*- C++ -*---------===//
+//===- ConstantPools.cpp - ConstantPool class -----------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,13 +10,16 @@
 // This file implements the ConstantPool and  AssemblerConstantPools classes.
 //
 //===----------------------------------------------------------------------===//
-#include "llvm/ADT/MapVector.h"
+
 #include "llvm/MC/ConstantPools.h"
 #include "llvm/MC/MCContext.h"
+#include "llvm/MC/MCDirectives.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCStreamer.h"
+#include "llvm/Support/Casting.h"
 
 using namespace llvm;
+
 //
 // ConstantPool implementation
 //
@@ -54,6 +57,10 @@ const MCExpr *ConstantPool::addEntry(const MCExpr *Value, MCContext &Context,
 
 bool ConstantPool::empty() { return Entries.empty(); }
 
+void ConstantPool::clearCache() {
+  CachedEntries.clear();
+}
+
 //
 // AssemblerConstantPools implementation
 //
@@ -90,9 +97,14 @@ void AssemblerConstantPools::emitAll(MCStreamer &Streamer) {
 
 void AssemblerConstantPools::emitForCurrentSection(MCStreamer &Streamer) {
   MCSection *Section = Streamer.getCurrentSectionOnly();
-  if (ConstantPool *CP = getConstantPool(Section)) {
+  if (ConstantPool *CP = getConstantPool(Section))
     emitConstantPool(Streamer, Section, *CP);
-  }
+}
+
+void AssemblerConstantPools::clearCacheForCurrentSection(MCStreamer &Streamer) {
+  MCSection *Section = Streamer.getCurrentSectionOnly();
+  if (ConstantPool *CP = getConstantPool(Section))
+    CP->clearCache();
 }
 
 const MCExpr *AssemblerConstantPools::addEntry(MCStreamer &Streamer,

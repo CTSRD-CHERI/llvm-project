@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file contains FormatTokenLexer, which tokenizes a source file
+/// This file contains FormatTokenLexer, which tokenizes a source file
 /// into a token stream suitable for ClangFormat.
 ///
 //===----------------------------------------------------------------------===//
@@ -22,6 +22,7 @@
 #include "clang/Basic/SourceManager.h"
 #include "clang/Format/Format.h"
 #include "llvm/Support/Regex.h"
+#include "llvm/ADT/MapVector.h"
 
 #include <stack>
 
@@ -36,7 +37,7 @@ enum LexerState {
 
 class FormatTokenLexer {
 public:
-  FormatTokenLexer(const SourceManager &SourceMgr, FileID ID,
+  FormatTokenLexer(const SourceManager &SourceMgr, FileID ID, unsigned Column,
                    const FormatStyle &Style, encoding::Encoding Encoding);
 
   ArrayRef<FormatToken *> lex();
@@ -47,6 +48,7 @@ private:
   void tryMergePreviousTokens();
 
   bool tryMergeLessLess();
+  bool tryMergeNSStringLiteral();
 
   bool tryMergeTokens(ArrayRef<tok::TokenKind> Kinds, TokenType NewType);
 
@@ -72,6 +74,8 @@ private:
   // nested template parts by balancing curly braces.
   void handleTemplateStrings();
 
+  void tryParsePythonComment();
+
   bool tryMerge_TMacro();
 
   bool tryMergeConflictMarkers();
@@ -96,7 +100,8 @@ private:
   // Index (in 'Tokens') of the last token that starts a new line.
   unsigned FirstInLineIndex;
   SmallVector<FormatToken *, 16> Tokens;
-  SmallVector<IdentifierInfo *, 8> ForEachMacros;
+
+  llvm::SmallMapVector<IdentifierInfo *, TokenType, 8> Macros;
 
   bool FormattingDisabled;
 

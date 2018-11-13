@@ -27,7 +27,7 @@ void f3(float a, ...) { // expected-note 2{{parameter of type 'float' is declare
 }
 
 
-// stdarg: PR3075
+// stdarg: PR3075 and PR2531
 void f4(const char *msg, ...) {
  __builtin_va_list ap;
  __builtin_stdarg_start((ap), (msg));
@@ -111,4 +111,13 @@ void f13(enum E1 e, ...) {
   // expected-warning@-6 {{passing an object that undergoes default argument promotion to 'va_start' has undefined behavior}}
 #endif
   __builtin_va_end(va);
+}
+
+void f14(int e, ...) {
+  // expected-warning@+3 {{implicitly declaring library function 'va_start'}}
+  // expected-note@+2 {{include the header <stdarg.h>}}
+  // expected-error@+1 {{too few arguments to function call}}
+  va_start();
+  __builtin_va_list va;
+  va_start(va, e);
 }

@@ -38,14 +38,17 @@ struct A {
 
   explicit A(void *x) {}
   explicit A(void *x, void *y) {}
+  explicit operator bool() const { return true; }
+
+  operator double() const = delete;
 
   explicit A(const A& a) {}
   // CHECK-MESSAGES: :[[@LINE-1]]:12: warning: copy constructor should not be declared explicit [google-explicit-constructor]
   // CHECK-FIXES: {{^  }}A(const A& a) {}
 
-  A(int x1) {}
+  A(int x1);
   // CHECK-MESSAGES: :[[@LINE-1]]:3: warning: single-argument constructors must be marked explicit to avoid unintentional implicit conversions [google-explicit-constructor]
-  // CHECK-FIXES: {{^  }}explicit A(int x1) {}
+  // CHECK-FIXES: {{^  }}explicit A(int x1);
 
   A(double x2, double y = 3.14) {}
   // CHECK-MESSAGES: :[[@LINE-1]]:3: warning: constructors that are callable with a single argument must be marked explicit to avoid unintentional implicit conversions [google-explicit-constructor]
@@ -57,10 +60,20 @@ struct A {
   // CHECK-FIXES: {{^  }}explicit A(T&&... args);
 };
 
+inline A::A(int x1) {}
+
 struct B {
   B(std::initializer_list<int> list1) {}
   B(const std::initializer_list<unsigned> &list2) {}
   B(std::initializer_list<unsigned> &&list3) {}
+
+  operator bool() const { return true; }
+  // CHECK-MESSAGES: :[[@LINE-1]]:3: warning: 'operator bool' must be marked explicit to avoid unintentional implicit conversions [google-explicit-constructor]
+  // CHECK-FIXES: {{^  }}explicit operator bool() const { return true; }
+
+  operator double() const;
+  // CHECK-MESSAGES: :[[@LINE-1]]:3: warning: 'operator double' must be marked explicit to avoid unintentional implicit conversions [google-explicit-constructor]
+  // CHECK-FIXES: {{^  }}explicit operator double() const;
 
   explicit B(::std::initializer_list<double> list4) {}
   // CHECK-MESSAGES: :[[@LINE-1]]:12: warning: initializer-list constructor should not be declared explicit [google-explicit-constructor]
@@ -74,6 +87,12 @@ struct B {
   // CHECK-MESSAGES: :[[@LINE-1]]:12: warning: initializer-list constructor
   // CHECK-FIXES: {{^  }}B(::std::initializer_list<char> &&list6) {}
 };
+
+inline B::operator double() const { return 0.0; }
+
+struct StructWithFnPointer {
+  void (*f)();
+} struct_with_fn_pointer = {[] {}};
 
 using namespace std;
 
@@ -129,3 +148,41 @@ void f(std::initializer_list<int> list) {
   E<decltype(list)> e(list);
   E<int> e2(list);
 }
+
+template <typename T>
+struct F {};
+
+template<typename T>
+struct G {
+  operator bool() const;
+  // CHECK-MESSAGES: :[[@LINE-1]]:3: warning: 'operator bool' must be marked
+  // CHECK-FIXES: {{^}}  explicit operator bool() const;
+  operator F<T>() const;
+  // CHECK-MESSAGES: :[[@LINE-1]]:3: warning: 'operator F<type-parameter-0-0>' must be marked
+  // CHECK-FIXES: {{^}}  explicit operator F<T>() const;
+  template<typename U>
+  operator F<U>*() const;
+  // CHECK-MESSAGES: :[[@LINE-1]]:3: warning: 'operator F<type-parameter-1-0> *' must be marked
+  // CHECK-FIXES: {{^}}  explicit operator F<U>*() const;
+};
+
+void f2() {
+  G<int> a;
+  (void)(F<int>)a;
+  if (a) {}
+  (void)(F<int>*)a;
+  (void)(F<int*>*)a;
+
+  G<double> b;
+  (void)(F<double>)b;
+  if (b) {}
+  (void)(F<double>*)b;
+  (void)(F<double*>*)b;
+}
+
+#define DEFINE_STRUCT_WITH_OPERATOR_BOOL(name) \
+  struct name {                                \
+    operator bool() const;                     \
+  }
+
+DEFINE_STRUCT_WITH_OPERATOR_BOOL(H);

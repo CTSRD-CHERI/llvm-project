@@ -53,7 +53,6 @@ int main()
 {
     {
     typedef test_allocator<char> A;
-    typedef std::basic_string<char, std::char_traits<char>, A> S;
 
     test("", 0);
     test("", 0, A(2));
@@ -70,7 +69,6 @@ int main()
 #if TEST_STD_VER >= 11
     {
     typedef min_allocator<char> A;
-    typedef std::basic_string<char, std::char_traits<char>, A> S;
 
     test("", 0);
     test("", 0, A());
@@ -83,6 +81,14 @@ int main()
 
     test("123456798012345679801234567980123456798012345679801234567980", 60);
     test("123456798012345679801234567980123456798012345679801234567980", 60, A());
+    }
+#endif
+
+#if TEST_STD_VER > 3
+    {   // LWG 2946
+    std::string s({"abc", 1});
+    assert(s.size() == 1);
+    assert(s == "a");
     }
 #endif
 }

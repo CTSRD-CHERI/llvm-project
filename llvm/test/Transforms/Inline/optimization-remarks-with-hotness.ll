@@ -1,11 +1,12 @@
 ; RUN: opt < %s -inline -pass-remarks=inline -pass-remarks-missed=inline \
 ; RUN:     -pass-remarks-analysis=inline -pass-remarks-with-hotness -S 2>&1 \
 ; RUN:     | FileCheck %s
+; RUN: opt < %s -passes=inline -pass-remarks=inline -pass-remarks-missed=inline \
+; RUN:     -pass-remarks-analysis=inline -pass-remarks-with-hotness -S 2>&1 \
+; RUN:     | FileCheck %s
 
-; CHECK: foo should always be inlined (cost=always) (hotness: 30)
-; CHECK: foo inlined into bar (hotness: 30)
-; CHECK: foz should never be inlined (cost=never) (hotness: 30)
-; CHECK: foz will not be inlined into bar (hotness: 30)
+; CHECK: foo inlined into bar with (cost=always): always inline attribute (hotness: 30)
+; CHECK: foz not inlined into bar because it should never be inlined (cost=never): noinline function attribute (hotness: 30)
 
 ; Function Attrs: alwaysinline nounwind uwtable
 define i32 @foo() #0 !prof !1 {

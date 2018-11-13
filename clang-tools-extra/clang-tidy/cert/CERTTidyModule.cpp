@@ -11,14 +11,17 @@
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
 #include "../google/UnnamedNamespaceInHeaderCheck.h"
-#include "../misc/MoveConstructorInitCheck.h"
 #include "../misc/NewDeleteOverloadsCheck.h"
 #include "../misc/NonCopyableObjects.h"
 #include "../misc/StaticAssertCheck.h"
 #include "../misc/ThrowByValueCatchByReferenceCheck.h"
+#include "../performance/MoveConstructorInitCheck.h"
 #include "CommandProcessorCheck.h"
+#include "DontModifyStdNamespaceCheck.h"
 #include "FloatLoopCounter.h"
 #include "LimitedRandomnessCheck.h"
+#include "PostfixOperatorCheck.h"
+#include "ProperlySeededRandomGeneratorCheck.h"
 #include "SetLongJmpCheck.h"
 #include "StaticObjectExceptionCheck.h"
 #include "StrToNumCheck.h"
@@ -34,13 +37,17 @@ public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
     // C++ checkers
     // DCL
+    CheckFactories.registerCheck<PostfixOperatorCheck>(
+        "cert-dcl21-cpp");
     CheckFactories.registerCheck<VariadicFunctionDefCheck>("cert-dcl50-cpp");
     CheckFactories.registerCheck<misc::NewDeleteOverloadsCheck>(
         "cert-dcl54-cpp");
+    CheckFactories.registerCheck<DontModifyStdNamespaceCheck>(
+        "cert-dcl58-cpp");
     CheckFactories.registerCheck<google::build::UnnamedNamespaceInHeaderCheck>(
         "cert-dcl59-cpp");
     // OOP
-    CheckFactories.registerCheck<misc::MoveConstructorInitCheck>(
+    CheckFactories.registerCheck<performance::MoveConstructorInitCheck>(
         "cert-oop11-cpp");
     // ERR
     CheckFactories.registerCheck<misc::ThrowByValueCatchByReferenceCheck>(
@@ -52,6 +59,8 @@ public:
         "cert-err61-cpp");
     // MSC
     CheckFactories.registerCheck<LimitedRandomnessCheck>("cert-msc50-cpp");
+    CheckFactories.registerCheck<ProperlySeededRandomGeneratorCheck>(
+        "cert-msc51-cpp");
 
     // C checkers
     // DCL
@@ -66,11 +75,8 @@ public:
     CheckFactories.registerCheck<StrToNumCheck>("cert-err34-c");
     // MSC
     CheckFactories.registerCheck<LimitedRandomnessCheck>("cert-msc30-c");
-  }
-  ClangTidyOptions getModuleOptions() override {
-    ClangTidyOptions Options;
-    Options.CheckOptions["cert-oop11-cpp.UseCERTSemantics"] = "1";
-    return Options;
+    CheckFactories.registerCheck<ProperlySeededRandomGeneratorCheck>(
+        "cert-msc32-c");
   }
 };
 

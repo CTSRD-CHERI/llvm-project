@@ -8,14 +8,128 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Core/Section.h"
+#include "lldb/Core/Address.h" // for Address
 #include "lldb/Core/Module.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
-#include "lldb/Utility/ConvertEnum.h"
+#include "lldb/Utility/FileSpec.h" // for FileSpec
+#include "lldb/Utility/Stream.h"   // for Stream
+#include "lldb/Utility/VMRange.h"  // for VMRange
 
+#include <inttypes.h> // for PRIx64
+#include <limits>     // for numeric_limits
+#include <utility>    // for distance
+
+namespace lldb_private {
+class DataExtractor;
+}
 using namespace lldb;
 using namespace lldb_private;
+
+const char *Section::GetTypeAsCString() const {
+  switch (m_type) {
+  case eSectionTypeInvalid:
+    return "invalid";
+  case eSectionTypeCode:
+    return "code";
+  case eSectionTypeContainer:
+    return "container";
+  case eSectionTypeData:
+    return "data";
+  case eSectionTypeDataCString:
+    return "data-cstr";
+  case eSectionTypeDataCStringPointers:
+    return "data-cstr-ptr";
+  case eSectionTypeDataSymbolAddress:
+    return "data-symbol-addr";
+  case eSectionTypeData4:
+    return "data-4-byte";
+  case eSectionTypeData8:
+    return "data-8-byte";
+  case eSectionTypeData16:
+    return "data-16-byte";
+  case eSectionTypeDataPointers:
+    return "data-ptrs";
+  case eSectionTypeDebug:
+    return "debug";
+  case eSectionTypeZeroFill:
+    return "zero-fill";
+  case eSectionTypeDataObjCMessageRefs:
+    return "objc-message-refs";
+  case eSectionTypeDataObjCCFStrings:
+    return "objc-cfstrings";
+  case eSectionTypeDWARFDebugAbbrev:
+    return "dwarf-abbrev";
+  case eSectionTypeDWARFDebugAddr:
+    return "dwarf-addr";
+  case eSectionTypeDWARFDebugAranges:
+    return "dwarf-aranges";
+  case eSectionTypeDWARFDebugCuIndex:
+    return "dwarf-cu-index";
+  case eSectionTypeDWARFDebugFrame:
+    return "dwarf-frame";
+  case eSectionTypeDWARFDebugInfo:
+    return "dwarf-info";
+  case eSectionTypeDWARFDebugLine:
+    return "dwarf-line";
+  case eSectionTypeDWARFDebugLineStr:
+    return "dwarf-line-str";
+  case eSectionTypeDWARFDebugLoc:
+    return "dwarf-loc";
+  case eSectionTypeDWARFDebugMacInfo:
+    return "dwarf-macinfo";
+  case eSectionTypeDWARFDebugMacro:
+    return "dwarf-macro";
+  case eSectionTypeDWARFDebugPubNames:
+    return "dwarf-pubnames";
+  case eSectionTypeDWARFDebugPubTypes:
+    return "dwarf-pubtypes";
+  case eSectionTypeDWARFDebugRanges:
+    return "dwarf-ranges";
+  case eSectionTypeDWARFDebugStr:
+    return "dwarf-str";
+  case eSectionTypeDWARFDebugStrOffsets:
+    return "dwarf-str-offsets";
+  case eSectionTypeDWARFDebugTypes:
+    return "dwarf-types";
+  case eSectionTypeDWARFDebugNames:
+    return "dwarf-names";
+  case eSectionTypeELFSymbolTable:
+    return "elf-symbol-table";
+  case eSectionTypeELFDynamicSymbols:
+    return "elf-dynamic-symbols";
+  case eSectionTypeELFRelocationEntries:
+    return "elf-relocation-entries";
+  case eSectionTypeELFDynamicLinkInfo:
+    return "elf-dynamic-link-info";
+  case eSectionTypeDWARFAppleNames:
+    return "apple-names";
+  case eSectionTypeDWARFAppleTypes:
+    return "apple-types";
+  case eSectionTypeDWARFAppleNamespaces:
+    return "apple-namespaces";
+  case eSectionTypeDWARFAppleObjC:
+    return "apple-objc";
+  case eSectionTypeEHFrame:
+    return "eh-frame";
+  case eSectionTypeARMexidx:
+    return "ARM.exidx";
+  case eSectionTypeARMextab:
+    return "ARM.extab";
+  case eSectionTypeCompactUnwind:
+    return "compact-unwind";
+  case eSectionTypeGoSymtab:
+    return "go-symtab";
+  case eSectionTypeAbsoluteAddress:
+    return "absolute";
+  case eSectionTypeDWARFGNUDebugAltLink:
+    return "dwarf-gnu-debugaltlink";
+  case eSectionTypeOther:
+    return "regular";
+  }
+  return "unknown";
+}
 
 Section::Section(const ModuleSP &module_sp, ObjectFile *obj_file,
                  user_id_t sect_id, const ConstString &name,
@@ -29,7 +143,7 @@ Section::Section(const ModuleSP &module_sp, ObjectFile *obj_file,
       m_file_offset(file_offset), m_file_size(file_size),
       m_log2align(log2align), m_children(), m_fake(false), m_encrypted(false),
       m_thread_specific(false), m_readable(false), m_writable(false),
-      m_executable(false), m_target_byte_size(target_byte_size) {
+      m_executable(false), m_relocated(false), m_target_byte_size(target_byte_size) {
   //    printf ("Section::Section(%p): module=%p, sect_id = 0x%16.16" PRIx64 ",
   //    addr=[0x%16.16" PRIx64 " - 0x%16.16" PRIx64 "), file [0x%16.16" PRIx64 "
   //    - 0x%16.16" PRIx64 "), flags = 0x%8.8x, name = %s\n",
@@ -51,7 +165,7 @@ Section::Section(const lldb::SectionSP &parent_section_sp,
       m_file_offset(file_offset), m_file_size(file_size),
       m_log2align(log2align), m_children(), m_fake(false), m_encrypted(false),
       m_thread_specific(false), m_readable(false), m_writable(false),
-      m_executable(false), m_target_byte_size(target_byte_size) {
+      m_executable(false), m_relocated(false), m_target_byte_size(target_byte_size) {
   //    printf ("Section::Section(%p): module=%p, sect_id = 0x%16.16" PRIx64 ",
   //    addr=[0x%16.16" PRIx64 " - 0x%16.16" PRIx64 "), file [0x%16.16" PRIx64 "
   //    - 0x%16.16" PRIx64 "), flags = 0x%8.8x, name = %s.%s\n",
@@ -69,9 +183,9 @@ Section::~Section() {
 addr_t Section::GetFileAddress() const {
   SectionSP parent_sp(GetParent());
   if (parent_sp) {
-    // This section has a parent which means m_file_addr is an offset into
-    // the parent section, so the file address for this section is the file
-    // address of the parent plus the offset
+    // This section has a parent which means m_file_addr is an offset into the
+    // parent section, so the file address for this section is the file address
+    // of the parent plus the offset
     return parent_sp->GetFileAddress() + m_file_addr;
   }
   // This section has no parent, so m_file_addr is the file base address
@@ -116,18 +230,18 @@ addr_t Section::GetLoadBaseAddress(Target *target) const {
   return load_base_addr;
 }
 
-bool Section::ResolveContainedAddress(addr_t offset, Address &so_addr) const {
+bool Section::ResolveContainedAddress(addr_t offset, Address &so_addr,
+                                      bool allow_section_end) const {
   const size_t num_children = m_children.GetSize();
-  if (num_children > 0) {
-    for (size_t i = 0; i < num_children; i++) {
-      Section *child_section = m_children.GetSectionAtIndex(i).get();
+  for (size_t i = 0; i < num_children; i++) {
+    Section *child_section = m_children.GetSectionAtIndex(i).get();
 
-      addr_t child_offset = child_section->GetOffset();
-      if (child_offset <= offset &&
-          offset - child_offset < child_section->GetByteSize())
-        return child_section->ResolveContainedAddress(offset - child_offset,
-                                                      so_addr);
-    }
+    addr_t child_offset = child_section->GetOffset();
+    if (child_offset <= offset &&
+        offset - child_offset <
+            child_section->GetByteSize() + (allow_section_end ? 1 : 0))
+      return child_section->ResolveContainedAddress(offset - child_offset,
+                                                    so_addr, allow_section_end);
   }
   so_addr.SetOffset(offset);
   so_addr.SetSection(const_cast<Section *>(this)->shared_from_this());
@@ -177,8 +291,7 @@ int Section::Compare(const Section &a, const Section &b) {
 void Section::Dump(Stream *s, Target *target, uint32_t depth) const {
   //    s->Printf("%.*p: ", (int)sizeof(void*) * 2, this);
   s->Indent();
-  s->Printf("0x%8.8" PRIx64 " %-16s ", GetID(),
-            GetSectionTypeAsCString(m_type));
+  s->Printf("0x%8.8" PRIx64 " %-16s ", GetID(), GetTypeAsCString());
   bool resolved = true;
   addr_t addr = LLDB_INVALID_ADDRESS;
 
@@ -220,10 +333,11 @@ void Section::DumpName(Stream *s) const {
     // The top most section prints the module basename
     const char *name = NULL;
     ModuleSP module_sp(GetModule());
-    const FileSpec &file_spec = m_obj_file->GetFileSpec();
 
-    if (m_obj_file)
+    if (m_obj_file) {
+      const FileSpec &file_spec = m_obj_file->GetFileSpec();
       name = file_spec.GetFilename().AsCString();
+    }
     if ((!name || !name[0]) && module_sp)
       name = module_sp->GetFileSpec().GetFilename().AsCString();
     if (name && name[0])
@@ -286,7 +400,7 @@ lldb::offset_t Section::GetSectionData(void *dst, lldb::offset_t dst_len,
   return 0;
 }
 
-lldb::offset_t Section::GetSectionData(DataExtractor &section_data) const {
+lldb::offset_t Section::GetSectionData(DataExtractor &section_data) {
   if (m_obj_file)
     return m_obj_file->ReadSectionData(this, section_data);
   return 0;
@@ -450,10 +564,8 @@ SectionSP SectionList::FindSectionContainingFileAddress(addr_t vm_addr,
     Section *sect = sect_iter->get();
     if (sect->ContainsFileAddress(vm_addr)) {
       // The file address is in this section. We need to make sure one of our
-      // child
-      // sections doesn't contain this address as well as obeying the depth
-      // limit
-      // that was passed in.
+      // child sections doesn't contain this address as well as obeying the
+      // depth limit that was passed in.
       if (depth > 0)
         sect_sp = sect->GetChildren().FindSectionContainingFileAddress(
             vm_addr, depth - 1);

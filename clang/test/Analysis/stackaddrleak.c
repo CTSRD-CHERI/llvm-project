@@ -1,5 +1,5 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -verify -std=c99 -Dbool=_Bool -Wno-bool-conversion %s
-// RUN: %clang_cc1 -analyze -analyzer-checker=core -verify -x c++ -Wno-bool-conversion %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -verify -std=c99 -Dbool=_Bool -Wno-bool-conversion %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core -verify -x c++ -Wno-bool-conversion %s
 
 typedef __INTPTR_TYPE__ intptr_t;
 char const *p;
@@ -37,7 +37,7 @@ void test_multi_return() {
 
 intptr_t returnAsNonLoc() {
   int x;
-  return (intptr_t)&x; // expected-warning{{Address of stack memory associated with local variable 'x' returned to caller}}
+  return (intptr_t)&x; // expected-warning{{Address of stack memory associated with local variable 'x' returned to caller}} expected-warning{{address of stack memory associated with local variable 'x' returned}}
 }
 
 bool returnAsBool() {

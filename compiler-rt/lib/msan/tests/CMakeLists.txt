@@ -35,7 +35,11 @@ set(MSAN_UNITTEST_COMMON_CFLAGS
   -Wno-zero-length-array
   -Wno-uninitialized
   -Werror=sign-compare
+  -Wno-gnu-zero-variadic-macro-arguments
 )
+# Remove -stdlib= which is unused when passing -nostdinc++.
+string(REGEX REPLACE "-stdlib=[a-zA-Z+]*" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+
 set(MSAN_UNITTEST_INSTRUMENTED_CFLAGS
   ${MSAN_UNITTEST_COMMON_CFLAGS}
   -fsanitize=memory
@@ -52,32 +56,26 @@ set(MSAN_UNITTEST_LINK_FLAGS
 
 append_list_if(COMPILER_RT_HAS_LIBDL -ldl MSAN_UNITTEST_LINK_FLAGS)
 
-# Compile source for the given architecture, using compiler
-# options in ${ARGN}, and add it to the object list.
-macro(msan_compile obj_list source arch kind)
-  get_filename_component(basename ${source} NAME)
-  set(output_obj "${basename}.${arch}${kind}.o")
-  get_target_flags_for_arch(${arch} TARGET_CFLAGS)
-  set(COMPILE_DEPS ${MSAN_UNITTEST_HEADERS})
-  if(NOT COMPILER_RT_STANDALONE_BUILD)
-    list(APPEND COMPILE_DEPS gtest msan)
-  endif()
-  clang_compile(${output_obj} ${source}
-                CFLAGS ${ARGN} ${TARGET_CFLAGS}
-                DEPS ${COMPILE_DEPS})
-  list(APPEND ${obj_list} ${output_obj})
+macro(msan_compile obj_list source arch kind cflags)
+  sanitizer_test_compile(
+    ${obj_list} ${source} ${arch}
+    KIND ${kind}
+    COMPILE_DEPS ${MSAN_UNITTEST_HEADERS}
+    DEPS gtest msan
+    CFLAGS ${MSAN_UNITTEST_INSTRUMENTED_CFLAGS} ${cflags}
+  )
 endmacro()
 
 macro(msan_link_shared so_list so_name arch kind)
-  cmake_parse_arguments(SOURCE "" "" "OBJECTS;LINKFLAGS;DEPS" ${ARGN})
+  cmake_parse_arguments(SOURCE "" "" "OBJECTS;LINK_FLAGS;DEPS" ${ARGN})
   set(output_so "${CMAKE_CURRENT_BINARY_DIR}/${so_name}.${arch}${kind}.so")
-  get_target_flags_for_arch(${arch} TARGET_LINKFLAGS)
+  get_target_flags_for_arch(${arch} TARGET_LINK_FLAGS)
   if(NOT COMPILER_RT_STANDALONE_BUILD)
     list(APPEND SOURCE_DEPS msan)
   endif()
   clang_link_shared(${output_so}
                 OBJECTS ${SOURCE_OBJECTS}
-                LINKFLAGS ${TARGET_LINKFLAGS} ${SOURCE_LINKFLAGS}
+                LINK_FLAGS ${TARGET_LINK_FLAGS} ${SOURCE_LINK_FLAGS}
                 DEPS ${SOURCE_DEPS})
   list(APPEND ${so_list} ${output_so})
 endmacro()
@@ -87,23 +85,22 @@ add_custom_target(MsanUnitTests)
 set_target_properties(MsanUnitTests PROPERTIES FOLDER "MSan unit tests")
 
 # Adds MSan unit tests and benchmarks for architecture.
-macro(add_msan_tests_for_arch arch kind)
+macro(add_msan_tests_for_arch arch kind cflags)
   # Build gtest instrumented with MSan.
   set(MSAN_INST_GTEST)
   msan_compile(MSAN_INST_GTEST ${COMPILER_RT_GTEST_SOURCE} ${arch} "${kind}"
-                               ${MSAN_UNITTEST_INSTRUMENTED_CFLAGS} ${ARGN})
+                               "${cflags}")
 
   # Instrumented tests.
   set(MSAN_INST_TEST_OBJECTS)
   foreach (SOURCE ${MSAN_UNITTEST_SOURCES})
-    msan_compile(MSAN_INST_TEST_OBJECTS ${SOURCE} ${arch} "${kind}"
-                 ${MSAN_UNITTEST_INSTRUMENTED_CFLAGS} ${ARGN})
+    msan_compile(MSAN_INST_TEST_OBJECTS ${SOURCE} ${arch} "${kind}" "${cflags}")
   endforeach(SOURCE)
 
   # Instrumented loadable module objects.
   set(MSAN_INST_LOADABLE_OBJECTS)
   msan_compile(MSAN_INST_LOADABLE_OBJECTS ${MSAN_LOADABLE_SOURCE} ${arch} "${kind}"
-               ${MSAN_UNITTEST_INSTRUMENTED_CFLAGS} "-fPIC" ${ARGN})
+               "-fPIC;${cflags}")
 
   # Instrumented loadable library tests.
   set(MSAN_LOADABLE_SO)
@@ -112,7 +109,7 @@ macro(add_msan_tests_for_arch arch kind)
                    DEPS ${MSAN_INST_LOADABLE_OBJECTS})
 
   set(MSAN_TEST_OBJECTS ${MSAN_INST_TEST_OBJECTS} ${MSAN_INST_GTEST})
-  set(MSAN_TEST_DEPS ${MSAN_TEST_OBJECTS} libcxx_msan_${arch}
+  set(MSAN_TEST_DEPS ${MSAN_TEST_OBJECTS} libcxx_msan_${arch}-build
                      ${MSAN_LOADABLE_SO})
   if(NOT COMPILER_RT_STANDALONE_BUILD)
     list(APPEND MSAN_TEST_DEPS msan)
@@ -128,17 +125,18 @@ macro(add_msan_tests_for_arch arch kind)
 endmacro()
 
 # We should only build MSan unit tests if we can build instrumented libcxx.
-if(COMPILER_RT_CAN_EXECUTE_TESTS AND COMPILER_RT_HAS_LIBCXX_SOURCES)
+if(COMPILER_RT_CAN_EXECUTE_TESTS AND COMPILER_RT_LIBCXX_PATH)
   foreach(arch ${MSAN_SUPPORTED_ARCH})
     get_target_flags_for_arch(${arch} TARGET_CFLAGS)
     set(LIBCXX_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/../libcxx_msan_${arch})
     add_custom_libcxx(libcxx_msan_${arch} ${LIBCXX_PREFIX}
       DEPS ${MSAN_RUNTIME_LIBRARIES}
-      CFLAGS ${MSAN_LIBCXX_CFLAGS} ${TARGET_CFLAGS})
+      CFLAGS ${MSAN_LIBCXX_CFLAGS} ${TARGET_CFLAGS}
+      USE_TOOLCHAIN)
     set(MSAN_LIBCXX_SO ${LIBCXX_PREFIX}/lib/libc++.so)
 
-    add_msan_tests_for_arch(${arch} "")
+    add_msan_tests_for_arch(${arch} "" "")
     add_msan_tests_for_arch(${arch} "-with-call"
-                            -mllvm -msan-instrumentation-with-call-threshold=0)
+                            "-mllvm;-msan-instrumentation-with-call-threshold=0")
   endforeach()
 endif()

@@ -1,6 +1,6 @@
 // REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %s -o %t
-// RUN: ld.lld %t -o %tout -shared
+// RUN: ld.lld --hash-style=sysv %t -o %tout -shared
 // RUN: llvm-objdump -d %tout | FileCheck -check-prefix=DISASM %s
 // RUN: llvm-readobj -symbols -r %tout | FileCheck -check-prefix=SYMBOL %s
 
@@ -19,13 +19,12 @@
 // DISASM:    1013:       90      nop
 // DISASM:    1014:       90      nop
 
-
 // SYMBOL:      Relocations [
 // SYMBOL-NEXT:   Section ({{.*}}) .rela.dyn {
-// SYMBOL-NEXT:     0x3010 R_X86_64_64 __stop_zed1 0x0
-// SYMBOL-NEXT:     0x3018 R_X86_64_64 __stop_zed1 0x1
-// SYMBOL-NEXT:     0x3000 R_X86_64_64 __stop_zed2 0x0
-// SYMBOL-NEXT:     0x3008 R_X86_64_64 __stop_zed2 0x1
+// SYMBOL-NEXT:     R_X86_64_RELATIVE
+// SYMBOL-NEXT:     R_X86_64_RELATIVE
+// SYMBOL-NEXT:     R_X86_64_RELATIVE
+// SYMBOL-NEXT:     R_X86_64_RELATIVE
 // SYMBOL-NEXT:   }
 // SYMBOL-NEXT: ]
 
@@ -45,20 +44,20 @@
 // SYMBOL: Symbol {
 // SYMBOL:   Name: __stop_foo
 // SYMBOL:   Value: 0x1012
-// STMBOL:   STV_HIDDEN
+// SYMBOL:   STV_HIDDEN
 // SYMBOL:   Section: foo
 // SYMBOL: }
 
 // SYMBOL: Symbol {
 // SYMBOL:   Name: __stop_zed1
-// SYMBOL:   Value: 0x3010
-// STMBOL:   Other: 0
+// SYMBOL:   Value: 0x2010
+// SYMBOL:   STV_PROTECTED
 // SYMBOL:   Section: zed1
 // SYMBOL: }
 // SYMBOL: Symbol {
 // SYMBOL:   Name: __stop_zed2
-// SYMBOL:   Value: 0x3020
-// STMBOL:   Other: 0
+// SYMBOL:   Value: 0x2020
+// SYMBOL:   STV_PROTECTED
 // SYMBOL:   Section: zed2
 // SYMBOL: }
 

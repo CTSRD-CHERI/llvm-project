@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "sanitizer_common/sanitizer_common.h"
+#include "sanitizer_common/sanitizer_file.h"
 #include "sanitizer_common/sanitizer_internal_defs.h"
 #if SANITIZER_POSIX
 #include "sanitizer_common/sanitizer_posix.h"
@@ -41,7 +42,7 @@ void WriteLE(fd_t fd, uptr val) {
 }
 
 void OpenStatsFile(const char *path_env) {
-  InternalScopedBuffer<char> path(kMaxPathLength);
+  InternalMmapVector<char> path(kMaxPathLength);
   SubstituteForFlagValue(path_env, path.data(), kMaxPathLength);
 
   error_t err;

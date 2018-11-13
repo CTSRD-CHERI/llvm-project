@@ -17,7 +17,9 @@
 #include "polly/LinkAllPasses.h"
 #include "polly/Options.h"
 #include "llvm/Transforms/IPO.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Utils.h"
 
 using namespace llvm;
 using namespace polly;
@@ -28,7 +30,10 @@ static cl::opt<bool>
                  cl::init(false), cl::ZeroOrMore, cl::cat(PollyCategory));
 
 void polly::registerCanonicalicationPasses(llvm::legacy::PassManagerBase &PM) {
+  bool UseMemSSA = true;
+  PM.add(polly::createRewriteByrefParamsPass());
   PM.add(llvm::createPromoteMemoryToRegisterPass());
+  PM.add(llvm::createEarlyCSEPass(UseMemSSA));
   PM.add(llvm::createInstructionCombiningPass());
   PM.add(llvm::createCFGSimplificationPass());
   PM.add(llvm::createTailCallEliminationPass());
@@ -37,6 +42,7 @@ void polly::registerCanonicalicationPasses(llvm::legacy::PassManagerBase &PM) {
   PM.add(llvm::createLoopRotatePass());
   if (PollyInliner) {
     PM.add(llvm::createFunctionInliningPass(200));
+    PM.add(llvm::createPromoteMemoryToRegisterPass());
     PM.add(llvm::createCFGSimplificationPass());
     PM.add(llvm::createInstructionCombiningPass());
     PM.add(createBarrierNoopPass());

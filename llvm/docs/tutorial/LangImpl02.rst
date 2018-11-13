@@ -10,7 +10,7 @@ Chapter 2 Introduction
 
 Welcome to Chapter 2 of the "`Implementing a language with
 LLVM <index.html>`_" tutorial. This chapter shows you how to use the
-lexer, built in `Chapter 1 <LangImpl1.html>`_, to build a full
+lexer, built in `Chapter 1 <LangImpl01.html>`_, to build a full
 `parser <http://en.wikipedia.org/wiki/Parsing>`_ for our Kaleidoscope
 language. Once we have a parser, we'll define and build an `Abstract
 Syntax Tree <http://en.wikipedia.org/wiki/Abstract_syntax_tree>`_ (AST).
@@ -20,7 +20,7 @@ Parsing <http://en.wikipedia.org/wiki/Recursive_descent_parser>`_ and
 `Operator-Precedence
 Parsing <http://en.wikipedia.org/wiki/Operator-precedence_parser>`_ to
 parse the Kaleidoscope language (the latter for binary expressions and
-the former for everything else). Before we get to parsing though, lets
+the former for everything else). Before we get to parsing though, let's
 talk about the output of the parser: the Abstract Syntax Tree.
 
 The Abstract Syntax Tree (AST)
@@ -119,6 +119,8 @@ way to talk about functions themselves:
     public:
       PrototypeAST(const std::string &name, std::vector<std::string> Args)
         : Name(name), Args(std::move(Args)) {}
+
+      const std::string &getName() const { return Name; }
     };
 
     /// FunctionAST - This class represents a function definition itself.
@@ -714,15 +716,15 @@ Intermediate Representation (IR) from the AST.
 Full Code Listing
 =================
 
-Here is the complete code listing for this and the previous chapter.
-Note that it is fully self-contained: you don't need LLVM or any
-external libraries at all for this. (Besides the C and C++ standard
-libraries, of course.) To build this, just compile with:
+Here is the complete code listing for our running example. Because this
+uses the LLVM libraries, we need to link them in. To do this, we use the
+`llvm-config <http://llvm.org/cmds/llvm-config.html>`_ tool to inform
+our makefile/command line about which options to use:
 
 .. code-block:: bash
 
     # Compile
-    clang++ -g -O3 toy.cpp
+    clang++ -g -O3 toy.cpp `llvm-config --cxxflags`
     # Run
     ./a.out
 

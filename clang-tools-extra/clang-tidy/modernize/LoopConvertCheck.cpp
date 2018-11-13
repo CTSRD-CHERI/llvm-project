@@ -8,11 +8,21 @@
 //===----------------------------------------------------------------------===//
 
 #include "LoopConvertCheck.h"
-#include "../utils/Matchers.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/Basic/LLVM.h"
+#include "clang/Basic/LangOptions.h"
+#include "clang/Basic/SourceLocation.h"
+#include "clang/Basic/SourceManager.h"
+#include "clang/Lex/Lexer.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/StringSwitch.h"
+#include "llvm/Support/Casting.h"
+#include <cassert>
+#include <cstring>
+#include <utility>
 
-using namespace clang;
 using namespace clang::ast_matchers;
 using namespace llvm;
 
@@ -151,17 +161,18 @@ StatementMatcher makeIteratorLoopMatcher() {
   // overloaded operator*(). If the operator*() returns by value instead of by
   // reference then the return type is tagged with DerefByValueResultName.
   internal::Matcher<VarDecl> TestDerefReturnsByValue =
-      hasType(cxxRecordDecl(hasMethod(allOf(
-          hasOverloadedOperatorName("*"),
-          anyOf(
-              // Tag the return type if it's by value.
-              returns(qualType(unless(hasCanonicalType(referenceType())))
-                          .bind(DerefByValueResultName)),
-              returns(
-                  // Skip loops where the iterator's operator* returns an
-                  // rvalue reference. This is just weird.
-                  qualType(unless(hasCanonicalType(rValueReferenceType())))
-                      .bind(DerefByRefResultName)))))));
+      hasType(hasUnqualifiedDesugaredType(
+          recordType(hasDeclaration(cxxRecordDecl(hasMethod(allOf(
+              hasOverloadedOperatorName("*"),
+              anyOf(
+                  // Tag the return type if it's by value.
+                  returns(qualType(unless(hasCanonicalType(referenceType())))
+                              .bind(DerefByValueResultName)),
+                  returns(
+                      // Skip loops where the iterator's operator* returns an
+                      // rvalue reference. This is just weird.
+                      qualType(unless(hasCanonicalType(rValueReferenceType())))
+                          .bind(DerefByRefResultName))))))))));
 
   return forStmt(
              unless(isInTemplateInstantiation()),
@@ -232,16 +243,17 @@ StatementMatcher makePseudoArrayLoopMatcher() {
   // functions called begin() and end() taking the container as an argument
   // are also allowed.
   TypeMatcher RecordWithBeginEnd = qualType(anyOf(
-      qualType(isConstQualified(),
-               hasDeclaration(cxxRecordDecl(
-                   hasMethod(cxxMethodDecl(hasName("begin"), isConst())),
-                   hasMethod(cxxMethodDecl(hasName("end"),
-                                           isConst())))) // hasDeclaration
-               ),                                        // qualType
       qualType(
-          unless(isConstQualified()),
-          hasDeclaration(cxxRecordDecl(hasMethod(hasName("begin")),
-                                       hasMethod(hasName("end"))))) // qualType
+          isConstQualified(),
+          hasUnqualifiedDesugaredType(recordType(hasDeclaration(cxxRecordDecl(
+              hasMethod(cxxMethodDecl(hasName("begin"), isConst())),
+              hasMethod(cxxMethodDecl(hasName("end"),
+                                      isConst()))))   // hasDeclaration
+                                                 ))), // qualType
+      qualType(unless(isConstQualified()),
+               hasUnqualifiedDesugaredType(recordType(hasDeclaration(
+                   cxxRecordDecl(hasMethod(hasName("begin")),
+                                 hasMethod(hasName("end"))))))) // qualType
       ));
 
   StatementMatcher SizeCallMatcher = cxxMemberCallExpr(
@@ -693,7 +705,7 @@ void LoopConvertCheck::getIteratorLoopQualifiers(ASTContext *Context,
                                                  RangeDescriptor &Descriptor) {
   // The matchers for iterator loops provide bound nodes to obtain this
   // information.
-  const auto *InitVar = Nodes.getDeclAs<VarDecl>(InitVarName);
+  const auto *InitVar = Nodes.getNodeAs<VarDecl>(InitVarName);
   QualType CanonicalInitVarType = InitVar->getType().getCanonicalType();
   const auto *DerefByValueType =
       Nodes.getNodeAs<QualType>(DerefByValueResultName);
@@ -753,13 +765,13 @@ bool LoopConvertCheck::isConvertible(ASTContext *Context,
     return false;
 
   // Check that we have exactly one index variable and at most one end variable.
-  const auto *LoopVar = Nodes.getDeclAs<VarDecl>(IncrementVarName);
-  const auto *CondVar = Nodes.getDeclAs<VarDecl>(ConditionVarName);
-  const auto *InitVar = Nodes.getDeclAs<VarDecl>(InitVarName);
+  const auto *LoopVar = Nodes.getNodeAs<VarDecl>(IncrementVarName);
+  const auto *CondVar = Nodes.getNodeAs<VarDecl>(ConditionVarName);
+  const auto *InitVar = Nodes.getNodeAs<VarDecl>(InitVarName);
   if (!areSameVariable(LoopVar, CondVar) || !areSameVariable(LoopVar, InitVar))
     return false;
-  const auto *EndVar = Nodes.getDeclAs<VarDecl>(EndVarName);
-  const auto *ConditionEndVar = Nodes.getDeclAs<VarDecl>(ConditionEndVarName);
+  const auto *EndVar = Nodes.getNodeAs<VarDecl>(EndVarName);
+  const auto *ConditionEndVar = Nodes.getNodeAs<VarDecl>(ConditionEndVarName);
   if (EndVar && !areSameVariable(EndVar, ConditionEndVar))
     return false;
 
@@ -788,7 +800,7 @@ bool LoopConvertCheck::isConvertible(ASTContext *Context,
     }
   } else if (FixerKind == LFK_PseudoArray) {
     // This call is required to obtain the container.
-    const auto *EndCall = Nodes.getStmtAs<CXXMemberCallExpr>(EndCallName);
+    const auto *EndCall = Nodes.getNodeAs<CXXMemberCallExpr>(EndCallName);
     if (!EndCall || !dyn_cast<MemberExpr>(EndCall->getCallee()))
       return false;
   }
@@ -804,12 +816,12 @@ void LoopConvertCheck::check(const MatchFinder::MatchResult &Result) {
   LoopFixerKind FixerKind;
   RangeDescriptor Descriptor;
 
-  if ((Loop = Nodes.getStmtAs<ForStmt>(LoopNameArray))) {
+  if ((Loop = Nodes.getNodeAs<ForStmt>(LoopNameArray))) {
     FixerKind = LFK_Array;
-  } else if ((Loop = Nodes.getStmtAs<ForStmt>(LoopNameIterator))) {
+  } else if ((Loop = Nodes.getNodeAs<ForStmt>(LoopNameIterator))) {
     FixerKind = LFK_Iterator;
   } else {
-    Loop = Nodes.getStmtAs<ForStmt>(LoopNamePseudoArray);
+    Loop = Nodes.getNodeAs<ForStmt>(LoopNamePseudoArray);
     assert(Loop && "Bad Callback. No for statement");
     FixerKind = LFK_PseudoArray;
   }
@@ -817,8 +829,8 @@ void LoopConvertCheck::check(const MatchFinder::MatchResult &Result) {
   if (!isConvertible(Context, Nodes, Loop, FixerKind))
     return;
 
-  const auto *LoopVar = Nodes.getDeclAs<VarDecl>(IncrementVarName);
-  const auto *EndVar = Nodes.getDeclAs<VarDecl>(EndVarName);
+  const auto *LoopVar = Nodes.getNodeAs<VarDecl>(IncrementVarName);
+  const auto *EndVar = Nodes.getNodeAs<VarDecl>(EndVarName);
 
   // If the loop calls end()/size() after each iteration, lower our confidence
   // level.
@@ -827,8 +839,8 @@ void LoopConvertCheck::check(const MatchFinder::MatchResult &Result) {
 
   // If the end comparison isn't a variable, we can try to work with the
   // expression the loop variable is being tested against instead.
-  const auto *EndCall = Nodes.getStmtAs<CXXMemberCallExpr>(EndCallName);
-  const auto *BoundExpr = Nodes.getStmtAs<Expr>(ConditionBoundName);
+  const auto *EndCall = Nodes.getNodeAs<CXXMemberCallExpr>(EndCallName);
+  const auto *BoundExpr = Nodes.getNodeAs<Expr>(ConditionBoundName);
 
   // Find container expression of iterators and pseudoarrays, and determine if
   // this expression needs to be dereferenced to obtain the container.

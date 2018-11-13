@@ -2,6 +2,8 @@
 // RUN: llvm-mc -triple x86_64-pc-win32 -filetype=obj %s | llvm-readobj -s -t | FileCheck %s
 
 .section assocSec, "dr", discard, "assocSym"
+.global assocSym
+assocSym:
 .long 1
 
 .section secName, "dr", discard, "Symbol1"
@@ -161,7 +163,7 @@ Symbol8:
 // CHECK:   }
 // CHECK:   Symbol {
 // CHECK:     Name: SecName
-// CHECK:     Section: SecName (9)
+// CHECK:     Section: SecName (11)
 // CHECK:     AuxSectionDef {
 // CHECK:       Selection: Associative
 // CHECK:       AssocSection: assocSec (4)
@@ -169,25 +171,25 @@ Symbol8:
 // CHECK:   }
 // CHECK:   Symbol {
 // CHECK:     Name: SecName
-// CHECK:     Section: SecName (10)
+// CHECK:     Section: SecName (9)
 // CHECK:     AuxSectionDef {
 // CHECK:       Selection: Largest
 // CHECK:     }
 // CHECK:   }
 // CHECK:   Symbol {
 // CHECK:     Name: Symbol6
-// CHECK:     Section: SecName (10)
+// CHECK:     Section: SecName (9)
 // CHECK:   }
 // CHECK:   Symbol {
 // CHECK:     Name: SecName
-// CHECK:     Section: SecName (11)
+// CHECK:     Section: SecName (10)
 // CHECK:     AuxSectionDef {
 // CHECK:       Selection: Newest (0x7)
 // CHECK:     }
 // CHECK:   }
 // CHECK:   Symbol {
 // CHECK:     Name: Symbol7
-// CHECK:     Section: SecName (11)
+// CHECK:     Section: SecName (10)
 // CHECK:   }
 // CHECK:   Symbol {
 // CHECK:     Name: assocSec
@@ -199,7 +201,7 @@ Symbol8:
 // CHECK:   }
 // CHECK:   Symbol {
 // CHECK:     Name: Symbol5
-// CHECK:     Section: SecName (9)
+// CHECK:     Section: SecName (11)
 // CHECK:   }
 // CHECK:   Symbol {
 // CHECK:     Name: Symbol8

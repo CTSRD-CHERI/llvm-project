@@ -9,14 +9,24 @@
 
 #include "llvm/Analysis/DominanceFrontier.h"
 #include "llvm/Analysis/DominanceFrontierImpl.h"
+#include "llvm/Config/llvm-config.h"
+#include "llvm/IR/Dominators.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/Compiler.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
 
 namespace llvm {
-template class DominanceFrontierBase<BasicBlock>;
+
+template class DominanceFrontierBase<BasicBlock, false>;
+template class DominanceFrontierBase<BasicBlock, true>;
 template class ForwardDominanceFrontierBase<BasicBlock>;
-}
+
+} // end namespace llvm
 
 char DominanceFrontierWrapperPass::ID = 0;
 
@@ -26,7 +36,7 @@ INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_END(DominanceFrontierWrapperPass, "domfrontier",
                 "Dominance Frontier Construction", true, true)
 
- DominanceFrontierWrapperPass::DominanceFrontierWrapperPass()
+DominanceFrontierWrapperPass::DominanceFrontierWrapperPass()
     : FunctionPass(ID), DF() {
   initializeDominanceFrontierWrapperPassPass(*PassRegistry::getPassRegistry());
 }
@@ -56,7 +66,17 @@ LLVM_DUMP_METHOD void DominanceFrontierWrapperPass::dump() const {
 }
 #endif
 
-char DominanceFrontierAnalysis::PassID;
+/// Handle invalidation explicitly.
+bool DominanceFrontier::invalidate(Function &F, const PreservedAnalyses &PA,
+                                   FunctionAnalysisManager::Invalidator &) {
+  // Check whether the analysis, all analyses on functions, or the function's
+  // CFG have been preserved.
+  auto PAC = PA.getChecker<DominanceFrontierAnalysis>();
+  return !(PAC.preserved() || PAC.preservedSet<AllAnalysesOn<Function>>() ||
+           PAC.preservedSet<CFGAnalyses>());
+}
+
+AnalysisKey DominanceFrontierAnalysis::Key;
 
 DominanceFrontier DominanceFrontierAnalysis::run(Function &F,
                                                  FunctionAnalysisManager &AM) {

@@ -128,7 +128,7 @@ F:
 define i32 @test10(i32 %i) {
 ; CHECK-LABEL: @test10(
 ; CHECK-NEXT:    [[B1:%.*]] = shl i32 %i, 30
-; CHECK-NEXT:    [[B:%.*]] = ashr exact i32 [[B:%.*]]1, 30
+; CHECK-NEXT:    [[B:%.*]] = ashr exact i32 [[B1]], 30
 ; CHECK-NEXT:    ret i32 [[B]]
 ;
   %tmp12 = trunc i32 %i to i8
@@ -229,10 +229,10 @@ define i32 @test17(i1 %x) {
 
 define i32 @test18(i16 %x) {
 ; CHECK-LABEL: @test18(
-; CHECK-NEXT:    [[CMP:%.*]] = icmp slt i16 %x, 0
-; CHECK-NEXT:    [[SEL:%.*]] = select i1 [[CMP]], i16 0, i16 %x
-; CHECK-NEXT:    [[TMP1:%.*]] = zext i16 [[SEL]] to i32
-; CHECK-NEXT:    ret i32 [[TMP1]]
+; CHECK-NEXT:    [[TMP1:%.*]] = icmp sgt i16 %x, 0
+; CHECK-NEXT:    [[SEL:%.*]] = select i1 [[TMP1]], i16 %x, i16 0
+; CHECK-NEXT:    [[TMP2:%.*]] = zext i16 [[SEL]] to i32
+; CHECK-NEXT:    ret i32 [[TMP2]]
 ;
   %cmp = icmp slt i16 %x, 0
   %sel = select i1 %cmp, i16 0, i16 %x

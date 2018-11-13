@@ -1,7 +1,7 @@
-; RUN: llc < %s -O0 -march=x86
-; RUN: llc < %s -O0 -march=x86-64
-; RUN: llc < %s -O2 -march=x86
-; RUN: llc < %s -O2 -march=x86-64
+; RUN: llc < %s -O0 -mtriple=i686--
+; RUN: llc < %s -O0 -mtriple=x86_64--
+; RUN: llc < %s -O2 -mtriple=i686--
+; RUN: llc < %s -O2 -mtriple=x86_64--
 
 
 ; Test big index trunc to pointer size:
@@ -77,4 +77,15 @@ define i8* @test_sext16(i8* %ptr) nounwind {
 ; CHECK: -21
   %d = getelementptr i8, i8* %ptr, i8 -21
   ret i8* %d
+}
+
+
+; Test out of int64_t range indices
+
+; OSS-Fuzz: https://bugs.chromium.org/p/oss-fuzz/issues/detail?id=7173
+define void @test_outofrange(i96* %ptr) nounwind {
+; CHECK-LABEL: test_outofrange
+  %d = getelementptr i96, i96* %ptr, i96 39614081257132168796771975167
+  %ld = load i96, i96* %d, align 1
+  unreachable
 }

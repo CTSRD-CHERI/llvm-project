@@ -11,7 +11,6 @@
 
 #include "Plugins/ExpressionParser/Clang/ClangModulesDeclVendor.h"
 #include "Plugins/ExpressionParser/Clang/ClangPersistentVariables.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Symbol/Block.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/DebugMacros.h"
@@ -22,6 +21,7 @@
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb_private;
 
@@ -93,15 +93,15 @@ public:
       m_state = CURRENT_FILE_POPPED;
   }
 
-  // An entry is valid if it occurs before the current line in
-  // the current file.
+  // An entry is valid if it occurs before the current line in the current
+  // file.
   bool IsValidEntry(uint32_t line) {
     switch (m_state) {
     case CURRENT_FILE_NOT_YET_PUSHED:
       return true;
     case CURRENT_FILE_PUSHED:
-      // If we are in file included in the current file,
-      // the entry should be added.
+      // If we are in file included in the current file, the entry should be
+      // added.
       if (m_file_stack.back() != m_current_file)
         return true;
 

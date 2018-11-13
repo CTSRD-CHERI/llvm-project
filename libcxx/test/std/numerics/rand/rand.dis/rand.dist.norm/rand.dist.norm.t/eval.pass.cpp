@@ -33,7 +33,6 @@ int main()
 {
     {
         typedef std::student_t_distribution<> D;
-        typedef D::param_type P;
         typedef std::minstd_rand G;
         G g;
         D d(5.5);
@@ -45,7 +44,7 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (unsigned i = 0; i < u.size(); ++i)
         {
             double dbl = (u[i] - mean);
             double d2 = sqr(dbl);
@@ -69,7 +68,6 @@ int main()
     }
     {
         typedef std::student_t_distribution<> D;
-        typedef D::param_type P;
         typedef std::minstd_rand G;
         G g;
         D d(10);
@@ -81,7 +79,7 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (unsigned i = 0; i < u.size(); ++i)
         {
             double dbl = (u[i] - mean);
             double d2 = sqr(dbl);
@@ -105,7 +103,6 @@ int main()
     }
     {
         typedef std::student_t_distribution<> D;
-        typedef D::param_type P;
         typedef std::minstd_rand G;
         G g;
         D d(100);
@@ -117,7 +114,7 @@ int main()
         double var = 0;
         double skew = 0;
         double kurtosis = 0;
-        for (int i = 0; i < u.size(); ++i)
+        for (unsigned i = 0; i < u.size(); ++i)
         {
             double dbl = (u[i] - mean);
             double d2 = sqr(dbl);

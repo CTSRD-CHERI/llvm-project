@@ -1,6 +1,6 @@
 ; RUN: opt -mtriple=amdgcn-amd-amdhsa -basicaa -load-store-vectorizer -S -o - %s | FileCheck %s
 
-target datalayout = "e-p:32:32-p1:64:64-p2:64:64-p3:32:32-p4:64:64-p5:32:32-p24:64:64-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64"
+target datalayout = "e-p:64:64-p1:64:64-p2:32:32-p3:32:32-p4:64:64-p5:32:32-p6:32:32-i64:64-v16:16-v24:32-v32:32-v48:64-v96:128-v192:256-v256:256-v512:512-v1024:1024-v2048:2048-n32:64-S32-A5"
 
 declare i32 @llvm.amdgcn.workitem.id.x() #1
 
@@ -8,7 +8,7 @@ declare i32 @llvm.amdgcn.workitem.id.x() #1
 ; CHECK: sext i32 %id.x to i64
 ; CHECK: load <2 x float>
 ; CHECK: store <2 x float> zeroinitializer
-define void @basic_merge_sext_index(float addrspace(1)* nocapture %a, float addrspace(1)* nocapture %b, float addrspace(1)* nocapture readonly %c) #0 {
+define amdgpu_kernel void @basic_merge_sext_index(float addrspace(1)* nocapture %a, float addrspace(1)* nocapture %b, float addrspace(1)* nocapture readonly %c) #0 {
 entry:
   %id.x = call i32 @llvm.amdgcn.workitem.id.x()
   %sext.id.x = sext i32 %id.x to i64
@@ -32,7 +32,7 @@ entry:
 ; CHECK: zext i32 %id.x to i64
 ; CHECK: load <2 x float>
 ; CHECK: store <2 x float>
-define void @basic_merge_zext_index(float addrspace(1)* nocapture %a, float addrspace(1)* nocapture %b, float addrspace(1)* nocapture readonly %c) #0 {
+define amdgpu_kernel void @basic_merge_zext_index(float addrspace(1)* nocapture %a, float addrspace(1)* nocapture %b, float addrspace(1)* nocapture readonly %c) #0 {
 entry:
   %id.x = call i32 @llvm.amdgcn.workitem.id.x()
   %zext.id.x = zext i32 %id.x to i64
@@ -54,7 +54,7 @@ entry:
 ; CHECK-LABEL: @merge_op_zext_index(
 ; CHECK: load <2 x float>
 ; CHECK: store <2 x float>
-define void @merge_op_zext_index(float addrspace(1)* nocapture noalias %a, float addrspace(1)* nocapture noalias %b, float addrspace(1)* nocapture readonly noalias %c) #0 {
+define amdgpu_kernel void @merge_op_zext_index(float addrspace(1)* nocapture noalias %a, float addrspace(1)* nocapture noalias %b, float addrspace(1)* nocapture readonly noalias %c) #0 {
 entry:
   %id.x = call i32 @llvm.amdgcn.workitem.id.x()
   %shl = shl i32 %id.x, 2
@@ -81,7 +81,7 @@ entry:
 ; CHECK-LABEL: @merge_op_sext_index(
 ; CHECK: load <2 x float>
 ; CHECK: store <2 x float>
-define void @merge_op_sext_index(float addrspace(1)* nocapture noalias %a, float addrspace(1)* nocapture noalias %b, float addrspace(1)* nocapture readonly noalias %c) #0 {
+define amdgpu_kernel void @merge_op_sext_index(float addrspace(1)* nocapture noalias %a, float addrspace(1)* nocapture noalias %b, float addrspace(1)* nocapture readonly noalias %c) #0 {
 entry:
   %id.x = call i32 @llvm.amdgcn.workitem.id.x()
   %shl = shl i32 %id.x, 2
@@ -112,7 +112,7 @@ entry:
 ; CHECK: loop:
 ; CHECK: load <2 x i32>
 ; CHECK: store <2 x i32>
-define void @zext_trunc_phi_1(i32 addrspace(1)* nocapture noalias %a, i32 addrspace(1)* nocapture noalias %b, i32 addrspace(1)* nocapture readonly noalias %c, i32 %n, i64 %arst, i64 %aoeu) #0 {
+define amdgpu_kernel void @zext_trunc_phi_1(i32 addrspace(1)* nocapture noalias %a, i32 addrspace(1)* nocapture noalias %b, i32 addrspace(1)* nocapture readonly noalias %c, i32 %n, i64 %arst, i64 %aoeu) #0 {
 entry:
   %cmp0 = icmp eq i32 %n, 0
   br i1 %cmp0, label %exit, label %loop

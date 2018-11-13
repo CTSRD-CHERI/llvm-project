@@ -10,8 +10,9 @@
 #ifndef lldb_Host_windows_HostInfoWindows_h_
 #define lldb_Host_windows_HostInfoWindows_h_
 
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/HostInfoBase.h"
+#include "lldb/Utility/FileSpec.h"
+#include "llvm/Support/VersionTuple.h"
 
 namespace lldb_private {
 
@@ -29,7 +30,7 @@ public:
 
   static size_t GetPageSize();
 
-  static bool GetOSVersion(uint32_t &major, uint32_t &minor, uint32_t &update);
+  static llvm::VersionTuple GetOSVersion();
   static bool GetOSBuildString(std::string &s);
   static bool GetOSKernelDescription(std::string &s);
   static bool GetHostname(std::string &s);
@@ -37,9 +38,6 @@ public:
   static FileSpec GetDefaultShell();
 
   static bool GetEnvironmentVar(const std::string &var_name, std::string &var);
-
-protected:
-  static bool ComputePythonDirectory(FileSpec &file_spec);
 
 private:
   static FileSpec m_program_filespec;

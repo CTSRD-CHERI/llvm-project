@@ -101,13 +101,18 @@
 
 #include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/bit.h"
 #include "llvm/Support/AlignOf.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/RecyclingAllocator.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
 #include <iterator>
+#include <new>
+#include <utility>
 
 namespace llvm {
-
 
 //===----------------------------------------------------------------------===//
 //---                              Key traits                              ---//
@@ -131,7 +136,6 @@ namespace llvm {
 
 template <typename T>
 struct IntervalMapInfo {
-
   /// startLess - Return true if x is not in [a;b].
   /// This is x < a both for closed intervals and for [a;b) half-open intervals.
   static inline bool startLess(const T &x, const T &a) {
@@ -155,12 +159,10 @@ struct IntervalMapInfo {
   static inline bool nonEmpty(const T &a, const T &b) {
     return a <= b;
   }
-
 };
 
 template <typename T>
 struct IntervalMapHalfOpenInfo {
-
   /// startLess - Return true if x is not in [a;b).
   static inline bool startLess(const T &x, const T &a) {
     return x < a;
@@ -180,19 +182,13 @@ struct IntervalMapHalfOpenInfo {
   static inline bool nonEmpty(const T &a, const T &b) {
     return a < b;
   }
-
 };
 
 /// IntervalMapImpl - Namespace used for IntervalMap implementation details.
 /// It should be considered private to the implementation.
 namespace IntervalMapImpl {
 
-// Forward declarations.
-template <typename, typename, unsigned, typename> class LeafNode;
-template <typename, typename, unsigned, typename> class BranchNode;
-
-typedef std::pair<unsigned,unsigned> IdxPair;
-
+using IdxPair = std::pair<unsigned,unsigned>;
 
 //===----------------------------------------------------------------------===//
 //---                    IntervalMapImpl::NodeBase                         ---//
@@ -417,7 +413,6 @@ IdxPair distribute(unsigned Nodes, unsigned Elements, unsigned Capacity,
                    const unsigned *CurSize, unsigned NewSize[],
                    unsigned Position, bool Grow);
 
-
 //===----------------------------------------------------------------------===//
 //---                   IntervalMapImpl::NodeSizer                         ---//
 //===----------------------------------------------------------------------===//
@@ -452,7 +447,7 @@ struct NodeSizer {
     LeafSize = DesiredLeafSize > MinLeafSize ? DesiredLeafSize : MinLeafSize
   };
 
-  typedef NodeBase<std::pair<KeyT, KeyT>, ValT, LeafSize> LeafBase;
+  using LeafBase = NodeBase<std::pair<KeyT, KeyT>, ValT, LeafSize>;
 
   enum {
     // Now that we have the leaf branching factor, compute the actual allocation
@@ -468,11 +463,9 @@ struct NodeSizer {
   /// This typedef is very likely to be identical for all IntervalMaps with
   /// reasonably sized entries, so the same allocator can be shared among
   /// different kinds of maps.
-  typedef RecyclingAllocator<BumpPtrAllocator, char,
-                             AllocBytes, CacheLineBytes> Allocator;
-
+  using Allocator =
+      RecyclingAllocator<BumpPtrAllocator, char, AllocBytes, CacheLineBytes>;
 };
-
 
 //===----------------------------------------------------------------------===//
 //---                     IntervalMapImpl::NodeRef                         ---//
@@ -505,7 +498,7 @@ class NodeRef {
 
 public:
   /// NodeRef - Create a null ref.
-  NodeRef() {}
+  NodeRef() = default;
 
   /// operator bool - Detect a null ref.
   explicit operator bool() const { return pip.getOpaqueValue(); }
@@ -684,7 +677,6 @@ insertFrom(unsigned &Pos, unsigned Size, KeyT a, KeyT b, ValT y) {
   value(i) = y;
   return Size + 1;
 }
-
 
 //===----------------------------------------------------------------------===//
 //---                   IntervalMapImpl::BranchNode                        ---//
@@ -930,8 +922,7 @@ public:
   }
 };
 
-} // namespace IntervalMapImpl
-
+} // end namespace IntervalMapImpl
 
 //===----------------------------------------------------------------------===//
 //---                          IntervalMap                                ----//
@@ -939,14 +930,14 @@ public:
 
 template <typename KeyT, typename ValT,
           unsigned N = IntervalMapImpl::NodeSizer<KeyT, ValT>::LeafSize,
-          typename Traits = IntervalMapInfo<KeyT> >
+          typename Traits = IntervalMapInfo<KeyT>>
 class IntervalMap {
-  typedef IntervalMapImpl::NodeSizer<KeyT, ValT> Sizer;
-  typedef IntervalMapImpl::LeafNode<KeyT, ValT, Sizer::LeafSize, Traits> Leaf;
-  typedef IntervalMapImpl::BranchNode<KeyT, ValT, Sizer::BranchSize, Traits>
-    Branch;
-  typedef IntervalMapImpl::LeafNode<KeyT, ValT, N, Traits> RootLeaf;
-  typedef IntervalMapImpl::IdxPair IdxPair;
+  using Sizer = IntervalMapImpl::NodeSizer<KeyT, ValT>;
+  using Leaf = IntervalMapImpl::LeafNode<KeyT, ValT, Sizer::LeafSize, Traits>;
+  using Branch =
+      IntervalMapImpl::BranchNode<KeyT, ValT, Sizer::BranchSize, Traits>;
+  using RootLeaf = IntervalMapImpl::LeafNode<KeyT, ValT, N, Traits>;
+  using IdxPair = IntervalMapImpl::IdxPair;
 
   // The RootLeaf capacity is given as a template parameter. We must compute the
   // corresponding RootBranch capacity.
@@ -956,8 +947,8 @@ class IntervalMap {
     RootBranchCap = DesiredRootBranchCap ? DesiredRootBranchCap : 1
   };
 
-  typedef IntervalMapImpl::BranchNode<KeyT, ValT, RootBranchCap, Traits>
-    RootBranch;
+  using RootBranch =
+      IntervalMapImpl::BranchNode<KeyT, ValT, RootBranchCap, Traits>;
 
   // When branched, we store a global start key as well as the branch node.
   struct RootBranchData {
@@ -966,10 +957,10 @@ class IntervalMap {
   };
 
 public:
-  typedef typename Sizer::Allocator Allocator;
-  typedef KeyT KeyType;
-  typedef ValT ValueType;
-  typedef Traits KeyTraits;
+  using Allocator = typename Sizer::Allocator;
+  using KeyType = KeyT;
+  using ValueType = ValT;
+  using KeyTraits = Traits;
 
 private:
   // The root data is either a RootLeaf or a RootBranchData instance.
@@ -987,15 +978,10 @@ private:
   // Allocator used for creating external nodes.
   Allocator &allocator;
 
-  /// dataAs - Represent data as a node type without breaking aliasing rules.
+  /// Represent data as a node type without breaking aliasing rules.
   template <typename T>
   T &dataAs() const {
-    union {
-      const char *d;
-      T *t;
-    } u;
-    u.d = data.buffer;
-    return *u.t;
+    return *bit_cast<T *>(const_cast<char *>(data.buffer));
   }
 
   const RootLeaf &rootLeaf() const {
@@ -1006,6 +992,7 @@ private:
     assert(!branched() && "Cannot acces leaf data in branched root");
     return dataAs<RootLeaf>();
   }
+
   RootBranchData &rootBranchData() const {
     assert(branched() && "Cannot access branch data in non-branched root");
     return dataAs<RootBranchData>();
@@ -1014,6 +1001,7 @@ private:
     assert(branched() && "Cannot access branch data in non-branched root");
     return dataAs<RootBranchData>();
   }
+
   const RootBranch &rootBranch() const { return rootBranchData().node; }
   RootBranch &rootBranch()             { return rootBranchData().node; }
   KeyT rootBranchStart() const { return rootBranchData().start; }
@@ -1160,7 +1148,6 @@ treeSafeLookup(KeyT x, ValT NotFound) const {
   return NR.get<Leaf>().safeLookup(x, NotFound);
 }
 
-
 // branchRoot - Switch from a leaf root to a branched root.
 // Return the new (root offset, node offset) corresponding to Position.
 template <typename KeyT, typename ValT, unsigned N, typename Traits>
@@ -1295,11 +1282,12 @@ clear() {
 template <typename KeyT, typename ValT, unsigned N, typename Traits>
 class IntervalMap<KeyT, ValT, N, Traits>::const_iterator :
   public std::iterator<std::bidirectional_iterator_tag, ValT> {
+
 protected:
   friend class IntervalMap;
 
   // The map referred to.
-  IntervalMap *map;
+  IntervalMap *map = nullptr;
 
   // We store a full path from the root to the current position.
   // The path may be partially filled, but never between iterator calls.
@@ -1347,7 +1335,7 @@ protected:
 
 public:
   /// const_iterator - Create an iterator that isn't pointing anywhere.
-  const_iterator() : map(nullptr) {}
+  const_iterator() = default;
 
   /// setMap - Change the map iterated over. This call must be followed by a
   /// call to goToBegin(), goToEnd(), or find()
@@ -1447,7 +1435,6 @@ public:
       path.leafOffset() =
         map->rootLeaf().findFrom(path.leafOffset(), map->rootSize, x);
   }
-
 };
 
 /// pathFillFind - Complete path by searching for x.
@@ -1519,7 +1506,8 @@ const_iterator::treeAdvanceTo(KeyT x) {
 template <typename KeyT, typename ValT, unsigned N, typename Traits>
 class IntervalMap<KeyT, ValT, N, Traits>::iterator : public const_iterator {
   friend class IntervalMap;
-  typedef IntervalMapImpl::IdxPair IdxPair;
+
+  using IdxPair = IntervalMapImpl::IdxPair;
 
   explicit iterator(IntervalMap &map) : const_iterator(map) {}
 
@@ -1534,7 +1522,7 @@ class IntervalMap<KeyT, ValT, N, Traits>::iterator : public const_iterator {
 
 public:
   /// iterator - Create null iterator.
-  iterator() {}
+  iterator() = default;
 
   /// setStart - Move the start of the current interval.
   /// This may cause coalescing with the previous interval.
@@ -1600,7 +1588,6 @@ public:
     operator--();
     return tmp;
   }
-
 };
 
 /// canCoalesceLeft - Can the current interval coalesce to the left after
@@ -1800,7 +1787,6 @@ iterator::insert(KeyT a, KeyT b, ValT y) {
   // Now it fits in the new leaf.
   treeInsert(a, b, y);
 }
-
 
 template <typename KeyT, typename ValT, unsigned N, typename Traits>
 void IntervalMap<KeyT, ValT, N, Traits>::
@@ -2015,7 +2001,7 @@ iterator::overflow(unsigned Level) {
   // Elements have been rearranged, now update node sizes and stops.
   bool SplitRoot = false;
   unsigned Pos = 0;
-  for (;;) {
+  while (true) {
     KeyT Stop = Node[Pos]->stop(NewSize[Pos]-1);
     if (NewNode && Pos == NewNode) {
       SplitRoot = insertNode(Level, NodeRef(Node[Pos], NewSize[Pos]), Stop);
@@ -2057,8 +2043,9 @@ iterator::overflow(unsigned Level) {
 ///
 template <typename MapA, typename MapB>
 class IntervalMapOverlaps {
-  typedef typename MapA::KeyType KeyType;
-  typedef typename MapA::KeyTraits Traits;
+  using KeyType = typename MapA::KeyType;
+  using Traits = typename MapA::KeyTraits;
+
   typename MapA::const_iterator posA;
   typename MapB::const_iterator posB;
 
@@ -2083,7 +2070,7 @@ class IntervalMapOverlaps {
       // Already overlapping.
       return;
 
-    for (;;) {
+    while (true) {
       // Make a.end > b.start.
       posA.advanceTo(posB.start());
       if (!posA.valid() || !Traits::stopLess(posB.stop(), posA.start()))
@@ -2162,6 +2149,6 @@ public:
   }
 };
 
-} // namespace llvm
+} // end namespace llvm
 
-#endif
+#endif // LLVM_ADT_INTERVALMAP_H

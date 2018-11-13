@@ -1,5 +1,6 @@
 // RUN: %clang_cc1 -fsyntax-only -verify -std=c++14 -Wundefined-func-template %s
 
+#if !defined(INCLUDE)
 template <class T> struct C1 {
   static char s_var_1;       // expected-note{{forward declaration of template entity is here}}
   static char s_var_2;       // expected-note{{forward declaration of template entity is here}}
@@ -134,6 +135,24 @@ void func_23(C1<int>::C2<long> *x) {
                         // expected-note@-1{{add an explicit instantiation declaration to suppress this warning if 'C1<int>::C2<long>::tmeth_2<int>' is explicitly instantiated in another translation unit}}
 }
 
+namespace test_24 {
+  template <typename T> struct X {
+    friend void g(int);
+    operator int() { return 0; }
+  };
+  void h(X<int> x) { g(x); } // no warning for use of 'g' despite the declaration having been instantiated from a template
+}
+
+#define INCLUDE
+#include "undefined-template.cpp"
+void func_25(SystemHeader<char> *x) {
+  x->meth();
+}
+
 int main() {
   return 0;
 }
+#else
+#pragma clang system_header
+template <typename T> struct SystemHeader { T meth(); };
+#endif

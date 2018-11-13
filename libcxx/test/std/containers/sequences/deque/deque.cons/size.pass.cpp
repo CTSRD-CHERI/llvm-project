@@ -13,6 +13,7 @@
 
 #include <deque>
 #include <cassert>
+#include <cstddef>
 
 #include "test_macros.h"
 #include "test_allocator.h"
@@ -29,15 +30,15 @@ test2(unsigned n)
     assert(DefaultOnly::count == 0);
     {
     C d(n, Allocator());
-    assert(DefaultOnly::count == n);
+    assert(static_cast<unsigned>(DefaultOnly::count) == n);
     assert(d.size() == n);
-    assert(distance(d.begin(), d.end()) == d.size());
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+    assert(static_cast<std::size_t>(distance(d.begin(), d.end())) == d.size());
     for (const_iterator i = d.begin(), e = d.end(); i != e; ++i)
         assert(*i == T());
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
     }
     assert(DefaultOnly::count == 0);
+#else
+    ((void)n);
 #endif
 }
 
@@ -50,13 +51,13 @@ test1(unsigned n)
     assert(DefaultOnly::count == 0);
     {
     C d(n);
-    assert(DefaultOnly::count == n);
+    assert(static_cast<unsigned>(DefaultOnly::count) == n);
     assert(d.size() == n);
-    assert(distance(d.begin(), d.end()) == d.size());
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
+    assert(static_cast<std::size_t>(distance(d.begin(), d.end())) == d.size());
+#if TEST_STD_VER >= 11
     for (const_iterator i = d.begin(), e = d.end(); i != e; ++i)
         assert(*i == T());
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#endif
     }
     assert(DefaultOnly::count == 0);
 }
@@ -67,12 +68,14 @@ test3(unsigned n, Allocator const &alloc = Allocator())
 {
 #if TEST_STD_VER > 11
     typedef std::deque<T, Allocator> C;
-    typedef typename C::const_iterator const_iterator;
     {
     C d(n, alloc);
     assert(d.size() == n);
     assert(d.get_allocator() == alloc);
     }
+#else
+    ((void)n);
+    ((void)alloc);
 #endif
 }
 

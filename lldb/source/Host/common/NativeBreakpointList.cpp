@@ -9,7 +9,7 @@
 
 #include "lldb/Host/common/NativeBreakpointList.h"
 
-#include "lldb/Core/Log.h"
+#include "lldb/Utility/Log.h"
 
 #include "lldb/Host/common/NativeBreakpoint.h"
 #include "lldb/Host/common/SoftwareBreakpoint.h"
@@ -19,9 +19,9 @@ using namespace lldb_private;
 
 NativeBreakpointList::NativeBreakpointList() : m_mutex() {}
 
-Error NativeBreakpointList::AddRef(lldb::addr_t addr, size_t size_hint,
-                                   bool hardware,
-                                   CreateBreakpointFunc create_func) {
+Status NativeBreakpointList::AddRef(lldb::addr_t addr, size_t size_hint,
+                                    bool hardware,
+                                    CreateBreakpointFunc create_func) {
   Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_BREAKPOINTS));
   if (log)
     log->Printf("NativeBreakpointList::%s addr = 0x%" PRIx64
@@ -40,7 +40,7 @@ Error NativeBreakpointList::AddRef(lldb::addr_t addr, size_t size_hint,
                   __FUNCTION__, addr);
 
     iter->second->AddRef();
-    return Error();
+    return Status();
   }
 
   // Create a new breakpoint using the given create func.
@@ -51,7 +51,7 @@ Error NativeBreakpointList::AddRef(lldb::addr_t addr, size_t size_hint,
         __FUNCTION__, addr, size_hint, hardware ? "true" : "false");
 
   NativeBreakpointSP breakpoint_sp;
-  Error error = create_func(addr, size_hint, hardware, breakpoint_sp);
+  Status error = create_func(addr, size_hint, hardware, breakpoint_sp);
   if (error.Fail()) {
     if (log)
       log->Printf(
@@ -70,8 +70,8 @@ Error NativeBreakpointList::AddRef(lldb::addr_t addr, size_t size_hint,
   return error;
 }
 
-Error NativeBreakpointList::DecRef(lldb::addr_t addr) {
-  Error error;
+Status NativeBreakpointList::DecRef(lldb::addr_t addr) {
+  Status error;
 
   Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_BREAKPOINTS));
   if (log)
@@ -104,8 +104,8 @@ Error NativeBreakpointList::DecRef(lldb::addr_t addr) {
     return error;
   }
 
-  // Breakpoint has no more references.  Disable it if it's not
-  // already disabled.
+  // Breakpoint has no more references.  Disable it if it's not already
+  // disabled.
   if (log)
     log->Printf("NativeBreakpointList::%s addr = 0x%" PRIx64
                 " -- removing due to no remaining references",
@@ -142,7 +142,7 @@ Error NativeBreakpointList::DecRef(lldb::addr_t addr) {
   return error;
 }
 
-Error NativeBreakpointList::EnableBreakpoint(lldb::addr_t addr) {
+Status NativeBreakpointList::EnableBreakpoint(lldb::addr_t addr) {
   Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_BREAKPOINTS));
   if (log)
     log->Printf("NativeBreakpointList::%s addr = 0x%" PRIx64, __FUNCTION__,
@@ -157,14 +157,14 @@ Error NativeBreakpointList::EnableBreakpoint(lldb::addr_t addr) {
     if (log)
       log->Printf("NativeBreakpointList::%s addr = 0x%" PRIx64 " -- NOT FOUND",
                   __FUNCTION__, addr);
-    return Error("breakpoint not found");
+    return Status("breakpoint not found");
   }
 
   // Enable it.
   return iter->second->Enable();
 }
 
-Error NativeBreakpointList::DisableBreakpoint(lldb::addr_t addr) {
+Status NativeBreakpointList::DisableBreakpoint(lldb::addr_t addr) {
   Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_BREAKPOINTS));
   if (log)
     log->Printf("NativeBreakpointList::%s addr = 0x%" PRIx64, __FUNCTION__,
@@ -179,15 +179,15 @@ Error NativeBreakpointList::DisableBreakpoint(lldb::addr_t addr) {
     if (log)
       log->Printf("NativeBreakpointList::%s addr = 0x%" PRIx64 " -- NOT FOUND",
                   __FUNCTION__, addr);
-    return Error("breakpoint not found");
+    return Status("breakpoint not found");
   }
 
   // Disable it.
   return iter->second->Disable();
 }
 
-Error NativeBreakpointList::GetBreakpoint(lldb::addr_t addr,
-                                          NativeBreakpointSP &breakpoint_sp) {
+Status NativeBreakpointList::GetBreakpoint(lldb::addr_t addr,
+                                           NativeBreakpointSP &breakpoint_sp) {
   Log *log(GetLogIfAnyCategoriesSet(LIBLLDB_LOG_BREAKPOINTS));
   if (log)
     log->Printf("NativeBreakpointList::%s addr = 0x%" PRIx64, __FUNCTION__,
@@ -200,30 +200,41 @@ Error NativeBreakpointList::GetBreakpoint(lldb::addr_t addr,
   if (iter == m_breakpoints.end()) {
     // Not found!
     breakpoint_sp.reset();
-    return Error("breakpoint not found");
+    return Status("breakpoint not found");
   }
 
   // Disable it.
   breakpoint_sp = iter->second;
-  return Error();
+  return Status();
 }
 
-Error NativeBreakpointList::RemoveTrapsFromBuffer(lldb::addr_t addr, void *buf,
-                                                  size_t size) const {
+Status NativeBreakpointList::RemoveTrapsFromBuffer(lldb::addr_t addr, void *buf,
+                                                   size_t size) const {
+  auto data = llvm::makeMutableArrayRef(static_cast<uint8_t *>(buf), size);
   for (const auto &map : m_breakpoints) {
-    lldb::addr_t bp_addr = map.first;
-    // Breapoint not in range, ignore
-    if (bp_addr < addr || addr + size <= bp_addr)
-      continue;
     const auto &bp_sp = map.second;
     // Not software breakpoint, ignore
     if (!bp_sp->IsSoftwareBreakpoint())
       continue;
     auto software_bp_sp = std::static_pointer_cast<SoftwareBreakpoint>(bp_sp);
-    auto opcode_addr = static_cast<char *>(buf) + bp_addr - addr;
-    auto saved_opcodes = software_bp_sp->m_saved_opcodes;
+
+    lldb::addr_t bp_addr = map.first;
     auto opcode_size = software_bp_sp->m_opcode_size;
-    ::memcpy(opcode_addr, saved_opcodes, opcode_size);
+
+    // Breapoint not in range, ignore
+    if (bp_addr + opcode_size < addr || addr + size <= bp_addr)
+      continue;
+
+    auto saved_opcodes =
+        llvm::makeArrayRef(software_bp_sp->m_saved_opcodes, opcode_size);
+    if (bp_addr < addr) {
+      saved_opcodes = saved_opcodes.drop_front(addr - bp_addr);
+      bp_addr = addr;
+    }
+    auto bp_data = data.drop_front(bp_addr - addr);
+    std::copy_n(saved_opcodes.begin(),
+                std::min(saved_opcodes.size(), bp_data.size()),
+                bp_data.begin());
   }
-  return Error();
+  return Status();
 }

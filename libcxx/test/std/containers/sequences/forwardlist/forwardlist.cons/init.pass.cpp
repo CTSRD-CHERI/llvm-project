@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <forward_list>
 
 // forward_list(initializer_list<value_type> il);
@@ -18,26 +20,22 @@
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_GENERALIZED_INITIALIZERS
     {
         typedef int T;
         typedef std::forward_list<T> C;
         C c = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-        unsigned n = 0;
+        int n = 0;
         for (C::const_iterator i = c.begin(), e = c.end(); i != e; ++i, ++n)
             assert(*i == n);
         assert(n == 10);
     }
-#if TEST_STD_VER >= 11
     {
         typedef int T;
         typedef std::forward_list<T, min_allocator<T>> C;
         C c = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-        unsigned n = 0;
+        int n = 0;
         for (C::const_iterator i = c.begin(), e = c.end(); i != e; ++i, ++n)
             assert(*i == n);
         assert(n == 10);
     }
-#endif
-#endif  // _LIBCPP_HAS_NO_GENERALIZED_INITIALIZERS
 }

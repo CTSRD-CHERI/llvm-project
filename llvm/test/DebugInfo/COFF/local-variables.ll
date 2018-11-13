@@ -24,20 +24,17 @@
 ; ASM: f:                                      # @f
 ; ASM:         .cv_func_id 0
 ; ASM:         .cv_file        1 "D:\\src\\llvm\\build\\t.cpp"
-; ASM:         .cv_loc 0 1 7 0 is_stmt 0       # t.cpp:7:0
+; ASM:         .cv_loc 0 1 7 0       # t.cpp:7:0
 ; ASM: .seh_proc f
-; ASM: # BB#0:                                 # %entry
+; ASM: # %bb.0:                                 # %entry
 ; ASM:         subq    $56, %rsp
-; ASM:         #DEBUG_VALUE: f:param <- [%RSP+52]
 ; ASM:         movl    %ecx, 52(%rsp)
 ; ASM: [[prologue_end:\.Ltmp.*]]:
 ; ASM:         .cv_loc 0 1 8 7                 # t.cpp:8:7
 ; ASM:         testl   %ecx, %ecx
 ; ASM:         je      .LBB0_2
+; ASM: # %bb.1:                                 # %if.then
 ; ASM: [[if_start:\.Ltmp.*]]:
-; ASM: # BB#1:                                 # %if.then
-; ASM:         #DEBUG_VALUE: f:param <- [%RSP+52]
-; ASM:         #DEBUG_VALUE: a <- [%RSP+40]
 ; ASM:         .cv_loc 0 1 9 9                 # t.cpp:9:9
 ; ASM:         movl    $42, 40(%rsp)
 ; ASM: [[inline_site1:\.Ltmp.*]]:
@@ -51,8 +48,6 @@
 ; ASM:         jmp     .LBB0_3
 ; ASM: [[else_start:\.Ltmp.*]]:
 ; ASM: .LBB0_2:                                # %if.else
-; ASM:         #DEBUG_VALUE: f:param <- [%RSP+52]
-; ASM:         #DEBUG_VALUE: b <- [%RSP+36]
 ; ASM:         .cv_loc 0 1 13 9                # t.cpp:13:9
 ; ASM:         movl    $42, 36(%rsp)
 ; ASM: [[inline_site2:\.Ltmp.*]]:
@@ -65,8 +60,8 @@
 ; ASM:         leaq    36(%rsp), %rcx
 ; ASM: [[else_end:\.Ltmp.*]]:
 ; ASM: .LBB0_3:                                # %if.end
+; ASM:         .cv_loc 0 1 0 0                # t.cpp:0:0
 ; ASM:         callq   capture
-; ASM:         .cv_loc 0 1 17 1                # t.cpp:17:1
 ; ASM:         nop
 ; ASM:         addq    $56, %rsp
 ; ASM:         retq
@@ -76,91 +71,82 @@
 ; ASM: .long   116                     # TypeIndex
 ; ASM: .short  1                       # Flags
 ; ASM: .asciz  "param"
-; ASM: .cv_def_range    [[prologue_end]] [[param_end]], "E\021O\001\000\0004\000\000\000"
+; ASM: .cv_def_range    [[prologue_end]] [[param_end]], "B\0214\000\000\000"
 ; ASM: .short  4414                    # Record kind: S_LOCAL
 ; ASM: .long   116                     # TypeIndex
 ; ASM: .short  0                       # Flags
 ; ASM: .asciz  "a"
-; ASM: .cv_def_range    [[if_start]] [[else_start]], "E\021O\001\000\000(\000\000\000"
+; ASM: .cv_def_range    [[if_start]] [[else_start]], "B\021(\000\000\000"
 ; ASM: .short  4414                    # Record kind: S_LOCAL
 ; ASM: .long   116                     # TypeIndex
 ; ASM: .short  0                       # Flags
 ; ASM: .asciz  "b"
-; ASM: .cv_def_range    [[else_start]] [[else_end]], "E\021O\001\000\000$\000\000\000"
+; ASM: .cv_def_range    [[else_start]] [[else_end]], "B\021$\000\000\000"
 ; ASM: .short  4429                    # Record kind: S_INLINESITE
 ; ASM: .short  4414                    # Record kind: S_LOCAL
 ; ASM: .long   116                     # TypeIndex
 ; ASM: .short  0                       # Flags
 ; ASM: .asciz  "v"
-; ASM: .cv_def_range    [[inline_site1]] [[else_start]], "E\021O\001\000\000,\000\000\000"
+; ASM: .cv_def_range    [[inline_site1]] [[else_start]], "B\021,\000\000\000"
 ; ASM: .short  4430                    # Record kind: S_INLINESITE_END
 ; ASM: .short  4429                    # Record kind: S_INLINESITE
 ; ASM: .short  4414                    # Record kind: S_LOCAL
 ; ASM: .long   116                     # TypeIndex
 ; ASM: .short  0                       # Flags
 ; ASM: .asciz  "v"
-; ASM: .cv_def_range    [[inline_site2]] [[else_end]], "E\021O\001\000\0000\000\000\000"
+; ASM: .cv_def_range    [[inline_site2]] [[else_end]], "B\0210\000\000\000"
 ; ASM: .short  4430                    # Record kind: S_INLINESITE_END
 
 ; OBJ:  Subsection [
 ; OBJ:    SubSectionType: Symbols (0xF1)
-; OBJ:    ProcStart {
+; OBJ:    {{.*}}Proc{{.*}}Sym {
 ; OBJ:      DisplayName: f
 ; OBJ:      LinkageName: f
 ; OBJ:    }
-; OBJ:    Local {
+; OBJ:    LocalSym {
 ; OBJ:      Type: int (0x74)
 ; OBJ:      Flags [ (0x1)
 ; OBJ:        IsParameter (0x1)
 ; OBJ:      ]
 ; OBJ:      VarName: param
 ; OBJ:    }
-; OBJ:    DefRangeRegisterRel {
-; OBJ:      BaseRegister: 335
-; OBJ:      HasSpilledUDTMember: No
-; OBJ:      OffsetInParent: 0
-; OBJ:      BasePointerOffset: 52
+; OBJ:    DefRangeFramePointerRelSym {
+; OBJ:      Offset: 52
 ; OBJ:      LocalVariableAddrRange {
 ; OBJ:        OffsetStart: .text+0x8
 ; OBJ:        ISectStart: 0x0
 ; OBJ:        Range: 0x4F
 ; OBJ:      }
 ; OBJ:    }
-; OBJ:    Local {
+; OBJ:    LocalSym {
 ; OBJ:      Type: int (0x74)
 ; OBJ:      Flags [ (0x0)
 ; OBJ:      ]
 ; OBJ:      VarName: a
 ; OBJ:    }
-; OBJ:    DefRangeRegisterRel {
-; OBJ:      BaseRegister: 335
-; OBJ:      HasSpilledUDTMember: No
-; OBJ:      OffsetInParent: 0
-; OBJ:      BasePointerOffset: 40
+; OBJ:    DefRangeFramePointerRelSym {
+; OBJ:      Offset: 40
 ; OBJ:      LocalVariableAddrRange {
 ; OBJ:        OffsetStart: .text+0xC
 ; OBJ:        ISectStart: 0x0
 ; OBJ:        Range: 0x21
 ; OBJ:      }
 ; OBJ:    }
-; OBJ:    Local {
+; OBJ:    LocalSym {
 ; OBJ:      Type: int (0x74)
 ; OBJ:      Flags [ (0x0)
 ; OBJ:      ]
 ; OBJ:      VarName: b
 ; OBJ:    }
-; OBJ:    DefRangeRegisterRel {
-; OBJ:      BaseRegister: 335
-; OBJ:      HasSpilledUDTMember: No
-; OBJ:      OffsetInParent: 0
-; OBJ:      BasePointerOffset: 36
+; OBJ:    DefRangeFramePointerRelSym {
+; OBJ:      Offset: 36
 ; OBJ:      LocalVariableAddrRange {
 ; OBJ:        OffsetStart: .text+0x2D
 ; OBJ:        ISectStart: 0x0
 ; OBJ:        Range: 0x1F
 ; OBJ:      }
 ; OBJ:    }
-; OBJ:    InlineSite {
+; OBJ:    InlineSiteSym {
 ; OBJ:      PtrParent: 0x0
 ; OBJ:      PtrEnd: 0x0
 ; OBJ:      Inlinee: will_be_inlined (0x1002)
@@ -171,17 +157,14 @@
 ; OBJ:        ChangeCodeLength: 0xC
 ; OBJ:      ]
 ; OBJ:    }
-; OBJ:    Local {
+; OBJ:    LocalSym {
 ; OBJ:      Type: int (0x74)
 ; OBJ:      Flags [ (0x0)
 ; OBJ:      ]
 ; OBJ:      VarName: v
 ; OBJ:    }
-; OBJ:    DefRangeRegisterRel {
-; OBJ:      BaseRegister: 335
-; OBJ:      HasSpilledUDTMember: No
-; OBJ:      OffsetInParent: 0
-; OBJ:      BasePointerOffset: 44
+; OBJ:    DefRangeFramePointerRelSym {
+; OBJ:      Offset: 44
 ; OBJ:      LocalVariableAddrRange {
 ; OBJ:        OffsetStart: .text+0x14
 ; OBJ:        ISectStart: 0x0
@@ -190,7 +173,7 @@
 ; OBJ:    }
 ; OBJ:    InlineSiteEnd {
 ; OBJ:    }
-; OBJ:    InlineSite {
+; OBJ:    InlineSiteSym {
 ; OBJ:      PtrParent: 0x0
 ; OBJ:      PtrEnd: 0x0
 ; OBJ:      Inlinee: will_be_inlined (0x1002)
@@ -198,20 +181,17 @@
 ; OBJ:        ChangeLineOffset: 1
 ; OBJ:        ChangeCodeOffset: 0x35
 ; OBJ:        ChangeCodeOffsetAndLineOffset: {CodeOffset: 0xD, LineOffset: 1}
-; OBJ:        ChangeCodeLength: 0xF
+; OBJ:        ChangeCodeLength: 0xA
 ; OBJ:      ]
 ; OBJ:    }
-; OBJ:    Local {
+; OBJ:    LocalSym {
 ; OBJ:      Type: int (0x74)
 ; OBJ:      Flags [ (0x0)
 ; OBJ:      ]
 ; OBJ:      VarName: v
 ; OBJ:    }
-; OBJ:    DefRangeRegisterRel {
-; OBJ:      BaseRegister: 335
-; OBJ:      HasSpilledUDTMember: No
-; OBJ:      OffsetInParent: 0
-; OBJ:      BasePointerOffset: 48
+; OBJ:    DefRangeFramePointerRelSym {
+; OBJ:      Offset: 48
 ; OBJ:      LocalVariableAddrRange {
 ; OBJ:        OffsetStart: .text+0x35
 ; OBJ:        ISectStart: 0x0
@@ -280,11 +260,11 @@ attributes #3 = { nounwind }
 !0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !1, producer: "clang version 3.9.0 ", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug, enums: !2)
 !1 = !DIFile(filename: "t.cpp", directory: "D:\5Csrc\5Cllvm\5Cbuild")
 !2 = !{}
-!4 = distinct !DISubprogram(name: "f", scope: !1, file: !1, line: 7, type: !5, isLocal: false, isDefinition: true, scopeLine: 7, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!4 = distinct !DISubprogram(name: "f", scope: !1, file: !1, line: 7, type: !5, isLocal: false, isDefinition: true, scopeLine: 7, flags: DIFlagPrototyped, isOptimized: false, unit: !0, retainedNodes: !2)
 !5 = !DISubroutineType(types: !6)
 !6 = !{null, !7}
 !7 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
-!8 = distinct !DISubprogram(name: "will_be_inlined", linkageName: "\01?will_be_inlined@@YAXXZ", scope: !1, file: !1, line: 3, type: !9, isLocal: true, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!8 = distinct !DISubprogram(name: "will_be_inlined", linkageName: "\01?will_be_inlined@@YAXXZ", scope: !1, file: !1, line: 3, type: !9, isLocal: true, isDefinition: true, scopeLine: 3, flags: DIFlagPrototyped, isOptimized: false, unit: !0, retainedNodes: !2)
 !9 = !DISubroutineType(types: !10)
 !10 = !{null}
 !11 = !{i32 2, !"CodeView", i32 1}

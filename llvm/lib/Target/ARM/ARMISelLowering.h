@@ -1,4 +1,4 @@
-//===-- ARMISelLowering.h - ARM DAG Lowering Interface ----------*- C++ -*-===//
+//===- ARMISelLowering.h - ARM DAG Lowering Interface -----------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -16,16 +16,42 @@
 #define LLVM_LIB_TARGET_ARM_ARMISELLOWERING_H
 
 #include "MCTargetDesc/ARMBaseInfo.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/CodeGen/CallingConvLower.h"
-#include "llvm/CodeGen/SelectionDAG.h"
-#include "llvm/Target/TargetLowering.h"
-#include <vector>
+#include "llvm/CodeGen/ISDOpcodes.h"
+#include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/ValueTypes.h"
+#include "llvm/IR/Attributes.h"
+#include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InlineAsm.h"
+#include "llvm/Support/CodeGen.h"
+#include "llvm/Support/MachineValueType.h"
+#include <utility>
 
 namespace llvm {
-  class ARMConstantPoolValue;
-  class ARMSubtarget;
+
+class ARMSubtarget;
+class DataLayout;
+class FastISel;
+class FunctionLoweringInfo;
+class GlobalValue;
+class InstrItineraryData;
+class Instruction;
+class MachineBasicBlock;
+class MachineInstr;
+class SelectionDAG;
+class TargetLibraryInfo;
+class TargetMachine;
+class TargetRegisterInfo;
+class VectorType;
 
   namespace ARMISD {
+
     // ARM Specific DAG Nodes
     enum NodeType : unsigned {
       // Start the numbering where the builtin ops and target ops leave off.
@@ -61,6 +87,7 @@ namespace llvm {
       CMOV,         // ARM conditional move instructions.
 
       SSAT,         // Signed saturation
+      USAT,         // Unsigned saturation
 
       BCC_i64,
 
@@ -75,6 +102,7 @@ namespace llvm {
 
       VMOVRRD,      // double to two gprs.
       VMOVDRR,      // Two gprs to double.
+      VMOVSR,       // move gpr to single, used for f32 literal constructed in a gpr
 
       EH_SJLJ_SETJMP,         // SjLj exception handling setjmp.
       EH_SJLJ_LONGJMP,        // SjLj exception handling longjmp.
@@ -144,6 +172,10 @@ namespace llvm {
       // Vector move f32 immediate:
       VMOVFPIMM,
 
+      // Move H <-> R, clearing top 16 bits
+      VMOVrh,
+      VMOVhr,
+
       // Vector duplicate:
       VDUP,
       VDUPLANE,
@@ -163,9 +195,21 @@ namespace llvm {
       VMULLs,       // ...signed
       VMULLu,       // ...unsigned
 
+      SMULWB,       // Signed multiply word by half word, bottom
+      SMULWT,       // Signed multiply word by half word, top
       UMLAL,        // 64bit Unsigned Accumulate Multiply
       SMLAL,        // 64bit Signed Accumulate Multiply
       UMAAL,        // 64-bit Unsigned Accumulate Accumulate Multiply
+      SMLALBB,      // 64-bit signed accumulate multiply bottom, bottom 16
+      SMLALBT,      // 64-bit signed accumulate multiply bottom, top 16
+      SMLALTB,      // 64-bit signed accumulate multiply top, bottom 16
+      SMLALTT,      // 64-bit signed accumulate multiply top, top 16
+      SMLALD,       // Signed multiply accumulate long dual
+      SMLALDX,      // Signed multiply accumulate long dual exchange
+      SMLSLD,       // Signed multiply subtract long dual
+      SMLSLDX,      // Signed multiply subtract long dual exchange
+      SMMLAR,       // Signed multiply long, round and add
+      SMMLSR,       // Signed multiply long, subtract and round
 
       // Operands of the standard BUILD_VECTOR node are not legalized, which
       // is fine if BUILD_VECTORs are always lowered to shuffles or other
@@ -190,7 +234,8 @@ namespace llvm {
       MEMCPY,
 
       // Vector load N-element structure to all lanes:
-      VLD2DUP = ISD::FIRST_TARGET_MEMORY_OPCODE,
+      VLD1DUP = ISD::FIRST_TARGET_MEMORY_OPCODE,
+      VLD2DUP,
       VLD3DUP,
       VLD4DUP,
 
@@ -202,6 +247,7 @@ namespace llvm {
       VLD2LN_UPD,
       VLD3LN_UPD,
       VLD4LN_UPD,
+      VLD1DUP_UPD,
       VLD2DUP_UPD,
       VLD3DUP_UPD,
       VLD4DUP_UPD,
@@ -215,12 +261,15 @@ namespace llvm {
       VST3LN_UPD,
       VST4LN_UPD
     };
-  }
+
+  } // end namespace ARMISD
 
   /// Define some predicates that are used for node matching.
   namespace ARM {
+
     bool isBitFieldInvertedMask(unsigned v);
-  }
+
+  } // end namespace ARM
 
   //===--------------------------------------------------------------------===//
   //  ARMTargetLowering - ARM Implementation of the TargetLowering interface
@@ -237,7 +286,6 @@ namespace llvm {
 
     /// ReplaceNodeResults - Replace the results of node with an illegal result
     /// type with new values built out of custom code.
-    ///
     void ReplaceNodeResults(SDNode *N, SmallVectorImpl<SDValue>&Results,
                             SelectionDAG &DAG) const override;
 
@@ -247,6 +295,8 @@ namespace llvm {
       // ARM does not support scalar condition selects on vectors.
       return (Kind != ScalarCondVectorVal);
     }
+
+    bool isReadOnly(const GlobalValue *GV) const;
 
     /// getSetCCResultType - Return the value type to use for ISD::SETCC.
     EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
@@ -279,8 +329,10 @@ namespace llvm {
                             bool MemcpyStrSrc,
                             MachineFunction &MF) const override;
 
-    using TargetLowering::isZExtFree;
+    bool isTruncateFree(Type *SrcTy, Type *DstTy) const override;
+    bool isTruncateFree(EVT SrcVT, EVT DstVT) const override;
     bool isZExtFree(SDValue Val, EVT VT2) const override;
+    bool isFNegFree(EVT VT) const override;
 
     bool isVectorLoadExtDesirable(SDValue ExtVal) const override;
 
@@ -290,7 +342,8 @@ namespace llvm {
     /// isLegalAddressingMode - Return true if the addressing mode represented
     /// by AM is legal for this target, for a load/store of the specified type.
     bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM,
-                               Type *Ty, unsigned AS) const override;
+                               Type *Ty, unsigned AS,
+                               Instruction *I = nullptr) const override;
 
     /// getScalingFactorCost - Return the cost of the scaling used in
     /// addressing mode represented by AM.
@@ -300,6 +353,10 @@ namespace llvm {
                              unsigned AS) const override;
 
     bool isLegalT2ScaledAddressingMode(const AddrMode &AM, EVT VT) const;
+
+    /// Returns true if the addresing mode representing by AM is legal
+    /// for the Thumb1 target, for a load/store of the specified type.
+    bool isLegalT1ScaledAddressingMode(const AddrMode &AM, EVT VT) const;
 
     /// isLegalICmpImmediate - Return true if the specified immediate is legal
     /// icmp immediate, that is the target has icmp instructions which can
@@ -327,10 +384,13 @@ namespace llvm {
                                     SDValue &Offset, ISD::MemIndexedMode &AM,
                                     SelectionDAG &DAG) const override;
 
-    void computeKnownBitsForTargetNode(const SDValue Op, APInt &KnownZero,
-                                       APInt &KnownOne,
+    void computeKnownBitsForTargetNode(const SDValue Op, KnownBits &Known,
+                                       const APInt &DemandedElts,
                                        const SelectionDAG &DAG,
                                        unsigned Depth) const override;
+
+    bool targetShrinkDemandedConstant(SDValue Op, const APInt &Demanded,
+                                      TargetLoweringOpt &TLO) const override;
 
 
     bool ExpandInlineAsm(CallInst *CI) const override;
@@ -412,7 +472,7 @@ namespace llvm {
     Sched::Preference getSchedulingPreference(SDNode *N) const override;
 
     bool
-    isShuffleMaskLegal(const SmallVectorImpl<int> &M, EVT VT) const override;
+    isShuffleMaskLegal(ArrayRef<int> M, EVT VT) const override;
     bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
     /// isFPImmLegal - Returns true if the target can instruction select the
@@ -422,14 +482,20 @@ namespace llvm {
 
     bool getTgtMemIntrinsic(IntrinsicInfo &Info,
                             const CallInst &I,
+                            MachineFunction &MF,
                             unsigned Intrinsic) const override;
 
-    /// \brief Returns true if it is beneficial to convert a load of a constant
+    /// Returns true if it is beneficial to convert a load of a constant
     /// to just the constant itself.
     bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                            Type *Ty) const override;
 
-    /// \brief Returns true if an argument of type Ty needs to be passed in a
+    /// Return true if EXTRACT_SUBVECTOR is cheap for this result type
+    /// with this index.
+    bool isExtractSubvectorCheap(EVT ResVT, EVT SrcVT,
+                                 unsigned Index) const override;
+
+    /// Returns true if an argument of type Ty needs to be passed in a
     /// contiguous block of registers in calling convention CallConv.
     bool functionArgumentNeedsConsecutiveRegisters(
         Type *Ty, CallingConv::ID CallConv, bool isVarArg) const override;
@@ -452,10 +518,10 @@ namespace llvm {
 
     void emitAtomicCmpXchgNoStoreLLBalance(IRBuilder<> &Builder) const override;
 
-    Instruction* emitLeadingFence(IRBuilder<> &Builder, AtomicOrdering Ord,
-                          bool IsStore, bool IsLoad) const override;
-    Instruction* emitTrailingFence(IRBuilder<> &Builder, AtomicOrdering Ord,
-                           bool IsStore, bool IsLoad) const override;
+    Instruction *emitLeadingFence(IRBuilder<> &Builder, Instruction *Inst,
+                                  AtomicOrdering Ord) const override;
+    Instruction *emitTrailingFence(IRBuilder<> &Builder, Instruction *Inst,
+                                   AtomicOrdering Ord) const override;
 
     unsigned getMaxSupportedInterleaveFactor() const override { return 4; }
 
@@ -472,15 +538,26 @@ namespace llvm {
     bool shouldExpandAtomicStoreInIR(StoreInst *SI) const override;
     TargetLoweringBase::AtomicExpansionKind
     shouldExpandAtomicRMWInIR(AtomicRMWInst *AI) const override;
-    bool shouldExpandAtomicCmpXchgInIR(AtomicCmpXchgInst *AI) const override;
+    TargetLoweringBase::AtomicExpansionKind
+    shouldExpandAtomicCmpXchgInIR(AtomicCmpXchgInst *AI) const override;
 
     bool useLoadStackGuardNode() const override;
 
     bool canCombineStoreAndExtract(Type *VectorTy, Value *Idx,
                                    unsigned &Cost) const override;
 
+    bool canMergeStoresTo(unsigned AddressSpace, EVT MemVT,
+                          const SelectionDAG &DAG) const override {
+      // Do not merge to larger than i32.
+      return (MemVT.getSizeInBits() <= 32);
+    }
+
     bool isCheapToSpeculateCttz() const override;
     bool isCheapToSpeculateCtlz() const override;
+
+    bool convertSetCCLogicToBitwiseLogic(EVT VT) const override {
+      return VT.isScalarInteger();
+    }
 
     bool supportSwiftError() const override {
       return true;
@@ -489,6 +566,31 @@ namespace llvm {
     bool hasStandaloneRem(EVT VT) const override {
       return HasStandaloneRem;
     }
+
+    CCAssignFn *CCAssignFnForCall(CallingConv::ID CC, bool isVarArg) const;
+    CCAssignFn *CCAssignFnForReturn(CallingConv::ID CC, bool isVarArg) const;
+
+    /// Returns true if \p VecTy is a legal interleaved access type. This
+    /// function checks the vector element type and the overall width of the
+    /// vector.
+    bool isLegalInterleavedAccessType(VectorType *VecTy,
+                                      const DataLayout &DL) const;
+
+    bool alignLoopsWithOptSize() const override;
+
+    /// Returns the number of interleaved accesses that will be generated when
+    /// lowering accesses of the given type.
+    unsigned getNumInterleavedAccesses(VectorType *VecTy,
+                                       const DataLayout &DL) const;
+
+    void finalizeLowering(MachineFunction &MF) const override;
+
+    /// Return the correct alignment for the current calling convention.
+    unsigned getABIAlignmentForCallingConv(Type *ArgTy,
+                                           DataLayout DL) const override;
+
+    bool isDesirableToCommuteWithShift(const SDNode *N,
+                                       CombineLevel Level) const override;
 
   protected:
     std::pair<const TargetRegisterClass *, uint8_t>
@@ -505,7 +607,6 @@ namespace llvm {
     const InstrItineraryData *Itins;
 
     /// ARMPCLabelIndex - Keep track of the number of ARM PC labels created.
-    ///
     unsigned ARMPCLabelIndex;
 
     // TODO: remove this, and have shouldInsertFencesForAtomic do the proper
@@ -514,14 +615,13 @@ namespace llvm {
 
     bool HasStandaloneRem = true;
 
-    void InitLibcallCallingConvs();
-
     void addTypeForNEON(MVT VT, MVT PromotedLdStVT, MVT PromotedBitwiseVT);
     void addDRTypeForNEON(MVT VT);
     void addQRTypeForNEON(MVT VT);
     std::pair<SDValue, SDValue> getARMXALUOOp(SDValue Op, SelectionDAG &DAG, SDValue &ARMcc) const;
 
-    typedef SmallVector<std::pair<unsigned, SDValue>, 8> RegsToPassVector;
+    using RegsToPassVector = SmallVector<std::pair<unsigned, SDValue>, 8>;
+
     void PassF64ArgInRegs(const SDLoc &dl, SelectionDAG &DAG, SDValue Chain,
                           SDValue &Arg, RegsToPassVector &RegsToPass,
                           CCValAssign &VA, CCValAssign &NextVA,
@@ -546,6 +646,8 @@ namespace llvm {
     SDValue LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG,
                                     const ARMSubtarget *Subtarget) const;
     SDValue LowerBlockAddress(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddressDarwin(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddressELF(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGlobalAddressWindows(SDValue Op, SelectionDAG &DAG) const;
@@ -559,9 +661,11 @@ namespace llvm {
     SDValue LowerGlobalTLSAddressWindows(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerGLOBAL_OFFSET_TABLE(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
-    SDValue LowerXALUO(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerSignedALUO(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerUnsignedALUO(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSELECT(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const;
+    SDValue LowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBR_CC(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerFCOPYSIGN(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerRETURNADDR(SDValue Op, SelectionDAG &DAG) const;
@@ -611,9 +715,10 @@ namespace llvm {
                             SDValue ThisVal) const;
 
     bool supportSplitCSR(MachineFunction *MF) const override {
-      return MF->getFunction()->getCallingConv() == CallingConv::CXX_FAST_TLS &&
-          MF->getFunction()->hasFnAttribute(Attribute::NoUnwind);
+      return MF->getFunction().getCallingConv() == CallingConv::CXX_FAST_TLS &&
+          MF->getFunction().hasFnAttribute(Attribute::NoUnwind);
     }
+
     void initializeSplitCSR(MachineBasicBlock *Entry) const override;
     void insertCopiesSplitCSR(
       MachineBasicBlock *Entry,
@@ -635,9 +740,8 @@ namespace llvm {
                               unsigned ArgOffset, unsigned TotalArgRegsSaveSize,
                               bool ForceMutable = false) const;
 
-    SDValue
-      LowerCall(TargetLowering::CallLoweringInfo &CLI,
-                SmallVectorImpl<SDValue> &InVals) const override;
+    SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
+                      SmallVectorImpl<SDValue> &InVals) const override;
 
     /// HandleByVal - Target-specific cleanup for ByVal support.
     void HandleByVal(CCState *, unsigned &, unsigned) const override;
@@ -667,7 +771,9 @@ namespace llvm {
 
     bool isUsedByReturnOnly(SDNode *N, SDValue &Chain) const override;
 
-    bool mayBeEmittedAsTailCall(CallInst *CI) const override;
+    bool mayBeEmittedAsTailCall(const CallInst *CI) const override;
+
+    bool shouldConsiderGEPOffsetSplit() const override { return true; }
 
     SDValue getCMOV(const SDLoc &dl, EVT VT, SDValue FalseVal, SDValue TrueVal,
                     SDValue ARMcc, SDValue CCR, SDValue Cmp,
@@ -675,7 +781,7 @@ namespace llvm {
     SDValue getARMCmp(SDValue LHS, SDValue RHS, ISD::CondCode CC,
                       SDValue &ARMcc, SelectionDAG &DAG, const SDLoc &dl) const;
     SDValue getVFPCmp(SDValue LHS, SDValue RHS, SelectionDAG &DAG,
-                      const SDLoc &dl) const;
+                      const SDLoc &dl, bool InvalidOnQNaN) const;
     SDValue duplicateCmp(SDValue Cmp, SelectionDAG &DAG) const;
 
     SDValue OptimizeVFPBrcond(SDValue Op, SelectionDAG &DAG) const;
@@ -703,9 +809,12 @@ namespace llvm {
   };
 
   namespace ARM {
+
     FastISel *createFastISel(FunctionLoweringInfo &funcInfo,
                              const TargetLibraryInfo *libInfo);
-  }
-}
 
-#endif  // ARMISELLOWERING_H
+  } // end namespace ARM
+
+} // end namespace llvm
+
+#endif // LLVM_LIB_TARGET_ARM_ARMISELLOWERING_H

@@ -22,8 +22,8 @@ namespace build {
 UnnamedNamespaceInHeaderCheck::UnnamedNamespaceInHeaderCheck(
     StringRef Name, ClangTidyContext *Context)
     : ClangTidyCheck(Name, Context),
-      RawStringHeaderFileExtensions(
-          Options.getLocalOrGlobal("HeaderFileExtensions", "h,hh,hpp,hxx")) {
+      RawStringHeaderFileExtensions(Options.getLocalOrGlobal(
+          "HeaderFileExtensions", utils::defaultHeaderFileExtensions())) {
   if (!utils::parseHeaderFileExtensions(RawStringHeaderFileExtensions,
                                         HeaderFileExtensions, ',')) {
     llvm::errs() << "Invalid header file extension: "
@@ -48,7 +48,7 @@ void UnnamedNamespaceInHeaderCheck::registerMatchers(
 void UnnamedNamespaceInHeaderCheck::check(
     const MatchFinder::MatchResult &Result) {
   const auto *N = Result.Nodes.getNodeAs<NamespaceDecl>("anonymousNamespace");
-  SourceLocation Loc = N->getLocStart();
+  SourceLocation Loc = N->getBeginLoc();
   if (!Loc.isValid())
     return;
 

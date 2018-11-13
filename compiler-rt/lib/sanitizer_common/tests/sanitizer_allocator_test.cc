@@ -20,9 +20,11 @@
 
 #include "gtest/gtest.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <algorithm>
 #include <vector>
+#include <random>
 #include <set>
 
 using namespace __sanitizer;
@@ -87,11 +89,20 @@ struct AP64VeryCompact {
   static const uptr kFlags = 0;
 };
 
+struct AP64Dense {
+  static const uptr kSpaceBeg = kAllocatorSpace;
+  static const uptr kSpaceSize = kAllocatorSize;
+  static const uptr kMetadataSize = 16;
+  typedef DenseSizeClassMap SizeClassMap;
+  typedef NoOpMapUnmapCallback MapUnmapCallback;
+  static const uptr kFlags = 0;
+};
 
 typedef SizeClassAllocator64<AP64> Allocator64;
 typedef SizeClassAllocator64<AP64Dyn> Allocator64Dynamic;
 typedef SizeClassAllocator64<AP64Compact> Allocator64Compact;
 typedef SizeClassAllocator64<AP64VeryCompact> Allocator64VeryCompact;
+typedef SizeClassAllocator64<AP64Dense> Allocator64Dense;
 #elif defined(__mips64)
 static const u64 kAddressSpaceSize = 1ULL << 40;
 #elif defined(__aarch64__)
@@ -107,13 +118,17 @@ static const u64 kAddressSpaceSize = 1ULL << 32;
 static const uptr kRegionSizeLog = FIRST_32_SECOND_64(20, 24);
 static const uptr kFlatByteMapSize = kAddressSpaceSize >> kRegionSizeLog;
 
-typedef SizeClassAllocator32<
-  0, kAddressSpaceSize,
-  /*kMetadataSize*/16,
-  CompactSizeClassMap,
-  kRegionSizeLog,
-  FlatByteMap<kFlatByteMapSize> >
-  Allocator32Compact;
+struct AP32Compact {
+  static const uptr kSpaceBeg = 0;
+  static const u64 kSpaceSize = kAddressSpaceSize;
+  static const uptr kMetadataSize = 16;
+  typedef CompactSizeClassMap SizeClassMap;
+  static const uptr kRegionSizeLog = ::kRegionSizeLog;
+  typedef FlatByteMap<kFlatByteMapSize> ByteMap;
+  typedef NoOpMapUnmapCallback MapUnmapCallback;
+  static const uptr kFlags = 0;
+};
+typedef SizeClassAllocator32<AP32Compact> Allocator32Compact;
 
 template <class SizeClassMap>
 void TestSizeClassMap() {
@@ -138,10 +153,14 @@ TEST(SanitizerCommon, InternalSizeClassMap) {
   TestSizeClassMap<InternalSizeClassMap>();
 }
 
+TEST(SanitizerCommon, DenseSizeClassMap) {
+  TestSizeClassMap<VeryCompactSizeClassMap>();
+}
+
 template <class Allocator>
 void TestSizeClassAllocator() {
   Allocator *a = new Allocator;
-  a->Init();
+  a->Init(kReleaseToOSIntervalNever);
   SizeClassAllocatorLocalCache<Allocator> cache;
   memset(&cache, 0, sizeof(cache));
   cache.Init(0);
@@ -220,8 +239,13 @@ TEST(SanitizerCommon, SizeClassAllocator64Dynamic) {
 }
 
 #if !SANITIZER_ANDROID
+//FIXME(kostyak): find values so that those work on Android as well.
 TEST(SanitizerCommon, SizeClassAllocator64Compact) {
   TestSizeClassAllocator<Allocator64Compact>();
+}
+
+TEST(SanitizerCommon, SizeClassAllocator64Dense) {
+  TestSizeClassAllocator<Allocator64Dense>();
 }
 #endif
 
@@ -235,10 +259,27 @@ TEST(SanitizerCommon, SizeClassAllocator32Compact) {
   TestSizeClassAllocator<Allocator32Compact>();
 }
 
+struct AP32SeparateBatches {
+  static const uptr kSpaceBeg = 0;
+  static const u64 kSpaceSize = kAddressSpaceSize;
+  static const uptr kMetadataSize = 16;
+  typedef DefaultSizeClassMap SizeClassMap;
+  static const uptr kRegionSizeLog = ::kRegionSizeLog;
+  typedef FlatByteMap<kFlatByteMapSize> ByteMap;
+  typedef NoOpMapUnmapCallback MapUnmapCallback;
+  static const uptr kFlags =
+      SizeClassAllocator32FlagMasks::kUseSeparateSizeClassForBatch;
+};
+typedef SizeClassAllocator32<AP32SeparateBatches> Allocator32SeparateBatches;
+
+TEST(SanitizerCommon, SizeClassAllocator32SeparateBatches) {
+  TestSizeClassAllocator<Allocator32SeparateBatches>();
+}
+
 template <class Allocator>
 void SizeClassAllocatorMetadataStress() {
   Allocator *a = new Allocator;
-  a->Init();
+  a->Init(kReleaseToOSIntervalNever);
   SizeClassAllocatorLocalCache<Allocator> cache;
   memset(&cache, 0, sizeof(cache));
   cache.Init(0);
@@ -292,7 +333,7 @@ TEST(SanitizerCommon, SizeClassAllocator32CompactMetadataStress) {
 template <class Allocator>
 void SizeClassAllocatorGetBlockBeginStress(u64 TotalSize) {
   Allocator *a = new Allocator;
-  a->Init();
+  a->Init(kReleaseToOSIntervalNever);
   SizeClassAllocatorLocalCache<Allocator> cache;
   memset(&cache, 0, sizeof(cache));
   cache.Init(0);
@@ -366,7 +407,7 @@ TEST(SanitizerCommon, SizeClassAllocator64MapUnmapCallback) {
   TestMapUnmapCallback::unmap_count = 0;
   typedef SizeClassAllocator64<AP64WithCallback> Allocator64WithCallBack;
   Allocator64WithCallBack *a = new Allocator64WithCallBack;
-  a->Init();
+  a->Init(kReleaseToOSIntervalNever);
   EXPECT_EQ(TestMapUnmapCallback::map_count, 1);  // Allocator state.
   SizeClassAllocatorLocalCache<Allocator64WithCallBack> cache;
   memset(&cache, 0, sizeof(cache));
@@ -385,19 +426,23 @@ TEST(SanitizerCommon, SizeClassAllocator64MapUnmapCallback) {
 #endif
 #endif
 
+struct AP32WithCallback {
+  static const uptr kSpaceBeg = 0;
+  static const u64 kSpaceSize = kAddressSpaceSize;
+  static const uptr kMetadataSize = 16;
+  typedef CompactSizeClassMap SizeClassMap;
+  static const uptr kRegionSizeLog = ::kRegionSizeLog;
+  typedef FlatByteMap<kFlatByteMapSize> ByteMap;
+  typedef TestMapUnmapCallback MapUnmapCallback;
+  static const uptr kFlags = 0;
+};
+
 TEST(SanitizerCommon, SizeClassAllocator32MapUnmapCallback) {
   TestMapUnmapCallback::map_count = 0;
   TestMapUnmapCallback::unmap_count = 0;
-  typedef SizeClassAllocator32<
-      0, kAddressSpaceSize,
-      /*kMetadataSize*/16,
-      CompactSizeClassMap,
-      kRegionSizeLog,
-      FlatByteMap<kFlatByteMapSize>,
-      TestMapUnmapCallback>
-    Allocator32WithCallBack;
+  typedef SizeClassAllocator32<AP32WithCallback> Allocator32WithCallBack;
   Allocator32WithCallBack *a = new Allocator32WithCallBack;
-  a->Init();
+  a->Init(kReleaseToOSIntervalNever);
   EXPECT_EQ(TestMapUnmapCallback::map_count, 0);
   SizeClassAllocatorLocalCache<Allocator32WithCallBack>  cache;
   memset(&cache, 0, sizeof(cache));
@@ -418,7 +463,7 @@ TEST(SanitizerCommon, LargeMmapAllocatorMapUnmapCallback) {
   TestMapUnmapCallback::map_count = 0;
   TestMapUnmapCallback::unmap_count = 0;
   LargeMmapAllocator<TestMapUnmapCallback> a;
-  a.Init(/* may_return_null */ false);
+  a.Init();
   AllocatorStats stats;
   stats.Init();
   void *x = a.Allocate(&stats, 1 << 20, 1);
@@ -427,35 +472,36 @@ TEST(SanitizerCommon, LargeMmapAllocatorMapUnmapCallback) {
   EXPECT_EQ(TestMapUnmapCallback::unmap_count, 1);
 }
 
-template<class Allocator>
-void FailInAssertionOnOOM() {
-  Allocator a;
-  a.Init();
-  SizeClassAllocatorLocalCache<Allocator> cache;
-  memset(&cache, 0, sizeof(cache));
-  cache.Init(0);
-  AllocatorStats stats;
-  stats.Init();
-  const size_t kNumChunks = 128;
-  uint32_t chunks[kNumChunks];
-  for (int i = 0; i < 1000000; i++) {
-    a.GetFromAllocator(&stats, 52, chunks, kNumChunks);
-  }
-
-  a.TestOnlyUnmap();
-}
-
 // Don't test OOM conditions on Win64 because it causes other tests on the same
 // machine to OOM.
 #if SANITIZER_CAN_USE_ALLOCATOR64 && !SANITIZER_WINDOWS64 && !SANITIZER_ANDROID
 TEST(SanitizerCommon, SizeClassAllocator64Overflow) {
-  EXPECT_DEATH(FailInAssertionOnOOM<Allocator64>(), "Out of memory");
+  Allocator64 a;
+  a.Init(kReleaseToOSIntervalNever);
+  SizeClassAllocatorLocalCache<Allocator64> cache;
+  memset(&cache, 0, sizeof(cache));
+  cache.Init(0);
+  AllocatorStats stats;
+  stats.Init();
+
+  const size_t kNumChunks = 128;
+  uint32_t chunks[kNumChunks];
+  bool allocation_failed = false;
+  for (int i = 0; i < 1000000; i++) {
+    if (!a.GetFromAllocator(&stats, 52, chunks, kNumChunks)) {
+      allocation_failed = true;
+      break;
+    }
+  }
+  EXPECT_EQ(allocation_failed, true);
+
+  a.TestOnlyUnmap();
 }
 #endif
 
 TEST(SanitizerCommon, LargeMmapAllocator) {
-  LargeMmapAllocator<> a;
-  a.Init(/* may_return_null */ false);
+  LargeMmapAllocator<NoOpMapUnmapCallback> a;
+  a.Init();
   AllocatorStats stats;
   stats.Init();
 
@@ -538,7 +584,8 @@ void TestCombinedAllocator() {
       CombinedAllocator<PrimaryAllocator, AllocatorCache, SecondaryAllocator>
       Allocator;
   Allocator *a = new Allocator;
-  a->Init(/* may_return_null */ true);
+  a->Init(kReleaseToOSIntervalNever);
+  std::mt19937 r;
 
   AllocatorCache cache;
   memset(&cache, 0, sizeof(cache));
@@ -549,11 +596,7 @@ void TestCombinedAllocator() {
   EXPECT_EQ(a->Allocate(&cache, (uptr)-1 - 1024, 1), (void*)0);
   EXPECT_EQ(a->Allocate(&cache, (uptr)-1 - 1024, 1024), (void*)0);
   EXPECT_EQ(a->Allocate(&cache, (uptr)-1 - 1023, 1024), (void*)0);
-
-  // Set to false
-  a->SetMayReturnNull(false);
-  EXPECT_DEATH(a->Allocate(&cache, -1, 1),
-               "allocator is terminating the process");
+  EXPECT_EQ(a->Allocate(&cache, -1, 1), (void*)0);
 
   const uptr kNumAllocs = 100000;
   const uptr kNumIter = 10;
@@ -570,7 +613,7 @@ void TestCombinedAllocator() {
       allocated.push_back(x);
     }
 
-    random_shuffle(allocated.begin(), allocated.end());
+    std::shuffle(allocated.begin(), allocated.end(), r);
 
     for (uptr i = 0; i < kNumAllocs; i++) {
       void *x = allocated[i];
@@ -627,7 +670,7 @@ void TestSizeClassAllocatorLocalCache() {
   typedef typename AllocatorCache::Allocator Allocator;
   Allocator *a = new Allocator();
 
-  a->Init();
+  a->Init(kReleaseToOSIntervalNever);
   memset(&cache, 0, sizeof(cache));
   cache.Init(0);
 
@@ -702,7 +745,7 @@ void *AllocatorLeakTestWorker(void *arg) {
 TEST(SanitizerCommon, AllocatorLeakTest) {
   typedef AllocatorCache::Allocator Allocator;
   Allocator a;
-  a.Init();
+  a.Init(kReleaseToOSIntervalNever);
   uptr total_used_memory = 0;
   for (int i = 0; i < 100; i++) {
     pthread_t t;
@@ -735,7 +778,7 @@ static void *DeallocNewThreadWorker(void *arg) {
 // able to call Deallocate on a zeroed cache, and it will self-initialize.
 TEST(Allocator, AllocatorCacheDeallocNewThread) {
   AllocatorCache::Allocator allocator;
-  allocator.Init();
+  allocator.Init(kReleaseToOSIntervalNever);
   AllocatorCache main_cache;
   AllocatorCache child_cache;
   memset(&main_cache, 0, sizeof(main_cache));
@@ -788,11 +831,11 @@ TEST(Allocator, LargeAlloc) {
 TEST(Allocator, ScopedBuffer) {
   const int kSize = 512;
   {
-    InternalScopedBuffer<int> int_buf(kSize);
-    EXPECT_EQ(sizeof(int) * kSize, int_buf.size());  // NOLINT
+    InternalMmapVector<int> int_buf(kSize);
+    EXPECT_EQ((uptr)kSize, int_buf.size()); // NOLINT
   }
-  InternalScopedBuffer<char> char_buf(kSize);
-  EXPECT_EQ(sizeof(char) * kSize, char_buf.size());  // NOLINT
+  InternalMmapVector<char> char_buf(kSize);
+  EXPECT_EQ((uptr)kSize, char_buf.size()); // NOLINT
   internal_memset(char_buf.data(), 'c', kSize);
   for (int i = 0; i < kSize; i++) {
     EXPECT_EQ('c', char_buf[i]);
@@ -806,7 +849,7 @@ void IterationTestCallback(uptr chunk, void *arg) {
 template <class Allocator>
 void TestSizeClassAllocatorIteration() {
   Allocator *a = new Allocator;
-  a->Init();
+  a->Init(kReleaseToOSIntervalNever);
   SizeClassAllocatorLocalCache<Allocator> cache;
   memset(&cache, 0, sizeof(cache));
   cache.Init(0);
@@ -863,8 +906,8 @@ TEST(SanitizerCommon, SizeClassAllocator32Iteration) {
 }
 
 TEST(SanitizerCommon, LargeMmapAllocatorIteration) {
-  LargeMmapAllocator<> a;
-  a.Init(/* may_return_null */ false);
+  LargeMmapAllocator<NoOpMapUnmapCallback> a;
+  a.Init();
   AllocatorStats stats;
   stats.Init();
 
@@ -890,8 +933,8 @@ TEST(SanitizerCommon, LargeMmapAllocatorIteration) {
 }
 
 TEST(SanitizerCommon, LargeMmapAllocatorBlockBegin) {
-  LargeMmapAllocator<> a;
-  a.Init(/* may_return_null */ false);
+  LargeMmapAllocator<NoOpMapUnmapCallback> a;
+  a.Init();
   AllocatorStats stats;
   stats.Init();
 
@@ -947,7 +990,7 @@ TEST(SanitizerCommon, SizeClassAllocator64PopulateFreeListOOM) {
   const uptr kRegionSize =
       kAllocatorSize / SpecialSizeClassMap::kNumClassesRounded;
   SpecialAllocator64 *a = new SpecialAllocator64;
-  a->Init();
+  a->Init(kReleaseToOSIntervalNever);
   SizeClassAllocatorLocalCache<SpecialAllocator64> cache;
   memset(&cache, 0, sizeof(cache));
   cache.Init(0);
@@ -959,9 +1002,9 @@ TEST(SanitizerCommon, SizeClassAllocator64PopulateFreeListOOM) {
   const uptr kAllocationSize = SpecialSizeClassMap::Size(kClassID);
   ASSERT_LT(2 * kAllocationSize, kRegionSize);
   ASSERT_GT(3 * kAllocationSize, kRegionSize);
-  cache.Allocate(a, kClassID);
-  EXPECT_DEATH(cache.Allocate(a, kClassID) && cache.Allocate(a, kClassID),
-               "The process has exhausted");
+  EXPECT_NE(cache.Allocate(a, kClassID), nullptr);
+  EXPECT_NE(cache.Allocate(a, kClassID), nullptr);
+  EXPECT_EQ(cache.Allocate(a, kClassID), nullptr);
 
   const uptr Class2 = 100;
   const uptr Size2 = SpecialSizeClassMap::Size(Class2);
@@ -969,11 +1012,12 @@ TEST(SanitizerCommon, SizeClassAllocator64PopulateFreeListOOM) {
   char *p[7];
   for (int i = 0; i < 7; i++) {
     p[i] = (char*)cache.Allocate(a, Class2);
+    EXPECT_NE(p[i], nullptr);
     fprintf(stderr, "p[%d] %p s = %lx\n", i, (void*)p[i], Size2);
     p[i][Size2 - 1] = 42;
     if (i) ASSERT_LT(p[i - 1], p[i]);
   }
-  EXPECT_DEATH(cache.Allocate(a, Class2), "The process has exhausted");
+  EXPECT_EQ(cache.Allocate(a, Class2), nullptr);
   cache.Deallocate(a, Class2, p[0]);
   cache.Drain(a);
   ASSERT_EQ(p[6][Size2 - 1], 42);
@@ -983,11 +1027,287 @@ TEST(SanitizerCommon, SizeClassAllocator64PopulateFreeListOOM) {
 
 #endif
 
+#if SANITIZER_CAN_USE_ALLOCATOR64
+
+class NoMemoryMapper {
+ public:
+  uptr last_request_buffer_size;
+
+  NoMemoryMapper() : last_request_buffer_size(0) {}
+
+  uptr MapPackedCounterArrayBuffer(uptr buffer_size) {
+    last_request_buffer_size = buffer_size;
+    return 0;
+  }
+  void UnmapPackedCounterArrayBuffer(uptr buffer, uptr buffer_size) {}
+};
+
+class RedZoneMemoryMapper {
+ public:
+  RedZoneMemoryMapper() {
+    const auto page_size = GetPageSize();
+    buffer = MmapOrDie(3ULL * page_size, "");
+    MprotectNoAccess(reinterpret_cast<uptr>(buffer), page_size);
+    MprotectNoAccess(reinterpret_cast<uptr>(buffer) + page_size * 2, page_size);
+  }
+  ~RedZoneMemoryMapper() {
+    UnmapOrDie(buffer, 3 * GetPageSize());
+  }
+
+  uptr MapPackedCounterArrayBuffer(uptr buffer_size) {
+    const auto page_size = GetPageSize();
+    CHECK_EQ(buffer_size, page_size);
+    memset(reinterpret_cast<void*>(reinterpret_cast<uptr>(buffer) + page_size),
+           0, page_size);
+    return reinterpret_cast<uptr>(buffer) + page_size;
+  }
+  void UnmapPackedCounterArrayBuffer(uptr buffer, uptr buffer_size) {}
+
+ private:
+  void *buffer;
+};
+
+TEST(SanitizerCommon, SizeClassAllocator64PackedCounterArray) {
+  NoMemoryMapper no_memory_mapper;
+  typedef Allocator64::PackedCounterArray<NoMemoryMapper>
+      NoMemoryPackedCounterArray;
+
+  for (int i = 0; i < 64; i++) {
+    // Various valid counter's max values packed into one word.
+    NoMemoryPackedCounterArray counters_2n(1, 1ULL << i, &no_memory_mapper);
+    EXPECT_EQ(8ULL, no_memory_mapper.last_request_buffer_size);
+
+    // Check the "all bit set" values too.
+    NoMemoryPackedCounterArray counters_2n1_1(1, ~0ULL >> i, &no_memory_mapper);
+    EXPECT_EQ(8ULL, no_memory_mapper.last_request_buffer_size);
+
+    // Verify the packing ratio, the counter is expected to be packed into the
+    // closest power of 2 bits.
+    NoMemoryPackedCounterArray counters(64, 1ULL << i, &no_memory_mapper);
+    EXPECT_EQ(8ULL * RoundUpToPowerOfTwo(i + 1),
+              no_memory_mapper.last_request_buffer_size);
+  }
+
+  RedZoneMemoryMapper memory_mapper;
+  typedef Allocator64::PackedCounterArray<RedZoneMemoryMapper>
+      RedZonePackedCounterArray;
+  // Go through 1, 2, 4, 8, .. 64 bits per counter.
+  for (int i = 0; i < 7; i++) {
+    // Make sure counters request one memory page for the buffer.
+    const u64 kNumCounters = (GetPageSize() / 8) * (64 >> i);
+    RedZonePackedCounterArray counters(kNumCounters,
+                                       1ULL << ((1 << i) - 1),
+                                       &memory_mapper);
+    counters.Inc(0);
+    for (u64 c = 1; c < kNumCounters - 1; c++) {
+      ASSERT_EQ(0ULL, counters.Get(c));
+      counters.Inc(c);
+      ASSERT_EQ(1ULL, counters.Get(c - 1));
+    }
+    ASSERT_EQ(0ULL, counters.Get(kNumCounters - 1));
+    counters.Inc(kNumCounters - 1);
+
+    if (i > 0) {
+      counters.IncRange(0, kNumCounters - 1);
+      for (u64 c = 0; c < kNumCounters; c++)
+        ASSERT_EQ(2ULL, counters.Get(c));
+    }
+  }
+}
+
+class RangeRecorder {
+ public:
+  std::string reported_pages;
+
+  RangeRecorder()
+      : page_size_scaled_log(
+            Log2(GetPageSizeCached() >> Allocator64::kCompactPtrScale)),
+        last_page_reported(0) {}
+
+  void ReleasePageRangeToOS(u32 from, u32 to) {
+    from >>= page_size_scaled_log;
+    to >>= page_size_scaled_log;
+    ASSERT_LT(from, to);
+    if (!reported_pages.empty())
+      ASSERT_LT(last_page_reported, from);
+    reported_pages.append(from - last_page_reported, '.');
+    reported_pages.append(to - from, 'x');
+    last_page_reported = to;
+  }
+ private:
+  const uptr page_size_scaled_log;
+  u32 last_page_reported;
+};
+
+TEST(SanitizerCommon, SizeClassAllocator64FreePagesRangeTracker) {
+  typedef Allocator64::FreePagesRangeTracker<RangeRecorder> RangeTracker;
+
+  // 'x' denotes a page to be released, '.' denotes a page to be kept around.
+  const char* test_cases[] = {
+      "",
+      ".",
+      "x",
+      "........",
+      "xxxxxxxxxxx",
+      "..............xxxxx",
+      "xxxxxxxxxxxxxxxxxx.....",
+      "......xxxxxxxx........",
+      "xxx..........xxxxxxxxxxxxxxx",
+      "......xxxx....xxxx........",
+      "xxx..........xxxxxxxx....xxxxxxx",
+      "x.x.x.x.x.x.x.x.x.x.x.x.",
+      ".x.x.x.x.x.x.x.x.x.x.x.x",
+      ".x.x.x.x.x.x.x.x.x.x.x.x.",
+      "x.x.x.x.x.x.x.x.x.x.x.x.x",
+  };
+
+  for (auto test_case : test_cases) {
+    RangeRecorder range_recorder;
+    RangeTracker tracker(&range_recorder);
+    for (int i = 0; test_case[i] != 0; i++)
+      tracker.NextPage(test_case[i] == 'x');
+    tracker.Done();
+    // Strip trailing '.'-pages before comparing the results as they are not
+    // going to be reported to range_recorder anyway.
+    const char* last_x = strrchr(test_case, 'x');
+    std::string expected(
+        test_case,
+        last_x == nullptr ? 0 : (last_x - test_case + 1));
+    EXPECT_STREQ(expected.c_str(), range_recorder.reported_pages.c_str());
+  }
+}
+
+class ReleasedPagesTrackingMemoryMapper {
+ public:
+  std::set<u32> reported_pages;
+
+  uptr MapPackedCounterArrayBuffer(uptr buffer_size) {
+    reported_pages.clear();
+    return reinterpret_cast<uptr>(calloc(1, buffer_size));
+  }
+  void UnmapPackedCounterArrayBuffer(uptr buffer, uptr buffer_size) {
+    free(reinterpret_cast<void*>(buffer));
+  }
+
+  void ReleasePageRangeToOS(u32 from, u32 to) {
+    uptr page_size_scaled =
+        GetPageSizeCached() >> Allocator64::kCompactPtrScale;
+    for (u32 i = from; i < to; i += page_size_scaled)
+      reported_pages.insert(i);
+  }
+};
+
+template <class Allocator>
+void TestReleaseFreeMemoryToOS() {
+  ReleasedPagesTrackingMemoryMapper memory_mapper;
+  const uptr kAllocatedPagesCount = 1024;
+  const uptr page_size = GetPageSizeCached();
+  const uptr page_size_scaled = page_size >> Allocator::kCompactPtrScale;
+  std::mt19937 r;
+  uint32_t rnd_state = 42;
+
+  for (uptr class_id = 1; class_id <= Allocator::SizeClassMapT::kLargestClassID;
+      class_id++) {
+    const uptr chunk_size = Allocator::SizeClassMapT::Size(class_id);
+    const uptr chunk_size_scaled = chunk_size >> Allocator::kCompactPtrScale;
+    const uptr max_chunks =
+        kAllocatedPagesCount * GetPageSizeCached() / chunk_size;
+
+    // Generate the random free list.
+    std::vector<u32> free_array;
+    bool in_free_range = false;
+    uptr current_range_end = 0;
+    for (uptr i = 0; i < max_chunks; i++) {
+      if (i == current_range_end) {
+        in_free_range = (my_rand_r(&rnd_state) & 1U) == 1;
+        current_range_end += my_rand_r(&rnd_state) % 100 + 1;
+      }
+      if (in_free_range)
+        free_array.push_back(i * chunk_size_scaled);
+    }
+    if (free_array.empty())
+      continue;
+    // Shuffle free_list to verify that ReleaseFreeMemoryToOS does not depend on
+    // the list ordering.
+    std::shuffle(free_array.begin(), free_array.end(), r);
+
+    Allocator::ReleaseFreeMemoryToOS(&free_array[0], free_array.size(),
+                                     chunk_size, kAllocatedPagesCount,
+                                     &memory_mapper);
+
+    // Verify that there are no released pages touched by used chunks and all
+    // ranges of free chunks big enough to contain the entire memory pages had
+    // these pages released.
+    uptr verified_released_pages = 0;
+    std::set<u32> free_chunks(free_array.begin(), free_array.end());
+
+    u32 current_chunk = 0;
+    in_free_range = false;
+    u32 current_free_range_start = 0;
+    for (uptr i = 0; i <= max_chunks; i++) {
+      bool is_free_chunk = free_chunks.find(current_chunk) != free_chunks.end();
+
+      if (is_free_chunk) {
+        if (!in_free_range) {
+          in_free_range = true;
+          current_free_range_start = current_chunk;
+        }
+      } else {
+        // Verify that this used chunk does not touch any released page.
+        for (uptr i_page = current_chunk / page_size_scaled;
+             i_page <= (current_chunk + chunk_size_scaled - 1) /
+                       page_size_scaled;
+             i_page++) {
+          bool page_released =
+              memory_mapper.reported_pages.find(i_page * page_size_scaled) !=
+              memory_mapper.reported_pages.end();
+          ASSERT_EQ(false, page_released);
+        }
+
+        if (in_free_range) {
+          in_free_range = false;
+          // Verify that all entire memory pages covered by this range of free
+          // chunks were released.
+          u32 page = RoundUpTo(current_free_range_start, page_size_scaled);
+          while (page + page_size_scaled <= current_chunk) {
+            bool page_released =
+                memory_mapper.reported_pages.find(page) !=
+                memory_mapper.reported_pages.end();
+            ASSERT_EQ(true, page_released);
+            verified_released_pages++;
+            page += page_size_scaled;
+          }
+        }
+      }
+
+      current_chunk += chunk_size_scaled;
+    }
+
+    ASSERT_EQ(memory_mapper.reported_pages.size(), verified_released_pages);
+  }
+}
+
+TEST(SanitizerCommon, SizeClassAllocator64ReleaseFreeMemoryToOS) {
+  TestReleaseFreeMemoryToOS<Allocator64>();
+}
+
+#if !SANITIZER_ANDROID
+TEST(SanitizerCommon, SizeClassAllocator64CompactReleaseFreeMemoryToOS) {
+  TestReleaseFreeMemoryToOS<Allocator64Compact>();
+}
+
+TEST(SanitizerCommon, SizeClassAllocator64VeryCompactReleaseFreeMemoryToOS) {
+  TestReleaseFreeMemoryToOS<Allocator64VeryCompact>();
+}
+#endif  // !SANITIZER_ANDROID
+
+#endif  // SANITIZER_CAN_USE_ALLOCATOR64
+
 TEST(SanitizerCommon, TwoLevelByteMap) {
   const u64 kSize1 = 1 << 6, kSize2 = 1 << 12;
   const u64 n = kSize1 * kSize2;
   TwoLevelByteMap<kSize1, kSize2> m;
-  m.TestOnlyInit();
+  m.Init();
   for (u64 i = 0; i < n; i += 7) {
     m.set(i, (i % 100) + 1);
   }
@@ -1022,7 +1342,7 @@ void *TwoLevelByteMapUserThread(void *param) {
 
 TEST(SanitizerCommon, ThreadedTwoLevelByteMap) {
   TestByteMap m;
-  m.TestOnlyInit();
+  m.Init();
   TestMapUnmapCallback::map_count = 0;
   TestMapUnmapCallback::unmap_count = 0;
   static const int kNumThreads = 4;

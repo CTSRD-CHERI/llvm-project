@@ -1,12 +1,12 @@
 // Make sure coverage is dumped even if there are reported leaks.
 //
-// RUN: %clangxx_asan -fsanitize-coverage=func %s -o %t
+// RUN: %clangxx_asan -fsanitize-coverage=func,trace-pc-guard %s -o %t
 //
-// RUN: rm -rf %T/coverage-and-lsan
+// RUN: rm -rf %t-dir
 //
-// RUN: mkdir -p %T/coverage-and-lsan/normal
-// RUN: %env_asan_opts=coverage=1:coverage_dir=%T/coverage-and-lsan:verbosity=1 not %run %t 2>&1 | FileCheck %s
-// RUN: %sancov print %T/coverage-and-lsan/*.sancov 2>&1
+// RUN: mkdir -p %t-dir
+// RUN: %env_asan_opts=coverage=1:coverage_dir=%t-dir:verbosity=1 not %run %t 2>&1 | FileCheck %s
+// RUN: %sancov print %t-dir/*.sancov 2>&1
 //
 // REQUIRES: leak-detection
 
@@ -17,4 +17,4 @@ int main(int argc, char **argv) {
 }
 
 // CHECK: LeakSanitizer: detected memory leaks
-// CHECK: CovDump:
+// CHECK: SanitizerCoverage: {{.*}}PCs written

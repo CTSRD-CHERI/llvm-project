@@ -10,7 +10,13 @@
 ; SCOP:      Assumed Context:
 ; SCOP-NEXT: [N, M] -> { : }
 ; SCOP:      Invalid Context:
-; SCOP-NEXT: [N, M] -> { : 1 = 0 }
+; SCOP-NEXT: [N, M] -> { : false }
+;
+;
+; This test checks that assumptions over parameters not used in the Scop are
+; not modeled. There is no benefit in knowing about parameters that are
+; unused in the scop, and adding them will increase the complexity of our
+; model.
 ;
 ;    int f(int *A, int N, int M) {
 ;      __builtin_assume(M > 0);

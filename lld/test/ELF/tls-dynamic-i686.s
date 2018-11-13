@@ -1,6 +1,6 @@
 // REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=i686-pc-linux %s -o %t
-// RUN: ld.lld -shared %t -o %tout
+// RUN: ld.lld --hash-style=sysv -shared %t -o %tout
 // RUN: llvm-readobj -sections -relocations %tout | FileCheck %s
 // RUN: llvm-objdump -d %tout | FileCheck %s --check-prefix=DIS
 
@@ -25,7 +25,7 @@ tls1:
 .align 4
 tls2:
  .long 0
- .size tls2, 4
+ .size tls2, 8
 
 .section .text
 .globl _start
@@ -42,7 +42,7 @@ leal tls2@dtpoff(%eax),%edx
 
 leal tls2@tlsldm(%ebx),%eax
 call __tls_get_addr@plt
-leal tls2@dtpoff(%eax),%edx
+leal tls2@dtpoff+4(%eax),%edx
 
 movl %gs:0,%eax
 addl tls0@gotntpoff(%ebx),%eax
@@ -50,15 +50,14 @@ addl tls0@gotntpoff(%ebx),%eax
 movl %gs:0,%eax
 addl tls1@gotntpoff(%ebx),%eax
 
-// CHECK:      Index: 10
-// CHECK-NEXT: Name: .got
+// CHECK:      Name: .got (
 // CHECK-NEXT: Type: SHT_PROGBITS
 // CHECK-NEXT: Flags [
 // CHECK-NEXT:   SHF_ALLOC
 // CHECK-NEXT:   SHF_WRITE
 // CHECK-NEXT: ]
-// CHECK-NEXT: Address: 0x2068
-// CHECK-NEXT: Offset: 0x2068
+// CHECK-NEXT: Address: 0x3068
+// CHECK-NEXT: Offset: 0x3068
 // CHECK-NEXT: Size: 32
 // CHECK-NEXT: Link: 0
 // CHECK-NEXT: Info: 0
@@ -67,13 +66,13 @@ addl tls1@gotntpoff(%ebx),%eax
 
 // CHECK: Relocations [
 // CHECK:      Section ({{.+}}) .rel.dyn {
-// CHECK-NEXT: 0x2078 R_386_TLS_DTPMOD32 - 0x0
-// CHECK-NEXT: 0x2068 R_386_TLS_DTPMOD32 tls0 0x0
-// CHECK-NEXT: 0x206C R_386_TLS_DTPOFF32 tls0 0x0
-// CHECK-NEXT: 0x2080 R_386_TLS_TPOFF tls0 0x0
-// CHECK-NEXT: 0x2070 R_386_TLS_DTPMOD32 tls1 0x0
-// CHECK-NEXT: 0x2074 R_386_TLS_DTPOFF32 tls1 0x0
-// CHECK-NEXT: 0x2084 R_386_TLS_TPOFF tls1 0x0
+// CHECK-NEXT: 0x3078 R_386_TLS_DTPMOD32 - 0x0
+// CHECK-NEXT: 0x3068 R_386_TLS_DTPMOD32 tls0 0x0
+// CHECK-NEXT: 0x306C R_386_TLS_DTPOFF32 tls0 0x0
+// CHECK-NEXT: 0x3080 R_386_TLS_TPOFF tls0 0x0
+// CHECK-NEXT: 0x3070 R_386_TLS_DTPMOD32 tls1 0x0
+// CHECK-NEXT: 0x3074 R_386_TLS_DTPOFF32 tls1 0x0
+// CHECK-NEXT: 0x3084 R_386_TLS_TPOFF tls1 0x0
 // CHECK-NEXT: }
 
 // DIS:      Disassembly of section .text:
@@ -92,7 +91,7 @@ addl tls1@gotntpoff(%ebx),%eax
 // DIS-NEXT: 1023: 8d 90 08 00 00 00 leal 8(%eax), %edx
 // DIS-NEXT: 1029: 8d 83 f0 ff ff ff leal -16(%ebx), %eax
 // DIS-NEXT: 102f: e8 3c 00 00 00    calll 60
-// DIS-NEXT: 1034: 8d 90 08 00 00 00 leal 8(%eax), %edx
+// DIS-NEXT: 1034: 8d 90 0c 00 00 00 leal 12(%eax), %edx
 // Initial exec model:
 // DIS-NEXT: 103a: 65 a1 00 00 00 00 movl %gs:0, %eax
 // DIS-NEXT: 1040: 03 83 f8 ff ff ff addl -8(%ebx), %eax

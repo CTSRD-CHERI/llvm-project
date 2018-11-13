@@ -41,7 +41,7 @@ namespace PR6066 {
 
 namespace test3 {
   struct A {
-    unsigned bitX : 4; // expected-note 4 {{bit-field is declared here}}
+    unsigned bitX : 4; // expected-note 3 {{bit-field is declared here}}
     unsigned bitY : 4; // expected-note {{bit-field is declared here}}
     unsigned var;
 
@@ -50,7 +50,7 @@ namespace test3 {
 
   void test(A *a) {
     unsigned &t0 = a->bitX; // expected-error {{non-const reference cannot bind to bit-field 'bitX'}}
-    unsigned &t1 = (unsigned&) a->bitX; // expected-error {{non-const reference cannot bind to bit-field 'bitX'}}
+    unsigned &t1 = (unsigned&) a->bitX; // expected-error {{C-style cast from bit-field lvalue to reference type 'unsigned int &'}}
     unsigned &t2 = const_cast<unsigned&>(a->bitX); // expected-error {{const_cast from bit-field lvalue to reference type 'unsigned int &'}}
     unsigned &t3 = (a->foo(), a->bitX); // expected-error {{non-const reference cannot bind to bit-field 'bitX'}}
     unsigned &t4 = (a->var ? a->bitX : a->bitY); // expected-error {{non-const reference cannot bind to bit-field}}
@@ -60,4 +60,13 @@ namespace test3 {
     unsigned &t8 = (a->bitX = 3); // expected-error {{non-const reference cannot bind to bit-field 'bitX'}}
     unsigned &t9 = (a->bitY += 3); // expected-error {{non-const reference cannot bind to bit-field 'bitY'}}
   }
+}
+
+namespace explicit_ctor {
+  struct A {};
+  struct B { // expected-note 2{{candidate}}
+    explicit B(const A&);
+  };
+  A a;
+  const B &b(a); // expected-error {{no viable conversion}}
 }

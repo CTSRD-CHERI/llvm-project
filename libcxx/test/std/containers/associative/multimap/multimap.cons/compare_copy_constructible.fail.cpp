@@ -9,21 +9,21 @@
 
 // <map>
 
-// Check that std::multimap fails to instantiate if the comparison predicate is 
+// Check that std::multimap fails to instantiate if the comparison predicate is
 // not copy-constructible. This is LWG issue 2436
 
 #include <map>
 
 template <class T>
 struct Comp {
-	bool operator () (const T& lhs, const T& rhs) const { return lhs < rhs; }
+    bool operator () (const T& lhs, const T& rhs) const { return lhs < rhs; }
 
-	Comp () {}
+    Comp () {}
 private:
-	Comp (const Comp &); // declared but not defined
-	};
+    Comp (const Comp &); // declared but not defined
+    };
 
 
 int main() {
-	std::multimap<int, int, Comp<int> > m;
+    std::multimap<int, int, Comp<int> > m;
 }

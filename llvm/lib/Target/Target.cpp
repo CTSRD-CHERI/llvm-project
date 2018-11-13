@@ -7,19 +7,19 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements the common infrastructure (including C bindings) for 
+// This file implements the common infrastructure (including C bindings) for
 // libLLVMTarget.a, which implements target information.
 //
 //===----------------------------------------------------------------------===//
 
 #include "llvm-c/Target.h"
 #include "llvm-c/Initialization.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Value.h"
 #include "llvm/InitializePasses.h"
-#include "llvm/IR/LegacyPassManager.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
 #include <cstring>
 
 using namespace llvm;

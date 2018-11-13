@@ -20,11 +20,11 @@
 namespace llvm {
 
 /// \struct AlignedCharArray
-/// \brief Helper for building an aligned character array type.
+/// Helper for building an aligned character array type.
 ///
 /// This template is used to explicitly build up a collection of aligned
 /// character array types. We have to build these up using a macro and explicit
-/// specialization to cope with old versions of MSVC where only an
+/// specialization to cope with MSVC (at least till 2015) where only an
 /// integer literal can be used to specify an alignment constraint. Once built
 /// up here, we can then begin to indirect between these using normal C++
 /// template parameters.
@@ -34,12 +34,12 @@ namespace llvm {
 
 template<std::size_t Alignment, std::size_t Size>
 struct AlignedCharArray {
-  LLVM_ALIGNAS(Alignment) char buffer[Size];
+  alignas(Alignment) char buffer[Size];
 };
 
 #else // _MSC_VER
 
-/// \brief Create a type with an aligned char buffer.
+/// Create a type with an aligned char buffer.
 template<std::size_t Alignment, std::size_t Size>
 struct AlignedCharArray;
 
@@ -124,7 +124,7 @@ union SizerImpl {
 };
 } // end namespace detail
 
-/// \brief This union template exposes a suitably aligned and sized character
+/// This union template exposes a suitably aligned and sized character
 /// array member which can hold elements of any of up to ten types.
 ///
 /// These types may be arrays, structs, or any other types. The goal is to

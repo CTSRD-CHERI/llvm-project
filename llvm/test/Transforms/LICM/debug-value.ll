@@ -1,5 +1,5 @@
 ; RUN: opt -licm -basicaa < %s -S | FileCheck %s
-; RUN: opt -aa-pipeline=basic-aa -passes='require<aa>,require<targetir>,require<scalar-evolution>,loop(licm)' < %s -S | FileCheck %s
+; RUN: opt -aa-pipeline=basic-aa -passes='require<aa>,require<targetir>,require<scalar-evolution>,require<opt-remark-emit>,loop(licm)' < %s -S | FileCheck %s
 
 define void @dgefa() nounwind ssp {
 entry:
@@ -16,7 +16,7 @@ if.then:                                          ; preds = %for.body
 
 if.then27:                                        ; preds = %if.then
 ; CHECK: tail call void @llvm.dbg.value
-  tail call void @llvm.dbg.value(metadata double undef, i64 0, metadata !19, metadata !DIExpression()), !dbg !21
+  tail call void @llvm.dbg.value(metadata double undef, metadata !19, metadata !DIExpression()), !dbg !21
   br label %for.body61.us
 
 if.end.if.end.split_crit_edge.critedge:           ; preds = %if.then
@@ -32,7 +32,7 @@ for.end104:                                       ; preds = %for.cond.backedge
   ret void, !dbg !24
 }
 
-declare void @llvm.dbg.value(metadata, i64, metadata, metadata) nounwind readnone
+declare void @llvm.dbg.value(metadata, metadata, metadata) nounwind readnone
 
 !llvm.module.flags = !{!26}
 !llvm.dbg.cu = !{!2}

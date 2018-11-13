@@ -8,8 +8,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "OsLogger.h"
+#include <Availability.h>
 
-#if LLDB_USE_OS_LOG
+#if (LLDB_USE_OS_LOG) && (__MAC_OS_X_VERSION_MAX_ALLOWED >= 101200)
 
 #include <os/log.h>
 
@@ -55,12 +56,11 @@ void DarwinLogCallback(void *baton, uint32_t flags, const char *format,
 }
 }
 
-DNBCallbackLog OsLogger::GetLogFunction() {
-  return _os_log_impl ? DarwinLogCallback : nullptr;
-}
+DNBCallbackLog OsLogger::GetLogFunction() { return DarwinLogCallback; }
 
 #else
 
 DNBCallbackLog OsLogger::GetLogFunction() { return nullptr; }
 
 #endif
+

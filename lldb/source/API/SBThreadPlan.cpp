@@ -1,4 +1,4 @@
-//===-- SBThread.cpp --------------------------------------------*- C++ -*-===//
+//===-- SBThreadPlan.cpp ----------------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,10 +14,7 @@
 #include "lldb/API/SBSymbolContext.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/State.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StructuredData.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/SymbolContext.h"
@@ -28,12 +25,14 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Target/ThreadPlan.h"
-#include "lldb/Target/ThreadPlan.h"
 #include "lldb/Target/ThreadPlanPython.h"
 #include "lldb/Target/ThreadPlanStepInRange.h"
 #include "lldb/Target/ThreadPlanStepInstruction.h"
 #include "lldb/Target/ThreadPlanStepOut.h"
 #include "lldb/Target/ThreadPlanStepRange.h"
+#include "lldb/Utility/State.h"
+#include "lldb/Utility/Stream.h"
+#include "lldb/Utility/StructuredData.h"
 
 #include "lldb/API/SBAddress.h"
 #include "lldb/API/SBDebugger.h"
@@ -139,8 +138,7 @@ bool SBThreadPlan::IsValid() {
 // plans...
 //
 // FIXME, you should only be able to queue thread plans from inside the methods
-// of a
-// Scripted Thread Plan.  Need a way to enforce that.
+// of a Scripted Thread Plan.  Need a way to enforce that.
 
 SBThreadPlan
 SBThreadPlan::QueueThreadPlanForStepOverRange(SBAddress &sb_start_address,

@@ -8,14 +8,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/MC/MCSectionCOFF.h"
-#include "llvm/MC/MCAsmInfo.h"
-#include "llvm/MC/MCContext.h"
+#include "llvm/BinaryFormat/COFF.h"
 #include "llvm/MC/MCSymbol.h"
-#include "llvm/Support/COFF.h"
 #include "llvm/Support/raw_ostream.h"
+#include <cassert>
+
 using namespace llvm;
 
-MCSectionCOFF::~MCSectionCOFF() {} // anchor.
+MCSectionCOFF::~MCSectionCOFF() = default; // anchor.
 
 // ShouldOmitSectionDirective - Decides whether a '.section' directive
 // should be printed before the section name
@@ -37,10 +37,9 @@ void MCSectionCOFF::setSelection(int Selection) const {
   Characteristics |= COFF::IMAGE_SCN_LNK_COMDAT;
 }
 
-void MCSectionCOFF::PrintSwitchToSection(const MCAsmInfo &MAI,
+void MCSectionCOFF::PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
                                          raw_ostream &OS,
                                          const MCExpr *Subsection) const {
-
   // standard sections don't require the '.section'
   if (ShouldOmitSectionDirective(SectionName, MAI)) {
     OS << '\t' << getSectionName() << '\n';
@@ -70,35 +69,40 @@ void MCSectionCOFF::PrintSwitchToSection(const MCAsmInfo &MAI,
   OS << '"';
 
   if (getCharacteristics() & COFF::IMAGE_SCN_LNK_COMDAT) {
-    OS << ",";
+    if (COMDATSymbol)
+      OS << ",";
+    else
+      OS << "\n\t.linkonce\t";
     switch (Selection) {
       case COFF::IMAGE_COMDAT_SELECT_NODUPLICATES:
-        OS << "one_only,";
+        OS << "one_only";
         break;
       case COFF::IMAGE_COMDAT_SELECT_ANY:
-        OS << "discard,";
+        OS << "discard";
         break;
       case COFF::IMAGE_COMDAT_SELECT_SAME_SIZE:
-        OS << "same_size,";
+        OS << "same_size";
         break;
       case COFF::IMAGE_COMDAT_SELECT_EXACT_MATCH:
-        OS << "same_contents,";
+        OS << "same_contents";
         break;
       case COFF::IMAGE_COMDAT_SELECT_ASSOCIATIVE:
-        OS << "associative,";
+        OS << "associative";
         break;
       case COFF::IMAGE_COMDAT_SELECT_LARGEST:
-        OS << "largest,";
+        OS << "largest";
         break;
       case COFF::IMAGE_COMDAT_SELECT_NEWEST:
-        OS << "newest,";
+        OS << "newest";
         break;
       default:
-        assert (0 && "unsupported COFF selection type");
+        assert(false && "unsupported COFF selection type");
         break;
     }
-    assert(COMDATSymbol);
-    COMDATSymbol->print(OS, &MAI);
+    if (COMDATSymbol) {
+      OS << ",";
+      COMDATSymbol->print(OS, &MAI);
+    }
   }
   OS << '\n';
 }

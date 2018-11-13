@@ -18,18 +18,18 @@
 #include "llvm/ADT/Triple.h"
 
 // Project includes
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/Error.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
-#include "lldb/Core/Scalar.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Symbol/UnwindPlan.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Scalar.h"
+#include "lldb/Utility/Status.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -713,13 +713,13 @@ size_t ABIMacOSX_i386::GetRedZoneSize() const { return 0; }
 //------------------------------------------------------------------
 
 ABISP
-ABIMacOSX_i386::CreateInstance(const ArchSpec &arch) {
+ABIMacOSX_i386::CreateInstance(lldb::ProcessSP process_sp, const ArchSpec &arch) {
   static ABISP g_abi_sp;
   if ((arch.GetTriple().getArch() == llvm::Triple::x86) &&
       (arch.GetTriple().isMacOSX() || arch.GetTriple().isiOS() ||
        arch.GetTriple().isWatchOS())) {
     if (!g_abi_sp)
-      g_abi_sp.reset(new ABIMacOSX_i386);
+      g_abi_sp.reset(new ABIMacOSX_i386(process_sp));
     return g_abi_sp;
   }
   return ABISP();
@@ -736,17 +736,17 @@ bool ABIMacOSX_i386::PrepareTrivialCall(Thread &thread, addr_t sp,
   uint32_t sp_reg_num = reg_ctx->ConvertRegisterKindToRegisterNumber(
       eRegisterKindGeneric, LLDB_REGNUM_GENERIC_SP);
 
-  // When writing a register value down to memory, the register info used
-  // to write memory just needs to have the correct size of a 32 bit register,
-  // the actual register it pertains to is not important, just the size needs
-  // to be correct. Here we use "eax"...
+  // When writing a register value down to memory, the register info used to
+  // write memory just needs to have the correct size of a 32 bit register, the
+  // actual register it pertains to is not important, just the size needs to be
+  // correct. Here we use "eax"...
   const RegisterInfo *reg_info_32 = reg_ctx->GetRegisterInfoByName("eax");
   if (!reg_info_32)
     return false; // TODO this should actually never happen
 
   // Make room for the argument(s) on the stack
 
-  Error error;
+  Status error;
   RegisterValue reg_value;
 
   // Write any arguments onto the stack
@@ -793,7 +793,7 @@ static bool ReadIntegerArgument(Scalar &scalar, unsigned int bit_width,
                                 addr_t &current_stack_argument) {
 
   uint32_t byte_size = (bit_width + (8 - 1)) / 8;
-  Error error;
+  Status error;
   if (process->ReadScalarIntegerFromMemory(current_stack_argument, byte_size,
                                            is_signed, scalar, error)) {
     current_stack_argument += byte_size;
@@ -828,8 +828,8 @@ bool ABIMacOSX_i386::GetArgumentValues(Thread &thread,
     if (!value)
       return false;
 
-    // We currently only support extracting values with Clang QualTypes.
-    // Do we care about others?
+    // We currently only support extracting values with Clang QualTypes. Do we
+    // care about others?
     CompilerType compiler_type(value->GetCompilerType());
     if (compiler_type) {
       bool is_signed;
@@ -849,9 +849,9 @@ bool ABIMacOSX_i386::GetArgumentValues(Thread &thread,
   return true;
 }
 
-Error ABIMacOSX_i386::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
-                                           lldb::ValueObjectSP &new_value_sp) {
-  Error error;
+Status ABIMacOSX_i386::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
+                                            lldb::ValueObjectSP &new_value_sp) {
+  Status error;
   if (!new_value_sp) {
     error.SetErrorString("Empty value object for return value.");
     return error;
@@ -875,7 +875,7 @@ Error ABIMacOSX_i386::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
   if (compiler_type.IsIntegerOrEnumerationType(is_signed) ||
       compiler_type.IsPointerType()) {
     DataExtractor data;
-    Error data_error;
+    Status data_error;
     size_t num_bytes = new_value_sp->GetData(data, data_error);
     if (data_error.Fail()) {
       error.SetErrorStringWithFormat(
@@ -1075,12 +1075,13 @@ bool ABIMacOSX_i386::RegisterIsVolatile(const RegisterInfo *reg_info) {
 }
 
 // v.
-// http://developer.apple.com/library/mac/#documentation/developertools/Conceptual/LowLevelABI/130-IA-32_Function_Calling_Conventions/IA32.html#//apple_ref/doc/uid/TP40002492-SW4
+// http://developer.apple.com/library/mac/#documentation/developertools/Conceptual/LowLevelABI/130
+// -IA-
+// 32_Function_Calling_Conventions/IA32.html#//apple_ref/doc/uid/TP40002492-SW4
 //
 // This document ("OS X ABI Function Call Guide", chapter "IA-32 Function
-// Calling Conventions")
-// says that the following registers on i386 are preserved aka non-volatile aka
-// callee-saved:
+// Calling Conventions") says that the following registers on i386 are
+// preserved aka non-volatile aka callee-saved:
 //
 // ebx, ebp, esi, edi, esp
 

@@ -78,10 +78,14 @@ bool CastToStructVisitor::VisitCastExpr(const CastExpr *CE) {
     // Don't warn for references
     const ValueDecl *VD = nullptr;
     if (const auto *SE = dyn_cast<DeclRefExpr>(U->getSubExpr()))
-      VD = dyn_cast<ValueDecl>(SE->getDecl());
+      VD = SE->getDecl();
     else if (const auto *SE = dyn_cast<MemberExpr>(U->getSubExpr()))
       VD = SE->getMemberDecl();
     if (!VD || VD->getType()->isReferenceType())
+      return true;
+
+    if (ToPointeeTy->isIncompleteType() ||
+        OrigPointeeTy->isIncompleteType())
       return true;
 
     // Warn when there is widening cast.

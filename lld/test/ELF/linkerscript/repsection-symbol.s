@@ -6,17 +6,17 @@
 # RUN:   .text : { *(.text) } \
 # RUN:   .foo : {foo1 = .;  *(.foo.*) foo2 = .;  *(.bar) foo3 = .;} \
 # RUN: }" > %t.script
-# RUN: ld.lld -o %t1 --script %t.script %t -shared
+# RUN: ld.lld --hash-style=sysv -o %t1 --script %t.script %t -shared
 # RUN: llvm-readobj -t %t1 | FileCheck %s
 
 # CHECK:      Name: foo1
-# CHECK-NEXT: Value: 0x288
+# CHECK-NEXT: Value: 0x228
 
 # CHECK:      Name: foo2
-# CHECK-NEXT: Value: 0x290
+# CHECK-NEXT: Value: 0x230
 
 # CHECK:      Name: foo3
-# CHECK-NEXT: Value: 0x294
+# CHECK-NEXT: Value: 0x234
 
 .section .foo.1,"a"
  .long 1

@@ -14,6 +14,7 @@
 
 #include "sanitizer_common/sanitizer_allocator_internal.h"
 #include "sanitizer_common/sanitizer_common.h"
+#include "sanitizer_common/sanitizer_file.h"
 #include "sanitizer_common/sanitizer_flags.h"
 #include "sanitizer_common/sanitizer_libc.h"
 #include "sanitizer_common/sanitizer_platform.h"
@@ -38,46 +39,46 @@ TEST(SanitizerCommon, SortTest) {
   for (uptr i = 0; i < n; i++) {
     array[i] = i;
   }
-  SortArray(array, n);
+  Sort(array, n);
   EXPECT_TRUE(IsSorted(array, n));
   // Reverse order.
   for (uptr i = 0; i < n; i++) {
     array[i] = n - 1 - i;
   }
-  SortArray(array, n);
+  Sort(array, n);
   EXPECT_TRUE(IsSorted(array, n));
   // Mixed order.
   for (uptr i = 0; i < n; i++) {
     array[i] = (i % 2 == 0) ? i : n - 1 - i;
   }
-  SortArray(array, n);
+  Sort(array, n);
   EXPECT_TRUE(IsSorted(array, n));
   // All equal.
   for (uptr i = 0; i < n; i++) {
     array[i] = 42;
   }
-  SortArray(array, n);
+  Sort(array, n);
   EXPECT_TRUE(IsSorted(array, n));
   // All but one sorted.
   for (uptr i = 0; i < n - 1; i++) {
     array[i] = i;
   }
   array[n - 1] = 42;
-  SortArray(array, n);
+  Sort(array, n);
   EXPECT_TRUE(IsSorted(array, n));
   // Minimal case - sort three elements.
   array[0] = 1;
   array[1] = 0;
-  SortArray(array, 2);
+  Sort(array, 2);
   EXPECT_TRUE(IsSorted(array, 2));
 }
 
-TEST(SanitizerCommon, MmapAlignedOrDie) {
+TEST(SanitizerCommon, MmapAlignedOrDieOnFatalError) {
   uptr PageSize = GetPageSizeCached();
   for (uptr size = 1; size <= 32; size *= 2) {
     for (uptr alignment = 1; alignment <= 32; alignment *= 2) {
       for (int iter = 0; iter < 100; iter++) {
-        uptr res = (uptr)MmapAlignedOrDie(
+        uptr res = (uptr)MmapAlignedOrDieOnFatalError(
             size * PageSize, alignment * PageSize, "MmapAlignedOrDieTest");
         EXPECT_EQ(0U, res % (alignment * PageSize));
         internal_memset((void*)res, 1, size * PageSize);
@@ -87,25 +88,37 @@ TEST(SanitizerCommon, MmapAlignedOrDie) {
   }
 }
 
-#if SANITIZER_LINUX
-TEST(SanitizerCommon, SanitizerSetThreadName) {
-  const char *names[] = {
-    "0123456789012",
-    "01234567890123",
-    "012345678901234",  // Larger names will be truncated on linux.
-  };
-
-  for (size_t i = 0; i < ARRAY_SIZE(names); i++) {
-    EXPECT_TRUE(SanitizerSetThreadName(names[i]));
-    char buff[100];
-    EXPECT_TRUE(SanitizerGetThreadName(buff, sizeof(buff) - 1));
-    EXPECT_EQ(0, internal_strcmp(buff, names[i]));
-  }
+TEST(SanitizerCommon, InternalMmapVectorRoundUpCapacity) {
+  InternalMmapVector<uptr> v;
+  v.reserve(1);
+  CHECK_EQ(v.capacity(), GetPageSizeCached() / sizeof(uptr));
 }
-#endif
+
+TEST(SanitizerCommon, InternalMmapVectorReize) {
+  InternalMmapVector<uptr> v;
+  CHECK_EQ(0U, v.size());
+  CHECK_GE(v.capacity(), v.size());
+
+  v.reserve(1000);
+  CHECK_EQ(0U, v.size());
+  CHECK_GE(v.capacity(), 1000U);
+
+  v.resize(10000);
+  CHECK_EQ(10000U, v.size());
+  CHECK_GE(v.capacity(), v.size());
+  uptr cap = v.capacity();
+
+  v.resize(100);
+  CHECK_EQ(100U, v.size());
+  CHECK_EQ(v.capacity(), cap);
+
+  v.reserve(10);
+  CHECK_EQ(100U, v.size());
+  CHECK_EQ(v.capacity(), cap);
+}
 
 TEST(SanitizerCommon, InternalMmapVector) {
-  InternalMmapVector<uptr> vector(1);
+  InternalMmapVector<uptr> vector;
   for (uptr i = 0; i < 100; i++) {
     EXPECT_EQ(i, vector.size());
     vector.push_back(i);
@@ -118,9 +131,50 @@ TEST(SanitizerCommon, InternalMmapVector) {
     vector.pop_back();
     EXPECT_EQ((uptr)i, vector.size());
   }
-  InternalMmapVector<uptr> empty_vector(0);
+  InternalMmapVector<uptr> empty_vector;
   CHECK_GT(empty_vector.capacity(), 0U);
   CHECK_EQ(0U, empty_vector.size());
+}
+
+TEST(SanitizerCommon, InternalMmapVectorEq) {
+  InternalMmapVector<uptr> vector1;
+  InternalMmapVector<uptr> vector2;
+  for (uptr i = 0; i < 100; i++) {
+    vector1.push_back(i);
+    vector2.push_back(i);
+  }
+  EXPECT_TRUE(vector1 == vector2);
+  EXPECT_FALSE(vector1 != vector2);
+
+  vector1.push_back(1);
+  EXPECT_FALSE(vector1 == vector2);
+  EXPECT_TRUE(vector1 != vector2);
+
+  vector2.push_back(1);
+  EXPECT_TRUE(vector1 == vector2);
+  EXPECT_FALSE(vector1 != vector2);
+
+  vector1[55] = 1;
+  EXPECT_FALSE(vector1 == vector2);
+  EXPECT_TRUE(vector1 != vector2);
+}
+
+TEST(SanitizerCommon, InternalMmapVectorSwap) {
+  InternalMmapVector<uptr> vector1;
+  InternalMmapVector<uptr> vector2;
+  InternalMmapVector<uptr> vector3;
+  InternalMmapVector<uptr> vector4;
+  for (uptr i = 0; i < 100; i++) {
+    vector1.push_back(i);
+    vector2.push_back(i);
+    vector3.push_back(-i);
+    vector4.push_back(-i);
+  }
+  EXPECT_NE(vector2, vector3);
+  EXPECT_NE(vector1, vector4);
+  vector1.swap(vector3);
+  EXPECT_EQ(vector2, vector3);
+  EXPECT_EQ(vector1, vector4);
 }
 
 void TestThreadInfo(bool main) {
@@ -172,7 +226,7 @@ bool UptrLess(uptr a, uptr b) {
   return a < b;
 }
 
-TEST(SanitizerCommon, InternalBinarySearch) {
+TEST(SanitizerCommon, InternalLowerBound) {
   static const uptr kSize = 5;
   int arr[kSize];
   arr[0] = 1;
@@ -181,22 +235,22 @@ TEST(SanitizerCommon, InternalBinarySearch) {
   arr[3] = 7;
   arr[4] = 11;
 
-  EXPECT_EQ(0u, InternalBinarySearch(arr, 0, kSize, 0, UptrLess));
-  EXPECT_EQ(0u, InternalBinarySearch(arr, 0, kSize, 1, UptrLess));
-  EXPECT_EQ(1u, InternalBinarySearch(arr, 0, kSize, 2, UptrLess));
-  EXPECT_EQ(1u, InternalBinarySearch(arr, 0, kSize, 3, UptrLess));
-  EXPECT_EQ(2u, InternalBinarySearch(arr, 0, kSize, 4, UptrLess));
-  EXPECT_EQ(2u, InternalBinarySearch(arr, 0, kSize, 5, UptrLess));
-  EXPECT_EQ(3u, InternalBinarySearch(arr, 0, kSize, 6, UptrLess));
-  EXPECT_EQ(3u, InternalBinarySearch(arr, 0, kSize, 7, UptrLess));
-  EXPECT_EQ(4u, InternalBinarySearch(arr, 0, kSize, 8, UptrLess));
-  EXPECT_EQ(4u, InternalBinarySearch(arr, 0, kSize, 9, UptrLess));
-  EXPECT_EQ(4u, InternalBinarySearch(arr, 0, kSize, 10, UptrLess));
-  EXPECT_EQ(4u, InternalBinarySearch(arr, 0, kSize, 11, UptrLess));
-  EXPECT_EQ(5u, InternalBinarySearch(arr, 0, kSize, 12, UptrLess));
+  EXPECT_EQ(0u, InternalLowerBound(arr, 0, kSize, 0, UptrLess));
+  EXPECT_EQ(0u, InternalLowerBound(arr, 0, kSize, 1, UptrLess));
+  EXPECT_EQ(1u, InternalLowerBound(arr, 0, kSize, 2, UptrLess));
+  EXPECT_EQ(1u, InternalLowerBound(arr, 0, kSize, 3, UptrLess));
+  EXPECT_EQ(2u, InternalLowerBound(arr, 0, kSize, 4, UptrLess));
+  EXPECT_EQ(2u, InternalLowerBound(arr, 0, kSize, 5, UptrLess));
+  EXPECT_EQ(3u, InternalLowerBound(arr, 0, kSize, 6, UptrLess));
+  EXPECT_EQ(3u, InternalLowerBound(arr, 0, kSize, 7, UptrLess));
+  EXPECT_EQ(4u, InternalLowerBound(arr, 0, kSize, 8, UptrLess));
+  EXPECT_EQ(4u, InternalLowerBound(arr, 0, kSize, 9, UptrLess));
+  EXPECT_EQ(4u, InternalLowerBound(arr, 0, kSize, 10, UptrLess));
+  EXPECT_EQ(4u, InternalLowerBound(arr, 0, kSize, 11, UptrLess));
+  EXPECT_EQ(5u, InternalLowerBound(arr, 0, kSize, 12, UptrLess));
 }
 
-TEST(SanitizerCommon, InternalBinarySearchVsLowerBound) {
+TEST(SanitizerCommon, InternalLowerBoundVsStdLowerBound) {
   std::vector<int> data;
   auto create_item = [] (size_t i, size_t j) {
     auto v = i * 10000 + j;
@@ -215,8 +269,8 @@ TEST(SanitizerCommon, InternalBinarySearchVsLowerBound) {
       for (auto to_find : {val - 1, val, val + 1}) {
         uptr expected =
             std::lower_bound(data.begin(), data.end(), to_find) - data.begin();
-        EXPECT_EQ(expected, InternalBinarySearch(data.data(), 0, data.size(),
-                                                 to_find, std::less<int>()));
+        EXPECT_EQ(expected, InternalLowerBound(data.data(), 0, data.size(),
+                                               to_find, std::less<int>()));
       }
     }
   }
@@ -298,6 +352,91 @@ TEST(SanitizerCommon, InternalScopedString) {
   str.append("0123456789");
   EXPECT_EQ(9U, str.length());
   EXPECT_STREQ("012345678", str.data());
+}
+
+#if SANITIZER_LINUX || SANITIZER_FREEBSD || \
+  SANITIZER_OPENBSD || SANITIZER_MAC || SANITIZER_IOS
+TEST(SanitizerCommon, GetRandom) {
+  u8 buffer_1[32], buffer_2[32];
+  for (bool blocking : { false, true }) {
+    EXPECT_FALSE(GetRandom(nullptr, 32, blocking));
+    EXPECT_FALSE(GetRandom(buffer_1, 0, blocking));
+    EXPECT_FALSE(GetRandom(buffer_1, 512, blocking));
+    EXPECT_EQ(ARRAY_SIZE(buffer_1), ARRAY_SIZE(buffer_2));
+    for (uptr size = 4; size <= ARRAY_SIZE(buffer_1); size += 4) {
+      for (uptr i = 0; i < 100; i++) {
+        EXPECT_TRUE(GetRandom(buffer_1, size, blocking));
+        EXPECT_TRUE(GetRandom(buffer_2, size, blocking));
+        EXPECT_NE(internal_memcmp(buffer_1, buffer_2, size), 0);
+      }
+    }
+  }
+}
+#endif
+
+TEST(SanitizerCommon, ReservedAddressRangeInit) {
+  uptr init_size = 0xffff;
+  ReservedAddressRange address_range;
+  uptr res = address_range.Init(init_size);
+  CHECK_NE(res, (void*)-1);
+  UnmapOrDie((void*)res, init_size);
+  // Should be able to map into the same space now.
+  ReservedAddressRange address_range2;
+  uptr res2 = address_range2.Init(init_size, nullptr, res);
+  CHECK_EQ(res, res2);
+
+  // TODO(flowerhack): Once this is switched to the "real" implementation
+  // (rather than passing through to MmapNoAccess*), enforce and test "no
+  // double initializations allowed"
+}
+
+TEST(SanitizerCommon, ReservedAddressRangeMap) {
+  constexpr uptr init_size = 0xffff;
+  ReservedAddressRange address_range;
+  uptr res = address_range.Init(init_size);
+  CHECK_NE(res, (void*) -1);
+
+  // Valid mappings should succeed.
+  CHECK_EQ(res, address_range.Map(res, init_size));
+
+  // Valid mappings should be readable.
+  unsigned char buffer[init_size];
+  memcpy(buffer, reinterpret_cast<void *>(res), init_size);
+
+  // TODO(flowerhack): Once this is switched to the "real" implementation, make
+  // sure you can only mmap into offsets in the Init range.
+}
+
+TEST(SanitizerCommon, ReservedAddressRangeUnmap) {
+  uptr PageSize = GetPageSizeCached();
+  uptr init_size = PageSize * 8;
+  ReservedAddressRange address_range;
+  uptr base_addr = address_range.Init(init_size);
+  CHECK_NE(base_addr, (void*)-1);
+  CHECK_EQ(base_addr, address_range.Map(base_addr, init_size));
+
+  // Unmapping the entire range should succeed.
+  address_range.Unmap(base_addr, init_size);
+
+  // Map a new range.
+  base_addr = address_range.Init(init_size);
+  CHECK_EQ(base_addr, address_range.Map(base_addr, init_size));
+
+  // Windows doesn't allow partial unmappings.
+  #if !SANITIZER_WINDOWS
+
+  // Unmapping at the beginning should succeed.
+  address_range.Unmap(base_addr, PageSize);
+
+  // Unmapping at the end should succeed.
+  uptr new_start = reinterpret_cast<uptr>(address_range.base()) +
+                   address_range.size() - PageSize;
+  address_range.Unmap(new_start, PageSize);
+
+  #endif
+
+  // Unmapping in the middle of the ReservedAddressRange should fail.
+  EXPECT_DEATH(address_range.Unmap(base_addr + (PageSize * 2), PageSize), ".*");
 }
 
 }  // namespace __sanitizer

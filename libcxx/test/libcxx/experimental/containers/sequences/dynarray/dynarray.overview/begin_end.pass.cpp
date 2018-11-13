@@ -8,6 +8,8 @@
 //===----------------------------------------------------------------------===//
 
 // UNSUPPORTED: c++98, c++03, c++11
+// XFAIL: availability
+
 // dynarray.overview
 
 
@@ -29,6 +31,7 @@
 #include <__config>
 
 #include <experimental/dynarray>
+#include <cstddef>
 #include <cassert>
 
 #include <algorithm>
@@ -46,10 +49,11 @@ void dyn_test_const ( const dynarray<T> &dyn ) {
     assert ( data + dyn.size() - 1 == &*dyn.rbegin ());
     assert ( data + dyn.size() - 1 == &*dyn.crbegin ());
 
-    assert ( dyn.size () == std::distance ( dyn.begin(), dyn.end()));
-    assert ( dyn.size () == std::distance ( dyn.cbegin(), dyn.cend()));
-    assert ( dyn.size () == std::distance ( dyn.rbegin(), dyn.rend()));
-    assert ( dyn.size () == std::distance ( dyn.crbegin(), dyn.crend()));
+    std::ptrdiff_t ds = static_cast<std::ptrdiff_t>(dyn.size());
+    assert (ds == std::distance ( dyn.begin(), dyn.end()));
+    assert (ds == std::distance ( dyn.cbegin(), dyn.cend()));
+    assert (ds == std::distance ( dyn.rbegin(), dyn.rend()));
+    assert (ds == std::distance ( dyn.crbegin(), dyn.crend()));
 
     assert (   dyn.begin ()  ==   dyn.cbegin ());
     assert ( &*dyn.begin ()  == &*dyn.cbegin ());
@@ -68,10 +72,11 @@ void dyn_test ( dynarray<T> &dyn ) {
     assert ( data + dyn.size() - 1 == &*dyn.rbegin ());
     assert ( data + dyn.size() - 1 == &*dyn.crbegin ());
 
-    assert ( dyn.size () == std::distance ( dyn.begin(), dyn.end()));
-    assert ( dyn.size () == std::distance ( dyn.cbegin(), dyn.cend()));
-    assert ( dyn.size () == std::distance ( dyn.rbegin(), dyn.rend()));
-    assert ( dyn.size () == std::distance ( dyn.crbegin(), dyn.crend()));
+    std::ptrdiff_t ds = static_cast<std::ptrdiff_t>(dyn.size());
+    assert (ds == std::distance ( dyn.begin(), dyn.end()));
+    assert (ds == std::distance ( dyn.cbegin(), dyn.cend()));
+    assert (ds == std::distance ( dyn.rbegin(), dyn.rend()));
+    assert (ds == std::distance ( dyn.crbegin(), dyn.crend()));
 
     assert (   dyn.begin ()  ==   dyn.cbegin ());
     assert ( &*dyn.begin ()  == &*dyn.cbegin ());

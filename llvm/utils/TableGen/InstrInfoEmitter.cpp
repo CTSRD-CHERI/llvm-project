@@ -13,22 +13,30 @@
 //===----------------------------------------------------------------------===//
 
 #include "CodeGenDAGPatterns.h"
+#include "CodeGenInstruction.h"
 #include "CodeGenSchedule.h"
 #include "CodeGenTarget.h"
+#include "PredicateExpander.h"
 #include "SequenceToOffsetTable.h"
 #include "TableGenBackends.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/TableGen/Error.h"
 #include "llvm/TableGen/Record.h"
 #include "llvm/TableGen/TableGenBackend.h"
-#include <algorithm>
-#include <cstdio>
+#include <cassert>
+#include <cstdint>
 #include <map>
+#include <string>
+#include <utility>
 #include <vector>
 
 using namespace llvm;
 
 namespace {
+
 class InstrInfoEmitter {
   RecordKeeper &Records;
   CodeGenDAGPatterns CDP;
@@ -50,8 +58,19 @@ private:
   /// and instruction operand indices as their values.  The values of this map
   /// are lists of instruction names.
   typedef std::map<std::map<unsigned, unsigned>,
-                   std::vector<std::string> > OpNameMapTy;
+                   std::vector<std::string>> OpNameMapTy;
   typedef std::map<std::string, unsigned>::iterator StrUintMapIter;
+
+  /// Generate member functions in the target-specific GenInstrInfo class.
+  ///
+  /// This method is used to custom expand TIIPredicate definitions.
+  /// See file llvm/Target/TargetInstPredicates.td for a description of what is
+  /// a TIIPredicate and how to use it.
+  void emitTIIHelperMethods(raw_ostream &OS, StringRef TargetName);
+
+  /// Expand TIIPredicate definitions to functions that accept a const MCInst
+  /// reference.
+  void emitMCIIHelperMethods(raw_ostream &OS, StringRef TargetName);
   void emitRecord(const CodeGenInstruction &Inst, unsigned Num,
                   Record *InstrInfo,
                   std::map<std::vector<Record*>, unsigned> &EL,
@@ -60,7 +79,7 @@ private:
   void emitOperandTypesEnum(raw_ostream &OS, const CodeGenTarget &Target);
   void initOperandMapData(
             ArrayRef<const CodeGenInstruction *> NumberedInstructions,
-            const std::string &Namespace,
+            StringRef Namespace,
             std::map<std::string, unsigned> &Operands,
             OpNameMapTy &OperandMap);
   void emitOperandNameMappings(raw_ostream &OS, const CodeGenTarget &Target,
@@ -70,6 +89,7 @@ private:
   void EmitOperandInfo(raw_ostream &OS, OperandInfoMapTy &OperandInfoIDs);
   std::vector<std::string> GetOperandInfo(const CodeGenInstruction &Inst);
 };
+
 } // end anonymous namespace
 
 static void PrintDefList(const std::vector<Record*> &Uses,
@@ -106,7 +126,7 @@ InstrInfoEmitter::GetOperandInfo(const CodeGenInstruction &Inst) {
       for (unsigned j = 0, e = Op.MINumOperands; j != e; ++j) {
         OperandList.push_back(Op);
 
-        Record *OpR = cast<DefInit>(MIOI->getArg(j))->getDef();
+        auto *OpR = cast<DefInit>(MIOI->getArg(j))->getDef();
         OperandList.back().Rec = OpR;
       }
     }
@@ -199,10 +219,9 @@ void InstrInfoEmitter::EmitOperandInfo(raw_ostream &OS,
 ///        well as the getNamedOperandIdx() function.
 void InstrInfoEmitter::initOperandMapData(
         ArrayRef<const CodeGenInstruction *> NumberedInstructions,
-        const std::string &Namespace,
+        StringRef Namespace,
         std::map<std::string, unsigned> &Operands,
         OpNameMapTy &OperandMap) {
-
   unsigned NumOperands = 0;
   for (const CodeGenInstruction *Inst : NumberedInstructions) {
     if (!Inst->TheDef->getValueAsBit("UseNamedOperandTable"))
@@ -217,7 +236,8 @@ void InstrInfoEmitter::initOperandMapData(
       }
       OpList[I->second] = Info.MIOperandNo;
     }
-    OperandMap[OpList].push_back(Namespace + "::" + Inst->TheDef->getName());
+    OperandMap[OpList].push_back(Namespace.str() + "::" +
+                                 Inst->TheDef->getName().str());
   }
 }
 
@@ -235,8 +255,7 @@ void InstrInfoEmitter::initOperandMapData(
 void InstrInfoEmitter::emitOperandNameMappings(raw_ostream &OS,
            const CodeGenTarget &Target,
            ArrayRef<const CodeGenInstruction*> NumberedInstructions) {
-
-  const std::string &Namespace = Target.getInstNamespace();
+  StringRef Namespace = Target.getInstNamespace();
   std::string OpNameNS = "OpName";
   // Map of operand names to their enumeration value.  This will be used to
   // generate the OpName enum.
@@ -300,7 +319,6 @@ void InstrInfoEmitter::emitOperandNameMappings(raw_ostream &OS,
   OS << "} // end namespace " << Namespace << "\n";
   OS << "} // end namespace llvm\n";
   OS << "#endif //GET_INSTRINFO_NAMED_OPS\n\n";
-
 }
 
 /// Generate an enum for all the operand types for this target, under the
@@ -309,7 +327,7 @@ void InstrInfoEmitter::emitOperandNameMappings(raw_ostream &OS,
 void InstrInfoEmitter::emitOperandTypesEnum(raw_ostream &OS,
                                             const CodeGenTarget &Target) {
 
-  const std::string &Namespace = Target.getInstNamespace();
+  StringRef Namespace = Target.getInstNamespace();
   std::vector<Record *> Operands = Records.getAllDerivedDefinitions("Operand");
 
   OS << "#ifdef GET_INSTRINFO_OPERAND_TYPES_ENUM\n";
@@ -331,6 +349,74 @@ void InstrInfoEmitter::emitOperandTypesEnum(raw_ostream &OS,
   OS << "} // end namespace " << Namespace << "\n";
   OS << "} // end namespace llvm\n";
   OS << "#endif // GET_INSTRINFO_OPERAND_TYPES_ENUM\n\n";
+}
+
+void InstrInfoEmitter::emitMCIIHelperMethods(raw_ostream &OS,
+                                             StringRef TargetName) {
+  RecVec TIIPredicates = Records.getAllDerivedDefinitions("TIIPredicate");
+  if (TIIPredicates.empty())
+    return;
+
+  OS << "#ifdef GET_GENINSTRINFO_MC_DECL\n";
+  OS << "#undef GET_GENINSTRINFO_MC_DECL\n\n";
+
+  OS << "namespace llvm {\n";
+  OS << "class MCInst;\n\n";
+
+  OS << "namespace " << TargetName << "_MC {\n\n";
+
+  for (const Record *Rec : TIIPredicates) {
+    OS << "bool " << Rec->getValueAsString("FunctionName")
+        << "(const MCInst &MI);\n";
+  }
+
+  OS << "\n} // end " << TargetName << "_MC namespace\n";
+  OS << "} // end llvm namespace\n\n";
+
+  OS << "#endif // GET_GENINSTRINFO_MC_DECL\n\n";
+
+  OS << "#ifdef GET_GENINSTRINFO_MC_HELPERS\n";
+  OS << "#undef GET_GENINSTRINFO_MC_HELPERS\n\n";
+
+  OS << "namespace llvm {\n";
+  OS << "namespace " << TargetName << "_MC {\n\n";
+
+  PredicateExpander PE(TargetName);
+  PE.setExpandForMC(true);
+
+  for (const Record *Rec : TIIPredicates) {
+    OS << "bool " << Rec->getValueAsString("FunctionName");
+    OS << "(const MCInst &MI) {\n";
+
+    OS.indent(PE.getIndentLevel() * 2);
+    PE.expandStatement(OS, Rec->getValueAsDef("Body"));
+    OS << "\n}\n";
+  }
+
+  OS << "\n} // end " << TargetName << "_MC namespace\n";
+  OS << "} // end llvm namespace\n\n";
+
+  OS << "#endif // GET_GENISTRINFO_MC_HELPERS\n";
+}
+
+void InstrInfoEmitter::emitTIIHelperMethods(raw_ostream &OS,
+                                            StringRef TargetName) {
+  RecVec TIIPredicates = Records.getAllDerivedDefinitions("TIIPredicate");
+  if (TIIPredicates.empty())
+    return;
+
+  PredicateExpander PE(TargetName);
+  PE.setExpandForMC(false);
+  PE.setIndentLevel(2);
+
+  for (const Record *Rec : TIIPredicates) {
+    OS << "\n  static bool " << Rec->getValueAsString("FunctionName");
+    OS << "(const MachineInstr &MI) {\n";
+
+    OS.indent(PE.getIndentLevel() * 2);
+    PE.expandStatement(OS, Rec->getValueAsDef("Body"));
+    OS << "\n  }\n";
+  }
 }
 
 //===----------------------------------------------------------------------===//
@@ -429,9 +515,11 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   OS << "struct " << ClassName << " : public TargetInstrInfo {\n"
      << "  explicit " << ClassName
      << "(int CFSetupOpcode = -1, int CFDestroyOpcode = -1, int CatchRetOpcode = -1, int ReturnOpcode = -1);\n"
-     << "  ~" << ClassName << "() override {}\n"
-     << "};\n";
-  OS << "} // end llvm namespace\n";
+     << "  ~" << ClassName << "() override = default;\n";
+
+  emitTIIHelperMethods(OS, TargetName);
+
+  OS << "\n};\n} // end llvm namespace\n";
 
   OS << "#endif // GET_INSTRINFO_HEADER\n\n";
 
@@ -455,6 +543,8 @@ void InstrInfoEmitter::run(raw_ostream &OS) {
   emitOperandNameMappings(OS, Target, NumberedInstructions);
 
   emitOperandTypesEnum(OS, Target);
+
+  emitMCIIHelperMethods(OS, TargetName);
 }
 
 void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
@@ -474,15 +564,20 @@ void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
      << Inst.TheDef->getValueAsInt("Size") << ",\t"
      << SchedModels.getSchedClassIdx(Inst) << ",\t0";
 
+  CodeGenTarget &Target = CDP.getTargetInfo();
+
   // Emit all of the target independent flags...
   if (Inst.isPseudo)           OS << "|(1ULL<<MCID::Pseudo)";
   if (Inst.isReturn)           OS << "|(1ULL<<MCID::Return)";
+  if (Inst.isEHScopeReturn)    OS << "|(1ULL<<MCID::EHScopeReturn)";
   if (Inst.isBranch)           OS << "|(1ULL<<MCID::Branch)";
   if (Inst.isIndirectBranch)   OS << "|(1ULL<<MCID::IndirectBranch)";
   if (Inst.isCompare)          OS << "|(1ULL<<MCID::Compare)";
   if (Inst.isMoveImm)          OS << "|(1ULL<<MCID::MoveImm)";
+  if (Inst.isMoveReg)          OS << "|(1ULL<<MCID::MoveReg)";
   if (Inst.isBitcast)          OS << "|(1ULL<<MCID::Bitcast)";
   if (Inst.isAdd)              OS << "|(1ULL<<MCID::Add)";
+  if (Inst.isTrap)             OS << "|(1ULL<<MCID::Trap)";
   if (Inst.isSelect)           OS << "|(1ULL<<MCID::Select)";
   if (Inst.isBarrier)          OS << "|(1ULL<<MCID::Barrier)";
   if (Inst.hasDelaySlot)       OS << "|(1ULL<<MCID::DelaySlot)";
@@ -502,8 +597,10 @@ void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
   if (Inst.Operands.isVariadic)OS << "|(1ULL<<MCID::Variadic)";
   if (Inst.hasSideEffects)     OS << "|(1ULL<<MCID::UnmodeledSideEffects)";
   if (Inst.isAsCheapAsAMove)   OS << "|(1ULL<<MCID::CheapAsAMove)";
-  if (Inst.hasExtraSrcRegAllocReq) OS << "|(1ULL<<MCID::ExtraSrcRegAllocReq)";
-  if (Inst.hasExtraDefRegAllocReq) OS << "|(1ULL<<MCID::ExtraDefRegAllocReq)";
+  if (!Target.getAllowRegisterRenaming() || Inst.hasExtraSrcRegAllocReq)
+    OS << "|(1ULL<<MCID::ExtraSrcRegAllocReq)";
+  if (!Target.getAllowRegisterRenaming() || Inst.hasExtraDefRegAllocReq)
+    OS << "|(1ULL<<MCID::ExtraDefRegAllocReq)";
   if (Inst.isRegSequence) OS << "|(1ULL<<MCID::RegSequence)";
   if (Inst.isExtractSubreg) OS << "|(1ULL<<MCID::ExtractSubreg)";
   if (Inst.isInsertSubreg) OS << "|(1ULL<<MCID::InsertSubreg)";
@@ -515,7 +612,7 @@ void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
     PrintFatalError("no TSFlags?");
   uint64_t Value = 0;
   for (unsigned i = 0, e = TSF->getNumBits(); i != e; ++i) {
-    if (BitInit *Bit = dyn_cast<BitInit>(TSF->getBit(i)))
+    if (const auto *Bit = dyn_cast<BitInit>(TSF->getBit(i)))
       Value |= uint64_t(Bit->getValue()) << i;
     else
       PrintFatalError("Invalid TSFlags bit in " + Inst.TheDef->getName());
@@ -544,7 +641,6 @@ void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
   else
     OS << "OperandInfo" << OpInfo.find(OperandInfo)->second;
 
-  CodeGenTarget &Target = CDP.getTargetInfo();
   if (Inst.HasComplexDeprecationPredicate)
     // Emit a function pointer to the complex predicate method.
     OS << ", -1 "
@@ -562,7 +658,6 @@ void InstrInfoEmitter::emitRecord(const CodeGenInstruction &Inst, unsigned Num,
 
 // emitEnums - Print out enum values for all of the instructions.
 void InstrInfoEmitter::emitEnums(raw_ostream &OS) {
-
   OS << "#ifdef GET_INSTRINFO_ENUM\n";
   OS << "#undef GET_INSTRINFO_ENUM\n";
 
@@ -571,7 +666,7 @@ void InstrInfoEmitter::emitEnums(raw_ostream &OS) {
   CodeGenTarget Target(Records);
 
   // We must emit the PHI opcode first...
-  std::string Namespace = Target.getInstNamespace();
+  StringRef Namespace = Target.getInstNamespace();
 
   if (Namespace.empty())
     PrintFatalError("No instructions defined!");
@@ -583,6 +678,14 @@ void InstrInfoEmitter::emitEnums(raw_ostream &OS) {
     OS << "    " << Inst->TheDef->getName() << "\t= " << Num++ << ",\n";
   OS << "    INSTRUCTION_LIST_END = " << Num << "\n";
   OS << "  };\n\n";
+  OS << "} // end " << Namespace << " namespace\n";
+  OS << "} // end llvm namespace\n";
+  OS << "#endif // GET_INSTRINFO_ENUM\n\n";
+
+  OS << "#ifdef GET_INSTRINFO_SCHED_ENUM\n";
+  OS << "#undef GET_INSTRINFO_SCHED_ENUM\n";
+  OS << "namespace llvm {\n\n";
+  OS << "namespace " << Namespace << " {\n";
   OS << "namespace Sched {\n";
   OS << "  enum {\n";
   Num = 0;
@@ -594,7 +697,7 @@ void InstrInfoEmitter::emitEnums(raw_ostream &OS) {
   OS << "} // end " << Namespace << " namespace\n";
   OS << "} // end llvm namespace\n";
 
-  OS << "#endif // GET_INSTRINFO_ENUM\n\n";
+  OS << "#endif // GET_INSTRINFO_SCHED_ENUM\n\n";
 }
 
 namespace llvm {

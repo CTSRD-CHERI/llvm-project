@@ -7,11 +7,34 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Support/FormatAdapters.h"
 #include "llvm/Support/FormatVariadic.h"
+#include "llvm/Support/Error.h"
+#include "llvm/Support/FormatAdapters.h"
 #include "gtest/gtest.h"
 
 using namespace llvm;
+
+// Compile-time tests templates in the detail namespace.
+namespace {
+struct Format : public FormatAdapter<int> {
+  Format(int N) : FormatAdapter<int>(std::move(N)) {}
+  void format(raw_ostream &OS, StringRef Opt) override { OS << "Format"; }
+};
+
+using detail::uses_format_member;
+using detail::uses_missing_provider;
+
+static_assert(uses_format_member<Format>::value, "");
+static_assert(uses_format_member<Format &>::value, "");
+static_assert(uses_format_member<Format &&>::value, "");
+static_assert(uses_format_member<const Format>::value, "");
+static_assert(uses_format_member<const Format &>::value, "");
+static_assert(uses_format_member<const volatile Format>::value, "");
+static_assert(uses_format_member<const volatile Format &>::value, "");
+
+struct NoFormat {};
+static_assert(uses_missing_provider<NoFormat>::value, "");
+}
 
 TEST(FormatVariadicTest, EmptyFormatString) {
   auto Replacements = formatv_object_base::parseFormatString("");
@@ -121,6 +144,58 @@ TEST(FormatVariadicTest, ValidReplacementSequence) {
   EXPECT_EQ(0u, Replacements[0].Align);
   EXPECT_EQ(AlignStyle::Right, Replacements[0].Where);
   EXPECT_EQ("0:1", Replacements[0].Options);
+
+  // 9. Custom padding character
+  Replacements = formatv_object_base::parseFormatString("{0,p+4:foo}");
+  ASSERT_EQ(1u, Replacements.size());
+  EXPECT_EQ("0,p+4:foo", Replacements[0].Spec);
+  EXPECT_EQ(ReplacementType::Format, Replacements[0].Type);
+  EXPECT_EQ(0u, Replacements[0].Index);
+  EXPECT_EQ(4u, Replacements[0].Align);
+  EXPECT_EQ(AlignStyle::Right, Replacements[0].Where);
+  EXPECT_EQ('p', Replacements[0].Pad);
+  EXPECT_EQ("foo", Replacements[0].Options);
+
+  // Format string special characters are allowed as padding character
+  Replacements = formatv_object_base::parseFormatString("{0,-+4:foo}");
+  ASSERT_EQ(1u, Replacements.size());
+  EXPECT_EQ("0,-+4:foo", Replacements[0].Spec);
+  EXPECT_EQ(ReplacementType::Format, Replacements[0].Type);
+  EXPECT_EQ(0u, Replacements[0].Index);
+  EXPECT_EQ(4u, Replacements[0].Align);
+  EXPECT_EQ(AlignStyle::Right, Replacements[0].Where);
+  EXPECT_EQ('-', Replacements[0].Pad);
+  EXPECT_EQ("foo", Replacements[0].Options);
+
+  Replacements = formatv_object_base::parseFormatString("{0,+-4:foo}");
+  ASSERT_EQ(1u, Replacements.size());
+  EXPECT_EQ("0,+-4:foo", Replacements[0].Spec);
+  EXPECT_EQ(ReplacementType::Format, Replacements[0].Type);
+  EXPECT_EQ(0u, Replacements[0].Index);
+  EXPECT_EQ(4u, Replacements[0].Align);
+  EXPECT_EQ(AlignStyle::Left, Replacements[0].Where);
+  EXPECT_EQ('+', Replacements[0].Pad);
+  EXPECT_EQ("foo", Replacements[0].Options);
+
+  Replacements = formatv_object_base::parseFormatString("{0,==4:foo}");
+  ASSERT_EQ(1u, Replacements.size());
+  EXPECT_EQ("0,==4:foo", Replacements[0].Spec);
+  EXPECT_EQ(ReplacementType::Format, Replacements[0].Type);
+  EXPECT_EQ(0u, Replacements[0].Index);
+  EXPECT_EQ(4u, Replacements[0].Align);
+  EXPECT_EQ(AlignStyle::Center, Replacements[0].Where);
+  EXPECT_EQ('=', Replacements[0].Pad);
+  EXPECT_EQ("foo", Replacements[0].Options);
+
+  Replacements = formatv_object_base::parseFormatString("{0,:=4:foo}");
+  ASSERT_EQ(1u, Replacements.size());
+  EXPECT_EQ("0,:=4:foo", Replacements[0].Spec);
+  EXPECT_EQ(ReplacementType::Format, Replacements[0].Type);
+  EXPECT_EQ(0u, Replacements[0].Index);
+  EXPECT_EQ(4u, Replacements[0].Align);
+  EXPECT_EQ(AlignStyle::Center, Replacements[0].Where);
+  EXPECT_EQ(':', Replacements[0].Pad);
+  EXPECT_EQ("foo", Replacements[0].Options);
 }
 
 TEST(FormatVariadicTest, DefaultReplacementValues) {
@@ -302,11 +377,13 @@ TEST(FormatVariadicTest, StringFormatting) {
   const char FooArray[] = "FooArray";
   const char *FooPtr = "FooPtr";
   llvm::StringRef FooRef("FooRef");
+  constexpr StringLiteral FooLiteral("FooLiteral");
   std::string FooString("FooString");
   // 1. Test that we can print various types of strings.
   EXPECT_EQ(FooArray, formatv("{0}", FooArray).str());
   EXPECT_EQ(FooPtr, formatv("{0}", FooPtr).str());
   EXPECT_EQ(FooRef, formatv("{0}", FooRef).str());
+  EXPECT_EQ(FooLiteral, formatv("{0}", FooLiteral).str());
   EXPECT_EQ(FooString, formatv("{0}", FooString).str());
 
   // 2. Test that the precision specifier prints the correct number of
@@ -395,6 +472,16 @@ TEST(FormatVariadicTest, DoubleFormatting) {
   EXPECT_EQ("  -1.100", formatv("{0,8:F3}", -1.1).str());
   EXPECT_EQ("1234.568", formatv("{0,8:F3}", 1234.5678).str());
   EXPECT_EQ("  -0.001", formatv("{0,8:F3}", -.0012345678).str());
+}
+
+TEST(FormatVariadicTest, CustomPaddingCharacter) {
+  // 1. Padding with custom character
+  EXPECT_EQ("==123", formatv("{0,=+5}", 123).str());
+  EXPECT_EQ("=123=", formatv("{0,==5}", 123).str());
+  EXPECT_EQ("123==", formatv("{0,=-5}", 123).str());
+
+  // 2. Combined with zero padding
+  EXPECT_EQ("=00123=", formatv("{0,==7:5}", 123).str());
 }
 
 struct format_tuple {
@@ -506,12 +593,10 @@ TEST(FormatVariadicTest, Range) {
 }
 
 TEST(FormatVariadicTest, Adapter) {
-  class Negative {
-    int N;
-
+  class Negative : public FormatAdapter<int> {
   public:
-    explicit Negative(int N) : N(N) {}
-    void format(raw_ostream &S, StringRef Options) { S << -N; }
+    explicit Negative(int N) : FormatAdapter<int>(std::move(N)) {}
+    void format(raw_ostream &S, StringRef Options) override { S << -Item; }
   };
 
   EXPECT_EQ("-7", formatv("{0}", Negative(7)).str());
@@ -520,6 +605,8 @@ TEST(FormatVariadicTest, Adapter) {
 
   EXPECT_EQ("  171  ",
             formatv("{0}", fmt_align(N, AlignStyle::Center, 7)).str());
+  EXPECT_EQ("--171--",
+            formatv("{0}", fmt_align(N, AlignStyle::Center, 7, '-')).str());
   EXPECT_EQ(" 171   ", formatv("{0}", fmt_pad(N, 1, 3)).str());
   EXPECT_EQ("171171171171171", formatv("{0}", fmt_repeat(N, 5)).str());
 
@@ -529,10 +616,76 @@ TEST(FormatVariadicTest, Adapter) {
             formatv("{0,=34:X-}", fmt_repeat(fmt_pad(N, 1, 3), 5)).str());
 }
 
+TEST(FormatVariadicTest, MoveConstructor) {
+  auto fmt = formatv("{0} {1}", 1, 2);
+  auto fmt2 = std::move(fmt);
+  std::string S = fmt2;
+  EXPECT_EQ("1 2", S);
+}
 TEST(FormatVariadicTest, ImplicitConversions) {
   std::string S = formatv("{0} {1}", 1, 2);
   EXPECT_EQ("1 2", S);
 
   SmallString<4> S2 = formatv("{0} {1}", 1, 2);
   EXPECT_EQ("1 2", S2);
+}
+
+TEST(FormatVariadicTest, FormatAdapter) {
+  EXPECT_EQ("Format", formatv("{0}", Format(1)).str());
+
+  Format var(1);
+  EXPECT_EQ("Format", formatv("{0}", var).str());
+  EXPECT_EQ("Format", formatv("{0}", std::move(var)).str());
+
+  // Not supposed to compile
+  // const Format cvar(1);
+  // EXPECT_EQ("Format", formatv("{0}", cvar).str());
+}
+
+TEST(FormatVariadicTest, FormatFormatvObject) {
+  EXPECT_EQ("Format", formatv("F{0}t", formatv("o{0}a", "rm")).str());
+  EXPECT_EQ("[   ! ]", formatv("[{0,+5}]", formatv("{0,-2}", "!")).str());
+}
+
+namespace {
+struct Recorder {
+  int Copied = 0, Moved = 0;
+  Recorder() = default;
+  Recorder(const Recorder &Copy) : Copied(1 + Copy.Copied), Moved(Copy.Moved) {}
+  Recorder(const Recorder &&Move)
+      : Copied(Move.Copied), Moved(1 + Move.Moved) {}
+};
+} // namespace
+namespace llvm {
+template <> struct format_provider<Recorder> {
+  static void format(const Recorder &R, raw_ostream &OS, StringRef style) {
+    OS << R.Copied << "C " << R.Moved << "M";
+  }
+};
+} // namespace
+
+TEST(FormatVariadicTest, CopiesAndMoves) {
+  Recorder R;
+  EXPECT_EQ("0C 0M", formatv("{0}", R).str());
+  EXPECT_EQ("0C 3M", formatv("{0}", std::move(R)).str());
+  EXPECT_EQ("0C 3M", formatv("{0}", Recorder()).str());
+  EXPECT_EQ(0, R.Copied);
+  EXPECT_EQ(0, R.Moved);
+}
+
+namespace adl {
+struct X {};
+raw_ostream &operator<<(raw_ostream &OS, const X &) { return OS << "X"; }
+} // namespace adl
+TEST(FormatVariadicTest, FormatStreamable) {
+  adl::X X;
+  EXPECT_EQ("X", formatv("{0}", X).str());
+}
+
+TEST(FormatVariadicTest, FormatError) {
+  auto E1 = make_error<StringError>("X", inconvertibleErrorCode());
+  EXPECT_EQ("X", formatv("{0}", E1).str());
+  EXPECT_TRUE(E1.isA<StringError>()); // not consumed
+  EXPECT_EQ("X", formatv("{0}", fmt_consume(std::move(E1))).str());
+  EXPECT_FALSE(E1.isA<StringError>()); // consumed
 }

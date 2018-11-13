@@ -14,15 +14,15 @@
 #define LLVM_TRANSFORMS_UTILS_IMPORTEDFUNCTIONSINLININGSTATISTICS_H
 
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
 #include <string>
 #include <vector>
 
 namespace llvm {
 class Module;
 class Function;
-/// \brief Calculate and dump ThinLTO specific inliner stats.
+/// Calculate and dump ThinLTO specific inliner stats.
 /// The main statistics are:
 /// (1) Number of inlined imported functions,
 /// (2) Number of imported functions inlined into importing module (indirect),

@@ -30,8 +30,8 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
+#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Target/TargetInstrInfo.h"
 using namespace llvm;
 
 #define GET_INSTRMAP_INFO
@@ -277,8 +277,7 @@ void LanaiMemAluCombiner::insertMergedInstruction(MachineBasicBlock *BB,
     InstrBuilder.addImm(LPAC::makePostOp(AluOpcode));
 
   // Transfer memory operands.
-  InstrBuilder->setMemRefs(MemInstr->memoperands_begin(),
-                           MemInstr->memoperands_end());
+  InstrBuilder.setMemRefs(MemInstr->memoperands());
 }
 
 // Function determines if ALU operation (in alu_iter) can be combined with
@@ -343,7 +342,7 @@ MbbIterator LanaiMemAluCombiner::findClosestSuitableAluInstr(
       break;
 
     // Skip over debug instructions
-    if (First->isDebugValue())
+    if (First->isDebugInstr())
       continue;
 
     if (isSuitableAluInstr(IsSpls, First, *Base, *Offset)) {

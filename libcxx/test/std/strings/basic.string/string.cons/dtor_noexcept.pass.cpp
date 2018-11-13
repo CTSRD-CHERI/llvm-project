@@ -20,11 +20,12 @@
 #include "test_allocator.h"
 
 template <class T>
-struct some_alloc
+struct throwing_alloc
 {
     typedef T value_type;
-    some_alloc(const some_alloc&);
-    ~some_alloc() noexcept(false);
+    throwing_alloc(const throwing_alloc&);
+    T *allocate(size_t);
+    ~throwing_alloc() noexcept(false);
 };
 
 // Test that it's possible to take the address of basic_string's destructors
@@ -42,8 +43,10 @@ int main()
         typedef std::basic_string<char, std::char_traits<char>, test_allocator<char>> C;
         static_assert(std::is_nothrow_destructible<C>::value, "");
     }
+#if defined(_LIBCPP_VERSION)
     {
-        typedef std::basic_string<char, std::char_traits<char>, some_alloc<char>> C;
-        LIBCPP_STATIC_ASSERT(!std::is_nothrow_destructible<C>::value, "");
+        typedef std::basic_string<char, std::char_traits<char>, throwing_alloc<char>> C;
+        static_assert(!std::is_nothrow_destructible<C>::value, "");
     }
+#endif // _LIBCPP_VERSION
 }

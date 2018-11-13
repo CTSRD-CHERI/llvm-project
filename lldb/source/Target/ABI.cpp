@@ -25,7 +25,7 @@ using namespace lldb;
 using namespace lldb_private;
 
 ABISP
-ABI::FindPlugin(const ArchSpec &arch) {
+ABI::FindPlugin(lldb::ProcessSP process_sp, const ArchSpec &arch) {
   ABISP abi_sp;
   ABICreateInstance create_callback;
 
@@ -33,7 +33,7 @@ ABI::FindPlugin(const ArchSpec &arch) {
        (create_callback = PluginManager::GetABICreateCallbackAtIndex(idx)) !=
        nullptr;
        ++idx) {
-    abi_sp = create_callback(arch);
+    abi_sp = create_callback(process_sp, arch);
 
     if (abi_sp)
       return abi_sp;
@@ -41,8 +41,6 @@ ABI::FindPlugin(const ArchSpec &arch) {
   abi_sp.reset();
   return abi_sp;
 }
-
-ABI::ABI() = default;
 
 ABI::~ABI() = default;
 
@@ -104,15 +102,18 @@ ValueObjectSP ABI::GetReturnValueObject(Thread &thread, CompilerType &ast_type,
   // work.
 
   if (persistent) {
+    Target &target = *thread.CalculateTarget();
     PersistentExpressionState *persistent_expression_state =
-        thread.CalculateTarget()->GetPersistentExpressionStateForLanguage(
+        target.GetPersistentExpressionStateForLanguage(
             ast_type.GetMinimumLanguage());
 
     if (!persistent_expression_state)
       return ValueObjectSP();
 
-    ConstString persistent_variable_name(
-        persistent_expression_state->GetNextPersistentVariableName());
+    auto prefix = persistent_expression_state->GetPersistentVariablePrefix();
+    ConstString persistent_variable_name =
+        persistent_expression_state->GetNextPersistentVariableName(target,
+                                                                   prefix);
 
     lldb::ValueObjectSP const_valobj_sp;
 
@@ -189,25 +190,24 @@ bool ABI::PrepareTrivialCall(Thread &thread, lldb::addr_t sp,
                              lldb::addr_t returnAddress, llvm::Type &returntype,
                              llvm::ArrayRef<ABI::CallArgument> args) const {
   // dummy prepare trivial call
-  assert(!"Should never get here!");
-  return false;
+  llvm_unreachable("Should never get here!");
 }
 
 bool ABI::GetFallbackRegisterLocation(
     const RegisterInfo *reg_info,
     UnwindPlan::Row::RegisterLocation &unwind_regloc) {
-  // Did the UnwindPlan fail to give us the caller's stack pointer?
-  // The stack pointer is defined to be the same as THIS frame's CFA, so return
-  // the CFA value as
-  // the caller's stack pointer.  This is true on x86-32/x86-64 at least.
+  // Did the UnwindPlan fail to give us the caller's stack pointer? The stack
+  // pointer is defined to be the same as THIS frame's CFA, so return the CFA
+  // value as the caller's stack pointer.  This is true on x86-32/x86-64 at
+  // least.
   if (reg_info->kinds[eRegisterKindGeneric] == LLDB_REGNUM_GENERIC_SP) {
     unwind_regloc.SetIsCFAPlusOffset(0);
     return true;
   }
 
   // If a volatile register is being requested, we don't want to forward the
-  // next frame's register contents
-  // up the stack -- the register is not retrievable at this frame.
+  // next frame's register contents up the stack -- the register is not
+  // retrievable at this frame.
   if (RegisterIsVolatile(reg_info)) {
     unwind_regloc.SetUndefined();
     return true;

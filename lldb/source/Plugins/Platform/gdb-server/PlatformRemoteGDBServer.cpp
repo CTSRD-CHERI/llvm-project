@@ -15,23 +15,22 @@
 // Project includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Host/ConnectionFileDescriptor.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
-#include "lldb/Host/StringConvert.h"
+#include "lldb/Host/PosixApi.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
-
-#include "Utility/UriParser.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StreamString.h"
+#include "lldb/Utility/UriParser.h"
 
 #include "Plugins/Process/Utility/GDBRemoteSignals.h"
 
@@ -95,12 +94,12 @@ const char *PlatformRemoteGDBServer::GetDescription() {
   return GetDescriptionStatic();
 }
 
-Error PlatformRemoteGDBServer::ResolveExecutable(
+Status PlatformRemoteGDBServer::ResolveExecutable(
     const ModuleSpec &module_spec, lldb::ModuleSP &exe_module_sp,
     const FileSpecList *module_search_paths_ptr) {
   // copied from PlatformRemoteiOS
 
-  Error error;
+  Status error;
   // Nothing special to do here, just use the actual file and architecture
 
   ModuleSpec resolved_module_spec(module_spec);
@@ -119,9 +118,9 @@ Error PlatformRemoteGDBServer::ResolveExecutable(
         return error;
       exe_module_sp.reset();
     }
-    // No valid architecture was specified or the exact arch wasn't
-    // found so ask the platform for the architectures that we should be
-    // using (in the correct order) and see if we can find a match that way
+    // No valid architecture was specified or the exact arch wasn't found so
+    // ask the platform for the architectures that we should be using (in the
+    // correct order) and see if we can find a match that way
     StreamString arch_names;
     for (uint32_t idx = 0; GetSupportedArchitectureAtIndex(
              idx, resolved_module_spec.GetArchitecture());
@@ -191,12 +190,12 @@ bool PlatformRemoteGDBServer::GetModuleSpec(const FileSpec &module_file_spec,
   return true;
 }
 
-Error PlatformRemoteGDBServer::GetFileWithUUID(const FileSpec &platform_file,
-                                               const UUID *uuid_ptr,
-                                               FileSpec &local_file) {
+Status PlatformRemoteGDBServer::GetFileWithUUID(const FileSpec &platform_file,
+                                                const UUID *uuid_ptr,
+                                                FileSpec &local_file) {
   // Default to the local case
   local_file = platform_file;
-  return Error();
+  return Status();
 }
 
 //------------------------------------------------------------------
@@ -237,14 +236,8 @@ size_t PlatformRemoteGDBServer::GetSoftwareBreakpointTrapOpcode(
 }
 
 bool PlatformRemoteGDBServer::GetRemoteOSVersion() {
-  uint32_t major, minor, update;
-  if (m_gdb_client.GetOSVersion(major, minor, update)) {
-    m_major_os_version = major;
-    m_minor_os_version = minor;
-    m_update_os_version = update;
-    return true;
-  }
-  return false;
+  m_os_version = m_gdb_client.GetOSVersion();
+  return !m_os_version.empty();
 }
 
 bool PlatformRemoteGDBServer::GetRemoteOSBuildString(std::string &s) {
@@ -278,8 +271,7 @@ bool PlatformRemoteGDBServer::SetRemoteWorkingDirectory(
     const FileSpec &working_dir) {
   if (IsConnected()) {
     // Clear the working directory it case it doesn't get set correctly. This
-    // will
-    // for use to re-read it
+    // will for use to re-read it
     Log *log = GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM);
     if (log)
       log->Printf("PlatformRemoteGDBServer::SetRemoteWorkingDirectory('%s')",
@@ -293,8 +285,8 @@ bool PlatformRemoteGDBServer::IsConnected() const {
   return m_gdb_client.IsConnected();
 }
 
-Error PlatformRemoteGDBServer::ConnectRemote(Args &args) {
-  Error error;
+Status PlatformRemoteGDBServer::ConnectRemote(Args &args) {
+  Status error;
   if (IsConnected()) {
     error.SetErrorStringWithFormat("the platform is already connected to '%s', "
                                    "execute 'platform disconnect' to close the "
@@ -308,10 +300,10 @@ Error PlatformRemoteGDBServer::ConnectRemote(Args &args) {
       std::string path;
       const char *url = args.GetArgumentAtIndex(0);
       if (!url)
-        return Error("URL is null.");
+        return Status("URL is null.");
       llvm::StringRef scheme, hostname, pathname;
       if (!UriParser::Parse(url, scheme, hostname, port, pathname))
-        return Error("Invalid URL: %s", url);
+        return Status("Invalid URL: %s", url);
       m_platform_scheme = scheme;
       m_platform_hostname = hostname;
       path = pathname;
@@ -338,8 +330,8 @@ Error PlatformRemoteGDBServer::ConnectRemote(Args &args) {
   return error;
 }
 
-Error PlatformRemoteGDBServer::DisconnectRemote() {
-  Error error;
+Status PlatformRemoteGDBServer::DisconnectRemote() {
+  Status error;
   m_gdb_client.Disconnect(&error);
   m_remote_signals_sp.reset();
   return error;
@@ -388,9 +380,9 @@ bool PlatformRemoteGDBServer::GetProcessInfo(
   return m_gdb_client.GetProcessInfo(pid, process_info);
 }
 
-Error PlatformRemoteGDBServer::LaunchProcess(ProcessLaunchInfo &launch_info) {
+Status PlatformRemoteGDBServer::LaunchProcess(ProcessLaunchInfo &launch_info) {
   Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_PLATFORM));
-  Error error;
+  Status error;
 
   if (log)
     log->Printf("PlatformRemoteGDBServer::%s() called", __FUNCTION__);
@@ -424,16 +416,7 @@ Error PlatformRemoteGDBServer::LaunchProcess(ProcessLaunchInfo &launch_info) {
   }
 
   // Send the environment and the program + arguments after we connect
-  const char **envp =
-      launch_info.GetEnvironmentEntries().GetConstArgumentVector();
-
-  if (envp) {
-    const char *env_entry;
-    for (int i = 0; (env_entry = envp[i]); ++i) {
-      if (m_gdb_client.SendEnvironmentPacket(env_entry) != 0)
-        break;
-    }
-  }
+  m_gdb_client.SendEnvironment(launch_info.GetEnvironment());
 
   ArchSpec arch_spec = launch_info.GetArchitecture();
   const char *arch_triple = arch_spec.GetTriple().str().c_str();
@@ -482,17 +465,17 @@ Error PlatformRemoteGDBServer::LaunchProcess(ProcessLaunchInfo &launch_info) {
   return error;
 }
 
-Error PlatformRemoteGDBServer::KillProcess(const lldb::pid_t pid) {
+Status PlatformRemoteGDBServer::KillProcess(const lldb::pid_t pid) {
   if (!KillSpawnedProcess(pid))
-    return Error("failed to kill remote spawned process");
-  return Error();
+    return Status("failed to kill remote spawned process");
+  return Status();
 }
 
 lldb::ProcessSP PlatformRemoteGDBServer::DebugProcess(
     ProcessLaunchInfo &launch_info, Debugger &debugger,
     Target *target, // Can be NULL, if NULL create a new target, else use
                     // existing one
-    Error &error) {
+    Status &error) {
   lldb::ProcessSP process_sp;
   if (IsRemote()) {
     if (IsConnected()) {
@@ -506,7 +489,7 @@ lldb::ProcessSP PlatformRemoteGDBServer::DebugProcess(
           TargetSP new_target_sp;
 
           error = debugger.GetTargetList().CreateTarget(
-              debugger, NULL, NULL, false, NULL, new_target_sp);
+              debugger, "", "", eLoadDependentsNo, NULL, new_target_sp);
           target = new_target_sp.get();
         } else
           error.Clear();
@@ -550,9 +533,8 @@ bool PlatformRemoteGDBServer::LaunchGDBServer(lldb::pid_t &pid,
   bool launch_result = false;
   if (remote_triple.getVendor() == llvm::Triple::Apple &&
       remote_triple.getOS() == llvm::Triple::IOS) {
-    // When remote debugging to iOS, we use a USB mux that always talks
-    // to localhost, so we will need the remote debugserver to accept
-    // connections
+    // When remote debugging to iOS, we use a USB mux that always talks to
+    // localhost, so we will need the remote debugserver to accept connections
     // only from localhost, no matter what our current hostname is
     launch_result =
         m_gdb_client.LaunchGDBServer("127.0.0.1", pid, port, socket_name);
@@ -579,7 +561,7 @@ lldb::ProcessSP PlatformRemoteGDBServer::Attach(
     ProcessAttachInfo &attach_info, Debugger &debugger,
     Target *target, // Can be NULL, if NULL create a new target, else use
                     // existing one
-    Error &error) {
+    Status &error) {
   lldb::ProcessSP process_sp;
   if (IsRemote()) {
     if (IsConnected()) {
@@ -593,7 +575,7 @@ lldb::ProcessSP PlatformRemoteGDBServer::Attach(
           TargetSP new_target_sp;
 
           error = debugger.GetTargetList().CreateTarget(
-              debugger, NULL, NULL, false, NULL, new_target_sp);
+              debugger, "", "", eLoadDependentsNo, NULL, new_target_sp);
           target = new_target_sp.get();
         } else
           error.Clear();
@@ -627,9 +609,9 @@ lldb::ProcessSP PlatformRemoteGDBServer::Attach(
   return process_sp;
 }
 
-Error PlatformRemoteGDBServer::MakeDirectory(const FileSpec &file_spec,
-                                             uint32_t mode) {
-  Error error = m_gdb_client.MakeDirectory(file_spec, mode);
+Status PlatformRemoteGDBServer::MakeDirectory(const FileSpec &file_spec,
+                                              uint32_t mode) {
+  Status error = m_gdb_client.MakeDirectory(file_spec, mode);
   Log *log = GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM);
   if (log)
     log->Printf("PlatformRemoteGDBServer::MakeDirectory(path='%s', mode=%o) "
@@ -639,9 +621,9 @@ Error PlatformRemoteGDBServer::MakeDirectory(const FileSpec &file_spec,
   return error;
 }
 
-Error PlatformRemoteGDBServer::GetFilePermissions(const FileSpec &file_spec,
-                                                  uint32_t &file_permissions) {
-  Error error = m_gdb_client.GetFilePermissions(file_spec, file_permissions);
+Status PlatformRemoteGDBServer::GetFilePermissions(const FileSpec &file_spec,
+                                                   uint32_t &file_permissions) {
+  Status error = m_gdb_client.GetFilePermissions(file_spec, file_permissions);
   Log *log = GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM);
   if (log)
     log->Printf("PlatformRemoteGDBServer::GetFilePermissions(path='%s', "
@@ -651,9 +633,9 @@ Error PlatformRemoteGDBServer::GetFilePermissions(const FileSpec &file_spec,
   return error;
 }
 
-Error PlatformRemoteGDBServer::SetFilePermissions(const FileSpec &file_spec,
-                                                  uint32_t file_permissions) {
-  Error error = m_gdb_client.SetFilePermissions(file_spec, file_permissions);
+Status PlatformRemoteGDBServer::SetFilePermissions(const FileSpec &file_spec,
+                                                   uint32_t file_permissions) {
+  Status error = m_gdb_client.SetFilePermissions(file_spec, file_permissions);
   Log *log = GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM);
   if (log)
     log->Printf("PlatformRemoteGDBServer::SetFilePermissions(path='%s', "
@@ -665,11 +647,11 @@ Error PlatformRemoteGDBServer::SetFilePermissions(const FileSpec &file_spec,
 
 lldb::user_id_t PlatformRemoteGDBServer::OpenFile(const FileSpec &file_spec,
                                                   uint32_t flags, uint32_t mode,
-                                                  Error &error) {
+                                                  Status &error) {
   return m_gdb_client.OpenFile(file_spec, flags, mode, error);
 }
 
-bool PlatformRemoteGDBServer::CloseFile(lldb::user_id_t fd, Error &error) {
+bool PlatformRemoteGDBServer::CloseFile(lldb::user_id_t fd, Status &error) {
   return m_gdb_client.CloseFile(fd, error);
 }
 
@@ -680,27 +662,27 @@ PlatformRemoteGDBServer::GetFileSize(const FileSpec &file_spec) {
 
 uint64_t PlatformRemoteGDBServer::ReadFile(lldb::user_id_t fd, uint64_t offset,
                                            void *dst, uint64_t dst_len,
-                                           Error &error) {
+                                           Status &error) {
   return m_gdb_client.ReadFile(fd, offset, dst, dst_len, error);
 }
 
 uint64_t PlatformRemoteGDBServer::WriteFile(lldb::user_id_t fd, uint64_t offset,
                                             const void *src, uint64_t src_len,
-                                            Error &error) {
+                                            Status &error) {
   return m_gdb_client.WriteFile(fd, offset, src, src_len, error);
 }
 
-Error PlatformRemoteGDBServer::PutFile(const FileSpec &source,
-                                       const FileSpec &destination,
-                                       uint32_t uid, uint32_t gid) {
+Status PlatformRemoteGDBServer::PutFile(const FileSpec &source,
+                                        const FileSpec &destination,
+                                        uint32_t uid, uint32_t gid) {
   return Platform::PutFile(source, destination, uid, gid);
 }
 
-Error PlatformRemoteGDBServer::CreateSymlink(
+Status PlatformRemoteGDBServer::CreateSymlink(
     const FileSpec &src, // The name of the link is in src
     const FileSpec &dst) // The symlink points to dst
 {
-  Error error = m_gdb_client.CreateSymlink(src, dst);
+  Status error = m_gdb_client.CreateSymlink(src, dst);
   Log *log = GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM);
   if (log)
     log->Printf("PlatformRemoteGDBServer::CreateSymlink(src='%s', dst='%s') "
@@ -710,8 +692,8 @@ Error PlatformRemoteGDBServer::CreateSymlink(
   return error;
 }
 
-Error PlatformRemoteGDBServer::Unlink(const FileSpec &file_spec) {
-  Error error = m_gdb_client.Unlink(file_spec);
+Status PlatformRemoteGDBServer::Unlink(const FileSpec &file_spec) {
+  Status error = m_gdb_client.Unlink(file_spec);
   Log *log = GetLogIfAnyCategoriesSet(LIBLLDB_LOG_PLATFORM);
   if (log)
     log->Printf("PlatformRemoteGDBServer::Unlink(path='%s') error = %u (%s)",
@@ -723,7 +705,7 @@ bool PlatformRemoteGDBServer::GetFileExists(const FileSpec &file_spec) {
   return m_gdb_client.GetFileExists(file_spec);
 }
 
-Error PlatformRemoteGDBServer::RunShellCommand(
+Status PlatformRemoteGDBServer::RunShellCommand(
     const char *command, // Shouldn't be NULL
     const FileSpec &
         working_dir, // Pass empty FileSpec to use the current working directory
@@ -732,11 +714,9 @@ Error PlatformRemoteGDBServer::RunShellCommand(
                      // process to exit
     std::string
         *command_output, // Pass NULL if you don't want the command output
-    uint32_t
-        timeout_sec) // Timeout in seconds to wait for shell program to finish
-{
+    const Timeout<std::micro> &timeout) {
   return m_gdb_client.RunShellCommand(command, working_dir, status_ptr,
-                                      signo_ptr, command_output, timeout_sec);
+                                      signo_ptr, command_output, timeout);
 }
 
 void PlatformRemoteGDBServer::CalculateTrapHandlerSymbolNames() {
@@ -750,8 +730,8 @@ const UnixSignalsSP &PlatformRemoteGDBServer::GetRemoteUnixSignals() {
   if (m_remote_signals_sp)
     return m_remote_signals_sp;
 
-  // If packet not implemented or JSON failed to parse,
-  // we'll guess the signal set based on the remote architecture.
+  // If packet not implemented or JSON failed to parse, we'll guess the signal
+  // set based on the remote architecture.
   m_remote_signals_sp = UnixSignals::Create(GetRemoteSystemArchitecture());
 
   StringExtractorGDBRemote response;
@@ -786,7 +766,7 @@ const UnixSignalsSP &PlatformRemoteGDBServer::GetRemoteUnixSignals() {
         if (!dict->GetValueForKeyAsInteger("signo", signo))
           return false;
 
-        std::string name;
+        llvm::StringRef name;
         if (!dict->GetValueForKeyAsString("name", name))
           return false;
 
@@ -811,7 +791,7 @@ const UnixSignalsSP &PlatformRemoteGDBServer::GetRemoteUnixSignals() {
         if (object_sp && object_sp->IsValid())
           description = object_sp->GetStringValue();
 
-        remote_signals_sp->AddSignal(signo, name.c_str(), suppress, stop,
+        remote_signals_sp->AddSignal(signo, name.str().c_str(), suppress, stop,
                                      notify, description.c_str());
         return true;
       });
@@ -854,7 +834,7 @@ std::string PlatformRemoteGDBServer::MakeUrl(const char *scheme,
 lldb::ProcessSP PlatformRemoteGDBServer::ConnectProcess(
     llvm::StringRef connect_url, llvm::StringRef plugin_name,
     lldb_private::Debugger &debugger, lldb_private::Target *target,
-    lldb_private::Error &error) {
+    lldb_private::Status &error) {
   if (!IsRemote() || !IsConnected()) {
     error.SetErrorString("Not connected to remote gdb server");
     return nullptr;
@@ -864,7 +844,7 @@ lldb::ProcessSP PlatformRemoteGDBServer::ConnectProcess(
 }
 
 size_t PlatformRemoteGDBServer::ConnectToWaitingProcesses(Debugger &debugger,
-                                                          Error &error) {
+                                                          Status &error) {
   std::vector<std::string> connection_urls;
   GetPendingGdbServerList(connection_urls);
 

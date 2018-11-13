@@ -1,6 +1,7 @@
 ;; x86 is chosen to show the transform when 8-bit and 16-bit registers are available.
 
 ; RUN: opt < %s -codegenprepare -S -mtriple=x86_64-unknown-unknown    | FileCheck %s --check-prefix=X86
+; RUN: opt < %s -debugify -codegenprepare -S -mtriple=x86_64-unknown-unknown | FileCheck %s --check-prefix=DEBUG
 
 ; No change for x86 because 16-bit registers are part of the architecture.
 
@@ -28,7 +29,7 @@ return:
 ; X86-LABEL: @widen_switch_i16(
 ; X86:       %trunc = trunc i32 %a to i16
 ; X86-NEXT:  switch i16 %trunc, label %sw.default [
-; X86-NEXT:    i16 1, label %return
+; X86-NEXT:    i16 1, label %sw.bb0
 ; X86-NEXT:    i16 -1, label %sw.bb1
 }
 
@@ -58,8 +59,15 @@ return:
 ; X86-LABEL: @widen_switch_i17(
 ; X86:       %0 = zext i17 %trunc to i32
 ; X86-NEXT:  switch i32 %0, label %sw.default [
-; X86-NEXT:    i32 10, label %return
+; X86-NEXT:    i32 10, label %sw.bb0
 ; X86-NEXT:    i32 131071, label %sw.bb1
+
+; DEBUG-LABEL: @widen_switch_i17(
+; DEBUG:       zext i17 %trunc to i32, !dbg [[switch_loc:![0-9]+]]
+; DEBUG-NEXT:  switch i32 {{.*}} [
+; DEBUG-NEXT:    label %sw.bb0
+; DEBUG-NEXT:    label %sw.bb1
+; DEBUG-NEXT:  ], !dbg [[switch_loc]]
 }
 
 ; If the switch condition is a sign-extended function argument, then the
@@ -89,7 +97,7 @@ return:
 ; X86-LABEL: @widen_switch_i16_sext(
 ; X86:       %0 = sext i2 %a to i8
 ; X86-NEXT:  switch i8 %0, label %sw.default [
-; X86-NEXT:    i8 1, label %return
+; X86-NEXT:    i8 1, label %sw.bb0
 ; X86-NEXT:    i8 -1, label %sw.bb1
 }
 

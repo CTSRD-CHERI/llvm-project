@@ -45,21 +45,21 @@ define fp128 @test_multf3(fp128 %a, fp128 %b) #0 {
 }
 
 define float @test_subsf3(float %a, float %b) #0 {
-  ; CHCEK-LABEL:  test_subsf3:
+  ; CHECK-LABEL:  test_subsf3:
   ; CHECK:        call __subsf3
   %sub = fsub float %a, %b
   ret float %sub
 }
 
 define double @test_subdf3(double %a, double %b) #0 {
-  ; CHCEK-LABEL:  test_subdf3:
+  ; CHECK-LABEL:  test_subdf3:
   ; CHECK:        call __subdf3
   %sub = fsub double %a, %b
   ret double %sub
 }
 
 define fp128 @test_subtf3(fp128 %a, fp128 %b) #0 {
-  ; CHCEK-LABEL:  test_subtf3:
+  ; CHECK-LABEL:  test_subtf3:
   ; CHECK:        call __subtf3
   %sub = fsub fp128 %a, %b
   ret fp128 %sub
@@ -151,21 +151,21 @@ define i1 @test_netf2(fp128 %a, fp128 %b) #0 {
 }
 
 define i1 @test_gesf2(float %a, float %b) #0 {
-  ; CHECK-LABLE:  test_gesf2:
+  ; CHECK-LABEL:  test_gesf2:
   ; CHECK:        call __gesf2
   %cmp = fcmp oge float %a, %b
   ret i1 %cmp
 }
 
 define i1 @test_gedf2(double %a, double %b) #0 {
-  ; CHECK-LABLE:  test_gedf2:
+  ; CHECK-LABEL:  test_gedf2:
   ; CHECK:        call __gedf2
   %cmp = fcmp oge double %a, %b
   ret i1 %cmp
 }
 
 define i1 @test_getf2(fp128 %a, fp128 %b) #0 {
-  ; CHECK-LABLE:  test_getf2:
+  ; CHECK-LABEL:  test_getf2:
   ; CHECK:        call __getf2
   %cmp = fcmp oge fp128 %a, %b
   ret i1 %cmp

@@ -10,6 +10,7 @@
 #ifndef LLVM_CLANG_PCH_CONTAINER_OPERATIONS_H
 #define LLVM_CLANG_PCH_CONTAINER_OPERATIONS_H
 
+#include "clang/Basic/Module.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -29,16 +30,16 @@ class DiagnosticsEngine;
 class CompilerInstance;
 
 struct PCHBuffer {
-  uint64_t Signature;
+  ASTFileSignature Signature;
   llvm::SmallVector<char, 0> Data;
   bool IsComplete;
 };
-  
+
 /// This abstract interface provides operations for creating
 /// containers for serialized ASTs (precompiled headers and clang
 /// modules).
 class PCHContainerWriter {
-public: 
+public:
   virtual ~PCHContainerWriter() = 0;
   virtual StringRef getFormat() const = 0;
 
@@ -57,7 +58,7 @@ public:
 /// containers for serialized ASTs (precompiled headers and clang
 /// modules).
 class PCHContainerReader {
-public: 
+public:
   virtual ~PCHContainerReader() = 0;
   /// Equivalent to the format passed to -fmodule-format=
   virtual StringRef getFormat() const = 0;
@@ -101,7 +102,7 @@ public:
   }
   void registerReader(std::unique_ptr<PCHContainerReader> Reader) {
     Readers[Reader->getFormat()] = std::move(Reader);
-  }  
+  }
   const PCHContainerWriter *getWriterOrNull(StringRef Format) {
     return Writers[Format].get();
   }

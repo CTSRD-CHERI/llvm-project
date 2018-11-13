@@ -15,7 +15,12 @@
 
 using namespace llvm;
 
-bool OrcExecutionTest::NativeTargetInitialized = false;
+const JITTargetAddress llvm::orc::CoreAPIsBasedStandardTest::FooAddr;
+const JITTargetAddress llvm::orc::CoreAPIsBasedStandardTest::BarAddr;
+const JITTargetAddress llvm::orc::CoreAPIsBasedStandardTest::BazAddr;
+const JITTargetAddress llvm::orc::CoreAPIsBasedStandardTest::QuxAddr;
+
+bool OrcNativeTarget::NativeTargetInitialized = false;
 
 ModuleBuilder::ModuleBuilder(LLVMContext &Context, StringRef Triple,
                              StringRef Name)

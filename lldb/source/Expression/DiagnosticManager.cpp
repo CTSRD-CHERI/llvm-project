@@ -11,8 +11,8 @@
 
 #include "llvm/Support/ErrorHandling.h"
 
-#include "lldb/Core/Log.h"
-#include "lldb/Core/StreamString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb_private;
 
@@ -22,9 +22,8 @@ void DiagnosticManager::Dump(Log *log) {
 
   std::string str = GetString();
 
-  // GetString() puts a separator after each diagnostic.
-  // We want to remove the last '\n' because log->PutCString will add one for
-  // us.
+  // GetString() puts a separator after each diagnostic. We want to remove the
+  // last '\n' because log->PutCString will add one for us.
 
   if (str.size() && str.back() == '\n') {
     str.pop_back();
@@ -78,4 +77,13 @@ size_t DiagnosticManager::PutString(DiagnosticSeverity severity,
     return 0;
   AddDiagnostic(str, severity, eDiagnosticOriginLLDB);
   return str.size();
+}
+
+void DiagnosticManager::CopyDiagnostics(DiagnosticManager &otherDiagnostics) {
+  for (const DiagnosticList::value_type &other_diagnostic:
+       otherDiagnostics.Diagnostics()) {
+    AddDiagnostic(
+        other_diagnostic->GetMessage(), other_diagnostic->GetSeverity(),
+        other_diagnostic->getKind(), other_diagnostic->GetCompilerID());
+  }
 }

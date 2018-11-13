@@ -12,9 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ExecutionEngine/MCJIT.h"
-#include "llvm/Support/DynamicLibrary.h"
 #include "MCJITTestBase.h"
+#include "llvm/Support/DynamicLibrary.h"
 #include "gtest/gtest.h"
 
 using namespace llvm;

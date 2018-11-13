@@ -59,18 +59,20 @@ int main()
         typedef std::deque<MoveOnly> C;
         static_assert(noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
     }
+#if defined(_LIBCPP_VERSION)
     {
         typedef std::deque<MoveOnly, test_allocator<MoveOnly>> C;
-        LIBCPP_STATIC_ASSERT(noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
+        static_assert(noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
     }
     {
         typedef std::deque<MoveOnly, other_allocator<MoveOnly>> C;
-        LIBCPP_STATIC_ASSERT(noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
+        static_assert(noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
     }
+#endif // _LIBCPP_VERSION
     {
         typedef std::deque<MoveOnly, some_alloc<MoveOnly>> C;
 #if TEST_STD_VER >= 14
-    //  In c++14, if POCS is set, swapping the allocator is required not to throw
+    //  In C++14, if POCS is set, swapping the allocator is required not to throw
         static_assert( noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");
 #else
         static_assert(!noexcept(swap(std::declval<C&>(), std::declval<C&>())), "");

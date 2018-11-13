@@ -10,29 +10,75 @@
 #ifndef liblldb_Disassembler_h_
 #define liblldb_Disassembler_h_
 
-// C Includes
-// C++ Includes
+#include "lldb/Core/Address.h"
+#include "lldb/Core/EmulateInstruction.h"
+#include "lldb/Core/FormatEntity.h" // for FormatEntity
+#include "lldb/Core/Opcode.h"
+#include "lldb/Core/PluginInterface.h"
+#include "lldb/Interpreter/OptionValue.h"
+#include "lldb/Symbol/LineEntry.h"
+#include "lldb/Target/ExecutionContext.h" // for ExecutionContext
+#include "lldb/Utility/ArchSpec.h"
+#include "lldb/Utility/ConstString.h" // for ConstString
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/lldb-defines.h"      // for DISALLOW_COPY_AND_ASSIGN
+#include "lldb/lldb-forward.h"      // for InstructionSP, DisassemblerSP
+#include "lldb/lldb-private-enumerations.h" // for AddressClass
+#include "lldb/lldb-types.h"        // for addr_t, offset_t
+
+#include "llvm/ADT/StringRef.h" // for StringRef
+
+#include <functional> // for function
+#include <map>
+#include <memory> // for enable_shared_from_this
+#include <set>
 #include <string>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/Address.h"
-#include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/EmulateInstruction.h"
-#include "lldb/Core/Opcode.h"
-#include "lldb/Core/PluginInterface.h"
-#include "lldb/Host/FileSpec.h"
-#include "lldb/Interpreter/OptionValue.h"
-#include "lldb/Symbol/LineEntry.h"
-#include "lldb/lldb-private.h"
+#include <stddef.h> // for size_t
+#include <stdint.h> // for uint32_t, int64_t
+#include <stdio.h>  // for FILE
+
+namespace lldb_private {
+class AddressRange;
+}
+namespace lldb_private {
+class DataExtractor;
+}
+namespace lldb_private {
+class Debugger;
+}
+namespace lldb_private {
+class Disassembler;
+}
+namespace lldb_private {
+class Module;
+}
+namespace lldb_private {
+class Stream;
+}
+namespace lldb_private {
+class SymbolContext;
+}
+namespace lldb_private {
+class SymbolContextList;
+}
+namespace lldb_private {
+class Target;
+}
+namespace lldb_private {
+struct RegisterInfo;
+}
+namespace llvm {
+template <typename T> class SmallVectorImpl;
+}
 
 namespace lldb_private {
 
 class Instruction {
 public:
   Instruction(const Address &address,
-              lldb::AddressClass addr_class = lldb::eAddressClassInvalid);
+              AddressClass addr_class = AddressClass::eInvalid);
 
   virtual ~Instruction();
 
@@ -56,12 +102,11 @@ public:
   virtual void
   CalculateMnemonicOperandsAndComment(const ExecutionContext *exe_ctx) = 0;
 
-  lldb::AddressClass GetAddressClass();
+  AddressClass GetAddressClass();
 
   void SetAddress(const Address &addr) {
-    // Invalidate the address class to lazily discover
-    // it if we need to.
-    m_address_class = lldb::eAddressClassInvalid;
+    // Invalidate the address class to lazily discover it if we need to.
+    m_address_class = AddressClass::eInvalid;
     m_address = addr;
   }
 
@@ -127,6 +172,8 @@ public:
 
   virtual bool HasDelaySlot();
 
+  bool CanSetBreakpoint ();
+
   virtual size_t Decode(const Disassembler &disassembler,
                         const DataExtractor &data,
                         lldb::offset_t data_offset) = 0;
@@ -187,14 +234,15 @@ public:
 protected:
   Address m_address; // The section offset address of this instruction
                      // We include an address class in the Instruction class to
-  // allow the instruction specify the eAddressClassCodeAlternateISA
-  // (currently used for thumb), and also to specify data (eAddressClassData).
-  // The usual value will be eAddressClassCode, but often when
-  // disassembling memory, you might run into data. This can
-  // help us to disassemble appropriately.
+                     // allow the instruction specify the
+                     // AddressClass::eCodeAlternateISA (currently used for
+                     // thumb), and also to specify data (AddressClass::eData).
+                     // The usual value will be AddressClass::eCode, but often
+                     // when disassembling memory, you might run into data.
+                     // This can help us to disassemble appropriately.
 private:
-  lldb::AddressClass
-      m_address_class; // Use GetAddressClass () accessor function!
+  AddressClass m_address_class; // Use GetAddressClass () accessor function!
+
 protected:
   Opcode m_opcode; // The opcode for this instruction
   std::string m_opcode_name;
@@ -317,12 +365,10 @@ public:
   };
 
   // FindPlugin should be lax about the flavor string (it is too annoying to
-  // have various internal uses of the
-  // disassembler fail because the global flavor string gets set wrong.
-  // Instead, if you get a flavor string you
+  // have various internal uses of the disassembler fail because the global
+  // flavor string gets set wrong. Instead, if you get a flavor string you
   // don't understand, use the default.  Folks who care to check can use the
-  // FlavorValidForArchSpec method on the
-  // disassembler they got back.
+  // FlavorValidForArchSpec method on the disassembler they got back.
   static lldb::DisassemblerSP
   FindPlugin(const ArchSpec &arch, const char *flavor, const char *plugin_name);
 
@@ -422,8 +468,8 @@ public:
                                       const char *flavor) = 0;
 
 protected:
-  // SourceLine and SourceLinesToDisplay structures are only used in
-  // the mixed source and assembly display methods internal to this class.
+  // SourceLine and SourceLinesToDisplay structures are only used in the mixed
+  // source and assembly display methods internal to this class.
 
   struct SourceLine {
     FileSpec file;
@@ -446,9 +492,9 @@ protected:
   struct SourceLinesToDisplay {
     std::vector<SourceLine> lines;
 
-    // index of the "current" source line, if we want to highlight that
-    // when displaying the source lines.  (as opposed to the surrounding
-    // source lines provided to give context)
+    // index of the "current" source line, if we want to highlight that when
+    // displaying the source lines.  (as opposed to the surrounding source
+    // lines provided to give context)
     size_t current_source_line;
 
     // Whether to print a blank line at the end of the source lines.
@@ -459,8 +505,8 @@ protected:
     }
   };
 
-  // Get the function's declaration line number, hopefully a line number earlier
-  // than the opening curly brace at the start of the function body.
+  // Get the function's declaration line number, hopefully a line number
+  // earlier than the opening curly brace at the start of the function body.
   static SourceLine GetFunctionDeclLineEntry(const SymbolContext &sc);
 
   // Add the provided SourceLine to the map of filenames-to-source-lines-seen.
@@ -469,14 +515,13 @@ protected:
       std::map<FileSpec, std::set<uint32_t>> &source_lines_seen);
 
   // Given a source line, determine if we should print it when we're doing
-  // mixed source & assembly output.
-  // We're currently using the target.process.thread.step-avoid-regexp setting
-  // (which is used for stepping over inlined STL functions by default) to
-  // determine what source lines to avoid showing.
+  // mixed source & assembly output. We're currently using the
+  // target.process.thread.step-avoid-regexp setting (which is used for
+  // stepping over inlined STL functions by default) to determine what source
+  // lines to avoid showing.
   //
   // Returns true if this source line should be elided (if the source line
-  // should
-  // not be displayed).
+  // should not be displayed).
   static bool
   ElideMixedSourceAndDisassemblyLine(const ExecutionContext &exe_ctx,
                                      const SymbolContext &sc, SourceLine &line);

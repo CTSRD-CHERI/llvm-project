@@ -18,8 +18,8 @@
 #include "llvm/ADT/StringRef.h"
 
 // Project includes
-#include "lldb/Core/ConstString.h"
 #include "lldb/Target/Language.h"
+#include "lldb/Utility/ConstString.h"
 #include "lldb/lldb-private.h"
 
 namespace lldb_private {
@@ -45,6 +45,8 @@ public:
   bool IsNilReference(ValueObject &valobj) override;
 
   lldb::TypeCategoryImplSP GetFormatters() override;
+
+  bool IsSourceFile(llvm::StringRef file_path) const override;
 };
 
 } // namespace lldb_private

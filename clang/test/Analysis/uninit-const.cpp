@@ -1,4 +1,5 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=cplusplus.NewDelete,core,alpha.core.CallAndMessageUnInitRefArg -analyzer-output=text -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=cplusplus.NewDelete,core,alpha.core.CallAndMessageUnInitRefArg -analyzer-output=text -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=cplusplus.NewDelete,core,alpha.core.CallAndMessageUnInitRefArg -analyzer-output=text -DTEST_INLINABLE_ALLOCATORS -verify %s
 // Passing uninitialized const data to unknown function
 
 #include "Inputs/system-header-simulator-cxx.h"
@@ -48,15 +49,17 @@ void f7(void) {
 
 
 int& f6_1_sub(int &p) {
-  return p;
+  return p; // expected-note{{Returning without writing to 'p'}}
+            // expected-note@-1{{Returning pointer (reference to 't')}}
 }
 
 void f6_1(void) {
-  int t;
+  int t; // expected-note{{'t' declared without an initial value}}
   int p = f6_1_sub(t); //expected-warning {{Assigned value is garbage or undefined}}
-                       //expected-note@-1 {{Calling 'f6_1_sub'}}
-                       //expected-note@-2 {{Returning from 'f6_1_sub'}}
-                       //expected-note@-3 {{Assigned value is garbage or undefined}}
+                       //expected-note@-1 {{Passing value via 1st parameter 'p'}}
+                       //expected-note@-2 {{Calling 'f6_1_sub'}}
+                       //expected-note@-3 {{Returning from 'f6_1_sub'}}
+                       //expected-note@-4 {{Assigned value is garbage or undefined}}
   int q = p;
   doStuff6(q);
 }
@@ -66,8 +69,8 @@ void f6_2(void) {
   int &p = t;
   int &s = p;
   int &q = s;  //expected-note {{'q' initialized here}}
-  doStuff6(q); //expected-warning {{Function call argument is an uninitialized value}}
-               //expected-note@-1 {{Function call argument is an uninitialized value}}
+  doStuff6(q); //expected-warning {{1st function call argument is an uninitialized value}}
+               //expected-note@-1 {{1st function call argument is an uninitialized value}}
 }
 
 void doStuff6_3(int& q_, int *ptr_) {}
@@ -78,15 +81,15 @@ void f6_3(void) {
   int &p = t;
   int &s = p;
   int &q = s;
-  doStuff6_3(q,ptr); //expected-warning {{Function call argument is an uninitialized value}}
-               //expected-note@-1 {{Function call argument is an uninitialized value}}
+  doStuff6_3(q,ptr); //expected-warning {{2nd function call argument is an uninitialized value}}
+               //expected-note@-1 {{2nd function call argument is an uninitialized value}}
 
 }
 
 void f6(void) {
   int k;       // expected-note {{'k' declared without an initial value}}
-  doStuff6(k); // expected-warning {{Function call argument is an uninitialized value}}
-               // expected-note@-1 {{Function call argument is an uninitialized value}}
+  doStuff6(k); // expected-warning {{1st function call argument is an uninitialized value}}
+               // expected-note@-1 {{1st function call argument is an uninitialized value}}
 
 }
 
@@ -95,15 +98,15 @@ void f6(void) {
 void f5(void) {
   int t;
   int* tp = &t;        // expected-note {{'tp' initialized here}}
-  doStuff_uninit(tp);  // expected-warning {{Function call argument is a pointer to uninitialized value}}
-                       // expected-note@-1 {{Function call argument is a pointer to uninitialized value}}
+  doStuff_uninit(tp);  // expected-warning {{1st function call argument is a pointer to uninitialized value}}
+                       // expected-note@-1 {{1st function call argument is a pointer to uninitialized value}}
 }
 
 
 void f4(void) {
       int y;        // expected-note {{'y' declared without an initial value}}
-      doStuff4(y);  // expected-warning {{Function call argument is an uninitialized value}}
-                    // expected-note@-1 {{Function call argument is an uninitialized value}}
+      doStuff4(y);  // expected-warning {{1st function call argument is an uninitialized value}}
+                    // expected-note@-1 {{1st function call argument is an uninitialized value}}
 }
 
 void f3(void) {
@@ -122,7 +125,7 @@ void f1(void) {
 }
 
 void f_uninit(void) {
-      int x;
-      doStuff_uninit(&x);  // expected-warning {{Function call argument is a pointer to uninitialized value}}
-                           // expected-note@-1 {{Function call argument is a pointer to uninitialized value}}
+      int x;               // expected-note {{'x' declared without an initial value}}
+      doStuff_uninit(&x);  // expected-warning {{1st function call argument is a pointer to uninitialized value}}
+                           // expected-note@-1 {{1st function call argument is a pointer to uninitialized value}}
 }

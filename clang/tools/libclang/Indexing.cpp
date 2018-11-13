@@ -45,7 +45,7 @@ namespace {
 // Skip Parsed Bodies
 //===----------------------------------------------------------------------===//
 
-/// \brief A "region" in source code identified by the file/offset of the
+/// A "region" in source code identified by the file/offset of the
 /// preprocessor conditional directive that it belongs to.
 /// Multiple, non-consecutive ranges can be parts of the same region.
 ///
@@ -249,7 +249,8 @@ public:
                           StringRef FileName, bool IsAngled,
                           CharSourceRange FilenameRange, const FileEntry *File,
                           StringRef SearchPath, StringRef RelativePath,
-                          const Module *Imported) override {
+                          const Module *Imported,
+                          SrcMgr::CharacteristicKind FileType) override {
     bool isImport = (IncludeTok.is(tok::identifier) &&
             IncludeTok.getIdentifierInfo()->getPPKeywordID() == tok::pp_import);
     DataConsumer.ppIncludedFile(HashLoc, FileName, File, isImport, IsAngled,
@@ -262,7 +263,8 @@ public:
   /// MacroUndefined - This hook is called whenever a macro #undef is seen.
   /// MI is released immediately following this callback.
   void MacroUndefined(const Token &MacroNameTok,
-                      const MacroDefinition &MD) override {}
+                      const MacroDefinition &MD,
+                      const MacroDirective *UD) override {}
 
   /// MacroExpands - This is called by when a macro invocation is found.
   void MacroExpands(const Token &MacroNameTok, const MacroDefinition &MD,
@@ -271,7 +273,8 @@ public:
   /// SourceRangeSkipped - This hook is called when a source range is skipped.
   /// \param Range The SourceRange that was skipped. The range begins at the
   /// #if/#else directive and ends after the #endif/#else directive.
-  void SourceRangeSkipped(SourceRange Range) override {}
+  void SourceRangeSkipped(SourceRange Range, SourceLocation EndifLoc) override {
+  }
 };
 
 //===----------------------------------------------------------------------===//
@@ -371,7 +374,7 @@ public:
     DataConsumer->setASTContext(CI.getASTContext());
     Preprocessor &PP = CI.getPreprocessor();
     PP.addPPCallbacks(llvm::make_unique<IndexPPCallbacks>(PP, *DataConsumer));
-    DataConsumer->setPreprocessor(PP);
+    DataConsumer->setPreprocessor(CI.getPreprocessorPtr());
 
     if (SKData) {
       auto *PPRec = new PPConditionalDirectiveRecord(PP.getSourceManager());
@@ -399,6 +402,8 @@ static IndexingOptions getIndexingOptionsFromCXOptions(unsigned index_options) {
   IndexingOptions IdxOpts;
   if (index_options & CXIndexOpt_IndexFunctionLocalSymbols)
     IdxOpts.IndexFunctionLocals = true;
+  if (index_options & CXIndexOpt_IndexImplicitTemplateInstantiations)
+    IdxOpts.IndexImplicitInstantiation = true;
   return IdxOpts;
 }
 
@@ -476,17 +481,19 @@ static CXErrorCode clang_indexSourceFile_Impl(
   // present it will be unused.
   if (source_filename)
     Args->push_back(source_filename);
-  
-  IntrusiveRefCntPtr<CompilerInvocation>
-    CInvok(createInvocationFromCommandLine(*Args, Diags));
+
+  std::shared_ptr<CompilerInvocation> CInvok =
+      createInvocationFromCommandLine(*Args, Diags);
 
   if (!CInvok)
     return CXError_Failure;
 
   // Recover resources if we crash before exiting this function.
-  llvm::CrashRecoveryContextCleanupRegistrar<CompilerInvocation,
-    llvm::CrashRecoveryContextReleaseRefCleanup<CompilerInvocation> >
-    CInvokCleanup(CInvok.get());
+  llvm::CrashRecoveryContextCleanupRegistrar<
+      std::shared_ptr<CompilerInvocation>,
+      llvm::CrashRecoveryContextDestructorCleanup<
+          std::shared_ptr<CompilerInvocation>>>
+      CInvokCleanup(&CInvok);
 
   if (CInvok->getFrontendOpts().Inputs.empty())
     return CXError_Failure;
@@ -518,13 +525,14 @@ static CXErrorCode clang_indexSourceFile_Impl(
   CInvok->getHeaderSearchOpts().ModuleFormat =
     CXXIdx->getPCHContainerOperations()->getRawReader().getFormat();
 
-  ASTUnit *Unit = ASTUnit::create(CInvok.get(), Diags, CaptureDiagnostics,
-                                  /*UserFilesAreVolatile=*/true);
+  auto Unit = ASTUnit::create(CInvok, Diags, CaptureDiagnostics,
+                              /*UserFilesAreVolatile=*/true);
   if (!Unit)
     return CXError_InvalidArguments;
 
+  auto *UPtr = Unit.get();
   std::unique_ptr<CXTUOwner> CXTU(
-      new CXTUOwner(MakeCXTranslationUnit(CXXIdx, Unit)));
+      new CXTUOwner(MakeCXTranslationUnit(CXXIdx, std::move(Unit))));
 
   // Recover resources if we crash before exiting this method.
   llvm::CrashRecoveryContextCleanupRegistrar<CXTUOwner>
@@ -583,16 +591,16 @@ static CXErrorCode clang_indexSourceFile_Impl(
       !PrecompilePreamble ? 0 : 2 - CreatePreambleOnFirstParse;
   DiagnosticErrorTrap DiagTrap(*Diags);
   bool Success = ASTUnit::LoadFromCompilerInvocationAction(
-      CInvok.get(), CXXIdx->getPCHContainerOperations(), Diags,
-      IndexAction.get(), Unit, Persistent, CXXIdx->getClangResourcesPath(),
+      std::move(CInvok), CXXIdx->getPCHContainerOperations(), Diags,
+      IndexAction.get(), UPtr, Persistent, CXXIdx->getClangResourcesPath(),
       OnlyLocalDecls, CaptureDiagnostics, PrecompilePreambleAfterNParses,
       CacheCodeCompletionResults,
       /*IncludeBriefCommentsInCodeCompletion=*/false,
       /*UserFilesAreVolatile=*/true);
   if (DiagTrap.hasErrorOccurred() && CXXIdx->getDisplayDiagnostics())
-    printDiagsToStderr(Unit);
+    printDiagsToStderr(UPtr);
 
-  if (isASTReadError(Unit))
+  if (isASTReadError(UPtr))
     return CXError_ASTReadError;
 
   if (!Success)
@@ -654,8 +662,7 @@ static CXErrorCode clang_indexTranslationUnit_Impl(
                                   ? index_callbacks_size : sizeof(CB);
   memcpy(&CB, client_index_callbacks, ClientCBSize);
 
-  auto DataConsumer = std::make_shared<CXIndexDataConsumer>(client_data, CB,
-                                                            index_options, TU);
+  CXIndexDataConsumer DataConsumer(client_data, CB, index_options, TU);
 
   ASTUnit *Unit = cxtu::getASTUnit(TU);
   if (!Unit)
@@ -664,21 +671,22 @@ static CXErrorCode clang_indexTranslationUnit_Impl(
   ASTUnit::ConcurrencyCheck Check(*Unit);
 
   if (const FileEntry *PCHFile = Unit->getPCHFile())
-    DataConsumer->importedPCH(PCHFile);
+    DataConsumer.importedPCH(PCHFile);
 
   FileManager &FileMgr = Unit->getFileManager();
 
   if (Unit->getOriginalSourceFileName().empty())
-    DataConsumer->enteredMainFile(nullptr);
+    DataConsumer.enteredMainFile(nullptr);
   else
-    DataConsumer->enteredMainFile(FileMgr.getFile(Unit->getOriginalSourceFileName()));
+    DataConsumer.enteredMainFile(
+        FileMgr.getFile(Unit->getOriginalSourceFileName()));
 
-  DataConsumer->setASTContext(Unit->getASTContext());
-  DataConsumer->startedTranslationUnit();
+  DataConsumer.setASTContext(Unit->getASTContext());
+  DataConsumer.startedTranslationUnit();
 
-  indexPreprocessingRecord(*Unit, *DataConsumer);
+  indexPreprocessingRecord(*Unit, DataConsumer);
   indexASTUnit(*Unit, DataConsumer, getIndexingOptionsFromCXOptions(index_options));
-  DataConsumer->indexDiagnostics();
+  DataConsumer.indexDiagnostics();
 
   return CXError_Success;
 }
@@ -686,8 +694,6 @@ static CXErrorCode clang_indexTranslationUnit_Impl(
 //===----------------------------------------------------------------------===//
 // libclang public APIs.
 //===----------------------------------------------------------------------===//
-
-extern "C" {
 
 int clang_index_isEntityObjCContainerKind(CXIdxEntityKind K) {
   return CXIdxEntity_ObjCClass <= K && K <= CXIdxEntity_ObjCCategory;
@@ -877,11 +883,6 @@ int clang_indexSourceFileFullArgv(
         TU_options);
   };
 
-  if (getenv("LIBCLANG_NOTHREADS")) {
-    IndexSourceFileImpl();
-    return result;
-  }
-
   llvm::CrashRecoveryContext CRC;
 
   if (!RunSafely(CRC, IndexSourceFileImpl)) {
@@ -931,11 +932,6 @@ int clang_indexTranslationUnit(CXIndexAction idxAction,
         index_options, TU);
   };
 
-  if (getenv("LIBCLANG_NOTHREADS")) {
-    IndexTranslationUnitImpl();
-    return result;
-  }
-
   llvm::CrashRecoveryContext CRC;
 
   if (!RunSafely(CRC, IndexTranslationUnitImpl)) {
@@ -977,6 +973,4 @@ CXSourceLocation clang_indexLoc_getCXSourceLocation(CXIdxLoc location) {
       *static_cast<CXIndexDataConsumer*>(location.ptr_data[0]);
   return cxloc::translateSourceLocation(DataConsumer.getASTContext(), Loc);
 }
-
-} // end: extern "C"
 

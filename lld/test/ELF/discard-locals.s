@@ -1,7 +1,7 @@
+// REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux -save-temp-labels %s -o %t
 // RUN: ld.lld -discard-locals %t -o %t2
 // RUN: llvm-readobj -s -sd -t %t2 | FileCheck %s
-// REQUIRES: x86
 
 .global _start
 _start:
@@ -40,7 +40,7 @@ _start:
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Symbol {
 // CHECK-NEXT:     Name: _start
-// CHECK-NEXT:     Value: 0x11000
+// CHECK-NEXT:     Value:
 // CHECK-NEXT:     Size: 0
 // CHECK-NEXT:     Binding: Global
 // CHECK-NEXT:     Type: None

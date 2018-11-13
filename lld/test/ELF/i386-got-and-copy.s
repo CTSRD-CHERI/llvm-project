@@ -9,12 +9,13 @@
 # RUN:         %S/Inputs/copy-in-shared.s -o %t.so.o
 # RUN: llvm-mc -filetype=obj -triple=i386-pc-linux %s -o %t.o
 # RUN: ld.lld %t.so.o -shared -o %t.so
-# RUN: ld.lld %t.o %t.so -o %t.exe
+# RUN: ld.lld --hash-style=sysv %t.o %t.so -o %t.exe
 # RUN: llvm-readobj -r %t.exe | FileCheck %s
 
 # CHECK:      Relocations [
 # CHECK-NEXT:   Section (4) .rel.dyn {
 # CHECK-NEXT:     0x{{[0-9A-F]+}} R_386_COPY foo
+# CHECK-NEXT:     0x{{[0-9A-F]+}} R_386_GLOB_DAT foo
 # CHECK-NEXT:   }
 # CHECK-NEXT: ]
 

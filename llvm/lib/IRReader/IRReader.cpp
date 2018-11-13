@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/IRReader/IRReader.h"
-#include "llvm-c/Core.h"
 #include "llvm-c/IRReader.h"
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -26,8 +25,10 @@ namespace llvm {
   extern bool TimePassesIsEnabled;
 }
 
-static const char *const TimeIRParsingGroupName = "LLVM IR Parsing";
-static const char *const TimeIRParsingName = "Parse IR";
+static const char *const TimeIRParsingGroupName = "irparse";
+static const char *const TimeIRParsingGroupDescription = "LLVM IR Parsing";
+static const char *const TimeIRParsingName = "parse";
+static const char *const TimeIRParsingDescription = "Parse IR";
 
 static std::unique_ptr<Module>
 getLazyIRModule(std::unique_ptr<MemoryBuffer> Buffer, SMDiagnostic &Err,
@@ -66,8 +67,11 @@ std::unique_ptr<Module> llvm::getLazyIRFileModule(StringRef Filename,
 }
 
 std::unique_ptr<Module> llvm::parseIR(MemoryBufferRef Buffer, SMDiagnostic &Err,
-                                      LLVMContext &Context) {
-  NamedRegionTimer T(TimeIRParsingName, TimeIRParsingGroupName,
+                                      LLVMContext &Context,
+                                      bool UpgradeDebugInfo,
+                                      StringRef DataLayoutString) {
+  NamedRegionTimer T(TimeIRParsingName, TimeIRParsingDescription,
+                     TimeIRParsingGroupName, TimeIRParsingGroupDescription,
                      TimePassesIsEnabled);
   if (isBitcode((const unsigned char *)Buffer.getBufferStart(),
                 (const unsigned char *)Buffer.getBufferEnd())) {
@@ -80,14 +84,19 @@ std::unique_ptr<Module> llvm::parseIR(MemoryBufferRef Buffer, SMDiagnostic &Err,
       });
       return nullptr;
     }
+    if (!DataLayoutString.empty())
+      ModuleOrErr.get()->setDataLayout(DataLayoutString);
     return std::move(ModuleOrErr.get());
   }
 
-  return parseAssembly(Buffer, Err, Context);
+  return parseAssembly(Buffer, Err, Context, nullptr, UpgradeDebugInfo,
+                       DataLayoutString);
 }
 
 std::unique_ptr<Module> llvm::parseIRFile(StringRef Filename, SMDiagnostic &Err,
-                                          LLVMContext &Context) {
+                                          LLVMContext &Context,
+                                          bool UpgradeDebugInfo,
+                                          StringRef DataLayoutString) {
   ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr =
       MemoryBuffer::getFileOrSTDIN(Filename);
   if (std::error_code EC = FileOrErr.getError()) {
@@ -96,7 +105,8 @@ std::unique_ptr<Module> llvm::parseIRFile(StringRef Filename, SMDiagnostic &Err,
     return nullptr;
   }
 
-  return parseIR(FileOrErr.get()->getMemBufferRef(), Err, Context);
+  return parseIR(FileOrErr.get()->getMemBufferRef(), Err, Context,
+                 UpgradeDebugInfo, DataLayoutString);
 }
 
 //===----------------------------------------------------------------------===//

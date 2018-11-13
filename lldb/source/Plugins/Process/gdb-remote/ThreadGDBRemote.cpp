@@ -10,10 +10,6 @@
 #include "ThreadGDBRemote.h"
 
 #include "lldb/Breakpoint/Watchpoint.h"
-#include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/State.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
@@ -22,10 +18,13 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/UnixSignals.h"
 #include "lldb/Target/Unwind.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/State.h"
+#include "lldb/Utility/StreamString.h"
 
 #include "ProcessGDBRemote.h"
 #include "ProcessGDBRemoteLog.h"
-#include "Utility/StringExtractorGDBRemote.h"
+#include "lldb/Utility/StringExtractorGDBRemote.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -41,24 +40,22 @@ ThreadGDBRemote::ThreadGDBRemote(Process &process, lldb::tid_t tid)
       m_dispatch_queue_t(LLDB_INVALID_ADDRESS), m_queue_kind(eQueueKindUnknown),
       m_queue_serial_number(LLDB_INVALID_QUEUE_ID),
       m_associated_with_libdispatch_queue(eLazyBoolCalculate) {
-  ProcessGDBRemoteLog::LogIf(
-      GDBR_LOG_THREAD,
-      "%p: ThreadGDBRemote::ThreadGDBRemote (pid = %i, tid = 0x%4.4x)", this,
-      process.GetID(), GetID());
+  Log *log(GetLogIfAnyCategoriesSet(GDBR_LOG_THREAD));
+  LLDB_LOG(log, "this = {0}, pid = {1}, tid = {2}", this, process.GetID(),
+           GetID());
 }
 
 ThreadGDBRemote::~ThreadGDBRemote() {
   ProcessSP process_sp(GetProcess());
-  ProcessGDBRemoteLog::LogIf(
-      GDBR_LOG_THREAD,
-      "%p: ThreadGDBRemote::~ThreadGDBRemote (pid = %i, tid = 0x%4.4x)", this,
-      process_sp ? process_sp->GetID() : LLDB_INVALID_PROCESS_ID, GetID());
+  Log *log(GetLogIfAnyCategoriesSet(GDBR_LOG_THREAD));
+  LLDB_LOG(log, "this = {0}, pid = {1}, tid = {2}", this,
+           process_sp ? process_sp->GetID() : LLDB_INVALID_PROCESS_ID, GetID());
   DestroyThread();
 }
 
 const char *ThreadGDBRemote::GetName() {
   if (m_thread_name.empty())
-    return NULL;
+    return nullptr;
   return m_thread_name.c_str();
 }
 
@@ -83,10 +80,9 @@ void ThreadGDBRemote::SetQueueInfo(std::string &&queue_name,
 
 const char *ThreadGDBRemote::GetQueueName() {
   // If our cached queue info is valid, then someone called
-  // ThreadGDBRemote::SetQueueInfo(...)
-  // with valid information that was gleaned from the stop reply packet. In this
-  // case we trust
-  // that the info is valid in m_dispatch_queue_name without refetching it
+  // ThreadGDBRemote::SetQueueInfo(...) with valid information that was gleaned
+  // from the stop reply packet. In this case we trust that the info is valid
+  // in m_dispatch_queue_name without refetching it
   if (CachedQueueInfoIsValid()) {
     if (m_dispatch_queue_name.empty())
       return nullptr;
@@ -113,15 +109,14 @@ const char *ThreadGDBRemote::GetQueueName() {
         return m_dispatch_queue_name.c_str();
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 QueueKind ThreadGDBRemote::GetQueueKind() {
   // If our cached queue info is valid, then someone called
-  // ThreadGDBRemote::SetQueueInfo(...)
-  // with valid information that was gleaned from the stop reply packet. In this
-  // case we trust
-  // that the info is valid in m_dispatch_queue_name without refetching it
+  // ThreadGDBRemote::SetQueueInfo(...) with valid information that was gleaned
+  // from the stop reply packet. In this case we trust that the info is valid
+  // in m_dispatch_queue_name without refetching it
   if (CachedQueueInfoIsValid()) {
     return m_queue_kind;
   }
@@ -144,10 +139,9 @@ QueueKind ThreadGDBRemote::GetQueueKind() {
 
 queue_id_t ThreadGDBRemote::GetQueueID() {
   // If our cached queue info is valid, then someone called
-  // ThreadGDBRemote::SetQueueInfo(...)
-  // with valid information that was gleaned from the stop reply packet. In this
-  // case we trust
-  // that the info is valid in m_dispatch_queue_name without refetching it
+  // ThreadGDBRemote::SetQueueInfo(...) with valid information that was gleaned
+  // from the stop reply packet. In this case we trust that the info is valid
+  // in m_dispatch_queue_name without refetching it
   if (CachedQueueInfoIsValid())
     return m_queue_serial_number;
 
@@ -278,11 +272,11 @@ void ThreadGDBRemote::RefreshStateAfterStop() {
   // Invalidate all registers in our register context. We don't set "force" to
   // true because the stop reply packet might have had some register values
   // that were expedited and these will already be copied into the register
-  // context by the time this function gets called. The GDBRemoteRegisterContext
-  // class has been made smart enough to detect when it needs to invalidate
-  // which registers are valid by putting hooks in the register read and
-  // register supply functions where they check the process stop ID and do
-  // the right thing.
+  // context by the time this function gets called. The
+  // GDBRemoteRegisterContext class has been made smart enough to detect when
+  // it needs to invalidate which registers are valid by putting hooks in the
+  // register read and register supply functions where they check the process
+  // stop ID and do the right thing.
   const bool force = false;
   GetRegisterContext()->InvalidateIfNeeded(force);
 }
@@ -295,8 +289,8 @@ void ThreadGDBRemote::Dump(Log *log, uint32_t index) {}
 
 bool ThreadGDBRemote::ShouldStop(bool &step_more) { return true; }
 lldb::RegisterContextSP ThreadGDBRemote::GetRegisterContext() {
-  if (m_reg_context_sp.get() == NULL)
-    m_reg_context_sp = CreateRegisterContextForFrame(NULL);
+  if (!m_reg_context_sp)
+    m_reg_context_sp = CreateRegisterContextForFrame(nullptr);
   return m_reg_context_sp;
 }
 
@@ -313,7 +307,8 @@ ThreadGDBRemote::CreateRegisterContextForFrame(StackFrame *frame) {
     if (process_sp) {
       ProcessGDBRemote *gdb_process =
           static_cast<ProcessGDBRemote *>(process_sp.get());
-      // read_all_registers_at_once will be true if 'p' packet is not supported.
+      // read_all_registers_at_once will be true if 'p' packet is not
+      // supported.
       bool read_all_registers_at_once =
           !gdb_process->GetGDBRemote().GetpPacketSupported(GetID());
       reg_ctx_sp.reset(new GDBRemoteRegisterContext(
@@ -322,7 +317,7 @@ ThreadGDBRemote::CreateRegisterContextForFrame(StackFrame *frame) {
     }
   } else {
     Unwind *unwinder = GetUnwinder();
-    if (unwinder)
+    if (unwinder != nullptr)
       reg_ctx_sp = unwinder->CreateRegisterContextForFrame(frame);
   }
   return reg_ctx_sp;

@@ -23,7 +23,7 @@ using namespace llvm;
 // Static Analyzer Checkers Tables generation
 //===----------------------------------------------------------------------===//
 
-/// \brief True if it is specified hidden or a parent package is specified
+/// True if it is specified hidden or a parent package is specified
 /// as hidden, otherwise false.
 static bool isHidden(const Record &R) {
   if (R.getValueAsBit("Hidden"))
@@ -51,7 +51,8 @@ static std::string getParentPackageFullName(const Record *R) {
 static std::string getPackageFullName(const Record *R) {
   std::string name = getParentPackageFullName(R);
   if (!name.empty()) name += ".";
-  return name + R->getValueAsString("PackageName");
+  name += R->getValueAsString("PackageName");
+  return name;
 }
 
 static std::string getCheckerFullName(const Record *R) {

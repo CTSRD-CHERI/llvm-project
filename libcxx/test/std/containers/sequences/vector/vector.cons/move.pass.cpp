@@ -7,12 +7,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <vector>
 
 // vector(vector&& c);
 
 #include <vector>
 #include <cassert>
+
+#include "test_macros.h"
 #include "MoveOnly.h"
 #include "test_allocator.h"
 #include "min_allocator.h"
@@ -20,7 +24,6 @@
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
     {
         std::vector<MoveOnly, test_allocator<MoveOnly> > l(test_allocator<MoveOnly>(5));
         std::vector<MoveOnly, test_allocator<MoveOnly> > lo(test_allocator<MoveOnly>(5));
@@ -68,7 +71,6 @@ int main()
         assert(*j == 3);
         assert(is_contiguous_container_asan_correct(c2));
     }
-#if TEST_STD_VER >= 11
     {
         std::vector<MoveOnly, min_allocator<MoveOnly> > l(min_allocator<MoveOnly>{});
         std::vector<MoveOnly, min_allocator<MoveOnly> > lo(min_allocator<MoveOnly>{});
@@ -98,6 +100,34 @@ int main()
         assert(*j == 3);
         assert(is_contiguous_container_asan_correct(c2));
     }
-#endif
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+    {
+      test_alloc_base::clear();
+      using Vect = std::vector<int, test_allocator<int> >;
+      Vect v(test_allocator<int>(42, 101));
+      assert(test_alloc_base::count == 1);
+      assert(test_alloc_base::copied == 1);
+      assert(test_alloc_base::moved == 0);
+      {
+        const test_allocator<int>& a = v.get_allocator();
+        assert(a.get_data() == 42);
+        assert(a.get_id() == 101);
+      }
+      assert(test_alloc_base::count == 1);
+      test_alloc_base::clear_ctor_counters();
+
+      Vect v2 = std::move(v);
+      assert(test_alloc_base::count == 2);
+      assert(test_alloc_base::copied == 0);
+      assert(test_alloc_base::moved == 1);
+      {
+        const test_allocator<int>& a = v.get_allocator();
+        assert(a.get_id() == test_alloc_base::moved_value);
+        assert(a.get_data() == test_alloc_base::moved_value);
+      }
+      {
+        const test_allocator<int>& a = v2.get_allocator();
+        assert(a.get_id() == 101);
+        assert(a.get_data() == 42);
+      }
+    }
 }

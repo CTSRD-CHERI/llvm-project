@@ -13,6 +13,7 @@
 
 #include <string_view>
 #include <cassert>
+#include <stdexcept>
 
 #include "test_macros.h"
 #include "constexpr_char_traits.hpp"
@@ -376,7 +377,7 @@ int main()
     test("abcdefghijklmnopqrst", 5, 5, "", 20);
     test("abcdefghijklmnopqrst", 0, 8, "abcde", 15);
     test("abcdefghijklmnopqrst", 0, 12, "abcdefghij", 10);
-    test("abcdefghijklmnopqrst", 0, -1, "abcdefghijklmnopqrst", 0);
+    test("abcdefghijklmnopqrst", 0, static_cast<size_t>(-1), "abcdefghijklmnopqrst", 0);
     }
 
     {
@@ -395,7 +396,7 @@ int main()
     test(L"abcdefghijklmnopqrst", 5, 5, L"", 20);
     test(L"abcdefghijklmnopqrst", 0, 8, L"abcde", 15);
     test(L"abcdefghijklmnopqrst", 0, 12, L"abcdefghij", 10);
-    test(L"abcdefghijklmnopqrst", 0, -1, L"abcdefghijklmnopqrst", 0);
+    test(L"abcdefghijklmnopqrst", 0, static_cast<size_t>(-1), L"abcdefghijklmnopqrst", 0);
     }
 
 #if TEST_STD_VER >= 11
@@ -415,7 +416,7 @@ int main()
     test(U"abcdefghijklmnopqrst", 5, 5, U"", 20);
     test(U"abcdefghijklmnopqrst", 0, 8, U"abcde", 15);
     test(U"abcdefghijklmnopqrst", 0, 12, U"abcdefghij", 10);
-    test(U"abcdefghijklmnopqrst", 0, -1, U"abcdefghijklmnopqrst", 0);
+    test(U"abcdefghijklmnopqrst", 0, static_cast<size_t>(-1), U"abcdefghijklmnopqrst", 0);
     }
 
     {
@@ -434,7 +435,7 @@ int main()
     test(u"abcdefghijklmnopqrst", 5, 5, u"", 20);
     test(u"abcdefghijklmnopqrst", 0, 8, u"abcde", 15);
     test(u"abcdefghijklmnopqrst", 0, 12, u"abcdefghij", 10);
-    test(u"abcdefghijklmnopqrst", 0, -1, u"abcdefghijklmnopqrst", 0);
+    test(u"abcdefghijklmnopqrst", 0, static_cast<size_t>(-1), u"abcdefghijklmnopqrst", 0);
     }
 #endif
 

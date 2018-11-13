@@ -1,10 +1,10 @@
-; RUN: llc < %s -march=nvptx -mcpu=sm_20 | FileCheck %s
-; RUN: llc < %s -march=nvptx64 -mcpu=sm_20 | FileCheck %s
+; RUN: llc < %s -march=nvptx -mcpu=sm_20 | FileCheck -allow-deprecated-dag-overlap %s
+; RUN: llc < %s -march=nvptx64 -mcpu=sm_20 | FileCheck -allow-deprecated-dag-overlap %s
 ; RUN: opt < %s -S -mtriple=nvptx-nvidia-cuda -nvvm-intr-range \
-; RUN:   | FileCheck --check-prefix=RANGE --check-prefix=RANGE_20 %s
+; RUN:   | FileCheck -allow-deprecated-dag-overlap --check-prefix=RANGE --check-prefix=RANGE_20 %s
 ; RUN: opt < %s -S -mtriple=nvptx-nvidia-cuda \
 ; RUN:    -nvvm-intr-range -nvvm-intr-range-sm=30 \
-; RUN:   | FileCheck --check-prefix=RANGE --check-prefix=RANGE_30 %s
+; RUN:   | FileCheck -allow-deprecated-dag-overlap --check-prefix=RANGE --check-prefix=RANGE_30 %s
 
 define ptx_device i32 @test_tid_x() {
 ; CHECK: mov.u32 %r{{[0-9]+}}, %tid.x;
@@ -152,6 +152,13 @@ define ptx_device i32 @test_nctaid_x() {
 ; RANGE_20: call i32 @llvm.nvvm.read.ptx.sreg.nctaid.x(), !range ![[GRID_SIZE_YZ]]
 ; CHECK: ret;
 	%x = call i32 @llvm.nvvm.read.ptx.sreg.nctaid.x()
+	ret i32 %x
+}
+
+define ptx_device i32 @test_already_has_range_md() {
+; CHECK: mov.u32 %r{{[0-9]+}}, %nctaid.x;
+; RANGE: call i32 @llvm.nvvm.read.ptx.sreg.nctaid.x(), !range ![[ALREADY:[0-9]+]]
+	%x = call i32 @llvm.nvvm.read.ptx.sreg.nctaid.x(), !range !0
 	ret i32 %x
 }
 
@@ -311,6 +318,9 @@ declare i32 @llvm.nvvm.read.ptx.sreg.pm3()
 
 declare void @llvm.nvvm.bar.sync(i32 %i)
 
+!0 = !{i32 0, i32 19}
+; RANGE-DAG: ![[ALREADY]] = !{i32 0, i32 19}
+; RANGE-DAG: ![[BLK_IDX_XY]] = !{i32 0, i32 1024}
 ; RANGE-DAG: ![[BLK_IDX_XY]] = !{i32 0, i32 1024}
 ; RANGE-DAG: ![[BLK_IDX_Z]] = !{i32 0, i32 64}
 ; RANGE-DAG: ![[BLK_SIZE_XY]] = !{i32 1, i32 1025}

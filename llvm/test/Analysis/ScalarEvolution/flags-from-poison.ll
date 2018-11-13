@@ -205,7 +205,7 @@ exit:
   ret void
 }
 
-; Demonstrate why we need a Visited set in llvm::isKnownNotFullPoison.
+; Demonstrate why we need a Visited set in llvm::programUndefinedIfFullPoison.
 define void @test-add-not-header5(float* %input, i32 %offset) {
 ; CHECK-LABEL: @test-add-not-header5
 entry:
@@ -272,17 +272,16 @@ exit:
   ret void
 }
 
-; Without inbounds, GEP does not propagate poison in the very
-; conservative approach used here.
-define void @test-add-no-inbounds(float* %input, i32 %offset, i32 %numIterations) {
-; CHECK-LABEL: @test-add-no-inbounds
+; Any poison input makes getelementptr produce poison
+define void @test-gep-propagates-poison(float* %input, i32 %offset, i32 %numIterations) {
+; CHECK-LABEL: @test-gep-propagates-poison
 entry:
   br label %loop
 loop:
   %i = phi i32 [ %nexti, %loop ], [ 0, %entry ]
 
 ; CHECK: %index32 =
-; CHECK: --> {%offset,+,1}<nw>
+; CHECK: --> {%offset,+,1}<nsw>
   %index32 = add nsw i32 %i, %offset
 
   %ptr = getelementptr float, float* %input, i32 %index32
@@ -317,17 +316,16 @@ exit:
   ret void
 }
 
-; Multiplication by a non-constant should not propagate poison in the
-; very conservative approach used here.
-define void @test-add-mul-no-propagation(float* %input, i32 %offset, i32 %numIterations) {
-; CHECK-LABEL: @test-add-mul-no-propagation
+; Any poison input to multiplication propages poison.
+define void @test-mul-propagates-poison(float* %input, i32 %offset, i32 %numIterations) {
+; CHECK-LABEL: @test-mul-propagates-poison
 entry:
   br label %loop
 loop:
   %i = phi i32 [ %nexti, %loop ], [ 0, %entry ]
 
 ; CHECK: %index32 =
-; CHECK: --> {%offset,+,1}<nw>
+; CHECK: --> {%offset,+,1}<nsw>
   %index32 = add nsw i32 %i, %offset
 
   %indexmul = mul nsw i32 %index32, %offset
@@ -340,17 +338,15 @@ exit:
   ret void
 }
 
-; Multiplication by a non-zero constant does not propagate poison
-; without a no-wrap flag.
-define void @test-add-mul-no-propagation2(float* %input, i32 %offset, i32 %numIterations) {
-; CHECK-LABEL: @test-add-mul-no-propagation2
+define void @test-mul-propagates-poison-2(float* %input, i32 %offset, i32 %numIterations) {
+; CHECK-LABEL: @test-mul-propagates-poison-2
 entry:
   br label %loop
 loop:
   %i = phi i32 [ %nexti, %loop ], [ 0, %entry ]
 
 ; CHECK: %index32 =
-; CHECK: --> {%offset,+,1}<nw>
+; CHECK: --> {%offset,+,1}<nsw>
   %index32 = add nsw i32 %i, %offset
 
   %indexmul = mul i32 %index32, 2
@@ -613,8 +609,42 @@ loop:
   %index32 = sub nsw i32 %i, %sub
 
 ; CHECK: %index64 =
-; CHECK: --> {(sext i32 (-1 * %sub) to i64),+,1}<nsw>
+; CHECK: --> {(-1 * (sext i32 %sub to i64))<nsw>,+,1}<nsw
   %index64 = sext i32 %index32 to i64
+
+  %ptr = getelementptr inbounds float, float* %input, i64 %index64
+  %nexti = add nsw i32 %i, 1
+  %f = load float, float* %ptr, align 4
+  %exitcond = icmp eq i32 %nexti, %numIterations
+  br i1 %exitcond, label %exit, label %loop
+exit:
+  ret void
+}
+
+; Example checking that a sext is pushed onto a sub's operands if the sub is an
+; overflow intrinsic.
+define void @test-sext-sub(float* %input, i32 %sub, i32 %numIterations) {
+; CHECK-LABEL: @test-sext-sub
+entry:
+  br label %loop
+loop:
+  %i = phi i32 [ %nexti, %cont ], [ 0, %entry ]
+
+; CHECK: %val = extractvalue { i32, i1 } %ssub, 0
+; CHECK: --> {(-1 * %sub),+,1}<nw>
+  %ssub = tail call { i32, i1 } @llvm.ssub.with.overflow.i32(i32 %i, i32 %sub)
+  %val = extractvalue { i32, i1 } %ssub, 0
+  %ovfl = extractvalue { i32, i1 } %ssub, 1
+  br i1 %ovfl, label %trap, label %cont
+
+trap:
+  tail call void @llvm.trap()
+  unreachable
+
+cont:
+; CHECK: %index64 =
+; CHECK: --> {(-1 * (sext i32 %sub to i64))<nsw>,+,1}<nsw
+  %index64 = sext i32 %val to i64
 
   %ptr = getelementptr inbounds float, float* %input, i64 %index64
   %nexti = add nsw i32 %i, 1

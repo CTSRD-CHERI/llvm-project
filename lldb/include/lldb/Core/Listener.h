@@ -10,19 +10,29 @@
 #ifndef liblldb_Select_h_
 #define liblldb_Select_h_
 
-// C Includes
-// C++ Includes
-#include <chrono>
+#include "lldb/Core/Broadcaster.h" // for Broadcaster::BroadcasterImplWP
+#include "lldb/Utility/Timeout.h"
+#include "lldb/lldb-defines.h" // for DISALLOW_COPY_AND_ASSIGN
+#include "lldb/lldb-forward.h" // for BroadcasterManagerWP, EventSP
+
+#include <condition_variable>
 #include <list>
 #include <map>
+#include <memory> // for owner_less, enable_shared_from_this
 #include <mutex>
+#include <ratio> // for micro
 #include <string>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/Event.h"
-#include "lldb/lldb-private.h"
+#include <stddef.h> // for size_t
+#include <stdint.h> // for uint32_t
+
+namespace lldb_private {
+class ConstString;
+}
+namespace lldb_private {
+class Event;
+}
 
 namespace lldb_private {
 
@@ -38,8 +48,7 @@ public:
   //------------------------------------------------------------------
   //
   // Listeners have to be constructed into shared pointers - at least if you
-  // want them to listen to
-  // Broadcasters,
+  // want them to listen to Broadcasters,
 protected:
   Listener(const char *name);
 
@@ -70,18 +79,6 @@ public:
 
   bool StopListeningForEvents(Broadcaster *broadcaster, uint32_t event_mask);
 
-  // Returns true if an event was received, false if we timed out.
-  bool WaitForEvent(const std::chrono::microseconds &timeout,
-                    lldb::EventSP &event_sp);
-
-  bool WaitForEventForBroadcaster(const std::chrono::microseconds &timeout,
-                                  Broadcaster *broadcaster,
-                                  lldb::EventSP &event_sp);
-
-  bool WaitForEventForBroadcasterWithType(
-      const std::chrono::microseconds &timeout, Broadcaster *broadcaster,
-      uint32_t event_type_mask, lldb::EventSP &event_sp);
-
   Event *PeekAtNextEvent();
 
   Event *PeekAtNextEventForBroadcaster(Broadcaster *broadcaster);
@@ -89,14 +86,16 @@ public:
   Event *PeekAtNextEventForBroadcasterWithType(Broadcaster *broadcaster,
                                                uint32_t event_type_mask);
 
-  bool GetNextEvent(lldb::EventSP &event_sp);
+  // Returns true if an event was received, false if we timed out.
+  bool GetEvent(lldb::EventSP &event_sp, const Timeout<std::micro> &timeout);
 
-  bool GetNextEventForBroadcaster(Broadcaster *broadcaster,
-                                  lldb::EventSP &event_sp);
+  bool GetEventForBroadcaster(Broadcaster *broadcaster, lldb::EventSP &event_sp,
+                              const Timeout<std::micro> &timeout);
 
-  bool GetNextEventForBroadcasterWithType(Broadcaster *broadcaster,
-                                          uint32_t event_type_mask,
-                                          lldb::EventSP &event_sp);
+  bool GetEventForBroadcasterWithType(Broadcaster *broadcaster,
+                                      uint32_t event_type_mask,
+                                      lldb::EventSP &event_sp,
+                                      const Timeout<std::micro> &timeout);
 
   size_t HandleBroadcastEvent(lldb::EventSP &event_sp);
 
@@ -128,14 +127,7 @@ private:
                         uint32_t num_sources, uint32_t event_type_mask,
                         lldb::EventSP &event_sp, bool remove);
 
-  bool
-  GetNextEventInternal(Broadcaster *broadcaster, // nullptr for any broadcaster
-                       const ConstString *sources, // nullptr for any event
-                       uint32_t num_sources, uint32_t event_type_mask,
-                       lldb::EventSP &event_sp);
-
-  bool
-  WaitForEventsInternal(const std::chrono::microseconds &timeout,
+  bool GetEventInternal(const Timeout<std::micro> &timeout,
                         Broadcaster *broadcaster, // nullptr for any broadcaster
                         const ConstString *sources, // nullptr for any event
                         uint32_t num_sources, uint32_t event_type_mask,

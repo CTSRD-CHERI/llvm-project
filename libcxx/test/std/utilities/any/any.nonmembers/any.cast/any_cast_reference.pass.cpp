@@ -9,6 +9,13 @@
 
 // UNSUPPORTED: c++98, c++03, c++11, c++14
 
+// XFAIL: with_system_cxx_lib=macosx10.12
+// XFAIL: with_system_cxx_lib=macosx10.11
+// XFAIL: with_system_cxx_lib=macosx10.10
+// XFAIL: with_system_cxx_lib=macosx10.9
+// XFAIL: with_system_cxx_lib=macosx10.7
+// XFAIL: with_system_cxx_lib=macosx10.8
+
 // <any>
 
 // template <class ValueType>
@@ -73,7 +80,7 @@ void checkThrows(any& a)
 {
 #if !defined(TEST_HAS_NO_EXCEPTIONS)
     try {
-        any_cast<Type>(a);
+        TEST_IGNORE_NODISCARD any_cast<Type>(a);
         assert(false);
     } catch (bad_any_cast const &) {
             // do nothing
@@ -82,7 +89,7 @@ void checkThrows(any& a)
     }
 
     try {
-        any_cast<ConstT>(static_cast<any const&>(a));
+        TEST_IGNORE_NODISCARD any_cast<ConstT>(static_cast<any const&>(a));
         assert(false);
     } catch (bad_any_cast const &) {
             // do nothing
@@ -96,19 +103,21 @@ void checkThrows(any& a)
             typename std::remove_reference<Type>::type&&,
             Type
         >::type;
-        any_cast<RefType>(static_cast<any&&>(a));
+        TEST_IGNORE_NODISCARD any_cast<RefType>(static_cast<any&&>(a));
         assert(false);
     } catch (bad_any_cast const &) {
             // do nothing
     } catch (...) {
         assert(false);
     }
+#else
+    (TEST_IGNORE_NODISCARD a);
 #endif
 }
 
 void test_cast_empty() {
     // None of these operations should allocate.
-    DisableAllocationGuard g; ((void)g);
+    DisableAllocationGuard g; (TEST_IGNORE_NODISCARD g);
     any a;
     checkThrows<int>(a);
 }

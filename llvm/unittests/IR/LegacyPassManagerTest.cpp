@@ -19,17 +19,14 @@
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallingConv.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/IRPrintingPasses.h"
-#include "llvm/IR/InlineAsm.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/IR/Verifier.h"
+#include "llvm/IR/OptBisect.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
@@ -400,6 +397,67 @@ namespace llvm {
       delete M;
     }
 
+    // Skips or runs optional passes.
+    struct CustomOptPassGate : public OptPassGate {
+      bool Skip;
+      CustomOptPassGate(bool Skip) : Skip(Skip) { }
+      bool shouldRunPass(const Pass *P, const Module &U) { return !Skip; }
+    };
+
+    // Optional module pass.
+    struct ModuleOpt: public ModulePass {
+      char run = 0;
+      static char ID;
+      ModuleOpt() : ModulePass(ID) { }
+      bool runOnModule(Module &M) override {
+        if (!skipModule(M))
+          run++;
+        return false;
+      }
+    };
+    char ModuleOpt::ID=0;
+
+    TEST(PassManager, CustomOptPassGate) {
+      LLVMContext Context0;
+      LLVMContext Context1;
+      LLVMContext Context2;
+      CustomOptPassGate SkipOptionalPasses(true);
+      CustomOptPassGate RunOptionalPasses(false);
+
+      Module M0("custom-opt-bisect", Context0);
+      Module M1("custom-opt-bisect", Context1);
+      Module M2("custom-opt-bisect2", Context2);
+      struct ModuleOpt *mOpt0 = new ModuleOpt();
+      struct ModuleOpt *mOpt1 = new ModuleOpt();
+      struct ModuleOpt *mOpt2 = new ModuleOpt();
+
+      mOpt0->run = mOpt1->run = mOpt2->run = 0;
+
+      legacy::PassManager Passes0;
+      legacy::PassManager Passes1;
+      legacy::PassManager Passes2;
+
+      Passes0.add(mOpt0);
+      Passes1.add(mOpt1);
+      Passes2.add(mOpt2);
+
+      Context1.setOptPassGate(SkipOptionalPasses);
+      Context2.setOptPassGate(RunOptionalPasses);
+
+      Passes0.run(M0);
+      Passes1.run(M1);
+      Passes2.run(M2);
+
+      // By default optional passes are run.
+      EXPECT_EQ(1, mOpt0->run);
+
+      // The first context skips optional passes.
+      EXPECT_EQ(0, mOpt1->run);
+
+      // The second context runs optional passes.
+      EXPECT_EQ(1, mOpt2->run);
+    }
+
     Module *makeLLVMModule(LLVMContext &Context) {
       // Module Construction
       Module *mod = new Module("test-mem", Context);
@@ -429,7 +487,7 @@ namespace llvm {
         /*Linkage=*/GlobalValue::ExternalLinkage,
         /*Name=*/"test1", mod);
       func_test1->setCallingConv(CallingConv::C);
-      AttributeSet func_test1_PAL;
+      AttributeList func_test1_PAL;
       func_test1->setAttributes(func_test1_PAL);
 
       Function* func_test2 = Function::Create(
@@ -437,7 +495,7 @@ namespace llvm {
         /*Linkage=*/GlobalValue::ExternalLinkage,
         /*Name=*/"test2", mod);
       func_test2->setCallingConv(CallingConv::C);
-      AttributeSet func_test2_PAL;
+      AttributeList func_test2_PAL;
       func_test2->setAttributes(func_test2_PAL);
 
       Function* func_test3 = Function::Create(
@@ -445,7 +503,7 @@ namespace llvm {
         /*Linkage=*/GlobalValue::ExternalLinkage,
         /*Name=*/"test3", mod);
       func_test3->setCallingConv(CallingConv::C);
-      AttributeSet func_test3_PAL;
+      AttributeList func_test3_PAL;
       func_test3->setAttributes(func_test3_PAL);
 
       Function* func_test4 = Function::Create(
@@ -453,7 +511,7 @@ namespace llvm {
         /*Linkage=*/GlobalValue::ExternalLinkage,
         /*Name=*/"test4", mod);
       func_test4->setCallingConv(CallingConv::C);
-      AttributeSet func_test4_PAL;
+      AttributeList func_test4_PAL;
       func_test4->setAttributes(func_test4_PAL);
 
       // Global Variable Declarations
@@ -474,7 +532,8 @@ namespace llvm {
         // Block entry (label_entry)
         CallInst* int32_3 = CallInst::Create(func_test2, "", label_entry);
         int32_3->setCallingConv(CallingConv::C);
-        int32_3->setTailCall(false);AttributeSet int32_3_PAL;
+        int32_3->setTailCall(false);
+        AttributeList int32_3_PAL;
         int32_3->setAttributes(int32_3_PAL);
 
         ReturnInst::Create(Context, int32_3, label_entry);
@@ -489,7 +548,8 @@ namespace llvm {
         // Block entry (label_entry_5)
         CallInst* int32_6 = CallInst::Create(func_test3, "", label_entry_5);
         int32_6->setCallingConv(CallingConv::C);
-        int32_6->setTailCall(false);AttributeSet int32_6_PAL;
+        int32_6->setTailCall(false);
+        AttributeList int32_6_PAL;
         int32_6->setAttributes(int32_6_PAL);
 
         ReturnInst::Create(Context, int32_6, label_entry_5);
@@ -504,7 +564,8 @@ namespace llvm {
         // Block entry (label_entry_8)
         CallInst* int32_9 = CallInst::Create(func_test1, "", label_entry_8);
         int32_9->setCallingConv(CallingConv::C);
-        int32_9->setTailCall(false);AttributeSet int32_9_PAL;
+        int32_9->setTailCall(false);
+        AttributeList int32_9_PAL;
         int32_9->setAttributes(int32_9_PAL);
 
         ReturnInst::Create(Context, int32_9, label_entry_8);

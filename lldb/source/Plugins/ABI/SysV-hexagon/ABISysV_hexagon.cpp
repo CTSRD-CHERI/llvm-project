@@ -16,13 +16,8 @@
 #include "llvm/IR/DerivedTypes.h"
 
 // Project includes
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectMemory.h"
@@ -33,6 +28,11 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Status.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -1019,11 +1019,11 @@ size_t ABISysV_hexagon::GetRedZoneSize() const { return 0; }
 //------------------------------------------------------------------
 
 ABISP
-ABISysV_hexagon::CreateInstance(const ArchSpec &arch) {
+ABISysV_hexagon::CreateInstance(lldb::ProcessSP process_sp, const ArchSpec &arch) {
   static ABISP g_abi_sp;
   if (arch.GetTriple().getArch() == llvm::Triple::hexagon) {
     if (!g_abi_sp)
-      g_abi_sp.reset(new ABISysV_hexagon);
+      g_abi_sp.reset(new ABISysV_hexagon(process_sp));
     return g_abi_sp;
   }
   return ABISP();
@@ -1073,7 +1073,7 @@ bool ABISysV_hexagon::PrepareTrivialCall(
     llvm::Type &prototype, llvm::ArrayRef<ABI::CallArgument> args) const {
   // default number of register passed arguments for varg functions
   const int nVArgRegParams = 1;
-  Error error;
+  Status error;
 
   // grab the process so we have access to the memory for spilling
   lldb::ProcessSP proc = thread.GetProcess();
@@ -1195,9 +1195,10 @@ bool ABISysV_hexagon::GetArgumentValues(Thread &thread,
   return false;
 }
 
-Error ABISysV_hexagon::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
-                                            lldb::ValueObjectSP &new_value_sp) {
-  Error error;
+Status
+ABISysV_hexagon::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
+                                      lldb::ValueObjectSP &new_value_sp) {
+  Status error;
   return error;
 }
 
@@ -1213,8 +1214,8 @@ ValueObjectSP ABISysV_hexagon::GetReturnValueObjectImpl(
   return return_valobj_sp;
 }
 
-// called when we are on the first instruction of a new function
-// for hexagon the return address is in RA (R31)
+// called when we are on the first instruction of a new function for hexagon
+// the return address is in RA (R31)
 bool ABISysV_hexagon::CreateFunctionEntryUnwindPlan(UnwindPlan &unwind_plan) {
   unwind_plan.Clear();
   unwind_plan.SetRegisterKind(eRegisterKindGeneric);

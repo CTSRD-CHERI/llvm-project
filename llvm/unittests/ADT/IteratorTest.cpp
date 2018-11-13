@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/ADT/iterator.h"
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "gtest/gtest.h"
@@ -35,14 +36,15 @@ static_assert(std::is_same<typename AdaptedIter::reference, Shadow<3>>::value,
               "");
 
 TEST(PointeeIteratorTest, Basic) {
-  int arr[4] = { 1, 2, 3, 4 };
+  int arr[4] = {1, 2, 3, 4};
   SmallVector<int *, 4> V;
   V.push_back(&arr[0]);
   V.push_back(&arr[1]);
   V.push_back(&arr[2]);
   V.push_back(&arr[3]);
 
-  typedef pointee_iterator<SmallVectorImpl<int *>::const_iterator> test_iterator;
+  typedef pointee_iterator<SmallVectorImpl<int *>::const_iterator>
+      test_iterator;
 
   test_iterator Begin, End;
   Begin = V.begin();
@@ -83,7 +85,8 @@ TEST(PointeeIteratorTest, SmartPointer) {
   V.push_back(make_unique<int>(4));
 
   typedef pointee_iterator<
-      SmallVectorImpl<std::unique_ptr<int>>::const_iterator> test_iterator;
+      SmallVectorImpl<std::unique_ptr<int>>::const_iterator>
+      test_iterator;
 
   test_iterator Begin, End;
   Begin = V.begin();
@@ -114,6 +117,29 @@ TEST(PointeeIteratorTest, SmartPointer) {
     EXPECT_EQ(K, std::prev(I));
   }
   EXPECT_EQ(End, I);
+}
+
+TEST(PointeeIteratorTest, Range) {
+  int A[] = {1, 2, 3, 4};
+  SmallVector<int *, 4> V{&A[0], &A[1], &A[2], &A[3]};
+
+  int I = 0;
+  for (int II : make_pointee_range(V))
+    EXPECT_EQ(A[I++], II);
+}
+
+TEST(PointeeIteratorTest, PointeeType) {
+  struct S {
+    int X;
+    bool operator==(const S &RHS) const { return X == RHS.X; };
+  };
+  S A[] = {S{0}, S{1}};
+  SmallVector<S *, 2> V{&A[0], &A[1]};
+
+  pointee_iterator<SmallVectorImpl<S *>::const_iterator, const S> I = V.begin();
+  for (int j = 0; j < 2; ++j, ++I) {
+    EXPECT_EQ(*V[j], *I);
+  }
 }
 
 TEST(FilterIteratorTest, Lambda) {
@@ -185,6 +211,33 @@ TEST(FilterIteratorTest, InputIterator) {
   EXPECT_EQ((SmallVector<int, 3>{1, 3, 5}), Actual);
 }
 
+TEST(FilterIteratorTest, ReverseFilterRange) {
+  auto IsOdd = [](int N) { return N % 2 == 1; };
+  int A[] = {0, 1, 2, 3, 4, 5, 6};
+
+  // Check basic reversal.
+  auto Range = reverse(make_filter_range(A, IsOdd));
+  SmallVector<int, 3> Actual(Range.begin(), Range.end());
+  EXPECT_EQ((SmallVector<int, 3>{5, 3, 1}), Actual);
+
+  // Check that the reverse of the reverse is the original.
+  auto Range2 = reverse(reverse(make_filter_range(A, IsOdd)));
+  SmallVector<int, 3> Actual2(Range2.begin(), Range2.end());
+  EXPECT_EQ((SmallVector<int, 3>{1, 3, 5}), Actual2);
+
+  // Check empty ranges.
+  auto Range3 = reverse(make_filter_range(ArrayRef<int>(), IsOdd));
+  SmallVector<int, 0> Actual3(Range3.begin(), Range3.end());
+  EXPECT_EQ((SmallVector<int, 0>{}), Actual3);
+
+  // Check that we don't skip the first element, provided it isn't filtered
+  // away.
+  auto IsEven = [](int N) { return N % 2 == 0; };
+  auto Range4 = reverse(make_filter_range(A, IsEven));
+  SmallVector<int, 4> Actual4(Range4.begin(), Range4.end());
+  EXPECT_EQ((SmallVector<int, 4>{6, 4, 2, 0}), Actual4);
+}
+
 TEST(PointerIterator, Basic) {
   int A[] = {1, 2, 3, 4};
   pointer_iterator<int *> Begin(std::begin(A)), End(std::end(A));
@@ -207,6 +260,13 @@ TEST(PointerIterator, Const) {
   EXPECT_EQ(A + 2, std::next(*Begin, 2));
   EXPECT_EQ(A + 3, std::next(*Begin, 3));
   EXPECT_EQ(A + 4, std::next(*Begin, 4));
+}
+
+TEST(PointerIterator, Range) {
+  int A[] = {1, 2, 3, 4};
+  int I = 0;
+  for (int *P : make_pointer_range(A))
+    EXPECT_EQ(A + I++, P);
 }
 
 TEST(ZipIteratorTest, Basic) {
@@ -269,6 +329,74 @@ TEST(ZipIteratorTest, ZipFirstMutability) {
 
   for (auto tup : zip_first(SmallVector<bool, 0>{1, 1, 0, 1}, pi)) {
     EXPECT_EQ(get<0>(tup), get<1>(tup));
+  }
+}
+
+TEST(ZipIteratorTest, Filter) {
+  using namespace std;
+  vector<unsigned> pi{3, 1, 4, 1, 5, 9};
+
+  unsigned iters = 0;
+  // pi is length 6, but the zip RHS is length 7.
+  auto zipped = zip_first(pi, vector<bool>{1, 1, 0, 1, 1, 1, 0});
+  for (auto tup : make_filter_range(
+           zipped, [](decltype(zipped)::value_type t) { return get<1>(t); })) {
+    EXPECT_EQ(get<0>(tup) & 0x01, get<1>(tup));
+    get<0>(tup) += 1;
+    iters += 1;
+  }
+
+  // Should have skipped pi[2].
+  EXPECT_EQ(iters, 5u);
+
+  // Ensure that in-place mutation works.
+  EXPECT_TRUE(all_of(pi, [](unsigned n) { return (n & 0x01) == 0; }));
+}
+
+TEST(ZipIteratorTest, Reverse) {
+  using namespace std;
+  vector<unsigned> ascending{0, 1, 2, 3, 4, 5};
+
+  auto zipped = zip_first(ascending, vector<bool>{0, 1, 0, 1, 0, 1});
+  unsigned last = 6;
+  for (auto tup : reverse(zipped)) {
+    // Check that this is in reverse.
+    EXPECT_LT(get<0>(tup), last);
+    last = get<0>(tup);
+    EXPECT_EQ(get<0>(tup) & 0x01, get<1>(tup));
+  }
+
+  auto odds = [](decltype(zipped)::value_type tup) { return get<1>(tup); };
+  last = 6;
+  for (auto tup : make_filter_range(reverse(zipped), odds)) {
+    EXPECT_LT(get<0>(tup), last);
+    last = get<0>(tup);
+    EXPECT_TRUE(get<0>(tup) & 0x01);
+    get<0>(tup) += 1;
+  }
+
+  // Ensure that in-place mutation works.
+  EXPECT_TRUE(all_of(ascending, [](unsigned n) { return (n & 0x01) == 0; }));
+}
+
+TEST(RangeTest, Distance) {
+  std::vector<int> v1;
+  std::vector<int> v2{1, 2, 3};
+
+  EXPECT_EQ(std::distance(v1.begin(), v1.end()), size(v1));
+  EXPECT_EQ(std::distance(v2.begin(), v2.end()), size(v2));
+}
+
+TEST(IteratorRangeTest, DropBegin) {
+  SmallVector<int, 5> vec{0, 1, 2, 3, 4};
+
+  for (int n = 0; n < 5; ++n) {
+    int i = n;
+    for (auto &v : drop_begin(vec, n)) {
+      EXPECT_EQ(v, i);
+      i += 1;
+    }
+    EXPECT_EQ(i, 5);
   }
 }
 

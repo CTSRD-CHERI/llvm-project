@@ -20,6 +20,7 @@
 #include "llvm/ADT/StringSet.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/ModuleSummaryIndex.h"
+#include "llvm/Support/CachePruning.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Target/TargetOptions.h"
@@ -31,6 +32,23 @@ class StringRef;
 class LLVMContext;
 class TargetMachine;
 
+/// Wrapper around MemoryBufferRef, owning the identifier
+class ThinLTOBuffer {
+  std::string OwnedIdentifier;
+  StringRef Buffer;
+
+public:
+  ThinLTOBuffer(StringRef Buffer, StringRef Identifier)
+      : OwnedIdentifier(Identifier), Buffer(Buffer) {}
+
+  MemoryBufferRef getMemBuffer() const {
+    return MemoryBufferRef(Buffer,
+                           {OwnedIdentifier.c_str(), OwnedIdentifier.size()});
+  }
+  StringRef getBuffer() const { return Buffer; }
+  StringRef getBufferIdentifier() const { return OwnedIdentifier; }
+};
+
 /// Helper to gather options relevant to the target machine creation
 struct TargetMachineBuilder {
   Triple TheTriple;
@@ -38,7 +56,7 @@ struct TargetMachineBuilder {
   std::string MAttr;
   TargetOptions Options;
   Optional<Reloc::Model> RelocModel;
-  CodeGenOpt::Level CGOptLevel = CodeGenOpt::Default;
+  CodeGenOpt::Level CGOptLevel = CodeGenOpt::Aggressive;
 
   std::unique_ptr<TargetMachine> create() const;
 };
@@ -72,15 +90,29 @@ public:
   /**
    * Process all the modules that were added to the code generator in parallel.
    *
-   * Client can access the resulting object files using getProducedBinaries()
+   * Client can access the resulting object files using getProducedBinaries(),
+   * unless setGeneratedObjectsDirectory() has been called, in which case
+   * results are available through getProducedBinaryFiles().
    */
   void run();
 
   /**
-   * Return the "in memory" binaries produced by the code generator.
+   * Return the "in memory" binaries produced by the code generator. This is
+   * filled after run() unless setGeneratedObjectsDirectory() has been
+   * called, in which case results are available through
+   * getProducedBinaryFiles().
    */
   std::vector<std::unique_ptr<MemoryBuffer>> &getProducedBinaries() {
     return ProducedBinaries;
+  }
+
+  /**
+   * Return the "on-disk" binaries produced by the code generator. This is
+   * filled after run() when setGeneratedObjectsDirectory() has been
+   * called, in which case results are available through getProducedBinaries().
+   */
+  std::vector<std::string> &getProducedBinaryFiles() {
+    return ProducedBinaryFiles;
   }
 
   /**
@@ -99,7 +131,8 @@ public:
    * To avoid filling the disk space, a few knobs are provided:
    *  - The pruning interval limit the frequency at which the garbage collector
    *    will try to scan the cache directory to prune it from expired entries.
-   *    Setting to -1 disable the pruning (default).
+   *    Setting to -1 disable the pruning (default). Setting to 0 will force
+   *    pruning to occur.
    *  - The pruning expiration time indicates to the garbage collector how old
    *    an entry needs to be to be removed.
    *  - Finally, the garbage collector can be instructed to prune the cache till
@@ -109,33 +142,34 @@ public:
 
   struct CachingOptions {
     std::string Path;                    // Path to the cache, empty to disable.
-    int PruningInterval = 1200;          // seconds, -1 to disable pruning.
-    unsigned int Expiration = 7 * 24 * 3600;     // seconds (1w default).
-    unsigned MaxPercentageOfAvailableSpace = 75; // percentage.
+    CachePruningPolicy Policy;
   };
 
   /// Provide a path to a directory where to store the cached files for
   /// incremental build.
   void setCacheDir(std::string Path) { CacheOptions.Path = std::move(Path); }
 
-  /// Cache policy: interval (seconds) between two prune of the cache. Set to a
-  /// negative value (default) to disable pruning. A value of 0 will be ignored.
+  /// Cache policy: interval (seconds) between two prunes of the cache. Set to a
+  /// negative value to disable pruning. A value of 0 will force pruning to
+  /// occur.
   void setCachePruningInterval(int Interval) {
-    if (Interval)
-      CacheOptions.PruningInterval = Interval;
+    if(Interval < 0)
+      CacheOptions.Policy.Interval.reset();
+    else
+      CacheOptions.Policy.Interval = std::chrono::seconds(Interval);
   }
 
   /// Cache policy: expiration (in seconds) for an entry.
   /// A value of 0 will be ignored.
   void setCacheEntryExpiration(unsigned Expiration) {
     if (Expiration)
-      CacheOptions.Expiration = Expiration;
+      CacheOptions.Policy.Expiration = std::chrono::seconds(Expiration);
   }
 
   /**
    * Sets the maximum cache size that can be persistent across build, in terms
-   * of percentage of the available space on the the disk. Set to 100 to
-   * indicate no limit, 50 to indicate that the cache size will not be left over
+   * of percentage of the available space on the disk. Set to 100 to indicate
+   * no limit, 50 to indicate that the cache size will not be left over
    * half the available space. A value over 100 will be reduced to 100, and a
    * value of 0 will be ignored.
    *
@@ -147,7 +181,22 @@ public:
    */
   void setMaxCacheSizeRelativeToAvailableSpace(unsigned Percentage) {
     if (Percentage)
-      CacheOptions.MaxPercentageOfAvailableSpace = Percentage;
+      CacheOptions.Policy.MaxSizePercentageOfAvailableSpace = Percentage;
+  }
+
+  /// Cache policy: the maximum size for the cache directory in bytes. A value
+  /// over the amount of available space on the disk will be reduced to the
+  /// amount of available space. A value of 0 will be ignored.
+  void setCacheMaxSizeBytes(uint64_t MaxSizeBytes) {
+    if (MaxSizeBytes)
+      CacheOptions.Policy.MaxSizeBytes = MaxSizeBytes;
+  }
+
+  /// Cache policy: the maximum number of files in the cache directory. A value
+  /// of 0 will be ignored.
+  void setCacheMaxSizeFiles(unsigned MaxSizeFiles) {
+    if (MaxSizeFiles)
+      CacheOptions.Policy.MaxSizeFiles = MaxSizeFiles;
   }
 
   /**@}*/
@@ -155,6 +204,14 @@ public:
   /// Set the path to a directory where to save temporaries at various stages of
   /// the processing.
   void setSaveTempsDir(std::string Path) { SaveTempsDir = std::move(Path); }
+
+  /// Set the path to a directory where to save generated object files. This
+  /// path can be used by a linker to request on-disk files instead of in-memory
+  /// buffers. When set, results are available through getProducedBinaryFiles()
+  /// instead of getProducedBinaries().
+  void setGeneratedObjectsDirectory(std::string Path) {
+    SavedObjectsDirectoryPath = std::move(Path);
+  }
 
   /// CPU to use to initialize the TargetMachine
   void setCpu(std::string Cpu) { TMBuilder.MCpu = std::move(Cpu); }
@@ -167,6 +224,10 @@ public:
     TMBuilder.Options = std::move(Options);
   }
 
+  /// Enable the Freestanding mode: indicate that the optimizer should not
+  /// assume builtins are present on the target.
+  void setFreestanding(bool Enabled) { Freestanding = Enabled; }
+
   /// CodeModel
   void setCodePICModel(Optional<Reloc::Model> Model) {
     TMBuilder.RelocModel = Model;
@@ -175,6 +236,11 @@ public:
   /// CodeGen optimization level
   void setCodeGenOptLevel(CodeGenOpt::Level CGOptLevel) {
     TMBuilder.CGOptLevel = CGOptLevel;
+  }
+
+  /// IR optimization level: from 0 to 3.
+  void setOptLevel(unsigned NewOptLevel) {
+    OptLevel = (NewOptLevel > 3) ? 3 : NewOptLevel;
   }
 
   /// Disable CodeGen, only run the stages till codegen and stop. The output
@@ -233,23 +299,22 @@ public:
    */
   void optimize(Module &Module);
 
-  /**
-   * Perform ThinLTO CodeGen.
-   */
-  std::unique_ptr<MemoryBuffer> codegen(Module &Module);
-
   /**@}*/
 
 private:
   /// Helper factory to build a TargetMachine
   TargetMachineBuilder TMBuilder;
 
-  /// Vector holding the in-memory buffer containing the produced binaries.
+  /// Vector holding the in-memory buffer containing the produced binaries, when
+  /// SavedObjectsDirectoryPath isn't set.
   std::vector<std::unique_ptr<MemoryBuffer>> ProducedBinaries;
+
+  /// Path to generated files in the supplied SavedObjectsDirectoryPath if any.
+  std::vector<std::string> ProducedBinaryFiles;
 
   /// Vector holding the input buffers containing the bitcode modules to
   /// process.
-  std::vector<MemoryBufferRef> Modules;
+  std::vector<ThinLTOBuffer> Modules;
 
   /// Set of symbols that need to be preserved outside of the set of bitcode
   /// files.
@@ -264,6 +329,9 @@ private:
   /// Path to a directory to save the temporary bitcode files.
   std::string SaveTempsDir;
 
+  /// Path to a directory to save the generated object files.
+  std::string SavedObjectsDirectoryPath;
+
   /// Flag to enable/disable CodeGen. When set to true, the process stops after
   /// optimizations and a bitcode is produced.
   bool DisableCodeGen = false;
@@ -271,6 +339,13 @@ private:
   /// Flag to indicate that only the CodeGen will be performed, no cross-module
   /// importing or optimization.
   bool CodeGenOnly = false;
+
+  /// Flag to indicate that the optimizer should not assume builtins are present
+  /// on the target.
+  bool Freestanding = false;
+
+  /// IR Optimization Level [0-3].
+  unsigned OptLevel = 3;
 };
 }
 #endif

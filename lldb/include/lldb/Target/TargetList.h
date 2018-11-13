@@ -91,10 +91,11 @@ public:
   /// @return
   ///     An error object that indicates success or failure
   //------------------------------------------------------------------
-  Error CreateTarget(Debugger &debugger, const char *user_exe_path,
-                     const char *triple_cstr, bool get_dependent_modules,
-                     const OptionGroupPlatform *platform_options,
-                     lldb::TargetSP &target_sp);
+  Status CreateTarget(Debugger &debugger, llvm::StringRef user_exe_path,
+                      llvm::StringRef triple_str,
+                      LoadDependentFiles get_dependent_modules,
+                      const OptionGroupPlatform *platform_options,
+                      lldb::TargetSP &target_sp);
 
   //------------------------------------------------------------------
   /// Create a new Target.
@@ -102,9 +103,10 @@ public:
   /// Same as the function above, but used when you already know the
   /// platform you will be using
   //------------------------------------------------------------------
-  Error CreateTarget(Debugger &debugger, const char *user_exe_path,
-                     const ArchSpec &arch, bool get_dependent_modules,
-                     lldb::PlatformSP &platform_sp, lldb::TargetSP &target_sp);
+  Status CreateTarget(Debugger &debugger, llvm::StringRef user_exe_path,
+                      const ArchSpec &arch,
+                      LoadDependentFiles get_dependent_modules,
+                      lldb::PlatformSP &platform_sp, lldb::TargetSP &target_sp);
 
   //------------------------------------------------------------------
   /// Delete a Target object from the list.
@@ -211,18 +213,21 @@ protected:
 private:
   lldb::TargetSP GetDummyTarget(lldb_private::Debugger &debugger);
 
-  Error CreateDummyTarget(Debugger &debugger, const char *specified_arch_name,
-                          lldb::TargetSP &target_sp);
+  Status CreateDummyTarget(Debugger &debugger,
+                           llvm::StringRef specified_arch_name,
+                           lldb::TargetSP &target_sp);
 
-  Error CreateTargetInternal(Debugger &debugger, const char *user_exe_path,
-                             const char *triple_cstr, bool get_dependent_files,
-                             const OptionGroupPlatform *platform_options,
-                             lldb::TargetSP &target_sp, bool is_dummy_target);
+  Status CreateTargetInternal(Debugger &debugger, llvm::StringRef user_exe_path,
+                              llvm::StringRef triple_str,
+                              LoadDependentFiles load_dependent_files,
+                              const OptionGroupPlatform *platform_options,
+                              lldb::TargetSP &target_sp, bool is_dummy_target);
 
-  Error CreateTargetInternal(Debugger &debugger, const char *user_exe_path,
-                             const ArchSpec &arch, bool get_dependent_modules,
-                             lldb::PlatformSP &platform_sp,
-                             lldb::TargetSP &target_sp, bool is_dummy_target);
+  Status CreateTargetInternal(Debugger &debugger, llvm::StringRef user_exe_path,
+                              const ArchSpec &arch,
+                              LoadDependentFiles get_dependent_modules,
+                              lldb::PlatformSP &platform_sp,
+                              lldb::TargetSP &target_sp, bool is_dummy_target);
 
   DISALLOW_COPY_AND_ASSIGN(TargetList);
 };

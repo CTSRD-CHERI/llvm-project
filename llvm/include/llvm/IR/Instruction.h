@@ -16,24 +16,33 @@
 #define LLVM_IR_INSTRUCTION_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/None.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/ilist_node.h"
 #include "llvm/IR/DebugLoc.h"
 #include "llvm/IR/SymbolTableListTraits.h"
 #include "llvm/IR/User.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/Casting.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <utility>
 
 namespace llvm {
 
-class FastMathFlags;
-class LLVMContext;
-class MDNode;
 class BasicBlock;
+class FastMathFlags;
+class MDNode;
+class Module;
 struct AAMDNodes;
+
+template <> struct ilist_alloc_traits<Instruction> {
+  static inline void deleteNode(Instruction *V);
+};
 
 class Instruction : public User,
                     public ilist_node_with_parent<Instruction, BasicBlock> {
-  void operator=(const Instruction &) = delete;
-  Instruction(const Instruction &) = delete;
-
   BasicBlock *Parent;
   DebugLoc DbgLoc;                         // 'dbg' Metadata cache.
 
@@ -42,9 +51,13 @@ class Instruction : public User,
     /// this instruction has metadata attached to it or not.
     HasMetadataBit = 1 << 15
   };
+
+protected:
+  ~Instruction(); // Use deleteValue() to delete a generic Instruction.
+
 public:
-  // Out of line virtual method, so the vtable, etc has a home.
-  ~Instruction() override;
+  Instruction(const Instruction &) = delete;
+  Instruction &operator=(const Instruction &) = delete;
 
   /// Specialize the methods defined in Value, as we know that an instruction
   /// can only be used by other instructions.
@@ -60,14 +73,20 @@ public:
   /// Note: this is undefined behavior if the instruction does not have a
   /// parent, or the parent basic block does not have a parent function.
   const Module *getModule() const;
-  Module *getModule();
+  Module *getModule() {
+    return const_cast<Module *>(
+                           static_cast<const Instruction *>(this)->getModule());
+  }
 
   /// Return the function this instruction belongs to.
   ///
   /// Note: it is undefined behavior to call this on an instruction not
   /// currently inserted into a function.
   const Function *getFunction() const;
-  Function *getFunction();
+  Function *getFunction() {
+    return const_cast<Function *>(
+                         static_cast<const Instruction *>(this)->getFunction());
+  }
 
   /// This method unlinks 'this' from the containing basic block, but does not
   /// delete it.
@@ -95,6 +114,10 @@ public:
   /// \pre I is a valid iterator into BB.
   void moveBefore(BasicBlock &BB, SymbolTableList<Instruction>::iterator I);
 
+  /// Unlink this instruction from its current basic block and insert it into
+  /// the basic block that MovePos lives in, right after MovePos.
+  void moveAfter(Instruction *MovePos);
+
   //===--------------------------------------------------------------------===//
   // Subclass classification.
   //===--------------------------------------------------------------------===//
@@ -105,9 +128,13 @@ public:
   const char *getOpcodeName() const { return getOpcodeName(getOpcode()); }
   bool isTerminator() const { return isTerminator(getOpcode()); }
   bool isBinaryOp() const { return isBinaryOp(getOpcode()); }
+  bool isIntDivRem() const { return isIntDivRem(getOpcode()); }
   bool isShift() { return isShift(getOpcode()); }
   bool isCast() const { return isCast(getOpcode()); }
   bool isFuncletPad() const { return isFuncletPad(getOpcode()); }
+  bool isExceptionalTerminator() const {
+    return isExceptionalTerminator(getOpcode());
+  }
 
   static const char* getOpcodeName(unsigned OpCode);
 
@@ -117,6 +144,10 @@ public:
 
   static inline bool isBinaryOp(unsigned Opcode) {
     return Opcode >= BinaryOpsBegin && Opcode < BinaryOpsEnd;
+  }
+
+  static inline bool isIntDivRem(unsigned Opcode) {
+    return Opcode == UDiv || Opcode == SDiv || Opcode == URem || Opcode == SRem;
   }
 
   /// Determine if the Opcode is one of the shift instructions.
@@ -134,6 +165,16 @@ public:
     return getOpcode() == AShr;
   }
 
+  /// Determine if the Opcode is and/or/xor.
+  static inline bool isBitwiseLogicOp(unsigned Opcode) {
+    return Opcode == And || Opcode == Or || Opcode == Xor;
+  }
+
+  /// Return true if this is and/or/xor.
+  inline bool isBitwiseLogicOp() const {
+    return isBitwiseLogicOp(getOpcode());
+  }
+
   /// Determine if the OpCode is one of the CastInst instructions.
   static inline bool isCast(unsigned OpCode) {
     return OpCode >= CastOpsBegin && OpCode < CastOpsEnd;
@@ -142,6 +183,20 @@ public:
   /// Determine if the OpCode is one of the FuncletPadInst instructions.
   static inline bool isFuncletPad(unsigned OpCode) {
     return OpCode >= FuncletPadOpsBegin && OpCode < FuncletPadOpsEnd;
+  }
+
+  /// Returns true if the OpCode is a terminator related to exception handling.
+  static inline bool isExceptionalTerminator(unsigned OpCode) {
+    switch (OpCode) {
+    case Instruction::CatchSwitch:
+    case Instruction::CatchRet:
+    case Instruction::CleanupRet:
+    case Instruction::Invoke:
+    case Instruction::Resume:
+      return true;
+    default:
+      return false;
+    }
   }
 
   //===--------------------------------------------------------------------===//
@@ -239,13 +294,19 @@ public:
   /// Returns false if no metadata was found.
   bool extractProfTotalWeight(uint64_t &TotalVal) const;
 
+  /// Updates branch_weights metadata by scaling it by \p S / \p T.
+  void updateProfWeight(uint64_t S, uint64_t T);
+
+  /// Sets the branch_weights metadata to \p W for CallInst.
+  void setProfWeight(uint64_t W);
+
   /// Set the debug location information for this instruction.
   void setDebugLoc(DebugLoc Loc) { DbgLoc = std::move(Loc); }
 
   /// Return the debug location for this node as a DebugLoc.
   const DebugLoc &getDebugLoc() const { return DbgLoc; }
 
-  /// Set or clear the nsw flag on this instruction, which must be an operator
+  /// Set or clear the nuw flag on this instruction, which must be an operator
   /// which supports this flag. See LangRef.html for the meaning of this flag.
   void setHasNoUnsignedWrap(bool b = true);
 
@@ -263,13 +324,22 @@ public:
   /// Determine whether the no signed wrap flag is set.
   bool hasNoSignedWrap() const;
 
+  /// Drops flags that may cause this instruction to evaluate to poison despite
+  /// having non-poison inputs.
+  void dropPoisonGeneratingFlags();
+
   /// Determine whether the exact flag is set.
   bool isExact() const;
 
-  /// Set or clear the unsafe-algebra flag on this instruction, which must be an
+  /// Set or clear all fast-math-flags on this instruction, which must be an
   /// operator which supports this flag. See LangRef.html for the meaning of
   /// this flag.
-  void setHasUnsafeAlgebra(bool B);
+  void setFast(bool B);
+
+  /// Set or clear the reassociation flag on this instruction, which must be
+  /// an operator which supports this flag. See LangRef.html for the meaning of
+  /// this flag.
+  void setHasAllowReassoc(bool B);
 
   /// Set or clear the no-nans flag on this instruction, which must be an
   /// operator which supports this flag. See LangRef.html for the meaning of
@@ -291,6 +361,11 @@ public:
   /// this flag.
   void setHasAllowReciprocal(bool B);
 
+  /// Set or clear the approximate-math-functions flag on this instruction,
+  /// which must be an operator which supports this flag. See LangRef.html for
+  /// the meaning of this flag.
+  void setHasApproxFunc(bool B);
+
   /// Convenience function for setting multiple fast-math flags on this
   /// instruction, which must be an operator which supports these flags. See
   /// LangRef.html for the meaning of these flags.
@@ -301,8 +376,11 @@ public:
   /// LangRef.html for the meaning of these flags.
   void copyFastMathFlags(FastMathFlags FMF);
 
-  /// Determine whether the unsafe-algebra flag is set.
-  bool hasUnsafeAlgebra() const;
+  /// Determine whether all fast-math-flags are set.
+  bool isFast() const;
+
+  /// Determine whether the allow-reassociation flag is set.
+  bool hasAllowReassoc() const;
 
   /// Determine whether the no-NaNs flag is set.
   bool hasNoNaNs() const;
@@ -316,6 +394,12 @@ public:
   /// Determine whether the allow-reciprocal flag is set.
   bool hasAllowReciprocal() const;
 
+  /// Determine whether the allow-contract flag is set.
+  bool hasAllowContract() const;
+
+  /// Determine whether the approximate-math-functions flag is set.
+  bool hasApproxFunc() const;
+
   /// Convenience function for getting all the fast-math flags, which must be an
   /// operator which supports these flags. See LangRef.html for the meaning of
   /// these flags.
@@ -324,13 +408,28 @@ public:
   /// Copy I's fast-math flags
   void copyFastMathFlags(const Instruction *I);
 
-  /// Convenience method to copy supported wrapping, exact, and fast-math flags
-  /// from V to this instruction.
-  void copyIRFlags(const Value *V);
+  /// Convenience method to copy supported exact, fast-math, and (optionally)
+  /// wrapping flags from V to this instruction.
+  void copyIRFlags(const Value *V, bool IncludeWrapFlags = true);
 
   /// Logical 'and' of any supported wrapping, exact, and fast-math flags of
   /// V and this instruction.
   void andIRFlags(const Value *V);
+
+  /// Merge 2 debug locations and apply it to the Instruction. If the
+  /// instruction is a CallIns, we need to traverse the inline chain to find
+  /// the common scope. This is not efficient for N-way merging as each time
+  /// you merge 2 iterations, you need to rebuild the hashmap to find the
+  /// common scope. However, we still choose this API because:
+  ///  1) Simplicity: it takes 2 locations instead of a list of locations.
+  ///  2) In worst case, it increases the complexity from O(N*I) to
+  ///     O(2*N*I), where N is # of Instructions to merge, and I is the
+  ///     maximum level of inline stack. So it is still linear.
+  ///  3) Merging of call instructions should be extremely rare in real
+  ///     applications, thus the N-way merging should be in code path.
+  /// The DebugLoc attached to this instruction will be overwritten by the
+  /// merged DebugLoc.
+  void applyMergedLocation(const DILocation *LocA, const DILocation *LocB);
 
 private:
   /// Return true if we have an entry in the on-the-side metadata hash.
@@ -347,11 +446,11 @@ private:
       SmallVectorImpl<std::pair<unsigned, MDNode *>> &) const;
   /// Clear all hashtable-based metadata from this instruction.
   void clearMetadataHashEntries();
+
 public:
   //===--------------------------------------------------------------------===//
   // Predicates and helper methods.
   //===--------------------------------------------------------------------===//
-
 
   /// Return true if the instruction is associative:
   ///
@@ -359,18 +458,30 @@ public:
   ///
   /// In LLVM, the Add, Mul, And, Or, and Xor operators are associative.
   ///
-  bool isAssociative() const;
-  static bool isAssociative(unsigned op);
+  bool isAssociative() const LLVM_READONLY;
+  static bool isAssociative(unsigned Opcode) {
+    return Opcode == And || Opcode == Or || Opcode == Xor ||
+           Opcode == Add || Opcode == Mul;
+  }
 
   /// Return true if the instruction is commutative:
   ///
   ///   Commutative operators satisfy: (x op y) === (y op x)
   ///
-  /// In LLVM, these are the associative operators, plus SetEQ and SetNE, when
+  /// In LLVM, these are the commutative operators, plus SetEQ and SetNE, when
   /// applied to any type.
   ///
   bool isCommutative() const { return isCommutative(getOpcode()); }
-  static bool isCommutative(unsigned op);
+  static bool isCommutative(unsigned Opcode) {
+    switch (Opcode) {
+    case Add: case FAdd:
+    case Mul: case FMul:
+    case And: case Or: case Xor:
+      return true;
+    default:
+      return false;
+  }
+  }
 
   /// Return true if the instruction is idempotent:
   ///
@@ -379,7 +490,9 @@ public:
   /// In LLVM, the And and Or operators are idempotent.
   ///
   bool isIdempotent() const { return isIdempotent(getOpcode()); }
-  static bool isIdempotent(unsigned op);
+  static bool isIdempotent(unsigned Opcode) {
+    return Opcode == And || Opcode == Or;
+  }
 
   /// Return true if the instruction is nilpotent:
   ///
@@ -391,7 +504,9 @@ public:
   /// In LLVM, the Xor operator is nilpotent.
   ///
   bool isNilpotent() const { return isNilpotent(getOpcode()); }
-  static bool isNilpotent(unsigned op);
+  static bool isNilpotent(unsigned Opcode) {
+    return Opcode == Xor;
+  }
 
   /// Return true if this instruction may modify memory.
   bool mayWriteToMemory() const;
@@ -407,6 +522,12 @@ public:
   /// Return true if this instruction has an AtomicOrdering of unordered or
   /// higher.
   bool isAtomic() const;
+
+  /// Return true if this atomic instruction loads from memory.
+  bool hasAtomicLoad() const;
+
+  /// Return true if this atomic instruction stores to memory.
+  bool hasAtomicStore() const;
 
   /// Return true if this instruction may throw an exception.
   bool mayThrow() const;
@@ -436,6 +557,14 @@ public:
   /// matters, isSafeToSpeculativelyExecute may be more appropriate.
   bool mayHaveSideEffects() const { return mayWriteToMemory() || mayThrow(); }
 
+  /// Return true if the instruction can be removed if the result is unused.
+  ///
+  /// When constant folding some instructions cannot be removed even if their
+  /// results are unused. Specifically terminator instructions and calls that
+  /// may have side effects cannot be removed without semantically changing the
+  /// generated program.
+  bool isSafeToRemove() const;
+
   /// Return true if the instruction is a variety of EH-block.
   bool isEHPad() const {
     switch (getOpcode()) {
@@ -447,6 +576,14 @@ public:
     default:
       return false;
     }
+  }
+
+  /// Return a pointer to the next non-debug instruction in the same basic
+  /// block as 'this', or nullptr if no such instruction exists.
+  const Instruction *getNextNonDebugInstruction() const;
+  Instruction *getNextNonDebugInstruction() {
+    return const_cast<Instruction *>(
+        static_cast<const Instruction *>(this)->getNextNonDebugInstruction());
   }
 
   /// Create a copy of 'this' instruction that is identical in all ways except
@@ -483,7 +620,7 @@ public:
   /// be identical.
   /// @returns true if the specified instruction is the same operation as
   /// the current one.
-  /// @brief Determine if one instruction is the same operation as another.
+  /// Determine if one instruction is the same operation as another.
   bool isSameOperationAs(const Instruction *I, unsigned flags = 0) const;
 
   /// Return true if there are any uses of this instruction in blocks other than
@@ -491,9 +628,19 @@ public:
   /// operands in the corresponding predecessor block.
   bool isUsedOutsideOfBlock(const BasicBlock *BB) const;
 
+  /// Return the number of successors that this instruction has. The instruction
+  /// must be a terminator.
+  unsigned getNumSuccessors() const;
+
+  /// Return the specified successor. This instruction must be a terminator.
+  BasicBlock *getSuccessor(unsigned Idx) const;
+
+  /// Update the specified successor to point at the provided block. This
+  /// instruction must be a terminator.
+  void setSuccessor(unsigned Idx, BasicBlock *BB);
 
   /// Methods for support type inquiry through isa, cast, and dyn_cast:
-  static inline bool classof(const Value *V) {
+  static bool classof(const Value *V) {
     return V->getValueID() >= Value::InstructionVal;
   }
 
@@ -541,12 +688,16 @@ public:
 #define   LAST_OTHER_INST(N)             OtherOpsEnd = N+1
 #include "llvm/IR/Instruction.def"
   };
+
 private:
+  friend class SymbolTableListTraits<Instruction>;
+
   // Shadow Value::setValueSubclassData with a private forwarding method so that
   // subclasses cannot accidentally use it.
   void setValueSubclassData(unsigned short D) {
     Value::setValueSubclassData(D);
   }
+
   unsigned short getSubclassDataFromValue() const {
     return Value::getSubclassDataFromValue();
   }
@@ -556,8 +707,8 @@ private:
                          (V ? HasMetadataBit : 0));
   }
 
-  friend class SymbolTableListTraits<Instruction>;
   void setParent(BasicBlock *P);
+
 protected:
   // Instruction subclasses can stick up to 15 bits of stuff into the
   // SubclassData field of instruction with these members.
@@ -582,18 +733,10 @@ private:
   Instruction *cloneImpl() const;
 };
 
-// Instruction* is only 4-byte aligned.
-template<>
-class PointerLikeTypeTraits<Instruction*> {
-  typedef Instruction* PT;
-public:
-  static inline void *getAsVoidPointer(PT P) { return P; }
-  static inline PT getFromVoidPointer(void *P) {
-    return static_cast<PT>(P);
-  }
-  enum { NumLowBitsAvailable = 2 };
-};
+inline void ilist_alloc_traits<Instruction>::deleteNode(Instruction *V) {
+  V->deleteValue();
+}
 
-} // End llvm namespace
+} // end namespace llvm
 
-#endif
+#endif // LLVM_IR_INSTRUCTION_H

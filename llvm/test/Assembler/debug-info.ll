@@ -1,8 +1,8 @@
 ; RUN: llvm-as < %s | llvm-dis | llvm-as | llvm-dis | FileCheck %s
 ; RUN: verify-uselistorder %s
 
-; CHECK: !named = !{!0, !0, !1, !2, !3, !4, !5, !6, !7, !8, !8, !9, !10, !11, !12, !13, !14, !15, !16, !17, !18, !19, !20, !21, !22, !23, !24, !25, !26, !27, !27, !28, !29, !30, !31}
-!named = !{!0, !1, !2, !3, !4, !5, !6, !7, !8, !9, !10, !11, !12, !13, !14, !15, !16, !17, !18, !19, !20, !21, !22, !23, !24, !25, !26, !27, !28, !29, !30, !31, !32, !33, !34}
+; CHECK: !named = !{!0, !0, !1, !2, !3, !4, !5, !6, !7, !8, !8, !9, !10, !11, !12, !13, !14, !15, !16, !17, !18, !19, !20, !21, !22, !23, !24, !25, !26, !27, !27, !28, !29, !30, !31, !32, !33, !34, !35, !36, !37, !38, !39}
+!named = !{!0, !1, !2, !3, !4, !5, !6, !7, !8, !9, !10, !11, !12, !13, !14, !15, !16, !17, !18, !19, !20, !21, !22, !23, !24, !25, !26, !27, !28, !29, !30, !31, !32, !33, !34, !35, !36, !37, !38, !39, !40, !41, !42}
 
 ; CHECK:      !0 = !DISubrange(count: 3)
 ; CHECK-NEXT: !1 = !DISubrange(count: 3, lowerBound: 4)
@@ -37,8 +37,8 @@
 !13 = distinct !{}
 !14 = !DIFile(filename: "", directory: "")
 
-; CHECK-NEXT: !13 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !6, size: 32, align: 32)
-!15 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !7, size: 32, align: 32)
+; CHECK-NEXT: !13 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !6, size: 32, align: 32, dwarfAddressSpace: 1)
+!15 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !7, size: 32, align: 32, dwarfAddressSpace: 1)
 
 ; CHECK-NEXT: !14 = !DICompositeType(tag: DW_TAG_structure_type, name: "MyType", file: !10, line: 2, size: 32, align: 32, identifier: "MangledMyType")
 ; CHECK-NEXT: !15 = distinct !DICompositeType(tag: DW_TAG_structure_type, name: "Base", scope: !14, file: !10, line: 3, size: 128, align: 32, offset: 64, flags: DIFlagPublic, elements: !16, runtimeLang: DW_LANG_C_plus_plus_11, vtableHolder: !15, templateParams: !18, identifier: "MangledBase")
@@ -79,3 +79,23 @@
 !32 = distinct !{!31}
 !33 = !DIMacroFile(line: 9, file: !14, nodes: !32)
 !34 = !DIMacroFile(type: DW_MACINFO_start_file, line: 11, file: !14)
+
+; CHECK-NEXT: !32 = !DIFile(filename: "file", directory: "dir", checksumkind: CSK_MD5, checksum: "000102030405060708090a0b0c0d0e0f")
+!35 = !DIFile(filename: "file", directory: "dir", checksumkind: CSK_MD5, checksum: "000102030405060708090a0b0c0d0e0f")
+
+; CHECK-NEXT: !33 = !DICompositeType(tag: DW_TAG_variant_part, name: "A", scope: !14, size: 64, discriminator: !34)
+; CHECK-NEXT: !34 = !DIDerivedType(tag: DW_TAG_member, scope: !33, baseType: !35, size: 64, align: 64, flags: DIFlagArtificial)
+; CHECK-NEXT: !35 = !DIBasicType(name: "u64", size: 64, encoding: DW_ATE_unsigned)
+!36 = !DICompositeType(tag: DW_TAG_variant_part, name: "A", scope: !16, size: 64, discriminator: !37)
+!37 = !DIDerivedType(tag: DW_TAG_member, scope: !36, baseType: !38, size: 64, align: 64, flags: DIFlagArtificial)
+!38 = !DIBasicType(name: "u64", size: 64, encoding: DW_ATE_unsigned)
+
+; CHECK-NEXT: !36 = !DIFile(filename: "file", directory: "dir", source: "int source() { }\0A")
+; CHECK-NEXT: !37 = !DIFile(filename: "file", directory: "dir", checksumkind: CSK_MD5, checksum: "3a420e2646916a475e68de8d48f779f5", source: "int source() { }\0A")
+!39 = !DIFile(filename: "file", directory: "dir", source: "int source() { }\0A")
+!40 = !DIFile(filename: "file", directory: "dir", checksumkind: CSK_MD5, checksum: "3a420e2646916a475e68de8d48f779f5", source: "int source() { }\0A")
+
+; CHECK-NEXT: !38 = !DIBasicType(name: "u64.be", size: 64, align: 1, encoding: DW_ATE_unsigned, flags: DIFlagBigEndian)
+; CHECK-NEXT: !39 = !DIBasicType(name: "u64.le", size: 64, align: 1, encoding: DW_ATE_unsigned, flags: DIFlagLittleEndian)
+!41 = !DIBasicType(name: "u64.be", size: 64, align: 1, encoding: DW_ATE_unsigned, flags: DIFlagBigEndian)
+!42 = !DIBasicType(name: "u64.le", size: 64, align: 1, encoding: DW_ATE_unsigned, flags: DIFlagLittleEndian)

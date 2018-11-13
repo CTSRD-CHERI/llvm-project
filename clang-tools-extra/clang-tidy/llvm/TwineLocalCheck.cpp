@@ -25,7 +25,7 @@ void TwineLocalCheck::registerMatchers(MatchFinder *Finder) {
 }
 
 void TwineLocalCheck::check(const MatchFinder::MatchResult &Result) {
-  const VarDecl *VD = Result.Nodes.getNodeAs<VarDecl>("variable");
+  const auto *VD = Result.Nodes.getNodeAs<VarDecl>("variable");
   auto Diag = diag(VD->getLocation(),
                    "twine variables are prone to use-after-free bugs");
 
@@ -35,8 +35,11 @@ void TwineLocalCheck::check(const MatchFinder::MatchResult &Result) {
     // of the initializer.
     const Expr *C = VD->getInit()->IgnoreImplicit();
 
-    while (isa<CXXConstructExpr>(C))
+    while (isa<CXXConstructExpr>(C)) {
+      if (cast<CXXConstructExpr>(C)->getNumArgs() == 0)
+        break;
       C = cast<CXXConstructExpr>(C)->getArg(0)->IgnoreParenImpCasts();
+    }
 
     SourceRange TypeRange =
         VD->getTypeSourceInfo()->getTypeLoc().getSourceRange();
@@ -45,9 +48,9 @@ void TwineLocalCheck::check(const MatchFinder::MatchResult &Result) {
     if (VD->getType()->getCanonicalTypeUnqualified() ==
         C->getType()->getCanonicalTypeUnqualified()) {
       SourceLocation EndLoc = Lexer::getLocForEndOfToken(
-          VD->getInit()->getLocEnd(), 0, *Result.SourceManager, getLangOpts());
+          VD->getInit()->getEndLoc(), 0, *Result.SourceManager, getLangOpts());
       Diag << FixItHint::CreateReplacement(TypeRange, "std::string")
-           << FixItHint::CreateInsertion(VD->getInit()->getLocStart(), "(")
+           << FixItHint::CreateInsertion(VD->getInit()->getBeginLoc(), "(")
            << FixItHint::CreateInsertion(EndLoc, ").str()");
     } else {
       // Just an implicit conversion. Insert the real type.

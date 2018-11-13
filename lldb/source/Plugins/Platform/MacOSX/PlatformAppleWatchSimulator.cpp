@@ -14,19 +14,19 @@
 // Other libraries and framework includes
 // Project includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
-#include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleList.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/StreamString.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/ArchSpec.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StreamString.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -89,9 +89,9 @@ PlatformSP PlatformAppleWatchSimulator::CreateInstance(bool force,
         break;
 
 #if defined(__APPLE__)
-      // Only accept "unknown" for the vendor if the host is Apple and
-      // it "unknown" wasn't specified (it was just returned because it
-      // was NOT specified)
+      // Only accept "unknown" for the vendor if the host is Apple and it
+      // "unknown" wasn't specified (it was just returned because it was NOT
+      // specified)
       case llvm::Triple::UnknownArch:
         create = !arch->TripleVendorWasSpecified();
         break;
@@ -106,9 +106,9 @@ PlatformSP PlatformAppleWatchSimulator::CreateInstance(bool force,
           break;
 
 #if defined(__APPLE__)
-        // Only accept "unknown" for the OS if the host is Apple and
-        // it "unknown" wasn't specified (it was just returned because it
-        // was NOT specified)
+        // Only accept "unknown" for the OS if the host is Apple and it
+        // "unknown" wasn't specified (it was just returned because it was NOT
+        // specified)
         case llvm::Triple::UnknownOS:
           create = !arch->TripleOSWasSpecified();
           break;
@@ -171,10 +171,10 @@ void PlatformAppleWatchSimulator::GetStatus(Stream &strm) {
     strm.PutCString("  SDK Path: error: unable to locate SDK\n");
 }
 
-Error PlatformAppleWatchSimulator::ResolveExecutable(
+Status PlatformAppleWatchSimulator::ResolveExecutable(
     const ModuleSpec &module_spec, lldb::ModuleSP &exe_module_sp,
     const FileSpecList *module_search_paths_ptr) {
-  Error error;
+  Status error;
   // Nothing special to do here, just use the actual file and architecture
 
   ModuleSpec resolved_module_spec(module_spec);
@@ -199,9 +199,9 @@ Error PlatformAppleWatchSimulator::ResolveExecutable(
         return error;
       exe_module_sp.reset();
     }
-    // No valid architecture was specified or the exact ARM slice wasn't
-    // found so ask the platform for the architectures that we should be
-    // using (in the correct order) and see if we can find a match that way
+    // No valid architecture was specified or the exact ARM slice wasn't found
+    // so ask the platform for the architectures that we should be using (in
+    // the correct order) and see if we can find a match that way
     StreamString arch_names;
     ArchSpec platform_arch;
     for (uint32_t idx = 0; GetSupportedArchitectureAtIndex(
@@ -248,9 +248,9 @@ Error PlatformAppleWatchSimulator::ResolveExecutable(
 }
 
 static FileSpec::EnumerateDirectoryResult
-EnumerateDirectoryCallback(void *baton, FileSpec::FileType file_type,
+EnumerateDirectoryCallback(void *baton, llvm::sys::fs::file_type ft,
                            const FileSpec &file_spec) {
-  if (file_type == FileSpec::eFileTypeDirectory) {
+  if (ft == llvm::sys::fs::file_type::directory_file) {
     const char *filename = file_spec.GetFilename().GetCString();
     if (filename &&
         strncmp(filename, "AppleWatchSimulator",
@@ -293,18 +293,18 @@ const char *PlatformAppleWatchSimulator::GetSDKDirectoryAsCString() {
     m_sdk_directory.assign(1, '\0');
   }
 
-  // We should have put a single NULL character into m_sdk_directory
-  // or it should have a valid path if the code gets here
+  // We should have put a single NULL character into m_sdk_directory or it
+  // should have a valid path if the code gets here
   assert(m_sdk_directory.empty() == false);
   if (m_sdk_directory[0])
     return m_sdk_directory.c_str();
   return NULL;
 }
 
-Error PlatformAppleWatchSimulator::GetSymbolFile(const FileSpec &platform_file,
-                                                 const UUID *uuid_ptr,
-                                                 FileSpec &local_file) {
-  Error error;
+Status PlatformAppleWatchSimulator::GetSymbolFile(const FileSpec &platform_file,
+                                                  const UUID *uuid_ptr,
+                                                  FileSpec &local_file) {
+  Status error;
   char platform_file_path[PATH_MAX];
   if (platform_file.GetPath(platform_file_path, sizeof(platform_file_path))) {
     char resolved_path[PATH_MAX];
@@ -315,12 +315,12 @@ Error PlatformAppleWatchSimulator::GetSymbolFile(const FileSpec &platform_file,
                  platform_file_path);
 
       // First try in the SDK and see if the file is in there
-      local_file.SetFile(resolved_path, true);
+      local_file.SetFile(resolved_path, true, FileSpec::Style::native);
       if (local_file.Exists())
         return error;
 
       // Else fall back to the actual path itself
-      local_file.SetFile(platform_file_path, true);
+      local_file.SetFile(platform_file_path, true, FileSpec::Style::native);
       if (local_file.Exists())
         return error;
     }
@@ -333,15 +333,14 @@ Error PlatformAppleWatchSimulator::GetSymbolFile(const FileSpec &platform_file,
   return error;
 }
 
-Error PlatformAppleWatchSimulator::GetSharedModule(
+Status PlatformAppleWatchSimulator::GetSharedModule(
     const ModuleSpec &module_spec, lldb_private::Process *process,
     ModuleSP &module_sp, const FileSpecList *module_search_paths_ptr,
     ModuleSP *old_module_sp_ptr, bool *did_create_ptr) {
-  // For AppleWatch, the SDK files are all cached locally on the host
-  // system. So first we ask for the file in the cached SDK,
-  // then we attempt to get a shared module for the right architecture
-  // with the right UUID.
-  Error error;
+  // For AppleWatch, the SDK files are all cached locally on the host system.
+  // So first we ask for the file in the cached SDK, then we attempt to get a
+  // shared module for the right architecture with the right UUID.
+  Status error;
   ModuleSpec platform_module_spec(module_spec);
   const FileSpec &platform_file = module_spec.GetFileSpec();
   error = GetSymbolFile(platform_file, module_spec.GetUUIDPtr(),

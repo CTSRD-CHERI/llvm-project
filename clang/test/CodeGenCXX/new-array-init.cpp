@@ -1,4 +1,5 @@
 // RUN: %clang_cc1 -std=c++11 -triple i386-unknown-unknown %s -emit-llvm -o - | FileCheck %s
+// RUN: %clang_cc1 -std=c++11 -triple i386-unknown-unknown %s -emit-llvm -fsanitize=signed-integer-overflow -o - | FileCheck --check-prefix=SIO %s
 
 // CHECK: @[[ABC4:.*]] = {{.*}} constant [4 x i8] c"abc\00"
 // CHECK: @[[ABC15:.*]] = {{.*}} constant [15 x i8] c"abc\00\00\00\00
@@ -49,10 +50,10 @@ void string_nonconst(int n) {
   // FIXME: Conditionally throw an exception rather than passing -1 to alloc function
   // CHECK: select
   // CHECK: %[[PTR:.*]] = call i8* @_Zna{{.}}(i{{32|64}}
-  // CHECK: call void @llvm.memcpy{{.*}}(i8* %[[PTR]], i8* getelementptr inbounds ([4 x i8], [4 x i8]* @[[ABC4]], i32 0, i32 0), i32 4,
+  // CHECK: call void @llvm.memcpy{{.*}}(i8* align {{[0-9]+}} %[[PTR]], i8* align {{[0-9]+}} getelementptr inbounds ([4 x i8], [4 x i8]* @[[ABC4]], i32 0, i32 0), i32 4,
   // CHECK: %[[REST:.*]] = getelementptr inbounds i8, i8* %[[PTR]], i32 4
   // CHECK: %[[RESTSIZE:.*]] = sub {{.*}}, 4
-  // CHECK: call void @llvm.memset{{.*}}(i8* %[[REST]], i8 0, i{{32|64}} %[[RESTSIZE]],
+  // CHECK: call void @llvm.memset{{.*}}(i8* align {{[0-9]+}} %[[REST]], i8 0, i{{32|64}} %[[RESTSIZE]],
   new char[n] { "abc" };
 }
 
@@ -60,7 +61,7 @@ void string_nonconst(int n) {
 void string_exact() {
   // CHECK-NOT: icmp
   // CHECK: %[[PTR:.*]] = call i8* @_Zna{{.}}(i{{32|64}} 4)
-  // CHECK: call void @llvm.memcpy{{.*}}(i8* %[[PTR]], i8* getelementptr inbounds ([4 x i8], [4 x i8]* @[[ABC4]], i32 0, i32 0), i32 4,
+  // CHECK: call void @llvm.memcpy{{.*}}(i8* align {{[0-9]+}} %[[PTR]], i8* align {{[0-9]+}} getelementptr inbounds ([4 x i8], [4 x i8]* @[[ABC4]], i32 0, i32 0), i32 4,
   // CHECK-NOT: memset
   new char[4] { "abc" };
 }
@@ -70,7 +71,7 @@ void string_sufficient() {
   // CHECK-NOT: icmp
   // CHECK: %[[PTR:.*]] = call i8* @_Zna{{.}}(i{{32|64}} 15)
   // FIXME: For very large arrays, it would be preferable to emit a small copy and a memset.
-  // CHECK: call void @llvm.memcpy{{.*}}(i8* %[[PTR]], i8* getelementptr inbounds ([15 x i8], [15 x i8]* @[[ABC15]], i32 0, i32 0), i32 15,
+  // CHECK: call void @llvm.memcpy{{.*}}(i8* align {{[0-9]+}} %[[PTR]], i8* align {{[0-9]+}} getelementptr inbounds ([15 x i8], [15 x i8]* @[[ABC15]], i32 0, i32 0), i32 15,
   // CHECK-NOT: memset
   new char[15] { "abc" };
 }
@@ -112,7 +113,13 @@ void aggr_sufficient(int n) {
   // CHECK: %[[PTR2:.*]] = getelementptr inbounds %[[AGGR]], %[[AGGR]]* %[[PTR1]], i32 1{{$}}
   // CHECK: %[[REMAIN:.*]] = sub i32 {{.*}}, 16
   // CHECK: %[[MEM:.*]] = bitcast %[[AGGR]]* %[[PTR2]] to i8*
-  // CHECK: call void @llvm.memset{{.*}}(i8* %[[MEM]], i8 0, i32 %[[REMAIN]],
+  // CHECK: call void @llvm.memset{{.*}}(i8* align {{[0-9]+}} %[[MEM]], i8 0, i32 %[[REMAIN]],
   struct Aggr { int a, b; };
   new Aggr[n] { 1, 2, 3 };
+}
+
+// SIO-LABEL: define void @_Z14constexpr_testv
+void constexpr_test() {
+  // SIO: call i8* @_Zna{{.}}(i32 4)
+  new int[0+1]{0};
 }

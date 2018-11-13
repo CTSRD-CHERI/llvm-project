@@ -30,7 +30,7 @@ namespace lldb_private {
 
 //----------------------------------------------------------------------
 /// @class UserExpression UserExpression.h "lldb/Expression/UserExpression.h"
-/// @brief Encapsulates a one-time expression for use in lldb.
+/// Encapsulates a one-time expression for use in lldb.
 ///
 /// LLDB uses expressions for various purposes, notably to call functions
 /// and as a backend for the expr command.  UserExpression is a virtual base
@@ -98,13 +98,41 @@ public:
                      lldb_private::ExecutionPolicy execution_policy,
                      bool keep_result_in_memory, bool generate_debug_info) = 0;
 
+  //------------------------------------------------------------------
+  /// Attempts to find possible command line completions for the given
+  /// (possible incomplete) user expression.
+  ///
+  /// @param[in] exe_ctx
+  ///     The execution context to use when looking up entities that
+  ///     are needed for parsing and completing (locations of functions, types
+  ///     of variables, persistent variables, etc.)
+  ///
+  /// @param[out] request
+  ///     The completion request to fill out. The completion should be a string
+  ///     that would complete the current token at the cursor position.
+  ///     Note that the string in the list replaces the current token
+  ///     in the command line.
+  ///
+  /// @param[in] complete_pos
+  ///     The position of the cursor inside the user expression string.
+  ///     The completion process starts on the token that the cursor is in.
+  ///
+  /// @return
+  ///     True if we added any completion results to the output;
+  ///     false otherwise.
+  //------------------------------------------------------------------
+  virtual bool Complete(ExecutionContext &exe_ctx, CompletionRequest &request,
+                        unsigned complete_pos) {
+    return false;
+  }
+
   virtual bool CanInterpret() = 0;
 
   bool MatchesContext(ExecutionContext &exe_ctx);
 
   //------------------------------------------------------------------
-  /// Execute the parsed expression by callinng the derived class's
-  /// DoExecute method.
+  /// Execute the parsed expression by callinng the derived class's DoExecute
+  /// method.
   ///
   /// @param[in] diagnostic_manager
   ///     A diagnostic manager to report errors to.
@@ -177,32 +205,29 @@ public:
 
   //------------------------------------------------------------------
   /// Return the function name that should be used for executing the
-  /// expression.  Text() should contain the definition of this
-  /// function.
+  /// expression.  Text() should contain the definition of this function.
   //------------------------------------------------------------------
   const char *FunctionName() override { return "$__lldb_expr"; }
 
   //------------------------------------------------------------------
-  /// Return the language that should be used when parsing.  To use
-  /// the default, return eLanguageTypeUnknown.
+  /// Return the language that should be used when parsing.  To use the
+  /// default, return eLanguageTypeUnknown.
   //------------------------------------------------------------------
   lldb::LanguageType Language() override { return m_language; }
 
   //------------------------------------------------------------------
-  /// Return the desired result type of the function, or
-  /// eResultTypeAny if indifferent.
+  /// Return the desired result type of the function, or eResultTypeAny if
+  /// indifferent.
   //------------------------------------------------------------------
   ResultType DesiredResultType() override { return m_desired_type; }
 
   //------------------------------------------------------------------
-  /// Return true if validation code should be inserted into the
-  /// expression.
+  /// Return true if validation code should be inserted into the expression.
   //------------------------------------------------------------------
   bool NeedsValidation() override { return true; }
 
   //------------------------------------------------------------------
-  /// Return true if external variables in the expression should be
-  /// resolved.
+  /// Return true if external variables in the expression should be resolved.
   //------------------------------------------------------------------
   bool NeedsVariableResolution() override { return true; }
 
@@ -216,8 +241,8 @@ public:
   virtual lldb::ModuleSP GetJITModule() { return lldb::ModuleSP(); }
 
   //------------------------------------------------------------------
-  /// Evaluate one expression in the scratch context of the
-  /// target passed in the exe_ctx and return its result.
+  /// Evaluate one expression in the scratch context of the target passed in
+  /// the exe_ctx and return its result.
   ///
   /// @param[in] exe_ctx
   ///     The execution context to use when evaluating the expression.
@@ -259,13 +284,13 @@ public:
   static lldb::ExpressionResults
   Evaluate(ExecutionContext &exe_ctx, const EvaluateExpressionOptions &options,
            llvm::StringRef expr_cstr, llvm::StringRef expr_prefix,
-           lldb::ValueObjectSP &result_valobj_sp, Error &error,
+           lldb::ValueObjectSP &result_valobj_sp, Status &error,
            uint32_t line_offset = 0, std::string *fixed_expression = nullptr,
            lldb::ModuleSP *jit_module_sp_ptr = nullptr);
 
-  static const Error::ValueType kNoResult =
+  static const Status::ValueType kNoResult =
       0x1001; ///< ValueObject::GetError() returns this if there is no result
-              ///from the expression.
+              /// from the expression.
 
   const char *GetFixedText() {
     if (m_fixed_text.empty())
@@ -281,7 +306,7 @@ protected:
             lldb::ExpressionVariableSP &result) = 0;
 
   static lldb::addr_t GetObjectPointer(lldb::StackFrameSP frame_sp,
-                                       ConstString &object_name, Error &err);
+                                       ConstString &object_name, Status &err);
 
   //------------------------------------------------------------------
   /// Populate m_in_cplusplus_method and m_in_objectivec_method based on the

@@ -14,11 +14,11 @@
 #include <algorithm>
 
 #include "lldb/Core/Module.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Expression/DWARFExpression.h"
 #include "lldb/Symbol/ObjectFile.h"
+#include "lldb/Utility/Stream.h"
 
-#include "DWARFCompileUnit.h"
+#include "DWARFUnit.h"
 #include "DWARFDIECollection.h"
 #include "DWARFDebugAbbrev.h"
 #include "DWARFDebugAranges.h"
@@ -34,7 +34,7 @@ using namespace std;
 extern int g_verbose;
 
 bool DWARFDebugInfoEntry::FastExtract(
-    const DWARFDataExtractor &debug_info_data, const DWARFCompileUnit *cu,
+    const DWARFDataExtractor &debug_info_data, const DWARFUnit *cu,
     const DWARFFormValue::FixedFormSizes &fixed_form_sizes,
     lldb::offset_t *offset_ptr) {
   m_offset = *offset_ptr;
@@ -122,18 +122,25 @@ bool DWARFDebugInfoEntry::FastExtract(
           case DW_FORM_data1:
           case DW_FORM_flag:
           case DW_FORM_ref1:
+          case DW_FORM_strx1:
             form_size = 1;
             break;
 
           // 2 byte values
           case DW_FORM_data2:
           case DW_FORM_ref2:
+          case DW_FORM_strx2:
             form_size = 2;
+            break;
+
+          case DW_FORM_strx3:
+            form_size = 3;
             break;
 
           // 4 byte values
           case DW_FORM_data4:
           case DW_FORM_ref4:
+          case DW_FORM_strx4:
             form_size = 4;
             break;
 
@@ -150,6 +157,7 @@ bool DWARFDebugInfoEntry::FastExtract(
           case DW_FORM_ref_udata:
           case DW_FORM_GNU_addr_index:
           case DW_FORM_GNU_str_index:
+          case DW_FORM_strx:
             debug_info_data.Skip_LEB128(&offset);
             break;
 
@@ -161,9 +169,9 @@ bool DWARFDebugInfoEntry::FastExtract(
           case DW_FORM_strp:
           case DW_FORM_sec_offset:
             if (cu->IsDWARF64())
-              debug_info_data.GetU64(offset_ptr);
+              debug_info_data.GetU64(&offset);
             else
-              debug_info_data.GetU32(offset_ptr);
+              debug_info_data.GetU32(&offset);
             break;
 
           default:
@@ -189,20 +197,20 @@ bool DWARFDebugInfoEntry::FastExtract(
 //----------------------------------------------------------------------
 // Extract
 //
-// Extract a debug info entry for a given compile unit from the
-// .debug_info and .debug_abbrev data within the SymbolFileDWARF class
-// starting at the given offset
+// Extract a debug info entry for a given compile unit from the .debug_info and
+// .debug_abbrev data within the SymbolFileDWARF class starting at the given
+// offset
 //----------------------------------------------------------------------
 bool DWARFDebugInfoEntry::Extract(SymbolFileDWARF *dwarf2Data,
-                                  const DWARFCompileUnit *cu,
+                                  const DWARFUnit *cu,
                                   lldb::offset_t *offset_ptr) {
-  const DWARFDataExtractor &debug_info_data = dwarf2Data->get_debug_info_data();
+  const DWARFDataExtractor &debug_info_data = cu->GetData();
   //    const DWARFDataExtractor& debug_str_data =
   //    dwarf2Data->get_debug_str_data();
   const uint32_t cu_end_offset = cu->GetNextCompileUnitOffset();
   lldb::offset_t offset = *offset_ptr;
   //  if (offset >= cu_end_offset)
-  //      Log::Error("DIE at offset 0x%8.8x is beyond the end of the current
+  //      Log::Status("DIE at offset 0x%8.8x is beyond the end of the current
   //      compile unit (0x%8.8x)", m_offset, cu_end_offset);
   if ((offset < cu_end_offset) && debug_info_data.ValidOffset(offset)) {
     m_offset = offset;
@@ -218,9 +226,10 @@ bool DWARFDebugInfoEntry::Extract(SymbolFileDWARF *dwarf2Data,
         m_tag = abbrevDecl->Tag();
         m_has_children = abbrevDecl->HasChildren();
 
-        bool isCompileUnitTag = m_tag == DW_TAG_compile_unit;
+        bool isCompileUnitTag = (m_tag == DW_TAG_compile_unit ||
+                                 m_tag == DW_TAG_partial_unit);
         if (cu && isCompileUnitTag)
-          const_cast<DWARFCompileUnit *>(cu)->SetBaseAddress(0);
+          const_cast<DWARFUnit *>(cu)->SetBaseAddress(0);
 
         // Skip all data in the .debug_info for the attributes
         const uint32_t numAttributes = abbrevDecl->NumAttributes();
@@ -235,7 +244,7 @@ bool DWARFDebugInfoEntry::Extract(SymbolFileDWARF *dwarf2Data,
             DWARFFormValue form_value(cu, form);
             if (form_value.ExtractValue(debug_info_data, &offset)) {
               if (attr == DW_AT_low_pc || attr == DW_AT_entry_pc)
-                const_cast<DWARFCompileUnit *>(cu)->SetBaseAddress(
+                const_cast<DWARFUnit *>(cu)->SetBaseAddress(
                     form_value.Address());
             }
           } else {
@@ -245,8 +254,7 @@ bool DWARFDebugInfoEntry::Extract(SymbolFileDWARF *dwarf2Data,
               uint32_t form_size = 0;
               switch (form) {
               // Blocks if inlined data that have a length field and the data
-              // bytes
-              // inlined in the .debug_info
+              // bytes inlined in the .debug_info
               case DW_FORM_exprloc:
               case DW_FORM_block:
                 form_size = debug_info_data.GetULEB128(&offset);
@@ -325,9 +333,9 @@ bool DWARFDebugInfoEntry::Extract(SymbolFileDWARF *dwarf2Data,
               case DW_FORM_strp:
               case DW_FORM_sec_offset:
                 if (cu->IsDWARF64())
-                  debug_info_data.GetU64(offset_ptr);
+                  debug_info_data.GetU64(&offset);
                 else
-                  debug_info_data.GetU32(offset_ptr);
+                  debug_info_data.GetU32(&offset);
                 break;
 
               default:
@@ -356,11 +364,11 @@ bool DWARFDebugInfoEntry::Extract(SymbolFileDWARF *dwarf2Data,
 //----------------------------------------------------------------------
 // DumpAncestry
 //
-// Dumps all of a debug information entries parents up until oldest and
-// all of it's attributes to the specified stream.
+// Dumps all of a debug information entries parents up until oldest and all of
+// it's attributes to the specified stream.
 //----------------------------------------------------------------------
 void DWARFDebugInfoEntry::DumpAncestry(SymbolFileDWARF *dwarf2Data,
-                                       const DWARFCompileUnit *cu,
+                                       const DWARFUnit *cu,
                                        const DWARFDebugInfoEntry *oldest,
                                        Stream &s,
                                        uint32_t recurse_depth) const {
@@ -374,11 +382,10 @@ void DWARFDebugInfoEntry::DumpAncestry(SymbolFileDWARF *dwarf2Data,
 // GetDIENamesAndRanges
 //
 // Gets the valid address ranges for a given DIE by looking for a
-// DW_AT_low_pc/DW_AT_high_pc pair, DW_AT_entry_pc, or DW_AT_ranges
-// attributes.
+// DW_AT_low_pc/DW_AT_high_pc pair, DW_AT_entry_pc, or DW_AT_ranges attributes.
 //----------------------------------------------------------------------
 bool DWARFDebugInfoEntry::GetDIENamesAndRanges(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu, const char *&name,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu, const char *&name,
     const char *&mangled, DWARFRangeList &ranges, int &decl_file,
     int &decl_line, int &decl_column, int &call_file, int &call_line,
     int &call_column, DWARFExpression *frame_base) const {
@@ -404,8 +411,7 @@ bool DWARFDebugInfoEntry::GetDIENamesAndRanges(
   lldb::ModuleSP module = dwarf2Data->GetObjectFile()->GetModule();
 
   if (abbrevDecl) {
-    const DWARFDataExtractor &debug_info_data =
-        dwarf2Data->get_debug_info_data();
+    const DWARFDataExtractor &debug_info_data = cu->GetData();
 
     if (!debug_info_data.ValidOffset(offset))
       return false;
@@ -451,9 +457,9 @@ bool DWARFDebugInfoEntry::GetDIENamesAndRanges(
           const DWARFDebugRanges *debug_ranges = dwarf2Data->DebugRanges();
           if (debug_ranges) {
             debug_ranges->FindRanges(cu->GetRangesBase(), form_value.Unsigned(), ranges);
-            // All DW_AT_ranges are relative to the base address of the
-            // compile unit. We add the compile unit base address to make
-            // sure all the addresses are properly fixed up.
+            // All DW_AT_ranges are relative to the base address of the compile
+            // unit. We add the compile unit base address to make sure all the
+            // addresses are properly fixed up.
             ranges.Slide(cu->GetBaseAddress());
           } else {
             cu->GetSymbolFileDWARF()->GetObjectFile()->GetModule()->ReportError(
@@ -582,13 +588,13 @@ bool DWARFDebugInfoEntry::GetDIENamesAndRanges(
 //----------------------------------------------------------------------
 // Dump
 //
-// Dumps a debug information entry and all of it's attributes to the
-// specified stream.
+// Dumps a debug information entry and all of it's attributes to the specified
+// stream.
 //----------------------------------------------------------------------
 void DWARFDebugInfoEntry::Dump(SymbolFileDWARF *dwarf2Data,
-                               const DWARFCompileUnit *cu, Stream &s,
+                               const DWARFUnit *cu, Stream &s,
                                uint32_t recurse_depth) const {
-  const DWARFDataExtractor &debug_info_data = dwarf2Data->get_debug_info_data();
+  const DWARFDataExtractor &debug_info_data = cu->GetData();
   lldb::offset_t offset = m_offset;
 
   if (debug_info_data.ValidOffset(offset)) {
@@ -639,8 +645,8 @@ void DWARFDebugInfoEntry::Dump(SymbolFileDWARF *dwarf2Data,
 }
 
 void DWARFDebugInfoEntry::DumpLocation(SymbolFileDWARF *dwarf2Data,
-                                       DWARFCompileUnit *cu, Stream &s) const {
-  const DWARFDIE cu_die = cu->GetCompileUnitDIEOnly();
+                                       DWARFUnit *cu, Stream &s) const {
+  const DWARFBaseDIE cu_die = cu->GetUnitDIEOnly();
   const char *cu_name = NULL;
   if (cu_die)
     cu_name = cu_die.GetName();
@@ -658,21 +664,17 @@ void DWARFDebugInfoEntry::DumpLocation(SymbolFileDWARF *dwarf2Data,
 //----------------------------------------------------------------------
 // DumpAttribute
 //
-// Dumps a debug information entry attribute along with it's form. Any
-// special display of attributes is done (disassemble location lists,
-// show enumeration values for attributes, etc).
+// Dumps a debug information entry attribute along with it's form. Any special
+// display of attributes is done (disassemble location lists, show enumeration
+// values for attributes, etc).
 //----------------------------------------------------------------------
 void DWARFDebugInfoEntry::DumpAttribute(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     const DWARFDataExtractor &debug_info_data, lldb::offset_t *offset_ptr,
     Stream &s, dw_attr_t attr, dw_form_t form) {
-  bool verbose = s.GetVerbose();
   bool show_form = s.GetFlags().Test(DWARFDebugInfo::eDumpFlag_ShowForm);
 
-  if (verbose)
-    s.Offset(*offset_ptr);
-  else
-    s.Printf("            ");
+  s.Printf("            ");
   s.Indent(DW_AT_value_to_name(attr));
 
   if (show_form) {
@@ -694,35 +696,18 @@ void DWARFDebugInfoEntry::DumpAttribute(
 
   s.PutCString("( ");
 
-  // Always dump form value if verbose is enabled
-  if (verbose) {
-    form_value.Dump(s);
-  }
-
   // Check to see if we have any special attribute formatters
   switch (attr) {
   case DW_AT_stmt_list:
-    if (verbose)
-      s.PutCString(" ( ");
     s.Printf("0x%8.8" PRIx64, form_value.Unsigned());
-    if (verbose)
-      s.PutCString(" )");
     break;
 
   case DW_AT_language:
-    if (verbose)
-      s.PutCString(" ( ");
     s.PutCString(DW_LANG_value_to_name(form_value.Unsigned()));
-    if (verbose)
-      s.PutCString(" )");
     break;
 
   case DW_AT_encoding:
-    if (verbose)
-      s.PutCString(" ( ");
     s.PutCString(DW_ATE_value_to_name(form_value.Unsigned()));
-    if (verbose)
-      s.PutCString(" )");
     break;
 
   case DW_AT_frame_base:
@@ -730,32 +715,19 @@ void DWARFDebugInfoEntry::DumpAttribute(
   case DW_AT_data_member_location: {
     const uint8_t *blockData = form_value.BlockData();
     if (blockData) {
-      if (!verbose)
-        form_value.Dump(s);
-
       // Location description is inlined in data in the form value
       DWARFDataExtractor locationData(debug_info_data,
                                       (*offset_ptr) - form_value.Unsigned(),
                                       form_value.Unsigned());
-      if (verbose)
-        s.PutCString(" ( ");
       DWARFExpression::PrintDWARFExpression(
-          s, locationData, DWARFCompileUnit::GetAddressByteSize(cu), 4, false);
-      if (verbose)
-        s.PutCString(" )");
+          s, locationData, DWARFUnit::GetAddressByteSize(cu), 4, false);
     } else {
-      // We have a location list offset as the value that is
-      // the offset into the .debug_loc section that describes
-      // the value over it's lifetime
+      // We have a location list offset as the value that is the offset into
+      // the .debug_loc section that describes the value over it's lifetime
       uint64_t debug_loc_offset = form_value.Unsigned();
       if (dwarf2Data) {
-        if (!verbose)
-          form_value.Dump(s);
         DWARFExpression::PrintDWARFLocationList(
             s, cu, dwarf2Data->get_debug_loc_data(), debug_loc_offset);
-      } else {
-        if (!verbose)
-          form_value.Dump(s);
       }
     }
   } break;
@@ -765,25 +737,17 @@ void DWARFDebugInfoEntry::DumpAttribute(
     uint64_t abstract_die_offset = form_value.Reference();
     form_value.Dump(s);
     //  *ostrm_ptr << HEX32 << abstract_die_offset << " ( ";
-    if (verbose)
-      s.PutCString(" ( ");
     GetName(dwarf2Data, cu, abstract_die_offset, s);
-    if (verbose)
-      s.PutCString(" )");
   } break;
 
   case DW_AT_type: {
     uint64_t type_die_offset = form_value.Reference();
-    if (!verbose)
-      form_value.Dump(s);
     s.PutCString(" ( ");
     AppendTypeName(dwarf2Data, cu, type_die_offset, s);
     s.PutCString(" )");
   } break;
 
   case DW_AT_ranges: {
-    if (!verbose)
-      form_value.Dump(s);
     lldb::offset_t ranges_offset = form_value.Unsigned();
     dw_addr_t base_addr = cu ? cu->GetBaseAddress() : 0;
     if (dwarf2Data)
@@ -792,8 +756,6 @@ void DWARFDebugInfoEntry::DumpAttribute(
   } break;
 
   default:
-    if (!verbose)
-      form_value.Dump(s);
     break;
   }
 
@@ -802,18 +764,18 @@ void DWARFDebugInfoEntry::DumpAttribute(
 
 //----------------------------------------------------------------------
 // Get all attribute values for a given DIE, including following any
-// specification or abstract origin attributes and including those in
-// the results. Any duplicate attributes will have the first instance
-// take precedence (this can happen for declaration attributes).
+// specification or abstract origin attributes and including those in the
+// results. Any duplicate attributes will have the first instance take
+// precedence (this can happen for declaration attributes).
 //----------------------------------------------------------------------
 size_t DWARFDebugInfoEntry::GetAttributes(
-    const DWARFCompileUnit *cu, DWARFFormValue::FixedFormSizes fixed_form_sizes,
+    const DWARFUnit *cu, DWARFFormValue::FixedFormSizes fixed_form_sizes,
     DWARFAttributes &attributes, uint32_t curr_depth) const {
   SymbolFileDWARF *dwarf2Data = nullptr;
   const DWARFAbbreviationDeclaration *abbrevDecl = nullptr;
   lldb::offset_t offset = 0;
   if (cu) {
-    if (m_tag != DW_TAG_compile_unit) {
+    if (m_tag != DW_TAG_compile_unit && m_tag != DW_TAG_partial_unit) {
       SymbolFileDWARFDwo *dwo_symbol_file = cu->GetDwoSymbolFile();
       if (dwo_symbol_file)
         return GetAttributes(dwo_symbol_file->GetCompileUnit(),
@@ -825,8 +787,7 @@ size_t DWARFDebugInfoEntry::GetAttributes(
   }
 
   if (abbrevDecl) {
-    const DWARFDataExtractor &debug_info_data =
-        dwarf2Data->get_debug_info_data();
+    const DWARFDataExtractor &debug_info_data = cu->GetData();
 
     if (fixed_form_sizes.Empty())
       fixed_form_sizes = DWARFFormValue::GetFixedFormSizesForAddressSize(
@@ -846,9 +807,9 @@ size_t DWARFDebugInfoEntry::GetAttributes(
       case DW_AT_sibling:
       case DW_AT_declaration:
         if (curr_depth > 0) {
-          // This attribute doesn't make sense when combined with
-          // the DIE that references this DIE. We know a DIE is
-          // referencing this DIE because curr_depth is not zero
+          // This attribute doesn't make sense when combined with the DIE that
+          // references this DIE. We know a DIE is referencing this DIE because
+          // curr_depth is not zero
           break;
         }
         LLVM_FALLTHROUGH;
@@ -862,7 +823,7 @@ size_t DWARFDebugInfoEntry::GetAttributes(
         if (form_value.ExtractValue(debug_info_data, &offset)) {
           dw_offset_t die_offset = form_value.Reference();
           DWARFDIE spec_die =
-              const_cast<DWARFCompileUnit *>(cu)->GetDIE(die_offset);
+              const_cast<DWARFUnit *>(cu)->GetDIE(die_offset);
           if (spec_die)
             spec_die.GetAttributes(attributes, curr_depth + 1);
         }
@@ -884,17 +845,18 @@ size_t DWARFDebugInfoEntry::GetAttributes(
 // GetAttributeValue
 //
 // Get the value of an attribute and return the .debug_info offset of the
-// attribute if it was properly extracted into form_value, or zero
-// if we fail since an offset of zero is invalid for an attribute (it
-// would be a compile unit header).
+// attribute if it was properly extracted into form_value, or zero if we fail
+// since an offset of zero is invalid for an attribute (it would be a compile
+// unit header).
 //----------------------------------------------------------------------
 dw_offset_t DWARFDebugInfoEntry::GetAttributeValue(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     const dw_attr_t attr, DWARFFormValue &form_value,
     dw_offset_t *end_attr_offset_ptr,
     bool check_specification_or_abstract_origin) const {
   SymbolFileDWARFDwo *dwo_symbol_file = cu->GetDwoSymbolFile();
-  if (dwo_symbol_file && m_tag != DW_TAG_compile_unit)
+  if (dwo_symbol_file && m_tag != DW_TAG_compile_unit &&
+                         m_tag != DW_TAG_partial_unit)
     return GetAttributeValue(dwo_symbol_file, dwo_symbol_file->GetCompileUnit(),
                              attr, form_value, end_attr_offset_ptr,
                              check_specification_or_abstract_origin);
@@ -907,8 +869,7 @@ dw_offset_t DWARFDebugInfoEntry::GetAttributeValue(
     uint32_t attr_idx = abbrevDecl->FindAttributeIndex(attr);
 
     if (attr_idx != DW_INVALID_INDEX) {
-      const DWARFDataExtractor &debug_info_data =
-          dwarf2Data->get_debug_info_data();
+      const DWARFDataExtractor &debug_info_data = cu->GetData();
 
       uint32_t idx = 0;
       while (idx < attr_idx)
@@ -929,7 +890,7 @@ dw_offset_t DWARFDebugInfoEntry::GetAttributeValue(
   if (check_specification_or_abstract_origin) {
     if (GetAttributeValue(dwarf2Data, cu, DW_AT_specification, form_value)) {
       DWARFDIE die =
-          const_cast<DWARFCompileUnit *>(cu)->GetDIE(form_value.Reference());
+          const_cast<DWARFUnit *>(cu)->GetDIE(form_value.Reference());
       if (die) {
         dw_offset_t die_offset = die.GetDIE()->GetAttributeValue(
             die.GetDWARF(), die.GetCU(), attr, form_value, end_attr_offset_ptr,
@@ -941,7 +902,7 @@ dw_offset_t DWARFDebugInfoEntry::GetAttributeValue(
 
     if (GetAttributeValue(dwarf2Data, cu, DW_AT_abstract_origin, form_value)) {
       DWARFDIE die =
-          const_cast<DWARFCompileUnit *>(cu)->GetDIE(form_value.Reference());
+          const_cast<DWARFUnit *>(cu)->GetDIE(form_value.Reference());
       if (die) {
         dw_offset_t die_offset = die.GetDIE()->GetAttributeValue(
             die.GetDWARF(), die.GetCU(), attr, form_value, end_attr_offset_ptr,
@@ -955,11 +916,11 @@ dw_offset_t DWARFDebugInfoEntry::GetAttributeValue(
   if (!dwo_symbol_file)
     return 0;
 
-  DWARFCompileUnit *dwo_cu = dwo_symbol_file->GetCompileUnit();
+  DWARFUnit *dwo_cu = dwo_symbol_file->GetCompileUnit();
   if (!dwo_cu)
     return 0;
 
-  DWARFDIE dwo_cu_die = dwo_cu->GetCompileUnitDIEOnly();
+  DWARFBaseDIE dwo_cu_die = dwo_cu->GetUnitDIEOnly();
   if (!dwo_cu_die.IsValid())
     return 0;
 
@@ -971,13 +932,13 @@ dw_offset_t DWARFDebugInfoEntry::GetAttributeValue(
 //----------------------------------------------------------------------
 // GetAttributeValueAsString
 //
-// Get the value of an attribute as a string return it. The resulting
-// pointer to the string data exists within the supplied SymbolFileDWARF
-// and will only be available as long as the SymbolFileDWARF is still around
-// and it's content doesn't change.
+// Get the value of an attribute as a string return it. The resulting pointer
+// to the string data exists within the supplied SymbolFileDWARF and will only
+// be available as long as the SymbolFileDWARF is still around and it's content
+// doesn't change.
 //----------------------------------------------------------------------
 const char *DWARFDebugInfoEntry::GetAttributeValueAsString(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     const dw_attr_t attr, const char *fail_value,
     bool check_specification_or_abstract_origin) const {
   DWARFFormValue form_value;
@@ -993,7 +954,7 @@ const char *DWARFDebugInfoEntry::GetAttributeValueAsString(
 // Get the value of an attribute as unsigned and return it.
 //----------------------------------------------------------------------
 uint64_t DWARFDebugInfoEntry::GetAttributeValueAsUnsigned(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     const dw_attr_t attr, uint64_t fail_value,
     bool check_specification_or_abstract_origin) const {
   DWARFFormValue form_value;
@@ -1009,7 +970,7 @@ uint64_t DWARFDebugInfoEntry::GetAttributeValueAsUnsigned(
 // Get the value of an attribute a signed value and return it.
 //----------------------------------------------------------------------
 int64_t DWARFDebugInfoEntry::GetAttributeValueAsSigned(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     const dw_attr_t attr, int64_t fail_value,
     bool check_specification_or_abstract_origin) const {
   DWARFFormValue form_value;
@@ -1022,11 +983,11 @@ int64_t DWARFDebugInfoEntry::GetAttributeValueAsSigned(
 //----------------------------------------------------------------------
 // GetAttributeValueAsReference
 //
-// Get the value of an attribute as reference and fix up and compile
-// unit relative offsets as needed.
+// Get the value of an attribute as reference and fix up and compile unit
+// relative offsets as needed.
 //----------------------------------------------------------------------
 uint64_t DWARFDebugInfoEntry::GetAttributeValueAsReference(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     const dw_attr_t attr, uint64_t fail_value,
     bool check_specification_or_abstract_origin) const {
   DWARFFormValue form_value;
@@ -1037,7 +998,7 @@ uint64_t DWARFDebugInfoEntry::GetAttributeValueAsReference(
 }
 
 uint64_t DWARFDebugInfoEntry::GetAttributeValueAsAddress(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     const dw_attr_t attr, uint64_t fail_value,
     bool check_specification_or_abstract_origin) const {
   DWARFFormValue form_value;
@@ -1050,13 +1011,13 @@ uint64_t DWARFDebugInfoEntry::GetAttributeValueAsAddress(
 //----------------------------------------------------------------------
 // GetAttributeHighPC
 //
-// Get the hi_pc, adding hi_pc to lo_pc when specified
-// as an <offset-from-low-pc>.
+// Get the hi_pc, adding hi_pc to lo_pc when specified as an <offset-from-low-
+// pc>.
 //
 // Returns the hi_pc or fail_value.
 //----------------------------------------------------------------------
 dw_addr_t DWARFDebugInfoEntry::GetAttributeHighPC(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu, dw_addr_t lo_pc,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu, dw_addr_t lo_pc,
     uint64_t fail_value, bool check_specification_or_abstract_origin) const {
   DWARFFormValue form_value;
   if (GetAttributeValue(dwarf2Data, cu, DW_AT_high_pc, form_value, nullptr,
@@ -1074,13 +1035,13 @@ dw_addr_t DWARFDebugInfoEntry::GetAttributeHighPC(
 //----------------------------------------------------------------------
 // GetAttributeAddressRange
 //
-// Get the lo_pc and hi_pc, adding hi_pc to lo_pc when specified
-// as an <offset-from-low-pc>.
+// Get the lo_pc and hi_pc, adding hi_pc to lo_pc when specified as an <offset-
+// from-low-pc>.
 //
 // Returns true or sets lo_pc and hi_pc to fail_value.
 //----------------------------------------------------------------------
 bool DWARFDebugInfoEntry::GetAttributeAddressRange(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu, dw_addr_t &lo_pc,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu, dw_addr_t &lo_pc,
     dw_addr_t &hi_pc, uint64_t fail_value,
     bool check_specification_or_abstract_origin) const {
   lo_pc = GetAttributeValueAsAddress(dwarf2Data, cu, DW_AT_low_pc, fail_value,
@@ -1097,7 +1058,7 @@ bool DWARFDebugInfoEntry::GetAttributeAddressRange(
 }
 
 size_t DWARFDebugInfoEntry::GetAttributeAddressRanges(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     DWARFRangeList &ranges, bool check_hi_lo_pc,
     bool check_specification_or_abstract_origin) const {
   ranges.Clear();
@@ -1126,23 +1087,23 @@ size_t DWARFDebugInfoEntry::GetAttributeAddressRanges(
 //----------------------------------------------------------------------
 // GetName
 //
-// Get value of the DW_AT_name attribute and return it if one exists,
-// else return NULL.
+// Get value of the DW_AT_name attribute and return it if one exists, else
+// return NULL.
 //----------------------------------------------------------------------
 const char *DWARFDebugInfoEntry::GetName(SymbolFileDWARF *dwarf2Data,
-                                         const DWARFCompileUnit *cu) const {
+                                         const DWARFUnit *cu) const {
   return GetAttributeValueAsString(dwarf2Data, cu, DW_AT_name, nullptr, true);
 }
 
 //----------------------------------------------------------------------
 // GetMangledName
 //
-// Get value of the DW_AT_MIPS_linkage_name attribute and return it if
-// one exists, else return the value of the DW_AT_name attribute
+// Get value of the DW_AT_MIPS_linkage_name attribute and return it if one
+// exists, else return the value of the DW_AT_name attribute
 //----------------------------------------------------------------------
 const char *
 DWARFDebugInfoEntry::GetMangledName(SymbolFileDWARF *dwarf2Data,
-                                    const DWARFCompileUnit *cu,
+                                    const DWARFUnit *cu,
                                     bool substitute_name_allowed) const {
   const char *name = nullptr;
 
@@ -1166,11 +1127,11 @@ DWARFDebugInfoEntry::GetMangledName(SymbolFileDWARF *dwarf2Data,
 //----------------------------------------------------------------------
 // GetPubname
 //
-// Get value the name for a DIE as it should appear for a
-// .debug_pubnames or .debug_pubtypes section.
+// Get value the name for a DIE as it should appear for a .debug_pubnames or
+// .debug_pubtypes section.
 //----------------------------------------------------------------------
 const char *DWARFDebugInfoEntry::GetPubname(SymbolFileDWARF *dwarf2Data,
-                                            const DWARFCompileUnit *cu) const {
+                                            const DWARFUnit *cu) const {
   const char *name = nullptr;
   if (!dwarf2Data)
     return name;
@@ -1192,14 +1153,13 @@ const char *DWARFDebugInfoEntry::GetPubname(SymbolFileDWARF *dwarf2Data,
 //----------------------------------------------------------------------
 // GetName
 //
-// Get value of the DW_AT_name attribute for a debug information entry
-// that exists at offset "die_offset" and place that value into the
-// supplied stream object. If the DIE is a NULL object "NULL" is placed
-// into the stream, and if no DW_AT_name attribute exists for the DIE
-// then nothing is printed.
+// Get value of the DW_AT_name attribute for a debug information entry that
+// exists at offset "die_offset" and place that value into the supplied stream
+// object. If the DIE is a NULL object "NULL" is placed into the stream, and if
+// no DW_AT_name attribute exists for the DIE then nothing is printed.
 //----------------------------------------------------------------------
 bool DWARFDebugInfoEntry::GetName(SymbolFileDWARF *dwarf2Data,
-                                  const DWARFCompileUnit *cu,
+                                  const DWARFUnit *cu,
                                   const dw_offset_t die_offset, Stream &s) {
   if (dwarf2Data == NULL) {
     s.PutCString("NULL");
@@ -1227,13 +1187,12 @@ bool DWARFDebugInfoEntry::GetName(SymbolFileDWARF *dwarf2Data,
 //----------------------------------------------------------------------
 // AppendTypeName
 //
-// Follows the type name definition down through all needed tags to
-// end up with a fully qualified type name and dump the results to
-// the supplied stream. This is used to show the name of types given
-// a type identifier.
+// Follows the type name definition down through all needed tags to end up with
+// a fully qualified type name and dump the results to the supplied stream.
+// This is used to show the name of types given a type identifier.
 //----------------------------------------------------------------------
 bool DWARFDebugInfoEntry::AppendTypeName(SymbolFileDWARF *dwarf2Data,
-                                         const DWARFCompileUnit *cu,
+                                         const DWARFUnit *cu,
                                          const dw_offset_t die_offset,
                                          Stream &s) {
   if (dwarf2Data == NULL) {
@@ -1357,24 +1316,11 @@ bool DWARFDebugInfoEntry::AppendTypeName(SymbolFileDWARF *dwarf2Data,
   return false;
 }
 
-bool DWARFDebugInfoEntry::Contains(const DWARFDebugInfoEntry *die) const {
-  if (die) {
-    const dw_offset_t die_offset = die->GetOffset();
-    if (die_offset > GetOffset()) {
-      const DWARFDebugInfoEntry *sibling = GetSibling();
-      assert(sibling); // TODO: take this out
-      if (sibling)
-        return die_offset < sibling->GetOffset();
-    }
-  }
-  return false;
-}
-
 //----------------------------------------------------------------------
 // BuildAddressRangeTable
 //----------------------------------------------------------------------
 void DWARFDebugInfoEntry::BuildAddressRangeTable(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     DWARFDebugAranges *debug_aranges) const {
   if (m_tag) {
     if (m_tag == DW_TAG_subprogram) {
@@ -1399,13 +1345,13 @@ void DWARFDebugInfoEntry::BuildAddressRangeTable(
 //----------------------------------------------------------------------
 // BuildFunctionAddressRangeTable
 //
-// This function is very similar to the BuildAddressRangeTable function
-// except that the actual DIE offset for the function is placed in the
-// table instead of the compile unit offset (which is the way the
-// standard .debug_aranges section does it).
+// This function is very similar to the BuildAddressRangeTable function except
+// that the actual DIE offset for the function is placed in the table instead
+// of the compile unit offset (which is the way the standard .debug_aranges
+// section does it).
 //----------------------------------------------------------------------
 void DWARFDebugInfoEntry::BuildFunctionAddressRangeTable(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     DWARFDebugAranges *debug_aranges) const {
   if (m_tag) {
     if (m_tag == DW_TAG_subprogram) {
@@ -1428,21 +1374,22 @@ void DWARFDebugInfoEntry::BuildFunctionAddressRangeTable(
 }
 
 void DWARFDebugInfoEntry::GetDeclContextDIEs(
-    DWARFCompileUnit *cu, DWARFDIECollection &decl_context_dies) const {
+    DWARFUnit *cu, DWARFDIECollection &decl_context_dies) const {
 
   DWARFDIE die(cu, const_cast<DWARFDebugInfoEntry *>(this));
   die.GetDeclContextDIEs(decl_context_dies);
 }
 
 void DWARFDebugInfoEntry::GetDWARFDeclContext(
-    SymbolFileDWARF *dwarf2Data, DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, DWARFUnit *cu,
     DWARFDeclContext &dwarf_decl_ctx) const {
   const dw_tag_t tag = Tag();
-  if (tag != DW_TAG_compile_unit) {
+  if (tag != DW_TAG_compile_unit && tag != DW_TAG_partial_unit) {
     dwarf_decl_ctx.AppendDeclContext(tag, GetName(dwarf2Data, cu));
     DWARFDIE parent_decl_ctx_die = GetParentDeclContextDIE(dwarf2Data, cu);
     if (parent_decl_ctx_die && parent_decl_ctx_die.GetDIE() != this) {
-      if (parent_decl_ctx_die.Tag() != DW_TAG_compile_unit)
+      if (parent_decl_ctx_die.Tag() != DW_TAG_compile_unit &&
+          parent_decl_ctx_die.Tag() != DW_TAG_partial_unit)
         parent_decl_ctx_die.GetDIE()->GetDWARFDeclContext(
             parent_decl_ctx_die.GetDWARF(), parent_decl_ctx_die.GetCU(),
             dwarf_decl_ctx);
@@ -1451,7 +1398,7 @@ void DWARFDebugInfoEntry::GetDWARFDeclContext(
 }
 
 bool DWARFDebugInfoEntry::MatchesDWARFDeclContext(
-    SymbolFileDWARF *dwarf2Data, DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, DWARFUnit *cu,
     const DWARFDeclContext &dwarf_decl_ctx) const {
 
   DWARFDeclContext this_dwarf_decl_ctx;
@@ -1461,7 +1408,7 @@ bool DWARFDebugInfoEntry::MatchesDWARFDeclContext(
 
 DWARFDIE
 DWARFDebugInfoEntry::GetParentDeclContextDIE(SymbolFileDWARF *dwarf2Data,
-                                             DWARFCompileUnit *cu) const {
+                                             DWARFUnit *cu) const {
   DWARFAttributes attributes;
   GetAttributes(cu, DWARFFormValue::FixedFormSizes(), attributes);
   return GetParentDeclContextDIE(dwarf2Data, cu, attributes);
@@ -1469,17 +1416,18 @@ DWARFDebugInfoEntry::GetParentDeclContextDIE(SymbolFileDWARF *dwarf2Data,
 
 DWARFDIE
 DWARFDebugInfoEntry::GetParentDeclContextDIE(
-    SymbolFileDWARF *dwarf2Data, DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, DWARFUnit *cu,
     const DWARFAttributes &attributes) const {
   DWARFDIE die(cu, const_cast<DWARFDebugInfoEntry *>(this));
 
   while (die) {
-    // If this is the original DIE that we are searching for a declaration
-    // for, then don't look in the cache as we don't want our own decl
-    // context to be our decl context...
+    // If this is the original DIE that we are searching for a declaration for,
+    // then don't look in the cache as we don't want our own decl context to be
+    // our decl context...
     if (die.GetDIE() != this) {
       switch (die.Tag()) {
       case DW_TAG_compile_unit:
+      case DW_TAG_partial_unit:
       case DW_TAG_namespace:
       case DW_TAG_structure_type:
       case DW_TAG_union_type:
@@ -1521,7 +1469,7 @@ DWARFDebugInfoEntry::GetParentDeclContextDIE(
 }
 
 const char *DWARFDebugInfoEntry::GetQualifiedName(SymbolFileDWARF *dwarf2Data,
-                                                  DWARFCompileUnit *cu,
+                                                  DWARFUnit *cu,
                                                   std::string &storage) const {
   DWARFAttributes attributes;
   GetAttributes(cu, DWARFFormValue::FixedFormSizes(), attributes);
@@ -1529,7 +1477,7 @@ const char *DWARFDebugInfoEntry::GetQualifiedName(SymbolFileDWARF *dwarf2Data,
 }
 
 const char *DWARFDebugInfoEntry::GetQualifiedName(
-    SymbolFileDWARF *dwarf2Data, DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, DWARFUnit *cu,
     const DWARFAttributes &attributes, std::string &storage) const {
 
   const char *name = GetName(dwarf2Data, cu);
@@ -1585,7 +1533,7 @@ const char *DWARFDebugInfoEntry::GetQualifiedName(
 //----------------------------------------------------------------------
 bool DWARFDebugInfoEntry::LookupAddress(const dw_addr_t address,
                                         SymbolFileDWARF *dwarf2Data,
-                                        const DWARFCompileUnit *cu,
+                                        const DWARFUnit *cu,
                                         DWARFDebugInfoEntry **function_die,
                                         DWARFDebugInfoEntry **block_die) {
   bool found_address = false;
@@ -1690,6 +1638,8 @@ bool DWARFDebugInfoEntry::LookupAddress(const dw_addr_t address,
       break;
     case DW_TAG_template_value_parameter:
       break;
+    case DW_TAG_GNU_template_parameter_pack:
+      break;
     case DW_TAG_thrown_type:
       break;
     case DW_TAG_try_block:
@@ -1715,6 +1665,7 @@ bool DWARFDebugInfoEntry::LookupAddress(const dw_addr_t address,
     case DW_TAG_unspecified_type:
       break;
     case DW_TAG_partial_unit:
+      match_addr_range = true;
       break;
     case DW_TAG_imported_unit:
       break;
@@ -1738,6 +1689,7 @@ bool DWARFDebugInfoEntry::LookupAddress(const dw_addr_t address,
             //  puts("***MATCH***");
             switch (m_tag) {
             case DW_TAG_compile_unit: // File
+            case DW_TAG_partial_unit: // File
               check_children = ((function_die != NULL) || (block_die != NULL));
               break;
 
@@ -1760,10 +1712,12 @@ bool DWARFDebugInfoEntry::LookupAddress(const dw_addr_t address,
               break;
             }
           }
-        } else { // compile units may not have a valid high/low pc when there
+        } else {
+          // Compile units may not have a valid high/low pc when there
           // are address gaps in subroutines so we must always search
-          // if there is no valid high and low PC
-          check_children = (m_tag == DW_TAG_compile_unit) &&
+          // if there is no valid high and low PC.
+          check_children = (m_tag == DW_TAG_compile_unit ||
+                            m_tag == DW_TAG_partial_unit) &&
                            ((function_die != NULL) || (block_die != NULL));
         }
       } else {
@@ -1773,15 +1727,16 @@ bool DWARFDebugInfoEntry::LookupAddress(const dw_addr_t address,
           DWARFRangeList ranges;
           DWARFDebugRanges *debug_ranges = dwarf2Data->DebugRanges();
           debug_ranges->FindRanges(cu->GetRangesBase(), debug_ranges_offset, ranges);
-          // All DW_AT_ranges are relative to the base address of the
-          // compile unit. We add the compile unit base address to make
-          // sure all the addresses are properly fixed up.
+          // All DW_AT_ranges are relative to the base address of the compile
+          // unit. We add the compile unit base address to make sure all the
+          // addresses are properly fixed up.
           ranges.Slide(cu->GetBaseAddress());
           if (ranges.FindEntryThatContains(address)) {
             found_address = true;
             //  puts("***MATCH***");
             switch (m_tag) {
             case DW_TAG_compile_unit: // File
+            case DW_TAG_partial_unit: // File
               check_children = ((function_die != NULL) || (block_die != NULL));
               break;
 
@@ -1826,7 +1781,7 @@ bool DWARFDebugInfoEntry::LookupAddress(const dw_addr_t address,
 
 const DWARFAbbreviationDeclaration *
 DWARFDebugInfoEntry::GetAbbreviationDeclarationPtr(
-    SymbolFileDWARF *dwarf2Data, const DWARFCompileUnit *cu,
+    SymbolFileDWARF *dwarf2Data, const DWARFUnit *cu,
     lldb::offset_t &offset) const {
   if (dwarf2Data) {
     offset = GetOffset();
@@ -1836,11 +1791,10 @@ DWARFDebugInfoEntry::GetAbbreviationDeclarationPtr(
       const DWARFAbbreviationDeclaration *abbrev_decl =
           abbrev_set->GetAbbreviationDeclaration(m_abbr_idx);
       if (abbrev_decl) {
-        // Make sure the abbreviation code still matches. If it doesn't and
-        // the DWARF data was mmap'ed, the backing file might have been modified
+        // Make sure the abbreviation code still matches. If it doesn't and the
+        // DWARF data was mmap'ed, the backing file might have been modified
         // which is bad news.
-        const uint64_t abbrev_code =
-            dwarf2Data->get_debug_info_data().GetULEB128(&offset);
+        const uint64_t abbrev_code = cu->GetData().GetULEB128(&offset);
 
         if (abbrev_decl->Code() == abbrev_code)
           return abbrev_decl;
@@ -1878,4 +1832,16 @@ void DWARFDebugInfoEntry::DumpDIECollection(
                 DW_TAG_value_to_name(die_ref.Tag()),
                 die_ref.HasChildren() ? " *" : "");
   }
+}
+
+bool DWARFDebugInfoEntry::operator==(const DWARFDebugInfoEntry &rhs) const {
+  return m_offset == rhs.m_offset && m_parent_idx == rhs.m_parent_idx &&
+         m_sibling_idx == rhs.m_sibling_idx &&
+         m_empty_children == rhs.m_empty_children &&
+         m_abbr_idx == rhs.m_abbr_idx && m_has_children == rhs.m_has_children &&
+         m_tag == rhs.m_tag;
+}
+
+bool DWARFDebugInfoEntry::operator!=(const DWARFDebugInfoEntry &rhs) const {
+  return !(*this == rhs);
 }

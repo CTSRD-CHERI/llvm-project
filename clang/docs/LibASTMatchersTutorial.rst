@@ -113,6 +113,7 @@ CMakeLists.txt should have the following contents:
         LoopConvert.cpp
         )
       target_link_libraries(loop-convert
+        PRIVATE
         clangTooling
         clangBasic
         clangASTMatchers
@@ -146,7 +147,7 @@ documentation <LibTooling.html>`_.
       static cl::extrahelp CommonHelp(CommonOptionsParser::HelpMessage);
 
       // A help message for this specific tool can be added afterwards.
-      static cl::extrahelp MoreHelp("\nMore help text...");
+      static cl::extrahelp MoreHelp("\nMore help text...\n");
 
       int main(int argc, const char **argv) {
         CommonOptionsParser OptionsParser(argc, argv, MyToolCategory);
@@ -496,9 +497,9 @@ And change ``LoopPrinter::run`` to
 
       void LoopPrinter::run(const MatchFinder::MatchResult &Result) {
         ASTContext *Context = Result.Context;
-        const ForStmt *FS = Result.Nodes.getStmtAs<ForStmt>("forLoop");
+        const ForStmt *FS = Result.Nodes.getNodeAs<ForStmt>("forLoop");
         // We do not want to convert header files!
-        if (!FS || !Context->getSourceManager().isFromMainFile(FS->getForLoc()))
+        if (!FS || !Context->getSourceManager().isWrittenInMainFile(FS->getForLoc()))
           return;
         const VarDecl *IncVar = Result.Nodes.getNodeAs<VarDecl>("incVarName");
         const VarDecl *CondVar = Result.Nodes.getNodeAs<VarDecl>("condVarName");

@@ -1,4 +1,4 @@
-//===--- AvoidBindCheck.cpp - clang-tidy--------------------------------===//
+//===--- AvoidBindCheck.cpp - clang-tidy-----------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,12 +6,25 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+
 #include "AvoidBindCheck.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
+#include "clang/Basic/LLVM.h"
+#include "clang/Basic/LangOptions.h"
+#include "clang/Basic/SourceLocation.h"
 #include "clang/Lex/Lexer.h"
-#include <cassert>
-#include <unordered_map>
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/Regex.h"
+#include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cstddef>
+#include <string>
 
 using namespace clang::ast_matchers;
 
@@ -20,6 +33,7 @@ namespace tidy {
 namespace modernize {
 
 namespace {
+
 enum BindArgumentKind { BK_Temporary, BK_Placeholder, BK_CallExpr, BK_Other };
 
 struct BindArgument {
@@ -45,7 +59,7 @@ buildBindArguments(const MatchFinder::MatchResult &Result, const CallExpr *C) {
     }
 
     B.Tokens = Lexer::getSourceText(
-        CharSourceRange::getTokenRange(E->getLocStart(), E->getLocEnd()),
+        CharSourceRange::getTokenRange(E->getBeginLoc(), E->getEndLoc()),
         *Result.SourceManager, Result.Context->getLangOpts());
 
     SmallVector<StringRef, 2> Matches;
@@ -117,7 +131,7 @@ void AvoidBindCheck::registerMatchers(MatchFinder *Finder) {
 
 void AvoidBindCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *MatchedDecl = Result.Nodes.getNodeAs<CallExpr>("bind");
-  auto Diag = diag(MatchedDecl->getLocStart(), "prefer a lambda to std::bind");
+  auto Diag = diag(MatchedDecl->getBeginLoc(), "prefer a lambda to std::bind");
 
   const auto Args = buildBindArguments(Result, MatchedDecl);
 

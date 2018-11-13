@@ -15,11 +15,11 @@
 #include "MinidumpTypes.h"
 
 // Other libraries and framework includes
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/Error.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/StopInfo.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Status.h"
 
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
@@ -53,15 +53,17 @@ public:
   bool CanDebug(lldb::TargetSP target_sp,
                 bool plugin_specified_by_name) override;
 
-  Error DoLoadCore() override;
+  Status DoLoadCore() override;
 
-  DynamicLoader *GetDynamicLoader() override;
+  DynamicLoader *GetDynamicLoader() override { return nullptr; }
 
   ConstString GetPluginName() override;
 
   uint32_t GetPluginVersion() override;
 
-  Error DoDestroy() override;
+  SystemRuntime *GetSystemRuntime() override { return nullptr; }
+
+  Status DoDestroy() override;
 
   void RefreshStateAfterStop() override;
 
@@ -70,17 +72,25 @@ public:
   bool WarnBeforeDetach() const override;
 
   size_t ReadMemory(lldb::addr_t addr, void *buf, size_t size,
-                    Error &error) override;
+                    Status &error) override;
 
   size_t DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
-                      Error &error) override;
+                      Status &error) override;
 
   ArchSpec GetArchitecture();
 
-  Error GetMemoryRegionInfo(lldb::addr_t load_addr,
-                            MemoryRegionInfo &range_info) override;
+  Status GetMemoryRegionInfo(lldb::addr_t load_addr,
+                             MemoryRegionInfo &range_info) override;
 
   bool GetProcessInfo(ProcessInstanceInfo &info) override;
+
+  Status WillResume() override {
+    Status error;
+    error.SetErrorStringWithFormat(
+        "error: %s does not support resuming processes",
+        GetPluginName().GetCString());
+    return error;
+  }
 
   MinidumpParser m_minidump_parser;
 
@@ -91,6 +101,8 @@ protected:
                         ThreadList &new_thread_list) override;
 
   void ReadModuleList();
+
+  JITLoaderList &GetJITLoaders() override;
 
 private:
   FileSpec m_core_file;

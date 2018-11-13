@@ -38,6 +38,13 @@ B
 **BB Vectorization**
     Basic-Block Vectorization
 
+**BDCE**
+    Bit-tracking dead code elimination. Some bit-wise instructions (shifts,
+    ands, ors, etc.) "kill" some of their input bits -- that is, they make it
+    such that those bits can be either zero or one without affecting control or
+    data flow of a program. The BDCE pass removes instructions that only
+    compute these dead bits.
+
 **BURS**
     Bottom Up Rewriting System --- A method of instruction selection for code
     generation.  An example is the `BURG
@@ -102,6 +109,18 @@ G
     Garbage Collection. The practice of using reachability analysis instead of
     explicit memory management to reclaim unused memory.
 
+**GEP**
+    ``GetElementPtr``. An LLVM IR instruction that is used to get the address
+    of a subelement of an aggregate data structure. It is documented in detail
+    `here <http://llvm.org/docs/GetElementPtr.html>`_.
+
+**GVN**
+    Global Value Numbering. GVN is a pass that partitions values computed by a
+    function into congruence classes. Values ending up in the same congruence
+    class are guaranteed to be the same for every execution of the program.
+    In that respect, congruency is a compile-time approximation of equivalence
+    of values at runtime.
+
 H
 -
 
@@ -113,6 +132,12 @@ H
 
 I
 -
+
+**ICE**
+    Internal Compiler Error. This abbreviation is used to describe errors
+    that occur in LLVM or Clang as they are compiling source code. For example,
+    if a valid C++ source program were to trigger an assert in Clang when
+    compiled, that could be referred to as an "ICE".
 
 **IPA**
     Inter-Procedural Analysis. Refers to any variety of code analysis that
@@ -160,6 +185,7 @@ M
 
 N
 -
+.. _nfc:
 
 **NFC**
   "No functional change". Used in a commit message to indicate that a patch
@@ -182,7 +208,7 @@ P
 
 **PR**
     Problem report. A bug filed on `the LLVM Bug Tracking System
-    <http://llvm.org/bugs/enter_bug.cgi>`_.
+    <https://bugs.llvm.org/enter_bug.cgi>`_.
 
 **PRE**
     Partial Redundancy Elimination
@@ -241,6 +267,14 @@ S
 **SLP**
     Superword-Level Parallelism, same as :ref:`Basic-Block Vectorization
     <lexicon-bb-vectorization>`.
+
+**Splat**
+    Splat refers to a vector of identical scalar elements.
+
+    The term is based on the PowerPC Altivec instructions that provided
+    this functionality in hardware. For example, "vsplth" and the corresponding
+    software intrinsic "vec_splat()". Examples of other hardware names for this
+    action include "duplicate" (ARM) and "broadcast" (x86).
 
 **SRoA**
     Scalar Replacement of Aggregates

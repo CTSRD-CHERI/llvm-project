@@ -1,14 +1,14 @@
 // REQUIRES: crash-recovery, shell
 
 // FIXME: This XFAIL is cargo-culted from crash-report.c. Do we need it?
-// XFAIL: mingw32
+// XFAIL: windows-gnu
 
 // Test clang can collect symbolic link headers used in modules.
 // crash reproducer if there's a symbolic link header file used in a module.
 
 // RUN: rm -rf %t
 // RUN: mkdir -p %t/i %t/m %t %t/sysroot
-// RUN: cp -a %S/Inputs/crash-recovery/usr %t/i/
+// RUN: cp -R %S/Inputs/crash-recovery/usr %t/i/
 
 // RUN: not env FORCE_CLANG_DIAGNOSTICS_CRASH= TMPDIR=%t TEMP=%t TMP=%t \
 // RUN: %clang -fsyntax-only %s -I %/t/i -isysroot %/t/sysroot/ \
@@ -27,7 +27,7 @@
 // CHECK-NEXT: note: diagnostic msg: {{.*}}.m
 // CHECK-NEXT: note: diagnostic msg: {{.*}}.cache
 
-// CHECKSRC: @import cstd.stdio;
+// CHECKSRC: #pragma clang module import cstd.stdio
 
 // CHECKSH: # Crash reproducer
 // CHECKSH-NEXT: # Driver args: "-fsyntax-only"
@@ -37,7 +37,7 @@
 // CHECKSH-NOT: "-fmodules-cache-path="
 // CHECKSH: "crash-vfs-{{[^ ]*}}.m"
 // CHECKSH: "-ivfsoverlay" "crash-vfs-{{[^ ]*}}.cache/vfs/vfs.yaml"
-// CHECKSH: "-fmodules-cache-path=crash-vfs-{{[^ ]*}}.cache/modules"
+// CHECKSH: "-fmodules-cache-path=crash-vfs-{{[^ ]*}}.cache/repro-modules"
 
 // CHECKYAML: 'type': 'directory',
 // CHECKYAML: 'name': "",

@@ -10,7 +10,7 @@
 
 @local_mem = internal unnamed_addr addrspace(3) global [2 x i32] undef, align 4
 
-define void @lds_input_queue(i32 addrspace(1)* %out, i32 addrspace(1)* %in, i32 %index) {
+define amdgpu_kernel void @lds_input_queue(i32 addrspace(1)* %out, i32 addrspace(1)* %in, i32 %index) {
 entry:
   %0 = getelementptr inbounds [2 x i32], [2 x i32] addrspace(3)* @local_mem, i32 0, i32 %index
   %1 = load i32, i32 addrspace(3)* %0
@@ -45,21 +45,21 @@ declare void @llvm.r600.group.barrier() nounwind convergent
 ;  %2 = load i32, i32 addrspace(1)* %in
 ;
 ; The instruction selection phase will generate ISA that looks like this:
-; %OQAP = LDS_READ_RET
-; %vreg0 = MOV %OQAP
-; %vreg1 = VTX_READ_32
-; %vreg2 = ADD_INT %vreg1, %vreg0
+; %oqap = LDS_READ_RET
+; %0 = MOV %oqap
+; %1 = VTX_READ_32
+; %2 = ADD_INT %1, %0
 ;
 ; The bottom scheduler will schedule the two ALU instructions first:
 ;
 ; UNSCHEDULED:
-; %OQAP = LDS_READ_RET
-; %vreg1 = VTX_READ_32
+; %oqap = LDS_READ_RET
+; %1 = VTX_READ_32
 ;
 ; SCHEDULED:
 ;
-; vreg0 = MOV %OQAP
-; vreg2 = ADD_INT %vreg1, %vreg2
+; %0 = MOV %oqap
+; %2 = ADD_INT %1, %2
 ;
 ; The lack of proper aliasing results in the local memory read (LDS_READ_RET)
 ; to consider the global memory read (VTX_READ_32) has a chain dependency, so
@@ -67,14 +67,14 @@ declare void @llvm.r600.group.barrier() nounwind convergent
 ; final program which looks like this:
 ;
 ; Alu clause:
-; %OQAP = LDS_READ_RET
+; %oqap = LDS_READ_RET
 ; VTX clause:
-; %vreg1 = VTX_READ_32
+; %1 = VTX_READ_32
 ; Alu clause:
-; vreg0 = MOV %OQAP
-; vreg2 = ADD_INT %vreg1, %vreg2
+; %0 = MOV %oqap
+; %2 = ADD_INT %1, %2
 ;
-; This is an illegal program because the OQAP def and use know occur in
+; This is an illegal program because the oqap def and use know occur in
 ; different ALU clauses.
 ;
 ; This test checks this scenario and makes sure it doesn't result in an
@@ -88,7 +88,7 @@ declare void @llvm.r600.group.barrier() nounwind convergent
 ; CHECK: LDS_READ_RET
 ; CHECK-NOT: ALU clause
 ; CHECK: MOV * T{{[0-9]\.[XYZW]}}, OQAP
-define void @local_global_alias(i32 addrspace(1)* %out, i32 addrspace(1)* %in) {
+define amdgpu_kernel void @local_global_alias(i32 addrspace(1)* %out, i32 addrspace(1)* %in) {
 entry:
   %0 = getelementptr inbounds [2 x i32], [2 x i32] addrspace(3)* @local_mem, i32 0, i32 0
   %1 = load i32, i32 addrspace(3)* %0

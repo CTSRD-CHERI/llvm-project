@@ -16,8 +16,10 @@
 //===----------------------------------------------------------------------===//
 
 #include "../ClangTidy.h"
+#include "clang/Config/config.h"
 #include "clang/Tooling/CommonOptionsParser.h"
 #include "llvm/Support/Process.h"
+#include "llvm/Support/TargetSelect.h"
 
 using namespace clang::ast_matchers;
 using namespace clang::driver;
@@ -35,12 +37,12 @@ Configuration files:
   option, command-line option takes precedence. The effective
   configuration can be inspected using -dump-config:
 
-    $ clang-tidy -dump-config - --
+    $ clang-tidy -dump-config
     ---
     Checks:          '-*,some-check'
     WarningsAsErrors: ''
     HeaderFilterRegex: ''
-    AnalyzeTemporaryDtors: false
+    FormatStyle:     none
     User:            user
     CheckOptions:
       - key:             some-check.SomeOption
@@ -49,9 +51,9 @@ Configuration files:
 
 )");
 
-const char DefaultChecks[] =  // Enable these checks by default:
-    "clang-diagnostic-*,"     //   * compiler diagnostics
-    "clang-analyzer-*";       //   * Static Analyzer checks
+const char DefaultChecks[] = // Enable these checks by default:
+    "clang-diagnostic-*,"    //   * compiler diagnostics
+    "clang-analyzer-*";      //   * Static Analyzer checks
 
 static cl::opt<std::string> Checks("checks", cl::desc(R"(
 Comma-separated list of globs with optional '-'
@@ -60,7 +62,7 @@ appearance in the list. Globs without '-'
 prefix add checks with matching names to the
 set, globs with the '-' prefix remove checks
 with matching names from the set of enabled
-checks.  This option's value is appended to the
+checks. This option's value is appended to the
 value of the 'Checks' option in .clang-tidy
 file, if any.
 )"),
@@ -120,6 +122,23 @@ well.
 )"),
                                cl::init(false), cl::cat(ClangTidyCategory));
 
+static cl::opt<std::string> FormatStyle("format-style", cl::desc(R"(
+Style for formatting code around applied fixes:
+  - 'none' (default) turns off formatting
+  - 'file' (literally 'file', not a placeholder)
+    uses .clang-format file in the closest parent
+    directory
+  - '{ <json> }' specifies options inline, e.g.
+    -format-style='{BasedOnStyle: llvm, IndentWidth: 8}'
+  - 'llvm', 'google', 'webkit', 'mozilla'
+See clang-format documentation for the up-to-date
+information about formatting styles and options.
+This option overrides the 'FormatStyle` option in
+.clang-tidy file, if any.
+)"),
+                                   cl::init("none"),
+                                   cl::cat(ClangTidyCategory));
+
 static cl::opt<bool> ListChecks("list-checks", cl::desc(R"(
 List all enabled checks and exit. Use with
 -checks=* to list all available checks.
@@ -163,15 +182,22 @@ report to stderr.
                                         cl::init(false),
                                         cl::cat(ClangTidyCategory));
 
-static cl::opt<bool> AnalyzeTemporaryDtors("analyze-temporary-dtors",
-                                           cl::desc(R"(
-Enable temporary destructor-aware analysis in
-clang-analyzer- checks.
-This option overrides the value read from a
-.clang-tidy file.
+static cl::opt<std::string> StoreCheckProfile("store-check-profile",
+                                              cl::desc(R"(
+By default reports are printed in tabulated
+format to stderr. When this option is passed,
+these per-TU profiles are instead stored as JSON.
 )"),
-                                           cl::init(false),
-                                           cl::cat(ClangTidyCategory));
+                                              cl::value_desc("prefix"),
+                                              cl::cat(ClangTidyCategory));
+
+/// This option allows enabling the experimental alpha checkers from the static
+/// analyzer. This option is set to false and not visible in help, because it is
+/// highly not recommended for users.
+static cl::opt<bool>
+    AllowEnablingAnalyzerAlphaCheckers("allow-enabling-analyzer-alpha-checkers",
+                                       cl::init(false), cl::Hidden,
+                                       cl::cat(ClangTidyCategory));
 
 static cl::opt<std::string> ExportFixes("export-fixes", cl::desc(R"(
 YAML file to store suggested fixes in. The
@@ -180,6 +206,22 @@ code with clang-apply-replacements.
 )"),
                                         cl::value_desc("filename"),
                                         cl::cat(ClangTidyCategory));
+
+static cl::opt<bool> Quiet("quiet", cl::desc(R"(
+Run clang-tidy in quiet mode. This suppresses
+printing statistics about ignored warnings and
+warnings treated as errors if the respective
+options are specified.
+)"),
+                           cl::init(false),
+                           cl::cat(ClangTidyCategory));
+
+static cl::opt<std::string> VfsOverlay("vfsoverlay", cl::desc(R"(
+Overlay the virtual filesystem described by file
+over the real file system.
+)"),
+                                       cl::value_desc("filename"),
+                                       cl::cat(ClangTidyCategory));
 
 namespace clang {
 namespace tidy {
@@ -212,46 +254,8 @@ static void printStats(const ClangTidyStats &Stats) {
   }
 }
 
-static void printProfileData(const ProfileData &Profile,
-                             llvm::raw_ostream &OS) {
-  // Time is first to allow for sorting by it.
-  std::vector<std::pair<llvm::TimeRecord, StringRef>> Timers;
-  TimeRecord Total;
-
-  for (const auto &P : Profile.Records) {
-    Timers.emplace_back(P.getValue(), P.getKey());
-    Total += P.getValue();
-  }
-
-  std::sort(Timers.begin(), Timers.end());
-
-  std::string Line = "===" + std::string(73, '-') + "===\n";
-  OS << Line;
-
-  if (Total.getUserTime())
-    OS << "   ---User Time---";
-  if (Total.getSystemTime())
-    OS << "   --System Time--";
-  if (Total.getProcessTime())
-    OS << "   --User+System--";
-  OS << "   ---Wall Time---";
-  if (Total.getMemUsed())
-    OS << "  ---Mem---";
-  OS << "  --- Name ---\n";
-
-  // Loop through all of the timing data, printing it out.
-  for (auto I = Timers.rbegin(), E = Timers.rend(); I != E; ++I) {
-    I->first.print(Total, OS);
-    OS << I->second << '\n';
-  }
-
-  Total.print(Total, OS);
-  OS << "Total\n";
-  OS << Line << "\n";
-  OS.flush();
-}
-
-static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider() {
+static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider(
+   llvm::IntrusiveRefCntPtr<vfs::FileSystem> FS) {
   ClangTidyGlobalOptions GlobalOptions;
   if (std::error_code Err = parseLineFilter(LineFilter, GlobalOptions)) {
     llvm::errs() << "Invalid LineFilter: " << Err.message() << "\n\nUsage:\n";
@@ -264,7 +268,7 @@ static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider() {
   DefaultOptions.WarningsAsErrors = "";
   DefaultOptions.HeaderFilterRegex = HeaderFilter;
   DefaultOptions.SystemHeaders = SystemHeaders;
-  DefaultOptions.AnalyzeTemporaryDtors = AnalyzeTemporaryDtors;
+  DefaultOptions.FormatStyle = FormatStyle;
   DefaultOptions.User = llvm::sys::Process::GetEnv("USER");
   // USERNAME is used on Windows.
   if (!DefaultOptions.User)
@@ -279,8 +283,8 @@ static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider() {
     OverrideOptions.HeaderFilterRegex = HeaderFilter;
   if (SystemHeaders.getNumOccurrences() > 0)
     OverrideOptions.SystemHeaders = SystemHeaders;
-  if (AnalyzeTemporaryDtors.getNumOccurrences() > 0)
-    OverrideOptions.AnalyzeTemporaryDtors = AnalyzeTemporaryDtors;
+  if (FormatStyle.getNumOccurrences() > 0)
+    OverrideOptions.FormatStyle = FormatStyle;
 
   if (!Config.empty()) {
     if (llvm::ErrorOr<ClangTidyOptions> ParsedConfig =
@@ -296,16 +300,59 @@ static std::unique_ptr<ClangTidyOptionsProvider> createOptionsProvider() {
     }
   }
   return llvm::make_unique<FileOptionsProvider>(GlobalOptions, DefaultOptions,
-                                                OverrideOptions);
+                                                OverrideOptions, std::move(FS));
+}
+
+llvm::IntrusiveRefCntPtr<vfs::FileSystem>
+getVfsOverlayFromFile(const std::string &OverlayFile) {
+  llvm::IntrusiveRefCntPtr<vfs::OverlayFileSystem> OverlayFS(
+      new vfs::OverlayFileSystem(vfs::getRealFileSystem()));
+  llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> Buffer =
+      OverlayFS->getBufferForFile(OverlayFile);
+  if (!Buffer) {
+    llvm::errs() << "Can't load virtual filesystem overlay file '"
+                 << OverlayFile << "': " << Buffer.getError().message()
+                 << ".\n";
+    return nullptr;
+  }
+
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = vfs::getVFSFromYAML(
+      std::move(Buffer.get()), /*DiagHandler*/ nullptr, OverlayFile);
+  if (!FS) {
+    llvm::errs() << "Error: invalid virtual filesystem overlay file '"
+                 << OverlayFile << "'.\n";
+    return nullptr;
+  }
+  OverlayFS->pushOverlay(FS);
+  return OverlayFS;
 }
 
 static int clangTidyMain(int argc, const char **argv) {
   CommonOptionsParser OptionsParser(argc, argv, ClangTidyCategory,
                                     cl::ZeroOrMore);
+  llvm::IntrusiveRefCntPtr<vfs::FileSystem> BaseFS(
+      VfsOverlay.empty() ? vfs::getRealFileSystem()
+                         : getVfsOverlayFromFile(VfsOverlay));
+  if (!BaseFS)
+    return 1;
 
-  auto OptionsProvider = createOptionsProvider();
+  auto OwningOptionsProvider = createOptionsProvider(BaseFS);
+  auto *OptionsProvider = OwningOptionsProvider.get();
   if (!OptionsProvider)
     return 1;
+
+  auto MakeAbsolute = [](const std::string &Input) -> SmallString<256> {
+    if (Input.empty())
+      return {};
+    SmallString<256> AbsolutePath(Input);
+    if (std::error_code EC = llvm::sys::fs::make_absolute(AbsolutePath)) {
+      llvm::errs() << "Can't make absolute path from " << Input << ": "
+                   << EC.message() << "\n";
+    }
+    return AbsolutePath;
+  };
+
+  SmallString<256> ProfilePrefix = MakeAbsolute(StoreCheckProfile);
 
   StringRef FileName("dummy");
   auto PathList = OptionsParser.getSourcePathList();
@@ -313,13 +360,11 @@ static int clangTidyMain(int argc, const char **argv) {
     FileName = PathList.front();
   }
 
-  SmallString<256> FilePath(FileName);
-  if (std::error_code EC = llvm::sys::fs::make_absolute(FilePath)) {
-    llvm::errs() << "Can't make absolute path from " << FileName << ": "
-                 << EC.message() << "\n";
-  }
+  SmallString<256> FilePath = MakeAbsolute(FileName);
+
   ClangTidyOptions EffectiveOptions = OptionsProvider->getOptions(FilePath);
-  std::vector<std::string> EnabledChecks = getCheckNames(EffectiveOptions);
+  std::vector<std::string> EnabledChecks =
+      getCheckNames(EffectiveOptions, AllowEnablingAnalyzerAlphaCheckers);
 
   if (ExplainConfig) {
     // FIXME: Show other ClangTidyOptions' fields, like ExtraArg.
@@ -350,7 +395,8 @@ static int clangTidyMain(int argc, const char **argv) {
   }
 
   if (DumpConfig) {
-    EffectiveOptions.CheckOptions = getCheckOptions(EffectiveOptions);
+    EffectiveOptions.CheckOptions =
+        getCheckOptions(EffectiveOptions, AllowEnablingAnalyzerAlphaCheckers);
     llvm::outs() << configurationAsText(
                         ClangTidyOptions::getDefaults().mergeWith(
                             EffectiveOptions))
@@ -370,23 +416,26 @@ static int clangTidyMain(int argc, const char **argv) {
     return 1;
   }
 
-  ProfileData Profile;
+  llvm::InitializeAllTargetInfos();
+  llvm::InitializeAllTargetMCs();
+  llvm::InitializeAllAsmParsers();
 
-  std::vector<ClangTidyError> Errors;
-  ClangTidyStats Stats =
-      runClangTidy(std::move(OptionsProvider), OptionsParser.getCompilations(),
-                   PathList, &Errors, EnableCheckProfile ? &Profile : nullptr);
-  bool FoundErrors =
-      std::find_if(Errors.begin(), Errors.end(), [](const ClangTidyError &E) {
-        return E.DiagLevel == ClangTidyError::Error;
-      }) != Errors.end();
+  ClangTidyContext Context(std::move(OwningOptionsProvider),
+                           AllowEnablingAnalyzerAlphaCheckers);
+  runClangTidy(Context, OptionsParser.getCompilations(), PathList, BaseFS,
+               EnableCheckProfile, ProfilePrefix);
+  ArrayRef<ClangTidyError> Errors = Context.getErrors();
+  bool FoundErrors = llvm::find_if(Errors, [](const ClangTidyError &E) {
+                       return E.DiagLevel == ClangTidyError::Error;
+                     }) != Errors.end();
 
   const bool DisableFixes = Fix && FoundErrors && !FixErrors;
 
   unsigned WErrorCount = 0;
 
   // -fix-errors implies -fix.
-  handleErrors(Errors, (FixErrors || Fix) && !DisableFixes, WErrorCount);
+  handleErrors(Context, (FixErrors || Fix) && !DisableFixes, WErrorCount,
+               BaseFS);
 
   if (!ExportFixes.empty() && !Errors.empty()) {
     std::error_code EC;
@@ -395,23 +444,37 @@ static int clangTidyMain(int argc, const char **argv) {
       llvm::errs() << "Error opening output file: " << EC.message() << '\n';
       return 1;
     }
-    exportReplacements(Errors, OS);
+    exportReplacements(FilePath.str(), Errors, OS);
   }
 
-  printStats(Stats);
-  if (DisableFixes)
-    llvm::errs()
-        << "Found compiler errors, but -fix-errors was not specified.\n"
-           "Fixes have NOT been applied.\n\n";
-
-  if (EnableCheckProfile)
-    printProfileData(Profile, llvm::errs());
+  if (!Quiet) {
+    printStats(Context.getStats());
+    if (DisableFixes)
+      llvm::errs()
+          << "Found compiler errors, but -fix-errors was not specified.\n"
+             "Fixes have NOT been applied.\n\n";
+  }
 
   if (WErrorCount) {
-    StringRef Plural = WErrorCount == 1 ? "" : "s";
-    llvm::errs() << WErrorCount << " warning" << Plural << " treated as error"
-                 << Plural << "\n";
+    if (!Quiet) {
+      StringRef Plural = WErrorCount == 1 ? "" : "s";
+      llvm::errs() << WErrorCount << " warning" << Plural << " treated as error"
+                   << Plural << "\n";
+    }
     return WErrorCount;
+  }
+
+  if (FoundErrors) {
+    // TODO: Figure out when zero exit code should be used with -fix-errors:
+    //   a. when a fix has been applied for an error
+    //   b. when a fix has been applied for all errors
+    //   c. some other condition.
+    // For now always returning zero when -fix-errors is used.
+    if (FixErrors)
+      return 0;
+    if (!Quiet)
+      llvm::errs() << "Found compiler error(s).\n";
+    return 1;
   }
 
   return 0;
@@ -422,10 +485,20 @@ extern volatile int CERTModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED CERTModuleAnchorDestination =
     CERTModuleAnchorSource;
 
+// This anchor is used to force the linker to link the AbseilModule.
+extern volatile int AbseilModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED AbseilModuleAnchorDestination =
+    AbseilModuleAnchorSource;
+
 // This anchor is used to force the linker to link the BoostModule.
 extern volatile int BoostModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED BoostModuleAnchorDestination =
     BoostModuleAnchorSource;
+
+// This anchor is used to force the linker to link the BugproneModule.
+extern volatile int BugproneModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED BugproneModuleAnchorDestination =
+    BugproneModuleAnchorSource;
 
 // This anchor is used to force the linker to link the LLVMModule.
 extern volatile int LLVMModuleAnchorSource;
@@ -437,10 +510,20 @@ extern volatile int CppCoreGuidelinesModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED CppCoreGuidelinesModuleAnchorDestination =
     CppCoreGuidelinesModuleAnchorSource;
 
+// This anchor is used to force the linker to link the FuchsiaModule.
+extern volatile int FuchsiaModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED FuchsiaModuleAnchorDestination =
+    FuchsiaModuleAnchorSource;
+
 // This anchor is used to force the linker to link the GoogleModule.
 extern volatile int GoogleModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED GoogleModuleAnchorDestination =
     GoogleModuleAnchorSource;
+
+// This anchor is used to force the linker to link the AndroidModule.
+extern volatile int AndroidModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED AndroidModuleAnchorDestination =
+    AndroidModuleAnchorSource;
 
 // This anchor is used to force the linker to link the MiscModule.
 extern volatile int MiscModuleAnchorSource;
@@ -452,20 +535,42 @@ extern volatile int ModernizeModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED ModernizeModuleAnchorDestination =
     ModernizeModuleAnchorSource;
 
+#if CLANG_ENABLE_STATIC_ANALYZER
 // This anchor is used to force the linker to link the MPIModule.
 extern volatile int MPIModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED MPIModuleAnchorDestination =
     MPIModuleAnchorSource;
+#endif
 
 // This anchor is used to force the linker to link the PerformanceModule.
 extern volatile int PerformanceModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED PerformanceModuleAnchorDestination =
     PerformanceModuleAnchorSource;
 
+// This anchor is used to force the linker to link the PortabilityModule.
+extern volatile int PortabilityModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED PortabilityModuleAnchorDestination =
+    PortabilityModuleAnchorSource;
+
 // This anchor is used to force the linker to link the ReadabilityModule.
 extern volatile int ReadabilityModuleAnchorSource;
 static int LLVM_ATTRIBUTE_UNUSED ReadabilityModuleAnchorDestination =
     ReadabilityModuleAnchorSource;
+
+// This anchor is used to force the linker to link the ObjCModule.
+extern volatile int ObjCModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED ObjCModuleAnchorDestination =
+    ObjCModuleAnchorSource;
+
+// This anchor is used to force the linker to link the HICPPModule.
+extern volatile int HICPPModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED HICPPModuleAnchorDestination =
+    HICPPModuleAnchorSource;
+
+// This anchor is used to force the linker to link the ZirconModule.
+extern volatile int ZirconModuleAnchorSource;
+static int LLVM_ATTRIBUTE_UNUSED ZirconModuleAnchorDestination =
+    ZirconModuleAnchorSource;
 
 } // namespace tidy
 } // namespace clang

@@ -23,8 +23,10 @@ Using Polly
 
    Architecture
    UsingPollyWithClang
+   HowToManuallyUseTheIndividualPiecesOfPolly
+   TipsAndTricks
+   Performance
 
-* `How to manually use the individual pieces of Polly <http://polly.llvm.org/example_manual_matmul.html>`_
 * `A list of Polly passes <http://polly.llvm.org/documentation/passes.html>`_
 
 Indices and tables

@@ -48,13 +48,16 @@ int convertForTestingMain(int argc, const char *argv[]) {
   // Look for the sections that we are interested in.
   int FoundSectionCount = 0;
   SectionRef ProfileNames, CoverageMapping;
+  auto ObjFormat = OF->getTripleObjectFormat();
   for (const auto &Section : OF->sections()) {
     StringRef Name;
     if (Section.getName(Name))
       return 1;
-    if (Name == llvm::getInstrProfNameSectionName(false)) {
+    if (Name == llvm::getInstrProfSectionName(IPSK_name, ObjFormat,
+                                              /*AddSegmentInfo=*/false)) {
       ProfileNames = Section;
-    } else if (Name == llvm::getInstrProfCoverageSectionName(false)) {
+    } else if (Name == llvm::getInstrProfSectionName(
+                           IPSK_covmap, ObjFormat, /*AddSegmentInfo=*/false)) {
       CoverageMapping = Section;
     } else
       continue;
@@ -72,8 +75,7 @@ int convertForTestingMain(int argc, const char *argv[]) {
     return 1;
 
   int FD;
-  if (auto Err =
-          sys::fs::openFileForWrite(OutputFilename, FD, sys::fs::F_None)) {
+  if (auto Err = sys::fs::openFileForWrite(OutputFilename, FD)) {
     errs() << "error: " << Err.message() << "\n";
     return 1;
   }

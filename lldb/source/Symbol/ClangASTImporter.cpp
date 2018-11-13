@@ -8,12 +8,12 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Symbol/ClangASTImporter.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/ClangExternalASTSourceCommon.h"
 #include "lldb/Symbol/ClangUtil.h"
 #include "lldb/Utility/LLDBAssert.h"
+#include "lldb/Utility/Log.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclCXX.h"
 #include "clang/AST/DeclObjC.h"
@@ -354,8 +354,7 @@ bool ClangASTImporter::CanImport(const CompilerType &type) {
       clang::ObjCInterfaceDecl *class_interface_decl =
           objc_class_type->getInterface();
       // We currently can't complete objective C types through the newly added
-      // ASTContext
-      // because it only supports TagDecl objects right now...
+      // ASTContext because it only supports TagDecl objects right now...
       if (class_interface_decl) {
         if (ResolveDeclOrigin(class_interface_decl, NULL, NULL))
           return true;
@@ -431,8 +430,7 @@ bool ClangASTImporter::Import(const CompilerType &type) {
       clang::ObjCInterfaceDecl *class_interface_decl =
           objc_class_type->getInterface();
       // We currently can't complete objective C types through the newly added
-      // ASTContext
-      // because it only supports TagDecl objects right now...
+      // ASTContext because it only supports TagDecl objects right now...
       if (class_interface_decl) {
         if (ResolveDeclOrigin(class_interface_decl, NULL, NULL))
           return CompleteAndFetchChildren(qual_type);
@@ -896,9 +894,9 @@ void ClangASTImporter::Minion::ImportDefinitionTo(clang::Decl *to,
     }
   }
 
-  // If we're dealing with an Objective-C class, ensure that the inheritance has
-  // been set up correctly.  The ASTImporter may not do this correctly if the
-  // class was originally sourced from symbols.
+  // If we're dealing with an Objective-C class, ensure that the inheritance
+  // has been set up correctly.  The ASTImporter may not do this correctly if
+  // the class was originally sourced from symbols.
 
   if (ObjCInterfaceDecl *to_objc_interface = dyn_cast<ObjCInterfaceDecl>(to)) {
     do {

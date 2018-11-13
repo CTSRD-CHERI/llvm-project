@@ -6,6 +6,7 @@ import fnmatch
 import os
 import platform
 import re
+import repo
 import subprocess
 import sys
 
@@ -13,46 +14,60 @@ from lldbbuild import *
 
 #### SETTINGS ####
 
-
 def LLVM_HASH_INCLUDES_DIFFS():
     return False
 
-# The use of "x = "..."; return x" here is important because tooling looks for
-# it with regexps.  Only change how this works if you know what you are doing.
-
-
-def LLVM_REF():
-    llvm_ref = "master"
-    return llvm_ref
-
-
-def CLANG_REF():
-    clang_ref = "master"
-    return clang_ref
-
 # For use with Xcode-style builds
 
+def process_vcs(vcs):
+    return {
+        "svn": VCS.svn,
+        "git": VCS.git
+    }[vcs]
+
+def process_root(name):
+    return {
+        "llvm": llvm_source_path(),
+        "clang": clang_source_path(),
+        "ninja": ninja_source_path()
+    }[name]
+
+def process_repo(r):
+    return {
+        'name': r["name"],
+        'vcs': process_vcs(r["vcs"]),
+        'root': process_root(r["name"]),
+        'url': r["url"],
+        'ref': r["ref"]
+    }
+
+def fallback_repo(name):
+    return {
+        'name': name,
+        'vcs': None,
+        'root': process_root(name),
+        'url': None,
+        'ref': None
+    }
+
+def dirs_exist(names):
+    for name in names:
+        if not os.path.isdir(process_root(name)):
+            return False
+    return True
 
 def XCODE_REPOSITORIES():
-    return [
-        {'name': "llvm",
-         'vcs': VCS.git,
-         'root': llvm_source_path(),
-         'url': "http://llvm.org/git/llvm.git",
-         'ref': LLVM_REF()},
-
-        {'name': "clang",
-         'vcs': VCS.git,
-         'root': clang_source_path(),
-         'url': "http://llvm.org/git/clang.git",
-         'ref': CLANG_REF()},
-
-        {'name': "ninja",
-         'vcs': VCS.git,
-         'root': ninja_source_path(),
-         'url': "https://github.com/ninja-build/ninja.git",
-         'ref': "master"}
-    ]
+    names = ["llvm", "clang", "ninja"]
+    if dirs_exist(names):
+        return [fallback_repo(n) for n in names]
+    override = repo.get_override()
+    if override:
+        return [process_repo(r) for r in override]
+    identifier = repo.identifier()
+    if identifier == None:
+        identifier = "<invalid>" # repo.find will just use the fallback file
+    set = repo.find(identifier)
+    return [process_repo(r) for r in set]
 
 
 def get_c_compiler():
@@ -209,7 +224,7 @@ def apply_patches(spec):
             f, spec['name'] + '.*.diff')]
     for p in patches:
         run_in_directory(["patch",
-                          "-p0",
+                          "-p1",
                           "-i",
                           os.path.join(lldb_source_path(),
                                        'scripts',
@@ -235,6 +250,8 @@ def should_build_llvm():
 
 def do_symlink(source_path, link_path):
     print "Symlinking " + source_path + " to " + link_path
+    if os.path.islink(link_path):
+        os.remove(link_path)
     if not os.path.exists(link_path):
         os.symlink(source_path, link_path)
 
@@ -346,7 +363,8 @@ def cmake_flags():
                     "-DCMAKE_C_FLAGS={}".format(get_c_flags()),
                     "-DCMAKE_CXX_FLAGS={}".format(get_cxx_flags()),
                     "-DCMAKE_EXE_LINKER_FLAGS={}".format(get_exe_linker_flags()),
-                    "-DCMAKE_SHARED_LINKER_FLAGS={}".format(get_shared_linker_flags())]
+                    "-DCMAKE_SHARED_LINKER_FLAGS={}".format(get_shared_linker_flags()),
+                    "-DHAVE_CRASHREPORTER_INFO=1"]
     deployment_target = get_deployment_target()
     if deployment_target:
         cmake_flags.append(
@@ -434,8 +452,8 @@ def build_llvm_if_needed():
 
 #### MAIN LOGIC ####
 
-all_check_out_if_needed()
-build_llvm_if_needed()
-write_archives_txt()
-
-sys.exit(0)
+if __name__ == "__main__":
+    all_check_out_if_needed()
+    build_llvm_if_needed()
+    write_archives_txt()
+    sys.exit(0)

@@ -16,7 +16,10 @@
 // ----------- ATTENTION -------------
 // This header should NOT include any other headers from sanitizer runtime.
 #include "sanitizer_internal_defs.h"
+#include "sanitizer_platform_limits_netbsd.h"
+#include "sanitizer_platform_limits_openbsd.h"
 #include "sanitizer_platform_limits_posix.h"
+#include "sanitizer_platform_limits_solaris.h"
 
 #if !SANITIZER_POSIX
 // Make it hard to accidentally use any of functions declared in this file:
@@ -57,6 +60,11 @@ uptr internal_waitpid(int pid, int *status, int options);
 int internal_fork();
 int internal_forkpty(int *amaster);
 
+int internal_sysctl(const int *name, unsigned int namelen, void *oldp,
+                    uptr *oldlenp, const void *newp, uptr newlen);
+int internal_sysctlbyname(const char *sname, void *oldp, uptr *oldlenp,
+                          const void *newp, uptr newlen);
+
 // These functions call appropriate pthread_ functions directly, bypassing
 // the interceptor. They are weak and may not be present in some tools.
 SANITIZER_WEAK_ATTRIBUTE
@@ -87,6 +95,9 @@ bool internal_sigismember(__sanitizer_sigset_t *set, int signum);
 
 uptr internal_execve(const char *filename, char *const argv[],
                      char *const envp[]);
+
+bool IsStateDetached(int state);
+
 }  // namespace __sanitizer
 
 #endif  // SANITIZER_POSIX_H

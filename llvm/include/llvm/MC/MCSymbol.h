@@ -15,18 +15,21 @@
 #define LLVM_MC_MCSYMBOL_H
 
 #include "llvm/ADT/PointerIntPair.h"
-#include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/MC/MCFragment.h"
-#include "llvm/Support/Compiler.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MathExtras.h"
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
 
 namespace llvm {
+
 class MCAsmInfo;
-class MCExpr;
-class MCSymbol;
-class MCFragment;
-class MCSection;
 class MCContext;
+class MCExpr;
+class MCSection;
 class raw_ostream;
 
 /// MCSymbol - Instances of this class represent a symbol name in the MC file,
@@ -45,6 +48,7 @@ protected:
     SymbolKindCOFF,
     SymbolKindELF,
     SymbolKindMachO,
+    SymbolKindWasm,
   };
 
   /// A symbol can contain an Offset, or Value, or be Common, but never more
@@ -81,7 +85,7 @@ protected:
   /// "Lfoo" or ".foo".
   unsigned IsTemporary : 1;
 
-  /// \brief True if this symbol can be redefined.
+  /// True if this symbol can be redefined.
   unsigned IsRedefinable : 1;
 
   /// IsUsed - True if this symbol has been used.
@@ -97,7 +101,7 @@ protected:
 
   /// LLVM RTTI discriminator. This is actually a SymbolKind enumerator, but is
   /// unsigned to avoid sign extension and achieve better bitpacking with MSVC.
-  unsigned Kind : 2;
+  unsigned Kind : 3;
 
   /// True if we have created a relocation that uses this symbol.
   mutable unsigned IsUsedInReloc : 1;
@@ -133,18 +137,18 @@ protected:
     const MCExpr *Value;
   };
 
-protected: // MCContext creates and uniques these.
+  // MCContext creates and uniques these.
   friend class MCExpr;
   friend class MCContext;
 
-  /// \brief The name for a symbol.
+  /// The name for a symbol.
   /// MCSymbol contains a uint64_t so is probably aligned to 8.  On a 32-bit
   /// system, the name is a pointer so isn't going to satisfy the 8 byte
   /// alignment of uint64_t.  Account for that here.
-  typedef union {
+  using NameEntryStorageTy = union {
     const StringMapEntry<bool> *NameEntry;
     uint64_t AlignmentPadding;
-  } NameEntryStorageTy;
+  };
 
   MCSymbol(SymbolKind Kind, const StringMapEntry<bool> *Name, bool isTemporary)
       : IsTemporary(isTemporary), IsRedefinable(false), IsUsed(false),
@@ -163,28 +167,25 @@ protected: // MCContext creates and uniques these.
                      MCContext &Ctx);
 
 private:
-
   void operator delete(void *);
-  /// \brief Placement delete - required by std, but never called.
+  /// Placement delete - required by std, but never called.
   void operator delete(void*, unsigned) {
     llvm_unreachable("Constructor throws?");
   }
-  /// \brief Placement delete - required by std, but never called.
+  /// Placement delete - required by std, but never called.
   void operator delete(void*, unsigned, bool) {
     llvm_unreachable("Constructor throws?");
   }
 
-  MCSymbol(const MCSymbol &) = delete;
-  void operator=(const MCSymbol &) = delete;
-  MCSection *getSectionPtr(bool SetUsed = true) const {
-    if (MCFragment *F = getFragment(SetUsed)) {
+  MCSection *getSectionPtr() const {
+    if (MCFragment *F = getFragment()) {
       assert(F != AbsolutePseudoFragment);
       return F->getParent();
     }
     return nullptr;
   }
 
-  /// \brief Get a reference to the name field.  Requires that we have a name
+  /// Get a reference to the name field.  Requires that we have a name
   const StringMapEntry<bool> *&getNameEntryPtr() {
     assert(FragmentAndHasName.getInt() && "Name is required");
     NameEntryStorageTy *Name = reinterpret_cast<NameEntryStorageTy *>(this);
@@ -195,6 +196,9 @@ private:
   }
 
 public:
+  MCSymbol(const MCSymbol &) = delete;
+  MCSymbol &operator=(const MCSymbol &) = delete;
+
   /// getName - Get the symbol name.
   StringRef getName() const {
     if (!FragmentAndHasName.getInt())
@@ -217,13 +221,12 @@ public:
 
   /// isUsed - Check if this is used.
   bool isUsed() const { return IsUsed; }
-  void setUsed(bool Value) const { IsUsed |= Value; }
 
-  /// \brief Check if this symbol is redefinable.
+  /// Check if this symbol is redefinable.
   bool isRedefinable() const { return IsRedefinable; }
-  /// \brief Mark this symbol as redefinable.
+  /// Mark this symbol as redefinable.
   void setRedefinable(bool Value) { IsRedefinable = Value; }
-  /// \brief Prepare this symbol to be redefined.
+  /// Prepare this symbol to be redefined.
   void redefineIfPossible() {
     if (IsRedefinable) {
       if (SymbolContents == SymContentsVariable) {
@@ -242,28 +245,28 @@ public:
   /// isDefined - Check if this symbol is defined (i.e., it has an address).
   ///
   /// Defined symbols are either absolute or in some section.
-  bool isDefined(bool SetUsed = true) const {
-    return getFragment(SetUsed) != nullptr;
-  }
+  bool isDefined() const { return !isUndefined(); }
 
   /// isInSection - Check if this symbol is defined in some section (i.e., it
   /// is defined but not absolute).
-  bool isInSection(bool SetUsed = true) const {
-    return isDefined(SetUsed) && !isAbsolute(SetUsed);
+  bool isInSection() const {
+    return isDefined() && !isAbsolute();
   }
 
   /// isUndefined - Check if this symbol undefined (i.e., implicitly defined).
-  bool isUndefined(bool SetUsed = true) const { return !isDefined(SetUsed); }
+  bool isUndefined(bool SetUsed = true) const {
+    return getFragment(SetUsed) == nullptr;
+  }
 
   /// isAbsolute - Check if this is an absolute symbol.
-  bool isAbsolute(bool SetUsed = true) const {
-    return getFragment(SetUsed) == AbsolutePseudoFragment;
+  bool isAbsolute() const {
+    return getFragment() == AbsolutePseudoFragment;
   }
 
   /// Get the section associated with a defined, non-absolute symbol.
-  MCSection &getSection(bool SetUsed = true) const {
-    assert(isInSection(SetUsed) && "Invalid accessor!");
-    return *getSectionPtr(SetUsed);
+  MCSection &getSection() const {
+    assert(isInSection() && "Invalid accessor!");
+    return *getSectionPtr();
   }
 
   /// Mark the symbol as defined in the fragment \p F.
@@ -280,6 +283,8 @@ public:
   bool isCOFF() const { return Kind == SymbolKindCOFF; }
 
   bool isMachO() const { return Kind == SymbolKindMachO; }
+
+  bool isWasm() const { return Kind == SymbolKindWasm; }
 
   /// @}
   /// \name Variable Symbols
@@ -310,6 +315,8 @@ public:
   void setIndex(uint32_t Value) const {
     Index = Value;
   }
+
+  bool isUnset() const { return SymbolContents == SymContentsUnset; }
 
   uint64_t getOffset() const {
     assert((SymbolContents == SymContentsUnset ||
@@ -416,6 +423,7 @@ inline raw_ostream &operator<<(raw_ostream &OS, const MCSymbol &Sym) {
   Sym.print(OS, nullptr);
   return OS;
 }
+
 } // end namespace llvm
 
-#endif
+#endif // LLVM_MC_MCSYMBOL_H

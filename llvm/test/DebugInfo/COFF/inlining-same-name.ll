@@ -14,15 +14,15 @@
 ; CHECK: CodeViewDebugInfo [
 ; CHECK:   Section: .debug$S
 ; CHECK:   Subsection [
-; CHECK:     ProcStart {
+; CHECK:     {{.*}}Proc{{.*}}Sym {
 ; CHECK:       DisplayName: main
 ; CHECK:     }
-; CHECK:     InlineSite {
+; CHECK:     InlineSiteSym {
 ; CHECK:       Inlinee: same_name (0x1002)
 ; CHECK:     }
 ; CHECK:     InlineSiteEnd {
 ; CHECK:     }
-; CHECK:     InlineSite {
+; CHECK:     InlineSiteSym {
 ; CHECK:       Inlinee: same_name (0x1002)
 ; CHECK:     }
 ; CHECK:     InlineSiteEnd {
@@ -39,19 +39,18 @@ define void @main(i32* %i.i) !dbg !16 {
   ret void
 }
 
-!llvm.module.flags = !{!0, !1, !2}
+!llvm.module.flags = !{!0, !1}
 !llvm.dbg.cu = !{!4}
 
 !0 = !{i32 2, !"CodeView", i32 1}
 !1 = !{i32 2, !"Debug Info Version", i32 3}
-!2 = !{i32 6, !"Linker Options", !{}}
 !4 = distinct !DICompileUnit(language: DW_LANG_D, file: !5, producer: "LDC (http://wiki.dlang.org/LDC)", isOptimized: false, runtimeVersion: 1, emissionKind: FullDebug)
 !5 = !DIFile(filename: "opover2.d", directory: "C:\5CLDC\5Cninja-ldc\5C..\5Cldc\5Ctests\5Cd2\5Cdmd-testsuite\5Crunnable")
 !6 = !DILocation(line: 302, column: 9, scope: !7, inlinedAt: !15)
-!7 = distinct !DISubprogram(name: "same_name", linkageName: "same_name", scope: null, file: !5, line: 302, type: !8, isLocal: false, isDefinition: true, scopeLine: 302, flags: DIFlagPrototyped, isOptimized: false, unit: !4, variables: !{})
+!7 = distinct !DISubprogram(name: "same_name", linkageName: "same_name", scope: null, file: !5, line: 302, type: !8, isLocal: false, isDefinition: true, scopeLine: 302, flags: DIFlagPrototyped, isOptimized: false, unit: !4, retainedNodes: !{})
 !8 = !DISubroutineType(types: !{})
 !15 = distinct !DILocation(line: 333, column: 5, scope: !16)
-!16 = distinct !DISubprogram(name: "main", linkageName: "main", scope: null, file: !5, line: 328, type: !8, isLocal: false, isDefinition: true, scopeLine: 328, flags: DIFlagPrototyped, isOptimized: false, unit: !4, variables: !{})
+!16 = distinct !DISubprogram(name: "main", linkageName: "main", scope: null, file: !5, line: 328, type: !8, isLocal: false, isDefinition: true, scopeLine: 328, flags: DIFlagPrototyped, isOptimized: false, unit: !4, retainedNodes: !{})
 !19 = !DILocation(line: 308, column: 9, scope: !20, inlinedAt: !25)
-!20 = distinct !DISubprogram(name: "same_name", linkageName: "same_name",  scope: null, file: !5, line: 308, type: !8, isLocal: false, isDefinition: true, scopeLine: 308, flags: DIFlagPrototyped, isOptimized: false, unit: !4, variables: !{})
+!20 = distinct !DISubprogram(name: "same_name", linkageName: "same_name",  scope: null, file: !5, line: 308, type: !8, isLocal: false, isDefinition: true, scopeLine: 308, flags: DIFlagPrototyped, isOptimized: false, unit: !4, retainedNodes: !{})
 !25 = distinct !DILocation(line: 334, column: 5, scope: !16)

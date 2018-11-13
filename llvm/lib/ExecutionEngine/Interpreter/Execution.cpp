@@ -85,7 +85,7 @@ static void executeFMulInst(GenericValue &Dest, GenericValue Src1,
   }
 }
 
-static void executeFDivInst(GenericValue &Dest, GenericValue Src1, 
+static void executeFDivInst(GenericValue &Dest, GenericValue Src1,
                             GenericValue Src2, Type *Ty) {
   switch (Ty->getTypeID()) {
     IMPLEMENT_BINARY_OPERATOR(/, Float);
@@ -96,7 +96,7 @@ static void executeFDivInst(GenericValue &Dest, GenericValue Src1,
   }
 }
 
-static void executeFRemInst(GenericValue &Dest, GenericValue Src1, 
+static void executeFRemInst(GenericValue &Dest, GenericValue Src1,
                             GenericValue Src2, Type *Ty) {
   switch (Ty->getTypeID()) {
   case Type::FloatTyID:
@@ -281,7 +281,7 @@ void Interpreter::visitICmpInst(ICmpInst &I) {
   GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
   GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
   GenericValue R;   // Result
-  
+
   switch (I.getPredicate()) {
   case ICmpInst::ICMP_EQ:  R = executeICMP_EQ(Src1,  Src2, Ty); break;
   case ICmpInst::ICMP_NE:  R = executeICMP_NE(Src1,  Src2, Ty); break;
@@ -297,7 +297,7 @@ void Interpreter::visitICmpInst(ICmpInst &I) {
     dbgs() << "Don't know how to handle this ICmp predicate!\n-->" << I;
     llvm_unreachable(nullptr);
   }
- 
+
   SetValue(&I, R, SF);
 }
 
@@ -552,10 +552,10 @@ static GenericValue executeFCMP_ORD(GenericValue Src1, GenericValue Src2,
         Src2.AggregateVal[_i].DoubleVal)));
     }
   } else if (Ty->isFloatTy())
-    Dest.IntVal = APInt(1,(Src1.FloatVal == Src1.FloatVal && 
+    Dest.IntVal = APInt(1,(Src1.FloatVal == Src1.FloatVal &&
                            Src2.FloatVal == Src2.FloatVal));
   else {
-    Dest.IntVal = APInt(1,(Src1.DoubleVal == Src1.DoubleVal && 
+    Dest.IntVal = APInt(1,(Src1.DoubleVal == Src1.DoubleVal &&
                            Src2.DoubleVal == Src2.DoubleVal));
   }
   return Dest;
@@ -583,10 +583,10 @@ static GenericValue executeFCMP_UNO(GenericValue Src1, GenericValue Src2,
              Src2.AggregateVal[_i].DoubleVal)));
       }
   } else if (Ty->isFloatTy())
-    Dest.IntVal = APInt(1,(Src1.FloatVal != Src1.FloatVal || 
+    Dest.IntVal = APInt(1,(Src1.FloatVal != Src1.FloatVal ||
                            Src2.FloatVal != Src2.FloatVal));
   else {
-    Dest.IntVal = APInt(1,(Src1.DoubleVal != Src1.DoubleVal || 
+    Dest.IntVal = APInt(1,(Src1.DoubleVal != Src1.DoubleVal ||
                            Src2.DoubleVal != Src2.DoubleVal));
   }
   return Dest;
@@ -613,15 +613,15 @@ void Interpreter::visitFCmpInst(FCmpInst &I) {
   GenericValue Src1 = getOperandValue(I.getOperand(0), SF);
   GenericValue Src2 = getOperandValue(I.getOperand(1), SF);
   GenericValue R;   // Result
-  
+
   switch (I.getPredicate()) {
   default:
     dbgs() << "Don't know how to handle this FCmp predicate!\n-->" << I;
     llvm_unreachable(nullptr);
   break;
-  case FCmpInst::FCMP_FALSE: R = executeFCMP_BOOL(Src1, Src2, Ty, false); 
+  case FCmpInst::FCMP_FALSE: R = executeFCMP_BOOL(Src1, Src2, Ty, false);
   break;
-  case FCmpInst::FCMP_TRUE:  R = executeFCMP_BOOL(Src1, Src2, Ty, true); 
+  case FCmpInst::FCMP_TRUE:  R = executeFCMP_BOOL(Src1, Src2, Ty, true);
   break;
   case FCmpInst::FCMP_ORD:   R = executeFCMP_ORD(Src1, Src2, Ty); break;
   case FCmpInst::FCMP_UNO:   R = executeFCMP_UNO(Src1, Src2, Ty); break;
@@ -638,11 +638,11 @@ void Interpreter::visitFCmpInst(FCmpInst &I) {
   case FCmpInst::FCMP_UGE:   R = executeFCMP_UGE(Src1, Src2, Ty); break;
   case FCmpInst::FCMP_OGE:   R = executeFCMP_OGE(Src1, Src2, Ty); break;
   }
- 
+
   SetValue(&I, R, SF);
 }
 
-static GenericValue executeCmpInst(unsigned predicate, GenericValue Src1, 
+static GenericValue executeCmpInst(unsigned predicate, GenericValue Src1,
                                    GenericValue Src2, Type *Ty) {
   GenericValue Result;
   switch (predicate) {
@@ -747,12 +747,12 @@ void Interpreter::visitBinaryOperator(BinaryOperator &I) {
     case Instruction::FRem:
       if (cast<VectorType>(Ty)->getElementType()->isFloatTy())
         for (unsigned i = 0; i < R.AggregateVal.size(); ++i)
-          R.AggregateVal[i].FloatVal = 
+          R.AggregateVal[i].FloatVal =
           fmod(Src1.AggregateVal[i].FloatVal, Src2.AggregateVal[i].FloatVal);
       else {
         if (cast<VectorType>(Ty)->getElementType()->isDoubleTy())
           for (unsigned i = 0; i < R.AggregateVal.size(); ++i)
-            R.AggregateVal[i].DoubleVal = 
+            R.AggregateVal[i].DoubleVal =
             fmod(Src1.AggregateVal[i].DoubleVal, Src2.AggregateVal[i].DoubleVal);
         else {
           dbgs() << "Unhandled type for Rem instruction: " << *Ty << "\n";
@@ -899,10 +899,10 @@ void Interpreter::visitSwitchInst(SwitchInst &I) {
 
   // Check to see if any of the cases match...
   BasicBlock *Dest = nullptr;
-  for (SwitchInst::CaseIt i = I.case_begin(), e = I.case_end(); i != e; ++i) {
-    GenericValue CaseVal = getOperandValue(i.getCaseValue(), SF);
+  for (auto Case : I.cases()) {
+    GenericValue CaseVal = getOperandValue(Case.getCaseValue(), SF);
     if (executeICMP_EQ(CondVal, CaseVal, ElTy).IntVal != 0) {
-      Dest = cast<BasicBlock>(i.getCaseSuccessor());
+      Dest = cast<BasicBlock>(Case.getCaseSuccessor());
       break;
     }
   }
@@ -965,7 +965,7 @@ void Interpreter::visitAllocaInst(AllocaInst &I) {
   Type *Ty = I.getType()->getElementType();  // Type to be allocated
 
   // Get the number of elements being allocated by the array...
-  unsigned NumElements = 
+  unsigned NumElements =
     getOperandValue(I.getOperand(0), SF).IntVal.getZExtValue();
 
   unsigned TypeSize = (size_t)getDataLayout().getTypeAllocSize(Ty);
@@ -974,11 +974,11 @@ void Interpreter::visitAllocaInst(AllocaInst &I) {
   unsigned MemToAlloc = std::max(1U, NumElements * TypeSize);
 
   // Allocate enough memory to hold the type...
-  void *Memory = malloc(MemToAlloc);
+  void *Memory = safe_malloc(MemToAlloc);
 
-  DEBUG(dbgs() << "Allocated Type: " << *Ty << " (" << TypeSize << " bytes) x " 
-               << NumElements << " (Total: " << MemToAlloc << ") at "
-               << uintptr_t(Memory) << '\n');
+  LLVM_DEBUG(dbgs() << "Allocated Type: " << *Ty << " (" << TypeSize
+                    << " bytes) x " << NumElements << " (Total: " << MemToAlloc
+                    << ") at " << uintptr_t(Memory) << '\n');
 
   GenericValue Result = PTOGV(Memory);
   assert(Result.PointerVal && "Null pointer returned by malloc!");
@@ -999,7 +999,7 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
   uint64_t Total = 0;
 
   for (; I != E; ++I) {
-    if (StructType *STy = dyn_cast<StructType>(*I)) {
+    if (StructType *STy = I.getStructTypeOrNull()) {
       const StructLayout *SLO = getDataLayout().getStructLayout(STy);
 
       const ConstantInt *CPU = cast<ConstantInt>(I.getOperand());
@@ -1007,12 +1007,11 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
 
       Total += SLO->getElementOffset(Index);
     } else {
-      SequentialType *ST = cast<SequentialType>(*I);
       // Get the index number for the array... which must be long type...
       GenericValue IdxGV = getOperandValue(I.getOperand(), SF);
 
       int64_t Idx;
-      unsigned BitWidth = 
+      unsigned BitWidth =
         cast<IntegerType>(I.getOperand()->getType())->getBitWidth();
       if (BitWidth == 32)
         Idx = (int64_t)(int32_t)IdxGV.IntVal.getZExtValue();
@@ -1020,13 +1019,13 @@ GenericValue Interpreter::executeGEPOperation(Value *Ptr, gep_type_iterator I,
         assert(BitWidth == 64 && "Invalid index type for getelementptr");
         Idx = (int64_t)IdxGV.IntVal.getZExtValue();
       }
-      Total += getDataLayout().getTypeAllocSize(ST->getElementType()) * Idx;
+      Total += getDataLayout().getTypeAllocSize(I.getIndexedType()) * Idx;
     }
   }
 
   GenericValue Result;
   Result.PointerVal = ((char*)getOperandValue(Ptr, SF).PointerVal) + Total;
-  DEBUG(dbgs() << "GEP Index " << Total << " bytes.\n");
+  LLVM_DEBUG(dbgs() << "GEP Index " << Total << " bytes.\n");
   return Result;
 }
 
@@ -1566,7 +1565,7 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
           Tmp = Tmp.zext(SrcBitSize);
           Tmp = TempSrc.AggregateVal[SrcElt++].IntVal;
           Tmp = Tmp.zext(DstBitSize);
-          Tmp = Tmp.shl(ShiftAmt);
+          Tmp <<= ShiftAmt;
           ShiftAmt += isLittleEndian ? SrcBitSize : -SrcBitSize;
           Elt.IntVal |= Tmp;
         }
@@ -1581,7 +1580,7 @@ GenericValue Interpreter::executeBitCastInst(Value *SrcVal, Type *DstTy,
           GenericValue Elt;
           Elt.IntVal = Elt.IntVal.zext(SrcBitSize);
           Elt.IntVal = TempSrc.AggregateVal[i].IntVal;
-          Elt.IntVal = Elt.IntVal.lshr(ShiftAmt);
+          Elt.IntVal.lshrInPlace(ShiftAmt);
           // it could be DstBitSize == SrcBitSize, so check it
           if (DstBitSize < SrcBitSize)
             Elt.IntVal = Elt.IntVal.trunc(DstBitSize);
@@ -2038,13 +2037,13 @@ GenericValue Interpreter::getConstantExprValue (ConstantExpr *CE,
   case Instruction::And:  Dest.IntVal = Op0.IntVal & Op1.IntVal; break;
   case Instruction::Or:   Dest.IntVal = Op0.IntVal | Op1.IntVal; break;
   case Instruction::Xor:  Dest.IntVal = Op0.IntVal ^ Op1.IntVal; break;
-  case Instruction::Shl:  
+  case Instruction::Shl:
     Dest.IntVal = Op0.IntVal.shl(Op1.IntVal.getZExtValue());
     break;
-  case Instruction::LShr: 
+  case Instruction::LShr:
     Dest.IntVal = Op0.IntVal.lshr(Op1.IntVal.getZExtValue());
     break;
-  case Instruction::AShr: 
+  case Instruction::AShr:
     Dest.IntVal = Op0.IntVal.ashr(Op1.IntVal.getZExtValue());
     break;
   default:
@@ -2101,7 +2100,7 @@ void Interpreter::callFunction(Function *F, ArrayRef<GenericValue> ArgVals) {
 
   // Handle non-varargs arguments...
   unsigned i = 0;
-  for (Function::arg_iterator AI = F->arg_begin(), E = F->arg_end(); 
+  for (Function::arg_iterator AI = F->arg_begin(), E = F->arg_end();
        AI != E; ++AI, ++i)
     SetValue(&*AI, ArgVals[i], StackFrame);
 
@@ -2119,7 +2118,7 @@ void Interpreter::run() {
     // Track the number of dynamic instructions executed.
     ++NumDynamicInsts;
 
-    DEBUG(dbgs() << "About to interpret: " << I);
+    LLVM_DEBUG(dbgs() << "About to interpret: " << I);
     visit(I);   // Dispatch to one of the visit* methods...
   }
 }

@@ -14,6 +14,10 @@
 // XFAIL: lsan
 // XFAIL: tsan
 // XFAIL: msan
+// XFAIL: ubsan
+
+// https://github.com/google/sanitizers/issues/981
+// UNSUPPORTED: android-26
 
 #include <string.h>
 #include <stdio.h>
@@ -26,7 +30,10 @@ volatile char *sink[kNumAllocs];
 int main(int argc, char **argv) {
   for (int i = 0; i < kNumAllocs; i++) {
     if ((i % 1000) == 0) {
-      fprintf(stderr, "[%d]\n", i);
+      // Don't write to stderr! Doing that triggers a kernel race condition
+      // between this thread and the rss-limit thread, and may lose part of the
+      // output. See https://lkml.org/lkml/2014/2/17/324.
+      printf("[%d]\n", i);
     }
     char *x = new char[kAllocSize];
     memset(x, 0, kAllocSize);

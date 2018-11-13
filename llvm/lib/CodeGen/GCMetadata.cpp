@@ -11,22 +11,27 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/GCMetadata.h"
 #include "llvm/CodeGen/GCStrategy.h"
-#include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cassert>
+#include <memory>
+#include <string>
+
 using namespace llvm;
 
 namespace {
 
 class Printer : public FunctionPass {
   static char ID;
+
   raw_ostream &OS;
 
 public:
@@ -38,7 +43,8 @@ public:
   bool runOnFunction(Function &F) override;
   bool doFinalization(Module &M) override;
 };
-}
+
+} // end anonymous namespace
 
 INITIALIZE_PASS(GCModuleInfo, "collector-metadata",
                 "Create Garbage Collector Module Metadata", false, false)
@@ -48,7 +54,7 @@ INITIALIZE_PASS(GCModuleInfo, "collector-metadata",
 GCFunctionInfo::GCFunctionInfo(const Function &F, GCStrategy &S)
     : F(F), S(S), FrameSize(~0LL) {}
 
-GCFunctionInfo::~GCFunctionInfo() {}
+GCFunctionInfo::~GCFunctionInfo() = default;
 
 // -----------------------------------------------------------------------------
 
@@ -67,7 +73,7 @@ GCFunctionInfo &GCModuleInfo::getFunctionInfo(const Function &F) {
     return *I->second;
 
   GCStrategy *S = getGCStrategy(F.getGC());
-  Functions.push_back(make_unique<GCFunctionInfo>(F, *S));
+  Functions.push_back(llvm::make_unique<GCFunctionInfo>(F, *S));
   GCFunctionInfo *GFI = Functions.back().get();
   FInfoMap[&F] = GFI;
   return *GFI;
@@ -153,7 +159,7 @@ GCStrategy *GCModuleInfo::getGCStrategy(const StringRef Name) {
   auto NMI = GCStrategyMap.find(Name);
   if (NMI != GCStrategyMap.end())
     return NMI->getValue();
-  
+
   for (auto& Entry : GCRegistry::entries()) {
     if (Name == Entry.getName()) {
       std::unique_ptr<GCStrategy> S = Entry.instantiate();
@@ -165,11 +171,11 @@ GCStrategy *GCModuleInfo::getGCStrategy(const StringRef Name) {
   }
 
   if (GCRegistry::begin() == GCRegistry::end()) {
-    // In normal operation, the registry should not be empty.  There should 
+    // In normal operation, the registry should not be empty.  There should
     // be the builtin GCs if nothing else.  The most likely scenario here is
-    // that we got here without running the initializers used by the Registry 
+    // that we got here without running the initializers used by the Registry
     // itself and it's registration mechanism.
-    const std::string error = ("unsupported GC: " + Name).str() + 
+    const std::string error = ("unsupported GC: " + Name).str() +
       " (did you remember to link and initialize the CodeGen library?)";
     report_fatal_error(error);
   } else

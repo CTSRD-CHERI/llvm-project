@@ -7,16 +7,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "lldb/Core/Error.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Host/windows/HostThreadWindows.h"
 #include "lldb/Host/windows/windows.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Status.h"
 #include "lldb/lldb-private-types.h"
 
 #include "ProcessWindowsLog.h"
 #include "RegisterContextWindows_x86.h"
-#include "RegisterContext_x86.h"
-#include "lldb-x86-register-enums.h"
+#include "Plugins/Process/Utility/RegisterContext_x86.h"
+#include "TargetThreadWindows.h"
+#include "Plugins/Process/Utility/lldb-x86-register-enums.h"
 
 #include "llvm/ADT/STLExtras.h"
 
@@ -29,14 +30,11 @@ using namespace lldb_private;
 namespace {
 
 // This enum defines the layout of the global RegisterInfo array.  This is
-// necessary because
-// lldb register sets are defined in terms of indices into the register array.
-// As such, the
-// order of RegisterInfos defined in global registers array must match the order
-// defined here.
-// When defining the register set layouts, these values can appear in an
-// arbitrary order, and that
-// determines the order that register values are displayed in a dump.
+// necessary because lldb register sets are defined in terms of indices into
+// the register array. As such, the order of RegisterInfos defined in global
+// registers array must match the order defined here. When defining the
+// register set layouts, these values can appear in an arbitrary order, and
+// that determines the order that register values are displayed in a dump.
 enum RegisterIndex {
   eRegisterIndexEax,
   eRegisterIndexEbx,
@@ -178,6 +176,9 @@ bool RegisterContextWindows_x86::ReadRegister(const RegisterInfo *reg_info,
   if (!CacheAllRegisterValues())
     return false;
 
+  if (reg_info == nullptr)
+    return false;
+
   uint32_t reg = reg_info->kinds[eRegisterKindLLDB];
   switch (reg) {
   case lldb_eax_i386:
@@ -202,22 +203,85 @@ bool RegisterContextWindows_x86::ReadRegister(const RegisterInfo *reg_info,
     return ReadRegisterHelper(CONTEXT_CONTROL, "EFLAGS", m_context.EFlags,
                               reg_value);
   default:
-    WINWARN_IFALL(WINDOWS_LOG_REGISTERS, "Requested unknown register %u", reg);
+    Log *log = ProcessWindowsLog::GetLogIfAny(WINDOWS_LOG_REGISTERS);
+    LLDB_LOG(log, "Requested unknown register {0}", reg);
     break;
   }
   return false;
 }
 
+bool RegisterContextWindows_x86::WriteRegister(const RegisterInfo *reg_info,
+                                               const RegisterValue &reg_value) {
+  // Since we cannot only write a single register value to the inferior, we
+  // need to make sure our cached copy of the register values are fresh.
+  // Otherwise when writing EAX, for example, we may also overwrite some other
+  // register with a stale value.
+  if (!CacheAllRegisterValues())
+    return false;
+
+  Log *log = ProcessWindowsLog::GetLogIfAny(WINDOWS_LOG_REGISTERS);
+  uint32_t reg = reg_info->kinds[eRegisterKindLLDB];
+  switch (reg) {
+  case lldb_eax_i386:
+    LLDB_LOG(log, "Write value {0:x} to EAX", reg_value.GetAsUInt32());
+    m_context.Eax = reg_value.GetAsUInt32();
+    break;
+  case lldb_ebx_i386:
+    LLDB_LOG(log, "Write value {0:x} to EBX", reg_value.GetAsUInt32());
+    m_context.Ebx = reg_value.GetAsUInt32();
+    break;
+  case lldb_ecx_i386:
+    LLDB_LOG(log, "Write value {0:x} to ECX", reg_value.GetAsUInt32());
+    m_context.Ecx = reg_value.GetAsUInt32();
+    break;
+  case lldb_edx_i386:
+    LLDB_LOG(log, "Write value {0:x} to EDX", reg_value.GetAsUInt32());
+    m_context.Edx = reg_value.GetAsUInt32();
+    break;
+  case lldb_edi_i386:
+    LLDB_LOG(log, "Write value {0:x} to EDI", reg_value.GetAsUInt32());
+    m_context.Edi = reg_value.GetAsUInt32();
+    break;
+  case lldb_esi_i386:
+    LLDB_LOG(log, "Write value {0:x} to ESI", reg_value.GetAsUInt32());
+    m_context.Esi = reg_value.GetAsUInt32();
+    break;
+  case lldb_ebp_i386:
+    LLDB_LOG(log, "Write value {0:x} to EBP", reg_value.GetAsUInt32());
+    m_context.Ebp = reg_value.GetAsUInt32();
+    break;
+  case lldb_esp_i386:
+    LLDB_LOG(log, "Write value {0:x} to ESP", reg_value.GetAsUInt32());
+    m_context.Esp = reg_value.GetAsUInt32();
+    break;
+  case lldb_eip_i386:
+    LLDB_LOG(log, "Write value {0:x} to EIP", reg_value.GetAsUInt32());
+    m_context.Eip = reg_value.GetAsUInt32();
+    break;
+  case lldb_eflags_i386:
+    LLDB_LOG(log, "Write value {0:x} to EFLAGS", reg_value.GetAsUInt32());
+    m_context.EFlags = reg_value.GetAsUInt32();
+    break;
+  default:
+    LLDB_LOG(log, "Write value {0:x} to unknown register {1}",
+             reg_value.GetAsUInt32(), reg);
+  }
+
+  // Physically update the registers in the target process.
+  TargetThreadWindows &wthread = static_cast<TargetThreadWindows &>(m_thread);
+  return ::SetThreadContext(
+      wthread.GetHostThread().GetNativeThread().GetSystemHandle(), &m_context);
+}
+
 bool RegisterContextWindows_x86::ReadRegisterHelper(
     DWORD flags_required, const char *reg_name, DWORD value,
     RegisterValue &reg_value) const {
+  Log *log = ProcessWindowsLog::GetLogIfAny(WINDOWS_LOG_REGISTERS);
   if ((m_context.ContextFlags & flags_required) != flags_required) {
-    WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Thread context doesn't have %s",
-                 reg_name);
+    LLDB_LOG(log, "Thread context doesn't have {0}", reg_name);
     return false;
   }
-  WINLOG_IFALL(WINDOWS_LOG_REGISTERS, "Read value 0x%lx from %s", value,
-               reg_name);
+  LLDB_LOG(log, "Read value {0:x} from {1}", value, reg_name);
   reg_value.SetUInt32(value);
   return true;
 }

@@ -1,3 +1,6 @@
+; XFAIL: *
+; Implement generic selection of a constant.
+
 ; RUN: llc -O2 -march=hexagon < %s | FileCheck %s --check-prefix=CHECK-TEST1
 ; RUN: llc -O2 -march=hexagon < %s | FileCheck %s --check-prefix=CHECK-TEST2
 ; RUN: llc -O2 -march=hexagon < %s | FileCheck %s --check-prefix=CHECK-TEST3
@@ -19,9 +22,9 @@ entry:
 ; The instructions seem to be in a different order in the .s file than
 ; the corresponding values in the .ll file, so just run the test three
 ; times and each time test for a different instruction.
-; CHECK-TEST1: combine(#-2, #3)
-; CHECK-TEST2: combine(#6, #-4)
-; CHECK-TEST3: combine(#-10, #-8)
+; CHECK-TEST1: combine(#-2,#3)
+; CHECK-TEST2: combine(#6,#-4)
+; CHECK-TEST3: combine(#-10,#-8)
 
 attributes #0 = { "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-frame-pointer-elim-non-leaf"="true" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "unsafe-fp-math"="false" "use-soft-float"="false" }
 

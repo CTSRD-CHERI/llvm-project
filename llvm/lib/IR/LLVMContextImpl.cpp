@@ -1,4 +1,4 @@
-//===-- LLVMContextImpl.cpp - Implement LLVMContextImpl -------------------===//
+//===- LLVMContextImpl.cpp - Implement LLVMContextImpl --------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -12,17 +12,17 @@
 //===----------------------------------------------------------------------===//
 
 #include "LLVMContextImpl.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/IR/Attributes.h"
-#include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/OptBisect.h"
+#include "llvm/IR/Type.h"
 #include "llvm/Support/ManagedStatic.h"
-#include <algorithm>
+#include <cassert>
+#include <utility>
+
 using namespace llvm;
 
 LLVMContextImpl::LLVMContextImpl(LLVMContext &C)
-  : TheTrueVal(nullptr), TheFalseVal(nullptr),
+  : DiagHandler(llvm::make_unique<DiagnosticHandler>()),
     VoidTy(C, Type::VoidTyID),
     LabelTy(C, Type::LabelTyID),
     HalfTy(C, Type::HalfTyID),
@@ -39,17 +39,7 @@ LLVMContextImpl::LLVMContextImpl(LLVMContext &C)
     Int16Ty(C, 16),
     Int32Ty(C, 32),
     Int64Ty(C, 64),
-    Int128Ty(C, 128) {
-  InlineAsmDiagHandler = nullptr;
-  InlineAsmDiagContext = nullptr;
-  DiagnosticHandler = nullptr;
-  DiagnosticContext = nullptr;
-  RespectDiagnosticFilters = false;
-  DiagnosticHotnessRequested = false;
-  YieldCallback = nullptr;
-  YieldOpaqueHandle = nullptr;
-  NamedStructTypesUniqueID = 0;
-}
+    Int128Ty(C, 128) {}
 
 LLVMContextImpl::~LLVMContextImpl() {
   // NOTE: We need to delete the contents of OwnedModules, but Module's dtor
@@ -57,6 +47,14 @@ LLVMContextImpl::~LLVMContextImpl() {
   // the container. Avoid iterators during this operation:
   while (!OwnedModules.empty())
     delete *OwnedModules.begin();
+
+#ifndef NDEBUG
+  // Check for metadata references from leaked Instructions.
+  for (auto &Pair : InstructionMetadata)
+    Pair.first->dump();
+  assert(InstructionMetadata.empty() &&
+         "Instructions with metadata have been leaked");
+#endif
 
   // Drop references for MDNodes.  Do this before Values get deleted to avoid
   // unnecessary RAUW when nodes are still unresolved.
@@ -114,9 +112,10 @@ LLVMContextImpl::~LLVMContextImpl() {
   }
 
   // Destroy attribute lists.
-  for (FoldingSetIterator<AttributeSetImpl> I = AttrsLists.begin(),
-         E = AttrsLists.end(); I != E; ) {
-    FoldingSetIterator<AttributeSetImpl> Elem = I++;
+  for (FoldingSetIterator<AttributeListImpl> I = AttrsLists.begin(),
+                                             E = AttrsLists.end();
+       I != E;) {
+    FoldingSetIterator<AttributeListImpl> Elem = I++;
     delete &*Elem;
   }
 
@@ -155,7 +154,6 @@ void LLVMContextImpl::dropTriviallyDeadConstantArrays() {
         C->destroyConstant();
       }
     }
-
   } while (Changed);
 }
 
@@ -164,7 +162,8 @@ void Module::dropTriviallyDeadConstantArrays() {
 }
 
 namespace llvm {
-/// \brief Make MDOperand transparent for hashing.
+
+/// Make MDOperand transparent for hashing.
 ///
 /// This overload of an implementation detail of the hashing library makes
 /// MDOperand hash to the same value as a \a Metadata pointer.
@@ -178,7 +177,8 @@ namespace llvm {
 /// does not cause MDOperand to be transparent.  In particular, a bare pointer
 /// doesn't get hashed before it's combined, whereas \a MDOperand would.
 static const Metadata *get_hashable_data(const MDOperand &X) { return X.get(); }
-}
+
+} // end namespace llvm
 
 unsigned MDNodeOpsKey::calculateHash(MDNode *N, unsigned Offset) {
   unsigned Hash = hash_combine_range(N->op_begin() + Offset, N->op_end());
@@ -214,31 +214,24 @@ uint32_t LLVMContextImpl::getOperandBundleTagID(StringRef Tag) const {
   return I->second;
 }
 
-// ConstantsContext anchors
-void UnaryConstantExpr::anchor() { }
+SyncScope::ID LLVMContextImpl::getOrInsertSyncScopeID(StringRef SSN) {
+  auto NewSSID = SSC.size();
+  assert(NewSSID < std::numeric_limits<SyncScope::ID>::max() &&
+         "Hit the maximum number of synchronization scopes allowed!");
+  return SSC.insert(std::make_pair(SSN, SyncScope::ID(NewSSID))).first->second;
+}
 
-void BinaryConstantExpr::anchor() { }
-
-void SelectConstantExpr::anchor() { }
-
-void ExtractElementConstantExpr::anchor() { }
-
-void InsertElementConstantExpr::anchor() { }
-
-void ShuffleVectorConstantExpr::anchor() { }
-
-void ExtractValueConstantExpr::anchor() { }
-
-void InsertValueConstantExpr::anchor() { }
-
-void GetElementPtrConstantExpr::anchor() { }
-
-void CompareConstantExpr::anchor() { }
+void LLVMContextImpl::getSyncScopeNames(
+    SmallVectorImpl<StringRef> &SSNs) const {
+  SSNs.resize(SSC.size());
+  for (const auto &SSE : SSC)
+    SSNs[SSE.second] = SSE.first();
+}
 
 /// Singleton instance of the OptBisect class.
 ///
-/// This singleton is accessed via the LLVMContext::getOptBisect() function.  It
-/// provides a mechanism to disable passes and individual optimizations at
+/// This singleton is accessed via the LLVMContext::getOptPassGate() function.
+/// It provides a mechanism to disable passes and individual optimizations at
 /// compile time based on a command line option (-opt-bisect-limit) in order to
 /// perform a bisecting search for optimization-related problems.
 ///
@@ -248,6 +241,12 @@ void CompareConstantExpr::anchor() { }
 /// enabled in order to enable a consistent bisect count.
 static ManagedStatic<OptBisect> OptBisector;
 
-OptBisect &LLVMContextImpl::getOptBisect() {
-  return *OptBisector;
+OptPassGate &LLVMContextImpl::getOptPassGate() const {
+  if (!OPG)
+    OPG = &(*OptBisector);
+  return *OPG;
+}
+
+void LLVMContextImpl::setOptPassGate(OptPassGate& OPG) {
+  this->OPG = &OPG;
 }

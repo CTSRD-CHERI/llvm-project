@@ -9,17 +9,13 @@
 
 #include "llvm/DebugInfo/PDB/PDBSymbolFuncDebugEnd.h"
 
-#include "llvm/DebugInfo/PDB/PDBSymbol.h"
 #include "llvm/DebugInfo/PDB/PDBSymDumper.h"
+#include "llvm/DebugInfo/PDB/PDBSymbol.h"
 
 #include <utility>
 
 using namespace llvm;
 using namespace llvm::pdb;
-
-PDBSymbolFuncDebugEnd::PDBSymbolFuncDebugEnd(
-    const IPDBSession &PDBSession, std::unique_ptr<IPDBRawSymbol> Symbol)
-    : PDBSymbol(PDBSession, std::move(Symbol)) {}
 
 void PDBSymbolFuncDebugEnd::dump(PDBSymDumper &Dumper) const {
   Dumper.dump(*this);

@@ -34,6 +34,8 @@ class LLVM_LIBRARY_VISIBILITY NVPTXDAGToDAGISel : public SelectionDAGISel {
   bool usePrecSqrtF32() const;
   bool useF32FTZ() const;
   bool allowFMA() const;
+  bool allowUnsafeFPMath() const;
+  bool useShortPointers() const;
 
 public:
   explicit NVPTXDAGToDAGISel(NVPTXTargetMachine &tm,
@@ -69,6 +71,9 @@ private:
   bool tryTextureIntrinsic(SDNode *N);
   bool trySurfaceIntrinsic(SDNode *N);
   bool tryBFE(SDNode *N);
+  bool tryConstantFP16(SDNode *N);
+  bool SelectSETP_F16X2(SDNode *N);
+  bool tryEXTRACT_VECTOR_ELEMENT(SDNode *N);
 
   inline SDValue getI32Imm(unsigned Imm, const SDLoc &DL) {
     return CurDAG->getTargetConstant(Imm, DL, MVT::i32);
@@ -83,7 +88,6 @@ private:
                     SDValue &Offset);
   bool SelectADDRri64(SDNode *OpNode, SDValue Addr, SDValue &Base,
                       SDValue &Offset);
-
   bool SelectADDRsi_imp(SDNode *OpNode, SDValue Addr, SDValue &Base,
                         SDValue &Offset, MVT mvt);
   bool SelectADDRsi(SDNode *OpNode, SDValue Addr, SDValue &Base,

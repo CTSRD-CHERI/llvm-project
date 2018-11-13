@@ -11,13 +11,14 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
+#include "lldb/lldb-enumerations.h"
 #include "lldb/Breakpoint/BreakpointIDList.h"
 
 #include "lldb/Breakpoint/Breakpoint.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
-#include "lldb/Interpreter/Args.h"
 #include "lldb/Interpreter/CommandReturnObject.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/Args.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -88,14 +89,13 @@ bool BreakpointIDList::FindBreakpointID(const char *bp_id_str,
   return FindBreakpointID(*bp_id, position);
 }
 
-void BreakpointIDList::InsertStringArray(const char **string_array,
-                                         size_t array_size,
-                                         CommandReturnObject &result) {
-  if (string_array == nullptr)
+void BreakpointIDList::InsertStringArray(
+    llvm::ArrayRef<const char *> string_array, CommandReturnObject &result) {
+  if(string_array.empty())
     return;
 
-  for (uint32_t i = 0; i < array_size; ++i) {
-    auto bp_id = BreakpointID::ParseCanonicalReference(string_array[i]);
+  for (const char *str : string_array) {
+    auto bp_id = BreakpointID::ParseCanonicalReference(str);
     if (bp_id.hasValue())
       m_breakpoint_ids.push_back(*bp_id);
   }
@@ -117,18 +117,19 @@ void BreakpointIDList::InsertStringArray(const char **string_array,
 
 void BreakpointIDList::FindAndReplaceIDRanges(Args &old_args, Target *target,
                                               bool allow_locations,
+                                              BreakpointName::Permissions
+                                                  ::PermissionKinds purpose,
                                               CommandReturnObject &result,
                                               Args &new_args) {
   llvm::StringRef range_from;
   llvm::StringRef range_to;
   llvm::StringRef current_arg;
-  const size_t num_old_args = old_args.GetArgumentCount();
   std::set<std::string> names_found;
 
-  for (size_t i = 0; i < num_old_args; ++i) {
+  for (size_t i = 0; i < old_args.size(); ++i) {
     bool is_range = false;
 
-    current_arg = old_args.GetArgumentAtIndex(i);
+    current_arg = old_args[i].ref;
     if (!allow_locations && current_arg.contains('.')) {
       result.AppendErrorWithFormat(
           "Breakpoint locations not allowed, saw location: %s.",
@@ -137,8 +138,7 @@ void BreakpointIDList::FindAndReplaceIDRanges(Args &old_args, Target *target,
       return;
     }
 
-    llvm::StringRef range_expr;
-    Error error;
+    Status error;
 
     std::tie(range_from, range_to) =
         BreakpointIDList::SplitIDRangeExpression(current_arg);
@@ -152,19 +152,17 @@ void BreakpointIDList::FindAndReplaceIDRanges(Args &old_args, Target *target,
         return;
       } else
         names_found.insert(current_arg);
-    } else if ((i + 2 < num_old_args) &&
-               BreakpointID::IsRangeIdentifier(
-                   old_args.GetArgumentAtIndex(i + 1)) &&
+    } else if ((i + 2 < old_args.size()) &&
+               BreakpointID::IsRangeIdentifier(old_args[i + 1].ref) &&
                BreakpointID::IsValidIDExpression(current_arg) &&
-               BreakpointID::IsValidIDExpression(
-                   old_args.GetArgumentAtIndex(i + 2))) {
+               BreakpointID::IsValidIDExpression(old_args[i + 2].ref)) {
       range_from = current_arg;
-      range_to = old_args.GetArgumentAtIndex(i + 2);
+      range_to = old_args[i + 2].ref;
       is_range = true;
       i = i + 2;
     } else {
       // See if user has specified id.*
-      llvm::StringRef tmp_str = old_args.GetArgumentAtIndex(i);
+      llvm::StringRef tmp_str = old_args[i].ref;
       size_t pos = tmp_str.find('.');
       if (pos != llvm::StringRef::npos) {
         llvm::StringRef bp_id_str = tmp_str.substr(0, pos);
@@ -238,13 +236,13 @@ void BreakpointIDList::FindAndReplaceIDRanges(Args &old_args, Target *target,
     }
 
     // We have valid range starting & ending breakpoint IDs.  Go through all
-    // the breakpoints in the target and find all the breakpoints that fit
-    // into this range, and add them to new_args.
+    // the breakpoints in the target and find all the breakpoints that fit into
+    // this range, and add them to new_args.
 
     // Next check to see if we have location id's.  If so, make sure the
-    // start_bp_id and end_bp_id are for the same breakpoint; otherwise we
-    // have an illegal range: breakpoint id ranges that specify bp locations
-    // are NOT allowed to cross major bp id numbers.
+    // start_bp_id and end_bp_id are for the same breakpoint; otherwise we have
+    // an illegal range: breakpoint id ranges that specify bp locations are NOT
+    // allowed to cross major bp id numbers.
 
     if ((start_loc_id != LLDB_INVALID_BREAK_ID) ||
         (end_loc_id != LLDB_INVALID_BREAK_ID)) {
@@ -305,14 +303,29 @@ void BreakpointIDList::FindAndReplaceIDRanges(Args &old_args, Target *target,
   }
 
   // Okay, now see if we found any names, and if we did, add them:
-  if (target && names_found.size()) {
-    for (BreakpointSP bkpt_sp : target->GetBreakpointList().Breakpoints()) {
-      for (std::string name : names_found) {
-        if (bkpt_sp->MatchesName(name.c_str())) {
-          StreamString canonical_id_str;
-          BreakpointID::GetCanonicalReference(
-              &canonical_id_str, bkpt_sp->GetID(), LLDB_INVALID_BREAK_ID);
-          new_args.AppendArgument(canonical_id_str.GetString());
+  if (target && !names_found.empty()) {
+    Status error;
+    // Remove any names that aren't visible for this purpose:
+    auto iter = names_found.begin();
+    while (iter != names_found.end()) {
+      BreakpointName *bp_name = target->FindBreakpointName(ConstString(*iter),
+                                                           true,
+                                                           error);
+      if (bp_name && !bp_name->GetPermission(purpose))
+        iter = names_found.erase(iter);
+      else
+        iter++;
+    }
+    
+    if (!names_found.empty()) {
+      for (BreakpointSP bkpt_sp : target->GetBreakpointList().Breakpoints()) {
+        for (std::string name : names_found) {
+          if (bkpt_sp->MatchesName(name.c_str())) {
+            StreamString canonical_id_str;
+            BreakpointID::GetCanonicalReference(
+                &canonical_id_str, bkpt_sp->GetID(), LLDB_INVALID_BREAK_ID);
+            new_args.AppendArgument(canonical_id_str.GetString());
+          }
         }
       }
     }

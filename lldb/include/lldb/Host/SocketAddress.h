@@ -32,15 +32,24 @@ typedef ADDRESS_FAMILY sa_family_t;
 // Other libraries and framework includes
 // Project includes
 #include <string>
+#include <vector>
 
 namespace lldb_private {
 
 class SocketAddress {
 public:
+  //----------------------------------------------------------------------------
+  // Static method to get all address information for a host and/or service
+  //----------------------------------------------------------------------------
+  static std::vector<SocketAddress>
+  GetAddressInfo(const char *hostname, const char *servname, int ai_family,
+                 int ai_socktype, int ai_protocol, int ai_flags = 0);
+
   //------------------------------------------------------------------
   // Constructors and Destructors
   //------------------------------------------------------------------
   SocketAddress();
+  SocketAddress(const struct addrinfo *addr_info);
   SocketAddress(const struct sockaddr &s);
   SocketAddress(const struct sockaddr_in &s);
   SocketAddress(const struct sockaddr_in6 &s);
@@ -62,6 +71,9 @@ public:
   const SocketAddress &operator=(const struct sockaddr_in6 &s);
 
   const SocketAddress &operator=(const struct sockaddr_storage &s);
+
+  bool operator==(const SocketAddress &rhs) const;
+  bool operator!=(const SocketAddress &rhs) const;
 
   //------------------------------------------------------------------
   // Clear the contents of this socket address
@@ -99,17 +111,16 @@ public:
   uint16_t GetPort() const;
 
   //------------------------------------------------------------------
-  // Set the port if the socket address for the family has a port.
-  // The family must be set correctly prior to calling this function.
+  // Set the port if the socket address for the family has a port. The family
+  // must be set correctly prior to calling this function.
   //------------------------------------------------------------------
   bool SetPort(uint16_t port);
 
   //------------------------------------------------------------------
-  // Set the socket address according to the first match from a call
-  // to getaddrinfo() (or equivalent functions for systems that don't
-  // have getaddrinfo(). If "addr_info_ptr" is not NULL, it will get
-  // filled in with the match that was used to populate this socket
-  // address.
+  // Set the socket address according to the first match from a call to
+  // getaddrinfo() (or equivalent functions for systems that don't have
+  // getaddrinfo(). If "addr_info_ptr" is not NULL, it will get filled in with
+  // the match that was used to populate this socket address.
   //------------------------------------------------------------------
   bool
   getaddrinfo(const char *host,    // Hostname ("foo.bar.com" or "foo" or IP
@@ -121,9 +132,9 @@ public:
               int ai_protocol = 0, int ai_flags = 0);
 
   //------------------------------------------------------------------
-  // Quick way to set the SocketAddress to localhost given the family.
-  // Returns true if successful, false if "family" doesn't support
-  // localhost or if "family" is not supported by this class.
+  // Quick way to set the SocketAddress to localhost given the family. Returns
+  // true if successful, false if "family" doesn't support localhost or if
+  // "family" is not supported by this class.
   //------------------------------------------------------------------
   bool SetToLocalhost(sa_family_t family, uint16_t port);
 
@@ -133,6 +144,16 @@ public:
   // Returns true if there is a valid socket address in this object.
   //------------------------------------------------------------------
   bool IsValid() const;
+
+  //------------------------------------------------------------------
+  // Returns true if the socket is INADDR_ANY
+  //------------------------------------------------------------------
+  bool IsAnyAddr() const;
+
+  //------------------------------------------------------------------
+  // Returns true if the socket is INADDR_LOOPBACK
+  //------------------------------------------------------------------
+  bool IsLocalhost() const;
 
   //------------------------------------------------------------------
   // Direct access to all of the sockaddr structures
@@ -168,11 +189,10 @@ public:
   }
 
   //------------------------------------------------------------------
-  // Conversion operators to allow getting the contents of this class
-  // as a pointer to the appropriate structure. This allows an instance
-  // of this class to be used in calls that take one of the sockaddr
-  // structure variants without having to manually use the correct
-  // accessor function.
+  // Conversion operators to allow getting the contents of this class as a
+  // pointer to the appropriate structure. This allows an instance of this
+  // class to be used in calls that take one of the sockaddr structure variants
+  // without having to manually use the correct accessor function.
   //------------------------------------------------------------------
 
   operator struct sockaddr *() { return &m_socket_addr.sa; }

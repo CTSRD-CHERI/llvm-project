@@ -19,6 +19,7 @@ namespace include_fixer {
 namespace {
 
 using find_all_symbols::SymbolInfo;
+using find_all_symbols::SymbolAndSignals;
 
 static bool runOnCode(tooling::ToolAction *ToolAction, StringRef Code,
                       StringRef FileName,
@@ -52,41 +53,49 @@ static bool runOnCode(tooling::ToolAction *ToolAction, StringRef Code,
 static std::string runIncludeFixer(
     StringRef Code,
     const std::vector<std::string> &ExtraArgs = std::vector<std::string>()) {
-  std::vector<SymbolInfo> Symbols = {
-      SymbolInfo("string", SymbolInfo::SymbolKind::Class, "<string>", 1,
-                 {{SymbolInfo::ContextType::Namespace, "std"}}),
-      SymbolInfo("sting", SymbolInfo::SymbolKind::Class, "\"sting\"", 1,
-                 {{SymbolInfo::ContextType::Namespace, "std"}}),
-      SymbolInfo("foo", SymbolInfo::SymbolKind::Class, "\"dir/otherdir/qux.h\"",
-                 1, {{SymbolInfo::ContextType::Namespace, "b"},
-                     {SymbolInfo::ContextType::Namespace, "a"}}),
-      SymbolInfo("bar", SymbolInfo::SymbolKind::Class, "\"bar.h\"", 1,
-                 {{SymbolInfo::ContextType::Namespace, "b"},
-                  {SymbolInfo::ContextType::Namespace, "a"}}),
-      SymbolInfo("bar", SymbolInfo::SymbolKind::Class, "\"bar2.h\"", 1,
-                 {{SymbolInfo::ContextType::Namespace, "c"},
-                  {SymbolInfo::ContextType::Namespace, "a"}}),
-      SymbolInfo("Green", SymbolInfo::SymbolKind::Class, "\"color.h\"", 1,
-                 {{SymbolInfo::ContextType::EnumDecl, "Color"},
-                  {SymbolInfo::ContextType::Namespace, "b"},
-                  {SymbolInfo::ContextType::Namespace, "a"}}),
-      SymbolInfo("Vector", SymbolInfo::SymbolKind::Class, "\"Vector.h\"", 1,
-                 {{SymbolInfo::ContextType::Namespace, "__a"},
-                  {SymbolInfo::ContextType::Namespace, "a"}},
-                 /*num_occurrences=*/2),
-      SymbolInfo("Vector", SymbolInfo::SymbolKind::Class, "\"Vector.h\"", 2,
-                 {{SymbolInfo::ContextType::Namespace, "a"}},
-                 /*num_occurrences=*/1),
-      SymbolInfo("StrCat", SymbolInfo::SymbolKind::Class, "\"strcat.h\"",
-                 1, {{SymbolInfo::ContextType::Namespace, "str"}}),
-      SymbolInfo("str", SymbolInfo::SymbolKind::Class, "\"str.h\"",
-                 1, {}),
-      SymbolInfo("foo2", SymbolInfo::SymbolKind::Class, "\"foo2.h\"",
-                 1, {}),
+  std::vector<SymbolAndSignals> Symbols = {
+      {SymbolInfo("string", SymbolInfo::SymbolKind::Class, "<string>",
+                  {{SymbolInfo::ContextType::Namespace, "std"}}),
+       SymbolInfo::Signals{}},
+      {SymbolInfo("sting", SymbolInfo::SymbolKind::Class, "\"sting\"",
+                  {{SymbolInfo::ContextType::Namespace, "std"}}),
+       SymbolInfo::Signals{}},
+      {SymbolInfo("foo", SymbolInfo::SymbolKind::Class,
+                  "\"dir/otherdir/qux.h\"",
+                  {{SymbolInfo::ContextType::Namespace, "b"},
+                   {SymbolInfo::ContextType::Namespace, "a"}}),
+       SymbolInfo::Signals{}},
+      {SymbolInfo("bar", SymbolInfo::SymbolKind::Class, "\"bar.h\"",
+                  {{SymbolInfo::ContextType::Namespace, "b"},
+                   {SymbolInfo::ContextType::Namespace, "a"}}),
+       SymbolInfo::Signals{}},
+      {SymbolInfo("bar", SymbolInfo::SymbolKind::Class, "\"bar2.h\"",
+                  {{SymbolInfo::ContextType::Namespace, "c"},
+                   {SymbolInfo::ContextType::Namespace, "a"}}),
+       SymbolInfo::Signals{}},
+      {SymbolInfo("Green", SymbolInfo::SymbolKind::Class, "\"color.h\"",
+                  {{SymbolInfo::ContextType::EnumDecl, "Color"},
+                   {SymbolInfo::ContextType::Namespace, "b"},
+                   {SymbolInfo::ContextType::Namespace, "a"}}),
+       SymbolInfo::Signals{}},
+      {SymbolInfo("Vector", SymbolInfo::SymbolKind::Class, "\"Vector.h\"",
+                  {{SymbolInfo::ContextType::Namespace, "__a"},
+                   {SymbolInfo::ContextType::Namespace, "a"}}),
+       SymbolInfo::Signals{/*Seen=*/2, 0}},
+      {SymbolInfo("Vector", SymbolInfo::SymbolKind::Class, "\"Vector.h\"",
+                  {{SymbolInfo::ContextType::Namespace, "a"}}),
+       SymbolInfo::Signals{/*Seen=*/2, 0}},
+      {SymbolInfo("StrCat", SymbolInfo::SymbolKind::Class, "\"strcat.h\"",
+                  {{SymbolInfo::ContextType::Namespace, "str"}}),
+       SymbolInfo::Signals{}},
+      {SymbolInfo("str", SymbolInfo::SymbolKind::Class, "\"str.h\"", {}),
+       SymbolInfo::Signals{}},
+      {SymbolInfo("foo2", SymbolInfo::SymbolKind::Class, "\"foo2.h\"", {}),
+       SymbolInfo::Signals{}},
   };
-  auto SymbolIndexMgr = llvm::make_unique<include_fixer::SymbolIndexManager>();
+  auto SymbolIndexMgr = llvm::make_unique<SymbolIndexManager>();
   SymbolIndexMgr->addSymbolIndex(
-      llvm::make_unique<include_fixer::InMemorySymbolIndex>(Symbols));
+      [=]() { return llvm::make_unique<InMemorySymbolIndex>(Symbols); });
 
   std::vector<IncludeFixerContext> FixerContexts;
   IncludeFixerActionFactory Factory(*SymbolIndexMgr, FixerContexts, "llvm");
@@ -95,15 +104,14 @@ static std::string runIncludeFixer(
   assert(FixerContexts.size() == 1);
   if (FixerContexts.front().getHeaderInfos().empty())
     return Code;
-  auto Replaces = clang::include_fixer::createIncludeFixerReplacements(
-      Code, FixerContexts.front());
+  auto Replaces = createIncludeFixerReplacements(Code, FixerContexts.front());
   EXPECT_TRUE(static_cast<bool>(Replaces))
       << llvm::toString(Replaces.takeError()) << "\n";
   if (!Replaces)
     return "";
-  clang::RewriterTestContext Context;
-  clang::FileID ID = Context.createInMemoryFile(FakeFileName, Code);
-  clang::tooling::applyAllReplacements(*Replaces, Context.Rewrite);
+  RewriterTestContext Context;
+  FileID ID = Context.createInMemoryFile(FakeFileName, Code);
+  tooling::applyAllReplacements(*Replaces, Context.Rewrite);
   return Context.getRewrittenText(ID);
 }
 
@@ -111,13 +119,10 @@ TEST(IncludeFixer, Typo) {
   EXPECT_EQ("#include <string>\nstd::string foo;\n",
             runIncludeFixer("std::string foo;\n"));
 
-  // FIXME: the current version of include-fixer does not get this test case
-  // right - header should be inserted before definition.
-  EXPECT_EQ(
-      "// comment\n#include \"foo.h\"\nstd::string foo;\n"
-      "#include \"dir/bar.h\"\n#include <string>\n",
-      runIncludeFixer("// comment\n#include \"foo.h\"\nstd::string foo;\n"
-                      "#include \"dir/bar.h\"\n"));
+  EXPECT_EQ("// comment\n#include \"foo.h\"\n#include <string>\n"
+            "std::string foo;\n#include \"dir/bar.h\"\n",
+            runIncludeFixer("// comment\n#include \"foo.h\"\nstd::string foo;\n"
+                            "#include \"dir/bar.h\"\n"));
 
   EXPECT_EQ("#include \"foo.h\"\n#include <string>\nstd::string foo;\n",
             runIncludeFixer("#include \"foo.h\"\nstd::string foo;\n"));
@@ -139,6 +144,10 @@ TEST(IncludeFixer, IncompleteType) {
       "namespace std {\nclass string;\n}\nstd::string foo;\n",
       runIncludeFixer("#include \"foo.h\"\n"
                       "namespace std {\nclass string;\n}\nstring foo;\n"));
+
+  EXPECT_EQ("#include <string>\n"
+            "class string;\ntypedef string foo;\nfoo f;\n",
+            runIncludeFixer("class string;\ntypedef string foo;\nfoo f;\n"));
 }
 
 TEST(IncludeFixer, MinimizeInclude) {
@@ -187,7 +196,8 @@ TEST(IncludeFixer, ScopedNamespaceSymbols) {
             runIncludeFixer("namespace a {\nb::bar b;\n}"));
   EXPECT_EQ("#include \"bar.h\"\nnamespace A {\na::b::bar b;\n}",
             runIncludeFixer("namespace A {\na::b::bar b;\n}"));
-  EXPECT_EQ("#include \"bar.h\"\nnamespace a {\nvoid func() { b::bar b; }\n}",
+  EXPECT_EQ("#include \"bar.h\"\nnamespace a {\nvoid func() { b::bar b; }\n} "
+            "// namespace a",
             runIncludeFixer("namespace a {\nvoid func() { b::bar b; }\n}"));
   EXPECT_EQ("namespace A { c::b::bar b; }\n",
             runIncludeFixer("namespace A { c::b::bar b; }\n"));
@@ -249,7 +259,8 @@ TEST(IncludeFixer, FixNamespaceQualifiers) {
             runIncludeFixer("namespace a {\nb::bar b;\n}\n"));
   EXPECT_EQ("#include \"bar.h\"\nnamespace a {\nb::bar b;\n}\n",
             runIncludeFixer("namespace a {\nbar b;\n}\n"));
-  EXPECT_EQ("#include \"bar.h\"\nnamespace a {\nnamespace b{\nbar b;\n}\n}\n",
+  EXPECT_EQ("#include \"bar.h\"\nnamespace a {\nnamespace b{\nbar b;\n}\n} "
+            "// namespace a\n",
             runIncludeFixer("namespace a {\nnamespace b{\nbar b;\n}\n}\n"));
   EXPECT_EQ("c::b::bar b;\n",
             runIncludeFixer("c::b::bar b;\n"));
@@ -259,12 +270,12 @@ TEST(IncludeFixer, FixNamespaceQualifiers) {
             runIncludeFixer("namespace c {\nbar b;\n}\n"));
 
   // Test common qualifers reduction.
-  EXPECT_EQ(
-      "#include \"bar.h\"\nnamespace a {\nnamespace d {\nb::bar b;\n}\n}\n",
-      runIncludeFixer("namespace a {\nnamespace d {\nbar b;\n}\n}\n"));
-  EXPECT_EQ(
-      "#include \"bar.h\"\nnamespace d {\nnamespace a {\na::b::bar b;\n}\n}\n",
-      runIncludeFixer("namespace d {\nnamespace a {\nbar b;\n}\n}\n"));
+  EXPECT_EQ("#include \"bar.h\"\nnamespace a {\nnamespace d {\nb::bar b;\n}\n} "
+            "// namespace a\n",
+            runIncludeFixer("namespace a {\nnamespace d {\nbar b;\n}\n}\n"));
+  EXPECT_EQ("#include \"bar.h\"\nnamespace d {\nnamespace a {\na::b::bar "
+            "b;\n}\n} // namespace d\n",
+            runIncludeFixer("namespace d {\nnamespace a {\nbar b;\n}\n}\n"));
 
   // Test nested classes.
   EXPECT_EQ("#include \"bar.h\"\nnamespace d {\na::b::bar::t b;\n}\n",

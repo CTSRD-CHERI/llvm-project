@@ -20,8 +20,9 @@
 using namespace lldb;
 using namespace lldb_private;
 using namespace lldb_private::process_gdb_remote;
+using namespace std::chrono;
 
-static const std::chrono::seconds kInterruptTimeout(5);
+static const seconds kInterruptTimeout(5);
 
 /////////////////////////
 // GDBRemoteClientBase //
@@ -51,19 +52,15 @@ StateType GDBRemoteClientBase::SendContinuePacketAndWaitForResponse(
   OnRunPacketSent(true);
 
   for (;;) {
-    PacketResult read_result = ReadPacket(
-        response,
-        std::chrono::duration_cast<std::chrono::microseconds>(kInterruptTimeout)
-            .count(),
-        false);
+    PacketResult read_result = ReadPacket(response, kInterruptTimeout, false);
     switch (read_result) {
     case PacketResult::ErrorReplyTimeout: {
       std::lock_guard<std::mutex> lock(m_mutex);
       if (m_async_count == 0)
         continue;
-      if (std::chrono::steady_clock::now() >=
-          m_interrupt_time + kInterruptTimeout)
+      if (steady_clock::now() >= m_interrupt_time + kInterruptTimeout)
         return eStateInvalid;
+      break;
     }
     case PacketResult::Success:
       break;
@@ -112,16 +109,14 @@ StateType GDBRemoteClientBase::SendContinuePacketAndWaitForResponse(
       const bool should_stop = ShouldStop(signals, response);
       response.SetFilePos(0);
 
-      // The packet we should resume with. In the future
-      // we should check our thread list and "do the right thing"
-      // for new threads that show up while we stop and run async
-      // packets. Setting the packet to 'c' to continue all threads
-      // is the right thing to do 99.99% of the time because if a
-      // thread was single stepping, and we sent an interrupt, we
-      // will notice above that we didn't stop due to an interrupt
-      // but stopped due to stepping and we would _not_ continue.
-      // This packet may get modified by the async actions (e.g. to send a
-      // signal).
+      // The packet we should resume with. In the future we should check our
+      // thread list and "do the right thing" for new threads that show up
+      // while we stop and run async packets. Setting the packet to 'c' to
+      // continue all threads is the right thing to do 99.99% of the time
+      // because if a thread was single stepping, and we sent an interrupt, we
+      // will notice above that we didn't stop due to an interrupt but stopped
+      // due to stepping and we would _not_ continue. This packet may get
+      // modified by the async actions (e.g. to send a signal).
       m_continue_packet = 'c';
       cont_lock.unlock();
 
@@ -180,6 +175,30 @@ GDBRemoteClientBase::SendPacketAndWaitForResponse(
 }
 
 GDBRemoteCommunication::PacketResult
+GDBRemoteClientBase::SendPacketAndReceiveResponseWithOutputSupport(
+    llvm::StringRef payload, StringExtractorGDBRemote &response,
+    bool send_async,
+    llvm::function_ref<void(llvm::StringRef)> output_callback) {
+  Lock lock(*this, send_async);
+  if (!lock) {
+    if (Log *log =
+            ProcessGDBRemoteLog::GetLogIfAllCategoriesSet(GDBR_LOG_PROCESS))
+      log->Printf("GDBRemoteClientBase::%s failed to get mutex, not sending "
+                  "packet '%.*s' (send_async=%d)",
+                  __FUNCTION__, int(payload.size()), payload.data(),
+                  send_async);
+    return PacketResult::ErrorSendFailed;
+  }
+
+  PacketResult packet_result = SendPacketNoLock(payload);
+  if (packet_result != PacketResult::Success)
+    return packet_result;
+
+  return ReadPacketWithOutputSupport(response, GetPacketTimeout(), true,
+                                     output_callback);
+}
+
+GDBRemoteCommunication::PacketResult
 GDBRemoteClientBase::SendPacketAndWaitForResponseNoLock(
     llvm::StringRef payload, StringExtractorGDBRemote &response) {
   PacketResult packet_result = SendPacketNoLock(payload);
@@ -188,11 +207,7 @@ GDBRemoteClientBase::SendPacketAndWaitForResponseNoLock(
 
   const size_t max_response_retries = 3;
   for (size_t i = 0; i < max_response_retries; ++i) {
-    packet_result = ReadPacket(
-        response, std::chrono::duration_cast<std::chrono::microseconds>(
-                      GetPacketTimeout())
-                      .count(),
-        true);
+    packet_result = ReadPacket(response, GetPacketTimeout(), true);
     // Make sure we received a response
     if (packet_result != PacketResult::Success)
       return packet_result;
@@ -232,7 +247,7 @@ bool GDBRemoteClientBase::SendvContPacket(llvm::StringRef payload,
   OnRunPacketSent(true);
 
   // wait for the response to the vCont
-  if (ReadPacket(response, UINT32_MAX, false) == PacketResult::Success) {
+  if (ReadPacket(response, llvm::None, false) == PacketResult::Success) {
     if (response.IsOKResponse())
       return true;
   }
@@ -246,20 +261,16 @@ bool GDBRemoteClientBase::ShouldStop(const UnixSignals &signals,
   if (m_async_count == 0)
     return true; // We were not interrupted. The process stopped on its own.
 
-  // Older debugserver stubs (before April 2016) can return two
-  // stop-reply packets in response to a ^C packet.
-  // Additionally, all debugservers still return two stop replies if
-  // the inferior stops due to some other reason before the remote
-  // stub manages to interrupt it. We need to wait for this
-  // additional packet to make sure the packet sequence does not get
-  // skewed.
+  // Older debugserver stubs (before April 2016) can return two stop-reply
+  // packets in response to a ^C packet. Additionally, all debugservers still
+  // return two stop replies if the inferior stops due to some other reason
+  // before the remote stub manages to interrupt it. We need to wait for this
+  // additional packet to make sure the packet sequence does not get skewed.
   StringExtractorGDBRemote extra_stop_reply_packet;
-  uint32_t timeout_usec = 100000; // 100ms
-  ReadPacket(extra_stop_reply_packet, timeout_usec, false);
+  ReadPacket(extra_stop_reply_packet, milliseconds(100), false);
 
-  // Interrupting is typically done using SIGSTOP or SIGINT, so if
-  // the process stops with some other signal, we definitely want to
-  // stop.
+  // Interrupting is typically done using SIGSTOP or SIGINT, so if the process
+  // stops with some other signal, we definitely want to stop.
   const uint8_t signo = response.GetHexU8(UINT8_MAX);
   if (signo != signals.GetSignalNumberFromName("SIGSTOP") &&
       signo != signals.GetSignalNumberFromName("SIGINT"))
@@ -268,11 +279,9 @@ bool GDBRemoteClientBase::ShouldStop(const UnixSignals &signals,
   // We probably only stopped to perform some async processing, so continue
   // after that is done.
   // TODO: This is not 100% correct, as the process may have been stopped with
-  // SIGINT or SIGSTOP
-  // that was not caused by us (e.g. raise(SIGINT)). This will normally cause a
-  // stop, but if it's
-  // done concurrently with a async interrupt, that stop will get eaten
-  // (llvm.org/pr20231).
+  // SIGINT or SIGSTOP that was not caused by us (e.g. raise(SIGINT)). This will
+  // normally cause a stop, but if it's done concurrently with a async
+  // interrupt, that stop will get eaten (llvm.org/pr20231).
   return false;
 }
 
@@ -368,7 +377,7 @@ void GDBRemoteClientBase::Lock::SyncWithContinueThread(bool interrupt) {
       }
       if (log)
         log->PutCString("GDBRemoteClientBase::Lock::Lock sent packet: \\x03");
-      m_comm.m_interrupt_time = std::chrono::steady_clock::now();
+      m_comm.m_interrupt_time = steady_clock::now();
     }
     m_comm.m_cv.wait(lock, [this] { return m_comm.m_is_running == false; });
     m_did_interrupt = true;

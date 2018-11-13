@@ -11,12 +11,12 @@
 #include <utility>
 #include <vector>
 
+#include "lldb/Core/DumpDataExtractor.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/UniqueCStringMap.h"
 #include "lldb/Core/ValueObject.h"
-#include "lldb/DataFormatters/StringPrinter.h"
 #include "lldb/Symbol/CompilerType.h"
 #include "lldb/Symbol/GoASTContext.h"
 #include "lldb/Symbol/ObjectFile.h"
@@ -24,6 +24,8 @@
 #include "lldb/Symbol/Type.h"
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/Target.h"
+
+#include "llvm/Support/Threading.h"
 
 #include "Plugins/ExpressionParser/Go/GoUserExpression.h"
 #include "Plugins/SymbolFile/DWARF/DWARFASTParserGo.h"
@@ -593,36 +595,35 @@ GoASTContext::GetBasicTypeEnumeration(lldb::opaque_compiler_type_t type) {
   if (name) {
     typedef UniqueCStringMap<lldb::BasicType> TypeNameToBasicTypeMap;
     static TypeNameToBasicTypeMap g_type_map;
-    static std::once_flag g_once_flag;
-    std::call_once(g_once_flag, []() {
+    static llvm::once_flag g_once_flag;
+    llvm::call_once(g_once_flag, []() {
       // "void"
-      g_type_map.Append(ConstString("void").GetStringRef(), eBasicTypeVoid);
+      g_type_map.Append(ConstString("void"), eBasicTypeVoid);
       // "int"
-      g_type_map.Append(ConstString("int").GetStringRef(), eBasicTypeInt);
-      g_type_map.Append(ConstString("uint").GetStringRef(),
-                        eBasicTypeUnsignedInt);
+      g_type_map.Append(ConstString("int"), eBasicTypeInt);
+      g_type_map.Append(ConstString("uint"), eBasicTypeUnsignedInt);
 
       // Miscellaneous
-      g_type_map.Append(ConstString("bool").GetStringRef(), eBasicTypeBool);
+      g_type_map.Append(ConstString("bool"), eBasicTypeBool);
 
       // Others. Should these map to C types?
-      g_type_map.Append(ConstString("byte").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("uint8").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("uint16").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("uint32").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("uint64").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("int8").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("int16").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("int32").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("int64").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("float32").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("float64").GetStringRef(), eBasicTypeOther);
-      g_type_map.Append(ConstString("uintptr").GetStringRef(), eBasicTypeOther);
+      g_type_map.Append(ConstString("byte"), eBasicTypeOther);
+      g_type_map.Append(ConstString("uint8"), eBasicTypeOther);
+      g_type_map.Append(ConstString("uint16"), eBasicTypeOther);
+      g_type_map.Append(ConstString("uint32"), eBasicTypeOther);
+      g_type_map.Append(ConstString("uint64"), eBasicTypeOther);
+      g_type_map.Append(ConstString("int8"), eBasicTypeOther);
+      g_type_map.Append(ConstString("int16"), eBasicTypeOther);
+      g_type_map.Append(ConstString("int32"), eBasicTypeOther);
+      g_type_map.Append(ConstString("int64"), eBasicTypeOther);
+      g_type_map.Append(ConstString("float32"), eBasicTypeOther);
+      g_type_map.Append(ConstString("float64"), eBasicTypeOther);
+      g_type_map.Append(ConstString("uintptr"), eBasicTypeOther);
 
       g_type_map.Sort();
     });
 
-    return g_type_map.Find(name.GetStringRef(), eBasicTypeInvalid);
+    return g_type_map.Find(name, eBasicTypeInvalid);
   }
   return eBasicTypeInvalid;
 }
@@ -666,8 +667,7 @@ GoASTContext::GetFullyUnqualifiedType(lldb::opaque_compiler_type_t type) {
 }
 
 // Returns -1 if this isn't a function of if the function doesn't have a
-// prototype
-// Returns a value >= 0 if there is a prototype.
+// prototype Returns a value >= 0 if there is a prototype.
 int GoASTContext::GetFunctionArgumentCount(lldb::opaque_compiler_type_t type) {
   return GetNumberOfFunctionArguments(type);
 }
@@ -1007,8 +1007,8 @@ CompilerType GoASTContext::GetChildCompilerTypeAtIndex(
   return CompilerType();
 }
 
-// Lookup a child given a name. This function will match base class names
-// and member member names in "clang_type" only, not descendants.
+// Lookup a child given a name. This function will match base class names and
+// member member names in "clang_type" only, not descendants.
 uint32_t
 GoASTContext::GetIndexOfChildWithName(lldb::opaque_compiler_type_t type,
                                       const char *name,
@@ -1047,8 +1047,8 @@ size_t GoASTContext::GetIndexOfChildMemberWithName(
   return 1;
 }
 
-// Converts "s" to a floating point value and place resulting floating
-// point bytes in the "dst" buffer.
+// Converts "s" to a floating point value and place resulting floating point
+// bytes in the "dst" buffer.
 size_t
 GoASTContext::ConvertStringToFloatValue(lldb::opaque_compiler_type_t type,
                                         const char *s, uint8_t *dst,
@@ -1079,9 +1079,8 @@ void GoASTContext::DumpValue(lldb::opaque_compiler_type_t type,
       uint32_t field_idx = 0;
       for (auto *field = st->GetField(field_idx); field != nullptr;
            field_idx++) {
-        // Print the starting squiggly bracket (if this is the
-        // first member) or comma (for member 2 and beyond) for
-        // the struct/union/class member.
+        // Print the starting squiggly bracket (if this is the first member) or
+        // comma (for member 2 and beyond) for the struct/union/class member.
         if (field_idx == 0)
           s->PutChar('{');
         else
@@ -1136,9 +1135,8 @@ void GoASTContext::DumpValue(lldb::opaque_compiler_type_t type,
 
     uint64_t element_idx;
     for (element_idx = 0; element_idx < a->GetLength(); ++element_idx) {
-      // Print the starting squiggly bracket (if this is the
-      // first member) or comman (for member 2 and beyong) for
-      // the struct/union/class member.
+      // Print the starting squiggly bracket (if this is the first member) or
+      // comman (for member 2 and beyong) for the struct/union/class member.
       if (element_idx == 0)
         s->PutChar('{');
       else
@@ -1261,9 +1259,9 @@ bool GoASTContext::DumpTypeValue(lldb::opaque_compiler_type_t type, Stream *s,
       byte_size = 4;
       break;
     }
-    return data.Dump(s, byte_offset, format, byte_size, item_count, UINT32_MAX,
-                     LLDB_INVALID_ADDRESS, bitfield_bit_size,
-                     bitfield_bit_offset, exe_scope);
+    return DumpDataExtractor(data, s, byte_offset, format, byte_size,
+                             item_count, UINT32_MAX, LLDB_INVALID_ADDRESS,
+                             bitfield_bit_size, bitfield_bit_offset, exe_scope);
   }
   return 0;
 }

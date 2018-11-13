@@ -1,5 +1,5 @@
 ; REQUIRES: asserts
-; RUN: llc %s -mtriple=lanai-unknown-unknown -debug-only=misched -o /dev/null 2>&1 | FileCheck %s
+; RUN: llc %s -mtriple=lanai-unknown-unknown -debug-only=machine-scheduler -o /dev/null 2>&1 | FileCheck %s
 
 ; Make sure there are no control dependencies between memory operations that
 ; are trivially disjoint.
@@ -36,7 +36,7 @@ entry:
 ; CHECK-LABEL: SU({{.*}}):   SW_RI{{.*}}, 4,
 ; CHECK:  # preds left       : 2
 ; CHECK:  # succs left       : 0
-; CHECK-LABEL: SU({{.*}}):   %vreg{{.*}}<def> = LDW_RI{{.*}}, 12,
+; CHECK-LABEL: SU({{.*}}):   %{{.*}} = LDW_RI{{.*}}, 12,
 ; CHECK:  # preds left       : 1
 ; CHECK:  # succs left       : 4
 ; CHECK-LABEL: SU({{.*}}):   STH_RI{{.*}}, 10,

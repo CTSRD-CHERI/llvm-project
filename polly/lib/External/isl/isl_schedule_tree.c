@@ -1,6 +1,7 @@
 /*
  * Copyright 2013-2014 Ecole Normale Superieure
  * Copyright 2014      INRIA Rocquencourt
+ * Copyright 2016      INRIA Paris
  *
  * Use of this software is governed by the MIT license
  *
@@ -8,8 +9,13 @@
  * Ecole Normale Superieure, 45 rue d'Ulm, 75230 Paris, France
  * and Inria Paris - Rocquencourt, Domaine de Voluceau - Rocquencourt,
  * B.P. 105 - 78153 Le Chesnay, France
+ * and Centre de Recherche Inria de Paris, 2 rue Simone Iff - Voie DQ12,
+ * CS 42112, 75589 Paris Cedex 12, France
  */
 
+#include <isl/id.h>
+#include <isl/val.h>
+#include <isl/space.h>
 #include <isl/map.h>
 #include <isl_schedule_band.h>
 #include <isl_schedule_private.h>
@@ -79,7 +85,7 @@ __isl_take isl_schedule_tree *isl_schedule_tree_dup(
 	case isl_schedule_node_error:
 		isl_die(ctx, isl_error_internal,
 			"allocation should have failed",
-			isl_schedule_tree_free(dup));
+			return isl_schedule_tree_free(dup));
 	case isl_schedule_node_band:
 		dup->band = isl_schedule_band_copy(tree->band);
 		if (!dup->band)
@@ -1728,7 +1734,7 @@ static __isl_give isl_union_map *subtree_schedule_extend_from_children(
 	separate = n > 1 && (tree->type == isl_schedule_node_sequence ||
 			    isl_options_get_schedule_separate_components(ctx));
 
-	space = extract_space_from_filter_child(tree);
+	space = isl_space_params_alloc(ctx, 0);
 
 	umap = isl_union_map_empty(isl_space_copy(space));
 	space = isl_space_set_from_params(space);
@@ -1740,6 +1746,7 @@ static __isl_give isl_union_map *subtree_schedule_extend_from_children(
 
 	dim = isl_multi_val_dim(mv, isl_dim_set);
 	for (i = 0; i < n; ++i) {
+		isl_multi_val *mv_copy;
 		isl_union_pw_multi_aff *upma;
 		isl_union_map *umap_i;
 		isl_union_set *dom;
@@ -1755,8 +1762,10 @@ static __isl_give isl_union_map *subtree_schedule_extend_from_children(
 			mv = isl_multi_val_set_val(mv, 0, isl_val_copy(v));
 			v = isl_val_add_ui(v, 1);
 		}
-		upma = isl_union_pw_multi_aff_multi_val_on_domain(dom,
-							isl_multi_val_copy(mv));
+		mv_copy = isl_multi_val_copy(mv);
+		space = isl_union_set_get_space(dom);
+		mv_copy = isl_multi_val_align_params(mv_copy, space);
+		upma = isl_union_pw_multi_aff_multi_val_on_domain(dom, mv_copy);
 		umap_i = isl_union_map_from_union_pw_multi_aff(upma);
 		umap_i = isl_union_map_flat_range_product(
 					    isl_union_map_copy(outer), umap_i);
@@ -2262,7 +2271,7 @@ static __isl_give isl_set *isolate_final(__isl_keep isl_set *isolate,
  * The tree is itself positioned at schedule depth "depth".
  *
  * The loop AST generation type options and the isolate option
- * are split over the the two band nodes.
+ * are split over the two band nodes.
  */
 __isl_give isl_schedule_tree *isl_schedule_tree_band_split(
 	__isl_take isl_schedule_tree *tree, int pos, int depth)

@@ -12,12 +12,15 @@
 
 // C Includes
 // C++ Includes
+#include <map>
+#include <memory>
+
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Breakpoint/StoppointCallbackContext.h"
-#include "lldb/Target/DynamicLoader.h"
-
 #include "DYLDRendezvous.h"
+#include "lldb/Breakpoint/StoppointCallbackContext.h"
+#include "lldb/Core/ModuleList.h"
+#include "lldb/Target/DynamicLoader.h"
 
 class AuxVector;
 
@@ -49,7 +52,7 @@ public:
   lldb::ThreadPlanSP GetStepThroughTrampolinePlan(lldb_private::Thread &thread,
                                                   bool stop_others) override;
 
-  lldb_private::Error CanLoadImage() override;
+  lldb_private::Status CanLoadImage() override;
 
   lldb::addr_t GetThreadLocalData(const lldb::ModuleSP module,
                                   const lldb::ThreadSP thread,
@@ -82,13 +85,17 @@ protected:
   /// mapped to the address space
   lldb::addr_t m_vdso_base;
 
+  /// Contains AT_BASE, which means a dynamic loader has been
+  /// mapped to the address space
+  lldb::addr_t m_interpreter_base;
+
   /// Loaded module list. (link map for each module)
   std::map<lldb::ModuleWP, lldb::addr_t, std::owner_less<lldb::ModuleWP>>
       m_loaded_modules;
 
-  /// Enables a breakpoint on a function called by the runtime
+  /// If possible sets a breakpoint on a function called by the runtime
   /// linker each time a module is loaded or unloaded.
-  virtual void SetRendezvousBreakpoint();
+  bool SetRendezvousBreakpoint();
 
   /// Callback routine which updates the current list of loaded modules based
   /// on the information supplied by the runtime linker.
@@ -135,6 +142,12 @@ protected:
   /// of all dependent modules.
   virtual void LoadAllCurrentModules();
 
+  void LoadVDSO();
+
+  // Loading an interpreter module (if present) assumming m_interpreter_base
+  // already points to its base address.
+  lldb::ModuleSP LoadInterpreterModule();
+
   /// Computes a value for m_load_offset returning the computed address on
   /// success and LLDB_INVALID_ADDRESS on failure.
   lldb::addr_t ComputeLoadOffset();
@@ -143,9 +156,10 @@ protected:
   /// success and LLDB_INVALID_ADDRESS on failure.
   lldb::addr_t GetEntryPoint();
 
-  /// Evaluate if Aux vectors contain vDSO information
+  /// Evaluate if Aux vectors contain vDSO and LD information
   /// in case they do, read and assign the address to m_vdso_base
-  void EvalVdsoStatus();
+  /// and m_interpreter_base.
+  void EvalSpecialModulesStatus();
 
   /// Loads Module from inferior process.
   void ResolveExecutableModule(lldb::ModuleSP &module_sp);

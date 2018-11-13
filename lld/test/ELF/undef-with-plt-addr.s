@@ -5,6 +5,9 @@
 // RUN: ld.lld %t.o %t2.so -o %t3
 // RUN: llvm-readobj -t -s -r %t3 | FileCheck %s
 
+// Test that -z nocopyreloc doesn't prevent the plt hack.
+// RUN: ld.lld %t.o %t2.so -o %t3 -z nocopyreloc
+
 .globl _start
 _start:
 movabsq	$set_data, %rax
@@ -19,13 +22,13 @@ movabsq	$set_data, %rax
 // CHECK-NEXT:   SHF_ALLOC
 // CHECK-NEXT:   SHF_EXECINSTR
 // CHECK-NEXT: ]
-// CHECK-NEXT: Address: 0x11010
+// CHECK-NEXT: Address: 0x201010
 
 // CHECK:      Section ({{.*}}) .rela.dyn {
-// CHECK-NEXT:   0x13000 R_X86_64_64 foo 0x0
+// CHECK-NEXT:   0x202000 R_X86_64_64 foo 0x0
 // CHECK-NEXT: }
 // CHECK-NEXT: Section ({{.*}}) .rela.plt {
-// CHECK-NEXT:   0x13020 R_X86_64_JUMP_SLOT set_data 0x0
+// CHECK-NEXT:   0x202020 R_X86_64_JUMP_SLOT set_data 0x0
 // CHECK-NEXT: }
 
 // CHECK:      Name: foo
@@ -37,7 +40,7 @@ movabsq	$set_data, %rax
 // CHECK-NEXT: Section: Undefined
 
 // CHECK:      Name:    set_data
-// CHECK-NEXT: Value:   0x11020
+// CHECK-NEXT: Value:   0x201020
 // CHECK-NEXT: Size: 0
 // CHECK-NEXT: Binding: Global
 // CHECK-NEXT: Type: Function

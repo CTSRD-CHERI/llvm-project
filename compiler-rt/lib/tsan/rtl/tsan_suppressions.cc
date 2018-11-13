@@ -74,6 +74,8 @@ static const char *conv(ReportType typ) {
     return kSuppressionRace;
   else if (typ == ReportTypeVptrUseAfterFree)
     return kSuppressionRace;
+  else if (typ == ReportTypeExternalRace)
+    return kSuppressionRace;
   else if (typ == ReportTypeThreadLeak)
     return kSuppressionThread;
   else if (typ == ReportTypeMutexDestroyLocked)
@@ -150,7 +152,7 @@ uptr IsSuppressed(ReportType typ, const ReportLocation *loc, Suppression **sp) {
 }
 
 void PrintMatchedSuppressions() {
-  InternalMmapVector<Suppression *> matched(1);
+  InternalMmapVector<Suppression *> matched;
   CHECK(suppression_ctx);
   suppression_ctx->GetMatched(&matched);
   if (!matched.size())

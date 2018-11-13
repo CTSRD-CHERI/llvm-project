@@ -59,15 +59,16 @@ if (LIBCXX_BENCHMARK_NATIVE_STDLIB)
           -DBENCHMARK_ENABLE_TESTING:BOOL=OFF)
 endif()
 
+
 #==============================================================================
 # Benchmark tests configuration
 #==============================================================================
 add_custom_target(cxx-benchmarks)
-
+set(BENCHMARK_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR})
 set(BENCHMARK_LIBCXX_INSTALL ${CMAKE_CURRENT_BINARY_DIR}/benchmark-libcxx)
 set(BENCHMARK_NATIVE_INSTALL ${CMAKE_CURRENT_BINARY_DIR}/benchmark-native)
 set(BENCHMARK_TEST_COMPILE_FLAGS
-    -std=c++14 -O2
+    -std=c++17 -O2
     -I${BENCHMARK_LIBCXX_INSTALL}/include
     -I${LIBCXX_SOURCE_DIR}/test/support
 )
@@ -111,6 +112,7 @@ macro(add_benchmark_test name source_file)
   set_target_properties(${libcxx_target}
     PROPERTIES
           OUTPUT_NAME "${name}.libcxx.out"
+          RUNTIME_OUTPUT_DIRECTORY "${BENCHMARK_OUTPUT_DIR}"
           COMPILE_FLAGS "${BENCHMARK_TEST_LIBCXX_COMPILE_FLAGS}"
           LINK_FLAGS "${BENCHMARK_TEST_LIBCXX_LINK_FLAGS}")
   if (LIBCXX_BENCHMARK_NATIVE_STDLIB)
@@ -131,6 +133,7 @@ macro(add_benchmark_test name source_file)
     set_target_properties(${native_target}
       PROPERTIES
           OUTPUT_NAME "${name}.native.out"
+          RUNTIME_OUTPUT_DIRECTORY "${BENCHMARK_OUTPUT_DIR}"
           INCLUDE_DIRECTORIES ""
           COMPILE_FLAGS "${BENCHMARK_TEST_NATIVE_COMPILE_FLAGS}"
           LINK_FLAGS "${BENCHMARK_TEST_NATIVE_LINK_FLAGS}")

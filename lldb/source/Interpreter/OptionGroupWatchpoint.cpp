@@ -13,40 +13,38 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Interpreter/Args.h"
-#include "lldb/Utility/Utils.h"
+#include "lldb/Host/OptionParser.h"
+#include "lldb/Interpreter/OptionArgParser.h"
 #include "lldb/lldb-enumerations.h"
 
 using namespace lldb;
 using namespace lldb_private;
 
-static OptionEnumValueElement g_watch_type[] = {
+static constexpr OptionEnumValueElement g_watch_type[] = {
     {OptionGroupWatchpoint::eWatchRead, "read", "Watch for read"},
     {OptionGroupWatchpoint::eWatchWrite, "write", "Watch for write"},
     {OptionGroupWatchpoint::eWatchReadWrite, "read_write",
-     "Watch for read/write"},
-    {0, nullptr, nullptr}};
+     "Watch for read/write"} };
 
-static OptionEnumValueElement g_watch_size[] = {
+static constexpr OptionEnumValueElement g_watch_size[] = {
     {1, "1", "Watch for byte size of 1"},
     {2, "2", "Watch for byte size of 2"},
     {4, "4", "Watch for byte size of 4"},
-    {8, "8", "Watch for byte size of 8"},
-    {0, nullptr, nullptr}};
+    {8, "8", "Watch for byte size of 8"} };
 
-static OptionDefinition g_option_table[] = {
+static constexpr OptionDefinition g_option_table[] = {
     {LLDB_OPT_SET_1, false, "watch", 'w', OptionParser::eRequiredArgument,
-     nullptr, g_watch_type, 0, eArgTypeWatchType,
+     nullptr, OptionEnumValues(g_watch_type), 0, eArgTypeWatchType,
      "Specify the type of watching to perform."},
     {LLDB_OPT_SET_1, false, "size", 's', OptionParser::eRequiredArgument,
-     nullptr, g_watch_size, 0, eArgTypeByteSize,
+     nullptr, OptionEnumValues(g_watch_size), 0, eArgTypeByteSize,
      "Number of bytes to use to watch a region."}};
 
 bool OptionGroupWatchpoint::IsWatchSizeSupported(uint32_t watch_size) {
-  for (uint32_t i = 0; i < llvm::array_lengthof(g_watch_size); ++i) {
-    if (g_watch_size[i].value == 0)
+  for (const auto& size : g_watch_size) {
+    if (0  == size.value)
       break;
-    if (watch_size == g_watch_size[i].value)
+    if (watch_size == size.value)
       return true;
   }
   return false;
@@ -56,15 +54,16 @@ OptionGroupWatchpoint::OptionGroupWatchpoint() : OptionGroup() {}
 
 OptionGroupWatchpoint::~OptionGroupWatchpoint() {}
 
-Error OptionGroupWatchpoint::SetOptionValue(
-    uint32_t option_idx, llvm::StringRef option_arg,
-    ExecutionContext *execution_context) {
-  Error error;
+Status
+OptionGroupWatchpoint::SetOptionValue(uint32_t option_idx,
+                                      llvm::StringRef option_arg,
+                                      ExecutionContext *execution_context) {
+  Status error;
   const int short_option = g_option_table[option_idx].short_option;
   switch (short_option) {
   case 'w': {
     WatchType tmp_watch_type;
-    tmp_watch_type = (WatchType)Args::StringToOptionEnum(
+    tmp_watch_type = (WatchType)OptionArgParser::ToOptionEnum(
         option_arg, g_option_table[option_idx].enum_values, 0, error);
     if (error.Success()) {
       watch_type = tmp_watch_type;
@@ -73,7 +72,7 @@ Error OptionGroupWatchpoint::SetOptionValue(
     break;
   }
   case 's':
-    watch_size = (uint32_t)Args::StringToOptionEnum(
+    watch_size = (uint32_t)OptionArgParser::ToOptionEnum(
         option_arg, g_option_table[option_idx].enum_values, 0, error);
     break;
 

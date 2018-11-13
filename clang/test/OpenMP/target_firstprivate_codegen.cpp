@@ -6,6 +6,14 @@
 // RUN: %clang_cc1 -fopenmp -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -o %t %s
 // RUN: %clang_cc1 -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefix CHECK --check-prefix CHECK-32
 
+// RUN: %clang_cc1 -verify -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm %s -o - | FileCheck --check-prefix SIMD-ONLY0 %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -std=c++11 -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-pch -o %t %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY0 %s
+// RUN: %clang_cc1 -verify -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -o - | FileCheck --check-prefix SIMD-ONLY0 %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -o %t %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY0 %s
+// SIMD-ONLY0-NOT: {{__kmpc|__tgt}}
+
 // Test target codegen - host bc file has to be created first.
 // RUN: %clang_cc1 -verify -fopenmp -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm-bc %s -o %t-ppc-host.bc
 // RUN: %clang_cc1 -verify -fopenmp -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm %s -fopenmp-is-device -fopenmp-host-ir-file-path %t-ppc-host.bc -o - | FileCheck %s --check-prefix TCHECK --check-prefix TCHECK-64
@@ -15,6 +23,16 @@
 // RUN: %clang_cc1 -verify -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o - | FileCheck %s --check-prefix TCHECK --check-prefix TCHECK-32
 // RUN: %clang_cc1 -fopenmp -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o %t %s
 // RUN: %clang_cc1 -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefix TCHECK --check-prefix TCHECK-32
+
+// RUN: %clang_cc1 -verify -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm-bc %s -o %t-ppc-host.bc
+// RUN: %clang_cc1 -verify -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm %s -fopenmp-is-device -fopenmp-host-ir-file-path %t-ppc-host.bc -o - | FileCheck --check-prefix SIMD-ONLY1 %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -std=c++11 -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-pch -fopenmp-is-device -fopenmp-host-ir-file-path %t-ppc-host.bc -o %t %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -std=c++11 -fopenmp-is-device -fopenmp-host-ir-file-path %t-ppc-host.bc -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY1 %s
+// RUN: %clang_cc1 -verify -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm-bc %s -o %t-x86-host.bc
+// RUN: %clang_cc1 -verify -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o - | FileCheck --check-prefix SIMD-ONLY1 %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o %t %s
+// RUN: %clang_cc1 -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY1 %s
+// SIMD-ONLY1-NOT: {{__kmpc|__tgt}}
 
 // expected-no-diagnostics
 #ifndef HEADER
@@ -33,15 +51,15 @@ struct TT{
 // TCHECK:  [[S1:%.+]] = type { double }
 
 // CHECK-DAG:  [[SIZET:@.+]] = private unnamed_addr constant [1 x i{{32|64}}] [i[[SZ:32|64]] 4]
-// CHECK:  [[MAPT:@.+]] = private unnamed_addr constant [1 x i32] [i32 288]
-// CHECK-DAG:  [[MAPT2:@.+]] = private unnamed_addr constant [9 x i32] [i32 288, i32 161, i32 288, i32 161, i32 161, i32 288, i32 288, i32 161, i32 161]
+// CHECK:  [[MAPT:@.+]] = private unnamed_addr constant [1 x i64] [i64 800]
+// CHECK-DAG:  [[MAPT2:@.+]] = private unnamed_addr constant [9 x i64] [i64 800, i64 673, i64 288, i64 673, i64 673, i64 288, i64 288, i64 673, i64 673]
 // CHECK-DAG:  [[SIZET3:@.+]] = private unnamed_addr constant [1 x i{{32|64}}] zeroinitializer
-// CHECK-DAG:  [[MAPT3:@.+]] = private unnamed_addr constant [1 x i32] [i32 32]
-// CHECK-DAG:  [[MAPT4:@.+]] = private unnamed_addr constant [5 x i32] [i32 35, i32 288, i32 288, i32 288, i32 161]
+// CHECK-DAG:  [[MAPT3:@.+]] = private unnamed_addr constant [1 x i64] [i64 544]
+// CHECK-DAG:  [[MAPT4:@.+]] = private unnamed_addr constant [6 x i64] [i64 32, i64 281474976711171, i64 800, i64 288, i64 288, i64 673]
 // CHECK-DAG:  [[SIZET5:@.+]] = private unnamed_addr constant [3 x i{{32|64}}] [i[[SZ]] 4, i[[SZ]] 1, i[[SZ]] 40]
-// CHECK-DAG:  [[MAPT5:@.+]] = private unnamed_addr constant [3 x i32] [i32 288, i32 288, i32 161]
+// CHECK-DAG:  [[MAPT5:@.+]] = private unnamed_addr constant [3 x i64] [i64 800, i64 800, i64 673]
 // CHECK-DAG:  [[SIZET6:@.+]] = private unnamed_addr constant [2 x i{{32|64}}] [i[[SZ]] 4, i[[SZ]] 40]
-// CHECK-DAG:  [[MAPT6:@.+]] = private unnamed_addr constant [2 x i32] [i32 288, i32 161]
+// CHECK-DAG:  [[MAPT6:@.+]] = private unnamed_addr constant [2 x i64] [i64 800, i64 673]
 
 
 // CHECK: define {{.*}}[[FOO:@.+]](
@@ -68,7 +86,6 @@ int foo(int n, double *ptr) {
   // CHECK:  [[C:%.+]] = alloca [5 x [10 x double]],
   // CHECK:  [[D:%.+]] = alloca [[TT]],
   // CHECK:  [[ACAST:%.+]] = alloca i{{[0-9]+}},
-  // CHECK:  {{.+}} = alloca i{{[0-9]+}},
   // CHECK:  [[BASE_PTR_ARR:%.+]] = alloca [1 x i8*],
   // CHECK:  [[PTR_ARR:%.+]] = alloca [1 x i8*],
   // CHECK:  [[A2CAST:%.+]] = alloca i{{[0-9]+}},
@@ -93,17 +110,17 @@ int foo(int n, double *ptr) {
   // CHECK-64:  store i{{[0-9]+}} [[AVAL]], i{{[0-9]+}}* [[CONV]],
   // CHECK-32:  store i{{[0-9]+}} [[AVAL]], i{{[0-9]+}}* [[ACAST]],
   // CHECK:  [[ACAST_VAL:%.+]] = load i{{[0-9]+}}, i{{[0-9]+}}* [[ACAST]],
-  // CHECK:  [[ACAST_TOPTR:%.+]] = inttoptr i{{[0-9]+}} [[ACAST_VAL]] to i8*
   // CHECK:  [[BASE_PTR_GEP:%.+]] = getelementptr inbounds [1 x i8*], [1 x i8*]* [[BASE_PTR_ARR]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store i8* [[ACAST_TOPTR]], i8** [[BASE_PTR_GEP]],
-  // CHECK:  [[ACAST_TOPTR2:%.+]] = inttoptr i{{[0-9]+}} [[ACAST_VAL]] to i8*
+  // CHECK:  [[ACAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[ACAST_VAL]], i{{[0-9]+}}* [[ACAST_TOPTR]],
   // CHECK:  [[PTR_GEP:%.+]] = getelementptr inbounds [1 x i8*], [1 x i8*]* [[PTR_ARR]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store i8* [[ACAST_TOPTR2]], i8** [[PTR_GEP]],
+  // CHECK:  [[ACAST_TOPTR2:%.+]] = bitcast i8** [[PTR_GEP]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[ACAST_VAL]], i{{[0-9]+}}* [[ACAST_TOPTR2]],
   // CHECK:  [[BASE_PTR_GEP_ARG:%.+]] = getelementptr inbounds [1 x i8*], [1 x i8*]* [[BASE_PTR_ARR]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
   // CHECK:  [[PTR_GEP_ARG:%.+]] = getelementptr inbounds [1 x i8*], [1 x i8*]* [[PTR_ARR]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  {{.+}} = call i32 @__tgt_target(i32 -1, {{.+}}, i32 1, i8** [[BASE_PTR_GEP_ARG]], i8** [[PTR_GEP_ARG]], i[[SZ]]* getelementptr inbounds ([1 x i[[SZ]]], [1 x i[[SZ]]]* [[SIZET]], i32 0, i32 0), i32* getelementptr inbounds ([1 x i32], [1 x i32]* [[MAPT]], i32 0, i32 0))
+  // CHECK:  {{.+}} = call i32 @__tgt_target(i64 -1, {{.+}}, i32 1, i8** [[BASE_PTR_GEP_ARG]], i8** [[PTR_GEP_ARG]], i[[SZ]]* getelementptr inbounds ([1 x i[[SZ]]], [1 x i[[SZ]]]* [[SIZET]], i32 0, i32 0), i64* getelementptr inbounds ([1 x i64], [1 x i64]* [[MAPT]], i32 0, i32 0))
   
-  // TCHECK:  define void @__omp_offloading_{{.+}}(i{{[0-9]+}} [[A_IN:%.+]])
+  // TCHECK:  define weak void @__omp_offloading_{{.+}}(i{{[0-9]+}} [[A_IN:%.+]])
   // TCHECK:  [[A_ADDR:%.+]] = alloca i{{[0-9]+}},
   // TCHECK-NOT: alloca i{{[0-9]+}},
   // TCHECK:  store i{{[0-9]+}} [[A_IN]], i{{[0-9]+}}* [[A_ADDR]],
@@ -132,85 +149,87 @@ int foo(int n, double *ptr) {
   // CHECK:  [[CN_SIZE_2:%.+]] = mul{{.+}} i{{[0-9]+}} [[CN_SIZE_1]], 8
 
   // firstprivate(aa) --> base_ptr = aa, ptr = aa, size = 2 (short)
-  // CHECK:  [[A2CAST_TO_INT:%.+]] = inttoptr i{{[0-9]+}} [[A2CAST_VAL]] to i8*
   // CHECK:  [[BASE_PTR_GEP2_0:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[BASE_PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store i8* [[A2CAST_TO_INT]], i8** [[BASE_PTR_GEP2_0]],
-  // CHECK:  [[A2CAST_TO_INT_2:%.+]] = inttoptr i{{[0-9]+}} [[A2CAST_VAL]] to i8*
+  // CHECK:  [[ACAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP2_0]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[A2CAST_VAL]], i{{[0-9]+}}* [[ACAST_TOPTR]],
   // CHECK:  [[PTR_GEP2_0:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store i8* [[A2CAST_TO_INT_2]], i8** [[PTR_GEP2_0]],
+  // CHECK:  [[ACAST_TOPTR:%.+]] = bitcast i8** [[PTR_GEP2_0]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[A2CAST_VAL]], i{{[0-9]+}}* [[ACAST_TOPTR]],
   // CHECK:  [[SIZE_GEPA2:%.+]] = getelementptr inbounds [9 x i{{[0-9]+}}], [9 x i{{[0-9]+}}]* [[SIZET2]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
   // CHECK:  store i{{[0-9]+}} 2, i{{[0-9]+}}* [[SIZE_GEPA2]],
 
   // firstprivate(b): base_ptr = &b[0], ptr = &b[0], size = 40 (sizeof(float)*10)
-  // CHECK:  [[BCAST:%.+]] = bitcast [10 x float]* [[B]] to i8*
   // CHECK:  [[BASE_PTR_GEP2_1:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[BASE_PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
-  // CHECK:  store i8* [[BCAST]], i8** [[BASE_PTR_GEP2_1]],
-  // CHECK:  [[BCAST2:%.+]] = bitcast [10 x float]* [[B]] to i8*
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP2_1]] to [10 x float]**
+  // CHECK:  store [10 x float]* [[B]], [10 x float]** [[BCAST_TOPTR]],
   // CHECK:  [[PTR_GEP2_1:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
-  // CHECK:  store i8* [[BCAST2]], i8** [[PTR_GEP2_1]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTR_GEP2_1]] to [10 x float]**
+  // CHECK:  store [10 x float]* [[B]], [10 x float]** [[BCAST_TOPTR]],
   // CHECK:  [[SIZE_GEPB:%.+]] = getelementptr inbounds [9 x i{{[0-9]+}}], [9 x i{{[0-9]+}}]* [[SIZET2]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
   // CHECK:  store i{{[0-9]+}} 40, i{{[0-9]+}}* [[SIZE_GEPB]],
 
   // firstprivate(bn), 2 entries, n and bn: (1) base_ptr = n, ptr = n, size = 8 ; (2) base_ptr = &c[0], ptr = &c[0], size = n*sizeof(float)
-  // CHECK-64:  [[N_EXT3_1:%.+]] = inttoptr i{{[0-9]+}} [[N_EXT]] to i8*
-  // CHECK-32:  [[N_EXT3_1:%.+]] = inttoptr i{{[0-9]+}} [[N_ADDR_VAL]] to i8*
   // CHECK:  [[BASE_PTR_GEP2_2:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[BASE_PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
-  // CHECK:  store i8* [[N_EXT3_1]], i8** [[BASE_PTR_GEP2_2]],
-  // CHECK-64:  [[N_EXT3_2:%.+]] = inttoptr i{{[0-9]+}} [[N_EXT]] to i8*
-  // CHECK-32:  [[N_EXT3_2:%.+]] = inttoptr i{{[0-9]+}} [[N_ADDR_VAL]] to i8*
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP2_2]] to i{{[0-9]+}}*
+  // CHECK-64:  store i{{[0-9]+}} [[N_EXT]], i{{[0-9]+}}* [[BCAST_TOPTR]],
+  // CHECK-32:  store i{{[0-9]+}} [[N_ADDR_VAL]], i{{[0-9]+}}* [[BCAST_TOPTR]],
   // CHECK:  [[PTR_GEP2_2:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
-  // CHECK:  store i8* [[N_EXT3_2]], i8** [[PTR_GEP2_2]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTR_GEP2_2]] to i{{[0-9]+}}*
+  // CHECK-64:  store i{{[0-9]+}} [[N_EXT]], i{{[0-9]+}}* [[BCAST_TOPTR]],
+  // CHECK-32:  store i{{[0-9]+}} [[N_ADDR_VAL]], i{{[0-9]+}}* [[BCAST_TOPTR]],
   // CHECK:  [[SIZE_GEPBN_1:%.+]] = getelementptr inbounds [9 x i{{[0-9]+}}], [9 x i{{[0-9]+}}]* [[SIZET2]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
   // CHECK:  store i{{[0-9]+}} {{[0-9]}}, i{{[0-9]+}}* [[SIZE_GEPBN_1]],
-  // CHECK:  [[VLABN_BCAST:%.+]] = bitcast float* [[BN_VLA]] to i8*
   // CHECK:  [[BASE_PTR_GEP2_3:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[BASE_PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 3
-  // CHECK:  store i8* [[VLABN_BCAST]], i8** [[BASE_PTR_GEP2_3]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP2_3]] to float**
+  // CHECK:  store float* [[BN_VLA]], float** [[BCAST_TOPTR]],
   // CHECK: [[SIZE_GEPBN_3:%.+]] = getelementptr inbounds [9 x i{{[0-9]+}}], [9 x i{{[0-9]+}}]* [[SIZET2]], i{{[0-9]+}} 0, i{{[0-9]+}} 3
   // CHECK:  store i{{[0-9]+}} [[BN_SIZE]], i{{[0-9]+}}* [[SIZE_GEPBN_3]]
   
   // firstprivate(c): base_ptr = &c[0], ptr = &c[0], size = 400 (5*10*sizeof(double))
-  // CHECK:  [[C_BCAST:%.+]] = bitcast [5 x [10 x double]]* [[C]] to i8*
   // CHECK:  [[BASE_PTR_GEP2_4:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[BASE_PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 4
-  // CHECK:  store i8* [[C_BCAST]], i8** [[BASE_PTR_GEP2_4]],
-  // CHECK:  [[C_BCAST2:%.+]] = bitcast [5 x [10 x double]]* [[C]] to i8*
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP2_4]] to [5 x [10 x double]]**
+  // CHECK:  store [5 x [10 x double]]* [[C]], [5 x [10 x double]]** [[BCAST_TOPTR]],
   // CHECK:  [[PTR_GEP2_4:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 4
-  // CHECK:  store i8* [[C_BCAST2]], i8** [[PTR_GEP2_4]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTR_GEP2_4]] to [5 x [10 x double]]**
+  // CHECK:  store [5 x [10 x double]]* [[C]], [5 x [10 x double]]** [[BCAST_TOPTR]],
   // CHECK:  [[SIZE_GEPC_4:%.+]] = getelementptr inbounds [9 x i{{[0-9]+}}], [9 x i{{[0-9]+}}]* [[SIZET2]], i{{[0-9]+}} 0, i{{[0-9]+}} 4
   // CHECK:  store i{{[0-9]+}} 400, i{{[0-9]+}}* [[SIZE_GEPC_4]],
   
   // firstprivate(cn), 3 entries, 5, n, cn: (1) base_ptr = 5, ptr = 5, size = 8; (2) (1) base_ptr = n, ptr = n, size = 8; (3) base_ptr = &cn[0], ptr = &cn[0], size = 5*n*sizeof(double)
   // CHECK:  [[BASE_PTR_GEP2_5:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[BASE_PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 5
-  // CHECK:  store i8* inttoptr (i{{[0-9]+}} 5 to i8*), i8** [[BASE_PTR_GEP2_5]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP2_5]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} 5, i{{[0-9]+}}* [[BCAST_TOPTR]],
   // CHECK:  [[PTR_GEP2_5:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 5
-  // CHECK:  store i8* inttoptr (i{{[0-9]+}} 5 to i8*), i8** [[PTR_GEP2_5]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTR_GEP2_5]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} 5, i{{[0-9]+}}* [[BCAST_TOPTR]],
   // CHECK:  [[SIZE_GEPCN_5:%.+]] = getelementptr inbounds [9 x i{{[0-9]+}}], [9 x i{{[0-9]+}}]* [[SIZET2]], i{{[0-9]+}} 0, i{{[0-9]+}} 5
   // CHECK:  store i{{[0-9]+}} {{[0-9]}}, i{{[0-9]+}}* [[SIZE_GEPCN_5]],
-  // CHECK-64:  [[CN_SZ_2_1:%.+]] = inttoptr i{{[0-9]+}} [[N_EXT2]] to i8*
-  // CHECK-32:  [[CN_SZ_2_1:%.+]] = inttoptr i{{[0-9]+}} [[N_ADDR_VAL2]] to i8*
   // CHECK:  [[BASE_PTR_GEP2_6:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[BASE_PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 6
-  // CHECK:  store i8* [[CN_SZ_2_1]], i8** [[BASE_PTR_GEP2_6]],
-  // CHECK-64:  [[CN_SZ_2_2:%.+]] = inttoptr i{{[0-9]+}} [[N_EXT2]] to i8*
-  // CHECK-32:  [[CN_SZ_2_2:%.+]] = inttoptr i{{[0-9]+}} [[N_ADDR_VAL2]] to i8*
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP2_6]] to i{{[0-9]+}}*
+  // CHECK-64:  store i{{[0-9]+}} [[N_EXT2]], i{{[0-9]+}}* [[BCAST_TOPTR]],
+  // CHECK-32:  store i{{[0-9]+}} [[N_ADDR_VAL2]], i{{[0-9]+}}* [[BCAST_TOPTR]],
   // CHECK:  [[PTR_GEP2_6:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 6
-  // CHECK:  store i8* [[CN_SZ_2_2]], i8** [[PTR_GEP2_6]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTR_GEP2_6]] to i{{[0-9]+}}*
+  // CHECK-64:  store i{{[0-9]+}} [[N_EXT2]], i{{[0-9]+}}* [[BCAST_TOPTR]],
+  // CHECK-32:  store i{{[0-9]+}} [[N_ADDR_VAL2]], i{{[0-9]+}}* [[BCAST_TOPTR]],
   // CHECK:  [[SIZE_GEPCN_6:%.+]] = getelementptr inbounds [9 x i{{[0-9]+}}], [9 x i{{[0-9]+}}]* [[SIZET2]], i{{[0-9]+}} 0, i{{[0-9]+}} 6
   // CHECK:  store i{{[0-9]+}} {{[0-9]}}, i{{[0-9]+}}* [[SIZE_GEPCN_6]],
-  // CHECK:  [[VLA_CN_BCAST:%.+]] = bitcast double* [[CN_VLA]] to i8*
   // CHECK:  [[BASE_PTR_GEP2_7:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[BASE_PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 7
-  // CHECK:  store i8* [[VLA_CN_BCAST]], i8** [[BASE_PTR_GEP2_7]],
-  // CHECK:  [[VLA_CN_BCAST2:%.+]] = bitcast double* [[CN_VLA]] to i8*
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP2_7]] to double**
+  // CHECK:  store double* [[CN_VLA]], double** [[BCAST_TOPTR]],
   // CHECK:  [[PTR_GEP2_7:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 7
-  // CHECK:  store i8* [[VLA_CN_BCAST2]], i8** [[PTR_GEP2_7]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTR_GEP2_7]] to double**
+  // CHECK:  store double* [[CN_VLA]], double** [[BCAST_TOPTR]],
   // CHECK:  [[SIZE_GEPCN_7:%.+]] = getelementptr inbounds [9 x i{{[0-9]+}}], [9 x i{{[0-9]+}}]* [[SIZET2]], i{{[0-9]+}} 0, i{{[0-9]+}} 7
   // CHECK:  store i{{[0-9]+}} [[CN_SIZE_2]], i{{[0-9]+}}* [[SIZE_GEPCN_7]],
   
   // firstprivate(d): base_ptr = &d, ptr = &d, size = 16 
-  // CHECK:  [[D_REF:%.+]] = bitcast [[TT]]* [[D]] to i8*
   // CHECK:  [[BASE_PTR_GEP2_8:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[BASE_PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 8
-  // CHECK:  store i8* [[D_REF]], i8** [[BASE_PTR_GEP2_8]],
-  // CHECK:  [[D_REF2:%.+]] = bitcast [[TT]]* [[D]] to i8*
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP2_8]] to [[TT]]**
+  // CHECK:  store [[TT]]* [[D]], [[TT]]** [[BCAST_TOPTR]],
   // CHECK:  [[PTR_GEP2_8:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 8
-  // CHECK:  store i8* [[D_REF2]], i8** [[PTR_GEP2_8]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTR_GEP2_8]] to [[TT]]**
+  // CHECK:  store [[TT]]* [[D]], [[TT]]** [[BCAST_TOPTR]],
   // CHECK:  [[SIZE_GEPCN_8:%.+]] = getelementptr inbounds [9 x i{{[0-9]+}}], [9 x i{{[0-9]+}}]* [[SIZET2]], i{{[0-9]+}} 0, i{{[0-9]+}} 8
   // CHECK:  store i{{[0-9]+}} {{[0-9]+}}, i{{[0-9]+}}* [[SIZE_GEPCN_8]],
   
@@ -218,11 +237,11 @@ int foo(int n, double *ptr) {
   // CHECK:  [[BASE_PTR_GEP_ARG2:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[BASE_PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
   // CHECK:  [[PTR_GEP_ARG2:%.+]] = getelementptr inbounds [9 x i8*], [9 x i8*]* [[PTR_ARR2]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
   // CHECK:  [[SIZES_ARG2:%.+]] = getelementptr inbounds [9 x i[[SZ]]], [9 x i[[SZ]]]* [[SIZET2]],  i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK: {{.+}} = call i32 @__tgt_target(i32 -1, {{.+}}, i32 9, i8** [[BASE_PTR_GEP_ARG2]], i8** [[PTR_GEP_ARG2]], i[[SZ]]* [[SIZES_ARG2]], i32* getelementptr inbounds ([9 x i32], [9 x i32]* [[MAPT2]], i32 0, i32 0))
+  // CHECK: {{.+}} = call i32 @__tgt_target(i64 -1, {{.+}}, i32 9, i8** [[BASE_PTR_GEP_ARG2]], i8** [[PTR_GEP_ARG2]], i[[SZ]]* [[SIZES_ARG2]], i64* getelementptr inbounds ([9 x i64], [9 x i64]* [[MAPT2]], i32 0, i32 0))
   
   // make sure that firstprivate variables are generated in all cases and that we use those instances for operations inside the
   // target region
-  // TCHECK:  define {{.*}}void @__omp_offloading_{{.+}}(i{{[0-9]+}} [[A2_IN:%.+]], [10 x float]* {{.+}} [[B_IN:%.+]], i{{[0-9]+}} [[BN_SZ:%.+]], float* [[BN_IN:%.+]], [5 x [10 x double]]* {{.+}} [[C_IN:%.+]], i{{[0-9]+}} [[CN_SZ1:%.+]], i{{[0-9]+}} [[CN_SZ2:%.+]], double* [[CN_IN:%.+]], [[TT]]* {{.+}} [[D_IN:%.+]])
+  // TCHECK:  define {{.*}}void @__omp_offloading_{{.+}}(i{{[0-9]+}} [[A2_IN:%.+]], [10 x float]* {{.+}} [[B_IN:%.+]], i{{[0-9]+}} [[BN_SZ:%.+]], float* {{.+}} [[BN_IN:%.+]], [5 x [10 x double]]* {{.+}} [[C_IN:%.+]], i{{[0-9]+}} [[CN_SZ1:%.+]], i{{[0-9]+}} [[CN_SZ2:%.+]], double* {{.+}} [[CN_IN:%.+]], [[TT]]* {{.+}} [[D_IN:%.+]])
   // TCHECK:  [[A2_ADDR:%.+]] = alloca i{{[0-9]+}},
   // TCHECK:  [[B_ADDR:%.+]] = alloca [10 x float]*,
   // TCHECK:  [[VLA_ADDR:%.+]] = alloca i{{[0-9]+}},
@@ -262,7 +281,7 @@ int foo(int n, double *ptr) {
   //  firstprivate(b): memcpy(b_priv,b_in)
   // TCHECK:  [[B_PRIV_BCAST:%.+]] = bitcast [10 x float]* [[B_PRIV]] to i8*
   // TCHECK:  [[B_ADDR_REF_BCAST:%.+]] = bitcast [10 x float]* [[B_ADDR_REF]] to i8*
-  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* [[B_PRIV_BCAST]], i8* [[B_ADDR_REF_BCAST]], {{.+}})
+  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* align {{[0-9]+}} [[B_PRIV_BCAST]], i8* align {{[0-9]+}} [[B_ADDR_REF_BCAST]], {{.+}})
 
   // TCHECK:  [[RET_STACK:%.+]] = call i8* @llvm.stacksave()
   // TCHECK:  store i8* [[RET_STACK]], i8** [[SSTACK]],
@@ -272,12 +291,12 @@ int foo(int n, double *ptr) {
   // TCHECK:  [[BN_COPY_SZ:%.+]] = mul{{.+}} i{{[0-9]+}} [[BN_SZ_VAL]], 4
   // TCHECK:  [[BN_PRIV__BCAST:%.+]] = bitcast float* [[BN_PRIV]] to i8*
   // TCHECK:  [[BN_REF_IN_BCAST:%.+]] = bitcast float* [[BN_ADDR_REF]] to i8*
-  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* [[BN_PRIV__BCAST]], i8* [[BN_REF_IN_BCAST]], i{{[0-9]+}} [[BN_COPY_SZ]],{{.+}})
+  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* align {{[0-9]+}} [[BN_PRIV__BCAST]], i8* align {{[0-9]+}} [[BN_REF_IN_BCAST]], i{{[0-9]+}} [[BN_COPY_SZ]],{{.+}})
 
   // firstprivate(c)
   // TCHECK:  [[C_PRIV_BCAST:%.+]] = bitcast [5 x [10 x double]]* [[C_PRIV]] to i8*
   // TCHECK:  [[C_IN_BCAST:%.+]] = bitcast [5 x [10 x double]]* [[C_ADDR_REF]] to i8*
-  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* [[C_PRIV_BCAST]], i8* [[C_IN_BCAST]],{{.+}})
+  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* align {{[0-9]+}} [[C_PRIV_BCAST]], i8* align {{[0-9]+}} [[C_IN_BCAST]],{{.+}})
   
   // firstprivate(cn)
   // TCHECK:  [[CN_SZ:%.+]] = mul{{.+}} i{{[0-9]+}} [[CN_SZ1_VAL]], [[CN_SZ2_VAL]]
@@ -286,12 +305,12 @@ int foo(int n, double *ptr) {
   // TCHECK:  [[CN_SZ2_CPY:%.+]] = mul{{.+}} i{{[0-9]+}} [[CN_SZ2]], 8
   // TCHECK:  [[CN_PRIV_BCAST:%.+]] = bitcast double* [[CN_PRIV]] to i8*
   // TCHECK:  [[CN_IN_BCAST:%.+]] = bitcast double* [[CN_ADDR_REF]] to i8*
-  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* [[CN_PRIV_BCAST]], i8* [[CN_IN_BCAST]], i{{[0-9]+}} [[CN_SZ2_CPY]],{{.+}})
+  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* align {{[0-9]+}} [[CN_PRIV_BCAST]], i8* align {{[0-9]+}} [[CN_IN_BCAST]], i{{[0-9]+}} [[CN_SZ2_CPY]],{{.+}})
   
   // firstprivate(d)
   // TCHECK:  [[D_PRIV_BCAST:%.+]] = bitcast [[TT]]* [[D_PRIV]] to i8*
   // TCHECK:  [[D_IN_BCAST:%.+]] = bitcast [[TT]]* [[D_ADDR_REF]] to i8*
-  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* [[D_PRIV_BCAST]], i8* [[D_IN_BCAST]],{{.+}})
+  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* align {{[0-9]+}} [[D_PRIV_BCAST]], i8* align {{[0-9]+}} [[D_IN_BCAST]],{{.+}})
 
   
   #pragma omp target firstprivate(ptr)
@@ -299,19 +318,19 @@ int foo(int n, double *ptr) {
     ptr[0]++;
   }
   // CHECK:  [[PTR_ADDR_REF:%.+]] = load double*, double** [[PTR_ADDR]],
-  // CHECK:  [[PTR_ADDR_BCAST:%.+]] = bitcast double* [[PTR_ADDR_REF]] to i8*
 
   // CHECK:  [[BASE_PTR_GEP3_0:%.+]] = getelementptr inbounds [1 x i8*], [1 x i8*]* [[BASE_PTR_ARR3]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store i8* [[PTR_ADDR_BCAST]], i8** [[BASE_PTR_GEP3_0]],
-  // CHECK:  [[PTR_ADDR_BCAST2:%.+]] = bitcast double* [[PTR_ADDR_REF]] to i8*
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTR_GEP3_0]] to double**
+  // CHECK:  store double* [[PTR_ADDR_REF]], double** [[BCAST_TOPTR]],
   // CHECK:  [[PTR_GEP3_0:%.+]] = getelementptr inbounds [1 x i8*], [1 x i8*]* [[PTR_ARR3]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store i8* [[PTR_ADDR_BCAST2]], i8** [[PTR_GEP3_0]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTR_GEP3_0]] to double**
+  // CHECK:  store double* [[PTR_ADDR_REF]], double** [[BCAST_TOPTR]],
 
   // CHECK:  [[BASE_PTR_GEP_ARG3:%.+]] = getelementptr inbounds [1 x i8*], [1 x i8*]* [[BASE_PTR_ARR3]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
   // CHECK:  [[PTR_GEP_ARG3:%.+]] = getelementptr inbounds [1 x i8*], [1 x i8*]* [[PTR_ARR3]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK: {{.+}} = call i32 @__tgt_target(i32 -1, {{.+}}, i32 1, i8** [[BASE_PTR_GEP_ARG3]], i8** [[PTR_GEP_ARG3]], i[[SZ]]* getelementptr inbounds ([1 x i[[SZ]]], [1 x i[[SZ]]]* [[SIZET3]], i32 0, i32 0), i32* getelementptr inbounds ([1 x i32], [1 x i32]* [[MAPT3]], i32 0, i32 0))
+  // CHECK: {{.+}} = call i32 @__tgt_target(i64 -1, {{.+}}, i32 1, i8** [[BASE_PTR_GEP_ARG3]], i8** [[PTR_GEP_ARG3]], i[[SZ]]* getelementptr inbounds ([1 x i[[SZ]]], [1 x i[[SZ]]]* [[SIZET3]], i32 0, i32 0), i64* getelementptr inbounds ([1 x i64], [1 x i64]* [[MAPT3]], i32 0, i32 0))
 
-  // TCHECK:  define void @__omp_offloading_{{.+}}(double* [[PTR_IN:%.+]])
+  // TCHECK:  define weak void @__omp_offloading_{{.+}}(double* [[PTR_IN:%.+]])
   // TCHECK:  [[PTR_ADDR:%.+]] = alloca double*,
   // TCHECK-NOT: alloca double*,
   // TCHECK:  store double* [[PTR_IN]], double** [[PTR_ADDR]],
@@ -351,7 +370,7 @@ int fstatic(int n) {
   return a;
 }
 
-// TCHECK: define void @__omp_offloading_{{.+}}(i{{[0-9]+}} [[A_IN:%.+]], i{{[0-9]+}} [[A3_IN:%.+]], [10 x i{{[0-9]+}}]*{{.+}} [[B_IN:%.+]])
+// TCHECK: define weak void @__omp_offloading_{{.+}}(i{{[0-9]+}} [[A_IN:%.+]], i{{[0-9]+}} [[A3_IN:%.+]], [10 x i{{[0-9]+}}]*{{.+}} [[B_IN:%.+]])
 // TCHECK:  [[A_ADDR:%.+]] = alloca i{{[0-9]+}},
 // TCHECK:  [[A3_ADDR:%.+]] = alloca i{{[0-9]+}},
 // TCHECK:  [[B_ADDR:%.+]] = alloca [10 x i{{[0-9]+}}]*,
@@ -372,7 +391,7 @@ int fstatic(int n) {
 // firstprivate(b)
 // TCHECK:  [[B_PRIV_BCAST:%.+]] = bitcast [10 x i{{[0-9]+}}]* [[B_PRIV]] to i8*
 // TCHECK:  [[B_IN_BCAST:%.+]] = bitcast [10 x i{{[0-9]+}}]* [[B_ADDR_REF]] to i8*
-// TCHECK:  call void @llvm.memcpy.{{.+}}(i8* [[B_PRIV_BCAST]], i8* [[B_IN_BCAST]],{{.+}})
+// TCHECK:  call void @llvm.memcpy.{{.+}}(i8* align {{[0-9]+}} [[B_PRIV_BCAST]], i8* align {{[0-9]+}} [[B_IN_BCAST]],{{.+}})
 
 // TCHECK:  ret void
 
@@ -394,58 +413,71 @@ struct S1 {
 
   // on the host side, we first generate r1, then the static function and the template above
   // CHECK:  define{{.+}} i32 {{.+}}([[S1]]* {{.+}}, i{{[0-9]+}} {{.+}})
-  // CHECK:  [[BASE_PTRS4:%.+]] = alloca [5 x i8*],
-  // CHECK:  [[PTRS4:%.+]] = alloca [5 x i8*],
-  // CHECK:  [[SIZET4:%.+]] = alloca [5 x i{{[0-9]+}}],
+  // CHECK:  [[BASE_PTRS4:%.+]] = alloca [6 x i8*],
+  // CHECK:  [[PTRS4:%.+]] = alloca [6 x i8*],
+  // CHECK:  [[SIZET4:%.+]] = alloca [6 x i{{[0-9]+}}],
 
   // map(this: this ptr is implicitly captured (not firstprivate matter)
-  // CHECK:  {{.+}} = getelementptr inbounds [5 x i8*], [5 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store {{.+}}, {{.+}},
-  // CHECK:  {{.+}} = getelementptr inbounds [5 x i8*], [5 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store {{.+}}, {{.+}},
-  // CHECK:  {{.+}} getelementptr inbounds [5 x i{{[0-9]+}}], [5 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store {{.+}}, {{.+}}
+  // CHECK:  [[BP0:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
+  // CHECK:  [[CBP0:%.+]] = bitcast i8** [[BP0]] to %struct.S1**
+  // CHECK:  store %struct.S1* [[THIS:%.+]], %struct.S1** [[CBP0]],
+  // CHECK:  [[P0:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
+  // CHECK:  [[CP0:%.+]] = bitcast i8** [[P0]] to double**
+  // CHECK:  store double* [[A:%.+]], double** [[CP0]],
+  // CHECK:  [[SZ0:%.+]] = getelementptr inbounds [6 x i{{[0-9]+}}], [6 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
+  // CHECK:  store i{{[0-9]+}} %{{.+}}, i{{[0-9]+}}* [[SZ0]],
+
+  // CHECK:  [[BP1:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
+  // CHECK:  [[CBP1:%.+]] = bitcast i8** [[BP1]] to %struct.S1**
+  // CHECK:  store %struct.S1* [[THIS]], %struct.S1** [[CBP1]],
+  // CHECK:  [[P1:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
+  // CHECK:  [[CP1:%.+]] = bitcast i8** [[P1]] to double**
+  // CHECK:  store double* [[A]], double** [[CP1]],
+  // CHECK:  [[SZ1:%.+]] = getelementptr inbounds [6 x i{{[0-9]+}}], [6 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
+  // CHECK:  store i{{[0-9]+}} 8, i{{[0-9]+}}* [[SZ1]],
 
   // firstprivate(b): base_ptr = b, ptr = b, size = 4 (pass by-value)
-  // CHECK:  [[B_CAST_PTR:%.+]] = inttoptr i{{[0-9]+}} [[B_CAST:%.+]] to i8*
-  // CHECK:  [[BASE_PTRS_GEP4_1:%.+]] = getelementptr inbounds [5 x i8*], [5 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
-  // CHECK:  store i8* [[B_CAST_PTR]], i8** [[BASE_PTRS_GEP4_1]],
-  // CHECK:  [[B_CAST_PTR2:%.+]] = inttoptr i{{[0-9]+}} [[B_CAST:%.+]] to i8*
-  // CHECK:  [[PTRS_GEP4_1:%.+]] = getelementptr inbounds [5 x i8*], [5 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
-  // CHECK:  store i8* [[B_CAST_PTR2]], i8** [[PTRS_GEP4_1]],
-  // CHECK:  [[SIZES_GEP4_1:%.+]] = getelementptr inbounds [5 x i{{[0-9]+}}], [5 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
+  // CHECK:  [[BASE_PTRS_GEP4_1:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTRS_GEP4_1]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[B_CAST:%.+]], i{{[0-9]+}}* [[BCAST_TOPTR]],
+  // CHECK:  [[PTRS_GEP4_1:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTRS_GEP4_1]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[B_CAST]], i{{[0-9]+}}* [[BCAST_TOPTR]],
+  // CHECK:  [[SIZES_GEP4_1:%.+]] = getelementptr inbounds [6 x i{{[0-9]+}}], [6 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
   // CHECK:  store i{{[0-9]+}} 4, i{{[0-9]+}}* [[SIZES_GEP4_1]],
 
   // firstprivate(c), 3 entries: 2, n, c
-  // CHECK:  [[BASE_PTRS_GEP4_2:%.+]] = getelementptr inbounds [5 x i8*], [5 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
-  // CHECK:  store i8* inttoptr (i{{[0-9]+}} 2 to i8*), i8** [[BASE_PTRS_GEP4_2]],
-  // CHECK:  [[PTRS_GEP4_2:%.+]] = getelementptr inbounds [5 x i8*], [5 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
-  // CHECK:  store i8* inttoptr (i{{[0-9]+}} 2 to i8*), i8** [[PTRS_GEP4_2]],
-  // CHECK:  [[SIZES_GEP4_2:%.+]] = getelementptr inbounds [5 x i{{[0-9]+}}], [5 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
+  // CHECK:  [[BASE_PTRS_GEP4_2:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 3
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTRS_GEP4_2]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} 2, i{{[0-9]+}}* [[BCAST_TOPTR]],
+  // CHECK:  [[PTRS_GEP4_2:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 3
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTRS_GEP4_2]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} 2, i{{[0-9]+}}* [[BCAST_TOPTR]],
+  // CHECK:  [[SIZES_GEP4_2:%.+]] = getelementptr inbounds [6 x i{{[0-9]+}}], [6 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 3
   // CHECK-64:  store i{{[0-9]+}} 8, i{{[0-9]+}}* [[SIZES_GEP4_2]],
   // CHECK-32:  store i{{[0-9]+}} 4, i{{[0-9]+}}* [[SIZES_GEP4_2]],
-  // CHECK:  [[N_PTR:%.+]] = inttoptr i{{[0-9]+}} [[N:%.+]] to i8*
-  // CHECK:  [[BASE_PTRS_GEP4_3:%.+]] = getelementptr inbounds [5 x i8*], [5 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 3
-  // CHECK:  store i8* [[N_PTR]], i8** [[BASE_PTRS_GEP4_3]],
-  // CHECK:  [[N_PTR2:%.+]] = inttoptr i{{[0-9]+}} [[N:%.+]] to i8*
-  // CHECK:  [[PTRS_GEP4_3:%.+]] = getelementptr inbounds [5 x i8*], [5 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 3
-  // CHECK:  store i8* [[N_PTR2]], i8** [[PTRS_GEP4_3]],
-  // CHECK:  [[SIZES_GEP4_3:%.+]] = getelementptr inbounds [5 x i{{[0-9]+}}], [5 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 3
+  // CHECK:  [[BASE_PTRS_GEP4_3:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 4
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTRS_GEP4_3]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[N:%.+]], i{{[0-9]+}}* [[BCAST_TOPTR]],
+  // CHECK:  [[PTRS_GEP4_3:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 4
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTRS_GEP4_3]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[N]], i{{[0-9]+}}* [[BCAST_TOPTR]],
+  // CHECK:  [[SIZES_GEP4_3:%.+]] = getelementptr inbounds [6 x i{{[0-9]+}}], [6 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 4
   // CHECK-64:  store i{{[0-9]+}} 8, i{{[0-9]+}}* [[SIZES_GEP4_3]],
   // CHECK-32:  store i{{[0-9]+}} 4, i{{[0-9]+}}* [[SIZES_GEP4_3]],
-  // CHECK:  [[B_BCAST:%.+]] = bitcast i{{[0-9]+}}* [[B:%.+]] to i8*
-  // CHECK:  [[BASE_PTRS_GEP4_4:%.+]] = getelementptr inbounds [5 x i8*], [5 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 4
-  // CHECK:  store i8* [[B_BCAST]], i8** [[BASE_PTRS_GEP4_4]],
-  // CHECK:  [[B_BCAST2:%.+]] = bitcast i{{[0-9]+}}* [[B:%.+]] to i8*
-  // CHECK:  [[PTRS_GEP4_4:%.+]] = getelementptr inbounds [5 x i8*], [5 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 4
-  // CHECK:  store i8* [[B_BCAST2]], i8** [[PTRS_GEP4_4]],
-  // CHECK:  [[SIZES_GEP4_4:%.+]] = getelementptr inbounds [5 x i{{[0-9]+}}], [5 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 4
+  // CHECK:  [[BASE_PTRS_GEP4_4:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[BASE_PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 5
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTRS_GEP4_4]] to i{{[0-9]+}}**
+  // CHECK:  store i{{[0-9]+}}* [[B:%.+]], i{{[0-9]+}}** [[BCAST_TOPTR]],
+  // CHECK:  [[PTRS_GEP4_4:%.+]] = getelementptr inbounds [6 x i8*], [6 x i8*]* [[PTRS4]], i{{[0-9]+}} 0, i{{[0-9]+}} 5
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTRS_GEP4_4]] to i{{[0-9]+}}**
+  // CHECK:  store i{{[0-9]+}}* [[B]], i{{[0-9]+}}** [[BCAST_TOPTR]],
+  // CHECK:  [[SIZES_GEP4_4:%.+]] = getelementptr inbounds [6 x i{{[0-9]+}}], [6 x i{{[0-9]+}}]* [[SIZET4]], i{{[0-9]+}} 0, i{{[0-9]+}} 5
   // CHECK:  store i{{[0-9]+}} [[B_SIZE:%.+]], i{{[0-9]+}}* [[SIZES_GEP4_4]],
 
   // only check that we use the map types stored in the global variable
-  // CHECK:  call i32 @__tgt_target(i32 -1, {{.+}}, i32 5, i8** {{.+}}, i8** {{.+}}, i{{[0-9]+}}* {{.+}}, i32* getelementptr inbounds ([5 x i32], [5 x i32]* [[MAPT4]], i32 0, i32 0))
-  
-  // TCHECK: define void @__omp_offloading_{{.+}}([[S1]]* [[TH:%.+]], i{{[0-9]+}} [[B_IN:%.+]], i{{[0-9]+}} [[VLA:%.+]], i{{[0-9]+}} [[VLA1:%.+]], i{{[0-9]+}}{{.+}} [[C_IN:%.+]])
+  // CHECK:  call i32 @__tgt_target(i64 -1, {{.+}}, i32 6, i8** {{.+}}, i8** {{.+}}, i{{[0-9]+}}* {{.+}}, i64* getelementptr inbounds ([6 x i64], [6 x i64]* [[MAPT4]], i32 0, i32 0))
+
+  // TCHECK: define weak void @__omp_offloading_{{.+}}([[S1]]* [[TH:%.+]], i{{[0-9]+}} [[B_IN:%.+]], i{{[0-9]+}} [[VLA:%.+]], i{{[0-9]+}} [[VLA1:%.+]], i{{[0-9]+}}{{.+}} [[C_IN:%.+]])
   // TCHECK:  [[TH_ADDR:%.+]] = alloca [[S1]]*,
   // TCHECK:  [[B_ADDR:%.+]] = alloca i{{[0-9]+}},
   // TCHECK:  [[VLA_ADDR:%.+]] = alloca i{{[0-9]+}},
@@ -478,7 +510,7 @@ struct S1 {
   // TCHECK:  [[C_SZ_CPY:%.+]] = mul{{.+}} i{{[0-9]+}} [[C_SZ2]],  2
   // TCHECK:  [[C_PRIV_BCAST:%.+]] = bitcast i{{[0-9]+}}* [[C_PRIV]] to i8*
   // TCHECK:  [[C_IN_BCAST:%.+]] = bitcast i{{[0-9]+}}* [[C_ADDR_REF]] to i8*
-  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* [[C_PRIV_BCAST]], i8* [[C_IN_BCAST]],{{.+}})
+  // TCHECK:  call void @llvm.memcpy.{{.+}}(i8* align {{[0-9]+}} [[C_PRIV_BCAST]], i8* align {{[0-9]+}} [[C_IN_BCAST]],{{.+}})
 
   // finish
   // TCHECK: [[RELOAD_SSTACK:%.+]] = load i8*, i8** [[SSTACK]],
@@ -492,31 +524,31 @@ struct S1 {
   // CHECK:  [[PTRS5:%.+]] = alloca [3 x i8*],
 
   // firstprivate(a): by value
-  // CHECK:  [[A_CAST_PTR:%.+]] = inttoptr i{{[0-9]+}} [[A_CAST:%.+]] to i8*
   // CHECK:  [[BASE_PTRS_GEP5_0:%.+]] = getelementptr inbounds [3 x i8*], [3 x i8*]* [[BASE_PTRS5]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store i8* [[A_CAST_PTR]], i8** [[BASE_PTRS_GEP5_0]],
-  // CHECK:  [[A_CAST_PTR2:%.+]] = inttoptr i{{[0-9]+}} [[A_CAST:%.+]] to i8*
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTRS_GEP5_0]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[A_CAST:%.+]], i{{[0-9]+}}* [[BCAST_TOPTR]],
   // CHECK:  [[PTRS_GEP5_0:%.+]] = getelementptr inbounds [3 x i8*], [3 x i8*]* [[PTRS5]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-  // CHECK:  store i8* [[A_CAST_PTR2]], i8** [[PTRS_GEP5_0]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTRS_GEP5_0]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[A_CAST]], i{{[0-9]+}}* [[BCAST_TOPTR]],
 
   // firstprivate(aaa): by value
-  // CHECK:  [[A3_CAST_PTR:%.+]] = inttoptr i{{[0-9]+}} [[A3_CAST:%.+]] to i8*
   // CHECK:  [[BASE_PTRS_GEP5_1:%.+]] = getelementptr inbounds [3 x i8*], [3 x i8*]* [[BASE_PTRS5]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
-  // CHECK:  store i8* [[A3_CAST_PTR]], i8** [[BASE_PTRS_GEP5_1]],
-  // CHECK:  [[A3_CAST_PTR2:%.+]] = inttoptr i{{[0-9]+}} [[A3_CAST:%.+]] to i8*
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTRS_GEP5_1]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[A3_CAST:%.+]], i{{[0-9]+}}* [[BCAST_TOPTR]],
   // CHECK:  [[PTRS_GEP5_1:%.+]] = getelementptr inbounds [3 x i8*], [3 x i8*]* [[PTRS5]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
-  // CHECK:  store i8* [[A3_CAST_PTR2]], i8** [[PTRS_GEP5_1]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTRS_GEP5_1]] to i{{[0-9]+}}*
+  // CHECK:  store i{{[0-9]+}} [[A3_CAST]], i{{[0-9]+}}* [[BCAST_TOPTR]],
 
   // firstprivate(b): base_ptr = &b[0], ptr= &b[0]
-  // CHECK:  [[B_BCAST:%.+]] = bitcast [10 x i{{[0-9]+}}]* [[B:%.+]] to i8*
   // CHECK:  [[BASE_PTRS_GEP5_2:%.+]] = getelementptr inbounds [3 x i8*], [3 x i8*]* [[BASE_PTRS5]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
-  // CHECK:  store i8* [[B_BCAST]], i8** [[BASE_PTRS_GEP5_2]],
-  // CHECK:  [[B_BCAST2:%.+]] = bitcast [10 x i{{[0-9]+}}]* [[B:%.+]] to i8*
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTRS_GEP5_2]] to [10 x i{{[0-9]+}}]**
+  // CHECK:  store [10 x i{{[0-9]+}}]* [[B:%.+]], [10 x i{{[0-9]+}}]** [[BCAST_TOPTR]],
   // CHECK:  [[PTRS_GEP5_2:%.+]] = getelementptr inbounds [3 x i8*], [3 x i8*]* [[PTRS5]], i{{[0-9]+}} 0, i{{[0-9]+}} 2
-  // CHECK:  store i8* [[B_BCAST2]], i8** [[PTRS_GEP5_2]],
+  // CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTRS_GEP5_2]] to [10 x i{{[0-9]+}}]**
+  // CHECK:  store [10 x i{{[0-9]+}}]* [[B]], [10 x i{{[0-9]+}}]** [[BCAST_TOPTR]],
 
   // only check that the right sizes and map types are used
-  // CHECK:  call i32 @__tgt_target(i32 -1, {{.+}}, i32 3, i8** {{.+}}, i8** {{.+}}, i[[SZ]]* getelementptr inbounds ([3 x i[[SZ]]], [3 x i[[SZ]]]* [[SIZET5]], i32 0, i32 0), i32* getelementptr inbounds ([3 x i32], [3 x i32]* [[MAPT5]], i32 0, i32 0))
+  // CHECK:  call i32 @__tgt_target(i64 -1, {{.+}}, i32 3, i8** {{.+}}, i8** {{.+}}, i[[SZ]]* getelementptr inbounds ([3 x i[[SZ]]], [3 x i[[SZ]]]* [[SIZET5]], i32 0, i32 0), i64* getelementptr inbounds ([3 x i64], [3 x i64]* [[MAPT5]], i32 0, i32 0))
 };
 
 
@@ -539,25 +571,24 @@ int bar(int n, double *ptr){
 // CHECK:  [[PTRS6:%.+]] = alloca [2 x i8*],
 
 // firstprivate(a): by value
-// CHECK:  [[AT_CAST_PTR:%.+]] = inttoptr i{{[0-9]+}} [[AT_CAST:%.+]] to i8*
 // CHECK:  [[BASE_PTRS_GEP6_0:%.+]] = getelementptr inbounds [2 x i8*], [2 x i8*]* [[BASE_PTRS6]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-// CHECK:  store i8* [[AT_CAST_PTR]], i8** [[BASE_PTRS_GEP6_0]],
-// CHECK:  [[AT_CAST_PTR2:%.+]] = inttoptr i{{[0-9]+}} [[AT_CAST:%.+]] to i8*
+// CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTRS_GEP6_0]] to i{{[0-9]+}}*
+// CHECK:  store i{{[0-9]+}} [[AT_CAST:%.+]], i{{[0-9]+}}* [[BCAST_TOPTR]],
 // CHECK:  [[PTRS_GEP6_0:%.+]] = getelementptr inbounds [2 x i8*], [2 x i8*]* [[PTRS6]], i{{[0-9]+}} 0, i{{[0-9]+}} 0
-// CHECK:  store i8* [[AT_CAST_PTR2]], i8** [[PTRS_GEP6_0]],
+// CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTRS_GEP6_0]] to i{{[0-9]+}}*
+// CHECK:  store i{{[0-9]+}} [[AT_CAST]], i{{[0-9]+}}* [[BCAST_TOPTR]],
 
 // firstprivate(b): pointer
-// CHECK:  [[B_BCAST:%.+]] = bitcast [10 x i{{[0-9]+}}]* [[B:%.+]] to i8*
 // CHECK:  [[BASE_PTRS_GEP6_1:%.+]] = getelementptr inbounds [2 x i8*], [2 x i8*]* [[BASE_PTRS6]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
-// CHECK:  store i8* [[B_BCAST]], i8** [[BASE_PTRS_GEP6_1]],
-// CHECK:  [[B_BCAST2:%.+]] = bitcast [10 x i{{[0-9]+}}]* [[B:%.+]] to i8*
+// CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[BASE_PTRS_GEP6_1]] to [10 x i{{[0-9]+}}]**
+// CHECK:  store [10 x i{{[0-9]+}}]* [[B:%.+]], [10 x i{{[0-9]+}}]** [[BCAST_TOPTR]],
 // CHECK:  [[PTRS_GEP6_1:%.+]] = getelementptr inbounds [2 x i8*], [2 x i8*]* [[PTRS6]], i{{[0-9]+}} 0, i{{[0-9]+}} 1
-// CHECK:  store i8* [[B_BCAST2]], i8** [[PTRS_GEP6_1]],
+// CHECK:  [[BCAST_TOPTR:%.+]] = bitcast i8** [[PTRS_GEP6_1]] to [10 x i{{[0-9]+}}]**
+// CHECK:  store [10 x i{{[0-9]+}}]* [[B]], [10 x i{{[0-9]+}}]** [[BCAST_TOPTR]],
 
-// CHECK:  call i32 @__tgt_target(i32 -1, {{.+}}, i32 2, i8** {{.+}}, i8** {{.+}}, i[[SZ]]* getelementptr inbounds ([2 x i[[SZ]]], [2 x i[[SZ]]]* [[SIZET6]], i32 0, i32 0), i32* getelementptr inbounds ([2 x i32], [2 x i32]* [[MAPT6]], i32 0, i32 0))
+// CHECK:  call i32 @__tgt_target(i64 -1, {{.+}}, i32 2, i8** {{.+}}, i8** {{.+}}, i[[SZ]]* getelementptr inbounds ([2 x i[[SZ]]], [2 x i[[SZ]]]* [[SIZET6]], i32 0, i32 0), i64* getelementptr inbounds ([2 x i64], [2 x i64]* [[MAPT6]], i32 0, i32 0))
 
-
-// TCHECK: define void @__omp_offloading_{{.+}}(i{{[0-9]+}} [[A_IN:%.+]], [10 x i{{[0-9]+}}]*{{.+}} [[B_IN:%.+]])
+// TCHECK: define weak void @__omp_offloading_{{.+}}(i{{[0-9]+}} [[A_IN:%.+]], [10 x i{{[0-9]+}}]*{{.+}} [[B_IN:%.+]])
 // TCHECK:  [[A_ADDR:%.+]] = alloca i{{[0-9]+}},
 // TCHECK:  [[B_ADDR:%.+]] = alloca [10 x i{{[0-9]+}}]*,
 // TCHECK-NOT: alloca i{{[0-9]+}},
@@ -573,7 +604,7 @@ int bar(int n, double *ptr){
 // firstprivate(b)
 // TCHECK:  [[B_PRIV_BCAST:%.+]] = bitcast [10 x i{{[0-9]+}}]* [[B_PRIV]] to i8*
 // TCHECK:  [[B_IN_BCAST:%.+]] = bitcast [10 x i{{[0-9]+}}]* [[B_ADDR_REF]] to i8*
-// TCHECK:  call void @llvm.memcpy.{{.+}}(i8* [[B_PRIV_BCAST]], i8* [[B_IN_BCAST]],{{.+}})
+// TCHECK:  call void @llvm.memcpy.{{.+}}(i8* align {{[0-9]+}} [[B_PRIV_BCAST]], i8* align {{[0-9]+}} [[B_IN_BCAST]],{{.+}})
 
 // TCHECK: ret void
 

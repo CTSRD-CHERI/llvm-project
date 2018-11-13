@@ -1,6 +1,6 @@
 // REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %s -o %t.o
-// RUN: ld.lld %t.o %t.o -o %t -shared
+// RUN: ld.lld --hash-style=sysv %t.o %t.o -o %t -shared
 // RUN: llvm-readobj -s -section-data %t | FileCheck %s
 
         .section	foo,"ax",@progbits
@@ -27,7 +27,7 @@
 // CHECK-NEXT: ]
 // CHECK-NEXT: Address:
 // CHECK-NEXT: Offset:
-// CHECK-NEXT: Size: 96
+// CHECK-NEXT: Size: 100
 // CHECK-NEXT: Link: 0
 // CHECK-NEXT: Info: 0
 // CHECK-NEXT: AddressAlignment: 8
@@ -35,10 +35,11 @@
 // CHECK-NEXT: SectionData (
 // CHECK-NEXT: 0000: 14000000 00000000 017A5200 01781001  |
 // CHECK-NEXT: 0010: 1B0C0708 90010000 14000000 1C000000  |
-// CHECK-NEXT: 0020: 180E0000 01000000 00000000 00000000  |
-// CHECK-NEXT: 0030: 14000000 34000000 020E0000 02000000  |
+// CHECK-NEXT: 0020: E80D0000 01000000 00000000 00000000  |
+// CHECK-NEXT: 0030: 14000000 34000000 D20D0000 02000000  |
 // CHECK-NEXT: 0040: 00000000 00000000 14000000 4C000000  |
-// CHECK-NEXT: 0050: E90D0000 01000000 00000000 00000000  |
+// CHECK-NEXT: 0050: B90D0000 01000000 00000000 00000000  |
+// CHECK-NEXT: 0060: 00000000
 // CHECK-NEXT: )
 
 // CHECK:      Name: foo

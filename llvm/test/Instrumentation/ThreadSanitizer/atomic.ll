@@ -1959,7 +1959,7 @@ entry:
 
 define void @atomic_signal_fence_acquire() nounwind uwtable {
 entry:
-  fence singlethread acquire, !dbg !7
+  fence syncscope("singlethread") acquire, !dbg !7
   ret void, !dbg !7
 }
 ; CHECK-LABEL: atomic_signal_fence_acquire
@@ -1975,7 +1975,7 @@ entry:
 
 define void @atomic_signal_fence_release() nounwind uwtable {
 entry:
-  fence singlethread release, !dbg !7
+  fence syncscope("singlethread") release, !dbg !7
   ret void, !dbg !7
 }
 ; CHECK-LABEL: atomic_signal_fence_release
@@ -1991,7 +1991,7 @@ entry:
 
 define void @atomic_signal_fence_acq_rel() nounwind uwtable {
 entry:
-  fence singlethread acq_rel, !dbg !7
+  fence syncscope("singlethread") acq_rel, !dbg !7
   ret void, !dbg !7
 }
 ; CHECK-LABEL: atomic_signal_fence_acq_rel
@@ -2007,7 +2007,7 @@ entry:
 
 define void @atomic_signal_fence_seq_cst() nounwind uwtable {
 entry:
-  fence singlethread seq_cst, !dbg !7
+  fence syncscope("singlethread") seq_cst, !dbg !7
   ret void, !dbg !7
 }
 ; CHECK-LABEL: atomic_signal_fence_seq_cst
@@ -2030,7 +2030,7 @@ entry:
 !3 = !{}
 !4 = !DISubroutineType(types: !3)
 !5 = !DIFile(filename: "atomic.cpp", directory: "/tmp")
-!6 = distinct !DISubprogram(name: "test", scope: !5, file: !5, line: 99, type: !4, isLocal: false, isDefinition: true, scopeLine: 100, flags: DIFlagPrototyped, isOptimized: false, unit: !8, variables: !3)
+!6 = distinct !DISubprogram(name: "test", scope: !5, file: !5, line: 99, type: !4, isLocal: false, isDefinition: true, scopeLine: 100, flags: DIFlagPrototyped, isOptimized: false, unit: !8, retainedNodes: !3)
 !7 = !DILocation(line: 100, column: 1, scope: !6)
 
 !8 = distinct !DICompileUnit(language: DW_LANG_C99, producer: "clang",

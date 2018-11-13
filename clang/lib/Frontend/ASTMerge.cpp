@@ -1,4 +1,4 @@
-//===-- ASTMerge.cpp - AST Merging Frontent Action --------------*- C++ -*-===//
+//===-- ASTMerge.cpp - AST Merging Frontend Action --------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -21,14 +21,13 @@ ASTMergeAction::CreateASTConsumer(CompilerInstance &CI, StringRef InFile) {
   return AdaptedAction->CreateASTConsumer(CI, InFile);
 }
 
-bool ASTMergeAction::BeginSourceFileAction(CompilerInstance &CI,
-                                           StringRef Filename) {
+bool ASTMergeAction::BeginSourceFileAction(CompilerInstance &CI) {
   // FIXME: This is a hack. We need a better way to communicate the
   // AST file, compiler instance, and file name than member variables
   // of FrontendAction.
   AdaptedAction->setCurrentInput(getCurrentInput(), takeCurrentASTUnit());
   AdaptedAction->setCompilerInstance(&CI);
-  return AdaptedAction->BeginSourceFileAction(CI, Filename);
+  return AdaptedAction->BeginSourceFileAction(CI);
 }
 
 void ASTMergeAction::ExecuteAction() {
@@ -45,16 +44,16 @@ void ASTMergeAction::ExecuteAction() {
                                     new ForwardingDiagnosticConsumer(
                                           *CI.getDiagnostics().getClient()),
                                     /*ShouldOwnClient=*/true));
-    std::unique_ptr<ASTUnit> Unit =
-        ASTUnit::LoadFromASTFile(ASTFiles[I], CI.getPCHContainerReader(),
-                                 Diags, CI.getFileSystemOpts(), false);
+    std::unique_ptr<ASTUnit> Unit = ASTUnit::LoadFromASTFile(
+        ASTFiles[I], CI.getPCHContainerReader(), ASTUnit::LoadEverything, Diags,
+        CI.getFileSystemOpts(), false);
 
     if (!Unit)
       continue;
 
-    ASTImporter Importer(CI.getASTContext(), 
+    ASTImporter Importer(CI.getASTContext(),
                          CI.getFileManager(),
-                         Unit->getASTContext(), 
+                         Unit->getASTContext(),
                          Unit->getFileManager(),
                          /*MinimalImport=*/false);
 
@@ -65,9 +64,9 @@ void ASTMergeAction::ExecuteAction() {
         if (IdentifierInfo *II = ND->getIdentifier())
           if (II->isStr("__va_list_tag") || II->isStr("__builtin_va_list"))
             continue;
-      
+
       Decl *ToD = Importer.Import(D);
-    
+
       if (ToD) {
         DeclGroupRef DGR(ToD);
         CI.getASTConsumer().HandleTopLevelDecl(DGR);
@@ -89,7 +88,7 @@ ASTMergeAction::ASTMergeAction(std::unique_ptr<FrontendAction> adaptedAction,
   assert(AdaptedAction && "ASTMergeAction needs an action to adapt");
 }
 
-ASTMergeAction::~ASTMergeAction() { 
+ASTMergeAction::~ASTMergeAction() {
 }
 
 bool ASTMergeAction::usesPreprocessorOnly() const {

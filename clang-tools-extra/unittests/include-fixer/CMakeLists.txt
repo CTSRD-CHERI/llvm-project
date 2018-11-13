@@ -13,9 +13,11 @@ include_directories(${CLANG_SOURCE_DIR})
 
 add_extra_unittest(IncludeFixerTests
   IncludeFixerTest.cpp
+  FuzzySymbolIndexTests.cpp
   )
 
 target_link_libraries(IncludeFixerTests
+  PRIVATE
   clangBasic
   clangFormat
   clangFrontend

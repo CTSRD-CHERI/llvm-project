@@ -19,17 +19,13 @@ class raw_ostream;
 namespace pdb {
 
 class PDBSymbolTypeVTableShape : public PDBSymbol {
-public:
-  PDBSymbolTypeVTableShape(const IPDBSession &PDBSession,
-                           std::unique_ptr<IPDBRawSymbol> VtblShapeSymbol);
-
   DECLARE_PDB_SYMBOL_CONCRETE_TYPE(PDB_SymType::VTableShape)
-
+public:
   void dump(PDBSymDumper &Dumper) const override;
 
   FORWARD_SYMBOL_METHOD(isConstType)
   FORWARD_SYMBOL_METHOD(getCount)
-  FORWARD_SYMBOL_METHOD(getLexicalParentId)
+  FORWARD_SYMBOL_ID_METHOD(getLexicalParent)
   FORWARD_SYMBOL_METHOD(isUnalignedType)
   FORWARD_SYMBOL_METHOD(isVolatileType)
 };

@@ -186,7 +186,8 @@ namespace ISD {
     /// BUILD_PAIR - This is the opposite of EXTRACT_ELEMENT in some ways.
     /// Given two values of the same integer value type, this produces a value
     /// twice as big.  Like EXTRACT_ELEMENT, this can only be used before
-    /// legalization.
+    /// legalization. The lower part of the composite value should be in
+    /// element 0 and the upper part should be in element 1.
     BUILD_PAIR,
 
     /// MERGE_VALUES - This node takes multiple discrete operands and returns
@@ -216,6 +217,9 @@ namespace ISD {
     /// These nodes take two operands of the same value type, and produce two
     /// results.  The first result is the normal add or sub result, the second
     /// result is the carry flag result.
+    /// FIXME: These nodes are deprecated in favor of ADDCARRY and SUBCARRY.
+    /// They are kept around for now to provide a smooth transition path
+    /// toward the use of ADDCARRY/SUBCARRY and will eventually be removed.
     ADDC, SUBC,
 
     /// Carry-using nodes for multiple precision addition and subtraction. These
@@ -226,6 +230,16 @@ namespace ISD {
     /// to them to be chained together for add and sub of arbitrarily large
     /// values.
     ADDE, SUBE,
+
+    /// Carry-using nodes for multiple precision addition and subtraction.
+    /// These nodes take three operands: The first two are the normal lhs and
+    /// rhs to the add or sub, and the third is a boolean indicating if there
+    /// is an incoming carry. These nodes produce two results: the normal
+    /// result of the add or sub, and the output carry so they can be chained
+    /// together. The use of this opcode is preferable to adde/sube if the
+    /// target supports it, as the carry is a regular value rather than a
+    /// glue, which allows further optimisation.
+    ADDCARRY, SUBCARRY,
 
     /// RESULT, BOOL = [SU]ADDO(LHS, RHS) - Overflow-aware nodes for addition.
     /// These nodes take two operands: the normal LHS and RHS to the add. They
@@ -244,6 +258,21 @@ namespace ISD {
 
     /// Simple binary floating point operators.
     FADD, FSUB, FMUL, FDIV, FREM,
+
+    /// Constrained versions of the binary floating point operators.
+    /// These will be lowered to the simple operators before final selection.
+    /// They are used to limit optimizations while the DAG is being
+    /// optimized.
+    STRICT_FADD, STRICT_FSUB, STRICT_FMUL, STRICT_FDIV, STRICT_FREM,
+    STRICT_FMA,
+
+    /// Constrained versions of libm-equivalent floating point intrinsics.
+    /// These will be lowered to the equivalent non-constrained pseudo-op
+    /// (or expanded to the equivalent library call) before final selection.
+    /// They are used to limit optimizations while the DAG is being optimized.
+    STRICT_FSQRT, STRICT_FPOW, STRICT_FPOWI, STRICT_FSIN, STRICT_FCOS,
+    STRICT_FEXP, STRICT_FEXP2, STRICT_FLOG, STRICT_FLOG10, STRICT_FLOG2,
+    STRICT_FRINT, STRICT_FNEARBYINT,
 
     /// FMA - Perform a * b + c with no intermediate rounding step.
     FMA,
@@ -281,7 +310,8 @@ namespace ISD {
     /// EXTRACT_VECTOR_ELT(VECTOR, IDX) - Returns a single element from VECTOR
     /// identified by the (potentially variable) element number IDX.  If the
     /// return type is an integer type larger than the element type of the
-    /// vector, the result is extended to the width of the return type.
+    /// vector, the result is extended to the width of the return type. In
+    /// that case, the high bits are undefined.
     EXTRACT_VECTOR_ELT,
 
     /// CONCAT_VECTORS(VECTOR0, VECTOR1, ...) - Given a number of values of
@@ -332,6 +362,12 @@ namespace ISD {
     /// Bitwise operators - logical and, logical or, logical xor.
     AND, OR, XOR,
 
+    /// ABS - Determine the unsigned absolute value of a signed integer value of
+    /// the same bitwidth.
+    /// Note: A value of INT_MIN will return INT_MIN, no saturation or overflow
+    /// is performed.
+    ABS,
+
     /// Shift and rotation operations.  After legalization, the type of the
     /// shift amount is known to be TLI.getShiftAmountTy().  Before legalization
     /// the shift amount can be any type, but care must be taken to ensure it is
@@ -341,6 +377,8 @@ namespace ISD {
     /// When the 1st operand is a vector, the shift amount must be in the same
     /// type. (TLI.getShiftAmountTy() will return the same type when the input
     /// type is a vector.)
+    /// For rotates, the shift amount is treated as an unsigned amount modulo
+    /// the element size of the first operand.
     SHL, SRA, SRL, ROTL, ROTR,
 
     /// Byte Swap and Counting operators.
@@ -377,10 +415,12 @@ namespace ISD {
     SETCC,
 
     /// Like SetCC, ops #0 and #1 are the LHS and RHS operands to compare, but
-    /// op #2 is a *carry value*. This operator checks the result of
-    /// "LHS - RHS - Carry", and can be used to compare two wide integers:
-    /// (setcce lhshi rhshi (subc lhslo rhslo) cc). Only valid for integers.
-    SETCCE,
+    /// op #2 is a boolean indicating if there is an incoming carry. This
+    /// operator checks the result of "LHS - RHS - Carry", and can be used to
+    /// compare two wide integers:
+    /// (setcccarry lhshi rhshi (subcarry lhslo rhslo) cc).
+    /// Only valid for integers.
+    SETCCCARRY,
 
     /// SHL_PARTS/SRA_PARTS/SRL_PARTS - These operators are used for expanded
     /// integer shift operations.  The operation ordering is:
@@ -449,7 +489,8 @@ namespace ISD {
     ZERO_EXTEND_VECTOR_INREG,
 
     /// FP_TO_[US]INT - Convert a floating point value to a signed or unsigned
-    /// integer.
+    /// integer. These have the same semantics as fptosi and fptoui in IR. If
+    /// the FP value cannot fit in the integer type, the results are undefined.
     FP_TO_SINT,
     FP_TO_UINT,
 
@@ -503,30 +544,14 @@ namespace ISD {
     /// address spaces.
     ADDRSPACECAST,
 
-    /// CONVERT_RNDSAT - This operator is used to support various conversions
-    /// between various types (float, signed, unsigned and vectors of those
-    /// types) with rounding and saturation. NOTE: Avoid using this operator as
-    /// most target don't support it and the operator might be removed in the
-    /// future. It takes the following arguments:
-    ///   0) value
-    ///   1) dest type (type to convert to)
-    ///   2) src type (type to convert from)
-    ///   3) rounding imm
-    ///   4) saturation imm
-    ///   5) ISD::CvtCode indicating the type of conversion to do
-    CONVERT_RNDSAT,
-
     /// FP16_TO_FP, FP_TO_FP16 - These operators are used to perform promotions
     /// and truncation for half-precision (16 bit) floating numbers. These nodes
     /// form a semi-softened interface for dealing with f16 (as an i16), which
     /// is often a storage-only type but has native conversions.
     FP16_TO_FP, FP_TO_FP16,
 
-    /// FNEG, FABS, FSQRT, FSIN, FCOS, FPOWI, FPOW,
-    /// FLOG, FLOG2, FLOG10, FEXP, FEXP2,
-    /// FCEIL, FTRUNC, FRINT, FNEARBYINT, FROUND, FFLOOR - Perform various unary
-    /// floating point operations. These are inspired by libm.
-    FNEG, FABS, FSQRT, FSIN, FCOS, FPOWI, FPOW,
+    /// Perform various unary floating-point operations inspired by libm.
+    FNEG, FABS, FSQRT, FCBRT, FSIN, FCOS, FPOWI, FPOW,
     FLOG, FLOG2, FLOG10, FEXP, FEXP2,
     FCEIL, FTRUNC, FRINT, FNEARBYINT, FROUND, FFLOOR,
     /// FMINNUM/FMAXNUM - Perform floating-point minimum or maximum on two
@@ -606,6 +631,12 @@ namespace ISD {
     /// take a chain as input and return a chain.
     EH_LABEL,
 
+    /// ANNOTATION_LABEL - Represents a mid basic block label used by
+    /// annotations. This should remain within the basic block and be ordered
+    /// with respect to other call instructions, but loads and stores may float
+    /// past it.
+    ANNOTATION_LABEL,
+
     /// CATCHPAD - Represents a catchpad instruction.
     CATCHPAD,
 
@@ -631,6 +662,13 @@ namespace ISD {
     /// of a call sequence, and carry arbitrary information that target might
     /// want to know.  The first operand is a chain, the rest are specified by
     /// the target and not touched by the DAG optimizers.
+    /// Targets that may use stack to pass call arguments define additional
+    /// operands:
+    /// - size of the call frame part that must be set up within the
+    ///   CALLSEQ_START..CALLSEQ_END pair,
+    /// - part of the call frame prepared prior to CALLSEQ_START.
+    /// Both these parameters must be constants, their sum is the total call
+    /// frame size.
     /// CALLSEQ_START..CALLSEQ_END pairs may not be nested.
     CALLSEQ_START,  // Beginning of a call sequence
     CALLSEQ_END,    // End of a call sequence
@@ -733,6 +771,7 @@ namespace ISD {
     ATOMIC_LOAD_ADD,
     ATOMIC_LOAD_SUB,
     ATOMIC_LOAD_AND,
+    ATOMIC_LOAD_CLR,
     ATOMIC_LOAD_OR,
     ATOMIC_LOAD_XOR,
     ATOMIC_LOAD_NAND,
@@ -744,11 +783,20 @@ namespace ISD {
     // Masked load and store - consecutive vector load and store operations
     // with additional mask operand that prevents memory accesses to the
     // masked-off lanes.
+    //
+    // Val, OutChain = MLOAD(BasePtr, Mask, PassThru)
+    // OutChain = MSTORE(Value, BasePtr, Mask)
     MLOAD, MSTORE,
 
     // Masked gather and scatter - load and store operations for a vector of
     // random addresses with additional mask operand that prevents memory
     // accesses to the masked-off lanes.
+    //
+    // Val, OutChain = GATHER(InChain, PassThru, Mask, BasePtr, Index, Scale)
+    // OutChain = SCATTER(InChain, Value, Mask, BasePtr, Index, Scale)
+    //
+    // The Index operand can have more vector elements than the other operands
+    // due to type legalization. The extra elements are ignored.
     MGATHER, MSCATTER,
 
     /// This corresponds to the llvm.lifetime.* intrinsics. The first operand
@@ -770,6 +818,20 @@ namespace ISD {
     /// known nonzero constant. The only operand here is the chain.
     GET_DYNAMIC_AREA_OFFSET,
 
+    /// Generic reduction nodes. These nodes represent horizontal vector
+    /// reduction operations, producing a scalar result.
+    /// The STRICT variants perform reductions in sequential order. The first
+    /// operand is an initial scalar accumulator value, and the second operand
+    /// is the vector to reduce.
+    VECREDUCE_STRICT_FADD, VECREDUCE_STRICT_FMUL,
+    /// These reductions are non-strict, and have a single vector operand.
+    VECREDUCE_FADD, VECREDUCE_FMUL,
+    VECREDUCE_ADD, VECREDUCE_MUL,
+    VECREDUCE_AND, VECREDUCE_OR, VECREDUCE_XOR,
+    VECREDUCE_SMAX, VECREDUCE_SMIN, VECREDUCE_UMAX, VECREDUCE_UMIN,
+    /// FMIN/FMAX nodes can have flags, for NaN/NoNaN variants.
+    VECREDUCE_FMAX, VECREDUCE_FMIN,
+
     /// BUILTIN_OP_END - This must be the last enum value in this list.
     /// The target-specific pre-isel opcode values start here.
     BUILTIN_OP_END
@@ -779,7 +841,7 @@ namespace ISD {
   /// which do not reference a specific memory location should be less than
   /// this value. Those that do must not be less than this value, and can
   /// be used with SelectionDAG::getMemIntrinsicNode.
-  static const int FIRST_TARGET_MEMORY_OPCODE = BUILTIN_OP_END+300;
+  static const int FIRST_TARGET_MEMORY_OPCODE = BUILTIN_OP_END+400;
 
   //===--------------------------------------------------------------------===//
   /// MemIndexedMode enum - This enum defines the load / store indexed
@@ -814,9 +876,10 @@ namespace ISD {
     PRE_INC,
     PRE_DEC,
     POST_INC,
-    POST_DEC,
-    LAST_INDEXED_MODE
+    POST_DEC
   };
+
+  static const int LAST_INDEXED_MODE = POST_DEC + 1;
 
   //===--------------------------------------------------------------------===//
   /// LoadExtType enum - This enum defines the three variants of LOADEXT
@@ -832,9 +895,10 @@ namespace ISD {
     NON_EXTLOAD = 0,
     EXTLOAD,
     SEXTLOAD,
-    ZEXTLOAD,
-    LAST_LOADEXT_TYPE
+    ZEXTLOAD
   };
+
+  static const int LAST_LOADEXT_TYPE = ZEXTLOAD + 1;
 
   NodeType getExtForLoadExtType(bool IsFP, LoadExtType);
 
@@ -926,21 +990,6 @@ namespace ISD {
   /// identical values: ((X op1 Y) & (X op2 Y)). This function returns
   /// SETCC_INVALID if it is not possible to represent the resultant comparison.
   CondCode getSetCCAndOperation(CondCode Op1, CondCode Op2, bool isInteger);
-
-  //===--------------------------------------------------------------------===//
-  /// This enum defines the various converts CONVERT_RNDSAT supports.
-  enum CvtCode {
-    CVT_FF,     /// Float from Float
-    CVT_FS,     /// Float from Signed
-    CVT_FU,     /// Float from Unsigned
-    CVT_SF,     /// Signed from Float
-    CVT_UF,     /// Unsigned from Float
-    CVT_SS,     /// Signed from Signed
-    CVT_SU,     /// Signed from Unsigned
-    CVT_US,     /// Unsigned from Signed
-    CVT_UU,     /// Unsigned from Unsigned
-    CVT_INVALID /// Marker - Invalid opcode
-  };
 
 } // end llvm::ISD namespace
 

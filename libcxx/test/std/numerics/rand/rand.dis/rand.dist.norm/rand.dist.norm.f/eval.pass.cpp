@@ -34,7 +34,7 @@ double
 I(double x, unsigned a, unsigned b)
 {
     double r = 0;
-    for (int j = a; j <= a+b-1; ++j)
+    for (int j = a; static_cast<unsigned>(j) <= a+b-1; ++j)
         r += fac(a+b-1)/(fac(j) * fac(a + b - 1 - j)) * std::pow(x, j) *
              std::pow(1-x, a+b-1-j);
     return r;
@@ -51,7 +51,6 @@ int main()
     // Purposefully only testing even integral values of m and n (for now)
     {
         typedef std::fisher_f_distribution<> D;
-        typedef D::param_type P;
         typedef std::mt19937 G;
         G g;
         D d(2, 4);
@@ -69,7 +68,6 @@ int main()
     }
     {
         typedef std::fisher_f_distribution<> D;
-        typedef D::param_type P;
         typedef std::mt19937 G;
         G g;
         D d(4, 2);
@@ -87,7 +85,6 @@ int main()
     }
     {
         typedef std::fisher_f_distribution<> D;
-        typedef D::param_type P;
         typedef std::mt19937 G;
         G g;
         D d(18, 20);

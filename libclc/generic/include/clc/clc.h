@@ -8,6 +8,10 @@
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 #endif
 
+#ifdef cl_khr_fp16
+#pragma OPENCL EXTENSION cl_khr_fp16 : enable
+#endif
+
 /* Function Attributes */
 #include <clc/clcfunc.h>
 
@@ -21,7 +25,7 @@
 #include <clc/as_type.h>
 
 /* 6.9 Preprocessor Directives and Macros */
-#include <clc/clcversion.h>
+#include <clc/clcmacros.h>
 
 /* 6.11.1 Work-Item Functions */
 #include <clc/workitem/get_global_size.h>
@@ -31,6 +35,7 @@
 #include <clc/workitem/get_num_groups.h>
 #include <clc/workitem/get_group_id.h>
 #include <clc/workitem/get_global_offset.h>
+#include <clc/workitem/get_work_dim.h>
 
 /* 6.11.2 Math Functions */
 #include <clc/math/acos.h>
@@ -53,6 +58,7 @@
 #include <clc/math/erf.h>
 #include <clc/math/erfc.h>
 #include <clc/math/exp.h>
+#include <clc/math/expm1.h>
 #include <clc/math/exp10.h>
 #include <clc/math/exp2.h>
 #include <clc/math/fabs.h>
@@ -64,8 +70,20 @@
 #include <clc/math/fmod.h>
 #include <clc/math/fract.h>
 #include <clc/math/frexp.h>
+#include <clc/math/half_cos.h>
+#include <clc/math/half_divide.h>
+#include <clc/math/half_exp.h>
+#include <clc/math/half_exp10.h>
+#include <clc/math/half_exp2.h>
+#include <clc/math/half_log.h>
+#include <clc/math/half_log10.h>
+#include <clc/math/half_log2.h>
+#include <clc/math/half_powr.h>
+#include <clc/math/half_recip.h>
 #include <clc/math/half_rsqrt.h>
+#include <clc/math/half_sin.h>
 #include <clc/math/half_sqrt.h>
+#include <clc/math/half_tan.h>
 #include <clc/math/hypot.h>
 #include <clc/math/ilogb.h>
 #include <clc/math/ldexp.h>
@@ -75,19 +93,29 @@
 #include <clc/math/log10.h>
 #include <clc/math/log1p.h>
 #include <clc/math/log2.h>
+#include <clc/math/logb.h>
 #include <clc/math/mad.h>
+#include <clc/math/maxmag.h>
+#include <clc/math/minmag.h>
 #include <clc/math/modf.h>
+#include <clc/math/nan.h>
 #include <clc/math/nextafter.h>
 #include <clc/math/pow.h>
 #include <clc/math/pown.h>
+#include <clc/math/powr.h>
+#include <clc/math/remainder.h>
+#include <clc/math/remquo.h>
 #include <clc/math/rint.h>
+#include <clc/math/rootn.h>
 #include <clc/math/round.h>
 #include <clc/math/sin.h>
 #include <clc/math/sincos.h>
+#include <clc/math/sinh.h>
 #include <clc/math/sinpi.h>
 #include <clc/math/sqrt.h>
 #include <clc/math/tan.h>
 #include <clc/math/tanh.h>
+#include <clc/math/tanpi.h>
 #include <clc/math/tgamma.h>
 #include <clc/math/trunc.h>
 #include <clc/math/native_cos.h>
@@ -96,10 +124,14 @@
 #include <clc/math/native_exp10.h>
 #include <clc/math/native_exp2.h>
 #include <clc/math/native_log.h>
+#include <clc/math/native_log10.h>
 #include <clc/math/native_log2.h>
 #include <clc/math/native_powr.h>
+#include <clc/math/native_recip.h>
 #include <clc/math/native_sin.h>
 #include <clc/math/native_sqrt.h>
+#include <clc/math/native_rsqrt.h>
+#include <clc/math/native_tan.h>
 #include <clc/math/rsqrt.h>
 
 /* 6.11.2.1 Floating-point macros */
@@ -116,6 +148,7 @@
 #include <clc/integer/mad_sat.h>
 #include <clc/integer/mul24.h>
 #include <clc/integer/mul_hi.h>
+#include <clc/integer/popcount.h>
 #include <clc/integer/rhadd.h>
 #include <clc/integer/rotate.h>
 #include <clc/integer/sub_sat.h>
@@ -173,6 +206,9 @@
 #include <clc/synchronization/cl_mem_fence_flags.h>
 #include <clc/synchronization/barrier.h>
 
+/* 6.11.9 Explicit Memory Fence Functions */
+#include <clc/explicit_fence/explicit_memory_fence.h>
+
 /* 6.11.10 Async Copy and Prefetch Functions */
 #include <clc/async/async_work_group_copy.h>
 #include <clc/async/async_work_group_strided_copy.h>
@@ -222,14 +258,31 @@
 #include <clc/cl_khr_local_int32_extended_atomics/atom_or.h>
 #include <clc/cl_khr_local_int32_extended_atomics/atom_xor.h>
 
-/* 6.11.13 Image Read and Write Functions */
+/* cl_khr_int64_base_atomics Extension Functions */
+#ifdef cl_khr_int64_base_atomics
+#include <clc/cl_khr_int64_base_atomics/atom_add.h>
+#include <clc/cl_khr_int64_base_atomics/atom_cmpxchg.h>
+#include <clc/cl_khr_int64_base_atomics/atom_dec.h>
+#include <clc/cl_khr_int64_base_atomics/atom_inc.h>
+#include <clc/cl_khr_int64_base_atomics/atom_sub.h>
+#include <clc/cl_khr_int64_base_atomics/atom_xchg.h>
+#endif
 
+/* cl_khr_int64_extended_atomics Extension Functions */
+#ifdef cl_khr_int64_base_atomics
+#include <clc/cl_khr_int64_extended_atomics/atom_and.h>
+#include <clc/cl_khr_int64_extended_atomics/atom_max.h>
+#include <clc/cl_khr_int64_extended_atomics/atom_min.h>
+#include <clc/cl_khr_int64_extended_atomics/atom_or.h>
+#include <clc/cl_khr_int64_extended_atomics/atom_xor.h>
+#endif
+
+/* 6.12.12 Miscellaneous Vector Functions */
+#include <clc/misc/shuffle.h>
+#include <clc/misc/shuffle2.h>
+
+/* 6.11.13 Image Read and Write Functions */
 #include <clc/image/image_defines.h>
 #include <clc/image/image.h>
-
-/* libclc internal defintions */
-#ifdef __CLC_INTERNAL
-#include <math/clc_nextafter.h>
-#endif
 
 #pragma OPENCL EXTENSION all : disable

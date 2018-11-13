@@ -259,7 +259,11 @@ class CrashLog(symbolication.Symbolicator):
                     self.dsymForUUIDBinary, uuid_str)
                 s = commands.getoutput(dsym_for_uuid_command)
                 if s:
-                    plist_root = plistlib.readPlistFromString(s)
+                    try:
+                        plist_root = plistlib.readPlistFromString(s)
+                    except:
+                        print("Got exception: ", sys.exc_value, " handling dsymForUUID output: \n", s) 
+                        raise
                     if plist_root:
                         plist = plist_root[uuid_str]
                         if plist:
@@ -380,9 +384,15 @@ class CrashLog(symbolication.Symbolicator):
                 elif line.startswith('Exception Codes:'):
                     self.thread_exception_data = line[16:].strip()
                     continue
+                elif line.startswith('Exception Subtype:'): # iOS
+                    self.thread_exception_data = line[18:].strip()
+                    continue                                                          
                 elif line.startswith('Crashed Thread:'):
                     self.crashed_thread_idx = int(line[15:].strip().split()[0])
                     continue
+                elif line.startswith('Triggered by Thread:'): # iOS
+                    self.crashed_thread_idx = int(line[20:].strip().split()[0])
+                    continue                    
                 elif line.startswith('Report Version:'):
                     self.version = int(line[15:].strip())
                     continue
@@ -423,6 +433,11 @@ class CrashLog(symbolication.Symbolicator):
                         app_specific_backtrace = True
                         idx = int(app_backtrace_match.group(1))
                         thread = CrashLog.Thread(idx, True)
+                elif line.startswith('Last Exception Backtrace:'): # iOS
+                    parse_mode = PARSE_MODE_THREAD
+                    app_specific_backtrace = True
+                    idx = 1
+                    thread = CrashLog.Thread(idx, True)
                 self.info_lines.append(line.strip())
             elif parse_mode == PARSE_MODE_THREAD:
                 if line.startswith('Thread'):
@@ -665,7 +680,7 @@ def interactive_crashlogs(options, args):
     interpreter.cmdloop()
 
 
-def save_crashlog(debugger, command, result, dict):
+def save_crashlog(debugger, command, exe_ctx, result, dict):
     usage = "usage: %prog [options] <output-path>"
     description = '''Export the state of current target into a crashlog file'''
     parser = optparse.OptionParser(
@@ -694,11 +709,12 @@ def save_crashlog(debugger, command, result, dict):
             "error: failed to open file '%s' for writing...",
             args[0])
         return
-    target = debugger.GetSelectedTarget()
+    target = exe_ctx.target
     if target:
         identifier = target.executable.basename
-        if lldb.process:
-            pid = lldb.process.id
+        process = exe_ctx.process
+        if process:
+            pid = process.id
             if pid != lldb.LLDB_INVALID_PROCESS_ID:
                 out_file.write(
                     'Process:         %s [%u]\n' %
@@ -711,8 +727,8 @@ def save_crashlog(debugger, command, result, dict):
             'OS Version:      Mac OS X %s (%s)\n' %
             (platform.mac_ver()[0], commands.getoutput('sysctl -n kern.osversion')))
         out_file.write('Report Version:  9\n')
-        for thread_idx in range(lldb.process.num_threads):
-            thread = lldb.process.thread[thread_idx]
+        for thread_idx in range(process.num_threads):
+            thread = process.thread[thread_idx]
             out_file.write('\nThread %u:\n' % (thread_idx))
             for (frame_idx, frame) in enumerate(thread.frames):
                 frame_pc = frame.pc

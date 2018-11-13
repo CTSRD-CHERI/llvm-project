@@ -1,4 +1,4 @@
-; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt | FileCheck %s
+; RUN: llc < %s -asm-verbose=false -disable-wasm-fallthrough-return-opt -wasm-disable-explicit-locals -wasm-keep-registers | FileCheck %s
 
 ; Test that basic functions assemble as expected.
 
@@ -7,7 +7,7 @@ target triple = "wasm32-unknown-unknown"
 
 ; CHECK-LABEL: f0:
 ; CHECK: return{{$}}
-; CHECK: .endfunc{{$}}
+; CHECK: end_function{{$}}
 ; CHECK: .size f0,
 define void @f0() {
   ret void

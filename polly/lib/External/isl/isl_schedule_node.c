@@ -11,6 +11,9 @@
  * B.P. 105 - 78153 Le Chesnay, France
  */
 
+#include <isl/id.h>
+#include <isl/val.h>
+#include <isl/space.h>
 #include <isl/set.h>
 #include <isl_schedule_band.h>
 #include <isl_schedule_private.h>
@@ -294,7 +297,7 @@ int isl_schedule_node_get_schedule_depth(__isl_keep isl_schedule_node *node)
  *
  * "initialized" is set if the filter field has been initialized.
  * If "universe_domain" is not set, then the collected filter is intersected
- * with the the domain of the root domain node.
+ * with the domain of the root domain node.
  * "universe_filter" is set if we are only collecting the universes of filters
  * "collect_prefix" is set if we are collecting prefixes.
  * "filter" collects all outer filters and is NULL until "initialized" is set.
@@ -1334,11 +1337,12 @@ static __isl_give isl_schedule_node *preorder_leave(
 /* Traverse the descendants of "node" (including the node itself)
  * in depth first preorder.
  *
- * If "fn" returns -1 on any of the nodes, then the traversal is aborted.
- * If "fn" returns 0 on any of the nodes, then the subtree rooted
+ * If "fn" returns isl_bool_error on any of the nodes,
+ * then the traversal is aborted.
+ * If "fn" returns isl_bool_false on any of the nodes, then the subtree rooted
  * at that node is skipped.
  *
- * Return 0 on success and -1 on failure.
+ * Return isl_stat_ok on success and isl_stat_error on failure.
  */
 isl_stat isl_schedule_node_foreach_descendant_top_down(
 	__isl_keep isl_schedule_node *node,
@@ -1352,6 +1356,56 @@ isl_stat isl_schedule_node_foreach_descendant_top_down(
 	isl_schedule_node_free(node);
 
 	return node ? isl_stat_ok : isl_stat_error;
+}
+
+/* Internal data structure for isl_schedule_node_every_descendant.
+ *
+ * "test" is the user-specified callback function.
+ * "user" is the user-specified callback function argument.
+ *
+ * "failed" is initialized to 0 and set to 1 if "test" fails
+ * on any node.
+ */
+struct isl_union_map_every_data {
+	isl_bool (*test)(__isl_keep isl_schedule_node *node, void *user);
+	void *user;
+	int failed;
+};
+
+/* isl_schedule_node_foreach_descendant_top_down callback
+ * that sets data->failed if data->test returns false and
+ * subsequently aborts the traversal.
+ */
+static isl_bool call_every(__isl_keep isl_schedule_node *node, void *user)
+{
+	struct isl_union_map_every_data *data = user;
+	isl_bool r;
+
+	r = data->test(node, data->user);
+	if (r < 0)
+		return isl_bool_error;
+	if (r)
+		return isl_bool_true;
+	data->failed = 1;
+	return isl_bool_error;
+}
+
+/* Does "test" succeed on every descendant of "node" (including "node" itself)?
+ */
+isl_bool isl_schedule_node_every_descendant(__isl_keep isl_schedule_node *node,
+	isl_bool (*test)(__isl_keep isl_schedule_node *node, void *user),
+	void *user)
+{
+	struct isl_union_map_every_data data = { test, user, 0 };
+	isl_stat r;
+
+	r = isl_schedule_node_foreach_descendant_top_down(node, &call_every,
+							&data);
+	if (r >= 0)
+		return isl_bool_true;
+	if (data.failed)
+		return isl_bool_false;
+	return isl_bool_error;
 }
 
 /* Internal data structure for isl_schedule_node_map_descendant_bottom_up.
@@ -1934,14 +1988,14 @@ __isl_give isl_schedule_node *isl_schedule_node_band_sink(
 	type = isl_schedule_node_get_type(node);
 	if (type != isl_schedule_node_band)
 		isl_die(isl_schedule_node_get_ctx(node), isl_error_invalid,
-			"not a band node", isl_schedule_node_free(node));
+			"not a band node", return isl_schedule_node_free(node));
 	anchored = isl_schedule_node_is_subtree_anchored(node);
 	if (anchored < 0)
 		return isl_schedule_node_free(node);
 	if (anchored)
 		isl_die(isl_schedule_node_get_ctx(node), isl_error_invalid,
 			"cannot sink band node in anchored subtree",
-			isl_schedule_node_free(node));
+			return isl_schedule_node_free(node));
 	if (isl_schedule_tree_n_children(node->tree) == 0)
 		return node;
 
@@ -1960,7 +2014,7 @@ __isl_give isl_schedule_node *isl_schedule_node_band_sink(
  * dimensions and one with the remaining dimensions.
  * The schedules of the two band nodes live in anonymous spaces.
  * The loop AST generation type options and the isolate option
- * are split over the the two band nodes.
+ * are split over the two band nodes.
  */
 __isl_give isl_schedule_node *isl_schedule_node_band_split(
 	__isl_take isl_schedule_node *node, int pos)
@@ -2205,12 +2259,14 @@ __isl_give isl_schedule_node *isl_schedule_node_sequence_splice_child(
 		return NULL;
 	if (isl_schedule_node_get_type(node) != isl_schedule_node_sequence)
 		isl_die(isl_schedule_node_get_ctx(node), isl_error_invalid,
-			"not a sequence node", isl_schedule_node_free(node));
+			"not a sequence node",
+			return isl_schedule_node_free(node));
 	node = isl_schedule_node_child(node, pos);
 	node = isl_schedule_node_child(node, 0);
 	if (isl_schedule_node_get_type(node) != isl_schedule_node_sequence)
 		isl_die(isl_schedule_node_get_ctx(node), isl_error_invalid,
-			"not a sequence node", isl_schedule_node_free(node));
+			"not a sequence node",
+			return isl_schedule_node_free(node));
 	child = isl_schedule_node_copy(node);
 	node = isl_schedule_node_parent(node);
 	filter = isl_schedule_node_filter_get_filter(node);
@@ -2252,7 +2308,6 @@ static __isl_give isl_schedule_node *update_ancestors(
 {
 	int i, n;
 	int is_leaf;
-	isl_ctx *ctx;
 	isl_schedule_tree *tree;
 	isl_schedule_node *pos = NULL;
 
@@ -2263,7 +2318,6 @@ static __isl_give isl_schedule_node *update_ancestors(
 	if (!node)
 		return isl_schedule_node_free(pos);
 
-	ctx = isl_schedule_node_get_ctx(node);
 	n = isl_schedule_tree_list_n_schedule_tree(node->ancestors);
 	tree = isl_schedule_tree_copy(node->tree);
 
@@ -3137,7 +3191,7 @@ __isl_give isl_schedule_node *isl_schedule_node_group(
 	if (!disjoint)
 		isl_die(isl_schedule_node_get_ctx(node), isl_error_invalid,
 			"group instances already reach node",
-			isl_schedule_node_free(node));
+			return isl_schedule_node_free(node));
 
 	return node;
 error:
@@ -4286,6 +4340,8 @@ static __isl_give isl_schedule_node *isl_schedule_node_graft_before_or_after(
 	if (isl_schedule_node_get_type(graft) == isl_schedule_node_domain)
 		graft = extension_from_domain(graft, node);
 
+	if (!graft)
+		goto error;
 	if (isl_schedule_node_get_type(graft) != isl_schedule_node_extension)
 		isl_die(isl_schedule_node_get_ctx(node), isl_error_invalid,
 			"expecting domain or extension as root of graft",

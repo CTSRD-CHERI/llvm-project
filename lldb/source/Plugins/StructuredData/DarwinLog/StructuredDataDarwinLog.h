@@ -67,12 +67,14 @@ public:
       Process &process, const ConstString &type_name,
       const StructuredData::ObjectSP &object_sp) override;
 
-  Error GetDescription(const StructuredData::ObjectSP &object_sp,
-                       lldb_private::Stream &stream) override;
+  Status GetDescription(const StructuredData::ObjectSP &object_sp,
+                        lldb_private::Stream &stream) override;
 
   bool GetEnabled(const ConstString &type_name) const override;
 
   void ModulesDidLoad(Process &process, ModuleList &module_list) override;
+
+  ~StructuredDataDarwinLog();
 
 private:
   // -------------------------------------------------------------------------
@@ -94,7 +96,8 @@ private:
                                          lldb::user_id_t break_id,
                                          lldb::user_id_t break_loc_id);
 
-  static Error FilterLaunchInfo(ProcessLaunchInfo &launch_info, Target *target);
+  static Status FilterLaunchInfo(ProcessLaunchInfo &launch_info,
+                                 Target *target);
 
   // -------------------------------------------------------------------------
   // Internal helper methods used by friend classes
@@ -129,6 +132,7 @@ private:
   bool m_is_enabled;
   std::mutex m_added_breakpoint_mutex;
   bool m_added_breakpoint;
+  lldb::user_id_t m_breakpoint_id;
 };
 }
 

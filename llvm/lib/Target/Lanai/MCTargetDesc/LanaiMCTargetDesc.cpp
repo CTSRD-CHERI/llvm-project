@@ -12,15 +12,20 @@
 //===----------------------------------------------------------------------===//
 
 #include "LanaiMCTargetDesc.h"
-
 #include "InstPrinter/LanaiInstPrinter.h"
 #include "LanaiMCAsmInfo.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Triple.h"
+#include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstrInfo.h"
+#include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/TargetRegistry.h"
+#include <cstdint>
+#include <string>
 
 #define GET_INSTRINFO_MC_DESC
 #include "LanaiGenInstrInfo.inc"
@@ -55,12 +60,15 @@ createLanaiMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
 }
 
 static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
-                                    MCAsmBackend &MAB, raw_pwrite_stream &OS,
-                                    MCCodeEmitter *Emitter, bool RelaxAll) {
+                                    std::unique_ptr<MCAsmBackend> &&MAB,
+                                    std::unique_ptr<MCObjectWriter> &&OW,
+                                    std::unique_ptr<MCCodeEmitter> &&Emitter,
+                                    bool RelaxAll) {
   if (!T.isOSBinFormatELF())
     llvm_unreachable("OS not supported");
 
-  return createELFStreamer(Context, MAB, OS, Emitter, RelaxAll);
+  return createELFStreamer(Context, std::move(MAB), std::move(OW),
+                           std::move(Emitter), RelaxAll);
 }
 
 static MCInstPrinter *createLanaiMCInstPrinter(const Triple & /*T*/,
@@ -70,7 +78,7 @@ static MCInstPrinter *createLanaiMCInstPrinter(const Triple & /*T*/,
                                                const MCRegisterInfo &MRI) {
   if (SyntaxVariant == 0)
     return new LanaiInstPrinter(MAI, MII, MRI);
-  return 0;
+  return nullptr;
 }
 
 static MCRelocationInfo *createLanaiElfRelocation(const Triple &TheTriple,
@@ -79,6 +87,7 @@ static MCRelocationInfo *createLanaiElfRelocation(const Triple &TheTriple,
 }
 
 namespace {
+
 class LanaiMCInstrAnalysis : public MCInstrAnalysis {
 public:
   explicit LanaiMCInstrAnalysis(const MCInstrInfo *Info)
@@ -107,6 +116,7 @@ public:
     }
   }
 };
+
 } // end anonymous namespace
 
 static MCInstrAnalysis *createLanaiInstrAnalysis(const MCInstrInfo *Info) {
@@ -131,7 +141,7 @@ extern "C" void LLVMInitializeLanaiTargetMC() {
 
   // Register the MC code emitter
   TargetRegistry::RegisterMCCodeEmitter(getTheLanaiTarget(),
-                                        llvm::createLanaiMCCodeEmitter);
+                                        createLanaiMCCodeEmitter);
 
   // Register the ASM Backend
   TargetRegistry::RegisterMCAsmBackend(getTheLanaiTarget(),

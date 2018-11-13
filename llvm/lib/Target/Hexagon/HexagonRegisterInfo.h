@@ -15,8 +15,7 @@
 #ifndef LLVM_LIB_TARGET_HEXAGON_HEXAGONREGISTERINFO_H
 #define LLVM_LIB_TARGET_HEXAGON_HEXAGONREGISTERINFO_H
 
-#include "llvm/MC/MachineLocation.h"
-#include "llvm/Target/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
 
 #define GET_REGINFO_HEADER
 #include "HexagonGenRegisterInfo.inc"
@@ -30,12 +29,13 @@ namespace Hexagon {
 
 class HexagonRegisterInfo : public HexagonGenRegisterInfo {
 public:
-  HexagonRegisterInfo();
+  HexagonRegisterInfo(unsigned HwMode);
 
   /// Code Generation virtual methods...
   const MCPhysReg *getCalleeSavedRegs(const MachineFunction *MF)
         const override;
-
+  const uint32_t *getCallPreservedMask(const MachineFunction &MF,
+        CallingConv::ID) const override;
 
   BitVector getReservedRegs(const MachineFunction &MF) const override;
 
@@ -61,13 +61,17 @@ public:
     return true;
   }
 
+  bool shouldCoalesce(MachineInstr *MI, const TargetRegisterClass *SrcRC,
+        unsigned SubReg, const TargetRegisterClass *DstRC, unsigned DstSubReg,
+        const TargetRegisterClass *NewRC, LiveIntervals &LIS) const override;
+
   // Debug information queries.
   unsigned getRARegister() const;
   unsigned getFrameRegister(const MachineFunction &MF) const override;
   unsigned getFrameRegister() const;
   unsigned getStackRegister() const;
 
-  unsigned getHexagonSubRegIndex(const TargetRegisterClass *RC,
+  unsigned getHexagonSubRegIndex(const TargetRegisterClass &RC,
         unsigned GenIdx) const;
 
   const MCPhysReg *getCallerSavedRegs(const MachineFunction *MF,
@@ -75,8 +79,11 @@ public:
 
   unsigned getFirstCallerSavedNonParamReg() const;
 
+  const TargetRegisterClass *
+  getPointerRegClass(const MachineFunction &MF,
+                     unsigned Kind = 0) const override;
+
   bool isEHReturnCalleeSaveReg(unsigned Reg) const;
-  bool isCalleeSaveReg(unsigned Reg) const;
 };
 
 } // end namespace llvm

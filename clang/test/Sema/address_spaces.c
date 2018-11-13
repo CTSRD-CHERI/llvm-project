@@ -14,13 +14,14 @@ void foo(_AS3 float *a,
 
   int _AS1 _AS2 *Y;   // expected-error {{multiple address spaces specified for type}}
   int *_AS1 _AS2 *Z;  // expected-error {{multiple address spaces specified for type}}
+  int *_AS1 _AS1 *M;  // expected-warning {{multiple identical address spaces specified for type}}
 
   _AS1 int local;     // expected-error {{automatic variable qualified with an address space}}
   _AS1 int array[5];  // expected-error {{automatic variable qualified with an address space}}
   _AS1 int arrarr[5][5]; // expected-error {{automatic variable qualified with an address space}}
 
   __attribute__((address_space(-1))) int *_boundsA; // expected-error {{address space is negative}}
-  __attribute__((address_space(0x7FFFFF))) int *_boundsB;
+  __attribute__((address_space(0x7FFFFF))) int *_boundsB; // expected-error {{address space is larger than the maximum supported}}
   __attribute__((address_space(0x1000000))) int *_boundsC; // expected-error {{address space is larger than the maximum supported}}
   // chosen specifically to overflow 32 bits and come out reasonable
   __attribute__((address_space(4294967500))) int *_boundsD; // expected-error {{address space is larger than the maximum supported}}
@@ -70,5 +71,19 @@ __attribute__((address_space("12"))) int *i; // expected-error {{'address_space'
 
 // Clang extension doesn't forbid operations on pointers to different address spaces.
 char* cmp(_AS1 char *x,  _AS2 char *y) {
-  return x < y ? x : y; // expected-warning {{pointer type mismatch ('__attribute__((address_space(1))) char *' and '__attribute__((address_space(2))) char *')}}
+  return x < y ? x : y; // expected-error{{conditional operator with the second and third operands of type  ('__attribute__((address_space(1))) char *' and '__attribute__((address_space(2))) char *') which are pointers to non-overlapping address spaces}}
+}
+
+struct SomeStruct {
+  int a;
+  long b;
+  int c;
+};
+
+// Compound literals in function scope are lvalues with automatic storage duration,
+// so they cannot realistically be qualified with an address space.
+void as_compound_literal() {
+  (_AS1 struct SomeStruct){1, 2, 3}; // expected-error {{compound literal in function scope may not be qualified with an address space}}
+  (_AS1 char[]){"test"}; // expected-error {{compound literal in function scope may not be qualified with an address space}}
+  (_AS1 char[]){'a', 'b', 'c'}; // expected-error {{compound literal in function scope may not be qualified with an address space}}
 }

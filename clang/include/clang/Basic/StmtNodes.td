@@ -43,7 +43,7 @@ def ObjCAtSynchronizedStmt : Stmt;
 def ObjCForCollectionStmt : Stmt;
 def ObjCAutoreleasePoolStmt : Stmt;
 
-// C++ statments
+// C++ statements
 def CXXCatchStmt : Stmt;
 def CXXTryStmt : Stmt;
 def CXXForRangeStmt : Stmt;
@@ -57,6 +57,7 @@ def Expr : Stmt<1>;
 def PredefinedExpr : DStmt<Expr>;
 def DeclRefExpr : DStmt<Expr>;
 def IntegerLiteral : DStmt<Expr>;
+def FixedPointLiteral : DStmt<Expr>;
 def FloatingLiteral : DStmt<Expr>;
 def ImaginaryLiteral : DStmt<Expr>;
 def StringLiteral : DStmt<Expr>;
@@ -85,6 +86,8 @@ def DesignatedInitExpr : DStmt<Expr>;
 def DesignatedInitUpdateExpr : DStmt<Expr>;
 def ImplicitValueInitExpr : DStmt<Expr>;
 def NoInitExpr : DStmt<Expr>;
+def ArrayInitLoopExpr : DStmt<Expr>;
+def ArrayInitIndexExpr : DStmt<Expr>;
 def ParenListExpr : DStmt<Expr>;
 def VAArgExpr : DStmt<Expr>;
 def GenericSelectionExpr : DStmt<Expr>;
@@ -148,6 +151,7 @@ def CXXFoldExpr : DStmt<Expr>;
 // C++ Coroutines TS expressions
 def CoroutineSuspendExpr : DStmt<Expr, 1>;
 def CoawaitExpr : DStmt<CoroutineSuspendExpr>;
+def DependentCoawaitExpr : DStmt<Expr>;
 def CoyieldExpr : DStmt<CoroutineSuspendExpr>;
 
 // Obj-C Expressions.
@@ -183,7 +187,7 @@ def TypoExpr : DStmt<Expr>;
 // Microsoft Extensions.
 def MSPropertyRefExpr : DStmt<Expr>;
 def MSPropertySubscriptExpr : DStmt<Expr>;
-def CXXUuidofExpr : DStmt<Expr>; 
+def CXXUuidofExpr : DStmt<Expr>;
 def SEHTryStmt : Stmt;
 def SEHExceptStmt : Stmt;
 def SEHFinallyStmt : Stmt;
@@ -236,3 +240,10 @@ def OMPTargetParallelForSimdDirective : DStmt<OMPLoopDirective>;
 def OMPTargetSimdDirective : DStmt<OMPLoopDirective>;
 def OMPTeamsDistributeDirective : DStmt<OMPLoopDirective>;
 def OMPTeamsDistributeSimdDirective : DStmt<OMPLoopDirective>;
+def OMPTeamsDistributeParallelForSimdDirective : DStmt<OMPLoopDirective>;
+def OMPTeamsDistributeParallelForDirective : DStmt<OMPLoopDirective>;
+def OMPTargetTeamsDirective : DStmt<OMPExecutableDirective>;
+def OMPTargetTeamsDistributeDirective : DStmt<OMPLoopDirective>;
+def OMPTargetTeamsDistributeParallelForDirective : DStmt<OMPLoopDirective>;
+def OMPTargetTeamsDistributeParallelForSimdDirective : DStmt<OMPLoopDirective>;
+def OMPTargetTeamsDistributeSimdDirective : DStmt<OMPLoopDirective>;

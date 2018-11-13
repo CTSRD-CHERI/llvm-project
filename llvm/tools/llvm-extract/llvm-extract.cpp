@@ -17,17 +17,16 @@
 #include "llvm/Bitcode/BitcodeWriterPass.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/IRPrintingPasses.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IRReader/IRReader.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
-#include "llvm/Support/ManagedStatic.h"
-#include "llvm/Support/PrettyStackTrace.h"
+#include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/Regex.h"
-#include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/SystemUtils.h"
 #include "llvm/Support/ToolOutputFile.h"
@@ -50,6 +49,10 @@ Force("f", cl::desc("Enable binary output on terminals"));
 static cl::opt<bool>
 DeleteFn("delete", cl::desc("Delete specified Globals from Module"));
 
+static cl::opt<bool>
+    Recursive("recursive",
+              cl::desc("Recursively extract all called functions"));
+
 // ExtractFuncs - The functions to extract from the module.
 static cl::list<std::string>
 ExtractFuncs("func", cl::desc("Specify function to extract"),
@@ -61,6 +64,12 @@ static cl::list<std::string>
 ExtractRegExpFuncs("rfunc", cl::desc("Specify function(s) to extract using a "
                                      "regular expression"),
                    cl::ZeroOrMore, cl::value_desc("rfunction"));
+
+// ExtractBlocks - The blocks to extract from the module.
+static cl::list<std::string>
+    ExtractBlocks("bb",
+                  cl::desc("Specify <function, basic block> pairs to extract"),
+                  cl::ZeroOrMore, cl::value_desc("function:bb"));
 
 // ExtractAlias - The alias to extract from the module.
 static cl::list<std::string>
@@ -102,12 +111,9 @@ static cl::opt<bool> PreserveAssemblyUseListOrder(
     cl::init(false), cl::Hidden);
 
 int main(int argc, char **argv) {
-  // Print a stack trace if we signal out.
-  sys::PrintStackTraceOnErrorSignal(argv[0]);
-  PrettyStackTraceProgram X(argc, argv);
+  InitLLVM X(argc, argv);
 
   LLVMContext Context;
-  llvm_shutdown_obj Y;  // Call llvm_shutdown() on exit.
   cl::ParseCommandLineOptions(argc, argv, "llvm extractor\n");
 
   // Use lazy loading, since we only care about selected global values.
@@ -223,8 +229,62 @@ int main(int argc, char **argv) {
     }
   }
 
+  // Figure out which BasicBlocks we should extract.
+  SmallVector<BasicBlock *, 4> BBs;
+  for (StringRef StrPair : ExtractBlocks) {
+    auto BBInfo = StrPair.split(':');
+    // Get the function.
+    Function *F = M->getFunction(BBInfo.first);
+    if (!F) {
+      errs() << argv[0] << ": program doesn't contain a function named '"
+             << BBInfo.first << "'!\n";
+      return 1;
+    }
+    // Do not materialize this function.
+    GVs.insert(F);
+    // Get the basic block.
+    auto Res = llvm::find_if(*F, [&](const BasicBlock &BB) {
+      return BB.getName().equals(BBInfo.second);
+    });
+    if (Res == F->end()) {
+      errs() << argv[0] << ": function " << F->getName()
+             << " doesn't contain a basic block named '" << BBInfo.second
+             << "'!\n";
+      return 1;
+    }
+    BBs.push_back(&*Res);
+  }
+
   // Use *argv instead of argv[0] to work around a wrong GCC warning.
   ExitOnError ExitOnErr(std::string(*argv) + ": error reading input: ");
+
+  if (Recursive) {
+    std::vector<llvm::Function *> Workqueue;
+    for (GlobalValue *GV : GVs) {
+      if (auto *F = dyn_cast<Function>(GV)) {
+        Workqueue.push_back(F);
+      }
+    }
+    while (!Workqueue.empty()) {
+      Function *F = &*Workqueue.back();
+      Workqueue.pop_back();
+      ExitOnErr(F->materialize());
+      for (auto &BB : *F) {
+        for (auto &I : BB) {
+          auto *CI = dyn_cast<CallInst>(&I);
+          if (!CI)
+            continue;
+          Function *CF = CI->getCalledFunction();
+          if (!CF)
+            continue;
+          if (CF->isDeclaration() || GVs.count(CF))
+            continue;
+          GVs.insert(CF);
+          Workqueue.push_back(CF);
+        }
+      }
+    }
+  }
 
   auto Materialize = [&](GlobalValue &GV) { ExitOnErr(GV.materialize()); };
 
@@ -253,6 +313,14 @@ int main(int argc, char **argv) {
     ExitOnErr(M->materializeAll());
   }
 
+  // Extract the specified basic blocks from the module and erase the existing
+  // functions.
+  if (!ExtractBlocks.empty()) {
+    legacy::PassManager PM;
+    PM.add(createBlockExtractorPass(BBs, true));
+    PM.run(*M);
+  }
+
   // In addition to deleting all other functions, we also want to spiff it
   // up a little bit.  Do this now.
   legacy::PassManager Passes;
@@ -263,7 +331,7 @@ int main(int argc, char **argv) {
   Passes.add(createStripDeadPrototypesPass());   // Remove dead func decls
 
   std::error_code EC;
-  tool_output_file Out(OutputFilename, EC, sys::fs::F_None);
+  ToolOutputFile Out(OutputFilename, EC, sys::fs::F_None);
   if (EC) {
     errs() << EC.message() << '\n';
     return 1;

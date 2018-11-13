@@ -68,12 +68,12 @@ __attribute__((pointer_with_type_tag(ident1,1,2)));
 void TestBool(void *, int)
 __attribute__((pointer_with_type_tag(bool1,1,2)));
 // CHECK: FunctionDecl{{.*}}TestBool
-// CHECK:   ArgumentWithTypeTagAttr{{.*}}pointer_with_type_tag bool1 0 1 IsPointer
+// CHECK:   ArgumentWithTypeTagAttr{{.*}}pointer_with_type_tag bool1 1 2 IsPointer
 
 void TestUnsigned(void *, int)
 __attribute__((pointer_with_type_tag(unsigned1,1,2)));
 // CHECK: FunctionDecl{{.*}}TestUnsigned
-// CHECK:   ArgumentWithTypeTagAttr{{.*}} pointer_with_type_tag unsigned1 0 1
+// CHECK:   ArgumentWithTypeTagAttr{{.*}} pointer_with_type_tag unsigned1 1 2
 
 void TestInt(void) __attribute__((constructor(123)));
 // CHECK:      FunctionDecl{{.*}}TestInt
@@ -123,7 +123,7 @@ int __attribute__((cdecl)) TestOne(void), TestTwo(void);
 
 void func() {
   auto Test = []() __attribute__((no_thread_safety_analysis)) {};
-  // CHECK: CXXMethodDecl{{.*}}operator() 'void (void) const'
+  // CHECK: CXXMethodDecl{{.*}}operator() 'void () const'
   // CHECK: NoThreadSafetyAnalysisAttr
 
   // Because GNU's noreturn applies to the function type, and this lambda does
@@ -131,7 +131,7 @@ void func() {
   // conversion should both be noreturn, but the method should not contain a
   // NoReturnAttr because the attribute applied to the type.
   auto Test2 = []() __attribute__((noreturn)) { while(1); };
-  // CHECK: CXXMethodDecl{{.*}}operator() 'void (void) __attribute__((noreturn)) const'
+  // CHECK: CXXMethodDecl{{.*}}operator() 'void () __attribute__((noreturn)) const'
   // CHECK-NOT: NoReturnAttr
   // CHECK: CXXConversionDecl{{.*}}operator void (*)() __attribute__((noreturn))
 }
@@ -154,3 +154,79 @@ void f() {
 struct __attribute__((objc_bridge_related(NSParagraphStyle,,))) TestBridgedRef;
 // CHECK: CXXRecordDecl{{.*}} struct TestBridgedRef
 // CHECK-NEXT: ObjCBridgeRelatedAttr{{.*}} NSParagraphStyle
+
+void TestExternalSourceSymbolAttr1()
+__attribute__((external_source_symbol(language="Swift", defined_in="module", generated_declaration)));
+// CHECK: FunctionDecl{{.*}} TestExternalSourceSymbolAttr1
+// CHECK-NEXT: ExternalSourceSymbolAttr{{.*}} "Swift" "module" GeneratedDeclaration
+
+void TestExternalSourceSymbolAttr2()
+__attribute__((external_source_symbol(defined_in="module", language="Swift")));
+// CHECK: FunctionDecl{{.*}} TestExternalSourceSymbolAttr2
+// CHECK-NEXT: ExternalSourceSymbolAttr{{.*}} "Swift" "module"{{$}}
+
+void TestExternalSourceSymbolAttr3()
+__attribute__((external_source_symbol(generated_declaration, language="Objective-C++", defined_in="module")));
+// CHECK: FunctionDecl{{.*}} TestExternalSourceSymbolAttr3
+// CHECK-NEXT: ExternalSourceSymbolAttr{{.*}} "Objective-C++" "module" GeneratedDeclaration
+
+void TestExternalSourceSymbolAttr4()
+__attribute__((external_source_symbol(defined_in="Some external file.cs", generated_declaration, language="C Sharp")));
+// CHECK: FunctionDecl{{.*}} TestExternalSourceSymbolAttr4
+// CHECK-NEXT: ExternalSourceSymbolAttr{{.*}} "C Sharp" "Some external file.cs" GeneratedDeclaration
+
+void TestExternalSourceSymbolAttr5()
+__attribute__((external_source_symbol(generated_declaration, defined_in="module", language="Swift")));
+// CHECK: FunctionDecl{{.*}} TestExternalSourceSymbolAttr5
+// CHECK-NEXT: ExternalSourceSymbolAttr{{.*}} "Swift" "module" GeneratedDeclaration
+
+namespace TestNoEscape {
+  void noescapeFunc(int *p0, __attribute__((noescape)) int *p1) {}
+  // CHECK: `-FunctionDecl{{.*}} noescapeFunc 'void (int *, __attribute__((noescape)) int *)'
+  // CHECK-NEXT: ParmVarDecl
+  // CHECK-NEXT: ParmVarDecl
+  // CHECK-NEXT: NoEscapeAttr
+}
+
+namespace TestSuppress {
+  [[gsl::suppress("at-namespace")]];
+  // CHECK: NamespaceDecl{{.*}} TestSuppress
+  // CHECK-NEXT: EmptyDecl{{.*}}
+  // CHECK-NEXT: SuppressAttr{{.*}} at-namespace
+  [[gsl::suppress("on-decl")]]
+  void TestSuppressFunction();
+  // CHECK: FunctionDecl{{.*}} TestSuppressFunction
+  // CHECK-NEXT SuppressAttr{{.*}} on-decl
+
+  void f() {
+      int *i;
+
+      [[gsl::suppress("on-stmt")]] {
+      // CHECK: AttributedStmt
+      // CHECK-NEXT: SuppressAttr{{.*}} on-stmt
+      // CHECK-NEXT: CompoundStmt
+        i = reinterpret_cast<int*>(7);
+      }
+    }
+}
+
+// Verify the order of attributes in the Ast. It must reflect the order
+// in the parsed source.
+int mergeAttrTest() __attribute__((deprecated)) __attribute__((warn_unused_result));
+int mergeAttrTest() __attribute__((annotate("test")));
+int mergeAttrTest() __attribute__((unused,no_thread_safety_analysis));
+// CHECK: FunctionDecl{{.*}} mergeAttrTest
+// CHECK-NEXT: DeprecatedAttr
+// CHECK-NEXT: WarnUnusedResultAttr
+
+// CHECK: FunctionDecl{{.*}} mergeAttrTest
+// CHECK-NEXT: DeprecatedAttr{{.*}} Inherited
+// CHECK-NEXT: WarnUnusedResultAttr{{.*}} Inherited
+// CHECK-NEXT: AnnotateAttr{{.*}}
+
+// CHECK: FunctionDecl{{.*}} mergeAttrTest
+// CHECK-NEXT: DeprecatedAttr{{.*}} Inherited
+// CHECK-NEXT: WarnUnusedResultAttr{{.*}} Inherited
+// CHECK-NEXT: AnnotateAttr{{.*}} Inherited
+// CHECK-NEXT: UnusedAttr
+// CHECK-NEXT: NoThreadSafetyAnalysisAttr

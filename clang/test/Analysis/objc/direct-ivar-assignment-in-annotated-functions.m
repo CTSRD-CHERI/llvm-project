@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -analyze -analyzer-checker=alpha.osx.cocoa.DirectIvarAssignmentForAnnotatedFunctions -verify -fblocks %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=alpha.osx.cocoa.DirectIvarAssignmentForAnnotatedFunctions -verify -fblocks %s
 
 typedef signed char BOOL;
 @protocol NSObject  - (BOOL)isEqual:(id)object; @end
@@ -26,7 +26,7 @@ typedef signed char BOOL;
   MyClass* _NotA __attribute__((annotate("objc_allow_direct_instance_variable_assignment")));
 }
 
-  @property (assign, nonatomic) MyClass* A; // explicitely synthesized, not implemented, non-default ivar name
+  @property (assign, nonatomic) MyClass* A; // explicitly synthesized, not implemented, non-default ivar name
 
   @property (assign) MyClass* X;  // automatically synthesized, not implemented
 

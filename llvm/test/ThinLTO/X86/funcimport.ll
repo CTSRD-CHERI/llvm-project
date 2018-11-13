@@ -10,22 +10,25 @@
 ; constant variable need promotion).
 ; RUN: llvm-lto -thinlto-action=promote %t.bc -thinlto-index=%t3.bc -o - | llvm-dis -o - | FileCheck %s --check-prefix=EXPORTSTATIC
 ; EXPORTSTATIC-DAG: @staticvar.llvm.0 = hidden global
-; EXPORTSTATIC-DAG: @staticconstvar = internal unnamed_addr constant
+; Eventually @staticconstvar can be exported as a copy and not promoted
+; EXPORTSTATIC-DAG: @staticconstvar.llvm.0 = hidden unnamed_addr constant
 ; EXPORTSTATIC-DAG: @P.llvm.0 = hidden global void ()* null
 ; EXPORTSTATIC-DAG: define hidden i32 @staticfunc.llvm.0
 ; EXPORTSTATIC-DAG: define hidden void @staticfunc2.llvm.0
 
-; Ensure that both weak alias to an imported function and strong alias to a
-; non-imported function are correctly turned into declarations.
+; Ensure that weak alias to an imported function is correctly turned into
+; a declaration.
 ; Also ensures that alias to a linkonce function is turned into a declaration
 ; and that the associated linkonce function is not in the output, as it is
 ; lazily linked and never referenced/materialized.
 ; RUN: llvm-lto -thinlto-action=import %t2.bc -thinlto-index=%t3.bc -o - | llvm-dis -o - | FileCheck %s --check-prefix=IMPORTGLOB1
 ; IMPORTGLOB1-DAG: define available_externally void @globalfunc1
 ; IMPORTGLOB1-DAG: declare void @weakalias
-; IMPORTGLOB1-DAG: declare void @analias
 ; IMPORTGLOB1-NOT: @linkoncealias
 ; IMPORTGLOB1-NOT: @linkoncefunc
+
+; A strong alias is imported as an available_externally copy of its aliasee.
+; IMPORTGLOB1-DAG: define available_externally void @analias
 ; IMPORTGLOB1-NOT: declare void @globalfunc2
 
 ; Verify that the optimizer run

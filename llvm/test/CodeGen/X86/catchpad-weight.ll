@@ -1,8 +1,8 @@
-; RUN: llc -march=x86-64 -print-machineinstrs=expand-isel-pseudos %s -o /dev/null 2>&1 | FileCheck %s
+; RUN: llc -print-machineinstrs=expand-isel-pseudos %s -o /dev/null 2>&1 | FileCheck %s
 
 ; Check if the edge weight to the catchpad is calculated correctly.
 
-; CHECK: Successors according to CFG: BB#2(0x7ffff100 / 0x80000000 = 100.00%) BB#1(0x00000800 / 0x80000000 = 0.00%) BB#3(0x00000400 / 0x80000000 = 0.00%) BB#4(0x00000200 / 0x80000000 = 0.00%) BB#5(0x00000100 / 0x80000000 = 0.00%)
+; CHECK: successors: %bb.2(0x7ffff100), %bb.1(0x00000800), %bb.3(0x00000400), %bb.4(0x00000200), %bb.5(0x00000100)
 
 target datalayout = "e-m:w-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64--windows-msvc18.0.0"
@@ -26,7 +26,7 @@ define i32 @main() #0 personality i8* bitcast (i32 (...)* @__CxxFrameHandler3 to
 entry:
   %o = alloca %struct.HasDtor, align 1
   %0 = getelementptr inbounds %struct.HasDtor, %struct.HasDtor* %o, i64 0, i32 0
-  call void @llvm.lifetime.start(i64 1, i8* %0) #4
+  call void @llvm.lifetime.start.p0i8(i64 1, i8* %0) #4
   invoke void @"\01?may_throw@@YAXXZ"()
           to label %try.cont unwind label %catch.dispatch
 
@@ -39,7 +39,7 @@ catch.5:                                          ; preds = %catch.dispatch
 
 try.cont:                                         ; preds = %entry, %catch, %catch.3, %catch.5
   call void @"\01??1HasDtor@@QEAA@XZ"(%struct.HasDtor* nonnull %o) #4
-  call void @llvm.lifetime.end(i64 1, i8* %0) #4
+  call void @llvm.lifetime.end.p0i8(i64 1, i8* %0) #4
   ret i32 0
 
 catch.dispatch.1:                                 ; preds = %catch.dispatch
@@ -63,7 +63,7 @@ ehcleanup:                                        ; preds = %catchendblock
 }
 
 ; Function Attrs: nounwind argmemonly
-declare void @llvm.lifetime.start(i64, i8* nocapture) #1
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #1
 
 declare void @"\01?may_throw@@YAXXZ"() #2
 
@@ -73,7 +73,7 @@ declare i32 @__CxxFrameHandler3(...)
 declare void @"\01??1HasDtor@@QEAA@XZ"(%struct.HasDtor*) #3
 
 ; Function Attrs: nounwind argmemonly
-declare void @llvm.lifetime.end(i64, i8* nocapture) #1
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1
 
 attributes #0 = { uwtable "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="false" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+mmx,+sse,+sse2" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind argmemonly }

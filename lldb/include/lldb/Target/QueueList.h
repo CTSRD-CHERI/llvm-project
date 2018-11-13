@@ -13,20 +13,19 @@
 #include <mutex>
 #include <vector>
 
-#include "lldb/Core/UserID.h"
 #include "lldb/Utility/Iterable.h"
+#include "lldb/Utility/UserID.h"
 #include "lldb/lldb-private.h"
 
 namespace lldb_private {
 
 //------------------------------------------------------------------
 // QueueList:
-// This is the container for libdispatch aka Grand Central Dispatch
-// Queue objects.
+// This is the container for libdispatch aka Grand Central Dispatch Queue
+// objects.
 //
-// Each Process will have a QueueList.  When the process execution is
-// paused, the QueueList may be populated with Queues by the
-// SystemRuntime.
+// Each Process will have a QueueList.  When the process execution is paused,
+// the QueueList may be populated with Queues by the SystemRuntime.
 //------------------------------------------------------------------
 
 class QueueList {

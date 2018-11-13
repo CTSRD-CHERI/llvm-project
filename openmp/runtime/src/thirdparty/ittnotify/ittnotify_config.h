@@ -24,11 +24,17 @@
 #  define ITT_OS_MAC   3
 #endif /* ITT_OS_MAC */
 
+#ifndef ITT_OS_FREEBSD
+#  define ITT_OS_FREEBSD   4
+#endif /* ITT_OS_FREEBSD */
+
 #ifndef ITT_OS
 #  if defined WIN32 || defined _WIN32
 #    define ITT_OS ITT_OS_WIN
 #  elif defined( __APPLE__ ) && defined( __MACH__ )
 #    define ITT_OS ITT_OS_MAC
+#  elif defined( __FreeBSD__ )
+#    define ITT_OS ITT_OS_FREEBSD
 #  else
 #    define ITT_OS ITT_OS_LINUX
 #  endif
@@ -46,11 +52,17 @@
 #  define ITT_PLATFORM_MAC 3
 #endif /* ITT_PLATFORM_MAC */
 
+#ifndef ITT_PLATFORM_FREEBSD
+#  define ITT_PLATFORM_FREEBSD 4
+#endif /* ITT_PLATFORM_FREEBSD */
+
 #ifndef ITT_PLATFORM
 #  if ITT_OS==ITT_OS_WIN
 #    define ITT_PLATFORM ITT_PLATFORM_WIN
 #  elif ITT_OS==ITT_OS_MAC
 #    define ITT_PLATFORM ITT_PLATFORM_MAC
+#  elif ITT_OS==ITT_OS_FREEBSD
+#    define ITT_PLATFORM ITT_PLATFORM_FREEBSD
 #  else
 #    define ITT_PLATFORM ITT_PLATFORM_POSIX
 #  endif
@@ -70,17 +82,17 @@
 #endif /* UNICODE || _UNICODE */
 #endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
 
-#ifndef CDECL
+#ifndef ITTAPI_CDECL
 #  if ITT_PLATFORM==ITT_PLATFORM_WIN
-#    define CDECL __cdecl
+#    define ITTAPI_CDECL __cdecl
 #  else /* ITT_PLATFORM==ITT_PLATFORM_WIN */
 #    if defined _M_IX86 || defined __i386__
-#      define CDECL __attribute__ ((cdecl))
+#      define ITTAPI_CDECL __attribute__ ((cdecl))
 #    else  /* _M_IX86 || __i386__ */
-#      define CDECL /* actual only on x86 platform */
+#      define ITTAPI_CDECL /* actual only on x86 platform */
 #    endif /* _M_IX86 || __i386__ */
 #  endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
-#endif /* CDECL */
+#endif /* ITTAPI_CDECL */
 
 #ifndef STDCALL
 #  if ITT_PLATFORM==ITT_PLATFORM_WIN
@@ -94,12 +106,12 @@
 #  endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
 #endif /* STDCALL */
 
-#define ITTAPI    CDECL
-#define LIBITTAPI CDECL
+#define ITTAPI    ITTAPI_CDECL
+#define LIBITTAPI ITTAPI_CDECL
 
 /* TODO: Temporary for compatibility! */
-#define ITTAPI_CALL    CDECL
-#define LIBITTAPI_CALL CDECL
+#define ITTAPI_CALL    ITTAPI_CDECL
+#define LIBITTAPI_CALL ITTAPI_CDECL
 
 #if ITT_PLATFORM==ITT_PLATFORM_WIN
 /* use __forceinline (VC++ specific) */
@@ -142,6 +154,13 @@
 #  define ITT_ARCH_PPC64  5
 #endif /* ITT_ARCH_PPC64 */
 
+#ifndef ITT_ARCH_MIPS
+#  define ITT_ARCH_MIPS  6
+#endif /* ITT_ARCH_MIPS */
+
+#ifndef ITT_ARCH_MIPS64
+#  define ITT_ARCH_MIPS64  6
+#endif /* ITT_ARCH_MIPS64 */
 
 #ifndef ITT_ARCH
 #  if defined _M_IX86 || defined __i386__
@@ -150,12 +169,16 @@
 #    define ITT_ARCH ITT_ARCH_IA32E
 #  elif defined _M_IA64 || defined __ia64__
 #    define ITT_ARCH ITT_ARCH_IA64
-#  elif defined _M_ARM || __arm__
+#  elif defined _M_ARM || defined __arm__
 #    define ITT_ARCH ITT_ARCH_ARM
 #  elif defined __powerpc64__
 #    define ITT_ARCH ITT_ARCH_PPC64
 #  elif defined __aarch64__
 #    define ITT_ARCH ITT_ARCH_AARCH64
+#  elif defined __mips__ && !defined __mips64
+#    define ITT_ARCH ITT_ARCH_MIPS
+#  elif defined __mips__ && defined __mips64
+#    define ITT_ARCH ITT_ARCH_MIPS64
 #  endif
 #endif
 
@@ -182,7 +205,7 @@
 #define ITT_MAGIC { 0xED, 0xAB, 0xAB, 0xEC, 0x0D, 0xEE, 0xDA, 0x30 }
 
 /* Replace with snapshot date YYYYMMDD for promotion build. */
-#define API_VERSION_BUILD    20111111
+#define API_VERSION_BUILD    20151119
 
 #ifndef API_VERSION_NUM
 #define API_VERSION_NUM 0.0.0
@@ -229,8 +252,8 @@ typedef pthread_mutex_t   mutex_t;
 #define __itt_unload_lib(handle)  FreeLibrary(handle)
 #define __itt_system_error()      (int)GetLastError()
 #define __itt_fstrcmp(s1, s2)     lstrcmpA(s1, s2)
-#define __itt_fstrlen(s)          lstrlenA(s)
-#define __itt_fstrcpyn(s1, s2, l) lstrcpynA(s1, s2, l)
+#define __itt_fstrnlen(s, l)      strnlen_s(s, l)
+#define __itt_fstrcpyn(s1, b, s2, l) strncpy_s(s1, b, s2, l)
 #define __itt_fstrdup(s)          _strdup(s)
 #define __itt_thread_id()         GetCurrentThreadId()
 #define __itt_thread_yield()      SwitchToThread()
@@ -242,6 +265,10 @@ ITT_INLINE long __itt_interlocked_increment(volatile long* ptr)
     return InterlockedIncrement(ptr);
 }
 #endif /* ITT_SIMPLE_INIT */
+
+#define DL_SYMBOLS (1)
+#define PTHREAD_SYMBOLS (1)
+
 #else /* ITT_PLATFORM!=ITT_PLATFORM_WIN */
 #define __itt_get_proc(lib, name) dlsym(lib, name)
 #define __itt_mutex_init(mutex)   {\
@@ -270,8 +297,19 @@ ITT_INLINE long __itt_interlocked_increment(volatile long* ptr)
 #define __itt_unload_lib(handle)  dlclose(handle)
 #define __itt_system_error()      errno
 #define __itt_fstrcmp(s1, s2)     strcmp(s1, s2)
-#define __itt_fstrlen(s)          strlen(s)
-#define __itt_fstrcpyn(s1, s2, l) strncpy(s1, s2, l)
+
+/* makes customer code define safe APIs for SDL_STRNLEN_S and SDL_STRNCPY_S */
+#ifdef SDL_STRNLEN_S
+#define __itt_fstrnlen(s, l)      SDL_STRNLEN_S(s, l)
+#else
+#define __itt_fstrnlen(s, l)      strlen(s)
+#endif /* SDL_STRNLEN_S */
+#ifdef SDL_STRNCPY_S
+#define __itt_fstrcpyn(s1, b, s2, l) SDL_STRNCPY_S(s1, b, s2, l)
+#else
+#define __itt_fstrcpyn(s1, b, s2, l) strncpy(s1, s2, l)
+#endif /* SDL_STRNCPY_S */
+
 #define __itt_fstrdup(s)          strdup(s)
 #define __itt_thread_id()         pthread_self()
 #define __itt_thread_yield()      sched_yield()
@@ -288,12 +326,12 @@ ITT_INLINE long __TBB_machine_fetchadd4(volatile void* ptr, long addend)
 {
     long result;
     __asm__ __volatile__("lock\nxadd %0,%1"
-                          : "=r"(result),"=m"(*(int*)ptr)
-                          : "0"(addend), "m"(*(int*)ptr)
+                          : "=r"(result),"=m"(*(volatile int*)ptr)
+                          : "0"(addend), "m"(*(volatile int*)ptr)
                           : "memory");
     return result;
 }
-#elif ITT_ARCH==ITT_ARCH_ARM || ITT_ARCH==ITT_ARCH_PPC64 || ITT_ARCH==ITT_ARCH_AARCH64
+#elif ITT_ARCH==ITT_ARCH_ARM || ITT_ARCH==ITT_ARCH_PPC64 || ITT_ARCH==ITT_ARCH_AARCH64 || ITT_ARCH==ITT_ARCH_MIPS ||  ITT_ARCH==ITT_ARCH_MIPS64
 #define __TBB_machine_fetchadd4(addr, val) __sync_fetch_and_add(addr, val)
 #endif /* ITT_ARCH==ITT_ARCH_IA64 */
 #ifndef ITT_SIMPLE_INIT
@@ -304,6 +342,22 @@ ITT_INLINE long __itt_interlocked_increment(volatile long* ptr)
     return __TBB_machine_fetchadd4(ptr, 1) + 1L;
 }
 #endif /* ITT_SIMPLE_INIT */
+
+void* dlopen(const char*, int) __attribute__((weak));
+void* dlsym(void*, const char*) __attribute__((weak));
+int dlclose(void*) __attribute__((weak));
+#define DL_SYMBOLS (dlopen && dlsym && dlclose)
+
+int pthread_mutex_init(pthread_mutex_t*, const pthread_mutexattr_t*) __attribute__((weak));
+int pthread_mutex_lock(pthread_mutex_t*) __attribute__((weak));
+int pthread_mutex_unlock(pthread_mutex_t*) __attribute__((weak));
+int pthread_mutex_destroy(pthread_mutex_t*) __attribute__((weak));
+int pthread_mutexattr_init(pthread_mutexattr_t*) __attribute__((weak));
+int pthread_mutexattr_settype(pthread_mutexattr_t*, int) __attribute__((weak));
+int pthread_mutexattr_destroy(pthread_mutexattr_t*) __attribute__((weak));
+pthread_t pthread_self(void) __attribute__((weak));
+#define PTHREAD_SYMBOLS (pthread_mutex_init && pthread_mutex_lock && pthread_mutex_unlock && pthread_mutex_destroy && pthread_mutexattr_init && pthread_mutexattr_settype && pthread_mutexattr_destroy && pthread_self)
+
 #endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
 
 typedef enum {
@@ -352,6 +406,27 @@ typedef struct ___itt_api_info
     __itt_group_id group;
 }  __itt_api_info;
 
+typedef struct __itt_counter_info
+{
+    const char* nameA;  /*!< Copy of original name in ASCII. */
+#if defined(UNICODE) || defined(_UNICODE)
+    const wchar_t* nameW; /*!< Copy of original name in UNICODE. */
+#else  /* UNICODE || _UNICODE */
+    void* nameW;
+#endif /* UNICODE || _UNICODE */
+    const char* domainA;  /*!< Copy of original name in ASCII. */
+#if defined(UNICODE) || defined(_UNICODE)
+    const wchar_t* domainW; /*!< Copy of original name in UNICODE. */
+#else  /* UNICODE || _UNICODE */
+    void* domainW;
+#endif /* UNICODE || _UNICODE */
+    int type;
+    long index;
+    int   extra1; /*!< Reserved to the runtime */
+    void* extra2; /*!< Reserved to the runtime */
+    struct __itt_counter_info* next;
+}  __itt_counter_info_t;
+
 struct ___itt_domain;
 struct ___itt_string_handle;
 
@@ -375,6 +450,7 @@ typedef struct ___itt_global
     struct ___itt_domain*  domain_list;
     struct ___itt_string_handle* string_list;
     __itt_collection_state state;
+    __itt_counter_info_t* counter_list;
 } __itt_global;
 
 #pragma pack(pop)
@@ -416,7 +492,7 @@ typedef struct ___itt_global
 #define NEW_DOMAIN_W(gptr,h,h_tail,name) { \
     h = (__itt_domain*)malloc(sizeof(__itt_domain)); \
     if (h != NULL) { \
-        h->flags  = 0;    /* domain is disabled by default */ \
+        h->flags  = 1;    /* domain is enabled by default */ \
         h->nameA  = NULL; \
         h->nameW  = name ? _wcsdup(name) : NULL; \
         h->extra1 = 0;    /* reserved */ \
@@ -432,7 +508,7 @@ typedef struct ___itt_global
 #define NEW_DOMAIN_A(gptr,h,h_tail,name) { \
     h = (__itt_domain*)malloc(sizeof(__itt_domain)); \
     if (h != NULL) { \
-        h->flags  = 0;    /* domain is disabled by default */ \
+        h->flags  = 1;    /* domain is enabled by default */ \
         h->nameA  = name ? __itt_fstrdup(name) : NULL; \
         h->nameW  = NULL; \
         h->extra1 = 0;    /* reserved */ \
@@ -470,6 +546,40 @@ typedef struct ___itt_global
         h->next   = NULL; \
         if (h_tail == NULL) \
             (gptr)->string_list = h; \
+        else \
+            h_tail->next = h; \
+    } \
+}
+
+#define NEW_COUNTER_W(gptr,h,h_tail,name,domain,type) { \
+    h = (__itt_counter_info_t*)malloc(sizeof(__itt_counter_info_t)); \
+    if (h != NULL) { \
+        h->nameA   = NULL; \
+        h->nameW   = name ? _wcsdup(name) : NULL; \
+        h->domainA   = NULL; \
+        h->domainW   = name ? _wcsdup(domain) : NULL; \
+        h->type = type; \
+        h->index = 0; \
+        h->next   = NULL; \
+        if (h_tail == NULL) \
+            (gptr)->counter_list = h; \
+        else \
+            h_tail->next = h; \
+    } \
+}
+
+#define NEW_COUNTER_A(gptr,h,h_tail,name,domain,type) { \
+    h = (__itt_counter_info_t*)malloc(sizeof(__itt_counter_info_t)); \
+    if (h != NULL) { \
+        h->nameA   = name ? __itt_fstrdup(name) : NULL; \
+        h->nameW   = NULL; \
+        h->domainA   = domain ? __itt_fstrdup(domain) : NULL; \
+        h->domainW   = NULL; \
+        h->type = type; \
+        h->index = 0; \
+        h->next   = NULL; \
+        if (h_tail == NULL) \
+            (gptr)->counter_list = h; \
         else \
             h_tail->next = h; \
     } \

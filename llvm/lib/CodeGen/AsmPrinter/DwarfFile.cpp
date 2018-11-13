@@ -1,4 +1,4 @@
-//===-- llvm/CodeGen/DwarfFile.cpp - Dwarf Debug Framework ----------------===//
+//===- llvm/CodeGen/DwarfFile.cpp - Dwarf Debug Framework -----------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,45 +11,18 @@
 #include "DwarfCompileUnit.h"
 #include "DwarfDebug.h"
 #include "DwarfUnit.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/IR/DataLayout.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/CodeGen/AsmPrinter.h"
+#include "llvm/CodeGen/DIE.h"
+#include "llvm/IR/DebugInfoMetadata.h"
 #include "llvm/MC/MCStreamer.h"
-#include "llvm/Support/LEB128.h"
-#include "llvm/Target/TargetLoweringObjectFile.h"
+#include <algorithm>
+#include <cstdint>
 
-namespace llvm {
+using namespace llvm;
+
 DwarfFile::DwarfFile(AsmPrinter *AP, StringRef Pref, BumpPtrAllocator &DA)
-    : Asm(AP), StrPool(DA, *Asm, Pref) {}
-
-DwarfFile::~DwarfFile() {
-  for (DIEAbbrev *Abbrev : Abbreviations)
-    Abbrev->~DIEAbbrev();
-}
-
-// Define a unique number for the abbreviation.
-//
-DIEAbbrev &DwarfFile::assignAbbrevNumber(DIE &Die) {
-  FoldingSetNodeID ID;
-  DIEAbbrev Abbrev = Die.generateAbbrev();
-  Abbrev.Profile(ID);
-
-  void *InsertPos;
-  if (DIEAbbrev *Existing =
-          AbbreviationsSet.FindNodeOrInsertPos(ID, InsertPos)) {
-    Die.setAbbrevNumber(Existing->getNumber());
-    return *Existing;
-  }
-
-  // Move the abbreviation to the heap and assign a number.
-  DIEAbbrev *New = new (AbbrevAllocator) DIEAbbrev(std::move(Abbrev));
-  Abbreviations.push_back(New);
-  New->setNumber(Abbreviations.size());
-  Die.setAbbrevNumber(Abbreviations.size());
-
-  // Store it for lookup.
-  AbbreviationsSet.InsertNode(New, InsertPos);
-  return *New;
-}
+    : Asm(AP), Abbrevs(AbbrevAllocator), StrPool(DA, *Asm, Pref) {}
 
 void DwarfFile::addUnit(std::unique_ptr<DwarfCompileUnit> U) {
   CUs.push_back(std::move(U));
@@ -63,6 +36,9 @@ void DwarfFile::emitUnits(bool UseOffsets) {
 }
 
 void DwarfFile::emitUnit(DwarfUnit *TheU, bool UseOffsets) {
+  if (TheU->getCUNode()->isDebugDirectivesOnly())
+    return;
+
   DIE &Die = TheU->getUnitDie();
   MCSection *USection = TheU->getSection();
   Asm->OutStreamer->SwitchSection(USection);
@@ -80,7 +56,10 @@ void DwarfFile::computeSizeAndOffsets() {
   // Iterate over each compile unit and set the size and offsets for each
   // DIE within each compile unit. All offsets are CU relative.
   for (const auto &TheU : CUs) {
-    TheU->setDebugInfoOffset(SecOffset);
+    if (TheU->getCUNode()->isDebugDirectivesOnly())
+      continue;
+
+    TheU->setDebugSectionOffset(SecOffset);
     SecOffset += computeSizeAndOffsetsForUnit(TheU.get());
   }
 }
@@ -98,83 +77,35 @@ unsigned DwarfFile::computeSizeAndOffsetsForUnit(DwarfUnit *TheU) {
 // Compute the size and offset of a DIE. The offset is relative to start of the
 // CU. It returns the offset after laying out the DIE.
 unsigned DwarfFile::computeSizeAndOffset(DIE &Die, unsigned Offset) {
-  // Record the abbreviation.
-  const DIEAbbrev &Abbrev = assignAbbrevNumber(Die);
-
-  // Set DIE offset
-  Die.setOffset(Offset);
-
-  // Start the size with the size of abbreviation code.
-  Offset += getULEB128Size(Die.getAbbrevNumber());
-
-  // Size the DIE attribute values.
-  for (const auto &V : Die.values())
-    // Size attribute value.
-    Offset += V.SizeOf(Asm);
-
-  // Size the DIE children if any.
-  if (Die.hasChildren()) {
-    (void)Abbrev;
-    assert(Abbrev.hasChildren() && "Children flag not set");
-
-    for (auto &Child : Die.children())
-      Offset = computeSizeAndOffset(Child, Offset);
-
-    // End of children marker.
-    Offset += sizeof(int8_t);
-  }
-
-  Die.setSize(Offset - Die.getOffset());
-  return Offset;
+  return Die.computeOffsetsAndAbbrevs(Asm, Abbrevs, Offset);
 }
 
-void DwarfFile::emitAbbrevs(MCSection *Section) {
-  // Check to see if it is worth the effort.
-  if (!Abbreviations.empty()) {
-    // Start the debug abbrev section.
-    Asm->OutStreamer->SwitchSection(Section);
-    Asm->emitDwarfAbbrevs(Abbreviations);
-  }
-}
+void DwarfFile::emitAbbrevs(MCSection *Section) { Abbrevs.Emit(Asm, Section); }
 
 // Emit strings into a string section.
-void DwarfFile::emitStrings(MCSection *StrSection, MCSection *OffsetSection) {
-  StrPool.emit(*Asm, StrSection, OffsetSection);
+void DwarfFile::emitStrings(MCSection *StrSection, MCSection *OffsetSection,
+                            bool UseRelativeOffsets) {
+  StrPool.emit(*Asm, StrSection, OffsetSection, UseRelativeOffsets);
 }
 
 bool DwarfFile::addScopeVariable(LexicalScope *LS, DbgVariable *Var) {
-  SmallVectorImpl<DbgVariable *> &Vars = ScopeVariables[LS];
+  auto &ScopeVars = ScopeVariables[LS];
   const DILocalVariable *DV = Var->getVariable();
-  // Variables with positive arg numbers are parameters.
   if (unsigned ArgNum = DV->getArg()) {
-    // Keep all parameters in order at the start of the variable list to ensure
-    // function types are correct (no out-of-order parameters)
-    //
-    // This could be improved by only doing it for optimized builds (unoptimized
-    // builds have the right order to begin with), searching from the back (this
-    // would catch the unoptimized case quickly), or doing a binary search
-    // rather than linear search.
-    auto I = Vars.begin();
-    while (I != Vars.end()) {
-      unsigned CurNum = (*I)->getVariable()->getArg();
-      // A local (non-parameter) variable has been found, insert immediately
-      // before it.
-      if (CurNum == 0)
-        break;
-      // A later indexed parameter has been found, insert immediately before it.
-      if (CurNum > ArgNum)
-        break;
-      if (CurNum == ArgNum) {
-        (*I)->addMMIEntry(*Var);
-        return false;
-      }
-      ++I;
+    auto Cached = ScopeVars.Args.find(ArgNum);
+    if (Cached == ScopeVars.Args.end())
+      ScopeVars.Args[ArgNum] = Var;
+    else {
+      Cached->second->addMMIEntry(*Var);
+      return false;
     }
-    Vars.insert(I, Var);
-    return true;
+  } else {
+    ScopeVars.Locals.push_back(Var);
   }
-
-  Vars.push_back(Var);
   return true;
 }
+
+void DwarfFile::addScopeLabel(LexicalScope *LS, DbgLabel *Label) {
+  SmallVectorImpl<DbgLabel *> &Labels = ScopeLabels[LS];
+  Labels.push_back(Label);
 }

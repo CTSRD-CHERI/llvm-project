@@ -21,7 +21,7 @@ class Base {
 
 class Derived : public Base {};
 
-Derived &test_bad_cast(Base b) {
+Derived &test_bad_cast(Base& b) {
   return dynamic_cast<Derived&>(b);
 }
 
@@ -40,6 +40,7 @@ int main ()
 #endif
         Derived &d = test_bad_cast(gB);
         assert(false);
+        ((void)d);
 #ifndef LIBCXXABI_HAS_NO_EXCEPTIONS
     } catch (std::bad_cast) {
         // success

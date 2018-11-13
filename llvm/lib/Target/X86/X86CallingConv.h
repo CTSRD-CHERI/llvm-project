@@ -24,23 +24,29 @@ namespace llvm {
 /// When regcall calling convention compiled to 32 bit arch, special treatment
 /// is required for 64 bit masks.
 /// The value should be assigned to two GPRs.
-/// @return true if registers were allocated and false otherwise
+/// \return true if registers were allocated and false otherwise.
 bool CC_X86_32_RegCall_Assign2Regs(unsigned &ValNo, MVT &ValVT, MVT &LocVT,
                                    CCValAssign::LocInfo &LocInfo,
                                    ISD::ArgFlagsTy &ArgFlags, CCState &State);
 
-inline bool CC_X86_32_VectorCallIndirect(unsigned &ValNo, MVT &ValVT,
-                                         MVT &LocVT,
-                                         CCValAssign::LocInfo &LocInfo,
-                                         ISD::ArgFlagsTy &ArgFlags,
-                                         CCState &State) {
-  // Similar to CCPassIndirect, with the addition of inreg.
-  LocVT = MVT::i32;
-  LocInfo = CCValAssign::Indirect;
-  ArgFlags.setInReg();
-  return false; // Continue the search, but now for i32.
-}
+/// Vectorcall calling convention has special handling for vector types or
+/// HVA for 64 bit arch.
+/// For HVAs shadow registers might be allocated on the first pass
+/// and actual XMM registers are allocated on the second pass.
+/// For vector types, actual XMM registers are allocated on the first pass.
+/// \return true if registers were allocated and false otherwise.
+bool CC_X86_64_VectorCall(unsigned &ValNo, MVT &ValVT, MVT &LocVT,
+                          CCValAssign::LocInfo &LocInfo,
+                          ISD::ArgFlagsTy &ArgFlags, CCState &State);
 
+/// Vectorcall calling convention has special handling for vector types or
+/// HVA for 32 bit arch.
+/// For HVAs actual XMM registers are allocated on the second pass.
+/// For vector types, actual XMM registers are allocated on the first pass.
+/// \return true if registers were allocated and false otherwise.
+bool CC_X86_32_VectorCall(unsigned &ValNo, MVT &ValVT, MVT &LocVT,
+                          CCValAssign::LocInfo &LocInfo,
+                          ISD::ArgFlagsTy &ArgFlags, CCState &State);
 
 inline bool CC_X86_AnyReg_Error(unsigned &, MVT &, MVT &,
                                 CCValAssign::LocInfo &, ISD::ArgFlagsTy &,
@@ -49,13 +55,6 @@ inline bool CC_X86_AnyReg_Error(unsigned &, MVT &, MVT &,
                    "stackmap and patchpoint intrinsics.");
   // gracefully fallback to X86 C calling convention on Release builds.
   return false;
-}
-
-inline bool CC_X86_RegCall_Error(unsigned &, MVT &, MVT &,
-                                 CCValAssign::LocInfo &, ISD::ArgFlagsTy &,
-                                 CCState &) {
-  report_fatal_error("LLVM x86 RegCall calling convention implementation" \
-    " doesn't support long double and mask types yet.");
 }
 
 inline bool CC_X86_32_MCUInReg(unsigned &ValNo, MVT &ValVT,
@@ -67,7 +66,7 @@ inline bool CC_X86_32_MCUInReg(unsigned &ValNo, MVT &ValVT,
   // not to split i64 and double between a register and stack
   static const MCPhysReg RegList[] = {X86::EAX, X86::EDX, X86::ECX};
   static const unsigned NumRegs = sizeof(RegList)/sizeof(RegList[0]);
-  
+
   SmallVectorImpl<CCValAssign> &PendingMembers = State.getPendingLocs();
 
   // If this is the first part of an double/i64/i128, or if we're already

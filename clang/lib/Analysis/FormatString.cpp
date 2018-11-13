@@ -406,12 +406,14 @@ ArgType::matchesType(ASTContext &C, QualType argTy) const {
     }
 
     case WIntTy: {
-
-      QualType PromoArg = 
-        argTy->isPromotableIntegerType()
-          ? C.getPromotedIntegerType(argTy) : argTy;
-
       QualType WInt = C.getCanonicalType(C.getWIntType()).getUnqualifiedType();
+
+      if (C.getCanonicalType(argTy).getUnqualifiedType() == WInt)
+        return Match;
+
+      QualType PromoArg = argTy->isPromotableIntegerType()
+                              ? C.getPromotedIntegerType(argTy)
+                              : argTy;
       PromoArg = C.getCanonicalType(PromoArg).getUnqualifiedType();
 
       // If the promoted argument is the corresponding signed type of the
@@ -623,7 +625,7 @@ const char *ConversionSpecifier::toString() const {
 Optional<ConversionSpecifier>
 ConversionSpecifier::getStandardSpecifier() const {
   ConversionSpecifier::Kind NewKind;
-  
+
   switch (getKind()) {
   default:
     return None;
@@ -672,7 +674,7 @@ bool FormatSpecifier::hasValidLengthModifier(const TargetInfo &Target) const {
   switch (LM.getKind()) {
     case LengthModifier::None:
       return true;
-      
+
     // Handle most integer flags
     case LengthModifier::AsShort:
       if (Target.getTriple().isOSMSVCRT()) {
@@ -712,7 +714,7 @@ bool FormatSpecifier::hasValidLengthModifier(const TargetInfo &Target) const {
         default:
           return false;
       }
-      
+
     // Handle 'l' flag
     case LengthModifier::AsLong: // or AsWideChar
       switch (CS.getKind()) {
@@ -745,7 +747,7 @@ bool FormatSpecifier::hasValidLengthModifier(const TargetInfo &Target) const {
         default:
           return false;
       }
-      
+
     case LengthModifier::AsLongDouble:
       switch (CS.getKind()) {
         case ConversionSpecifier::aArg:

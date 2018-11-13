@@ -12,12 +12,12 @@
 // Other libraries and framework includes
 // Project includes
 #include "lldb/Target/ThreadPlanRunToAddress.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Stream.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -133,8 +133,7 @@ void ThreadPlanRunToAddress::GetDescription(Stream *s,
 }
 
 bool ThreadPlanRunToAddress::ValidatePlan(Stream *error) {
-  // If we couldn't set the breakpoint for some reason, then this won't
-  // work.
+  // If we couldn't set the breakpoint for some reason, then this won't work.
   bool all_bps_good = true;
   size_t num_break_ids = m_break_ids.size();
 

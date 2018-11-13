@@ -11,15 +11,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ByteStreamer.h"
 #include "DIEHash.h"
+#include "ByteStreamer.h"
 #include "DwarfDebug.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/CodeGen/AsmPrinter.h"
 #include "llvm/CodeGen/DIE.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/Dwarf.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/raw_ostream.h"
@@ -28,7 +28,7 @@ using namespace llvm;
 
 #define DEBUG_TYPE "dwarfdebug"
 
-/// \brief Grabs the string in whichever attribute is passed in and returns
+/// Grabs the string in whichever attribute is passed in and returns
 /// a reference to it.
 static StringRef getDIEStringAttr(const DIE &Die, uint16_t Attr) {
   // Iterate through all the attributes until we find the one we're
@@ -40,10 +40,10 @@ static StringRef getDIEStringAttr(const DIE &Die, uint16_t Attr) {
   return StringRef("");
 }
 
-/// \brief Adds the string in \p Str to the hash. This also hashes
+/// Adds the string in \p Str to the hash. This also hashes
 /// a trailing NULL with the string.
 void DIEHash::addString(StringRef Str) {
-  DEBUG(dbgs() << "Adding string " << Str << " to hash.\n");
+  LLVM_DEBUG(dbgs() << "Adding string " << Str << " to hash.\n");
   Hash.update(Str);
   Hash.update(makeArrayRef((uint8_t)'\0'));
 }
@@ -51,9 +51,9 @@ void DIEHash::addString(StringRef Str) {
 // FIXME: The LEB128 routines are copied and only slightly modified out of
 // LEB128.h.
 
-/// \brief Adds the unsigned in \p Value to the hash encoded as a ULEB128.
+/// Adds the unsigned in \p Value to the hash encoded as a ULEB128.
 void DIEHash::addULEB128(uint64_t Value) {
-  DEBUG(dbgs() << "Adding ULEB128 " << Value << " to hash.\n");
+  LLVM_DEBUG(dbgs() << "Adding ULEB128 " << Value << " to hash.\n");
   do {
     uint8_t Byte = Value & 0x7f;
     Value >>= 7;
@@ -64,7 +64,7 @@ void DIEHash::addULEB128(uint64_t Value) {
 }
 
 void DIEHash::addSLEB128(int64_t Value) {
-  DEBUG(dbgs() << "Adding ULEB128 " << Value << " to hash.\n");
+  LLVM_DEBUG(dbgs() << "Adding ULEB128 " << Value << " to hash.\n");
   bool More;
   do {
     uint8_t Byte = Value & 0x7f;
@@ -77,10 +77,10 @@ void DIEHash::addSLEB128(int64_t Value) {
   } while (More);
 }
 
-/// \brief Including \p Parent adds the context of Parent to the hash..
+/// Including \p Parent adds the context of Parent to the hash..
 void DIEHash::addParentContext(const DIE &Parent) {
 
-  DEBUG(dbgs() << "Adding parent context to hash...\n");
+  LLVM_DEBUG(dbgs() << "Adding parent context to hash...\n");
 
   // [7.27.2] For each surrounding type or namespace beginning with the
   // outermost such construct...
@@ -108,7 +108,7 @@ void DIEHash::addParentContext(const DIE &Parent) {
 
     // ... Then the name, taken from the DW_AT_name attribute.
     StringRef Name = getDIEStringAttr(Die, dwarf::DW_AT_name);
-    DEBUG(dbgs() << "... adding context: " << Name << "\n");
+    LLVM_DEBUG(dbgs() << "... adding context: " << Name << "\n");
     if (!Name.empty())
       addString(Name);
   }
@@ -116,65 +116,17 @@ void DIEHash::addParentContext(const DIE &Parent) {
 
 // Collect all of the attributes for a particular DIE in single structure.
 void DIEHash::collectAttributes(const DIE &Die, DIEAttrs &Attrs) {
-#define COLLECT_ATTR(NAME)                                                     \
-  case dwarf::NAME:                                                            \
-    Attrs.NAME = V;                                                            \
-    break
 
   for (const auto &V : Die.values()) {
-    DEBUG(dbgs() << "Attribute: "
-                 << dwarf::AttributeString(V.getAttribute())
-                 << " added.\n");
+    LLVM_DEBUG(dbgs() << "Attribute: "
+                      << dwarf::AttributeString(V.getAttribute())
+                      << " added.\n");
     switch (V.getAttribute()) {
-      COLLECT_ATTR(DW_AT_name);
-      COLLECT_ATTR(DW_AT_accessibility);
-      COLLECT_ATTR(DW_AT_address_class);
-      COLLECT_ATTR(DW_AT_allocated);
-      COLLECT_ATTR(DW_AT_artificial);
-      COLLECT_ATTR(DW_AT_associated);
-      COLLECT_ATTR(DW_AT_binary_scale);
-      COLLECT_ATTR(DW_AT_bit_offset);
-      COLLECT_ATTR(DW_AT_bit_size);
-      COLLECT_ATTR(DW_AT_bit_stride);
-      COLLECT_ATTR(DW_AT_byte_size);
-      COLLECT_ATTR(DW_AT_byte_stride);
-      COLLECT_ATTR(DW_AT_const_expr);
-      COLLECT_ATTR(DW_AT_const_value);
-      COLLECT_ATTR(DW_AT_containing_type);
-      COLLECT_ATTR(DW_AT_count);
-      COLLECT_ATTR(DW_AT_data_bit_offset);
-      COLLECT_ATTR(DW_AT_data_location);
-      COLLECT_ATTR(DW_AT_data_member_location);
-      COLLECT_ATTR(DW_AT_decimal_scale);
-      COLLECT_ATTR(DW_AT_decimal_sign);
-      COLLECT_ATTR(DW_AT_default_value);
-      COLLECT_ATTR(DW_AT_digit_count);
-      COLLECT_ATTR(DW_AT_discr);
-      COLLECT_ATTR(DW_AT_discr_list);
-      COLLECT_ATTR(DW_AT_discr_value);
-      COLLECT_ATTR(DW_AT_encoding);
-      COLLECT_ATTR(DW_AT_enum_class);
-      COLLECT_ATTR(DW_AT_endianity);
-      COLLECT_ATTR(DW_AT_explicit);
-      COLLECT_ATTR(DW_AT_is_optional);
-      COLLECT_ATTR(DW_AT_location);
-      COLLECT_ATTR(DW_AT_lower_bound);
-      COLLECT_ATTR(DW_AT_mutable);
-      COLLECT_ATTR(DW_AT_ordering);
-      COLLECT_ATTR(DW_AT_picture_string);
-      COLLECT_ATTR(DW_AT_prototyped);
-      COLLECT_ATTR(DW_AT_small);
-      COLLECT_ATTR(DW_AT_segment);
-      COLLECT_ATTR(DW_AT_string_length);
-      COLLECT_ATTR(DW_AT_threads_scaled);
-      COLLECT_ATTR(DW_AT_upper_bound);
-      COLLECT_ATTR(DW_AT_use_location);
-      COLLECT_ATTR(DW_AT_use_UTF8);
-      COLLECT_ATTR(DW_AT_variable_parameter);
-      COLLECT_ATTR(DW_AT_virtuality);
-      COLLECT_ATTR(DW_AT_visibility);
-      COLLECT_ATTR(DW_AT_vtable_elem_location);
-      COLLECT_ATTR(DW_AT_type);
+#define HANDLE_DIE_HASH_ATTR(NAME)                                             \
+  case dwarf::NAME:                                                            \
+    Attrs.NAME = V;                                                            \
+    break;
+#include "DIEHashAttributes.def"
     default:
       break;
     }
@@ -330,6 +282,12 @@ void DIEHash::hashAttribute(const DIEValue &Value, dwarf::Tag Tag) {
     addULEB128(dwarf::DW_FORM_string);
     addString(Value.getDIEString().getString());
     break;
+  case DIEValue::isInlineString:
+    addULEB128('A');
+    addULEB128(Attribute);
+    addULEB128(dwarf::DW_FORM_string);
+    addString(Value.getDIEInlineString().getString());
+    break;
   case DIEValue::isBlock:
   case DIEValue::isLoc:
   case DIEValue::isLocList:
@@ -360,62 +318,12 @@ void DIEHash::hashAttribute(const DIEValue &Value, dwarf::Tag Tag) {
 // Go through the attributes from \param Attrs in the order specified in 7.27.4
 // and hash them.
 void DIEHash::hashAttributes(const DIEAttrs &Attrs, dwarf::Tag Tag) {
-#define ADD_ATTR(ATTR)                                                         \
+#define HANDLE_DIE_HASH_ATTR(NAME)                                             \
   {                                                                            \
-    if (ATTR)                                                                  \
-      hashAttribute(ATTR, Tag);                                                \
+    if (Attrs.NAME)                                                           \
+      hashAttribute(Attrs.NAME, Tag);                                         \
   }
-
-  ADD_ATTR(Attrs.DW_AT_name);
-  ADD_ATTR(Attrs.DW_AT_accessibility);
-  ADD_ATTR(Attrs.DW_AT_address_class);
-  ADD_ATTR(Attrs.DW_AT_allocated);
-  ADD_ATTR(Attrs.DW_AT_artificial);
-  ADD_ATTR(Attrs.DW_AT_associated);
-  ADD_ATTR(Attrs.DW_AT_binary_scale);
-  ADD_ATTR(Attrs.DW_AT_bit_offset);
-  ADD_ATTR(Attrs.DW_AT_bit_size);
-  ADD_ATTR(Attrs.DW_AT_bit_stride);
-  ADD_ATTR(Attrs.DW_AT_byte_size);
-  ADD_ATTR(Attrs.DW_AT_byte_stride);
-  ADD_ATTR(Attrs.DW_AT_const_expr);
-  ADD_ATTR(Attrs.DW_AT_const_value);
-  ADD_ATTR(Attrs.DW_AT_containing_type);
-  ADD_ATTR(Attrs.DW_AT_count);
-  ADD_ATTR(Attrs.DW_AT_data_bit_offset);
-  ADD_ATTR(Attrs.DW_AT_data_location);
-  ADD_ATTR(Attrs.DW_AT_data_member_location);
-  ADD_ATTR(Attrs.DW_AT_decimal_scale);
-  ADD_ATTR(Attrs.DW_AT_decimal_sign);
-  ADD_ATTR(Attrs.DW_AT_default_value);
-  ADD_ATTR(Attrs.DW_AT_digit_count);
-  ADD_ATTR(Attrs.DW_AT_discr);
-  ADD_ATTR(Attrs.DW_AT_discr_list);
-  ADD_ATTR(Attrs.DW_AT_discr_value);
-  ADD_ATTR(Attrs.DW_AT_encoding);
-  ADD_ATTR(Attrs.DW_AT_enum_class);
-  ADD_ATTR(Attrs.DW_AT_endianity);
-  ADD_ATTR(Attrs.DW_AT_explicit);
-  ADD_ATTR(Attrs.DW_AT_is_optional);
-  ADD_ATTR(Attrs.DW_AT_location);
-  ADD_ATTR(Attrs.DW_AT_lower_bound);
-  ADD_ATTR(Attrs.DW_AT_mutable);
-  ADD_ATTR(Attrs.DW_AT_ordering);
-  ADD_ATTR(Attrs.DW_AT_picture_string);
-  ADD_ATTR(Attrs.DW_AT_prototyped);
-  ADD_ATTR(Attrs.DW_AT_small);
-  ADD_ATTR(Attrs.DW_AT_segment);
-  ADD_ATTR(Attrs.DW_AT_string_length);
-  ADD_ATTR(Attrs.DW_AT_threads_scaled);
-  ADD_ATTR(Attrs.DW_AT_upper_bound);
-  ADD_ATTR(Attrs.DW_AT_use_location);
-  ADD_ATTR(Attrs.DW_AT_use_UTF8);
-  ADD_ATTR(Attrs.DW_AT_variable_parameter);
-  ADD_ATTR(Attrs.DW_AT_virtuality);
-  ADD_ATTR(Attrs.DW_AT_visibility);
-  ADD_ATTR(Attrs.DW_AT_vtable_elem_location);
-  ADD_ATTR(Attrs.DW_AT_type);
-
+#include "DIEHashAttributes.def"
   // FIXME: Add the extended attributes.
 }
 
@@ -472,10 +380,12 @@ void DIEHash::computeHash(const DIE &Die) {
 /// DWARF4 standard. It is an md5 hash of the flattened description of the DIE
 /// with the inclusion of the full CU and all top level CU entities.
 // TODO: Initialize the type chain at 0 instead of 1 for CU signatures.
-uint64_t DIEHash::computeCUSignature(const DIE &Die) {
+uint64_t DIEHash::computeCUSignature(StringRef DWOName, const DIE &Die) {
   Numbering.clear();
   Numbering[&Die] = 1;
 
+  if (!DWOName.empty())
+    Hash.update(DWOName);
   // Hash the DIE.
   computeHash(Die);
 
@@ -484,9 +394,9 @@ uint64_t DIEHash::computeCUSignature(const DIE &Die) {
   Hash.final(Result);
 
   // ... take the least significant 8 bytes and return those. Our MD5
-  // implementation always returns its results in little endian, swap bytes
-  // appropriately.
-  return support::endian::read64le(Result + 8);
+  // implementation always returns its results in little endian, so we actually
+  // need the "high" word.
+  return Result.high();
 }
 
 /// This is based on the type signature computation given in section 7.27 of the
@@ -508,7 +418,7 @@ uint64_t DIEHash::computeTypeSignature(const DIE &Die) {
   Hash.final(Result);
 
   // ... take the least significant 8 bytes and return those. Our MD5
-  // implementation always returns its results in little endian, swap bytes
-  // appropriately.
-  return support::endian::read64le(Result + 8);
+  // implementation always returns its results in little endian, so we actually
+  // need the "high" word.
+  return Result.high();
 }

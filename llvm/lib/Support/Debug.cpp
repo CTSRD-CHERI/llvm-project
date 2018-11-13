@@ -11,15 +11,16 @@
 // code, without it being enabled all of the time, and without having to add
 // command line options to enable it.
 //
-// In particular, just wrap your code with the DEBUG() macro, and it will be
-// enabled automatically if you specify '-debug' on the command-line.
+// In particular, just wrap your code with the LLVM_DEBUG() macro, and it will
+// be enabled automatically if you specify '-debug' on the command-line.
 // Alternatively, you can also use the SET_DEBUG_TYPE("foo") macro to specify
 // that your debug code belongs to class "foo".  Then, on the command line, you
 // can specify '-debug-only=foo' to enable JUST the debug information for the
 // foo class.
 //
 // When compiling without assertions, the -debug-* options and all code in
-// DEBUG() statements disappears, so it does not affect the runtime of the code.
+// LLVM_DEBUG() statements disappears, so it does not affect the runtime of the
+// code.
 //
 //===----------------------------------------------------------------------===//
 
@@ -32,6 +33,7 @@
 
 #undef isCurrentDebugType
 #undef setCurrentDebugType
+#undef setCurrentDebugTypes
 
 using namespace llvm;
 
@@ -62,11 +64,17 @@ bool isCurrentDebugType(const char *DebugType) {
 /// option were specified.  Note that DebugFlag also needs to be set to true for
 /// debug output to be produced.
 ///
+void setCurrentDebugTypes(const char **Types, unsigned Count);
+
 void setCurrentDebugType(const char *Type) {
-  CurrentDebugType->clear();
-  CurrentDebugType->push_back(Type);
+  setCurrentDebugTypes(&Type, 1);
 }
 
+void setCurrentDebugTypes(const char **Types, unsigned Count) {
+  CurrentDebugType->clear();
+  for (size_t T = 0; T < Count; ++T)
+    CurrentDebugType->push_back(Types[T]);
+}
 } // namespace llvm
 
 // All Debug.h functionality is a no-op in NDEBUG mode.

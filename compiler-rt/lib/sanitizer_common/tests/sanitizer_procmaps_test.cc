@@ -37,7 +37,8 @@ TEST(MemoryMappingLayout, DumpListOfModules) {
   const char *binary_name = last_slash ? last_slash + 1 : argv0;
   MemoryMappingLayout memory_mapping(false);
   const uptr kMaxModules = 100;
-  InternalMmapVector<LoadedModule> modules(kMaxModules);
+  InternalMmapVector<LoadedModule> modules;
+  modules.reserve(kMaxModules);
   memory_mapping.DumpListOfModules(&modules);
   EXPECT_GT(modules.size(), 0U);
   bool found = false;
@@ -50,6 +51,28 @@ TEST(MemoryMappingLayout, DumpListOfModules) {
     modules[i].clear();
   }
   EXPECT_TRUE(found);
+}
+
+TEST(MemoryMapping, LoadedModuleArchAndUUID) {
+  if (SANITIZER_MAC) {
+    MemoryMappingLayout memory_mapping(false);
+    const uptr kMaxModules = 100;
+    InternalMmapVector<LoadedModule> modules;
+    modules.reserve(kMaxModules);
+    memory_mapping.DumpListOfModules(&modules);
+    for (uptr i = 0; i < modules.size(); ++i) {
+      ModuleArch arch = modules[i].arch();
+      // Darwin unit tests are only run on i386/x86_64/x86_64h.
+      if (SANITIZER_WORDSIZE == 32) {
+        EXPECT_EQ(arch, kModuleArchI386);
+      } else if (SANITIZER_WORDSIZE == 64) {
+        EXPECT_TRUE(arch == kModuleArchX86_64 || arch == kModuleArchX86_64H);
+      }
+      const u8 *uuid = modules[i].uuid();
+      u8 null_uuid[kModuleUUIDSize] = {0};
+      EXPECT_NE(memcmp(null_uuid, uuid, kModuleUUIDSize), 0);
+    }
+  }
 }
 
 }  // namespace __sanitizer

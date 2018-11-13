@@ -16,15 +16,18 @@
 
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Object/Archive.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 
 namespace llvm {
 
 struct NewArchiveMember {
   std::unique_ptr<MemoryBuffer> Buf;
+  StringRef MemberName;
   sys::TimePoint<std::chrono::seconds> ModTime;
   unsigned UID = 0, GID = 0, Perms = 0644;
 
+  bool IsNew = false;
   NewArchiveMember() = default;
   NewArchiveMember(MemoryBufferRef BufRef);
 
@@ -35,10 +38,10 @@ struct NewArchiveMember {
                                             bool Deterministic);
 };
 
-std::pair<StringRef, std::error_code>
-writeArchive(StringRef ArcName, std::vector<NewArchiveMember> &NewMembers,
-             bool WriteSymtab, object::Archive::Kind Kind, bool Deterministic,
-             bool Thin, std::unique_ptr<MemoryBuffer> OldArchiveBuf = nullptr);
+Error writeArchive(StringRef ArcName, ArrayRef<NewArchiveMember> NewMembers,
+                   bool WriteSymtab, object::Archive::Kind Kind,
+                   bool Deterministic, bool Thin,
+                   std::unique_ptr<MemoryBuffer> OldArchiveBuf = nullptr);
 }
 
 #endif

@@ -12,10 +12,9 @@
 #include "llvm/DebugInfo/PDB/ConcreteSymbolEnumerator.h"
 #include "llvm/DebugInfo/PDB/IPDBEnumChildren.h"
 #include "llvm/DebugInfo/PDB/IPDBSession.h"
+#include "llvm/DebugInfo/PDB/PDBSymDumper.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolData.h"
 #include "llvm/DebugInfo/PDB/PDBSymbolTypeFunctionSig.h"
-#include "llvm/DebugInfo/PDB/PDBSymbolTypeUDT.h"
-#include "llvm/DebugInfo/PDB/PDBSymDumper.h"
 #include "llvm/DebugInfo/PDB/PDBTypes.h"
 
 #include <unordered_set>
@@ -70,10 +69,6 @@ public:
 
   void reset() override { CurIter = Args.empty() ? Args.end() : Args.begin(); }
 
-  FunctionArgEnumerator *clone() const override {
-    return new FunctionArgEnumerator(Session, Func);
-  }
-
 private:
   typedef std::vector<std::unique_ptr<PDBSymbolData>> ArgListType;
   const IPDBSession &Session;
@@ -83,21 +78,35 @@ private:
 };
 }
 
-PDBSymbolFunc::PDBSymbolFunc(const IPDBSession &PDBSession,
-                             std::unique_ptr<IPDBRawSymbol> Symbol)
-    : PDBSymbol(PDBSession, std::move(Symbol)) {}
-
-std::unique_ptr<PDBSymbolTypeFunctionSig> PDBSymbolFunc::getSignature() const {
-  return Session.getConcreteSymbolById<PDBSymbolTypeFunctionSig>(getTypeId());
-}
-
 std::unique_ptr<IPDBEnumChildren<PDBSymbolData>>
 PDBSymbolFunc::getArguments() const {
   return llvm::make_unique<FunctionArgEnumerator>(Session, *this);
 }
 
-std::unique_ptr<PDBSymbolTypeUDT> PDBSymbolFunc::getClassParent() const {
-  return Session.getConcreteSymbolById<PDBSymbolTypeUDT>(getClassParentId());
+void PDBSymbolFunc::dump(PDBSymDumper &Dumper) const { Dumper.dump(*this); }
+
+bool PDBSymbolFunc::isDestructor() const {
+  std::string Name = getName();
+  if (Name.empty())
+    return false;
+  if (Name[0] == '~')
+    return true;
+  if (Name == "__vecDelDtor")
+    return true;
+  return false;
 }
 
-void PDBSymbolFunc::dump(PDBSymDumper &Dumper) const { Dumper.dump(*this); }
+std::unique_ptr<IPDBEnumLineNumbers> PDBSymbolFunc::getLineNumbers() const {
+  auto Len = RawSymbol->getLength();
+  return Session.findLineNumbersByAddress(RawSymbol->getVirtualAddress(),
+                                          Len ? Len : 1);
+}
+
+uint32_t PDBSymbolFunc::getCompilandId() const {
+  if (auto Lines = getLineNumbers()) {
+    if (auto FirstLine = Lines->getNext()) {
+      return FirstLine->getCompilandId();
+    }
+  }
+  return 0;
+}

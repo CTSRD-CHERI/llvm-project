@@ -1,4 +1,4 @@
-//===-- SIInsertSkips.cpp - Use predicates for control flow ----------===//
+//===-- SIInsertSkips.cpp - Use predicates for control flow ---------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,37 +8,51 @@
 //===----------------------------------------------------------------------===//
 //
 /// \file
-/// \brief This pass inserts branches on the 0 exec mask over divergent branches
+/// This pass inserts branches on the 0 exec mask over divergent branches
 /// branches when it's expected that jumping over the untaken control flow will
 /// be cheaper than having every workitem no-op through it.
 //
+//===----------------------------------------------------------------------===//
 
 #include "AMDGPU.h"
 #include "AMDGPUSubtarget.h"
 #include "SIInstrInfo.h"
 #include "SIMachineFunctionInfo.h"
-#include "llvm/CodeGen/MachineFrameInfo.h"
+#include "MCTargetDesc/AMDGPUMCTargetDesc.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/IR/CallingConv.h"
+#include "llvm/IR/DebugLoc.h"
 #include "llvm/MC/MCAsmInfo.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Target/TargetMachine.h"
+#include <cassert>
+#include <cstdint>
+#include <iterator>
 
 using namespace llvm;
 
 #define DEBUG_TYPE "si-insert-skips"
-
-namespace {
 
 static cl::opt<unsigned> SkipThresholdFlag(
   "amdgpu-skip-threshold",
   cl::desc("Number of instructions before jumping over divergent control flow"),
   cl::init(12), cl::Hidden);
 
+namespace {
+
 class SIInsertSkips : public MachineFunctionPass {
 private:
-  const SIRegisterInfo *TRI;
-  const SIInstrInfo *TII;
-  unsigned SkipThreshold;
+  const SIRegisterInfo *TRI = nullptr;
+  const SIInstrInfo *TII = nullptr;
+  unsigned SkipThreshold = 0;
 
   bool shouldSkip(const MachineBasicBlock &From,
                   const MachineBasicBlock &To) const;
@@ -55,8 +69,7 @@ private:
 public:
   static char ID;
 
-  SIInsertSkips() :
-    MachineFunctionPass(ID), TRI(nullptr), TII(nullptr), SkipThreshold(0) { }
+  SIInsertSkips() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -69,7 +82,7 @@ public:
   }
 };
 
-} // End anonymous namespace
+} // end anonymous namespace
 
 char SIInsertSkips::ID = 0;
 
@@ -120,18 +133,10 @@ bool SIInsertSkips::shouldSkip(const MachineBasicBlock &From,
           I->getOpcode() == AMDGPU::S_CBRANCH_VCCZ)
         return true;
 
-      if (I->isInlineAsm()) {
-        const MCAsmInfo *MAI = MF->getTarget().getMCAsmInfo();
-        const char *AsmStr = I->getOperand(0).getSymbolName();
+      if (TII->hasUnwantedEffectsWhenEXECEmpty(*I))
+        return true;
 
-        // inlineasm length estimate is number of bytes assuming the longest
-        // instruction.
-        uint64_t MaxAsmSize = TII->getInlineAsmLength(AsmStr, *MAI);
-        NumInstr += MaxAsmSize / MAI->getMaxInstLength();
-      } else {
-        ++NumInstr;
-      }
-
+      ++NumInstr;
       if (NumInstr >= SkipThreshold)
         return true;
     }
@@ -144,7 +149,7 @@ bool SIInsertSkips::skipIfDead(MachineInstr &MI, MachineBasicBlock &NextBB) {
   MachineBasicBlock &MBB = *MI.getParent();
   MachineFunction *MF = MBB.getParent();
 
-  if (MF->getFunction()->getCallingConv() != CallingConv::AMDGPU_PS ||
+  if (MF->getFunction().getCallingConv() != CallingConv::AMDGPU_PS ||
       !shouldSkip(MBB, MBB.getParent()->back()))
     return false;
 
@@ -159,16 +164,15 @@ bool SIInsertSkips::skipIfDead(MachineInstr &MI, MachineBasicBlock &NextBB) {
   MachineBasicBlock::iterator Insert = SkipBB->begin();
 
   // Exec mask is zero: Export to NULL target...
-  BuildMI(*SkipBB, Insert, DL, TII->get(AMDGPU::EXP))
-    .addImm(0)
+  BuildMI(*SkipBB, Insert, DL, TII->get(AMDGPU::EXP_DONE))
     .addImm(0x09) // V_008DFC_SQ_EXP_NULL
-    .addImm(0)
-    .addImm(1)
-    .addImm(1)
     .addReg(AMDGPU::VGPR0, RegState::Undef)
     .addReg(AMDGPU::VGPR0, RegState::Undef)
     .addReg(AMDGPU::VGPR0, RegState::Undef)
-    .addReg(AMDGPU::VGPR0, RegState::Undef);
+    .addReg(AMDGPU::VGPR0, RegState::Undef)
+    .addImm(1)  // vm
+    .addImm(0)  // compr
+    .addImm(0); // en
 
   // ... and terminate wavefront.
   BuildMI(*SkipBB, Insert, DL, TII->get(AMDGPU::S_ENDPGM));
@@ -179,25 +183,109 @@ bool SIInsertSkips::skipIfDead(MachineInstr &MI, MachineBasicBlock &NextBB) {
 void SIInsertSkips::kill(MachineInstr &MI) {
   MachineBasicBlock &MBB = *MI.getParent();
   DebugLoc DL = MI.getDebugLoc();
-  const MachineOperand &Op = MI.getOperand(0);
 
-#ifndef NDEBUG
-  CallingConv::ID CallConv = MBB.getParent()->getFunction()->getCallingConv();
-  // Kill is only allowed in pixel / geometry shaders.
-  assert(CallConv == CallingConv::AMDGPU_PS ||
-         CallConv == CallingConv::AMDGPU_GS);
-#endif
-  // Clear this thread from the exec mask if the operand is negative.
-  if (Op.isImm()) {
-    // Constant operand: Set exec mask to 0 or do nothing
-    if (Op.getImm() & 0x80000000) {
-      BuildMI(MBB, &MI, DL, TII->get(AMDGPU::S_MOV_B64), AMDGPU::EXEC)
-        .addImm(0);
+  switch (MI.getOpcode()) {
+  case AMDGPU::SI_KILL_F32_COND_IMM_TERMINATOR: {
+    unsigned Opcode = 0;
+
+    // The opcodes are inverted because the inline immediate has to be
+    // the first operand, e.g. from "x < imm" to "imm > x"
+    switch (MI.getOperand(2).getImm()) {
+    case ISD::SETOEQ:
+    case ISD::SETEQ:
+      Opcode = AMDGPU::V_CMPX_EQ_F32_e64;
+      break;
+    case ISD::SETOGT:
+    case ISD::SETGT:
+      Opcode = AMDGPU::V_CMPX_LT_F32_e64;
+      break;
+    case ISD::SETOGE:
+    case ISD::SETGE:
+      Opcode = AMDGPU::V_CMPX_LE_F32_e64;
+      break;
+    case ISD::SETOLT:
+    case ISD::SETLT:
+      Opcode = AMDGPU::V_CMPX_GT_F32_e64;
+      break;
+    case ISD::SETOLE:
+    case ISD::SETLE:
+      Opcode = AMDGPU::V_CMPX_GE_F32_e64;
+      break;
+    case ISD::SETONE:
+    case ISD::SETNE:
+      Opcode = AMDGPU::V_CMPX_LG_F32_e64;
+      break;
+    case ISD::SETO:
+      Opcode = AMDGPU::V_CMPX_O_F32_e64;
+      break;
+    case ISD::SETUO:
+      Opcode = AMDGPU::V_CMPX_U_F32_e64;
+      break;
+    case ISD::SETUEQ:
+      Opcode = AMDGPU::V_CMPX_NLG_F32_e64;
+      break;
+    case ISD::SETUGT:
+      Opcode = AMDGPU::V_CMPX_NGE_F32_e64;
+      break;
+    case ISD::SETUGE:
+      Opcode = AMDGPU::V_CMPX_NGT_F32_e64;
+      break;
+    case ISD::SETULT:
+      Opcode = AMDGPU::V_CMPX_NLE_F32_e64;
+      break;
+    case ISD::SETULE:
+      Opcode = AMDGPU::V_CMPX_NLT_F32_e64;
+      break;
+    case ISD::SETUNE:
+      Opcode = AMDGPU::V_CMPX_NEQ_F32_e64;
+      break;
+    default:
+      llvm_unreachable("invalid ISD:SET cond code");
     }
-  } else {
-    BuildMI(MBB, &MI, DL, TII->get(AMDGPU::V_CMPX_LE_F32_e32))
-      .addImm(0)
-      .addOperand(Op);
+
+    assert(MI.getOperand(0).isReg());
+
+    if (TRI->isVGPR(MBB.getParent()->getRegInfo(),
+                    MI.getOperand(0).getReg())) {
+      Opcode = AMDGPU::getVOPe32(Opcode);
+      BuildMI(MBB, &MI, DL, TII->get(Opcode))
+          .add(MI.getOperand(1))
+          .add(MI.getOperand(0));
+    } else {
+      BuildMI(MBB, &MI, DL, TII->get(Opcode))
+          .addReg(AMDGPU::VCC, RegState::Define)
+          .addImm(0)  // src0 modifiers
+          .add(MI.getOperand(1))
+          .addImm(0)  // src1 modifiers
+          .add(MI.getOperand(0))
+          .addImm(0);  // omod
+    }
+    break;
+  }
+  case AMDGPU::SI_KILL_I1_TERMINATOR: {
+    const MachineOperand &Op = MI.getOperand(0);
+    int64_t KillVal = MI.getOperand(1).getImm();
+    assert(KillVal == 0 || KillVal == -1);
+
+    // Kill all threads if Op0 is an immediate and equal to the Kill value.
+    if (Op.isImm()) {
+      int64_t Imm = Op.getImm();
+      assert(Imm == 0 || Imm == -1);
+
+      if (Imm == KillVal)
+        BuildMI(MBB, &MI, DL, TII->get(AMDGPU::S_MOV_B64), AMDGPU::EXEC)
+          .addImm(0);
+      break;
+    }
+
+    unsigned Opcode = KillVal ? AMDGPU::S_ANDN2_B64 : AMDGPU::S_AND_B64;
+    BuildMI(MBB, &MI, DL, TII->get(Opcode), AMDGPU::EXEC)
+        .addReg(AMDGPU::EXEC)
+        .add(Op);
+    break;
+  }
+  default:
+    llvm_unreachable("invalid opcode, expected SI_KILL_*_TERMINATOR");
   }
 }
 
@@ -233,7 +321,7 @@ bool SIInsertSkips::skipMaskBranch(MachineInstr &MI,
 }
 
 bool SIInsertSkips::runOnMachineFunction(MachineFunction &MF) {
-  const SISubtarget &ST = MF.getSubtarget<SISubtarget>();
+  const GCNSubtarget &ST = MF.getSubtarget<GCNSubtarget>();
   TII = ST.getInstrInfo();
   TRI = &TII->getRegisterInfo();
   SkipThreshold = SkipThresholdFlag;
@@ -252,6 +340,7 @@ bool SIInsertSkips::runOnMachineFunction(MachineFunction &MF) {
        BI != BE; BI = NextBB) {
     NextBB = std::next(BI);
     MachineBasicBlock &MBB = *BI;
+    bool HaveSkipBlock = false;
 
     if (!ExecBranchStack.empty() && ExecBranchStack.back() == &MBB) {
       // Reached convergence point for last divergent branch.
@@ -271,27 +360,34 @@ bool SIInsertSkips::runOnMachineFunction(MachineFunction &MF) {
       MachineInstr &MI = *I;
 
       switch (MI.getOpcode()) {
-      case AMDGPU::SI_MASK_BRANCH: {
+      case AMDGPU::SI_MASK_BRANCH:
         ExecBranchStack.push_back(MI.getOperand(0).getMBB());
         MadeChange |= skipMaskBranch(MI, MBB);
         break;
-      }
-      case AMDGPU::S_BRANCH: {
+
+      case AMDGPU::S_BRANCH:
         // Optimize out branches to the next block.
         // FIXME: Shouldn't this be handled by BranchFolding?
-        if (MBB.isLayoutSuccessor(MI.getOperand(0).getMBB()))
+        if (MBB.isLayoutSuccessor(MI.getOperand(0).getMBB())) {
           MI.eraseFromParent();
+        } else if (HaveSkipBlock) {
+          // Remove the given unconditional branch when a skip block has been
+          // inserted after the current one and let skip the two instructions
+          // performing the kill if the exec mask is non-zero.
+          MI.eraseFromParent();
+        }
         break;
-      }
-      case AMDGPU::SI_KILL_TERMINATOR: {
+
+      case AMDGPU::SI_KILL_F32_COND_IMM_TERMINATOR:
+      case AMDGPU::SI_KILL_I1_TERMINATOR:
         MadeChange = true;
         kill(MI);
 
         if (ExecBranchStack.empty()) {
           if (skipIfDead(MI, *NextBB)) {
+            HaveSkipBlock = true;
             NextBB = std::next(BI);
             BE = MF.end();
-            Next = MBB.end();
           }
         } else {
           HaveKill = true;
@@ -299,15 +395,15 @@ bool SIInsertSkips::runOnMachineFunction(MachineFunction &MF) {
 
         MI.eraseFromParent();
         break;
-      }
-      case AMDGPU::SI_RETURN: {
+
+      case AMDGPU::SI_RETURN_TO_EPILOG:
         // FIXME: Should move somewhere else
         assert(!MF.getInfo<SIMachineFunctionInfo>()->returnsVoid());
 
         // Graphics shaders returning non-void shouldn't contain S_ENDPGM,
         // because external bytecode will be appended at the end.
         if (BI != --MF.end() || I != MBB.getFirstTerminator()) {
-          // SI_RETURN is not the last instruction. Add an empty block at
+          // SI_RETURN_TO_EPILOG is not the last instruction. Add an empty block at
           // the end and jump there.
           if (!EmptyMBBAtEnd) {
             EmptyMBBAtEnd = MF.CreateMachineBasicBlock();
@@ -319,7 +415,8 @@ bool SIInsertSkips::runOnMachineFunction(MachineFunction &MF) {
             .addMBB(EmptyMBBAtEnd);
           I->eraseFromParent();
         }
-      }
+        break;
+
       default:
         break;
       }

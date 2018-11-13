@@ -1,3 +1,4 @@
+// REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %s -o %t.o
 // RUN: ld.lld -shared %t.o -o %t.so
 // RUN: llvm-readobj -t -r -dyn-symbols %t.so | FileCheck %s
@@ -9,10 +10,10 @@
 // CHECK-NEXT:   Section ({{.*}}) .rela.dyn {
 // CHECK-NEXT:     0x[[FOO_ADDR:.*]] R_X86_64_RELATIVE - 0x[[FOO_ADDR]]
 // CHECK-NEXT:     0x[[BAR_ADDR:.*]] R_X86_64_RELATIVE - 0x[[BAR_ADDR]]
-// CHECK-NEXT:     0x2010 R_X86_64_RELATIVE - 0x2009
+// CHECK-NEXT:     0x1010 R_X86_64_RELATIVE - 0x1009
 // CHECK-NEXT:     0x{{.*}} R_X86_64_RELATIVE - 0x[[ZED_ADDR:.*]]
 // CHECK-NEXT:     0x{{.*}} R_X86_64_RELATIVE - 0x[[FOO_ADDR]]
-// CHECK-NEXT:     0x2028 R_X86_64_64 external 0x0
+// CHECK-NEXT:     0x1028 R_X86_64_64 external 0x0
 // CHECK-NEXT:   }
 // CHECK-NEXT: ]
 

@@ -9,10 +9,11 @@
 
 #include "ClangPersistentVariables.h"
 
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Core/Value.h"
+#include "lldb/Target/Target.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 
 #include "clang/AST/Decl.h"
 
@@ -50,14 +51,6 @@ void ClangPersistentVariables::RemovePersistentVariable(
 
   if (strtoul(name, NULL, 0) == m_next_persistent_variable_id - 1)
     m_next_persistent_variable_id--;
-}
-
-ConstString ClangPersistentVariables::GetNextPersistentVariableName() {
-  char name_cstr[256];
-  ::snprintf(name_cstr, sizeof(name_cstr), "$%u",
-             m_next_persistent_variable_id++);
-  ConstString name(name_cstr);
-  return name;
 }
 
 void ClangPersistentVariables::RegisterPersistentDecl(const ConstString &name,

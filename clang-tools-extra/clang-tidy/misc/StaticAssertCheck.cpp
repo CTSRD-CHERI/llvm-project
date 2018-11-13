@@ -33,9 +33,11 @@ void StaticAssertCheck::registerMatchers(MatchFinder *Finder) {
   if (!(getLangOpts().CPlusPlus11 || getLangOpts().C11))
     return;
 
+  auto NegatedString = unaryOperator(
+      hasOperatorName("!"), hasUnaryOperand(ignoringImpCasts(stringLiteral())));
   auto IsAlwaysFalse =
       expr(anyOf(cxxBoolLiteral(equals(false)), integerLiteral(equals(0)),
-                 cxxNullPtrLiteralExpr(), gnuNullExpr()))
+                 cxxNullPtrLiteralExpr(), gnuNullExpr(), NegatedString))
           .bind("isAlwaysFalse");
   auto IsAlwaysFalseWithCast = ignoringParenImpCasts(anyOf(
       IsAlwaysFalse, cStyleCastExpr(has(ignoringParenImpCasts(IsAlwaysFalse)))
@@ -86,7 +88,7 @@ void StaticAssertCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *AssertExprRoot =
       Result.Nodes.getNodeAs<BinaryOperator>("assertExprRoot");
   const auto *CastExpr = Result.Nodes.getNodeAs<CStyleCastExpr>("castExpr");
-  SourceLocation AssertExpansionLoc = CondStmt->getLocStart();
+  SourceLocation AssertExpansionLoc = CondStmt->getBeginLoc();
 
   if (!AssertExpansionLoc.isValid() || !AssertExpansionLoc.isMacroID())
     return;
@@ -127,7 +129,7 @@ void StaticAssertCheck::check(const MatchFinder::MatchResult &Result) {
       FixItHints.push_back(FixItHint::CreateRemoval(
           SourceRange(AssertExprRoot->getOperatorLoc())));
       FixItHints.push_back(FixItHint::CreateRemoval(
-          SourceRange(AssertMSG->getLocStart(), AssertMSG->getLocEnd())));
+          SourceRange(AssertMSG->getBeginLoc(), AssertMSG->getEndLoc())));
       StaticAssertMSG = (Twine(", \"") + AssertMSG->getString() + "\"").str();
     }
 

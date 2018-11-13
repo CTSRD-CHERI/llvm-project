@@ -59,8 +59,6 @@ struct E
 template <typename T>
 struct X { T t; };
 
-struct Incomplete;
-
 int main()
 {
     test_is_assignable<int&, int&> ();
@@ -81,6 +79,5 @@ int main()
     test_is_not_assignable<int(), int> ();
 
 //  pointer to incomplete template type
-	test_is_assignable<X<D>*&, X<D>*> ();
-    test_is_not_assignable<Incomplete&, Incomplete const&>();
+    test_is_assignable<X<D>*&, X<D>*> ();
 }

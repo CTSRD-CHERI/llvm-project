@@ -10,12 +10,8 @@
 #ifndef liblldb_OptionGroupArchitecture_h_
 #define liblldb_OptionGroupArchitecture_h_
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/ArchSpec.h"
 #include "lldb/Interpreter/Options.h"
+#include "lldb/Utility/ArchSpec.h"
 
 namespace lldb_private {
 
@@ -31,9 +27,8 @@ public:
 
   llvm::ArrayRef<OptionDefinition> GetDefinitions() override;
 
-  Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_value,
-                       ExecutionContext *execution_context) override;
-  Error SetOptionValue(uint32_t, const char *, ExecutionContext *) = delete;
+  Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_value,
+                        ExecutionContext *execution_context) override;
 
   void OptionParsingStarting(ExecutionContext *execution_context) override;
 
@@ -41,9 +36,7 @@ public:
 
   bool ArchitectureWasSpecified() const { return !m_arch_str.empty(); }
 
-  const char *GetArchitectureName() {
-    return (m_arch_str.empty() ? nullptr : m_arch_str.c_str());
-  }
+  llvm::StringRef GetArchitectureName() const { return m_arch_str; }
 
 protected:
   std::string m_arch_str; // Save the arch triple in case a platform is

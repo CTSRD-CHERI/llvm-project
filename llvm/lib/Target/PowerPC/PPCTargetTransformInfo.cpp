@@ -10,10 +10,10 @@
 #include "PPCTargetTransformInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/BasicTTIImpl.h"
+#include "llvm/CodeGen/CostTable.h"
+#include "llvm/CodeGen/TargetLowering.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Target/CostTable.h"
-#include "llvm/Target/TargetLowering.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "ppctti"
@@ -26,6 +26,11 @@ cl::desc("disable constant hoisting on PPC"), cl::init(false), cl::Hidden);
 static cl::opt<unsigned>
 CacheLineSize("ppc-loop-prefetch-cache-line", cl::Hidden, cl::init(64),
               cl::desc("The loop prefetch cache line size"));
+
+static cl::opt<bool>
+EnablePPCColdCC("ppc-enable-coldcc", cl::Hidden, cl::init(false),
+                cl::desc("Enable using coldcc calling conv for cold "
+                         "internal functions"));
 
 //===----------------------------------------------------------------------===//
 //
@@ -189,7 +194,18 @@ int PPCTTIImpl::getIntImmCost(unsigned Opcode, unsigned Idx, const APInt &Imm,
   return PPCTTIImpl::getIntImmCost(Imm, Ty);
 }
 
-void PPCTTIImpl::getUnrollingPreferences(Loop *L,
+unsigned PPCTTIImpl::getUserCost(const User *U,
+                                 ArrayRef<const Value *> Operands) {
+  if (U->getType()->isVectorTy()) {
+    // Instructions that need to be split should cost more.
+    std::pair<int, MVT> LT = TLI->getTypeLegalizationCost(DL, U->getType());
+    return LT.first * BaseT::getUserCost(U, Operands);
+  }
+
+  return BaseT::getUserCost(U, Operands);
+}
+
+void PPCTTIImpl::getUnrollingPreferences(Loop *L, ScalarEvolution &SE,
                                          TTI::UnrollingPreferences &UP) {
   if (ST->getDarwinDirective() == PPC::DIR_A2) {
     // The A2 is in-order with a deep pipeline, and concatenation unrolling
@@ -201,7 +217,15 @@ void PPCTTIImpl::getUnrollingPreferences(Loop *L,
     UP.AllowExpensiveTripCount = true;
   }
 
-  BaseT::getUnrollingPreferences(L, UP);
+  BaseT::getUnrollingPreferences(L, SE, UP);
+}
+
+// This function returns true to allow using coldcc calling convention.
+// Returning true results in coldcc being used for functions which are cold at
+// all call sites when the callers of the functions are not calling any other
+// non coldcc functions.
+bool PPCTTIImpl::useColdCCForColdCall(Function &F) {
+  return EnablePPCColdCC;
 }
 
 bool PPCTTIImpl::enableAggressiveInterleaving(bool LoopHasReductions) {
@@ -215,6 +239,19 @@ bool PPCTTIImpl::enableAggressiveInterleaving(bool LoopHasReductions) {
   return LoopHasReductions;
 }
 
+const PPCTTIImpl::TTI::MemCmpExpansionOptions *
+PPCTTIImpl::enableMemCmpExpansion(bool IsZeroCmp) const {
+  static const auto Options = []() {
+    TTI::MemCmpExpansionOptions Options;
+    Options.LoadSizes.push_back(8);
+    Options.LoadSizes.push_back(4);
+    Options.LoadSizes.push_back(2);
+    Options.LoadSizes.push_back(1);
+    return Options;
+  }();
+  return &Options;
+}
+
 bool PPCTTIImpl::enableInterleavedAccessVectorization() {
   return true;
 }
@@ -225,7 +262,7 @@ unsigned PPCTTIImpl::getNumberOfRegisters(bool Vector) {
   return ST->hasVSX() ? 64 : 32;
 }
 
-unsigned PPCTTIImpl::getRegisterBitWidth(bool Vector) {
+unsigned PPCTTIImpl::getRegisterBitWidth(bool Vector) const {
   if (Vector) {
     if (ST->hasQPX()) return 256;
     if (ST->hasAltivec()) return 128;
@@ -239,9 +276,18 @@ unsigned PPCTTIImpl::getRegisterBitWidth(bool Vector) {
 }
 
 unsigned PPCTTIImpl::getCacheLineSize() {
-  // This is currently only used for the data prefetch pass which is only
-  // enabled for BG/Q by default.
-  return CacheLineSize;
+  // Check first if the user specified a custom line size.
+  if (CacheLineSize.getNumOccurrences() > 0)
+    return CacheLineSize;
+
+  // On P7, P8 or P9 we have a cache line size of 128.
+  unsigned Directive = ST->getDarwinDirective();
+  if (Directive == PPC::DIR_PWR7 || Directive == PPC::DIR_PWR8 ||
+      Directive == PPC::DIR_PWR9)
+    return 128;
+
+  // On other processors return a default of 64 bytes.
+  return 64;
 }
 
 unsigned PPCTTIImpl::getPrefetchDistance() {
@@ -281,7 +327,7 @@ unsigned PPCTTIImpl::getMaxInterleaveFactor(unsigned VF) {
 int PPCTTIImpl::getArithmeticInstrCost(
     unsigned Opcode, Type *Ty, TTI::OperandValueKind Op1Info,
     TTI::OperandValueKind Op2Info, TTI::OperandValueProperties Opd1PropInfo,
-    TTI::OperandValueProperties Opd2PropInfo) {
+    TTI::OperandValueProperties Opd2PropInfo, ArrayRef<const Value *> Args) {
   assert(TLI->InstructionOpcodeToISD(Opcode) && "Invalid opcode");
 
   // Fallback to the default implementation.
@@ -302,14 +348,16 @@ int PPCTTIImpl::getShuffleCost(TTI::ShuffleKind Kind, Type *Tp, int Index,
   return LT.first;
 }
 
-int PPCTTIImpl::getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src) {
+int PPCTTIImpl::getCastInstrCost(unsigned Opcode, Type *Dst, Type *Src,
+                                 const Instruction *I) {
   assert(TLI->InstructionOpcodeToISD(Opcode) && "Invalid opcode");
 
   return BaseT::getCastInstrCost(Opcode, Dst, Src);
 }
 
-int PPCTTIImpl::getCmpSelInstrCost(unsigned Opcode, Type *ValTy, Type *CondTy) {
-  return BaseT::getCmpSelInstrCost(Opcode, ValTy, CondTy);
+int PPCTTIImpl::getCmpSelInstrCost(unsigned Opcode, Type *ValTy, Type *CondTy,
+                                   const Instruction *I) {
+  return BaseT::getCmpSelInstrCost(Opcode, ValTy, CondTy, I);
 }
 
 int PPCTTIImpl::getVectorInstrCost(unsigned Opcode, Type *Val, unsigned Index) {
@@ -352,18 +400,13 @@ int PPCTTIImpl::getVectorInstrCost(unsigned Opcode, Type *Val, unsigned Index) {
 }
 
 int PPCTTIImpl::getMemoryOpCost(unsigned Opcode, Type *Src, unsigned Alignment,
-                                unsigned AddressSpace) {
+                                unsigned AddressSpace, const Instruction *I) {
   // Legalize the type.
   std::pair<int, MVT> LT = TLI->getTypeLegalizationCost(DL, Src);
   assert((Opcode == Instruction::Load || Opcode == Instruction::Store) &&
          "Invalid Opcode");
 
   int Cost = BaseT::getMemoryOpCost(Opcode, Src, Alignment, AddressSpace);
-
-  // Aligned loads and stores are easy.
-  unsigned SrcBytes = LT.second.getStoreSize();
-  if (!SrcBytes || !Alignment || Alignment >= SrcBytes)
-    return Cost;
 
   bool IsAltivecType = ST->hasAltivec() &&
                        (LT.second == MVT::v16i8 || LT.second == MVT::v8i16 ||
@@ -372,6 +415,20 @@ int PPCTTIImpl::getMemoryOpCost(unsigned Opcode, Type *Src, unsigned Alignment,
                    (LT.second == MVT::v2f64 || LT.second == MVT::v2i64);
   bool IsQPXType = ST->hasQPX() &&
                    (LT.second == MVT::v4f64 || LT.second == MVT::v4f32);
+
+  // VSX has 32b/64b load instructions. Legalization can handle loading of
+  // 32b/64b to VSR correctly and cheaply. But BaseT::getMemoryOpCost and
+  // PPCTargetLowering can't compute the cost appropriately. So here we
+  // explicitly check this case.
+  unsigned MemBytes = Src->getPrimitiveSizeInBits();
+  if (Opcode == Instruction::Load && ST->hasVSX() && IsAltivecType &&
+      (MemBytes == 64 || (ST->hasP8Vector() && MemBytes == 32)))
+    return 1;
+
+  // Aligned loads and stores are easy.
+  unsigned SrcBytes = LT.second.getStoreSize();
+  if (!SrcBytes || !Alignment || Alignment >= SrcBytes)
+    return Cost;
 
   // If we can use the permutation-based load sequence, then this is also
   // relatively cheap (not counting loop-invariant instructions): one load plus
@@ -390,6 +447,10 @@ int PPCTTIImpl::getMemoryOpCost(unsigned Opcode, Type *Src, unsigned Alignment,
   // load sequence, so that might be used instead, but regardless, the net cost
   // is about the same (not counting loop-invariant instructions).
   if (IsVSXType || (ST->hasVSX() && IsAltivecType))
+    return Cost;
+
+  // Newer PPC supports unaligned memory access.
+  if (TLI->allowsMisalignedMemoryAccesses(LT.second, 0))
     return Cost;
 
   // PPC in general does not support unaligned loads and stores. They'll need

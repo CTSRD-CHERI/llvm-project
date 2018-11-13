@@ -1,4 +1,8 @@
-add_lldb_library(lldbPluginExpressionParserClang
+if(NOT LLDB_BUILT_STANDALONE)
+  set(tablegen_deps intrinsics_gen)
+endif()
+
+add_lldb_library(lldbPluginExpressionParserClang PLUGIN
   ASTDumper.cpp
   ASTResultSynthesizer.cpp
   ASTStructExtractor.cpp
@@ -7,13 +11,40 @@ add_lldb_library(lldbPluginExpressionParserClang
   ClangExpressionParser.cpp
   ClangExpressionVariable.cpp
   ClangFunctionCaller.cpp
+  ClangHost.cpp
   ClangModulesDeclVendor.cpp
   ClangPersistentVariables.cpp
   ClangUserExpression.cpp
   ClangUtilityFunction.cpp
   IRForTarget.cpp
-  )
 
-if(NOT LLDB_BUILT_STANDALONE)
-  add_dependencies(lldbPluginExpressionParserClang intrinsics_gen)
-endif()
+  DEPENDS
+  ${tablegen_deps}
+
+  LINK_LIBS
+    clangAST
+    clangCodeGen
+    clangDriver
+    clangEdit
+    clangFrontend
+    clangLex
+    clangParse
+    clangRewrite
+    clangRewriteFrontend
+    clangSema
+    clangSerialization
+    lldbCore
+    lldbExpression
+    lldbHost
+    lldbInterpreter
+    lldbSymbol
+    lldbTarget
+    lldbUtility
+    lldbPluginCPlusPlusLanguage
+  LINK_COMPONENTS
+    Core
+    ExecutionEngine
+    ipo
+    MCJIT
+    Support
+  )

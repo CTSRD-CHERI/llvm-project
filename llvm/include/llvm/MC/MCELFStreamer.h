@@ -10,27 +10,24 @@
 #ifndef LLVM_MC_MCELFSTREAMER_H
 #define LLVM_MC_MCELFSTREAMER_H
 
-#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCDirectives.h"
 #include "llvm/MC/MCObjectStreamer.h"
-#include "llvm/MC/SectionKind.h"
-#include "llvm/Support/DataTypes.h"
 
 namespace llvm {
+
 class MCAsmBackend;
-class MCAssembler;
 class MCCodeEmitter;
 class MCExpr;
 class MCInst;
-class raw_ostream;
 
 class MCELFStreamer : public MCObjectStreamer {
 public:
-  MCELFStreamer(MCContext &Context, MCAsmBackend &TAB, raw_pwrite_stream &OS,
-                MCCodeEmitter *Emitter)
-      : MCObjectStreamer(Context, TAB, OS, Emitter), SeenIdent(false) {}
+  MCELFStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> TAB,
+                std::unique_ptr<MCObjectWriter> OW,
+                std::unique_ptr<MCCodeEmitter> Emitter);
 
-  ~MCELFStreamer() override;
+  ~MCELFStreamer() override = default;
 
   /// state management
   void reset() override {
@@ -44,7 +41,8 @@ public:
 
   void InitSections(bool NoExecStack) override;
   void ChangeSection(MCSection *Section, const MCExpr *Subsection) override;
-  void EmitLabel(MCSymbol *Symbol) override;
+  void EmitLabel(MCSymbol *Symbol, SMLoc Loc = SMLoc()) override;
+  void EmitLabel(MCSymbol *Symbol, SMLoc Loc, MCFragment *F) override;
   void EmitAssemblerFlag(MCAssemblerFlag Flag) override;
   void EmitThumbFunc(MCSymbol *Func) override;
   void EmitWeakReference(MCSymbol *Alias, const MCSymbol *Symbol) override;
@@ -52,28 +50,28 @@ public:
   void EmitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) override;
   void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                         unsigned ByteAlignment) override;
-  void BeginCOFFSymbolDef(const MCSymbol *Symbol) override;
-  void EmitCOFFSymbolStorageClass(int StorageClass) override;
-  void EmitCOFFSymbolType(int Type) override;
-  void EndCOFFSymbolDef() override;
 
-  void emitELFSize(MCSymbolELF *Symbol, const MCExpr *Value) override;
+  void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
+  void emitELFSymverDirective(StringRef AliasName,
+                              const MCSymbol *Aliasee) override;
 
   void EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                              unsigned ByteAlignment) override;
 
   void EmitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
-                    uint64_t Size = 0, unsigned ByteAlignment = 0) override;
+                    uint64_t Size = 0, unsigned ByteAlignment = 0,
+                    SMLoc L = SMLoc()) override;
   void EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                       unsigned ByteAlignment = 0) override;
   void EmitValueImpl(const MCExpr *Value, unsigned Size,
                      SMLoc Loc = SMLoc()) override;
 
-  void EmitFileDirective(StringRef Filename) override;
-
   void EmitIdent(StringRef IdentString) override;
 
   void EmitValueToAlignment(unsigned, int64_t, unsigned, unsigned) override;
+
+  void emitCGProfileEntry(const MCSymbolRefExpr *From,
+                          const MCSymbolRefExpr *To, uint64_t Count) override;
 
   void FinishImpl() override;
 
@@ -87,22 +85,25 @@ private:
   void EmitInstToData(const MCInst &Inst, const MCSubtargetInfo &) override;
 
   void fixSymbolsInTLSFixups(const MCExpr *expr);
+  void finalizeCGProfileEntry(const MCSymbolRefExpr *&S);
+  void finalizeCGProfile();
 
-  /// \brief Merge the content of the fragment \p EF into the fragment \p DF.
+  /// Merge the content of the fragment \p EF into the fragment \p DF.
   void mergeFragment(MCDataFragment *, MCDataFragment *);
 
-  bool SeenIdent;
+  bool SeenIdent = false;
 
   /// BundleGroups - The stack of fragments holding the bundle-locked
   /// instructions.
-  llvm::SmallVector<MCDataFragment *, 4> BundleGroups;
+  SmallVector<MCDataFragment *, 4> BundleGroups;
 };
 
-MCELFStreamer *createARMELFStreamer(MCContext &Context, MCAsmBackend &TAB,
-                                    raw_pwrite_stream &OS,
-                                    MCCodeEmitter *Emitter, bool RelaxAll,
-                                    bool IsThumb);
+MCELFStreamer *createARMELFStreamer(MCContext &Context,
+                                    std::unique_ptr<MCAsmBackend> TAB,
+                                    std::unique_ptr<MCObjectWriter> OW,
+                                    std::unique_ptr<MCCodeEmitter> Emitter,
+                                    bool RelaxAll, bool IsThumb);
 
 } // end namespace llvm
 
-#endif
+#endif // LLVM_MC_MCELFSTREAMER_H

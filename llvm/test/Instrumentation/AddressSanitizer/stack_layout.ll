@@ -9,8 +9,8 @@ target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f3
 target triple = "x86_64-unknown-linux-gnu"
 
 declare void @Use(i8*)
-declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
-declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) nounwind
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) nounwind
 
 ; CHECK: private unnamed_addr constant{{.*}}3 32 10 3 XXX 64 20 3 YYY 128 30 3 ZZZ\0
 ; CHECK: private unnamed_addr constant{{.*}}3 32 5 3 AAA 64 55 3 BBB 160 555 3 CCC\0
@@ -22,6 +22,7 @@ entry:
 ; CHECK-LABEL: Func1
 
 ; CHECK-STATIC: alloca [192 x i8]
+; CHECK-STATIC: %asan_local_stack_base = alloca i64
 ; CHECK-DYNAMIC: alloca i8, i64 192
 
 ; CHECK-NOT: alloca
@@ -43,6 +44,7 @@ entry:
 ; CHECK-LABEL: Func2
 
 ; CHECK-STATIC: alloca [864 x i8]
+; CHECK-STATIC: %asan_local_stack_base = alloca i64
 ; CHECK-DYNAMIC: alloca i8, i64 864
 
 ; CHECK-NOT: alloca
@@ -65,6 +67,7 @@ entry:
 ; CHECK-LABEL: Func3
 
 ; CHECK-STATIC: alloca [768 x i8]
+; CHECK-STATIC: %asan_local_stack_base = alloca i64
 ; CHECK-DYNAMIC: alloca i8, i64 768
 
 ; CHECK-NOT: alloca
@@ -87,13 +90,13 @@ define void @Func5() sanitize_address #0 !dbg !11 {
   %AAA = alloca i32, align 4  ; File is not the same as !11
   %BBB = alloca i32, align 4  ; File is the same as !11
   %BBB.ptr = bitcast i32* %BBB to i8*
-  call void @llvm.lifetime.start(i64 4, i8* nonnull %BBB.ptr), !dbg !12
+  call void @llvm.lifetime.start.p0i8(i64 4, i8* nonnull %BBB.ptr), !dbg !12
   store volatile i32 5, i32* %BBB, align 4
   %AAA.ptr = bitcast i32* %AAA to i8*
-  call void @llvm.lifetime.start(i64 4, i8* nonnull %AAA.ptr), !dbg !14
+  call void @llvm.lifetime.start.p0i8(i64 4, i8* nonnull %AAA.ptr), !dbg !14
   store volatile i32 3, i32* %AAA, align 4
-  call void @llvm.lifetime.end(i64 4, i8* nonnull %AAA.ptr), !dbg !17
-  call void @llvm.lifetime.end(i64 4, i8* nonnull %BBB.ptr), !dbg !18
+  call void @llvm.lifetime.end.p0i8(i64 4, i8* nonnull %AAA.ptr), !dbg !17
+  call void @llvm.lifetime.end.p0i8(i64 4, i8* nonnull %BBB.ptr), !dbg !18
   ret void
 }
 

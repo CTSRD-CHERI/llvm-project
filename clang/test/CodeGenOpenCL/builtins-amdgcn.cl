@@ -1,5 +1,5 @@
 // REQUIRES: amdgpu-registered-target
-// RUN: %clang_cc1 -triple amdgcn-unknown-unknown -S -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -cl-std=CL2.0 -triple amdgcn-unknown-unknown -S -emit-llvm -o - %s | FileCheck -enable-var-scope %s
 
 #pragma OPENCL EXTENSION cl_khr_fp64 : enable
 
@@ -19,17 +19,40 @@ void test_div_scale_f64(global double* out, global int* flagout, double a, doubl
   *flagout = flag;
 }
 
-// CHECK-LABEL: @test_div_scale_f32
+// CHECK-LABEL: @test_div_scale_f32(
 // CHECK: call { float, i1 } @llvm.amdgcn.div.scale.f32(float %a, float %b, i1 true)
 // CHECK-DAG: [[FLAG:%.+]] = extractvalue { float, i1 } %{{.+}}, 1
 // CHECK-DAG: [[VAL:%.+]] = extractvalue { float, i1 } %{{.+}}, 0
-// CHECK: [[FLAGEXT:%.+]] = zext i1 [[FLAG]] to i32
-// CHECK: store i32 [[FLAGEXT]]
-void test_div_scale_f32(global float* out, global int* flagout, float a, float b)
+// CHECK: [[FLAGEXT:%.+]] = zext i1 [[FLAG]] to i8
+// CHECK: store i8 [[FLAGEXT]]
+void test_div_scale_f32(global float* out, global bool* flagout, float a, float b)
 {
   bool flag;
   *out = __builtin_amdgcn_div_scalef(a, b, true, &flag);
   *flagout = flag;
+}
+
+// CHECK-LABEL: @test_div_scale_f32_global_ptr(
+// CHECK: call { float, i1 } @llvm.amdgcn.div.scale.f32(float %a, float %b, i1 true)
+// CHECK-DAG: [[FLAG:%.+]] = extractvalue { float, i1 } %{{.+}}, 1
+// CHECK-DAG: [[VAL:%.+]] = extractvalue { float, i1 } %{{.+}}, 0
+// CHECK: [[FLAGEXT:%.+]] = zext i1 [[FLAG]] to i8
+// CHECK: store i8 [[FLAGEXT]]
+void test_div_scale_f32_global_ptr(global float* out, global int* flagout, float a, float b, global bool* flag)
+{
+  *out = __builtin_amdgcn_div_scalef(a, b, true, flag);
+}
+
+// CHECK-LABEL: @test_div_scale_f32_generic_ptr(
+// CHECK: call { float, i1 } @llvm.amdgcn.div.scale.f32(float %a, float %b, i1 true)
+// CHECK-DAG: [[FLAG:%.+]] = extractvalue { float, i1 } %{{.+}}, 1
+// CHECK-DAG: [[VAL:%.+]] = extractvalue { float, i1 } %{{.+}}, 0
+// CHECK: [[FLAGEXT:%.+]] = zext i1 [[FLAG]] to i8
+// CHECK: store i8 [[FLAGEXT]]
+void test_div_scale_f32_generic_ptr(global float* out, global int* flagout, float a, float b, global bool* flag_arg)
+{
+  generic bool* flag = flag_arg;
+  *out = __builtin_amdgcn_div_scalef(a, b, true, flag);
 }
 
 // CHECK-LABEL: @test_div_fmas_f32
@@ -166,14 +189,14 @@ void test_frexp_mant_f64(global double* out, double a)
 }
 
 // CHECK-LABEL: @test_frexp_exp_f32
-// CHECK: call i32 @llvm.amdgcn.frexp.exp.f32
+// CHECK: call i32 @llvm.amdgcn.frexp.exp.i32.f32
 void test_frexp_exp_f32(global int* out, float a)
 {
   *out = __builtin_amdgcn_frexp_expf(a);
 }
 
 // CHECK-LABEL: @test_frexp_exp_f64
-// CHECK: call i32 @llvm.amdgcn.frexp.exp.f64
+// CHECK: call i32 @llvm.amdgcn.frexp.exp.i32.f64
 void test_frexp_exp_f64(global int* out, double a)
 {
   *out = __builtin_amdgcn_frexp_exp(a);
@@ -235,6 +258,34 @@ void test_ds_swizzle(global int* out, int a)
   *out = __builtin_amdgcn_ds_swizzle(a, 32);
 }
 
+// CHECK-LABEL: @test_ds_permute
+// CHECK: call i32 @llvm.amdgcn.ds.permute(i32 %a, i32 %b)
+void test_ds_permute(global int* out, int a, int b)
+{
+  out[0] = __builtin_amdgcn_ds_permute(a, b);
+}
+
+// CHECK-LABEL: @test_ds_bpermute
+// CHECK: call i32 @llvm.amdgcn.ds.bpermute(i32 %a, i32 %b)
+void test_ds_bpermute(global int* out, int a, int b)
+{
+  *out = __builtin_amdgcn_ds_bpermute(a, b);
+}
+
+// CHECK-LABEL: @test_readfirstlane
+// CHECK: call i32 @llvm.amdgcn.readfirstlane(i32 %a)
+void test_readfirstlane(global int* out, int a)
+{
+  *out = __builtin_amdgcn_readfirstlane(a);
+}
+
+// CHECK-LABEL: @test_readlane
+// CHECK: call i32 @llvm.amdgcn.readlane(i32 %a, i32 %b)
+void test_readlane(global int* out, int a, int b)
+{
+  *out = __builtin_amdgcn_readlane(a, b);
+}
+
 // CHECK-LABEL: @test_fcmp_f32
 // CHECK: call i64 @llvm.amdgcn.fcmp.f32(float %a, float %b, i32 5)
 void test_fcmp_f32(global ulong* out, float a, float b)
@@ -261,6 +312,55 @@ void test_class_f32(global float* out, float a, int b)
 void test_class_f64(global double* out, double a, int b)
 {
   *out = __builtin_amdgcn_class(a, b);
+}
+
+// CHECK-LABEL: @test_buffer_wbinvl1
+// CHECK: call void @llvm.amdgcn.buffer.wbinvl1(
+void test_buffer_wbinvl1()
+{
+  __builtin_amdgcn_buffer_wbinvl1();
+}
+
+// CHECK-LABEL: @test_s_dcache_inv
+// CHECK: call void @llvm.amdgcn.s.dcache.inv(
+void test_s_dcache_inv()
+{
+  __builtin_amdgcn_s_dcache_inv();
+}
+
+// CHECK-LABEL: @test_s_waitcnt
+// CHECK: call void @llvm.amdgcn.s.waitcnt(
+void test_s_waitcnt()
+{
+  __builtin_amdgcn_s_waitcnt(0);
+}
+
+// CHECK-LABEL: @test_s_sendmsg
+// CHECK: call void @llvm.amdgcn.s.sendmsg(
+void test_s_sendmsg()
+{
+  __builtin_amdgcn_s_sendmsg(1, 0);
+}
+
+// CHECK-LABEL: @test_s_sendmsg_var
+// CHECK: call void @llvm.amdgcn.s.sendmsg(
+void test_s_sendmsg_var(int in)
+{
+  __builtin_amdgcn_s_sendmsg(1, in);
+}
+
+// CHECK-LABEL: @test_s_sendmsghalt
+// CHECK: call void @llvm.amdgcn.s.sendmsghalt(
+void test_s_sendmsghalt()
+{
+  __builtin_amdgcn_s_sendmsghalt(1, 0);
+}
+
+// CHECK-LABEL: @test_s_sendmsghalt
+// CHECK: call void @llvm.amdgcn.s.sendmsghalt(
+void test_s_sendmsghalt_var(int in)
+{
+  __builtin_amdgcn_s_sendmsghalt(1, in);
 }
 
 // CHECK-LABEL: @test_s_barrier
@@ -336,23 +436,49 @@ void test_cubema(global float* out, float a, float b, float c) {
 }
 
 // CHECK-LABEL: @test_read_exec(
-// CHECK: call i64 @llvm.read_register.i64(metadata ![[EXEC:[0-9]+]]) #[[READ_EXEC_ATTRS:[0-9]+]]
+// CHECK: call i64 @llvm.read_register.i64(metadata ![[$EXEC:[0-9]+]]) #[[$READ_EXEC_ATTRS:[0-9]+]]
 void test_read_exec(global ulong* out) {
   *out = __builtin_amdgcn_read_exec();
 }
 
-// CHECK: declare i64 @llvm.read_register.i64(metadata) #[[NOUNWIND_READONLY:[0-9]+]]
+// CHECK: declare i64 @llvm.read_register.i64(metadata) #[[$NOUNWIND_READONLY:[0-9]+]]
+
+// CHECK-LABEL: @test_read_exec_lo(
+// CHECK: call i32 @llvm.read_register.i32(metadata ![[$EXEC_LO:[0-9]+]]) #[[$READ_EXEC_ATTRS]]
+void test_read_exec_lo(global uint* out) {
+  *out = __builtin_amdgcn_read_exec_lo();
+}
+
+// CHECK-LABEL: @test_read_exec_hi(
+// CHECK: call i32 @llvm.read_register.i32(metadata ![[$EXEC_HI:[0-9]+]]) #[[$READ_EXEC_ATTRS]]
+void test_read_exec_hi(global uint* out) {
+  *out = __builtin_amdgcn_read_exec_hi();
+}
+
+// CHECK-LABEL: @test_dispatch_ptr
+// CHECK: call i8 addrspace(4)* @llvm.amdgcn.dispatch.ptr()
+void test_dispatch_ptr(__constant unsigned char ** out)
+{
+  *out = __builtin_amdgcn_dispatch_ptr();
+}
+
+// CHECK-LABEL: @test_queue_ptr
+// CHECK: call i8 addrspace(4)* @llvm.amdgcn.queue.ptr()
+void test_queue_ptr(__constant unsigned char ** out)
+{
+  *out = __builtin_amdgcn_queue_ptr();
+}
 
 // CHECK-LABEL: @test_kernarg_segment_ptr
-// CHECK: call i8 addrspace(2)* @llvm.amdgcn.kernarg.segment.ptr()
-void test_kernarg_segment_ptr(__attribute__((address_space(2))) unsigned char ** out)
+// CHECK: call i8 addrspace(4)* @llvm.amdgcn.kernarg.segment.ptr()
+void test_kernarg_segment_ptr(__constant unsigned char ** out)
 {
   *out = __builtin_amdgcn_kernarg_segment_ptr();
 }
 
 // CHECK-LABEL: @test_implicitarg_ptr
-// CHECK: call i8 addrspace(2)* @llvm.amdgcn.implicitarg.ptr()
-void test_implicitarg_ptr(__attribute__((address_space(2))) unsigned char ** out)
+// CHECK: call i8 addrspace(4)* @llvm.amdgcn.implicitarg.ptr()
+void test_implicitarg_ptr(__constant unsigned char ** out)
 {
   *out = __builtin_amdgcn_implicitarg_ptr();
 }
@@ -371,10 +497,21 @@ void test_get_group_id(int d, global int *out)
 	}
 }
 
+// CHECK-LABEL: @test_s_getreg(
+// CHECK: tail call i32 @llvm.amdgcn.s.getreg(i32 0)
+// CHECK: tail call i32 @llvm.amdgcn.s.getreg(i32 1)
+// CHECK: tail call i32 @llvm.amdgcn.s.getreg(i32 65535)
+void test_s_getreg(volatile global uint *out)
+{
+  *out = __builtin_amdgcn_s_getreg(0);
+  *out = __builtin_amdgcn_s_getreg(1);
+  *out = __builtin_amdgcn_s_getreg(65535);
+}
+
 // CHECK-LABEL: @test_get_local_id(
-// CHECK: tail call i32 @llvm.amdgcn.workitem.id.x(), !range [[WI_RANGE:![0-9]*]]
-// CHECK: tail call i32 @llvm.amdgcn.workitem.id.y(), !range [[WI_RANGE]]
-// CHECK: tail call i32 @llvm.amdgcn.workitem.id.z(), !range [[WI_RANGE]]
+// CHECK: tail call i32 @llvm.amdgcn.workitem.id.x(), !range [[$WI_RANGE:![0-9]*]]
+// CHECK: tail call i32 @llvm.amdgcn.workitem.id.y(), !range [[$WI_RANGE]]
+// CHECK: tail call i32 @llvm.amdgcn.workitem.id.z(), !range [[$WI_RANGE]]
 void test_get_local_id(int d, global int *out)
 {
 	switch (d) {
@@ -385,7 +522,23 @@ void test_get_local_id(int d, global int *out)
 	}
 }
 
-// CHECK-DAG: [[WI_RANGE]] = !{i32 0, i32 1024}
-// CHECK-DAG: attributes #[[NOUNWIND_READONLY:[0-9]+]] = { nounwind readonly }
-// CHECK-DAG: attributes #[[READ_EXEC_ATTRS]] = { convergent }
-// CHECK-DAG: ![[EXEC]] = !{!"exec"}
+// CHECK-LABEL: @test_fmed3_f32
+// CHECK: call float @llvm.amdgcn.fmed3.f32(
+void test_fmed3_f32(global float* out, float a, float b, float c)
+{
+  *out = __builtin_amdgcn_fmed3f(a, b, c);
+}
+
+// CHECK-LABEL: @test_s_getpc
+// CHECK: call i64 @llvm.amdgcn.s.getpc()
+void test_s_getpc(global ulong* out)
+{
+  *out = __builtin_amdgcn_s_getpc();
+}
+
+// CHECK-DAG: [[$WI_RANGE]] = !{i32 0, i32 1024}
+// CHECK-DAG: attributes #[[$NOUNWIND_READONLY:[0-9]+]] = { nounwind readonly }
+// CHECK-DAG: attributes #[[$READ_EXEC_ATTRS]] = { convergent }
+// CHECK-DAG: ![[$EXEC]] = !{!"exec"}
+// CHECK-DAG: ![[$EXEC_LO]] = !{!"exec_lo"}
+// CHECK-DAG: ![[$EXEC_HI]] = !{!"exec_hi"}

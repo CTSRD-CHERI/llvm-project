@@ -20,6 +20,7 @@ class TestGoASTContext(TestBase):
     @skipIfRemote  # Not remote test suit ready
     @no_debug_info_test
     @skipUnlessGoInstalled
+    @expectedFailureAll(bugnumber="llvm.org/pr33643")
     def test_with_dsym_and_python_api(self):
         """Test GoASTContext dwarf parsing."""
         self.buildGo()
@@ -45,7 +46,7 @@ class TestGoASTContext(TestBase):
             self.assertEqual(size, t.size)
 
     def launchProcess(self):
-        exe = os.path.join(os.getcwd(), "a.out")
+        exe = self.getBuildArtifact("a.out")
 
         target = self.dbg.CreateTarget(exe)
         self.assertTrue(target, VALID_TARGET)

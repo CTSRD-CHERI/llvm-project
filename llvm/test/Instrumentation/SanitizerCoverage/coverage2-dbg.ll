@@ -17,8 +17,8 @@ target triple = "x86_64-unknown-linux-gnu"
 ; Check that __sanitizer_cov call has !dgb pointing to the beginning
 ; of appropriate basic blocks.
 ; CHECK-LABEL:_Z3fooPi
-; CHECK: call void @__sanitizer_cov(i32*{{.*}}), !dbg [[A:!.*]]
-; CHECK: call void @__sanitizer_cov(i32*{{.*}}), !dbg [[B:!.*]]
+; CHECK: call void @__sanitizer_cov{{.*}}(i32*{{.*}}), !dbg [[A:!.*]]
+; CHECK: call void @__sanitizer_cov{{.*}}(i32*{{.*}}), !dbg [[B:!.*]]
 ; CHECK: ret void
 ; CHECK: [[A]] = !DILocation(line: 1, scope: !{{.*}})
 ; CHECK: [[B]] = !DILocation(line: 3, column: 5, scope: !{{.*}})
@@ -50,7 +50,7 @@ attributes #1 = { nounwind readnone }
 !0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, producer: "clang version 3.6.0 (217079)", isOptimized: true, emissionKind: FullDebug, file: !1, enums: !2, retainedTypes: !2, globals: !2, imports: !2)
 !1 = !DIFile(filename: "if.cc", directory: "FOO")
 !2 = !{}
-!4 = distinct !DISubprogram(name: "foo", linkageName: "_Z3fooPi", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !0, scopeLine: 1, file: !1, scope: !5, type: !6, variables: !10)
+!4 = distinct !DISubprogram(name: "foo", linkageName: "_Z3fooPi", line: 1, isLocal: false, isDefinition: true, virtualIndex: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !0, scopeLine: 1, file: !1, scope: !5, type: !6, retainedNodes: !10)
 !5 = !DIFile(filename: "if.cc", directory: "FOO")
 !6 = !DISubroutineType(types: !7)
 !7 = !{null, !8}

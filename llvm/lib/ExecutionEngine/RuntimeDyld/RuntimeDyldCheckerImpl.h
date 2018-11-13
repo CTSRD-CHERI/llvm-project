@@ -41,6 +41,9 @@ private:
 
   RuntimeDyldImpl &getRTDyld() const { return *RTDyld.Dyld; }
 
+  Expected<JITSymbolResolver::LookupResult>
+  lookup(const JITSymbolResolver::LookupSet &Symbols) const;
+
   bool isSymbolValid(StringRef Symbol) const;
   uint64_t getSymbolLocalAddr(StringRef Symbol) const;
   uint64_t getSymbolRemoteAddr(StringRef Symbol) const;
@@ -59,6 +62,8 @@ private:
                                                   StringRef Symbol,
                                                   bool IsInsideLoad) const;
   StringRef getSubsectionStartingAt(StringRef Name) const;
+
+  Optional<uint64_t> getSectionLoadAddress(void *LocalAddr) const;
 
   void registerSection(StringRef FilePath, unsigned SectionID);
   void registerStubMap(StringRef FilePath, unsigned SectionID,

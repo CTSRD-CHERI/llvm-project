@@ -15,10 +15,12 @@
 #include "lldb/Target/Language.h"
 
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Symbol/SymbolFile.h"
 #include "lldb/Symbol/TypeList.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/Stream.h"
+
+#include "llvm/Support/Threading.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -29,9 +31,9 @@ typedef std::map<lldb::LanguageType, LanguageUP> LanguagesMap;
 
 static LanguagesMap &GetLanguagesMap() {
   static LanguagesMap *g_map = nullptr;
-  static std::once_flag g_initialize;
+  static llvm::once_flag g_initialize;
 
-  std::call_once(g_initialize, [] {
+  llvm::call_once(g_initialize, [] {
     g_map = new LanguagesMap(); // NOTE: INTENTIONAL LEAK due to global
                                 // destructor chain
   });
@@ -40,9 +42,9 @@ static LanguagesMap &GetLanguagesMap() {
 }
 static std::mutex &GetLanguagesMutex() {
   static std::mutex *g_mutex = nullptr;
-  static std::once_flag g_initialize;
+  static llvm::once_flag g_initialize;
 
-  std::call_once(g_initialize, [] {
+  llvm::call_once(g_initialize, [] {
     g_mutex = new std::mutex(); // NOTE: INTENTIONAL LEAK due to global
                                 // destructor chain
   });
@@ -75,7 +77,39 @@ Language *Language::FindPlugin(lldb::LanguageType language) {
   return nullptr;
 }
 
+Language *Language::FindPlugin(llvm::StringRef file_path) {
+  Language *result = nullptr;
+  ForEach([&result, file_path](Language *language) {
+    if (language->IsSourceFile(file_path)) {
+      result = language;
+      return false;
+    }
+    return true;
+  });
+  return result;
+}
+
+Language *Language::FindPlugin(LanguageType language,
+                               llvm::StringRef file_path) {
+  Language *result = FindPlugin(language);
+  // Finding a language by file path is slower, we so we use this as the
+  // fallback.
+  if (!result)
+    result = FindPlugin(file_path);
+  return result;
+}
+
 void Language::ForEach(std::function<bool(Language *)> callback) {
+  // If we want to iterate over all languages, we first have to complete the
+  // LanguagesMap.
+  static llvm::once_flag g_initialize;
+  llvm::call_once(g_initialize, [] {
+    for (unsigned lang = eLanguageTypeUnknown; lang < eNumLanguageTypes;
+         ++lang) {
+      FindPlugin(static_cast<lldb::LanguageType>(lang));
+    }
+  });
+
   std::lock_guard<std::mutex> guard(GetLanguagesMutex());
   LanguagesMap &map(GetLanguagesMap());
   for (const auto &entry : map) {
@@ -385,7 +419,7 @@ DumpValueObjectOptions::DeclPrintingHelper Language::GetDeclPrintingHelper() {
   return nullptr;
 }
 
-LazyBool Language::IsLogicalTrue(ValueObject &valobj, Error &error) {
+LazyBool Language::IsLogicalTrue(ValueObject &valobj, Status &error) {
   return eLazyBoolCalculate;
 }
 

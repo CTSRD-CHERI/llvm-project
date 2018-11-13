@@ -4,11 +4,11 @@
 declare void @llvm.amdgcn.buffer.wbinvl1() #0
 
 ; GCN-LABEL: {{^}}test_buffer_wbinvl1:
-; GCN-NEXT: ; BB#0:
+; GCN-NEXT: ; %bb.0:
 ; SI-NEXT: buffer_wbinvl1 ; encoding: [0x00,0x00,0xc4,0xe1,0x00,0x00,0x00,0x00]
 ; VI-NEXT: buffer_wbinvl1 ; encoding: [0x00,0x00,0xf8,0xe0,0x00,0x00,0x00,0x00]
 ; GCN-NEXT: s_endpgm
-define void @test_buffer_wbinvl1() #0 {
+define amdgpu_kernel void @test_buffer_wbinvl1() #0 {
   call void @llvm.amdgcn.buffer.wbinvl1()
   ret void
 }

@@ -1,11 +1,12 @@
-; RUN: llc %s -o - -enable-shrink-wrap=true -ifcvt-fn-start=1 -ifcvt-fn-stop=0 -mtriple=thumb-macho \
+; RUN: llc %s -o - -enable-shrink-wrap=true -ifcvt-fn-start=1 -ifcvt-fn-stop=0 -tail-dup-placement=0 -mtriple=thumb-macho \
 ; RUN:      | FileCheck %s --check-prefix=CHECK --check-prefix=ENABLE --check-prefix=ENABLE-V4T
-; RUN: llc %s -o - -enable-shrink-wrap=true -ifcvt-fn-start=1 -ifcvt-fn-stop=0 -mtriple=thumbv5-macho \
+; RUN: llc %s -o - -enable-shrink-wrap=true -ifcvt-fn-start=1 -ifcvt-fn-stop=0 -tail-dup-placement=0 -mtriple=thumbv5-macho \
 ; RUN:      | FileCheck %s --check-prefix=CHECK --check-prefix=ENABLE --check-prefix=ENABLE-V5T
-; RUN: llc %s -o - -enable-shrink-wrap=false -ifcvt-fn-start=1 -ifcvt-fn-stop=0 -mtriple=thumb-macho \
+; RUN: llc %s -o - -enable-shrink-wrap=false -ifcvt-fn-start=1 -ifcvt-fn-stop=0 -tail-dup-placement=0 -mtriple=thumb-macho \
 ; RUN:      | FileCheck %s --check-prefix=CHECK --check-prefix=DISABLE --check-prefix=DISABLE-V4T
-; RUN: llc %s -o - -enable-shrink-wrap=false -ifcvt-fn-start=1 -ifcvt-fn-stop=0 -mtriple=thumbv5-macho \
+; RUN: llc %s -o - -enable-shrink-wrap=false -ifcvt-fn-start=1 -ifcvt-fn-stop=0 -tail-dup-placement=0 -mtriple=thumbv5-macho \
 ; RUN:      | FileCheck %s --check-prefix=CHECK --check-prefix=DISABLE --check-prefix=DISABLE-V5T
+
 ;
 ; Note: Lots of tests use inline asm instead of regular calls.
 ; This allows to have a better control on what the allocation will do.
@@ -15,6 +16,8 @@
 ; edges.
 ; Also disable the late if-converter as it makes harder to reason on
 ; the diffs.
+; Disable tail-duplication during placement, as v4t vs v5t get different
+; results due to branches not being analyzable under v5
 
 ; Initial motivating example: Simple diamond with a call just on one side.
 ; CHECK-LABEL: foo:
@@ -371,7 +374,7 @@ declare void @somethingElse(...)
 ;
 ; ENABLE-V5T-NEXT: {{LBB[0-9_]+}}: @ %if.end
 ; ENABLE-NEXT: bx lr
-define i32 @loopInfoRestoreOutsideLoop(i32 %cond, i32 %N) #0 {
+define i32 @loopInfoRestoreOutsideLoop(i32 %cond, i32 %N) nounwind {
 entry:
   %tobool = icmp eq i32 %cond, 0
   br i1 %tobool, label %if.else, label %if.then
@@ -502,14 +505,9 @@ if.end:                                           ; preds = %for.body, %if.else
 ; CHECK-NEXT: str r1, {{\[}}[[TMP_SP]]]
 ; CHECK-NEXT: str r1, {{\[}}[[TMP_SP]], #4]
 ; CHECK-NEXT: str r1, {{\[}}[[TMP_SP]], #8]
-; Thumb has quite a strange way for moving stuff
-; in around. Oh well, match the current sequence.
-; CHECK: push {r1}
-; CHECK-NEXT: pop {r0}
-; CHECK: push {r1}
-; CHECK-NEXT: pop {r2}
-; CHECK: push {r1}
-; CHECK-NEXT: pop {r3}
+; CHECK:      movs r0, r1
+; CHECK-NEXT: movs r2, r1
+; CHECK-NEXT: movs r3, r1
 ; CHECK-NEXT: bl
 ; CHECK-NEXT: lsls r0, r0, #3
 ;
@@ -600,7 +598,7 @@ declare void @abort() #0
 define i32 @b_to_bx(i32 %value) {
 ; CHECK-LABEL: b_to_bx:
 ; DISABLE: push {r7, lr}
-; CHECK: cmp r1, #49
+; CHECK: cmp r0, #49
 ; CHECK-NEXT: bgt [[ELSE_LABEL:LBB[0-9_]+]]
 ; ENABLE: push {r7, lr}
 
@@ -648,13 +646,15 @@ define i1 @beq_to_bx(i32* %y, i32 %head) {
 ; CHECK-NEXT: beq [[EXIT_LABEL:LBB[0-9_]+]]
 ; ENABLE: push {r4, lr}
 
-; CHECK: tst r3, r4
-; ENABLE-NEXT: pop {r4}
-; ENABLE-NEXT: pop {r3}
-; ENABLE-NEXT: mov lr, r3
-; CHECK-NEXT: beq [[EXIT_LABEL]]
+; CHECK: lsls    r4, r3, #30
+; ENABLE-NEXT: ldr [[POP:r[4567]]], [sp, #4]
+; ENABLE-NEXT: mov lr, [[POP]]
+; ENABLE-NEXT: pop {[[POP]]}
+; ENABLE-NEXT: add sp, #4
+; CHECK-NEXT: bpl [[EXIT_LABEL]]
 
 ; CHECK: str r1, [r2]
+; CHECK: str r3, [r2]
 ; CHECK-NEXT: movs r0, #0
 ; CHECK-NEXT: [[EXIT_LABEL]]: @ %cleanup
 ; ENABLE-NEXT: bx lr
@@ -675,6 +675,7 @@ if.end:
 
 if.end4:
   store i32 %head, i32* %y, align 4
+  store volatile i32 %z, i32* %y, align 4
   br label %cleanup
 
 cleanup:

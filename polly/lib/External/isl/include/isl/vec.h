@@ -13,7 +13,7 @@
 #include <stdio.h>
 
 #include <isl/ctx.h>
-#include <isl/val.h>
+#include <isl/val_type.h>
 #include <isl/printer.h>
 
 #if defined(__cplusplus)
@@ -24,6 +24,7 @@ struct isl_vec;
 typedef struct isl_vec isl_vec;
 
 __isl_give isl_vec *isl_vec_alloc(isl_ctx *ctx, unsigned size);
+__isl_give isl_vec *isl_vec_zero(isl_ctx *ctx, unsigned size);
 __isl_give isl_vec *isl_vec_copy(__isl_keep isl_vec *vec);
 __isl_null isl_vec *isl_vec_free(__isl_take isl_vec *vec);
 
@@ -44,7 +45,7 @@ void isl_vec_dump(__isl_keep isl_vec *vec);
 __isl_give isl_printer *isl_printer_print_vec(__isl_take isl_printer *printer,
 	__isl_keep isl_vec *vec);
 
-struct isl_vec *isl_vec_ceil(struct isl_vec *vec);
+__isl_give isl_vec *isl_vec_ceil(__isl_take isl_vec *vec);
 struct isl_vec *isl_vec_normalize(struct isl_vec *vec);
 __isl_give isl_vec *isl_vec_set_si(__isl_take isl_vec *vec, int v);
 __isl_give isl_vec *isl_vec_set_val(__isl_take isl_vec *vec,
@@ -64,6 +65,7 @@ __isl_give isl_vec *isl_vec_read_from_file(isl_ctx *ctx, FILE *input);
 
 __isl_give isl_vec *isl_vec_drop_els(__isl_take isl_vec *vec,
 	unsigned pos, unsigned n);
+__isl_give isl_vec *isl_vec_add_els(__isl_take isl_vec *vec, unsigned n);
 __isl_give isl_vec *isl_vec_insert_els(__isl_take isl_vec *vec,
 	unsigned pos, unsigned n);
 __isl_give isl_vec *isl_vec_insert_zero_els(__isl_take isl_vec *vec,

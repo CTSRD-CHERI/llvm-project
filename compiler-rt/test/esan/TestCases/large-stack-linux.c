@@ -1,5 +1,7 @@
 // RUN: %clang_esan_wset -O0 %s -o %t 2>&1
 // RUN: %env_esan_opts="verbosity=1 record_snapshots=0" %run %t %t 2>&1 | FileCheck %s
+// Stucks at init and no clone feature equivalent.
+// UNSUPPORTED: freebsd
 
 #include <assert.h>
 #include <stdio.h>
@@ -56,14 +58,14 @@ int main(int argc, char *argv[]) {
   // CHECK:      in esan::initializeLibrary
   // CHECK:      Testing child with infinite stack
   // CHECK-NEXT: in esan::initializeLibrary
-  // CHECK-NEXT: =={{[0-9]+}}==The stack size limit is beyond the maximum supported.
+  // CHECK-NEXT: =={{[0-9:]+}}==The stack size limit is beyond the maximum supported.
   // CHECK-NEXT: Re-execing with a stack size below 1TB.
   // CHECK-NEXT: in esan::initializeLibrary
   // CHECK:      done
   // CHECK:      in esan::finalizeLibrary
   // CHECK:      Testing child with 1TB stack
   // CHECK-NEXT: in esan::initializeLibrary
-  // CHECK-NEXT: =={{[0-9]+}}==The stack size limit is beyond the maximum supported.
+  // CHECK-NEXT: =={{[0-9:]+}}==The stack size limit is beyond the maximum supported.
   // CHECK-NEXT: Re-execing with a stack size below 1TB.
   // CHECK-NEXT: in esan::initializeLibrary
   // CHECK:      done

@@ -10,7 +10,7 @@
 int
 sum (int a, int b)
 {
-    int result = a + b;
+    int result = a + b; // Set a breakpoint here
     return result;
 }
 

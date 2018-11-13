@@ -12,6 +12,7 @@
 
 #include "DIASupport.h"
 #include "llvm/DebugInfo/PDB/IPDBEnumChildren.h"
+#include "llvm/DebugInfo/PDB/IPDBSourceFile.h"
 
 namespace llvm {
 namespace pdb {
@@ -26,7 +27,6 @@ public:
   ChildTypePtr getChildAtIndex(uint32_t Index) const override;
   ChildTypePtr getNext() override;
   void reset() override;
-  DIAEnumSourceFiles *clone() const override;
 
 private:
   const DIASession &Session;

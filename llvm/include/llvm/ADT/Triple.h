@@ -50,15 +50,17 @@ public:
     armeb,          // ARM (big endian): armeb
     aarch64,        // AArch64 (little endian): aarch64
     aarch64_be,     // AArch64 (big endian): aarch64_be
+    arc,            // ARC: Synopsys ARC
     avr,            // AVR: Atmel AVR microcontroller
     bpfel,          // eBPF or extended BPF or 64-bit BPF (little endian)
     bpfeb,          // eBPF or extended BPF or 64-bit BPF (big endian)
     hexagon,        // Hexagon: hexagon
-    mips,           // MIPS: mips, mipsallegrex
-    mipsel,         // MIPSEL: mipsel, mipsallegrexel
-    mips64,         // MIPS64: mips64
-    mips64el,       // MIPS64EL: mips64el
+    mips,           // MIPS: mips, mipsallegrex, mipsr6
+    mipsel,         // MIPSEL: mipsel, mipsallegrexe, mipsr6el
+    mips64,         // MIPS64: mips64, mips64r6, mipsn32, mipsn32r6
+    mips64el,       // MIPS64EL: mips64el, mips64r6el, mipsn32el, mipsn32r6el
     msp430,         // MSP430: msp430
+    nios2,          // NIOSII: nios2
     ppc,            // PPC: powerpc
     ppc64,          // PPC64: powerpc64, ppu
     ppc64le,        // PPC64LE: powerpc64le
@@ -99,6 +101,9 @@ public:
   enum SubArchType {
     NoSubArch,
 
+    ARMSubArch_v8_5a,
+    ARMSubArch_v8_4a,
+    ARMSubArch_v8_3a,
     ARMSubArch_v8_2a,
     ARMSubArch_v8_1a,
     ARMSubArch_v8,
@@ -110,6 +115,7 @@ public:
     ARMSubArch_v7m,
     ARMSubArch_v7s,
     ARMSubArch_v7k,
+    ARMSubArch_v7ve,
     ARMSubArch_v6,
     ARMSubArch_v6m,
     ARMSubArch_v6k,
@@ -120,7 +126,9 @@ public:
 
     KalimbaSubArch_v3,
     KalimbaSubArch_v4,
-    KalimbaSubArch_v5
+    KalimbaSubArch_v5,
+
+    MipsSubArch_r6
   };
   enum VendorType {
     UnknownVendor,
@@ -139,11 +147,14 @@ public:
     Myriad,
     AMD,
     Mesa,
-    LastVendorType = Mesa
+    SUSE,
+    OpenEmbedded,
+    LastVendorType = OpenEmbedded
   };
   enum OSType {
     UnknownOS,
 
+    Ananas,
     CloudABI,
     Darwin,
     DragonFly,
@@ -163,7 +174,6 @@ public:
     RTEMS,
     NaCl,       // Native Client
     CNK,        // BG/P Compute-Node Kernel
-    Bitrig,
     AIX,
     CUDA,       // NVIDIA CUDA
     NVCL,       // NVIDIA OpenCL
@@ -174,12 +184,15 @@ public:
     WatchOS,    // Apple watchOS
     Mesa3D,
     Contiki,
-    LastOSType = Contiki
+    AMDPAL,     // AMD PAL Runtime
+    HermitCore, // HermitCore Unikernel/Multikernel
+    LastOSType = HermitCore
   };
   enum EnvironmentType {
     UnknownEnvironment,
 
     GNU,
+    GNUABIN32,
     GNUABI64,
     GNUEABI,
     GNUEABIHF,
@@ -195,10 +208,9 @@ public:
     MSVC,
     Itanium,
     Cygnus,
-    AMDOpenCL,
     CoreCLR,
-    OpenCL,
-    LastEnvironmentType = OpenCL
+    Simulator,  // Simulator variants of other systems, e.g., Apple's iOS
+    LastEnvironmentType = Simulator
   };
   enum ObjectFormatType {
     UnknownObjectFormat,
@@ -206,6 +218,7 @@ public:
     COFF,
     ELF,
     MachO,
+    Wasm,
   };
 
 private:
@@ -235,7 +248,9 @@ public:
 
   /// Default constructor is the same as an empty string and leaves all
   /// triple fields unknown.
-  Triple() : Data(), Arch(), Vendor(), OS(), Environment(), ObjectFormat() {}
+  Triple()
+      : Data(), Arch(), SubArch(), Vendor(), OS(), Environment(),
+        ObjectFormat() {}
 
   explicit Triple(const Twine &Str);
   Triple(const Twine &ArchStr, const Twine &VendorStr, const Twine &OSStr);
@@ -247,6 +262,10 @@ public:
            Vendor == Other.Vendor && OS == Other.OS &&
            Environment == Other.Environment &&
            ObjectFormat == Other.ObjectFormat;
+  }
+
+  bool operator!=(const Triple &Other) const {
+    return !(*this == Other);
   }
 
   /// @}
@@ -456,6 +475,10 @@ public:
     return isMacOSX() || isiOS() || isWatchOS();
   }
 
+  bool isSimulatorEnvironment() const {
+    return getEnvironment() == Triple::Simulator;
+  }
+
   bool isOSNetBSD() const {
     return getOS() == Triple::NetBSD;
   }
@@ -478,23 +501,26 @@ public:
     return getOS() == Triple::Solaris;
   }
 
-  bool isOSBitrig() const {
-    return getOS() == Triple::Bitrig;
-  }
-
   bool isOSIAMCU() const {
     return getOS() == Triple::ELFIAMCU;
   }
 
+  bool isOSUnknown() const { return getOS() == Triple::UnknownOS; }
+
   bool isGNUEnvironment() const {
     EnvironmentType Env = getEnvironment();
-    return Env == Triple::GNU || Env == Triple::GNUABI64 ||
-           Env == Triple::GNUEABI || Env == Triple::GNUEABIHF ||
-           Env == Triple::GNUX32;
+    return Env == Triple::GNU || Env == Triple::GNUABIN32 ||
+           Env == Triple::GNUABI64 || Env == Triple::GNUEABI ||
+           Env == Triple::GNUEABIHF || Env == Triple::GNUX32;
   }
 
   bool isOSContiki() const {
     return getOS() == Triple::Contiki;
+  }
+
+  /// Tests whether the OS is Haiku.
+  bool isOSHaiku() const {
+    return getOS() == Triple::Haiku;
   }
 
   /// Checks if the environment could be MSVC.
@@ -558,7 +584,8 @@ public:
 
   /// Tests whether the OS uses glibc.
   bool isOSGlibc() const {
-    return getOS() == Triple::Linux || getOS() == Triple::KFreeBSD;
+    return (getOS() == Triple::Linux || getOS() == Triple::KFreeBSD) &&
+           !isAndroid();
   }
 
   /// Tests whether the OS uses the ELF binary format.
@@ -574,6 +601,11 @@ public:
   /// Tests whether the environment is MachO.
   bool isOSBinFormatMachO() const {
     return getObjectFormat() == Triple::MachO;
+  }
+
+  /// Tests whether the OS uses the Wasm binary format.
+  bool isOSBinFormatWasm() const {
+    return getObjectFormat() == Triple::Wasm;
   }
 
   /// Tests whether the target is the PS4 CPU
@@ -592,6 +624,19 @@ public:
   /// Tests whether the target is Android
   bool isAndroid() const { return getEnvironment() == Triple::Android; }
 
+  bool isAndroidVersionLT(unsigned Major) const {
+    assert(isAndroid() && "Not an Android triple!");
+
+    unsigned Env[3];
+    getEnvironmentVersion(Env[0], Env[1], Env[2]);
+
+    // 64-bit targets did not exist before API level 21 (Lollipop).
+    if (isArch64Bit() && Env[0] < 21)
+      Env[0] = 21;
+
+    return Env[0] < Major;
+  }
+
   /// Tests whether the environment is musl-libc
   bool isMusl() const {
     return getEnvironment() == Triple::Musl ||
@@ -604,8 +649,45 @@ public:
     return getArch() == Triple::nvptx || getArch() == Triple::nvptx64;
   }
 
-  /// Tests wether the target supports comdat
-  bool supportsCOMDAT() const { return !isOSBinFormatMachO(); }
+  /// Tests whether the target is Thumb (little and big endian).
+  bool isThumb() const {
+    return getArch() == Triple::thumb || getArch() == Triple::thumbeb;
+  }
+
+  /// Tests whether the target is ARM (little and big endian).
+  bool isARM() const {
+    return getArch() == Triple::arm || getArch() == Triple::armeb;
+  }
+
+  /// Tests whether the target is AArch64 (little and big endian).
+  bool isAArch64() const {
+    return getArch() == Triple::aarch64 || getArch() == Triple::aarch64_be;
+  }
+
+  /// Tests whether the target is MIPS 32-bit (little and big endian).
+  bool isMIPS32() const {
+    return getArch() == Triple::mips || getArch() == Triple::mipsel;
+  }
+
+  /// Tests whether the target is MIPS 64-bit (little and big endian).
+  bool isMIPS64() const {
+    return getArch() == Triple::mips64 || getArch() == Triple::mips64el;
+  }
+
+  /// Tests whether the target is MIPS (little and big endian, 32- or 64-bit).
+  bool isMIPS() const {
+    return isMIPS32() || isMIPS64();
+  }
+
+  /// Tests whether the target supports comdat
+  bool supportsCOMDAT() const {
+    return !isOSBinFormatMachO();
+  }
+
+  /// Tests whether the target uses emulated TLS as default.
+  bool hasDefaultEmulatedTLS() const {
+    return isAndroid() || isOSOpenBSD() || isWindowsCygwinEnvironment();
+  }
 
   /// @}
   /// @name Mutators
@@ -699,6 +781,12 @@ public:
   ///
   /// \returns true if the triple is little endian, false otherwise.
   bool isLittleEndian() const;
+
+  /// Test whether target triples are compatible.
+  bool isCompatibleWith(const Triple &Other) const;
+
+  /// Merge target triples.
+  std::string merge(const Triple &Other) const;
 
   /// @}
   /// @name Static helpers for IDs.

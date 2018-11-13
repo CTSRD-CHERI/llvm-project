@@ -135,8 +135,8 @@ bool StackDepotReverseMap::IdDescPair::IdComparator(
   return a.id < b.id;
 }
 
-StackDepotReverseMap::StackDepotReverseMap()
-    : map_(StackDepotGetStats()->n_uniq_ids + 100) {
+StackDepotReverseMap::StackDepotReverseMap() {
+  map_.reserve(StackDepotGetStats()->n_uniq_ids + 100);
   for (int idx = 0; idx < StackDepot::kTabSize; idx++) {
     atomic_uintptr_t *p = &theDepot.tab[idx];
     uptr v = atomic_load(p, memory_order_consume);
@@ -146,15 +146,15 @@ StackDepotReverseMap::StackDepotReverseMap()
       map_.push_back(pair);
     }
   }
-  InternalSort(&map_, map_.size(), IdDescPair::IdComparator);
+  Sort(map_.data(), map_.size(), &IdDescPair::IdComparator);
 }
 
 StackTrace StackDepotReverseMap::Get(u32 id) {
   if (!map_.size())
     return StackTrace();
   IdDescPair pair = {id, nullptr};
-  uptr idx = InternalBinarySearch(map_, 0, map_.size(), pair,
-                                  IdDescPair::IdComparator);
+  uptr idx =
+      InternalLowerBound(map_, 0, map_.size(), pair, IdDescPair::IdComparator);
   if (idx > map_.size() || map_[idx].id != id)
     return StackTrace();
   return map_[idx].desc->load();

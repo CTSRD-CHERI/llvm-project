@@ -1,15 +1,18 @@
-; RUN: llc -march=amdgcn -mcpu=bonaire -verify-machineinstrs -mattr=+load-store-opt < %s | FileCheck -strict-whitespace -check-prefix=SI %s
+; RUN: llc -march=amdgcn -mcpu=bonaire -verify-machineinstrs -mattr=+load-store-opt < %s | FileCheck -enable-var-scope -strict-whitespace -check-prefixes=GCN,CI %s
+; RUN: llc -march=amdgcn -mcpu=gfx900 -verify-machineinstrs -mattr=+load-store-opt,+flat-for-global < %s | FileCheck -enable-var-scope -strict-whitespace -check-prefixes=GCN,GFX9 %s
 
 @lds = addrspace(3) global [512 x float] undef, align 4
 @lds.f64 = addrspace(3) global [512 x double] undef, align 8
 
+; GCN-LABEL: {{^}}simple_write2_one_val_f32:
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
 
-; SI-LABEL: @simple_write2_one_val_f32
-; SI-DAG: buffer_load_dword [[VAL:v[0-9]+]]
-; SI-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
-; SI: ds_write2_b32 [[VPTR]], [[VAL]], [[VAL]] offset1:8
-; SI: s_endpgm
-define void @simple_write2_one_val_f32(float addrspace(1)* %C, float addrspace(1)* %in) #0 {
+; GCN-DAG: {{buffer|flat|global}}_load_dword [[VAL:v[0-9]+]]
+; GCN-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
+; GCN: ds_write2_b32 [[VPTR]], [[VAL]], [[VAL]] offset1:8
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_one_val_f32(float addrspace(1)* %C, float addrspace(1)* %in) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in.gep = getelementptr float, float addrspace(1)* %in, i32 %x.i
   %val = load float, float addrspace(1)* %in.gep, align 4
@@ -21,13 +24,20 @@ define void @simple_write2_one_val_f32(float addrspace(1)* %C, float addrspace(1
   ret void
 }
 
-; SI-LABEL: @simple_write2_two_val_f32
-; SI-DAG: buffer_load_dword [[VAL0:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64{{$}}
-; SI-DAG: buffer_load_dword [[VAL1:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64 offset:4
-; SI-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
-; SI: ds_write2_b32 [[VPTR]], [[VAL0]], [[VAL1]] offset1:8
-; SI: s_endpgm
-define void @simple_write2_two_val_f32(float addrspace(1)* %C, float addrspace(1)* %in) #0 {
+; GCN-LABEL: {{^}}simple_write2_two_val_f32:
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; CI-DAG: buffer_load_dword [[VAL0:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64{{$}}
+; CI-DAG: buffer_load_dword [[VAL1:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64 offset:4
+
+; GFX9-DAG: global_load_dword [[VAL0:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, off{{$}}
+; GFX9-DAG: global_load_dword [[VAL1:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, off offset:4
+
+; GCN-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
+; GCN: ds_write2_b32 [[VPTR]], [[VAL0]], [[VAL1]] offset1:8
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_f32(float addrspace(1)* %C, float addrspace(1)* %in) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in.gep.0 = getelementptr float, float addrspace(1)* %in, i32 %x.i
   %in.gep.1 = getelementptr float, float addrspace(1)* %in.gep.0, i32 1
@@ -41,12 +51,15 @@ define void @simple_write2_two_val_f32(float addrspace(1)* %C, float addrspace(1
   ret void
 }
 
-; SI-LABEL: @simple_write2_two_val_f32_volatile_0
-; SI-NOT: ds_write2_b32
-; SI: ds_write_b32 {{v[0-9]+}}, {{v[0-9]+}}
-; SI: ds_write_b32 {{v[0-9]+}}, {{v[0-9]+}} offset:32
-; SI: s_endpgm
-define void @simple_write2_two_val_f32_volatile_0(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1) #0 {
+; GCN-LABEL: @simple_write2_two_val_f32_volatile_0
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-NOT: ds_write2_b32
+; GCN: ds_write_b32 {{v[0-9]+}}, {{v[0-9]+}}
+; GCN: ds_write_b32 {{v[0-9]+}}, {{v[0-9]+}} offset:32
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_f32_volatile_0(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in0.gep = getelementptr float, float addrspace(1)* %in0, i32 %x.i
   %in1.gep = getelementptr float, float addrspace(1)* %in1, i32 %x.i
@@ -60,12 +73,15 @@ define void @simple_write2_two_val_f32_volatile_0(float addrspace(1)* %C, float 
   ret void
 }
 
-; SI-LABEL: @simple_write2_two_val_f32_volatile_1
-; SI-NOT: ds_write2_b32
-; SI: ds_write_b32 {{v[0-9]+}}, {{v[0-9]+}}
-; SI: ds_write_b32 {{v[0-9]+}}, {{v[0-9]+}} offset:32
-; SI: s_endpgm
-define void @simple_write2_two_val_f32_volatile_1(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1) #0 {
+; GCN-LABEL: @simple_write2_two_val_f32_volatile_1
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-NOT: ds_write2_b32
+; GCN: ds_write_b32 {{v[0-9]+}}, {{v[0-9]+}}
+; GCN: ds_write_b32 {{v[0-9]+}}, {{v[0-9]+}} offset:32
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_f32_volatile_1(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in0.gep = getelementptr float, float addrspace(1)* %in0, i32 %x.i
   %in1.gep = getelementptr float, float addrspace(1)* %in1, i32 %x.i
@@ -80,13 +96,21 @@ define void @simple_write2_two_val_f32_volatile_1(float addrspace(1)* %C, float 
 }
 
 ; 2 data subregisters from different super registers.
-; SI-LABEL: @simple_write2_two_val_subreg2_mixed_f32
-; SI: buffer_load_dwordx2 v{{\[}}[[VAL0:[0-9]+]]:{{[0-9]+\]}}
-; SI: buffer_load_dwordx2 v{{\[[0-9]+}}:[[VAL1:[0-9]+]]{{\]}}
-; SI: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
-; SI: ds_write2_b32 [[VPTR]], v[[VAL0]], v[[VAL1]] offset1:8
-; SI: s_endpgm
-define void @simple_write2_two_val_subreg2_mixed_f32(float addrspace(1)* %C, <2 x float> addrspace(1)* %in) #0 {
+; GCN-LABEL: {{^}}simple_write2_two_val_subreg2_mixed_f32:
+; GFX9-NOT: m0
+
+; CI: buffer_load_dwordx2 v{{\[}}[[VAL0:[0-9]+]]:{{[0-9]+\]}}
+; CI: buffer_load_dwordx2 v{{\[[0-9]+}}:[[VAL1:[0-9]+]]{{\]}}
+; CI-DAG: s_mov_b32 m0
+
+; GCN-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
+
+; GFX9: global_load_dwordx2 v{{\[}}[[VAL0:[0-9]+]]:{{[0-9]+\]}}
+; GFX9: global_load_dwordx2 v{{\[[0-9]+}}:[[VAL1:[0-9]+]]{{\]}}
+
+; GCN: ds_write2_b32 [[VPTR]], v[[VAL0]], v[[VAL1]] offset1:8
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_subreg2_mixed_f32(float addrspace(1)* %C, <2 x float> addrspace(1)* %in) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in.gep.0 = getelementptr <2 x float>, <2 x float> addrspace(1)* %in, i32 %x.i
   %in.gep.1 = getelementptr <2 x float>, <2 x float> addrspace(1)* %in.gep.0, i32 1
@@ -102,12 +126,15 @@ define void @simple_write2_two_val_subreg2_mixed_f32(float addrspace(1)* %C, <2 
   ret void
 }
 
-; SI-LABEL: @simple_write2_two_val_subreg2_f32
-; SI-DAG: buffer_load_dwordx2 v{{\[}}[[VAL0:[0-9]+]]:[[VAL1:[0-9]+]]{{\]}}
-; SI-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
-; SI: ds_write2_b32 [[VPTR]], v[[VAL0]], v[[VAL1]] offset1:8
-; SI: s_endpgm
-define void @simple_write2_two_val_subreg2_f32(float addrspace(1)* %C, <2 x float> addrspace(1)* %in) #0 {
+; GCN-LABEL: @simple_write2_two_val_subreg2_f32
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-DAG: {{buffer|global}}_load_dwordx2 v{{\[}}[[VAL0:[0-9]+]]:[[VAL1:[0-9]+]]{{\]}}
+; GCN-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
+; GCN: ds_write2_b32 [[VPTR]], v[[VAL0]], v[[VAL1]] offset1:8
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_subreg2_f32(float addrspace(1)* %C, <2 x float> addrspace(1)* %in) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in.gep = getelementptr <2 x float>, <2 x float> addrspace(1)* %in, i32 %x.i
   %val = load <2 x float>, <2 x float> addrspace(1)* %in.gep, align 8
@@ -121,12 +148,15 @@ define void @simple_write2_two_val_subreg2_f32(float addrspace(1)* %C, <2 x floa
   ret void
 }
 
-; SI-LABEL: @simple_write2_two_val_subreg4_f32
-; SI-DAG: buffer_load_dwordx4 v{{\[}}[[VAL0:[0-9]+]]:[[VAL1:[0-9]+]]{{\]}}
-; SI-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
-; SI: ds_write2_b32 [[VPTR]], v[[VAL0]], v[[VAL1]] offset1:8
-; SI: s_endpgm
-define void @simple_write2_two_val_subreg4_f32(float addrspace(1)* %C, <4 x float> addrspace(1)* %in) #0 {
+; GCN-LABEL: @simple_write2_two_val_subreg4_f32
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-DAG: {{buffer|global}}_load_dwordx4 v{{\[}}[[VAL0:[0-9]+]]:[[VAL1:[0-9]+]]{{\]}}
+; GCN-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
+; GCN: ds_write2_b32 [[VPTR]], v[[VAL0]], v[[VAL1]] offset1:8
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_subreg4_f32(float addrspace(1)* %C, <4 x float> addrspace(1)* %in) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in.gep = getelementptr <4 x float>, <4 x float> addrspace(1)* %in, i32 %x.i
   %val = load <4 x float>, <4 x float> addrspace(1)* %in.gep, align 16
@@ -140,13 +170,20 @@ define void @simple_write2_two_val_subreg4_f32(float addrspace(1)* %C, <4 x floa
   ret void
 }
 
-; SI-LABEL: @simple_write2_two_val_max_offset_f32
-; SI-DAG: buffer_load_dword [[VAL0:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64{{$}}
-; SI-DAG: buffer_load_dword [[VAL1:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64 offset:4
-; SI-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
-; SI: ds_write2_b32 [[VPTR]], [[VAL0]], [[VAL1]] offset1:255
-; SI: s_endpgm
-define void @simple_write2_two_val_max_offset_f32(float addrspace(1)* %C, float addrspace(1)* %in) #0 {
+; GCN-LABEL: @simple_write2_two_val_max_offset_f32
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; CI-DAG: buffer_load_dword [[VAL0:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64{{$}}
+; CI-DAG: buffer_load_dword [[VAL1:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64 offset:4
+
+; GFX9-DAG: global_load_dword [[VAL0:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, off{{$}}
+; GFX9-DAG: global_load_dword [[VAL1:v[0-9]+]], {{v\[[0-9]+:[0-9]+\]}}, off offset:4
+
+; GCN-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 2, v{{[0-9]+}}
+; GCN: ds_write2_b32 [[VPTR]], [[VAL0]], [[VAL1]] offset1:255
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_max_offset_f32(float addrspace(1)* %C, float addrspace(1)* %in) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in.gep.0 = getelementptr float, float addrspace(1)* %in, i32 %x.i
   %in.gep.1 = getelementptr float, float addrspace(1)* %in.gep.0, i32 1
@@ -160,11 +197,14 @@ define void @simple_write2_two_val_max_offset_f32(float addrspace(1)* %C, float 
   ret void
 }
 
-; SI-LABEL: @simple_write2_two_val_too_far_f32
-; SI: ds_write_b32 v{{[0-9]+}}, v{{[0-9]+}}
-; SI: ds_write_b32 v{{[0-9]+}}, v{{[0-9]+}} offset:1028
-; SI: s_endpgm
-define void @simple_write2_two_val_too_far_f32(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1) #0 {
+; GCN-LABEL: @simple_write2_two_val_too_far_f32
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN: ds_write_b32 v{{[0-9]+}}, v{{[0-9]+}}
+; GCN: ds_write_b32 v{{[0-9]+}}, v{{[0-9]+}} offset:1028
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_too_far_f32(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in0.gep = getelementptr float, float addrspace(1)* %in0, i32 %x.i
   %in1.gep = getelementptr float, float addrspace(1)* %in1, i32 %x.i
@@ -178,11 +218,14 @@ define void @simple_write2_two_val_too_far_f32(float addrspace(1)* %C, float add
   ret void
 }
 
-; SI-LABEL: @simple_write2_two_val_f32_x2
-; SI: ds_write2_b32 [[BASEADDR:v[0-9]+]], [[VAL0:v[0-9]+]], [[VAL1:v[0-9]+]] offset1:8
-; SI: ds_write2_b32 [[BASEADDR:v[0-9]+]], [[VAL0]], [[VAL1]] offset0:11 offset1:27
-; SI: s_endpgm
-define void @simple_write2_two_val_f32_x2(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1) #0 {
+; GCN-LABEL: @simple_write2_two_val_f32_x2
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN: ds_write2_b32 [[BASEADDR:v[0-9]+]], [[VAL0:v[0-9]+]], [[VAL1:v[0-9]+]] offset1:8
+; GCN: ds_write2_b32 [[BASEADDR:v[0-9]+]], [[VAL0]], [[VAL1]] offset0:11 offset1:27
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_f32_x2(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1) #0 {
   %tid.x = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in0.gep = getelementptr float, float addrspace(1)* %in0, i32 %tid.x
   %in1.gep = getelementptr float, float addrspace(1)* %in1, i32 %tid.x
@@ -208,11 +251,14 @@ define void @simple_write2_two_val_f32_x2(float addrspace(1)* %C, float addrspac
   ret void
 }
 
-; SI-LABEL: @simple_write2_two_val_f32_x2_nonzero_base
-; SI: ds_write2_b32 [[BASEADDR:v[0-9]+]], [[VAL0:v[0-9]+]], [[VAL1:v[0-9]+]] offset0:3 offset1:8
-; SI: ds_write2_b32 [[BASEADDR:v[0-9]+]], [[VAL0]], [[VAL1]] offset0:11 offset1:27
-; SI: s_endpgm
-define void @simple_write2_two_val_f32_x2_nonzero_base(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1) #0 {
+; GCN-LABEL: @simple_write2_two_val_f32_x2_nonzero_base
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN: ds_write2_b32 [[BASEADDR:v[0-9]+]], [[VAL0:v[0-9]+]], [[VAL1:v[0-9]+]] offset0:3 offset1:8
+; GCN: ds_write2_b32 [[BASEADDR:v[0-9]+]], [[VAL0]], [[VAL1]] offset0:11 offset1:27
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_f32_x2_nonzero_base(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1) #0 {
   %tid.x = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in0.gep = getelementptr float, float addrspace(1)* %in0, i32 %tid.x
   %in1.gep = getelementptr float, float addrspace(1)* %in1, i32 %tid.x
@@ -238,12 +284,15 @@ define void @simple_write2_two_val_f32_x2_nonzero_base(float addrspace(1)* %C, f
   ret void
 }
 
-; SI-LABEL: @write2_ptr_subreg_arg_two_val_f32
-; SI-NOT: ds_write2_b32
-; SI: ds_write_b32
-; SI: ds_write_b32
-; SI: s_endpgm
-define void @write2_ptr_subreg_arg_two_val_f32(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1, <2 x float addrspace(3)*> %lds.ptr) #0 {
+; GCN-LABEL: @write2_ptr_subreg_arg_two_val_f32
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-NOT: ds_write2_b32
+; GCN: ds_write_b32
+; GCN: ds_write_b32
+; GCN: s_endpgm
+define amdgpu_kernel void @write2_ptr_subreg_arg_two_val_f32(float addrspace(1)* %C, float addrspace(1)* %in0, float addrspace(1)* %in1, <2 x float addrspace(3)*> %lds.ptr) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in0.gep = getelementptr float, float addrspace(1)* %in0, i32 %x.i
   %in1.gep = getelementptr float, float addrspace(1)* %in1, i32 %x.i
@@ -265,12 +314,15 @@ define void @write2_ptr_subreg_arg_two_val_f32(float addrspace(1)* %C, float add
   ret void
 }
 
-; SI-LABEL: @simple_write2_one_val_f64
-; SI: buffer_load_dwordx2 [[VAL:v\[[0-9]+:[0-9]+\]]],
-; SI: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 3, v{{[0-9]+}}
-; SI: ds_write2_b64 [[VPTR]], [[VAL]], [[VAL]] offset1:8
-; SI: s_endpgm
-define void @simple_write2_one_val_f64(double addrspace(1)* %C, double addrspace(1)* %in) #0 {
+; GCN-LABEL: @simple_write2_one_val_f64
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-DAG: {{buffer|global}}_load_dwordx2 [[VAL:v\[[0-9]+:[0-9]+\]]],
+; GCN-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 3, v{{[0-9]+}}
+; GCN: ds_write2_b64 [[VPTR]], [[VAL]], [[VAL]] offset1:8
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_one_val_f64(double addrspace(1)* %C, double addrspace(1)* %in) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in.gep = getelementptr double, double addrspace(1)* %in, i32 %x.i
   %val = load double, double addrspace(1)* %in.gep, align 8
@@ -282,13 +334,16 @@ define void @simple_write2_one_val_f64(double addrspace(1)* %C, double addrspace
   ret void
 }
 
-; SI-LABEL: @misaligned_simple_write2_one_val_f64
-; SI-DAG: buffer_load_dwordx2 v{{\[}}[[VAL0:[0-9]+]]:[[VAL1:[0-9]+]]{{\]}}
-; SI-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 3, v{{[0-9]+}}
-; SI: ds_write2_b32 [[VPTR]], v[[VAL0]], v[[VAL1]] offset1:1
-; SI: ds_write2_b32 [[VPTR]], v[[VAL0]], v[[VAL1]] offset0:14 offset1:15
-; SI: s_endpgm
-define void @misaligned_simple_write2_one_val_f64(double addrspace(1)* %C, double addrspace(1)* %in, double addrspace(3)* %lds) #0 {
+; GCN-LABEL: @misaligned_simple_write2_one_val_f64
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-DAG: {{buffer|global}}_load_dwordx2 v{{\[}}[[VAL0:[0-9]+]]:[[VAL1:[0-9]+]]{{\]}}
+; GCN-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 3, v{{[0-9]+}}
+; GCN: ds_write2_b32 [[VPTR]], v[[VAL0]], v[[VAL1]] offset1:1
+; GCN: ds_write2_b32 [[VPTR]], v[[VAL0]], v[[VAL1]] offset0:14 offset1:15
+; GCN: s_endpgm
+define amdgpu_kernel void @misaligned_simple_write2_one_val_f64(double addrspace(1)* %C, double addrspace(1)* %in, double addrspace(3)* %lds) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in.gep = getelementptr double, double addrspace(1)* %in, i32 %x.i
   %val = load double, double addrspace(1)* %in.gep, align 8
@@ -300,13 +355,21 @@ define void @misaligned_simple_write2_one_val_f64(double addrspace(1)* %C, doubl
   ret void
 }
 
-; SI-LABEL: @simple_write2_two_val_f64
-; SI-DAG: buffer_load_dwordx2 [[VAL0:v\[[0-9]+:[0-9]+\]]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64{{$}}
-; SI-DAG: buffer_load_dwordx2 [[VAL1:v\[[0-9]+:[0-9]+\]]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64 offset:8
-; SI-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 3, v{{[0-9]+}}
-; SI: ds_write2_b64 [[VPTR]], [[VAL0]], [[VAL1]] offset1:8
-; SI: s_endpgm
-define void @simple_write2_two_val_f64(double addrspace(1)* %C, double addrspace(1)* %in) #0 {
+; GCN-LABEL: @simple_write2_two_val_f64
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; CI-DAG: buffer_load_dwordx2 [[VAL0:v\[[0-9]+:[0-9]+\]]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64{{$}}
+; CI-DAG: buffer_load_dwordx2 [[VAL1:v\[[0-9]+:[0-9]+\]]], {{v\[[0-9]+:[0-9]+\]}}, {{s\[[0-9]+:[0-9]+\]}}, 0 addr64 offset:8
+
+; GFX9-DAG: global_load_dwordx2 [[VAL0:v\[[0-9]+:[0-9]+\]]], {{v\[[0-9]+:[0-9]+\]}}, off{{$}}
+; GFX9-DAG: global_load_dwordx2 [[VAL1:v\[[0-9]+:[0-9]+\]]], {{v\[[0-9]+:[0-9]+\]}}, off offset:8
+
+
+; GCN-DAG: v_lshlrev_b32_e32 [[VPTR:v[0-9]+]], 3, v{{[0-9]+}}
+; GCN: ds_write2_b64 [[VPTR]], [[VAL0]], [[VAL1]] offset1:8
+; GCN: s_endpgm
+define amdgpu_kernel void @simple_write2_two_val_f64(double addrspace(1)* %C, double addrspace(1)* %in) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in.gep.0 = getelementptr double, double addrspace(1)* %in, i32 %x.i
   %in.gep.1 = getelementptr double, double addrspace(1)* %in.gep.0, i32 1
@@ -322,20 +385,26 @@ define void @simple_write2_two_val_f64(double addrspace(1)* %C, double addrspace
 
 @foo = addrspace(3) global [4 x i32] undef, align 4
 
-; SI-LABEL: @store_constant_adjacent_offsets
-; SI: v_mov_b32_e32 [[ZERO:v[0-9]+]], 0{{$}}
-; SI: ds_write2_b32 [[ZERO]], v{{[0-9]+}}, v{{[0-9]+}} offset1:1
-define void @store_constant_adjacent_offsets() {
+; GCN-LABEL: @store_constant_adjacent_offsets
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-DAG: v_mov_b32_e32 [[ZERO:v[0-9]+]], 0{{$}}
+; GCN: ds_write2_b32 [[ZERO]], v{{[0-9]+}}, v{{[0-9]+}} offset1:1
+define amdgpu_kernel void @store_constant_adjacent_offsets() {
   store i32 123, i32 addrspace(3)* getelementptr inbounds ([4 x i32], [4 x i32] addrspace(3)* @foo, i32 0, i32 0), align 4
   store i32 123, i32 addrspace(3)* getelementptr inbounds ([4 x i32], [4 x i32] addrspace(3)* @foo, i32 0, i32 1), align 4
   ret void
 }
 
-; SI-LABEL: @store_constant_disjoint_offsets
-; SI-DAG: v_mov_b32_e32 [[VAL:v[0-9]+]], 0x7b{{$}}
-; SI-DAG: v_mov_b32_e32 [[ZERO:v[0-9]+]], 0{{$}}
-; SI: ds_write2_b32 [[ZERO]], [[VAL]], [[VAL]] offset1:2
-define void @store_constant_disjoint_offsets() {
+; GCN-LABEL: @store_constant_disjoint_offsets
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-DAG: v_mov_b32_e32 [[VAL:v[0-9]+]], 0x7b{{$}}
+; GCN-DAG: v_mov_b32_e32 [[ZERO:v[0-9]+]], 0{{$}}
+; GCN: ds_write2_b32 [[ZERO]], [[VAL]], [[VAL]] offset1:2
+define amdgpu_kernel void @store_constant_disjoint_offsets() {
   store i32 123, i32 addrspace(3)* getelementptr inbounds ([4 x i32], [4 x i32] addrspace(3)* @foo, i32 0, i32 0), align 4
   store i32 123, i32 addrspace(3)* getelementptr inbounds ([4 x i32], [4 x i32] addrspace(3)* @foo, i32 0, i32 2), align 4
   ret void
@@ -343,12 +412,15 @@ define void @store_constant_disjoint_offsets() {
 
 @bar = addrspace(3) global [4 x i64] undef, align 4
 
-; SI-LABEL: @store_misaligned64_constant_offsets
-; SI: v_mov_b32_e32 [[ZERO:v[0-9]+]], 0{{$}}
-; SI-DAG: ds_write2_b32 [[ZERO]], v{{[0-9]+}}, v{{[0-9]+}} offset1:1
-; SI-DAG: ds_write2_b32 [[ZERO]], v{{[0-9]+}}, v{{[0-9]+}} offset0:2 offset1:3
-; SI: s_endpgm
-define void @store_misaligned64_constant_offsets() {
+; GCN-LABEL: @store_misaligned64_constant_offsets
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-DAG: v_mov_b32_e32 [[ZERO:v[0-9]+]], 0{{$}}
+; GCN-DAG: ds_write2_b32 [[ZERO]], v{{[0-9]+}}, v{{[0-9]+}} offset1:1
+; GCN-DAG: ds_write2_b32 [[ZERO]], v{{[0-9]+}}, v{{[0-9]+}} offset0:2 offset1:3
+; GCN: s_endpgm
+define amdgpu_kernel void @store_misaligned64_constant_offsets() {
   store i64 123, i64 addrspace(3)* getelementptr inbounds ([4 x i64], [4 x i64] addrspace(3)* @bar, i32 0, i32 0), align 4
   store i64 123, i64 addrspace(3)* getelementptr inbounds ([4 x i64], [4 x i64] addrspace(3)* @bar, i32 0, i32 1), align 4
   ret void
@@ -356,13 +428,16 @@ define void @store_misaligned64_constant_offsets() {
 
 @bar.large = addrspace(3) global [4096 x i64] undef, align 4
 
-; SI-LABEL: @store_misaligned64_constant_large_offsets
-; SI-DAG: v_mov_b32_e32 [[BASE0:v[0-9]+]], 0x7ff8{{$}}
-; SI-DAG: v_mov_b32_e32 [[BASE1:v[0-9]+]], 0x4000{{$}}
-; SI-DAG: ds_write2_b32 [[BASE0]], v{{[0-9]+}}, v{{[0-9]+}} offset1:1
-; SI-DAG: ds_write2_b32 [[BASE1]], v{{[0-9]+}}, v{{[0-9]+}} offset1:1
-; SI: s_endpgm
-define void @store_misaligned64_constant_large_offsets() {
+; GCN-LABEL: @store_misaligned64_constant_large_offsets
+; CI-DAG: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN-DAG: v_mov_b32_e32 [[BASE0:v[0-9]+]], 0x7ff8{{$}}
+; GCN-DAG: v_mov_b32_e32 [[BASE1:v[0-9]+]], 0x4000{{$}}
+; GCN-DAG: ds_write2_b32 [[BASE0]], v{{[0-9]+}}, v{{[0-9]+}} offset1:1
+; GCN-DAG: ds_write2_b32 [[BASE1]], v{{[0-9]+}}, v{{[0-9]+}} offset1:1
+; GCN: s_endpgm
+define amdgpu_kernel void @store_misaligned64_constant_large_offsets() {
   store i64 123, i64 addrspace(3)* getelementptr inbounds ([4096 x i64], [4096 x i64] addrspace(3)* @bar.large, i32 0, i32 2048), align 4
   store i64 123, i64 addrspace(3)* getelementptr inbounds ([4096 x i64], [4096 x i64] addrspace(3)* @bar.large, i32 0, i32 4095), align 4
   ret void
@@ -371,7 +446,7 @@ define void @store_misaligned64_constant_large_offsets() {
 @sgemm.lA = internal unnamed_addr addrspace(3) global [264 x float] undef, align 4
 @sgemm.lB = internal unnamed_addr addrspace(3) global [776 x float] undef, align 4
 
-define void @write2_sgemm_sequence(float addrspace(1)* %C, i32 %lda, i32 %ldb, float addrspace(1)* %in) #0 {
+define amdgpu_kernel void @write2_sgemm_sequence(float addrspace(1)* %C, i32 %lda, i32 %ldb, float addrspace(1)* %in) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workgroup.id.x() #1
   %y.i = tail call i32 @llvm.amdgcn.workitem.id.y() #1
   %val = load float, float addrspace(1)* %in
@@ -406,11 +481,13 @@ define void @write2_sgemm_sequence(float addrspace(1)* %C, i32 %lda, i32 %ldb, f
   ret void
 }
 
-; CI-LABEL: {{^}}simple_write2_v4f32_superreg_align4:
-; CI: ds_write2_b32 {{v[0-9]+}}, {{v[0-9]+}}, {{v[0-9]+}} offset0:3 offset1:2{{$}}
-; CI: ds_write2_b32 {{v[0-9]+}}, {{v[0-9]+}}, {{v[0-9]+}} offset0:1{{$}}
-; CI: s_endpgm
-define void @simple_write2_v4f32_superreg_align4(<4 x float> addrspace(3)* %out, <4 x float> addrspace(1)* %in) #0 {
+; GCN-LABEL: {{^}}simple_write2_v4f32_superreg_align4:
+; CI: s_mov_b32 m0
+; GFX9-NOT: m0
+
+; GCN: ds_write2_b32 {{v[0-9]+}}, {{v[0-9]+}}, {{v[0-9]+}} offset0:2 offset1:3{{$}}
+; GCN: ds_write2_b32 {{v[0-9]+}}, {{v[0-9]+}}, {{v[0-9]+}} offset1:1{{$}}
+define amdgpu_kernel void @simple_write2_v4f32_superreg_align4(<4 x float> addrspace(3)* %out, <4 x float> addrspace(1)* %in) #0 {
   %x.i = tail call i32 @llvm.amdgcn.workitem.id.x() #1
   %in.gep = getelementptr inbounds <4 x float>, <4 x float> addrspace(1)* %in
   %val0 = load <4 x float>, <4 x float> addrspace(1)* %in.gep, align 4
@@ -419,18 +496,11 @@ define void @simple_write2_v4f32_superreg_align4(<4 x float> addrspace(3)* %out,
   ret void
 }
 
-; Function Attrs: nounwind readnone
 declare i32 @llvm.amdgcn.workgroup.id.x() #1
-
-; Function Attrs: nounwind readnone
 declare i32 @llvm.amdgcn.workgroup.id.y() #1
-
-; Function Attrs: nounwind readnone
 declare i32 @llvm.amdgcn.workitem.id.x() #1
-
-; Function Attrs: nounwind readnone
 declare i32 @llvm.amdgcn.workitem.id.y() #1
 
 attributes #0 = { nounwind }
-attributes #1 = { nounwind readnone }
+attributes #1 = { nounwind readnone speculatable }
 attributes #2 = { convergent nounwind }

@@ -8,7 +8,7 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief This file lowers exception-related instructions and setjmp/longjmp
+/// This file lowers exception-related instructions and setjmp/longjmp
 /// function calls in order to use Emscripten's JavaScript try and catch
 /// mechanism.
 ///
@@ -50,7 +50,8 @@
 ///
 /// In detail, this pass does following things:
 ///
-/// 1) Create three global variables: __THREW__, __threwValue, and __tempRet0.
+/// 1) Assumes the existence of global variables: __THREW__, __threwValue, and
+///    __tempRet0.
 ///    __tempRet0 will be set within __cxa_find_matching_catch() function in
 ///    JS library, and __THREW__ and __threwValue will be set in invoke wrappers
 ///    in JS glue code. For what invoke wrappers are, refer to 3). These
@@ -65,9 +66,10 @@
 ///
 /// * Exception handling
 ///
-/// 2) Create setThrew and setTempRet0 functions.
-///    The global variables created in 1) will exist in wasm address space,
-///    but their values should be set in JS code, so we provide these functions
+/// 2) We assume the existence of setThrew and setTempRet0 functions at link
+///    time.
+///    The global variables in 1) will exist in wasm address space,
+///    but their values should be set in JS code, so these functions
 ///    as interfaces to JS glue code. These functions are equivalent to the
 ///    following JS functions, which actually exist in asm.js version of JS
 ///    library.
@@ -225,13 +227,8 @@ static cl::list<std::string>
 
 namespace {
 class WebAssemblyLowerEmscriptenEHSjLj final : public ModulePass {
-  static const char *ThrewGVName;
-  static const char *ThrewValueGVName;
-  static const char *TempRet0GVName;
   static const char *ResumeFName;
   static const char *EHTypeIDFName;
-  static const char *SetThrewFName;
-  static const char *SetTempRet0FName;
   static const char *EmLongjmpFName;
   static const char *EmLongjmpJmpbufFName;
   static const char *SaveSetjmpFName;
@@ -277,9 +274,6 @@ class WebAssemblyLowerEmscriptenEHSjLj final : public ModulePass {
   bool areAllExceptionsAllowed() const { return EHWhitelistSet.empty(); }
   bool canLongjmp(Module &M, const Value *Callee) const;
 
-  void createSetThrewFunction(Module &M);
-  void createSetTempRet0Function(Module &M);
-
   void rebuildSSA(Function &F);
 
 public:
@@ -300,14 +294,9 @@ public:
 };
 } // End anonymous namespace
 
-const char *WebAssemblyLowerEmscriptenEHSjLj::ThrewGVName = "__THREW__";
-const char *WebAssemblyLowerEmscriptenEHSjLj::ThrewValueGVName = "__threwValue";
-const char *WebAssemblyLowerEmscriptenEHSjLj::TempRet0GVName = "__tempRet0";
 const char *WebAssemblyLowerEmscriptenEHSjLj::ResumeFName = "__resumeException";
 const char *WebAssemblyLowerEmscriptenEHSjLj::EHTypeIDFName =
     "llvm_eh_typeid_for";
-const char *WebAssemblyLowerEmscriptenEHSjLj::SetThrewFName = "setThrew";
-const char *WebAssemblyLowerEmscriptenEHSjLj::SetTempRet0FName = "setTempRet0";
 const char *WebAssemblyLowerEmscriptenEHSjLj::EmLongjmpFName =
     "emscripten_longjmp";
 const char *WebAssemblyLowerEmscriptenEHSjLj::EmLongjmpJmpbufFName =
@@ -343,15 +332,15 @@ static bool canThrow(const Value *V) {
   return true;
 }
 
-// Returns an available name for a global value.
-// If the proposed name already exists in the module, adds '_' at the end of
-// the name until the name is available.
-static inline std::string createGlobalValueName(const Module &M,
-                                                const std::string &Propose) {
-  std::string Name = Propose;
-  while (M.getNamedGlobal(Name))
-    Name += "_";
-  return Name;
+// Get a global variable with the given name.  If it doesn't exist declare it,
+// which will generate an import and asssumes that it will exist at link time.
+static GlobalVariable *getGlobalVariableI32(Module &M, IRBuilder<> &IRB,
+                                            const char *Name) {
+  if (M.getNamedGlobal(Name))
+    report_fatal_error(Twine("variable name is reserved: ") + Name);
+
+  return new GlobalVariable(M, IRB.getInt32Ty(), false,
+                            GlobalValue::ExternalLinkage, nullptr, Name);
 }
 
 // Simple function name mangler.
@@ -412,7 +401,7 @@ Value *WebAssemblyLowerEmscriptenEHSjLj::wrapInvoke(CallOrInvoke *CI) {
   if (CI->doesNotReturn()) {
     if (auto *F = dyn_cast<Function>(CI->getCalledValue()))
       F->removeFnAttr(Attribute::NoReturn);
-    CI->removeAttribute(AttributeSet::FunctionIndex, Attribute::NoReturn);
+    CI->removeAttribute(AttributeList::FunctionIndex, Attribute::NoReturn);
   }
 
   IRBuilder<> IRB(C);
@@ -435,25 +424,20 @@ Value *WebAssemblyLowerEmscriptenEHSjLj::wrapInvoke(CallOrInvoke *CI) {
 
   // Because we added the pointer to the callee as first argument, all
   // argument attribute indices have to be incremented by one.
-  SmallVector<AttributeSet, 8> AttributesVec;
-  const AttributeSet &InvokePAL = CI->getAttributes();
-  CallSite::arg_iterator AI = CI->arg_begin();
-  unsigned i = 1; // Argument attribute index starts from 1
-  for (unsigned e = CI->getNumArgOperands(); i <= e; ++AI, ++i) {
-    if (InvokePAL.hasAttributes(i)) {
-      AttrBuilder B(InvokePAL, i);
-      AttributesVec.push_back(AttributeSet::get(C, i + 1, B));
-    }
-  }
-  // Add any return attributes.
-  if (InvokePAL.hasAttributes(AttributeSet::ReturnIndex))
-    AttributesVec.push_back(AttributeSet::get(C, InvokePAL.getRetAttributes()));
-  // Add any function attributes.
-  if (InvokePAL.hasAttributes(AttributeSet::FunctionIndex))
-    AttributesVec.push_back(AttributeSet::get(C, InvokePAL.getFnAttributes()));
+  SmallVector<AttributeSet, 8> ArgAttributes;
+  const AttributeList &InvokeAL = CI->getAttributes();
+
+  // No attributes for the callee pointer.
+  ArgAttributes.push_back(AttributeSet());
+  // Copy the argument attributes from the original
+  for (unsigned i = 0, e = CI->getNumArgOperands(); i < e; ++i)
+    ArgAttributes.push_back(InvokeAL.getParamAttributes(i));
+
   // Reconstruct the AttributesList based on the vector we constructed.
-  AttributeSet NewCallPAL = AttributeSet::get(C, AttributesVec);
-  NewCall->setAttributes(NewCallPAL);
+  AttributeList NewCallAL =
+      AttributeList::get(C, InvokeAL.getFnAttributes(),
+                         InvokeAL.getRetAttributes(), ArgAttributes);
+  NewCall->setAttributes(NewCallAL);
 
   CI->replaceAllUsesWith(NewCall);
 
@@ -607,64 +591,6 @@ void WebAssemblyLowerEmscriptenEHSjLj::wrapTestSetjmp(
   LongjmpResult = IRB.CreateLoad(TempRet0GV, "longjmp_result");
 }
 
-// Create setThrew function
-// function setThrew(threw, value) {
-//   if (__THREW__ == 0) {
-//     __THREW__ = threw;
-//     __threwValue = value;
-//   }
-// }
-void WebAssemblyLowerEmscriptenEHSjLj::createSetThrewFunction(Module &M) {
-  LLVMContext &C = M.getContext();
-  IRBuilder<> IRB(C);
-
-  assert(!M.getNamedGlobal(SetThrewFName) && "setThrew already exists");
-  Type *Params[] = {IRB.getInt32Ty(), IRB.getInt32Ty()};
-  FunctionType *FTy = FunctionType::get(IRB.getVoidTy(), Params, false);
-  Function *F =
-      Function::Create(FTy, GlobalValue::ExternalLinkage, SetThrewFName, &M);
-  Argument *Arg1 = &*(F->arg_begin());
-  Argument *Arg2 = &*(++F->arg_begin());
-  Arg1->setName("threw");
-  Arg2->setName("value");
-  BasicBlock *EntryBB = BasicBlock::Create(C, "entry", F);
-  BasicBlock *ThenBB = BasicBlock::Create(C, "if.then", F);
-  BasicBlock *EndBB = BasicBlock::Create(C, "if.end", F);
-
-  IRB.SetInsertPoint(EntryBB);
-  Value *Threw = IRB.CreateLoad(ThrewGV, ThrewGV->getName() + ".val");
-  Value *Cmp = IRB.CreateICmpEQ(Threw, IRB.getInt32(0), "cmp");
-  IRB.CreateCondBr(Cmp, ThenBB, EndBB);
-
-  IRB.SetInsertPoint(ThenBB);
-  IRB.CreateStore(Arg1, ThrewGV);
-  IRB.CreateStore(Arg2, ThrewValueGV);
-  IRB.CreateBr(EndBB);
-
-  IRB.SetInsertPoint(EndBB);
-  IRB.CreateRetVoid();
-}
-
-// Create setTempRet0 function
-// function setTempRet0(value) {
-//   __tempRet0 = value;
-// }
-void WebAssemblyLowerEmscriptenEHSjLj::createSetTempRet0Function(Module &M) {
-  LLVMContext &C = M.getContext();
-  IRBuilder<> IRB(C);
-
-  assert(!M.getNamedGlobal(SetTempRet0FName) && "setTempRet0 already exists");
-  Type *Params[] = {IRB.getInt32Ty()};
-  FunctionType *FTy = FunctionType::get(IRB.getVoidTy(), Params, false);
-  Function *F =
-      Function::Create(FTy, GlobalValue::ExternalLinkage, SetTempRet0FName, &M);
-  F->arg_begin()->setName("value");
-  BasicBlock *EntryBB = BasicBlock::Create(C, "entry", F);
-  IRB.SetInsertPoint(EntryBB);
-  IRB.CreateStore(&*F->arg_begin(), TempRet0GV);
-  IRB.CreateRetVoid();
-}
-
 void WebAssemblyLowerEmscriptenEHSjLj::rebuildSSA(Function &F) {
   DominatorTree &DT = getAnalysis<DominatorTreeWrapperPass>(F).getDomTree();
   DT.recalculate(F); // CFG has been changed
@@ -702,17 +628,12 @@ bool WebAssemblyLowerEmscriptenEHSjLj::runOnModule(Module &M) {
   bool LongjmpUsed = LongjmpF && !LongjmpF->use_empty();
   bool DoSjLj = EnableSjLj && (SetjmpUsed || LongjmpUsed);
 
-  // Create global variables __THREW__, threwValue, and __tempRet0, which are
-  // used in common for both exception handling and setjmp/longjmp handling
-  ThrewGV = new GlobalVariable(M, IRB.getInt32Ty(), false,
-                               GlobalValue::ExternalLinkage, IRB.getInt32(0),
-                               createGlobalValueName(M, ThrewGVName));
-  ThrewValueGV = new GlobalVariable(
-      M, IRB.getInt32Ty(), false, GlobalValue::ExternalLinkage, IRB.getInt32(0),
-      createGlobalValueName(M, ThrewValueGVName));
-  TempRet0GV = new GlobalVariable(M, IRB.getInt32Ty(), false,
-                                  GlobalValue::ExternalLinkage, IRB.getInt32(0),
-                                  createGlobalValueName(M, TempRet0GVName));
+  // Declare (or get) global variables __THREW__, __threwValue, and __tempRet0,
+  // which are used in common for both exception handling and setjmp/longjmp
+  // handling
+  ThrewGV = getGlobalVariableI32(M, IRB, "__THREW__");
+  ThrewValueGV = getGlobalVariableI32(M, IRB, "__threwValue");
+  TempRet0GV = getGlobalVariableI32(M, IRB, "__tempRet0");
 
   bool Changed = false;
 
@@ -740,12 +661,6 @@ bool WebAssemblyLowerEmscriptenEHSjLj::runOnModule(Module &M) {
   // Setjmp/longjmp handling
   if (DoSjLj) {
     Changed = true; // We have setjmp or longjmp somewhere
-
-    Function *MallocF = M.getFunction("malloc");
-    Function *FreeF = M.getFunction("free");
-    if (!MallocF || !FreeF)
-      report_fatal_error(
-          "malloc and free must be linked into the module if setjmp is used");
 
     // Register saveSetjmp function
     FunctionType *SetjmpFTy = SetjmpF->getFunctionType();
@@ -790,9 +705,6 @@ bool WebAssemblyLowerEmscriptenEHSjLj::runOnModule(Module &M) {
 
   if (!Changed) {
     // Delete unused global variables and functions
-    ThrewGV->eraseFromParent();
-    ThrewValueGV->eraseFromParent();
-    TempRet0GV->eraseFromParent();
     if (ResumeF)
       ResumeF->eraseFromParent();
     if (EHTypeIDF)
@@ -805,12 +717,6 @@ bool WebAssemblyLowerEmscriptenEHSjLj::runOnModule(Module &M) {
       TestSetjmpF->eraseFromParent();
     return false;
   }
-
-  // If we have made any changes while doing exception handling or
-  // setjmp/longjmp handling, we have to create these functions for JavaScript
-  // to call.
-  createSetThrewFunction(M);
-  createSetTempRet0Function(M);
 
   return true;
 }
@@ -902,7 +808,7 @@ bool WebAssemblyLowerEmscriptenEHSjLj::runEHOnFunction(Function &F) {
     }
   }
 
-  // Look for orphan landingpads, can occur in blocks with no predecesors
+  // Look for orphan landingpads, can occur in blocks with no predecessors
   for (BasicBlock &BB : F) {
     Instruction *I = BB.getFirstNonPHI();
     if (auto *LPI = dyn_cast<LandingPadInst>(I))

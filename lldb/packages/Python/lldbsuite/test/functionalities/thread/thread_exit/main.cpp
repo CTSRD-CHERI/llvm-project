@@ -9,7 +9,7 @@
 
 // This test verifies the correct handling of child thread exits.
 
-#include <atomic>
+#include "pseudo_barrier.h"
 #include <thread>
 
 pseudo_barrier_t g_barrier1;
@@ -64,7 +64,8 @@ int main ()
     thread_1.join();
 
     // Synchronize with the remaining thread
-    pseudo_barrier_wait(g_barrier3);                  // Set third breakpoint here
+    int dummy = 47;                   // Set third breakpoint here
+    pseudo_barrier_wait(g_barrier3);
 
     // Wait for the second thread to finish
     thread_2.join();

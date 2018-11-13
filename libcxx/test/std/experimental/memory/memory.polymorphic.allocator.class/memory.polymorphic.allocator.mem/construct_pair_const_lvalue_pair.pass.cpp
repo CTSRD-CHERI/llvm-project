@@ -23,7 +23,12 @@
 #include <tuple>
 #include <cassert>
 #include <cstdlib>
+
+#include "test_macros.h"
+#include "test_memory_resource.hpp"
 #include "uses_alloc_types.hpp"
+#include "controlled_allocators.hpp"
+#include "test_allocator.h"
 
 namespace ex = std::experimental::pmr;
 
@@ -85,6 +90,32 @@ void test_pmr_uses_allocator(std::pair<TT, UU> const& p)
         assert((doTest<T, U>(UA_AllocArg, UA_None, p)));
     }
 }
+
+template <class Alloc, class TT, class UU>
+void test_pmr_not_uses_allocator(std::pair<TT, UU> const& p)
+{
+    {
+        using T = NotUsesAllocator<Alloc, 1>;
+        using U = NotUsesAllocator<Alloc, 1>;
+        assert((doTest<T, U>(UA_None, UA_None, p)));
+    }
+    {
+        using T = UsesAllocatorV1<Alloc, 1>;
+        using U = UsesAllocatorV2<Alloc, 1>;
+        assert((doTest<T, U>(UA_None, UA_None, p)));
+    }
+    {
+        using T = UsesAllocatorV2<Alloc, 1>;
+        using U = UsesAllocatorV3<Alloc, 1>;
+        assert((doTest<T, U>(UA_None, UA_None, p)));
+    }
+    {
+        using T = UsesAllocatorV3<Alloc, 1>;
+        using U = NotUsesAllocator<Alloc, 1>;
+        assert((doTest<T, U>(UA_None, UA_None, p)));
+    }
+}
+
 template <class Tp>
 struct Print;
 
@@ -98,7 +129,7 @@ int main()
         int y = 42;
         const std::pair<int, int&> p(x, y);
         test_pmr_uses_allocator<ERT>(p);
-        test_pmr_uses_allocator<PMR>(p);
+        test_pmr_not_uses_allocator<PMR>(p);
         test_pmr_uses_allocator<PMA>(p);
     }
     {
@@ -106,7 +137,7 @@ int main()
         int y = 42;
         const std::pair<int&, int&&> p(x, std::move(y));
         test_pmr_uses_allocator<ERT>(p);
-        test_pmr_uses_allocator<PMR>(p);
+        test_pmr_not_uses_allocator<PMR>(p);
         test_pmr_uses_allocator<PMA>(p);
     }
 }

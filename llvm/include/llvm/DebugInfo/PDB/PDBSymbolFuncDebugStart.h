@@ -19,12 +19,8 @@ class raw_ostream;
 namespace pdb {
 
 class PDBSymbolFuncDebugStart : public PDBSymbol {
-public:
-  PDBSymbolFuncDebugStart(const IPDBSession &PDBSession,
-                          std::unique_ptr<IPDBRawSymbol> FuncDebugStartSymbol);
-
   DECLARE_PDB_SYMBOL_CONCRETE_TYPE(PDB_SymType::FuncDebugStart)
-
+public:
   void dump(PDBSymDumper &Dumper) const override;
 
   FORWARD_SYMBOL_METHOD(getAddressOffset)
@@ -33,7 +29,7 @@ public:
   FORWARD_SYMBOL_METHOD(hasFarReturn)
   FORWARD_SYMBOL_METHOD(hasInterruptReturn)
   FORWARD_SYMBOL_METHOD(isStatic)
-  FORWARD_SYMBOL_METHOD(getLexicalParentId)
+  FORWARD_SYMBOL_ID_METHOD(getLexicalParent)
   FORWARD_SYMBOL_METHOD(getLocationType)
   FORWARD_SYMBOL_METHOD(hasNoInlineAttribute)
   FORWARD_SYMBOL_METHOD(hasNoReturnAttribute)

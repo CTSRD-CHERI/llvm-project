@@ -10,13 +10,13 @@
 #ifndef liblldb_ModuleChild_h_
 #define liblldb_ModuleChild_h_
 
-#include "lldb/lldb-private.h"
+#include "lldb/lldb-forward.h"
 
 namespace lldb_private {
 
 //----------------------------------------------------------------------
 /// @class ModuleChild ModuleChild.h "lldb/Core/ModuleChild.h"
-/// @brief A mix in class that contains a pointer back to the module
+/// A mix in class that contains a pointer back to the module
 ///        that owns the object which inherits from it.
 //----------------------------------------------------------------------
 class ModuleChild {

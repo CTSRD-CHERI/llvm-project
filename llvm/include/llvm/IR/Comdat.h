@@ -1,4 +1,4 @@
-//===-- llvm/IR/Comdat.h - Comdat definitions -------------------*- C++ -*-===//
+//===- llvm/IR/Comdat.h - Comdat definitions --------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -15,6 +15,9 @@
 
 #ifndef LLVM_IR_COMDAT_H
 #define LLVM_IR_COMDAT_H
+
+#include "llvm-c/Types.h"
+#include "llvm/Support/CBindingWrapping.h"
 
 namespace llvm {
 
@@ -36,7 +39,9 @@ public:
     SameSize,     ///< The data referenced by the COMDAT must be the same size.
   };
 
+  Comdat(const Comdat &) = delete;
   Comdat(Comdat &&C);
+
   SelectionKind getSelectionKind() const { return SK; }
   void setSelectionKind(SelectionKind Val) { SK = Val; }
   StringRef getName() const;
@@ -45,19 +50,22 @@ public:
 
 private:
   friend class Module;
+
   Comdat();
-  Comdat(const Comdat &) = delete;
 
   // Points to the map in Module.
-  StringMapEntry<Comdat> *Name;
-  SelectionKind SK;
+  StringMapEntry<Comdat> *Name = nullptr;
+  SelectionKind SK = Any;
 };
+
+// Create wrappers for C Binding types (see CBindingWrapping.h).
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(Comdat, LLVMComdatRef)
 
 inline raw_ostream &operator<<(raw_ostream &OS, const Comdat &C) {
   C.print(OS);
   return OS;
 }
 
-} // end llvm namespace
+} // end namespace llvm
 
-#endif
+#endif // LLVM_IR_COMDAT_H

@@ -10,25 +10,25 @@
 #include "ObjectFilePECOFF.h"
 #include "WindowsMiniDump.h"
 
-#include "llvm/Support/COFF.h"
-
-#include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/DataBuffer.h"
-#include "lldb/Core/DataBufferHeap.h"
 #include "lldb/Core/FileSpecList.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StreamString.h"
-#include "lldb/Core/Timer.h"
-#include "lldb/Core/UUID.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
+#include "lldb/Utility/ArchSpec.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/StreamString.h"
+#include "lldb/Utility/Timer.h"
+#include "lldb/Utility/UUID.h"
+#include "llvm/BinaryFormat/COFF.h"
+
+#include "llvm/Support/MemoryBuffer.h"
 
 #define IMAGE_DOS_SIGNATURE 0x5A4D    // MZ
 #define IMAGE_NT_SIGNATURE 0x00004550 // PE00
@@ -65,20 +65,28 @@ ObjectFile *ObjectFilePECOFF::CreateInstance(const lldb::ModuleSP &module_sp,
                                              lldb::offset_t file_offset,
                                              lldb::offset_t length) {
   if (!data_sp) {
-    data_sp = file->MemoryMapFileContentsIfLocal(file_offset, length);
+    data_sp = MapFileData(file, length, file_offset);
+    if (!data_sp)
+      return nullptr;
     data_offset = 0;
   }
 
-  if (ObjectFilePECOFF::MagicBytesMatch(data_sp)) {
-    // Update the data to contain the entire file if it doesn't already
-    if (data_sp->GetByteSize() < length)
-      data_sp = file->MemoryMapFileContentsIfLocal(file_offset, length);
-    std::unique_ptr<ObjectFile> objfile_ap(new ObjectFilePECOFF(
-        module_sp, data_sp, data_offset, file, file_offset, length));
-    if (objfile_ap.get() && objfile_ap->ParseHeader())
-      return objfile_ap.release();
+  if (!ObjectFilePECOFF::MagicBytesMatch(data_sp))
+    return nullptr;
+
+  // Update the data to contain the entire file if it doesn't already
+  if (data_sp->GetByteSize() < length) {
+    data_sp = MapFileData(file, length, file_offset);
+    if (!data_sp)
+      return nullptr;
   }
-  return NULL;
+
+  auto objfile_ap = llvm::make_unique<ObjectFilePECOFF>(
+      module_sp, data_sp, data_offset, file, file_offset, length);
+  if (!objfile_ap || !objfile_ap->ParseHeader())
+    return nullptr;
+
+  return objfile_ap.release();
 }
 
 ObjectFile *ObjectFilePECOFF::CreateMemoryInstance(
@@ -124,6 +132,11 @@ size_t ObjectFilePECOFF::GetModuleSpecifications(
           spec.SetTriple("i686-pc-windows");
           specs.Append(ModuleSpec(file, spec));
         }
+        else if (coff_header.machine == MachineArmNt)
+        {
+          spec.SetTriple("arm-pc-windows");
+          specs.Append(ModuleSpec(file, spec));
+        }
       }
     }
   }
@@ -133,7 +146,7 @@ size_t ObjectFilePECOFF::GetModuleSpecifications(
 
 bool ObjectFilePECOFF::SaveCore(const lldb::ProcessSP &process_sp,
                                 const lldb_private::FileSpec &outfile,
-                                lldb_private::Error &error) {
+                                lldb_private::Status &error) {
   return SaveMiniDump(process_sp, outfile, error);
 }
 
@@ -223,8 +236,8 @@ bool ObjectFilePECOFF::SetLoadAddress(Target &target, addr_t value,
       size_t sect_idx = 0;
 
       for (sect_idx = 0; sect_idx < num_sections; ++sect_idx) {
-        // Iterate through the object file sections to find all
-        // of the sections that have SHF_ALLOC in their flag bits.
+        // Iterate through the object file sections to find all of the sections
+        // that have SHF_ALLOC in their flag bits.
         SectionSP section_sp(section_list->GetSectionAtIndex(sect_idx));
         if (section_sp && !section_sp->IsThreadSpecific()) {
           if (target.GetSectionLoadList().SetSectionLoadAddress(
@@ -255,8 +268,8 @@ uint32_t ObjectFilePECOFF::GetAddressByteSize() const {
 //----------------------------------------------------------------------
 // NeedsEndianSwap
 //
-// Return true if an endian swap needs to occur when extracting data
-// from this file.
+// Return true if an endian swap needs to occur when extracting data from this
+// file.
 //----------------------------------------------------------------------
 bool ObjectFilePECOFF::NeedsEndianSwap() const {
 #if defined(__LITTLE_ENDIAN__)
@@ -418,14 +431,16 @@ bool ObjectFilePECOFF::ParseCOFFOptionalHeader(lldb::offset_t *offset_ptr) {
 
 DataExtractor ObjectFilePECOFF::ReadImageData(uint32_t offset, size_t size) {
   if (m_file) {
-    DataBufferSP buffer_sp(m_file.ReadFileContents(offset, size));
+    // A bit of a hack, but we intend to write to this buffer, so we can't 
+    // mmap it.
+    auto buffer_sp = MapFileData(m_file, size, offset);
     return DataExtractor(buffer_sp, GetByteOrder(), GetAddressByteSize());
   }
   ProcessSP process_sp(m_process_wp.lock());
   DataExtractor data;
   if (process_sp) {
     auto data_ap = llvm::make_unique<DataBufferHeap>(size, 0);
-    Error readmem_error;
+    Status readmem_error;
     size_t bytes_read =
         process_sp->ReadMemory(m_image_base + offset, data_ap->GetBytes(),
                                data_ap->GetByteSize(), readmem_error);
@@ -522,7 +537,8 @@ Symtab *ObjectFilePECOFF::GetSymtab() {
 
           // First 4 bytes should be zeroed after strtab_size has been read,
           // because it is used as offset 0 to encode a NULL string.
-          uint32_t *strtab_data_start = (uint32_t *)strtab_data.GetDataStart();
+          uint32_t *strtab_data_start = const_cast<uint32_t *>(
+              reinterpret_cast<const uint32_t *>(strtab_data.GetDataStart()));
           strtab_data_start[0] = 0;
 
           offset = 0;
@@ -536,8 +552,8 @@ Symtab *ObjectFilePECOFF::GetSymtab() {
             // are followed by a 4-byte string table offset. Else these
             // 8 bytes contain the symbol name
             if (symtab_data.GetU32(&offset) == 0) {
-              // Long string that doesn't fit into the symbol table name,
-              // so now we must read the 4 byte string table offset
+              // Long string that doesn't fit into the symbol table name, so
+              // now we must read the 4 byte string table offset
               uint32_t strtab_offset = symtab_data.GetU32(&offset);
               symbol_name_cstr = strtab_data.PeekCStr(strtab_offset);
               symbol_name.assign(symbol_name_cstr);
@@ -676,10 +692,12 @@ void ObjectFilePECOFF::CreateSections(SectionList &unified_section_list) {
         static ConstString g_sect_name_dwarf_debug_line(".debug_line");
         static ConstString g_sect_name_dwarf_debug_loc(".debug_loc");
         static ConstString g_sect_name_dwarf_debug_macinfo(".debug_macinfo");
+        static ConstString g_sect_name_dwarf_debug_names(".debug_names");
         static ConstString g_sect_name_dwarf_debug_pubnames(".debug_pubnames");
         static ConstString g_sect_name_dwarf_debug_pubtypes(".debug_pubtypes");
         static ConstString g_sect_name_dwarf_debug_ranges(".debug_ranges");
         static ConstString g_sect_name_dwarf_debug_str(".debug_str");
+        static ConstString g_sect_name_dwarf_debug_types(".debug_types");
         static ConstString g_sect_name_eh_frame(".eh_frame");
         static ConstString g_sect_name_go_symtab(".gosymtab");
         SectionType section_type = eSectionTypeOther;
@@ -720,6 +738,8 @@ void ObjectFilePECOFF::CreateSections(SectionList &unified_section_list) {
           section_type = eSectionTypeDWARFDebugLoc;
         else if (const_sect_name == g_sect_name_dwarf_debug_macinfo)
           section_type = eSectionTypeDWARFDebugMacInfo;
+        else if (const_sect_name == g_sect_name_dwarf_debug_names)
+          section_type = eSectionTypeDWARFDebugNames;
         else if (const_sect_name == g_sect_name_dwarf_debug_pubnames)
           section_type = eSectionTypeDWARFDebugPubNames;
         else if (const_sect_name == g_sect_name_dwarf_debug_pubtypes)
@@ -728,6 +748,8 @@ void ObjectFilePECOFF::CreateSections(SectionList &unified_section_list) {
           section_type = eSectionTypeDWARFDebugRanges;
         else if (const_sect_name == g_sect_name_dwarf_debug_str)
           section_type = eSectionTypeDWARFDebugStr;
+        else if (const_sect_name == g_sect_name_dwarf_debug_types)
+          section_type = eSectionTypeDWARFDebugTypes;
         else if (const_sect_name == g_sect_name_eh_frame)
           section_type = eSectionTypeEHFrame;
         else if (const_sect_name == g_sect_name_go_symtab)

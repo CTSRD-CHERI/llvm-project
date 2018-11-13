@@ -33,10 +33,12 @@ struct AsanChunk;
 
 struct AllocatorOptions {
   u32 quarantine_size_mb;
+  u32 thread_local_quarantine_size_kb;
   u16 min_redzone;
   u16 max_redzone;
   u8 may_return_null;
   u8 alloc_dealloc_mismatch;
+  s32 release_to_os_interval_ms;
 
   void SetFrom(const Flags *f, const CommonFlags *cf);
   void CopyTo(Flags *f, CommonFlags *cf);
@@ -49,28 +51,30 @@ void GetAllocatorOptions(AllocatorOptions *options);
 class AsanChunkView {
  public:
   explicit AsanChunkView(AsanChunk *chunk) : chunk_(chunk) {}
-  bool IsValid();        // Checks if AsanChunkView points to a valid allocated
-                         // or quarantined chunk.
-  bool IsAllocated();    // Checks if the memory is currently allocated.
-  uptr Beg();            // First byte of user memory.
-  uptr End();            // Last byte of user memory.
-  uptr UsedSize();       // Size requested by the user.
-  uptr AllocTid();
-  uptr FreeTid();
+  bool IsValid() const;        // Checks if AsanChunkView points to a valid
+                               // allocated or quarantined chunk.
+  bool IsAllocated() const;    // Checks if the memory is currently allocated.
+  bool IsQuarantined() const;  // Checks if the memory is currently quarantined.
+  uptr Beg() const;            // First byte of user memory.
+  uptr End() const;            // Last byte of user memory.
+  uptr UsedSize() const;       // Size requested by the user.
+  u32 UserRequestedAlignment() const;  // Originally requested alignment.
+  uptr AllocTid() const;
+  uptr FreeTid() const;
   bool Eq(const AsanChunkView &c) const { return chunk_ == c.chunk_; }
-  u32 GetAllocStackId();
-  u32 GetFreeStackId();
-  StackTrace GetAllocStack();
-  StackTrace GetFreeStack();
-  AllocType GetAllocType();
-  bool AddrIsInside(uptr addr, uptr access_size, sptr *offset) {
+  u32 GetAllocStackId() const;
+  u32 GetFreeStackId() const;
+  StackTrace GetAllocStack() const;
+  StackTrace GetFreeStack() const;
+  AllocType GetAllocType() const;
+  bool AddrIsInside(uptr addr, uptr access_size, sptr *offset) const {
     if (addr >= Beg() && (addr + access_size) <= End()) {
       *offset = addr - Beg();
       return true;
     }
     return false;
   }
-  bool AddrIsAtLeft(uptr addr, uptr access_size, sptr *offset) {
+  bool AddrIsAtLeft(uptr addr, uptr access_size, sptr *offset) const {
     (void)access_size;
     if (addr < Beg()) {
       *offset = Beg() - addr;
@@ -78,7 +82,7 @@ class AsanChunkView {
     }
     return false;
   }
-  bool AddrIsAtRight(uptr addr, uptr access_size, sptr *offset) {
+  bool AddrIsAtRight(uptr addr, uptr access_size, sptr *offset) const {
     if (addr + access_size > End()) {
       *offset = addr - End();
       return true;
@@ -116,12 +120,17 @@ struct AsanMapUnmapCallback {
 };
 
 #if SANITIZER_CAN_USE_ALLOCATOR64
-# if defined(__powerpc64__)
-const uptr kAllocatorSpace =  0xa0000000000ULL;
+# if SANITIZER_FUCHSIA
+const uptr kAllocatorSpace = ~(uptr)0;
+const uptr kAllocatorSize  =  0x40000000000ULL;  // 4T.
+typedef DefaultSizeClassMap SizeClassMap;
+# elif defined(__powerpc64__)
+const uptr kAllocatorSpace = ~(uptr)0;
 const uptr kAllocatorSize  =  0x20000000000ULL;  // 2T.
 typedef DefaultSizeClassMap SizeClassMap;
 # elif defined(__aarch64__) && SANITIZER_ANDROID
-const uptr kAllocatorSpace =  0x3000000000ULL;
+// Android needs to support 39, 42 and 48 bit VMA.
+const uptr kAllocatorSpace =  ~(uptr)0;
 const uptr kAllocatorSize  =  0x2000000000ULL;  // 128G.
 typedef VeryCompactSizeClassMap SizeClassMap;
 # elif defined(__aarch64__)
@@ -158,10 +167,17 @@ typedef FlatByteMap<kNumRegions> ByteMap;
 typedef TwoLevelByteMap<(kNumRegions >> 12), 1 << 12> ByteMap;
 # endif
 typedef CompactSizeClassMap SizeClassMap;
-typedef SizeClassAllocator32<0, SANITIZER_MMAP_RANGE_SIZE, 16,
-  SizeClassMap, kRegionSizeLog,
-  ByteMap,
-  AsanMapUnmapCallback> PrimaryAllocator;
+struct AP32 {
+  static const uptr kSpaceBeg = 0;
+  static const u64 kSpaceSize = SANITIZER_MMAP_RANGE_SIZE;
+  static const uptr kMetadataSize = 16;
+  typedef __asan::SizeClassMap SizeClassMap;
+  static const uptr kRegionSizeLog = __asan::kRegionSizeLog;
+  typedef __asan::ByteMap ByteMap;
+  typedef AsanMapUnmapCallback MapUnmapCallback;
+  static const uptr kFlags = 0;
+};
+typedef SizeClassAllocator32<AP32> PrimaryAllocator;
 #endif  // SANITIZER_CAN_USE_ALLOCATOR64
 
 static const uptr kNumberOfSizeClasses = SizeClassMap::kNumClasses;
@@ -183,8 +199,8 @@ struct AsanThreadLocalMallocStorage {
 void *asan_memalign(uptr alignment, uptr size, BufferedStackTrace *stack,
                     AllocType alloc_type);
 void asan_free(void *ptr, BufferedStackTrace *stack, AllocType alloc_type);
-void asan_sized_free(void *ptr, uptr size, BufferedStackTrace *stack,
-                     AllocType alloc_type);
+void asan_delete(void *ptr, uptr size, uptr alignment,
+                 BufferedStackTrace *stack, AllocType alloc_type);
 
 void *asan_malloc(uptr size, BufferedStackTrace *stack);
 void *asan_calloc(uptr nmemb, uptr size, BufferedStackTrace *stack);
@@ -192,6 +208,7 @@ void *asan_realloc(void *p, uptr size, BufferedStackTrace *stack);
 void *asan_valloc(uptr size, BufferedStackTrace *stack);
 void *asan_pvalloc(uptr size, BufferedStackTrace *stack);
 
+void *asan_aligned_alloc(uptr alignment, uptr size, BufferedStackTrace *stack);
 int asan_posix_memalign(void **memptr, uptr alignment, uptr size,
                         BufferedStackTrace *stack);
 uptr asan_malloc_usable_size(const void *ptr, uptr pc, uptr bp);

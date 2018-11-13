@@ -9,6 +9,13 @@
 
 // UNSUPPORTED: c++98, c++03, c++11, c++14
 
+// XFAIL: with_system_cxx_lib=macosx10.12
+// XFAIL: with_system_cxx_lib=macosx10.11
+// XFAIL: with_system_cxx_lib=macosx10.10
+// XFAIL: with_system_cxx_lib=macosx10.9
+// XFAIL: with_system_cxx_lib=macosx10.7
+// XFAIL: with_system_cxx_lib=macosx10.8
+
 // <any>
 
 // template <class T, class ...Args> any make_any(Args&&...);
@@ -108,14 +115,14 @@ void test_make_any_throws()
 {
     {
         try {
-            std::make_any<Type>(101);
+            TEST_IGNORE_NODISCARD std::make_any<Type>(101);
             assert(false);
         } catch (int const&) {
         }
     }
     {
         try {
-            std::make_any<Type>({1, 2, 3}, 101);
+            TEST_IGNORE_NODISCARD std::make_any<Type>({1, 2, 3}, 101);
             assert(false);
         } catch (int const&) {
         }

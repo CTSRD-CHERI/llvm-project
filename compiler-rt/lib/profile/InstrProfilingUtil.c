@@ -7,13 +7,11 @@
 |*
 \*===----------------------------------------------------------------------===*/
 
-#include "InstrProfilingUtil.h"
-#include "InstrProfiling.h"
-
 #ifdef _WIN32
 #include <direct.h>
-#include <io.h>
+#include <process.h>
 #include <windows.h>
+#include "WindowsMMap.h"
 #else
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -29,6 +27,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__linux__)
+#include <signal.h>
+#include <sys/prctl.h>
+#endif
+
+#include "InstrProfiling.h"
+#include "InstrProfilingUtil.h"
+
+COMPILER_RT_WEAK unsigned lprofDirMode = 0755;
+
 COMPILER_RT_VISIBILITY
 void __llvm_profile_recursive_mkdir(char *path) {
   int i;
@@ -41,11 +49,18 @@ void __llvm_profile_recursive_mkdir(char *path) {
 #ifdef _WIN32
     _mkdir(path);
 #else
-    mkdir(path, 0755); /* Some of these will fail, ignore it. */
+    /* Some of these will fail, ignore it. */
+    mkdir(path, __llvm_profile_get_dir_mode());
 #endif
     path[i] = save;
   }
 }
+
+COMPILER_RT_VISIBILITY
+void __llvm_profile_set_dir_mode(unsigned Mode) { lprofDirMode = Mode; }
+
+COMPILER_RT_VISIBILITY
+unsigned __llvm_profile_get_dir_mode(void) { return lprofDirMode; }
 
 #if COMPILER_RT_HAS_ATOMICS != 1
 COMPILER_RT_VISIBILITY
@@ -66,19 +81,31 @@ void *lprofPtrFetchAdd(void **Mem, long ByteIncr) {
 
 #endif
 
-#ifdef COMPILER_RT_HAS_UNAME
+#ifdef _MSC_VER
+COMPILER_RT_VISIBILITY int lprofGetHostName(char *Name, int Len) {
+  WCHAR Buffer[COMPILER_RT_MAX_HOSTLEN];
+  DWORD BufferSize = sizeof(Buffer);
+  BOOL Result =
+      GetComputerNameExW(ComputerNameDnsFullyQualified, Buffer, &BufferSize);
+  if (!Result)
+    return -1;
+  if (WideCharToMultiByte(CP_UTF8, 0, Buffer, -1, Name, Len, NULL, NULL) == 0)
+    return -1;
+  return 0;
+}
+#elif defined(COMPILER_RT_HAS_UNAME)
 COMPILER_RT_VISIBILITY int lprofGetHostName(char *Name, int Len) {
   struct utsname N;
-  int R;
-  if (!(R = uname(&N)))
+  int R = uname(&N);
+  if (R >= 0) {
     strncpy(Name, N.nodename, Len);
+    return 0;
+  }
   return R;
 }
 #endif
 
-COMPILER_RT_VISIBILITY FILE *lprofOpenFileEx(const char *ProfileName) {
-  FILE *f;
-  int fd;
+COMPILER_RT_VISIBILITY int lprofLockFd(int fd) {
 #ifdef COMPILER_RT_HAS_FCNTL_LCK
   struct flock s_flock;
 
@@ -86,21 +113,59 @@ COMPILER_RT_VISIBILITY FILE *lprofOpenFileEx(const char *ProfileName) {
   s_flock.l_start = 0;
   s_flock.l_len = 0; /* Until EOF.  */
   s_flock.l_pid = getpid();
-
   s_flock.l_type = F_WRLCK;
-  fd = open(ProfileName, O_RDWR | O_CREAT, 0666);
-  if (fd < 0)
-    return NULL;
 
   while (fcntl(fd, F_SETLKW, &s_flock) == -1) {
     if (errno != EINTR) {
       if (errno == ENOLCK) {
-        PROF_WARN("Data may be corrupted during profile merging : %s\n",
-                  "Fail to obtain file lock due to system limit.");
+        return -1;
       }
       break;
     }
   }
+  return 0;
+#else
+  flock(fd, LOCK_EX);
+  return 0;
+#endif
+}
+
+COMPILER_RT_VISIBILITY int lprofUnlockFd(int fd) {
+#ifdef COMPILER_RT_HAS_FCNTL_LCK
+  struct flock s_flock;
+
+  s_flock.l_whence = SEEK_SET;
+  s_flock.l_start = 0;
+  s_flock.l_len = 0; /* Until EOF.  */
+  s_flock.l_pid = getpid();
+  s_flock.l_type = F_UNLCK;
+
+  while (fcntl(fd, F_SETLKW, &s_flock) == -1) {
+    if (errno != EINTR) {
+      if (errno == ENOLCK) {
+        return -1;
+      }
+      break;
+    }
+  }
+  return 0;
+#else
+  flock(fd, LOCK_UN);
+  return 0;
+#endif
+}
+
+COMPILER_RT_VISIBILITY FILE *lprofOpenFileEx(const char *ProfileName) {
+  FILE *f;
+  int fd;
+#ifdef COMPILER_RT_HAS_FCNTL_LCK
+  fd = open(ProfileName, O_RDWR | O_CREAT, 0666);
+  if (fd < 0)
+    return NULL;
+
+  if (lprofLockFd(fd) != 0)
+    PROF_WARN("Data may be corrupted during profile merging : %s\n",
+              "Fail to obtain file lock due to system limit.");
 
   f = fdopen(fd, "r+b");
 #elif defined(_WIN32)
@@ -187,23 +252,39 @@ lprofApplyPathPrefix(char *Dest, const char *PathStr, const char *Prefix,
 
 COMPILER_RT_VISIBILITY const char *
 lprofFindFirstDirSeparator(const char *Path) {
-  const char *Sep;
-  Sep = strchr(Path, DIR_SEPARATOR);
-  if (Sep)
-    return Sep;
+  const char *Sep = strchr(Path, DIR_SEPARATOR);
 #if defined(DIR_SEPARATOR_2)
-  Sep = strchr(Path, DIR_SEPARATOR_2);
+  const char *Sep2 = strchr(Path, DIR_SEPARATOR_2);
+  if (Sep2 && (!Sep || Sep2 < Sep))
+    Sep = Sep2;
 #endif
   return Sep;
 }
 
 COMPILER_RT_VISIBILITY const char *lprofFindLastDirSeparator(const char *Path) {
-  const char *Sep;
-  Sep = strrchr(Path, DIR_SEPARATOR);
-  if (Sep)
-    return Sep;
+  const char *Sep = strrchr(Path, DIR_SEPARATOR);
 #if defined(DIR_SEPARATOR_2)
-  Sep = strrchr(Path, DIR_SEPARATOR_2);
+  const char *Sep2 = strrchr(Path, DIR_SEPARATOR_2);
+  if (Sep2 && (!Sep || Sep2 > Sep))
+    Sep = Sep2;
 #endif
   return Sep;
+}
+
+COMPILER_RT_VISIBILITY int lprofSuspendSigKill() {
+#if defined(__linux__)
+  int PDeachSig = 0;
+  /* Temporarily suspend getting SIGKILL upon exit of the parent process. */
+  if (prctl(PR_GET_PDEATHSIG, &PDeachSig) == 0 && PDeachSig == SIGKILL)
+    prctl(PR_SET_PDEATHSIG, 0);
+  return (PDeachSig == SIGKILL);
+#else
+  return 0;
+#endif
+}
+
+COMPILER_RT_VISIBILITY void lprofRestoreSigKill() {
+#if defined(__linux__)
+  prctl(PR_SET_PDEATHSIG, SIGKILL);
+#endif
 }

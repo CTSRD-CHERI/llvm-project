@@ -10,6 +10,7 @@
 #ifndef LLVM_SUPPORT_TIMER_H
 #define LLVM_SUPPORT_TIMER_H
 
+#include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/DataTypes.h"
 #include <cassert>
@@ -77,6 +78,7 @@ class Timer {
   TimeRecord Time;          ///< The total time captured.
   TimeRecord StartTime;     ///< The time startTimer() was last called.
   std::string Name;         ///< The name of this time variable.
+  std::string Description;  ///< Description of this time variable.
   bool Running;             ///< Is the timer currently running?
   bool Triggered;           ///< Has the timer ever been triggered?
   TimerGroup *TG = nullptr; ///< The TimerGroup this Timer is in.
@@ -84,8 +86,12 @@ class Timer {
   Timer **Prev;             ///< Pointer to \p Next of previous timer in group.
   Timer *Next;              ///< Next timer in the group.
 public:
-  explicit Timer(StringRef N) { init(N); }
-  Timer(StringRef N, TimerGroup &tg) { init(N, tg); }
+  explicit Timer(StringRef Name, StringRef Description) {
+    init(Name, Description);
+  }
+  Timer(StringRef Name, StringRef Description, TimerGroup &tg) {
+    init(Name, Description, tg);
+  }
   Timer(const Timer &RHS) {
     assert(!RHS.TG && "Can only copy uninitialized timers");
   }
@@ -97,10 +103,11 @@ public:
 
   /// Create an uninitialized timer, client must use 'init'.
   explicit Timer() {}
-  void init(StringRef N);
-  void init(StringRef N, TimerGroup &tg);
+  void init(StringRef Name, StringRef Description);
+  void init(StringRef Name, StringRef Description, TimerGroup &tg);
 
   const std::string &getName() const { return Name; }
+  const std::string &getDescription() const { return Description; }
   bool isInitialized() const { return TG != nullptr; }
 
   /// Check if the timer is currently running.
@@ -152,8 +159,9 @@ public:
 /// statement.  All timers with the same name are merged.  This is primarily
 /// used for debugging and for hunting performance problems.
 struct NamedRegionTimer : public TimeRegion {
-  explicit NamedRegionTimer(StringRef Name, StringRef GroupName,
-                            bool Enabled = true);
+  explicit NamedRegionTimer(StringRef Name, StringRef Description,
+                            StringRef GroupName,
+                            StringRef GroupDescription, bool Enabled = true);
 };
 
 /// The TimerGroup class is used to group together related timers into a single
@@ -161,9 +169,24 @@ struct NamedRegionTimer : public TimeRegion {
 /// destroy a TimerGroup object before all of the Timers in it are gone.  A
 /// TimerGroup can be specified for a newly created timer in its constructor.
 class TimerGroup {
+  struct PrintRecord {
+    TimeRecord Time;
+    std::string Name;
+    std::string Description;
+
+    PrintRecord(const PrintRecord &Other) = default;
+    PrintRecord(const TimeRecord &Time, const std::string &Name,
+                const std::string &Description)
+      : Time(Time), Name(Name), Description(Description) {}
+
+    bool operator <(const PrintRecord &Other) const {
+      return Time < Other.Time;
+    }
+  };
   std::string Name;
+  std::string Description;
   Timer *FirstTimer = nullptr; ///< First timer in the group.
-  std::vector<std::pair<TimeRecord, std::string>> TimersToPrint;
+  std::vector<PrintRecord> TimersToPrint;
 
   TimerGroup **Prev; ///< Pointer to Next field of previous timergroup in list.
   TimerGroup *Next;  ///< Pointer to next timergroup in list.
@@ -171,22 +194,50 @@ class TimerGroup {
   void operator=(const TimerGroup &TG) = delete;
 
 public:
-  explicit TimerGroup(StringRef name);
+  explicit TimerGroup(StringRef Name, StringRef Description);
+
+  explicit TimerGroup(StringRef Name, StringRef Description,
+                      const StringMap<TimeRecord> &Records);
+
   ~TimerGroup();
 
-  void setName(StringRef name) { Name.assign(name.begin(), name.end()); }
+  void setName(StringRef NewName, StringRef NewDescription) {
+    Name.assign(NewName.begin(), NewName.end());
+    Description.assign(NewDescription.begin(), NewDescription.end());
+  }
 
-  /// Print any started timers in this group and zero them.
+  /// Print any started timers in this group.
   void print(raw_ostream &OS);
 
-  /// This static method prints all timers and clears them all out.
+  /// Clear all timers in this group.
+  void clear();
+
+  /// This static method prints all timers.
   static void printAll(raw_ostream &OS);
 
+  /// Clear out all timers. This is mostly used to disable automatic
+  /// printing on shutdown, when timers have already been printed explicitly
+  /// using \c printAll or \c printJSONValues.
+  static void clearAll();
+
+  const char *printJSONValues(raw_ostream &OS, const char *delim);
+
+  /// Prints all timers as JSON key/value pairs.
+  static const char *printAllJSONValues(raw_ostream &OS, const char *delim);
+
+  /// Ensure global timer group lists are initialized. This function is mostly
+  /// used by the Statistic code to influence the construction and destruction
+  /// order of the global timer lists.
+  static void ConstructTimerLists();
 private:
   friend class Timer;
+  friend void PrintStatisticsJSON(raw_ostream &OS);
   void addTimer(Timer &T);
   void removeTimer(Timer &T);
+  void prepareToPrintList();
   void PrintQueuedTimers(raw_ostream &OS);
+  void printJSONValue(raw_ostream &OS, const PrintRecord &R,
+                      const char *suffix, double Value);
 };
 
 } // end namespace llvm

@@ -1,11 +1,9 @@
 // RUN: %clang_cc1 -fsyntax-only -verify -std=c++11 %s 
 // RUN: %clang_cc1 -fsyntax-only -verify -std=c++14 %s 
-// RUN: %clang_cc1 -fsyntax-only -verify -std=c++1z %s 
+// RUN: %clang_cc1 -fsyntax-only -verify -std=c++17 %s 
 
 // Verify that using an initializer list for a non-aggregate looks for
 // constructors..
-// Note that due to a (likely) standard bug, this is technically an aggregate,
-// but we do not treat it as one.
 struct NonAggr1 { // expected-note 2 {{candidate constructor}}
   NonAggr1(int, int) { } // expected-note {{candidate constructor}}
 
@@ -57,7 +55,7 @@ struct A {
   A(int);
   ~A();
   
-  A(const A&) = delete; // expected-note 2 {{'A' has been explicitly marked deleted here}}
+  A(const A&) = delete; // expected-note 0-2{{'A' has been explicitly marked deleted here}}
 };
 
 struct B {
@@ -70,10 +68,16 @@ struct C {
 
 void f() {
   A as1[1] = { };
-  A as2[1] = { 1 }; // expected-error {{copying array element of type 'A' invokes deleted constructor}}
+  A as2[1] = { 1 };
+#if __cplusplus <= 201402L
+  // expected-error@-2 {{copying array element of type 'A' invokes deleted constructor}}
+#endif
 
   B b1 = { };
-  B b2 = { 1 }; // expected-error {{copying member subobject of type 'A' invokes deleted constructor}}
+  B b2 = { 1 };
+#if __cplusplus <= 201402L
+  // expected-error@-2 {{copying member subobject of type 'A' invokes deleted constructor}}
+#endif
   
   C c1 = { 1 };
 }
@@ -145,4 +149,88 @@ namespace ProtectedBaseCtor {
 #endif
   // expected-error@-5 {{protected constructor}}
   // expected-note@-30 {{here}}
+}
+
+namespace IdiomaticStdArrayInitDoesNotWarn {
+#pragma clang diagnostic push
+#pragma clang diagnostic warning "-Wmissing-braces"
+  template<typename T, int N> struct StdArray {
+    T contents[N];
+  };
+  StdArray<int, 3> x = {1, 2, 3};
+  
+  template<typename T, int N> struct ArrayAndSomethingElse {
+    T contents[N];
+    int something_else;
+  };
+  ArrayAndSomethingElse<int, 3> y = {1, 2, 3}; // expected-warning {{suggest braces}}
+
+#if __cplusplus >= 201703L
+  template<typename T, int N> struct ArrayAndBaseClass : StdArray<int, 3> {
+    T contents[N];
+  };
+  ArrayAndBaseClass<int, 3> z = {1, 2, 3}; // expected-warning {{suggest braces}}
+
+  // It's not clear whether we should be warning in this case. If this
+  // pattern becomes idiomatic, it would be reasonable to suppress the
+  // warning here too.
+  template<typename T, int N> struct JustABaseClass : StdArray<T, N> {};
+  JustABaseClass<int, 3> w = {1, 2, 3}; // expected-warning {{suggest braces}}
+#endif
+
+#pragma clang diagnostic pop
+}
+
+namespace HugeArraysUseArrayFiller {
+  // All we're checking here is that initialization completes in a reasonable
+  // amount of time.
+  struct A { int n; int arr[1000 * 1000 * 1000]; } a = {1, {2}};
+}
+
+namespace ElementDestructor {
+  // The destructor for each element of class type is potentially invoked
+  // (15.4 [class.dtor]) from the context where the aggregate initialization
+  // occurs. Produce a diagnostic if an element's destructor isn't accessible.
+
+  class X { int f; ~X(); }; // expected-note {{implicitly declared private here}}
+  struct Y { X x; };
+
+  void test0() {
+    auto *y = new Y {}; // expected-error {{temporary of type 'ElementDestructor::X' has private destructor}}
+  }
+
+  struct S0 { int f; ~S0() = delete; }; // expected-note 3 {{'~S0' has been explicitly marked deleted here}}
+  struct S1 { S0 s0; int f; };
+
+  S1 test1() {
+    auto *t = new S1 { .f = 1 }; // expected-error {{attempt to use a deleted function}}
+    return {2}; // expected-error {{attempt to use a deleted function}}
+  }
+
+  // Check if the type of an array element has a destructor.
+  struct S2 { S0 a[4]; };
+
+  void test2() {
+    auto *t = new S2 {1,2,3,4}; // expected-error {{attempt to use a deleted function}}
+  }
+
+#if __cplusplus >= 201703L
+  namespace BaseDestructor {
+     struct S0 { int f; ~S0() = delete; }; // expected-note {{'~S0' has been explicitly marked deleted here}}
+
+    // Check destructor of base class.
+    struct S3 : S0 {};
+
+    void test3() {
+      S3 s3 = {1}; // expected-error {{attempt to use a deleted function}}
+    }
+  }
+#endif
+
+  // A's destructor doesn't have to be accessible from the context of C's
+  // initialization.
+  struct A { friend struct B; private: ~A(); };
+  struct B { B(); A a; };
+  struct C { B b; };
+  C c = { B() };
 }

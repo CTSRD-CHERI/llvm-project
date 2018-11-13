@@ -2,33 +2,9 @@
 ; RUN: opt < %s -instcombine -S | FileCheck %s
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
-define i16 @test1(float %f) {
-; CHECK-LABEL: @test1(
-; CHECK-NEXT:    [[TMP281:%.*]] = fadd float %f, -1.000000e+00
-; CHECK-NEXT:    [[TMP373:%.*]] = fmul float [[TMP281]], 5.000000e-01
-; CHECK-NEXT:    [[TMP374:%.*]] = insertelement <4 x float> undef, float [[TMP373]], i32 0
-; CHECK-NEXT:    [[TMP48:%.*]] = tail call <4 x float> @llvm.x86.sse.min.ss(<4 x float> [[TMP374]], <4 x float> <float 6.553500e+04, float undef, float undef, float undef>)
-; CHECK-NEXT:    [[TMP59:%.*]] = tail call <4 x float> @llvm.x86.sse.max.ss(<4 x float> [[TMP48]], <4 x float> <float 0.000000e+00, float undef, float undef, float undef>)
-; CHECK-NEXT:    [[TMP_UPGRD_1:%.*]] = tail call i32 @llvm.x86.sse.cvttss2si(<4 x float> [[TMP59]])
-; CHECK-NEXT:    [[TMP69:%.*]] = trunc i32 [[TMP_UPGRD_1]] to i16
-; CHECK-NEXT:    ret i16 [[TMP69]]
-;
-  %tmp = insertelement <4 x float> undef, float %f, i32 0
-  %tmp10 = insertelement <4 x float> %tmp, float 0.000000e+00, i32 1
-  %tmp11 = insertelement <4 x float> %tmp10, float 0.000000e+00, i32 2
-  %tmp12 = insertelement <4 x float> %tmp11, float 0.000000e+00, i32 3
-  %tmp28 = tail call <4 x float> @llvm.x86.sse.sub.ss( <4 x float> %tmp12, <4 x float> < float 1.000000e+00, float 0.000000e+00, float 0.000000e+00, float 0.000000e+00 > )
-  %tmp37 = tail call <4 x float> @llvm.x86.sse.mul.ss( <4 x float> %tmp28, <4 x float> < float 5.000000e-01, float 0.000000e+00, float 0.000000e+00, float 0.000000e+00 > )
-  %tmp48 = tail call <4 x float> @llvm.x86.sse.min.ss( <4 x float> %tmp37, <4 x float> < float 6.553500e+04, float 0.000000e+00, float 0.000000e+00, float 0.000000e+00 > )
-  %tmp59 = tail call <4 x float> @llvm.x86.sse.max.ss( <4 x float> %tmp48, <4 x float> zeroinitializer )
-  %tmp.upgrd.1 = tail call i32 @llvm.x86.sse.cvttss2si( <4 x float> %tmp59 )
-  %tmp69 = trunc i32 %tmp.upgrd.1 to i16
-  ret i16 %tmp69
-}
-
 define i32 @test2(float %f) {
 ; CHECK-LABEL: @test2(
-; CHECK-NEXT:    [[TMP5:%.*]] = fmul float %f, %f
+; CHECK-NEXT:    [[TMP5:%.*]] = fmul float [[F:%.*]], [[F]]
 ; CHECK-NEXT:    [[TMP21:%.*]] = bitcast float [[TMP5]] to i32
 ; CHECK-NEXT:    ret i32 [[TMP21]]
 ;
@@ -42,84 +18,13 @@ define i32 @test2(float %f) {
   ret i32 %tmp21
 }
 
-define i64 @test3(float %f, double %d) {
-; CHECK-LABEL: @test3(
-; CHECK-NEXT:    [[V00:%.*]] = insertelement <4 x float> undef, float %f, i32 0
-; CHECK-NEXT:    [[TMP0:%.*]] = tail call i32 @llvm.x86.sse.cvtss2si(<4 x float> [[V00]])
-; CHECK-NEXT:    [[V10:%.*]] = insertelement <4 x float> undef, float %f, i32 0
-; CHECK-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.x86.sse.cvtss2si64(<4 x float> [[V10]])
-; CHECK-NEXT:    [[V20:%.*]] = insertelement <4 x float> undef, float %f, i32 0
-; CHECK-NEXT:    [[TMP2:%.*]] = tail call i32 @llvm.x86.sse.cvttss2si(<4 x float> [[V20]])
-; CHECK-NEXT:    [[V30:%.*]] = insertelement <4 x float> undef, float %f, i32 0
-; CHECK-NEXT:    [[TMP3:%.*]] = tail call i64 @llvm.x86.sse.cvttss2si64(<4 x float> [[V30]])
-; CHECK-NEXT:    [[V40:%.*]] = insertelement <2 x double> undef, double %d, i32 0
-; CHECK-NEXT:    [[TMP4:%.*]] = tail call i32 @llvm.x86.sse2.cvtsd2si(<2 x double> [[V40]])
-; CHECK-NEXT:    [[V50:%.*]] = insertelement <2 x double> undef, double %d, i32 0
-; CHECK-NEXT:    [[TMP5:%.*]] = tail call i64 @llvm.x86.sse2.cvtsd2si64(<2 x double> [[V50]])
-; CHECK-NEXT:    [[V60:%.*]] = insertelement <2 x double> undef, double %d, i32 0
-; CHECK-NEXT:    [[TMP6:%.*]] = tail call i32 @llvm.x86.sse2.cvttsd2si(<2 x double> [[V60]])
-; CHECK-NEXT:    [[V70:%.*]] = insertelement <2 x double> undef, double %d, i32 0
-; CHECK-NEXT:    [[TMP7:%.*]] = tail call i64 @llvm.x86.sse2.cvttsd2si64(<2 x double> [[V70]])
-; CHECK-NEXT:    [[TMP8:%.*]] = add i32 [[TMP0]], [[TMP2]]
-; CHECK-NEXT:    [[TMP9:%.*]] = add i32 [[TMP4]], [[TMP6]]
-; CHECK-NEXT:    [[TMP10:%.*]] = add i32 [[TMP8]], [[TMP9]]
-; CHECK-NEXT:    [[TMP11:%.*]] = sext i32 [[TMP10]] to i64
-; CHECK-NEXT:    [[TMP12:%.*]] = add i64 [[TMP1]], [[TMP3]]
-; CHECK-NEXT:    [[TMP13:%.*]] = add i64 [[TMP5]], [[TMP7]]
-; CHECK-NEXT:    [[TMP14:%.*]] = add i64 [[TMP12]], [[TMP13]]
-; CHECK-NEXT:    [[TMP15:%.*]] = add i64 [[TMP11]], [[TMP14]]
-; CHECK-NEXT:    ret i64 [[TMP15]]
-;
-  %v00 = insertelement <4 x float> undef, float %f, i32 0
-  %v01 = insertelement <4 x float> %v00, float 0.000000e+00, i32 1
-  %v02 = insertelement <4 x float> %v01, float 0.000000e+00, i32 2
-  %v03 = insertelement <4 x float> %v02, float 0.000000e+00, i32 3
-  %tmp0 = tail call i32 @llvm.x86.sse.cvtss2si(<4 x float> %v03)
-  %v10 = insertelement <4 x float> undef, float %f, i32 0
-  %v11 = insertelement <4 x float> %v10, float 0.000000e+00, i32 1
-  %v12 = insertelement <4 x float> %v11, float 0.000000e+00, i32 2
-  %v13 = insertelement <4 x float> %v12, float 0.000000e+00, i32 3
-  %tmp1 = tail call i64 @llvm.x86.sse.cvtss2si64(<4 x float> %v13)
-  %v20 = insertelement <4 x float> undef, float %f, i32 0
-  %v21 = insertelement <4 x float> %v20, float 0.000000e+00, i32 1
-  %v22 = insertelement <4 x float> %v21, float 0.000000e+00, i32 2
-  %v23 = insertelement <4 x float> %v22, float 0.000000e+00, i32 3
-  %tmp2 = tail call i32 @llvm.x86.sse.cvttss2si(<4 x float> %v23)
-  %v30 = insertelement <4 x float> undef, float %f, i32 0
-  %v31 = insertelement <4 x float> %v30, float 0.000000e+00, i32 1
-  %v32 = insertelement <4 x float> %v31, float 0.000000e+00, i32 2
-  %v33 = insertelement <4 x float> %v32, float 0.000000e+00, i32 3
-  %tmp3 = tail call i64 @llvm.x86.sse.cvttss2si64(<4 x float> %v33)
-  %v40 = insertelement <2 x double> undef, double %d, i32 0
-  %v41 = insertelement <2 x double> %v40, double 0.000000e+00, i32 1
-  %tmp4 = tail call i32 @llvm.x86.sse2.cvtsd2si(<2 x double> %v41)
-  %v50 = insertelement <2 x double> undef, double %d, i32 0
-  %v51 = insertelement <2 x double> %v50, double 0.000000e+00, i32 1
-  %tmp5 = tail call i64 @llvm.x86.sse2.cvtsd2si64(<2 x double> %v51)
-  %v60 = insertelement <2 x double> undef, double %d, i32 0
-  %v61 = insertelement <2 x double> %v60, double 0.000000e+00, i32 1
-  %tmp6 = tail call i32 @llvm.x86.sse2.cvttsd2si(<2 x double> %v61)
-  %v70 = insertelement <2 x double> undef, double %d, i32 0
-  %v71 = insertelement <2 x double> %v70, double 0.000000e+00, i32 1
-  %tmp7 = tail call i64 @llvm.x86.sse2.cvttsd2si64(<2 x double> %v71)
-  %tmp8 = add i32 %tmp0, %tmp2
-  %tmp9 = add i32 %tmp4, %tmp6
-  %tmp10 = add i32 %tmp8, %tmp9
-  %tmp11 = sext i32 %tmp10 to i64
-  %tmp12 = add i64 %tmp1, %tmp3
-  %tmp13 = add i64 %tmp5, %tmp7
-  %tmp14 = add i64 %tmp12, %tmp13
-  %tmp15 = add i64 %tmp11, %tmp14
-  ret i64 %tmp15
-}
-
 define void @get_image() nounwind {
 ; CHECK-LABEL: @get_image(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[TMP0:%.*]] = call i32 @fgetc(i8* null) #0
-; CHECK-NEXT:    br i1 false, label %bb2, label %bb3
+; CHECK-NEXT:    br i1 false, label [[BB2:%.*]], label [[BB3:%.*]]
 ; CHECK:       bb2:
-; CHECK-NEXT:    br label %bb3
+; CHECK-NEXT:    br label [[BB3]]
 ; CHECK:       bb3:
 ; CHECK-NEXT:    unreachable
 ;
@@ -142,7 +47,7 @@ bb3:            ; preds = %bb2, %entry
 define void @vac(<4 x float>* nocapture %a) nounwind {
 ; CHECK-LABEL: @vac(
 ; CHECK-NEXT:  entry:
-; CHECK-NEXT:    store <4 x float> zeroinitializer, <4 x float>* %a, align 16
+; CHECK-NEXT:    store <4 x float> zeroinitializer, <4 x float>* [[A:%.*]], align 16
 ; CHECK-NEXT:    ret void
 ;
 entry:
@@ -156,23 +61,11 @@ entry:
 }
 
 declare i32 @fgetc(i8*)
-declare <4 x float> @llvm.x86.sse.sub.ss(<4 x float>, <4 x float>)
-declare <4 x float> @llvm.x86.sse.mul.ss(<4 x float>, <4 x float>)
-declare <4 x float> @llvm.x86.sse.min.ss(<4 x float>, <4 x float>)
-declare <4 x float> @llvm.x86.sse.max.ss(<4 x float>, <4 x float>)
-declare i32 @llvm.x86.sse.cvtss2si(<4 x float>)
-declare i64 @llvm.x86.sse.cvtss2si64(<4 x float>)
-declare i32 @llvm.x86.sse.cvttss2si(<4 x float>)
-declare i64 @llvm.x86.sse.cvttss2si64(<4 x float>)
-declare i32 @llvm.x86.sse2.cvtsd2si(<2 x double>)
-declare i64 @llvm.x86.sse2.cvtsd2si64(<2 x double>)
-declare i32 @llvm.x86.sse2.cvttsd2si(<2 x double>)
-declare i64 @llvm.x86.sse2.cvttsd2si64(<2 x double>)
 
 define <4 x float> @dead_shuffle_elt(<4 x float> %x, <2 x float> %y) nounwind {
 ; CHECK-LABEL: @dead_shuffle_elt(
-; CHECK-NEXT:    [[SHUFFLE_I:%.*]] = shufflevector <2 x float> %y, <2 x float> undef, <4 x i32> <i32 0, i32 1, i32 undef, i32 undef>
-; CHECK-NEXT:    [[SHUFFLE9_I:%.*]] = shufflevector <4 x float> %x, <4 x float> [[SHUFFLE_I]], <4 x i32> <i32 4, i32 5, i32 2, i32 3>
+; CHECK-NEXT:    [[SHUFFLE_I:%.*]] = shufflevector <2 x float> [[Y:%.*]], <2 x float> undef, <4 x i32> <i32 0, i32 1, i32 undef, i32 undef>
+; CHECK-NEXT:    [[SHUFFLE9_I:%.*]] = shufflevector <4 x float> [[X:%.*]], <4 x float> [[SHUFFLE_I]], <4 x i32> <i32 4, i32 5, i32 2, i32 3>
 ; CHECK-NEXT:    ret <4 x float> [[SHUFFLE9_I]]
 ;
   %shuffle.i = shufflevector <2 x float> %y, <2 x float> %y, <4 x i32> <i32 0, i32 1, i32 0, i32 1>
@@ -182,10 +75,9 @@ define <4 x float> @dead_shuffle_elt(<4 x float> %x, <2 x float> %y) nounwind {
 
 define <2 x float> @test_fptrunc(double %f) {
 ; CHECK-LABEL: @test_fptrunc(
-; CHECK-NEXT:    [[TMP1:%.*]] = insertelement <2 x double> undef, double %f, i32 0
-; CHECK-NEXT:    [[TMP2:%.*]] = insertelement <2 x double> [[TMP1]], double 0.000000e+00, i32 1
-; CHECK-NEXT:    [[TMP3:%.*]] = fptrunc <2 x double> [[TMP2]] to <2 x float>
-; CHECK-NEXT:    ret <2 x float> [[TMP3]]
+; CHECK-NEXT:    [[TMP1:%.*]] = insertelement <2 x double> <double undef, double 0.000000e+00>, double [[F:%.*]], i32 0
+; CHECK-NEXT:    [[TMP2:%.*]] = fptrunc <2 x double> [[TMP1]] to <2 x float>
+; CHECK-NEXT:    ret <2 x float> [[TMP2]]
 ;
   %tmp9 = insertelement <4 x double> undef, double %f, i32 0
   %tmp10 = insertelement <4 x double> %tmp9, double 0.000000e+00, i32 1
@@ -198,10 +90,9 @@ define <2 x float> @test_fptrunc(double %f) {
 
 define <2 x double> @test_fpext(float %f) {
 ; CHECK-LABEL: @test_fpext(
-; CHECK-NEXT:    [[TMP1:%.*]] = insertelement <2 x float> undef, float %f, i32 0
-; CHECK-NEXT:    [[TMP2:%.*]] = insertelement <2 x float> [[TMP1]], float 0.000000e+00, i32 1
-; CHECK-NEXT:    [[TMP3:%.*]] = fpext <2 x float> [[TMP2]] to <2 x double>
-; CHECK-NEXT:    ret <2 x double> [[TMP3]]
+; CHECK-NEXT:    [[TMP1:%.*]] = insertelement <2 x float> <float undef, float 0.000000e+00>, float [[F:%.*]], i32 0
+; CHECK-NEXT:    [[TMP2:%.*]] = fpext <2 x float> [[TMP1]] to <2 x double>
+; CHECK-NEXT:    ret <2 x double> [[TMP2]]
 ;
   %tmp9 = insertelement <4 x float> undef, float %f, i32 0
   %tmp10 = insertelement <4 x float> %tmp9, float 0.000000e+00, i32 1
@@ -214,7 +105,7 @@ define <2 x double> @test_fpext(float %f) {
 
 define <4 x double> @test_shuffle(<4 x double> %f) {
 ; CHECK-LABEL: @test_shuffle(
-; CHECK-NEXT:    [[RET1:%.*]] = insertelement <4 x double> %f, double 1.000000e+00, i32 3
+; CHECK-NEXT:    [[RET1:%.*]] = insertelement <4 x double> [[F:%.*]], double 1.000000e+00, i32 3
 ; CHECK-NEXT:    ret <4 x double> [[RET1]]
 ;
   %ret = shufflevector <4 x double> %f, <4 x double> <double undef, double 1.0, double undef, double undef>, <4 x i32> <i32 0, i32 1, i32 2, i32 5>
@@ -223,8 +114,7 @@ define <4 x double> @test_shuffle(<4 x double> %f) {
 
 define <4 x float> @test_select(float %f, float %g) {
 ; CHECK-LABEL: @test_select(
-; CHECK-NEXT:    [[A0:%.*]] = insertelement <4 x float> undef, float %f, i32 0
-; CHECK-NEXT:    [[A3:%.*]] = insertelement <4 x float> [[A0]], float 3.000000e+00, i32 3
+; CHECK-NEXT:    [[A3:%.*]] = insertelement <4 x float> <float undef, float undef, float undef, float 3.000000e+00>, float [[F:%.*]], i32 0
 ; CHECK-NEXT:    [[RET:%.*]] = shufflevector <4 x float> [[A3]], <4 x float> <float undef, float 4.000000e+00, float 5.000000e+00, float undef>, <4 x i32> <i32 0, i32 5, i32 6, i32 3>
 ; CHECK-NEXT:    ret <4 x float> [[RET]]
 ;
@@ -241,14 +131,368 @@ define <4 x float> @test_select(float %f, float %g) {
 }
 
 ; Check that instcombine doesn't wrongly fold away the select completely.
-; TODO: Should this be an insertelement rather than a shuffle?
 
 define <2 x i64> @PR24922(<2 x i64> %v) {
 ; CHECK-LABEL: @PR24922(
-; CHECK-NEXT:    [[RESULT1:%.*]] = insertelement <2 x i64> %v, i64 0, i32 0
+; CHECK-NEXT:    [[RESULT1:%.*]] = insertelement <2 x i64> [[V:%.*]], i64 0, i32 0
 ; CHECK-NEXT:    ret <2 x i64> [[RESULT1]]
 ;
   %result = select <2 x i1> <i1 icmp eq (i64 extractelement (<2 x i64> bitcast (<4 x i32> <i32 15, i32 15, i32 15, i32 15> to <2 x i64>), i64 0), i64 0), i1 true>, <2 x i64> %v, <2 x i64> zeroinitializer
   ret <2 x i64> %result
+}
+
+; The shuffle only demands the 0th (undef) element of 'out123', so everything should fold away.
+
+define <4 x float> @inselt_shuf_no_demand(float %a1, float %a2, float %a3) {
+; CHECK-LABEL: @inselt_shuf_no_demand(
+; CHECK-NEXT:    ret <4 x float> undef
+;
+  %out1 = insertelement <4 x float> undef, float %a1, i32 1
+  %out12 = insertelement <4 x float> %out1, float %a2, i32 2
+  %out123 = insertelement <4 x float> %out12, float %a3, i32 3
+  %shuffle = shufflevector <4 x float> %out123, <4 x float> undef, <4 x i32> <i32 0, i32 undef, i32 undef, i32 undef>
+  ret <4 x float> %shuffle
+}
+
+; The shuffle only demands the 0th (undef) element of 'out123', so everything should fold away.
+
+define <4 x float> @inselt_shuf_no_demand_commute(float %a1, float %a2, float %a3) {
+; CHECK-LABEL: @inselt_shuf_no_demand_commute(
+; CHECK-NEXT:    ret <4 x float> undef
+;
+  %out1 = insertelement <4 x float> undef, float %a1, i32 1
+  %out12 = insertelement <4 x float> %out1, float %a2, i32 2
+  %out123 = insertelement <4 x float> %out12, float %a3, i32 3
+  %shuffle = shufflevector <4 x float> undef, <4 x float> %out123, <4 x i32> <i32 4, i32 undef, i32 undef, i32 undef>
+  ret <4 x float> %shuffle
+}
+
+; The add uses 'out012' giving it multiple uses after the shuffle is transformed to also
+; use 'out012'. The analysis should be able to see past that.
+
+define <4 x i32> @inselt_shuf_no_demand_multiuse(i32 %a0, i32 %a1, <4 x i32> %b) {
+; CHECK-LABEL: @inselt_shuf_no_demand_multiuse(
+; CHECK-NEXT:    [[OUT0:%.*]] = insertelement <4 x i32> undef, i32 [[A0:%.*]], i32 0
+; CHECK-NEXT:    [[OUT01:%.*]] = insertelement <4 x i32> [[OUT0]], i32 [[A1:%.*]], i32 1
+; CHECK-NEXT:    [[FOO:%.*]] = add <4 x i32> [[OUT01]], [[B:%.*]]
+; CHECK-NEXT:    ret <4 x i32> [[FOO]]
+;
+  %out0 = insertelement <4 x i32> undef, i32 %a0, i32 0
+  %out01 = insertelement <4 x i32> %out0, i32 %a1, i32 1
+  %out012 = insertelement <4 x i32> %out01, i32 %a0, i32 2
+  %foo = add <4 x i32> %out012, %b
+  %out0123 = insertelement <4 x i32> %foo, i32 %a1, i32 3
+  %shuffle = shufflevector <4 x i32> %out0123, <4 x i32> undef, <4 x i32> <i32 0, i32 1, i32 undef, i32 undef>
+  ret <4 x i32> %shuffle
+}
+
+define <4 x float> @inselt_shuf_no_demand_bogus_insert_index_in_chain(float %a1, float %a2, float %a3, i32 %variable_index) {
+; CHECK-LABEL: @inselt_shuf_no_demand_bogus_insert_index_in_chain(
+; CHECK-NEXT:    [[OUT12:%.*]] = insertelement <4 x float> undef, float [[A2:%.*]], i32 [[VARIABLE_INDEX:%.*]]
+; CHECK-NEXT:    ret <4 x float> [[OUT12]]
+;
+  %out1 = insertelement <4 x float> undef, float %a1, i32 1
+  %out12 = insertelement <4 x float> %out1, float %a2, i32 %variable_index ; something unexpected
+  %out123 = insertelement <4 x float> %out12, float %a3, i32 3
+  %shuffle = shufflevector <4 x float> %out123, <4 x float> undef, <4 x i32> <i32 0, i32 undef, i32 undef, i32 undef>
+  ret <4 x float> %shuffle
+}
+
+; Test undef replacement in constant vector elements with binops.
+
+define <3 x i8> @shuf_add(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_add(
+; CHECK-NEXT:    [[BO:%.*]] = add <3 x i8> [[X:%.*]], <i8 undef, i8 2, i8 3>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 1, i32 undef, i32 2>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = add nsw <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 1, i32 undef, i32 2>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_sub(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_sub(
+; CHECK-NEXT:    [[BO:%.*]] = sub <3 x i8> <i8 1, i8 undef, i8 3>, [[X:%.*]]
+; CHECK-NEXT:    ret <3 x i8> [[BO]]
+;
+  %bo = sub nuw <3 x i8> <i8 1, i8 2, i8 3>, %x
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 0, i32 undef, i32 2>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_mul(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_mul(
+; CHECK-NEXT:    [[BO:%.*]] = mul <3 x i8> [[X:%.*]], <i8 1, i8 undef, i8 3>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 0, i32 2, i32 0>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = mul nsw <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 0, i32 2, i32 0>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_and(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_and(
+; CHECK-NEXT:    [[BO:%.*]] = and <3 x i8> [[X:%.*]], <i8 1, i8 2, i8 undef>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 1, i32 1, i32 0>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = and <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 1, i32 1, i32 0>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_or(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_or(
+; CHECK-NEXT:    [[BO:%.*]] = or <3 x i8> [[X:%.*]], <i8 1, i8 2, i8 undef>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 1, i32 undef, i32 0>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = or <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 1, i32 undef, i32 0>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_xor(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_xor(
+; CHECK-NEXT:    [[BO:%.*]] = xor <3 x i8> [[X:%.*]], <i8 1, i8 undef, i8 3>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 0>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = xor <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 0>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_lshr_const_op0(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_lshr_const_op0(
+; CHECK-NEXT:    [[BO:%.*]] = lshr <3 x i8> <i8 1, i8 2, i8 3>, [[X:%.*]]
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 2, i32 1, i32 undef>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = lshr <3 x i8> <i8 1, i8 2, i8 3>, %x
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 2, i32 1, i32 undef>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_lshr_const_op1(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_lshr_const_op1(
+; CHECK-NEXT:    [[BO:%.*]] = lshr exact <3 x i8> [[X:%.*]], <i8 1, i8 2, i8 3>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 2, i32 1, i32 undef>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = lshr exact <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 2, i32 1, i32 undef>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_ashr_const_op0(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_ashr_const_op0(
+; CHECK-NEXT:    [[BO:%.*]] = lshr <3 x i8> <i8 1, i8 2, i8 3>, [[X:%.*]]
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 0, i32 undef, i32 1>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = ashr <3 x i8> <i8 1, i8 2, i8 3>, %x
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 0, i32 undef, i32 1>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_ashr_const_op1(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_ashr_const_op1(
+; CHECK-NEXT:    [[BO:%.*]] = ashr exact <3 x i8> [[X:%.*]], <i8 1, i8 2, i8 3>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 0, i32 undef, i32 1>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = ashr exact <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 0, i32 undef, i32 1>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_shl_const_op0(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_shl_const_op0(
+; CHECK-NEXT:    [[BO:%.*]] = shl nsw <3 x i8> <i8 1, i8 2, i8 3>, [[X:%.*]]
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 0>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = shl nsw <3 x i8> <i8 1, i8 2, i8 3>, %x
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 0>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_shl_const_op1(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_shl_const_op1(
+; CHECK-NEXT:    [[BO:%.*]] = shl nuw <3 x i8> [[X:%.*]], <i8 1, i8 2, i8 3>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 0>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = shl nuw <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 0>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_sdiv_const_op0(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_sdiv_const_op0(
+; CHECK-NEXT:    [[BO:%.*]] = sdiv exact <3 x i8> <i8 1, i8 2, i8 3>, [[X:%.*]]
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 0, i32 undef, i32 1>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = sdiv exact <3 x i8> <i8 1, i8 2, i8 3>, %x
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 0, i32 undef, i32 1>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_sdiv_const_op1(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_sdiv_const_op1(
+; CHECK-NEXT:    [[BO:%.*]] = sdiv <3 x i8> [[X:%.*]], <i8 1, i8 2, i8 3>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 1, i32 undef, i32 0>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = sdiv <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 1, i32 undef, i32 0>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_srem_const_op0(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_srem_const_op0(
+; CHECK-NEXT:    [[BO:%.*]] = srem <3 x i8> <i8 1, i8 2, i8 3>, [[X:%.*]]
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 1, i32 undef, i32 2>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = srem <3 x i8> <i8 1, i8 2, i8 3>, %x
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 1, i32 undef, i32 2>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_srem_const_op1(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_srem_const_op1(
+; CHECK-NEXT:    [[BO:%.*]] = srem <3 x i8> [[X:%.*]], <i8 1, i8 2, i8 3>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 1>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = srem <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 1>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_udiv_const_op0(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_udiv_const_op0(
+; CHECK-NEXT:    [[BO:%.*]] = udiv exact <3 x i8> <i8 1, i8 2, i8 3>, [[X:%.*]]
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 0>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = udiv exact <3 x i8> <i8 1, i8 2, i8 3>, %x
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 0>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_udiv_const_op1(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_udiv_const_op1(
+; CHECK-NEXT:    [[BO:%.*]] = udiv <3 x i8> [[X:%.*]], <i8 1, i8 2, i8 3>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 0>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = udiv <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 2, i32 undef, i32 0>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_urem_const_op0(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_urem_const_op0(
+; CHECK-NEXT:    [[BO:%.*]] = urem <3 x i8> <i8 1, i8 2, i8 3>, [[X:%.*]]
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 2, i32 1, i32 undef>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = urem <3 x i8> <i8 1, i8 2, i8 3>, %x
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 2, i32 1, i32 undef>
+  ret <3 x i8> %r
+}
+
+define <3 x i8> @shuf_urem_const_op1(<3 x i8> %x) {
+; CHECK-LABEL: @shuf_urem_const_op1(
+; CHECK-NEXT:    [[BO:%.*]] = urem <3 x i8> [[X:%.*]], <i8 1, i8 2, i8 3>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x i8> [[BO]], <3 x i8> undef, <3 x i32> <i32 undef, i32 1, i32 0>
+; CHECK-NEXT:    ret <3 x i8> [[R]]
+;
+  %bo = urem <3 x i8> %x, <i8 1, i8 2, i8 3>
+  %r = shufflevector <3 x i8> %bo, <3 x i8> undef, <3 x i32> <i32 undef, i32 1, i32 0>
+  ret <3 x i8> %r
+}
+
+define <3 x float> @shuf_fadd(<3 x float> %x) {
+; CHECK-LABEL: @shuf_fadd(
+; CHECK-NEXT:    [[BO:%.*]] = fadd <3 x float> [[X:%.*]], <float 1.000000e+00, float 2.000000e+00, float undef>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x float> [[BO]], <3 x float> undef, <3 x i32> <i32 undef, i32 1, i32 0>
+; CHECK-NEXT:    ret <3 x float> [[R]]
+;
+  %bo = fadd <3 x float> %x, <float 1.0, float 2.0, float 3.0>
+  %r = shufflevector <3 x float> %bo, <3 x float> undef, <3 x i32> <i32 undef, i32 1, i32 0>
+  ret <3 x float> %r
+}
+
+define <3 x float> @shuf_fsub(<3 x float> %x) {
+; CHECK-LABEL: @shuf_fsub(
+; CHECK-NEXT:    [[BO:%.*]] = fsub fast <3 x float> <float 1.000000e+00, float undef, float 3.000000e+00>, [[X:%.*]]
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x float> [[BO]], <3 x float> undef, <3 x i32> <i32 undef, i32 0, i32 2>
+; CHECK-NEXT:    ret <3 x float> [[R]]
+;
+  %bo = fsub fast <3 x float> <float 1.0, float 2.0, float 3.0>, %x
+  %r = shufflevector <3 x float> %bo, <3 x float> undef, <3 x i32> <i32 undef, i32 0, i32 2>
+  ret <3 x float> %r
+}
+
+define <3 x float> @shuf_fmul(<3 x float> %x) {
+; CHECK-LABEL: @shuf_fmul(
+; CHECK-NEXT:    [[BO:%.*]] = fmul reassoc <3 x float> [[X:%.*]], <float 1.000000e+00, float 2.000000e+00, float undef>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x float> [[BO]], <3 x float> undef, <3 x i32> <i32 undef, i32 1, i32 0>
+; CHECK-NEXT:    ret <3 x float> [[R]]
+;
+  %bo = fmul reassoc <3 x float> %x, <float 1.0, float 2.0, float 3.0>
+  %r = shufflevector <3 x float> %bo, <3 x float> undef, <3 x i32> <i32 undef, i32 1, i32 0>
+  ret <3 x float> %r
+}
+
+define <3 x float> @shuf_fdiv_const_op0(<3 x float> %x) {
+; CHECK-LABEL: @shuf_fdiv_const_op0(
+; CHECK-NEXT:    [[BO:%.*]] = fdiv reassoc ninf <3 x float> <float 1.000000e+00, float undef, float 3.000000e+00>, [[X:%.*]]
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x float> [[BO]], <3 x float> undef, <3 x i32> <i32 undef, i32 0, i32 2>
+; CHECK-NEXT:    ret <3 x float> [[R]]
+;
+  %bo = fdiv ninf reassoc <3 x float> <float 1.0, float 2.0, float 3.0>, %x
+  %r = shufflevector <3 x float> %bo, <3 x float> undef, <3 x i32> <i32 undef, i32 0, i32 2>
+  ret <3 x float> %r
+}
+
+define <3 x float> @shuf_fdiv_const_op1(<3 x float> %x) {
+; CHECK-LABEL: @shuf_fdiv_const_op1(
+; CHECK-NEXT:    [[BO:%.*]] = fdiv nnan ninf <3 x float> [[X:%.*]], <float 1.000000e+00, float 2.000000e+00, float undef>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x float> [[BO]], <3 x float> undef, <3 x i32> <i32 undef, i32 1, i32 0>
+; CHECK-NEXT:    ret <3 x float> [[R]]
+;
+  %bo = fdiv ninf nnan <3 x float> %x, <float 1.0, float 2.0, float 3.0>
+  %r = shufflevector <3 x float> %bo, <3 x float> undef, <3 x i32> <i32 undef, i32 1, i32 0>
+  ret <3 x float> %r
+}
+
+define <3 x float> @shuf_frem_const_op0(<3 x float> %x) {
+; CHECK-LABEL: @shuf_frem_const_op0(
+; CHECK-NEXT:    [[BO:%.*]] = frem nnan <3 x float> <float 1.000000e+00, float undef, float 3.000000e+00>, [[X:%.*]]
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x float> [[BO]], <3 x float> undef, <3 x i32> <i32 undef, i32 2, i32 0>
+; CHECK-NEXT:    ret <3 x float> [[R]]
+;
+  %bo = frem nnan <3 x float> <float 1.0, float 2.0, float 3.0>, %x
+  %r = shufflevector <3 x float> %bo, <3 x float> undef, <3 x i32> <i32 undef, i32 2, i32 0>
+  ret <3 x float> %r
+}
+
+define <3 x float> @shuf_frem_const_op1(<3 x float> %x) {
+; CHECK-LABEL: @shuf_frem_const_op1(
+; CHECK-NEXT:    [[BO:%.*]] = frem reassoc ninf <3 x float> [[X:%.*]], <float undef, float 2.000000e+00, float 3.000000e+00>
+; CHECK-NEXT:    [[R:%.*]] = shufflevector <3 x float> [[BO]], <3 x float> undef, <3 x i32> <i32 1, i32 undef, i32 2>
+; CHECK-NEXT:    ret <3 x float> [[R]]
+;
+  %bo = frem ninf reassoc <3 x float> %x, <float 1.0, float 2.0, float 3.0>
+  %r = shufflevector <3 x float> %bo, <3 x float> undef, <3 x i32> <i32 1, i32 undef, i32 2>
+  ret <3 x float> %r
 }
 

@@ -18,7 +18,7 @@
 
 // NOTE: this constructor does not currently support tags derived from
 // allocator_arg_t because libc++ has to deduce the parameter as a template
-// argument. See PR27684 (https://llvm.org/bugs/show_bug.cgi?id=27684)
+// argument. See PR27684 (https://bugs.llvm.org/show_bug.cgi?id=27684)
 
 #include <tuple>
 #include <cassert>
@@ -96,12 +96,14 @@ int main()
     }
     {
         // Test that the uses-allocator default constructor does not evaluate
-        // it's SFINAE when it otherwise shouldn't be selected. Do this by
+        // its SFINAE when it otherwise shouldn't be selected. Do this by
         // using 'NonDefaultConstructible' which will cause a compile error
         // if std::is_default_constructible is evaluated on it.
         using T = NonDefaultConstructible<>;
         T v(42);
         std::tuple<T, T> t(v, v);
+        (void)t;
         std::tuple<T, T> t2(42, 42);
+        (void)t2;
     }
 }

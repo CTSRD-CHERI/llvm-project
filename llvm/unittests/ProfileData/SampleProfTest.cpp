@@ -7,13 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ProfileData/SampleProf.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
-#include "llvm/ProfileData/ProfileCommon.h"
-#include "llvm/ProfileData/SampleProf.h"
 #include "llvm/ProfileData/SampleProfReader.h"
 #include "llvm/ProfileData/SampleProfWriter.h"
 #include "llvm/Support/Casting.h"
@@ -21,12 +20,7 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/raw_ostream.h"
 #include "gtest/gtest.h"
-#include <algorithm>
-#include <cstdint>
-#include <limits>
-#include <memory>
 #include <string>
-#include <system_error>
 #include <vector>
 
 using namespace llvm;
@@ -42,29 +36,33 @@ static ::testing::AssertionResult NoError(std::error_code EC) {
 namespace {
 
 struct SampleProfTest : ::testing::Test {
-  std::string Data;
   LLVMContext Context;
-  std::unique_ptr<raw_ostream> OS;
   std::unique_ptr<SampleProfileWriter> Writer;
   std::unique_ptr<SampleProfileReader> Reader;
 
-  SampleProfTest()
-      : Data(), OS(new raw_string_ostream(Data)), Writer(), Reader() {}
+  SampleProfTest() : Writer(), Reader() {}
 
-  void createWriter(SampleProfileFormat Format) {
+  void createWriter(SampleProfileFormat Format, StringRef Profile) {
+    std::error_code EC;
+    std::unique_ptr<raw_ostream> OS(
+        new raw_fd_ostream(Profile, EC, sys::fs::F_None));
     auto WriterOrErr = SampleProfileWriter::create(OS, Format);
     ASSERT_TRUE(NoError(WriterOrErr.getError()));
     Writer = std::move(WriterOrErr.get());
   }
 
-  void readProfile(std::unique_ptr<MemoryBuffer> &Profile) {
+  void readProfile(const Module &M, StringRef Profile) {
     auto ReaderOrErr = SampleProfileReader::create(Profile, Context);
     ASSERT_TRUE(NoError(ReaderOrErr.getError()));
     Reader = std::move(ReaderOrErr.get());
+    Reader->collectFuncsToUse(M);
   }
 
   void testRoundTrip(SampleProfileFormat Format) {
-    createWriter(Format);
+    SmallVector<char, 128> ProfilePath;
+    ASSERT_TRUE(NoError(llvm::sys::fs::createTemporaryFile("profile", "", ProfilePath)));
+    StringRef Profile(ProfilePath.data(), ProfilePath.size());
+    createWriter(Format, Profile);
 
     StringRef FooName("_Z3fooi");
     FunctionSamples FooSamples;
@@ -83,6 +81,17 @@ struct SampleProfTest : ::testing::Test {
     BarSamples.addTotalSamples(20301);
     BarSamples.addHeadSamples(1437);
     BarSamples.addBodySamples(1, 0, 1437);
+    // Test how reader/writer handles unmangled names.
+    StringRef MconstructName("_M_construct<char *>");
+    StringRef StringviewName("string_view<std::allocator<char> >");
+    BarSamples.addCalledTargetSamples(1, 0, MconstructName, 1000);
+    BarSamples.addCalledTargetSamples(1, 0, StringviewName, 437);
+
+    Module M("my_module", Context);
+    FunctionType *fn_type =
+        FunctionType::get(Type::getVoidTy(Context), {}, false);
+    M.getOrInsertFunction(FooName, fn_type);
+    M.getOrInsertFunction(BarName, fn_type);
 
     StringMap<FunctionSamples> Profiles;
     Profiles[FooName] = std::move(FooSamples);
@@ -94,8 +103,7 @@ struct SampleProfTest : ::testing::Test {
 
     Writer->getOutputStream().flush();
 
-    auto Profile = MemoryBuffer::getMemBufferCopy(Data);
-    readProfile(Profile);
+    readProfile(M, Profile);
 
     EC = Reader->read();
     ASSERT_TRUE(NoError(EC));
@@ -103,13 +111,29 @@ struct SampleProfTest : ::testing::Test {
     StringMap<FunctionSamples> &ReadProfiles = Reader->getProfiles();
     ASSERT_EQ(2u, ReadProfiles.size());
 
-    FunctionSamples &ReadFooSamples = ReadProfiles[FooName];
+    std::string FooGUID;
+    StringRef FooRep = getRepInFormat(FooName, Format, FooGUID);
+    FunctionSamples &ReadFooSamples = ReadProfiles[FooRep];
     ASSERT_EQ(7711u, ReadFooSamples.getTotalSamples());
     ASSERT_EQ(610u, ReadFooSamples.getHeadSamples());
 
-    FunctionSamples &ReadBarSamples = ReadProfiles[BarName];
+    std::string BarGUID;
+    StringRef BarRep = getRepInFormat(BarName, Format, BarGUID);
+    FunctionSamples &ReadBarSamples = ReadProfiles[BarRep];
     ASSERT_EQ(20301u, ReadBarSamples.getTotalSamples());
     ASSERT_EQ(1437u, ReadBarSamples.getHeadSamples());
+    ErrorOr<SampleRecord::CallTargetMap> CTMap =
+        ReadBarSamples.findCallTargetMapAt(1, 0);
+    ASSERT_FALSE(CTMap.getError());
+
+    std::string MconstructGUID;
+    StringRef MconstructRep =
+        getRepInFormat(MconstructName, Format, MconstructGUID);
+    std::string StringviewGUID;
+    StringRef StringviewRep =
+        getRepInFormat(StringviewName, Format, StringviewGUID);
+    ASSERT_EQ(1000u, CTMap.get()[MconstructRep]);
+    ASSERT_EQ(437u, CTMap.get()[StringviewRep]);
 
     auto VerifySummary = [](ProfileSummary &Summary) mutable {
       ASSERT_EQ(ProfileSummary::PSK_Sample, Summary.getKind());
@@ -149,7 +173,6 @@ struct SampleProfTest : ::testing::Test {
     delete PS;
 
     // Test that summary can be attached to and read back from module.
-    Module M("my_module", Context);
     M.setProfileSummary(MD);
     MD = M.getProfileSummary();
     ASSERT_TRUE(MD);
@@ -164,8 +187,12 @@ TEST_F(SampleProfTest, roundtrip_text_profile) {
   testRoundTrip(SampleProfileFormat::SPF_Text);
 }
 
-TEST_F(SampleProfTest, roundtrip_binary_profile) {
+TEST_F(SampleProfTest, roundtrip_raw_binary_profile) {
   testRoundTrip(SampleProfileFormat::SPF_Binary);
+}
+
+TEST_F(SampleProfTest, roundtrip_compact_binary_profile) {
+  testRoundTrip(SampleProfileFormat::SPF_Compact_Binary);
 }
 
 TEST_F(SampleProfTest, sample_overflow_saturation) {

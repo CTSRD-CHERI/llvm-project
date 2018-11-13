@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "NVPTX.h"
 #include "NVPTXInstrInfo.h"
+#include "NVPTX.h"
 #include "NVPTXTargetMachine.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -38,7 +38,7 @@ void NVPTXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   const TargetRegisterClass *DestRC = MRI.getRegClass(DestReg);
   const TargetRegisterClass *SrcRC = MRI.getRegClass(SrcReg);
 
-  if (DestRC->getSize() != SrcRC->getSize())
+  if (RegInfo.getRegSizeInBits(*DestRC) != RegInfo.getRegSizeInBits(*SrcRC))
     report_fatal_error("Copy one register into another with a different width");
 
   unsigned Op;
@@ -52,6 +52,11 @@ void NVPTXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   } else if (DestRC == &NVPTX::Int64RegsRegClass) {
     Op = (SrcRC == &NVPTX::Int64RegsRegClass ? NVPTX::IMOV64rr
                                              : NVPTX::BITCONVERT_64_F2I);
+  } else if (DestRC == &NVPTX::Float16RegsRegClass) {
+    Op = (SrcRC == &NVPTX::Float16RegsRegClass ? NVPTX::FMOV16rr
+                                               : NVPTX::BITCONVERT_16_I2F);
+  } else if (DestRC == &NVPTX::Float16x2RegsRegClass) {
+    Op = NVPTX::IMOV32rr;
   } else if (DestRC == &NVPTX::Float32RegsRegClass) {
     Op = (SrcRC == &NVPTX::Float32RegsRegClass ? NVPTX::FMOV32rr
                                                : NVPTX::BITCONVERT_32_I2F);
@@ -63,64 +68,6 @@ void NVPTXInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   }
   BuildMI(MBB, I, DL, get(Op), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrc));
-}
-
-bool NVPTXInstrInfo::isMoveInstr(const MachineInstr &MI, unsigned &SrcReg,
-                                 unsigned &DestReg) const {
-  // Look for the appropriate part of TSFlags
-  bool isMove = false;
-
-  unsigned TSFlags =
-      (MI.getDesc().TSFlags & NVPTX::SimpleMoveMask) >> NVPTX::SimpleMoveShift;
-  isMove = (TSFlags == 1);
-
-  if (isMove) {
-    MachineOperand dest = MI.getOperand(0);
-    MachineOperand src = MI.getOperand(1);
-    assert(dest.isReg() && "dest of a movrr is not a reg");
-    assert(src.isReg() && "src of a movrr is not a reg");
-
-    SrcReg = src.getReg();
-    DestReg = dest.getReg();
-    return true;
-  }
-
-  return false;
-}
-
-bool NVPTXInstrInfo::isLoadInstr(const MachineInstr &MI,
-                                 unsigned &AddrSpace) const {
-  bool isLoad = false;
-  unsigned TSFlags =
-      (MI.getDesc().TSFlags & NVPTX::isLoadMask) >> NVPTX::isLoadShift;
-  isLoad = (TSFlags == 1);
-  if (isLoad)
-    AddrSpace = getLdStCodeAddrSpace(MI);
-  return isLoad;
-}
-
-bool NVPTXInstrInfo::isStoreInstr(const MachineInstr &MI,
-                                  unsigned &AddrSpace) const {
-  bool isStore = false;
-  unsigned TSFlags =
-      (MI.getDesc().TSFlags & NVPTX::isStoreMask) >> NVPTX::isStoreShift;
-  isStore = (TSFlags == 1);
-  if (isStore)
-    AddrSpace = getLdStCodeAddrSpace(MI);
-  return isStore;
-}
-
-bool NVPTXInstrInfo::CanTailMerge(const MachineInstr *MI) const {
-  unsigned addrspace = 0;
-  if (MI->getOpcode() == NVPTX::INT_BARRIER0)
-    return false;
-  if (isLoadInstr(*MI, addrspace))
-    if (addrspace == NVPTX::PTXLdStInstCode::SHARED)
-      return false;
-  if (isStoreInstr(*MI, addrspace))
-    if (addrspace == NVPTX::PTXLdStInstCode::SHARED)
-      return false;
-  return true;
 }
 
 /// AnalyzeBranch - Analyze the branching code at the end of MBB, returning

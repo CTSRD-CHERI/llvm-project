@@ -1,8 +1,8 @@
+// REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %s -o %t
 // RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %p/Inputs/resolution.s -o %t2
 // RUN: ld.lld -discard-all %t %t2 -o %t3
 // RUN: llvm-readobj -t %t3 | FileCheck %s
-// REQUIRES: x86
 
 // This is an exhaustive test for checking which symbol is kept when two
 // have the same name. Each symbol has a different size which is used
@@ -308,7 +308,7 @@
 // CHECK-NEXT:   }
 // CHECK-NEXT:  Symbol {
 // CHECK-NEXT:    Name: _start
-// CHECK-NEXT:    Value: 0x11000
+// CHECK-NEXT:    Value: 0x201000
 // CHECK-NEXT:    Size: 0
 // CHECK-NEXT:    Binding: Global (0x1)
 // CHECK-NEXT:    Type: None (0x0)

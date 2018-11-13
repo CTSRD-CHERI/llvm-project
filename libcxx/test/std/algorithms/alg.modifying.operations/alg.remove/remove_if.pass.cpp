@@ -12,20 +12,31 @@
 // template<ForwardIterator Iter, Predicate<auto, Iter::value_type> Pred>
 //   requires OutputIterator<Iter, RvalueOf<Iter::reference>::type>
 //         && CopyConstructible<Pred>
-//   Iter
+//   constexpr Iter         // constexpr after C++17
 //   remove_if(Iter first, Iter last, Pred pred);
 
 #include <algorithm>
 #include <functional>
 #include <cassert>
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
 #include <memory>
-#endif
 
+#include "test_macros.h"
 #include "test_iterators.h"
 #include "counting_predicates.hpp"
 
-bool equal2 ( int i ) { return i == 2; }
+TEST_CONSTEXPR bool equal2 ( int i ) { return i == 2; }
+
+#if TEST_STD_VER > 17
+TEST_CONSTEXPR bool test_constexpr() {
+    int ia[] = {1, 3, 5, 2, 5, 6};
+
+    auto it = std::remove_if(std::begin(ia), std::end(ia), equal2);
+
+    return (std::begin(ia) + std::size(ia) - 1) == it  // we removed one element
+        && std::none_of(std::begin(ia), it, equal2)
+           ;
+    }
+#endif
 
 template <class Iter>
 void
@@ -46,8 +57,7 @@ test()
     assert(cp.count() == sa);
 }
 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
-
+#if TEST_STD_VER >= 11
 struct pred
 {
     bool operator()(const std::unique_ptr<int>& i) {return *i == 2;}
@@ -77,8 +87,7 @@ test1()
     assert(*ia[4] == 3);
     assert(*ia[5] == 4);
 }
-
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#endif // TEST_STD_VER >= 11
 
 int main()
 {
@@ -87,12 +96,14 @@ int main()
     test<random_access_iterator<int*> >();
     test<int*>();
 
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
-
+#if TEST_STD_VER >= 11
     test1<forward_iterator<std::unique_ptr<int>*> >();
     test1<bidirectional_iterator<std::unique_ptr<int>*> >();
     test1<random_access_iterator<std::unique_ptr<int>*> >();
     test1<std::unique_ptr<int>*>();
+#endif // TEST_STD_VER >= 11
 
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
+#if TEST_STD_VER > 17
+    static_assert(test_constexpr());
+#endif
 }

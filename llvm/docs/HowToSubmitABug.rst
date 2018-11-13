@@ -19,7 +19,7 @@ section to narrow down the bug so that the person who fixes it will be able
 to find the problem more easily.
 
 Once you have a reduced test-case, go to `the LLVM Bug Tracking System
-<http://llvm.org/bugs/enter_bug.cgi>`_ and fill out the form with the
+<https://bugs.llvm.org/enter_bug.cgi>`_ and fill out the form with the
 necessary details (note that you don't need to pick a category, just use
 the "new-bugs" category if you're not sure).  The bug description should
 contain the following information:
@@ -38,7 +38,7 @@ Crashing Bugs
 
 More often than not, bugs in the compiler cause it to crash---often due to
 an assertion failure of some sort. The most important piece of the puzzle
-is to figure out if it is crashing in the GCC front-end or if it is one of
+is to figure out if it is crashing in the Clang front-end or if it is one of
 the LLVM libraries (e.g. the optimizer or code generator) that has
 problems.
 

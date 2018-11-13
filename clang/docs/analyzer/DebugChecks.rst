@@ -74,7 +74,7 @@ inspects expressions.)
 ExprInspection checks
 ---------------------
 
-- void clang_analyzer_eval(bool);
+- ``void clang_analyzer_eval(bool);``
 
   Prints TRUE if the argument is known to have a non-zero value, FALSE if the
   argument is known to have a zero or null value, and UNKNOWN if the argument
@@ -93,7 +93,7 @@ ExprInspection checks
     clang_analyzer_eval(x); // expected-warning{{TRUE}}
 
 
-- void clang_analyzer_checkInlined(bool);
+- ``void clang_analyzer_checkInlined(bool);``
 
   If a call occurs within an inlined function, prints TRUE or FALSE according to
   the value of its argument. If a call occurs outside an inlined function,
@@ -125,7 +125,7 @@ ExprInspection checks
       clang_analyzer_eval(value == 42); // expected-warning{{TRUE}}
     }
 
-- void clang_analyzer_warnIfReached();
+- ``void clang_analyzer_warnIfReached();``
 
   Generate a warning if this line of code gets reached by the analyzer.
 
@@ -138,7 +138,18 @@ ExprInspection checks
       clang_analyzer_warnIfReached();  // no-warning
     }
 
-- void clang_analyzer_warnOnDeadSymbol(int);
+- ``void clang_analyzer_numTimesReached();``
+
+  Same as above, but include the number of times this call expression
+  gets reached by the analyzer during the current analysis.
+
+  Example usage::
+
+    for (int x = 0; x < 3; ++x) {
+      clang_analyzer_numTimesReached(); // expected-warning{{3}}
+    }
+
+- ``void clang_analyzer_warnOnDeadSymbol(int);``
 
   Subscribe for a delayed warning when the symbol that represents the value of
   the argument is garbage-collected by the analyzer.
@@ -162,25 +173,43 @@ ExprInspection checks
     } while(0);  // expected-warning{{SYMBOL DEAD}}
 
 
-- void clang_analyzer_explain(a single argument of any type);
+- ``void clang_analyzer_explain(a single argument of any type);``
 
   This function explains the value of its argument in a human-readable manner
   in the warning message. You can make as many overrides of its prototype
   in the test code as necessary to explain various integral, pointer,
-  or even record-type values.
+  or even record-type values. To simplify usage in C code (where overloading
+  the function declaration is not allowed), you may append an arbitrary suffix
+  to the function name, without affecting functionality.
 
   Example usage::
 
     void clang_analyzer_explain(int);
     void clang_analyzer_explain(void *);
 
+    // Useful in C code
+    void clang_analyzer_explain_int(int);
+
     void foo(int param, void *ptr) {
       clang_analyzer_explain(param); // expected-warning{{argument 'param'}}
+      clang_analyzer_explain_int(param); // expected-warning{{argument 'param'}}
       if (!ptr)
         clang_analyzer_explain(ptr); // expected-warning{{memory address '0'}}
     }
 
-- size_t clang_analyzer_getExtent(void *);
+- ``void clang_analyzer_dump( /* a single argument of any type */);``
+
+  Similar to clang_analyzer_explain, but produces a raw dump of the value,
+  same as SVal::dump().
+
+  Example usage::
+
+    void clang_analyzer_dump(int);
+    void foo(int x) {
+      clang_analyzer_dump(x); // expected-warning{{reg_$0<x>}}
+    }
+
+- ``size_t clang_analyzer_getExtent(void *);``
 
   This function returns the value that represents the extent of a memory region
   pointed to by the argument. This value is often difficult to obtain otherwise,
@@ -196,6 +225,52 @@ ExprInspection checks
       size_t ys = clang_analyzer_getExtent(&y);
       clang_analyzer_explain(ys); // expected-warning{{'8'}}
     }
+
+- ``void clang_analyzer_printState();``
+
+  Dumps the current ProgramState to the stderr. Quickly lookup the program state
+  at any execution point without ViewExplodedGraph or re-compiling the program.
+  This is not very useful for writing tests (apart from testing how ProgramState
+  gets printed), but useful for debugging tests. Also, this method doesn't
+  produce a warning, so it gets printed on the console before all other
+  ExprInspection warnings.
+
+  Example usage::
+
+    void foo() {
+      int x = 1;
+      clang_analyzer_printState(); // Read the stderr!
+    }
+
+- ``void clang_analyzer_hashDump(int);``
+
+  The analyzer can generate a hash to identify reports. To debug what information
+  is used to calculate this hash it is possible to dump the hashed string as a
+  warning of an arbitrary expression using the function above.
+
+  Example usage::
+
+    void foo() {
+      int x = 1;
+      clang_analyzer_hashDump(x); // expected-warning{{hashed string for x}}
+    }
+
+- ``void clang_analyzer_denote(int, const char *);``
+
+  Denotes symbols with strings. A subsequent call to clang_analyzer_express()
+  will expresses another symbol in terms of these string. Useful for testing
+  relationships between different symbols.
+
+  Example usage::
+
+    void foo(int x) {
+      clang_analyzer_denote(x, "$x");
+      clang_analyzer_express(x + 1); // expected-warning{{$x + 1}}
+    }
+
+- ``void clang_analyzer_express(int);``
+
+  See clang_analyzer_denote().
 
 Statistics
 ==========

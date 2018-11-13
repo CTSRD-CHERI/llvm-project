@@ -1,5 +1,8 @@
-b@LIBSAMPLE_1.0 = b_1
-b@@LIBSAMPLE_2.0 = b_2
+.global b@V1
+b@V1 = b_1
+
+.global b@@V2
+b@@V2 = b_2
 
 .globl a
 .type  a,@function

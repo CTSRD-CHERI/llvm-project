@@ -261,8 +261,17 @@ module config {
   config_macros [exhaustive] WANT_FOO, WANT_BAR
 }
 
+module diag_flags {
+  header "diag_flags.h"
+}
+
 module diag_pragma {
   header "diag_pragma.h"
+}
+
+module pragma_pack {
+  module set { header "pragma_pack_set.h" }
+  module empty { header "empty.h" }
 }
 
 module dummy {
@@ -338,6 +347,12 @@ module DebugObjC {
   header "DebugObjC.h"
 }
 
+module DebugObjCImport {
+  module SubModule {
+    header "DebugObjCImport.h"
+  }
+}
+
 module ImportNameInDir {
   header "ImportNameInDir.h"
   export *
@@ -364,6 +379,11 @@ module TargetFeatures {
     requires x86
     module x86_32 { requires x86_32 }
     module x86_64 { requires x86_64 }
+  }
+  module riscv {
+    requires riscv
+    module riscv32 { requires riscv32 }
+    module riscv64 { requires riscv64 }
   }
 }
 
@@ -430,5 +450,28 @@ module DebugNestedA {
 
 module DebugNestedB {
   header "DebugNestedB.h"
+  export *
+}
+
+module objcAtKeywordMissingEnd {
+  header "objcAtKeywordMissingEnd.h"
+}
+
+module innerstructredef {
+  module one {
+    header "empty.h"
+  }
+  module two {
+   header "innerstructredef.h"
+  }
+}
+
+module template_nontrivial0 {
+  header "template-nontrivial0.h"
+  export *
+}
+
+module template_nontrivial1 {
+  header "template-nontrivial1.h"
   export *
 }

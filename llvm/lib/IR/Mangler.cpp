@@ -13,6 +13,7 @@
 
 #include "llvm/IR/Mangler.h"
 #include "llvm/ADT/SmallString.h"
+#include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -42,6 +43,9 @@ static void getNameWithPrefixImpl(raw_ostream &OS, const Twine &GVName,
     OS << Name.substr(1);
     return;
   }
+
+  if (DL.doNotMangleLeadingQuestionMark() && Name[0] == '?')
+    Prefix = '\0';
 
   if (PrefixTy == Private)
     OS << DL.getPrivateGlobalPrefix();
@@ -134,8 +138,13 @@ void Mangler::getNameWithPrefix(raw_ostream &OS, const GlobalValue *GV,
   // Mangle functions with Microsoft calling conventions specially.  Only do
   // this mangling for x86_64 vectorcall and 32-bit x86.
   const Function *MSFunc = dyn_cast<Function>(GV);
-  if (Name.startswith("\01"))
-    MSFunc = nullptr; // Don't mangle when \01 is present.
+
+  // Don't add byte count suffixes when '\01' or '?' are in the first
+  // character.
+  if (Name.startswith("\01") ||
+      (DL.doNotMangleLeadingQuestionMark() && Name.startswith("?")))
+    MSFunc = nullptr;
+
   CallingConv::ID CC =
       MSFunc ? MSFunc->getCallingConv() : (unsigned)CallingConv::C;
   if (!DL.hasMicrosoftFastStdCallMangling() &&
@@ -172,3 +181,44 @@ void Mangler::getNameWithPrefix(SmallVectorImpl<char> &OutName,
   raw_svector_ostream OS(OutName);
   getNameWithPrefix(OS, GV, CannotUsePrivateLabel);
 }
+
+void llvm::emitLinkerFlagsForGlobalCOFF(raw_ostream &OS, const GlobalValue *GV,
+                                        const Triple &TT, Mangler &Mangler) {
+  if (!GV->hasDLLExportStorageClass() || GV->isDeclaration())
+    return;
+
+  if (TT.isKnownWindowsMSVCEnvironment())
+    OS << " /EXPORT:";
+  else
+    OS << " -export:";
+
+  if (TT.isWindowsGNUEnvironment() || TT.isWindowsCygwinEnvironment()) {
+    std::string Flag;
+    raw_string_ostream FlagOS(Flag);
+    Mangler.getNameWithPrefix(FlagOS, GV, false);
+    FlagOS.flush();
+    if (Flag[0] == GV->getParent()->getDataLayout().getGlobalPrefix())
+      OS << Flag.substr(1);
+    else
+      OS << Flag;
+  } else {
+    Mangler.getNameWithPrefix(OS, GV, false);
+  }
+
+  if (!GV->getValueType()->isFunctionTy()) {
+    if (TT.isKnownWindowsMSVCEnvironment())
+      OS << ",DATA";
+    else
+      OS << ",data";
+  }
+}
+
+void llvm::emitLinkerFlagsForUsedCOFF(raw_ostream &OS, const GlobalValue *GV,
+                                      const Triple &T, Mangler &M) {
+  if (!T.isKnownWindowsMSVCEnvironment())
+    return;
+
+  OS << " /INCLUDE:";
+  M.getNameWithPrefix(OS, GV, false);
+}
+

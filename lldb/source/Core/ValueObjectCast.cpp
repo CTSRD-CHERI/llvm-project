@@ -1,5 +1,4 @@
-//===-- ValueObjectDynamicValue.cpp ---------------------------------*- C++
-//-*-===//
+//===-- ValueObjectCast.cpp -------------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,27 +9,16 @@
 
 #include "lldb/Core/ValueObjectCast.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/Log.h"
-#include "lldb/Core/Module.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObject.h"
-#include "lldb/Core/ValueObjectList.h"
-
 #include "lldb/Symbol/CompilerType.h"
-#include "lldb/Symbol/ObjectFile.h"
-#include "lldb/Symbol/SymbolContext.h"
-#include "lldb/Symbol/Type.h"
-#include "lldb/Symbol/Variable.h"
-
 #include "lldb/Target/ExecutionContext.h"
-#include "lldb/Target/Process.h"
-#include "lldb/Target/RegisterContext.h"
-#include "lldb/Target/Target.h"
-#include "lldb/Target/Thread.h"
+#include "lldb/Utility/Scalar.h" // for operator!=, Scalar
+#include "lldb/Utility/Status.h" // for Status
+
+namespace lldb_private {
+class ConstString;
+}
 
 using namespace lldb_private;
 
@@ -83,9 +71,9 @@ bool ValueObjectCast::UpdateValue() {
     m_value.SetCompilerType(compiler_type);
     SetAddressTypeOfChildren(m_parent->GetAddressTypeOfChildren());
     if (!CanProvideValue()) {
-      // this value object represents an aggregate type whose
-      // children have values, but this object does not. So we
-      // say we are changed if our location has changed.
+      // this value object represents an aggregate type whose children have
+      // values, but this object does not. So we say we are changed if our
+      // location has changed.
       SetValueDidChange(m_value.GetValueType() != old_value.GetValueType() ||
                         m_value.GetScalar() != old_value.GetScalar());
     }

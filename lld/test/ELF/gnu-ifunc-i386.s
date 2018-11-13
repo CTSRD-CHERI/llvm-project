@@ -1,8 +1,8 @@
+// REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=i686-pc-linux %s -o %t.o
 // RUN: ld.lld -static %t.o -o %tout
 // RUN: llvm-objdump -d %tout | FileCheck %s --check-prefix=DISASM
 // RUN: llvm-readobj -r -symbols -sections %tout | FileCheck %s
-// REQUIRES: x86
 
 // CHECK:      Sections [
 // CHECK:       Section {
@@ -15,15 +15,15 @@
 // CHECK-NEXT:  Address: [[RELA:.*]]
 // CHECK-NEXT:  Offset: 0xD4
 // CHECK-NEXT:  Size: 16
-// CHECK-NEXT:  Link: 6
+// CHECK-NEXT:  Link: 0
 // CHECK-NEXT:  Info: 0
 // CHECK-NEXT:  AddressAlignment: 4
 // CHECK-NEXT:  EntrySize: 8
 // CHECK-NEXT: }
 // CHECK:     Relocations [
 // CHECK-NEXT:   Section ({{.*}}) .rel.plt {
-// CHECK-NEXT:     0x1200C R_386_IRELATIVE
-// CHECK-NEXT:     0x12010 R_386_IRELATIVE
+// CHECK-NEXT:     0x402000 R_386_IRELATIVE
+// CHECK-NEXT:     0x402004 R_386_IRELATIVE
 // CHECK-NEXT:   }
 // CHECK-NEXT: ]
 
@@ -39,7 +39,7 @@
 // CHECK-NEXT: }
 // CHECK-NEXT: Symbol {
 // CHECK-NEXT:   Name: __rel_iplt_end
-// CHECK-NEXT:   Value: 0x100E4
+// CHECK-NEXT:   Value: 0x4000E4
 // CHECK-NEXT:   Size: 0
 // CHECK-NEXT:   Binding: Local
 // CHECK-NEXT:   Type: None
@@ -61,7 +61,7 @@
 // CHECK-NEXT: }
 // CHECK-NEXT: Symbol {
 // CHECK-NEXT:   Name: _start
-// CHECK-NEXT:   Value: 0x11002
+// CHECK-NEXT:   Value: 0x401002
 // CHECK-NEXT:   Size: 0
 // CHECK-NEXT:   Binding: Global
 // CHECK-NEXT:   Type: None
@@ -70,7 +70,7 @@
 // CHECK-NEXT: }
 // CHECK-NEXT: Symbol {
 // CHECK-NEXT:   Name: bar
-// CHECK-NEXT:   Value: 0x11001
+// CHECK-NEXT:   Value: 0x401001
 // CHECK-NEXT:   Size: 0
 // CHECK-NEXT:   Binding: Global
 // CHECK-NEXT:   Type: GNU_IFunc
@@ -79,7 +79,7 @@
 // CHECK-NEXT: }
 // CHECK-NEXT: Symbol {
 // CHECK-NEXT:   Name: foo
-// CHECK-NEXT:   Value: 0x11000
+// CHECK-NEXT:   Value: 0x401000
 // CHECK-NEXT:   Size: 0
 // CHECK-NEXT:   Binding: Global
 // CHECK-NEXT:   Type: GNU_IFunc
@@ -88,30 +88,24 @@
 // CHECK-NEXT: }
 // CHECK-NEXT:]
 
-// DISASM:      Disassembly of section .text:
+// DISASM: Disassembly of section .text:
 // DISASM-NEXT: foo:
-// DISASM-NEXT: 11000: c3 retl
-// DISASM:      bar:
-// DISASM-NEXT: 11001: c3 retl
+// DISASM-NEXT:    401000: c3 retl
+// DISASM: bar:
+// DISASM-NEXT:    401001: c3 retl
 // DISASM:      _start:
-// DISASM-NEXT:    11002: e8 29 00 00 00 calll 41
-// DISASM-NEXT:    11007: e8 34 00 00 00 calll 52
-// DISASM-NEXT:    1100c: ba d4 00 01 00 movl $65748, %edx
-// DISASM-NEXT:    11011: ba e4 00 01 00 movl $65764, %edx
+// DISASM-NEXT:    401002: e8 19 00 00 00 calll 25
+// DISASM-NEXT:    401007: e8 24 00 00 00 calll 36
+// DISASM-NEXT:    40100c: ba d4 00 40 00 movl $4194516, %edx
+// DISASM-NEXT:    401011: ba e4 00 40 00 movl $4194532, %edx
 // DISASM-NEXT: Disassembly of section .plt:
 // DISASM-NEXT: .plt:
-// DISASM-NEXT:    11020: ff 35 04 20 01 00 pushl 73732
-// DISASM-NEXT:    11026: ff 25 08 20 01 00 jmpl *73736
-// DISASM-NEXT:    1102c: 90 nop
-// DISASM-NEXT:    1102d: 90 nop
-// DISASM-NEXT:    1102e: 90 nop
-// DISASM-NEXT:    1102f: 90 nop
-// DISASM-NEXT:    11030: ff 25 0c 20 01 00 jmpl *73740
-// DISASM-NEXT:    11036: 68 00 00 00 00    pushl $0
-// DISASM-NEXT:    1103b: e9 e0 ff ff ff    jmp -32 <.plt>
-// DISASM-NEXT:    11040: ff 25 10 20 01 00 jmpl *73744
-// DISASM-NEXT:    11046: 68 08 00 00 00    pushl $8
-// DISASM-NEXT:    1104b: e9 d0 ff ff ff    jmp -48 <.plt>
+// DISASM-NEXT:    401020: ff 25 00 20 40 00 jmpl *4202496
+// DISASM-NEXT:    401026: 68 10 00 00 00 pushl $16
+// DISASM-NEXT:    40102b: e9 e0 ff ff ff jmp -32 <_start+0xe>
+// DISASM-NEXT:    401030: ff 25 04 20 40 00 jmpl *4202500
+// DISASM-NEXT:    401036: 68 18 00 00 00 pushl $24
+// DISASM-NEXT:    40103b: e9 d0 ff ff ff jmp -48 <_start+0xe>
 
 .text
 .type foo STT_GNU_IFUNC

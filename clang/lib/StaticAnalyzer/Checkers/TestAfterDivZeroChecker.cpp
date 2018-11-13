@@ -55,7 +55,7 @@ public:
   }
 };
 
-class DivisionBRVisitor : public BugReporterVisitorImpl<DivisionBRVisitor> {
+class DivisionBRVisitor : public BugReporterVisitor {
 private:
   SymbolRef ZeroSymbol;
   const StackFrameContext *SFC;
@@ -70,10 +70,9 @@ public:
     ID.Add(SFC);
   }
 
-  PathDiagnosticPiece *VisitNode(const ExplodedNode *Succ,
-                                 const ExplodedNode *Pred,
-                                 BugReporterContext &BRC,
-                                 BugReport &BR) override;
+  std::shared_ptr<PathDiagnosticPiece> VisitNode(const ExplodedNode *Succ,
+                                                 BugReporterContext &BRC,
+                                                 BugReport &BR) override;
 };
 
 class TestAfterDivZeroChecker
@@ -85,7 +84,7 @@ class TestAfterDivZeroChecker
 public:
   void checkPreStmt(const BinaryOperator *B, CheckerContext &C) const;
   void checkBranchCondition(const Stmt *Condition, CheckerContext &C) const;
-  void checkEndFunction(CheckerContext &C) const;
+  void checkEndFunction(const ReturnStmt *RS, CheckerContext &C) const;
   void setDivZeroMap(SVal Var, CheckerContext &C) const;
   bool hasDivZeroMap(SVal Var, const CheckerContext &C) const;
   bool isZero(SVal S, CheckerContext &C) const;
@@ -94,10 +93,9 @@ public:
 
 REGISTER_SET_WITH_PROGRAMSTATE(DivZeroMap, ZeroState)
 
-PathDiagnosticPiece *DivisionBRVisitor::VisitNode(const ExplodedNode *Succ,
-                                                  const ExplodedNode *Pred,
-                                                  BugReporterContext &BRC,
-                                                  BugReport &BR) {
+std::shared_ptr<PathDiagnosticPiece>
+DivisionBRVisitor::VisitNode(const ExplodedNode *Succ, 
+                             BugReporterContext &BRC, BugReport &BR) {
   if (Satisfied)
     return nullptr;
 
@@ -115,8 +113,7 @@ PathDiagnosticPiece *DivisionBRVisitor::VisitNode(const ExplodedNode *Succ,
   if (!E)
     return nullptr;
 
-  ProgramStateRef State = Succ->getState();
-  SVal S = State->getSVal(E, Succ->getLocationContext());
+  SVal S = Succ->getSVal(E);
   if (ZeroSymbol == S.getAsSymbol() && SFC == Succ->getStackFrame()) {
     Satisfied = true;
 
@@ -128,7 +125,7 @@ PathDiagnosticPiece *DivisionBRVisitor::VisitNode(const ExplodedNode *Succ,
     if (!L.isValid() || !L.asLocation().isValid())
       return nullptr;
 
-    return new PathDiagnosticEventPiece(
+    return std::make_shared<PathDiagnosticEventPiece>(
         L, "Division with compared value made here");
   }
 
@@ -182,7 +179,8 @@ void TestAfterDivZeroChecker::reportBug(SVal Val, CheckerContext &C) const {
   }
 }
 
-void TestAfterDivZeroChecker::checkEndFunction(CheckerContext &C) const {
+void TestAfterDivZeroChecker::checkEndFunction(const ReturnStmt *,
+                                               CheckerContext &C) const {
   ProgramStateRef State = C.getState();
 
   DivZeroMapTy DivZeroes = State->get<DivZeroMap>();

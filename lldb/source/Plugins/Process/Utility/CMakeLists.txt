@@ -1,6 +1,4 @@
-include_directories(../../../Utility/)
-
-add_lldb_library(lldbPluginProcessUtility
+add_lldb_library(lldbPluginProcessUtility PLUGIN
   DynamicRegisterInfo.cpp
   FreeBSDSignals.cpp
   GDBRemoteSignals.cpp
@@ -9,21 +7,18 @@ add_lldb_library(lldbPluginProcessUtility
   InferiorCallPOSIX.cpp
   LinuxSignals.cpp
   MipsLinuxSignals.cpp
+  NativeRegisterContextRegisterInfo.cpp
   NetBSDSignals.cpp
   RegisterContextDarwin_arm.cpp
   RegisterContextDarwin_arm64.cpp
   RegisterContextDarwin_i386.cpp
   RegisterContextDarwin_x86_64.cpp
   RegisterContextDummy.cpp
-  RegisterContextFreeBSD_arm.cpp
-  RegisterContextFreeBSD_arm64.cpp
   RegisterContextFreeBSD_i386.cpp
   RegisterContextFreeBSD_mips64.cpp
   RegisterContextFreeBSD_powerpc.cpp
   RegisterContextFreeBSD_x86_64.cpp
   RegisterContextHistory.cpp
-  RegisterContextLinux_arm.cpp
-  RegisterContextLinux_arm64.cpp
   RegisterContextLinux_i386.cpp
   RegisterContextLinux_x86_64.cpp
   RegisterContextLinux_mips64.cpp
@@ -36,15 +31,33 @@ add_lldb_library(lldbPluginProcessUtility
   RegisterContextMach_x86_64.cpp
   RegisterContextMemory.cpp
   RegisterContextNetBSD_x86_64.cpp
+  RegisterContextOpenBSD_i386.cpp
+  RegisterContextOpenBSD_x86_64.cpp
   RegisterContextPOSIX_arm.cpp
   RegisterContextPOSIX_arm64.cpp
   RegisterContextPOSIX_mips64.cpp
   RegisterContextPOSIX_powerpc.cpp
+  RegisterContextPOSIX_ppc64le.cpp
   RegisterContextPOSIX_s390x.cpp
   RegisterContextPOSIX_x86.cpp
   RegisterContextThreadMemory.cpp
+  RegisterInfoPOSIX_arm.cpp
+  RegisterInfoPOSIX_arm64.cpp
+  RegisterInfoPOSIX_ppc64le.cpp
   StopInfoMachException.cpp
   ThreadMemory.cpp
   UnwindLLDB.cpp
   UnwindMacOSXFrameBackchain.cpp
+
+  LINK_LIBS
+    lldbBreakpoint
+    lldbCore
+    lldbDataFormatters
+    lldbExpression
+    lldbHost
+    lldbSymbol
+    lldbTarget
+    lldbUtility
+  LINK_COMPONENTS
+    Support
   )

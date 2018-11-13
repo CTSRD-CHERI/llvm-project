@@ -1,5 +1,7 @@
 // RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 -o - %s
 
+// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 100 -o - %s
+
 void foo();
 
 int main(int argc, char **argv) {
@@ -22,6 +24,9 @@ int main(int argc, char **argv) {
   #pragma omp target parallel default(none)
   foo();
   #pragma omp target parallel default(shared)
+  ++argc;
+  #pragma omp target parallel default(none)
+  #pragma omp parallel default(shared)
   ++argc;
   return 0;
 }

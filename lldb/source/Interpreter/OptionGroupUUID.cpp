@@ -13,7 +13,7 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Utility/Utils.h"
+#include "lldb/Host/OptionParser.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -22,19 +22,19 @@ OptionGroupUUID::OptionGroupUUID() : m_uuid() {}
 
 OptionGroupUUID::~OptionGroupUUID() {}
 
-static OptionDefinition g_option_table[] = {
+static constexpr OptionDefinition g_option_table[] = {
     {LLDB_OPT_SET_1, false, "uuid", 'u', OptionParser::eRequiredArgument,
-     nullptr, nullptr, 0, eArgTypeNone, "A module UUID value."},
+     nullptr, {}, 0, eArgTypeNone, "A module UUID value."},
 };
 
 llvm::ArrayRef<OptionDefinition> OptionGroupUUID::GetDefinitions() {
   return llvm::makeArrayRef(g_option_table);
 }
 
-Error OptionGroupUUID::SetOptionValue(uint32_t option_idx,
-                                      llvm::StringRef option_arg,
-                                      ExecutionContext *execution_context) {
-  Error error;
+Status OptionGroupUUID::SetOptionValue(uint32_t option_idx,
+                                       llvm::StringRef option_arg,
+                                       ExecutionContext *execution_context) {
+  Status error;
   const int short_option = g_option_table[option_idx].short_option;
 
   switch (short_option) {

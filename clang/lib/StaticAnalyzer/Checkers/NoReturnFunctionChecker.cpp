@@ -13,8 +13,8 @@
 //===----------------------------------------------------------------------===//
 
 #include "ClangSACheckers.h"
-#include "SelectorExtras.h"
 #include "clang/AST/Attr.h"
+#include "clang/Analysis/SelectorExtras.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
 #include "clang/StaticAnalyzer/Core/PathSensitive/CallEvent.h"
@@ -123,14 +123,14 @@ void NoReturnFunctionChecker::checkPostObjCMessage(const ObjCMethodCall &Msg,
   case 4:
     lazyInitKeywordSelector(HandleFailureInFunctionSel, C.getASTContext(),
                             "handleFailureInFunction", "file", "lineNumber",
-                            "description", nullptr);
+                            "description");
     if (Sel != HandleFailureInFunctionSel)
       return;
     break;
   case 5:
     lazyInitKeywordSelector(HandleFailureInMethodSel, C.getASTContext(),
                             "handleFailureInMethod", "object", "file",
-                            "lineNumber", "description", nullptr);
+                            "lineNumber", "description");
     if (Sel != HandleFailureInMethodSel)
       return;
     break;

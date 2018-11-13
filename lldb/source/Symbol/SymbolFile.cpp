@@ -9,25 +9,28 @@
 
 #include "lldb/Symbol/SymbolFile.h"
 
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Symbol/TypeMap.h"
 #include "lldb/Symbol/TypeSystem.h"
 #include "lldb/Symbol/VariableList.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/StreamString.h"
 #include "lldb/lldb-private.h"
 
 using namespace lldb_private;
+
+void SymbolFile::PreloadSymbols() {
+  // No-op for most implementations.
+}
 
 SymbolFile *SymbolFile::FindPlugin(ObjectFile *obj_file) {
   std::unique_ptr<SymbolFile> best_symfile_ap;
   if (obj_file != nullptr) {
 
     // We need to test the abilities of this section list. So create what it
-    // would
-    // be with this new obj_file.
+    // would be with this new obj_file.
     lldb::ModuleSP module_sp(obj_file->GetModule());
     if (module_sp) {
       // Default to the main module section list.
@@ -56,16 +59,16 @@ SymbolFile *SymbolFile::FindPlugin(ObjectFile *obj_file) {
         if (sym_file_abilities > best_symfile_abilities) {
           best_symfile_abilities = sym_file_abilities;
           best_symfile_ap.reset(curr_symfile_ap.release());
-          // If any symbol file parser has all of the abilities, then
-          // we should just stop looking.
+          // If any symbol file parser has all of the abilities, then we should
+          // just stop looking.
           if ((kAllAbilities & sym_file_abilities) == kAllAbilities)
             break;
         }
       }
     }
     if (best_symfile_ap.get()) {
-      // Let the winning symbol file parser initialize itself more
-      // completely now that it has been chosen
+      // Let the winning symbol file parser initialize itself more completely
+      // now that it has been chosen
       best_symfile_ap->InitializeObject();
     }
   }
@@ -93,19 +96,16 @@ uint32_t SymbolFile::ResolveSymbolContext(const FileSpec &file_spec,
   return 0;
 }
 
-uint32_t SymbolFile::FindGlobalVariables(
-    const ConstString &name, const CompilerDeclContext *parent_decl_ctx,
-    bool append, uint32_t max_matches, VariableList &variables) {
-  if (!append)
-    variables.Clear();
+uint32_t
+SymbolFile::FindGlobalVariables(const ConstString &name,
+                                const CompilerDeclContext *parent_decl_ctx,
+                                uint32_t max_matches, VariableList &variables) {
   return 0;
 }
 
 uint32_t SymbolFile::FindGlobalVariables(const RegularExpression &regex,
-                                         bool append, uint32_t max_matches,
+                                         uint32_t max_matches,
                                          VariableList &variables) {
-  if (!append)
-    variables.Clear();
   return 0;
 }
 

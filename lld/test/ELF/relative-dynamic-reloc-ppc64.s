@@ -1,7 +1,11 @@
+// REQUIRES: ppc
+// RUN: llvm-mc -filetype=obj -triple=powerpc64le-unknown-linux %s -o %t.o
+// RUN: ld.lld -shared %t.o -o %t.so
+// RUN: llvm-readobj -t -r -dyn-symbols %t.so | FileCheck %s
+
 // RUN: llvm-mc -filetype=obj -triple=powerpc64-unknown-linux %s -o %t.o
 // RUN: ld.lld -shared %t.o -o %t.so
 // RUN: llvm-readobj -t -r -dyn-symbols %t.so | FileCheck %s
-// REQUIRES: ppc
 
 // Test that we create R_PPC64_RELATIVE relocations but don't put any
 // symbols in the dynamic symbol table.
@@ -10,10 +14,10 @@
 // CHECK-NEXT:   Section ({{.*}}) .rela.dyn {
 // CHECK-NEXT:     0x[[FOO_ADDR:.*]] R_PPC64_RELATIVE - 0x[[FOO_ADDR]]
 // CHECK-NEXT:     0x[[BAR_ADDR:.*]] R_PPC64_RELATIVE - 0x[[BAR_ADDR]]
-// CHECK-NEXT:     0x20010 R_PPC64_RELATIVE - 0x20009
+// CHECK-NEXT:     0x10010 R_PPC64_RELATIVE - 0x10009
 // CHECK-NEXT:     0x{{.*}} R_PPC64_RELATIVE - 0x[[ZED_ADDR:.*]]
 // CHECK-NEXT:     0x{{.*}} R_PPC64_RELATIVE - 0x[[FOO_ADDR]]
-// CHECK-NEXT:     0x20028 R_PPC64_ADDR64 external 0x0
+// CHECK-NEXT:     0x10028 R_PPC64_ADDR64 external 0x0
 // CHECK-NEXT:   }
 // CHECK-NEXT: ]
 

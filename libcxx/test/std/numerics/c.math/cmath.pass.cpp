@@ -10,6 +10,7 @@
 // <cmath>
 
 #include <cmath>
+#include <limits>
 #include <type_traits>
 #include <cassert>
 
@@ -551,6 +552,13 @@ void test_signbit()
     static_assert((std::is_same<decltype(std::signbit((long double)0)), bool>::value), "");
     static_assert((std::is_same<decltype(signbit(Ambiguous())), Ambiguous>::value), "");
     assert(std::signbit(-1.0) == true);
+    assert(std::signbit(0u) == false);
+    assert(std::signbit(std::numeric_limits<unsigned>::max()) == false);
+    assert(std::signbit(0) == false);
+    assert(std::signbit(1) == false);
+    assert(std::signbit(-1) == true);
+    assert(std::signbit(std::numeric_limits<int>::max()) == false);
+    assert(std::signbit(std::numeric_limits<int>::min()) == true);
 }
 
 void test_fpclassify()
@@ -564,6 +572,11 @@ void test_fpclassify()
     static_assert((std::is_same<decltype(std::fpclassify((long double)0)), int>::value), "");
     static_assert((std::is_same<decltype(fpclassify(Ambiguous())), Ambiguous>::value), "");
     assert(std::fpclassify(-1.0) == FP_NORMAL);
+    assert(std::fpclassify(0) == FP_ZERO);
+    assert(std::fpclassify(1) == FP_NORMAL);
+    assert(std::fpclassify(-1) == FP_NORMAL);
+    assert(std::fpclassify(std::numeric_limits<int>::max()) == FP_NORMAL);
+    assert(std::fpclassify(std::numeric_limits<int>::min()) == FP_NORMAL);
 }
 
 void test_isfinite()
@@ -577,6 +590,11 @@ void test_isfinite()
     static_assert((std::is_same<decltype(std::isfinite((long double)0)), bool>::value), "");
     static_assert((std::is_same<decltype(isfinite(Ambiguous())), Ambiguous>::value), "");
     assert(std::isfinite(-1.0) == true);
+    assert(std::isfinite(0) == true);
+    assert(std::isfinite(1) == true);
+    assert(std::isfinite(-1) == true);
+    assert(std::isfinite(std::numeric_limits<int>::max()) == true);
+    assert(std::isfinite(std::numeric_limits<int>::min()) == true);
 }
 
 void test_isnormal()
@@ -590,6 +608,11 @@ void test_isnormal()
     static_assert((std::is_same<decltype(std::isnormal((long double)0)), bool>::value), "");
     static_assert((std::is_same<decltype(isnormal(Ambiguous())), Ambiguous>::value), "");
     assert(std::isnormal(-1.0) == true);
+    assert(std::isnormal(0) == false);
+    assert(std::isnormal(1) == true);
+    assert(std::isnormal(-1) == true);
+    assert(std::isnormal(std::numeric_limits<int>::max()) == true);
+    assert(std::isnormal(std::numeric_limits<int>::min()) == true);
 }
 
 void test_isgreater()
@@ -638,11 +661,12 @@ void test_isinf()
     static_assert((std::is_same<decltype(std::isinf((float)0)), bool>::value), "");
 
     typedef decltype(std::isinf((double)0)) DoubleRetType;
-#ifndef __linux__
+#if !defined(__linux__) || defined(__clang__)
     static_assert((std::is_same<DoubleRetType, bool>::value), "");
 #else
-    // GLIBC < 2.26 defines 'isinf(double)' with a return type of 'int' in
-    // all C++ dialects. The test should tolerate this.
+    // GLIBC < 2.23 defines 'isinf(double)' with a return type of 'int' in
+    // all C++ dialects. The test should tolerate this when libc++ can't work
+    // around it.
     // See: https://sourceware.org/bugzilla/show_bug.cgi?id=19439
     static_assert((std::is_same<DoubleRetType, bool>::value
                 || std::is_same<DoubleRetType, int>::value), "");
@@ -651,6 +675,11 @@ void test_isinf()
     static_assert((std::is_same<decltype(std::isinf(0)), bool>::value), "");
     static_assert((std::is_same<decltype(std::isinf((long double)0)), bool>::value), "");
     assert(std::isinf(-1.0) == false);
+    assert(std::isinf(0) == false);
+    assert(std::isinf(1) == false);
+    assert(std::isinf(-1) == false);
+    assert(std::isinf(std::numeric_limits<int>::max()) == false);
+    assert(std::isinf(std::numeric_limits<int>::min()) == false);
 }
 
 void test_isless()
@@ -718,11 +747,12 @@ void test_isnan()
     static_assert((std::is_same<decltype(std::isnan((float)0)), bool>::value), "");
 
     typedef decltype(std::isnan((double)0)) DoubleRetType;
-#ifndef __linux__
+#if !defined(__linux__) || defined(__clang__)
     static_assert((std::is_same<DoubleRetType, bool>::value), "");
 #else
-    // GLIBC < 2.26 defines 'isnan(double)' with a return type of 'int' in
-    // all C++ dialects. The test should tolerate this.
+    // GLIBC < 2.23 defines 'isinf(double)' with a return type of 'int' in
+    // all C++ dialects. The test should tolerate this when libc++ can't work
+    // around it.
     // See: https://sourceware.org/bugzilla/show_bug.cgi?id=19439
     static_assert((std::is_same<DoubleRetType, bool>::value
                 || std::is_same<DoubleRetType, int>::value), "");
@@ -731,6 +761,11 @@ void test_isnan()
     static_assert((std::is_same<decltype(std::isnan(0)), bool>::value), "");
     static_assert((std::is_same<decltype(std::isnan((long double)0)), bool>::value), "");
     assert(std::isnan(-1.0) == false);
+    assert(std::isnan(0) == false);
+    assert(std::isnan(1) == false);
+    assert(std::isnan(-1) == false);
+    assert(std::isnan(std::numeric_limits<int>::max()) == false);
+    assert(std::isnan(std::numeric_limits<int>::min()) == false);
 }
 
 void test_isunordered()

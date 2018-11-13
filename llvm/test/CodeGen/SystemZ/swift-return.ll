@@ -8,9 +8,9 @@
 ; CHECK-LABEL: test:
 ; CHECK: st %r2
 ; CHECK: brasl %r14, gen
-; CHECK-DAG: lhr %r2, %r2
-; CHECK-DAG: lbr %[[REG1:r[0-9]+]], %r3
-; CHECK: ar %r2, %[[REG1]]
+; CHECK-DAG: lhr %{{r[0,2]+}}, %r2
+; CHECK-DAG: lbr %{{r[0,2]+}}, %r3
+; CHECK: ar %r2, %r0
 ; CHECK-O0-LABEL: test
 ; CHECK-O0: st %r2
 ; CHECK-O0: brasl %r14, gen
@@ -39,9 +39,8 @@ declare swiftcc { i16, i8 } @gen(i32)
 ; in memroy. The caller provides space for the return value and passes
 ; the address in %r2. The first input argument will be in %r3.
 ; CHECK-LABEL: test2:
-; CHECK: lr %[[REG1:r[0-9]+]], %r2
+; CHECK: lr %r3, %r2
 ; CHECK-DAG: la %r2, 160(%r15)
-; CHECK-DAG: lr %r3, %[[REG1]]
 ; CHECK: brasl %r14, gen2
 ; CHECK: l %r2, 160(%r15)
 ; CHECK: a %r2, 164(%r15)
@@ -189,11 +188,11 @@ define void @consume_i1_ret() {
   %v6 = extractvalue { i1, i1, i1, i1 } %call, 2
   %v7 = extractvalue { i1, i1, i1, i1 } %call, 3
   %val = zext i1 %v3 to i32
-  store i32 %val, i32* @var
+  store volatile i32 %val, i32* @var
   %val2 = zext i1 %v5 to i32
-  store i32 %val2, i32* @var
+  store volatile i32 %val2, i32* @var
   %val3 = zext i1 %v6 to i32
-  store i32 %val3, i32* @var
+  store volatile i32 %val3, i32* @var
   %val4 = zext i1 %v7 to i32
   store i32 %val4, i32* @var
   ret void

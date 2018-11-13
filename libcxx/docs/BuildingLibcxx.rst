@@ -92,6 +92,57 @@ build would look like this:
   $ make check-libcxx # optional
 
 
+Experimental Support for Windows
+--------------------------------
+
+The Windows support requires building with clang-cl as cl does not support one
+required extension: `#include_next`.  Furthermore, VS 2015 or newer (19.00) is
+required.  In the case of clang-cl, we need to specify the "MS Compatibility
+Version" as it defaults to 2014 (18.00).
+
+CMake + Visual Studio
+~~~~~~~~~~~~~~~~~~~~~
+
+Building with Visual Studio currently does not permit running tests. However,
+it is the simplest way to build.
+
+.. code-block:: batch
+
+  > cmake -G "Visual Studio 14 2015"              ^
+          -T "LLVM-vs2014"                        ^
+          -DLIBCXX_ENABLE_SHARED=YES              ^
+          -DLIBCXX_ENABLE_STATIC=NO               ^
+          -DLIBCXX_ENABLE_EXPERIMENTAL_LIBRARY=NO ^
+          \path\to\libcxx
+  > cmake --build .
+
+CMake + ninja
+~~~~~~~~~~~~~
+
+Building with ninja is required for development to enable tests.
+Unfortunately, doing so requires additional configuration as we cannot
+just specify a toolset.
+
+.. code-block:: batch
+
+  > cmake -G Ninja                                                                    ^
+          -DCMAKE_MAKE_PROGRAM=/path/to/ninja                                         ^
+          -DCMAKE_SYSTEM_NAME=Windows                                                 ^
+          -DCMAKE_C_COMPILER=clang-cl                                                 ^
+          -DCMAKE_C_FLAGS="-fms-compatibility-version=19.00 --target=i686--windows"   ^
+          -DCMAKE_CXX_COMPILER=clang-cl                                                ^
+          -DCMAKE_CXX_FLAGS="-fms-compatibility-version=19.00 --target=i686--windows" ^
+          -DLLVM_PATH=/path/to/llvm/tree                                              ^
+          -DLIBCXX_ENABLE_SHARED=YES                                                  ^
+          -DLIBCXX_ENABLE_STATIC=NO                                                   ^
+          -DLIBCXX_ENABLE_EXPERIMENTAL_LIBRARY=NO                                     ^
+          \path\to\libcxx
+  > /path/to/ninja cxx
+  > /path/to/ninja check-cxx
+
+Note that the paths specified with backward slashes must use the `\\` as the
+directory separator as clang-cl may otherwise parse the path as an argument.
+
 .. _`libc++abi`: http://libcxxabi.llvm.org/
 
 
@@ -165,6 +216,11 @@ libc++ specific options
   Extra suffix to append to the directory where libraries are to be installed.
   This option overrides `LLVM_LIBDIR_SUFFIX`.
 
+.. option:: LIBCXX_INSTALL_PREFIX:STRING
+
+  **Default**: ``""``
+
+  Define libc++ destination prefix.
 
 .. _libc++experimental options:
 
@@ -186,11 +242,15 @@ libc++experimental Specific Options
 
 .. option:: LIBCXX_ENABLE_FILESYSTEM:BOOL
 
-  **Default**: ``LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY``
+  **Default**: ``ON``
 
-  Build filesystem as part of libc++experimental.a. This allows filesystem
-  to be disabled without turning off the entire experimental library.
+  Build filesystem as a standalone library libc++fs.a.
 
+.. option:: LIBCXX_INSTALL_FILESYSTEM_LIBRARY:BOOL
+
+  **Default**: ``LIBCXX_ENABLE_FILESYSTEM AND LIBCXX_INSTALL_LIBRARY``
+
+  Install libc++fs.a alongside libc++.
 
 .. _ABI Library Specific Options:
 
@@ -272,6 +332,15 @@ libc++ Feature Options
   Use the specified GCC toolchain and standard library when building the native
   stdlib benchmark tests.
 
+.. option:: LIBCXX_HIDE_FROM_ABI_PER_TU_BY_DEFAULT:BOOL
+
+  **Default**: ``OFF``
+
+  Pick the default for whether to constrain ABI-unstable symbols to
+  each individual translation unit. This setting controls whether
+  `_LIBCPP_HIDE_FROM_ABI_PER_TU_BY_DEFAULT` is defined by default --
+  see the documentation of that macro for details.
+
 
 libc++ ABI Feature Options
 --------------------------
@@ -290,6 +359,13 @@ The following options allow building libc++ for a different ABI version.
 
   Build the "unstable" ABI version of libc++. Includes all ABI changing features
   on top of the current stable version.
+
+.. option:: LIBCXX_ABI_DEFINES:STRING
+
+  **Default**: ``""``
+
+  A semicolon-separated list of ABI macros to persist in the site config header.
+  See ``include/__config`` for the list of ABI macros.
 
 .. _LLVM-specific variables:
 

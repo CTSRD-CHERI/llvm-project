@@ -1,4 +1,4 @@
-//===-- RegisterContextCorePOSIX_x86_64.h -----------------------*- C++ -*-===//
+//===-- RegisterContextPOSIXCore_x86_64.h -----------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,11 +10,8 @@
 #ifndef liblldb_RegisterContextCorePOSIX_x86_64_h_
 #define liblldb_RegisterContextCorePOSIX_x86_64_h_
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "Plugins/Process/Utility/RegisterContextPOSIX_x86.h"
+#include "Plugins/Process/elf-core/RegisterUtilities.h"
 
 class RegisterContextCorePOSIX_x86_64 : public RegisterContextPOSIX_x86 {
 public:
@@ -22,9 +19,7 @@ public:
       lldb_private::Thread &thread,
       lldb_private::RegisterInfoInterface *register_info,
       const lldb_private::DataExtractor &gpregset,
-      const lldb_private::DataExtractor &fpregset);
-
-  ~RegisterContextCorePOSIX_x86_64() override;
+      llvm::ArrayRef<lldb_private::CoreNote> notes);
 
   bool ReadRegister(const lldb_private::RegisterInfo *reg_info,
                     lldb_private::RegisterValue &value) override;
@@ -48,7 +43,8 @@ protected:
   bool WriteFPR() override;
 
 private:
-  uint8_t *m_gpregset;
+  std::unique_ptr<uint8_t[]> m_gpregset;
+  std::unique_ptr<uint8_t[]> m_fpregset;
 };
 
 #endif // liblldb_RegisterContextCorePOSIX_x86_64_h_

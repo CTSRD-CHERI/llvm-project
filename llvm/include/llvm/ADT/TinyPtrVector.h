@@ -11,8 +11,13 @@
 #define LLVM_ADT_TINYPTRVECTOR_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/None.h"
 #include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SmallVector.h"
+#include <cassert>
+#include <cstddef>
+#include <iterator>
+#include <type_traits>
 
 namespace llvm {
 
@@ -25,15 +30,16 @@ namespace llvm {
 template <typename EltTy>
 class TinyPtrVector {
 public:
-  typedef llvm::SmallVector<EltTy, 4> VecTy;
-  typedef typename VecTy::value_type value_type;
-  typedef llvm::PointerUnion<EltTy, VecTy *> PtrUnion;
+  using VecTy = SmallVector<EltTy, 4>;
+  using value_type = typename VecTy::value_type;
+  using PtrUnion = PointerUnion<EltTy, VecTy *>;
 
 private:
   PtrUnion Val;
 
 public:
-  TinyPtrVector() {}
+  TinyPtrVector() = default;
+
   ~TinyPtrVector() {
     if (VecTy *V = Val.template dyn_cast<VecTy*>())
       delete V;
@@ -43,6 +49,7 @@ public:
     if (VecTy *V = Val.template dyn_cast<VecTy*>())
       Val = new VecTy(*V);
   }
+
   TinyPtrVector &operator=(const TinyPtrVector &RHS) {
     if (this == &RHS)
       return *this;
@@ -74,6 +81,7 @@ public:
   TinyPtrVector(TinyPtrVector &&RHS) : Val(RHS.Val) {
     RHS.Val = (EltTy)nullptr;
   }
+
   TinyPtrVector &operator=(TinyPtrVector &&RHS) {
     if (this == &RHS)
       return *this;
@@ -89,6 +97,7 @@ public:
       if (RHS.Val.template is<EltTy>()) {
         V->clear();
         V->push_back(RHS.front());
+        RHS.Val = (EltTy)nullptr;
         return *this;
       }
       delete V;
@@ -98,6 +107,12 @@ public:
     RHS.Val = (EltTy)nullptr;
     return *this;
   }
+
+  TinyPtrVector(std::initializer_list<EltTy> IL)
+      : Val(IL.size() == 0
+                ? PtrUnion()
+                : IL.size() == 1 ? PtrUnion(*IL.begin())
+                                 : PtrUnion(new VecTy(IL.begin(), IL.end()))) {}
 
   /// Constructor from an ArrayRef.
   ///
@@ -159,10 +174,10 @@ public:
     return Val.template get<VecTy*>()->size();
   }
 
-  typedef EltTy *iterator;
-  typedef const EltTy *const_iterator;
-  typedef std::reverse_iterator<iterator> reverse_iterator;
-  typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+  using iterator = EltTy *;
+  using const_iterator = const EltTy *;
+  using reverse_iterator = std::reverse_iterator<iterator>;
+  using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
   iterator begin() {
     if (Val.template is<EltTy>())
@@ -170,6 +185,7 @@ public:
 
     return Val.template get<VecTy *>()->begin();
   }
+
   iterator end() {
     if (Val.template is<EltTy>())
       return begin() + (Val.isNull() ? 0 : 1);
@@ -187,9 +203,11 @@ public:
 
   reverse_iterator rbegin() { return reverse_iterator(end()); }
   reverse_iterator rend() { return reverse_iterator(begin()); }
+
   const_reverse_iterator rbegin() const {
     return const_reverse_iterator(end());
   }
+
   const_reverse_iterator rend() const {
     return const_reverse_iterator(begin());
   }
@@ -329,6 +347,7 @@ public:
     return Val.template get<VecTy*>()->insert(begin() + Offset, From, To);
   }
 };
+
 } // end namespace llvm
 
-#endif
+#endif // LLVM_ADT_TINYPTRVECTOR_H

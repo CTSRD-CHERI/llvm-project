@@ -6,7 +6,11 @@
 #define DEFINE_EXPLICIT
 #endif
 #ifndef DEFINE_CONSTEXPR
+#ifdef TEST_WORKAROUND_EDG_EXPLICIT_CONSTEXPR
+#define DEFINE_CONSTEXPR
+#else // TEST_WORKAROUND_EDG_EXPLICIT_CONSTEXPR
 #define DEFINE_CONSTEXPR constexpr
+#endif // TEST_WORKAROUND_EDG_EXPLICIT_CONSTEXPR
 #endif
 #ifndef DEFINE_ASSIGN_CONSTEXPR
 #if TEST_STD_VER >= 14
@@ -42,7 +46,6 @@ struct AllCtors : DEFINE_BASE(AllCtors) {
 
 struct NoCtors : DEFINE_BASE(NoCtors) {
   using Base = DEFINE_BASE(NoCtors);
-  using Base::Base;
   DEFINE_EXPLICIT NoCtors() = delete;
   DEFINE_EXPLICIT NoCtors(NoCtors const&) = delete;
   NoCtors& operator=(NoCtors const&) = delete;

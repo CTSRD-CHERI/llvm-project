@@ -14,7 +14,8 @@
 #ifndef LLVM_UTILS_TABLEGEN_CODEGENINTRINSICS_H
 #define LLVM_UTILS_TABLEGEN_CODEGENINTRINSICS_H
 
-#include "llvm/CodeGen/MachineValueType.h"
+#include "SDNodeProperties.h"
+#include "llvm/Support/MachineValueType.h"
 #include <string>
 #include <vector>
 
@@ -62,15 +63,23 @@ struct CodeGenIntrinsic {
   /// accesses that may be performed by the intrinsics. Analogous to
   /// \c FunctionModRefBehaviour.
   enum ModRefBits {
+    /// The intrinsic may access memory that is otherwise inaccessible via
+    /// LLVM IR.
+    MR_InaccessibleMem = 1,
+
+    /// The intrinsic may access memory through pointer arguments.
+    /// LLVM IR.
+    MR_ArgMem = 2,
+
     /// The intrinsic may access memory anywhere, i.e. it is not restricted
     /// to access through pointer arguments.
-    MR_Anywhere = 1,
+    MR_Anywhere = 4 | MR_ArgMem | MR_InaccessibleMem,
 
     /// The intrinsic may read memory.
-    MR_Ref = 2,
+    MR_Ref = 8,
 
     /// The intrinsic may write memory.
-    MR_Mod = 4,
+    MR_Mod = 16,
 
     /// The intrinsic may both read and write memory.
     MR_ModRef = MR_Ref | MR_Mod,
@@ -80,14 +89,24 @@ struct CodeGenIntrinsic {
   /// properties (IntrReadMem, IntrArgMemOnly, etc.).
   enum ModRefBehavior {
     NoMem = 0,
-    ReadArgMem = MR_Ref,
+    ReadArgMem = MR_Ref | MR_ArgMem,
+    ReadInaccessibleMem = MR_Ref | MR_InaccessibleMem,
+    ReadInaccessibleMemOrArgMem = MR_Ref | MR_ArgMem | MR_InaccessibleMem,
     ReadMem = MR_Ref | MR_Anywhere,
-    WriteArgMem = MR_Mod,
+    WriteArgMem = MR_Mod | MR_ArgMem,
+    WriteInaccessibleMem = MR_Mod | MR_InaccessibleMem,
+    WriteInaccessibleMemOrArgMem = MR_Mod | MR_ArgMem | MR_InaccessibleMem,
     WriteMem = MR_Mod | MR_Anywhere,
-    ReadWriteArgMem = MR_ModRef,
+    ReadWriteArgMem = MR_ModRef | MR_ArgMem,
+    ReadWriteInaccessibleMem = MR_ModRef | MR_InaccessibleMem,
+    ReadWriteInaccessibleMemOrArgMem = MR_ModRef | MR_ArgMem |
+                                       MR_InaccessibleMem,
     ReadWriteMem = MR_ModRef | MR_Anywhere,
   };
   ModRefBehavior ModRef;
+
+  /// SDPatternOperator Properties applied to the intrinsic.
+  unsigned Properties;
 
   /// This is set to true if the intrinsic is overloaded by its argument
   /// types.
@@ -108,8 +127,19 @@ struct CodeGenIntrinsic {
   /// True if the intrinsic is marked as convergent.
   bool isConvergent;
 
+  /// True if the intrinsic has side effects that aren't captured by any
+  /// of the other flags.
+  bool hasSideEffects;
+
+  // True if the intrinsic is marked as speculatable.
+  bool isSpeculatable;
+
   enum ArgAttribute { NoCapture, Returned, ReadOnly, WriteOnly, ReadNone };
   std::vector<std::pair<unsigned, ArgAttribute>> ArgumentAttributes;
+
+  bool hasProperty(enum SDNP Prop) const {
+    return Properties & (1 << Prop);
+  }
 
   CodeGenIntrinsic(Record *R);
 };

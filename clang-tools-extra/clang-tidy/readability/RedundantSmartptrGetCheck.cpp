@@ -51,6 +51,20 @@ void registerMatchersForGetArrowStart(MatchFinder *Finder,
       unaryOperator(hasOperatorName("*"),
                     hasUnaryOperand(callToGet(QuacksLikeASmartptr))),
       Callback);
+
+  // Catch '!ptr.get()'
+  const auto CallToGetAsBool = ignoringParenImpCasts(callToGet(recordDecl(
+      QuacksLikeASmartptr, has(cxxConversionDecl(returns(booleanType()))))));
+  Finder->addMatcher(
+      unaryOperator(hasOperatorName("!"), hasUnaryOperand(CallToGetAsBool)),
+      Callback);
+
+  // Catch 'if(ptr.get())'
+  Finder->addMatcher(ifStmt(hasCondition(CallToGetAsBool)), Callback);
+
+  // Catch 'ptr.get() ? X : Y'
+  Finder->addMatcher(conditionalOperator(hasCondition(CallToGetAsBool)),
+                     Callback);
 }
 
 void registerMatchersForGetEquals(MatchFinder *Finder,
@@ -70,11 +84,6 @@ void registerMatchersForGetEquals(MatchFinder *Finder,
                          anyOf(cxxNullPtrLiteralExpr(), gnuNullExpr(),
                                integerLiteral(equals(0))))),
                      hasEitherOperand(callToGet(IsAKnownSmartptr))),
-      Callback);
-
-  // Matches against if(ptr.get())
-  Finder->addMatcher(
-      ifStmt(hasCondition(ignoringImpCasts(callToGet(IsAKnownSmartptr)))),
       Callback);
 
   // FIXME: Match and fix if (l.get() == r.get()).
@@ -116,8 +125,8 @@ void RedundantSmartptrGetCheck::check(const MatchFinder::MatchResult &Result) {
 
   bool IsPtrToPtr = Result.Nodes.getNodeAs<Decl>("ptr_to_ptr") != nullptr;
   bool IsMemberExpr = Result.Nodes.getNodeAs<Expr>("memberExpr") != nullptr;
-  const Expr *GetCall = Result.Nodes.getNodeAs<Expr>("redundant_get");
-  const Expr *Smartptr = Result.Nodes.getNodeAs<Expr>("smart_pointer");
+  const auto *GetCall = Result.Nodes.getNodeAs<Expr>("redundant_get");
+  const auto *Smartptr = Result.Nodes.getNodeAs<Expr>("smart_pointer");
 
   if (IsPtrToPtr && IsMemberExpr) {
     // Ignore this case (eg. Foo->get()->DoSomething());
@@ -129,7 +138,7 @@ void RedundantSmartptrGetCheck::check(const MatchFinder::MatchResult &Result) {
       *Result.SourceManager, getLangOpts());
   // Replace foo->get() with *foo, and foo.get() with foo.
   std::string Replacement = Twine(IsPtrToPtr ? "*" : "", SmartptrText).str();
-  diag(GetCall->getLocStart(), "redundant get() call on smart pointer")
+  diag(GetCall->getBeginLoc(), "redundant get() call on smart pointer")
       << FixItHint::CreateReplacement(GetCall->getSourceRange(), Replacement);
 }
 

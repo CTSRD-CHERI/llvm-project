@@ -289,7 +289,7 @@ code often follows a pattern:
       return my_function_precise(a);
   }
 
-The default value for all unspecified reflection parameters is zero. 
+The default value for all unspecified reflection parameters is zero.
 
 The ``NVVMReflect`` pass should be executed early in the optimization
 pipeline, immediately after the link stage. The ``internalize`` pass is also
@@ -326,6 +326,16 @@ often leave behind dead code of the form:
 Therefore, it is recommended that ``NVVMReflect`` is executed early in the
 optimization pipeline before dead-code elimination.
 
+The NVPTX TargetMachine knows how to schedule ``NVVMReflect`` at the beginning
+of your pass manager; just use the following code when setting up your pass
+manager:
+
+.. code-block:: c++
+
+    std::unique_ptr<TargetMachine> TM = ...;
+    PassManagerBuilder PMBuilder(...);
+    if (TM)
+      TM->adjustPassManager(PMBuilder);
 
 Reflection Parameters
 ---------------------
@@ -339,35 +349,17 @@ Flag                 Description
 ``__CUDA_FTZ=[0,1]`` Use optimized code paths that flush subnormals to zero
 ==================== ======================================================
 
+The value of this flag is determined by the "nvvm-reflect-ftz" module flag.
+The following sets the ftz flag to 1.
 
-Invoking NVVMReflect
---------------------
+.. code-block:: llvm
 
-To ensure that all dead code caused by the reflection pass is eliminated, it
-is recommended that the reflection pass is executed early in the LLVM IR
-optimization pipeline. The pass takes an optional mapping of reflection
-parameter name to an integer value. This mapping can be specified as either a
-command-line option to ``opt`` or as an LLVM ``StringMap<int>`` object when
-programmatically creating a pass pipeline.
+    !llvm.module.flag = !{!0}
+    !0 = !{i32 4, !"nvvm-reflect-ftz", i32 1}
 
-With ``opt``:
-
-.. code-block:: text
-
-  # opt -nvvm-reflect -nvvm-reflect-list=<var>=<value>,<var>=<value> module.bc -o module.reflect.bc
-
-
-With programmatic pass pipeline:
-
-.. code-block:: c++
-
-  extern FunctionPass *llvm::createNVVMReflectPass(const StringMap<int>& Mapping);
-
-  StringMap<int> ReflectParams;
-  ReflectParams["__CUDA_FTZ"] = 1;
-  Passes.add(createNVVMReflectPass(ReflectParams));
-
-
+(``i32 4`` indicates that the value set here overrides the value in another
+module we link with.  See the `LangRef <LangRef.html#module-flags-metadata>`
+for details.)
 
 Executing PTX
 =============
@@ -507,7 +499,7 @@ The output we get from ``llc`` (as of LLVM 3.4):
     .reg .s32   %r<2>;
     .reg .s64   %rl<8>;
 
-  // BB#0:                                // %entry
+  // %bb.0:                                // %entry
     ld.param.u64    %rl1, [kernel_param_0];
     mov.u32         %r1, %tid.x;
     mul.wide.s32    %rl2, %r1, 4;
@@ -905,7 +897,7 @@ This gives us the following PTX (excerpt):
     .reg .s32   %r<21>;
     .reg .s64   %rl<8>;
 
-  // BB#0:                                // %entry
+  // %bb.0:                                // %entry
     ld.param.u64  %rl2, [kernel_param_0];
     mov.u32   %r3, %tid.x;
     ld.param.u64  %rl3, [kernel_param_1];
@@ -929,7 +921,7 @@ This gives us the following PTX (excerpt):
     abs.f32   %f4, %f1;
     setp.gtu.f32  %p4, %f4, 0f7F800000;
     @%p4 bra  BB0_4;
-  // BB#3:                                // %__nv_isnanf.exit5.i
+  // %bb.3:                                // %__nv_isnanf.exit5.i
     abs.f32   %f5, %f2;
     setp.le.f32 %p5, %f5, 0f7F800000;
     @%p5 bra  BB0_5;
@@ -961,7 +953,7 @@ This gives us the following PTX (excerpt):
     selp.f32  %f110, 0f7F800000, %f99, %p16;
     setp.eq.f32 %p17, %f110, 0f7F800000;
     @%p17 bra   BB0_28;
-  // BB#27:
+  // %bb.27:
     fma.rn.f32  %f110, %f110, %f108, %f110;
   BB0_28:                                 // %__internal_accurate_powf.exit.i
     setp.lt.f32 %p18, %f1, 0f00000000;

@@ -1,5 +1,5 @@
-; RUN: opt < %s -instcombine -S -default-data-layout="E-p:64:64:64-a0:0:8-f32:32:32-f64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-v64:64:64-v128:128:128" | FileCheck %s -check-prefix=CHECK -check-prefix=ALL
-; RUN: opt < %s -instcombine -S -default-data-layout="E-p:32:32:32-a0:0:8-f32:32:32-f64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-v64:64:64-v128:128:128" | FileCheck %s -check-prefix=P32 -check-prefix=ALL
+; RUN: opt < %s -instcombine -S -data-layout="E-p:64:64:64-a0:0:8-f32:32:32-f64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-v64:64:64-v128:128:128" | FileCheck %s -check-prefix=CHECK -check-prefix=ALL
+; RUN: opt < %s -instcombine -S -data-layout="E-p:32:32:32-a0:0:8-f32:32:32-f64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:32:64-v64:64:64-v128:128:128" | FileCheck %s -check-prefix=P32 -check-prefix=ALL
 ; RUN: opt < %s -instcombine -S | FileCheck %s -check-prefix=NODL -check-prefix=ALL
 
 
@@ -51,8 +51,8 @@ define i32* @test4(i32 %n) {
   ret i32* %A
 }
 
-; Allocas which are only used by GEPs, bitcasts, and stores (transitively)
-; should be deleted.
+; Allocas which are only used by GEPs, bitcasts, addrspacecasts, and stores
+; (transitively) should be deleted.
 define void @test5() {
 ; CHECK-LABEL: @test5(
 ; CHECK-NOT: alloca
@@ -62,6 +62,7 @@ define void @test5() {
 entry:
   %a = alloca { i32 }
   %b = alloca i32*
+  %c = alloca i32
   %a.1 = getelementptr { i32 }, { i32 }* %a, i32 0, i32 0
   store i32 123, i32* %a.1
   store i32* %a.1, i32** %b
@@ -73,6 +74,8 @@ entry:
   store atomic i32 3, i32* %a.3 release, align 4
   %a.4 = getelementptr { i32 }, { i32 }* %a, i32 0, i32 0
   store atomic i32 4, i32* %a.4 seq_cst, align 4
+  %c.1 = addrspacecast i32* %c to i32 addrspace(1)*
+  store i32 123, i32 addrspace(1)* %c.1
   ret void
 }
 
@@ -105,11 +108,11 @@ define void @test7() {
 entry:
   %0 = alloca %real_type, align 4
   %1 = bitcast %real_type* %0 to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i32(i8* %1, i8* bitcast (%opaque_type* @opaque_global to i8*), i32 8, i32 1, i1 false)
+  call void @llvm.memcpy.p0i8.p0i8.i32(i8* %1, i8* bitcast (%opaque_type* @opaque_global to i8*), i32 8, i1 false)
   ret void
 }
 
-declare void @llvm.memcpy.p0i8.p0i8.i32(i8* nocapture, i8* nocapture, i32, i32, i1) nounwind
+declare void @llvm.memcpy.p0i8.p0i8.i32(i8* nocapture, i8* nocapture, i32, i1) nounwind
 
 
 ; Check that the GEP indices use the pointer size, or 64 if unknown
@@ -145,7 +148,7 @@ entry:
   %0 = getelementptr inbounds <{ %struct_type }>, <{ %struct_type }>* %argmem, i32 0, i32 0
   %1 = bitcast %struct_type* %0 to i8*
   %2 = bitcast %struct_type* %a to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i32(i8* %1, i8* %2, i32 8, i32 4, i1 false)
+  call void @llvm.memcpy.p0i8.p0i8.i32(i8* align 4 %1, i8* align 4 %2, i32 8, i1 false)
   call void @test9_aux(<{ %struct_type }>* inalloca %argmem)
   call void @llvm.stackrestore(i8* %inalloca.save)
   ret void

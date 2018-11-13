@@ -20,14 +20,17 @@ using namespace clang::CodeGen;
 using namespace llvm;
 
 static MDNode *createMetadata(LLVMContext &Ctx, const LoopAttributes &Attrs,
-                              llvm::DebugLoc StartLoc, llvm::DebugLoc EndLoc) {
+                              const llvm::DebugLoc &StartLoc,
+                              const llvm::DebugLoc &EndLoc) {
 
   if (!Attrs.IsParallel && Attrs.VectorizeWidth == 0 &&
       Attrs.InterleaveCount == 0 && Attrs.UnrollCount == 0 &&
+      Attrs.UnrollAndJamCount == 0 &&
       Attrs.VectorizeEnable == LoopAttributes::Unspecified &&
       Attrs.UnrollEnable == LoopAttributes::Unspecified &&
-      Attrs.DistributeEnable == LoopAttributes::Unspecified &&
-      !StartLoc && !EndLoc)
+      Attrs.UnrollAndJamEnable == LoopAttributes::Unspecified &&
+      Attrs.DistributeEnable == LoopAttributes::Unspecified && !StartLoc &&
+      !EndLoc)
     return nullptr;
 
   SmallVector<Metadata *, 4> Args;
@@ -60,11 +63,19 @@ static MDNode *createMetadata(LLVMContext &Ctx, const LoopAttributes &Attrs,
     Args.push_back(MDNode::get(Ctx, Vals));
   }
 
-  // Setting interleave.count
+  // Setting unroll.count
   if (Attrs.UnrollCount > 0) {
     Metadata *Vals[] = {MDString::get(Ctx, "llvm.loop.unroll.count"),
                         ConstantAsMetadata::get(ConstantInt::get(
                             Type::getInt32Ty(Ctx), Attrs.UnrollCount))};
+    Args.push_back(MDNode::get(Ctx, Vals));
+  }
+
+  // Setting unroll_and_jam.count
+  if (Attrs.UnrollAndJamCount > 0) {
+    Metadata *Vals[] = {MDString::get(Ctx, "llvm.loop.unroll_and_jam.count"),
+                        ConstantAsMetadata::get(ConstantInt::get(
+                            Type::getInt32Ty(Ctx), Attrs.UnrollAndJamCount))};
     Args.push_back(MDNode::get(Ctx, Vals));
   }
 
@@ -90,6 +101,19 @@ static MDNode *createMetadata(LLVMContext &Ctx, const LoopAttributes &Attrs,
     Args.push_back(MDNode::get(Ctx, Vals));
   }
 
+  // Setting unroll_and_jam.full or unroll_and_jam.disable
+  if (Attrs.UnrollAndJamEnable != LoopAttributes::Unspecified) {
+    std::string Name;
+    if (Attrs.UnrollAndJamEnable == LoopAttributes::Enable)
+      Name = "llvm.loop.unroll_and_jam.enable";
+    else if (Attrs.UnrollAndJamEnable == LoopAttributes::Full)
+      Name = "llvm.loop.unroll_and_jam.full";
+    else
+      Name = "llvm.loop.unroll_and_jam.disable";
+    Metadata *Vals[] = {MDString::get(Ctx, Name)};
+    Args.push_back(MDNode::get(Ctx, Vals));
+  }
+
   if (Attrs.DistributeEnable != LoopAttributes::Unspecified) {
     Metadata *Vals[] = {MDString::get(Ctx, "llvm.loop.distribute.enable"),
                         ConstantAsMetadata::get(ConstantInt::get(
@@ -106,8 +130,9 @@ static MDNode *createMetadata(LLVMContext &Ctx, const LoopAttributes &Attrs,
 
 LoopAttributes::LoopAttributes(bool IsParallel)
     : IsParallel(IsParallel), VectorizeEnable(LoopAttributes::Unspecified),
-      UnrollEnable(LoopAttributes::Unspecified), VectorizeWidth(0),
-      InterleaveCount(0), UnrollCount(0),
+      UnrollEnable(LoopAttributes::Unspecified),
+      UnrollAndJamEnable(LoopAttributes::Unspecified), VectorizeWidth(0),
+      InterleaveCount(0), UnrollCount(0), UnrollAndJamCount(0),
       DistributeEnable(LoopAttributes::Unspecified) {}
 
 void LoopAttributes::clear() {
@@ -115,19 +140,21 @@ void LoopAttributes::clear() {
   VectorizeWidth = 0;
   InterleaveCount = 0;
   UnrollCount = 0;
+  UnrollAndJamCount = 0;
   VectorizeEnable = LoopAttributes::Unspecified;
   UnrollEnable = LoopAttributes::Unspecified;
+  UnrollAndJamEnable = LoopAttributes::Unspecified;
   DistributeEnable = LoopAttributes::Unspecified;
 }
 
 LoopInfo::LoopInfo(BasicBlock *Header, const LoopAttributes &Attrs,
-                   llvm::DebugLoc StartLoc, llvm::DebugLoc EndLoc)
+                   const llvm::DebugLoc &StartLoc, const llvm::DebugLoc &EndLoc)
     : LoopID(nullptr), Header(Header), Attrs(Attrs) {
   LoopID = createMetadata(Header->getContext(), Attrs, StartLoc, EndLoc);
 }
 
-void LoopInfoStack::push(BasicBlock *Header, llvm::DebugLoc StartLoc,
-                         llvm::DebugLoc EndLoc) {
+void LoopInfoStack::push(BasicBlock *Header, const llvm::DebugLoc &StartLoc,
+                         const llvm::DebugLoc &EndLoc) {
   Active.push_back(LoopInfo(Header, StagedAttrs, StartLoc, EndLoc));
   // Clear the attributes so nested loops do not inherit them.
   StagedAttrs.clear();
@@ -135,7 +162,8 @@ void LoopInfoStack::push(BasicBlock *Header, llvm::DebugLoc StartLoc,
 
 void LoopInfoStack::push(BasicBlock *Header, clang::ASTContext &Ctx,
                          ArrayRef<const clang::Attr *> Attrs,
-                         llvm::DebugLoc StartLoc, llvm::DebugLoc EndLoc) {
+                         const llvm::DebugLoc &StartLoc,
+                         const llvm::DebugLoc &EndLoc) {
 
   // Identify loop hint attributes from Attrs.
   for (const auto *Attr : Attrs) {
@@ -153,7 +181,7 @@ void LoopInfoStack::push(BasicBlock *Header, clang::ASTContext &Ctx,
     unsigned ValueInt = 1;
     // Translate opencl_unroll_hint attribute argument to
     // equivalent LoopHintAttr enums.
-    // OpenCL v2.0 s6.11.5:  
+    // OpenCL v2.0 s6.11.5:
     // 0 - full unroll (no argument).
     // 1 - disable unroll.
     // other positive integer n - unroll by n.
@@ -189,10 +217,14 @@ void LoopInfoStack::push(BasicBlock *Header, clang::ASTContext &Ctx,
       case LoopHintAttr::Unroll:
         setUnrollState(LoopAttributes::Disable);
         break;
+      case LoopHintAttr::UnrollAndJam:
+        setUnrollAndJamState(LoopAttributes::Disable);
+        break;
       case LoopHintAttr::Distribute:
         setDistributeState(false);
         break;
       case LoopHintAttr::UnrollCount:
+      case LoopHintAttr::UnrollAndJamCount:
       case LoopHintAttr::VectorizeWidth:
       case LoopHintAttr::InterleaveCount:
         llvm_unreachable("Options cannot be disabled.");
@@ -208,10 +240,14 @@ void LoopInfoStack::push(BasicBlock *Header, clang::ASTContext &Ctx,
       case LoopHintAttr::Unroll:
         setUnrollState(LoopAttributes::Enable);
         break;
+      case LoopHintAttr::UnrollAndJam:
+        setUnrollAndJamState(LoopAttributes::Enable);
+        break;
       case LoopHintAttr::Distribute:
         setDistributeState(true);
         break;
       case LoopHintAttr::UnrollCount:
+      case LoopHintAttr::UnrollAndJamCount:
       case LoopHintAttr::VectorizeWidth:
       case LoopHintAttr::InterleaveCount:
         llvm_unreachable("Options cannot enabled.");
@@ -227,7 +263,9 @@ void LoopInfoStack::push(BasicBlock *Header, clang::ASTContext &Ctx,
         setVectorizeEnable(true);
         break;
       case LoopHintAttr::Unroll:
+      case LoopHintAttr::UnrollAndJam:
       case LoopHintAttr::UnrollCount:
+      case LoopHintAttr::UnrollAndJamCount:
       case LoopHintAttr::VectorizeWidth:
       case LoopHintAttr::InterleaveCount:
       case LoopHintAttr::Distribute:
@@ -240,9 +278,13 @@ void LoopInfoStack::push(BasicBlock *Header, clang::ASTContext &Ctx,
       case LoopHintAttr::Unroll:
         setUnrollState(LoopAttributes::Full);
         break;
+      case LoopHintAttr::UnrollAndJam:
+        setUnrollAndJamState(LoopAttributes::Full);
+        break;
       case LoopHintAttr::Vectorize:
       case LoopHintAttr::Interleave:
       case LoopHintAttr::UnrollCount:
+      case LoopHintAttr::UnrollAndJamCount:
       case LoopHintAttr::VectorizeWidth:
       case LoopHintAttr::InterleaveCount:
       case LoopHintAttr::Distribute:
@@ -261,7 +303,11 @@ void LoopInfoStack::push(BasicBlock *Header, clang::ASTContext &Ctx,
       case LoopHintAttr::UnrollCount:
         setUnrollCount(ValueInt);
         break;
+      case LoopHintAttr::UnrollAndJamCount:
+        setUnrollAndJamCount(ValueInt);
+        break;
       case LoopHintAttr::Unroll:
+      case LoopHintAttr::UnrollAndJam:
       case LoopHintAttr::Vectorize:
       case LoopHintAttr::Interleave:
       case LoopHintAttr::Distribute:
@@ -298,6 +344,17 @@ void LoopInfoStack::InsertHelper(Instruction *I) const {
     return;
   }
 
-  if (L.getAttributes().IsParallel && I->mayReadOrWriteMemory())
-    I->setMetadata("llvm.mem.parallel_loop_access", L.getLoopID());
+  if (I->mayReadOrWriteMemory()) {
+    SmallVector<Metadata *, 2> ParallelLoopIDs;
+    for (const LoopInfo &AL : Active)
+      if (AL.getAttributes().IsParallel)
+        ParallelLoopIDs.push_back(AL.getLoopID());
+
+    MDNode *ParallelMD = nullptr;
+    if (ParallelLoopIDs.size() == 1)
+      ParallelMD = cast<MDNode>(ParallelLoopIDs[0]);
+    else if (ParallelLoopIDs.size() >= 2)
+      ParallelMD = MDNode::get(I->getContext(), ParallelLoopIDs);
+    I->setMetadata("llvm.mem.parallel_loop_access", ParallelMD);
+  }
 }

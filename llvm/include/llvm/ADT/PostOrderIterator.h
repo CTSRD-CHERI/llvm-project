@@ -17,10 +17,12 @@
 #define LLVM_ADT_POSTORDERITERATOR_H
 
 #include "llvm/ADT/GraphTraits.h"
+#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/iterator_range.h"
-#include "llvm/ADT/Optional.h"
+#include <iterator>
 #include <set>
+#include <utility>
 #include <vector>
 
 namespace llvm {
@@ -55,6 +57,7 @@ namespace llvm {
 template<class SetType, bool External>
 class po_iterator_storage {
   SetType Visited;
+
 public:
   // Return true if edge destination should be visited.
   template <typename NodeRef>
@@ -70,6 +73,7 @@ public:
 template<class SetType>
 class po_iterator_storage<SetType, true> {
   SetType &Visited;
+
 public:
   po_iterator_storage(SetType &VSet) : Visited(VSet) {}
   po_iterator_storage(const po_iterator_storage &S) : Visited(S.Visited) {}
@@ -87,35 +91,26 @@ public:
 
 template <class GraphT,
           class SetType =
-              llvm::SmallPtrSet<typename GraphTraits<GraphT>::NodeRef, 8>,
+              SmallPtrSet<typename GraphTraits<GraphT>::NodeRef, 8>,
           bool ExtStorage = false, class GT = GraphTraits<GraphT>>
 class po_iterator
     : public std::iterator<std::forward_iterator_tag, typename GT::NodeRef>,
       public po_iterator_storage<SetType, ExtStorage> {
-  typedef std::iterator<std::forward_iterator_tag, typename GT::NodeRef> super;
-  typedef typename GT::NodeRef NodeRef;
-  typedef typename GT::ChildIteratorType ChildItTy;
+  using super = std::iterator<std::forward_iterator_tag, typename GT::NodeRef>;
+  using NodeRef = typename GT::NodeRef;
+  using ChildItTy = typename GT::ChildIteratorType;
 
   // VisitStack - Used to maintain the ordering.  Top = current block
   // First element is basic block pointer, second is the 'next child' to visit
   std::vector<std::pair<NodeRef, ChildItTy>> VisitStack;
-
-  void traverseChild() {
-    while (VisitStack.back().second != GT::child_end(VisitStack.back().first)) {
-      NodeRef BB = *VisitStack.back().second++;
-      if (this->insertEdge(Optional<NodeRef>(VisitStack.back().first), BB)) {
-        // If the block is not visited...
-        VisitStack.push_back(std::make_pair(BB, GT::child_begin(BB)));
-      }
-    }
-  }
 
   po_iterator(NodeRef BB) {
     this->insertEdge(Optional<NodeRef>(), BB);
     VisitStack.push_back(std::make_pair(BB, GT::child_begin(BB)));
     traverseChild();
   }
-  po_iterator() {} // End is when stack is empty.
+
+  po_iterator() = default; // End is when stack is empty.
 
   po_iterator(NodeRef BB, SetType &S)
       : po_iterator_storage<SetType, ExtStorage>(S) {
@@ -128,8 +123,19 @@ class po_iterator
   po_iterator(SetType &S)
       : po_iterator_storage<SetType, ExtStorage>(S) {
   } // End is when stack is empty.
+
+  void traverseChild() {
+    while (VisitStack.back().second != GT::child_end(VisitStack.back().first)) {
+      NodeRef BB = *VisitStack.back().second++;
+      if (this->insertEdge(Optional<NodeRef>(VisitStack.back().first), BB)) {
+        // If the block is not visited...
+        VisitStack.push_back(std::make_pair(BB, GT::child_begin(BB)));
+      }
+    }
+  }
+
 public:
-  typedef typename super::pointer pointer;
+  using pointer = typename super::pointer;
 
   // Provide static "constructors"...
   static po_iterator begin(GraphT G) {
@@ -262,6 +268,10 @@ inverse_post_order_ext(const T &G, SetType &S) {
 // with a postorder iterator to build the data structures).  The moral of this
 // story is: Don't create more ReversePostOrderTraversal classes than necessary.
 //
+// Because it does the traversal in its constructor, it won't invalidate when
+// BasicBlocks are removed, *but* it may contain erased blocks. Some places
+// rely on this behavior (i.e. GVN).
+//
 // This class should be used like this:
 // {
 //   ReversePostOrderTraversal<Function*> RPOT(FuncPtr); // Expensive to create
@@ -274,15 +284,18 @@ inverse_post_order_ext(const T &G, SetType &S) {
 // }
 //
 
-template<class GraphT, class GT = GraphTraits<GraphT> >
+template<class GraphT, class GT = GraphTraits<GraphT>>
 class ReversePostOrderTraversal {
-  typedef typename GT::NodeRef NodeRef;
+  using NodeRef = typename GT::NodeRef;
+
   std::vector<NodeRef> Blocks; // Block list in normal PO order
+
   void Initialize(NodeRef BB) {
     std::copy(po_begin(BB), po_end(BB), std::back_inserter(Blocks));
   }
+
 public:
-  typedef typename std::vector<NodeRef>::reverse_iterator rpo_iterator;
+  using rpo_iterator = typename std::vector<NodeRef>::reverse_iterator;
 
   ReversePostOrderTraversal(GraphT G) { Initialize(GT::getEntryNode(G)); }
 
@@ -291,6 +304,6 @@ public:
   rpo_iterator end() { return Blocks.rend(); }
 };
 
-} // End llvm namespace
+} // end namespace llvm
 
-#endif
+#endif // LLVM_ADT_POSTORDERITERATOR_H

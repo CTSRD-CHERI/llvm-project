@@ -48,26 +48,25 @@ private:
       BT.reset(new BugType(this, "Use of Untrusted Data", "Untrusted Data"));
   }
 
-  /// \brief Catch taint related bugs. Check if tainted data is passed to a
+  /// Catch taint related bugs. Check if tainted data is passed to a
   /// system call etc.
   bool checkPre(const CallExpr *CE, CheckerContext &C) const;
 
-  /// \brief Add taint sources on a pre-visit.
+  /// Add taint sources on a pre-visit.
   void addSourcesPre(const CallExpr *CE, CheckerContext &C) const;
 
-  /// \brief Propagate taint generated at pre-visit.
+  /// Propagate taint generated at pre-visit.
   bool propagateFromPre(const CallExpr *CE, CheckerContext &C) const;
 
-  /// \brief Add taint sources on a post visit.
+  /// Add taint sources on a post visit.
   void addSourcesPost(const CallExpr *CE, CheckerContext &C) const;
 
   /// Check if the region the expression evaluates to is the standard input,
   /// and thus, is tainted.
   static bool isStdin(const Expr *E, CheckerContext &C);
 
-  /// \brief Given a pointer argument, get the symbol of the value it contains
-  /// (points to).
-  static SymbolRef getPointedToSymbol(CheckerContext &C, const Expr *Arg);
+  /// Given a pointer argument, return the value it points to.
+  static Optional<SVal> getPointedToSVal(CheckerContext &C, const Expr *Arg);
 
   /// Functions defining the attack surface.
   typedef ProgramStateRef (GenericTaintChecker::*FnCheck)(const CallExpr *,
@@ -101,10 +100,9 @@ private:
   bool generateReportIfTainted(const Expr *E, const char Msg[],
                                CheckerContext &C) const;
 
-
   typedef SmallVector<unsigned, 2> ArgVector;
 
-  /// \brief A struct used to specify taint propagation rules for a function.
+  /// A struct used to specify taint propagation rules for a function.
   ///
   /// If any of the possible taint source arguments is tainted, all of the
   /// destination arguments should also be tainted. Use InvalidArgIndex in the
@@ -158,12 +156,17 @@ private:
     static inline bool isTaintedOrPointsToTainted(const Expr *E,
                                                   ProgramStateRef State,
                                                   CheckerContext &C) {
-      return (State->isTainted(E, C.getLocationContext()) || isStdin(E, C) ||
-              (E->getType().getTypePtr()->isPointerType() &&
-               State->isTainted(getPointedToSymbol(C, E))));
+      if (State->isTainted(E, C.getLocationContext()) || isStdin(E, C))
+        return true;
+
+      if (!E->getType().getTypePtr()->isPointerType())
+        return false;
+
+      Optional<SVal> V = getPointedToSVal(C, E);
+      return (V && State->isTainted(*V));
     }
 
-    /// \brief Pre-process a function which propagates taint according to the
+    /// Pre-process a function which propagates taint according to the
     /// taint rule.
     ProgramStateRef process(const CallExpr *CE, CheckerContext &C) const;
 
@@ -350,9 +353,9 @@ bool GenericTaintChecker::propagateFromPre(const CallExpr *CE,
     if (CE->getNumArgs() < (ArgNum + 1))
       return false;
     const Expr* Arg = CE->getArg(ArgNum);
-    SymbolRef Sym = getPointedToSymbol(C, Arg);
-    if (Sym)
-      State = State->addTaint(Sym);
+    Optional<SVal> V = getPointedToSVal(C, Arg);
+    if (V)
+      State = State->addTaint(*V);
   }
 
   // Clear up the taint info from the state.
@@ -423,22 +426,29 @@ bool GenericTaintChecker::checkPre(const CallExpr *CE, CheckerContext &C) const{
   return false;
 }
 
-SymbolRef GenericTaintChecker::getPointedToSymbol(CheckerContext &C,
-                                                  const Expr* Arg) {
+Optional<SVal> GenericTaintChecker::getPointedToSVal(CheckerContext &C,
+                                                     const Expr *Arg) {
   ProgramStateRef State = C.getState();
-  SVal AddrVal = State->getSVal(Arg->IgnoreParens(), C.getLocationContext());
+  SVal AddrVal = C.getSVal(Arg->IgnoreParens());
   if (AddrVal.isUnknownOrUndef())
-    return nullptr;
+    return None;
 
   Optional<Loc> AddrLoc = AddrVal.getAs<Loc>();
   if (!AddrLoc)
-    return nullptr;
+    return None;
 
-  const PointerType *ArgTy =
-    dyn_cast<PointerType>(Arg->getType().getCanonicalType().getTypePtr());
-  SVal Val = State->getSVal(*AddrLoc,
-                            ArgTy ? ArgTy->getPointeeType(): QualType());
-  return Val.getAsSymbol();
+  QualType ArgTy = Arg->getType().getCanonicalType();
+  if (!ArgTy->isPointerType())
+    return None;
+
+  QualType ValTy = ArgTy->getPointeeType();
+
+  // Do not dereference void pointers. Treat them as byte pointers instead.
+  // FIXME: we might want to consider more than just the first byte.
+  if (ValTy->isVoidType())
+    ValTy = C.getASTContext().CharTy;
+
+  return State->getSVal(*AddrLoc, ValTy);
 }
 
 ProgramStateRef
@@ -558,9 +568,9 @@ ProgramStateRef GenericTaintChecker::postScanf(const CallExpr *CE,
     // The arguments are pointer arguments. The data they are pointing at is
     // tainted after the call.
     const Expr* Arg = CE->getArg(i);
-        SymbolRef Sym = getPointedToSymbol(C, Arg);
-    if (Sym)
-      State = State->addTaint(Sym);
+    Optional<SVal> V = getPointedToSVal(C, Arg);
+    if (V)
+      State = State->addTaint(*V);
   }
   return State;
 }
@@ -572,7 +582,7 @@ ProgramStateRef GenericTaintChecker::postRetTaint(const CallExpr *CE,
 
 bool GenericTaintChecker::isStdin(const Expr *E, CheckerContext &C) {
   ProgramStateRef State = C.getState();
-  SVal Val = State->getSVal(E, C.getLocationContext());
+  SVal Val = C.getSVal(E);
 
   // stdin is a pointer, so it would be a region.
   const MemRegion *MemReg = Val.getAsRegion();
@@ -597,7 +607,8 @@ bool GenericTaintChecker::isStdin(const Expr *E, CheckerContext &C) {
     if ((D->getName().find("stdin") != StringRef::npos) && D->isExternC())
         if (const PointerType * PtrTy =
               dyn_cast<PointerType>(D->getType().getTypePtr()))
-          if (PtrTy->getPointeeType() == C.getASTContext().getFILEType())
+          if (PtrTy->getPointeeType().getCanonicalType() ==
+              C.getASTContext().getFILEType().getCanonicalType())
             return true;
   }
   return false;
@@ -635,8 +646,13 @@ bool GenericTaintChecker::generateReportIfTainted(const Expr *E,
 
   // Check for taint.
   ProgramStateRef State = C.getState();
-  if (!State->isTainted(getPointedToSymbol(C, E)) &&
-      !State->isTainted(E, C.getLocationContext()))
+  Optional<SVal> PointedToSVal = getPointedToSVal(C, E);
+  SVal TaintedSVal;
+  if (PointedToSVal && State->isTainted(*PointedToSVal))
+    TaintedSVal = *PointedToSVal;
+  else if (State->isTainted(E, C.getLocationContext()))
+    TaintedSVal = C.getSVal(E);
+  else
     return false;
 
   // Generate diagnostic.
@@ -644,6 +660,7 @@ bool GenericTaintChecker::generateReportIfTainted(const Expr *E,
     initBugType();
     auto report = llvm::make_unique<BugReport>(*BT, Msg, N);
     report->addRange(E->getSourceRange());
+    report->addVisitor(llvm::make_unique<TaintBugVisitor>(TaintedSVal));
     C.emitReport(std::move(report));
     return true;
   }

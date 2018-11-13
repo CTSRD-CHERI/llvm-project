@@ -134,6 +134,9 @@ ISL_ARG_CHOICE(struct isl_options, convex, 0, "convex-hull", \
 	convex,	ISL_CONVEX_HULL_WRAP, "convex hull algorithm to use")
 ISL_ARG_BOOL(struct isl_options, coalesce_bounded_wrapping, 0,
 	"coalesce-bounded-wrapping", 1, "bound wrapping during coalescing")
+ISL_ARG_BOOL(struct isl_options, coalesce_preserve_locals, 0,
+	"coalesce-preserve-locals", 0,
+	"preserve local variables during coalescing")
 ISL_ARG_INT(struct isl_options, schedule_max_coefficient, 0,
 	"schedule-max-coefficient", "limit", -1, "Only consider schedules "
 	"where the coefficients of the variable and parameter dimensions "
@@ -169,6 +172,8 @@ ISL_ARG_BOOL(struct isl_options, schedule_whole_component, 0,
 ISL_ARG_CHOICE(struct isl_options, schedule_algorithm, 0,
 	"schedule-algorithm", isl_schedule_algorithm_choice,
 	ISL_SCHEDULE_ALGORITHM_ISL, "scheduling algorithm to use")
+ISL_ARG_BOOL(struct isl_options, schedule_carry_self_first, 0,
+	"schedule-carry-self-first", 1, "try and carry self-dependences first")
 ISL_ARG_BOOL(struct isl_options, schedule_serialize_sccs, 0,
 	"schedule-serialize-sccs", 0,
 	"serialize strongly connected components in dependence graph")
@@ -240,6 +245,11 @@ ISL_CTX_GET_BOOL_DEF(isl_options, struct isl_options, isl_options_args,
 	coalesce_bounded_wrapping)
 
 ISL_CTX_SET_BOOL_DEF(isl_options, struct isl_options, isl_options_args,
+	coalesce_preserve_locals)
+ISL_CTX_GET_BOOL_DEF(isl_options, struct isl_options, isl_options_args,
+	coalesce_preserve_locals)
+
+ISL_CTX_SET_BOOL_DEF(isl_options, struct isl_options, isl_options_args,
 	gbr_only_first)
 ISL_CTX_GET_BOOL_DEF(isl_options, struct isl_options, isl_options_args,
 	gbr_only_first)
@@ -293,6 +303,11 @@ ISL_CTX_SET_CHOICE_DEF(isl_options, struct isl_options, isl_options_args,
 	schedule_algorithm)
 ISL_CTX_GET_CHOICE_DEF(isl_options, struct isl_options, isl_options_args,
 	schedule_algorithm)
+
+ISL_CTX_SET_BOOL_DEF(isl_options, struct isl_options, isl_options_args,
+	schedule_carry_self_first)
+ISL_CTX_GET_BOOL_DEF(isl_options, struct isl_options, isl_options_args,
+	schedule_carry_self_first)
 
 ISL_CTX_SET_BOOL_DEF(isl_options, struct isl_options, isl_options_args,
 	schedule_serialize_sccs)

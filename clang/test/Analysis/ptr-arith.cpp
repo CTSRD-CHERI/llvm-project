@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -Wno-unused-value -std=c++14 -analyze -analyzer-checker=core,debug.ExprInspection,alpha.core.PointerArithm -verify %s
+// RUN: %clang_analyze_cc1 -Wno-unused-value -std=c++14 -analyzer-checker=core,debug.ExprInspection,alpha.core.PointerArithm -verify %s
 struct X {
   int *p;
   int zero;
@@ -97,4 +97,23 @@ void checkConditionalArray() {
 void checkMultiDimansionalArray() {
   int a[5][5];
    *(*(a+1)+2) = 2;
+}
+
+unsigned ptrSubtractionNoCrash(char *Begin, char *End) {
+  auto N = End - Begin;
+  if (Begin)
+    return 0;
+  return N;
+}
+
+// Bug 34309
+bool ptrAsIntegerSubtractionNoCrash(__UINTPTR_TYPE__ x, char *p) {
+  __UINTPTR_TYPE__ y = (__UINTPTR_TYPE__)p - 1;
+  return y == x;
+}
+
+// Bug 34374
+bool integerAsPtrSubtractionNoCrash(char *p, __UINTPTR_TYPE__ m) {
+  auto n = p - reinterpret_cast<char*>((__UINTPTR_TYPE__)1);
+  return n == m;
 }

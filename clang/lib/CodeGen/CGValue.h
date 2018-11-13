@@ -20,6 +20,7 @@
 #include "llvm/IR/Value.h"
 #include "llvm/IR/Type.h"
 #include "Address.h"
+#include "CodeGenTBAA.h"
 
 namespace llvm {
   class Constant;
@@ -146,6 +147,20 @@ static inline AlignmentSource getFieldAlignmentSource(AlignmentSource Source) {
   return AlignmentSource::Decl;
 }
 
+class LValueBaseInfo {
+  AlignmentSource AlignSource;
+
+public:
+  explicit LValueBaseInfo(AlignmentSource Source = AlignmentSource::Type)
+    : AlignSource(Source) {}
+  AlignmentSource getAlignmentSource() const { return AlignSource; }
+  void setAlignmentSource(AlignmentSource Source) { AlignSource = Source; }
+
+  void mergeForCast(const LValueBaseInfo &Info) {
+    setAlignmentSource(Info.getAlignmentSource());
+  }
+};
+
 /// LValue - This represents an lvalue references.  Because C/C++ allow
 /// bitfields, this is not a simple LLVM pointer, it may be a pointer plus a
 /// bitrange.
@@ -178,11 +193,11 @@ class LValue {
 
   // The alignment to use when accessing this lvalue.  (For vector elements,
   // this is the alignment of the whole vector.)
-  int64_t Alignment;
+  unsigned Alignment;
 
   // objective-c's ivar
   bool Ivar:1;
-  
+
   // objective-c's ivar is an array
   bool ObjIsArray:1;
 
@@ -192,7 +207,7 @@ class LValue {
 
   // Lvalue is a global reference of an objective-c object
   bool GlobalObjCRef : 1;
-  
+
   // Lvalue is a thread local reference
   bool ThreadLocalRef : 1;
 
@@ -200,34 +215,30 @@ class LValue {
   // to make the default bitfield pattern all-zeroes.
   bool ImpreciseLifetime : 1;
 
-  unsigned AlignSource : 2;
-
   // This flag shows if a nontemporal load/stores should be used when accessing
   // this lvalue.
   bool Nontemporal : 1;
 
+  LValueBaseInfo BaseInfo;
+  TBAAAccessInfo TBAAInfo;
+
   Expr *BaseIvarExp;
 
-  /// Used by struct-path-aware TBAA.
-  QualType TBAABaseType;
-  /// Offset relative to the base type.
-  uint64_t TBAAOffset;
-
-  /// TBAAInfo - TBAA information to attach to dereferences of this LValue.
-  llvm::MDNode *TBAAInfo;
-
 private:
-  void Initialize(QualType Type, Qualifiers Quals,
-                  CharUnits Alignment, AlignmentSource AlignSource,
-                  llvm::MDNode *TBAAInfo = nullptr) {
+  void Initialize(QualType Type, Qualifiers Quals, CharUnits Alignment,
+                  LValueBaseInfo BaseInfo, TBAAAccessInfo TBAAInfo) {
     assert((!Alignment.isZero() || Type->isIncompleteType()) &&
            "initializing l-value with zero alignment!");
     this->Type = Type;
     this->Quals = Quals;
-    this->Alignment = Alignment.getQuantity();
+    const unsigned MaxAlign = 1U << 31;
+    this->Alignment = Alignment.getQuantity() <= MaxAlign
+                          ? Alignment.getQuantity()
+                          : MaxAlign;
     assert(this->Alignment == Alignment.getQuantity() &&
            "Alignment exceeds allowed max!");
-    this->AlignSource = unsigned(AlignSource);
+    this->BaseInfo = BaseInfo;
+    this->TBAAInfo = TBAAInfo;
 
     // Initialize Objective-C flags.
     this->Ivar = this->ObjIsArray = this->NonGC = this->GlobalObjCRef = false;
@@ -235,11 +246,6 @@ private:
     this->Nontemporal = false;
     this->ThreadLocalRef = false;
     this->BaseIvarExp = nullptr;
-
-    // Initialize fields for TBAA.
-    this->TBAABaseType = Type;
-    this->TBAAOffset = 0;
-    this->TBAAInfo = TBAAInfo;
   }
 
 public:
@@ -295,33 +301,23 @@ public:
   bool isVolatile() const {
     return Quals.hasVolatile();
   }
-  
+
   Expr *getBaseIvarExp() const { return BaseIvarExp; }
   void setBaseIvarExp(Expr *V) { BaseIvarExp = V; }
 
-  QualType getTBAABaseType() const { return TBAABaseType; }
-  void setTBAABaseType(QualType T) { TBAABaseType = T; }
-
-  uint64_t getTBAAOffset() const { return TBAAOffset; }
-  void setTBAAOffset(uint64_t O) { TBAAOffset = O; }
-
-  llvm::MDNode *getTBAAInfo() const { return TBAAInfo; }
-  void setTBAAInfo(llvm::MDNode *N) { TBAAInfo = N; }
+  TBAAAccessInfo getTBAAInfo() const { return TBAAInfo; }
+  void setTBAAInfo(TBAAAccessInfo Info) { TBAAInfo = Info; }
 
   const Qualifiers &getQuals() const { return Quals; }
   Qualifiers &getQuals() { return Quals; }
 
-  unsigned getAddressSpace() const { return Quals.getAddressSpace(); }
+  LangAS getAddressSpace() const { return Quals.getAddressSpace(); }
 
   CharUnits getAlignment() const { return CharUnits::fromQuantity(Alignment); }
   void setAlignment(CharUnits A) { Alignment = A.getQuantity(); }
 
-  AlignmentSource getAlignmentSource() const {
-    return AlignmentSource(AlignSource);
-  }
-  void setAlignmentSource(AlignmentSource Source) {
-    AlignSource = unsigned(Source);
-  }
+  LValueBaseInfo getBaseInfo() const { return BaseInfo; }
+  void setBaseInfo(LValueBaseInfo Info) { BaseInfo = Info; }
 
   // simple lvalue
   llvm::Value *getPointer() const {
@@ -368,10 +364,8 @@ public:
   // global register lvalue
   llvm::Value *getGlobalReg() const { assert(isGlobalReg()); return V; }
 
-  static LValue MakeAddr(Address address, QualType type,
-                         ASTContext &Context,
-                         AlignmentSource alignSource,
-                         llvm::MDNode *TBAAInfo = nullptr) {
+  static LValue MakeAddr(Address address, QualType type, ASTContext &Context,
+                         LValueBaseInfo BaseInfo, TBAAAccessInfo TBAAInfo) {
     Qualifiers qs = type.getQualifiers();
     qs.setObjCGCAttr(Context.getObjCGCAttrKind(type));
 
@@ -379,47 +373,49 @@ public:
     R.LVType = Simple;
     assert(address.getPointer()->getType()->isPointerTy());
     R.V = address.getPointer();
-    R.Initialize(type, qs, address.getAlignment(), alignSource, TBAAInfo);
+    R.Initialize(type, qs, address.getAlignment(), BaseInfo, TBAAInfo);
     return R;
   }
 
   static LValue MakeVectorElt(Address vecAddress, llvm::Value *Idx,
-                              QualType type, AlignmentSource alignSource) {
+                              QualType type, LValueBaseInfo BaseInfo,
+                              TBAAAccessInfo TBAAInfo) {
     LValue R;
     R.LVType = VectorElt;
     R.V = vecAddress.getPointer();
     R.VectorIdx = Idx;
     R.Initialize(type, type.getQualifiers(), vecAddress.getAlignment(),
-                 alignSource);
+                 BaseInfo, TBAAInfo);
     return R;
   }
 
   static LValue MakeExtVectorElt(Address vecAddress, llvm::Constant *Elts,
-                                 QualType type, AlignmentSource alignSource) {
+                                 QualType type, LValueBaseInfo BaseInfo,
+                                 TBAAAccessInfo TBAAInfo) {
     LValue R;
     R.LVType = ExtVectorElt;
     R.V = vecAddress.getPointer();
     R.VectorElts = Elts;
     R.Initialize(type, type.getQualifiers(), vecAddress.getAlignment(),
-                 alignSource);
+                 BaseInfo, TBAAInfo);
     return R;
   }
 
-  /// \brief Create a new object to represent a bit-field access.
+  /// Create a new object to represent a bit-field access.
   ///
   /// \param Addr - The base address of the bit-field sequence this
   /// bit-field refers to.
   /// \param Info - The information describing how to perform the bit-field
   /// access.
-  static LValue MakeBitfield(Address Addr,
-                             const CGBitFieldInfo &Info,
-                             QualType type,
-                             AlignmentSource alignSource) {
+  static LValue MakeBitfield(Address Addr, const CGBitFieldInfo &Info,
+                             QualType type, LValueBaseInfo BaseInfo,
+                             TBAAAccessInfo TBAAInfo) {
     LValue R;
     R.LVType = BitField;
     R.V = Addr.getPointer();
     R.BitFieldInfo = &Info;
-    R.Initialize(type, type.getQualifiers(), Addr.getAlignment(), alignSource);
+    R.Initialize(type, type.getQualifiers(), Addr.getAlignment(), BaseInfo,
+                 TBAAInfo);
     return R;
   }
 
@@ -428,7 +424,7 @@ public:
     R.LVType = GlobalReg;
     R.V = Reg.getPointer();
     R.Initialize(type, type.getQualifiers(), Reg.getAlignment(),
-                 AlignmentSource::Decl);
+                 LValueBaseInfo(AlignmentSource::Decl), TBAAAccessInfo());
     return R;
   }
 
@@ -456,7 +452,7 @@ class AggValueSlot {
   /// slot might require calling an appropriate Objective-C GC
   /// barrier.  The exact interaction here is unnecessarily mysterious.
   bool ObjCGCFlag : 1;
-  
+
   /// ZeroedFlag - This is set to true if the memory in the slot is
   /// known to be zero before the assignment into it.  This means that
   /// zero fields don't need to be set.
@@ -476,17 +472,33 @@ class AggValueSlot {
   /// evaluating an expression which constructs such an object.
   bool AliasedFlag : 1;
 
+  /// This is set to true if the tail padding of this slot might overlap
+  /// another object that may have already been initialized (and whose
+  /// value must be preserved by this initialization). If so, we may only
+  /// store up to the dsize of the type. Otherwise we can widen stores to
+  /// the size of the type.
+  bool OverlapFlag : 1;
+
+  /// If is set to true, sanitizer checks are already generated for this address
+  /// or not required. For instance, if this address represents an object
+  /// created in 'new' expression, sanitizer checks for memory is made as a part
+  /// of 'operator new' emission and object constructor should not generate
+  /// them.
+  bool SanitizerCheckedFlag : 1;
+
 public:
   enum IsAliased_t { IsNotAliased, IsAliased };
   enum IsDestructed_t { IsNotDestructed, IsDestructed };
   enum IsZeroed_t { IsNotZeroed, IsZeroed };
+  enum Overlap_t { DoesNotOverlap, MayOverlap };
   enum NeedsGCBarriers_t { DoesNotNeedGCBarriers, NeedsGCBarriers };
+  enum IsSanitizerChecked_t { IsNotSanitizerChecked, IsSanitizerChecked };
 
   /// ignored - Returns an aggregate value slot indicating that the
   /// aggregate value is being ignored.
   static AggValueSlot ignored() {
     return forAddr(Address::invalid(), Qualifiers(), IsNotDestructed,
-                   DoesNotNeedGCBarriers, IsNotAliased);
+                   DoesNotNeedGCBarriers, IsNotAliased, DoesNotOverlap);
   }
 
   /// forAddr - Make a slot for an aggregate value.
@@ -504,7 +516,9 @@ public:
                               IsDestructed_t isDestructed,
                               NeedsGCBarriers_t needsGC,
                               IsAliased_t isAliased,
-                              IsZeroed_t isZeroed = IsNotZeroed) {
+                              Overlap_t mayOverlap,
+                              IsZeroed_t isZeroed = IsNotZeroed,
+                       IsSanitizerChecked_t isChecked = IsNotSanitizerChecked) {
     AggValueSlot AV;
     if (addr.isValid()) {
       AV.Addr = addr.getPointer();
@@ -518,6 +532,8 @@ public:
     AV.ObjCGCFlag = needsGC;
     AV.ZeroedFlag = isZeroed;
     AV.AliasedFlag = isAliased;
+    AV.OverlapFlag = mayOverlap;
+    AV.SanitizerCheckedFlag = isChecked;
     return AV;
   }
 
@@ -525,9 +541,11 @@ public:
                                 IsDestructed_t isDestructed,
                                 NeedsGCBarriers_t needsGC,
                                 IsAliased_t isAliased,
-                                IsZeroed_t isZeroed = IsNotZeroed) {
-    return forAddr(LV.getAddress(),
-                   LV.getQuals(), isDestructed, needsGC, isAliased, isZeroed);
+                                Overlap_t mayOverlap,
+                                IsZeroed_t isZeroed = IsNotZeroed,
+                       IsSanitizerChecked_t isChecked = IsNotSanitizerChecked) {
+    return forAddr(LV.getAddress(), LV.getQuals(), isDestructed, needsGC,
+                   isAliased, mayOverlap, isZeroed, isChecked);
   }
 
   IsDestructed_t isExternallyDestructed() const {
@@ -546,7 +564,7 @@ public:
   void setVolatile(bool flag) {
     Quals.setVolatile(flag);
   }
-  
+
   Qualifiers::ObjCLifetime getObjCLifetime() const {
     return Quals.getObjCLifetime();
   }
@@ -575,6 +593,14 @@ public:
     return IsAliased_t(AliasedFlag);
   }
 
+  Overlap_t mayOverlap() const {
+    return Overlap_t(OverlapFlag);
+  }
+
+  bool isSanitizerChecked() const {
+    return SanitizerCheckedFlag;
+  }
+
   RValue asRValue() const {
     if (isIgnored()) {
       return RValue::getIgnored();
@@ -586,6 +612,14 @@ public:
   void setZeroed(bool V = true) { ZeroedFlag = V; }
   IsZeroed_t isZeroed() const {
     return IsZeroed_t(ZeroedFlag);
+  }
+
+  /// Get the preferred size to use when storing a value to this slot. This
+  /// is the type size unless that might overlap another object, in which
+  /// case it's the dsize.
+  CharUnits getPreferredSize(ASTContext &Ctx, QualType Type) const {
+    return mayOverlap() ? Ctx.getTypeInfoDataSizeInChars(Type).first
+                        : Ctx.getTypeSizeInChars(Type);
   }
 };
 

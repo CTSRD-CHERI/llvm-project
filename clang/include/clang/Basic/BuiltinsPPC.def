@@ -51,14 +51,14 @@ BUILTIN(__builtin_altivec_vavguw, "V4UiV4UiV4Ui", "")
 
 BUILTIN(__builtin_altivec_vrfip, "V4fV4f", "")
 
-BUILTIN(__builtin_altivec_vcfsx, "V4fV4ii", "")
-BUILTIN(__builtin_altivec_vcfux, "V4fV4ii", "")
-BUILTIN(__builtin_altivec_vctsxs, "V4SiV4fi", "")
-BUILTIN(__builtin_altivec_vctuxs, "V4UiV4fi", "")
+BUILTIN(__builtin_altivec_vcfsx, "V4fV4iIi", "")
+BUILTIN(__builtin_altivec_vcfux, "V4fV4iIi", "")
+BUILTIN(__builtin_altivec_vctsxs, "V4SiV4fIi", "")
+BUILTIN(__builtin_altivec_vctuxs, "V4UiV4fIi", "")
 
 BUILTIN(__builtin_altivec_dss, "vUi", "")
 BUILTIN(__builtin_altivec_dssall, "v", "")
-BUILTIN(__builtin_altivec_dst, "vvC*iUi", "") 
+BUILTIN(__builtin_altivec_dst, "vvC*iUi", "")
 BUILTIN(__builtin_altivec_dstt, "vvC*iUi", "")
 BUILTIN(__builtin_altivec_dstst, "vvC*iUi", "")
 BUILTIN(__builtin_altivec_dststt, "vvC*iUi", "")
@@ -417,6 +417,23 @@ BUILTIN(__builtin_vsx_xvcvhpsp, "V4fV8Us", "")
 BUILTIN(__builtin_vsx_xvtstdcdp, "V2ULLiV2dIi", "")
 BUILTIN(__builtin_vsx_xvtstdcsp, "V4UiV4fIi", "")
 
+BUILTIN(__builtin_vsx_insertword, "V16UcV4UiV16UcIi", "")
+BUILTIN(__builtin_vsx_extractuword, "V2ULLiV16UcIi", "")
+
+BUILTIN(__builtin_vsx_xxpermdi, "v.", "t")
+BUILTIN(__builtin_vsx_xxsldwi, "v.", "t")
+
+// Float 128 built-ins
+BUILTIN(__builtin_sqrtf128_round_to_odd, "LLdLLd", "")
+BUILTIN(__builtin_addf128_round_to_odd, "LLdLLdLLd", "")
+BUILTIN(__builtin_subf128_round_to_odd, "LLdLLdLLd", "")
+BUILTIN(__builtin_mulf128_round_to_odd, "LLdLLdLLd", "")
+BUILTIN(__builtin_divf128_round_to_odd, "LLdLLdLLd", "")
+BUILTIN(__builtin_fmaf128_round_to_odd, "LLdLLdLLdLLd", "")
+BUILTIN(__builtin_truncf128_round_to_odd, "dLLd", "")
+BUILTIN(__builtin_vsx_scalar_extract_expq, "ULLiLLd", "")
+BUILTIN(__builtin_vsx_scalar_insert_exp_qp, "LLdLLdULLi", "")
+
 // HTM builtins
 BUILTIN(__builtin_tbegin, "UiUIi", "")
 BUILTIN(__builtin_tend, "UiUIi", "")
@@ -454,6 +471,10 @@ BUILTIN(__builtin_divweu, "UiUiUi", "")
 BUILTIN(__builtin_divde, "SLLiSLLiSLLi", "")
 BUILTIN(__builtin_divdeu, "ULLiULLiULLi", "")
 BUILTIN(__builtin_bpermd, "SLLiSLLiSLLi", "")
+
+// Vector int128 (un)pack
+BUILTIN(__builtin_unpack_vector_int128, "ULLiV1LLLii", "")
+BUILTIN(__builtin_pack_vector_int128, "V1LLLiULLiULLi", "")
 
 // FIXME: Obviously incomplete.
 

@@ -14,6 +14,7 @@
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Basic/FileManager.h"
 #include "clang/Basic/LangOptions.h"
+#include "clang/Basic/MemoryBufferCache.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
@@ -31,25 +32,6 @@ using namespace clang;
 
 namespace {
 
-// Stub out module loading.
-class VoidModuleLoader : public ModuleLoader {
-  ModuleLoadResult loadModule(SourceLocation ImportLoc, 
-                              ModuleIdPath Path,
-                              Module::NameVisibilityKind Visibility,
-                              bool IsInclusionDirective) override {
-    return ModuleLoadResult();
-  }
-
-  void makeModuleVisible(Module *Mod,
-                         Module::NameVisibilityKind Visibility,
-                         SourceLocation ImportLoc) override { }
-
-  GlobalModuleIndex *loadGlobalModuleIndex(SourceLocation TriggerLoc) override
-    { return nullptr; }
-  bool lookupMissingImports(StringRef Name, SourceLocation TriggerLoc) override
-    { return 0; }
-};
-
 // Stub to collect data from InclusionDirective callbacks.
 class InclusionDirectiveCallbacks : public PPCallbacks {
 public:
@@ -57,16 +39,18 @@ public:
                           StringRef FileName, bool IsAngled,
                           CharSourceRange FilenameRange, const FileEntry *File,
                           StringRef SearchPath, StringRef RelativePath,
-                          const Module *Imported) override {
-      this->HashLoc = HashLoc;
-      this->IncludeTok = IncludeTok;
-      this->FileName = FileName.str();
-      this->IsAngled = IsAngled;
-      this->FilenameRange = FilenameRange;
-      this->File = File;
-      this->SearchPath = SearchPath.str();
-      this->RelativePath = RelativePath.str();
-      this->Imported = Imported;
+                          const Module *Imported,
+                          SrcMgr::CharacteristicKind FileType) override {
+    this->HashLoc = HashLoc;
+    this->IncludeTok = IncludeTok;
+    this->FileName = FileName.str();
+    this->IsAngled = IsAngled;
+    this->FilenameRange = FilenameRange;
+    this->File = File;
+    this->SearchPath = SearchPath.str();
+    this->RelativePath = RelativePath.str();
+    this->Imported = Imported;
+    this->FileType = FileType;
   }
 
   SourceLocation HashLoc;
@@ -78,6 +62,7 @@ public:
   SmallString<16> SearchPath;
   SmallString<16> RelativePath;
   const Module* Imported;
+  SrcMgr::CharacteristicKind FileType;
 };
 
 // Stub to collect data from PragmaOpenCLExtension callbacks.
@@ -160,17 +145,41 @@ protected:
         llvm::MemoryBuffer::getMemBuffer(SourceText);
     SourceMgr.setMainFileID(SourceMgr.createFileID(std::move(Buf)));
 
-    VoidModuleLoader ModLoader;
+    TrivialModuleLoader ModLoader;
+    MemoryBufferCache PCMCache;
 
-    IntrusiveRefCntPtr<HeaderSearchOptions> HSOpts = new HeaderSearchOptions();
-    HeaderSearch HeaderInfo(HSOpts, SourceMgr, Diags, LangOpts,
-                            Target.get());
+    HeaderSearch HeaderInfo(std::make_shared<HeaderSearchOptions>(), SourceMgr,
+                            Diags, LangOpts, Target.get());
     AddFakeHeader(HeaderInfo, HeaderPath, SystemHeader);
 
-    IntrusiveRefCntPtr<PreprocessorOptions> PPOpts = new PreprocessorOptions();
-    Preprocessor PP(PPOpts, Diags, LangOpts, SourceMgr, HeaderInfo, ModLoader,
+    Preprocessor PP(std::make_shared<PreprocessorOptions>(), Diags, LangOpts,
+                    SourceMgr, PCMCache, HeaderInfo, ModLoader,
                     /*IILookup =*/nullptr,
                     /*OwnsHeaderSearch =*/false);
+    return InclusionDirectiveCallback(PP)->FilenameRange;
+  }
+
+  SrcMgr::CharacteristicKind InclusionDirectiveCharacteristicKind(
+      const char *SourceText, const char *HeaderPath, bool SystemHeader) {
+    std::unique_ptr<llvm::MemoryBuffer> Buf =
+        llvm::MemoryBuffer::getMemBuffer(SourceText);
+    SourceMgr.setMainFileID(SourceMgr.createFileID(std::move(Buf)));
+
+    TrivialModuleLoader ModLoader;
+    MemoryBufferCache PCMCache;
+
+    HeaderSearch HeaderInfo(std::make_shared<HeaderSearchOptions>(), SourceMgr,
+                            Diags, LangOpts, Target.get());
+    AddFakeHeader(HeaderInfo, HeaderPath, SystemHeader);
+
+    Preprocessor PP(std::make_shared<PreprocessorOptions>(), Diags, LangOpts,
+                    SourceMgr, PCMCache, HeaderInfo, ModLoader,
+                    /*IILookup =*/nullptr,
+                    /*OwnsHeaderSearch =*/false);
+    return InclusionDirectiveCallback(PP)->FileType;
+  }
+
+  InclusionDirectiveCallbacks *InclusionDirectiveCallback(Preprocessor &PP) {
     PP.Initialize(*Target);
     InclusionDirectiveCallbacks* Callbacks = new InclusionDirectiveCallbacks;
     PP.addPPCallbacks(std::unique_ptr<PPCallbacks>(Callbacks));
@@ -186,7 +195,7 @@ protected:
     }
 
     // Callbacks have been executed at this point -- return filename range.
-    return Callbacks->FilenameRange;
+    return Callbacks;
   }
 
   PragmaOpenCLExtensionCallbacks::CallbackParameters 
@@ -198,12 +207,14 @@ protected:
         llvm::MemoryBuffer::getMemBuffer(SourceText, "test.cl");
     SourceMgr.setMainFileID(SourceMgr.createFileID(std::move(SourceBuf)));
 
-    VoidModuleLoader ModLoader;
-    HeaderSearch HeaderInfo(new HeaderSearchOptions, SourceMgr, Diags, 
-                            OpenCLLangOpts, Target.get());
+    TrivialModuleLoader ModLoader;
+    MemoryBufferCache PCMCache;
+    HeaderSearch HeaderInfo(std::make_shared<HeaderSearchOptions>(), SourceMgr,
+                            Diags, OpenCLLangOpts, Target.get());
 
-    Preprocessor PP(new PreprocessorOptions(), Diags, OpenCLLangOpts, SourceMgr,
-                    HeaderInfo, ModLoader, /*IILookup =*/nullptr,
+    Preprocessor PP(std::make_shared<PreprocessorOptions>(), Diags,
+                    OpenCLLangOpts, SourceMgr, PCMCache, HeaderInfo, ModLoader,
+                    /*IILookup =*/nullptr,
                     /*OwnsHeaderSearch =*/false);
     PP.Initialize(*Target);
 
@@ -237,6 +248,15 @@ protected:
     return RetVal;    
   }
 };
+
+TEST_F(PPCallbacksTest, UserFileCharacteristics) {
+  const char *Source = "#include \"quoted.h\"\n";
+
+  SrcMgr::CharacteristicKind Kind =
+      InclusionDirectiveCharacteristicKind(Source, "/quoted.h", false);
+
+  ASSERT_EQ(SrcMgr::CharacteristicKind::C_User, Kind);
+}
 
 TEST_F(PPCallbacksTest, QuotedFilename) {
   const char* Source =

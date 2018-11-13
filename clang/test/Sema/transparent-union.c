@@ -43,6 +43,35 @@ void fi(int i) {} // expected-error{{conflicting types}}
 void fvpp(TU); // expected-note{{previous declaration is here}}
 void fvpp(void **v) {} // expected-error{{conflicting types}}
 
+/* Test redeclaring a function taking a transparent_union arg more than twice.
+   Merging different declarations depends on their order, vary order too. */
+
+void f_triple0(TU tu) {}
+void f_triple0(int *); // expected-note{{previous declaration is here}}
+void f_triple0(float *f); // expected-error{{conflicting types}}
+
+void f_triple1(int *);
+void f_triple1(TU tu) {} // expected-note{{previous definition is here}}
+void f_triple1(float *f); // expected-error{{conflicting types}}
+
+void f_triple2(int *); // expected-note{{previous declaration is here}}
+void f_triple2(float *f); // expected-error{{conflicting types}}
+void f_triple2(TU tu) {}
+
+/* Test calling redeclared function taking a transparent_union arg. */
+
+void f_callee(TU);
+void f_callee(int *i) {} // expected-note{{passing argument to parameter 'i' here}}
+
+void caller(void) {
+  TU tu;
+  f_callee(tu); // expected-error{{passing 'TU' to parameter of incompatible type 'int *'}}
+
+  int *i;
+  f_callee(i);
+}
+
+
 /* FIXME: we'd like to just use an "int" here and align it differently
    from the normal "int", but if we do so we lose the alignment
    information from the typedef within the compiler. */
@@ -54,10 +83,20 @@ typedef union {
   aligned_struct8 s8; // expected-warning{{alignment of field}}
 } TU1 __attribute__((transparent_union));
 
+typedef union __attribute__((transparent_union)) {
+  aligned_struct4 s4; // expected-note{{alignment of first field}}
+  aligned_struct8 s8; // expected-warning{{alignment of field}}
+} TU1b ;
+
 typedef union {
   char c; // expected-note{{size of first field is 8 bits}}
   int i; // expected-warning{{size of field}}
 } TU2 __attribute__((transparent_union));
+
+typedef union __attribute__((transparent_union)){
+  char c; // expected-note{{size of first field is 8 bits}}
+  int i; // expected-warning{{size of field}}
+} TU2b;
 
 typedef union {
   float f; // expected-warning{{floating}}
@@ -92,9 +131,23 @@ union pr15134v2 {
 
 union pr30520v { void b; } __attribute__((transparent_union)); // expected-error {{field has incomplete type 'void'}}
 
-union pr30520a { int b[]; } __attribute__((transparent_union)); // expected-error {{field has incomplete type 'int []'}}
+union pr30520a { int b[]; } __attribute__((transparent_union)); // expected-error {{flexible array member 'b' in a union is not allowed}}
 
 // expected-note@+1 2 {{forward declaration of 'struct stb'}}
 union pr30520s { struct stb b; } __attribute__((transparent_union)); // expected-error {{field has incomplete type 'struct stb'}}
 
 union pr30520s2 { int *v; struct stb b; } __attribute__((transparent_union)); // expected-error {{field has incomplete type 'struct stb'}}
+
+typedef union __attribute__((__transparent_union__)) {
+  int *i;
+  struct st *s;
+} TU6;
+
+void bar(TU6);
+
+void foo11(int *i) {
+  bar(i);
+}
+void foo2(struct st *s) {
+  bar(s);
+}

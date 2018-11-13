@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <map>
 
 // class map
@@ -22,7 +24,6 @@
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
     typedef std::pair<const int, double> V;
     {
         typedef test_compare<std::less<int> > C;
@@ -34,7 +35,7 @@ int main()
         assert(m.size() == 0);
         assert(distance(m.begin(), m.end()) == 0);
 
-        assert(mo.get_allocator() == A(7));
+        assert(mo.get_allocator() == A(test_alloc_base::moved_value));
         assert(mo.key_comp() == C(5));
         assert(mo.size() == 0);
         assert(distance(mo.begin(), mo.end()) == 0);
@@ -64,12 +65,11 @@ int main()
         assert(*next(m.begin()) == V(2, 1));
         assert(*next(m.begin(), 2) == V(3, 1));
 
-        assert(mo.get_allocator() == A(7));
+        assert(mo.get_allocator() == A(test_alloc_base::moved_value));
         assert(mo.key_comp() == C(5));
         assert(mo.size() == 0);
         assert(distance(mo.begin(), mo.end()) == 0);
     }
-#if TEST_STD_VER >= 11
     {
         typedef test_compare<std::less<int> > C;
         typedef min_allocator<V> A;
@@ -115,6 +115,4 @@ int main()
         assert(mo.size() == 0);
         assert(distance(mo.begin(), mo.end()) == 0);
     }
-#endif
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
 }

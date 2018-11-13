@@ -203,9 +203,9 @@ unsigned AVRDAGToDAGISel::selectIndexedProgMemLoad(const LoadSDNode *LD,
 bool AVRDAGToDAGISel::SelectInlineAsmMemoryOperand(const SDValue &Op,
                                                    unsigned ConstraintCode,
                                                    std::vector<SDValue> &OutOps) {
-  // Yes hardcoded 'm' symbol. Just because it also has been hardcoded in
-  // SelectionDAGISel (callee for this method).
-  assert(ConstraintCode == 'm' && "Unexpected asm memory constraint");
+  assert((ConstraintCode == InlineAsm::Constraint_m ||
+         ConstraintCode == InlineAsm::Constraint_Q) &&
+      "Unexpected asm memory constraint");
 
   MachineRegisterInfo &RI = MF->getRegInfo();
   const AVRSubtarget &STI = MF->getSubtarget<AVRSubtarget>();
@@ -328,7 +328,8 @@ template <> bool AVRDAGToDAGISel::select<ISD::STORE>(SDNode *N) {
   SDValue BasePtr = ST->getBasePtr();
 
   // Early exit when the base pointer is a frame index node or a constant.
-  if (isa<FrameIndexSDNode>(BasePtr) || isa<ConstantSDNode>(BasePtr)) {
+  if (isa<FrameIndexSDNode>(BasePtr) || isa<ConstantSDNode>(BasePtr) ||
+      BasePtr.isUndef()) {
     return false;
   }
 
@@ -349,9 +350,7 @@ template <> bool AVRDAGToDAGISel::select<ISD::STORE>(SDNode *N) {
   SDNode *ResNode = CurDAG->getMachineNode(Opc, DL, MVT::Other, Ops);
 
   // Transfer memory operands.
-  MachineSDNode::mmo_iterator MemOp = MF->allocateMemRefsArray(1);
-  MemOp[0] = ST->getMemOperand();
-  cast<MachineSDNode>(ResNode)->setMemRefs(MemOp, MemOp + 1);
+  CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode), {ST->getMemOperand()});
 
   ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
   CurDAG->RemoveDeadNode(N);
@@ -365,6 +364,8 @@ template <> bool AVRDAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
     // Check if the opcode can be converted into an indexed load.
     return selectIndexedLoad(N);
   }
+
+  assert(Subtarget->hasLPM() && "cannot load from program memory on this mcu");
 
   // This is a flash memory load, move the pointer into R31R30 and emit
   // the lpm instruction.
@@ -404,9 +405,7 @@ template <> bool AVRDAGToDAGISel::select<ISD::LOAD>(SDNode *N) {
   }
 
   // Transfer memory operands.
-  MachineSDNode::mmo_iterator MemOp = MF->allocateMemRefsArray(1);
-  MemOp[0] = LD->getMemOperand();
-  cast<MachineSDNode>(ResNode)->setMemRefs(MemOp, MemOp + 1);
+  CurDAG->setNodeMemRefs(cast<MachineSDNode>(ResNode), {LD->getMemOperand()});
 
   ReplaceUses(SDValue(N, 0), SDValue(ResNode, 0));
   ReplaceUses(SDValue(N, 1), SDValue(ResNode, 1));
@@ -516,12 +515,9 @@ bool AVRDAGToDAGISel::selectMultiplication(llvm::SDNode *N) {
 }
 
 void AVRDAGToDAGISel::Select(SDNode *N) {
-  // Dump information about the Node being selected
-  DEBUG(errs() << "Selecting: "; N->dump(CurDAG); errs() << "\n");
-
   // If we have a custom node, we already have selected!
   if (N->isMachineOpcode()) {
-    DEBUG(errs() << "== "; N->dump(CurDAG); errs() << "\n");
+    LLVM_DEBUG(errs() << "== "; N->dump(CurDAG); errs() << "\n");
     N->setNodeId(-1);
     return;
   }

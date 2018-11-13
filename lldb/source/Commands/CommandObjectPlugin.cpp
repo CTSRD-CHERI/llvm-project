@@ -42,20 +42,13 @@ public:
 
   ~CommandObjectPluginLoad() override = default;
 
-  int HandleArgumentCompletion(Args &input, int &cursor_index,
-                               int &cursor_char_position,
-                               OptionElementVector &opt_element_vector,
-                               int match_start_point, int max_return_elements,
-                               bool &word_complete,
-                               StringList &matches) override {
-    std::string completion_str(input.GetArgumentAtIndex(cursor_index));
-    completion_str.erase(cursor_char_position);
-
+  int HandleArgumentCompletion(
+      CompletionRequest &request,
+      OptionElementVector &opt_element_vector) override {
     CommandCompletions::InvokeCommonCompletionCallbacks(
         GetCommandInterpreter(), CommandCompletions::eDiskFileCompletion,
-        completion_str.c_str(), match_start_point, max_return_elements, nullptr,
-        word_complete, matches);
-    return matches.GetSize();
+        request, nullptr);
+    return request.GetNumberOfMatches();
   }
 
 protected:
@@ -68,11 +61,9 @@ protected:
       return false;
     }
 
-    const char *path = command.GetArgumentAtIndex(0);
+    Status error;
 
-    Error error;
-
-    FileSpec dylib_fspec(path, true);
+    FileSpec dylib_fspec(command[0].ref, true);
 
     if (m_interpreter.GetDebugger().LoadPlugin(dylib_fspec, error))
       result.SetStatus(eReturnStatusSuccessFinishResult);

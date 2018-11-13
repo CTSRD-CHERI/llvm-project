@@ -31,6 +31,7 @@ struct AddressInfo {
 
   char *module;
   uptr module_offset;
+  ModuleArch module_arch;
 
   static const uptr kUnknown = ~(uptr)0;
   char *function;
@@ -43,7 +44,7 @@ struct AddressInfo {
   AddressInfo();
   // Deletes all strings and resets all fields.
   void Clear();
-  void FillModuleInfo(const char *mod_name, uptr mod_offset);
+  void FillModuleInfo(const char *mod_name, uptr mod_offset, ModuleArch arch);
 };
 
 // Linked list of symbolized frames (each frame is described by AddressInfo).
@@ -65,6 +66,8 @@ struct DataInfo {
   // (de)allocated using sanitizer internal allocator.
   char *module;
   uptr module_offset;
+  ModuleArch module_arch;
+
   char *file;
   uptr line;
   char *name;
@@ -104,7 +107,6 @@ class Symbolizer final {
   void Flush();
   // Attempts to demangle the provided C++ mangled name.
   const char *Demangle(const char *name);
-  void PrepareForSandboxing();
 
   // Allow user to install hooks that would be called before/after Symbolizer
   // does the actual file/line info fetching. Specific sanitizers may need this
@@ -116,7 +118,10 @@ class Symbolizer final {
   void AddHooks(StartSymbolizationHook start_hook,
                 EndSymbolizationHook end_hook);
 
+  void RefreshModules();
   const LoadedModule *FindModuleForAddress(uptr address);
+
+  void InvalidateModuleList();
 
  private:
   // GetModuleNameAndOffsetForPC has to return a string to the caller.
@@ -127,8 +132,9 @@ class Symbolizer final {
   class ModuleNameOwner {
    public:
     explicit ModuleNameOwner(BlockingMutex *synchronized_by)
-        : storage_(kInitialCapacity), last_match_(nullptr),
-          mu_(synchronized_by) {}
+        : last_match_(nullptr), mu_(synchronized_by) {
+      storage_.reserve(kInitialCapacity);
+    }
     const char *GetOwnedCopy(const char *str);
 
    private:
@@ -143,14 +149,15 @@ class Symbolizer final {
   static Symbolizer *PlatformInit();
 
   bool FindModuleNameAndOffsetForAddress(uptr address, const char **module_name,
-                                         uptr *module_offset);
+                                         uptr *module_offset,
+                                         ModuleArch *module_arch);
   ListOfModules modules_;
+  ListOfModules fallback_modules_;
   // If stale, need to reload the modules before looking up addresses.
   bool modules_fresh_;
 
   // Platform-specific default demangler, must not return nullptr.
   const char *PlatformDemangle(const char *name);
-  void PlatformPrepareForSandboxing();
 
   static Symbolizer *symbolizer_;
   static StaticSpinMutex init_mu_;

@@ -1,4 +1,4 @@
-//===- llvm/CodeGen/GlobalISel/InstructionSelector.cpp -----------*- C++ -*-==//
+//===- llvm/CodeGen/GlobalISel/InstructionSelector.cpp --------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,55 +6,79 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+//
 /// \file
 /// This file implements the InstructionSelector class.
+//
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
-#include "llvm/CodeGen/GlobalISel/RegisterBankInfo.h"
+#include "llvm/CodeGen/GlobalISel/Utils.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
-#include "llvm/Target/TargetInstrInfo.h"
-#include "llvm/Target/TargetRegisterInfo.h"
+#include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/MC/MCInstrDesc.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
+#include <cassert>
 
 #define DEBUG_TYPE "instructionselector"
 
 using namespace llvm;
 
-InstructionSelector::InstructionSelector() {}
+InstructionSelector::MatcherState::MatcherState(unsigned MaxRenderers)
+    : Renderers(MaxRenderers), MIs() {}
 
-bool InstructionSelector::constrainSelectedInstRegOperands(
-    MachineInstr &I, const TargetInstrInfo &TII, const TargetRegisterInfo &TRI,
+InstructionSelector::InstructionSelector() = default;
+
+bool InstructionSelector::constrainOperandRegToRegClass(
+    MachineInstr &I, unsigned OpIdx, const TargetRegisterClass &RC,
+    const TargetInstrInfo &TII, const TargetRegisterInfo &TRI,
     const RegisterBankInfo &RBI) const {
   MachineBasicBlock &MBB = *I.getParent();
   MachineFunction &MF = *MBB.getParent();
   MachineRegisterInfo &MRI = MF.getRegInfo();
 
-  for (unsigned OpI = 0, OpE = I.getNumExplicitOperands(); OpI != OpE; ++OpI) {
-    MachineOperand &MO = I.getOperand(OpI);
+  return
+      constrainRegToClass(MRI, TII, RBI, I, I.getOperand(OpIdx).getReg(), RC);
+}
 
-    // There's nothing to be done on non-register operands.
-    if (!MO.isReg())
-      continue;
+bool InstructionSelector::isOperandImmEqual(
+    const MachineOperand &MO, int64_t Value,
+    const MachineRegisterInfo &MRI) const {
+  if (MO.isReg() && MO.getReg())
+    if (auto VRegVal = getConstantVRegVal(MO.getReg(), MRI))
+      return *VRegVal == Value;
+  return false;
+}
 
-    DEBUG(dbgs() << "Converting operand: " << MO << '\n');
-    assert(MO.isReg() && "Unsupported non-reg operand");
-
-    // Physical registers don't need to be constrained.
-    if (TRI.isPhysicalRegister(MO.getReg()))
-      continue;
-
-    const TargetRegisterClass *RC = TII.getRegClass(I.getDesc(), OpI, &TRI, MF);
-    assert(RC && "Selected inst should have regclass operand");
-
-    // If the operand is a vreg, we should constrain its regclass, and only
-    // insert COPYs if that's impossible.
-    // If the operand is a physreg, we only insert COPYs if the register class
-    // doesn't contain the register.
-    if (RBI.constrainGenericRegister(MO.getReg(), *RC, MRI))
-      continue;
-
-    DEBUG(dbgs() << "Constraining with COPYs isn't implemented yet");
+bool InstructionSelector::isBaseWithConstantOffset(
+    const MachineOperand &Root, const MachineRegisterInfo &MRI) const {
+  if (!Root.isReg())
     return false;
-  }
+
+  MachineInstr *RootI = MRI.getVRegDef(Root.getReg());
+  if (RootI->getOpcode() != TargetOpcode::G_GEP)
+    return false;
+
+  MachineOperand &RHS = RootI->getOperand(2);
+  MachineInstr *RHSI = MRI.getVRegDef(RHS.getReg());
+  if (RHSI->getOpcode() != TargetOpcode::G_CONSTANT)
+    return false;
+
   return true;
+}
+
+bool InstructionSelector::isObviouslySafeToFold(MachineInstr &MI,
+                                                MachineInstr &IntoMI) const {
+  // Immediate neighbours are already folded.
+  if (MI.getParent() == IntoMI.getParent() &&
+      std::next(MI.getIterator()) == IntoMI.getIterator())
+    return true;
+
+  return !MI.mayLoadOrStore() && !MI.hasUnmodeledSideEffects() &&
+         MI.implicit_operands().begin() == MI.implicit_operands().end();
 }

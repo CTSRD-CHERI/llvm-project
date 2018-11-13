@@ -9,16 +9,23 @@
 
 #include "clang/Basic/VirtualFileSystem.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/Config/llvm-config.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/SourceMgr.h"
+#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include <map>
+#include <string>
 
 using namespace clang;
 using namespace llvm;
 using llvm::sys::fs::UniqueID;
+using testing::ElementsAre;
+using testing::Pair;
+using testing::UnorderedElementsAre;
 
 namespace {
 struct DummyFile : public vfs::File {
@@ -66,6 +73,21 @@ public:
   std::error_code setCurrentWorkingDirectory(const Twine &Path) override {
     return std::error_code();
   }
+  // Map any symlink to "/symlink".
+  std::error_code getRealPath(const Twine &Path,
+                              SmallVectorImpl<char> &Output) const override {
+    auto I = FilesAndDirs.find(Path.str());
+    if (I == FilesAndDirs.end())
+      return make_error_code(llvm::errc::no_such_file_or_directory);
+    if (I->second.isSymlink()) {
+      Output.clear();
+      Twine("/symlink").toVector(Output);
+      return std::error_code();
+    }
+    Output.clear();
+    Path.toVector(Output);
+    return std::error_code();
+  }
 
   struct DirIterImpl : public clang::vfs::detail::DirIterImpl {
     std::map<std::string, vfs::Status> &FilesAndDirs;
@@ -85,7 +107,8 @@ public:
           Path(_Path.str()) {
       for ( ; I != FilesAndDirs.end(); ++I) {
         if (isInPath(I->first)) {
-          CurrentEntry = I->second;
+          CurrentEntry =
+              vfs::directory_entry(I->second.getName(), I->second.getType());
           break;
         }
       }
@@ -94,12 +117,13 @@ public:
       ++I;
       for ( ; I != FilesAndDirs.end(); ++I) {
         if (isInPath(I->first)) {
-          CurrentEntry = I->second;
+          CurrentEntry =
+              vfs::directory_entry(I->second.getName(), I->second.getType());
           break;
         }
       }
       if (I == FilesAndDirs.end())
-        CurrentEntry = vfs::Status();
+        CurrentEntry = vfs::directory_entry();
       return std::error_code();
     }
   };
@@ -135,6 +159,13 @@ public:
     addEntry(Path, S);
   }
 };
+
+/// Replace back-slashes by front-slashes.
+std::string getPosixPath(std::string S) {
+  SmallString<128> Result;
+  llvm::sys::path::native(S, Result, llvm::sys::path::Style::posix);
+  return Result.str();
+}
 } // end anonymous namespace
 
 TEST(VirtualFileSystemTest, StatusQueries) {
@@ -193,6 +224,35 @@ TEST(VirtualFileSystemTest, BaseOnlyOverlay) {
   Status2 = O->status("/foo");
   EXPECT_FALSE(Status2.getError());
   EXPECT_TRUE(Status->equivalent(*Status2));
+}
+
+TEST(VirtualFileSystemTest, GetRealPathInOverlay) {
+  IntrusiveRefCntPtr<DummyFileSystem> Lower(new DummyFileSystem());
+  Lower->addRegularFile("/foo");
+  Lower->addSymlink("/lower_link");
+  IntrusiveRefCntPtr<DummyFileSystem> Upper(new DummyFileSystem());
+
+  IntrusiveRefCntPtr<vfs::OverlayFileSystem> O(
+      new vfs::OverlayFileSystem(Lower));
+  O->pushOverlay(Upper);
+
+  // Regular file.
+  SmallString<16> RealPath;
+  EXPECT_FALSE(O->getRealPath("/foo", RealPath));
+  EXPECT_EQ(RealPath.str(), "/foo");
+
+  // Expect no error getting real path for symlink in lower overlay.
+  EXPECT_FALSE(O->getRealPath("/lower_link", RealPath));
+  EXPECT_EQ(RealPath.str(), "/symlink");
+
+  // Try a non-existing link.
+  EXPECT_EQ(O->getRealPath("/upper_link", RealPath),
+            errc::no_such_file_or_directory);
+
+  // Add a new symlink in upper.
+  Upper->addSymlink("/upper_link");
+  EXPECT_FALSE(O->getRealPath("/upper_link", RealPath));
+  EXPECT_EQ(RealPath.str(), "/symlink");
 }
 
 TEST(VirtualFileSystemTest, OverlayFiles) {
@@ -300,8 +360,26 @@ struct ScopedDir {
     EXPECT_FALSE(EC);
   }
   ~ScopedDir() {
-    if (Path != "")
+    if (Path != "") {
       EXPECT_FALSE(llvm::sys::fs::remove(Path.str()));
+    }
+  }
+  operator StringRef() { return Path.str(); }
+};
+
+struct ScopedLink {
+  SmallString<128> Path;
+  ScopedLink(const Twine &To, const Twine &From) {
+    Path = From.str();
+    std::error_code EC = sys::fs::create_link(To, From);
+    if (EC)
+      Path = "";
+    EXPECT_FALSE(EC);
+  }
+  ~ScopedLink() {
+    if (Path != "") {
+      EXPECT_FALSE(llvm::sys::fs::remove(Path.str()));
+    }
   }
   operator StringRef() { return Path.str(); }
 };
@@ -325,14 +403,42 @@ TEST(VirtualFileSystemTest, BasicRealFSIteration) {
   ASSERT_FALSE(EC);
   ASSERT_NE(vfs::directory_iterator(), I);
   // Check either a or c, since we can't rely on the iteration order.
-  EXPECT_TRUE(I->getName().endswith("a") || I->getName().endswith("c"));
+  EXPECT_TRUE(I->path().endswith("a") || I->path().endswith("c"));
   I.increment(EC);
   ASSERT_FALSE(EC);
   ASSERT_NE(vfs::directory_iterator(), I);
-  EXPECT_TRUE(I->getName().endswith("a") || I->getName().endswith("c"));
+  EXPECT_TRUE(I->path().endswith("a") || I->path().endswith("c"));
   I.increment(EC);
   EXPECT_EQ(vfs::directory_iterator(), I);
 }
+
+#ifdef LLVM_ON_UNIX
+TEST(VirtualFileSystemTest, BrokenSymlinkRealFSIteration) {
+  ScopedDir TestDirectory("virtual-file-system-test", /*Unique*/ true);
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = vfs::getRealFileSystem();
+
+  ScopedLink _a("no_such_file", TestDirectory + "/a");
+  ScopedDir _b(TestDirectory + "/b");
+  ScopedLink _c("no_such_file", TestDirectory + "/c");
+
+  // Should get no iteration error, but a stat error for the broken symlinks.
+  std::map<std::string, std::error_code> StatResults;
+  std::error_code EC;
+  for (vfs::directory_iterator I = FS->dir_begin(Twine(TestDirectory), EC), E;
+       I != E; I.increment(EC)) {
+    EXPECT_FALSE(EC);
+    StatResults[sys::path::filename(I->path())] =
+        FS->status(I->path()).getError();
+  }
+  EXPECT_THAT(
+      StatResults,
+      ElementsAre(
+          Pair("a", std::make_error_code(std::errc::no_such_file_or_directory)),
+          Pair("b", std::error_code()),
+          Pair("c",
+               std::make_error_code(std::errc::no_such_file_or_directory))));
+}
+#endif
 
 TEST(VirtualFileSystemTest, BasicRealFSRecursiveIteration) {
   ScopedDir TestDirectory("virtual-file-system-test", /*Unique*/true);
@@ -355,7 +461,7 @@ TEST(VirtualFileSystemTest, BasicRealFSRecursiveIteration) {
   std::vector<std::string> Contents;
   for (auto E = vfs::recursive_directory_iterator(); !EC && I != E;
        I.increment(EC)) {
-    Contents.push_back(I->getName());
+    Contents.push_back(I->path());
   }
 
   // Check contents, which may be in any order
@@ -373,6 +479,43 @@ TEST(VirtualFileSystemTest, BasicRealFSRecursiveIteration) {
   EXPECT_EQ(1, Counts[3]); // d
 }
 
+#ifdef LLVM_ON_UNIX
+TEST(VirtualFileSystemTest, BrokenSymlinkRealFSRecursiveIteration) {
+  ScopedDir TestDirectory("virtual-file-system-test", /*Unique*/ true);
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = vfs::getRealFileSystem();
+
+  ScopedLink _a("no_such_file", TestDirectory + "/a");
+  ScopedDir _b(TestDirectory + "/b");
+  ScopedLink _ba("no_such_file", TestDirectory + "/b/a");
+  ScopedDir _bb(TestDirectory + "/b/b");
+  ScopedLink _bc("no_such_file", TestDirectory + "/b/c");
+  ScopedLink _c("no_such_file", TestDirectory + "/c");
+  ScopedDir _d(TestDirectory + "/d");
+  ScopedDir _dd(TestDirectory + "/d/d");
+  ScopedDir _ddd(TestDirectory + "/d/d/d");
+  ScopedLink _e("no_such_file", TestDirectory + "/e");
+
+  std::vector<std::string> VisitedBrokenSymlinks;
+  std::vector<std::string> VisitedNonBrokenSymlinks;
+  std::error_code EC;
+  for (vfs::recursive_directory_iterator I(*FS, Twine(TestDirectory), EC), E;
+       I != E; I.increment(EC)) {
+    EXPECT_FALSE(EC);
+    (FS->status(I->path()) ? VisitedNonBrokenSymlinks : VisitedBrokenSymlinks)
+        .push_back(I->path());
+  }
+
+  // Check visited file names.
+  EXPECT_THAT(VisitedBrokenSymlinks,
+              UnorderedElementsAre(StringRef(_a), StringRef(_ba),
+                                   StringRef(_bc), StringRef(_c),
+                                   StringRef(_e)));
+  EXPECT_THAT(VisitedNonBrokenSymlinks,
+              UnorderedElementsAre(StringRef(_b), StringRef(_bb), StringRef(_d),
+                                   StringRef(_dd), StringRef(_ddd)));
+}
+#endif
+
 template <typename DirIter>
 static void checkContents(DirIter I, ArrayRef<StringRef> ExpectedOut) {
   std::error_code EC;
@@ -382,10 +525,10 @@ static void checkContents(DirIter I, ArrayRef<StringRef> ExpectedOut) {
   // Do not rely on iteration order to check for contents, sort both
   // content vectors before comparison.
   for (DirIter E; !EC && I != E; I.increment(EC))
-    InputToCheck.push_back(I->getName());
+    InputToCheck.push_back(I->path());
 
-  std::sort(InputToCheck.begin(), InputToCheck.end());
-  std::sort(Expected.begin(), Expected.end());
+  llvm::sort(InputToCheck);
+  llvm::sort(Expected);
   EXPECT_EQ(InputToCheck.size(), Expected.size());
 
   unsigned LastElt = std::min(InputToCheck.size(), Expected.size());
@@ -489,14 +632,14 @@ TEST(VirtualFileSystemTest, HiddenInIteration) {
   O->pushOverlay(Upper);
 
   std::error_code EC;
-  Lower->addRegularFile("/onlyInLow", sys::fs::owner_read);
-  Lower->addRegularFile("/hiddenByMid", sys::fs::owner_read);
-  Lower->addRegularFile("/hiddenByUp", sys::fs::owner_read);
-  Middle->addRegularFile("/onlyInMid", sys::fs::owner_write);
-  Middle->addRegularFile("/hiddenByMid", sys::fs::owner_write);
-  Middle->addRegularFile("/hiddenByUp", sys::fs::owner_write);
-  Upper->addRegularFile("/onlyInUp", sys::fs::owner_all);
-  Upper->addRegularFile("/hiddenByUp", sys::fs::owner_all);
+  Lower->addRegularFile("/onlyInLow");
+  Lower->addDirectory("/hiddenByMid");
+  Lower->addDirectory("/hiddenByUp");
+  Middle->addRegularFile("/onlyInMid");
+  Middle->addRegularFile("/hiddenByMid");
+  Middle->addDirectory("/hiddenByUp");
+  Upper->addRegularFile("/onlyInUp");
+  Upper->addRegularFile("/hiddenByUp");
   checkContents(
       O->dir_begin("/", EC),
       {"/hiddenByUp", "/onlyInUp", "/hiddenByMid", "/onlyInMid", "/onlyInLow"});
@@ -506,19 +649,19 @@ TEST(VirtualFileSystemTest, HiddenInIteration) {
     std::error_code EC;
     vfs::directory_iterator I = O->dir_begin("/", EC), E;
     for ( ; !EC && I != E; I.increment(EC))
-      if (I->getName() == "/hiddenByUp")
+      if (I->path() == "/hiddenByUp")
         break;
     ASSERT_NE(E, I);
-    EXPECT_EQ(sys::fs::owner_all, I->getPermissions());
+    EXPECT_EQ(sys::fs::file_type::regular_file, I->type());
   }
   {
     std::error_code EC;
     vfs::directory_iterator I = O->dir_begin("/", EC), E;
     for ( ; !EC && I != E; I.increment(EC))
-      if (I->getName() == "/hiddenByMid")
+      if (I->path() == "/hiddenByMid")
         break;
     ASSERT_NE(E, I);
-    EXPECT_EQ(sys::fs::owner_write, I->getPermissions());
+    EXPECT_EQ(sys::fs::file_type::regular_file, I->type());
   }
 }
 
@@ -531,6 +674,16 @@ protected:
       : FS(/*UseNormalizedPaths=*/false),
         NormalizedFS(/*UseNormalizedPaths=*/true) {}
 };
+
+MATCHER_P2(IsHardLinkTo, FS, Target, "") {
+  StringRef From = arg;
+  StringRef To = Target;
+  auto OpenedFrom = FS->openFileForRead(From);
+  auto OpenedTo = FS->openFileForRead(To);
+  return !OpenedFrom.getError() && !OpenedTo.getError() &&
+         (*OpenedFrom)->status()->getUniqueID() ==
+             (*OpenedTo)->status()->getUniqueID();
+}
 
 TEST_F(InMemoryFileSystemTest, IsEmpty) {
   auto Stat = FS.status("/a");
@@ -615,17 +768,19 @@ TEST_F(InMemoryFileSystemTest, DirectoryIteration) {
   std::error_code EC;
   vfs::directory_iterator I = FS.dir_begin("/", EC);
   ASSERT_FALSE(EC);
-  ASSERT_EQ("/a", I->getName());
+  ASSERT_EQ("/a", I->path());
   I.increment(EC);
   ASSERT_FALSE(EC);
-  ASSERT_EQ("/b", I->getName());
+  ASSERT_EQ("/b", I->path());
   I.increment(EC);
   ASSERT_FALSE(EC);
   ASSERT_EQ(vfs::directory_iterator(), I);
 
   I = FS.dir_begin("/b", EC);
   ASSERT_FALSE(EC);
-  ASSERT_EQ("/b/c", I->getName());
+  // When on Windows, we end up with "/b\\c" as the name.  Convert to Posix
+  // path for the sake of the comparison.
+  ASSERT_EQ("/b/c", getPosixPath(I->path()));
   I.increment(EC);
   ASSERT_FALSE(EC);
   ASSERT_EQ(vfs::directory_iterator(), I);
@@ -637,23 +792,260 @@ TEST_F(InMemoryFileSystemTest, WorkingDirectory) {
 
   auto Stat = FS.status("/b/c");
   ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
-  ASSERT_EQ("c", Stat->getName());
+  ASSERT_EQ("/b/c", Stat->getName());
   ASSERT_EQ("/b", *FS.getCurrentWorkingDirectory());
 
   Stat = FS.status("c");
   ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
 
-  auto ReplaceBackslashes = [](std::string S) {
-    std::replace(S.begin(), S.end(), '\\', '/');
-    return S;
-  };
   NormalizedFS.setCurrentWorkingDirectory("/b/c");
   NormalizedFS.setCurrentWorkingDirectory(".");
-  ASSERT_EQ("/b/c", ReplaceBackslashes(
-                        NormalizedFS.getCurrentWorkingDirectory().get()));
+  ASSERT_EQ("/b/c",
+            getPosixPath(NormalizedFS.getCurrentWorkingDirectory().get()));
   NormalizedFS.setCurrentWorkingDirectory("..");
-  ASSERT_EQ("/b", ReplaceBackslashes(
-                      NormalizedFS.getCurrentWorkingDirectory().get()));
+  ASSERT_EQ("/b",
+            getPosixPath(NormalizedFS.getCurrentWorkingDirectory().get()));
+}
+
+#if !defined(_WIN32)
+TEST_F(InMemoryFileSystemTest, GetRealPath) {
+  SmallString<16> Path;
+  EXPECT_EQ(FS.getRealPath("b", Path), errc::operation_not_permitted);
+
+  auto GetRealPath = [this](StringRef P) {
+    SmallString<16> Output;
+    auto EC = FS.getRealPath(P, Output);
+    EXPECT_FALSE(EC);
+    return Output.str().str();
+  };
+
+  FS.setCurrentWorkingDirectory("a");
+  EXPECT_EQ(GetRealPath("b"), "a/b");
+  EXPECT_EQ(GetRealPath("../b"), "b");
+  EXPECT_EQ(GetRealPath("b/./c"), "a/b/c");
+
+  FS.setCurrentWorkingDirectory("/a");
+  EXPECT_EQ(GetRealPath("b"), "/a/b");
+  EXPECT_EQ(GetRealPath("../b"), "/b");
+  EXPECT_EQ(GetRealPath("b/./c"), "/a/b/c");
+}
+#endif // _WIN32
+
+TEST_F(InMemoryFileSystemTest, AddFileWithUser) {
+  FS.addFile("/a/b/c", 0, MemoryBuffer::getMemBuffer("abc"), 0xFEEDFACE);
+  auto Stat = FS.status("/a");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isDirectory());
+  ASSERT_EQ(0xFEEDFACE, Stat->getUser());
+  Stat = FS.status("/a/b");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isDirectory());
+  ASSERT_EQ(0xFEEDFACE, Stat->getUser());
+  Stat = FS.status("/a/b/c");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isRegularFile());
+  ASSERT_EQ(sys::fs::perms::all_all, Stat->getPermissions());
+  ASSERT_EQ(0xFEEDFACE, Stat->getUser());
+}
+
+TEST_F(InMemoryFileSystemTest, AddFileWithGroup) {
+  FS.addFile("/a/b/c", 0, MemoryBuffer::getMemBuffer("abc"), None, 0xDABBAD00);
+  auto Stat = FS.status("/a");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isDirectory());
+  ASSERT_EQ(0xDABBAD00, Stat->getGroup());
+  Stat = FS.status("/a/b");
+  ASSERT_TRUE(Stat->isDirectory());
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_EQ(0xDABBAD00, Stat->getGroup());
+  Stat = FS.status("/a/b/c");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isRegularFile());
+  ASSERT_EQ(sys::fs::perms::all_all, Stat->getPermissions());
+  ASSERT_EQ(0xDABBAD00, Stat->getGroup());
+}
+
+TEST_F(InMemoryFileSystemTest, AddFileWithFileType) {
+  FS.addFile("/a/b/c", 0, MemoryBuffer::getMemBuffer("abc"), None, None,
+             sys::fs::file_type::socket_file);
+  auto Stat = FS.status("/a");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isDirectory());
+  Stat = FS.status("/a/b");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isDirectory());
+  Stat = FS.status("/a/b/c");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_EQ(sys::fs::file_type::socket_file, Stat->getType());
+  ASSERT_EQ(sys::fs::perms::all_all, Stat->getPermissions());
+}
+
+TEST_F(InMemoryFileSystemTest, AddFileWithPerms) {
+  FS.addFile("/a/b/c", 0, MemoryBuffer::getMemBuffer("abc"), None, None,
+             None, sys::fs::perms::owner_read | sys::fs::perms::owner_write);
+  auto Stat = FS.status("/a");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isDirectory());
+  ASSERT_EQ(sys::fs::perms::owner_read | sys::fs::perms::owner_write |
+            sys::fs::perms::owner_exe, Stat->getPermissions());
+  Stat = FS.status("/a/b");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isDirectory());
+  ASSERT_EQ(sys::fs::perms::owner_read | sys::fs::perms::owner_write |
+            sys::fs::perms::owner_exe, Stat->getPermissions());
+  Stat = FS.status("/a/b/c");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isRegularFile());
+  ASSERT_EQ(sys::fs::perms::owner_read | sys::fs::perms::owner_write,
+            Stat->getPermissions());
+}
+
+TEST_F(InMemoryFileSystemTest, AddDirectoryThenAddChild) {
+  FS.addFile("/a", 0, MemoryBuffer::getMemBuffer(""), /*User=*/None,
+             /*Group=*/None, sys::fs::file_type::directory_file);
+  FS.addFile("/a/b", 0, MemoryBuffer::getMemBuffer("abc"), /*User=*/None,
+             /*Group=*/None, sys::fs::file_type::regular_file);
+  auto Stat = FS.status("/a");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isDirectory());
+  Stat = FS.status("/a/b");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n" << FS.toString();
+  ASSERT_TRUE(Stat->isRegularFile());
+}
+
+// Test that the name returned by status() is in the same form as the path that
+// was requested (to match the behavior of RealFileSystem).
+TEST_F(InMemoryFileSystemTest, StatusName) {
+  NormalizedFS.addFile("/a/b/c", 0, MemoryBuffer::getMemBuffer("abc"),
+                       /*User=*/None,
+                       /*Group=*/None, sys::fs::file_type::regular_file);
+  NormalizedFS.setCurrentWorkingDirectory("/a/b");
+
+  // Access using InMemoryFileSystem::status.
+  auto Stat = NormalizedFS.status("../b/c");
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n"
+                                << NormalizedFS.toString();
+  ASSERT_TRUE(Stat->isRegularFile());
+  ASSERT_EQ("../b/c", Stat->getName());
+
+  // Access using InMemoryFileAdaptor::status.
+  auto File = NormalizedFS.openFileForRead("../b/c");
+  ASSERT_FALSE(File.getError()) << File.getError() << "\n"
+                                << NormalizedFS.toString();
+  Stat = (*File)->status();
+  ASSERT_FALSE(Stat.getError()) << Stat.getError() << "\n"
+                                << NormalizedFS.toString();
+  ASSERT_TRUE(Stat->isRegularFile());
+  ASSERT_EQ("../b/c", Stat->getName());
+
+  // Access using a directory iterator.
+  std::error_code EC;
+  clang::vfs::directory_iterator It = NormalizedFS.dir_begin("../b", EC);
+  // When on Windows, we end up with "../b\\c" as the name.  Convert to Posix
+  // path for the sake of the comparison.
+  ASSERT_EQ("../b/c", getPosixPath(It->path()));
+}
+
+TEST_F(InMemoryFileSystemTest, AddHardLinkToFile) {
+  StringRef FromLink = "/path/to/FROM/link";
+  StringRef Target = "/path/to/TO/file";
+  FS.addFile(Target, 0, MemoryBuffer::getMemBuffer("content of target"));
+  EXPECT_TRUE(FS.addHardLink(FromLink, Target));
+  EXPECT_THAT(FromLink, IsHardLinkTo(&FS, Target));
+  EXPECT_TRUE(FS.status(FromLink)->getSize() == FS.status(Target)->getSize());
+  EXPECT_TRUE(FS.getBufferForFile(FromLink)->get()->getBuffer() ==
+              FS.getBufferForFile(Target)->get()->getBuffer());
+}
+
+TEST_F(InMemoryFileSystemTest, AddHardLinkInChainPattern) {
+  StringRef Link0 = "/path/to/0/link";
+  StringRef Link1 = "/path/to/1/link";
+  StringRef Link2 = "/path/to/2/link";
+  StringRef Target = "/path/to/target";
+  FS.addFile(Target, 0, MemoryBuffer::getMemBuffer("content of target file"));
+  EXPECT_TRUE(FS.addHardLink(Link2, Target));
+  EXPECT_TRUE(FS.addHardLink(Link1, Link2));
+  EXPECT_TRUE(FS.addHardLink(Link0, Link1));
+  EXPECT_THAT(Link0, IsHardLinkTo(&FS, Target));
+  EXPECT_THAT(Link1, IsHardLinkTo(&FS, Target));
+  EXPECT_THAT(Link2, IsHardLinkTo(&FS, Target));
+}
+
+TEST_F(InMemoryFileSystemTest, AddHardLinkToAFileThatWasNotAddedBefore) {
+  EXPECT_FALSE(FS.addHardLink("/path/to/link", "/path/to/target"));
+}
+
+TEST_F(InMemoryFileSystemTest, AddHardLinkFromAFileThatWasAddedBefore) {
+  StringRef Link = "/path/to/link";
+  StringRef Target = "/path/to/target";
+  FS.addFile(Target, 0, MemoryBuffer::getMemBuffer("content of target"));
+  FS.addFile(Link, 0, MemoryBuffer::getMemBuffer("content of link"));
+  EXPECT_FALSE(FS.addHardLink(Link, Target));
+}
+
+TEST_F(InMemoryFileSystemTest, AddSameHardLinkMoreThanOnce) {
+  StringRef Link = "/path/to/link";
+  StringRef Target = "/path/to/target";
+  FS.addFile(Target, 0, MemoryBuffer::getMemBuffer("content of target"));
+  EXPECT_TRUE(FS.addHardLink(Link, Target));
+  EXPECT_FALSE(FS.addHardLink(Link, Target));
+}
+
+TEST_F(InMemoryFileSystemTest, AddFileInPlaceOfAHardLinkWithSameContent) {
+  StringRef Link = "/path/to/link";
+  StringRef Target = "/path/to/target";
+  StringRef Content = "content of target";
+  EXPECT_TRUE(FS.addFile(Target, 0, MemoryBuffer::getMemBuffer(Content)));
+  EXPECT_TRUE(FS.addHardLink(Link, Target));
+  EXPECT_TRUE(FS.addFile(Link, 0, MemoryBuffer::getMemBuffer(Content)));
+}
+
+TEST_F(InMemoryFileSystemTest, AddFileInPlaceOfAHardLinkWithDifferentContent) {
+  StringRef Link = "/path/to/link";
+  StringRef Target = "/path/to/target";
+  StringRef Content = "content of target";
+  StringRef LinkContent = "different content of link";
+  EXPECT_TRUE(FS.addFile(Target, 0, MemoryBuffer::getMemBuffer(Content)));
+  EXPECT_TRUE(FS.addHardLink(Link, Target));
+  EXPECT_FALSE(FS.addFile(Link, 0, MemoryBuffer::getMemBuffer(LinkContent)));
+}
+
+TEST_F(InMemoryFileSystemTest, AddHardLinkToADirectory) {
+  StringRef Dir = "path/to/dummy/dir";
+  StringRef Link = "/path/to/link";
+  StringRef File = "path/to/dummy/dir/target";
+  StringRef Content = "content of target";
+  EXPECT_TRUE(FS.addFile(File, 0, MemoryBuffer::getMemBuffer(Content)));
+  EXPECT_FALSE(FS.addHardLink(Link, Dir));
+}
+
+TEST_F(InMemoryFileSystemTest, AddHardLinkFromADirectory) {
+  StringRef Dir = "path/to/dummy/dir";
+  StringRef Target = "path/to/dummy/dir/target";
+  StringRef Content = "content of target";
+  EXPECT_TRUE(FS.addFile(Target, 0, MemoryBuffer::getMemBuffer(Content)));
+  EXPECT_FALSE(FS.addHardLink(Dir, Target));
+}
+
+TEST_F(InMemoryFileSystemTest, AddHardLinkUnderAFile) {
+  StringRef CommonContent = "content string";
+  FS.addFile("/a/b", 0, MemoryBuffer::getMemBuffer(CommonContent));
+  FS.addFile("/c/d", 0, MemoryBuffer::getMemBuffer(CommonContent));
+  EXPECT_FALSE(FS.addHardLink("/c/d/e", "/a/b"));
+}
+
+TEST_F(InMemoryFileSystemTest, RecursiveIterationWithHardLink) {
+  std::error_code EC;
+  FS.addFile("/a/b", 0, MemoryBuffer::getMemBuffer("content string"));
+  EXPECT_TRUE(FS.addHardLink("/c/d", "/a/b"));
+  auto I = vfs::recursive_directory_iterator(FS, "/", EC);
+  ASSERT_FALSE(EC);
+  std::vector<std::string> Nodes;
+  for (auto E = vfs::recursive_directory_iterator(); !EC && I != E;
+       I.increment(EC)) {
+    Nodes.push_back(getPosixPath(I->path()));
+  }
+  EXPECT_THAT(Nodes, testing::UnorderedElementsAre("/a", "/a/b", "/c", "/c/d"));
 }
 
 // NOTE: in the tests below, we use '//root/' as our root directory, since it is
@@ -1165,4 +1557,36 @@ TEST_F(VFSFromYAMLTest, RecursiveDirectoryIterationLevel) {
     EXPECT_EQ(I.level(), l);
   }
   EXPECT_EQ(I, E);
+}
+
+TEST_F(VFSFromYAMLTest, RelativePaths) {
+  IntrusiveRefCntPtr<DummyFileSystem> Lower(new DummyFileSystem());
+  // Filename at root level without a parent directory.
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = getFromYAMLString(
+      "{ 'roots': [\n"
+      "  { 'type': 'file', 'name': 'file-not-in-directory.h',\n"
+      "    'external-contents': '//root/external/file'\n"
+      "  }\n"
+      "] }", Lower);
+  EXPECT_EQ(nullptr, FS.get());
+
+  // Relative file path.
+  FS = getFromYAMLString(
+      "{ 'roots': [\n"
+      "  { 'type': 'file', 'name': 'relative/file/path.h',\n"
+      "    'external-contents': '//root/external/file'\n"
+      "  }\n"
+      "] }", Lower);
+  EXPECT_EQ(nullptr, FS.get());
+
+  // Relative directory path.
+  FS = getFromYAMLString(
+       "{ 'roots': [\n"
+       "  { 'type': 'directory', 'name': 'relative/directory/path.h',\n"
+       "    'contents': []\n"
+       "  }\n"
+       "] }", Lower);
+  EXPECT_EQ(nullptr, FS.get());
+
+  EXPECT_EQ(3, NumDiagnostics);
 }

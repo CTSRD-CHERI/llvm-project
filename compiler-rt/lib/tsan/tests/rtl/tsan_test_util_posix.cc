@@ -9,7 +9,7 @@
 //
 // This file is a part of ThreadSanitizer (TSan), a race detector.
 //
-// Test utils, Linux, FreeBSD and Darwin implementation.
+// Test utils, Linux, FreeBSD, NetBSD and Darwin implementation.
 //===----------------------------------------------------------------------===//
 
 #include "sanitizer_common/sanitizer_atomic.h"
@@ -60,11 +60,11 @@ bool OnReport(const ReportDesc *rep, bool suppressed) {
     if (rep->typ != expect_report_type) {
       printf("Expected report of type %d, got type %d\n",
              (int)expect_report_type, (int)rep->typ);
-      EXPECT_FALSE("Wrong report type");
+      EXPECT_TRUE(false) << "Wrong report type";
       return false;
     }
   } else {
-    EXPECT_FALSE("Unexpected report");
+    EXPECT_TRUE(false) << "Unexpected report";
     return false;
   }
   expect_report_reported = true;
@@ -270,7 +270,7 @@ void ScopedThread::Impl::HandleEvent(Event *ev) {
       }
     }
     CHECK_NE(tsan_mop, 0);
-#if defined(__FreeBSD__) || defined(__APPLE__)
+#if defined(__FreeBSD__) || defined(__APPLE__) || defined(__NetBSD__)
     const int ErrCode = ESOCKTNOSUPPORT;
 #else
     const int ErrCode = ECHRNG;
@@ -323,7 +323,7 @@ void ScopedThread::Impl::HandleEvent(Event *ev) {
   }
   if (expect_report && !expect_report_reported) {
     printf("Missed expected report of type %d\n", (int)ev->report_type);
-    EXPECT_FALSE("Missed expected race");
+    EXPECT_TRUE(false) << "Missed expected race";
   }
   expect_report = false;
 }

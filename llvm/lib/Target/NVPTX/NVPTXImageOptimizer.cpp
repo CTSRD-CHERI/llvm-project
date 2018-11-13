@@ -2,7 +2,7 @@
 //
 //                     The LLVM Compiler Infrastructure
 //
-// This file is distributed under the University of Illinois Open Source 
+// This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
@@ -96,9 +96,7 @@ bool NVPTXImageOptimizer::replaceIsTypePSampler(Instruction &I) {
     // This is an OpenCL sampler, so it must be a samplerref
     replaceWith(&I, ConstantInt::getTrue(I.getContext()));
     return true;
-  } else if (isImageWriteOnly(*TexHandle) ||
-             isImageReadWrite(*TexHandle) ||
-             isImageReadOnly(*TexHandle)) {
+  } else if (isImage(*TexHandle)) {
     // This is an OpenCL image, so it cannot be a samplerref
     replaceWith(&I, ConstantInt::getFalse(I.getContext()));
     return true;

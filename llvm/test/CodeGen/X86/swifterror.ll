@@ -1,6 +1,6 @@
-; RUN: llc -verify-machineinstrs < %s -mtriple=x86_64-apple-darwin | FileCheck --check-prefix=CHECK-APPLE %s
-; RUN: llc -verify-machineinstrs -O0 < %s -mtriple=x86_64-apple-darwin | FileCheck --check-prefix=CHECK-O0 %s
-; RUN: llc -verify-machineinstrs < %s -mtriple=i386-apple-darwin | FileCheck --check-prefix=CHECK-i386 %s
+; RUN: llc < %s -verify-machineinstrs -mtriple=x86_64-apple-darwin | FileCheck --check-prefix=CHECK-APPLE %s
+; RUN: llc < %s -verify-machineinstrs -mtriple=x86_64-apple-darwin -O0 | FileCheck --check-prefix=CHECK-O0 %s
+; RUN: llc < %s -verify-machineinstrs -mtriple=i386-apple-darwin | FileCheck --check-prefix=CHECK-i386 %s
 
 declare i8* @malloc(i64)
 declare void @free(i8*)
@@ -37,8 +37,7 @@ define float @caller(i8* %error_ref) {
 ; CHECK-APPLE: testq %r12, %r12
 ; CHECK-APPLE: jne
 ; Access part of the error object and save it to error_ref
-; CHECK-APPLE: movb 8(%r12)
-; CHECK-APPLE: movq %r12, %rdi
+; CHECK-APPLE: movb 8(%rdi)
 ; CHECK-APPLE: callq {{.*}}free
 
 ; CHECK-O0-LABEL: caller:
@@ -250,9 +249,8 @@ define float @caller3(i8* %error_ref) {
 ; CHECK-APPLE: testq %r12, %r12
 ; CHECK-APPLE: jne
 ; Access part of the error object and save it to error_ref
-; CHECK-APPLE: movb 8(%r12),
+; CHECK-APPLE: movb 8(%rdi),
 ; CHECK-APPLE: movb %{{.*}},
-; CHECK-APPLE: movq %r12, %rdi
 ; CHECK-APPLE: callq {{.*}}free
 
 ; CHECK-O0-LABEL: caller3:
@@ -300,8 +298,7 @@ define float @caller_with_multiple_swifterror_values(i8* %error_ref, i8* %error_
 ; CHECK-APPLE: testq %r12, %r12
 ; CHECK-APPLE: jne
 ; Access part of the error object and save it to error_ref
-; CHECK-APPLE: movb 8(%r12)
-; CHECK-APPLE: movq %r12, %rdi
+; CHECK-APPLE: movb 8(%rdi)
 ; CHECK-APPLE: callq {{.*}}free
 
 ; The second swifterror value:
@@ -310,8 +307,7 @@ define float @caller_with_multiple_swifterror_values(i8* %error_ref, i8* %error_
 ; CHECK-APPLE: testq %r12, %r12
 ; CHECK-APPLE: jne
 ; Access part of the error object and save it to error_ref
-; CHECK-APPLE: movb 8(%r12)
-; CHECK-APPLE: movq %r12, %rdi
+; CHECK-APPLE: movb 8(%rdi)
 ; CHECK-APPLE: callq {{.*}}free
 
 ; CHECK-O0-LABEL: caller_with_multiple_swifterror_values:
@@ -488,8 +484,8 @@ entry:
 ; CHECK-i386:  retl
 ; CHECK-APPLE-LABEL: empty_swiftcc:
 ; CHECK-APPLE:  movl    %edx, %ecx
-; CHECK-APPLE:  movl    %edi, %eax
-; CHECK-APPLE:  movl    %esi, %edx
+; CHECK-APPLE-DAG:  movl    %edi, %eax
+; CHECK-APPLE-DAG:  movl    %esi, %edx
 ; CHECK-APPLE:  retq
 define swiftcc {i32, i32, i32} @empty_swiftcc({i32, i32, i32} , %swift_error** swifterror %error_ptr_ref) {
 entry:
@@ -670,3 +666,153 @@ define swiftcc { i64, i64, i64, i64} @params_and_return_in_reg(i64, i64, i64, i6
 }
 
 declare swiftcc { i64, i64, i64, i64 } @params_and_return_in_reg2(i64, i64, i64, i64, i64, i64, i8* swiftself, %swift_error** nocapture swifterror %err)
+
+
+declare void @acallee(i8*)
+
+; Make sure we don't tail call if the caller returns a swifterror value. We
+; would have to move into the swifterror register before the tail call.
+; CHECK-APPLE: tailcall_from_swifterror:
+; CHECK-APPLE-NOT: jmp _acallee
+; CHECK-APPLE: callq _acallee
+
+define swiftcc void @tailcall_from_swifterror(%swift_error** swifterror %error_ptr_ref) {
+entry:
+  tail call void @acallee(i8* null)
+  ret void
+}
+
+; Make sure we don't crash on this function during -O0.
+; We used to crash because we would insert an IMPLICIT_DEF for the swifterror at
+; beginning of the machine basic block but did not inform FastISel of the
+; inserted instruction. When computing the InsertPoint in the entry block
+; FastISel would choose an insertion point before the IMPLICIT_DEF causing a
+; crash later on.
+declare hidden swiftcc i8* @testFunA()
+
+%TSb = type <{ i1 }>
+
+define swiftcc void @dontCrash()  {
+entry:
+  %swifterror = alloca swifterror %swift_error*, align 8
+  store %swift_error* null, %swift_error** %swifterror, align 8
+  %a = call i8* @testFunA()
+  %b = bitcast i8* %a to %TSb*
+  %._value = getelementptr inbounds %TSb, %TSb* %b, i32 0, i32 0
+  %c = load i1, i1* %._value, align 1
+  br i1 %c, label %trueBB, label %falseBB
+
+trueBB:
+  ret void
+
+falseBB:
+  ret void
+}
+
+
+declare swiftcc void @foo2(%swift_error** swifterror)
+
+; Make sure we properly assign registers during fast-isel.
+; CHECK-O0-LABEL: testAssign
+; CHECK-O0:        pushq   %r12
+; CHECK-O0:        xorl    [[ZERO:%[a-z0-9]+]], [[ZERO]]
+; CHECK-O0:        movl    [[ZERO]], %r12d
+; CHECK-O0:        callq   _foo2
+; CHECK-O0:        movq    %r12, [[SLOT:[-a-z0-9\(\)\%]*]]
+;
+; CHECK-O0:        movq    [[SLOT]], %rax
+; CHECK-O0:        popq    %r12
+; CHECK-O0:        retq
+
+; CHECK-APPLE-LABEL: testAssign
+; CHECK-APPLE:        pushq   %r12
+; CHECK-APPLE:        xorl    %r12d, %r12d
+; CHECK-APPLE:        callq   _foo2
+; CHECK-APPLE:        movq    %r12, %rax
+; CHECK-APPLE:        popq    %r12
+; CHECK-APPLE:        retq
+
+define swiftcc %swift_error* @testAssign(i8* %error_ref) {
+entry:
+  %error_ptr = alloca swifterror %swift_error*
+  store %swift_error* null, %swift_error** %error_ptr
+  call swiftcc void @foo2(%swift_error** swifterror %error_ptr)
+  br label %a
+
+a:
+  %error = load %swift_error*, %swift_error** %error_ptr
+  ret %swift_error* %error
+}
+
+; CHECK-O0-LABEL: testAssign2
+; CHECK-O0:        movq    %r12, {{.*}}
+; CHECK-O0:        movq    %r12, [[SLOT:[-a-z0-9\(\)\%]*]]
+; CHECK-O0:        jmp
+; CHECK-O0:        movq    [[SLOT]], %rax
+; CHECK-O0:        movq    %rax, [[SLOT2:[-a-z0-9\(\)\%]*]]
+; CHECK-O0:        movq    [[SLOT2]], %r12
+; CHECK-O0:        retq
+
+; CHECK-APPLE-LABEL: testAssign2
+; CHECK-APPLE:        movq    %r12, %rax
+; CHECK-APPLE:        retq
+define swiftcc %swift_error* @testAssign2(i8* %error_ref, %swift_error** swifterror %err) {
+entry:
+  br label %a
+
+a:
+  %error = load %swift_error*, %swift_error** %err
+  ret %swift_error* %error
+}
+
+; CHECK-O0-LABEL: testAssign3
+; CHECK-O0:        callq   _foo2
+; CHECK-O0:        movq    %r12, [[SLOT:[-a-z0-9\(\)\%]*]]
+; CHECK-O0:        movq    [[SLOT]], %rax
+; CHECK-O0:        movq    %rax, [[SLOT2:[-a-z0-9\(\)\%]*]]
+; CHECK-O0:        movq    [[SLOT2]], %r12
+; CHECK-O0:        addq    $24, %rsp
+; CHECK-O0:        retq
+
+; CHECK-APPLE-LABEL: testAssign3
+; CHECK-APPLE:         callq   _foo2
+; CHECK-APPLE:         movq    %r12, %rax
+; CHECK-APPLE:         retq
+
+define swiftcc %swift_error* @testAssign3(i8* %error_ref, %swift_error** swifterror %err) {
+entry:
+  call swiftcc void @foo2(%swift_error** swifterror %err)
+  br label %a
+
+a:
+  %error = load %swift_error*, %swift_error** %err
+  ret %swift_error* %error
+}
+
+
+; CHECK-O0-LABEL: testAssign4
+; CHECK-O0:        callq   _foo2
+; CHECK-O0:        xorl    %ecx, %ecx
+; CHECK-O0:        movl    %ecx, %eax
+; CHECK-O0:        movq    %rax, [[SLOT:[-a-z0-9\(\)\%]*]]
+; CHECK-O0:        movq    [[SLOT]], %rax
+; CHECK-O0:        movq    %rax, [[SLOT2:[-a-z0-9\(\)\%]*]]
+; CHECK-O0:        movq    [[SLOT2]], %r12
+; CHECK-O0:        retq
+
+; CHECK-APPLE-LABEL: testAssign4
+; CHECK-APPLE:        callq   _foo2
+; CHECK-APPLE:        xorl    %eax, %eax
+; CHECK-APPLE:        xorl    %r12d, %r12d
+; CHECK-APPLE:        retq
+
+define swiftcc %swift_error* @testAssign4(i8* %error_ref, %swift_error** swifterror %err) {
+entry:
+  call swiftcc void @foo2(%swift_error** swifterror %err)
+  store %swift_error* null, %swift_error** %err
+  br label %a
+
+a:
+  %error = load %swift_error*, %swift_error** %err
+  ret %swift_error* %error
+}

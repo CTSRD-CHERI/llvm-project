@@ -14,11 +14,11 @@
 
 #include <algorithm>
 
-#include "lldb/Core/Log.h"
-#include "lldb/Core/Stream.h"
-#include "lldb/Core/Timer.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Stream.h"
+#include "lldb/Utility/Timer.h"
 
-#include "DWARFCompileUnit.h"
+#include "DWARFUnit.h"
 #include "DWARFDebugInfo.h"
 #include "LogChannelDWARF.h"
 #include "SymbolFileDWARF.h"
@@ -82,7 +82,7 @@ bool DWARFDebugAranges::Generate(SymbolFileDWARF *dwarf2Data) {
     uint32_t cu_idx = 0;
     const uint32_t num_compile_units = dwarf2Data->GetNumCompileUnits();
     for (cu_idx = 0; cu_idx < num_compile_units; ++cu_idx) {
-      DWARFCompileUnit *cu = debug_info->GetCompileUnitAtIndex(cu_idx);
+      DWARFUnit *cu = debug_info->GetCompileUnitAtIndex(cu_idx);
       if (cu)
         cu->BuildAddressRangeTable(dwarf2Data, this);
     }
@@ -110,7 +110,8 @@ void DWARFDebugAranges::AppendRange(dw_offset_t offset, dw_addr_t low_pc,
 }
 
 void DWARFDebugAranges::Sort(bool minimize) {
-  Timer scoped_timer(LLVM_PRETTY_FUNCTION, "%s this = %p", LLVM_PRETTY_FUNCTION,
+  static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
+  Timer scoped_timer(func_cat, "%s this = %p", LLVM_PRETTY_FUNCTION,
                      static_cast<void *>(this));
 
   Log *log(LogChannelDWARF::GetLogIfAll(DWARF_LOG_DEBUG_ARANGES));

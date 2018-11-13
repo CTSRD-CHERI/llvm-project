@@ -34,18 +34,18 @@ public:
 protected:
 
     virtual typename base::int_type
-        overflow(typename base::int_type __c = base::traits_type::eof())
+        overflow(typename base::int_type ch = base::traits_type::eof())
         {
-            if (__c != base::traits_type::eof())
+            if (ch != base::traits_type::eof())
             {
-                int n = str_.size();
-                str_.push_back(__c);
+                int n = static_cast<int>(str_.size());
+                str_.push_back(static_cast<CharT>(ch));
                 str_.resize(str_.capacity());
                 base::setp(const_cast<CharT*>(str_.data()),
                            const_cast<CharT*>(str_.data() + str_.size()));
                 base::pbump(n+1);
             }
-            return __c;
+            return ch;
         }
 };
 
@@ -76,7 +76,7 @@ int main()
         testbuf<char> sb;
         std::ostream os(&sb);
         hex(os);
-        unsigned long long n = -10;
+        unsigned long long n = static_cast<unsigned long long>(-10);
         os << n;
         assert(sb.str() == "fffffffffffffff6");
     }

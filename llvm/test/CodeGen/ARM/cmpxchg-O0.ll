@@ -17,8 +17,11 @@ define { i8, i1 } @test_cmpxchg_8(i8* %addr, i8 %desired, i8 %new) nounwind {
 ; CHECK:     cmp{{(\.w)?}} [[STATUS]], #0
 ; CHECK:     bne [[RETRY]]
 ; CHECK: [[DONE]]:
-; CHECK:     cmp{{(\.w)?}} [[OLD]], [[DESIRED]]
-; CHECK:     {{moveq|movweq}} {{r[0-9]+}}, #1
+; Materialisation of a boolean is done with sub/clz/lsr
+; CHECK:     uxtb [[CMP1:r[0-9]+]], [[DESIRED]]
+; CHECK:     sub{{(s)?}} [[CMP1]], [[OLD]], [[CMP1]]
+; CHECK:     clz [[CMP2:r[0-9]+]], [[CMP1]]
+; CHECK:     lsr{{(s)?}} {{r[0-9]+}}, [[CMP2]], #5
 ; CHECK:     dmb ish
   %res = cmpxchg i8* %addr, i8 %desired, i8 %new seq_cst monotonic
   ret { i8, i1 } %res
@@ -36,8 +39,11 @@ define { i16, i1 } @test_cmpxchg_16(i16* %addr, i16 %desired, i16 %new) nounwind
 ; CHECK:     cmp{{(\.w)?}} [[STATUS]], #0
 ; CHECK:     bne [[RETRY]]
 ; CHECK: [[DONE]]:
-; CHECK:     cmp{{(\.w)?}} [[OLD]], [[DESIRED]]
-; CHECK:     {{moveq|movweq}} {{r[0-9]+}}, #1
+; Materialisation of a boolean is done with sub/clz/lsr
+; CHECK:     uxth [[CMP1:r[0-9]+]], [[DESIRED]]
+; CHECK:     sub{{(s)?}} [[CMP1]], [[OLD]], [[CMP1]]
+; CHECK:     clz [[CMP2:r[0-9]+]], [[CMP1]]
+; CHECK:     lsr{{(s)?}} {{r[0-9]+}}, [[CMP2]], #5
 ; CHECK:     dmb ish
   %res = cmpxchg i16* %addr, i16 %desired, i16 %new seq_cst monotonic
   ret { i16, i1 } %res
@@ -55,8 +61,10 @@ define { i32, i1 } @test_cmpxchg_32(i32* %addr, i32 %desired, i32 %new) nounwind
 ; CHECK:     cmp{{(\.w)?}} [[STATUS]], #0
 ; CHECK:     bne [[RETRY]]
 ; CHECK: [[DONE]]:
-; CHECK:     cmp{{(\.w)?}} [[OLD]], [[DESIRED]]
-; CHECK:     {{moveq|movweq}} {{r[0-9]+}}, #1
+; Materialisation of a boolean is done with sub/clz/lsr
+; CHECK:     sub{{(s)?}} [[CMP1:r[0-9]+]], [[OLD]], [[DESIRED]]
+; CHECK:     clz [[CMP2:r[0-9]+]], [[CMP1]]
+; CHECK:     lsr{{(s)?}} {{r[0-9]+}}, [[CMP2]], #5
 ; CHECK:     dmb ish
   %res = cmpxchg i32* %addr, i32 %desired, i32 %new seq_cst monotonic
   ret { i32, i1 } %res
@@ -69,9 +77,9 @@ define { i64, i1 } @test_cmpxchg_64(i64* %addr, i64 %desired, i64 %new) nounwind
 ; CHECK: [[RETRY:.LBB[0-9]+_[0-9]+]]:
 ; CHECK:     ldrexd [[OLDLO:r[0-9]+]], [[OLDHI:r[0-9]+]], [r0]
 ; CHECK:     cmp [[OLDLO]], r6
-; CHECK:     sbcs{{(\.w)?}} [[STATUS:r[0-9]+]], [[OLDHI]], r7
+; CHECK:     cmpeq [[OLDHI]], r7
 ; CHECK:     bne [[DONE:.LBB[0-9]+_[0-9]+]]
-; CHECK:     strexd [[STATUS]], r4, r5, [r0]
+; CHECK:     strexd [[STATUS:r[0-9]+]], r4, r5, [r0]
 ; CHECK:     cmp{{(\.w)?}} [[STATUS]], #0
 ; CHECK:     bne [[RETRY]]
 ; CHECK: [[DONE]]:
@@ -87,9 +95,9 @@ define { i64, i1 } @test_nontrivial_args(i64* %addr, i64 %desired, i64 %new) {
 ; CHECK: [[RETRY:.LBB[0-9]+_[0-9]+]]:
 ; CHECK:     ldrexd [[OLDLO:r[0-9]+]], [[OLDHI:r[0-9]+]], [r0]
 ; CHECK:     cmp [[OLDLO]], {{r[0-9]+}}
-; CHECK:     sbcs{{(\.w)?}} [[STATUS:r[0-9]+]], [[OLDHI]], {{r[0-9]+}}
+; CHECK:     cmpeq [[OLDHI]], {{r[0-9]+}}
 ; CHECK:     bne [[DONE:.LBB[0-9]+_[0-9]+]]
-; CHECK:     strexd [[STATUS]], {{r[0-9]+}}, {{r[0-9]+}}, [r0]
+; CHECK:     strexd [[STATUS:r[0-9]+]], {{r[0-9]+}}, {{r[0-9]+}}, [r0]
 ; CHECK:     cmp{{(\.w)?}} [[STATUS]], #0
 ; CHECK:     bne [[RETRY]]
 ; CHECK: [[DONE]]:

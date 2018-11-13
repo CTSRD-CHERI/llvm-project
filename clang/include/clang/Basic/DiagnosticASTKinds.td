@@ -44,7 +44,8 @@ def note_constexpr_non_global : Note<
 def note_constexpr_uninitialized : Note<
   "%select{|sub}0object of type %1 is not initialized">;
 def note_constexpr_array_index : Note<"cannot refer to element %0 of "
-  "%select{array of %2 elements|non-array object}1 in a constant expression">;
+  "%select{array of %2 element%plural{1:|:s}2|non-array object}1 "
+  "in a constant expression">;
 def note_constexpr_float_arithmetic : Note<
   "floating point arithmetic produces %select{an infinity|a NaN}0">;
 def note_constexpr_pointer_subtraction_not_same_array : Note<
@@ -126,6 +127,10 @@ def note_constexpr_access_null : Note<
 def note_constexpr_access_past_end : Note<
   "%select{read of|assignment to|increment of|decrement of}0 "
   "dereferenced one-past-the-end pointer is not allowed in a constant expression">;
+def note_constexpr_access_unsized_array : Note<
+  "%select{read of|assignment to|increment of|decrement of}0 "
+  "pointer to element of array without known bound "
+  "is not allowed in a constant expression">;
 def note_constexpr_access_inactive_union_member : Note<
   "%select{read of|assignment to|increment of|decrement of}0 "
   "member %1 of union with %select{active member %3|no active member}2 "
@@ -153,12 +158,38 @@ def note_constexpr_baa_insufficient_alignment : Note<
 def note_constexpr_baa_value_insufficient_alignment : Note<
   "value of the aligned pointer (%0) is not a multiple of the asserted %1 "
   "%plural{1:byte|:bytes}1">;
+def note_constexpr_unsupported_unsized_array : Note<
+  "array-to-pointer decay of array member without known bound is not supported">;
+def note_constexpr_unsized_array_indexed : Note<
+  "indexing of array without known bound is not allowed "
+  "in a constant expression">;
+def note_constexpr_memcpy_null : Note<
+  "%select{source|destination}2 of "
+  "'%select{%select{memcpy|wmemcpy}1|%select{memmove|wmemmove}1}0' "
+  "is %3">;
+def note_constexpr_memcpy_type_pun : Note<
+  "cannot constant evaluate '%select{memcpy|memmove}0' from object of "
+  "type %1 to object of type %2">;
+def note_constexpr_memcpy_nontrivial : Note<
+  "cannot constant evaluate '%select{memcpy|memmove}0' between objects of "
+  "non-trivially-copyable type %1">;
+def note_constexpr_memcpy_incomplete_type : Note<
+  "cannot constant evaluate '%select{memcpy|memmove}0' between objects of "
+  "incomplete type %1">;
+def note_constexpr_memcpy_overlap : Note<
+  "'%select{memcpy|wmemcpy}0' between overlapping memory regions">;
+def note_constexpr_memcpy_unsupported : Note<
+  "'%select{%select{memcpy|wmemcpy}1|%select{memmove|wmemmove}1}0' "
+  "not supported: %select{"
+  "size to copy (%4) is not a multiple of size of element type %3 (%5)|"
+  "source is not a contiguous array of at least %4 elements of type %3|"
+  "destination is not a contiguous array of at least %4 elements of type %3}2">;
 
 def warn_integer_constant_overflow : Warning<
   "overflow in expression; result is %0 with type %1">,
   InGroup<DiagGroup<"integer-overflow">>;
 
-// This is a temporary diagnostic, and shall be removed once our 
+// This is a temporary diagnostic, and shall be removed once our
 // implementation is complete, and like the preceding constexpr notes belongs
 // in Sema.
 def note_unimplemented_constexpr_lambda_feature_ast : Note<
@@ -199,12 +230,17 @@ def note_odr_defined_here : Note<"also defined here">;
 def err_odr_function_type_inconsistent : Error<
   "external function %0 declared with incompatible types in different "
   "translation units (%1 vs. %2)">;
-def warn_odr_tag_type_inconsistent : Warning<
-  "type %0 has incompatible definitions in different translation units">,
-  InGroup<DiagGroup<"odr">>;
+def warn_odr_tag_type_inconsistent
+    : Warning<"type %0 has incompatible definitions in different translation "
+              "units">,
+      InGroup<DiagGroup<"odr">>;
+def err_odr_tag_type_inconsistent
+    : Error<"type %0 has incompatible definitions in different translation "
+            "units">;
 def note_odr_tag_kind_here: Note<
   "%0 is a %select{struct|interface|union|class|enum}1 here">;
 def note_odr_field : Note<"field %0 has type %1 here">;
+def note_odr_field_name : Note<"field has name %0 here">;
 def note_odr_missing_field : Note<"no corresponding field here">;
 def note_odr_bit_field : Note<"bit-field %0 with type %1 and length %2 here">;
 def note_odr_not_bit_field : Note<"field %0 is not a bit-field">;
@@ -258,6 +294,8 @@ def note_odr_objc_synthesize_ivar_here : Note<
   "property is synthesized to ivar %0 here">;
 
 // Importing C++ ASTs
+def note_odr_friend : Note<"friend declared here">;
+def note_odr_missing_friend : Note<"no corresponding friend here">;
 def err_odr_different_num_template_parameters : Error<
   "template parameter lists have a different number of parameters (%0 vs %1)">;
 def note_odr_template_parameter_list : Note<

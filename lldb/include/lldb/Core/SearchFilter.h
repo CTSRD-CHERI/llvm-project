@@ -10,20 +10,51 @@
 #ifndef liblldb_SearchFilter_h_
 #define liblldb_SearchFilter_h_
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/FileSpecList.h"
-#include "lldb/Core/StructuredData.h"
-#include "lldb/lldb-private.h"
+#include "lldb/Utility/StructuredData.h"
+
+#include "lldb/Utility/FileSpec.h" // for FileSpec
+#include "lldb/lldb-forward.h"     // for SearchFilterSP, TargetSP, Modu...
+
+#include <stdint.h> // for uint32_t
+
+namespace lldb_private {
+class Address;
+}
+namespace lldb_private {
+class Breakpoint;
+}
+namespace lldb_private {
+class CompileUnit;
+}
+namespace lldb_private {
+class Status;
+}
+namespace lldb_private {
+class Function;
+}
+namespace lldb_private {
+class ModuleList;
+}
+namespace lldb_private {
+class SearchFilter;
+}
+namespace lldb_private {
+class Stream;
+}
+namespace lldb_private {
+class SymbolContext;
+}
+namespace lldb_private {
+class Target;
+}
 
 namespace lldb_private {
 
 //----------------------------------------------------------------------
-/// @class Searcher SearchFilter.h "lldb/Core/SearchFilter.h"
-/// @brief Class that is driven by the SearchFilter to search the
-/// SymbolContext space of the target program.
+/// @class Searcher SearchFilter.h "lldb/Core/SearchFilter.h" Class that is
+/// driven by the SearchFilter to search the SymbolContext space of the target
+/// program.
 //----------------------------------------------------------------------
 
 //----------------------------------------------------------------------
@@ -39,15 +70,6 @@ public:
     eCallbackReturnPop       // Pop one level up and continue iterating
   } CallbackReturn;
 
-  typedef enum {
-    eDepthTarget,
-    eDepthModule,
-    eDepthCompUnit,
-    eDepthFunction,
-    eDepthBlock,
-    eDepthAddress
-  } Depth;
-
   Searcher();
 
   virtual ~Searcher();
@@ -56,7 +78,7 @@ public:
                                         SymbolContext &context, Address *addr,
                                         bool complete) = 0;
 
-  virtual Depth GetDepth() = 0;
+  virtual lldb::SearchDepth GetDepth() = 0;
 
   //------------------------------------------------------------------
   /// Prints a canonical description for the searcher to the stream \a s.
@@ -68,10 +90,10 @@ public:
 };
 
 //----------------------------------------------------------------------
-/// @class SearchFilter SearchFilter.h "lldb/Core/SearchFilter.h"
-/// @brief Class descends through the SymbolContext space of the target,
-/// applying a filter at each stage till it reaches the depth specified by
-/// the GetDepth method of the searcher, and calls its callback at that point.
+/// @class SearchFilter SearchFilter.h "lldb/Core/SearchFilter.h" Class
+/// descends through the SymbolContext space of the target, applying a filter
+/// at each stage till it reaches the depth specified by the GetDepth method
+/// of the searcher, and calls its callback at that point.
 //----------------------------------------------------------------------
 
 //----------------------------------------------------------------------
@@ -79,15 +101,12 @@ public:
 /// Provides the callback and search depth for the SearchFilter search.
 ///
 /// The search is done by cooperation between the search filter and the
-/// searcher.
-/// The search filter does the heavy work of recursing through the SymbolContext
-/// space of the target program's symbol space.  The Searcher specifies the
-/// depth
-/// at which it wants its callback to be invoked.  Note that since the
-/// resolution
-/// of the Searcher may be greater than that of the SearchFilter, before the
-/// Searcher qualifies an address it should pass it to "AddressPasses."
-/// The default implementation is "Everything Passes."
+/// searcher. The search filter does the heavy work of recursing through the
+/// SymbolContext space of the target program's symbol space.  The Searcher
+/// specifies the depth at which it wants its callback to be invoked.  Note
+/// that since the resolution of the Searcher may be greater than that of the
+/// SearchFilter, before the Searcher qualifies an address it should pass it
+/// to "AddressPasses." The default implementation is "Everything Passes."
 //----------------------------------------------------------------------
 
 class SearchFilter {
@@ -141,8 +160,8 @@ public:
   virtual bool AddressPasses(Address &addr);
 
   //------------------------------------------------------------------
-  /// Call this method with a FileSpec to see if \a file spec passes the filter
-  /// as the name of a compilation unit.
+  /// Call this method with a FileSpec to see if \a file spec passes the
+  /// filter as the name of a compilation unit.
   ///
   /// @param[in] fileSpec
   ///    The file spec to check against the filter.
@@ -163,6 +182,18 @@ public:
   ///    \b true if \a Comp Unit passes, and \b false otherwise.
   //------------------------------------------------------------------
   virtual bool CompUnitPasses(CompileUnit &compUnit);
+
+  //------------------------------------------------------------------
+  /// Call this method with a Function to see if \a function passes the
+  /// filter.
+  ///
+  /// @param[in] function
+  ///    The Functions to check against the filter.
+  ///
+  /// @return
+  ///    \b true if \a function passes, and \b false otherwise.
+  //------------------------------------------------------------------
+  virtual bool FunctionPasses(Function &function);
 
   //------------------------------------------------------------------
   /// Call this method to do the search using the Searcher.
@@ -187,11 +218,10 @@ public:
   virtual void SearchInModuleList(Searcher &searcher, ModuleList &modules);
 
   //------------------------------------------------------------------
-  /// This determines which items are REQUIRED for the filter to pass.
-  /// For instance, if you are filtering by Compilation Unit, obviously
-  /// symbols that have no compilation unit can't pass  So return
-  /// eSymbolContextCU
-  /// and search callbacks can then short cut the search to avoid looking at
+  /// This determines which items are REQUIRED for the filter to pass. For
+  /// instance, if you are filtering by Compilation Unit, obviously symbols
+  /// that have no compilation unit can't pass  So return eSymbolContextCU and
+  /// search callbacks can then short cut the search to avoid looking at
   /// things that obviously won't pass.
   ///
   /// @return
@@ -219,7 +249,7 @@ public:
   static lldb::SearchFilterSP
   CreateFromStructuredData(Target &target,
                            const StructuredData::Dictionary &data_dict,
-                           Error &error);
+                           Status &error);
 
   virtual StructuredData::ObjectSP SerializeToStructuredData() {
     return StructuredData::ObjectSP();
@@ -254,7 +284,7 @@ public:
 
   static const char *FilterTyToName(enum FilterTy);
 
-  static FilterTy NameToFilterTy(const char *name);
+  static FilterTy NameToFilterTy(llvm::StringRef name);
 
 protected:
   // Serialization of SearchFilter options:
@@ -272,8 +302,7 @@ protected:
                              OptionNames name, FileSpecList &file_list);
 
   // These are utility functions to assist with the search iteration.  They are
-  // used by the
-  // default Search method.
+  // used by the default Search method.
 
   Searcher::CallbackReturn DoModuleIteration(const SymbolContext &context,
                                              Searcher &searcher);
@@ -302,9 +331,9 @@ private:
 
 //----------------------------------------------------------------------
 /// @class SearchFilterForUnconstrainedSearches SearchFilter.h
-/// "lldb/Core/SearchFilter.h"
-/// @brief This is a SearchFilter that searches through all modules.  It also
-/// consults the Target::ModuleIsExcludedForUnconstrainedSearches.
+/// "lldb/Core/SearchFilter.h" This is a SearchFilter that searches through
+/// all modules.  It also consults the
+/// Target::ModuleIsExcludedForUnconstrainedSearches.
 //----------------------------------------------------------------------
 class SearchFilterForUnconstrainedSearches : public SearchFilter {
 public:
@@ -320,7 +349,7 @@ public:
   static lldb::SearchFilterSP
   CreateFromStructuredData(Target &target,
                            const StructuredData::Dictionary &data_dict,
-                           Error &error);
+                           Status &error);
 
   StructuredData::ObjectSP SerializeToStructuredData() override;
 
@@ -329,8 +358,8 @@ protected:
 };
 
 //----------------------------------------------------------------------
-/// @class SearchFilterByModule SearchFilter.h "lldb/Core/SearchFilter.h"
-/// @brief This is a SearchFilter that restricts the search to a given module.
+/// @class SearchFilterByModule SearchFilter.h "lldb/Core/SearchFilter.h" This
+/// is a SearchFilter that restricts the search to a given module.
 //----------------------------------------------------------------------
 
 class SearchFilterByModule : public SearchFilter {
@@ -374,7 +403,7 @@ public:
   static lldb::SearchFilterSP
   CreateFromStructuredData(Target &target,
                            const StructuredData::Dictionary &data_dict,
-                           Error &error);
+                           Status &error);
 
   StructuredData::ObjectSP SerializeToStructuredData() override;
 
@@ -431,7 +460,7 @@ public:
   static lldb::SearchFilterSP
   CreateFromStructuredData(Target &target,
                            const StructuredData::Dictionary &data_dict,
-                           Error &error);
+                           Status &error);
 
   StructuredData::ObjectSP SerializeToStructuredData() override;
 
@@ -484,7 +513,7 @@ public:
   static lldb::SearchFilterSP
   CreateFromStructuredData(Target &target,
                            const StructuredData::Dictionary &data_dict,
-                           Error &error);
+                           Status &error);
 
   StructuredData::ObjectSP SerializeToStructuredData() override;
 

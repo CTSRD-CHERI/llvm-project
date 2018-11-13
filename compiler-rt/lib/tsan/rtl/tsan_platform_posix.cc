@@ -16,6 +16,7 @@
 #if SANITIZER_POSIX
 
 #include "sanitizer_common/sanitizer_common.h"
+#include "sanitizer_common/sanitizer_errno.h"
 #include "sanitizer_common/sanitizer_libc.h"
 #include "sanitizer_common/sanitizer_procmaps.h"
 #include "tsan_platform.h"
@@ -23,16 +24,39 @@
 
 namespace __tsan {
 
+static const char kShadowMemoryMappingWarning[] =
+    "FATAL: %s can not madvise shadow region [%zx, %zx] with %s (errno: %d)\n";
+static const char kShadowMemoryMappingHint[] =
+    "HINT: if %s is not supported in your environment, you may set "
+    "TSAN_OPTIONS=%s=0\n";
+
+static void NoHugePagesInShadow(uptr addr, uptr size) {
+  if (common_flags()->no_huge_pages_for_shadow)
+    if (!NoHugePagesInRegion(addr, size)) {
+      Printf(kShadowMemoryMappingWarning, SanitizerToolName, addr, addr + size,
+             "MADV_NOHUGEPAGE", errno);
+      Printf(kShadowMemoryMappingHint, "MADV_NOHUGEPAGE",
+             "no_huge_pages_for_shadow");
+      Die();
+    }
+}
+
+static void DontDumpShadow(uptr addr, uptr size) {
+  if (common_flags()->use_madv_dontdump)
+    if (!DontDumpShadowMemory(addr, size)) {
+      Printf(kShadowMemoryMappingWarning, SanitizerToolName, addr, addr + size,
+             "MADV_DONTDUMP", errno);
+      Printf(kShadowMemoryMappingHint, "MADV_DONTDUMP", "use_madv_dontdump");
+      Die();
+    }
+}
+
 #if !SANITIZER_GO
 void InitializeShadowMemory() {
   // Map memory shadow.
-  uptr shadow =
-      (uptr)MmapFixedNoReserve(ShadowBeg(), ShadowEnd() - ShadowBeg(),
-                               "shadow");
-  if (shadow != ShadowBeg()) {
+  if (!MmapFixedNoReserve(ShadowBeg(), ShadowEnd() - ShadowBeg(), "shadow")) {
     Printf("FATAL: ThreadSanitizer can not mmap the shadow memory\n");
-    Printf("FATAL: Make sure to compile with -fPIE and "
-               "to link with -pie (%p, %p).\n", shadow, ShadowBeg());
+    Printf("FATAL: Make sure to compile with -fPIE and to link with -pie.\n");
     Die();
   }
   // This memory range is used for thread stacks and large user mmaps.
@@ -46,6 +70,9 @@ void InitializeShadowMemory() {
 #elif defined(__mips64)
   const uptr kMadviseRangeBeg  = 0xff00000000ull;
   const uptr kMadviseRangeSize = 0x0100000000ull;
+#elif defined(__aarch64__) && defined(__APPLE__)
+  uptr kMadviseRangeBeg = LoAppMemBeg();
+  uptr kMadviseRangeSize = LoAppMemEnd() - LoAppMemBeg();
 #elif defined(__aarch64__)
   uptr kMadviseRangeBeg = 0;
   uptr kMadviseRangeSize = 0;
@@ -71,30 +98,23 @@ void InitializeShadowMemory() {
     DCHECK(0);
   }
 #endif
-  NoHugePagesInRegion(MemToShadow(kMadviseRangeBeg),
+  NoHugePagesInShadow(MemToShadow(kMadviseRangeBeg),
                       kMadviseRangeSize * kShadowMultiplier);
-  // Meta shadow is compressing and we don't flush it,
-  // so it makes sense to mark it as NOHUGEPAGE to not over-allocate memory.
-  // On one program it reduces memory consumption from 5GB to 2.5GB.
-  NoHugePagesInRegion(MetaShadowBeg(), MetaShadowEnd() - MetaShadowBeg());
-  if (common_flags()->use_madv_dontdump)
-    DontDumpShadowMemory(ShadowBeg(), ShadowEnd() - ShadowBeg());
+  DontDumpShadow(ShadowBeg(), ShadowEnd() - ShadowBeg());
   DPrintf("memory shadow: %zx-%zx (%zuGB)\n",
       ShadowBeg(), ShadowEnd(),
       (ShadowEnd() - ShadowBeg()) >> 30);
 
   // Map meta shadow.
-  uptr meta_size = MetaShadowEnd() - MetaShadowBeg();
-  uptr meta =
-      (uptr)MmapFixedNoReserve(MetaShadowBeg(), meta_size, "meta shadow");
-  if (meta != MetaShadowBeg()) {
+  const uptr meta = MetaShadowBeg();
+  const uptr meta_size = MetaShadowEnd() - meta;
+  if (!MmapFixedNoReserve(meta, meta_size, "meta shadow")) {
     Printf("FATAL: ThreadSanitizer can not mmap the shadow memory\n");
-    Printf("FATAL: Make sure to compile with -fPIE and "
-               "to link with -pie (%p, %p).\n", meta, MetaShadowBeg());
+    Printf("FATAL: Make sure to compile with -fPIE and to link with -pie.\n");
     Die();
   }
-  if (common_flags()->use_madv_dontdump)
-    DontDumpShadowMemory(meta, meta_size);
+  NoHugePagesInShadow(meta, meta_size);
+  DontDumpShadow(meta, meta_size);
   DPrintf("meta shadow: %zx-%zx (%zuGB)\n",
       meta, meta + meta_size, meta_size >> 30);
 
@@ -115,21 +135,24 @@ static void ProtectRange(uptr beg, uptr end) {
 void CheckAndProtect() {
   // Ensure that the binary is indeed compiled with -pie.
   MemoryMappingLayout proc_maps(true);
-  uptr p, end, prot;
-  while (proc_maps.Next(&p, &end, 0, 0, 0, &prot)) {
-    if (IsAppMem(p))
+  MemoryMappedSegment segment;
+  while (proc_maps.Next(&segment)) {
+    if (IsAppMem(segment.start)) continue;
+    if (segment.start >= HeapMemEnd() && segment.start < HeapEnd()) continue;
+    if (segment.protection == 0)  // Zero page or mprotected.
       continue;
-    if (p >= HeapMemEnd() &&
-        p < HeapEnd())
-      continue;
-    if (prot == 0)  // Zero page or mprotected.
-      continue;
-    if (p >= VdsoBeg())  // vdso
+    if (segment.start >= VdsoBeg())  // vdso
       break;
-    Printf("FATAL: ThreadSanitizer: unexpected memory mapping %p-%p\n", p, end);
+    Printf("FATAL: ThreadSanitizer: unexpected memory mapping %p-%p\n",
+           segment.start, segment.end);
     Die();
   }
 
+#if defined(__aarch64__) && defined(__APPLE__)
+  ProtectRange(HeapMemEnd(), ShadowBeg());
+  ProtectRange(ShadowEnd(), MetaShadowBeg());
+  ProtectRange(MetaShadowEnd(), TraceMemBeg());
+#else
   ProtectRange(LoAppMemEnd(), ShadowBeg());
   ProtectRange(ShadowEnd(), MetaShadowBeg());
 #ifdef TSAN_MID_APP_RANGE
@@ -143,6 +166,7 @@ void CheckAndProtect() {
   ProtectRange(TraceMemBeg(), TraceMemEnd());
   ProtectRange(TraceMemEnd(), HeapMemBeg());
   ProtectRange(HeapEnd(), HiAppMemBeg());
+#endif
 }
 #endif
 

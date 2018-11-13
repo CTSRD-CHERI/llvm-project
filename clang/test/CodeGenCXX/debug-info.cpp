@@ -4,12 +4,13 @@
 // CHECK: @_ZN6pr96081xE = global [3 x i8]* null, align 8, !dbg [[X:![0-9]+]]
 
 // CHECK: define void @_ZN7pr147634funcENS_3fooE
-// CHECK: call void @llvm.dbg.declare({{.*}}, metadata ![[F:[0-9]+]], metadata ![[EXPR:[0-9]+]])
+// CHECK: call void @llvm.dbg.declare({{.*}}, metadata ![[F:[0-9]+]], metadata !DIExpression())
 
 // !llvm.dbg.cu pulls in globals and their types first.
 // CHECK-NOT: !DIGlobalVariable(name: "c"
-// CHECK: [[X]] = distinct !DIGlobalVariable(name: "x", linkageName: "_ZN6pr96081xE"
-// CHECK-SAME:              type: [[INCARRAYPTR:![0-9]*]]
+// CHECK: [[X]] = !DIGlobalVariableExpression(var: [[XV:!.*]], expr: !DIExpression())
+// CHECK: [[XV]] = distinct !DIGlobalVariable(name: "x", linkageName: "_ZN6pr96081xE"
+// CHECK-SAME:                                type: [[INCARRAYPTR:![0-9]*]]
 // CHECK: [[INCARRAYPTR]] = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: [[INCARRAY:![0-9]+]]
 // CHECK: [[INCARRAY]] = !DICompositeType(tag: DW_TAG_array_type
 // CHECK-NOT:                             line:
@@ -116,7 +117,6 @@ struct foo {
 // For some reason function arguments ended up down here
 // CHECK: ![[F]] = !DILocalVariable(name: "f", arg: 1, scope: ![[FUNC]]
 // CHECK-SAME:                      type: ![[FOO]]
-// CHECK: ![[EXPR]] = !DIExpression(DW_OP_deref)
 foo func(foo f) {
   return f; // reference 'f' for now because otherwise we hit another bug
 }

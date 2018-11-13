@@ -9,10 +9,10 @@ target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 
 ; CHECK-LABEL: test_select_fcmp_oeq_i32:
 
-; CMOV-NEXT: ucomiss  %xmm1, %xmm0
-; CMOV-NEXT: cmovnel  %esi, %edi
-; CMOV-NEXT: cmovpl  %esi, %edi
 ; CMOV-NEXT: movl  %edi, %eax
+; CMOV-NEXT: ucomiss  %xmm1, %xmm0
+; CMOV-NEXT: cmovnel  %esi, %eax
+; CMOV-NEXT: cmovpl  %esi, %eax
 ; CMOV-NEXT: retq
 
 ; NOCMOV-NEXT:  flds  8(%esp)
@@ -36,10 +36,10 @@ entry:
 
 ; CHECK-LABEL: test_select_fcmp_oeq_i64:
 
-; CMOV-NEXT:   ucomiss  %xmm1, %xmm0
-; CMOV-NEXT:   cmovneq  %rsi, %rdi
-; CMOV-NEXT:   cmovpq  %rsi, %rdi
 ; CMOV-NEXT:   movq  %rdi, %rax
+; CMOV-NEXT:   ucomiss  %xmm1, %xmm0
+; CMOV-NEXT:   cmovneq  %rsi, %rax
+; CMOV-NEXT:   cmovpq  %rsi, %rax
 ; CMOV-NEXT:   retq
 
 ; NOCMOV-NEXT:   flds  8(%esp)
@@ -53,8 +53,7 @@ entry:
 ; NOCMOV-NEXT:   leal  12(%esp), %ecx
 ; NOCMOV-NEXT: [[TBB]]:
 ; NOCMOV-NEXT:   movl  (%ecx), %eax
-; NOCMOV-NEXT:   orl  $4, %ecx
-; NOCMOV-NEXT:   movl  (%ecx), %edx
+; NOCMOV-NEXT:   movl  4(%ecx), %edx
 ; NOCMOV-NEXT:   retl
 define i64 @test_select_fcmp_oeq_i64(float %a, float %b, i64 %c, i64 %d) #0 {
 entry:
@@ -65,10 +64,10 @@ entry:
 
 ; CHECK-LABEL: test_select_fcmp_une_i64:
 
-; CMOV-NEXT:   ucomiss  %xmm1, %xmm0
-; CMOV-NEXT:   cmovneq  %rdi, %rsi
-; CMOV-NEXT:   cmovpq  %rdi, %rsi
 ; CMOV-NEXT:   movq  %rsi, %rax
+; CMOV-NEXT:   ucomiss  %xmm1, %xmm0
+; CMOV-NEXT:   cmovneq  %rdi, %rax
+; CMOV-NEXT:   cmovpq  %rdi, %rax
 ; CMOV-NEXT:   retq
 
 ; NOCMOV-NEXT:   flds  8(%esp)
@@ -82,8 +81,7 @@ entry:
 ; NOCMOV-NEXT:   leal  20(%esp), %ecx
 ; NOCMOV-NEXT: [[TBB]]:
 ; NOCMOV-NEXT:   movl  (%ecx), %eax
-; NOCMOV-NEXT:   orl  $4, %ecx
-; NOCMOV-NEXT:   movl  (%ecx), %edx
+; NOCMOV-NEXT:   movl  4(%ecx), %edx
 ; NOCMOV-NEXT:   retl
 define i64 @test_select_fcmp_une_i64(float %a, float %b, i64 %c, i64 %d) #0 {
 entry:
@@ -229,36 +227,43 @@ attributes #0 = { nounwind }
 
 ; The following test failed because llvm had a bug where a structure like:
 ;
-; %vreg12<def> = CMOV_GR8 %vreg7, %vreg11 ... (lt)
-; %vreg13<def> = CMOV_GR8 %vreg12, %vreg11 ... (gt)
+; %12 = CMOV_GR8 %7, %11 ... (lt)
+; %13 = CMOV_GR8 %12, %11 ... (gt)
 ;
 ; was lowered to:
 ;
 ; The first two cmovs got expanded to:
-; BB#0:
-;   JL_1 BB#9
-; BB#7:
-;   JG_1 BB#9
-; BB#8:
-; BB#9:
-;   vreg12 = phi(vreg7, BB#8, vreg11, BB#0, vreg12, BB#7)
-;   vreg13 = COPY vreg12
-; Which was invalid as %vreg12 is not the same value as %vreg13
+; %bb.0:
+;   JL_1 %bb.9
+; %bb.7:
+;   JG_1 %bb.9
+; %bb.8:
+; %bb.9:
+;   %12 = phi(%7, %bb.8, %11, %bb.0, %12, %bb.7)
+;   %13 = COPY %12
+; Which was invalid as %12 is not the same value as %13
 
 ; CHECK-LABEL: no_cascade_opt:
 ; CMOV-DAG: cmpl %edx, %esi
 ; CMOV-DAG: movb $20, %al
 ; CMOV-DAG: movb $20, %dl
-; CMOV:   jl [[BB0:.LBB[0-9_]+]]
-; CMOV:   movl %ecx, %edx
-; CMOV: [[BB0]]:
-; CMOV:   jg [[BB1:.LBB[0-9_]+]]
-; CMOV:   movl %edx, %eax
-; CMOV: [[BB1]]:
+; CMOV:   jge [[BB2:.LBB[0-9_]+]]
+; CMOV:   jle [[BB3:.LBB[0-9_]+]]
+; CMOV: [[BB0:.LBB[0-9_]+]]
 ; CMOV:   testl %edi, %edi
-; CMOV:   je [[BB2:.LBB[0-9_]+]]
-; CMOV:   movl %edx, %eax
+; CMOV:   jne [[BB4:.LBB[0-9_]+]]
+; CMOV: [[BB1:.LBB[0-9_]+]]
+; CMOV:   movb %al, g8(%rip)
+; CMOV:   retq
 ; CMOV: [[BB2]]:
+; CMOV:   movl %ecx, %edx
+; CMOV:   jg [[BB0]]
+; CMOV: [[BB3]]:
+; CMOV:   movl %edx, %eax
+; CMOV:   testl %edi, %edi
+; CMOV:   je [[BB1]]
+; CMOV: [[BB4]]:
+; CMOV:   movl %edx, %eax
 ; CMOV:   movb %al, g8(%rip)
 ; CMOV:   retq
 define void @no_cascade_opt(i32 %v0, i32 %v1, i32 %v2, i32 %v3) {

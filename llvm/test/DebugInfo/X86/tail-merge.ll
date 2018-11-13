@@ -1,4 +1,4 @@
-; RUN: llc %s -mtriple=x86_64-unknown-unknown -use-unknown-locations=true -o - | FileCheck %s
+; RUN: llc %s -mtriple=x86_64-unknown-unknown -use-unknown-locations=Enable -o - | FileCheck %s
 
 ; Generated with "clang -gline-tables-only -c -emit-llvm -o - | opt -sroa -S"
 ; from source:
@@ -27,7 +27,7 @@
 ; CHECK: .loc	1 8 10
 ; CHECK: callq	bar
 ; CHECK: [[TAIL]]:
-; CHECK: .loc	1 0 0
+; CHECK: .loc	1 0
 ; CHECK: addl	[[REG]], %eax
 ; CHECK: .loc	1 9 3
 
@@ -65,7 +65,7 @@ declare i32 @bar(i32)
 !2 = !{}
 !3 = !{i32 2, !"Dwarf Version", i32 4}
 !4 = !{i32 2, !"Debug Info Version", i32 3}
-!6 = distinct !DISubprogram(name: "test", scope: !1, file: !1, line: 4, type: !7, isLocal: false, isDefinition: true, scopeLine: 4, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!6 = distinct !DISubprogram(name: "test", scope: !1, file: !1, line: 4, type: !7, isLocal: false, isDefinition: true, scopeLine: 4, flags: DIFlagPrototyped, isOptimized: false, unit: !0, retainedNodes: !2)
 !7 = !DISubroutineType(types: !2)
 !8 = !DILocation(line: 5, column: 6, scope: !6)
 !9 = !DILocation(line: 6, column: 10, scope: !6)

@@ -1,6 +1,6 @@
 ; REQUIRES: asserts
-; RUN: llc -march=x86 -no-integrated-as < %s -verify-machineinstrs -precompute-phys-liveness
-; RUN: llc -march=x86-64 -no-integrated-as < %s -verify-machineinstrs -precompute-phys-liveness
+; RUN: llc -mtriple=i686-- -no-integrated-as < %s -verify-machineinstrs -precompute-phys-liveness
+; RUN: llc -mtriple=x86_64-- -no-integrated-as < %s -verify-machineinstrs -precompute-phys-liveness
  
 ; PR6497
 
@@ -314,9 +314,9 @@ declare %t14* @_ZN4llvm9MCContext16CreateTempSymbolEv(%t2*)
 
 declare void @_ZNSt6vectorIN4llvm11MachineMoveESaIS1_EE13_M_insert_auxEN9__gnu_cxx17__normal_iteratorIPS1_S3_EERKS1_(%t10*, %t21* byval align 4, %t13*)
 
-declare void @llvm.lifetime.start(i64, i8* nocapture) nounwind
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) nounwind
 
-declare void @llvm.lifetime.end(i64, i8* nocapture) nounwind
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) nounwind
 
 ; PR10463
 ; Spilling a virtual register with <undef> uses.
@@ -481,10 +481,10 @@ declare void @fn3(...)
 
 ; Check coalescing of IMPLICIT_DEF instructions:
 ;
-; %vreg1 = IMPLICIT_DEF
-; %vreg2 = MOV32r0
+; %1 = IMPLICIT_DEF
+; %2 = MOV32r0
 ;
-; When coalescing %vreg1 and %vreg2, the IMPLICIT_DEF instruction should be
+; When coalescing %1 and %2, the IMPLICIT_DEF instruction should be
 ; erased along with its value number.
 ;
 define void @rdar12474033() nounwind ssp {

@@ -32,13 +32,14 @@ namespace OtherDecl {
   void f(auto [a, b, c]); // expected-error {{'auto' not allowed in function prototype}} expected-error {{'a'}}
 
   void g() {
-    // A condition is not a simple-declaration.
-    for (; auto [a, b, c] = S(); ) {} // expected-error {{not permitted in this context}}
-    if (auto [a, b, c] = S()) {} // expected-error {{not permitted in this context}}
-    if (int n; auto [a, b, c] = S()) {} // expected-error {{not permitted in this context}}
-    switch (auto [a, b, c] = S()) {} // expected-error {{not permitted in this context}}
-    switch (int n; auto [a, b, c] = S()) {} // expected-error {{not permitted in this context}}
-    while (auto [a, b, c] = S()) {} // expected-error {{not permitted in this context}}
+    // A condition is allowed as a Clang extension.
+    // See commentary in test/Parser/decomposed-condition.cpp
+    for (; auto [a, b, c] = S(); ) {} // expected-warning {{ISO C++17 does not permit structured binding declaration in a condition}} expected-error {{value of type 'S' is not contextually convertible to 'bool'}}
+    if (auto [a, b, c] = S()) {} // expected-warning {{ISO C++17 does not permit structured binding declaration in a condition}} expected-error {{value of type 'S' is not contextually convertible to 'bool'}}
+    if (int n; auto [a, b, c] = S()) {} // expected-warning {{ISO C++17 does not permit structured binding declaration in a condition}} expected-error {{value of type 'S' is not contextually convertible to 'bool'}}
+    switch (auto [a, b, c] = S()) {} // expected-warning {{ISO C++17 does not permit structured binding declaration in a condition}} expected-error {{statement requires expression of integer type ('S' invalid)}}
+    switch (int n; auto [a, b, c] = S()) {} // expected-warning {{ISO C++17 does not permit structured binding declaration in a condition}} expected-error {{statement requires expression of integer type ('S' invalid)}}
+    while (auto [a, b, c] = S()) {} // expected-warning {{ISO C++17 does not permit structured binding declaration in a condition}} expected-error {{value of type 'S' is not contextually convertible to 'bool'}}
 
     // An exception-declaration is not a simple-declaration.
     try {}
@@ -139,9 +140,11 @@ namespace Init {
     int arr[1];
     struct S { int n; };
     auto &[bad1]; // expected-error {{decomposition declaration '[bad1]' requires an initializer}}
-    const auto &[bad2](S{}); // expected-error {{decomposition declaration '[bad2]' cannot have a parenthesized initializer}}
+    const auto &[bad2](S{}, S{}); // expected-error {{initializer for variable '[bad2]' with type 'const auto &' contains multiple expressions}}
+    const auto &[bad3](); // expected-error {{expected expression}}
     auto &[good1] = arr;
     auto &&[good2] = S{};
+    const auto &[good3](S{});
     S [goodish3] = { 4 }; // expected-error {{cannot be declared with type 'S'}}
     S [goodish4] { 4 }; // expected-error {{cannot be declared with type 'S'}}
   }

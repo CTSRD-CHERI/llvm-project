@@ -13,6 +13,7 @@ set(CLANG_LINKS_TO_CREATE clang++ cc c++ CACHE STRING "")
 set(CMAKE_MACOSX_RPATH ON CACHE BOOL "")
 set(LLVM_ENABLE_ZLIB ON CACHE BOOL "")
 set(LLVM_ENABLE_BACKTRACES OFF CACHE BOOL "")
+set(LLVM_ENABLE_MODULES ON CACHE BOOL "")
 set(LLVM_EXTERNALIZE_DEBUGINFO ON CACHE BOOL "")
 set(CLANG_PLUGIN_SUPPORT OFF CACHE BOOL "")
 set(BUG_REPORT_URL "http://developer.apple.com/bugreporter/" CACHE STRING "")
@@ -20,7 +21,7 @@ set(BUG_REPORT_URL "http://developer.apple.com/bugreporter/" CACHE STRING "")
 set(LLVM_BUILD_EXTERNAL_COMPILER_RT ON CACHE BOOL "Build Compiler-RT with just-built clang")
 set(COMPILER_RT_ENABLE_IOS ON CACHE BOOL "Build iOS Compiler-RT libraries")
 
-set(LLVM_CREATE_XCODE_TOOLCHAIN ON CACHE BOOL "Generate targets to create and install an Xcode compatable toolchain")
+set(LLVM_CREATE_XCODE_TOOLCHAIN ON CACHE BOOL "Generate targets to create and install an Xcode compatible toolchain")
 
 # Make unit tests (if present) part of the ALL target
 set(LLVM_BUILD_TESTS ON CACHE BOOL "")
@@ -28,8 +29,10 @@ set(LLVM_BUILD_TESTS ON CACHE BOOL "")
 set(LLVM_ENABLE_LTO ON CACHE BOOL "")
 set(CMAKE_C_FLAGS "-fno-stack-protector -fno-common -Wno-profile-instr-unprofiled" CACHE STRING "")
 set(CMAKE_CXX_FLAGS "-fno-stack-protector -fno-common -Wno-profile-instr-unprofiled" CACHE STRING "")
-set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -gline-tables-only -DNDEBUG" CACHE STRING "")
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -gline-tables-only -DNDEBUG" CACHE STRING "")
+if(LLVM_ENABLE_LTO AND NOT LLVM_ENABLE_LTO STREQUAL "THIN")
+  set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -gline-tables-only -DNDEBUG" CACHE STRING "")
+  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -gline-tables-only -DNDEBUG" CACHE STRING "")
+endif()
 set(CMAKE_BUILD_TYPE RelWithDebInfo CACHE STRING "")
 
 set(LIBCXX_INSTALL_LIBRARY OFF CACHE BOOL "")
@@ -37,10 +40,14 @@ set(LIBCXX_INSTALL_HEADERS ON CACHE BOOL "")
 set(LIBCXX_INCLUDE_TESTS OFF CACHE BOOL "")
 set(LLVM_LTO_VERSION_OFFSET 3000 CACHE STRING "")
 
+# Generating Xcode toolchains is useful for developers wanting to build and use
+# clang without installing over existing tools.
+set(LLVM_CREATE_XCODE_TOOLCHAIN ON CACHE BOOL "")
+
 # setup toolchain
 set(LLVM_INSTALL_TOOLCHAIN_ONLY ON CACHE BOOL "")
 set(LLVM_TOOLCHAIN_TOOLS
-  llvm-dsymutil
+  dsymutil
   llvm-cov
   llvm-dwarfdump
   llvm-profdata
@@ -54,7 +61,7 @@ set(LLVM_DISTRIBUTION_COMPONENTS
   LTO
   clang-format
   clang-headers
-  libcxx-headers
+  cxx-headers
   ${LLVM_TOOLCHAIN_TOOLS}
   CACHE STRING "")
 

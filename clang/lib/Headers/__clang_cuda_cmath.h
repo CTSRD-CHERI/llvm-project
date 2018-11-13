@@ -72,10 +72,21 @@ __DEVICE__ int fpclassify(double __x) {
 __DEVICE__ float frexp(float __arg, int *__exp) {
   return ::frexpf(__arg, __exp);
 }
+
+// For inscrutable reasons, the CUDA headers define these functions for us on
+// Windows.
+#ifndef _MSC_VER
 __DEVICE__ bool isinf(float __x) { return ::__isinff(__x); }
 __DEVICE__ bool isinf(double __x) { return ::__isinf(__x); }
 __DEVICE__ bool isfinite(float __x) { return ::__finitef(__x); }
-__DEVICE__ bool isfinite(double __x) { return ::__finite(__x); }
+// For inscrutable reasons, __finite(), the double-precision version of
+// __finitef, does not exist when compiling for MacOS.  __isfinited is available
+// everywhere and is just as good.
+__DEVICE__ bool isfinite(double __x) { return ::__isfinited(__x); }
+__DEVICE__ bool isnan(float __x) { return ::__isnanf(__x); }
+__DEVICE__ bool isnan(double __x) { return ::__isnan(__x); }
+#endif
+
 __DEVICE__ bool isgreater(float __x, float __y) {
   return __builtin_isgreater(__x, __y);
 }
@@ -106,8 +117,6 @@ __DEVICE__ bool islessgreater(float __x, float __y) {
 __DEVICE__ bool islessgreater(double __x, double __y) {
   return __builtin_islessgreater(__x, __y);
 }
-__DEVICE__ bool isnan(float __x) { return ::__isnanf(__x); }
-__DEVICE__ bool isnan(double __x) { return ::__isnan(__x); }
 __DEVICE__ bool isnormal(float __x) { return __builtin_isnormal(__x); }
 __DEVICE__ bool isnormal(double __x) { return __builtin_isnormal(__x); }
 __DEVICE__ bool isunordered(float __x, float __y) {
@@ -122,15 +131,6 @@ __DEVICE__ float ldexp(float __arg, int __exp) {
 __DEVICE__ float log(float __x) { return ::logf(__x); }
 __DEVICE__ float log10(float __x) { return ::log10f(__x); }
 __DEVICE__ float modf(float __x, float *__iptr) { return ::modff(__x, __iptr); }
-__DEVICE__ float nexttoward(float __from, double __to) {
-  return __builtin_nexttowardf(__from, __to);
-}
-__DEVICE__ double nexttoward(double __from, double __to) {
-  return __builtin_nexttoward(__from, __to);
-}
-__DEVICE__ float nexttowardf(float __from, double __to) {
-  return __builtin_nexttowardf(__from, __to);
-}
 __DEVICE__ float pow(float __base, float __exp) {
   return ::powf(__base, __exp);
 }
@@ -141,12 +141,16 @@ __DEVICE__ double pow(double __base, int __iexp) {
   return ::powi(__base, __iexp);
 }
 __DEVICE__ bool signbit(float __x) { return ::__signbitf(__x); }
-__DEVICE__ bool signbit(double __x) { return ::__signbit(__x); }
+__DEVICE__ bool signbit(double __x) { return ::__signbitd(__x); }
 __DEVICE__ float sin(float __x) { return ::sinf(__x); }
 __DEVICE__ float sinh(float __x) { return ::sinhf(__x); }
 __DEVICE__ float sqrt(float __x) { return ::sqrtf(__x); }
 __DEVICE__ float tan(float __x) { return ::tanf(__x); }
 __DEVICE__ float tanh(float __x) { return ::tanhf(__x); }
+
+// Notably missing above is nexttoward.  We omit it because
+// libdevice doesn't provide an implementation, and we don't want to be in the
+// business of implementing tricky libm functions in this header.
 
 // Now we've defined everything we promised we'd define in
 // __clang_cuda_math_forward_declares.h.  We need to do two additional things to
@@ -286,13 +290,6 @@ ldexp(__T __x, int __exp) {
   return std::ldexp((double)__x, __exp);
 }
 
-template <typename __T>
-__DEVICE__ typename __clang_cuda_enable_if<std::numeric_limits<__T>::is_integer,
-                                           double>::type
-nexttoward(__T __from, double __to) {
-  return std::nexttoward((double)__from, __to);
-}
-
 template <typename __T1, typename __T2>
 __DEVICE__ typename __clang_cuda_enable_if<
     std::numeric_limits<__T1>::is_specialized &&
@@ -379,7 +376,6 @@ using ::lrint;
 using ::lround;
 using ::nearbyint;
 using ::nextafter;
-using ::nexttoward;
 using ::pow;
 using ::remainder;
 using ::remquo;
@@ -447,8 +443,6 @@ using ::lroundf;
 using ::modff;
 using ::nearbyintf;
 using ::nextafterf;
-using ::nexttowardf;
-using ::nexttowardf;
 using ::powf;
 using ::remainderf;
 using ::remquof;

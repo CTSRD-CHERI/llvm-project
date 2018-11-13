@@ -14,6 +14,7 @@
 #include "clang-c/Index.h"
 #include "CXString.h"
 #include "clang/ARCMigrate/ARCMT.h"
+#include "clang/Config/config.h"
 #include "clang/Frontend/TextDiagnosticBuffer.h"
 #include "llvm/Support/FileSystem.h"
 
@@ -32,10 +33,8 @@ struct Remap {
 // libClang public APIs.
 //===----------------------------------------------------------------------===//
 
-extern "C" {
-
 CXRemapping clang_getRemappings(const char *migrate_dir_path) {
-#ifndef CLANG_ENABLE_ARCMT
+#if !CLANG_ENABLE_ARCMT
   llvm::errs() << "error: feature not enabled in this build\n";
   return nullptr;
 #else
@@ -78,7 +77,7 @@ CXRemapping clang_getRemappings(const char *migrate_dir_path) {
 
 CXRemapping clang_getRemappingsFromFileList(const char **filePaths,
                                             unsigned numFiles) {
-#ifndef CLANG_ENABLE_ARCMT
+#if !CLANG_ENABLE_ARCMT
   llvm::errs() << "error: feature not enabled in this build\n";
   return nullptr;
 #else
@@ -138,5 +137,3 @@ void clang_remap_getFilenames(CXRemapping map, unsigned index,
 void clang_remap_dispose(CXRemapping map) {
   delete static_cast<Remap *>(map);
 }
-
-} // end: extern "C"

@@ -7,9 +7,9 @@
 ; #3 }
 
 ; i == 3:     discriminator 0
-; i == 5:     discriminator 1
-; return 100: discriminator 2
-; return 99:  discriminator 3
+; i == 5:     discriminator 2
+; return 100: discriminator 4
+; return 99:  discriminator 6
 
 define i32 @_Z3fooi(i32 %i) #0 !dbg !4 {
   %1 = alloca i32, align 4
@@ -62,7 +62,7 @@ attributes #1 = { nounwind readnone }
 !0 = distinct !DICompileUnit(language: DW_LANG_C_plus_plus, file: !1, producer: "clang version 3.8.0 (trunk 250915)", isOptimized: true, runtimeVersion: 0, emissionKind: NoDebug, enums: !2)
 !1 = !DIFile(filename: "a.cc", directory: "/usr/local/google/home/dehao/discr")
 !2 = !{}
-!4 = distinct !DISubprogram(name: "foo", linkageName: "_Z3fooi", scope: !1, file: !1, line: 1, type: !5, isLocal: false, isDefinition: true, scopeLine: 1, flags: DIFlagPrototyped, isOptimized: true, unit: !0, variables: !8)
+!4 = distinct !DISubprogram(name: "foo", linkageName: "_Z3fooi", scope: !1, file: !1, line: 1, type: !5, isLocal: false, isDefinition: true, scopeLine: 1, flags: DIFlagPrototyped, isOptimized: true, unit: !0, retainedNodes: !8)
 !5 = !DISubroutineType(types: !6)
 !6 = !{!7, !7}
 !7 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
@@ -91,11 +91,11 @@ attributes #1 = { nounwind readnone }
 ; CHECK: ![[F:.*]] = distinct !DISubprogram(name: "foo",
 ; CHECK: ![[IF:.*]] = distinct !DILexicalBlock(scope: ![[F]],{{.*}}line: 2, column: 7)
 ; CHECK: ![[THEN1]] = !DILocation(line: 2, column: 17, scope: ![[THENBLOCK:[0-9]+]])
-; CHECK: ![[THENBLOCK]] = !DILexicalBlockFile(scope: ![[IF]],{{.*}} discriminator: 1)
+; CHECK: ![[THENBLOCK]] = !DILexicalBlockFile(scope: ![[IF]],{{.*}} discriminator: 2)
 ; CHECK: ![[THEN2]] = !DILocation(line: 2, column: 19, scope: ![[THENBLOCK]])
 ; CHECK: ![[THEN3]] = !DILocation(line: 2, column: 7, scope: ![[BRBLOCK:[0-9]+]])
-; CHECK: ![[BRBLOCK]] = !DILexicalBlockFile(scope: ![[F]],{{.*}} discriminator: 1)
+; CHECK: ![[BRBLOCK]] = !DILexicalBlockFile(scope: ![[F]],{{.*}} discriminator: 2)
 ; CHECK: ![[ELSE]] = !DILocation(line: 2, column: 25, scope: ![[ELSEBLOCK:[0-9]+]])
-; CHECK: ![[ELSEBLOCK]] = !DILexicalBlockFile(scope: ![[IF]],{{.*}} discriminator: 2)
+; CHECK: ![[ELSEBLOCK]] = !DILexicalBlockFile(scope: ![[IF]],{{.*}} discriminator: 4)
 ; CHECK: ![[COMBINE]] = !DILocation(line: 2, column: 42, scope: ![[COMBINEBLOCK:[0-9]+]])
-; CHECK: ![[COMBINEBLOCK]] = !DILexicalBlockFile(scope: ![[IF]],{{.*}} discriminator: 3)
+; CHECK: ![[COMBINEBLOCK]] = !DILexicalBlockFile(scope: ![[IF]],{{.*}} discriminator: 6)

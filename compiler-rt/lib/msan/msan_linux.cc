@@ -9,13 +9,14 @@
 //
 // This file is a part of MemorySanitizer.
 //
-// Linux- and FreeBSD-specific code.
+// Linux-, NetBSD- and FreeBSD-specific code.
 //===----------------------------------------------------------------------===//
 
 #include "sanitizer_common/sanitizer_platform.h"
-#if SANITIZER_FREEBSD || SANITIZER_LINUX
+#if SANITIZER_FREEBSD || SANITIZER_LINUX || SANITIZER_NETBSD
 
 #include "msan.h"
+#include "msan_report.h"
 #include "msan_thread.h"
 
 #include <elf.h>
@@ -120,7 +121,7 @@ bool InitShadow(bool init_origins) {
     return false;
   }
 
-  const uptr maxVirtualAddress = GetMaxVirtualAddress();
+  const uptr maxVirtualAddress = GetMaxUserVirtualAddress();
 
   for (unsigned i = 0; i < kMemoryLayoutSize; ++i) {
     uptr start = kMemoryLayout[i].start;
@@ -142,7 +143,7 @@ bool InitShadow(bool init_origins) {
     if (map) {
       if (!CheckMemoryRangeAvailability(start, size))
         return false;
-      if ((uptr)MmapFixedNoReserve(start, size, kMemoryLayout[i].name) != start)
+      if (!MmapFixedNoReserve(start, size, kMemoryLayout[i].name))
         return false;
       if (common_flags()->use_madv_dontdump)
         DontDumpShadowMemory(start, size);
@@ -213,4 +214,4 @@ void MsanTSDDtor(void *tsd) {
 
 } // namespace __msan
 
-#endif // SANITIZER_FREEBSD || SANITIZER_LINUX
+#endif // SANITIZER_FREEBSD || SANITIZER_LINUX || SANITIZER_NETBSD

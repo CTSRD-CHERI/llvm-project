@@ -17,55 +17,126 @@ class LibcxxSetDataFormatterTestCase(TestBase):
 
     mydir = TestBase.compute_mydir(__file__)
 
-    @skipIf(compiler="gcc")
-    @skipIfWindows  # libc++ not ported to Windows yet
+    def setUp(self):
+        TestBase.setUp(self)
+        ns = 'ndk' if lldbplatformutil.target_is_android() else ''
+        self.namespace = 'std::__' + ns + '1'
+
+    def getVariableType(self, name):
+        var = self.frame().FindVariable(name)
+        self.assertTrue(var.IsValid())
+        return var.GetType().GetCanonicalType().GetName()
+
+    def check_ii(self, var_name):
+        """ This checks the value of the bitset stored in ii at the call to by_ref_and_ptr.
+            We use this to make sure we get the same values for ii when we look at the object
+            directly, and when we look at a reference to the object. """
+        self.expect(
+            "frame variable " + var_name,
+            substrs=["size=7",
+                     "[2] = 2",
+                     "[3] = 3",
+                     "[6] = 6"])
+        self.expect("frame variable " + var_name + "[2]", substrs=[" = 2"])
+        self.expect(
+            "p " + var_name,
+            substrs=[
+                "size=7",
+                "[2] = 2",
+                "[3] = 3",
+                "[6] = 6"])
+
+    @add_test_categories(["libc++"])
     def test_with_run_command(self):
         """Test that that file and class static variables display correctly."""
         self.build()
-        self.runCmd("file a.out", CURRENT_EXECUTABLE_SET)
+        (self.target, process, _, bkpt) = lldbutil.run_to_source_breakpoint(
+            self, "Set break point at this line.", lldb.SBFileSpec("main.cpp", False))
 
-#        bkpt = self.target().FindBreakpointByID(lldbutil.run_break_set_by_source_regexp (self, "Set break point at this line."))
+        # This is the function to remove the custom formats in order to have a
+        # clean slate for the next test case.
+        def cleanup():
+            self.runCmd('type format clear', check=False)
+            self.runCmd('type summary clear', check=False)
+            self.runCmd('type filter clear', check=False)
+            self.runCmd('type synth clear', check=False)
+            self.runCmd(
+                "settings set target.max-children-count 256",
+                check=False)
 
-        self.runCmd("run", RUN_SUCCEEDED)
+        # Execute the cleanup function during test case tear down.
+        self.addTearDownHook(cleanup)
 
-#        lldbutil.skip_if_library_missing(self, self.target(), lldbutil.PrintableRegex("libc\+\+"))
-#
-#        # The stop reason of the thread should be breakpoint.
-#        self.expect("thread list", STOPPED_DUE_TO_BREAKPOINT,
-#            substrs = ['stopped',
-#                       'stop reason = breakpoint'])
-#
-#        # This is the function to remove the custom formats in order to have a
-#        # clean slate for the next test case.
-#        def cleanup():
-#            self.runCmd('type format clear', check=False)
-#            self.runCmd('type summary clear', check=False)
-#            self.runCmd('type filter clear', check=False)
-#            self.runCmd('type synth clear', check=False)
-#            self.runCmd("settings set target.max-children-count 256", check=False)
-#
-#        # Execute the cleanup function during test case tear down.
-#        self.addTearDownHook(cleanup)
-#
-#        self.expect('image list', substrs = self.getLibcPlusPlusLibs())
-#
-#        self.expect("frame variable ii",substrs = ["size=0","{}"])
-#        lldbutil.continue_to_breakpoint(self.process(), bkpt)
-#        self.expect("frame variable ii",substrs = ["size=6","[0] = 0","[1] = 1", "[2] = 2", "[3] = 3", "[4] = 4", "[5] = 5"])
-#        lldbutil.continue_to_breakpoint(self.process(), bkpt)
-#        self.expect("frame variable ii",substrs = ["size=7","[2] = 2", "[3] = 3", "[6] = 6"])
-#        self.expect("frame variable ii[2]",substrs = [" = 2"])
-#        self.expect("p ii",substrs = ["size=7","[2] = 2", "[3] = 3", "[6] = 6"])
-#        lldbutil.continue_to_breakpoint(self.process(), bkpt)
-#        self.expect("frame variable ii",substrs = ["size=0","{}"])
-#        lldbutil.continue_to_breakpoint(self.process(), bkpt)
-#        self.expect("frame variable ii",substrs = ["size=0","{}"])
-#        self.expect("frame variable ss",substrs = ["size=0","{}"])
-#        lldbutil.continue_to_breakpoint(self.process(), bkpt)
-#        self.expect("frame variable ss",substrs = ["size=2",'[0] = "a"','[1] = "a very long string is right here"'])
-#        lldbutil.continue_to_breakpoint(self.process(), bkpt)
-#        self.expect("frame variable ss",substrs = ["size=4",'[2] = "b"','[3] = "c"','[0] = "a"','[1] = "a very long string is right here"'])
-#        self.expect("p ss",substrs = ["size=4",'[2] = "b"','[3] = "c"','[0] = "a"','[1] = "a very long string is right here"'])
-#        self.expect("frame variable ss[2]",substrs = [' = "b"'])
-#        lldbutil.continue_to_breakpoint(self.process(), bkpt)
-#        self.expect("frame variable ss",substrs = ["size=3",'[0] = "a"','[1] = "a very long string is right here"','[2] = "c"'])
+        ii_type = self.getVariableType("ii")
+        self.assertTrue(ii_type.startswith(self.namespace + "::set"),
+                        "Type: " + ii_type)
+
+        self.expect("frame variable ii", substrs=["size=0", "{}"])
+        lldbutil.continue_to_breakpoint(process, bkpt)
+        self.expect(
+            "frame variable ii",
+            substrs=["size=6",
+                     "[0] = 0",
+                     "[1] = 1",
+                     "[2] = 2",
+                     "[3] = 3",
+                     "[4] = 4",
+                     "[5] = 5"])
+        lldbutil.continue_to_breakpoint(process, bkpt)
+        self.check_ii("ii")
+
+        lldbutil.continue_to_breakpoint(process, bkpt)
+        self.expect("frame variable ii", substrs=["size=0", "{}"])
+        lldbutil.continue_to_breakpoint(process, bkpt)
+        self.expect("frame variable ii", substrs=["size=0", "{}"])
+
+        ss_type = self.getVariableType("ss")
+        self.assertTrue(ii_type.startswith(self.namespace + "::set"),
+                        "Type: " + ss_type)
+
+        self.expect("frame variable ss", substrs=["size=0", "{}"])
+        lldbutil.continue_to_breakpoint(process, bkpt)
+        self.expect(
+            "frame variable ss",
+            substrs=["size=2",
+                     '[0] = "a"',
+                     '[1] = "a very long string is right here"'])
+        lldbutil.continue_to_breakpoint(process, bkpt)
+        self.expect(
+            "frame variable ss",
+            substrs=["size=4",
+                     '[2] = "b"',
+                     '[3] = "c"',
+                     '[0] = "a"',
+                     '[1] = "a very long string is right here"'])
+        self.expect(
+            "p ss",
+            substrs=["size=4",
+                     '[2] = "b"',
+                     '[3] = "c"',
+                     '[0] = "a"',
+                     '[1] = "a very long string is right here"'])
+        self.expect("frame variable ss[2]", substrs=[' = "b"'])
+        lldbutil.continue_to_breakpoint(process, bkpt)
+        self.expect(
+            "frame variable ss",
+            substrs=["size=3",
+                     '[0] = "a"',
+                     '[1] = "a very long string is right here"',
+                     '[2] = "c"'])
+
+    @add_test_categories(["libc++"])
+    def test_ref_and_ptr(self):
+        """Test that the data formatters work on ref and ptr."""
+        self.build()
+        (self.target, process, _, bkpt) = lldbutil.run_to_source_breakpoint(
+            self, "Stop here to check by ref and ptr.",
+            lldb.SBFileSpec("main.cpp", False))
+        # The reference should print just like the value:
+        self.check_ii("ref")
+
+        self.expect("frame variable ptr",
+                    substrs=["ptr =", "size=7"])
+        self.expect("expr ptr",
+                    substrs=["size=7"])
+

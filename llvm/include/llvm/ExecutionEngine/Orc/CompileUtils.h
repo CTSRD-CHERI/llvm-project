@@ -1,4 +1,4 @@
-//===-- CompileUtils.h - Utilities for compiling IR in the JIT --*- C++ -*-===//
+//===- CompileUtils.h - Utilities for compiling IR in the JIT ---*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,49 +14,118 @@
 #ifndef LLVM_EXECUTIONENGINE_ORC_COMPILEUTILS_H
 #define LLVM_EXECUTIONENGINE_ORC_COMPILEUTILS_H
 
-#include "llvm/ExecutionEngine/ObjectMemoryBuffer.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ExecutionEngine/ObjectCache.h"
+#include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
 #include "llvm/IR/LegacyPassManager.h"
-#include "llvm/MC/MCContext.h"
+#include "llvm/Object/Binary.h"
 #include "llvm/Object/ObjectFile.h"
+#include "llvm/Support/Error.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/SmallVectorMemoryBuffer.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
+#include <algorithm>
+#include <memory>
 
 namespace llvm {
+
+class MCContext;
+class Module;
+
 namespace orc {
 
-/// @brief Simple compile functor: Takes a single IR module and returns an
-///        ObjectFile.
+/// Simple compile functor: Takes a single IR module and returns an ObjectFile.
+/// This compiler supports a single compilation thread and LLVMContext only.
+/// For multithreaded compilation, use MultiThreadedSimpleCompiler below.
 class SimpleCompiler {
 public:
-  /// @brief Construct a simple compile functor with the given target.
-  SimpleCompiler(TargetMachine &TM) : TM(TM) {}
+  using CompileResult = std::unique_ptr<MemoryBuffer>;
 
-  /// @brief Compile a Module to an ObjectFile.
-  object::OwningBinary<object::ObjectFile> operator()(Module &M) const {
+  /// Construct a simple compile functor with the given target.
+  SimpleCompiler(TargetMachine &TM, ObjectCache *ObjCache = nullptr)
+    : TM(TM), ObjCache(ObjCache) {}
+
+  /// Set an ObjectCache to query before compiling.
+  void setObjectCache(ObjectCache *NewCache) { ObjCache = NewCache; }
+
+  /// Compile a Module to an ObjectFile.
+  CompileResult operator()(Module &M) {
+    CompileResult CachedObject = tryToLoadFromObjectCache(M);
+    if (CachedObject)
+      return CachedObject;
+
     SmallVector<char, 0> ObjBufferSV;
-    raw_svector_ostream ObjStream(ObjBufferSV);
 
-    legacy::PassManager PM;
-    MCContext *Ctx;
-    if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
-      llvm_unreachable("Target does not support MC emission.");
-    PM.run(M);
-    std::unique_ptr<MemoryBuffer> ObjBuffer(
-        new ObjectMemoryBuffer(std::move(ObjBufferSV)));
-    Expected<std::unique_ptr<object::ObjectFile>> Obj =
+    {
+      raw_svector_ostream ObjStream(ObjBufferSV);
+
+      legacy::PassManager PM;
+      MCContext *Ctx;
+      if (TM.addPassesToEmitMC(PM, Ctx, ObjStream))
+        llvm_unreachable("Target does not support MC emission.");
+      PM.run(M);
+    }
+
+    auto ObjBuffer =
+        llvm::make_unique<SmallVectorMemoryBuffer>(std::move(ObjBufferSV));
+    auto Obj =
         object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
-    typedef object::OwningBinary<object::ObjectFile> OwningObj;
-    if (Obj)
-      return OwningObj(std::move(*Obj), std::move(ObjBuffer));
+
+    if (Obj) {
+      notifyObjectCompiled(M, *ObjBuffer);
+      return std::move(ObjBuffer);
+    }
+
     // TODO: Actually report errors helpfully.
     consumeError(Obj.takeError());
-    return OwningObj(nullptr, nullptr);
+    return nullptr;
   }
 
 private:
+
+  CompileResult tryToLoadFromObjectCache(const Module &M) {
+    if (!ObjCache)
+      return CompileResult();
+
+    return ObjCache->getObject(&M);
+  }
+
+  void notifyObjectCompiled(const Module &M, const MemoryBuffer &ObjBuffer) {
+    if (ObjCache)
+      ObjCache->notifyObjectCompiled(&M, ObjBuffer.getMemBufferRef());
+  }
+
   TargetMachine &TM;
+  ObjectCache *ObjCache = nullptr;
 };
 
-} // End namespace orc.
-} // End namespace llvm.
+/// A thread-safe version of SimpleCompiler.
+///
+/// This class creates a new TargetMachine and SimpleCompiler instance for each
+/// compile.
+class MultiThreadedSimpleCompiler {
+public:
+  MultiThreadedSimpleCompiler(JITTargetMachineBuilder JTMB,
+                              ObjectCache *ObjCache = nullptr)
+      : JTMB(std::move(JTMB)), ObjCache(ObjCache) {}
+
+  void setObjectCache(ObjectCache *ObjCache) { this->ObjCache = ObjCache; }
+
+  std::unique_ptr<MemoryBuffer> operator()(Module &M) {
+    auto TM = cantFail(JTMB.createTargetMachine());
+    SimpleCompiler C(*TM, ObjCache);
+    return C(M);
+  }
+
+private:
+  JITTargetMachineBuilder JTMB;
+  ObjectCache *ObjCache = nullptr;
+};
+
+} // end namespace orc
+
+} // end namespace llvm
 
 #endif // LLVM_EXECUTIONENGINE_ORC_COMPILEUTILS_H

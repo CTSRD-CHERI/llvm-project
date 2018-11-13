@@ -7,7 +7,7 @@
 
 ; Ensure gold generates imports files if requested for distributed backends.
 ; RUN: rm -f %t3.o.imports %t3.o.thinlto.bc
-; RUN: %gold -plugin %llvmshlibdir/LLVMgold.so \
+; RUN: %gold -plugin %llvmshlibdir/LLVMgold%shlibext \
 ; RUN:    --plugin-opt=thinlto \
 ; RUN:    --plugin-opt=thinlto-index-only \
 ; RUN:    --plugin-opt=thinlto-emit-imports-files \
@@ -27,6 +27,8 @@
 
 ; The index file should be created even for the input with an empty summary.
 ; RUN: ls %t3.o.thinlto.bc
+
+target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 
 declare void @g(...)
 

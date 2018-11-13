@@ -61,9 +61,9 @@ class _LIBCPP_HIDDEN __libcpp_refstring
 
     bool __uses_refcount() const;
 public:
-    explicit __libcpp_refstring(const char* msg);
-    __libcpp_refstring(const __libcpp_refstring& s) _NOEXCEPT;
-    __libcpp_refstring& operator=(const __libcpp_refstring& s) _NOEXCEPT;
+    explicit __libcpp_refstring(const char* __msg);
+    __libcpp_refstring(const __libcpp_refstring& __s) _NOEXCEPT;
+    __libcpp_refstring& operator=(const __libcpp_refstring& __s) _NOEXCEPT;
     ~__libcpp_refstring();
 
     const char* c_str() const _NOEXCEPT {return __imp_;}
@@ -185,83 +185,91 @@ _LIBCPP_BEGIN_NAMESPACE_STD
 // in the dylib
 _LIBCPP_NORETURN _LIBCPP_FUNC_VIS void __throw_runtime_error(const char*);
 
-_LIBCPP_NORETURN inline _LIBCPP_ALWAYS_INLINE
+_LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_logic_error(const char*__msg)
 {
 #ifndef _LIBCPP_NO_EXCEPTIONS
     throw logic_error(__msg);
 #else
-	_VSTD::abort();
+    ((void)__msg);
+    _VSTD::abort();
 #endif
 }
 
-_LIBCPP_NORETURN inline _LIBCPP_ALWAYS_INLINE
+_LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_domain_error(const char*__msg)
 {
 #ifndef _LIBCPP_NO_EXCEPTIONS
     throw domain_error(__msg);
 #else
-	_VSTD::abort();
+    ((void)__msg);
+    _VSTD::abort();
 #endif
 }
 
-_LIBCPP_NORETURN inline _LIBCPP_ALWAYS_INLINE
+_LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_invalid_argument(const char*__msg)
 {
 #ifndef _LIBCPP_NO_EXCEPTIONS
     throw invalid_argument(__msg);
 #else
-	_VSTD::abort();
+    ((void)__msg);
+    _VSTD::abort();
 #endif
 }
 
-_LIBCPP_NORETURN inline _LIBCPP_ALWAYS_INLINE
+_LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_length_error(const char*__msg)
 {
 #ifndef _LIBCPP_NO_EXCEPTIONS
     throw length_error(__msg);
 #else
-	_VSTD::abort();
+    ((void)__msg);
+    _VSTD::abort();
 #endif
 }
 
-_LIBCPP_NORETURN inline _LIBCPP_ALWAYS_INLINE
+_LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_out_of_range(const char*__msg)
 {
 #ifndef _LIBCPP_NO_EXCEPTIONS
     throw out_of_range(__msg);
 #else
-	_VSTD::abort();
+    ((void)__msg);
+    _VSTD::abort();
 #endif
 }
 
-_LIBCPP_NORETURN inline _LIBCPP_ALWAYS_INLINE
+_LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_range_error(const char*__msg)
 {
 #ifndef _LIBCPP_NO_EXCEPTIONS
     throw range_error(__msg);
 #else
-	_VSTD::abort();
+    ((void)__msg);
+    _VSTD::abort();
 #endif
 }
 
-_LIBCPP_NORETURN inline _LIBCPP_ALWAYS_INLINE
+_LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_overflow_error(const char*__msg)
 {
 #ifndef _LIBCPP_NO_EXCEPTIONS
     throw overflow_error(__msg);
 #else
-	_VSTD::abort();
+    ((void)__msg);
+    _VSTD::abort();
 #endif
 }
 
-_LIBCPP_NORETURN inline _LIBCPP_ALWAYS_INLINE
+_LIBCPP_NORETURN inline _LIBCPP_INLINE_VISIBILITY
 void __throw_underflow_error(const char*__msg)
 {
 #ifndef _LIBCPP_NO_EXCEPTIONS
     throw underflow_error(__msg);
 #else
-	_VSTD::abort();
+    ((void)__msg);
+    _VSTD::abort();
 #endif
 }
 

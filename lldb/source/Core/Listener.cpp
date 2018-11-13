@@ -9,16 +9,17 @@
 
 #include "lldb/Core/Listener.h"
 
-// C Includes
-// C++ Includes
-#include <algorithm>
-
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/Broadcaster.h"
 #include "lldb/Core/Event.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Core/StreamString.h"
+#include "lldb/Utility/ConstString.h" // for ConstString
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Logging.h" // for GetLogIfAllCategoriesSet, LIBL...
+
+#include "llvm/ADT/Optional.h" // for Optional
+
+#include <algorithm>
+#include <memory>  // for make_shared
+#include <utility> // for pair, make_pair
 
 using namespace lldb;
 using namespace lldb_private;
@@ -303,11 +304,9 @@ bool Listener::FindNextEventInternal(
 
     if (remove) {
       m_events.erase(pos);
-      // Unlock the event queue here.  We've removed this event and are about to
-      // return
-      // it so it should be okay to get the next event off the queue here - and
-      // it might
-      // be useful to do that in the "DoOnRemoval".
+      // Unlock the event queue here.  We've removed this event and are about
+      // to return it so it should be okay to get the next event off the queue
+      // here - and it might be useful to do that in the "DoOnRemoval".
       lock.unlock();
       event_sp->DoOnRemoval();
     }
@@ -345,45 +344,14 @@ Listener::PeekAtNextEventForBroadcasterWithType(Broadcaster *broadcaster,
   return nullptr;
 }
 
-bool Listener::GetNextEventInternal(
-    Broadcaster *broadcaster,             // nullptr for any broadcaster
-    const ConstString *broadcaster_names, // nullptr for any event
-    uint32_t num_broadcaster_names, uint32_t event_type_mask,
-    EventSP &event_sp) {
-  std::unique_lock<std::mutex> guard(m_events_mutex);
-  return FindNextEventInternal(guard, broadcaster, broadcaster_names,
-                               num_broadcaster_names, event_type_mask, event_sp,
-                               true);
-}
-
-bool Listener::GetNextEvent(EventSP &event_sp) {
-  return GetNextEventInternal(nullptr, nullptr, 0, 0, event_sp);
-}
-
-bool Listener::GetNextEventForBroadcaster(Broadcaster *broadcaster,
-                                          EventSP &event_sp) {
-  return GetNextEventInternal(broadcaster, nullptr, 0, 0, event_sp);
-}
-
-bool Listener::GetNextEventForBroadcasterWithType(Broadcaster *broadcaster,
-                                                  uint32_t event_type_mask,
-                                                  EventSP &event_sp) {
-  return GetNextEventInternal(broadcaster, nullptr, 0, event_type_mask,
-                              event_sp);
-}
-
-bool Listener::WaitForEventsInternal(
-    const std::chrono::microseconds &timeout,
+bool Listener::GetEventInternal(
+    const Timeout<std::micro> &timeout,
     Broadcaster *broadcaster,             // nullptr for any broadcaster
     const ConstString *broadcaster_names, // nullptr for any event
     uint32_t num_broadcaster_names, uint32_t event_type_mask,
     EventSP &event_sp) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_EVENTS));
-  if (log != nullptr)
-    log->Printf("%p Listener::WaitForEventsInternal (timeout = %llu us) for %s",
-                static_cast<void *>(this),
-                static_cast<unsigned long long>(timeout.count()),
-                m_name.c_str());
+  LLDB_LOG(log, "this = {0}, timeout = {1} for {2}", this, timeout, m_name);
 
   std::unique_lock<std::mutex> lock(m_events_mutex);
 
@@ -394,23 +362,22 @@ bool Listener::WaitForEventsInternal(
       return true;
     } else {
       std::cv_status result = std::cv_status::no_timeout;
-      if (timeout == std::chrono::microseconds(0))
+      if (!timeout)
         m_events_condition.wait(lock);
       else
-        result = m_events_condition.wait_for(lock, timeout);
+        result = m_events_condition.wait_for(lock, *timeout);
 
       if (result == std::cv_status::timeout) {
         log = lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_EVENTS);
         if (log)
-          log->Printf("%p Listener::WaitForEventsInternal() timed out for %s",
+          log->Printf("%p Listener::GetEventInternal() timed out for %s",
                       static_cast<void *>(this), m_name.c_str());
         return false;
       } else if (result != std::cv_status::no_timeout) {
         log = lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_EVENTS);
         if (log)
-          log->Printf(
-              "%p Listener::WaitForEventsInternal() unknown error for %s",
-              static_cast<void *>(this), m_name.c_str());
+          log->Printf("%p Listener::GetEventInternal() unknown error for %s",
+                      static_cast<void *>(this), m_name.c_str());
         return false;
       }
     }
@@ -419,22 +386,21 @@ bool Listener::WaitForEventsInternal(
   return false;
 }
 
-bool Listener::WaitForEventForBroadcasterWithType(
-    const std::chrono::microseconds &timeout, Broadcaster *broadcaster,
-    uint32_t event_type_mask, EventSP &event_sp) {
-  return WaitForEventsInternal(timeout, broadcaster, nullptr, 0,
-                               event_type_mask, event_sp);
+bool Listener::GetEventForBroadcasterWithType(
+    Broadcaster *broadcaster, uint32_t event_type_mask, EventSP &event_sp,
+    const Timeout<std::micro> &timeout) {
+  return GetEventInternal(timeout, broadcaster, nullptr, 0, event_type_mask,
+                          event_sp);
 }
 
-bool Listener::WaitForEventForBroadcaster(
-    const std::chrono::microseconds &timeout, Broadcaster *broadcaster,
-    EventSP &event_sp) {
-  return WaitForEventsInternal(timeout, broadcaster, nullptr, 0, 0, event_sp);
+bool Listener::GetEventForBroadcaster(Broadcaster *broadcaster,
+                                      EventSP &event_sp,
+                                      const Timeout<std::micro> &timeout) {
+  return GetEventInternal(timeout, broadcaster, nullptr, 0, 0, event_sp);
 }
 
-bool Listener::WaitForEvent(const std::chrono::microseconds &timeout,
-                            EventSP &event_sp) {
-  return WaitForEventsInternal(timeout, nullptr, nullptr, 0, 0, event_sp);
+bool Listener::GetEvent(EventSP &event_sp, const Timeout<std::micro> &timeout) {
+  return GetEventInternal(timeout, nullptr, nullptr, 0, 0, event_sp);
 }
 
 size_t Listener::HandleBroadcastEvent(EventSP &event_sp) {
@@ -466,8 +432,8 @@ Listener::StartListeningForEventSpec(BroadcasterManagerSP manager_sp,
   if (!manager_sp)
     return 0;
 
-  // The BroadcasterManager mutex must be locked before m_broadcasters_mutex
-  // to avoid violating the lock hierarchy (manager before broadcasters).
+  // The BroadcasterManager mutex must be locked before m_broadcasters_mutex to
+  // avoid violating the lock hierarchy (manager before broadcasters).
   std::lock_guard<std::recursive_mutex> manager_guard(
       manager_sp->m_manager_mutex);
   std::lock_guard<std::recursive_mutex> guard(m_broadcasters_mutex);

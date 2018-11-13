@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-// NOTE: Older versions of clang have a bug where they fail to evalute
+// NOTE: Older versions of clang have a bug where they fail to evaluate
 // string_view::at as a constant expression.
 // XFAIL: clang-3.4, clang-3.3
 
@@ -32,7 +32,7 @@ void test ( const CharT *s, size_t len ) {
     }
 
 #ifndef TEST_HAS_NO_EXCEPTIONS
-    try { sv.at(len); } catch ( const std::out_of_range & ) { return ; }
+    try { (void)sv.at(len); } catch ( const std::out_of_range & ) { return ; }
     assert ( false );
 #endif
 }

@@ -20,7 +20,7 @@
 ; CHECK-NEXT: Assumed Context:
 ; CHECK-NEXT: [N] -> {  :  }
 ; CHECK-NEXT: Invalid Context:
-; CHECK-NEXT: [N] -> {  : 1 = 0 }
+; CHECK-NEXT: [N] -> {  : false }
 ; CHECK-NEXT: p0: %N
 ; CHECK-NEXT: Arrays {
 ; CHECK-NEXT:     i32 MemRef_j_0__phi; // Element size 4
@@ -73,7 +73,7 @@
 ; CHECK-NEXT:         ReadAccess :=    [Reduction Type: NONE] [Scalar: 1]
 ; CHECK-NEXT:             [N] -> { Stmt_bb18[i0] -> MemRef_j_2__phi[] };
 ; CHECK-NEXT:         ReadAccess :=    [Reduction Type: NONE] [Scalar: 0]
-; CHECK-NEXT:             [N] -> { Stmt_bb18[i0] -> MemRef_A[o0] : -2147483648 <= o0 <= 2147483647 };
+; CHECK-NEXT:             [N] -> { Stmt_bb18[i0] -> MemRef_A[o0] };
 ; CHECK-NEXT:         MustWriteAccess :=    [Reduction Type: NONE] [Scalar: 0]
 ; CHECK-NEXT:             [N] -> { Stmt_bb18[i0] -> MemRef_A[i0] };
 ; CHECK-NEXT:     Stmt_bb23

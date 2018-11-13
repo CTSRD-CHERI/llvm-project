@@ -1,4 +1,7 @@
 set(LLVM_LINK_COMPONENTS
+  BinaryFormat
+  DebugInfoCodeView
+  DebugInfoDWARF
   Object
   ObjectYAML
   Support
@@ -7,7 +10,9 @@ set(LLVM_LINK_COMPONENTS
 add_llvm_tool(obj2yaml
   obj2yaml.cpp
   coff2yaml.cpp
+  dwarf2yaml.cpp
   elf2yaml.cpp
   macho2yaml.cpp
+  wasm2yaml.cpp
   Error.cpp
   )

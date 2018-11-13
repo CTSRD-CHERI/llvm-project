@@ -47,7 +47,7 @@ public:
   FileManager FakeFiles;
   llvm::DenseMap<unsigned, const FileEntry *> Files;
 
-  /// \brief Copy the string into our own allocator.
+  /// Copy the string into our own allocator.
   const char *copyString(StringRef Blob) {
     char *mem = Alloc.Allocate<char>(Blob.size() + 1);
     memcpy(mem, Blob.data(), Blob.size());
@@ -387,11 +387,9 @@ std::error_code DiagLoader::visitDiagnosticRecord(
   return std::error_code();
 }
 
-extern "C" {
 CXDiagnosticSet clang_loadDiagnostics(const char *file,
                                       enum CXLoadDiag_Error *error,
                                       CXString *errorString) {
   DiagLoader L(error, errorString);
   return L.load(file);
 }
-} // end extern 'C'.

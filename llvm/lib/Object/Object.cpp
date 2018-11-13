@@ -12,8 +12,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/SmallVector.h"
 #include "llvm-c/Object.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/Object/ObjectFile.h"
 
 using namespace llvm;
@@ -228,7 +228,7 @@ uint64_t LLVMGetRelocationType(LLVMRelocationIteratorRef RI) {
 const char *LLVMGetRelocationTypeName(LLVMRelocationIteratorRef RI) {
   SmallVector<char, 0> ret;
   (*unwrap(RI))->getTypeName(ret);
-  char *str = static_cast<char*>(malloc(ret.size()));
+  char *str = static_cast<char*>(safe_malloc(ret.size()));
   std::copy(ret.begin(), ret.end(), str);
   return str;
 }

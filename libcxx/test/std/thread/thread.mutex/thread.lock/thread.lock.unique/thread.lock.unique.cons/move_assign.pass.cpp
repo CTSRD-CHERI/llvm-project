@@ -7,7 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// UNSUPPORTED: libcpp-has-no-threads
+// UNSUPPORTED: libcpp-has-no-threads, c++98, c++03
 
 // <mutex>
 
@@ -21,11 +21,10 @@
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_RVALUE_REFERENCES
     {
     typedef std::mutex M;
-	M m0;
-	M m1;
+    M m0;
+    M m1;
     std::unique_lock<M> lk0(m0);
     std::unique_lock<M> lk1(m1);
     lk1 = std::move(lk0);
@@ -36,8 +35,8 @@ int main()
     }
     {
     typedef nasty_mutex M;
-	M m0;
-	M m1;
+    M m0;
+    M m1;
     std::unique_lock<M> lk0(m0);
     std::unique_lock<M> lk1(m1);
     lk1 = std::move(lk0);
@@ -46,5 +45,4 @@ int main()
     assert(lk0.mutex() == nullptr);
     assert(lk0.owns_lock() == false);
     }
-#endif  // _LIBCPP_HAS_NO_RVALUE_REFERENCES
 }

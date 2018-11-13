@@ -1,4 +1,4 @@
-//===-- MipsDelaySlotFiller.cpp - Mips Delay Slot Filler ------------------===//
+//===- MipsDelaySlotFiller.cpp - Mips Delay Slot Filler -------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,25 +14,44 @@
 #include "MCTargetDesc/MipsMCNaCl.h"
 #include "Mips.h"
 #include "MipsInstrInfo.h"
-#include "MipsTargetMachine.h"
+#include "MipsRegisterInfo.h"
+#include "MipsSubtarget.h"
 #include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/PointerUnion.h"
 #include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/ADT/StringRef.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineBranchProbabilityInfo.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
+#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/CodeGen/TargetSubtargetInfo.h"
+#include "llvm/MC/MCInstrDesc.h"
+#include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/CodeGen.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Target/TargetMachine.h"
-#include "llvm/Target/TargetRegisterInfo.h"
+#include <algorithm>
+#include <cassert>
+#include <iterator>
+#include <memory>
+#include <utility>
 
 using namespace llvm;
 
-#define DEBUG_TYPE "delay-slot-filler"
+#define DEBUG_TYPE "mips-delay-slot-filler"
 
 STATISTIC(FilledSlots, "Number of delay slots filled");
 STATISTIC(UsefulSlots, "Number of delay slots filled with instructions that"
@@ -84,13 +103,15 @@ static cl::opt<CompactBranchPolicy> MipsCompactBranchPolicy(
 );
 
 namespace {
-  typedef MachineBasicBlock::iterator Iter;
-  typedef MachineBasicBlock::reverse_iterator ReverseIter;
-  typedef SmallDenseMap<MachineBasicBlock*, MachineInstr*, 2> BB2BrMap;
+
+  using Iter = MachineBasicBlock::iterator;
+  using ReverseIter = MachineBasicBlock::reverse_iterator;
+  using BB2BrMap = SmallDenseMap<MachineBasicBlock *, MachineInstr *, 2>;
 
   class RegDefsUses {
   public:
     RegDefsUses(const TargetRegisterInfo &TRI);
+
     void init(const MachineInstr &MI);
 
     /// This function sets all caller-saved registers in Defs.
@@ -120,18 +141,18 @@ namespace {
   /// Base class for inspecting loads and stores.
   class InspectMemInstr {
   public:
-    InspectMemInstr(bool ForbidMemInstr_)
-      : OrigSeenLoad(false), OrigSeenStore(false), SeenLoad(false),
-        SeenStore(false), ForbidMemInstr(ForbidMemInstr_) {}
+    InspectMemInstr(bool ForbidMemInstr_) : ForbidMemInstr(ForbidMemInstr_) {}
+    virtual ~InspectMemInstr() = default;
 
     /// Return true if MI cannot be moved to delay slot.
     bool hasHazard(const MachineInstr &MI);
 
-    virtual ~InspectMemInstr() {}
-
   protected:
     /// Flags indicating whether loads or stores have been seen.
-    bool OrigSeenLoad, OrigSeenStore, SeenLoad, SeenStore;
+    bool OrigSeenLoad = false;
+    bool OrigSeenStore = false;
+    bool SeenLoad = false;
+    bool SeenStore = false;
 
     /// Memory instructions are not allowed to move to delay slot if this flag
     /// is true.
@@ -145,6 +166,7 @@ namespace {
   class NoMemInstr : public InspectMemInstr {
   public:
     NoMemInstr() : InspectMemInstr(true) {}
+
   private:
     bool hasHazard_(const MachineInstr &MI) override { return true; }
   };
@@ -153,6 +175,7 @@ namespace {
   class LoadFromStackOrConst : public InspectMemInstr {
   public:
     LoadFromStackOrConst() : InspectMemInstr(false) {}
+
   private:
     bool hasHazard_(const MachineInstr &MI) override;
   };
@@ -164,7 +187,7 @@ namespace {
     MemDefsUses(const DataLayout &DL, const MachineFrameInfo *MFI);
 
   private:
-    typedef PointerUnion<const Value *, const PseudoSourceValue *> ValueType;
+    using ValueType = PointerUnion<const Value *, const PseudoSourceValue *>;
 
     bool hasHazard_(const MachineInstr &MI) override;
 
@@ -183,17 +206,20 @@ namespace {
 
     /// Flags indicating whether loads or stores with no underlying objects have
     /// been seen.
-    bool SeenNoObjLoad, SeenNoObjStore;
+    bool SeenNoObjLoad = false;
+    bool SeenNoObjStore = false;
   };
 
-  class Filler : public MachineFunctionPass {
+  class MipsDelaySlotFiller : public MachineFunctionPass {
   public:
-    Filler(TargetMachine &tm)
-      : MachineFunctionPass(ID), TM(tm) { }
+    MipsDelaySlotFiller() : MachineFunctionPass(ID) {
+      initializeMipsDelaySlotFillerPass(*PassRegistry::getPassRegistry());
+    }
 
     StringRef getPassName() const override { return "Mips Delay Slot Filler"; }
 
     bool runOnMachineFunction(MachineFunction &F) override {
+      TM = &F.getTarget();
       bool Changed = false;
       for (MachineFunction::iterator FI = F.begin(), FE = F.end();
            FI != FE; ++FI)
@@ -217,6 +243,8 @@ namespace {
       AU.addRequired<MachineBranchProbabilityInfo>();
       MachineFunctionPass::getAnalysisUsage(AU);
     }
+
+    static char ID;
 
   private:
     bool runOnMachineBasicBlock(MachineBasicBlock &MBB);
@@ -267,16 +295,19 @@ namespace {
 
     bool terminateSearch(const MachineInstr &Candidate) const;
 
-    TargetMachine &TM;
-
-    static char ID;
+    const TargetMachine *TM = nullptr;
   };
-  char Filler::ID = 0;
-} // end of anonymous namespace
+
+} // end anonymous namespace
+
+char MipsDelaySlotFiller::ID = 0;
 
 static bool hasUnoccupiedSlot(const MachineInstr *MI) {
   return MI->hasDelaySlot() && !MI->isBundledWithSucc();
 }
+
+INITIALIZE_PASS(MipsDelaySlotFiller, DEBUG_TYPE,
+                "Fill delay slot for MIPS", false, false)
 
 /// This function inserts clones of Filler into predecessor blocks.
 static void insertDelayFiller(Iter Filler, const BB2BrMap &BrMap) {
@@ -361,7 +392,7 @@ void RegDefsUses::setCallerSaved(const MachineInstr &MI) {
 void RegDefsUses::setUnallocatableRegs(const MachineFunction &MF) {
   BitVector AllocSet = TRI.getAllocatableSet(MF);
 
-  for (int R = AllocSet.find_first(); R != -1; R = AllocSet.find_next(R))
+  for (unsigned R : AllocSet.set_bits())
     for (MCRegAliasIterator AI(R, &TRI, false); AI.isValid(); ++AI)
       AllocSet.set(*AI);
 
@@ -458,8 +489,7 @@ bool LoadFromStackOrConst::hasHazard_(const MachineInstr &MI) {
 }
 
 MemDefsUses::MemDefsUses(const DataLayout &DL, const MachineFrameInfo *MFI_)
-    : InspectMemInstr(false), MFI(MFI_), DL(DL), SeenNoObjLoad(false),
-      SeenNoObjStore(false) {}
+    : InspectMemInstr(false), MFI(MFI_), DL(DL) {}
 
 bool MemDefsUses::hasHazard_(const MachineInstr &MI) {
   bool HasHazard = false;
@@ -526,8 +556,9 @@ getUnderlyingObjects(const MachineInstr &MI,
 }
 
 // Replace Branch with the compact branch instruction.
-Iter Filler::replaceWithCompactBranch(MachineBasicBlock &MBB, Iter Branch,
-                                      const DebugLoc &DL) {
+Iter MipsDelaySlotFiller::replaceWithCompactBranch(MachineBasicBlock &MBB,
+                                                   Iter Branch,
+                                                   const DebugLoc &DL) {
   const MipsSubtarget &STI = MBB.getParent()->getSubtarget<MipsSubtarget>();
   const MipsInstrInfo *TII = STI.getInstrInfo();
 
@@ -540,7 +571,7 @@ Iter Filler::replaceWithCompactBranch(MachineBasicBlock &MBB, Iter Branch,
 
 // For given opcode returns opcode of corresponding instruction with short
 // delay slot.
-// For the pseudo TAILCALL*_MM instrunctions return the short delay slot
+// For the pseudo TAILCALL*_MM instructions return the short delay slot
 // form. Unfortunately, TAILCALL<->b16 is denied as b16 has a limited range
 // that is too short to make use of for tail calls.
 static int getEquivalentCallShort(int Opcode) {
@@ -550,6 +581,7 @@ static int getEquivalentCallShort(int Opcode) {
   case Mips::BLTZAL:
     return Mips::BLTZALS_MM;
   case Mips::JAL:
+  case Mips::JAL_MM:
     return Mips::JALS_MM;
   case Mips::JALR:
     return Mips::JALRS_MM;
@@ -566,27 +598,20 @@ static int getEquivalentCallShort(int Opcode) {
 
 /// runOnMachineBasicBlock - Fill in delay slots for the given basic block.
 /// We assume there is only one delay slot per delayed instruction.
-bool Filler::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
+bool MipsDelaySlotFiller::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
   bool Changed = false;
   const MipsSubtarget &STI = MBB.getParent()->getSubtarget<MipsSubtarget>();
   bool InMicroMipsMode = STI.inMicroMipsMode();
   const MipsInstrInfo *TII = STI.getInstrInfo();
 
-  if (InMicroMipsMode && STI.hasMips32r6()) {
-    // This is microMIPS32r6 or microMIPS64r6 processor. Delay slot for
-    // branching instructions is not needed.
-    return Changed;
-  }
-
   for (Iter I = MBB.begin(); I != MBB.end(); ++I) {
     if (!hasUnoccupiedSlot(&*I))
       continue;
 
-    ++FilledSlots;
-    Changed = true;
+    // Delay slot filling is disabled at -O0, or in microMIPS32R6.
+    if (!DisableDelaySlotFiller && (TM->getOptLevel() != CodeGenOpt::None) &&
+        !(InMicroMipsMode && STI.hasMips32r6())) {
 
-    // Delay slot filling is disabled at -O0.
-    if (!DisableDelaySlotFiller && (TM.getOptLevel() != CodeGenOpt::None)) {
       bool Filled = false;
 
       if (MipsCompactBranchPolicy.getValue() != CB_Always ||
@@ -614,10 +639,12 @@ bool Filler::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
           // TODO: Implement an instruction mapping table of 16bit opcodes to
           // 32bit opcodes so that an instruction can be expanded. This would
           // save 16 bits as a TAILCALL_MM pseudo requires a fullsized nop.
-          // TODO: Permit b16 when branching backwards to the the same function
+          // TODO: Permit b16 when branching backwards to the same function
           // if it is in range.
           DSI->setDesc(TII->get(getEquivalentCallShort(DSI->getOpcode())));
         }
+        ++FilledSlots;
+        Changed = true;
         continue;
       }
     }
@@ -635,33 +662,31 @@ bool Filler::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
          (STI.hasMips32r6() && MipsCompactBranchPolicy != CB_Never)) &&
         TII->getEquivalentCompactForm(I)) {
       I = replaceWithCompactBranch(MBB, I, I->getDebugLoc());
+      Changed = true;
       continue;
     }
 
     // Bundle the NOP to the instruction with the delay slot.
     BuildMI(MBB, std::next(I), I->getDebugLoc(), TII->get(Mips::NOP));
     MIBundleBuilder(MBB, I, std::next(I, 2));
+    ++FilledSlots;
+    Changed = true;
   }
 
   return Changed;
 }
 
-/// createMipsDelaySlotFillerPass - Returns a pass that fills in delay
-/// slots in Mips MachineFunctions
-FunctionPass *llvm::createMipsDelaySlotFillerPass(MipsTargetMachine &tm) {
-  return new Filler(tm);
-}
-
-template<typename IterTy>
-bool Filler::searchRange(MachineBasicBlock &MBB, IterTy Begin, IterTy End,
-                         RegDefsUses &RegDU, InspectMemInstr& IM, Iter Slot,
-                         IterTy &Filler) const {
+template <typename IterTy>
+bool MipsDelaySlotFiller::searchRange(MachineBasicBlock &MBB, IterTy Begin,
+                                      IterTy End, RegDefsUses &RegDU,
+                                      InspectMemInstr &IM, Iter Slot,
+                                      IterTy &Filler) const {
   for (IterTy I = Begin; I != End;) {
     IterTy CurrI = I;
     ++I;
 
     // skip debug value
-    if (CurrI->isDebugValue())
+    if (CurrI->isDebugInstr())
       continue;
 
     if (terminateSearch(*CurrI))
@@ -703,6 +728,11 @@ bool Filler::searchRange(MachineBasicBlock &MBB, IterTy Begin, IterTy End,
         (Opcode == Mips::JR || Opcode == Mips::PseudoIndirectBranch ||
          Opcode == Mips::PseudoReturn || Opcode == Mips::TAILCALL))
       continue;
+     // Instructions LWP/SWP and MOVEP should not be in a delay slot as that
+     // results in unpredictable behaviour
+     if (InMicroMipsMode && (Opcode == Mips::LWP_MM || Opcode == Mips::SWP_MM ||
+                             Opcode == Mips::MOVEP_MM))
+       continue;
 
     Filler = CurrI;
     return true;
@@ -711,7 +741,8 @@ bool Filler::searchRange(MachineBasicBlock &MBB, IterTy Begin, IterTy End,
   return false;
 }
 
-bool Filler::searchBackward(MachineBasicBlock &MBB, MachineInstr &Slot) const {
+bool MipsDelaySlotFiller::searchBackward(MachineBasicBlock &MBB,
+                                         MachineInstr &Slot) const {
   if (DisableBackwardSearch)
     return false;
 
@@ -733,7 +764,8 @@ bool Filler::searchBackward(MachineBasicBlock &MBB, MachineInstr &Slot) const {
   return true;
 }
 
-bool Filler::searchForward(MachineBasicBlock &MBB, Iter Slot) const {
+bool MipsDelaySlotFiller::searchForward(MachineBasicBlock &MBB,
+                                        Iter Slot) const {
   // Can handle only calls.
   if (DisableForwardSearch || !Slot->isCall())
     return false;
@@ -753,7 +785,8 @@ bool Filler::searchForward(MachineBasicBlock &MBB, Iter Slot) const {
   return true;
 }
 
-bool Filler::searchSuccBBs(MachineBasicBlock &MBB, Iter Slot) const {
+bool MipsDelaySlotFiller::searchSuccBBs(MachineBasicBlock &MBB,
+                                        Iter Slot) const {
   if (DisableSuccBBSearch)
     return false;
 
@@ -799,7 +832,8 @@ bool Filler::searchSuccBBs(MachineBasicBlock &MBB, Iter Slot) const {
   return true;
 }
 
-MachineBasicBlock *Filler::selectSuccBB(MachineBasicBlock &B) const {
+MachineBasicBlock *
+MipsDelaySlotFiller::selectSuccBB(MachineBasicBlock &B) const {
   if (B.succ_empty())
     return nullptr;
 
@@ -815,7 +849,8 @@ MachineBasicBlock *Filler::selectSuccBB(MachineBasicBlock &B) const {
 }
 
 std::pair<MipsInstrInfo::BranchType, MachineInstr *>
-Filler::getBranch(MachineBasicBlock &MBB, const MachineBasicBlock &Dst) const {
+MipsDelaySlotFiller::getBranch(MachineBasicBlock &MBB,
+                               const MachineBasicBlock &Dst) const {
   const MipsInstrInfo *TII =
       MBB.getParent()->getSubtarget<MipsSubtarget>().getInstrInfo();
   MachineBasicBlock *TrueBB = nullptr, *FalseBB = nullptr;
@@ -850,11 +885,13 @@ Filler::getBranch(MachineBasicBlock &MBB, const MachineBasicBlock &Dst) const {
   return std::make_pair(MipsInstrInfo::BT_None, nullptr);
 }
 
-bool Filler::examinePred(MachineBasicBlock &Pred, const MachineBasicBlock &Succ,
-                         RegDefsUses &RegDU, bool &HasMultipleSuccs,
-                         BB2BrMap &BrMap) const {
+bool MipsDelaySlotFiller::examinePred(MachineBasicBlock &Pred,
+                                      const MachineBasicBlock &Succ,
+                                      RegDefsUses &RegDU,
+                                      bool &HasMultipleSuccs,
+                                      BB2BrMap &BrMap) const {
   std::pair<MipsInstrInfo::BranchType, MachineInstr *> P =
-    getBranch(Pred, Succ);
+      getBranch(Pred, Succ);
 
   // Return if either getBranch wasn't able to analyze the branches or there
   // were no branches with unoccupied slots.
@@ -871,8 +908,9 @@ bool Filler::examinePred(MachineBasicBlock &Pred, const MachineBasicBlock &Succ,
   return true;
 }
 
-bool Filler::delayHasHazard(const MachineInstr &Candidate, RegDefsUses &RegDU,
-                            InspectMemInstr &IM) const {
+bool MipsDelaySlotFiller::delayHasHazard(const MachineInstr &Candidate,
+                                         RegDefsUses &RegDU,
+                                         InspectMemInstr &IM) const {
   assert(!Candidate.isKill() &&
          "KILL instructions should have been eliminated at this point.");
 
@@ -884,8 +922,12 @@ bool Filler::delayHasHazard(const MachineInstr &Candidate, RegDefsUses &RegDU,
   return HasHazard;
 }
 
-bool Filler::terminateSearch(const MachineInstr &Candidate) const {
+bool MipsDelaySlotFiller::terminateSearch(const MachineInstr &Candidate) const {
   return (Candidate.isTerminator() || Candidate.isCall() ||
           Candidate.isPosition() || Candidate.isInlineAsm() ||
           Candidate.hasUnmodeledSideEffects());
 }
+
+/// createMipsDelaySlotFillerPass - Returns a pass that fills in delay
+/// slots in Mips MachineFunctions
+FunctionPass *llvm::createMipsDelaySlotFillerPass() { return new MipsDelaySlotFiller(); }

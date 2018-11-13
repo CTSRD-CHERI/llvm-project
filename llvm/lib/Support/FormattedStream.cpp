@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Support/Debug.h"
 #include "llvm/Support/FormattedStream.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 
@@ -32,6 +32,7 @@ static void UpdatePosition(std::pair<unsigned, unsigned> &Position, const char *
     switch (*Ptr) {
     case '\n':
       Line += 1;
+      LLVM_FALLTHROUGH;
     case '\r':
       Column = 0;
       break;
@@ -64,7 +65,7 @@ void formatted_raw_ostream::ComputePosition(const char *Ptr, size_t Size) {
 ///
 /// \param NewCol - The column to move to.
 ///
-formatted_raw_ostream &formatted_raw_ostream::PadToColumn(unsigned NewCol) { 
+formatted_raw_ostream &formatted_raw_ostream::PadToColumn(unsigned NewCol) {
   // Figure out what's in the buffer and add it to the column count.
   ComputePosition(getBufferStart(), GetNumBytesInBuffer());
 

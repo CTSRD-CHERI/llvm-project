@@ -10,13 +10,16 @@
 // UNSUPPORTED: libcpp-has-no-threads
 // UNSUPPORTED: c++98, c++03, c++11
 
-// FLAKY_TEST
+// FLAKY_TEST.
 
 // <shared_mutex>
 
 // template <class Mutex> class shared_lock;
 
 // explicit shared_lock(mutex_type& m);
+
+// template<class _Mutex> shared_lock(shared_lock<_Mutex>)
+//     -> shared_lock<_Mutex>;  // C++17
 
 #include <shared_mutex>
 #include <thread>
@@ -92,4 +95,9 @@ int main()
             t.join();
         q.join();
     }
+
+#ifdef __cpp_deduction_guides
+    std::shared_lock sl(m);
+    static_assert((std::is_same<decltype(sl), std::shared_lock<decltype(m)>>::value), "" );
+#endif
 }

@@ -88,7 +88,7 @@ kern_return_t MachTask::Suspend() {
   err = ::task_suspend(task);
   if (DNBLogCheckLogBit(LOG_TASK) || err.Fail())
     err.LogThreaded("::task_suspend ( target_task = 0x%4.4x )", task);
-  return err.Error();
+  return err.Status();
 }
 
 //----------------------------------------------------------------------
@@ -113,7 +113,7 @@ kern_return_t MachTask::Resume() {
         err.LogThreaded("::task_resume ( target_task = 0x%4.4x )", task);
     }
   }
-  return err.Error();
+  return err.Status();
 }
 
 //----------------------------------------------------------------------
@@ -188,7 +188,7 @@ nub_size_t MachTask::WriteMemory(nub_addr_t addr, nub_size_t size,
                      (uint64_t)addr, (uint64_t)size, buf, (uint64_t)n);
     if (DNBLogCheckLogBit(LOG_MEMORY_DATA_LONG) ||
         (DNBLogCheckLogBit(LOG_MEMORY_DATA_SHORT) && size <= 8)) {
-      DNBDataRef data((uint8_t *)buf, n, false);
+      DNBDataRef data((const uint8_t *)buf, n, false);
       data.Dump(0, static_cast<DNBDataRef::offset_t>(n), addr,
                 DNBDataRef::TypeUInt8, 16);
     }
@@ -348,23 +348,15 @@ std::string MachTask::GetProfileData(DNBProfileDataScanType scanType) {
                              threads_used_usec);
   }
 
-#if defined(HOST_VM_INFO64_COUNT)
   vm_statistics64_data_t vminfo;
-#else
-  struct vm_statistics vminfo;
-#endif
-  uint64_t physical_memory;
-  mach_vm_size_t rprvt = 0;
-  mach_vm_size_t rsize = 0;
-  mach_vm_size_t vprvt = 0;
-  mach_vm_size_t vsize = 0;
-  mach_vm_size_t dirty_size = 0;
-  mach_vm_size_t purgeable = 0;
-  mach_vm_size_t anonymous = 0;
+  uint64_t physical_memory = 0;
+  uint64_t anonymous = 0;
+  uint64_t phys_footprint = 0;
+  uint64_t memory_cap = 0;
   if (m_vm_memory.GetMemoryProfile(scanType, task, task_info,
                                    m_process->GetCPUType(), pid, vminfo,
-                                   physical_memory, rprvt, rsize, vprvt, vsize,
-                                   dirty_size, purgeable, anonymous)) {
+                                   physical_memory, anonymous,
+                                   phys_footprint, memory_cap)) {
     std::ostringstream profile_data_stream;
 
     if (scanType & eProfileHostCPU) {
@@ -413,57 +405,28 @@ std::string MachTask::GetProfileData(DNBProfileDataScanType scanType) {
       profile_data_stream << "total:" << physical_memory << ';';
 
     if (scanType & eProfileMemory) {
-#if defined(HOST_VM_INFO64_COUNT) && defined(_VM_PAGE_SIZE_H_)
       static vm_size_t pagesize = vm_kernel_page_size;
-#else
-      static vm_size_t pagesize;
-      static bool calculated = false;
-      if (!calculated) {
-        calculated = true;
-        pagesize = PageSize();
-      }
-#endif
 
-/* Unused values. Optimized out for transfer performance.
-profile_data_stream << "wired:" << vminfo.wire_count * pagesize << ';';
-profile_data_stream << "active:" << vminfo.active_count * pagesize << ';';
-profile_data_stream << "inactive:" << vminfo.inactive_count * pagesize << ';';
- */
-#if defined(HOST_VM_INFO64_COUNT)
       // This mimicks Activity Monitor.
       uint64_t total_used_count =
           (physical_memory / pagesize) -
           (vminfo.free_count - vminfo.speculative_count) -
           vminfo.external_page_count - vminfo.purgeable_count;
-#else
-      uint64_t total_used_count =
-          vminfo.wire_count + vminfo.inactive_count + vminfo.active_count;
-#endif
       profile_data_stream << "used:" << total_used_count * pagesize << ';';
-      /* Unused values. Optimized out for transfer performance.
-      profile_data_stream << "free:" << vminfo.free_count * pagesize << ';';
-       */
-
-      profile_data_stream << "rprvt:" << rprvt << ';';
-      /* Unused values. Optimized out for transfer performance.
-      profile_data_stream << "rsize:" << rsize << ';';
-      profile_data_stream << "vprvt:" << vprvt << ';';
-      profile_data_stream << "vsize:" << vsize << ';';
-       */
-
-      if (scanType & eProfileMemoryDirtyPage)
-        profile_data_stream << "dirty:" << dirty_size << ';';
 
       if (scanType & eProfileMemoryAnonymous) {
-        profile_data_stream << "purgeable:" << purgeable << ';';
         profile_data_stream << "anonymous:" << anonymous << ';';
       }
+      
+      profile_data_stream << "phys_footprint:" << phys_footprint << ';';
     }
-
-// proc_pid_rusage pm_sample_task_and_pid pm_energy_impact needs to be tested
-// for weakness in Cab
+    
+    if (scanType & eProfileMemoryCap) {
+      profile_data_stream << "mem_cap:" << memory_cap << ';';
+    }
+    
 #ifdef LLDB_ENERGY
-    if ((scanType & eProfileEnergy) && (pm_sample_task_and_pid != NULL)) {
+    if (scanType & eProfileEnergy) {
       struct rusage_info_v2 info;
       int rc = proc_pid_rusage(pid, RUSAGE_INFO_V2, (rusage_info_t *)&info);
       if (rc == 0) {
@@ -531,7 +494,7 @@ task_t MachTask::TaskPortForProcessID(pid_t pid, DNBError &err,
         char str[1024];
         ::snprintf(str, sizeof(str), "::task_for_pid ( target_tport = 0x%4.4x, "
                                      "pid = %d, &task ) => err = 0x%8.8x (%s)",
-                   task_self, pid, err.Error(),
+                   task_self, pid, err.Status(),
                    err.AsString() ? err.AsString() : "success");
         if (err.Fail())
           err.SetErrorString(str);
@@ -583,7 +546,7 @@ kern_return_t MachTask::BasicInfo(task_t task, struct task_basic_info *info) {
                    info->suspend_count, (uint64_t)info->virtual_size,
                    (uint64_t)info->resident_size, user, system);
   }
-  return err.Error();
+  return err.Status();
 }
 
 //----------------------------------------------------------------------
@@ -687,7 +650,7 @@ kern_return_t MachTask::ShutDownExcecptionThread() {
     err.LogThreaded("::mach_port_deallocate ( task = 0x%4.4x, name = 0x%4.4x )",
                     task_self, exception_port);
 
-  return err.Error();
+  return err.Status();
 }
 
 void *MachTask::ExceptionThread(void *arg) {
@@ -805,7 +768,7 @@ void *MachTask::ExceptionThread(void *arg) {
                                       MACH_RCV_MSG | MACH_RCV_INTERRUPT, 0);
     }
 
-    if (err.Error() == MACH_RCV_INTERRUPTED) {
+    if (err.Status() == MACH_RCV_INTERRUPTED) {
       // If we have no task port we should exit this thread
       if (!mach_task->ExceptionPortIsValid()) {
         DNBLogThreadedIf(LOG_EXCEPTIONS, "thread cancelled...");
@@ -824,7 +787,7 @@ void *MachTask::ExceptionThread(void *arg) {
         // Our task has died, exit the thread.
         break;
       }
-    } else if (err.Error() == MACH_RCV_TIMED_OUT) {
+    } else if (err.Status() == MACH_RCV_TIMED_OUT) {
       if (num_exceptions_received > 0) {
         // We were receiving all current exceptions with a timeout of zero
         // it is time to go back to our normal looping mode
@@ -860,7 +823,7 @@ void *MachTask::ExceptionThread(void *arg) {
         }
       }
 #endif
-    } else if (err.Error() != KERN_SUCCESS) {
+    } else if (err.Status() != KERN_SUCCESS) {
       DNBLogThreadedIf(LOG_EXCEPTIONS, "got some other error, do something "
                                        "about it??? nah, continuing for "
                                        "now...");
@@ -947,7 +910,7 @@ nub_addr_t MachTask::AllocateMemory(size_t size, uint32_t permissions) {
 
   DNBError err;
   err = ::mach_vm_allocate(task, &addr, size, TRUE);
-  if (err.Error() == KERN_SUCCESS) {
+  if (err.Status() == KERN_SUCCESS) {
     // Set the protections:
     vm_prot_t mach_prot = VM_PROT_NONE;
     if (permissions & eMemoryPermissionsReadable)
@@ -958,7 +921,7 @@ nub_addr_t MachTask::AllocateMemory(size_t size, uint32_t permissions) {
       mach_prot |= VM_PROT_EXECUTE;
 
     err = ::mach_vm_protect(task, addr, size, 0, mach_prot);
-    if (err.Error() == KERN_SUCCESS) {
+    if (err.Status() == KERN_SUCCESS) {
       m_allocations.insert(std::make_pair(addr, size));
       return addr;
     }
@@ -992,8 +955,6 @@ nub_bool_t MachTask::DeallocateMemory(nub_addr_t addr) {
   }
   return false;
 }
-
-nub_size_t MachTask::PageSize() { return m_vm_memory.PageSize(m_task); }
 
 void MachTask::TaskPortChanged(task_t task)
 {

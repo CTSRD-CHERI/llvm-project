@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 ///
-///  \file This file implements ClangTidyDiagnosticConsumer, ClangTidyMessage,
-///  ClangTidyContext and ClangTidyError classes.
+///  \file This file implements ClangTidyDiagnosticConsumer, ClangTidyContext
+///  and ClangTidyError classes.
 ///
 ///  This tool uses the Clang Tooling infrastructure, see
 ///    http://clang.llvm.org/docs/HowToSetupToolingForLLVM.html
@@ -21,6 +21,7 @@
 #include "clang/AST/ASTDiagnostic.h"
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Frontend/DiagnosticRenderer.h"
+#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
 #include <tuple>
 #include <vector>
@@ -36,22 +37,22 @@ public:
       : DiagnosticRenderer(LangOpts, DiagOpts), Error(Error) {}
 
 protected:
-  void emitDiagnosticMessage(SourceLocation Loc, PresumedLoc PLoc,
+  void emitDiagnosticMessage(FullSourceLoc Loc, PresumedLoc PLoc,
                              DiagnosticsEngine::Level Level, StringRef Message,
                              ArrayRef<CharSourceRange> Ranges,
-                             const SourceManager *SM,
                              DiagOrStoredDiag Info) override {
     // Remove check name from the message.
     // FIXME: Remove this once there's a better way to pass check names than
     // appending the check name to the message in ClangTidyContext::diag and
     // using getCustomDiagID.
-    std::string CheckNameInMessage = " [" + Error.CheckName + "]";
+    std::string CheckNameInMessage = " [" + Error.DiagnosticName + "]";
     if (Message.endswith(CheckNameInMessage))
       Message = Message.substr(0, Message.size() - CheckNameInMessage.size());
 
-    ClangTidyMessage TidyMessage = Loc.isValid()
-                                       ? ClangTidyMessage(Message, *SM, Loc)
-                                       : ClangTidyMessage(Message);
+    auto TidyMessage =
+        Loc.isValid()
+            ? tooling::DiagnosticMessage(Message, Loc.getManager(), Loc)
+            : tooling::DiagnosticMessage(Message);
     if (Level == DiagnosticsEngine::Note) {
       Error.Notes.push_back(TidyMessage);
       return;
@@ -60,15 +61,13 @@ protected:
     Error.Message = TidyMessage;
   }
 
-  void emitDiagnosticLoc(SourceLocation Loc, PresumedLoc PLoc,
+  void emitDiagnosticLoc(FullSourceLoc Loc, PresumedLoc PLoc,
                          DiagnosticsEngine::Level Level,
-                         ArrayRef<CharSourceRange> Ranges,
-                         const SourceManager &SM) override {}
+                         ArrayRef<CharSourceRange> Ranges) override {}
 
-  void emitCodeContext(SourceLocation Loc, DiagnosticsEngine::Level Level,
+  void emitCodeContext(FullSourceLoc Loc, DiagnosticsEngine::Level Level,
                        SmallVectorImpl<CharSourceRange> &Ranges,
-                       ArrayRef<FixItHint> Hints,
-                       const SourceManager &SM) override {
+                       ArrayRef<FixItHint> Hints) override {
     assert(Loc.isValid());
     for (const auto &FixIt : Hints) {
       CharSourceRange Range = FixIt.RemoveRange;
@@ -77,7 +76,8 @@ protected:
       assert(Range.getBegin().isFileID() && Range.getEnd().isFileID() &&
              "Only file locations supported in fix-it hints.");
 
-      tooling::Replacement Replacement(SM, Range, FixIt.CodeToInsert);
+      tooling::Replacement Replacement(Loc.getManager(), Range,
+                                       FixIt.CodeToInsert);
       llvm::Error Err = Error.Fix[Replacement.getFilePath()].add(Replacement);
       // FIXME: better error handling (at least, don't let other replacements be
       // applied).
@@ -89,16 +89,13 @@ protected:
     }
   }
 
-  void emitIncludeLocation(SourceLocation Loc, PresumedLoc PLoc,
-                           const SourceManager &SM) override {}
+  void emitIncludeLocation(FullSourceLoc Loc, PresumedLoc PLoc) override {}
 
-  void emitImportLocation(SourceLocation Loc, PresumedLoc PLoc,
-                          StringRef ModuleName,
-                          const SourceManager &SM) override {}
+  void emitImportLocation(FullSourceLoc Loc, PresumedLoc PLoc,
+                          StringRef ModuleName) override {}
 
-  void emitBuildingModuleLocation(SourceLocation Loc, PresumedLoc PLoc,
-                                  StringRef ModuleName,
-                                  const SourceManager &SM) override {}
+  void emitBuildingModuleLocation(FullSourceLoc Loc, PresumedLoc PLoc,
+                                  StringRef ModuleName) override {}
 
   void endDiagnostic(DiagOrStoredDiag D,
                      DiagnosticsEngine::Level Level) override {
@@ -110,27 +107,16 @@ private:
 };
 } // end anonymous namespace
 
-ClangTidyMessage::ClangTidyMessage(StringRef Message)
-    : Message(Message), FileOffset(0) {}
-
-ClangTidyMessage::ClangTidyMessage(StringRef Message,
-                                   const SourceManager &Sources,
-                                   SourceLocation Loc)
-    : Message(Message) {
-  assert(Loc.isValid() && Loc.isFileID());
-  FilePath = Sources.getFilename(Loc);
-  FileOffset = Sources.getFileOffset(Loc);
-}
-
 ClangTidyError::ClangTidyError(StringRef CheckName,
                                ClangTidyError::Level DiagLevel,
-                               bool IsWarningAsError, StringRef BuildDirectory)
-    : CheckName(CheckName), BuildDirectory(BuildDirectory),
-      DiagLevel(DiagLevel), IsWarningAsError(IsWarningAsError) {}
+                               StringRef BuildDirectory, bool IsWarningAsError)
+    : tooling::Diagnostic(CheckName, DiagLevel, BuildDirectory),
+      IsWarningAsError(IsWarningAsError) {}
 
 // Returns true if GlobList starts with the negative indicator ('-'), removes it
 // from the GlobList.
 static bool ConsumeNegativeIndicator(StringRef &GlobList) {
+  GlobList = GlobList.trim(" \r\n");
   if (GlobList.startswith("-")) {
     GlobList = GlobList.substr(1);
     return true;
@@ -140,8 +126,9 @@ static bool ConsumeNegativeIndicator(StringRef &GlobList) {
 // Converts first glob from the comma-separated list of globs to Regex and
 // removes it and the trailing comma from the GlobList.
 static llvm::Regex ConsumeGlob(StringRef &GlobList) {
-  StringRef Glob = GlobList.substr(0, GlobList.find(',')).trim();
-  GlobList = GlobList.substr(Glob.size() + 1);
+  StringRef UntrimmedGlob = GlobList.substr(0, GlobList.find(','));
+  StringRef Glob = UntrimmedGlob.trim(' ');
+  GlobList = GlobList.substr(UntrimmedGlob.size() + 1);
   SmallString<128> RegexText("^");
   StringRef MetaChars("()^$|*+?.[]\\{}");
   for (char C : Glob) {
@@ -168,14 +155,39 @@ bool GlobList::contains(StringRef S, bool Contains) {
   return Contains;
 }
 
+class ClangTidyContext::CachedGlobList {
+public:
+  CachedGlobList(StringRef Globs) : Globs(Globs) {}
+
+  bool contains(StringRef S) {
+    switch (auto &Result = Cache[S]) {
+      case Yes: return true;
+      case No: return false;
+      case None:
+        Result = Globs.contains(S) ? Yes : No;
+        return Result == Yes;
+    }
+    llvm_unreachable("invalid enum");
+  }
+
+private:
+  GlobList Globs;
+  enum Tristate { None, Yes, No };
+  llvm::StringMap<Tristate> Cache;
+};
+
 ClangTidyContext::ClangTidyContext(
-    std::unique_ptr<ClangTidyOptionsProvider> OptionsProvider)
+    std::unique_ptr<ClangTidyOptionsProvider> OptionsProvider,
+    bool AllowEnablingAnalyzerAlphaCheckers)
     : DiagEngine(nullptr), OptionsProvider(std::move(OptionsProvider)),
-      Profile(nullptr) {
+      Profile(false),
+      AllowEnablingAnalyzerAlphaCheckers(AllowEnablingAnalyzerAlphaCheckers) {
   // Before the first translation unit we can get errors related to command-line
   // parsing, use empty string for the file name in this case.
   setCurrentFile("");
 }
+
+ClangTidyContext::~ClangTidyContext() = default;
 
 DiagnosticBuilder ClangTidyContext::diag(
     StringRef CheckName, SourceLocation Loc, StringRef Description,
@@ -198,8 +210,9 @@ void ClangTidyContext::setSourceManager(SourceManager *SourceMgr) {
 void ClangTidyContext::setCurrentFile(StringRef File) {
   CurrentFile = File;
   CurrentOptions = getOptionsForFile(CurrentFile);
-  CheckFilter.reset(new GlobList(*getOptions().Checks));
-  WarningAsErrorFilter.reset(new GlobList(*getOptions().WarningsAsErrors));
+  CheckFilter = llvm::make_unique<CachedGlobList>(*getOptions().Checks);
+  WarningAsErrorFilter =
+      llvm::make_unique<CachedGlobList>(*getOptions().WarningsAsErrors);
 }
 
 void ClangTidyContext::setASTContext(ASTContext *Context) {
@@ -222,16 +235,28 @@ ClangTidyOptions ClangTidyContext::getOptionsForFile(StringRef File) const {
       OptionsProvider->getOptions(File));
 }
 
-void ClangTidyContext::setCheckProfileData(ProfileData *P) { Profile = P; }
+void ClangTidyContext::setEnableProfiling(bool P) { Profile = P; }
 
-GlobList &ClangTidyContext::getChecksFilter() {
-  assert(CheckFilter != nullptr);
-  return *CheckFilter;
+void ClangTidyContext::setProfileStoragePrefix(StringRef Prefix) {
+  ProfilePrefix = Prefix;
 }
 
-GlobList &ClangTidyContext::getWarningAsErrorFilter() {
+llvm::Optional<ClangTidyProfiling::StorageParams>
+ClangTidyContext::getProfileStorageParams() const {
+  if (ProfilePrefix.empty())
+    return llvm::None;
+
+  return ClangTidyProfiling::StorageParams(ProfilePrefix, CurrentFile);
+}
+
+bool ClangTidyContext::isCheckEnabled(StringRef CheckName) const {
+  assert(CheckFilter != nullptr);
+  return CheckFilter->contains(CheckName);
+}
+
+bool ClangTidyContext::treatAsError(StringRef CheckName) const {
   assert(WarningAsErrorFilter != nullptr);
-  return *WarningAsErrorFilter;
+  return WarningAsErrorFilter->contains(CheckName);
 }
 
 /// \brief Store a \c ClangTidyError.
@@ -247,20 +272,22 @@ StringRef ClangTidyContext::getCheckName(unsigned DiagnosticID) const {
   return "";
 }
 
-ClangTidyDiagnosticConsumer::ClangTidyDiagnosticConsumer(ClangTidyContext &Ctx)
-    : Context(Ctx), LastErrorRelatesToUserCode(false),
-      LastErrorPassesLineFilter(false), LastErrorWasIgnored(false) {
+ClangTidyDiagnosticConsumer::ClangTidyDiagnosticConsumer(
+    ClangTidyContext &Ctx, bool RemoveIncompatibleErrors)
+    : Context(Ctx), RemoveIncompatibleErrors(RemoveIncompatibleErrors),
+      LastErrorRelatesToUserCode(false), LastErrorPassesLineFilter(false),
+      LastErrorWasIgnored(false) {
   IntrusiveRefCntPtr<DiagnosticOptions> DiagOpts = new DiagnosticOptions();
-  Diags.reset(new DiagnosticsEngine(
+  Diags = llvm::make_unique<DiagnosticsEngine>(
       IntrusiveRefCntPtr<DiagnosticIDs>(new DiagnosticIDs), &*DiagOpts, this,
-      /*ShouldOwnClient=*/false));
+      /*ShouldOwnClient=*/false);
   Context.setDiagnosticsEngine(Diags.get());
 }
 
 void ClangTidyDiagnosticConsumer::finalizeLastError() {
   if (!Errors.empty()) {
     ClangTidyError &Error = Errors.back();
-    if (!Context.getChecksFilter().contains(Error.CheckName) &&
+    if (!Context.isCheckEnabled(Error.DiagnosticName) &&
         Error.DiagLevel != ClangTidyError::Error) {
       ++Context.Stats.ErrorsIgnoredCheckFilter;
       Errors.pop_back();
@@ -278,30 +305,90 @@ void ClangTidyDiagnosticConsumer::finalizeLastError() {
   LastErrorPassesLineFilter = false;
 }
 
-static bool LineIsMarkedWithNOLINT(SourceManager &SM, SourceLocation Loc) {
-  bool Invalid;
-  const char *CharacterData = SM.getCharacterData(Loc, &Invalid);
-  if (!Invalid) {
-    const char *P = CharacterData;
-    while (*P != '\0' && *P != '\r' && *P != '\n')
-      ++P;
-    StringRef RestOfLine(CharacterData, P - CharacterData + 1);
-    // FIXME: Handle /\bNOLINT\b(\([^)]*\))?/ as cpplint.py does.
-    if (RestOfLine.find("NOLINT") != StringRef::npos) {
-      return true;
+static bool IsNOLINTFound(StringRef NolintDirectiveText, StringRef Line,
+                          unsigned DiagID, const ClangTidyContext &Context) {
+  const size_t NolintIndex = Line.find(NolintDirectiveText);
+  if (NolintIndex == StringRef::npos)
+    return false;
+
+  size_t BracketIndex = NolintIndex + NolintDirectiveText.size();
+  // Check if the specific checks are specified in brackets.
+  if (BracketIndex < Line.size() && Line[BracketIndex] == '(') {
+    ++BracketIndex;
+    const size_t BracketEndIndex = Line.find(')', BracketIndex);
+    if (BracketEndIndex != StringRef::npos) {
+      StringRef ChecksStr =
+          Line.substr(BracketIndex, BracketEndIndex - BracketIndex);
+      // Allow disabling all the checks with "*".
+      if (ChecksStr != "*") {
+        StringRef CheckName = Context.getCheckName(DiagID);
+        // Allow specifying a few check names, delimited with comma.
+        SmallVector<StringRef, 1> Checks;
+        ChecksStr.split(Checks, ',', -1, false);
+        llvm::transform(Checks, Checks.begin(),
+                        [](StringRef S) { return S.trim(); });
+        return llvm::find(Checks, CheckName) != Checks.end();
+      }
     }
   }
+  return true;
+}
+
+static bool LineIsMarkedWithNOLINT(SourceManager &SM, SourceLocation Loc,
+                                   unsigned DiagID,
+                                   const ClangTidyContext &Context) {
+  bool Invalid;
+  const char *CharacterData = SM.getCharacterData(Loc, &Invalid);
+  if (Invalid)
+    return false;
+
+  // Check if there's a NOLINT on this line.
+  const char *P = CharacterData;
+  while (*P != '\0' && *P != '\r' && *P != '\n')
+    ++P;
+  StringRef RestOfLine(CharacterData, P - CharacterData + 1);
+  if (IsNOLINTFound("NOLINT", RestOfLine, DiagID, Context))
+    return true;
+
+  // Check if there's a NOLINTNEXTLINE on the previous line.
+  const char *BufBegin =
+      SM.getCharacterData(SM.getLocForStartOfFile(SM.getFileID(Loc)), &Invalid);
+  if (Invalid || P == BufBegin)
+    return false;
+
+  // Scan backwards over the current line.
+  P = CharacterData;
+  while (P != BufBegin && *P != '\n')
+    --P;
+
+  // If we reached the begin of the file there is no line before it.
+  if (P == BufBegin)
+    return false;
+
+  // Skip over the newline.
+  --P;
+  const char *LineEnd = P;
+
+  // Now we're on the previous line. Skip to the beginning of it.
+  while (P != BufBegin && *P != '\n')
+    --P;
+
+  RestOfLine = StringRef(P, LineEnd - P + 1);
+  if (IsNOLINTFound("NOLINTNEXTLINE", RestOfLine, DiagID, Context))
+    return true;
+
   return false;
 }
 
-static bool LineIsMarkedWithNOLINTinMacro(SourceManager &SM,
-                                          SourceLocation Loc) {
+static bool LineIsMarkedWithNOLINTinMacro(SourceManager &SM, SourceLocation Loc,
+                                          unsigned DiagID,
+                                          const ClangTidyContext &Context) {
   while (true) {
-    if (LineIsMarkedWithNOLINT(SM, Loc))
+    if (LineIsMarkedWithNOLINT(SM, Loc, DiagID, Context))
       return true;
     if (!Loc.isMacroID())
       return false;
-    Loc = SM.getImmediateExpansionRange(Loc).first;
+    Loc = SM.getImmediateExpansionRange(Loc).getBegin();
   }
   return false;
 }
@@ -314,7 +401,8 @@ void ClangTidyDiagnosticConsumer::HandleDiagnostic(
   if (Info.getLocation().isValid() && DiagLevel != DiagnosticsEngine::Error &&
       DiagLevel != DiagnosticsEngine::Fatal &&
       LineIsMarkedWithNOLINTinMacro(Diags->getSourceManager(),
-                                    Info.getLocation())) {
+                                    Info.getLocation(), Info.getID(),
+                                    Context)) {
     ++Context.Stats.ErrorsIgnoredNOLINT;
     // Ignored a warning, should ignore related notes as well
     LastErrorWasIgnored = true;
@@ -363,11 +451,10 @@ void ClangTidyDiagnosticConsumer::HandleDiagnostic(
       LastErrorRelatesToUserCode = true;
       LastErrorPassesLineFilter = true;
     }
-    bool IsWarningAsError =
-        DiagLevel == DiagnosticsEngine::Warning &&
-        Context.getWarningAsErrorFilter().contains(CheckName);
-    Errors.push_back(ClangTidyError(CheckName, Level, IsWarningAsError,
-                                    Context.getCurrentBuildDirectory()));
+    bool IsWarningAsError = DiagLevel == DiagnosticsEngine::Warning &&
+                            Context.treatAsError(CheckName);
+    Errors.emplace_back(CheckName, Level, Context.getCurrentBuildDirectory(),
+                        IsWarningAsError);
   }
 
   ClangTidyDiagnosticRenderer Converter(
@@ -375,11 +462,12 @@ void ClangTidyDiagnosticConsumer::HandleDiagnostic(
       Errors.back());
   SmallString<100> Message;
   Info.FormatDiagnostic(Message);
-  SourceManager *Sources = nullptr;
-  if (Info.hasSourceManager())
-    Sources = &Info.getSourceManager();
-  Converter.emitDiagnostic(Info.getLocation(), DiagLevel, Message,
-                           Info.getRanges(), Info.getFixItHints(), Sources);
+  FullSourceLoc Loc =
+      (Info.getLocation().isInvalid())
+          ? FullSourceLoc()
+          : FullSourceLoc(Info.getLocation(), Info.getSourceManager());
+  Converter.emitDiagnostic(Loc, DiagLevel, Message, Info.getRanges(),
+                           Info.getFixItHints());
 
   checkFilters(Info.getLocation());
 }
@@ -441,8 +529,8 @@ void ClangTidyDiagnosticConsumer::checkFilters(SourceLocation Location) {
 
 llvm::Regex *ClangTidyDiagnosticConsumer::getHeaderFilter() {
   if (!HeaderFilter)
-    HeaderFilter.reset(
-        new llvm::Regex(*Context.getOptions().HeaderFilterRegex));
+    HeaderFilter =
+        llvm::make_unique<llvm::Regex>(*Context.getOptions().HeaderFilterRegex);
   return HeaderFilter.get();
 }
 
@@ -532,10 +620,9 @@ void ClangTidyDiagnosticConsumer::removeIncompatibleErrors(
         // FIXME: Handle empty intervals, such as those from insertions.
         if (Begin == End)
           continue;
-        FileEvents[FilePath].push_back(
-            Event(Begin, End, Event::ET_Begin, I, Sizes[I]));
-        FileEvents[FilePath].push_back(
-            Event(Begin, End, Event::ET_End, I, Sizes[I]));
+        auto &Events = FileEvents[FilePath];
+        Events.emplace_back(Begin, End, Event::ET_Begin, I, Sizes[I]);
+        Events.emplace_back(Begin, End, Event::ET_End, I, Sizes[I]);
       }
     }
   }
@@ -562,9 +649,8 @@ void ClangTidyDiagnosticConsumer::removeIncompatibleErrors(
   for (unsigned I = 0; I < Errors.size(); ++I) {
     if (!Apply[I]) {
       Errors[I].Fix.clear();
-      Errors[I].Notes.push_back(
-          ClangTidyMessage("this fix will not be applied because"
-                           " it overlaps with another fix"));
+      Errors[I].Notes.emplace_back(
+          "this fix will not be applied because it overlaps with another fix");
     }
   }
 }
@@ -572,8 +658,8 @@ void ClangTidyDiagnosticConsumer::removeIncompatibleErrors(
 namespace {
 struct LessClangTidyError {
   bool operator()(const ClangTidyError &LHS, const ClangTidyError &RHS) const {
-    const ClangTidyMessage &M1 = LHS.Message;
-    const ClangTidyMessage &M2 = RHS.Message;
+    const tooling::DiagnosticMessage &M1 = LHS.Message;
+    const tooling::DiagnosticMessage &M2 = RHS.Message;
 
     return std::tie(M1.FilePath, M1.FileOffset, M1.Message) <
            std::tie(M2.FilePath, M2.FileOffset, M2.Message);
@@ -594,7 +680,9 @@ void ClangTidyDiagnosticConsumer::finish() {
   std::sort(Errors.begin(), Errors.end(), LessClangTidyError());
   Errors.erase(std::unique(Errors.begin(), Errors.end(), EqualClangTidyError()),
                Errors.end());
-  removeIncompatibleErrors(Errors);
+
+  if (RemoveIncompatibleErrors)
+    removeIncompatibleErrors(Errors);
 
   for (const ClangTidyError &Error : Errors)
     Context.storeError(Error);

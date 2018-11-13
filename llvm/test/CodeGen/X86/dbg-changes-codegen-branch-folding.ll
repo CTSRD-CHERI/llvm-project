@@ -1,5 +1,5 @@
-; RUN: llc -march=x86-64 -mtriple=x86_64-linux < %s | FileCheck %s
-; RUN: opt -strip-debug < %s | llc -march=x86-64 -mtriple=x86_64-linux | FileCheck %s
+; RUN: llc -mtriple=x86_64-linux < %s | FileCheck %s
+; RUN: opt -strip-debug < %s | llc -mtriple=x86_64-linux | FileCheck %s
 ; http://llvm.org/PR19051. Minor code-motion difference with -g.
 ; Presence of debug info shouldn't affect the codegen. Make sure that
 ; we generated the same code sequence with and without debug info. 
@@ -65,13 +65,13 @@ if.then:                                          ; preds = %entry
 
 if.end:                                           ; preds = %entry, %if.then
   %0 = getelementptr inbounds %struct.AAA3, %struct.AAA3* %var1, i64 0, i32 0, i64 0, !dbg !56
-  call void @llvm.lifetime.start(i64 4, i8* %0) #4, !dbg !56
+  call void @llvm.lifetime.start.p0i8(i64 4, i8* %0) #4, !dbg !56
   tail call void @llvm.dbg.value(metadata %struct.AAA3* %var1, i64 0, metadata !32, metadata !57), !dbg !58
   tail call void @llvm.dbg.value(metadata %struct.AAA3* %var1, i64 0, metadata !36, metadata !46), !dbg !59
   tail call void @llvm.dbg.value(metadata i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str, i64 0, i64 0), i64 0, metadata !38, metadata !46), !dbg !62
   call void @_Z3fooPcjPKc(i8* %0, i32 4, i8* nonnull getelementptr inbounds ([1 x i8], [1 x i8]* @.str, i64 0, i64 0)), !dbg !63
   %1 = getelementptr inbounds %struct.AAA3, %struct.AAA3* %var2, i64 0, i32 0, i64 0, !dbg !65
-  call void @llvm.lifetime.start(i64 4, i8* %1) #4, !dbg !65
+  call void @llvm.lifetime.start.p0i8(i64 4, i8* %1) #4, !dbg !65
   call void @llvm.dbg.value(metadata %struct.AAA3* %var2, i64 0, metadata !33, metadata !57), !dbg !66
   call void @llvm.dbg.value(metadata %struct.AAA3* %var2, i64 0, metadata !36, metadata !46), !dbg !67
   call void @llvm.dbg.value(metadata i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str, i64 0, i64 0), i64 0, metadata !38, metadata !46), !dbg !69
@@ -96,18 +96,18 @@ if.end3:                                          ; preds = %if.else, %if.then2
   call void @llvm.dbg.value(metadata %struct.AAA3* %var1, i64 0, metadata !41, metadata !46), !dbg !82
   call void @llvm.dbg.value(metadata i8* getelementptr inbounds ([1 x i8], [1 x i8]* @.str, i64 0, i64 0), i64 0, metadata !42, metadata !46), !dbg !84
   call void @_Z3fooPcjPKc(i8* %0, i32 4, i8* nonnull getelementptr inbounds ([1 x i8], [1 x i8]* @.str, i64 0, i64 0)), !dbg !85
-  call void @llvm.lifetime.end(i64 4, i8* %1) #4, !dbg !86
-  call void @llvm.lifetime.end(i64 4, i8* %0) #4, !dbg !87
+  call void @llvm.lifetime.end.p0i8(i64 4, i8* %1) #4, !dbg !86
+  call void @llvm.lifetime.end.p0i8(i64 4, i8* %0) #4, !dbg !87
   ret void, !dbg !86
 }
 
 ; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.start(i64, i8* nocapture) #1
+declare void @llvm.lifetime.start.p0i8(i64, i8* nocapture) #1
 
 declare i8* @_Z5i2stri(i32) #2
 
 ; Function Attrs: argmemonly nounwind
-declare void @llvm.lifetime.end(i64, i8* nocapture) #1
+declare void @llvm.lifetime.end.p0i8(i64, i8* nocapture) #1
 
 declare void @_Z3fooPcjPKc(i8*, i32, i8*) #2
 
@@ -147,7 +147,7 @@ attributes #4 = { nounwind }
 !20 = !{!15, !21}
 !21 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !22, size: 64, align: 64, flags: DIFlagArtificial | DIFlagObjectPointer)
 !22 = !DIDerivedType(tag: DW_TAG_const_type, baseType: !4)
-!24 = distinct !DISubprogram(name: "bar", linkageName: "_Z3barii", scope: !1, file: !1, line: 11, type: !25, isLocal: false, isDefinition: true, scopeLine: 11, flags: DIFlagPrototyped, isOptimized: true, unit: !0, variables: !28)
+!24 = distinct !DISubprogram(name: "bar", linkageName: "_Z3barii", scope: !1, file: !1, line: 11, type: !25, isLocal: false, isDefinition: true, scopeLine: 11, flags: DIFlagPrototyped, isOptimized: true, unit: !0, retainedNodes: !28)
 !25 = !DISubroutineType(types: !26)
 !26 = !{null, !27, !27}
 !27 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
@@ -157,12 +157,12 @@ attributes #4 = { nounwind }
 !31 = !DILocalVariable(name: "temp", scope: !24, file: !1, line: 12, type: !15)
 !32 = !DILocalVariable(name: "var1", scope: !24, file: !1, line: 17, type: !4)
 !33 = !DILocalVariable(name: "var2", scope: !24, file: !1, line: 18, type: !4)
-!34 = distinct !DISubprogram(name: "AAA3", linkageName: "_ZN4AAA3C2EPKc", scope: !4, file: !1, line: 5, type: !12, isLocal: false, isDefinition: true, scopeLine: 5, flags: DIFlagPrototyped, isOptimized: true, unit: !0, declaration: !11, variables: !35)
+!34 = distinct !DISubprogram(name: "AAA3", linkageName: "_ZN4AAA3C2EPKc", scope: !4, file: !1, line: 5, type: !12, isLocal: false, isDefinition: true, scopeLine: 5, flags: DIFlagPrototyped, isOptimized: true, unit: !0, declaration: !11, retainedNodes: !35)
 !35 = !{!36, !38}
 !36 = !DILocalVariable(name: "this", arg: 1, scope: !34, type: !37, flags: DIFlagArtificial | DIFlagObjectPointer)
 !37 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: !4, size: 64, align: 64)
 !38 = !DILocalVariable(name: "value", arg: 2, scope: !34, file: !1, line: 5, type: !15)
-!39 = distinct !DISubprogram(name: "operator=", linkageName: "_ZN4AAA3aSEPKc", scope: !4, file: !1, line: 6, type: !12, isLocal: false, isDefinition: true, scopeLine: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !0, declaration: !17, variables: !40)
+!39 = distinct !DISubprogram(name: "operator=", linkageName: "_ZN4AAA3aSEPKc", scope: !4, file: !1, line: 6, type: !12, isLocal: false, isDefinition: true, scopeLine: 6, flags: DIFlagPrototyped, isOptimized: true, unit: !0, declaration: !17, retainedNodes: !40)
 !40 = !{!41, !42}
 !41 = !DILocalVariable(name: "this", arg: 1, scope: !39, type: !37, flags: DIFlagArtificial | DIFlagObjectPointer)
 !42 = !DILocalVariable(name: "value", arg: 2, scope: !39, file: !1, line: 6, type: !15)

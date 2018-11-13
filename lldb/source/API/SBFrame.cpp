@@ -21,9 +21,6 @@
 
 #include "Plugins/ExpressionParser/Clang/ClangPersistentVariables.h"
 #include "lldb/Core/Address.h"
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Core/ValueObjectRegister.h"
 #include "lldb/Core/ValueObjectVariable.h"
@@ -42,6 +39,9 @@
 #include "lldb/Target/StackID.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Stream.h"
 
 #include "lldb/API/SBAddress.h"
 #include "lldb/API/SBDebugger.h"
@@ -51,6 +51,8 @@
 #include "lldb/API/SBThread.h"
 #include "lldb/API/SBValue.h"
 #include "lldb/API/SBVariablesOptions.h"
+
+#include "llvm/Support/PrettyStackTrace.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -417,7 +419,7 @@ addr_t SBFrame::GetPC() const {
       frame = exe_ctx.GetFramePtr();
       if (frame) {
         addr = frame->GetFrameCodeAddress().GetOpcodeLoadAddress(
-            target, eAddressClassCode);
+            target, AddressClass::eCode);
       } else {
         if (log)
           log->Printf("SBFrame::GetPC () => error: could not reconstruct frame "
@@ -604,7 +606,7 @@ lldb::SBValue SBFrame::GetValueForVariablePath(const char *var_path,
       frame = exe_ctx.GetFramePtr();
       if (frame) {
         VariableSP var_sp;
-        Error error;
+        Status error;
         ValueObjectSP value_sp(frame->GetValueForVariableExpressionPath(
             var_path, eNoDynamicValues,
             StackFrame::eExpressionPathOptionCheckPtrVsMember |
@@ -664,28 +666,10 @@ SBValue SBFrame::FindVariable(const char *name,
     if (stop_locker.TryLock(&process->GetRunLock())) {
       frame = exe_ctx.GetFramePtr();
       if (frame) {
-        VariableList variable_list;
-        SymbolContext sc(frame->GetSymbolContext(eSymbolContextBlock));
+        value_sp = frame->FindVariable(ConstString(name));
 
-        if (sc.block) {
-          const bool can_create = true;
-          const bool get_parent_variables = true;
-          const bool stop_if_block_is_inlined_function = true;
-
-          if (sc.block->AppendVariables(
-                  can_create, get_parent_variables,
-                  stop_if_block_is_inlined_function,
-                  [frame](Variable *v) { return v->IsInScope(frame); },
-                  &variable_list)) {
-            var_sp = variable_list.FindVariable(ConstString(name));
-          }
-        }
-
-        if (var_sp) {
-          value_sp =
-              frame->GetValueObjectForFrameVariable(var_sp, eNoDynamicValues);
+        if (value_sp)
           sb_value.SetSP(value_sp, use_dynamic);
-        }
       } else {
         if (log)
           log->Printf("SBFrame::FindVariable () => error: could not "
@@ -1288,10 +1272,11 @@ lldb::SBValue SBFrame::EvaluateExpression(const char *expr,
     if (stop_locker.TryLock(&process->GetRunLock())) {
       frame = exe_ctx.GetFramePtr();
       if (frame) {
+        std::unique_ptr<llvm::PrettyStackTraceFormat> stack_trace;
         if (target->GetDisplayExpressionsInCrashlogs()) {
           StreamString frame_description;
           frame->DumpUsingSettingsFormat(&frame_description);
-          Host::SetCrashDescriptionWithFormat(
+          stack_trace = llvm::make_unique<llvm::PrettyStackTraceFormat>(
               "SBFrame::EvaluateExpression (expr = \"%s\", fetch_dynamic_value "
               "= %u) %s",
               expr, options.GetFetchDynamicValue(),
@@ -1301,9 +1286,6 @@ lldb::SBValue SBFrame::EvaluateExpression(const char *expr,
         exe_results = target->EvaluateExpression(expr, frame, expr_value_sp,
                                                  options.ref());
         expr_result.SetSP(expr_value_sp, options.GetFetchDynamicValue());
-
-        if (target->GetDisplayExpressionsInCrashlogs())
-          Host::SetCrashDescription(nullptr);
       } else {
         if (log)
           log->Printf("SBFrame::EvaluateExpression () => error: could not "
@@ -1366,8 +1348,42 @@ bool SBFrame::IsInlined() const {
   return false;
 }
 
+bool SBFrame::IsArtificial() {
+  return static_cast<const SBFrame *>(this)->IsArtificial();
+}
+
+bool SBFrame::IsArtificial() const {
+  std::unique_lock<std::recursive_mutex> lock;
+  ExecutionContext exe_ctx(m_opaque_sp.get(), lock);
+
+  StackFrame *frame = exe_ctx.GetFramePtr();
+  if (frame)
+    return frame->IsArtificial();
+
+  return false;
+}
+
 const char *SBFrame::GetFunctionName() {
   return static_cast<const SBFrame *>(this)->GetFunctionName();
+}
+
+lldb::LanguageType SBFrame::GuessLanguage() const {
+  std::unique_lock<std::recursive_mutex> lock;
+  ExecutionContext exe_ctx(m_opaque_sp.get(), lock);
+  
+  StackFrame *frame = nullptr;
+  Target *target = exe_ctx.GetTargetPtr();
+  Process *process = exe_ctx.GetProcessPtr();
+  if (target && process) {
+    Process::StopLocker stop_locker;
+    if (stop_locker.TryLock(&process->GetRunLock())) {
+      frame = exe_ctx.GetFramePtr();
+      if (frame) {
+        return frame->GuessLanguage();
+      }
+    }
+  }
+  return eLanguageTypeUnknown;
 }
 
 const char *SBFrame::GetFunctionName() const {

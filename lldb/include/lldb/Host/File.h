@@ -10,23 +10,20 @@
 #ifndef liblldb_File_h_
 #define liblldb_File_h_
 
-// C Includes
-// C++ Includes
+#include "lldb/Host/PosixApi.h"
+#include "lldb/Utility/IOObject.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/lldb-private.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <sys/types.h>
-
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Host/IOObject.h"
-#include "lldb/Host/PosixApi.h"
-#include "lldb/lldb-private.h"
 
 namespace lldb_private {
 
 //----------------------------------------------------------------------
 /// @class File File.h "lldb/Host/File.h"
-/// @brief A file class.
+/// A file class.
 ///
 /// A file class that divides abstracts the LLDB core from host file
 /// functionality.
@@ -57,20 +54,22 @@ public:
       : IOObject(eFDTypeFile, false), m_descriptor(kInvalidDescriptor),
         m_stream(kInvalidStream), m_options(0), m_own_stream(false),
         m_is_interactive(eLazyBoolCalculate),
-        m_is_real_terminal(eLazyBoolCalculate) {}
+        m_is_real_terminal(eLazyBoolCalculate),
+        m_supports_colors(eLazyBoolCalculate) {}
 
   File(FILE *fh, bool transfer_ownership)
       : IOObject(eFDTypeFile, false), m_descriptor(kInvalidDescriptor),
         m_stream(fh), m_options(0), m_own_stream(transfer_ownership),
         m_is_interactive(eLazyBoolCalculate),
-        m_is_real_terminal(eLazyBoolCalculate) {}
+        m_is_real_terminal(eLazyBoolCalculate),
+        m_supports_colors(eLazyBoolCalculate) {}
 
   //------------------------------------------------------------------
   /// Constructor with path.
   ///
-  /// Takes a path to a file which can be just a filename, or a full
-  /// path. If \a path is not nullptr or empty, this function will call
-  /// File::Open (const char *path, uint32_t options, uint32_t permissions).
+  /// Takes a path to a file which can be just a filename, or a full path. If
+  /// \a path is not nullptr or empty, this function will call File::Open
+  /// (const char *path, uint32_t options, uint32_t permissions).
   ///
   /// @param[in] path
   ///     The full or partial path to a file.
@@ -81,7 +80,8 @@ public:
   /// @param[in] permissions
   ///     Options to use when opening (see File::Permissions)
   ///
-  /// @see File::Open (const char *path, uint32_t options, uint32_t permissions)
+  /// @see File::Open (const char *path, uint32_t options, uint32_t
+  /// permissions)
   //------------------------------------------------------------------
   File(const char *path, uint32_t options,
        uint32_t permissions = lldb::eFilePermissionsFileDefault);
@@ -90,8 +90,7 @@ public:
   /// Constructor with FileSpec.
   ///
   /// Takes a FileSpec pointing to a file which can be just a filename, or a
-  /// full
-  /// path. If \a path is not nullptr or empty, this function will call
+  /// full path. If \a path is not nullptr or empty, this function will call
   /// File::Open (const char *path, uint32_t options, uint32_t permissions).
   ///
   /// @param[in] filespec
@@ -103,7 +102,8 @@ public:
   /// @param[in] permissions
   ///     Options to use when opening (see File::Permissions)
   ///
-  /// @see File::Open (const char *path, uint32_t options, uint32_t permissions)
+  /// @see File::Open (const char *path, uint32_t options, uint32_t
+  /// permissions)
   //------------------------------------------------------------------
   File(const FileSpec &filespec, uint32_t options,
        uint32_t permissions = lldb::eFilePermissionsFileDefault);
@@ -128,8 +128,8 @@ public:
   //------------------------------------------------------------------
   /// Convert to pointer operator.
   ///
-  /// This allows code to check a File object to see if it
-  /// contains anything valid using code such as:
+  /// This allows code to check a File object to see if it contains anything
+  /// valid using code such as:
   ///
   /// @code
   /// File file(...);
@@ -146,8 +146,8 @@ public:
   //------------------------------------------------------------------
   /// Logical NOT operator.
   ///
-  /// This allows code to check a File object to see if it is
-  /// invalid using code such as:
+  /// This allows code to check a File object to see if it is invalid using
+  /// code such as:
   ///
   /// @code
   /// File file(...);
@@ -167,13 +167,12 @@ public:
   /// @return
   ///     A reference to the file specification object.
   //------------------------------------------------------------------
-  Error GetFileSpec(FileSpec &file_spec) const;
+  Status GetFileSpec(FileSpec &file_spec) const;
 
   //------------------------------------------------------------------
   /// Open a file for read/writing with the specified options.
   ///
-  /// Takes a path to a file which can be just a filename, or a full
-  /// path.
+  /// Takes a path to a file which can be just a filename, or a full path.
   ///
   /// @param[in] path
   ///     The full or partial path to a file.
@@ -184,10 +183,10 @@ public:
   /// @param[in] permissions
   ///     Options to use when opening (see File::Permissions)
   //------------------------------------------------------------------
-  Error Open(const char *path, uint32_t options,
-             uint32_t permissions = lldb::eFilePermissionsFileDefault);
+  Status Open(const char *path, uint32_t options,
+              uint32_t permissions = lldb::eFilePermissionsFileDefault);
 
-  Error Close() override;
+  Status Close() override;
 
   void Clear();
 
@@ -205,8 +204,8 @@ public:
   /// Read bytes from a file from the current file position.
   ///
   /// NOTE: This function is NOT thread safe. Use the read function
-  /// that takes an "off_t &offset" to ensure correct operation in
-  /// multi-threaded environments.
+  /// that takes an "off_t &offset" to ensure correct operation in multi-
+  /// threaded environments.
   ///
   /// @param[in] buf
   ///     A buffer where to put the bytes that are read.
@@ -219,14 +218,14 @@ public:
   ///     An error object that indicates success or the reason for
   ///     failure.
   //------------------------------------------------------------------
-  Error Read(void *buf, size_t &num_bytes) override;
+  Status Read(void *buf, size_t &num_bytes) override;
 
   //------------------------------------------------------------------
   /// Write bytes to a file at the current file position.
   ///
   /// NOTE: This function is NOT thread safe. Use the write function
-  /// that takes an "off_t &offset" to ensure correct operation in
-  /// multi-threaded environments.
+  /// that takes an "off_t &offset" to ensure correct operation in multi-
+  /// threaded environments.
   ///
   /// @param[in] buf
   ///     A buffer where to put the bytes that are read.
@@ -240,60 +239,60 @@ public:
   ///     An error object that indicates success or the reason for
   ///     failure.
   //------------------------------------------------------------------
-  Error Write(const void *buf, size_t &num_bytes) override;
+  Status Write(const void *buf, size_t &num_bytes) override;
 
   //------------------------------------------------------------------
   /// Seek to an offset relative to the beginning of the file.
   ///
   /// NOTE: This function is NOT thread safe, other threads that
-  /// access this object might also change the current file position.
-  /// For thread safe reads and writes see the following functions:
-  /// @see File::Read (void *, size_t, off_t &)
-  /// @see File::Write (const void *, size_t, off_t &)
+  /// access this object might also change the current file position. For
+  /// thread safe reads and writes see the following functions: @see
+  /// File::Read (void *, size_t, off_t &) @see File::Write (const void *,
+  /// size_t, off_t &)
   ///
   /// @param[in] offset
   ///     The offset to seek to within the file relative to the
   ///     beginning of the file.
   ///
   /// @param[in] error_ptr
-  ///     A pointer to a lldb_private::Error object that will be
+  ///     A pointer to a lldb_private::Status object that will be
   ///     filled in if non-nullptr.
   ///
   /// @return
   ///     The resulting seek offset, or -1 on error.
   //------------------------------------------------------------------
-  off_t SeekFromStart(off_t offset, Error *error_ptr = nullptr);
+  off_t SeekFromStart(off_t offset, Status *error_ptr = nullptr);
 
   //------------------------------------------------------------------
   /// Seek to an offset relative to the current file position.
   ///
   /// NOTE: This function is NOT thread safe, other threads that
-  /// access this object might also change the current file position.
-  /// For thread safe reads and writes see the following functions:
-  /// @see File::Read (void *, size_t, off_t &)
-  /// @see File::Write (const void *, size_t, off_t &)
+  /// access this object might also change the current file position. For
+  /// thread safe reads and writes see the following functions: @see
+  /// File::Read (void *, size_t, off_t &) @see File::Write (const void *,
+  /// size_t, off_t &)
   ///
   /// @param[in] offset
   ///     The offset to seek to within the file relative to the
   ///     current file position.
   ///
   /// @param[in] error_ptr
-  ///     A pointer to a lldb_private::Error object that will be
+  ///     A pointer to a lldb_private::Status object that will be
   ///     filled in if non-nullptr.
   ///
   /// @return
   ///     The resulting seek offset, or -1 on error.
   //------------------------------------------------------------------
-  off_t SeekFromCurrent(off_t offset, Error *error_ptr = nullptr);
+  off_t SeekFromCurrent(off_t offset, Status *error_ptr = nullptr);
 
   //------------------------------------------------------------------
   /// Seek to an offset relative to the end of the file.
   ///
   /// NOTE: This function is NOT thread safe, other threads that
-  /// access this object might also change the current file position.
-  /// For thread safe reads and writes see the following functions:
-  /// @see File::Read (void *, size_t, off_t &)
-  /// @see File::Write (const void *, size_t, off_t &)
+  /// access this object might also change the current file position. For
+  /// thread safe reads and writes see the following functions: @see
+  /// File::Read (void *, size_t, off_t &) @see File::Write (const void *,
+  /// size_t, off_t &)
   ///
   /// @param[in,out] offset
   ///     The offset to seek to within the file relative to the
@@ -301,20 +300,20 @@ public:
   ///     absolute file offset.
   ///
   /// @param[in] error_ptr
-  ///     A pointer to a lldb_private::Error object that will be
+  ///     A pointer to a lldb_private::Status object that will be
   ///     filled in if non-nullptr.
   ///
   /// @return
   ///     The resulting seek offset, or -1 on error.
   //------------------------------------------------------------------
-  off_t SeekFromEnd(off_t offset, Error *error_ptr = nullptr);
+  off_t SeekFromEnd(off_t offset, Status *error_ptr = nullptr);
 
   //------------------------------------------------------------------
   /// Read bytes from a file from the specified file offset.
   ///
   /// NOTE: This function is thread safe in that clients manager their
-  /// own file position markers and reads on other threads won't mess
-  /// up the current read.
+  /// own file position markers and reads on other threads won't mess up the
+  /// current read.
   ///
   /// @param[in] dst
   ///     A buffer where to put the bytes that are read.
@@ -332,14 +331,14 @@ public:
   ///     An error object that indicates success or the reason for
   ///     failure.
   //------------------------------------------------------------------
-  Error Read(void *dst, size_t &num_bytes, off_t &offset);
+  Status Read(void *dst, size_t &num_bytes, off_t &offset);
 
   //------------------------------------------------------------------
   /// Read bytes from a file from the specified file offset.
   ///
   /// NOTE: This function is thread safe in that clients manager their
-  /// own file position markers and reads on other threads won't mess
-  /// up the current read.
+  /// own file position markers and reads on other threads won't mess up the
+  /// current read.
   ///
   /// @param[in,out] num_bytes
   ///     The number of bytes to read form the current file position
@@ -363,16 +362,16 @@ public:
   ///     An error object that indicates success or the reason for
   ///     failure.
   //------------------------------------------------------------------
-  Error Read(size_t &num_bytes, off_t &offset, bool null_terminate,
-             lldb::DataBufferSP &data_buffer_sp);
+  Status Read(size_t &num_bytes, off_t &offset, bool null_terminate,
+              lldb::DataBufferSP &data_buffer_sp);
 
   //------------------------------------------------------------------
   /// Write bytes to a file at the specified file offset.
   ///
   /// NOTE: This function is thread safe in that clients manager their
-  /// own file position markers, though clients will need to implement
-  /// their own locking externally to avoid multiple people writing
-  /// to the file at the same time.
+  /// own file position markers, though clients will need to implement their
+  /// own locking externally to avoid multiple people writing to the file at
+  /// the same time.
   ///
   /// @param[in] src
   ///     A buffer containing the bytes to write.
@@ -391,7 +390,7 @@ public:
   ///     An error object that indicates success or the reason for
   ///     failure.
   //------------------------------------------------------------------
-  Error Write(const void *src, size_t &num_bytes, off_t &offset);
+  Status Write(const void *src, size_t &num_bytes, off_t &offset);
 
   //------------------------------------------------------------------
   /// Flush the current stream
@@ -400,7 +399,7 @@ public:
   ///     An error object that indicates success or the reason for
   ///     failure.
   //------------------------------------------------------------------
-  Error Flush();
+  Status Flush();
 
   //------------------------------------------------------------------
   /// Sync to disk.
@@ -409,7 +408,7 @@ public:
   ///     An error object that indicates success or the reason for
   ///     failure.
   //------------------------------------------------------------------
-  Error Sync();
+  Status Sync();
 
   //------------------------------------------------------------------
   /// Get the permissions for a this file.
@@ -418,9 +417,9 @@ public:
   ///     Bits logical OR'ed together from the permission bits defined
   ///     in lldb_private::File::Permissions.
   //------------------------------------------------------------------
-  uint32_t GetPermissions(Error &error) const;
+  uint32_t GetPermissions(Status &error) const;
 
-  static uint32_t GetPermissions(const FileSpec &file_spec, Error &error);
+  static uint32_t GetPermissions(const FileSpec &file_spec, Status &error);
 
   //------------------------------------------------------------------
   /// Return true if this file is interactive.
@@ -434,10 +433,9 @@ public:
   //------------------------------------------------------------------
   /// Return true if this file from a real terminal.
   ///
-  /// Just knowing a file is a interactive isn't enough, we also need
-  /// to know if the terminal has a width and height so we can do
-  /// cursor movement and other terminal manipulations by sending
-  /// escape sequences.
+  /// Just knowing a file is a interactive isn't enough, we also need to know
+  /// if the terminal has a width and height so we can do cursor movement and
+  /// other terminal manipulations by sending escape sequences.
   ///
   /// @return
   ///     True if this file is a terminal (tty, not a pty) that has

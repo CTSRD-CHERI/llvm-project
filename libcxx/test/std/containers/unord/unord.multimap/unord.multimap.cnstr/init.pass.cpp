@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: c++98, c++03
+
 // <unordered_map>
 
 // template <class Key, class T, class Hash = hash<Key>, class Pred = equal_to<Key>,
@@ -19,6 +21,7 @@
 #include <string>
 #include <cassert>
 #include <cfloat>
+#include <cstddef>
 
 #include "test_macros.h"
 #include "../../../test_compare.h"
@@ -28,7 +31,6 @@
 
 int main()
 {
-#ifndef _LIBCPP_HAS_NO_GENERALIZED_INITIALIZERS
     {
         typedef std::unordered_multimap<int, std::string,
                                    test_hash<std::hash<int> >,
@@ -74,15 +76,14 @@ int main()
         i = eq.first;
         assert(i->first == 4);
         assert(i->second == "four");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
         assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
         assert(c.hash_function() == test_hash<std::hash<int> >());
         assert(c.key_eq() == test_compare<std::equal_to<int> >());
         assert((c.get_allocator() == test_allocator<std::pair<const int, std::string> >()));
     }
-#if TEST_STD_VER >= 11
     {
         typedef std::unordered_multimap<int, std::string,
                                    test_hash<std::hash<int> >,
@@ -128,8 +129,8 @@ int main()
         i = eq.first;
         assert(i->first == 4);
         assert(i->second == "four");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
         assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
         assert(c.hash_function() == test_hash<std::hash<int> >());
@@ -183,8 +184,8 @@ int main()
         i = eq.first;
         assert(i->first == 4);
         assert(i->second == "four");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
         assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
         assert(c.hash_function() == HF());
@@ -239,8 +240,8 @@ int main()
         i = eq.first;
         assert(i->first == 4);
         assert(i->second == "four");
-        assert(std::distance(c.begin(), c.end()) == c.size());
-        assert(std::distance(c.cbegin(), c.cend()) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.begin(), c.end())) == c.size());
+        assert(static_cast<std::size_t>(std::distance(c.cbegin(), c.cend())) == c.size());
         assert(fabs(c.load_factor() - (float)c.size()/c.bucket_count()) < FLT_EPSILON);
         assert(c.max_load_factor() == 1);
         assert(c.hash_function() == hf);
@@ -249,7 +250,5 @@ int main()
         assert(c.get_allocator() == a);
         assert(!(c.get_allocator() == A()));
     }
-#endif
-#endif
-#endif  // _LIBCPP_HAS_NO_GENERALIZED_INITIALIZERS
+#endif // TEST_STD_VER > 11
 }

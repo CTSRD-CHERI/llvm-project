@@ -17,6 +17,7 @@ class MiFileTestCase(lldbmi_testcase.MiTestCaseBase):
 
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     def test_lldbmi_file_exec_and_symbols_file(self):
         """Test that 'lldb-mi --interpreter' works for -file-exec-and-symbols exe."""
 
@@ -33,15 +34,14 @@ class MiFileTestCase(lldbmi_testcase.MiTestCaseBase):
 
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     def test_lldbmi_file_exec_and_symbols_absolute_path(self):
         """Test that 'lldb-mi --interpreter' works for -file-exec-and-symbols fullpath/exe."""
 
         self.spawnLldbMi(args=None)
 
         # Test that -file-exec-and-symbols works for absolute path
-        import os
-        path = os.path.join(os.getcwd(), self.myexe)
-        self.runCmd("-file-exec-and-symbols \"%s\"" % path)
+        self.runCmd("-file-exec-and-symbols \"%s\"" % self.myexe)
         self.expect("\^done")
 
         # Run
@@ -51,13 +51,15 @@ class MiFileTestCase(lldbmi_testcase.MiTestCaseBase):
 
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     def test_lldbmi_file_exec_and_symbols_relative_path(self):
         """Test that 'lldb-mi --interpreter' works for -file-exec-and-symbols relpath/exe."""
 
         self.spawnLldbMi(args=None)
 
         # Test that -file-exec-and-symbols works for relative path
-        path = "./%s" % self.myexe
+        import os
+        path = os.path.relpath(self.myexe, self.getBuildDir())
         self.runCmd("-file-exec-and-symbols %s" % path)
         self.expect("\^done")
 
@@ -68,6 +70,7 @@ class MiFileTestCase(lldbmi_testcase.MiTestCaseBase):
 
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
     def test_lldbmi_file_exec_and_symbols_unknown_path(self):
         """Test that 'lldb-mi --interpreter' works for -file-exec-and-symbols badpath/exe."""
 

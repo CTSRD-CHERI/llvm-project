@@ -1,7 +1,7 @@
+// REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux -save-temp-labels %s -o %t
 // RUN: ld.lld -discard-none -shared %t -o %t2
 // RUN: llvm-readobj -s -sd -t %t2 | FileCheck %s
-// REQUIRES: x86
 
 .text
 .Lmyvar:
@@ -36,7 +36,7 @@
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Symbol {
 // CHECK-NEXT:     Name: .Lmyothervar
-// CHECK-NEXT:     Value: 0x1000
+// CHECK-NEXT:     Value:
 // CHECK-NEXT:     Size: 0
 // CHECK-NEXT:     Binding: Local
 // CHECK-NEXT:     Type: None
@@ -45,7 +45,7 @@
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Symbol {
 // CHECK-NEXT:     Name: .Lmyvar
-// CHECK-NEXT:     Value: 0x1000
+// CHECK-NEXT:     Value:
 // CHECK-NEXT:     Size: 0
 // CHECK-NEXT:     Binding: Local
 // CHECK-NEXT:     Type: None

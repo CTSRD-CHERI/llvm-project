@@ -13,15 +13,16 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Core/Stream.h"
 #include "lldb/Host/StringConvert.h"
+#include "lldb/Utility/Stream.h"
 
 using namespace lldb;
 using namespace lldb_private;
 
 void OptionValueSInt64::DumpValue(const ExecutionContext *exe_ctx, Stream &strm,
                                   uint32_t dump_mask) {
-  // printf ("%p: DumpValue (exe_ctx=%p, strm, mask) m_current_value = %" PRIi64
+  // printf ("%p: DumpValue (exe_ctx=%p, strm, mask) m_current_value = %"
+  // PRIi64
   // "\n", this, exe_ctx, m_current_value);
   if (dump_mask & eDumpOptionType)
     strm.Printf("(%s)", GetTypeAsCString());
@@ -34,9 +35,9 @@ void OptionValueSInt64::DumpValue(const ExecutionContext *exe_ctx, Stream &strm,
   }
 }
 
-Error OptionValueSInt64::SetValueFromString(llvm::StringRef value_ref,
-                                            VarSetOperationType op) {
-  Error error;
+Status OptionValueSInt64::SetValueFromString(llvm::StringRef value_ref,
+                                             VarSetOperationType op) {
+  Status error;
   switch (op) {
   case eVarSetOperationClear:
     Clear();

@@ -23,9 +23,9 @@
 #include "lldb/lldb-enumerations.h"
 #include "lldb/lldb-public.h"
 
-#include "lldb/Core/Error.h"
 #include "lldb/Core/FormatEntity.h"
-#include "lldb/Core/StructuredData.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StructuredData.h"
 
 namespace lldb_private {
 class TypeSummaryOptions {
@@ -258,10 +258,9 @@ public:
   void SetOptions(uint32_t value) { m_flags.SetValue(value); }
 
   // we are using a ValueObject* instead of a ValueObjectSP because we do not
-  // need to hold on to this for
-  // extended periods of time and we trust the ValueObject to stay around for as
-  // long as it is required
-  // for us to generate its summary
+  // need to hold on to this for extended periods of time and we trust the
+  // ValueObject to stay around for as long as it is required for us to
+  // generate its summary
   virtual bool FormatObject(ValueObject *valobj, std::string &dest,
                             const TypeSummaryOptions &options) = 0;
 
@@ -286,7 +285,7 @@ private:
 struct StringSummaryFormat : public TypeSummaryImpl {
   std::string m_format_str;
   FormatEntity::Entry m_format;
-  Error m_error;
+  Status m_error;
 
   StringSummaryFormat(const TypeSummaryImpl::Flags &flags, const char *f);
 
@@ -311,8 +310,8 @@ private:
 
 // summaries implemented via a C++ function
 struct CXXFunctionSummaryFormat : public TypeSummaryImpl {
-  // we should convert these to SBValue and SBStream if we ever cross
-  // the boundary towards the external world
+  // we should convert these to SBValue and SBStream if we ever cross the
+  // boundary towards the external world
   typedef std::function<bool(ValueObject &, Stream &,
                              const TypeSummaryOptions &)>
       Callback;

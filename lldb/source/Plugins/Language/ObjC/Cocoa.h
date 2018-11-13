@@ -11,11 +11,11 @@
 #ifndef liblldb_Cocoa_h_
 #define liblldb_Cocoa_h_
 
-#include "lldb/Core/Stream.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/DataFormatters/TypeSummary.h"
 #include "lldb/DataFormatters/TypeSynthetic.h"
 #include "lldb/Target/ObjCLanguageRuntime.h"
+#include "lldb/Utility/Stream.h"
 
 namespace lldb_private {
 namespace formatters {
@@ -31,6 +31,9 @@ bool NSDataSummaryProvider(ValueObject &valobj, Stream &stream,
 
 bool NSNumberSummaryProvider(ValueObject &valobj, Stream &stream,
                              const TypeSummaryOptions &options);
+
+bool NSDecimalNumberSummaryProvider(ValueObject &valobj, Stream &stream,
+                                    const TypeSummaryOptions &options);
 
 bool NSNotificationSummaryProvider(ValueObject &valobj, Stream &stream,
                                    const TypeSummaryOptions &options);

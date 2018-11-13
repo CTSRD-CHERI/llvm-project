@@ -188,8 +188,14 @@
 # CHECK-BE: frsqrtes. 2, 3                  # encoding: [0xec,0x40,0x18,0x35]
 # CHECK-LE: frsqrtes. 2, 3                  # encoding: [0x35,0x18,0x40,0xec]
             frsqrtes. 2, 3
-# FIXME:    ftdiv 2, 3, 4
-# FIXME:    ftsqrt 2, 3, 4
+
+# CHECK-BE: ftdiv 2, 3, 4                   # encoding: [0xfd,0x03,0x21,0x00]
+# CHECK-LE: ftdiv 2, 3, 4                   # encoding: [0x00,0x21,0x03,0xfd]
+            ftdiv 2, 3, 4
+
+# CHECK-BE: ftsqrt 2, 3                    # encoding: [0xfd,0x00,0x19,0x40]
+# CHECK-LE: ftsqrt 2, 3                    # encoding: [0x40,0x19,0x00,0xfd]
+            ftsqrt 2, 3
 
 # CHECK-BE: fmadd 2, 3, 4, 5                # encoding: [0xfc,0x43,0x29,0x3a]
 # CHECK-LE: fmadd 2, 3, 4, 5                # encoding: [0x3a,0x29,0x43,0xfc]
@@ -255,34 +261,48 @@
 # CHECK-BE: fctid. 2, 3                     # encoding: [0xfc,0x40,0x1e,0x5d]
 # CHECK-LE: fctid. 2, 3                     # encoding: [0x5d,0x1e,0x40,0xfc]
             fctid. 2, 3
+
+# CHECK-BE: fctidu 2, 3                      # encoding: [0xfc,0x40,0x1f,0x5c]
+# CHECK-LE: fctidu 2, 3                      # encoding: [0x5c,0x1f,0x40,0xfc]
+            fctidu 2, 3
+# CHECK-BE: fctidu. 2, 3                     # encoding: [0xfc,0x40,0x1f,0x5d]
+# CHECK-LE: fctidu. 2, 3                     # encoding: [0x5d,0x1f,0x40,0xfc]
+            fctidu. 2, 3
+
 # CHECK-BE: fctidz 2, 3                     # encoding: [0xfc,0x40,0x1e,0x5e]
 # CHECK-LE: fctidz 2, 3                     # encoding: [0x5e,0x1e,0x40,0xfc]
             fctidz 2, 3
 # CHECK-BE: fctidz. 2, 3                    # encoding: [0xfc,0x40,0x1e,0x5f]
 # CHECK-LE: fctidz. 2, 3                    # encoding: [0x5f,0x1e,0x40,0xfc]
             fctidz. 2, 3
-# FIXME:    fctidu 2, 3
-# FIXME:    fctidu. 2, 3
+
 # CHECK-BE: fctiduz 2, 3                    # encoding: [0xfc,0x40,0x1f,0x5e]
 # CHECK-LE: fctiduz 2, 3                    # encoding: [0x5e,0x1f,0x40,0xfc]
             fctiduz 2, 3
 # CHECK-BE: fctiduz. 2, 3                   # encoding: [0xfc,0x40,0x1f,0x5f]
 # CHECK-LE: fctiduz. 2, 3                   # encoding: [0x5f,0x1f,0x40,0xfc]
             fctiduz. 2, 3
+
 # CHECK-BE: fctiw 2, 3                      # encoding: [0xfc,0x40,0x18,0x1c]
 # CHECK-LE: fctiw 2, 3                      # encoding: [0x1c,0x18,0x40,0xfc]
             fctiw 2, 3
 # CHECK-BE: fctiw. 2, 3                     # encoding: [0xfc,0x40,0x18,0x1d]
 # CHECK-LE: fctiw. 2, 3                     # encoding: [0x1d,0x18,0x40,0xfc]
             fctiw. 2, 3
+
+# CHECK-BE: fctiwu 2, 3                      # encoding: [0xfc,0x40,0x19,0x1c]
+# CHECK-LE: fctiwu 2, 3                      # encoding: [0x1c,0x19,0x40,0xfc]
+            fctiwu 2, 3
+# CHECK-BE: fctiwu. 2, 3                     # encoding: [0xfc,0x40,0x19,0x1d]
+# CHECK-LE: fctiwu. 2, 3                     # encoding: [0x1d,0x19,0x40,0xfc]
+            fctiwu. 2, 3
+
 # CHECK-BE: fctiwz 2, 3                     # encoding: [0xfc,0x40,0x18,0x1e]
 # CHECK-LE: fctiwz 2, 3                     # encoding: [0x1e,0x18,0x40,0xfc]
             fctiwz 2, 3
 # CHECK-BE: fctiwz. 2, 3                    # encoding: [0xfc,0x40,0x18,0x1f]
 # CHECK-LE: fctiwz. 2, 3                    # encoding: [0x1f,0x18,0x40,0xfc]
             fctiwz. 2, 3
-# FIXME:    fctiwu 2, 3
-# FIXME:    fctiwu. 2, 3
 # CHECK-BE: fctiwuz 2, 3                    # encoding: [0xfc,0x40,0x19,0x1e]
 # CHECK-LE: fctiwuz 2, 3                    # encoding: [0x1e,0x19,0x40,0xfc]
             fctiwuz 2, 3
@@ -362,6 +382,24 @@
 # CHECK-BE: mffs. 7                         # encoding: [0xfc,0xe0,0x04,0x8f]
 # CHECK-LE: mffs. 7                         # encoding: [0x8f,0x04,0xe0,0xfc]
             mffs. 7
+# CHECK-BE: mffsce 2                        # encoding: [0xfc,0x41,0x04,0x8e]
+# CHECK-LE: mffsce 2                        # encoding: [0x8e,0x04,0x41,0xfc]
+            mffsce 2
+# CHECK-BE: mffscdrn 2, 3                   # encoding: [0xfc,0x54,0x1c,0x8e]
+# CHECK-LE: mffscdrn 2, 3                   # encoding: [0x8e,0x1c,0x54,0xfc]
+            mffscdrn 2, 3
+# CHECK-BE: mffscdrni 2, 3                  # encoding: [0xfc,0x55,0x1c,0x8e]
+# CHECK-LE: mffscdrni 2, 3                  # encoding: [0x8e,0x1c,0x55,0xfc]
+            mffscdrni 2, 3
+# CHECK-BE: mffscrn 2, 3                    # encoding: [0xfc,0x56,0x1c,0x8e]
+# CHECK-LE: mffscrn 2, 3                    # encoding: [0x8e,0x1c,0x56,0xfc]
+            mffscrn 2, 3
+# CHECK-BE: mffscrni 2, 3                   # encoding: [0xfc,0x57,0x1c,0x8e]
+# CHECK-LE: mffscrni 2, 3                   # encoding: [0x8e,0x1c,0x57,0xfc]
+            mffscrni 2, 3
+# CHECK-BE: mffsl 2                         # encoding: [0xfc,0x58,0x04,0x8e]
+# CHECK-LE: mffsl 2                         # encoding: [0x8e,0x04,0x58,0xfc]
+            mffsl 2
 # CHECK-BE: mcrfs 4, 5                      # encoding: [0xfe,0x14,0x00,0x80]
 # CHECK-LE: mcrfs 4, 5                      # encoding: [0x80,0x00,0x14,0xfe]
             mcrfs 4, 5

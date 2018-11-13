@@ -101,6 +101,34 @@ template<typename T> class C12 {
   friend void func_12(int x = 0);  // expected-error{{friend declaration specifying a default argument must be the only declaration}}
 };
 
+// Friend function with uninstantiated body is still a definition.
+
+template<typename T> struct C20 {
+  friend void func_20() {} // expected-note{{previous definition is here}}
+};
+C20<int> c20i;
+void func_20() {} // expected-error{{redefinition of 'func_20'}}
+
+template<typename T> struct C21a {
+  friend void func_21() {} // expected-note{{previous definition is here}}
+};
+template<typename T> struct C21b {
+  friend void func_21() {} // expected-error{{redefinition of 'func_21'}}
+};
+C21a<int> c21ai;
+C21b<int> c21bi; // expected-note{{in instantiation of template class 'C21b<int>' requested here}}
+
+template<typename T> struct C22a {
+  friend void func_22() {} // expected-note{{previous definition is here}}
+};
+template<typename T> struct C22b {
+  friend void func_22();
+};
+C22a<int> c22ai;
+C22b<int> c22bi;
+void func_22() {} // expected-error{{redefinition of 'func_22'}}
+
+
 
 namespace pr22307 {
 
@@ -169,4 +197,41 @@ struct Test {
 
 template class Test<int>;
 
+}
+
+namespace pr14785 {
+template<typename T>
+struct Somewhat {
+  void internal() const { }
+  friend void operator+(int const &, Somewhat<T> const &) {}  // expected-error{{redefinition of 'operator+'}}
+};
+
+void operator+(int const &, Somewhat<char> const &x) {  // expected-note {{previous definition is here}}
+  x.internal();  // expected-note{{in instantiation of template class 'pr14785::Somewhat<char>' requested here}}
+}
+}
+
+namespace D30375 {
+template <typename K> struct B {
+  template <typename A> bool insert(A &);
+};
+
+template <typename K>
+template <typename A> bool B<K>::insert(A &x) { return x < x; }
+
+template <typename K> class D {
+  B<K> t;
+
+public:
+  K x;
+  bool insert() { return t.insert(x); }
+  template <typename K1> friend bool operator<(const D<K1> &, const D<K1> &);
+};
+
+template <typename K> bool operator<(const D<K> &, const D<K> &);
+
+void func() {
+  D<D<int>> cache;
+  cache.insert();
+}
 }

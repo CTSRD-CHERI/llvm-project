@@ -7,12 +7,25 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Transforms/Utils/GlobalStatus.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Constant.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/Transforms/Utils/GlobalStatus.h"
+#include "llvm/IR/Use.h"
+#include "llvm/IR/User.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/AtomicOrdering.h"
+#include "llvm/Support/Casting.h"
+#include <algorithm>
+#include <cassert>
 
 using namespace llvm;
 
@@ -47,7 +60,7 @@ bool llvm::isSafeToDestroyConstant(const Constant *C) {
 }
 
 static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
-                             SmallPtrSetImpl<const PHINode *> &PhiUsers) {
+                             SmallPtrSetImpl<const Value *> &VisitedUsers) {
   if (const GlobalVariable *GV = dyn_cast<GlobalVariable>(V))
     if (GV->isExternallyInitialized())
       GS.StoredType = GlobalStatus::StoredOnce;
@@ -62,7 +75,8 @@ static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
       if (!isa<PointerType>(CE->getType()))
         return true;
 
-      if (analyzeGlobalAux(CE, GS, PhiUsers))
+      // FIXME: Do we need to add constexpr selects to VisitedUsers?
+      if (analyzeGlobalAux(CE, GS, VisitedUsers))
         return true;
     } else if (const Instruction *I = dyn_cast<Instruction>(UR)) {
       if (!GS.HasMultipleAccessingFunctions) {
@@ -124,20 +138,18 @@ static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
             GS.StoredType = GlobalStatus::Stored;
           }
         }
-      } else if (isa<BitCastInst>(I)) {
-        if (analyzeGlobalAux(I, GS, PhiUsers))
+      } else if (isa<BitCastInst>(I) || isa<GetElementPtrInst>(I)) {
+        // Skip over bitcasts and GEPs; we don't care about the type or offset
+        // of the pointer.
+        if (analyzeGlobalAux(I, GS, VisitedUsers))
           return true;
-      } else if (isa<GetElementPtrInst>(I)) {
-        if (analyzeGlobalAux(I, GS, PhiUsers))
-          return true;
-      } else if (isa<SelectInst>(I)) {
-        if (analyzeGlobalAux(I, GS, PhiUsers))
-          return true;
-      } else if (const PHINode *PN = dyn_cast<PHINode>(I)) {
-        // PHI nodes we can check just like select or GEP instructions, but we
-        // have to be careful about infinite recursion.
-        if (PhiUsers.insert(PN).second) // Not already visited.
-          if (analyzeGlobalAux(I, GS, PhiUsers))
+      } else if (isa<SelectInst>(I) || isa<PHINode>(I)) {
+        // Look through selects and PHIs to find if the pointer is
+        // conditionally accessed. Make sure we only visit an instruction
+        // once; otherwise, we can get infinite recursion or exponential
+        // compile time.
+        if (VisitedUsers.insert(I).second)
+          if (analyzeGlobalAux(I, GS, VisitedUsers))
             return true;
       } else if (isa<CmpInst>(I)) {
         GS.IsCompared = true;
@@ -175,13 +187,9 @@ static bool analyzeGlobalAux(const Value *V, GlobalStatus &GS,
   return false;
 }
 
-bool GlobalStatus::analyzeGlobal(const Value *V, GlobalStatus &GS) {
-  SmallPtrSet<const PHINode *, 16> PhiUsers;
-  return analyzeGlobalAux(V, GS, PhiUsers);
-}
+GlobalStatus::GlobalStatus() = default;
 
-GlobalStatus::GlobalStatus()
-    : IsCompared(false), IsLoaded(false), StoredType(NotStored),
-      StoredOnceValue(nullptr), AccessingFunction(nullptr),
-      HasMultipleAccessingFunctions(false), HasNonInstructionUser(false),
-      Ordering(AtomicOrdering::NotAtomic) {}
+bool GlobalStatus::analyzeGlobal(const Value *V, GlobalStatus &GS) {
+  SmallPtrSet<const Value *, 16> VisitedUsers;
+  return analyzeGlobalAux(V, GS, VisitedUsers);
+}

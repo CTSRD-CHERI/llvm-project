@@ -1,5 +1,5 @@
 // RUN: %clangxx_msan -O0 -g %s -o %t && %run %t
-// RUN: %clangxx_msan -O0 -g -DPOSITIVE %s -o %t && not %run %t |& FileCheck %s
+// RUN: %clangxx_msan -O0 -g -DPOSITIVE %s -o %t && not %run %t 2>&1 | FileCheck %s
 
 #include <assert.h>
 #include <iconv.h>
@@ -15,8 +15,8 @@ int main(void) {
   char inbuf_[100];
   strcpy(inbuf_, "sample text");
   char outbuf_[100];
-#if defined(__FreeBSD__)
-  // FreeBSD's iconv() expects the 2nd argument be of type 'const char**'.
+#if defined(__NetBSD__)
+  // Some OSes expect the 2nd argument of iconv(3) to be of type const char **
   const char *inbuf = inbuf_;
 #else
   char *inbuf = inbuf_;

@@ -1,4 +1,4 @@
-; RUN: llc -verify-machineinstrs -march=ppc32 -mtriple=powerpc-unknown-linux-gnu -mattr=+altivec < %s | FileCheck %s
+; RUN: llc -verify-machineinstrs -mtriple=powerpc-unknown-linux-gnu -mattr=+altivec < %s | FileCheck %s
 
 ;; This test ensures that MergeConsecutiveStores does not attempt to
 ;; merge stores or loads when doing so would result in unaligned
@@ -23,14 +23,14 @@
 ;; worthwhile.
 
 ;; CHECK-LABEL: f:
-;; CHECK:      lwzu
-;; CHECK-NEXT: lwz
-;; CHECK-NEXT: lwz
-;; CHECK-NEXT: lwz
-;; CHECK-NEXT: stwu
-;; CHECK-NEXT: stw
-;; CHECK-NEXT: stw
-;; CHECK-NEXT: stw
+;; CHECK-DAG:      lwzu
+;; CHECK-DAG:      stwu
+;; CHECK-DAG: lwz
+;; CHECK-DAG: lwz
+;; CHECK-DAG: lwz
+;; CHECK-DAG: stw
+;; CHECK-DAG: stw
+;; CHECK-DAG: stw
 ;; CHECK-NEXT: blr
 define void @f() {
 entry:

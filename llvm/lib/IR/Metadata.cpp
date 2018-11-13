@@ -11,20 +11,52 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/IR/Metadata.h"
 #include "LLVMContextImpl.h"
 #include "MetadataImpl.h"
 #include "SymbolTableListTraitsImpl.h"
+#include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/DenseSet.h"
+#include "llvm/ADT/None.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
+#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/ADT/Twine.h"
+#include "llvm/IR/Argument.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constant.h"
 #include "llvm/IR/ConstantRange.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/DebugLoc.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalObject.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/TrackingMDRef.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Value.h"
 #include "llvm/IR/ValueHandle.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/MathExtras.h"
+#include <algorithm>
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <tuple>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 
@@ -203,9 +235,9 @@ void ReplaceableMetadataImpl::replaceAllUsesWith(Metadata *MD) {
     return;
 
   // Copy out uses since UseMap will get touched below.
-  typedef std::pair<void *, std::pair<OwnerTy, uint64_t>> UseTy;
+  using UseTy = std::pair<void *, std::pair<OwnerTy, uint64_t>>;
   SmallVector<UseTy, 8> Uses(UseMap.begin(), UseMap.end());
-  std::sort(Uses.begin(), Uses.end(), [](const UseTy &L, const UseTy &R) {
+  llvm::sort(Uses, [](const UseTy &L, const UseTy &R) {
     return L.second.second < R.second.second;
   });
   for (const auto &Pair : Uses) {
@@ -256,9 +288,9 @@ void ReplaceableMetadataImpl::resolveAllUses(bool ResolveUsers) {
   }
 
   // Copy out uses since UseMap could get touched below.
-  typedef std::pair<void *, std::pair<OwnerTy, uint64_t>> UseTy;
+  using UseTy = std::pair<void *, std::pair<OwnerTy, uint64_t>>;
   SmallVector<UseTy, 8> Uses(UseMap.begin(), UseMap.end());
-  std::sort(Uses.begin(), Uses.end(), [](const UseTy &L, const UseTy &R) {
+  llvm::sort(Uses, [](const UseTy &L, const UseTy &R) {
     return L.second.second < R.second.second;
   });
   UseMap.clear();
@@ -297,12 +329,20 @@ bool ReplaceableMetadataImpl::isReplaceable(const Metadata &MD) {
   return dyn_cast<ValueAsMetadata>(&MD);
 }
 
-static Function *getLocalFunction(Value *V) {
+static DISubprogram *getLocalFunctionMetadata(Value *V) {
   assert(V && "Expected value");
-  if (auto *A = dyn_cast<Argument>(V))
-    return A->getParent();
-  if (BasicBlock *BB = cast<Instruction>(V)->getParent())
-    return BB->getParent();
+  if (auto *A = dyn_cast<Argument>(V)) {
+    if (auto *Fn = A->getParent())
+      return Fn->getSubprogram();
+    return nullptr;
+  }
+
+  if (BasicBlock *BB = cast<Instruction>(V)->getParent()) {
+    if (auto *Fn = BB->getParent())
+      return Fn->getSubprogram();
+    return nullptr;
+  }
+
   return nullptr;
 }
 
@@ -378,9 +418,9 @@ void ValueAsMetadata::handleRAUW(Value *From, Value *To) {
       delete MD;
       return;
     }
-    if (getLocalFunction(From) && getLocalFunction(To) &&
-        getLocalFunction(From) != getLocalFunction(To)) {
-      // Function changed.
+    if (getLocalFunctionMetadata(From) && getLocalFunctionMetadata(To) &&
+        getLocalFunctionMetadata(From) != getLocalFunctionMetadata(To)) {
+      // DISubprogram changed.
       MD->replaceAllUsesWith(nullptr);
       delete MD;
       return;
@@ -728,8 +768,8 @@ static T *uniquifyImpl(T *N, DenseSet<T *, InfoT> &Store) {
 }
 
 template <class NodeTy> struct MDNode::HasCachedHash {
-  typedef char Yes[1];
-  typedef char No[2];
+  using Yes = char[1];
+  using No = char[2];
   template <class U, U Val> struct SFINAE {};
 
   template <class U>
@@ -937,7 +977,7 @@ static void addRange(SmallVectorImpl<ConstantInt *> &EndPoints,
 
 MDNode *MDNode::getMostGenericRange(MDNode *A, MDNode *B) {
   // Given two ranges, we want to compute the union of the ranges. This
-  // is slightly complitade by having to combine the intervals and merge
+  // is slightly complicated by having to combine the intervals and merge
   // the ones that overlap.
 
   if (!A || !B)
@@ -946,7 +986,7 @@ MDNode *MDNode::getMostGenericRange(MDNode *A, MDNode *B) {
   if (A == B)
     return A;
 
-  // First, walk both lists in older of the lower boundary of each interval.
+  // First, walk both lists in order of the lower boundary of each interval.
   // At each step, try to merge the new interval to the last one we adedd.
   SmallVector<ConstantInt *, 4> EndPoints;
   int AI = 0;
@@ -1027,8 +1067,7 @@ static SmallVector<TrackingMDRef, 4> &getNMDOps(void *Operands) {
 }
 
 NamedMDNode::NamedMDNode(const Twine &N)
-    : Name(N.str()), Parent(nullptr),
-      Operands(new SmallVector<TrackingMDRef, 4>()) {}
+    : Name(N.str()), Operands(new SmallVector<TrackingMDRef, 4>()) {}
 
 NamedMDNode::~NamedMDNode() {
   dropAllReferences();
@@ -1071,14 +1110,14 @@ void MDAttachmentMap::set(unsigned ID, MDNode &MD) {
                            std::make_tuple(&MD));
 }
 
-void MDAttachmentMap::erase(unsigned ID) {
+bool MDAttachmentMap::erase(unsigned ID) {
   if (empty())
-    return;
+    return false;
 
   // Common case is one/last value.
   if (Attachments.back().first == ID) {
     Attachments.pop_back();
-    return;
+    return true;
   }
 
   for (auto I = Attachments.begin(), E = std::prev(Attachments.end()); I != E;
@@ -1086,8 +1125,10 @@ void MDAttachmentMap::erase(unsigned ID) {
     if (I->first == ID) {
       *I = std::move(Attachments.back());
       Attachments.pop_back();
-      return;
+      return true;
     }
+
+  return false;
 }
 
 MDNode *MDAttachmentMap::lookup(unsigned ID) const {
@@ -1110,29 +1151,31 @@ void MDGlobalAttachmentMap::insert(unsigned ID, MDNode &MD) {
   Attachments.push_back({ID, TrackingMDNodeRef(&MD)});
 }
 
+MDNode *MDGlobalAttachmentMap::lookup(unsigned ID) const {
+  for (const auto &A : Attachments)
+    if (A.MDKind == ID)
+      return A.Node;
+  return nullptr;
+}
+
 void MDGlobalAttachmentMap::get(unsigned ID,
-                                SmallVectorImpl<MDNode *> &Result) {
-  for (auto A : Attachments)
+                                SmallVectorImpl<MDNode *> &Result) const {
+  for (const auto &A : Attachments)
     if (A.MDKind == ID)
       Result.push_back(A.Node);
 }
 
-void MDGlobalAttachmentMap::erase(unsigned ID) {
-  auto Follower = Attachments.begin();
-  for (auto Leader = Attachments.begin(), E = Attachments.end(); Leader != E;
-       ++Leader) {
-    if (Leader->MDKind != ID) {
-      if (Follower != Leader)
-        *Follower = std::move(*Leader);
-      ++Follower;
-    }
-  }
-  Attachments.resize(Follower - Attachments.begin());
+bool MDGlobalAttachmentMap::erase(unsigned ID) {
+  auto I = std::remove_if(Attachments.begin(), Attachments.end(),
+                          [ID](const Attachment &A) { return A.MDKind == ID; });
+  bool Changed = I != Attachments.end();
+  Attachments.erase(I, Attachments.end());
+  return Changed;
 }
 
 void MDGlobalAttachmentMap::getAll(
     SmallVectorImpl<std::pair<unsigned, MDNode *>> &Result) const {
-  for (auto &A : Attachments)
+  for (const auto &A : Attachments)
     Result.emplace_back(A.MDKind, A.Node);
 
   // Sort the resulting array so it is stable with respect to metadata IDs. We
@@ -1308,17 +1351,26 @@ bool Instruction::extractProfTotalWeight(uint64_t &TotalVal) const {
     return false;
 
   auto *ProfDataName = dyn_cast<MDString>(ProfileData->getOperand(0));
-  if (!ProfDataName || !ProfDataName->getString().equals("branch_weights"))
+  if (!ProfDataName)
     return false;
 
-  TotalVal = 0;
-  for (unsigned i = 1; i < ProfileData->getNumOperands(); i++) {
-    auto *V = mdconst::dyn_extract<ConstantInt>(ProfileData->getOperand(i));
-    if (!V)
-      return false;
-    TotalVal += V->getValue().getZExtValue();
+  if (ProfDataName->getString().equals("branch_weights")) {
+    TotalVal = 0;
+    for (unsigned i = 1; i < ProfileData->getNumOperands(); i++) {
+      auto *V = mdconst::dyn_extract<ConstantInt>(ProfileData->getOperand(i));
+      if (!V)
+        return false;
+      TotalVal += V->getValue().getZExtValue();
+    }
+    return true;
+  } else if (ProfDataName->getString().equals("VP") &&
+             ProfileData->getNumOperands() > 3) {
+    TotalVal = mdconst::dyn_extract<ConstantInt>(ProfileData->getOperand(2))
+                   ->getValue()
+                   .getZExtValue();
+    return true;
   }
-  return true;
+  return false;
 }
 
 void Instruction::clearMetadataHashEntries() {
@@ -1350,15 +1402,16 @@ void GlobalObject::addMetadata(StringRef Kind, MDNode &MD) {
   addMetadata(getContext().getMDKindID(Kind), MD);
 }
 
-void GlobalObject::eraseMetadata(unsigned KindID) {
+bool GlobalObject::eraseMetadata(unsigned KindID) {
   // Nothing to unset.
   if (!hasMetadata())
-    return;
+    return false;
 
   auto &Store = getContext().pImpl->GlobalObjectMetadata[this];
-  Store.erase(KindID);
+  bool Changed = Store.erase(KindID);
   if (Store.empty())
     clearMetadata();
+  return Changed;
 }
 
 void GlobalObject::getAllMetadata(
@@ -1389,12 +1442,9 @@ void GlobalObject::setMetadata(StringRef Kind, MDNode *N) {
 }
 
 MDNode *GlobalObject::getMetadata(unsigned KindID) const {
-  SmallVector<MDNode *, 1> MDs;
-  getMetadata(KindID, MDs);
-  assert(MDs.size() <= 1 && "Expected at most one metadata attachment");
-  if (MDs.empty())
-    return nullptr;
-  return MDs[0];
+  if (hasMetadata())
+    return getContext().pImpl->GlobalObjectMetadata[this].lookup(KindID);
+  return nullptr;
 }
 
 MDNode *GlobalObject::getMetadata(StringRef Kind) const {
@@ -1419,19 +1469,26 @@ void GlobalObject::copyMetadata(const GlobalObject *Other, unsigned Offset) {
     // If an offset adjustment was specified we need to modify the DIExpression
     // to prepend the adjustment:
     // !DIExpression(DW_OP_plus, Offset, [original expr])
+    auto *Attachment = MD.second;
     if (Offset != 0 && MD.first == LLVMContext::MD_dbg) {
-      DIGlobalVariable *GV = cast<DIGlobalVariable>(MD.second);
-      DIExpression *E = GV->getExpr();
+      DIGlobalVariable *GV = dyn_cast<DIGlobalVariable>(Attachment);
+      DIExpression *E = nullptr;
+      if (!GV) {
+        auto *GVE = cast<DIGlobalVariableExpression>(Attachment);
+        GV = GVE->getVariable();
+        E = GVE->getExpression();
+      }
       ArrayRef<uint64_t> OrigElements;
       if (E)
         OrigElements = E->getElements();
       std::vector<uint64_t> Elements(OrigElements.size() + 2);
-      Elements[0] = dwarf::DW_OP_plus;
+      Elements[0] = dwarf::DW_OP_plus_uconst;
       Elements[1] = Offset;
       std::copy(OrigElements.begin(), OrigElements.end(), Elements.begin() + 2);
-      GV->replaceExpr(DIExpression::get(getContext(), Elements));
+      E = DIExpression::get(getContext(), Elements);
+      Attachment = DIGlobalVariableExpression::get(getContext(), GV, E);
     }
-    addMetadata(MD.first, *MD.second);
+    addMetadata(MD.first, *Attachment);
   }
 }
 
@@ -1439,7 +1496,7 @@ void GlobalObject::addTypeMetadata(unsigned Offset, Metadata *TypeID) {
   addMetadata(
       LLVMContext::MD_type,
       *MDTuple::get(getContext(),
-                    {llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(
+                    {ConstantAsMetadata::get(ConstantInt::get(
                          Type::getInt64Ty(getContext()), Offset)),
                      TypeID}));
 }
@@ -1452,14 +1509,23 @@ DISubprogram *Function::getSubprogram() const {
   return cast_or_null<DISubprogram>(getMetadata(LLVMContext::MD_dbg));
 }
 
-void GlobalVariable::addDebugInfo(DIGlobalVariable *GV) {
+bool Function::isDebugInfoForProfiling() const {
+  if (DISubprogram *SP = getSubprogram()) {
+    if (DICompileUnit *CU = SP->getUnit()) {
+      return CU->getDebugInfoForProfiling();
+    }
+  }
+  return false;
+}
+
+void GlobalVariable::addDebugInfo(DIGlobalVariableExpression *GV) {
   addMetadata(LLVMContext::MD_dbg, *GV);
 }
 
 void GlobalVariable::getDebugInfo(
-    SmallVectorImpl<DIGlobalVariable *> &GVs) const {
+    SmallVectorImpl<DIGlobalVariableExpression *> &GVs) const {
   SmallVector<MDNode *, 1> MDs;
   getMetadata(LLVMContext::MD_dbg, MDs);
   for (MDNode *MD : MDs)
-    GVs.push_back(cast<DIGlobalVariable>(MD));
+    GVs.push_back(cast<DIGlobalVariableExpression>(MD));
 }

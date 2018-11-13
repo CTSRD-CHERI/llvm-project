@@ -40,22 +40,22 @@ std::ostream &operator<<(std::ostream &OS,
 // std::is_assignable and actually writing such an assignment.
 #if !defined(_MSC_VER)
 static_assert(
-    !std::is_assignable<StringRef, std::string>::value,
+    !std::is_assignable<StringRef&, std::string>::value,
     "Assigning from prvalue std::string");
 static_assert(
-    !std::is_assignable<StringRef, std::string &&>::value,
+    !std::is_assignable<StringRef&, std::string &&>::value,
     "Assigning from xvalue std::string");
 static_assert(
-    std::is_assignable<StringRef, std::string &>::value,
+    std::is_assignable<StringRef&, std::string &>::value,
     "Assigning from lvalue std::string");
 static_assert(
-    std::is_assignable<StringRef, const char *>::value,
+    std::is_assignable<StringRef&, const char *>::value,
     "Assigning from prvalue C string");
 static_assert(
-    std::is_assignable<StringRef, const char * &&>::value,
+    std::is_assignable<StringRef&, const char * &&>::value,
     "Assigning from xvalue C string");
 static_assert(
-    std::is_assignable<StringRef, const char * &>::value,
+    std::is_assignable<StringRef&, const char * &>::value,
     "Assigning from lvalue C string");
 #endif
 
@@ -181,6 +181,17 @@ TEST(StringRefTest, Split) {
             Str.rsplit('l'));
   EXPECT_EQ(std::make_pair(StringRef("hell"), StringRef("")),
             Str.rsplit('o'));
+
+  EXPECT_EQ(std::make_pair(StringRef("he"), StringRef("o")),
+		    Str.rsplit("ll"));
+  EXPECT_EQ(std::make_pair(StringRef(""), StringRef("ello")),
+		    Str.rsplit("h"));
+  EXPECT_EQ(std::make_pair(StringRef("hell"), StringRef("")),
+	      Str.rsplit("o"));
+  EXPECT_EQ(std::make_pair(StringRef("hello"), StringRef("")),
+		    Str.rsplit("::"));
+  EXPECT_EQ(std::make_pair(StringRef("hel"), StringRef("o")),
+		    Str.rsplit("l"));
 }
 
 TEST(StringRefTest, Split2) {
@@ -504,8 +515,22 @@ TEST(StringRefTest, Count) {
 }
 
 TEST(StringRefTest, EditDistance) {
-  StringRef Str("hello");
-  EXPECT_EQ(2U, Str.edit_distance("hill"));
+  StringRef Hello("hello");
+  EXPECT_EQ(2U, Hello.edit_distance("hill"));
+
+  StringRef Industry("industry");
+  EXPECT_EQ(6U, Industry.edit_distance("interest"));
+
+  StringRef Soylent("soylent green is people");
+  EXPECT_EQ(19U, Soylent.edit_distance("people soiled our green"));
+  EXPECT_EQ(26U, Soylent.edit_distance("people soiled our green",
+                                      /* allow replacements = */ false));
+  EXPECT_EQ(9U, Soylent.edit_distance("people soiled our green",
+                                      /* allow replacements = */ true,
+                                      /* max edit distance = */ 8));
+  EXPECT_EQ(53U, Soylent.edit_distance("people soiled our green "
+                                       "people soiled our green "
+                                       "people soiled our green "));
 }
 
 TEST(StringRefTest, Misc) {
@@ -852,6 +877,33 @@ TEST(StringRefTest, consumeIntegerSigned) {
   }
 }
 
+struct GetDoubleStrings {
+  const char *Str;
+  bool AllowInexact;
+  bool ShouldFail;
+  double D;
+} DoubleStrings[] = {{"0", false, false, 0.0},
+                     {"0.0", false, false, 0.0},
+                     {"-0.0", false, false, -0.0},
+                     {"123.45", false, true, 123.45},
+                     {"123.45", true, false, 123.45},
+                     {"1.8e308", true, false, std::numeric_limits<double>::infinity()},
+                     {"1.8e308", false, true, std::numeric_limits<double>::infinity()},
+                     {"0x0.0000000000001P-1023", false, true, 0.0},
+                     {"0x0.0000000000001P-1023", true, false, 0.0},
+                    };
+
+TEST(StringRefTest, getAsDouble) {
+  for (const auto &Entry : DoubleStrings) {
+    double Result;
+    StringRef S(Entry.Str);
+    EXPECT_EQ(Entry.ShouldFail, S.getAsDouble(Result, Entry.AllowInexact));
+    if (!Entry.ShouldFail) {
+      EXPECT_EQ(Result, Entry.D);
+    }
+  }
+}
+
 static const char *join_input[] = { "a", "b", "c" };
 static const char join_result1[] = "a";
 static const char join_result2[] = "a:b:c";
@@ -877,6 +929,8 @@ TEST(StringRefTest, joinStrings) {
   bool v2_join2 = join(v2.begin(), v2.end(), ":") == join_result2;
   EXPECT_TRUE(v2_join2);
   bool v2_join3 = join(v2.begin(), v2.end(), "::") == join_result3;
+  EXPECT_TRUE(v2_join3);
+  v2_join3 = join(v2, "::") == join_result3;
   EXPECT_TRUE(v2_join3);
 }
 
@@ -1000,6 +1054,12 @@ TEST(StringRefTest, DropWhileUntil) {
   StringRef EmptyString = "";
   Taken = EmptyString.drop_while([](char c) { return true; });
   EXPECT_EQ("", Taken);
+}
+
+TEST(StringRefTest, StringLiteral) {
+  constexpr StringLiteral Strings[] = {"Foo", "Bar"};
+  EXPECT_EQ(StringRef("Foo"), Strings[0]);
+  EXPECT_EQ(StringRef("Bar"), Strings[1]);
 }
 
 } // end anonymous namespace

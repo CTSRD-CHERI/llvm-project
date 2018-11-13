@@ -181,15 +181,21 @@ static Matcher *FindNodeWithKind(Matcher *M, Matcher::KindTy Kind) {
 ///       ABC
 ///       XYZ
 ///
-static void FactorNodes(std::unique_ptr<Matcher> &MatcherPtr) {
-  // If we reached the end of the chain, we're done.
-  Matcher *N = MatcherPtr.get();
-  if (!N) return;
-  
-  // If this is not a push node, just scan for one.
-  ScopeMatcher *Scope = dyn_cast<ScopeMatcher>(N);
-  if (!Scope)
-    return FactorNodes(N->getNextPtr());
+static void FactorNodes(std::unique_ptr<Matcher> &InputMatcherPtr) {
+  // Look for a push node. Iterates instead of recurses to reduce stack usage.
+  ScopeMatcher *Scope = nullptr;
+  std::unique_ptr<Matcher> *RebindableMatcherPtr = &InputMatcherPtr;
+  while (!Scope) {
+    // If we reached the end of the chain, we're done.
+    Matcher *N = RebindableMatcherPtr->get();
+    if (!N) return;
+
+    // If this is not a push node, just scan for one.
+    Scope = dyn_cast<ScopeMatcher>(N);
+    if (!Scope)
+      RebindableMatcherPtr = &(N->getNextPtr());
+  }
+  std::unique_ptr<Matcher> &MatcherPtr = *RebindableMatcherPtr;
   
   // Okay, pull together the children of the scope node into a vector so we can
   // inspect it more easily.
@@ -200,8 +206,15 @@ static void FactorNodes(std::unique_ptr<Matcher> &MatcherPtr) {
     std::unique_ptr<Matcher> Child(Scope->takeChild(i));
     FactorNodes(Child);
     
-    if (Matcher *N = Child.release())
-      OptionsToMatch.push_back(N);
+    if (Child) {
+      // If the child is a ScopeMatcher we can just merge its contents.
+      if (auto *SM = dyn_cast<ScopeMatcher>(Child.get())) {
+        for (unsigned j = 0, e = SM->getNumChildren(); j != e; ++j)
+          OptionsToMatch.push_back(SM->takeChild(j));
+      } else {
+        OptionsToMatch.push_back(Child.release());
+      }
+    }
   }
   
   SmallVector<Matcher*, 32> NewOptionsToMatch;
@@ -280,15 +293,12 @@ static void FactorNodes(std::unique_ptr<Matcher> &MatcherPtr) {
     if (Scan != e &&
         // Don't print it's obvious nothing extra could be merged anyway.
         Scan+1 != e) {
-      DEBUG(errs() << "Couldn't merge this:\n";
-            Optn->print(errs(), 4);
-            errs() << "into this:\n";
-            OptionsToMatch[Scan]->print(errs(), 4);
-            if (Scan+1 != e)
-              OptionsToMatch[Scan+1]->printOne(errs());
-            if (Scan+2 < e)
-              OptionsToMatch[Scan+2]->printOne(errs());
-            errs() << "\n");
+      LLVM_DEBUG(errs() << "Couldn't merge this:\n"; Optn->print(errs(), 4);
+                 errs() << "into this:\n";
+                 OptionsToMatch[Scan]->print(errs(), 4);
+                 if (Scan + 1 != e) OptionsToMatch[Scan + 1]->printOne(errs());
+                 if (Scan + 2 < e) OptionsToMatch[Scan + 2]->printOne(errs());
+                 errs() << "\n");
     }
     
     // If we only found one option starting with this matcher, no factoring is
@@ -414,9 +424,7 @@ static void FactorNodes(std::unique_ptr<Matcher> &MatcherPtr) {
         }
         
         Matcher *Entries[2] = { PrevMatcher, MatcherWithoutCTM };
-        std::unique_ptr<Matcher> Case(new ScopeMatcher(Entries));
-        FactorNodes(Case);
-        Cases[Entry-1].second = Case.release();
+        Cases[Entry-1].second = new ScopeMatcher(Entries);
         continue;
       }
       
@@ -424,6 +432,16 @@ static void FactorNodes(std::unique_ptr<Matcher> &MatcherPtr) {
       Cases.push_back(std::make_pair(CTMTy, MatcherWithoutCTM));
     }
     
+    // Make sure we recursively factor any scopes we may have created.
+    for (auto &M : Cases) {
+      if (ScopeMatcher *SM = dyn_cast<ScopeMatcher>(M.second)) {
+        std::unique_ptr<Matcher> Scope(SM);
+        FactorNodes(Scope);
+        M.second = Scope.release();
+        assert(M.second && "null matcher");
+      }
+    }
+
     if (Cases.size() != 1) {
       MatcherPtr.reset(new SwitchTypeMatcher(Cases));
     } else {

@@ -1,5 +1,5 @@
-// Should set the value of the "end" symbol if it is undefined.
 // REQUIRES: x86
+// Should set the value of the "end" symbol if it is undefined.
 
 // RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %s -o %t.o
 // RUN: ld.lld %t.o -o %t
@@ -12,13 +12,13 @@
 // CHECK-NEXT:       SHF_ALLOC
 // CHECK-NEXT:       SHF_WRITE
 // CHECK-NEXT:     ]
-// CHECK-NEXT:     Address: 0x12000
+// CHECK-NEXT:     Address: 0x202000
 // CHECK-NEXT:     Offset:
 // CHECK-NEXT:     Size: 6
 // CHECK: ]
 // CHECK: Symbols [
 // CHECK:     Name: end
-// CHECK-NEXT:     Value: 0x12006
+// CHECK-NEXT:     Value: 0x202006
 // CHECK: ]
 
 .global _start,end

@@ -8,15 +8,15 @@
 //===----------------------------------------------------------------------===//
 
 #include "lldb/Host/windows/HostProcessWindows.h"
-#include "lldb/Host/FileSpec.h"
 #include "lldb/Host/HostThread.h"
 #include "lldb/Host/ThreadLauncher.h"
 #include "lldb/Host/windows/windows.h"
+#include "lldb/Utility/FileSpec.h"
 
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/ConvertUTF.h"
 
-#include <Psapi.h>
+#include <psapi.h>
 
 using namespace lldb_private;
 
@@ -37,8 +37,8 @@ HostProcessWindows::~HostProcessWindows() { Close(); }
 
 void HostProcessWindows::SetOwnsHandle(bool owns) { m_owns_handle = owns; }
 
-Error HostProcessWindows::Terminate() {
-  Error error;
+Status HostProcessWindows::Terminate() {
+  Status error;
   if (m_process == nullptr)
     error.SetError(ERROR_INVALID_HANDLE, lldb::eErrorTypeWin32);
 
@@ -48,8 +48,8 @@ Error HostProcessWindows::Terminate() {
   return error;
 }
 
-Error HostProcessWindows::GetMainModule(FileSpec &file_spec) const {
-  Error error;
+Status HostProcessWindows::GetMainModule(FileSpec &file_spec) const {
+  Status error;
   if (m_process == nullptr)
     error.SetError(ERROR_INVALID_HANDLE, lldb::eErrorTypeWin32);
 
@@ -57,7 +57,7 @@ Error HostProcessWindows::GetMainModule(FileSpec &file_spec) const {
   if (::GetProcessImageFileNameW(m_process, wpath.data(), wpath.size())) {
     std::string path;
     if (llvm::convertWideToUTF8(wpath.data(), path))
-      file_spec.SetFile(path, false);
+      file_spec.SetFile(path, false, FileSpec::Style::native);
     else
       error.SetErrorString("Error converting path to UTF-8");
   } else
@@ -88,8 +88,8 @@ HostThread HostProcessWindows::StartMonitoring(
   info->callback = callback;
 
   // Since the life of this HostProcessWindows instance and the life of the
-  // process may be different, duplicate the handle so that
-  // the monitor thread can have ownership over its own copy of the handle.
+  // process may be different, duplicate the handle so that the monitor thread
+  // can have ownership over its own copy of the handle.
   HostThread result;
   if (::DuplicateHandle(GetCurrentProcess(), m_process, GetCurrentProcess(),
                         &info->process_handle, 0, FALSE, DUPLICATE_SAME_ACCESS))

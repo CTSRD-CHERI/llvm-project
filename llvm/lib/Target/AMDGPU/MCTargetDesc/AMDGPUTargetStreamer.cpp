@@ -11,12 +11,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "AMDGPU.h"
 #include "AMDGPUTargetStreamer.h"
+#include "AMDGPU.h"
 #include "SIDefines.h"
 #include "Utils/AMDGPUBaseInfo.h"
 #include "Utils/AMDKernelCodeTUtils.h"
 #include "llvm/ADT/Twine.h"
+#include "llvm/BinaryFormat/ELF.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Metadata.h"
@@ -25,8 +26,8 @@
 #include "llvm/MC/MCELFStreamer.h"
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCSectionELF.h"
-#include "llvm/Support/ELF.h"
 #include "llvm/Support/FormattedStream.h"
+#include "llvm/Support/TargetParser.h"
 
 namespace llvm {
 #include "AMDGPUPTNote.h"
@@ -35,8 +36,104 @@ namespace llvm {
 using namespace llvm;
 using namespace llvm::AMDGPU;
 
-AMDGPUTargetStreamer::AMDGPUTargetStreamer(MCStreamer &S)
-    : MCTargetStreamer(S) {}
+//===----------------------------------------------------------------------===//
+// AMDGPUTargetStreamer
+//===----------------------------------------------------------------------===//
+
+bool AMDGPUTargetStreamer::EmitHSAMetadata(StringRef HSAMetadataString) {
+  HSAMD::Metadata HSAMetadata;
+  if (HSAMD::fromString(HSAMetadataString, HSAMetadata))
+    return false;
+
+  return EmitHSAMetadata(HSAMetadata);
+}
+
+StringRef AMDGPUTargetStreamer::getArchNameFromElfMach(unsigned ElfMach) {
+  AMDGPU::GPUKind AK;
+
+  switch (ElfMach) {
+  case ELF::EF_AMDGPU_MACH_R600_R600:     AK = GK_R600;    break;
+  case ELF::EF_AMDGPU_MACH_R600_R630:     AK = GK_R630;    break;
+  case ELF::EF_AMDGPU_MACH_R600_RS880:    AK = GK_RS880;   break;
+  case ELF::EF_AMDGPU_MACH_R600_RV670:    AK = GK_RV670;   break;
+  case ELF::EF_AMDGPU_MACH_R600_RV710:    AK = GK_RV710;   break;
+  case ELF::EF_AMDGPU_MACH_R600_RV730:    AK = GK_RV730;   break;
+  case ELF::EF_AMDGPU_MACH_R600_RV770:    AK = GK_RV770;   break;
+  case ELF::EF_AMDGPU_MACH_R600_CEDAR:    AK = GK_CEDAR;   break;
+  case ELF::EF_AMDGPU_MACH_R600_CYPRESS:  AK = GK_CYPRESS; break;
+  case ELF::EF_AMDGPU_MACH_R600_JUNIPER:  AK = GK_JUNIPER; break;
+  case ELF::EF_AMDGPU_MACH_R600_REDWOOD:  AK = GK_REDWOOD; break;
+  case ELF::EF_AMDGPU_MACH_R600_SUMO:     AK = GK_SUMO;    break;
+  case ELF::EF_AMDGPU_MACH_R600_BARTS:    AK = GK_BARTS;   break;
+  case ELF::EF_AMDGPU_MACH_R600_CAICOS:   AK = GK_CAICOS;  break;
+  case ELF::EF_AMDGPU_MACH_R600_CAYMAN:   AK = GK_CAYMAN;  break;
+  case ELF::EF_AMDGPU_MACH_R600_TURKS:    AK = GK_TURKS;   break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX600: AK = GK_GFX600;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX601: AK = GK_GFX601;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX700: AK = GK_GFX700;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX701: AK = GK_GFX701;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX702: AK = GK_GFX702;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX703: AK = GK_GFX703;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX704: AK = GK_GFX704;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX801: AK = GK_GFX801;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX802: AK = GK_GFX802;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX803: AK = GK_GFX803;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX810: AK = GK_GFX810;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX900: AK = GK_GFX900;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX902: AK = GK_GFX902;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX904: AK = GK_GFX904;  break;
+  case ELF::EF_AMDGPU_MACH_AMDGCN_GFX906: AK = GK_GFX906;  break;
+  case ELF::EF_AMDGPU_MACH_NONE:          AK = GK_NONE;    break;
+  }
+
+  StringRef GPUName = getArchNameAMDGCN(AK);
+  if (GPUName != "")
+    return GPUName;
+  return getArchNameR600(AK);
+}
+
+unsigned AMDGPUTargetStreamer::getElfMach(StringRef GPU) {
+  AMDGPU::GPUKind AK = parseArchAMDGCN(GPU);
+  if (AK == AMDGPU::GPUKind::GK_NONE)
+    AK = parseArchR600(GPU);
+
+  switch (AK) {
+  case GK_R600:    return ELF::EF_AMDGPU_MACH_R600_R600;
+  case GK_R630:    return ELF::EF_AMDGPU_MACH_R600_R630;
+  case GK_RS880:   return ELF::EF_AMDGPU_MACH_R600_RS880;
+  case GK_RV670:   return ELF::EF_AMDGPU_MACH_R600_RV670;
+  case GK_RV710:   return ELF::EF_AMDGPU_MACH_R600_RV710;
+  case GK_RV730:   return ELF::EF_AMDGPU_MACH_R600_RV730;
+  case GK_RV770:   return ELF::EF_AMDGPU_MACH_R600_RV770;
+  case GK_CEDAR:   return ELF::EF_AMDGPU_MACH_R600_CEDAR;
+  case GK_CYPRESS: return ELF::EF_AMDGPU_MACH_R600_CYPRESS;
+  case GK_JUNIPER: return ELF::EF_AMDGPU_MACH_R600_JUNIPER;
+  case GK_REDWOOD: return ELF::EF_AMDGPU_MACH_R600_REDWOOD;
+  case GK_SUMO:    return ELF::EF_AMDGPU_MACH_R600_SUMO;
+  case GK_BARTS:   return ELF::EF_AMDGPU_MACH_R600_BARTS;
+  case GK_CAICOS:  return ELF::EF_AMDGPU_MACH_R600_CAICOS;
+  case GK_CAYMAN:  return ELF::EF_AMDGPU_MACH_R600_CAYMAN;
+  case GK_TURKS:   return ELF::EF_AMDGPU_MACH_R600_TURKS;
+  case GK_GFX600:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX600;
+  case GK_GFX601:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX601;
+  case GK_GFX700:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX700;
+  case GK_GFX701:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX701;
+  case GK_GFX702:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX702;
+  case GK_GFX703:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX703;
+  case GK_GFX704:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX704;
+  case GK_GFX801:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX801;
+  case GK_GFX802:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX802;
+  case GK_GFX803:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX803;
+  case GK_GFX810:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX810;
+  case GK_GFX900:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX900;
+  case GK_GFX902:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX902;
+  case GK_GFX904:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX904;
+  case GK_GFX906:  return ELF::EF_AMDGPU_MACH_AMDGCN_GFX906;
+  case GK_NONE:    return ELF::EF_AMDGPU_MACH_NONE;
+  }
+
+  llvm_unreachable("unknown GPU");
+}
 
 //===----------------------------------------------------------------------===//
 // AMDGPUTargetAsmStreamer
@@ -46,9 +143,12 @@ AMDGPUTargetAsmStreamer::AMDGPUTargetAsmStreamer(MCStreamer &S,
                                                  formatted_raw_ostream &OS)
     : AMDGPUTargetStreamer(S), OS(OS) { }
 
-void
-AMDGPUTargetAsmStreamer::EmitDirectiveHSACodeObjectVersion(uint32_t Major,
-                                                           uint32_t Minor) {
+void AMDGPUTargetAsmStreamer::EmitDirectiveAMDGCNTarget(StringRef Target) {
+  OS << "\t.amdgcn_target \"" << Target << "\"\n";
+}
+
+void AMDGPUTargetAsmStreamer::EmitDirectiveHSACodeObjectVersion(
+    uint32_t Major, uint32_t Minor) {
   OS << "\t.hsa_code_object_version " <<
         Twine(Major) << "," << Twine(Minor) << '\n';
 }
@@ -82,47 +182,210 @@ void AMDGPUTargetAsmStreamer::EmitAMDGPUSymbolType(StringRef SymbolName,
   }
 }
 
-void AMDGPUTargetAsmStreamer::EmitAMDGPUHsaModuleScopeGlobal(
-    StringRef GlobalName) {
-  OS << "\t.amdgpu_hsa_module_global " << GlobalName << '\n';
+bool AMDGPUTargetAsmStreamer::EmitISAVersion(StringRef IsaVersionString) {
+  OS << "\t.amd_amdgpu_isa \"" << IsaVersionString << "\"\n";
+  return true;
 }
 
-void AMDGPUTargetAsmStreamer::EmitAMDGPUHsaProgramScopeGlobal(
-    StringRef GlobalName) {
-  OS << "\t.amdgpu_hsa_program_global " << GlobalName << '\n';
+bool AMDGPUTargetAsmStreamer::EmitHSAMetadata(
+    const AMDGPU::HSAMD::Metadata &HSAMetadata) {
+  std::string HSAMetadataString;
+  if (HSAMD::toString(HSAMetadata, HSAMetadataString))
+    return false;
+
+  OS << '\t' << HSAMD::AssemblerDirectiveBegin << '\n';
+  OS << HSAMetadataString << '\n';
+  OS << '\t' << HSAMD::AssemblerDirectiveEnd << '\n';
+  return true;
+}
+
+bool AMDGPUTargetAsmStreamer::EmitPALMetadata(
+    const PALMD::Metadata &PALMetadata) {
+  std::string PALMetadataString;
+  if (PALMD::toString(PALMetadata, PALMetadataString))
+    return false;
+
+  OS << '\t' << PALMD::AssemblerDirective << PALMetadataString << '\n';
+  return true;
+}
+
+void AMDGPUTargetAsmStreamer::EmitAmdhsaKernelDescriptor(
+    const MCSubtargetInfo &STI, StringRef KernelName,
+    const amdhsa::kernel_descriptor_t &KD, uint64_t NextVGPR, uint64_t NextSGPR,
+    bool ReserveVCC, bool ReserveFlatScr, bool ReserveXNACK) {
+  IsaVersion IVersion = getIsaVersion(STI.getCPU());
+
+  OS << "\t.amdhsa_kernel " << KernelName << '\n';
+
+#define PRINT_FIELD(STREAM, DIRECTIVE, KERNEL_DESC, MEMBER_NAME, FIELD_NAME)   \
+  STREAM << "\t\t" << DIRECTIVE << " "                                         \
+         << AMDHSA_BITS_GET(KERNEL_DESC.MEMBER_NAME, FIELD_NAME) << '\n';
+
+  OS << "\t\t.amdhsa_group_segment_fixed_size " << KD.group_segment_fixed_size
+     << '\n';
+  OS << "\t\t.amdhsa_private_segment_fixed_size "
+     << KD.private_segment_fixed_size << '\n';
+
+  PRINT_FIELD(OS, ".amdhsa_user_sgpr_private_segment_buffer", KD,
+              kernel_code_properties,
+              amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_PRIVATE_SEGMENT_BUFFER);
+  PRINT_FIELD(OS, ".amdhsa_user_sgpr_dispatch_ptr", KD,
+              kernel_code_properties,
+              amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_DISPATCH_PTR);
+  PRINT_FIELD(OS, ".amdhsa_user_sgpr_queue_ptr", KD,
+              kernel_code_properties,
+              amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_QUEUE_PTR);
+  PRINT_FIELD(OS, ".amdhsa_user_sgpr_kernarg_segment_ptr", KD,
+              kernel_code_properties,
+              amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_KERNARG_SEGMENT_PTR);
+  PRINT_FIELD(OS, ".amdhsa_user_sgpr_dispatch_id", KD,
+              kernel_code_properties,
+              amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_DISPATCH_ID);
+  PRINT_FIELD(OS, ".amdhsa_user_sgpr_flat_scratch_init", KD,
+              kernel_code_properties,
+              amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_FLAT_SCRATCH_INIT);
+  PRINT_FIELD(OS, ".amdhsa_user_sgpr_private_segment_size", KD,
+              kernel_code_properties,
+              amdhsa::KERNEL_CODE_PROPERTY_ENABLE_SGPR_PRIVATE_SEGMENT_SIZE);
+  PRINT_FIELD(
+      OS, ".amdhsa_system_sgpr_private_segment_wavefront_offset", KD,
+      compute_pgm_rsrc2,
+      amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_PRIVATE_SEGMENT_WAVEFRONT_OFFSET);
+  PRINT_FIELD(OS, ".amdhsa_system_sgpr_workgroup_id_x", KD,
+              compute_pgm_rsrc2,
+              amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_WORKGROUP_ID_X);
+  PRINT_FIELD(OS, ".amdhsa_system_sgpr_workgroup_id_y", KD,
+              compute_pgm_rsrc2,
+              amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_WORKGROUP_ID_Y);
+  PRINT_FIELD(OS, ".amdhsa_system_sgpr_workgroup_id_z", KD,
+              compute_pgm_rsrc2,
+              amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_WORKGROUP_ID_Z);
+  PRINT_FIELD(OS, ".amdhsa_system_sgpr_workgroup_info", KD,
+              compute_pgm_rsrc2,
+              amdhsa::COMPUTE_PGM_RSRC2_ENABLE_SGPR_WORKGROUP_INFO);
+  PRINT_FIELD(OS, ".amdhsa_system_vgpr_workitem_id", KD,
+              compute_pgm_rsrc2,
+              amdhsa::COMPUTE_PGM_RSRC2_ENABLE_VGPR_WORKITEM_ID);
+
+  // These directives are required.
+  OS << "\t\t.amdhsa_next_free_vgpr " << NextVGPR << '\n';
+  OS << "\t\t.amdhsa_next_free_sgpr " << NextSGPR << '\n';
+
+  if (!ReserveVCC)
+    OS << "\t\t.amdhsa_reserve_vcc " << ReserveVCC << '\n';
+  if (IVersion.Major >= 7 && !ReserveFlatScr)
+    OS << "\t\t.amdhsa_reserve_flat_scratch " << ReserveFlatScr << '\n';
+  if (IVersion.Major >= 8 && ReserveXNACK != hasXNACK(STI))
+    OS << "\t\t.amdhsa_reserve_xnack_mask " << ReserveXNACK << '\n';
+
+  PRINT_FIELD(OS, ".amdhsa_float_round_mode_32", KD,
+              compute_pgm_rsrc1,
+              amdhsa::COMPUTE_PGM_RSRC1_FLOAT_ROUND_MODE_32);
+  PRINT_FIELD(OS, ".amdhsa_float_round_mode_16_64", KD,
+              compute_pgm_rsrc1,
+              amdhsa::COMPUTE_PGM_RSRC1_FLOAT_ROUND_MODE_16_64);
+  PRINT_FIELD(OS, ".amdhsa_float_denorm_mode_32", KD,
+              compute_pgm_rsrc1,
+              amdhsa::COMPUTE_PGM_RSRC1_FLOAT_DENORM_MODE_32);
+  PRINT_FIELD(OS, ".amdhsa_float_denorm_mode_16_64", KD,
+              compute_pgm_rsrc1,
+              amdhsa::COMPUTE_PGM_RSRC1_FLOAT_DENORM_MODE_16_64);
+  PRINT_FIELD(OS, ".amdhsa_dx10_clamp", KD,
+              compute_pgm_rsrc1,
+              amdhsa::COMPUTE_PGM_RSRC1_ENABLE_DX10_CLAMP);
+  PRINT_FIELD(OS, ".amdhsa_ieee_mode", KD,
+              compute_pgm_rsrc1,
+              amdhsa::COMPUTE_PGM_RSRC1_ENABLE_IEEE_MODE);
+  if (IVersion.Major >= 9)
+    PRINT_FIELD(OS, ".amdhsa_fp16_overflow", KD,
+                compute_pgm_rsrc1,
+                amdhsa::COMPUTE_PGM_RSRC1_FP16_OVFL);
+  PRINT_FIELD(
+      OS, ".amdhsa_exception_fp_ieee_invalid_op", KD,
+      compute_pgm_rsrc2,
+      amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_IEEE_754_FP_INVALID_OPERATION);
+  PRINT_FIELD(OS, ".amdhsa_exception_fp_denorm_src", KD,
+              compute_pgm_rsrc2,
+              amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_FP_DENORMAL_SOURCE);
+  PRINT_FIELD(
+      OS, ".amdhsa_exception_fp_ieee_div_zero", KD,
+      compute_pgm_rsrc2,
+      amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_IEEE_754_FP_DIVISION_BY_ZERO);
+  PRINT_FIELD(OS, ".amdhsa_exception_fp_ieee_overflow", KD,
+              compute_pgm_rsrc2,
+              amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_IEEE_754_FP_OVERFLOW);
+  PRINT_FIELD(OS, ".amdhsa_exception_fp_ieee_underflow", KD,
+              compute_pgm_rsrc2,
+              amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_IEEE_754_FP_UNDERFLOW);
+  PRINT_FIELD(OS, ".amdhsa_exception_fp_ieee_inexact", KD,
+              compute_pgm_rsrc2,
+              amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_IEEE_754_FP_INEXACT);
+  PRINT_FIELD(OS, ".amdhsa_exception_int_div_zero", KD,
+              compute_pgm_rsrc2,
+              amdhsa::COMPUTE_PGM_RSRC2_ENABLE_EXCEPTION_INT_DIVIDE_BY_ZERO);
+#undef PRINT_FIELD
+
+  OS << "\t.end_amdhsa_kernel\n";
 }
 
 //===----------------------------------------------------------------------===//
 // AMDGPUTargetELFStreamer
 //===----------------------------------------------------------------------===//
 
-AMDGPUTargetELFStreamer::AMDGPUTargetELFStreamer(MCStreamer &S)
-    : AMDGPUTargetStreamer(S), Streamer(S) {}
+AMDGPUTargetELFStreamer::AMDGPUTargetELFStreamer(
+    MCStreamer &S, const MCSubtargetInfo &STI)
+    : AMDGPUTargetStreamer(S), Streamer(S) {
+  MCAssembler &MCA = getStreamer().getAssembler();
+  unsigned EFlags = MCA.getELFHeaderEFlags();
+
+  EFlags &= ~ELF::EF_AMDGPU_MACH;
+  EFlags |= getElfMach(STI.getCPU());
+
+  EFlags &= ~ELF::EF_AMDGPU_XNACK;
+  if (AMDGPU::hasXNACK(STI))
+    EFlags |= ELF::EF_AMDGPU_XNACK;
+
+  MCA.setELFHeaderEFlags(EFlags);
+}
 
 MCELFStreamer &AMDGPUTargetELFStreamer::getStreamer() {
   return static_cast<MCELFStreamer &>(Streamer);
 }
 
-void
-AMDGPUTargetELFStreamer::EmitDirectiveHSACodeObjectVersion(uint32_t Major,
-                                                           uint32_t Minor) {
-  MCStreamer &OS = getStreamer();
-  MCSectionELF *Note =
-      OS.getContext().getELFSection(PT_NOTE::SectionName, ELF::SHT_NOTE,
-                                    ELF::SHF_ALLOC);
+void AMDGPUTargetELFStreamer::EmitAMDGPUNote(
+    const MCExpr *DescSZ, unsigned NoteType,
+    function_ref<void(MCELFStreamer &)> EmitDesc) {
+  auto &S = getStreamer();
+  auto &Context = S.getContext();
 
-  auto NameSZ = sizeof(PT_NOTE::NoteName);
-  OS.PushSection();
-  OS.SwitchSection(Note);
-  OS.EmitIntValue(NameSZ, 4);                                     // namesz
-  OS.EmitIntValue(8, 4);                                          // descz
-  OS.EmitIntValue(PT_NOTE::NT_AMDGPU_HSA_CODE_OBJECT_VERSION, 4); // type
-  OS.EmitBytes(StringRef(PT_NOTE::NoteName, NameSZ));             // name
-  OS.EmitValueToAlignment(4);
-  OS.EmitIntValue(Major, 4);                                      // desc
-  OS.EmitIntValue(Minor, 4);
-  OS.EmitValueToAlignment(4);
-  OS.PopSection();
+  auto NameSZ = sizeof(ElfNote::NoteName);
+
+  S.PushSection();
+  S.SwitchSection(Context.getELFSection(
+    ElfNote::SectionName, ELF::SHT_NOTE, ELF::SHF_ALLOC));
+  S.EmitIntValue(NameSZ, 4);                                  // namesz
+  S.EmitValue(DescSZ, 4);                                     // descz
+  S.EmitIntValue(NoteType, 4);                                // type
+  S.EmitBytes(StringRef(ElfNote::NoteName, NameSZ));          // name
+  S.EmitValueToAlignment(4, 0, 1, 0);                         // padding 0
+  EmitDesc(S);                                                // desc
+  S.EmitValueToAlignment(4, 0, 1, 0);                         // padding 0
+  S.PopSection();
+}
+
+void AMDGPUTargetELFStreamer::EmitDirectiveAMDGCNTarget(StringRef Target) {}
+
+void AMDGPUTargetELFStreamer::EmitDirectiveHSACodeObjectVersion(
+    uint32_t Major, uint32_t Minor) {
+
+  EmitAMDGPUNote(
+    MCConstantExpr::create(8, getContext()),
+    ElfNote::NT_AMDGPU_HSA_CODE_OBJECT_VERSION,
+    [&](MCELFStreamer &OS){
+      OS.EmitIntValue(Major, 4);
+      OS.EmitIntValue(Minor, 4);
+    }
+  );
 }
 
 void
@@ -131,36 +394,28 @@ AMDGPUTargetELFStreamer::EmitDirectiveHSACodeObjectISA(uint32_t Major,
                                                        uint32_t Stepping,
                                                        StringRef VendorName,
                                                        StringRef ArchName) {
-  MCStreamer &OS = getStreamer();
-  MCSectionELF *Note =
-      OS.getContext().getELFSection(PT_NOTE::SectionName, ELF::SHT_NOTE,
-                                    ELF::SHF_ALLOC);
-
   uint16_t VendorNameSize = VendorName.size() + 1;
   uint16_t ArchNameSize = ArchName.size() + 1;
-  unsigned DescSZ = sizeof(VendorNameSize) + sizeof(ArchNameSize) +
-                    sizeof(Major) + sizeof(Minor) + sizeof(Stepping) +
-                    VendorNameSize + ArchNameSize;
 
-  OS.PushSection();
-  OS.SwitchSection(Note);
-  auto NameSZ = sizeof(PT_NOTE::NoteName);
-  OS.EmitIntValue(NameSZ, 4);                              // namesz
-  OS.EmitIntValue(DescSZ, 4);                              // descsz
-  OS.EmitIntValue(PT_NOTE::NT_AMDGPU_HSA_ISA, 4);          // type
-  OS.EmitBytes(StringRef(PT_NOTE::NoteName, NameSZ));      // name
-  OS.EmitValueToAlignment(4);
-  OS.EmitIntValue(VendorNameSize, 2);                      // desc
-  OS.EmitIntValue(ArchNameSize, 2);
-  OS.EmitIntValue(Major, 4);
-  OS.EmitIntValue(Minor, 4);
-  OS.EmitIntValue(Stepping, 4);
-  OS.EmitBytes(VendorName);
-  OS.EmitIntValue(0, 1); // NULL terminate VendorName
-  OS.EmitBytes(ArchName);
-  OS.EmitIntValue(0, 1); // NULL terminte ArchName
-  OS.EmitValueToAlignment(4);
-  OS.PopSection();
+  unsigned DescSZ = sizeof(VendorNameSize) + sizeof(ArchNameSize) +
+    sizeof(Major) + sizeof(Minor) + sizeof(Stepping) +
+    VendorNameSize + ArchNameSize;
+
+  EmitAMDGPUNote(
+    MCConstantExpr::create(DescSZ, getContext()),
+    ElfNote::NT_AMDGPU_HSA_ISA,
+    [&](MCELFStreamer &OS) {
+      OS.EmitIntValue(VendorNameSize, 2);
+      OS.EmitIntValue(ArchNameSize, 2);
+      OS.EmitIntValue(Major, 4);
+      OS.EmitIntValue(Minor, 4);
+      OS.EmitIntValue(Stepping, 4);
+      OS.EmitBytes(VendorName);
+      OS.EmitIntValue(0, 1); // NULL terminate VendorName
+      OS.EmitBytes(ArchName);
+      OS.EmitIntValue(0, 1); // NULL terminte ArchName
+    }
+  );
 }
 
 void
@@ -176,361 +431,110 @@ void AMDGPUTargetELFStreamer::EmitAMDGPUSymbolType(StringRef SymbolName,
                                                    unsigned Type) {
   MCSymbolELF *Symbol = cast<MCSymbolELF>(
       getStreamer().getContext().getOrCreateSymbol(SymbolName));
-  Symbol->setType(ELF::STT_AMDGPU_HSA_KERNEL);
+  Symbol->setType(Type);
 }
 
-void AMDGPUTargetELFStreamer::EmitAMDGPUHsaModuleScopeGlobal(
-    StringRef GlobalName) {
-
-  MCSymbolELF *Symbol = cast<MCSymbolELF>(
-      getStreamer().getContext().getOrCreateSymbol(GlobalName));
-  Symbol->setType(ELF::STT_OBJECT);
-  Symbol->setBinding(ELF::STB_LOCAL);
-}
-
-void AMDGPUTargetELFStreamer::EmitAMDGPUHsaProgramScopeGlobal(
-    StringRef GlobalName) {
-
-  MCSymbolELF *Symbol = cast<MCSymbolELF>(
-      getStreamer().getContext().getOrCreateSymbol(GlobalName));
-  Symbol->setType(ELF::STT_OBJECT);
-  Symbol->setBinding(ELF::STB_GLOBAL);
-}
-
-void AMDGPUTargetStreamer::emitRuntimeMDIntValue(RuntimeMD::Key K, uint64_t V,
-                                                 unsigned Size) {
-  auto &S = getStreamer();
-  S.EmitIntValue(K, 1);
-  S.EmitIntValue(V, Size);
-}
-
-void AMDGPUTargetStreamer::emitRuntimeMDStringValue(RuntimeMD::Key K,
-                                                    StringRef R) {
-  auto &S = getStreamer();
-  S.EmitIntValue(K, 1);
-  S.EmitIntValue(R.size(), 4);
-  S.EmitBytes(R);
-}
-
-void AMDGPUTargetStreamer::emitRuntimeMDThreeIntValues(RuntimeMD::Key K,
-                                                       MDNode *Node,
-                                                       unsigned Size) {
-  assert(Node->getNumOperands() == 3);
-
-  auto &S = getStreamer();
-  S.EmitIntValue(K, 1);
-  for (const MDOperand &Op : Node->operands()) {
-    const ConstantInt *CI = mdconst::extract<ConstantInt>(Op);
-    S.EmitIntValue(CI->getZExtValue(), Size);
-  }
-}
-
-void AMDGPUTargetStreamer::emitStartOfRuntimeMetadata(const Module &M) {
-  emitRuntimeMDIntValue(RuntimeMD::KeyMDVersion,
-                        RuntimeMD::MDVersion << 8 | RuntimeMD::MDRevision, 2);
-  if (auto MD = M.getNamedMetadata("opencl.ocl.version")) {
-    if (MD->getNumOperands() != 0) {
-      auto Node = MD->getOperand(0);
-      if (Node->getNumOperands() > 1) {
-        emitRuntimeMDIntValue(RuntimeMD::KeyLanguage,
-                              RuntimeMD::OpenCL_C, 1);
-        uint16_t Major = mdconst::extract<ConstantInt>(Node->getOperand(0))
-                         ->getZExtValue();
-        uint16_t Minor = mdconst::extract<ConstantInt>(Node->getOperand(1))
-                         ->getZExtValue();
-        emitRuntimeMDIntValue(RuntimeMD::KeyLanguageVersion,
-                              Major * 100 + Minor * 10, 2);
-      }
-    }
-  }
-
-  if (auto MD = M.getNamedMetadata("llvm.printf.fmts")) {
-    for (unsigned I = 0; I < MD->getNumOperands(); ++I) {
-      auto Node = MD->getOperand(I);
-      if (Node->getNumOperands() > 0)
-        emitRuntimeMDStringValue(RuntimeMD::KeyPrintfInfo,
-            cast<MDString>(Node->getOperand(0))->getString());
-    }
-  }
-}
-
-static std::string getOCLTypeName(Type *Ty, bool Signed) {
-  switch (Ty->getTypeID()) {
-  case Type::HalfTyID:
-    return "half";
-  case Type::FloatTyID:
-    return "float";
-  case Type::DoubleTyID:
-    return "double";
-  case Type::IntegerTyID: {
-    if (!Signed)
-      return (Twine('u') + getOCLTypeName(Ty, true)).str();
-    unsigned BW = Ty->getIntegerBitWidth();
-    switch (BW) {
-    case 8:
-      return "char";
-    case 16:
-      return "short";
-    case 32:
-      return "int";
-    case 64:
-      return "long";
-    default:
-      return (Twine('i') + Twine(BW)).str();
-    }
-  }
-  case Type::VectorTyID: {
-    VectorType *VecTy = cast<VectorType>(Ty);
-    Type *EleTy = VecTy->getElementType();
-    unsigned Size = VecTy->getVectorNumElements();
-    return (Twine(getOCLTypeName(EleTy, Signed)) + Twine(Size)).str();
-  }
-  default:
-    return "unknown";
-  }
-}
-
-static RuntimeMD::KernelArg::ValueType getRuntimeMDValueType(
-  Type *Ty, StringRef TypeName) {
-  switch (Ty->getTypeID()) {
-  case Type::HalfTyID:
-    return RuntimeMD::KernelArg::F16;
-  case Type::FloatTyID:
-    return RuntimeMD::KernelArg::F32;
-  case Type::DoubleTyID:
-    return RuntimeMD::KernelArg::F64;
-  case Type::IntegerTyID: {
-    bool Signed = !TypeName.startswith("u");
-    switch (Ty->getIntegerBitWidth()) {
-    case 8:
-      return Signed ? RuntimeMD::KernelArg::I8 : RuntimeMD::KernelArg::U8;
-    case 16:
-      return Signed ? RuntimeMD::KernelArg::I16 : RuntimeMD::KernelArg::U16;
-    case 32:
-      return Signed ? RuntimeMD::KernelArg::I32 : RuntimeMD::KernelArg::U32;
-    case 64:
-      return Signed ? RuntimeMD::KernelArg::I64 : RuntimeMD::KernelArg::U64;
-    default:
-      // Runtime does not recognize other integer types. Report as struct type.
-      return RuntimeMD::KernelArg::Struct;
-    }
-  }
-  case Type::VectorTyID:
-    return getRuntimeMDValueType(Ty->getVectorElementType(), TypeName);
-  case Type::PointerTyID:
-    return getRuntimeMDValueType(Ty->getPointerElementType(), TypeName);
-  default:
-    return RuntimeMD::KernelArg::Struct;
-  }
-}
-
-static RuntimeMD::KernelArg::AddressSpaceQualifer getRuntimeAddrSpace(
-    AMDGPUAS::AddressSpaces A) {
-  switch (A) {
-  case AMDGPUAS::GLOBAL_ADDRESS:
-    return RuntimeMD::KernelArg::Global;
-  case AMDGPUAS::CONSTANT_ADDRESS:
-    return RuntimeMD::KernelArg::Constant;
-  case AMDGPUAS::LOCAL_ADDRESS:
-    return RuntimeMD::KernelArg::Local;
-  case AMDGPUAS::FLAT_ADDRESS:
-    return RuntimeMD::KernelArg::Generic;
-  case AMDGPUAS::REGION_ADDRESS:
-    return RuntimeMD::KernelArg::Region;
-  default:
-    return RuntimeMD::KernelArg::Private;
-  }
-}
-
-void AMDGPUTargetStreamer::emitRuntimeMetadataForKernelArg(const DataLayout &DL,
-    Type *T, RuntimeMD::KernelArg::Kind Kind,
-    StringRef BaseTypeName, StringRef TypeName,
-    StringRef ArgName, StringRef TypeQual, StringRef AccQual) {
-  auto &S = getStreamer();
-
-  // Emit KeyArgBegin.
-  S.EmitIntValue(RuntimeMD::KeyArgBegin, 1);
-
-  // Emit KeyArgSize and KeyArgAlign.
-  emitRuntimeMDIntValue(RuntimeMD::KeyArgSize,
-                        DL.getTypeAllocSize(T), 4);
-  emitRuntimeMDIntValue(RuntimeMD::KeyArgAlign,
-                        DL.getABITypeAlignment(T), 4);
-  if (auto PT = dyn_cast<PointerType>(T)) {
-    auto ET = PT->getElementType();
-    if (PT->getAddressSpace() == AMDGPUAS::LOCAL_ADDRESS && ET->isSized())
-      emitRuntimeMDIntValue(RuntimeMD::KeyArgPointeeAlign,
-                            DL.getABITypeAlignment(ET), 4);
-  }
-
-  // Emit KeyArgTypeName.
-  if (!TypeName.empty())
-    emitRuntimeMDStringValue(RuntimeMD::KeyArgTypeName, TypeName);
-
-  // Emit KeyArgName.
-  if (!ArgName.empty())
-    emitRuntimeMDStringValue(RuntimeMD::KeyArgName, ArgName);
-
-  // Emit KeyArgIsVolatile, KeyArgIsRestrict, KeyArgIsConst and KeyArgIsPipe.
-  SmallVector<StringRef, 1> SplitQ;
-  TypeQual.split(SplitQ, " ", -1, false /* Drop empty entry */);
-
-  for (StringRef KeyName : SplitQ) {
-    auto Key = StringSwitch<RuntimeMD::Key>(KeyName)
-      .Case("volatile", RuntimeMD::KeyArgIsVolatile)
-      .Case("restrict", RuntimeMD::KeyArgIsRestrict)
-      .Case("const",    RuntimeMD::KeyArgIsConst)
-      .Case("pipe",     RuntimeMD::KeyArgIsPipe)
-      .Default(RuntimeMD::KeyNull);
-    S.EmitIntValue(Key, 1);
-  }
-
-  // Emit KeyArgKind.
-  emitRuntimeMDIntValue(RuntimeMD::KeyArgKind, Kind, 1);
-
-  // Emit KeyArgValueType.
-  emitRuntimeMDIntValue(RuntimeMD::KeyArgValueType,
-                        getRuntimeMDValueType(T, BaseTypeName), 2);
-
-  // Emit KeyArgAccQual.
-  if (!AccQual.empty()) {
-    auto AQ = StringSwitch<RuntimeMD::KernelArg::AccessQualifer>(AccQual)
-      .Case("read_only",  RuntimeMD::KernelArg::ReadOnly)
-      .Case("write_only", RuntimeMD::KernelArg::WriteOnly)
-      .Case("read_write", RuntimeMD::KernelArg::ReadWrite)
-      .Default(RuntimeMD::KernelArg::None);
-    emitRuntimeMDIntValue(RuntimeMD::KeyArgAccQual, AQ, 1);
-  }
-
-  // Emit KeyArgAddrQual.
-  if (auto *PT = dyn_cast<PointerType>(T))
-    emitRuntimeMDIntValue(RuntimeMD::KeyArgAddrQual,
-        getRuntimeAddrSpace(static_cast<AMDGPUAS::AddressSpaces>(
-            PT->getAddressSpace())), 1);
-
-  // Emit KeyArgEnd
-  S.EmitIntValue(RuntimeMD::KeyArgEnd, 1);
-}
-
-void AMDGPUTargetStreamer::emitRuntimeMetadata(const Function &F) {
-  if (!F.getMetadata("kernel_arg_type"))
-    return;
-  auto &S = getStreamer();
-  S.EmitIntValue(RuntimeMD::KeyKernelBegin, 1);
-  emitRuntimeMDStringValue(RuntimeMD::KeyKernelName, F.getName());
-
-  const DataLayout &DL = F.getParent()->getDataLayout();
-  for (auto &Arg : F.args()) {
-    unsigned I = Arg.getArgNo();
-    Type *T = Arg.getType();
-    auto TypeName = dyn_cast<MDString>(F.getMetadata(
-        "kernel_arg_type")->getOperand(I))->getString();
-    auto BaseTypeName = cast<MDString>(F.getMetadata(
-        "kernel_arg_base_type")->getOperand(I))->getString();
-    StringRef ArgName;
-    if (auto ArgNameMD = F.getMetadata("kernel_arg_name"))
-      ArgName = cast<MDString>(ArgNameMD->getOperand(I))->getString();
-    auto TypeQual = cast<MDString>(F.getMetadata(
-        "kernel_arg_type_qual")->getOperand(I))->getString();
-    auto AccQual = cast<MDString>(F.getMetadata(
-        "kernel_arg_access_qual")->getOperand(I))->getString();
-    RuntimeMD::KernelArg::Kind Kind;
-    if (TypeQual.find("pipe") != StringRef::npos)
-      Kind = RuntimeMD::KernelArg::Pipe;
-    else Kind = StringSwitch<RuntimeMD::KernelArg::Kind>(BaseTypeName)
-      .Case("sampler_t", RuntimeMD::KernelArg::Sampler)
-      .Case("queue_t",   RuntimeMD::KernelArg::Queue)
-      .Cases("image1d_t", "image1d_array_t", "image1d_buffer_t",
-             "image2d_t" , "image2d_array_t",  RuntimeMD::KernelArg::Image)
-      .Cases("image2d_depth_t", "image2d_array_depth_t",
-             "image2d_msaa_t", "image2d_array_msaa_t",
-             "image2d_msaa_depth_t",  RuntimeMD::KernelArg::Image)
-      .Cases("image2d_array_msaa_depth_t", "image3d_t",
-             RuntimeMD::KernelArg::Image)
-      .Default(isa<PointerType>(T) ?
-                   (T->getPointerAddressSpace() == AMDGPUAS::LOCAL_ADDRESS ?
-                   RuntimeMD::KernelArg::DynamicSharedPointer :
-                   RuntimeMD::KernelArg::GlobalBuffer) :
-                   RuntimeMD::KernelArg::ByValue);
-    emitRuntimeMetadataForKernelArg(DL, T,
-        Kind, BaseTypeName, TypeName, ArgName, TypeQual, AccQual);
-  }
-
-  // Emit hidden kernel arguments for OpenCL kernels.
-  if (F.getParent()->getNamedMetadata("opencl.ocl.version")) {
-    auto Int64T = Type::getInt64Ty(F.getContext());
-    emitRuntimeMetadataForKernelArg(DL, Int64T,
-                                    RuntimeMD::KernelArg::HiddenGlobalOffsetX);
-    emitRuntimeMetadataForKernelArg(DL, Int64T,
-                                    RuntimeMD::KernelArg::HiddenGlobalOffsetY);
-    emitRuntimeMetadataForKernelArg(DL, Int64T,
-                                    RuntimeMD::KernelArg::HiddenGlobalOffsetZ);
-    if (F.getParent()->getNamedMetadata("llvm.printf.fmts")) {
-      auto Int8PtrT = Type::getInt8PtrTy(F.getContext(),
-          RuntimeMD::KernelArg::Global);
-      emitRuntimeMetadataForKernelArg(DL, Int8PtrT,
-                                      RuntimeMD::KernelArg::HiddenPrintfBuffer);
-    }
-  }
-
-  // Emit KeyReqdWorkGroupSize, KeyWorkGroupSizeHint, and KeyVecTypeHint.
-  if (auto RWGS = F.getMetadata("reqd_work_group_size")) {
-    emitRuntimeMDThreeIntValues(RuntimeMD::KeyReqdWorkGroupSize,
-                                RWGS, 4);
-  }
-
-  if (auto WGSH = F.getMetadata("work_group_size_hint")) {
-    emitRuntimeMDThreeIntValues(RuntimeMD::KeyWorkGroupSizeHint,
-                                WGSH, 4);
-  }
-
-  if (auto VTH = F.getMetadata("vec_type_hint")) {
-    auto TypeName = getOCLTypeName(cast<ValueAsMetadata>(
-      VTH->getOperand(0))->getType(), mdconst::extract<ConstantInt>(
-      VTH->getOperand(1))->getZExtValue());
-    emitRuntimeMDStringValue(RuntimeMD::KeyVecTypeHint, TypeName);
-  }
-
-  // Emit KeyKernelEnd
-  S.EmitIntValue(RuntimeMD::KeyKernelEnd, 1);
-}
-
-void AMDGPUTargetStreamer::emitRuntimeMetadataAsNoteElement(Module &M) {
-  auto &S = getStreamer();
-  auto &Context = S.getContext();
-
-  auto NameSZ = sizeof(PT_NOTE::NoteName); // Size of note name including trailing null.
-
-  S.PushSection();
-  S.SwitchSection(Context.getELFSection(
-      PT_NOTE::SectionName, ELF::SHT_NOTE, ELF::SHF_ALLOC));
-
+bool AMDGPUTargetELFStreamer::EmitISAVersion(StringRef IsaVersionString) {
   // Create two labels to mark the beginning and end of the desc field
   // and a MCExpr to calculate the size of the desc field.
+  auto &Context = getContext();
   auto *DescBegin = Context.createTempSymbol();
   auto *DescEnd = Context.createTempSymbol();
   auto *DescSZ = MCBinaryExpr::createSub(
-      MCSymbolRefExpr::create(DescEnd, Context),
-      MCSymbolRefExpr::create(DescBegin, Context), Context);
+    MCSymbolRefExpr::create(DescEnd, Context),
+    MCSymbolRefExpr::create(DescBegin, Context), Context);
 
-  // Emit the note element for runtime metadata.
-  // Name and desc should be padded to 4 byte boundary but size of name and
-  // desc should not include padding 0's.
-  S.EmitIntValue(NameSZ, 4);                                  // namesz
-  S.EmitValue(DescSZ, 4);                                     // descz
-  S.EmitIntValue(PT_NOTE::NT_AMDGPU_HSA_RUNTIME_METADATA, 4); // type
-  S.EmitBytes(StringRef(PT_NOTE::NoteName, NameSZ));          // name
-  S.EmitValueToAlignment(4);                                  // padding 0
-  S.EmitLabel(DescBegin);
-  emitRuntimeMetadata(M);                                     // desc
-  S.EmitLabel(DescEnd);
-  S.EmitValueToAlignment(4);                                  // padding 0
-  S.PopSection();
+  EmitAMDGPUNote(
+    DescSZ,
+    ELF::NT_AMD_AMDGPU_ISA,
+    [&](MCELFStreamer &OS) {
+      OS.EmitLabel(DescBegin);
+      OS.EmitBytes(IsaVersionString);
+      OS.EmitLabel(DescEnd);
+    }
+  );
+  return true;
 }
 
-void AMDGPUTargetStreamer::emitRuntimeMetadata(Module &M) {
-  emitStartOfRuntimeMetadata(M);
-  for (auto &F : M.functions())
-    emitRuntimeMetadata(F);
+bool AMDGPUTargetELFStreamer::EmitHSAMetadata(
+    const AMDGPU::HSAMD::Metadata &HSAMetadata) {
+  std::string HSAMetadataString;
+  if (HSAMD::toString(HSAMetadata, HSAMetadataString))
+    return false;
+
+  // Create two labels to mark the beginning and end of the desc field
+  // and a MCExpr to calculate the size of the desc field.
+  auto &Context = getContext();
+  auto *DescBegin = Context.createTempSymbol();
+  auto *DescEnd = Context.createTempSymbol();
+  auto *DescSZ = MCBinaryExpr::createSub(
+    MCSymbolRefExpr::create(DescEnd, Context),
+    MCSymbolRefExpr::create(DescBegin, Context), Context);
+
+  EmitAMDGPUNote(
+    DescSZ,
+    ELF::NT_AMD_AMDGPU_HSA_METADATA,
+    [&](MCELFStreamer &OS) {
+      OS.EmitLabel(DescBegin);
+      OS.EmitBytes(HSAMetadataString);
+      OS.EmitLabel(DescEnd);
+    }
+  );
+  return true;
 }
 
+bool AMDGPUTargetELFStreamer::EmitPALMetadata(
+    const PALMD::Metadata &PALMetadata) {
+  EmitAMDGPUNote(
+    MCConstantExpr::create(PALMetadata.size() * sizeof(uint32_t), getContext()),
+    ELF::NT_AMD_AMDGPU_PAL_METADATA,
+    [&](MCELFStreamer &OS){
+      for (auto I : PALMetadata)
+        OS.EmitIntValue(I, sizeof(uint32_t));
+    }
+  );
+  return true;
+}
+
+void AMDGPUTargetELFStreamer::EmitAmdhsaKernelDescriptor(
+    const MCSubtargetInfo &STI, StringRef KernelName,
+    const amdhsa::kernel_descriptor_t &KernelDescriptor, uint64_t NextVGPR,
+    uint64_t NextSGPR, bool ReserveVCC, bool ReserveFlatScr,
+    bool ReserveXNACK) {
+  auto &Streamer = getStreamer();
+  auto &Context = Streamer.getContext();
+
+  MCSymbolELF *KernelDescriptorSymbol = cast<MCSymbolELF>(
+      Context.getOrCreateSymbol(Twine(KernelName) + Twine(".kd")));
+  KernelDescriptorSymbol->setBinding(ELF::STB_GLOBAL);
+  KernelDescriptorSymbol->setType(ELF::STT_OBJECT);
+  KernelDescriptorSymbol->setSize(
+      MCConstantExpr::create(sizeof(KernelDescriptor), Context));
+
+  MCSymbolELF *KernelCodeSymbol = cast<MCSymbolELF>(
+      Context.getOrCreateSymbol(Twine(KernelName)));
+  KernelCodeSymbol->setBinding(ELF::STB_LOCAL);
+
+  Streamer.EmitLabel(KernelDescriptorSymbol);
+  Streamer.EmitBytes(StringRef(
+      (const char*)&(KernelDescriptor),
+      offsetof(amdhsa::kernel_descriptor_t, kernel_code_entry_byte_offset)));
+  // FIXME: Remove the use of VK_AMDGPU_REL64 in the expression below. The
+  // expression being created is:
+  //   (start of kernel code) - (start of kernel descriptor)
+  // It implies R_AMDGPU_REL64, but ends up being R_AMDGPU_ABS64.
+  Streamer.EmitValue(MCBinaryExpr::createSub(
+      MCSymbolRefExpr::create(
+          KernelCodeSymbol, MCSymbolRefExpr::VK_AMDGPU_REL64, Context),
+      MCSymbolRefExpr::create(
+          KernelDescriptorSymbol, MCSymbolRefExpr::VK_None, Context),
+      Context),
+      sizeof(KernelDescriptor.kernel_code_entry_byte_offset));
+  Streamer.EmitBytes(StringRef(
+      (const char*)&(KernelDescriptor) +
+          offsetof(amdhsa::kernel_descriptor_t, kernel_code_entry_byte_offset) +
+          sizeof(KernelDescriptor.kernel_code_entry_byte_offset),
+      sizeof(KernelDescriptor) -
+          offsetof(amdhsa::kernel_descriptor_t, kernel_code_entry_byte_offset) -
+          sizeof(KernelDescriptor.kernel_code_entry_byte_offset)));
+}

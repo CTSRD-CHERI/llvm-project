@@ -15,13 +15,8 @@
 #include "clang/AST/Type.h"
 
 #include "lldb/Breakpoint/BreakpointLocation.h"
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/Scalar.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Expression/FunctionCaller.h"
 #include "lldb/Expression/UtilityFunction.h"
 #include "lldb/Symbol/ClangASTContext.h"
@@ -31,6 +26,11 @@
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Scalar.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StreamString.h"
 
 #include <vector>
 
@@ -42,8 +42,7 @@ AppleObjCRuntimeV1::AppleObjCRuntimeV1(Process *process)
       m_isa_hash_table_ptr(LLDB_INVALID_ADDRESS) {}
 
 // for V1 runtime we just try to return a class name as that is the minimum
-// level of support
-// required for the data formatters to work
+// level of support required for the data formatters to work
 bool AppleObjCRuntimeV1::GetDynamicTypeAndAddress(
     ValueObject &in_value, lldb::DynamicValueType use_dynamic,
     TypeAndOrName &class_type_or_name, Address &address,
@@ -85,7 +84,7 @@ AppleObjCRuntimeV1::CreateInstance(Process *process,
 
 void AppleObjCRuntimeV1::Initialize() {
   PluginManager::RegisterPlugin(
-      GetPluginNameStatic(), "Apple Objective C Language Runtime - Version 1",
+      GetPluginNameStatic(), "Apple Objective-C Language Runtime - Version 1",
       CreateInstance);
 }
 
@@ -127,7 +126,7 @@ struct BufStruct {
 UtilityFunction *AppleObjCRuntimeV1::CreateObjectChecker(const char *name) {
   std::unique_ptr<BufStruct> buf(new BufStruct);
 
-  assert(snprintf(&buf->contents[0], sizeof(buf->contents),
+  int strformatsize = snprintf(&buf->contents[0], sizeof(buf->contents),
                   "struct __objc_class                                         "
                   "           \n"
                   "{                                                           "
@@ -169,9 +168,11 @@ UtilityFunction *AppleObjCRuntimeV1::CreateObjectChecker(const char *name) {
                   "           \n"
                   "}                                                           "
                   "           \n",
-                  name) < (int)sizeof(buf->contents));
+                  name);
+  assert(strformatsize < (int)sizeof(buf->contents));
+  (void)strformatsize;
 
-  Error error;
+  Status error;
   return GetTargetRef().GetUtilityFunctionForLanguage(
       buf->contents, eLanguageTypeObjC, name, error);
 }
@@ -195,7 +196,7 @@ void AppleObjCRuntimeV1::ClassDescriptorV1::Initialize(
 
   m_valid = true;
 
-  Error error;
+  Status error;
 
   m_isa = process_sp->ReadPointerFromMemory(isa, error);
 
@@ -282,6 +283,10 @@ bool AppleObjCRuntimeV1::ClassDescriptorV1::Describe(
   return false;
 }
 
+lldb::addr_t AppleObjCRuntimeV1::GetTaggedPointerObfuscator() {
+  return 0;
+}
+
 lldb::addr_t AppleObjCRuntimeV1::GetISAHashTablePointer() {
   if (m_isa_hash_table_ptr == LLDB_INVALID_ADDRESS) {
     ModuleSP objc_module_sp(GetObjCModule());
@@ -301,7 +306,7 @@ lldb::addr_t AppleObjCRuntimeV1::GetISAHashTablePointer() {
             symbol->GetAddressRef().GetLoadAddress(&process->GetTarget());
 
         if (objc_debug_class_hash_addr != LLDB_INVALID_ADDRESS) {
-          Error error;
+          Status error;
           lldb::addr_t objc_debug_class_hash_ptr =
               process->ReadPointerFromMemory(objc_debug_class_hash_addr, error);
           if (objc_debug_class_hash_ptr != 0 &&
@@ -347,7 +352,7 @@ void AppleObjCRuntimeV1::UpdateISAToDescriptorMapIfNeeded() {
       //     const void *info;
       // } NXHashTable;
 
-      Error error;
+      Status error;
       DataBufferHeap buffer(1024, 0);
       if (process->ReadMemory(hash_table_ptr, buffer.GetBytes(), 20, error) ==
           20) {
@@ -381,8 +386,8 @@ void AppleObjCRuntimeV1::UpdateISAToDescriptorMapIfNeeded() {
 
               ObjCISA isa;
               if (bucket_isa_count == 1) {
-                // When we only have one entry in the bucket, the bucket data is
-                // the "isa"
+                // When we only have one entry in the bucket, the bucket data
+                // is the "isa"
                 isa = bucket_data;
                 if (isa) {
                   if (!ISAIsCached(isa)) {
@@ -400,8 +405,7 @@ void AppleObjCRuntimeV1::UpdateISAToDescriptorMapIfNeeded() {
                 }
               } else {
                 // When we have more than one entry in the bucket, the bucket
-                // data is a pointer
-                // to an array of "isa" values
+                // data is a pointer to an array of "isa" values
                 addr_t isa_addr = bucket_data;
                 for (uint32_t isa_idx = 0; isa_idx < bucket_isa_count;
                      ++isa_idx, isa_addr += addr_size) {
@@ -435,8 +439,5 @@ void AppleObjCRuntimeV1::UpdateISAToDescriptorMapIfNeeded() {
 }
 
 DeclVendor *AppleObjCRuntimeV1::GetDeclVendor() {
-  if (!m_decl_vendor_ap.get())
-    m_decl_vendor_ap.reset(new AppleObjCDeclVendor(*this));
-
-  return m_decl_vendor_ap.get();
+  return nullptr;
 }

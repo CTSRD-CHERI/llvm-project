@@ -2,8 +2,7 @@
 // RUN: %clangxx_asan -O1 %s -o %t && not %run %t 2>&1 | FileCheck %s --check-prefix=CHECK-%os --check-prefix=CHECK
 // RUN: %clangxx_asan -O2 %s -o %t && not %run %t 2>&1 | FileCheck %s --check-prefix=CHECK-%os --check-prefix=CHECK
 // RUN: %clangxx_asan -O3 %s -o %t && not %run %t 2>&1 | FileCheck %s --check-prefix=CHECK-%os --check-prefix=CHECK
-// XFAIL: arm-linux-gnueabi
-// XFAIL: armv7l-unknown-linux-gnueabihf
+// REQUIRES: stable-runtime
 
 #include <stdlib.h>
 int main() {
@@ -30,7 +29,7 @@ int main() {
 
   // CHECK-Darwin: {{    #0 0x.* in wrap_malloc.*}}
   // CHECK-Darwin: {{    #1 0x.* in main .*use-after-free.cc:}}[[@LINE-22]]
-  // CHECK: Shadow byte legend (one shadow byte represents 8 application bytes):
+  // CHECK: Shadow byte legend (one shadow byte represents {{[0-9]+}} application bytes):
   // CHECK: Global redzone:
   // CHECK: ASan internal:
 }

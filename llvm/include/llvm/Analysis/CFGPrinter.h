@@ -140,8 +140,7 @@ struct DOTGraphTraits<const Function*> : public DefaultDOTGraphTraits {
 
       std::string Str;
       raw_string_ostream OS(Str);
-      SwitchInst::ConstCaseIt Case =
-          SwitchInst::ConstCaseIt::fromSuccessorIndex(SI, SuccNo);
+      auto Case = *SwitchInst::ConstCaseIt::fromSuccessorIndex(SI, SuccNo);
       OS << Case.getCaseValue()->getValue();
       return OS.str();
     }
@@ -173,8 +172,7 @@ struct DOTGraphTraits<const Function*> : public DefaultDOTGraphTraits {
 
     // Prepend a 'W' to indicate that this is a weight rather than the actual
     // profile count (due to scaling).
-    Twine Attrs = "label=\"W:" + Twine(Weight->getZExtValue()) + "\"";
-    return Attrs.str();
+    return ("label=\"W:" + Twine(Weight->getZExtValue()) + "\"").str();
   }
 };
 } // End llvm namespace

@@ -30,7 +30,7 @@ class AddressBreakpointTestCase(TestBase):
 
     def address_breakpoints(self):
         """Test address breakpoints set with shared library of SBAddress work correctly."""
-        exe = os.path.join(os.getcwd(), "a.out")
+        exe = self.getBuildArtifact("a.out")
 
         # Create a target by the debugger.
         target = self.dbg.CreateTarget(exe)
@@ -40,7 +40,7 @@ class AddressBreakpointTestCase(TestBase):
         breakpoint = target.BreakpointCreateBySourceRegex(
             "Set a breakpoint here", lldb.SBFileSpec("main.c"))
         self.assertTrue(breakpoint and
-                        breakpoint.GetNumLocations() == 1,
+                        breakpoint.GetNumLocations() >= 1,
                         VALID_BREAKPOINT)
 
         # Get the breakpoint location from breakpoint after we verified that,

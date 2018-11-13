@@ -16,13 +16,8 @@
 #include "llvm/ADT/Triple.h"
 
 // Project includes
-#include "lldb/Core/ConstString.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectMemory.h"
@@ -33,6 +28,11 @@
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Status.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -223,11 +223,11 @@ size_t ABISysV_ppc::GetRedZoneSize() const { return 224; }
 //------------------------------------------------------------------
 
 ABISP
-ABISysV_ppc::CreateInstance(const ArchSpec &arch) {
+ABISysV_ppc::CreateInstance(lldb::ProcessSP process_sp, const ArchSpec &arch) {
   static ABISP g_abi_sp;
   if (arch.GetTriple().getArch() == llvm::Triple::ppc) {
     if (!g_abi_sp)
-      g_abi_sp.reset(new ABISysV_ppc);
+      g_abi_sp.reset(new ABISysV_ppc(process_sp));
     return g_abi_sp;
   }
   return ABISP();
@@ -282,7 +282,7 @@ bool ABISysV_ppc::PrepareTrivialCall(Thread &thread, addr_t sp,
 
   sp -= 8;
 
-  Error error;
+  Status error;
   const RegisterInfo *pc_reg_info =
       reg_ctx->GetRegisterInfo(eRegisterKindGeneric, LLDB_REGNUM_GENERIC_PC);
   const RegisterInfo *sp_reg_info =
@@ -290,47 +290,6 @@ bool ABISysV_ppc::PrepareTrivialCall(Thread &thread, addr_t sp,
   ProcessSP process_sp(thread.GetProcess());
 
   RegisterValue reg_value;
-
-#if 0
-    // This code adds an extra frame so that we don't lose the function that we came from
-    // by pushing the PC and the FP and then writing the current FP to point to the FP value
-    // we just pushed. It is disabled for now until the stack backtracing code can be debugged.
-
-    // Save current PC
-    const RegisterInfo *fp_reg_info = reg_ctx->GetRegisterInfo (eRegisterKindGeneric, LLDB_REGNUM_GENERIC_FP);
-    if (reg_ctx->ReadRegister(pc_reg_info, reg_value))
-    {
-        if (log)
-            log->Printf("Pushing the current PC onto the stack: 0x%" PRIx64 ": 0x%" PRIx64, (uint64_t)sp, reg_value.GetAsUInt64());
-
-        if (!process_sp->WritePointerToMemory(sp, reg_value.GetAsUInt64(), error))
-            return false;
-
-        sp -= 8;
-
-        // Save current FP
-        if (reg_ctx->ReadRegister(fp_reg_info, reg_value))
-        {
-            if (log)
-                log->Printf("Pushing the current FP onto the stack: 0x%" PRIx64 ": 0x%" PRIx64, (uint64_t)sp, reg_value.GetAsUInt64());
-
-            if (!process_sp->WritePointerToMemory(sp, reg_value.GetAsUInt64(), error))
-                return false;
-        }
-        // Setup FP backchain
-        reg_value.SetUInt64 (sp);
-
-        if (log)
-            log->Printf("Writing FP:  0x%" PRIx64 " (for FP backchain)", reg_value.GetAsUInt64());
-
-        if (!reg_ctx->WriteRegister(fp_reg_info, reg_value))
-        {
-            return false;
-        }
-
-        sp -= 8;
-    }
-#endif
 
   if (log)
     log->Printf("Pushing the return address onto the stack: 0x%" PRIx64
@@ -376,7 +335,7 @@ static bool ReadIntegerArgument(Scalar &scalar, unsigned int bit_width,
       scalar.SignExtend(bit_width);
   } else {
     uint32_t byte_size = (bit_width + (8 - 1)) / 8;
-    Error error;
+    Status error;
     if (thread.GetProcess()->ReadScalarIntegerFromMemory(
             current_stack_argument, byte_size, is_signed, scalar, error)) {
       current_stack_argument += byte_size;
@@ -443,8 +402,8 @@ bool ABISysV_ppc::GetArgumentValues(Thread &thread, ValueList &values) const {
     if (!value)
       return false;
 
-    // We currently only support extracting values with Clang QualTypes.
-    // Do we care about others?
+    // We currently only support extracting values with Clang QualTypes. Do we
+    // care about others?
     CompilerType compiler_type = value->GetCompilerType();
     if (!compiler_type)
       return false;
@@ -464,9 +423,9 @@ bool ABISysV_ppc::GetArgumentValues(Thread &thread, ValueList &values) const {
   return true;
 }
 
-Error ABISysV_ppc::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
-                                        lldb::ValueObjectSP &new_value_sp) {
-  Error error;
+Status ABISysV_ppc::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
+                                         lldb::ValueObjectSP &new_value_sp) {
+  Status error;
   if (!new_value_sp) {
     error.SetErrorString("Empty value object for return value.");
     return error;
@@ -492,7 +451,7 @@ Error ABISysV_ppc::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
     const RegisterInfo *reg_info = reg_ctx->GetRegisterInfoByName("r3", 0);
 
     DataExtractor data;
-    Error data_error;
+    Status data_error;
     size_t num_bytes = new_value_sp->GetData(data, data_error);
     if (data_error.Fail()) {
       error.SetErrorStringWithFormat(
@@ -518,7 +477,7 @@ Error ABISysV_ppc::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
       size_t bit_width = compiler_type.GetBitSize(frame_sp.get());
       if (bit_width <= 64) {
         DataExtractor data;
-        Error data_error;
+        Status data_error;
         size_t num_bytes = new_value_sp->GetData(data, data_error);
         if (data_error.Fail()) {
           error.SetErrorStringWithFormat(
@@ -542,8 +501,8 @@ Error ABISysV_ppc::SetReturnValueObject(lldb::StackFrameSP &frame_sp,
 
   if (!set_it_simple) {
     // Okay we've got a structure or something that doesn't fit in a simple
-    // register.
-    // We should figure out where it really goes, but we don't support this yet.
+    // register. We should figure out where it really goes, but we don't
+    // support this yet.
     error.SetErrorString("We only support setting simple integer and float "
                          "return types at present.");
   }
@@ -663,7 +622,7 @@ ValueObjectSP ABISysV_ppc::GetReturnValueObjectSimple(
             const ByteOrder byte_order = process_sp->GetByteOrder();
             RegisterValue reg_value;
             if (reg_ctx->ReadRegister(altivec_reg, reg_value)) {
-              Error error;
+              Status error;
               if (reg_value.GetAsMemoryData(
                       altivec_reg, heap_data_ap->GetBytes(),
                       heap_data_ap->GetByteSize(), byte_order, error)) {
@@ -776,10 +735,9 @@ ValueObjectSP ABISysV_ppc::GetReturnValueObjectImpl(
             copy_from_offset = integer_bytes - 8;
             integer_bytes += field_byte_width;
           } else {
-            // The last field didn't fit.  I can't see how that would happen w/o
-            // the overall size being
-            // greater than 16 bytes.  For now, return a nullptr return value
-            // object.
+            // The last field didn't fit.  I can't see how that would happen
+            // w/o the overall size being greater than 16 bytes.  For now,
+            // return a nullptr return value object.
             return return_valobj_sp;
           }
         } else if (field_compiler_type.IsFloatingPointType(count, is_complex)) {
@@ -792,10 +750,9 @@ ValueObjectSP ABISysV_ppc::GetReturnValueObjectImpl(
             fp_bytes += field_byte_width;
           } else if (field_bit_width == 32) {
             // This one is kind of complicated.  If we are in an "eightbyte"
-            // with another float, we'll
-            // be stuffed into an xmm register with it.  If we are in an
-            // "eightbyte" with one or more ints,
-            // then we will be stuffed into the appropriate GPR with them.
+            // with another float, we'll be stuffed into an xmm register with
+            // it.  If we are in an "eightbyte" with one or more ints, then we
+            // will be stuffed into the appropriate GPR with them.
             bool in_gpr;
             if (field_byte_offset % 8 == 0) {
               // We are at the beginning of one of the eightbytes, so check the
@@ -817,9 +774,9 @@ ValueObjectSP ABISysV_ppc::GetReturnValueObjectImpl(
                 }
               }
             } else if (field_byte_offset % 4 == 0) {
-              // We are inside of an eightbyte, so see if the field before us is
-              // floating point:
-              // This could happen if somebody put padding in the structure.
+              // We are inside of an eightbyte, so see if the field before us
+              // is floating point: This could happen if somebody put padding
+              // in the structure.
               if (idx == 0)
                 in_gpr = false;
               else {
@@ -860,9 +817,9 @@ ValueObjectSP ABISysV_ppc::GetReturnValueObjectImpl(
           }
         }
 
-        // These two tests are just sanity checks.  If I somehow get the
-        // type calculation wrong above it is better to just return nothing
-        // than to assert or crash.
+        // These two tests are just sanity checks.  If I somehow get the type
+        // calculation wrong above it is better to just return nothing than to
+        // assert or crash.
         if (!copy_from_extractor)
           return return_valobj_sp;
         if (copy_from_offset + field_byte_width >
@@ -886,9 +843,8 @@ ValueObjectSP ABISysV_ppc::GetReturnValueObjectImpl(
     // FIXME: This is just taking a guess, r3 may very well no longer hold the
     // return storage location.
     // If we are going to do this right, when we make a new frame we should
-    // check to see if it uses a memory
-    // return, and if we are at the first instruction and if so stash away the
-    // return location.  Then we would
+    // check to see if it uses a memory return, and if we are at the first
+    // instruction and if so stash away the return location.  Then we would
     // only return the memory return value if we know it is valid.
 
     if (is_memory) {
@@ -959,9 +915,9 @@ bool ABISysV_ppc::RegisterIsVolatile(const RegisterInfo *reg_info) {
 
 // See "Register Usage" in the
 // "System V Application Binary Interface"
-// "64-bit PowerPC ELF Application Binary Interface Supplement"
-// current version is 1.9 released 2004 at
-// http://refspecs.linuxfoundation.org/ELF/ppc/PPC-elf64abi-1.9.pdf
+// "64-bit PowerPC ELF Application Binary Interface Supplement" current version
+// is 1.9 released 2004 at http://refspecs.linuxfoundation.org/ELF/ppc/PPC-
+// elf64abi-1.9.pdf
 
 bool ABISysV_ppc::RegisterIsCalleeSaved(const RegisterInfo *reg_info) {
   if (reg_info) {

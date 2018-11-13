@@ -9,6 +9,7 @@
 
 #include "OrcCBindingsStack.h"
 #include "llvm-c/OrcBindings.h"
+#include "llvm/ExecutionEngine/JITEventListener.h"
 
 using namespace llvm;
 
@@ -17,12 +18,11 @@ LLVMOrcJITStackRef LLVMOrcCreateInstance(LLVMTargetMachineRef TM) {
 
   Triple T(TM2->getTargetTriple());
 
-  auto CompileCallbackMgr = orc::createLocalCompileCallbackManager(T, 0);
   auto IndirectStubsMgrBuilder =
       orc::createLocalIndirectStubsManagerBuilder(T);
 
-  OrcCBindingsStack *JITStack = new OrcCBindingsStack(
-      *TM2, std::move(CompileCallbackMgr), IndirectStubsMgrBuilder);
+  OrcCBindingsStack *JITStack =
+      new OrcCBindingsStack(*TM2, std::move(IndirectStubsMgrBuilder));
 
   return wrap(JITStack);
 }
@@ -42,58 +42,118 @@ void LLVMOrcGetMangledSymbol(LLVMOrcJITStackRef JITStack, char **MangledName,
 
 void LLVMOrcDisposeMangledSymbol(char *MangledName) { delete[] MangledName; }
 
-LLVMOrcTargetAddress
-LLVMOrcCreateLazyCompileCallback(LLVMOrcJITStackRef JITStack,
-                                 LLVMOrcLazyCompileCallbackFn Callback,
-                                 void *CallbackCtx) {
+LLVMErrorRef LLVMOrcCreateLazyCompileCallback(
+    LLVMOrcJITStackRef JITStack, LLVMOrcTargetAddress *RetAddr,
+    LLVMOrcLazyCompileCallbackFn Callback, void *CallbackCtx) {
   OrcCBindingsStack &J = *unwrap(JITStack);
-  return J.createLazyCompileCallback(Callback, CallbackCtx);
+  if (auto Addr = J.createLazyCompileCallback(Callback, CallbackCtx)) {
+    *RetAddr = *Addr;
+    return LLVMErrorSuccess;
+  } else
+    return wrap(Addr.takeError());
 }
 
-LLVMOrcErrorCode LLVMOrcCreateIndirectStub(LLVMOrcJITStackRef JITStack,
+LLVMErrorRef LLVMOrcCreateIndirectStub(LLVMOrcJITStackRef JITStack,
+                                       const char *StubName,
+                                       LLVMOrcTargetAddress InitAddr) {
+  OrcCBindingsStack &J = *unwrap(JITStack);
+  return wrap(J.createIndirectStub(StubName, InitAddr));
+}
+
+LLVMErrorRef LLVMOrcSetIndirectStubPointer(LLVMOrcJITStackRef JITStack,
                                            const char *StubName,
-                                           LLVMOrcTargetAddress InitAddr) {
+                                           LLVMOrcTargetAddress NewAddr) {
   OrcCBindingsStack &J = *unwrap(JITStack);
-  return J.createIndirectStub(StubName, InitAddr);
+  return wrap(J.setIndirectStubPointer(StubName, NewAddr));
 }
 
-LLVMOrcErrorCode LLVMOrcSetIndirectStubPointer(LLVMOrcJITStackRef JITStack,
-                                               const char *StubName,
-                                               LLVMOrcTargetAddress NewAddr) {
+LLVMErrorRef LLVMOrcAddEagerlyCompiledIR(LLVMOrcJITStackRef JITStack,
+                                         LLVMOrcModuleHandle *RetHandle,
+                                         LLVMModuleRef Mod,
+                                         LLVMOrcSymbolResolverFn SymbolResolver,
+                                         void *SymbolResolverCtx) {
   OrcCBindingsStack &J = *unwrap(JITStack);
-  return J.setIndirectStubPointer(StubName, NewAddr);
+  std::unique_ptr<Module> M(unwrap(Mod));
+  if (auto Handle =
+          J.addIRModuleEager(std::move(M), SymbolResolver, SymbolResolverCtx)) {
+    *RetHandle = *Handle;
+    return LLVMErrorSuccess;
+  } else
+    return wrap(Handle.takeError());
 }
 
-LLVMOrcModuleHandle
-LLVMOrcAddEagerlyCompiledIR(LLVMOrcJITStackRef JITStack, LLVMModuleRef Mod,
-                            LLVMOrcSymbolResolverFn SymbolResolver,
-                            void *SymbolResolverCtx) {
+LLVMErrorRef LLVMOrcAddLazilyCompiledIR(LLVMOrcJITStackRef JITStack,
+                                        LLVMOrcModuleHandle *RetHandle,
+                                        LLVMModuleRef Mod,
+                                        LLVMOrcSymbolResolverFn SymbolResolver,
+                                        void *SymbolResolverCtx) {
   OrcCBindingsStack &J = *unwrap(JITStack);
-  Module *M(unwrap(Mod));
-  return J.addIRModuleEager(M, SymbolResolver, SymbolResolverCtx);
+  std::unique_ptr<Module> M(unwrap(Mod));
+  if (auto Handle =
+          J.addIRModuleLazy(std::move(M), SymbolResolver, SymbolResolverCtx)) {
+    *RetHandle = *Handle;
+    return LLVMErrorSuccess;
+  } else
+    return wrap(Handle.takeError());
 }
 
-LLVMOrcModuleHandle
-LLVMOrcAddLazilyCompiledIR(LLVMOrcJITStackRef JITStack, LLVMModuleRef Mod,
-                           LLVMOrcSymbolResolverFn SymbolResolver,
-                           void *SymbolResolverCtx) {
+LLVMErrorRef LLVMOrcAddObjectFile(LLVMOrcJITStackRef JITStack,
+                                  LLVMOrcModuleHandle *RetHandle,
+                                  LLVMMemoryBufferRef Obj,
+                                  LLVMOrcSymbolResolverFn SymbolResolver,
+                                  void *SymbolResolverCtx) {
   OrcCBindingsStack &J = *unwrap(JITStack);
-  Module *M(unwrap(Mod));
-  return J.addIRModuleLazy(M, SymbolResolver, SymbolResolverCtx);
+  std::unique_ptr<MemoryBuffer> O(unwrap(Obj));
+  if (auto Handle =
+          J.addObject(std::move(O), SymbolResolver, SymbolResolverCtx)) {
+    *RetHandle = *Handle;
+    return LLVMErrorSuccess;
+  } else
+    return wrap(Handle.takeError());
 }
 
-void LLVMOrcRemoveModule(LLVMOrcJITStackRef JITStack, LLVMOrcModuleHandle H) {
+LLVMErrorRef LLVMOrcRemoveModule(LLVMOrcJITStackRef JITStack,
+                                 LLVMOrcModuleHandle H) {
   OrcCBindingsStack &J = *unwrap(JITStack);
-  J.removeModule(H);
+  return wrap(J.removeModule(H));
 }
 
-LLVMOrcTargetAddress LLVMOrcGetSymbolAddress(LLVMOrcJITStackRef JITStack,
-                                             const char *SymbolName) {
+LLVMErrorRef LLVMOrcGetSymbolAddress(LLVMOrcJITStackRef JITStack,
+                                     LLVMOrcTargetAddress *RetAddr,
+                                     const char *SymbolName) {
   OrcCBindingsStack &J = *unwrap(JITStack);
-  auto Sym = J.findSymbol(SymbolName, true);
-  return Sym.getAddress();
+  if (auto Addr = J.findSymbolAddress(SymbolName, true)) {
+    *RetAddr = *Addr;
+    return LLVMErrorSuccess;
+  } else
+    return wrap(Addr.takeError());
 }
 
-void LLVMOrcDisposeInstance(LLVMOrcJITStackRef JITStack) {
-  delete unwrap(JITStack);
+LLVMErrorRef LLVMOrcGetSymbolAddressIn(LLVMOrcJITStackRef JITStack,
+                                       LLVMOrcTargetAddress *RetAddr,
+                                       LLVMOrcModuleHandle H,
+                                       const char *SymbolName) {
+  OrcCBindingsStack &J = *unwrap(JITStack);
+  if (auto Addr = J.findSymbolAddressIn(H, SymbolName, true)) {
+    *RetAddr = *Addr;
+    return LLVMErrorSuccess;
+  } else
+    return wrap(Addr.takeError());
+}
+
+LLVMErrorRef LLVMOrcDisposeInstance(LLVMOrcJITStackRef JITStack) {
+  auto *J = unwrap(JITStack);
+  auto Err = J->shutdown();
+  delete J;
+  return wrap(std::move(Err));
+}
+
+void LLVMOrcRegisterJITEventListener(LLVMOrcJITStackRef JITStack, LLVMJITEventListenerRef L)
+{
+  unwrap(JITStack)->RegisterJITEventListener(unwrap(L));
+}
+
+void LLVMOrcUnregisterJITEventListener(LLVMOrcJITStackRef JITStack, LLVMJITEventListenerRef L)
+{
+  unwrap(JITStack)->UnregisterJITEventListener(unwrap(L));
 }

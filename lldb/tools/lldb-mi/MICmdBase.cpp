@@ -195,7 +195,7 @@ bool CMICmdBase::HasMIResultRecordExtra() const {
 // metadata
 //          object and set the command's error status.
 // Type:    Method.
-// Args:    rErrMsg - (R) Error description.
+// Args:    rErrMsg - (R) Status description.
 // Return:  None.
 // Throws:  None.
 //--
@@ -210,6 +210,64 @@ void CMICmdBase::SetError(const CMIUtilString &rErrMsg) {
       valueResult);
   m_miResultRecord = miResultRecord;
   m_cmdData.strMiCmdResultRecord = miResultRecord.GetString();
+}
+
+//++
+//------------------------------------------------------------------------------------
+// Details: Short cut function to check MI command's execute status and
+//          set an error in case of failure.
+// Type:    Method.
+// Args:    error - (R) Error description object.
+//          successHandler - (R) function describing actions to execute
+//          in case of success state of passed SBError object.
+//          errorHandler - (R) function describing actions to execute
+//          in case of fail status of passed SBError object.
+// Return:  bool.
+// Throws:  None.
+//--
+bool CMICmdBase::HandleSBError(const lldb::SBError &error,
+                               const std::function<bool()> &successHandler,
+                               const std::function<void()> &errorHandler) {
+  if (error.Success())
+    return successHandler();
+
+  SetError(error.GetCString());
+  errorHandler();
+  return MIstatus::failure;
+}
+
+//++
+//------------------------------------------------------------------------------------
+// Details: Short cut function to check MI command's execute status and
+//          call specified handler function for success case.
+// Type:    Method.
+// Args:    error - (R) Error description object.
+//          successHandler - (R) function describing actions to execute
+//          in case of success state of passed SBError object.
+// Return:  bool.
+// Throws:  None.
+//--
+bool CMICmdBase::HandleSBErrorWithSuccess(
+    const lldb::SBError &error,
+    const std::function<bool()> &successHandler) {
+  return HandleSBError(error, successHandler);
+}
+
+//++
+//------------------------------------------------------------------------------------
+// Details: Short cut function to check MI command's execute status and
+//          call specified handler function for error case.
+// Type:    Method.
+// Args:    error - (R) Error description object.
+//          errorHandler - (R) function describing actions to execute
+//          in case of fail status of passed SBError object.
+// Return:  bool.
+// Throws:  None.
+//--
+bool CMICmdBase::HandleSBErrorWithFailure(
+    const lldb::SBError &error,
+    const std::function<void()> &errorHandler) {
+  return HandleSBError(error, [] { return MIstatus::success; }, errorHandler);
 }
 
 //++

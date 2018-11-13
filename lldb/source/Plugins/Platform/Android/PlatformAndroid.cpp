@@ -7,27 +7,26 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-#include "Utility/UriParser.h"
-#include "lldb/Core/Log.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/Scalar.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/StringConvert.h"
+#include "lldb/Utility/Log.h"
+#include "lldb/Utility/Scalar.h"
+#include "lldb/Utility/UriParser.h"
 
 // Project includes
 #include "AdbClient.h"
 #include "PlatformAndroid.h"
 #include "PlatformAndroidRemoteGDBServer.h"
+#include "lldb/Target/Target.h"
 
 using namespace lldb;
 using namespace lldb_private;
 using namespace lldb_private::platform_android;
+using namespace std::chrono;
 
 static uint32_t g_initialize_count = 0;
 static const unsigned int g_android_default_cache_size =
@@ -84,9 +83,9 @@ PlatformSP PlatformAndroid::CreateInstance(bool force, const ArchSpec *arch) {
       break;
 
 #if defined(__ANDROID__)
-    // Only accept "unknown" for the vendor if the host is android and
-    // it "unknown" wasn't specified (it was just returned because it
-    // was NOT specified_
+    // Only accept "unknown" for the vendor if the host is android and if
+    // "unknown" wasn't specified (it was just returned because it was NOT
+    // specified).
     case llvm::Triple::VendorType::UnknownVendor:
       create = !arch->TripleVendorWasSpecified();
       break;
@@ -96,16 +95,16 @@ PlatformSP PlatformAndroid::CreateInstance(bool force, const ArchSpec *arch) {
     }
 
     if (create) {
-      switch (triple.getOS()) {
+      switch (triple.getEnvironment()) {
       case llvm::Triple::Android:
         break;
 
 #if defined(__ANDROID__)
-      // Only accept "unknown" for the OS if the host is android and
-      // it "unknown" wasn't specified (it was just returned because it
-      // was NOT specified)
-      case llvm::Triple::OSType::UnknownOS:
-        create = !arch->TripleOSWasSpecified();
+      // Only accept "unknown" for the OS if the host is android and it
+      // "unknown" wasn't specified (it was just returned because it was NOT
+      // specified)
+      case llvm::Triple::EnvironmentType::UnknownEnvironment:
+        create = !arch->TripleEnvironmentWasSpecified();
         break;
 #endif
       default:
@@ -156,12 +155,12 @@ ConstString PlatformAndroid::GetPluginName() {
   return GetPluginNameStatic(IsHost());
 }
 
-Error PlatformAndroid::ConnectRemote(Args &args) {
+Status PlatformAndroid::ConnectRemote(Args &args) {
   m_device_id.clear();
 
   if (IsHost()) {
-    return Error("can't connect to the host platform '%s', always connected",
-                 GetPluginName().GetCString());
+    return Status("can't connect to the host platform '%s', always connected",
+                  GetPluginName().GetCString());
   }
 
   if (!m_remote_platform_sp)
@@ -171,9 +170,9 @@ Error PlatformAndroid::ConnectRemote(Args &args) {
   llvm::StringRef scheme, host, path;
   const char *url = args.GetArgumentAtIndex(0);
   if (!url)
-    return Error("URL is null.");
+    return Status("URL is null.");
   if (!UriParser::Parse(url, scheme, host, port, path))
-    return Error("Invalid URL: %s", url);
+    return Status("Invalid URL: %s", url);
   if (host != "localhost")
     m_device_id = host;
 
@@ -189,18 +188,17 @@ Error PlatformAndroid::ConnectRemote(Args &args) {
   return error;
 }
 
-Error PlatformAndroid::GetFile(const FileSpec &source,
-                               const FileSpec &destination) {
+Status PlatformAndroid::GetFile(const FileSpec &source,
+                                const FileSpec &destination) {
   if (IsHost() || !m_remote_platform_sp)
     return PlatformLinux::GetFile(source, destination);
 
-  FileSpec source_spec(source.GetPath(false), false,
-                       FileSpec::ePathSyntaxPosix);
+  FileSpec source_spec(source.GetPath(false), false, FileSpec::Style::posix);
   if (source_spec.IsRelative())
     source_spec = GetRemoteWorkingDirectory().CopyByAppendingPathComponent(
         source_spec.GetCString(false));
 
-  Error error;
+  Status error;
   auto sync_service = GetSyncService(error);
   if (error.Fail())
     return error;
@@ -221,32 +219,32 @@ Error PlatformAndroid::GetFile(const FileSpec &source,
                 source_file);
 
   if (strchr(source_file, '\'') != nullptr)
-    return Error("Doesn't support single-quotes in filenames");
+    return Status("Doesn't support single-quotes in filenames");
 
-  // mode == 0 can signify that adbd cannot access the file
-  // due security constraints - try "cat ..." as a fallback.
+  // mode == 0 can signify that adbd cannot access the file due security
+  // constraints - try "cat ..." as a fallback.
   AdbClient adb(m_device_id);
 
   char cmd[PATH_MAX];
   snprintf(cmd, sizeof(cmd), "cat '%s'", source_file);
 
-  return adb.ShellToFile(cmd, 60000 /* ms */, destination);
+  return adb.ShellToFile(cmd, minutes(1), destination);
 }
 
-Error PlatformAndroid::PutFile(const FileSpec &source,
-                               const FileSpec &destination, uint32_t uid,
-                               uint32_t gid) {
+Status PlatformAndroid::PutFile(const FileSpec &source,
+                                const FileSpec &destination, uint32_t uid,
+                                uint32_t gid) {
   if (IsHost() || !m_remote_platform_sp)
     return PlatformLinux::PutFile(source, destination, uid, gid);
 
   FileSpec destination_spec(destination.GetPath(false), false,
-                            FileSpec::ePathSyntaxPosix);
+                            FileSpec::Style::posix);
   if (destination_spec.IsRelative())
     destination_spec = GetRemoteWorkingDirectory().CopyByAppendingPathComponent(
         destination_spec.GetCString(false));
 
   // TODO: Set correct uid and gid on remote file.
-  Error error;
+  Status error;
   auto sync_service = GetSyncService(error);
   if (error.Fail())
     return error;
@@ -255,18 +253,18 @@ Error PlatformAndroid::PutFile(const FileSpec &source,
 
 const char *PlatformAndroid::GetCacheHostname() { return m_device_id.c_str(); }
 
-Error PlatformAndroid::DownloadModuleSlice(const FileSpec &src_file_spec,
-                                           const uint64_t src_offset,
-                                           const uint64_t src_size,
-                                           const FileSpec &dst_file_spec) {
+Status PlatformAndroid::DownloadModuleSlice(const FileSpec &src_file_spec,
+                                            const uint64_t src_offset,
+                                            const uint64_t src_size,
+                                            const FileSpec &dst_file_spec) {
   if (src_offset != 0)
-    return Error("Invalid offset - %" PRIu64, src_offset);
+    return Status("Invalid offset - %" PRIu64, src_offset);
 
   return GetFile(src_file_spec, dst_file_spec);
 }
 
-Error PlatformAndroid::DisconnectRemote() {
-  Error error = PlatformLinux::DisconnectRemote();
+Status PlatformAndroid::DisconnectRemote() {
+  Status error = PlatformLinux::DisconnectRemote();
   if (error.Success()) {
     m_device_id.clear();
     m_sdk_version = 0;
@@ -287,8 +285,8 @@ uint32_t PlatformAndroid::GetSdkVersion() {
 
   std::string version_string;
   AdbClient adb(m_device_id);
-  Error error =
-      adb.Shell("getprop ro.build.version.sdk", 5000 /* ms */, &version_string);
+  Status error =
+      adb.Shell("getprop ro.build.version.sdk", seconds(5), &version_string);
   version_string = llvm::StringRef(version_string).trim().str();
 
   if (error.Fail() || version_string.empty()) {
@@ -303,42 +301,42 @@ uint32_t PlatformAndroid::GetSdkVersion() {
   return m_sdk_version;
 }
 
-Error PlatformAndroid::DownloadSymbolFile(const lldb::ModuleSP &module_sp,
-                                          const FileSpec &dst_file_spec) {
+Status PlatformAndroid::DownloadSymbolFile(const lldb::ModuleSP &module_sp,
+                                           const FileSpec &dst_file_spec) {
   // For oat file we can try to fetch additional debug info from the device
   ConstString extension = module_sp->GetFileSpec().GetFileNameExtension();
-  if (extension != ConstString("oat") && extension != ConstString("odex"))
-    return Error(
+  if (extension != ConstString(".oat") && extension != ConstString(".odex"))
+    return Status(
         "Symbol file downloading only supported for oat and odex files");
 
   // If we have no information about the platform file we can't execute oatdump
   if (!module_sp->GetPlatformFileSpec())
-    return Error("No platform file specified");
+    return Status("No platform file specified");
 
   // Symbolizer isn't available before SDK version 23
   if (GetSdkVersion() < 23)
-    return Error("Symbol file generation only supported on SDK 23+");
+    return Status("Symbol file generation only supported on SDK 23+");
 
   // If we already have symtab then we don't have to try and generate one
   if (module_sp->GetSectionList()->FindSectionByName(ConstString(".symtab")) !=
       nullptr)
-    return Error("Symtab already available in the module");
+    return Status("Symtab already available in the module");
 
   AdbClient adb(m_device_id);
   std::string tmpdir;
-  Error error = adb.Shell("mktemp --directory --tmpdir /data/local/tmp",
-                          5000 /* ms */, &tmpdir);
+  Status error = adb.Shell("mktemp --directory --tmpdir /data/local/tmp",
+                           seconds(5), &tmpdir);
   if (error.Fail() || tmpdir.empty())
-    return Error("Failed to generate temporary directory on the device (%s)",
-                 error.AsCString());
+    return Status("Failed to generate temporary directory on the device (%s)",
+                  error.AsCString());
   tmpdir = llvm::StringRef(tmpdir).trim().str();
 
   // Create file remover for the temporary directory created on the device
   std::unique_ptr<std::string, std::function<void(std::string *)>>
-  tmpdir_remover(&tmpdir, [this, &adb](std::string *s) {
+  tmpdir_remover(&tmpdir, [&adb](std::string *s) {
     StreamString command;
     command.Printf("rm -rf %s", s->c_str());
-    Error error = adb.Shell(command.GetData(), 5000 /* ms */, nullptr);
+    Status error = adb.Shell(command.GetData(), seconds(5), nullptr);
 
     Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_PLATFORM));
     if (log && error.Fail())
@@ -353,31 +351,46 @@ Error PlatformAndroid::DownloadSymbolFile(const lldb::ModuleSP &module_sp,
   command.Printf("oatdump --symbolize=%s --output=%s",
                  module_sp->GetPlatformFileSpec().GetCString(false),
                  symfile_platform_filespec.GetCString(false));
-  error = adb.Shell(command.GetData(), 60000 /* ms */, nullptr);
+  error = adb.Shell(command.GetData(), minutes(1), nullptr);
   if (error.Fail())
-    return Error("Oatdump failed: %s", error.AsCString());
+    return Status("Oatdump failed: %s", error.AsCString());
 
   // Download the symbolfile from the remote device
   return GetFile(symfile_platform_filespec, dst_file_spec);
 }
 
 bool PlatformAndroid::GetRemoteOSVersion() {
-  m_major_os_version = GetSdkVersion();
-  m_minor_os_version = 0;
-  m_update_os_version = 0;
-  return m_major_os_version != 0;
+  m_os_version = llvm::VersionTuple(GetSdkVersion());
+  return !m_os_version.empty();
 }
 
-const char *PlatformAndroid::GetLibdlFunctionDeclarations() const {
-  return R"(
+llvm::StringRef
+PlatformAndroid::GetLibdlFunctionDeclarations(lldb_private::Process *process) {
+  SymbolContextList matching_symbols;
+  std::vector<const char *> dl_open_names = { "__dl_dlopen", "dlopen" };
+  const char *dl_open_name = nullptr;
+  Target &target = process->GetTarget();
+  for (auto name: dl_open_names) {
+    if (target.GetImages().FindFunctionSymbols(ConstString(name),
+                                               eFunctionNameTypeFull,
+                                               matching_symbols)) {
+       dl_open_name = name;
+       break;
+    }
+  }
+  // Older platform versions have the dl function symbols mangled
+  if (dl_open_name == dl_open_names[0])
+    return R"(
               extern "C" void* dlopen(const char*, int) asm("__dl_dlopen");
               extern "C" void* dlsym(void*, const char*) asm("__dl_dlsym");
               extern "C" int   dlclose(void*) asm("__dl_dlclose");
               extern "C" char* dlerror(void) asm("__dl_dlerror");
              )";
+
+  return PlatformPOSIX::GetLibdlFunctionDeclarations(process);
 }
 
-AdbClient::SyncService *PlatformAndroid::GetSyncService(Error &error) {
+AdbClient::SyncService *PlatformAndroid::GetSyncService(Status &error) {
   if (m_adb_sync_svc && m_adb_sync_svc->IsConnected())
     return m_adb_sync_svc.get();
 

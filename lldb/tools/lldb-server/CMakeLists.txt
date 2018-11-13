@@ -17,37 +17,50 @@ endif ()
 if ( CMAKE_SYSTEM_NAME MATCHES "NetBSD" )
 include_directories(
   ../../../../llvm/include
+  ../../source/Plugins/Process/NetBSD
   ../../source/Plugins/Process/POSIX
   )
 endif ()
 
 include_directories(../../source)
 
-include(../../cmake/LLDBDependencies.cmake)
+set(LLDB_PLUGINS)
 
-add_lldb_executable(lldb-server INCLUDE_IN_FRAMEWORK
+if(CMAKE_SYSTEM_NAME MATCHES "Linux|Android")
+  list(APPEND LLDB_PLUGINS lldbPluginProcessLinux)
+endif()
+
+if(CMAKE_SYSTEM_NAME MATCHES "NetBSD")
+  list(APPEND LLDB_PLUGINS lldbPluginProcessNetBSD)
+endif()
+
+if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+  list(APPEND LLDB_PLUGINS lldbPluginObjectFileMachO)
+elseif(CMAKE_SYSTEM_NAME MATCHES "Windows")
+  list(APPEND LLDB_PLUGINS lldbPluginObjectFilePECOFF)
+else()
+  list(APPEND LLDB_PLUGINS lldbPluginObjectFileELF)
+endif()
+
+add_lldb_tool(lldb-server INCLUDE_IN_SUITE
     Acceptor.cpp
     lldb-gdbserver.cpp
     lldb-platform.cpp
     lldb-server.cpp
     LLDBServerUtilities.cpp
+    SystemInitializerLLGS.cpp
+
+    LINK_LIBS
+      lldbBase
+      lldbCore
+      lldbHost
+      lldbInitialization
+      lldbInterpreter
+      ${LLDB_PLUGINS}
+      ${LLDB_SYSTEM_LIBS}
+
+    LINK_COMPONENTS
+      Support
 )
 
-# The Darwin linker doesn't understand --start-group/--end-group.
-if (LLDB_LINKER_SUPPORTS_GROUPS)
-  target_link_libraries(lldb-server
-                        -Wl,--start-group ${LLDB_USED_LIBS} -Wl,--end-group)
-  target_link_libraries(lldb-server
-                        -Wl,--start-group ${CLANG_USED_LIBS} -Wl,--end-group)
-else()
-  target_link_libraries(lldb-server ${LLDB_USED_LIBS})
-  target_link_libraries(lldb-server ${CLANG_USED_LIBS})
-endif()
-llvm_config(lldb-server ${LLVM_LINK_COMPONENTS})
-
-target_link_libraries(lldb-server ${LLDB_SYSTEM_LIBS})
-
-set_target_properties(lldb-server PROPERTIES VERSION ${LLDB_VERSION})
-
-install(TARGETS lldb-server
-  RUNTIME DESTINATION bin)
+target_link_libraries(lldb-server PRIVATE ${LLDB_SYSTEM_LIBS})

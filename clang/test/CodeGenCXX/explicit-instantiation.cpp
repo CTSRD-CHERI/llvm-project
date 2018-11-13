@@ -1,9 +1,12 @@
 // RUN: %clang_cc1 -emit-llvm -triple i686-pc-linux-gnu -std=c++1y -o - %s | FileCheck %s --check-prefix=CHECK --check-prefix=CHECK-NO-OPT
-// RUN: %clang_cc1 -emit-llvm -triple i686-pc-linux-gnu -std=c++1y -O3 -disable-llvm-optzns -o - %s | FileCheck %s --check-prefix=CHECK --check-prefix=CHECK-OPT
+// RUN: %clang_cc1 -emit-llvm -triple i686-pc-linux-gnu -std=c++1y -O3 -disable-llvm-passes -o - %s | FileCheck %s --check-prefix=CHECK --check-prefix=CHECK-OPT
 // RUN: %clang_cc1 -emit-llvm -triple i686-pc-win32 -std=c++1y -o - %s | FileCheck %s --check-prefix=CHECK-MS
 
 // This check logically is attached to 'template int S<int>::i;' below.
 // CHECK: @_ZN1SIiE1iE = weak_odr global i32
+
+// This check is logically attached to 'template int ExportedStaticLocal::f<int>()' below.
+// CHECK-OPT: @_ZZN19ExportedStaticLocal1fIiEEvvE1i = linkonce_odr global
 
 template<typename T, typename U, typename Result>
 struct plus {
@@ -116,14 +119,14 @@ namespace NestedClasses {
   // definition of Inner.
   template struct Outer<int>;
   // CHECK: define weak_odr void @_ZN13NestedClasses5OuterIiE5Inner1fEv
-  // CHECK-MS: define weak_odr x86_thiscallcc void @"\01?f@Inner@?$Outer@H@NestedClasses@@QAEXXZ"
+  // CHECK-MS: define weak_odr dso_local x86_thiscallcc void @"?f@Inner@?$Outer@H@NestedClasses@@QAEXXZ"
 
   // Explicit instantiation declaration of Outer causes explicit instantiation
   // declaration of Inner, but not in MSVC mode.
   extern template struct Outer<char>;
   auto use = &Outer<char>::Inner::f;
   // CHECK: {{declare|define available_externally}} void @_ZN13NestedClasses5OuterIcE5Inner1fEv
-  // CHECK-MS: define linkonce_odr x86_thiscallcc void @"\01?f@Inner@?$Outer@D@NestedClasses@@QAEXXZ"
+  // CHECK-MS: define linkonce_odr dso_local x86_thiscallcc void @"?f@Inner@?$Outer@D@NestedClasses@@QAEXXZ"
 }
 
 // Check that we emit definitions from explicit instantiations even when they
@@ -153,3 +156,36 @@ template <typename T> void S<T>::f() {}
 template <typename T> void S<T>::g() {}
 template <typename T> int S<T>::i;
 template <typename T> void S<T>::S2::h() {}
+
+namespace ExportedStaticLocal {
+void sink(int&);
+template <typename T>
+inline void f() {
+  static int i;
+  sink(i);
+}
+// See the check line at the top of the file.
+extern template void f<int>();
+void use() {
+  f<int>();
+}
+}
+
+namespace DefaultedMembers {
+  struct B { B(); B(const B&); ~B(); };
+  template<typename T> struct A : B {
+    A() = default;
+    ~A() = default;
+  };
+  extern template struct A<int>;
+
+  // CHECK-LABEL: define {{.*}} @_ZN16DefaultedMembers1AIiEC2Ev
+  // CHECK-LABEL: define {{.*}} @_ZN16DefaultedMembers1AIiED2Ev
+  A<int> ai;
+
+  // CHECK-LABEL: define {{.*}} @_ZN16DefaultedMembers1AIiEC2ERKS1_
+  A<int> ai2(ai);
+
+  // CHECK-NOT: @_ZN16DefaultedMembers1AIcE
+  template struct A<char>;
+}

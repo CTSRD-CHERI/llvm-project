@@ -43,7 +43,8 @@ void StackTrace::Print() const {
       if (dedup_frames-- > 0) {
         if (dedup_token.length())
           dedup_token.append("--");
-        dedup_token.append(cur->info.function);
+        if (cur->info.function != nullptr)
+          dedup_token.append(cur->info.function);
       }
     }
     frames->ClearAll();
@@ -82,6 +83,21 @@ void BufferedStackTrace::Unwind(u32 max_depth, uptr pc, uptr bp, void *context,
   }
 }
 
+static int GetModuleAndOffsetForPc(uptr pc, char *module_name,
+                                   uptr module_name_len, uptr *pc_offset) {
+  const char *found_module_name = nullptr;
+  bool ok = Symbolizer::GetOrInit()->GetModuleNameAndOffsetForPC(
+      pc, &found_module_name, pc_offset);
+
+  if (!ok) return false;
+
+  if (module_name && module_name_len) {
+    internal_strncpy(module_name, found_module_name, module_name_len);
+    module_name[module_name_len - 1] = '\x00';
+  }
+  return true;
+}
+
 }  // namespace __sanitizer
 using namespace __sanitizer;
 
@@ -98,11 +114,25 @@ void __sanitizer_symbolize_pc(uptr pc, const char *fmt, char *out_buf,
     return;
   }
   InternalScopedString frame_desc(GetPageSizeCached());
-  RenderFrame(&frame_desc, fmt, 0, frame->info,
-              common_flags()->symbolize_vs_style,
-              common_flags()->strip_path_prefix);
-  internal_strncpy(out_buf, frame_desc.data(), out_buf_size);
-  out_buf[out_buf_size - 1] = 0;
+  uptr frame_num = 0;
+  // Reserve one byte for the final 0.
+  char *out_end = out_buf + out_buf_size - 1;
+  for (SymbolizedStack *cur = frame; cur && out_buf < out_end;
+       cur = cur->next) {
+    frame_desc.clear();
+    RenderFrame(&frame_desc, fmt, frame_num++, cur->info,
+                common_flags()->symbolize_vs_style,
+                common_flags()->strip_path_prefix);
+    if (!frame_desc.length())
+      continue;
+    // Reserve one byte for the terminating 0.
+    uptr n = out_end - out_buf - 1;
+    internal_strncpy(out_buf, frame_desc.data(), n);
+    out_buf += __sanitizer::Min<uptr>(n, frame_desc.length());
+    *out_buf++ = 0;
+  }
+  CHECK(out_buf <= out_end);
+  *out_buf = 0;
 }
 
 SANITIZER_INTERFACE_ATTRIBUTE
@@ -116,5 +146,12 @@ void __sanitizer_symbolize_global(uptr data_addr, const char *fmt,
   RenderData(&data_desc, fmt, &DI, common_flags()->strip_path_prefix);
   internal_strncpy(out_buf, data_desc.data(), out_buf_size);
   out_buf[out_buf_size - 1] = 0;
+}
+
+SANITIZER_INTERFACE_ATTRIBUTE
+int __sanitizer_get_module_and_offset_for_pc( // NOLINT
+    uptr pc, char *module_name, uptr module_name_len, uptr *pc_offset) {
+  return __sanitizer::GetModuleAndOffsetForPc(pc, module_name, module_name_len,
+                                              pc_offset);
 }
 }  // extern "C"

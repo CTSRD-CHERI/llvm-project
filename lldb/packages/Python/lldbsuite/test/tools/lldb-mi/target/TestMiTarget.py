@@ -17,6 +17,8 @@ class MiTargetTestCase(lldbmi_testcase.MiTestCaseBase):
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     @skipIfLinux  # cannot attach to process on linux
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
+    @skipIfDarwin
     def test_lldbmi_target_attach_wait_for(self):
         """Test that 'lldb-mi --interpreter' works for -target-attach -n <name> --waitfor."""
 
@@ -31,7 +33,7 @@ class MiTargetTestCase(lldbmi_testcase.MiTestCaseBase):
         # Load executable
         # FIXME: -file-exec-and-sybmols is not required for target attach, but
         # the test will not pass without this
-        self.runCmd("-file-exec-and-symbols %s" % exeName)
+        self.runCmd("-file-exec-and-symbols %s" % self.getBuildArtifact(exeName))
         self.expect("\^done")
 
         # Set up attach
@@ -39,7 +41,7 @@ class MiTargetTestCase(lldbmi_testcase.MiTestCaseBase):
         time.sleep(4)  # Give attach time to setup
 
         # Start target process
-        self.spawnSubprocess(os.path.join(os.path.dirname(__file__), exeName))
+        self.spawnSubprocess(self.getBuildArtifact(exeName))
         self.addTearDownHook(self.cleanupSubprocesses)
         self.expect("\^done")
 
@@ -59,6 +61,8 @@ class MiTargetTestCase(lldbmi_testcase.MiTestCaseBase):
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     @skipIfLinux  # cannot attach to process on linux
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
+    @skipIfDarwin
     def test_lldbmi_target_attach_name(self):
         """Test that 'lldb-mi --interpreter' works for -target-attach -n <name>."""
 
@@ -69,8 +73,7 @@ class MiTargetTestCase(lldbmi_testcase.MiTestCaseBase):
         self.addTearDownCleanup(dictionary=d)
 
         # Start target process
-        targetProcess = self.spawnSubprocess(
-            os.path.join(os.path.dirname(__file__), exeName))
+        targetProcess = self.spawnSubprocess(self.getBuildArtifact(exeName))
         self.addTearDownHook(self.cleanupSubprocesses)
 
         self.spawnLldbMi(args=None)
@@ -95,6 +98,8 @@ class MiTargetTestCase(lldbmi_testcase.MiTestCaseBase):
     @skipIfWindows  # llvm.org/pr24452: Get lldb-mi tests working on Windows
     @skipIfFreeBSD  # llvm.org/pr22411: Failure presumably due to known thread races
     @skipIfLinux  # cannot attach to process on linux
+    @skipIfRemote   # We do not currently support remote debugging via the MI.
+    @skipIfDarwin
     def test_lldbmi_target_attach_pid(self):
         """Test that 'lldb-mi --interpreter' works for -target-attach <pid>."""
 
@@ -106,7 +111,7 @@ class MiTargetTestCase(lldbmi_testcase.MiTestCaseBase):
 
         # Start target process
         targetProcess = self.spawnSubprocess(
-            os.path.join(os.path.dirname(__file__), exeName))
+            self.getBuildArtifact(exeName))
         self.addTearDownHook(self.cleanupSubprocesses)
 
         self.spawnLldbMi(args=None)

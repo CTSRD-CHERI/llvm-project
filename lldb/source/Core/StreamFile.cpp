@@ -9,12 +9,7 @@
 
 #include "lldb/Core/StreamFile.h"
 
-// C Includes
 #include <stdio.h>
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
-#include "lldb/Core/Error.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -46,7 +41,7 @@ StreamFile::~StreamFile() {}
 
 void StreamFile::Flush() { m_file.Flush(); }
 
-size_t StreamFile::Write(const void *s, size_t length) {
+size_t StreamFile::WriteImpl(const void *s, size_t length) {
   m_file.Write(s, length);
   return length;
 }

@@ -24,9 +24,9 @@ namespace lldb_private {
 
 class OptionGroupBoolean : public OptionGroup {
 public:
-  // When 'no_argument_toggle_default' is true, then setting the option
-  // value does NOT require an argument, it sets the boolean value to the
-  // inverse of the default value
+  // When 'no_argument_toggle_default' is true, then setting the option value
+  // does NOT require an argument, it sets the boolean value to the inverse of
+  // the default value
   OptionGroupBoolean(uint32_t usage_mask, bool required,
                      const char *long_option, int short_option,
                      const char *usage_text, bool default_value,
@@ -38,9 +38,9 @@ public:
     return llvm::ArrayRef<OptionDefinition>(&m_option_definition, 1);
   }
 
-  Error SetOptionValue(uint32_t option_idx, llvm::StringRef option_value,
-                       ExecutionContext *execution_context) override;
-  Error SetOptionValue(uint32_t, const char *, ExecutionContext *) = delete;
+  Status SetOptionValue(uint32_t option_idx, llvm::StringRef option_value,
+                        ExecutionContext *execution_context) override;
+  Status SetOptionValue(uint32_t, const char *, ExecutionContext *) = delete;
 
   void OptionParsingStarting(ExecutionContext *execution_context) override;
 

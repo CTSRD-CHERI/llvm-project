@@ -7,9 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/DebugInfo/PDB/PDBSymbol.h"
 #include "llvm/DebugInfo/PDB/DIA/DIAEnumLineNumbers.h"
 #include "llvm/DebugInfo/PDB/DIA/DIALineNumber.h"
+#include "llvm/DebugInfo/PDB/PDBSymbol.h"
 
 using namespace llvm;
 using namespace llvm::pdb;
@@ -42,10 +42,3 @@ std::unique_ptr<IPDBLineNumber> DIAEnumLineNumbers::getNext() {
 }
 
 void DIAEnumLineNumbers::reset() { Enumerator->Reset(); }
-
-DIAEnumLineNumbers *DIAEnumLineNumbers::clone() const {
-  CComPtr<IDiaEnumLineNumbers> EnumeratorClone;
-  if (S_OK != Enumerator->Clone(&EnumeratorClone))
-    return nullptr;
-  return new DIAEnumLineNumbers(EnumeratorClone);
-}

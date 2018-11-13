@@ -19,11 +19,13 @@
 
 #include "gtest/gtest.h"
 
-#include "lldb/Core/Error.h"
-#include "lldb/Core/StringList.h"
 #include "lldb/Host/Editline.h"
 #include "lldb/Host/Pipe.h"
-#include "lldb/Utility/PseudoTerminal.h"
+#include "lldb/Host/PseudoTerminal.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StringList.h"
+
+using namespace lldb_private;
 
 namespace {
 const size_t TIMEOUT_MILLIS = 5000;
@@ -81,7 +83,7 @@ private:
 
   std::unique_ptr<lldb_private::Editline> _editline_sp;
 
-  lldb_utility::PseudoTerminal _pty;
+  PseudoTerminal _pty;
   int _pty_master_fd;
   int _pty_slave_fd;
 
@@ -91,7 +93,7 @@ private:
 EditlineAdapter::EditlineAdapter()
     : _editline_sp(), _pty(), _pty_master_fd(-1), _pty_slave_fd(-1),
       _el_slave_file() {
-  lldb_private::Error error;
+  lldb_private::Status error;
 
   // Open the first master pty available.
   char error_string[256];

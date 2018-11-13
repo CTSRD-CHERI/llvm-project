@@ -71,9 +71,8 @@ class PCHContainerGenerator : public ASTConsumer {
     }
 
     bool VisitImportDecl(ImportDecl *D) {
-      auto *Import = cast<ImportDecl>(D);
-      if (!Import->getImportedOwningModule())
-        DI.EmitImportDecl(*Import);
+      if (!D->getImportedOwningModule())
+        DI.EmitImportDecl(*D);
       return true;
     }
 
@@ -152,6 +151,9 @@ public:
     CodeGenOpts.CodeModel = "default";
     CodeGenOpts.ThreadModel = "single";
     CodeGenOpts.DebugTypeExtRefs = true;
+    // When building a module MainFileName is the name of the modulemap file.
+    CodeGenOpts.MainFileName =
+        LangOpts.CurrentModule.empty() ? MainFileName : LangOpts.CurrentModule;
     CodeGenOpts.setDebugInfo(codegenoptions::FullDebugInfo);
     CodeGenOpts.setDebuggerTuning(CI.getCodeGenOpts().getDebuggerTuning());
   }
@@ -171,7 +173,8 @@ public:
     // Prepare CGDebugInfo to emit debug info for a clang module.
     auto *DI = Builder->getModuleDebugInfo();
     StringRef ModuleName = llvm::sys::path::filename(MainFileName);
-    DI->setPCHDescriptor({ModuleName, "", OutputFileName, ~1ULL});
+    DI->setPCHDescriptor({ModuleName, "", OutputFileName,
+                          ASTFileSignature{{{~0U, ~0U, ~0U, ~0U, ~1U}}}});
     DI->setModuleMap(MMap);
   }
 
@@ -225,6 +228,11 @@ public:
       Builder->getModuleDebugInfo()->completeRequiredType(RD);
   }
 
+  void HandleImplicitImportDecl(ImportDecl *D) override {
+    if (!D->getImportedOwningModule())
+      Builder->getModuleDebugInfo()->EmitImportDecl(*D);
+  }
+
   /// Emit a container holding the serialized AST.
   void HandleTranslationUnit(ASTContext &Ctx) override {
     assert(M && VMContext && Builder);
@@ -241,7 +249,11 @@ public:
 
     // PCH files don't have a signature field in the control block,
     // but LLVM detects DWO CUs by looking for a non-zero DWO id.
-    uint64_t Signature = Buffer->Signature ? Buffer->Signature : ~1ULL;
+    // We use the lower 64 bits for debug info.
+    uint64_t Signature =
+        Buffer->Signature
+            ? (uint64_t)Buffer->Signature[1] << 32 | Buffer->Signature[0]
+            : ~1ULL;
     Builder->getModuleDebugInfo()->setDwoId(Signature);
 
     // Finalize the Builder.
@@ -278,11 +290,11 @@ public:
     else
       ASTSym->setSection("__clangast");
 
-    DEBUG({
+    LLVM_DEBUG({
       // Print the IR for the PCH container to the debug output.
       llvm::SmallString<0> Buffer;
       clang::EmitBackendOutput(
-          Diags, CodeGenOpts, TargetOpts, LangOpts,
+          Diags, HeaderSearchOpts, CodeGenOpts, TargetOpts, LangOpts,
           Ctx.getTargetInfo().getDataLayout(), M.get(),
           BackendAction::Backend_EmitLL,
           llvm::make_unique<llvm::raw_svector_ostream>(Buffer));
@@ -290,9 +302,10 @@ public:
     });
 
     // Use the LLVM backend to emit the pch container.
-    clang::EmitBackendOutput(Diags, CodeGenOpts, TargetOpts, LangOpts,
-                             Ctx.getTargetInfo().getDataLayout(), M.get(),
-                             BackendAction::Backend_EmitObj, std::move(OS));
+    clang::EmitBackendOutput(Diags, HeaderSearchOpts, CodeGenOpts, TargetOpts,
+                             LangOpts, Ctx.getTargetInfo().getDataLayout(),
+                             M.get(), BackendAction::Backend_EmitObj,
+                             std::move(OS));
 
     // Free the memory for the temporary buffer.
     llvm::SmallVector<char, 0> Empty;

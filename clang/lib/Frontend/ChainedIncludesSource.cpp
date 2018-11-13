@@ -83,7 +83,7 @@ createASTReader(CompilerInstance &CI, StringRef pchFile,
                 ASTDeserializationListener *deserialListener = nullptr) {
   Preprocessor &PP = CI.getPreprocessor();
   std::unique_ptr<ASTReader> Reader;
-  Reader.reset(new ASTReader(PP, CI.getASTContext(),
+  Reader.reset(new ASTReader(PP, &CI.getASTContext(),
                              CI.getPCHContainerReader(),
                              /*Extensions=*/{ },
                              /*isysroot=*/"", /*DisableValidation=*/true));
@@ -126,7 +126,7 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
     bool firstInclude = (i == 0);
     std::unique_ptr<CompilerInvocation> CInvok;
     CInvok.reset(new CompilerInvocation(CI.getInvocation()));
-    
+
     CInvok->getPreprocessorOpts().ChainedIncludes.clear();
     CInvok->getPreprocessorOpts().ImplicitPCHInclude.clear();
     CInvok->getPreprocessorOpts().ImplicitPTHInclude.clear();
@@ -134,7 +134,7 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
     CInvok->getPreprocessorOpts().Includes.clear();
     CInvok->getPreprocessorOpts().MacroIncludes.clear();
     CInvok->getPreprocessorOpts().Macros.clear();
-    
+
     CInvok->getFrontendOpts().Inputs.clear();
     FrontendInputFile InputFile(includes[i], IK);
     CInvok->getFrontendOpts().Inputs.push_back(InputFile);
@@ -147,7 +147,7 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
 
     std::unique_ptr<CompilerInstance> Clang(
         new CompilerInstance(CI.getPCHContainerOperations()));
-    Clang->setInvocation(CInvok.release());
+    Clang->setInvocation(std::move(CInvok));
     Clang->setDiagnostics(Diags.get());
     Clang->setTarget(TargetInfo::CreateTargetInfo(
         Clang->getDiagnostics(), Clang->getInvocation().TargetOpts));
@@ -159,7 +159,7 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
     Clang->createASTContext();
 
     auto Buffer = std::make_shared<PCHBuffer>();
-    ArrayRef<llvm::IntrusiveRefCntPtr<ModuleFileExtension>> Extensions;
+    ArrayRef<std::shared_ptr<ModuleFileExtension>> Extensions;
     auto consumer = llvm::make_unique<PCHGenerator>(
         Clang->getPreprocessor(), "-", /*isysroot=*/"", Buffer,
         Extensions, /*AllowASTWithErrors=*/true);
@@ -193,7 +193,7 @@ IntrusiveRefCntPtr<ExternalSemaSource> clang::createChainedIncludesSource(
       Clang->setModuleManager(Reader);
       Clang->getASTContext().setExternalSource(Reader);
     }
-    
+
     if (!Clang->InitializeSourceManager(InputFile))
       return nullptr;
 

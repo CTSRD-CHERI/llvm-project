@@ -12,14 +12,14 @@
 // C Includes
 // C++ Includes
 // Other libraries and framework includes
-#include "lldb/Core/DataBufferHeap.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/RegisterValue.h"
-#include "lldb/Core/Scalar.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Target/Thread.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Scalar.h"
+#include "lldb/Utility/StreamString.h"
 // Project includes
-#include "Utility/StringExtractorGDBRemote.h"
+#include "lldb/Utility/StringExtractorGDBRemote.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -120,7 +120,7 @@ bool RegisterContextMacOSXFrameBackchain::ReadRegister(
 // the same bytes size as "double"
 #if !defined(__arm__) && !defined(__arm64__) && !defined(__aarch64__) &&       \
     !defined(_MSC_VER) && !defined(__mips__) && !defined(__powerpc__) &&       \
-    !defined(__ANDROID_NDK__)
+    !defined(__ANDROID__)
     case sizeof(long double):
       if (sizeof(long double) == sizeof(uint32_t)) {
         value.SetUInt32(reg_value, RegisterValue::eTypeLongDouble);
@@ -139,8 +139,8 @@ bool RegisterContextMacOSXFrameBackchain::ReadRegister(
 
 bool RegisterContextMacOSXFrameBackchain::WriteRegister(
     const RegisterInfo *reg_info, const RegisterValue &value) {
-  // Not supported yet. We could easily add support for this by remembering
-  // the address of each entry (it would need to be part of the cursor)
+  // Not supported yet. We could easily add support for this by remembering the
+  // address of each entry (it would need to be part of the cursor)
   return false;
 }
 
@@ -154,10 +154,10 @@ bool RegisterContextMacOSXFrameBackchain::ReadAllRegisterValues(
 
 bool RegisterContextMacOSXFrameBackchain::WriteAllRegisterValues(
     const lldb::DataBufferSP &data_sp) {
-  // Since this class doesn't respond to "ReadAllRegisterValues()", it must
-  // not have been the one that saved all the register values. So we just let
-  // the thread's register context (the register context for frame zero) do
-  // the writing.
+  // Since this class doesn't respond to "ReadAllRegisterValues()", it must not
+  // have been the one that saved all the register values. So we just let the
+  // thread's register context (the register context for frame zero) do the
+  // writing.
   return m_thread.GetRegisterContext()->WriteAllRegisterValues(data_sp);
 }
 

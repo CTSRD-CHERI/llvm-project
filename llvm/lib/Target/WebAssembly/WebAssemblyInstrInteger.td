@@ -8,9 +8,43 @@
 //===----------------------------------------------------------------------===//
 ///
 /// \file
-/// \brief WebAssembly Integer operand code-gen constructs.
+/// WebAssembly Integer operand code-gen constructs.
 ///
 //===----------------------------------------------------------------------===//
+
+multiclass UnaryInt<SDNode node, string name, bits<32> i32Inst,
+                    bits<32> i64Inst> {
+  defm _I32 : I<(outs I32:$dst), (ins I32:$src), (outs), (ins),
+                [(set I32:$dst, (node I32:$src))],
+                !strconcat("i32.", !strconcat(name, "\t$dst, $src")),
+                !strconcat("i32.", name), i32Inst>;
+  defm _I64 : I<(outs I64:$dst), (ins I64:$src), (outs), (ins),
+                [(set I64:$dst, (node I64:$src))],
+                !strconcat("i64.", !strconcat(name, "\t$dst, $src")),
+                !strconcat("i64.", name), i64Inst>;
+}
+multiclass BinaryInt<SDNode node, string name, bits<32> i32Inst,
+                     bits<32> i64Inst> {
+  defm _I32 : I<(outs I32:$dst), (ins I32:$lhs, I32:$rhs), (outs), (ins),
+                [(set I32:$dst, (node I32:$lhs, I32:$rhs))],
+                !strconcat("i32.", !strconcat(name, "\t$dst, $lhs, $rhs")),
+                !strconcat("i32.", name), i32Inst>;
+  defm _I64 : I<(outs I64:$dst), (ins I64:$lhs, I64:$rhs), (outs), (ins),
+                [(set I64:$dst, (node I64:$lhs, I64:$rhs))],
+                !strconcat("i64.", !strconcat(name, "\t$dst, $lhs, $rhs")),
+                !strconcat("i64.", name), i64Inst>;
+}
+multiclass ComparisonInt<CondCode cond, string name, bits<32> i32Inst, bits<32> i64Inst> {
+  defm _I32 : I<(outs I32:$dst), (ins I32:$lhs, I32:$rhs), (outs), (ins),
+                [(set I32:$dst, (setcc I32:$lhs, I32:$rhs, cond))],
+                !strconcat("i32.", !strconcat(name, "\t$dst, $lhs, $rhs")),
+                !strconcat("i32.", name), i32Inst>;
+  defm _I64 : I<(outs I32:$dst), (ins I64:$lhs, I64:$rhs), (outs), (ins),
+                [(set I32:$dst, (setcc I64:$lhs, I64:$rhs, cond))],
+                !strconcat("i64.", !strconcat(name, "\t$dst, $lhs, $rhs")),
+                !strconcat("i64.", name), i64Inst>;
+}
+
 
 let Defs = [ARGUMENTS] in {
 
@@ -37,11 +71,11 @@ defm SHL : BinaryInt<shl, "shl ", 0x74, 0x86>;
 defm SHR_S : BinaryInt<sra, "shr_s", 0x75, 0x87>;
 defm SHR_U : BinaryInt<srl, "shr_u", 0x76, 0x88>;
 defm ROTL : BinaryInt<rotl, "rotl", 0x77, 0x89>;
-defm ROTR : BinaryInt<rotr, "rotr", 0x78, 0x90>;
+defm ROTR : BinaryInt<rotr, "rotr", 0x78, 0x8a>;
 
 let isCommutable = 1 in {
-defm EQ : ComparisonInt<SETEQ, "eq  ", 0x46, 0x68>;
-defm NE : ComparisonInt<SETNE, "ne  ", 0x47, 0x69>;
+defm EQ : ComparisonInt<SETEQ, "eq  ", 0x46, 0x51>;
+defm NE : ComparisonInt<SETNE, "ne  ", 0x47, 0x52>;
 } // isCommutable = 1
 defm LT_S : ComparisonInt<SETLT,  "lt_s", 0x48, 0x53>;
 defm LT_U : ComparisonInt<SETULT, "lt_u", 0x49, 0x54>;
@@ -56,12 +90,12 @@ defm CLZ : UnaryInt<ctlz, "clz ", 0x67, 0x79>;
 defm CTZ : UnaryInt<cttz, "ctz ", 0x68, 0x7a>;
 defm POPCNT : UnaryInt<ctpop, "popcnt", 0x69, 0x7b>;
 
-def EQZ_I32 : I<(outs I32:$dst), (ins I32:$src),
-                [(set I32:$dst, (setcc I32:$src, 0, SETEQ))],
-                "i32.eqz \t$dst, $src", 0x45>;
-def EQZ_I64 : I<(outs I32:$dst), (ins I64:$src),
-                [(set I32:$dst, (setcc I64:$src, 0, SETEQ))],
-                "i64.eqz \t$dst, $src", 0x50>;
+defm EQZ_I32 : I<(outs I32:$dst), (ins I32:$src), (outs), (ins),
+                 [(set I32:$dst, (setcc I32:$src, 0, SETEQ))],
+                 "i32.eqz \t$dst, $src", "i32.eqz", 0x45>;
+defm EQZ_I64 : I<(outs I32:$dst), (ins I64:$src), (outs), (ins),
+                 [(set I32:$dst, (setcc I64:$src, 0, SETEQ))],
+                 "i64.eqz \t$dst, $src", "i64.eqz", 0x50>;
 
 } // Defs = [ARGUMENTS]
 
@@ -73,12 +107,14 @@ def : Pat<(rotr I64:$lhs, (and I64:$rhs, 63)), (ROTR_I64 I64:$lhs, I64:$rhs)>;
 
 let Defs = [ARGUMENTS] in {
 
-def SELECT_I32 : I<(outs I32:$dst), (ins I32:$lhs, I32:$rhs, I32:$cond),
-                   [(set I32:$dst, (select I32:$cond, I32:$lhs, I32:$rhs))],
-                   "i32.select\t$dst, $lhs, $rhs, $cond", 0x1b>;
-def SELECT_I64 : I<(outs I64:$dst), (ins I64:$lhs, I64:$rhs, I32:$cond),
-                   [(set I64:$dst, (select I32:$cond, I64:$lhs, I64:$rhs))],
-                   "i64.select\t$dst, $lhs, $rhs, $cond", 0x1b>;
+defm SELECT_I32 : I<(outs I32:$dst), (ins I32:$lhs, I32:$rhs, I32:$cond),
+                    (outs), (ins),
+                    [(set I32:$dst, (select I32:$cond, I32:$lhs, I32:$rhs))],
+                    "i32.select\t$dst, $lhs, $rhs, $cond", "i32.select", 0x1b>;
+defm SELECT_I64 : I<(outs I64:$dst), (ins I64:$lhs, I64:$rhs, I32:$cond),
+                    (outs), (ins),
+                    [(set I64:$dst, (select I32:$cond, I64:$lhs, I64:$rhs))],
+                    "i64.select\t$dst, $lhs, $rhs, $cond", "i64.select", 0x1b>;
 
 } // Defs = [ARGUMENTS]
 

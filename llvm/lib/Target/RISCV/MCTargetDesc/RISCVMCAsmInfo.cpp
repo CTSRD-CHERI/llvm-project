@@ -18,8 +18,10 @@ using namespace llvm;
 void RISCVMCAsmInfo::anchor() {}
 
 RISCVMCAsmInfo::RISCVMCAsmInfo(const Triple &TT) {
-  PointerSize = CalleeSaveStackSlotSize = TT.isArch64Bit() ? 8 : 4;
+  CodePointerSize = CalleeSaveStackSlotSize = TT.isArch64Bit() ? 8 : 4;
   CommentString = "#";
   AlignmentIsInBytes = false;
   SupportsDebugInformation = true;
+  Data16bitsDirective = "\t.half\t";
+  Data32bitsDirective = "\t.word\t";
 }

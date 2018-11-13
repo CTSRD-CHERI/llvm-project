@@ -22,7 +22,8 @@
 #include "LanaiTargetMachine.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/BasicTTIImpl.h"
-#include "llvm/Target/TargetLowering.h"
+#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/Support/MathExtras.h"
 
 namespace llvm {
 class LanaiTTIImpl : public BasicTTIImplBase<LanaiTTIImpl> {
@@ -49,12 +50,39 @@ public:
     return TTI::PSK_Software;
   }
 
+  int getIntImmCost(const APInt &Imm, Type *Ty) {
+    assert(Ty->isIntegerTy());
+    if (Imm == 0)
+      return TTI::TCC_Free;
+    if (isInt<16>(Imm.getSExtValue()))
+      return TTI::TCC_Basic;
+    if (isInt<21>(Imm.getZExtValue()))
+      return TTI::TCC_Basic;
+    if (isInt<32>(Imm.getSExtValue())) {
+      if ((Imm.getSExtValue() & 0xFFFF) == 0)
+        return TTI::TCC_Basic;
+      return 2 * TTI::TCC_Basic;
+    }
+
+    return 4 * TTI::TCC_Basic;
+  }
+
+  int getIntImmCost(unsigned Opc, unsigned Idx, const APInt &Imm, Type *Ty) {
+    return getIntImmCost(Imm, Ty);
+  }
+
+  int getIntImmCost(Intrinsic::ID IID, unsigned Idx, const APInt &Imm,
+                    Type *Ty) {
+    return getIntImmCost(Imm, Ty);
+  }
+
   unsigned getArithmeticInstrCost(
       unsigned Opcode, Type *Ty,
       TTI::OperandValueKind Opd1Info = TTI::OK_AnyValue,
       TTI::OperandValueKind Opd2Info = TTI::OK_AnyValue,
       TTI::OperandValueProperties Opd1PropInfo = TTI::OP_None,
-      TTI::OperandValueProperties Opd2PropInfo = TTI::OP_None) {
+      TTI::OperandValueProperties Opd2PropInfo = TTI::OP_None,
+      ArrayRef<const Value *> Args = ArrayRef<const Value *>()) {
     int ISD = TLI->InstructionOpcodeToISD(Opcode);
 
     switch (ISD) {

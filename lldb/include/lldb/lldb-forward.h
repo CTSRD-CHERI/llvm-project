@@ -38,6 +38,8 @@ class BreakpointList;
 class BreakpointLocation;
 class BreakpointLocationCollection;
 class BreakpointLocationList;
+class BreakpointName;
+class BreakpointOptionGroup;
 class BreakpointOptions;
 class BreakpointResolver;
 class BreakpointSite;
@@ -74,6 +76,7 @@ class ConnectionFileDescriptor;
 class ConstString;
 class CXXSyntheticChildren;
 class DWARFCallFrameInfo;
+class DWARFDataExtractor;
 class DWARFExpression;
 class DataBuffer;
 class DataEncoder;
@@ -87,7 +90,7 @@ class DynamicCheckerFunctions;
 class DynamicLoader;
 class Editline;
 class EmulateInstruction;
-class Error;
+class Status;
 class EvaluateExpressionOptions;
 class Event;
 class EventData;
@@ -127,7 +130,6 @@ class MemoryRegionInfo;
 class LineTable;
 class Listener;
 class Log;
-class LogChannel;
 class Mangled;
 class Materializer;
 class MemoryHistory;
@@ -189,6 +191,7 @@ class RegisterLocationList;
 class RegisterValue;
 class RegularExpression;
 class REPL;
+class RichManglingContext;
 class Scalar;
 class ScriptInterpreter;
 class ScriptInterpreterLocker;
@@ -216,6 +219,7 @@ class StreamFile;
 class StreamString;
 class StringList;
 struct StringSummaryFormat;
+class StructuredDataImpl;
 class StructuredDataPlugin;
 class SystemRuntime;
 class TypeSummaryImpl;
@@ -255,6 +259,7 @@ class ThreadPlanStepRange;
 class ThreadPlanStepThrough;
 class ThreadPlanTracer;
 class ThreadSpec;
+class TraceOptions;
 class Type;
 class TypeAndOrName;
 class TypeCategoryMap;
@@ -362,7 +367,6 @@ typedef std::unique_ptr<lldb_private::SystemRuntime> SystemRuntimeUP;
 typedef std::shared_ptr<lldb_private::LineTable> LineTableSP;
 typedef std::shared_ptr<lldb_private::Listener> ListenerSP;
 typedef std::weak_ptr<lldb_private::Listener> ListenerWP;
-typedef std::shared_ptr<lldb_private::LogChannel> LogChannelSP;
 typedef std::shared_ptr<lldb_private::MemoryHistory> MemoryHistorySP;
 typedef std::shared_ptr<lldb_private::MemoryRegionInfo> MemoryRegionInfoSP;
 typedef std::unique_ptr<lldb_private::MemoryRegionInfo> MemoryRegionInfoUP;
@@ -432,6 +436,7 @@ typedef std::weak_ptr<lldb_private::Stream> StreamWP;
 typedef std::shared_ptr<lldb_private::StreamFile> StreamFileSP;
 typedef std::shared_ptr<lldb_private::StringSummaryFormat>
     StringTypeSummaryImplSP;
+typedef std::unique_ptr<lldb_private::StructuredDataImpl> StructuredDataImplUP;
 typedef std::shared_ptr<lldb_private::StructuredDataPlugin>
     StructuredDataPluginSP;
 typedef std::weak_ptr<lldb_private::StructuredDataPlugin>
@@ -453,6 +458,7 @@ typedef std::weak_ptr<lldb_private::Thread> ThreadWP;
 typedef std::shared_ptr<lldb_private::ThreadCollection> ThreadCollectionSP;
 typedef std::shared_ptr<lldb_private::ThreadPlan> ThreadPlanSP;
 typedef std::shared_ptr<lldb_private::ThreadPlanTracer> ThreadPlanTracerSP;
+typedef std::shared_ptr<lldb_private::TraceOptions> TraceOptionsSP;
 typedef std::shared_ptr<lldb_private::Type> TypeSP;
 typedef std::weak_ptr<lldb_private::Type> TypeWP;
 typedef std::shared_ptr<lldb_private::TypeCategoryImpl> TypeCategoryImplSP;
@@ -486,6 +492,16 @@ typedef std::shared_ptr<lldb_private::ValueObjectList> ValueObjectListSP;
 typedef std::shared_ptr<lldb_private::Watchpoint> WatchpointSP;
 
 } // namespace lldb
+
+//----------------------------------------------------------------------
+// llvm forward declarations
+//----------------------------------------------------------------------
+namespace llvm {
+
+struct ItaniumPartialDemangler;
+class StringRef;
+
+} // namespace llvm
 
 #endif // #if defined(__cplusplus)
 #endif // LLDB_lldb_forward_h_

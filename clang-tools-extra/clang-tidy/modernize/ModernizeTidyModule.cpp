@@ -11,7 +11,9 @@
 #include "../ClangTidyModule.h"
 #include "../ClangTidyModuleRegistry.h"
 #include "AvoidBindCheck.h"
+#include "ConcatNestedNamespacesCheck.h"
 #include "DeprecatedHeadersCheck.h"
+#include "DeprecatedIosBaseAliasesCheck.h"
 #include "LoopConvertCheck.h"
 #include "MakeSharedCheck.h"
 #include "MakeUniqueCheck.h"
@@ -19,15 +21,21 @@
 #include "RawStringLiteralCheck.h"
 #include "RedundantVoidArgCheck.h"
 #include "ReplaceAutoPtrCheck.h"
+#include "ReplaceRandomShuffleCheck.h"
+#include "ReturnBracedInitListCheck.h"
 #include "ShrinkToFitCheck.h"
+#include "UnaryStaticAssertCheck.h"
 #include "UseAutoCheck.h"
 #include "UseBoolLiteralsCheck.h"
-#include "UseDefaultCheck.h"
+#include "UseDefaultMemberInitCheck.h"
 #include "UseEmplaceCheck.h"
+#include "UseEqualsDefaultCheck.h"
 #include "UseEqualsDeleteCheck.h"
+#include "UseNoexceptCheck.h"
 #include "UseNullptrCheck.h"
 #include "UseOverrideCheck.h"
 #include "UseTransparentFunctorsCheck.h"
+#include "UseUncaughtExceptionsCheck.h"
 #include "UseUsingCheck.h"
 
 using namespace clang::ast_matchers;
@@ -40,8 +48,12 @@ class ModernizeModule : public ClangTidyModule {
 public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
     CheckFactories.registerCheck<AvoidBindCheck>("modernize-avoid-bind");
+    CheckFactories.registerCheck<ConcatNestedNamespacesCheck>(
+        "modernize-concat-nested-namespaces");
     CheckFactories.registerCheck<DeprecatedHeadersCheck>(
         "modernize-deprecated-headers");
+    CheckFactories.registerCheck<DeprecatedIosBaseAliasesCheck>(
+        "modernize-deprecated-ios-base-aliases");
     CheckFactories.registerCheck<LoopConvertCheck>("modernize-loop-convert");
     CheckFactories.registerCheck<MakeSharedCheck>("modernize-make-shared");
     CheckFactories.registerCheck<MakeUniqueCheck>("modernize-make-unique");
@@ -52,18 +64,29 @@ public:
         "modernize-redundant-void-arg");
     CheckFactories.registerCheck<ReplaceAutoPtrCheck>(
         "modernize-replace-auto-ptr");
+    CheckFactories.registerCheck<ReplaceRandomShuffleCheck>(
+        "modernize-replace-random-shuffle");
+    CheckFactories.registerCheck<ReturnBracedInitListCheck>(
+        "modernize-return-braced-init-list");
     CheckFactories.registerCheck<ShrinkToFitCheck>("modernize-shrink-to-fit");
+    CheckFactories.registerCheck<UnaryStaticAssertCheck>(
+        "modernize-unary-static-assert");
     CheckFactories.registerCheck<UseAutoCheck>("modernize-use-auto");
     CheckFactories.registerCheck<UseBoolLiteralsCheck>(
         "modernize-use-bool-literals");
-    CheckFactories.registerCheck<UseDefaultCheck>("modernize-use-default");
+    CheckFactories.registerCheck<UseDefaultMemberInitCheck>(
+        "modernize-use-default-member-init");
     CheckFactories.registerCheck<UseEmplaceCheck>("modernize-use-emplace");
+    CheckFactories.registerCheck<UseEqualsDefaultCheck>("modernize-use-equals-default");
     CheckFactories.registerCheck<UseEqualsDeleteCheck>(
         "modernize-use-equals-delete");
+    CheckFactories.registerCheck<UseNoexceptCheck>("modernize-use-noexcept");
     CheckFactories.registerCheck<UseNullptrCheck>("modernize-use-nullptr");
     CheckFactories.registerCheck<UseOverrideCheck>("modernize-use-override");
     CheckFactories.registerCheck<UseTransparentFunctorsCheck>(
         "modernize-use-transparent-functors");
+    CheckFactories.registerCheck<UseUncaughtExceptionsCheck>(
+        "modernize-use-uncaught-exceptions");
     CheckFactories.registerCheck<UseUsingCheck>("modernize-use-using");
   }
 

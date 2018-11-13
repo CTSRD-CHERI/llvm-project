@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # Check handling TLS related relocations and symbols when linking
 # a 64-bit static executable.
 
@@ -5,11 +6,9 @@
 # RUN: ld.lld -static %t -o %t.exe
 # RUN: llvm-objdump -s -t %t.exe | FileCheck %s
 
-# REQUIRES: mips
-
 # CHECK:      Contents of section .data:
-# CHECK-NEXT:  40000 00020004 ffffffff ffff8004 ffffffff
-# CHECK-NEXT:  40010 ffff9004
+# CHECK-NEXT:  30000 00020004 ffffffff ffff8004 ffffffff
+# CHECK-NEXT:  30010 ffff9004
 #
 # CHECK: SYMBOL TABLE:
 # CHECK: 0000000000020004         .text           00000000 __tls_get_addr

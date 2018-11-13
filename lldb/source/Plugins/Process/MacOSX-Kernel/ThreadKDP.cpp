@@ -9,18 +9,18 @@
 
 #include "ThreadKDP.h"
 
-#include "lldb/Utility/SafeMachO.h"
+#include "lldb/Host/SafeMachO.h"
 
 #include "lldb/Breakpoint/Watchpoint.h"
-#include "lldb/Core/ArchSpec.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/State.h"
-#include "lldb/Core/StreamString.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
 #include "lldb/Target/StopInfo.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Unwind.h"
+#include "lldb/Utility/ArchSpec.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/State.h"
+#include "lldb/Utility/StreamString.h"
 
 #include "Plugins/Process/Utility/StopInfoMachException.h"
 #include "ProcessKDP.h"
@@ -40,25 +40,23 @@ using namespace lldb_private;
 ThreadKDP::ThreadKDP(Process &process, lldb::tid_t tid)
     : Thread(process, tid), m_thread_name(), m_dispatch_queue_name(),
       m_thread_dispatch_qaddr(LLDB_INVALID_ADDRESS) {
-  ProcessKDPLog::LogIf(KDP_LOG_THREAD,
-                       "%p: ThreadKDP::ThreadKDP (tid = 0x%4.4x)", this,
-                       GetID());
+  Log *log = ProcessKDPLog::GetLogIfAllCategoriesSet(KDP_LOG_THREAD);
+  LLDB_LOG(log, "this = {0}, tid = {1:x}", this, GetID());
 }
 
 ThreadKDP::~ThreadKDP() {
-  ProcessKDPLog::LogIf(KDP_LOG_THREAD,
-                       "%p: ThreadKDP::~ThreadKDP (tid = 0x%4.4x)", this,
-                       GetID());
+  Log *log = ProcessKDPLog::GetLogIfAllCategoriesSet(KDP_LOG_THREAD);
+  LLDB_LOG(log, "this = {0}, tid = {1:x}", this, GetID());
   DestroyThread();
 }
 
 const char *ThreadKDP::GetName() {
   if (m_thread_name.empty())
-    return NULL;
+    return nullptr;
   return m_thread_name.c_str();
 }
 
-const char *ThreadKDP::GetQueueName() { return NULL; }
+const char *ThreadKDP::GetQueueName() { return nullptr; }
 
 void ThreadKDP::RefreshStateAfterStop() {
   // Invalidate all registers in our register context. We don't set "force" to
@@ -67,8 +65,8 @@ void ThreadKDP::RefreshStateAfterStop() {
   // context by the time this function gets called. The KDPRegisterContext
   // class has been made smart enough to detect when it needs to invalidate
   // which registers are valid by putting hooks in the register read and
-  // register supply functions where they check the process stop ID and do
-  // the right thing.
+  // register supply functions where they check the process stop ID and do the
+  // right thing.
   const bool force = false;
   lldb::RegisterContextSP reg_ctx_sp(GetRegisterContext());
   if (reg_ctx_sp)
@@ -81,8 +79,8 @@ void ThreadKDP::Dump(Log *log, uint32_t index) {}
 
 bool ThreadKDP::ShouldStop(bool &step_more) { return true; }
 lldb::RegisterContextSP ThreadKDP::GetRegisterContext() {
-  if (m_reg_context_sp.get() == NULL)
-    m_reg_context_sp = CreateRegisterContextForFrame(NULL);
+  if (!m_reg_context_sp)
+    m_reg_context_sp = CreateRegisterContextForFrame(nullptr);
   return m_reg_context_sp;
 }
 
@@ -116,13 +114,12 @@ ThreadKDP::CreateRegisterContextForFrame(StackFrame *frame) {
             new RegisterContextKDP_x86_64(*this, concrete_frame_idx));
         break;
       default:
-        assert(!"Add CPU type support in KDP");
-        break;
+        llvm_unreachable("Add CPU type support in KDP");
       }
     }
   } else {
     Unwind *unwinder = GetUnwinder();
-    if (unwinder)
+    if (unwinder != nullptr)
       reg_ctx_sp = unwinder->CreateRegisterContextForFrame(frame);
   }
   return reg_ctx_sp;
@@ -154,8 +151,8 @@ void ThreadKDP::SetStopInfoFrom_KDP_EXCEPTION(
       const uint32_t exc_type = exc_reply_packet.GetU32(&offset);
       const uint32_t exc_code = exc_reply_packet.GetU32(&offset);
       const uint32_t exc_subcode = exc_reply_packet.GetU32(&offset);
-      // We have to make a copy of the stop info because the thread list
-      // will iterate through the threads and clear all stop infos..
+      // We have to make a copy of the stop info because the thread list will
+      // iterate through the threads and clear all stop infos..
 
       // Let the StopInfoMachException::CreateStopReasonWithMachException()
       // function update the PC if needed as we might hit a software breakpoint

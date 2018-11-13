@@ -65,29 +65,21 @@ void FasterStringFindCheck::registerMatchers(MatchFinder *Finder) {
 
   const auto SingleChar =
       expr(ignoringParenCasts(stringLiteral(hasSize(1)).bind("literal")));
-
   const auto StringFindFunctions =
-      anyOf(hasName("find"), hasName("rfind"), hasName("find_first_of"),
-            hasName("find_first_not_of"), hasName("find_last_of"),
-            hasName("find_last_not_of"));
+      hasAnyName("find", "rfind", "find_first_of", "find_first_not_of",
+                 "find_last_of", "find_last_not_of");
 
-  llvm::Optional<ast_matchers::internal::Matcher<NamedDecl>> IsStringClass;
-
-  for (const auto &ClassName : StringLikeClasses) {
-    const auto HasName = hasName(ClassName);
-    IsStringClass = IsStringClass ? anyOf(*IsStringClass, HasName) : HasName;
-  }
-
-  if (IsStringClass) {
-    Finder->addMatcher(
-        cxxMemberCallExpr(
-            callee(functionDecl(StringFindFunctions).bind("func")),
-            anyOf(argumentCountIs(1), argumentCountIs(2)),
-            hasArgument(0, SingleChar),
-            on(expr(hasType(recordDecl(*IsStringClass)),
-                    unless(hasSubstitutedType())))),
-        this);
-  }
+  Finder->addMatcher(
+      cxxMemberCallExpr(
+          callee(functionDecl(StringFindFunctions).bind("func")),
+          anyOf(argumentCountIs(1), argumentCountIs(2)),
+          hasArgument(0, SingleChar),
+          on(expr(
+              hasType(hasUnqualifiedDesugaredType(recordType(hasDeclaration(
+                  recordDecl(hasAnyName(SmallVector<StringRef, 4>(
+                      StringLikeClasses.begin(), StringLikeClasses.end()))))))),
+              unless(hasSubstitutedType())))),
+      this);
 }
 
 void FasterStringFindCheck::check(const MatchFinder::MatchResult &Result) {
@@ -98,13 +90,14 @@ void FasterStringFindCheck::check(const MatchFinder::MatchResult &Result) {
   if (!Replacement)
     return;
 
-  diag(Literal->getLocStart(), "%0 called with a string literal consisting of "
+  diag(Literal->getBeginLoc(), "%0 called with a string literal consisting of "
                                "a single character; consider using the more "
                                "effective overload accepting a character")
-      << FindFunc << FixItHint::CreateReplacement(
-                         CharSourceRange::getTokenRange(Literal->getLocStart(),
-                                                        Literal->getLocEnd()),
-                         *Replacement);
+      << FindFunc
+      << FixItHint::CreateReplacement(
+             CharSourceRange::getTokenRange(Literal->getBeginLoc(),
+                                            Literal->getEndLoc()),
+             *Replacement);
 }
 
 } // namespace performance

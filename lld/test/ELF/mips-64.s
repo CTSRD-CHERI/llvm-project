@@ -1,11 +1,10 @@
+# REQUIRES: mips
 # Check R_MIPS_64 relocation calculation.
 
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-linux %s -o %t.o
 # RUN: ld.lld -shared %t.o -o %t.so
 # RUN: llvm-objdump -t %t.so | FileCheck -check-prefix=SYM %s
 # RUN: llvm-readobj -r -dynamic-table -mips-plt-got %t.so | FileCheck %s
-
-# REQUIRES: mips
 
   .global  __start
 __start:
@@ -26,21 +25,20 @@ v2:
 
 
 # SYM: SYMBOL TABLE:
-# SYM: 00030000 l       .data           00000004 v1
-# SYM: 00030008 g       .data           00000008 v2
+# SYM: 00020000 l       .data           00000004 v1
+# SYM: 00020008 g       .data           00000008 v2
 
 # CHECK:      Relocations [
-# CHECK-NEXT:   Section (7) .rela.dyn {
-# CHECK-NEXT:     0x30010 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x30000
-#                                                             ^-- v1
-# CHECK-NEXT:     0x30008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE v2 0x8
+# CHECK-NEXT:   Section (7) .rel.dyn {
+# CHECK-NEXT:     0x20010 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0
+# CHECK-NEXT:     0x20008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE v2 0x0
 # CHECK-NEXT:   }
 # CHECK-NEXT: ]
 
 # CHECK: DynamicSection [
 # CHECK:   Tag        Type     Name/Value
-# CHECK:   0x0000000000000008 RELASZ    48 (bytes)
-# CHECK:   0x0000000000000009 RELAENT   24 (bytes)
+# CHECK:   0x0000000000000012 RELSZ    32 (bytes)
+# CHECK:   0x0000000000000013 RELENT   16 (bytes)
 
 # CHECK:      Primary GOT {
 # CHECK-NEXT:   Canonical gp value:
@@ -52,8 +50,8 @@ v2:
 # CHECK-NEXT:     Entry {
 # CHECK-NEXT:       Address:
 # CHECK-NEXT:       Access:
-# CHECK-NEXT:       Initial: 0x30008
-# CHECK-NEXT:       Value: 0x30008
+# CHECK-NEXT:       Initial: 0x20008
+# CHECK-NEXT:       Value: 0x20008
 # CHECK-NEXT:       Type: Object
 # CHECK-NEXT:       Section: .data
 # CHECK-NEXT:       Name: v2

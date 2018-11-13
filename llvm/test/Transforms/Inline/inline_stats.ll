@@ -1,5 +1,10 @@
+; First with legacy PM
 ; RUN: opt -S -inline -inliner-function-import-stats=basic < %s 2>&1 | FileCheck %s -check-prefix=CHECK-BASIC -check-prefix=CHECK
 ; RUN: opt -S -inline -inliner-function-import-stats=verbose < %s 2>&1 | FileCheck %s -check-prefix="CHECK-VERBOSE" -check-prefix=CHECK
+
+; Do again with new PM
+; RUN: opt -S -passes=inline -inliner-function-import-stats=basic < %s 2>&1 | FileCheck %s -check-prefix=CHECK-BASIC -check-prefix=CHECK
+; RUN: opt -S -passes=inline -inliner-function-import-stats=verbose < %s 2>&1 | FileCheck %s -check-prefix="CHECK-VERBOSE" -check-prefix=CHECK
 
 ; CHECK: ------- Dumping inliner stats for [<stdin>] -------
 ; CHECK-BASIC-NOT: -- List of inlined functions:
@@ -36,9 +41,12 @@ define void @internal3() {
     ret void
 }
 
+declare void @external_decl()
+
 define void @external1() alwaysinline !thinlto_src_module !0 {
     call fastcc void @internal2()
     call fastcc void @external2();
+    call void @external_decl();
     ret void
 }
 

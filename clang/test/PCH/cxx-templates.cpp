@@ -108,3 +108,27 @@ namespace cyclic_module_load {
 template int local_extern::f<int[]>(); // expected-note {{in instantiation of}}
 #endif
 template int local_extern::g<int[]>();
+
+namespace MemberSpecializationLocation {
+#ifndef NO_ERRORS
+  // expected-note@cxx-templates.h:* {{previous}}
+  template<> float A<int>::n; // expected-error {{redeclaration of 'n' with a different type}}
+#endif
+  int k = A<int>::n;
+}
+
+// https://bugs.llvm.org/show_bug.cgi?id=34728
+namespace PR34728 {
+int test() {
+  // Verify with several TemplateParmDecl kinds, using PCH (incl. modules).
+  int z1 = func1(/*ignored*/2.718);
+  int z2 = func2(/*ignored*/3.142);
+  int tmp3 = 30;
+  Container<int> c = func3(tmp3);
+  int z3 = c.item;
+
+  // Return value is meaningless.  Just "use" all these values to avoid
+  // warning about unused vars / values.
+  return z1 + z2 + z3;
+}
+} // end namespace PR34728

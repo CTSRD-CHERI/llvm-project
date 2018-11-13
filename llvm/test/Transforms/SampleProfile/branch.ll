@@ -87,7 +87,9 @@ for.cond:                                         ; preds = %for.inc, %if.then.2
   %6 = load i32, i32* %u, align 4, !dbg !46
   %7 = load i32, i32* %limit, align 4, !dbg !48
   %cmp5 = icmp slt i32 %6, %7, !dbg !49
-  br i1 %cmp5, label %for.body, label %for.end, !dbg !50
+  br i1 %cmp5, label %for.body, label %for.end, !dbg !50, !prof !80
+; CHECK: edge for.cond -> for.body probability is 0x73333333 / 0x80000000 = 90.00%
+; CHECK: edge for.cond -> for.end probability is 0x0ccccccd / 0x80000000 = 10.00%
 
 for.body:                                         ; preds = %for.cond
   call void @llvm.dbg.declare(metadata double* %x, metadata !51, metadata !17), !dbg !53
@@ -163,7 +165,7 @@ attributes #4 = { nounwind readonly }
 !2 = !{}
 !3 = !{!4}
 !4 = !DIBasicType(name: "double", size: 64, align: 64, encoding: DW_ATE_float)
-!6 = distinct !DISubprogram(name: "main", scope: !1, file: !1, line: 4, type: !7, isLocal: false, isDefinition: true, scopeLine: 4, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!6 = distinct !DISubprogram(name: "main", scope: !1, file: !1, line: 4, type: !7, isLocal: false, isDefinition: true, scopeLine: 4, flags: DIFlagPrototyped, isOptimized: false, unit: !0, retainedNodes: !2)
 !7 = !DISubroutineType(types: !8)
 !8 = !{!9, !9, !10}
 !9 = !DIBasicType(name: "int", size: 32, align: 32, encoding: DW_ATE_signed)
@@ -237,3 +239,4 @@ attributes #4 = { nounwind readonly }
 !77 = !DILocation(line: 20, column: 4, scope: !6)
 !78 = !DILocation(line: 21, column: 4, scope: !6)
 !79 = !DILocation(line: 22, column: 2, scope: !6)
+!80 = !{!"branch_weights", i32 90, i32 10}

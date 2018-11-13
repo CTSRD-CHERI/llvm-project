@@ -95,6 +95,12 @@ void TypeMapTy::addTypeMapping(Type *DstTy, Type *SrcTy) {
     for (StructType *Ty : SpeculativeDstOpaqueTypes)
       DstResolvedOpaqueTypes.erase(Ty);
   } else {
+    // SrcTy and DstTy are recursively ismorphic. We clear names of SrcTy
+    // and all its descendants to lower amount of renaming in LLVM context
+    // Renaming occurs because we load all source modules to the same context
+    // and declaration with existing name gets renamed (i.e Foo -> Foo.42).
+    // As a result we may get several different types in the destination
+    // module, which are in fact the same.
     for (Type *Ty : SpeculativeTypes)
       if (auto *STy = dyn_cast<StructType>(Ty))
         if (STy->hasName())
@@ -160,7 +166,6 @@ bool TypeMapTy::areTypesIsomorphic(Type *DstTy, Type *SrcTy) {
   if (PointerType *PT = dyn_cast<PointerType>(DstTy)) {
     if (PT->getAddressSpace() != cast<PointerType>(SrcTy)->getAddressSpace())
       return false;
-
   } else if (FunctionType *FT = dyn_cast<FunctionType>(DstTy)) {
     if (FT->isVarArg() != cast<FunctionType>(SrcTy)->isVarArg())
       return false;
@@ -169,11 +174,9 @@ bool TypeMapTy::areTypesIsomorphic(Type *DstTy, Type *SrcTy) {
     if (DSTy->isLiteral() != SSTy->isLiteral() ||
         DSTy->isPacked() != SSTy->isPacked())
       return false;
-  } else if (ArrayType *DATy = dyn_cast<ArrayType>(DstTy)) {
-    if (DATy->getNumElements() != cast<ArrayType>(SrcTy)->getNumElements())
-      return false;
-  } else if (VectorType *DVTy = dyn_cast<VectorType>(DstTy)) {
-    if (DVTy->getNumElements() != cast<VectorType>(SrcTy)->getNumElements())
+  } else if (auto *DSeqTy = dyn_cast<SequentialType>(DstTy)) {
+    if (DSeqTy->getNumElements() !=
+        cast<SequentialType>(SrcTy)->getNumElements())
       return false;
   }
 
@@ -237,18 +240,27 @@ Type *TypeMapTy::get(Type *Ty, SmallPtrSet<StructType *, 8> &Visited) {
   // These are types that LLVM itself will unique.
   bool IsUniqued = !isa<StructType>(Ty) || cast<StructType>(Ty)->isLiteral();
 
-#ifndef NDEBUG
   if (!IsUniqued) {
+    StructType *STy = cast<StructType>(Ty);
+    // This is actually a type from the destination module, this can be reached
+    // when this type is loaded in another module, added to DstStructTypesSet,
+    // and then we reach the same type in another module where it has not been
+    // added to MappedTypes. (PR37684)
+    if (STy->getContext().isODRUniquingDebugTypes() && !STy->isOpaque() &&
+        DstStructTypesSet.hasType(STy))
+      return *Entry = STy;
+
+#ifndef NDEBUG
     for (auto &Pair : MappedTypes) {
       assert(!(Pair.first != Ty && Pair.second == Ty) &&
              "mapping to a source type");
     }
-  }
 #endif
 
-  if (!IsUniqued && !Visited.insert(cast<StructType>(Ty)).second) {
-    StructType *DTy = StructType::create(Ty->getContext());
-    return *Entry = DTy;
+    if (!Visited.insert(STy).second) {
+      StructType *DTy = StructType::create(Ty->getContext());
+      return *Entry = DTy;
+    }
   }
 
   // If this is not a recursive type, then just map all of the elements and
@@ -397,11 +409,12 @@ class IRLinker {
       Worklist.push_back(GV);
   }
 
-  /// Flag whether the ModuleInlineAsm string in Src should be linked with
-  /// (concatenated into) the ModuleInlineAsm string for the destination
-  /// module. It should be true for full LTO, but not when importing for
-  /// ThinLTO, otherwise we can have duplicate symbols.
-  bool LinkModuleInlineAsm;
+  /// Whether we are importing globals for ThinLTO, as opposed to linking the
+  /// source module. If this flag is set, it means that we can rely on some
+  /// other object file to define any non-GlobalValue entities defined by the
+  /// source module. This currently causes us to not link retained types in
+  /// debug info metadata and module inline asm.
+  bool IsPerformingImport;
 
   /// Set to true when all global value body linking is complete (including
   /// lazy linking). Used to prevent metadata linking from creating new
@@ -482,6 +495,10 @@ class IRLinker {
   Function *copyFunctionProto(const Function *SF);
   GlobalValue *copyGlobalAliasProto(const GlobalAlias *SGA);
 
+  /// When importing for ThinLTO, prevent importing of types listed on
+  /// the DICompileUnit that we don't need a copy of in the importing
+  /// module.
+  void prepareCompileUnitsForImport();
   void linkNamedMDNodes();
 
 public:
@@ -489,10 +506,10 @@ public:
            IRMover::IdentifiedStructTypeSet &Set, std::unique_ptr<Module> SrcM,
            ArrayRef<GlobalValue *> ValuesToLink,
            std::function<void(GlobalValue &, IRMover::ValueAdder)> AddLazyFor,
-           bool LinkModuleInlineAsm)
+           bool IsPerformingImport)
       : DstM(DstM), SrcM(std::move(SrcM)), AddLazyFor(std::move(AddLazyFor)),
         TypeMap(Set), GValMaterializer(*this), LValMaterializer(*this),
-        SharedMDs(SharedMDs), LinkModuleInlineAsm(LinkModuleInlineAsm),
+        SharedMDs(SharedMDs), IsPerformingImport(IsPerformingImport),
         Mapper(ValueMap, RF_MoveDistinctMDs | RF_IgnoreMissingLocals, &TypeMap,
                &GValMaterializer),
         AliasMCID(Mapper.registerAlternateMappingContext(AliasValueMap,
@@ -500,6 +517,8 @@ public:
     ValueMap.getMDMap() = std::move(SharedMDs);
     for (GlobalValue *GV : ValuesToLink)
       maybeAdd(GV);
+    if (IsPerformingImport)
+      prepareCompileUnitsForImport();
   }
   ~IRLinker() { SharedMDs = std::move(*ValueMap.getMDMap()); }
 
@@ -597,6 +616,7 @@ GlobalVariable *IRLinker::copyGlobalVariableProto(const GlobalVariable *SGVar) {
                          /*insertbefore*/ nullptr, SGVar->getThreadLocalMode(),
                          SGVar->getType()->getAddressSpace());
   NewDGV->setAlignment(SGVar->getAlignment());
+  NewDGV->copyAttributesFrom(SGVar);
   return NewDGV;
 }
 
@@ -605,8 +625,11 @@ GlobalVariable *IRLinker::copyGlobalVariableProto(const GlobalVariable *SGVar) {
 Function *IRLinker::copyFunctionProto(const Function *SF) {
   // If there is no linkage to be performed or we are linking from the source,
   // bring SF over.
-  return Function::Create(TypeMap.get(SF->getFunctionType()),
-                          GlobalValue::ExternalLinkage, SF->getName(), &DstM);
+  auto *F =
+      Function::Create(TypeMap.get(SF->getFunctionType()),
+                       GlobalValue::ExternalLinkage, SF->getName(), &DstM);
+  F->copyAttributesFrom(SF);
+  return F;
 }
 
 /// Set up prototypes for any aliases that come over from the source module.
@@ -614,9 +637,11 @@ GlobalValue *IRLinker::copyGlobalAliasProto(const GlobalAlias *SGA) {
   // If there is no linkage to be performed or we're linking from the source,
   // bring over SGA.
   auto *Ty = TypeMap.get(SGA->getValueType());
-  return GlobalAlias::create(Ty, SGA->getType()->getPointerAddressSpace(),
-                             GlobalValue::ExternalLinkage, SGA->getName(),
-                             &DstM);
+  auto *GA =
+      GlobalAlias::create(Ty, SGA->getType()->getPointerAddressSpace(),
+                          GlobalValue::ExternalLinkage, SGA->getName(), &DstM);
+  GA->copyAttributesFrom(SGA);
+  return GA;
 }
 
 GlobalValue *IRLinker::copyGlobalValueProto(const GlobalValue *SGV,
@@ -629,6 +654,10 @@ GlobalValue *IRLinker::copyGlobalValueProto(const GlobalValue *SGV,
   } else {
     if (ForDefinition)
       NewGV = copyGlobalAliasProto(cast<GlobalAlias>(SGV));
+    else if (SGV->getValueType()->isFunctionTy())
+      NewGV =
+          Function::Create(cast<FunctionType>(TypeMap.get(SGV->getValueType())),
+                           GlobalValue::ExternalLinkage, SGV->getName(), &DstM);
     else
       NewGV = new GlobalVariable(
           DstM, TypeMap.get(SGV->getValueType()),
@@ -642,8 +671,6 @@ GlobalValue *IRLinker::copyGlobalValueProto(const GlobalValue *SGV,
     NewGV->setLinkage(SGV->getLinkage());
   else if (SGV->hasExternalWeakLinkage())
     NewGV->setLinkage(GlobalValue::ExternalWeakLinkage);
-
-  NewGV->copyAttributesFrom(SGV);
 
   if (auto *NewGO = dyn_cast<GlobalObject>(NewGV)) {
     // Metadata for global variables and function declarations is copied eagerly.
@@ -661,6 +688,14 @@ GlobalValue *IRLinker::copyGlobalValueProto(const GlobalValue *SGV,
   }
 
   return NewGV;
+}
+
+static StringRef getTypeNamePrefix(StringRef Name) {
+  size_t DotPos = Name.rfind('.');
+  return (DotPos == 0 || DotPos == StringRef::npos || Name.back() == '.' ||
+          !isdigit(static_cast<unsigned char>(Name[DotPos + 1])))
+             ? Name
+             : Name.substr(0, DotPos);
 }
 
 /// Loop over all of the linked values to compute type mappings.  For example,
@@ -701,15 +736,20 @@ void IRLinker::computeTypeMapping() {
     if (!ST->hasName())
       continue;
 
-    // Check to see if there is a dot in the name followed by a digit.
-    size_t DotPos = ST->getName().rfind('.');
-    if (DotPos == 0 || DotPos == StringRef::npos ||
-        ST->getName().back() == '.' ||
-        !isdigit(static_cast<unsigned char>(ST->getName()[DotPos + 1])))
+    if (TypeMap.DstStructTypesSet.hasType(ST)) {
+      // This is actually a type from the destination module.
+      // getIdentifiedStructTypes() can have found it by walking debug info
+      // metadata nodes, some of which get linked by name when ODR Type Uniquing
+      // is enabled on the Context, from the source to the destination module.
+      continue;
+    }
+
+    auto STTypePrefix = getTypeNamePrefix(ST->getName());
+    if (STTypePrefix.size()== ST->getName().size())
       continue;
 
     // Check to see if the destination module has a struct with the prefix name.
-    StructType *DST = DstM.getTypeByName(ST->getName().substr(0, DotPos));
+    StructType *DST = DstM.getTypeByName(STTypePrefix);
     if (!DST)
       continue;
 
@@ -858,9 +898,6 @@ bool IRLinker::shouldLink(GlobalValue *DGV, GlobalValue &SGV) {
   if (DGV && !DGV->isDeclarationForLinker())
     return false;
 
-  if (SGV.hasAvailableExternallyLinkage())
-    return true;
-
   if (SGV.isDeclaration() || DoneLinkingBodies)
     return false;
 
@@ -910,7 +947,7 @@ Expected<Constant *> IRLinker::linkGlobalValueProto(GlobalValue *SGV,
     if (DoneLinkingBodies)
       return nullptr;
 
-    NewGV = copyGlobalValueProto(SGV, ShouldLink);
+    NewGV = copyGlobalValueProto(SGV, ShouldLink || ForAlias);
     if (ShouldLink || !ForAlias)
       forceRenaming(NewGV, SGV->getName());
   }
@@ -936,11 +973,19 @@ Expected<Constant *> IRLinker::linkGlobalValueProto(GlobalValue *SGV,
     NewGV->setLinkage(GlobalValue::InternalLinkage);
 
   Constant *C = NewGV;
-  if (DGV)
-    C = ConstantExpr::getBitCast(NewGV, TypeMap.get(SGV->getType()));
+  // Only create a bitcast if necessary. In particular, with
+  // DebugTypeODRUniquing we may reach metadata in the destination module
+  // containing a GV from the source module, in which case SGV will be
+  // the same as DGV and NewGV, and TypeMap.get() will assert since it
+  // assumes it is being invoked on a type in the source module.
+  if (DGV && NewGV != SGV) {
+    C = ConstantExpr::getPointerBitCastOrAddrSpaceCast(
+      NewGV, TypeMap.get(SGV->getType()));
+  }
 
   if (DGV && NewGV != DGV) {
-    DGV->replaceAllUsesWith(ConstantExpr::getBitCast(NewGV, DGV->getType()));
+    DGV->replaceAllUsesWith(
+      ConstantExpr::getPointerBitCastOrAddrSpaceCast(NewGV, DGV->getType()));
     DGV->eraseFromParent();
   }
 
@@ -997,6 +1042,66 @@ Error IRLinker::linkGlobalValueBody(GlobalValue &Dst, GlobalValue &Src) {
   }
   linkAliasBody(cast<GlobalAlias>(Dst), cast<GlobalAlias>(Src));
   return Error::success();
+}
+
+void IRLinker::prepareCompileUnitsForImport() {
+  NamedMDNode *SrcCompileUnits = SrcM->getNamedMetadata("llvm.dbg.cu");
+  if (!SrcCompileUnits)
+    return;
+  // When importing for ThinLTO, prevent importing of types listed on
+  // the DICompileUnit that we don't need a copy of in the importing
+  // module. They will be emitted by the originating module.
+  for (unsigned I = 0, E = SrcCompileUnits->getNumOperands(); I != E; ++I) {
+    auto *CU = cast<DICompileUnit>(SrcCompileUnits->getOperand(I));
+    assert(CU && "Expected valid compile unit");
+    // Enums, macros, and retained types don't need to be listed on the
+    // imported DICompileUnit. This means they will only be imported
+    // if reached from the mapped IR. Do this by setting their value map
+    // entries to nullptr, which will automatically prevent their importing
+    // when reached from the DICompileUnit during metadata mapping.
+    ValueMap.MD()[CU->getRawEnumTypes()].reset(nullptr);
+    ValueMap.MD()[CU->getRawMacros()].reset(nullptr);
+    ValueMap.MD()[CU->getRawRetainedTypes()].reset(nullptr);
+    // We import global variables only temporarily in order for instcombine
+    // and globalopt to perform constant folding and static constructor
+    // evaluation. After that elim-avail-extern will covert imported globals
+    // back to declarations, so we don't need debug info for them.
+    ValueMap.MD()[CU->getRawGlobalVariables()].reset(nullptr);
+
+    // Imported entities only need to be mapped in if they have local
+    // scope, as those might correspond to an imported entity inside a
+    // function being imported (any locally scoped imported entities that
+    // don't end up referenced by an imported function will not be emitted
+    // into the object). Imported entities not in a local scope
+    // (e.g. on the namespace) only need to be emitted by the originating
+    // module. Create a list of the locally scoped imported entities, and
+    // replace the source CUs imported entity list with the new list, so
+    // only those are mapped in.
+    // FIXME: Locally-scoped imported entities could be moved to the
+    // functions they are local to instead of listing them on the CU, and
+    // we would naturally only link in those needed by function importing.
+    SmallVector<TrackingMDNodeRef, 4> AllImportedModules;
+    bool ReplaceImportedEntities = false;
+    for (auto *IE : CU->getImportedEntities()) {
+      DIScope *Scope = IE->getScope();
+      assert(Scope && "Invalid Scope encoding!");
+      if (isa<DILocalScope>(Scope))
+        AllImportedModules.emplace_back(IE);
+      else
+        ReplaceImportedEntities = true;
+    }
+    if (ReplaceImportedEntities) {
+      if (!AllImportedModules.empty())
+        CU->replaceImportedEntities(MDTuple::get(
+            CU->getContext(),
+            SmallVector<Metadata *, 16>(AllImportedModules.begin(),
+                                        AllImportedModules.end())));
+      else
+        // If there were no local scope imported entities, we can map
+        // the whole list to nullptr.
+        ValueMap.MD()[CU->getRawImportedEntities()].reset(nullptr);
+    }
+  }
 }
 
 /// Insert all of the named MDNodes in Src into the Dest module.
@@ -1079,6 +1184,11 @@ Error IRLinker::linkModuleFlagsMetadata() {
         mdconst::extract<ConstantInt>(DstOp->getOperand(0));
     unsigned DstBehaviorValue = DstBehavior->getZExtValue();
 
+    auto overrideDstValue = [&]() {
+      DstModFlags->setOperand(DstIndex, SrcOp);
+      Flags[ID].first = SrcOp;
+    };
+
     // If either flag has override behavior, handle it first.
     if (DstBehaviorValue == Module::Override) {
       // Diagnose inconsistent flags which both have override behavior.
@@ -1089,8 +1199,7 @@ Error IRLinker::linkModuleFlagsMetadata() {
       continue;
     } else if (SrcBehaviorValue == Module::Override) {
       // Update the destination flag to that of the source.
-      DstModFlags->setOperand(DstIndex, SrcOp);
-      Flags[ID].first = SrcOp;
+      overrideDstValue();
       continue;
     }
 
@@ -1125,6 +1234,15 @@ Error IRLinker::linkModuleFlagsMetadata() {
                     "': IDs have conflicting values");
       }
       continue;
+    }
+    case Module::Max: {
+      ConstantInt *DstValue =
+          mdconst::extract<ConstantInt>(DstOp->getOperand(2));
+      ConstantInt *SrcValue =
+          mdconst::extract<ConstantInt>(SrcOp->getOperand(2));
+      if (SrcValue->getZExtValue() > DstValue->getZExtValue())
+        overrideDstValue();
+      break;
     }
     case Module::Append: {
       MDNode *DstValue = cast<MDNode>(DstOp->getOperand(2));
@@ -1165,25 +1283,16 @@ Error IRLinker::linkModuleFlagsMetadata() {
   return Error::success();
 }
 
-// This function returns true if the triples match.
-static bool triplesMatch(const Triple &T0, const Triple &T1) {
-  // If vendor is apple, ignore the version number.
-  if (T0.getVendor() == Triple::Apple)
-    return T0.getArch() == T1.getArch() && T0.getSubArch() == T1.getSubArch() &&
-           T0.getVendor() == T1.getVendor() && T0.getOS() == T1.getOS();
-
-  return T0 == T1;
-}
-
-// This function returns the merged triple.
-static std::string mergeTriples(const Triple &SrcTriple,
-                                const Triple &DstTriple) {
-  // If vendor is apple, pick the triple with the larger version number.
-  if (SrcTriple.getVendor() == Triple::Apple)
-    if (DstTriple.isOSVersionLT(SrcTriple))
-      return SrcTriple.str();
-
-  return DstTriple.str();
+/// Return InlineAsm adjusted with target-specific directives if required.
+/// For ARM and Thumb, we have to add directives to select the appropriate ISA
+/// to support mixing module-level inline assembly from ARM and Thumb modules.
+static std::string adjustInlineAsm(const std::string &InlineAsm,
+                                   const Triple &Triple) {
+  if (Triple.getArch() == Triple::thumb || Triple.getArch() == Triple::thumbeb)
+    return ".text\n.balign 2\n.thumb\n" + InlineAsm;
+  if (Triple.getArch() == Triple::arm || Triple.getArch() == Triple::armeb)
+    return ".text\n.balign 4\n.arm\n" + InlineAsm;
+  return InlineAsm;
 }
 
 Error IRLinker::run() {
@@ -1211,22 +1320,25 @@ Error IRLinker::run() {
 
   Triple SrcTriple(SrcM->getTargetTriple()), DstTriple(DstM.getTargetTriple());
 
-  if (!SrcM->getTargetTriple().empty() && !triplesMatch(SrcTriple, DstTriple))
+  if (!SrcM->getTargetTriple().empty()&&
+      !SrcTriple.isCompatibleWith(DstTriple))
     emitWarning("Linking two modules of different target triples: " +
                 SrcM->getModuleIdentifier() + "' is '" +
                 SrcM->getTargetTriple() + "' whereas '" +
                 DstM.getModuleIdentifier() + "' is '" + DstM.getTargetTriple() +
                 "'\n");
 
-  DstM.setTargetTriple(mergeTriples(SrcTriple, DstTriple));
+  DstM.setTargetTriple(SrcTriple.merge(DstTriple));
 
   // Append the module inline asm string.
-  if (LinkModuleInlineAsm && !SrcM->getModuleInlineAsm().empty()) {
+  if (!IsPerformingImport && !SrcM->getModuleInlineAsm().empty()) {
+    std::string SrcModuleInlineAsm = adjustInlineAsm(SrcM->getModuleInlineAsm(),
+                                                     SrcTriple);
     if (DstM.getModuleInlineAsm().empty())
-      DstM.setModuleInlineAsm(SrcM->getModuleInlineAsm());
+      DstM.setModuleInlineAsm(SrcModuleInlineAsm);
     else
       DstM.setModuleInlineAsm(DstM.getModuleInlineAsm() + "\n" +
-                              SrcM->getModuleInlineAsm());
+                              SrcModuleInlineAsm);
   }
 
   // Loop over all of the linked values to compute type mappings.
@@ -1342,7 +1454,7 @@ bool IRMover::IdentifiedStructTypeSet::hasType(StructType *Ty) {
 
 IRMover::IRMover(Module &M) : Composite(M) {
   TypeFinder StructTypes;
-  StructTypes.run(M, true);
+  StructTypes.run(M, /* OnlyNamed */ false);
   for (StructType *Ty : StructTypes) {
     if (Ty->isOpaque())
       IdentifiedStructTypes.addOpaque(Ty);
@@ -1360,10 +1472,10 @@ IRMover::IRMover(Module &M) : Composite(M) {
 Error IRMover::move(
     std::unique_ptr<Module> Src, ArrayRef<GlobalValue *> ValuesToLink,
     std::function<void(GlobalValue &, ValueAdder Add)> AddLazyFor,
-    bool LinkModuleInlineAsm) {
+    bool IsPerformingImport) {
   IRLinker TheIRLinker(Composite, SharedMDs, IdentifiedStructTypes,
                        std::move(Src), ValuesToLink, std::move(AddLazyFor),
-                       LinkModuleInlineAsm);
+                       IsPerformingImport);
   Error E = TheIRLinker.run();
   Composite.dropTriviallyDeadConstantArrays();
   return E;

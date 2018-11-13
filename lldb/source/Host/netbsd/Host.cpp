@@ -1,5 +1,4 @@
-//===-- source/Host/netbsd/Host.cpp ------------------------------*- C++
-//-*-===//
+//===-- source/Host/netbsd/Host.cpp -----------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -15,7 +14,6 @@
 #include <sys/proc.h>
 #include <sys/sysctl.h>
 #include <sys/types.h>
-#include <sys/user.h>
 
 #include <limits.h>
 
@@ -27,22 +25,16 @@
 // C++ Includes
 // Other libraries and framework includes
 // Project includes
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Core/Error.h"
-#include "lldb/Core/Log.h"
-#include "lldb/Core/Module.h"
-#include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StreamString.h"
-#include "lldb/Host/Endian.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
-#include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
-
-#include "lldb/Core/DataBufferHeap.h"
-#include "lldb/Core/DataExtractor.h"
-#include "lldb/Utility/CleanUp.h"
+#include "lldb/Utility/DataBufferHeap.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Endian.h"
+#include "lldb/Utility/Log.h"
 #include "lldb/Utility/NameMatches.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/StreamString.h"
 
 #include "llvm/Support/Host.h"
 
@@ -53,17 +45,7 @@ extern char **environ;
 using namespace lldb;
 using namespace lldb_private;
 
-size_t Host::GetEnvironment(StringList &env) {
-  char *v;
-  char **var = environ;
-  for (; var != NULL && *var != NULL; ++var) {
-    v = ::strchr(*var, (int)'-');
-    if (v == NULL)
-      continue;
-    env.AppendString(v);
-  }
-  return env.GetSize();
-}
+Environment Host::GetEnvironment() { return Environment(environ); }
 
 static bool GetNetBSDProcessArgs(const ProcessInstanceInfoMatch *match_info_ptr,
                                  ProcessInstanceInfo &process_info) {
@@ -88,7 +70,8 @@ static bool GetNetBSDProcessArgs(const ProcessInstanceInfoMatch *match_info_ptr,
   if (!cstr)
     return false;
 
-  process_info.GetExecutableFile().SetFile(cstr, false);
+  process_info.GetExecutableFile().SetFile(cstr, false,
+                                           FileSpec::Style::native);
 
   if (!(match_info_ptr == NULL ||
         NameMatches(process_info.GetExecutableFile().GetFilename().GetCString(),
@@ -210,9 +193,8 @@ uint32_t Host::FindProcesses(const ProcessInstanceInfoMatch &match_info,
       continue;
 
     // Every thread is a process in NetBSD, but all the threads of a single
-    // process have the same pid. Do not store the process info in the
-    // result list if a process with given identifier is already registered
-    // there.
+    // process have the same pid. Do not store the process info in the result
+    // list if a process with given identifier is already registered there.
     if (proc_kinfo[i].p_nlwps > 1) {
       bool already_registered = false;
       for (size_t pi = 0; pi < process_infos.GetSize(); pi++) {
@@ -259,10 +241,6 @@ bool Host::GetProcessInfo(lldb::pid_t pid, ProcessInstanceInfo &process_info) {
   return false;
 }
 
-lldb::DataBufferSP Host::GetAuxvData(lldb_private::Process *process) {
-  return lldb::DataBufferSP();
-}
-
-Error Host::ShellExpandArguments(ProcessLaunchInfo &launch_info) {
-  return Error("unimplemented");
+Status Host::ShellExpandArguments(ProcessLaunchInfo &launch_info) {
+  return Status("unimplemented");
 }

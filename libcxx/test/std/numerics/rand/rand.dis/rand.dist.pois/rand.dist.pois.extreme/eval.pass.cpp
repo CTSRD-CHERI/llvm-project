@@ -33,7 +33,6 @@ void
 test1()
 {
     typedef std::extreme_value_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937 G;
     G g;
     D d(0.5, 2);
@@ -48,7 +47,7 @@ test1()
     double var = 0;
     double skew = 0;
     double kurtosis = 0;
-    for (int i = 0; i < u.size(); ++i)
+    for (unsigned i = 0; i < u.size(); ++i)
     {
         double dbl = (u[i] - mean);
         double d2 = sqr(dbl);
@@ -75,7 +74,6 @@ void
 test2()
 {
     typedef std::extreme_value_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937 G;
     G g;
     D d(1, 2);
@@ -90,7 +88,7 @@ test2()
     double var = 0;
     double skew = 0;
     double kurtosis = 0;
-    for (int i = 0; i < u.size(); ++i)
+    for (unsigned i = 0; i < u.size(); ++i)
     {
         double dbl = (u[i] - mean);
         double d2 = sqr(dbl);
@@ -117,7 +115,6 @@ void
 test3()
 {
     typedef std::extreme_value_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937 G;
     G g;
     D d(1.5, 3);
@@ -132,7 +129,7 @@ test3()
     double var = 0;
     double skew = 0;
     double kurtosis = 0;
-    for (int i = 0; i < u.size(); ++i)
+    for (unsigned i = 0; i < u.size(); ++i)
     {
         double dbl = (u[i] - mean);
         double d2 = sqr(dbl);
@@ -159,7 +156,6 @@ void
 test4()
 {
     typedef std::extreme_value_distribution<> D;
-    typedef D::param_type P;
     typedef std::mt19937 G;
     G g;
     D d(3, 4);
@@ -174,7 +170,7 @@ test4()
     double var = 0;
     double skew = 0;
     double kurtosis = 0;
-    for (int i = 0; i < u.size(); ++i)
+    for (unsigned i = 0; i < u.size(); ++i)
     {
         double dbl = (u[i] - mean);
         double d2 = sqr(dbl);

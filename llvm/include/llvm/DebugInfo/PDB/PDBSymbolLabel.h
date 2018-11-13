@@ -19,12 +19,8 @@ class raw_ostream;
 namespace pdb {
 
 class PDBSymbolLabel : public PDBSymbol {
-public:
-  PDBSymbolLabel(const IPDBSession &PDBSession,
-                 std::unique_ptr<IPDBRawSymbol> LabelSymbol);
-
   DECLARE_PDB_SYMBOL_CONCRETE_TYPE(PDB_SymType::Label)
-
+public:
   void dump(PDBSymDumper &Dumper) const override;
 
   FORWARD_SYMBOL_METHOD(getAddressOffset)
@@ -32,7 +28,7 @@ public:
   FORWARD_SYMBOL_METHOD(hasCustomCallingConvention)
   FORWARD_SYMBOL_METHOD(hasFarReturn)
   FORWARD_SYMBOL_METHOD(hasInterruptReturn)
-  FORWARD_SYMBOL_METHOD(getLexicalParentId)
+  FORWARD_SYMBOL_ID_METHOD(getLexicalParent)
   FORWARD_SYMBOL_METHOD(getLocationType)
   FORWARD_SYMBOL_METHOD(getName)
   FORWARD_SYMBOL_METHOD(hasNoInlineAttribute)

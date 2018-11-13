@@ -1,4 +1,4 @@
-; RUN: llc -march=amdgcn -verify-machineinstrs< %s | FileCheck -check-prefix=SI %s
+; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck -check-prefix=SI %s
 ;
 ;
 ; Most SALU instructions ignore control flow, so we need to make sure
@@ -9,15 +9,17 @@
 ; about instructions in different blocks overwriting each other.
 ; SI-LABEL: {{^}}sgpr_if_else_salu_br:
 ; SI: s_add
-; SI: s_add
+; SI: s_branch
 
-define void @sgpr_if_else_salu_br(i32 addrspace(1)* %out, i32 %a, i32 %b, i32 %c, i32 %d, i32 %e) {
+; SI: s_sub
+
+define amdgpu_kernel void @sgpr_if_else_salu_br(i32 addrspace(1)* %out, i32 %a, i32 %b, i32 %c, i32 %d, i32 %e) {
 entry:
   %0 = icmp eq i32 %a, 0
   br i1 %0, label %if, label %else
 
 if:
-  %1 = add i32 %b, %c
+  %1 = sub i32 %b, %c
   br label %endif
 
 else:
@@ -31,6 +33,45 @@ endif:
   ret void
 }
 
+; SI-LABEL: {{^}}sgpr_if_else_salu_br_opt:
+; SI: s_cmp_lg_u32
+; SI: s_cbranch_scc0 [[IF:BB[0-9]+_[0-9]+]]
+
+; SI: ; %bb.1: ; %else
+; SI: s_load_dword [[LOAD0:s[0-9]+]], s{{\[[0-9]+:[0-9]+\]}}, 0x2e
+; SI: s_load_dword [[LOAD1:s[0-9]+]], s{{\[[0-9]+:[0-9]+\]}}, 0x37
+; SI-NOT: add
+; SI: s_branch [[ENDIF:BB[0-9]+_[0-9]+]]
+
+; SI: [[IF]]: ; %if
+; SI: s_load_dword [[LOAD0]], s{{\[[0-9]+:[0-9]+\]}}, 0x1c
+; SI: s_load_dword [[LOAD1]], s{{\[[0-9]+:[0-9]+\]}}, 0x25
+; SI-NOT: add
+
+; SI: [[ENDIF]]: ; %endif
+; SI: s_add_i32 s{{[0-9]+}}, [[LOAD0]], [[LOAD1]]
+; SI: buffer_store_dword
+; SI-NEXT: s_endpgm
+define amdgpu_kernel void @sgpr_if_else_salu_br_opt(i32 addrspace(1)* %out, [8 x i32], i32 %a, [8 x i32], i32 %b, [8 x i32], i32 %c, [8 x i32], i32 %d, [8 x i32], i32 %e) {
+entry:
+  %cmp0 = icmp eq i32 %a, 0
+  br i1 %cmp0, label %if, label %else
+
+if:
+  %add0 = add i32 %b, %c
+  br label %endif
+
+else:
+  %add1 = add i32 %d, %e
+  br label %endif
+
+endif:
+  %phi = phi i32 [%add0, %if], [%add1, %else]
+  %add2 = add i32 %phi, %a
+  store i32 %add2, i32 addrspace(1)* %out
+  ret void
+}
+
 ; The two S_ADD instructions should write to different registers, since
 ; different threads will take different control flow paths.
 
@@ -38,7 +79,7 @@ endif:
 ; SI: s_add_i32 [[SGPR:s[0-9]+]]
 ; SI-NOT: s_add_i32 [[SGPR]]
 
-define void @sgpr_if_else_valu_br(i32 addrspace(1)* %out, float %a, i32 %b, i32 %c, i32 %d, i32 %e) {
+define amdgpu_kernel void @sgpr_if_else_valu_br(i32 addrspace(1)* %out, float %a, i32 %b, i32 %c, i32 %d, i32 %e) {
 entry:
   %tid = call i32 @llvm.amdgcn.workitem.id.x() #0
   %tid_f = uitofp i32 %tid to float
@@ -67,7 +108,7 @@ endif:
 ; SI: v_cmp_gt_i32_e32 [[CMP_IF:vcc]], 0, [[AVAL]]
 ; SI: v_cndmask_b32_e64 [[V_CMP:v[0-9]+]], 0, -1, [[CMP_IF]]
 
-; SI: BB2_2:
+; SI: BB{{[0-9]+}}_2:
 ; SI: buffer_load_dword [[AVAL:v[0-9]+]]
 ; SI: v_cmp_eq_u32_e32 [[CMP_ELSE:vcc]], 0, [[AVAL]]
 ; SI: v_cndmask_b32_e64 [[V_CMP]], 0, -1, [[CMP_ELSE]]
@@ -75,7 +116,7 @@ endif:
 ; SI: v_cmp_ne_u32_e32 [[CMP_CMP:vcc]], 0, [[V_CMP]]
 ; SI: v_cndmask_b32_e64 [[RESULT:v[0-9]+]], 0, -1, [[CMP_CMP]]
 ; SI: buffer_store_dword [[RESULT]]
-define void @sgpr_if_else_valu_cmp_phi_br(i32 addrspace(1)* %out, i32 addrspace(1)* %a, i32 addrspace(1)* %b) {
+define amdgpu_kernel void @sgpr_if_else_valu_cmp_phi_br(i32 addrspace(1)* %out, i32 addrspace(1)* %a, i32 addrspace(1)* %b) {
 entry:
   %tid = call i32 @llvm.amdgcn.workitem.id.x() #0
   %tmp1 = icmp eq i32 %tid, 0

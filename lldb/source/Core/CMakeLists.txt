@@ -1,61 +1,46 @@
+set(LLDB_CURSES_LIBS)
+
+if (NOT LLDB_DISABLE_CURSES)
+  list(APPEND LLDB_CURSES_LIBS ${CURSES_LIBRARIES})
+  if(LLVM_ENABLE_TERMINFO AND HAVE_TERMINFO)
+    list(APPEND LLDB_CURSES_LIBS ${TERMINFO_LIBS})
+  endif()
+endif()
+
 add_lldb_library(lldbCore
   Address.cpp
   AddressRange.cpp
   AddressResolver.cpp
   AddressResolverFileLine.cpp
   AddressResolverName.cpp
-  ArchSpec.cpp
-  Baton.cpp
   Broadcaster.cpp
   Communication.cpp
-  Connection.cpp
-  ConnectionMachPort.cpp
-  ConnectionSharedMemory.cpp
-  ConstString.cpp
-  DataBufferHeap.cpp
-  DataBufferMemoryMap.cpp
-  DataEncoder.cpp
-  DataExtractor.cpp
   Debugger.cpp
   Disassembler.cpp
+  DumpDataExtractor.cpp
+  DumpRegisterValue.cpp
   DynamicLoader.cpp
   EmulateInstruction.cpp
-  Error.cpp
   Event.cpp
-  FastDemangle.cpp
   FileLineResolver.cpp
   FileSpecList.cpp
   FormatEntity.cpp
-  History.cpp
+  Highlighter.cpp
   IOHandler.cpp
   Listener.cpp
-  Log.cpp
-  Logging.cpp
   Mangled.cpp
   Module.cpp
   ModuleChild.cpp
   ModuleList.cpp
   Opcode.cpp
   PluginManager.cpp
-  RegisterValue.cpp
-  RegularExpression.cpp
-  Scalar.cpp
+  RichManglingContext.cpp
   SearchFilter.cpp
   Section.cpp
   SourceManager.cpp
-  State.cpp
-  Stream.cpp
   StreamAsynchronousIO.cpp
-  StreamCallback.cpp
   StreamFile.cpp
-  StreamGDBRemote.cpp
-  StreamString.cpp
-  StringList.cpp
-  StructuredData.cpp
-  Timer.cpp
-  UserID.cpp
   UserSettingsController.cpp
-  UUID.cpp
   Value.cpp
   ValueObject.cpp
   ValueObjectCast.cpp
@@ -70,6 +55,32 @@ add_lldb_library(lldbCore
   ValueObjectRegister.cpp
   ValueObjectSyntheticFilter.cpp
   ValueObjectVariable.cpp
-  VMRange.cpp
+
+  LINK_LIBS
+    clangAST
+    lldbBreakpoint
+    lldbDataFormatters
+    lldbExpression
+    lldbHost
+    lldbInterpreter
+    lldbSymbol
+    lldbTarget
+    lldbUtility
+    lldbPluginProcessUtility
+    lldbPluginCPlusPlusLanguage
+    lldbPluginObjCLanguage
+    ${LLDB_CURSES_LIBS}
+
+  LINK_COMPONENTS
+    BinaryFormat
+    Support
+    Demangle
   )
 
+# Needed to properly resolve references in a debug build.
+# TODO: Remove once we have better layering
+set_target_properties(lldbCore PROPERTIES LINK_INTERFACE_MULTIPLICITY 4)
+
+if (NOT LLDB_DISABLE_LIBEDIT)
+  target_include_directories(lldbCore PRIVATE ${libedit_INCLUDE_DIRS})
+endif()

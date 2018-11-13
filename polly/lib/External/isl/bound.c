@@ -1,11 +1,10 @@
 #include <assert.h>
 #include <isl/stream.h>
 #include <isl_map_private.h>
-#include <isl_polynomial_private.h>
+#include <isl/polynomial.h>
 #include <isl_scan.h>
+#include <isl/val.h>
 #include <isl/options.h>
-#include <isl/deprecated/point_int.h>
-#include <isl/deprecated/polynomial_int.h>
 
 struct bound_options {
 	struct isl_options	*isl;
@@ -61,10 +60,9 @@ struct verify_point_bound {
 static isl_stat verify_point(__isl_take isl_point *pnt, void *user)
 {
 	int i;
-	unsigned nvar;
 	unsigned nparam;
 	struct verify_point_bound *vpb = (struct verify_point_bound *) user;
-	isl_int t;
+	isl_val *v;
 	isl_ctx *ctx;
 	isl_pw_qpolynomial_fold *pwf;
 	isl_val *bound = NULL;
@@ -72,7 +70,7 @@ static isl_stat verify_point(__isl_take isl_point *pnt, void *user)
 	isl_set *dom = NULL;
 	isl_printer *p;
 	const char *minmax;
-	int bounded;
+	isl_bool bounded;
 	int sign;
 	int ok;
 	FILE *out = vpb->options->print_all ? stdout : stderr;
@@ -90,14 +88,12 @@ static isl_stat verify_point(__isl_take isl_point *pnt, void *user)
 	ctx = isl_point_get_ctx(pnt);
 	p = isl_printer_to_file(ctx, out);
 
-	isl_int_init(t);
-
 	pwf = isl_pw_qpolynomial_fold_copy(vpb->pwf);
 
 	nparam = isl_pw_qpolynomial_fold_dim(pwf, isl_dim_param);
 	for (i = 0; i < nparam; ++i) {
-		isl_point_get_coordinate(pnt, isl_dim_param, i, &t);
-		pwf = isl_pw_qpolynomial_fold_fix_dim(pwf, isl_dim_param, i, t);
+		v = isl_point_get_coordinate_val(pnt, isl_dim_param, i);
+		pwf = isl_pw_qpolynomial_fold_fix_val(pwf, isl_dim_param, i, v);
 	}
 
 	bound = isl_pw_qpolynomial_fold_eval(
@@ -119,7 +115,6 @@ static isl_stat verify_point(__isl_take isl_point *pnt, void *user)
 	else
 		opt = isl_pw_qpolynomial_fold_min(isl_pw_qpolynomial_fold_copy(pwf));
 
-	nvar = isl_set_dim(dom, isl_dim_set);
 	if (vpb->exact && bounded)
 		ok = isl_val_eq(opt, bound);
 	else if (sign > 0)
@@ -135,8 +130,9 @@ static isl_stat verify_point(__isl_take isl_point *pnt, void *user)
 		for (i = 0; i < nparam; ++i) {
 			if (i)
 				p = isl_printer_print_str(p, ", ");
-			isl_point_get_coordinate(pnt, isl_dim_param, i, &t);
-			p = isl_printer_print_isl_int(p, t);
+			v = isl_point_get_coordinate_val(pnt, isl_dim_param, i);
+			p = isl_printer_print_val(p, v);
+			isl_val_free(v);
 		}
 		p = isl_printer_print_str(p, ") = ");
 		p = isl_printer_print_val(p, bound);
@@ -164,8 +160,6 @@ error:
 	isl_val_free(opt);
 	isl_point_free(pnt);
 	isl_set_free(dom);
-
-	isl_int_clear(t);
 
 	isl_printer_free(p);
 

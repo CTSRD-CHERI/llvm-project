@@ -9,7 +9,7 @@
 #endif
 
 template<typename T> 
-T pi = T(3.1415926535897932385); // expected-note {{template is declared here}}
+T pi = T(3.1415926535897932385); // expected-note 2{{declared here}}
 
 template<typename T> 
 CONST T cpi = T(3.1415926535897932385); // expected-note {{template is declared here}}
@@ -30,8 +30,8 @@ namespace use_in_top_level_funcs {
 
   void no_deduce() {
     // template arguments are not deduced for uses of variable templates.
-    int ipi = pi; // expected-error {{cannot refer to variable template 'pi' without a template argument list}}
-    int icpi = cpi; // expected-error {{cannot refer to variable template 'cpi' without a template argument list}}
+    int ipi = pi; // expected-error {{use of variable template 'pi' requires template arguments}}
+    int icpi = cpi; // expected-error {{use of variable template 'cpi' requires template arguments}}
   }
   
   template<typename T>
@@ -58,10 +58,9 @@ namespace use_in_top_level_funcs {
 namespace shadow {
   void foo() {
     int ipi0 = pi<int>;
-    int pi;
+    int pi; // expected-note {{found}}
     int a = pi;
-    int ipi = pi<int>;  // expected-error {{expected '(' for function-style cast or type construction}} \
-                        // expected-error {{expected expression}}
+    int ipi = pi<int>;  // expected-error {{'pi' does not name a template but is followed by template arguments; did you mean '::pi'?}}
   }
 }
 
@@ -102,7 +101,7 @@ namespace odr_tmpl {
     template<typename T> extern int v;    // expected-error {{redeclaration of 'v' with a different type: 'int' vs 'T'}}
 
 #ifndef PRECXX11
-    template<typename T> extern auto v;   // expected-error {{declaration of variable 'v' with type 'auto' requires an initializer}}
+    template<typename T> extern auto v;   // expected-error {{declaration of variable 'v' with deduced type 'auto' requires an initializer}}
 #endif
 
     template<typename T> T var = T();     // expected-note {{previous definition is here}}
@@ -111,7 +110,7 @@ namespace odr_tmpl {
 
 #ifndef PRECXX11
   namespace pvt_auto {
-    template<typename T> auto v0; // expected-error {{declaration of variable 'v0' with type 'auto' requires an initializer}}
+    template<typename T> auto v0; // expected-error {{declaration of variable 'v0' with deduced type 'auto' requires an initializer}}
     template<typename T> auto v1 = T();  // expected-note {{previous definition is here}}
     template<typename T> int v1;   // expected-error {{redefinition of 'v1' with a different type: 'int' vs 'auto'}}
     template<typename T> auto v2 = T();  // expected-note {{previous definition is here}}
@@ -119,7 +118,7 @@ namespace odr_tmpl {
     template<typename T> auto v3 = T();   // expected-note {{previous definition is here}}
     template<typename T> extern T v3;     // expected-error {{redeclaration of 'v3' with a different type: 'T' vs 'auto'}}
     template<typename T> auto v4 = T();
-    template<typename T> extern auto v4;   // expected-error {{declaration of variable 'v4' with type 'auto' requires an initializer}}
+    template<typename T> extern auto v4;   // expected-error {{declaration of variable 'v4' with deduced type 'auto' requires an initializer}}
   }
 #endif
   
@@ -410,7 +409,7 @@ namespace nested {
 #endif
     float f1 = pi1a<float>;
     
-    template<> double pi1a<double> = 5.2;  // expected-error {{variable template specialization of 'pi1a' must originally be declared in namespace 'n1'}}
+    template<> double pi1a<double> = 5.2; // expected-error {{not in a namespace enclosing 'n1'}}
     double d1 = pi1a<double>;
   }
   
@@ -423,8 +422,7 @@ namespace nested {
 #endif
     float f1 = n1::pi1b<float>;
     
-    template<> double n1::pi1b<double> = 5.2;  // expected-error {{cannot define or redeclare 'pi1b' here because namespace 'use_n1b' does not enclose namespace 'n1'}} \
-                                               // expected-error {{variable template specialization of 'pi1b' must originally be declared in namespace 'n1'}}
+    template<> double n1::pi1b<double> = 5.2;  // expected-error {{not in a namespace enclosing 'n1'}}
     double d1 = n1::pi1b<double>;
   }
 }
@@ -464,3 +462,8 @@ template <typename... Args> Variadic_t<Args...> Variadic;
 auto variadic1 = Variadic<>;
 auto variadic2 = Variadic<int, int>;
 #endif
+
+namespace VexingParse {
+  template <typename> int var; // expected-note {{declared here}}
+  int x(var); // expected-error {{use of variable template 'var' requires template arguments}}
+}

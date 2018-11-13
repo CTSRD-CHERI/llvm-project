@@ -30,17 +30,17 @@ if(LLVM_BUILD_INSTRUMENTED)
   endif()
 
   if(NOT LLVM_PROFDATA)
-    message(FATAL_ERROR "Must set LLVM_PROFDATA to point to llvm-profdata to use for merging PGO data")
+    message(STATUS "To enable merging PGO data LLVM_PROFDATA has to point to llvm-profdata")
+  else()
+    add_custom_target(generate-profdata
+      COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/perf-helper.py merge ${LLVM_PROFDATA} ${CMAKE_CURRENT_BINARY_DIR}/clang.profdata ${CMAKE_CURRENT_BINARY_DIR}
+      COMMENT "Merging profdata"
+      DEPENDS generate-profraw)
   endif()
-
-  add_custom_target(generate-profdata
-    COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/perf-helper.py merge ${LLVM_PROFDATA} ${CMAKE_CURRENT_BINARY_DIR}/clang.profdata ${CMAKE_CURRENT_BINARY_DIR}
-    COMMENT "Merging profdata"
-    DEPENDS generate-profraw)
 endif()
 
 find_program(DTRACE dtrace)
-if(DTRACE)
+if(APPLE AND DTRACE)
   configure_lit_site_cfg(
     ${CMAKE_CURRENT_SOURCE_DIR}/order-files.lit.site.cfg.in
     ${CMAKE_CURRENT_BINARY_DIR}/order-files/lit.site.cfg
@@ -55,6 +55,10 @@ if(DTRACE)
   add_custom_target(clear-dtrace-logs
     COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/perf-helper.py clean ${CMAKE_CURRENT_BINARY_DIR} dtrace
     COMMENT "Clearing old dtrace data")
+
+  if(NOT CLANG_ORDER_FILE)
+    message(FATAL_ERROR "Output clang order file is not set")
+  endif()
 
   add_custom_target(generate-order-file
     COMMAND ${PYTHON_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/perf-helper.py gen-order-file --binary $<TARGET_FILE:clang> --output ${CLANG_ORDER_FILE} ${CMAKE_CURRENT_BINARY_DIR}

@@ -13,6 +13,7 @@
 
 #include <string_view>
 #include <cassert>
+#include <cstddef>
 
 #include "test_macros.h"
 
@@ -38,9 +39,9 @@ test(S s)
         assert(ce2 !=  s.rbegin());
     }
 
-    assert(  e -  s.rbegin() == s.size());
-    assert(ce1 - cs.rbegin() == cs.size());
-    assert(ce2 - s.crbegin() == s.size());
+    assert(static_cast<std::size_t>(  e -  s.rbegin()) == s.size());
+    assert(static_cast<std::size_t>(ce1 - cs.rbegin()) == cs.size());
+    assert(static_cast<std::size_t>(ce2 - s.crbegin()) == s.size());
 
     assert(  e == ce1);
     assert(  e == ce2);
@@ -64,5 +65,24 @@ int main()
 #if TEST_STD_VER >= 11
     test(u16string_view{u"123"});
     test(u32string_view{U"123"});
+#endif
+
+#if TEST_STD_VER > 14
+    {
+    constexpr string_view       sv { "123", 3 };
+    constexpr u16string_view u16sv {u"123", 3 };
+    constexpr u32string_view u32sv {U"123", 3 };
+    constexpr wstring_view     wsv {L"123", 3 };
+
+    static_assert (    *--sv.rend() ==    sv[0], "" );
+    static_assert ( *--u16sv.rend() == u16sv[0], "" );
+    static_assert ( *--u32sv.rend() == u32sv[0], "" );
+    static_assert (   *--wsv.rend() ==   wsv[0], "" );
+
+    static_assert (    *--sv.crend() ==    sv[0], "" );
+    static_assert ( *--u16sv.crend() == u16sv[0], "" );
+    static_assert ( *--u32sv.crend() == u32sv[0], "" );
+    static_assert (   *--wsv.crend() ==   wsv[0], "" );
+    }
 #endif
 }

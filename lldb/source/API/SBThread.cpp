@@ -14,10 +14,7 @@
 #include "lldb/API/SBSymbolContext.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/State.h"
-#include "lldb/Core/Stream.h"
 #include "lldb/Core/StreamFile.h"
-#include "lldb/Core/StructuredData.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Symbol/CompileUnit.h"
@@ -34,6 +31,9 @@
 #include "lldb/Target/ThreadPlanStepOut.h"
 #include "lldb/Target/ThreadPlanStepRange.h"
 #include "lldb/Target/UnixSignals.h"
+#include "lldb/Utility/State.h"
+#include "lldb/Utility/Stream.h"
+#include "lldb/Utility/StructuredData.h"
 
 #include "lldb/API/SBAddress.h"
 #include "lldb/API/SBDebugger.h"
@@ -43,6 +43,7 @@
 #include "lldb/API/SBThreadCollection.h"
 #include "lldb/API/SBThreadPlan.h"
 #include "lldb/API/SBValue.h"
+#include "lldb/lldb-enumerations.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -291,10 +292,6 @@ SBThreadCollection
 SBThread::GetStopReasonExtendedBacktraces(InstrumentationRuntimeType type) {
   ThreadCollectionSP threads;
   threads.reset(new ThreadCollection());
-
-  // We currently only support ThreadSanitizer.
-  if (type != eInstrumentationRuntimeTypeThreadSanitizer)
-    return threads;
 
   std::unique_lock<std::recursive_mutex> lock;
   ExecutionContext exe_ctx(m_opaque_sp.get(), lock);
@@ -561,26 +558,26 @@ bool SBThread::GetInfoItemByPathAsString(const char *path, SBStream &strm) {
         StructuredData::ObjectSP node =
             info_root_sp->GetObjectForDotSeparatedPath(path);
         if (node) {
-          if (node->GetType() == StructuredData::Type::eTypeString) {
-            strm.Printf("%s", node->GetAsString()->GetValue().c_str());
+          if (node->GetType() == eStructuredDataTypeString) {
+            strm.Printf("%s", node->GetAsString()->GetValue().str().c_str());
             success = true;
           }
-          if (node->GetType() == StructuredData::Type::eTypeInteger) {
+          if (node->GetType() == eStructuredDataTypeInteger) {
             strm.Printf("0x%" PRIx64, node->GetAsInteger()->GetValue());
             success = true;
           }
-          if (node->GetType() == StructuredData::Type::eTypeFloat) {
+          if (node->GetType() == eStructuredDataTypeFloat) {
             strm.Printf("0x%f", node->GetAsFloat()->GetValue());
             success = true;
           }
-          if (node->GetType() == StructuredData::Type::eTypeBoolean) {
+          if (node->GetType() == eStructuredDataTypeBoolean) {
             if (node->GetAsBoolean()->GetValue() == true)
               strm.Printf("true");
             else
               strm.Printf("false");
             success = true;
           }
-          if (node->GetType() == StructuredData::Type::eTypeNull) {
+          if (node->GetType() == eStructuredDataTypeNull) {
             strm.Printf("null");
             success = true;
           }
@@ -595,8 +592,8 @@ bool SBThread::GetInfoItemByPathAsString(const char *path, SBStream &strm) {
   }
 
   if (log)
-    log->Printf("SBThread(%p)::GetInfoItemByPathAsString () => %s",
-                static_cast<void *>(exe_ctx.GetThreadPtr()), strm.GetData());
+    log->Printf("SBThread(%p)::GetInfoItemByPathAsString (\"%s\") => \"%s\"",
+                static_cast<void *>(exe_ctx.GetThreadPtr()), path, strm.GetData());
 
   return success;
 }
@@ -618,8 +615,7 @@ SBError SBThread::ResumeNewPlan(ExecutionContext &exe_ctx,
   }
 
   // User level plans should be Master Plans so they can be interrupted, other
-  // plans executed, and
-  // then a "continue" will resume the plan.
+  // plans executed, and then a "continue" will resume the plan.
   if (new_plan != NULL) {
     new_plan->SetIsMasterPlan(true);
     new_plan->SetOkayToDiscard(false);
@@ -637,6 +633,11 @@ SBError SBThread::ResumeNewPlan(ExecutionContext &exe_ctx,
 }
 
 void SBThread::StepOver(lldb::RunMode stop_other_threads) {
+  SBError error; // Ignored
+  StepOver(stop_other_threads, error);
+}
+
+void SBThread::StepOver(lldb::RunMode stop_other_threads, SBError &error) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
 
   std::unique_lock<std::recursive_mutex> lock;
@@ -647,28 +648,29 @@ void SBThread::StepOver(lldb::RunMode stop_other_threads) {
                 static_cast<void *>(exe_ctx.GetThreadPtr()),
                 Thread::RunModeAsCString(stop_other_threads));
 
-  if (exe_ctx.HasThreadScope()) {
-    Thread *thread = exe_ctx.GetThreadPtr();
-    bool abort_other_plans = false;
-    StackFrameSP frame_sp(thread->GetStackFrameAtIndex(0));
-
-    ThreadPlanSP new_plan_sp;
-    if (frame_sp) {
-      if (frame_sp->HasDebugInformation()) {
-        const LazyBool avoid_no_debug = eLazyBoolCalculate;
-        SymbolContext sc(frame_sp->GetSymbolContext(eSymbolContextEverything));
-        new_plan_sp = thread->QueueThreadPlanForStepOverRange(
-            abort_other_plans, sc.line_entry, sc, stop_other_threads,
-            avoid_no_debug);
-      } else {
-        new_plan_sp = thread->QueueThreadPlanForStepSingleInstruction(
-            true, abort_other_plans, stop_other_threads);
-      }
-    }
-
-    // This returns an error, we should use it!
-    ResumeNewPlan(exe_ctx, new_plan_sp.get());
+  if (!exe_ctx.HasThreadScope()) {
+    error.SetErrorString("this SBThread object is invalid");
+    return;
   }
+
+  Thread *thread = exe_ctx.GetThreadPtr();
+  bool abort_other_plans = false;
+  StackFrameSP frame_sp(thread->GetStackFrameAtIndex(0));
+
+  ThreadPlanSP new_plan_sp;
+  if (frame_sp) {
+    if (frame_sp->HasDebugInformation()) {
+      const LazyBool avoid_no_debug = eLazyBoolCalculate;
+      SymbolContext sc(frame_sp->GetSymbolContext(eSymbolContextEverything));
+      new_plan_sp = thread->QueueThreadPlanForStepOverRange(
+          abort_other_plans, sc.line_entry, sc, stop_other_threads,
+          avoid_no_debug);
+    } else {
+      new_plan_sp = thread->QueueThreadPlanForStepSingleInstruction(
+          true, abort_other_plans, stop_other_threads);
+    }
+  }
+  error = ResumeNewPlan(exe_ctx, new_plan_sp.get());
 }
 
 void SBThread::StepInto(lldb::RunMode stop_other_threads) {
@@ -677,7 +679,7 @@ void SBThread::StepInto(lldb::RunMode stop_other_threads) {
 
 void SBThread::StepInto(const char *target_name,
                         lldb::RunMode stop_other_threads) {
-  SBError error;
+  SBError error; // Ignored
   StepInto(target_name, LLDB_INVALID_LINE_NUMBER, error, stop_other_threads);
 }
 
@@ -695,41 +697,48 @@ void SBThread::StepInto(const char *target_name, uint32_t end_line,
         target_name ? target_name : "<NULL>",
         Thread::RunModeAsCString(stop_other_threads));
 
-  if (exe_ctx.HasThreadScope()) {
-    bool abort_other_plans = false;
+  if (!exe_ctx.HasThreadScope()) {
+    error.SetErrorString("this SBThread object is invalid");
+    return;
+  }
 
-    Thread *thread = exe_ctx.GetThreadPtr();
-    StackFrameSP frame_sp(thread->GetStackFrameAtIndex(0));
-    ThreadPlanSP new_plan_sp;
+  bool abort_other_plans = false;
 
-    if (frame_sp && frame_sp->HasDebugInformation()) {
-      SymbolContext sc(frame_sp->GetSymbolContext(eSymbolContextEverything));
-      AddressRange range;
-      if (end_line == LLDB_INVALID_LINE_NUMBER)
-        range = sc.line_entry.range;
-      else {
-        if (!sc.GetAddressRangeFromHereToEndLine(end_line, range, error.ref()))
-          return;
-      }
+  Thread *thread = exe_ctx.GetThreadPtr();
+  StackFrameSP frame_sp(thread->GetStackFrameAtIndex(0));
+  ThreadPlanSP new_plan_sp;
 
-      const LazyBool step_out_avoids_code_without_debug_info =
-          eLazyBoolCalculate;
-      const LazyBool step_in_avoids_code_without_debug_info =
-          eLazyBoolCalculate;
-      new_plan_sp = thread->QueueThreadPlanForStepInRange(
-          abort_other_plans, range, sc, target_name, stop_other_threads,
-          step_in_avoids_code_without_debug_info,
-          step_out_avoids_code_without_debug_info);
-    } else {
-      new_plan_sp = thread->QueueThreadPlanForStepSingleInstruction(
-          false, abort_other_plans, stop_other_threads);
+  if (frame_sp && frame_sp->HasDebugInformation()) {
+    SymbolContext sc(frame_sp->GetSymbolContext(eSymbolContextEverything));
+    AddressRange range;
+    if (end_line == LLDB_INVALID_LINE_NUMBER)
+      range = sc.line_entry.range;
+    else {
+      if (!sc.GetAddressRangeFromHereToEndLine(end_line, range, error.ref()))
+        return;
     }
 
-    error = ResumeNewPlan(exe_ctx, new_plan_sp.get());
+    const LazyBool step_out_avoids_code_without_debug_info =
+        eLazyBoolCalculate;
+    const LazyBool step_in_avoids_code_without_debug_info =
+        eLazyBoolCalculate;
+    new_plan_sp = thread->QueueThreadPlanForStepInRange(
+        abort_other_plans, range, sc, target_name, stop_other_threads,
+        step_in_avoids_code_without_debug_info,
+        step_out_avoids_code_without_debug_info);
+  } else {
+    new_plan_sp = thread->QueueThreadPlanForStepSingleInstruction(
+        false, abort_other_plans, stop_other_threads);
   }
+  error = ResumeNewPlan(exe_ctx, new_plan_sp.get());
 }
 
 void SBThread::StepOut() {
+  SBError error; // Ignored
+  StepOut(error);
+}
+
+void SBThread::StepOut(SBError &error) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
 
   std::unique_lock<std::recursive_mutex> lock;
@@ -739,23 +748,30 @@ void SBThread::StepOut() {
     log->Printf("SBThread(%p)::StepOut ()",
                 static_cast<void *>(exe_ctx.GetThreadPtr()));
 
-  if (exe_ctx.HasThreadScope()) {
-    bool abort_other_plans = false;
-    bool stop_other_threads = false;
-
-    Thread *thread = exe_ctx.GetThreadPtr();
-
-    const LazyBool avoid_no_debug = eLazyBoolCalculate;
-    ThreadPlanSP new_plan_sp(thread->QueueThreadPlanForStepOut(
-        abort_other_plans, NULL, false, stop_other_threads, eVoteYes,
-        eVoteNoOpinion, 0, avoid_no_debug));
-
-    // This returns an error, we should use it!
-    ResumeNewPlan(exe_ctx, new_plan_sp.get());
+  if (!exe_ctx.HasThreadScope()) {
+    error.SetErrorString("this SBThread object is invalid");
+    return;
   }
+
+  bool abort_other_plans = false;
+  bool stop_other_threads = false;
+
+  Thread *thread = exe_ctx.GetThreadPtr();
+
+  const LazyBool avoid_no_debug = eLazyBoolCalculate;
+  ThreadPlanSP new_plan_sp(thread->QueueThreadPlanForStepOut(
+      abort_other_plans, NULL, false, stop_other_threads, eVoteYes,
+      eVoteNoOpinion, 0, avoid_no_debug));
+
+  error = ResumeNewPlan(exe_ctx, new_plan_sp.get());
 }
 
-void SBThread::StepOutOfFrame(lldb::SBFrame &sb_frame) {
+void SBThread::StepOutOfFrame(SBFrame &sb_frame) {
+  SBError error; // Ignored
+  StepOutOfFrame(sb_frame, error);
+}
+
+void SBThread::StepOutOfFrame(SBFrame &sb_frame, SBError &error) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
 
   std::unique_lock<std::recursive_mutex> lock;
@@ -766,6 +782,7 @@ void SBThread::StepOutOfFrame(lldb::SBFrame &sb_frame) {
       log->Printf(
           "SBThread(%p)::StepOutOfFrame passed an invalid frame, returning.",
           static_cast<void *>(exe_ctx.GetThreadPtr()));
+    error.SetErrorString("passed invalid SBFrame object");
     return;
   }
 
@@ -778,27 +795,36 @@ void SBThread::StepOutOfFrame(lldb::SBFrame &sb_frame) {
                 static_cast<void *>(frame_sp.get()), frame_desc_strm.GetData());
   }
 
-  if (exe_ctx.HasThreadScope()) {
-    bool abort_other_plans = false;
-    bool stop_other_threads = false;
-    Thread *thread = exe_ctx.GetThreadPtr();
-    if (sb_frame.GetThread().GetThreadID() != thread->GetID()) {
-      log->Printf("SBThread(%p)::StepOutOfFrame passed a frame from another "
-                  "thread (0x%" PRIx64 " vrs. 0x%" PRIx64 ", returning.",
-                  static_cast<void *>(exe_ctx.GetThreadPtr()),
-                  sb_frame.GetThread().GetThreadID(), thread->GetID());
-    }
-
-    ThreadPlanSP new_plan_sp(thread->QueueThreadPlanForStepOut(
-        abort_other_plans, NULL, false, stop_other_threads, eVoteYes,
-        eVoteNoOpinion, frame_sp->GetFrameIndex()));
-
-    // This returns an error, we should use it!
-    ResumeNewPlan(exe_ctx, new_plan_sp.get());
+  if (!exe_ctx.HasThreadScope()) {
+    error.SetErrorString("this SBThread object is invalid");
+    return;
   }
+
+  bool abort_other_plans = false;
+  bool stop_other_threads = false;
+  Thread *thread = exe_ctx.GetThreadPtr();
+  if (sb_frame.GetThread().GetThreadID() != thread->GetID()) {
+    log->Printf("SBThread(%p)::StepOutOfFrame passed a frame from another "
+                "thread (0x%" PRIx64 " vrs. 0x%" PRIx64 ", returning.",
+                static_cast<void *>(exe_ctx.GetThreadPtr()),
+                sb_frame.GetThread().GetThreadID(), thread->GetID());
+    error.SetErrorString("passed a frame from another thread");
+    return;
+  }
+
+  ThreadPlanSP new_plan_sp(thread->QueueThreadPlanForStepOut(
+      abort_other_plans, NULL, false, stop_other_threads, eVoteYes,
+      eVoteNoOpinion, frame_sp->GetFrameIndex()));
+
+  error = ResumeNewPlan(exe_ctx, new_plan_sp.get());
 }
 
 void SBThread::StepInstruction(bool step_over) {
+  SBError error; // Ignored
+  StepInstruction(step_over, error);
+}
+
+void SBThread::StepInstruction(bool step_over, SBError &error) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
 
   std::unique_lock<std::recursive_mutex> lock;
@@ -808,17 +834,24 @@ void SBThread::StepInstruction(bool step_over) {
     log->Printf("SBThread(%p)::StepInstruction (step_over=%i)",
                 static_cast<void *>(exe_ctx.GetThreadPtr()), step_over);
 
-  if (exe_ctx.HasThreadScope()) {
-    Thread *thread = exe_ctx.GetThreadPtr();
-    ThreadPlanSP new_plan_sp(
-        thread->QueueThreadPlanForStepSingleInstruction(step_over, true, true));
-
-    // This returns an error, we should use it!
-    ResumeNewPlan(exe_ctx, new_plan_sp.get());
+  if (!exe_ctx.HasThreadScope()) {
+    error.SetErrorString("this SBThread object is invalid");
+    return;
   }
+
+  Thread *thread = exe_ctx.GetThreadPtr();
+  ThreadPlanSP new_plan_sp(
+      thread->QueueThreadPlanForStepSingleInstruction(step_over, true, true));
+
+  error = ResumeNewPlan(exe_ctx, new_plan_sp.get());
 }
 
 void SBThread::RunToAddress(lldb::addr_t addr) {
+  SBError error; // Ignored
+  RunToAddress(addr, error);
+}
+
+void SBThread::RunToAddress(lldb::addr_t addr, SBError &error) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
 
   std::unique_lock<std::recursive_mutex> lock;
@@ -828,20 +861,22 @@ void SBThread::RunToAddress(lldb::addr_t addr) {
     log->Printf("SBThread(%p)::RunToAddress (addr=0x%" PRIx64 ")",
                 static_cast<void *>(exe_ctx.GetThreadPtr()), addr);
 
-  if (exe_ctx.HasThreadScope()) {
-    bool abort_other_plans = false;
-    bool stop_other_threads = true;
-
-    Address target_addr(addr);
-
-    Thread *thread = exe_ctx.GetThreadPtr();
-
-    ThreadPlanSP new_plan_sp(thread->QueueThreadPlanForRunToAddress(
-        abort_other_plans, target_addr, stop_other_threads));
-
-    // This returns an error, we should use it!
-    ResumeNewPlan(exe_ctx, new_plan_sp.get());
+  if (!exe_ctx.HasThreadScope()) {
+    error.SetErrorString("this SBThread object is invalid");
+    return;
   }
+
+  bool abort_other_plans = false;
+  bool stop_other_threads = true;
+
+  Address target_addr(addr);
+
+  Thread *thread = exe_ctx.GetThreadPtr();
+
+  ThreadPlanSP new_plan_sp(thread->QueueThreadPlanForRunToAddress(
+      abort_other_plans, target_addr, stop_other_threads));
+
+  error = ResumeNewPlan(exe_ctx, new_plan_sp.get());
 }
 
 SBError SBThread::StepOverUntil(lldb::SBFrame &sb_frame,
@@ -914,8 +949,7 @@ SBError SBThread::StepOverUntil(lldb::SBFrame &sb_frame,
     // Grab the current function, then we will make sure the "until" address is
     // within the function.  We discard addresses that are out of the current
     // function, and then if there are no addresses remaining, give an
-    // appropriate
-    // error message.
+    // appropriate error message.
 
     bool all_in_function = true;
     AddressRange fun_range = frame_sc.function->GetAddressRange();
@@ -1037,7 +1071,7 @@ SBError SBThread::JumpToLine(lldb::SBFileSpec &file_spec, uint32_t line) {
 
   Thread *thread = exe_ctx.GetThreadPtr();
 
-  Error err = thread->JumpToLine(file_spec.get(), line, true);
+  Status err = thread->JumpToLine(file_spec.get(), line, true);
   sb_error.SetError(err);
   return sb_error;
 }
@@ -1087,6 +1121,11 @@ SBError SBThread::UnwindInnermostExpression() {
 }
 
 bool SBThread::Suspend() {
+  SBError error; // Ignored
+  return Suspend(error);
+}
+
+bool SBThread::Suspend(SBError &error) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
   std::unique_lock<std::recursive_mutex> lock;
   ExecutionContext exe_ctx(m_opaque_sp.get(), lock);
@@ -1098,11 +1137,13 @@ bool SBThread::Suspend() {
       exe_ctx.GetThreadPtr()->SetResumeState(eStateSuspended);
       result = true;
     } else {
+      error.SetErrorString("process is running");
       if (log)
         log->Printf("SBThread(%p)::Suspend() => error: process is running",
                     static_cast<void *>(exe_ctx.GetThreadPtr()));
     }
-  }
+  } else
+    error.SetErrorString("this SBThread object is invalid");
   if (log)
     log->Printf("SBThread(%p)::Suspend() => %i",
                 static_cast<void *>(exe_ctx.GetThreadPtr()), result);
@@ -1110,6 +1151,11 @@ bool SBThread::Suspend() {
 }
 
 bool SBThread::Resume() {
+  SBError error; // Ignored
+  return Resume(error);
+}
+
+bool SBThread::Resume(SBError &error) {
   Log *log(lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_API));
   std::unique_lock<std::recursive_mutex> lock;
   ExecutionContext exe_ctx(m_opaque_sp.get(), lock);
@@ -1122,11 +1168,13 @@ bool SBThread::Resume() {
       exe_ctx.GetThreadPtr()->SetResumeState(eStateRunning, override_suspend);
       result = true;
     } else {
+      error.SetErrorString("process is running");
       if (log)
         log->Printf("SBThread(%p)::Resume() => error: process is running",
                     static_cast<void *>(exe_ctx.GetThreadPtr()));
     }
-  }
+  } else
+    error.SetErrorString("this SBThread object is invalid");
   if (log)
     log->Printf("SBThread(%p)::Resume() => %i",
                 static_cast<void *>(exe_ctx.GetThreadPtr()), result);
@@ -1377,8 +1425,7 @@ SBThread SBThread::GetExtendedBacktraceThread(const char *type) {
                 runtime->GetExtendedBacktraceThread(real_thread, type_const));
             if (new_thread_sp) {
               // Save this in the Process' ExtendedThreadList so a strong
-              // pointer retains the
-              // object.
+              // pointer retains the object.
               process->GetExtendedThreadList().AddThread(new_thread_sp);
               sb_origin_thread.SetThread(new_thread_sp);
               if (log) {

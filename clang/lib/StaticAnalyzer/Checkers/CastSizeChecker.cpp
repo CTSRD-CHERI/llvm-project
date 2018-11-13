@@ -101,7 +101,7 @@ void CastSizeChecker::checkPreStmt(const CastExpr *CE,CheckerContext &C) const {
     return;
 
   ProgramStateRef state = C.getState();
-  const MemRegion *R = state->getSVal(E, C.getLocationContext()).getAsRegion();
+  const MemRegion *R = C.getSVal(E).getAsRegion();
   if (!R)
     return;
 
@@ -140,5 +140,10 @@ void CastSizeChecker::checkPreStmt(const CastExpr *CE,CheckerContext &C) const {
 }
 
 void ento::registerCastSizeChecker(CheckerManager &mgr) {
-  mgr.registerChecker<CastSizeChecker>();
+  // PR31226: C++ is more complicated than what this checker currently supports.
+  // There are derived-to-base casts, there are different rules for 0-size
+  // structures, no flexible arrays, etc.
+  // FIXME: Disabled on C++ for now.
+  if (!mgr.getLangOpts().CPlusPlus)
+    mgr.registerChecker<CastSizeChecker>();
 }

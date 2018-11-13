@@ -218,7 +218,7 @@
 ; CHECK: CodeViewDebugInfo [
 ; CHECK:   Subsection [
 ; CHECK:     SubSectionType: Symbols (0xF1)
-; CHECK:     ProcStart {
+; CHECK:     {{.*}}Proc{{.*}}Sym {
 ; CHECK:       DbgStart: 0x0
 ; CHECK:       DbgEnd: 0x0
 ; CHECK:       FunctionType: f (0x1002)
@@ -229,68 +229,68 @@
 ; CHECK:       DisplayName: f
 ; CHECK:       LinkageName: ?f@@YAXMN_J@Z
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: float (0x40)
 ; CHECK:       Flags [ (0x1)
 ; CHECK:         IsParameter (0x1)
 ; CHECK:       ]
 ; CHECK:       VarName: p1
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: double (0x41)
 ; CHECK:       Flags [ (0x1)
 ; CHECK:         IsParameter (0x1)
 ; CHECK:       ]
 ; CHECK:       VarName: p2
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: __int64 (0x13)
 ; CHECK:       Flags [ (0x1)
 ; CHECK:         IsParameter (0x1)
 ; CHECK:       ]
 ; CHECK:       VarName: p3
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: int (0x74)
 ; CHECK:       VarName: v1
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: int* (0x674)
 ; CHECK:       VarName: v2
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: const int* (0x1004)
 ; CHECK:       VarName: v21
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: void* (0x603)
 ; CHECK:       VarName: v3
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: int A::* (0x1006)
 ; CHECK:       VarName: v4
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: void A::() A::* (0x100E)
 ; CHECK:       VarName: v5
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: long (0x12)
 ; CHECK:       VarName: l1
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: long (0x12)
 ; CHECK:       VarName: l2
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: unsigned long (0x22)
 ; CHECK:       VarName: l3
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: unsigned long (0x22)
 ; CHECK:       VarName: l4
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: const void* (0x1010)
 ; CHECK:       VarName: v6
 ; CHECK:     }
@@ -298,48 +298,48 @@
 ; CHECK:     }
 ; CHECK:   ]
 ; CHECK:   Subsection [
-; CHECK:     ProcStart {
+; CHECK:     {{.*}}Proc{{.*}}Sym {
 ; CHECK:       Type: CharTypes (0x1012)
 ; CHECK:       DisplayName: CharTypes
 ; CHECK:       LinkageName: ?CharTypes@@YAXXZ
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: wchar_t (0x71)
 ; CHECK:       Flags [ (0x0)
 ; CHECK:       ]
 ; CHECK:       VarName: w
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: unsigned short (0x21)
 ; CHECK:       Flags [ (0x0)
 ; CHECK:       ]
 ; CHECK:       VarName: us
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: char (0x70)
 ; CHECK:       Flags [ (0x0)
 ; CHECK:       ]
 ; CHECK:       VarName: c
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: unsigned char (0x20)
 ; CHECK:       Flags [ (0x0)
 ; CHECK:       ]
 ; CHECK:       VarName: uc
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: signed char (0x10)
 ; CHECK:       Flags [ (0x0)
 ; CHECK:       ]
 ; CHECK:       VarName: sc
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: char16_t (0x7A)
 ; CHECK:       Flags [ (0x0)
 ; CHECK:       ]
 ; CHECK:       VarName: c16
 ; CHECK:     }
-; CHECK:     Local {
+; CHECK:     LocalSym {
 ; CHECK:       Type: char32_t (0x7B)
 ; CHECK:       Flags [ (0x0)
 ; CHECK:       ]
@@ -460,7 +460,7 @@ attributes #3 = { nounwind uwtable "disable-tail-calls"="false" "less-precise-fp
 !4 = !{i32 2, !"Debug Info Version", i32 3}
 !5 = !{i32 1, !"PIC Level", i32 2}
 !6 = !{!"clang version 3.9.0 "}
-!7 = distinct !DISubprogram(name: "f", linkageName: "\01?f@@YAXMN_J@Z", scope: !1, file: !1, line: 6, type: !8, isLocal: false, isDefinition: true, scopeLine: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!7 = distinct !DISubprogram(name: "f", linkageName: "\01?f@@YAXMN_J@Z", scope: !1, file: !1, line: 6, type: !8, isLocal: false, isDefinition: true, scopeLine: 6, flags: DIFlagPrototyped, isOptimized: false, unit: !0, retainedNodes: !2)
 !8 = !DISubroutineType(types: !9)
 !9 = !{null, !10, !11, !12}
 !10 = !DIBasicType(name: "float", size: 32, align: 32, encoding: DW_ATE_float)
@@ -525,7 +525,7 @@ attributes #3 = { nounwind uwtable "disable-tail-calls"="false" "less-precise-fp
 !69 = !DILocation(line: 18, column: 11, scope: !7)
 !70 = !DILocation(line: 18, column: 3, scope: !7)
 !71 = !DILocation(line: 19, column: 1, scope: !7)
-!72 = distinct !DISubprogram(name: "CharTypes", linkageName: "\01?CharTypes@@YAXXZ", scope: !1, file: !1, line: 20, type: !73, isLocal: false, isDefinition: true, scopeLine: 20, flags: DIFlagPrototyped, isOptimized: false, unit: !0, variables: !2)
+!72 = distinct !DISubprogram(name: "CharTypes", linkageName: "\01?CharTypes@@YAXXZ", scope: !1, file: !1, line: 20, type: !73, isLocal: false, isDefinition: true, scopeLine: 20, flags: DIFlagPrototyped, isOptimized: false, unit: !0, retainedNodes: !2)
 !73 = !DISubroutineType(types: !74)
 !74 = !{null}
 !75 = !DILocalVariable(name: "w", scope: !72, file: !1, line: 21, type: !76)

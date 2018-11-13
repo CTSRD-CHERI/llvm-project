@@ -1,9 +1,8 @@
+# REQUIRES: amdgpu
 # RUN: llvm-mc -filetype=obj -triple=amdgcn--amdhsa -mcpu=fiji %s -o %t.o
-# RUN: ld.lld -shared %t.o -o %t.so
+# RUN: ld.lld --hash-style=sysv -shared %t.o -o %t.so
 # RUN: llvm-readobj -r %t.so | FileCheck %s
 # RUN: llvm-objdump -s %t.so | FileCheck %s --check-prefix=OBJDUMP
-
-# REQUIRES: amdgpu
 
 .text
 
@@ -65,10 +64,32 @@ ptr:
   .quad temp
   .size ptr, 8
 
+# R_AMDGPU_RELATIVE64:
+  .type temp2, @object
+  .local temp2
+  .size temp2, 4
+
+  .type ptr2, @object
+  .globl ptr2
+  .size ptr2, 8
+  .p2align 3
+ptr2:
+  .quad temp2
+
+# R_AMDGPU_REL64:
+.type foo, @object
+.rodata
+  .globl foo
+  .p2align 3
+foo:
+  .quad temp2@rel64
+  .size foo, 8
+
 # The relocation for local_var{0, 1, 2} and var should be resolved by the
 # linker.
 # CHECK: Relocations [
 # CHECK: .rela.dyn {
+# CHECK-NEXT: R_AMDGPU_RELATIVE64 - 0x0
 # CHECK-NEXT: R_AMDGPU_ABS64 common_var0 0x0
 # CHECK-NEXT: R_AMDGPU_ABS64 common_var1 0x0
 # CHECK-NEXT: R_AMDGPU_ABS64 common_var2 0x0
@@ -88,6 +109,9 @@ ptr:
 # CHECK-NEXT: }
 # CHECK-NEXT: ]
 
+# OBJDUMP: Contents of section .rodata:
+# OBJDUMP: d0f8ffff ffffffff
+
 # OBJDUMP: Contents of section nonalloc:
-# OBJDUMP-NEXT: 0000 00000000 14380000 00000000 18340000
-# OBJDUMP-NEXT: 00000000 1c300000
+# OBJDUMP-NEXT: 0000 00000000 04480000 00000000 08440000
+# OBJDUMP-NEXT: 00000000 0c400000

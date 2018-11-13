@@ -1,4 +1,4 @@
-//===-- llvm/CodeGen/DwarfFile.h - Dwarf Debug Framework -------*- C++ -*--===//
+//===- llvm/CodeGen/DwarfFile.h - Dwarf Debug Framework ---------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,30 +10,28 @@
 #ifndef LLVM_LIB_CODEGEN_ASMPRINTER_DWARFFILE_H
 #define LLVM_LIB_CODEGEN_ASMPRINTER_DWARFFILE_H
 
-#include "AddressPool.h"
 #include "DwarfStringPool.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/FoldingSet.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringMap.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/CodeGen/DIE.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/Support/Allocator.h"
+#include <map>
 #include <memory>
-#include <vector>
+#include <utility>
 
 namespace llvm {
+
 class AsmPrinter;
+class DbgEntity;
 class DbgVariable;
+class DbgLabel;
 class DwarfCompileUnit;
 class DwarfUnit;
-class DIEAbbrev;
-class MCSymbol;
-class DIE;
 class LexicalScope;
-class StringRef;
-class DwarfDebug;
 class MCSection;
-class MDNode;
+
 class DwarfFile {
   // Target of Dwarf emission, used for sizing of abbreviations.
   AsmPrinter *Asm;
@@ -41,21 +39,38 @@ class DwarfFile {
   BumpPtrAllocator AbbrevAllocator;
 
   // Used to uniquely define abbreviations.
-  FoldingSet<DIEAbbrev> AbbreviationsSet;
-
-  // A list of all the unique abbreviations in use.
-  std::vector<DIEAbbrev *> Abbreviations;
+  DIEAbbrevSet Abbrevs;
 
   // A pointer to all units in the section.
   SmallVector<std::unique_ptr<DwarfCompileUnit>, 1> CUs;
 
   DwarfStringPool StrPool;
 
-  // Collection of dbg variables of a scope.
-  DenseMap<LexicalScope *, SmallVector<DbgVariable *, 8>> ScopeVariables;
+  /// DWARF v5: The symbol that designates the start of the contribution to
+  /// the string offsets table. The contribution is shared by all units.
+  MCSymbol *StringOffsetsStartSym = nullptr;
+
+  /// DWARF v5: The symbol that designates the base of the range list table.
+  /// The table is shared by all units.
+  MCSymbol *RnglistsTableBaseSym = nullptr;
+
+  /// The variables of a lexical scope.
+  struct ScopeVars {
+    /// We need to sort Args by ArgNo and check for duplicates. This could also
+    /// be implemented as a list or vector + std::lower_bound().
+    std::map<unsigned, DbgVariable *> Args;
+    SmallVector<DbgVariable *, 8> Locals;
+  };
+  /// Collection of DbgVariables of each lexical scope.
+  DenseMap<LexicalScope *, ScopeVars> ScopeVariables;
+
+  /// Collection of DbgLabels of each lexical scope.
+  using LabelList = SmallVector<DbgLabel *, 4>;
+  DenseMap<LexicalScope *, LabelList> ScopeLabels;
 
   // Collection of abstract subprogram DIEs.
   DenseMap<const MDNode *, DIE *> AbstractSPDies;
+  DenseMap<const DINode *, std::unique_ptr<DbgEntity>> AbstractEntities;
 
   /// Maps MDNodes for type system with the corresponding DIEs. These DIEs can
   /// be shared across CUs, that is why we keep the map here instead
@@ -65,64 +80,81 @@ class DwarfFile {
 public:
   DwarfFile(AsmPrinter *AP, StringRef Pref, BumpPtrAllocator &DA);
 
-  ~DwarfFile();
-
   const SmallVectorImpl<std::unique_ptr<DwarfCompileUnit>> &getUnits() {
     return CUs;
   }
 
-  /// \brief Compute the size and offset of a DIE given an incoming Offset.
+  /// Compute the size and offset of a DIE given an incoming Offset.
   unsigned computeSizeAndOffset(DIE &Die, unsigned Offset);
 
-  /// \brief Compute the size and offset of all the DIEs.
+  /// Compute the size and offset of all the DIEs.
   void computeSizeAndOffsets();
 
-  /// \brief Compute the size and offset of all the DIEs in the given unit.
+  /// Compute the size and offset of all the DIEs in the given unit.
   /// \returns The size of the root DIE.
   unsigned computeSizeAndOffsetsForUnit(DwarfUnit *TheU);
 
-  /// Define a unique number for the abbreviation.
-  ///
-  /// Compute the abbreviation for \c Die, look up its unique number, and
-  /// return a reference to it in the uniquing table.
-  DIEAbbrev &assignAbbrevNumber(DIE &Die);
-
-  /// \brief Add a unit to the list of CUs.
+  /// Add a unit to the list of CUs.
   void addUnit(std::unique_ptr<DwarfCompileUnit> U);
 
-  /// \brief Emit all of the units to the section listed with the given
+  /// Emit all of the units to the section listed with the given
   /// abbreviation section.
   void emitUnits(bool UseOffsets);
 
-  /// \brief Emit the given unit to its section.
+  /// Emit the given unit to its section.
   void emitUnit(DwarfUnit *U, bool UseOffsets);
 
-  /// \brief Emit a set of abbreviations to the specific section.
+  /// Emit a set of abbreviations to the specific section.
   void emitAbbrevs(MCSection *);
 
-  /// \brief Emit all of the strings to the section given.
-  void emitStrings(MCSection *StrSection, MCSection *OffsetSection = nullptr);
+  /// Emit all of the strings to the section given. If OffsetSection is
+  /// non-null, emit a table of string offsets to it. If UseRelativeOffsets
+  /// is false, emit absolute offsets to the strings. Otherwise, emit
+  /// relocatable references to the strings if they are supported by the target.
+  void emitStrings(MCSection *StrSection, MCSection *OffsetSection = nullptr,
+                   bool UseRelativeOffsets = false);
 
-  /// \brief Returns the string pool.
+  /// Returns the string pool.
   DwarfStringPool &getStringPool() { return StrPool; }
+
+  MCSymbol *getStringOffsetsStartSym() const { return StringOffsetsStartSym; }
+
+  void setStringOffsetsStartSym(MCSymbol *Sym) { StringOffsetsStartSym = Sym; }
+
+  MCSymbol *getRnglistsTableBaseSym() const { return RnglistsTableBaseSym; }
+
+  void setRnglistsTableBaseSym(MCSymbol *Sym) { RnglistsTableBaseSym = Sym; }
 
   /// \returns false if the variable was merged with a previous one.
   bool addScopeVariable(LexicalScope *LS, DbgVariable *Var);
 
-  DenseMap<LexicalScope *, SmallVector<DbgVariable *, 8>> &getScopeVariables() {
+  void addScopeLabel(LexicalScope *LS, DbgLabel *Label);
+
+  DenseMap<LexicalScope *, ScopeVars> &getScopeVariables() {
     return ScopeVariables;
+  }
+
+  DenseMap<LexicalScope *, LabelList> &getScopeLabels() {
+    return ScopeLabels;
   }
 
   DenseMap<const MDNode *, DIE *> &getAbstractSPDies() {
     return AbstractSPDies;
   }
 
+  DenseMap<const DINode *, std::unique_ptr<DbgEntity>> &getAbstractEntities() {
+    return AbstractEntities;
+  }
+
   void insertDIE(const MDNode *TypeMD, DIE *Die) {
     DITypeNodeToDieMap.insert(std::make_pair(TypeMD, Die));
   }
+
   DIE *getDIE(const MDNode *TypeMD) {
     return DITypeNodeToDieMap.lookup(TypeMD);
   }
 };
-}
-#endif
+
+} // end namespace llvm
+
+#endif // LLVM_LIB_CODEGEN_ASMPRINTER_DWARFFILE_H

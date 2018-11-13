@@ -33,16 +33,15 @@ public:
     if (!Inserter)
       Inserter.reset(new UsingInserter(*Result.SourceManager));
 
-    const clang::CallExpr *Call =
-        Result.Nodes.getNodeAs<clang::CallExpr>("foo");
+    const auto *Call = Result.Nodes.getNodeAs<clang::CallExpr>("foo");
     assert(Call != nullptr && "Did not find node \"foo\"");
     auto Hint =
         Inserter->createUsingDeclaration(*Result.Context, *Call, "::foo::func");
 
     if (Hint.hasValue())
-      diag(Call->getLocStart(), "Fix for testing") << Hint.getValue();
+      diag(Call->getBeginLoc(), "Fix for testing") << Hint.getValue();
 
-    diag(Call->getLocStart(), "insert call")
+    diag(Call->getBeginLoc(), "insert call")
         << clang::FixItHint::CreateReplacement(
                Call->getCallee()->getSourceRange(),
                Inserter->getShortName(*Result.Context, *Call, "::foo::func"));
