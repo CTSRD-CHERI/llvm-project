@@ -3329,17 +3329,21 @@ public:
   static int  lastDwarfRegNum() { return _LIBUNWIND_HIGHEST_DWARF_REGISTER_MIPS_CHERI; }
 
   uint64_t  getSP() const         { return _registers.__r[29]; }
-  void      setSP(uintptr_t value) { _registers.__r[29] = value; }
-  uint64_t  getIP() const         { return _registers.__c[32]; }
+  void      setSP(uintptr_t value) { _registers.__r[29] = addr_get(value); }
+  uint64_t  getIP() const         { return addr_get(_registers.__c[32]); }
   void      setIP(uintptr_t value) { _registers.__c[32] = value; }
 
 private:
   template<typename T>
   int64_t offset_get(T x) const {
-    return __builtin_cheri_offset_get(reinterpret_cast<void*>(x));
+    return (int64_t)__builtin_cheri_offset_get(reinterpret_cast<void*>(x));
   }
   template<typename T>
-  T offset_set(T x, int64_t off) const {
+  uint64_t addr_get(T x) const {
+    return __builtin_cheri_address_get(reinterpret_cast<void*>(x));
+  }
+  template<typename T>
+  T offset_set(T x, uint64_t off) const {
     return reinterpret_cast<T>(__builtin_cheri_offset_set(reinterpret_cast<void*>(x), off));
   }
   struct mips_cheri_thread_state_t {
@@ -3396,7 +3400,7 @@ inline uintptr_t Registers_mips_cheri::getRegister(int regNum) const {
 
   switch (regNum) {
   case 0:
-    return 0;
+    return 0u;
   case UNW_REG_IP:
     return _registers.__c[32];
   case UNW_REG_SP:
@@ -3407,7 +3411,7 @@ inline uintptr_t Registers_mips_cheri::getRegister(int regNum) const {
 
 inline void Registers_mips_cheri::setRegister(int regNum, uintptr_t value) {
   if (regNum >= UNW_MIPS_R0 && regNum <= UNW_MIPS_R31) {
-    _registers.__r[regNum - UNW_MIPS_R0] = value;
+    _registers.__r[regNum - UNW_MIPS_R0] = addr_get(value);
     return;
   }
   if (regNum >= UNW_MIPS_C0 && regNum <= UNW_MIPS_C31) {
