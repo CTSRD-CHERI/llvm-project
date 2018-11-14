@@ -75,8 +75,8 @@ class CollectBinariesExecutor(Executor):
         # pprint.pprint(vars(self.config.lit_config))
         # pprint.pprint(vars(self.config.config))
         # print "exe_path=", exe_path, "cmd=", cmd, "cwd=", work_dir, "file_deps=", file_deps, "env=", env
-        if env is not None:
-            return cmd, str(env), 'Cannot handle env yet', 7
+        # if env is not None:
+        #     self.config.lit_config.warning('Cannot handle env yet: ' + str(env))
         if file_deps:
             return cmd, str(file_deps), 'Cannot handle file_deps yet', 7
         if cmd is not None and cmd != [exe_path]:
