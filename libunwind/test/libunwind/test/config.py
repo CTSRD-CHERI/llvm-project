@@ -53,6 +53,13 @@ class Configuration(LibcxxConfiguration):
             self.config.available_features.add('libunwind-no-threads')
         super(Configuration, self).configure_compile_flags()
 
+    def configure_link_flags(self):
+        super(Configuration, self).configure_link_flags()
+        # Ensure that libunwind is always added to the linker flags
+        # This should be the case for most TargetInfo classes anyway but some
+        # of them don't add it.
+        self.cxx.link_flags += ['-lunwind']
+
     def configure_compile_flags_header_includes(self):
         self.configure_config_site_header()
 
