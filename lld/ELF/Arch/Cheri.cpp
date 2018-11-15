@@ -720,10 +720,15 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     RelType ElfCapabilityReloc = it.second.UsedAsFunctionPointer
                                      ? R_MIPS_CHERI_CAPABILITY
                                      : R_MIPS_CHERI_CAPABILITY_CALL;
+    // All R_MIPS_CHERI_CAPABILITY_CALL relocations should end up in
+    // the pltrel section rather than the normal relocation section to make
+    // processing of PLT relocations in RTLD more efficient.
+    RelocationBaseSection *DynRelSec =
+        it.second.UsedAsFunctionPointer ? In.RelaDyn : In.RelaPlt;
     addCapabilityRelocation<ELFT>(
         *TargetSym, ElfCapabilityReloc, In.CheriCapTable, Off,
         R_CHERI_CAPABILITY, 0,
-        [&]() { return "\n>>> referenced by " + RefName; });
+        [&]() { return "\n>>> referenced by " + RefName; }, DynRelSec);
   }
   assert(AssignedSmallIndexes + AssignedLargeIndexes == Entries.size());
 

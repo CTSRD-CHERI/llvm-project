@@ -236,10 +236,11 @@ inline void readOnlyCapRelocsError(Symbol &Sym, const Twine &SourceMsg) {
 }
 
 template <typename ELFT, typename ReferencedByFunc>
-inline void addCapabilityRelocation(Symbol &Sym, RelType Type,
-                                    InputSectionBase *Sec, uint64_t Offset,
-                                    RelExpr Expr, int64_t Addend,
-                                    ReferencedByFunc &&ReferencedBy) {
+inline void
+addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
+                        uint64_t Offset, RelExpr Expr, int64_t Addend,
+                        ReferencedByFunc &&ReferencedBy,
+                        RelocationBaseSection *DynRelSec = nullptr) {
   // Emit either the legacy __cap_relocs section or a R_CHERI_CAPABILITY reloc
   // For local symbols we can also emit the untagged capability bits and
   // instruct csu/rtld to run CBuildCap
@@ -262,8 +263,10 @@ inline void addCapabilityRelocation(Symbol &Sym, RelType Type,
     // We don't use a R_MIPS_CHERI_CAPABILITY relocation for the input but
     // instead need to use an absolute pointer size relocation to write
     // the offset addend
-    In.RelaDyn->addReloc(Type, Sec, Offset, &Sym, Addend, Expr,
-                           *Target->AbsPointerRel);
+    if (!DynRelSec)
+      DynRelSec = In.RelaDyn;
+    DynRelSec->addReloc(Type, Sec, Offset, &Sym, Addend, Expr,
+                        *Target->AbsPointerRel);
     // in the case that -local-caprelocs=elf is passed we need to ensure that
     // the target symbol is included in the dynamic symbol table
     if (!In.DynSymTab) {

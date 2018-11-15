@@ -31,18 +31,41 @@
 // RUN: llvm-readobj -r %t-fnptr1.so | FileCheck -check-prefix ONE-FNPTR %s
 // ONE-FNPTR: Relocations [
 // ONE-FNPTR-NEXT: Section ({{.+}}) .rel.dyn {
-// ONE-FNPTR-NEXT:    0x30000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1 0x0 (real addend unknown)
-// ONE-FNPTR-NEXT:  }
+// ONE-FNPTR-NEXT:    0x30000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE
+// extern1 0x0 (real addend unknown) ONE-FNPTR-NEXT:  }
 
 // If the symbol is only ever called we can emit a R_MIPS_CHERI_CAPABILITY_CALL which will allow the
 // runtime linker to lazily resolve the symbol since the address is not taken. If the address is taken,
 // all instances of this function pointer must compare equal so they must point to a unique plt stub!
 // RUN: ld.lld -shared -o %t-call1.so %t-call1.o
-// RUN: llvm-readobj -r %t-call1.so | FileCheck -check-prefix ONE-CALL %s
+// RUN: llvm-readobj -dynamic-table -r %t-call1.so | FileCheck -check-prefix ONE-CALL %s
 // ONE-CALL: Relocations [
-// ONE-CALL-NEXT: Section ({{.+}}) .rel.dyn {
+// ONE-CALL-NEXT: Section ({{.+}}) .rel.plt {
 // ONE-CALL-NEXT:    0x30000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern1 0x0 (real addend unknown)
 // ONE-CALL-NEXT:  }
+// ONE-CALL-LABEL: DynamicSection [
+// ONE-CALL-NEXT: Tag                Type                 Name/Value
+// ONE-CALL-NEXT: 0x0000000000000017 JMPREL               0x3C0
+// ONE-CALL-NEXT: 0x0000000000000002 PLTRELSZ             16 (bytes)
+// ONE-CALL-NEXT: 0x0000000070000032 MIPS_PLTGOT          0x0
+// ONE-CALL-NEXT: 0x0000000000000014 PLTREL               REL
+
+// RUN: ld.lld -shared -o %t-2calls.so %t-call1.o %t-call2.o
+// RUN: llvm-readobj -dynamic-table -r %t-2calls.so
+// RUN: llvm-readobj -dynamic-table -r %t-2calls.so | FileCheck -check-prefix TWO-CALLS %s
+// TWO-CALLS: Relocations [
+// TWO-CALLS-NEXT: Section ({{.+}}) .rel.plt {
+// TWO-CALLS-NEXT:    0x30000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern1 0x0 (real addend unknown)
+// TWO-CALLS-NEXT:    0x300{{1|2}}0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern2 0x0 (real addend unknown)
+// TWO-CALLS-NEXT:  }
+// TWO-CALLS-LABEL: DynamicSection [
+// TWO-CALLS-NEXT: Tag                Type                 Name/Value
+// TWO-CALLS-NEXT: 0x0000000000000017 JMPREL               0x410
+// TWO-CALLS-NEXT: 0x0000000000000002 PLTRELSZ             32 (bytes)
+// TWO-CALLS-NEXT: 0x0000000070000032 MIPS_PLTGOT          0x0
+// TWO-CALLS-NEXT: 0x0000000000000014 PLTREL               REL
+
+
 
 // If the same symbol is both called and used as a function pointer we must use R_MIPS_CHERI_CAPABILITY
 // and not R_MIPS_CHERI_CAPABILITY_CALL since currently there is no way to lazily resolve function
@@ -59,14 +82,27 @@
 // CALL-AND-FNPTR-NEXT:  }
 
 // RUN: ld.lld -shared -o %t-all.so %t-call1.o %t-fnptr1.o %t-call2.o %t-fnptr2.o
-// RUN: llvm-readobj -r %t-all.so  | FileCheck -check-prefix ALL %s
+// RUN: llvm-readobj -dynamic-table -r %t-all.so  | FileCheck -check-prefix ALL %s
 // ALL: Relocations [
 // ALL-NEXT: Section ({{.+}}) .rel.dyn {
 // ALL-NEXT:    0x30000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern1 0x0 (real addend unknown)
 // Since this is a data symbol we have to eagerly resolve it to a stub
 // ALL-NEXT:    0x20000 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE extern2 0x0 (real addend unknown)
+// ALL-NEXT:  }
+// FIXME: we should to avoid another PLT relocation here since we are already resolving the symbol!
+// However, it is a data symbol and not just a local value loaded from the captable so it will require a bit more logic.
+// ALL-NEXT:  Section ({{.+}}) .rel.plt {
 // ALL-NEXT:    0x300{{1|2}}0 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern2 0x0 (real addend unknown)
 // ALL-NEXT:  }
+// ALL-LABEL: DynamicSection [
+// ALL-NEXT:  Tag                Type                 Name/Value
+// ALL-NEXT:  0x0000000000000011 REL                  0x498
+// ALL-NEXT:  0x0000000000000012 RELSZ                32 (bytes)
+// ALL-NEXT:  0x0000000000000013 RELENT               16 (bytes)
+// ALL-NEXT:  0x0000000000000017 JMPREL               0x4B8
+// ALL-NEXT:  0x0000000000000002 PLTRELSZ             16 (bytes)
+// ALL-NEXT:  0x0000000070000032 MIPS_PLTGOT          0x0
+// ALL-NEXT:  0x0000000000000014 PLTREL               REL
 
 extern void* extern1(void);
 extern void* extern2(void);
