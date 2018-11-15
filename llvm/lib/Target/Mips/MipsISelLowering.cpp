@@ -3472,16 +3472,11 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
   //
   // When using the capability table we don't need $GP, but use $cgp instead.
   //
-  if (IsPICCall && !InternalLinkage && IsCallReloc) {
-    if (ABI.UsesCapabilityTable()) {
-      RegsToPass.push_back(std::make_pair(ABI.GetGlobalCapability(),
-                                          getCapGlobalReg(CLI.DAG, CapType)));
-    } else {
-      unsigned GPReg = ABI.IsN64() ? Mips::GP_64 : Mips::GP;
-      EVT Ty = ABI.IsN64() ? MVT::i64 : MVT::i32;
-      RegsToPass.push_back(
-          std::make_pair(GPReg, getGlobalReg(CLI.DAG, Ty, /*IsForTls=*/false)));
-    }
+  if (IsPICCall && !InternalLinkage && IsCallReloc && !ABI.UsesCapabilityTable()) {
+    unsigned GPReg = ABI.IsN64() ? Mips::GP_64 : Mips::GP;
+    EVT Ty = ABI.IsN64() ? MVT::i64 : MVT::i32;
+    RegsToPass.push_back(
+        std::make_pair(GPReg, getGlobalReg(CLI.DAG, Ty, /*IsForTls=*/false)));
   }
 
   // Build a sequence of copy-to-reg nodes chained together with token

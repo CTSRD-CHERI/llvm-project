@@ -774,7 +774,7 @@ def SDT_MipsCapJmpLink      : SDTypeProfile<0, 1, [SDTCisVT<0, CapRegType>]>;
 def CapJmpLink : SDNode<"MipsISD::CapJmpLink",SDT_MipsCapJmpLink,
                          [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
                           SDNPVariadic]>;
-let isCall=1, hasDelaySlot=1, Defs = [C17], hasNoSchedulingInfo = 1 in {
+let isCall=1, hasDelaySlot=1, Defs = [C17, C26], hasNoSchedulingInfo = 1 in {
 def CapJumpLinkPseudo :
   PseudoSE<(outs), (ins CheriOpnd: $rs), [(CapJmpLink CheriOpnd: $rs)], NoItinerary>,
   PseudoInstExpansion<(CJALR C17, CheriOpnd:$rs)>;

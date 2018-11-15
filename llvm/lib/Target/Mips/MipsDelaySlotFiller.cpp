@@ -354,7 +354,9 @@ void RegDefsUses::init(const MachineInstr &MI) {
   // If MI is a call, add RA to Defs to prevent users of RA from going into
   // delay slot.
   if (MI.isCall()) {
-    assert(MI.getDesc().getNumImplicitDefs() == 1 &&
+    // XXXAR: currently have to mark $cgp as a def for cjalr since I don't see
+    // a better way
+    assert(MI.getDesc().getNumImplicitDefs() <= 2 &&
            "Expected one implicit def for call instruction");
     for (unsigned i = 0; i < MI.getDesc().getNumImplicitDefs(); i++)
       Defs.set(MI.getDesc().getImplicitDefs()[i]);
