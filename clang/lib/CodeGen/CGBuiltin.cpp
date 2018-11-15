@@ -2211,7 +2211,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),
                                                    getContext().UnsignedIntTy);
     Value *F =
-        CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.ProgramInt8PtrTy});
+        CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.AllocaInt8PtrTy});
     return RValue::get(Builder.CreateCall(F, Depth));
   }
   case Builtin::BI__builtin_extract_return_addr: {
@@ -2295,7 +2295,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
 
     // Store the frame pointer to the setjmp buffer.
     Value *FrameAddr = Builder.CreateCall(
-        CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.ProgramInt8PtrTy}),
+        CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.AllocaInt8PtrTy}),
         ConstantInt::get(Int32Ty, 0));
     Builder.CreateStore(FrameAddr, Buf);
 
