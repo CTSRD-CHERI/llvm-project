@@ -160,6 +160,8 @@ def scrub_asm_powerpc64(asm, args):
 
 
 last_cap_size = None
+last_frame_size = None  # type: int
+
 
 def offset_to_cap_expr(offset, cap_size):
   if offset == 0:
@@ -168,6 +170,11 @@ def offset_to_cap_expr(offset, cap_size):
     return "[[@EXPR " + str(offset // cap_size) + " * $CAP_SIZE]]"
   else:
     return "[[@EXPR " + str(offset // cap_size) + " * $CAP_SIZE + " + str(offset % cap_size) + "]]"
+
+
+def unchanged_match(match):
+  return match.string[match.start():match.end()]
+
 
 def do_clc_csc_sub(match):
   if sys.version_info >= (3, 5):
@@ -188,6 +195,33 @@ def do_clc_csc_sub(match):
   # print('replacing ', match.string[match.start():match.end()], 'with', result)
   return result
 
+
+def do_save_load_dword_sub(match):
+  if sys.version_info >= (3, 5):
+    from typing import Match
+    assert isinstance(match, Match)
+  insn = match.group('insn')
+  reg = match.group('reg')
+  offset = int(match.group('offset'))
+  offset_sign = match.group('offset_sign')
+  if offset_sign is None:
+    offset_sign = ""
+  # dwords are stored after capabilities so usually this can be $STACKFRAME_SIZE - n*dword
+  global last_frame_size
+  if not last_frame_size:
+    print("cld/csd: unknown stackframe size:" + unchanged_match(match))
+  if offset >= last_frame_size:
+    print("cld/csd: offset bigger than", last_frame_size, ":" + unchanged_match(match))
+    return unchanged_match(match)
+  difference = last_frame_size - offset
+  if difference % 8 != 0:
+    print("cld/csd: modulo wrong:" + unchanged_match(match))
+    return unchanged_match(match)
+  result = insn + " " + reg + ", $zero, " + offset_sign + "[[@EXPR STACKFRAME_SIZE - " + str(difference) + "]]($c11)"
+  # print('replacing ', match.string[match.start():match.end()], 'with', result)
+  return result
+
+
 def do_cfi_offset_sub(match):
   cap_size = 16 if last_cap_size is None else last_cap_size
   offset_str = offset_to_cap_expr(int(match.group('offset')), cap_size)
@@ -195,15 +229,17 @@ def do_cfi_offset_sub(match):
 
 
 def do_stackframe_size_sub(match):
-  print("do_stackframe_size_sub ", match)
   size = match.group("size")
   cfa_offset = match.group("size")
   if size != cfa_offset:
     print("WARNING: Could not match stackframe size")
-    return match.string[match.start():match.end()]
+    return unchanged_match(match)
+  global last_frame_size
+  last_frame_size = int(size)
   # assume double the size for CHERI256 stackframe:
   size_str = size + "|" + str(int(size) * 2)
   return "cincoffset $c11, $c11, -[[STACKFRAME_SIZE:" + size_str + "]]\n  .cfi_def_cfa_offset [[STACKFRAME_SIZE]]"
+
 
 def scrub_asm_mips(asm, args):
   # Scrub runs of whitespace out of the assembly, but leave the leading
@@ -215,12 +251,14 @@ def scrub_asm_mips(asm, args):
   asm = common.SCRUB_TRAILING_WHITESPACE_RE.sub(r'', asm)
 
   # Expand .cfi offsets and clc offset to @EXPR for CHERI128/256
-  stack_store_re = re.compile(r'(?P<insn>csc|clc) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# (?P<cap_size>16|32)\-byte Folded (Spill|Reload)')
-  asm = stack_store_re.sub(do_clc_csc_sub, asm)
-  cfi_offset_regex = re.compile(r'\.cfi_offset (?P<reg>[$\w]+), -(?P<offset>\d+)')
-  asm = cfi_offset_regex.sub(do_cfi_offset_sub, asm)
+  stack_store_cap_re = re.compile(r'(?P<insn>csc|clc) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# (?P<cap_size>16|32)\-byte Folded (Spill|Reload)')
+  asm = stack_store_cap_re.sub(do_clc_csc_sub, asm)
   stackframe_size_regex = re.compile(r'cincoffset \$c11, \$c11, -(?P<size>\d+)\n *.cfi_def_cfa_offset (?P<cfa>\d+)')
   asm = stackframe_size_regex.sub(do_stackframe_size_sub, asm)
+  stack_store_dword_re = re.compile(r'(?P<insn>csd|cld) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# 8\-byte Folded (Spill|Reload)')
+  asm = stack_store_dword_re.sub(do_save_load_dword_sub, asm)
+  cfi_offset_regex = re.compile(r'\.cfi_offset (?P<reg>[$\w]+), -(?P<offset>\d+)')
+  asm = cfi_offset_regex.sub(do_cfi_offset_sub, asm)
   stackframe_inc_return_regex = re.compile(r'cjr \$c17\n *cincoffset \$c11, \$c11, \d+')
   asm = stackframe_inc_return_regex.sub('cjr $c17\n  cincoffset $c11, $c11, [[STACKFRAME_SIZE]]', asm)
   return asm
