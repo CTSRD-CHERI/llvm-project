@@ -474,6 +474,7 @@ class Reducer(object):
                 die("Executed program should contain 'clang', but was", command[0])
             source_file_index = -1
             source_file_name = command[source_file_index]
+            source_file = infile.with_name(source_file_name)
             while source_file_name.startswith("-"):
                 print("WARNING: crash reproducer command line probably does not end with the input file",
                       "name: got", blue(source_file_name), "which is probably not a file!")
