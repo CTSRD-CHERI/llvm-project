@@ -158,6 +158,53 @@ def scrub_asm_powerpc64(asm, args):
   asm = common.SCRUB_TRAILING_WHITESPACE_RE.sub(r'', asm)
   return asm
 
+
+last_cap_size = None
+
+def offset_to_cap_expr(offset, cap_size):
+  if offset == 0:
+    return "0"
+  elif offset % cap_size == 0:
+    return "[[@EXPR " + str(offset // cap_size) + " * $CAP_SIZE]]"
+  else:
+    return "[[@EXPR " + str(offset // cap_size) + " * $CAP_SIZE + " + str(offset % cap_size) + "]]"
+
+def do_clc_csc_sub(match):
+  if sys.version_info >= (3, 5):
+    from typing import Match
+    assert isinstance(match, Match)
+  insn = match.group('insn')
+  reg = match.group('reg')
+  offset = int(match.group('offset'))
+  offset_sign = match.group('offset_sign')
+  if offset_sign is None:
+    offset_sign = ""
+  cap_size = int(match.group('cap_size'))
+  assert cap_size == 16 or cap_size == 32
+  offset_str = offset_to_cap_expr(offset, cap_size)
+  global last_cap_size
+  last_cap_size = cap_size
+  result = insn + " " + reg + ", $zero, " + offset_sign + offset_str + "($c11)"
+  # print('replacing ', match.string[match.start():match.end()], 'with', result)
+  return result
+
+def do_cfi_offset_sub(match):
+  cap_size = 16 if last_cap_size is None else last_cap_size
+  offset_str = offset_to_cap_expr(int(match.group('offset')), cap_size)
+  return ".cfi_offset " + match.group('reg') + ", -" + offset_str
+
+
+def do_stackframe_size_sub(match):
+  print("do_stackframe_size_sub ", match)
+  size = match.group("size")
+  cfa_offset = match.group("size")
+  if size != cfa_offset:
+    print("WARNING: Could not match stackframe size")
+    return match.string[match.start():match.end()]
+  # assume double the size for CHERI256 stackframe:
+  size_str = size + "|" + str(int(size) * 2)
+  return "cincoffset $c11, $c11, -[[STACKFRAME_SIZE:" + size_str + "]]\n  .cfi_def_cfa_offset [[STACKFRAME_SIZE]]"
+
 def scrub_asm_mips(asm, args):
   # Scrub runs of whitespace out of the assembly, but leave the leading
   # whitespace in place.
@@ -166,6 +213,16 @@ def scrub_asm_mips(asm, args):
   asm = string.expandtabs(asm, 2)
   # Strip trailing whitespace.
   asm = common.SCRUB_TRAILING_WHITESPACE_RE.sub(r'', asm)
+
+  # Expand .cfi offsets and clc offset to @EXPR for CHERI128/256
+  stack_store_re = re.compile(r'(?P<insn>csc|clc) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# (?P<cap_size>16|32)\-byte Folded (Spill|Reload)')
+  asm = stack_store_re.sub(do_clc_csc_sub, asm)
+  cfi_offset_regex = re.compile(r'\.cfi_offset (?P<reg>[$\w]+), -(?P<offset>\d+)')
+  asm = cfi_offset_regex.sub(do_cfi_offset_sub, asm)
+  stackframe_size_regex = re.compile(r'cincoffset \$c11, \$c11, -(?P<size>\d+)\n *.cfi_def_cfa_offset (?P<cfa>\d+)')
+  asm = stackframe_size_regex.sub(do_stackframe_size_sub, asm)
+  stackframe_inc_return_regex = re.compile(r'cjr \$c17\n *cincoffset \$c11, \$c11, \d+')
+  asm = stackframe_inc_return_regex.sub('cjr $c17\n  cincoffset $c11, $c11, [[STACKFRAME_SIZE]]', asm)
   return asm
 
 def scrub_asm_riscv(asm, args):
