@@ -11,6 +11,7 @@
 #include "MipsRegisterInfo.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCTargetOptions.h"
 
 using namespace llvm;
@@ -99,6 +100,31 @@ unsigned MipsABIInfo::GetDefaultDataCapability() const { return Mips::DDC; }
 
 unsigned MipsABIInfo::GetGlobalCapability() const {
   return Mips::C26;
+}
+
+// HACK: Update the default CFA register for CHERI purecap
+void MipsABIInfo::updateCheriInitialFrameStateHack(const MCAsmInfo &MAI,
+                                                   const MCRegisterInfo &MRI) {
+  if (!IsCheriPureCap())
+    return;
+
+  auto &InitialState = MAI.getInitialFrameState();
+  unsigned C11Dwarf = MRI.getDwarfRegNum(Mips::C11, true);
+  for (const MCCFIInstruction &Inst : InitialState) {
+    if (Inst.getOperation() == MCCFIInstruction::OpDefCfaRegister) {
+      if (Inst.getRegister() != C11Dwarf) {
+        // errs() << __func__ << ": Updating default OpDefCfaRegister from "
+        //       << Inst.getRegister() << " to " << C11Dwarf << "\n";
+        const_cast<MCCFIInstruction &>(Inst).setRegister(C11Dwarf);
+      }
+    } else if (Inst.getOperation() == MCCFIInstruction::OpDefCfa) {
+      if (Inst.getRegister() != C11Dwarf) {
+        // errs() << __func__ << ": Updating default OpDefCfa from "
+        //        << Inst.getRegister() << "to" << C11Dwarf << "\n";
+        const_cast<MCCFIInstruction &>(Inst).setRegister(C11Dwarf);
+      }
+    }
+  }
 }
 
 bool MipsABIInfo::UsesCapabilityTable() const {

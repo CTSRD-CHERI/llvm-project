@@ -34,13 +34,14 @@
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/CHERICap.h"
+#include "llvm/Transforms/Scalar.h"
 #include <string>
 
 using namespace llvm;
@@ -163,6 +164,9 @@ MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
                       isLittle, *this, Options.StackAlignmentOverride) {
   Subtarget = &DefaultSubtarget;
   initAsmInfo();
+
+  // HACK: Update the default CFA register for CHERI purecap
+  ABI.updateCheriInitialFrameStateHack(*AsmInfo, *MRI);
 }
 
 MipsTargetMachine::~MipsTargetMachine() = default;

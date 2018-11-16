@@ -19,6 +19,7 @@ namespace llvm {
 
 template <typename T> class ArrayRef;
 class MCTargetOptions;
+class MCAsmInfo;
 class StringRef;
 class TargetRegisterClass;
 
@@ -99,6 +100,10 @@ public:
   inline bool AreGprs64bit() const { return IsN32() || IsN64(); }
 
   unsigned GetEhDataReg(unsigned I) const;
+
+  // Update the initial CFA register from SP to C11 if needed
+  void updateCheriInitialFrameStateHack(const MCAsmInfo &MAI,
+                                        const MCRegisterInfo &MRI);
 };
 }
 
