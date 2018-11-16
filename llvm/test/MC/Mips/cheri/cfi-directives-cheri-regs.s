@@ -1,7 +1,7 @@
 # RUN: %cheri128_purecap_llvm-mc %s -show-encoding -filetype=obj -o %t.purecap
-# RUN: %cheri128_purecap_llvm-mc %s -show-encoding -filetype=obj -o %t.hybrid
-# RUN: llvm-dwarfdump -all %t.purecap | FileCheck %s
-# RUNNOT: llvm-dwarfdump -all %t.hybrid | FileCheck %s -check-prefix=HYBRID
+# RUN: %cheri128_llvm-mc %s -show-encoding -filetype=obj -o %t.hybrid
+# RUN: llvm-dwarfdump -all %t.purecap | FileCheck %s -check-prefixes=CHECK,PURECAP
+# RUN: llvm-dwarfdump -all %t.hybrid | FileCheck %s -check-prefixes=CHECK,HYBRID
 
 # llvm-mc used to not parse $cNN register correctly and always used -1 instead.
 # This caused completely useless debug information when I tried to annotate the
@@ -29,9 +29,8 @@ b:
 
 .end b
 
-
-# FIXME: this should actually be 83 ($c11) and not 29 for purecap
-# CHECK:   DW_CFA_def_cfa: reg29 +0
+# HYBRID:   DW_CFA_def_cfa: reg29 +0
+# PURECAP:   DW_CFA_def_cfa: reg83 +0
 
 # CHECK:      00000014 00000028 00000018 FDE cie=00000018 pc=00000000...00000014
 # CHECK-NEXT:   DW_CFA_advance_loc: 4

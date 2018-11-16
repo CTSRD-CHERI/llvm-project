@@ -21,6 +21,7 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/ELF.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
@@ -521,6 +522,28 @@ public:
         llvm::make_unique<MipsAssemblerOptions>(getSTI().getFeatureBits()));
 
     getTargetStreamer().updateABIInfo(*this);
+
+    // HACK: Update the default CFA register for CHERI purecap
+    if (ABI.IsCheriPureCap()) {
+      auto &InitialState = getContext().getAsmInfo()->getInitialFrameState();
+      unsigned C11Dwarf =
+          getContext().getRegisterInfo()->getDwarfRegNum(Mips::C11, true);
+      for (const MCCFIInstruction &Inst : InitialState) {
+        if (Inst.getOperation() == MCCFIInstruction::OpDefCfaRegister) {
+          if (Inst.getRegister() != C11Dwarf) {
+            // errs() << __func__ << ": Updating default OpDefCfaRegister from "
+            //       << Inst.getRegister() << " to " << C11Dwarf << "\n";
+            const_cast<MCCFIInstruction &>(Inst).setRegister(C11Dwarf);
+          }
+        } else if (Inst.getOperation() == MCCFIInstruction::OpDefCfa) {
+          if (Inst.getRegister() != C11Dwarf) {
+            // errs() << __func__ << ": Updating default OpDefCfa from "
+            //        << Inst.getRegister() << "to" << C11Dwarf << "\n";
+            const_cast<MCCFIInstruction &>(Inst).setRegister(C11Dwarf);
+          }
+        }
+      }
+    }
 
     if (!isABI_O32() && !useOddSPReg() != 0)
       report_fatal_error("-mno-odd-spreg requires the O32 ABI");
