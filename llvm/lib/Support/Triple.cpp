@@ -409,6 +409,8 @@ static Triple::ArchType parseArch(StringRef ArchName) {
            Triple::mipsel)
     .Cases("mips64", "mips64eb", "mipsn32", "mipsisa64r6",
            "mips64r6", "mipsn32r6", Triple::mips64)
+    .StartsWith("mips64c", Triple::mips64) // purecap/hybrid CHERI
+    .Case("cheri", Triple::cheri)          // TODO: remove
     .Cases("mips64el", "mipsn32el", "mipsisa64r6el", "mips64r6el",
            "mipsn32r6el", Triple::mips64el)
     .Case("nios2", Triple::nios2)
@@ -434,7 +436,6 @@ static Triple::ArchType parseArch(StringRef ArchName) {
     .Case("hsail64", Triple::hsail64)
     .Case("spir", Triple::spir)
     .Case("spir64", Triple::spir64)
-    .Case("cheri", Triple::cheri)
     .StartsWith("kalimba", Triple::kalimba)
     .Case("lanai", Triple::lanai)
     .Case("shave", Triple::shave)
@@ -551,9 +552,20 @@ static Triple::ObjectFormatType parseFormat(StringRef EnvironmentName) {
 }
 
 static Triple::SubArchType parseSubArch(StringRef SubArchName) {
-  if (SubArchName.startswith("mips") &&
-      (SubArchName.endswith("r6el") || SubArchName.endswith("r6")))
-    return Triple::MipsSubArch_r6;
+  if (SubArchName.startswith("mips")) {
+    if (SubArchName.endswith("r6el") || SubArchName.endswith("r6")) {
+      return Triple::MipsSubArch_r6;
+    }
+    // Support encoding the CHERI abi and size in the triple name
+    return StringSwitch<Triple::SubArchType>(SubArchName)
+        .EndsWith("c128", Triple::MipsSubArch_cheri128)
+        .EndsWith("c128hybrid", Triple::MipsSubArch_cheri128)
+        .EndsWith("c256", Triple::MipsSubArch_cheri256)
+        .EndsWith("c256hybrid", Triple::MipsSubArch_cheri256)
+        .EndsWith("c64", Triple::MipsSubArch_cheri64)
+        .EndsWith("c64hybrid", Triple::MipsSubArch_cheri64)
+        .Default(Triple::NoSubArch);
+  }
 
   StringRef ARMSubArch = ARM::getCanonicalArchName(SubArchName);
 
@@ -733,11 +745,19 @@ Triple::Triple(const Twine &Str)
       Environment =
           StringSwitch<Triple::EnvironmentType>(Components[0])
               .StartsWith("mipsn32", Triple::GNUABIN32)
+              .StartsWith("mips64c", Triple::UnknownEnvironment) // see below
               .StartsWith("mips64", Triple::GNUABI64)
               .StartsWith("mipsisa64", Triple::GNUABI64)
               .StartsWith("mipsisa32", Triple::GNU)
               .Cases("mips", "mipsel", "mipsr6", "mipsr6el", Triple::GNU)
               .Default(UnknownEnvironment);
+    }
+  }
+  if (Environment == UnknownEnvironment) {
+    if (Components[0].startswith("mips64c")) {
+      // allow mips64c for purecap and mips64c128hybrid for CHERI128 (hybrid)
+      Environment = Components[0].endswith("hybrid") ? Triple::GNUABI64
+                                                     : Triple::CheriPurecap;
     }
   }
   if (ObjectFormat == UnknownObjectFormat)
