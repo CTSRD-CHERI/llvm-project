@@ -220,6 +220,7 @@ StringRef Triple::getOSTypeName(OSType Kind) {
 StringRef Triple::getEnvironmentTypeName(EnvironmentType Kind) {
   switch (Kind) {
   case UnknownEnvironment: return "unknown";
+  case CheriPurecap: return "purecap";
   case GNU: return "gnu";
   case GNUABIN32: return "gnuabin32";
   case GNUABI64: return "gnuabi64";
@@ -517,6 +518,8 @@ static Triple::OSType parseOS(StringRef OSName) {
 
 static Triple::EnvironmentType parseEnvironment(StringRef EnvironmentName) {
   return StringSwitch<Triple::EnvironmentType>(EnvironmentName)
+    .StartsWith("cheripurecap", Triple::CheriPurecap)
+    .StartsWith("purecap", Triple::CheriPurecap)
     .StartsWith("eabihf", Triple::EABIHF)
     .StartsWith("eabi", Triple::EABI)
     .StartsWith("gnuabin32", Triple::GNUABIN32)

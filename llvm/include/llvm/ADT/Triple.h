@@ -206,6 +206,8 @@ public:
     MuslEABI,
     MuslEABIHF,
 
+    CheriPurecap,
+
     MSVC,
     Itanium,
     Cygnus,
