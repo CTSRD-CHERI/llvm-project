@@ -33,6 +33,7 @@ class SImmScaled<int Width, int Scale> : AsmOperandClass {
   let Name = "SImm" # Width # "s" # Scale;
   let RenderMethod = "addImmOperands";
   let PredicateMethod = "isScaledSImm<" # Width # ", " # Scale # ">";
+  let DiagnosticType = "SImm" # Width # "_Lsl" # Scale;
 }
 
 multiclass ShiftImmPattern<int Width, int Shift> {

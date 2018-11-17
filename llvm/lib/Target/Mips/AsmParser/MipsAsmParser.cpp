@@ -5707,6 +5707,18 @@ bool MipsAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_SImm7_Lsl2:
     return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
                  "expected both 9-bit signed immediate and multiple of 4");
+  case Match_SImm8_Lsl0:
+    return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
+                 "expected 8-bit signed immediate");
+  case Match_SImm8_Lsl1:
+    return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
+                 "expected both 9-bit signed immediate and multiple of 2");
+  case Match_SImm8_Lsl2:
+    return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
+                 "expected both 10-bit signed immediate and multiple of 4");
+  case Match_SImm8_Lsl3:
+    return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
+                 "expected both 11-bit signed immediate and multiple of 8");
   case Match_UImm8_0:
     return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
                  "expected 8-bit unsigned immediate");
@@ -5717,8 +5729,12 @@ bool MipsAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
                  "expected 10-bit signed immediate");
   case Match_SImm11_0:
+  case Match_SImm11_Lsl0:
     return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
                  "expected 11-bit signed immediate");
+  case Match_SImm11_Lsl4:
+    return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
+                 "expected both 15-bit signed immediate and multiple of 16");
   case Match_UImm16:
   case Match_UImm16_Relaxed:
   case Match_UImm16_AltRelaxed:
@@ -5728,6 +5744,9 @@ bool MipsAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_SImm16_Relaxed:
     return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
                  "expected 16-bit signed immediate");
+  case Match_SImm16_Lsl4:
+    return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
+                 "expected both 20-bit signed immediate and multiple of 16");
   case Match_SImm19_Lsl2:
     return Error(RefineErrorLoc(IDLoc, Operands, ErrorInfo),
                  "expected both 19-bit signed immediate and multiple of 4");
