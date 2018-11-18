@@ -47,6 +47,25 @@ multiclass ShiftSImmPattern<int Width, int Shift> {
   }
 }
 
+class UImmScaled<int Width, int Scale> : AsmOperandClass {
+  let Name = "UImm" # Width # "s" # Scale;
+  let RenderMethod = "addImmOperands";
+  let PredicateMethod = "isScaledUImm<" # Width # ", " # Scale # ">";
+  let DiagnosticType = "UImm" # Width # "_Lsl" # Scale;
+}
+
+multiclass ShiftUImmPattern<int Width, int Shift> {
+  def NAME # Pattern : ImmLeaf<i64,
+    "return isShiftedUInt<" # Width # ", " # Shift # ">(Imm);"
+    >;
+  def NAME : Operand<i64> {
+    let ParserMatchClass = UImmScaled<Width, Shift>;
+    let EncoderMethod = "getShiftedImmediate<" # Width # ", " # Shift # ">";
+    let DecoderMethod = "DecodeUImmWithOffsetAndScale<" # Width # ", 0, (1 <<" # Shift # ")>";
+  }
+}
+
+
 // 11-bit immediate offset used by C[SL]CR
 defm simm16s4  : ShiftSImmPattern<16, 4>;
 defm simm11s4  : ShiftSImmPattern<11, 4>;
@@ -57,6 +76,7 @@ defm simm8s1  : ShiftSImmPattern<8, 1>;
 defm simm8    : ShiftSImmPattern<8, 0>;
 // 11-bit immediate offset used by immediate versions of cincoffset / csetbounds
 defm simm11s0 : ShiftSImmPattern<11, 0>;
+defm uimm11s0 : ShiftUImmPattern<11, 0>;
 
 // Pattern for atomic loads on capabilities
 // TODO: these should end up in TargetSelectionDAG.td
@@ -164,7 +184,7 @@ def CJALR : CheriFmt2Op<0xc, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
                               []>;
 }
 let isCall=1 in {
-def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm11: $selector),
+def CCall : CheriFmt3CCall<0x05, (outs), (ins CheriOpnd:$cs, CheriOpnd:$cb, uimm11s0: $selector),
                               "ccall\t${cs}, ${cb}, ${selector}",
                               []>;
 }
@@ -282,8 +302,8 @@ def CGetSealed : CheriFmtCGet<5, "sealed">;
 def CGetOffset : CheriFmtCGet<6, "offset">;
 def CGetAddr   : CheriFmtCGet<0xf, "addr", "address">;
 // Versions of property setters that take immediate operands
-def CSetBoundsImm : CheriFmtCSetImm<0x14, simm11s0, simm11s0Pattern, "bounds">;
 def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, simm11s0Pattern, "offset", "offset", "inc", "increment">;
+def CSetBoundsImm : CheriFmtCSetImm<0x14, uimm11s0, uimm11s0Pattern, "bounds">;
 
 // Accept CIncOffsetImm as an assembler mnemonic because ancient binutils is too stupid to have an opcode
 // with differing encoding depending on the parameters
