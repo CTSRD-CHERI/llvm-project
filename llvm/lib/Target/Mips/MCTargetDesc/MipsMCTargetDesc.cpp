@@ -87,7 +87,8 @@ static MCAsmInfo *createMipsMCAsmInfo(const MCRegisterInfo &MRI,
                                       const Triple &TT) {
   MCAsmInfo *MAI = new MipsMCAsmInfo(TT);
 
-  unsigned SP = MRI.getDwarfRegNum(Mips::SP, true);
+  unsigned SP = MRI.getDwarfRegNum(
+      TT.getEnvironment() == Triple::CheriPurecap ? Mips::C11 : Mips::SP, true);
   MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(nullptr, SP, 0);
   MAI->addInitialFrameState(Inst);
 
