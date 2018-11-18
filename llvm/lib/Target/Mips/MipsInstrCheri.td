@@ -36,27 +36,27 @@ class SImmScaled<int Width, int Scale> : AsmOperandClass {
   let DiagnosticType = "SImm" # Width # "_Lsl" # Scale;
 }
 
-multiclass ShiftImmPattern<int Width, int Shift> {
+multiclass ShiftSImmPattern<int Width, int Shift> {
   def NAME # Pattern : ImmLeaf<i64,
     "return isShiftedInt<" # Width # ", " # Shift # ">(Imm);"
     >;
   def NAME : Operand<i64> {
     let ParserMatchClass = SImmScaled<Width, Shift>;
     let EncoderMethod = "getShiftedImmediate<" # Width # ", " # Shift # ">";
-    let DecoderMethod = "DecodeShiftedImmediate<" # Width # ", " # Shift # ">";
+    let DecoderMethod = "DecodeSImmWithOffsetAndScale<" # Width # ", 0, (1 <<" # Shift # ")>";
   }
 }
 
 // 11-bit immediate offset used by C[SL]CR
-defm simm16s4  : ShiftImmPattern<16, 4>;
-defm simm11s4  : ShiftImmPattern<11, 4>;
+defm simm16s4  : ShiftSImmPattern<16, 4>;
+defm simm11s4  : ShiftSImmPattern<11, 4>;
 // 8-bit immediate offset used by C[SL][DWHB]
-defm simm8s3  : ShiftImmPattern<8, 3>;
-defm simm8s2  : ShiftImmPattern<8, 2>;
-defm simm8s1  : ShiftImmPattern<8, 1>;
-defm simm8    : ShiftImmPattern<8, 0>;
+defm simm8s3  : ShiftSImmPattern<8, 3>;
+defm simm8s2  : ShiftSImmPattern<8, 2>;
+defm simm8s1  : ShiftSImmPattern<8, 1>;
+defm simm8    : ShiftSImmPattern<8, 0>;
 // 11-bit immediate offset used by immediate versions of cincoffset / csetbounds
-defm simm11s0 : ShiftImmPattern<11, 0>;
+defm simm11s0 : ShiftSImmPattern<11, 0>;
 
 // Pattern for atomic loads on capabilities
 // TODO: these should end up in TargetSelectionDAG.td

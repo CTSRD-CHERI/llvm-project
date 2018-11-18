@@ -454,10 +454,6 @@ static DecodeStatus DecodeANDI16Imm(MCInst &Inst, unsigned Insn,
 static DecodeStatus DecodeSimm23Lsl2(MCInst &Inst, unsigned Insn,
                                      uint64_t Address, const void *Decoder);
 
-template<int Width, int Shift>
-static DecodeStatus DecodeShiftedImmediate(MCInst &Inst, unsigned Insn,
-                                           uint64_t Address, const void *Decoder);
-
 /// INSVE_[BHWD] have an implicit operand that the generated decoder doesn't
 /// handle.
 template <typename InsnType>
@@ -2635,13 +2631,6 @@ static DecodeStatus DecodeMovePRegPair(MCInst &Inst, unsigned RegPair,
 static DecodeStatus DecodeSimm23Lsl2(MCInst &Inst, unsigned Insn,
                                      uint64_t Address, const void *Decoder) {
   Inst.addOperand(MCOperand::createImm(SignExtend32<25>(Insn << 2)));
-  return MCDisassembler::Success;
-}
-
-template<int Width, int Shift>
-static DecodeStatus DecodeShiftedImmediate(MCInst &Inst, unsigned Insn,
-                                           uint64_t Address, const void *Decoder) {
-  Inst.addOperand(MCOperand::createImm(SignExtend64<Width+Shift>(Insn << Shift)));
   return MCDisassembler::Success;
 }
 
