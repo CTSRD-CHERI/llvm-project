@@ -1,4 +1,5 @@
 ; REQUIRES: x86
+; This randomly fails in jenkins. Add some debug info otherwise we need to add unsupp: system-freebsd
 
 ; RUN: opt -module-hash -module-summary %s -o %t.o
 ; RUN: opt -module-hash -module-summary %p/Inputs/cache.ll -o %t2.o
@@ -10,6 +11,7 @@
 ; RUN: ld.lld --thinlto-cache-dir=%t.cache --thinlto-cache-policy prune_after=1h:prune_interval=0s -o %t3 %t2.o %t.o
 
 ; Two cached objects, plus a timestamp file and "foo", minus the file we removed.
+; RUN: echo 15 && ls %t.cache
 ; RUN: ls %t.cache | count 4
 
 ; Create a file of size 64KB.
@@ -21,10 +23,12 @@
 
 ; This should remove it.
 ; RUN: ld.lld --thinlto-cache-dir=%t.cache --thinlto-cache-policy cache_size_bytes=32k:prune_interval=0s -o %t3 %t2.o %t.o
+; RUN: echo 27 && ls %t.cache
 ; RUN: ls %t.cache | count 4
 
 ; Setting max number of files to 0 should disable the limit, not delete everything.
 ; RUN: ld.lld --thinlto-cache-dir=%t.cache --thinlto-cache-policy prune_after=0s:cache_size=0%:cache_size_files=0:prune_interval=0s -o %t3 %t2.o %t.o
+; RUN: echo 32 && ls %t.cache
 ; RUN: ls %t.cache | count 4
 
 ; Delete everything except for the timestamp, "foo" and one cache file.
