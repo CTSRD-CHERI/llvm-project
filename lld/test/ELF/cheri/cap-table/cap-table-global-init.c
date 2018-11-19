@@ -24,8 +24,8 @@ int main(void) {
 // CHECK-LABEL: SYMBOL TABLE:
 // CHECK-DAG: 0000000120010068    l        F .text		 00000030 _start
 // CHECK-DAG: 0000000120010000    g        F .text		 00000068 __start
-// CHECK-DAG: 0000000120030030               .cap_table		 00000000 .hidden __cap_table_end
-// CHECK-DAG: 0000000120030000               .cap_table		 00000030 .hidden __cap_table_start
-// CHECK-DAG: 0000000120030000 l             .cap_table		 00000010 main@CAPTABLE
-// CHECK-DAG: 0000000120030010 l             .cap_table		 00000010 global@CAPTABLE
-// CHECK-DAG: 0000000120030020 l             .cap_table		 00000010 global2@CAPTABLE
+// CHECK-DAG: 0000000120030030               .captable		 00000000 .hidden __cap_table_end
+// CHECK-DAG: 0000000120030000               .captable		 00000030 .hidden __cap_table_start
+// CHECK-DAG: 0000000120030000 l             .captable		 00000010 main@CAPTABLE
+// CHECK-DAG: 0000000120030010 l             .captable		 00000010 global@CAPTABLE
+// CHECK-DAG: 0000000120030020 l             .captable		 00000010 global2@CAPTABLE

@@ -12,7 +12,7 @@
 # STATIC-COMMON-NEXT:    Binding: Local (0x0)
 # STATIC-COMMON-NEXT:    Type: Object (0x1)
 # STATIC-COMMON-NEXT:    Other: 0
-# STATIC-COMMON-NEXT:    Section: .cap_table
+# STATIC-COMMON-NEXT:    Section: .captable
 # STATIC-COMMON-NEXT:  }
 # UNDEFINED:       Symbol {
 # UNDEFINED:         Name: weak_symbol (
@@ -79,12 +79,12 @@
 # RUN: not ld.lld --fatal-warnings -o %t.exe %t.o %t2.o 2>&1 | FileCheck %s -check-prefix ERROR
 # ERROR: ld.lld: error: could not determine size of cap reloc against <unknown kind> weak_symbol
 # ERROR-NEXT: >>> defined in  ({{.+}}weak-symbols-2.s.tmp2.o:(.data+0x0))
-# ERROR-NEXT: >>> referenced by <internal>:(.cap_table+0x0)
+# ERROR-NEXT: >>> referenced by <internal>:(.captable+0x0)
 # RUN: ld.lld --no-fatal-warnings -o %t.exe %t.o %t2.o 2>%t.warnings
 # RUN: FileCheck %s -check-prefix WARNING < %t.warnings
 # WARNING: ld.lld: warning: could not determine size of cap reloc against <unknown kind> weak_symbol
 # WARNING-NEXT: >>> defined in  ({{.+}}weak-symbols-2.s.tmp2.o:(.data+0x0))
-# WARNING-NEXT: >>> referenced by <internal>:(.cap_table+0x0)
+# WARNING-NEXT: >>> referenced by <internal>:(.captable+0x0)
 # RUN: llvm-readobj -dyn-relocations -t %t.exe | FileCheck %s -check-prefixes STATIC-COMMON,RESOLVED '-D$RESOLVED_SIZE=0'
 
 .ifdef MAIN_FILE

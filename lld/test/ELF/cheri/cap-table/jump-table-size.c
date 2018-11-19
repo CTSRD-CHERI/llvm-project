@@ -23,7 +23,7 @@
 
 // EXE: SYMBOL TABLE:
 // EXE-DAG: 00000001200001d0 .rodata		 00000024 .LJTI0_0
-// EXE-DAG: 0000000120030000 l       .cap_table		 000000{{1|2}}0 .LJTI0_0@CAPTABLE
+// EXE-DAG: 0000000120030000 l       .captable		 000000{{1|2}}0 .LJTI0_0@CAPTABLE
 
 int __start(int i) {
   switch(i) {

@@ -28,16 +28,16 @@
 
 
 # CHECK-LABEL: SYMBOL TABLE:
-# CHECK:      0000000120030000         .cap_table		 00000090 _CHERI_CAPABILITY_TABLE_
-# CHECK-NEXT: 0000000120030000 l       .cap_table		 00000010 .L.str.123@CAPTABLE.0
-# CHECK-NEXT: 0000000120030010 l       .cap_table		 00000010 .L.duplicate_local@CAPTABLE.1
-# CHECK-NEXT: 0000000120030020 l       .cap_table		 00000010 duplicate_local_without_prefix@CAPTABLE.2
-# CHECK-NEXT: 0000000120030030 l       .cap_table		 00000010 duplicate_global@CAPTABLE
-# CHECK-NEXT: 0000000120030040 l       .cap_table		 00000010 local_with_same_name_as_global@CAPTABLE.4
-# CHECK-NEXT: 0000000120030050 l       .cap_table		 00000010 .L.duplicate_local@CAPTABLE.5
-# CHECK-NEXT: 0000000120030060 l       .cap_table		 00000010 duplicate_local_without_prefix@CAPTABLE.6
-# CHECK-NEXT: 0000000120030070 l       .cap_table		 00000010 g@CAPTABLE
-# CHECK-NEXT: 0000000120030080 l       .cap_table		 00000010 local_with_same_name_as_global@CAPTABLE
+# CHECK:      0000000120030000         .captable		 00000090 _CHERI_CAPABILITY_TABLE_
+# CHECK-NEXT: 0000000120030000 l       .captable		 00000010 .L.str.123@CAPTABLE.0
+# CHECK-NEXT: 0000000120030010 l       .captable		 00000010 .L.duplicate_local@CAPTABLE.1
+# CHECK-NEXT: 0000000120030020 l       .captable		 00000010 duplicate_local_without_prefix@CAPTABLE.2
+# CHECK-NEXT: 0000000120030030 l       .captable		 00000010 duplicate_global@CAPTABLE
+# CHECK-NEXT: 0000000120030040 l       .captable		 00000010 local_with_same_name_as_global@CAPTABLE.4
+# CHECK-NEXT: 0000000120030050 l       .captable		 00000010 .L.duplicate_local@CAPTABLE.5
+# CHECK-NEXT: 0000000120030060 l       .captable		 00000010 duplicate_local_without_prefix@CAPTABLE.6
+# CHECK-NEXT: 0000000120030070 l       .captable		 00000010 g@CAPTABLE
+# CHECK-NEXT: 0000000120030080 l       .captable		 00000010 local_with_same_name_as_global@CAPTABLE
 .macro add_captable_reference name
 .text
 clcbi $c1, %captab20(\name)($c1)  # add a reference so that it ends up in the captable

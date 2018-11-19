@@ -356,7 +356,7 @@ struct ElfSym {
   static Defined *MipsLocalGp;
 
   // The _CHERI_CAPABILITY_TABLE_ symbol points to the beginning of the
-  // .cap_table section
+  // .captable section
   static Defined *CheriCapabilityTable;
 
   // __rela_iplt_end or __rel_iplt_end

@@ -43,7 +43,7 @@ __attribute__((noreturn)) void exit(int code) {
 // CHECK-NEXT:            0x12003{{.+}} (atexit@CAPTABLE) Base: 0x12001{{.+}} (atexit+0) Length: 8 Perms: Function
 // CHECK-NEXT:            0x12003{{.+}} (_init_tls@CAPTABLE) Base: 0x12001{{.+}} (_init_tls+0) Length: 8 Perms: Function
 // CHECK-NEXT:            0x12003{{.+}} (crt_call_constructors@CAPTABLE) Base: 0x12001{{.+}} (crt_call_constructors+0) Length: 128 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (handle_static_init@CAPTABLE.7) Base: 0x12001{{.+}} (handle_static_init+0) Length: 432 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (handle_static_init@CAPTABLE.7) Base: 0x12001{{.+}} (handle_static_init+0) Length: 444 Perms: Function
 // CHECK-NEXT:            0x12003{{.+}} (main@CAPTABLE) Base: 0x12001{{.+}} (main+0) Length: 8 Perms: Function
 // CHECK-NEXT:            0x12003{{.+}} (exit@CAPTABLE) Base: 0x12001{{.+}} (exit+0) Length: 4 Perms: Function
 // CHECK-NEXT:            0x12003{{.+}} (finalizer@CAPTABLE.10) Base: 0x12001{{.+}} (finalizer+0) Length: 192 Perms: Function
@@ -67,8 +67,8 @@ __attribute__((noreturn)) void exit(int code) {
 // CHECK-NEXT: ]
 
 // CHECK-SYMS-LABEL: SYMBOL TABLE:
-// CHECK-SYMS:         00000001200301{{8|9}}0 .cap_table		 00000000 .hidden __cap_table_end
-// CHECK-SYMS:         00000001200300{{2|3}}0 .cap_table		 00000160 .hidden __cap_table_start
+// CHECK-SYMS:         00000001200301{{8|9}}0 .captable		 00000000 .hidden __cap_table_end
+// CHECK-SYMS:         00000001200300{{2|3}}0 .captable		 00000160 .hidden __cap_table_start
 // WITHOUT_CTORS-SYMS: 0000000120010000       .text          00000000 .hidden __fini_array_end
 // WITHOUT_CTORS-SYMS: 0000000120010000       .text          00000000 .hidden __fini_array_start
 // WITHOUT_CTORS-SYMS: 0000000120010000       .text          00000000 .hidden __init_array_end

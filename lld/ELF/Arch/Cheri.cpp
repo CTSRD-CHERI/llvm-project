@@ -516,7 +516,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
 
 CheriCapTableSection::CheriCapTableSection()
   : SyntheticSection(SHF_ALLOC | SHF_WRITE, /* XXX: actually RELRO */
-                     SHT_PROGBITS, Config->CapabilitySize, ".cap_table") {
+                     SHT_PROGBITS, Config->CapabilitySize, ".captable") {
   assert(Config->CapabilitySize > 0);
   this->Entsize = Config->CapabilitySize;
 }
@@ -584,7 +584,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type) {
   }
 #ifdef DEBUG_CAP_TABLE
   llvm::errs() << "Added symbol " << toString(Sym)
-               << " to .cap_table. Total count " << Entries.size() << "\n";
+               << " to .captable. Total count " << Entries.size() << "\n";
 #endif
 }
 
@@ -648,12 +648,12 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     // Use warn here since the calculation may be wrong if the 11 bit clc is
     // used. We will error when writing the relocation values later anyway
     // so this will help find the error
-    warn("added " + Twine(SmallEntryCount) + " entries to .cap_table but "
+    warn("added " + Twine(SmallEntryCount) + " entries to .captable but "
         "current maximum is " + Twine(MaxSmallEntries) + "; try recompiling "
         "non-performance critical source files with -mxcaptable");
   }
   if (errorHandler().Verbose) {
-    message("Total " + Twine(Entries.size()) + " .cap_table entries: " +
+    message("Total " + Twine(Entries.size()) + " .captable entries: " +
         Twine(SmallEntryCount) + " use a small immediate and " +
         Twine(Entries.size() - SmallEntryCount) + " use -mxcaptable. ");
   }

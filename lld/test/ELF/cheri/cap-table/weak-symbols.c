@@ -39,14 +39,14 @@ int __start(void) {
 //                      ^------- Start of .text segment (actual value doesn't matter as long as iteration terminates immediately)
 // EXE: 0030008         .preinit_array		 00000000 .hidden __preinit_array_end
 // EXE: 0030000         .preinit_array		 00000008 .hidden __preinit_array_start
-// EXE: 0030010         .cap_table		 000000b0 _CHERI_CAPABILITY_TABLE_
+// EXE: 0030010         .captable		 000000b0 _CHERI_CAPABILITY_TABLE_
 // STATIC-EXE: 0000000000000000  w      *UND*		 00000000 _DYNAMIC
 // EXE: 10108 g     F .text		 00000008 __start
 // DYNAMIC-EXE:  0030278         __cap_relocs		 00000000 _edata
-// STATIC-EXE: 00300c0         .cap_table		 00000000 _edata
+// STATIC-EXE: 00300c0         .captable		 00000000 _edata
 // EXE: 0040000         .bss		 00000000 _end
 // EXE: 10110         .text		 00000000 _etext
 // DYNAMIC-EXE: 0030278         __cap_relocs		 00000000 edata
-// STATIC-EXE: 00300c0         .cap_table		 00000000 edata
+// STATIC-EXE: 00300c0         .captable		 00000000 edata
 // EXE: 0040000         .bss		 00000000 end
 // EXE: 10110         .text		 00000000 etext

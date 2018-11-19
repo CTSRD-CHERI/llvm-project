@@ -86,7 +86,7 @@
 
 // PURECAP-SHLIB:  Section {
 // PURECAP-SHLIB:      Index: [[CAPTABLE_INDEX]]
-// PURECAP-SHLIB-NEXT: Name: .cap_table
+// PURECAP-SHLIB-NEXT: Name: .captable
 
 // PURECAP-SHLIB: Relocations [
 // PURECAP-SHLIB-NEXT: Section ({{.+}}) .rel.plt {
