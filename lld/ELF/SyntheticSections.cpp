@@ -1562,8 +1562,12 @@ void RelocationBaseSection::finalizeContents() {
   getParent()->Link = In.DynSymTab ? In.DynSymTab->getParent()->SectionIndex
                                    : In.SymTab->getParent()->SectionIndex;
 
-  if (In.RelaIplt == this || In.RelaPlt == this)
+  if (Config->isCheriABI() && In.CheriCapTable) {
+    // For MIPS CheriABI we use the captable as the sh_info value
+    getParent()->Info = In.CheriCapTable->getParent()->SectionIndex;
+  } else if (In.RelaIplt == this || In.RelaPlt == this) {
     getParent()->Info = In.GotPlt->getParent()->SectionIndex;
+  }
 }
 
 RelrBaseSection::RelrBaseSection()
