@@ -7200,8 +7200,10 @@ CGObjCNonFragileABIMac::GetClassGlobal(StringRef Name,
 
   llvm::GlobalVariable *GV = CGM.getModule().getGlobalVariable(Name);
   if (!GV || GV->getType() != ObjCTypes.ClassnfABITy->getPointerTo()) {
-    auto *NewGV = new llvm::GlobalVariable(ObjCTypes.ClassnfABITy, false, L,
-                                           nullptr, Name);
+    auto *NewGV =
+        new llvm::GlobalVariable(ObjCTypes.ClassnfABITy, false, L, nullptr,
+                                 Name, llvm::GlobalVariable::NotThreadLocal,
+                                 CGM.getTargetCodeGenInfo().getDefaultAS());
 
     if (DLLImport)
       NewGV->setDLLStorageClass(llvm::GlobalValue::DLLImportStorageClass);
