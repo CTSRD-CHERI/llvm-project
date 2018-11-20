@@ -43,7 +43,9 @@
 #include "clang/Basic/Version.h"
 #include "clang/CodeGen/ConstantInitBuilder.h"
 #include "clang/Frontend/CodeGenOptions.h"
+#include "clang/Frontend/FrontendDiagnostic.h"
 #include "clang/Sema/SemaDiagnostic.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
@@ -57,7 +59,13 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MD5.h"
+#include "llvm/Support/YAMLParser.h"
+
+// For the CHERI stats (should probably move somewhere else)
+#include <sys/file.h>
+#include <unistd.h>
 
 using namespace clang;
 using namespace CodeGen;
@@ -65,6 +73,11 @@ using namespace CodeGen;
 static llvm::cl::opt<bool> LimitedCoverage(
     "limited-coverage-experimental", llvm::cl::ZeroOrMore, llvm::cl::Hidden,
     llvm::cl::desc("Emit limited coverage mapping information (experimental)"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> CollectPointerCastStats(
+    "collect-pointer-cast-stats", llvm::cl::ZeroOrMore, llvm::cl::Hidden,
+    llvm::cl::desc("Collect statistics on numbers of int <-> pointer casts"),
     llvm::cl::init(false));
 
 static const char AnnotationSection[] = "llvm.metadata";
@@ -184,6 +197,9 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   // CoverageMappingModuleGen object.
   if (CodeGenOpts.CoverageMapping)
     CoverageMapping.reset(new CoverageMappingModuleGen(*this, *CoverageInfo));
+
+  if (CollectPointerCastStats)
+    PointerCastStats.reset(new PointerCastLocations);
 }
 
 CodeGenModule::~CodeGenModule() {}
@@ -411,6 +427,39 @@ void InstrProfStats::reportDiagnostics(DiagnosticsEngine &Diags,
   }
 }
 
+void CodeGenModule::PointerCastLocations::printStats(llvm::raw_ostream &OS,
+                                                     const SourceManager &SM) {
+
+  auto DumpStat = [&](const llvm::SmallVectorImpl<SourceRange> &Vec) {
+    const size_t Total = Vec.size();
+    OS << "\t\t\"count\": " << Twine(Total) << ",\n\t\t\"locations\": [";
+    if (Total == 0) {
+      OS << "]";
+      return;
+    }
+
+    for (size_t i = 0; i < Total;) {
+      OS << "\n\t\t\t\"" << llvm::yaml::escape(Vec[i].printToString(SM)) << '"';
+      i++;
+      if (i < Total)
+        OS << ',';
+    }
+    OS << "\n\t\t]";
+  };
+
+  OS << "\"pointer_cast_stats\": {\n";
+  OS << "\t\"ptrtoint\": {\n";
+  DumpStat(PointerToInt);
+  OS << "\n\t}, \"inttoptr\": {\n";
+  DumpStat(IntToPointer);
+  OS << "\n\t}, \"captoptr\": {\n";
+  DumpStat(CapToPointer);
+  OS << "\n\t}, \"ptrtocap\": {\n";
+  DumpStat(PointerToCap);
+  OS << "\n\t}";
+  OS << "\n}\n";
+}
+
 void CodeGenModule::Release() {
   EmitDeferred();
   EmitVTablesOpportunistically();
@@ -460,6 +509,38 @@ void CodeGenModule::Release() {
   emitLLVMUsed();
   if (SanStats)
     SanStats->finish();
+
+  if (CollectPointerCastStats) {
+    StringRef StatsFile = getCodeGenOpts().CHERIStatsFile;
+    std::unique_ptr<llvm::raw_fd_ostream> StatsOS;
+    // raw_fd_ostream has no way of getting the FD and I don't want to change
+    // the interface just for this function to enable file locking since
+    // that would require a recompile of all of LLVM....
+    int StatsFD = STDERR_FILENO;
+    if (!StatsFile.empty()) {
+      std::error_code EC = llvm::sys::fs::openFileForWrite(StatsFile, StatsFD);
+      if (EC) {
+        getDiags().Report(diag::warn_fe_unable_to_open_stats_file)
+            << StatsFile << EC.message();
+      }
+    } else {
+      StatsFile = "/dev/stderr";
+    }
+    if (StatsFD != -1) {
+      if (flock(StatsFD, LOCK_EX) != 0) {
+        getDiags().Report(diag::warn_fe_unable_to_lock_stats_file)
+            << StatsFile << strerror(errno);
+      }
+      // Ensure that we unlock on scope exit
+      auto ScopeExit = llvm::make_scope_exit([StatsFD]() {
+        if (flock(StatsFD, LOCK_UN) != 0)
+          llvm::errs() << "WARNING: unlocking statistics FD failed. Should be "
+                          "released automatically on exit anyway.\n";
+      });
+      StatsOS = llvm::make_unique<llvm::raw_fd_ostream>(StatsFD, false);
+      PointerCastStats->printStats(*StatsOS, getContext().getSourceManager());
+    }
+  }
 
   if (CodeGenOpts.Autolink &&
       (Context.getLangOpts().Modules || !LinkerOptionsMetadata.empty())) {

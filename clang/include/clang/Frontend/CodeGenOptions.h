@@ -224,6 +224,12 @@ public:
   /// records.
   std::string OptRecordFile;
 
+  /// The name of the file to whcih the backend should save CHERI-related
+  /// statistics (number of ptr->int casts, csetbounds info, etc..) as JSON
+  /// Note: This file can be a shared between multiple compiler instances
+  /// since we will use a lock file global
+  std::string CHERIStatsFile;
+
   /// Regular expression to select optimizations for which we should enable
   /// optimization remarks. Transformation passes whose name matches this
   /// expression (and support this feature), will emit a diagnostic

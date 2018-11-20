@@ -1157,6 +1157,15 @@ public:
   /// The return value is the address of the method number.
   llvm::Value *EmitSandboxRequiredMethod(StringRef, StringRef);
 
+  struct PointerCastLocations {
+    SmallVector<SourceRange, 8> PointerToInt;
+    SmallVector<SourceRange, 8> IntToPointer;
+    SmallVector<SourceRange, 8> CapToPointer;
+    SmallVector<SourceRange, 8> PointerToCap;
+    void printStats(llvm::raw_ostream &OS, const SourceManager &SM);
+  };
+  std::unique_ptr<PointerCastLocations> PointerCastStats;
+
   /// Emit the metadata for a defined method in a CHERI sandbox
   void EmitSandboxDefinedMethod(StringRef, StringRef, llvm::Function *);
 

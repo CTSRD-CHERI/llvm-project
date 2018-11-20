@@ -110,6 +110,9 @@ def warn_fe_cc_log_diagnostics_failure : Warning<
 def warn_fe_unable_to_open_stats_file : Warning<
     "unable to open statistics output file '%0': '%1'">,
     InGroup<DiagGroup<"unable-to-open-stats-file">>;
+def warn_fe_unable_to_lock_stats_file : Warning<
+    "unable to lock statistics output file '%0': '%1'">,
+    InGroup<DiagGroup<"unable-to-lock-stats-file">>, DefaultError;
 def err_fe_no_pch_in_dir : Error<
     "no suitable precompiled header file found in directory '%0'">;
 def err_fe_action_not_available : Error<
