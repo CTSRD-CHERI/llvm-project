@@ -37,11 +37,6 @@ let hasSideEffects = 0, isNotDuplicable = 1, Uses = [ESP, SSP],
   def MOVPC32r : Ii32<0xE8, Pseudo, (outs GR32:$reg), (ins i32imm:$label),
                       "", []>;
 
-// 64-bit large code model PIC base construction.
-let hasSideEffects = 0, mayLoad = 1, isNotDuplicable = 1, SchedRW = [WriteJump] in
-  def MOVGOT64r : PseudoI<(outs GR64:$reg),
-                          (ins GR64:$scratch, i64i32imm_pcrel:$got), []>;
-
 // ADJCALLSTACKDOWN/UP implicitly use/def ESP because they may be expanded into
 // a stack adjustment and the codegen must know that they may modify the stack
 // pointer before prolog-epilog rewriting occurs.
@@ -148,7 +143,7 @@ def WIN_ALLOCA_64 : I<0, Pseudo, (outs), (ins GR64:$size),
 // These instructions XOR the frame pointer into a GPR. They are used in some
 // stack protection schemes. These are post-RA pseudos because we only know the
 // frame register after register allocation.
-let Constraints = "$src = $dst", isPseudo = 1, Defs = [EFLAGS] in {
+let Constraints = "$src = $dst", isMoveImm = 1, isPseudo = 1, Defs = [EFLAGS] in {
   def XOR32_FP : I<0, Pseudo, (outs GR32:$dst), (ins GR32:$src),
                   "xorl\t$$FP, $src", []>,
                   Requires<[NotLP64]>, Sched<[WriteALU]>;
@@ -275,7 +270,7 @@ def MORESTACK_RET_RESTORE_R10 : I<0, Pseudo, (outs), (ins), "", []>;
 // Alias instruction mapping movr0 to xor.
 // FIXME: remove when we can teach regalloc that xor reg, reg is ok.
 let Defs = [EFLAGS], isReMaterializable = 1, isAsCheapAsAMove = 1,
-    isPseudo = 1, AddedComplexity = 10 in
+    isPseudo = 1, isMoveImm = 1, AddedComplexity = 10 in
 def MOV32r0  : I<0, Pseudo, (outs GR32:$dst), (ins), "",
                  [(set GR32:$dst, 0)]>, Sched<[WriteZero]>;
 
@@ -1325,6 +1320,15 @@ def : Pat<(i64 (anyext GR16:$src)),
 def : Pat<(i64 (anyext GR32:$src)),
           (INSERT_SUBREG (i64 (IMPLICIT_DEF)), GR32:$src, sub_32bit)>;
 
+// If this is an anyext of the remainder of an 8-bit sdivrem, use a MOVSX
+// instead of a MOVZX. The sdivrem lowering will emit emit a MOVSX to move
+// %ah to the lower byte of a register. By using a MOVSX here we allow a
+// post-isel peephole to merge the two MOVSX instructions into one.
+def anyext_sdiv : PatFrag<(ops node:$lhs), (anyext node:$lhs),[{
+  return (N->getOperand(0).getOpcode() == ISD::SDIVREM &&
+          N->getOperand(0).getResNo() == 1);
+}]>;
+def : Pat<(i32 (anyext_sdiv GR8:$src)), (MOVSX32rr8 GR8:$src)>;
 
 // Any instruction that defines a 32-bit result leaves the high half of the
 // register. Truncate can be lowered to EXTRACT_SUBREG. CopyFromReg may

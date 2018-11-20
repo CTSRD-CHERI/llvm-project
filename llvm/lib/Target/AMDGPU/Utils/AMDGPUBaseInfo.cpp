@@ -152,12 +152,15 @@ void streamIsaVersion(const MCSubtargetInfo *STI, raw_ostream &Stream) {
 
   if (hasXNACK(*STI))
     Stream << "+xnack";
+  if (hasSRAMECC(*STI))
+    Stream << "+sram-ecc";
 
   Stream.flush();
 }
 
 bool hasCodeObjectV3(const MCSubtargetInfo *STI) {
-  return STI->getFeatureBits().test(FeatureCodeObjectV3);
+  return STI->getTargetTriple().getOS() == Triple::AMDHSA &&
+             STI->getFeatureBits().test(FeatureCodeObjectV3);
 }
 
 unsigned getWavefrontSize(const MCSubtargetInfo *STI) {
@@ -593,6 +596,10 @@ bool hasXNACK(const MCSubtargetInfo &STI) {
   return STI.getFeatureBits()[AMDGPU::FeatureXNACK];
 }
 
+bool hasSRAMECC(const MCSubtargetInfo &STI) {
+  return STI.getFeatureBits()[AMDGPU::FeatureSRAMECC];
+}
+
 bool hasMIMG_R128(const MCSubtargetInfo &STI) {
   return STI.getFeatureBits()[AMDGPU::FeatureMIMG_R128];
 }
@@ -748,6 +755,7 @@ unsigned getRegBitWidth(unsigned RCID) {
   case AMDGPU::VS_64RegClassID:
   case AMDGPU::SReg_64RegClassID:
   case AMDGPU::VReg_64RegClassID:
+  case AMDGPU::SReg_64_XEXECRegClassID:
     return 64;
   case AMDGPU::VReg_96RegClassID:
     return 96;

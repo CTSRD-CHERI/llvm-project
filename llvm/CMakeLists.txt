@@ -7,6 +7,10 @@ if(POLICY CMP0068)
   set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)
 endif()
 
+if(POLICY CMP0075)
+  cmake_policy(SET CMP0075 NEW)
+endif()
+
 if(NOT DEFINED LLVM_VERSION_MAJOR)
   set(LLVM_VERSION_MAJOR 8)
 endif()
@@ -395,8 +399,8 @@ option(LLVM_USE_OPROFILE
 option(LLVM_EXTERNALIZE_DEBUGINFO
   "Generate dSYM files and strip executables and libraries (Darwin Only)" OFF)
 
-option(LLVM_CODESIGNING_IDENTITY
-  "Sign executables and dylibs with the given identity (Darwin Only)" OFF)
+set(LLVM_CODESIGNING_IDENTITY "" CACHE STRING
+  "Sign executables and dylibs with the given identity or skip if empty (Darwin Only)")
 
 # If enabled, verify we are on a platform that supports oprofile.
 if( LLVM_USE_OPROFILE )
@@ -855,7 +859,7 @@ if( LLVM_INCLUDE_UTILS )
 else()
   if ( LLVM_INCLUDE_TESTS )
     message(FATAL_ERROR "Including tests when not building utils will not work.
-    Either set LLVM_INCLUDE_UTILS to On, or set LLVM_INCLDE_TESTS to Off.")
+    Either set LLVM_INCLUDE_UTILS to On, or set LLVM_INCLUDE_TESTS to Off.")
   endif()
 endif()
 

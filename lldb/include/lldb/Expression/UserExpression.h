@@ -10,14 +10,10 @@
 #ifndef liblldb_UserExpression_h_
 #define liblldb_UserExpression_h_
 
-// C Includes
-// C++ Includes
 #include <memory>
 #include <string>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/Address.h"
 #include "lldb/Expression/Expression.h"
 #include "lldb/Expression/Materializer.h"
@@ -287,6 +283,10 @@ public:
            lldb::ValueObjectSP &result_valobj_sp, Status &error,
            uint32_t line_offset = 0, std::string *fixed_expression = nullptr,
            lldb::ModuleSP *jit_module_sp_ptr = nullptr);
+
+  static const Status::ValueType kNoResult =
+      0x1001; ///< ValueObject::GetError() returns this if there is no result
+              /// from the expression.
 
   const char *GetFixedText() {
     if (m_fixed_text.empty())

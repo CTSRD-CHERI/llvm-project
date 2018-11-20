@@ -25,10 +25,9 @@ add_clang_library(clangDaemon
   FuzzyMatch.cpp
   GlobalCompilationDatabase.cpp
   Headers.cpp
-  JSONRPCDispatcher.cpp
+  JSONTransport.cpp
   Logger.cpp
   Protocol.cpp
-  ProtocolHandlers.cpp
   Quality.cpp
   RIFF.cpp
   SourceCode.cpp
@@ -39,6 +38,7 @@ add_clang_library(clangDaemon
   XRefs.cpp
 
   index/Background.cpp
+  index/BackgroundIndexStorage.cpp
   index/CanonicalIncludes.cpp
   index/FileIndex.cpp
   index/Index.cpp
@@ -65,6 +65,24 @@ add_clang_library(clangDaemon
   clangLex
   clangSema
   clangSerialization
+  clangTidy
+  clangTidyAndroidModule
+  clangTidyAbseilModule
+  clangTidyBoostModule
+  clangTidyBugproneModule
+  clangTidyCERTModule
+  clangTidyCppCoreGuidelinesModule
+  clangTidyFuchsiaModule
+  clangTidyGoogleModule
+  clangTidyHICPPModule
+  clangTidyLLVMModule
+  clangTidyMiscModule
+  clangTidyModernizeModule
+  clangTidyObjCModule
+  clangTidyPerformanceModule
+  clangTidyPortabilityModule
+  clangTidyReadabilityModule
+  clangTidyZirconModule
   clangTooling
   clangToolingCore
   clangToolingInclusions

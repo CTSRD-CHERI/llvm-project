@@ -49,6 +49,11 @@ public:
   /// Returns a reference to the JITDylib representing the JIT'd main program.
   JITDylib &getMainJITDylib() { return Main; }
 
+  /// Create a new JITDylib with the given name and return a reference to it.
+  JITDylib &createJITDylib(std::string Name) {
+    return ES->createJITDylib(std::move(Name));
+  }
+
   /// Convenience method for defining an absolute symbol.
   Error defineAbsolute(StringRef Name, JITEvaluatedSymbol Address);
 
@@ -139,7 +144,7 @@ public:
   /// LLLazyJIT with the given number of compile threads.
   static Expected<std::unique_ptr<LLLazyJIT>>
   Create(JITTargetMachineBuilder JTMB, DataLayout DL,
-         unsigned NumCompileThreads = 0);
+         JITTargetAddress ErrorAddr, unsigned NumCompileThreads = 0);
 
   /// Set an IR transform (e.g. pass manager pipeline) to run on each function
   /// when it is compiled.

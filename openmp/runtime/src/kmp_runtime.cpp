@@ -2649,6 +2649,8 @@ void __kmp_set_num_threads(int new_nth, int gtid) {
 
   KMP_COUNT_VALUE(OMP_set_numthreads, new_nth);
   thread = __kmp_threads[gtid];
+  if (thread->th.th_current_task->td_icvs.nproc == new_nth)
+    return; // nothing to do
 
   __kmp_save_internal_controls(thread);
 
@@ -7668,7 +7670,7 @@ __kmp_determine_reduction_method(
 #if KMP_ARCH_X86_64 || KMP_ARCH_PPC64 || KMP_ARCH_AARCH64 || KMP_ARCH_MIPS64
 
 #if KMP_OS_LINUX || KMP_OS_FREEBSD || KMP_OS_NETBSD || KMP_OS_WINDOWS ||       \
-    KMP_OS_DARWIN
+    KMP_OS_DARWIN || KMP_OS_HURD
 
     int teamsize_cutoff = 4;
 
@@ -7696,7 +7698,7 @@ __kmp_determine_reduction_method(
 
 #elif KMP_ARCH_X86 || KMP_ARCH_ARM || KMP_ARCH_AARCH || KMP_ARCH_MIPS
 
-#if KMP_OS_LINUX || KMP_OS_WINDOWS
+#if KMP_OS_LINUX || KMP_OS_WINDOWS || KMP_OS_HURD
 
     // basic tuning
 

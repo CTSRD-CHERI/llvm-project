@@ -7,16 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
 #include <atomic>
 #include <mutex>
 
-// Other libraries and framework includes
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Support/Threading.h"
 
-// Project includes
 #include "Plugins/Process/Utility/InferiorCallPOSIX.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Breakpoint/StoppointCallbackContext.h"
@@ -430,7 +426,7 @@ Status ProcessLaunchCommandOptions::SetOptionValue(
   case 'i': // STDIN for read only
   {
     FileAction action;
-    if (action.Open(STDIN_FILENO, FileSpec{option_arg, false}, true, false))
+    if (action.Open(STDIN_FILENO, FileSpec(option_arg), true, false))
       launch_info.AppendFileAction(action);
     break;
   }
@@ -438,7 +434,7 @@ Status ProcessLaunchCommandOptions::SetOptionValue(
   case 'o': // Open STDOUT for write only
   {
     FileAction action;
-    if (action.Open(STDOUT_FILENO, FileSpec{option_arg, false}, false, true))
+    if (action.Open(STDOUT_FILENO, FileSpec(option_arg), false, true))
       launch_info.AppendFileAction(action);
     break;
   }
@@ -446,7 +442,7 @@ Status ProcessLaunchCommandOptions::SetOptionValue(
   case 'e': // STDERR for write only
   {
     FileAction action;
-    if (action.Open(STDERR_FILENO, FileSpec{option_arg, false}, false, true))
+    if (action.Open(STDERR_FILENO, FileSpec(option_arg), false, true))
       launch_info.AppendFileAction(action);
     break;
   }
@@ -458,7 +454,7 @@ Status ProcessLaunchCommandOptions::SetOptionValue(
   case 'n': // Disable STDIO
   {
     FileAction action;
-    const FileSpec dev_null{FileSystem::DEV_NULL, false};
+    const FileSpec dev_null(FileSystem::DEV_NULL);
     if (action.Open(STDIN_FILENO, dev_null, true, false))
       launch_info.AppendFileAction(action);
     if (action.Open(STDOUT_FILENO, dev_null, false, true))
@@ -469,7 +465,7 @@ Status ProcessLaunchCommandOptions::SetOptionValue(
   }
 
   case 'w':
-    launch_info.SetWorkingDirectory(FileSpec{option_arg, false});
+    launch_info.SetWorkingDirectory(FileSpec(option_arg));
     break;
 
   case 't': // Open process in new terminal window
@@ -515,7 +511,7 @@ Status ProcessLaunchCommandOptions::SetOptionValue(
 
   case 'c':
     if (!option_arg.empty())
-      launch_info.SetShell(FileSpec(option_arg, false));
+      launch_info.SetShell(FileSpec(option_arg));
     else
       launch_info.SetShell(HostInfo::GetDefaultShell());
     break;
@@ -1924,7 +1920,7 @@ Process::CreateBreakpointSite(const BreakpointLocationSP &owner,
           owner->SetBreakpointSite(bp_site_sp);
           return m_breakpoint_site_list.Add(bp_site_sp);
         } else {
-          if (show_error) {
+          if (show_error || use_hardware) {
             // Report error for setting breakpoint...
             GetTarget().GetDebugger().GetErrorFile()->Printf(
                 "warning: failed to set breakpoint site at 0x%" PRIx64
@@ -2734,7 +2730,7 @@ Status Process::Launch(ProcessLaunchInfo &launch_info) {
                                       sizeof(local_exec_file_path));
     exe_module->GetPlatformFileSpec().GetPath(platform_exec_file_path,
                                               sizeof(platform_exec_file_path));
-    if (exe_module->GetFileSpec().Exists()) {
+    if (FileSystem::Instance().Exists(exe_module->GetFileSpec())) {
       // Install anything that might need to be installed prior to launching.
       // For host systems, this will do nothing, but if we are connected to a
       // remote platform it will install any needed binaries

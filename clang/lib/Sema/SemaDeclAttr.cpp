@@ -2410,6 +2410,15 @@ static void handleAvailabilityAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   if (const auto *SE = dyn_cast_or_null<StringLiteral>(AL.getReplacementExpr()))
     Replacement = SE->getString();
 
+  if (II->isStr("swift")) {
+    if (Introduced.isValid() || Obsoleted.isValid() ||
+        (!IsUnavailable && !Deprecated.isValid())) {
+      S.Diag(AL.getLoc(),
+             diag::warn_availability_swift_unavailable_deprecated_only);
+      return;
+    }
+  }
+
   AvailabilityAttr *NewAttr = S.mergeAvailabilityAttr(ND, AL.getRange(), II,
                                                       false/*Implicit*/,
                                                       Introduced.Version,
@@ -5834,10 +5843,8 @@ static void handleDeprecatedAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
            !S.checkStringLiteralArgumentAttr(AL, 1, Replacement))
     return;
 
-  if (!S.getLangOpts().CPlusPlus14)
-    if (AL.isCXX11Attribute() &&
-        !(AL.hasScope() && AL.getScopeName()->isStr("gnu")))
-      S.Diag(AL.getLoc(), diag::ext_cxx14_attr) << AL;
+  if (!S.getLangOpts().CPlusPlus14 && AL.isCXX11Attribute() && !AL.isGNUScope())
+    S.Diag(AL.getLoc(), diag::ext_cxx14_attr) << AL;
 
   D->addAttr(::new (S.Context)
                  DeprecatedAttr(AL.getRange(), S.Context, Str, Replacement,
@@ -7735,7 +7742,7 @@ public:
 
   bool VisitObjCAvailabilityCheckExpr(ObjCAvailabilityCheckExpr *E) {
     SemaRef.Diag(E->getBeginLoc(), diag::warn_at_available_unchecked_use)
-        << (!SemaRef.getLangOpts().ObjC1);
+        << (!SemaRef.getLangOpts().ObjC);
     return true;
   }
 
@@ -7790,8 +7797,8 @@ void DiagnoseUnguardedAvailability::DiagnoseDeclAvailability(
     auto FixitDiag =
         SemaRef.Diag(Range.getBegin(), diag::note_unguarded_available_silence)
         << Range << D
-        << (SemaRef.getLangOpts().ObjC1 ? /*@available*/ 0
-                                        : /*__builtin_available*/ 1);
+        << (SemaRef.getLangOpts().ObjC ? /*@available*/ 0
+                                       : /*__builtin_available*/ 1);
 
     // Find the statement which should be enclosed in the if @available check.
     if (StmtStack.empty())
@@ -7835,8 +7842,8 @@ void DiagnoseUnguardedAvailability::DiagnoseDeclAvailability(
     const char *ExtraIndentation = "    ";
     std::string FixItString;
     llvm::raw_string_ostream FixItOS(FixItString);
-    FixItOS << "if (" << (SemaRef.getLangOpts().ObjC1 ? "@available"
-                                                      : "__builtin_available")
+    FixItOS << "if (" << (SemaRef.getLangOpts().ObjC ? "@available"
+                                                     : "__builtin_available")
             << "("
             << AvailabilityAttr::getPlatformNameSourceSpelling(
                    SemaRef.getASTContext().getTargetInfo().getPlatformName())

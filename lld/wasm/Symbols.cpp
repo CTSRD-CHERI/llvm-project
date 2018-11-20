@@ -27,7 +27,9 @@ DefinedFunction *WasmSym::CallCtors;
 DefinedData *WasmSym::DsoHandle;
 DefinedData *WasmSym::DataEnd;
 DefinedData *WasmSym::HeapBase;
-DefinedGlobal *WasmSym::StackPointer;
+GlobalSymbol *WasmSym::StackPointer;
+UndefinedGlobal *WasmSym::TableBase;
+UndefinedGlobal *WasmSym::MemoryBase;
 
 WasmSymbolType Symbol::getWasmType() const {
   if (isa<FunctionSymbol>(this))
@@ -226,10 +228,14 @@ void SectionSymbol::setOutputSectionIndex(uint32_t Index) {
 void LazySymbol::fetch() { cast<ArchiveFile>(File)->addMember(&ArchiveSymbol); }
 
 std::string lld::toString(const wasm::Symbol &Sym) {
+  return lld::maybeDemangleSymbol(Sym.getName());
+}
+
+std::string lld::maybeDemangleSymbol(StringRef Name) {
   if (Config->Demangle)
-    if (Optional<std::string> S = demangleItanium(Sym.getName()))
+    if (Optional<std::string> S = demangleItanium(Name))
       return *S;
-  return Sym.getName();
+  return Name;
 }
 
 std::string lld::toString(wasm::Symbol::Kind Kind) {

@@ -9,10 +9,8 @@
 
 #include "lldb/Expression/DWARFExpression.h"
 
-// C Includes
 #include <inttypes.h>
 
-// C++ Includes
 #include <vector>
 
 #include "lldb/Core/Module.h"
@@ -3029,7 +3027,9 @@ bool DWARFExpression::AddressRangeForLocationListEntry(
   if (!debug_loc_data.ValidOffset(*offset_ptr))
     return false;
 
-  switch (dwarf_cu->GetSymbolFileDWARF()->GetLocationListFormat()) {
+  DWARFExpression::LocationListFormat format =
+      dwarf_cu->GetSymbolFileDWARF()->GetLocationListFormat();
+  switch (format) {
   case NonLocationList:
     return false;
   case RegularLocationList:
@@ -3037,6 +3037,7 @@ bool DWARFExpression::AddressRangeForLocationListEntry(
     high_pc = debug_loc_data.GetAddress(offset_ptr);
     return true;
   case SplitDwarfLocationList:
+  case LocLists:
     switch (debug_loc_data.GetU8(offset_ptr)) {
     case DW_LLE_end_of_list:
       return false;
@@ -3050,12 +3051,25 @@ bool DWARFExpression::AddressRangeForLocationListEntry(
     case DW_LLE_startx_length: {
       uint64_t index = debug_loc_data.GetULEB128(offset_ptr);
       low_pc = ReadAddressFromDebugAddrSection(dwarf_cu, index);
-      uint32_t length = debug_loc_data.GetU32(offset_ptr);
+      uint64_t length = (format == LocLists)
+                            ? debug_loc_data.GetULEB128(offset_ptr)
+                            : debug_loc_data.GetU32(offset_ptr);
       high_pc = low_pc + length;
+      return true;
+    }
+    case DW_LLE_start_length: {
+      low_pc = debug_loc_data.GetAddress(offset_ptr);
+      high_pc = low_pc + debug_loc_data.GetULEB128(offset_ptr);
+      return true;
+    }
+    case DW_LLE_start_end: {
+      low_pc = debug_loc_data.GetAddress(offset_ptr);
+      high_pc = debug_loc_data.GetAddress(offset_ptr);
       return true;
     }
     default:
       // Not supported entry type
+      lldbassert(false && "Not supported location list type");
       return false;
     }
   }

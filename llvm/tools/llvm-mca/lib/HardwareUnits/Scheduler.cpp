@@ -15,9 +15,8 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
+namespace llvm {
 namespace mca {
-
-using namespace llvm;
 
 #define DEBUG_TYPE "llvm-mca"
 
@@ -108,7 +107,7 @@ void Scheduler::promoteToReadySet(SmallVectorImpl<InstRef> &Ready) {
   unsigned RemovedElements = 0;
   for (auto I = WaitSet.begin(), E = WaitSet.end(); I != E;) {
     InstRef &IR = *I;
-    if (!IR.isValid())
+    if (!IR)
       break;
 
     // Check if this instruction is now ready. In case, force
@@ -160,7 +159,7 @@ void Scheduler::updateIssuedSet(SmallVectorImpl<InstRef> &Executed) {
   unsigned RemovedElements = 0;
   for (auto I = IssuedSet.begin(), E = IssuedSet.end(); I != E;) {
     InstRef &IR = *I;
-    if (!IR.isValid())
+    if (!IR)
       break;
     Instruction &IS = *IR.getInstruction();
     if (!IS.isExecuted()) {
@@ -243,3 +242,4 @@ bool Scheduler::isReady(const InstRef &IR) const {
 }
 
 } // namespace mca
+} // namespace llvm

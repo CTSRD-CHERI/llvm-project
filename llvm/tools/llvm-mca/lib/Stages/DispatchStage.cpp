@@ -21,10 +21,9 @@
 #include "HardwareUnits/Scheduler.h"
 #include "llvm/Support/Debug.h"
 
-using namespace llvm;
-
 #define DEBUG_TYPE "llvm-mca"
 
+namespace llvm {
 namespace mca {
 
 void DispatchStage::notifyInstructionDispatched(const InstRef &IR,
@@ -37,9 +36,8 @@ void DispatchStage::notifyInstructionDispatched(const InstRef &IR,
 
 bool DispatchStage::checkPRF(const InstRef &IR) const {
   SmallVector<unsigned, 4> RegDefs;
-  for (const std::unique_ptr<WriteState> &RegDef :
-       IR.getInstruction()->getDefs())
-    RegDefs.emplace_back(RegDef->getRegisterID());
+  for (const WriteState &RegDef : IR.getInstruction()->getDefs())
+    RegDefs.emplace_back(RegDef.getRegisterID());
 
   const unsigned RegisterMask = PRF.isAvailable(RegDefs);
   // A mask with all zeroes means: register files are available.
@@ -69,8 +67,9 @@ void DispatchStage::updateRAWDependencies(ReadState &RS,
                                           const MCSubtargetInfo &STI) {
   SmallVector<WriteRef, 4> DependentWrites;
 
-  collectWrites(DependentWrites, RS.getRegisterID());
-  RS.setDependentWrites(DependentWrites.size());
+  // Collect all the dependent writes, and update RS internal state.
+  PRF.addRegisterRead(RS, DependentWrites);
+
   // We know that this read depends on all the writes in DependentWrites.
   // For each write, check if we have ReadAdvance information, and use it
   // to figure out in how many cycles this read becomes available.
@@ -105,7 +104,7 @@ Error DispatchStage::dispatch(InstRef IR) {
   if (IS.isOptimizableMove()) {
     assert(IS.getDefs().size() == 1 && "Expected a single input!");
     assert(IS.getUses().size() == 1 && "Expected a single output!");
-    IsEliminated = PRF.tryEliminateMove(*IS.getDefs()[0], *IS.getUses()[0]);
+    IsEliminated = PRF.tryEliminateMove(IS.getDefs()[0], IS.getUses()[0]);
   }
 
   // A dependency-breaking instruction doesn't have to wait on the register
@@ -118,19 +117,16 @@ Error DispatchStage::dispatch(InstRef IR) {
   // We also don't update data dependencies for instructions that have been
   // eliminated at register renaming stage.
   if (!IsEliminated) {
-    for (std::unique_ptr<ReadState> &RS : IS.getUses()) {
-      if (!RS->isIndependentFromDef())
-        updateRAWDependencies(*RS, STI);
-    }
+    for (ReadState &RS : IS.getUses())
+      updateRAWDependencies(RS, STI);
   }
 
   // By default, a dependency-breaking zero-idiom is expected to be optimized
   // at register renaming stage. That means, no physical register is allocated
   // to the instruction.
   SmallVector<unsigned, 4> RegisterFiles(PRF.getNumRegisterFiles());
-  for (std::unique_ptr<WriteState> &WS : IS.getDefs())
-    PRF.addRegisterWrite(WriteRef(IR.getSourceIndex(), WS.get()),
-                         RegisterFiles);
+  for (WriteState &WS : IS.getDefs())
+    PRF.addRegisterWrite(WriteRef(IR.getSourceIndex(), &WS), RegisterFiles);
 
   // Reserve slots in the RCU, and notify the instruction that it has been
   // dispatched to the schedulers for execution.
@@ -154,7 +150,7 @@ Error DispatchStage::cycleStart() {
   AvailableEntries = CarryOver >= DispatchWidth ? 0 : DispatchWidth - CarryOver;
   unsigned DispatchedOpcodes = DispatchWidth - AvailableEntries;
   CarryOver -= DispatchedOpcodes;
-  assert(CarriedOver.isValid() && "Invalid dispatched instruction");
+  assert(CarriedOver && "Invalid dispatched instruction");
 
   SmallVector<unsigned, 8> RegisterFiles(PRF.getNumRegisterFiles(), 0U);
   notifyInstructionDispatched(CarriedOver, RegisterFiles, DispatchedOpcodes);
@@ -186,3 +182,4 @@ void DispatchStage::dump() const {
 }
 #endif
 } // namespace mca
+} // namespace llvm

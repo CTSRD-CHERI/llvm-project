@@ -82,6 +82,12 @@ public:
   /// been used across the sequence.
   LiveRegUnits UsedInSequence;
 
+  /// Target-specific flags for this Candidate's MBB.
+  unsigned Flags = 0x0;
+
+  /// True if initLRU has been called on this Candidate.
+  bool LRUWasSet = false;
+
   /// Return the number of instructions in this Candidate.
   unsigned getLength() const { return Len; }
 
@@ -120,9 +126,9 @@ public:
   Candidate(unsigned StartIdx, unsigned Len,
             MachineBasicBlock::iterator &FirstInst,
             MachineBasicBlock::iterator &LastInst, MachineBasicBlock *MBB,
-            unsigned FunctionIdx)
+            unsigned FunctionIdx, unsigned Flags)
       : StartIdx(StartIdx), Len(Len), FirstInst(FirstInst), LastInst(LastInst),
-        MBB(MBB), FunctionIdx(FunctionIdx) {}
+        MBB(MBB), FunctionIdx(FunctionIdx), Flags(Flags) {}
   Candidate() {}
 
   /// Used to ensure that \p Candidates are outlined in an order that
@@ -138,6 +144,10 @@ public:
   void initLRU(const TargetRegisterInfo &TRI) {
     assert(MBB->getParent()->getRegInfo().tracksLiveness() &&
            "Candidate's Machine Function must track liveness");
+    // Only initialize once.
+    if (LRUWasSet)
+      return;
+    LRUWasSet = true;
     LRU.init(TRI);
     LRU.addLiveOuts(*MBB);
 
@@ -168,9 +178,6 @@ public:
   /// The actual outlined function created.
   /// This is initialized after we go through and create the actual function.
   MachineFunction *MF = nullptr;
-
-  /// A number assigned to this function which appears at the end of its name.
-  unsigned Name;
 
   /// The sequence of integers corresponding to the instructions in this
   /// function.

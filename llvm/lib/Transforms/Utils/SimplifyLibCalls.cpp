@@ -1225,6 +1225,9 @@ Value *LibCallSimplifier::replacePowWithExp(CallInst *Pow, IRBuilder<> &B) {
       StringRef ExpName;
       Intrinsic::ID ID;
       Value *ExpFn;
+      LibFunc LibFnFloat;
+      LibFunc LibFnDouble;
+      LibFunc LibFnLongDouble;
 
       switch (LibFn) {
       default:
@@ -1232,10 +1235,16 @@ Value *LibCallSimplifier::replacePowWithExp(CallInst *Pow, IRBuilder<> &B) {
       case LibFunc_expf:  case LibFunc_exp:  case LibFunc_expl:
         ExpName = TLI->getName(LibFunc_exp);
         ID = Intrinsic::exp;
+        LibFnFloat = LibFunc_expf;
+        LibFnDouble = LibFunc_exp;
+        LibFnLongDouble = LibFunc_expl;
         break;
       case LibFunc_exp2f: case LibFunc_exp2: case LibFunc_exp2l:
         ExpName = TLI->getName(LibFunc_exp2);
         ID = Intrinsic::exp2;
+        LibFnFloat = LibFunc_exp2f;
+        LibFnDouble = LibFunc_exp2;
+        LibFnLongDouble = LibFunc_exp2l;
         break;
       }
 
@@ -1244,7 +1253,9 @@ Value *LibCallSimplifier::replacePowWithExp(CallInst *Pow, IRBuilder<> &B) {
       ExpFn = BaseFn->doesNotAccessMemory()
               ? B.CreateCall(Intrinsic::getDeclaration(Mod, ID, Ty),
                              FMul, ExpName)
-              : emitUnaryFloatFnCall(FMul, ExpName, B, BaseFn->getAttributes());
+              : emitUnaryFloatFnCall(FMul, TLI, LibFnDouble, LibFnFloat,
+                                     LibFnLongDouble, B,
+                                     BaseFn->getAttributes());
 
       // Since the new exp{,2}() is different from the original one, dead code
       // elimination cannot be trusted to remove it, since it may have side
@@ -1281,7 +1292,8 @@ Value *LibCallSimplifier::replacePowWithExp(CallInst *Pow, IRBuilder<> &B) {
         return B.CreateCall(Intrinsic::getDeclaration(Mod, Intrinsic::exp2, Ty),
                             FMul, "exp2");
       else
-        return emitUnaryFloatFnCall(FMul, TLI->getName(LibFunc_exp2), B, Attrs);
+        return emitUnaryFloatFnCall(FMul, TLI, LibFunc_exp2, LibFunc_exp2f,
+                                    LibFunc_exp2l, B, Attrs);
     }
   }
 
@@ -1289,7 +1301,8 @@ Value *LibCallSimplifier::replacePowWithExp(CallInst *Pow, IRBuilder<> &B) {
   // TODO: There is no exp10() intrinsic yet, but some day there shall be one.
   if (match(Base, m_SpecificFP(10.0)) &&
       hasUnaryFloatFn(TLI, Ty, LibFunc_exp10, LibFunc_exp10f, LibFunc_exp10l))
-    return emitUnaryFloatFnCall(Expo, TLI->getName(LibFunc_exp10), B, Attrs);
+    return emitUnaryFloatFnCall(Expo, TLI, LibFunc_exp10, LibFunc_exp10f,
+                                LibFunc_exp10l, B, Attrs);
 
   return nullptr;
 }
@@ -1310,7 +1323,8 @@ static Value *getSqrtCall(Value *V, AttributeList Attrs, bool NoErrno,
     // TODO: We also should check that the target can in fact lower the sqrt()
     // libcall. We currently have no way to ask this question, so we ask if
     // the target has a sqrt() libcall, which is not exactly the same.
-    return emitUnaryFloatFnCall(V, TLI->getName(LibFunc_sqrt), B, Attrs);
+    return emitUnaryFloatFnCall(V, TLI, LibFunc_sqrt, LibFunc_sqrtf,
+                                LibFunc_sqrtl, B, Attrs);
 
   return nullptr;
 }

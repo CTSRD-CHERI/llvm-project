@@ -115,7 +115,7 @@ ModuleSP DynamicLoaderDarwin::FindTargetModuleForImageInfo(
     // No UUID, we must rely upon the cached module modification time and the
     // modification time of the file on disk
     if (module_sp->GetModificationTime() !=
-        FileSystem::GetModificationTime(module_sp->GetFileSpec()))
+        FileSystem::Instance().GetModificationTime(module_sp->GetFileSpec()))
       module_sp.reset();
   }
 
@@ -374,7 +374,7 @@ bool DynamicLoaderDarwin::JSONImageInformationIntoImageInfo(
     image_infos[i].mod_date =
         image->GetValueForKey("mod_date")->GetAsInteger()->GetValue();
     image_infos[i].file_spec.SetFile(
-        image->GetValueForKey("pathname")->GetAsString()->GetValue(), false,
+        image->GetValueForKey("pathname")->GetAsString()->GetValue(),
         FileSpec::Style::native);
 
     StructuredData::Dictionary *mh =

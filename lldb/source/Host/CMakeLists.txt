@@ -11,7 +11,9 @@ endmacro()
 # Objective-C++ files in lldb (which slows down the build process).
 macro(remove_module_flags)
   string(REGEX REPLACE "-fmodules-cache-path=[^ ]+" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REGEX REPLACE "-fmodules-local-submodule-visibility" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   string(REGEX REPLACE "-fmodules" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
+  string(REGEX REPLACE "-gmodules" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   string(REGEX REPLACE "-fcxx-modules" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 endmacro()
 
@@ -28,8 +30,6 @@ add_host_subdirectory(common
   common/LockFileBase.cpp
   common/MainLoop.cpp
   common/MonitoringProcessLauncher.cpp
-  common/NativeBreakpoint.cpp
-  common/NativeBreakpointList.cpp
   common/NativeWatchpointList.cpp
   common/NativeProcessProtocol.cpp
   common/NativeRegisterContext.cpp
@@ -40,7 +40,6 @@ add_host_subdirectory(common
   common/PseudoTerminal.cpp
   common/Socket.cpp
   common/SocketAddress.cpp
-  common/SoftwareBreakpoint.cpp
   common/StringConvert.cpp
   common/Symbols.cpp
   common/TaskPool.cpp
@@ -92,7 +91,7 @@ else()
     include_directories(SYSTEM ${LIBXML2_INCLUDE_DIR})
     add_subdirectory(macosx/objcxx)
     set(LLDBObjCLibs lldbHostMacOSXObjCXX)
-    add_host_subdirectory(maqcosx
+    add_host_subdirectory(macosx
       macosx/Symbols.cpp
       macosx/cfcpp/CFCBundle.cpp
       macosx/cfcpp/CFCData.cpp

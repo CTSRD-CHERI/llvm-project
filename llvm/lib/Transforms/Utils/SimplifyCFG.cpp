@@ -694,7 +694,7 @@ Value *SimplifyCFGOpt::isValueEqualityComparison(Instruction *TI) {
   if (SwitchInst *SI = dyn_cast<SwitchInst>(TI)) {
     // Do not permit merging of large switch instructions into their
     // predecessors unless there is only one predecessor.
-    if (SI->getNumSuccessors() * pred_size(SI->getParent()) <= 128)
+    if (!SI->getParent()->hasNPredecessorsOrMore(128 / SI->getNumSuccessors()))
       CV = SI->getCondition();
   } else if (BranchInst *BI = dyn_cast<BranchInst>(TI))
     if (BI->isConditional() && BI->getCondition()->hasOneUse())
@@ -1380,6 +1380,14 @@ HoistTerminator:
     }
   }
 
+  // As the parent basic block terminator is a branch instruction which is
+  // removed at the end of the current transformation, use its previous
+  // non-debug instruction, as the reference insertion point, which will
+  // provide the debug location for the instruction being hoisted. For BBs
+  // with only debug instructions, use an empty debug location.
+  Instruction *InsertPt =
+      BIParent->getTerminator()->getPrevNonDebugInstruction();
+
   // Okay, it is safe to hoist the terminator.
   Instruction *NT = I1->clone();
   BIParent->getInstList().insert(BI->getIterator(), NT);
@@ -1388,6 +1396,14 @@ HoistTerminator:
     I2->replaceAllUsesWith(NT);
     NT->takeName(I1);
   }
+
+  // The instruction NT being hoisted, is the terminator for the true branch,
+  // with debug location (DILocation) within that branch. We can't retain
+  // its original debug location value, otherwise 'select' instructions that
+  // are created from any PHI nodes, will take its debug location, giving
+  // the impression that those 'select' instructions are in the true branch,
+  // causing incorrect stepping, affecting the debug experience.
+  NT->setDebugLoc(InsertPt ? InsertPt->getDebugLoc() : DebugLoc());
 
   IRBuilder<NoFolder> Builder(NT);
   // Hoisting one of the terminators from our successor is a great thing.
@@ -2383,24 +2399,10 @@ static bool FoldTwoEntryPHINode(PHINode *PN, const TargetTransformInfo &TTI,
 
   // Move all 'aggressive' instructions, which are defined in the
   // conditional parts of the if's up to the dominating block.
-  if (IfBlock1) {
-    for (auto &I : *IfBlock1) {
-      I.dropUnknownNonDebugMetadata();
-      dropDebugUsers(I);
-    }
-    DomBlock->getInstList().splice(InsertPt->getIterator(),
-                                   IfBlock1->getInstList(), IfBlock1->begin(),
-                                   IfBlock1->getTerminator()->getIterator());
-  }
-  if (IfBlock2) {
-    for (auto &I : *IfBlock2) {
-      I.dropUnknownNonDebugMetadata();
-      dropDebugUsers(I);
-    }
-    DomBlock->getInstList().splice(InsertPt->getIterator(),
-                                   IfBlock2->getInstList(), IfBlock2->begin(),
-                                   IfBlock2->getTerminator()->getIterator());
-  }
+  if (IfBlock1)
+    hoistAllInstructionsInto(DomBlock, InsertPt, IfBlock1);
+  if (IfBlock2)
+    hoistAllInstructionsInto(DomBlock, InsertPt, IfBlock2);
 
   while (PHINode *PN = dyn_cast<PHINode>(BB->begin())) {
     // Change the PHI node into a select instruction.
@@ -2896,7 +2898,7 @@ static Value *ensureValueAvailableInSuccessor(Value *V, BasicBlock *BB,
       if (!AlternativeV)
         break;
 
-      assert(pred_size(Succ) == 2);
+      assert(Succ->hasNPredecessors(2));
       auto PredI = pred_begin(Succ);
       BasicBlock *OtherPredBB = *PredI == BB ? *++PredI : *PredI;
       if (PHI->getIncomingValueForBlock(OtherPredBB) == AlternativeV)
@@ -5292,7 +5294,7 @@ static bool SwitchToLookupTable(SwitchInst *SI, IRBuilder<> &Builder,
 
   // Figure out the corresponding result for each case value and phi node in the
   // common destination, as well as the min and max case values.
-  assert(SI->case_begin() != SI->case_end());
+  assert(!empty(SI->cases()));
   SwitchInst::CaseIt CI = SI->case_begin();
   ConstantInt *MinCaseVal = CI->getCaseValue();
   ConstantInt *MaxCaseVal = CI->getCaseValue();
@@ -5790,7 +5792,7 @@ bool SimplifyCFGOpt::SimplifyUncondBranch(BranchInst *BI,
   // backedge, so we can eliminate BB.
   bool NeedCanonicalLoop =
       Options.NeedCanonicalLoop &&
-      (LoopHeaders && pred_size(BB) > 1 &&
+      (LoopHeaders && BB->hasNPredecessorsOrMore(2) &&
        (LoopHeaders->count(BB) || LoopHeaders->count(Succ)));
   BasicBlock::iterator I = BB->getFirstNonPHIOrDbg()->getIterator();
   if (I->isTerminator() && BB != &BB->getParent()->getEntryBlock() &&

@@ -691,6 +691,7 @@ void ObjectFilePECOFF::CreateSections(SectionList &unified_section_list) {
         static ConstString g_sect_name_dwarf_debug_info(".debug_info");
         static ConstString g_sect_name_dwarf_debug_line(".debug_line");
         static ConstString g_sect_name_dwarf_debug_loc(".debug_loc");
+        static ConstString g_sect_name_dwarf_debug_loclists(".debug_loclists");
         static ConstString g_sect_name_dwarf_debug_macinfo(".debug_macinfo");
         static ConstString g_sect_name_dwarf_debug_names(".debug_names");
         static ConstString g_sect_name_dwarf_debug_pubnames(".debug_pubnames");
@@ -709,7 +710,10 @@ void ObjectFilePECOFF::CreateSections(SectionList &unified_section_list) {
                        llvm::COFF::IMAGE_SCN_CNT_INITIALIZED_DATA &&
                    ((const_sect_name == g_data_sect_name) ||
                     (const_sect_name == g_DATA_sect_name))) {
-          section_type = eSectionTypeData;
+          if (m_sect_headers[idx].size == 0 && m_sect_headers[idx].offset == 0)
+            section_type = eSectionTypeZeroFill;
+          else
+            section_type = eSectionTypeData;
         } else if (m_sect_headers[idx].flags &
                        llvm::COFF::IMAGE_SCN_CNT_UNINITIALIZED_DATA &&
                    ((const_sect_name == g_bss_sect_name) ||
@@ -736,6 +740,8 @@ void ObjectFilePECOFF::CreateSections(SectionList &unified_section_list) {
           section_type = eSectionTypeDWARFDebugLine;
         else if (const_sect_name == g_sect_name_dwarf_debug_loc)
           section_type = eSectionTypeDWARFDebugLoc;
+        else if (const_sect_name == g_sect_name_dwarf_debug_loclists)
+          section_type = eSectionTypeDWARFDebugLocLists;
         else if (const_sect_name == g_sect_name_dwarf_debug_macinfo)
           section_type = eSectionTypeDWARFDebugMacInfo;
         else if (const_sect_name == g_sect_name_dwarf_debug_names)
@@ -1050,6 +1056,7 @@ ObjectFile::Type ObjectFilePECOFF::CalculateType() {
 }
 
 ObjectFile::Strata ObjectFilePECOFF::CalculateStrata() { return eStrataUser; }
+
 //------------------------------------------------------------------
 // PluginInterface protocol
 //------------------------------------------------------------------

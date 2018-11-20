@@ -17,8 +17,6 @@ def MUBUFScratchOffset : ComplexPattern<i64, 3, "SelectMUBUFScratchOffset", [], 
 def MUBUFOffset : ComplexPattern<i64, 6, "SelectMUBUFOffset">;
 def MUBUFOffsetNoGLC : ComplexPattern<i64, 3, "SelectMUBUFOffset">;
 def MUBUFOffsetAtomic : ComplexPattern<i64, 4, "SelectMUBUFOffset">;
-def MUBUFIntrinsicOffset : ComplexPattern<i32, 2, "SelectMUBUFIntrinsicOffset">;
-def MUBUFIntrinsicVOffset : ComplexPattern<i32, 3, "SelectMUBUFIntrinsicVOffset">;
 
 class MubufLoad <SDPatternOperator op> : PatFrag <
   (ops node:$ptr), (op node:$ptr), [{
@@ -658,11 +656,10 @@ class MUBUF_AtomicRet_Pseudo<string opName, int addrKind,
   let AsmMatchConverter = "cvtMubufAtomicReturn";
 }
 
-multiclass MUBUF_Pseudo_Atomics <string opName,
-                                 RegisterClass vdataClass,
-                                 ValueType vdataType,
-                                 SDPatternOperator atomic> {
-
+multiclass MUBUF_Pseudo_Atomics_NO_RTN <string opName,
+                                        RegisterClass vdataClass,
+                                        ValueType vdataType,
+                                        SDPatternOperator atomic> {
   def _OFFSET : MUBUF_AtomicNoRet_Pseudo <opName, BUFAddrKind.Offset, vdataClass>,
                 MUBUFAddr64Table <0, NAME>;
   def _ADDR64 : MUBUF_AtomicNoRet_Pseudo <opName, BUFAddrKind.Addr64, vdataClass>,
@@ -670,7 +667,12 @@ multiclass MUBUF_Pseudo_Atomics <string opName,
   def _OFFEN  : MUBUF_AtomicNoRet_Pseudo <opName, BUFAddrKind.OffEn,  vdataClass>;
   def _IDXEN  : MUBUF_AtomicNoRet_Pseudo <opName, BUFAddrKind.IdxEn,  vdataClass>;
   def _BOTHEN : MUBUF_AtomicNoRet_Pseudo <opName, BUFAddrKind.BothEn, vdataClass>;
+}
 
+multiclass MUBUF_Pseudo_Atomics_RTN <string opName,
+                                     RegisterClass vdataClass,
+                                     ValueType vdataType,
+                                     SDPatternOperator atomic> {
   def _OFFSET_RTN : MUBUF_AtomicRet_Pseudo <opName, BUFAddrKind.Offset, vdataClass,
     [(set vdataType:$vdata,
      (atomic (MUBUFOffsetAtomic v4i32:$srsrc, i32:$soffset, i16:$offset, i1:$slc),
@@ -687,6 +689,13 @@ multiclass MUBUF_Pseudo_Atomics <string opName,
   def _IDXEN_RTN  : MUBUF_AtomicRet_Pseudo <opName, BUFAddrKind.IdxEn,  vdataClass>;
   def _BOTHEN_RTN : MUBUF_AtomicRet_Pseudo <opName, BUFAddrKind.BothEn, vdataClass>;
 }
+
+multiclass MUBUF_Pseudo_Atomics <string opName,
+                                 RegisterClass vdataClass,
+                                 ValueType vdataType,
+                                 SDPatternOperator atomic> :
+  MUBUF_Pseudo_Atomics_NO_RTN<opName, vdataClass, vdataType, atomic>,
+  MUBUF_Pseudo_Atomics_RTN<opName, vdataClass, vdataType, atomic>;
 
 
 //===----------------------------------------------------------------------===//
