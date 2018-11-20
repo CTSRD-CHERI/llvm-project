@@ -39,6 +39,7 @@
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/DiagnosticInfo.h"
@@ -1143,6 +1144,17 @@ static void computeKnownBitsFromOperator(const Operator *I, KnownBits &Known,
         // TODO: For now, not handling conversions like:
         // (bitcast i64 %x to <2 x i32>)
         !I->getType()->isVectorTy()) {
+      computeKnownBits(I->getOperand(0), Known, Depth + 1, Q);
+      break;
+    }
+    break;
+  }
+  case Instruction::AddrSpaceCast: {
+    Type *SrcTy = I->getOperand(0)->getType();
+    Type *DestTy = I->getType();
+    // Address space conversions between CHERI capability and integer pointer
+    // do not affect the virtual address bits
+    if (SrcTy->isIntOrPtrTy() && isCheriPointer(SrcTy, &Q.DL) != isCheriPointer(DestTy, &Q.DL)) {
       computeKnownBits(I->getOperand(0), Known, Depth + 1, Q);
       break;
     }
