@@ -517,6 +517,8 @@ static llvm::Triple computeTargetTriple(const Driver &D,
       if (Target.getEnvironment() == llvm::Triple::GNU ||
           Target.getEnvironment() == llvm::Triple::GNUABIN32)
         Target.setEnvironment(llvm::Triple::GNUABI64);
+    } else if (ABIName == "purecap") {
+      Target.setEnvironment(llvm::Triple::CheriPurecap);
     }
   }
 
