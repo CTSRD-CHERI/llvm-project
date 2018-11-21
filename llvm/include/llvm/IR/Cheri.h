@@ -112,7 +112,8 @@ public:
   CSetBoundsStatistics();
   ~CSetBoundsStatistics();
   void add(unsigned KnownAlignment, Value *Length, StringRef Pass,
-           SetBoundsPointerSource Kind, Twine Details, Instruction *DebugInst);
+           SetBoundsPointerSource Kind, Twine Details, Instruction *DebugInst,
+           std::string KnownSourceLoc);
   void print(llvm::raw_ostream &OS, StringRef MainFile, bool PrintHeader);
   void print(StatsOutputFile &S, StringRef MainFile);
 

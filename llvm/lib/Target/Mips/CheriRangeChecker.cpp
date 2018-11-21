@@ -100,7 +100,8 @@ class CheriRangeChecker : public FunctionPass,
       if (!DebugInst)
         DebugInst = InsertPt;
       cheri::CSetBoundsStats->add(getKnownAlignment(AlignmentSource, *TD), Size,
-                                  getPassName(), std::get<2>(AO), "", DebugInst);
+                                  getPassName(), std::get<2>(AO), "", DebugInst,
+                                  std::string());
     }
     if (BitCast == I2P)
       BitCast = SetLength;

@@ -41,19 +41,22 @@ ManagedStatic<CSetBoundsStatistics> CSetBoundsStats;
 
 void CSetBoundsStatistics::add(unsigned KnownAlignment, Value *Length,
                                StringRef Pass, SetBoundsPointerSource Kind,
-                               Twine Details, Instruction *DebugInst) {
-  std::string SourceLoc;
-  assert(DebugInst && "Missing instruction?");
-  if (DILocation *Loc =
-          DebugInst->getDebugLoc()) { // Here I is an LLVM instruction
-    SourceLoc = (Loc->getFilename() + ":" + Twine(Loc->getLine()) + ":" +
-                 Twine(Loc->getColumn()))
-                    .str();
-  }
+                               Twine Details, Instruction *DebugInst,
+                               std::string KnownSourceLoc) {
+  std::string SourceLoc = std::move(KnownSourceLoc);
   if (SourceLoc.empty()) {
-    SourceLoc = ("<somewhere in " +
-                 DebugInst->getParent()->getParent()->getName() + ">")
-                    .str();
+    assert(DebugInst && "Missing instruction?");
+    if (DILocation *Loc =
+            DebugInst->getDebugLoc()) { // Here I is an LLVM instruction
+      SourceLoc = (Loc->getFilename() + ":" + Twine(Loc->getLine()) + ":" +
+                   Twine(Loc->getColumn()))
+                      .str();
+    }
+    if (SourceLoc.empty()) {
+      SourceLoc = ("<somewhere in " +
+                   DebugInst->getParent()->getParent()->getName() + ">")
+                      .str();
+    }
   }
   Optional<uint64_t> KnownSize = None;
   if (auto CI = dyn_cast<ConstantInt>(Length)) {
@@ -133,13 +136,10 @@ void CSetBoundsStatistics::print(llvm::raw_ostream &OS, StringRef MainFile,
 
 CSetBoundsStatistics::CSetBoundsStatistics() {
   assert(ShouldCollectCSetBoundsStats && "Created in invalid state");
-  errs() << "CSetBoundsStats created: with " << this->Entries.size()
-         << " entries\n";
 }
 
 CSetBoundsStatistics::~CSetBoundsStatistics() {
-  errs() << "CSetBoundsStats destroyed: with " << this->Entries.size()
-         << " entries\n";
+  // TODO: dump to stderr if not dumped already?
 }
 
 uint64_t StatsOutputFile::size() {
