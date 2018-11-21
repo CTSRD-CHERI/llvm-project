@@ -1730,6 +1730,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
         Builder.CreateCall(FnExpect, {ArgValue, ExpectedValue}, "expval");
     return RValue::get(Result);
   }
+  case Builtin::BI__builtin_assume_aligned_cap:
   case Builtin::BI__builtin_assume_aligned: {
     Value *PtrValue = EmitScalarExpr(E->getArg(0));
     Value *OffsetValue =

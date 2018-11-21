@@ -6039,6 +6039,7 @@ bool PointerExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
   switch (BuiltinOp) {
   case Builtin::BI__builtin_addressof:
     return evaluateLValue(E->getArg(0), Result);
+  case Builtin::BI__builtin_assume_aligned_cap:
   case Builtin::BI__builtin_assume_aligned: {
     // We need to be very careful here because: if the pointer does not have the
     // asserted alignment, then the behavior is undefined, and undefined

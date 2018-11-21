@@ -1110,6 +1110,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       return ExprError();
     break;
   case Builtin::BI__builtin_assume_aligned:
+  case Builtin::BI__builtin_assume_aligned_cap:
     if (SemaBuiltinAssumeAligned(TheCall))
       return ExprError();
     break;
