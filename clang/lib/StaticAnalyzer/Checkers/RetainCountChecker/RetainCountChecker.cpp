@@ -45,7 +45,7 @@ ProgramStateRef removeRefBinding(ProgramStateRef State, SymbolRef Sym) {
 
 void RefVal::print(raw_ostream &Out) const {
   if (!T.isNull())
-    Out << "Tracked " << T.getAsString() << '/';
+    Out << "Tracked " << T.getAsString() << " | ";
 
   switch (getKind()) {
     default: llvm_unreachable("Invalid RefVal kind");
@@ -175,9 +175,7 @@ void RetainCountChecker::checkPostStmt(const BlockExpr *BE,
     Regions.push_back(VR);
   }
 
-  state =
-    state->scanReachableSymbols<StopTrackingCallback>(Regions.data(),
-                                    Regions.data() + Regions.size()).getState();
+  state = state->scanReachableSymbols<StopTrackingCallback>(Regions).getState();
   C.addTransition(state);
 }
 
@@ -422,13 +420,6 @@ void RetainCountChecker::processSummaryOfInlined(const RetainSummary &Summ,
   RetEffect RE = Summ.getRetEffect();
 
   if (SymbolRef Sym = CallOrMsg.getReturnValue().getAsSymbol()) {
-    if (const auto *MCall = dyn_cast<CXXMemberCall>(&CallOrMsg)) {
-      if (Optional<RefVal> updatedRefVal =
-              refValFromRetEffect(RE, MCall->getResultType())) {
-        state = setRefBinding(state, Sym, *updatedRefVal);
-      }
-    }
-
     if (RE.getKind() == RetEffect::NoRetHard)
       state = removeRefBinding(state, Sym);
   }
@@ -637,7 +628,7 @@ RetainCountChecker::updateSymbol(ProgramStateRef state, SymbolRef sym,
         break;
       }
 
-      // Fall-through.
+      LLVM_FALLTHROUGH;
 
     case DoNothing:
       return state;
@@ -776,31 +767,47 @@ bool RetainCountChecker::evalCall(const CallExpr *CE, CheckerContext &C) const {
 
   const LocationContext *LCtx = C.getLocationContext();
 
-  // Process OSDynamicCast: should just return the first argument.
-  // For now, tresting the cast as a no-op, and disregarding the case where
-  // the output becomes null due to the type mismatch.
-  if (FD->getNameAsString() == "safeMetaCast") {
-    state = state->BindExpr(CE, LCtx, 
-                            state->getSVal(CE->getArg(0), LCtx));
-    C.addTransition(state);
-    return true;
-  }
+  using BehaviorSummary = RetainSummaryManager::BehaviorSummary;
+  Optional<BehaviorSummary> BSmr =
+      SmrMgr.canEval(CE, FD, hasTrustedImplementationAnnotation);
 
   // See if it's one of the specific functions we know how to eval.
-  if (!SmrMgr.canEval(CE, FD, hasTrustedImplementationAnnotation))
+  if (!BSmr)
     return false;
 
   // Bind the return value.
-  SVal RetVal = state->getSVal(CE->getArg(0), LCtx);
-  if (RetVal.isUnknown() ||
-      (hasTrustedImplementationAnnotation && !ResultTy.isNull())) {
+  if (BSmr == BehaviorSummary::Identity ||
+      BSmr == BehaviorSummary::IdentityOrZero) {
+    SVal RetVal = state->getSVal(CE->getArg(0), LCtx);
+
     // If the receiver is unknown or the function has
     // 'rc_ownership_trusted_implementation' annotate attribute, conjure a
     // return value.
-    SValBuilder &SVB = C.getSValBuilder();
-    RetVal = SVB.conjureSymbolVal(nullptr, CE, LCtx, ResultTy, C.blockCount());
+    if (RetVal.isUnknown() ||
+        (hasTrustedImplementationAnnotation && !ResultTy.isNull())) {
+      SValBuilder &SVB = C.getSValBuilder();
+      RetVal =
+          SVB.conjureSymbolVal(nullptr, CE, LCtx, ResultTy, C.blockCount());
+    }
+    state = state->BindExpr(CE, LCtx, RetVal, /*Invalidate=*/false);
+
+    if (BSmr == BehaviorSummary::IdentityOrZero) {
+      // Add a branch where the output is zero.
+      ProgramStateRef NullOutputState = C.getState();
+
+      // Assume that output is zero on the other branch.
+      NullOutputState = NullOutputState->BindExpr(
+          CE, LCtx, C.getSValBuilder().makeNull(), /*Invalidate=*/false);
+
+      C.addTransition(NullOutputState);
+
+      // And on the original branch assume that both input and
+      // output are non-zero.
+      if (auto L = RetVal.getAs<DefinedOrUnknownSVal>())
+        state = state->assume(*L, /*Assumption=*/true);
+
+    }
   }
-  state = state->BindExpr(CE, LCtx, RetVal, false);
 
   C.addTransition(state);
   return true;
@@ -1089,9 +1096,8 @@ RetainCountChecker::checkRegionChanges(ProgramStateRef state,
       WhitelistedSymbols.insert(SR->getSymbol());
   }
 
-  for (InvalidatedSymbols::const_iterator I=invalidated->begin(),
-       E = invalidated->end(); I!=E; ++I) {
-    SymbolRef sym = *I;
+  for (SymbolRef sym :
+       llvm::make_range(invalidated->begin(), invalidated->end())) {
     if (WhitelistedSymbols.count(sym))
       continue;
     // Remove any existing reference-count binding.
@@ -1387,5 +1393,12 @@ void RetainCountChecker::printState(raw_ostream &Out, ProgramStateRef State,
 //===----------------------------------------------------------------------===//
 
 void ento::registerRetainCountChecker(CheckerManager &Mgr) {
-  Mgr.registerChecker<RetainCountChecker>(Mgr.getAnalyzerOptions());
+  auto *Chk = Mgr.registerChecker<RetainCountChecker>();
+
+  AnalyzerOptions &Options = Mgr.getAnalyzerOptions();
+
+  Chk->IncludeAllocationLine = Options.getCheckerBooleanOption(
+                           "leak-diagnostics-reference-allocation", false, Chk);
+  Chk->ShouldCheckOSObjectRetainCount = Options.getCheckerBooleanOption(
+                                                    "CheckOSObject", true, Chk);
 }

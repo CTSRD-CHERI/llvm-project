@@ -330,6 +330,7 @@ private:
   SDValue PromoteIntRes_UNDEF(SDNode *N);
   SDValue PromoteIntRes_VAARG(SDNode *N);
   SDValue PromoteIntRes_XMULO(SDNode *N, unsigned ResNo);
+  SDValue PromoteIntRes_ADDSUBSAT(SDNode *N);
 
   // Integer Operand Promotion.
   bool PromoteIntegerOperand(SDNode *N, unsigned OpNo);
@@ -414,6 +415,7 @@ private:
   void ExpandIntRes_SADDSUBO          (SDNode *N, SDValue &Lo, SDValue &Hi);
   void ExpandIntRes_UADDSUBO          (SDNode *N, SDValue &Lo, SDValue &Hi);
   void ExpandIntRes_XMULO             (SDNode *N, SDValue &Lo, SDValue &Hi);
+  void ExpandIntRes_ADDSUBSAT         (SDNode *N, SDValue &Lo, SDValue &Hi);
 
   void ExpandIntRes_ATOMIC_LOAD       (SDNode *N, SDValue &Lo, SDValue &Hi);
 
@@ -846,9 +848,6 @@ private:
   /// Return a mask of vector type MaskVT to replace InMask. Also adjust
   /// MaskVT to ToMaskVT if needed with vector extension or truncation.
   SDValue convertMask(SDValue InMask, EVT MaskVT, EVT ToMaskVT);
-
-  /// Get the target mask VT, and widen if needed.
-  EVT getSETCCWidenedResultTy(SDValue SetCC);
 
   //===--------------------------------------------------------------------===//
   // Generic Splitting: LegalizeTypesGeneric.cpp

@@ -17,13 +17,16 @@ namespace clang {
 namespace clangd {
 namespace {
 
-// No fmemopen on windows, so we can't easily run this test.
-#ifndef WIN32
+// No fmemopen on windows or on versions of MacOS X earlier than 10.13, so we
+// can't easily run this test.
+#if !(defined(WIN32) || \
+      (defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && \
+       __MAC_OS_X_VERSION_MIN_REQUIRED < 101300))
 
 // Fixture takes care of managing the input/output buffers for the transport.
 class JSONTransportTest : public ::testing::Test {
   std::string InBuf, OutBuf, MirrorBuf;
-  llvm::raw_string_ostream Out, Mirror;
+  raw_string_ostream Out, Mirror;
   std::unique_ptr<FILE, int (*)(FILE *)> In;
 
 protected:
@@ -77,8 +80,8 @@ public:
     if (Params)
       Log << "Reply(" << ID << "): " << *Params << "\n";
     else
-      Log << "Reply(" << ID
-          << "): error = " << llvm::toString(Params.takeError()) << "\n";
+      Log << "Reply(" << ID << "): error = " << toString(Params.takeError())
+          << "\n";
     return true;
   }
 };
@@ -103,24 +106,25 @@ TEST_F(JSONTransportTest, StandardDense) {
       /*Pretty=*/false, JSONStreamStyle::Standard);
   Echo E(*T);
   auto Err = T->loop(E);
-  EXPECT_FALSE(bool(Err)) << llvm::toString(std::move(Err));
+  EXPECT_FALSE(bool(Err)) << toString(std::move(Err));
 
-  EXPECT_EQ(trim(E.log()), trim(R"(
+  const char *WantLog = R"(
 Notification call: 1234
 Reply(1234): 5678
 Call foo("abcd"): "efgh"
 Reply("xyz"): error = 99: bad!
 Call err("wxyz"): "boom!"
 Notification exit: null
-  )"));
-  EXPECT_EQ(
-      trim(output()),
+  )";
+  EXPECT_EQ(trim(E.log()), trim(WantLog));
+  const char *WantOutput =
       "Content-Length: 60\r\n\r\n"
       R"({"id":42,"jsonrpc":"2.0","method":"echo call","params":1234})"
       "Content-Length: 45\r\n\r\n"
       R"({"id":"abcd","jsonrpc":"2.0","result":"efgh"})"
       "Content-Length: 77\r\n\r\n"
-      R"({"error":{"code":88,"message":"trouble at mill"},"id":"wxyz","jsonrpc":"2.0"})");
+      R"({"error":{"code":88,"message":"trouble at mill"},"id":"wxyz","jsonrpc":"2.0"})";
+  EXPECT_EQ(output(), WantOutput);
   EXPECT_EQ(trim(input_mirror()), trim(input()));
 }
 
@@ -143,38 +147,40 @@ TEST_F(JSONTransportTest, DelimitedPretty) {
                      /*Pretty=*/true, JSONStreamStyle::Delimited);
   Echo E(*T);
   auto Err = T->loop(E);
-  EXPECT_FALSE(bool(Err)) << llvm::toString(std::move(Err));
+  EXPECT_FALSE(bool(Err)) << toString(std::move(Err));
 
-  EXPECT_EQ(trim(E.log()), trim(R"(
+  const char *WantLog = R"(
 Notification call: 1234
 Reply(1234): 5678
 Call foo("abcd"): "efgh"
 Reply("xyz"): error = 99: bad!
 Call err("wxyz"): "boom!"
 Notification exit: null
-  )"));
-  EXPECT_EQ(trim(output()), "Content-Length: 77\r\n\r\n"
-                            R"({
+  )";
+  EXPECT_EQ(trim(E.log()), trim(WantLog));
+  const char *WantOutput = "Content-Length: 77\r\n\r\n"
+                           R"({
   "id": 42,
   "jsonrpc": "2.0",
   "method": "echo call",
   "params": 1234
 })"
-                            "Content-Length: 58\r\n\r\n"
-                            R"({
+                           "Content-Length: 58\r\n\r\n"
+                           R"({
   "id": "abcd",
   "jsonrpc": "2.0",
   "result": "efgh"
 })"
-                            "Content-Length: 105\r\n\r\n"
-                            R"({
+                           "Content-Length: 105\r\n\r\n"
+                           R"({
   "error": {
     "code": 88,
     "message": "trouble at mill"
   },
   "id": "wxyz",
   "jsonrpc": "2.0"
-})");
+})";
+  EXPECT_EQ(output(), WantOutput);
   EXPECT_EQ(trim(input_mirror()), trim(input()));
 }
 

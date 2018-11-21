@@ -289,6 +289,7 @@ public:
 
   void EmitWinCFIStartProc(const MCSymbol *Symbol, SMLoc Loc) override;
   void EmitWinCFIEndProc(SMLoc Loc) override;
+  void EmitWinCFIFuncletOrFuncEnd(SMLoc Loc) override;
   void EmitWinCFIStartChained(SMLoc Loc) override;
   void EmitWinCFIEndChained(SMLoc Loc) override;
   void EmitWinCFIPushReg(unsigned Register, SMLoc Loc) override;
@@ -858,10 +859,14 @@ void MCAsmStreamer::EmitBytes(StringRef Data) {
   // supported, emit as vector of 8bits data.
   if (Data.size() == 1 ||
       !(MAI->getAscizDirective() || MAI->getAsciiDirective())) {
-    const char *Directive = MAI->getData8bitsDirective();
-    for (const unsigned char C : Data.bytes()) {
-      OS << Directive << (unsigned)C;
-      EmitEOL();
+    if (MCTargetStreamer *TS = getTargetStreamer()) {
+      TS->emitRawBytes(Data);
+    } else {
+      const char *Directive = MAI->getData8bitsDirective();
+      for (const unsigned char C : Data.bytes()) {
+        OS << Directive << (unsigned)C;
+        EmitEOL();
+      }
     }
     return;
   }
@@ -1583,6 +1588,10 @@ void MCAsmStreamer::EmitWinCFIEndProc(SMLoc Loc) {
 
   OS << "\t.seh_endproc";
   EmitEOL();
+}
+
+// TODO: Implement
+void MCAsmStreamer::EmitWinCFIFuncletOrFuncEnd(SMLoc Loc) {
 }
 
 void MCAsmStreamer::EmitWinCFIStartChained(SMLoc Loc) {

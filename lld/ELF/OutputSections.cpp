@@ -25,6 +25,7 @@
 using namespace llvm;
 using namespace llvm::dwarf;
 using namespace llvm::object;
+using namespace llvm::support::endian;
 using namespace llvm::ELF;
 
 using namespace lld;
@@ -32,7 +33,6 @@ using namespace lld::elf;
 
 uint8_t Out::First;
 PhdrEntry *Out::TlsPhdr;
-OutputSection *Out::DebugInfo;
 OutputSection *Out::ElfHeader;
 OutputSection *Out::ProgramHeaders;
 OutputSection *Out::PreinitArray;
@@ -171,11 +171,12 @@ void OutputSection::sort(llvm::function_ref<int(InputSectionBase *S)> Order) {
 
 // Fill [Buf, Buf + Size) with Filler.
 // This is used for linker script "=fillexp" command.
-static void fill(uint8_t *Buf, size_t Size, uint32_t Filler) {
+static void fill(uint8_t *Buf, size_t Size,
+                 const std::array<uint8_t, 4> &Filler) {
   size_t I = 0;
   for (; I + 4 < Size; I += 4)
-    memcpy(Buf + I, &Filler, 4);
-  memcpy(Buf + I, &Filler, Size - I);
+    memcpy(Buf + I, Filler.data(), 4);
+  memcpy(Buf + I, Filler.data(), Size - I);
 }
 
 // Compress section contents if this section contains debug info.
@@ -236,23 +237,24 @@ template <class ELFT> void OutputSection::writeTo(uint8_t *Buf) {
 
   // Write leading padding.
   std::vector<InputSection *> Sections = getInputSections(this);
-  llvm::Optional<uint32_t> Filler = getFiller();
-  if (Filler)
-    fill(Buf, Sections.empty() ? Size : Sections[0]->OutSecOff, *Filler);
+  std::array<uint8_t, 4> Filler = getFiller();
+  bool NonZeroFiller = read32(Filler.data()) != 0;
+  if (NonZeroFiller)
+    fill(Buf, Sections.empty() ? Size : Sections[0]->OutSecOff, Filler);
 
   parallelForEachN(0, Sections.size(), [&](size_t I) {
     InputSection *IS = Sections[I];
     IS->writeTo<ELFT>(Buf);
 
     // Fill gaps between sections.
-    if (Filler) {
+    if (NonZeroFiller) {
       uint8_t *Start = Buf + IS->OutSecOff + IS->getSize();
       uint8_t *End;
       if (I + 1 == Sections.size())
         End = Buf + Size;
       else
         End = Buf + Sections[I + 1]->OutSecOff;
-      fill(Start, End - Start, *Filler);
+      fill(Start, End - Start, Filler);
     }
   });
 
@@ -406,17 +408,12 @@ void OutputSection::sortInitFini() {
   sort([](InputSectionBase *S) { return getPriority(S->Name); });
 }
 
-llvm::Optional<uint32_t> OutputSection::getFiller() {
+std::array<uint8_t, 4> OutputSection::getFiller() {
   if (Filler)
     return *Filler;
-  if (Flags & SHF_EXECINSTR) {
-    // .init and .fini are run from start to end, so we need to pad it with nops
-    // instead of trap instructions
-    if (Name == ".init" || Name == ".fini")
-      return Target->NopInstr;
+  if (Flags & SHF_EXECINSTR)
     return Target->TrapInstr;
-  }
-  return None;
+  return {0, 0, 0, 0};
 }
 
 template void OutputSection::writeHeaderTo<ELF32LE>(ELF32LE::Shdr *Shdr);

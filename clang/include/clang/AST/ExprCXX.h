@@ -548,26 +548,25 @@ public:
 
 /// A boolean literal, per ([C++ lex.bool] Boolean literals).
 class CXXBoolLiteralExpr : public Expr {
-  bool Value;
-  SourceLocation Loc;
-
 public:
-  CXXBoolLiteralExpr(bool val, QualType Ty, SourceLocation l)
+  CXXBoolLiteralExpr(bool Val, QualType Ty, SourceLocation Loc)
       : Expr(CXXBoolLiteralExprClass, Ty, VK_RValue, OK_Ordinary, false, false,
-             false, false),
-        Value(val), Loc(l) {}
+             false, false) {
+    CXXBoolLiteralExprBits.Value = Val;
+    CXXBoolLiteralExprBits.Loc = Loc;
+  }
 
   explicit CXXBoolLiteralExpr(EmptyShell Empty)
       : Expr(CXXBoolLiteralExprClass, Empty) {}
 
-  bool getValue() const { return Value; }
-  void setValue(bool V) { Value = V; }
+  bool getValue() const { return CXXBoolLiteralExprBits.Value; }
+  void setValue(bool V) { CXXBoolLiteralExprBits.Value = V; }
 
-  SourceLocation getBeginLoc() const LLVM_READONLY { return Loc; }
-  SourceLocation getEndLoc() const LLVM_READONLY { return Loc; }
+  SourceLocation getBeginLoc() const { return getLocation(); }
+  SourceLocation getEndLoc() const { return getLocation(); }
 
-  SourceLocation getLocation() const { return Loc; }
-  void setLocation(SourceLocation L) { Loc = L; }
+  SourceLocation getLocation() const { return CXXBoolLiteralExprBits.Loc; }
+  void setLocation(SourceLocation L) { CXXBoolLiteralExprBits.Loc = L; }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == CXXBoolLiteralExprClass;
@@ -583,22 +582,21 @@ public:
 ///
 /// Introduced in C++11, the only literal of type \c nullptr_t is \c nullptr.
 class CXXNullPtrLiteralExpr : public Expr {
-  SourceLocation Loc;
-
 public:
-  CXXNullPtrLiteralExpr(QualType Ty, SourceLocation l)
+  CXXNullPtrLiteralExpr(QualType Ty, SourceLocation Loc)
       : Expr(CXXNullPtrLiteralExprClass, Ty, VK_RValue, OK_Ordinary, false,
-             false, false, false),
-        Loc(l) {}
+             false, false, false) {
+    CXXNullPtrLiteralExprBits.Loc = Loc;
+  }
 
   explicit CXXNullPtrLiteralExpr(EmptyShell Empty)
       : Expr(CXXNullPtrLiteralExprClass, Empty) {}
 
-  SourceLocation getBeginLoc() const LLVM_READONLY { return Loc; }
-  SourceLocation getEndLoc() const LLVM_READONLY { return Loc; }
+  SourceLocation getBeginLoc() const { return getLocation(); }
+  SourceLocation getEndLoc() const { return getLocation(); }
 
-  SourceLocation getLocation() const { return Loc; }
-  void setLocation(SourceLocation L) { Loc = L; }
+  SourceLocation getLocation() const { return CXXNullPtrLiteralExprBits.Loc; }
+  void setLocation(SourceLocation L) { CXXNullPtrLiteralExprBits.Loc = L; }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == CXXNullPtrLiteralExprClass;
@@ -964,29 +962,28 @@ public:
 /// };
 /// \endcode
 class CXXThisExpr : public Expr {
-  SourceLocation Loc;
-  bool Implicit : 1;
-
 public:
-  CXXThisExpr(SourceLocation L, QualType Type, bool isImplicit)
-      : Expr(CXXThisExprClass, Type, VK_RValue, OK_Ordinary,
+  CXXThisExpr(SourceLocation L, QualType Ty, bool IsImplicit)
+      : Expr(CXXThisExprClass, Ty, VK_RValue, OK_Ordinary,
              // 'this' is type-dependent if the class type of the enclosing
              // member function is dependent (C++ [temp.dep.expr]p2)
-             Type->isDependentType(), Type->isDependentType(),
-             Type->isInstantiationDependentType(),
-             /*ContainsUnexpandedParameterPack=*/false),
-        Loc(L), Implicit(isImplicit) {}
+             Ty->isDependentType(), Ty->isDependentType(),
+             Ty->isInstantiationDependentType(),
+             /*ContainsUnexpandedParameterPack=*/false) {
+    CXXThisExprBits.IsImplicit = IsImplicit;
+    CXXThisExprBits.Loc = L;
+  }
 
   CXXThisExpr(EmptyShell Empty) : Expr(CXXThisExprClass, Empty) {}
 
-  SourceLocation getLocation() const { return Loc; }
-  void setLocation(SourceLocation L) { Loc = L; }
+  SourceLocation getLocation() const { return CXXThisExprBits.Loc; }
+  void setLocation(SourceLocation L) { CXXThisExprBits.Loc = L; }
 
-  SourceLocation getBeginLoc() const LLVM_READONLY { return Loc; }
-  SourceLocation getEndLoc() const LLVM_READONLY { return Loc; }
+  SourceLocation getBeginLoc() const { return getLocation(); }
+  SourceLocation getEndLoc() const { return getLocation(); }
 
-  bool isImplicit() const { return Implicit; }
-  void setImplicit(bool I) { Implicit = I; }
+  bool isImplicit() const { return CXXThisExprBits.IsImplicit; }
+  void setImplicit(bool I) { CXXThisExprBits.IsImplicit = I; }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == CXXThisExprClass;
@@ -1006,42 +1003,43 @@ public:
 class CXXThrowExpr : public Expr {
   friend class ASTStmtReader;
 
-  Stmt *Op;
-  SourceLocation ThrowLoc;
-
-  /// Whether the thrown variable (if any) is in scope.
-  unsigned IsThrownVariableInScope : 1;
+  /// The optional expression in the throw statement.
+  Stmt *Operand;
 
 public:
   // \p Ty is the void type which is used as the result type of the
-  // expression.  The \p l is the location of the throw keyword.  \p expr
-  // can by null, if the optional expression to throw isn't present.
-  CXXThrowExpr(Expr *expr, QualType Ty, SourceLocation l,
+  // expression. The \p Loc is the location of the throw keyword.
+  // \p Operand is the expression in the throw statement, and can be
+  // null if not present.
+  CXXThrowExpr(Expr *Operand, QualType Ty, SourceLocation Loc,
                bool IsThrownVariableInScope)
       : Expr(CXXThrowExprClass, Ty, VK_RValue, OK_Ordinary, false, false,
-             expr && expr->isInstantiationDependent(),
-             expr && expr->containsUnexpandedParameterPack()),
-        Op(expr), ThrowLoc(l),
-        IsThrownVariableInScope(IsThrownVariableInScope) {}
+             Operand && Operand->isInstantiationDependent(),
+             Operand && Operand->containsUnexpandedParameterPack()),
+        Operand(Operand) {
+    CXXThrowExprBits.ThrowLoc = Loc;
+    CXXThrowExprBits.IsThrownVariableInScope = IsThrownVariableInScope;
+  }
   CXXThrowExpr(EmptyShell Empty) : Expr(CXXThrowExprClass, Empty) {}
 
-  const Expr *getSubExpr() const { return cast_or_null<Expr>(Op); }
-  Expr *getSubExpr() { return cast_or_null<Expr>(Op); }
+  const Expr *getSubExpr() const { return cast_or_null<Expr>(Operand); }
+  Expr *getSubExpr() { return cast_or_null<Expr>(Operand); }
 
-  SourceLocation getThrowLoc() const { return ThrowLoc; }
+  SourceLocation getThrowLoc() const { return CXXThrowExprBits.ThrowLoc; }
 
   /// Determines whether the variable thrown by this expression (if any!)
   /// is within the innermost try block.
   ///
   /// This information is required to determine whether the NRVO can apply to
   /// this variable.
-  bool isThrownVariableInScope() const { return IsThrownVariableInScope; }
+  bool isThrownVariableInScope() const {
+    return CXXThrowExprBits.IsThrownVariableInScope;
+  }
 
-  SourceLocation getBeginLoc() const LLVM_READONLY { return ThrowLoc; }
-
+  SourceLocation getBeginLoc() const { return getThrowLoc(); }
   SourceLocation getEndLoc() const LLVM_READONLY {
     if (!getSubExpr())
-      return ThrowLoc;
+      return getThrowLoc();
     return getSubExpr()->getEndLoc();
   }
 
@@ -1051,7 +1049,7 @@ public:
 
   // Iterators
   child_range children() {
-    return child_range(&Op, Op ? &Op+1 : &Op);
+    return child_range(&Operand, Operand ? &Operand + 1 : &Operand);
   }
 };
 
@@ -1061,26 +1059,24 @@ public:
 /// corresponding parameter's default argument, when the call did not
 /// explicitly supply arguments for all of the parameters.
 class CXXDefaultArgExpr final : public Expr {
+  friend class ASTStmtReader;
+
   /// The parameter whose default is being used.
   ParmVarDecl *Param;
 
-  /// The location where the default argument expression was used.
-  SourceLocation Loc;
-
-  CXXDefaultArgExpr(StmtClass SC, SourceLocation Loc, ParmVarDecl *param)
+  CXXDefaultArgExpr(StmtClass SC, SourceLocation Loc, ParmVarDecl *Param)
       : Expr(SC,
-             param->hasUnparsedDefaultArg()
-               ? param->getType().getNonReferenceType()
-               : param->getDefaultArg()->getType(),
-             param->getDefaultArg()->getValueKind(),
-             param->getDefaultArg()->getObjectKind(), false, false, false,
+             Param->hasUnparsedDefaultArg()
+                 ? Param->getType().getNonReferenceType()
+                 : Param->getDefaultArg()->getType(),
+             Param->getDefaultArg()->getValueKind(),
+             Param->getDefaultArg()->getObjectKind(), false, false, false,
              false),
-        Param(param), Loc(Loc) {}
+        Param(Param) {
+    CXXDefaultArgExprBits.Loc = Loc;
+  }
 
 public:
-  friend class ASTStmtReader;
-  friend class ASTStmtWriter;
-
   CXXDefaultArgExpr(EmptyShell Empty) : Expr(CXXDefaultArgExprClass, Empty) {}
 
   // \p Param is the parameter whose default argument is used by this
@@ -1095,23 +1091,18 @@ public:
   ParmVarDecl *getParam() { return Param; }
 
   // Retrieve the actual argument to the function call.
-  const Expr *getExpr() const {
-    return getParam()->getDefaultArg();
-  }
-  Expr *getExpr() {
-    return getParam()->getDefaultArg();
-  }
+  const Expr *getExpr() const { return getParam()->getDefaultArg(); }
+  Expr *getExpr() { return getParam()->getDefaultArg(); }
 
-  /// Retrieve the location where this default argument was actually
-  /// used.
-  SourceLocation getUsedLocation() const { return Loc; }
+  /// Retrieve the location where this default argument was actually used.
+  SourceLocation getUsedLocation() const { return CXXDefaultArgExprBits.Loc; }
 
   /// Default argument expressions have no representation in the
   /// source, so they have an empty source range.
-  SourceLocation getBeginLoc() const LLVM_READONLY { return SourceLocation(); }
-  SourceLocation getEndLoc() const LLVM_READONLY { return SourceLocation(); }
+  SourceLocation getBeginLoc() const { return SourceLocation(); }
+  SourceLocation getEndLoc() const { return SourceLocation(); }
 
-  SourceLocation getExprLoc() const LLVM_READONLY { return Loc; }
+  SourceLocation getExprLoc() const { return getUsedLocation(); }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == CXXDefaultArgExprClass;
@@ -1132,26 +1123,23 @@ public:
 /// (C++11 [class.base.init]p8) or in aggregate initialization
 /// (C++1y [dcl.init.aggr]p7).
 class CXXDefaultInitExpr : public Expr {
+  friend class ASTReader;
+  friend class ASTStmtReader;
+
   /// The field whose default is being used.
   FieldDecl *Field;
 
-  /// The location where the default initializer expression was used.
-  SourceLocation Loc;
-
-  CXXDefaultInitExpr(const ASTContext &C, SourceLocation Loc, FieldDecl *Field,
-                     QualType T);
+  CXXDefaultInitExpr(const ASTContext &Ctx, SourceLocation Loc,
+                     FieldDecl *Field, QualType Ty);
 
   CXXDefaultInitExpr(EmptyShell Empty) : Expr(CXXDefaultInitExprClass, Empty) {}
 
 public:
-  friend class ASTReader;
-  friend class ASTStmtReader;
-
   /// \p Field is the non-static data member whose default initializer is used
   /// by this expression.
-  static CXXDefaultInitExpr *Create(const ASTContext &C, SourceLocation Loc,
+  static CXXDefaultInitExpr *Create(const ASTContext &Ctx, SourceLocation Loc,
                                     FieldDecl *Field) {
-    return new (C) CXXDefaultInitExpr(C, Loc, Field, Field->getType());
+    return new (Ctx) CXXDefaultInitExpr(Ctx, Loc, Field, Field->getType());
   }
 
   /// Get the field whose initializer will be used.
@@ -1168,8 +1156,8 @@ public:
     return Field->getInClassInitializer();
   }
 
-  SourceLocation getBeginLoc() const LLVM_READONLY { return Loc; }
-  SourceLocation getEndLoc() const LLVM_READONLY { return Loc; }
+  SourceLocation getBeginLoc() const { return CXXDefaultInitExprBits.Loc; }
+  SourceLocation getEndLoc() const { return CXXDefaultInitExprBits.Loc; }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == CXXDefaultInitExprClass;
@@ -3031,7 +3019,7 @@ public:
 /// potentially-evaluated block literal.  The lifetime of a block
 /// literal is the extent of the enclosing scope.
 class ExprWithCleanups final
-    : public Expr,
+    : public FullExpr,
       private llvm::TrailingObjects<ExprWithCleanups, BlockDecl *> {
 public:
   /// The type of objects that are kept in the cleanup.
@@ -3043,8 +3031,6 @@ public:
 private:
   friend class ASTStmtReader;
   friend TrailingObjects;
-
-  Stmt *SubExpr;
 
   ExprWithCleanups(EmptyShell, unsigned NumObjects);
   ExprWithCleanups(Expr *SubExpr, bool CleanupsHaveSideEffects,
@@ -3070,16 +3056,9 @@ public:
     return getObjects()[i];
   }
 
-  Expr *getSubExpr() { return cast<Expr>(SubExpr); }
-  const Expr *getSubExpr() const { return cast<Expr>(SubExpr); }
-
   bool cleanupsHaveSideEffects() const {
     return ExprWithCleanupsBits.CleanupsHaveSideEffects;
   }
-
-  /// As with any mutator of the AST, be very careful
-  /// when modifying an existing AST to preserve its invariants.
-  void setSubExpr(Expr *E) { SubExpr = E; }
 
   SourceLocation getBeginLoc() const LLVM_READONLY {
     return SubExpr->getBeginLoc();

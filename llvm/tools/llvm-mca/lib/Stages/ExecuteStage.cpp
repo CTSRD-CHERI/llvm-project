@@ -21,9 +21,8 @@
 
 #define DEBUG_TYPE "llvm-mca"
 
+namespace llvm {
 namespace mca {
-
-using namespace llvm;
 
 HWStallEvent::GenericEventType toHWStallEventType(Scheduler::Status Status) {
   switch (Status) {
@@ -73,7 +72,7 @@ Error ExecuteStage::issueInstruction(InstRef &IR) {
 
 Error ExecuteStage::issueReadyInstructions() {
   InstRef IR = HWS.select();
-  while (IR.isValid()) {
+  while (IR) {
     if (Error Err = issueInstruction(IR))
       return Err;
 
@@ -107,7 +106,6 @@ Error ExecuteStage::cycleStart() {
   return issueReadyInstructions();
 }
 
-
 #ifndef NDEBUG
 static void verifyInstructionEliminated(const InstRef &IR) {
   const Instruction &Inst = *IR.getInstruction();
@@ -120,7 +118,6 @@ static void verifyInstructionEliminated(const InstRef &IR) {
   assert(!Desc.MayLoad && !Desc.MayStore && "Cannot eliminate a memory op!");
 }
 #endif
-
 
 Error ExecuteStage::handleInstructionEliminated(InstRef &IR) {
 #ifndef NDEBUG
@@ -219,3 +216,4 @@ void ExecuteStage::notifyReservedOrReleasedBuffers(const InstRef &IR,
 }
 
 } // namespace mca
+} // namespace llvm

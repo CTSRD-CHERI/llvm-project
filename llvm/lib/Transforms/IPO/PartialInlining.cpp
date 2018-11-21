@@ -359,7 +359,7 @@ struct PartialInlinerLegacyPass : public ModulePass {
     TargetTransformInfoWrapperPass *TTIWP =
         &getAnalysis<TargetTransformInfoWrapperPass>();
     ProfileSummaryInfo *PSI =
-        getAnalysis<ProfileSummaryInfoWrapperPass>().getPSI();
+        &getAnalysis<ProfileSummaryInfoWrapperPass>().getPSI();
 
     std::function<AssumptionCache &(Function &)> GetAssumptionCache =
         [&ACT](Function &F) -> AssumptionCache & {
@@ -403,7 +403,7 @@ PartialInlinerImpl::computeOutliningColdRegionsInfo(Function *F,
 
   auto IsSingleEntry = [](SmallVectorImpl<BasicBlock *> &BlockList) {
     BasicBlock *Dom = BlockList.front();
-    return BlockList.size() > 1 && pred_size(Dom) == 1;
+    return BlockList.size() > 1 && Dom->hasNPredecessors(1);
   };
 
   auto IsSingleExit =
@@ -468,7 +468,7 @@ PartialInlinerImpl::computeOutliningColdRegionsInfo(Function *F,
     // Only consider regions with predecessor blocks that are considered
     // not-cold (default: part of the top 99.99% of all block counters)
     // AND greater than our minimum block execution count (default: 100).
-    if (PSI->isColdBB(thisBB, BFI) ||
+    if (PSI->isColdBlock(thisBB, BFI) ||
         BBProfileCount(thisBB) < MinBlockCounterExecution)
       continue;
     for (auto SI = succ_begin(thisBB); SI != succ_end(thisBB); ++SI) {
@@ -1251,7 +1251,7 @@ std::pair<bool, Function *> PartialInlinerImpl::unswitchFunction(Function *F) {
   if (PSI->isFunctionEntryCold(F))
     return {false, nullptr};
 
-  if (F->user_begin() == F->user_end())
+  if (empty(F->users()))
     return {false, nullptr};
 
   OptimizationRemarkEmitter ORE(F);
@@ -1357,7 +1357,7 @@ bool PartialInlinerImpl::tryPartialInline(FunctionCloner &Cloner) {
     return false;
   }
 
-  assert(Cloner.OrigFunc->user_begin() == Cloner.OrigFunc->user_end() &&
+  assert(empty(Cloner.OrigFunc->users()) &&
          "F's users should all be replaced!");
 
   std::vector<User *> Users(Cloner.ClonedFunc->user_begin(),

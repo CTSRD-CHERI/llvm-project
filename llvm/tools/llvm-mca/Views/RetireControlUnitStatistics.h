@@ -30,6 +30,7 @@
 #include "llvm/MC/MCSubtargetInfo.h"
 #include <map>
 
+namespace llvm {
 namespace mca {
 
 class RetireControlUnitStatistics : public View {
@@ -48,13 +49,12 @@ public:
   RetireControlUnitStatistics() : NumRetired(0), NumCycles(0) {}
 
   void onEvent(const HWInstructionEvent &Event) override;
-
   void onCycleBegin() override { NumCycles++; }
-
   void onCycleEnd() override { updateHistograms(); }
 
   void printView(llvm::raw_ostream &OS) const override;
 };
 } // namespace mca
+} // namespace llvm
 
 #endif

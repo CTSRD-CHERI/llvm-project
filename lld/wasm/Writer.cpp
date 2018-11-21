@@ -39,7 +39,6 @@ using namespace lld;
 using namespace lld::wasm;
 
 static constexpr int kStackAlignment = 16;
-static constexpr int kInitialTableOffset = 1;
 static constexpr const char *kFunctionTableName = "__indirect_function_table";
 
 namespace {
@@ -90,6 +89,7 @@ private:
   void createCustomSections();
 
   // Custom sections
+  void createDylinkSection();
   void createRelocSections();
   void createLinkingSection();
   void createNameSection();
@@ -98,8 +98,13 @@ private:
   void writeSections();
 
   uint64_t FileSize = 0;
+  uint32_t TableBase = 0;
   uint32_t NumMemoryPages = 0;
   uint32_t MaxMemoryPages = 0;
+  // Memory size and aligment. Written to the "dylink" section
+  // when build with -shared or -pie.
+  uint32_t MemAlign = 0;
+  uint32_t MemSize = 0;
 
   std::vector<const WasmSignature *> Types;
   DenseMap<WasmSignature, int32_t> TypeIndices;
@@ -155,11 +160,13 @@ void Writer::createImportSection() {
       Import.Memory.Flags |= WASM_LIMITS_FLAG_HAS_MAX;
       Import.Memory.Maximum = MaxMemoryPages;
     }
+    if (Config->SharedMemory)
+      Import.Memory.Flags |= WASM_LIMITS_FLAG_IS_SHARED;
     writeImport(OS, Import);
   }
 
   if (Config->ImportTable) {
-    uint32_t TableSize = kInitialTableOffset + IndirectFunctions.size();
+    uint32_t TableSize = TableBase + IndirectFunctions.size();
     WasmImport Import;
     Import.Module = "env";
     Import.Field = kFunctionTableName;
@@ -214,8 +221,12 @@ void Writer::createMemorySection() {
 
   bool HasMax = MaxMemoryPages != 0;
   writeUleb128(OS, 1, "memory count");
-  writeUleb128(OS, HasMax ? static_cast<unsigned>(WASM_LIMITS_FLAG_HAS_MAX) : 0,
-               "memory limits flags");
+  unsigned Flags = 0;
+  if (HasMax)
+    Flags |= WASM_LIMITS_FLAG_HAS_MAX;
+  if (Config->SharedMemory)
+    Flags |= WASM_LIMITS_FLAG_IS_SHARED;
+  writeUleb128(OS, Flags, "memory limits flags");
   writeUleb128(OS, NumMemoryPages, "initial pages");
   if (HasMax)
     writeUleb128(OS, MaxMemoryPages, "max pages");
@@ -253,7 +264,7 @@ void Writer::createTableSection() {
   //     no address-taken function will fail at validation time since it is
   //     a validation error to include a call_indirect instruction if there
   //     is not table.
-  uint32_t TableSize = kInitialTableOffset + IndirectFunctions.size();
+  uint32_t TableSize = TableBase + IndirectFunctions.size();
 
   SyntheticSection *Section = createSyntheticSection(WASM_SEC_TABLE);
   raw_ostream &OS = Section->getStream();
@@ -319,12 +330,17 @@ void Writer::createElemSection() {
   writeUleb128(OS, 1, "segment count");
   writeUleb128(OS, 0, "table index");
   WasmInitExpr InitExpr;
-  InitExpr.Opcode = WASM_OPCODE_I32_CONST;
-  InitExpr.Value.Int32 = kInitialTableOffset;
+  if (Config->Pic) {
+    InitExpr.Opcode = WASM_OPCODE_GET_GLOBAL;
+    InitExpr.Value.Global = WasmSym::TableBase->getGlobalIndex();
+  } else {
+    InitExpr.Opcode = WASM_OPCODE_I32_CONST;
+    InitExpr.Value.Int32 = TableBase;
+  }
   writeInitExpr(OS, InitExpr);
   writeUleb128(OS, IndirectFunctions.size(), "elem count");
 
-  uint32_t TableIndex = kInitialTableOffset;
+  uint32_t TableIndex = TableBase;
   for (const FunctionSymbol *Sym : IndirectFunctions) {
     assert(Sym->getTableIndex() == TableIndex);
     writeUleb128(OS, Sym->getFunctionIndex(), "function index");
@@ -418,6 +434,20 @@ private:
 public:
   raw_string_ostream OS{Body};
 };
+
+// Create the custom "dylink" section containing information for the dynamic
+// linker.
+// See
+// https://github.com/WebAssembly/tool-conventions/blob/master/DynamicLinking.md
+void Writer::createDylinkSection() {
+  SyntheticSection *Section = createSyntheticSection(WASM_SEC_CUSTOM, "dylink");
+  raw_ostream &OS = Section->getStream();
+
+  writeUleb128(OS, MemSize, "MemSize");
+  writeUleb128(OS, int(log2(MemAlign)), "MemAlign");
+  writeUleb128(OS, IndirectFunctions.size(), "TableSize");
+  writeUleb128(OS, 0, "TableAlign");
+}
 
 // Create the custom "linking" section containing linker metadata.
 // This is only created when relocatable output is requested.
@@ -548,8 +578,7 @@ void Writer::createNameSection() {
   for (const Symbol *S : ImportedSymbols) {
     if (auto *F = dyn_cast<FunctionSymbol>(S)) {
       writeUleb128(Sub.OS, F->getFunctionIndex(), "func index");
-      Optional<std::string> Name = demangleItanium(F->getName());
-      writeStr(Sub.OS, Name ? StringRef(*Name) : F->getName(), "symbol name");
+      writeStr(Sub.OS, toString(*S), "symbol name");
     }
   }
   for (const InputFunction *F : InputFunctions) {
@@ -558,8 +587,7 @@ void Writer::createNameSection() {
       if (!F->getDebugName().empty()) {
         writeStr(Sub.OS, F->getDebugName(), "symbol name");
       } else {
-        Optional<std::string> Name = demangleItanium(F->getName());
-        writeStr(Sub.OS, Name ? StringRef(*Name) : F->getName(), "symbol name");
+        writeStr(Sub.OS, maybeDemangleSymbol(F->getName()), "symbol name");
       }
     }
   }
@@ -595,7 +623,7 @@ void Writer::layoutMemory() {
   uint32_t MemoryPtr = 0;
 
   auto PlaceStack = [&]() {
-    if (Config->Relocatable)
+    if (Config->Relocatable || Config->Shared)
       return;
     MemoryPtr = alignTo(MemoryPtr, kStackAlignment);
     if (Config->ZStackSize != alignTo(Config->ZStackSize, kStackAlignment))
@@ -603,7 +631,8 @@ void Writer::layoutMemory() {
     log("mem: stack size  = " + Twine(Config->ZStackSize));
     log("mem: stack base  = " + Twine(MemoryPtr));
     MemoryPtr += Config->ZStackSize;
-    WasmSym::StackPointer->Global->Global.InitExpr.Value.Int32 = MemoryPtr;
+    auto *SP = cast<DefinedGlobal>(WasmSym::StackPointer);
+    SP->Global->Global.InitExpr.Value.Int32 = MemoryPtr;
     log("mem: stack top   = " + Twine(MemoryPtr));
   };
 
@@ -621,7 +650,9 @@ void Writer::layoutMemory() {
   if (WasmSym::DsoHandle)
     WasmSym::DsoHandle->setVirtualAddress(DataStart);
 
+  MemAlign = 0;
   for (OutputSegment *Seg : Segments) {
+    MemAlign = std::max(MemAlign, Seg->Alignment);
     MemoryPtr = alignTo(MemoryPtr, Seg->Alignment);
     Seg->StartVA = MemoryPtr;
     log(formatv("mem: {0,-15} offset={1,-8} size={2,-8} align={3}", Seg->Name,
@@ -634,6 +665,11 @@ void Writer::layoutMemory() {
     WasmSym::DataEnd->setVirtualAddress(MemoryPtr);
 
   log("mem: static data = " + Twine(MemoryPtr - DataStart));
+
+  if (Config->Shared) {
+    MemSize = MemoryPtr;
+    return;
+  }
 
   if (!Config->StackFirst)
     PlaceStack();
@@ -654,8 +690,8 @@ void Writer::layoutMemory() {
     else
       MemoryPtr = Config->InitialMemory;
   }
-  uint32_t MemSize = alignTo(MemoryPtr, WasmPageSize);
-  NumMemoryPages = MemSize / WasmPageSize;
+  MemSize = MemoryPtr;
+  NumMemoryPages = alignTo(MemoryPtr, WasmPageSize) / WasmPageSize;
   log("mem: total pages = " + Twine(NumMemoryPages));
 
   if (Config->MaxMemory != 0) {
@@ -678,6 +714,8 @@ SyntheticSection *Writer::createSyntheticSection(uint32_t Type,
 
 void Writer::createSections() {
   // Known sections
+  if (Config->Pic)
+    createDylinkSection();
   createTypeSection();
   createImportSection();
   createFunctionSection();
@@ -853,7 +891,8 @@ void Writer::calculateTypes() {
 }
 
 void Writer::assignIndexes() {
-  uint32_t FunctionIndex = NumImportedFunctions + InputFunctions.size();
+  assert(InputFunctions.empty());
+  uint32_t FunctionIndex = NumImportedFunctions;
   auto AddDefinedFunction = [&](InputFunction *Func) {
     if (!Func->Live)
       return;
@@ -870,7 +909,7 @@ void Writer::assignIndexes() {
       AddDefinedFunction(Func);
   }
 
-  uint32_t TableIndex = kInitialTableOffset;
+  uint32_t TableIndex = TableBase;
   auto HandleRelocs = [&](InputChunk *Chunk) {
     if (!Chunk->Live)
       return;
@@ -902,7 +941,8 @@ void Writer::assignIndexes() {
       HandleRelocs(P);
   }
 
-  uint32_t GlobalIndex = NumImportedGlobals + InputGlobals.size();
+  assert(InputGlobals.empty());
+  uint32_t GlobalIndex = NumImportedGlobals;
   auto AddDefinedGlobal = [&](InputGlobal *Global) {
     if (Global->Live) {
       LLVM_DEBUG(dbgs() << "AddDefinedGlobal: " << GlobalIndex << "\n");
@@ -922,6 +962,10 @@ void Writer::assignIndexes() {
 }
 
 static StringRef getOutputDataSegmentName(StringRef Name) {
+  // With PIC code we currently only support a single data segment since
+  // we only have a single __memory_base to use as our base address.
+  if (Config->Pic)
+    return "data";
   if (!Config->MergeDataSegments)
     return Name;
   if (Name.startswith(".text."))
@@ -979,7 +1023,7 @@ void Writer::createCtorFunction() {
     OS << BodyContent;
   }
 
-  ArrayRef<uint8_t> Body = toArrayRef(Saver.save(FunctionBody));
+  ArrayRef<uint8_t> Body = arrayRefFromStringRef(Saver.save(FunctionBody));
   cast<SyntheticFunction>(WasmSym::CallCtors->Function)->setBody(Body);
 }
 
@@ -1006,8 +1050,13 @@ void Writer::calculateInitFunctions() {
 }
 
 void Writer::run() {
-  if (Config->Relocatable)
+  if (Config->Relocatable || Config->Pic)
     Config->GlobalBase = 0;
+
+  // For PIC code the table base is assigned dynamically by the loader.
+  // For non-PIC, we start at 1 so that accessing table index 0 always traps.
+  if (!Config->Pic)
+    TableBase = 1;
 
   log("-- calculateImports");
   calculateImports();

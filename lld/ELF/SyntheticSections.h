@@ -681,9 +681,9 @@ public:
     uint64_t CuLength;
   };
 
-  struct NameTypeEntry {
+  struct NameAttrEntry {
     llvm::CachedHashStringRef Name;
-    uint32_t Type;
+    uint32_t CuIndexAndAttrs;
   };
 
   struct GdbChunk {
@@ -965,6 +965,25 @@ private:
   size_t Size = 0;
 };
 
+// This section is used to store the addresses of functions that are called
+// in range-extending thunks on PowerPC64. When producing position dependant
+// code the addresses are link-time constants and the table is written out to
+// the binary. When producing position-dependant code the table is allocated and
+// filled in by the dynamic linker.
+class PPC64LongBranchTargetSection final : public SyntheticSection {
+public:
+  PPC64LongBranchTargetSection();
+  void addEntry(Symbol &Sym);
+  size_t getSize() const override;
+  void writeTo(uint8_t *Buf) override;
+  bool empty() const override;
+  void finalizeContents() override { Finalized = true; }
+
+private:
+  std::vector<const Symbol *> Entries;
+  bool Finalized = false;
+};
+
 // Can only be forward declared here since it depends on SyntheticSection
 template <class ELFT> class CheriCapRelocsSection;
 class CheriCapTableSection;
@@ -996,6 +1015,7 @@ struct InStruct {
   GotSection *Got;
   GotPltSection *GotPlt;
   IgotPltSection *IgotPlt;
+  PPC64LongBranchTargetSection *PPC64LongBranchTarget;
   MipsGotSection *MipsGot;
   MipsRldMapSection *MipsRldMap;
   PltSection *Plt;

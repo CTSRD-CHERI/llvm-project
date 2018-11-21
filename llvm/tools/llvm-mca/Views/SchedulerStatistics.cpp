@@ -16,8 +16,7 @@
 #include "llvm/Support/Format.h"
 #include "llvm/Support/FormattedStream.h"
 
-using namespace llvm;
-
+namespace llvm {
 namespace mca {
 
 void SchedulerStatistics::onEvent(const HWInstructionEvent &Event) {
@@ -121,9 +120,10 @@ void SchedulerStatistics::printSchedulerUsage(raw_ostream &OS) const {
   FOS.flush();
 }
 
-void SchedulerStatistics::printView(llvm::raw_ostream &OS) const {
+void SchedulerStatistics::printView(raw_ostream &OS) const {
   printSchedulerStats(OS);
   printSchedulerUsage(OS);
 }
 
 } // namespace mca
+} // namespace llvm

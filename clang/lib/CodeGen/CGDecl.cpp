@@ -754,9 +754,9 @@ void CodeGenFunction::EmitScalarInit(const Expr *init, const ValueDecl *D,
 
   // If we're emitting a value with lifetime, we have to do the
   // initialization *before* we leave the cleanup scopes.
-  if (const ExprWithCleanups *ewc = dyn_cast<ExprWithCleanups>(init)) {
-    enterFullExpression(ewc);
-    init = ewc->getSubExpr();
+  if (const FullExpr *fe = dyn_cast<FullExpr>(init)) {
+    enterFullExpression(fe);
+    init = fe->getSubExpr();
   }
   CodeGenFunction::RunCleanupsScope Scope(*this);
 
@@ -963,6 +963,49 @@ static llvm::Value *shouldUseMemSetToInitialize(llvm::Constant *Init,
   return llvm::isBytewiseValue(Init);
 }
 
+static Address createUnnamedGlobalFrom(CodeGenModule &CGM, const VarDecl &D,
+                                       CGBuilderTy &Builder,
+                                       llvm::Constant *Constant,
+                                       CharUnits Align) {
+  auto FunctionName = [&](const DeclContext *DC) -> std::string {
+    if (const auto *FD = dyn_cast<FunctionDecl>(DC)) {
+      if (const auto *CC = dyn_cast<CXXConstructorDecl>(FD))
+        return CC->getNameAsString();
+      if (const auto *CD = dyn_cast<CXXDestructorDecl>(FD))
+        return CD->getNameAsString();
+      return CGM.getMangledName(FD);
+    } else if (const auto *OM = dyn_cast<ObjCMethodDecl>(DC)) {
+      return OM->getNameAsString();
+    } else if (isa<BlockDecl>(DC)) {
+      return "<block>";
+    } else if (isa<CapturedDecl>(DC)) {
+      return "<captured>";
+    } else {
+      llvm::llvm_unreachable_internal("expected a function or method");
+    }
+  };
+
+  auto *Ty = Constant->getType();
+  bool isConstant = true;
+  llvm::GlobalVariable *InsertBefore = nullptr;
+  unsigned AS = CGM.getContext().getTargetAddressSpace(
+      CGM.getStringLiteralAddressSpace());
+  llvm::GlobalVariable *GV = new llvm::GlobalVariable(
+      CGM.getModule(), Ty, isConstant, llvm::GlobalValue::PrivateLinkage,
+      Constant,
+      "__const." + FunctionName(D.getParentFunctionOrMethod()) + "." +
+          D.getName(),
+      InsertBefore, llvm::GlobalValue::NotThreadLocal, AS);
+  GV->setAlignment(Align.getQuantity());
+  GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+
+  Address SrcPtr = Address(GV, Align);
+  llvm::Type *BP = llvm::PointerType::getInt8PtrTy(CGM.getLLVMContext(), AS);
+  if (SrcPtr.getType() != BP)
+    SrcPtr = Builder.CreateBitCast(SrcPtr, BP);
+  return SrcPtr;
+}
+
 static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
                                   Address Loc, bool isVolatile,
                                   CGBuilderTy &Builder,
@@ -1002,25 +1045,10 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
     return;
   }
 
-  // Otherwise, create a temporary global with the initializer then memcpy from
-  // the global to the alloca.
-  std::string Name = getStaticDeclName(CGM, D);
-  unsigned AS = CGM.getContext().getTargetAddressSpace(
-      CGM.getStringLiteralAddressSpace());
-  llvm::Type *BP = llvm::PointerType::getInt8PtrTy(CGM.getLLVMContext(), AS);
-
-  llvm::GlobalVariable *GV = new llvm::GlobalVariable(
-      CGM.getModule(), constant->getType(), true,
-      llvm::GlobalValue::PrivateLinkage, constant, Name, nullptr,
-      llvm::GlobalValue::NotThreadLocal, AS);
-  GV->setAlignment(Loc.getAlignment().getQuantity());
-  GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-
-  Address SrcPtr = Address(GV, Loc.getAlignment());
-  if (SrcPtr.getType() != BP)
-    SrcPtr = Builder.CreateBitCast(SrcPtr, BP);
-
-  Builder.CreateMemCpy(Loc, SrcPtr, SizeVal, isVolatile);
+  Builder.CreateMemCpy(
+      Loc,
+      createUnnamedGlobalFrom(CGM, D, Builder, constant, Loc.getAlignment()),
+      SizeVal, isVolatile);
 }
 
 /// EmitAutoVarDecl - Emit code and set up an entry in LocalDeclMap for a
@@ -1066,6 +1094,7 @@ void CodeGenFunction::EmitAndRegisterVariableArrayDimensions(
   // For each dimension stores its QualType and corresponding
   // size-expression Value.
   SmallVector<CodeGenFunction::VlaSizePair, 4> Dimensions;
+  SmallVector<IdentifierInfo *, 4> VLAExprNames;
 
   // Break down the array into individual dimensions.
   QualType Type1D = D.getType();
@@ -1074,8 +1103,14 @@ void CodeGenFunction::EmitAndRegisterVariableArrayDimensions(
     if (auto *C = dyn_cast<llvm::ConstantInt>(VlaSize.NumElts))
       Dimensions.emplace_back(C, Type1D.getUnqualifiedType());
     else {
-      auto SizeExprAddr = CreateDefaultAlignTempAlloca(
-          VlaSize.NumElts->getType(), "__vla_expr");
+      // Generate a locally unique name for the size expression.
+      Twine Name = Twine("__vla_expr") + Twine(VLAExprCounter++);
+      SmallString<12> Buffer;
+      StringRef NameRef = Name.toStringRef(Buffer);
+      auto &Ident = getContext().Idents.getOwn(NameRef);
+      VLAExprNames.push_back(&Ident);
+      auto SizeExprAddr =
+          CreateDefaultAlignTempAlloca(VlaSize.NumElts->getType(), NameRef);
       Builder.CreateStore(VlaSize.NumElts, SizeExprAddr);
       Dimensions.emplace_back(SizeExprAddr.getPointer(),
                               Type1D.getUnqualifiedType());
@@ -1089,20 +1124,20 @@ void CodeGenFunction::EmitAndRegisterVariableArrayDimensions(
   // Register each dimension's size-expression with a DILocalVariable,
   // so that it can be used by CGDebugInfo when instantiating a DISubrange
   // to describe this array.
+  unsigned NameIdx = 0;
   for (auto &VlaSize : Dimensions) {
     llvm::Metadata *MD;
     if (auto *C = dyn_cast<llvm::ConstantInt>(VlaSize.NumElts))
       MD = llvm::ConstantAsMetadata::get(C);
     else {
       // Create an artificial VarDecl to generate debug info for.
-      IdentifierInfo &NameIdent = getContext().Idents.getOwn(
-          cast<llvm::AllocaInst>(VlaSize.NumElts)->getName());
+      IdentifierInfo *NameIdent = VLAExprNames[NameIdx++];
       auto VlaExprTy = VlaSize.NumElts->getType()->getPointerElementType();
       auto QT = getContext().getIntTypeForBitwidth(
           VlaExprTy->getScalarSizeInBits(), false);
       auto *ArtificialDecl = VarDecl::Create(
           getContext(), const_cast<DeclContext *>(D.getDeclContext()),
-          D.getLocation(), D.getLocation(), &NameIdent, QT,
+          D.getLocation(), D.getLocation(), NameIdent, QT,
           getContext().CreateTypeSourceInfo(QT), SC_Auto);
       ArtificialDecl->setImplicit();
 
@@ -2150,5 +2185,5 @@ void CodeGenModule::EmitOMPDeclareReduction(const OMPDeclareReductionDecl *D,
 }
 
 void CodeGenModule::EmitOMPRequiresDecl(const OMPRequiresDecl *D) {
-  //Do nothing - here to avoid build errors
+  getOpenMPRuntime().checkArchForUnifiedAddressing(*this, D);
 }

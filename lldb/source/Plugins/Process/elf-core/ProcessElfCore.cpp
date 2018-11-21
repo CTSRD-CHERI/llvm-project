@@ -7,13 +7,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
 #include <stdlib.h>
 
-// C++ Includes
 #include <mutex>
 
-// Other libraries and framework includes
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
@@ -23,7 +20,6 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/UnixSignals.h"
 #include "lldb/Utility/DataBufferHeap.h"
-#include "lldb/Utility/DataBufferLLVM.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/State.h"
 
@@ -61,8 +57,8 @@ lldb::ProcessSP ProcessElfCore::CreateInstance(lldb::TargetSP target_sp,
     // the header extension.
     const size_t header_size = sizeof(llvm::ELF::Elf64_Ehdr);
 
-    auto data_sp = DataBufferLLVM::CreateSliceFromPath(crash_file->GetPath(),
-                                                       header_size, 0);
+    auto data_sp = FileSystem::Instance().CreateDataBuffer(
+        crash_file->GetPath(), header_size, 0);
     if (data_sp && data_sp->GetByteSize() == header_size &&
         elf::ELFHeader::MagicBytesMatch(data_sp->GetBytes())) {
       elf::ELFHeader elf_header;
@@ -81,7 +77,7 @@ lldb::ProcessSP ProcessElfCore::CreateInstance(lldb::TargetSP target_sp,
 bool ProcessElfCore::CanDebug(lldb::TargetSP target_sp,
                               bool plugin_specified_by_name) {
   // For now we are just making sure the file exists for a given module
-  if (!m_core_module_sp && m_core_file.Exists()) {
+  if (!m_core_module_sp && FileSystem::Instance().Exists(m_core_file)) {
     ModuleSpec core_module_spec(m_core_file, target_sp->GetArchitecture());
     Status error(ModuleList::GetSharedModule(core_module_spec, m_core_module_sp,
                                              NULL, NULL, NULL));
@@ -249,8 +245,7 @@ Status ProcessElfCore::DoLoadCore() {
       ModuleSpec exe_module_spec;
       exe_module_spec.GetArchitecture() = arch;
       exe_module_spec.GetFileSpec().SetFile(
-          m_nt_file_entries[0].path.GetCString(), false,
-          FileSpec::Style::native);
+          m_nt_file_entries[0].path.GetCString(), FileSpec::Style::native);
       if (exe_module_spec.GetFileSpec()) {
         exe_module_sp = GetTarget().GetSharedModule(exe_module_spec);
         if (exe_module_sp)

@@ -71,9 +71,11 @@ ArchFlags("arch", cl::desc("architecture(s) from a Mach-O file to dump"),
 static bool ArchAll = false;
 
 enum RadixTy { octal = 8, decimal = 10, hexadecimal = 16 };
-static cl::opt<unsigned int>
-Radix("radix", cl::desc("Print size in radix. Only 8, 10, and 16 are valid"),
-      cl::init(decimal));
+static cl::opt<RadixTy> Radix(
+    "radix", cl::desc("Print size in radix"), cl::init(decimal),
+    cl::values(clEnumValN(octal, "8", "Print size in octal"),
+               clEnumValN(decimal, "10", "Print size in decimal"),
+               clEnumValN(hexadecimal, "16", "Print size in hexadecimal")));
 
 static cl::opt<RadixTy>
 RadixShort(cl::desc("Print size in radix:"),
@@ -138,7 +140,7 @@ static void error(llvm::Error E, StringRef FileName, const Archive::Child &C,
 
   std::string Buf;
   raw_string_ostream OS(Buf);
-  logAllUnhandledErrors(std::move(E), OS, "");
+  logAllUnhandledErrors(std::move(E), OS);
   OS.flush();
   errs() << " " << Buf << "\n";
 }
@@ -156,7 +158,7 @@ static void error(llvm::Error E, StringRef FileName,
 
   std::string Buf;
   raw_string_ostream OS(Buf);
-  logAllUnhandledErrors(std::move(E), OS, "");
+  logAllUnhandledErrors(std::move(E), OS);
   OS.flush();
   errs() << " " << Buf << "\n";
 }
@@ -865,7 +867,7 @@ int main(int argc, char **argv) {
   if (OutputFormatShort.getNumOccurrences())
     OutputFormat = static_cast<OutputFormatTy>(OutputFormatShort);
   if (RadixShort.getNumOccurrences())
-    Radix = RadixShort;
+    Radix = RadixShort.getValue();
 
   for (unsigned i = 0; i < ArchFlags.size(); ++i) {
     if (ArchFlags[i] == "all") {

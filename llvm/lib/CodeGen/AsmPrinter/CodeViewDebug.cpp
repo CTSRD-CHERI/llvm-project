@@ -92,9 +92,6 @@
 using namespace llvm;
 using namespace llvm::codeview;
 
-static cl::opt<bool> EmitDebugGlobalHashes("emit-codeview-ghash-section",
-                                           cl::ReallyHidden, cl::init(false));
-
 static CPUType mapArchToCVCPUType(Triple::ArchType Type) {
   switch (Type) {
   case Triple::ArchType::x86:
@@ -117,6 +114,7 @@ CodeViewDebug::CodeViewDebug(AsmPrinter *AP)
   if (!MMI->getModule()->getNamedMetadata("llvm.dbg.cu") ||
       !AP->getObjFileLowering().getCOFFDebugSymbolsSection()) {
     Asm = nullptr;
+    MMI->setDebugInfoAvailability(false);
     return;
   }
   // Tell MMI that we have debug info.
@@ -124,6 +122,11 @@ CodeViewDebug::CodeViewDebug(AsmPrinter *AP)
 
   TheCPU =
       mapArchToCVCPUType(Triple(MMI->getModule()->getTargetTriple()).getArch());
+
+  // Check if we should emit type record hashes.
+  ConstantInt *GH = mdconst::extract_or_null<ConstantInt>(
+      MMI->getModule()->getModuleFlag("CodeViewGHash"));
+  EmitDebugGlobalHashes = GH && !GH->isZero();
 }
 
 StringRef CodeViewDebug::getFullFilepath(const DIFile *File) {
@@ -1338,6 +1341,7 @@ void CodeViewDebug::beginFunctionImpl(const MachineFunction *MF) {
   // instruction (AArch64), this will be zero.
   CurFn->CSRSize = MFI.getCVBytesOfCalleeSavedRegisters();
   CurFn->FrameSize = MFI.getStackSize();
+  CurFn->OffsetAdjustment = MFI.getOffsetAdjustment();
   CurFn->HasStackRealignment = TRI->needsStackRealignment(*MF);
 
   // For this function S_FRAMEPROC record, figure out which codeview register
@@ -1515,6 +1519,8 @@ TypeIndex CodeViewDebug::lowerType(const DIType *Ty, const DIType *ClassTy) {
   case dwarf::DW_TAG_union_type:
     return lowerTypeUnion(cast<DICompositeType>(Ty));
   case dwarf::DW_TAG_unspecified_type:
+    if (Ty->getName() == "decltype(nullptr)")
+      return TypeIndex::NullptrT();
     return TypeIndex::None();
   default:
     // Use the null type index.
@@ -2596,16 +2602,10 @@ void CodeViewDebug::emitLocalVariable(const FunctionInfo &FI,
 
       // 32-bit x86 call sequences often use PUSH instructions, which disrupt
       // ESP-relative offsets. Use the virtual frame pointer, VFRAME or $T0,
-      // instead. In simple cases, $T0 will be the CFA.
+      // instead. In frames without stack realignment, $T0 will be the CFA.
       if (RegisterId(Reg) == RegisterId::ESP) {
         Reg = unsigned(RegisterId::VFRAME);
-        Offset -= FI.FrameSize;
-
-        // If the frame requires realignment, VFRAME will be ESP after it is
-        // aligned. We have to remove the ESP adjustments made to push CSRs and
-        // EBP. EBP is not included in CSRSize.
-        if (FI.HasStackRealignment)
-          Offset += FI.CSRSize + 4;
+        Offset += FI.OffsetAdjustment;
       }
 
       // If we can use the chosen frame pointer for the frame and this isn't a

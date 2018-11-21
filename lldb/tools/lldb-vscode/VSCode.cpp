@@ -14,6 +14,11 @@
 #include "VSCode.h"
 #include "LLDBUtils.h"
 
+#if defined(_WIN32)
+#include <io.h>
+#include <fcntl.h>
+#endif
+
 using namespace lldb_vscode;
 
 namespace {
@@ -39,6 +44,13 @@ VSCode::VSCode()
       focus_tid(LLDB_INVALID_THREAD_ID), sent_terminated_event(false),
       stop_at_entry(false) {
   const char *log_file_path = getenv("LLDBVSCODE_LOG");
+#if defined(_WIN32)
+// Windows opens stdout and stdin in text mode which converts \n to 13,10
+// while the value is just 10 on Darwin/Linux. Setting the file mode to binary
+// fixes this.
+  assert(_setmode(fileno(stdout), _O_BINARY));
+  assert(_setmode(fileno(stdin), _O_BINARY));
+#endif
   if (log_file_path)
     log.reset(new std::ofstream(log_file_path));
 }
@@ -244,7 +256,7 @@ void VSCode::SendOutput(OutputType o, const llvm::StringRef output) {
     break;
   }
   body.try_emplace("category", category);
-  body.try_emplace("output", output.str());
+  EmplaceSafeString(body, "output", output.str());
   event.try_emplace("body", std::move(body));
   SendJSON(llvm::json::Value(std::move(event)));
 }
@@ -296,9 +308,10 @@ lldb::SBFrame VSCode::GetLLDBFrame(const llvm::json::Object &arguments) {
   const uint64_t frame_id = GetUnsigned(arguments, "frameId", UINT64_MAX);
   lldb::SBProcess process = target.GetProcess();
   // Upper 32 bits is the thread index ID
-  lldb::SBThread thread = process.GetThreadByIndexID(frame_id >> 32);
+  lldb::SBThread thread =
+      process.GetThreadByIndexID(GetLLDBThreadIndexID(frame_id));
   // Lower 32 bits is the frame index
-  return thread.GetFrameAtIndex(frame_id & 0xffffffffu);
+  return thread.GetFrameAtIndex(GetLLDBFrameID(frame_id));
 }
 
 llvm::json::Value VSCode::CreateTopLevelScopes() {

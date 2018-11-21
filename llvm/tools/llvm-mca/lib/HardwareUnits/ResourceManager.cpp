@@ -18,9 +18,8 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 
+namespace llvm {
 namespace mca {
-
-using namespace llvm;
 
 #define DEBUG_TYPE "llvm-mca"
 ResourceStrategy::~ResourceStrategy() = default;
@@ -97,8 +96,7 @@ getStrategyFor(const ResourceState &RS) {
   return std::unique_ptr<ResourceStrategy>(nullptr);
 }
 
-ResourceManager::ResourceManager(const MCSchedModel &SM)
-    : ProcResID2Mask(SM.getNumProcResourceKinds()) {
+ResourceManager::ResourceManager(const MCSchedModel &SM) {
   computeProcResourceMasks(SM, ProcResID2Mask);
   Resources.resize(SM.getNumProcResourceKinds());
   Strategies.resize(SM.getNumProcResourceKinds());
@@ -149,8 +147,14 @@ ResourceRef ResourceManager::selectPipe(uint64_t ResourceID) {
 
 void ResourceManager::use(const ResourceRef &RR) {
   // Mark the sub-resource referenced by RR as used.
-  ResourceState &RS = *Resources[getResourceStateIndex(RR.first)];
+  unsigned RSID = getResourceStateIndex(RR.first);
+  ResourceState &RS = *Resources[RSID];
   RS.markSubResourceAsUsed(RR.second);
+  // Remember to update the resource strategy for non-group resources with
+  // multiple units.
+  if (RS.getNumUnits() > 1)
+    Strategies[RSID]->used(RR.second);
+
   // If there are still available units in RR.first,
   // then we are done.
   if (RS.isReady())
@@ -218,13 +222,12 @@ void ResourceManager::releaseBuffers(ArrayRef<uint64_t> Buffers) {
 }
 
 bool ResourceManager::canBeIssued(const InstrDesc &Desc) const {
-  return std::all_of(Desc.Resources.begin(), Desc.Resources.end(),
-                     [&](const std::pair<uint64_t, const ResourceUsage> &E) {
-                       unsigned NumUnits =
-                           E.second.isReserved() ? 0U : E.second.NumUnits;
-                       unsigned Index = getResourceStateIndex(E.first);
-                       return Resources[Index]->isReady(NumUnits);
-                     });
+  return all_of(
+      Desc.Resources, [&](const std::pair<uint64_t, const ResourceUsage> &E) {
+        unsigned NumUnits = E.second.isReserved() ? 0U : E.second.NumUnits;
+        unsigned Index = getResourceStateIndex(E.first);
+        return Resources[Index]->isReady(NumUnits);
+      });
 }
 
 // Returns true if all resources are in-order, and there is at least one
@@ -307,3 +310,4 @@ void ResourceManager::releaseResource(uint64_t ResourceID) {
 }
 
 } // namespace mca
+} // namespace llvm

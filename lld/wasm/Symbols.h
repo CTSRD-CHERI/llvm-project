@@ -245,8 +245,6 @@ protected:
                const WasmGlobalType *GlobalType)
       : Symbol(Name, K, Flags, F), GlobalType(GlobalType) {}
 
-  // Explicit function type, needed for undefined or synthetic functions only.
-  // For regular defined globals this information comes from the InputChunk.
   const WasmGlobalType *GlobalType;
   uint32_t GlobalIndex = INVALID_INDEX;
 };
@@ -291,7 +289,7 @@ struct WasmSym {
   // __stack_pointer
   // Global that holds the address of the top of the explicit value stack in
   // linear memory.
-  static DefinedGlobal *StackPointer;
+  static GlobalSymbol *StackPointer;
 
   // __data_end
   // Symbol marking the end of the data and bss.
@@ -310,6 +308,14 @@ struct WasmSym {
   // __dso_handle
   // Symbol used in calls to __cxa_atexit to determine current DLL
   static DefinedData *DsoHandle;
+
+  // __table_base
+  // Used in PIC code for offset of indirect function table
+  static UndefinedGlobal *TableBase;
+
+  // __memory_base
+  // Used in PIC code for offset of global data
+  static UndefinedGlobal *MemoryBase;
 };
 
 // A buffer class that is large enough to hold any Symbol-derived
@@ -330,7 +336,7 @@ template <typename T, typename... ArgT>
 T *replaceSymbol(Symbol *S, ArgT &&... Arg) {
   static_assert(std::is_trivially_destructible<T>(),
                 "Symbol types must be trivially destructible");
-  static_assert(sizeof(T) <= sizeof(SymbolUnion), "Symbol too small");
+  static_assert(sizeof(T) <= sizeof(SymbolUnion), "SymbolUnion too small");
   static_assert(alignof(T) <= alignof(SymbolUnion),
                 "SymbolUnion not aligned enough");
   assert(static_cast<Symbol *>(static_cast<T *>(nullptr)) == nullptr &&
@@ -349,6 +355,7 @@ T *replaceSymbol(Symbol *S, ArgT &&... Arg) {
 // Returns a symbol name for an error message.
 std::string toString(const wasm::Symbol &Sym);
 std::string toString(wasm::Symbol::Kind Kind);
+std::string maybeDemangleSymbol(StringRef Name);
 
 } // namespace lld
 

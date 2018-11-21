@@ -106,11 +106,11 @@ def analyzer_checker : Separate<["-"], "analyzer-checker">,
   ValuesCode<[{
     const char *Values =
     #define GET_CHECKERS
-    #define CHECKER(FULLNAME, CLASS, DESCFILE, HT, G, H)  FULLNAME ","
+    #define CHECKER(FULLNAME, CLASS, HT)  FULLNAME ","
     #include "clang/StaticAnalyzer/Checkers/Checkers.inc"
     #undef GET_CHECKERS
     #define GET_PACKAGES
-    #define PACKAGE(FULLNAME, G, D)  FULLNAME ","
+    #define PACKAGE(FULLNAME)  FULLNAME ","
     #include "clang/StaticAnalyzer/Checkers/Checkers.inc"
     #undef GET_PACKAGES
     ;
@@ -128,6 +128,9 @@ def analyzer_disable_all_checks : Flag<["-"], "analyzer-disable-all-checks">,
 
 def analyzer_checker_help : Flag<["-"], "analyzer-checker-help">,
   HelpText<"Display the list of analyzer checkers that are available">;
+
+def analyzer_config_help : Flag<["-"], "analyzer-config-help">,
+  HelpText<"Display the list of -analyzer-config options">;
 
 def analyzer_list_enabled_checkers : Flag<["-"], "analyzer-list-enabled-checkers">,
   HelpText<"Display the list of enabled analyzer checkers">;
@@ -354,6 +357,13 @@ def fdebug_pass_manager : Flag<["-"], "fdebug-pass-manager">,
     HelpText<"Prints debug information for the new pass manager">;
 def fno_debug_pass_manager : Flag<["-"], "fno-debug-pass-manager">,
     HelpText<"Disables debug printing for the new pass manager">;
+// The driver option takes the key as a parameter to the -msign-return-address=
+// and -mbranch-protection= options, but CC1 has a separate option so we
+// don't have to parse the parameter twice.
+def msign_return_address_key_EQ : Joined<["-"], "msign-return-address-key=">,
+    Values<"a_key,b_key">;
+def mbranch_target_enforce : Flag<["-"], "mbranch-target-enforce">;
+def fno_dllexport_inlines : Flag<["-"], "fno-dllexport-inlines">;
 
 //===----------------------------------------------------------------------===//
 // Dependency Output Options
@@ -639,7 +649,9 @@ def fblocks_runtime_optional : Flag<["-"], "fblocks-runtime-optional">,
 def fexternc_nounwind : Flag<["-"], "fexternc-nounwind">,
   HelpText<"Assume all functions with C linkage do not unwind">;
 def enable_split_dwarf : Flag<["-"], "enable-split-dwarf">,
-  HelpText<"Use split dwarf/Fission">;
+  HelpText<"Use DWARF fission in 'split' mode">;
+def enable_split_dwarf_EQ : Joined<["-"], "enable-split-dwarf=">,
+  HelpText<"Set DWARF fission mode to either 'split' or 'single'">, Values<"split,single">;
 def fno_wchar : Flag<["-"], "fno-wchar">,
   HelpText<"Disable C++ builtin type wchar_t">;
 def fconstant_string_class : Separate<["-"], "fconstant-string-class">,
