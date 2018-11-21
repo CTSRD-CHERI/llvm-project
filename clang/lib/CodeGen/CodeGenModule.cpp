@@ -51,6 +51,7 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
@@ -62,10 +63,6 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/YAMLParser.h"
-
-// For the CHERI stats (should probably move somewhere else)
-#include <sys/file.h>
-#include <unistd.h>
 
 using namespace clang;
 using namespace CodeGen;
@@ -520,35 +517,19 @@ void CodeGenModule::Release() {
     SanStats->finish();
 
   if (CollectPointerCastStats) {
-    StringRef StatsFile = getCodeGenOpts().CHERIStatsFile;
-    std::unique_ptr<llvm::raw_fd_ostream> StatsOS;
-    // raw_fd_ostream has no way of getting the FD and I don't want to change
-    // the interface just for this function to enable file locking since
-    // that would require a recompile of all of LLVM....
-    int StatsFD = STDERR_FILENO;
-    if (!StatsFile.empty()) {
-      std::error_code EC = llvm::sys::fs::openFileForWrite(StatsFile, StatsFD);
-      if (EC) {
-        getDiags().Report(diag::warn_fe_unable_to_open_stats_file)
-            << StatsFile << EC.message();
-      }
-    } else {
-      StatsFile = "/dev/stderr";
-    }
-    if (StatsFD != -1) {
-      if (flock(StatsFD, LOCK_EX) != 0) {
-        getDiags().Report(diag::warn_fe_unable_to_lock_stats_file)
-            << StatsFile << strerror(errno);
-      }
-      // Ensure that we unlock on scope exit
-      auto ScopeExit = llvm::make_scope_exit([StatsFD]() {
-        if (flock(StatsFD, LOCK_UN) != 0)
-          llvm::errs() << "WARNING: unlocking statistics FD failed. Should be "
-                          "released automatically on exit anyway.\n";
-      });
-      StatsOS = llvm::make_unique<llvm::raw_fd_ostream>(StatsFD, false);
-      PointerCastStats->printStats(*StatsOS, getContext().getSourceManager());
-    }
+    auto StatsOS = llvm::cheri::StatsOutputFile::open(
+        getCodeGenOpts().CHERIStatsFile,
+        [this](StringRef StatsFile, const std::error_code &EC) {
+          getDiags().Report(diag::warn_fe_unable_to_open_stats_file)
+              << StatsFile << EC.message();
+        },
+        [this](StringRef StatsFile, const std::error_code &EC) {
+          getDiags().Report(diag::warn_fe_unable_to_lock_stats_file)
+              << StatsFile << EC.message();
+        });
+    if (StatsOS)
+      PointerCastStats->printStats(StatsOS->stream(),
+                                   getContext().getSourceManager());
   }
 
   if (CodeGenOpts.Autolink &&
