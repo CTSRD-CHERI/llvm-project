@@ -33,43 +33,71 @@ namespace clangd {
 struct SymbolLocation {
   // Specify a position (Line, Column) of symbol. Using Line/Column allows us to
   // build LSP responses without reading the file content.
+  //
+  // Position is encoded into 32 bits to save space.
+  // If Line/Column overflow, the value will be their maximum value.
   struct Position {
-    uint32_t Line = 0; // 0-based
-    // Using UTF-16 code units.
-    uint32_t Column = 0; // 0-based
-  };
+    Position() : Line(0), Column(0) {}
+    void setLine(uint32_t Line);
+    uint32_t line() const { return Line; }
+    void setColumn(uint32_t Column);
+    uint32_t column() const { return Column; }
 
-  // The URI of the source file where a symbol occurs.
-  llvm::StringRef FileURI;
+    bool hasOverflow() const {
+      return Line >= MaxLine || Column >= MaxColumn;
+    }
+
+    static constexpr uint32_t MaxLine = (1 << 20) - 1;
+    static constexpr uint32_t MaxColumn = (1 << 12) - 1;
+
+  private:
+    uint32_t Line : 20; // 0-based
+    // Using UTF-16 code units.
+    uint32_t Column : 12; // 0-based
+  };
 
   /// The symbol range, using half-open range [Start, End).
   Position Start;
   Position End;
 
-  explicit operator bool() const { return !FileURI.empty(); }
+  explicit operator bool() const { return !StringRef(FileURI).empty(); }
+
+  // The URI of the source file where a symbol occurs.
+  // The string must be null-terminated.
+  //
+  // We avoid using llvm::StringRef here to save memory.
+  // WARNING: unless you know what you are doing, it is recommended to use it
+  // via llvm::StringRef.
+  const char *FileURI = "";
 };
 inline bool operator==(const SymbolLocation::Position &L,
                        const SymbolLocation::Position &R) {
-  return std::tie(L.Line, L.Column) == std::tie(R.Line, R.Column);
+  return std::make_tuple(L.line(), L.column()) ==
+         std::make_tuple(R.line(), R.column());
 }
 inline bool operator<(const SymbolLocation::Position &L,
                       const SymbolLocation::Position &R) {
-  return std::tie(L.Line, L.Column) < std::tie(R.Line, R.Column);
+  return std::make_tuple(L.line(), L.column()) <
+         std::make_tuple(R.line(), R.column());
 }
 inline bool operator==(const SymbolLocation &L, const SymbolLocation &R) {
-  return std::tie(L.FileURI, L.Start, L.End) ==
-         std::tie(R.FileURI, R.Start, R.End);
+  assert(L.FileURI && R.FileURI);
+  return !std::strcmp(L.FileURI, R.FileURI) &&
+         std::tie(L.Start, L.End) == std::tie(R.Start, R.End);
 }
 inline bool operator<(const SymbolLocation &L, const SymbolLocation &R) {
-  return std::tie(L.FileURI, L.Start, L.End) <
-         std::tie(R.FileURI, R.Start, R.End);
+  assert(L.FileURI && R.FileURI);
+  int Cmp = std::strcmp(L.FileURI, R.FileURI);
+  if (Cmp != 0)
+    return Cmp < 0;
+  return std::tie(L.Start, L.End) < std::tie(R.Start, R.End);
 }
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const SymbolLocation &);
 
 // The class identifies a particular C++ symbol (class, function, method, etc).
 //
 // As USRs (Unified Symbol Resolution) could be large, especially for functions
-// with long type arguments, SymbolID is using 160-bits SHA1(USR) values to
+// with long type arguments, SymbolID is using truncated SHA1(USR) values to
 // guarantee the uniqueness of symbols while using a relatively small amount of
 // memory (vs storing USRs directly).
 //
@@ -86,13 +114,15 @@ public:
     return HashValue < Sym.HashValue;
   }
 
-  constexpr static size_t RawSize = 20;
+  // The stored hash is truncated to RawSize bytes.
+  // This trades off memory against the number of symbols we can handle.
+  constexpr static size_t RawSize = 8;
   llvm::StringRef raw() const {
     return StringRef(reinterpret_cast<const char *>(HashValue.data()), RawSize);
   }
   static SymbolID fromRaw(llvm::StringRef);
 
-  // Returns a 40-bytes hex encoded string.
+  // Returns a hex encoded string.
   std::string str() const;
   static llvm::Expected<SymbolID> fromStr(llvm::StringRef);
 
@@ -244,6 +274,8 @@ struct Symbol {
     IndexedForCodeCompletion = 1 << 0,
     /// Indicates if the symbol is deprecated.
     Deprecated = 1 << 1,
+    // Symbol is an implementation detail.
+    ImplementationDetail = 1 << 2,
   };
 
   SymbolFlag Flags = SymbolFlag::None;
@@ -264,12 +296,19 @@ raw_ostream &operator<<(raw_ostream &, Symbol::SymbolFlag);
 template <typename Callback> void visitStrings(Symbol &S, const Callback &CB) {
   CB(S.Name);
   CB(S.Scope);
-  CB(S.CanonicalDeclaration.FileURI);
-  CB(S.Definition.FileURI);
   CB(S.Signature);
   CB(S.CompletionSnippetSuffix);
   CB(S.Documentation);
   CB(S.ReturnType);
+  auto RawCharPointerCB = [&CB](const char *&P) {
+    llvm::StringRef S(P);
+    CB(S);
+    assert(!S.data()[S.size()] && "Visited StringRef must be null-terminated");
+    P = S.data();
+  };
+  RawCharPointerCB(S.CanonicalDeclaration.FileURI);
+  RawCharPointerCB(S.Definition.FileURI);
+
   for (auto &Include : S.IncludeHeaders)
     CB(Include.IncludeHeader);
 }
@@ -390,7 +429,9 @@ public:
 
   const_iterator begin() const { return Refs.begin(); }
   const_iterator end() const { return Refs.end(); }
+  /// Gets the number of symbols.
   size_t size() const { return Refs.size(); }
+  size_t numRefs() const { return NumRefs; }
   bool empty() const { return Refs.empty(); }
 
   size_t bytes() const {
@@ -414,11 +455,14 @@ public:
   };
 
 private:
-  RefSlab(std::vector<value_type> Refs, llvm::BumpPtrAllocator Arena)
-      : Arena(std::move(Arena)), Refs(std::move(Refs)) {}
+  RefSlab(std::vector<value_type> Refs, llvm::BumpPtrAllocator Arena,
+          size_t NumRefs)
+      : Arena(std::move(Arena)), Refs(std::move(Refs)), NumRefs(NumRefs) {}
 
   llvm::BumpPtrAllocator Arena;
   std::vector<value_type> Refs;
+  // Number of all references.
+  size_t NumRefs = 0;
 };
 
 struct FuzzyFindRequest {
@@ -431,9 +475,6 @@ struct FuzzyFindRequest {
   /// namespace xyz::abc.
   ///
   /// The global scope is "", a top level scope is "foo::", etc.
-  /// FIXME: drop the special case for empty list, which is the same as
-  /// `AnyScope = true`.
-  /// FIXME: support scope proximity.
   std::vector<std::string> Scopes;
   /// If set to true, allow symbols from any scope. Scopes explicitly listed
   /// above will be ranked higher.

@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__MINGW32__)
 // Provide M_PI.
 #define _USE_MATH_DEFINES
 #endif
@@ -384,8 +384,20 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
   if (Subtarget->hasBFE())
     setHasExtractBitsInsn(true);
 
-  setOperationAction(ISD::FMINNUM, MVT::f64, Legal);
-  setOperationAction(ISD::FMAXNUM, MVT::f64, Legal);
+  setOperationAction(ISD::FMINNUM, MVT::f32, Custom);
+  setOperationAction(ISD::FMAXNUM, MVT::f32, Custom);
+  setOperationAction(ISD::FMINNUM, MVT::f64, Custom);
+  setOperationAction(ISD::FMAXNUM, MVT::f64, Custom);
+
+
+  // These are really only legal for ieee_mode functions. We should be avoiding
+  // them for functions that don't have ieee_mode enabled, so just say they are
+  // legal.
+  setOperationAction(ISD::FMINNUM_IEEE, MVT::f32, Legal);
+  setOperationAction(ISD::FMAXNUM_IEEE, MVT::f32, Legal);
+  setOperationAction(ISD::FMINNUM_IEEE, MVT::f64, Legal);
+  setOperationAction(ISD::FMAXNUM_IEEE, MVT::f64, Legal);
+
 
   if (Subtarget->getGeneration() >= AMDGPUSubtarget::SEA_ISLANDS) {
     setOperationAction(ISD::FTRUNC, MVT::f64, Legal);
@@ -474,8 +486,7 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
     // F16 - VOP2 Actions.
     setOperationAction(ISD::BR_CC, MVT::f16, Expand);
     setOperationAction(ISD::SELECT_CC, MVT::f16, Expand);
-    setOperationAction(ISD::FMAXNUM, MVT::f16, Legal);
-    setOperationAction(ISD::FMINNUM, MVT::f16, Legal);
+
     setOperationAction(ISD::FDIV, MVT::f16, Custom);
 
     // F16 - VOP3 Actions.
@@ -558,6 +569,17 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
     // This isn't really legal, but this avoids the legalizer unrolling it (and
     // allows matching fneg (fabs x) patterns)
     setOperationAction(ISD::FABS, MVT::v2f16, Legal);
+
+    setOperationAction(ISD::FMAXNUM, MVT::f16, Custom);
+    setOperationAction(ISD::FMINNUM, MVT::f16, Custom);
+    setOperationAction(ISD::FMAXNUM_IEEE, MVT::f16, Legal);
+    setOperationAction(ISD::FMINNUM_IEEE, MVT::f16, Legal);
+
+    setOperationAction(ISD::FMINNUM_IEEE, MVT::v4f16, Custom);
+    setOperationAction(ISD::FMAXNUM_IEEE, MVT::v4f16, Custom);
+
+    setOperationAction(ISD::FMINNUM, MVT::v4f16, Expand);
+    setOperationAction(ISD::FMAXNUM, MVT::v4f16, Expand);
   }
 
   if (Subtarget->hasVOP3PInsts()) {
@@ -575,8 +597,10 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
     setOperationAction(ISD::FADD, MVT::v2f16, Legal);
     setOperationAction(ISD::FMUL, MVT::v2f16, Legal);
     setOperationAction(ISD::FMA, MVT::v2f16, Legal);
-    setOperationAction(ISD::FMINNUM, MVT::v2f16, Legal);
-    setOperationAction(ISD::FMAXNUM, MVT::v2f16, Legal);
+
+    setOperationAction(ISD::FMINNUM_IEEE, MVT::v2f16, Legal);
+    setOperationAction(ISD::FMAXNUM_IEEE, MVT::v2f16, Legal);
+
     setOperationAction(ISD::FCANONICALIZE, MVT::v2f16, Legal);
 
     setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v2i16, Custom);
@@ -596,6 +620,10 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
 
     setOperationAction(ISD::FADD, MVT::v4f16, Custom);
     setOperationAction(ISD::FMUL, MVT::v4f16, Custom);
+
+    setOperationAction(ISD::FMAXNUM, MVT::v2f16, Custom);
+    setOperationAction(ISD::FMINNUM, MVT::v2f16, Custom);
+
     setOperationAction(ISD::FMINNUM, MVT::v4f16, Custom);
     setOperationAction(ISD::FMAXNUM, MVT::v4f16, Custom);
     setOperationAction(ISD::FCANONICALIZE, MVT::v4f16, Custom);
@@ -634,6 +662,8 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
   setTargetDAGCombine(ISD::FSUB);
   setTargetDAGCombine(ISD::FMINNUM);
   setTargetDAGCombine(ISD::FMAXNUM);
+  setTargetDAGCombine(ISD::FMINNUM_IEEE);
+  setTargetDAGCombine(ISD::FMAXNUM_IEEE);
   setTargetDAGCombine(ISD::FMA);
   setTargetDAGCombine(ISD::SMIN);
   setTargetDAGCombine(ISD::SMAX);
@@ -649,7 +679,7 @@ SITargetLowering::SITargetLowering(const TargetMachine &TM,
   setTargetDAGCombine(ISD::SCALAR_TO_VECTOR);
   setTargetDAGCombine(ISD::ZERO_EXTEND);
   setTargetDAGCombine(ISD::EXTRACT_VECTOR_ELT);
-  setTargetDAGCombine(ISD::BUILD_VECTOR);
+  setTargetDAGCombine(ISD::INSERT_VECTOR_ELT);
 
   // All memory operations. Some folding on the pointer operand is done to help
   // matching the constant offsets in the addressing modes.
@@ -1156,7 +1186,7 @@ bool SITargetLowering::isMemOpUniform(const SDNode *N) const {
 }
 
 TargetLoweringBase::LegalizeTypeAction
-SITargetLowering::getPreferredVectorAction(EVT VT) const {
+SITargetLowering::getPreferredVectorAction(MVT VT) const {
   if (VT.getVectorNumElements() != 1 && VT.getScalarType().bitsLE(MVT::i16))
     return TypeSplitVector;
 
@@ -3580,6 +3610,9 @@ SDValue SITargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   case ISD::FNEG:
   case ISD::FCANONICALIZE:
     return splitUnaryVectorOp(Op, DAG);
+  case ISD::FMINNUM:
+  case ISD::FMAXNUM:
+    return lowerFMINNUM_FMAXNUM(Op, DAG);
   case ISD::SHL:
   case ISD::SRA:
   case ISD::SRL:
@@ -3590,10 +3623,10 @@ SDValue SITargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   case ISD::SMAX:
   case ISD::UMIN:
   case ISD::UMAX:
-  case ISD::FMINNUM:
-  case ISD::FMAXNUM:
   case ISD::FADD:
   case ISD::FMUL:
+  case ISD::FMINNUM_IEEE:
+  case ISD::FMAXNUM_IEEE:
     return splitBinaryVectorOp(Op, DAG);
   }
   return SDValue();
@@ -4046,6 +4079,23 @@ SDValue SITargetLowering::lowerFP_ROUND(SDValue Op, SelectionDAG &DAG) const {
   SDValue FpToFp16 = DAG.getNode(ISD::FP_TO_FP16, DL, MVT::i32, Src);
   SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, MVT::i16, FpToFp16);
   return DAG.getNode(ISD::BITCAST, DL, MVT::f16, Trunc);
+}
+
+SDValue SITargetLowering::lowerFMINNUM_FMAXNUM(SDValue Op,
+                                               SelectionDAG &DAG) const {
+  EVT VT = Op.getValueType();
+  bool IsIEEEMode = Subtarget->enableIEEEBit(DAG.getMachineFunction());
+
+  // FIXME: Assert during eslection that this is only selected for
+  // ieee_mode. Currently a combine can produce the ieee version for non-ieee
+  // mode functions, but this happens to be OK since it's only done in cases
+  // where there is known no sNaN.
+  if (IsIEEEMode)
+    return expandFMINNUM_FMAXNUM(Op.getNode(), DAG);
+
+  if (VT == MVT::v4f16)
+    return splitBinaryVectorOp(Op, DAG);
+  return Op;
 }
 
 SDValue SITargetLowering::lowerTRAP(SDValue Op, SelectionDAG &DAG) const {
@@ -4677,9 +4727,11 @@ SDValue SITargetLowering::lowerImage(SDValue Op,
   // Check for 16 bit addresses and pack if true.
   unsigned DimIdx = AddrIdx + BaseOpcode->NumExtraArgs;
   MVT VAddrVT = Op.getOperand(DimIdx).getSimpleValueType();
-  if (VAddrVT.getScalarType() == MVT::f16 &&
+  const MVT VAddrScalarVT = VAddrVT.getScalarType();
+  if (((VAddrScalarVT == MVT::f16) || (VAddrScalarVT == MVT::i16)) &&
       ST->hasFeature(AMDGPU::FeatureR128A16)) {
     IsA16 = true;
+    const MVT VectorVT = VAddrScalarVT == MVT::f16 ? MVT::v2f16 : MVT::v2i16;
     for (unsigned i = AddrIdx; i < (AddrIdx + NumMIVAddrs); ++i) {
       SDValue AddrLo, AddrHi;
       // Push back extra arguments.
@@ -4698,7 +4750,7 @@ SDValue SITargetLowering::lowerImage(SDValue Op,
           AddrHi = Op.getOperand(i + 1);
           i++;
         }
-        AddrLo = DAG.getNode(ISD::SCALAR_TO_VECTOR, DL, MVT::v2f16,
+        AddrLo = DAG.getNode(ISD::SCALAR_TO_VECTOR, DL, VectorVT,
                              {AddrLo, AddrHi});
         AddrLo = DAG.getBitcast(MVT::i32, AddrLo);
       }
@@ -4934,12 +4986,11 @@ SDValue SITargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
   case Intrinsic::r600_read_tgid_z:
     return getPreloadedValue(DAG, *MFI, VT,
                              AMDGPUFunctionArgInfo::WORKGROUP_ID_Z);
-  case Intrinsic::amdgcn_workitem_id_x: {
+  case Intrinsic::amdgcn_workitem_id_x:
   case Intrinsic::r600_read_tidig_x:
     return loadInputValue(DAG, &AMDGPU::VGPR_32RegClass, MVT::i32,
                           SDLoc(DAG.getEntryNode()),
                           MFI->getArgInfo().WorkItemIDX);
-  }
   case Intrinsic::amdgcn_workitem_id_y:
   case Intrinsic::r600_read_tidig_y:
     return loadInputValue(DAG, &AMDGPU::VGPR_32RegClass, MVT::i32,
@@ -6251,6 +6302,17 @@ SDValue SITargetLowering::LowerLOAD(SDValue Op, SelectionDAG &DAG) const {
 
     if (NumElements > 2)
       return SplitVectorLoad(Op, DAG);
+
+    // SI has a hardware bug in the LDS / GDS boounds checking: if the base
+    // address is negative, then the instruction is incorrectly treated as
+    // out-of-bounds even if base + offsets is in bounds. Split vectorized
+    // loads here to avoid emitting ds_read2_b32. We may re-combine the
+    // load later in the SILoadStoreOptimizer.
+    if (Subtarget->getGeneration() == AMDGPUSubtarget::SOUTHERN_ISLANDS &&
+        NumElements == 2 && MemVT.getStoreSize() == 8 &&
+        Load->getAlignment() < 8) {
+      return SplitVectorLoad(Op, DAG);
+    }
   }
   return SDValue();
 }
@@ -6653,6 +6715,18 @@ SDValue SITargetLowering::LowerSTORE(SDValue Op, SelectionDAG &DAG) const {
 
     if (NumElements > 2)
       return SplitVectorStore(Op, DAG);
+
+    // SI has a hardware bug in the LDS / GDS boounds checking: if the base
+    // address is negative, then the instruction is incorrectly treated as
+    // out-of-bounds even if base + offsets is in bounds. Split vectorized
+    // stores here to avoid emitting ds_write2_b32. We may re-combine the
+    // store later in the SILoadStoreOptimizer.
+    if (Subtarget->getGeneration() == AMDGPUSubtarget::SOUTHERN_ISLANDS &&
+        NumElements == 2 && VT.getStoreSize() == 8 &&
+        Store->getAlignment() < 8) {
+      return SplitVectorStore(Op, DAG);
+    }
+
     return SDValue();
   } else {
     llvm_unreachable("unhandled address space");
@@ -7457,37 +7531,32 @@ bool SITargetLowering::isCanonicalized(SelectionDAG &DAG, SDValue Op,
 
   case ISD::FMINNUM:
   case ISD::FMAXNUM:
+  case ISD::FMINNUM_IEEE:
+  case ISD::FMAXNUM_IEEE:
   case AMDGPUISD::CLAMP:
   case AMDGPUISD::FMED3:
   case AMDGPUISD::FMAX3:
   case AMDGPUISD::FMIN3: {
     // FIXME: Shouldn't treat the generic operations different based these.
-    bool IsIEEEMode = Subtarget->enableIEEEBit(DAG.getMachineFunction());
-    if (IsIEEEMode) {
-      // snans will be quieted, so we only need to worry about denormals.
-      if (Subtarget->supportsMinMaxDenormModes() ||
-          denormalsEnabledForType(Op.getValueType()))
-        return true;
+    // However, we aren't really required to flush the result from
+    // minnum/maxnum..
 
-      // Flushing may be required.
-      // In pre-GFX9 targets V_MIN_F32 and others do not flush denorms. For such
-      // targets need to check their input recursively.
-      return isCanonicalized(DAG, Op.getOperand(0), MaxDepth - 1) &&
-             isCanonicalized(DAG, Op.getOperand(1), MaxDepth - 1);
-    }
-
+    // snans will be quieted, so we only need to worry about denormals.
     if (Subtarget->supportsMinMaxDenormModes() ||
-        denormalsEnabledForType(Op.getValueType())) {
-      // Only quieting may be necessary.
-      return DAG.isKnownNeverSNaN(Op.getOperand(0)) &&
-             DAG.isKnownNeverSNaN(Op.getOperand(1));
+        denormalsEnabledForType(Op.getValueType()))
+      return true;
+
+    // Flushing may be required.
+    // In pre-GFX9 targets V_MIN_F32 and others do not flush denorms. For such
+    // targets need to check their input recursively.
+
+    // FIXME: Does this apply with clamp? It's implemented with max.
+    for (unsigned I = 0, E = Op.getNumOperands(); I != E; ++I) {
+      if (!isCanonicalized(DAG, Op.getOperand(I), MaxDepth - 1))
+        return false;
     }
 
-    // Flushing and quieting may be necessary
-    // With ieee_mode off, the nan is returned as-is, so if it is an sNaN it
-    // needs to be quieted.
-    return isCanonicalized(DAG, Op.getOperand(0), MaxDepth - 1) &&
-           isCanonicalized(DAG, Op.getOperand(1), MaxDepth - 1);
+    return true;
   }
   case ISD::SELECT: {
     return isCanonicalized(DAG, Op.getOperand(1), MaxDepth - 1) &&
@@ -7514,6 +7583,21 @@ bool SITargetLowering::isCanonicalized(SelectionDAG &DAG, SDValue Op,
     // Could be anything.
     return false;
 
+  case ISD::BITCAST: {
+    // Hack round the mess we make when legalizing extract_vector_elt
+    SDValue Src = Op.getOperand(0);
+    if (Src.getValueType() == MVT::i16 &&
+        Src.getOpcode() == ISD::TRUNCATE) {
+      SDValue TruncSrc = Src.getOperand(0);
+      if (TruncSrc.getValueType() == MVT::i32 &&
+          TruncSrc.getOpcode() == ISD::BITCAST &&
+          TruncSrc.getOperand(0).getValueType() == MVT::v2f16) {
+        return isCanonicalized(DAG, TruncSrc.getOperand(0), MaxDepth - 1);
+      }
+    }
+
+    return false;
+  }
   case ISD::INTRINSIC_WO_CHAIN: {
     unsigned IntrinsicID
       = cast<ConstantSDNode>(Op.getOperand(0))->getZExtValue();
@@ -7539,7 +7623,6 @@ bool SITargetLowering::isCanonicalized(SelectionDAG &DAG, SDValue Op,
 }
 
 // Constant fold canonicalize.
-
 SDValue SITargetLowering::getCanonicalConstantFP(
   SelectionDAG &DAG, const SDLoc &SL, EVT VT, const APFloat &C) const {
   // Flush denormals to 0 if not enabled.
@@ -7635,18 +7718,40 @@ SDValue SITargetLowering::performFCanonicalizeCombine(
     }
   }
 
+  unsigned SrcOpc = N0.getOpcode();
+
+  // If it's free to do so, push canonicalizes further up the source, which may
+  // find a canonical source.
+  //
+  // TODO: More opcodes. Note this is unsafe for the the _ieee minnum/maxnum for
+  // sNaNs.
+  if (SrcOpc == ISD::FMINNUM || SrcOpc == ISD::FMAXNUM) {
+    auto *CRHS = dyn_cast<ConstantFPSDNode>(N0.getOperand(1));
+    if (CRHS && N0.hasOneUse()) {
+      SDLoc SL(N);
+      SDValue Canon0 = DAG.getNode(ISD::FCANONICALIZE, SL, VT,
+                                   N0.getOperand(0));
+      SDValue Canon1 = getCanonicalConstantFP(DAG, SL, VT, CRHS->getValueAPF());
+      DCI.AddToWorklist(Canon0.getNode());
+
+      return DAG.getNode(N0.getOpcode(), SL, VT, Canon0, Canon1);
+    }
+  }
+
   return isCanonicalized(DAG, N0) ? N0 : SDValue();
 }
 
 static unsigned minMaxOpcToMin3Max3Opc(unsigned Opc) {
   switch (Opc) {
   case ISD::FMAXNUM:
+  case ISD::FMAXNUM_IEEE:
     return AMDGPUISD::FMAX3;
   case ISD::SMAX:
     return AMDGPUISD::SMAX3;
   case ISD::UMAX:
     return AMDGPUISD::UMAX3;
   case ISD::FMINNUM:
+  case ISD::FMINNUM_IEEE:
     return AMDGPUISD::FMIN3;
   case ISD::SMIN:
     return AMDGPUISD::SMIN3;
@@ -7813,6 +7918,7 @@ SDValue SITargetLowering::performMinMaxCombine(SDNode *N,
 
   // fminnum(fmaxnum(x, K0), K1), K0 < K1 && !is_snan(x) -> fmed3(x, K0, K1)
   if (((Opc == ISD::FMINNUM && Op0.getOpcode() == ISD::FMAXNUM) ||
+       (Opc == ISD::FMINNUM_IEEE && Op0.getOpcode() == ISD::FMAXNUM_IEEE) ||
        (Opc == AMDGPUISD::FMIN_LEGACY &&
         Op0.getOpcode() == AMDGPUISD::FMAX_LEGACY)) &&
       (VT == MVT::f32 || VT == MVT::f64 ||
@@ -7920,7 +8026,7 @@ SDValue SITargetLowering::performExtractVectorEltCombine(
 
     switch(Opc) {
     default:
-      return SDValue();
+      break;
       // TODO: Support other binary operations.
     case ISD::FADD:
     case ISD::FSUB:
@@ -7931,7 +8037,9 @@ SDValue SITargetLowering::performExtractVectorEltCombine(
     case ISD::SMIN:
     case ISD::SMAX:
     case ISD::FMAXNUM:
-    case ISD::FMINNUM: {
+    case ISD::FMINNUM:
+    case ISD::FMAXNUM_IEEE:
+    case ISD::FMINNUM_IEEE: {
       SDValue Elt0 = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SL, EltVT,
                                  Vec.getOperand(0), Idx);
       SDValue Elt1 = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SL, EltVT,
@@ -7944,11 +8052,33 @@ SDValue SITargetLowering::performExtractVectorEltCombine(
     }
   }
 
-  if (!DCI.isBeforeLegalize())
-    return SDValue();
-
   unsigned VecSize = VecVT.getSizeInBits();
   unsigned EltSize = EltVT.getSizeInBits();
+
+  // EXTRACT_VECTOR_ELT (<n x e>, var-idx) => n x select (e, const-idx)
+  // This elminates non-constant index and subsequent movrel or scratch access.
+  // Sub-dword vectors of size 2 dword or less have better implementation.
+  // Vectors of size bigger than 8 dwords would yield too many v_cndmask_b32
+  // instructions.
+  if (VecSize <= 256 && (VecSize > 64 || EltSize >= 32) &&
+      !isa<ConstantSDNode>(N->getOperand(1))) {
+    SDLoc SL(N);
+    SDValue Idx = N->getOperand(1);
+    EVT IdxVT = Idx.getValueType();
+    SDValue V;
+    for (unsigned I = 0, E = VecVT.getVectorNumElements(); I < E; ++I) {
+      SDValue IC = DAG.getConstant(I, SL, IdxVT);
+      SDValue Elt = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SL, EltVT, Vec, IC);
+      if (I == 0)
+        V = Elt;
+      else
+        V = DAG.getSelectCC(SL, Idx, IC, Elt, V, ISD::SETEQ);
+    }
+    return V;
+  }
+
+  if (!DCI.isBeforeLegalize())
+    return SDValue();
 
   // Try to turn sub-dword accesses of vectors into accesses of the same 32-bit
   // elements. This exposes more load reduction opportunities by replacing
@@ -7985,46 +8115,40 @@ SDValue SITargetLowering::performExtractVectorEltCombine(
   return SDValue();
 }
 
-static bool convertBuildVectorCastElt(SelectionDAG &DAG,
-                                      SDValue &Lo, SDValue &Hi) {
-  if (Hi.getOpcode() == ISD::BITCAST &&
-      Hi.getOperand(0).getValueType() == MVT::f16 &&
-      (isa<ConstantSDNode>(Lo) || Lo.isUndef())) {
-    Lo = DAG.getNode(ISD::BITCAST, SDLoc(Lo), MVT::f16, Lo);
-    Hi = Hi.getOperand(0);
-    return true;
-  }
+SDValue
+SITargetLowering::performInsertVectorEltCombine(SDNode *N,
+                                                DAGCombinerInfo &DCI) const {
+  SDValue Vec = N->getOperand(0);
+  SDValue Idx = N->getOperand(2);
+  EVT VecVT = Vec.getValueType();
+  EVT EltVT = VecVT.getVectorElementType();
+  unsigned VecSize = VecVT.getSizeInBits();
+  unsigned EltSize = EltVT.getSizeInBits();
 
-  return false;
-}
-
-SDValue SITargetLowering::performBuildVectorCombine(
-  SDNode *N, DAGCombinerInfo &DCI) const {
-  SDLoc SL(N);
-
-  if (!isTypeLegal(MVT::v2i16))
+  // INSERT_VECTOR_ELT (<n x e>, var-idx)
+  // => BUILD_VECTOR n x select (e, const-idx)
+  // This elminates non-constant index and subsequent movrel or scratch access.
+  // Sub-dword vectors of size 2 dword or less have better implementation.
+  // Vectors of size bigger than 8 dwords would yield too many v_cndmask_b32
+  // instructions.
+  if (isa<ConstantSDNode>(Idx) ||
+      VecSize > 256 || (VecSize <= 64 && EltSize < 32))
     return SDValue();
+
   SelectionDAG &DAG = DCI.DAG;
-  EVT VT = N->getValueType(0);
+  SDLoc SL(N);
+  SDValue Ins = N->getOperand(1);
+  EVT IdxVT = Idx.getValueType();
 
-  if (VT == MVT::v2i16) {
-    SDValue Lo = N->getOperand(0);
-    SDValue Hi = N->getOperand(1);
-
-    // v2i16 build_vector (const|undef), (bitcast f16:$x)
-    // -> bitcast (v2f16 build_vector const|undef, $x
-    if (convertBuildVectorCastElt(DAG, Lo, Hi)) {
-      SDValue NewVec = DAG.getBuildVector(MVT::v2f16, SL, { Lo, Hi  });
-      return DAG.getNode(ISD::BITCAST, SL, VT, NewVec);
-    }
-
-    if (convertBuildVectorCastElt(DAG, Hi, Lo)) {
-      SDValue NewVec = DAG.getBuildVector(MVT::v2f16, SL, { Hi, Lo  });
-      return DAG.getNode(ISD::BITCAST, SL, VT, NewVec);
-    }
+  SmallVector<SDValue, 16> Ops;
+  for (unsigned I = 0, E = VecVT.getVectorNumElements(); I < E; ++I) {
+    SDValue IC = DAG.getConstant(I, SL, IdxVT);
+    SDValue Elt = DAG.getNode(ISD::EXTRACT_VECTOR_ELT, SL, EltVT, Vec, IC);
+    SDValue V = DAG.getSelectCC(SL, Idx, IC, Ins, Elt, ISD::SETEQ);
+    Ops.push_back(V);
   }
 
-  return SDValue();
+  return DAG.getBuildVector(VecVT, SL, Ops);
 }
 
 unsigned SITargetLowering::getFusedOpcode(const SelectionDAG &DAG,
@@ -8531,13 +8655,15 @@ SDValue SITargetLowering::PerformDAGCombine(SDNode *N,
     return performSetCCCombine(N, DCI);
   case ISD::FMAXNUM:
   case ISD::FMINNUM:
+  case ISD::FMAXNUM_IEEE:
+  case ISD::FMINNUM_IEEE:
   case ISD::SMAX:
   case ISD::SMIN:
   case ISD::UMAX:
   case ISD::UMIN:
   case AMDGPUISD::FMIN_LEGACY:
   case AMDGPUISD::FMAX_LEGACY: {
-    if (DCI.getDAGCombineLevel() >= AfterLegalizeDAG &&
+    if (//DCI.getDAGCombineLevel() >= AfterLegalizeDAG &&
         getTargetMachine().getOptLevel() > CodeGenOpt::None)
       return performMinMaxCombine(N, DCI);
     break;
@@ -8633,8 +8759,8 @@ SDValue SITargetLowering::PerformDAGCombine(SDNode *N,
   }
   case ISD::EXTRACT_VECTOR_ELT:
     return performExtractVectorEltCombine(N, DCI);
-  case ISD::BUILD_VECTOR:
-    return performBuildVectorCombine(N, DCI);
+  case ISD::INSERT_VECTOR_ELT:
+    return performInsertVectorEltCombine(N, DCI);
   }
   return AMDGPUTargetLowering::PerformDAGCombine(N, DCI);
 }
@@ -8693,7 +8819,7 @@ SDNode *SITargetLowering::adjustWritemask(MachineSDNode *&Node,
 
     // Set which texture component corresponds to the lane.
     unsigned Comp;
-    for (unsigned i = 0, Dmask = OldDmask; i <= Lane; i++) {
+    for (unsigned i = 0, Dmask = OldDmask; (i <= Lane) && (Dmask != 0); i++) {
       Comp = countTrailingZeros(Dmask);
       Dmask &= ~(1 << Comp);
     }
@@ -9255,4 +9381,18 @@ bool SITargetLowering::denormalsEnabledForType(EVT VT) const {
   default:
     return false;
   }
+}
+
+bool SITargetLowering::isKnownNeverNaNForTargetNode(SDValue Op,
+                                                    const SelectionDAG &DAG,
+                                                    bool SNaN,
+                                                    unsigned Depth) const {
+  if (Op.getOpcode() == AMDGPUISD::CLAMP) {
+    if (Subtarget->enableDX10Clamp())
+      return true; // Clamped to 0.
+    return DAG.isKnownNeverNaN(Op.getOperand(0), SNaN, Depth + 1);
+  }
+
+  return AMDGPUTargetLowering::isKnownNeverNaNForTargetNode(Op, DAG,
+                                                            SNaN, Depth);
 }

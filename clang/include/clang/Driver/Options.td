@@ -818,6 +818,12 @@ def fno_profile_instr_use : Flag<["-"], "fno-profile-instr-use">,
     HelpText<"Disable using instrumentation data for profile-guided optimization">;
 def fno_profile_use : Flag<["-"], "fno-profile-use">,
     Alias<fno_profile_instr_use>;
+def fprofile_filter_files_EQ : Joined<["-"], "fprofile-filter-files=">,
+    Group<f_Group>, Flags<[CC1Option, CoreOption]>,
+    HelpText<"Instrument only functions from files where names match any regex separated by a semi-colon">;
+def fprofile_exclude_files_EQ : Joined<["-"], "fprofile-exclude-files=">,
+    Group<f_Group>, Flags<[CC1Option, CoreOption]>,
+    HelpText<"Instrument only functions from files where names don't match all the regexes separated by a semi-colon">;
 
 def faddrsig : Flag<["-"], "faddrsig">, Group<f_Group>, Flags<[CoreOption, CC1Option]>,
   HelpText<"Emit an address-significance table">;
@@ -855,6 +861,8 @@ def fcomplete_member_pointers : Flag<["-"], "fcomplete-member-pointers">, Group<
 def fno_complete_member_pointers : Flag<["-"], "fno-complete-member-pointers">, Group<f_clang_Group>,
    Flags<[CoreOption]>,
    HelpText<"Do not require member pointer base types to be complete if they would be significant under the Microsoft ABI">;
+def fcf_runtime_abi_EQ : Joined<["-"], "fcf-runtime-abi=">, Group<f_Group>,
+    Flags<[CC1Option]>;
 def fconstant_cfstrings : Flag<["-"], "fconstant-cfstrings">, Group<f_Group>;
 def fconstant_string_class_EQ : Joined<["-"], "fconstant-string-class=">, Group<f_Group>;
 def fconstexpr_depth_EQ : Joined<["-"], "fconstexpr-depth=">, Group<f_Group>;
@@ -1019,14 +1027,14 @@ def fno_sanitize_address_use_after_scope : Flag<["-"], "fno-sanitize-address-use
                                            Group<f_clang_Group>,
                                            Flags<[CoreOption, DriverOption]>,
                                            HelpText<"Disable use-after-scope detection in AddressSanitizer">;
-def fsanitize_address_poison_class_member_array_new_cookie
-    : Flag<[ "-" ], "fsanitize-address-poison-class-member-array-new-cookie">,
+def fsanitize_address_poison_custom_array_cookie
+    : Flag<[ "-" ], "fsanitize-address-poison-custom-array-cookie">,
       Group<f_clang_Group>,
-      HelpText<"Enable poisoning array cookies when using class member operator new[] in AddressSanitizer">;
-def fno_sanitize_address_poison_class_member_array_new_cookie
-    : Flag<[ "-" ], "fno-sanitize-address-poison-class-member-array-new-cookie">,
+      HelpText<"Enable poisoning array cookies when using custom operator new[] in AddressSanitizer">;
+def fno_sanitize_address_poison_custom_array_cookie
+    : Flag<[ "-" ], "fno-sanitize-address-poison-custom-array-cookie">,
       Group<f_clang_Group>,
-      HelpText<"Disable poisoning array cookies when using class member operator new[] in AddressSanitizer">;
+      HelpText<"Disable poisoning array cookies when using custom operator new[] in AddressSanitizer">;
 def fsanitize_address_globals_dead_stripping : Flag<["-"], "fsanitize-address-globals-dead-stripping">,
                                         Group<f_clang_Group>,
                                         HelpText<"Enable linker dead stripping of globals in AddressSanitizer">;
@@ -1594,6 +1602,10 @@ def fopenmp_cuda_force_full_runtime : Flag<["-"], "fopenmp-cuda-force-full-runti
   Flags<[CC1Option, NoArgumentUnused, HelpHidden]>;
 def fno_openmp_cuda_force_full_runtime : Flag<["-"], "fno-openmp-cuda-force-full-runtime">, Group<f_Group>,
   Flags<[NoArgumentUnused, HelpHidden]>;
+def fopenmp_cuda_number_of_sm_EQ : Joined<["-"], "fopenmp-cuda-number-of-sm=">, Group<f_Group>,
+  Flags<[CC1Option, NoArgumentUnused, HelpHidden]>;
+def fopenmp_cuda_blocks_per_sm_EQ : Joined<["-"], "fopenmp-cuda-blocks-per-sm=">, Group<f_Group>,
+  Flags<[CC1Option, NoArgumentUnused, HelpHidden]>;
 def fno_optimize_sibling_calls : Flag<["-"], "fno-optimize-sibling-calls">, Group<f_Group>;
 def foptimize_sibling_calls : Flag<["-"], "foptimize-sibling-calls">, Group<f_Group>;
 def fno_escaping_block_tail_calls : Flag<["-"], "fno-escaping-block-tail-calls">, Group<f_Group>, Flags<[CC1Option]>;
@@ -1644,7 +1656,7 @@ def fshort_enums : Flag<["-"], "fshort-enums">, Group<f_Group>, Flags<[CC1Option
   HelpText<"Allocate to an enum type only as many bytes as it needs for the declared range of possible values">;
 def fchar8__t : Flag<["-"], "fchar8_t">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Enable C++ builtin type char8_t">;
-def fno_char8__t : Flag<["-"], "fno-char8_t">, Group<f_Group>,
+def fno_char8__t : Flag<["-"], "fno-char8_t">, Group<f_Group>, Flags<[CC1Option]>,
   HelpText<"Disable C++ builtin type char8_t">;
 def fshort_wchar : Flag<["-"], "fshort-wchar">, Group<f_Group>,
   HelpText<"Force wchar_t to be a short unsigned int">;
@@ -1824,6 +1836,10 @@ def fdebug_types_section: Flag <["-"], "fdebug-types-section">, Group<f_Group>,
   Flags<[CC1Option]>, HelpText<"Place debug types in their own section (ELF Only)">;
 def fno_debug_types_section: Flag<["-"], "fno-debug-types-section">, Group<f_Group>,
   Flags<[CC1Option]>;
+def fdebug_ranges_base_address: Flag <["-"], "fdebug-ranges-base-address">, Group<f_Group>,
+  Flags<[CC1Option]>, HelpText<"Use DWARF base address selection entries in debug_ranges">;
+def fno_debug_ranges_base_address: Flag <["-"], "fno-debug-ranges-base-address">, Group<f_Group>,
+  Flags<[CC1Option]>;
 def fsplit_dwarf_inlining: Flag <["-"], "fsplit-dwarf-inlining">, Group<f_Group>,
   Flags<[CC1Option]>, HelpText<"Provide minimal debug info in the object/executable to facilitate online symbolication/stack traces in the absence of .dwo/.dwp files when using Split DWARF">;
 def fno_split_dwarf_inlining: Flag<["-"], "fno-split-dwarf-inlining">, Group<f_Group>,
@@ -1858,9 +1874,15 @@ def gdwarf_4 : Flag<["-"], "gdwarf-4">, Group<g_Group>,
   HelpText<"Generate source-level debug information with dwarf version 4">;
 def gdwarf_5 : Flag<["-"], "gdwarf-5">, Group<g_Group>,
   HelpText<"Generate source-level debug information with dwarf version 5">;
+
 def gcodeview : Flag<["-"], "gcodeview">,
   HelpText<"Generate CodeView debug information">,
   Flags<[CC1Option, CC1AsOption, CoreOption]>;
+def gcodeview_ghash : Flag<["-"], "gcodeview-ghash">,
+  HelpText<"Emit type record hashes in a .debug$H section">,
+  Flags<[CC1Option, CoreOption]>;
+def gno_codeview_ghash : Flag<["-"], "gno-codeview-ghash">, Flags<[CoreOption]>;
+
 // Equivalent to our default dwarf version. Forces usual dwarf emission when
 // CodeView is enabled.
 def gdwarf : Flag<["-"], "gdwarf">, Alias<gdwarf_4>, Flags<[CoreOption]>;
@@ -1880,6 +1902,9 @@ def gno_strict_dwarf : Flag<["-"], "gno-strict-dwarf">, Group<g_flags_Group>;
 def gcolumn_info : Flag<["-"], "gcolumn-info">, Group<g_flags_Group>, Flags<[CoreOption]>;
 def gno_column_info : Flag<["-"], "gno-column-info">, Group<g_flags_Group>, Flags<[CoreOption]>;
 def gsplit_dwarf : Flag<["-"], "gsplit-dwarf">, Group<g_flags_Group>;
+def gsplit_dwarf_EQ : Joined<["-"], "gsplit-dwarf=">, Group<g_flags_Group>,
+  HelpText<"Set DWARF fission mode to either 'split' or 'single'">,
+  Values<"split,single">;
 def ggnu_pubnames : Flag<["-"], "ggnu-pubnames">, Group<g_flags_Group>, Flags<[CC1Option]>;
 def gno_gnu_pubnames : Flag<["-"], "gno-gnu-pubnames">, Group<g_flags_Group>, Flags<[CC1Option]>;
 def gpubnames : Flag<["-"], "gpubnames">, Group<g_flags_Group>, Flags<[CC1Option]>;
@@ -2061,6 +2086,8 @@ def mno_global_merge : Flag<["-"], "mno-global-merge">, Group<m_Group>, Flags<[C
 def mno_pascal_strings : Flag<["-"], "mno-pascal-strings">,
   Alias<fno_pascal_strings>;
 def mno_red_zone : Flag<["-"], "mno-red-zone">, Group<m_Group>;
+def mno_tls_direct_seg_refs : Flag<["-"], "mno-tls-direct-seg-refs">, Group<m_Group>, Flags<[CC1Option]>,
+  HelpText<"Disable direct TLS access through segment registers">;
 def mno_relax_all : Flag<["-"], "mno-relax-all">, Group<m_Group>;
 def mno_rtd: Flag<["-"], "mno-rtd">, Group<m_Group>;
 def mno_soft_float : Flag<["-"], "mno-soft-float">, Group<m_Group>;
@@ -2117,9 +2144,11 @@ foreach i = {8-15,18} in
   def fcall_saved_x#i : Flag<["-"], "fcall-saved-x"#i>, Group<m_aarch64_Features_Group>,
     HelpText<"Make the x"#i#" register call-saved (AArch64 only)">;
 
-def msign_return_address : Joined<["-"], "msign-return-address=">,
-  Flags<[CC1Option]>, Group<m_Group>,
-  HelpText<"Select return address signing scope">, Values<"none,all,non-leaf">;
+def msign_return_address_EQ : Joined<["-"], "msign-return-address=">,
+  Flags<[CC1Option]>, Group<m_Group>, Values<"none,all,non-leaf">,
+  HelpText<"Select return address signing scope">;
+def mbranch_protection_EQ : Joined<["-"], "mbranch-protection=">,
+  HelpText<"Enforce targets of indirect branches and function returns">;
 
 def msimd128 : Flag<["-"], "msimd128">, Group<m_wasm_Features_Group>;
 def mno_simd128 : Flag<["-"], "mno-simd128">, Group<m_wasm_Features_Group>;
@@ -2135,10 +2164,19 @@ def mamdgpu_debugger_abi : Joined<["-"], "mamdgpu-debugger-abi=">,
   Group<m_Group>,
   HelpText<"Generate additional code for specified <version> of debugger ABI (AMDGPU only)">,
   MetaVarName<"<version>">;
+
+def mcode_object_v3 : Flag<["-"], "mcode-object-v3">, Group<m_amdgpu_Features_Group>,
+  HelpText<"Enable code object v3 (AMDGPU only)">;
+def mno_code_object_v3 : Flag<["-"], "mno-code-object-v3">, Group<m_amdgpu_Features_Group>,
+  HelpText<"Disable code object v3 (AMDGPU only)">;
 def mxnack : Flag<["-"], "mxnack">, Group<m_amdgpu_Features_Group>,
   HelpText<"Enable XNACK (AMDGPU only)">;
 def mno_xnack : Flag<["-"], "mno-xnack">, Group<m_amdgpu_Features_Group>,
   HelpText<"Disable XNACK (AMDGPU only)">;
+def msram_ecc : Flag<["-"], "msram-ecc">, Group<m_amdgpu_Features_Group>,
+  HelpText<"Enable SRAM ECC (AMDGPU only)">;
+def mno_sram_ecc : Flag<["-"], "mno-sram-ecc">, Group<m_amdgpu_Features_Group>,
+  HelpText<"Disable SRAM ECC (AMDGPU only)">;
 
 def faltivec : Flag<["-"], "faltivec">, Group<f_Group>, Flags<[DriverOption]>;
 def fno_altivec : Flag<["-"], "fno-altivec">, Group<f_Group>, Flags<[DriverOption]>;
@@ -2216,6 +2254,8 @@ def momit_leaf_frame_pointer : Flag<["-"], "momit-leaf-frame-pointer">, Group<m_
 def moslib_EQ : Joined<["-"], "moslib=">, Group<m_Group>;
 def mpascal_strings : Flag<["-"], "mpascal-strings">, Alias<fpascal_strings>;
 def mred_zone : Flag<["-"], "mred-zone">, Group<m_Group>;
+def mtls_direct_seg_refs : Flag<["-"], "mtls-direct-seg-refs">, Group<m_Group>,
+  HelpText<"Enable direct TLS access through segment registers (default)">;
 def mregparm_EQ : Joined<["-"], "mregparm=">, Group<m_Group>;
 def mrelax_all : Flag<["-"], "mrelax-all">, Group<m_Group>, Flags<[CC1Option,CC1AsOption]>,
   HelpText<"(integrated-as) Relax all machine instructions">;
@@ -2702,8 +2742,6 @@ def _ : Joined<["--"], "">, Flags<[Unsupported]>;
 // Hexagon feature flags.
 def mieee_rnd_near : Flag<["-"], "mieee-rnd-near">,
   Group<m_hexagon_Features_Group>;
-def mv4 : Flag<["-"], "mv4">, Group<m_hexagon_Features_Group>,
-  Alias<mcpu_EQ>, AliasArgs<["hexagonv4"]>;
 def mv5 : Flag<["-"], "mv5">, Group<m_hexagon_Features_Group>, Alias<mcpu_EQ>,
   AliasArgs<["hexagonv5"]>;
 def mv55 : Flag<["-"], "mv55">, Group<m_hexagon_Features_Group>,

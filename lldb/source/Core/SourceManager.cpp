@@ -9,34 +9,34 @@
 
 #include "lldb/Core/SourceManager.h"
 
-#include "lldb/Core/Address.h"      // for Address
-#include "lldb/Core/AddressRange.h" // for AddressRange
+#include "lldb/Core/Address.h"
+#include "lldb/Core/AddressRange.h"
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/FormatEntity.h" // for FormatEntity
+#include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/Highlighter.h"
 #include "lldb/Core/Module.h"
-#include "lldb/Core/ModuleList.h" // for ModuleList
+#include "lldb/Core/ModuleList.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Symbol/CompileUnit.h"
 #include "lldb/Symbol/Function.h"
-#include "lldb/Symbol/LineEntry.h" // for LineEntry
+#include "lldb/Symbol/LineEntry.h"
 #include "lldb/Symbol/SymbolContext.h"
-#include "lldb/Target/PathMappingList.h" // for PathMappingList
+#include "lldb/Target/PathMappingList.h"
 #include "lldb/Target/Target.h"
-#include "lldb/Utility/ConstString.h" // for ConstString
+#include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/DataBuffer.h"
 #include "lldb/Utility/DataBufferLLVM.h"
 #include "lldb/Utility/RegularExpression.h"
 #include "lldb/Utility/Stream.h"
-#include "lldb/lldb-enumerations.h" // for StopShowColumn::eStopSho...
+#include "lldb/lldb-enumerations.h"
 
-#include "llvm/ADT/Twine.h" // for Twine
+#include "llvm/ADT/Twine.h"
 
 #include <memory>
-#include <utility> // for pair
+#include <utility>
 
-#include <assert.h> // for assert
-#include <stdio.h>  // for size_t, NULL, snprintf
+#include <assert.h>
+#include <stdio.h>
 
 namespace lldb_private {
 class ExecutionContext;
@@ -92,7 +92,7 @@ SourceManager::FileSP SourceManager::GetFile(const FileSpec &file_spec) {
     file_sp->UpdateIfNeeded();
 
   // If file_sp is no good or it points to a non-existent file, reset it.
-  if (!file_sp || !file_sp->GetFileSpec().Exists()) {
+  if (!file_sp || !FileSystem::Instance().Exists(file_sp->GetFileSpec())) {
     if (target_sp)
       file_sp = std::make_shared<File>(file_spec, target_sp.get());
     else
@@ -370,14 +370,14 @@ void SourceManager::FindLinesMatchingRegex(FileSpec &file_spec,
 SourceManager::File::File(const FileSpec &file_spec,
                           lldb::DebuggerSP debugger_sp)
     : m_file_spec_orig(file_spec), m_file_spec(file_spec),
-      m_mod_time(FileSystem::GetModificationTime(file_spec)),
+      m_mod_time(FileSystem::Instance().GetModificationTime(file_spec)),
       m_debugger_wp(debugger_sp) {
   CommonInitializer(file_spec, nullptr);
 }
 
 SourceManager::File::File(const FileSpec &file_spec, Target *target)
     : m_file_spec_orig(file_spec), m_file_spec(file_spec),
-      m_mod_time(FileSystem::GetModificationTime(file_spec)),
+      m_mod_time(FileSystem::Instance().GetModificationTime(file_spec)),
       m_debugger_wp(target ? target->GetDebugger().shared_from_this()
                            : DebuggerSP()) {
   CommonInitializer(file_spec, target);
@@ -397,7 +397,8 @@ void SourceManager::File::CommonInitializer(const FileSpec &file_spec,
         size_t num_matches =
             target->GetImages().ResolveSymbolContextForFilePath(
                 file_spec.GetFilename().AsCString(), 0, check_inlines,
-                lldb::eSymbolContextModule | lldb::eSymbolContextCompUnit,
+                SymbolContextItem(eSymbolContextModule |
+                                  eSymbolContextCompUnit),
                 sc_list);
         bool got_multiple = false;
         if (num_matches != 0) {
@@ -421,12 +422,12 @@ void SourceManager::File::CommonInitializer(const FileSpec &file_spec,
             SymbolContext sc;
             sc_list.GetContextAtIndex(0, sc);
             m_file_spec = sc.comp_unit;
-            m_mod_time = FileSystem::GetModificationTime(m_file_spec);
+            m_mod_time = FileSystem::Instance().GetModificationTime(m_file_spec);
           }
         }
       }
       // Try remapping if m_file_spec does not correspond to an existing file.
-      if (!m_file_spec.Exists()) {
+      if (!FileSystem::Instance().Exists(m_file_spec)) {
         FileSpec new_file_spec;
         // Check target specific source remappings first, then fall back to
         // modules objects can have individual path remappings that were
@@ -434,14 +435,14 @@ void SourceManager::File::CommonInitializer(const FileSpec &file_spec,
         if (target->GetSourcePathMap().FindFile(m_file_spec, new_file_spec) ||
             target->GetImages().FindSourceFile(m_file_spec, new_file_spec)) {
           m_file_spec = new_file_spec;
-          m_mod_time = FileSystem::GetModificationTime(m_file_spec);
+          m_mod_time = FileSystem::Instance().GetModificationTime(m_file_spec);
         }
       }
     }
   }
 
   if (m_mod_time != llvm::sys::TimePoint<>())
-    m_data_sp = DataBufferLLVM::CreateFromPath(m_file_spec.GetPath());
+    m_data_sp = FileSystem::Instance().CreateDataBuffer(m_file_spec);
 }
 
 uint32_t SourceManager::File::GetLineOffset(uint32_t line) {
@@ -514,12 +515,12 @@ void SourceManager::File::UpdateIfNeeded() {
   // TODO: use host API to sign up for file modifications to anything in our
   // source cache and only update when we determine a file has been updated.
   // For now we check each time we want to display info for the file.
-  auto curr_mod_time = FileSystem::GetModificationTime(m_file_spec);
+  auto curr_mod_time = FileSystem::Instance().GetModificationTime(m_file_spec);
 
   if (curr_mod_time != llvm::sys::TimePoint<>() &&
       m_mod_time != curr_mod_time) {
     m_mod_time = curr_mod_time;
-    m_data_sp = DataBufferLLVM::CreateFromPath(m_file_spec.GetPath());
+    m_data_sp = FileSystem::Instance().CreateDataBuffer(m_file_spec);
     m_offsets.clear();
   }
 }

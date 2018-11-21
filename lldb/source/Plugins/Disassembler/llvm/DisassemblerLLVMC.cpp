@@ -7,12 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Project includes
 #include "DisassemblerLLVMC.h"
 
-// Other libraries and framework includes
 #include "llvm-c/Disassembler.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -1382,7 +1378,7 @@ const char *DisassemblerLLVMC::SymbolLookup(uint64_t value, uint64_t *type_ptr,
       }
 
       SymbolContext sym_ctx;
-      const uint32_t resolve_scope =
+      const SymbolContextItem resolve_scope =
           eSymbolContextFunction | eSymbolContextSymbol;
       if (pc_so_addr.IsValid() && pc_so_addr.GetModule()) {
         pc_so_addr.GetModule()->ResolveSymbolContextForAddress(

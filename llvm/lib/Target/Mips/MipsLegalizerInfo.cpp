@@ -40,7 +40,8 @@ MipsLegalizerInfo::MipsLegalizerInfo(const MipsSubtarget &ST) {
       .minScalar(0, s32);
 
   getActionDefinitionsBuilder(G_CONSTANT)
-      .legalFor({s32});
+      .legalFor({s32})
+      .clampScalar(0, s32, s32);
 
   getActionDefinitionsBuilder(G_GEP)
       .legalFor({{p0, s32}});
@@ -78,15 +79,15 @@ bool MipsLegalizerInfo::legalizeCustom(MachineInstr &MI,
     unsigned Carry = MRI.createGenericVirtualRegister(sHalf);
     unsigned TmpResHigh = MRI.createGenericVirtualRegister(sHalf);
 
-    MIRBuilder.buildUnmerge({RHSHigh, RHSLow}, MI.getOperand(2).getReg());
-    MIRBuilder.buildUnmerge({LHSHigh, LHSLow}, MI.getOperand(1).getReg());
+    MIRBuilder.buildUnmerge({RHSLow, RHSHigh}, MI.getOperand(2).getReg());
+    MIRBuilder.buildUnmerge({LHSLow, LHSHigh}, MI.getOperand(1).getReg());
 
     MIRBuilder.buildAdd(TmpResHigh, LHSHigh, RHSHigh);
     MIRBuilder.buildAdd(ResLow, LHSLow, RHSLow);
     MIRBuilder.buildICmp(CmpInst::ICMP_ULT, Carry, ResLow, LHSLow);
     MIRBuilder.buildAdd(ResHigh, TmpResHigh, Carry);
 
-    MIRBuilder.buildMerge(MI.getOperand(0).getReg(), {ResHigh, ResLow});
+    MIRBuilder.buildMerge(MI.getOperand(0).getReg(), {ResLow, ResHigh});
 
     MI.eraseFromParent();
     break;

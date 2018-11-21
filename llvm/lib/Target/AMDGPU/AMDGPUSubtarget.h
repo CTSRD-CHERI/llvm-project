@@ -263,6 +263,7 @@ public:
     ISAVersion9_0_2,
     ISAVersion9_0_4,
     ISAVersion9_0_6,
+    ISAVersion9_0_9,
   };
 
   enum TrapHandlerAbi {
@@ -321,7 +322,6 @@ protected:
 
   // Used as options.
   bool EnableHugePrivateBuffer;
-  bool EnableVGPRSpilling;
   bool EnableLoadStoreOpt;
   bool EnableUnsafeDSOffsetFolding;
   bool EnableSIScheduler;
@@ -353,7 +353,7 @@ protected:
   bool HasDPP;
   bool HasR128A16;
   bool HasDLInsts;
-  bool D16PreservesUnusedBits;
+  bool EnableSRAMECC;
   bool FlatAddressSpace;
   bool FlatInstOffsets;
   bool FlatGlobalInsts;
@@ -515,6 +515,10 @@ public:
     return FMA;
   }
 
+  bool hasSwap() const {
+    return GFX9Insts;
+  }
+
   TrapHandlerAbi getTrapHandlerAbi() const {
     return isAmdHsaOS() ? TrapHandlerAbiHsa : TrapHandlerAbiNone;
   }
@@ -577,7 +581,8 @@ public:
   }
 
   bool hasCodeObjectV3() const {
-    return CodeObjectV3;
+    // FIXME: Need to add code object v3 support for mesa and pal.
+    return isAmdHsaOS() ? CodeObjectV3 : false;
   }
 
   bool hasUnalignedBufferAccess() const {
@@ -675,8 +680,8 @@ public:
     return HasDLInsts;
   }
 
-  bool d16PreservesUnusedBits() const {
-    return D16PreservesUnusedBits;
+  bool isSRAMECCEnabled() const {
+    return EnableSRAMECC;
   }
 
   // Scratch is allocated in 256 dword per wave blocks for the entire
@@ -742,8 +747,6 @@ public:
 
   void overrideSchedPolicy(MachineSchedPolicy &Policy,
                            unsigned NumRegionInstrs) const override;
-
-  bool isVGPRSpillingEnabled(const Function &F) const;
 
   unsigned getMaxNumUserSGPRs() const {
     return 16;

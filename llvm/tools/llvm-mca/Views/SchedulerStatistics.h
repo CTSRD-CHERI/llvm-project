@@ -42,6 +42,7 @@
 #include "llvm/MC/MCSubtargetInfo.h"
 #include <map>
 
+namespace llvm {
 namespace mca {
 
 class SchedulerStatistics final : public View {
@@ -70,9 +71,7 @@ public:
         Usage(STI.getSchedModel().NumProcResourceKinds, {0, 0, 0}) {}
 
   void onEvent(const HWInstructionEvent &Event) override;
-
   void onCycleBegin() override { NumCycles++; }
-
   void onCycleEnd() override { updateHistograms(); }
 
   // Increases the number of used scheduler queue slots of every buffered
@@ -88,5 +87,6 @@ public:
   void printView(llvm::raw_ostream &OS) const override;
 };
 } // namespace mca
+} // namespace llvm
 
 #endif

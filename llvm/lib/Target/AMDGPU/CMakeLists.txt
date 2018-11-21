@@ -40,6 +40,7 @@ add_llvm_target(AMDGPUCodeGen
   AMDGPUAtomicOptimizer.cpp
   AMDGPUCallLowering.cpp
   AMDGPUCodeGenPrepare.cpp
+  AMDGPUFixFunctionBitcasts.cpp
   AMDGPUFrameLowering.cpp
   AMDGPUHSAMetadataStreamer.cpp
   AMDGPUInstrInfo.cpp
@@ -95,6 +96,7 @@ add_llvm_target(AMDGPUCodeGen
   SIAnnotateControlFlow.cpp
   SIDebuggerInsertNops.cpp
   SIFixSGPRCopies.cpp
+  SIFixupVectorISel.cpp
   SIFixVGPRCopies.cpp
   SIFixWWMLiveness.cpp
   SIFoldOperands.cpp

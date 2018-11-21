@@ -7,12 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
 #include "CommandObjectBreakpoint.h"
 #include "CommandObjectBreakpointCommand.h"
 #include "lldb/Breakpoint/Breakpoint.h"
@@ -438,7 +434,7 @@ public:
       } break;
 
       case 'f':
-        m_filenames.AppendIfUnique(FileSpec(option_arg, false));
+        m_filenames.AppendIfUnique(FileSpec(option_arg));
         break;
 
       case 'F':
@@ -557,7 +553,7 @@ public:
         break;
 
       case 's':
-        m_modules.AppendIfUnique(FileSpec(option_arg, false));
+        m_modules.AppendIfUnique(FileSpec(option_arg));
         break;
 
       case 'S':
@@ -636,7 +632,7 @@ public:
     uint32_t m_column;
     std::vector<std::string> m_func_names;
     std::vector<std::string> m_breakpoint_names;
-    uint32_t m_func_name_type_mask;
+    lldb::FunctionNameType m_func_name_type_mask;
     std::string m_func_regexp;
     std::string m_source_text_regexp;
     FileSpecList m_modules;
@@ -765,7 +761,7 @@ protected:
     }
     case eSetTypeFunctionName: // Breakpoint by function name
     {
-      uint32_t name_type_mask = m_options.m_func_name_type_mask;
+      FunctionNameType name_type_mask = m_options.m_func_name_type_mask;
 
       if (name_type_mask == 0)
         name_type_mask = eFunctionNameTypeAuto;
@@ -2370,7 +2366,8 @@ protected:
     std::unique_lock<std::recursive_mutex> lock;
     target->GetBreakpointList().GetListMutex(lock);
 
-    FileSpec input_spec(m_options.m_filename, true);
+    FileSpec input_spec(m_options.m_filename);
+    FileSystem::Instance().Resolve(input_spec);
     BreakpointIDList new_bps;
     Status error = target->CreateBreakpointsFromFile(
         input_spec, m_options.m_names, new_bps);
@@ -2504,8 +2501,10 @@ protected:
         return false;
       }
     }
-    Status error = target->SerializeBreakpointsToFile(
-        FileSpec(m_options.m_filename, true), valid_bp_ids, m_options.m_append);
+    FileSpec file_spec(m_options.m_filename);
+    FileSystem::Instance().Resolve(file_spec);
+    Status error = target->SerializeBreakpointsToFile(file_spec, valid_bp_ids,
+                                                      m_options.m_append);
     if (!error.Success()) {
       result.AppendErrorWithFormat("error serializing breakpoints: %s.",
                                    error.AsCString());

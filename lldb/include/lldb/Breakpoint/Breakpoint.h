@@ -10,15 +10,11 @@
 #ifndef liblldb_Breakpoint_h_
 #define liblldb_Breakpoint_h_
 
-// C Includes
-// C++ Includes
 #include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Breakpoint/BreakpointID.h"
 #include "lldb/Breakpoint/BreakpointLocationCollection.h"
 #include "lldb/Breakpoint/BreakpointLocationList.h"
@@ -501,6 +497,14 @@ public:
   ///     The number locations resolved breakpoint sites.
   //------------------------------------------------------------------
   size_t GetNumResolvedLocations() const;
+
+  //------------------------------------------------------------------
+  /// Return whether this breakpoint has any resolved locations.
+  ///
+  /// @return
+  ///     True if GetNumResolvedLocations > 0
+  //------------------------------------------------------------------
+  bool HasResolvedLocations() const;
 
   //------------------------------------------------------------------
   /// Return the number of breakpoint locations.

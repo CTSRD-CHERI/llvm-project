@@ -20,6 +20,7 @@
 #include "llvm/MC/MCSchedule.h"
 #include <vector>
 
+namespace llvm {
 namespace mca {
 
 /// This class tracks which instructions are in-flight (i.e., dispatched but not
@@ -62,7 +63,7 @@ private:
   std::vector<RUToken> Queue;
 
 public:
-  RetireControlUnit(const llvm::MCSchedModel &SM);
+  RetireControlUnit(const MCSchedModel &SM);
 
   bool isEmpty() const { return AvailableSlots == Queue.size(); }
   bool isAvailable(unsigned Quantity = 1) const {
@@ -98,5 +99,6 @@ public:
 };
 
 } // namespace mca
+} // namespace llvm
 
 #endif // LLVM_TOOLS_LLVM_MCA_RETIRE_CONTROL_UNIT_H

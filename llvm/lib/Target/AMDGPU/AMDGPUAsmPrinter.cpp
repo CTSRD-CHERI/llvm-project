@@ -911,9 +911,9 @@ void AMDGPUAsmPrinter::getSIProgramInfo(SIProgramInfo &ProgInfo,
   }
 
   ProgInfo.SGPRBlocks = IsaInfo::getNumSGPRBlocks(
-      getSTI(), ProgInfo.NumSGPRsForWavesPerEU);
+      &STM, ProgInfo.NumSGPRsForWavesPerEU);
   ProgInfo.VGPRBlocks = IsaInfo::getNumVGPRBlocks(
-      getSTI(), ProgInfo.NumVGPRsForWavesPerEU);
+      &STM, ProgInfo.NumVGPRsForWavesPerEU);
 
   // Update DebuggerWavefrontPrivateSegmentOffsetSGPR and
   // DebuggerPrivateSegmentBufferSGPR fields if "amdgpu-debugger-emit-prologue"
@@ -1008,7 +1008,6 @@ static unsigned getRsrcReg(CallingConv::ID CallConv) {
 
 void AMDGPUAsmPrinter::EmitProgramInfoSI(const MachineFunction &MF,
                                          const SIProgramInfo &CurrentProgramInfo) {
-  const GCNSubtarget &STM = MF.getSubtarget<GCNSubtarget>();
   const SIMachineFunctionInfo *MFI = MF.getInfo<SIMachineFunctionInfo>();
   unsigned RsrcReg = getRsrcReg(MF.getFunction().getCallingConv());
 
@@ -1029,10 +1028,9 @@ void AMDGPUAsmPrinter::EmitProgramInfoSI(const MachineFunction &MF,
     OutStreamer->EmitIntValue(RsrcReg, 4);
     OutStreamer->EmitIntValue(S_00B028_VGPRS(CurrentProgramInfo.VGPRBlocks) |
                               S_00B028_SGPRS(CurrentProgramInfo.SGPRBlocks), 4);
-    if (STM.isVGPRSpillingEnabled(MF.getFunction())) {
-      OutStreamer->EmitIntValue(R_0286E8_SPI_TMPRING_SIZE, 4);
-      OutStreamer->EmitIntValue(S_0286E8_WAVESIZE(CurrentProgramInfo.ScratchBlocks), 4);
-    }
+    OutStreamer->EmitIntValue(R_0286E8_SPI_TMPRING_SIZE, 4);
+    OutStreamer->EmitIntValue(
+        S_0286E8_WAVESIZE(CurrentProgramInfo.ScratchBlocks), 4);
   }
 
   if (MF.getFunction().getCallingConv() == CallingConv::AMDGPU_PS) {

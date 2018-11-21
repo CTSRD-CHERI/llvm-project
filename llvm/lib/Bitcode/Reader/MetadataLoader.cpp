@@ -650,10 +650,6 @@ public:
     return MetadataList.getMetadataFwdRef(ID);
   }
 
-  MDNode *getMDNodeFwdRefOrNull(unsigned Idx) {
-    return MetadataList.getMDNodeFwdRefOrNull(Idx);
-  }
-
   DISubprogram *lookupSubprogramForFunction(Function *F) {
     return FunctionsWithSPs.lookup(F);
   }
@@ -772,7 +768,7 @@ MetadataLoader::MetadataLoaderImpl::lazyLoadModuleMetadataBlock() {
           // It is acknowledged by 'TODO: Inherit from Metadata' in the
           // NamedMDNode class definition.
           MDNode *MD = MetadataList.getMDNodeFwdRefOrNull(Record[i]);
-          assert(MD && "Invalid record");
+          assert(MD && "Invalid metadata: expect fwd ref to MDNode");
           NMD->addOperand(MD);
         }
         break;
@@ -1049,7 +1045,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     for (unsigned i = 0; i != Size; ++i) {
       MDNode *MD = MetadataList.getMDNodeFwdRefOrNull(Record[i]);
       if (!MD)
-        return error("Invalid record");
+        return error("Invalid named metadata: expect fwd ref to MDNode");
       NMD->addOperand(MD);
     }
     break;
@@ -1395,7 +1391,8 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
         Record.size() <= 14 ? 0 : Record[14],
         Record.size() <= 16 ? true : Record[16],
         Record.size() <= 17 ? false : Record[17],
-        Record.size() <= 18 ? 0 : Record[18]);
+        Record.size() <= 18 ? 0 : Record[18],
+        Record.size() <= 19 ? 0 : Record[19]);
 
     MetadataList.assignValue(CU, NextMetadataNo);
     NextMetadataNo++;
@@ -1423,6 +1420,9 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     bool HasFn = Offset && !HasUnit;
     bool HasThisAdj = Record.size() >= 20;
     bool HasThrownTypes = Record.size() >= 21;
+    DISubprogram::DISPFlags SPFlags = DISubprogram::toSPFlags(
+        /*IsLocalToUnit=*/Record[7], /*IsDefinition=*/Record[8],
+        /*IsOptimized=*/Record[14], /*Virtuality=*/Record[11]);
     DISubprogram *SP = GET_OR_DISTINCT(
         DISubprogram,
         (Context,
@@ -1432,15 +1432,12 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
          getMDOrNull(Record[4]),                            // file
          Record[5],                                         // line
          getMDOrNull(Record[6]),                            // type
-         Record[7],                                         // isLocal
-         Record[8],                                         // isDefinition
          Record[9],                                         // scopeLine
          getDITypeRefOrNull(Record[10]),                    // containingType
-         Record[11],                                        // virtuality
          Record[12],                                        // virtualIndex
          HasThisAdj ? Record[19] : 0,                       // thisAdjustment
          static_cast<DINode::DIFlags>(Record[13]),          // flags
-         Record[14],                                        // isOptimized
+         SPFlags,                                           // SPFlags
          HasUnit ? CUorFn : nullptr,                        // unit
          getMDOrNull(Record[15 + Offset]),                  // templateParams
          getMDOrNull(Record[16 + Offset]),                  // declaration
@@ -1833,7 +1830,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseGlobalObjectAttachment(
       return error("Invalid ID");
     MDNode *MD = MetadataList.getMDNodeFwdRefOrNull(Record[I + 1]);
     if (!MD)
-      return error("Invalid metadata attachment");
+      return error("Invalid metadata attachment: expect fwd ref to MDNode");
     GO.addMetadata(K->second, *MD);
   }
   return Error::success();
@@ -2001,10 +1998,6 @@ bool MetadataLoader::hasFwdRefs() const { return Pimpl->hasFwdRefs(); }
 /// necessary.
 Metadata *MetadataLoader::getMetadataFwdRefOrLoad(unsigned Idx) {
   return Pimpl->getMetadataFwdRefOrLoad(Idx);
-}
-
-MDNode *MetadataLoader::getMDNodeFwdRefOrNull(unsigned Idx) {
-  return Pimpl->getMDNodeFwdRefOrNull(Idx);
 }
 
 DISubprogram *MetadataLoader::lookupSubprogramForFunction(Function *F) {

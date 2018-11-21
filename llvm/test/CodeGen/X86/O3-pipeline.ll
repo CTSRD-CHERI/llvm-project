@@ -1,4 +1,7 @@
-; RUN: llc -mtriple=x86_64-- -O3 -debug-pass=Structure < %s -o /dev/null 2>&1 | FileCheck %s
+; When EXPENSIVE_CHECKS are enabled, the machine verifier appears between each
+; pass. Ignore it with 'grep -v'.
+; RUN: llc -mtriple=x86_64-- -O3 -debug-pass=Structure < %s -o /dev/null 2>&1 \
+; RUN:   | grep -v 'Verify generated machine code' | FileCheck %s
 
 ; REQUIRES: asserts
 
@@ -72,7 +75,6 @@
 ; CHECK-NEXT:       Merge disjoint stack slots
 ; CHECK-NEXT:       Local Stack Slot Allocation
 ; CHECK-NEXT:       Remove dead machine instructions
-; CHECK-NEXT:       X86 CondBr Folding
 ; CHECK-NEXT:       MachineDominator Tree Construction
 ; CHECK-NEXT:       Machine Natural Loop Construction
 ; CHECK-NEXT:       Machine Trace Metrics

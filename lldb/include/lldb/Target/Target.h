@@ -10,16 +10,12 @@
 #ifndef liblldb_Target_h_
 #define liblldb_Target_h_
 
-// C Includes
-// C++ Includes
 #include <list>
 #include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Breakpoint/BreakpointList.h"
 #include "lldb/Breakpoint/BreakpointName.h"
 #include "lldb/Breakpoint/WatchpointList.h"
@@ -201,6 +197,10 @@ public:
   void SetInjectLocalVariables(ExecutionContext *exe_ctx, bool b);
 
   bool GetUseModernTypeLookup() const;
+
+  void SetRequireHardwareBreakpoints(bool b);
+
+  bool GetRequireHardwareBreakpoints() const;
 
 private:
   //------------------------------------------------------------------
@@ -608,14 +608,12 @@ public:
   // eLazyBoolCalculate, we use the current target setting, else we use the
   // values passed in. func_name_type_mask is or'ed values from the
   // FunctionNameType enum.
-  lldb::BreakpointSP CreateBreakpoint(const FileSpecList *containingModules,
-                                      const FileSpecList *containingSourceFiles,
-                                      const char *func_name,
-                                      uint32_t func_name_type_mask,
-                                      lldb::LanguageType language,
-                                      lldb::addr_t offset,
-                                      LazyBool skip_prologue, bool internal,
-                                      bool request_hardware);
+  lldb::BreakpointSP CreateBreakpoint(
+      const FileSpecList *containingModules,
+      const FileSpecList *containingSourceFiles, const char *func_name,
+      lldb::FunctionNameType func_name_type_mask, lldb::LanguageType language,
+      lldb::addr_t offset, LazyBool skip_prologue, bool internal,
+      bool request_hardware);
 
   lldb::BreakpointSP
   CreateExceptionBreakpoint(enum lldb::LanguageType language, bool catch_bp,
@@ -637,20 +635,20 @@ public:
   // the case where you just want to set a breakpoint on a set of names you
   // already know. func_name_type_mask is or'ed values from the
   // FunctionNameType enum.
-  lldb::BreakpointSP
-  CreateBreakpoint(const FileSpecList *containingModules,
-                   const FileSpecList *containingSourceFiles,
-                   const char *func_names[], size_t num_names,
-                   uint32_t func_name_type_mask, lldb::LanguageType language,
-                   lldb::addr_t offset, LazyBool skip_prologue, bool internal,
-                   bool request_hardware);
+  lldb::BreakpointSP CreateBreakpoint(
+      const FileSpecList *containingModules,
+      const FileSpecList *containingSourceFiles, const char *func_names[],
+      size_t num_names, lldb::FunctionNameType func_name_type_mask,
+      lldb::LanguageType language, lldb::addr_t offset, LazyBool skip_prologue,
+      bool internal, bool request_hardware);
 
   lldb::BreakpointSP
   CreateBreakpoint(const FileSpecList *containingModules,
                    const FileSpecList *containingSourceFiles,
                    const std::vector<std::string> &func_names,
-                   uint32_t func_name_type_mask, lldb::LanguageType language,
-                   lldb::addr_t m_offset, LazyBool skip_prologue, bool internal,
+                   lldb::FunctionNameType func_name_type_mask,
+                   lldb::LanguageType language, lldb::addr_t m_offset,
+                   LazyBool skip_prologue, bool internal,
                    bool request_hardware);
 
   // Use this to create a general breakpoint:

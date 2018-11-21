@@ -189,6 +189,10 @@ public:
                     unsigned FalseReg) const override;
   void getNoop(MCInst &NopInst) const override;
 
+  bool isSchedulingBoundary(const MachineInstr &MI,
+                            const MachineBasicBlock *MBB,
+                            const MachineFunction &MF) const override;
+
   /// analyzeCompare - For a comparison instruction, return the source registers
   /// in SrcReg and SrcReg2, and the value it compares against in CmpValue.
   /// Return true if the comparison instruction can be analyzed.
@@ -242,7 +246,8 @@ public:
       std::vector<outliner::Candidate> &RepeatedSequenceLocs) const override;
   outliner::InstrType
   getOutliningType(MachineBasicBlock::iterator &MIT, unsigned Flags) const override;
-  unsigned getMachineOutlinerMBBFlags(MachineBasicBlock &MBB) const override;
+  bool isMBBSafeToOutlineFrom(MachineBasicBlock &MBB,
+                              unsigned &Flags) const override;
   void buildOutlinedFrame(MachineBasicBlock &MBB, MachineFunction &MF,
                           const outliner::OutlinedFunction &OF) const override;
   MachineBasicBlock::iterator
@@ -250,15 +255,21 @@ public:
                      MachineBasicBlock::iterator &It, MachineFunction &MF,
                      const outliner::Candidate &C) const override;
   bool shouldOutlineFromFunctionByDefault(MachineFunction &MF) const override;
-  /// Returns true if the instruction sets to an immediate value that can be
+  /// Returns true if the instruction sets a constant value that can be
   /// executed more efficiently.
-  bool isExynosResetFast(const MachineInstr &MI) const;
-  /// Returns true if the instruction has a shift left that can be executed
+  static bool isExynosResetFast(const MachineInstr &MI);
+  /// Returns true if the load or store has an extension that can be executed
   /// more efficiently.
-  bool isExynosShiftLeftFast(const MachineInstr &MI) const;
+  static bool isExynosLdStExtFast(const MachineInstr &MI);
+  /// Returns true if the instruction has a constant shift left or extension
+  /// that can be executed more efficiently.
+  static bool isExynosShiftExtFast(const MachineInstr &MI);
   /// Returns true if the instruction has a shift by immediate that can be
   /// executed in one cycle less.
-  bool isFalkorShiftExtFast(const MachineInstr &MI) const;
+  static bool isFalkorShiftExtFast(const MachineInstr &MI);
+  /// Return true if the instructions is a SEH instruciton used for unwinding
+  /// on Windows.
+  static bool isSEHInstruction(const MachineInstr &MI);
 
 private:
   /// Sets the offsets on outlined instructions in \p MBB which use SP
@@ -286,7 +297,7 @@ void emitFrameOffset(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
                      const DebugLoc &DL, unsigned DestReg, unsigned SrcReg,
                      int Offset, const TargetInstrInfo *TII,
                      MachineInstr::MIFlag = MachineInstr::NoFlags,
-                     bool SetNZCV = false);
+                     bool SetNZCV = false,  bool NeedsWinCFI = false);
 
 /// rewriteAArch64FrameIndex - Rewrite MI to access 'Offset' bytes from the
 /// FP. Return false if the offset could not be handled directly in MI, and

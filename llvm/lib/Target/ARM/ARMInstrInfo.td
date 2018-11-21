@@ -221,6 +221,7 @@ def HasV4T           : Predicate<"Subtarget->hasV4TOps()">,
 def NoV4T            : Predicate<"!Subtarget->hasV4TOps()">;
 def HasV5T           : Predicate<"Subtarget->hasV5TOps()">,
                                  AssemblerPredicate<"HasV5TOps", "armv5t">;
+def NoV5T            : Predicate<"!Subtarget->hasV5TOps()">;
 def HasV5TE          : Predicate<"Subtarget->hasV5TEOps()">,
                                  AssemblerPredicate<"HasV5TEOps", "armv5te">;
 def HasV6            : Predicate<"Subtarget->hasV6Ops()">,
@@ -357,21 +358,22 @@ let RecomputePerFunction = 1 in {
   def DontUseMovt      : Predicate<"!Subtarget->useMovt(*MF)">;
   def UseMovtInPic     : Predicate<"Subtarget->useMovt(*MF) && Subtarget->allowPositionIndependentMovt()">;
   def DontUseMovtInPic : Predicate<"!Subtarget->useMovt(*MF) || !Subtarget->allowPositionIndependentMovt()">;
-  def UseFPVMLx        : Predicate<"Subtarget->useFPVMLx() || MF->getFunction().optForMinSize()">;
+
+  def UseFPVMLx: Predicate<"((Subtarget->useFPVMLx() &&"
+                           "  TM.Options.AllowFPOpFusion != FPOpFusion::Fast) ||"
+                           "MF->getFunction().optForMinSize())">;
 }
 def UseMulOps        : Predicate<"Subtarget->useMulOps()">;
 
 // Prefer fused MAC for fp mul + add over fp VMLA / VMLS if they are available.
-// But only select them if more precision in FP computation is allowed.
+// But only select them if more precision in FP computation is allowed, and when
+// they are not slower than a mul + add sequence.
 // Do not use them for Darwin platforms.
 def UseFusedMAC      : Predicate<"(TM.Options.AllowFPOpFusion =="
                                  " FPOpFusion::Fast && "
                                  " Subtarget->hasVFP4()) && "
-                                 "!Subtarget->isTargetDarwin()">;
-def DontUseFusedMAC  : Predicate<"!(TM.Options.AllowFPOpFusion =="
-                                 " FPOpFusion::Fast &&"
-                                 " Subtarget->hasVFP4()) || "
-                                 "Subtarget->isTargetDarwin()">;
+                                 "!Subtarget->isTargetDarwin() &&"
+                                 "Subtarget->useFPVMLx()">;
 
 def HasFastVGETLNi32 : Predicate<"!Subtarget->hasSlowVGETLNi32()">;
 def HasSlowVGETLNi32 : Predicate<"Subtarget->hasSlowVGETLNi32()">;
@@ -2198,6 +2200,9 @@ def TRAP : AXI<(outs), (ins), MiscFrm, NoItinerary,
            Requires<[IsARM,DontUseNaClTrap]> {
   let Inst = 0xe7ffdefe;
 }
+
+def : Pat<(debugtrap), (BKPT 0)>, Requires<[IsARM, HasV5T]>;
+def : Pat<(debugtrap), (UDF 254)>, Requires<[IsARM, NoV5T]>;
 
 // Address computation and loads and stores in PIC mode.
 let isNotDuplicable = 1 in {

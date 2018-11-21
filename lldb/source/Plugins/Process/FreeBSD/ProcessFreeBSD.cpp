@@ -8,7 +8,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
 #include <errno.h>
 #include <pthread.h>
 #include <pthread_np.h>
@@ -18,12 +17,11 @@
 #include <sys/user.h>
 #include <machine/elf.h>
 
-// C++ Includes
 #include <mutex>
 #include <unordered_map>
 
-// Other libraries and framework includes
 #include "lldb/Core/PluginManager.h"
+#include "lldb/Host/FileSystem.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/DynamicLoader.h"
@@ -38,7 +36,6 @@
 #include "ProcessFreeBSD.h"
 #include "ProcessMonitor.h"
 
-// Other libraries and framework includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Breakpoint/Watchpoint.h"
 #include "lldb/Core/Module.h"
@@ -287,7 +284,7 @@ bool ProcessFreeBSD::CanDebug(lldb::TargetSP target_sp,
   // For now we are just making sure the file exists for a given module
   ModuleSP exe_module_sp(target_sp->GetExecutableModule());
   if (exe_module_sp.get())
-    return exe_module_sp->GetFileSpec().Exists();
+    return FileSystem::Instance().Exists(exe_module_sp->GetFileSpec());
   // If there is no executable module, we return true since we might be
   // preparing to attach.
   return true;
@@ -373,12 +370,13 @@ Status ProcessFreeBSD::DoLaunch(Module *module,
   assert(m_monitor == NULL);
 
   FileSpec working_dir = launch_info.GetWorkingDirectory();
-  namespace fs = llvm::sys::fs;
-  if (working_dir && (!working_dir.ResolvePath() ||
-                      !fs::is_directory(working_dir.GetPath()))) {
-    error.SetErrorStringWithFormat("No such file or directory: %s",
+  if (working_dir) {
+    FileSystem::Instance().Resolve(working_dir);
+    if (!FileSystem::Instance().IsDirectory(working_dir.GetPath())) {
+      error.SetErrorStringWithFormat("No such file or directory: %s",
                                    working_dir.GetCString());
-    return error;
+      return error;
+    }
   }
 
   SetPrivateState(eStateLaunching);
@@ -390,8 +388,7 @@ Status ProcessFreeBSD::DoLaunch(Module *module,
   FileSpec stdout_file_spec{};
   FileSpec stderr_file_spec{};
 
-  const FileSpec dbg_pts_file_spec{launch_info.GetPTY().GetSlaveName(NULL, 0),
-                                   false};
+  const FileSpec dbg_pts_file_spec{launch_info.GetPTY().GetSlaveName(NULL, 0)};
 
   file_action = launch_info.GetFileActionForFD(STDIN_FILENO);
   stdin_file_spec =

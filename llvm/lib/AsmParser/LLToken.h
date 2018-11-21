@@ -270,6 +270,7 @@ enum Kind {
   kw_umin,
 
   // Instruction Opcodes (Opcode in UIntVal).
+  kw_fneg,
   kw_add,
   kw_fadd,
   kw_sub,
@@ -369,6 +370,7 @@ enum Kind {
   kw_readOnly,
   kw_noRecurse,
   kw_returnDoesNotAlias,
+  kw_noInline,
   kw_calls,
   kw_callee,
   kw_hotness,

@@ -45,9 +45,9 @@
 #include <lwp.h>
 #endif
 
-// C++ Includes
 #include <csignal>
 
+#include "lldb/Host/FileSystem.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Host/HostProcess.h"
@@ -419,8 +419,10 @@ FileSpec Host::GetModuleFileSpecForHostAddress(const void *host_addr) {
 #if !defined(__ANDROID__)
   Dl_info info;
   if (::dladdr(host_addr, &info)) {
-    if (info.dli_fname)
-      module_filespec.SetFile(info.dli_fname, true, FileSpec::Style::native);
+    if (info.dli_fname) {
+      module_filespec.SetFile(info.dli_fname, FileSpec::Style::native);
+      FileSystem::Instance().Resolve(module_filespec);
+    }
   }
 #endif
   return module_filespec;
@@ -510,7 +512,7 @@ Status Host::RunShellCommand(const Args &args, const FileSpec &working_dir,
     }
   }
 
-  FileSpec output_file_spec{output_file_path.c_str(), false};
+  FileSpec output_file_spec(output_file_path.c_str());
 
   launch_info.AppendSuppressFileAction(STDIN_FILENO, true, false);
   if (output_file_spec) {
@@ -554,14 +556,15 @@ Status Host::RunShellCommand(const Args &args, const FileSpec &working_dir,
 
       if (command_output_ptr) {
         command_output_ptr->clear();
-        uint64_t file_size = output_file_spec.GetByteSize();
+        uint64_t file_size =
+            FileSystem::Instance().GetByteSize(output_file_spec);
         if (file_size > 0) {
           if (file_size > command_output_ptr->max_size()) {
             error.SetErrorStringWithFormat(
                 "shell command output is too large to fit into a std::string");
           } else {
             auto Buffer =
-                DataBufferLLVM::CreateFromPath(output_file_spec.GetPath());
+                FileSystem::Instance().CreateDataBuffer(output_file_spec);
             if (error.Success())
               command_output_ptr->assign(Buffer->GetChars(),
                                          Buffer->GetByteSize());

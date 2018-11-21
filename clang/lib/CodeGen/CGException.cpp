@@ -66,7 +66,7 @@ llvm::Constant *CodeGenModule::getTerminateFn() {
       name = "__std_terminate";
     else
       name = "?terminate@@YAXXZ";
-  } else if (getLangOpts().ObjC1 &&
+  } else if (getLangOpts().ObjC &&
              getLangOpts().ObjCRuntime.hasTerminate())
     name = "objc_terminate";
   else
@@ -224,7 +224,7 @@ const EHPersonality &EHPersonality::get(CodeGenModule &CGM,
   if (FD && FD->usesSEHTry())
     return getSEHPersonalityMSVC(T);
 
-  if (L.ObjC1)
+  if (L.ObjC)
     return L.CPlusPlus ? getObjCXXPersonality(Target, L)
                        : getObjCPersonality(Target, L);
   return L.CPlusPlus ? getCXXPersonality(Target, L)
@@ -250,9 +250,11 @@ static llvm::Constant *getPersonalityFn(CodeGenModule &CGM,
 static llvm::Constant *getOpaquePersonalityFn(CodeGenModule &CGM,
                                         const EHPersonality &Personality) {
   llvm::Constant *Fn = getPersonalityFn(CGM, Personality);
-  // FIXME: not sure if this needs to remain in AS0
-  return llvm::ConstantExpr::getBitCast(
-      Fn, CGM.Int8Ty->getPointerTo(CGM.getFunctionAddrSpace()));
+  llvm::PointerType* Int8PtrTy = llvm::PointerType::get(
+      llvm::Type::getInt8Ty(CGM.getLLVMContext()),
+      CGM.getDataLayout().getProgramAddressSpace());
+
+  return llvm::ConstantExpr::getBitCast(Fn, Int8PtrTy);
 }
 
 /// Check whether a landingpad instruction only uses C++ features.
@@ -317,7 +319,7 @@ static bool PersonalityHasOnlyCXXUses(llvm::Constant *Fn) {
 /// when it really needs it.
 void CodeGenModule::SimplifyPersonality() {
   // If we're not in ObjC++ -fexceptions, there's nothing to do.
-  if (!LangOpts.CPlusPlus || !LangOpts.ObjC1 || !LangOpts.Exceptions)
+  if (!LangOpts.CPlusPlus || !LangOpts.ObjC || !LangOpts.Exceptions)
     return;
 
   // Both the problem this endeavors to fix and the way the logic
@@ -1883,7 +1885,7 @@ void CodeGenFunction::startOutlinedSEHHelper(CodeGenFunction &ParentCGF,
                 OutlinedStmt->getBeginLoc(), OutlinedStmt->getBeginLoc());
   CurSEHParent = ParentCGF.CurSEHParent;
 
-  CGM.SetLLVMFunctionAttributes(nullptr, FnInfo, CurFn);
+  CGM.SetLLVMFunctionAttributes(GlobalDecl(), FnInfo, CurFn);
   EmitCapturedLocals(ParentCGF, OutlinedStmt, IsFilter);
 }
 

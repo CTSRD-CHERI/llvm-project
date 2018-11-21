@@ -940,7 +940,7 @@ ConstantAggregate::ConstantAggregate(CompositeType *T, ValueTy VT,
                                      ArrayRef<Constant *> V)
     : Constant(T, VT, OperandTraits<ConstantAggregate>::op_end(this) - V.size(),
                V.size()) {
-  std::copy(V.begin(), V.end(), op_begin());
+  llvm::copy(V, op_begin());
 
   // Check that types match, unless this is an opaque struct.
   if (auto *ST = dyn_cast<StructType>(T))
@@ -1778,6 +1778,36 @@ Constant *ConstantExpr::getAddrSpaceCast(Constant *C, Type *DstTy,
     C = getBitCast(C, MidTy);
   }
   return getFoldedCast(Instruction::AddrSpaceCast, C, DstTy, OnlyIfReduced);
+}
+
+Constant *ConstantExpr::get(unsigned Opcode, Constant *C, unsigned Flags, 
+                            Type *OnlyIfReducedTy) {
+  // Check the operands for consistency first.
+  assert(Instruction::isUnaryOp(Opcode) &&
+         "Invalid opcode in unary constant expression");
+
+#ifndef NDEBUG
+  switch (Opcode) {
+  case Instruction::FNeg:
+    assert(C->getType()->isFPOrFPVectorTy() &&
+           "Tried to create a floating-point operation on a "
+           "non-floating-point type!");
+    break;
+  default:
+    break;
+  }
+#endif
+
+  // TODO: Try to constant fold operation.
+
+  if (OnlyIfReducedTy == C->getType())
+    return nullptr;
+
+  Constant *ArgVec[] = { C };
+  ConstantExprKeyType Key(Opcode, ArgVec, 0, Flags);
+
+  LLVMContextImpl *pImpl = C->getContext().pImpl;
+  return pImpl->ExprConstants.getOrCreate(C->getType(), Key);
 }
 
 Constant *ConstantExpr::get(unsigned Opcode, Constant *C1, Constant *C2,

@@ -229,7 +229,9 @@ public:
 
   void setParsingInlineAsm(bool V) override {
     ParsingInlineAsm = V;
-    Lexer.setParsingMSInlineAsm(V);
+    // When parsing MS inline asm, we must lex 0b1101 and 0ABCH as binary and
+    // hex integer literals.
+    Lexer.setLexMasmIntegers(V);
   }
   bool isParsingInlineAsm() override { return ParsingInlineAsm; }
 
@@ -673,6 +675,7 @@ namespace llvm {
 extern MCAsmParserExtension *createDarwinAsmParser();
 extern MCAsmParserExtension *createELFAsmParser();
 extern MCAsmParserExtension *createCOFFAsmParser();
+extern MCAsmParserExtension *createWasmAsmParser();
 
 } // end namespace llvm
 
@@ -703,10 +706,7 @@ AsmParser::AsmParser(SourceMgr &SM, MCContext &Ctx, MCStreamer &Out,
     PlatformParser.reset(createELFAsmParser());
     break;
   case MCObjectFileInfo::IsWasm:
-    // TODO: WASM will need its own MCAsmParserExtension implementation, but
-    // for now we can re-use the ELF one, since the directives can be the
-    // same for now.
-    PlatformParser.reset(createELFAsmParser());
+    PlatformParser.reset(createWasmAsmParser());
     break;
   }
 
@@ -3920,7 +3920,12 @@ bool AsmParser::parseDirectiveCFIStartProc() {
       return addErrorSuffix(" in '.cfi_startproc' directive");
   }
 
-  getStreamer().EmitCFIStartProc(!Simple.empty());
+  // TODO(kristina): Deal with a corner case of incorrect diagnostic context
+  // being produced if this directive is emitted as part of preprocessor macro
+  // expansion which can *ONLY* happen if Clang's cc1as is the API consumer.
+  // Tools like llvm-mc on the other hand are not affected by it, and report
+  // correct context information.
+  getStreamer().EmitCFIStartProc(!Simple.empty(), Lexer.getLoc());
   return false;
 }
 

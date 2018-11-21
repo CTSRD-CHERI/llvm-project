@@ -9,27 +9,23 @@
 
 #include "NativeProcessLinux.h"
 
-// C Includes
 #include <errno.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
 
-// C++ Includes
 #include <fstream>
 #include <mutex>
 #include <sstream>
 #include <string>
 #include <unordered_map>
 
-// Other libraries and framework includes
 #include "lldb/Core/EmulateInstruction.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Host/HostProcess.h"
 #include "lldb/Host/PseudoTerminal.h"
 #include "lldb/Host/ThreadLauncher.h"
-#include "lldb/Host/common/NativeBreakpoint.h"
 #include "lldb/Host/common/NativeRegisterContext.h"
 #include "lldb/Host/linux/Ptrace.h"
 #include "lldb/Host/linux/Uio.h"
@@ -1418,8 +1414,9 @@ Status NativeProcessLinux::PopulateMemoryRegionCache() {
       m_supports_mem_region = LazyBool::eLazyBoolNo;
       return parse_error;
     }
-    m_mem_region_cache.emplace_back(
-        info, FileSpec(info.GetName().GetCString(), true));
+    FileSpec file_spec(info.GetName().GetCString());
+    FileSystem::Instance().Resolve(file_spec);
+    m_mem_region_cache.emplace_back(info, file_spec);
   }
 
   if (m_mem_region_cache.empty()) {
@@ -1723,7 +1720,8 @@ Status NativeProcessLinux::GetLoadedModuleFileSpec(const char *module_path,
   if (error.Fail())
     return error;
 
-  FileSpec module_file_spec(module_path, true);
+  FileSpec module_file_spec(module_path);
+  FileSystem::Instance().Resolve(module_file_spec);
 
   file_spec.Clear();
   for (const auto &it : m_mem_region_cache) {
@@ -1743,7 +1741,7 @@ Status NativeProcessLinux::GetFileLoadAddress(const llvm::StringRef &file_name,
   if (error.Fail())
     return error;
 
-  FileSpec file(file_name, false);
+  FileSpec file(file_name);
   for (const auto &it : m_mem_region_cache) {
     if (it.second == file) {
       load_addr = it.first.GetRange().GetRangeBase();

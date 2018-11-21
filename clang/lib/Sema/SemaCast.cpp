@@ -582,7 +582,7 @@ CastsAwayConstness(Sema &Self, QualType SrcType, QualType DestType,
                    Qualifiers *CastAwayQualifiers = nullptr) {
   // If the only checking we care about is for Objective-C lifetime qualifiers,
   // and we're not in ObjC mode, there's nothing to check.
-  if (!CheckCVR && CheckObjCLifetime && !Self.Context.getLangOpts().ObjC1)
+  if (!CheckCVR && CheckObjCLifetime && !Self.Context.getLangOpts().ObjC)
     return CastAwayConstnessKind::CACK_None;
 
   if (!DestType->isReferenceType()) {
@@ -2718,7 +2718,7 @@ void CastOperation::CheckCStyleCast() {
       llvm::APSInt CastInt;
       if (SrcExpr.get()->EvaluateAsInt(CastInt, Self.Context)) {
         if (0 == CastInt) {
-          Kind = CK_ZeroToOCLEvent;
+          Kind = CK_ZeroToOCLOpaqueType;
           return;
         }
         Self.Diag(OpRange.getBegin(),

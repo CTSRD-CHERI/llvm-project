@@ -441,7 +441,9 @@ DiagnosticBuilder ClangTidyCheck::diag(SourceLocation Loc, StringRef Message,
 }
 
 void ClangTidyCheck::run(const ast_matchers::MatchFinder::MatchResult &Result) {
-  Context->setSourceManager(Result.SourceManager);
+  // For historical reasons, checks don't implement the MatchFinder run()
+  // callback directly. We keep the run()/check() distinction to avoid interface
+  // churn, and to allow us to add cross-cutting logic in the future.
   check(Result);
 }
 
@@ -500,11 +502,12 @@ getCheckOptions(const ClangTidyOptions &Options,
   return Factory.getCheckOptions();
 }
 
-void runClangTidy(clang::tidy::ClangTidyContext &Context,
-                  const CompilationDatabase &Compilations,
-                  ArrayRef<std::string> InputFiles,
-                  llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> BaseFS,
-                  bool EnableCheckProfile, llvm::StringRef StoreCheckProfile) {
+std::vector<ClangTidyError>
+runClangTidy(clang::tidy::ClangTidyContext &Context,
+             const CompilationDatabase &Compilations,
+             ArrayRef<std::string> InputFiles,
+             llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> BaseFS,
+             bool EnableCheckProfile, llvm::StringRef StoreCheckProfile) {
   ClangTool Tool(Compilations, InputFiles,
                  std::make_shared<PCHContainerOperations>(), BaseFS);
 
@@ -548,7 +551,9 @@ void runClangTidy(clang::tidy::ClangTidyContext &Context,
   Context.setProfileStoragePrefix(StoreCheckProfile);
 
   ClangTidyDiagnosticConsumer DiagConsumer(Context);
-
+  DiagnosticsEngine DE(new DiagnosticIDs(), new DiagnosticOptions(),
+                       &DiagConsumer, /*ShouldOwnClient=*/false);
+  Context.setDiagnosticsEngine(&DE);
   Tool.setDiagnosticConsumer(&DiagConsumer);
 
   class ActionFactory : public FrontendActionFactory {
@@ -586,9 +591,11 @@ void runClangTidy(clang::tidy::ClangTidyContext &Context,
 
   ActionFactory Factory(Context);
   Tool.run(&Factory);
+  return DiagConsumer.take();
 }
 
-void handleErrors(ClangTidyContext &Context, bool Fix,
+void handleErrors(llvm::ArrayRef<ClangTidyError> Errors,
+                  ClangTidyContext &Context, bool Fix,
                   unsigned &WarningsAsErrorsCount,
                   llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> BaseFS) {
   ErrorReporter Reporter(Context, Fix, BaseFS);
@@ -598,7 +605,7 @@ void handleErrors(ClangTidyContext &Context, bool Fix,
   if (!InitialWorkingDir)
     llvm::report_fatal_error("Cannot get current working path.");
 
-  for (const ClangTidyError &Error : Context.getErrors()) {
+  for (const ClangTidyError &Error : Errors) {
     if (!Error.BuildDirectory.empty()) {
       // By default, the working directory of file system is the current
       // clang-tidy running directory.

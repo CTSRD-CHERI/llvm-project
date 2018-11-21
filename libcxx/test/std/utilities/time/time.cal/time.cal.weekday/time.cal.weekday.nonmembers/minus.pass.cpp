@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class weekday;
@@ -16,7 +16,7 @@
 //
 // constexpr days operator-(const weekday& x, const weekday& y) noexcept;
 // Returns: If x.ok() == true and y.ok() == true, returns a value d in the range
-//    [days{0}, days{6}] satisfying y + d == x. 
+//    [days{0}, days{6}] satisfying y + d == x.
 // Otherwise the value returned is unspecified.
 // [Example: Sunday - Monday == days{6}. —end example]
 
@@ -55,7 +55,7 @@ int main()
 
     ASSERT_NOEXCEPT(                   std::declval<weekday>() - std::declval<weekday>());
     ASSERT_SAME_TYPE(days,    decltype(std::declval<weekday>() - std::declval<weekday>()));
-    
+
     static_assert(testConstexpr<weekday, days>(), "");
 
     for (unsigned i = 0; i <= 6; ++i)

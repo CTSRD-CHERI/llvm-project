@@ -470,7 +470,8 @@ DICompileUnit *DICompileUnit::getImpl(
     unsigned EmissionKind, Metadata *EnumTypes, Metadata *RetainedTypes,
     Metadata *GlobalVariables, Metadata *ImportedEntities, Metadata *Macros,
     uint64_t DWOId, bool SplitDebugInlining, bool DebugInfoForProfiling,
-    unsigned NameTableKind, StorageType Storage, bool ShouldCreate) {
+    unsigned NameTableKind, bool RangesBaseAddress, StorageType Storage,
+    bool ShouldCreate) {
   assert(Storage != Uniqued && "Cannot unique DICompileUnit");
   assert(isCanonical(Producer) && "Expected canonical MDString");
   assert(isCanonical(Flags) && "Expected canonical MDString");
@@ -483,7 +484,8 @@ DICompileUnit *DICompileUnit::getImpl(
   return storeImpl(new (array_lengthof(Ops)) DICompileUnit(
                        Context, Storage, SourceLanguage, IsOptimized,
                        RuntimeVersion, EmissionKind, DWOId, SplitDebugInlining,
-                       DebugInfoForProfiling, NameTableKind, Ops),
+                       DebugInfoForProfiling, NameTableKind, RangesBaseAddress,
+                       Ops),
                    Storage);
 }
 
@@ -543,18 +545,17 @@ DILocalScope *DILocalScope::getNonLexicalBlockFileScope() const {
 DISubprogram *DISubprogram::getImpl(
     LLVMContext &Context, Metadata *Scope, MDString *Name,
     MDString *LinkageName, Metadata *File, unsigned Line, Metadata *Type,
-    bool IsLocalToUnit, bool IsDefinition, unsigned ScopeLine,
-    Metadata *ContainingType, unsigned Virtuality, unsigned VirtualIndex,
-    int ThisAdjustment, DIFlags Flags, bool IsOptimized, Metadata *Unit,
+    unsigned ScopeLine, Metadata *ContainingType, unsigned VirtualIndex,
+    int ThisAdjustment, DIFlags Flags, DISPFlags SPFlags, Metadata *Unit,
     Metadata *TemplateParams, Metadata *Declaration, Metadata *RetainedNodes,
     Metadata *ThrownTypes, StorageType Storage, bool ShouldCreate) {
   assert(isCanonical(Name) && "Expected canonical MDString");
   assert(isCanonical(LinkageName) && "Expected canonical MDString");
-  DEFINE_GETIMPL_LOOKUP(
-      DISubprogram, (Scope, Name, LinkageName, File, Line, Type, IsLocalToUnit,
-                     IsDefinition, ScopeLine, ContainingType, Virtuality,
-                     VirtualIndex, ThisAdjustment, Flags, IsOptimized, Unit,
-                     TemplateParams, Declaration, RetainedNodes, ThrownTypes));
+  DEFINE_GETIMPL_LOOKUP(DISubprogram,
+                        (Scope, Name, LinkageName, File, Line, Type, ScopeLine,
+                         ContainingType, VirtualIndex, ThisAdjustment, Flags,
+                         SPFlags, Unit, TemplateParams, Declaration,
+                         RetainedNodes, ThrownTypes));
   SmallVector<Metadata *, 11> Ops = {
       File,        Scope,         Name,           LinkageName,    Type,       Unit,
       Declaration, RetainedNodes, ContainingType, TemplateParams, ThrownTypes};
@@ -566,11 +567,10 @@ DISubprogram *DISubprogram::getImpl(
         Ops.pop_back();
     }
   }
-  DEFINE_GETIMPL_STORE_N(DISubprogram,
-                         (Line, ScopeLine, Virtuality, VirtualIndex,
-                          ThisAdjustment, Flags, IsLocalToUnit, IsDefinition,
-                          IsOptimized),
-                         Ops, Ops.size());
+  DEFINE_GETIMPL_STORE_N(
+      DISubprogram,
+      (Line, ScopeLine, VirtualIndex, ThisAdjustment, Flags, SPFlags), Ops,
+      Ops.size());
 }
 
 bool DISubprogram::describes(const Function *F) const {

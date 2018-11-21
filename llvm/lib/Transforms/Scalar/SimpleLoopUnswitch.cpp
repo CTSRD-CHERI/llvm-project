@@ -19,6 +19,7 @@
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/CodeMetrics.h"
+#include "llvm/Analysis/GuardUtils.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/Analysis/LoopInfo.h"
@@ -59,7 +60,11 @@ using namespace llvm;
 
 STATISTIC(NumBranches, "Number of branches unswitched");
 STATISTIC(NumSwitches, "Number of switches unswitched");
+STATISTIC(NumGuards, "Number of guards turned into branches for unswitching");
 STATISTIC(NumTrivial, "Number of unswitches that are trivial");
+STATISTIC(
+    NumCostMultiplierSkipped,
+    "Number of unswitch candidates that had their cost multiplier skipped");
 
 static cl::opt<bool> EnableNonTrivialUnswitch(
     "enable-nontrivial-unswitch", cl::init(false), cl::Hidden,
@@ -69,6 +74,22 @@ static cl::opt<bool> EnableNonTrivialUnswitch(
 static cl::opt<int>
     UnswitchThreshold("unswitch-threshold", cl::init(50), cl::Hidden,
                       cl::desc("The cost threshold for unswitching a loop."));
+
+static cl::opt<bool> EnableUnswitchCostMultiplier(
+    "enable-unswitch-cost-multiplier", cl::init(true), cl::Hidden,
+    cl::desc("Enable unswitch cost multiplier that prohibits exponential "
+             "explosion in nontrivial unswitch."));
+static cl::opt<int> UnswitchSiblingsToplevelDiv(
+    "unswitch-siblings-toplevel-div", cl::init(2), cl::Hidden,
+    cl::desc("Toplevel siblings divisor for cost multiplier."));
+static cl::opt<int> UnswitchNumInitialUnscaledCandidates(
+    "unswitch-num-initial-unscaled-candidates", cl::init(8), cl::Hidden,
+    cl::desc("Number of unswitch candidates that are ignored when calculating "
+             "cost multiplier."));
+static cl::opt<bool> UnswitchGuards(
+    "simple-loop-unswitch-guards", cl::init(true), cl::Hidden,
+    cl::desc("If enabled, simple loop unswitching will also consider "
+             "llvm.experimental.guard intrinsics as unswitch candidates."));
 
 /// Collect all of the loop invariant input values transitively used by the
 /// homogeneous instruction graph from a given root.
@@ -1792,10 +1813,10 @@ void visitDomSubTree(DominatorTree &DT, BasicBlock *BB, CallableT Callable) {
   } while (!DomWorklist.empty());
 }
 
-static bool unswitchNontrivialInvariants(
-    Loop &L, TerminatorInst &TI, ArrayRef<Value *> Invariants,
-    DominatorTree &DT, LoopInfo &LI, AssumptionCache &AC,
-    function_ref<void(bool, ArrayRef<Loop *>)> UnswitchCB,
+static void unswitchNontrivialInvariants(
+    Loop &L, Instruction &TI, ArrayRef<Value *> Invariants,
+    SmallVectorImpl<BasicBlock *> &ExitBlocks, DominatorTree &DT, LoopInfo &LI,
+    AssumptionCache &AC, function_ref<void(bool, ArrayRef<Loop *>)> UnswitchCB,
     ScalarEvolution *SE) {
   auto *ParentBB = TI.getParent();
   BranchInst *BI = dyn_cast<BranchInst>(&TI);
@@ -1850,17 +1871,6 @@ static bool unswitchNontrivialInvariants(
   // routine should filter out any candidates that remain (but were skipped for
   // whatever reason).
   assert(LI.getLoopFor(ParentBB) == &L && "Branch in an inner loop!");
-
-  SmallVector<BasicBlock *, 4> ExitBlocks;
-  L.getUniqueExitBlocks(ExitBlocks);
-
-  // We cannot unswitch if exit blocks contain a cleanuppad instruction as we
-  // don't know how to split those exit blocks.
-  // FIXME: We should teach SplitBlock to handle this and remove this
-  // restriction.
-  for (auto *ExitBB : ExitBlocks)
-    if (isa<CleanupPadInst>(ExitBB->getFirstNonPHI()))
-      return false;
 
   // Compute the parent loop now before we start hacking on things.
   Loop *ParentL = L.getParentLoop();
@@ -2048,6 +2058,18 @@ static bool unswitchNontrivialInvariants(
     assert(UnswitchedSuccBBs.size() == 1 &&
            "Only one possible unswitched block for a branch!");
     BasicBlock *ClonedPH = ClonedPHs.begin()->second;
+
+    // When considering multiple partially-unswitched invariants
+    // we cant just go replace them with constants in both branches.
+    //
+    // For 'AND' we infer that true branch ("continue") means true
+    // for each invariant operand.
+    // For 'OR' we can infer that false branch ("continue") means false
+    // for each invariant operand.
+    // So it happens that for multiple-partial case we dont replace
+    // in the unswitched branch.
+    bool ReplaceUnswitched = FullUnswitch || (Invariants.size() == 1);
+
     ConstantInt *UnswitchedReplacement =
         Direction ? ConstantInt::getTrue(BI->getContext())
                   : ConstantInt::getFalse(BI->getContext());
@@ -2067,7 +2089,8 @@ static bool unswitchNontrivialInvariants(
         // unswitched if in the cloned blocks.
         if (DT.dominates(LoopPH, UserI->getParent()))
           U->set(ContinueReplacement);
-        else if (DT.dominates(ClonedPH, UserI->getParent()))
+        else if (ReplaceUnswitched &&
+                 DT.dominates(ClonedPH, UserI->getParent()))
           U->set(UnswitchedReplacement);
       }
   }
@@ -2145,7 +2168,6 @@ static bool unswitchNontrivialInvariants(
   UnswitchCB(IsStillLoop, SibLoops);
 
   ++NumBranches;
-  return true;
 }
 
 /// Recursively compute the cost of a dominator subtree based on the per-block
@@ -2181,6 +2203,162 @@ computeDomSubtreeCost(DomTreeNode &N,
   return Cost;
 }
 
+/// Turns a llvm.experimental.guard intrinsic into implicit control flow branch,
+/// making the following replacement:
+///
+///   --code before guard--
+///   call void (i1, ...) @llvm.experimental.guard(i1 %cond) [ "deopt"() ]
+///   --code after guard--
+///
+/// into
+///
+///   --code before guard--
+///   br i1 %cond, label %guarded, label %deopt
+///
+/// guarded:
+///   --code after guard--
+///
+/// deopt:
+///   call void (i1, ...) @llvm.experimental.guard(i1 false) [ "deopt"() ]
+///   unreachable
+///
+/// It also makes all relevant DT and LI updates, so that all structures are in
+/// valid state after this transform.
+static BranchInst *
+turnGuardIntoBranch(IntrinsicInst *GI, Loop &L,
+                    SmallVectorImpl<BasicBlock *> &ExitBlocks,
+                    DominatorTree &DT, LoopInfo &LI) {
+  SmallVector<DominatorTree::UpdateType, 4> DTUpdates;
+  LLVM_DEBUG(dbgs() << "Turning " << *GI << " into a branch.\n");
+  BasicBlock *CheckBB = GI->getParent();
+
+  // Remove all CheckBB's successors from DomTree. A block can be seen among
+  // successors more than once, but for DomTree it should be added only once.
+  SmallPtrSet<BasicBlock *, 4> Successors;
+  for (auto *Succ : successors(CheckBB))
+    if (Successors.insert(Succ).second)
+      DTUpdates.push_back({DominatorTree::Delete, CheckBB, Succ});
+
+  Instruction *DeoptBlockTerm =
+      SplitBlockAndInsertIfThen(GI->getArgOperand(0), GI, true);
+  BranchInst *CheckBI = cast<BranchInst>(CheckBB->getTerminator());
+  // SplitBlockAndInsertIfThen inserts control flow that branches to
+  // DeoptBlockTerm if the condition is true.  We want the opposite.
+  CheckBI->swapSuccessors();
+
+  BasicBlock *GuardedBlock = CheckBI->getSuccessor(0);
+  GuardedBlock->setName("guarded");
+  CheckBI->getSuccessor(1)->setName("deopt");
+
+  // We now have a new exit block.
+  ExitBlocks.push_back(CheckBI->getSuccessor(1));
+
+  GI->moveBefore(DeoptBlockTerm);
+  GI->setArgOperand(0, ConstantInt::getFalse(GI->getContext()));
+
+  // Add new successors of CheckBB into DomTree.
+  for (auto *Succ : successors(CheckBB))
+    DTUpdates.push_back({DominatorTree::Insert, CheckBB, Succ});
+
+  // Now the blocks that used to be CheckBB's successors are GuardedBlock's
+  // successors.
+  for (auto *Succ : Successors)
+    DTUpdates.push_back({DominatorTree::Insert, GuardedBlock, Succ});
+
+  // Make proper changes to DT.
+  DT.applyUpdates(DTUpdates);
+  // Inform LI of a new loop block.
+  L.addBasicBlockToLoop(GuardedBlock, LI);
+
+  ++NumGuards;
+  return CheckBI;
+}
+
+/// Cost multiplier is a way to limit potentially exponential behavior
+/// of loop-unswitch. Cost is multipied in proportion of 2^number of unswitch
+/// candidates available. Also accounting for the number of "sibling" loops with
+/// the idea to account for previous unswitches that already happened on this
+/// cluster of loops. There was an attempt to keep this formula simple,
+/// just enough to limit the worst case behavior. Even if it is not that simple
+/// now it is still not an attempt to provide a detailed heuristic size
+/// prediction.
+///
+/// TODO: Make a proper accounting of "explosion" effect for all kinds of
+/// unswitch candidates, making adequate predictions instead of wild guesses.
+/// That requires knowing not just the number of "remaining" candidates but
+/// also costs of unswitching for each of these candidates.
+static int calculateUnswitchCostMultiplier(
+    Instruction &TI, Loop &L, LoopInfo &LI, DominatorTree &DT,
+    ArrayRef<std::pair<Instruction *, TinyPtrVector<Value *>>>
+        UnswitchCandidates) {
+
+  // Guards and other exiting conditions do not contribute to exponential
+  // explosion as soon as they dominate the latch (otherwise there might be
+  // another path to the latch remaining that does not allow to eliminate the
+  // loop copy on unswitch).
+  BasicBlock *Latch = L.getLoopLatch();
+  BasicBlock *CondBlock = TI.getParent();
+  if (DT.dominates(CondBlock, Latch) &&
+      (isGuard(&TI) ||
+       llvm::count_if(successors(&TI), [&L](BasicBlock *SuccBB) {
+         return L.contains(SuccBB);
+       }) <= 1)) {
+    NumCostMultiplierSkipped++;
+    return 1;
+  }
+
+  auto *ParentL = L.getParentLoop();
+  int SiblingsCount = (ParentL ? ParentL->getSubLoopsVector().size()
+                               : std::distance(LI.begin(), LI.end()));
+  // Count amount of clones that all the candidates might cause during
+  // unswitching. Branch/guard counts as 1, switch counts as log2 of its cases.
+  int UnswitchedClones = 0;
+  for (auto Candidate : UnswitchCandidates) {
+    Instruction *CI = Candidate.first;
+    BasicBlock *CondBlock = CI->getParent();
+    bool SkipExitingSuccessors = DT.dominates(CondBlock, Latch);
+    if (isGuard(CI)) {
+      if (!SkipExitingSuccessors)
+        UnswitchedClones++;
+      continue;
+    }
+    int NonExitingSuccessors = llvm::count_if(
+        successors(CondBlock), [SkipExitingSuccessors, &L](BasicBlock *SuccBB) {
+          return !SkipExitingSuccessors || L.contains(SuccBB);
+        });
+    UnswitchedClones += Log2_32(NonExitingSuccessors);
+  }
+
+  // Ignore up to the "unscaled candidates" number of unswitch candidates
+  // when calculating the power-of-two scaling of the cost. The main idea
+  // with this control is to allow a small number of unswitches to happen
+  // and rely more on siblings multiplier (see below) when the number
+  // of candidates is small.
+  unsigned ClonesPower =
+      std::max(UnswitchedClones - (int)UnswitchNumInitialUnscaledCandidates, 0);
+
+  // Allowing top-level loops to spread a bit more than nested ones.
+  int SiblingsMultiplier =
+      std::max((ParentL ? SiblingsCount
+                        : SiblingsCount / (int)UnswitchSiblingsToplevelDiv),
+               1);
+  // Compute the cost multiplier in a way that won't overflow by saturating
+  // at an upper bound.
+  int CostMultiplier;
+  if (ClonesPower > Log2_32(UnswitchThreshold) ||
+      SiblingsMultiplier > UnswitchThreshold)
+    CostMultiplier = UnswitchThreshold;
+  else
+    CostMultiplier = std::min(SiblingsMultiplier * (1 << ClonesPower),
+                              (int)UnswitchThreshold);
+
+  LLVM_DEBUG(dbgs() << "  Computed multiplier  " << CostMultiplier
+                    << " (siblings " << SiblingsMultiplier << " * clones "
+                    << (1 << ClonesPower) << ")"
+                    << " for unswitch candidate: " << TI << "\n");
+  return CostMultiplier;
+}
+
 static bool
 unswitchBestCondition(Loop &L, DominatorTree &DT, LoopInfo &LI,
                       AssumptionCache &AC, TargetTransformInfo &TTI,
@@ -2188,11 +2366,30 @@ unswitchBestCondition(Loop &L, DominatorTree &DT, LoopInfo &LI,
                       ScalarEvolution *SE) {
   // Collect all invariant conditions within this loop (as opposed to an inner
   // loop which would be handled when visiting that inner loop).
-  SmallVector<std::pair<TerminatorInst *, TinyPtrVector<Value *>>, 4>
+  SmallVector<std::pair<Instruction *, TinyPtrVector<Value *>>, 4>
       UnswitchCandidates;
+
+  // Whether or not we should also collect guards in the loop.
+  bool CollectGuards = false;
+  if (UnswitchGuards) {
+    auto *GuardDecl = L.getHeader()->getParent()->getParent()->getFunction(
+        Intrinsic::getName(Intrinsic::experimental_guard));
+    if (GuardDecl && !GuardDecl->use_empty())
+      CollectGuards = true;
+  }
+
   for (auto *BB : L.blocks()) {
     if (LI.getLoopFor(BB) != &L)
       continue;
+
+    if (CollectGuards)
+      for (auto &I : *BB)
+        if (isGuard(&I)) {
+          auto *Cond = cast<IntrinsicInst>(&I)->getArgOperand(0);
+          // TODO: Support AND, OR conditions and partial unswitching.
+          if (!isa<Constant>(Cond) && L.isLoopInvariant(Cond))
+            UnswitchCandidates.push_back({&I, {Cond}});
+        }
 
     if (auto *SI = dyn_cast<SwitchInst>(BB->getTerminator())) {
       // We can only consider fully loop-invariant switch conditions as we need
@@ -2240,6 +2437,19 @@ unswitchBestCondition(Loop &L, DominatorTree &DT, LoopInfo &LI,
   RPOT.perform(&LI);
   if (containsIrreducibleCFG<const BasicBlock *>(RPOT, LI))
     return false;
+
+  SmallVector<BasicBlock *, 4> ExitBlocks;
+  L.getUniqueExitBlocks(ExitBlocks);
+
+  // We cannot unswitch if exit blocks contain a cleanuppad instruction as we
+  // don't know how to split those exit blocks.
+  // FIXME: We should teach SplitBlock to handle this and remove this
+  // restriction.
+  for (auto *ExitBB : ExitBlocks)
+    if (isa<CleanupPadInst>(ExitBB->getFirstNonPHI())) {
+      dbgs() << "Cannot unswitch because of cleanuppad in exit block\n";
+      return false;
+    }
 
   LLVM_DEBUG(
       dbgs() << "Considering " << UnswitchCandidates.size()
@@ -2298,7 +2508,7 @@ unswitchBestCondition(Loop &L, DominatorTree &DT, LoopInfo &LI,
   SmallDenseMap<DomTreeNode *, int, 4> DTCostMap;
   // Given a terminator which might be unswitched, computes the non-duplicated
   // cost for that terminator.
-  auto ComputeUnswitchedCost = [&](TerminatorInst &TI, bool FullUnswitch) {
+  auto ComputeUnswitchedCost = [&](Instruction &TI, bool FullUnswitch) {
     BasicBlock &BB = *TI.getParent();
     SmallPtrSet<BasicBlock *, 4> Visited;
 
@@ -2345,22 +2555,40 @@ unswitchBestCondition(Loop &L, DominatorTree &DT, LoopInfo &LI,
     // Now scale the cost by the number of unique successors minus one. We
     // subtract one because there is already at least one copy of the entire
     // loop. This is computing the new cost of unswitching a condition.
-    assert(Visited.size() > 1 &&
+    // Note that guards always have 2 unique successors that are implicit and
+    // will be materialized if we decide to unswitch it.
+    int SuccessorsCount = isGuard(&TI) ? 2 : Visited.size();
+    assert(SuccessorsCount > 1 &&
            "Cannot unswitch a condition without multiple distinct successors!");
-    return Cost * (Visited.size() - 1);
+    return Cost * (SuccessorsCount - 1);
   };
-  TerminatorInst *BestUnswitchTI = nullptr;
+  Instruction *BestUnswitchTI = nullptr;
   int BestUnswitchCost;
   ArrayRef<Value *> BestUnswitchInvariants;
   for (auto &TerminatorAndInvariants : UnswitchCandidates) {
-    TerminatorInst &TI = *TerminatorAndInvariants.first;
+    Instruction &TI = *TerminatorAndInvariants.first;
     ArrayRef<Value *> Invariants = TerminatorAndInvariants.second;
     BranchInst *BI = dyn_cast<BranchInst>(&TI);
     int CandidateCost = ComputeUnswitchedCost(
         TI, /*FullUnswitch*/ !BI || (Invariants.size() == 1 &&
                                      Invariants[0] == BI->getCondition()));
-    LLVM_DEBUG(dbgs() << "  Computed cost of " << CandidateCost
-                      << " for unswitch candidate: " << TI << "\n");
+    // Calculate cost multiplier which is a tool to limit potentially
+    // exponential behavior of loop-unswitch.
+    if (EnableUnswitchCostMultiplier) {
+      int CostMultiplier =
+          calculateUnswitchCostMultiplier(TI, L, LI, DT, UnswitchCandidates);
+      assert(
+          (CostMultiplier > 0 && CostMultiplier <= UnswitchThreshold) &&
+          "cost multiplier needs to be in the range of 1..UnswitchThreshold");
+      CandidateCost *= CostMultiplier;
+      LLVM_DEBUG(dbgs() << "  Computed cost of " << CandidateCost
+                        << " (multiplier: " << CostMultiplier << ")"
+                        << " for unswitch candidate: " << TI << "\n");
+    } else {
+      LLVM_DEBUG(dbgs() << "  Computed cost of " << CandidateCost
+                        << " for unswitch candidate: " << TI << "\n");
+    }
+
     if (!BestUnswitchTI || CandidateCost < BestUnswitchCost) {
       BestUnswitchTI = &TI;
       BestUnswitchCost = CandidateCost;
@@ -2374,11 +2602,17 @@ unswitchBestCondition(Loop &L, DominatorTree &DT, LoopInfo &LI,
     return false;
   }
 
-  LLVM_DEBUG(dbgs() << "  Trying to unswitch non-trivial (cost = "
+  // If the best candidate is a guard, turn it into a branch.
+  if (isGuard(BestUnswitchTI))
+    BestUnswitchTI = turnGuardIntoBranch(cast<IntrinsicInst>(BestUnswitchTI), L,
+                                         ExitBlocks, DT, LI);
+
+  LLVM_DEBUG(dbgs() << "  Unswitching non-trivial (cost = "
                     << BestUnswitchCost << ") terminator: " << *BestUnswitchTI
                     << "\n");
-  return unswitchNontrivialInvariants(
-      L, *BestUnswitchTI, BestUnswitchInvariants, DT, LI, AC, UnswitchCB, SE);
+  unswitchNontrivialInvariants(L, *BestUnswitchTI, BestUnswitchInvariants,
+                               ExitBlocks, DT, LI, AC, UnswitchCB, SE);
+  return true;
 }
 
 /// Unswitch control flow predicated on loop invariant conditions.

@@ -74,7 +74,6 @@ uint64_t elf::getPPC64TocBase() {
   return TocVA + PPC64TocOffset;
 }
 
-
 unsigned elf::getPPC64GlobalEntryToLocalEntryOffset(uint8_t StOther) {
   // The offset is encoded into the 3 most significant bits of the st_other
   // field, with some special values described in section 3.4.1 of the ABI:
@@ -114,6 +113,7 @@ public:
   void writeGotHeader(uint8_t *Buf) const override;
   bool needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
                   uint64_t BranchAddr, const Symbol &S) const override;
+  bool inBranchRange(RelType Type, uint64_t Src, uint64_t Dst) const override;
   RelExpr adjustRelaxExpr(RelType Type, const uint8_t *Data,
                           RelExpr Expr) const override;
   void relaxTlsGdToIe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
@@ -208,8 +208,6 @@ PPC64::PPC64() {
   GotPltHeaderEntriesNum = 2;
   PltHeaderSize = 60;
   NeedsThunks = true;
-  TcbSize = 8;
-  TlsTpOffset = 0x7000;
 
   TlsModuleIndexRel = R_PPC64_DTPMOD64;
   TlsOffsetRel = R_PPC64_DTPREL64;
@@ -232,8 +230,7 @@ PPC64::PPC64() {
   // use 0x10000000 as the starting address.
   DefaultImageBase = 0x10000000;
 
-  TrapInstr =
-      (Config->IsLE == sys::IsLittleEndianHost) ? 0x7fe00008 : 0x0800e07f;
+  write32(TrapInstr.data(), 0x7fe00008);
 }
 
 static uint32_t getEFlags(InputFile *File) {
@@ -515,9 +512,9 @@ void PPC64::writePltHeader(uint8_t *Buf) const {
 void PPC64::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
                      uint64_t PltEntryAddr, int32_t Index,
                      unsigned RelOff) const {
- int32_t Offset = PltHeaderSize + Index * PltEntrySize;
- // bl __glink_PLTresolve
- write32(Buf, 0x48000000 | ((-Offset) & 0x03FFFFFc));
+  int32_t Offset = PltHeaderSize + Index * PltEntrySize;
+  // bl __glink_PLTresolve
+  write32(Buf, 0x48000000 | ((-Offset) & 0x03FFFFFc));
 }
 
 static std::pair<RelType, uint64_t> toAddr16Rel(RelType Type, uint64_t Val) {
@@ -697,7 +694,8 @@ void PPC64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
     break;
   case R_PPC64_REL24: {
     uint32_t Mask = 0x03FFFFFC;
-    checkInt(Loc, Val, 24, Type);
+    checkInt(Loc, Val, 26, Type);
+    checkAlignment(Loc, Val, 4, Type);
     write32(Loc, (read32(Loc) & ~Mask) | (Val & Mask));
     break;
   }
@@ -711,9 +709,28 @@ void PPC64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
 
 bool PPC64::needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
                        uint64_t BranchAddr, const Symbol &S) const {
-  // If a function is in the plt it needs to be called through
-  // a call stub.
-  return Type == R_PPC64_REL24 && S.isInPlt();
+  // The only call relocation we currently support is the REL24 type.
+  if (Type != R_PPC64_REL24)
+    return false;
+
+  // If a function is in the Plt it needs to be called with a call-stub.
+  if (S.isInPlt())
+    return true;
+
+  // If a symbol is a weak undefined and we are compiling an executable
+  // it doesn't need a range-extending thunk since it can't be called.
+  if (S.isUndefWeak() && !Config->Shared)
+    return false;
+
+  // If the offset exceeds the range of the branch type then it will need
+  // a range-extending thunk.
+  return !inBranchRange(Type, BranchAddr, S.getVA());
+}
+
+bool PPC64::inBranchRange(RelType Type, uint64_t Src, uint64_t Dst) const {
+  assert(Type == R_PPC64_REL24 && "Unexpected relocation type used in branch");
+  int64_t Offset = Dst - Src;
+  return isInt<26>(Offset);
 }
 
 RelExpr PPC64::adjustRelaxExpr(RelType Type, const uint8_t *Data,
@@ -780,7 +797,7 @@ void PPC64::relaxTlsGdToIe(uint8_t *Loc, RelType Type, uint64_t Val) const {
 //      # compare needed to actual and branch to allocate_more_stack if more
 //      # space is needed, otherwise fallthrough to 'normal' function body.
 //      cmpld cr7,r12,r0
-//      blt- .Lallocate_more_stack
+//      blt- cr7, .Lallocate_more_stack
 //
 // -) The allocate_more_stack block might be placed after the split-stack
 //    prologue and the `blt-` replaced with a `bge+ .Lnormal_func_body`
@@ -836,11 +853,11 @@ bool PPC64::adjustPrologueForCrossSplitStack(uint8_t *Loc, uint8_t *End,
   // The register operands of the first instruction should be the stack-pointer
   // (r1) as the input (RA) and r12 as the output (RT). If the second
   // instruction is not a nop, then it should use r12 as both input and output.
-  auto CheckRegOperands =
-      [](uint32_t Instr, uint8_t ExpectedRT, uint8_t ExpectedRA) {
-        return ((Instr & 0x3E00000) >> 21 == ExpectedRT) &&
-               ((Instr & 0x1F0000) >> 16  == ExpectedRA);
-      };
+  auto CheckRegOperands = [](uint32_t Instr, uint8_t ExpectedRT,
+                             uint8_t ExpectedRA) {
+    return ((Instr & 0x3E00000) >> 21 == ExpectedRT) &&
+           ((Instr & 0x1F0000) >> 16 == ExpectedRA);
+  };
   if (!CheckRegOperands(FirstInstr, 12, 1))
     return false;
   if (SecondInstr != 0x60000000 && !CheckRegOperands(SecondInstr, 12, 12))
@@ -849,7 +866,7 @@ bool PPC64::adjustPrologueForCrossSplitStack(uint8_t *Loc, uint8_t *End,
   int32_t StackFrameSize = (HiImm * 65536) + LoImm;
   // Check that the adjusted size doesn't overflow what we can represent with 2
   // instructions.
-  if (StackFrameSize < -2147483648 + Config->SplitStackAdjustSize) {
+  if (StackFrameSize < Config->SplitStackAdjustSize + INT32_MIN) {
     error(getErrorLocation(Loc) + "split-stack prologue adjustment overflows");
     return false;
   }
@@ -862,8 +879,7 @@ bool PPC64::adjustPrologueForCrossSplitStack(uint8_t *Loc, uint8_t *End,
   if (HiImm) {
     write32(Loc + 4, 0x3D810000 | (uint16_t)HiImm);
     // If the low immediate is zero the second instruction will be a nop.
-    SecondInstr =
-        LoImm ? 0x398C0000 | (uint16_t)LoImm : 0x60000000;
+    SecondInstr = LoImm ? 0x398C0000 | (uint16_t)LoImm : 0x60000000;
     write32(Loc + 8, SecondInstr);
   } else {
     // addi r12, r1, imm
@@ -877,4 +893,4 @@ bool PPC64::adjustPrologueForCrossSplitStack(uint8_t *Loc, uint8_t *End,
 TargetInfo *elf::getPPC64TargetInfo() {
   static PPC64 Target;
   return &Target;
-  }
+}
