@@ -599,7 +599,8 @@ STATISTIC(NumBoundsSetOnAddrOf,
 #undef DEBUG_TYPE
 
 llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
-                                                        QualType Ty) {
+                                                        QualType Ty,
+                                                        SourceLocation Loc) {
   if (getLangOpts().getCheriBounds() < LangOptions::CBM_References)
     return Value; // Not enabled
 
@@ -612,13 +613,16 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
     CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
                      << "' reference to " << Size << "\n");
     NumBoundsSetOnReferences++;
-    return setPointerBounds(Value, Size, "ref.with.bounds");
+    return setPointerBounds(Value, Size, Loc, "ref.with.bounds",
+                            "Add subobject bounds",
+                            "C++ reference on " + Ty.getAsString());
   }
   return Value;
 }
 
 llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
-                                                     clang::QualType Ty) {
+                                                     clang::QualType Ty,
+                                                     SourceLocation Loc) {
   assert(getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe);
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on addrof operator ";
   //                  E->dump(llvm::dbgs()));
@@ -629,19 +633,25 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
     CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
                      << "' addrof to " << Size << "\n");
     NumBoundsSetOnAddrOf++;
-    return setPointerBounds(Value, Size, "addrof.with.bounds");
+    return setPointerBounds(Value, Size, Loc, "addrof.with.bounds",
+                            "Add subobject bounds",
+                            "addrof operator on " + Ty.getAsString());
   }
   return Value;
 }
 
 bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty) {
   assert(getLangOpts().getCheriBounds() > LangOptions::CBM_Conservative);
+  if (!CGM.getDataLayout().isFatPointer(Value->getType())) {
+    CHERI_BOUNDS_DBG(<< "Cannot set bounds on non-capability IR type "; Value->getType()->print(llvm::dbgs(), true); llvm::dbgs() << "\n");
+    return false;
+  }
 
   if (Ty->isIncompleteType()) {
     CHERI_BOUNDS_DBG(<< "Cannot set bounds on incomplete type\n");
     return false;
   }
-  assert(CGM.getTypes().getDataLayout().isFatPointer(Value->getType()));
+  assert(CGM.getDataLayout().isFatPointer(Value->getType()));
   // It should be possible to set the size for all scalar types
   if (Ty->isScalarType()) {
     CHERI_BOUNDS_DBG(<< "Found scalar type -> ");
@@ -725,7 +735,7 @@ CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E) {
   // TODO: we should probably check if references are capabilities instead since
   // there could be a mode where references are capabilities but pointers aren't
   if (CGM.getTarget().areAllPointersCapabilities() && !Ty->isFunctionType())
-    Value = setCHERIBoundsOnReference(Value, Ty);
+    Value = setCHERIBoundsOnReference(Value, Ty, E->getExprLoc());
   return RValue::get(Value);
 }
 

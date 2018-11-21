@@ -13,9 +13,9 @@
 
 #include "CodeGenFunction.h"
 #include "CGBlocks.h"
-#include "CGCleanup.h"
 #include "CGCUDARuntime.h"
 #include "CGCXXABI.h"
+#include "CGCleanup.h"
 #include "CGDebugInfo.h"
 #include "CGOpenMPRuntime.h"
 #include "CodeGenModule.h"
@@ -32,11 +32,13 @@
 #include "clang/CodeGen/CGFunctionInfo.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "clang/Sema/SemaDiagnostic.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
 using namespace clang;
 using namespace CodeGen;
@@ -111,6 +113,19 @@ CharUnits CodeGenFunction::getNaturalPointeeTypeAlignment(QualType T,
                                                     TBAAAccessInfo *TBAAInfo) {
   return getNaturalTypeAlignment(T->getPointeeType(), BaseInfo, TBAAInfo,
                                  /* forPointeeType= */ true);
+}
+
+llvm::Value *
+CodeGenFunction::setPointerBounds(llvm::Value *V, llvm::Value *Size,
+                                  SourceLocation Loc, const llvm::Twine &Name,
+                                  StringRef Pass, const llvm::Twine &Details) {
+  if (llvm::cheri::ShouldCollectCSetBoundsStats) {
+    llvm::cheri::CSetBoundsStats->add(
+        getKnownAlignment(V, CGM.getDataLayout()), Size, Pass,
+        llvm::cheri::SetBoundsPointerSource::Unknown, Details, nullptr,
+        Loc.printToString(CGM.getContext().getSourceManager()));
+  }
+  return getTargetHooks().setPointerBounds(*this, V, Size, Name);
 }
 
 CharUnits CodeGenFunction::getNaturalTypeAlignment(QualType T,
