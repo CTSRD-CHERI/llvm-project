@@ -18301,7 +18301,7 @@ SDValue DAGCombiner::SimplifySelectCC(const SDLoc &DL, SDValue N0, SDValue N1,
        TLI.isOperationLegal(ISD::SETCC, N0.getValueType()))) {
 
     if (Swap) {
-      CC = ISD::getSetCCInverse(CC, N0.getValueType().isInteger());
+      CC = ISD::getSetCCInverse(CC, N0.getValueType());
       std::swap(N2C, N3C);
     }
 
