@@ -1158,10 +1158,10 @@ public:
   llvm::Value *EmitSandboxRequiredMethod(StringRef, StringRef);
 
   struct PointerCastLocations {
-    SmallVector<SourceRange, 8> PointerToInt;
-    SmallVector<SourceRange, 8> IntToPointer;
-    SmallVector<SourceRange, 8> CapToPointer;
-    SmallVector<SourceRange, 8> PointerToCap;
+    SmallVector<std::pair<SourceRange, bool>, 8> PointerToInt;
+    SmallVector<std::pair<SourceRange, bool>, 8> IntToPointer;
+    SmallVector<std::pair<SourceRange, bool>, 8> CapToPointer;
+    SmallVector<std::pair<SourceRange, bool>, 8> PointerToCap;
     void printStats(llvm::raw_ostream &OS, const SourceManager &SM);
   };
   std::unique_ptr<PointerCastLocations> PointerCastStats;

@@ -430,25 +430,34 @@ void InstrProfStats::reportDiagnostics(DiagnosticsEngine &Diags,
 void CodeGenModule::PointerCastLocations::printStats(llvm::raw_ostream &OS,
                                                      const SourceManager &SM) {
 
-  auto DumpStat = [&](const llvm::SmallVectorImpl<SourceRange> &Vec) {
+  auto DumpStat = [&](const llvm::SmallVectorImpl<std::pair<SourceRange, bool>> &Vec) {
     const size_t Total = Vec.size();
-    OS << "\t\t\"count\": " << Twine(Total) << ",\n\t\t\"locations\": [";
+    OS << "\t\t\"count\": " << Total << ",\n\t\t\"locations\": [";
+    unsigned NumImplicitCasts = 0;
     if (Total == 0) {
       OS << "]";
       return;
     }
 
     for (size_t i = 0; i < Total;) {
-      OS << "\n\t\t\t\"" << llvm::yaml::escape(Vec[i].printToString(SM)) << '"';
+      OS << "\n\t\t\t\"" << llvm::yaml::escape(Vec[i].first.printToString(SM));
+      if (Vec[i].second) {
+        OS << " (implicit)";
+        NumImplicitCasts++;
+      }
+      OS << '"';
       i++;
       if (i < Total)
         OS << ',';
     }
     OS << "\n\t\t]";
+    if (NumImplicitCasts)
+      OS << ",\n\t\t\"implicit_count\": " << NumImplicitCasts << "";
   };
 
-  OS << "\"pointer_cast_stats\": {\n";
+  OS << "{ \"pointer_cast_stats\": {\n";
   OS << "\t\"ptrtoint\": {\n";
+
   DumpStat(PointerToInt);
   OS << "\n\t}, \"inttoptr\": {\n";
   DumpStat(IntToPointer);
@@ -457,7 +466,7 @@ void CodeGenModule::PointerCastLocations::printStats(llvm::raw_ostream &OS,
   OS << "\n\t}, \"ptrtocap\": {\n";
   DumpStat(PointerToCap);
   OS << "\n\t}";
-  OS << "\n}\n";
+  OS << "\n} }";
 }
 
 void CodeGenModule::Release() {

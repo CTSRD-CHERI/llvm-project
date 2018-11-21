@@ -2038,9 +2038,11 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_PointerToCHERICapability: {
     if (CGF.CGM.PointerCastStats) {
       if (Kind == CK_PointerToCHERICapability) {
-        CGF.CGM.PointerCastStats->PointerToCap.push_back(E->getSourceRange());
+        CGF.CGM.PointerCastStats->PointerToCap.push_back(
+            {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
       } else {
-        CGF.CGM.PointerCastStats->CapToPointer.push_back(E->getSourceRange());
+        CGF.CGM.PointerCastStats->CapToPointer.push_back(
+            {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
       }
     }
 
@@ -2221,7 +2223,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_IntegralToPointer: {
     Value *Src = Visit(const_cast<Expr*>(E));
     if (CGF.CGM.PointerCastStats)
-      CGF.CGM.PointerCastStats->IntToPointer.push_back(E->getSourceRange());
+      CGF.CGM.PointerCastStats->IntToPointer.push_back(
+          {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
 
     llvm::Type *DestLLVMTy = ConvertType(DestTy);
     auto &C = CGF.getContext();
@@ -2278,8 +2281,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     auto *PtrExpr = Visit(E);
     llvm::Type *ResultType = ConvertType(DestTy);
 
-    if (CGF.CGM.PointerCastStats)
-      CGF.CGM.PointerCastStats->PointerToInt.push_back(E->getSourceRange());
+    if (CGF.CGM.PointerCastStats) {
+      CGF.CGM.PointerCastStats->PointerToInt.push_back(
+          {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
+    }
 
     if (CGF.CGM.getCodeGenOpts().StrictVTablePointers) {
       const QualType SrcType = E->getType();
