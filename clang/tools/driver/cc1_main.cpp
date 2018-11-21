@@ -13,10 +13,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Option/Arg.h"
+#include "clang/Basic/Stack.h"
 #include "clang/CodeGen/ObjectFilePCHContainerOperations.h"
 #include "clang/Config/config.h"
-#include "clang/Basic/Stack.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -28,7 +27,9 @@
 #include "clang/FrontendTool/Utils.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Config/llvm-config.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/LinkAllPasses.h"
+#include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Option/OptTable.h"
 #include "llvm/Support/Compiler.h"
@@ -216,6 +217,32 @@ int cc1_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
 
   // Execute the frontend actions.
   Success = ExecuteCompilerInvocation(Clang.get());
+
+  // Dump the CHERI CSetBounds stats now
+  if (llvm::cheri::ShouldCollectCSetBoundsStats) {
+    auto StatsFile = llvm::cheri::StatsOutputFile::open(
+        Clang->getCodeGenOpts().CHERIStatsFile,
+        [&Clang](StringRef StatsFile, const std::error_code &EC) {
+          Clang->getDiagnostics().Report(
+              diag::warn_fe_unable_to_open_stats_file)
+              << StatsFile << EC.message();
+        },
+        [&Clang](StringRef StatsFile, const std::error_code &EC) {
+          Clang->getDiagnostics().Report(
+              diag::warn_fe_unable_to_lock_stats_file)
+              << StatsFile << EC.message();
+        });
+    if (StatsFile) {
+      StringRef MainFile = Clang->getCodeGenOpts().MainFileName;
+      if (MainFile.empty()) {
+        const SourceManager &SM = Clang->getSourceManager();
+        SourceLocation MainFileLoc =
+            SM.getLocForStartOfFile(SM.getMainFileID());
+        MainFile = SM.getFilename(MainFileLoc);
+      }
+      llvm::cheri::CSetBoundsStats->print(*StatsFile, MainFile);
+    }
+  }
 
   // If any timers were active but haven't been destroyed yet, print their
   // results now.  This happens in -disable-free mode.
