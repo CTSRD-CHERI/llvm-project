@@ -2202,6 +2202,28 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   const GlobalValue *GV = N->getGlobal();
   const Type* GVTy = GV->getType();
+  if (cheri::ShouldCollectCSetBoundsStats) {
+    unsigned AllocSize =
+        DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
+    unsigned TypeSize =
+        DAG.getDataLayout().getTypeStoreSize(GV->getValueType());
+    Type *I64 = Type::getInt64Ty(*DAG.getContext());
+    std::string DebugLoc;
+    llvm::raw_string_ostream OS(DebugLoc);
+    N->getDebugLoc().print(OS);
+    OS.flush();
+    if (DebugLoc.empty()) {
+      OS << "somewhere in " << DAG.getMachineFunction().getName();
+      OS.flush();
+    }
+    cheri::CSetBoundsStats->add(GV->getAlignment(),
+                                ConstantInt::get(I64, TypeSize),
+                                "MipsTargetLowering::lowerGlobalAddress",
+                                cheri::SetBoundsPointerSource::GlobalVar,
+                                "load of global " + GV->getName() +
+                                    " (alloc size=" + Twine(AllocSize) + ")",
+                                nullptr, std::move(DebugLoc));
+  }
 
   if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTable()) {
     // FIXME: shouldn't functions have a R_MIPS_CHERI_CAPCALL relocation?

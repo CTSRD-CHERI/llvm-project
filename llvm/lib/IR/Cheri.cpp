@@ -107,7 +107,10 @@ void CSetBoundsStatistics::print(llvm::raw_ostream &OS, StringRef MainFile,
     for (const Entry &E : Entries) {
       // The analysis scripts expect alignment as a power of two instead of the
       // value
-      unsigned AlignmentBits = Log2_64(E.KnownAlignment);
+      unsigned AlignmentBits = 0;
+      // Log2_64 will return -1 for 0 but we want 0 in that case
+      if (E.KnownAlignment != 0)
+        AlignmentBits = Log2_64(E.KnownAlignment);
       OS << AlignmentBits << ',';
       if (E.RequestedSize)
         OS << *E.RequestedSize;
