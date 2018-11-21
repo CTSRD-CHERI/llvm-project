@@ -2093,7 +2093,10 @@ MachineBasicBlock *MipsTargetLowering::emitAtomicCmpSwapPartword(
   return exitMBB;
 }
 
-static SDValue setBounds(SelectionDAG &DAG, SDValue Val, SDValue Length) {
+static SDValue setBounds(SelectionDAG &DAG, SDValue Val, SDValue Length,
+                         bool CSetBoundsStatsLogged) {
+  assert(CSetBoundsStatsLogged);
+  (void)CSetBoundsStatsLogged;
   SDLoc DL(Val);
   Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
   return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, Val.getValueType(),
@@ -2101,8 +2104,31 @@ static SDValue setBounds(SelectionDAG &DAG, SDValue Val, SDValue Length) {
         Length);
 }
 
-static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length) {
-   return setBounds(DAG, Val, DAG.getIntPtrConstant(Length, SDLoc(Val)));
+static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length,
+                         bool CSetBoundsStatsLogged) {
+  return setBounds(DAG, Val, DAG.getIntPtrConstant(Length, SDLoc(Val)),
+                   CSetBoundsStatsLogged);
+}
+
+static void addGlobalsCSetBoundsStats(const GlobalValue *GV, SelectionDAG &DAG,
+                                      StringRef Pass, const DebugLoc &DL) {
+  unsigned AllocSize = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
+  unsigned TypeSize = DAG.getDataLayout().getTypeStoreSize(GV->getValueType());
+  Type *I64 = Type::getInt64Ty(*DAG.getContext());
+  std::string DebugLoc;
+  llvm::raw_string_ostream OS(DebugLoc);
+  DL.print(OS);
+  OS.flush();
+  if (DebugLoc.empty()) {
+    OS << "somewhere in " << DAG.getMachineFunction().getName();
+    OS.flush();
+  }
+  cheri::CSetBoundsStats->add(GV->getAlignment(),
+                              ConstantInt::get(I64, TypeSize), Pass,
+                              cheri::SetBoundsPointerSource::GlobalVar,
+                              "load of global " + GV->getName() +
+                                  " (alloc size=" + Twine(AllocSize) + ")",
+                              nullptr, std::move(DebugLoc));
 }
 
 SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
@@ -2133,7 +2159,11 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
       auto *Ty = GV->getValueType();
       if (Ty->isSized() && (GV->hasInternalLinkage() || GV->hasLocalLinkage())){
         uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(Ty);
-        Ptr = setBounds(DAG, Ptr, SizeBytes);
+        if (cheri::ShouldCollectCSetBoundsStats) {
+          addGlobalsCSetBoundsStats(GV, DAG, "MipsTargetLowering::lowerADDRSPACECAST",
+                                    N->getDebugLoc());
+        }
+        Ptr = setBounds(DAG, Ptr, SizeBytes, /*CSetBoundsStatsLogged=*/true);
       }
     }
     return Ptr;
@@ -2201,28 +2231,10 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   EVT Ty = Op.getValueType();
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   const GlobalValue *GV = N->getGlobal();
-  const Type* GVTy = GV->getType();
+  const Type *GVTy = GV->getType();
   if (cheri::ShouldCollectCSetBoundsStats) {
-    unsigned AllocSize =
-        DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
-    unsigned TypeSize =
-        DAG.getDataLayout().getTypeStoreSize(GV->getValueType());
-    Type *I64 = Type::getInt64Ty(*DAG.getContext());
-    std::string DebugLoc;
-    llvm::raw_string_ostream OS(DebugLoc);
-    N->getDebugLoc().print(OS);
-    OS.flush();
-    if (DebugLoc.empty()) {
-      OS << "somewhere in " << DAG.getMachineFunction().getName();
-      OS.flush();
-    }
-    cheri::CSetBoundsStats->add(GV->getAlignment(),
-                                ConstantInt::get(I64, TypeSize),
-                                "MipsTargetLowering::lowerGlobalAddress",
-                                cheri::SetBoundsPointerSource::GlobalVar,
-                                "load of global " + GV->getName() +
-                                    " (alloc size=" + Twine(AllocSize) + ")",
-                                nullptr, std::move(DebugLoc));
+    addGlobalsCSetBoundsStats(GV, DAG, "MipsTargetLowering::lowerGlobalAddress",
+                              N->getDebugLoc());
   }
 
   if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTable()) {
@@ -2343,7 +2355,8 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         !Name.startswith("__stop_")) {
       if (GV->hasInternalLinkage() || GV->hasLocalLinkage()) {
         uint64_t SizeBytes = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
-        Global = setBounds(DAG, Global, SizeBytes);
+        Global =
+            setBounds(DAG, Global, SizeBytes, /*CSetBoundsStatsLogged=*/true);
       } else {
         const Module &M = *GV->getParent();
         std::string Name = (Twine(".size.")+GV->getName()).str();
@@ -2359,7 +2372,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
         SDValue Size = DAG.getGlobalAddress(SizeGV, SDLoc(Global), MVT::i64);
         Size = DAG.getLoad(MVT::i64, SDLoc(Global), DAG.getEntryNode(), Size,
             MachinePointerInfo(SizeGV));
-        Global = setBounds(DAG, Global, Size);
+        Global = setBounds(DAG, Global, Size, /*CSetBoundsStatsLogged=*/true);
       }
     }
   }
