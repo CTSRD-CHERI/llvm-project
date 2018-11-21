@@ -1738,8 +1738,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // Now handle __cap_relocs (must be before RelaDyn because it might
   // result in new dynamic relocations being added)
   if (Config->ProcessCapRelocs) {
-    applySynthetic({InX<ELFT>::CapRelocs},
-                   [](SyntheticSection *SS) { SS->finalizeContents(); });
+    finalizeSynthetic(InX<ELFT>::CapRelocs);
 
     if (OutputSection *GS = findSection(".global_sizes"))
       // Also check if the .global_sizes section needs to be writable:
