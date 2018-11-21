@@ -1118,7 +1118,7 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
   // theoretically make them AS200 but right now RTLD/csu expects that
   // .init_array contains virtual addresses and not capabilities
   if (getTriple().getArch() == llvm::Triple::cheri)
-    CtorPtrAs = 0;
+    CtorPtrAS = 0;
   llvm::Type *CtorPFTy = llvm::PointerType::get(CtorFTy, CtorPtrAS);
 
   // Get the type of a ctor entry, { i32, void ()*, i8* }.
@@ -2678,7 +2678,7 @@ llvm::Constant *CodeGenModule::GetOrCreateMultiVersionResolver(
   if (getTarget().supportsIFunc()) {
     llvm::Type *ResolverType = llvm::FunctionType::get(
         llvm::PointerType::get(
-            DeclTy, getContext().getTargetAddressSpace(FD->getType())),
+            DeclTy, getAddressSpaceForType(FD->getType())),
         false);
     llvm::Constant *Resolver = GetOrCreateLLVMFunction(
         MangledName + ".resolver", ResolverType, GlobalDecl{},
