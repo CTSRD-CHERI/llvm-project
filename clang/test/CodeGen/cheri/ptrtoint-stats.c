@@ -36,6 +36,7 @@ void* multicast(long value) {
 }
 
 // CHECK:      { "pointer_cast_stats": {
+// CHECK-NEXT: 	"main_file": "{{.+}}CodeGen/cheri/ptrtoint-stats.c",
 // CHECK-NEXT: 	"ptrtoint": {
 // CHECK-NEXT: 		"count": 3,
 // CHECK-NEXT: 		"locations": [

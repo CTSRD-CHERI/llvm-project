@@ -1162,7 +1162,7 @@ public:
     SmallVector<std::pair<SourceRange, bool>, 8> IntToPointer;
     SmallVector<std::pair<SourceRange, bool>, 8> CapToPointer;
     SmallVector<std::pair<SourceRange, bool>, 8> PointerToCap;
-    void printStats(llvm::raw_ostream &OS, const SourceManager &SM);
+    void printStats(llvm::raw_ostream &OS, const CodeGenModule &CGM);
   };
   std::unique_ptr<PointerCastLocations> PointerCastStats;
 

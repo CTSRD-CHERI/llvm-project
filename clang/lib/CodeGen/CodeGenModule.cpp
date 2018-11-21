@@ -425,8 +425,8 @@ void InstrProfStats::reportDiagnostics(DiagnosticsEngine &Diags,
 }
 
 void CodeGenModule::PointerCastLocations::printStats(llvm::raw_ostream &OS,
-                                                     const SourceManager &SM) {
-
+                                                     const CodeGenModule &CGM) {
+  const SourceManager &SM = CGM.getContext().getSourceManager();
   auto DumpStat = [&](const llvm::SmallVectorImpl<std::pair<SourceRange, bool>> &Vec) {
     const size_t Total = Vec.size();
     OS << "\t\t\"count\": " << Total << ",\n\t\t\"locations\": [";
@@ -453,6 +453,12 @@ void CodeGenModule::PointerCastLocations::printStats(llvm::raw_ostream &OS,
   };
 
   OS << "{ \"pointer_cast_stats\": {\n";
+  StringRef MainFile = CGM.getCodeGenOpts().MainFileName;
+  if (MainFile.empty()) {
+    SourceLocation MainFileLoc = SM.getLocForStartOfFile(SM.getMainFileID());
+    MainFile = SM.getFilename(MainFileLoc);
+  }
+  OS << "\t\"main_file\": \"" << llvm::yaml::escape(MainFile) << "\",\n";
   OS << "\t\"ptrtoint\": {\n";
 
   DumpStat(PointerToInt);
@@ -528,8 +534,7 @@ void CodeGenModule::Release() {
               << StatsFile << EC.message();
         });
     if (StatsOS)
-      PointerCastStats->printStats(StatsOS->stream(),
-                                   getContext().getSourceManager());
+      PointerCastStats->printStats(StatsOS->stream(), *this);
   }
 
   if (CodeGenOpts.Autolink &&
