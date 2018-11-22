@@ -1,8 +1,9 @@
 // RUN: rm -f %t-hybrid.csv %t-purecap.csv
 // RUN: %cheri_cc1 %s -cheri-bounds=aggressive -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t-hybrid.csv -S -o /dev/null
-// RUN: cat %t-hybrid.csv
+//
 // RUN: FileCheck -input-file %t-hybrid.csv %s -check-prefix HYBRID-CSV
-// RUN: %cheri_purecap_cc1 %s -cheri-bounds=aggressive -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t-purecap.csv -S -o /dev/null
+// RUN: %cheri_purecap_cc1 %s -mllvm -cheri-cap-table-abi=pcrel -cheri-bounds=aggressive \
+// RUN:     -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t-purecap.csv -S -o /dev/null
 // RUN: cat %t-purecap.csv
 // RUN: FileCheck -input-file %t-purecap.csv %s -check-prefix PURECAP-CSV
 
@@ -71,5 +72,15 @@ void test_subobject_addrof_alignas(struct Nested * __capability cap) {
   // now we only know 3 bits since it's been incremented by 8 -> min align 8
 }
 
+// global bounds log should not appear in the hybrid log:
 // HYBRID-CSV-EMPTY:
+
+
+// PURECAP-CSV-NEXT: 4,16,s,"<somewhere in test_subobject_addrof_basic>","CHERI sandbox ABI setup","set bounds on AllocaInst s.addr"
+// PURECAP-CSV-NEXT: 4,16,s,"<somewhere in test_subobject_addrof_hybrid>","CHERI sandbox ABI setup","set bounds on AllocaInst cap.addr"
+// PURECAP-CSV-NEXT: 4,16,s,"<somewhere in test_subobject_addrof_assume_aligned>","CHERI sandbox ABI setup","set bounds on AllocaInst cap.addr"
+// PURECAP-CSV-NEXT: 4,16,s,"<somewhere in test_subobject_addrof_assume_aligned>","CHERI sandbox ABI setup","set bounds on AllocaInst cap2"
+// PURECAP-CSV-NEXT: 4,16,s,"<somewhere in test_subobject_addrof_alignas>","CHERI sandbox ABI setup","set bounds on AllocaInst cap.addr"
+// PURECAP-CSV-NEXT: 7,12,s,"<somewhere in test_subobject_addrof_alignas>","CHERI sandbox ABI setup","set bounds on AllocaInst onstack128"
+// PURECAP-CSV-NEXT: 2,20,g,"<somewhere in test_subobject_addrof_global>","MipsTargetLowering::lowerGlobalAddress","load of global GlobalStruct (alloc size=20)"
 // PURECAP-CSV-EMPTY:
