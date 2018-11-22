@@ -50,6 +50,7 @@
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/WithColor.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <memory>
 using namespace llvm;
@@ -626,6 +627,19 @@ static int compileModule(char **argv, LLVMContext &Context) {
   Out->keep();
   if (DwoOut)
     DwoOut->keep();
+
+  if (cheri::ShouldCollectCSetBoundsStats) {
+    auto StatsFile = llvm::cheri::StatsOutputFile::open(
+        cheri::CSetBoundsStatistics::outputFile(),
+        [](StringRef StatsFile, const std::error_code &EC) {
+          errs() << "Couldn't open CSetBounds stats file " << StatsFile << ": " << EC.message();
+        },
+        [](StringRef StatsFile, const std::error_code &EC) {
+          errs() << "Couldn't lock CSetBounds stats file " << StatsFile << ": " << EC.message();
+        });
+    if (StatsFile)
+      llvm::cheri::CSetBoundsStats->print(*StatsFile, InputFilename);
+  }
 
   return 0;
 }
