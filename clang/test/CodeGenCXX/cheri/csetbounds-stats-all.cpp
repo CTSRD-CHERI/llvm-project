@@ -2,12 +2,7 @@
 // RUN: %cheri_purecap_cc1 %s -mllvm -cheri-cap-table-abi=pcrel -cheri-bounds=aggressive \
 // RUN:   -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t-purecap.csv -S -o /dev/null
 // RUN: cat %t-purecap.csv
-// RUN: FileCheck -input-file %t-purecap.csv %s -check-prefixes CSV,CSV-CAPTABLE
-// RUN: rm -f %t-hybrid.csv %t-purecap.csv
-// RUN: %cheri_purecap_cc1 %s -mllvm -cheri-cap-table-abi=legacy -debug-info-kind=standalone -cheri-bounds=aggressive \
-// RUN:    -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t-purecap.csv -S -o /dev/null
-// RUN: cat %t-purecap.csv
-// RUN: FileCheck -input-file %t-purecap.csv %s -check-prefixes CSV,CSV-LEGACY
+// RUN: FileCheck -input-file %t-purecap.csv %s -check-prefixes CSV
 
 // CSV: alignment_bits,size,kind,source_loc,compiler_pass,details
 struct Foo {
@@ -66,10 +61,6 @@ struct Foo global_foo;
 int load_global_variable() {
   // This should also result in a dump from MIPSISelLowering (and we know it's a global)
   int x = global_foo.a;
-  // captable is compiled without debug info -> we only get the function name as location:
-  // CSV-CAPTABLE-NEXT: 2,12,g,"somewhere in _Z20load_global_variablev","MipsTargetLowering::lowerGlobalAddress","load of global global_foo (alloc size=12)"
-  // CSV-LEGACY-NEXT: 2,12,g,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-3]]","MipsTargetLowering::lowerGlobalAddress","load of global global_foo (alloc size=12)"
-  // CSV-LEGACY-NEXT: 0,8,g,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-4]]","MipsTargetLowering::lowerGlobalAddress","load of global .size.global_foo (alloc size=8)"
   return x;
 }
 
@@ -77,7 +68,6 @@ extern int foo(int, ...);
 
 int test(void) {
   return foo(3, 1, 2, 3, 4ULL); // promoted to u64 in variadic call -> 4 * 8 bytes
-  // CSV-NEXT:   0,32,s,"{{.+}}/csetbounds-stats-variadic-call.c:[[@LINE-1]]","variadic call lowering","setting varargs bounds for call to foo"
 }
 
 // CSV-NEXT: 4,16,s,"<somewhere in _Z27test_subobject_addrof_basicU3capP3Foo>","CHERI sandbox ABI setup","set bounds on AllocaInst s.addr"
