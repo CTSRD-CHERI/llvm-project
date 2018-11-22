@@ -45,7 +45,7 @@ void CSetBoundsStatistics::add(unsigned KnownAlignment, Value *Length,
                                StringRef Pass, SetBoundsPointerSource Kind,
                                Twine Details, std::string SourceLoc) {
   Optional<uint64_t> KnownSize = None;
-  if (auto CI = dyn_cast<ConstantInt>(Length)) {
+  if (auto CI = dyn_cast_or_null<ConstantInt>(Length)) {
     KnownSize = CI->getSExtValue();
   } else {
     // TODO: use KnownBits to infer something about size?

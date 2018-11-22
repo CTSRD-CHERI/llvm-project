@@ -45,6 +45,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -1585,6 +1586,14 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
     Chain = DAG.getCopyToReg(Chain, dl, SPReg, Tmp1);     // Output chain
     Tmp1 =
       DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, VT.getSimpleVT(), SetBounds, Tmp1, Size);
+    if (cheri::ShouldCollectCSetBoundsStats) {
+      Value* KnownSize = nullptr;
+      if (auto CSDN = dyn_cast<ConstantSDNode>(Size)) {
+        KnownSize = ConstantInt::get(Type::getInt64Ty(*DAG.getContext()), CSDN->getZExtValue());
+      }
+      cheri::CSetBoundsStats->add(Align, KnownSize, "ExpandDYNAMIC_STACKALLOC", cheri::SetBoundsPointerSource::Stack,
+      "", cheri::inferSourceLocation(Node->getDebugLoc(), DAG.getMachineFunction().getName()));
+    }
   } else {
     Chain = DAG.getCopyToReg(Chain, dl, SPReg, Tmp1);     // Output chain
   }
