@@ -2225,7 +2225,7 @@ SDValue MipsTargetLowering::lowerGlobalAddress(SDValue Op,
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   const GlobalValue *GV = N->getGlobal();
   const Type *GVTy = GV->getType();
-  if (cheri::ShouldCollectCSetBoundsStats) {
+  if (Ty.isFatPointer() && cheri::ShouldCollectCSetBoundsStats) {
     addGlobalsCSetBoundsStats(GV, DAG, "MipsTargetLowering::lowerGlobalAddress",
                               N->getDebugLoc());
   }
