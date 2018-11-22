@@ -3784,6 +3784,22 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
           DAG.getConstant(Intrinsic::cheri_cap_perms_and, DL, MVT::i64), PtrOff,
           DAG.getIntPtrConstant(0xFFD7, DL));
       RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
+      if (cheri::ShouldCollectCSetBoundsStats) {
+        auto Size =
+            ConstantInt::get(Type::getInt64Ty(*DAG.getContext()), LastOffset);
+        StringRef Name;
+        if (ES) {
+          Name = ES->getSymbol();
+        } else if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
+          Name = G->getGlobal()->getName();
+        }
+        cheri::CSetBoundsStats->add(
+            1, Size, "variadic call lowering",
+            cheri::SetBoundsPointerSource::Stack,
+            StringRef("setting varargs bounds for call to ") + Name,
+            cheri::inferSourceLocation(DL.getDebugLoc(),
+                                       DAG.getMachineFunction().getName()));
+      }
     } else {
       bool ShouldClearC13 = false;
       // We only need to clear $c13 (for on-stack arguments if the calling
