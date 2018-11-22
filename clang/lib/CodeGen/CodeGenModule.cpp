@@ -63,6 +63,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/YAMLParser.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 
 using namespace clang;
 using namespace CodeGen;

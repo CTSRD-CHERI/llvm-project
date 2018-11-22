@@ -38,8 +38,10 @@
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
+
 using namespace clang;
 using namespace CodeGen;
 
@@ -122,7 +124,7 @@ CodeGenFunction::setPointerBounds(llvm::Value *V, llvm::Value *Size,
   if (llvm::cheri::ShouldCollectCSetBoundsStats) {
     llvm::cheri::CSetBoundsStats->add(
         getKnownAlignment(V, CGM.getDataLayout()), Size, Pass,
-        llvm::cheri::SetBoundsPointerSource::Unknown, Details, nullptr,
+        llvm::cheri::inferPointerSource(V), Details,
         Loc.printToString(CGM.getContext().getSourceManager()));
   }
   return getTargetHooks().setPointerBounds(*this, V, Size, Name);

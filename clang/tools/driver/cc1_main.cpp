@@ -27,7 +27,6 @@
 #include "clang/FrontendTool/Utils.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Config/llvm-config.h"
-#include "llvm/IR/Cheri.h"
 #include "llvm/LinkAllPasses.h"
 #include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
@@ -39,6 +38,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include <cstdio>
 
 #ifdef CLANG_HAVE_RLIMITS
