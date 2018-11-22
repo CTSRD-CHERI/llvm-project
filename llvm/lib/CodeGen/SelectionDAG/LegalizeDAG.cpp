@@ -1587,9 +1587,9 @@ void SelectionDAGLegalize::ExpandDYNAMIC_STACKALLOC(SDNode* Node,
     Tmp1 =
       DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, VT.getSimpleVT(), SetBounds, Tmp1, Size);
     if (cheri::ShouldCollectCSetBoundsStats) {
-      Value* KnownSize = nullptr;
+      llvm::Optional<uint64_t> KnownSize = None;
       if (auto CSDN = dyn_cast<ConstantSDNode>(Size)) {
-        KnownSize = ConstantInt::get(Type::getInt64Ty(*DAG.getContext()), CSDN->getZExtValue());
+        KnownSize = CSDN->getZExtValue();
       }
       cheri::CSetBoundsStats->add(Align, KnownSize, "ExpandDYNAMIC_STACKALLOC", cheri::SetBoundsPointerSource::Stack,
       "", cheri::inferSourceLocation(Node->getDebugLoc(), DAG.getMachineFunction().getName()));

@@ -2114,11 +2114,9 @@ static SDValue setBounds(SelectionDAG &DAG, SDValue Val, uint64_t Length,
 static void addGlobalsCSetBoundsStats(const GlobalValue *GV, SelectionDAG &DAG,
                                       StringRef Pass, const DebugLoc &DL) {
   unsigned AllocSize = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
-  unsigned TypeSize = DAG.getDataLayout().getTypeStoreSize(GV->getValueType());
-  Type *I64 = Type::getInt64Ty(*DAG.getContext());
+  unsigned Size = DAG.getDataLayout().getTypeStoreSize(GV->getValueType());
   cheri::CSetBoundsStats->add(
-      GV->getAlignment(), ConstantInt::get(I64, TypeSize), Pass,
-      cheri::SetBoundsPointerSource::GlobalVar,
+      GV->getAlignment(), Size, Pass, cheri::SetBoundsPointerSource::GlobalVar,
       "load of global " + GV->getName() + " (alloc size=" + Twine(AllocSize) +
           ")",
       cheri::inferSourceLocation(DL, DAG.getMachineFunction().getName()));
@@ -3785,16 +3783,14 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
           DAG.getIntPtrConstant(0xFFD7, DL));
       RegsToPass.push_back(std::make_pair(Mips::C13, PtrOff));
       if (cheri::ShouldCollectCSetBoundsStats) {
-        auto Size =
-            ConstantInt::get(Type::getInt64Ty(*DAG.getContext()), LastOffset);
-        StringRef Name;
+        StringRef Name = "<unknown function>";
         if (ES) {
           Name = ES->getSymbol();
         } else if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
           Name = G->getGlobal()->getName();
         }
         cheri::CSetBoundsStats->add(
-            1, Size, "variadic call lowering",
+            1, LastOffset, "variadic call lowering",
             cheri::SetBoundsPointerSource::Stack,
             StringRef("setting varargs bounds for call to ") + Name,
             cheri::inferSourceLocation(DL.getDebugLoc(),

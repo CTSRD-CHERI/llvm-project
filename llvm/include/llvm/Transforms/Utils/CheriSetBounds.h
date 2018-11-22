@@ -66,11 +66,16 @@ public:
   };
   CSetBoundsStatistics();
   ~CSetBoundsStatistics();
+
   void add(unsigned KnownAlignment, Value *Length, StringRef Pass,
-           SetBoundsPointerSource Kind, Twine Details,
+           SetBoundsPointerSource Kind, const Twine &Details,
+           std::string KnownSourceLoc);
+  void add(unsigned KnownAlignment, Optional<uint64_t> Length, StringRef Pass,
+           SetBoundsPointerSource Kind, const Twine &Details,
            std::string KnownSourceLoc);
   void print(llvm::raw_ostream &OS, StringRef MainFile, bool PrintHeader);
   void print(StatsOutputFile &S, StringRef MainFile);
+  static StringRef outputFile();
 
 private:
   SmallVector<Entry, 32> Entries;

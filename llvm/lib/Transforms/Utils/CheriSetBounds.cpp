@@ -43,13 +43,20 @@ ManagedStatic<CSetBoundsStatistics> CSetBoundsStats;
 
 void CSetBoundsStatistics::add(unsigned KnownAlignment, Value *Length,
                                StringRef Pass, SetBoundsPointerSource Kind,
-                               Twine Details, std::string SourceLoc) {
+                               const Twine &Details, std::string SourceLoc) {
   Optional<uint64_t> KnownSize = None;
   if (auto CI = dyn_cast_or_null<ConstantInt>(Length)) {
     KnownSize = CI->getSExtValue();
   } else {
     // TODO: use KnownBits to infer something about size?
   }
+  add(KnownAlignment, KnownSize, Pass, Kind, Details, std::move(SourceLoc));
+}
+
+void CSetBoundsStatistics::add(unsigned KnownAlignment,
+                               Optional<uint64_t> KnownSize, StringRef Pass,
+                               SetBoundsPointerSource Kind,
+                               const Twine &Details, std::string SourceLoc) {
   Entries.push_back({KnownAlignment, KnownSize, Kind, std::move(SourceLoc),
                      Pass, Details.str()});
 }
