@@ -220,8 +220,11 @@ int cc1_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
 
   // Dump the CHERI CSetBounds stats now
   if (llvm::cheri::ShouldCollectCSetBoundsStats) {
+    StringRef StatsOutput = llvm::cheri::CSetBoundsStatistics::outputFile();
+    if (StatsOutput.empty())
+      StatsOutput = Clang->getCodeGenOpts().CHERIStatsFile;
     auto StatsFile = llvm::cheri::StatsOutputFile::open(
-        Clang->getCodeGenOpts().CHERIStatsFile,
+        StatsOutput,
         [&Clang](StringRef StatsFile, const std::error_code &EC) {
           Clang->getDiagnostics().Report(
               diag::warn_fe_unable_to_open_stats_file)
