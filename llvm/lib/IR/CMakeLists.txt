@@ -7,7 +7,6 @@ add_llvm_library(LLVMCore
   Attributes.cpp
   AutoUpgrade.cpp
   BasicBlock.cpp
-  Cheri.cpp
   Comdat.cpp
   ConstantFold.cpp
   ConstantRange.cpp

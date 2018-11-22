@@ -69,6 +69,7 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include <algorithm>
 #include <cassert>
 #include <cctype>
@@ -2115,20 +2116,12 @@ static void addGlobalsCSetBoundsStats(const GlobalValue *GV, SelectionDAG &DAG,
   unsigned AllocSize = DAG.getDataLayout().getTypeAllocSize(GV->getValueType());
   unsigned TypeSize = DAG.getDataLayout().getTypeStoreSize(GV->getValueType());
   Type *I64 = Type::getInt64Ty(*DAG.getContext());
-  std::string DebugLoc;
-  llvm::raw_string_ostream OS(DebugLoc);
-  DL.print(OS);
-  OS.flush();
-  if (DebugLoc.empty()) {
-    OS << "somewhere in " << DAG.getMachineFunction().getName();
-    OS.flush();
-  }
-  cheri::CSetBoundsStats->add(GV->getAlignment(),
-                              ConstantInt::get(I64, TypeSize), Pass,
-                              cheri::SetBoundsPointerSource::GlobalVar,
-                              "load of global " + GV->getName() +
-                                  " (alloc size=" + Twine(AllocSize) + ")",
-                              nullptr, std::move(DebugLoc));
+  cheri::CSetBoundsStats->add(
+      GV->getAlignment(), ConstantInt::get(I64, TypeSize), Pass,
+      cheri::SetBoundsPointerSource::GlobalVar,
+      "load of global " + GV->getName() + " (alloc size=" + Twine(AllocSize) +
+          ")",
+      cheri::inferSourceLocation(DL, DAG.getMachineFunction().getName()));
 }
 
 SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)

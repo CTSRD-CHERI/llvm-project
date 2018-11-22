@@ -12,6 +12,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Pass.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Transforms/Utils/Local.h"
 
 #include <string>
@@ -100,8 +101,8 @@ class CheriRangeChecker : public FunctionPass,
       if (!DebugInst)
         DebugInst = InsertPt;
       cheri::CSetBoundsStats->add(getKnownAlignment(AlignmentSource, *TD), Size,
-                                  getPassName(), std::get<2>(AO), "", DebugInst,
-                                  std::string());
+                                  getPassName(), std::get<2>(AO), "",
+                                  cheri::inferSourceLocation(DebugInst));
     }
     if (BitCast == I2P)
       BitCast = SetLength;

@@ -1,18 +1,21 @@
-#include "llvm/Pass.h"
-#include "llvm/IR/Cheri.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/Intrinsics.h"
-#include "llvm/IR/Constants.h"
-#include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/DataLayout.h"
 #include "llvm/ADT/StringSwitch.h"
-#include "llvm/IR/CallSite.h"
-#include "llvm/IR/InstVisitor.h"
 #include "llvm/Analysis/Utils/Local.h"
+#include "llvm/IR/CallSite.h"
+#include "llvm/IR/Cheri.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InstVisitor.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/Pass.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
+#include "llvm/Transforms/Utils/Local.h"
 
 #include <string>
 #include <utility>
@@ -100,10 +103,15 @@ public:
       Value *Alloca = B.CreateCall(StackToCapFn, BitCast);
       if (BitCast == AI)
         BitCast = cast<Instruction>(Alloca);
+      if (cheri::ShouldCollectCSetBoundsStats) {
+        cheri::CSetBoundsStats->add(AI->getAlignment(), Size, getPassName(),
+                                    cheri::SetBoundsPointerSource::Stack,
+                                    "set bounds on " +
+                                        cheri::inferLocalVariableName(AI),
+                                    cheri::inferSourceLocation(AI));
+      }
       Alloca = B.CreateCall(SetLenFun, {Alloca, Size});
       Alloca = B.CreateBitCast(Alloca, AllocaTy);
-      // FIXME: this breaks the debuginfo:
-      // FIXME is this correct?
       AI->replaceNonMetadataUsesWith(Alloca);
       BitCast->setOperand(0, AI);
     }

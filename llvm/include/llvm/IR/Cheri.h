@@ -73,65 +73,6 @@ inline bool isCheriPointer(Type* Ty, const Instruction* InstForDL) {
 }
 #endif
 
-namespace cheri {
-
-class StatsOutputFile {
-  std::unique_ptr<llvm::raw_fd_ostream> Stream;
-  int FD;
-  explicit StatsOutputFile(int FD, std::unique_ptr<llvm::raw_fd_ostream> S)
-      : Stream(std::move(S)), FD(FD) {}
-
-public:
-  using ErrorCallback = std::function<void(StringRef, const std::error_code &)>;
-  llvm::raw_fd_ostream &stream() { return *Stream; }
-  uint64_t size();
-  ~StatsOutputFile();
-  static std::unique_ptr<StatsOutputFile>
-  open(StringRef File, ErrorCallback OnOpenError, ErrorCallback OnLockError);
-};
-
-enum class SetBoundsPointerSource {
-  Unknown,
-  Heap,
-  Stack,
-  GlobalVar,
-  CodePointer,
-  SubObject,
-};
-
-class CSetBoundsStatistics {
-public:
-  struct Entry {
-    uint64_t KnownAlignment;
-    Optional<uint64_t> RequestedSize;
-    SetBoundsPointerSource PointerKind;
-    std::string SourceLocation;
-    std::string Pass;
-    std::string Details;
-  };
-  CSetBoundsStatistics();
-  ~CSetBoundsStatistics();
-  void add(unsigned KnownAlignment, Value *Length, StringRef Pass,
-           SetBoundsPointerSource Kind, Twine Details, Instruction *DebugInst,
-           std::string KnownSourceLoc);
-  void print(llvm::raw_ostream &OS, StringRef MainFile, bool PrintHeader);
-  void print(StatsOutputFile &S, StringRef MainFile);
-
-private:
-  SmallVector<Entry, 32> Entries;
-};
-
-enum StatsFormat {
-  StatsOff = 0,
-  StatsCSV,
-  StatsJSON,
-};
-
-extern StatsFormat ShouldCollectCSetBoundsStats;
-extern ManagedStatic<CSetBoundsStatistics> CSetBoundsStats;
-
-} // end namespace cheri
-
 } // end namespace llvm
 
 #endif // LLVM_IR_CHERI_H
