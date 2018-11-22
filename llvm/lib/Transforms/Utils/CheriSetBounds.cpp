@@ -25,15 +25,20 @@
 #include <sys/file.h>
 #include <unistd.h>
 
-static llvm::cl::opt<llvm::cheri::StatsFormat, true> CollectPointerCastStats(
+static llvm::cl::opt<llvm::cheri::StatsFormat, true> CollectSetBoundsStats(
     "collect-csetbounds-stats", llvm::cl::ZeroOrMore, llvm::cl::Hidden,
-    llvm::cl::desc("Collect statistics on numbers of int <-> pointer casts"),
+    llvm::cl::desc("Collect statistics on CSetBounds uses"),
     llvm::cl::location(llvm::cheri::ShouldCollectCSetBoundsStats),
     llvm::cl::values(
         clEnumValN(llvm::cheri::StatsOff, "off", "Do not collect statistics"),
         clEnumValN(llvm::cheri::StatsCSV, "csv", "Print stats in CSV format"),
         clEnumValN(llvm::cheri::StatsJSON, "json",
                    "Print stats in JSON format")));
+
+llvm::cl::opt<std::string>
+    SetBoundsOutput("collect-csetbounds-output", llvm::cl::ZeroOrMore,
+                    llvm::cl::Hidden,
+                    llvm::cl::desc("output file for CSetBounds statistics"));
 
 namespace llvm {
 namespace cheri {
@@ -60,6 +65,8 @@ void CSetBoundsStatistics::add(unsigned KnownAlignment,
   Entries.push_back({KnownAlignment, KnownSize, Kind, std::move(SourceLoc),
                      Pass, Details.str()});
 }
+
+StringRef CSetBoundsStatistics::outputFile() { return SetBoundsOutput; }
 
 void CSetBoundsStatistics::print(StatsOutputFile &S, StringRef MainFile) {
   print(S.stream(), MainFile, S.size() == 0);
