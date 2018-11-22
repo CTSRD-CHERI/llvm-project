@@ -17,28 +17,28 @@ extern void do_stuff_with_float(float *);
 
 void test_subobject_addrof_basic(struct Foo *s) {
   do_stuff_with_int(&s->a);
-  // CSV-NEXT: 0,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
+  // CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
   do_stuff_with_float(&s->b);
-  // CSV-NEXT: 0,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:23","Add subobject bounds","addrof operator on float"
+  // CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:23","Add subobject bounds","addrof operator on float"
   do_stuff_with_int_ref(s->a);
-  // CSV-NEXT: 0,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:28","Add subobject bounds","C++ reference on int"
+  // CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:28","Add subobject bounds","C++ reference on int"
 }
 
 void test_onstack_int(struct Foo *s) {
   int x = 0;
   do_stuff_with_int(&x);
-  // CSV-NEXT: 2,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
+  // CSV-NEXT: 2,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
   do_stuff_with_int_ref(x);
-  // CSV-NEXT: 2,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:25","Add subobject bounds","C++ reference on int"
+  // CSV-NEXT: 2,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:25","Add subobject bounds","C++ reference on int"
 }
 
 void test_onstack_int_overaligned(struct Foo *s) {
   alignas(32) int x = 0;
   // We know this int is at least 5 bits aligned:
   do_stuff_with_int(&x);
-  // CSV-NEXT: 5,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
+  // CSV-NEXT: 5,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
   do_stuff_with_int_ref(x);
-  // CSV-NEXT: 5,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:25","Add subobject bounds","C++ reference on int"
+  // CSV-NEXT: 5,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:25","Add subobject bounds","C++ reference on int"
 }
 
 void test__stack_array(void) {

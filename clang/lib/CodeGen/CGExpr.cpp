@@ -614,7 +614,7 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
                      << "' reference to " << Size << "\n");
     NumBoundsSetOnReferences++;
     return setPointerBounds(Value, Size, Loc, "ref.with.bounds",
-                            "Add subobject bounds",
+                            "Add subobject bounds", /*IsSubObject=*/true,
                             "C++ reference on " + Ty.getAsString());
   }
   return Value;
@@ -634,7 +634,7 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
                      << "' addrof to " << Size << "\n");
     NumBoundsSetOnAddrOf++;
     return setPointerBounds(Value, Size, Loc, "addrof.with.bounds",
-                            "Add subobject bounds",
+                            "Add subobject bounds", /*IsSubObject=*/true,
                             "addrof operator on " + Ty.getAsString());
   }
   return Value;

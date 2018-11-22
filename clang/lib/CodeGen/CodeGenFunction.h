@@ -4320,15 +4320,15 @@ public:
   }
   llvm::Value *setPointerBounds(llvm::Value *V, llvm::Value *Size,
                                 SourceLocation Loc, const llvm::Twine &Name,
-                                StringRef Pass,
+                                StringRef Pass, bool isSubObject,
                                 const llvm::Twine &Details = "");
 
-  llvm::Value *setPointerBounds(llvm::Value *V, uint64_t Size,
-                                SourceLocation Loc, const llvm::Twine &Name,
-                                StringRef Pass,
-                                const llvm::Twine &Details = "") {
+  llvm::Value *
+  setPointerBounds(llvm::Value *V, uint64_t Size, SourceLocation Loc,
+                   const llvm::Twine &Name, StringRef Pass,
+                   bool IsSubObject, const llvm::Twine &Details = "") {
     return setPointerBounds(V, llvm::ConstantInt::get(Int64Ty, Size), Loc, Name,
-                            Pass, Details);
+                            Pass, IsSubObject, Details);
   }
 
   /// EmitPointerWithAlignment - Given an expression with a pointer type,

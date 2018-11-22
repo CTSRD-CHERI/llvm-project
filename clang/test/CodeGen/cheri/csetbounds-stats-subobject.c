@@ -31,44 +31,44 @@ void do_stuff_with_nested(struct Nested *nptr);
 
 void test_subobject_addrof_basic(struct WithNested *s) {
   do_stuff_with_int(&s->n.a);
-// PURECAP-CSV-NEXT: 0,4,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
+// PURECAP-CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
   do_stuff_with_nested(&s->n);
-// PURECAP-CSV-NEXT: 0,12,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:24","Add subobject bounds","addrof operator on struct Nested"
+// PURECAP-CSV-NEXT: 0,12,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:24","Add subobject bounds","addrof operator on struct Nested"
   do_stuff_with_float(&s->f1);
-// PURECAP-CSV-NEXT: 0,4,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:23","Add subobject bounds","addrof operator on float"
+// PURECAP-CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:23","Add subobject bounds","addrof operator on float"
 }
 
 void test_subobject_addrof_hybrid(struct Nested * __capability cap) {
   do_stuff_with_int_capability(&cap->a);
-  // HYBRID-CSV-NEXT: 0,4,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:32","Add subobject bounds","addrof operator on int"
-  // PURECAP-CSV-NEXT: 0,4,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-2]]:32","Add subobject bounds","addrof operator on int"
+  // HYBRID-CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:32","Add subobject bounds","addrof operator on int"
+  // PURECAP-CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-2]]:32","Add subobject bounds","addrof operator on int"
 }
 
 struct WithNested GlobalStruct;
 
 void test_subobject_addrof_global() {
   do_stuff_with_float(&GlobalStruct.f1);
-// PURECAP-CSV-NEXT: 2,4,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:23","Add subobject bounds","addrof operator on float"
+// PURECAP-CSV-NEXT: 2,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:23","Add subobject bounds","addrof operator on float"
   do_stuff_with_nested(&GlobalStruct.n);
-// PURECAP-CSV-NEXT: 2,12,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:24","Add subobject bounds","addrof operator on struct Nested"
+// PURECAP-CSV-NEXT: 2,12,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:24","Add subobject bounds","addrof operator on struct Nested"
 }
 
 void test_subobject_addrof_assume_aligned(struct Nested * __capability cap) {
   struct Nested * __capability cap2 = __builtin_assume_aligned_cap(cap, 4096);
   do_stuff_with_int_capability(&cap2->a);
-  // HYBRID-CSV-NEXT: 0,4,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:32","Add subobject bounds","addrof operator on int"
-  // PURECAP-CSV-NEXT: 0,4,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-2]]:32","Add subobject bounds","addrof operator on int"
+  // HYBRID-CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:32","Add subobject bounds","addrof operator on int"
+  // PURECAP-CSV-NEXT: 0,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-2]]:32","Add subobject bounds","addrof operator on int"
 }
 
 void test_subobject_addrof_alignas(struct Nested * __capability cap) {
   _Alignas(128) struct Nested onstack128;
   // HYBRID-CSV-NEXT: 7,12,s,"<somewhere in test_subobject_addrof_alignas>","CHERI range checker",""
   do_stuff_with_int(&onstack128.a);
-  // PURECAP-CSV-NEXT: 7,4,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
+  // PURECAP-CSV-NEXT: 7,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
   do_stuff_with_int_capability(&onstack128.a);
-  // PURECAP-CSV-NEXT: 7,4,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:32","Add subobject bounds","addrof operator on int"
+  // PURECAP-CSV-NEXT: 7,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:32","Add subobject bounds","addrof operator on int"
   do_stuff_with_int(&onstack128.c);
-  // PURECAP-CSV-NEXT: 3,4,?,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
+  // PURECAP-CSV-NEXT: 3,4,o,"{{.+}}/csetbounds-stats-subobject.c:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
   // now we only know 3 bits since it's been incremented by 8 -> min align 8
 }
 

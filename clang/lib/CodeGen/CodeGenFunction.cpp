@@ -117,14 +117,17 @@ CharUnits CodeGenFunction::getNaturalPointeeTypeAlignment(QualType T,
                                  /* forPointeeType= */ true);
 }
 
-llvm::Value *
-CodeGenFunction::setPointerBounds(llvm::Value *V, llvm::Value *Size,
-                                  SourceLocation Loc, const llvm::Twine &Name,
-                                  StringRef Pass, const llvm::Twine &Details) {
+llvm::Value *CodeGenFunction::setPointerBounds(llvm::Value *V,
+                                               llvm::Value *Size,
+                                               SourceLocation Loc,
+                                               const llvm::Twine &Name,
+                                               StringRef Pass, bool IsSubObject,
+                                               const llvm::Twine &Details) {
   if (llvm::cheri::ShouldCollectCSetBoundsStats) {
+    auto Kind = IsSubObject ? llvm::cheri::SetBoundsPointerSource::SubObject
+                            : llvm::cheri::inferPointerSource(V);
     llvm::cheri::CSetBoundsStats->add(
-        getKnownAlignment(V, CGM.getDataLayout()), Size, Pass,
-        llvm::cheri::inferPointerSource(V), Details,
+        getKnownAlignment(V, CGM.getDataLayout()), Size, Pass, Kind, Details,
         Loc.printToString(CGM.getContext().getSourceManager()));
   }
   return getTargetHooks().setPointerBounds(*this, V, Size, Name);
