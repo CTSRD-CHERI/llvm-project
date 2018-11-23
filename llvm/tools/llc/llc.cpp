@@ -564,6 +564,9 @@ static int compileModule(char **argv, LLVMContext &Context) {
       }
       TPC.setInitialized();
       PM.add(createPrintMIRPass(*OS));
+      if (cheri::ShouldCollectCSetBoundsStats) {
+        PM.add(createLogCheriSetBoundsPass());
+      }
       PM.add(createFreeMachineFunctionPass());
     } else if (Target->addPassesToEmitFile(PM, *OS,
                                            DwoOut ? &DwoOut->os() : nullptr,

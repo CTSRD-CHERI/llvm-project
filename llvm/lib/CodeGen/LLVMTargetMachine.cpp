@@ -33,6 +33,8 @@
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
+
 using namespace llvm;
 
 static cl::opt<bool> EnableTrapUnreachable("trap-unreachable",
@@ -211,6 +213,9 @@ bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
       addAsmPrinter(PM, Out, DwoOut, FileType, *Context))
     return true;
 
+  if (cheri::ShouldCollectCSetBoundsStats) {
+    PM.add(createLogCheriSetBoundsPass());
+  }
   PM.add(createFreeMachineFunctionPass());
   return false;
 }
@@ -260,6 +265,9 @@ bool LLVMTargetMachine::addPassesToEmitMC(PassManagerBase &PM, MCContext *&Ctx,
     return true;
 
   PM.add(Printer);
+  if (cheri::ShouldCollectCSetBoundsStats) {
+    PM.add(createLogCheriSetBoundsPass());
+  }
   PM.add(createFreeMachineFunctionPass());
 
   return false; // success!

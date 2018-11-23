@@ -46,24 +46,13 @@ namespace cheri {
 StatsFormat ShouldCollectCSetBoundsStats = StatsOff;
 ManagedStatic<CSetBoundsStatistics> CSetBoundsStats;
 
-void CSetBoundsStatistics::add(unsigned KnownAlignment, Value *Length,
-                               StringRef Pass, SetBoundsPointerSource Kind,
-                               const Twine &Details, std::string SourceLoc) {
-  Optional<uint64_t> KnownSize = None;
-  if (auto CI = dyn_cast_or_null<ConstantInt>(Length)) {
-    KnownSize = CI->getSExtValue();
-  } else {
-    // TODO: use KnownBits to infer something about size?
-  }
-  add(KnownAlignment, KnownSize, Pass, Kind, Details, std::move(SourceLoc));
-}
-
 void CSetBoundsStatistics::add(unsigned KnownAlignment,
                                Optional<uint64_t> KnownSize, StringRef Pass,
                                SetBoundsPointerSource Kind,
-                               const Twine &Details, std::string SourceLoc) {
-  Entries.push_back({KnownAlignment, KnownSize, Kind, std::move(SourceLoc),
-                     Pass, Details.str()});
+                               const Twine &Details, std::string SourceLoc,
+                               Optional<uint64_t> SizeMultipleOf) {
+  Entries.push_back({KnownAlignment, KnownSize, SizeMultipleOf, Kind,
+                     std::move(SourceLoc), Pass, Details.str()});
 }
 
 StringRef CSetBoundsStatistics::outputFile() { return SetBoundsOutput; }
@@ -112,10 +101,15 @@ void CSetBoundsStatistics::print(llvm::raw_ostream &OS, StringRef MainFile,
       if (E.KnownAlignment != 0)
         AlignmentBits = Log2_64(E.KnownAlignment);
       OS << AlignmentBits << ',';
-      if (E.RequestedSize)
+      if (E.RequestedSize) {
         OS << *E.RequestedSize;
-      else
-        OS << "<unknown>";
+      } else {
+        // IF the size is unknown
+        if (E.RequestedSizeMultipleOf)
+          OS << "<unknown multiple of " << *E.RequestedSizeMultipleOf << ">";
+        else
+          OS << "<unknown>";
+      }
 
       if (E.PointerKind == SetBoundsPointerSource::Stack) {
         OS << ",s";
