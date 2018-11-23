@@ -148,7 +148,7 @@ uint64_t StatsOutputFile::size() {
 }
 
 StatsOutputFile::~StatsOutputFile() {
-  if (flock(FD, LOCK_UN) != 0) {
+  if (flock(FD, LOCK_UN) != 0 && errno != ENOTSUP) {
     errs() << "WARNING: unlocking statistics FD failed. Should be "
               "released automatically on exit anyway.\n";
   }
@@ -174,7 +174,7 @@ StatsOutputFile::open(StringRef File, ErrorCallback OnOpenError,
     CloseOnStreamDelete = false;
   }
   assert(StatsFD != -1);
-  if (flock(StatsFD, LOCK_EX) != 0) {
+  if (flock(StatsFD, LOCK_EX) != 0 && errno != ENOTSUP) {
     // Lock error is not fatal we just get mixed output in the stats file
     OnLockError(File, std::error_code(errno, std::generic_category()));
   }
