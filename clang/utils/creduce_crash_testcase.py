@@ -74,7 +74,8 @@ def expand_lit_substitutions(args: "Options", cmd) -> str:
                                         "-target-abi purecap ")
     # llc substitutions:
     if "llc" in compiler_cmd:
-        compiler_cmd = re.sub(r"\sllc\b", " " + str(args.llc_cmd) + " ", compiler_cmd)
+        print("COMPILER_CMD: '" + compiler_cmd + "'")
+        compiler_cmd = re.sub(r"^\s*llc\b", " " + str(args.llc_cmd) + " ", compiler_cmd)
     compiler_cmd = compiler_cmd.replace("%cheri128_llc ", str(args.llc_cmd) +
                                         " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
     compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(args.llc_cmd) +
@@ -88,7 +89,7 @@ def expand_lit_substitutions(args: "Options", cmd) -> str:
 
     # opt substitutions
     if "opt" in compiler_cmd:
-        compiler_cmd = re.sub(r"\sopt\b", " " + str(args.opt_cmd) + " ", compiler_cmd)
+        compiler_cmd = re.sub(r"^\s*opt\b", " " + str(args.opt_cmd) + " ", compiler_cmd)
     compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(args.opt_cmd) +
                                         " -mtriple=cheri-unknown-freebsd ")
 
