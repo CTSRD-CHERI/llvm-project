@@ -61,14 +61,12 @@ set(LLVM_TEST_DEPENDS
           dsymutil
           llvm-dwarfdump
           llvm-dwp
-          llvm-exegesis
           llvm-extract
           llvm-isel-fuzzer
           llvm-lib
           llvm-link
           llvm-lto2
           llvm-mc
-          llvm-mca
           llvm-modextract
           llvm-mt
           llvm-nm
@@ -79,7 +77,6 @@ set(LLVM_TEST_DEPENDS
           llvm-pdbutil
           llvm-profdata
           llvm-ranlib
-          llvm-rc
           llvm-readobj
           llvm-readelf
           llvm-rtdyld
@@ -100,6 +97,16 @@ set(LLVM_TEST_DEPENDS
           yaml-bench
           yaml2obj
         )
+
+if (TARGET llvm-mca)
+  list(APPEND LLVM_TEST_DEPENDS llvm-mca)
+endif()
+if (TARGET llvm-rc)
+  list(APPEND LLVM_TEST_DEPENDS llvm-rc)
+endif()
+if (TARGET llvm-exegesis)
+  list(APPEND LLVM_TEST_DEPENDS llvm-exegesis)
+endif()
 
 if(TARGET llvm-lto)
   set(LLVM_TEST_DEPENDS ${LLVM_TEST_DEPENDS} llvm-lto)
