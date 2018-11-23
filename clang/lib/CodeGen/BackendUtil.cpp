@@ -59,6 +59,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
 #include "llvm/Transforms/Utils.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Transforms/Utils/NameAnonGlobals.h"
 #include "llvm/Transforms/Utils/SymbolRewriter.h"
 #include <memory>
@@ -681,6 +682,11 @@ void EmitAssemblyHelper::CreatePasses(legacy::PassManager &MPM,
   FPM.add(new TargetLibraryInfoWrapperPass(*TLII));
   if (CodeGenOpts.VerifyModule)
     FPM.add(createVerifierPass());
+
+  // FIXME: is this the right location?
+  if (cheri::ShouldCollectCSetBoundsStats) {
+    FPM.add(createLogCheriSetBoundsPass());
+  }
 
   // Set up the per-module pass manager.
   if (!CodeGenOpts.RewriteMapFiles.empty())
