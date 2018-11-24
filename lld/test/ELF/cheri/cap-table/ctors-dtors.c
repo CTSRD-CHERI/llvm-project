@@ -45,5 +45,5 @@ crt_call_constructors(void) {
 // CHECK-LABEL: SYMBOL TABLE:
 // CHECK: 0000000120030010         .ctors		 00000000 .hidden __ctors_end
 // CHECK: 0000000120030000         .ctors		 00000010 .hidden __ctors_start
-// CHECK: 0000000120030000 g       .ctors		 00000010 __CTOR_END__
+// CHECK: 0000000120030000 g     O .ctors		 00000010 __CTOR_END__
 

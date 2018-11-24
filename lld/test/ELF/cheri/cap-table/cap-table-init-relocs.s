@@ -42,8 +42,8 @@ local_var:
 # LEGACY-BOTH-CAPRELOCS: 11 .captable    00000020 0000000000030000 DATA
 # LEGACY-BOTH-CAPRELOCS: 12 __cap_relocs  00000050 0000000000030020 DATA
 # LEGACY-BOTH-CAPRELOCS-LABEL: SYMBOL TABLE:
-# LEGACY-BOTH-CAPRELOCS:       0000000000030000 l       .captable              00000010 preemptible_var@CAPTABLE
-# LEGACY-BOTH-CAPRELOCS:       0000000000030010 l       .captable              00000010 local_var@CAPTABLE
+# LEGACY-BOTH-CAPRELOCS:       0000000000030000 l     O .captable              00000010 preemptible_var@CAPTABLE
+# LEGACY-BOTH-CAPRELOCS:       0000000000030010 l     O .captable              00000010 local_var@CAPTABLE
 
 # two relative relocs for the location and one for the local var base. And then the ABSPTR/SIZE for the preemptible one
 # LEGACY-BOTH-ELF-RELOCS:      Relocations [
@@ -67,8 +67,8 @@ local_var:
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS: 11 .captable    00000020 0000000000030000 DATA
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS: 12 __cap_relocs  00000028 0000000000030020 DATA
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS-LABEL: SYMBOL TABLE:
-# ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS:       0000000000030000 l       .captable              00000010 preemptible_var@CAPTABLE
-# ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS:       0000000000030010 l       .captable              00000010 local_var@CAPTABLE
+# ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS:       0000000000030000 l     O .captable              00000010 preemptible_var@CAPTABLE
+# ELF-PREEMPTIBLE-LEGACY-LOCAL-CAPRELOCS:       0000000000030010 l     O .captable              00000010 local_var@CAPTABLE
 
 # One relative reloc for the local __cap_reloc location and one R_MIPS_CHERI_CAPABILITY for the preemptible symbol
 # ELF-PREEMPTIBLE-LEGACY-LOCAL-ELF-RELOCS:      Relocations [
@@ -91,8 +91,8 @@ local_var:
 # ELF-BOTH-CAPRELOCS: 11 .captable    00000020 0000000000030000 DATA
 # ELF-BOTH-CAPRELOCS-NOT: __cap_relocs
 # ELF-BOTH-CAPRELOCS-LABEL: SYMBOL TABLE:
-# ELF-BOTH-CAPRELOCS:       0000000000030000 l       .captable              00000010 preemptible_var@CAPTABLE
-# ELF-BOTH-CAPRELOCS:       0000000000030010 l       .captable              00000010 local_var@CAPTABLE
+# ELF-BOTH-CAPRELOCS:       0000000000030000 l     O .captable              00000010 preemptible_var@CAPTABLE
+# ELF-BOTH-CAPRELOCS:       0000000000030010 l     O .captable              00000010 local_var@CAPTABLE
 
 # ELF-BOTH-ELF-RELOCS:      Relocations [
 # ELF-BOTH-ELF-RELOCS-NEXT:   Section (7) .rel.dyn {

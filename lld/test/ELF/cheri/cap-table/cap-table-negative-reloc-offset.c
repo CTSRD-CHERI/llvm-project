@@ -155,6 +155,6 @@ int __start(void) {
 // CHECK: 0x0000000120030440	Base: __man_macros (0x0000000120030000)	Offset: 0xffffffffffffd280	Length: 0x0000000000000440	Permissions: 0x00000000
 
 // CHECK-LABEL: SYMBOL TABLE:
-// CHECK: 0000000120030000 g       .data.rel.ro		 00000440 __man_macros
-// CHECK: 0000000120030440 g       .data.rel.ro		 00000010 man_macros
+// CHECK: 0000000120030000 g     O .data.rel.ro		 00000440 __man_macros
+// CHECK: 0000000120030440 g     O .data.rel.ro		 00000010 man_macros
 
