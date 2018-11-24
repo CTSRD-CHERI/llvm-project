@@ -157,10 +157,10 @@ ThreeLongs three_longs() {
   // CHECK-LABEL: define void @three_longs(%struct.ThreeLongs addrspace(200)* noalias nocapture sret %agg.result) local_unnamed_addr
   // ASM-LABEL: three_longs
   // Clang now uses a memcpy from a global for cheri128
-  // CHERI128-ASM: clcbi $c4, %captab20(.Lthree_longs.t)($c26)
+  // CHERI128-ASM: clcbi $c4, %captab20(.L__const.three_longs.t)($c26)
   // CHERI128-ASM: clcbi   $c12, %capcall20(memcpy)($c26)
   // For cheri256 clang will inline the memcpy from a global (since it is smaller than 1 cap)
-  // CHERI256-ASM:      clcbi $c1, %captab20(.Lthree_longs.t)($c26)
+  // CHERI256-ASM:      clcbi $c1, %captab20(.L__const.three_longs.t)($c26)
   // CHERI256-ASM-NEXT: cld	$1, $zero, 16($c1)
   // CHERI256-ASM-NEXT: cld	$2, $zero, 8($c1)
   // CHERI256-ASM-NEXT: cld	$3, $zero, 0($c1)

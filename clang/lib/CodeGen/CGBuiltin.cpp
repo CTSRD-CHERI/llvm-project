@@ -7087,7 +7087,8 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   }
 
   if (BuiltinID == AArch64::BI_AddressOfReturnAddress) {
-    llvm::Value *F = CGM.getIntrinsic(Intrinsic::addressofreturnaddress);
+    llvm::Value *F = CGM.getIntrinsic(Intrinsic::addressofreturnaddress,
+                                      {CGM.ProgramInt8PtrTy});
     return Builder.CreateCall(F);
   }
 

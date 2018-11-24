@@ -77,7 +77,7 @@ void use_array(void* value);
 
 void func(void) {
   // This seems to emit a memcpy from a global so it had the same issues:
-  // CHECK: func.uintptr_struct_array = private unnamed_addr addrspace(200) constant [2 x %struct.uintptr_struct]
+  // CHECK: @__const.func.uintptr_struct_array = private unnamed_addr addrspace(200) constant [2 x %struct.uintptr_struct]
   // CHECK-SAME: [%struct.uintptr_struct { i8 addrspace(200)* inttoptr (i64 5246977 to i8 addrspace(200)*) },
   // CHECK-SAME:  %struct.uintptr_struct { i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @uintptr_constant_int to i8 addrspace(200)*) }]
   struct uintptr_struct uintptr_struct_array[] = {
@@ -86,7 +86,7 @@ void func(void) {
   };
   use_array(&uintptr_struct_array);
 
-  // CHECK: @func.uintptr_array = private unnamed_addr addrspace(200) constant [2 x i8 addrspace(200)*]
+  // CHECK: @__const.func.uintptr_array = private unnamed_addr addrspace(200) constant [2 x i8 addrspace(200)*]
   // CHECK-SAME: [i8 addrspace(200)* inttoptr (i64 3 to i8 addrspace(200)*),
   // CHECK-SAME:  i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @uintptr_constant_int to i8 addrspace(200)*)]
   __uintcap_t uintptr_array[] = {
@@ -158,15 +158,15 @@ struct uintptr_struct uintptr_struct_bss;
 // ASM-NEXT: 	.space	[[$CAP_SIZE]]
 // ASM-NEXT: 	.size	uintptr_struct_array, [[@EXPR 4 * $CAP_SIZE]]
 
-// ASM-LABEL: .Lfunc.uintptr_struct_array:
+// ASM-LABEL: .L__const.func.uintptr_struct_array:
 // ASM-NEXT: 	.chericap	5246977
 // ASM-NEXT: 	.chericap	uintptr_constant_int
-// ASM-NEXT: 	.size	.Lfunc.uintptr_struct_array, [[@EXPR 2 * $CAP_SIZE]]
+// ASM-NEXT: 	.size	.L__const.func.uintptr_struct_array, [[@EXPR 2 * $CAP_SIZE]]
 
-// ASM-LABEL: .Lfunc.uintptr_array:
+// ASM-LABEL: .L__const.func.uintptr_array:
 // ASM-NEXT: 	.chericap	3
 // ASM-NEXT: 	.chericap	uintptr_constant_int
-// ASM-NEXT: 	.size	.Lfunc.uintptr_array, [[@EXPR 2 * $CAP_SIZE]]
+// ASM-NEXT: 	.size	.L__const.func.uintptr_array, [[@EXPR 2 * $CAP_SIZE]]
 
 // ASM-LABEL: .type	uintptr_bss,@object
 // ASM-NEXT: .comm	uintptr_bss,[[$CAP_SIZE]],[[$CAP_SIZE]]
