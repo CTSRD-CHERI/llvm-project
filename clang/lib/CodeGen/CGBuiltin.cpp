@@ -2998,11 +2998,14 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     return RValue::get(Carry);
   }
   case Builtin::BI__builtin_addressof: {
-    auto Result = RValue::get(EmitLValue(E->getArg(0)).getPointer());
+    Value *Addr = EmitLValue(E->getArg(0)).getPointer();
     if (getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
-      report_fatal_error("__builtin_addressof() needs bounds too!");
+      auto BoundedAddr = setCHERIBoundsOnAddrOf(Addr, E->getArg(0)->getType(),
+                                                E->getExprLoc());
+      assert(BoundedAddr->getType() == Addr->getType());
+      Addr = BoundedAddr;
     }
-    return Result;
+    return RValue::get(Addr);
   }
   case Builtin::BI__builtin_operator_new:
     return EmitBuiltinNewDeleteCall(
