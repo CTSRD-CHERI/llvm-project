@@ -163,8 +163,14 @@ public:
     CBM_SubObjectsSafe, /// in addition to references also set bounds for
                         /// pointers to subobjects (but only for those where we
                         /// assume that it is safe to do so)
-    CBM_Aggressive, /// set bounds for anything that is not definitively unsafe
+    CBM_Aggressive, /// Set bounds for anything that is not definitively unsafe
                     /// or annotated as not wanting bounds
+    CBM_VeryAggressive,   /// Same as aggressive but also set bounds on array
+                          /// indexing operations such as foo(&array[0]) -> set
+                          /// bounds to first member
+    CBM_EverywhereUnsafe, /// Unsafe: Set bounds everywhere where there isn't an
+                          /// explicit opt-out (also sets bounds on object
+                          /// pointers with vtables)
   };
 
   // TODO: merge FEnvAccessModeKind and FPContractModeKind

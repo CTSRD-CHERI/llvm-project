@@ -2366,6 +2366,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
             .Case("references-only", LangOptions::CBM_References)
             .Case("subobject-safe", LangOptions::CBM_SubObjectsSafe)
             .Case("aggressive", LangOptions::CBM_Aggressive)
+            .Case("very-aggressive", LangOptions::CBM_VeryAggressive)
+            .Case("everywhere-unsafe", LangOptions::CBM_EverywhereUnsafe)
             .Default((LangOptions::CheriBoundsMode)-1);
 
     if (BoundsMode == (LangOptions::CheriBoundsMode)-1) {

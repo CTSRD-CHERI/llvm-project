@@ -652,6 +652,12 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty) {
     return false;
   }
   assert(CGM.getDataLayout().isFatPointer(Value->getType()));
+
+  // TODO: handle opt-out cases
+  if (getLangOpts().getCheriBounds() >= LangOptions::CBM_EverywhereUnsafe) {
+    CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");
+    return true;
+  }
   // It should be possible to set the size for all scalar types
   if (Ty->isScalarType()) {
     CHERI_BOUNDS_DBG(<< "Found scalar type -> ");
