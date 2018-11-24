@@ -44,15 +44,15 @@ public:
       for (Instruction &I : BB) {
         // TODO: CallBase
         Function *CalledFunc = nullptr;
+        // TODO: use CallBase when we merge upstream
         if (const CallInst *CI = dyn_cast<CallInst>(&I)) {
           CalledFunc = CI->getCalledFunction();
         } else if (const InvokeInst *II = dyn_cast<InvokeInst>(&I)) {
           CalledFunc = II->getCalledFunction();
-        } else {
-          // We only care about calls and invokes
-          // TODO: use CallBase when we merge upstream
-          continue;
         }
+        // We only care about calls and invokes where the target is known
+        if (!CalledFunc)
+          continue;
         // We can only do this analysis on calls that return pointers
         if (!I.getType()->isPointerTy())
           continue;
