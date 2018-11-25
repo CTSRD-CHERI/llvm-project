@@ -600,6 +600,7 @@ STATISTIC(NumBoundsSetOnAddrOf,
 
 llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
                                                         QualType Ty,
+                                                        const Expr *E,
                                                         SourceLocation Loc) {
   if (getLangOpts().getCheriBounds() < LangOptions::CBM_References)
     return Value; // Not enabled
@@ -608,7 +609,7 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
   //                  E->dump(llvm::dbgs()));
 
   NumReferencesCheckedForBoundsTightening++;
-  if (canTightenCheriBounds(Value, Ty)) {
+  if (canTightenCheriBounds(Value, Ty, E)) {
     uint64_t Size = getContext().getTypeSizeInChars(Ty).getQuantity();
     CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
                      << "' reference to " << Size << "\n");
@@ -622,13 +623,14 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
 
 llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
                                                      clang::QualType Ty,
+                                                     const Expr *E,
                                                      SourceLocation Loc) {
   assert(getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe);
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on addrof operator ";
   //                  E->dump(llvm::dbgs()));
 
   NumAddrOfCheckedForBoundsTightening++;
-  if (canTightenCheriBounds(Value, Ty)) {
+  if (canTightenCheriBounds(Value, Ty, E)) {
     uint64_t Size = getContext().getTypeSizeInChars(Ty).getQuantity();
     CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
                      << "' addrof to " << Size << "\n");
@@ -640,8 +642,10 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
   return Value;
 }
 
-bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty) {
-  assert(getLangOpts().getCheriBounds() > LangOptions::CBM_Conservative);
+bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
+                                            const Expr *E) {
+  const auto BoundsMode = getLangOpts().getCheriBounds() ;
+  assert(BoundsMode > LangOptions::CBM_Conservative);
   if (!CGM.getDataLayout().isFatPointer(Value->getType())) {
     CHERI_BOUNDS_DBG(<< "Cannot set bounds on non-capability IR type "; Value->getType()->print(llvm::dbgs(), true); llvm::dbgs() << "\n");
     return false;
@@ -654,13 +658,61 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty) {
   assert(CGM.getDataLayout().isFatPointer(Value->getType()));
 
   // TODO: handle opt-out cases
-  if (getLangOpts().getCheriBounds() >= LangOptions::CBM_EverywhereUnsafe) {
+  if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
     CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");
     return true;
   }
+
+  E = E->IgnoreImplicit();
+  if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
+    CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
+    const Expr* Index = ASE->getIdx();
+    llvm::APSInt ConstLength;
+    if (!Index->EvaluateAsInt(ConstLength, getContext())) {
+      // If the index is not a constant we should be able to set bounds:
+      // This indicates the code is something like
+      // for (int i = 0; i < max; i++) { do_something(array[i]); }
+      // and therefore we should be able to tightly bound.
+      CHERI_BOUNDS_DBG(<< "Index is not a constant (probably in a per-element loop) -> ");
+      return true;
+    }
+    CHERI_BOUNDS_DBG(<< "Index is a constant -> ");
+    const Expr* Base = ASE->getBase()->IgnoreImplicit();
+    if (BoundsMode >= LangOptions::CBM_VeryAggressive) {
+      CHERI_BOUNDS_DBG(<< "bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> ");
+      return true;
+    }
+    if (BoundsMode < LangOptions::CBM_Aggressive) {
+      CHERI_BOUNDS_DBG(<< "bounds on array[CONST] only with mode>=aggressive\n");
+      return false;
+    }
+    assert(BoundsMode == LangOptions::CBM_Aggressive);
+    // In aggressive mode we set bounds on everything except &array[0],
+    // &array[last_index] and &array[last_index+1]
+    // since those may be used to pass start and end indices to functions like
+    // `for_each_elem(&array[0], &array[last_index]);`
+    Optional<llvm::APSInt> ArraySizeMinusOne;
+    if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(Base->getType())) {
+      ArraySizeMinusOne = llvm::APSInt(CAT->getSize() - 1, false);
+    }
+    // can't use operator<= here since it asserts
+    if (ConstLength == 0 || (ArraySizeMinusOne && llvm::APSInt::compareValues(ConstLength, *ArraySizeMinusOne) >= 0)){
+      CHERI_BOUNDS_DBG(<< "const array index is 0 or end of array\n");
+      return false;
+    }
+    CHERI_BOUNDS_DBG(<< "const array index is not end and bounds==aggressive -> ");
+    return true;
+  }
+
   // It should be possible to set the size for all scalar types
   if (Ty->isScalarType()) {
     CHERI_BOUNDS_DBG(<< "Found scalar type -> ");
+    return true;
+  }
+
+  if (Ty->isConstantArrayType()) {
+    CHERI_BOUNDS_DBG(<< "Found constant size array type -> ");
+    // FIXME: what about size 0/size 1 VLA emulation for pre-C99 code
     return true;
   }
   // It because a bit more tricky for class types since they might be
@@ -741,7 +793,7 @@ CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E) {
   // TODO: we should probably check if references are capabilities instead since
   // there could be a mode where references are capabilities but pointers aren't
   if (CGM.getTarget().areAllPointersCapabilities() && !Ty->isFunctionType())
-    Value = setCHERIBoundsOnReference(Value, Ty, E->getExprLoc());
+    Value = setCHERIBoundsOnReference(Value, Ty, E, E->getExprLoc());
   return RValue::get(Value);
 }
 

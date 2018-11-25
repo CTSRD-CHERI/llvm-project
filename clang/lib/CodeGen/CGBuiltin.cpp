@@ -3001,7 +3001,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const FunctionDecl *FD,
     Value *Addr = EmitLValue(E->getArg(0)).getPointer();
     if (getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
       auto BoundedAddr = setCHERIBoundsOnAddrOf(Addr, E->getArg(0)->getType(),
-                                                E->getExprLoc());
+                                                E->getArg(0), E->getExprLoc());
       assert(BoundedAddr->getType() == Addr->getType());
       Addr = BoundedAddr;
     }

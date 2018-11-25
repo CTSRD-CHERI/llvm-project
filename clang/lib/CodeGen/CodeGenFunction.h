@@ -3870,10 +3870,10 @@ public:
   /// Emits a reference binding to the passed in expression.
   RValue EmitReferenceBindingToExpr(const Expr *E);
   llvm::Value *setCHERIBoundsOnReference(llvm::Value *Ptr, QualType Ty,
-                                         SourceLocation Loc);
+                                         const Expr *E, SourceLocation Loc);
   llvm::Value *setCHERIBoundsOnAddrOf(llvm::Value *Ptr, QualType Ty,
-                                      SourceLocation Loc);
-  bool canTightenCheriBounds(llvm::Value *Ptr, QualType Ty);
+                                      const Expr *E, SourceLocation Loc);
+  bool canTightenCheriBounds(llvm::Value *Ptr, QualType Ty, const Expr *E);
 
   //===--------------------------------------------------------------------===//
   //                           Expression Emission
