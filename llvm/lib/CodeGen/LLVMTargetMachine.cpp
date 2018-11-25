@@ -213,9 +213,6 @@ bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
       addAsmPrinter(PM, Out, DwoOut, FileType, *Context))
     return true;
 
-  if (cheri::ShouldCollectCSetBoundsStats) {
-    PM.add(createLogCheriSetBoundsPass());
-  }
   PM.add(createFreeMachineFunctionPass());
   return false;
 }
