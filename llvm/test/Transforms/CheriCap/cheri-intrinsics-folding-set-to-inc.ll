@@ -48,5 +48,36 @@ define i8 addrspace(200)* @fold_offset_get_add_set(i8 addrspace(200)* %arg) #1 {
   ; CHECK: ret i8 addrspace(200)* [[RESULT]]
 }
 
+define i8 addrspace(200)* @fold_addr_get_set(i8 addrspace(200)* %arg) #1 {
+  %addr = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %arg)
+  %ret = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* %arg, i64 %addr)
+  ret i8 addrspace(200)* %ret
+  ; CHECK-LABEL: @fold_addr_get_set(i8 addrspace(200)* %arg)
+  ; CHECK: ret i8 addrspace(200)* %arg
+}
+
+; But check that we don't do the same folding when using different base caps for get/set
+define i8 addrspace(200)* @fold_addr_get_set_different_cap(i8 addrspace(200)* %arg, i8 addrspace(200)* %arg2) #1 {
+  %addr = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %arg)
+  %ret = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* %arg2, i64 %addr)
+  ret i8 addrspace(200)* %ret
+  ; CHECK-LABEL: @fold_addr_get_set_different_cap(
+  ; CHECK-NEXT: %addr = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %arg)
+  ; CHECK-NEXT: %ret = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* %arg2, i64 %addr)
+  ; CHECK-NEXT: ret i8 addrspace(200)* %ret
+}
+
+define i8 addrspace(200)* @fold_addr_get_add_set(i8 addrspace(200)* %arg) #1 {
+  %offset = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %arg)
+  %new_offset = add i64 %offset, 25
+  %ret = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* %arg, i64 %new_offset)
+  ret i8 addrspace(200)* %ret
+  ; CHECK-LABEL: @fold_addr_get_add_set(i8 addrspace(200)* %arg)
+  ; CHECK: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %arg, i64 25)
+  ; CHECK: ret i8 addrspace(200)* [[RESULT]]
+}
+
+
+
 attributes #0 = { nounwind }
 attributes #1 = { nounwind readnone }

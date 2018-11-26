@@ -40,6 +40,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
   Function *IncOffset;
   Function *SetOffset;
   Function *GetOffset;
+  Function *SetAddr;
+  Function *GetAddr;
 
   Type* I8CapTy;
   Type* CapOffsetTy;
@@ -229,7 +231,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
         &CHERICapFoldIntrinsics::inferCapabilityAddress, V, Call, IntTy, BaseCap);
   }
 
-  void foldIncOffsetSetOffsetOnlyUserIncrement(CallInst* CI, SmallPtrSet<Instruction*, 8> &ToErase) {
+  void foldIncOffsetSetOffsetSetAddrOnlyUserIncrement(
+      CallInst *CI, SmallPtrSet<Instruction *, 8> &ToErase) {
     // errs() << __func__ << ": num users=" << CI->getNumUses() << ": "; CI->dump();
     User* OnlyUser = CI->hasOneUse() ? *CI->user_begin() : nullptr;
     while (OnlyUser) {
@@ -276,12 +279,25 @@ class CHERICapFoldIntrinsics : public ModulePass {
   }
 
   /// Replace get-offset, add, set-offset sequences with inc-offset
-  void foldSetOffset() {
-    SmallVector<CallInst *, 16> SetOffsets;
+  void foldSetOffset(Module *M) {
+    foldSetOffsetOrSetAddress<Intrinsic::cheri_cap_offset_get,
+                              Intrinsic::cheri_cap_offset_set>(M, SetOffset);
+  }
+
+  /// Replace get-address, add, set-address sequences with inc-offset
+  void foldSetAddress(Module *M) {
+    foldSetOffsetOrSetAddress<Intrinsic::cheri_cap_address_get,
+                              Intrinsic::cheri_cap_address_set>(M, SetAddr);
+  }
+
+  template <Intrinsic::ID GetIntrinsic, Intrinsic::ID SetIntrinsic>
+  void foldSetOffsetOrSetAddress(Module *M, Function *SetFunc) {
+    assert(IncOffset && "Not initialized correclty");
+    SmallVector<CallInst *, 16> SetCalls;
     SmallPtrSet<Instruction*, 8> ToErase;
-    for (Value *V : SetOffset->users())
-      SetOffsets.push_back(cast<CallInst>(V));
-    for (CallInst *CI : SetOffsets) {
+    for (Value *V : SetFunc->users())
+      SetCalls.push_back(cast<CallInst>(V));
+    for (CallInst *CI : SetCalls) {
       if (ToErase.count(CI)) {
         assert(CI->hasNUses(0));
         continue;
@@ -291,8 +307,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
       // Replace setoffset(setoffset(C, A), B) with setoffset(C, B). Must come
       // before the setoffset to incoffset transformation in case C is an add.
       while (match(CI->getOperand(0),
-                   m_Intrinsic<Intrinsic::cheri_cap_offset_set>(
-                       m_Value(LHS), m_Value(RHS)))) {
+                   m_Intrinsic<SetIntrinsic>(m_Value(LHS), m_Value(RHS)))) {
         Instruction *NestedInstr = cast<Instruction>(CI->getOperand(0));
         if (NestedInstr->hasOneUse())
           ToErase.insert(NestedInstr);
@@ -302,15 +317,13 @@ class CHERICapFoldIntrinsics : public ModulePass {
       Value *BaseCap = CI->getOperand(0);
 
       // fold chains of set-offset, (inc-offset/GEP)+ into a single set-offset
-      foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
+      foldIncOffsetSetOffsetSetAddrOnlyUserIncrement(CI, ToErase);
 
       if (match(CI->getOperand(1), m_Add(m_Value(LHS), m_Value(RHS)))) {
         Value *Add = nullptr;
-        if (match(LHS, m_Intrinsic<Intrinsic::cheri_cap_offset_get>(
-                           m_Specific(BaseCap))))
+        if (match(LHS, m_Intrinsic<GetIntrinsic>(m_Specific(BaseCap))))
           Add = RHS;
-        else if (match(RHS, m_Intrinsic<Intrinsic::cheri_cap_offset_get>(
-                                m_Specific(BaseCap))))
+        else if (match(RHS, m_Intrinsic<GetIntrinsic>(m_Specific(BaseCap))))
           Add = LHS;
         if (Add) {
           IRBuilder<> B(CI);
@@ -323,43 +336,27 @@ class CHERICapFoldIntrinsics : public ModulePass {
       }
 
       // Fold setoffset(A, getoffset(A)) -> A
-      if (match(CI->getOperand(1), m_Intrinsic<Intrinsic::cheri_cap_offset_get>(m_Specific(BaseCap)))) {
+      if (match(CI->getOperand(1),
+                m_Intrinsic<GetIntrinsic>(m_Specific(BaseCap)))) {
         CI->replaceAllUsesWith(BaseCap);
         ToErase.insert(CI);
         Modified = true;
       }
 
+      // Convert all llvm.cheri.cap.address.set(null, FOO) to offset.increment()
+      // since there is not setaddr instruction and a incoffset is the most efficient
+      // operation to set the offset since there is a version with an immediate overload
       // Also convert a setoffset on null to a incoffset on null since we have
       // an immediate version of incoffset but not setoffset
       // FIXME: this should be done in the MIPS backend instead...
       if (isa<ConstantPointerNull>(CI->getOperand(0))) {
+        assert(IncOffset);
         CI->setCalledFunction(IncOffset);
         Modified = true;
       }
     }
     for (Instruction* I : ToErase)
       RecursivelyDeleteTriviallyDeadInstructions(I);
-  }
-
-  void foldSetAddressOnNull(Module* M) {
-    Function *SetAddr = M->getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_set));
-    if (!SetAddr)
-      return;
-    // Convert all llvm.cheri.cap.address.set(null, FOO) to offset.increment()
-    // since there is not setaddr instruction and a incoffset is the most efficient
-    // operation to set the offset since there is a version with an immediate overload
-    SmallVector<CallInst *, 16> SetAddrs; // Needed since we are modifying the users()
-    for (Value *V : SetAddr->users())
-      SetAddrs.push_back(cast<CallInst>(V));
-    for (CallInst *CI : SetAddrs) {
-      if (isa<ConstantPointerNull>(CI->getOperand(0))) {
-        // IRBuilder<> B(CI);
-        if (!IncOffset)
-          IncOffset = Intrinsic::getDeclaration(M, Intrinsic::cheri_cap_offset_increment);
-        CI->setCalledFunction(IncOffset);
-        Modified = true;
-      }
-    }
   }
 
   /// Replace set-offset, inc-offset sequences with a single set-offset
@@ -375,7 +372,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
         continue;
       }
       // fold chains of inc-offset, (inc-offset/GEP)+ into a single inc-offset
-      foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
+      foldIncOffsetSetOffsetSetAddrOnlyUserIncrement(CI, ToErase);
     }
     for (Instruction* I : ToErase)
       RecursivelyDeleteTriviallyDeadInstructions(I);
@@ -397,9 +394,13 @@ public:
         M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_set));
     GetOffset =
         M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_get));
+    SetAddr =
+        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_set));
+    GetAddr =
+        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_get));
     // at least one intrinsic was used -> we need to run the fold
     // setoffset/incoffset pass
-    foldSetAddressOnNull(&M);
+
     if (IncOffset || SetOffset || GetOffset) {
       if (!IncOffset)
         IncOffset = Intrinsic::getDeclaration(
@@ -415,8 +416,25 @@ public:
       CapOffsetTy = GetOffset->getReturnType();
       // TODO: does the order here matter?
       foldIncOffset();
-      foldSetOffset();
+      foldSetOffset(&M);
     }
+    if (SetAddr || GetAddr) {
+      if (!SetAddr)
+        SetAddr =
+            Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_set);
+      if (!GetAddr)
+        GetAddr =
+            Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_get);
+      if (!IncOffset)
+        IncOffset = Intrinsic::getDeclaration(
+            &M, Intrinsic::cheri_cap_offset_increment);
+      // Ensure that all the intrinsics exist in the module
+      I8CapTy = IncOffset->getReturnType();
+      CapOffsetTy = GetAddr->getReturnType();
+      // TODO: does the order here matter?
+      foldSetAddress(&M);
+    }
+
     foldGetIntrinisics(&M);
     return Modified;
   }
