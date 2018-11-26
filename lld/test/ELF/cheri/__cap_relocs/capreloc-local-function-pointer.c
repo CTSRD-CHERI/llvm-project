@@ -1,6 +1,6 @@
 // REQUIRES: clang, cheri_is_128
 
-// RUN: %cheri_purecap_clang %s -c -o %t.o
+// RUN: %cheri_purecap_clang -cheri-cap-table-abi=legacy %s -c -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
 
 // RUN: ld.lld -preemptible-caprelocs=legacy %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
