@@ -20,10 +20,10 @@
 
 # CHECK:      error: incompatible pure-capability ABIs:
 # CHECK-NEXT: >>> {{.+}}incompatible-abis.s.tmp-fn-desc.o uses EXT_CHERI_ABI_FNDESC
-# CHECK-NEXT: >>> {{.+}}incompatible-abis.s.tmp-default.o uses EXT_CHERI_ABI_LEGACY
+# CHECK-NEXT: >>> {{.+}}incompatible-abis.s.tmp-default.o uses EXT_CHERI_ABI_PCREL
 
 # CHECK:      error: incompatible pure-capability ABIs:
-# CHECK-NEXT: >>> {{.+}}incompatible-abis.s.tmp-default.o uses EXT_CHERI_ABI_LEGACY
+# CHECK-NEXT: >>> {{.+}}incompatible-abis.s.tmp-default.o uses EXT_CHERI_ABI_PCREL
 # CHECK-NEXT: >>> {{.+}}incompatible-abis.s.tmp-non-cheri.o uses EXT_OCTEON
 
 .text

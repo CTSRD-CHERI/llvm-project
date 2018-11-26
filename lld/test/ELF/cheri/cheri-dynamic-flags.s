@@ -12,8 +12,8 @@
 # RUN: ld.lld -shared %t-fn-desc.o -o - | llvm-readobj -dynamic-table - | FileCheck %s -check-prefix FNDESC
 # FNDESC: 0x000000007000C002 MIPS_CHERI_FLAGS     0x3
 
-# Default is still legacy abi (but that will change soon)
-# RUN: ld.lld -shared %t-default.o -o - | llvm-readobj -dynamic-table - | FileCheck %s -check-prefix LEGACY
+# Default is pc-relative
+# RUN: ld.lld -shared %t-default.o -o - | llvm-readobj -dynamic-table - | FileCheck %s -check-prefix PCREL
 
 .text
 nop
