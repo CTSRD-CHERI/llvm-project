@@ -4321,12 +4321,14 @@ public:
   llvm::Value *setPointerBounds(llvm::Value *V, llvm::Value *Size,
                                 SourceLocation Loc, const llvm::Twine &Name,
                                 StringRef Pass, bool isSubObject,
-                                const llvm::Twine &Details = "");
+                                const llvm::Twine &Details = "",
+                                Optional<uint64_t> KnownAlignment = None);
 
-  llvm::Value *
-  setPointerBounds(llvm::Value *V, uint64_t Size, SourceLocation Loc,
-                   const llvm::Twine &Name, StringRef Pass,
-                   bool IsSubObject, const llvm::Twine &Details = "") {
+  llvm::Value *setPointerBounds(llvm::Value *V, uint64_t Size,
+                                SourceLocation Loc, const llvm::Twine &Name,
+                                StringRef Pass, bool IsSubObject,
+                                const llvm::Twine &Details = "",
+                                Optional<uint64_t> KnownAlignment = None) {
     return setPointerBounds(V, llvm::ConstantInt::get(Int64Ty, Size), Loc, Name,
                             Pass, IsSubObject, Details);
   }

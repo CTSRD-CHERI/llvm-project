@@ -21,6 +21,7 @@
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -1767,6 +1768,36 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
                      nullCheckBB);
 
     resultPtr = PHI;
+  }
+
+  // Don't log the non-allocating placement new since it will probably
+  // not be setting bounds (unless cheri-bounds>=aggresive, but in that case
+  // we will already have logged the bounds)
+  if (llvm::cheri::ShouldCollectCSetBoundsStats && !ReservedGlobalPlacement) {
+    // TODO: placement new with pointer might not be heap!
+    auto Kind = llvm::cheri::SetBoundsPointerSource::Heap;
+    uint64_t KnownAlignment = allocation.getAlignment().getQuantity();
+    llvm::Optional<uint64_t> AllocSizeConstant =
+        llvm::cheri::inferConstantValue(allocSize);
+    llvm::Optional<uint64_t> MultipleOf;
+    std::string BoundsSource;
+    llvm::raw_string_ostream DS(BoundsSource);
+    // allocator->getNameForDiagnostic(DS, getContext().getPrintingPolicy(),
+    // true);
+    DS << "operator new";
+    if (E->isArray()) {
+      DS << "[]";
+      if (!AllocSizeConstant)
+        MultipleOf = getContext().getTypeSizeInChars(allocType).getQuantity();
+    }
+    DS << " for " << E->getType().getAsString(getContext().getPrintingPolicy());
+    DS.flush();
+    // TODO: if it is an array get multiple of
+    llvm::cheri::CSetBoundsStats->add(
+        KnownAlignment, AllocSizeConstant, BoundsSource, Kind,
+        "allocating type " + allocType.getAsString(),
+        E->getSourceRange().printToString(getContext().getSourceManager()),
+        MultipleOf);
   }
 
   return resultPtr;
