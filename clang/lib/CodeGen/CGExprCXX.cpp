@@ -1573,12 +1573,31 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
   // operator, just "inline" it directly.
   Address allocation = Address::invalid();
   CallArgList allocatorArgs;
-  if (allocator->isReservedGlobalPlacementOperator()) {
+
+  const bool ReservedGlobalPlacement = allocator->isReservedGlobalPlacementOperator();
+  if (ReservedGlobalPlacement) {
     assert(E->getNumPlacementArgs() == 1);
     const Expr *arg = *E->placement_arguments().begin();
 
     LValueBaseInfo BaseInfo;
     allocation = EmitPointerWithAlignment(arg, &BaseInfo);
+
+    // If we are setting bounds aggressively, also insert a csetbounds
+    // after calls to  new(addr) Foo(); since it seems like clang
+    // ignores the contents of a global declaration
+    // for void* operator new(std::size_t count, void* p)
+    if (getTarget().areAllPointersCapabilities() &&
+        getLangOpts().getCheriBounds() >= LangOptions::CBM_Aggressive) {
+      allocation = Address(
+          setPointerBounds(allocation.getPointer(), allocSize, E->getExprLoc(),
+                           "new.with.bounds",
+                           E->isArray() ? "non-allocating placement new"
+                                        : "non-allocating placement new[]",
+                           /*IsSubObject=*/false,
+                           "for type " + allocType.getAsString(),
+                           allocation.getAlignment().getQuantity()),
+          allocation.getAlignment());
+    }
 
     // The pointer expression will, in many cases, be an opaque void*.
     // In these cases, discard the computed alignment and use the
