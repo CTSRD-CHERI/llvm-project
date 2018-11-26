@@ -1,5 +1,5 @@
 // RUN: rm -fv %t.csv
-// RUN: %cheri_purecap_cc1 %s -mllvm -cheri-cap-table-abi=pcrel -cheri-bounds=conservative -debug-info-kind=standalone \
+// RUN: %cheri128_purecap_cc1 %s -mllvm -cheri-cap-table-abi=pcrel -cheri-bounds=conservative -debug-info-kind=standalone \
 // RUN:   -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t.csv -S -o /dev/null -O2
 // RUN: FileCheck -input-file %t.csv %s -check-prefixes CSV
 

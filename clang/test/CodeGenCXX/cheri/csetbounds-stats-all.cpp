@@ -1,5 +1,5 @@
 // RUN: rm -f %t-hybrid.csv %t-purecap.csv
-// RUN: %cheri_purecap_cc1 %s -mllvm -cheri-cap-table-abi=pcrel -cheri-bounds=aggressive \
+// RUN: %cheri128_purecap_cc1 %s -mllvm -cheri-cap-table-abi=pcrel -cheri-bounds=aggressive \
 // RUN:   -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t-purecap.csv -S -o /dev/null
 // RUN: cat %t-purecap.csv
 // RUN: FileCheck -input-file %t-purecap.csv %s -check-prefixes CSV
