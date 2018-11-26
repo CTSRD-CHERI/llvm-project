@@ -34,6 +34,17 @@ void test_foo_array() {
   // CHECK: Found array subscript -> using C++ reference -> setting bounds for 'class Foo' reference to 8
 }
 
+void test_foo_array_deref_pointer() {
+  // We can't set bounds here since we don't know whether it is actually a Foo* or a subclass
+  Foo* foo_array[2];
+  do_stuff_with_ref(*foo_array[0]);
+  do_stuff_with_ref(*foo_array[1]);
+  do_stuff_with_ref(*foo_array[2]);
+  // CHECK: Found record type 'class Foo' -> not final -> can't assume it has no inheritors
+  // CHECK: Found record type 'class Foo' -> not final -> can't assume it has no inheritors
+  // CHECK: Found record type 'class Foo' -> not final -> can't assume it has no inheritors
+}
+
 struct Foo_final final {
   int x;
   int y;
@@ -56,4 +67,4 @@ void test_final_class_array() {
 // CHECK-LABEL: STATISTICS:
 // CHECK: ... Statistics Collected ...
 // CHECK:  9 cheri-bounds     - Number of references where bounds were tightend
-// CHECK:  9 cheri-bounds     - Number of references checked for tightening bounds
+// CHECK:  12 cheri-bounds     - Number of references checked for tightening bounds
