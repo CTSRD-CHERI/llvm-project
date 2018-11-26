@@ -609,7 +609,7 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
   //                  E->dump(llvm::dbgs()));
 
   NumReferencesCheckedForBoundsTightening++;
-  if (canTightenCheriBounds(Value, Ty, E)) {
+  if (canTightenCheriBounds(Value, Ty, E, /* IsReference=*/true)) {
     uint64_t Size = getContext().getTypeSizeInChars(Ty).getQuantity();
     CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
                      << "' reference to " << Size << "\n");
@@ -643,7 +643,7 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
 }
 
 bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
-                                            const Expr *E) {
+                                            const Expr *E, bool IsReference) {
   const auto BoundsMode = getLangOpts().getCheriBounds() ;
   assert(BoundsMode > LangOptions::CBM_Conservative);
   if (!CGM.getDataLayout().isFatPointer(Value->getType())) {
@@ -666,6 +666,10 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   E = E->IgnoreImplicit();
   if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
     CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
+    if (IsReference && BoundsMode >= LangOptions::CBM_References) {
+      CHERI_BOUNDS_DBG(<< "using C++ reference -> ");
+      return true;
+    }
     const Expr* Index = ASE->getIdx();
     llvm::APSInt ConstLength;
     if (!Index->EvaluateAsInt(ConstLength, getContext())) {
