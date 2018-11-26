@@ -299,12 +299,12 @@ class CHERICapFoldIntrinsics : public ModulePass {
         CI->setOperand(0, LHS);
         Modified = true;
       }
+      Value *BaseCap = CI->getOperand(0);
 
       // fold chains of set-offset, (inc-offset/GEP)+ into a single set-offset
       foldIncOffsetSetOffsetOnlyUserIncrement(CI, ToErase);
 
       if (match(CI->getOperand(1), m_Add(m_Value(LHS), m_Value(RHS)))) {
-        Value *BaseCap = CI->getOperand(0);
         Value *Add = nullptr;
         if (match(LHS, m_Intrinsic<Intrinsic::cheri_cap_offset_get>(
                            m_Specific(BaseCap))))
@@ -321,6 +321,14 @@ class CHERICapFoldIntrinsics : public ModulePass {
           Modified = true;
         }
       }
+
+      // Fold setoffset(A, getoffset(A)) -> A
+      if (match(CI->getOperand(1), m_Intrinsic<Intrinsic::cheri_cap_offset_get>(m_Specific(BaseCap)))) {
+        CI->replaceAllUsesWith(BaseCap);
+        ToErase.insert(CI);
+        Modified = true;
+      }
+
       // Also convert a setoffset on null to a incoffset on null since we have
       // an immediate version of incoffset but not setoffset
       // FIXME: this should be done in the MIPS backend instead...

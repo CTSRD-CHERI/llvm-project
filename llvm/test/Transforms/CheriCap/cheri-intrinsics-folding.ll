@@ -1,5 +1,5 @@
 ; RUN: %cheri_opt -S -cheri-fold-intrisics %s -o %t.ll
-; RUN: FileCheck %s < %t.ll
+; RUN: FileCheck %s -input-file %t.ll
 ; Check that the dynamic GEP is folded properly
 ; RUN: %cheri_llc -O2 %t.ll -o - | FileCheck %s -check-prefix DYNAMIC-GEP-ASM
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
