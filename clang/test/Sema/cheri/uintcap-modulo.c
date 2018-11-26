@@ -1,4 +1,7 @@
-// RUN: %cheri_purecap_cc1 -verify %s
+// RUN: %cheri_purecap_cc1 -verify -cheri-uintcap=offset %s
+// RUN: %cheri_purecap_cc1 -verify=address -cheri-uintcap=addr %s
+// TODO: should we warn that this is inefficient?
+// address-no-diagnostics
 
 
 typedef __UINTPTR_TYPE__ uintptr_t;

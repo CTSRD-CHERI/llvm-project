@@ -1,6 +1,6 @@
-// RUN: %cheri_purecap_cc1 -std=c11 -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
+// RUN: %cheri_purecap_cc1 -std=c11 -cheri-uintcap=offset -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
 // also check that the same warnings trigger in C++ modes
-// RUN: %cheri_purecap_cc1 -xc++ -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
+// RUN: %cheri_purecap_cc1 -xc++ -cheri-uintcap=offset -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
 
 // Check that we don't warn about bitwise operations (other than &) when in cheri-uintcap=addr mode
 // For & we can't just rely on vaddr mode to make it work, we also need data-dependent provenance

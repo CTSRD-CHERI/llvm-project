@@ -1,4 +1,5 @@
-// RUN: %cheri_purecap_cc1 -emit-llvm %s -O2 -o - -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,OFFSET -enable-var-scope
+// default is address:
+// RUN: %cheri_purecap_cc1 -emit-llvm %s -O2 -o - -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,ADDR -enable-var-scope
 // RUN: %cheri_purecap_cc1 -cheri-uintcap=offset -emit-llvm %s -O2 -o - -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,OFFSET -enable-var-scope
 // RUN: %cheri_purecap_cc1 -cheri-uintcap=addr -emit-llvm %s -O2 -o - -Wno-cheri-bitwise-operations | %cheri_FileCheck %s -check-prefixes BOTH,ADDR -enable-var-scope
 

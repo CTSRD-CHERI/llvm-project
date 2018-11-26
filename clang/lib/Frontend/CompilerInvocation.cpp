@@ -2351,7 +2351,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
 
   // uintcap_t mode: vaddr or offset
   bool UseCheriVaddrMode =
-      Args.hasFlag(OPT_cheri_uintcap_addr, OPT_cheri_uintcap_offset, false);
+      Args.hasFlag(OPT_cheri_uintcap_addr, OPT_cheri_uintcap_offset, true);
   Opts.setCheriUIntCap(UseCheriVaddrMode
                            ? LangOptions::CheriUIntCapMode::UIntCap_Addr
                            : LangOptions::CheriUIntCapMode::UIntCap_Offset);
