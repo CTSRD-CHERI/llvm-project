@@ -570,10 +570,13 @@ public:
   /// '::operator new(size_t)' is guaranteed to produce a correctly-aligned
   /// pointer.
   unsigned getNewAlign() const {
-    return NewAlign ? NewAlign
-                    : (areAllPointersCapabilities()
-                              ? getCHERICapabilityAlign()
-                              : std::max(LongDoubleAlign, LongLongAlign));
+    if (NewAlign)
+      return NewAlign;
+    // If CHERI is supported new will return at least capability-aligned memory
+    unsigned Align = std::max(LongDoubleAlign, LongLongAlign);
+    if (SupportsCapabilities())
+      Align = std::max(Align, (unsigned)getCHERICapabilityAlign());
+    return Align;
   }
 
   /// getWCharWidth/Align - Return the size of 'wchar_t' for this target, in
