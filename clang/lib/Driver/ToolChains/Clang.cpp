@@ -1508,7 +1508,7 @@ static void addCheriFlags(const ArgList &Args, ArgStringList &CmdArgs,
   }
 
   // Add the -cap-table-abi and -cap-tls-abi flags (ignore for non-purecap ABIs)
-  bool IsCapTable = false;
+  bool IsCapTable = true;
   StringRef DefaultCapTableABI = "pcrel";
   if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
     StringRef v = A->getValue();
@@ -1519,20 +1519,9 @@ static void addCheriFlags(const ArgList &Args, ArgStringList &CmdArgs,
     IsCapTable = v != "legacy";
     A->claim();
   } else {
-    // XXXAR: The following is a hack for jenkins:
-    StringRef CapTableEnv = getenv("CHERI_CAP_TABLE");
-    bool CapTableDefault = false;
-    if (!CapTableEnv.empty() && CapTableEnv != "0" && CapTableEnv != "false" &&
-        CapTableEnv != "no")
-      CapTableDefault = true;
-    // HACK to switch the default for a bunch of jenkins jobs without
-    // having to modify the cflags:
-    if (getenv("ISA") == StringRef("cap-table") ||
-        getenv("LLVM_BRANCH") == StringRef("cap-table"))
-      CapTableDefault = true;
-
+    // TODO: eventually remove this and drop legacy support
     IsCapTable = Args.hasFlag(options::OPT_cheri_cap_table,
-                              options::OPT_no_cheri_cap_table, CapTableDefault);
+                              options::OPT_no_cheri_cap_table, true);
     StringRef ChosenABI = IsCapTable ? DefaultCapTableABI : "legacy";
     if (ABIName == "purecap") {
       CmdArgs.push_back("-mllvm");

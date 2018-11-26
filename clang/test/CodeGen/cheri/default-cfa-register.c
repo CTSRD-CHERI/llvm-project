@@ -28,13 +28,12 @@ int* test(int i) {
 // CHECK-LABEL: 00000018
 // CHECK-NEXT: DW_CFA_advance_loc: 4
 
-// PURECAP-NEXT: DW_CFA_def_cfa_offset: +{{48|96}}
+// PURECAP-NEXT: DW_CFA_def_cfa_offset: +{{32|64}}
+// PURECAP-NEXT: DW_CFA_advance_loc: 4
+// PURECAP-NEXT: DW_CFA_offset_extended: reg89 -{{16|32}}
+// PURECAP-NEXT: DW_CFA_nop:
+
 // HYBRID-NEXT: DW_CFA_def_cfa_offset: +32
-
-// CHECK-NEXT: DW_CFA_advance_loc: 8
-
-// PURECAP-NEXT: DW_CFA_offset: reg28 -8
-// PURECAP-NEXT: DW_CFA_offset_extended: reg89 -{{32|64}}
-
+// HYBRID-NEXT: DW_CFA_advance_loc: 8
 // HYBRID-NEXT: DW_CFA_offset: reg31 -8
 // HYBRID-NEXT: DW_CFA_offset: reg28 -16

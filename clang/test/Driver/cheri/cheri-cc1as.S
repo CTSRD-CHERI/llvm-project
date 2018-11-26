@@ -87,7 +87,7 @@
 
 // RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd -mabi=purecap -### -c %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=SANDBOX-WITHOUT-CHERI %s
-// SANDBOX-WITHOUT-CHERI: "-target-abi" "purecap" "-mllvm" "-cheri-cap-table-abi=legacy"
+// SANDBOX-WITHOUT-CHERI: "-target-abi" "purecap" "-mllvm" "-cheri-cap-table-abi=pcrel"
 
 __start:
   nop
