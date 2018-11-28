@@ -956,6 +956,7 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::BlockAddress, MVT::i32, Custom);
 
   setOperationAction(ISD::TRAP, MVT::Other, Legal);
+  setOperationAction(ISD::DEBUGTRAP, MVT::Other, Legal);
 
   // Use the default implementation.
   setOperationAction(ISD::VASTART,            MVT::Other, Custom);
@@ -1142,14 +1143,14 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
   if (Subtarget->hasNEON()) {
     // vmin and vmax aren't available in a scalar form, so we use
     // a NEON instruction with an undef lane instead.
-    setOperationAction(ISD::FMINNAN, MVT::f16, Legal);
-    setOperationAction(ISD::FMAXNAN, MVT::f16, Legal);
-    setOperationAction(ISD::FMINNAN, MVT::f32, Legal);
-    setOperationAction(ISD::FMAXNAN, MVT::f32, Legal);
-    setOperationAction(ISD::FMINNAN, MVT::v2f32, Legal);
-    setOperationAction(ISD::FMAXNAN, MVT::v2f32, Legal);
-    setOperationAction(ISD::FMINNAN, MVT::v4f32, Legal);
-    setOperationAction(ISD::FMAXNAN, MVT::v4f32, Legal);
+    setOperationAction(ISD::FMINIMUM, MVT::f16, Legal);
+    setOperationAction(ISD::FMAXIMUM, MVT::f16, Legal);
+    setOperationAction(ISD::FMINIMUM, MVT::f32, Legal);
+    setOperationAction(ISD::FMAXIMUM, MVT::f32, Legal);
+    setOperationAction(ISD::FMINIMUM, MVT::v2f32, Legal);
+    setOperationAction(ISD::FMAXIMUM, MVT::v2f32, Legal);
+    setOperationAction(ISD::FMINIMUM, MVT::v4f32, Legal);
+    setOperationAction(ISD::FMAXIMUM, MVT::v4f32, Legal);
 
     if (Subtarget->hasFullFP16()) {
       setOperationAction(ISD::FMINNUM, MVT::v4f16, Legal);
@@ -1157,10 +1158,10 @@ ARMTargetLowering::ARMTargetLowering(const TargetMachine &TM,
       setOperationAction(ISD::FMINNUM, MVT::v8f16, Legal);
       setOperationAction(ISD::FMAXNUM, MVT::v8f16, Legal);
 
-      setOperationAction(ISD::FMINNAN, MVT::v4f16, Legal);
-      setOperationAction(ISD::FMAXNAN, MVT::v4f16, Legal);
-      setOperationAction(ISD::FMINNAN, MVT::v8f16, Legal);
-      setOperationAction(ISD::FMAXNAN, MVT::v8f16, Legal);
+      setOperationAction(ISD::FMINIMUM, MVT::v4f16, Legal);
+      setOperationAction(ISD::FMAXIMUM, MVT::v4f16, Legal);
+      setOperationAction(ISD::FMINIMUM, MVT::v8f16, Legal);
+      setOperationAction(ISD::FMAXIMUM, MVT::v8f16, Legal);
     }
   }
 
@@ -3171,9 +3172,11 @@ static SDValue promoteToConstantPool(const ARMTargetLowering *TLI,
 
 bool ARMTargetLowering::isReadOnly(const GlobalValue *GV) const {
   if (const GlobalAlias *GA = dyn_cast<GlobalAlias>(GV))
-    GV = GA->getBaseObject();
-  return (isa<GlobalVariable>(GV) && cast<GlobalVariable>(GV)->isConstant()) ||
-         isa<Function>(GV);
+    if (!(GV = GA->getBaseObject()))
+      return false;
+  if (const auto *V = dyn_cast<GlobalVariable>(GV))
+    return V->isConstant();
+  return isa<Function>(GV);
 }
 
 SDValue ARMTargetLowering::LowerGlobalAddress(SDValue Op,
@@ -3405,7 +3408,7 @@ ARMTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op, SelectionDAG &DAG,
                          Op.getOperand(1), Op.getOperand(2));
     }
     unsigned NewOpc = (IntNo == Intrinsic::arm_neon_vmins)
-      ? ISD::FMINNAN : ISD::FMAXNAN;
+      ? ISD::FMINIMUM : ISD::FMAXIMUM;
     return DAG.getNode(NewOpc, SDLoc(Op), Op.getValueType(),
                        Op.getOperand(1), Op.getOperand(2));
   }
@@ -9157,6 +9160,42 @@ ARMTargetLowering::EmitLowered__dbzchk(MachineInstr &MI,
   return ContBB;
 }
 
+// The CPSR operand of SelectItr might be missing a kill marker
+// because there were multiple uses of CPSR, and ISel didn't know
+// which to mark. Figure out whether SelectItr should have had a
+// kill marker, and set it if it should. Returns the correct kill
+// marker value.
+static bool checkAndUpdateCPSRKill(MachineBasicBlock::iterator SelectItr,
+                                   MachineBasicBlock* BB,
+                                   const TargetRegisterInfo* TRI) {
+  // Scan forward through BB for a use/def of CPSR.
+  MachineBasicBlock::iterator miI(std::next(SelectItr));
+  for (MachineBasicBlock::iterator miE = BB->end(); miI != miE; ++miI) {
+    const MachineInstr& mi = *miI;
+    if (mi.readsRegister(ARM::CPSR))
+      return false;
+    if (mi.definesRegister(ARM::CPSR))
+      break; // Should have kill-flag - update below.
+  }
+
+  // If we hit the end of the block, check whether CPSR is live into a
+  // successor.
+  if (miI == BB->end()) {
+    for (MachineBasicBlock::succ_iterator sItr = BB->succ_begin(),
+                                          sEnd = BB->succ_end();
+         sItr != sEnd; ++sItr) {
+      MachineBasicBlock* succ = *sItr;
+      if (succ->isLiveIn(ARM::CPSR))
+        return false;
+    }
+  }
+
+  // We found a def, or hit the end of the basic block and CPSR wasn't live
+  // out. SelectMI should have a kill flag on CPSR.
+  SelectItr->addRegisterKilled(ARM::CPSR, TRI);
+  return true;
+}
+
 MachineBasicBlock *
 ARMTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
                                                MachineBasicBlock *BB) const {
@@ -9255,6 +9294,14 @@ ARMTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
     MachineBasicBlock *sinkMBB  = F->CreateMachineBasicBlock(LLVM_BB);
     F->insert(It, copy0MBB);
     F->insert(It, sinkMBB);
+
+    // Check whether CPSR is live past the tMOVCCr_pseudo.
+    const TargetRegisterInfo *TRI = Subtarget->getRegisterInfo();
+    if (!MI.killsRegister(ARM::CPSR) &&
+        !checkAndUpdateCPSRKill(MI, thisMBB, TRI)) {
+      copy0MBB->addLiveIn(ARM::CPSR);
+      sinkMBB->addLiveIn(ARM::CPSR);
+    }
 
     // Transfer the remainder of BB and its successor edges to sinkMBB.
     sinkMBB->splice(sinkMBB->begin(), BB,

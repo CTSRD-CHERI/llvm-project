@@ -298,7 +298,7 @@ public:
       const FunctionImporter::ImportMapTy &ImportList,
       const FunctionImporter::ExportSetTy &ExportList,
       const std::map<GlobalValue::GUID, GlobalValue::LinkageTypes> &ResolvedODR,
-      const GVSummaryMapTy &DefinedFunctions,
+      const GVSummaryMapTy &DefinedGVSummaries,
       const DenseSet<GlobalValue::GUID> &PreservedSymbols, unsigned OptLevel,
       bool Freestanding, const TargetMachineBuilder &TMBuilder) {
     if (CachePath.empty())
@@ -368,6 +368,10 @@ public:
     for (auto &Entry : ImportList) {
       auto ModHash = Index.getModuleHash(Entry.first());
       Hasher.update(ArrayRef<uint8_t>((uint8_t *)&ModHash[0], sizeof(ModHash)));
+      for (auto Guid : Entry.second)
+        if (auto *GVS = dyn_cast<GlobalVarSummary>(
+                Index.getGlobalValueSummary(Guid, false)))
+          AddUnsigned(GVS->isReadOnly());
     }
 
     // Include the hash for the resolved ODR.
@@ -380,10 +384,14 @@ public:
 
     // Include the hash for the preserved symbols.
     for (auto &Entry : PreservedSymbols) {
-      if (DefinedFunctions.count(Entry))
+      if (DefinedGVSummaries.count(Entry))
         Hasher.update(
             ArrayRef<uint8_t>((const uint8_t *)&Entry, sizeof(GlobalValue::GUID)));
     }
+
+    for (auto &Entry : DefinedGVSummaries)
+      if (auto *GVS = dyn_cast<GlobalVarSummary>(Entry.second))
+        AddUnsigned(GVS->isReadOnly());
 
     // This choice of file name allows the cache to be pruned (see pruneCache()
     // in include/llvm/Support/CachePruning.h).
@@ -457,8 +465,8 @@ ProcessThinLTOModule(Module &TheModule, ModuleSummaryIndex &Index,
   if (!SingleModule) {
     promoteModule(TheModule, Index);
 
-    // Apply summary-based LinkOnce/Weak resolution decisions.
-    thinLTOResolveWeakForLinkerModule(TheModule, DefinedGlobals);
+    // Apply summary-based prevailing-symbol resolution decisions.
+    thinLTOResolvePrevailingInModule(TheModule, DefinedGlobals);
 
     // Save temps: after promotion.
     saveTempBitcode(TheModule, SaveTempsDir, count, ".1.promoted.bc");
@@ -500,12 +508,12 @@ ProcessThinLTOModule(Module &TheModule, ModuleSummaryIndex &Index,
   return codegenModule(TheModule, TM);
 }
 
-/// Resolve LinkOnce/Weak symbols. Record resolutions in the \p ResolvedODR map
+/// Resolve prevailing symbols. Record resolutions in the \p ResolvedODR map
 /// for caching, and in the \p Index for application during the ThinLTO
 /// backends. This is needed for correctness for exported symbols (ensure
 /// at least one copy kept) and a compile-time optimization (to drop duplicate
 /// copies when possible).
-static void resolveWeakForLinkerInIndex(
+static void resolvePrevailingInIndex(
     ModuleSummaryIndex &Index,
     StringMap<std::map<GlobalValue::GUID, GlobalValue::LinkageTypes>>
         &ResolvedODR) {
@@ -527,7 +535,7 @@ static void resolveWeakForLinkerInIndex(
     ResolvedODR[ModuleIdentifier][GUID] = NewLinkage;
   };
 
-  thinLTOResolveWeakForLinkerInIndex(Index, isPrevailing, recordNewLinkage);
+  thinLTOResolvePrevailingInIndex(Index, isPrevailing, recordNewLinkage);
 }
 
 // Initialize the TargetMachine builder for a given Triple
@@ -646,7 +654,8 @@ static void computeDeadSymbolsInIndex(
   auto isPrevailing = [&](GlobalValue::GUID G) {
     return PrevailingType::Unknown;
   };
-  computeDeadSymbols(Index, GUIDPreservedSymbols, isPrevailing);
+  computeDeadSymbolsWithConstProp(Index, GUIDPreservedSymbols, isPrevailing,
+                                  /* ImportEnabled = */ true);
 }
 
 /**
@@ -675,11 +684,11 @@ void ThinLTOCodeGenerator::promote(Module &TheModule,
   ComputeCrossModuleImport(Index, ModuleToDefinedGVSummaries, ImportLists,
                            ExportLists);
 
-  // Resolve LinkOnce/Weak symbols.
+  // Resolve prevailing symbols
   StringMap<std::map<GlobalValue::GUID, GlobalValue::LinkageTypes>> ResolvedODR;
-  resolveWeakForLinkerInIndex(Index, ResolvedODR);
+  resolvePrevailingInIndex(Index, ResolvedODR);
 
-  thinLTOResolveWeakForLinkerModule(
+  thinLTOResolvePrevailingInModule(
       TheModule, ModuleToDefinedGVSummaries[ModuleIdentifier]);
 
   // Promote the exported values in the index, so that they are promoted
@@ -942,9 +951,9 @@ void ThinLTOCodeGenerator::run() {
   // on the index, and nuke this map.
   StringMap<std::map<GlobalValue::GUID, GlobalValue::LinkageTypes>> ResolvedODR;
 
-  // Resolve LinkOnce/Weak symbols, this has to be computed early because it
+  // Resolve prevailing symbols, this has to be computed early because it
   // impacts the caching.
-  resolveWeakForLinkerInIndex(*Index, ResolvedODR);
+  resolvePrevailingInIndex(*Index, ResolvedODR);
 
   // Use global summary-based analysis to identify symbols that can be
   // internalized (because they aren't exported or preserved as per callback).
@@ -983,13 +992,13 @@ void ThinLTOCodeGenerator::run() {
         auto ModuleIdentifier = ModuleBuffer.getBufferIdentifier();
         auto &ExportList = ExportLists[ModuleIdentifier];
 
-        auto &DefinedFunctions = ModuleToDefinedGVSummaries[ModuleIdentifier];
+        auto &DefinedGVSummaries = ModuleToDefinedGVSummaries[ModuleIdentifier];
 
         // The module may be cached, this helps handling it.
         ModuleCacheEntry CacheEntry(CacheOptions.Path, *Index, ModuleIdentifier,
                                     ImportLists[ModuleIdentifier], ExportList,
                                     ResolvedODR[ModuleIdentifier],
-                                    DefinedFunctions, GUIDPreservedSymbols,
+                                    DefinedGVSummaries, GUIDPreservedSymbols,
                                     OptLevel, Freestanding, TMBuilder);
         auto CacheEntryPath = CacheEntry.getEntryPath();
 

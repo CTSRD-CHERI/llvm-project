@@ -12,7 +12,6 @@
 #include "Assembler.h"
 #include "BenchmarkRunner.h"
 #include "MCInstrDescView.h"
-#include "PerfHelper.h"
 #include "Target.h"
 
 // FIXME: Load constants into registers (e.g. with fld1) to not break
@@ -79,6 +78,7 @@
 // In that case we just use a greedy register assignment and hope for the
 // best.
 
+namespace llvm {
 namespace exegesis {
 
 static llvm::SmallVector<const Variable *, 8>
@@ -153,13 +153,13 @@ UopsSnippetGenerator::generateCodeTemplates(const Instruction &Instr) const {
     CT.Info = "instruction is parallel, repeating a random one.";
     CT.Instructions.push_back(std::move(IT));
     instantiateMemoryOperands(CT.ScratchSpacePointerInReg, CT.Instructions);
-    return getSingleton(CT);
+    return getSingleton(std::move(CT));
   }
   if (SelfAliasing.hasImplicitAliasing()) {
     CT.Info = "instruction is serial, repeating a random one.";
     CT.Instructions.push_back(std::move(IT));
     instantiateMemoryOperands(CT.ScratchSpacePointerInReg, CT.Instructions);
-    return getSingleton(CT);
+    return getSingleton(std::move(CT));
   }
   const auto TiedVariables = getVariablesWithTiedOperands(Instr);
   if (!TiedVariables.empty()) {
@@ -181,7 +181,7 @@ UopsSnippetGenerator::generateCodeTemplates(const Instruction &Instr) const {
       CT.Instructions.push_back(std::move(TmpIT));
     }
     instantiateMemoryOperands(CT.ScratchSpacePointerInReg, CT.Instructions);
-    return getSingleton(CT);
+    return getSingleton(std::move(CT));
   }
   const auto &ReservedRegisters = State.getRATC().reservedRegisters();
   // No tied variables, we pick random values for defs.
@@ -218,56 +218,37 @@ UopsSnippetGenerator::generateCodeTemplates(const Instruction &Instr) const {
       "instruction has no tied variables picking Uses different from defs";
   CT.Instructions.push_back(std::move(IT));
   instantiateMemoryOperands(CT.ScratchSpacePointerInReg, CT.Instructions);
-  return getSingleton(CT);
+  return getSingleton(std::move(CT));
 }
 
-std::vector<BenchmarkMeasure>
-UopsBenchmarkRunner::runMeasurements(const ExecutableFunction &Function,
-                                     ScratchSpace &Scratch) const {
-  const auto &SchedModel = State.getSubtargetInfo().getSchedModel();
-
-  const auto RunMeasurement = [&Function,
-                               &Scratch](const char *const Counters) {
-    // We sum counts when there are several counters for a single ProcRes
-    // (e.g. P23 on SandyBridge).
-    int64_t CounterValue = 0;
-    llvm::SmallVector<llvm::StringRef, 2> CounterNames;
-    llvm::StringRef(Counters).split(CounterNames, ',');
-    for (const auto &CounterName : CounterNames) {
-      pfm::PerfEvent UopPerfEvent(CounterName);
-      if (!UopPerfEvent.valid())
-        llvm::report_fatal_error(
-            llvm::Twine("invalid perf event ").concat(Counters));
-      pfm::Counter Counter(UopPerfEvent);
-      Scratch.clear();
-      Counter.start();
-      Function(Scratch.ptr());
-      Counter.stop();
-      CounterValue += Counter.read();
-    }
-    return CounterValue;
-  };
-
+llvm::Expected<std::vector<BenchmarkMeasure>>
+UopsBenchmarkRunner::runMeasurements(const FunctionExecutor &Executor) const {
   std::vector<BenchmarkMeasure> Result;
-  const auto &PfmCounters = SchedModel.getExtraProcessorInfo().PfmCounters;
+  const PfmCountersInfo &PCI = State.getPfmCounters();
   // Uops per port.
-  for (unsigned ProcResIdx = 1;
-       ProcResIdx < SchedModel.getNumProcResourceKinds(); ++ProcResIdx) {
-    const char *const Counters = PfmCounters.IssueCounters[ProcResIdx];
-    if (!Counters)
+  for (const auto *IssueCounter = PCI.IssueCounters,
+                  *IssueCounterEnd = PCI.IssueCounters + PCI.NumIssueCounters;
+       IssueCounter != IssueCounterEnd; ++IssueCounter) {
+    if (!IssueCounter->Counter)
       continue;
-    const double CounterValue = RunMeasurement(Counters);
-    Result.push_back(BenchmarkMeasure::Create(
-        SchedModel.getProcResource(ProcResIdx)->Name, CounterValue));
+    auto ExpectedCounterValue = Executor.runAndMeasure(IssueCounter->Counter);
+    if (!ExpectedCounterValue)
+      return ExpectedCounterValue.takeError();
+    Result.push_back(BenchmarkMeasure::Create(IssueCounter->ProcResName,
+                                              *ExpectedCounterValue));
   }
   // NumMicroOps.
-  if (const char *const UopsCounter = PfmCounters.UopsCounter) {
-    const double CounterValue = RunMeasurement(UopsCounter);
-    Result.push_back(BenchmarkMeasure::Create("NumMicroOps", CounterValue));
+  if (const char *const UopsCounter = PCI.UopsCounter) {
+    auto ExpectedCounterValue = Executor.runAndMeasure(UopsCounter);
+    if (!ExpectedCounterValue)
+      return ExpectedCounterValue.takeError();
+    Result.push_back(
+        BenchmarkMeasure::Create("NumMicroOps", *ExpectedCounterValue));
   }
-  return Result;
+  return std::move(Result);
 }
 
 constexpr const size_t UopsSnippetGenerator::kMinNumDifferentAddresses;
 
 } // namespace exegesis
+} // namespace llvm

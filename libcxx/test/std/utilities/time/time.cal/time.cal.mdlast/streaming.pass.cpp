@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 // XFAIL: *
 
 // <chrono>
@@ -15,7 +15,7 @@
 // template<class charT, class traits>
 //     basic_ostream<charT, traits>&
 //     operator<<(basic_ostream<charT, traits>& os, const month_day_last& mdl);
-// 
+//
 //     Returns: os << mdl.month() << "/last".
 
 

@@ -56,7 +56,8 @@ public:
     ThunderX,
     ThunderXT81,
     ThunderXT83,
-    ThunderXT88
+    ThunderXT88,
+    TSV110
   };
 
 protected:
@@ -142,6 +143,7 @@ protected:
   bool HasFuseLiterals = false;
   bool DisableLatencySchedHeuristic = false;
   bool UseRSqrt = false;
+  bool Force32BitJumpTables = false;
   uint8_t MaxInterleaveFactor = 2;
   uint8_t VectorInsertExtractBaseCost = 3;
   uint16_t CacheLineSize = 0;
@@ -292,6 +294,7 @@ public:
   }
 
   bool useRSqrt() const { return UseRSqrt; }
+  bool force32BitJumpTables() const { return Force32BitJumpTables; }
   unsigned getMaxInterleaveFactor() const { return MaxInterleaveFactor; }
   unsigned getVectorInsertExtractBaseCost() const {
     return VectorInsertExtractBaseCost;

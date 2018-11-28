@@ -444,6 +444,7 @@ private:
   void visitBitCastInst(BitCastInst &I);
   void visitAddrSpaceCastInst(AddrSpaceCastInst &I);
   void visitPHINode(PHINode &PN);
+  void visitUnaryOperator(UnaryOperator &U);
   void visitBinaryOperator(BinaryOperator &B);
   void visitICmpInst(ICmpInst &IC);
   void visitFCmpInst(FCmpInst &FC);
@@ -1952,6 +1953,7 @@ void Verifier::verifyStatepoint(ImmutableCallSite CS) {
 
   // Verify that the types of the call parameter arguments match
   // the type of the wrapped callee.
+  AttributeList Attrs = CS.getAttributes();
   for (int i = 0; i < NumParams; i++) {
     Type *ParamType = TargetFuncType->getParamType(i);
     Type *ArgType = CS.getArgument(5 + i)->getType();
@@ -1959,6 +1961,12 @@ void Verifier::verifyStatepoint(ImmutableCallSite CS) {
            "gc.statepoint call argument does not match wrapped "
            "function type",
            &CI);
+
+    if (TargetFuncType->isVarArg()) {
+      AttributeSet ArgAttrs = Attrs.getParamAttributes(5 + i);
+      Assert(!ArgAttrs.hasAttribute(Attribute::StructRet),
+             "Attribute 'sret' cannot be used for vararg call arguments!", &CI);
+    }
   }
 
   const int EndCallArgsInx = 4 + NumCallArgs;
@@ -2836,8 +2844,13 @@ void Verifier::verifyCallSite(CallSite CS) {
         SawReturned = true;
       }
 
-      Assert(!ArgAttrs.hasAttribute(Attribute::StructRet),
-             "Attribute 'sret' cannot be used for vararg call arguments!", I);
+      // Statepoint intrinsic is vararg but the wrapped function may be not.
+      // Allow sret here and check the wrapped function in verifyStatepoint.
+      if (CS.getCalledFunction() == nullptr ||
+          CS.getCalledFunction()->getIntrinsicID() !=
+            Intrinsic::experimental_gc_statepoint)
+        Assert(!ArgAttrs.hasAttribute(Attribute::StructRet),
+               "Attribute 'sret' cannot be used for vararg call arguments!", I);
 
       if (ArgAttrs.hasAttribute(Attribute::InAlloca))
         Assert(Idx == CS.arg_size() - 1, "inalloca isn't on the last argument!",
@@ -3011,6 +3024,28 @@ void Verifier::visitInvokeInst(InvokeInst &II) {
       &II);
 
   visitTerminator(II);
+}
+
+/// visitUnaryOperator - Check the argument to the unary operator.
+///
+void Verifier::visitUnaryOperator(UnaryOperator &U) {
+  Assert(U.getType() == U.getOperand(0)->getType(), 
+         "Unary operators must have same type for"
+         "operands and result!",
+         &U);
+
+  switch (U.getOpcode()) {
+  // Check that floating-point arithmetic operators are only used with
+  // floating-point operands.
+  case Instruction::FNeg:
+    Assert(U.getType()->isFPOrFPVectorTy(),
+           "FNeg operator only works with float types!", &U);
+    break;
+  default:
+    llvm_unreachable("Unknown UnaryOperator opcode!");
+  }
+
+  visitInstruction(U);
 }
 
 /// visitBinaryOperator - Check that both arguments to the binary operator are
@@ -4127,6 +4162,12 @@ void Verifier::visitIntrinsicCallSite(Intrinsic::ID ID, CallSite CS) {
   case Intrinsic::experimental_constrained_log2:
   case Intrinsic::experimental_constrained_rint:
   case Intrinsic::experimental_constrained_nearbyint:
+  case Intrinsic::experimental_constrained_maxnum:
+  case Intrinsic::experimental_constrained_minnum:
+  case Intrinsic::experimental_constrained_ceil:
+  case Intrinsic::experimental_constrained_floor:
+  case Intrinsic::experimental_constrained_round:
+  case Intrinsic::experimental_constrained_trunc:
     visitConstrainedFPIntrinsic(
         cast<ConstrainedFPIntrinsic>(*CS.getInstruction()));
     break;
@@ -4507,13 +4548,18 @@ void Verifier::visitIntrinsicCallSite(Intrinsic::ID ID, CallSite CS) {
 
     break;
   }
-  case Intrinsic::sadd_sat: {
+  case Intrinsic::sadd_sat:
+  case Intrinsic::uadd_sat:
+  case Intrinsic::ssub_sat:
+  case Intrinsic::usub_sat: {
     Value *Op1 = CS.getArgOperand(0);
     Value *Op2 = CS.getArgOperand(1);
     Assert(Op1->getType()->isIntOrIntVectorTy(),
-           "first operand of sadd_sat must be an int type or vector of ints");
+           "first operand of [us][add|sub]_sat must be an int type or vector "
+           "of ints");
     Assert(Op2->getType()->isIntOrIntVectorTy(),
-           "second operand of sadd_sat must be an int type or vector of ints");
+           "second operand of [us][add|sub]_sat must be an int type or vector "
+           "of ints");
     break;
   }
   };

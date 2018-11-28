@@ -26,8 +26,8 @@
 using ::testing::AnyOf;
 using ::testing::ElementsAre;
 using ::testing::UnorderedElementsAre;
-using namespace llvm;
 
+using namespace llvm;
 namespace clang {
 namespace clangd {
 namespace dex {
@@ -250,17 +250,17 @@ TEST(DexIterators, StringRepresentation) {
 
   // No token given, prints full posting list.
   auto I1 = L1.iterator();
-  EXPECT_EQ(llvm::to_string(*I1), "[1 3 5]");
+  EXPECT_EQ(to_string(*I1), "[1 3 5]");
 
   // Token given, uses token's string representation.
   Token Tok(Token::Kind::Trigram, "L2");
   auto I2 = L1.iterator(&Tok);
-  EXPECT_EQ(llvm::to_string(*I2), "T=L2");
+  EXPECT_EQ(to_string(*I2), "T=L2");
 
   auto Tree = C.limit(C.intersect(move(I1), move(I2)), 10);
   // AND reorders its children, we don't care which order it prints.
-  EXPECT_THAT(llvm::to_string(*Tree), AnyOf("(LIMIT 10 (& [1 3 5] T=L2))",
-                                            "(LIMIT 10 (& T=L2 [1 3 5]))"));
+  EXPECT_THAT(to_string(*Tree), AnyOf("(LIMIT 10 (& [1 3 5] T=L2))",
+                                      "(LIMIT 10 (& T=L2 [1 3 5]))"));
 }
 
 TEST(DexIterators, Limit) {
@@ -325,28 +325,27 @@ TEST(DexIterators, Optimizations) {
   const PostingList L3{3};
 
   // empty and/or yield true/false
-  EXPECT_EQ(llvm::to_string(*C.intersect()), "true");
-  EXPECT_EQ(llvm::to_string(*C.unionOf()), "false");
+  EXPECT_EQ(to_string(*C.intersect()), "true");
+  EXPECT_EQ(to_string(*C.unionOf()), "false");
 
   // true/false inside and/or short-circuit
-  EXPECT_EQ(llvm::to_string(*C.intersect(L1.iterator(), C.all())), "[1]");
-  EXPECT_EQ(llvm::to_string(*C.intersect(L1.iterator(), C.none())), "false");
+  EXPECT_EQ(to_string(*C.intersect(L1.iterator(), C.all())), "[1]");
+  EXPECT_EQ(to_string(*C.intersect(L1.iterator(), C.none())), "false");
   // Not optimized to avoid breaking boosts.
-  EXPECT_EQ(llvm::to_string(*C.unionOf(L1.iterator(), C.all())),
-            "(| [1] true)");
-  EXPECT_EQ(llvm::to_string(*C.unionOf(L1.iterator(), C.none())), "[1]");
+  EXPECT_EQ(to_string(*C.unionOf(L1.iterator(), C.all())), "(| [1] true)");
+  EXPECT_EQ(to_string(*C.unionOf(L1.iterator(), C.none())), "[1]");
 
   // and/or nested inside and/or are flattened
-  EXPECT_EQ(llvm::to_string(*C.intersect(
-                L1.iterator(), C.intersect(L1.iterator(), L1.iterator()))),
+  EXPECT_EQ(to_string(*C.intersect(L1.iterator(),
+                                   C.intersect(L1.iterator(), L1.iterator()))),
             "(& [1] [1] [1])");
-  EXPECT_EQ(llvm::to_string(*C.unionOf(
-                L1.iterator(), C.unionOf(L2.iterator(), L3.iterator()))),
+  EXPECT_EQ(to_string(*C.unionOf(L1.iterator(),
+                                 C.unionOf(L2.iterator(), L3.iterator()))),
             "(| [1] [2] [3])");
 
   // optimizations combine over multiple levels
-  EXPECT_EQ(llvm::to_string(*C.intersect(
-                C.intersect(L1.iterator(), C.intersect()), C.unionOf(C.all()))),
+  EXPECT_EQ(to_string(*C.intersect(C.intersect(L1.iterator(), C.intersect()),
+                                   C.unionOf(C.all()))),
             "[1]");
 }
 
@@ -486,25 +485,18 @@ TEST(Dex, FuzzyFind) {
               UnorderedElementsAre("other::A", "other::ABC"));
   Req.Query = "";
   Req.Scopes = {};
+  Req.AnyScope = true;
   EXPECT_THAT(match(*Index, Req),
               UnorderedElementsAre("ns::ABC", "ns::BCD", "::ABC",
                                    "ns::nested::ABC", "other::ABC",
                                    "other::A"));
 }
 
-TEST(DexTest, DexDeduplicate) {
-  std::vector<Symbol> Symbols = {symbol("1"), symbol("2"), symbol("3"),
-                                 symbol("2") /* duplicate */};
-  FuzzyFindRequest Req;
-  Req.Query = "2";
-  Dex I(Symbols, RefSlab(), URISchemes);
-  EXPECT_THAT(match(I, Req), ElementsAre("2"));
-}
-
 TEST(DexTest, DexLimitedNumMatches) {
   auto I = Dex::build(generateNumSymbols(0, 100), RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "5";
+  Req.AnyScope = true;
   Req.Limit = 3;
   bool Incomplete;
   auto Matches = match(*I, Req, &Incomplete);
@@ -519,6 +511,7 @@ TEST(DexTest, FuzzyMatch) {
       RefSlab(), URISchemes);
   FuzzyFindRequest Req;
   Req.Query = "lol";
+  Req.AnyScope = true;
   Req.Limit = 2;
   EXPECT_THAT(match(*I, Req),
               UnorderedElementsAre("LaughingOutLoud", "LittleOldLady"));
@@ -528,6 +521,7 @@ TEST(DexTest, ShortQuery) {
   auto I =
       Dex::build(generateSymbols({"OneTwoThreeFour"}), RefSlab(), URISchemes);
   FuzzyFindRequest Req;
+  Req.AnyScope = true;
   bool Incomplete;
 
   EXPECT_THAT(match(*I, Req, &Incomplete), ElementsAre("OneTwoThreeFour"));
@@ -550,6 +544,7 @@ TEST(DexTest, MatchQualifiedNamesWithoutSpecificScope) {
   auto I = Dex::build(generateSymbols({"a::y1", "b::y2", "y3"}), RefSlab(),
                       URISchemes);
   FuzzyFindRequest Req;
+  Req.AnyScope = true;
   Req.Query = "y";
   EXPECT_THAT(match(*I, Req), UnorderedElementsAre("a::y1", "b::y2", "y3"));
 }
@@ -594,9 +589,9 @@ TEST(DexTest, WildcardScope) {
   auto I =
       Dex::build(generateSymbols({"a::y1", "a::b::y2", "c::y3"}), RefSlab(), URISchemes);
   FuzzyFindRequest Req;
+  Req.AnyScope = true;
   Req.Query = "y";
   Req.Scopes = {"a::"};
-  Req.AnyScope = true;
   EXPECT_THAT(match(*I, Req),
               UnorderedElementsAre("a::y1", "a::b::y2", "c::y3"));
 }
@@ -636,6 +631,7 @@ TEST(DexTest, SymbolIndexOptionsFilter) {
   std::vector<Symbol> Symbols{CodeCompletionSymbol, NonCodeCompletionSymbol};
   Dex I(Symbols, RefSlab(), URISchemes);
   FuzzyFindRequest Req;
+  Req.AnyScope = true;
   Req.RestrictForCodeCompletion = false;
   EXPECT_THAT(match(I, Req), ElementsAre("Completion", "NoCompletion"));
   Req.RestrictForCodeCompletion = true;
@@ -652,6 +648,7 @@ TEST(DexTest, ProximityPathsBoosting) {
   Dex I(Symbols, RefSlab(), URISchemes);
 
   FuzzyFindRequest Req;
+  Req.AnyScope = true;
   Req.Query = "abc";
   // The best candidate can change depending on the proximity paths.
   Req.Limit = 1;
@@ -669,7 +666,7 @@ TEST(DexTest, ProximityPathsBoosting) {
 
 TEST(DexTests, Refs) {
   DenseMap<SymbolID, std::vector<Ref>> Refs;
-  auto AddRef = [&](const Symbol& Sym, StringRef Filename, RefKind Kind) {
+  auto AddRef = [&](const Symbol &Sym, const char *Filename, RefKind Kind) {
     auto& SymbolRefs = Refs[Sym.ID];
     SymbolRefs.emplace_back();
     SymbolRefs.back().Kind = Kind;

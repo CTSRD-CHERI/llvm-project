@@ -8,18 +8,54 @@
 //===----------------------------------------------------------------------===//
 
 #include "PdbUtil.h"
+#include "PdbSymUid.h"
 
 #include "llvm/DebugInfo/CodeView/SymbolDeserializer.h"
+#include "llvm/DebugInfo/CodeView/TypeDeserializer.h"
+#include "llvm/DebugInfo/PDB/Native/TpiStream.h"
 
 #include "lldb/Utility/LLDBAssert.h"
+
+#include "lldb/lldb-enumerations.h"
 
 using namespace lldb_private;
 using namespace lldb_private::npdb;
 using namespace llvm::codeview;
 using namespace llvm::pdb;
 
-llvm::pdb::PDB_SymType
-lldb_private::npdb::CVSymToPDBSym(llvm::codeview::SymbolKind kind) {
+CVTagRecord CVTagRecord::create(CVType type) {
+  assert(IsTagRecord(type) && "type is not a tag record!");
+  switch (type.kind()) {
+  case LF_CLASS:
+  case LF_STRUCTURE:
+  case LF_INTERFACE: {
+    ClassRecord cr;
+    llvm::cantFail(TypeDeserializer::deserializeAs<ClassRecord>(type, cr));
+    return CVTagRecord(std::move(cr));
+  }
+  case LF_UNION: {
+    UnionRecord ur;
+    llvm::cantFail(TypeDeserializer::deserializeAs<UnionRecord>(type, ur));
+    return CVTagRecord(std::move(ur));
+  }
+  case LF_ENUM: {
+    EnumRecord er;
+    llvm::cantFail(TypeDeserializer::deserializeAs<EnumRecord>(type, er));
+    return CVTagRecord(std::move(er));
+  }
+  default:
+    llvm_unreachable("Unreachable!");
+  }
+}
+
+CVTagRecord::CVTagRecord(ClassRecord &&c)
+    : cvclass(std::move(c)),
+      m_kind(cvclass.Kind == TypeRecordKind::Struct ? Struct : Class) {}
+CVTagRecord::CVTagRecord(UnionRecord &&u)
+    : cvunion(std::move(u)), m_kind(Union) {}
+CVTagRecord::CVTagRecord(EnumRecord &&e) : cvenum(std::move(e)), m_kind(Enum) {}
+
+PDB_SymType lldb_private::npdb::CVSymToPDBSym(SymbolKind kind) {
   switch (kind) {
   case S_COMPILE3:
   case S_OBJNAME:
@@ -71,7 +107,36 @@ lldb_private::npdb::CVSymToPDBSym(llvm::codeview::SymbolKind kind) {
   return PDB_SymType::None;
 }
 
-bool lldb_private::npdb::SymbolHasAddress(const llvm::codeview::CVSymbol &sym) {
+PDB_SymType lldb_private::npdb::CVTypeToPDBType(TypeLeafKind kind) {
+  switch (kind) {
+  case LF_ARRAY:
+    return PDB_SymType::ArrayType;
+  case LF_ARGLIST:
+    return PDB_SymType::FunctionSig;
+  case LF_BCLASS:
+    return PDB_SymType::BaseClass;
+  case LF_BINTERFACE:
+    return PDB_SymType::BaseInterface;
+  case LF_CLASS:
+  case LF_STRUCTURE:
+  case LF_INTERFACE:
+  case LF_UNION:
+    return PDB_SymType::UDT;
+  case LF_POINTER:
+    return PDB_SymType::PointerType;
+  case LF_ENUM:
+    return PDB_SymType::Enum;
+  case LF_PROCEDURE:
+    return PDB_SymType::FunctionSig;
+  case LF_BITFIELD:
+    return PDB_SymType::BuiltinType;
+  default:
+    lldbassert(false && "Invalid type record kind!");
+  }
+  return PDB_SymType::None;
+}
+
+bool lldb_private::npdb::SymbolHasAddress(const CVSymbol &sym) {
   switch (sym.kind()) {
   case S_GPROC32:
   case S_LPROC32:
@@ -98,7 +163,7 @@ bool lldb_private::npdb::SymbolHasAddress(const llvm::codeview::CVSymbol &sym) {
   }
 }
 
-bool lldb_private::npdb::SymbolIsCode(const llvm::codeview::CVSymbol &sym) {
+bool lldb_private::npdb::SymbolIsCode(const CVSymbol &sym) {
   switch (sym.kind()) {
   case S_GPROC32:
   case S_LPROC32:
@@ -156,8 +221,7 @@ SegmentOffset GetSegmentAndOffset<ThreadLocalDataSym>(const CVSymbol &sym) {
   return {record.Segment, record.DataOffset};
 }
 
-SegmentOffset
-lldb_private::npdb::GetSegmentAndOffset(const llvm::codeview::CVSymbol &sym) {
+SegmentOffset lldb_private::npdb::GetSegmentAndOffset(const CVSymbol &sym) {
   switch (sym.kind()) {
   case S_GPROC32:
   case S_LPROC32:
@@ -229,8 +293,8 @@ GetSegmentOffsetAndLength<CoffGroupSym>(const CVSymbol &sym) {
   return SegmentOffsetLength{record.Segment, record.Offset, record.Size};
 }
 
-SegmentOffsetLength lldb_private::npdb::GetSegmentOffsetAndLength(
-    const llvm::codeview::CVSymbol &sym) {
+SegmentOffsetLength
+lldb_private::npdb::GetSegmentOffsetAndLength(const CVSymbol &sym) {
   switch (sym.kind()) {
   case S_GPROC32:
   case S_LPROC32:
@@ -255,4 +319,109 @@ SegmentOffsetLength lldb_private::npdb::GetSegmentOffsetAndLength(
     lldbassert(false && "Record does not have a segment/offset/length triple!");
   }
   return {0, 0, 0};
+}
+
+bool lldb_private::npdb::IsForwardRefUdt(CVType cvt) {
+  ClassRecord cr;
+  UnionRecord ur;
+  EnumRecord er;
+  switch (cvt.kind()) {
+  case LF_CLASS:
+  case LF_STRUCTURE:
+  case LF_INTERFACE:
+    llvm::cantFail(TypeDeserializer::deserializeAs<ClassRecord>(cvt, cr));
+    return cr.isForwardRef();
+  case LF_UNION:
+    llvm::cantFail(TypeDeserializer::deserializeAs<UnionRecord>(cvt, ur));
+    return ur.isForwardRef();
+  case LF_ENUM:
+    llvm::cantFail(TypeDeserializer::deserializeAs<EnumRecord>(cvt, er));
+    return er.isForwardRef();
+  default:
+    return false;
+  }
+}
+
+bool lldb_private::npdb::IsTagRecord(llvm::codeview::CVType cvt) {
+  switch (cvt.kind()) {
+  case LF_CLASS:
+  case LF_STRUCTURE:
+  case LF_UNION:
+  case LF_ENUM:
+    return true;
+  default:
+    return false;
+  }
+}
+
+bool lldb_private::npdb::IsForwardRefUdt(const PdbTypeSymId &id,
+                                         TpiStream &tpi) {
+  if (id.is_ipi || id.index.isSimple())
+    return false;
+  return IsForwardRefUdt(tpi.getType(id.index));
+}
+
+bool lldb_private::npdb::IsTagRecord(const PdbTypeSymId &id, TpiStream &tpi) {
+  if (id.is_ipi || id.index.isSimple())
+    return false;
+  return IsTagRecord(tpi.getType(id.index));
+}
+
+lldb::AccessType
+lldb_private::npdb::TranslateMemberAccess(MemberAccess access) {
+  switch (access) {
+  case MemberAccess::Private:
+    return lldb::eAccessPrivate;
+  case MemberAccess::Protected:
+    return lldb::eAccessProtected;
+  case MemberAccess::Public:
+    return lldb::eAccessPublic;
+  case MemberAccess::None:
+    return lldb::eAccessNone;
+  }
+  llvm_unreachable("unreachable");
+}
+
+TypeIndex lldb_private::npdb::GetFieldListIndex(CVType cvt) {
+  switch (cvt.kind()) {
+  case LF_CLASS:
+  case LF_STRUCTURE:
+  case LF_INTERFACE: {
+    ClassRecord cr;
+    cantFail(TypeDeserializer::deserializeAs<ClassRecord>(cvt, cr));
+    return cr.FieldList;
+  }
+  case LF_UNION: {
+    UnionRecord ur;
+    cantFail(TypeDeserializer::deserializeAs<UnionRecord>(cvt, ur));
+    return ur.FieldList;
+  }
+  case LF_ENUM: {
+    EnumRecord er;
+    cantFail(TypeDeserializer::deserializeAs<EnumRecord>(cvt, er));
+    return er.FieldList;
+  }
+  default:
+    llvm_unreachable("Unreachable!");
+  }
+}
+
+TypeIndex lldb_private::npdb::LookThroughModifierRecord(CVType modifier) {
+  lldbassert(modifier.kind() == LF_MODIFIER);
+  ModifierRecord mr;
+  llvm::cantFail(TypeDeserializer::deserializeAs<ModifierRecord>(modifier, mr));
+  return mr.ModifiedType;
+}
+
+llvm::StringRef lldb_private::npdb::DropNameScope(llvm::StringRef name) {
+  // Not all PDB names can be parsed with CPlusPlusNameParser.
+  // E.g. it fails on names containing `anonymous namespace'.
+  // So we simply drop everything before '::'
+
+  auto offset = name.rfind("::");
+  if (offset == llvm::StringRef::npos)
+    return name;
+  assert(offset + 2 <= name.size());
+
+  return name.substr(offset + 2);
 }

@@ -811,9 +811,26 @@ AST_MATCHER_P(Expr, ignoringParenImpCasts,
 ///   varDecl(hasType(pointerType(pointee(ignoringParens(functionType())))))
 /// \endcode
 /// would match the declaration for fp.
-AST_MATCHER_P(QualType, ignoringParens,
-              internal::Matcher<QualType>, InnerMatcher) {
+AST_MATCHER_P_OVERLOAD(QualType, ignoringParens, internal::Matcher<QualType>,
+                       InnerMatcher, 0) {
   return InnerMatcher.matches(Node.IgnoreParens(), Finder, Builder);
+}
+
+/// Overload \c ignoringParens for \c Expr.
+///
+/// Given
+/// \code
+///   const char* str = ("my-string");
+/// \endcode
+/// The matcher
+/// \code
+///   implicitCastExpr(hasSourceExpression(ignoringParens(stringLiteral())))
+/// \endcode
+/// would match the implicit cast resulting from the assignment.
+AST_MATCHER_P_OVERLOAD(Expr, ignoringParens, internal::Matcher<Expr>,
+                       InnerMatcher, 1) {
+  const Expr *E = Node.IgnoreParens();
+  return InnerMatcher.matches(*E, Finder, Builder);
 }
 
 /// Matches expressions that are instantiation-dependent even if it is
@@ -1573,6 +1590,18 @@ extern const internal::VariadicDynCastAllOfMatcher<Decl,
 extern const internal::VariadicDynCastAllOfMatcher<Decl,
                                                    UnresolvedUsingTypenameDecl>
     unresolvedUsingTypenameDecl;
+
+/// Matches a constant expression wrapper.
+///
+/// Example matches the constant in the case statement:
+///     (matcher = constantExpr())
+/// \code
+///   switch (a) {
+///   case 37: break;
+///   }
+/// \endcode
+extern const internal::VariadicDynCastAllOfMatcher<Stmt, ConstantExpr>
+    constantExpr;
 
 /// Matches parentheses used in expressions.
 ///
@@ -2425,8 +2454,9 @@ AST_MATCHER_P(UnaryExprOrTypeTraitExpr, ofKind, UnaryExprOrTypeTrait, Kind) {
 /// alignof.
 inline internal::Matcher<Stmt> alignOfExpr(
     const internal::Matcher<UnaryExprOrTypeTraitExpr> &InnerMatcher) {
-  return stmt(unaryExprOrTypeTraitExpr(allOf(
-      ofKind(UETT_AlignOf), InnerMatcher)));
+  return stmt(unaryExprOrTypeTraitExpr(
+      allOf(anyOf(ofKind(UETT_AlignOf), ofKind(UETT_PreferredAlignOf)),
+            InnerMatcher)));
 }
 
 /// Same as unaryExprOrTypeTraitExpr, but only matching
@@ -3297,6 +3327,20 @@ AST_MATCHER_P(
   const Expr *Initializer = Node.getAnyInitializer();
   return (Initializer != nullptr &&
           InnerMatcher.matches(*Initializer, Finder, Builder));
+}
+
+/// \brief Matches a static variable with local scope.
+///
+/// Example matches y (matcher = varDecl(isStaticLocal()))
+/// \code
+/// void f() {
+///   int x;
+///   static int y;
+/// }
+/// static int z;
+/// \endcode
+AST_MATCHER(VarDecl, isStaticLocal) {
+  return Node.isStaticLocal();
 }
 
 /// Matches a variable declaration that has function scope and is a

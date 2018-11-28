@@ -321,6 +321,24 @@ class TypePromotionTransaction;
     }
 
   private:
+    template <typename F>
+    void resetIteratorIfInvalidatedWhileCalling(BasicBlock *BB, F f) {
+      // Substituting can cause recursive simplifications, which can invalidate
+      // our iterator.  Use a WeakTrackingVH to hold onto it in case this
+      // happens.
+      Value *CurValue = &*CurInstIterator;
+      WeakTrackingVH IterHandle(CurValue);
+
+      f();
+
+      // If the iterator instruction was recursively deleted, start over at the
+      // start of the block.
+      if (IterHandle != CurValue) {
+        CurInstIterator = BB->begin();
+        SunkAddrs.clear();
+      }
+    }
+
     bool eliminateFallThrough(Function &F);
     bool eliminateMostlyEmptyBlocks(Function &F);
     BasicBlock *findDestBlockOfMergeableEmptyBlock(BasicBlock *BB);
@@ -398,7 +416,7 @@ bool CodeGenPrepare::runOnFunction(Function &F) {
   OptSize = F.optForSize();
 
   ProfileSummaryInfo *PSI =
-      getAnalysis<ProfileSummaryInfoWrapperPass>().getPSI();
+      &getAnalysis<ProfileSummaryInfoWrapperPass>().getPSI();
   if (ProfileGuidedSectionPrefix) {
     if (PSI->isFunctionHotInCallGraph(&F, *BFI))
       F.setSectionPrefix(".hot");
@@ -436,11 +454,6 @@ bool CodeGenPrepare::runOnFunction(Function &F) {
   bool MadeChange = true;
   while (MadeChange) {
     MadeChange = false;
-    SeenChainsForSExt.clear();
-    ValToSExtendedUses.clear();
-    RemovedInsts.clear();
-    LargeOffsetGEPMap.clear();
-    LargeOffsetGEPID.clear();
     for (Function::iterator I = F.begin(); I != F.end(); ) {
       BasicBlock *BB = &*I++;
       bool ModifiedDTOnIteration = false;
@@ -460,6 +473,11 @@ bool CodeGenPrepare::runOnFunction(Function &F) {
       I->deleteValue();
 
     EverMadeChange |= MadeChange;
+    SeenChainsForSExt.clear();
+    ValToSExtendedUses.clear();
+    RemovedInsts.clear();
+    LargeOffsetGEPMap.clear();
+    LargeOffsetGEPID.clear();
   }
 
   SunkAddrs.clear();
@@ -1690,21 +1708,18 @@ bool CodeGenPrepare::optimizeCallInst(CallInst *CI, bool &ModifiedDT) {
       // Lower all uses of llvm.objectsize.*
       ConstantInt *RetVal =
           lowerObjectSizeCall(II, *DL, TLInfo, /*MustSucceed=*/true);
-      // Substituting this can cause recursive simplifications, which can
-      // invalidate our iterator.  Use a WeakTrackingVH to hold onto it in case
-      // this
-      // happens.
-      Value *CurValue = &*CurInstIterator;
-      WeakTrackingVH IterHandle(CurValue);
 
-      replaceAndRecursivelySimplify(CI, RetVal, TLInfo, nullptr);
-
-      // If the iterator instruction was recursively deleted, start over at the
-      // start of the block.
-      if (IterHandle != CurValue) {
-        CurInstIterator = BB->begin();
-        SunkAddrs.clear();
-      }
+      resetIteratorIfInvalidatedWhileCalling(BB, [&]() {
+        replaceAndRecursivelySimplify(CI, RetVal, TLInfo, nullptr);
+      });
+      return true;
+    }
+    case Intrinsic::is_constant: {
+      // If is_constant hasn't folded away yet, lower it to false now.
+      Constant *RetVal = ConstantInt::get(II->getType(), 0);
+      resetIteratorIfInvalidatedWhileCalling(BB, [&]() {
+        replaceAndRecursivelySimplify(CI, RetVal, TLInfo, nullptr);
+      });
       return true;
     }
     case Intrinsic::aarch64_stlxr:
@@ -1721,11 +1736,22 @@ bool CodeGenPrepare::optimizeCallInst(CallInst *CI, bool &ModifiedDT) {
       return true;
     }
     case Intrinsic::launder_invariant_group:
-    case Intrinsic::strip_invariant_group:
-      II->replaceAllUsesWith(II->getArgOperand(0));
+    case Intrinsic::strip_invariant_group: {
+      Value *ArgVal = II->getArgOperand(0);
+      auto it = LargeOffsetGEPMap.find(II);
+      if (it != LargeOffsetGEPMap.end()) {
+          // Merge entries in LargeOffsetGEPMap to reflect the RAUW.
+          // Make sure not to have to deal with iterator invalidation
+          // after possibly adding ArgVal to LargeOffsetGEPMap.
+          auto GEPs = std::move(it->second);
+          LargeOffsetGEPMap[ArgVal].append(GEPs.begin(), GEPs.end());
+          LargeOffsetGEPMap.erase(II);
+      }
+
+      II->replaceAllUsesWith(ArgVal);
       II->eraseFromParent();
       return true;
-
+    }
     case Intrinsic::cttz:
     case Intrinsic::ctlz:
       // If counting zeros is expensive, try to avoid it.
@@ -2631,15 +2657,159 @@ private:
                              Value *PromotedOperand) const;
 };
 
+class PhiNodeSet;
+
+/// An iterator for PhiNodeSet.
+class PhiNodeSetIterator {
+  PhiNodeSet * const Set;
+  size_t CurrentIndex = 0;
+
+public:
+  /// The constructor. Start should point to either a valid element, or be equal
+  /// to the size of the underlying SmallVector of the PhiNodeSet.
+  PhiNodeSetIterator(PhiNodeSet * const Set, size_t Start);
+  PHINode * operator*() const;
+  PhiNodeSetIterator& operator++();
+  bool operator==(const PhiNodeSetIterator &RHS) const;
+  bool operator!=(const PhiNodeSetIterator &RHS) const;
+};
+
+/// Keeps a set of PHINodes.
+///
+/// This is a minimal set implementation for a specific use case:
+/// It is very fast when there are very few elements, but also provides good
+/// performance when there are many. It is similar to SmallPtrSet, but also
+/// provides iteration by insertion order, which is deterministic and stable
+/// across runs. It is also similar to SmallSetVector, but provides removing
+/// elements in O(1) time. This is achieved by not actually removing the element
+/// from the underlying vector, so comes at the cost of using more memory, but
+/// that is fine, since PhiNodeSets are used as short lived objects.
+class PhiNodeSet {
+  friend class PhiNodeSetIterator;
+
+  using MapType = SmallDenseMap<PHINode *, size_t, 32>;
+  using iterator =  PhiNodeSetIterator;
+
+  /// Keeps the elements in the order of their insertion in the underlying
+  /// vector. To achieve constant time removal, it never deletes any element.
+  SmallVector<PHINode *, 32> NodeList;
+
+  /// Keeps the elements in the underlying set implementation. This (and not the
+  /// NodeList defined above) is the source of truth on whether an element
+  /// is actually in the collection.
+  MapType NodeMap;
+
+  /// Points to the first valid (not deleted) element when the set is not empty
+  /// and the value is not zero. Equals to the size of the underlying vector
+  /// when the set is empty. When the value is 0, as in the beginning, the
+  /// first element may or may not be valid.
+  size_t FirstValidElement = 0;
+
+public:
+  /// Inserts a new element to the collection.
+  /// \returns true if the element is actually added, i.e. was not in the
+  /// collection before the operation.
+  bool insert(PHINode *Ptr) {
+    if (NodeMap.insert(std::make_pair(Ptr, NodeList.size())).second) {
+      NodeList.push_back(Ptr);
+      return true;
+    }
+    return false;
+  }
+
+  /// Removes the element from the collection.
+  /// \returns whether the element is actually removed, i.e. was in the
+  /// collection before the operation.
+  bool erase(PHINode *Ptr) {
+    auto it = NodeMap.find(Ptr);
+    if (it != NodeMap.end()) {
+      NodeMap.erase(Ptr);
+      SkipRemovedElements(FirstValidElement);
+      return true;
+    }
+    return false;
+  }
+
+  /// Removes all elements and clears the collection.
+  void clear() {
+    NodeMap.clear();
+    NodeList.clear();
+    FirstValidElement = 0;
+  }
+
+  /// \returns an iterator that will iterate the elements in the order of
+  /// insertion.
+  iterator begin() {
+    if (FirstValidElement == 0)
+      SkipRemovedElements(FirstValidElement);
+    return PhiNodeSetIterator(this, FirstValidElement);
+  }
+
+  /// \returns an iterator that points to the end of the collection.
+  iterator end() { return PhiNodeSetIterator(this, NodeList.size()); }
+
+  /// Returns the number of elements in the collection.
+  size_t size() const {
+    return NodeMap.size();
+  }
+
+  /// \returns 1 if the given element is in the collection, and 0 if otherwise.
+  size_t count(PHINode *Ptr) const {
+    return NodeMap.count(Ptr);
+  }
+
+private:
+  /// Updates the CurrentIndex so that it will point to a valid element.
+  ///
+  /// If the element of NodeList at CurrentIndex is valid, it does not
+  /// change it. If there are no more valid elements, it updates CurrentIndex
+  /// to point to the end of the NodeList.
+  void SkipRemovedElements(size_t &CurrentIndex) {
+    while (CurrentIndex < NodeList.size()) {
+      auto it = NodeMap.find(NodeList[CurrentIndex]);
+      // If the element has been deleted and added again later, NodeMap will
+      // point to a different index, so CurrentIndex will still be invalid.
+      if (it != NodeMap.end() && it->second == CurrentIndex)
+        break;
+      ++CurrentIndex;
+    }
+  }
+};
+
+PhiNodeSetIterator::PhiNodeSetIterator(PhiNodeSet *const Set, size_t Start)
+    : Set(Set), CurrentIndex(Start) {}
+
+PHINode * PhiNodeSetIterator::operator*() const {
+  assert(CurrentIndex < Set->NodeList.size() &&
+         "PhiNodeSet access out of range");
+  return Set->NodeList[CurrentIndex];
+}
+
+PhiNodeSetIterator& PhiNodeSetIterator::operator++() {
+  assert(CurrentIndex < Set->NodeList.size() &&
+         "PhiNodeSet access out of range");
+  ++CurrentIndex;
+  Set->SkipRemovedElements(CurrentIndex);
+  return *this;
+}
+
+bool PhiNodeSetIterator::operator==(const PhiNodeSetIterator &RHS) const {
+  return CurrentIndex == RHS.CurrentIndex;
+}
+
+bool PhiNodeSetIterator::operator!=(const PhiNodeSetIterator &RHS) const {
+  return !((*this) == RHS);
+}
+
 /// Keep track of simplification of Phi nodes.
 /// Accept the set of all phi nodes and erase phi node from this set
 /// if it is simplified.
 class SimplificationTracker {
   DenseMap<Value *, Value *> Storage;
   const SimplifyQuery &SQ;
-  // Tracks newly created Phi nodes. We use a SetVector to get deterministic
-  // order when iterating over the set in MatchPhiSet.
-  SmallSetVector<PHINode *, 32> AllPhiNodes;
+  // Tracks newly created Phi nodes. The elements are iterated by insertion
+  // order.
+  PhiNodeSet AllPhiNodes;
   // Tracks newly created Select nodes.
   SmallPtrSet<SelectInst *, 32> AllSelectNodes;
 
@@ -2671,7 +2841,7 @@ public:
           Put(PI, V);
           PI->replaceAllUsesWith(V);
           if (auto *PHI = dyn_cast<PHINode>(PI))
-            AllPhiNodes.remove(PHI);
+            AllPhiNodes.erase(PHI);
           if (auto *Select = dyn_cast<SelectInst>(PI))
             AllSelectNodes.erase(Select);
           PI->eraseFromParent();
@@ -2694,11 +2864,11 @@ public:
     assert(Get(To) == To && "Replacement PHI node is already replaced.");
     Put(From, To);
     From->replaceAllUsesWith(To);
-    AllPhiNodes.remove(From);
+    AllPhiNodes.erase(From);
     From->eraseFromParent();
   }
 
-  SmallSetVector<PHINode *, 32>& newPhiNodes() { return AllPhiNodes; }
+  PhiNodeSet& newPhiNodes() { return AllPhiNodes; }
 
   void insertNewPhi(PHINode *PN) { AllPhiNodes.insert(PN); }
 
@@ -2943,7 +3113,7 @@ private:
   /// Matcher tracks the matched Phi nodes.
   bool MatchPhiNode(PHINode *PHI, PHINode *Candidate,
                     SmallSetVector<PHIPair, 8> &Matcher,
-                    SmallSetVector<PHINode *, 32> &PhiNodesToMatch) {
+                    PhiNodeSet &PhiNodesToMatch) {
     SmallVector<PHIPair, 8> WorkList;
     Matcher.insert({ PHI, Candidate });
     WorkList.push_back({ PHI, Candidate });
@@ -2992,11 +3162,12 @@ private:
   /// Returns false if this matching fails and creation of new Phi is disabled.
   bool MatchPhiSet(SimplificationTracker &ST, bool AllowNewPhiNodes,
                    unsigned &PhiNotMatchedCount) {
-    // Use a SetVector for Matched to make sure we do replacements (ReplacePhi)
-    // in a deterministic order below.
+    // Matched and PhiNodesToMatch iterate their elements in a deterministic
+    // order, so the replacements (ReplacePhi) are also done in a deterministic
+    // order.
     SmallSetVector<PHIPair, 8> Matched;
     SmallPtrSet<PHINode *, 8> WillNotMatch;
-    SmallSetVector<PHINode *, 32> &PhiNodesToMatch = ST.newPhiNodes();
+    PhiNodeSet &PhiNodesToMatch = ST.newPhiNodes();
     while (PhiNodesToMatch.size()) {
       PHINode *PHI = *PhiNodesToMatch.begin();
 
@@ -3031,7 +3202,7 @@ private:
       // Just remove all seen values in matcher. They will not match anything.
       PhiNotMatchedCount += WillNotMatch.size();
       for (auto *P : WillNotMatch)
-        PhiNodesToMatch.remove(P);
+        PhiNodesToMatch.erase(P);
     }
     return true;
   }

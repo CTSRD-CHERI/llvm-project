@@ -585,7 +585,7 @@ class Configuration(object):
             self.cxx.flags += ['-arch', arch]
             self.cxx.flags += ['-m' + name + '-version-min=' + version]
 
-        # Disable availability unless explicitely requested
+        # Disable availability unless explicitly requested
         if not self.with_availability:
             self.cxx.flags += ['-D_LIBCPP_DISABLE_AVAILABILITY']
         # FIXME(EricWF): variant_size.pass.cpp requires a slightly larger
@@ -931,9 +931,6 @@ class Configuration(object):
         self.cxx.addWarningFlagIfSupported('-Wunused-variable')
         self.cxx.addWarningFlagIfSupported('-Wunused-parameter')
         self.cxx.addWarningFlagIfSupported('-Wunreachable-code')
-        # FIXME: Enable the two warnings below.
-        self.cxx.addWarningFlagIfSupported('-Wno-conversion')
-        self.cxx.addWarningFlagIfSupported('-Wno-unused-local-typedef')
         std = self.get_lit_conf('std', None)
         if std in ['c++98', 'c++03']:
             # The '#define static_assert' provided by libc++ in C++03 mode

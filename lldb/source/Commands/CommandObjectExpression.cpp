@@ -7,13 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 
-// Project includes
 #include "CommandObjectExpression.h"
 #include "Plugins/ExpressionParser/Clang/ClangExpressionVariable.h"
 #include "lldb/Core/Debugger.h"
@@ -487,7 +483,7 @@ bool CommandObjectExpression::EvaluateExpression(llvm::StringRef expr,
         }
       } else {
         if (result_valobj_sp->GetError().GetError() ==
-            lldb::eExpressionProducedNoResult) {
+            UserExpression::kNoResult) {
           if (format != eFormatVoid &&
               m_interpreter.GetDebugger().GetNotifyVoid()) {
             error_stream->PutCString("(void)\n");

@@ -1343,6 +1343,12 @@ let hasPostISelHook = 1, Defs = [CPSR] in {
                                                            tGPR:$Rm))]>,
                 Requires<[IsThumb1Only]>,
                 Sched<[WriteALU]>;
+
+  def tRSBS   : tPseudoInst<(outs tGPR:$Rd), (ins tGPR:$Rn),
+                            2, IIC_iALUr,
+                            [(set tGPR:$Rd, CPSR, (ARMsubc 0, tGPR:$Rn))]>,
+                Requires<[IsThumb1Only]>,
+                Sched<[WriteALU]>;
 }
 
 // Sign-extend byte
@@ -1379,6 +1385,9 @@ def tUDF : TI<(outs), (ins imm0_255:$imm8), IIC_Br, "udf\t$imm8",
   let Inst{11-8} = 0b1110;
   let Inst{7-0} = imm8;
 }
+
+def : Pat<(debugtrap), (tBKPT 0)>, Requires<[IsThumb, HasV5T]>;
+def : Pat<(debugtrap), (tUDF 254)>, Requires<[IsThumb, NoV5T]>;
 
 def t__brkdiv0 : TI<(outs), (ins), IIC_Br, "__brkdiv0",
                     [(int_arm_undefined 249)]>, Encoding16,

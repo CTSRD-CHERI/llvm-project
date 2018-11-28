@@ -711,6 +711,9 @@ void USRGenerator::VisitType(QualType T) {
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
         case BuiltinType::Id:
 #include "clang/Basic/OpenCLImageTypes.def"
+#define EXT_OPAQUE_TYPE(ExtType, Id, Ext) \
+        case BuiltinType::Id:
+#include "clang/Basic/OpenCLExtensionTypes.def"
         case BuiltinType::OCLEvent:
         case BuiltinType::OCLClkEvent:
         case BuiltinType::OCLQueue:
@@ -942,7 +945,7 @@ void USRGenerator::VisitTemplateArgument(const TemplateArgument &Arg) {
 
   case TemplateArgument::TemplateExpansion:
     Out << 'P'; // pack expansion of...
-    // Fall through
+    LLVM_FALLTHROUGH;
   case TemplateArgument::Template:
     VisitTemplateName(Arg.getAsTemplateOrTemplatePattern());
     break;

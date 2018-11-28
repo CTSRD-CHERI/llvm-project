@@ -276,7 +276,7 @@ void CallInst::init(FunctionType *FTy, Value *Func, ArrayRef<Value *> Args,
            "Calling a function with a bad signature!");
 #endif
 
-  std::copy(Args.begin(), Args.end(), op_begin());
+  llvm::copy(Args, op_begin());
 
   auto It = populateBundleOperandInfos(Bundles, Args.size());
   (void)It;
@@ -578,7 +578,7 @@ void InvokeInst::init(FunctionType *FTy, Value *Fn, BasicBlock *IfNormal,
            "Invoking a function with a bad signature!");
 #endif
 
-  std::copy(Args.begin(), Args.end(), op_begin());
+  llvm::copy(Args, op_begin());
 
   auto It = populateBundleOperandInfos(Bundles, Args.size());
   (void)It;
@@ -623,55 +623,53 @@ LandingPadInst *InvokeInst::getLandingPadInst() const {
 //===----------------------------------------------------------------------===//
 
 ReturnInst::ReturnInst(const ReturnInst &RI)
-  : TerminatorInst(Type::getVoidTy(RI.getContext()), Instruction::Ret,
-                   OperandTraits<ReturnInst>::op_end(this) -
-                     RI.getNumOperands(),
-                   RI.getNumOperands()) {
+    : Instruction(Type::getVoidTy(RI.getContext()), Instruction::Ret,
+                  OperandTraits<ReturnInst>::op_end(this) - RI.getNumOperands(),
+                  RI.getNumOperands()) {
   if (RI.getNumOperands())
     Op<0>() = RI.Op<0>();
   SubclassOptionalData = RI.SubclassOptionalData;
 }
 
 ReturnInst::ReturnInst(LLVMContext &C, Value *retVal, Instruction *InsertBefore)
-  : TerminatorInst(Type::getVoidTy(C), Instruction::Ret,
-                   OperandTraits<ReturnInst>::op_end(this) - !!retVal, !!retVal,
-                   InsertBefore) {
+    : Instruction(Type::getVoidTy(C), Instruction::Ret,
+                  OperandTraits<ReturnInst>::op_end(this) - !!retVal, !!retVal,
+                  InsertBefore) {
   if (retVal)
     Op<0>() = retVal;
 }
 
 ReturnInst::ReturnInst(LLVMContext &C, Value *retVal, BasicBlock *InsertAtEnd)
-  : TerminatorInst(Type::getVoidTy(C), Instruction::Ret,
-                   OperandTraits<ReturnInst>::op_end(this) - !!retVal, !!retVal,
-                   InsertAtEnd) {
+    : Instruction(Type::getVoidTy(C), Instruction::Ret,
+                  OperandTraits<ReturnInst>::op_end(this) - !!retVal, !!retVal,
+                  InsertAtEnd) {
   if (retVal)
     Op<0>() = retVal;
 }
 
 ReturnInst::ReturnInst(LLVMContext &Context, BasicBlock *InsertAtEnd)
-  : TerminatorInst(Type::getVoidTy(Context), Instruction::Ret,
-                   OperandTraits<ReturnInst>::op_end(this), 0, InsertAtEnd) {
-}
+    : Instruction(Type::getVoidTy(Context), Instruction::Ret,
+                  OperandTraits<ReturnInst>::op_end(this), 0, InsertAtEnd) {}
 
 //===----------------------------------------------------------------------===//
 //                        ResumeInst Implementation
 //===----------------------------------------------------------------------===//
 
 ResumeInst::ResumeInst(const ResumeInst &RI)
-  : TerminatorInst(Type::getVoidTy(RI.getContext()), Instruction::Resume,
-                   OperandTraits<ResumeInst>::op_begin(this), 1) {
+    : Instruction(Type::getVoidTy(RI.getContext()), Instruction::Resume,
+                  OperandTraits<ResumeInst>::op_begin(this), 1) {
   Op<0>() = RI.Op<0>();
 }
 
 ResumeInst::ResumeInst(Value *Exn, Instruction *InsertBefore)
-  : TerminatorInst(Type::getVoidTy(Exn->getContext()), Instruction::Resume,
-                   OperandTraits<ResumeInst>::op_begin(this), 1, InsertBefore) {
+    : Instruction(Type::getVoidTy(Exn->getContext()), Instruction::Resume,
+                  OperandTraits<ResumeInst>::op_begin(this), 1, InsertBefore) {
   Op<0>() = Exn;
 }
 
 ResumeInst::ResumeInst(Value *Exn, BasicBlock *InsertAtEnd)
-  : TerminatorInst(Type::getVoidTy(Exn->getContext()), Instruction::Resume,
-                   OperandTraits<ResumeInst>::op_begin(this), 1, InsertAtEnd) {
+    : Instruction(Type::getVoidTy(Exn->getContext()), Instruction::Resume,
+                  OperandTraits<ResumeInst>::op_begin(this), 1, InsertAtEnd) {
   Op<0>() = Exn;
 }
 
@@ -680,10 +678,10 @@ ResumeInst::ResumeInst(Value *Exn, BasicBlock *InsertAtEnd)
 //===----------------------------------------------------------------------===//
 
 CleanupReturnInst::CleanupReturnInst(const CleanupReturnInst &CRI)
-    : TerminatorInst(CRI.getType(), Instruction::CleanupRet,
-                     OperandTraits<CleanupReturnInst>::op_end(this) -
-                         CRI.getNumOperands(),
-                     CRI.getNumOperands()) {
+    : Instruction(CRI.getType(), Instruction::CleanupRet,
+                  OperandTraits<CleanupReturnInst>::op_end(this) -
+                      CRI.getNumOperands(),
+                  CRI.getNumOperands()) {
   setInstructionSubclassData(CRI.getSubclassDataFromInstruction());
   Op<0>() = CRI.Op<0>();
   if (CRI.hasUnwindDest())
@@ -701,19 +699,19 @@ void CleanupReturnInst::init(Value *CleanupPad, BasicBlock *UnwindBB) {
 
 CleanupReturnInst::CleanupReturnInst(Value *CleanupPad, BasicBlock *UnwindBB,
                                      unsigned Values, Instruction *InsertBefore)
-    : TerminatorInst(Type::getVoidTy(CleanupPad->getContext()),
-                     Instruction::CleanupRet,
-                     OperandTraits<CleanupReturnInst>::op_end(this) - Values,
-                     Values, InsertBefore) {
+    : Instruction(Type::getVoidTy(CleanupPad->getContext()),
+                  Instruction::CleanupRet,
+                  OperandTraits<CleanupReturnInst>::op_end(this) - Values,
+                  Values, InsertBefore) {
   init(CleanupPad, UnwindBB);
 }
 
 CleanupReturnInst::CleanupReturnInst(Value *CleanupPad, BasicBlock *UnwindBB,
                                      unsigned Values, BasicBlock *InsertAtEnd)
-    : TerminatorInst(Type::getVoidTy(CleanupPad->getContext()),
-                     Instruction::CleanupRet,
-                     OperandTraits<CleanupReturnInst>::op_end(this) - Values,
-                     Values, InsertAtEnd) {
+    : Instruction(Type::getVoidTy(CleanupPad->getContext()),
+                  Instruction::CleanupRet,
+                  OperandTraits<CleanupReturnInst>::op_end(this) - Values,
+                  Values, InsertAtEnd) {
   init(CleanupPad, UnwindBB);
 }
 
@@ -726,25 +724,25 @@ void CatchReturnInst::init(Value *CatchPad, BasicBlock *BB) {
 }
 
 CatchReturnInst::CatchReturnInst(const CatchReturnInst &CRI)
-    : TerminatorInst(Type::getVoidTy(CRI.getContext()), Instruction::CatchRet,
-                     OperandTraits<CatchReturnInst>::op_begin(this), 2) {
+    : Instruction(Type::getVoidTy(CRI.getContext()), Instruction::CatchRet,
+                  OperandTraits<CatchReturnInst>::op_begin(this), 2) {
   Op<0>() = CRI.Op<0>();
   Op<1>() = CRI.Op<1>();
 }
 
 CatchReturnInst::CatchReturnInst(Value *CatchPad, BasicBlock *BB,
                                  Instruction *InsertBefore)
-    : TerminatorInst(Type::getVoidTy(BB->getContext()), Instruction::CatchRet,
-                     OperandTraits<CatchReturnInst>::op_begin(this), 2,
-                     InsertBefore) {
+    : Instruction(Type::getVoidTy(BB->getContext()), Instruction::CatchRet,
+                  OperandTraits<CatchReturnInst>::op_begin(this), 2,
+                  InsertBefore) {
   init(CatchPad, BB);
 }
 
 CatchReturnInst::CatchReturnInst(Value *CatchPad, BasicBlock *BB,
                                  BasicBlock *InsertAtEnd)
-    : TerminatorInst(Type::getVoidTy(BB->getContext()), Instruction::CatchRet,
-                     OperandTraits<CatchReturnInst>::op_begin(this), 2,
-                     InsertAtEnd) {
+    : Instruction(Type::getVoidTy(BB->getContext()), Instruction::CatchRet,
+                  OperandTraits<CatchReturnInst>::op_begin(this), 2,
+                  InsertAtEnd) {
   init(CatchPad, BB);
 }
 
@@ -756,8 +754,8 @@ CatchSwitchInst::CatchSwitchInst(Value *ParentPad, BasicBlock *UnwindDest,
                                  unsigned NumReservedValues,
                                  const Twine &NameStr,
                                  Instruction *InsertBefore)
-    : TerminatorInst(ParentPad->getType(), Instruction::CatchSwitch, nullptr, 0,
-                     InsertBefore) {
+    : Instruction(ParentPad->getType(), Instruction::CatchSwitch, nullptr, 0,
+                  InsertBefore) {
   if (UnwindDest)
     ++NumReservedValues;
   init(ParentPad, UnwindDest, NumReservedValues + 1);
@@ -767,8 +765,8 @@ CatchSwitchInst::CatchSwitchInst(Value *ParentPad, BasicBlock *UnwindDest,
 CatchSwitchInst::CatchSwitchInst(Value *ParentPad, BasicBlock *UnwindDest,
                                  unsigned NumReservedValues,
                                  const Twine &NameStr, BasicBlock *InsertAtEnd)
-    : TerminatorInst(ParentPad->getType(), Instruction::CatchSwitch, nullptr, 0,
-                     InsertAtEnd) {
+    : Instruction(ParentPad->getType(), Instruction::CatchSwitch, nullptr, 0,
+                  InsertAtEnd) {
   if (UnwindDest)
     ++NumReservedValues;
   init(ParentPad, UnwindDest, NumReservedValues + 1);
@@ -776,8 +774,8 @@ CatchSwitchInst::CatchSwitchInst(Value *ParentPad, BasicBlock *UnwindDest,
 }
 
 CatchSwitchInst::CatchSwitchInst(const CatchSwitchInst &CSI)
-    : TerminatorInst(CSI.getType(), Instruction::CatchSwitch, nullptr,
-                     CSI.getNumOperands()) {
+    : Instruction(CSI.getType(), Instruction::CatchSwitch, nullptr,
+                  CSI.getNumOperands()) {
   init(CSI.getParentPad(), CSI.getUnwindDest(), CSI.getNumOperands());
   setNumHungOffUseOperands(ReservedSpace);
   Use *OL = getOperandList();
@@ -837,7 +835,7 @@ void CatchSwitchInst::removeHandler(handler_iterator HI) {
 void FuncletPadInst::init(Value *ParentPad, ArrayRef<Value *> Args,
                           const Twine &NameStr) {
   assert(getNumOperands() == 1 + Args.size() && "NumOperands not set up?");
-  std::copy(Args.begin(), Args.end(), op_begin());
+  llvm::copy(Args, op_begin());
   setParentPad(ParentPad);
   setName(NameStr);
 }
@@ -875,13 +873,11 @@ FuncletPadInst::FuncletPadInst(Instruction::FuncletPadOps Op, Value *ParentPad,
 
 UnreachableInst::UnreachableInst(LLVMContext &Context,
                                  Instruction *InsertBefore)
-  : TerminatorInst(Type::getVoidTy(Context), Instruction::Unreachable,
-                   nullptr, 0, InsertBefore) {
-}
+    : Instruction(Type::getVoidTy(Context), Instruction::Unreachable, nullptr,
+                  0, InsertBefore) {}
 UnreachableInst::UnreachableInst(LLVMContext &Context, BasicBlock *InsertAtEnd)
-  : TerminatorInst(Type::getVoidTy(Context), Instruction::Unreachable,
-                   nullptr, 0, InsertAtEnd) {
-}
+    : Instruction(Type::getVoidTy(Context), Instruction::Unreachable, nullptr,
+                  0, InsertAtEnd) {}
 
 //===----------------------------------------------------------------------===//
 //                        BranchInst Implementation
@@ -894,18 +890,18 @@ void BranchInst::AssertOK() {
 }
 
 BranchInst::BranchInst(BasicBlock *IfTrue, Instruction *InsertBefore)
-  : TerminatorInst(Type::getVoidTy(IfTrue->getContext()), Instruction::Br,
-                   OperandTraits<BranchInst>::op_end(this) - 1,
-                   1, InsertBefore) {
+    : Instruction(Type::getVoidTy(IfTrue->getContext()), Instruction::Br,
+                  OperandTraits<BranchInst>::op_end(this) - 1, 1,
+                  InsertBefore) {
   assert(IfTrue && "Branch destination may not be null!");
   Op<-1>() = IfTrue;
 }
 
 BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
                        Instruction *InsertBefore)
-  : TerminatorInst(Type::getVoidTy(IfTrue->getContext()), Instruction::Br,
-                   OperandTraits<BranchInst>::op_end(this) - 3,
-                   3, InsertBefore) {
+    : Instruction(Type::getVoidTy(IfTrue->getContext()), Instruction::Br,
+                  OperandTraits<BranchInst>::op_end(this) - 3, 3,
+                  InsertBefore) {
   Op<-1>() = IfTrue;
   Op<-2>() = IfFalse;
   Op<-3>() = Cond;
@@ -915,18 +911,16 @@ BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
 }
 
 BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *InsertAtEnd)
-  : TerminatorInst(Type::getVoidTy(IfTrue->getContext()), Instruction::Br,
-                   OperandTraits<BranchInst>::op_end(this) - 1,
-                   1, InsertAtEnd) {
+    : Instruction(Type::getVoidTy(IfTrue->getContext()), Instruction::Br,
+                  OperandTraits<BranchInst>::op_end(this) - 1, 1, InsertAtEnd) {
   assert(IfTrue && "Branch destination may not be null!");
   Op<-1>() = IfTrue;
 }
 
 BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
-           BasicBlock *InsertAtEnd)
-  : TerminatorInst(Type::getVoidTy(IfTrue->getContext()), Instruction::Br,
-                   OperandTraits<BranchInst>::op_end(this) - 3,
-                   3, InsertAtEnd) {
+                       BasicBlock *InsertAtEnd)
+    : Instruction(Type::getVoidTy(IfTrue->getContext()), Instruction::Br,
+                  OperandTraits<BranchInst>::op_end(this) - 3, 3, InsertAtEnd) {
   Op<-1>() = IfTrue;
   Op<-2>() = IfFalse;
   Op<-3>() = Cond;
@@ -935,10 +929,10 @@ BranchInst::BranchInst(BasicBlock *IfTrue, BasicBlock *IfFalse, Value *Cond,
 #endif
 }
 
-BranchInst::BranchInst(const BranchInst &BI) :
-  TerminatorInst(Type::getVoidTy(BI.getContext()), Instruction::Br,
-                 OperandTraits<BranchInst>::op_end(this) - BI.getNumOperands(),
-                 BI.getNumOperands()) {
+BranchInst::BranchInst(const BranchInst &BI)
+    : Instruction(Type::getVoidTy(BI.getContext()), Instruction::Br,
+                  OperandTraits<BranchInst>::op_end(this) - BI.getNumOperands(),
+                  BI.getNumOperands()) {
   Op<-1>() = BI.Op<-1>();
   if (BI.getNumOperands() != 1) {
     assert(BI.getNumOperands() == 3 && "BR can have 1 or 3 operands!");
@@ -1397,7 +1391,7 @@ void GetElementPtrInst::init(Value *Ptr, ArrayRef<Value *> IdxList,
   assert(getNumOperands() == 1 + IdxList.size() &&
          "NumOperands not initialized?");
   Op<0>() = Ptr;
-  std::copy(IdxList.begin(), IdxList.end(), op_begin() + 1);
+  llvm::copy(IdxList, op_begin() + 1);
   setName(Name);
 }
 
@@ -1805,6 +1799,35 @@ bool ShuffleVectorInst::isTransposeMask(ArrayRef<int> Mask) {
   return true;
 }
 
+bool ShuffleVectorInst::isExtractSubvectorMask(ArrayRef<int> Mask,
+                                               int NumSrcElts, int &Index) {
+  // Must extract from a single source.
+  if (!isSingleSourceMaskImpl(Mask, NumSrcElts))
+    return false;
+
+  // Must be smaller (else this is an Identity shuffle).
+  if (NumSrcElts <= (int)Mask.size())
+    return false;
+
+  // Find start of extraction, accounting that we may start with an UNDEF.
+  int SubIndex = -1;
+  for (int i = 0, e = Mask.size(); i != e; ++i) {
+    int M = Mask[i];
+    if (M < 0)
+      continue;
+    int Offset = (M % NumSrcElts) - i;
+    if (0 <= SubIndex && SubIndex != Offset)
+      return false;
+    SubIndex = Offset;
+  }
+
+  if (0 <= SubIndex) {
+    Index = SubIndex;
+    return true;
+  }
+  return false;
+}
+
 bool ShuffleVectorInst::isIdentityWithPadding() const {
   int NumOpElts = Op<0>()->getType()->getVectorNumElements();
   int NumMaskElts = getType()->getVectorNumElements();
@@ -1932,6 +1955,59 @@ Type *ExtractValueInst::getIndexedType(Type *Agg,
     Agg = cast<CompositeType>(Agg)->getTypeAtIndex(Index);
   }
   return const_cast<Type*>(Agg);
+}
+
+//===----------------------------------------------------------------------===//
+//                             UnaryOperator Class
+//===----------------------------------------------------------------------===//
+
+UnaryOperator::UnaryOperator(UnaryOps iType, Value *S,
+                             Type *Ty, const Twine &Name,
+                             Instruction *InsertBefore)
+  : UnaryInstruction(Ty, iType, S, InsertBefore) {
+  Op<0>() = S;
+  setName(Name);
+  AssertOK();
+}
+
+UnaryOperator::UnaryOperator(UnaryOps iType, Value *S,
+                             Type *Ty, const Twine &Name,
+                             BasicBlock *InsertAtEnd)
+  : UnaryInstruction(Ty, iType, S, InsertAtEnd) {
+  Op<0>() = S;
+  setName(Name);
+  AssertOK();
+}
+
+UnaryOperator *UnaryOperator::Create(UnaryOps Op, Value *S,
+                                     const Twine &Name,
+                                     Instruction *InsertBefore) {
+  return new UnaryOperator(Op, S, S->getType(), Name, InsertBefore);
+}
+
+UnaryOperator *UnaryOperator::Create(UnaryOps Op, Value *S,
+                                     const Twine &Name,
+                                     BasicBlock *InsertAtEnd) {
+  UnaryOperator *Res = Create(Op, S, Name);
+  InsertAtEnd->getInstList().push_back(Res);
+  return Res;
+}
+
+void UnaryOperator::AssertOK() {
+  Value *LHS = getOperand(0);
+  (void)LHS; // Silence warnings.
+#ifndef NDEBUG
+  switch (getOpcode()) {
+  case FNeg:
+    assert(getType() == LHS->getType() &&
+           "Unary operation should return same type as operand!");
+    assert(getType()->isFPOrFPVectorTy() &&
+           "Tried to create a floating-point operation on a "
+           "non-floating-point type!");
+    break;
+  default: llvm_unreachable("Invalid opcode provided");
+  }
+#endif
 }
 
 //===----------------------------------------------------------------------===//
@@ -2114,71 +2190,6 @@ BinaryOperator *BinaryOperator::CreateNot(Value *Op, const Twine &Name,
   Constant *AllOnes = Constant::getAllOnesValue(Op->getType());
   return new BinaryOperator(Instruction::Xor, Op, AllOnes,
                             Op->getType(), Name, InsertAtEnd);
-}
-
-// isConstantAllOnes - Helper function for several functions below
-static inline bool isConstantAllOnes(const Value *V) {
-  if (const Constant *C = dyn_cast<Constant>(V))
-    return C->isAllOnesValue();
-  return false;
-}
-
-bool BinaryOperator::isNeg(const Value *V) {
-  if (const BinaryOperator *Bop = dyn_cast<BinaryOperator>(V))
-    if (Bop->getOpcode() == Instruction::Sub)
-      if (Constant *C = dyn_cast<Constant>(Bop->getOperand(0)))
-        return C->isNegativeZeroValue();
-  return false;
-}
-
-bool BinaryOperator::isFNeg(const Value *V, bool IgnoreZeroSign) {
-  if (const BinaryOperator *Bop = dyn_cast<BinaryOperator>(V))
-    if (Bop->getOpcode() == Instruction::FSub)
-      if (Constant *C = dyn_cast<Constant>(Bop->getOperand(0))) {
-        if (!IgnoreZeroSign)
-          IgnoreZeroSign = cast<Instruction>(V)->hasNoSignedZeros();
-        return !IgnoreZeroSign ? C->isNegativeZeroValue() : C->isZeroValue();
-      }
-  return false;
-}
-
-bool BinaryOperator::isNot(const Value *V) {
-  if (const BinaryOperator *Bop = dyn_cast<BinaryOperator>(V))
-    return (Bop->getOpcode() == Instruction::Xor &&
-            (isConstantAllOnes(Bop->getOperand(1)) ||
-             isConstantAllOnes(Bop->getOperand(0))));
-  return false;
-}
-
-Value *BinaryOperator::getNegArgument(Value *BinOp) {
-  return cast<BinaryOperator>(BinOp)->getOperand(1);
-}
-
-const Value *BinaryOperator::getNegArgument(const Value *BinOp) {
-  return getNegArgument(const_cast<Value*>(BinOp));
-}
-
-Value *BinaryOperator::getFNegArgument(Value *BinOp) {
-  return cast<BinaryOperator>(BinOp)->getOperand(1);
-}
-
-const Value *BinaryOperator::getFNegArgument(const Value *BinOp) {
-  return getFNegArgument(const_cast<Value*>(BinOp));
-}
-
-Value *BinaryOperator::getNotArgument(Value *BinOp) {
-  assert(isNot(BinOp) && "getNotArgument on non-'not' instruction!");
-  BinaryOperator *BO = cast<BinaryOperator>(BinOp);
-  Value *Op0 = BO->getOperand(0);
-  Value *Op1 = BO->getOperand(1);
-  if (isConstantAllOnes(Op0)) return Op1;
-
-  assert(isConstantAllOnes(Op1));
-  return Op0;
-}
-
-const Value *BinaryOperator::getNotArgument(const Value *BinOp) {
-  return getNotArgument(const_cast<Value*>(BinOp));
 }
 
 // Exchange the two operands to this instruction. This instruction is safe to
@@ -3272,15 +3283,18 @@ AddrSpaceCastInst::AddrSpaceCastInst(
 //===----------------------------------------------------------------------===//
 
 CmpInst::CmpInst(Type *ty, OtherOps op, Predicate predicate, Value *LHS,
-                 Value *RHS, const Twine &Name, Instruction *InsertBefore)
+                 Value *RHS, const Twine &Name, Instruction *InsertBefore,
+                 Instruction *FlagsSource)
   : Instruction(ty, op,
                 OperandTraits<CmpInst>::op_begin(this),
                 OperandTraits<CmpInst>::operands(this),
                 InsertBefore) {
-    Op<0>() = LHS;
-    Op<1>() = RHS;
+  Op<0>() = LHS;
+  Op<1>() = RHS;
   setPredicate((Predicate)predicate);
   setName(Name);
+  if (FlagsSource)
+    copyIRFlags(FlagsSource);
 }
 
 CmpInst::CmpInst(Type *ty, OtherOps op, Predicate predicate, Value *LHS,
@@ -3619,8 +3633,8 @@ void SwitchInst::init(Value *Value, BasicBlock *Default, unsigned NumReserved) {
 /// constructor can also autoinsert before another instruction.
 SwitchInst::SwitchInst(Value *Value, BasicBlock *Default, unsigned NumCases,
                        Instruction *InsertBefore)
-  : TerminatorInst(Type::getVoidTy(Value->getContext()), Instruction::Switch,
-                   nullptr, 0, InsertBefore) {
+    : Instruction(Type::getVoidTy(Value->getContext()), Instruction::Switch,
+                  nullptr, 0, InsertBefore) {
   init(Value, Default, 2+NumCases*2);
 }
 
@@ -3630,13 +3644,13 @@ SwitchInst::SwitchInst(Value *Value, BasicBlock *Default, unsigned NumCases,
 /// constructor also autoinserts at the end of the specified BasicBlock.
 SwitchInst::SwitchInst(Value *Value, BasicBlock *Default, unsigned NumCases,
                        BasicBlock *InsertAtEnd)
-  : TerminatorInst(Type::getVoidTy(Value->getContext()), Instruction::Switch,
-                   nullptr, 0, InsertAtEnd) {
+    : Instruction(Type::getVoidTy(Value->getContext()), Instruction::Switch,
+                  nullptr, 0, InsertAtEnd) {
   init(Value, Default, 2+NumCases*2);
 }
 
 SwitchInst::SwitchInst(const SwitchInst &SI)
-  : TerminatorInst(SI.getType(), Instruction::Switch, nullptr, 0) {
+    : Instruction(SI.getType(), Instruction::Switch, nullptr, 0) {
   init(SI.getCondition(), SI.getDefaultDest(), SI.getNumOperands());
   setNumHungOffUseOperands(SI.getNumOperands());
   Use *OL = getOperandList();
@@ -3647,7 +3661,6 @@ SwitchInst::SwitchInst(const SwitchInst &SI)
   }
   SubclassOptionalData = SI.SubclassOptionalData;
 }
-
 
 /// addCase - Add an entry to the switch instruction...
 ///
@@ -3727,21 +3740,21 @@ void IndirectBrInst::growOperands() {
 
 IndirectBrInst::IndirectBrInst(Value *Address, unsigned NumCases,
                                Instruction *InsertBefore)
-: TerminatorInst(Type::getVoidTy(Address->getContext()),Instruction::IndirectBr,
-                 nullptr, 0, InsertBefore) {
+    : Instruction(Type::getVoidTy(Address->getContext()),
+                  Instruction::IndirectBr, nullptr, 0, InsertBefore) {
   init(Address, NumCases);
 }
 
 IndirectBrInst::IndirectBrInst(Value *Address, unsigned NumCases,
                                BasicBlock *InsertAtEnd)
-: TerminatorInst(Type::getVoidTy(Address->getContext()),Instruction::IndirectBr,
-                 nullptr, 0, InsertAtEnd) {
+    : Instruction(Type::getVoidTy(Address->getContext()),
+                  Instruction::IndirectBr, nullptr, 0, InsertAtEnd) {
   init(Address, NumCases);
 }
 
 IndirectBrInst::IndirectBrInst(const IndirectBrInst &IBI)
-    : TerminatorInst(Type::getVoidTy(IBI.getContext()), Instruction::IndirectBr,
-                     nullptr, IBI.getNumOperands()) {
+    : Instruction(Type::getVoidTy(IBI.getContext()), Instruction::IndirectBr,
+                  nullptr, IBI.getNumOperands()) {
   allocHungoffUses(IBI.getNumOperands());
   Use *OL = getOperandList();
   const Use *InOL = IBI.getOperandList();
@@ -3787,6 +3800,10 @@ void IndirectBrInst::removeDestination(unsigned idx) {
 
 GetElementPtrInst *GetElementPtrInst::cloneImpl() const {
   return new (getNumOperands()) GetElementPtrInst(*this);
+}
+
+UnaryOperator *UnaryOperator::cloneImpl() const {
+  return Create(getOpcode(), Op<0>());
 }
 
 BinaryOperator *BinaryOperator::cloneImpl() const {

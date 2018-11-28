@@ -802,6 +802,29 @@ static void addPGOAndCoverageFlags(Compilation &C, const Driver &D,
     CmdArgs.push_back("-fcoverage-mapping");
   }
 
+  if (Args.hasArg(options::OPT_fprofile_exclude_files_EQ)) {
+    auto *Arg = Args.getLastArg(options::OPT_fprofile_exclude_files_EQ);
+    if (!Args.hasArg(options::OPT_coverage))
+      D.Diag(clang::diag::err_drv_argument_only_allowed_with)
+          << "-fprofile-exclude-files="
+          << "--coverage";
+
+    StringRef v = Arg->getValue();
+    CmdArgs.push_back(
+        Args.MakeArgString(Twine("-fprofile-exclude-files=" + v)));
+  }
+
+  if (Args.hasArg(options::OPT_fprofile_filter_files_EQ)) {
+    auto *Arg = Args.getLastArg(options::OPT_fprofile_filter_files_EQ);
+    if (!Args.hasArg(options::OPT_coverage))
+      D.Diag(clang::diag::err_drv_argument_only_allowed_with)
+          << "-fprofile-filter-files="
+          << "--coverage";
+
+    StringRef v = Arg->getValue();
+    CmdArgs.push_back(Args.MakeArgString(Twine("-fprofile-filter-files=" + v)));
+  }
+
   if (C.getArgs().hasArg(options::OPT_c) ||
       C.getArgs().hasArg(options::OPT_S)) {
     if (Output.isFilename()) {
@@ -1430,6 +1453,56 @@ void Clang::RenderTargetOptions(const llvm::Triple &EffectiveTriple,
   }
 }
 
+// Parse -mbranch-protection=<protection>[+<protection>]* where
+//   <protection> ::= standard | none | [bti,pac-ret[+b-key,+leaf]*]
+// Returns a triple of (return address signing Scope, signing key, require
+// landing pads)
+static std::tuple<StringRef, StringRef, bool>
+ParseAArch64BranchProtection(const Driver &D, const ArgList &Args,
+                             const Arg *A) {
+  StringRef Scope = "none";
+  StringRef Key = "a_key";
+  bool IndirectBranches = false;
+
+  StringRef Value = A->getValue();
+  // This maps onto -mbranch-protection=<scope>+<key>
+
+  if (Value.equals("standard")) {
+    Scope = "non-leaf";
+    Key = "a_key";
+    IndirectBranches = true;
+
+  } else if (!Value.equals("none")) {
+    SmallVector<StringRef, 4> BranchProtection;
+    StringRef(A->getValue()).split(BranchProtection, '+');
+
+    auto Protection = BranchProtection.begin();
+    while (Protection != BranchProtection.end()) {
+      if (Protection->equals("bti"))
+        IndirectBranches = true;
+      else if (Protection->equals("pac-ret")) {
+        Scope = "non-leaf";
+        while (++Protection != BranchProtection.end()) {
+          // Inner loop as "leaf" and "b-key" options must only appear attached
+          // to pac-ret.
+          if (Protection->equals("leaf"))
+            Scope = "all";
+          else if (Protection->equals("b-key"))
+            Key = "b_key";
+          else
+            break;
+        }
+        Protection--;
+      } else
+        D.Diag(diag::err_invalid_branch_protection)
+            << *Protection << A->getAsString(Args);
+      Protection++;
+    }
+  }
+
+  return std::make_tuple(Scope, Key, IndirectBranches);
+}
+
 namespace {
 void RenderAArch64ABI(const llvm::Triple &Triple, const ArgList &Args,
                       ArgStringList &CmdArgs) {
@@ -1484,9 +1557,33 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
       CmdArgs.push_back("-aarch64-enable-global-merge=true");
   }
 
-  if (Arg *A = Args.getLastArg(options::OPT_msign_return_address)) {
+  // Enable/disable return address signing and indirect branch targets.
+  if (Arg *A = Args.getLastArg(options::OPT_msign_return_address_EQ,
+                               options::OPT_mbranch_protection_EQ)) {
+
+    const Driver &D = getToolChain().getDriver();
+
+    StringRef Scope, Key;
+    bool IndirectBranches;
+
+    if (A->getOption().matches(options::OPT_msign_return_address_EQ)) {
+      Scope = A->getValue();
+      if (!Scope.equals("none") && !Scope.equals("non-leaf") &&
+          !Scope.equals("all"))
+        D.Diag(diag::err_invalid_branch_protection)
+            << Scope << A->getAsString(Args);
+      Key = "a_key";
+      IndirectBranches = false;
+    } else
+      std::tie(Scope, Key, IndirectBranches) =
+          ParseAArch64BranchProtection(D, Args, A);
+
     CmdArgs.push_back(
-        Args.MakeArgString(Twine("-msign-return-address=") + A->getValue()));
+        Args.MakeArgString(Twine("-msign-return-address=") + Scope));
+    CmdArgs.push_back(
+        Args.MakeArgString(Twine("-msign-return-address-key=") + Key));
+    if (IndirectBranches)
+      CmdArgs.push_back("-mbranch-target-enforce");
   }
 }
 
@@ -1738,6 +1835,10 @@ void Clang::AddX86TargetArgs(const ArgList &Args,
       Args.hasArg(options::OPT_mkernel) ||
       Args.hasArg(options::OPT_fapple_kext))
     CmdArgs.push_back("-disable-red-zone");
+
+  if (!Args.hasFlag(options::OPT_mtls_direct_seg_refs,
+                    options::OPT_mno_tls_direct_seg_refs, true))
+    CmdArgs.push_back("-mno-tls-direct-seg-refs");
 
   // Default to avoid implicit floating-point for kernel/kext code, but allow
   // that to be overridden with -mno-soft-float.
@@ -2694,8 +2795,10 @@ static void RenderCharacterOptions(const ArgList &Args, const llvm::Triple &T,
     CmdArgs.push_back("-fno-signed-char");
   }
 
-  if (Args.hasFlag(options::OPT_fchar8__t, options::OPT_fno_char8__t, false))
-    CmdArgs.push_back("-fchar8_t");
+  // The default depends on the language standard.
+  if (const Arg *A =
+          Args.getLastArg(options::OPT_fchar8__t, options::OPT_fno_char8__t))
+    A->render(Args, CmdArgs);
 
   if (const Arg *A = Args.getLastArg(options::OPT_fshort_wchar,
                                      options::OPT_fno_short_wchar)) {
@@ -2908,12 +3011,35 @@ static void RenderDiagnosticsOptions(const Driver &D, const ArgList &Args,
     CmdArgs.push_back("-fno-spell-checking");
 }
 
+enum class DwarfFissionKind { None, Split, Single };
+
+static DwarfFissionKind getDebugFissionKind(const Driver &D,
+                                            const ArgList &Args, Arg *&Arg) {
+  Arg =
+      Args.getLastArg(options::OPT_gsplit_dwarf, options::OPT_gsplit_dwarf_EQ);
+  if (!Arg)
+    return DwarfFissionKind::None;
+
+  if (Arg->getOption().matches(options::OPT_gsplit_dwarf))
+    return DwarfFissionKind::Split;
+
+  StringRef Value = Arg->getValue();
+  if (Value == "split")
+    return DwarfFissionKind::Split;
+  if (Value == "single")
+    return DwarfFissionKind::Single;
+
+  D.Diag(diag::err_drv_unsupported_option_argument)
+      << Arg->getOption().getName() << Arg->getValue();
+  return DwarfFissionKind::None;
+}
+
 static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
                                const llvm::Triple &T, const ArgList &Args,
                                bool EmitCodeView, bool IsWindowsMSVC,
                                ArgStringList &CmdArgs,
                                codegenoptions::DebugInfoKind &DebugInfoKind,
-                               const Arg *&SplitDWARFArg) {
+                               DwarfFissionKind &DwarfFission) {
   if (Args.hasFlag(options::OPT_fdebug_info_for_profiling,
                    options::OPT_fno_debug_info_for_profiling, false) &&
       checkDebugInfoOption(
@@ -2938,10 +3064,12 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
 
   Args.ClaimAllArgs(options::OPT_g_Group);
 
-  SplitDWARFArg = Args.getLastArg(options::OPT_gsplit_dwarf);
+  Arg* SplitDWARFArg;
+  DwarfFission = getDebugFissionKind(D, Args, SplitDWARFArg);
 
-  if (SplitDWARFArg && !checkDebugInfoOption(SplitDWARFArg, Args, D, TC)) {
-    SplitDWARFArg = nullptr;
+  if (DwarfFission != DwarfFissionKind::None &&
+      !checkDebugInfoOption(SplitDWARFArg, Args, D, TC)) {
+    DwarfFission = DwarfFissionKind::None;
     SplitDWARFInlining = false;
   }
 
@@ -2958,13 +3086,13 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
         // composing split-dwarf and line-tables-only, so let those compose
         // naturally in that case. And if you just turned off debug info,
         // (-gsplit-dwarf -g0) - do that.
-        if (SplitDWARFArg) {
+        if (DwarfFission != DwarfFissionKind::None) {
           if (A->getIndex() > SplitDWARFArg->getIndex()) {
             if (DebugInfoKind == codegenoptions::NoDebugInfo ||
                 DebugInfoKind == codegenoptions::DebugDirectivesOnly ||
                 (DebugInfoKind == codegenoptions::DebugLineTablesOnly &&
                  SplitDWARFInlining))
-              SplitDWARFArg = nullptr;
+              DwarfFission = DwarfFissionKind::None;
           } else if (SplitDWARFInlining)
             DebugInfoKind = codegenoptions::NoDebugInfo;
         }
@@ -2997,21 +3125,24 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
     if (checkDebugInfoOption(A, Args, D, TC))
       DWARFVersion = DwarfVersionNum(A->getSpelling());
 
-  // Forward -gcodeview. EmitCodeView might have been set by CL-compatibility
-  // argument parsing.
-  if (EmitCodeView) {
-    if (const Arg *A = Args.getLastArg(options::OPT_gcodeview)) {
-      EmitCodeView = checkDebugInfoOption(A, Args, D, TC);
-      if (EmitCodeView) {
-        // DWARFVersion remains at 0 if no explicit choice was made.
-        CmdArgs.push_back("-gcodeview");
-      }
-    }
+  if (const Arg *A = Args.getLastArg(options::OPT_gcodeview)) {
+    if (checkDebugInfoOption(A, Args, D, TC))
+      EmitCodeView = true;
   }
 
+  // If the user asked for debug info but did not explicitly specify -gcodeview
+  // or -gdwarf, ask the toolchain for the default format.
   if (!EmitCodeView && DWARFVersion == 0 &&
-      DebugInfoKind != codegenoptions::NoDebugInfo)
-    DWARFVersion = TC.GetDefaultDwarfVersion();
+      DebugInfoKind != codegenoptions::NoDebugInfo) {
+    switch (TC.getDefaultDebugFormat()) {
+    case codegenoptions::DIF_CodeView:
+      EmitCodeView = true;
+      break;
+    case codegenoptions::DIF_DWARF:
+      DWARFVersion = TC.GetDefaultDwarfVersion();
+      break;
+    }
+  }
 
   // -gline-directives-only supported only for the DWARF debug info.
   if (DWARFVersion == 0 && DebugInfoKind == codegenoptions::DebugDirectivesOnly)
@@ -3052,10 +3183,14 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
     if (!SplitDWARFInlining)
       CmdArgs.push_back("-fno-split-dwarf-inlining");
 
-    if (SplitDWARFArg) {
+    if (DwarfFission != DwarfFissionKind::None) {
       if (DebugInfoKind == codegenoptions::NoDebugInfo)
         DebugInfoKind = codegenoptions::LimitedDebugInfo;
-      CmdArgs.push_back("-enable-split-dwarf");
+
+      if (DwarfFission == DwarfFissionKind::Single)
+        CmdArgs.push_back("-enable-split-dwarf=single");
+      else
+        CmdArgs.push_back("-enable-split-dwarf");
     }
   }
 
@@ -3086,6 +3221,16 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
       CmdArgs.push_back("-gembed-source");
   }
 
+  if (EmitCodeView) {
+    CmdArgs.push_back("-gcodeview");
+
+    // Emit codeview type hashes if requested.
+    if (Args.hasFlag(options::OPT_gcodeview_ghash,
+                     options::OPT_gno_codeview_ghash, false)) {
+      CmdArgs.push_back("-gcodeview-ghash");
+    }
+  }
+
   RenderDebugEnablingArgs(Args, CmdArgs, DebugInfoKind, DWARFVersion,
                           DebuggerTuning);
 
@@ -3100,7 +3245,8 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
   const auto *PubnamesArg =
       Args.getLastArg(options::OPT_ggnu_pubnames, options::OPT_gno_gnu_pubnames,
                       options::OPT_gpubnames, options::OPT_gno_pubnames);
-  if (SplitDWARFArg || DebuggerTuning == llvm::DebuggerKind::LLDB ||
+  if (DwarfFission != DwarfFissionKind::None ||
+      DebuggerTuning == llvm::DebuggerKind::LLDB ||
       (PubnamesArg && checkDebugInfoOption(PubnamesArg, Args, D, TC)))
     if (!PubnamesArg ||
         (!PubnamesArg->getOption().matches(options::OPT_gno_gnu_pubnames) &&
@@ -3109,6 +3255,11 @@ static void RenderDebugOptions(const ToolChain &TC, const Driver &D,
                                            options::OPT_gpubnames)
                             ? "-gpubnames"
                             : "-ggnu-pubnames");
+
+  if (Args.hasFlag(options::OPT_fdebug_ranges_base_address,
+                   options::OPT_fno_debug_ranges_base_address, false)) {
+    CmdArgs.push_back("-fdebug-ranges-base-address");
+  }
 
   // -gdwarf-aranges turns on the emission of the aranges section in the
   // backend.
@@ -3172,18 +3323,15 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   bool IsCuda = JA.isOffloading(Action::OFK_Cuda);
   bool IsHIP = JA.isOffloading(Action::OFK_HIP);
   bool IsOpenMPDevice = JA.isDeviceOffloading(Action::OFK_OpenMP);
-  bool IsModulePrecompile =
-      isa<PrecompileJobAction>(JA) && JA.getType() == types::TY_ModuleFile;
   bool IsHeaderModulePrecompile = isa<HeaderModulePrecompileJobAction>(JA);
 
   // A header module compilation doesn't have a main input file, so invent a
   // fake one as a placeholder.
-  // FIXME: Pick the language based on the header file language.
   const char *ModuleName = [&]{
     auto *ModuleNameArg = Args.getLastArg(options::OPT_fmodule_name_EQ);
     return ModuleNameArg ? ModuleNameArg->getValue() : "";
   }();
-  InputInfo HeaderModuleInput(types::TY_CXXModule, ModuleName, ModuleName);
+  InputInfo HeaderModuleInput(Inputs[0].getType(), ModuleName, ModuleName);
 
   const InputInfo &Input =
       IsHeaderModulePrecompile ? HeaderModuleInput : Inputs[0];
@@ -3194,10 +3342,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   for (const InputInfo &I : Inputs) {
     if (&I == &Input) {
       // This is the primary input.
-    } else if (IsModulePrecompile &&
+    } else if (IsHeaderModulePrecompile &&
                types::getPrecompiledType(I.getType()) == types::TY_PCH) {
-      types::ID Expected =
-          types::lookupHeaderTypeForSourceType(Inputs[0].getType());
+      types::ID Expected = HeaderModuleInput.getType();
       if (I.getType() != Expected) {
         D.Diag(diag::err_drv_module_header_wrong_kind)
             << I.getFilename() << types::getTypeName(I.getType())
@@ -3805,23 +3952,21 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   types::ID InputType = Input.getType();
   if (D.IsCLMode())
     AddClangCLArgs(Args, InputType, CmdArgs, &DebugInfoKind, &EmitCodeView);
-  else
-    EmitCodeView = Args.hasArg(options::OPT_gcodeview);
 
-  const Arg *SplitDWARFArg = nullptr;
+  DwarfFissionKind DwarfFission;
   RenderDebugOptions(TC, D, RawTriple, Args, EmitCodeView, IsWindowsMSVC,
-                     CmdArgs, DebugInfoKind, SplitDWARFArg);
+                     CmdArgs, DebugInfoKind, DwarfFission);
 
   // Add the split debug info name to the command lines here so we
   // can propagate it to the backend.
-  bool SplitDWARF = SplitDWARFArg &&
+  bool SplitDWARF = (DwarfFission != DwarfFissionKind::None) &&
                     (RawTriple.isOSLinux() || RawTriple.isOSFuchsia()) &&
                     (isa<AssembleJobAction>(JA) || isa<CompileJobAction>(JA) ||
                      isa<BackendJobAction>(JA));
   const char *SplitDWARFOut;
   if (SplitDWARF) {
     CmdArgs.push_back("-split-dwarf-file");
-    SplitDWARFOut = SplitDebugName(Args, Input);
+    SplitDWARFOut = SplitDebugName(Args, Output);
     CmdArgs.push_back(SplitDWARFOut);
   }
 
@@ -4102,6 +4247,17 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasArg(options::OPT_relocatable_pch))
     CmdArgs.push_back("-relocatable-pch");
 
+  if (const Arg *A = Args.getLastArg(options::OPT_fcf_runtime_abi_EQ)) {
+    static const char *kCFABIs[] = {
+      "standalone", "objc", "swift", "swift-5.0", "swift-4.2", "swift-4.1",
+    };
+
+    if (find(kCFABIs, StringRef(A->getValue())) == std::end(kCFABIs))
+      D.Diag(diag::err_drv_invalid_cf_runtime_abi) << A->getValue();
+    else
+      A->render(Args, CmdArgs);
+  }
+
   if (Arg *A = Args.getLastArg(options::OPT_fconstant_string_class_EQ)) {
     CmdArgs.push_back("-fconstant-string-class");
     CmdArgs.push_back(A->getValue());
@@ -4209,6 +4365,8 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
       Args.AddLastArg(CmdArgs, options::OPT_fopenmp_simd,
                       options::OPT_fno_openmp_simd);
       Args.AddAllArgs(CmdArgs, options::OPT_fopenmp_version_EQ);
+      Args.AddAllArgs(CmdArgs, options::OPT_fopenmp_cuda_number_of_sm_EQ);
+      Args.AddAllArgs(CmdArgs, options::OPT_fopenmp_cuda_blocks_per_sm_EQ);
 
       // When in OpenMP offloading mode with NVPTX target, forward
       // cuda-mode flag
@@ -4788,7 +4946,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   // nice to enable this when doing a crashdump for modules as well.
   if (Args.hasFlag(options::OPT_frewrite_includes,
                    options::OPT_fno_rewrite_includes, false) ||
-      (C.isForDiagnostics() && (RewriteImports || !HaveModules)))
+      (C.isForDiagnostics() && !HaveModules))
     CmdArgs.push_back("-frewrite-includes");
 
   // Only allow -traditional or -traditional-cpp outside in preprocessing modes.
@@ -5379,7 +5537,6 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
       *DebugInfoKind = codegenoptions::LimitedDebugInfo;
     else
       *DebugInfoKind = codegenoptions::DebugLineTablesOnly;
-    CmdArgs.push_back("-gcodeview");
   } else {
     *EmitCodeView = false;
   }
@@ -5412,6 +5569,16 @@ void Clang::AddClangCLArgs(const ArgList &Args, types::ID InputType,
 
   if (VolatileOptionID == options::OPT__SLASH_volatile_ms)
     CmdArgs.push_back("-fms-volatile");
+
+ if (Args.hasFlag(options::OPT__SLASH_Zc_dllexportInlines_,
+                  options::OPT__SLASH_Zc_dllexportInlines,
+                  false)) {
+   if (Args.hasArg(options::OPT__SLASH_fallback)) {
+     D.Diag(clang::diag::err_drv_dllexport_inlines_and_fallback);
+   } else {
+    CmdArgs.push_back("-fno-dllexport-inlines");
+   }
+ }
 
   Arg *MostGeneralArg = Args.getLastArg(options::OPT__SLASH_vmg);
   Arg *BestCaseArg = Args.getLastArg(options::OPT__SLASH_vmb);
@@ -5761,10 +5928,11 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back(Output.getFilename());
 
   const llvm::Triple &T = getToolChain().getTriple();
-  if (Args.hasArg(options::OPT_gsplit_dwarf) &&
+  Arg *A;
+  if ((getDebugFissionKind(D, Args, A) == DwarfFissionKind::Split) &&
       (T.isOSLinux() || T.isOSFuchsia())) {
     CmdArgs.push_back("-split-dwarf-file");
-    CmdArgs.push_back(SplitDebugName(Args, Input));
+    CmdArgs.push_back(SplitDebugName(Args, Output));
   }
 
   assert(Input.isFilename() && "Invalid input.");

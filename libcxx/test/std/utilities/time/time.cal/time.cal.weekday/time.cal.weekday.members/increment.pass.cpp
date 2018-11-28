@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class weekday;
@@ -40,7 +40,7 @@ int main()
 
     ASSERT_SAME_TYPE(weekday , decltype(  std::declval<weekday&>()++));
     ASSERT_SAME_TYPE(weekday&, decltype(++std::declval<weekday&>()  ));
-    
+
     static_assert(testConstexpr<weekday>(), "");
 
     for (unsigned i = 0; i <= 6; ++i)

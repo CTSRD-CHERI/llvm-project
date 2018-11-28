@@ -254,9 +254,16 @@ void MCObjectFileInfo::initMachOMCObjectFileInfo(const Triple &T) {
   DwarfStrOffSection =
       Ctx->getMachOSection("__DWARF", "__debug_str_offs", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata(), "section_str_off");
+  DwarfAddrSection =
+      Ctx->getMachOSection("__DWARF", "__debug_addr", MachO::S_ATTR_DEBUG,
+                           SectionKind::getMetadata(), "section_info");
   DwarfLocSection =
       Ctx->getMachOSection("__DWARF", "__debug_loc", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata(), "section_debug_loc");
+  DwarfLoclistsSection =
+      Ctx->getMachOSection("__DWARF", "__debug_loclists", MachO::S_ATTR_DEBUG,
+                           SectionKind::getMetadata(), "section_debug_loc");
+
   DwarfARangesSection =
       Ctx->getMachOSection("__DWARF", "__debug_aranges", MachO::S_ATTR_DEBUG,
                            SectionKind::getMetadata());
@@ -449,6 +456,7 @@ void MCObjectFileInfo::initELFMCObjectFileInfo(const Triple &T, bool Large) {
       Ctx->getELFSection(".debug_str_offsets", DebugSecType, 0);
   DwarfAddrSection = Ctx->getELFSection(".debug_addr", DebugSecType, 0);
   DwarfRnglistsSection = Ctx->getELFSection(".debug_rnglists", DebugSecType, 0);
+  DwarfLoclistsSection = Ctx->getELFSection(".debug_loclists", DebugSecType, 0);
 
   // Fission Sections
   DwarfInfoDWOSection =
@@ -760,6 +768,12 @@ void MCObjectFileInfo::initWasmMCObjectFileInfo(const Triple &T) {
   DwarfPubNamesSection = Ctx->getWasmSection(".debug_pubnames", SectionKind::getMetadata());
   DwarfPubTypesSection = Ctx->getWasmSection(".debug_pubtypes", SectionKind::getMetadata());
 
+  // Wasm use data section for LSDA.
+  // TODO Consider putting each function's exception table in a separate
+  // section, as in -function-sections, to facilitate lld's --gc-section.
+  LSDASection = Ctx->getWasmSection(".rodata.gcc_except_table",
+                                    SectionKind::getReadOnlyWithRel());
+
   // TODO: Define more sections.
 }
 
@@ -815,16 +829,17 @@ void MCObjectFileInfo::InitMCObjectFileInfo(const Triple &TheTriple, bool PIC,
   }
 }
 
-MCSection *MCObjectFileInfo::getDwarfTypesSection(uint64_t Hash) const {
+MCSection *MCObjectFileInfo::getDwarfComdatSection(const char *Name,
+                                                   uint64_t Hash) const {
   switch (TT.getObjectFormat()) {
   case Triple::ELF:
-    return Ctx->getELFSection(".debug_types", ELF::SHT_PROGBITS, ELF::SHF_GROUP,
-                              0, utostr(Hash));
+    return Ctx->getELFSection(Name, ELF::SHT_PROGBITS, ELF::SHF_GROUP, 0,
+                              utostr(Hash));
   case Triple::MachO:
   case Triple::COFF:
   case Triple::Wasm:
   case Triple::UnknownObjectFormat:
-    report_fatal_error("Cannot get DWARF types section for this object file "
+    report_fatal_error("Cannot get DWARF comdat section for this object file "
                        "format: not implemented.");
     break;
   }

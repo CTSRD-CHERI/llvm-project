@@ -35,6 +35,13 @@ struct WasmObjectHeader {
   uint32_t Version;
 };
 
+struct WasmDylinkInfo {
+  uint32_t MemorySize; // Memory size in bytes
+  uint32_t MemoryAlignment;  // P2 alignment of memory
+  uint32_t TableSize;  // Table size in elements
+  uint32_t TableAlignment;  // P2 alignment of table
+};
+
 struct WasmExport {
   StringRef Name;
   uint8_t Kind;
@@ -75,6 +82,18 @@ struct WasmGlobal {
   StringRef SymbolName; // from the "linking" section
 };
 
+struct WasmEventType {
+  // Kind of event. Currently only WASM_EVENT_ATTRIBUTE_EXCEPTION is possible.
+  uint32_t Attribute;
+  uint32_t SigIndex;
+};
+
+struct WasmEvent {
+  uint32_t Index;
+  WasmEventType Type;
+  StringRef SymbolName; // from the "linking" section
+};
+
 struct WasmImport {
   StringRef Module;
   StringRef Field;
@@ -84,6 +103,7 @@ struct WasmImport {
     WasmGlobalType Global;
     WasmTable Table;
     WasmLimits Memory;
+    WasmEventType Event;
   };
 };
 
@@ -178,7 +198,8 @@ enum : unsigned {
   WASM_SEC_START = 8,    // Start function declaration
   WASM_SEC_ELEM = 9,     // Elements section
   WASM_SEC_CODE = 10,    // Function bodies (code)
-  WASM_SEC_DATA = 11     // Data segments
+  WASM_SEC_DATA = 11,    // Data segments
+  WASM_SEC_EVENT = 12    // Event declarations
 };
 
 // Type immediate encodings used in various contexts.
@@ -200,6 +221,7 @@ enum : unsigned {
   WASM_EXTERNAL_TABLE = 0x1,
   WASM_EXTERNAL_MEMORY = 0x2,
   WASM_EXTERNAL_GLOBAL = 0x3,
+  WASM_EXTERNAL_EVENT = 0x4,
 };
 
 // Opcodes used in initializer expressions.
@@ -214,6 +236,7 @@ enum : unsigned {
 
 enum : unsigned {
   WASM_LIMITS_FLAG_HAS_MAX = 0x1,
+  WASM_LIMITS_FLAG_IS_SHARED = 0x2,
 };
 
 // Kind codes used in the custom "name" section
@@ -242,6 +265,12 @@ enum WasmSymbolType : unsigned {
   WASM_SYMBOL_TYPE_DATA = 0x1,
   WASM_SYMBOL_TYPE_GLOBAL = 0x2,
   WASM_SYMBOL_TYPE_SECTION = 0x3,
+  WASM_SYMBOL_TYPE_EVENT = 0x4,
+};
+
+// Kinds of event attributes.
+enum WasmEventAttribute : unsigned {
+  WASM_EVENT_ATTRIBUTE_EXCEPTION = 0x0,
 };
 
 const unsigned WASM_SYMBOL_BINDING_MASK = 0x3;
@@ -299,6 +328,14 @@ inline bool operator==(const WasmGlobalType &LHS, const WasmGlobalType &RHS) {
 }
 
 inline bool operator!=(const WasmGlobalType &LHS, const WasmGlobalType &RHS) {
+  return !(LHS == RHS);
+}
+
+inline bool operator==(const WasmEventType &LHS, const WasmEventType &RHS) {
+  return LHS.Attribute == RHS.Attribute && LHS.SigIndex == RHS.SigIndex;
+}
+
+inline bool operator!=(const WasmEventType &LHS, const WasmEventType &RHS) {
   return !(LHS == RHS);
 }
 

@@ -419,8 +419,13 @@ TargetPassConfig::TargetPassConfig()
                      "triple set?");
 }
 
-bool TargetPassConfig::hasLimitedCodeGenPipeline() const {
-  return StartBefore || StartAfter || StopBefore || StopAfter;
+bool TargetPassConfig::willCompleteCodeGenPipeline() {
+  return StopBeforeOpt.empty() && StopAfterOpt.empty();
+}
+
+bool TargetPassConfig::hasLimitedCodeGenPipeline() {
+  return !StartBeforeOpt.empty() || !StartAfterOpt.empty() ||
+         !willCompleteCodeGenPipeline();
 }
 
 std::string
@@ -806,15 +811,17 @@ void TargetPassConfig::addMachinePasses() {
   AddingMachinePasses = true;
 
   // Insert a machine instr printer pass after the specified pass.
-  if (!StringRef(PrintMachineInstrs.getValue()).equals("") &&
-      !StringRef(PrintMachineInstrs.getValue()).equals("option-unspecified")) {
-    const PassRegistry *PR = PassRegistry::getPassRegistry();
-    const PassInfo *TPI = PR->getPassInfo(PrintMachineInstrs.getValue());
-    const PassInfo *IPI = PR->getPassInfo(StringRef("machineinstr-printer"));
-    assert (TPI && IPI && "Pass ID not registered!");
-    const char *TID = (const char *)(TPI->getTypeInfo());
-    const char *IID = (const char *)(IPI->getTypeInfo());
-    insertPass(TID, IID);
+  StringRef PrintMachineInstrsPassName = PrintMachineInstrs.getValue();
+  if (!PrintMachineInstrsPassName.equals("") &&
+      !PrintMachineInstrsPassName.equals("option-unspecified")) {
+    if (const PassInfo *TPI = getPassInfo(PrintMachineInstrsPassName)) {
+      const PassRegistry *PR = PassRegistry::getPassRegistry();
+      const PassInfo *IPI = PR->getPassInfo(StringRef("machineinstr-printer"));
+      assert(IPI && "failed to get \"machineinstr-printer\" PassInfo!");
+      const char *TID = (const char *)(TPI->getTypeInfo());
+      const char *IID = (const char *)(IPI->getTypeInfo());
+      insertPass(TID, IID);
+    }
   }
 
   // Print the instruction selected machine code...
@@ -983,7 +990,8 @@ bool TargetPassConfig::getOptimizeRegAlloc() const {
 }
 
 /// RegisterRegAlloc's global Registry tracks allocator registration.
-MachinePassRegistry RegisterRegAlloc::Registry;
+MachinePassRegistry<RegisterRegAlloc::FunctionPassCtor>
+    RegisterRegAlloc::Registry;
 
 /// A dummy default pass factory indicates whether the register allocator is
 /// overridden on the command line.

@@ -31,6 +31,7 @@
 #include "Commands/CommandObjectProcess.h"
 #include "Commands/CommandObjectQuit.h"
 #include "Commands/CommandObjectRegister.h"
+#include "Commands/CommandObjectReproducer.h"
 #include "Commands/CommandObjectSettings.h"
 #include "Commands/CommandObjectSource.h"
 #include "Commands/CommandObjectStats.h"
@@ -430,7 +431,6 @@ void CommandInterpreter::Initialize() {
     AddAlias("var", cmd_obj_sp);
     AddAlias("vo", cmd_obj_sp, "--object-description");
   }
-  
 }
 
 void CommandInterpreter::Clear() {
@@ -484,6 +484,8 @@ void CommandInterpreter::LoadCommandDictionary() {
   m_command_dict["quit"] = CommandObjectSP(new CommandObjectQuit(*this));
   m_command_dict["register"] =
       CommandObjectSP(new CommandObjectRegister(*this));
+  m_command_dict["reproducer"] =
+      CommandObjectSP(new CommandObjectReproducer(*this));
   m_command_dict["script"] =
       CommandObjectSP(new CommandObjectScript(*this, script_language));
   m_command_dict["settings"] =
@@ -2087,13 +2089,14 @@ void CommandInterpreter::SourceInitFile(bool in_cwd,
       LoadCWDlldbinitFile should_load =
           target->TargetProperties::GetLoadCWDlldbinitFile();
       if (should_load == eLoadCWDlldbinitWarn) {
-        FileSpec dot_lldb(".lldbinit", true);
+        FileSpec dot_lldb(".lldbinit");
+        FileSystem::Instance().Resolve(dot_lldb);
         llvm::SmallString<64> home_dir_path;
         llvm::sys::path::home_directory(home_dir_path);
-        FileSpec homedir_dot_lldb(home_dir_path.c_str(), false);
+        FileSpec homedir_dot_lldb(home_dir_path.c_str());
         homedir_dot_lldb.AppendPathComponent(".lldbinit");
-        homedir_dot_lldb.ResolvePath();
-        if (dot_lldb.Exists() &&
+        FileSystem::Instance().Resolve(homedir_dot_lldb);
+        if (FileSystem::Instance().Exists(dot_lldb) &&
             dot_lldb.GetDirectory() != homedir_dot_lldb.GetDirectory()) {
           result.AppendErrorWithFormat(
               "There is a .lldbinit file in the current directory which is not "
@@ -2111,7 +2114,8 @@ void CommandInterpreter::SourceInitFile(bool in_cwd,
           return;
         }
       } else if (should_load == eLoadCWDlldbinitTrue) {
-        init_file.SetFile("./.lldbinit", true, FileSpec::Style::native);
+        init_file.SetFile("./.lldbinit", FileSpec::Style::native);
+        FileSystem::Instance().Resolve(init_file);
       }
     }
   } else {
@@ -2123,7 +2127,7 @@ void CommandInterpreter::SourceInitFile(bool in_cwd,
     // init files.
     llvm::SmallString<64> home_dir_path;
     llvm::sys::path::home_directory(home_dir_path);
-    FileSpec profilePath(home_dir_path.c_str(), false);
+    FileSpec profilePath(home_dir_path.c_str());
     profilePath.AppendPathComponent(".lldbinit");
     std::string init_file_path = profilePath.GetPath();
 
@@ -2135,22 +2139,22 @@ void CommandInterpreter::SourceInitFile(bool in_cwd,
         char program_init_file_name[PATH_MAX];
         ::snprintf(program_init_file_name, sizeof(program_init_file_name),
                    "%s-%s", init_file_path.c_str(), program_name);
-        init_file.SetFile(program_init_file_name, true,
-                          FileSpec::Style::native);
-        if (!init_file.Exists())
+        init_file.SetFile(program_init_file_name, FileSpec::Style::native);
+        FileSystem::Instance().Resolve(init_file);
+        if (!FileSystem::Instance().Exists(init_file))
           init_file.Clear();
       }
     }
 
     if (!init_file && !m_skip_lldbinit_files)
-      init_file.SetFile(init_file_path, false, FileSpec::Style::native);
+      init_file.SetFile(init_file_path, FileSpec::Style::native);
   }
 
   // If the file exists, tell HandleCommand to 'source' it; this will do the
   // actual broadcasting of the commands back to any appropriate listener (see
   // CommandObjectSource::Execute for more details).
 
-  if (init_file.Exists()) {
+  if (FileSystem::Instance().Exists(init_file)) {
     const bool saved_batch = SetBatchCommandMode(true);
     CommandInterpreterRunOptions options;
     options.SetSilent(true);
@@ -2351,13 +2355,12 @@ enum {
 void CommandInterpreter::HandleCommandsFromFile(
     FileSpec &cmd_file, ExecutionContext *context,
     CommandInterpreterRunOptions &options, CommandReturnObject &result) {
-  if (cmd_file.Exists()) {
+  if (FileSystem::Instance().Exists(cmd_file)) {
     StreamFileSP input_file_sp(new StreamFile());
 
     std::string cmd_file_path = cmd_file.GetPath();
-    Status error = input_file_sp->GetFile().Open(cmd_file_path.c_str(),
-                                                 File::eOpenOptionRead);
-
+    Status error = FileSystem::Instance().Open(input_file_sp->GetFile(),
+                                               cmd_file, File::eOpenOptionRead);
     if (error.Success()) {
       Debugger &debugger = GetDebugger();
 
@@ -2387,7 +2390,7 @@ void CommandInterpreter::HandleCommandsFromFile(
         flags |= eHandleCommandFlagStopOnError;
       }
 
-      // stop-on-crash can only be set, if it is present in all levels of 
+      // stop-on-crash can only be set, if it is present in all levels of
       // pushed flag sets.
       if (options.GetStopOnCrash()) {
         if (m_command_source_flags.empty()) {

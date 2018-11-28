@@ -1418,7 +1418,7 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
   bool AllowObjCWritebackConversion
     = getLangOpts().ObjCAutoRefCount &&
       (Action == AA_Passing || Action == AA_Sending);
-  if (getLangOpts().ObjC1)
+  if (getLangOpts().ObjC)
     CheckObjCBridgeRelatedConversions(From->getBeginLoc(), ToType,
                                       From->getType(), From);
   ICS = ::TryImplicitConversion(*this, From, ToType,
@@ -2395,7 +2395,7 @@ static QualType AdoptQualifiers(ASTContext &Context, QualType T, Qualifiers Qs){
 bool Sema::isObjCPointerConversion(QualType FromType, QualType ToType,
                                    QualType& ConvertedType,
                                    bool &IncompatibleObjC) {
-  if (!getLangOpts().ObjC1)
+  if (!getLangOpts().ObjC)
     return false;
 
   // The set of qualifiers on the type we're converting from.
@@ -3516,7 +3516,7 @@ Sema::DiagnoseMultipleUserDefinedConversion(Expr *From, QualType ToType) {
 static ImplicitConversionSequence::CompareKind
 compareConversionFunctions(Sema &S, FunctionDecl *Function1,
                            FunctionDecl *Function2) {
-  if (!S.getLangOpts().ObjC1 || !S.getLangOpts().CPlusPlus11)
+  if (!S.getLangOpts().ObjC || !S.getLangOpts().CPlusPlus11)
     return ImplicitConversionSequence::Indistinguishable;
 
   // Objective-C++:
@@ -3899,6 +3899,31 @@ CompareStandardConversionSequences(Sema &S, SourceLocation Loc,
       S.Context.getTypeSize(SCS1.getFromType()) ==
           S.Context.getTypeSize(SCS1.getToType(2)))
     return ImplicitConversionSequence::Better;
+
+  // Prefer a compatible vector conversion over a lax vector conversion
+  // For example:
+  //
+  // typedef float __v4sf __attribute__((__vector_size__(16)));
+  // void f(vector float);
+  // void f(vector signed int);
+  // int main() {
+  //   __v4sf a;
+  //   f(a);
+  // }
+  // Here, we'd like to choose f(vector float) and not
+  // report an ambiguous call error
+  if (SCS1.Second == ICK_Vector_Conversion &&
+      SCS2.Second == ICK_Vector_Conversion) {
+    bool SCS1IsCompatibleVectorConversion = S.Context.areCompatibleVectorTypes(
+        SCS1.getFromType(), SCS1.getToType(2));
+    bool SCS2IsCompatibleVectorConversion = S.Context.areCompatibleVectorTypes(
+        SCS2.getFromType(), SCS2.getToType(2));
+
+    if (SCS1IsCompatibleVectorConversion != SCS2IsCompatibleVectorConversion)
+      return SCS1IsCompatibleVectorConversion
+                 ? ImplicitConversionSequence::Better
+                 : ImplicitConversionSequence::Worse;
+  }
 
   return ImplicitConversionSequence::Indistinguishable;
 }
@@ -5444,7 +5469,7 @@ static ExprResult CheckConvertedConstantExpression(Sema &S, Expr *From,
 
     if (Notes.empty()) {
       // It's a constant expression.
-      return Result;
+      return new (S.Context) ConstantExpr(Result.get());
     }
   }
 
@@ -10997,7 +11022,7 @@ private:
 
     // Note: We explicitly leave Matches unmodified if there isn't a clear best
     // option, so we can potentially give the user a better error
-    if (!std::all_of(Matches.begin(), Matches.end(), IsBestOrInferiorToBest))
+    if (!llvm::all_of(Matches, IsBestOrInferiorToBest))
       return false;
     Matches[0] = *Best;
     Matches.resize(1);

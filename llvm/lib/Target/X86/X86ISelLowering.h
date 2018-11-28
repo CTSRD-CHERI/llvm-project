@@ -295,11 +295,6 @@ namespace llvm {
       // Vector move to low scalar and zero higher vector elements.
       VZEXT_MOVL,
 
-      // Vector integer zero-extend.
-      VZEXT,
-      // Vector integer signed-extend.
-      VSEXT,
-
       // Vector integer truncate.
       VTRUNC,
       // Vector integer truncate with unsigned/signed saturation.
@@ -355,15 +350,14 @@ namespace llvm {
       // Bit field extract.
       BEXTR,
 
+      // Zero High Bits Starting with Specified Bit Position.
+      BZHI,
+
       // LOW, HI, FLAGS = umul LHS, RHS.
       UMUL,
 
       // 8-bit SMUL/UMUL - AX, FLAGS = smul8/umul8 AL, RHS.
       SMUL8, UMUL8,
-
-      // 8-bit divrem that zero-extend the high result (AH).
-      UDIVREM8_ZEXT_HREG,
-      SDIVREM8_SEXT_HREG,
 
       // X86-specific multiply by immediate.
       MUL_IMM,
@@ -875,6 +869,12 @@ namespace llvm {
                                                  TargetLoweringOpt &TLO,
                                                  unsigned Depth) const override;
 
+    bool SimplifyDemandedBitsForTargetNode(SDValue Op,
+                                           const APInt &DemandedBits,
+                                           KnownBits &Known,
+                                           TargetLoweringOpt &TLO,
+                                           unsigned Depth) const override;
+
     SDValue unwrapAddress(SDValue N) const override;
 
     bool isGAPlusOffset(SDNode *N, const GlobalValue* &GA,
@@ -940,6 +940,8 @@ namespace llvm {
     /// add a register and the immediate without having to materialize
     /// the immediate into a register.
     bool isLegalAddImmediate(int64_t Imm) const override;
+
+    bool isLegalStoreImmediate(int64_t Imm) const override;
 
     /// Return the cost of the scaling factor used in the addressing
     /// mode represented by AM for this target, for a load/store
@@ -1106,7 +1108,7 @@ namespace llvm {
     bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override;
 
     /// Customize the preferred legalization strategy for certain types.
-    LegalizeTypeAction getPreferredVectorAction(EVT VT) const override;
+    LegalizeTypeAction getPreferredVectorAction(MVT VT) const override;
 
     MVT getRegisterTypeForCallingConv(LLVMContext &Context, CallingConv::ID CC,
                                       EVT VT) const override;

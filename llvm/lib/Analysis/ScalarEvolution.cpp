@@ -112,6 +112,7 @@
 #include "llvm/IR/Use.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -161,6 +162,11 @@ static cl::opt<bool>
     VerifySCEVMap("verify-scev-maps", cl::Hidden,
                   cl::desc("Verify no dangling value in ScalarEvolution's "
                            "ExprValueMap (slow)"));
+
+static cl::opt<bool> VerifyIR(
+    "scev-verify-ir", cl::Hidden,
+    cl::desc("Verify IR correctness when making sensitive SCEV queries (slow)"),
+    cl::init(false));
 
 static cl::opt<unsigned> MulOpsInlineThreshold(
     "scev-mulops-inline-threshold", cl::Hidden,
@@ -3060,7 +3066,7 @@ const SCEV *ScalarEvolution::getMulExpr(SmallVectorImpl<const SCEV *> &Ops,
       SmallVector<const SCEV*, 7> AddRecOps;
       for (int x = 0, xe = AddRec->getNumOperands() +
              OtherAddRec->getNumOperands() - 1; x != xe && !Overflow; ++x) {
-        const SCEV *Term = getZero(Ty);
+        SmallVector <const SCEV *, 7> SumOps;
         for (int y = x, ye = 2*x+1; y != ye && !Overflow; ++y) {
           uint64_t Coeff1 = Choose(x, 2*x - y, Overflow);
           for (int z = std::max(y-x, y-(int)AddRec->getNumOperands()+1),
@@ -3075,12 +3081,13 @@ const SCEV *ScalarEvolution::getMulExpr(SmallVectorImpl<const SCEV *> &Ops,
             const SCEV *CoeffTerm = getConstant(Ty, Coeff);
             const SCEV *Term1 = AddRec->getOperand(y-z);
             const SCEV *Term2 = OtherAddRec->getOperand(z);
-            Term = getAddExpr(Term, getMulExpr(CoeffTerm, Term1, Term2,
-                                               SCEV::FlagAnyWrap, Depth + 1),
-                              SCEV::FlagAnyWrap, Depth + 1);
+            SumOps.push_back(getMulExpr(CoeffTerm, Term1, Term2,
+                                        SCEV::FlagAnyWrap, Depth + 1));
           }
         }
-        AddRecOps.push_back(Term);
+        if (SumOps.empty())
+          SumOps.push_back(getZero(Ty));
+        AddRecOps.push_back(getAddExpr(SumOps, SCEV::FlagAnyWrap, Depth + 1));
       }
       if (!Overflow) {
         const SCEV *NewAddRec = getAddRecExpr(AddRecOps, AddRec->getLoop(),
@@ -8813,7 +8820,13 @@ bool ScalarEvolution::SimplifyICmpOperands(ICmpInst::Predicate &Pred,
                                            const SCEV *&LHS, const SCEV *&RHS,
                                            unsigned Depth) {
   bool Changed = false;
-
+  // Simplifies ICMP to trivial true or false by turning it into '0 == 0' or
+  // '0 != 0'.
+  auto TrivialCase = [&](bool TriviallyTrue) {
+    LHS = RHS = getConstant(ConstantInt::getFalse(getContext()));
+    Pred = TriviallyTrue ? ICmpInst::ICMP_EQ : ICmpInst::ICMP_NE;
+    return true;
+  };
   // If we hit the max recursion limit bail out.
   if (Depth >= 3)
     return false;
@@ -8825,9 +8838,9 @@ bool ScalarEvolution::SimplifyICmpOperands(ICmpInst::Predicate &Pred,
       if (ConstantExpr::getICmp(Pred,
                                 LHSC->getValue(),
                                 RHSC->getValue())->isNullValue())
-        goto trivially_false;
+        return TrivialCase(false);
       else
-        goto trivially_true;
+        return TrivialCase(true);
     }
     // Otherwise swap the operands to put the constant on the right.
     std::swap(LHS, RHS);
@@ -8857,9 +8870,9 @@ bool ScalarEvolution::SimplifyICmpOperands(ICmpInst::Predicate &Pred,
     if (!ICmpInst::isEquality(Pred)) {
       ConstantRange ExactCR = ConstantRange::makeExactICmpRegion(Pred, RA);
       if (ExactCR.isFullSet())
-        goto trivially_true;
+        return TrivialCase(true);
       else if (ExactCR.isEmptySet())
-        goto trivially_false;
+        return TrivialCase(false);
 
       APInt NewRHS;
       CmpInst::Predicate NewPred;
@@ -8895,7 +8908,7 @@ bool ScalarEvolution::SimplifyICmpOperands(ICmpInst::Predicate &Pred,
         // The "Should have been caught earlier!" messages refer to the fact
         // that the ExactCR.isFullSet() or ExactCR.isEmptySet() check above
         // should have fired on the corresponding cases, and canonicalized the
-        // check to trivially_true or trivially_false.
+        // check to trivial case.
 
       case ICmpInst::ICMP_UGE:
         assert(!RA.isMinValue() && "Should have been caught earlier!");
@@ -8928,9 +8941,9 @@ bool ScalarEvolution::SimplifyICmpOperands(ICmpInst::Predicate &Pred,
   // Check for obvious equality.
   if (HasSameValue(LHS, RHS)) {
     if (ICmpInst::isTrueWhenEqual(Pred))
-      goto trivially_true;
+      return TrivialCase(true);
     if (ICmpInst::isFalseWhenEqual(Pred))
-      goto trivially_false;
+      return TrivialCase(false);
   }
 
   // If possible, canonicalize GE/LE comparisons to GT/LT comparisons, by
@@ -8998,18 +9011,6 @@ bool ScalarEvolution::SimplifyICmpOperands(ICmpInst::Predicate &Pred,
     return SimplifyICmpOperands(Pred, LHS, RHS, Depth+1);
 
   return Changed;
-
-trivially_true:
-  // Return 0 == 0.
-  LHS = RHS = getConstant(ConstantInt::getFalse(getContext()));
-  Pred = ICmpInst::ICMP_EQ;
-  return true;
-
-trivially_false:
-  // Return 0 != 0.
-  LHS = RHS = getConstant(ConstantInt::getFalse(getContext()));
-  Pred = ICmpInst::ICMP_NE;
-  return true;
 }
 
 bool ScalarEvolution::isKnownNegative(const SCEV *S) {
@@ -9380,6 +9381,11 @@ ScalarEvolution::isLoopBackedgeGuardedByCond(const Loop *L,
   // (interprocedural conditions notwithstanding).
   if (!L) return true;
 
+  if (VerifyIR)
+    assert(!verifyFunction(*L->getHeader()->getParent(), &dbgs()) &&
+           "This cannot be done on broken IR!");
+
+
   if (isKnownViaNonRecursiveReasoning(Pred, LHS, RHS))
     return true;
 
@@ -9484,6 +9490,10 @@ ScalarEvolution::isLoopEntryGuardedByCond(const Loop *L,
   // Interpret a null as meaning no loop, where there is obviously no guard
   // (interprocedural conditions notwithstanding).
   if (!L) return false;
+
+  if (VerifyIR)
+    assert(!verifyFunction(*L->getHeader()->getParent(), &dbgs()) &&
+           "This cannot be done on broken IR!");
 
   // Both LHS and RHS must be available at loop entry.
   assert(isAvailableAtLoopEntry(LHS, L) &&

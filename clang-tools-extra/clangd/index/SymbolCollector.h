@@ -13,9 +13,13 @@
 #include "Index.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
+#include "clang/Basic/SourceLocation.h"
+#include "clang/Basic/SourceManager.h"
 #include "clang/Index/IndexDataConsumer.h"
 #include "clang/Index/IndexSymbol.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
+#include "llvm/ADT/DenseMap.h"
+#include <functional>
 
 namespace clang {
 namespace clangd {
@@ -56,7 +60,15 @@ public:
     bool CountReferences = false;
     /// The symbol ref kinds that will be collected.
     /// If not set, SymbolCollector will not collect refs.
+    /// Note that references of namespace decls are not collected, as they
+    /// contribute large part of the index, and they are less useful compared
+    /// with other decls.
     RefKind RefFilter = RefKind::Unknown;
+    /// If set to true, SymbolCollector will collect all refs (from main file
+    /// and included headers); otherwise, only refs from main file will be
+    /// collected.
+    /// This flag is only meaningful when RefFilter is set.
+    bool RefsInHeaders = false;
     // Every symbol collected will be stamped with this origin.
     SymbolOrigin Origin = SymbolOrigin::Unknown;
     /// Collect macros.
@@ -64,6 +76,9 @@ public:
     /// collect macros. For example, `indexTopLevelDecls` will not index any
     /// macro even if this is true.
     bool CollectMacro = false;
+    /// If this is set, only collect symbols/references from a file if
+    /// `FileFilter(SM, FID)` is true. If not set, all files are indexed.
+    std::function<bool(const SourceManager &, FileID)> FileFilter = nullptr;
   };
 
   SymbolCollector(Options Opts);
@@ -120,6 +135,8 @@ private:
   // canonical by clang but should not be considered canonical in the index
   // unless it's a definition.
   llvm::DenseMap<const Decl *, const Decl *> CanonicalDecls;
+  // Cache whether to index a file or not.
+  llvm::DenseMap<FileID, bool> FilesToIndexCache;
 };
 
 } // namespace clangd
