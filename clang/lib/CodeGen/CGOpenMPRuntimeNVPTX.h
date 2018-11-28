@@ -182,6 +182,7 @@ protected:
 
 public:
   explicit CGOpenMPRuntimeNVPTX(CodeGenModule &CGM);
+  void clear() override;
 
   /// Emit call to void __kmpc_push_proc_bind(ident_t *loc, kmp_int32
   /// global_tid, int proc_bind) to generate code for 'proc_bind' clause.
@@ -348,7 +349,17 @@ public:
   /// Choose a default value for the schedule clause.
   void getDefaultScheduleAndChunk(CodeGenFunction &CGF,
       const OMPLoopDirective &S, OpenMPScheduleClauseKind &ScheduleKind,
-      llvm::Value *&Chunk) const override;
+      const Expr *&ChunkExpr) const override;
+
+  /// Adjust some parameters for the target-based directives, like addresses of
+  /// the variables captured by reference in lambdas.
+  void adjustTargetSpecificDataForLambdas(
+      CodeGenFunction &CGF, const OMPExecutableDirective &D) const override;
+
+  /// Perform check on requires decl to ensure that target architecture
+  /// supports unified addressing
+  void checkArchForUnifiedAddressing(CodeGenModule &CGM,
+                                     const OMPRequiresDecl *D) const override;
 
 private:
   /// Track the execution mode when codegening directives within a target
@@ -408,6 +419,27 @@ private:
   /// Maps the function to the list of the globalized variables with their
   /// addresses.
   llvm::SmallDenseMap<llvm::Function *, FunctionData> FunctionGlobalizedDecls;
+  /// List of records for the globalized variables in target/teams/distribute
+  /// contexts. Inner records are going to be joined into the single record,
+  /// while those resulting records are going to be joined into the single
+  /// union. This resulting union (one per CU) is the entry point for the static
+  /// memory management runtime functions.
+  struct GlobalPtrSizeRecsTy {
+    llvm::GlobalVariable *UseSharedMemory = nullptr;
+    llvm::GlobalVariable *RecSize = nullptr;
+    llvm::GlobalVariable *Buffer = nullptr;
+    SourceLocation Loc;
+    llvm::SmallVector<const RecordDecl *, 2> Records;
+    unsigned RegionCounter = 0;
+  };
+  llvm::SmallVector<GlobalPtrSizeRecsTy, 8> GlobalizedRecords;
+  /// Shared pointer for the global memory in the global memory buffer used for
+  /// the given kernel.
+  llvm::GlobalVariable *KernelStaticGlobalized = nullptr;
+  /// Pair of the Non-SPMD team and all reductions variables in this team
+  /// region.
+  std::pair<const Decl *, llvm::SmallVector<const ValueDecl *, 4>>
+      TeamAndReductions;
 };
 
 } // CodeGen namespace.

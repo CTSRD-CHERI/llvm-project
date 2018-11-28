@@ -60,11 +60,11 @@
 // DYNAMIC:      {{.*}} .dynamic {{00000.+}} .hidden _DYNAMIC
 
 // DUMP-EXE-DAG: [[__START_ADDR]]  g    F  .text           [[__START_LEN]] __start{{$}}
-// DUMP-EXE-DAG: [[FN_PTR_ADDR]]   g       .data           [[CAP_SYMBOL_SIZE:000000(20|10)]] fn_ptr{{$}}
-// DUMP-EXE-DAG: [[X_ADDR]]        g       .data           00000004 x{{$}}
-// DUMP-EXE-DAG: [[XPTR_ADDR]]     g       .data           [[CAP_SYMBOL_SIZE]] xptr{{$}}
-// DUMP-EXE-DAG: [[BUFFER_ADDR]]   g       .bss            0000002a buffer{{$}}
-// DUMP-EXE-DAG: [[BUFPTR_ADDR]]   g       {{\.rodata|\.data\.rel\.ro}}    [[CAP_SYMBOL_SIZE]] bufptr{{$}}
+// DUMP-EXE-DAG: [[FN_PTR_ADDR]]   g     O .data           [[CAP_SYMBOL_SIZE:000000(20|10)]] fn_ptr{{$}}
+// DUMP-EXE-DAG: [[X_ADDR]]        g     O .data           00000004 x{{$}}
+// DUMP-EXE-DAG: [[XPTR_ADDR]]     g     O .data           [[CAP_SYMBOL_SIZE]] xptr{{$}}
+// DUMP-EXE-DAG: [[BUFFER_ADDR]]   g     O .bss            0000002a buffer{{$}}
+// DUMP-EXE-DAG: [[BUFPTR_ADDR]]   g     O {{\.rodata|\.data\.rel\.ro}}    [[CAP_SYMBOL_SIZE]] bufptr{{$}}
 
 
 // DUMP-OBJ:      RELOCATION RECORDS FOR [.rela__cap_relocs]:
@@ -128,7 +128,7 @@
 // DUMP-SHLIB-INTERNAL-NEXT: 0x[[FN_PTR_ADDR:[0-9a-f]+]] Base: ([[ZERO]]) Offset: [[ZERO]] Length: 0x0000000000000000 Permissions: 0x8000000000000000 (Function)
 
 // DUMP-SHLIB-LABEL: SYMBOL TABLE:
-// DUMP-SHLIB-DAG: [[FN_PTR_ADDR]]   g       .data           [[CAP_SYMBOL_SIZE:000000(20|10)]] fn_ptr{{$}}
-// DUMP-SHLIB-DAG: [[XPTR_ADDR]]     g       .data           [[CAP_SYMBOL_SIZE]] xptr{{$}}
-// DUMP-SHLIB-DAG: [[BUFPTR_ADDR]]   g       {{\.rodata|\.data\.rel\.ro}}    [[CAP_SYMBOL_SIZE]] bufptr{{$}}
+// DUMP-SHLIB-DAG: [[FN_PTR_ADDR]]   g     O .data           [[CAP_SYMBOL_SIZE:000000(20|10)]] fn_ptr{{$}}
+// DUMP-SHLIB-DAG: [[XPTR_ADDR]]     g     O .data           [[CAP_SYMBOL_SIZE]] xptr{{$}}
+// DUMP-SHLIB-DAG: [[BUFPTR_ADDR]]   g     O {{\.rodata|\.data\.rel\.ro}}    [[CAP_SYMBOL_SIZE]] bufptr{{$}}
 

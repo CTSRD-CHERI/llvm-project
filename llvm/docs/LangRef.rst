@@ -1450,6 +1450,10 @@ example:
 ``noredzone``
     This attribute indicates that the code generator should not use a
     red zone, even if the target-specific ABI normally permits it.
+``indirect-tls-seg-refs``
+    This attribute indicates that the code generator should not use
+    direct TLS access through segment registers, even if the
+    target-specific ABI normally permits it.
 ``noreturn``
     This function attribute indicates that the function never returns
     normally. This produces undefined behavior at runtime if the
@@ -2922,7 +2926,7 @@ Simple Constants
     hexadecimal notation (see below). The assembler requires the exact
     decimal value of a floating-point constant. For example, the
     assembler accepts 1.25 but rejects 1.3 because 1.3 is a repeating
-    decimal in binary. Floating-point constants must have a 
+    decimal in binary. Floating-point constants must have a
     :ref:`floating-point <t_floating>` type.
 **Null pointer constants**
     The identifier '``null``' is recognized as a null pointer constant
@@ -3327,7 +3331,7 @@ The following is the syntax for constant expressions:
     value won't fit in the integer type, the result is a
     :ref:`poison value <poisonvalues>`.
 ``uitofp (CST to TYPE)``
-    Convert an unsigned integer constant to the corresponding 
+    Convert an unsigned integer constant to the corresponding
     floating-point constant. TYPE must be a scalar or vector floating-point
     type.  CST must be of scalar or vector integer type. Both CST and TYPE must
     be scalars, or vectors of the same number of elements.
@@ -5430,7 +5434,7 @@ Irreducible loop header weights are typically based on profile data.
 '``invariant.group``' Metadata
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The experimental ``invariant.group`` metadata may be attached to 
+The experimental ``invariant.group`` metadata may be attached to
 ``load``/``store`` instructions referencing a single metadata with no entries.
 The existence of the ``invariant.group`` metadata on the instruction tells
 the optimizer that every ``load`` and ``store`` to the same pointer operand
@@ -6786,6 +6790,55 @@ Semantics:
 
 The '``unreachable``' instruction has no defined semantics.
 
+.. _unaryops:
+
+Unary Operations
+-----------------
+
+Unary operators require a single operand, execute an operation on
+it, and produce a single value. The operand might represent multiple
+data, as is the case with the :ref:`vector <t_vector>` data type. The
+result value has the same type as its operand.
+
+.. _i_fneg:
+
+'``fneg``' Instruction
+^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      <result> = fneg [fast-math flags]* <ty> <op1>   ; yields ty:result
+
+Overview:
+"""""""""
+
+The '``fneg``' instruction returns the negation of its operand.
+
+Arguments:
+""""""""""
+
+The argument to the '``fneg``' instruction must be a
+:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of
+floating-point values. 
+
+Semantics:
+""""""""""
+
+The value produced is a copy of the operand with its sign bit flipped.
+This instruction can also take any number of :ref:`fast-math
+flags <fastmath>`, which are optimization hints to enable otherwise
+unsafe floating-point optimizations:
+
+Example:
+""""""""
+
+.. code-block:: text
+
+      <result> = fneg float %val          ; yields float:result = -%var
+
 .. _binaryops:
 
 Binary Operations
@@ -6871,7 +6924,7 @@ Arguments:
 """"""""""
 
 The two arguments to the '``fadd``' instruction must be
-:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of 
+:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of
 floating-point values. Both arguments must have identical types.
 
 Semantics:
@@ -6879,7 +6932,7 @@ Semantics:
 
 The value produced is the floating-point sum of the two operands.
 This instruction is assumed to execute in the default :ref:`floating-point
-environment <floatenv>`. 
+environment <floatenv>`.
 This instruction can also take any number of :ref:`fast-math
 flags <fastmath>`, which are optimization hints to enable otherwise
 unsafe floating-point optimizations:
@@ -6961,14 +7014,11 @@ Overview:
 
 The '``fsub``' instruction returns the difference of its two operands.
 
-Note that the '``fsub``' instruction is used to represent the '``fneg``'
-instruction present in most other intermediate representations.
-
 Arguments:
 """"""""""
 
 The two arguments to the '``fsub``' instruction must be
-:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of 
+:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of
 floating-point values. Both arguments must have identical types.
 
 Semantics:
@@ -6976,7 +7026,7 @@ Semantics:
 
 The value produced is the floating-point difference of the two operands.
 This instruction is assumed to execute in the default :ref:`floating-point
-environment <floatenv>`. 
+environment <floatenv>`.
 This instruction can also take any number of :ref:`fast-math
 flags <fastmath>`, which are optimization hints to enable otherwise
 unsafe floating-point optimizations:
@@ -7063,7 +7113,7 @@ Arguments:
 """"""""""
 
 The two arguments to the '``fmul``' instruction must be
-:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of 
+:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of
 floating-point values. Both arguments must have identical types.
 
 Semantics:
@@ -7071,7 +7121,7 @@ Semantics:
 
 The value produced is the floating-point product of the two operands.
 This instruction is assumed to execute in the default :ref:`floating-point
-environment <floatenv>`. 
+environment <floatenv>`.
 This instruction can also take any number of :ref:`fast-math
 flags <fastmath>`, which are optimization hints to enable otherwise
 unsafe floating-point optimizations:
@@ -7197,7 +7247,7 @@ Arguments:
 """"""""""
 
 The two arguments to the '``fdiv``' instruction must be
-:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of 
+:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of
 floating-point values. Both arguments must have identical types.
 
 Semantics:
@@ -7205,7 +7255,7 @@ Semantics:
 
 The value produced is the floating-point quotient of the two operands.
 This instruction is assumed to execute in the default :ref:`floating-point
-environment <floatenv>`. 
+environment <floatenv>`.
 This instruction can also take any number of :ref:`fast-math
 flags <fastmath>`, which are optimization hints to enable otherwise
 unsafe floating-point optimizations:
@@ -7340,7 +7390,7 @@ Arguments:
 """"""""""
 
 The two arguments to the '``frem``' instruction must be
-:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of 
+:ref:`floating-point <t_floating>` or :ref:`vector <t_vector>` of
 floating-point values. Both arguments must have identical types.
 
 Semantics:
@@ -7348,10 +7398,10 @@ Semantics:
 
 The value produced is the floating-point remainder of the two operands.
 This is the same output as a libm '``fmod``' function, but without any
-possibility of setting ``errno``. The remainder has the same sign as the 
+possibility of setting ``errno``. The remainder has the same sign as the
 dividend.
 This instruction is assumed to execute in the default :ref:`floating-point
-environment <floatenv>`. 
+environment <floatenv>`.
 This instruction can also take any number of :ref:`fast-math
 flags <fastmath>`, which are optimization hints to enable otherwise
 unsafe floating-point optimizations:
@@ -8805,7 +8855,7 @@ Semantics:
 
 The '``fptrunc``' instruction casts a ``value`` from a larger
 :ref:`floating-point <t_floating>` type to a smaller :ref:`floating-point
-<t_floating>` type.  
+<t_floating>` type.
 This instruction is assumed to execute in the default :ref:`floating-point
 environment <floatenv>`.
 
@@ -10324,7 +10374,28 @@ Note that calling this intrinsic does not prevent function inlining or
 other aggressive transformations, so the value returned may not be that
 of the obvious source-language caller.
 
-This intrinsic is only implemented for x86.
+This intrinsic is only implemented for x86 and aarch64.
+
+'``llvm.sponentry``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare i8* @llvm.sponentry()
+
+Overview:
+"""""""""
+
+The '``llvm.sponentry``' intrinsic returns the stack pointer value at
+the entry of the current function calling this intrinsic.
+
+Semantics:
+""""""""""
+
+Note this intrinsic is only verified on AArch64.
 
 '``llvm.frameaddress``' Intrinsic
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -12111,11 +12182,11 @@ Overview:
 
 The '``llvm.fshl``' family of intrinsic functions performs a funnel shift left:
 the first two values are concatenated as { %a : %b } (%a is the most significant
-bits of the wide value), the combined value is shifted left, and the most 
-significant bits are extracted to produce a result that is the same size as the 
-original arguments. If the first 2 arguments are identical, this is equivalent 
-to a rotate left operation. For vector types, the operation occurs for each 
-element of the vector. The shift argument is treated as an unsigned amount 
+bits of the wide value), the combined value is shifted left, and the most
+significant bits are extracted to produce a result that is the same size as the
+original arguments. If the first 2 arguments are identical, this is equivalent
+to a rotate left operation. For vector types, the operation occurs for each
+element of the vector. The shift argument is treated as an unsigned amount
 modulo the element size of the arguments.
 
 Arguments:
@@ -12157,11 +12228,11 @@ Overview:
 
 The '``llvm.fshr``' family of intrinsic functions performs a funnel shift right:
 the first two values are concatenated as { %a : %b } (%a is the most significant
-bits of the wide value), the combined value is shifted right, and the least 
-significant bits are extracted to produce a result that is the same size as the 
-original arguments. If the first 2 arguments are identical, this is equivalent 
-to a rotate right operation. For vector types, the operation occurs for each 
-element of the vector. The shift argument is treated as an unsigned amount 
+bits of the wide value), the combined value is shifted right, and the least
+significant bits are extracted to produce a result that is the same size as the
+original arguments. If the first 2 arguments are identical, this is equivalent
+to a rotate right operation. For vector types, the operation occurs for each
+element of the vector. The shift argument is treated as an unsigned amount
 modulo the element size of the arguments.
 
 Arguments:
@@ -13442,7 +13513,7 @@ The '``llvm.masked.expandload``' intrinsic is designed for reading multiple scal
     %Tmp = call <8 x double> @llvm.masked.expandload.v8f64(double* %Bptr, <8 x i1> %Mask, <8 x double> undef)
     ; Store the result in A
     call void @llvm.masked.store.v8f64.p0v8f64(<8 x double> %Tmp, <8 x double>* %Aptr, i32 8, <8 x i1> %Mask)
-    
+
     ; %Bptr should be increased on each iteration according to the number of '1' elements in the Mask.
     %MaskI = bitcast <8 x i1> %Mask to i8
     %MaskIPopcnt = call i8 @llvm.ctpop.i8(i8 %MaskI)
@@ -13499,7 +13570,7 @@ The '``llvm.masked.compressstore``' intrinsic is designed for compressing data i
     %Tmp = call <8 x double> @llvm.masked.load.v8f64.p0v8f64(<8 x double>* %Aptr, i32 8, <8 x i1> %Mask, <8 x double> undef)
     ; Store all selected elements consecutively in array B
     call <void> @llvm.masked.compressstore.v8f64(<8 x double> %Tmp, double* %Bptr, <8 x i1> %Mask)
-    
+
     ; %Bptr should be increased on each iteration according to the number of '1' elements in the Mask.
     %MaskI = bitcast <8 x i1> %Mask to i8
     %MaskIPopcnt = call i8 @llvm.ctpop.i8(i8 %MaskI)
@@ -13991,7 +14062,7 @@ value operands and has the same type as the operands.  The remainder has the
 same sign as the dividend.
 
 '``llvm.experimental.constrained.fma``' Intrinsic
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Syntax:
 """""""
@@ -14132,7 +14203,7 @@ Overview:
 
 The '``llvm.experimental.constrained.powi``' intrinsic returns the first operand
 raised to the (positive or negative) power specified by the second operand. The
-order of evaluation of multiplications is not defined. When a vector of 
+order of evaluation of multiplications is not defined. When a vector of
 floating-point type is used, the second argument remains a scalar integer value.
 
 
@@ -14458,7 +14529,7 @@ Overview:
 """""""""
 
 The '``llvm.experimental.constrained.nearbyint``' intrinsic returns the first
-operand rounded to the nearest integer. It will not raise an inexact 
+operand rounded to the nearest integer. It will not raise an inexact
 floating-point exception if the operand is not an integer.
 
 
@@ -14479,6 +14550,225 @@ would, and handles error conditions in the same way.  The rounding mode is
 described, not determined, by the rounding mode argument.  The actual rounding
 mode is determined by the runtime floating-point environment.  The rounding
 mode argument is only intended as information to the compiler.
+
+
+'``llvm.experimental.constrained.maxnum``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <type>
+      @llvm.experimental.constrained.maxnum(<type> <op1>, <type> <op2>
+                                            metadata <rounding mode>,
+                                            metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.maxnum``' intrinsic returns the maximum 
+of the two arguments.
+
+Arguments:
+""""""""""
+
+The first two arguments and the return value are floating-point numbers 
+of the same type.
+
+The third and forth arguments specify the rounding mode and exception
+behavior as described above.
+
+Semantics:
+""""""""""
+
+This function follows the IEEE-754 semantics for maxNum. The rounding mode is
+described, not determined, by the rounding mode argument. The actual rounding
+mode is determined by the runtime floating-point environment. The rounding
+mode argument is only intended as information to the compiler.
+
+
+'``llvm.experimental.constrained.minnum``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <type>
+      @llvm.experimental.constrained.minnum(<type> <op1>, <type> <op2>
+                                            metadata <rounding mode>,
+                                            metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.minnum``' intrinsic returns the minimum
+of the two arguments.
+
+Arguments:
+""""""""""
+
+The first two arguments and the return value are floating-point numbers
+of the same type.
+
+The third and forth arguments specify the rounding mode and exception
+behavior as described above.
+
+Semantics:
+""""""""""
+
+This function follows the IEEE-754 semantics for minNum. The rounding mode is
+described, not determined, by the rounding mode argument. The actual rounding
+mode is determined by the runtime floating-point environment. The rounding
+mode argument is only intended as information to the compiler.
+
+
+'``llvm.experimental.constrained.ceil``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <type>
+      @llvm.experimental.constrained.ceil(<type> <op1>,
+                                          metadata <rounding mode>,
+                                          metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.ceil``' intrinsic returns the ceiling of the 
+first operand.
+
+Arguments:
+""""""""""
+
+The first argument and the return value are floating-point numbers of the same
+type.
+
+The second and third arguments specify the rounding mode and exception
+behavior as described above. The rounding mode is currently unused for this
+intrinsic.
+
+Semantics:
+""""""""""
+
+This function returns the same values as the libm ``ceil`` functions
+would and handles error conditions in the same way.
+
+
+'``llvm.experimental.constrained.floor``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <type>
+      @llvm.experimental.constrained.floor(<type> <op1>,
+                                           metadata <rounding mode>,
+                                           metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.floor``' intrinsic returns the floor of the 
+first operand.
+
+Arguments:
+""""""""""
+
+The first argument and the return value are floating-point numbers of the same
+type.
+
+The second and third arguments specify the rounding mode and exception
+behavior as described above. The rounding mode is currently unused for this
+intrinsic.
+
+Semantics:
+""""""""""
+
+This function returns the same values as the libm ``floor`` functions
+would and handles error conditions in the same way. 
+
+
+'``llvm.experimental.constrained.round``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <type>
+      @llvm.experimental.constrained.round(<type> <op1>,
+                                           metadata <rounding mode>,
+                                           metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.round``' intrinsic returns the first 
+operand rounded to the nearest integer.
+
+Arguments:
+""""""""""
+
+The first argument and the return value are floating-point numbers of the same
+type.
+
+The second and third arguments specify the rounding mode and exception
+behavior as described above. The rounding mode is currently unused for this
+intrinsic.
+
+Semantics:
+""""""""""
+
+This function returns the same values as the libm ``round`` functions
+would and handles error conditions in the same way.
+
+
+'``llvm.experimental.constrained.trunc``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+::
+
+      declare <type>
+      @llvm.experimental.constrained.trunc(<type> <op1>,
+                                           metadata <truncing mode>,
+                                           metadata <exception behavior>)
+
+Overview:
+"""""""""
+
+The '``llvm.experimental.constrained.trunc``' intrinsic returns the first 
+operand rounded to the nearest integer not larger in magnitude than the 
+operand.
+
+Arguments:
+""""""""""
+
+The first argument and the return value are floating-point numbers of the same
+type.
+
+The second and third arguments specify the truncing mode and exception
+behavior as described above. The truncing mode is currently unused for this
+intrinsic.
+
+Semantics:
+""""""""""
+
+This function returns the same values as the libm ``trunc`` functions
+would and handles error conditions in the same way.
 
 
 General Intrinsics
@@ -14624,7 +14914,7 @@ Syntax:
 
 ::
 
-      declare void @llvm.trap() noreturn nounwind
+      declare void @llvm.trap() cold noreturn nounwind
 
 Overview:
 """""""""
@@ -15172,6 +15462,51 @@ Semantics:
 
 This intrinsic actually does nothing, but optimizers must assume that it
 has externally observable side effects.
+
+'``llvm.is.constant.*``' Intrinsic
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Syntax:
+"""""""
+
+This is an overloaded intrinsic. You can use llvm.is.constant with any argument type.
+
+::
+
+      declare i1 @llvm.is.constant.i32(i32 %operand) nounwind readnone
+      declare i1 @llvm.is.constant.f32(float %operand) nounwind readnone
+      declare i1 @llvm.is.constant.TYPENAME(TYPE %operand) nounwind readnone
+
+Overview:
+"""""""""
+
+The '``llvm.is.constant``' intrinsic will return true if the argument
+is known to be a manifest compile-time constant. It is guaranteed to
+fold to either true or false before generating machine code.
+
+Semantics:
+""""""""""
+
+This intrinsic generates no code. If its argument is known to be a
+manifest compile-time constant value, then the intrinsic will be
+converted to a constant true value. Otherwise, it will be converted to
+a constant false value.
+
+In particular, note that if the argument is a constant expression
+which refers to a global (the address of which _is_ a constant, but
+not manifest during the compile), then the intrinsic evaluates to
+false.
+
+The result also intentionally depends on the result of optimization
+passes -- e.g., the result can change depending on whether a
+function gets inlined or not. A function's parameters are
+obviously not constant. However, a call like
+``llvm.is.constant.i32(i32 %param)`` *can* return true after the
+function is inlined, if the value passed to the function parameter was
+a constant.
+
+On the other hand, if constant folding is not run, it will never
+evaluate to true, even in simple cases.
 
 Stack Map Intrinsics
 --------------------

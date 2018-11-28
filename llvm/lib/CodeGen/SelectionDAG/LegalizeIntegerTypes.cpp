@@ -141,6 +141,11 @@ void DAGTypeLegalizer::PromoteIntegerResult(SDNode *N, unsigned ResNo) {
   case ISD::ADDCARRY:
   case ISD::SUBCARRY:    Res = PromoteIntRes_ADDSUBCARRY(N, ResNo); break;
 
+  case ISD::SADDSAT:
+  case ISD::UADDSAT:
+  case ISD::SSUBSAT:
+  case ISD::USUBSAT:     Res = PromoteIntRes_ADDSUBSAT(N); break;
+
   case ISD::ATOMIC_LOAD:
     Res = PromoteIntRes_Atomic0(cast<AtomicSDNode>(N)); break;
 
@@ -305,6 +310,26 @@ SDValue DAGTypeLegalizer::PromoteIntRes_BITCAST(SDNode *N) {
     // make us bitcast between two vectors which are legalized in different ways.
     if (NOutVT.bitsEq(NInVT) && !NOutVT.isVector())
       return DAG.getNode(ISD::BITCAST, dl, NOutVT, GetWidenedVector(InOp));
+    // If the output type is also a vector and widening it to the same size
+    // as the widened input type would be a legal type, we can widen the bitcast
+    // and handle the promotion after.
+    if (NOutVT.isVector()) {
+      unsigned WidenInSize = NInVT.getSizeInBits();
+      unsigned OutSize = OutVT.getSizeInBits();
+      if (WidenInSize % OutSize == 0) {
+        unsigned Scale = WidenInSize / OutSize;
+        EVT WideOutVT = EVT::getVectorVT(*DAG.getContext(),
+                                         OutVT.getVectorElementType(),
+                                         OutVT.getVectorNumElements() * Scale);
+        if (isTypeLegal(WideOutVT)) {
+          InOp = DAG.getBitcast(WideOutVT, GetWidenedVector(InOp));
+          MVT IdxTy = TLI.getVectorIdxTy(DAG.getDataLayout());
+          InOp = DAG.getNode(ISD::EXTRACT_SUBVECTOR, dl, OutVT, InOp,
+                             DAG.getConstant(0, dl, IdxTy));
+          return DAG.getNode(ISD::ANY_EXTEND, dl, NOutVT, InOp);
+        }
+      }
+    }
   }
 
   return DAG.getNode(ISD::ANY_EXTEND, dl, NOutVT,
@@ -544,6 +569,51 @@ SDValue DAGTypeLegalizer::PromoteIntRes_Overflow(SDNode *N) {
   ReplaceValueWith(SDValue(N, 0), Res);
 
   return SDValue(Res.getNode(), 1);
+}
+
+SDValue DAGTypeLegalizer::PromoteIntRes_ADDSUBSAT(SDNode *N) {
+  // For promoting iN -> iM, this can be expanded by
+  // 1. ANY_EXTEND iN to iM
+  // 2. SHL by M-N
+  // 3. [US][ADD|SUB]SAT
+  // 4. L/ASHR by M-N
+  SDLoc dl(N);
+  SDValue Op1 = N->getOperand(0);
+  SDValue Op2 = N->getOperand(1);
+  unsigned OldBits = Op1.getValueSizeInBits();
+
+  unsigned Opcode = N->getOpcode();
+  unsigned ShiftOp;
+  switch (Opcode) {
+  case ISD::SADDSAT:
+  case ISD::SSUBSAT:
+    ShiftOp = ISD::SRA;
+    break;
+  case ISD::UADDSAT:
+  case ISD::USUBSAT:
+    ShiftOp = ISD::SRL;
+    break;
+  default:
+    llvm_unreachable("Expected opcode to be signed or unsigned saturation "
+                     "addition or subtraction");
+  }
+
+  SDValue Op1Promoted = GetPromotedInteger(Op1);
+  SDValue Op2Promoted = GetPromotedInteger(Op2);
+
+  EVT PromotedType = Op1Promoted.getValueType();
+  unsigned NewBits = Op1Promoted.getValueSizeInBits();
+  unsigned SHLAmount = NewBits - OldBits;
+  EVT SHVT = TLI.getShiftAmountTy(PromotedType, DAG.getDataLayout());
+  SDValue ShiftAmount = DAG.getConstant(SHLAmount, dl, SHVT);
+  Op1Promoted =
+      DAG.getNode(ISD::SHL, dl, PromotedType, Op1Promoted, ShiftAmount);
+  Op2Promoted =
+      DAG.getNode(ISD::SHL, dl, PromotedType, Op2Promoted, ShiftAmount);
+
+  SDValue Result =
+      DAG.getNode(Opcode, dl, PromotedType, Op1Promoted, Op2Promoted);
+  return DAG.getNode(ShiftOp, dl, PromotedType, Result, ShiftAmount);
 }
 
 SDValue DAGTypeLegalizer::PromoteIntRes_SADDSUBO(SDNode *N, unsigned ResNo) {
@@ -1466,6 +1536,11 @@ void DAGTypeLegalizer::ExpandIntegerResult(SDNode *N, unsigned ResNo) {
   case ISD::USUBO: ExpandIntRes_UADDSUBO(N, Lo, Hi); break;
   case ISD::UMULO:
   case ISD::SMULO: ExpandIntRes_XMULO(N, Lo, Hi); break;
+
+  case ISD::SADDSAT:
+  case ISD::UADDSAT:
+  case ISD::SSUBSAT:
+  case ISD::USUBSAT: ExpandIntRes_ADDSUBSAT(N, Lo, Hi); break;
   }
 
   // If Lo/Hi is null, the sub-method took care of registering results etc.
@@ -2426,6 +2501,12 @@ void DAGTypeLegalizer::ExpandIntRes_READCYCLECOUNTER(SDNode *N, SDValue &Lo,
   Lo = R.getValue(0);
   Hi = R.getValue(1);
   ReplaceValueWith(SDValue(N, 1), R.getValue(2));
+}
+
+void DAGTypeLegalizer::ExpandIntRes_ADDSUBSAT(SDNode *N, SDValue &Lo,
+                                              SDValue &Hi) {
+  SDValue Result = TLI.getExpandedSaturationAdditionSubtraction(N, DAG);
+  SplitInteger(Result, Lo, Hi);
 }
 
 void DAGTypeLegalizer::ExpandIntRes_SADDSUBO(SDNode *Node,

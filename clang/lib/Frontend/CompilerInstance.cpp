@@ -38,6 +38,7 @@
 #include "clang/Serialization/ASTReader.h"
 #include "clang/Serialization/GlobalModuleIndex.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Support/BuryPointer.h"
 #include "llvm/Support/CrashRecoveryContext.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/FileSystem.h"
@@ -371,6 +372,9 @@ static void InitializeFileRemapping(DiagnosticsEngine &Diags,
 
 void CompilerInstance::createPreprocessor(TranslationUnitKind TUKind) {
   const PreprocessorOptions &PPOpts = getPreprocessorOpts();
+
+  // The module manager holds a reference to the old preprocessor (if any).
+  ModuleManager.reset();
 
   // Create a PTH manager if we are using some form of a token cache.
   PTHManager *PTHMgr = nullptr;
@@ -1024,7 +1028,7 @@ static InputKind::Language getLanguageFromOptions(const LangOptions &LangOpts) {
     return InputKind::OpenCL;
   if (LangOpts.CUDA)
     return InputKind::CUDA;
-  if (LangOpts.ObjC1)
+  if (LangOpts.ObjC)
     return LangOpts.CPlusPlus ? InputKind::ObjCXX : InputKind::ObjC;
   return LangOpts.CPlusPlus ? InputKind::CXX : InputKind::C;
 }
@@ -1269,7 +1273,7 @@ static bool compileAndLoadModule(CompilerInstance &ImportingInstance,
           << Module->Name << Locked.getErrorMessage();
       // Clear out any potential leftover.
       Locked.unsafeRemoveLockFile();
-      // FALLTHROUGH
+      LLVM_FALLTHROUGH;
     case llvm::LockFileManager::LFS_Owned:
       // We're responsible for building the module ourselves.
       if (!compileModuleImpl(ImportingInstance, ModuleNameLoc, Module,
@@ -1724,7 +1728,9 @@ CompilerInstance::loadModule(SourceLocation ImportLoc,
     // module cache, we don't know how to rebuild modules.
     unsigned ARRFlags = Source == ModuleCache ?
                         ASTReader::ARR_OutOfDate | ASTReader::ARR_Missing :
-                        ASTReader::ARR_ConfigurationMismatch;
+                        Source == PrebuiltModulePath ?
+                            0 :
+                            ASTReader::ARR_ConfigurationMismatch;
     switch (ModuleManager->ReadAST(ModuleFileName,
                                    Source == PrebuiltModulePath
                                        ? serialization::MK_PrebuiltModule
@@ -2127,7 +2133,7 @@ CompilerInstance::lookupMissingImports(StringRef Name,
 
   return false;
 }
-void CompilerInstance::resetAndLeakSema() { BuryPointer(takeSema()); }
+void CompilerInstance::resetAndLeakSema() { llvm::BuryPointer(takeSema()); }
 
 void CompilerInstance::setExternalSemaSource(
     IntrusiveRefCntPtr<ExternalSemaSource> ESS) {

@@ -7,7 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// Project includes
 #include "lldb/Target/TargetList.h"
 #include "lldb/Core/Broadcaster.h"
 #include "lldb/Core/Debugger.h"
@@ -25,7 +24,6 @@
 #include "lldb/Utility/TildeExpressionResolver.h"
 #include "lldb/Utility/Timer.h"
 
-// Other libraries and framework includes
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/FileSystem.h"
 
@@ -120,8 +118,8 @@ Status TargetList::CreateTargetInternal(
   if (!user_exe_path.empty()) {
     ModuleSpecList module_specs;
     ModuleSpec module_spec;
-    module_spec.GetFileSpec().SetFile(user_exe_path, true,
-                                      FileSpec::Style::native);
+    module_spec.GetFileSpec().SetFile(user_exe_path, FileSpec::Style::native);
+    FileSystem::Instance().Resolve(module_spec.GetFileSpec());
 
     // Resolve the executable in case we are given a path to a application
     // bundle like a .app bundle on MacOSX
@@ -346,8 +344,8 @@ Status TargetList::CreateTargetInternal(Debugger &debugger,
   if (!arch.IsValid())
     arch = specified_arch;
 
-  FileSpec file(user_exe_path, false);
-  if (!file.Exists() && user_exe_path.startswith("~")) {
+  FileSpec file(user_exe_path);
+  if (!FileSystem::Instance().Exists(file) && user_exe_path.startswith("~")) {
     // we want to expand the tilde but we don't want to resolve any symbolic
     // links so we can't use the FileSpec constructor's resolve flag
     llvm::SmallString<64> unglobbed_path;
@@ -355,24 +353,24 @@ Status TargetList::CreateTargetInternal(Debugger &debugger,
     Resolver.ResolveFullPath(user_exe_path, unglobbed_path);
 
     if (unglobbed_path.empty())
-      file = FileSpec(user_exe_path, false);
+      file = FileSpec(user_exe_path);
     else
-      file = FileSpec(unglobbed_path.c_str(), false);
+      file = FileSpec(unglobbed_path.c_str());
   }
 
   bool user_exe_path_is_bundle = false;
   char resolved_bundle_exe_path[PATH_MAX];
   resolved_bundle_exe_path[0] = '\0';
   if (file) {
-    if (llvm::sys::fs::is_directory(file.GetPath()))
+    if (FileSystem::Instance().IsDirectory(file))
       user_exe_path_is_bundle = true;
 
     if (file.IsRelative() && !user_exe_path.empty()) {
       llvm::SmallString<64> cwd;
       if (! llvm::sys::fs::current_path(cwd)) {
-        FileSpec cwd_file(cwd.c_str(), false);
+        FileSpec cwd_file(cwd.c_str());
         cwd_file.AppendPathComponent(file);
-        if (cwd_file.Exists())
+        if (FileSystem::Instance().Exists(cwd_file))
           file = cwd_file;
       }
     }

@@ -121,7 +121,7 @@ struct LegalityQuery {
   ArrayRef<LLT> Types;
 
   struct MemDesc {
-    uint64_t Size;
+    uint64_t SizeInBits;
     AtomicOrdering Ordering;
   };
 
@@ -693,6 +693,8 @@ public:
         },
         [=](const LegalityQuery &Query) {
           LLT VecTy = Query.Types[TypeIdx];
+          if (MaxElements == 1)
+            return std::make_pair(TypeIdx, VecTy.getElementType());
           return std::make_pair(
               TypeIdx, LLT::vector(MaxElements, VecTy.getScalarSizeInBits()));
         });

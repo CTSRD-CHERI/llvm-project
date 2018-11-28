@@ -16,9 +16,9 @@
 #include "clang/Frontend/PCHContainerOperations.h"
 #include "clang/Frontend/Utils.h"
 
+using namespace llvm;
 namespace clang {
 namespace clangd {
-using namespace llvm;
 
 ParsedAST TestTU::build() const {
   std::string FullFilename = testPath(Filename),
@@ -31,11 +31,20 @@ ParsedAST TestTU::build() const {
     Cmd.push_back(FullHeaderName.c_str());
   }
   Cmd.insert(Cmd.end(), ExtraArgs.begin(), ExtraArgs.end());
-  auto AST = ParsedAST::build(
-      createInvocationFromCommandLine(Cmd), nullptr,
-      MemoryBuffer::getMemBufferCopy(Code),
-      std::make_shared<PCHContainerOperations>(),
-      buildTestFS({{FullFilename, Code}, {FullHeaderName, HeaderCode}}));
+  ParseInputs Inputs;
+  Inputs.CompileCommand.Filename = FullFilename;
+  Inputs.CompileCommand.CommandLine = {Cmd.begin(), Cmd.end()};
+  Inputs.CompileCommand.Directory = testRoot();
+  Inputs.Contents = Code;
+  Inputs.FS = buildTestFS({{FullFilename, Code}, {FullHeaderName, HeaderCode}});
+  auto PCHs = std::make_shared<PCHContainerOperations>();
+  auto Preamble =
+      buildPreamble(FullFilename, *createInvocationFromCommandLine(Cmd),
+                    /*OldPreamble=*/nullptr,
+                    /*OldCompileCommand=*/Inputs.CompileCommand, Inputs, PCHs,
+                    /*StoreInMemory=*/true, /*PreambleCallback=*/nullptr);
+  auto AST = buildAST(FullFilename, createInvocationFromCommandLine(Cmd),
+                      Inputs, Preamble, PCHs);
   if (!AST.hasValue()) {
     ADD_FAILURE() << "Failed to build code:\n" << Code;
     llvm_unreachable("Failed to build TestTU!");
@@ -57,7 +66,7 @@ std::unique_ptr<SymbolIndex> TestTU::index() const {
   return std::move(Idx);
 }
 
-const Symbol &findSymbol(const SymbolSlab &Slab, llvm::StringRef QName) {
+const Symbol &findSymbol(const SymbolSlab &Slab, StringRef QName) {
   const Symbol *Result = nullptr;
   for (const Symbol &S : Slab) {
     if (QName != (S.Scope + S.Name).str())
@@ -78,13 +87,13 @@ const Symbol &findSymbol(const SymbolSlab &Slab, llvm::StringRef QName) {
   return *Result;
 }
 
-const NamedDecl &findDecl(ParsedAST &AST, llvm::StringRef QName) {
-  llvm::SmallVector<llvm::StringRef, 4> Components;
+const NamedDecl &findDecl(ParsedAST &AST, StringRef QName) {
+  SmallVector<StringRef, 4> Components;
   QName.split(Components, "::");
 
   auto &Ctx = AST.getASTContext();
   auto LookupDecl = [&Ctx](const DeclContext &Scope,
-                           llvm::StringRef Name) -> const NamedDecl & {
+                           StringRef Name) -> const NamedDecl & {
     auto LookupRes = Scope.lookup(DeclarationName(&Ctx.Idents.get(Name)));
     assert(!LookupRes.empty() && "Lookup failed");
     assert(LookupRes.size() == 1 && "Lookup returned multiple results");
@@ -99,20 +108,19 @@ const NamedDecl &findDecl(ParsedAST &AST, llvm::StringRef QName) {
   return LookupDecl(*Scope, Components.back());
 }
 
-const NamedDecl &findAnyDecl(ParsedAST &AST,
-                             std::function<bool(const NamedDecl &)> Callback) {
+const NamedDecl &findDecl(ParsedAST &AST,
+                          std::function<bool(const NamedDecl &)> Filter) {
   struct Visitor : RecursiveASTVisitor<Visitor> {
-    decltype(Callback) CB;
-    llvm::SmallVector<const NamedDecl *, 1> Decls;
+    decltype(Filter) F;
+    SmallVector<const NamedDecl *, 1> Decls;
     bool VisitNamedDecl(const NamedDecl *ND) {
-      if (CB(*ND))
+      if (F(*ND))
         Decls.push_back(ND);
       return true;
     }
   } Visitor;
-  Visitor.CB = Callback;
-  for (Decl *D : AST.getLocalTopLevelDecls())
-    Visitor.TraverseDecl(D);
+  Visitor.F = Filter;
+  Visitor.TraverseDecl(AST.getASTContext().getTranslationUnitDecl());
   if (Visitor.Decls.size() != 1) {
     ADD_FAILURE() << Visitor.Decls.size() << " symbols matched.";
     assert(Visitor.Decls.size() == 1);
@@ -120,8 +128,8 @@ const NamedDecl &findAnyDecl(ParsedAST &AST,
   return *Visitor.Decls.front();
 }
 
-const NamedDecl &findAnyDecl(ParsedAST &AST, llvm::StringRef Name) {
-  return findAnyDecl(AST, [Name](const NamedDecl &ND) {
+const NamedDecl &findUnqualifiedDecl(ParsedAST &AST, StringRef Name) {
+  return findDecl(AST, [Name](const NamedDecl &ND) {
     if (auto *ID = ND.getIdentifier())
       if (ID->getName() == Name)
         return true;

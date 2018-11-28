@@ -739,7 +739,20 @@ void WebAssemblyCFGStackify::rewriteDepthImmediates(MachineFunction &MF) {
       case WebAssembly::CATCH_I32:
       case WebAssembly::CATCH_I64:
       case WebAssembly::CATCH_ALL:
-        EHPadStack.push_back(&MBB);
+        // Currently the only case there are more than one catch for a try is
+        // for catch terminate pad, in the form of
+        //   try
+        //   catch
+        //     call @__clang_call_terminate
+        //     unreachable
+        //   catch_all
+        //     call @std::terminate
+        //     unreachable
+        //   end
+        // So we shouldn't push the current BB for the second catch_all block
+        // here.
+        if (!WebAssembly::isCatchAllTerminatePad(MBB))
+          EHPadStack.push_back(&MBB);
         break;
 
       case WebAssembly::LOOP:
@@ -767,7 +780,7 @@ void WebAssemblyCFGStackify::rewriteDepthImmediates(MachineFunction &MF) {
       case WebAssembly::RETHROW_TO_CALLER: {
         MachineInstr *Rethrow =
             BuildMI(MBB, MI, MI.getDebugLoc(), TII.get(WebAssembly::RETHROW))
-                .addImm(Stack.size());
+                .addImm(EHPadStack.size());
         MI.eraseFromParent();
         I = MachineBasicBlock::reverse_iterator(Rethrow);
         break;

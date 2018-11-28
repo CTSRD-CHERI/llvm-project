@@ -18,12 +18,12 @@ static int __start(void) {
 // OBJ-LABEL: SYMBOL TABLE:
 // OBJ-NEXT: 0000000000000000         *UND*		 00000000
 // OBJ-NEXT: 0000000000000000 l    df *ABS*		 00000000 cap-table-broken-mips-output.c
-// OBJ-NEXT: 0000000000000000 g       .data		 00000004 global
-// OBJ-NEXT: 0000000000000008 g       .data		 00000008 global2
+// OBJ-NEXT: 0000000000000000 g     O .data		 00000004 global
+// OBJ-NEXT: 0000000000000008 g     O .data		 00000008 global2
 
 // CHECK-LABEL: SYMBOL TABLE:
 // CHECK-NEXT: 0000000000000000         *UND*		 00000000
 // CHECK-NEXT: 0000000000000000 l    df *ABS*    00000000 cap-table-broken-mips-output.c
 // CHECK-NEXT: 0000000000028000         .got		 00000000 .hidden _gp
-// CHECK-NEXT: 0000000000020000 g       .data		 00000004 global
-// CHECK-NEXT: 0000000000020008 g       .data		 00000008 global2
+// CHECK-NEXT: 0000000000020000 g     O .data		 00000004 global
+// CHECK-NEXT: 0000000000020008 g     O .data		 00000008 global2

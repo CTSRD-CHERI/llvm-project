@@ -280,7 +280,6 @@ bool X86TargetInfo::initFeatureMap(
     setFeatureEnabledImpl(Features, "lzcnt", true);
     setFeatureEnabledImpl(Features, "bmi", true);
     setFeatureEnabledImpl(Features, "bmi2", true);
-    setFeatureEnabledImpl(Features, "rtm", true);
     setFeatureEnabledImpl(Features, "fma", true);
     setFeatureEnabledImpl(Features, "rdrnd", true);
     setFeatureEnabledImpl(Features, "f16c", true);
@@ -1682,6 +1681,7 @@ bool X86TargetInfo::validateOperandSize(StringRef Constraint,
         return false;
       break;
     }
+    LLVM_FALLTHROUGH;
   case 'v':
   case 'x':
     if (SSELevel >= AVX512F)

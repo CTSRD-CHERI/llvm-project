@@ -36,6 +36,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
+#include "llvm/Support/Regex.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Instrumentation.h"
 #include "llvm/Transforms/Instrumentation/GCOVProfiler.h"
@@ -96,6 +97,11 @@ private:
   // profiling runtime to emit .gcda files when run.
   bool emitProfileArcs();
 
+  bool isFunctionInstrumented(const Function &F);
+  std::vector<Regex> createRegexesFromString(StringRef RegexesStr);
+  static bool doesFilenameMatchARegex(StringRef Filename,
+                                      std::vector<Regex> &Regexes);
+
   // Get pointers to the functions in the runtime library.
   Constant *getStartFileFunc();
   Constant *getEmitFunctionFunc();
@@ -108,6 +114,8 @@ private:
   Function *
   insertCounterWriteout(ArrayRef<std::pair<GlobalVariable *, MDNode *>>);
   Function *insertFlush(ArrayRef<std::pair<GlobalVariable *, MDNode *>>);
+
+  void AddFlushBeforeForkAndExec();
 
   enum class GCovFileType { GCNO, GCDA };
   std::string mangleName(const DICompileUnit *CU, GCovFileType FileType);
@@ -123,6 +131,9 @@ private:
   const TargetLibraryInfo *TLI;
   LLVMContext *Ctx;
   SmallVector<std::unique_ptr<GCOVFunction>, 16> Funcs;
+  std::vector<Regex> FilterRe;
+  std::vector<Regex> ExcludeRe;
+  StringMap<bool> InstrumentedFiles;
 };
 
 class GCOVProfilerLegacyPass : public ModulePass {
@@ -421,6 +432,72 @@ namespace {
   };
 }
 
+// RegexesStr is a string containing differents regex separated by a semi-colon.
+// For example "foo\..*$;bar\..*$".
+std::vector<Regex> GCOVProfiler::createRegexesFromString(StringRef RegexesStr) {
+  std::vector<Regex> Regexes;
+  while (!RegexesStr.empty()) {
+    std::pair<StringRef, StringRef> HeadTail = RegexesStr.split(';');
+    if (!HeadTail.first.empty()) {
+      Regex Re(HeadTail.first);
+      std::string Err;
+      if (!Re.isValid(Err)) {
+        Ctx->emitError(Twine("Regex ") + HeadTail.first +
+                       " is not valid: " + Err);
+      }
+      Regexes.emplace_back(std::move(Re));
+    }
+    RegexesStr = HeadTail.second;
+  }
+  return Regexes;
+}
+
+bool GCOVProfiler::doesFilenameMatchARegex(StringRef Filename,
+                                           std::vector<Regex> &Regexes) {
+  for (Regex &Re : Regexes) {
+    if (Re.match(Filename)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool GCOVProfiler::isFunctionInstrumented(const Function &F) {
+  if (FilterRe.empty() && ExcludeRe.empty()) {
+    return true;
+  }
+  const StringRef Filename = F.getSubprogram()->getFilename();
+  auto It = InstrumentedFiles.find(Filename);
+  if (It != InstrumentedFiles.end()) {
+    return It->second;
+  }
+
+  SmallString<256> RealPath;
+  StringRef RealFilename;
+
+  // Path can be
+  // /usr/lib/gcc/x86_64-linux-gnu/8/../../../../include/c++/8/bits/*.h so for
+  // such a case we must get the real_path.
+  if (sys::fs::real_path(Filename, RealPath)) {
+    // real_path can fail with path like "foo.c".
+    RealFilename = Filename;
+  } else {
+    RealFilename = RealPath;
+  }
+
+  bool ShouldInstrument;
+  if (FilterRe.empty()) {
+    ShouldInstrument = !doesFilenameMatchARegex(RealFilename, ExcludeRe);
+  } else if (ExcludeRe.empty()) {
+    ShouldInstrument = doesFilenameMatchARegex(RealFilename, FilterRe);
+  } else {
+    ShouldInstrument = doesFilenameMatchARegex(RealFilename, FilterRe) &&
+                       !doesFilenameMatchARegex(RealFilename, ExcludeRe);
+  }
+  InstrumentedFiles[Filename] = ShouldInstrument;
+  return ShouldInstrument;
+}
+
 std::string GCOVProfiler::mangleName(const DICompileUnit *CU,
                                      GCovFileType OutputType) {
   bool Notes = OutputType == GCovFileType::GCNO;
@@ -467,6 +544,11 @@ bool GCOVProfiler::runOnModule(Module &M, const TargetLibraryInfo &TLI) {
   this->M = &M;
   this->TLI = &TLI;
   Ctx = &M.getContext();
+
+  AddFlushBeforeForkAndExec();
+
+  FilterRe = createRegexesFromString(Options.Filter);
+  ExcludeRe = createRegexesFromString(Options.Exclude);
 
   if (Options.EmitNotes) emitProfileNotes();
   if (Options.EmitData) return emitProfileArcs();
@@ -524,6 +606,38 @@ static bool shouldKeepInEntry(BasicBlock::iterator It) {
 	return false;
 }
 
+void GCOVProfiler::AddFlushBeforeForkAndExec() {
+  SmallVector<Instruction *, 2> ForkAndExecs;
+  for (auto &F : M->functions()) {
+    for (auto &I : instructions(F)) {
+      if (CallInst *CI = dyn_cast<CallInst>(&I)) {
+        if (Function *Callee = CI->getCalledFunction()) {
+          LibFunc LF;
+          if (TLI->getLibFunc(*Callee, LF) &&
+              (LF == LibFunc_fork || LF == LibFunc_execl ||
+               LF == LibFunc_execle || LF == LibFunc_execlp ||
+               LF == LibFunc_execv || LF == LibFunc_execvp ||
+               LF == LibFunc_execve || LF == LibFunc_execvpe ||
+               LF == LibFunc_execvP)) {
+            ForkAndExecs.push_back(&I);
+          }
+        }
+      }
+    }
+  }
+
+  // We need to split the block after the fork/exec call
+  // because else the counters for the lines after will be
+  // the same as before the call.
+  for (auto I : ForkAndExecs) {
+    IRBuilder<> Builder(I);
+    FunctionType *FTy = FunctionType::get(Builder.getVoidTy(), {}, false);
+    Constant *GCOVFlush = M->getOrInsertFunction("__gcov_flush", FTy);
+    Builder.CreateCall(GCOVFlush);
+    I->getParent()->splitBasicBlock(I);
+  }
+}
+
 void GCOVProfiler::emitProfileNotes() {
   NamedMDNode *CU_Nodes = M->getNamedMetadata("llvm.dbg.cu");
   if (!CU_Nodes) return;
@@ -553,7 +667,8 @@ void GCOVProfiler::emitProfileNotes() {
     for (auto &F : M->functions()) {
       DISubprogram *SP = F.getSubprogram();
       if (!SP) continue;
-      if (!functionHasLines(F)) continue;
+      if (!functionHasLines(F) || !isFunctionInstrumented(F))
+        continue;
       // TODO: Functions using scope-based EH are currently not supported.
       if (isUsingScopeBasedEH(F)) continue;
 
@@ -572,9 +687,8 @@ void GCOVProfiler::emitProfileNotes() {
 
       // Add the function line number to the lines of the entry block
       // to have a counter for the function definition.
-      Func.getBlock(&EntryBlock)
-          .getFile(SP->getFilename())
-          .addLine(SP->getLine());
+      uint32_t Line = SP->getLine();
+      Func.getBlock(&EntryBlock).getFile(SP->getFilename()).addLine(Line);
 
       for (auto &BB : F) {
         GCOVBlock &Block = Func.getBlock(&BB);
@@ -587,7 +701,6 @@ void GCOVProfiler::emitProfileNotes() {
           Block.addEdge(Func.getReturnBlock());
         }
 
-        uint32_t Line = 0;
         for (auto &I : BB) {
           // Debug intrinsic locations correspond to the location of the
           // declaration, not necessarily any statements or expressions.
@@ -609,6 +722,7 @@ void GCOVProfiler::emitProfileNotes() {
           GCOVLines &Lines = Block.getFile(SP->getFilename());
           Lines.addLine(Loc.getLine());
         }
+        Line = 0;
       }
       EdgeDestinations += Func.getEdgeDestinations();
     }
@@ -638,7 +752,8 @@ bool GCOVProfiler::emitProfileArcs() {
     for (auto &F : M->functions()) {
       DISubprogram *SP = F.getSubprogram();
       if (!SP) continue;
-      if (!functionHasLines(F)) continue;
+      if (!functionHasLines(F) || !isFunctionInstrumented(F))
+        continue;
       // TODO: Functions using scope-based EH are currently not supported.
       if (isUsingScopeBasedEH(F)) continue;
       if (!Result) Result = true;

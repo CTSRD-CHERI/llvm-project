@@ -533,20 +533,17 @@ struct FormatStyle {
     /// \code
     ///   try {
     ///     foo();
-    ///   } catch () {
+    ///   }
+    ///   catch () {
     ///   }
     ///   void foo() { bar(); }
-    ///   class foo
-    ///   {
+    ///   class foo {
     ///   };
     ///   if (foo()) {
-    ///   } else {
     ///   }
-    ///   enum X : int
-    ///   {
-    ///     A,
-    ///     B
-    ///   };
+    ///   else {
+    ///   }
+    ///   enum X : int { A, B };
     /// \endcode
     BS_Stroustrup,
     /// Always break before braces.
@@ -1139,11 +1136,13 @@ struct FormatStyle {
   /// can be a subset of another - the longest prefix is always matched. Within
   /// a group, the imports are ordered lexicographically.
   ///
-  /// In the .clang-format configuration file, this can be configured like:
+  /// In the .clang-format configuration file, this can be configured like
+  /// in the following yaml example. This will result in imports being
+  /// formatted as in the Java example below.
   /// \code{.yaml}
   ///   JavaImportGroups: ['com.example', 'com', 'org']
   /// \endcode
-  /// Which will result in imports being formatted as so:
+  ///
   /// \code{.java}
   ///    import static com.example.function1;
   ///

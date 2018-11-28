@@ -366,7 +366,8 @@ private:
       // specifier parameter, although this is technically valid:
       // [[foo(:)]]
       if (AttrTok->is(tok::colon) ||
-          AttrTok->startsSequence(tok::identifier, tok::identifier))
+          AttrTok->startsSequence(tok::identifier, tok::identifier) || 
+          AttrTok->startsSequence(tok::r_paren, tok::identifier))
         return false;
       if (AttrTok->is(tok::ellipsis))
         return true;
@@ -403,8 +404,9 @@ private:
         Contexts.back().CanBeExpression && Left->isNot(TT_LambdaLSquare) &&
         !CurrentToken->isOneOf(tok::l_brace, tok::r_square) &&
         (!Parent ||
-         Parent->isOneOf(tok::colon, tok::l_square, tok::l_paren,
-                         tok::kw_return, tok::kw_throw) ||
+         (Parent->is(tok::colon) && Parent->isNot(TT_InlineASMColon)) ||
+         Parent->isOneOf(tok::l_square, tok::l_paren, tok::kw_return,
+                         tok::kw_throw) ||
          Parent->isUnaryOperator() ||
          // FIXME(bug 36976): ObjC return types shouldn't use TT_CastRParen.
          Parent->isOneOf(TT_ObjCForIn, TT_CastRParen) ||
@@ -2874,6 +2876,7 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
   } else if (Style.Language == FormatStyle::LK_Cpp ||
              Style.Language == FormatStyle::LK_ObjC ||
              Style.Language == FormatStyle::LK_Proto ||
+             Style.Language == FormatStyle::LK_TableGen ||
              Style.Language == FormatStyle::LK_TextProto) {
     if (Left.isStringLiteral() && Right.isStringLiteral())
       return true;
@@ -3046,6 +3049,30 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
     // If there was a comment between `}` an `key` above, then `key` would be
     // put on a new line anyways.
     if (Left.isOneOf(tok::r_brace, tok::greater, tok::r_square))
+      return true;
+  }
+
+  // Deal with lambda arguments in C++ - we want consistent line breaks whether
+  // they happen to be at arg0, arg1 or argN. The selection is a bit nuanced
+  // as aggressive line breaks are placed when the lambda is not the last arg.
+  if ((Style.Language == FormatStyle::LK_Cpp ||
+       Style.Language == FormatStyle::LK_ObjC) &&
+      Left.is(tok::l_paren) && Left.BlockParameterCount > 0 &&
+      !Right.isOneOf(tok::l_paren, TT_LambdaLSquare)) {
+    // Multiple lambdas in the same function call force line breaks.
+    if (Left.BlockParameterCount > 1)
+      return true;
+
+    // A lambda followed by another arg forces a line break.
+    if (!Left.Role)
+      return false;
+    auto Comma = Left.Role->lastComma();
+    if (!Comma)
+      return false;
+    auto Next = Comma->getNextNonComment();
+    if (!Next)
+      return false;
+    if (!Next->isOneOf(TT_LambdaLSquare, tok::l_brace, tok::caret))
       return true;
   }
 

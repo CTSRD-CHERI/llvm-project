@@ -90,22 +90,22 @@ void __start(void) {
 // DUMP-RELOCATABLE-NEXT: 0020 00000000 00000000 00000000 00000000  ................
 
 // DUMP-RELOCATABLE-LABEL: SYMBOL TABLE:
-// DUMP-RELOCATABLE: 0000000000000010 gw      .global_sizes           00000008 .size.bar
-// DUMP-RELOCATABLE: 0000000000000008 gw      .global_sizes           00000008 .size.external_buffer
-// DUMP-RELOCATABLE: 0000000000000000 gw      .global_sizes           00000008 .size.external_cap
-// DUMP-RELOCATABLE: 0000000000000018 gw      .global_sizes           00000008 .size.foo
-// DUMP-RELOCATABLE: 0000000000000028 gw      .global_sizes           00000008 .size.other_var
+// DUMP-RELOCATABLE: 0000000000000010 gw    O .global_sizes           00000008 .size.bar
+// DUMP-RELOCATABLE: 0000000000000008 gw    O .global_sizes           00000008 .size.external_buffer
+// DUMP-RELOCATABLE: 0000000000000000 gw    O .global_sizes           00000008 .size.external_cap
+// DUMP-RELOCATABLE: 0000000000000018 gw    O .global_sizes           00000008 .size.foo
+// DUMP-RELOCATABLE: 0000000000000028 gw    O .global_sizes           00000008 .size.other_var
 
 // DUMP-EXE-LABEL: SYMBOL TABLE:
-// DUMP-EXE: 00000001200001a8 gw      .global_sizes           00000008 .size.bar
-// DUMP-EXE: 00000001200001a0 gw      .global_sizes           00000008 .size.external_buffer
-// DUMP-EXE: 0000000120000198 gw      .global_sizes           00000008 .size.external_cap
-// DUMP-EXE: 00000001200001b0 gw      .global_sizes           00000008 .size.foo
-// DUMP-EXE: 00000001200001c0 gw      .global_sizes           00000008 .size.other_var
+// DUMP-EXE: 00000001200001a8 gw    O .global_sizes           00000008 .size.bar
+// DUMP-EXE: 00000001200001a0 gw    O .global_sizes           00000008 .size.external_buffer
+// DUMP-EXE: 0000000120000198 gw    O .global_sizes           00000008 .size.external_cap
+// DUMP-EXE: 00000001200001b0 gw    O .global_sizes           00000008 .size.foo
+// DUMP-EXE: 00000001200001c0 gw    O .global_sizes           00000008 .size.other_var
 
 // DUMP-SHLIB-LABEL: SYMBOL TABLE:
-// DUMP-SHLIB: 0000000000000{{.+}} gw      .global_sizes           00000008 .size.bar
-// DUMP-SHLIB: 0000000000000{{.+}} gw      .global_sizes           00000008 .size.external_buffer
-// DUMP-SHLIB: 0000000000000{{.+}} gw      .global_sizes           00000008 .size.external_cap
-// DUMP-SHLIB: 0000000000000{{.+}} gw      .global_sizes           00000008 .size.foo
-// DUMP-SHLIB: 0000000000000{{.+}} gw      .global_sizes           00000008 .size.other_var
+// DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.bar
+// DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.external_buffer
+// DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.external_cap
+// DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.foo
+// DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.other_var

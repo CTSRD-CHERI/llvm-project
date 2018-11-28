@@ -206,7 +206,7 @@ def ixlenimm : Operand<XLenVT> {
 def simm32     : ImmLeaf<XLenVT, [{return isInt<32>(Imm);}]>;
 def simm32hi20 : ImmLeaf<XLenVT, [{return isShiftedInt<20, 12>(Imm);}]>;
 // A mask value that won't affect significant shift bits.
-def immshiftxlen : ImmLeaf<XLenVT, [{
+def immbottomxlenset : ImmLeaf<XLenVT, [{
   if (Subtarget->is64Bit())
     return countTrailingOnes<uint64_t>(Imm) >= 6;
   return countTrailingOnes<uint64_t>(Imm) >= 5;
@@ -660,15 +660,14 @@ def : PatGprUimmLog2XLen<sra, SRAI>;
 // typically introduced when the legalizer promotes the shift amount and
 // zero-extends it). For RISC-V, the mask is unnecessary as shifts in the base
 // ISA only read the least significant 5 bits (RV32I) or 6 bits (RV64I).
-multiclass VarShiftXLenPat<PatFrag ShiftOp, RVInst Inst> {
-  def : Pat<(ShiftOp GPR:$rs1, GPR:$rs2), (Inst GPR:$rs1, GPR:$rs2)>;
-  def : Pat<(ShiftOp GPR:$rs1, (and GPR:$rs2, immshiftxlen)),
-            (Inst GPR:$rs1, GPR:$rs2)>;
-}
+class shiftop<SDPatternOperator operator>
+    : PatFrags<(ops node:$val, node:$count),
+               [(operator node:$val, node:$count),
+                (operator node:$val, (and node:$count, immbottomxlenset))]>;
 
-defm : VarShiftXLenPat<shl, SLL>;
-defm : VarShiftXLenPat<srl, SRL>;
-defm : VarShiftXLenPat<sra, SRA>;
+def : PatGprGpr<shiftop<shl>, SLL>;
+def : PatGprGpr<shiftop<srl>, SRL>;
+def : PatGprGpr<shiftop<sra>, SRA>;
 
 /// FrameIndex calculations
 
@@ -686,7 +685,9 @@ def : PatGprSimm12<setult, SLTIU>;
 
 // Define pattern expansions for setcc operations that aren't directly
 // handled by a RISC-V instruction.
+def : Pat<(seteq GPR:$rs1, 0), (SLTIU GPR:$rs1, 1)>;
 def : Pat<(seteq GPR:$rs1, GPR:$rs2), (SLTIU (XOR GPR:$rs1, GPR:$rs2), 1)>;
+def : Pat<(setne GPR:$rs1, 0), (SLTU X0, GPR:$rs1)>;
 def : Pat<(setne GPR:$rs1, GPR:$rs2), (SLTU X0, (XOR GPR:$rs1, GPR:$rs2))>;
 def : Pat<(setugt GPR:$rs1, GPR:$rs2), (SLTU GPR:$rs2, GPR:$rs1)>;
 def : Pat<(setuge GPR:$rs1, GPR:$rs2), (XORI (SLTU GPR:$rs1, GPR:$rs2), 1)>;

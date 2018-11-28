@@ -45,8 +45,8 @@
 
 
 // DUMP-EXTERNALLIB: SYMBOL TABLE:
-// DUMP-EXTERNALLIB:  000000000020020 g       .bss		 000010e1 external_buffer
-// DUMP-EXTERNALLIB:  0000000000021120 g       .bss		 00000020 external_cap
+// DUMP-EXTERNALLIB:  0000000000020020 g     O .bss		 000010e1 external_buffer
+// DUMP-EXTERNALLIB:  0000000000021120 g     O .bss		 00000020 external_cap
 // DUMP-EXTERNALLIB:  0000000000010000 g     F .text		 00000030 external_func
 
 

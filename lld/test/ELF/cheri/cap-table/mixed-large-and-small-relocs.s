@@ -12,8 +12,8 @@
 # EXE-NEXT: 0x0000000000050000	Base: sym_small000 (0x00000000000403e8)	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
 # EXE:      0x0000000000053e80	Base: sym_mxcaptable000 (0x0000000000040000)	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
 # EXE-LABEL: SYMBOL TABLE
-# EXE: 0000000000053e80 l       .captable		 00000010 sym_mxcaptable000@CAPTABLE
-# EXE: 0000000000050000 l       .captable		 00000010 sym_small000@CAPTABLE
+# EXE: 0000000000053e80 l     O .captable		 00000010 sym_mxcaptable000@CAPTABLE
+# EXE: 0000000000050000 l     O .captable		 00000010 sym_small000@CAPTABLE
 
 
 # But if there are too many small relocs there is nothing we can do

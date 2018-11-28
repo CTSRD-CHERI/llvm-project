@@ -52,21 +52,15 @@ enum Style {
 
 class X86Subtarget final : public X86GenSubtargetInfo {
 public:
+  // NOTE: Do not add anything new to this list. Coarse, CPU name based flags
+  // are not a good idea. We should be migrating away from these.
   enum X86ProcFamilyEnum {
     Others,
     IntelAtom,
     IntelSLM,
     IntelGLM,
     IntelGLP,
-    IntelTRM,
-    IntelHaswell,
-    IntelBroadwell,
-    IntelSkylake,
-    IntelKNL,
-    IntelSKX,
-    IntelCannonlake,
-    IntelIcelakeClient,
-    IntelIcelakeServer,
+    IntelTRM
   };
 
 protected:
@@ -228,6 +222,9 @@ protected:
   /// True if the PMULLD instruction is slow compared to PMULLW/PMULHW and
   //  PMULUDQ.
   bool IsPMULLDSlow = false;
+
+  /// True if the PMADDWD instruction is slow compared to PMULLD.
+  bool IsPMADDWDSlow = false;
 
   /// True if unaligned memory accesses of 16-bytes are slow.
   bool IsUAMem16Slow = false;
@@ -618,6 +615,7 @@ public:
   bool hasPTWRITE() const { return HasPTWRITE; }
   bool isSHLDSlow() const { return IsSHLDSlow; }
   bool isPMULLDSlow() const { return IsPMULLDSlow; }
+  bool isPMADDWDSlow() const { return IsPMADDWDSlow; }
   bool isUnalignedMem16Slow() const { return IsUAMem16Slow; }
   bool isUnalignedMem32Slow() const { return IsUAMem32Slow; }
   int getGatherOverhead() const { return GatherOverhead; }

@@ -28,8 +28,8 @@
 // 20000 is the address of rel.dyn -> correct
 // CHECK:  __cap_relocs  00000028 0000000000020000 DATA
 // CHECK-LABEL: SYMBOL TABLE:
-// CHECK: 0000000000030000 g       .bss      00000004 foo
-// CHECK: 0000000000010000 g       .data		 000000{{1|2}}0 foo_ptr
+// CHECK: 0000000000030000 g     O .bss      00000004 foo
+// CHECK: 0000000000010000 g     O .data		 000000{{1|2}}0 foo_ptr
 
 int foo;
 

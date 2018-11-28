@@ -38,12 +38,15 @@ class WasmSymbol {
 public:
   WasmSymbol(const wasm::WasmSymbolInfo &Info,
              const wasm::WasmSignature *FunctionType,
-             const wasm::WasmGlobalType *GlobalType)
-      : Info(Info), FunctionType(FunctionType), GlobalType(GlobalType) {}
+             const wasm::WasmGlobalType *GlobalType,
+             const wasm::WasmEventType *EventType)
+      : Info(Info), FunctionType(FunctionType), GlobalType(GlobalType),
+        EventType(EventType) {}
 
   const wasm::WasmSymbolInfo &Info;
   const wasm::WasmSignature *FunctionType;
   const wasm::WasmGlobalType *GlobalType;
+  const wasm::WasmEventType *EventType;
 
   bool isTypeFunction() const {
     return Info.Kind == wasm::WASM_SYMBOL_TYPE_FUNCTION;
@@ -58,6 +61,8 @@ public:
   bool isTypeSection() const {
     return Info.Kind == wasm::WASM_SYMBOL_TYPE_SECTION;
   }
+
+  bool isTypeEvent() const { return Info.Kind == wasm::WASM_SYMBOL_TYPE_EVENT; }
 
   bool isDefined() const { return !isUndefined(); }
 
@@ -124,12 +129,14 @@ public:
 
   static bool classof(const Binary *v) { return v->isWasm(); }
 
+  const wasm::WasmDylinkInfo &dylinkInfo() const { return DylinkInfo; }
   ArrayRef<wasm::WasmSignature> types() const { return Signatures; }
   ArrayRef<uint32_t> functionTypes() const { return FunctionTypes; }
   ArrayRef<wasm::WasmImport> imports() const { return Imports; }
   ArrayRef<wasm::WasmTable> tables() const { return Tables; }
   ArrayRef<wasm::WasmLimits> memories() const { return Memories; }
   ArrayRef<wasm::WasmGlobal> globals() const { return Globals; }
+  ArrayRef<wasm::WasmEvent> events() const { return Events; }
   ArrayRef<wasm::WasmExport> exports() const { return Exports; }
   ArrayRef<WasmSymbol> syms() const { return Symbols; }
   const wasm::WasmLinkingData &linkingData() const { return LinkingData; }
@@ -141,6 +148,7 @@ public:
   uint32_t startFunction() const { return StartFunction; }
   uint32_t getNumImportedGlobals() const { return NumImportedGlobals; }
   uint32_t getNumImportedFunctions() const { return NumImportedFunctions; }
+  uint32_t getNumImportedEvents() const { return NumImportedEvents; }
 
   void moveSymbolNext(DataRefImpl &Symb) const override;
 
@@ -205,12 +213,16 @@ private:
   bool isDefinedFunctionIndex(uint32_t Index) const;
   bool isValidGlobalIndex(uint32_t Index) const;
   bool isDefinedGlobalIndex(uint32_t Index) const;
+  bool isValidEventIndex(uint32_t Index) const;
+  bool isDefinedEventIndex(uint32_t Index) const;
   bool isValidFunctionSymbol(uint32_t Index) const;
   bool isValidGlobalSymbol(uint32_t Index) const;
+  bool isValidEventSymbol(uint32_t Index) const;
   bool isValidDataSymbol(uint32_t Index) const;
   bool isValidSectionSymbol(uint32_t Index) const;
   wasm::WasmFunction &getDefinedFunction(uint32_t Index);
   wasm::WasmGlobal &getDefinedGlobal(uint32_t Index);
+  wasm::WasmEvent &getDefinedEvent(uint32_t Index);
 
   const WasmSection &getWasmSection(DataRefImpl Ref) const;
   const wasm::WasmRelocation &getWasmRelocation(DataRefImpl Ref) const;
@@ -226,6 +238,7 @@ private:
   Error parseTableSection(ReadContext &Ctx);
   Error parseMemorySection(ReadContext &Ctx);
   Error parseGlobalSection(ReadContext &Ctx);
+  Error parseEventSection(ReadContext &Ctx);
   Error parseExportSection(ReadContext &Ctx);
   Error parseStartSection(ReadContext &Ctx);
   Error parseElemSection(ReadContext &Ctx);
@@ -233,6 +246,7 @@ private:
   Error parseDataSection(ReadContext &Ctx);
 
   // Custom section types
+  Error parseDylinkSection(ReadContext &Ctx);
   Error parseNameSection(ReadContext &Ctx);
   Error parseLinkingSection(ReadContext &Ctx);
   Error parseLinkingSectionSymtab(ReadContext &Ctx);
@@ -241,11 +255,13 @@ private:
 
   wasm::WasmObjectHeader Header;
   std::vector<WasmSection> Sections;
+  wasm::WasmDylinkInfo DylinkInfo;
   std::vector<wasm::WasmSignature> Signatures;
   std::vector<uint32_t> FunctionTypes;
   std::vector<wasm::WasmTable> Tables;
   std::vector<wasm::WasmLimits> Memories;
   std::vector<wasm::WasmGlobal> Globals;
+  std::vector<wasm::WasmEvent> Events;
   std::vector<wasm::WasmImport> Imports;
   std::vector<wasm::WasmExport> Exports;
   std::vector<wasm::WasmElemSegment> ElemSegments;
@@ -258,9 +274,11 @@ private:
   wasm::WasmLinkingData LinkingData;
   uint32_t NumImportedGlobals = 0;
   uint32_t NumImportedFunctions = 0;
+  uint32_t NumImportedEvents = 0;
   uint32_t CodeSection = 0;
   uint32_t DataSection = 0;
   uint32_t GlobalSection = 0;
+  uint32_t EventSection = 0;
 };
 
 } // end namespace object

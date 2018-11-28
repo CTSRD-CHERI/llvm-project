@@ -1104,6 +1104,71 @@ GetElementPtrInst::GetElementPtrInst(Type *PointeeType, Value *Ptr,
 DEFINE_TRANSPARENT_OPERAND_ACCESSORS(GetElementPtrInst, Value)
 
 //===----------------------------------------------------------------------===//
+//                                UnaryOperator Class
+//===----------------------------------------------------------------------===//
+
+/// a unary instruction 
+class UnaryOperator : public UnaryInstruction {
+  void AssertOK();
+
+protected:
+  UnaryOperator(UnaryOps iType, Value *S, Type *Ty,
+                const Twine &Name, Instruction *InsertBefore);
+  UnaryOperator(UnaryOps iType, Value *S, Type *Ty,
+                const Twine &Name, BasicBlock *InsertAtEnd);
+
+  // Note: Instruction needs to be a friend here to call cloneImpl.
+  friend class Instruction;
+
+  UnaryOperator *cloneImpl() const;
+
+public:
+
+  /// Construct a unary instruction, given the opcode and an operand.
+  /// Optionally (if InstBefore is specified) insert the instruction
+  /// into a BasicBlock right before the specified instruction.  The specified
+  /// Instruction is allowed to be a dereferenced end iterator.
+  ///
+  static UnaryOperator *Create(UnaryOps Op, Value *S,
+                               const Twine &Name = Twine(),
+                               Instruction *InsertBefore = nullptr);
+
+  /// Construct a unary instruction, given the opcode and an operand.
+  /// Also automatically insert this instruction to the end of the
+  /// BasicBlock specified.
+  ///
+  static UnaryOperator *Create(UnaryOps Op, Value *S,
+                               const Twine &Name,
+                               BasicBlock *InsertAtEnd);
+
+  /// These methods just forward to Create, and are useful when you
+  /// statically know what type of instruction you're going to create.  These
+  /// helpers just save some typing.
+#define HANDLE_UNARY_INST(N, OPC, CLASS) \
+  static UnaryInstruction *Create##OPC(Value *V, \
+                                       const Twine &Name = "") {\
+    return Create(Instruction::OPC, V, Name);\
+  }
+#include "llvm/IR/Instruction.def"
+#define HANDLE_UNARY_INST(N, OPC, CLASS) \
+  static UnaryInstruction *Create##OPC(Value *V, \
+                                       const Twine &Name, BasicBlock *BB) {\
+    return Create(Instruction::OPC, V, Name, BB);\
+  }
+#include "llvm/IR/Instruction.def"
+#define HANDLE_UNARY_INST(N, OPC, CLASS) \
+  static UnaryInstruction *Create##OPC(Value *V, \
+                                       const Twine &Name, Instruction *I) {\
+    return Create(Instruction::OPC, V, Name, I);\
+  }
+#include "llvm/IR/Instruction.def"
+
+  UnaryOps getOpcode() const {
+    return static_cast<UnaryOps>(Instruction::getOpcode());
+  }
+};
+
+//===----------------------------------------------------------------------===//
 //                               ICmpInst Class
 //===----------------------------------------------------------------------===//
 
@@ -1299,12 +1364,13 @@ public:
 
   /// Constructor with no-insertion semantics
   FCmpInst(
-    Predicate pred, ///< The predicate to use for the comparison
+    Predicate Pred, ///< The predicate to use for the comparison
     Value *LHS,     ///< The left-hand-side of the expression
     Value *RHS,     ///< The right-hand-side of the expression
-    const Twine &NameStr = "" ///< Name of the instruction
-  ) : CmpInst(makeCmpResultType(LHS->getType()),
-              Instruction::FCmp, pred, LHS, RHS, NameStr) {
+    const Twine &NameStr = "", ///< Name of the instruction
+    Instruction *FlagsSource = nullptr
+  ) : CmpInst(makeCmpResultType(LHS->getType()), Instruction::FCmp, Pred, LHS,
+              RHS, NameStr, nullptr, FlagsSource) {
     AssertOK();
   }
 
@@ -1356,8 +1422,6 @@ class CallInst;
 class InvokeInst;
 
 template <class T> struct CallBaseParent { using type = Instruction; };
-
-template <> struct CallBaseParent<InvokeInst> { using type = TerminatorInst; };
 
 //===----------------------------------------------------------------------===//
 /// Base class for all callable instructions (InvokeInst and CallInst)
@@ -1525,7 +1589,7 @@ public:
   /// indirect function invocation.
   ///
   Function *getCalledFunction() const {
-    return dyn_cast<Function>(Op<-InstTy::ArgOffset>());
+    return dyn_cast_or_null<Function>(Op<-InstTy::ArgOffset>());
   }
 
   /// Determine whether this call has the given attribute.
@@ -2649,6 +2713,25 @@ public:
     return !changesLength() && isTransposeMask(getMask());
   }
 
+  /// Return true if this shuffle mask is an extract subvector mask.
+  /// A valid extract subvector mask returns a smaller vector from a single
+  /// source operand. The base extraction index is returned as well.
+  static bool isExtractSubvectorMask(ArrayRef<int> Mask, int NumSrcElts,
+                                     int &Index);
+  static bool isExtractSubvectorMask(const Constant *Mask, int NumSrcElts,
+                                     int &Index) {
+    assert(Mask->getType()->isVectorTy() && "Shuffle needs vector constant.");
+    SmallVector<int, 16> MaskAsInts;
+    getShuffleMask(Mask, MaskAsInts);
+    return isExtractSubvectorMask(MaskAsInts, NumSrcElts, Index);
+  }
+
+  /// Return true if this shuffle mask is an extract subvector mask.
+  bool isExtractSubvectorMask(int &Index) const {
+    int NumSrcElts = Op<0>()->getType()->getVectorNumElements();
+    return isExtractSubvectorMask(getMask(), NumSrcElts, Index);
+  }
+
   /// Change values in a shuffle permute mask assuming the two vector operands
   /// of length InVecNumElts have swapped position.
   static void commuteShuffleMask(MutableArrayRef<int> Mask,
@@ -3265,7 +3348,7 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(LandingPadInst, Value)
 /// Return a value (possibly void), from a function.  Execution
 /// does not continue in this function any longer.
 ///
-class ReturnInst : public TerminatorInst {
+class ReturnInst : public Instruction {
   ReturnInst(const ReturnInst &RI);
 
 private:
@@ -3325,8 +3408,6 @@ public:
   }
 
 private:
-  friend TerminatorInst;
-
   BasicBlock *getSuccessor(unsigned idx) const {
     llvm_unreachable("ReturnInst has no successors!");
   }
@@ -3349,7 +3430,7 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(ReturnInst, Value)
 //===---------------------------------------------------------------------------
 /// Conditional or Unconditional Branch instruction.
 ///
-class BranchInst : public TerminatorInst {
+class BranchInst : public Instruction {
   /// Ops list - Branches are strange.  The operands are ordered:
   ///  [Cond, FalseDest,] TrueDest.  This makes some accessors faster because
   /// they don't have to check for cond/uncond branchness. These are mostly
@@ -3493,7 +3574,7 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(BranchInst, Value)
 //===---------------------------------------------------------------------------
 /// Multiway switch
 ///
-class SwitchInst : public TerminatorInst {
+class SwitchInst : public Instruction {
   unsigned ReservedSpace;
 
   // Operand[0]    = Value to switch on
@@ -3576,7 +3657,7 @@ public:
     /// Returns number of current case.
     unsigned getCaseIndex() const { return Index; }
 
-    /// Returns TerminatorInst's successor index for current case successor.
+    /// Returns successor index for current case successor.
     unsigned getSuccessorIndex() const {
       assert(((unsigned)Index == DefaultPseudoIndex ||
               (unsigned)Index < SI->getNumCases()) &&
@@ -3632,7 +3713,7 @@ public:
     CaseIteratorImpl(SwitchInstT *SI, unsigned CaseNum) : Case(SI, CaseNum) {}
 
     /// Initializes case iterator for given SwitchInst and for given
-    /// TerminatorInst's successor index.
+    /// successor index.
     static CaseIteratorImpl fromSuccessorIndex(SwitchInstT *SI,
                                                unsigned SuccessorIndex) {
       assert(SuccessorIndex < SI->getNumSuccessors() &&
@@ -3850,7 +3931,7 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(SwitchInst, Value)
 //===---------------------------------------------------------------------------
 /// Indirect Branch Instruction.
 ///
-class IndirectBrInst : public TerminatorInst {
+class IndirectBrInst : public Instruction {
   unsigned ReservedSpace;
 
   // Operand[0]   = Address to jump to
@@ -4226,7 +4307,7 @@ InvokeInst::InvokeInst(Value *Func, BasicBlock *IfNormal,
 //===---------------------------------------------------------------------------
 /// Resume the propagation of an exception.
 ///
-class ResumeInst : public TerminatorInst {
+class ResumeInst : public Instruction {
   ResumeInst(const ResumeInst &RI);
 
   explicit ResumeInst(Value *Exn, Instruction *InsertBefore=nullptr);
@@ -4264,8 +4345,6 @@ public:
   }
 
 private:
-  friend TerminatorInst;
-
   BasicBlock *getSuccessor(unsigned idx) const {
     llvm_unreachable("ResumeInst has no successors!");
   }
@@ -4285,7 +4364,7 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(ResumeInst, Value)
 //===----------------------------------------------------------------------===//
 //                         CatchSwitchInst Class
 //===----------------------------------------------------------------------===//
-class CatchSwitchInst : public TerminatorInst {
+class CatchSwitchInst : public Instruction {
   /// The number of operands actually allocated.  NumOperands is
   /// the number actually in use.
   unsigned ReservedSpace;
@@ -4551,7 +4630,7 @@ public:
 //                               CatchReturnInst Class
 //===----------------------------------------------------------------------===//
 
-class CatchReturnInst : public TerminatorInst {
+class CatchReturnInst : public Instruction {
   CatchReturnInst(const CatchReturnInst &RI);
   CatchReturnInst(Value *CatchPad, BasicBlock *BB, Instruction *InsertBefore);
   CatchReturnInst(Value *CatchPad, BasicBlock *BB, BasicBlock *InsertAtEnd);
@@ -4611,8 +4690,6 @@ public:
   }
 
 private:
-  friend TerminatorInst;
-
   BasicBlock *getSuccessor(unsigned Idx) const {
     assert(Idx < getNumSuccessors() && "Successor # out of range for catchret!");
     return getSuccessor();
@@ -4634,7 +4711,7 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(CatchReturnInst, Value)
 //                               CleanupReturnInst Class
 //===----------------------------------------------------------------------===//
 
-class CleanupReturnInst : public TerminatorInst {
+class CleanupReturnInst : public Instruction {
 private:
   CleanupReturnInst(const CleanupReturnInst &RI);
   CleanupReturnInst(Value *CleanupPad, BasicBlock *UnwindBB, unsigned Values,
@@ -4707,8 +4784,6 @@ public:
   }
 
 private:
-  friend TerminatorInst;
-
   BasicBlock *getSuccessor(unsigned Idx) const {
     assert(Idx == 0);
     return getUnwindDest();
@@ -4741,7 +4816,7 @@ DEFINE_TRANSPARENT_OPERAND_ACCESSORS(CleanupReturnInst, Value)
 /// presence of this instruction indicates some higher level knowledge that the
 /// end of the block cannot be reached.
 ///
-class UnreachableInst : public TerminatorInst {
+class UnreachableInst : public Instruction {
 protected:
   // Note: Instruction needs to be a friend here to call cloneImpl.
   friend class Instruction;
@@ -4768,8 +4843,6 @@ public:
   }
 
 private:
-  friend TerminatorInst;
-
   BasicBlock *getSuccessor(unsigned idx) const {
     llvm_unreachable("UnreachableInst has no successors!");
   }

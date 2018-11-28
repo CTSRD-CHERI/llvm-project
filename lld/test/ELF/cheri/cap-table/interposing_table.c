@@ -59,4 +59,4 @@ int __start(void) {
 
 // CHECK: CAPABILITY RELOCATION RECORDS:
 // CHECK: 0x0000000120020000	Base: __wrap_accept (0x0000000120010170)	Offset: 0x0000000000000000	Length: 0x0000000000000038	Permissions: 0x8000000000000000 (Function)
-// CHECK: 0000000120020000 l       .data		 00000540 .hidden __libc_interposing
+// CHECK: 0000000120020000 l     O .data		 00000540 .hidden __libc_interposing

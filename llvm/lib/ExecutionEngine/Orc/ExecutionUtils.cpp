@@ -88,7 +88,7 @@ iterator_range<CtorDtorIterator> getDestructors(const Module &M) {
 }
 
 void CtorDtorRunner::add(iterator_range<CtorDtorIterator> CtorDtors) {
-  if (CtorDtors.begin() == CtorDtors.end())
+  if (empty(CtorDtors))
     return;
 
   MangleAndInterner Mangle(
@@ -130,8 +130,8 @@ Error CtorDtorRunner::run() {
 
   auto &ES = JD.getExecutionSession();
   if (auto CtorDtorMap =
-          ES.lookup({&JD}, std::move(Names), NoDependenciesToRegister, true,
-                    nullptr, true)) {
+          ES.lookup(JITDylibSearchList({{&JD, true}}), std::move(Names),
+                    NoDependenciesToRegister, true)) {
     for (auto &KV : CtorDtorsByPriority) {
       for (auto &Name : KV.second) {
         assert(CtorDtorMap->count(Name) && "No entry for Name");

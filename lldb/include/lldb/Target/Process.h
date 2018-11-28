@@ -12,10 +12,8 @@
 
 #include "lldb/Host/Config.h"
 
-// C Includes
 #include <limits.h>
 
-// C++ Includes
 #include <chrono>
 #include <list>
 #include <memory>
@@ -24,8 +22,6 @@
 #include <unordered_set>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Breakpoint/BreakpointSiteList.h"
 #include "lldb/Core/Broadcaster.h"
 #include "lldb/Core/Communication.h"
@@ -319,7 +315,7 @@ public:
                            NameMatch process_name_match_type)
       : m_match_info(), m_name_match_type(process_name_match_type),
         m_match_all_users(false) {
-    m_match_info.GetExecutableFile().SetFile(process_name, false,
+    m_match_info.GetExecutableFile().SetFile(process_name,
                                              FileSpec::Style::native);
   }
 

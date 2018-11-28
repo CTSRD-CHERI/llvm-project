@@ -586,6 +586,7 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
       AddPromotedToType (ISD::LOAD  , VT, MVT::v4i32);
       setOperationAction(ISD::SELECT, VT, Promote);
       AddPromotedToType (ISD::SELECT, VT, MVT::v4i32);
+      setOperationAction(ISD::VSELECT, VT, Legal);
       setOperationAction(ISD::SELECT_CC, VT, Promote);
       AddPromotedToType (ISD::SELECT_CC, VT, MVT::v4i32);
       setOperationAction(ISD::STORE, VT, Promote);
@@ -626,7 +627,6 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
       setOperationAction(ISD::SCALAR_TO_VECTOR, VT, Expand);
       setOperationAction(ISD::FPOW, VT, Expand);
       setOperationAction(ISD::BSWAP, VT, Expand);
-      setOperationAction(ISD::VSELECT, VT, Expand);
       setOperationAction(ISD::SIGN_EXTEND_INREG, VT, Expand);
       setOperationAction(ISD::ROTL, VT, Expand);
       setOperationAction(ISD::ROTR, VT, Expand);
@@ -727,12 +727,6 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
       setOperationAction(ISD::FDIV, MVT::v2f64, Legal);
       setOperationAction(ISD::FSQRT, MVT::v2f64, Legal);
 
-      setOperationAction(ISD::VSELECT, MVT::v16i8, Legal);
-      setOperationAction(ISD::VSELECT, MVT::v8i16, Legal);
-      setOperationAction(ISD::VSELECT, MVT::v4i32, Legal);
-      setOperationAction(ISD::VSELECT, MVT::v4f32, Legal);
-      setOperationAction(ISD::VSELECT, MVT::v2f64, Legal);
-
       // Share the Altivec comparison restrictions.
       setCondCodeAction(ISD::SETUO, MVT::v2f64, Expand);
       setCondCodeAction(ISD::SETUEQ, MVT::v2f64, Expand);
@@ -791,6 +785,9 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
       setOperationAction(ISD::UINT_TO_FP, MVT::v2i64, Legal);
       setOperationAction(ISD::FP_TO_SINT, MVT::v2i64, Legal);
       setOperationAction(ISD::FP_TO_UINT, MVT::v2i64, Legal);
+
+      setOperationAction(ISD::UINT_TO_FP, MVT::v2i16, Custom);
+      setOperationAction(ISD::SINT_TO_FP, MVT::v2i16, Custom);
 
       setOperationAction(ISD::FNEG, MVT::v4f32, Legal);
       setOperationAction(ISD::FNEG, MVT::v2f64, Legal);
@@ -1069,6 +1066,8 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
   setTargetDAGCombine(ISD::SIGN_EXTEND);
   setTargetDAGCombine(ISD::ZERO_EXTEND);
   setTargetDAGCombine(ISD::ANY_EXTEND);
+
+  setTargetDAGCombine(ISD::TRUNCATE);
 
   if (Subtarget.useCRBits()) {
     setTargetDAGCombine(ISD::TRUNCATE);
@@ -3965,7 +3964,7 @@ SDValue PPCTargetLowering::LowerFormalArguments_64SVR4(
 
       assert(ObjectVT.getSimpleVT().SimpleTy == MVT::v4f32 &&
              "Invalid QPX parameter type");
-      /* fall through */
+      LLVM_FALLTHROUGH;
 
     case MVT::v4f64:
     case MVT::v4i1:
@@ -6108,7 +6107,7 @@ SDValue PPCTargetLowering::LowerCall_64SVR4(
       assert(Arg.getValueType().getSimpleVT().SimpleTy == MVT::v4f32 &&
              "Invalid QPX parameter type");
 
-      /* fall through */
+      LLVM_FALLTHROUGH;
     case MVT::v4f64:
     case MVT::v4i1: {
       bool IsF32 = Arg.getValueType().getSimpleVT().SimpleTy == MVT::v4f32;
@@ -7263,9 +7262,74 @@ SDValue PPCTargetLowering::LowerINT_TO_FPDirectMove(SDValue Op,
   return FP;
 }
 
+static SDValue widenVec(SelectionDAG &DAG, SDValue Vec, const SDLoc &dl) {
+
+  EVT VecVT = Vec.getValueType();
+  assert(VecVT.isVector() && "Expected a vector type.");
+  assert(VecVT.getSizeInBits() < 128 && "Vector is already full width.");
+
+  EVT EltVT = VecVT.getVectorElementType();
+  unsigned WideNumElts = 128 / EltVT.getSizeInBits();
+  EVT WideVT = EVT::getVectorVT(*DAG.getContext(), EltVT, WideNumElts);
+
+  unsigned NumConcat = WideNumElts / VecVT.getVectorNumElements();
+  SmallVector<SDValue, 16> Ops(NumConcat);
+  Ops[0] = Vec;
+  SDValue UndefVec = DAG.getUNDEF(VecVT);
+  for (unsigned i = 1; i < NumConcat; ++i)
+    Ops[i] = UndefVec;
+
+  return DAG.getNode(ISD::CONCAT_VECTORS, dl, WideVT, Ops);
+}
+
+SDValue PPCTargetLowering::LowerINT_TO_FPVector(SDValue Op,
+                                                SelectionDAG &DAG,
+                                                const SDLoc &dl) const {
+
+  unsigned Opc = Op.getOpcode();
+  assert((Opc == ISD::UINT_TO_FP || Opc == ISD::SINT_TO_FP) &&
+         "Unexpected conversion type");
+  assert(Op.getValueType() == MVT::v2f64 && "Supports v2f64 only.");
+
+  // CPU's prior to P9 don't have a way to sign-extend in vectors.
+  bool SignedConv = Opc == ISD::SINT_TO_FP;
+  if (SignedConv && !Subtarget.hasP9Altivec())
+    return SDValue();
+
+  SDValue Wide = widenVec(DAG, Op.getOperand(0), dl);
+  EVT WideVT = Wide.getValueType();
+  unsigned WideNumElts = WideVT.getVectorNumElements();
+
+  SmallVector<int, 16> ShuffV;
+  for (unsigned i = 0; i < WideNumElts; ++i)
+    ShuffV.push_back(i + WideNumElts);
+
+  if (Subtarget.isLittleEndian()) {
+    ShuffV[0] = 0;
+    ShuffV[WideNumElts / 2] = 1;
+  }
+  else {
+    ShuffV[WideNumElts / 2 - 1] = 0;
+    ShuffV[WideNumElts - 1] = 1;
+  }
+
+  SDValue ShuffleSrc2 = SignedConv ? DAG.getUNDEF(WideVT) :
+                                     DAG.getConstant(0, dl, WideVT);
+  SDValue Arrange = DAG.getVectorShuffle(WideVT, dl, Wide, ShuffleSrc2, ShuffV);
+  unsigned ExtendOp = SignedConv ? (unsigned) PPCISD::SExtVElems :
+                                   (unsigned) ISD::BITCAST;
+  SDValue Extend = DAG.getNode(ExtendOp, dl, MVT::v2i64, Arrange);
+
+  return DAG.getNode(Opc, dl, Op.getValueType(), Extend);
+}
+
 SDValue PPCTargetLowering::LowerINT_TO_FP(SDValue Op,
                                           SelectionDAG &DAG) const {
   SDLoc dl(Op);
+
+  if (Op.getValueType() == MVT::v2f64 &&
+      Op.getOperand(0).getValueType() == MVT::v2i16)
+    return LowerINT_TO_FPVector(Op, DAG, dl);
 
   // Conversions to f128 are legal.
   if (EnableQuadPrecision && (Op.getValueType() == MVT::f128))
@@ -9634,6 +9698,9 @@ void PPCTargetLowering::ReplaceNodeResults(SDNode *N,
       return;
     Results.push_back(LowerFP_TO_INT(SDValue(N, 0), DAG, dl));
     return;
+  case ISD::BITCAST:
+    // Don't handle bitcast here.
+    return;
   }
 }
 
@@ -11750,6 +11817,37 @@ SDValue PPCTargetLowering::DAGCombineExtBoolTrunc(SDNode *N,
       ShiftCst);
 }
 
+SDValue PPCTargetLowering::combineSetCC(SDNode *N,
+                                        DAGCombinerInfo &DCI) const {
+  assert(N->getOpcode() == ISD::SETCC &&
+         "Should be called with a SETCC node");
+
+  ISD::CondCode CC = cast<CondCodeSDNode>(N->getOperand(2))->get();
+  if (CC == ISD::SETNE || CC == ISD::SETEQ) {
+    SDValue LHS = N->getOperand(0);
+    SDValue RHS = N->getOperand(1);
+
+    // If there is a '0 - y' pattern, canonicalize the pattern to the RHS.
+    if (LHS.getOpcode() == ISD::SUB && isNullConstant(LHS.getOperand(0)) &&
+        LHS.hasOneUse())
+      std::swap(LHS, RHS);
+
+    // x == 0-y --> x+y == 0
+    // x != 0-y --> x+y != 0
+    if (RHS.getOpcode() == ISD::SUB && isNullConstant(RHS.getOperand(0)) &&
+        RHS.hasOneUse()) {
+      SDLoc DL(N);
+      SelectionDAG &DAG = DCI.DAG;
+      EVT VT = N->getValueType(0);
+      EVT OpVT = LHS.getValueType();
+      SDValue Add = DAG.getNode(ISD::ADD, DL, OpVT, LHS, RHS.getOperand(1));
+      return DAG.getSetCC(DL, VT, Add, DAG.getConstant(0, DL, OpVT), CC);
+    }
+  }
+
+  return DAGCombineTruncBoolExt(N, DCI);
+}
+
 // Is this an extending load from an f32 to an f64?
 static bool isFPExtLoad(SDValue Op) {
   if (LoadSDNode *LD = dyn_cast<LoadSDNode>(Op.getNode()))
@@ -12479,7 +12577,11 @@ SDValue PPCTargetLowering::PerformDAGCombine(SDNode *N,
   case ISD::ANY_EXTEND:
     return DAGCombineExtBoolTrunc(N, DCI);
   case ISD::TRUNCATE:
+    return combineTRUNCATE(N, DCI);
   case ISD::SETCC:
+    if (SDValue CSCC = combineSetCC(N, DCI))
+      return CSCC;
+    LLVM_FALLTHROUGH;
   case ISD::SELECT_CC:
     return DAGCombineTruncBoolExt(N, DCI);
   case ISD::SINT_TO_FP:
@@ -13254,7 +13356,8 @@ PPCTargetLowering::getConstraintType(StringRef Constraint) const {
   } else if (Constraint == "wc") { // individual CR bits.
     return C_RegisterClass;
   } else if (Constraint == "wa" || Constraint == "wd" ||
-             Constraint == "wf" || Constraint == "ws") {
+             Constraint == "wf" || Constraint == "ws" ||
+             Constraint == "wi") {
     return C_RegisterClass; // VSX registers.
   }
   return TargetLowering::getConstraintType(Constraint);
@@ -13284,6 +13387,8 @@ PPCTargetLowering::getSingleConstraintMatchWeight(
     return CW_Register;
   else if (StringRef(constraint) == "ws" && type->isDoubleTy())
     return CW_Register;
+  else if (StringRef(constraint) == "wi" && type->isIntegerTy(64))
+    return CW_Register; // just hold 64-bit integers data.
 
   switch (*constraint) {
   default:
@@ -13366,7 +13471,8 @@ PPCTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
     // An individual CR bit.
     return std::make_pair(0U, &PPC::CRBITRCRegClass);
   } else if ((Constraint == "wa" || Constraint == "wd" ||
-             Constraint == "wf") && Subtarget.hasVSX()) {
+             Constraint == "wf" || Constraint == "wi") &&
+             Subtarget.hasVSX()) {
     return std::make_pair(0U, &PPC::VSRCRegClass);
   } else if (Constraint == "ws" && Subtarget.hasVSX()) {
     if (VT == MVT::f32 && Subtarget.hasP8Vector())
@@ -14250,6 +14356,58 @@ SDValue PPCTargetLowering::combineADD(SDNode *N, DAGCombinerInfo &DCI) const {
   if (auto Value = combineADDToADDZE(N, DCI.DAG, Subtarget))
     return Value;
 
+  return SDValue();
+}
+
+// Detect TRUNCATE operations on bitcasts of float128 values.
+// What we are looking for here is the situtation where we extract a subset
+// of bits from a 128 bit float.
+// This can be of two forms:
+// 1) BITCAST of f128 feeding TRUNCATE
+// 2) BITCAST of f128 feeding SRL (a shift) feeding TRUNCATE
+// The reason this is required is because we do not have a legal i128 type
+// and so we want to prevent having to store the f128 and then reload part
+// of it.
+SDValue PPCTargetLowering::combineTRUNCATE(SDNode *N,
+                                           DAGCombinerInfo &DCI) const {
+  // If we are using CRBits then try that first.
+  if (Subtarget.useCRBits()) {
+    // Check if CRBits did anything and return that if it did.
+    if (SDValue CRTruncValue = DAGCombineTruncBoolExt(N, DCI))
+      return CRTruncValue;
+  }
+
+  SDLoc dl(N);
+  SDValue Op0 = N->getOperand(0);
+
+  // Looking for a truncate of i128 to i64.
+  if (Op0.getValueType() != MVT::i128 || N->getValueType(0) != MVT::i64)
+    return SDValue();
+
+  int EltToExtract = DCI.DAG.getDataLayout().isBigEndian() ? 1 : 0;
+
+  // SRL feeding TRUNCATE.
+  if (Op0.getOpcode() == ISD::SRL) {
+    ConstantSDNode *ConstNode = dyn_cast<ConstantSDNode>(Op0.getOperand(1));
+    // The right shift has to be by 64 bits.
+    if (!ConstNode || ConstNode->getZExtValue() != 64)
+      return SDValue();
+
+    // Switch the element number to extract.
+    EltToExtract = EltToExtract ? 0 : 1;
+    // Update Op0 past the SRL.
+    Op0 = Op0.getOperand(0);
+  }
+
+  // BITCAST feeding a TRUNCATE possibly via SRL.
+  if (Op0.getOpcode() == ISD::BITCAST &&
+      Op0.getValueType() == MVT::i128 &&
+      Op0.getOperand(0).getValueType() == MVT::f128) {
+    SDValue Bitcast = DCI.DAG.getBitcast(MVT::v2i64, Op0.getOperand(0));
+    return DCI.DAG.getNode(
+        ISD::EXTRACT_VECTOR_ELT, dl, MVT::i64, Bitcast,
+        DCI.DAG.getTargetConstant(EltToExtract, dl, MVT::i32));
+  }
   return SDValue();
 }
 

@@ -34,10 +34,10 @@
 // 20000 is the address in rel.dyn -> correct
 // CHECK:  __cap_relocs  00000050 0000000000020000 DATA
 // CHECK-LABEL: SYMBOL TABLE:
-// CHECK: 00000000000100{{1|2}}0 l       .data  00000004 bar
-// CHECK: 00000000000100{{2|4}}0 g       .data  000000{{1|2}}0 bar_ptr
+// CHECK: 00000000000100{{1|2}}0 l     O .data  00000004 bar
+// CHECK: 00000000000100{{2|4}}0 g     O .data  000000{{1|2}}0 bar_ptr
 // CHECK: 0000000000000000               *UND*  00000000 foo
-// CHECK: 0000000000010000       g       .data  000000{{1|2}}0 foo_ptr
+// CHECK: 0000000000010000       g     O .data  000000{{1|2}}0 foo_ptr
 
 // But it should with --unresolved-symbols=report-all
 // RUN: not ld.lld -shared --unresolved-symbols=report-all -o %t.so %t.o 2>&1 | FileCheck %s -check-prefix ERR

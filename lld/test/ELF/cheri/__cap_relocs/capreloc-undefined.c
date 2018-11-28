@@ -31,7 +31,7 @@
 // CHECK:  __cap_relocs  00000028 0000000000020000 DATA
 // CHECK-LABEL: SYMBOL TABLE:
 // CHECK: 0000000000000000         *UND*		 00000000 foo
-// CHECK: 0000000000010000 g       .data		 000000{{1|2}}0 foo_ptr
+// CHECK: 0000000000010000 g     O .data		 000000{{1|2}}0 foo_ptr
 
 // But it should with --unresolved-symbols=report-all
 // RUN: not ld.lld -shared --unresolved-symbols=report-all -o %t.so %t.o 2>&1 | FileCheck %s -check-prefix ERR

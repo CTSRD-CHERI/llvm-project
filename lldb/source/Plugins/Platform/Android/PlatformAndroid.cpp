@@ -17,7 +17,6 @@
 #include "lldb/Utility/Scalar.h"
 #include "lldb/Utility/UriParser.h"
 
-// Project includes
 #include "AdbClient.h"
 #include "PlatformAndroid.h"
 #include "PlatformAndroidRemoteGDBServer.h"
@@ -193,7 +192,7 @@ Status PlatformAndroid::GetFile(const FileSpec &source,
   if (IsHost() || !m_remote_platform_sp)
     return PlatformLinux::GetFile(source, destination);
 
-  FileSpec source_spec(source.GetPath(false), false, FileSpec::Style::posix);
+  FileSpec source_spec(source.GetPath(false), FileSpec::Style::posix);
   if (source_spec.IsRelative())
     source_spec = GetRemoteWorkingDirectory().CopyByAppendingPathComponent(
         source_spec.GetCString(false));
@@ -237,8 +236,7 @@ Status PlatformAndroid::PutFile(const FileSpec &source,
   if (IsHost() || !m_remote_platform_sp)
     return PlatformLinux::PutFile(source, destination, uid, gid);
 
-  FileSpec destination_spec(destination.GetPath(false), false,
-                            FileSpec::Style::posix);
+  FileSpec destination_spec(destination.GetPath(false), FileSpec::Style::posix);
   if (destination_spec.IsRelative())
     destination_spec = GetRemoteWorkingDirectory().CopyByAppendingPathComponent(
         destination_spec.GetCString(false));
@@ -343,7 +341,7 @@ Status PlatformAndroid::DownloadSymbolFile(const lldb::ModuleSP &module_sp,
       log->Printf("Failed to remove temp directory: %s", error.AsCString());
   });
 
-  FileSpec symfile_platform_filespec(tmpdir, false);
+  FileSpec symfile_platform_filespec(tmpdir);
   symfile_platform_filespec.AppendPathComponent("symbolized.oat");
 
   // Execute oatdump on the remote device to generate a file with symtab

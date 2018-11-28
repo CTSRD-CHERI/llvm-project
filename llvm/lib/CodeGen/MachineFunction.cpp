@@ -130,7 +130,8 @@ static inline unsigned getFnStackAlignment(const TargetSubtargetInfo *STI,
   return STI->getFrameLowering()->getStackAlignment();
 }
 
-MachineFunction::MachineFunction(const Function &F, const TargetMachine &Target,
+MachineFunction::MachineFunction(const Function &F,
+                                 const LLVMTargetMachine &Target,
                                  const TargetSubtargetInfo &STI,
                                  unsigned FunctionNum, MachineModuleInfo &mmi)
     : F(F), Target(Target), STI(&STI), Ctx(mmi.getContext()), MMI(mmi) {
@@ -434,7 +435,7 @@ MachineFunction::createMIExtraInfo(ArrayRef<MachineMemOperand *> MMOs,
 
 const char *MachineFunction::createExternalSymbolName(StringRef Name) {
   char *Dest = Allocator.Allocate<char>(Name.size() + 1);
-  std::copy(Name.begin(), Name.end(), Dest);
+  llvm::copy(Name, Dest);
   Dest[Name.size()] = 0;
   return Dest;
 }

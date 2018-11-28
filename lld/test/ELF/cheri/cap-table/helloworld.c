@@ -9,4 +9,4 @@
 // CHECK: 0x00000001200f7480      Base: __wrap_accept (0x00000001200abd00)   Offset: 0x0000000000000000      Length: 0x0000000000000038      Permissions: 0x8000000000000000 (Function)
 // CHECK: 0x0000000120111080      Base: __libc_interposing (0x00000001200f7480)   Offset: 0x0000000000000000      Length: 0x0000000000000540      Permissions: 0x00000000
 
-// CHECK: 00000001200f7480 l       .data           00000540 .hidden __libc_interposing
+// CHECK: 00000001200f7480 l     O .data           00000540 .hidden __libc_interposing

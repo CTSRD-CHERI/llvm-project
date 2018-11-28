@@ -86,5 +86,5 @@ void __start(void) {}
 
 // DUMP-CAPRELOCS-LABEL: SYMBOL TABLE:
 // DUMP-CAPRELOCS: 0000000000000000         *UND*           00000000
-// DUMP-CAPRELOCS: {{.+}} gw      .global_sizes           00000008 .size.errno
-// DUMP-CAPRELOCS: {{.+}} g       .bss            00000004 errno
+// DUMP-CAPRELOCS: {{.+}} gw    O .global_sizes           00000008 .size.errno
+// DUMP-CAPRELOCS: {{.+}} g     O .bss            00000004 errno

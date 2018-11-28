@@ -9,11 +9,7 @@
 
 #include "LibCxx.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 #include "llvm/ADT/ScopeExit.h"
-// Project includes
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/ValueObject.h"
@@ -599,9 +595,10 @@ bool lldb_private::formatters::LibcxxWStringSummaryProvider(
   return true;
 }
 
-bool lldb_private::formatters::LibcxxStringSummaryProvider(
-    ValueObject &valobj, Stream &stream,
-    const TypeSummaryOptions &summary_options) {
+template <StringPrinter::StringElementType element_type>
+bool LibcxxStringSummaryProvider(ValueObject &valobj, Stream &stream,
+                                 const TypeSummaryOptions &summary_options,
+                                 std::string prefix_token = "") {
   uint64_t size = 0;
   ValueObjectSP location_sp;
 
@@ -630,12 +627,37 @@ bool lldb_private::formatters::LibcxxStringSummaryProvider(
 
   options.SetData(extractor);
   options.SetStream(&stream);
-  options.SetPrefixToken(nullptr);
+
+  if (prefix_token.empty())
+    options.SetPrefixToken(nullptr);
+  else
+    options.SetPrefixToken(prefix_token);
+
   options.SetQuote('"');
   options.SetSourceSize(size);
   options.SetBinaryZeroIsTerminator(false);
-  StringPrinter::ReadBufferAndDumpToStream<
-      StringPrinter::StringElementType::ASCII>(options);
+  StringPrinter::ReadBufferAndDumpToStream<element_type>(options);
 
   return true;
+}
+
+bool lldb_private::formatters::LibcxxStringSummaryProviderASCII(
+    ValueObject &valobj, Stream &stream,
+    const TypeSummaryOptions &summary_options) {
+  return LibcxxStringSummaryProvider<StringPrinter::StringElementType::ASCII>(
+      valobj, stream, summary_options);
+}
+
+bool lldb_private::formatters::LibcxxStringSummaryProviderUTF16(
+    ValueObject &valobj, Stream &stream,
+    const TypeSummaryOptions &summary_options) {
+  return LibcxxStringSummaryProvider<StringPrinter::StringElementType::UTF16>(
+      valobj, stream, summary_options, "u");
+}
+
+bool lldb_private::formatters::LibcxxStringSummaryProviderUTF32(
+    ValueObject &valobj, Stream &stream,
+    const TypeSummaryOptions &summary_options) {
+  return LibcxxStringSummaryProvider<StringPrinter::StringElementType::UTF32>(
+      valobj, stream, summary_options, "U");
 }
