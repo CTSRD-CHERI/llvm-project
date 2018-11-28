@@ -24,6 +24,7 @@
 
 namespace llvm {
 
+class Triple;
 class FunctionPass;
 class ModulePass;
 class OptimizationRemarkEmitter;
@@ -45,7 +46,8 @@ GlobalVariable *createPrivateGlobalForString(Module &M, StringRef Str,
 // Returns F.getComdat() if it exists.
 // Otherwise creates a new comdat, sets F's comdat, and returns it.
 // Returns nullptr on failure.
-Comdat *GetOrCreateFunctionComdat(Function &F, const std::string &ModuleId);
+Comdat *GetOrCreateFunctionComdat(Function &F, Triple &T,
+                                  const std::string &ModuleId);
 
 // Insert GCOV profiling instrumentation
 struct GCOVOptions {
@@ -75,6 +77,12 @@ struct GCOVOptions {
   // Emit the exit block immediately after the start block, rather than after
   // all of the function body's blocks.
   bool ExitBlockBeforeBody;
+
+  // Regexes separated by a semi-colon to filter the files to instrument.
+  std::string Filter;
+
+  // Regexes separated by a semi-colon to filter the files to not instrument.
+  std::string Exclude;
 };
 
 ModulePass *createGCOVProfilerPass(const GCOVOptions &Options =

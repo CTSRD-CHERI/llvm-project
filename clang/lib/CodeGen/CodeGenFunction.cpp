@@ -450,10 +450,25 @@ void CodeGenFunction::FinishFunction(SourceLocation EndLoc) {
     NormalCleanupDest = Address::invalid();
   }
 
-  // Add the required-vector-width attribute.
-  if (LargestVectorWidth != 0)
-    CurFn->addFnAttr("min-legal-vector-width",
-                     llvm::utostr(LargestVectorWidth));
+  // Scan function arguments for vector width.
+  for (llvm::Argument &A : CurFn->args())
+    if (auto *VT = dyn_cast<llvm::VectorType>(A.getType()))
+      LargestVectorWidth = std::max(LargestVectorWidth,
+                                    VT->getPrimitiveSizeInBits());
+
+  // Update vector width based on return type.
+  if (auto *VT = dyn_cast<llvm::VectorType>(CurFn->getReturnType()))
+    LargestVectorWidth = std::max(LargestVectorWidth,
+                                  VT->getPrimitiveSizeInBits());
+
+  // Add the required-vector-width attribute. This contains the max width from:
+  // 1. min-vector-width attribute used in the source program.
+  // 2. Any builtins used that have a vector width specified.
+  // 3. Values passed in and out of inline assembly.
+  // 4. Width of vector arguments and return types for this function.
+  // 5. Width of vector aguments and return types for functions called by this
+  //    function.
+  CurFn->addFnAttr("min-legal-vector-width", llvm::utostr(LargestVectorWidth));
 }
 
 /// ShouldInstrumentFunction - Return true if the current function should be
@@ -2321,7 +2336,7 @@ static bool hasRequiredFeatures(const SmallVectorImpl<StringRef> &ReqFeatures,
   // Now build up the set of caller features and verify that all the required
   // features are there.
   llvm::StringMap<bool> CallerFeatureMap;
-  CGM.getFunctionFeatureMap(CallerFeatureMap, FD);
+  CGM.getFunctionFeatureMap(CallerFeatureMap, GlobalDecl().getWithDecl(FD));
 
   // If we have at least one of the features in the feature list return
   // true, otherwise return false.
@@ -2329,14 +2344,13 @@ static bool hasRequiredFeatures(const SmallVectorImpl<StringRef> &ReqFeatures,
       ReqFeatures.begin(), ReqFeatures.end(), [&](StringRef Feature) {
         SmallVector<StringRef, 1> OrFeatures;
         Feature.split(OrFeatures, '|');
-        return std::any_of(OrFeatures.begin(), OrFeatures.end(),
-                           [&](StringRef Feature) {
-                             if (!CallerFeatureMap.lookup(Feature)) {
-                               FirstMissing = Feature.str();
-                               return false;
-                             }
-                             return true;
-                           });
+        return llvm::any_of(OrFeatures, [&](StringRef Feature) {
+          if (!CallerFeatureMap.lookup(Feature)) {
+            FirstMissing = Feature.str();
+            return false;
+          }
+          return true;
+        });
       });
 }
 
@@ -2423,6 +2437,29 @@ CodeGenFunction::FormResolverCondition(const MultiVersionResolverOption &RO) {
   return Condition;
 }
 
+static void CreateMultiVersionResolverReturn(CodeGenModule &CGM,
+                                             llvm::Function *Resolver,
+                                             CGBuilderTy &Builder,
+                                             llvm::Function *FuncToReturn,
+                                             bool SupportsIFunc) {
+  if (SupportsIFunc) {
+    Builder.CreateRet(FuncToReturn);
+    return;
+  }
+
+  llvm::SmallVector<llvm::Value *, 10> Args;
+  llvm::for_each(Resolver->args(),
+                 [&](llvm::Argument &Arg) { Args.push_back(&Arg); });
+
+  llvm::CallInst *Result = Builder.CreateCall(FuncToReturn, Args);
+  Result->setTailCallKind(llvm::CallInst::TCK_MustTail);
+
+  if (Resolver->getReturnType()->isVoidTy())
+    Builder.CreateRetVoid();
+  else
+    Builder.CreateRet(Result);
+}
+
 void CodeGenFunction::EmitMultiVersionResolver(
     llvm::Function *Resolver, ArrayRef<MultiVersionResolverOption> Options) {
   assert((getContext().getTargetInfo().getTriple().getArch() ==
@@ -2430,6 +2467,9 @@ void CodeGenFunction::EmitMultiVersionResolver(
           getContext().getTargetInfo().getTriple().getArch() ==
               llvm::Triple::x86_64) &&
          "Only implemented for x86 targets");
+
+  bool SupportsIFunc = getContext().getTargetInfo().supportsIFunc();
+
   // Main function's basic block.
   llvm::BasicBlock *CurBlock = createBasicBlock("resolver_entry", Resolver);
   Builder.SetInsertPoint(CurBlock);
@@ -2443,13 +2483,15 @@ void CodeGenFunction::EmitMultiVersionResolver(
     if (!Condition) {
       assert(&RO == Options.end() - 1 &&
              "Default or Generic case must be last");
-      Builder.CreateRet(RO.Function);
+      CreateMultiVersionResolverReturn(CGM, Resolver, Builder, RO.Function,
+                                       SupportsIFunc);
       return;
     }
 
     llvm::BasicBlock *RetBlock = createBasicBlock("resolver_return", Resolver);
-    llvm::IRBuilder<> RetBuilder(RetBlock);
-    RetBuilder.CreateRet(RO.Function);
+    CGBuilderTy RetBuilder(*this, RetBlock);
+    CreateMultiVersionResolverReturn(CGM, Resolver, RetBuilder, RO.Function,
+                                     SupportsIFunc);
     CurBlock = createBasicBlock("resolver_else", Resolver);
     Builder.CreateCondBr(Condition, RetBlock, CurBlock);
   }

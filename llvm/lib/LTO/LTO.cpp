@@ -56,6 +56,11 @@ static cl::opt<bool>
     DumpThinCGSCCs("dump-thin-cg-sccs", cl::init(false), cl::Hidden,
                    cl::desc("Dump the SCCs in the ThinLTO index's callgraph"));
 
+/// Enable global value internalization in LTO.
+cl::opt<bool> EnableLTOInternalization(
+    "enable-lto-internalization", cl::init(true), cl::Hidden,
+    cl::desc("Enable global value internalization in LTO"));
+
 // Returns a unique hash for the Module considering the current list of
 // export/import and other global analysis results.
 // The hash is produced in \p Key.
@@ -182,6 +187,8 @@ static void computeCacheKey(
       AddUnsigned(VI.isDSOLocal());
       AddUsedCfiGlobal(VI.getGUID());
     }
+    if (auto *GVS = dyn_cast<GlobalVarSummary>(GS))
+      AddUnsigned(GVS->isReadOnly());
     if (auto *FS = dyn_cast<FunctionSummary>(GS)) {
       for (auto &TT : FS->type_tests())
         UsedTypeIds.insert(TT);
@@ -277,7 +284,7 @@ static void computeCacheKey(
   Key = toHex(Hasher.result());
 }
 
-static void thinLTOResolveWeakForLinkerGUID(
+static void thinLTOResolvePrevailingGUID(
     GlobalValueSummaryList &GVSummaryList, GlobalValue::GUID GUID,
     DenseSet<GlobalValueSummary *> &GlobalInvolvedWithAlias,
     function_ref<bool(GlobalValue::GUID, const GlobalValueSummary *)>
@@ -286,7 +293,10 @@ static void thinLTOResolveWeakForLinkerGUID(
         recordNewLinkage) {
   for (auto &S : GVSummaryList) {
     GlobalValue::LinkageTypes OriginalLinkage = S->linkage();
-    if (!GlobalValue::isWeakForLinker(OriginalLinkage))
+    // Ignore local and appending linkage values since the linker
+    // doesn't resolve them.
+    if (GlobalValue::isLocalLinkage(OriginalLinkage) ||
+        GlobalValue::isAppendingLinkage(S->linkage()))
       continue;
     // We need to emit only one of these. The prevailing module will keep it,
     // but turned into a weak, while the others will drop it when possible.
@@ -310,13 +320,13 @@ static void thinLTOResolveWeakForLinkerGUID(
   }
 }
 
-// Resolve Weak and LinkOnce values in the \p Index.
+/// Resolve linkage for prevailing symbols in the \p Index.
 //
 // We'd like to drop these functions if they are no longer referenced in the
 // current module. However there is a chance that another module is still
 // referencing them because of the import. We make sure we always emit at least
 // one copy.
-void llvm::thinLTOResolveWeakForLinkerInIndex(
+void llvm::thinLTOResolvePrevailingInIndex(
     ModuleSummaryIndex &Index,
     function_ref<bool(GlobalValue::GUID, const GlobalValueSummary *)>
         isPrevailing,
@@ -332,9 +342,9 @@ void llvm::thinLTOResolveWeakForLinkerInIndex(
         GlobalInvolvedWithAlias.insert(&AS->getAliasee());
 
   for (auto &I : Index)
-    thinLTOResolveWeakForLinkerGUID(I.second.SummaryList, I.first,
-                                    GlobalInvolvedWithAlias, isPrevailing,
-                                    recordNewLinkage);
+    thinLTOResolvePrevailingGUID(I.second.SummaryList, I.first,
+                                 GlobalInvolvedWithAlias, isPrevailing,
+                                 recordNewLinkage);
 }
 
 static void thinLTOInternalizeAndPromoteGUID(
@@ -344,7 +354,11 @@ static void thinLTOInternalizeAndPromoteGUID(
     if (isExported(S->modulePath(), GUID)) {
       if (GlobalValue::isLocalLinkage(S->linkage()))
         S->setLinkage(GlobalValue::ExternalLinkage);
-    } else if (!GlobalValue::isLocalLinkage(S->linkage()))
+    } else if (EnableLTOInternalization &&
+               // Ignore local and appending linkage values since the linker
+               // doesn't resolve them.
+               !GlobalValue::isLocalLinkage(S->linkage()) &&
+               !GlobalValue::isAppendingLinkage(S->linkage()))
       S->setLinkage(GlobalValue::InternalLinkage);
   }
 }
@@ -797,7 +811,8 @@ Error LTO::run(AddStreamFn AddStream, NativeObjectCache Cache) {
       return PrevailingType::Unknown;
     return It->second;
   };
-  computeDeadSymbols(ThinLTO.CombinedIndex, GUIDPreservedSymbols, isPrevailing);
+  computeDeadSymbolsWithConstProp(ThinLTO.CombinedIndex, GUIDPreservedSymbols,
+                                  isPrevailing, Conf.OptLevel > 0);
 
   // Setup output file to emit statistics.
   std::unique_ptr<ToolOutputFile> StatsFile = nullptr;
@@ -876,7 +891,7 @@ Error LTO::runRegularLTO(AddStreamFn AddStream) {
         continue;
       GV->setUnnamedAddr(R.second.UnnamedAddr ? GlobalValue::UnnamedAddr::Global
                                               : GlobalValue::UnnamedAddr::None);
-      if (R.second.Partition == 0)
+      if (EnableLTOInternalization && R.second.Partition == 0)
         GV->setLinkage(GlobalValue::InternalLinkage);
     }
 
@@ -1199,8 +1214,8 @@ Error LTO::runThinLTO(AddStreamFn AddStream, NativeObjectCache Cache) {
                               GlobalValue::LinkageTypes NewLinkage) {
     ResolvedODR[ModuleIdentifier][GUID] = NewLinkage;
   };
-  thinLTOResolveWeakForLinkerInIndex(ThinLTO.CombinedIndex, isPrevailing,
-                                     recordNewLinkage);
+  thinLTOResolvePrevailingInIndex(ThinLTO.CombinedIndex, isPrevailing,
+                                  recordNewLinkage);
 
   std::unique_ptr<ThinBackendProc> BackendProc =
       ThinLTO.Backend(Conf, ThinLTO.CombinedIndex, ModuleToDefinedGVSummaries,

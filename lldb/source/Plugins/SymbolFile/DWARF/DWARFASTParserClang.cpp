@@ -1734,9 +1734,12 @@ TypeSP DWARFASTParserClang::ParseTypeFromDWARF(const SymbolContext &sc,
           Type *element_type = dwarf->ResolveTypeUID(type_die_ref);
 
           if (element_type) {
-            std::vector<uint64_t> element_orders;
-            ParseChildArrayInfo(sc, die, first_index, element_orders,
-                                byte_stride, bit_stride);
+            auto array_info = ParseChildArrayInfo(die);
+            if (array_info) {
+              first_index = array_info->first_index;
+              byte_stride = array_info->byte_stride;
+              bit_stride = array_info->bit_stride;
+            }
             if (byte_stride == 0 && bit_stride == 0)
               byte_stride = element_type->GetByteSize();
             CompilerType array_element_type =
@@ -1786,12 +1789,11 @@ TypeSP DWARFASTParserClang::ParseTypeFromDWARF(const SymbolContext &sc,
             }
 
             uint64_t array_element_bit_stride = byte_stride * 8 + bit_stride;
-            if (element_orders.size() > 0) {
+            if (array_info && array_info->element_orders.size() > 0) {
               uint64_t num_elements = 0;
-              std::vector<uint64_t>::const_reverse_iterator pos;
-              std::vector<uint64_t>::const_reverse_iterator end =
-                  element_orders.rend();
-              for (pos = element_orders.rbegin(); pos != end; ++pos) {
+              auto end = array_info->element_orders.rend();
+              for (auto pos = array_info->element_orders.rbegin(); pos != end;
+                   ++pos) {
                 num_elements = *pos;
                 clang_type = m_ast.CreateArrayType(array_element_type,
                                                    num_elements, is_vector);
@@ -1810,6 +1812,8 @@ TypeSP DWARFASTParserClang::ParseTypeFromDWARF(const SymbolContext &sc,
                 NULL, DIERef(type_die_form).GetUID(dwarf), Type::eEncodingIsUID,
                 &decl, clang_type, Type::eResolveStateFull));
             type_sp->SetEncodingType(element_type);
+            m_ast.SetMetadataAsUserID(clang_type.GetOpaqueQualType(),
+                                      die.GetID());
           }
         }
       } break;
@@ -2184,14 +2188,14 @@ bool DWARFASTParserClang::CompleteTypeFromDWARF(const DWARFDIE &die,
         }
 
         SymbolContext sc(die.GetLLDBCompileUnit());
-        std::vector<clang::CXXBaseSpecifier *> base_classes;
+        std::vector<std::unique_ptr<clang::CXXBaseSpecifier>> bases;
         std::vector<int> member_accessibilities;
         bool is_a_class = false;
         // Parse members and base classes first
         DWARFDIECollection member_function_dies;
 
         DelayedPropertyList delayed_properties;
-        ParseChildMembers(sc, die, clang_type, class_language, base_classes,
+        ParseChildMembers(sc, die, clang_type, class_language, bases,
                           member_accessibilities, member_function_dies,
                           delayed_properties, default_accessibility, is_a_class,
                           layout_info);
@@ -2255,11 +2259,11 @@ bool DWARFASTParserClang::CompleteTypeFromDWARF(const DWARFDIE &die,
               &member_accessibilities.front(), member_accessibilities.size());
         }
 
-        if (!base_classes.empty()) {
+        if (!bases.empty()) {
           // Make sure all base classes refer to complete types and not forward
           // declarations. If we don't do this, clang will crash with an
-          // assertion in the call to clang_type.SetBaseClassesForClassType()
-          for (auto &base_class : base_classes) {
+          // assertion in the call to clang_type.TransferBaseClasses()
+          for (const auto &base_class : bases) {
             clang::TypeSourceInfo *type_source_info =
                 base_class->getTypeSourceInfo();
             if (type_source_info) {
@@ -2278,7 +2282,7 @@ bool DWARFASTParserClang::CompleteTypeFromDWARF(const DWARFDIE &die,
                 // We have no choice other than to pretend that the base class
                 // is complete. If we don't do this, clang will crash when we
                 // call setBases() inside of
-                // "clang_type.SetBaseClassesForClassType()" below. Since we
+                // "clang_type.TransferBaseClasses()" below. Since we
                 // provide layout assistance, all ivars in this class and other
                 // classes will be fine, this is the best we can do short of
                 // crashing.
@@ -2290,14 +2294,9 @@ bool DWARFASTParserClang::CompleteTypeFromDWARF(const DWARFDIE &die,
               }
             }
           }
-          m_ast.SetBaseClassesForClassType(clang_type.GetOpaqueQualType(),
-                                           &base_classes.front(),
-                                           base_classes.size());
 
-          // Clang will copy each CXXBaseSpecifier in "base_classes" so we have
-          // to free them all.
-          ClangASTContext::DeleteBaseClassSpecifiers(&base_classes.front(),
-                                                     base_classes.size());
+          m_ast.TransferBaseClasses(clang_type.GetOpaqueQualType(),
+                                    std::move(bases));
         }
       }
     }
@@ -2501,9 +2500,7 @@ size_t DWARFASTParserClang::ParseChildEnumerators(
 
         if (name && name[0] && got_value) {
           m_ast.AddEnumerationValueToEnumerationType(
-              clang_type.GetOpaqueQualType(),
-              m_ast.GetEnumerationIntegerType(clang_type.GetOpaqueQualType()),
-              decl, name, enum_value, enumerator_byte_size * 8);
+              clang_type, decl, name, enum_value, enumerator_byte_size * 8);
           ++enumerators_added;
         }
       }
@@ -2675,7 +2672,7 @@ Function *DWARFASTParserClang::ParseFunctionFromDWARF(const SymbolContext &sc,
 bool DWARFASTParserClang::ParseChildMembers(
     const SymbolContext &sc, const DWARFDIE &parent_die,
     CompilerType &class_clang_type, const LanguageType class_language,
-    std::vector<clang::CXXBaseSpecifier *> &base_classes,
+    std::vector<std::unique_ptr<clang::CXXBaseSpecifier>> &base_classes,
     std::vector<int> &member_accessibilities,
     DWARFDIECollection &member_function_dies,
     DelayedPropertyList &delayed_properties, AccessType &default_accessibility,
@@ -3029,7 +3026,7 @@ bool DWARFASTParserClang::ParseChildMembers(
                   if (anon_field_info.IsValid()) {
                     clang::FieldDecl *unnamed_bitfield_decl =
                         ClangASTContext::AddFieldToRecordType(
-                            class_clang_type, NULL,
+                            class_clang_type, llvm::StringRef(),
                             m_ast.GetBuiltinTypeForEncodingAndBitSize(
                                 eEncodingSint, word_width),
                             accessibility, anon_field_info.bit_size);
@@ -3271,9 +3268,14 @@ bool DWARFASTParserClang::ParseChildMembers(
         if (class_language == eLanguageTypeObjC) {
           ast->SetObjCSuperClass(class_clang_type, base_class_clang_type);
         } else {
-          base_classes.push_back(ast->CreateBaseClassSpecifier(
-              base_class_clang_type.GetOpaqueQualType(), accessibility,
-              is_virtual, is_base_of_class));
+          std::unique_ptr<clang::CXXBaseSpecifier> result =
+              ast->CreateBaseClassSpecifier(
+                  base_class_clang_type.GetOpaqueQualType(), accessibility,
+                  is_virtual, is_base_of_class);
+          if (!result)
+            break;
+
+          base_classes.push_back(std::move(result));
 
           if (is_virtual) {
             // Do not specify any offset for virtual inheritance. The DWARF
@@ -3439,12 +3441,12 @@ size_t DWARFASTParserClang::ParseChildParameters(
   return arg_idx;
 }
 
-void DWARFASTParserClang::ParseChildArrayInfo(
-    const SymbolContext &sc, const DWARFDIE &parent_die, int64_t &first_index,
-    std::vector<uint64_t> &element_orders, uint32_t &byte_stride,
-    uint32_t &bit_stride) {
+llvm::Optional<SymbolFile::ArrayInfo>
+DWARFASTParser::ParseChildArrayInfo(const DWARFDIE &parent_die,
+                                    const ExecutionContext *exe_ctx) {
+  SymbolFile::ArrayInfo array_info;
   if (!parent_die)
-    return;
+    return llvm::None;
 
   for (DWARFDIE die = parent_die.GetFirstChild(); die.IsValid();
        die = die.GetSibling()) {
@@ -3468,15 +3470,31 @@ void DWARFASTParserClang::ParseChildArrayInfo(
               break;
 
             case DW_AT_count:
-              num_elements = form_value.Unsigned();
+              if (DWARFDIE var_die = die.GetReferencedDIE(DW_AT_count)) {
+                if (var_die.Tag() == DW_TAG_variable)
+                  if (exe_ctx) {
+                    if (auto frame = exe_ctx->GetFrameSP()) {
+                      Status error;
+                      lldb::VariableSP var_sp;
+                      auto valobj_sp = frame->GetValueForVariableExpressionPath(
+                          var_die.GetName(), eNoDynamicValues, 0, var_sp,
+                          error);
+                      if (valobj_sp) {
+                        num_elements = valobj_sp->GetValueAsUnsigned(0);
+                        break;
+                      }
+                    }
+                  }
+              } else
+                num_elements = form_value.Unsigned();
               break;
 
             case DW_AT_bit_stride:
-              bit_stride = form_value.Unsigned();
+              array_info.bit_stride = form_value.Unsigned();
               break;
 
             case DW_AT_byte_stride:
-              byte_stride = form_value.Unsigned();
+              array_info.byte_stride = form_value.Unsigned();
               break;
 
             case DW_AT_lower_bound:
@@ -3510,11 +3528,12 @@ void DWARFASTParserClang::ParseChildArrayInfo(
             num_elements = upper_bound - lower_bound + 1;
         }
 
-        element_orders.push_back(num_elements);
+        array_info.element_orders.push_back(num_elements);
       }
     } break;
     }
   }
+  return array_info;
 }
 
 Type *DWARFASTParserClang::GetTypeForDIE(const DWARFDIE &die) {

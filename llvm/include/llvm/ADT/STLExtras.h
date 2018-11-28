@@ -195,6 +195,12 @@ void adl_swap(T &&lhs, T &&rhs) noexcept(
   adl_detail::adl_swap(std::forward<T>(lhs), std::forward<T>(rhs));
 }
 
+/// Test whether \p RangeOrContainer is empty. Similar to C++17 std::empty.
+template <typename T>
+constexpr bool empty(const T &RangeOrContainer) {
+  return adl_begin(RangeOrContainer) == adl_end(RangeOrContainer);
+}
+
 // mapped_iterator - This is a simple iterator adapter that causes a function to
 // be applied whenever operator* is invoked on the iterator.
 
@@ -1397,6 +1403,40 @@ auto apply_tuple(F &&f, Tuple &&t) -> decltype(detail::apply_tuple_impl(
 
   return detail::apply_tuple_impl(std::forward<F>(f), std::forward<Tuple>(t),
                                   Indices{});
+}
+
+/// Return true if the sequence [Begin, End) has exactly N items. Runs in O(N)
+/// time. Not meant for use with random-access iterators.
+template <typename IterTy>
+bool hasNItems(
+    IterTy &&Begin, IterTy &&End, unsigned N,
+    typename std::enable_if<
+        !std::is_same<
+            typename std::iterator_traits<typename std::remove_reference<
+                decltype(Begin)>::type>::iterator_category,
+            std::random_access_iterator_tag>::value,
+        void>::type * = nullptr) {
+  for (; N; --N, ++Begin)
+    if (Begin == End)
+      return false; // Too few.
+  return Begin == End;
+}
+
+/// Return true if the sequence [Begin, End) has N or more items. Runs in O(N)
+/// time. Not meant for use with random-access iterators.
+template <typename IterTy>
+bool hasNItemsOrMore(
+    IterTy &&Begin, IterTy &&End, unsigned N,
+    typename std::enable_if<
+        !std::is_same<
+            typename std::iterator_traits<typename std::remove_reference<
+                decltype(Begin)>::type>::iterator_category,
+            std::random_access_iterator_tag>::value,
+        void>::type * = nullptr) {
+  for (; N; --N, ++Begin)
+    if (Begin == End)
+      return false; // Too few.
+  return true;
 }
 
 } // end namespace llvm

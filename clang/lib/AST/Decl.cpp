@@ -2580,7 +2580,7 @@ Expr *ParmVarDecl::getDefaultArg() {
          "Default argument is not yet instantiated!");
 
   Expr *Arg = getInit();
-  if (auto *E = dyn_cast_or_null<ExprWithCleanups>(Arg))
+  if (auto *E = dyn_cast_or_null<FullExpr>(Arg))
     return E->getSubExpr();
 
   return Arg;
@@ -2656,6 +2656,7 @@ FunctionDecl::FunctionDecl(Kind DK, ASTContext &C, DeclContext *DC,
                      StartLoc),
       DeclContext(DK), redeclarable_base(C), ODRHash(0),
       EndRangeLoc(NameInfo.getEndLoc()), DNLoc(NameInfo.getInfo()) {
+  assert(T.isNull() || T->isFunctionType());
   setStorageClass(S);
   setInlineSpecified(isInlineSpecified);
   setExplicitSpecified(false);
@@ -2949,6 +2950,10 @@ bool FunctionDecl::isCPUDispatchMultiVersion() const {
 
 bool FunctionDecl::isCPUSpecificMultiVersion() const {
   return isMultiVersion() && hasAttr<CPUSpecificAttr>();
+}
+
+bool FunctionDecl::isTargetMultiVersion() const {
+  return isMultiVersion() && hasAttr<TargetAttr>();
 }
 
 void

@@ -7,10 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Target/StackFrame.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Disassembler.h"
@@ -31,9 +27,12 @@
 #include "lldb/Target/ExecutionContext.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/RegisterContext.h"
+#include "lldb/Target/StackFrameRecognizer.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Utility/RegisterValue.h"
+
+#include "lldb/lldb-enumerations.h"
 
 using namespace lldb;
 using namespace lldb_private;
@@ -56,7 +55,8 @@ StackFrame::StackFrame(const ThreadSP &thread_sp, user_id_t frame_idx,
       m_id(pc, cfa, nullptr), m_frame_code_addr(pc), m_sc(), m_flags(),
       m_frame_base(), m_frame_base_error(), m_cfa_is_valid(cfa_is_valid),
       m_stack_frame_kind(kind), m_variable_list_sp(),
-      m_variable_list_value_objects(), m_disassembly(), m_mutex() {
+      m_variable_list_value_objects(), m_recognized_frame_sp(), m_disassembly(),
+      m_mutex() {
   // If we don't have a CFA value, use the frame index for our StackID so that
   // recursive functions properly aren't confused with one another on a history
   // stack.
@@ -80,7 +80,8 @@ StackFrame::StackFrame(const ThreadSP &thread_sp, user_id_t frame_idx,
       m_frame_code_addr(pc), m_sc(), m_flags(), m_frame_base(),
       m_frame_base_error(), m_cfa_is_valid(true),
       m_stack_frame_kind(StackFrame::Kind::Regular), m_variable_list_sp(),
-      m_variable_list_value_objects(), m_disassembly(), m_mutex() {
+      m_variable_list_value_objects(), m_recognized_frame_sp(), m_disassembly(),
+      m_mutex() {
   if (sc_ptr != nullptr) {
     m_sc = *sc_ptr;
     m_flags.Set(m_sc.GetResolvedMask());
@@ -105,7 +106,8 @@ StackFrame::StackFrame(const ThreadSP &thread_sp, user_id_t frame_idx,
       m_frame_code_addr(pc_addr), m_sc(), m_flags(), m_frame_base(),
       m_frame_base_error(), m_cfa_is_valid(true),
       m_stack_frame_kind(StackFrame::Kind::Regular), m_variable_list_sp(),
-      m_variable_list_value_objects(), m_disassembly(), m_mutex() {
+      m_variable_list_value_objects(), m_recognized_frame_sp(), m_disassembly(),
+      m_mutex() {
   if (sc_ptr != nullptr) {
     m_sc = *sc_ptr;
     m_flags.Set(m_sc.GetResolvedMask());
@@ -262,7 +264,8 @@ Block *StackFrame::GetFrameBlock() {
 // StackFrame object, everyone will have as much information as possible and no
 // one will ever have to look things up manually.
 //----------------------------------------------------------------------
-const SymbolContext &StackFrame::GetSymbolContext(uint32_t resolve_scope) {
+const SymbolContext &
+StackFrame::GetSymbolContext(SymbolContextItem resolve_scope) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
   // Copy our internal symbol context into "sc".
   if ((m_flags.Get() & resolve_scope) != resolve_scope) {
@@ -314,7 +317,7 @@ const SymbolContext &StackFrame::GetSymbolContext(uint32_t resolve_scope) {
       // haven't already tried to lookup one of those things. If we haven't
       // then we will do the query.
 
-      uint32_t actual_resolve_scope = 0;
+      SymbolContextItem actual_resolve_scope = SymbolContextItem(0);
 
       if (resolve_scope & eSymbolContextCompUnit) {
         if (m_flags.IsClear(eSymbolContextCompUnit)) {
@@ -1948,4 +1951,12 @@ bool StackFrame::GetStatus(Stream &strm, bool show_frame_info, bool show_source,
     }
   }
   return true;
+}
+
+RecognizedStackFrameSP StackFrame::GetRecognizedFrame() {
+  if (!m_recognized_frame_sp) {
+    m_recognized_frame_sp =
+        StackFrameRecognizerManager::RecognizeFrame(CalculateStackFrame());
+  }
+  return m_recognized_frame_sp;
 }

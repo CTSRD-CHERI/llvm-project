@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class year_month_weekday;
@@ -37,11 +37,9 @@ int main()
 {
     using year               = std::chrono::year;
     using month              = std::chrono::month;
-    using day                = std::chrono::day;
     using weekday            = std::chrono::weekday;
     using weekday_indexed    = std::chrono::weekday_indexed;
     using year_month_weekday = std::chrono::year_month_weekday;
-    using years              = std::chrono::years;
     using months             = std::chrono::months;
 
 

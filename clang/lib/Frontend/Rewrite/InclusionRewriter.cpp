@@ -594,6 +594,7 @@ void InclusionRewriter::Process(FileID FileId,
                               LocalEOL, Line, /*EnsureNewline=*/ true);
             WriteLineInfo(FileName, Line, FileType);
             RawLex.SetKeepWhitespaceMode(false);
+            break;
           }
           default:
             break;

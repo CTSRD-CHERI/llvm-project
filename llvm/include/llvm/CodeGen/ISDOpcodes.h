@@ -70,7 +70,7 @@ namespace ISD {
     /// of the frame or return address to return.  An index of zero corresponds
     /// to the current function's frame or return address, an index of one to
     /// the parent's frame or return address, and so on.
-    FRAMEADDR, RETURNADDR, ADDROFRETURNADDR,
+    FRAMEADDR, RETURNADDR, ADDROFRETURNADDR, SPONENTRY,
 
     /// LOCAL_RECOVER - Represents the llvm.localrecover intrinsic.
     /// Materializes the offset from the local object pointer of another
@@ -256,13 +256,21 @@ namespace ISD {
     /// Same for multiplication.
     SMULO, UMULO,
 
-    /// RESULT = SADDSAT(LHS, RHS) - Perform signed saturation addition on 2
+    /// RESULT = [US]ADDSAT(LHS, RHS) - Perform saturation addition on 2
     /// integers with the same bit width (W). If the true value of LHS + RHS
-    /// exceeds the largest signed value that can be represented by W bits, the
+    /// exceeds the largest value that can be represented by W bits, the
     /// resulting value is this maximum value. Otherwise, if this value is less
-    /// than the smallest signed value that can be represented by W bits, the
+    /// than the smallest value that can be represented by W bits, the
     /// resulting value is this minimum value.
-    SADDSAT,
+    SADDSAT, UADDSAT,
+
+    /// RESULT = [US]SUBSAT(LHS, RHS) - Perform saturation subtraction on 2
+    /// integers with the same bit width (W). If the true value of LHS - RHS
+    /// exceeds the largest value that can be represented by W bits, the
+    /// resulting value is this maximum value. Otherwise, if this value is less
+    /// than the smallest value that can be represented by W bits, the
+    /// resulting value is this minimum value.
+    SSUBSAT, USUBSAT,
 
     /// Simple binary floating point operators.
     FADD, FSUB, FMUL, FDIV, FREM,
@@ -280,7 +288,8 @@ namespace ISD {
     /// They are used to limit optimizations while the DAG is being optimized.
     STRICT_FSQRT, STRICT_FPOW, STRICT_FPOWI, STRICT_FSIN, STRICT_FCOS,
     STRICT_FEXP, STRICT_FEXP2, STRICT_FLOG, STRICT_FLOG10, STRICT_FLOG2,
-    STRICT_FRINT, STRICT_FNEARBYINT,
+    STRICT_FRINT, STRICT_FNEARBYINT, STRICT_FMAXNUM, STRICT_FMINNUM,
+    STRICT_FCEIL, STRICT_FFLOOR, STRICT_FROUND, STRICT_FTRUNC,
 
     /// FMA - Perform a * b + c with no intermediate rounding step.
     FMA,
@@ -469,31 +478,33 @@ namespace ISD {
     /// in-register any-extension of the low lanes of an integer vector. The
     /// result type must have fewer elements than the operand type, and those
     /// elements must be larger integer types such that the total size of the
-    /// operand type and the result type match. Each of the low operand
-    /// elements is any-extended into the corresponding, wider result
-    /// elements with the high bits becoming undef.
+    /// operand type is less than or equal to the size of the result type. Each
+    /// of the low operand elements is any-extended into the corresponding,
+    /// wider result elements with the high bits becoming undef.
+    /// NOTE: The type legalizer prefers to make the operand and result size
+    /// the same to allow expansion to shuffle vector during op legalization.
     ANY_EXTEND_VECTOR_INREG,
 
     /// SIGN_EXTEND_VECTOR_INREG(Vector) - This operator represents an
     /// in-register sign-extension of the low lanes of an integer vector. The
     /// result type must have fewer elements than the operand type, and those
     /// elements must be larger integer types such that the total size of the
-    /// operand type and the result type match. Each of the low operand
-    /// elements is sign-extended into the corresponding, wider result
-    /// elements.
-    // FIXME: The SIGN_EXTEND_INREG node isn't specifically limited to
-    // scalars, but it also doesn't handle vectors well. Either it should be
-    // restricted to scalars or this node (and its handling) should be merged
-    // into it.
+    /// operand type is less than or equal to the size of the result type. Each
+    /// of the low operand elements is sign-extended into the corresponding,
+    /// wider result elements.
+    /// NOTE: The type legalizer prefers to make the operand and result size
+    /// the same to allow expansion to shuffle vector during op legalization.
     SIGN_EXTEND_VECTOR_INREG,
 
     /// ZERO_EXTEND_VECTOR_INREG(Vector) - This operator represents an
     /// in-register zero-extension of the low lanes of an integer vector. The
     /// result type must have fewer elements than the operand type, and those
     /// elements must be larger integer types such that the total size of the
-    /// operand type and the result type match. Each of the low operand
-    /// elements is zero-extended into the corresponding, wider result
-    /// elements.
+    /// operand type is less than or equal to the size of the result type. Each
+    /// of the low operand elements is zero-extended into the corresponding,
+    /// wider result elements.
+    /// NOTE: The type legalizer prefers to make the operand and result size
+    /// the same to allow expansion to shuffle vector during op legalization.
     ZERO_EXTEND_VECTOR_INREG,
 
     /// FP_TO_[US]INT - Convert a floating point value to a signed or unsigned
@@ -564,14 +575,23 @@ namespace ISD {
     FCEIL, FTRUNC, FRINT, FNEARBYINT, FROUND, FFLOOR,
     /// FMINNUM/FMAXNUM - Perform floating-point minimum or maximum on two
     /// values.
-    /// In the case where a single input is NaN, the non-NaN input is returned.
+    //
+    /// In the case where a single input is a NaN (either signaling or quiet),
+    /// the non-NaN input is returned.
     ///
     /// The return value of (FMINNUM 0.0, -0.0) could be either 0.0 or -0.0.
     FMINNUM, FMAXNUM,
-    /// FMINNAN/FMAXNAN - NaN-propagating minimum/maximum that also treat -0.0
-    /// as less than 0.0. While FMINNUM/FMAXNUM follow IEEE 754-2008 semantics,
-    /// FMINNAN/FMAXNAN follow IEEE 754-2018 draft semantics.
-    FMINNAN, FMAXNAN,
+
+    /// FMINNUM_IEEE/FMAXNUM_IEEE - Perform floating-point minimum or maximum on
+    /// two values, following the IEEE-754 2008 definition. This differs from
+    /// FMINNUM/FMAXNUM in the handling of signaling NaNs. If one input is a
+    /// signaling NaN, returns a quiet NaN.
+    FMINNUM_IEEE, FMAXNUM_IEEE,
+
+    /// FMINIMUM/FMAXIMUM - NaN-propagating minimum/maximum that also treat -0.0
+    /// as less than 0.0. While FMINNUM_IEEE/FMAXNUM_IEEE follow IEEE 754-2008
+    /// semantics, FMINIMUM/FMAXIMUM follow IEEE 754-2018 draft semantics.
+    FMINIMUM, FMAXIMUM,
 
     /// FSINCOS - Compute both fsin and fcos as a single operation.
     FSINCOS,

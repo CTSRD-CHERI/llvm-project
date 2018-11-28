@@ -152,8 +152,14 @@ def smax_oneuse : HasOneUseBinOp<smax>;
 def smin_oneuse : HasOneUseBinOp<smin>;
 def umax_oneuse : HasOneUseBinOp<umax>;
 def umin_oneuse : HasOneUseBinOp<umin>;
+
 def fminnum_oneuse : HasOneUseBinOp<fminnum>;
 def fmaxnum_oneuse : HasOneUseBinOp<fmaxnum>;
+
+def fminnum_ieee_oneuse : HasOneUseBinOp<fminnum_ieee>;
+def fmaxnum_ieee_oneuse : HasOneUseBinOp<fmaxnum_ieee>;
+
+
 def and_oneuse : HasOneUseBinOp<and>;
 def or_oneuse : HasOneUseBinOp<or>;
 def xor_oneuse : HasOneUseBinOp<xor>;
@@ -790,18 +796,30 @@ class ROTRPattern <Instruction BIT_ALIGN> : AMDGPUPat <
   (BIT_ALIGN $src0, $src0, $src1)
 >;
 
-// This matches 16 permutations of
-// max(min(x, y), min(max(x, y), z))
-class IntMed3Pat<Instruction med3Inst,
+multiclass IntMed3Pat<Instruction med3Inst,
+                 SDPatternOperator min,
                  SDPatternOperator max,
-                 SDPatternOperator max_oneuse,
                  SDPatternOperator min_oneuse,
-                 ValueType vt = i32> : AMDGPUPat<
+                 SDPatternOperator max_oneuse,
+                 ValueType vt = i32> {
+
+  // This matches 16 permutations of 
+  // min(max(a, b), max(min(a, b), c))
+  def : AMDGPUPat <
+  (min (max_oneuse vt:$src0, vt:$src1),
+       (max_oneuse (min_oneuse vt:$src0, vt:$src1), vt:$src2)),
+  (med3Inst vt:$src0, vt:$src1, vt:$src2)
+>;
+
+  // This matches 16 permutations of 
+  // max(min(x, y), min(max(x, y), z))
+  def : AMDGPUPat <
   (max (min_oneuse vt:$src0, vt:$src1),
        (min_oneuse (max_oneuse vt:$src0, vt:$src1), vt:$src2)),
   (med3Inst $src0, $src1, $src2)
 >;
-
+}
+  
 // Special conversion patterns
 
 def cvt_rpi_i32_f32 : PatFrag <
@@ -836,4 +854,26 @@ class RcpPat<Instruction RcpInst, ValueType vt> : AMDGPUPat <
 class RsqPat<Instruction RsqInst, ValueType vt> : AMDGPUPat <
   (AMDGPUrcp (fsqrt vt:$src)),
   (RsqInst $src)
+>;
+
+// Instructions which select to the same v_min_f*
+def fminnum_like : PatFrags<(ops node:$src0, node:$src1),
+  [(fminnum_ieee node:$src0, node:$src1),
+   (fminnum node:$src0, node:$src1)]
+>;
+
+// Instructions which select to the same v_max_f*
+def fmaxnum_like : PatFrags<(ops node:$src0, node:$src1),
+  [(fmaxnum_ieee node:$src0, node:$src1),
+   (fmaxnum node:$src0, node:$src1)]
+>;
+
+def fminnum_like_oneuse : PatFrags<(ops node:$src0, node:$src1),
+  [(fminnum_ieee_oneuse node:$src0, node:$src1),
+   (fminnum_oneuse node:$src0, node:$src1)]
+>;
+
+def fmaxnum_like_oneuse : PatFrags<(ops node:$src0, node:$src1),
+  [(fmaxnum_ieee_oneuse node:$src0, node:$src1),
+   (fmaxnum_oneuse node:$src0, node:$src1)]
 >;

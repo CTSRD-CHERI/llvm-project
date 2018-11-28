@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class year_month;
@@ -20,7 +20,7 @@
 int main()
 {
     using year_month = std::chrono::year_month;
-    
+
     static_assert(std::is_trivially_copyable_v<year_month>, "");
     static_assert(std::is_standard_layout_v<year_month>, "");
 }

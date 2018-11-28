@@ -9,6 +9,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+namespace llvm {
 namespace exegesis {
 
 void InitializeAArch64ExegesisTarget();
@@ -58,5 +59,13 @@ TEST_F(AArch64TargetTest, SetRegToConstant) {
   EXPECT_THAT(Insts, Not(IsEmpty()));
 }
 
+TEST_F(AArch64TargetTest, DefaultPfmCounters) {
+  const std::string Expected = "CPU_CYCLES";
+  EXPECT_EQ(ExegesisTarget_->getPfmCounters("").CycleCounter, Expected);
+  EXPECT_EQ(ExegesisTarget_->getPfmCounters("unknown_cpu").CycleCounter,
+            Expected);
+}
+
 } // namespace
 } // namespace exegesis
+} // namespace llvm

@@ -7,18 +7,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
 #include <algorithm>
 #include <csignal>
 #include <fstream>
 #include <vector>
 
-// Other libraries and framework includes
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Path.h"
 
-// Project includes
 #include "lldb/Breakpoint/BreakpointIDList.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Core/Debugger.h"
@@ -94,7 +90,7 @@ PlatformProperties::PlatformProperties() {
   if (!llvm::sys::path::home_directory(user_home_dir))
     return;
 
-  module_cache_dir = FileSpec(user_home_dir.c_str(), false);
+  module_cache_dir = FileSpec(user_home_dir.c_str());
   module_cache_dir.AppendPathComponent(".lldb");
   module_cache_dir.AppendPathComponent("module_cache");
   SetModuleCacheDirectory(module_cache_dir);
@@ -536,9 +532,12 @@ FileSpec Platform::GetWorkingDirectory() {
   if (IsHost()) {
     llvm::SmallString<64> cwd;
     if (llvm::sys::fs::current_path(cwd))
-      return FileSpec{};
-    else
-      return FileSpec(cwd, true);
+      return {};
+    else {
+      FileSpec file_spec(cwd);
+      FileSystem::Instance().Resolve(file_spec);
+      return file_spec;
+    }
   } else {
     if (!m_working_dir)
       m_working_dir = GetRemoteWorkingDirectory();
@@ -552,16 +551,17 @@ struct RecurseCopyBaton {
   Status error;
 };
 
-static FileSpec::EnumerateDirectoryResult
+static FileSystem::EnumerateDirectoryResult
 RecurseCopy_Callback(void *baton, llvm::sys::fs::file_type ft,
-                     const FileSpec &src) {
+                     llvm::StringRef path) {
   RecurseCopyBaton *rc_baton = (RecurseCopyBaton *)baton;
+  FileSpec src(path);
   namespace fs = llvm::sys::fs;
   switch (ft) {
   case fs::file_type::fifo_file:
   case fs::file_type::socket_file:
     // we have no way to copy pipes and sockets - ignore them and continue
-    return FileSpec::eEnumerateDirectoryResultNext;
+    return FileSystem::eEnumerateDirectoryResultNext;
     break;
 
   case fs::file_type::directory_file: {
@@ -574,7 +574,7 @@ RecurseCopy_Callback(void *baton, llvm::sys::fs::file_type ft,
     if (error.Fail()) {
       rc_baton->error.SetErrorStringWithFormat(
           "unable to setup directory %s on remote end", dst_dir.GetCString());
-      return FileSpec::eEnumerateDirectoryResultQuit; // got an error, bail out
+      return FileSystem::eEnumerateDirectoryResultQuit; // got an error, bail out
     }
 
     // now recurse
@@ -586,13 +586,13 @@ RecurseCopy_Callback(void *baton, llvm::sys::fs::file_type ft,
     recurse_dst.GetDirectory().SetCString(dst_dir.GetPath().c_str());
     RecurseCopyBaton rc_baton2 = {recurse_dst, rc_baton->platform_ptr,
                                   Status()};
-    FileSpec::EnumerateDirectory(src_dir_path, true, true, true,
-                                 RecurseCopy_Callback, &rc_baton2);
+    FileSystem::Instance().EnumerateDirectory(src_dir_path, true, true, true,
+                                              RecurseCopy_Callback, &rc_baton2);
     if (rc_baton2.error.Fail()) {
       rc_baton->error.SetErrorString(rc_baton2.error.AsCString());
-      return FileSpec::eEnumerateDirectoryResultQuit; // got an error, bail out
+      return FileSystem::eEnumerateDirectoryResultQuit; // got an error, bail out
     }
-    return FileSpec::eEnumerateDirectoryResultNext;
+    return FileSystem::eEnumerateDirectoryResultNext;
   } break;
 
   case fs::file_type::symlink_file: {
@@ -603,18 +603,18 @@ RecurseCopy_Callback(void *baton, llvm::sys::fs::file_type ft,
 
     FileSpec src_resolved;
 
-    rc_baton->error = FileSystem::Readlink(src, src_resolved);
+    rc_baton->error = FileSystem::Instance().Readlink(src, src_resolved);
 
     if (rc_baton->error.Fail())
-      return FileSpec::eEnumerateDirectoryResultQuit; // got an error, bail out
+      return FileSystem::eEnumerateDirectoryResultQuit; // got an error, bail out
 
     rc_baton->error =
         rc_baton->platform_ptr->CreateSymlink(dst_file, src_resolved);
 
     if (rc_baton->error.Fail())
-      return FileSpec::eEnumerateDirectoryResultQuit; // got an error, bail out
+      return FileSystem::eEnumerateDirectoryResultQuit; // got an error, bail out
 
-    return FileSpec::eEnumerateDirectoryResultNext;
+    return FileSystem::eEnumerateDirectoryResultNext;
   } break;
 
   case fs::file_type::regular_file: {
@@ -625,15 +625,15 @@ RecurseCopy_Callback(void *baton, llvm::sys::fs::file_type ft,
     Status err = rc_baton->platform_ptr->PutFile(src, dst_file);
     if (err.Fail()) {
       rc_baton->error.SetErrorString(err.AsCString());
-      return FileSpec::eEnumerateDirectoryResultQuit; // got an error, bail out
+      return FileSystem::eEnumerateDirectoryResultQuit; // got an error, bail out
     }
-    return FileSpec::eEnumerateDirectoryResultNext;
+    return FileSystem::eEnumerateDirectoryResultNext;
   } break;
 
   default:
     rc_baton->error.SetErrorStringWithFormat(
         "invalid file detected during copy: %s", src.GetPath().c_str());
-    return FileSpec::eEnumerateDirectoryResultQuit; // got an error, bail out
+    return FileSystem::eEnumerateDirectoryResultQuit; // got an error, bail out
     break;
   }
   llvm_unreachable("Unhandled file_type!");
@@ -708,7 +708,7 @@ Status Platform::Install(const FileSpec &src, const FileSpec &dst) {
     switch (fs::get_file_type(src.GetPath(), false)) {
     case fs::file_type::directory_file: {
       llvm::sys::fs::remove(fixed_dst.GetPath());
-      uint32_t permissions = src.GetPermissions();
+      uint32_t permissions = FileSystem::Instance().GetPermissions(src);
       if (permissions == 0)
         permissions = eFilePermissionsDirectoryDefault;
       error = MakeDirectory(fixed_dst, permissions);
@@ -719,8 +719,8 @@ Status Platform::Install(const FileSpec &src, const FileSpec &dst) {
         recurse_dst.GetDirectory().SetCString(fixed_dst.GetCString());
         std::string src_dir_path(src.GetPath());
         RecurseCopyBaton baton = {recurse_dst, this, Status()};
-        FileSpec::EnumerateDirectory(src_dir_path, true, true, true,
-                                     RecurseCopy_Callback, &baton);
+        FileSystem::Instance().EnumerateDirectory(
+            src_dir_path, true, true, true, RecurseCopy_Callback, &baton);
         return baton.error;
       }
     } break;
@@ -733,7 +733,7 @@ Status Platform::Install(const FileSpec &src, const FileSpec &dst) {
     case fs::file_type::symlink_file: {
       llvm::sys::fs::remove(fixed_dst.GetPath());
       FileSpec src_resolved;
-      error = FileSystem::Readlink(src, src_resolved);
+      error = FileSystem::Instance().Readlink(src, src_resolved);
       if (error.Success())
         error = CreateSymlink(dst, src_resolved);
     } break;
@@ -889,7 +889,7 @@ Platform::ResolveExecutable(const ModuleSpec &module_spec,
                             lldb::ModuleSP &exe_module_sp,
                             const FileSpecList *module_search_paths_ptr) {
   Status error;
-  if (module_spec.GetFileSpec().Exists()) {
+  if (FileSystem::Instance().Exists(module_spec.GetFileSpec())) {
     if (module_spec.GetArchitecture().IsValid()) {
       error = ModuleList::GetSharedModule(module_spec, exe_module_sp,
                                           module_search_paths_ptr, nullptr,
@@ -920,7 +920,7 @@ Platform::ResolveExecutable(const ModuleSpec &module_spec,
 Status Platform::ResolveSymbolFile(Target &target, const ModuleSpec &sym_spec,
                                    FileSpec &sym_file) {
   Status error;
-  if (sym_spec.GetSymbolFileSpec().Exists())
+  if (FileSystem::Instance().Exists(sym_spec.GetSymbolFileSpec()))
     sym_file = sym_spec.GetSymbolFileSpec();
   else
     error.SetErrorString("unable to resolve symbol file");
@@ -930,7 +930,8 @@ Status Platform::ResolveSymbolFile(Target &target, const ModuleSpec &sym_spec,
 bool Platform::ResolveRemotePath(const FileSpec &platform_path,
                                  FileSpec &resolved_platform_path) {
   resolved_platform_path = platform_path;
-  return resolved_platform_path.ResolvePath();
+  FileSystem::Instance().Resolve(resolved_platform_path);
+  return true;
 }
 
 const ArchSpec &Platform::GetSystemArchitecture() {
@@ -1275,8 +1276,9 @@ Status Platform::PutFile(const FileSpec &source, const FileSpec &destination,
   if (fs::is_symlink_file(source.GetPath()))
     source_open_options |= File::eOpenOptionDontFollowSymlinks;
 
-  File source_file(source, source_open_options, lldb::eFilePermissionsUserRW);
-  Status error;
+  File source_file;
+  Status error = FileSystem::Instance().Open(
+      source_file, source, source_open_options, lldb::eFilePermissionsUserRW);
   uint32_t permissions = source_file.GetPermissions(error);
   if (permissions == 0)
     permissions = lldb::eFilePermissionsFileDefault;
@@ -1798,9 +1800,9 @@ uint32_t Platform::LoadImageUsingPaths(lldb_private::Process *process,
 {
   FileSpec file_to_use;
   if (remote_filename.IsAbsolute())
-    file_to_use = FileSpec(remote_filename.GetFilename().GetStringRef(), 
-                               false, 
-                               remote_filename.GetPathStyle());
+    file_to_use = FileSpec(remote_filename.GetFilename().GetStringRef(),
+
+                           remote_filename.GetPathStyle());
   else
     file_to_use = remote_filename;
     
@@ -1820,9 +1822,19 @@ lldb::ProcessSP Platform::ConnectProcess(llvm::StringRef connect_url,
   error.Clear();
 
   if (!target) {
+    ArchSpec arch;
+    if (target && target->GetArchitecture().IsValid())
+      arch = target->GetArchitecture();
+    else
+      arch = Target::GetDefaultArchitecture();
+
+    const char *triple = "";
+    if (arch.IsValid())
+      triple = arch.GetTriple().getTriple().c_str();
+
     TargetSP new_target_sp;
     error = debugger.GetTargetList().CreateTarget(
-        debugger, "", "", eLoadDependentsNo, nullptr, new_target_sp);
+        debugger, "", triple, eLoadDependentsNo, nullptr, new_target_sp);
     target = new_target_sp.get();
   }
 

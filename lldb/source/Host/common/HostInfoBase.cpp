@@ -42,7 +42,7 @@ namespace {
 
 struct HostInfoBaseFields {
   ~HostInfoBaseFields() {
-    if (m_lldb_process_tmp_dir.Exists()) {
+    if (FileSystem::Instance().Exists(m_lldb_process_tmp_dir)) {
       // Remove the LLDB temporary directory if we have one. Set "recurse" to
       // true to all files that were created for the LLDB process can be
       // cleaned up.
@@ -194,6 +194,19 @@ FileSpec HostInfoBase::GetGlobalTempDir() {
   return success ? g_fields->m_lldb_global_tmp_dir : FileSpec();
 }
 
+FileSpec HostInfoBase::GetReproducerTempDir() {
+  static llvm::once_flag g_once_flag;
+  static bool success = false;
+  llvm::call_once(g_once_flag, []() {
+    success = HostInfo::ComputeReproducerTempFileDirectory(
+        g_fields->m_lldb_global_tmp_dir);
+    Log *log = lldb_private::GetLogIfAllCategoriesSet(LIBLLDB_LOG_HOST);
+    LLDB_LOG(log, "reproducer temp dir -> `{0}`",
+             g_fields->m_lldb_global_tmp_dir);
+  });
+  return success ? g_fields->m_lldb_global_tmp_dir : FileSpec();
+}
+
 ArchSpec HostInfoBase::GetAugmentedArchSpec(llvm::StringRef triple) {
   if (triple.empty())
     return ArchSpec();
@@ -226,7 +239,7 @@ bool HostInfoBase::ComputeSharedLibraryDirectory(FileSpec &file_spec) {
 
   // This is necessary because when running the testsuite the shlib might be a
   // symbolic link inside the Python resource dir.
-  FileSystem::ResolveSymbolicLink(lldb_file_spec, lldb_file_spec);
+  FileSystem::Instance().ResolveSymbolicLink(lldb_file_spec, lldb_file_spec);
 
   // Remove the filename so that this FileSpec only represents the directory.
   file_spec.GetDirectory() = lldb_file_spec.GetDirectory();
@@ -256,7 +269,8 @@ bool HostInfoBase::ComputeProcessTempFileDirectory(FileSpec &file_spec) {
 bool HostInfoBase::ComputeTempFileBaseDirectory(FileSpec &file_spec) {
   llvm::SmallVector<char, 16> tmpdir;
   llvm::sys::path::system_temp_directory(/*ErasedOnReboot*/ true, tmpdir);
-  file_spec = FileSpec(std::string(tmpdir.data(), tmpdir.size()), true);
+  file_spec = FileSpec(std::string(tmpdir.data(), tmpdir.size()));
+  FileSystem::Instance().Resolve(file_spec);
   return true;
 }
 
@@ -268,6 +282,26 @@ bool HostInfoBase::ComputeGlobalTempFileDirectory(FileSpec &file_spec) {
     return false;
 
   temp_file_spec.AppendPathComponent("lldb");
+  if (llvm::sys::fs::create_directory(temp_file_spec.GetPath()))
+    return false;
+
+  file_spec.GetDirectory().SetCString(temp_file_spec.GetCString());
+  return true;
+}
+
+bool HostInfoBase::ComputeReproducerTempFileDirectory(FileSpec &file_spec) {
+  file_spec.Clear();
+
+  FileSpec temp_file_spec;
+  if (!HostInfo::ComputeTempFileBaseDirectory(temp_file_spec))
+    return false;
+
+  temp_file_spec.AppendPathComponent("reproducer");
+  if (llvm::sys::fs::create_directory(temp_file_spec.GetPath()))
+    return false;
+
+  std::string pid_str{llvm::to_string(Host::GetCurrentProcessID())};
+  temp_file_spec.AppendPathComponent(pid_str);
   if (llvm::sys::fs::create_directory(temp_file_spec.GetPath()))
     return false;
 

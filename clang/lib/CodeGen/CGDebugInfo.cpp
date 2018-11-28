@@ -528,11 +528,11 @@ void CGDebugInfo::CreateCompileUnit() {
   llvm::dwarf::SourceLanguage LangTag;
   const LangOptions &LO = CGM.getLangOpts();
   if (LO.CPlusPlus) {
-    if (LO.ObjC1)
+    if (LO.ObjC)
       LangTag = llvm::dwarf::DW_LANG_ObjC_plus_plus;
     else
       LangTag = llvm::dwarf::DW_LANG_C_plus_plus;
-  } else if (LO.ObjC1) {
+  } else if (LO.ObjC) {
     LangTag = llvm::dwarf::DW_LANG_ObjC;
   } else if (LO.RenderScript) {
     LangTag = llvm::dwarf::DW_LANG_GOOGLE_RenderScript;
@@ -546,7 +546,7 @@ void CGDebugInfo::CreateCompileUnit() {
 
   // Figure out which version of the ObjC runtime we have.
   unsigned RuntimeVers = 0;
-  if (LO.ObjC1)
+  if (LO.ObjC)
     RuntimeVers = LO.ObjCRuntime.isNonFragile() ? 2 : 1;
 
   llvm::DICompileUnit::DebugEmissionKind EmissionKind;
@@ -581,12 +581,16 @@ void CGDebugInfo::CreateCompileUnit() {
       CGOpts.EmitVersionIdentMetadata ? Producer : "",
       LO.Optimize || CGOpts.PrepareForLTO || CGOpts.PrepareForThinLTO,
       CGOpts.DwarfDebugFlags, RuntimeVers,
-      CGOpts.EnableSplitDwarf ? "" : CGOpts.SplitDwarfFile, EmissionKind,
-      0 /* DWOid */, CGOpts.SplitDwarfInlining, CGOpts.DebugInfoForProfiling,
+      (CGOpts.getSplitDwarfMode() != CodeGenOptions::NoFission)
+          ? ""
+          : CGOpts.SplitDwarfFile,
+      EmissionKind, 0 /* DWOid */, CGOpts.SplitDwarfInlining,
+      CGOpts.DebugInfoForProfiling,
       CGM.getTarget().getTriple().isNVPTX()
           ? llvm::DICompileUnit::DebugNameTableKind::None
           : static_cast<llvm::DICompileUnit::DebugNameTableKind>(
-                CGOpts.DebugNameTable));
+                CGOpts.DebugNameTable),
+      CGOpts.DebugRangesBaseAddress);
 }
 
 llvm::DIType *CGDebugInfo::CreateType(const BuiltinType *BT) {
@@ -659,6 +663,10 @@ llvm::DIType *CGDebugInfo::CreateType(const BuiltinType *BT) {
     return getOrCreateStructPtrType("opencl_queue_t", OCLQueueDITy);
   case BuiltinType::OCLReserveID:
     return getOrCreateStructPtrType("opencl_reserve_id_t", OCLReserveIDDITy);
+#define EXT_OPAQUE_TYPE(ExtType, Id, Ext) \
+  case BuiltinType::Id: \
+    return getOrCreateStructPtrType("opencl_" #ExtType, Id##Ty);
+#include "clang/Basic/OpenCLExtensionTypes.def"
 
   case BuiltinType::UChar:
   case BuiltinType::Char_U:
@@ -1496,16 +1504,16 @@ llvm::DISubprogram *CGDebugInfo::CreateCXXMemberFunction(
 
   // Collect virtual method info.
   llvm::DIType *ContainingType = nullptr;
-  unsigned Virtuality = 0;
   unsigned VIndex = 0;
   llvm::DINode::DIFlags Flags = llvm::DINode::FlagZero;
+  llvm::DISubprogram::DISPFlags SPFlags = llvm::DISubprogram::SPFlagZero;
   int ThisAdjustment = 0;
 
   if (Method->isVirtual()) {
     if (Method->isPure())
-      Virtuality = llvm::dwarf::DW_VIRTUALITY_pure_virtual;
+      SPFlags |= llvm::DISubprogram::SPFlagPureVirtual;
     else
-      Virtuality = llvm::dwarf::DW_VIRTUALITY_virtual;
+      SPFlags |= llvm::DISubprogram::SPFlagVirtual;
 
     if (CGM.getTarget().getCXXABI().isItaniumFamily()) {
       // It doesn't make sense to give a virtual destructor a vtable index,
@@ -1557,12 +1565,13 @@ llvm::DISubprogram *CGDebugInfo::CreateCXXMemberFunction(
     Flags |= llvm::DINode::FlagLValueReference;
   if (Method->getRefQualifier() == RQ_RValue)
     Flags |= llvm::DINode::FlagRValueReference;
+  if (CGM.getLangOpts().Optimize)
+    SPFlags |= llvm::DISubprogram::SPFlagOptimized;
 
   llvm::DINodeArray TParamsArray = CollectFunctionTemplateParams(Method, Unit);
   llvm::DISubprogram *SP = DBuilder.createMethod(
       RecordTy, MethodName, MethodLinkageName, MethodDefUnit, MethodLine,
-      MethodTy, /*isLocalToUnit=*/false, /*isDefinition=*/false, Virtuality,
-      VIndex, ThisAdjustment, ContainingType, Flags, CGM.getLangOpts().Optimize,
+      MethodTy, VIndex, ThisAdjustment, ContainingType, Flags, SPFlags,
       TParamsArray.get());
 
   SPCache[Method->getCanonicalDecl()].reset(SP);
@@ -1965,8 +1974,17 @@ static bool isDefinedInClangModule(const RecordDecl *RD) {
   if (auto *CXXDecl = dyn_cast<CXXRecordDecl>(RD)) {
     if (!CXXDecl->isCompleteDefinition())
       return false;
+    // Check wether RD is a template.
     auto TemplateKind = CXXDecl->getTemplateSpecializationKind();
     if (TemplateKind != TSK_Undeclared) {
+      // Unfortunately getOwningModule() isn't accurate enough to find the
+      // owning module of a ClassTemplateSpecializationDecl that is inside a
+      // namespace spanning multiple modules.
+      bool Explicit = false;
+      if (auto *TD = dyn_cast<ClassTemplateSpecializationDecl>(CXXDecl))
+        Explicit = TD->isExplicitInstantiationOrSpecialization();
+      if (!Explicit && CXXDecl->getEnclosingNamespaceContext())
+        return false;
       // This is a template, check the origin of the first member.
       if (CXXDecl->field_begin() == CXXDecl->field_end())
         return TemplateKind == TSK_ExplicitInstantiationDeclaration;
@@ -3161,6 +3179,7 @@ llvm::DISubprogram *CGDebugInfo::getFunctionFwdDeclOrStub(GlobalDecl GD,
   llvm::DINodeArray TParamsArray;
   StringRef Name, LinkageName;
   llvm::DINode::DIFlags Flags = llvm::DINode::FlagZero;
+  llvm::DISubprogram::DISPFlags SPFlags = llvm::DISubprogram::SPFlagZero;
   SourceLocation Loc = GD.getDecl()->getLocation();
   llvm::DIFile *Unit = getOrCreateFile(Loc);
   llvm::DIScope *DContext = Unit;
@@ -3177,21 +3196,23 @@ llvm::DISubprogram *CGDebugInfo::getFunctionFwdDeclOrStub(GlobalDecl GD,
   CallingConv CC = FD->getType()->castAs<FunctionType>()->getCallConv();
   QualType FnType = CGM.getContext().getFunctionType(
       FD->getReturnType(), ArgTypes, FunctionProtoType::ExtProtoInfo(CC));
+  if (!FD->isExternallyVisible())
+    SPFlags |= llvm::DISubprogram::SPFlagLocalToUnit;
+  if (CGM.getLangOpts().Optimize)
+    SPFlags |= llvm::DISubprogram::SPFlagOptimized;
+
   if (Stub) {
     Flags |= getCallSiteRelatedAttrs();
+    SPFlags |= llvm::DISubprogram::SPFlagDefinition;
     return DBuilder.createFunction(
         DContext, Name, LinkageName, Unit, Line,
-        getOrCreateFunctionType(GD.getDecl(), FnType, Unit),
-        !FD->isExternallyVisible(),
-        /* isDefinition = */ true, 0, Flags, CGM.getLangOpts().Optimize,
+        getOrCreateFunctionType(GD.getDecl(), FnType, Unit), 0, Flags, SPFlags,
         TParamsArray.get(), getFunctionDeclaration(FD));
   }
 
   llvm::DISubprogram *SP = DBuilder.createTempFunctionFwdDecl(
       DContext, Name, LinkageName, Unit, Line,
-      getOrCreateFunctionType(GD.getDecl(), FnType, Unit),
-      !FD->isExternallyVisible(),
-      /* isDefinition = */ false, 0, Flags, CGM.getLangOpts().Optimize,
+      getOrCreateFunctionType(GD.getDecl(), FnType, Unit), 0, Flags, SPFlags,
       TParamsArray.get(), getFunctionDeclaration(FD));
   const FunctionDecl *CanonDecl = FD->getCanonicalDecl();
   FwdDeclReplaceMap.emplace_back(std::piecewise_construct,
@@ -3379,6 +3400,7 @@ void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, SourceLocation Loc,
   bool HasDecl = (D != nullptr);
 
   llvm::DINode::DIFlags Flags = llvm::DINode::FlagZero;
+  llvm::DISubprogram::DISPFlags SPFlags = llvm::DISubprogram::SPFlagZero;
   llvm::DIFile *Unit = getOrCreateFile(Loc);
   llvm::DIScope *FDContext = Unit;
   llvm::DINodeArray TParamsArray;
@@ -3418,7 +3440,14 @@ void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, SourceLocation Loc,
   if (CurFuncIsThunk)
     Flags |= llvm::DINode::FlagThunk;
 
+  if (Fn->hasLocalLinkage())
+    SPFlags |= llvm::DISubprogram::SPFlagLocalToUnit;
+  if (CGM.getLangOpts().Optimize)
+    SPFlags |= llvm::DISubprogram::SPFlagOptimized;
+
   llvm::DINode::DIFlags FlagsForDef = Flags | getCallSiteRelatedAttrs();
+  llvm::DISubprogram::DISPFlags SPFlagsForDef =
+      SPFlags | llvm::DISubprogram::SPFlagDefinition;
 
   unsigned LineNo = getLineNumber(Loc);
   unsigned ScopeLine = getLineNumber(ScopeLoc);
@@ -3430,9 +3459,8 @@ void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, SourceLocation Loc,
   // are emitted as CU level entities by the backend.
   llvm::DISubprogram *SP = DBuilder.createFunction(
       FDContext, Name, LinkageName, Unit, LineNo,
-      getOrCreateFunctionType(D, FnType, Unit), Fn->hasLocalLinkage(),
-      true /*definition*/, ScopeLine, FlagsForDef, CGM.getLangOpts().Optimize,
-      TParamsArray.get(), getFunctionDeclaration(D));
+      getOrCreateFunctionType(D, FnType, Unit), ScopeLine, FlagsForDef,
+      SPFlagsForDef, TParamsArray.get(), getFunctionDeclaration(D));
   Fn->setSubprogram(SP);
   // We might get here with a VarDecl in the case we're generating
   // code for the initialization of globals. Do not record these decls
@@ -3452,8 +3480,7 @@ void CGDebugInfo::EmitFunctionStart(GlobalDecl GD, SourceLocation Loc,
             cast<llvm::DICompositeType>(It->second);
         llvm::DISubprogram *FD = DBuilder.createFunction(
             InterfaceDecl, Name, LinkageName, Unit, LineNo,
-            getOrCreateFunctionType(D, FnType, Unit), Fn->hasLocalLinkage(),
-            false /*definition*/, ScopeLine, Flags, CGM.getLangOpts().Optimize,
+            getOrCreateFunctionType(D, FnType, Unit), ScopeLine, Flags, SPFlags,
             TParamsArray.get());
         DBuilder.finalizeSubprogram(FD);
         ObjCMethodCache[ID].push_back(FD);
@@ -3502,11 +3529,13 @@ void CGDebugInfo::EmitFunctionDecl(GlobalDecl GD, SourceLocation Loc,
   }
   unsigned LineNo = getLineNumber(Loc);
   unsigned ScopeLine = 0;
+  llvm::DISubprogram::DISPFlags SPFlags = llvm::DISubprogram::SPFlagZero;
+  if (CGM.getLangOpts().Optimize)
+    SPFlags |= llvm::DISubprogram::SPFlagOptimized;
 
   DBuilder.retainType(DBuilder.createFunction(
       FDContext, Name, LinkageName, Unit, LineNo,
-      getOrCreateFunctionType(D, FnType, Unit), false /*internalLinkage*/,
-      false /*definition*/, ScopeLine, Flags, CGM.getLangOpts().Optimize,
+      getOrCreateFunctionType(D, FnType, Unit), ScopeLine, Flags, SPFlags,
       TParamsArray.get(), getFunctionDeclaration(D)));
 }
 
@@ -3535,7 +3564,7 @@ void CGDebugInfo::EmitLocation(CGBuilderTy &Builder, SourceLocation Loc) {
   // Update our current location
   setLocation(Loc);
 
-  if (CurLoc.isInvalid() || CurLoc.isMacroID())
+  if (CurLoc.isInvalid() || CurLoc.isMacroID() || LexicalBlockStack.empty())
     return;
 
   llvm::MDNode *Scope = LexicalBlockStack.back();

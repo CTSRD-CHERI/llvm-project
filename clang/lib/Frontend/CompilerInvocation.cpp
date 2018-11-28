@@ -279,6 +279,7 @@ static bool ParseAnalyzerArgs(AnalyzerOptions &Opts, ArgList &Args,
   }
 
   Opts.ShowCheckerHelp = Args.hasArg(OPT_analyzer_checker_help);
+  Opts.ShowConfigOptionsList = Args.hasArg(OPT_analyzer_config_help);
   Opts.ShowEnabledCheckerList = Args.hasArg(OPT_analyzer_list_enabled_checkers);
   Opts.DisableAllChecks = Args.hasArg(OPT_analyzer_disable_all_checks);
 
@@ -592,12 +593,29 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DwarfVersion = getLastArgIntValue(Args, OPT_dwarf_version_EQ, 0, Diags);
   Opts.DebugColumnInfo = Args.hasArg(OPT_dwarf_column_info);
   Opts.EmitCodeView = Args.hasArg(OPT_gcodeview);
+  Opts.CodeViewGHash = Args.hasArg(OPT_gcodeview_ghash);
   Opts.MacroDebugInfo = Args.hasArg(OPT_debug_info_macro);
   Opts.WholeProgramVTables = Args.hasArg(OPT_fwhole_program_vtables);
   Opts.LTOVisibilityPublicStd = Args.hasArg(OPT_flto_visibility_public_std);
-  Opts.EnableSplitDwarf = Args.hasArg(OPT_enable_split_dwarf);
   Opts.SplitDwarfFile = Args.getLastArgValue(OPT_split_dwarf_file);
   Opts.SplitDwarfInlining = !Args.hasArg(OPT_fno_split_dwarf_inlining);
+
+  if (Arg *A =
+          Args.getLastArg(OPT_enable_split_dwarf, OPT_enable_split_dwarf_EQ)) {
+    if (A->getOption().matches(options::OPT_enable_split_dwarf)) {
+      Opts.setSplitDwarfMode(CodeGenOptions::SplitFileFission);
+    } else {
+      StringRef Name = A->getValue();
+      if (Name == "single")
+        Opts.setSplitDwarfMode(CodeGenOptions::SingleFileFission);
+      else if (Name == "split")
+        Opts.setSplitDwarfMode(CodeGenOptions::SplitFileFission);
+      else
+        Diags.Report(diag::err_drv_invalid_value)
+            << A->getAsString(Args) << Name;
+    }
+  }
+
   Opts.DebugTypeExtRefs = Args.hasArg(OPT_dwarf_ext_refs);
   Opts.DebugExplicitImport = Args.hasArg(OPT_dwarf_explicit_import);
   Opts.DebugFwdTemplateParams = Args.hasArg(OPT_debug_forward_template_params);
@@ -616,6 +634,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
   Opts.DisableLifetimeMarkers = Args.hasArg(OPT_disable_lifetimemarkers);
   Opts.DisableO0ImplyOptNone = Args.hasArg(OPT_disable_O0_optnone);
   Opts.DisableRedZone = Args.hasArg(OPT_disable_red_zone);
+  Opts.IndirectTlsSegRefs = Args.hasArg(OPT_mno_tls_direct_seg_refs);
   Opts.ForbidGuardVariables = Args.hasArg(OPT_fforbid_guard_variables);
   Opts.UseRegisterSizedBitfieldAccess = Args.hasArg(
     OPT_fuse_register_sized_bitfield_access);
@@ -651,6 +670,7 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
           : Args.hasArg(OPT_gpubnames)
                 ? llvm::DICompileUnit::DebugNameTableKind::Default
                 : llvm::DICompileUnit::DebugNameTableKind::None);
+  Opts.DebugRangesBaseAddress = Args.hasArg(OPT_fdebug_ranges_base_address);
 
   setPGOInstrumentor(Opts, Args, Diags);
   Opts.InstrProfileOutput =
@@ -822,6 +842,10 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
     Opts.CoverageExtraChecksum = Args.hasArg(OPT_coverage_cfg_checksum);
     Opts.CoverageNoFunctionNamesInData =
         Args.hasArg(OPT_coverage_no_function_names_in_data);
+    Opts.ProfileFilterFiles =
+        Args.getLastArgValue(OPT_fprofile_filter_files_EQ);
+    Opts.ProfileExcludeFiles =
+        Args.getLastArgValue(OPT_fprofile_exclude_files_EQ);
     Opts.CoverageExitBlockBeforeBody =
         Args.hasArg(OPT_coverage_exit_block_before_body);
     if (Args.hasArg(OPT_coverage_version_EQ)) {
@@ -980,11 +1004,11 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
       Args.hasArg(OPT_fsanitize_cfi_icall_generalize_pointers);
   Opts.SanitizeStats = Args.hasArg(OPT_fsanitize_stats);
   if (Arg *A = Args.getLastArg(
-          OPT_fsanitize_address_poison_class_member_array_new_cookie,
-          OPT_fno_sanitize_address_poison_class_member_array_new_cookie)) {
-    Opts.SanitizeAddressPoisonClassMemberArrayNewCookie =
+          OPT_fsanitize_address_poison_custom_array_cookie,
+          OPT_fno_sanitize_address_poison_custom_array_cookie)) {
+    Opts.SanitizeAddressPoisonCustomArrayCookie =
         A->getOption().getID() ==
-        OPT_fsanitize_address_poison_class_member_array_new_cookie;
+        OPT_fsanitize_address_poison_custom_array_cookie;
   }
   if (Arg *A = Args.getLastArg(OPT_fsanitize_address_use_after_scope,
                                OPT_fno_sanitize_address_use_after_scope)) {
@@ -1150,8 +1174,9 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.Addrsig = Args.hasArg(OPT_faddrsig);
 
-  if (Arg *A = Args.getLastArg(OPT_msign_return_address)) {
+  if (Arg *A = Args.getLastArg(OPT_msign_return_address_EQ)) {
     StringRef SignScope = A->getValue();
+
     if (SignScope.equals_lower("none"))
       Opts.setSignReturnAddress(CodeGenOptions::SignReturnAddressScope::None);
     else if (SignScope.equals_lower("all"))
@@ -1161,8 +1186,25 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
           CodeGenOptions::SignReturnAddressScope::NonLeaf);
     else
       Diags.Report(diag::err_drv_invalid_value)
-          << A->getAsString(Args) << A->getValue();
+          << A->getAsString(Args) << SignScope;
+
+    if (Arg *A = Args.getLastArg(OPT_msign_return_address_key_EQ)) {
+      StringRef SignKey = A->getValue();
+      if (!SignScope.empty() && !SignKey.empty()) {
+        if (SignKey.equals_lower("a_key"))
+          Opts.setSignReturnAddressKey(
+              CodeGenOptions::SignReturnAddressKeyValue::AKey);
+        else if (SignKey.equals_lower("b_key"))
+          Opts.setSignReturnAddressKey(
+              CodeGenOptions::SignReturnAddressKeyValue::BKey);
+        else
+          Diags.Report(diag::err_drv_invalid_value)
+              << A->getAsString(Args) << SignKey;
+      }
+    }
   }
+
+  Opts.BranchTargetEnforcement = Args.hasArg(OPT_mbranch_target_enforce);
 
   Opts.KeepStaticConsts = Args.hasArg(OPT_fkeep_static_consts);
 
@@ -1475,7 +1517,7 @@ static InputKind ParseFrontendArgs(FrontendOptions &Opts, ArgList &Args,
       Opts.ProgramAction = frontend::EmitObj; break;
     case OPT_fixit_EQ:
       Opts.FixItSuffix = A->getValue();
-      // fall-through!
+      LLVM_FALLTHROUGH;
     case OPT_fixit:
       Opts.ProgramAction = frontend::FixIt; break;
     case OPT_emit_module:
@@ -1916,7 +1958,7 @@ void CompilerInvocation::setLangDefaults(LangOptions &Opts, InputKind IK,
   if (IK.getLanguage() == InputKind::Asm) {
     Opts.AsmPreprocessor = 1;
   } else if (IK.isObjectiveC()) {
-    Opts.ObjC1 = Opts.ObjC2 = 1;
+    Opts.ObjC = 1;
   }
 
   if (LangStd == LangStandard::lang_unspecified) {
@@ -2179,6 +2221,9 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     }
   }
 
+  if (Args.hasArg(OPT_fno_dllexport_inlines))
+    Opts.DllExportInlines = false;
+
   if (const Arg *A = Args.getLastArg(OPT_fcf_protection_EQ)) {
     StringRef Name = A->getValue();
     if (Name == "full" || Name == "branch") {
@@ -2247,7 +2292,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.GPURelocatableDeviceCode = Args.hasArg(OPT_fgpu_rdc);
 
-  if (Opts.ObjC1) {
+  if (Opts.ObjC) {
     if (Arg *arg = Args.getLastArg(OPT_fobjc_runtime_EQ)) {
       StringRef value = arg->getValue();
       if (Opts.ObjCRuntime.tryParse(value))
@@ -2314,8 +2359,19 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
 
   if (Args.hasArg(OPT_print_ivar_layout))
     Opts.ObjCGCBitmapPrint = 1;
+
   if (Args.hasArg(OPT_fno_constant_cfstrings))
     Opts.NoConstantCFStrings = 1;
+  if (const auto *A = Args.getLastArg(OPT_fcf_runtime_abi_EQ))
+    Opts.CFRuntime =
+        llvm::StringSwitch<LangOptions::CoreFoundationABI>(A->getValue())
+            .Cases("unspecified", "standalone", "objc",
+                   LangOptions::CoreFoundationABI::ObjectiveC)
+            .Cases("swift", "swift-5.0",
+                   LangOptions::CoreFoundationABI::Swift5_0)
+            .Case("swift-4.2", LangOptions::CoreFoundationABI::Swift4_2)
+            .Case("swift-4.1", LangOptions::CoreFoundationABI::Swift4_1)
+            .Default(LangOptions::CoreFoundationABI::ObjectiveC);
 
   if (Args.hasArg(OPT_fzvector))
     Opts.ZVector = 1;
@@ -2475,7 +2531,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.ImplicitModules = !Args.hasArg(OPT_fno_implicit_modules);
   Opts.CharIsSigned = Opts.OpenCL || !Args.hasArg(OPT_fno_signed_char);
   Opts.WChar = Opts.CPlusPlus && !Args.hasArg(OPT_fno_wchar);
-  Opts.Char8 = Args.hasArg(OPT_fchar8__t);
+  Opts.Char8 = Args.hasFlag(OPT_fchar8__t, OPT_fno_char8__t, Opts.CPlusPlus2a);
   if (const Arg *A = Args.getLastArg(OPT_fwchar_type_EQ)) {
     Opts.WCharSize = llvm::StringSwitch<unsigned>(A->getValue())
                          .Case("char", 1)
@@ -2707,6 +2763,14 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
     Opts.Exceptions = 0;
     Opts.CXXExceptions = 0;
   }
+  if (Opts.OpenMPIsDevice && T.isNVPTX()) {
+    Opts.OpenMPCUDANumSMs =
+        getLastArgIntValue(Args, options::OPT_fopenmp_cuda_number_of_sm_EQ,
+                           Opts.OpenMPCUDANumSMs, Diags);
+    Opts.OpenMPCUDABlocksPerSM =
+        getLastArgIntValue(Args, options::OPT_fopenmp_cuda_blocks_per_sm_EQ,
+                           Opts.OpenMPCUDABlocksPerSM, Diags);
+  }
 
   // Get the OpenMP target triples if any.
   if (Arg *A = Args.getLastArg(options::OPT_fopenmp_targets_EQ)) {
@@ -2863,6 +2927,8 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
         Opts.setClangABICompat(LangOptions::ClangABI::Ver4);
       else if (Major <= 6)
         Opts.setClangABICompat(LangOptions::ClangABI::Ver6);
+      else if (Major <= 7)
+        Opts.setClangABICompat(LangOptions::ClangABI::Ver7);
     } else if (Ver != "latest") {
       Diags.Report(diag::err_drv_invalid_value)
           << A->getAsString(Args) << A->getValue();
@@ -3309,21 +3375,6 @@ uint64_t getLastArgUInt64Value(const ArgList &Args, OptSpecifier Id,
   return getLastArgIntValueImpl<uint64_t>(Args, Id, Default, Diags);
 }
 
-void BuryPointer(const void *Ptr) {
-  // This function may be called only a small fixed amount of times per each
-  // invocation, otherwise we do actually have a leak which we want to report.
-  // If this function is called more than kGraveYardMaxSize times, the pointers
-  // will not be properly buried and a leak detector will report a leak, which
-  // is what we want in such case.
-  static const size_t kGraveYardMaxSize = 16;
-  LLVM_ATTRIBUTE_UNUSED static const void *GraveYard[kGraveYardMaxSize];
-  static std::atomic<unsigned> GraveYardSize;
-  unsigned Idx = GraveYardSize++;
-  if (Idx >= kGraveYardMaxSize)
-    return;
-  GraveYard[Idx] = Ptr;
-}
-
 IntrusiveRefCntPtr<llvm::vfs::FileSystem>
 createVFSFromCompilerInvocation(const CompilerInvocation &CI,
                                 DiagnosticsEngine &Diags) {
@@ -3337,25 +3388,27 @@ IntrusiveRefCntPtr<llvm::vfs::FileSystem> createVFSFromCompilerInvocation(
   if (CI.getHeaderSearchOpts().VFSOverlayFiles.empty())
     return BaseFS;
 
-  IntrusiveRefCntPtr<llvm::vfs::OverlayFileSystem> Overlay(
-      new llvm::vfs::OverlayFileSystem(BaseFS));
+  IntrusiveRefCntPtr<llvm::vfs::FileSystem> Result = BaseFS;
   // earlier vfs files are on the bottom
   for (const auto &File : CI.getHeaderSearchOpts().VFSOverlayFiles) {
     llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> Buffer =
-        BaseFS->getBufferForFile(File);
+        Result->getBufferForFile(File);
     if (!Buffer) {
       Diags.Report(diag::err_missing_vfs_overlay_file) << File;
       continue;
     }
 
     IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS = llvm::vfs::getVFSFromYAML(
-        std::move(Buffer.get()), /*DiagHandler*/ nullptr, File);
-    if (FS)
-      Overlay->pushOverlay(FS);
-    else
+        std::move(Buffer.get()), /*DiagHandler*/ nullptr, File,
+        /*DiagContext*/ nullptr, Result);
+    if (!FS) {
       Diags.Report(diag::err_invalid_vfs_overlay) << File;
+      continue;
+    }
+
+    Result = FS;
   }
-  return Overlay;
+  return Result;
 }
 
 } // namespace clang

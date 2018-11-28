@@ -1660,9 +1660,8 @@ void ItaniumCXXABI::EmitDestructorCall(CodeGenFunction &CGF,
       Type != Dtor_Base && DD->isVirtual())
     Callee = CGF.BuildAppleKextVirtualDestructorCall(DD, Type, DD->getParent());
   else
-    Callee =
-      CGCallee::forDirect(CGM.getAddrOfCXXStructor(DD, getFromDtorType(Type)),
-                          DD);
+    Callee = CGCallee::forDirect(
+        CGM.getAddrOfCXXStructor(DD, getFromDtorType(Type)), GD);
 
   CGF.EmitCXXMemberOrOperatorCall(DD, Callee, ReturnValueSlot(),
                                   This.getPointer(), VTT, VTTTy,
@@ -1849,7 +1848,7 @@ CGCallee ItaniumCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
     VFunc = VFuncLoad;
   }
 
-  CGCallee Callee(MethodDecl->getCanonicalDecl(), VFunc);
+  CGCallee Callee(GD, VFunc);
   return Callee;
 }
 
@@ -2026,7 +2025,7 @@ Address ItaniumCXXABI::InitializeArrayCookie(CodeGenFunction &CGF,
   // Handle the array cookie specially in ASan.
   if (CGM.getLangOpts().Sanitize.has(SanitizerKind::Address) && AS == 0 &&
       (expr->getOperatorNew()->isReplaceableGlobalAllocationFunction() ||
-       CGM.getCodeGenOpts().SanitizeAddressPoisonClassMemberArrayNewCookie)) {
+       CGM.getCodeGenOpts().SanitizeAddressPoisonCustomArrayCookie)) {
     // The store to the CookiePtr does not need to be instrumented.
     CGM.getSanitizerMetadata()->disableSanitizerForInstruction(SI);
     llvm::FunctionType *FTy =
@@ -2440,11 +2439,13 @@ void CodeGenModule::registerGlobalDtorsWithAtExit() {
         FTy, GlobalInitFnName, getTypes().arrangeNullaryFunction(),
         SourceLocation());
     ASTContext &Ctx = getContext();
+    QualType ReturnTy = Ctx.VoidTy;
+    QualType FunctionTy = Ctx.getFunctionType(ReturnTy, llvm::None, {});
     FunctionDecl *FD = FunctionDecl::Create(
         Ctx, Ctx.getTranslationUnitDecl(), SourceLocation(), SourceLocation(),
-        &Ctx.Idents.get(GlobalInitFnName), Ctx.VoidTy, nullptr, SC_Static,
+        &Ctx.Idents.get(GlobalInitFnName), FunctionTy, nullptr, SC_Static,
         false, false);
-    CGF.StartFunction(GlobalDecl(FD), getContext().VoidTy, GlobalInitFn,
+    CGF.StartFunction(GlobalDecl(FD), ReturnTy, GlobalInitFn,
                       getTypes().arrangeNullaryFunction(), FunctionArgList(),
                       SourceLocation(), SourceLocation());
 
@@ -2543,7 +2544,7 @@ ItaniumCXXABI::getOrCreateThreadLocalWrapper(const VarDecl *VD,
       llvm::Function::Create(FnTy, getThreadLocalWrapperLinkage(VD, CGM),
                              WrapperName.str(), &CGM.getModule());
 
-  CGM.SetLLVMFunctionAttributes(nullptr, FI, Wrapper);
+  CGM.SetLLVMFunctionAttributes(GlobalDecl(), FI, Wrapper);
 
   if (VD->hasDefinition())
     CGM.SetLLVMFunctionAttributesForDefinition(nullptr, Wrapper);
@@ -2601,8 +2602,8 @@ void ItaniumCXXABI::EmitThreadLocalInitFuncs(
     CharUnits GuardAlign = CharUnits::One();
     Guard->setAlignment(GuardAlign.getQuantity());
 
-    CodeGenFunction(CGM).GenerateCXXGlobalInitFunc(InitFunc, OrderedInits,
-                                                   Address(Guard, GuardAlign));
+    CodeGenFunction(CGM).GenerateCXXGlobalInitFunc(
+        InitFunc, OrderedInits, ConstantAddress(Guard, GuardAlign));
     // On Darwin platforms, use CXX_FAST_TLS calling convention.
     if (CGM.getTarget().getTriple().isOSDarwin()) {
       InitFunc->setCallingConv(llvm::CallingConv::CXX_FAST_TLS);
@@ -2654,7 +2655,8 @@ void ItaniumCXXABI::EmitThreadLocalInitFuncs(
                                     llvm::GlobalVariable::ExternalWeakLinkage,
                                     InitFnName.str(), &CGM.getModule());
       const CGFunctionInfo &FI = CGM.getTypes().arrangeNullaryFunction();
-      CGM.SetLLVMFunctionAttributes(nullptr, FI, cast<llvm::Function>(Init));
+      CGM.SetLLVMFunctionAttributes(GlobalDecl(), FI,
+                                    cast<llvm::Function>(Init));
     }
 
     if (Init) {
@@ -2943,6 +2945,9 @@ static bool TypeInfoIsInStandardLibrary(const BuiltinType *Ty) {
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
     case BuiltinType::Id:
 #include "clang/Basic/OpenCLImageTypes.def"
+#define EXT_OPAQUE_TYPE(ExtType, Id, Ext) \
+    case BuiltinType::Id:
+#include "clang/Basic/OpenCLExtensionTypes.def"
     case BuiltinType::OCLSampler:
     case BuiltinType::OCLEvent:
     case BuiltinType::OCLClkEvent:
@@ -3222,7 +3227,7 @@ void ItaniumRTTIBuilder::BuildVTablePointer(const Type *Ty) {
     }
 
     assert(isa<ObjCInterfaceType>(Ty));
-    // Fall through.
+    LLVM_FALLTHROUGH;
 
   case Type::ObjCInterface:
     if (cast<ObjCInterfaceType>(Ty)->getDecl()->getSuperClass()) {
@@ -4169,7 +4174,7 @@ static void InitCatchParam(CodeGenFunction &CGF,
       switch (CatchType.getQualifiers().getObjCLifetime()) {
       case Qualifiers::OCL_Strong:
         CastExn = CGF.EmitARCRetainNonBlock(CastExn);
-        // fallthrough
+        LLVM_FALLTHROUGH;
 
       case Qualifiers::OCL_None:
       case Qualifiers::OCL_ExplicitNone:

@@ -1062,8 +1062,7 @@ public:
                                      const CGFunctionInfo &FI);
 
   /// Set the LLVM function attributes (sext, zext, etc).
-  void SetLLVMFunctionAttributes(const Decl *D,
-                                 const CGFunctionInfo &Info,
+  void SetLLVMFunctionAttributes(GlobalDecl GD, const CGFunctionInfo &Info,
                                  llvm::Function *F);
 
   /// Set the LLVM function attributes which only apply to a function
@@ -1123,8 +1122,7 @@ public:
 
   // Fills in the supplied string map with the set of target features for the
   // passed in function.
-  void getFunctionFeatureMap(llvm::StringMap<bool> &FeatureMap,
-                             const FunctionDecl *FD);
+  void getFunctionFeatureMap(llvm::StringMap<bool> &FeatureMap, GlobalDecl GD);
 
   StringRef getMangledName(GlobalDecl GD);
   StringRef getBlockMangledName(GlobalDecl GD, const BlockDecl *BD);
@@ -1330,9 +1328,9 @@ private:
       llvm::AttributeList ExtraAttrs = llvm::AttributeList(),
       ForDefinition_t IsForDefinition = NotForDefinition);
 
-  llvm::Constant *GetOrCreateMultiVersionIFunc(GlobalDecl GD,
-                                               llvm::Type *DeclTy,
-                                               const FunctionDecl *FD);
+  llvm::Constant *GetOrCreateMultiVersionResolver(GlobalDecl GD,
+                                                  llvm::Type *DeclTy,
+                                                  const FunctionDecl *FD);
   void UpdateMultiVersionNames(GlobalDecl GD, const FunctionDecl *FD);
 
   llvm::Constant *GetOrCreateLLVMGlobal(StringRef MangledName,
@@ -1341,7 +1339,7 @@ private:
                                         ForDefinition_t IsForDefinition
                                           = NotForDefinition);
 
-  bool GetCPUAndFeaturesAttributes(const Decl *D,
+  bool GetCPUAndFeaturesAttributes(GlobalDecl GD,
                                    llvm::AttrBuilder &AttrBuilder);
   void setNonAliasAttributes(GlobalDecl GD, llvm::GlobalObject *GO);
 
@@ -1352,6 +1350,8 @@ private:
   void EmitGlobalDefinition(GlobalDecl D, llvm::GlobalValue *GV = nullptr);
 
   void EmitGlobalFunctionDefinition(GlobalDecl GD, llvm::GlobalValue *GV);
+  void EmitMultiVersionFunctionDefinition(GlobalDecl GD, llvm::GlobalValue *GV);
+
   void EmitGlobalVarDefinition(const VarDecl *D, bool IsTentative = false);
   void EmitAliasDefinition(GlobalDecl GD);
   void emitIFuncDefinition(GlobalDecl GD);

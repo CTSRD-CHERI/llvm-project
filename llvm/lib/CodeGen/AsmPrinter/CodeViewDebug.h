@@ -54,6 +54,9 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   BumpPtrAllocator Allocator;
   codeview::GlobalTypeTableBuilder TypeTable;
 
+  /// Whether to emit type record hashes into .debug$H.
+  bool EmitDebugGlobalHashes = false;
+
   /// The codeview CPU type used by the translation unit.
   codeview::CPUType TheCPU;
 
@@ -152,6 +155,9 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
 
     /// Number of bytes pushed to save CSRs.
     unsigned CSRSize = 0;
+
+    /// Adjustment to apply on x86 when using the VFRAME frame pointer.
+    int OffsetAdjustment = 0;
 
     /// Two-bit value indicating which register is the designated frame pointer
     /// register for local variables. Included in S_FRAMEPROC.

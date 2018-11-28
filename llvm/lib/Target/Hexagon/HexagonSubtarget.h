@@ -56,10 +56,11 @@ class HexagonSubtarget : public HexagonGenSubtargetInfo {
   bool HasMemNoShuf = false;
   bool EnableDuplex = false;
   bool ReservedR19 = false;
+  bool NoreturnStackElim = false;
 
 public:
   Hexagon::ArchEnum HexagonArchVersion;
-  Hexagon::ArchEnum HexagonHVXVersion = Hexagon::ArchEnum::V4;
+  Hexagon::ArchEnum HexagonHVXVersion = Hexagon::ArchEnum::NoArch;
   CodeGenOpt::Level OptLevel;
   /// True if the target should use Back-Skip-Back scheduling. This is the
   /// default for V60.
@@ -158,13 +159,17 @@ public:
   bool useNewValueStores() const { return UseNewValueStores; }
   bool useSmallData() const { return UseSmallData; }
 
-  bool useHVXOps() const { return HexagonHVXVersion > Hexagon::ArchEnum::V4; }
+  bool useHVXOps() const {
+    return HexagonHVXVersion > Hexagon::ArchEnum::NoArch;
+  }
   bool useHVX128BOps() const { return useHVXOps() && UseHVX128BOps; }
   bool useHVX64BOps() const { return useHVXOps() && UseHVX64BOps; }
 
   bool hasMemNoShuf() const { return HasMemNoShuf; }
   bool hasReservedR19() const { return ReservedR19; }
   bool usePredicatedCalls() const;
+
+  bool noreturnStackElim() const { return NoreturnStackElim; }
 
   bool useBSBScheduling() const { return UseBSBScheduling; }
   bool enableMachineScheduler() const override;

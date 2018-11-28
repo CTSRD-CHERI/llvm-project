@@ -7,12 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 #include "llvm/ADT/StringRef.h"
 
-// Project includes
 #include "Plugins/Process/Utility/RegisterContextDarwin_arm.h"
 #include "Plugins/Process/Utility/RegisterContextDarwin_arm64.h"
 #include "Plugins/Process/Utility/RegisterContextDarwin_i386.h"
@@ -1191,14 +1187,17 @@ AddressClass ObjectFileMachO::GetAddressClass(lldb::addr_t file_addr) {
 
           case eSectionTypeDebug:
           case eSectionTypeDWARFDebugAbbrev:
+          case eSectionTypeDWARFDebugAbbrevDwo:
           case eSectionTypeDWARFDebugAddr:
           case eSectionTypeDWARFDebugAranges:
           case eSectionTypeDWARFDebugCuIndex:
           case eSectionTypeDWARFDebugFrame:
           case eSectionTypeDWARFDebugInfo:
+          case eSectionTypeDWARFDebugInfoDwo:
           case eSectionTypeDWARFDebugLine:
           case eSectionTypeDWARFDebugLineStr:
           case eSectionTypeDWARFDebugLoc:
+          case eSectionTypeDWARFDebugLocLists:
           case eSectionTypeDWARFDebugMacInfo:
           case eSectionTypeDWARFDebugMacro:
           case eSectionTypeDWARFDebugNames:
@@ -1207,7 +1206,9 @@ AddressClass ObjectFileMachO::GetAddressClass(lldb::addr_t file_addr) {
           case eSectionTypeDWARFDebugRanges:
           case eSectionTypeDWARFDebugRngLists:
           case eSectionTypeDWARFDebugStr:
+          case eSectionTypeDWARFDebugStrDwo:
           case eSectionTypeDWARFDebugStrOffsets:
+          case eSectionTypeDWARFDebugStrOffsetsDwo:
           case eSectionTypeDWARFDebugTypes:
           case eSectionTypeDWARFAppleNames:
           case eSectionTypeDWARFAppleTypes:
@@ -1457,6 +1458,7 @@ static lldb::SectionType GetSectionType(uint32_t flags,
   static ConstString g_sect_name_dwarf_debug_info("__debug_info");
   static ConstString g_sect_name_dwarf_debug_line("__debug_line");
   static ConstString g_sect_name_dwarf_debug_loc("__debug_loc");
+  static ConstString g_sect_name_dwarf_debug_loclists("__debug_loclists");
   static ConstString g_sect_name_dwarf_debug_macinfo("__debug_macinfo");
   static ConstString g_sect_name_dwarf_debug_names("__debug_names");
   static ConstString g_sect_name_dwarf_debug_pubnames("__debug_pubnames");
@@ -1486,6 +1488,8 @@ static lldb::SectionType GetSectionType(uint32_t flags,
     return eSectionTypeDWARFDebugLine;
   if (section_name == g_sect_name_dwarf_debug_loc)
     return eSectionTypeDWARFDebugLoc;
+  if (section_name == g_sect_name_dwarf_debug_loclists)
+    return eSectionTypeDWARFDebugLocLists;
   if (section_name == g_sect_name_dwarf_debug_macinfo)
     return eSectionTypeDWARFDebugMacInfo;
   if (section_name == g_sect_name_dwarf_debug_names)
@@ -2179,7 +2183,7 @@ size_t ObjectFileMachO::ParseSymtab() {
       uint32_t name_offset = cmd_offset + m_data.GetU32(&offset);
       const char *path = m_data.PeekCStr(name_offset);
       if (path) {
-        FileSpec file_spec(path, false);
+        FileSpec file_spec(path);
         // Strip the path if there is @rpath, @executable, etc so we just use
         // the basename
         if (path[0] == '@')
@@ -2632,7 +2636,7 @@ size_t ObjectFileMachO::ParseSymtab() {
       // shared cache UUID in the development or non-development shared caches
       // on disk.
       if (process_shared_cache_uuid.IsValid()) {
-        if (dsc_development_filespec.Exists()) {
+        if (FileSystem::Instance().Exists(dsc_development_filespec)) {
           UUID dsc_development_uuid = GetSharedCacheUUID(
               dsc_development_filespec, byte_order, addr_byte_size);
           if (dsc_development_uuid.IsValid() &&
@@ -2641,7 +2645,8 @@ size_t ObjectFileMachO::ParseSymtab() {
             dsc_uuid = dsc_development_uuid;
           }
         }
-        if (!dsc_uuid.IsValid() && dsc_nondevelopment_filespec.Exists()) {
+        if (!dsc_uuid.IsValid() &&
+            FileSystem::Instance().Exists(dsc_nondevelopment_filespec)) {
           UUID dsc_nondevelopment_uuid = GetSharedCacheUUID(
               dsc_nondevelopment_filespec, byte_order, addr_byte_size);
           if (dsc_nondevelopment_uuid.IsValid() &&
@@ -2654,8 +2659,8 @@ size_t ObjectFileMachO::ParseSymtab() {
 
       // Failing a UUID match, prefer the development dyld_shared cache if both
       // are present.
-      if (!dsc_filespec.Exists()) {
-        if (dsc_development_filespec.Exists()) {
+      if (!FileSystem::Instance().Exists(dsc_filespec)) {
+        if (FileSystem::Instance().Exists(dsc_development_filespec)) {
           dsc_filespec = dsc_development_filespec;
         } else {
           dsc_filespec = dsc_nondevelopment_filespec;
@@ -3063,11 +3068,11 @@ size_t ObjectFileMachO::ParseSymtab() {
                                   // file so you end up with a path that looks
                                   // like "/tmp/src//tmp/src/"
                                   FileSpec so_dir(so_path, false);
-                                  if (!so_dir.Exists()) {
+                                  if (!FileSystem::Instance().Exists(so_dir)) {
                                     so_dir.SetFile(
                                         &full_so_path[double_slash_pos + 1],
                                         false);
-                                    if (so_dir.Exists()) {
+                                    if (FileSystem::Instance().Exists(so_dir)) {
                                       // Trim off the incorrect path
                                       full_so_path.erase(0,
                                                          double_slash_pos + 1);
@@ -4012,11 +4017,11 @@ size_t ObjectFileMachO::ParseSymtab() {
                     // string in the DW_AT_comp_dir, and the second is the
                     // directory for the source file so you end up with a path
                     // that looks like "/tmp/src//tmp/src/"
-                    FileSpec so_dir(so_path, false);
-                    if (!so_dir.Exists()) {
-                      so_dir.SetFile(&full_so_path[double_slash_pos + 1], false,
+                    FileSpec so_dir(so_path);
+                    if (!FileSystem::Instance().Exists(so_dir)) {
+                      so_dir.SetFile(&full_so_path[double_slash_pos + 1],
                                      FileSpec::Style::native);
-                      if (so_dir.Exists()) {
+                      if (FileSystem::Instance().Exists(so_dir)) {
                         // Trim off the incorrect path
                         full_so_path.erase(0, double_slash_pos + 1);
                       }
@@ -5026,24 +5031,28 @@ bool ObjectFileMachO::GetArchitecture(const llvm::MachO::mach_header &header,
         const lldb::offset_t cmd_offset = offset;
         if (data.GetU32(&offset, &load_cmd, 2) == NULL)
           break;
-
-        if (load_cmd.cmd == llvm::MachO::LC_BUILD_VERSION) {
-          struct build_version_command build_version;
-          if (load_cmd.cmdsize != sizeof(build_version))
+        do {
+          if (load_cmd.cmd == llvm::MachO::LC_BUILD_VERSION) {
+            struct build_version_command build_version;
+            if (load_cmd.cmdsize < sizeof(build_version)) {
+              // Malformed load command.
+              break;
+            }
             if (data.ExtractBytes(cmd_offset, sizeof(build_version),
                                   data.GetByteOrder(), &build_version) == 0)
-              continue;
-          MinOS min_os(build_version.minos);
-          OSEnv os_env(build_version.platform);
-          if (os_env.os_type.empty())
-            continue;
-          os << os_env.os_type << min_os.major_version << '.'
-             << min_os.minor_version << '.' << min_os.patch_version;
-          triple.setOSName(os.str());
-          if (!os_env.environment.empty())
-            triple.setEnvironmentName(os_env.environment);
-          return true;
-        }
+              break;
+            MinOS min_os(build_version.minos);
+            OSEnv os_env(build_version.platform);
+            if (os_env.os_type.empty())
+              break;
+            os << os_env.os_type << min_os.major_version << '.'
+               << min_os.minor_version << '.' << min_os.patch_version;
+            triple.setOSName(os.str());
+            if (!os_env.environment.empty())
+              triple.setEnvironmentName(os_env.environment);
+            return true;
+          }
+        } while (0);
         offset = cmd_offset + load_cmd.cmdsize;
       }
 
@@ -5079,9 +5088,6 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
     std::vector<std::string> rpath_paths;
     std::vector<std::string> rpath_relative_paths;
     std::vector<std::string> at_exec_relative_paths;
-    const bool resolve_path = false; // Don't resolve the dependent file paths
-                                     // since they may not reside on this
-                                     // system
     uint32_t i;
     for (i = 0; i < m_header.ncmds; ++i) {
       const uint32_t cmd_offset = offset;
@@ -5110,7 +5116,7 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
                 at_exec_relative_paths.push_back(path 
                                                  + strlen("@executable_path"));
             } else {
-              FileSpec file_spec(path, resolve_path);
+              FileSpec file_spec(path);
               if (files.AppendIfUnique(file_spec))
                 count++;
             }
@@ -5125,8 +5131,8 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
     }
 
     FileSpec this_file_spec(m_file);
-    this_file_spec.ResolvePath();
-    
+    FileSystem::Instance().Resolve(this_file_spec);
+
     if (!rpath_paths.empty()) {
       // Fixup all LC_RPATH values to be absolute paths
       std::string loader_path("@loader_path");
@@ -5147,8 +5153,10 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
           path += rpath_relative_path;
           // It is OK to resolve this path because we must find a file on disk
           // for us to accept it anyway if it is rpath relative.
-          FileSpec file_spec(path, true);
-          if (file_spec.Exists() && files.AppendIfUnique(file_spec)) {
+          FileSpec file_spec(path);
+          FileSystem::Instance().Resolve(file_spec);
+          if (FileSystem::Instance().Exists(file_spec) &&
+              files.AppendIfUnique(file_spec)) {
             count++;
             break;
           }
@@ -5165,7 +5173,8 @@ uint32_t ObjectFileMachO::GetDependentModules(FileSpecList &files) {
       for (const auto &at_exec_relative_path : at_exec_relative_paths) {
         FileSpec file_spec = 
             exec_dir.CopyByAppendingPathComponent(at_exec_relative_path);
-        if (file_spec.Exists() && files.AppendIfUnique(file_spec))
+        if (FileSystem::Instance().Exists(file_spec) &&
+            files.AppendIfUnique(file_spec))
           count++;
       }
     }
@@ -6319,10 +6328,10 @@ bool ObjectFileMachO::SaveCore(const lldb::ProcessSP &process_sp,
 
           File core_file;
           std::string core_file_path(outfile.GetPath());
-          error = core_file.Open(core_file_path.c_str(),
-                                 File::eOpenOptionWrite |
-                                     File::eOpenOptionTruncate |
-                                     File::eOpenOptionCanCreate);
+          error = FileSystem::Instance().Open(core_file, outfile,
+                                              File::eOpenOptionWrite |
+                                                  File::eOpenOptionTruncate |
+                                                  File::eOpenOptionCanCreate);
           if (error.Success()) {
             // Read 1 page at a time
             uint8_t bytes[0x1000];

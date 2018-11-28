@@ -21,6 +21,7 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/Support/Error.h"
 
+namespace llvm {
 namespace mca {
 
 class HWEventListener;
@@ -54,11 +55,11 @@ class Pipeline {
   Pipeline &operator=(const Pipeline &P) = delete;
 
   /// An ordered list of stages that define this instruction pipeline.
-  llvm::SmallVector<std::unique_ptr<Stage>, 8> Stages;
+  SmallVector<std::unique_ptr<Stage>, 8> Stages;
   std::set<HWEventListener *> Listeners;
   unsigned Cycles;
 
-  llvm::Error runCycle();
+  Error runCycle();
   bool hasWorkToProcess();
   void notifyCycleBegin();
   void notifyCycleEnd();
@@ -66,9 +67,10 @@ class Pipeline {
 public:
   Pipeline() : Cycles(0) {}
   void appendStage(std::unique_ptr<Stage> S);
-  llvm::Error run();
+  Error run();
   void addEventListener(HWEventListener *Listener);
 };
 } // namespace mca
+} // namespace llvm
 
 #endif // LLVM_TOOLS_LLVM_MCA_PIPELINE_H

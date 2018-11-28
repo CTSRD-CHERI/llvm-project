@@ -54,6 +54,8 @@ extern "C" {
  * @{
  */
 
+/// External users depend on the following values being stable. It is not safe
+/// to reorder them.
 typedef enum {
   /* Terminator Instructions */
   LLVMRet            = 1,
@@ -63,6 +65,9 @@ typedef enum {
   LLVMInvoke         = 5,
   /* removed 6 due to API changes */
   LLVMUnreachable    = 7,
+
+  /* Standard Unary Operators */
+  LLVMFNeg           = 66,
 
   /* Standard Binary Operators */
   LLVMAdd            = 8,
@@ -1539,16 +1544,15 @@ LLVMTypeRef LLVMX86MMXType(void);
       macro(SelectInst)                     \
       macro(ShuffleVectorInst)              \
       macro(StoreInst)                      \
-      macro(TerminatorInst)                 \
-        macro(BranchInst)                   \
-        macro(IndirectBrInst)               \
-        macro(InvokeInst)                   \
-        macro(ReturnInst)                   \
-        macro(SwitchInst)                   \
-        macro(UnreachableInst)              \
-        macro(ResumeInst)                   \
-        macro(CleanupReturnInst)            \
-        macro(CatchReturnInst)              \
+      macro(BranchInst)                     \
+      macro(IndirectBrInst)                 \
+      macro(InvokeInst)                     \
+      macro(ReturnInst)                     \
+      macro(SwitchInst)                     \
+      macro(UnreachableInst)                \
+      macro(ResumeInst)                     \
+      macro(CleanupReturnInst)              \
+      macro(CatchReturnInst)                \
       macro(FuncletPadInst)                 \
         macro(CatchPadInst)                 \
         macro(CleanupPadInst)               \
@@ -2383,6 +2387,54 @@ void LLVMSetPersonalityFn(LLVMValueRef Fn, LLVMValueRef PersonalityFn);
 unsigned LLVMGetIntrinsicID(LLVMValueRef Fn);
 
 /**
+ * Create or insert the declaration of an intrinsic.  For overloaded intrinsics,
+ * parameter types must be provided to uniquely identify an overload.
+ *
+ * @see llvm::Intrinsic::getDeclaration()
+ */
+LLVMValueRef LLVMGetIntrinsicDeclaration(LLVMModuleRef Mod,
+                                         unsigned ID,
+                                         LLVMTypeRef *ParamTypes,
+                                         size_t ParamCount);
+
+/**
+ * Retrieves the type of an intrinsic.  For overloaded intrinsics, parameter
+ * types must be provided to uniquely identify an overload.
+ *
+ * @see llvm::Intrinsic::getType()
+ */
+LLVMTypeRef LLVMIntrinsicGetType(LLVMContextRef Ctx, unsigned ID,
+                                 LLVMTypeRef *ParamTypes, size_t ParamCount);
+
+/**
+ * Retrieves the name of an intrinsic.
+ *
+ * @see llvm::Intrinsic::getName()
+ */
+const char *LLVMIntrinsicGetName(unsigned ID, size_t *NameLength);
+
+/**
+ * Copies the name of an overloaded intrinsic identified by a given list of
+ * parameter types.
+ *
+ * Unlike LLVMIntrinsicGetName, the caller is responsible for freeing the
+ * returned string.
+ *
+ * @see llvm::Intrinsic::getName()
+ */
+const char *LLVMIntrinsicCopyOverloadedName(unsigned ID,
+                                            LLVMTypeRef *ParamTypes,
+                                            size_t ParamCount,
+                                            size_t *NameLength);
+
+/**
+ * Obtain if the intrinsic identified by the given ID is overloaded.
+ *
+ * @see llvm::Intrinsic::isOverloaded()
+ */
+LLVMBool LLVMIntrinsicIsOverloaded(unsigned ID);
+
+/**
  * Obtain the calling function of a function.
  *
  * The returned value corresponds to the LLVMCallConv enumeration.
@@ -2679,7 +2731,7 @@ LLVMValueRef LLVMGetBasicBlockParent(LLVMBasicBlockRef BB);
  * If the basic block does not have a terminator (it is not well-formed
  * if it doesn't), then NULL is returned.
  *
- * The returned LLVMValueRef corresponds to a llvm::TerminatorInst.
+ * The returned LLVMValueRef corresponds to an llvm::Instruction.
  *
  * @see llvm::BasicBlock::getTerminator()
  */
@@ -2952,6 +3004,15 @@ LLVMRealPredicate LLVMGetFCmpPredicate(LLVMValueRef Inst);
 LLVMValueRef LLVMInstructionClone(LLVMValueRef Inst);
 
 /**
+ * Determine whether an instruction is a terminator. This routine is named to
+ * be compatible with historical functions that did this by querying the
+ * underlying C++ type.
+ *
+ * @see llvm::Instruction::isTerminator()
+ */
+LLVMValueRef LLVMIsATerminatorInst(LLVMValueRef Inst);
+
+/**
  * @defgroup LLVMCCoreValueInstructionCall Call Sites and Invocations
  *
  * Functions in this group apply to instructions that refer to call
@@ -3091,8 +3152,8 @@ void LLVMSetUnwindDest(LLVMValueRef InvokeInst, LLVMBasicBlockRef B);
 /**
  * @defgroup LLVMCCoreValueInstructionTerminator Terminators
  *
- * Functions in this group only apply to instructions that map to
- * llvm::TerminatorInst instances.
+ * Functions in this group only apply to instructions for which
+ * LLVMIsATerminatorInst returns true.
  *
  * @{
  */
@@ -3100,21 +3161,21 @@ void LLVMSetUnwindDest(LLVMValueRef InvokeInst, LLVMBasicBlockRef B);
 /**
  * Return the number of successors that this terminator has.
  *
- * @see llvm::TerminatorInst::getNumSuccessors
+ * @see llvm::Instruction::getNumSuccessors
  */
 unsigned LLVMGetNumSuccessors(LLVMValueRef Term);
 
 /**
  * Return the specified successor.
  *
- * @see llvm::TerminatorInst::getSuccessor
+ * @see llvm::Instruction::getSuccessor
  */
 LLVMBasicBlockRef LLVMGetSuccessor(LLVMValueRef Term, unsigned i);
 
 /**
  * Update the specified successor to point at the provided block.
  *
- * @see llvm::TerminatorInst::setSuccessor
+ * @see llvm::Instruction::setSuccessor
  */
 void LLVMSetSuccessor(LLVMValueRef Term, unsigned i, LLVMBasicBlockRef block);
 
@@ -3465,6 +3526,35 @@ LLVMValueRef LLVMBuildNot(LLVMBuilderRef, LLVMValueRef V, const char *Name);
 LLVMValueRef LLVMBuildMalloc(LLVMBuilderRef, LLVMTypeRef Ty, const char *Name);
 LLVMValueRef LLVMBuildArrayMalloc(LLVMBuilderRef, LLVMTypeRef Ty,
                                   LLVMValueRef Val, const char *Name);
+
+/**
+ * Creates and inserts a memset to the specified pointer and the 
+ * specified value.
+ *
+ * @see llvm::IRRBuilder::CreateMemSet()
+ */
+LLVMValueRef LLVMBuildMemSet(LLVMBuilderRef B, LLVMValueRef Ptr,
+                             LLVMValueRef Val, LLVMValueRef Len,
+                             unsigned Align);
+/**
+ * Creates and inserts a memcpy between the specified pointers.
+ *
+ * @see llvm::IRRBuilder::CreateMemCpy()
+ */
+LLVMValueRef LLVMBuildMemCpy(LLVMBuilderRef B, 
+                             LLVMValueRef Dst, unsigned DstAlign,
+                             LLVMValueRef Src, unsigned SrcAlign,
+                             LLVMValueRef Size);
+/**
+ * Creates and inserts a memmove between the specified pointers.
+ *
+ * @see llvm::IRRBuilder::CreateMemMove()
+ */
+LLVMValueRef LLVMBuildMemMove(LLVMBuilderRef B, 
+                              LLVMValueRef Dst, unsigned DstAlign,
+                              LLVMValueRef Src, unsigned SrcAlign,
+                              LLVMValueRef Size);
+
 LLVMValueRef LLVMBuildAlloca(LLVMBuilderRef, LLVMTypeRef Ty, const char *Name);
 LLVMValueRef LLVMBuildArrayAlloca(LLVMBuilderRef, LLVMTypeRef Ty,
                                   LLVMValueRef Val, const char *Name);

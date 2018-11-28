@@ -908,16 +908,6 @@ void SIInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
     return;
   }
 
-  if (!ST.isVGPRSpillingEnabled(MF->getFunction())) {
-    LLVMContext &Ctx = MF->getFunction().getContext();
-    Ctx.emitError("SIInstrInfo::storeRegToStackSlot - Do not know how to"
-                  " spill register");
-    BuildMI(MBB, MI, DL, get(AMDGPU::KILL))
-      .addReg(SrcReg);
-
-    return;
-  }
-
   assert(RI.hasVGPRs(RC) && "Only VGPR spilling expected");
 
   unsigned Opcode = getVGPRSpillSaveOpcode(SpillSize);
@@ -1006,15 +996,6 @@ void SIInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
       // m0 is used for offset to scalar stores if used to spill.
       Spill.addReg(AMDGPU::M0, RegState::ImplicitDefine | RegState::Dead);
     }
-
-    return;
-  }
-
-  if (!ST.isVGPRSpillingEnabled(MF->getFunction())) {
-    LLVMContext &Ctx = MF->getFunction().getContext();
-    Ctx.emitError("SIInstrInfo::loadRegFromStackSlot - Do not know how to"
-                  " restore register");
-    BuildMI(MBB, MI, DL, get(AMDGPU::IMPLICIT_DEF), DestReg);
 
     return;
   }
@@ -1555,8 +1536,9 @@ unsigned SIInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
   //   buzz;
 
   RS->enterBasicBlockEnd(MBB);
-  unsigned Scav = RS->scavengeRegister(&AMDGPU::SReg_64RegClass,
-                                       MachineBasicBlock::iterator(GetPC), 0);
+  unsigned Scav = RS->scavengeRegisterBackwards(
+    AMDGPU::SReg_64RegClass,
+    MachineBasicBlock::iterator(GetPC), false, 0);
   MRI.replaceRegWith(PCReg, Scav);
   MRI.clearVirtRegs();
   RS->setRegUsed(Scav);
@@ -1650,7 +1632,34 @@ bool SIInstrInfo::analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
                                 SmallVectorImpl<MachineOperand> &Cond,
                                 bool AllowModify) const {
   MachineBasicBlock::iterator I = MBB.getFirstTerminator();
-  if (I == MBB.end())
+  auto E = MBB.end();
+  if (I == E)
+    return false;
+
+  // Skip over the instructions that are artificially terminators for special
+  // exec management.
+  while (I != E && !I->isBranch() && !I->isReturn() &&
+         I->getOpcode() != AMDGPU::SI_MASK_BRANCH) {
+    switch (I->getOpcode()) {
+    case AMDGPU::SI_MASK_BRANCH:
+    case AMDGPU::S_MOV_B64_term:
+    case AMDGPU::S_XOR_B64_term:
+    case AMDGPU::S_ANDN2_B64_term:
+      break;
+    case AMDGPU::SI_IF:
+    case AMDGPU::SI_ELSE:
+    case AMDGPU::SI_KILL_I1_TERMINATOR:
+    case AMDGPU::SI_KILL_F32_COND_IMM_TERMINATOR:
+      // FIXME: It's messy that these need to be considered here at all.
+      return true;
+    default:
+      llvm_unreachable("unexpected non-branch terminator inst");
+    }
+
+    ++I;
+  }
+
+  if (I == E)
     return false;
 
   if (I->getOpcode() != AMDGPU::SI_MASK_BRANCH)
@@ -4952,10 +4961,10 @@ void SIInstrInfo::addSCCDefUsersToVALUWorklist(
        make_range(MachineBasicBlock::iterator(SCCDefInst),
                       SCCDefInst.getParent()->end())) {
     // Exit if we find another SCC def.
-    if (MI.findRegisterDefOperandIdx(AMDGPU::SCC) != -1)
+    if (MI.findRegisterDefOperandIdx(AMDGPU::SCC, false, false, &RI) != -1)
       return;
 
-    if (MI.findRegisterUseOperandIdx(AMDGPU::SCC) != -1)
+    if (MI.findRegisterUseOperandIdx(AMDGPU::SCC, false, &RI) != -1)
       Worklist.insert(&MI);
   }
 }

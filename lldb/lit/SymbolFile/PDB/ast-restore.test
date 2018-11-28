@@ -1,11 +1,12 @@
-REQUIRES: windows
-RUN: cl /Zi /GS- /c %S/Inputs/AstRestoreTest.cpp /Fo%t.obj
-RUN: link /debug:full /nodefaultlib /entry:main %t.obj /out:%t.exe
+REQUIRES: system-windows
+RUN: %msvc_cl /Zi /GS- /c %S/Inputs/AstRestoreTest.cpp /Fo%t.obj
+RUN: %msvc_link /debug:full /nodefaultlib /entry:main %t.obj /out:%t.exe
 RUN: lldb-test symbols -dump-ast %t.exe | FileCheck --check-prefix=ENUM %s
 RUN: lldb-test symbols -dump-ast %t.exe | FileCheck --check-prefix=GLOBAL %s
 RUN: lldb-test symbols -dump-ast %t.exe | FileCheck --check-prefix=BASE %s
 RUN: lldb-test symbols -dump-ast %t.exe | FileCheck --check-prefix=CLASS %s
 RUN: lldb-test symbols -dump-ast %t.exe | FileCheck --check-prefix=INNER %s
+RUN: lldb-test symbols -dump-ast %t.exe | FileCheck --check-prefix=TEMPLATE %s
 RUN: lldb-test symbols -dump-ast %t.exe | FileCheck --check-prefix=FOO %s
 RUN: lldb-test symbols -dump-ast %t.exe | FileCheck --check-prefix=MAIN %s
 
@@ -65,6 +66,11 @@ INNER:             };
 INNER:         };
 INNER:     }
 INNER: }
+
+TEMPLATE: Module: {{.*}}
+TEMPLATE: struct Template<N0::N1::Class> {
+TEMPLATE:     inline void TemplateFunc<1>();
+TEMPLATE: };
 
 FOO: Module: {{.*}}
 FOO: namespace N0 {

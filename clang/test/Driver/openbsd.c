@@ -12,7 +12,7 @@
 // RUN: %clang -no-canonical-prefixes -target i686-pc-openbsd -pg -pthread %s -### 2>&1 \
 // RUN:   | FileCheck --check-prefix=CHECK-PG %s
 // CHECK-PG: clang{{.*}}" "-cc1" "-triple" "i686-pc-openbsd"
-// CHECK-PG: ld{{.*}}" "-e" "__start" "--eh-frame-hdr" "-Bdynamic" "-dynamic-linker" "{{.*}}ld.so" "-o" "a.out" "{{.*}}gcrt0.o" "{{.*}}crtbegin.o" "{{.*}}.o" "-lcompiler_rt" "-lpthread_p" "-lc_p" "-lcompiler_rt" "{{.*}}crtend.o"
+// CHECK-PG: ld{{.*}}" "-e" "__start" "--eh-frame-hdr" "-Bdynamic" "-dynamic-linker" "{{.*}}ld.so" "-nopie" "-o" "a.out" "{{.*}}gcrt0.o" "{{.*}}crtbegin.o" "{{.*}}.o" "-lcompiler_rt" "-lpthread_p" "-lc_p" "-lcompiler_rt" "{{.*}}crtend.o"
 
 // Check CPU type for MIPS64
 // RUN: %clang -target mips64-unknown-openbsd -### -c %s 2>&1 \
@@ -112,3 +112,8 @@
 // RUN:   | FileCheck -check-prefix=CHECK-ARM-FLOAT-ABI %s
 // CHECK-ARM-FLOAT-ABI-NOT: "-target-feature" "+soft-float"
 // CHECK-ARM-FLOAT-ABI: "-target-feature" "+soft-float-abi"
+
+// Check PowerPC for Secure PLT
+// RUN: %clang -target powerpc-unknown-openbsd -### -c %s 2>&1 \
+// RUN:   | FileCheck -check-prefix=CHECK-POWERPC-SECUREPLT %s
+// CHECK-POWERPC-SECUREPLT: "-target-feature" "+secure-plt"

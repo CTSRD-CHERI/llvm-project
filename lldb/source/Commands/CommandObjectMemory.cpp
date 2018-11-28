@@ -7,14 +7,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
 #include <inttypes.h>
 
-// C++ Includes
-// Other libraries and framework includes
 #include "clang/AST/Decl.h"
 
-// Project includes
 #include "CommandObjectMemory.h"
 #include "Plugins/ExpressionParser/Clang/ClangPersistentVariables.h"
 #include "lldb/Core/Debugger.h"
@@ -762,9 +758,9 @@ protected:
     Stream *output_stream = nullptr;
     const FileSpec &outfile_spec =
         m_outfile_options.GetFile().GetCurrentValue();
+
+    std::string path = outfile_spec.GetPath();
     if (outfile_spec) {
-      char path[PATH_MAX];
-      outfile_spec.GetPath(path, sizeof(path));
 
       uint32_t open_options =
           File::eOpenOptionWrite | File::eOpenOptionCanCreate;
@@ -772,19 +768,21 @@ protected:
       if (append)
         open_options |= File::eOpenOptionAppend;
 
-      if (outfile_stream.GetFile().Open(path, open_options).Success()) {
+      Status error = FileSystem::Instance().Open(outfile_stream.GetFile(),
+                                                 outfile_spec, open_options);
+      if (error.Success()) {
         if (m_memory_options.m_output_as_binary) {
           const size_t bytes_written =
               outfile_stream.Write(data_sp->GetBytes(), bytes_read);
           if (bytes_written > 0) {
             result.GetOutputStream().Printf(
                 "%zi bytes %s to '%s'\n", bytes_written,
-                append ? "appended" : "written", path);
+                append ? "appended" : "written", path.c_str());
             return true;
           } else {
             result.AppendErrorWithFormat("Failed to write %" PRIu64
                                          " bytes to '%s'.\n",
-                                         (uint64_t)bytes_read, path);
+                                         (uint64_t)bytes_read, path.c_str());
             result.SetStatus(eReturnStatusFailed);
             return false;
           }
@@ -794,8 +792,8 @@ protected:
           output_stream = &outfile_stream;
         }
       } else {
-        result.AppendErrorWithFormat("Failed to open file '%s' for %s.\n", path,
-                                     append ? "append" : "write");
+        result.AppendErrorWithFormat("Failed to open file '%s' for %s.\n",
+                                     path.c_str(), append ? "append" : "write");
         result.SetStatus(eReturnStatusFailed);
         return false;
       }
@@ -1209,8 +1207,9 @@ public:
 
       switch (short_option) {
       case 'i':
-        m_infile.SetFile(option_value, true, FileSpec::Style::native);
-        if (!m_infile.Exists()) {
+        m_infile.SetFile(option_value, FileSpec::Style::native);
+        FileSystem::Instance().Resolve(m_infile);
+        if (!FileSystem::Instance().Exists(m_infile)) {
           m_infile.Clear();
           error.SetErrorStringWithFormat("input file does not exist: '%s'",
                                          option_value.str().c_str());
@@ -1358,7 +1357,7 @@ protected:
       size_t length = SIZE_MAX;
       if (item_byte_size > 1)
         length = item_byte_size;
-      auto data_sp = DataBufferLLVM::CreateSliceFromPath(
+      auto data_sp = FileSystem::Instance().CreateDataBuffer(
           m_memory_options.m_infile.GetPath(), length,
           m_memory_options.m_infile_offset);
       if (data_sp) {

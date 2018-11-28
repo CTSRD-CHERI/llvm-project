@@ -37,6 +37,7 @@
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/SubtargetFeature.h"
 #include "llvm/Passes/PassBuilder.h"
+#include "llvm/Support/BuryPointer.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/PrettyStackTrace.h"
@@ -481,7 +482,7 @@ static void initTargetOptions(llvm::TargetOptions &Options,
   Options.EmitStackSizeSection = CodeGenOpts.StackSizeSection;
   Options.EmitAddrsig = CodeGenOpts.Addrsig;
 
-  if (CodeGenOpts.EnableSplitDwarf)
+  if (CodeGenOpts.getSplitDwarfMode() != CodeGenOptions::NoFission)
     Options.MCOptions.SplitDwarfFile = CodeGenOpts.SplitDwarfFile;
   Options.MCOptions.MCRelaxAll = CodeGenOpts.RelaxAll;
   Options.MCOptions.MCSaveTempLabels = CodeGenOpts.SaveTempLabels;
@@ -516,6 +517,8 @@ static Optional<GCOVOptions> getGCOVOptions(const CodeGenOptions &CodeGenOpts) {
   Options.UseCfgChecksum = CodeGenOpts.CoverageExtraChecksum;
   Options.NoRedZone = CodeGenOpts.DisableRedZone;
   Options.FunctionNamesInData = !CodeGenOpts.CoverageNoFunctionNamesInData;
+  Options.Filter = CodeGenOpts.ProfileFilterFiles;
+  Options.Exclude = CodeGenOpts.ProfileExcludeFiles;
   Options.ExitBlockBeforeBody = CodeGenOpts.CoverageExitBlockBeforeBody;
   return Options;
 }
@@ -862,7 +865,8 @@ void EmitAssemblyHelper::EmitAssembly(BackendAction Action,
     break;
 
   default:
-    if (!CodeGenOpts.SplitDwarfFile.empty()) {
+    if (!CodeGenOpts.SplitDwarfFile.empty() &&
+        (CodeGenOpts.getSplitDwarfMode() == CodeGenOptions::SplitFileFission)) {
       DwoOS = openOutputFile(CodeGenOpts.SplitDwarfFile);
       if (!DwoOS)
         return;

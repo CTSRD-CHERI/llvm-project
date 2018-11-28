@@ -876,43 +876,62 @@ Instruction *InstCombiner::visitInsertElementInst(InsertElementInst &IE) {
   if (isa<UndefValue>(ScalarOp) || isa<UndefValue>(IdxOp))
     replaceInstUsesWith(IE, VecOp);
 
-  // If the inserted element was extracted from some other vector, and if the
-  // indexes are constant, try to turn this into a shufflevector operation.
-  if (ExtractElementInst *EI = dyn_cast<ExtractElementInst>(ScalarOp)) {
-    if (isa<ConstantInt>(EI->getOperand(1)) && isa<ConstantInt>(IdxOp)) {
-      unsigned NumInsertVectorElts = IE.getType()->getNumElements();
-      unsigned NumExtractVectorElts =
-          EI->getOperand(0)->getType()->getVectorNumElements();
-      unsigned ExtractedIdx =
-        cast<ConstantInt>(EI->getOperand(1))->getZExtValue();
-      unsigned InsertedIdx = cast<ConstantInt>(IdxOp)->getZExtValue();
+  // If the inserted element was extracted from some other vector and both
+  // indexes are constant, try to turn this into a shuffle.
+  uint64_t InsertedIdx, ExtractedIdx;
+  Value *ExtVecOp;
+  if (match(IdxOp, m_ConstantInt(InsertedIdx)) &&
+      match(ScalarOp, m_ExtractElement(m_Value(ExtVecOp),
+                                       m_ConstantInt(ExtractedIdx)))) {
+    unsigned NumInsertVectorElts = IE.getType()->getNumElements();
+    unsigned NumExtractVectorElts = ExtVecOp->getType()->getVectorNumElements();
+    if (ExtractedIdx >= NumExtractVectorElts) // Out of range extract.
+      return replaceInstUsesWith(IE, VecOp);
 
-      if (ExtractedIdx >= NumExtractVectorElts) // Out of range extract.
-        return replaceInstUsesWith(IE, VecOp);
+    if (InsertedIdx >= NumInsertVectorElts)  // Out of range insert.
+      return replaceInstUsesWith(IE, UndefValue::get(IE.getType()));
 
-      if (InsertedIdx >= NumInsertVectorElts)  // Out of range insert.
-        return replaceInstUsesWith(IE, UndefValue::get(IE.getType()));
+    // If we are extracting a value from a vector, then inserting it right
+    // back into the same place, just use the input vector.
+    if (ExtVecOp == VecOp && ExtractedIdx == InsertedIdx)
+      return replaceInstUsesWith(IE, VecOp);
 
-      // If we are extracting a value from a vector, then inserting it right
-      // back into the same place, just use the input vector.
-      if (EI->getOperand(0) == VecOp && ExtractedIdx == InsertedIdx)
-        return replaceInstUsesWith(IE, VecOp);
+    // TODO: Looking at the user(s) to determine if this insert is a
+    // fold-to-shuffle opportunity does not match the usual instcombine
+    // constraints. We should decide if the transform is worthy based only
+    // on this instruction and its operands, but that may not work currently.
+    //
+    // Here, we are trying to avoid creating shuffles before reaching
+    // the end of a chain of extract-insert pairs. This is complicated because
+    // we do not generally form arbitrary shuffle masks in instcombine
+    // (because those may codegen poorly), but collectShuffleElements() does
+    // exactly that.
+    //
+    // The rules for determining what is an acceptable target-independent
+    // shuffle mask are fuzzy because they evolve based on the backend's
+    // capabilities and real-world impact.
+    auto isShuffleRootCandidate = [](InsertElementInst &Insert) {
+      if (!Insert.hasOneUse())
+        return true;
+      auto *InsertUser = dyn_cast<InsertElementInst>(Insert.user_back());
+      if (!InsertUser)
+        return true;
+      return false;
+    };
 
-      // If this insertelement isn't used by some other insertelement, turn it
-      // (and any insertelements it points to), into one big shuffle.
-      if (!IE.hasOneUse() || !isa<InsertElementInst>(IE.user_back())) {
-        SmallVector<Constant*, 16> Mask;
-        ShuffleOps LR = collectShuffleElements(&IE, Mask, nullptr, *this);
+    // Try to form a shuffle from a chain of extract-insert ops.
+    if (isShuffleRootCandidate(IE)) {
+      SmallVector<Constant*, 16> Mask;
+      ShuffleOps LR = collectShuffleElements(&IE, Mask, nullptr, *this);
 
-        // The proposed shuffle may be trivial, in which case we shouldn't
-        // perform the combine.
-        if (LR.first != &IE && LR.second != &IE) {
-          // We now have a shuffle of LHS, RHS, Mask.
-          if (LR.second == nullptr)
-            LR.second = UndefValue::get(LR.first->getType());
-          return new ShuffleVectorInst(LR.first, LR.second,
-                                       ConstantVector::get(Mask));
-        }
+      // The proposed shuffle may be trivial, in which case we shouldn't
+      // perform the combine.
+      if (LR.first != &IE && LR.second != &IE) {
+        // We now have a shuffle of LHS, RHS, Mask.
+        if (LR.second == nullptr)
+          LR.second = UndefValue::get(LR.first->getType());
+        return new ShuffleVectorInst(LR.first, LR.second,
+                                     ConstantVector::get(Mask));
       }
     }
   }
@@ -1512,6 +1531,71 @@ static Instruction *foldIdentityExtractShuffle(ShuffleVectorInst &Shuf) {
   return new ShuffleVectorInst(X, Y, ConstantVector::get(NewMask));
 }
 
+/// Try to replace a shuffle with an insertelement.
+static Instruction *foldShuffleWithInsert(ShuffleVectorInst &Shuf) {
+  Value *V0 = Shuf.getOperand(0), *V1 = Shuf.getOperand(1);
+  SmallVector<int, 16> Mask = Shuf.getShuffleMask();
+
+  // The shuffle must not change vector sizes.
+  // TODO: This restriction could be removed if the insert has only one use
+  //       (because the transform would require a new length-changing shuffle).
+  int NumElts = Mask.size();
+  if (NumElts != (int)(V0->getType()->getVectorNumElements()))
+    return nullptr;
+
+  // shuffle (insert ?, Scalar, IndexC), V1, Mask --> insert V1, Scalar, IndexC'
+  auto isShufflingScalarIntoOp1 = [&](Value *&Scalar, ConstantInt *&IndexC) {
+    // We need an insertelement with a constant index.
+    if (!match(V0, m_InsertElement(m_Value(), m_Value(Scalar),
+                                   m_ConstantInt(IndexC))))
+      return false;
+
+    // Test the shuffle mask to see if it splices the inserted scalar into the
+    // operand 1 vector of the shuffle.
+    int NewInsIndex = -1;
+    for (int i = 0; i != NumElts; ++i) {
+      // Ignore undef mask elements.
+      if (Mask[i] == -1)
+        continue;
+
+      // The shuffle takes elements of operand 1 without lane changes.
+      if (Mask[i] == NumElts + i)
+        continue;
+
+      // The shuffle must choose the inserted scalar exactly once.
+      if (NewInsIndex != -1 || Mask[i] != IndexC->getSExtValue())
+        return false;
+
+      // The shuffle is placing the inserted scalar into element i.
+      NewInsIndex = i;
+    }
+
+    assert(NewInsIndex != -1 && "Did not fold shuffle with unused operand?");
+
+    // Index is updated to the potentially translated insertion lane.
+    IndexC = ConstantInt::get(IndexC->getType(), NewInsIndex);
+    return true;
+  };
+
+  // If the shuffle is unnecessary, insert the scalar operand directly into
+  // operand 1 of the shuffle. Example:
+  // shuffle (insert ?, S, 1), V1, <1, 5, 6, 7> --> insert V1, S, 0
+  Value *Scalar;
+  ConstantInt *IndexC;
+  if (isShufflingScalarIntoOp1(Scalar, IndexC))
+    return InsertElementInst::Create(V1, Scalar, IndexC);
+
+  // Try again after commuting shuffle. Example:
+  // shuffle V0, (insert ?, S, 0), <0, 1, 2, 4> -->
+  // shuffle (insert ?, S, 0), V0, <4, 5, 6, 0> --> insert V0, S, 3
+  std::swap(V0, V1);
+  ShuffleVectorInst::commuteShuffleMask(Mask, NumElts);
+  if (isShufflingScalarIntoOp1(Scalar, IndexC))
+    return InsertElementInst::Create(V1, Scalar, IndexC);
+
+  return nullptr;
+}
+
 Instruction *InstCombiner::visitShuffleVectorInst(ShuffleVectorInst &SVI) {
   Value *LHS = SVI.getOperand(0);
   Value *RHS = SVI.getOperand(1);
@@ -1535,6 +1619,11 @@ Instruction *InstCombiner::visitShuffleVectorInst(ShuffleVectorInst &SVI) {
   }
 
   if (Instruction *I = foldIdentityExtractShuffle(SVI))
+    return I;
+
+  // This transform has the potential to lose undef knowledge, so it is
+  // intentionally placed after SimplifyDemandedVectorElts().
+  if (Instruction *I = foldShuffleWithInsert(SVI))
     return I;
 
   SmallVector<int, 16> Mask = SVI.getShuffleMask();

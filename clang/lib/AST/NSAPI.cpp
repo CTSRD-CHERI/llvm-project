@@ -477,6 +477,9 @@ NSAPI::getNSNumberFactoryMethodKind(QualType T) const {
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
   case BuiltinType::Id:
 #include "clang/Basic/OpenCLImageTypes.def"
+#define EXT_OPAQUE_TYPE(ExtType, Id, Ext) \
+  case BuiltinType::Id:
+#include "clang/Basic/OpenCLExtensionTypes.def"
   case BuiltinType::OCLSampler:
   case BuiltinType::OCLEvent:
   case BuiltinType::OCLClkEvent:
@@ -511,7 +514,7 @@ bool NSAPI::isObjCNSUIntegerType(QualType T) const {
 }
 
 StringRef NSAPI::GetNSIntegralKind(QualType T) const {
-  if (!Ctx.getLangOpts().ObjC1 || T.isNull())
+  if (!Ctx.getLangOpts().ObjC || T.isNull())
     return StringRef();
 
   while (const TypedefType *TDT = T->getAs<TypedefType>()) {
@@ -563,7 +566,7 @@ bool NSAPI::isSubclassOfNSClass(ObjCInterfaceDecl *InterfaceDecl,
 
 bool NSAPI::isObjCTypedef(QualType T,
                           StringRef name, IdentifierInfo *&II) const {
-  if (!Ctx.getLangOpts().ObjC1)
+  if (!Ctx.getLangOpts().ObjC)
     return false;
   if (T.isNull())
     return false;
@@ -582,7 +585,7 @@ bool NSAPI::isObjCTypedef(QualType T,
 
 bool NSAPI::isObjCEnumerator(const Expr *E,
                              StringRef name, IdentifierInfo *&II) const {
-  if (!Ctx.getLangOpts().ObjC1)
+  if (!Ctx.getLangOpts().ObjC)
     return false;
   if (!E)
     return false;

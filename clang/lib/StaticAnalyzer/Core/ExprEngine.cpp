@@ -1282,6 +1282,10 @@ void ExprEngine::Visit(const Stmt *S, ExplodedNode *Pred,
       Bldr.addNodes(Dst);
       break;
 
+    case Expr::ConstantExprClass:
+      // Handled due to it being a wrapper class.
+      break;
+
     case Stmt::ExprWithCleanupsClass:
       // Handled due to fully linearised CFG.
       break;
@@ -3107,4 +3111,9 @@ std::string ExprEngine::DumpGraph(ArrayRef<const ExplodedNode*> Nodes,
 #endif
   llvm::errs() << "Warning: dumping graph requires assertions" << "\n";
   return "";
+}
+
+void *ProgramStateTrait<ReplayWithoutInlining>::GDMIndex() {
+  static int index = 0;
+  return &index;
 }

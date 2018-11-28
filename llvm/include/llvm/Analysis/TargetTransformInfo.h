@@ -588,7 +588,8 @@ public:
   bool enableInterleavedAccessVectorization() const;
 
   /// Enable matching of interleaved access groups that contain predicated 
-  /// accesses and are vectorized using masked vector loads/stores.
+  /// accesses or gaps and therefore vectorized using masked
+  /// vector loads/stores.
   bool enableMaskedInterleavedAccessVectorization() const;
 
   /// Indicate that it is potentially unsafe to automatically vectorize
@@ -743,9 +744,9 @@ public:
   /// and the number of execution units in the CPU.
   unsigned getMaxInterleaveFactor(unsigned VF) const;
 
-  /// Collect properties of V used in cost analyzis, e.g. OP_PowerOf2.
-  OperandValueKind getOperandInfo(Value *V,
-                                  OperandValueProperties &OpProps) const;
+  /// Collect properties of V used in cost analysis, e.g. OP_PowerOf2.
+  static OperandValueKind getOperandInfo(Value *V,
+                                         OperandValueProperties &OpProps);
 
   /// This is an approximation of reciprocal throughput of a math/logic op.
   /// A higher cost indicates less expected throughput.
@@ -770,7 +771,9 @@ public:
 
   /// \return The cost of a shuffle instruction of kind Kind and of type Tp.
   /// The index and subtype parameters are used by the subvector insertion and
-  /// extraction shuffle kinds.
+  /// extraction shuffle kinds to show the insert/extract point and the type of
+  /// the subvector being inserted/extracted. 
+  /// NOTE: For subvector extractions Tp represents the source type.
   int getShuffleCost(ShuffleKind Kind, Type *Tp, int Index = 0,
                      Type *SubTp = nullptr) const;
 
@@ -825,11 +828,13 @@ public:
   ///    load allows gaps)
   /// \p Alignment is the alignment of the memory operation
   /// \p AddressSpace is address space of the pointer.
-  /// \p IsMasked indicates if the memory access is predicated.
+  /// \p UseMaskForCond indicates if the memory access is predicated.
+  /// \p UseMaskForGaps indicates if gaps should be masked.
   int getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy, unsigned Factor,
                                  ArrayRef<unsigned> Indices, unsigned Alignment,
-                                 unsigned AddressSpace, 
-                                 bool IsMasked = false) const;
+                                 unsigned AddressSpace,
+                                 bool UseMaskForCond = false,
+                                 bool UseMaskForGaps = false) const;
 
   /// Calculate the cost of performing a vector reduction.
   ///
@@ -1140,7 +1145,8 @@ public:
                                          ArrayRef<unsigned> Indices,
                                          unsigned Alignment,
                                          unsigned AddressSpace,
-                                         bool IsMasked = false) = 0;
+                                         bool UseMaskForCond = false,
+                                         bool UseMaskForGaps = false) = 0;
   virtual int getArithmeticReductionCost(unsigned Opcode, Type *Ty,
                                          bool IsPairwiseForm) = 0;
   virtual int getMinMaxReductionCost(Type *Ty, Type *CondTy,
@@ -1482,9 +1488,11 @@ public:
   }
   int getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy, unsigned Factor,
                                  ArrayRef<unsigned> Indices, unsigned Alignment,
-                                 unsigned AddressSpace, bool IsMasked) override {
+                                 unsigned AddressSpace, bool UseMaskForCond,
+                                 bool UseMaskForGaps) override {
     return Impl.getInterleavedMemoryOpCost(Opcode, VecTy, Factor, Indices,
-                                           Alignment, AddressSpace, IsMasked);
+                                           Alignment, AddressSpace,
+                                           UseMaskForCond, UseMaskForGaps);
   }
   int getArithmeticReductionCost(unsigned Opcode, Type *Ty,
                                  bool IsPairwiseForm) override {

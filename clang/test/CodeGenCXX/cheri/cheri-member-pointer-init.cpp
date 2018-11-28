@@ -29,7 +29,7 @@ void local_struct_constant_init() {
   struct {
       MemberPtr p;
   } s{&A::nonvirt};
-  // CHECK: @_ZZ26local_struct_constant_initvE1s = private unnamed_addr addrspace(200) constant %struct.anon { { i8 addrspace(200)*, i64 } {
+  // CHECK: @__const._Z26local_struct_constant_initv.s = private unnamed_addr addrspace(200) constant %struct.anon { { i8 addrspace(200)*, i64 } {
   // LEGACY: i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A7nonvirtEv to i8*) to i8 addrspace(200)*), i64 0 } }, align [[$CAP_SIZE]]
   // CAPTABLE: i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A7nonvirtEv to i8 addrspace(200)*), i64 0 } }, align [[$CAP_SIZE]]
 }

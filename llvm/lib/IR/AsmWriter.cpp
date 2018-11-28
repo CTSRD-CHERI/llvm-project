@@ -1910,6 +1910,7 @@ static void writeDICompileUnit(raw_ostream &Out, const DICompileUnit *N,
   Printer.printBool("debugInfoForProfiling", N->getDebugInfoForProfiling(),
                     false);
   Printer.printNameTableKind("nameTableKind", N->getNameTableKind());
+  Printer.printBool("rangesBaseAddress", N->getRangesBaseAddress(), false);
   Out << ")";
 }
 
@@ -2871,6 +2872,7 @@ void AssemblyWriter::printFunctionSummary(const FunctionSummary *FS) {
     Out << ", readOnly: " << FFlags.ReadOnly;
     Out << ", noRecurse: " << FFlags.NoRecurse;
     Out << ", returnDoesNotAlias: " << FFlags.ReturnDoesNotAlias;
+    Out << ", noInline: " << FFlags.NoInline;
     Out << ")";
   }
   if (!FS->calls().empty()) {

@@ -1021,6 +1021,10 @@ namespace serialization {
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
       PREDEF_TYPE_##Id##_ID,
 #include "clang/Basic/OpenCLImageTypes.def"
+      /// \brief OpenCL extension types with auto numeration
+#define EXT_OPAQUE_TYPE(ExtType, Id, Ext) \
+      PREDEF_TYPE_##Id##_ID,
+#include "clang/Basic/OpenCLExtensionTypes.def"
     };
 
     /// The number of predefined type IDs that are reserved for
@@ -1542,6 +1546,8 @@ namespace serialization {
 
       /// An OMPDeclareReductionDecl record.
       DECL_OMP_DECLARE_REDUCTION,
+
+      DECL_LAST = DECL_OMP_DECLARE_REDUCTION
     };
 
     /// Record codes for each kind of statement or expression.
@@ -1554,7 +1560,7 @@ namespace serialization {
     enum StmtCode {
       /// A marker record that indicates that we are at the end
       /// of an expression.
-      STMT_STOP = 128,
+      STMT_STOP = DECL_LAST + 1,
 
       /// A NULL expression.
       STMT_NULL_PTR,
@@ -1621,6 +1627,9 @@ namespace serialization {
 
       /// A MS-style AsmStmt record.
       STMT_MSASM,
+
+      /// A constant expression context.
+      EXPR_CONSTANT,
 
       /// A PredefinedExpr record.
       EXPR_PREDEFINED,
