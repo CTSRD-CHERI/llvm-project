@@ -609,13 +609,14 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
   //                  E->dump(llvm::dbgs()));
 
   NumReferencesCheckedForBoundsTightening++;
-  if (canTightenCheriBounds(Value, Ty, E, /* IsReference=*/true)) {
+  bool IsSubObj = false;
+  if (canTightenCheriBounds(Value, Ty, E, &IsSubObj, /* IsReference=*/true)) {
     uint64_t Size = getContext().getTypeSizeInChars(Ty).getQuantity();
     CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
                      << "' reference to " << Size << "\n");
     NumBoundsSetOnReferences++;
     return setPointerBounds(Value, Size, Loc, "ref.with.bounds",
-                            "Add subobject bounds", /*IsSubObject=*/true,
+                            "Add subobject bounds", IsSubObj,
                             "C++ reference on " + Ty.getAsString());
   }
   return Value;
@@ -630,20 +631,22 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
   //                  E->dump(llvm::dbgs()));
 
   NumAddrOfCheckedForBoundsTightening++;
-  if (canTightenCheriBounds(Value, Ty, E)) {
+  bool IsSubObject = false;
+  if (canTightenCheriBounds(Value, Ty, E, &IsSubObject)) {
     uint64_t Size = getContext().getTypeSizeInChars(Ty).getQuantity();
     CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
                      << "' addrof to " << Size << "\n");
     NumBoundsSetOnAddrOf++;
     return setPointerBounds(Value, Size, Loc, "addrof.with.bounds",
-                            "Add subobject bounds", /*IsSubObject=*/true,
+                            "Add subobject bounds", IsSubObject,
                             "addrof operator on " + Ty.getAsString());
   }
   return Value;
 }
 
 bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
-                                            const Expr *E, bool IsReference) {
+                                            const Expr *E, bool *IsSubObject,
+                                            bool IsReference) {
   const auto BoundsMode = getLangOpts().getCheriBounds() ;
   assert(BoundsMode > LangOptions::CBM_Conservative);
   if (!CGM.getDataLayout().isFatPointer(Value->getType())) {
@@ -658,6 +661,12 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   assert(CGM.getDataLayout().isFatPointer(Value->getType()));
 
   // TODO: handle opt-out cases
+
+  // Any expression other than DeclRefExpr (e.g. in the case &x) will be a
+  // sub-object expression (array index, member expression (&x.a)
+  if (IsSubObject)
+    *IsSubObject = !isa<DeclRefExpr>(E);
+
   if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
     CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");
     return true;
