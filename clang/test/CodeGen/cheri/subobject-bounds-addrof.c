@@ -43,9 +43,54 @@ void test_subobject_addrof_basic(struct WithNested* s) {
   // CHECK-NEXT: %addrof.with.bounds3 = bitcast i8 addrspace(200)* [[BOUNDED_FLOAT]] to float addrspace(200)*
 }
 
-void do_stuff_untyped(void*);
+typedef void (*fn_ptr_ty)(void);
+
+struct ContainsFnPtr {
+  fn_ptr_ty fn_ptr;
+};
+
+void do_stuff_with_fn_ptr(fn_ptr_ty);
+void do_stuff_with_void_ptr(void*);
+void do_stuff_with_fn_ptr_ptr(fn_ptr_ty*);
+void foo(void);
+
+
+void test_fnptr(struct ContainsFnPtr *s) {
+  do_stuff_with_fn_ptr(&foo);
+  // DBG-NEXT: subobj bounds check: cannot set bounds on function addressof/reference
+  do_stuff_with_fn_ptr_ptr(&s->fn_ptr);
+  // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' addrof to 16
+  fn_ptr_ty fnptr_array[4];
+  struct ContainsFnPtr onstack;
+  do_stuff_with_fn_ptr_ptr(&onstack.fn_ptr);
+  // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' addrof to 16
+  do_stuff_with_fn_ptr_ptr(&fnptr_array[2]);
+  // DBG-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> Found scalar type -> setting bounds for 'fn_ptr_ty' addrof to 16
+}
+
+
+typedef _Atomic(int) atomic_int_t;
+extern atomic_int_t at_int;
+struct WithAtomicInt {
+  atomic_int_t value;
+};
+
+void test_atomic(atomic_int_t* array, struct WithAtomicInt *s) {
+  do_stuff_with_void_ptr(&array[0]);
+  // DBG-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> const array index is 0 or end of array
+  do_stuff_with_void_ptr(&array[2]);
+  // DBG-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> unwrapping _Atomic type -> Found scalar type -> setting bounds for 'atomic_int_t' addrof to 4
+  do_stuff_with_void_ptr(&at_int);
+  // DBG-NEXT: subobj bounds check: unwrapping _Atomic type -> Found scalar type -> setting bounds for 'atomic_int_t' addrof to 4
+  struct WithAtomicInt onstack;
+  do_stuff_with_void_ptr(&onstack.value);
+  // DBG-NEXT: subobj bounds check: got MemberExpr -> unwrapping _Atomic type -> Found scalar type -> setting bounds for 'atomic_int_t' addrof to 4
+  do_stuff_with_void_ptr(&s->value);
+  // DBG-NEXT: subobj bounds check: got MemberExpr -> unwrapping _Atomic type -> Found scalar type -> setting bounds for 'atomic_int_t' addrof to 4
+
+}
 
 // DBG-LABEL: ... Statistics Collected ...
-// DBG: 3 cheri-bounds     - Number of & operators checked for tightening bounds
-// DBG: 3 cheri-bounds     - Number of & operators where bounds were tightend
+// DBG: 12 cheri-bounds     - Number of & operators checked for tightening bounds
+// DBG: 10 cheri-bounds     - Number of & operators where bounds were tightend
 

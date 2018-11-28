@@ -691,6 +691,11 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     CHERI_BOUNDS_DBG(<< "Cannot set bounds on incomplete type\n");
     return false;
   }
+  if (Ty->isFunctionType()) {
+    CHERI_BOUNDS_DBG(<< "cannot set bounds on function addressof/reference\n");
+    return false;
+  }
+
   assert(CGM.getDataLayout().isFatPointer(Value->getType()));
 
   E = E->IgnoreImplicit(); // ignore array-to-pointer decay, etc
@@ -766,7 +771,6 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       return false;
     }
     CHERI_BOUNDS_DBG(<< "const array index is not end and bounds==aggressive -> ");
-    return true;
   }
 
   // General opt-out based on the type of the expression
@@ -776,6 +780,11 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
     CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");
     return true;
+  }
+
+  if (auto AT = Ty->getAs<AtomicType>()) {
+    CHERI_BOUNDS_DBG(<< "unwrapping _Atomic type -> ");
+    Ty = AT->getValueType();
   }
 
   // It should be possible to set the size for all scalar types
