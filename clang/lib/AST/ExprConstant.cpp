@@ -5914,7 +5914,7 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr *E) {
   case CK_IntegralCast:
     if (!E->getType()->isCHERICapabilityType(Info.Ctx))
       return false;
-  // Fall through
+  LLVM_FALLTHROUGH;
   case CK_IntegralToPointer: {
     CCEDiag(E, diag::note_constexpr_invalid_cast) << 2;
 

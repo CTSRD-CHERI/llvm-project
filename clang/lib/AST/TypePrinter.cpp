@@ -1497,6 +1497,9 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
   case attr::CHERIMethodSuffix:
     OS << "cheri_method_suffix(" << "???" << ")";
     break;
+  case attr::CHERINoSubobjectBounds:
+     OS << "cheri_no_subobject_bounds";
+     break;
   case attr::PointerInterpretationCaps:
      OS << "pointer_interpretation_capabilities";
      break;
