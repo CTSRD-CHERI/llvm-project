@@ -109,7 +109,7 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
     run_line = run_line.replace("-Werror=implicit-int", "")  # important for creduce but not for the test
     if "%clang_cc1" in run_line:
         target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
-        triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\d*\s+"
+        triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd(-purecap)?\d*\s+"
         if re.search(target_cpu_re, run_line) or re.search(triple_cheri_freebsd_re, run_line):
             run_line = re.sub(target_cpu_re, "", run_line)  # remove
             run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
