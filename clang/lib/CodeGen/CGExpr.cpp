@@ -644,11 +644,42 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
   return Value;
 }
 
+static bool hasBoundsOptOutAnnotation(QualType Ty, const Twine &Msg) {
+  if (Ty->hasAttr(attr::CHERINoSubobjectBounds)) {
+    CHERI_BOUNDS_DBG(<< "opt-out: " << Msg << " (" << Ty.getAsString()
+                     << ") has no_subobject_bounds attribute\n");
+    return true;
+  }
+  if (RecordDecl *RD = Ty->getAsRecordDecl()) {
+    if (RD->hasAttr<CHERINoSubobjectBoundsAttr>()) {
+      CHERI_BOUNDS_DBG(<< "opt-out: " << Msg << " (" << Ty.getAsString()
+                       << ") decl is annnotated with no_subobject_bounds\n");
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool hasBoundsOptOutAnnotation(const Decl* D, const StringRef Msg) {
+  if (D->hasAttr<CHERINoSubobjectBoundsAttr>()) {
+    StringRef Name = "<anonymous>";
+    if (auto ND = dyn_cast<NamedDecl>(D))
+      Name = ND->getName();
+    CHERI_BOUNDS_DBG(<< "opt-out: " << Msg << " decl (" << Name << ") has no_subobject_bounds attribute\n");
+    return true;
+  }
+  if (auto VD = dyn_cast<ValueDecl>(D)) {
+    return hasBoundsOptOutAnnotation(VD->getType(), Msg + " type");
+  }
+  return false;
+}
+
 bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
                                             const Expr *E, bool *IsSubObject,
                                             bool IsReference) {
   const auto BoundsMode = getLangOpts().getCheriBounds() ;
   assert(BoundsMode > LangOptions::CBM_Conservative);
+  CHERI_BOUNDS_DBG(<< "subobj bounds check: ");
   if (!CGM.getDataLayout().isFatPointer(Value->getType())) {
     CHERI_BOUNDS_DBG(<< "Cannot set bounds on non-capability IR type "; Value->getType()->print(llvm::dbgs(), true); llvm::dbgs() << "\n");
     return false;
@@ -660,21 +691,41 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   }
   assert(CGM.getDataLayout().isFatPointer(Value->getType()));
 
-  // TODO: handle opt-out cases
+  E = E->IgnoreImplicit(); // ignore array-to-pointer decay, etc
 
   // Any expression other than DeclRefExpr (e.g. in the case &x) will be a
   // sub-object expression (array index, member expression (&x.a)
   if (IsSubObject)
     *IsSubObject = !isa<DeclRefExpr>(E);
 
-  if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
-    CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");
-    return true;
+  // Check if the type of the expression or the container of the member expr
+  // is annotated with no subobject bounds. In this case we must never set
+  // bounds (even in everywhere-unsafe mode!)
+
+  if (auto ME = dyn_cast<MemberExpr>(E)) {
+    CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
+    // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is
+    // annotated with no bounds should that apply to d?
+    auto BaseTy = ME->getBase()->IgnoreImplicit()->getType();
+    if (ME->isArrow())
+      BaseTy = BaseTy->getPointeeType();
+    if (hasBoundsOptOutAnnotation(BaseTy, "base type"))
+      return false;
+    if (hasBoundsOptOutAnnotation(ME->getMemberDecl(), "field"))
+      return false;
   }
 
-  E = E->IgnoreImplicit();
   if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
     CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
+    // TODO: should we opt-out even for references?
+    // TODO: I guess cheri_no_bounds should have a argument that identifies
+    // which kinds of narrowing are fine
+    if (hasBoundsOptOutAnnotation(ASE->getType(), "array type"))
+      return false;
+    const Expr* Base = ASE->getBase()->IgnoreImplicit();
+    if (hasBoundsOptOutAnnotation(Base->getType(), "array base type"))
+      return false;
+
     if (IsReference && BoundsMode >= LangOptions::CBM_References) {
       CHERI_BOUNDS_DBG(<< "using C++ reference -> ");
       return true;
@@ -690,7 +741,6 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       return true;
     }
     CHERI_BOUNDS_DBG(<< "Index is a constant -> ");
-    const Expr* Base = ASE->getBase()->IgnoreImplicit();
     if (BoundsMode >= LangOptions::CBM_VeryAggressive) {
       CHERI_BOUNDS_DBG(<< "bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> ");
       return true;
@@ -714,6 +764,15 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       return false;
     }
     CHERI_BOUNDS_DBG(<< "const array index is not end and bounds==aggressive -> ");
+    return true;
+  }
+
+  // General opt-out based on the type of the expression
+  if (hasBoundsOptOutAnnotation(Ty, "expression"))
+    return false;
+
+  if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
+    CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");
     return true;
   }
 

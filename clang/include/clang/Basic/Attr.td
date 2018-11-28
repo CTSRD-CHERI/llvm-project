@@ -1813,6 +1813,13 @@ def CHERIMethodClass : DeclOrTypeAttr { // InheritableAttr {
   let Args = [IdentifierArgument<"DefaultClass">];
 }
 
+def CHERINoSubobjectBounds : DeclOrTypeAttr {
+  let Spellings = [GNU<"cheri_no_subobject_bounds">,
+                   CXX11<"cheri","no_subobject_bounds">,
+                   C2x<"cheri", "no_subobject_bounds">];
+  let Documentation = [Undocumented];
+}
+
 def IntelOclBicc : DeclOrTypeAttr {
   let Spellings = [Clang<"intel_ocl_bicc", 0>];
 //  let Subjects = [Function, ObjCMethod];

@@ -7627,6 +7627,17 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       attr.setUsedAsTypeAttr();
       HandleCHERICapabilityAttr(type, state, TAL, attr);
       break;
+    case ParsedAttr::AT_CHERINoSubobjectBounds:
+      attr.setUsedAsTypeAttr();
+      if (type->hasAttr(attr::CHERINoSubobjectBounds))
+        state.getSema().Diag(attr.getLoc(),
+                             diag::warn_duplicate_attribute_exact)
+            << attr.getName();
+      type =
+          state.getAttributedType(createSimpleAttr<CHERINoSubobjectBoundsAttr>(
+                                      state.getSema().Context, attr),
+                                  type, type);
+      break;
     case ParsedAttr::AT_MemoryAddress:
       // llvm::errs() << "applying memory_address to "; type.dump();
       if (!HandleMemoryAddressAttr(type, state, TAL, attr)) {
