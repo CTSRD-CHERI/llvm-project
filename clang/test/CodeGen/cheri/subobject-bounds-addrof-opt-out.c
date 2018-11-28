@@ -66,6 +66,18 @@ void test(struct WithBoundsPls* w, struct NoBoundsPls* n, struct HasMemberOfType
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
 }
 
+struct a {
+  int b;
+};
+
+// This previously crashed:
+struct a c(void) {
+  struct a d[1];
+  do_stuff(&d->b);
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
+  return d[0];
+}
+
 typedef struct WithBoundsPls NoBoundsTypedef __attribute__((cheri_no_subobject_bounds));
 typedef __attribute__((cheri_no_subobject_bounds)) struct WithBoundsPls NoBoundsTypedef2;
 typedef struct WithBoundsPls __attribute__((cheri_no_subobject_bounds)) NoBoundsTypedef3;

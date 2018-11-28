@@ -645,6 +645,8 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
 }
 
 static bool hasBoundsOptOutAnnotation(QualType Ty, const Twine &Msg) {
+  if (Ty.isNull())
+    return false; // unknown type
   if (Ty->hasAttr(attr::CHERINoSubobjectBounds)) {
     CHERI_BOUNDS_DBG(<< "opt-out: " << Msg << " (" << Ty.getAsString()
                      << ") has no_subobject_bounds attribute\n");
@@ -706,8 +708,8 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
     // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is
     // annotated with no bounds should that apply to d?
-    auto BaseTy = ME->getBase()->IgnoreImplicit()->getType();
-    if (ME->isArrow())
+    auto BaseTy = ME->getBase()->getType();
+    if (ME->isArrow() && !BaseTy->getPointeeType().isNull())
       BaseTy = BaseTy->getPointeeType();
     if (hasBoundsOptOutAnnotation(BaseTy, "base type"))
       return false;
