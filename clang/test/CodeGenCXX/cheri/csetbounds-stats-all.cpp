@@ -27,18 +27,18 @@ void test_subobject_addrof_basic(struct Foo *s) {
 void test_onstack_int(struct Foo *s) {
   int x = 0;
   do_stuff_with_int(&x);
-  // CSV-NEXT: 2,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
+  // CSV-NEXT: 2,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
   do_stuff_with_int_ref(x);
-  // CSV-NEXT: 2,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:25","Add subobject bounds","C++ reference on int"
+  // CSV-NEXT: 2,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:25","Add subobject bounds","C++ reference on int"
 }
 
 void test_onstack_int_overaligned(struct Foo *s) {
   alignas(32) int x = 0;
   // We know this int is at least 5 bits aligned:
   do_stuff_with_int(&x);
-  // CSV-NEXT: 5,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
+  // CSV-NEXT: 5,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:21","Add subobject bounds","addrof operator on int"
   do_stuff_with_int_ref(x);
-  // CSV-NEXT: 5,4,o,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:25","Add subobject bounds","C++ reference on int"
+  // CSV-NEXT: 5,4,?,"{{.+}}/csetbounds-stats-all.cpp:[[@LINE-1]]:25","Add subobject bounds","C++ reference on int"
 }
 
 void test__stack_array(void) {
@@ -81,7 +81,7 @@ int test(void) {
 // CSV-NEXT: 7,<unknown>,s,"<somewhere in _Z11test_allocai>","CHERI sandbox ABI setup","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
 // CSV-NEXT: 2,4,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst n.addr"
 // CSV-NEXT: 4,16,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst saved_stack"
-// CSV-NEXT: 3,8,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst __vla_expr"
+// CSV-NEXT: 3,8,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst __vla_expr0"
 // CSV-NEXT: 7,<unknown>,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst vla"
 // CSV-NEXT: 2,4,s,"<somewhere in _Z20load_global_variablev>","CHERI sandbox ABI setup","set bounds on AllocaInst x"
 // CSV-NEXT: 7,<unknown>,s,"<somewhere in _Z11test_allocai>","ExpandDYNAMIC_STACKALLOC",""

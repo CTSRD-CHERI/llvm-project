@@ -676,6 +676,66 @@ static bool hasBoundsOptOutAnnotation(const Decl* D, const StringRef Msg) {
   return false;
 }
 
+static bool
+canSetBoundsOnArraySubscript(const ArraySubscriptExpr *ASE, bool IsReference,
+                             LangOptions::CheriBoundsMode BoundsMode,
+                             const ASTContext &Context) {
+  // TODO: should we opt-out even for references?
+  // TODO: I guess cheri_no_bounds should have a argument that identifies
+  // which kinds of narrowing are fine
+  if (hasBoundsOptOutAnnotation(ASE->getType(), "array type"))
+    return false;
+  const Expr *Base = ASE->getBase()->IgnoreImplicit();
+  if (hasBoundsOptOutAnnotation(Base->getType(), "array base type"))
+    return false;
+
+  if (IsReference && BoundsMode >= LangOptions::CBM_References) {
+    CHERI_BOUNDS_DBG(<< "using C++ reference -> ");
+    return true;
+  }
+  const Expr *Index = ASE->getIdx();
+  llvm::APSInt ConstLength;
+  if (!Index->EvaluateAsInt(ConstLength, Context)) {
+    // If the index is not a constant we should be able to set bounds:
+    // This indicates the code is something like
+    // for (int i = 0; i < max; i++) { do_something(array[i]); }
+    // and therefore we should be able to tightly bound.
+    CHERI_BOUNDS_DBG(
+        << "Index is not a constant (probably in a per-element loop) -> ");
+    return true;
+  }
+  CHERI_BOUNDS_DBG(<< "Index is a constant -> ");
+  if (BoundsMode >= LangOptions::CBM_VeryAggressive) {
+    CHERI_BOUNDS_DBG(<< "bounds-mode is very-aggressive -> bounds on "
+                        "array[CONST] are fine -> ");
+    return true;
+  }
+  if (BoundsMode < LangOptions::CBM_Aggressive) {
+    CHERI_BOUNDS_DBG(<< "bounds on array[CONST] only with mode>=aggressive\n");
+    return false;
+  }
+  assert(BoundsMode == LangOptions::CBM_Aggressive);
+  // In aggressive mode we set bounds on everything except &array[0],
+  // &array[last_index] and &array[last_index+1]
+  // since those may be used to pass start and end indices to functions like
+  // `for_each_elem(&array[0], &array[last_index]);`
+  Optional<llvm::APSInt> ArraySizeMinusOne;
+  if (const ConstantArrayType *CAT =
+          dyn_cast<ConstantArrayType>(Base->getType())) {
+    ArraySizeMinusOne = llvm::APSInt(CAT->getSize() - 1, false);
+  }
+  // can't use operator<= here since it asserts
+  if (ConstLength == 0 ||
+      (ArraySizeMinusOne &&
+       llvm::APSInt::compareValues(ConstLength, *ArraySizeMinusOne) >= 0)) {
+    CHERI_BOUNDS_DBG(<< "const array index is 0 or end of array\n");
+    return false;
+  }
+  CHERI_BOUNDS_DBG(
+      << "const array index is not end and bounds==aggressive -> ");
+  return true;
+}
+
 bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
                                             const Expr *E, bool *IsSubObject,
                                             bool IsReference) {
@@ -724,53 +784,9 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
 
   if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
     CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
-    // TODO: should we opt-out even for references?
-    // TODO: I guess cheri_no_bounds should have a argument that identifies
-    // which kinds of narrowing are fine
-    if (hasBoundsOptOutAnnotation(ASE->getType(), "array type"))
+    if (!canSetBoundsOnArraySubscript(ASE, IsReference, BoundsMode,
+                                      getContext()))
       return false;
-    const Expr* Base = ASE->getBase()->IgnoreImplicit();
-    if (hasBoundsOptOutAnnotation(Base->getType(), "array base type"))
-      return false;
-
-    if (IsReference && BoundsMode >= LangOptions::CBM_References) {
-      CHERI_BOUNDS_DBG(<< "using C++ reference -> ");
-      return true;
-    }
-    const Expr* Index = ASE->getIdx();
-    llvm::APSInt ConstLength;
-    if (!Index->EvaluateAsInt(ConstLength, getContext())) {
-      // If the index is not a constant we should be able to set bounds:
-      // This indicates the code is something like
-      // for (int i = 0; i < max; i++) { do_something(array[i]); }
-      // and therefore we should be able to tightly bound.
-      CHERI_BOUNDS_DBG(<< "Index is not a constant (probably in a per-element loop) -> ");
-      return true;
-    }
-    CHERI_BOUNDS_DBG(<< "Index is a constant -> ");
-    if (BoundsMode >= LangOptions::CBM_VeryAggressive) {
-      CHERI_BOUNDS_DBG(<< "bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> ");
-      return true;
-    }
-    if (BoundsMode < LangOptions::CBM_Aggressive) {
-      CHERI_BOUNDS_DBG(<< "bounds on array[CONST] only with mode>=aggressive\n");
-      return false;
-    }
-    assert(BoundsMode == LangOptions::CBM_Aggressive);
-    // In aggressive mode we set bounds on everything except &array[0],
-    // &array[last_index] and &array[last_index+1]
-    // since those may be used to pass start and end indices to functions like
-    // `for_each_elem(&array[0], &array[last_index]);`
-    Optional<llvm::APSInt> ArraySizeMinusOne;
-    if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(Base->getType())) {
-      ArraySizeMinusOne = llvm::APSInt(CAT->getSize() - 1, false);
-    }
-    // can't use operator<= here since it asserts
-    if (ConstLength == 0 || (ArraySizeMinusOne && llvm::APSInt::compareValues(ConstLength, *ArraySizeMinusOne) >= 0)){
-      CHERI_BOUNDS_DBG(<< "const array index is 0 or end of array\n");
-      return false;
-    }
-    CHERI_BOUNDS_DBG(<< "const array index is not end and bounds==aggressive -> ");
   }
 
   // General opt-out based on the type of the expression

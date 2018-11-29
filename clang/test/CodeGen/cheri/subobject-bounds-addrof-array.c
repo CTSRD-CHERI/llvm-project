@@ -66,7 +66,7 @@ void test_len2_array(struct WithLen2Array *s) {
   do_stuff_untyped(&s->values[0]); // should only set bounds in very-agressive mode here
   // AGGRESSIVE-NOT: llvm.cheri.cap.bounds.set
   // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
-  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> setting bounds for 'struct Foo' addrof to 4
+  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   // DBG-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> const array index is 0 or end of array
   // DBG-SUBOBJECT-SAFE-NEXT: Found array subscript -> Index is a constant -> bounds on array[CONST] only with mode>=aggressive
 
@@ -74,26 +74,26 @@ void test_len2_array(struct WithLen2Array *s) {
   do_stuff_untyped(&s->values[1]); // probably fine to set bounds here in aggressive (but not in safe mode)
   // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
   // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
-  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> setting bounds for 'struct Foo' addrof to 4
-  // DBG-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> setting bounds for 'struct Foo' addrof to 4
+  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
+  // DBG-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   // DBG-SUBOBJECT-SAFE-NEXT: Found array subscript -> Index is a constant -> bounds on array[CONST] only with mode>=aggressive
 
   do_stuff_untyped(&s->values[2]); // should only set bounds in very-agressive mode here
   // AGGRESSIVE-NOT: llvm.cheri.cap.bounds.set
   // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
-  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> setting bounds for 'struct Foo' addrof to 4
+  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   // DBG-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> const array index is 0 or end of array
   // DBG-SUBOBJECT-SAFE-NEXT: Found array subscript -> Index is a constant -> bounds on array[CONST] only with mode>=aggressive
   do_stuff_untyped(&s->values[3]); // should only set bounds in very-agressive mode here
   // AGGRESSIVE-NOT: llvm.cheri.cap.bounds.set
   // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
-  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> setting bounds for 'struct Foo' addrof to 4
+  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   // DBG-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> const array index is 0 or end of array
   // DBG-SUBOBJECT-SAFE-NEXT: Found array subscript -> Index is a constant -> bounds on array[CONST] only with mode>=aggressive
   do_stuff_untyped(&s->values[4]); // should only set bounds in very-agressive mode here
   // AGGRESSIVE-NOT: llvm.cheri.cap.bounds.set
   // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
-  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> setting bounds for 'struct Foo' addrof to 4
+  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   // DBG-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> const array index is 0 or end of array
   // DBG-SUBOBJECT-SAFE-NEXT: Found array subscript -> Index is a constant -> bounds on array[CONST] only with mode>=aggressive
 
@@ -105,7 +105,7 @@ void test_len2_array(struct WithLen2Array *s) {
     // Even in safe mode we set bounds here
     do_stuff_untyped(&s->values[i]); // should set bounds here since this will usually be a single object
     // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
-    // DBG-NEXT: Found array subscript -> Index is not a constant (probably in a per-element loop) -> setting bounds for 'struct Foo' addrof to 4
+    // DBG-NEXT: Found array subscript -> Index is not a constant (probably in a per-element loop) -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   }
   // CHECK: ret void
 }

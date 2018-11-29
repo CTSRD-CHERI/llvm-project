@@ -1,9 +1,9 @@
 // Check that we can set bounds on addrof expressions
 // REQUIRES: asserts
-// RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm %s -o - -mllvm -debug-only=cheri-bounds -mllvm -stats 2>%t.dbg | FileCheck %s -check-prefixes CHECK,AGGRESSIVE
-// RUN: FileCheck -input-file %t.dbg %s -check-prefix DBG
-// RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -DUSE_BUITLTIN_ADDROF -O2 -std=c11 -emit-llvm %s -o - -mllvm -debug-only=cheri-bounds -mllvm -stats 2>%t.dbg | FileCheck %s -check-prefixes CHECK,AGGRESSIVE
-// RUN: FileCheck -input-file %t.dbg %s -check-prefix DBG
+// RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm %s -o - -mllvm -debug-only=cheri-bounds -mllvm -stats 2>%t.dbg | %cheri_FileCheck %s -check-prefixes CHECK,AGGRESSIVE
+// RUN: %cheri_FileCheck -input-file %t.dbg %s -check-prefix DBG
+// RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -DUSE_BUITLTIN_ADDROF -O2 -std=c11 -emit-llvm %s -o - -mllvm -debug-only=cheri-bounds -mllvm -stats 2>%t.dbg | %cheri_FileCheck %s -check-prefixes CHECK,AGGRESSIVE
+// RUN: %cheri_FileCheck -input-file %t.dbg %s -check-prefix DBG
 
 #ifdef USE_BUITLTIN_ADDROF
 #define TAKE_ADDRESS(obj) __builtin_addressof(obj)
@@ -59,13 +59,13 @@ void test_fnptr(struct ContainsFnPtr *s) {
   do_stuff_with_fn_ptr(&foo);
   // DBG-NEXT: subobj bounds check: cannot set bounds on function addressof/reference
   do_stuff_with_fn_ptr_ptr(&s->fn_ptr);
-  // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' addrof to 16
+  // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' addrof to [[$CAP_SIZE]]
   fn_ptr_ty fnptr_array[4];
   struct ContainsFnPtr onstack;
   do_stuff_with_fn_ptr_ptr(&onstack.fn_ptr);
-  // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' addrof to 16
+  // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' addrof to [[$CAP_SIZE]]
   do_stuff_with_fn_ptr_ptr(&fnptr_array[2]);
-  // DBG-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> Found scalar type -> setting bounds for 'fn_ptr_ty' addrof to 16
+  // DBG-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> Found scalar type -> setting bounds for 'fn_ptr_ty' addrof to [[$CAP_SIZE]]
 }
 
 
