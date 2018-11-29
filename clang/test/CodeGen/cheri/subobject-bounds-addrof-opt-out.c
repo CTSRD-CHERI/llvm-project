@@ -66,6 +66,19 @@ void test(struct WithBoundsPls* w, struct NoBoundsPls* n, struct HasMemberOfType
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
 }
 
+// opt-out on variable decl (see ncurses source code)
+static char* stringbuf;
+// TODO:
+// static char* stringbuf_opt_out __attribute__((cheri_no_subobject_bounds("array-index")));
+static char* stringbuf_opt_out __attribute__((cheri_no_subobject_bounds));
+
+void test_stringbuf(int next_free) {
+  do_stuff(&stringbuf[next_free]); // TODO: maybe don't do this by default for char[]?
+  // CHECK-NEXT: subobj bounds check: Found array subscript -> Index is not a constant (probably in a per-element loop) -> Bounds mode is everywhere-unsafe -> setting bounds for 'char' addrof to 1
+  do_stuff(&stringbuf_opt_out[next_free]);
+  // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array base type (char * __capability __attribute__((cheri_no_subobject_bounds))) has no_subobject_bounds attribute
+}
+
 struct a {
   int b;
 };
