@@ -1,11 +1,13 @@
 // Check that we can set bounds on addrof expressions
 // REQUIRES: asserts
 // RUN: rm -f %t.dbg
-// RUN: %cheri_purecap_cc1 -emit-llvm -cheri-bounds=everywhere-unsafe -xc %s -o - -mllvm -debug-only=cheri-bounds 2>%t.dbg
+// RUN: %cheri_purecap_cc1 -emit-llvm -cheri-bounds=everywhere-unsafe -xc %s -o /dev/null \
+// RUN:   -mllvm -debug-only=cheri-bounds -Rcheri-subobject-bounds -verify 2>%t.dbg
 // RUN: FileCheck -input-file %t.dbg %s
-// RUN: rm -f %t.dbg
 // also check when compiled as C++
-// RUN: %cheri_purecap_cc1 -emit-llvm -cheri-bounds=everywhere-unsafe -xc++ %s -o - -mllvm -debug-only=cheri-bounds 2>%t.dbg
+// RUN: rm -f %t.dbg
+// RUN: %cheri_purecap_cc1 -emit-llvm -cheri-bounds=everywhere-unsafe -xc++ %s -o /dev/null \
+// RUN:   -mllvm -debug-only=cheri-bounds -Rcheri-subobject-bounds -verify 2>%t.dbg
 // RUN: FileCheck -input-file %t.dbg %s
 
 // Check that we can opt out of setting bounds on addrof expressions
@@ -39,30 +41,37 @@ void do_stuff(void* data);
 void test(struct WithBoundsPls* w, struct NoBoundsPls* n, struct HasMemberOfTypeNoBoundsPls* t, struct HasFieldWithOptOut* f) {
   // annotation on the type (applies to all subelements)
   do_stuff(&((struct WithBoundsPls*)n)->data); // cast avoids the bounds setting
+  // expected-remark@-1{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
   // CHECK: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
   struct NoBoundsPls n2;
   do_stuff(n); // just passing on, no bounds
-  do_stuff(&n[0]); // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array type (struct NoBoundsPls) decl is annnotated with no_subobject_bounds
-  do_stuff(&n[2]); // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array type (struct NoBoundsPls) decl is annnotated with no_subobject_bounds
+  do_stuff(&n[0]); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (array type declaration has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array type declaration has opt-out attribute -> not setting bounds
+  do_stuff(&n[2]); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (array type declaration has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array type declaration has opt-out attribute -> not setting bounds
   do_stuff((struct WithBoundsPls*)n); // Setting bounds here
-  do_stuff(&n2); // CHECK-NEXT: subobj bounds check: opt-out: expression (struct NoBoundsPls) decl is annnotated with no_subobject_bounds
-  do_stuff(&n->data); // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type (struct NoBoundsPls) decl is annnotated with no_subobject_bounds
-  do_stuff(&n2.data); // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type (struct NoBoundsPls) decl is annnotated with no_subobject_bounds
+  do_stuff(&n2); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (expression declaration has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: opt-out: expression declaration has opt-out attribute -> not setting bounds
+  do_stuff(&n->data); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (base type declaration has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type declaration has opt-out attribute -> not setting bounds
+  do_stuff(&n2.data); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (base type declaration has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type declaration has opt-out attribute -> not setting bounds
 
   // field annotation:
-  do_stuff(&f->first);
-  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field decl (first) has no_subobject_bounds attribute
-  do_stuff(&f->second);
+  do_stuff(&f->first); // expected-remark{{not setting bounds for first (field has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field has opt-out attribute -> not setting bounds
+  do_stuff(&f->second); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
 
   // nested type with annotations
-  do_stuff(&t->before);
+  do_stuff(&t->before); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
-  do_stuff(&t->nested);
-  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field type (struct NoBoundsPls) decl is annnotated with no_subobject_bounds
-  do_stuff(&t->nested.data);
-  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type (struct NoBoundsPls) decl is annnotated with no_subobject_bounds
-  do_stuff(&t->after);
+  do_stuff(&t->nested); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (field type declaration has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field type declaration has opt-out attribute -> not setting bounds
+  do_stuff(&t->nested.data); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (base type declaration has opt-out attribute)}}
+
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type declaration has opt-out attribute -> not setting bounds
+  do_stuff(&t->after); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
 }
 
@@ -74,9 +83,11 @@ static char* stringbuf_opt_out __attribute__((cheri_no_subobject_bounds));
 
 void test_stringbuf(int next_free) {
   do_stuff(&stringbuf[next_free]); // TODO: maybe don't do this by default for char[]?
+  // expected-remark@-1{{setting sub-object bounds for pointer to 'char' to 1 bytes}}
   // CHECK-NEXT: subobj bounds check: Found array subscript -> Index is not a constant (probably in a per-element loop) -> Bounds mode is everywhere-unsafe -> setting bounds for 'char' addrof to 1
   do_stuff(&stringbuf_opt_out[next_free]);
-  // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array base type (char * __capability __attribute__((cheri_no_subobject_bounds))) has no_subobject_bounds attribute
+  // expected-remark@-1{{not setting bounds for 'char * __capability __attribute__((cheri_no_subobject_bounds))' (array base type has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array base type has opt-out attribute -> not setting bounds
 }
 
 struct a {
@@ -86,7 +97,7 @@ struct a {
 // This previously crashed:
 struct a c(void) {
   struct a d[1];
-  do_stuff(&d->b);
+  do_stuff(&d->b); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
   return d[0];
 }

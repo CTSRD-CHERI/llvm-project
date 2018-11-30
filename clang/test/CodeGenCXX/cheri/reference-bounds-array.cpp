@@ -8,9 +8,9 @@ void test_array() {
   do_stuff_with_ref(intarray[0]);
   do_stuff_with_ref(intarray[1]);
   do_stuff_with_ref(intarray[2]);
-  // CHECK: Found array subscript -> using C++ reference -> Found scalar type -> setting bounds for 'int' reference to 4
-  // CHECK: Found array subscript -> using C++ reference -> Found scalar type -> setting bounds for 'int' reference to 4
-  // CHECK: Found array subscript -> using C++ reference -> Found scalar type -> setting bounds for 'int' reference to 4
+  // CHECK: Found array subscript -> using C++ reference -> setting bounds for 'int' reference to 4
+  // CHECK: Found array subscript -> using C++ reference -> setting bounds for 'int' reference to 4
+  // CHECK: Found array subscript -> using C++ reference -> setting bounds for 'int' reference to 4
 }
 
 
@@ -41,9 +41,9 @@ void test_foo_array_deref_pointer() {
   do_stuff_with_ref(*foo_array[0]);
   do_stuff_with_ref(*foo_array[1]);
   do_stuff_with_ref(*foo_array[2]);
-  // CHECK: Found record type 'class Foo' -> not final -> can't assume it has no inheritors
-  // CHECK: Found record type 'class Foo' -> not final -> can't assume it has no inheritors
-  // CHECK: Found record type 'class Foo' -> not final -> can't assume it has no inheritors
+  // CHECK: Found record type 'class Foo' -> non-final class and using sub-object-safe mode -> not setting bounds
+  // CHECK: Found record type 'class Foo' -> non-final class and using sub-object-safe mode -> not setting bounds
+  // CHECK: Found record type 'class Foo' -> non-final class and using sub-object-safe mode -> not setting bounds
 }
 
 struct Foo_final final {
