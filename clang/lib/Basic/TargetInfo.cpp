@@ -568,6 +568,7 @@ bool TargetInfo::validateOutputConstraint(ConstraintInfo &Info) const {
     case 'm': // memory operand.
       if (areAllPointersCapabilities())
         break;
+      LLVM_FALLTHROUGH;
     case 'o': // offsetable memory operand.
     case 'V': // non-offsetable memory operand.
     case '<': // autodecrement memory operand.
