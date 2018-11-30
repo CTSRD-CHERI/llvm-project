@@ -809,6 +809,12 @@ bool CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       return false;
     if (hasBoundsOptOutAnnotation(*this, E, ME->getMemberDecl(), "field"))
       return false;
+
+    if (BaseTy->isUnionType() && BoundsMode < LangOptions::CBM_VeryAggressive) {
+      // FIXME: we should set bounds to the whole union rather than not setting bounds at all
+      // FIXME: should we set bounds for references?
+      return cannotSetBounds(*this, E, Ty, "container is union");
+    }
   }
 
   if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
