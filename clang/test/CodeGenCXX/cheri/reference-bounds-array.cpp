@@ -8,10 +8,9 @@ void test_array() {
   do_stuff_with_ref(intarray[0]);
   do_stuff_with_ref(intarray[1]);
   do_stuff_with_ref(intarray[2]);
-// CHECK: Found array subscript -> using C++ reference -> setting bounds for 'int' reference to 4
-// CHECK: Found array subscript -> using C++ reference -> setting bounds for 'int' reference to 4
-// CHECK: Found array subscript -> using C++ reference -> setting bounds for 'int' reference to 4
-
+  // CHECK: Found array subscript -> using C++ reference -> Found scalar type -> setting bounds for 'int' reference to 4
+  // CHECK: Found array subscript -> using C++ reference -> Found scalar type -> setting bounds for 'int' reference to 4
+  // CHECK: Found array subscript -> using C++ reference -> Found scalar type -> setting bounds for 'int' reference to 4
 }
 
 
@@ -29,6 +28,8 @@ void test_foo_array() {
   do_stuff_with_ref(foo_array[0]);
   do_stuff_with_ref(foo_array[1]);
   do_stuff_with_ref(foo_array[2]);
+  // FIXME: should be able to set bounds here
+
   // CHECK: Found array subscript -> using C++ reference -> setting bounds for 'class Foo' reference to 8
   // CHECK: Found array subscript -> using C++ reference -> setting bounds for 'class Foo' reference to 8
   // CHECK: Found array subscript -> using C++ reference -> setting bounds for 'class Foo' reference to 8

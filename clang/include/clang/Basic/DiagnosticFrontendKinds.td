@@ -238,6 +238,19 @@ def err_test_module_file_extension_version : Error<
   "test module file extension '%0' has different version (%1.%2) than expected "
   "(%3.%4)">;
 
+
+def remark_setting_cheri_subobject_bounds :
+  Remark<"setting %select{|sub-object }0bounds for "
+         "%select{pointer to|reference to}1 %2 to %3 bytes">,
+  InGroup<CheriSubobjectBounds>;
+def remark_no_cheri_subobject_bounds :
+  Remark<"not setting bounds for %0 (%1)">,
+  InGroup<CheriSubobjectBounds>;
+
+def warn_subobject_bounds_unknown_type :
+  Warning<"unhandled type '%0' in CHERI bounds setting">,
+  InGroup<CheriSubobjectBounds>;
+
 def err_missing_vfs_overlay_file : Error<
   "virtual filesystem overlay file '%0' not found">, DefaultFatal;
 def err_invalid_vfs_overlay : Error<
