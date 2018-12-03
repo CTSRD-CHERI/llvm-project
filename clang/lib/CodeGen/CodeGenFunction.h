@@ -3875,8 +3875,9 @@ public:
                                          const Expr *E, SourceLocation Loc);
   llvm::Value *setCHERIBoundsOnAddrOf(llvm::Value *Ptr, QualType Ty,
                                       const Expr *E, SourceLocation Loc);
-  bool canTightenCheriBounds(llvm::Value *Ptr, QualType Ty, const Expr *E,
-                             bool *IsSubObj, bool IsReference = false);
+  Optional<int64_t> canTightenCheriBounds(llvm::Value *Ptr, QualType Ty,
+                                          const Expr *E, bool *IsSubObj,
+                                          bool IsReference = false);
 
   //===--------------------------------------------------------------------===//
   //                           Expression Emission
