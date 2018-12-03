@@ -1,7 +1,7 @@
 // Check that we only set bounds on union member expressions in very-aggressive mode
 // FIXME: or should it be aggressive vs safe behave instead (i.e. set bounds in aggressive mode)?
-// RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm %s -o %t.ll -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=aggressive
-// RUN: %cheri_purecap_cc1 -cheri-bounds=very-aggressive -O2 -std=c11 -emit-llvm %s -o %t.ll -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=very-aggressive
+// RUN: %cheri_purecap_cc1 -cheri-bounds=aggressive -O2 -std=c11 -emit-llvm %s -o %t.ll -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=aggressive,expected
+// RUN: %cheri_purecap_cc1 -cheri-bounds=very-aggressive -O2 -std=c11 -emit-llvm %s -o %t.ll -Wcheri-subobject-bounds -Rcheri-subobject-bounds -verify=very-aggressive,expected
 
 struct sockaddr {
   char data[16];
@@ -74,4 +74,42 @@ void test2(union WithNestedStruct* un) {
   // aggressive-remark@-1{{using size of containing type 'union WithNestedStruct' instead of object type 'char [64]' for subobject bounds on union member}}
   // aggressive-remark@-2{{setting sub-object bounds for pointer to 'char [64]' to 64 bytes}}
   // very-aggressive-remark@-3{{setting sub-object bounds for pointer to 'char [64]' to 64 bytes}}
+}
+
+// Real VLA with empty [] are not allow in unions but the pre-C99 versions with 0/1 might exist
+
+union WithVLA1 {
+  int i;
+  char vla[0];
+  long other_field;
+};
+
+union WithVLA2 {
+  long l;
+  char vla[1];
+  long other_field;
+};
+
+union WithVLA3 {
+  float f;
+  struct NestedVLA {
+    char vla[1];
+  } nestedvla;
+  long other_field;
+};
+
+void test3(union WithVLA1 *un1, union WithVLA2 *un2, union WithVLA3 *un3) {
+  // Check that we don't tighten bounds if the union contains a VLA
+  // (but still do it in very-aggressive mode)
+  call(&un1->i);
+  // aggressive-remark@-1{{not setting bounds for 'int' (containing union includes a variable length array)}}
+  // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  call(&un2->l);
+  // aggressive-remark@-1{{not setting bounds for 'long' (containing union includes a variable length array)}}
+  // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'long' to 8 bytes}}
+
+  // Check that recursing into nested types works
+  call(&un3->f);
+  // aggressive-remark@-1{{not setting bounds for 'float' (containing union includes a variable length array)}}
+  // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'float' to 4 bytes}}
 }

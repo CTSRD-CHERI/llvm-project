@@ -766,6 +766,60 @@ static bool canSetBoundsOnArraySubscript(
   return true;
 }
 
+static bool containsVariableLengthArray(LangOptions::CheriBoundsMode BoundsMode,
+                                        QualType Ty) {
+  auto RD = Ty->getAsRecordDecl();
+  if (!RD)
+    return false;
+
+  if (RD->hasFlexibleArrayMember()) {
+    CHERI_BOUNDS_DBG(<< "found real VLA in " << Ty.getAsString() << " -> ");
+    return true;
+  }
+  if (BoundsMode >= LangOptions::CBM_VeryAggressive) {
+    // In very-aggressive mode only accept real VLAs and not size 0 / size 1
+    return false;
+  }
+
+  const bool CheckingUnion = Ty->isUnionType();
+  for (auto i = RD->field_begin(), end = RD->field_end(); i != end; ++i) {
+    // We only check the last field (except for unions!)
+    if (!CheckingUnion) {
+      auto i2 = i;
+      const bool IsLastField = (++i2 == end);
+      if (!IsLastField)
+        continue;
+    }
+
+    auto FieldTy = i->getType();
+    // If a nested struct has a flexible array member, this union/struct also
+    // has one.
+    if (FieldTy->isRecordType() &&
+        containsVariableLengthArray(BoundsMode, FieldTy))
+      return true;
+
+    if (FieldTy->isConstantArrayType()) {
+      if (const ConstantArrayType *CAT =
+              dyn_cast<ConstantArrayType>(FieldTy.getTypePtr())) {
+        // Assume that size 0 and size 1 arrays are meant to be
+        // variable length arrays since that was the only way of
+        // doing it before C99
+        if (CAT->getSize() == 0) {
+          CHERI_BOUNDS_DBG(<< "found length 0 array at end of "
+                           << Ty.getAsString() << " -> ");
+          return true;
+        }
+        if (CAT->getSize() == 1) {
+          CHERI_BOUNDS_DBG(<< "found length 1 array at end of "
+                           << Ty.getAsString() << " -> ");
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
                                                          QualType Ty,
                                                          const Expr *E,
@@ -820,6 +874,11 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
       // FIXME: should we set bounds for references?
       if (BoundsMode < LangOptions::CBM_References)
         return cannotSetBounds(*this, E, Ty, "container is union");
+
+      if (containsVariableLengthArray(BoundsMode, BaseTy))
+        return cannotSetBounds(
+            *this, E, Ty, "containing union includes a variable length array");
+
       CGM.getDiags().Report(E->getExprLoc(),
                             diag::remark_subobject_using_container_size)
           << BaseTy << Ty << "union member";
