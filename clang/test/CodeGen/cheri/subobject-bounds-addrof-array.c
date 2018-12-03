@@ -163,8 +163,26 @@ void test_len2_array(struct WithLen2Array *s) {
   // CHECK: ret void
 }
 
+void test2(int *array) {
+  // CHECK-LABEL: @test2(
+  // Should use the full array here except in very-aggressive mode.
+  // However the size of the array is not known so we should not be setting any bounds!
+  do_stuff_untyped(&array[0]);
+  // aggressive-or-less-remark@-1{{not setting bounds for 'int' (should set bounds on full array but size is not known)}}
+  // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+
+  // SUBOBJECT-SAFE-NOT: @llvm.cheri.cap.bounds.set
+  // AGGRESSIVE-SAFE-NOT: @llvm.cheri.cap.bounds.set
+  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
+  // CHECK: ret void
+
+  // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> should set bounds on full array but size is not known -> not setting bounds
+  // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> should set bounds on full array but size is not known -> not setting bounds
+  // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found scalar type -> setting bounds for 'int' addrof to 4
+}
+
 // DBG-LABEL: ... Statistics Collected ...
-// DBG:                 7 cheri-bounds     - Number of & operators checked for tightening bounds
-// DBG-VERY-AGGRESSIVE-NEXT: 7 cheri-bounds     - Number of & operators where bounds were tightend
+// DBG:                 8 cheri-bounds     - Number of & operators checked for tightening bounds
+// DBG-VERY-AGGRESSIVE-NEXT: 8 cheri-bounds     - Number of & operators where bounds were tightend
 // DBG-AGGRESSIVE-NEXT:      7 cheri-bounds     - Number of & operators where bounds were tightend
 // DBG-SUBOBJECT-SAFE-NEXT:  7 cheri-bounds     - Number of & operators where bounds were tightend

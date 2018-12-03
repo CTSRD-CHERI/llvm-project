@@ -728,7 +728,8 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
   if (hasBoundsOptOutAnnotation(CGF, E, ASE->getType(), "array type"))
     return ArrayBoundsResult::Never;
   const Expr *Base = ASE->getBase()->IgnoreImplicit();
-  if (hasBoundsOptOutAnnotation(CGF, E, Base->getType(), "array base type"))
+  const QualType BaseTy = Base->getType();
+  if (hasBoundsOptOutAnnotation(CGF, E, BaseTy, "array base type"))
     return ArrayBoundsResult::Never;
 
   if (IsReference && BoundsMode >= LangOptions::CBM_References) {
@@ -747,8 +748,8 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
     // Use the full array bounds in safe mode since there is lots of code that
     // uses &foo[n] to get an unbounded member access instead of foo + n
     if (BoundsMode <= LangOptions::CBM_SubObjectsSafe) {
-      remarkUsingContainerSize(CGF, E, Base->getType(), ASE->getType(),
-                               "&array[n]");
+      if (BaseTy->isConstantArrayType())
+        remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(), "&array[n]");
       return ArrayBoundsResult::UseFullArray;
     }
     return ArrayBoundsResult::DependsOnType;
@@ -764,25 +765,25 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
   // since those may be used to pass start and end indices to functions like
   // `for_each_elem(&array[0], &array[last_index]);
   if (ConstLength == 0) {
-    remarkUsingContainerSize(CGF, E, Base->getType(), ASE->getType(),
-                             "&array[0]");
+    if (BaseTy->isConstantArrayType())
+      remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(), "&array[0]");
     return ArrayBoundsResult::UseFullArray;
   }
 
   if (BoundsMode < LangOptions::CBM_Aggressive) {
     // don't set bounds on array[constant] for subobject-safe
-    remarkUsingContainerSize(CGF, E, Base->getType(), ASE->getType(),
-                             "&array[<CONSTANT>]");
+    if (BaseTy->isConstantArrayType())
+      remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(),
+                               "&array[<CONSTANT>]");
     return ArrayBoundsResult::UseFullArray;
   }
 
   assert(BoundsMode == LangOptions::CBM_Aggressive);
   // can't use operator<= here since it asserts
-  if (const ConstantArrayType *CAT =
-          dyn_cast<ConstantArrayType>(Base->getType())) {
+  if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(BaseTy)) {
     auto ArraySizeMinusOne = llvm::APSInt(CAT->getSize() - 1, false);
     if (llvm::APSInt::compareValues(ConstLength, ArraySizeMinusOne) >= 0) {
-      remarkUsingContainerSize(CGF, E, Base->getType(), ASE->getType(),
+      remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(),
                                "bounds on &array[<last index>]");
       return ArrayBoundsResult::UseFullArray;
     }
