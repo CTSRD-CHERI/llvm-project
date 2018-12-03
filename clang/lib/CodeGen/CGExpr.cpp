@@ -703,21 +703,37 @@ static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
 
 // FIXME: should not tighten bounds on addresses of globals!
 
-static bool canSetBoundsOnArraySubscript(
+static void remarkUsingContainerSize(const CodeGenFunction &CGF, const Expr *E,
+                                     QualType BaseTy, QualType Ty,
+                                     const char *Msg) {
+  CHERI_BOUNDS_DBG(<< Msg << " -> using container size -> ");
+  CGF.CGM.getDiags().Report(E->getExprLoc(),
+                            diag::remark_subobject_using_container_size)
+      << BaseTy << Ty << Msg;
+}
+
+enum class ArrayBoundsResult {
+  Never = 0,
+  Always,
+  UseFullArray,
+  DependsOnType,
+};
+
+static ArrayBoundsResult canSetBoundsOnArraySubscript(
     const Expr *E, const ArraySubscriptExpr *ASE, bool IsReference,
     LangOptions::CheriBoundsMode BoundsMode, const CodeGenFunction &CGF) {
   // TODO: should we opt-out even for references?
   // TODO: I guess cheri_no_bounds should have a argument that identifies
   // which kinds of narrowing are fine
   if (hasBoundsOptOutAnnotation(CGF, E, ASE->getType(), "array type"))
-    return false;
+    return ArrayBoundsResult::Never;
   const Expr *Base = ASE->getBase()->IgnoreImplicit();
   if (hasBoundsOptOutAnnotation(CGF, E, Base->getType(), "array base type"))
-    return false;
+    return ArrayBoundsResult::Never;
 
   if (IsReference && BoundsMode >= LangOptions::CBM_References) {
     CHERI_BOUNDS_DBG(<< "using C++ reference -> ");
-    return true;
+    return ArrayBoundsResult::Always;
   }
   const Expr *Index = ASE->getIdx();
   llvm::APSInt ConstLength;
@@ -728,42 +744,52 @@ static bool canSetBoundsOnArraySubscript(
     // and therefore we should be able to tightly bound.
     CHERI_BOUNDS_DBG(
         << "Index is not a constant (probably in a per-element loop) -> ");
-    return true;
+    // Use the full array bounds in safe mode since there is lots of code that
+    // uses &foo[n] to get an unbounded member access instead of foo + n
+    if (BoundsMode <= LangOptions::CBM_SubObjectsSafe) {
+      remarkUsingContainerSize(CGF, E, Base->getType(), ASE->getType(),
+                               "&array[n]");
+      return ArrayBoundsResult::UseFullArray;
+    }
+    return ArrayBoundsResult::DependsOnType;
   }
   CHERI_BOUNDS_DBG(<< "Index is a constant -> ");
   if (BoundsMode >= LangOptions::CBM_VeryAggressive) {
     CHERI_BOUNDS_DBG(<< "bounds-mode is very-aggressive -> bounds on "
                         "array[CONST] are fine -> ");
-    return true;
+    return ArrayBoundsResult::DependsOnType;
   }
-  if (BoundsMode < LangOptions::CBM_Aggressive) {
-    cannotSetBounds(CGF, E, E->getType(), "bounds on &array[<CONSTANT>]");
-    return false;
-  }
-
-  assert(BoundsMode == LangOptions::CBM_Aggressive);
   // In aggressive mode we set bounds on everything except &array[0],
   // &array[last_index] and &array[last_index+1]
   // since those may be used to pass start and end indices to functions like
-  // `for_each_elem(&array[0], &array[last_index]);`
-  Optional<llvm::APSInt> ArraySizeMinusOne;
+  // `for_each_elem(&array[0], &array[last_index]);
+  if (ConstLength == 0) {
+    remarkUsingContainerSize(CGF, E, Base->getType(), ASE->getType(),
+                             "&array[0]");
+    return ArrayBoundsResult::UseFullArray;
+  }
+
+  if (BoundsMode < LangOptions::CBM_Aggressive) {
+    // don't set bounds on array[constant] for subobject-safe
+    remarkUsingContainerSize(CGF, E, Base->getType(), ASE->getType(),
+                             "&array[<CONSTANT>]");
+    return ArrayBoundsResult::UseFullArray;
+  }
+
+  assert(BoundsMode == LangOptions::CBM_Aggressive);
+  // can't use operator<= here since it asserts
   if (const ConstantArrayType *CAT =
           dyn_cast<ConstantArrayType>(Base->getType())) {
-    ArraySizeMinusOne = llvm::APSInt(CAT->getSize() - 1, false);
-  }
-  // can't use operator<= here since it asserts
-  if (ConstLength == 0) {
-    cannotSetBounds(CGF, E, E->getType(), "bounds on &array[0]");
-    return false;
-  }
-  if (ArraySizeMinusOne &&
-      llvm::APSInt::compareValues(ConstLength, *ArraySizeMinusOne) >= 0) {
-    cannotSetBounds(CGF, E, E->getType(), "bounds on &array[<last index>]");
-    return false;
+    auto ArraySizeMinusOne = llvm::APSInt(CAT->getSize() - 1, false);
+    if (llvm::APSInt::compareValues(ConstLength, ArraySizeMinusOne) >= 0) {
+      remarkUsingContainerSize(CGF, E, Base->getType(), ASE->getType(),
+                               "bounds on &array[<last index>]");
+      return ArrayBoundsResult::UseFullArray;
+    }
   }
   CHERI_BOUNDS_DBG(
       << "const array index is not end and bounds==aggressive -> ");
-  return true;
+  return ArrayBoundsResult::DependsOnType;
 }
 
 static FieldDecl* findPossibleVLA(const RecordDecl *RD) {
@@ -886,9 +912,7 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
         return cannotSetBounds(
             *this, E, Ty, "containing union includes a variable length array");
 
-      CGM.getDiags().Report(E->getExprLoc(),
-                            diag::remark_subobject_using_container_size)
-          << BaseTy << Ty << "union member";
+      remarkUsingContainerSize(*this, E, BaseTy, Ty, "union member");
       return getContext().getTypeSizeInChars(BaseTy).getQuantity();
     }
   }
@@ -896,14 +920,26 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
   if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
     // TODO: set bounds on whole array type?
     CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
-    if (!canSetBoundsOnArraySubscript(E, ASE, IsReference, BoundsMode, *this))
+    switch (
+        canSetBoundsOnArraySubscript(E, ASE, IsReference, BoundsMode, *this)) {
+    case ArrayBoundsResult::Never:
       return None;
-
-    // For C++ references we always set the bounds unless there is an opt-out
-    // annotation
-    // FIXME: overloaded operators?
-    if (IsReference)
+    case ArrayBoundsResult::Always:
       return TypeSize;
+    case ArrayBoundsResult::UseFullArray: {
+      const Expr *Base = ASE->getBase()->IgnoreImplicit();
+      if (Base->getType()->isConstantArrayType()) {
+        return getContext().getTypeSizeInChars(Base->getType()).getQuantity();
+      }
+      // Otherwise we have a non-constant array type -> don't set bounds to
+      // avoid crashes at runtime
+      return cannotSetBounds(
+          *this, E, Ty,
+          "should set bounds on full array but size is not known");
+    }
+    case ArrayBoundsResult::DependsOnType:
+      break;
+    }
   }
 
   // General opt-out based on the type of the expression
