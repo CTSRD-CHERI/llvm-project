@@ -149,11 +149,11 @@ TEST_PTR_TO_REF(FinalClassInheritedWithVTable)
 
 // Shouldn't be able to set bounds here since there is a flexible array member
 TEST_PTR_TO_REF(FlexArrayBase)
-// DEBUG-MSG-NEXT: Found record type 'struct FlexArrayBase' -> has flexible array member -> not setting bounds
+// DEBUG-MSG-NEXT: subobj bounds check: Found record type 'struct FlexArrayBase' -> found real VLA in struct FlexArrayBase -> has flexible array member -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP13FlexArrayBase(
 // CHECK-NOT: @llvm.cheri.cap.bounds.set
 TEST_PTR_TO_REF(FlexArrayFinal)
-// DEBUG-MSG-NEXT: Found record type 'struct FlexArrayFinal' -> has flexible array member -> not setting bounds
+// DEBUG-MSG-NEXT: subobj bounds check: Found record type 'struct FlexArrayFinal' -> found real VLA in struct FlexArrayFinal -> has flexible array member -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP14FlexArrayFinal(
 // CHECK-NOT: @llvm.cheri.cap.bounds.set
 
