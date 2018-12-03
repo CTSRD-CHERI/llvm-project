@@ -766,6 +766,44 @@ static bool canSetBoundsOnArraySubscript(
   return true;
 }
 
+static FieldDecl* findPossibleVLA(const RecordDecl *RD) {
+  const bool CheckingUnion = RD->isUnion();
+  for (auto i = RD->field_begin(), end = RD->field_end(); i != end; ++i) {
+    // We only check the last field (except for unions!)
+    if (!CheckingUnion) {
+      auto i2 = i;
+      const bool IsLastField = (++i2 == end);
+      if (!IsLastField)
+        continue;
+    }
+
+    auto FieldTy = i->getType();
+    // If a nested struct has a flexible array member, this union/struct also
+    // has one.
+    if (FieldTy->isRecordType()) {
+      FieldDecl* NestedVLA = findPossibleVLA(FieldTy->getAsRecordDecl());
+      if (NestedVLA)
+        return NestedVLA;
+    }
+    if (FieldTy->isVariableArrayType() || FieldTy->isIncompleteArrayType())
+      return *i;
+
+    if (FieldTy->isConstantArrayType()) {
+      if (const ConstantArrayType *CAT =
+              dyn_cast<ConstantArrayType>(FieldTy.getTypePtr())) {
+        // Assume that size 0 and size 1 arrays are meant to be
+        // variable length arrays since that was the only way of
+        // doing it before C99
+        if (CAT->getSize() == 0 || CAT->getSize() == 1) {
+          return *i;
+        }
+      }
+    }
+  }
+
+  return nullptr;
+}
+
 static bool containsVariableLengthArray(LangOptions::CheriBoundsMode BoundsMode,
                                         QualType Ty) {
   auto RD = Ty->getAsRecordDecl();
@@ -781,43 +819,7 @@ static bool containsVariableLengthArray(LangOptions::CheriBoundsMode BoundsMode,
     return false;
   }
 
-  const bool CheckingUnion = Ty->isUnionType();
-  for (auto i = RD->field_begin(), end = RD->field_end(); i != end; ++i) {
-    // We only check the last field (except for unions!)
-    if (!CheckingUnion) {
-      auto i2 = i;
-      const bool IsLastField = (++i2 == end);
-      if (!IsLastField)
-        continue;
-    }
-
-    auto FieldTy = i->getType();
-    // If a nested struct has a flexible array member, this union/struct also
-    // has one.
-    if (FieldTy->isRecordType() &&
-        containsVariableLengthArray(BoundsMode, FieldTy))
-      return true;
-
-    if (FieldTy->isConstantArrayType()) {
-      if (const ConstantArrayType *CAT =
-              dyn_cast<ConstantArrayType>(FieldTy.getTypePtr())) {
-        // Assume that size 0 and size 1 arrays are meant to be
-        // variable length arrays since that was the only way of
-        // doing it before C99
-        if (CAT->getSize() == 0) {
-          CHERI_BOUNDS_DBG(<< "found length 0 array at end of "
-                           << Ty.getAsString() << " -> ");
-          return true;
-        }
-        if (CAT->getSize() == 1) {
-          CHERI_BOUNDS_DBG(<< "found length 1 array at end of "
-                           << Ty.getAsString() << " -> ");
-          return true;
-        }
-      }
-    }
-  }
-  return false;
+  return findPossibleVLA(RD) != nullptr;
 }
 
 Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
@@ -868,6 +870,11 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
       return None;
     if (hasBoundsOptOutAnnotation(*this, E, ME->getMemberDecl(), "field"))
       return None;
+
+    if (BoundsMode < LangOptions::CBM_VeryAggressive &&
+        ME->getMemberDecl() == findPossibleVLA(BaseTy->getAsRecordDecl()))
+      return cannotSetBounds(
+            *this, E, Ty, "member is potential variable length array");
 
     if (BaseTy->isUnionType() && BoundsMode < LangOptions::CBM_VeryAggressive) {
       // FIXME: we should set bounds to the whole union rather than not setting bounds at all
@@ -922,6 +929,7 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
   if (Ty->isConstantArrayType()) {
     CHERI_BOUNDS_DBG(<< "Found constant size array type -> ");
     // FIXME: what about size 0/size 1 VLA emulation for pre-C99 code
+    if (Ty->getAsArrayTypeUnsafe())
     return TypeSize;
   }
   // It because a bit more tricky for class types since they might be
@@ -930,9 +938,7 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
   // I guess final classes would work
   if (Ty->isRecordType()) {
     CHERI_BOUNDS_DBG(<< "Found record type '" << Ty.getAsString() << "' -> ");
-    auto *RT = Ty->getAs<RecordType>();
-    auto RD = RT->getDecl();
-    if (RD->hasFlexibleArrayMember()) {
+    if (containsVariableLengthArray(BoundsMode, Ty)) {
       return cannotSetBounds(*this, E, Ty, "has flexible array member");
     }
     if (Ty->isStructureOrClassType() && !getLangOpts().CPlusPlus) {
