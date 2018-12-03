@@ -243,6 +243,9 @@ def remark_setting_cheri_subobject_bounds :
   Remark<"setting %select{|sub-object }0bounds for "
          "%select{pointer to|reference to}1 %2 to %3 bytes">,
   InGroup<CheriSubobjectBounds>;
+def remark_subobject_using_container_size :
+  Remark<"using size of containing type %0 instead of object type %1 for "
+         "subobject bounds on %2">, InGroup<CheriSubobjectBounds>;
 def remark_no_cheri_subobject_bounds :
   Remark<"not setting bounds for %0 (%1)">,
   InGroup<CheriSubobjectBounds>;

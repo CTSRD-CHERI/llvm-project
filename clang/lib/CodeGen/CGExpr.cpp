@@ -818,7 +818,12 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
     if (BaseTy->isUnionType() && BoundsMode < LangOptions::CBM_VeryAggressive) {
       // FIXME: we should set bounds to the whole union rather than not setting bounds at all
       // FIXME: should we set bounds for references?
-      return cannotSetBounds(*this, E, Ty, "container is union");
+      if (BoundsMode < LangOptions::CBM_References)
+        return cannotSetBounds(*this, E, Ty, "container is union");
+      CGM.getDiags().Report(E->getExprLoc(),
+                            diag::remark_subobject_using_container_size)
+          << BaseTy << Ty << "union member";
+      return getContext().getTypeSizeInChars(BaseTy).getQuantity();
     }
   }
 
