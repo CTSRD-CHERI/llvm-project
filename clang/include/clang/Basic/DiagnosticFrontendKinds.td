@@ -249,7 +249,7 @@ def remark_no_cheri_subobject_bounds :
 
 def warn_subobject_bounds_unknown_type :
   Warning<"unhandled type '%0' in CHERI bounds setting">,
-  InGroup<CheriSubobjectBounds>;
+  InGroup<CheriSubobjectBounds>, DefaultWarnNoWerror;
 
 def err_missing_vfs_overlay_file : Error<
   "virtual filesystem overlay file '%0' not found">, DefaultFatal;
