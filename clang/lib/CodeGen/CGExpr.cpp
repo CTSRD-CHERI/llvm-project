@@ -610,18 +610,34 @@ tightenCHERIBounds(CodeGenFunction &CGF, bool IsReference, llvm::Value *Value,
                    const Expr *E, SourceLocation Loc, QualType Ty,
                    const CodeGenFunction::TightenBoundsResult &TBR) {
   llvm::Value *ValueToBound = Value;
-  llvm::Type *BoundedTy = Value->getType();
   llvm::GetElementPtrInst *GEP = nullptr;
   CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
                    << (IsReference ? "' reference to " : "' addrof to ")
                    << TBR.Size << "\n");
   if (TBR.IsContainerSize) {
-
     if ((GEP = dyn_cast<llvm::GetElementPtrInst>(Value))) {
       ValueToBound = GEP->getPointerOperand();
-      BoundedTy = GEP->getPointerOperandType();
+    } else if (auto CE = dyn_cast<llvm::ConstantExpr>(Value)) {
+      // If the source Value is not a GEP instruction but a GEP constantexp
+      // (e.g. bounds on a global &array[index]) we need to convert it to an
+      // instruction so that it can work with the result of a CSetBounds Inst
+      if (CE->getOpcode() == llvm::Instruction::GetElementPtr) {
+        GEP = cast<llvm::GetElementPtrInst>(CE->getAsInstruction());
+        CGF.Builder.Insert(GEP);
+        ValueToBound = GEP->getPointerOperand();
+        ;
+      } else {
+        assert(CE->isCast() && "expected GEP or cast");
+      }
+    } else if (auto I = dyn_cast<llvm::Instruction>(Value)) {
+      // Other case where we use container size is unions -> must be a cast
+      assert(I->isCast() && "expected GEP or cast");
+    } else {
+      llvm_unreachable("Container type is not GEP or cast");
     }
   }
+  llvm::Type *BoundedTy = ValueToBound->getType();
+
   CGF.CGM.getDiags().Report(E->getExprLoc(),
                             diag::remark_setting_cheri_subobject_bounds)
       << TBR.IsSubObject << IsReference << Ty << (unsigned)TBR.Size
@@ -632,6 +648,7 @@ tightenCHERIBounds(CodeGenFunction &CGF, bool IsReference, llvm::Value *Value,
       "Add subobject bounds", TBR.IsSubObject,
       (IsReference ? "C++ reference on " : "addrof operator on ") +
           Ty.getAsString());
+
   Result = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Result, BoundedTy);
   if (GEP) {
     // Replace the GEP source with the new bounded source
