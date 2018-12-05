@@ -56,5 +56,5 @@ void test_subobject_ptr(WithNested& s) {
   do_stuff_with_ptr(&s.n);
 }
 
-// DBG: 3 cheri-bounds     - Number of references where bounds were tightend
 // DBG: 3 cheri-bounds     - Number of references checked for tightening bounds
+// DBG: 3 cheri-bounds     - Number of references where bounds were tightend

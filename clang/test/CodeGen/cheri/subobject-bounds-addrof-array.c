@@ -184,5 +184,9 @@ void test2(int *array) {
 // DBG-LABEL: ... Statistics Collected ...
 // DBG:                 8 cheri-bounds     - Number of & operators checked for tightening bounds
 // DBG-VERY-AGGRESSIVE-NEXT: 8 cheri-bounds     - Number of & operators where bounds were tightend
-// DBG-AGGRESSIVE-NEXT:      7 cheri-bounds     - Number of & operators where bounds were tightend
-// DBG-SUBOBJECT-SAFE-NEXT:  7 cheri-bounds     - Number of & operators where bounds were tightend
+
+// DBG-AGGRESSIVE-NEXT:      4 cheri-bounds     - Number of & operators where container bounds were used
+// DBG-AGGRESSIVE-NEXT:      3 cheri-bounds     - Number of & operators where bounds were tightend
+
+// DBG-SUBOBJECT-SAFE-NEXT:  6 cheri-bounds     - Number of & operators where container bounds were used
+// DBG-SUBOBJECT-SAFE-NEXT:  1 cheri-bounds     - Number of & operators where bounds were tightend

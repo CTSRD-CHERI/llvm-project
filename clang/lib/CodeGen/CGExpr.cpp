@@ -591,13 +591,56 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
 #define DEBUG_TYPE "cheri-bounds"
 STATISTIC(NumReferencesCheckedForBoundsTightening,
           "Number of references checked for tightening bounds");
-STATISTIC(NumBoundsSetOnReferences,
+STATISTIC(NumTightBoundsSetOnReferences,
           "Number of references where bounds were tightend");
+STATISTIC(NumContainerBoundsSetOnReferences,
+          "Number of references operators where container bounds were used");
 STATISTIC(NumAddrOfCheckedForBoundsTightening,
           "Number of & operators checked for tightening bounds");
-STATISTIC(NumBoundsSetOnAddrOf,
+STATISTIC(NumTightBoundsSetOnAddrOf,
           "Number of & operators where bounds were tightend");
+STATISTIC(NumContainerBoundsSetOnAddrOf,
+          "Number of & operators where container bounds were used");
 #undef DEBUG_TYPE
+
+// If we are setting bounds on the full container size, the csetbounds must
+// be done before the cincoffset!
+static llvm::Value *
+tightenCHERIBounds(CodeGenFunction &CGF, bool IsReference, llvm::Value *Value,
+                   const Expr *E, SourceLocation Loc, QualType Ty,
+                   const CodeGenFunction::TightenBoundsResult &TBR) {
+  llvm::Value *ValueToBound = Value;
+  llvm::Type *BoundedTy = Value->getType();
+  llvm::GetElementPtrInst *GEP = nullptr;
+  CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
+                   << (IsReference ? "' reference to " : "' addrof to ")
+                   << TBR.Size << "\n");
+  if (TBR.IsContainerSize) {
+
+    if ((GEP = dyn_cast<llvm::GetElementPtrInst>(Value))) {
+      ValueToBound = GEP->getPointerOperand();
+      BoundedTy = GEP->getPointerOperandType();
+    }
+  }
+  CGF.CGM.getDiags().Report(E->getExprLoc(),
+                            diag::remark_setting_cheri_subobject_bounds)
+      << TBR.IsSubObject << IsReference << Ty << (unsigned)TBR.Size
+      << E->getSourceRange();
+  llvm::Value *Result = CGF.setPointerBounds(
+      ValueToBound, TBR.Size, Loc,
+      (IsReference ? "ref.with.bounds" : "addrof.with.bounds"),
+      "Add subobject bounds", TBR.IsSubObject,
+      (IsReference ? "C++ reference on " : "addrof operator on ") +
+          Ty.getAsString());
+  Result = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Result, BoundedTy);
+  if (GEP) {
+    // Replace the GEP source with the new bounded source
+    GEP->setOperand(0, Result);
+    GEP->moveAfter(cast<llvm::Instruction>(Result));
+    Result = GEP;
+  }
+  return Result;
+}
 
 llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
                                                         QualType Ty,
@@ -610,18 +653,14 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
   //                  E->dump(llvm::dbgs()));
 
   NumReferencesCheckedForBoundsTightening++;
-  bool IsSubObj = false;
-  if (auto Size = canTightenCheriBounds(Value, Ty, E, &IsSubObj,
-                                        /* IsReference=*/true)) {
-    CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
-                     << "' reference to " << *Size << "\n");
-    NumBoundsSetOnReferences++;
-    CGM.getDiags().Report(E->getExprLoc(),
-                          diag::remark_setting_cheri_subobject_bounds)
-        << IsSubObj << true << Ty << (unsigned)*Size << E->getSourceRange();
-    return setPointerBounds(Value, *Size, Loc, "ref.with.bounds",
-                            "Add subobject bounds", IsSubObj,
-                            "C++ reference on " + Ty.getAsString());
+  constexpr bool IsReference = true;
+  if (auto TBR = canTightenCheriBounds(Value, Ty, E, IsReference)) {
+    if (TBR->IsContainerSize) {
+      NumContainerBoundsSetOnReferences++;
+    } else {
+      NumTightBoundsSetOnReferences++;
+    }
+    return tightenCHERIBounds(*this, IsReference, Value, E, Loc, Ty, *TBR);
   }
   return Value;
 }
@@ -635,25 +674,22 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
   //                  E->dump(llvm::dbgs()));
 
   NumAddrOfCheckedForBoundsTightening++;
-  bool IsSubObject = false;
-  if (auto Size = canTightenCheriBounds(Value, Ty, E, &IsSubObject)) {
-    CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
-                     << "' addrof to " << *Size << "\n");
-    NumBoundsSetOnAddrOf++;
-    CGM.getDiags().Report(E->getExprLoc(),
-                          diag::remark_setting_cheri_subobject_bounds)
-        << IsSubObject << false << Ty << (unsigned)*Size << E->getSourceRange();
-    return setPointerBounds(Value, *Size, Loc, "addrof.with.bounds",
-                            "Add subobject bounds", IsSubObject,
-                            "addrof operator on " + Ty.getAsString());
+  constexpr bool IsReference = false;
+  if (auto TBR = canTightenCheriBounds(Value, Ty, E, IsReference)) {
+    if (TBR->IsContainerSize) {
+      NumContainerBoundsSetOnAddrOf++;
+    } else {
+      NumTightBoundsSetOnAddrOf++;
+    }
+    return tightenCHERIBounds(*this, IsReference, Value, E, Loc, Ty, *TBR);
   }
   return Value;
 }
 
 template <typename T>
-static llvm::Optional<int64_t> cannotSetBounds(const CodeGenFunction &CGF,
-                                               const Expr *E, T &&Type,
-                                               const Twine &Reason) {
+static Optional<CodeGenFunction::TightenBoundsResult>
+cannotSetBounds(const CodeGenFunction &CGF, const Expr *E, T &&Type,
+                const Twine &Reason) {
   CGF.CGM.getDiags().Report(E->getExprLoc(),
                             diag::remark_no_cheri_subobject_bounds)
       << Type << Reason.str() << E->getSourceRange();
@@ -849,11 +885,9 @@ static bool containsVariableLengthArray(LangOptions::CheriBoundsMode BoundsMode,
   return findPossibleVLA(RD) != nullptr;
 }
 
-Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
-                                                         QualType Ty,
-                                                         const Expr *E,
-                                                         bool *IsSubObject,
-                                                         bool IsReference) {
+Optional<CodeGenFunction::TightenBoundsResult>
+CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
+                                       const Expr *E, bool IsReference) {
   const auto BoundsMode = getLangOpts().getCheriBounds();
   assert(BoundsMode > LangOptions::CBM_Conservative);
   CHERI_BOUNDS_DBG(<< "subobj bounds check: ");
@@ -877,15 +911,26 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
 
   // Any expression other than DeclRefExpr (e.g. in the case &x) will be a
   // sub-object expression (array index, member expression (&x.a)
-  if (IsSubObject)
-    *IsSubObject = !isa<DeclRefExpr>(E);
-
+  const bool IsSubObject = !isa<DeclRefExpr>(E);
   // Check if the type of the expression or the container of the member expr
   // is annotated with no subobject bounds. In this case we must never set
   // bounds (even in everywhere-unsafe mode!)
-
   int64_t TypeSize = getContext().getTypeSizeInChars(Ty).getQuantity();
 
+  const auto BoundsOnContainer = [this, IsSubObject](QualType Container) {
+    CodeGenFunction::TightenBoundsResult Result;
+    Result.IsSubObject = IsSubObject;
+    Result.IsContainerSize = true;
+    Result.Size = getContext().getTypeSizeInChars(Container).getQuantity();
+    return Result;
+  };
+  const auto ExactBounds = [IsSubObject](int64_t Size) {
+    CodeGenFunction::TightenBoundsResult Result;
+    Result.IsSubObject = IsSubObject;
+    Result.IsContainerSize = false;
+    Result.Size = Size;
+    return Result;
+  };
   if (auto ME = dyn_cast<MemberExpr>(E)) {
     CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
     // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is
@@ -914,7 +959,7 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
             *this, E, Ty, "containing union includes a variable length array");
 
       remarkUsingContainerSize(*this, E, BaseTy, Ty, "union member");
-      return getContext().getTypeSizeInChars(BaseTy).getQuantity();
+      return BoundsOnContainer(BaseTy);
     }
   }
 
@@ -926,11 +971,11 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
     case ArrayBoundsResult::Never:
       return None;
     case ArrayBoundsResult::Always:
-      return TypeSize;
+      return ExactBounds(TypeSize);
     case ArrayBoundsResult::UseFullArray: {
       const Expr *Base = ASE->getBase()->IgnoreImplicit();
       if (Base->getType()->isConstantArrayType()) {
-        return getContext().getTypeSizeInChars(Base->getType()).getQuantity();
+        return BoundsOnContainer(Base->getType());
       }
       // Otherwise we have a non-constant array type -> don't set bounds to
       // avoid crashes at runtime
@@ -949,7 +994,7 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
 
   if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
     CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");
-    return TypeSize;
+    return ExactBounds(TypeSize);
   }
 
   if (auto AT = Ty->getAs<AtomicType>()) {
@@ -960,14 +1005,14 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
   // It should be possible to set the size for all scalar types
   if (Ty->isScalarType()) {
     CHERI_BOUNDS_DBG(<< "Found scalar type -> ");
-    return TypeSize;
+    return ExactBounds(TypeSize);
   }
 
   if (Ty->isConstantArrayType()) {
     CHERI_BOUNDS_DBG(<< "Found constant size array type -> ");
     // FIXME: what about size 0/size 1 VLA emulation for pre-C99 code
     if (Ty->getAsArrayTypeUnsafe())
-    return TypeSize;
+      return ExactBounds(TypeSize);
   }
   // It because a bit more tricky for class types since they might be
   // downcasted to something with a larger size.
@@ -983,7 +1028,7 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
       // all structurs that don't have flexible array members and aren't
       // annotated as opt-out
       CHERI_BOUNDS_DBG(<< "compiling C and no flexible array -> ");
-      return TypeSize;
+      return ExactBounds(TypeSize);
     } else if (Ty->isCXXStructureOrClassType()) {
       CXXRecordDecl *CRD = Ty->getAsCXXRecordDecl();
       const bool IsFinalClass = CRD->hasAttr<FinalAttr>();
@@ -994,7 +1039,7 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
       // No bounds on classes with vtables
       if (CRD->isCLike()) {
         CHERI_BOUNDS_DBG(<< "is C-like struct type and is marked as final -> ");
-        return TypeSize;
+        return ExactBounds(TypeSize);
       }
       // Final class: check it doesn't have any virtual bases
       // TODO: check there are no flexible array members
@@ -1003,7 +1048,7 @@ Optional<int64_t> CodeGenFunction::canTightenCheriBounds(llvm::Value *Value,
       } else {
         assert(CRD->getNumVBases() == 0);
         CHERI_BOUNDS_DBG(<< "is literal type and is marked as final -> ");
-        return TypeSize;
+        return ExactBounds(TypeSize);
       }
     }
     return cannotSetBounds(*this, E, Ty, "not a struct/class");

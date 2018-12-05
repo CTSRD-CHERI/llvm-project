@@ -55,6 +55,6 @@ void test_final_class_array() {
 
 // finally check the dumped statistics:
 // CHECK: {
-// CHECK: "cheri-bounds.NumBoundsSetOnReferences": 9,
 // CHECK: "cheri-bounds.NumReferencesCheckedForBoundsTightening": 12,
+// CHECK: "cheri-bounds.NumTightBoundsSetOnReferences": 9,
 // CHECK: }

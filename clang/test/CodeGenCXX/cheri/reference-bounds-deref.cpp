@@ -4,7 +4,7 @@
 // RUNNOT: %clang_cc1 -O0 -triple=x86_64-unknown-linux -fcolor-diagnostics %s -o - -fsanitize=local-bounds,array-bounds,object-size -emit-llvm -mllvm -debug
 // RUNNOT: %clang_cc1 -O2 -triple=x86_64-unknown-linux -fcolor-diagnostics %s -o - -fsanitize=local-bounds,array-bounds,object-size -emit-llvm
 // RUN: %cheri_purecap_cc1 -cheri-bounds=references-only -O2 -std=c++17 -emit-llvm %s -o - -mllvm -debug-only=cheri-bounds 2>%t.dbg -print-stats | %cheri_FileCheck %s
-// RUN: %cheri_FileCheck %s -check-prefix DEBUG-MSG < %t.dbg
+// RUN: %cheri_FileCheck %s -check-prefix DEBUG-MSG -input-file=%t.dbg
 
 class Foo {
 public:
@@ -182,5 +182,5 @@ TEST_PTR_TO_REF(IntOrFloat)
 // finally check the dumped statistics:
 // DEBUG-MSG-LABEL: STATISTICS:
 // DEBUG-MSG: ... Statistics Collected ...
-// DEBUG-MSG:  8 cheri-bounds     - Number of references where bounds were tightend
 // DEBUG-MSG: 15 cheri-bounds     - Number of references checked for tightening bounds
+// DEBUG-MSG:  8 cheri-bounds     - Number of references where bounds were tightend
