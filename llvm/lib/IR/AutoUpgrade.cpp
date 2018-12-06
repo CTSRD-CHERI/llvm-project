@@ -789,6 +789,7 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
                                         { ArgTy, ArgTy });
       return true;
     }
+    break;
   }
 
   case 'x':
