@@ -1409,12 +1409,11 @@ void Clang::RenderTargetOptions(const llvm::Triple &EffectiveTriple,
     CmdArgs.push_back("-fallow-half-arguments-and-returns");
     break;
   case llvm::Triple::cheri:
-    Args.ClaimAllArgs(options::OPT_cheri_linker);
-
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
+    Args.ClaimAllArgs(options::OPT_cheri_linker);
     AddMIPSTargetArgs(Args, CmdArgs, RelocationModel == llvm::Reloc::Static, JA);
     break;
 
