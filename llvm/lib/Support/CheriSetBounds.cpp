@@ -112,9 +112,10 @@ void CSetBoundsStatistics::print(llvm::raw_ostream &OS, StringRef MainFile,
         OS << ",h";
       } else if (E.PointerKind == SetBoundsPointerSource::SubObject) {
         OS << ",o";
-      } else if (E.PointerKind == SetBoundsPointerSource::GlobalVar ||
-                 E.PointerKind == SetBoundsPointerSource::CodePointer) {
+      } else if (E.PointerKind == SetBoundsPointerSource::GlobalVar) {
         OS << ",g";
+      } else if (E.PointerKind == SetBoundsPointerSource::CodePointer) {
+        OS << ",c";
       } else {
         OS << ",?";
       }

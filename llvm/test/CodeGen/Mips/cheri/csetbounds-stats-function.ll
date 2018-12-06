@@ -31,5 +31,6 @@ declare i32 @external_fn()
 ; SYMTAB-EMPTY:
 
 ; CSV: alignment_bits,size,kind,source_loc,compiler_pass,details
-; CSV: 2,20,g,"UNKNOWN","ELF symbol table","Function maybe_inline"
-; CSV: 2,84,g,"UNKNOWN","ELF symbol table","Function test_func"
+; CSV-NEXT: 2,20,c,"UNKNOWN","ELF symbol table","Function maybe_inline"
+; CSV-NEXT: 2,84,c,"UNKNOWN","ELF symbol table","Function test_func"
+; CSV-EMPTY:
