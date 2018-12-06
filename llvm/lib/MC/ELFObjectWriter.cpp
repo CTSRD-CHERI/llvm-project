@@ -39,6 +39,7 @@
 #include "llvm/MC/StringTableBuilder.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Casting.h"
+#include "llvm/Support/CheriSetBounds.h"
 #include "llvm/Support/Compression.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/Error.h"
@@ -546,6 +547,22 @@ void ELFWriter::writeSymbol(SymbolTableWriter &Writer, uint32_t StringIndex,
     if (!ESize->evaluateKnownAbsolute(Res, Layout))
       report_fatal_error("Size expression must be absolute.");
     Size = Res;
+  }
+
+  // Log the cheri bounds
+  if (Type == ELF::STT_FUNC && cheri::ShouldCollectCSetBoundsStats) {
+#if 0
+    // Offset is always zero, and .text align is 16
+    uint64_t SecAlign = Symbol.getSection().getAlignment();
+    assert(SecAlign == 0 || isPowerOf2_64(SecAlign));
+    auto MinAlign =
+        std::min(SecAlign, PowerOf2Floor(SecAlign + Symbol.getOffset()));
+#endif
+    // Assume we don't get any better than 4 byte alignment:
+    uint64_t MinAlign = 4;
+    cheri::CSetBoundsStats->add(MinAlign, Size, "ELF symbol table",
+                                cheri::SetBoundsPointerSource::CodePointer,
+                                "Function " + Symbol.getName(), "UNKNOWN");
   }
 
   // Write out the symbol table entry
