@@ -126,7 +126,7 @@ llvm::Value *CodeGenFunction::setPointerBounds(
                             : llvm::cheri::inferPointerSource(V);
     uint64_t Align = KnownAlignment ? *KnownAlignment
                                     : getKnownAlignment(V, CGM.getDataLayout());
-    llvm::cheri::CSetBoundsStats->add(
+    llvm::cheri::addSetBoundsStats(
         Align, Size, Pass, Kind, Details,
         Loc.printToString(CGM.getContext().getSourceManager()));
   }
