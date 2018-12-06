@@ -45,12 +45,10 @@ void *(__attribute__((alloc_size(1, 2))) * allocator_function_typdef3)(int, int)
 // This typedef applies the alloc_size to the pointer to the function pointer and should not be allowed
 void *(**__attribute__((alloc_size(1, 2))) * allocator_function_typdef4)(int, int); // expected-warning{{'alloc_size' attribute only applies to non-K&R-style functions}}
 
-
-
 // We should not be warning when assigning function pointers with and without the alloc size attribute
 // since it doesn't change the type of the function
-typedef void * (__attribute__((alloc_size(1))) * my_malloc_fn_pointer_type)(int);
-typedef void * (* my_other_malloc_fn_pointer_type)(int);
+typedef void *(__attribute__((alloc_size(1))) * my_malloc_fn_pointer_type)(int);
+typedef void *(*my_other_malloc_fn_pointer_type)(int);
 void *fn(int i);
 __attribute__((alloc_size(1))) void *fn2(int i);
 
