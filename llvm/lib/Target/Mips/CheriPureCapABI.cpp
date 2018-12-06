@@ -104,11 +104,11 @@ public:
       if (BitCast == AI)
         BitCast = cast<Instruction>(Alloca);
       if (cheri::ShouldCollectCSetBoundsStats) {
-        cheri::CSetBoundsStats->add(AI->getAlignment(), Size, getPassName(),
-                                    cheri::SetBoundsPointerSource::Stack,
-                                    "set bounds on " +
-                                        cheri::inferLocalVariableName(AI),
-                                    cheri::inferSourceLocation(AI));
+        cheri::addSetBoundsStats(AI->getAlignment(), Size, getPassName(),
+                                 cheri::SetBoundsPointerSource::Stack,
+                                 "set bounds on " +
+                                     cheri::inferLocalVariableName(AI),
+                                 cheri::inferSourceLocation(AI));
       }
       Alloca = B.CreateCall(SetLenFun, {Alloca, Size});
       Alloca = B.CreateBitCast(Alloca, AllocaTy);

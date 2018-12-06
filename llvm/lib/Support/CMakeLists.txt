@@ -62,6 +62,7 @@ add_llvm_library(LLVMSupport
   BuryPointer.cpp
   CachePruning.cpp
   circular_raw_ostream.cpp
+  CheriSetBounds.cpp
   Chrono.cpp
   COM.cpp
   CodeGenCoverage.cpp

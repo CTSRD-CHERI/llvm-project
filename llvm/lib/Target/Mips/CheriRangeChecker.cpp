@@ -100,9 +100,9 @@ class CheriRangeChecker : public FunctionPass,
       Instruction *DebugInst = dyn_cast<Instruction>(AlignmentSource);
       if (!DebugInst)
         DebugInst = InsertPt;
-      cheri::CSetBoundsStats->add(getKnownAlignment(AlignmentSource, *TD), Size,
-                                  getPassName(), std::get<2>(AO), "",
-                                  cheri::inferSourceLocation(DebugInst));
+      cheri::addSetBoundsStats(getKnownAlignment(AlignmentSource, *TD), Size,
+                               getPassName(), std::get<2>(AO), "",
+                               cheri::inferSourceLocation(DebugInst));
     }
     if (BitCast == I2P)
       BitCast = SetLength;
