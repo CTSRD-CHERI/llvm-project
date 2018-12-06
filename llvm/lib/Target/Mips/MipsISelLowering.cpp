@@ -4731,6 +4731,7 @@ MipsTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
         return std::make_pair(0U, &Mips::GPR32RegClass);
       if (VT == MVT::i64 && Subtarget.isGP64bit())
         return std::make_pair(0U, &Mips::GPR64RegClass);
+      LLVM_FALLTHROUGH; // also allow capability with r (for compatibility)
     case 'C':
       if (VT == CapType)
         return std::make_pair(0U, &Mips::CheriGPRRegClass);
@@ -4943,6 +4944,7 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
       case 16:
         if (Subtarget.isCheri128())
           return CapType;
+        LLVM_FALLTHROUGH;
       case 8:
         if (Subtarget.isCheri64())
           return CapType;

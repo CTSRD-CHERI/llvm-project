@@ -2531,10 +2531,12 @@ MipsAsmParser::tryExpandInstruction(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out,
                : MER_Success;
   case Mips::CLWC1:
     is64Bit = false;
+    LLVM_FALLTHROUGH;
   case Mips::CLDC1:
     return expandCapLoadC1(Inst, IDLoc, is64Bit, Out, STI);
   case Mips::CSWC1:
     is64Bit = false;
+    LLVM_FALLTHROUGH;
   case Mips::CSDC1:
     return expandCapStoreC1(Inst, IDLoc, is64Bit, Out, STI);
   case Mips::LoadAddrReg32:
