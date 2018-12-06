@@ -44,71 +44,82 @@ public:
       for (Instruction &I : BB) {
         // TODO: CallBase
         Function *CalledFunc = nullptr;
+        AttributeList AL;
         // TODO: use CallBase when we merge upstream
         if (const CallInst *CI = dyn_cast<CallInst>(&I)) {
           CalledFunc = CI->getCalledFunction();
+          AL = CI->getAttributes();
         } else if (const InvokeInst *II = dyn_cast<InvokeInst>(&I)) {
           CalledFunc = II->getCalledFunction();
+          AL = II->getAttributes();
         }
-        // We only care about calls and invokes where the target is known
-        if (!CalledFunc)
-          continue;
+        const auto LogAllocSize =
+            [&](std::pair<unsigned, Optional<unsigned>> AllocSize) {
+              // TODO: should we also log this for non-capabilities?
+              if (!DL.isFatPointer(I.getType()))
+                return;
+              // Without the assumption cache we don't get any benefit from
+              // assume_aligned attributes and getKnownAlignment will return 1
+              uint64_t Alignment = getKnownAlignment(&I, DL, &I, AC, DT);
+              Optional<uint64_t> KnownSize;
+              Optional<uint64_t> SizeMultipleOf;
+
+              Optional<uint64_t> FirstConstant;
+              Optional<uint64_t> SecondConstant;
+              if (I.getNumOperands() > AllocSize.first)
+                FirstConstant =
+                    cheri::inferConstantValue(I.getOperand(AllocSize.first));
+              if (AllocSize.second && I.getNumOperands() > *AllocSize.second)
+                SecondConstant =
+                    cheri::inferConstantValue(I.getOperand(*AllocSize.second));
+              if (FirstConstant) {
+                if (!AllocSize.second) {
+                  // If we used the one-argument version of allocsize this is
+                  // the total known size
+                  KnownSize = *FirstConstant;
+                } else {
+                  // If there is a second argument that also needs to be a
+                  // constant so that we can infer the size
+                  if (SecondConstant) {
+                    KnownSize = *FirstConstant * *SecondConstant;
+                  } else {
+                    // Otherwise can only infer that it is a multiple of N
+                    SizeMultipleOf = FirstConstant;
+                  }
+                }
+              } else if (SecondConstant) {
+                // First argument is not a constant, but if the second one is we
+                // can at least infer the known multiple
+                SizeMultipleOf = SecondConstant;
+              }
+              // Assume zero for now, parse assume_aligned bits?
+              // Assume that all alloc_size functions allocate on the heap.
+              // This may not be quite true since some might use shared memory
+              // but shouldn't really matter for analysis purposes
+              cheri::CSetBoundsStats->add(
+                  Alignment, KnownSize, "function with alloc_size",
+                  cheri::SetBoundsPointerSource::Heap,
+                  "call to " +
+                      (CalledFunc ? CalledFunc->getName() : "function pointer"),
+                  cheri::inferSourceLocation(&I), SizeMultipleOf);
+            };
         // We can only do this analysis on calls that return pointers
         if (!I.getType()->isPointerTy())
           continue;
 
-        // And they need a alloc_size attribute
-        if (!CalledFunc->hasFnAttribute(Attribute::AttrKind::AllocSize))
-          continue;
-
-        // TODO: should we also log this for non-capabilities?
-        if (!DL.isFatPointer(I.getType()))
-          continue;
-
-        Attribute Attr =
-            CalledFunc->getFnAttribute(Attribute::AttrKind::AllocSize);
-        auto AllocSize = Attr.getAllocSizeArgs();
-        // Without the assumption cache we don't get any benefit from
-        // assume_aligned attributes and getKnownAlignment will return 1
-        uint64_t Alignment = getKnownAlignment(&I, DL, &I, AC, DT);
-        Optional<uint64_t> KnownSize;
-        Optional<uint64_t> SizeMultipleOf;
-
-        Optional<uint64_t> FirstConstant;
-        Optional<uint64_t> SecondConstant;
-        if (I.getNumOperands() > AllocSize.first)
-          FirstConstant = cheri::inferConstantValue(I.getOperand(AllocSize.first));
-        if (AllocSize.second && I.getNumOperands() > *AllocSize.second)
-          SecondConstant = cheri::inferConstantValue(I.getOperand(*AllocSize.second));
-        if (FirstConstant) {
-          if (!AllocSize.second) {
-            // If we used the one-argument version of allocsize this is the
-            // total known size
-            KnownSize = *FirstConstant;
-          } else {
-            // If there is a second argument that also needs to be a constant
-            // so that we can infer the size
-            if (SecondConstant) {
-              KnownSize = *FirstConstant * *SecondConstant;
-            } else {
-              // Otherwise can only infer that it is a multiple of N
-              SizeMultipleOf = FirstConstant;
-            }
+        // Check both the target function and the CallInst for alloc_size attrs:
+        if (CalledFunc) {
+          if (CalledFunc->hasFnAttribute(Attribute::AttrKind::AllocSize)) {
+            Attribute Attr =
+                CalledFunc->getFnAttribute(Attribute::AttrKind::AllocSize);
+            LogAllocSize(Attr.getAllocSizeArgs());
+            continue;
           }
-        } else if (SecondConstant) {
-          // First argument is not a constant, but if the second one is we can
-          // at least infer the known multiple
-          SizeMultipleOf = SecondConstant;
         }
-        // Assume zero for now, parse assume_aligned bits?
-        // Assume that all alloc_size functions allocate on the heap.
-        // This may not be quite true since some might use shared memory but
-        // shouldn't really matter for analysis purposes
-        cheri::CSetBoundsStats->add(
-            Alignment, KnownSize, "function with alloc_size",
-            cheri::SetBoundsPointerSource::Heap,
-            "call to " + CalledFunc->getName(),
-            cheri::inferSourceLocation(&I), SizeMultipleOf);
+        // no attr on the called func, try call site too
+        if (AL.hasFnAttribute(Attribute::AttrKind::AllocSize)) {
+          LogAllocSize(AL.getFnAttributes().getAllocSizeArgs());
+        }
       }
     }
     // TODO: get machine function and count instructions?

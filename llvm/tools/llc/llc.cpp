@@ -575,6 +575,8 @@ static int compileModule(char **argv, LLVMContext &Context) {
           << "target does not support generation of this"
           << " file type!\n";
       return 1;
+    } else if (cheri::ShouldCollectCSetBoundsStats) {
+      PM.add(createLogCheriSetBoundsPass());
     }
 
     if (MIR) {
