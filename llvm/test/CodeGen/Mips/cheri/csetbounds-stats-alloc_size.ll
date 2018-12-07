@@ -1,7 +1,7 @@
 ; RUN: rm -f %t.csv
 ; RUN: %cheri_purecap_llc -cheri-cap-table-abi=plt %s -O0 -o /dev/null \
 ; RUN:    -collect-csetbounds-output=%t.csv -collect-csetbounds-stats=csv
-; RUN: FileCheck %s -input-file=%t.csv -check-prefix CSV
+; RUN: %cheri_FileCheck %s -input-file=%t.csv -check-prefix CSV
 
 declare i8 addrspace(200)* @do_alloc(i32) #1
 declare i8 addrspace(200)* @do_alloc_callsite_annotated(i32, i32)
@@ -36,5 +36,5 @@ attributes #3 = { allocsize(1,2) }
 ; CSV-LABEL: alignment_bits,size,kind,source_loc,compiler_pass,details
 ; CSV-NEXT: 0,100,h,"<somewhere in test_direct_call_1>","function with alloc_size","call to do_alloc"
 ; CSV-NEXT: 0,200,h,"<somewhere in test_direct_call_2>","function with alloc_size","call to do_alloc_callsite_annotated"
-; CSV-NEXT: 5,16,g,"<somewhere in test_indirect_call>","MipsTargetLowering::lowerGlobalAddress","load of global alloc_fn_ptr (alloc size=16)"
+; CSV-NEXT: 5,[[$CAP_SIZE]],g,"<somewhere in test_indirect_call>","MipsTargetLowering::lowerGlobalAddress","load of global alloc_fn_ptr (alloc size=[[$CAP_SIZE]])"
 ; CSV-NEXT: 0,32,h,"<somewhere in test_indirect_call>","function with alloc_size","call to function pointer"
