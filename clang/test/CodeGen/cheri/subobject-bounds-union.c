@@ -38,15 +38,15 @@ void test(union sockunion* un) {
   call(&un->sa); // 28 bytes in < very-aggrssive, otherwise 16
   // aggressive-remark@-1{{using size of containing type 'union sockunion' instead of object type 'struct sockaddr' for subobject bounds on union member}}
   // aggressive-remark@-2{{setting sub-object bounds for pointer to 'struct sockaddr' to 28 bytes}}
-  // very-aggressive-remark@-3{{setting sub-object bounds for pointer to 'struct sockaddr' to 16 bytes}}
+  // very-aggressive-remark@-3{{setting sub-object bounds for field 'sa' (pointer to 'struct sockaddr') to 16 bytes}}
   call(&un->sin);
   // aggressive-remark@-1{{using size of containing type 'union sockunion' instead of object type 'struct sockaddr_in' for subobject bounds on union member}}
   // aggressive-remark@-2{{setting sub-object bounds for pointer to 'struct sockaddr_in' to 28 bytes}}
-  // very-aggressive-remark@-3{{setting sub-object bounds for pointer to 'struct sockaddr_in' to 16 bytes}}
+  // very-aggressive-remark@-3{{setting sub-object bounds for field 'sin' (pointer to 'struct sockaddr_in') to 16 bytes}}
   call(&un->sin6);
   // aggressive-remark@-1{{using size of containing type 'union sockunion' instead of object type 'struct sockaddr_in6' for subobject bounds on union member}}
   // aggressive-remark@-2{{setting sub-object bounds for pointer to 'struct sockaddr_in6' to 28 bytes}}
-  // very-aggressive-remark@-3{{setting sub-object bounds for pointer to 'struct sockaddr_in6' to 28 bytes}}
+  // very-aggressive-remark@-3{{setting sub-object bounds for field 'sin6' (pointer to 'struct sockaddr_in6') to 28 bytes}}
 }
 
 union WithNestedStruct {
@@ -60,20 +60,20 @@ union WithNestedStruct {
 void test2(union WithNestedStruct* un) {
   // Accessing a member of a nested struct should set bounds
   call(&un->nested.a);
-  // aggressive-remark@-1{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
-  // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  // aggressive-remark@-1{{setting sub-object bounds for field 'a' (pointer to 'int') to 4 bytes}}
+  // very-aggressive-remark@-2{{setting sub-object bounds for field 'a' (pointer to 'int') to 4 bytes}}
   call(&un->nested.b);
-  // aggressive-remark@-1{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
-  // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  // aggressive-remark@-1{{setting sub-object bounds for field 'b' (pointer to 'int') to 4 bytes}}
+  // very-aggressive-remark@-2{{setting sub-object bounds for field 'b' (pointer to 'int') to 4 bytes}}
   // But using the immediate children of the union should not
   call(&un->nested);
   // aggressive-remark-re@-1{{using size of containing type 'union WithNestedStruct' instead of object type 'struct (anonymous struct at {{.+}}subobject-bounds-union.c:53:3)' for subobject bounds on union member}}
   // aggressive-remark-re@-2{{setting sub-object bounds for pointer to 'struct (anonymous struct at {{.+}}subobject-bounds-union.c:53:3)' to 64 bytes}}
-  // very-aggressive-remark-re@-3{{setting sub-object bounds for pointer to 'struct (anonymous struct at {{.+}}subobject-bounds-union.c:53:3)' to 8 bytes}}
+  // very-aggressive-remark-re@-3{{setting sub-object bounds for field 'nested' (pointer to 'struct (anonymous struct at {{.+}}subobject-bounds-union.c:53:3)') to 8 bytes}}
   call(&un->buffer);
   // aggressive-remark@-1{{using size of containing type 'union WithNestedStruct' instead of object type 'char [64]' for subobject bounds on union member}}
   // aggressive-remark@-2{{setting sub-object bounds for pointer to 'char [64]' to 64 bytes}}
-  // very-aggressive-remark@-3{{setting sub-object bounds for pointer to 'char [64]' to 64 bytes}}
+  // very-aggressive-remark@-3{{etting sub-object bounds for field 'buffer' (pointer to 'char [64]') to 64 bytes}}
 }
 
 // Real VLA with empty [] are not allow in unions but the pre-C99 versions with 0/1 might exist
@@ -103,13 +103,13 @@ void test3(union WithVLA1 *un1, union WithVLA2 *un2, union WithVLA3 *un3) {
   // (but still do it in very-aggressive mode)
   call(&un1->i);
   // aggressive-remark@-1{{not setting bounds for 'int' (containing union includes a variable length array)}}
-  // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  // very-aggressive-remark@-2{{setting sub-object bounds for field 'i' (pointer to 'int') to 4 bytes}}
   call(&un2->l);
   // aggressive-remark@-1{{not setting bounds for 'long' (containing union includes a variable length array)}}
-  // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'long' to 8 bytes}}
+  // very-aggressive-remark@-2{{setting sub-object bounds for field 'l' (pointer to 'long') to 8 bytes}}
 
   // Check that recursing into nested types works
   call(&un3->f);
   // aggressive-remark@-1{{not setting bounds for 'float' (containing union includes a variable length array)}}
-  // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'float' to 4 bytes}}
+  // very-aggressive-remark@-2{{setting sub-object bounds for field 'f' (pointer to 'float') to 4 bytes}}
 }

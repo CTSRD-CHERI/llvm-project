@@ -3880,6 +3880,7 @@ public:
     uint64_t Size;
     bool IsSubObject = false;
     bool IsContainerSize = false;
+    ValueDecl* TargetField = nullptr;
   };
   Optional<TightenBoundsResult> canTightenCheriBounds(llvm::Value *Ptr,
                                                       QualType Ty,

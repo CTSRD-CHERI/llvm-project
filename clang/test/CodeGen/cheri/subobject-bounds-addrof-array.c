@@ -59,7 +59,7 @@ void test_len2_array(struct WithLen2Array *s) {
   // CHECK-LABEL: define void @test_len2_array(
   // In safe mode there should not be any bounds here:
   do_stuff_untyped(&s->values);
-  // common-remark@-1 {{setting sub-object bounds for pointer to 'struct Foo [3]' to 12 bytes}}
+  // common-remark@-1 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo [3]') to 12 bytes}}
   // DBG: Found constant size array type -> setting bounds for 'struct Foo [3]' addrof to 12
   // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}} i64 12)
 

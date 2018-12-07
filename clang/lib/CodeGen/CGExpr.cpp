@@ -638,10 +638,18 @@ tightenCHERIBounds(CodeGenFunction &CGF, bool IsReference, llvm::Value *Value,
   }
   llvm::Type *BoundedTy = ValueToBound->getType();
 
-  CGF.CGM.getDiags().Report(E->getExprLoc(),
-                            diag::remark_setting_cheri_subobject_bounds)
-      << TBR.IsSubObject << IsReference << Ty << (unsigned)TBR.Size
+  if (TBR.TargetField) { // TODO: enable this after updating tests
+    assert(TBR.IsSubObject);
+    CGF.CGM.getDiags().Report(E->getExprLoc(),
+                            diag::remark_setting_cheri_subobject_bounds_field)
+      << TBR.TargetField << IsReference << Ty << (unsigned)TBR.Size
       << E->getSourceRange();
+  } else {
+    CGF.CGM.getDiags().Report(E->getExprLoc(),
+                              diag::remark_setting_cheri_subobject_bounds)
+        << TBR.IsSubObject << IsReference << Ty << (unsigned)TBR.Size
+        << E->getSourceRange();
+  }
   llvm::Value *Result = CGF.setPointerBounds(
       ValueToBound, TBR.Size, Loc,
       (IsReference ? "ref.with.bounds" : "addrof.with.bounds"),
@@ -943,10 +951,12 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     Result.Size = getContext().getTypeSizeInChars(Container).getQuantity();
     return Result;
   };
-  const auto ExactBounds = [IsSubObject](int64_t Size) {
+  ValueDecl* TargetField = nullptr;
+  const auto ExactBounds = [IsSubObject, &TargetField](int64_t Size) {
     CodeGenFunction::TightenBoundsResult Result;
     Result.IsSubObject = IsSubObject;
     Result.IsContainerSize = false;
+    Result.TargetField = TargetField;
     Result.Size = Size;
     return Result;
   };
@@ -961,6 +971,8 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       return None;
     if (hasBoundsOptOutAnnotation(*this, E, ME->getMemberDecl(), "field"))
       return None;
+
+    TargetField = ME->getMemberDecl();
 
     if (BoundsMode < LangOptions::CBM_VeryAggressive &&
         ME->getMemberDecl() == findPossibleVLA(BaseTy->getAsRecordDecl()))

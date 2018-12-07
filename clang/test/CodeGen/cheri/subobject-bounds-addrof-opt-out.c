@@ -41,7 +41,7 @@ void do_stuff(void* data);
 void test(struct WithBoundsPls* w, struct NoBoundsPls* n, struct HasMemberOfTypeNoBoundsPls* t, struct HasFieldWithOptOut* f) {
   // annotation on the type (applies to all subelements)
   do_stuff(&((struct WithBoundsPls*)n)->data); // cast avoids the bounds setting
-  // expected-remark@-1{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  // expected-remark@-1{{setting sub-object bounds for field 'data' (pointer to 'int') to 4 bytes}}
   // CHECK: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
   struct NoBoundsPls n2;
   do_stuff(n); // just passing on, no bounds
@@ -60,17 +60,17 @@ void test(struct WithBoundsPls* w, struct NoBoundsPls* n, struct HasMemberOfType
   // field annotation:
   do_stuff(&f->first); // expected-remark{{not setting bounds for first (field has opt-out attribute)}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field has opt-out attribute -> not setting bounds
-  do_stuff(&f->second); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  do_stuff(&f->second); // expected-remark{{setting sub-object bounds for field 'second' (pointer to 'int') to 4 bytes}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
 
   // nested type with annotations
-  do_stuff(&t->before); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  do_stuff(&t->before); // expected-remark{{setting sub-object bounds for field 'before' (pointer to 'int') to 4 bytes}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
   do_stuff(&t->nested); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (field type declaration has opt-out attribute)}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field type declaration has opt-out attribute -> not setting bounds
   do_stuff(&t->nested.data); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (base type declaration has opt-out attribute)}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type declaration has opt-out attribute -> not setting bounds
-  do_stuff(&t->after); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  do_stuff(&t->after); // expected-remark{{setting sub-object bounds for field 'after' (pointer to 'int') to 4 bytes}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
 
   // Check the opt-out with parenexprs
@@ -112,7 +112,7 @@ struct a {
 // This previously crashed:
 struct a c(void) {
   struct a d[1];
-  do_stuff(&d->b); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  do_stuff(&d->b); // expected-remark{{setting sub-object bounds for field 'b' (pointer to 'int') to 4 bytes}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
   return d[0];
 }

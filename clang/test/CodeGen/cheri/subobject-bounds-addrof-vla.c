@@ -29,16 +29,16 @@ void do_stuff_untyped(void *);
 
 void test_subobject_addrof_vla(struct WithVLA *s1, struct WithIntVLA *s2, struct NestedVLA *n) {
   do_stuff_untyped(&s1->buf); // expected-remark{{not setting bounds for 'struct CharVLA' (has flexible array member)}}
-  do_stuff_untyped(&s1->buf.size); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  do_stuff_untyped(&s1->buf.size); // expected-remark{{setting sub-object bounds for field 'size' (pointer to 'int') to 4 bytes}}
   // TODO: I guess this should be a slightly different remark message (VLA instead of incomplete type)
   do_stuff_untyped(&s1->buf.data); // expected-remark{{not setting bounds for 'char []' (incomplete type)}}
   do_stuff_untyped(&s2->buf); // expected-remark{{not setting bounds for 'struct IntVLA' (has flexible array member)}}
-  do_stuff_untyped(&s2->buf.size); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  do_stuff_untyped(&s2->buf.size); // expected-remark{{setting sub-object bounds for field 'size' (pointer to 'int') to 4 bytes}}
   do_stuff_untyped(&s2->buf.data); // expected-remark{{not setting bounds for 'int []' (incomplete type)}}
   do_stuff_untyped(&n->vla_struct); // expected-remark{{not setting bounds for 'struct WithVLA' (has flexible array member)}}
-  do_stuff_untyped(&n->vla_struct.x); // expected-remark{{setting sub-object bounds for pointer to 'float' to 4 bytes}}
+  do_stuff_untyped(&n->vla_struct.x); // expected-remark{{setting sub-object bounds for field 'x' (pointer to 'float') to 4 bytes}}
   do_stuff_untyped(&n->vla_struct.buf); // expected-remark{{not setting bounds for 'struct CharVLA' (has flexible array member)}}
-  do_stuff_untyped(&n->vla_struct.buf.size); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
+  do_stuff_untyped(&n->vla_struct.buf.size); // expected-remark{{setting sub-object bounds for field 'size' (pointer to 'int') to 4 bytes}}
   do_stuff_untyped(&n->vla_struct.buf.data); // expected-remark{{not setting bounds for 'char []' (incomplete type)}}
 }
 
@@ -89,8 +89,8 @@ void test2(void* ptr) {
   do_stuff_untyped(&v1->buf.data); // expected-remark{{not setting bounds for 'char [1]' (member is potential variable length array)}}
   struct NotVLAContainerLen2* v2 = (struct NotVLAContainerLen2*)ptr;
   do_stuff_untyped(&global_v2); // expected-remark{{setting bounds for pointer to 'struct NotVLAContainerLen2' to 12 bytes}}
-  do_stuff_untyped(&v2->buf); // expected-remark{{setting sub-object bounds for pointer to 'struct LengthTwoCharArray' to 8 bytes}}
-  do_stuff_untyped(&v2->buf.data); // expected-remark{{setting sub-object bounds for pointer to 'char [2]' to 2 bytes}}
+  do_stuff_untyped(&v2->buf); // expected-remark{{sub-object bounds for field 'buf' (pointer to 'struct LengthTwoCharArray') to 8 bytes}}
+  do_stuff_untyped(&v2->buf.data); // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [2]') to 2 bytes}}
 }
 
 #ifdef __cplusplus
@@ -118,7 +118,7 @@ void test_maybe_vla(void) {
   MaybeVLA<2> mvla2;
   do_stuff_reference(mvla2); // expected-remark{{setting bounds for reference to 'MaybeVLA<2>' to 8 bytes}}
   do_stuff_untyped(&mvla2); // expected-remark{{setting bounds for pointer to 'MaybeVLA<2>' to 8 bytes}}
-  do_stuff_reference(mvla2.data); //expected-remark{{etting sub-object bounds for reference to 'char [2]' to 2 bytes}}
-  do_stuff_untyped(&mvla2.data);  //expected-remark{{etting sub-object bounds for pointer to 'char [2]' to 2 bytes}}
+  do_stuff_reference(mvla2.data); //expected-remark{{setting sub-object bounds for field 'data' (reference to 'char [2]') to 2 bytes}}
+  do_stuff_untyped(&mvla2.data);  //expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [2]') to 2 bytes}}
 }
 #endif
