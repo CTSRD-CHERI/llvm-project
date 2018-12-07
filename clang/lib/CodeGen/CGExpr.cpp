@@ -780,7 +780,7 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
   // which kinds of narrowing are fine
   if (hasBoundsOptOutAnnotation(CGF, E, ASE->getType(), "array type"))
     return ArrayBoundsResult::Never;
-  const Expr *Base = ASE->getBase()->IgnoreImplicit();
+  const Expr *Base = ASE->getBase()->IgnoreParenImpCasts();
   const QualType BaseTy = Base->getType();
   if (hasBoundsOptOutAnnotation(CGF, E, BaseTy, "array base type"))
     return ArrayBoundsResult::Never;
@@ -924,7 +924,9 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
 
   assert(CGM.getDataLayout().isFatPointer(Value->getType()));
 
-  E = E->IgnoreImplicit(); // ignore array-to-pointer decay, etc
+  E = E->IgnoreParenImpCasts(); // ignore array-to-pointer decay, etc
+  // And we also neede to ignore parenexprs since oterwise we get a ParenExpr
+  // instead of ArraySubscriptExpr/MemberExpr!
 
   // Any expression other than DeclRefExpr (e.g. in the case &x) will be a
   // sub-object expression (array index, member expression (&x.a)
@@ -990,7 +992,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     case ArrayBoundsResult::Always:
       return ExactBounds(TypeSize);
     case ArrayBoundsResult::UseFullArray: {
-      const Expr *Base = ASE->getBase()->IgnoreImplicit();
+      const Expr *Base = ASE->getBase()->IgnoreParenImpCasts();
       if (Base->getType()->isConstantArrayType()) {
         return BoundsOnContainer(Base->getType());
       }

@@ -69,10 +69,17 @@ void test(struct WithBoundsPls* w, struct NoBoundsPls* n, struct HasMemberOfType
   do_stuff(&t->nested); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (field type declaration has opt-out attribute)}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field type declaration has opt-out attribute -> not setting bounds
   do_stuff(&t->nested.data); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (base type declaration has opt-out attribute)}}
-
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type declaration has opt-out attribute -> not setting bounds
   do_stuff(&t->after); // expected-remark{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' addrof to 4
+
+  // Check the opt-out with parenexprs
+  do_stuff(&((t)->nested)); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (field type declaration has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field type declaration has opt-out attribute -> not setting bounds
+  do_stuff(&(((t)->nested).data)); // expected-remark-re{{not setting bounds for '{{(struct )?}}NoBoundsPls' (base type declaration has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type declaration has opt-out attribute -> not setting bounds
+  do_stuff(&(f->first)); // expected-remark{{not setting bounds for first (field has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field has opt-out attribute -> not setting bounds
 }
 
 // opt-out on variable decl (see ncurses source code)
@@ -88,6 +95,14 @@ void test_stringbuf(int next_free) {
   do_stuff(&stringbuf_opt_out[next_free]);
   // expected-remark@-1{{not setting bounds for 'char * __capability __attribute__((cheri_no_subobject_bounds))' (array base type has opt-out attribute)}}
   // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array base type has opt-out attribute -> not setting bounds
+
+  // Due to the parenthesized expression this was previous not parsed as an
+  // array subscript expression so the bounds opt out annotation was not parsed.
+  do_stuff(&((stringbuf_opt_out)[(next_free)]));
+  // expected-remark@-1{{not setting bounds for 'char * __capability __attribute__((cheri_no_subobject_bounds))' (array base type has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: Found array subscript -> opt-out: array base type has opt-out attribute -> not setting bounds
+
+
 }
 
 struct a {
