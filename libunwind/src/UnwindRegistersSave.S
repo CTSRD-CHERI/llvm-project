@@ -244,6 +244,21 @@ END_LIBUNWIND_FUNCTION(unw_getcontext)
 
 DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
 #define SAVE_GPR(x) csd $x, $zero, (8*x)($c3)
+  SAVE_GPR(1) # $at
+  SAVE_GPR(2) # $v0
+  SAVE_GPR(3) # $v1
+  SAVE_GPR(4) # $a0
+  SAVE_GPR(5) # $a1
+  SAVE_GPR(6) # $a2
+  SAVE_GPR(7) # $a3
+  SAVE_GPR(8) # $a4
+  SAVE_GPR(9) # $a5
+  SAVE_GPR(10) # $a6
+  SAVE_GPR(11) # $a7
+  SAVE_GPR(12) # $t0/t4
+  SAVE_GPR(13) # $t1/t5
+  SAVE_GPR(14) # $t2/t6
+  SAVE_GPR(15) # $t3/t7
   SAVE_GPR(16) # $s0
   SAVE_GPR(17) # $s1
   SAVE_GPR(18) # $s2
@@ -252,18 +267,34 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   SAVE_GPR(21) # $s5
   SAVE_GPR(22) # $s6
   SAVE_GPR(23) # $s7
+  SAVE_GPR(24) # $t8
+  SAVE_GPR(25) # $t9
+  SAVE_GPR(26) # $k0
+  SAVE_GPR(27) # $k1
   SAVE_GPR(28) # $gp
   SAVE_GPR(29) # $sp
   SAVE_GPR(30) # $fp
+  SAVE_GPR(31) # $ra
   # Offset of the start of the capability register set
   daddiu $1, $zero, 64*8
 #define SAVE_CAP_REG(src, x) csc $c ## src, $1, (x * _MIPS_SZCAP/8)($c3)
 #define SAVE_CAP(x) SAVE_CAP_REG(x, x)
-  // Use $c12 as a temp register in order to save it $ddc since $c12 will hold
-  // the cap for unw_getcontext and it doesn't make sense to save it
-  cgetdefault $c12
-  SAVE_CAP_REG(12, 0)
+  SAVE_CAP(1)
+  SAVE_CAP(2)
+  SAVE_CAP(3)
+  SAVE_CAP(4)
+  SAVE_CAP(5)
+  SAVE_CAP(6)
+  SAVE_CAP(7)
+  SAVE_CAP(8)
+  SAVE_CAP(9)
+  SAVE_CAP(10)
   SAVE_CAP(11)
+  SAVE_CAP(12)
+  SAVE_CAP(13)
+  SAVE_CAP(14)
+  SAVE_CAP(15)
+  SAVE_CAP(16)
   SAVE_CAP(17)
   SAVE_CAP(18)
   SAVE_CAP(19)
@@ -272,6 +303,14 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   SAVE_CAP(22)
   SAVE_CAP(23)
   SAVE_CAP(24)
+  SAVE_CAP(25)
+  SAVE_CAP(26)
+  // Use $c12 as a temp register in order to save it $ddc since $c12 will hold
+  // the cap for unw_getcontext and it doesn't make sense to save it
+  cgetdefault $c12
+  SAVE_CAP_REG(12, 0)
+
+  // 27-31 not stored since they are reserved for kernel use
   daddiu $1, $1, 32*_MIPS_SZCAP/8
   // return UNW_ESUCCESS
   daddiu $v0, $zero, 0
