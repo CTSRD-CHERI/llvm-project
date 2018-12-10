@@ -174,12 +174,12 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
   RESTORE_GPR(29)
   RESTORE_GPR(30)
   RESTORE_GPR(31)
+
 #ifndef  _MIPS_SZCAP
 #error _MIPS_SZCAP must be defined!
 #endif
-  daddiu $31, $zero, 64*8+2*(_MIPS_SZCAP/8)
-  CIncOffset $c3, $c3, $31
-  cld $31, $zero, -(8+2*(_MIPS_SZCAP/8))($c3)
+  CIncOffset $c3, $c3, 66*8+2*(_MIPS_SZCAP/8)
+
 #define RESTORE_CAP_REG(reg, idx) clc $c ## reg, $zero, ((idx-2)*(_MIPS_SZCAP/8))($c3)
 #define RESTORE_CAP(x) RESTORE_CAP_REG(x, x)
   // Use $c17 as the temporary when restoring $ddc since it is loaded last
