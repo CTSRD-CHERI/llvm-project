@@ -131,12 +131,17 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind16Registers_x86_646jumptoEv)
 
 DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
 #
-# void libunwind::Registers_mips_n64::jumpto()
+# void libunwind::Registers_mips_cheri::jumpto()
 #
 # On entry:
 #  thread_state pointer is in $c3
 #
 #define RESTORE_GPR(x) cld $x, $zero, (x*8)($c3)
+
+  cld	$t0, $zero, (33*8)($c3)
+  mthi	$t0
+  cld	$t0, $zero, (34*8)($c3)
+  mtlo	$t0
 
   RESTORE_GPR(1)
   RESTORE_GPR(2)

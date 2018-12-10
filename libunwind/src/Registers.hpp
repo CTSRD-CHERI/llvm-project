@@ -3348,8 +3348,10 @@ private:
   }
   struct mips_cheri_thread_state_t {
     uint64_t  __r[64];
+    uint64_t __hi;
+    uint64_t __lo;
     // PCC is stored in __c[32]
-    uintptr_t __c[33];
+    __uintcap_t __c[33];
   };
   mips_cheri_thread_state_t _registers;
 };

@@ -275,8 +275,16 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   SAVE_GPR(29) # $sp
   SAVE_GPR(30) # $fp
   SAVE_GPR(31) # $ra
+
+  # hi and lo
+  mfhi	$t0
+  csd	$t0, $zero, (8*33)($c3)
+  mflo	$t0
+  csd	$t0, $zero, (8*34)($c3)
+  # TODO: floating point registers
+
   # Offset of the start of the capability register set
-  daddiu $1, $zero, 64*8
+  daddiu $1, $zero, 66*8
 #define SAVE_CAP_REG(src, x) csc $c ## src, $1, (x * _MIPS_SZCAP/8)($c3)
 #define SAVE_CAP(x) SAVE_CAP_REG(x, x)
   SAVE_CAP(1)
