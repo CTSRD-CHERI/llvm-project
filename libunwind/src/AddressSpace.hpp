@@ -194,7 +194,9 @@ public:
   template<typename T>
   inline T get(pint_t addr) {
     T val;
-    addr = ddc_address(addr);
+#ifdef __CHERI_PURE_CAPABILITY__
+    assert(cheri_gettag((void*)addr) && "Value should be tagged!");
+#endif
     memcpy(&val, (void *)addr, sizeof(val));
     return val;
   }
