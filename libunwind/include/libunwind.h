@@ -59,12 +59,12 @@ enum {
   UNW_ENOINFO       = -6549  /* no unwind info found */
 };
 
-struct unw_context_t {
+struct __attribute__((aligned(sizeof(void*)))) unw_context_t {
   uint64_t data[_LIBUNWIND_CONTEXT_SIZE];
 };
 typedef struct unw_context_t unw_context_t;
 
-struct unw_cursor_t {
+struct __attribute__((aligned(sizeof(void*)))) unw_cursor_t {
   uint64_t data[_LIBUNWIND_CURSOR_SIZE];
 };
 typedef struct unw_cursor_t unw_cursor_t;
