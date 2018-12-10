@@ -965,8 +965,11 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is
     // annotated with no bounds should that apply to d?
     auto BaseTy = ME->getBase()->getType();
-    if (ME->isArrow() && !BaseTy->getPointeeType().isNull())
+    if (ME->isArrow() && !BaseTy->getPointeeType().isNull()) {
+      if (hasBoundsOptOutAnnotation(*this, E, BaseTy, "base pointer type"))
+        return None;
       BaseTy = BaseTy->getPointeeType();
+    }
     if (hasBoundsOptOutAnnotation(*this, E, BaseTy, "base type"))
       return None;
     if (hasBoundsOptOutAnnotation(*this, E, ME->getMemberDecl(), "field"))

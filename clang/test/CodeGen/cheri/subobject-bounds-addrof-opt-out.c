@@ -123,6 +123,68 @@ typedef struct WithBoundsPls __attribute__((cheri_no_subobject_bounds)) NoBounds
 __attribute__((cheri_no_subobject_bounds)) typedef struct WithBoundsPls NoBoundsTypedef4;
 
 
+
+// example from libexpat (taking address of struct encoding that is the later casted back to normal_ecoding)
+struct encoding;
+typedef __attribute__((cheri_no_subobject_bounds)) struct encoding ENCODING;
+typedef struct encoding ENCODING2;
+
+struct __attribute__((cheri_no_subobject_bounds)) encoding {
+  int i;
+};
+
+struct normal_encoding {
+  ENCODING enc;
+  ENCODING2 enc2;
+  unsigned char type[256];
+};
+
+struct unknown_encoding {
+  struct normal_encoding normal;
+  void *userData;
+};
+
+ENCODING* test_expat_error(struct unknown_encoding *e) {
+  return &(e->normal.enc); // expected-remark-re {{not setting bounds for 'ENCODING' (aka '{{(struct )?}}encoding') (field type has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field type has opt-out attribute -> not setting bounds
+}
+
+ENCODING2* test_expat_error2(struct unknown_encoding *e) {
+  return &(e->normal.enc2); // expected-remark-re {{not setting bounds for '{{(struct )?}}encoding' (field type declaration has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: field type declaration has opt-out attribute -> not setting bounds
+}
+
+struct in_addr {
+  int addr;
+};
+
+struct ip {
+  char some_data[12];
+  struct in_addr ip_src, ip_dst;
+} __attribute__((packed,aligned(2)));
+
+void test_dhclient_var_opt_out(void) {
+  struct ip ip;
+  struct ip ip2 __attribute__((cheri_no_subobject_bounds));
+  do_stuff(&ip.ip_src); // expected-remark {{setting sub-object bounds for field 'ip_src' (pointer to 'struct in_addr') to 4 bytes}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'struct in_addr' addrof to 4
+  do_stuff(&ip2.ip_src);
+  // expected-remark@-1{{not setting bounds for 'struct ip __attribute__((cheri_no_subobject_bounds))' (base type has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type has opt-out attribute -> not setting bounds
+}
+
+void test_dhclient_cast_opt_out(struct ip* ip) {
+  // Check that casting the base type works fine (both before and after the *):
+
+  do_stuff((unsigned char *)&((struct ip* __attribute__((cheri_no_subobject_bounds)))ip)->ip_src);
+  // expected-remark@-1{{not setting bounds for 'struct ip * __capability __attribute__((cheri_no_subobject_bounds))' (base pointer type has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base pointer type has opt-out attribute -> not setting bounds
+  do_stuff((unsigned char *)&((__attribute__((cheri_no_subobject_bounds)) struct ip*)ip)->ip_src);
+  // expected-remark@-1{{not setting bounds for 'struct ip __attribute__((cheri_no_subobject_bounds))' (base type has opt-out attribute)}}
+  // CHECK-NEXT: subobj bounds check: got MemberExpr -> opt-out: base type has opt-out attribute -> not setting bounds
+}
+
+
 #ifdef NOTYET
 struct TestStruct {
   int first;
