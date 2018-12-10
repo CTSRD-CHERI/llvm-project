@@ -487,7 +487,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
         assert(cbdata);
         assert(cbdata->sects);
 
-        if (cbdata->targetAddr < pinfo->dlpi_addr) {
+        if ((vaddr_t)cbdata->targetAddr < (vaddr_t)pinfo->dlpi_addr) {
           return false;
         }
 
@@ -518,7 +518,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
         for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
           const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
           if (phdr->p_type == PT_LOAD) {
-	    uintptr_t begin = pcc_address(pinfo->dlpi_addr + phdr->p_vaddr);
+            uintptr_t begin = pcc_address(pinfo->dlpi_addr + phdr->p_vaddr);
             uintptr_t end = pcc_address(begin + phdr->p_memsz);
 #if defined(__ANDROID__)
             if (pinfo->dlpi_addr == 0 && phdr->p_vaddr < image_base)
@@ -531,7 +531,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
             }
           } else if (phdr->p_type == PT_GNU_EH_FRAME) {
             EHHeaderParser<LocalAddressSpace>::EHHeaderInfo hdrInfo;
-            uintptr_t eh_frame_hdr_start = ddc_address(pinfo->dlpi_addr + phdr->p_vaddr);
+            uintptr_t eh_frame_hdr_start = pinfo->dlpi_addr + phdr->p_vaddr;
 #if defined(__ANDROID__)
             if (pinfo->dlpi_addr == 0 && phdr->p_vaddr < image_base)
               eh_frame_hdr_start = eh_frame_hdr_start + image_base;
