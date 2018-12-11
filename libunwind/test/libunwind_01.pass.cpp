@@ -12,7 +12,7 @@ void backtrace(int lower_bound) {
   char buffer[1024];
   unw_word_t offset = 0;
 
-  int n = 1;
+  int n = 0;
   while (unw_step(&cursor) > 0) {
     n++;
     if (unw_get_proc_name(&cursor, buffer, sizeof(buffer), &offset) == 0) {
@@ -21,11 +21,13 @@ void backtrace(int lower_bound) {
       fprintf(stderr, "Frame %d: Could not get name for cursor\n", n);
     }
     if (n > 100) {
+      fprintf(stderr, "ERROR: Got %d frames, but expected at most 100\n", n);
       abort();
     }
   };
 
   if (n < lower_bound) {
+    fprintf(stderr, "ERROR: Got %d frames, but expected at least %d\n", n, lower_bound);
     abort();
   }
 }
