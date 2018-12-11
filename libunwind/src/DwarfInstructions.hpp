@@ -33,6 +33,7 @@ class DwarfInstructions {
 public:
   typedef typename A::pint_t pint_t;
   typedef typename A::sint_t sint_t;
+  typedef typename A::capability_t capability_t;
 
   static int stepWithDwarf(A &addressSpace, pint_t pc, pint_t fdeStart,
                            R &registers);
@@ -59,6 +60,9 @@ private:
                                  pint_t cfa, const RegisterLocation &savedReg);
   static double getSavedFloatRegister(A &addressSpace, const R &registers,
                                   pint_t cfa, const RegisterLocation &savedReg);
+  static capability_t
+  getSavedCapabilityRegister(A &addressSpace, const R &registers, pint_t cfa,
+                             const RegisterLocation &savedReg);
   static v128 getSavedVectorRegister(A &addressSpace, const R &registers,
                                   pint_t cfa, const RegisterLocation &savedReg);
 
@@ -85,26 +89,24 @@ private:
   }
 };
 
-
 template <typename A, typename R>
-typename A::pint_t DwarfInstructions<A, R>::getSavedRegister(
-    int reg, A &addressSpace, const R &registers, pint_t cfa, const
-    RegisterLocation &savedReg) {
+typename A::pint_t
+DwarfInstructions<A, R>::getSavedRegister(int reg, A &addressSpace,
+                                          const R &registers, pint_t cfa,
+                                          const RegisterLocation &savedReg) {
+  if (registers.validCapabilityRegister(reg))
+    return A::to_pint_t(
+        getSavedCapabilityRegister(addressSpace, registers, cfa, savedReg));
   switch (savedReg.location) {
   case CFI_Parser<A>::kRegisterInCFA:
-#ifdef __CHERI_PURE_CAPABILITY__
-    // FIXME: This is not the correct way of doing this, but we currently
-    // don't have a way of differentiating pointers and integers.
-    if (reg < UNW_MIPS_DDC)
-      return addressSpace.get64(cfa + (pint_t)savedReg.value);
-#endif
+    CHERI_DBG("addressSpace.getRegister(%#p + %#p)\n", (void *)cfa,
+              (void *)savedReg.value);
     return addressSpace.getRegister(cfa + (pint_t)savedReg.value);
 
-  case CFI_Parser<A>::kRegisterAtExpression:
-    *(volatile char*)savedReg.value;
-    return addressSpace.getRegister(
-        evaluateExpression((pint_t)savedReg.value, addressSpace,
-                            registers, cfa));
+  case CFI_Parser<A>::kRegisterAtExpression: {
+    return addressSpace.getRegister(evaluateExpression(
+        (pint_t)savedReg.value, addressSpace, registers, cfa));
+  }
 
   case CFI_Parser<A>::kRegisterIsExpression:
     return evaluateExpression((pint_t)savedReg.value, addressSpace,
@@ -112,6 +114,35 @@ typename A::pint_t DwarfInstructions<A, R>::getSavedRegister(
 
   case CFI_Parser<A>::kRegisterInRegister:
     return registers.getRegister((int)savedReg.value);
+
+  case CFI_Parser<A>::kRegisterUnused:
+  case CFI_Parser<A>::kRegisterOffsetFromCFA:
+    // FIX ME
+    break;
+  }
+  _LIBUNWIND_ABORT("unsupported restore location for register");
+}
+
+template <typename A, typename R>
+typename A::capability_t DwarfInstructions<A, R>::getSavedCapabilityRegister(
+    A &addressSpace, const R &registers, pint_t cfa,
+    const RegisterLocation &savedReg) {
+  switch (savedReg.location) {
+  case CFI_Parser<A>::kRegisterInCFA:
+    CHERI_DBG("addressSpace.getCapability(%#p + %#p)\n", (void *)cfa,
+              (void *)savedReg.value);
+    return addressSpace.getCapability(cfa + (pint_t)savedReg.value);
+
+  case CFI_Parser<A>::kRegisterAtExpression:
+    return addressSpace.getCapability(evaluateExpression(
+        (pint_t)savedReg.value, addressSpace, registers, cfa));
+
+  case CFI_Parser<A>::kRegisterIsExpression:
+    return A::to_capability_t(evaluateExpression((pint_t)savedReg.value,
+                                                 addressSpace, registers, cfa));
+
+  case CFI_Parser<A>::kRegisterInRegister:
+    return registers.getCapabilityRegister((int)savedReg.value);
 
   case CFI_Parser<A>::kRegisterUnused:
   case CFI_Parser<A>::kRegisterOffsetFromCFA:
@@ -199,10 +230,18 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pint_t pc,
             newRegisters.setVectorRegister(
                 i, getSavedVectorRegister(addressSpace, registers, cfa,
                                           prolog.savedRegisters[i]));
-          else if (i == (int)cieInfo.returnAddressRegister)
+          else if (i == (int)cieInfo.returnAddressRegister) {
             returnAddress = getSavedRegister(i, addressSpace, registers, cfa,
                                              prolog.savedRegisters[i]);
-          else if (registers.validRegister(i))
+            CHERI_DBG("FETCHING RETURN ADDRESS REGISTER %d: %#p \n", i,
+                      (void *)returnAddress);
+          } else if (registers.validCapabilityRegister(i)) {
+            CHERI_DBG("FETCHING CAPABILITY REGISTER %d: %#p \n", i,
+                      (void *)returnAddress);
+            newRegisters.setCapabilityRegister(
+                i, getSavedCapabilityRegister(addressSpace, registers, cfa,
+                                              prolog.savedRegisters[i]));
+          } else if (registers.validRegister(i))
             newRegisters.setRegister(
                 i, getSavedRegister(i, addressSpace, registers, cfa,
                                     prolog.savedRegisters[i]));

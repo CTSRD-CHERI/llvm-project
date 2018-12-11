@@ -23,7 +23,20 @@ namespace libunwind {
 
 // For emulating 128-bit registers
 struct v128 { uint32_t vec[4]; };
+// For emulating CHERI capability
+struct __attribute__((aligned(16))) fake_capability {
+  char bytes[16];
+};
+typedef struct fake_capability fake_capability_t;
 
+#define CAPABILITIES_NOT_SUPPORTED                                             \
+  bool validCapabilityRegister(int) const { return false; }                    \
+  fake_capability getCapabilityRegister(int) const {                           \
+    _LIBUNWIND_ABORT("no CHERI capability registers");                         \
+  }                                                                            \
+  inline void setCapabilityRegister(int, fake_capability) {                    \
+    _LIBUNWIND_ABORT("no x86 vector registers");                               \
+  }
 
 #if defined(_LIBUNWIND_TARGET_I386)
 /// Registers_x86 holds the register state of a thread in a 32-bit intel
@@ -32,6 +45,7 @@ class _LIBUNWIND_HIDDEN Registers_x86 {
 public:
   Registers_x86();
   Registers_x86(const void *registers);
+  CAPABILITIES_NOT_SUPPORTED
 
   bool        validRegister(int num) const;
   uint32_t    getRegister(int num) const;
@@ -238,6 +252,7 @@ class _LIBUNWIND_HIDDEN Registers_x86_64 {
 public:
   Registers_x86_64();
   Registers_x86_64(const void *registers);
+  CAPABILITIES_NOT_SUPPORTED
 
   bool        validRegister(int num) const;
   uint64_t    getRegister(int num) const;
@@ -551,6 +566,7 @@ class _LIBUNWIND_HIDDEN Registers_ppc {
 public:
   Registers_ppc();
   Registers_ppc(const void *registers);
+  CAPABILITIES_NOT_SUPPORTED
 
   bool        validRegister(int num) const;
   uint32_t    getRegister(int num) const;
@@ -1116,6 +1132,7 @@ class _LIBUNWIND_HIDDEN Registers_ppc64 {
 public:
   Registers_ppc64();
   Registers_ppc64(const void *registers);
+  CAPABILITIES_NOT_SUPPORTED
 
   bool        validRegister(int num) const;
   uint64_t    getRegister(int num) const;
@@ -1758,6 +1775,7 @@ class _LIBUNWIND_HIDDEN Registers_arm64 {
 public:
   Registers_arm64();
   Registers_arm64(const void *registers);
+  CAPABILITIES_NOT_SUPPORTED
 
   bool        validRegister(int num) const;
   uint64_t    getRegister(int num) const;
@@ -2028,6 +2046,7 @@ class _LIBUNWIND_HIDDEN Registers_arm {
 public:
   Registers_arm();
   Registers_arm(const void *registers);
+  CAPABILITIES_NOT_SUPPORTED
 
   bool        validRegister(int num) const;
   uint32_t    getRegister(int num) const;
@@ -2508,6 +2527,7 @@ class _LIBUNWIND_HIDDEN Registers_or1k {
 public:
   Registers_or1k();
   Registers_or1k(const void *registers);
+  CAPABILITIES_NOT_SUPPORTED
 
   bool        validRegister(int num) const;
   uint32_t    getRegister(int num) const;
@@ -2704,6 +2724,7 @@ class _LIBUNWIND_HIDDEN Registers_mips_o32 {
 public:
   Registers_mips_o32();
   Registers_mips_o32(const void *registers);
+  CAPABILITIES_NOT_SUPPORTED
 
   bool        validRegister(int num) const;
   uint32_t    getRegister(int num) const;
@@ -3025,6 +3046,11 @@ class _LIBUNWIND_HIDDEN Registers_mips_newabi {
 public:
   Registers_mips_newabi();
   Registers_mips_newabi(const void *registers);
+#ifndef __CHERI__
+  CAPABILITIES_NOT_SUPPORTED
+#else
+#error "This needs to be implemented"
+#endif
 
   bool        validRegister(int num) const;
   uint64_t    getRegister(int num) const;
@@ -3322,6 +3348,9 @@ public:
   double      getFloatRegister(int num) const;
   void        setFloatRegister(int num, double value);
   bool        validVectorRegister(int num) const;
+  bool        validCapabilityRegister(int num) const;
+  uintcap_t   getCapabilityRegister(int num) const;
+  void        setCapabilityRegister(int num, uintcap_t value);
   v128        getVectorRegister(int num) const;
   void        setVectorRegister(int num, v128 value);
   const char *getRegisterName(int num);
@@ -3331,7 +3360,16 @@ public:
   uintptr_t getSP() const { return _registers.__c[11]; }
   void      setSP(uintptr_t value) { _registers.__c[11] = value; }
   uintptr_t getIP() const { CHERI_DBG("getIP(%#p)\n", (void*)_registers.__c[32]); return _registers.__c[32]; }
-  void      setIP(uintptr_t value) { CHERI_DBG("setIP(%#p)\n", (void*)value); _registers.__c[32] = value; }
+  void setIP(uintptr_t value) {
+    if (!__builtin_cheri_tag_get((void *)value)) {
+      fprintf(
+          stderr,
+          "WARNING: Registers_mips_cheri::setIP() with untagged value %#p\n",
+          (void *)value);
+    }
+    CHERI_DBG("setIP(%#p)\n", (void *)value);
+    _registers.__c[32] = value;
+  }
 
 private:
   template<typename T>
@@ -3377,6 +3415,28 @@ inline Registers_mips_cheri::Registers_mips_cheri(const void *registers) {
   fprintf(stderr, "current pcc = %#p\n", __builtin_cheri_program_counter_get());
 
 #endif
+}
+
+inline uintcap_t Registers_mips_cheri::getCapabilityRegister(int regNum) const {
+  assert(validCapabilityRegister(regNum));
+  if (regNum == UNW_REG_IP)
+    return _registers.__c[32];
+  if (regNum == UNW_REG_SP)
+    return _registers.__c[11];
+  return _registers.__c[regNum - UNW_MIPS_DDC];
+}
+
+inline void Registers_mips_cheri::setCapabilityRegister(int regNum, uintcap_t value) {
+  assert(validCapabilityRegister(regNum));
+  if (regNum == UNW_REG_IP) {
+    _registers.__c[32] = value;
+    return;
+  }
+  if (regNum == UNW_REG_SP) {
+    _registers.__c[11] = value;
+    return;
+  }
+  _registers.__c[regNum - UNW_MIPS_DDC] = value;
 }
 
 inline Registers_mips_cheri::Registers_mips_cheri() {
@@ -3449,6 +3509,11 @@ inline void Registers_mips_cheri::setRegister(int regNum, uintptr_t value) {
   default:
     _LIBUNWIND_ABORT("unsupported mips_cheri register");
   }
+}
+
+inline bool Registers_mips_cheri::validCapabilityRegister(int regNum) const {
+  return (regNum >= UNW_MIPS_DDC && regNum <= UNW_MIPS_C31) ||
+         regNum == UNW_REG_SP || regNum == UNW_REG_IP;
 }
 
 inline bool Registers_mips_cheri::validFloatRegister(int /* regNum */) const {

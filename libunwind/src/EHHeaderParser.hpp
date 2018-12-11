@@ -66,10 +66,10 @@ void EHHeaderParser<A>::decodeEHHdr(A &addressSpace, pint_t ehHdrStart,
 
   ehHdrInfo.eh_frame_ptr =
       addressSpace.getEncodedP(p, ehHdrEnd, eh_frame_ptr_enc, ehHdrStart);
-  ehHdrInfo.fde_count =
-      fde_count_enc == DW_EH_PE_omit
-          ? 0
-          : addressSpace.getEncodedP(p, ehHdrEnd, fde_count_enc, ehHdrStart);
+  ehHdrInfo.fde_count = fde_count_enc == DW_EH_PE_omit
+                            ? 0
+                            : (size_t)addressSpace.getEncodedP(
+                                  p, ehHdrEnd, fde_count_enc, ehHdrStart);
   ehHdrInfo.table = p;
 }
 

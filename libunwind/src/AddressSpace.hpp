@@ -184,6 +184,11 @@ class _LIBUNWIND_HIDDEN LocalAddressSpace {
 public:
   typedef uintptr_t pint_t;
   typedef intptr_t  sint_t;
+#ifndef __CHERI__
+  typedef libunwind::fake_capability_t capability_t;
+#else
+  typedef ::uintcap_t capability_t;
+#endif
 #ifdef __CHERI_PURE_CAPABILITY__
   typedef uint64_t addr_t;
 #elif defined(__LP64__)
@@ -218,7 +223,9 @@ public:
   v128             getVector(pint_t addr) {
     return get<v128>(addr);
   }
+  capability_t     getCapability(pint_t addr) { return get<capability_t>(addr); }
   addr_t           getAddr(pint_t addr) {
+    // FIXME: for CHERI the actually address is the second 8 byte sequence
     return get<addr_t>(addr);
   }
   __attribute__((always_inline))
@@ -235,6 +242,28 @@ public:
   bool findOtherFDE(pint_t targetAddr, pint_t &fde);
 
   static LocalAddressSpace sThisAddressSpace;
+
+  static pint_t to_pint_t(capability_t cap) {
+#ifdef __CHERI_PURE_CAPABILITY__
+    return (uintcap_t)cap;
+#elif defined(__CHERI__)
+    return (__cheri_addr pint_t)cap;
+#else
+    pint_t result;
+    memcpy(&result, &cap, std::min(sizeof(result), sizeof(cap)));
+    return result;
+#endif
+  }
+  static capability_t to_capability_t(pint_t pint) {
+#ifdef __CHERI__
+    return (uintcap_t)pint;
+#else
+    capability_t result;
+    memcpy(&result, &pint, std::min(sizeof(result), sizeof(pint)));
+    return result;
+#endif
+  }
+
 };
 
 inline uintptr_t LocalAddressSpace::getP(pint_t addr) {
@@ -396,7 +425,6 @@ constexpr int check_same_type() {
 
 inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
                                                   UnwindInfoSections &info) {
-  _LIBUNWIND_TRACE_API("%s(%#p)", __func__, (void*)targetAddr);
 #ifdef __APPLE__
   dyld_unwind_sections dyldInfo;
   if (_dyld_find_unwind_sections((void *)targetAddr, &dyldInfo)) {
