@@ -195,7 +195,7 @@ public:
   inline T get(pint_t addr) {
     T val;
 #ifdef __CHERI_PURE_CAPABILITY__
-    assert(cheri_gettag((void*)addr) && "Value should be tagged!");
+    assert(__builtin_cheri_tag_get((void*)addr) && "Value should be tagged!");
 #endif
     memcpy(&val, (void *)addr, sizeof(val));
     return val;
