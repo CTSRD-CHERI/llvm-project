@@ -676,7 +676,7 @@ DwarfInstructions<A, R>::evaluateExpression(pint_t expression, A &addressSpace,
       reg = static_cast<uint32_t>(addressSpace.getULEB128(p, expressionEnd));
       *(++sp) = registers.getRegister((int)reg);
       if (log)
-        fprintf(stderr, "push reg %d + 0x%" PRIx64 "\n", reg, (uint64_t)svalue);
+        fprintf(stderr, "push reg %d\n", reg);
       break;
 
     case DW_OP_breg0:
