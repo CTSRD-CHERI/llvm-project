@@ -94,7 +94,7 @@ typename A::pint_t DwarfInstructions<A, R>::getSavedRegister(
 #ifdef __CHERI_PURE_CAPABILITY__
     // FIXME: This is not the correct way of doing this, but we currently
     // don't have a way of differentiating pointers and integers.
-    if (reg < UNW_MIPS_C0)
+    if (reg < UNW_MIPS_DDC)
       return addressSpace.get64(cfa + (pint_t)savedReg.value);
 #endif
     return addressSpace.getRegister(cfa + (pint_t)savedReg.value);

@@ -817,7 +817,7 @@ enum {
   UNW_MIPS_HI = 64,
   UNW_MIPS_LO = 65,
   // CHERI registers
-  UNW_MIPS_C0  = 72,
+  UNW_MIPS_DDC  = 72,
   UNW_MIPS_C1,
   UNW_MIPS_C2,
   UNW_MIPS_C3,

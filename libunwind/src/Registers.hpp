@@ -3389,7 +3389,7 @@ inline bool Registers_mips_cheri::validRegister(int regNum) const {
   // FIXME: Hard float
   if (regNum <= 32)
     return true;
-  if ((regNum >= UNW_MIPS_C0) && (regNum <= UNW_MIPS_C31))
+  if ((regNum >= UNW_MIPS_DDC) && (regNum <= UNW_MIPS_C31))
     return true;
   return false;
 }
@@ -3397,8 +3397,8 @@ inline bool Registers_mips_cheri::validRegister(int regNum) const {
 inline uintptr_t Registers_mips_cheri::getRegister(int regNum) const {
   if (regNum >= 1 && regNum <= 32)
     return _registers.__r[regNum];
-  if (regNum >= UNW_MIPS_C0 && regNum <= UNW_MIPS_C31)
-    return _registers.__c[regNum - UNW_MIPS_C0];
+  if (regNum >= UNW_MIPS_DDC && regNum <= UNW_MIPS_C31)
+    return _registers.__c[regNum - UNW_MIPS_DDC];
 
   switch (regNum) {
   case 0:
@@ -3416,8 +3416,8 @@ inline void Registers_mips_cheri::setRegister(int regNum, uintptr_t value) {
     _registers.__r[regNum - UNW_MIPS_R0] = addr_get(value);
     return;
   }
-  if (regNum >= UNW_MIPS_C0 && regNum <= UNW_MIPS_C31) {
-    _registers.__c[regNum - UNW_MIPS_C0] = value;
+  if (regNum >= UNW_MIPS_DDC && regNum <= UNW_MIPS_C31) {
+    _registers.__c[regNum - UNW_MIPS_DDC] = value;
     return;
   }
 
@@ -3524,8 +3524,8 @@ inline const char *Registers_mips_cheri::getRegisterName(int regNum) {
     return "$30";
   case UNW_MIPS_R31:
     return "$31";
-  case UNW_MIPS_C0:
-    return "$c0";
+  case UNW_MIPS_DDC:
+    return "$ddc";
   case UNW_MIPS_C1:
     return "$c1";
   case UNW_MIPS_C2:
