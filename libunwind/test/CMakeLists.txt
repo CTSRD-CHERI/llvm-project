@@ -16,6 +16,8 @@ foreach(_test ${_LIBUNWIND_TESTS})
     target_compile_features(test-${_test}-shared PUBLIC cxx_std_11)
     target_compile_options(test-${_test}-shared PUBLIC ${LIBUNWIND_CXX_FLAGS})
     list(APPEND _LIBUNWIND_TEST_BINARIES test-${_test}-shared)
+    # Add all symbols to dynsymtab to improve test debugging
+    set_target_properties(test-${_test}-shared PROPERTIES ENABLE_EXPORTS ON)
   endif()
   if (LIBUNWIND_ENABLE_STATIC)
     add_executable(test-${_test}-static EXCLUDE_FROM_ALL ${_test}.pass.cpp)
@@ -23,6 +25,8 @@ foreach(_test ${_LIBUNWIND_TESTS})
     target_compile_features(test-${_test}-static PUBLIC cxx_std_11)
     target_compile_options(test-${_test}-static PUBLIC ${LIBUNWIND_CXX_FLAGS})
     list(APPEND _LIBUNWIND_TEST_BINARIES test-${_test}-static)
+    # Add all symbols to dynsymtab to improve test debugging
+    set_target_properties(test-${_test}-static PROPERTIES ENABLE_EXPORTS ON)
   endif()
 endforeach()
 

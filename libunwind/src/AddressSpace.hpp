@@ -524,8 +524,11 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
 
         assert(cbdata);
         assert(cbdata->sects);
-        CHERI_DBG("Checking %s for target %#p. Base=%#p\n", pinfo->dlpi_name,
-                  (void *)cbdata->targetAddr, (void *)pinfo->dlpi_addr);
+        CHERI_DBG("Checking %s for target %p (%#p). Base=%p->%p(%#p)\n",
+                  pinfo->dlpi_name, (void *)cbdata->targetAddr,
+                  (void *)cbdata->targetAddr, (void *)pinfo->dlpi_addr,
+                  (void*)((char *)pinfo->dlpi_addr + __builtin_cheri_length_get((void *)pinfo->dlpi_addr)),
+                  (void*)pinfo->dlpi_addr);
 
         if ((vaddr_t)cbdata->targetAddr < (vaddr_t)pinfo->dlpi_addr) {
           CHERI_DBG("%#p out of bounds of %#p (%s)\n", (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr, pinfo->dlpi_name);
@@ -600,9 +603,11 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
         }
 
         if (found_obj && found_hdr) {
+          CHERI_DBG("found_obj && found_hdr in %s\n", pinfo->dlpi_name);
           cbdata->sects->dwarf_section_length = object_length;
           return true;
         } else {
+          CHERI_DBG("Could not find EHDR in %s\n", pinfo->dlpi_name);
           return false;
         }
  #else // defined(_LIBUNWIND_ARM_EHABI)
