@@ -3364,13 +3364,15 @@ inline Registers_mips_cheri::Registers_mips_cheri(const void *registers) {
 #ifdef CHERI_DUMP_REGISTERS
   for (int i=0 ; i<32 ; i++)
   {
-      fprintf(stderr, "$%d = 0x%llx\n", i, (long long)getRegister(i));
-      usleep(1);
+      fprintf(stderr, "%s = 0x%lx\n", getRegisterName(i), (long)addr_get(getRegister(i)));
+      // usleep(1);
   }
-  for (int i=UNW_MIPS_C0 ; i<=UNW_MIPS_C31 ; i++)
+  fprintf(stderr, "lo = 0x%lx\n", (long)addr_get(getRegister(UNW_MIPS_LO)));
+  fprintf(stderr, "hi = 0x%lx\n", (long)addr_get(getRegister(UNW_MIPS_HI)));
+  for (int i=UNW_MIPS_DDC ; i<=UNW_MIPS_C31 ; i++)
   {
-      fprintf(stderr, "$c%d = %#p\n", i - UNW_MIPS_C0, (void*)getRegister(i));
-      usleep(1);
+      fprintf(stderr, "%s = %#p\n",  getRegisterName(i), (void*)getRegister(i));
+      // usleep(1);
   }
 #endif
 }
