@@ -129,7 +129,9 @@
   #define _LIBUNWIND_TRACING_DWARF (0)
   #define _LIBUNWIND_TRACE_UNWINDING(msg, ...)
   #define _LIBUNWIND_TRACE_DWARF(...)
+  #define CHERI_DBG(...) (void)0
 #else
+  #define CHERI_DBG(...) fprintf(stderr, __VA_ARGS__)
   #ifdef __cplusplus
     extern "C" {
   #endif
