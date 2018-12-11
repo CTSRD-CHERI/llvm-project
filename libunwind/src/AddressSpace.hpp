@@ -647,10 +647,15 @@ inline bool LocalAddressSpace::findFunctionName(pint_t addr, char *buf,
                                                 unw_word_t *offset) {
 #if _LIBUNWIND_USE_DLADDR
   Dl_info dyldInfo;
+  CHERI_DBG("%s(%p: %#p))\n", __func__, (void*)addr, (void*)addr);
   if (dladdr((void *)addr, &dyldInfo)) {
     if (dyldInfo.dli_sname != NULL) {
       snprintf(buf, bufLen, "%s", dyldInfo.dli_sname);
       *offset = (addr - (pint_t) dyldInfo.dli_saddr);
+      return true;
+    } else if (dyldInfo.dli_fname != NULL) {
+      snprintf(buf, bufLen, "%s", dyldInfo.dli_fname);
+      *offset = (addr - (pint_t) dyldInfo.dli_fbase);
       return true;
     }
   }
