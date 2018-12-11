@@ -394,13 +394,9 @@ constexpr int check_same_type() {
   return 0;
 }
 
-#define CHERI_DBG(...) fprintf(stderr, __VA_ARGS__)
-// #define CHERI_DBG(...) (void)0
-
 inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
                                                   UnwindInfoSections &info) {
   _LIBUNWIND_TRACE_API("%s(%#p)", __func__, (void*)targetAddr);
-  test_breakpoint();
 #ifdef __APPLE__
   dyld_unwind_sections dyldInfo;
   if (_dyld_find_unwind_sections((void *)targetAddr, &dyldInfo)) {
@@ -500,18 +496,21 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
 
         assert(cbdata);
         assert(cbdata->sects);
-        CHERI_DBG("Checking %s for target %p. Base=%#p\n", pinfo->dlpi_name,
-                  (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr);
+        CHERI_DBG("Checking %s for target %#p. Base=%#p\n", pinfo->dlpi_name,
+                  (void *)cbdata->targetAddr, (void *)pinfo->dlpi_addr);
 
         if ((vaddr_t)cbdata->targetAddr < (vaddr_t)pinfo->dlpi_addr) {
           CHERI_DBG("%#p out of bounds of %#p (%s)\n", (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr, pinfo->dlpi_name);
           return false;
         }
 #ifdef __CHERI_PURE_CAPABILITY__
+        assert(__builtin_cheri_tag_get((void*)cbdata->targetAddr));
         check_same_type<__uintcap_t, decltype(pinfo->dlpi_addr)>();
         check_same_type<const Elf_Phdr *, decltype(pinfo->dlpi_phdr)>();
         // TODO: __builtin_cheri_top_get_would be nice
-        if (__builtin_cheri_length_get(pinfo->dlpi_addr) + __builtin_cheri_base_get(pinfo->dlpi_addr) < (vaddr_t)cbdata->targetAddr) {
+        if (__builtin_cheri_length_get((void *)pinfo->dlpi_addr) +
+                __builtin_cheri_base_get((void *)pinfo->dlpi_addr) <
+            (vaddr_t)cbdata->targetAddr) {
           CHERI_DBG("%#p out of bounds of %#p (%s)\n", (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr, pinfo->dlpi_name);
           return false;
         }

@@ -3374,6 +3374,8 @@ inline Registers_mips_cheri::Registers_mips_cheri(const void *registers) {
       fprintf(stderr, "%s = %#p\n",  getRegisterName(i), (void*)getRegister(i));
       // usleep(1);
   }
+  fprintf(stderr, "current pcc = %#p\n", __builtin_cheri_program_counter_get());
+
 #endif
 }
 
@@ -3412,6 +3414,7 @@ inline uintptr_t Registers_mips_cheri::getRegister(int regNum) const {
   case UNW_MIPS_HI:
     return _registers.__hi;
   case UNW_REG_IP:
+    CHERI_DBG("GETTING $PCC: %#p\n", (void*)_registers.__c[32]);
     return _registers.__c[32];
   case UNW_REG_SP:
     return offset_set(_registers.__c[11], _registers.__r[29]);
@@ -3437,6 +3440,7 @@ inline void Registers_mips_cheri::setRegister(int regNum, uintptr_t value) {
     _registers.__hi = addr_get(value);
     return;
   case UNW_REG_IP:
+    CHERI_DBG("SETTING $PCC: %#p\n", (void*)value);
     _registers.__c[32] = value;
     return;
   case UNW_REG_SP:
