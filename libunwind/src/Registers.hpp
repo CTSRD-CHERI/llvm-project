@@ -3389,6 +3389,8 @@ inline bool Registers_mips_cheri::validRegister(int regNum) const {
   // FIXME: Hard float
   if (regNum <= 32)
     return true;
+  if (regNum == UNW_MIPS_LO || regNum == UNW_MIPS_HI)
+    return true;
   if ((regNum >= UNW_MIPS_DDC) && (regNum <= UNW_MIPS_C31))
     return true;
   return false;
@@ -3403,6 +3405,10 @@ inline uintptr_t Registers_mips_cheri::getRegister(int regNum) const {
   switch (regNum) {
   case 0:
     return 0u;
+  case UNW_MIPS_LO:
+    return _registers.__lo;
+  case UNW_MIPS_HI:
+    return _registers.__hi;
   case UNW_REG_IP:
     return _registers.__c[32];
   case UNW_REG_SP:
@@ -3422,6 +3428,12 @@ inline void Registers_mips_cheri::setRegister(int regNum, uintptr_t value) {
   }
 
   switch (regNum) {
+  case UNW_MIPS_LO:
+    _registers.__lo = addr_get(value);
+    return;
+  case UNW_MIPS_HI:
+    _registers.__hi = addr_get(value);
+    return;
   case UNW_REG_IP:
     _registers.__c[32] = value;
     return;
