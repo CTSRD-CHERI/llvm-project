@@ -313,11 +313,17 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   SAVE_CAP(24)
   SAVE_CAP(25)
   SAVE_CAP(26)
+  // store NULL for 27-31 since they are reserved for kernel use
+  SAVE_CAP_REG(null, 27)
+  SAVE_CAP_REG(null, 28)
+  SAVE_CAP_REG(null, 29)
+  SAVE_CAP_REG(null, 30)
+  SAVE_CAP_REG(null, 31)
+
   // Use $c12 as a temp register in order to save it $ddc since $c12 will hold
   // the cap for unw_getcontext and it doesn't make sense to save it
   cgetdefault $c12
   SAVE_CAP_REG(12, 0)
-  // 27-31 not stored since they are reserved for kernel use
 
   // return UNW_ESUCCESS
   daddiu $v0, $zero, 0
