@@ -3395,7 +3395,7 @@ inline bool Registers_mips_cheri::validRegister(int regNum) const {
     return true;
   if (regNum == UNW_MIPS_LO || regNum == UNW_MIPS_HI)
     return true;
-  if ((regNum >= UNW_MIPS_DDC) && (regNum <= UNW_MIPS_C31))
+  if (regNum >= UNW_MIPS_DDC && regNum <= UNW_MIPS_C31)
     return true;
   return false;
 }
