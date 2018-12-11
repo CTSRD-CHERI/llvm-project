@@ -3328,10 +3328,10 @@ public:
   void        jumpto();
   static int  lastDwarfRegNum() { return _LIBUNWIND_HIGHEST_DWARF_REGISTER_MIPS_CHERI; }
 
-  uint64_t  getSP() const         { return _registers.__r[29]; }
-  void      setSP(uintptr_t value) { _registers.__r[29] = addr_get(value); }
-  uint64_t  getIP() const         { return addr_get(_registers.__c[32]); }
-  void      setIP(uintptr_t value) { _registers.__c[32] = value; }
+  uintptr_t getSP() const { return _registers.__c[11]; }
+  void      setSP(uintptr_t value) { _registers.__c[11] = value; }
+  uintptr_t getIP() const { CHERI_DBG("getIP(%#p)\n", (void*)_registers.__c[32]); return _registers.__c[32]; }
+  void      setIP(uintptr_t value) { CHERI_DBG("setIP(%#p)\n", (void*)value); _registers.__c[32] = value; }
 
 private:
   template<typename T>

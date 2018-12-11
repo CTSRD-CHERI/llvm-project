@@ -1222,11 +1222,13 @@ bool UnwindCursor<A, R>::validReg(int regNum) {
 
 template <typename A, typename R>
 unw_word_t UnwindCursor<A, R>::getReg(int regNum) {
+  CHERI_DBG("%s: %d = %#p\n", __func__, regNum, (void*)_registers.getRegister(regNum));
   return _registers.getRegister(regNum);
 }
 
 template <typename A, typename R>
 void UnwindCursor<A, R>::setReg(int regNum, unw_word_t value) {
+  CHERI_DBG("%s: %d = %#p\n", __func__, regNum, (void*)value);
   _registers.setRegister(regNum, (typename A::pint_t)value);
 }
 
