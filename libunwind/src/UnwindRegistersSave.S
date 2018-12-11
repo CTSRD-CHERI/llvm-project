@@ -278,9 +278,9 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
 
   # hi and lo
   mfhi	$t0
-  csd	$t0, $zero, (8*33)($c3)
+  csd	$t0, $zero, (8*64)($c3)
   mflo	$t0
-  csd	$t0, $zero, (8*34)($c3)
+  csd	$t0, $zero, (8*65)($c3)
   # TODO: floating point registers
 
   # Offset of the start of the capability register set
@@ -317,12 +317,12 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   // the cap for unw_getcontext and it doesn't make sense to save it
   cgetdefault $c12
   SAVE_CAP_REG(12, 0)
-
   // 27-31 not stored since they are reserved for kernel use
-  daddiu $1, $1, 32*_MIPS_SZCAP/8
+
   // return UNW_ESUCCESS
   daddiu $v0, $zero, 0
   # Store the return address where we expect the current PC
+  daddiu $1, $1, 32*_MIPS_SZCAP/8
   cjr $c17
   csc $c17, $1, 0($c3)
 END_LIBUNWIND_FUNCTION(unw_getcontext)

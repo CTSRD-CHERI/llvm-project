@@ -138,9 +138,9 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
 #
 #define RESTORE_GPR(x) cld $x, $zero, (x*8)($c3)
 
-  cld	$t0, $zero, (33*8)($c3)
+  cld	$t0, $zero, (64*8)($c3)
   mthi	$t0
-  cld	$t0, $zero, (34*8)($c3)
+  cld	$t0, $zero, (65*8)($c3)
   mtlo	$t0
 
   RESTORE_GPR(1)
