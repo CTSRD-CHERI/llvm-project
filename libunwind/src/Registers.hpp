@@ -3426,11 +3426,11 @@ inline void Registers_mips_cheri::setRegister(int regNum, uintptr_t value) {
     _registers.__c[32] = value;
     return;
   case UNW_REG_SP:
-    _registers.__c[11] = offset_set(value, 0);
-    _registers.__r[29] = offset_get(value);
+    _registers.__c[11] = value;
     return;
+  default:
+    _LIBUNWIND_ABORT("unsupported mips_cheri register");
   }
-  _LIBUNWIND_ABORT("unsupported mips_cheri register");
 }
 
 inline bool Registers_mips_cheri::validFloatRegister(int /* regNum */) const {
