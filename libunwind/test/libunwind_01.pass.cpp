@@ -12,7 +12,7 @@ void backtrace(int lower_bound) {
   char buffer[1024];
   unw_word_t offset = 0;
 
-  int n = 0;
+  int n = 1;
   while (unw_step(&cursor) > 0) {
     n++;
     if (unw_get_proc_name(&cursor, buffer, sizeof(buffer), &offset) == 0) {
