@@ -388,8 +388,19 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
   return pcc_address(result);
 }
 
+template<typename T1, typename T2>
+constexpr int check_same_type() {
+  static_assert(std::is_same<T1, T2>::value, "Should be same type! Update CheriBSD!");
+  return 0;
+}
+
+#define CHERI_DBG(...) fprintf(stderr, __VA_ARGS__)
+// #define CHERI_DBG(...) (void)0
+
 inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
                                                   UnwindInfoSections &info) {
+  _LIBUNWIND_TRACE_API("%s(%#p)", __func__, (void*)targetAddr);
+  test_breakpoint();
 #ifdef __APPLE__
   dyld_unwind_sections dyldInfo;
   if (_dyld_find_unwind_sections((void *)targetAddr, &dyldInfo)) {
@@ -480,6 +491,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
 
   dl_iterate_cb_data cb_data = {this, &info, targetAddr};
   using vaddr_t = size_t;
+  CHERI_DBG("Calling dl_iterate_phdr()\n");
   int found = dl_iterate_phdr(
       [](struct dl_phdr_info *pinfo, size_t, void *data) -> int {
         auto cbdata = static_cast<dl_iterate_cb_data *>(data);
@@ -488,10 +500,22 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
 
         assert(cbdata);
         assert(cbdata->sects);
+        CHERI_DBG("Checking %s for target %p. Base=%#p\n", pinfo->dlpi_name,
+                  (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr);
 
         if ((vaddr_t)cbdata->targetAddr < (vaddr_t)pinfo->dlpi_addr) {
+          CHERI_DBG("%#p out of bounds of %#p (%s)\n", (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr, pinfo->dlpi_name);
           return false;
         }
+#ifdef __CHERI_PURE_CAPABILITY__
+        check_same_type<__uintcap_t, decltype(pinfo->dlpi_addr)>();
+        check_same_type<const Elf_Phdr *, decltype(pinfo->dlpi_phdr)>();
+        // TODO: __builtin_cheri_top_get_would be nice
+        if (__builtin_cheri_length_get(pinfo->dlpi_addr) + __builtin_cheri_base_get(pinfo->dlpi_addr) < (vaddr_t)cbdata->targetAddr) {
+          CHERI_DBG("%#p out of bounds of %#p (%s)\n", (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr, pinfo->dlpi_name);
+          return false;
+        }
+#endif
 
 #if !defined(Elf_Half)
         typedef ElfW(Half) Elf_Half;
