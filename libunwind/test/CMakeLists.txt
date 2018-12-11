@@ -7,7 +7,7 @@ macro(pythonize_bool var)
   endif()
 endmacro()
 
-set(_LIBUNWIND_TESTS alignment libunwind_01 libunwind_02 unw_getcontext)
+set(_LIBUNWIND_TESTS alignment libunwind_01 libunwind_02 unw_getcontext libunwind_get_registers)
 set(_LIBUNWIND_TEST_BINARIES)
 foreach(_test ${_LIBUNWIND_TESTS})
   if (LIBUNWIND_ENABLE_SHARED)
