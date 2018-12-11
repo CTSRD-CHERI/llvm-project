@@ -1866,6 +1866,10 @@ void UnwindCursor<A, R>::setInfoBasedOnIPRegister(bool isReturnAddress) {
   if (isReturnAddress)
     --pc;
 
+#ifdef __CHERI_PURE_CAPABILITY__
+  assert(__builtin_cheri_tag_get((void*)pc) && "Loaded invalid $pcc");
+#endif
+
   // Ask address space object to find unwind sections for this pc.
   UnwindInfoSections sects;
   if (_addressSpace.findUnwindSections(pc, sects)) {
