@@ -3542,6 +3542,10 @@ inline const char *Registers_mips_cheri::getRegisterName(int regNum) {
     return "$30";
   case UNW_MIPS_R31:
     return "$31";
+  case UNW_MIPS_HI:
+    return "$hi";
+  case UNW_MIPS_LO:
+    return "$lo";
   case UNW_MIPS_DDC:
     return "$ddc";
   case UNW_MIPS_C1:
