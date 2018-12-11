@@ -3399,7 +3399,7 @@ inline Registers_mips_cheri::Registers_mips_cheri(const void *registers) {
                 "mips_cheri registers do not fit into unw_context_t");
   memcpy(&_registers, static_cast<const uint8_t *>(registers),
          sizeof(_registers));
-#if defined(CHERI_DUMP_REGISTERS) || 1
+#if defined(CHERI_DUMP_REGISTERS)
   for (int i=0 ; i<32 ; i++)
   {
       fprintf(stderr, "%s = 0x%lx\n", getRegisterName(i), (long)addr_get(getRegister(i)));

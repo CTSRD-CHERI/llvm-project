@@ -99,8 +99,6 @@ DwarfInstructions<A, R>::getSavedRegister(int reg, A &addressSpace,
         getSavedCapabilityRegister(addressSpace, registers, cfa, savedReg));
   switch (savedReg.location) {
   case CFI_Parser<A>::kRegisterInCFA:
-    CHERI_DBG("addressSpace.getRegister(%#p + %#p)\n", (void *)cfa,
-              (void *)savedReg.value);
     return addressSpace.getRegister(cfa + (pint_t)savedReg.value);
 
   case CFI_Parser<A>::kRegisterAtExpression: {
@@ -129,20 +127,22 @@ typename A::capability_t DwarfInstructions<A, R>::getSavedCapabilityRegister(
     const RegisterLocation &savedReg) {
   switch (savedReg.location) {
   case CFI_Parser<A>::kRegisterInCFA:
-    CHERI_DBG("addressSpace.getCapability(%#p + %#p)\n", (void *)cfa,
-              (void *)savedReg.value);
     return addressSpace.getCapability(cfa + (pint_t)savedReg.value);
 
   case CFI_Parser<A>::kRegisterAtExpression:
     return addressSpace.getCapability(evaluateExpression(
         (pint_t)savedReg.value, addressSpace, registers, cfa));
-
-  case CFI_Parser<A>::kRegisterIsExpression:
-    return A::to_capability_t(evaluateExpression((pint_t)savedReg.value,
-                                                 addressSpace, registers, cfa));
-
   case CFI_Parser<A>::kRegisterInRegister:
     return registers.getCapabilityRegister((int)savedReg.value);
+
+  case CFI_Parser<A>::kRegisterIsExpression:
+#if 0
+    // TODO: should this be supported?
+    return A::to_capability_t(evaluateExpression((pint_t)savedReg.value,
+                                                 addressSpace, registers, cfa));
+#else
+    break;
+#endif
 
   case CFI_Parser<A>::kRegisterUnused:
   case CFI_Parser<A>::kRegisterOffsetFromCFA:
@@ -233,14 +233,15 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pint_t pc,
           else if (i == (int)cieInfo.returnAddressRegister) {
             returnAddress = getSavedRegister(i, addressSpace, registers, cfa,
                                              prolog.savedRegisters[i]);
-            CHERI_DBG("FETCHING RETURN ADDRESS REGISTER %d: %#p \n", i,
-                      (void *)returnAddress);
+            CHERI_DBG("SETTING RETURN REGISTER %d (%s): %#p \n",
+                      i, newRegisters.getRegisterName(i), (void*)returnAddress);
           } else if (registers.validCapabilityRegister(i)) {
-            CHERI_DBG("FETCHING CAPABILITY REGISTER %d: %#p \n", i,
-                      (void *)returnAddress);
             newRegisters.setCapabilityRegister(
                 i, getSavedCapabilityRegister(addressSpace, registers, cfa,
                                               prolog.savedRegisters[i]));
+            CHERI_DBG("SETTING CAPABILITY REGISTER %d (%s): %#p \n",
+                      i, newRegisters.getRegisterName(i),
+                      (void*)newRegisters.getCapabilityRegister(i));
           } else if (registers.validRegister(i))
             newRegisters.setRegister(
                 i, getSavedRegister(i, addressSpace, registers, cfa,
