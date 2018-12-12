@@ -24,17 +24,23 @@ namespace libunwind {
 // For emulating 128-bit registers
 struct v128 { uint32_t vec[4]; };
 // For emulating CHERI capability
+#ifndef __CHERI__
 struct __attribute__((aligned(16))) fake_capability {
   char bytes[16];
 };
 typedef struct fake_capability fake_capability_t;
+#else
+// To keep CAPABILITIES_NOT_SUPPORT working in hybrid mode
+// TODO: remove
+typedef __uintcap_t fake_capability_t;
+#endif
 
 #define CAPABILITIES_NOT_SUPPORTED                                             \
   bool validCapabilityRegister(int) const { return false; }                    \
-  fake_capability getCapabilityRegister(int) const {                           \
+  fake_capability_t getCapabilityRegister(int) const {                           \
     _LIBUNWIND_ABORT("no CHERI capability registers");                         \
   }                                                                            \
-  inline void setCapabilityRegister(int, fake_capability) {                    \
+  inline void setCapabilityRegister(int, fake_capability_t) {                    \
     _LIBUNWIND_ABORT("no x86 vector registers");                               \
   }
 
@@ -3046,10 +3052,9 @@ class _LIBUNWIND_HIDDEN Registers_mips_newabi {
 public:
   Registers_mips_newabi();
   Registers_mips_newabi(const void *registers);
-#ifndef __CHERI__
   CAPABILITIES_NOT_SUPPORTED
-#else
-#error "This needs to be implemented"
+#ifdef __CHERI__
+#pragma message("Should also handle capability registers here.")
 #endif
 
   bool        validRegister(int num) const;

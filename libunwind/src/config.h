@@ -131,7 +131,7 @@
   #define _LIBUNWIND_TRACE_DWARF(...)
   #define CHERI_DBG(...) (void)0
 #else
-  #ifndef __CHERI__
+  #ifndef __CHERI_PURE_CAPABILITY__
     #define CHERI_DBG(...) (void)0
   #else
     #define CHERI_DBG(...) fprintf(stderr, __VA_ARGS__)
