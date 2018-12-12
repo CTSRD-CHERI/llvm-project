@@ -163,7 +163,7 @@ const char *TargetInfo::getTypeName(IntType T) {
   case SignedLongLong:   return "long long int";
   case UnsignedLongLong: return "long long unsigned int";
   case UnsignedIntCap:   return "__uintcap_t";
-  case SignedIntCap:           return "__intcap_t";
+  case SignedIntCap:     return "__intcap_t";
   }
 }
 
