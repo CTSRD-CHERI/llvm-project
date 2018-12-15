@@ -155,6 +155,9 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   // Silence warning for -cheri=NNN
   Args.ClaimAllArgs(options::OPT_cheri_EQ);
   Args.ClaimAllArgs(options::OPT_cheri);
+  // And -cheri-uintcap=
+  Args.ClaimAllArgs(options::OPT_cheri_uintcap_offset);
+  Args.ClaimAllArgs(options::OPT_cheri_uintcap_addr);
 
   // Silence warning for "clang -g foo.o -o foo"
   Args.ClaimAllArgs(options::OPT_g_Group);
