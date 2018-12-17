@@ -214,8 +214,11 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("elf32ltsmip_fbsd");
     break;
   case llvm::Triple::mips64:
+  case llvm::Triple::cheri:
     CmdArgs.push_back("-m");
-    if (tools::mips::hasMipsAbiArg(Args, "n32"))
+    if (IsCHERIPureCapABI)
+      CmdArgs.push_back("elf64btsmip_cheri_fbsd");
+    else if (tools::mips::hasMipsAbiArg(Args, "n32"))
       CmdArgs.push_back("elf32btsmipn32_fbsd");
     else
       CmdArgs.push_back("elf64btsmip_fbsd");
