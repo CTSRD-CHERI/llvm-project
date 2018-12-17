@@ -193,12 +193,17 @@ class CheriBSDRemoteTI(DefaultTargetInfo):
         return 'freebsd'
 
     def add_cxx_link_flags(self, flags):
-        flags += ['-lc', '-lm', '-lpthread', '-fuse-ld=lld',
-                  '-B' + self.full_config.get_lit_conf('sysroot') + '/../bin']
         explicit_flags = shlex.split(self.full_config.get_lit_conf('test_linker_flags'))
         if self.full_config.link_shared is False:
             # We also need to pull in compiler-rt and libunwind (gcc_eh) when building static tests
             flags += ['-lcompiler_rt', '-lgcc_eh', '-static']
+            # FIXME: work around bug in libthr (or lld?) that doesn't pull in all symbols (if a weak symbol already exists)
+            #flags += ['-Wl,--whole-archive', '-lthr', '-Wl,--no-whole-archive']
+        # else:
+        flags += ['-lpthread']
+
+        flags += ['-lc', '-lm', '-fuse-ld=lld',
+                  '-B' + self.full_config.get_lit_conf('sysroot') + '/../bin']
         if self.full_config.get_lit_conf('target_triple').startswith("cheri-"):
             assert '-mabi=purecap' in explicit_flags, explicit_flags
 
