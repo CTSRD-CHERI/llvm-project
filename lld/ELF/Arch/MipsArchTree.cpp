@@ -73,6 +73,15 @@ static void checkFlags(ArrayRef<FileFlags> Files) {
   bool Nan = Files[0].Flags & EF_MIPS_NAN2008;
   bool Fp = Files[0].Flags & EF_MIPS_FP64;
 
+  // Handle explicit ABI selection via -melf64btsmip_cheri_fbsd
+  if ((Config->isCheriABI() && ABI != EF_MIPS_ABI_CHERIABI) ||
+      (!Config->isCheriABI() && ABI == EF_MIPS_ABI_CHERIABI)) {
+    error(toString(Files[0].File) + ": ABI '" + getAbiName(ABI) +
+          "' is incompatible with explicitly selected linker emulation '" +
+          Config->Emulation + "'");
+    ABI = Config->isCheriABI() ? EF_MIPS_ABI_CHERIABI : 0;
+  }
+
   for (const FileFlags &F : Files) {
     if (Config->Is64 && F.Flags & EF_MIPS_MICROMIPS)
       error(toString(F.File) + ": microMIPS 64-bit is not supported");
