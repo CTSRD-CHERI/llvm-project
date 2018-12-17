@@ -13,6 +13,7 @@ import os
 import platform
 import re
 import subprocess
+import shlex
 import sys
 
 from libcxx.util import executeCommand
@@ -185,23 +186,31 @@ class FreeBSDLocalTI(DefaultTargetInfo):
 class CheriBSDRemoteTI(DefaultTargetInfo):
     def __init__(self, full_config):
         super(CheriBSDRemoteTI, self).__init__(full_config)
+        # TODO: support dynamically linked
+        self.static = True
 
     def platform(self):
         return 'freebsd'
 
     def add_cxx_link_flags(self, flags):
-        flags += ['-lc', '-lm', '-lpthread', '-lcompiler_rt', '-fuse-ld=lld',
-                  '-static', '-B' + self.full_config.get_lit_conf('sysroot') + '/../bin']
-        # For now assume that building with cheri triple implies purecap
-        # We may want to test hybrid in the future but for now we only build mips64 and cheri
+        flags += ['-lc', '-lm', '-lpthread', '-fuse-ld=lld',
+                  '-B' + self.full_config.get_lit_conf('sysroot') + '/../bin']
+        explicit_flags = shlex.split(self.full_config.get_lit_conf('test_linker_flags'))
+        if self.full_config.link_shared is False:
+            # We also need to pull in compiler-rt and libunwind (gcc_eh) when building static tests
+            flags += ['-lcompiler_rt', '-lgcc_eh', '-static']
         if self.full_config.get_lit_conf('target_triple').startswith("cheri-"):
-            flags += ['-mabi=purecap']
+            assert '-mabi=purecap' in explicit_flags, explicit_flags
 
     def add_cxx_compile_flags(self, flags):
-        # we currently only support static linking so we need to add _LIBCPP_BUILD_STATIC
-        flags += ["-G0", "-msoft-float", "-D_LIBCPP_BUILD_STATIC"]
+        explicit_flags = shlex.split(self.full_config.get_lit_conf('test_compiler_flags'))
+        assert "-G0" in explicit_flags, explicit_flags
+        assert "-msoft-float in explicit_flags", explicit_flags
+        if self.full_config.link_shared is False:
+            # we currently only support static linking so we need to add _LIBCPP_BUILD_STATIC
+            flags += ["-D_LIBCPP_BUILD_STATIC"]
         if self.full_config.get_lit_conf('target_triple').startswith("cheri-"):
-            flags += ['-mabi=purecap']
+            assert '-mabi=purecap' in explicit_flags, explicit_flags
 
     # def configure_env(self, env): pass
     def allow_cxxabi_link(self):
