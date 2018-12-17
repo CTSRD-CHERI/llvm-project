@@ -81,8 +81,10 @@ class CollectBinariesExecutor(Executor):
             return cmd, str(file_deps), 'Cannot handle file_deps yet', 7
         if cmd is not None and cmd != [exe_path]:
             return cmd, cmd, 'Cannot handle extra cmd args yet', 7
-        assert exe_path.startswith(self.config.config.test_exec_root)
-        suffix = os.path.relpath(exe_path, self.config.config.test_exec_root)
+        exe_path = os.path.realpath(exe_path)
+        test_exec_root = os.path.realpath(self.config.config.test_exec_root)
+        assert exe_path.startswith(test_exec_root), exe_path + " doesn't start with " + str(test_exec_root)
+        suffix = os.path.relpath(exe_path, test_exec_root)
         target = os.path.join(self.target_dir, suffix)
         if not os.path.isdir(os.path.dirname(target)):
             try:
