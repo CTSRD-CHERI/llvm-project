@@ -28,6 +28,15 @@ foreach(_test ${_LIBUNWIND_TESTS})
     # Add all symbols to dynsymtab to improve test debugging
     set_target_properties(test-${_test}-static PROPERTIES ENABLE_EXPORTS ON)
   endif()
+  if (NOT APPLE)
+    add_executable(test-${_test}-allstatic EXCLUDE_FROM_ALL ${_test}.pass.cpp)
+    target_link_libraries(test-${_test}-allstatic -static $<TARGET_FILE:unwind_static>)
+    target_compile_features(test-${_test}-allstatic PUBLIC cxx_std_11)
+    target_compile_options(test-${_test}-allstatic PUBLIC ${LIBUNWIND_CXX_FLAGS} -static)
+    list(APPEND _LIBUNWIND_TEST_BINARIES test-${_test}-allstatic)
+    # Add all symbols to dynsymtab to improve test debugging
+    set_target_properties(test-${_test}-allstatic PROPERTIES ENABLE_EXPORTS ON)
+  endif()
 endforeach()
 
 message(STATUS "TESTS: ${_LIBUNWIND_TEST_BINARIES}")
