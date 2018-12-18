@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <algorithm>  // std::min/std::max
 
 #ifndef _LIBUNWIND_USE_DLADDR
   #if !defined(_LIBUNWIND_IS_BAREMETAL) && !defined(_WIN32)
@@ -423,6 +424,9 @@ constexpr int check_same_type() {
   return 0;
 }
 
+__attribute__((weak)) extern "C" char _DYNAMIC[];
+// #pragma weak _DYNAMIC
+
 inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
                                                   UnwindInfoSections &info) {
 #ifdef __APPLE__
@@ -570,12 +574,32 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
                           ->p_offset
                 : 0;
 #endif
+        auto getPhdrCapability = [](struct dl_phdr_info *pinfo, const Elf_Phdr *phdr) -> pint_t {
+#ifdef __CHERI_PURE_CAPABILITY__
+          // We have to work around the position dependent linking case where dlpi_addr
+          // will contain just the binary range (and can't a be massively out of bounds cap
+          // with a zero vaddr due to Cheri128 constaints). In that case phdr->p_vaddr
+          // will be within the bounds of pinfo->dlpi_addr so we just set the address to
+          // match the vaddr
+          if (&_DYNAMIC == NULL) {
+            // static linking / position dependent workaround:
+            vaddr_t base = __builtin_cheri_base_get((void*)pinfo->dlpi_addr);
+            vaddr_t end = base + __builtin_cheri_length_get((void*)pinfo->dlpi_addr);
+            if (phdr->p_vaddr >= base && phdr->p_vaddr < end) {
+              return pinfo->dlpi_addr + (phdr->p_vaddr - base);
+            }
+          }
+          // Otherwise just fall back to the default behaviour
+          assert(__builtin_cheri_tag_get((void*)(pinfo->dlpi_addr + phdr->p_vaddr)) && "phdr cap became unpresentable?");
+#endif
+          return pinfo->dlpi_addr + phdr->p_vaddr;
+        };
 
         for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
           const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
           if (phdr->p_type == PT_LOAD) {
-            uintptr_t begin = pcc_address(pinfo->dlpi_addr + phdr->p_vaddr);
-            uintptr_t end = pcc_address(begin + phdr->p_memsz);
+            uintptr_t begin = getPhdrCapability(pinfo, phdr);
+            uintptr_t end = begin + phdr->p_memsz;
 #if defined(__ANDROID__)
             if (pinfo->dlpi_addr == 0 && phdr->p_vaddr < image_base)
               begin = begin + image_base;
@@ -587,10 +611,13 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
             }
           } else if (phdr->p_type == PT_GNU_EH_FRAME) {
             EHHeaderParser<LocalAddressSpace>::EHHeaderInfo hdrInfo;
-            uintptr_t eh_frame_hdr_start = pinfo->dlpi_addr + phdr->p_vaddr;
+            uintptr_t eh_frame_hdr_start = getPhdrCapability(pinfo, phdr);
 #if defined(__ANDROID__)
             if (pinfo->dlpi_addr == 0 && phdr->p_vaddr < image_base)
               eh_frame_hdr_start = eh_frame_hdr_start + image_base;
+#endif
+#ifdef __CHERI_PURE_CAPABILITY__
+           assert(__builtin_cheri_tag_get((void*)eh_frame_hdr_start) && "phdr cap became unpresentable?");
 #endif
             cbdata->sects->dwarf_index_section = eh_frame_hdr_start;
             cbdata->sects->dwarf_index_section_length = phdr->p_memsz;
