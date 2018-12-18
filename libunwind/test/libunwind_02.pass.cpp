@@ -11,6 +11,7 @@ _Unwind_Reason_Code callback(_Unwind_Context *context, void *cnt) {
   int *i = (int *)cnt;
   ++*i;
   if (*i > NUM_FRAMES_UPPER_BOUND) {
+    fprintf(stderr, "Error: %d > %d\n", *i, NUM_FRAMES_UPPER_BOUND);
     abort();
   }
   return _URC_NO_REASON;
@@ -20,6 +21,7 @@ void test_backtrace() {
   int n = 0;
   _Unwind_Backtrace(&callback, &n);
   if (n < EXPECTED_NUM_FRAMES) {
+    fprintf(stderr, "Error: %d < %d\n", n, EXPECTED_NUM_FRAMES);
     abort();
   }
 }
