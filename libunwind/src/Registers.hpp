@@ -3339,7 +3339,7 @@ inline const char *Registers_mips_newabi::getRegisterName(int regNum) {
 }
 #endif // _LIBUNWIND_TARGET_MIPS_N64
 #if defined(_LIBUNWIND_TARGET_MIPS_CHERI)
-/// Registers_mips_n64 holds the register state of a thread in 64-bit MIPS
+/// Registers_mips_cheri holds the register state of a thread in 64-bit MIPS
 /// process with the CHERI pure-capability ABI.
 class _LIBUNWIND_HIDDEN Registers_mips_cheri {
 public:
