@@ -424,8 +424,10 @@ constexpr int check_same_type() {
   return 0;
 }
 
-__attribute__((weak)) extern "C" char _DYNAMIC[];
+#ifdef __CHERI_PURE_CAPABILITY__
+__attribute__((weak)) extern "C" ElfW(Dyn) _DYNAMIC[];
 // #pragma weak _DYNAMIC
+#endif
 
 inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
                                                   UnwindInfoSections &info) {
