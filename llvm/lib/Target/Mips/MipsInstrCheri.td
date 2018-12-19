@@ -368,8 +368,6 @@ def CToPtr : CheriFmt3Op<0x12, (outs GPR64Opnd:$r1), (ins CheriOpnd0IsDDC:$r3, C
 let isCodeGenOnly = 1 in {
 def CFromPtr32 : CheriFmt3Op<0x13, (outs CheriOpnd:$r1), (ins CheriOpnd0IsDDC:$r2, GPR32Opnd:$r3),
   "cfromptr\t$r1, $r2, $r3", []>;
-def CToPtr32 : CheriFmt3Op<0x12, (outs GPR32Opnd:$r1), (ins CheriOpnd0IsDDC:$r3, CheriOpnd:$r2),
-  "ctoptr\t$r1, $r2, $r3", []>;
 }
 def CSub : CheriFmt3Op<0xa, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
   "csub\t$r1, $r2, $r3", [(set GPR64Opnd:$r1, (int_cheri_cap_diff CheriOpnd:$r2, CheriOpnd:$r3))]>;
@@ -420,17 +418,21 @@ def : Pat<(inttoptr (i64 0)),
           (CFromPtr DDC, ZERO_64)>;
 def : Pat<(inttoptr GPR64Opnd:$rt),
           (CIncOffset CNULL, $rt)>;
+def : Pat<(ptrtoint CheriOpnd:$rt),
+          (CGetAddr $rt)>;
+def : Pat<(i32 (ptrtoint CheriOpnd:$rt)),
+          (SLL (EXTRACT_SUBREG (CGetAddr $rt), sub_32), 0)>;
 }
 let Predicates=[NotCHERIABI] in {
 def : Pat<(inttoptr GPR64Opnd:$rt),
           (CFromPtr DDC, $rt)>;
 def : Pat<(inttoptr GPR32:$rt),
           (CFromPtr32 DDC, $rt)>;
-}
 def : Pat<(ptrtoint CheriOpnd:$rt),
           (CToPtr DDC, $rt)>;
-def : Pat<(ptrtoint CheriOpnd:$rt),
-          (CToPtr32 DDC, $rt)>;
+def : Pat<(i32 (ptrtoint CheriOpnd:$rt)),
+          (SLL (EXTRACT_SUBREG (CToPtr DDC, $rt), sub_32), 0)>;
+}
 
 
 let Predicates = [IsCHERI], DecoderNamespace="CHERI" in {
