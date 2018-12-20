@@ -568,10 +568,10 @@ extern bool LargeCapTable;
                              unsigned HiFlag, unsigned LoFlag,
                              unsigned SmallFlag, unsigned HiOpc) const {
       if (LargeCapTable || SmallFlag == 0) {
-        return _getGlobalCapBigImmediate(N, SDLoc(N), EVT(), DAG, HiFlag, LoFlag,
+        return _getGlobalCapBigImmediate(N, SDLoc(N), CapType, DAG, HiFlag, LoFlag,
                                          SDValue(), nullptr, false, HiOpc);
       } else {
-        return _getGlobalCapSmallImmediate(N, SDLoc(N), EVT(), DAG, SmallFlag,
+        return _getGlobalCapSmallImmediate(N, SDLoc(N), CapType, DAG, SmallFlag,
                                            SDValue(), nullptr, false);
       }
     }
