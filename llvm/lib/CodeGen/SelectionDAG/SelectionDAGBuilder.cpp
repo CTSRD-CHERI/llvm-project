@@ -2145,14 +2145,16 @@ void SelectionDAGBuilder::visitSwitchCase(CaseBlock &CB,
 void SelectionDAGBuilder::visitJumpTable(JumpTable &JT) {
   // Emit the code for the jump table
   assert(JT.Reg != -1U && "Should lower JT Header first!");
-  EVT PTy = DAG.getTargetLoweringInfo().getPointerTy(
-      DAG.getDataLayout(), DAG.getDataLayout().getGlobalsAddressSpace());
-  SDValue Index = DAG.getCopyFromReg(getControlRoot(), getCurSDLoc(),
-                                     JT.Reg, PTy);
+  const DataLayout &TD = DAG.getDataLayout();
+  const auto &TLI = DAG.getTargetLoweringInfo();
+  EVT PTy = TLI.getPointerTy(TD, TD.getGlobalsAddressSpace());
+  EVT IndexTy = TLI.getPointerRangeTy(TD , TD.getProgramAddressSpace());
+  SDValue Index =
+      DAG.getCopyFromReg(getControlRoot(), getCurSDLoc(), JT.Reg, IndexTy);
   SDValue Table = DAG.getJumpTable(JT.JTI, PTy);
-  SDValue BrJumpTable = DAG.getNode(ISD::BR_JT, getCurSDLoc(),
-                                    MVT::Other, Index.getValue(1),
-                                    Table, Index);
+  SDValue BrJumpTable = DAG.getNode(ISD::BR_JT, getCurSDLoc(), MVT::Other,
+                                    Index.getValue(1), Table, Index);
+  assert(BrJumpTable->getOperand(2).getValueType().isInteger());
   DAG.setRoot(BrJumpTable);
 }
 
@@ -2180,8 +2182,7 @@ void SelectionDAGBuilder::visitJumpTableHeader(JumpTable &JT,
   SwitchOp =
       DAG.getZExtOrTrunc(Sub, dl, TLI.getPointerRangeTy(DAG.getDataLayout()));
 
-  unsigned JumpTableReg = FuncInfo.CreateReg(TLI.getPointerTy(
-      DAG.getDataLayout(), DAG.getDataLayout().getGlobalsAddressSpace()));
+  unsigned JumpTableReg = FuncInfo.CreateReg(TLI.getPointerRangeTy(DAG.getDataLayout()));
   SDValue CopyTo = DAG.getCopyToReg(getControlRoot(), dl,
                                     JumpTableReg, SwitchOp);
   JT.Reg = JumpTableReg;

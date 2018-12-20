@@ -3501,6 +3501,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     SDValue Chain = Node->getOperand(0);
     SDValue Table = Node->getOperand(1);
     SDValue Index = Node->getOperand(2);
+    assert(Index.getValueType().isInteger());
 
     const DataLayout &TD = DAG.getDataLayout();
     EVT PTy = TLI.getPointerRangeTy(TD);

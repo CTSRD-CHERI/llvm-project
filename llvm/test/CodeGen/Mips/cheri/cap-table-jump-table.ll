@@ -29,7 +29,6 @@ default:
 
 sw.bb:
   ret i64 1
-; FUXME: I SHOULD NOT BE DOING THIS SHIT HERE
 sw.bb1:
   ret i64 0
 }
