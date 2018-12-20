@@ -567,14 +567,16 @@ bool MipsFastISel::computeCallAddress(const Value *V, Address &Addr) {
       return computeCallAddress(U->getOperand(0), Addr);
     break;
   case Instruction::IntToPtr:
+    assert(!DL.isFatPointer(DL.getProgramAddressSpace()));
     // Look past no-op inttoptrs if its operand is in the same BB.
     if (TLI.getValueType(DL, U->getOperand(0)->getType()) ==
-        TLI.getPointerTy(DL))
+        TLI.getPointerTy(DL, 0))
       return computeCallAddress(U->getOperand(0), Addr);
     break;
   case Instruction::PtrToInt:
+    assert(!DL.isFatPointer(DL.getProgramAddressSpace()));
     // Look past no-op ptrtoints if its operand is in the same BB.
-    if (TLI.getValueType(DL, U->getType()) == TLI.getPointerTy(DL))
+    if (TLI.getValueType(DL, U->getType()) == TLI.getPointerTy(DL, 0))
       return computeCallAddress(U->getOperand(0), Addr);
     break;
   }

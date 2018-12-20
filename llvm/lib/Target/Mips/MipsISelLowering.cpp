@@ -2424,7 +2424,8 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
   SDLoc DL(GA);
   const GlobalValue *GV = GA->getGlobal();
   TLSModel::Model model = getTargetMachine().getTLSModel(GV);
-  EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  EVT PtrVT = getPointerTy(DAG.getDataLayout(),
+                           DAG.getDataLayout().getProgramAddressSpace());
 
   if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTls()) {
     const Type *GVTy = GV->getType();
@@ -2679,8 +2680,10 @@ SDValue MipsTargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Node);
   unsigned ArgSlotSizeInBytes = (ABI.IsN32() || ABI.IsN64()) ? 8 : 4;
 
-  SDValue VAListLoad = DAG.getLoad(getPointerTy(DAG.getDataLayout()), DL, Chain,
-                                   VAListPtr, MachinePointerInfo(SV));
+  SDValue VAListLoad =
+      DAG.getLoad(getPointerTy(DAG.getDataLayout(),
+                               DAG.getDataLayout().getAllocaAddrSpace()),
+                  DL, Chain, VAListPtr, MachinePointerInfo(SV));
   SDValue VAList = VAListLoad;
 
   // Re-align the pointer if necessary.
@@ -2882,6 +2885,10 @@ SDValue MipsTargetLowering::lowerEH_RETURN(SDValue Op, SelectionDAG &DAG)
   MachineFunction &MF = DAG.getMachineFunction();
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
 
+  if (ABI.UsesCapabilityTable())
+    report_fatal_error("MipsTargetLowering::lowerEH_RETURN needs fixing!");
+  unsigned AS = getExceptionPointerAS();
+
   MipsFI->setCallsEhReturn();
   SDValue Chain     = Op.getOperand(0);
   SDValue Offset    = Op.getOperand(1);
@@ -2895,10 +2902,10 @@ SDValue MipsTargetLowering::lowerEH_RETURN(SDValue Op, SelectionDAG &DAG)
   unsigned AddrReg = ABI.IsN64() ? Mips::V0_64 : Mips::V0;
   Chain = DAG.getCopyToReg(Chain, DL, OffsetReg, Offset, SDValue());
   Chain = DAG.getCopyToReg(Chain, DL, AddrReg, Handler, Chain.getValue(1));
-  return DAG.getNode(MipsISD::EH_RETURN, DL, MVT::Other, Chain,
-                     DAG.getRegister(OffsetReg, Ty),
-                     DAG.getRegister(AddrReg, getPointerTy(MF.getDataLayout())),
-                     Chain.getValue(1));
+  return DAG.getNode(
+      MipsISD::EH_RETURN, DL, MVT::Other, Chain, DAG.getRegister(OffsetReg, Ty),
+      DAG.getRegister(AddrReg, getPointerTy(MF.getDataLayout(), AS)),
+      Chain.getValue(1));
 }
 
 SDValue MipsTargetLowering::lowerATOMIC_FENCE(SDValue Op,
@@ -3911,10 +3918,11 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
                                FuncInfo->callPtrInfo(GV), GV->isThreadLocal());
         IsCallReloc = true;
       }
-    } else
-      Callee = DAG.getTargetGlobalAddress(GV, DL,
-                                          getPointerTy(DAG.getDataLayout()), 0,
-                                          MipsII::MO_NO_FLAG);
+    } else {
+      assert(!ABI.UsesCapabilityTable());
+      Callee = DAG.getTargetGlobalAddress(
+          GV, DL, getPointerTy(DAG.getDataLayout(), 0), 0, MipsII::MO_NO_FLAG);
+    }
     GlobalOrExternal = true;
   }
   else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
@@ -3924,10 +3932,11 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       Callee = getCallTargetFromCapTable(S, DL, CapType, DAG, Chain,
                                          FuncInfo->callPtrInfo(Sym));
       IsCallReloc = true;
-    } else if (!IsPIC) // static
+    } else if (!IsPIC) { // static
+      assert(!ABI.UsesCapabilityTable());
       Callee = DAG.getTargetExternalSymbol(
-          Sym, getPointerTy(DAG.getDataLayout()), MipsII::MO_NO_FLAG);
-    else if (LargeGOT) {
+          Sym, getPointerTy(DAG.getDataLayout(), 0), MipsII::MO_NO_FLAG);
+    } else if (LargeGOT) {
       Callee = getAddrGlobalLargeGOT(S, DL, Ty, DAG, MipsII::MO_CALL_HI16,
                                      MipsII::MO_CALL_LO16, Chain,
                                      FuncInfo->callPtrInfo(Sym), /*IsForTls=*/false);

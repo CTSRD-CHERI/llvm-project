@@ -514,7 +514,7 @@ std::pair<unsigned, bool> FastISel::getRegForGEPIndex(const Value *Idx) {
   bool IdxNIsKill = hasTrivialKill(Idx);
 
   // If the index is smaller or larger than intptr_t, truncate or extend it.
-  MVT PtrVT = TLI.getPointerTy(DL);
+  MVT PtrVT = TLI.getPointerRangeTy(DL);
   EVT IdxVT = EVT::getEVT(Idx->getType(), /*HandleUnknown=*/false);
   if (IdxVT.bitsLT(PtrVT)) {
     IdxN = fastEmit_r(IdxVT.getSimpleVT(), PtrVT, ISD::SIGN_EXTEND, IdxN,

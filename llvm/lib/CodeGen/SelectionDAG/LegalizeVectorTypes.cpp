@@ -2273,11 +2273,11 @@ SDValue DAGTypeLegalizer::SplitVecOp_TruncateHelper(SDNode *N) {
   // type. This should normally be something that ends up being legal directly,
   // but in theory if a target has very wide vectors and an annoyingly
   // restricted set of legal types, this split can chain to build things up.
-  return IsFloat
-             ? DAG.getNode(ISD::FP_ROUND, DL, OutVT, InterVec,
-                           DAG.getTargetConstant(
-                               0, DL, TLI.getPointerTy(DAG.getDataLayout())))
-             : DAG.getNode(ISD::TRUNCATE, DL, OutVT, InterVec);
+  return IsFloat ? DAG.getNode(
+                       ISD::FP_ROUND, DL, OutVT, InterVec,
+                       DAG.getTargetConstant(
+                           0, DL, TLI.getPointerRangeTy(DAG.getDataLayout())))
+                 : DAG.getNode(ISD::TRUNCATE, DL, OutVT, InterVec);
 }
 
 SDValue DAGTypeLegalizer::SplitVecOp_VSETCC(SDNode *N) {

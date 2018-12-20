@@ -1000,8 +1000,10 @@ void SelectionDAGBuilder::visitGCRelocate(const GCRelocateInst &Relocate) {
 
 void SelectionDAGBuilder::LowerDeoptimizeCall(const CallInst *CI) {
   const auto &TLI = DAG.getTargetLoweringInfo();
-  SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(RTLIB::DEOPTIMIZE),
-                                         TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalSymbol(
+      TLI.getLibcallName(RTLIB::DEOPTIMIZE),
+      TLI.getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getProgramAddressSpace()));
 
   // We don't lower calls to __llvm_deoptimize as varargs, but as a regular
   // call.  We also do not lower the return value to any virtual register, and

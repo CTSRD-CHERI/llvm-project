@@ -2287,7 +2287,9 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
     return DAG.getNode(ISD::XOR, DL, Op->getValueType(0),
                        Op->getOperand(1), lowerMSASplatImm(Op, 2, DAG));
   case Intrinsic::thread_pointer: {
-    EVT PtrVT = getPointerTy(DAG.getDataLayout());
+    EVT PtrVT = getPointerTy(DAG.getDataLayout(), 0);
+    if (ABI.UsesCapabilityTls())
+      PtrVT = CapType;
     return DAG.getNode(MipsISD::ThreadPointer, DL, PtrVT);
   }
   case Intrinsic::cheri_cap_address_set: {

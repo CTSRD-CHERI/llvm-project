@@ -500,8 +500,10 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
     unsigned V0Reg = Mips::V0;
     if (NeedMips16Helper) {
       RegsToPass.push_front(std::make_pair(V0Reg, Callee));
-      JumpTarget = DAG.getExternalSymbol(Mips16HelperFunction,
-                                         getPointerTy(DAG.getDataLayout()));
+      JumpTarget = DAG.getExternalSymbol(
+          Mips16HelperFunction,
+          getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getProgramAddressSpace()));
       ExternalSymbolSDNode *S = cast<ExternalSymbolSDNode>(JumpTarget);
       JumpTarget = getAddrGlobal(S, CLI.DL, JumpTarget.getValueType(), DAG,
                                  MipsII::MO_GOT, Chain,

@@ -11820,11 +11820,11 @@ bool AArch64TargetLowering::enableAggressiveFMAFusion(EVT VT) const {
 }
 
 unsigned
-AArch64TargetLowering::getVaListSizeInBits(const DataLayout &DL) const {
+AArch64TargetLowering::getVaListSizeInBits(const DataLayout &DL, unsigned AS) const {
   if (Subtarget->isTargetDarwin() || Subtarget->isTargetWindows())
-    return getPointerTy(DL).getSizeInBits();
+    return getPointerTy(DL, AS).getSizeInBits();
 
-  return 3 * getPointerTy(DL).getSizeInBits() + 2 * 32;
+  return 3 * getPointerTy(DL, AS).getSizeInBits() + 2 * 32;
 }
 
 void AArch64TargetLowering::finalizeLowering(MachineFunction &MF) const {

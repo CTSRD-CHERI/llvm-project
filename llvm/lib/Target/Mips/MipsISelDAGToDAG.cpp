@@ -67,8 +67,11 @@ bool MipsDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
 /// GOT address into a register.
 SDNode *MipsDAGToDAGISel::getGlobalBaseReg(bool IsForTls) {
   unsigned GlobalBaseReg = MF->getInfo<MipsFunctionInfo>()->getGlobalBaseReg(IsForTls);
-  return CurDAG->getRegister(GlobalBaseReg, getTargetLowering()->getPointerTy(
-                                                CurDAG->getDataLayout()))
+  // XXXAR: address space 0 is correct here since it will never be used
+  // for capabilities
+  return CurDAG
+      ->getRegister(GlobalBaseReg, getTargetLowering()->getPointerTy(
+                                       CurDAG->getDataLayout(), 0))
       .getNode();
 }
 

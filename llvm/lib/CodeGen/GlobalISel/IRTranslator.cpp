@@ -826,7 +826,9 @@ bool IRTranslator::translateKnownIntrinsic(const CallInst &CI, Intrinsic::ID ID,
   case Intrinsic::vastart: {
     auto &TLI = *MF->getSubtarget().getTargetLowering();
     Value *Ptr = CI.getArgOperand(0);
-    unsigned ListSize = TLI.getVaListSizeInBits(*DL) / 8;
+    unsigned ListSize =
+        TLI.getVaListSizeInBits(*DL, Ptr->getType()->getPointerAddressSpace()) /
+        8;
 
     MIRBuilder.buildInstr(TargetOpcode::G_VASTART)
         .addUse(getOrCreateVReg(*Ptr))

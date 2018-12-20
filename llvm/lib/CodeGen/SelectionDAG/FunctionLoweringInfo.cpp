@@ -537,7 +537,8 @@ FunctionLoweringInfo::getOrCreateSwiftErrorVReg(const MachineBasicBlock *MBB,
   // use" by inserting a copy or phi at the beginning of this block.
   if (It == SwiftErrorVRegDefMap.end()) {
     auto &DL = MF->getDataLayout();
-    const TargetRegisterClass *RC = TLI->getRegClassFor(TLI->getPointerTy(DL));
+    const TargetRegisterClass *RC =
+        TLI->getRegClassFor(TLI->getPointerRangeTy(DL));
     auto VReg = MF->getRegInfo().createVirtualRegister(RC);
     SwiftErrorVRegDefMap[Key] = VReg;
     SwiftErrorVRegUpwardsUse[Key] = VReg;
@@ -556,7 +557,8 @@ FunctionLoweringInfo::getOrCreateSwiftErrorVRegDefAt(const Instruction *I) {
   auto It = SwiftErrorVRegDefUses.find(Key);
   if (It == SwiftErrorVRegDefUses.end()) {
     auto &DL = MF->getDataLayout();
-    const TargetRegisterClass *RC = TLI->getRegClassFor(TLI->getPointerTy(DL));
+    const TargetRegisterClass *RC =
+        TLI->getRegClassFor(TLI->getPointerRangeTy(DL));
     unsigned VReg =  MF->getRegInfo().createVirtualRegister(RC);
     SwiftErrorVRegDefUses[Key] = VReg;
     return std::make_pair(VReg, true);

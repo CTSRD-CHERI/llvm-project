@@ -586,7 +586,7 @@ SDValue VectorLegalizer::ExpandLoad(SDValue Op) {
     // Instead, we load all significant words, mask bits off, and concatenate
     // them to form each element. Finally, they are extended to destination
     // scalar type to build the destination vector.
-    EVT WideVT = TLI.getPointerTy(DAG.getDataLayout());
+    EVT WideVT = TLI.getPointerRangeTy(DAG.getDataLayout());
 
     assert(WideVT.isRound() &&
            "Could not handle the sophisticated case when the widest integer is"

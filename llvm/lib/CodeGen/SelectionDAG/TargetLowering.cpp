@@ -136,8 +136,10 @@ TargetLowering::makeLibCall(SelectionDAG &DAG, RTLIB::Libcall LC, EVT RetVT,
 
   if (LC == RTLIB::UNKNOWN_LIBCALL)
     report_fatal_error("Unsupported library call operation!");
-  SDValue Callee = DAG.getExternalSymbol(getLibcallName(LC),
-                                         getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalSymbol(
+      getLibcallName(LC),
+      getPointerTy(DAG.getDataLayout(),
+                   DAG.getDataLayout().getProgramAddressSpace()));
 
   Type *RetTy = RetVT.getTypeForEVT(*DAG.getContext());
   TargetLowering::CallLoweringInfo CLI(DAG);
@@ -307,7 +309,8 @@ SDValue TargetLowering::getPICJumpTableRelocBase(SDValue Table,
 
   if ((JTEncoding == MachineJumpTableInfo::EK_GPRel64BlockAddress) ||
       (JTEncoding == MachineJumpTableInfo::EK_GPRel32BlockAddress))
-    return DAG.getGLOBAL_OFFSET_TABLE(getPointerTy(DAG.getDataLayout()));
+    return DAG.getGLOBAL_OFFSET_TABLE(getPointerTy(
+        DAG.getDataLayout(), DAG.getDataLayout().getGlobalsAddressSpace()));
 
   return Table;
 }
@@ -4950,7 +4953,10 @@ SDValue TargetLowering::LowerToTLSEmulatedModel(const GlobalAddressSDNode *GA,
                                                 SelectionDAG &DAG) const {
   // Access to address of TLS varialbe xyz is lowered to a function call:
   //   __emutls_get_address( address of global variable named "__emutls_v.xyz" )
-  EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  EVT DataPtrVT = getPointerTy(DAG.getDataLayout(),
+                               DAG.getDataLayout().getGlobalsAddressSpace());
+  EVT FuncPtrVT = getPointerTy(DAG.getDataLayout(),
+                               DAG.getDataLayout().getProgramAddressSpace());
   PointerType *VoidPtrType = Type::getInt8PtrTy(*DAG.getContext());
   SDLoc dl(GA);
 
@@ -4961,11 +4967,12 @@ SDValue TargetLowering::LowerToTLSEmulatedModel(const GlobalAddressSDNode *GA,
   StringRef EmuTlsVarName(NameString);
   GlobalVariable *EmuTlsVar = VariableModule->getNamedGlobal(EmuTlsVarName);
   assert(EmuTlsVar && "Cannot find EmuTlsVar ");
-  Entry.Node = DAG.getGlobalAddress(EmuTlsVar, dl, PtrVT);
+  Entry.Node = DAG.getGlobalAddress(EmuTlsVar, dl, DataPtrVT);
   Entry.Ty = VoidPtrType;
   Args.push_back(Entry);
 
-  SDValue EmuTlsGetAddr = DAG.getExternalSymbol("__emutls_get_address", PtrVT);
+  SDValue EmuTlsGetAddr =
+      DAG.getExternalSymbol("__emutls_get_address", FuncPtrVT);
 
   TargetLowering::CallLoweringInfo CLI(DAG);
   CLI.setDebugLoc(dl).setChain(DAG.getEntryNode());

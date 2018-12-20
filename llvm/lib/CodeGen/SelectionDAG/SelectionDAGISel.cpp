@@ -1170,8 +1170,9 @@ bool SelectionDAGISel::PrepareEHLandingPad() {
   const TargetRegisterClass *PtrRC =
       TLI->getRegClassFor(TLI->getPointerTy(CurDAG->getDataLayout(),
                   TLI->getExceptionPointerAS()));
+  // FIXME: what type is sel? pointer or pointer range?
   const TargetRegisterClass *SelRC =
-      TLI->getRegClassFor(TLI->getPointerTy(CurDAG->getDataLayout()));
+      TLI->getRegClassFor(TLI->getPointerRangeTy(CurDAG->getDataLayout()));
 
   auto Pers = classifyEHPersonality(PersonalityFn);
 
@@ -1281,7 +1282,7 @@ static void createSwiftErrorEntriesInEntryBlock(FunctionLoweringInfo *FuncInfo,
   assert(FuncInfo->MBB == &*FuncInfo->MF->begin() &&
          "expected to insert into entry block");
   auto &DL = FuncInfo->MF->getDataLayout();
-  auto const *RC = TLI->getRegClassFor(TLI->getPointerTy(DL));
+  auto const *RC = TLI->getRegClassFor(TLI->getPointerRangeTy(DL));
   for (const auto *SwiftErrorVal : FuncInfo->SwiftErrorVals) {
     // We will always generate a copy from the argument. It is always used at
     // least by the 'return' of the swifterror.
@@ -1470,7 +1471,7 @@ static void propagateSwiftErrorVRegs(FunctionLoweringInfo *FuncInfo) {
       // We need a phi: if there is an upwards exposed use we already have a
       // destination virtual register number otherwise we generate a new one.
       auto &DL = FuncInfo->MF->getDataLayout();
-      auto const *RC = TLI->getRegClassFor(TLI->getPointerTy(DL));
+      auto const *RC = TLI->getRegClassFor(TLI->getPointerRangeTy(DL));
       unsigned PHIVReg =
           UpwardsUse ? UUseVReg
                      : FuncInfo->MF->getRegInfo().createVirtualRegister(RC);
@@ -2739,7 +2740,7 @@ CheckType(const unsigned char *MatcherTable, unsigned &MatcherIndex, SDValue N,
   if (N.getValueType() == VT) return true;
 
   // Handle the case when VT is iPTR.
-  return VT == MVT::iPTR && N.getValueType() == TLI->getPointerTy(DL);
+  return VT == MVT::iPTR && N.getValueType() == TLI->getPointerTy(DL, 0);
 }
 
 LLVM_ATTRIBUTE_ALWAYS_INLINE static inline bool
@@ -2767,7 +2768,8 @@ CheckValueType(const unsigned char *MatcherTable, unsigned &MatcherIndex,
     return true;
 
   // Handle the case when VT is iPTR.
-  return VT == MVT::iPTR && cast<VTSDNode>(N)->getVT() == TLI->getPointerTy(DL);
+  return VT == MVT::iPTR &&
+         cast<VTSDNode>(N)->getVT() == TLI->getPointerTy(DL, 0);
 }
 
 LLVM_ATTRIBUTE_ALWAYS_INLINE static inline bool
@@ -3316,8 +3318,9 @@ void SelectionDAGISel::SelectCodeCommon(SDNode *NodeToMatch,
         if (CaseSize == 0) break;
 
         MVT CaseVT = (MVT::SimpleValueType)MatcherTable[MatcherIndex++];
+        // FIXME: is AS0 correct here?
         if (CaseVT == MVT::iPTR)
-          CaseVT = TLI->getPointerTy(CurDAG->getDataLayout());
+          CaseVT = TLI->getPointerTy(CurDAG->getDataLayout(), 0);
 
         // If the VT matches, then we will execute this case.
         if (CurNodeVT == CaseVT)
@@ -3571,8 +3574,9 @@ void SelectionDAGISel::SelectCodeCommon(SDNode *NodeToMatch,
       for (unsigned i = 0; i != NumVTs; ++i) {
         MVT::SimpleValueType VT =
           (MVT::SimpleValueType)MatcherTable[MatcherIndex++];
+        // FIXME: is AS0 correct here? This is what it was before
         if (VT == MVT::iPTR)
-          VT = TLI->getPointerTy(CurDAG->getDataLayout()).SimpleTy;
+          VT = TLI->getPointerTy(CurDAG->getDataLayout(), 0).SimpleTy;
         VTs.push_back(VT);
       }
 

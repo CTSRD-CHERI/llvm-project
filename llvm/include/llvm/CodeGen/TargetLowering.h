@@ -237,7 +237,13 @@ public:
   /// Return the pointer type for the given address space, defaults to
   /// the pointer type from the data layout.
   /// FIXME: The default needs to be removed once all the code is updated.
-  MVT getPointerTy(const DataLayout &DL, uint32_t AS = 0) const {
+  MVT getPointerTy(const DataLayout &DL,
+  // To ease porting of backends allow defaulting to AS0
+#ifdef LLVM_TARGETLOWERINGINFO_DEFAULT_AS
+                   uint32_t AS = LLVM_TARGETLOWERINGINFO_DEFAULT_AS) const {
+#else
+                   uint32_t AS) const {
+#endif
     if (DL.isFatPointer(AS))
       return MVT::getFatPointerVT(DL.getPointerSizeInBits(AS));
     return MVT::getIntegerVT(DL.getPointerSizeInBits(AS));
@@ -258,7 +264,8 @@ public:
   /// Return the type for operands of fence.
   /// TODO: Let fence operands be of i32 type and remove this.
   virtual MVT getFenceOperandTy(const DataLayout &DL) const {
-    return getPointerTy(DL);
+    // FIXME: hardcoded AS0
+    return getPointerTy(DL, 0);
   }
 
   /// EVT is not used in-tree, but is used by out-of-tree target.
@@ -272,7 +279,8 @@ public:
   /// ISD::INSERT_VECTOR_ELT, ISD::EXTRACT_VECTOR_ELT,
   /// ISD::INSERT_SUBVECTOR, and ISD::EXTRACT_SUBVECTOR
   virtual MVT getVectorIdxTy(const DataLayout &DL) const {
-    return getPointerTy(DL);
+    // FIXME: hardcoded AS0
+    return getPointerTy(DL, 0);
   }
 
   virtual bool isSelectSupported(SelectSupportKind /*kind*/) const {
@@ -1255,8 +1263,9 @@ public:
   }
 
   /// Returns the size of the platform's va_list object.
-  virtual unsigned getVaListSizeInBits(const DataLayout &DL) const {
-    return getPointerTy(DL).getSizeInBits();
+  virtual unsigned getVaListSizeInBits(const DataLayout &DL,
+                                       unsigned AS) const {
+    return getPointerTy(DL, AS).getSizeInBits();
   }
 
   /// Get maximum # of store operations permitted for llvm.memset

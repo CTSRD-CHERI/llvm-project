@@ -312,8 +312,9 @@ SelectionDAGLegalize::ExpandConstantFP(ConstantFPSDNode *CFP, bool UseCP) {
     }
   }
 
-  SDValue CPIdx =
-      DAG.getConstantPool(LLVMC, TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue CPIdx = DAG.getConstantPool(
+      LLVMC, TLI.getPointerTy(DAG.getDataLayout(),
+                              DAG.getDataLayout().getGlobalsAddressSpace()));
   unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
   if (Extend) {
     SDValue Result = DAG.getExtLoad(
@@ -332,8 +333,10 @@ SelectionDAGLegalize::ExpandConstantFP(ConstantFPSDNode *CFP, bool UseCP) {
 SDValue SelectionDAGLegalize::ExpandConstant(ConstantSDNode *CP) {
   SDLoc dl(CP);
   EVT VT = CP->getValueType(0);
-  SDValue CPIdx = DAG.getConstantPool(CP->getConstantIntValue(),
-                                      TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue CPIdx = DAG.getConstantPool(
+      CP->getConstantIntValue(),
+      TLI.getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getGlobalsAddressSpace()));
   unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
   SDValue Result = DAG.getLoad(
       VT, dl, DAG.getEntryNode(), CPIdx,
@@ -1956,8 +1959,9 @@ SDValue SelectionDAGLegalize::ExpandBUILD_VECTOR(SDNode *Node) {
       }
     }
     Constant *CP = ConstantVector::get(CV);
-    SDValue CPIdx =
-        DAG.getConstantPool(CP, TLI.getPointerTy(DAG.getDataLayout()));
+    SDValue CPIdx = DAG.getConstantPool(
+        CP, TLI.getPointerTy(DAG.getDataLayout(),
+                             DAG.getDataLayout().getGlobalsAddressSpace()));
     unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
     return DAG.getLoad(
         VT, dl, DAG.getEntryNode(), CPIdx,
@@ -2021,8 +2025,10 @@ SDValue SelectionDAGLegalize::ExpandLibCall(RTLIB::Libcall LC, SDNode *Node,
     Entry.IsZExt = !TLI.shouldSignExtendTypeInLibCall(ArgVT, isSigned);
     Args.push_back(Entry);
   }
-  SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(LC),
-                                         TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalSymbol(
+      TLI.getLibcallName(LC),
+      TLI.getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getProgramAddressSpace()));
 
   EVT RetVT = Node->getValueType(0);
   Type *RetTy = RetVT.getTypeForEVT(*DAG.getContext());
@@ -2082,8 +2088,10 @@ SDValue SelectionDAGLegalize::ExpandLibCall(RTLIB::Libcall LC, EVT RetVT,
     Entry.IsZExt = !isSigned;
     Args.push_back(Entry);
   }
-  SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(LC),
-                                         TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalSymbol(
+      TLI.getLibcallName(LC),
+      TLI.getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getProgramAddressSpace()));
 
   Type *RetTy = RetVT.getTypeForEVT(*DAG.getContext());
 
@@ -2120,8 +2128,10 @@ SelectionDAGLegalize::ExpandChainLibCall(RTLIB::Libcall LC,
     Entry.IsZExt = !isSigned;
     Args.push_back(Entry);
   }
-  SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(LC),
-                                         TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalSymbol(
+      TLI.getLibcallName(LC),
+      TLI.getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getGlobalsAddressSpace()));
 
   Type *RetTy = Node->getValueType(0).getTypeForEVT(*DAG.getContext());
 
@@ -2222,8 +2232,10 @@ SelectionDAGLegalize::ExpandDivRemLibCall(SDNode *Node,
   Entry.IsZExt = !isSigned;
   Args.push_back(Entry);
 
-  SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(LC),
-                                         TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalSymbol(
+      TLI.getLibcallName(LC),
+      TLI.getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getProgramAddressSpace()));
 
   SDLoc dl(Node);
   TargetLowering::CallLoweringInfo CLI(DAG);
@@ -2323,8 +2335,10 @@ SelectionDAGLegalize::ExpandSinCosLibCall(SDNode *Node,
   Entry.IsZExt = false;
   Args.push_back(Entry);
 
-  SDValue Callee = DAG.getExternalSymbol(TLI.getLibcallName(LC),
-                                         TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalSymbol(
+      TLI.getLibcallName(LC),
+      TLI.getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getProgramAddressSpace()));
 
   SDLoc dl(Node);
   TargetLowering::CallLoweringInfo CLI(DAG);
@@ -2427,8 +2441,10 @@ SDValue SelectionDAGLegalize::ExpandLegalINT_TO_FP(bool isSigned, SDValue Op0,
   Constant *FudgeFactor = ConstantInt::get(
                                        Type::getInt64Ty(*DAG.getContext()), FF);
 
-  SDValue CPIdx =
-      DAG.getConstantPool(FudgeFactor, TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue CPIdx = DAG.getConstantPool(
+      FudgeFactor,
+      TLI.getPointerTy(DAG.getDataLayout(),
+                       DAG.getDataLayout().getGlobalsAddressSpace()));
   unsigned Alignment = cast<ConstantPoolSDNode>(CPIdx)->getAlignment();
   CPIdx = DAG.getNode(ISD::ADD, dl, CPIdx.getValueType(), CPIdx, CstOffset);
   Alignment = std::min(Alignment, 4u);
@@ -2688,16 +2704,18 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     Results.push_back(DAG.getConstant(0, dl, Node->getValueType(0)));
     break;
   case ISD::EH_DWARF_CFA: {
-    SDValue CfaArg = DAG.getSExtOrTrunc(Node->getOperand(0), dl,
-                                        TLI.getPointerTy(DAG.getDataLayout()));
+    unsigned DwarfAS = 0; // FIXME: is this correct?
+    SDValue CfaArg =
+        DAG.getSExtOrTrunc(Node->getOperand(0), dl,
+                           TLI.getPointerTy(DAG.getDataLayout(), DwarfAS));
     SDValue Offset = DAG.getNode(ISD::ADD, dl,
                                  CfaArg.getValueType(),
                                  DAG.getNode(ISD::FRAME_TO_ARGS_OFFSET, dl,
                                              CfaArg.getValueType()),
                                  CfaArg);
     SDValue FA = DAG.getNode(
-        ISD::FRAMEADDR, dl, TLI.getPointerTy(DAG.getDataLayout()),
-        DAG.getConstant(0, dl, TLI.getPointerTy(DAG.getDataLayout())));
+        ISD::FRAMEADDR, dl, TLI.getPointerTy(DAG.getDataLayout(), DwarfAS),
+        DAG.getConstant(0, dl, TLI.getPointerRangeTy(DAG.getDataLayout())));
     Results.push_back(DAG.getNode(ISD::ADD, dl, FA.getValueType(),
                                   FA, Offset));
     break;
@@ -3409,14 +3427,14 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
         // The high part is obtained by SRA'ing all but one of the bits of low
         // part.
         unsigned LoSize = VT.getSizeInBits();
-        HiLHS =
-            DAG.getNode(ISD::SRA, dl, VT, LHS,
-                        DAG.getConstant(LoSize - 1, dl,
-                                        TLI.getPointerTy(DAG.getDataLayout())));
-        HiRHS =
-            DAG.getNode(ISD::SRA, dl, VT, RHS,
-                        DAG.getConstant(LoSize - 1, dl,
-                                        TLI.getPointerTy(DAG.getDataLayout())));
+        HiLHS = DAG.getNode(
+            ISD::SRA, dl, VT, LHS,
+            DAG.getConstant(LoSize - 1, dl,
+                            TLI.getPointerRangeTy(DAG.getDataLayout())));
+        HiRHS = DAG.getNode(
+            ISD::SRA, dl, VT, RHS,
+            DAG.getConstant(LoSize - 1, dl,
+                            TLI.getPointerRangeTy(DAG.getDataLayout())));
       } else {
           HiLHS = DAG.getConstant(0, dl, VT);
           HiRHS = DAG.getConstant(0, dl, VT);
@@ -3500,7 +3518,7 @@ bool SelectionDAGLegalize::ExpandNode(SDNode *Node) {
     SDValue Index = Node->getOperand(2);
 
     const DataLayout &TD = DAG.getDataLayout();
-    EVT PTy = TLI.getPointerTy(TD);
+    EVT PTy = TLI.getPointerRangeTy(TD);
 
     unsigned EntrySize =
       DAG.getMachineFunction().getJumpTableInfo()->getEntrySize(TD);
@@ -3819,8 +3837,10 @@ void SelectionDAGLegalize::ConvertNodeToLibcall(SDNode *Node) {
         .setChain(Node->getOperand(0))
         .setLibCallee(
             CallingConv::C, Type::getVoidTy(*DAG.getContext()),
-            DAG.getExternalSymbol("__sync_synchronize",
-                                  TLI.getPointerTy(DAG.getDataLayout())),
+            DAG.getExternalSymbol(
+                "__sync_synchronize",
+                TLI.getPointerTy(DAG.getDataLayout(),
+                                 DAG.getDataLayout().getProgramAddressSpace())),
             std::move(Args));
 
     std::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
@@ -3859,10 +3879,13 @@ void SelectionDAGLegalize::ConvertNodeToLibcall(SDNode *Node) {
     TargetLowering::CallLoweringInfo CLI(DAG);
     CLI.setDebugLoc(dl)
         .setChain(Node->getOperand(0))
-        .setLibCallee(CallingConv::C, Type::getVoidTy(*DAG.getContext()),
-                      DAG.getExternalSymbol(
-                          "abort", TLI.getPointerTy(DAG.getDataLayout())),
-                      std::move(Args));
+        .setLibCallee(
+            CallingConv::C, Type::getVoidTy(*DAG.getContext()),
+            DAG.getExternalSymbol(
+                "abort",
+                TLI.getPointerTy(DAG.getDataLayout(),
+                                 DAG.getDataLayout().getProgramAddressSpace())),
+            std::move(Args));
     std::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
 
     Results.push_back(CallResult.second);

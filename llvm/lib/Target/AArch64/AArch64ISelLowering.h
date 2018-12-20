@@ -509,7 +509,7 @@ public:
   bool enableAggressiveFMAFusion(EVT VT) const override;
 
   /// Returns the size of the platform's va_list object.
-  unsigned getVaListSizeInBits(const DataLayout &DL) const override;
+  unsigned getVaListSizeInBits(const DataLayout &DL, unsigned AS) const override;
 
   /// Returns true if \p VecTy is a legal interleaved access type. This
   /// function checks the vector element type and the overall width of the
