@@ -535,13 +535,18 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
                   (void *)cbdata->targetAddr, (void *)pinfo->dlpi_addr,
                   (void*)((char *)pinfo->dlpi_addr + __builtin_cheri_length_get((void *)pinfo->dlpi_addr)),
                   (void*)pinfo->dlpi_addr);
+#ifdef __CHERI_PURE_CAPABILITY__
+        assert(__builtin_cheri_tag_get((void*)cbdata->targetAddr));
+        if (!__builtin_cheri_tag_get((void*)pinfo->dlpi_addr)) {
+          _LIBUNWIND_ABORT("dlpi_addr was untagged. CheriBSD needs to be updated!");
+        }
+#endif
 
         if ((vaddr_t)cbdata->targetAddr < (vaddr_t)pinfo->dlpi_addr) {
           CHERI_DBG("%#p out of bounds of %#p (%s)\n", (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr, pinfo->dlpi_name);
           return false;
         }
 #ifdef __CHERI_PURE_CAPABILITY__
-        assert(__builtin_cheri_tag_get((void*)cbdata->targetAddr));
         check_same_type<__uintcap_t, decltype(pinfo->dlpi_addr)>();
         check_same_type<const Elf_Phdr *, decltype(pinfo->dlpi_phdr)>();
         // TODO: __builtin_cheri_top_get_would be nice
@@ -592,7 +597,8 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
             }
           }
           // Otherwise just fall back to the default behaviour
-          assert(__builtin_cheri_tag_get((void*)(pinfo->dlpi_addr + phdr->p_vaddr)) && "phdr cap became unpresentable?");
+          if (!__builtin_cheri_tag_get((void*)(pinfo->dlpi_addr + phdr->p_vaddr)))
+            _LIBUNWIND_ABORT("phdr cap became unpresentable?");
 #endif
           return pinfo->dlpi_addr + phdr->p_vaddr;
         };
@@ -619,7 +625,8 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
               eh_frame_hdr_start = eh_frame_hdr_start + image_base;
 #endif
 #ifdef __CHERI_PURE_CAPABILITY__
-           assert(__builtin_cheri_tag_get((void*)eh_frame_hdr_start) && "phdr cap became unpresentable?");
+            if (__builtin_cheri_tag_get((void*)eh_frame_hdr_start))
+              _LIBUNWIND_ABORT("eh_frame_hdr_start cap became unpresentable!");
 #endif
             cbdata->sects->dwarf_index_section = eh_frame_hdr_start;
             cbdata->sects->dwarf_index_section_length = phdr->p_memsz;
