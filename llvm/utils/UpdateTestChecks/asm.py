@@ -211,6 +211,7 @@ def do_save_load_dword_sub(match):
   global last_frame_size
   if not last_frame_size:
     print("cld/csd: unknown stackframe size:" + unchanged_match(match))
+    return unchanged_match(match)
   if offset >= last_frame_size:
     print("cld/csd: offset bigger than", last_frame_size, ":" + unchanged_match(match))
     return unchanged_match(match)
@@ -255,7 +256,7 @@ def scrub_asm_mips(asm, args):
   stack_store_cap_re = re.compile(r'(?P<insn>csc|clc) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# (?P<cap_size>16|32)\-byte Folded (Spill|Reload)')
   asm = stack_store_cap_re.sub(do_clc_csc_sub, asm)
   stackframe_size_regex = re.compile(r'cincoffset \$c11, \$c11, -(?P<size>\d+)\n *.cfi_def_cfa_offset (?P<cfa>\d+)')
-  asm = stackframe_size_regex.sub(do_stackframe_size_sub, asm)
+  asm = stackframe_size_regex.sub(do_stackframe_size_sub, asm, count=1)
   stack_store_dword_re = re.compile(r'(?P<insn>csd|cld) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# 8\-byte Folded (Spill|Reload)')
   asm = stack_store_dword_re.sub(do_save_load_dword_sub, asm)
   cfi_offset_regex = re.compile(r'\.cfi_offset (?P<reg>[$\w]+), -(?P<offset>\d+)')

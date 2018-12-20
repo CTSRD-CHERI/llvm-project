@@ -9,7 +9,6 @@
 define float @return_constant_pool() nounwind readnone {
 ; N64-LABEL: return_constant_pool:
 ; N64:       # %bb.0: # %entry
-; N64-NEXT:    cgetoffset $25, $c12
 ; N64-NEXT:    lui $1, %hi(%neg(%gp_rel(return_constant_pool)))
 ; N64-NEXT:    daddu $1, $1, $25
 ; N64-NEXT:    daddiu $1, $1, %lo(%neg(%gp_rel(return_constant_pool)))
@@ -20,6 +19,7 @@ define float @return_constant_pool() nounwind readnone {
 
 ; LEGACY-LABEL: return_constant_pool:
 ; LEGACY:       # %bb.0: # %entry
+; LEGACY-NEXT:    cgetoffset $25, $c12
 ; LEGACY-NEXT:    lui $1, %hi(%neg(%gp_rel(return_constant_pool)))
 ; LEGACY-NEXT:    daddu $1, $1, $25
 ; LEGACY-NEXT:    daddiu $1, $1, %lo(%neg(%gp_rel(return_constant_pool)))
@@ -44,7 +44,7 @@ entry:
 }
 
 define double @return_constant_pool2() nounwind readnone {
-; N64-LABEL: return_constant_pool:
+; N64-LABEL: return_constant_pool2:
 ; N64:       # %bb.0: # %entry
 ; N64-NEXT:    lui $1, %hi(%neg(%gp_rel(return_constant_pool2)))
 ; N64-NEXT:    daddu $1, $1, $25
