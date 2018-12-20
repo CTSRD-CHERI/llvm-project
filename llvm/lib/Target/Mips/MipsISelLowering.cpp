@@ -391,6 +391,7 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   if (Subtarget.isCheri()) {
     setOperationAction(ISD::ADDRSPACECAST,    CapType, Custom);
     setOperationAction(ISD::ADDRSPACECAST,    MVT::i64, Custom);
+    setOperationAction(ISD::ConstantPool, CapType, Custom);
   }
 
   // Mips Custom Operations
@@ -2606,9 +2607,13 @@ lowerConstantPool(SDValue Op, SelectionDAG &DAG) const
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
   EVT Ty = Op.getValueType();
 
-  if (ABI.UsesCapabilityTable())
-    report_fatal_error("Cannot handle constant pools in captable ABI. Try "
-                       "compiling with -msoft-float instead.");
+  if (ABI.UsesCapabilityTable()) {
+    auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
+    assert(Ty.isFatPointer());
+    auto Result = getDataFromCapTable(N, SDLoc(N), Ty, DAG, DAG.getEntryNode(), PtrInfo);
+    assert(Result.getValueType() == Ty);
+    return Result;
+  }
 
   if (!isPositionIndependent()) {
     const MipsTargetObjectFile *TLOF =
@@ -2624,7 +2629,8 @@ lowerConstantPool(SDValue Op, SelectionDAG &DAG) const
                                 : getAddrNonPICSym64(N, SDLoc(N), Ty, DAG);
   }
 
- return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(), /*IsForTls=*/false);
+  return getAddrLocal(N, SDLoc(N), Ty, DAG, ABI.IsN32() || ABI.IsN64(),
+                          /*IsForTls=*/false);
 }
 
 SDValue MipsTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
