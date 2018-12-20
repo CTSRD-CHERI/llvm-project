@@ -229,7 +229,7 @@ class SSHExecutor(RemoteExecutor):
                 self.local_run, log_calls=True, log_results=True,
                 label='ssh_local')
 
-    def _remote_temp(self, is_dir):
+    def _remote_temp(self, is_dir, is_retry=False):
         # TODO: detect what the target system is, and use the correct
         # mktemp command for it. (linux and darwin differ here, and I'm
         # sure windows has another way to do it)
@@ -240,7 +240,10 @@ class SSHExecutor(RemoteExecutor):
         _, temp_path, err, exitCode = self._execute_command_remote([cmd])
         temp_path = temp_path.strip()
         if exitCode != 0:
-            raise RuntimeError(err)
+            if not is_retry and "write: Broken pipe" in err:
+                # try again
+                return self._remote_temp(is_dir, is_retry=True)
+            raise RuntimeError("mktemp failed: " + err)
         return temp_path
 
     def _copy_in_file(self, src, dst):
