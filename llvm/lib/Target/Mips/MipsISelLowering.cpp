@@ -3876,6 +3876,10 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   bool GlobalOrExternal = false, IsCallReloc = false;
 
   const bool CheriCapTable = Subtarget.useCheriCapTable();
+  // In the legacy ABI we want to load only the vaddr and the use cgetpccsetoffset
+  if (ABI.IsCheriPureCap() && !CheriCapTable)
+    Ty = MVT::i64;
+
   // The long-calls feature is ignored in case of PIC.
   // While we do not support -mshared / -mno-shared properly,
   // ignore long-calls in case of -mabicalls too.
