@@ -2425,8 +2425,6 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
   SDLoc DL(GA);
   const GlobalValue *GV = GA->getGlobal();
   TLSModel::Model model = getTargetMachine().getTLSModel(GV);
-  EVT PtrVT = getPointerTy(DAG.getDataLayout(),
-                           DAG.getDataLayout().getProgramAddressSpace());
 
   if (Subtarget.getABI().IsCheriPureCap() && Subtarget.useCheriCapTls()) {
     const Type *GVTy = GV->getType();
@@ -2511,6 +2509,10 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
       report_fatal_error("SHOULD HAVE USED CAP TLS for " + GV->getName());
     }
   }
+
+  // NOTE: AS0 is okay since we are using the legacy ABI
+  assert(!ABI.UsesCapabilityTls());
+  EVT PtrVT = getPointerTy(DAG.getDataLayout(), 0);
 
   if (model == TLSModel::GeneralDynamic || model == TLSModel::LocalDynamic) {
     // General Dynamic and Local Dynamic TLS Model.
