@@ -1,4 +1,4 @@
-; RUN: %cheri_purecap_llc -O0 %s -o -
+; RUN: %cheri_purecap_llc -O0 %s -o - | FileCheck %s
 ; Reduced test case for index.c no longer compiling after memset optimization
 ; See https://github.com/CTSRD-CHERI/llvm/issues/265
 %struct.am = type { %struct.n, %struct.m, [8 x i8] }
