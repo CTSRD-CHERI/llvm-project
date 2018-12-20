@@ -1,11 +1,8 @@
-; RUN: %cheri_llc -target-abi purecap -o /dev/null %s
+; RUN: %cheri_purecap_llc -o /dev/null %s
 ; RUN: %cheri_llc -target-abi n64 -o /dev/null %s
 ; XFAIL: *
+; LLVM ERROR: Cannot select: t1: iFATPTR128 = FrameIndex<-1>
 ; REQUIRES: asserts
-; ModuleID = 'auditreduce-crash.creduce.ll-reduced-simplified.bc'
-source_filename = "auditreduce-crash.creduce.ll-output-4da6427.bc"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
-target triple = "cheri-unknown-freebsd"
 
 %struct.au_mask = type {}
 %struct.tokenstr = type { i8, i8*, i64, %union.anon }
