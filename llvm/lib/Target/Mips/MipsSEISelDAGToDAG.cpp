@@ -345,7 +345,7 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
   if (!MipsFI->capGlobalBaseRegSet())
     return;
   assert(Subtarget->useCheriCapTable());
-  assert(MF.getTarget().isPositionIndependent() && "CHERI CODEGEN REQUIRES -fPIC");
+  // assert(MF.getTarget().isPositionIndependent() && "CHERI CODEGEN REQUIRES -fPIC");
 
   MachineBasicBlock &MBB = MF.front();
   MachineBasicBlock::iterator I = MBB.begin();

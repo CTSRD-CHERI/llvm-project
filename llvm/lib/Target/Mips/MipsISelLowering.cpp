@@ -3911,7 +3911,10 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       Callee = getCallTargetFromCapTable(G, DL, CapType, DAG, Chain,
                                          FuncInfo->callPtrInfo(GV));
       IsCallReloc = true;
-    } else if (IsPIC) {
+    } else if (IsPIC || ABI.IsCheriPureCap()) {
+      // Legacy ABI also needs to load from GOT in non-PIC since otherwise
+      // it will attempt to use a JAL relocation in a CGetPCCSetOffset (and
+      // corrupt the instruction)
       InternalLinkage = GV->hasInternalLinkage();
 
       if (LargeGOT) {
