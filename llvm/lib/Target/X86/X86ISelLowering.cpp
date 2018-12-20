@@ -3920,8 +3920,7 @@ X86TargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     unsigned char OpFlags =
         Subtarget.classifyGlobalFunctionReference(nullptr, *Mod);
 
-    Callee = DAG.getTargetExternalSymbol(
-        S->getSymbol(), getPointerTy(DAG.getDataLayout()), OpFlags);
+    Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);
 
     if (OpFlags == X86II::MO_GOTPCREL) {
       Callee = DAG.getNode(X86ISD::WrapperRIP, dl,
@@ -23764,8 +23763,7 @@ SDValue X86TargetLowering::LowerWin64_i128OP(SDValue Op, SelectionDAG &DAG) cons
     Args.push_back(Entry);
   }
 
-  SDValue Callee = DAG.getExternalSymbol(getLibcallName(LC),
-                                         getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(getLibcallName(LC));
 
   TargetLowering::CallLoweringInfo CLI(DAG);
   CLI.setDebugLoc(dl)
@@ -25667,8 +25665,7 @@ static SDValue LowerFSINCOS(SDValue Op, const X86Subtarget &Subtarget,
   const TargetLowering &TLI = DAG.getTargetLoweringInfo();
   RTLIB::Libcall LC = isF64 ? RTLIB::SINCOS_STRET_F64 : RTLIB::SINCOS_STRET_F32;
   const char *LibcallName = TLI.getLibcallName(LC);
-  SDValue Callee =
-      DAG.getExternalSymbol(LibcallName, TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(LibcallName);
 
   Type *RetTy = isF64 ? (Type *)StructType::get(ArgTy, ArgTy)
                       : (Type *)VectorType::get(ArgTy, 4);

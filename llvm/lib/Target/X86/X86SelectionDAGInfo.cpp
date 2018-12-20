@@ -93,7 +93,6 @@ SDValue X86SelectionDAGInfo::EmitTargetCodeForMemset(
         ? DAG.getTargetLoweringInfo().getLibcallName(RTLIB::BZERO)
         : nullptr) {
       const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-      EVT IntPtr = TLI.getPointerTy(DAG.getDataLayout());
       Type *IntPtrTy = DAG.getDataLayout().getIntPtrType(*DAG.getContext());
       TargetLowering::ArgListTy Args;
       TargetLowering::ArgListEntry Entry;
@@ -107,7 +106,7 @@ SDValue X86SelectionDAGInfo::EmitTargetCodeForMemset(
       CLI.setDebugLoc(dl)
           .setChain(Chain)
           .setLibCallee(CallingConv::C, Type::getVoidTy(*DAG.getContext()),
-                        DAG.getExternalSymbol(bzeroName, IntPtr),
+                        DAG.getExternalFunctionSymbol(bzeroName),
                         std::move(Args))
           .setDiscardResult();
 

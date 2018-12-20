@@ -2451,7 +2451,7 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
         Type *CapTy = Type::getInt8PtrTy(*DAG.getContext(),
                                          GVTy->getPointerAddressSpace());
 
-        SDValue TlsGetAddr = DAG.getExternalSymbol("__tls_get_addr", PtrVT);
+        SDValue TlsGetAddr = DAG.getExternalFunctionSymbol("__tls_get_addr");
 
         ArgListTy Args;
         ArgListEntry Entry;
@@ -2523,7 +2523,7 @@ lowerGlobalTLSAddress(SDValue Op, SelectionDAG &DAG) const
     unsigned PtrSize = PtrVT.getSizeInBits();
     IntegerType *PtrTy = Type::getIntNTy(*DAG.getContext(), PtrSize);
 
-    SDValue TlsGetAddr = DAG.getExternalSymbol("__tls_get_addr", PtrVT);
+    SDValue TlsGetAddr = DAG.getExternalFunctionSymbol("__tls_get_addr");
 
     ArgListTy Args;
     ArgListEntry Entry;
@@ -3940,6 +3940,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       IsCallReloc = true;
     } else if (!IsPIC) { // static
       assert(!ABI.UsesCapabilityTable());
+      // NOTE: address space zero is correct here since we are in the legacy ABI
       Callee = DAG.getTargetExternalSymbol(
           Sym, getPointerTy(DAG.getDataLayout(), 0), MipsII::MO_NO_FLAG);
     } else if (LargeGOT) {

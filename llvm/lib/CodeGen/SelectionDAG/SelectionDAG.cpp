@@ -1501,6 +1501,11 @@ SDValue SelectionDAG::getExternalSymbol(const char *Sym, EVT VT) {
   return SDValue(N, 0);
 }
 
+SDValue SelectionDAG::getExternalFunctionSymbol(const char *Sym) {
+  auto AddrSpace = getDataLayout().getProgramAddressSpace();
+  return getExternalSymbol(Sym, TLI->getPointerTy(getDataLayout(), AddrSpace));
+}
+
 SDValue SelectionDAG::getMCSymbol(MCSymbol *Sym, EVT VT) {
   SDNode *&N = MCSymbols[Sym];
   if (N)
@@ -1519,6 +1524,14 @@ SDValue SelectionDAG::getTargetExternalSymbol(const char *Sym, EVT VT,
   N = newSDNode<ExternalSymbolSDNode>(true, Sym, TargetFlags, VT);
   InsertNode(N);
   return SDValue(N, 0);
+}
+
+SDValue
+SelectionDAG::getTargetExternalFunctionSymbol(const char *Sym,
+                                              unsigned char TargetFlags) {
+  auto AddrSpace = getDataLayout().getProgramAddressSpace();
+  return getTargetExternalSymbol(
+      Sym, TLI->getPointerTy(getDataLayout(), AddrSpace), TargetFlags);
 }
 
 SDValue SelectionDAG::getCondCode(ISD::CondCode Cond) {
@@ -5944,10 +5957,7 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
       .setLibCallee(
           TLI->getLibcallCallingConv(RTLIB::MEMCPY),
           Dst.getValueType().getTypeForEVT(*getContext()),
-          getExternalSymbol(
-              TLI->getLibcallName(RTLIB::MEMCPY),
-              TLI->getPointerTy(getDataLayout(),
-                                getDataLayout().getProgramAddressSpace())),
+          getExternalFunctionSymbol(TLI->getLibcallName(RTLIB::MEMCPY)),
           std::move(Args))
       .setDiscardResult()
       .setTailCall(isTailCall);
@@ -5985,14 +5995,10 @@ SDValue SelectionDAG::getAtomicMemcpy(SDValue Chain, const SDLoc &dl,
   TargetLowering::CallLoweringInfo CLI(*this);
   CLI.setDebugLoc(dl)
       .setChain(Chain)
-      .setLibCallee(
-          TLI->getLibcallCallingConv(LibraryCall),
-          Type::getVoidTy(*getContext()),
-          getExternalSymbol(
-              TLI->getLibcallName(LibraryCall),
-              TLI->getPointerTy(getDataLayout(),
-                                getDataLayout().getProgramAddressSpace())),
-          std::move(Args))
+      .setLibCallee(TLI->getLibcallCallingConv(LibraryCall),
+                    Type::getVoidTy(*getContext()),
+                    getExternalFunctionSymbol(TLI->getLibcallName(LibraryCall)),
+                    std::move(Args))
       .setDiscardResult()
       .setTailCall(isTailCall);
 
@@ -6054,10 +6060,7 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
       .setLibCallee(
           TLI->getLibcallCallingConv(RTLIB::MEMMOVE),
           Dst.getValueType().getTypeForEVT(*getContext()),
-          getExternalSymbol(
-              TLI->getLibcallName(RTLIB::MEMMOVE),
-              TLI->getPointerTy(getDataLayout(),
-                                getDataLayout().getProgramAddressSpace())),
+          getExternalFunctionSymbol(TLI->getLibcallName(RTLIB::MEMMOVE)),
           std::move(Args))
       .setDiscardResult()
       .setTailCall(isTailCall);
@@ -6095,14 +6098,10 @@ SDValue SelectionDAG::getAtomicMemmove(SDValue Chain, const SDLoc &dl,
   TargetLowering::CallLoweringInfo CLI(*this);
   CLI.setDebugLoc(dl)
       .setChain(Chain)
-      .setLibCallee(
-          TLI->getLibcallCallingConv(LibraryCall),
-          Type::getVoidTy(*getContext()),
-          getExternalSymbol(
-              TLI->getLibcallName(LibraryCall),
-              TLI->getPointerTy(getDataLayout(),
-                                getDataLayout().getProgramAddressSpace())),
-          std::move(Args))
+      .setLibCallee(TLI->getLibcallCallingConv(LibraryCall),
+                    Type::getVoidTy(*getContext()),
+                    getExternalFunctionSymbol(TLI->getLibcallName(LibraryCall)),
+                    std::move(Args))
       .setDiscardResult()
       .setTailCall(isTailCall);
 
@@ -6163,10 +6162,7 @@ SDValue SelectionDAG::getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst,
       .setLibCallee(
           TLI->getLibcallCallingConv(RTLIB::MEMSET),
           Dst.getValueType().getTypeForEVT(*getContext()),
-          getExternalSymbol(
-              TLI->getLibcallName(RTLIB::MEMSET),
-              TLI->getPointerTy(getDataLayout(),
-                                getDataLayout().getProgramAddressSpace())),
+          getExternalFunctionSymbol(TLI->getLibcallName(RTLIB::MEMSET)),
           std::move(Args))
       .setDiscardResult()
       .setTailCall(isTailCall);
@@ -6203,14 +6199,10 @@ SDValue SelectionDAG::getAtomicMemset(SDValue Chain, const SDLoc &dl,
   TargetLowering::CallLoweringInfo CLI(*this);
   CLI.setDebugLoc(dl)
       .setChain(Chain)
-      .setLibCallee(
-          TLI->getLibcallCallingConv(LibraryCall),
-          Type::getVoidTy(*getContext()),
-          getExternalSymbol(
-              TLI->getLibcallName(LibraryCall),
-              TLI->getPointerTy(getDataLayout(),
-                                getDataLayout().getProgramAddressSpace())),
-          std::move(Args))
+      .setLibCallee(TLI->getLibcallCallingConv(LibraryCall),
+                    Type::getVoidTy(*getContext()),
+                    getExternalFunctionSymbol(TLI->getLibcallName(LibraryCall)),
+                    std::move(Args))
       .setDiscardResult()
       .setTailCall(isTailCall);
 

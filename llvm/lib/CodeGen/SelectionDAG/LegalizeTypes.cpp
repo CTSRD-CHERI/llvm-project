@@ -1042,10 +1042,7 @@ DAGTypeLegalizer::ExpandChainLibCall(RTLIB::Libcall LC, SDNode *Node,
     Entry.IsZExt = !isSigned;
     Args.push_back(Entry);
   }
-  SDValue Callee = DAG.getExternalSymbol(
-      TLI.getLibcallName(LC),
-      TLI.getPointerTy(DAG.getDataLayout(),
-                       DAG.getDataLayout().getProgramAddressSpace()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(TLI.getLibcallName(LC));
 
   Type *RetTy = Node->getValueType(0).getTypeForEVT(*DAG.getContext());
 

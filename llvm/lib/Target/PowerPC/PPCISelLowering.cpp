@@ -3042,7 +3042,7 @@ SDValue PPCTargetLowering::LowerINIT_TRAMPOLINE(SDValue Op,
   TargetLowering::CallLoweringInfo CLI(DAG);
   CLI.setDebugLoc(dl).setChain(Chain).setLibCallee(
       CallingConv::C, Type::getVoidTy(*DAG.getContext()),
-      DAG.getExternalSymbol("__trampoline_setup", PtrVT), std::move(Args));
+      DAG.getExternalFunctionSymbol("__trampoline_setup"), std::move(Args));
 
   std::pair<SDValue, SDValue> CallResult = LowerCallTo(CLI);
   return CallResult.second;
@@ -4950,8 +4950,7 @@ PrepareCall(SelectionDAG &DAG, SDValue &Callee, SDValue &InFlag, SDValue &Chain,
     if (UsePlt)
       OpFlags = PPCII::MO_PLT;
 
-    Callee = DAG.getTargetExternalSymbol(S->getSymbol(), Callee.getValueType(),
-                                         OpFlags);
+    Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), OpFlags);
     needIndirectCall = false;
   }
 

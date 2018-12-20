@@ -656,6 +656,9 @@ public:
   SDValue getExternalSymbol(const char *Sym, const SDLoc &dl, EVT VT);
   SDValue getTargetExternalSymbol(const char *Sym, EVT VT,
                                   unsigned char TargetFlags = 0);
+  SDValue getExternalFunctionSymbol(const char *Sym);
+  SDValue getTargetExternalFunctionSymbol(const char *Sym,
+                                          unsigned char TargetFlags = 0);
   SDValue getMCSymbol(MCSymbol *Sym, EVT VT);
 
   SDValue getValueType(EVT);

@@ -2437,8 +2437,7 @@ SDValue AArch64TargetLowering::LowerFSINCOS(SDValue Op,
   RTLIB::Libcall LC = ArgVT == MVT::f64 ? RTLIB::SINCOS_STRET_F64
                                         : RTLIB::SINCOS_STRET_F32;
   const char *LibcallName = getLibcallName(LC);
-  SDValue Callee =
-      DAG.getExternalSymbol(LibcallName, getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(LibcallName);
 
   StructType *RetTy = StructType::get(ArgTy, ArgTy);
   TargetLowering::CallLoweringInfo CLI(DAG);
@@ -3795,11 +3794,11 @@ AArch64TargetLowering::LowerCall(CallLoweringInfo &CLI,
     if (getTargetMachine().getCodeModel() == CodeModel::Large &&
         Subtarget->isTargetMachO()) {
       const char *Sym = S->getSymbol();
-      Callee = DAG.getTargetExternalSymbol(Sym, PtrVT, AArch64II::MO_GOT);
+      Callee = DAG.getTargetExternalFunctionSymbol(Sym, AArch64II::MO_GOT);
       Callee = DAG.getNode(AArch64ISD::LOADgot, DL, PtrVT, Callee);
     } else {
       const char *Sym = S->getSymbol();
-      Callee = DAG.getTargetExternalSymbol(Sym, PtrVT, 0);
+      Callee = DAG.getTargetExternalFunctionSymbol(Sym, 0);
     }
   }
 
@@ -7928,8 +7927,7 @@ SDValue AArch64TargetLowering::LowerATOMIC_LOAD_AND(SDValue Op,
 SDValue AArch64TargetLowering::LowerWindowsDYNAMIC_STACKALLOC(
     SDValue Op, SDValue Chain, SDValue &Size, SelectionDAG &DAG) const {
   SDLoc dl(Op);
-  EVT PtrVT = getPointerTy(DAG.getDataLayout());
-  SDValue Callee = DAG.getTargetExternalSymbol("__chkstk", PtrVT, 0);
+  SDValue Callee = DAG.getTargetExternalFunctionSymbol("__chkstk", 0);
 
   const AArch64RegisterInfo *TRI = Subtarget->getRegisterInfo();
   const uint32_t *Mask = TRI->getWindowsStackProbePreservedMask();

@@ -482,9 +482,7 @@ LowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   TargetLowering::CallLoweringInfo CLI(DAG);
   CLI.setDebugLoc(DL).setChain(Chain).setLibCallee(
       CallingConv::C, IntPtrTy,
-      DAG.getExternalSymbol("__misaligned_load",
-                            getPointerTy(DAG.getDataLayout())),
-      std::move(Args));
+      DAG.getExternalFunctionSymbol("__misaligned_load"), std::move(Args));
 
   std::pair<SDValue, SDValue> CallResult = LowerCallTo(CLI);
   SDValue Ops[] = { CallResult.first, CallResult.second };

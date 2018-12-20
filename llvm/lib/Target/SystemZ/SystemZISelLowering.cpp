@@ -1359,7 +1359,7 @@ SystemZTargetLowering::LowerCall(CallLoweringInfo &CLI,
     Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, PtrVT);
     Callee = DAG.getNode(SystemZISD::PCREL_WRAPPER, DL, PtrVT, Callee);
   } else if (auto *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT);
+    Callee = DAG.getTargetExternalFunctionSymbol(E->getSymbol());
     Callee = DAG.getNode(SystemZISD::PCREL_WRAPPER, DL, PtrVT, Callee);
   } else if (IsTailCall) {
     Chain = DAG.getCopyToReg(Chain, DL, SystemZ::R1D, Callee, Glue);

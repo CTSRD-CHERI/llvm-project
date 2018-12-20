@@ -492,7 +492,7 @@ HexagonTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     Callee = DAG.getTargetGlobalAddress(G->getGlobal(), dl, PtrVT, 0, Flags);
   } else if (ExternalSymbolSDNode *S =
              dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    Callee = DAG.getTargetExternalSymbol(S->getSymbol(), PtrVT, Flags);
+    Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), Flags);
   }
 
   // Returns a chain & a flag for retval copy to use.

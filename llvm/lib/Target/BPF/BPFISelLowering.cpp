@@ -368,7 +368,7 @@ SDValue BPFTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     Callee = DAG.getTargetGlobalAddress(G->getGlobal(), CLI.DL, PtrVT,
                                         G->getOffset(), 0);
   } else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    Callee = DAG.getTargetExternalSymbol(E->getSymbol(), PtrVT, 0);
+    Callee = DAG.getTargetExternalFunctionSymbol(E->getSymbol(), 0);
     fail(CLI.DL, DAG, Twine("A call to built-in function '"
                             + StringRef(E->getSymbol())
                             + "' is not supported."));

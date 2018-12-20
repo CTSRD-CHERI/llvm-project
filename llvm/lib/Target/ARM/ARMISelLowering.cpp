@@ -2124,7 +2124,7 @@ ARMTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       SDValue PICLabel = DAG.getConstant(ARMPCLabelIndex, dl, MVT::i32);
       Callee = DAG.getNode(ARMISD::PIC_ADD, dl, PtrVt, Callee, PICLabel);
     } else {
-      Callee = DAG.getTargetExternalSymbol(Sym, PtrVt, 0);
+      Callee = DAG.getTargetExternalFunctionSymbol(Sym, 0);
     }
   }
 
@@ -2965,7 +2965,7 @@ ARMTargetLowering::LowerToTLSGeneralDynamicModel(GlobalAddressSDNode *GA,
   TargetLowering::CallLoweringInfo CLI(DAG);
   CLI.setDebugLoc(dl).setChain(Chain).setLibCallee(
       CallingConv::C, Type::getInt32Ty(*DAG.getContext()),
-      DAG.getExternalSymbol("__tls_get_addr", PtrVT), std::move(Args));
+      DAG.getExternalFunctionSymbol("__tls_get_addr"), std::move(Args));
 
   std::pair<SDValue, SDValue> CallResult = LowerCallTo(CLI);
   return CallResult.first;
@@ -7731,7 +7731,7 @@ SDValue ARMTargetLowering::LowerFSINCOS(SDValue Op, SelectionDAG &DAG) const {
       (ArgVT == MVT::f64) ? RTLIB::SINCOS_STRET_F64 : RTLIB::SINCOS_STRET_F32;
   const char *LibcallName = getLibcallName(LC);
   CallingConv::ID CC = getLibcallCallingConv(LC);
-  SDValue Callee = DAG.getExternalSymbol(LibcallName, getPointerTy(DL));
+  SDValue Callee = DAG.getExternalFunctionSymbol(LibcallName);
 
   TargetLowering::CallLoweringInfo CLI(DAG);
   CLI.setDebugLoc(dl)
@@ -7765,16 +7765,13 @@ SDValue ARMTargetLowering::LowerWindowsDIVLibCall(SDValue Op, SelectionDAG &DAG,
          "unexpected type for custom lowering DIV");
   SDLoc dl(Op);
 
-  const auto &DL = DAG.getDataLayout();
-  const auto &TLI = DAG.getTargetLoweringInfo();
-
   const char *Name = nullptr;
   if (Signed)
     Name = (VT == MVT::i32) ? "__rt_sdiv" : "__rt_sdiv64";
   else
     Name = (VT == MVT::i32) ? "__rt_udiv" : "__rt_udiv64";
 
-  SDValue ES = DAG.getExternalSymbol(Name, TLI.getPointerTy(DL));
+  SDValue ES = DAG.getExternalFunctionSymbol(Name);
 
   ARMTargetLowering::ArgListTy Args;
 
@@ -7931,8 +7928,8 @@ static SDValue LowerFPOWI(SDValue Op, const ARMSubtarget &Subtarget,
   SDValue Val = Op.getOperand(0);
   MVT Ty = Val->getSimpleValueType(0);
   SDValue Exponent = DAG.getNode(ISD::SINT_TO_FP, dl, Ty, Op.getOperand(1));
-  SDValue Callee = DAG.getExternalSymbol(Ty == MVT::f32 ? "powf" : "pow",
-                                         TLI.getPointerTy(DAG.getDataLayout()));
+  SDValue Callee =
+      DAG.getExternalFunctionSymbol(Ty == MVT::f32 ? "powf" : "pow");
 
   TargetLowering::ArgListTy Args;
   TargetLowering::ArgListEntry Entry;
@@ -14052,8 +14049,7 @@ SDValue ARMTargetLowering::LowerDivRem(SDValue Op, SelectionDAG &DAG) const {
                                                     DAG.getContext(),
                                                     Subtarget);
 
-  SDValue Callee = DAG.getExternalSymbol(getLibcallName(LC),
-                                         getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(getLibcallName(LC));
 
   Type *RetTy = StructType::get(Ty, Ty);
 
@@ -14095,8 +14091,7 @@ SDValue ARMTargetLowering::LowerREM(SDNode *N, SelectionDAG &DAG) const {
   TargetLowering::ArgListTy Args = getDivRemArgList(N, DAG.getContext(),
                                                     Subtarget);
   bool isSigned = N->getOpcode() == ISD::SREM;
-  SDValue Callee = DAG.getExternalSymbol(getLibcallName(LC),
-                                         getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(getLibcallName(LC));
 
   if (Subtarget->isTargetWindows())
     InChain = WinDBZCheckDenominator(DAG, N, InChain);

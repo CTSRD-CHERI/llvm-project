@@ -2025,10 +2025,7 @@ SDValue SelectionDAGLegalize::ExpandLibCall(RTLIB::Libcall LC, SDNode *Node,
     Entry.IsZExt = !TLI.shouldSignExtendTypeInLibCall(ArgVT, isSigned);
     Args.push_back(Entry);
   }
-  SDValue Callee = DAG.getExternalSymbol(
-      TLI.getLibcallName(LC),
-      TLI.getPointerTy(DAG.getDataLayout(),
-                       DAG.getDataLayout().getProgramAddressSpace()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(TLI.getLibcallName(LC));
 
   EVT RetVT = Node->getValueType(0);
   Type *RetTy = RetVT.getTypeForEVT(*DAG.getContext());
@@ -2088,10 +2085,7 @@ SDValue SelectionDAGLegalize::ExpandLibCall(RTLIB::Libcall LC, EVT RetVT,
     Entry.IsZExt = !isSigned;
     Args.push_back(Entry);
   }
-  SDValue Callee = DAG.getExternalSymbol(
-      TLI.getLibcallName(LC),
-      TLI.getPointerTy(DAG.getDataLayout(),
-                       DAG.getDataLayout().getProgramAddressSpace()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(TLI.getLibcallName(LC));
 
   Type *RetTy = RetVT.getTypeForEVT(*DAG.getContext());
 
@@ -2128,10 +2122,7 @@ SelectionDAGLegalize::ExpandChainLibCall(RTLIB::Libcall LC,
     Entry.IsZExt = !isSigned;
     Args.push_back(Entry);
   }
-  SDValue Callee = DAG.getExternalSymbol(
-      TLI.getLibcallName(LC),
-      TLI.getPointerTy(DAG.getDataLayout(),
-                       DAG.getDataLayout().getGlobalsAddressSpace()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(TLI.getLibcallName(LC));
 
   Type *RetTy = Node->getValueType(0).getTypeForEVT(*DAG.getContext());
 
@@ -2232,10 +2223,7 @@ SelectionDAGLegalize::ExpandDivRemLibCall(SDNode *Node,
   Entry.IsZExt = !isSigned;
   Args.push_back(Entry);
 
-  SDValue Callee = DAG.getExternalSymbol(
-      TLI.getLibcallName(LC),
-      TLI.getPointerTy(DAG.getDataLayout(),
-                       DAG.getDataLayout().getProgramAddressSpace()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(TLI.getLibcallName(LC));
 
   SDLoc dl(Node);
   TargetLowering::CallLoweringInfo CLI(DAG);
@@ -2335,10 +2323,7 @@ SelectionDAGLegalize::ExpandSinCosLibCall(SDNode *Node,
   Entry.IsZExt = false;
   Args.push_back(Entry);
 
-  SDValue Callee = DAG.getExternalSymbol(
-      TLI.getLibcallName(LC),
-      TLI.getPointerTy(DAG.getDataLayout(),
-                       DAG.getDataLayout().getProgramAddressSpace()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(TLI.getLibcallName(LC));
 
   SDLoc dl(Node);
   TargetLowering::CallLoweringInfo CLI(DAG);
@@ -3835,13 +3820,9 @@ void SelectionDAGLegalize::ConvertNodeToLibcall(SDNode *Node) {
     TargetLowering::CallLoweringInfo CLI(DAG);
     CLI.setDebugLoc(dl)
         .setChain(Node->getOperand(0))
-        .setLibCallee(
-            CallingConv::C, Type::getVoidTy(*DAG.getContext()),
-            DAG.getExternalSymbol(
-                "__sync_synchronize",
-                TLI.getPointerTy(DAG.getDataLayout(),
-                                 DAG.getDataLayout().getProgramAddressSpace())),
-            std::move(Args));
+        .setLibCallee(CallingConv::C, Type::getVoidTy(*DAG.getContext()),
+                      DAG.getExternalFunctionSymbol("__sync_synchronize"),
+                      std::move(Args));
 
     std::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
 
@@ -3879,13 +3860,8 @@ void SelectionDAGLegalize::ConvertNodeToLibcall(SDNode *Node) {
     TargetLowering::CallLoweringInfo CLI(DAG);
     CLI.setDebugLoc(dl)
         .setChain(Node->getOperand(0))
-        .setLibCallee(
-            CallingConv::C, Type::getVoidTy(*DAG.getContext()),
-            DAG.getExternalSymbol(
-                "abort",
-                TLI.getPointerTy(DAG.getDataLayout(),
-                                 DAG.getDataLayout().getProgramAddressSpace())),
-            std::move(Args));
+        .setLibCallee(CallingConv::C, Type::getVoidTy(*DAG.getContext()),
+                      DAG.getExternalFunctionSymbol("abort"), std::move(Args));
     std::pair<SDValue, SDValue> CallResult = TLI.LowerCallTo(CLI);
 
     Results.push_back(CallResult.second);

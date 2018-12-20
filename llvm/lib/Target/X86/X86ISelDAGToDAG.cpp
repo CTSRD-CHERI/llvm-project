@@ -960,12 +960,11 @@ void X86DAGToDAGISel::PostprocessISelDAG() {
 void X86DAGToDAGISel::emitSpecialCodeForMain() {
   if (Subtarget->isTargetCygMing()) {
     TargetLowering::ArgListTy Args;
-    auto &DL = CurDAG->getDataLayout();
 
     TargetLowering::CallLoweringInfo CLI(*CurDAG);
     CLI.setChain(CurDAG->getRoot())
         .setCallee(CallingConv::C, Type::getVoidTy(*CurDAG->getContext()),
-                   CurDAG->getExternalSymbol("__main", TLI->getPointerTy(DL)),
+                   CurDAG->getExternalFunctionSymbol("__main"),
                    std::move(Args));
     const TargetLowering &TLI = CurDAG->getTargetLoweringInfo();
     std::pair<SDValue, SDValue> Result = TLI.LowerCallTo(CLI);

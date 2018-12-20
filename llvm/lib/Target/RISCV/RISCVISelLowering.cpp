@@ -1414,7 +1414,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
     Callee = DAG.getTargetGlobalAddress(S->getGlobal(), DL, PtrVT, 0, 0);
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    Callee = DAG.getTargetExternalSymbol(S->getSymbol(), PtrVT, 0);
+    Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), 0);
   }
 
   // The first call operand is the chain and the second is the target address.

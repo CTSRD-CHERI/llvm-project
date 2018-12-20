@@ -2853,8 +2853,6 @@ void DAGTypeLegalizer::ExpandIntRes_XMULO(SDNode *N,
   }
 
   Type *RetTy = VT.getTypeForEVT(*DAG.getContext());
-  EVT FuncPtrVT = TLI.getPointerTy(
-      DAG.getDataLayout(), DAG.getDataLayout().getProgramAddressSpace());
   EVT PtrRangeVT = TLI.getPointerRangeTy(DAG.getDataLayout());
   Type *PtrTy = PtrRangeVT.getTypeForEVT(*DAG.getContext());
 
@@ -2893,7 +2891,7 @@ void DAGTypeLegalizer::ExpandIntRes_XMULO(SDNode *N,
   Entry.IsZExt = false;
   Args.push_back(Entry);
 
-  SDValue Func = DAG.getExternalSymbol(TLI.getLibcallName(LC), FuncPtrVT);
+  SDValue Func = DAG.getExternalFunctionSymbol(TLI.getLibcallName(LC));
 
   TargetLowering::CallLoweringInfo CLI(DAG);
   CLI.setDebugLoc(dl)

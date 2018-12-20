@@ -136,10 +136,7 @@ TargetLowering::makeLibCall(SelectionDAG &DAG, RTLIB::Libcall LC, EVT RetVT,
 
   if (LC == RTLIB::UNKNOWN_LIBCALL)
     report_fatal_error("Unsupported library call operation!");
-  SDValue Callee = DAG.getExternalSymbol(
-      getLibcallName(LC),
-      getPointerTy(DAG.getDataLayout(),
-                   DAG.getDataLayout().getProgramAddressSpace()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(getLibcallName(LC));
 
   Type *RetTy = RetVT.getTypeForEVT(*DAG.getContext());
   TargetLowering::CallLoweringInfo CLI(DAG);
@@ -4955,8 +4952,6 @@ SDValue TargetLowering::LowerToTLSEmulatedModel(const GlobalAddressSDNode *GA,
   //   __emutls_get_address( address of global variable named "__emutls_v.xyz" )
   EVT DataPtrVT = getPointerTy(DAG.getDataLayout(),
                                DAG.getDataLayout().getGlobalsAddressSpace());
-  EVT FuncPtrVT = getPointerTy(DAG.getDataLayout(),
-                               DAG.getDataLayout().getProgramAddressSpace());
   PointerType *VoidPtrType = Type::getInt8PtrTy(*DAG.getContext());
   SDLoc dl(GA);
 
@@ -4971,8 +4966,7 @@ SDValue TargetLowering::LowerToTLSEmulatedModel(const GlobalAddressSDNode *GA,
   Entry.Ty = VoidPtrType;
   Args.push_back(Entry);
 
-  SDValue EmuTlsGetAddr =
-      DAG.getExternalSymbol("__emutls_get_address", FuncPtrVT);
+  SDValue EmuTlsGetAddr = DAG.getExternalFunctionSymbol("__emutls_get_address");
 
   TargetLowering::CallLoweringInfo CLI(DAG);
   CLI.setDebugLoc(dl).setChain(DAG.getEntryNode());

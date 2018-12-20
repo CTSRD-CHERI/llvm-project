@@ -6044,11 +6044,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     TargetLowering::CallLoweringInfo CLI(DAG);
     CLI.setDebugLoc(sdl).setChain(getRoot()).setLibCallee(
         CallingConv::C, I.getType(),
-        DAG.getExternalSymbol(
-            TrapFuncName.data(),
-            TLI.getPointerTy(DAG.getDataLayout(),
-                             DAG.getDataLayout().getProgramAddressSpace())),
-        std::move(Args));
+        DAG.getExternalFunctionSymbol(TrapFuncName.data()), std::move(Args));
 
     std::pair<SDValue, SDValue> Result = TLI.LowerCallTo(CLI);
     DAG.setRoot(Result.second);
@@ -7179,10 +7175,7 @@ void SelectionDAGBuilder::visitCall(const CallInst &I) {
   if (!RenameFn)
     Callee = getValue(I.getCalledValue());
   else
-    Callee = DAG.getExternalSymbol(
-        RenameFn,
-        DAG.getTargetLoweringInfo().getPointerTy(
-            DAG.getDataLayout(), DAG.getDataLayout().getProgramAddressSpace()));
+    Callee = DAG.getExternalFunctionSymbol(RenameFn);
 
   // Deopt bundles are lowered in LowerCallSiteWithDeoptBundle, and we don't
   // have to do anything here to lower funclet bundles.
