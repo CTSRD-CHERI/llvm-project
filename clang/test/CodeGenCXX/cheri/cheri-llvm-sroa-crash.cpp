@@ -1,7 +1,6 @@
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -S -target-cpu mips4 -Os -std=c++1z -pthread -fcolor-diagnostics -vectorize-loops -vectorize-slp -o /dev/null %s
-// RUN: not %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -emit-obj -target-cpu mips4 -Os -std=c++1z \
-// RUN:   -pthread -fcolor-diagnostics -vectorize-loops -vectorize-slp -o - %s 2>&1 | FileCheck %s -check-prefix HARDFLOAT-ERR
-// HARDFLOAT-ERR: error in backend: Cannot handle constant pools in captable ABI. Try compiling with -msoft-float instead
+// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -emit-obj -target-cpu mips4 -Os -std=c++1z \
+// RUN:   -pthread -fcolor-diagnostics -vectorize-loops -vectorize-slp -o /dev/null %s -S
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -S -target-cpu mips4 -Os -std=c++1z \
 // RUN:   -pthread -fcolor-diagnostics -vectorize-loops -vectorize-slp -msoft-float -o /dev/null %s
 
