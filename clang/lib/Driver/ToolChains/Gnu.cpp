@@ -2629,6 +2629,7 @@ void Generic_ELF::addClangTargetOptions(const ArgList &DriverArgs,
         // Default to .init_array for FreeBSD mips since e.g. the CHERI purecap
         // rtld won't process .ctors anymore.
         UseInitArrayDefault = true;
+        break;
       default:
         break;
     }
