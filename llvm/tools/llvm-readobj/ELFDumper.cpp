@@ -166,6 +166,7 @@ public:
   void printMipsReginfo() override;
   void printMipsOptions() override;
   void printCheriCapRelocs() override;
+  void printCheriCapTable() override;
 
   void printStackMap() const override;
 
@@ -2474,6 +2475,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
   // errs() << "Found " << CapRelocsDynRels.size()
   //        << " dynamic relocations pointing to __cap_relocs section\n";
 
+  typename ELFT::SymRange DynSyms = dynamic_symbols();
   for (int i = 0, e = Data.size() / entry_size; i < e; i++) {
     const uint64_t CurrentOffset = entry_size * i;
     const uint8_t *entry = Data.data() + CurrentOffset;
@@ -2496,7 +2498,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       if (it != CapRelocsDynRels.end()) {
         Elf_Rel R = it->second;
         uint32_t SymIndex = R.getSymbol(Obj->isMips64EL());
-        const Elf_Sym *Sym = dynamic_symbols().begin() + SymIndex;
+        const Elf_Sym *Sym = unwrapOrError(getSymbol<ELFT>(DynSyms, SymIndex));
         BaseSymbol = unwrapOrError(Sym->getName(getDynamicStringTable()));
         // errs() << "Found dyn_rel for base: 0x" << utohexstr(R.r_offset) << "
         // Name=" << SymbolName << "\n";
@@ -2534,6 +2536,116 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
       OS << " Perms: " << PermStr;
       OS << "\n";
     }
+  }
+}
+
+template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
+  const Elf_Shdr *Shdr = findSectionByName(*Obj, ".captable");
+  if (!Shdr) {
+    W.startLine() << "There is no .captable section in the file.\n";
+    return;
+  }
+  ListScope L(W, "CHERI .captable");
+
+  const Elf_Ehdr *e = Obj->getHeader();
+  unsigned CapSize;
+  if ((e->e_flags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI256) {
+    CapSize = 32;
+  } else if ((e->e_flags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI128) {
+    CapSize = 16;
+  } else {
+    W.startLine() << "Invalid ELF header (no EF_MIPS_MACH_CHERI128/256 flag)\n";
+    return;
+  }
+  const uint64_t CapTableFileOffset = Shdr->sh_offset;
+  const uint64_t CapTableEnd = Shdr->sh_offset + Shdr->sh_size;
+
+  // Use the .symtab section if available otherwise use .dynsym:
+  typename ELFT::SymRange Syms;
+  StringRef StrTable;
+  bool UsingDynsym = false;
+  if (DotSymtabSec) {
+    StrTable = unwrapOrError(Obj->getStringTableForSymtab(*DotSymtabSec));
+    Syms = unwrapOrError(Obj->symbols(DotSymtabSec));
+  } else {
+    StrTable = DynamicStringTable;
+    Syms = dynamic_symbols();
+    UsingDynsym = true;
+  }
+
+  std::unordered_map<uint64_t, std::string> SymbolNames;
+  for (const auto &Sym : Syms) {
+    uint64_t Start = Sym.st_value;
+    if (Start < CapTableFileOffset || Start > CapTableEnd)
+      continue;
+    std::string Name = getFullSymbolName(&Sym, StrTable, UsingDynsym);
+    if (Name == "_CHERI_CAPABILITY_TABLE_")
+      continue;
+    SymbolNames.insert({Start, Name});
+  }
+
+  // Create a map of all dynamic relocations that point into the
+  // __cap_relocs section to add a symbol name to unresolved values
+  // FIXME: this hardcodes REL so won't work for architectures that use RELA
+  using Elf_Rel = typename ELFT::Rel;
+  // typedef Elf64_Rel Elf_Rel;
+  DenseMap<uint64_t, Elf_Rela> CapTableDynRels;
+
+  auto FindRelocs = [&](const DynRegionInfo &RelRegion) {
+    if (RelRegion.Size == 0)
+      return;
+    if (RelRegion.EntSize == sizeof(Elf_Rela)) {
+      for (const Elf_Rela &Rela : RelRegion.getAsArrayRef<Elf_Rela>()) {
+        if (Rela.r_offset >= CapTableFileOffset && Rela.r_offset < CapTableEnd)
+          CapTableDynRels.insert(std::make_pair((uint64_t)Rela.r_offset, Rela));
+      }
+    } else {
+      for (const Elf_Rel &Rel : RelRegion.getAsArrayRef<Elf_Rel>()) {
+        if (Rel.r_offset >= CapTableFileOffset && Rel.r_offset < CapTableEnd) {
+          Elf_Rela Rela;
+          Rela.r_offset = Rel.r_offset;
+          Rela.r_info = Rel.r_info;
+          Rela.r_addend = 0;
+          CapTableDynRels.insert(std::make_pair((uint64_t)Rela.r_offset, Rela));
+        }
+      }
+    }
+  };
+  FindRelocs(getDynPLTRelRegion());
+  FindRelocs(getDynRelRegion());
+  FindRelocs(getDynRelaRegion());
+
+  typename ELFT::SymRange DynSyms = dynamic_symbols();
+  for (uint64_t Offset = CapTableFileOffset; Offset < CapTableEnd;
+       Offset += CapSize) {
+    // Find name:
+    const auto &Name = SymbolNames.find(Offset);
+    formatted_raw_ostream OS(W.startLine());
+    OS << W.hex(Offset - CapTableFileOffset);
+    OS.PadToColumn(9u);
+    if (Name == SymbolNames.end())
+      OS << "<unknown symbol>"
+         << " ";
+    else
+      OS << Name->second << " ";
+
+    auto Reloc = CapTableDynRels.find(Offset);
+    if (Reloc != CapTableDynRels.end()) {
+      OS.PadToColumn(40u);
+      auto R = Reloc->second;
+      SmallString<32> RelocName;
+      StringRef TargetName;
+      Obj->getRelocationTypeName(R.getType(Obj->isMips64EL()), RelocName);
+      uint32_t SymIndex = R.getSymbol(Obj->isMips64EL());
+
+      const Elf_Sym *Sym = unwrapOrError(getSymbol<ELFT>(DynSyms, SymIndex));
+      if (Sym) {
+        TargetName = unwrapOrError(Sym->getName(getDynamicStringTable()));
+      }
+      OS << " " << RelocName << " against " << TargetName;
+      // TODO: getSymbol(dynamic_symbols()); StrTable = DynamicStringTable;
+    }
+    OS << "\n";
   }
 }
 

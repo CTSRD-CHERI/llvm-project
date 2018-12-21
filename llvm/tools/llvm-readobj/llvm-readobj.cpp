@@ -237,6 +237,9 @@ namespace opts {
     cl::desc("Alias for --cap-relocs"),
     cl::aliasopt(CheriCapRelocs));
 
+  cl::opt<bool> CheriCapTable("cap-table",
+                              cl::desc("Display the CHERI .captable section"));
+
   // -coff-imports
   cl::opt<bool>
   COFFImports("coff-imports", cl::desc("Display the PE/COFF import table"));
@@ -506,6 +509,8 @@ static void dumpObject(const ObjectFile *Obj, ScopedPrinter &Writer) {
         Dumper->printMipsOptions();
       if (opts::CheriCapRelocs)
         Dumper->printCheriCapRelocs();
+      if (opts::CheriCapTable)
+        Dumper->printCheriCapTable();
     }
     if (opts::SectionGroups)
       Dumper->printGroupSections();
@@ -677,6 +682,8 @@ int main(int argc, const char *argv[]) {
     opts::UnwindInfo = true;
     opts::SectionGroups = true;
     opts::HashHistogram = true;
+    opts::CheriCapRelocs = true;
+    opts::CheriCapTable = true;
   }
 
   // Default to stdin if no filename is specified.
