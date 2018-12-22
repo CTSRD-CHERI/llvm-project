@@ -1772,8 +1772,13 @@ void printFlags(T Value, ArrayRef<EnumEntry<TFlag>> Flags, raw_ostream &OS) {
       SetFlags.push_back(Flag);
   }
 
+  T RemainingBits = Value;
   for (const auto &Flag : SetFlags) {
     OS << Flag.Name << " ";
+    RemainingBits &= ~Flag.Value;
+  }
+  if (RemainingBits) {
+    OS << "| 0x" << utohexstr(RemainingBits, false);
   }
 }
 
