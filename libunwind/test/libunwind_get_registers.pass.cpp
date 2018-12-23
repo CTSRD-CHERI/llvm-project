@@ -8,6 +8,12 @@
     abort();                                                                   \
   } while (0)
 
+#ifdef __CHERI__
+#define PRINT_PTR "%#p"
+#else
+#define PRINT_PTR "%p"
+#endif
+
 static void check_reg(unw_cursor_t *cursor, const char *name,
                       unw_regnum_t regnum, uintptr_t expected) {
   unw_word_t value;
@@ -16,10 +22,10 @@ static void check_reg(unw_cursor_t *cursor, const char *name,
     fatal("Failed to get register %s: erro code %d\n", name, err);
   }
   if (value != expected) {
-    fatal("Got wrong value for register %s: %#p != %#p\n", name,
-          (void *)(uintptr_t)value, (void *)(uintptr_t)expected);
+    fatal("Got wrong value for register %s: " PRINT_PTR " != " PRINT_PTR "\n",
+          name, (void *)(uintptr_t)value, (void *)(uintptr_t)expected);
   }
-  fprintf(stderr, "Register %s has expected value %#p\n", name,
+  fprintf(stderr, "Register %s has expected value " PRINT_PTR "\n", name,
           (void *)(uintptr_t)expected);
 }
 
@@ -47,7 +53,7 @@ int main() {
                    : // outputs
                    : [hi_value] "r"(expected_hi),
                      [lo_value] "r"(expected_lo) // inputs
-                   :                             // clobbers
+                   : "lo", "hi"                  // clobbers
   );
   ret = unw_getcontext(&context);
   if (ret != UNW_ESUCCESS)
@@ -67,6 +73,29 @@ int main() {
 #else
   CHECK_REG(UNW_MIPS_R4, (uintptr_t)&context);
 #endif
+
+#elif defined(__x86_64__)
+  // Fetch the values of hi + lo since they will certainly not be clobbered
+  // between the asm volatile and the call to unw_init_local()
+  size_t expected_r14 = 0x87654321;
+  size_t expected_r15 = 0x12345678;
+  // Setup some registers that we can compare to the values stored in the
+  // unw_cursor
+  __asm__ volatile("movq %[r14_value], %%r14\n\t"
+                   "movq %[r15_value], %%r15\n\t"
+                   : // outputs
+                   : [r14_value] "X"(expected_r14),
+                     [r15_value] "X"(expected_r15) // inputs
+                   : "r14", "r15"                // clobbers
+  );
+  ret = unw_getcontext(&context);
+  if (ret != UNW_ESUCCESS)
+    fatal("unw_getcontext failed with error code %d", ret);
+  ret = unw_init_local(&cursor, &context);
+  if (ret != UNW_ESUCCESS)
+    fatal("unw_init_local failed with error code %d", ret);
+  CHECK_REG(UNW_X86_64_R14, expected_r14);
+  CHECK_REG(UNW_X86_64_R15, expected_r15);
 
 #else
 #warning "Test not implemented for this architecture"
