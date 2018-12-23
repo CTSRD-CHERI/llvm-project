@@ -3394,9 +3394,14 @@ private:
     uint64_t __hi;
     uint64_t __lo;
     // PCC is stored in __c[32]
+    // Note: for CHERI256 the compiler will insert 16 bytes of padding to align
+    // __c. This matches the definition of _LIBUNWIND_CAPREG_START and ensures
+    // that we can store the values correctly.
     __uintcap_t __c[33];
   };
   mips_cheri_thread_state_t _registers;
+  static_assert(__builtin_offsetof(mips_cheri_thread_state_t, __c) ==
+                _LIBUNWIND_CAPREG_START * sizeof(uint64_t), "Wrong offset for capregs");
 };
 
 inline Registers_mips_cheri::Registers_mips_cheri(const void *registers) {

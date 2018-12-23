@@ -93,8 +93,16 @@
 #    error "not supported yet"
 #   endif
 #   define _LIBUNWIND_TARGET_MIPS_CHERI 1
-    /* 32 GPRs + 32 FPRs + HI + LO + 32 CapGPR (0 -> $ddc) + $pcc */
-#   define _LIBUNWIND_CONTEXT_SIZE (32+32+2+33*(_MIPS_SZCAP/64))
+    /* 32 GPRs + 32 FPRs + HI + LO + (padding for CHERI256) + capregs*/
+#if _MIPS_SZCAP == 256
+    /* add two words as padding to ensure capability alignment*/
+#   define _LIBUNWIND_CAPREG_START (32+32+2+2)
+#else
+#   define _LIBUNWIND_CAPREG_START (32+32+2)
+#endif
+    /*  32 CapGPR (with index 0 -> $ddc) and $pcc */
+#   define _LIBUNWIND_NUM_CAPREGS 33
+#   define _LIBUNWIND_CONTEXT_SIZE (_LIBUNWIND_CAPREG_START+_LIBUNWIND_NUM_CAPREGS*(_MIPS_SZCAP/64))
 #   define _LIBUNWIND_CURSOR_SIZE (_LIBUNWIND_CONTEXT_SIZE+12*(_MIPS_SZCAP/64))
 #  elif defined(_ABIN32) && _MIPS_SIM == _ABIN32
 #    define _LIBUNWIND_TARGET_MIPS_NEWABI 1

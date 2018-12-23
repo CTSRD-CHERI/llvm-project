@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "assembly.h"
+#include "__libunwind_config.h"
 
     .text
 
@@ -283,8 +284,14 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   csd	$t0, $zero, (8*65)($c3)
   # TODO: floating point registers
 
-  # Offset of the start of the capability register set
-  daddiu $1, $zero, 66*8
+#ifndef _LIBUNWIND_CAPREG_START
+#error "_LIBUNWIND_CAPREG_START not defined"
+#endif
+#if ((_LIBUNWIND_CAPREG_START*64) % _MIPS_SZCAP) != 0
+#error "unw_context capability register offset is not capability aligned!"
+#endif
+  /* Add the offset of the start of the capability register set to $at */
+  daddiu $1, $zero, _LIBUNWIND_CAPREG_START*8
 #define SAVE_CAP_REG(src, x) csc $c ## src, $1, (x * _MIPS_SZCAP/8)($c3)
 #define SAVE_CAP(x) SAVE_CAP_REG(x, x)
   SAVE_CAP(1)

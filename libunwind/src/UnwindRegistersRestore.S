@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "assembly.h"
+#include "__libunwind_config.h"
 
   .text
 
@@ -178,7 +179,7 @@ DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
 #ifndef  _MIPS_SZCAP
 #error _MIPS_SZCAP must be defined!
 #endif
-  CIncOffset $c3, $c3, 66*8+2*(_MIPS_SZCAP/8)
+  CIncOffset $c3, $c3, _LIBUNWIND_CAPREG_START*8+2*(_MIPS_SZCAP/8)
 
 #define RESTORE_CAP_REG(reg, idx) clc $c ## reg, $zero, ((idx-2)*(_MIPS_SZCAP/8))($c3)
 #define RESTORE_CAP(x) RESTORE_CAP_REG(x, x)
