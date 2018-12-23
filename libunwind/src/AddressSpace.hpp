@@ -625,7 +625,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
               eh_frame_hdr_start = eh_frame_hdr_start + image_base;
 #endif
 #ifdef __CHERI_PURE_CAPABILITY__
-            if (__builtin_cheri_tag_get((void*)eh_frame_hdr_start))
+            if (!__builtin_cheri_tag_get((void*)eh_frame_hdr_start))
               _LIBUNWIND_ABORT("eh_frame_hdr_start cap became unpresentable!");
 #endif
             cbdata->sects->dwarf_index_section = eh_frame_hdr_start;
