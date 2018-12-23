@@ -60,7 +60,8 @@ class Configuration(LibcxxConfiguration):
         # of them don't add it.
         self.cxx.link_flags += ['-nodefaultlibs', '-lc']
         if self.link_shared:
-            self.cxx.link_flags += ['-lunwind']
+            # dladdr needs libdl on Linux
+            self.cxx.link_flags += ['-ldl', '-lunwind']
         else:
             libname = self.make_static_lib_name('unwind')
             abs_path = os.path.join(self.libunwind_obj_root, "lib", libname)
