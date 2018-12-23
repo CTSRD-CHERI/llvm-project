@@ -326,7 +326,7 @@ class SSHExecutorWithNFSMount(SSHExecutor):
         else:
             shutil.rmtree(remote)
 
-    def _remote_temp(self, is_dir):
+    def _remote_temp(self, is_dir, is_retry=False):
         if is_dir:
             return tempfile.mkdtemp(prefix="libcxx-", dir=self.nfs_dir)
         else:
