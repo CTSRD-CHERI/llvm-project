@@ -28,6 +28,13 @@
 #include "AddressSpace.hpp"
 #include "UnwindCursor.hpp"
 
+
+template<size_t A, size_t B>
+constexpr bool check_less_eq_than() {
+  static_assert(A <= B, "Constants need to be updated!");
+  return A <= B;
+}
+
 using namespace libunwind;
 
 /// internal object to represent this processes address space
@@ -44,6 +51,8 @@ extern int unw_getcontext(unw_context_t *);
 /// unw_getcontext().
 _LIBUNWIND_EXPORT int unw_init_local(unw_cursor_t *cursor,
                                      unw_context_t *context) {
+  check_less_eq_than<_LIBUNWIND_CONTEXT_SIZE, _LIBUNWIND_MAX_CONTEXT_SIZE>();
+  check_less_eq_than<_LIBUNWIND_CURSOR_SIZE, _LIBUNWIND_MAX_CURSOR_SIZE>();
   _LIBUNWIND_TRACE_API("unw_init_local(cursor=%p, context=%p)",
                        static_cast<void *>(cursor),
                        static_cast<void *>(context));
