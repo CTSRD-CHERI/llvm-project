@@ -98,6 +98,7 @@ class CollectBinariesExecutor(Executor):
         out, err, rc = executeCommand(cp_cmd)
         return cp_cmd, out, err, rc
 
+
 class PrefixExecutor(Executor):
     """Prefix an executor with some other command wrapper.
 
