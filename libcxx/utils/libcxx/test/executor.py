@@ -225,7 +225,8 @@ class SSHExecutor(RemoteExecutor):
         self.remote_host_failed_connections = 0
 
         # TODO(jroelofs): switch this on some -super-verbose-debug config flag
-        if self.config and self.config.lit_config.debug:
+        # TODO: this breaks multiprocessing
+        if self.config and self.config.lit_config.debug and False:
             self.local_run = tracing.trace_function(
                 self.local_run, log_calls=True, log_results=True,
                 label='ssh_local')
@@ -300,7 +301,8 @@ class SSHExecutorWithNFSMount(SSHExecutor):
         self.path_in_target = path_in_target
         if not self.path_in_target.endswith('/'):
             self.path_in_target = self.path_in_target + '/'
-        if self.config and self.config.lit_config.debug:
+        # TODO: this breaks multiprocessing
+        if self.config and self.config.lit_config.debug and False:
             self._remote_temp = tracing.trace_function(
                 self._remote_temp, log_calls=False, log_results=True,
                 label='ssh-exec')
