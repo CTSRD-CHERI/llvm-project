@@ -32,6 +32,7 @@ set(NVPTXCodeGen_sources
   NVPTXUtilities.cpp
   NVVMIntrRange.cpp
   NVVMReflect.cpp
+  NVPTXProxyRegErasure.cpp
   )
 
 # TODO: remove
