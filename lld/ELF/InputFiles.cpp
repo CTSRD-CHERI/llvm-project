@@ -46,7 +46,7 @@ std::vector<LazyObjFile *> elf::LazyObjFiles;
 std::vector<InputFile *> elf::ObjectFiles;
 std::vector<InputFile *> elf::SharedFiles;
 
-TarWriter *elf::Tar;
+std::unique_ptr<TarWriter> elf::Tar;
 
 InputFile::InputFile(Kind K, MemoryBufferRef M)
     : MB(M), GroupId(NextGroupId), FileKind(K) {
@@ -645,8 +645,16 @@ InputSectionBase *ObjFile<ELFT>::createInputSection(const Elf_Shdr &Sec) {
     // This section contains relocation information.
     // If -r is given, we do not interpret or apply relocation
     // but just copy relocation sections to output.
-    if (Config->Relocatable)
-      return make<InputSection>(*this, Sec, Name);
+    if (Config->Relocatable) {
+      InputSection *RelocSec = make<InputSection>(*this, Sec, Name);
+      // We want to add a dependency to target, similar like we do for
+      // -emit-relocs below. This is useful for the case when linker script
+      // contains the "/DISCARD/". It is perhaps uncommon to use a script with
+      // -r, but we faced it in the Linux kernel and have to handle such case
+      // and not to crash.
+      Target->DependentSections.push_back(RelocSec);
+      return RelocSec;
+    }
 
     if (Target->FirstRelocation)
       fatal(toString(this) +
@@ -1188,7 +1196,7 @@ static ELFKind getELFKind(MemoryBufferRef MB) {
 }
 
 void BinaryFile::parse() {
-  ArrayRef<uint8_t> Data = toArrayRef(MB.getBuffer());
+  ArrayRef<uint8_t> Data = arrayRefFromStringRef(MB.getBuffer());
   auto *Section = make<InputSection>(this, SHF_ALLOC | SHF_WRITE, SHT_PROGBITS,
                                      8, Data, ".data");
   Sections.push_back(Section);

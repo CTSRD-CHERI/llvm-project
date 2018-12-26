@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "DebugHandlerBase.h"
+#include "llvm/CodeGen/DebugHandlerBase.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/CodeGen/AsmPrinter.h"
@@ -123,6 +123,21 @@ MCSymbol *DebugHandlerBase::getLabelBeforeInsn(const MachineInstr *MI) {
 // Return Label immediately following the instruction.
 MCSymbol *DebugHandlerBase::getLabelAfterInsn(const MachineInstr *MI) {
   return LabelsAfterInsn.lookup(MI);
+}
+
+// Return the function-local offset of an instruction.
+const MCExpr *
+DebugHandlerBase::getFunctionLocalOffsetAfterInsn(const MachineInstr *MI) {
+  MCContext &MC = Asm->OutContext;
+
+  MCSymbol *Start = Asm->getFunctionBegin();
+  const auto *StartRef = MCSymbolRefExpr::create(Start, MC);
+
+  MCSymbol *AfterInsn = getLabelAfterInsn(MI);
+  assert(AfterInsn && "Expected label after instruction");
+  const auto *AfterRef = MCSymbolRefExpr::create(AfterInsn, MC);
+
+  return MCBinaryExpr::createSub(AfterRef, StartRef, MC);
 }
 
 /// If this type is derived from a base type then return base type size.

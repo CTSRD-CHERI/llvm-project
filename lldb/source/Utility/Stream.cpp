@@ -11,7 +11,7 @@
 
 #include "lldb/Utility/Endian.h"
 #include "lldb/Utility/VASPrintf.h"
-#include "llvm/ADT/SmallString.h" // for SmallString
+#include "llvm/ADT/SmallString.h"
 #include "llvm/Support/LEB128.h"
 
 #include <string>
@@ -93,9 +93,9 @@ void Stream::QuotedCString(const char *cstr, const char *format) {
 //------------------------------------------------------------------
 void Stream::Address(uint64_t addr, uint32_t addr_size, const char *prefix,
                      const char *suffix) {
-  if (prefix == NULL)
+  if (prefix == nullptr)
     prefix = "";
-  if (suffix == NULL)
+  if (suffix == nullptr)
     suffix = "";
   //    int addr_width = m_addr_size << 1;
   //    Printf ("%s0x%0*" PRIx64 "%s", prefix, addr_width, addr, suffix);

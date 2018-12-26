@@ -10,15 +10,11 @@
 #include "PlatformFreeBSD.h"
 #include "lldb/Host/Config.h"
 
-// C Includes
 #include <stdio.h>
 #ifndef LLDB_DISABLE_POSIX
 #include <sys/utsname.h>
 #endif
 
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Breakpoint/BreakpointSite.h"
 #include "lldb/Core/Debugger.h"
@@ -52,7 +48,7 @@ PlatformSP PlatformFreeBSD::CreateInstance(bool force, const ArchSpec *arch) {
            arch ? arch->GetTriple().getTriple() : "<null>");
 
   bool create = force;
-  if (create == false && arch && arch->IsValid()) {
+  if (!create && arch && arch->IsValid()) {
     const llvm::Triple &triple = arch->GetTriple();
     switch (triple.getOS()) {
     case llvm::Triple::FreeBSD:

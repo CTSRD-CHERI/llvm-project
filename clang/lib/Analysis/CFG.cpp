@@ -551,6 +551,7 @@ private:
   CFGBlock *VisitGotoStmt(GotoStmt *G);
   CFGBlock *VisitIfStmt(IfStmt *I);
   CFGBlock *VisitImplicitCastExpr(ImplicitCastExpr *E, AddStmtChoice asc);
+  CFGBlock *VisitConstantExpr(ConstantExpr *E, AddStmtChoice asc);
   CFGBlock *VisitIndirectGotoStmt(IndirectGotoStmt *I);
   CFGBlock *VisitLabelStmt(LabelStmt *L);
   CFGBlock *VisitBlockExpr(BlockExpr *E, AddStmtChoice asc);
@@ -571,7 +572,7 @@ private:
   CFGBlock *VisitObjCForCollectionStmt(ObjCForCollectionStmt *S);
   CFGBlock *VisitObjCMessageExpr(ObjCMessageExpr *E, AddStmtChoice asc);
   CFGBlock *VisitPseudoObjectExpr(PseudoObjectExpr *E);
-  CFGBlock *VisitReturnStmt(ReturnStmt *R);
+  CFGBlock *VisitReturnStmt(Stmt *S);
   CFGBlock *VisitSEHExceptStmt(SEHExceptStmt *S);
   CFGBlock *VisitSEHFinallyStmt(SEHFinallyStmt *S);
   CFGBlock *VisitSEHLeaveStmt(SEHLeaveStmt *S);
@@ -1038,11 +1039,13 @@ private:
     if (!areExprTypesCompatible(Expr1, Expr2))
       return {};
 
-    llvm::APSInt L1, L2;
-
-    if (!Expr1->EvaluateAsInt(L1, *Context) ||
-        !Expr2->EvaluateAsInt(L2, *Context))
+    Expr::EvalResult L1Result, L2Result;
+    if (!Expr1->EvaluateAsInt(L1Result, *Context) ||
+        !Expr2->EvaluateAsInt(L2Result, *Context))
       return {};
+
+    llvm::APSInt L1 = L1Result.Val.getInt();
+    llvm::APSInt L2 = L2Result.Val.getInt();
 
     // Can't compare signed with unsigned or with different bit width.
     if (L1.isSigned() != L2.isSigned() || L1.getBitWidth() != L2.getBitWidth())
@@ -1133,13 +1136,16 @@ private:
           case BO_And: {
             // If either operand is zero, we know the value
             // must be false.
-            llvm::APSInt IntVal;
-            if (Bop->getLHS()->EvaluateAsInt(IntVal, *Context)) {
+            Expr::EvalResult LHSResult;
+            if (Bop->getLHS()->EvaluateAsInt(LHSResult, *Context)) {
+              llvm::APSInt IntVal = LHSResult.Val.getInt();
               if (!IntVal.getBoolValue()) {
                 return TryResult(false);
               }
             }
-            if (Bop->getRHS()->EvaluateAsInt(IntVal, *Context)) {
+            Expr::EvalResult RHSResult;
+            if (Bop->getRHS()->EvaluateAsInt(RHSResult, *Context)) {
+              llvm::APSInt IntVal = RHSResult.Val.getInt();
               if (!IntVal.getBoolValue()) {
                 return TryResult(false);
               }
@@ -1334,6 +1340,7 @@ void CFGBuilder::findConstructionContexts(
     case CK_NoOp:
     case CK_ConstructorConversion:
       findConstructionContexts(Layer, Cast->getSubExpr());
+      break;
     default:
       break;
     }
@@ -2099,6 +2106,9 @@ CFGBlock *CFGBuilder::Visit(Stmt * S, AddStmtChoice asc) {
     case Stmt::ImplicitCastExprClass:
       return VisitImplicitCastExpr(cast<ImplicitCastExpr>(S), asc);
 
+    case Stmt::ConstantExprClass:
+      return VisitConstantExpr(cast<ConstantExpr>(S), asc);
+
     case Stmt::IndirectGotoStmtClass:
       return VisitIndirectGotoStmt(cast<IndirectGotoStmt>(S));
 
@@ -2146,7 +2156,8 @@ CFGBlock *CFGBuilder::Visit(Stmt * S, AddStmtChoice asc) {
       return VisitPseudoObjectExpr(cast<PseudoObjectExpr>(S));
 
     case Stmt::ReturnStmtClass:
-      return VisitReturnStmt(cast<ReturnStmt>(S));
+    case Stmt::CoreturnStmtClass:
+      return VisitReturnStmt(S);
 
     case Stmt::SEHExceptStmtClass:
       return VisitSEHExceptStmt(cast<SEHExceptStmt>(S));
@@ -2876,22 +2887,24 @@ CFGBlock *CFGBuilder::VisitIfStmt(IfStmt *I) {
   return LastBlock;
 }
 
-CFGBlock *CFGBuilder::VisitReturnStmt(ReturnStmt *R) {
+CFGBlock *CFGBuilder::VisitReturnStmt(Stmt *S) {
   // If we were in the middle of a block we stop processing that block.
   //
-  // NOTE: If a "return" appears in the middle of a block, this means that the
-  //       code afterwards is DEAD (unreachable).  We still keep a basic block
-  //       for that code; a simple "mark-and-sweep" from the entry block will be
-  //       able to report such dead blocks.
+  // NOTE: If a "return" or "co_return" appears in the middle of a block, this
+  //       means that the code afterwards is DEAD (unreachable).  We still keep
+  //       a basic block for that code; a simple "mark-and-sweep" from the entry
+  //       block will be able to report such dead blocks.
+  assert(isa<ReturnStmt>(S) || isa<CoreturnStmt>(S));
 
   // Create the new block.
   Block = createBlock(false);
 
-  addAutomaticObjHandling(ScopePos, LocalScope::const_iterator(), R);
+  addAutomaticObjHandling(ScopePos, LocalScope::const_iterator(), S);
 
-  findConstructionContexts(
-      ConstructionContextLayer::create(cfg->getBumpVectorContext(), R),
-      R->getRetValue());
+  if (auto *R = dyn_cast<ReturnStmt>(S))
+    findConstructionContexts(
+        ConstructionContextLayer::create(cfg->getBumpVectorContext(), R),
+        R->getRetValue());
 
   // If the one of the destructors does not return, we already have the Exit
   // block as a successor.
@@ -2900,7 +2913,7 @@ CFGBlock *CFGBuilder::VisitReturnStmt(ReturnStmt *R) {
 
   // Add the return statement to the block.  This may create new blocks if R
   // contains control-flow (short-circuit operations).
-  return VisitStmt(R, AddStmtChoice::AlwaysAdd);
+  return VisitStmt(S, AddStmtChoice::AlwaysAdd);
 }
 
 CFGBlock *CFGBuilder::VisitSEHExceptStmt(SEHExceptStmt *ES) {
@@ -4376,6 +4389,10 @@ CFGBlock *CFGBuilder::VisitImplicitCastExpr(ImplicitCastExpr *E,
   return Visit(E->getSubExpr(), AddStmtChoice());
 }
 
+CFGBlock *CFGBuilder::VisitConstantExpr(ConstantExpr *E, AddStmtChoice asc) {
+  return Visit(E->getSubExpr(), AddStmtChoice());
+}
+
 CFGBlock *CFGBuilder::VisitIndirectGotoStmt(IndirectGotoStmt *I) {
   // Lazily create the indirect-goto dispatch block if there isn't one already.
   CFGBlock *IBlock = cfg->getIndirectGotoBlock();
@@ -4430,6 +4447,10 @@ tryAgain:
     case Stmt::CXXFunctionalCastExprClass:
       // For functional cast we want BindToTemporary to be passed further.
       E = cast<CXXFunctionalCastExpr>(E)->getSubExpr();
+      goto tryAgain;
+
+    case Stmt::ConstantExprClass:
+      E = cast<ConstantExpr>(E)->getSubExpr();
       goto tryAgain;
 
     case Stmt::ParenExprClass:

@@ -20,9 +20,10 @@
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/Program.h"
 
+namespace llvm {
 namespace exegesis {
 
-std::vector<CodeTemplate> getSingleton(CodeTemplate &CT) {
+std::vector<CodeTemplate> getSingleton(CodeTemplate &&CT) {
   std::vector<CodeTemplate> Result;
   Result.push_back(std::move(CT));
   return Result;
@@ -90,7 +91,7 @@ std::vector<RegisterValue> SnippetGenerator::computeRegisterInitialValues(
       if (Op.isUse()) {
         const unsigned Reg = GetOpReg(Op);
         if (Reg > 0 && !DefinedRegs.test(Reg)) {
-          RIV.push_back(RegisterValue{Reg, llvm::APInt()});
+          RIV.push_back(RegisterValue::zero(Reg));
           DefinedRegs.set(Reg);
         }
       }
@@ -222,3 +223,4 @@ void randomizeUnsetVariables(const llvm::BitVector &ForbiddenRegs,
 }
 
 } // namespace exegesis
+} // namespace llvm

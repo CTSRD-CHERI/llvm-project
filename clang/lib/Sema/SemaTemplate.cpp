@@ -1255,9 +1255,10 @@ Sema::ActOnTemplateParameterList(unsigned Depth,
       RAngleLoc, RequiresClause);
 }
 
-static void SetNestedNameSpecifier(TagDecl *T, const CXXScopeSpec &SS) {
+static void SetNestedNameSpecifier(Sema &S, TagDecl *T,
+                                   const CXXScopeSpec &SS) {
   if (SS.isSet())
-    T->setQualifierInfo(SS.getWithLocInContext(T->getASTContext()));
+    T->setQualifierInfo(SS.getWithLocInContext(S.Context));
 }
 
 DeclResult Sema::CheckClassTemplate(
@@ -1554,7 +1555,7 @@ DeclResult Sema::CheckClassTemplate(
                           PrevClassTemplate && ShouldAddRedecl ?
                             PrevClassTemplate->getTemplatedDecl() : nullptr,
                           /*DelayTypeCreation=*/true);
-  SetNestedNameSpecifier(NewClass, SS);
+  SetNestedNameSpecifier(*this, NewClass, SS);
   if (NumOuterTemplateParamLists > 0)
     NewClass->setTemplateParameterListsInfo(
         Context, llvm::makeArrayRef(OuterTemplateParamLists,
@@ -3052,8 +3053,42 @@ static Expr *lookThroughRangesV3Condition(Preprocessor &PP, Expr *Cond) {
   return Cond;
 }
 
+namespace {
+
+// A PrinterHelper that prints more helpful diagnostics for some sub-expressions
+// within failing boolean expression, such as substituting template parameters
+// for actual types.
+class FailedBooleanConditionPrinterHelper : public PrinterHelper {
+public:
+  explicit FailedBooleanConditionPrinterHelper(const PrintingPolicy &P)
+      : Policy(P) {}
+
+  bool handledStmt(Stmt *E, raw_ostream &OS) override {
+    const auto *DR = dyn_cast<DeclRefExpr>(E);
+    if (DR && DR->getQualifier()) {
+      // If this is a qualified name, expand the template arguments in nested
+      // qualifiers.
+      DR->getQualifier()->print(OS, Policy, true);
+      // Then print the decl itself.
+      const ValueDecl *VD = DR->getDecl();
+      OS << VD->getName();
+      if (const auto *IV = dyn_cast<VarTemplateSpecializationDecl>(VD)) {
+        // This is a template variable, print the expanded template arguments.
+        printTemplateArgumentList(OS, IV->getTemplateArgs().asArray(), Policy);
+      }
+      return true;
+    }
+    return false;
+  }
+
+private:
+  const PrintingPolicy Policy;
+};
+
+} // end anonymous namespace
+
 std::pair<Expr *, std::string>
-Sema::findFailedBooleanCondition(Expr *Cond, bool AllowTopLevelCond) {
+Sema::findFailedBooleanCondition(Expr *Cond) {
   Cond = lookThroughRangesV3Condition(PP, Cond);
 
   // Separate out all of the terms in a conjunction.
@@ -3082,18 +3117,16 @@ Sema::findFailedBooleanCondition(Expr *Cond, bool AllowTopLevelCond) {
       break;
     }
   }
-
-  if (!FailedCond) {
-    if (!AllowTopLevelCond)
-      return { nullptr, "" };
-
+  if (!FailedCond)
     FailedCond = Cond->IgnoreParenImpCasts();
-  }
 
   std::string Description;
   {
     llvm::raw_string_ostream Out(Description);
-    FailedCond->printPretty(Out, nullptr, getPrintingPolicy());
+    PrintingPolicy Policy = getPrintingPolicy();
+    Policy.PrintCanonicalTypes = true;
+    FailedBooleanConditionPrinterHelper Helper(Policy);
+    FailedCond->printPretty(Out, &Helper, Policy, 0, "\n", nullptr);
   }
   return { FailedCond, Description };
 }
@@ -3177,9 +3210,7 @@ QualType Sema::CheckTemplateIdType(TemplateName Name,
             Expr *FailedCond;
             std::string FailedDescription;
             std::tie(FailedCond, FailedDescription) =
-              findFailedBooleanCondition(
-                TemplateArgs[0].getSourceExpression(),
-                /*AllowTopLevelCond=*/true);
+              findFailedBooleanCondition(TemplateArgs[0].getSourceExpression());
 
             // Remove the old SFINAE diagnostic.
             PartialDiagnosticAt OldDiag =
@@ -4434,7 +4465,7 @@ SubstDefaultTemplateArgument(Sema &SemaRef,
 
   // If the argument type is dependent, instantiate it now based
   // on the previously-computed template arguments.
-  if (ArgType->getType()->isDependentType()) {
+  if (ArgType->getType()->isInstantiationDependentType()) {
     Sema::InstantiatingTemplate Inst(SemaRef, TemplateLoc,
                                      Param, Template, Converted,
                                      SourceRange(TemplateLoc, RAngleLoc));
@@ -7620,7 +7651,7 @@ DeclResult Sema::ActOnClassTemplateSpecialization(
                                                        TemplateArgs,
                                                        CanonType,
                                                        PrevPartial);
-    SetNestedNameSpecifier(Partial, SS);
+    SetNestedNameSpecifier(*this, Partial, SS);
     if (TemplateParameterLists.size() > 1 && SS.isSet()) {
       Partial->setTemplateParameterListsInfo(
           Context, TemplateParameterLists.drop_back(1));
@@ -7646,7 +7677,7 @@ DeclResult Sema::ActOnClassTemplateSpecialization(
                                                 ClassTemplate,
                                                 Converted,
                                                 PrevDecl);
-    SetNestedNameSpecifier(Specialization, SS);
+    SetNestedNameSpecifier(*this, Specialization, SS);
     if (TemplateParameterLists.size() > 0) {
       Specialization->setTemplateParameterListsInfo(Context,
                                                     TemplateParameterLists);
@@ -8107,7 +8138,7 @@ bool Sema::CheckFunctionTemplateSpecialization(
         if (OldMD && OldMD->isConst()) {
           const FunctionProtoType *FPT = FT->castAs<FunctionProtoType>();
           FunctionProtoType::ExtProtoInfo EPI = FPT->getExtProtoInfo();
-          EPI.TypeQuals |= Qualifiers::Const;
+          EPI.TypeQuals.addConst();
           FT = Context.getFunctionType(FPT->getReturnType(),
                                        FPT->getParamTypes(), EPI);
         }
@@ -8745,7 +8776,7 @@ DeclResult Sema::ActOnExplicitInstantiation(
                                                 ClassTemplate,
                                                 Converted,
                                                 PrevDecl);
-    SetNestedNameSpecifier(Specialization, SS);
+    SetNestedNameSpecifier(*this, Specialization, SS);
 
     if (!HasNoEffect && !PrevDecl) {
       // Insert the new specialization.
@@ -9627,7 +9658,7 @@ Sema::CheckTypenameType(ElaboratedTypeKeyword Keyword,
         Expr *FailedCond;
         std::string FailedDescription;
         std::tie(FailedCond, FailedDescription) =
-          findFailedBooleanCondition(Cond, /*AllowTopLevelCond=*/true);
+          findFailedBooleanCondition(Cond);
 
         Diag(FailedCond->getExprLoc(),
              diag::err_typename_nested_not_found_requirement)

@@ -175,6 +175,8 @@ private:
 
   bool parseDirectiveReq(StringRef Name, SMLoc L);
   bool parseDirectiveUnreq(SMLoc L);
+  bool parseDirectiveCFINegateRAState();
+  bool parseDirectiveCFIBKeyFrame();
 
   bool validateInstruction(MCInst &Inst, SMLoc &IDLoc,
                            SmallVectorImpl<SMLoc> &Loc);
@@ -2813,27 +2815,28 @@ static const struct Extension {
   const char *Name;
   const FeatureBitset Features;
 } ExtensionMap[] = {
-  { "crc",  {AArch64::FeatureCRC} },
-  { "sm4",  {AArch64::FeatureSM4} },
-  { "sha3", {AArch64::FeatureSHA3} },
-  { "sha2", {AArch64::FeatureSHA2} },
-  { "aes",  {AArch64::FeatureAES} },
-  { "crypto", {AArch64::FeatureCrypto} },
-  { "fp", {AArch64::FeatureFPARMv8} },
-  { "simd", {AArch64::FeatureNEON} },
-  { "ras", {AArch64::FeatureRAS} },
-  { "lse", {AArch64::FeatureLSE} },
-  { "predctrl", {AArch64::FeaturePredCtrl} },
-  { "ccdp", {AArch64::FeatureCacheDeepPersist} },
-  { "mte", {AArch64::FeatureMTE} },
-
-  // FIXME: Unsupported extensions
-  { "pan", {} },
-  { "lor", {} },
-  { "rdma", {} },
-  { "profile", {} },
+    {"crc", {AArch64::FeatureCRC}},
+    {"sm4", {AArch64::FeatureSM4}},
+    {"sha3", {AArch64::FeatureSHA3}},
+    {"sha2", {AArch64::FeatureSHA2}},
+    {"aes", {AArch64::FeatureAES}},
+    {"crypto", {AArch64::FeatureCrypto}},
+    {"fp", {AArch64::FeatureFPARMv8}},
+    {"simd", {AArch64::FeatureNEON}},
+    {"ras", {AArch64::FeatureRAS}},
+    {"lse", {AArch64::FeatureLSE}},
+    {"predctrl", {AArch64::FeaturePredCtrl}},
+    {"ccdp", {AArch64::FeatureCacheDeepPersist}},
+    {"mte", {AArch64::FeatureMTE}},
+    {"tlb-rmi", {AArch64::FeatureTLB_RMI}},
+    {"pan-rwv", {AArch64::FeaturePAN_RWV}},
+    {"ccpp", {AArch64::FeatureCCPP}},
+    // FIXME: Unsupported extensions
+    {"pan", {}},
+    {"lor", {}},
+    {"rdma", {}},
+    {"profile", {}},
 };
-
 
 static void setRequiredFeatureString(FeatureBitset FBS, std::string &Str) {
   if (FBS[AArch64::HasV8_1aOps])
@@ -5026,6 +5029,10 @@ bool AArch64AsmParser::ParseDirective(AsmToken DirectiveID) {
     parseDirectiveUnreq(Loc);
   else if (IDVal == ".inst")
     parseDirectiveInst(Loc);
+  else if (IDVal == ".cfi_negate_ra_state")
+    parseDirectiveCFINegateRAState();
+  else if (IDVal == ".cfi_b_key_frame")
+    parseDirectiveCFIBKeyFrame();
   else if (IsMachO) {
     if (IDVal == MCLOHDirectiveName())
       parseDirectiveLOH(IDVal, Loc);
@@ -5399,6 +5406,23 @@ bool AArch64AsmParser::parseDirectiveUnreq(SMLoc L) {
   return false;
 }
 
+bool AArch64AsmParser::parseDirectiveCFINegateRAState() {
+  if (parseToken(AsmToken::EndOfStatement, "unexpected token in directive"))
+    return true;
+  getStreamer().EmitCFINegateRAState();
+  return false;
+}
+
+/// parseDirectiveCFIBKeyFrame
+/// ::= .cfi_b_key
+bool AArch64AsmParser::parseDirectiveCFIBKeyFrame() {
+  if (parseToken(AsmToken::EndOfStatement,
+                 "unexpected token in '.cfi_b_key_frame'"))
+    return true;
+  getStreamer().EmitCFIBKeyFrame();
+  return false;
+}
+
 bool
 AArch64AsmParser::classifySymbolRef(const MCExpr *Expr,
                                     AArch64MCExpr::VariantKind &ELFRefKind,
@@ -5423,10 +5447,16 @@ AArch64AsmParser::classifySymbolRef(const MCExpr *Expr,
   // Check that it looks like a symbol + an addend
   MCValue Res;
   bool Relocatable = Expr->evaluateAsRelocatable(Res, nullptr, nullptr);
-  if (!Relocatable || !Res.getSymA() || Res.getSymB())
+  if (!Relocatable || Res.getSymB())
     return false;
 
-  DarwinRefKind = Res.getSymA()->getKind();
+  // Treat expressions with an ELFRefKind (like ":abs_g1:3", or
+  // ":abs_g1:x" where x is constant) as symbolic even if there is no symbol.
+  if (!Res.getSymA() && ELFRefKind == AArch64MCExpr::VK_INVALID)
+    return false;
+
+  if (Res.getSymA())
+    DarwinRefKind = Res.getSymA()->getKind();
   Addend = Res.getConstant();
 
   // It's some symbol reference + a constant addend, but really

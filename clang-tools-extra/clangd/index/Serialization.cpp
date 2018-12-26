@@ -232,19 +232,44 @@ void writeLocation(const SymbolLocation &Loc, const StringTableOut &Strings,
                    raw_ostream &OS) {
   writeVar(Strings.index(Loc.FileURI), OS);
   for (const auto &Endpoint : {Loc.Start, Loc.End}) {
-    writeVar(Endpoint.Line, OS);
-    writeVar(Endpoint.Column, OS);
+    writeVar(Endpoint.line(), OS);
+    writeVar(Endpoint.column(), OS);
   }
 }
 
 SymbolLocation readLocation(Reader &Data, ArrayRef<StringRef> Strings) {
   SymbolLocation Loc;
-  Loc.FileURI = Data.consumeString(Strings);
+  Loc.FileURI = Data.consumeString(Strings).data();
   for (auto *Endpoint : {&Loc.Start, &Loc.End}) {
-    Endpoint->Line = Data.consumeVar();
-    Endpoint->Column = Data.consumeVar();
+    Endpoint->setLine(Data.consumeVar());
+    Endpoint->setColumn(Data.consumeVar());
   }
   return Loc;
+}
+
+IncludeGraphNode readIncludeGraphNode(Reader &Data,
+                                      llvm::ArrayRef<llvm::StringRef> Strings) {
+  IncludeGraphNode IGN;
+  IGN.IsTU = Data.consume8();
+  IGN.URI = Data.consumeString(Strings);
+  llvm::StringRef Digest = Data.consume(IGN.Digest.size());
+  std::copy(Digest.bytes_begin(), Digest.bytes_end(), IGN.Digest.begin());
+  IGN.DirectIncludes.resize(Data.consumeVar());
+  for (llvm::StringRef &Include : IGN.DirectIncludes)
+    Include = Data.consumeString(Strings);
+  return IGN;
+}
+
+void writeIncludeGraphNode(const IncludeGraphNode &IGN,
+                           const StringTableOut &Strings, raw_ostream &OS) {
+  OS.write(IGN.IsTU);
+  writeVar(Strings.index(IGN.URI), OS);
+  llvm::StringRef Hash(reinterpret_cast<const char *>(IGN.Digest.data()),
+                       IGN.Digest.size());
+  OS << Hash;
+  writeVar(IGN.DirectIncludes.size(), OS);
+  for (llvm::StringRef Include : IGN.DirectIncludes)
+    writeVar(Strings.index(Include), OS);
 }
 
 void writeSymbol(const Symbol &Sym, const StringTableOut &Strings,
@@ -264,6 +289,7 @@ void writeSymbol(const Symbol &Sym, const StringTableOut &Strings,
   writeVar(Strings.index(Sym.CompletionSnippetSuffix), OS);
   writeVar(Strings.index(Sym.Documentation), OS);
   writeVar(Strings.index(Sym.ReturnType), OS);
+  writeVar(Strings.index(Sym.Type), OS);
 
   auto WriteInclude = [&](const Symbol::IncludeHeaderWithReferences &Include) {
     writeVar(Strings.index(Include.IncludeHeader), OS);
@@ -290,6 +316,7 @@ Symbol readSymbol(Reader &Data, ArrayRef<StringRef> Strings) {
   Sym.CompletionSnippetSuffix = Data.consumeString(Strings);
   Sym.Documentation = Data.consumeString(Strings);
   Sym.ReturnType = Data.consumeString(Strings);
+  Sym.Type = Data.consumeString(Strings);
   Sym.IncludeHeaders.resize(Data.consumeVar());
   for (auto &I : Sym.IncludeHeaders) {
     I.IncludeHeader = Data.consumeString(Strings);
@@ -300,7 +327,7 @@ Symbol readSymbol(Reader &Data, ArrayRef<StringRef> Strings) {
 
 // REFS ENCODING
 // A refs section has data grouped by Symbol. Each symbol has:
-//  - SymbolID: 20 bytes
+//  - SymbolID: 8 bytes
 //  - NumRefs: varint
 //  - Ref[NumRefs]
 // Fields of Ref are encoded in turn, see implementation.
@@ -331,6 +358,7 @@ std::pair<SymbolID, std::vector<Ref>> readRefs(Reader &Data,
 // A file is a RIFF chunk with type 'CdIx'.
 // It contains the sections:
 //   - meta: version number
+//   - srcs: information related to include graph
 //   - stri: string table
 //   - symb: symbols
 //   - refs: references to symbols
@@ -338,7 +366,7 @@ std::pair<SymbolID, std::vector<Ref>> readRefs(Reader &Data,
 // The current versioning scheme is simple - non-current versions are rejected.
 // If you make a breaking change, bump this version number to invalidate stored
 // data. Later we may want to support some backward compatibility.
-constexpr static uint32_t Version = 5;
+constexpr static uint32_t Version = 8;
 
 Expected<IndexFileIn> readRIFF(StringRef Data) {
   auto RIFF = riff::readFile(Data);
@@ -363,6 +391,23 @@ Expected<IndexFileIn> readRIFF(StringRef Data) {
     return Strings.takeError();
 
   IndexFileIn Result;
+  if (Chunks.count("srcs")) {
+    Reader SrcsReader(Chunks.lookup("srcs"));
+    Result.Sources.emplace();
+    while (!SrcsReader.eof()) {
+      auto IGN = readIncludeGraphNode(SrcsReader, Strings->Strings);
+      auto Entry = Result.Sources->try_emplace(IGN.URI).first;
+      Entry->getValue() = std::move(IGN);
+      // We change all the strings inside the structure to point at the keys in
+      // the map, since it is the only copy of the string that's going to live.
+      Entry->getValue().URI = Entry->getKey();
+      for (auto &Include : Entry->getValue().DirectIncludes)
+        Include = Result.Sources->try_emplace(Include).first->getKey();
+    }
+    if (SrcsReader.err())
+      return makeError("malformed or truncated include uri");
+  }
+
   if (Chunks.count("symb")) {
     Reader SymbolReader(Chunks.lookup("symb"));
     SymbolSlab::Builder Symbols;
@@ -387,6 +432,13 @@ Expected<IndexFileIn> readRIFF(StringRef Data) {
   return std::move(Result);
 }
 
+template <class Callback>
+void visitStrings(IncludeGraphNode &IGN, const Callback &CB) {
+  CB(IGN.URI);
+  for (llvm::StringRef &Include : IGN.DirectIncludes)
+    CB(Include);
+}
+
 void writeRIFF(const IndexFileOut &Data, raw_ostream &OS) {
   assert(Data.Symbols && "An index file without symbols makes no sense!");
   riff::File RIFF;
@@ -405,12 +457,22 @@ void writeRIFF(const IndexFileOut &Data, raw_ostream &OS) {
     Symbols.emplace_back(Sym);
     visitStrings(Symbols.back(), [&](StringRef &S) { Strings.intern(S); });
   }
+  std::vector<IncludeGraphNode> Sources;
+  if (Data.Sources)
+    for (const auto &Source : *Data.Sources) {
+      Sources.push_back(Source.getValue());
+      visitStrings(Sources.back(), [&](StringRef &S) { Strings.intern(S); });
+    }
+
   std::vector<std::pair<SymbolID, std::vector<Ref>>> Refs;
   if (Data.Refs) {
     for (const auto &Sym : *Data.Refs) {
       Refs.emplace_back(Sym);
-      for (auto &Ref : Refs.back().second)
-        Strings.intern(Ref.Location.FileURI);
+      for (auto &Ref : Refs.back().second) {
+        StringRef File = Ref.Location.FileURI;
+        Strings.intern(File);
+        Ref.Location.FileURI = File.data();
+      }
     }
   }
 
@@ -439,6 +501,16 @@ void writeRIFF(const IndexFileOut &Data, raw_ostream &OS) {
     RIFF.Chunks.push_back({riff::fourCC("refs"), RefsSection});
   }
 
+  std::string SrcsSection;
+  {
+    {
+      raw_string_ostream SrcsOS(SrcsSection);
+      for (const auto &SF : Sources)
+        writeIncludeGraphNode(SF, Strings, SrcsOS);
+    }
+    RIFF.Chunks.push_back({riff::fourCC("srcs"), SrcsSection});
+  }
+
   OS << RIFF;
 }
 
@@ -448,7 +520,7 @@ void writeRIFF(const IndexFileOut &Data, raw_ostream &OS) {
 void writeYAML(const IndexFileOut &, raw_ostream &);
 Expected<IndexFileIn> readYAML(StringRef);
 
-llvm::raw_ostream &operator<<(llvm::raw_ostream &OS, const IndexFileOut &O) {
+raw_ostream &operator<<(raw_ostream &OS, const IndexFileOut &O) {
   switch (O.Format) {
   case IndexFileFormat::RIFF:
     writeRIFF(O, OS);
@@ -467,17 +539,15 @@ Expected<IndexFileIn> readIndexFile(StringRef Data) {
     return std::move(*YAMLContents);
   } else {
     return makeError("Not a RIFF file and failed to parse as YAML: " +
-                     llvm::toString(YAMLContents.takeError()));
+                     toString(YAMLContents.takeError()));
   }
 }
 
-std::unique_ptr<SymbolIndex> loadIndex(llvm::StringRef SymbolFilename,
-                                       llvm::ArrayRef<std::string> URISchemes,
-                                       bool UseDex) {
+std::unique_ptr<SymbolIndex> loadIndex(StringRef SymbolFilename, bool UseDex) {
   trace::Span OverallTracer("LoadIndex");
   auto Buffer = MemoryBuffer::getFile(SymbolFilename);
   if (!Buffer) {
-    llvm::errs() << "Can't open " << SymbolFilename << "\n";
+    errs() << "Can't open " << SymbolFilename << "\n";
     return nullptr;
   }
 
@@ -491,18 +561,22 @@ std::unique_ptr<SymbolIndex> loadIndex(llvm::StringRef SymbolFilename,
       if (I->Refs)
         Refs = std::move(*I->Refs);
     } else {
-      llvm::errs() << "Bad Index: " << llvm::toString(I.takeError()) << "\n";
+      errs() << "Bad Index: " << toString(I.takeError()) << "\n";
       return nullptr;
     }
   }
 
+  size_t NumSym = Symbols.size();
+  size_t NumRefs = Refs.numRefs();
+
   trace::Span Tracer("BuildIndex");
-  auto Index =
-      UseDex ? dex::Dex::build(std::move(Symbols), std::move(Refs), URISchemes)
-             : MemIndex::build(std::move(Symbols), std::move(Refs));
-  vlog("Loaded {0} from {1} with estimated memory usage {2}",
+  auto Index = UseDex ? dex::Dex::build(std::move(Symbols), std::move(Refs))
+                      : MemIndex::build(std::move(Symbols), std::move(Refs));
+  vlog("Loaded {0} from {1} with estimated memory usage {2} bytes\n"
+       "  - number of symbols: {3}\n"
+       "  - number of refs: {4}\n",
        UseDex ? "Dex" : "MemIndex", SymbolFilename,
-       Index->estimateMemoryUsage());
+       Index->estimateMemoryUsage(), NumSym, NumRefs);
   return Index;
 }
 

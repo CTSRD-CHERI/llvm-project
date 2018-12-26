@@ -277,10 +277,48 @@ for.end:                                          ; preds = %for.body, %entry
 ; }
 
 ; CHECK-LABEL: @fcmp_0_fsub_select1(
-; CHECK: %[[V1:.*]] = fcmp ogt <4 x float> %[[V0:.*]], zeroinitializer
-; CHECK: %[[V3:.*]] = fsub <4 x float> %[[V2:.*]], %[[V0]]
+; CHECK: %[[V1:.*]] = fcmp fast ogt <4 x float> %[[V0:.*]], zeroinitializer
+; CHECK: %[[V3:.*]] = fsub fast <4 x float> %[[V2:.*]], %[[V0]]
 ; CHECK: select <4 x i1> %[[V1]], <4 x float> %[[V3]], <4 x float> %[[V2]]
 define float @fcmp_0_fsub_select1(float* noalias %x, i32 %N) nounwind readonly {
+entry:
+  %cmp.1 = icmp sgt i32 %N, 0
+  br i1 %cmp.1, label %for.header, label %for.end
+
+for.header:                                       ; preds = %entry
+  %zext = zext i32 %N to i64
+  br label %for.body
+
+for.body:                                         ; preds = %for.body, %for.header
+  %indvars.iv = phi i64 [ 0, %for.header ], [ %indvars.iv.next, %for.body ]
+  %sum.1 = phi float [ 0.000000e+00, %for.header ], [ %sum.2, %for.body ]
+  %arrayidx = getelementptr inbounds float, float* %x, i64 %indvars.iv
+  %0 = load float, float* %arrayidx, align 4
+  %cmp.2 = fcmp fast ogt float %0, 0.000000e+00
+  %sub = fsub fast float %sum.1, %0
+  %sum.2 = select i1 %cmp.2, float %sub, float %sum.1
+  %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
+  %exitcond = icmp eq i64 %indvars.iv.next, %zext
+  br i1 %exitcond, label %for.end, label %for.body
+
+for.end:                                          ; preds = %for.body, %entry
+  %1 = phi float [ 0.000000e+00, %entry ], [ %sum.2, %for.body ]
+  ret float %1
+}
+
+; Float pattern:
+;   Check that is not vectorized if fp-instruction has no fast-math property.
+; float fcmp_0_fsub_select1_novectorize(float * restrict x, const int N) {
+;   float sum = 0.
+;   for (int i = 0; i < N; ++i)
+;     if (x[i] > (float)0.)
+;       sum -= x[i];
+;   return sum;
+; }
+
+; CHECK-LABEL: @fcmp_0_fsub_select1_novectorize(
+; CHECK-NOT: <4 x float>
+define float @fcmp_0_fsub_select1_novectorize(float* noalias %x, i32 %N) nounwind readonly {
 entry:
   %cmp.1 = icmp sgt i32 %N, 0
   br i1 %cmp.1, label %for.header, label %for.end
@@ -319,10 +357,49 @@ for.end:                                          ; preds = %for.body, %entry
 ; }
 
 ; CHECK-LABEL: @fcmp_0_fsub_select2(
-; CHECK: %[[V1:.*]] = fcmp ogt <4 x double> %[[V0:.*]], zeroinitializer
-; CHECK: %[[V3:.*]] = fsub <4 x double> %[[V2:.*]], %[[V0]]
+; CHECK: %[[V1:.*]] = fcmp fast ogt <4 x double> %[[V0:.*]], zeroinitializer
+; CHECK: %[[V3:.*]] = fsub fast <4 x double> %[[V2:.*]], %[[V0]]
 ; CHECK: select <4 x i1> %[[V1]], <4 x double> %[[V3]], <4 x double> %[[V2]]
 define double @fcmp_0_fsub_select2(double* noalias %x, i32 %N) nounwind readonly {
+entry:
+  %cmp.1 = icmp sgt i32 %N, 0
+  br i1 %cmp.1, label %for.header, label %for.end
+
+for.header:                                       ; preds = %entry
+  %zext = zext i32 %N to i64
+  br label %for.body
+
+for.body:                                         ; preds = %for.body, %for.header
+  %indvars.iv = phi i64 [ 0, %for.header ], [ %indvars.iv.next, %for.body ]
+  %sum.1 = phi double [ 0.000000e+00, %for.header ], [ %sum.2, %for.body ]
+  %arrayidx = getelementptr inbounds double, double* %x, i64 %indvars.iv
+  %0 = load double, double* %arrayidx, align 4
+  %cmp.2 = fcmp fast ogt double %0, 0.000000e+00
+  %sub = fsub fast double %sum.1, %0
+  %sum.2 = select i1 %cmp.2, double %sub, double %sum.1
+  %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
+  %exitcond = icmp eq i64 %indvars.iv.next, %zext
+  br i1 %exitcond, label %for.end, label %for.body
+
+for.end:                                          ; preds = %for.body, %entry
+  %1 = phi double [ 0.000000e+00, %entry ], [ %sum.2, %for.body ]
+  ret double %1
+}
+
+; Double pattern:
+; Check that is not vectorized if fp-instruction has no fast-math property. 
+;
+; double fcmp_0_fsub_select2_notvectorize(double * restrict x, const int N) {
+;   double sum = 0.                                              
+;   for (int i = 0; i < N; ++i)
+;     if (x[i] > 0.)
+;       sum -= x[i];
+;   return sum;
+; }
+
+; CHECK-LABEL: @fcmp_0_fsub_select2_notvectorize(
+; CHECK-NOT: <4 x doubole>
+define double @fcmp_0_fsub_select2_notvectorize(double* noalias %x, i32 %N) nounwind readonly {
 entry:
   %cmp.1 = icmp sgt i32 %N, 0
   br i1 %cmp.1, label %for.header, label %for.end
@@ -361,10 +438,49 @@ for.end:                                          ; preds = %for.body, %entry
 ; }
 
 ; CHECK-LABEL: @fcmp_0_fmult_select1(
-; CHECK: %[[V1:.*]] = fcmp ogt <4 x float> %[[V0:.*]], zeroinitializer
-; CHECK: %[[V3:.*]] = fmul <4 x float> %[[V2:.*]], %[[V0]]
+; CHECK: %[[V1:.*]] = fcmp fast ogt <4 x float> %[[V0:.*]], zeroinitializer
+; CHECK: %[[V3:.*]] = fmul fast <4 x float> %[[V2:.*]], %[[V0]]
 ; CHECK: select <4 x i1> %[[V1]], <4 x float> %[[V3]], <4 x float> %[[V2]]
 define float @fcmp_0_fmult_select1(float* noalias %x, i32 %N) nounwind readonly {
+entry:
+  %cmp.1 = icmp sgt i32 %N, 0
+  br i1 %cmp.1, label %for.header, label %for.end
+
+for.header:                                       ; preds = %entry
+  %zext = zext i32 %N to i64
+  br label %for.body
+
+for.body:                                         ; preds = %for.body, %for.header
+  %indvars.iv = phi i64 [ 0, %for.header ], [ %indvars.iv.next, %for.body ]
+  %sum.1 = phi float [ 0.000000e+00, %for.header ], [ %sum.2, %for.body ]
+  %arrayidx = getelementptr inbounds float, float* %x, i64 %indvars.iv
+  %0 = load float, float* %arrayidx, align 4
+  %cmp.2 = fcmp fast ogt float %0, 0.000000e+00
+  %mult = fmul fast float %sum.1, %0
+  %sum.2 = select i1 %cmp.2, float %mult, float %sum.1
+  %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
+  %exitcond = icmp eq i64 %indvars.iv.next, %zext
+  br i1 %exitcond, label %for.end, label %for.body
+
+for.end:                                          ; preds = %for.body, %entry
+  %1 = phi float [ 0.000000e+00, %entry ], [ %sum.2, %for.body ]
+  ret float %1
+}
+
+; Float pattern:
+;   Check that is not vectorized if fp-instruction has no fast-math property. 
+;
+; float fcmp_0_fmult_select1_notvectorize(float * restrict x, const int N) {
+;   float sum = 0.
+;   for (int i = 0; i < N; ++i)
+;     if (x[i] > (float)0.)
+;       sum *= x[i];
+;   return sum;
+; }
+
+; CHECK-LABEL: @fcmp_0_fmult_select1_notvectorize(
+; CHECK-NOT: <4 x float>
+define float @fcmp_0_fmult_select1_notvectorize(float* noalias %x, i32 %N) nounwind readonly {
 entry:
   %cmp.1 = icmp sgt i32 %N, 0
   br i1 %cmp.1, label %for.header, label %for.end
@@ -403,10 +519,49 @@ for.end:                                          ; preds = %for.body, %entry
 ; }
 
 ; CHECK-LABEL: @fcmp_0_fmult_select2(
-; CHECK: %[[V1:.*]] = fcmp ogt <4 x double> %[[V0:.*]], zeroinitializer
-; CHECK: %[[V3:.*]] = fmul <4 x double> %[[V2:.*]], %[[V0]]
+; CHECK: %[[V1:.*]] = fcmp fast ogt <4 x double> %[[V0:.*]], zeroinitializer
+; CHECK: %[[V3:.*]] = fmul fast <4 x double> %[[V2:.*]], %[[V0]]
 ; CHECK: select <4 x i1> %[[V1]], <4 x double> %[[V3]], <4 x double> %[[V2]]
 define double @fcmp_0_fmult_select2(double* noalias %x, i32 %N) nounwind readonly {
+entry:
+  %cmp.1 = icmp sgt i32 %N, 0
+  br i1 %cmp.1, label %for.header, label %for.end
+
+for.header:                                       ; preds = %entry
+  %zext = zext i32 %N to i64
+  br label %for.body
+
+for.body:                                         ; preds = %for.body, %for.header
+  %indvars.iv = phi i64 [ 0, %for.header ], [ %indvars.iv.next, %for.body ]
+  %sum.1 = phi double [ 0.000000e+00, %for.header ], [ %sum.2, %for.body ]
+  %arrayidx = getelementptr inbounds double, double* %x, i64 %indvars.iv
+  %0 = load double, double* %arrayidx, align 4
+  %cmp.2 = fcmp fast ogt double %0, 0.000000e+00
+  %mult = fmul fast double %sum.1, %0
+  %sum.2 = select i1 %cmp.2, double %mult, double %sum.1
+  %indvars.iv.next = add nuw nsw i64 %indvars.iv, 1
+  %exitcond = icmp eq i64 %indvars.iv.next, %zext
+  br i1 %exitcond, label %for.end, label %for.body
+
+for.end:                                          ; preds = %for.body, %entry
+  %1 = phi double [ 0.000000e+00, %entry ], [ %sum.2, %for.body ]
+  ret double %1
+}
+
+; Double pattern:
+;   Check that is not vectorized if fp-instruction has no fast-math property.
+;
+; double fcmp_0_fmult_select2_notvectorize(double * restrict x, const int N) {
+;   double sum = 0.
+;   for (int i = 0; i < N; ++i)
+;     if (x[i] > 0.)
+;       sum *= x[i];
+;   return sum;
+; }
+
+; CHECK-LABEL: @fcmp_0_fmult_select2_notvectorize(
+; CHECK-NOT: <4 x double>
+define double @fcmp_0_fmult_select2_notvectorize(double* noalias %x, i32 %N) nounwind readonly {
 entry:
   %cmp.1 = icmp sgt i32 %N, 0
   br i1 %cmp.1, label %for.header, label %for.end

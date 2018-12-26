@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class year_month_weekday_last;
@@ -47,7 +47,7 @@ int main()
 
     ASSERT_SAME_TYPE(year_month_weekday_last&, decltype(std::declval<year_month_weekday_last&>() += std::declval<years>()));
     ASSERT_SAME_TYPE(year_month_weekday_last&, decltype(std::declval<year_month_weekday_last&>() -= std::declval<years>()));
-    
+
     constexpr weekday Tuesday = std::chrono::Tuesday;
     constexpr month January = std::chrono::January;
 

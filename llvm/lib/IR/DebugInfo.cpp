@@ -280,7 +280,7 @@ bool DebugInfoFinder::addScope(DIScope *Scope) {
 }
 
 static MDNode *stripDebugLocFromLoopID(MDNode *N) {
-  assert(N->op_begin() != N->op_end() && "Missing self reference?");
+  assert(!empty(N->operands()) && "Missing self reference?");
 
   // if there is no debug location, we do not have to rewrite this MDNode.
   if (std::none_of(N->op_begin() + 1, N->op_end(), [](const MDOperand &Op) {
@@ -438,11 +438,10 @@ private:
     auto distinctMDSubprogram = [&]() {
       return DISubprogram::getDistinct(
           MDS->getContext(), FileAndScope, MDS->getName(), LinkageName,
-          FileAndScope, MDS->getLine(), Type, MDS->isLocalToUnit(),
-          MDS->isDefinition(), MDS->getScopeLine(), ContainingType,
-          MDS->getVirtuality(), MDS->getVirtualIndex(),
-          MDS->getThisAdjustment(), MDS->getFlags(), MDS->isOptimized(), Unit,
-          TemplateParams, Declaration, Variables);
+          FileAndScope, MDS->getLine(), Type, MDS->getScopeLine(),
+          ContainingType, MDS->getVirtualIndex(), MDS->getThisAdjustment(),
+          MDS->getFlags(), MDS->getSPFlags(), Unit, TemplateParams, Declaration,
+          Variables);
     };
 
     if (MDS->isDistinct())
@@ -450,11 +449,9 @@ private:
 
     auto *NewMDS = DISubprogram::get(
         MDS->getContext(), FileAndScope, MDS->getName(), LinkageName,
-        FileAndScope, MDS->getLine(), Type, MDS->isLocalToUnit(),
-        MDS->isDefinition(), MDS->getScopeLine(), ContainingType,
-        MDS->getVirtuality(), MDS->getVirtualIndex(), MDS->getThisAdjustment(),
-        MDS->getFlags(), MDS->isOptimized(), Unit, TemplateParams, Declaration,
-        Variables);
+        FileAndScope, MDS->getLine(), Type, MDS->getScopeLine(), ContainingType,
+        MDS->getVirtualIndex(), MDS->getThisAdjustment(), MDS->getFlags(),
+        MDS->getSPFlags(), Unit, TemplateParams, Declaration, Variables);
 
     StringRef OldLinkageName = MDS->getLinkageName();
 
@@ -491,7 +488,8 @@ private:
         CU->getSplitDebugFilename(), DICompileUnit::LineTablesOnly, EnumTypes,
         RetainedTypes, GlobalVariables, ImportedEntities, CU->getMacros(),
         CU->getDWOId(), CU->getSplitDebugInlining(),
-        CU->getDebugInfoForProfiling(), CU->getNameTableKind());
+        CU->getDebugInfoForProfiling(), CU->getNameTableKind(),
+        CU->getRangesBaseAddress());
   }
 
   DILocation *getReplacementMDLocation(DILocation *MLD) {
@@ -699,8 +697,9 @@ void Instruction::applyMergedLocation(const DILocation *LocA,
 
 static unsigned map_from_llvmDWARFsourcelanguage(LLVMDWARFSourceLanguage lang) {
   switch (lang) {
-#define HANDLE_DW_LANG(ID, NAME, VERSION, VENDOR) \
-case LLVMDWARFSourceLanguage##NAME: return ID;
+#define HANDLE_DW_LANG(ID, NAME, LOWER_BOUND, VERSION, VENDOR)                 \
+  case LLVMDWARFSourceLanguage##NAME:                                          \
+    return ID;
 #include "llvm/BinaryFormat/Dwarf.def"
 #undef HANDLE_DW_LANG
   }
@@ -717,6 +716,11 @@ static DINode::DIFlags map_from_llvmDIFlags(LLVMDIFlags Flags) {
 
 static LLVMDIFlags map_to_llvmDIFlags(DINode::DIFlags Flags) {
   return static_cast<LLVMDIFlags>(Flags);
+}
+
+static DISubprogram::DISPFlags
+pack_into_DISPFlags(bool IsLocalToUnit, bool IsDefinition, bool IsOptimized) {
+  return DISubprogram::toSPFlags(IsLocalToUnit, IsDefinition, IsOptimized);
 }
 
 unsigned LLVMDebugMetadataVersion() {
@@ -802,9 +806,10 @@ LLVMMetadataRef LLVMDIBuilderCreateFunction(
     unsigned ScopeLine, LLVMDIFlags Flags, LLVMBool IsOptimized) {
   return wrap(unwrap(Builder)->createFunction(
       unwrapDI<DIScope>(Scope), {Name, NameLen}, {LinkageName, LinkageNameLen},
-      unwrapDI<DIFile>(File), LineNo, unwrapDI<DISubroutineType>(Ty),
-      IsLocalToUnit, IsDefinition, ScopeLine, map_from_llvmDIFlags(Flags),
-      IsOptimized, nullptr, nullptr, nullptr));
+      unwrapDI<DIFile>(File), LineNo, unwrapDI<DISubroutineType>(Ty), ScopeLine,
+      map_from_llvmDIFlags(Flags),
+      pack_into_DISPFlags(IsLocalToUnit, IsDefinition, IsOptimized), nullptr,
+      nullptr, nullptr));
 }
 
 

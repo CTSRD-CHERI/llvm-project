@@ -28,9 +28,10 @@
 #include <memory>
 #include <vector>
 
+namespace llvm {
 namespace exegesis {
 
-std::vector<CodeTemplate> getSingleton(CodeTemplate &CT);
+std::vector<CodeTemplate> getSingleton(CodeTemplate &&CT);
 
 // Generates code templates that has a self-dependency.
 llvm::Expected<std::vector<CodeTemplate>>
@@ -92,5 +93,6 @@ void randomizeUnsetVariables(const llvm::BitVector &ForbiddenRegs,
                              InstructionTemplate &IT);
 
 } // namespace exegesis
+} // namespace llvm
 
 #endif // LLVM_TOOLS_LLVM_EXEGESIS_SNIPPETGENERATOR_H

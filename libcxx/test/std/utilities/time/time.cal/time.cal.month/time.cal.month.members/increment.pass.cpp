@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class month;
@@ -39,7 +39,7 @@ int main()
 
     ASSERT_SAME_TYPE(month , decltype(  std::declval<month&>()++));
     ASSERT_SAME_TYPE(month&, decltype(++std::declval<month&>()  ));
-    
+
     static_assert(testConstexpr<month>(), "");
 
     for (unsigned i = 0; i <= 10; ++i)

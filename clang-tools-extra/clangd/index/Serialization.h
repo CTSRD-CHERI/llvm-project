@@ -24,6 +24,7 @@
 
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_INDEX_RIFF_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_INDEX_RIFF_H
+#include "Headers.h"
 #include "Index.h"
 #include "llvm/Support/Error.h"
 
@@ -39,6 +40,8 @@ enum class IndexFileFormat {
 struct IndexFileIn {
   llvm::Optional<SymbolSlab> Symbols;
   llvm::Optional<RefSlab> Refs;
+  // Keys are URIs of the source files.
+  llvm::Optional<IncludeGraph> Sources;
 };
 // Parse an index file. The input must be a RIFF or YAML file.
 llvm::Expected<IndexFileIn> readIndexFile(llvm::StringRef);
@@ -47,6 +50,8 @@ llvm::Expected<IndexFileIn> readIndexFile(llvm::StringRef);
 struct IndexFileOut {
   const SymbolSlab *Symbols = nullptr;
   const RefSlab *Refs = nullptr;
+  // Keys are URIs of the source files.
+  const IncludeGraph *Sources = nullptr;
   // TODO: Support serializing Dex posting lists.
   IndexFileFormat Format = IndexFileFormat::RIFF;
 
@@ -65,7 +70,6 @@ std::string toYAML(const std::pair<SymbolID, ArrayRef<Ref>> &);
 // Build an in-memory static index from an index file.
 // The size should be relatively small, so data can be managed in memory.
 std::unique_ptr<SymbolIndex> loadIndex(llvm::StringRef Filename,
-                                       llvm::ArrayRef<std::string> URISchemes,
                                        bool UseDex = true);
 
 } // namespace clangd

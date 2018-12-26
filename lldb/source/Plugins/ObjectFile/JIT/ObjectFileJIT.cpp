@@ -184,7 +184,7 @@ lldb_private::Address ObjectFileJIT::GetEntryPointAddress() {
   return Address();
 }
 
-lldb_private::Address ObjectFileJIT::GetHeaderAddress() { return Address(); }
+lldb_private::Address ObjectFileJIT::GetBaseAddress() { return Address(); }
 
 ObjectFile::Type ObjectFileJIT::CalculateType() { return eTypeJIT; }
 
@@ -218,7 +218,7 @@ bool ObjectFileJIT::SetLoadAddress(Target &target, lldb::addr_t value,
       // that size on disk (to avoid __PAGEZERO) and load them
       SectionSP section_sp(section_list->GetSectionAtIndex(sect_idx));
       if (section_sp && section_sp->GetFileSize() > 0 &&
-          section_sp->IsThreadSpecific() == false) {
+          !section_sp->IsThreadSpecific()) {
         if (target.GetSectionLoadList().SetSectionLoadAddress(
                 section_sp, section_sp->GetFileAddress() + value))
           ++num_loaded_sections;

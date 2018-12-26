@@ -56,7 +56,8 @@ public:
     ThunderX,
     ThunderXT81,
     ThunderXT83,
-    ThunderXT88
+    ThunderXT88,
+    TSV110
   };
 
 protected:
@@ -82,6 +83,33 @@ protected:
   bool HasFP16FML = false;
   bool HasSPE = false;
 
+  // ARMv8.1 extensions
+  bool HasVH = false;
+  bool HasPAN = false;
+  bool HasLOR = false;
+
+  // ARMv8.2 extensions
+  bool HasPsUAO = false;
+  bool HasPAN_RWV = false;
+  bool HasCCPP = false;
+
+  // ARMv8.3 extensions
+  bool HasPA = false;
+  bool HasJS = false;
+  bool HasCCIDX = false;
+  bool HasComplxNum = false;
+
+  // ARMv8.4 extensions
+  bool HasNV = false;
+  bool HasRASv8_4 = false;
+  bool HasMPAM = false;
+  bool HasDIT = false;
+  bool HasTRACEV8_4 = false;
+  bool HasAM = false;
+  bool HasSEL2 = false;
+  bool HasTLB_RMI = false;
+  bool HasFMI = false;
+  bool HasRCPC_IMMO = false;
   // ARMv8.4 Crypto extensions
   bool HasSM4 = true;
   bool HasSHA3 = true;
@@ -99,6 +127,7 @@ protected:
   bool HasFRInt3264 = false;
   bool HasSpecRestrict = false;
   bool HasSpecCtrl = false;
+  bool HasSSBS = false;
   bool HasPredCtrl = false;
   bool HasCCDP = false;
   bool HasBTI = false;
@@ -142,6 +171,7 @@ protected:
   bool HasFuseLiterals = false;
   bool DisableLatencySchedHeuristic = false;
   bool UseRSqrt = false;
+  bool Force32BitJumpTables = false;
   uint8_t MaxInterleaveFactor = 2;
   uint8_t VectorInsertExtractBaseCost = 3;
   uint16_t CacheLineSize = 0;
@@ -292,6 +322,7 @@ public:
   }
 
   bool useRSqrt() const { return UseRSqrt; }
+  bool force32BitJumpTables() const { return Force32BitJumpTables; }
   unsigned getMaxInterleaveFactor() const { return MaxInterleaveFactor; }
   unsigned getVectorInsertExtractBaseCost() const {
     return VectorInsertExtractBaseCost;
@@ -325,6 +356,7 @@ public:
   bool hasFRInt3264() const { return HasFRInt3264; }
   bool hasSpecRestrict() const { return HasSpecRestrict; }
   bool hasSpecCtrl() const { return HasSpecCtrl; }
+  bool hasSSBS() const { return HasSSBS; }
   bool hasPredCtrl() const { return HasPredCtrl; }
   bool hasCCDP() const { return HasCCDP; }
   bool hasBTI() const { return HasBTI; }
@@ -345,6 +377,30 @@ public:
   bool isTargetMachO() const { return TargetTriple.isOSBinFormatMachO(); }
 
   bool useAA() const override { return UseAA; }
+
+  bool hasVH() const { return HasVH; }
+  bool hasPAN() const { return HasPAN; }
+  bool hasLOR() const { return HasLOR; }
+
+  bool hasPsUAO() const { return HasPsUAO; }
+  bool hasPAN_RWV() const { return HasPAN_RWV; }
+  bool hasCCPP() const { return HasCCPP; }
+
+  bool hasPA() const { return HasPA; }
+  bool hasJS() const { return HasJS; }
+  bool hasCCIDX() const { return HasCCIDX; }
+  bool hasComplxNum() const { return HasComplxNum; }
+
+  bool hasNV() const { return HasNV; }
+  bool hasRASv8_4() const { return HasRASv8_4; }
+  bool hasMPAM() const { return HasMPAM; }
+  bool hasDIT() const { return HasDIT; }
+  bool hasTRACEV8_4() const { return HasTRACEV8_4; }
+  bool hasAM() const { return HasAM; }
+  bool hasSEL2() const { return HasSEL2; }
+  bool hasTLB_RMI() const { return HasTLB_RMI; }
+  bool hasFMI() const { return HasFMI; }
+  bool hasRCPC_IMMO() const { return HasRCPC_IMMO; }
 
   bool useSmallAddressing() const {
     switch (TLInfo.getTargetMachine().getCodeModel()) {
@@ -380,6 +436,8 @@ public:
   bool isCallingConvWin64(CallingConv::ID CC) const {
     switch (CC) {
     case CallingConv::C:
+    case CallingConv::Fast:
+    case CallingConv::Swift:
       return isTargetWindows();
     case CallingConv::Win64:
       return true;

@@ -226,7 +226,7 @@ static alias VerboseAlias("v", desc("Alias for -verbose."), aliasopt(Verbose),
 static void error(StringRef Prefix, std::error_code EC) {
   if (!EC)
     return;
-  errs() << Prefix << ": " << EC.message() << "\n";
+  WithColor::error() << Prefix << ": " << EC.message() << "\n";
   exit(1);
 }
 
@@ -422,8 +422,8 @@ static bool dumpObjectFile(ObjectFile &Obj, DWARFContext &DICtx, Twine Filename,
     for (auto name : Name)
       Names.insert((IgnoreCase && !UseRegex) ? StringRef(name).lower() : name);
 
-    filterByName(Names, DICtx.compile_units(), OS);
-    filterByName(Names, DICtx.dwo_compile_units(), OS);
+    filterByName(Names, DICtx.normal_units(), OS);
+    filterByName(Names, DICtx.dwo_units(), OS);
     return true;
   }
 
@@ -571,6 +571,14 @@ int main(int argc, char **argv) {
     return 0;
   }
 
+  // FIXME: Audit interactions between these two options and make them
+  //        compatible.
+  if (Diff && Verbose) {
+    WithColor::error() << "incompatible arguments: specifying both -diff and "
+                          "-verbose is currently not supported";
+    return 0;
+  }
+
   std::unique_ptr<ToolOutputFile> OutputFile;
   if (!OutputFilename.empty()) {
     std::error_code EC;
@@ -624,7 +632,7 @@ int main(int argc, char **argv) {
 
   if (Verify) {
     // If we encountered errors during verify, exit with a non-zero exit status.
-    if (!std::all_of(Objects.begin(), Objects.end(), [&](std::string Object) {
+    if (!all_of(Objects, [&](std::string Object) {
           return handleFile(Object, verifyObjectFile, OS);
         }))
       exit(1);

@@ -63,44 +63,12 @@ FileManager::FileManager(const FileSystemOptions &FSO,
 
 FileManager::~FileManager() = default;
 
-void FileManager::addStatCache(std::unique_ptr<FileSystemStatCache> statCache,
-                               bool AtBeginning) {
+void FileManager::setStatCache(std::unique_ptr<FileSystemStatCache> statCache) {
   assert(statCache && "No stat cache provided?");
-  if (AtBeginning || !StatCache.get()) {
-    statCache->setNextStatCache(std::move(StatCache));
-    StatCache = std::move(statCache);
-    return;
-  }
-
-  FileSystemStatCache *LastCache = StatCache.get();
-  while (LastCache->getNextStatCache())
-    LastCache = LastCache->getNextStatCache();
-
-  LastCache->setNextStatCache(std::move(statCache));
+  StatCache = std::move(statCache);
 }
 
-void FileManager::removeStatCache(FileSystemStatCache *statCache) {
-  if (!statCache)
-    return;
-
-  if (StatCache.get() == statCache) {
-    // This is the first stat cache.
-    StatCache = StatCache->takeNextStatCache();
-    return;
-  }
-
-  // Find the stat cache in the list.
-  FileSystemStatCache *PrevCache = StatCache.get();
-  while (PrevCache && PrevCache->getNextStatCache() != statCache)
-    PrevCache = PrevCache->getNextStatCache();
-
-  assert(PrevCache && "Stat cache not found for removal");
-  PrevCache->setNextStatCache(statCache->takeNextStatCache());
-}
-
-void FileManager::clearStatCaches() {
-  StatCache.reset();
-}
+void FileManager::clearStatCache() { StatCache.reset(); }
 
 /// Retrieve the directory that the given file name resides in.
 /// Filename can point to either a real file or a virtual file.
@@ -221,14 +189,20 @@ const FileEntry *FileManager::getFile(StringRef Filename, bool openFile,
       *SeenFileEntries.insert(std::make_pair(Filename, nullptr)).first;
 
   // See if there is already an entry in the map.
-  if (NamedFileEnt.second)
-    return NamedFileEnt.second == NON_EXISTENT_FILE ? nullptr
-                                                    : NamedFileEnt.second;
+  if (NamedFileEnt.second) {
+    if (NamedFileEnt.second == NON_EXISTENT_FILE)
+      return nullptr;
+    // Entry exists: return it *unless* it wasn't opened and open is requested.
+    if (!(NamedFileEnt.second->DeferredOpen && openFile))
+      return NamedFileEnt.second;
+    // We previously stat()ed the file, but didn't open it: do that below.
+    // FIXME: the below does other redundant work too (stats the dir and file).
+  } else {
+    // By default, initialize it to invalid.
+    NamedFileEnt.second = NON_EXISTENT_FILE;
+  }
 
   ++NumFileCacheMisses;
-
-  // By default, initialize it to invalid.
-  NamedFileEnt.second = NON_EXISTENT_FILE;
 
   // Get the null-terminated file name as stored as the key of the
   // SeenFileEntries map.
@@ -267,6 +241,7 @@ const FileEntry *FileManager::getFile(StringRef Filename, bool openFile,
   // It exists.  See if we have already opened a file with the same inode.
   // This occurs when one dir is symlinked to another, for example.
   FileEntry &UFE = UniqueRealFiles[Data.UniqueID];
+  UFE.DeferredOpen = !openFile;
 
   NamedFileEnt.second = &UFE;
 
@@ -281,6 +256,15 @@ const FileEntry *FileManager::getFile(StringRef Filename, bool openFile,
       assert(NamedFileEnt.second == &UFE &&
              "filename from getStatValue() refers to wrong file");
     InterndFileName = NamedFileEnt.first().data();
+  }
+
+  // If we opened the file for the first time, record the resulting info.
+  // Do this even if the cache entry was valid, maybe we didn't previously open.
+  if (F && !UFE.File) {
+    if (auto PathName = F->getName())
+      fillRealPathName(&UFE, *PathName);
+    UFE.File = std::move(F);
+    assert(!UFE.DeferredOpen && "we just opened it!");
   }
 
   if (UFE.isValid()) { // Already have an entry with this inode, return it.
@@ -313,21 +297,9 @@ const FileEntry *FileManager::getFile(StringRef Filename, bool openFile,
   UFE.UniqueID = Data.UniqueID;
   UFE.IsNamedPipe = Data.IsNamedPipe;
   UFE.InPCH = Data.InPCH;
-  UFE.File = std::move(F);
   UFE.IsValid = true;
+  // Note File and DeferredOpen were initialized above.
 
-  if (UFE.File) {
-    if (auto PathName = UFE.File->getName()) {
-      llvm::SmallString<128> AbsPath(*PathName);
-      // This is not the same as `VFS::getRealPath()`, which resolves symlinks
-      // but can be very expensive on real file systems.
-      // FIXME: the semantic of RealPathName is unclear, and the name might be
-      // misleading. We need to clean up the interface here.
-      makeAbsolutePath(AbsPath);
-      llvm::sys::path::remove_dots(AbsPath, /*remove_dot_dot=*/true);
-      UFE.RealPathName = AbsPath.str();
-    }
-  }
   return &UFE;
 }
 
@@ -383,6 +355,7 @@ FileManager::getVirtualFile(StringRef Filename, off_t Size,
     UFE->UniqueID = Data.UniqueID;
     UFE->IsNamedPipe = Data.IsNamedPipe;
     UFE->InPCH = Data.InPCH;
+    fillRealPathName(UFE, Data.Name);
   }
 
   if (!UFE) {
@@ -398,6 +371,7 @@ FileManager::getVirtualFile(StringRef Filename, off_t Size,
   UFE->UID     = NextFileUID++;
   UFE->IsValid = true;
   UFE->File.reset();
+  UFE->DeferredOpen = false;
   return UFE;
 }
 
@@ -423,6 +397,17 @@ bool FileManager::makeAbsolutePath(SmallVectorImpl<char> &Path) const {
   }
 
   return Changed;
+}
+
+void FileManager::fillRealPathName(FileEntry *UFE, llvm::StringRef FileName) {
+  llvm::SmallString<128> AbsPath(FileName);
+  // This is not the same as `VFS::getRealPath()`, which resolves symlinks
+  // but can be very expensive on real file systems.
+  // FIXME: the semantic of RealPathName is unclear, and the name might be
+  // misleading. We need to clean up the interface here.
+  makeAbsolutePath(AbsPath);
+  llvm::sys::path::remove_dots(AbsPath, /*remove_dot_dot=*/true);
+  UFE->RealPathName = AbsPath.str();
 }
 
 llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>>

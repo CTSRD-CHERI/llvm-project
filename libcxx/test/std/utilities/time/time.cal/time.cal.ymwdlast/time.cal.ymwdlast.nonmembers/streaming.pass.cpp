@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 // XFAIL: *
 
 // <chrono>
@@ -15,7 +15,7 @@
 // template<class charT, class traits>
 //     basic_ostream<charT, traits>&
 //     operator<<(basic_ostream<charT, traits>& os, const year_month_weekday_last& ymwdl);
-// 
+//
 //   Returns: os << ymwdl.year() << '/' << ymwdl.month() << '/' << ymwdl.weekday_last().
 
 
@@ -33,6 +33,6 @@ int main()
     using month                   = std::chrono::month;
     using weekday                 = std::chrono::weekday;
     using weekday_last            = std::chrono::weekday_last;
-    
+
     std::cout << year_month_weekday_last{year{2018}, month{3}, weekday_last{weekday{4}}};
 }

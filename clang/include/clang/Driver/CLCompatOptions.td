@@ -321,6 +321,8 @@ def _SLASH_vmv : CLFlag<"vmv">,
 def _SLASH_volatile_ms  : Option<["/", "-"], "volatile:ms", KIND_FLAG>,
   Group<_SLASH_volatile_Group>, Flags<[CLOption, DriverOption]>,
   HelpText<"Volatile loads and stores have acquire and release semantics">;
+def _SLASH_clang : CLJoined<"clang:">,
+  HelpText<"Pass <arg> to the clang driver">, MetaVarName<"<arg>">;
 def _SLASH_Zl : CLFlag<"Zl">,
   HelpText<"Don't mention any default libraries in the object file">;
 
@@ -333,6 +335,10 @@ def _SLASH_Yu : CLJoined<"Yu">,
   MetaVarName<"<filename>">;
 def _SLASH_Y_ : CLFlag<"Y-">,
   HelpText<"Disable precompiled headers, overrides /Yc and /Yu">;
+def _SLASH_Zc_dllexportInlines : CLFlag<"Zc:dllexportInlines">,
+  HelpText<"dllexport/dllimport inline member functions of dllexport/import classes (default)">;
+def _SLASH_Zc_dllexportInlines_ : CLFlag<"Zc:dllexportInlines-">,
+  HelpText<"Don't dllexport/dllimport inline member functions of dllexport/import classes">;
 def _SLASH_Fp : CLJoined<"Fp">,
   HelpText<"Set pch filename (with /Yc and /Yu)">, MetaVarName<"<filename>">;
 

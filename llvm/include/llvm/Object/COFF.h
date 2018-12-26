@@ -971,6 +971,9 @@ public:
       return nullptr;
     return reinterpret_cast<const dos_header *>(base());
   }
+  std::error_code getCOFFHeader(const coff_file_header *&Res) const;
+  std::error_code
+  getCOFFBigObjHeader(const coff_bigobj_file_header *&Res) const;
   std::error_code getPE32Header(const pe32_header *&Res) const;
   std::error_code getPE32PlusHeader(const pe32plus_header *&Res) const;
   std::error_code getDataDirectory(uint32_t index,
@@ -1061,6 +1064,8 @@ public:
 
   bool isRelocatableObject() const override;
   bool is64() const { return PE32PlusHeader; }
+
+  StringRef mapDebugSectionName(StringRef Name) const override;
 
   static bool classof(const Binary *v) { return v->isCOFF(); }
 };

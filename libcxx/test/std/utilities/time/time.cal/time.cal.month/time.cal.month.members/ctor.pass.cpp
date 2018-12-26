@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class month;
@@ -31,13 +31,13 @@ int main()
     ASSERT_NOEXCEPT(month{});
     ASSERT_NOEXCEPT(month(1));
     ASSERT_NOEXCEPT(static_cast<unsigned>(month(1)));
-    
+
     constexpr month m0{};
     static_assert(static_cast<unsigned>(m0) == 0, "");
 
     constexpr month m1{1};
     static_assert(static_cast<unsigned>(m1) == 1, "");
-    
+
     for (unsigned i = 0; i <= 255; ++i)
     {
         month m(i);

@@ -9,10 +9,6 @@
 
 #include "lldb/Interpreter/OptionGroupVariable.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/DataFormatters/DataVisualization.h"
 #include "lldb/Host/OptionParser.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
@@ -28,6 +24,9 @@ static constexpr OptionDefinition g_variable_options[] = {
     {LLDB_OPT_SET_1 | LLDB_OPT_SET_2, false, "no-args", 'a',
      OptionParser::eNoArgument, nullptr, {}, 0, eArgTypeNone,
      "Omit function arguments."},
+    {LLDB_OPT_SET_1 | LLDB_OPT_SET_2, false, "no-recognized-args", 't',
+     OptionParser::eNoArgument, nullptr, {}, 0, eArgTypeNone,
+     "Omit recognized function arguments."},
     {LLDB_OPT_SET_1 | LLDB_OPT_SET_2, false, "no-locals", 'l',
      OptionParser::eNoArgument, nullptr, {}, 0, eArgTypeNone,
      "Omit local variables."},
@@ -56,8 +55,8 @@ static Status ValidateNamedSummary(const char *str, void *) {
   if (!str || !str[0])
     return Status("must specify a valid named summary");
   TypeSummaryImplSP summary_sp;
-  if (DataVisualization::NamedSummaryFormats::GetSummaryFormat(
-          ConstString(str), summary_sp) == false)
+  if (!DataVisualization::NamedSummaryFormats::GetSummaryFormat(
+          ConstString(str), summary_sp))
     return Status("must specify a valid named summary");
   return Status();
 }
@@ -101,6 +100,9 @@ OptionGroupVariable::SetOptionValue(uint32_t option_idx,
   case 's':
     show_scope = true;
     break;
+  case 't':
+    show_recognized_args = false;
+    break;
   case 'y':
     error = summary.SetCurrentValue(option_arg);
     break;
@@ -119,6 +121,7 @@ OptionGroupVariable::SetOptionValue(uint32_t option_idx,
 void OptionGroupVariable::OptionParsingStarting(
     ExecutionContext *execution_context) {
   show_args = true;     // Frame option only
+  show_recognized_args = true; // Frame option only
   show_locals = true;   // Frame option only
   show_globals = false; // Frame option only
   show_decl = false;

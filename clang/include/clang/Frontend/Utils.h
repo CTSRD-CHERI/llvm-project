@@ -183,9 +183,6 @@ void AttachHeaderIncludeGen(Preprocessor &PP,
                             StringRef OutputPath = {},
                             bool ShowDepth = true, bool MSStyle = false);
 
-/// Cache tokens for use with PCH. Note that this requires a seekable stream.
-void CacheTokens(Preprocessor &PP, raw_pwrite_stream *OS);
-
 /// The ChainedIncludesSource class converts headers to chained PCHs in
 /// memory, mainly for testing.
 IntrusiveRefCntPtr<ExternalSemaSource>
@@ -224,14 +221,6 @@ inline uint64_t getLastArgUInt64Value(const llvm::opt::ArgList &Args,
                                       uint64_t Default,
                                       DiagnosticsEngine &Diags) {
   return getLastArgUInt64Value(Args, Id, Default, &Diags);
-}
-
-// When Clang->getFrontendOpts().DisableFree is set we don't delete some of the
-// global objects, but we don't want LeakDetectors to complain, so we bury them
-// in a globally visible array.
-void BuryPointer(const void *Ptr);
-template <typename T> void BuryPointer(std::unique_ptr<T> Ptr) {
-  BuryPointer(Ptr.release());
 }
 
 // Frontend timing utils

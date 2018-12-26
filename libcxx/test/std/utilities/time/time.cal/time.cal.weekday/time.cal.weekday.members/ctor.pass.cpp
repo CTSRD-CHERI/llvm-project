@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class weekday;
@@ -34,13 +34,13 @@ int main()
     ASSERT_NOEXCEPT(weekday{});
     ASSERT_NOEXCEPT(weekday(1));
     ASSERT_NOEXCEPT(static_cast<unsigned>(weekday(1)));
-    
+
     constexpr weekday m0{};
     static_assert(static_cast<unsigned>(m0) == 0, "");
 
     constexpr weekday m1{1};
     static_assert(static_cast<unsigned>(m1) == 1, "");
-    
+
     for (unsigned i = 0; i <= 255; ++i)
     {
         weekday m(i);

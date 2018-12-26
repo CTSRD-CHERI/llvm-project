@@ -184,6 +184,25 @@ public:
   bool isCompatibleWith(uint32_t RelocType) const override;
 };
 
+// Implementations of Thunks for Arm v6-M. Only Thumb instructions are permitted
+class ThumbV6MABSLongThunk final : public ThumbThunk {
+public:
+  ThumbV6MABSLongThunk(Symbol &Dest) : ThumbThunk(Dest) {}
+
+  uint32_t sizeLong() override { return 12; }
+  void writeLong(uint8_t *Buf) override;
+  void addSymbols(ThunkSection &IS) override;
+};
+
+class ThumbV6MPILongThunk final : public ThumbThunk {
+public:
+  ThumbV6MPILongThunk(Symbol &Dest) : ThumbThunk(Dest) {}
+
+  uint32_t sizeLong() override { return 16; }
+  void writeLong(uint8_t *Buf) override;
+  void addSymbols(ThunkSection &IS) override;
+};
+
 // MIPS LA25 thunk
 class MipsThunk final : public Thunk {
 public:
@@ -232,6 +251,46 @@ public:
   uint32_t size() override { return 20; }
   void writeTo(uint8_t *Buf) override;
   void addSymbols(ThunkSection &IS) override;
+};
+
+// A bl instruction uses a signed 24 bit offset, with an implicit 4 byte
+// alignment. This gives a possible 26 bits of 'reach'. If the call offset is
+// larger then that we need to emit a long-branch thunk. The target address
+// of the callee is stored in a table to be accessed TOC-relative. Since the
+// call must be local (a non-local call will have a PltCallStub instead) the
+// table stores the address of the callee's local entry point. For
+// position-independent code a corresponding relative dynamic relocation is
+// used.
+class PPC64LongBranchThunk : public Thunk {
+public:
+  uint32_t size() override { return 16; }
+  void writeTo(uint8_t *Buf) override;
+  void addSymbols(ThunkSection &IS) override;
+
+protected:
+  PPC64LongBranchThunk(Symbol &Dest) : Thunk(Dest) {}
+};
+
+class PPC64PILongBranchThunk final : public PPC64LongBranchThunk {
+public:
+  PPC64PILongBranchThunk(Symbol &Dest) : PPC64LongBranchThunk(Dest) {
+    assert(!Dest.IsPreemptible);
+    if (Dest.isInPPC64Branchlt())
+      return;
+
+    In.PPC64LongBranchTarget->addEntry(Dest);
+    In.RelaDyn->addReloc({Target->RelativeRel, In.PPC64LongBranchTarget,
+                          Dest.getPPC64LongBranchOffset(), true, &Dest,
+                          getPPC64GlobalEntryToLocalEntryOffset(Dest.StOther)});
+  }
+};
+
+class PPC64PDLongBranchThunk final : public PPC64LongBranchThunk {
+public:
+  PPC64PDLongBranchThunk(Symbol &Dest) : PPC64LongBranchThunk(Dest) {
+    if (!Dest.isInPPC64Branchlt())
+      In.PPC64LongBranchTarget->addEntry(Dest);
+  }
 };
 
 } // end anonymous namespace
@@ -504,6 +563,56 @@ bool ARMV5PILongThunk::isCompatibleWith(uint32_t RelocType) const {
   return RelocType != R_ARM_THM_JUMP19 && RelocType != R_ARM_THM_JUMP24;
 }
 
+void ThumbV6MABSLongThunk::writeLong(uint8_t *Buf) {
+  // Most Thumb instructions cannot access the high registers r8 - r15. As the
+  // only register we can corrupt is r12 we must instead spill a low register
+  // to the stack to use as a scratch register. We push r1 even though we
+  // don't need to get some space to use for the return address.
+  const uint8_t Data[] = {
+      0x03, 0xb4,            // push {r0, r1} ; Obtain scratch registers
+      0x01, 0x48,            // ldr r0, [pc, #4] ; L1
+      0x01, 0x90,            // str r0, [sp, #4] ; SP + 4 = S
+      0x01, 0xbd,            // pop {r0, pc} ; restore r0 and branch to dest
+      0x00, 0x00, 0x00, 0x00 // L1: .word S
+  };
+  uint64_t S = getARMThunkDestVA(Destination);
+  memcpy(Buf, Data, sizeof(Data));
+  Target->relocateOne(Buf + 8, R_ARM_ABS32, S);
+}
+
+void ThumbV6MABSLongThunk::addSymbols(ThunkSection &IS) {
+  addSymbol(Saver.save("__Thumbv6MABSLongThunk_" + Destination.getName()),
+            STT_FUNC, 1, IS);
+  addSymbol("$t", STT_NOTYPE, 0, IS);
+  addSymbol("$d", STT_NOTYPE, 8, IS);
+}
+
+void ThumbV6MPILongThunk::writeLong(uint8_t *Buf) {
+  // Most Thumb instructions cannot access the high registers r8 - r15. As the
+  // only register we can corrupt is ip (r12) we must instead spill a low
+  // register to the stack to use as a scratch register.
+  const uint8_t Data[] = {
+      0x01, 0xb4,             // P:  push {r0}        ; Obtain scratch register
+      0x02, 0x48,             //     ldr r0, [pc, #8] ; L2
+      0x84, 0x46,             //     mov ip, r0       ; high to low register
+      0x01, 0xbc,             //     pop {r0}         ; restore scratch register
+      0xe7, 0x44,             // L1: add pc, ip       ; transfer control
+      0xc0, 0x46,             //     nop              ; pad to 4-byte boundary
+      0x00, 0x00, 0x00, 0x00, // L2: .word S - (P + (L1 - P) + 4)
+  };
+  uint64_t S = getARMThunkDestVA(Destination);
+  uint64_t P = getThunkTargetSym()->getVA() & ~0x1;
+  memcpy(Buf, Data, sizeof(Data));
+  Target->relocateOne(Buf + 12, R_ARM_REL32, S - P - 12);
+}
+
+void ThumbV6MPILongThunk::addSymbols(ThunkSection &IS) {
+  addSymbol(Saver.save("__Thumbv6MPILongThunk_" + Destination.getName()),
+            STT_FUNC, 1, IS);
+  addSymbol("$t", STT_NOTYPE, 0, IS);
+  addSymbol("$d", STT_NOTYPE, 12, IS);
+}
+
 // Write MIPS LA25 thunk code to call PIC function from the non-PIC one.
 void MipsThunk::writeTo(uint8_t *Buf) {
   uint64_t S = Destination.getVA();
@@ -573,23 +682,37 @@ InputSection *MicroMipsR6Thunk::getTargetInputSection() const {
   return dyn_cast<InputSection>(DR.Section);
 }
 
-void PPC64PltCallStub::writeTo(uint8_t *Buf) {
-  int64_t Off = Destination.getGotPltVA() - getPPC64TocBase();
-  // Need to add 0x8000 to offset to account for the low bits being signed.
-  uint16_t OffHa = (Off + 0x8000) >> 16;
-  uint16_t OffLo = Off;
+static void writePPCLoadAndBranch(uint8_t *Buf, int64_t Offset) {
+  uint16_t OffHa = (Offset + 0x8000) >> 16;
+  uint16_t OffLo = Offset & 0xffff;
 
-  write32(Buf +  0, 0xf8410018);          // std     r2,24(r1)
-  write32(Buf +  4, 0x3d820000 | OffHa);  // addis   r12,r2, X@plt@to@ha
-  write32(Buf +  8, 0xe98c0000 | OffLo);  // ld      r12,X@plt@toc@l(r12)
-  write32(Buf + 12, 0x7d8903a6);          // mtctr   r12
-  write32(Buf + 16, 0x4e800420);          // bctr
+  write32(Buf + 0, 0x3d820000 | OffHa); // addis r12, r2, OffHa
+  write32(Buf + 4, 0xe98c0000 | OffLo); // ld    r12, OffLo(r12)
+  write32(Buf + 8, 0x7d8903a6);         // mtctr r12
+  write32(Buf + 12, 0x4e800420);        // bctr
+}
+
+void PPC64PltCallStub::writeTo(uint8_t *Buf) {
+  int64_t Offset = Destination.getGotPltVA() - getPPC64TocBase();
+  // Save the TOC pointer to the save-slot reserved in the call frame.
+  write32(Buf + 0, 0xf8410018); // std     r2,24(r1)
+  writePPCLoadAndBranch(Buf + 4, Offset);
 }
 
 void PPC64PltCallStub::addSymbols(ThunkSection &IS) {
   Defined *S = addSymbol(Saver.save("__plt_" + Destination.getName()), STT_FUNC,
                          0, IS);
   S->NeedsTocRestore = true;
+}
+
+void PPC64LongBranchThunk::writeTo(uint8_t *Buf) {
+  int64_t Offset = Destination.getPPC64LongBranchTableVA() - getPPC64TocBase();
+  writePPCLoadAndBranch(Buf, Offset);
+}
+
+void PPC64LongBranchThunk::addSymbols(ThunkSection &IS) {
+  addSymbol(Saver.save("__long_branch_" + Destination.getName()), STT_FUNC, 0,
+            IS);
 }
 
 Thunk::Thunk(Symbol &D) : Destination(D), Offset(0) {}
@@ -624,6 +747,24 @@ static Thunk *addThunkPreArmv7(RelType Reloc, Symbol &S) {
         " not supported for Armv5 or Armv6 targets");
 }
 
+// Create a thunk for Thumb long branch on V6-M.
+// Arm Architecture v6-M only supports Thumb instructions. This means
+// - MOVT and MOVW instructions cannot be used.
+// - Only a limited number of instructions can access registers r8 and above
+// - No interworking support is needed (all Thumb).
+static Thunk *addThunkV6M(RelType Reloc, Symbol &S) {
+  switch (Reloc) {
+  case R_ARM_THM_JUMP19:
+  case R_ARM_THM_JUMP24:
+  case R_ARM_THM_CALL:
+    if (Config->Pic)
+      return make<ThumbV6MPILongThunk>(S);
+    return make<ThumbV6MABSLongThunk>(S);
+  }
+  fatal("relocation " + toString(Reloc) + " to " + toString(S) +
+        " not supported for Armv6-M targets");
+}
+
 // Creates a thunk for Thumb-ARM interworking or branch range extension.
 static Thunk *addThunkArm(RelType Reloc, Symbol &S) {
   // Decide which Thunk is needed based on:
@@ -638,14 +779,14 @@ static Thunk *addThunkArm(RelType Reloc, Symbol &S) {
   //   either Arm or Thumb.
   // Position independent Thunks if we require position independent code.
 
+  // Handle architectures that have restrictions on the instructions that they
+  // can use in Thunks. The flags below are set by reading the BuildAttributes
+  // of the input objects. InputFiles.cpp contains the mapping from ARM
+  // architecture to flag.
   if (!Config->ARMHasMovtMovw) {
     if (!Config->ARMJ1J2BranchEncoding)
       return addThunkPreArmv7(Reloc, S);
-    else
-      // The Armv6-m architecture (Cortex-M0) does not have Arm instructions or
-      // support the MOVT MOVW instructions so it cannot use any of the Thunks
-      // currently implemented.
-      fatal("thunks not supported for architecture Armv6-m");
+    return addThunkV6M(Reloc, S);
   }
 
   switch (Reloc) {
@@ -675,9 +816,14 @@ static Thunk *addThunkMips(RelType Type, Symbol &S) {
 }
 
 static Thunk *addThunkPPC64(RelType Type, Symbol &S) {
-  if (Type == R_PPC64_REL24)
+  assert(Type == R_PPC64_REL24 && "unexpected relocation type for thunk");
+  if (S.isInPlt())
     return make<PPC64PltCallStub>(S);
-  fatal("unexpected relocation type");
+
+  if (Config->Pic)
+    return make<PPC64PILongBranchThunk>(S);
+
+  return make<PPC64PDLongBranchThunk>(S);
 }
 
 Thunk *addThunk(RelType Type, Symbol &S) {

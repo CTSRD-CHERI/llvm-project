@@ -98,7 +98,8 @@ static void ImposeStackOrdering(MachineInstr *MI) {
 static void ConvertImplicitDefToConstZero(MachineInstr *MI,
                                           MachineRegisterInfo &MRI,
                                           const TargetInstrInfo *TII,
-                                          MachineFunction &MF) {
+                                          MachineFunction &MF,
+                                          LiveIntervals &LIS) {
   assert(MI->getOpcode() == TargetOpcode::IMPLICIT_DEF);
 
   const auto *RegClass = MRI.getRegClass(MI->getOperand(0).getReg());
@@ -118,6 +119,14 @@ static void ConvertImplicitDefToConstZero(MachineInstr *MI,
     ConstantFP *Val = cast<ConstantFP>(Constant::getNullValue(
         Type::getDoubleTy(MF.getFunction().getContext())));
     MI->addOperand(MachineOperand::CreateFPImm(Val));
+  } else if (RegClass == &WebAssembly::V128RegClass) {
+    unsigned TempReg = MRI.createVirtualRegister(&WebAssembly::I32RegClass);
+    MI->setDesc(TII->get(WebAssembly::SPLAT_v4i32));
+    MI->addOperand(MachineOperand::CreateReg(TempReg, false));
+    MachineInstr *Const = BuildMI(*MI->getParent(), MI, MI->getDebugLoc(),
+                                  TII->get(WebAssembly::CONST_I32), TempReg)
+                              .addImm(0);
+    LIS.InsertMachineInstrInMaps(*Const);
   } else {
     llvm_unreachable("Unexpected reg class");
   }
@@ -890,7 +899,7 @@ bool WebAssemblyRegStackify::runOnMachineFunction(MachineFunction &MF) {
         // to a constant 0 so that the def is explicit, and the push/pop
         // correspondence is maintained.
         if (Insert->getOpcode() == TargetOpcode::IMPLICIT_DEF)
-          ConvertImplicitDefToConstZero(Insert, MRI, TII, MF);
+          ConvertImplicitDefToConstZero(Insert, MRI, TII, MF, LIS);
 
         // We stackified an operand. Add the defining instruction's operands to
         // the worklist stack now to continue to build an ever deeper tree.

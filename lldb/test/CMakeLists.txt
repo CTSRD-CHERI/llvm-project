@@ -87,6 +87,12 @@ if (NOT ${CMAKE_SYSTEM_NAME} MATCHES "Windows|Darwin")
     --env ARCHIVER=${CMAKE_AR} --env OBJCOPY=${CMAKE_OBJCOPY})
 endif()
 
+if (NOT "${LLDB_LIT_TOOLS_DIR}" STREQUAL "")
+  if (NOT EXISTS "${LLDB_LIT_TOOLS_DIR}")
+    message(WARNING "LLDB_LIT_TOOLS_DIR ${LLDB_LIT_TOOLS_DIR} does not exist.")
+  endif()
+endif()
+
 if(CMAKE_HOST_APPLE)
   list(APPEND LLDB_TEST_COMMON_ARGS --server ${DEBUGSERVER_PATH})
 endif()
@@ -127,6 +133,6 @@ endif ()
 add_dependencies(check-lldb check-lldb-lit)
 
 add_custom_target(lldb-test-depends DEPENDS ${LLDB_TEST_DEPENDS})
-# This will add LLDB's test dependencies to the depenednecies for check-all and
+# This will add LLDB's test dependencies to the dependencies for check-all and
 # include them in the test-depends target.
 set_property(GLOBAL APPEND PROPERTY LLVM_LIT_DEPENDS ${ARG_DEPENDS})

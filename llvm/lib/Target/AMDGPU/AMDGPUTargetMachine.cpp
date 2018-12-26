@@ -106,6 +106,11 @@ static cl::opt<bool> EnableSDWAPeephole(
   cl::desc("Enable SDWA peepholer"),
   cl::init(true));
 
+static cl::opt<bool> EnableDPPCombine(
+  "amdgpu-dpp-combine",
+  cl::desc("Enable DPP combiner"),
+  cl::init(false));
+
 // Enable address space based alias analysis
 static cl::opt<bool> EnableAMDGPUAliasAnalysis("enable-amdgpu-aa", cl::Hidden,
   cl::desc("Enable AMDGPU Alias Analysis"),
@@ -145,6 +150,13 @@ static cl::opt<bool> EnableAtomicOptimizations(
   cl::init(false),
   cl::Hidden);
 
+// Enable Mode register optimization
+static cl::opt<bool> EnableSIModeRegisterPass(
+  "amdgpu-mode-register",
+  cl::desc("Enable mode register pass"),
+  cl::init(true),
+  cl::Hidden);
+
 extern "C" void LLVMInitializeAMDGPUTarget() {
   // Register the target
   RegisterTargetMachine<R600TargetMachine> X(getTheAMDGPUTarget());
@@ -158,14 +170,17 @@ extern "C" void LLVMInitializeAMDGPUTarget() {
   initializeR600VectorRegMergerPass(*PR);
   initializeGlobalISel(*PR);
   initializeAMDGPUDAGToDAGISelPass(*PR);
+  initializeGCNDPPCombinePass(*PR);
   initializeSILowerI1CopiesPass(*PR);
   initializeSIFixSGPRCopiesPass(*PR);
   initializeSIFixVGPRCopiesPass(*PR);
+  initializeSIFixupVectorISelPass(*PR);
   initializeSIFoldOperandsPass(*PR);
   initializeSIPeepholeSDWAPass(*PR);
   initializeSIShrinkInstructionsPass(*PR);
   initializeSIOptimizeExecMaskingPreRAPass(*PR);
   initializeSILoadStoreOptimizerPass(*PR);
+  initializeAMDGPUFixFunctionBitcastsPass(*PR);
   initializeAMDGPUAlwaysInlinePass(*PR);
   initializeAMDGPUAnnotateKernelFeaturesPass(*PR);
   initializeAMDGPUAnnotateUniformValuesPass(*PR);
@@ -181,6 +196,7 @@ extern "C" void LLVMInitializeAMDGPUTarget() {
   initializeAMDGPUUnifyMetadataPass(*PR);
   initializeSIAnnotateControlFlowPass(*PR);
   initializeSIInsertWaitcntsPass(*PR);
+  initializeSIModeRegisterPass(*PR);
   initializeSIWholeQuadModePass(*PR);
   initializeSILowerControlFlowPass(*PR);
   initializeSIInsertSkipsPass(*PR);
@@ -191,6 +207,7 @@ extern "C" void LLVMInitializeAMDGPUTarget() {
   initializeSIFormMemoryClausesPass(*PR);
   initializeAMDGPUUnifyDivergentExitNodesPass(*PR);
   initializeAMDGPUAAWrapperPassPass(*PR);
+  initializeAMDGPUExternalAAWrapperPass(*PR);
   initializeAMDGPUUseNativeCallsPass(*PR);
   initializeAMDGPUSimplifyLibCallsPass(*PR);
   initializeAMDGPUInlinerPass(*PR);
@@ -301,12 +318,6 @@ static Reloc::Model getEffectiveRelocModel(Optional<Reloc::Model> RM) {
   return Reloc::PIC_;
 }
 
-static CodeModel::Model getEffectiveCodeModel(Optional<CodeModel::Model> CM) {
-  if (CM)
-    return *CM;
-  return CodeModel::Small;
-}
-
 AMDGPUTargetMachine::AMDGPUTargetMachine(const Target &T, const Triple &TT,
                                          StringRef CPU, StringRef FS,
                                          TargetOptions Options,
@@ -315,7 +326,7 @@ AMDGPUTargetMachine::AMDGPUTargetMachine(const Target &T, const Triple &TT,
                                          CodeGenOpt::Level OptLevel)
     : LLVMTargetMachine(T, computeDataLayout(TT), TT, getGPUOrDefault(TT, CPU),
                         FS, Options, getEffectiveRelocModel(RM),
-                        getEffectiveCodeModel(CM), OptLevel),
+                        getEffectiveCodeModel(CM, CodeModel::Small), OptLevel),
       TLOF(createTLOF(getTargetTriple())) {
   initAsmInfo();
 }
@@ -337,13 +348,6 @@ StringRef AMDGPUTargetMachine::getFeatureString(const Function &F) const {
   return FSAttr.hasAttribute(Attribute::None) ?
     getTargetFeatureString() :
     FSAttr.getValueAsString();
-}
-
-static ImmutablePass *createAMDGPUExternalAAWrapperPass() {
-  return createExternalAAWrapperPass([](Pass &P, Function &, AAResults &AAR) {
-      if (auto *WrapperPass = P.getAnalysisIfAvailable<AMDGPUAAWrapperPass>())
-        AAR.addAAResult(WrapperPass->getResult());
-      });
 }
 
 /// Predicate for Internalize pass.
@@ -611,6 +615,11 @@ void AMDGPUPassConfig::addIRPasses() {
   disablePass(&PatchableFunctionID);
 
   addPass(createAtomicExpandPass());
+
+  // This must occur before inlining, as the inliner will not look through
+  // bitcast calls.
+  addPass(createAMDGPUFixFunctionBitcastsPass());
+
   addPass(createAMDGPULowerIntrinsicsPass());
 
   // Function calls are not supported, so make sure we inline everything.
@@ -789,6 +798,8 @@ void GCNPassConfig::addMachineSSAOptimization() {
   //
   // XXX - Can we get away without running DeadMachineInstructionElim again?
   addPass(&SIFoldOperandsID);
+  if (EnableDPPCombine)
+    addPass(&GCNDPPCombineID);
   addPass(&DeadMachineInstructionElimID);
   addPass(&SILoadStoreOptimizerID);
   if (EnableSDWAPeephole) {
@@ -811,8 +822,9 @@ bool GCNPassConfig::addILPOpts() {
 
 bool GCNPassConfig::addInstSelector() {
   AMDGPUPassConfig::addInstSelector();
-  addPass(createSILowerI1CopiesPass());
   addPass(&SIFixSGPRCopiesID);
+  addPass(createSILowerI1CopiesPass());
+  addPass(createSIFixupVectorISelPass());
   return false;
 }
 
@@ -878,7 +890,8 @@ void GCNPassConfig::addOptimizedRegAlloc(FunctionPass *RegAllocPass) {
 
 void GCNPassConfig::addPostRegAlloc() {
   addPass(&SIFixVGPRCopiesID);
-  addPass(&SIOptimizeExecMaskingID);
+  if (getOptLevel() > CodeGenOpt::None)
+    addPass(&SIOptimizeExecMaskingID);
   TargetPassConfig::addPostRegAlloc();
 }
 
@@ -889,6 +902,7 @@ void GCNPassConfig::addPreEmitPass() {
   addPass(createSIMemoryLegalizerPass());
   addPass(createSIInsertWaitcntsPass());
   addPass(createSIShrinkInstructionsPass());
+  addPass(createSIModeRegisterPass());
 
   // The hazard recognizer that runs as part of the post-ra scheduler does not
   // guarantee to be able handle all hazards correctly. This is because if there

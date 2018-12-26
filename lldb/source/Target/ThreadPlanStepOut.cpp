@@ -7,10 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Target/ThreadPlanStepOut.h"
 #include "lldb/Breakpoint/Breakpoint.h"
 #include "lldb/Core/Value.h"
@@ -133,7 +129,10 @@ ThreadPlanStepOut::ThreadPlanStepOut(
     Breakpoint *return_bp = m_thread.CalculateTarget()
                                 ->CreateBreakpoint(m_return_addr, true, false)
                                 .get();
+
     if (return_bp != nullptr) {
+      if (return_bp->IsHardware() && !return_bp->HasResolvedLocations())
+        m_could_not_resolve_hw_bp = true;
       return_bp->SetThreadID(m_thread.GetID());
       m_return_bp_id = return_bp->GetID();
       return_bp->SetBreakpointKind("step-out");
@@ -227,14 +226,24 @@ void ThreadPlanStepOut::GetDescription(Stream *s,
 bool ThreadPlanStepOut::ValidatePlan(Stream *error) {
   if (m_step_out_to_inline_plan_sp)
     return m_step_out_to_inline_plan_sp->ValidatePlan(error);
-  else if (m_step_through_inline_plan_sp)
+
+  if (m_step_through_inline_plan_sp)
     return m_step_through_inline_plan_sp->ValidatePlan(error);
-  else if (m_return_bp_id == LLDB_INVALID_BREAK_ID) {
+
+  if (m_could_not_resolve_hw_bp) {
+    if (error)
+      error->PutCString(
+          "Could not create hardware breakpoint for thread plan.");
+    return false;
+  }
+
+  if (m_return_bp_id == LLDB_INVALID_BREAK_ID) {
     if (error)
       error->PutCString("Could not create return address breakpoint.");
     return false;
-  } else
-    return true;
+  }
+
+  return true;
 }
 
 bool ThreadPlanStepOut::DoPlanExplainsStop(Event *event_ptr) {
@@ -281,7 +290,7 @@ bool ThreadPlanStepOut::DoPlanExplainsStop(Event *event_ptr) {
         }
 
         if (done) {
-          if (InvokeShouldStopHereCallback(eFrameCompareOlder)) {
+          if (InvokeShouldStopHereCallback(eFrameCompareOlder, m_status)) {
             CalculateReturnValue();
             SetPlanComplete();
           }
@@ -343,12 +352,12 @@ bool ThreadPlanStepOut::ShouldStop(Event *event_ptr) {
   // is consult the ShouldStopHere, and we are done.
 
   if (done) {
-    if (InvokeShouldStopHereCallback(eFrameCompareOlder)) {
+    if (InvokeShouldStopHereCallback(eFrameCompareOlder, m_status)) {
       CalculateReturnValue();
       SetPlanComplete();
     } else {
       m_step_out_further_plan_sp =
-          QueueStepOutFromHerePlan(m_flags, eFrameCompareOlder);
+          QueueStepOutFromHerePlan(m_flags, eFrameCompareOlder, m_status);
       done = false;
     }
   }

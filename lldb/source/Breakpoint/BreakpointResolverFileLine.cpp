@@ -9,10 +9,6 @@
 
 #include "lldb/Breakpoint/BreakpointResolverFileLine.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Symbol/CompileUnit.h"
@@ -92,7 +88,7 @@ BreakpointResolver *BreakpointResolverFileLine::CreateFromStructuredData(
     return nullptr;
   }
 
-  FileSpec file_spec(filename, false);
+  FileSpec file_spec(filename);
 
   return new BreakpointResolverFileLine(bkpt, file_spec, line_no, column,
                                         offset, check_inlines, skip_prologue,

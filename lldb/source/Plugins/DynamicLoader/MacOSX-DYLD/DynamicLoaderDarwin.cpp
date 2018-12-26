@@ -115,7 +115,7 @@ ModuleSP DynamicLoaderDarwin::FindTargetModuleForImageInfo(
     // No UUID, we must rely upon the cached module modification time and the
     // modification time of the file on disk
     if (module_sp->GetModificationTime() !=
-        FileSystem::GetModificationTime(module_sp->GetFileSpec()))
+        FileSystem::Instance().GetModificationTime(module_sp->GetFileSpec()))
       module_sp.reset();
   }
 
@@ -359,22 +359,24 @@ bool DynamicLoaderDarwin::JSONImageInformationIntoImageInfo(
     if (image_sp.get() == nullptr || image_sp->GetAsDictionary() == nullptr)
       return false;
     StructuredData::Dictionary *image = image_sp->GetAsDictionary();
-    if (image->HasKey("load_address") == false ||
-        image->HasKey("pathname") == false ||
-        image->HasKey("mod_date") == false ||
-        image->HasKey("mach_header") == false ||
+    // clang-format off
+    if (!image->HasKey("load_address") ||
+        !image->HasKey("pathname") ||
+        !image->HasKey("mod_date") ||
+        !image->HasKey("mach_header") ||
         image->GetValueForKey("mach_header")->GetAsDictionary() == nullptr ||
-        image->HasKey("segments") == false ||
+        !image->HasKey("segments") ||
         image->GetValueForKey("segments")->GetAsArray() == nullptr ||
-        image->HasKey("uuid") == false) {
+        !image->HasKey("uuid")) {
       return false;
     }
+    // clang-format on
     image_infos[i].address =
         image->GetValueForKey("load_address")->GetAsInteger()->GetValue();
     image_infos[i].mod_date =
         image->GetValueForKey("mod_date")->GetAsInteger()->GetValue();
     image_infos[i].file_spec.SetFile(
-        image->GetValueForKey("pathname")->GetAsString()->GetValue(), false,
+        image->GetValueForKey("pathname")->GetAsString()->GetValue(),
         FileSpec::Style::native);
 
     StructuredData::Dictionary *mh =
@@ -712,11 +714,7 @@ bool DynamicLoaderDarwin::AlwaysRelyOnEHUnwindInfo(SymbolContext &sym_ctx) {
     return false;
 
   ObjCLanguageRuntime *objc_runtime = m_process->GetObjCLanguageRuntime();
-  if (objc_runtime != NULL && objc_runtime->IsModuleObjCLibrary(module_sp)) {
-    return true;
-  }
-
-  return false;
+  return objc_runtime != NULL && objc_runtime->IsModuleObjCLibrary(module_sp);
 }
 
 //----------------------------------------------------------------------

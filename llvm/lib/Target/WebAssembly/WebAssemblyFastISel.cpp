@@ -37,9 +37,14 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/IR/PatternMatch.h"
+
 using namespace llvm;
+using namespace PatternMatch;
 
 #define DEBUG_TYPE "wasm-fastisel"
+
+extern cl::opt<bool> EnableUnimplementedWasmSIMDInstrs;
 
 namespace {
 
@@ -134,10 +139,13 @@ private:
     case MVT::v16i8:
     case MVT::v8i16:
     case MVT::v4i32:
-    case MVT::v2i64:
     case MVT::v4f32:
-    case MVT::v2f64:
       if (Subtarget->hasSIMD128())
+        return VT;
+      break;
+    case MVT::v2i64:
+    case MVT::v2f64:
+      if (Subtarget->hasSIMD128() && EnableUnimplementedWasmSIMDInstrs)
         return VT;
       break;
     default:
@@ -417,9 +425,10 @@ unsigned WebAssemblyFastISel::getRegForI1Value(const Value *V, bool &Not) {
         return getRegForValue(ICmp->getOperand(0));
       }
 
-  if (BinaryOperator::isNot(V) && V->getType()->isIntegerTy(32)) {
+  Value *NotV;
+  if (match(V, m_Not(m_Value(NotV))) && V->getType()->isIntegerTy(32)) {
     Not = true;
-    return getRegForValue(BinaryOperator::getNotArgument(V));
+    return getRegForValue(NotV);
   }
 
   Not = false;
@@ -443,6 +452,7 @@ unsigned WebAssemblyFastISel::zeroExtendToI32(unsigned Reg, const Value *V,
           (isa<Argument>(V) && cast<Argument>(V)->hasZExtAttr()))
         return copyValue(Reg);
     }
+    break;
   case MVT::i8:
   case MVT::i16:
     break;

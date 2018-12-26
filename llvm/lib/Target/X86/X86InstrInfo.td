@@ -17,10 +17,6 @@
 // X86 specific DAG Nodes.
 //
 
-def SDTIntShiftDOp: SDTypeProfile<1, 3,
-                                  [SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>,
-                                   SDTCisInt<0>, SDTCisInt<3>]>;
-
 def SDTX86CmpTest : SDTypeProfile<1, 2, [SDTCisVT<0, i32>, SDTCisSameAs<1, 2>]>;
 
 def SDTX86Cmps : SDTypeProfile<1, 3, [SDTCisFP<0>, SDTCisSameAs<1, 2>, SDTCisVT<3, i8>]>;
@@ -290,6 +286,8 @@ def X86lock_dec  : SDNode<"X86ISD::LDEC",  SDTLockUnaryArithWithFlags,
                            SDNPMemOperand]>;
 
 def X86bextr  : SDNode<"X86ISD::BEXTR",  SDTIntBinOp>;
+
+def X86bzhi   : SDNode<"X86ISD::BZHI",   SDTIntBinOp>;
 
 def X86mul_imm : SDNode<"X86ISD::MUL_IMM", SDTIntBinOp>;
 
@@ -1491,7 +1489,7 @@ def MOV64rr : RI<0x89, MRMDestReg, (outs GR64:$dst), (ins GR64:$src),
                  "mov{q}\t{$src, $dst|$dst, $src}", []>;
 }
 
-let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
+let isReMaterializable = 1, isAsCheapAsAMove = 1, isMoveImm = 1 in {
 def MOV8ri  : Ii8 <0xB0, AddRegFrm, (outs GR8 :$dst), (ins i8imm :$src),
                    "mov{b}\t{$src, $dst|$dst, $src}",
                    [(set GR8:$dst, imm:$src)]>;
@@ -1505,7 +1503,7 @@ def MOV64ri32 : RIi32S<0xC7, MRM0r, (outs GR64:$dst), (ins i64i32imm:$src),
                        "mov{q}\t{$src, $dst|$dst, $src}",
                        [(set GR64:$dst, i64immSExt32:$src)]>;
 }
-let isReMaterializable = 1 in {
+let isReMaterializable = 1, isMoveImm = 1 in {
 def MOV64ri : RIi64<0xB8, AddRegFrm, (outs GR64:$dst), (ins i64imm:$src),
                     "movabs{q}\t{$src, $dst|$dst, $src}",
                     [(set GR64:$dst, relocImm:$src)]>;
@@ -2454,9 +2452,9 @@ multiclass bmi_bzhi<bits<8> opc, string mnemonic, RegisterClass RC,
 
 let Predicates = [HasBMI2], Defs = [EFLAGS] in {
   defm BZHI32 : bmi_bzhi<0xF5, "bzhi{l}", GR32, i32mem,
-                         int_x86_bmi_bzhi_32, loadi32, WriteBZHI>;
+                         X86bzhi, loadi32, WriteBZHI>;
   defm BZHI64 : bmi_bzhi<0xF5, "bzhi{q}", GR64, i64mem,
-                         int_x86_bmi_bzhi_64, loadi64, WriteBZHI>, VEX_W;
+                         X86bzhi, loadi64, WriteBZHI>, VEX_W;
 }
 
 def CountTrailingOnes : SDNodeXForm<imm, [{
@@ -2496,84 +2494,6 @@ let Predicates = [HasBMI2, NoTBM] in {
               (INSERT_SUBREG (i64 (IMPLICIT_DEF)),
                              (MOV8ri (CountTrailingOnes imm:$mask)), sub_8bit))>;
 }
-
-let Predicates = [HasBMI2] in {
-  multiclass _bmi_bzhi_pattern<dag regpattern, dag mempattern, RegisterClass RC,
-                               ValueType VT, Instruction DstInst,
-                               Instruction DstMemInst> {
-    def : Pat<regpattern,
-              (DstInst RC:$src,
-                (INSERT_SUBREG (VT (IMPLICIT_DEF)), GR8:$lz, sub_8bit))>;
-    def : Pat<mempattern,
-              (DstMemInst addr:$src,
-                (INSERT_SUBREG (VT (IMPLICIT_DEF)), GR8:$lz, sub_8bit))>;
-  }
-
-  multiclass bmi_bzhi_patterns<RegisterClass RC, int bitwidth, ValueType VT,
-                               Instruction DstInst, X86MemOperand x86memop,
-                               Instruction DstMemInst> {
-    // x & ((1 << y) - 1)
-    defm : _bmi_bzhi_pattern<(and RC:$src, (add (shl 1, GR8:$lz), -1)),
-                             (and (x86memop addr:$src),
-                                  (add (shl 1, GR8:$lz), -1)),
-                             RC, VT, DstInst, DstMemInst>;
-
-    // x & ~(-1 << y)
-    defm : _bmi_bzhi_pattern<(and RC:$src, (xor (shl -1, GR8:$lz), -1)),
-                             (and (x86memop addr:$src),
-                                  (xor (shl -1, GR8:$lz), -1)),
-                             RC, VT, DstInst, DstMemInst>;
-
-    // x & (-1 >> (bitwidth - y))
-    defm : _bmi_bzhi_pattern<(and RC:$src, (srl -1, (sub bitwidth, GR8:$lz))),
-                             (and (x86memop addr:$src),
-                                  (srl -1, (sub bitwidth, GR8:$lz))),
-                             RC, VT, DstInst, DstMemInst>;
-
-    // x << (bitwidth - y) >> (bitwidth - y)
-    defm : _bmi_bzhi_pattern<(srl (shl RC:$src, (sub bitwidth, GR8:$lz)),
-                                  (sub bitwidth, GR8:$lz)),
-                             (srl (shl (x86memop addr:$src),
-                                        (sub bitwidth, GR8:$lz)),
-                                  (sub bitwidth, GR8:$lz)),
-                             RC, VT, DstInst, DstMemInst>;
-  }
-
-  defm : bmi_bzhi_patterns<GR32, 32, i32, BZHI32rr, loadi32, BZHI32rm>;
-  defm : bmi_bzhi_patterns<GR64, 64, i64, BZHI64rr, loadi64, BZHI64rm>;
-
-  // x & (-1 >> (32 - y))
-  def : Pat<(and GR32:$src, (srl -1, (i8 (trunc (sub 32, GR32:$lz))))),
-            (BZHI32rr GR32:$src, GR32:$lz)>;
-  def : Pat<(and (loadi32 addr:$src), (srl -1, (i8 (trunc (sub 32, GR32:$lz))))),
-            (BZHI32rm addr:$src, GR32:$lz)>;
-
-  // x & (-1 >> (64 - y))
-  def : Pat<(and GR64:$src, (srl -1, (i8 (trunc (sub 64, GR32:$lz))))),
-            (BZHI64rr GR64:$src,
-              (INSERT_SUBREG (i64 (IMPLICIT_DEF)), GR32:$lz, sub_32bit))>;
-  def : Pat<(and (loadi64 addr:$src), (srl -1, (i8 (trunc (sub 64, GR32:$lz))))),
-            (BZHI64rm addr:$src,
-              (INSERT_SUBREG (i64 (IMPLICIT_DEF)), GR32:$lz, sub_32bit))>;
-
-  // x << (32 - y) >> (32 - y)
-  def : Pat<(srl (shl GR32:$src, (i8 (trunc (sub 32, GR32:$lz)))),
-                 (i8 (trunc (sub 32, GR32:$lz)))),
-            (BZHI32rr GR32:$src, GR32:$lz)>;
-  def : Pat<(srl (shl (loadi32 addr:$src), (i8 (trunc (sub 32, GR32:$lz)))),
-                 (i8 (trunc (sub 32, GR32:$lz)))),
-            (BZHI32rm addr:$src, GR32:$lz)>;
-
-  // x << (64 - y) >> (64 - y)
-  def : Pat<(srl (shl GR64:$src, (i8 (trunc (sub 64, GR32:$lz)))),
-                 (i8 (trunc (sub 64, GR32:$lz)))),
-            (BZHI64rr GR64:$src,
-              (INSERT_SUBREG (i64 (IMPLICIT_DEF)), GR32:$lz, sub_32bit))>;
-  def : Pat<(srl (shl (loadi64 addr:$src), (i8 (trunc (sub 64, GR32:$lz)))),
-                 (i8 (trunc (sub 64, GR32:$lz)))),
-            (BZHI64rm addr:$src,
-              (INSERT_SUBREG (i64 (IMPLICIT_DEF)), GR32:$lz, sub_32bit))>;
-} // HasBMI2
 
 multiclass bmi_pdep_pext<string mnemonic, RegisterClass RC,
                          X86MemOperand x86memop, Intrinsic Int,
@@ -2976,6 +2896,8 @@ def : MnemonicAlias<"popf",  "popfl", "att">, Requires<[In32BitMode]>;
 def : MnemonicAlias<"popf",  "popfq", "att">, Requires<[In64BitMode]>;
 def : MnemonicAlias<"popf",  "popfq", "intel">, Requires<[In64BitMode]>;
 def : MnemonicAlias<"popfd", "popfl", "att">;
+def : MnemonicAlias<"popfw", "popf",  "intel">, Requires<[In32BitMode]>;
+def : MnemonicAlias<"popfw", "popf",  "intel">, Requires<[In64BitMode]>;
 
 // FIXME: This is wrong for "push reg".  "push %bx" should turn into pushw in
 // all modes.  However: "push (addr)" and "push $42" should default to
@@ -2988,6 +2910,8 @@ def : MnemonicAlias<"pushf",  "pushfl", "att">, Requires<[In32BitMode]>;
 def : MnemonicAlias<"pushf",  "pushfq", "att">, Requires<[In64BitMode]>;
 def : MnemonicAlias<"pushf",  "pushfq", "intel">, Requires<[In64BitMode]>;
 def : MnemonicAlias<"pushfd", "pushfl", "att">;
+def : MnemonicAlias<"pushfw", "pushf",  "intel">, Requires<[In32BitMode]>;
+def : MnemonicAlias<"pushfw", "pushf",  "intel">, Requires<[In64BitMode]>;
 
 def : MnemonicAlias<"popad",  "popal",  "intel">, Requires<[Not64BitMode]>;
 def : MnemonicAlias<"pushad", "pushal", "intel">, Requires<[Not64BitMode]>;

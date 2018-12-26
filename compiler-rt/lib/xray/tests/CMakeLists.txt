@@ -60,6 +60,10 @@ if (NOT APPLE)
   if (COMPILER_RT_STANDALONE_BUILD)
     append_list_if(COMPILER_RT_HAS_LLVMXRAY ${LLVM_XRAY_LDFLAGS} XRAY_UNITTEST_LINK_FLAGS)
     append_list_if(COMPILER_RT_HAS_LLVMXRAY ${LLVM_XRAY_LIBLIST} XRAY_UNITTEST_LINK_FLAGS)
+    append_list_if(COMPILER_RT_HAS_LLVMTESTINGSUPPORT
+      ${LLVM_TESTINGSUPPORT_LDFLAGS} XRAY_UNITTEST_LINK_FLAGS)
+    append_list_if(COMPILER_RT_HAS_LLVMTESTINGSUPPORT
+      ${LLVM_TESTINGSUPPORT_LIBLIST} XRAY_UNITTEST_LINK_FLAGS)
   else()
     # We add the library directories one at a time in our CFLAGS.
     foreach (DIR ${LLVM_LIBRARY_DIR})
@@ -93,6 +97,7 @@ macro(add_xray_unittest testname)
         # the build/test cycle.
         COMPILE_DEPS ${TEST_SOURCES} ${COMPILER_RT_GTEST_SOURCE}
         ${XRAY_HEADERS} ${XRAY_ALL_SOURCE_FILES_ABS_PATHS}
+        "test_helpers.h"
         RUNTIME "${XRAY_RUNTIME_LIBS}"
         DEPS gtest xray llvm-xray LLVMXRay LLVMTestingSupport
         CFLAGS ${XRAY_UNITTEST_CFLAGS}

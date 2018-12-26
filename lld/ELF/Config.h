@@ -127,6 +127,7 @@ struct Configuration {
   bool AsNeeded = false;
   bool Bsymbolic;
   bool BsymbolicFunctions;
+  bool CallGraphProfileSort;
   bool CheckSections;
   bool CompressDebugSections;
   bool Cref;
@@ -134,6 +135,7 @@ struct Configuration {
   bool Demangle = true;
   bool DisableVerify;
   bool EhFrameHdr;
+  bool EmitLLVM;
   bool EmitRelocs;
   bool EnableNewDtags;
   bool ExecuteOnly;
@@ -188,6 +190,7 @@ struct Configuration {
   bool ZInitfirst;
   bool ZInterpose;
   bool ZKeepTextSectionPrefix;
+  bool ZNodefaultlib;
   bool ZNodelete;
   bool ZNodlopen;
   bool ZNow;

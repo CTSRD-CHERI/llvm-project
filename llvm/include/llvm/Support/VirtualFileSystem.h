@@ -193,14 +193,22 @@ public:
 
 class FileSystem;
 
+namespace detail {
+
+/// Keeps state for the recursive_directory_iterator.
+struct RecDirIterState {
+  std::stack<directory_iterator, std::vector<directory_iterator>> Stack;
+  bool HasNoPushRequest = false;
+};
+
+} // end namespace detail
+
 /// An input iterator over the recursive contents of a virtual path,
 /// similar to llvm::sys::fs::recursive_directory_iterator.
 class recursive_directory_iterator {
-  using IterState =
-      std::stack<directory_iterator, std::vector<directory_iterator>>;
-
   FileSystem *FS;
-  std::shared_ptr<IterState> State; // Input iterator semantics on copy.
+  std::shared_ptr<detail::RecDirIterState>
+      State; // Input iterator semantics on copy.
 
 public:
   recursive_directory_iterator(FileSystem &FS, const Twine &Path,
@@ -212,8 +220,8 @@ public:
   /// Equivalent to operator++, with an error code.
   recursive_directory_iterator &increment(std::error_code &EC);
 
-  const directory_entry &operator*() const { return *State->top(); }
-  const directory_entry *operator->() const { return &*State->top(); }
+  const directory_entry &operator*() const { return *State->Stack.top(); }
+  const directory_entry *operator->() const { return &*State->Stack.top(); }
 
   bool operator==(const recursive_directory_iterator &Other) const {
     return State == Other.State; // identity
@@ -224,9 +232,12 @@ public:
 
   /// Gets the current level. Starting path is at level 0.
   int level() const {
-    assert(!State->empty() && "Cannot get level without any iteration state");
-    return State->size() - 1;
+    assert(!State->Stack.empty() &&
+           "Cannot get level without any iteration state");
+    return State->Stack.size() - 1;
   }
+
+  void no_push() { State->HasNoPushRequest = true; }
 };
 
 /// The virtual file system interface.
@@ -267,6 +278,9 @@ public:
 
   /// Check whether a file exists. Provided for convenience.
   bool exists(const Twine &Path);
+
+  /// Is the file mounted on a local filesystem?
+  virtual std::error_code isLocal(const Twine &Path, bool &Result);
 
   /// Make \a Path an absolute path.
   ///
@@ -315,6 +329,7 @@ public:
   directory_iterator dir_begin(const Twine &Dir, std::error_code &EC) override;
   llvm::ErrorOr<std::string> getCurrentWorkingDirectory() const override;
   std::error_code setCurrentWorkingDirectory(const Twine &Path) override;
+  std::error_code isLocal(const Twine &Path, bool &Result) override;
   std::error_code getRealPath(const Twine &Path,
                               SmallVectorImpl<char> &Output) const override;
 
@@ -358,6 +373,9 @@ public:
   std::error_code getRealPath(const Twine &Path,
                               SmallVectorImpl<char> &Output) const override {
     return FS->getRealPath(Path, Output);
+  }
+  std::error_code isLocal(const Twine &Path, bool &Result) override {
+    return FS->isLocal(Path, Result);
   }
 
 protected:
@@ -452,7 +470,7 @@ public:
   /// system.
   std::error_code getRealPath(const Twine &Path,
                               SmallVectorImpl<char> &Output) const override;
-
+  std::error_code isLocal(const Twine &Path, bool &Result) override;
   std::error_code setCurrentWorkingDirectory(const Twine &Path) override;
 };
 
@@ -490,7 +508,6 @@ class YAMLVFSWriter {
   Optional<bool> IsCaseSensitive;
   Optional<bool> IsOverlayRelative;
   Optional<bool> UseExternalNames;
-  Optional<bool> IgnoreNonExistentContents;
   std::string OverlayDir;
 
 public:
@@ -503,10 +520,6 @@ public:
   }
 
   void setUseExternalNames(bool UseExtNames) { UseExternalNames = UseExtNames; }
-
-  void setIgnoreNonExistentContents(bool IgnoreContents) {
-    IgnoreNonExistentContents = IgnoreContents;
-  }
 
   void setOverlayDir(StringRef OverlayDirectory) {
     IsOverlayRelative = true;

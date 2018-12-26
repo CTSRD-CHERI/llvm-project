@@ -70,14 +70,15 @@ class FileEntry {
   bool IsNamedPipe;
   bool InPCH;
   bool IsValid;               // Is this \c FileEntry initialized and valid?
+  bool DeferredOpen;          // Created by getFile(OpenFile=0); may open later.
 
   /// The open file, if it is owned by the \p FileEntry.
   mutable std::unique_ptr<llvm::vfs::File> File;
 
 public:
   FileEntry()
-      : UniqueID(0, 0), IsNamedPipe(false), InPCH(false), IsValid(false)
-  {}
+      : UniqueID(0, 0), IsNamedPipe(false), InPCH(false), IsValid(false),
+        DeferredOpen(false) {}
 
   FileEntry(const FileEntry &) = delete;
   FileEntry &operator=(const FileEntry &) = delete;
@@ -103,6 +104,10 @@ public:
   void closeFile() const {
     File.reset(); // rely on destructor to close File
   }
+
+  // Only for use in tests to see if deferred opens are happening, rather than
+  // relying on RealPathName being empty.
+  bool isOpenForTests() const { return File != nullptr; }
 };
 
 struct FileData;
@@ -172,6 +177,9 @@ class FileManager : public RefCountedBase<FileManager> {
   /// or a directory) as virtual directories.
   void addAncestorsAsVirtualDirs(StringRef Path);
 
+  /// Fills the RealPathName in file entry.
+  void fillRealPathName(FileEntry *UFE, llvm::StringRef FileName);
+
 public:
   FileManager(const FileSystemOptions &FileSystemOpts,
               IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS = nullptr);
@@ -184,18 +192,10 @@ public:
   ///
   /// \param statCache the new stat cache to install. Ownership of this
   /// object is transferred to the FileManager.
-  ///
-  /// \param AtBeginning whether this new stat cache must be installed at the
-  /// beginning of the chain of stat caches. Otherwise, it will be added to
-  /// the end of the chain.
-  void addStatCache(std::unique_ptr<FileSystemStatCache> statCache,
-                    bool AtBeginning = false);
+  void setStatCache(std::unique_ptr<FileSystemStatCache> statCache);
 
-  /// Removes the specified FileSystemStatCache object from the manager.
-  void removeStatCache(FileSystemStatCache *statCache);
-
-  /// Removes all FileSystemStatCache objects from the manager.
-  void clearStatCaches();
+  /// Removes the FileSystemStatCache object from the manager.
+  void clearStatCache();
 
   /// Lookup, cache, and verify the specified directory (real or
   /// virtual).

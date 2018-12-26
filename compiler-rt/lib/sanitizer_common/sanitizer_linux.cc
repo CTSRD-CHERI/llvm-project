@@ -381,6 +381,10 @@ uptr internal_filesize(fd_t fd) {
   return (uptr)st.st_size;
 }
 
+uptr internal_dup(int oldfd) {
+  return internal_syscall(SYSCALL(dup), oldfd);
+}
+
 uptr internal_dup2(int oldfd, int newfd) {
 #if SANITIZER_USES_CANONICAL_LINUX_SYSCALLS
   return internal_syscall(SYSCALL(dup3), oldfd, newfd, 0);
@@ -433,7 +437,7 @@ void internal__exit(int exitcode) {
 
 unsigned int internal_sleep(unsigned int seconds) {
   struct timespec ts;
-  ts.tv_sec = 1;
+  ts.tv_sec = seconds;
   ts.tv_nsec = 0;
   int res = internal_syscall(SYSCALL(nanosleep), &ts, &ts);
   if (res) return ts.tv_sec;
@@ -623,33 +627,13 @@ char **GetArgv() {
   return argv;
 }
 
-void ReExec() {
+char **GetEnviron() {
   char **argv, **envp;
-  const char *pathname = "/proc/self/exe";
-
-#if SANITIZER_NETBSD
-  static const int name[] = {
-    CTL_KERN, KERN_PROC_ARGS, -1, KERN_PROC_PATHNAME,
-  };
-  char path[400];
-  uptr len;
-
-  len = sizeof(path);
-  if (internal_sysctl(name, ARRAY_SIZE(name), path, &len, NULL, 0) != -1)
-    pathname = path;
-#elif SANITIZER_SOLARIS
-  pathname = getexecname();
-  CHECK_NE(pathname, NULL);
-#endif
-
   GetArgsAndEnv(&argv, &envp);
-  uptr rv = internal_execve(pathname, argv, envp);
-  int rverrno;
-  CHECK_EQ(internal_iserror(rv, &rverrno), true);
-  Printf("execve failed, errno %d\n", rverrno);
-  Die();
+  return envp;
 }
-#endif
+
+#endif  // !SANITIZER_OPENBSD
 
 #if !SANITIZER_SOLARIS
 enum MutexState {
@@ -792,19 +776,17 @@ int internal_sysctl(const int *name, unsigned int namelen, void *oldp,
   return sysctl(name, namelen, oldp, (size_t *)oldlenp, (void *)newp,
                 (size_t)newlen);
 #else
-  return sysctl(name, namelen, oldp, (size_t *)oldlenp, newp, (size_t)newlen);
+  return internal_syscall(SYSCALL(__sysctl), name, namelen, oldp,
+                          (size_t *)oldlenp, newp, (size_t)newlen);
 #endif
 }
 
+#if SANITIZER_FREEBSD
 int internal_sysctlbyname(const char *sname, void *oldp, uptr *oldlenp,
                           const void *newp, uptr newlen) {
-#if SANITIZER_OPENBSD
-  return sysctlbyname(sname, oldp, (size_t *)oldlenp, (void *)newp,
-                      (size_t)newlen);
-#else
   return sysctlbyname(sname, oldp, (size_t *)oldlenp, newp, (size_t)newlen);
-#endif
 }
+#endif
 #endif
 
 #if SANITIZER_LINUX
@@ -1099,6 +1081,14 @@ uptr GetPageSize() {
   return EXEC_PAGESIZE;
 #elif SANITIZER_USE_GETAUXVAL
   return getauxval(AT_PAGESZ);
+#elif SANITIZER_FREEBSD || SANITIZER_NETBSD
+// Use sysctl as sysconf can trigger interceptors internally.
+  int pz = 0;
+  uptr pzl = sizeof(pz);
+  int mib[2] = {CTL_HW, HW_PAGESIZE};
+  int rv = internal_sysctl(mib, 2, &pz, &pzl, nullptr, 0);
+  CHECK_EQ(rv, 0);
+  return (uptr)pz;
 #else
   return sysconf(_SC_PAGESIZE);  // EXEC_PAGESIZE may not be trustworthy.
 #endif
@@ -1949,14 +1939,14 @@ static void GetPcSpBp(void *context, uptr *pc, uptr *sp, uptr *bp) {
 #elif defined(__sparc__)
   ucontext_t *ucontext = (ucontext_t*)context;
   uptr *stk_ptr;
-# if defined (__sparcv9)
+# if defined(__sparcv9) || defined (__arch64__)
 # ifndef MC_PC
 #  define MC_PC REG_PC
 # endif
 # ifndef MC_O6
 #  define MC_O6 REG_O6
 # endif
-# ifdef SANITIZER_SOLARIS
+# if SANITIZER_SOLARIS
 #  define mc_gregs gregs
 # endif
   *pc = ucontext->uc_mcontext.mc_gregs[MC_PC];
@@ -1990,6 +1980,10 @@ static void GetPcSpBp(void *context, uptr *pc, uptr *sp, uptr *bp) {
 
 void SignalContext::InitPcSpBp() { GetPcSpBp(context, &pc, &sp, &bp); }
 
+void InitializePlatformEarly() {
+  // Do nothing.
+}
+
 void MaybeReexec() {
   // No need to re-exec on Linux.
 }
@@ -2012,6 +2006,17 @@ void CheckASLR() {
   if (UNLIKELY(paxflags & CTL_PROC_PAXFLAGS_ASLR)) {
     Printf("This sanitizer is not compatible with enabled ASLR\n");
     Die();
+  }
+#elif SANITIZER_PPC64V2
+  // Disable ASLR for Linux PPC64LE.
+  int old_personality = personality(0xffffffff);
+  if (old_personality != -1 && (old_personality & ADDR_NO_RANDOMIZE) == 0) {
+    VReport(1, "WARNING: Program is being run with address space layout "
+               "randomization (ASLR) enabled which prevents the thread and "
+               "memory sanitizers from working on powerpc64le.\n"
+               "ASLR will be disabled and the program re-executed.\n");
+    CHECK_NE(personality(old_personality | ADDR_NO_RANDOMIZE), -1);
+    ReExec();
   }
 #else
   // Do nothing

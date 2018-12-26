@@ -59,14 +59,6 @@
 // -----------------------------------------------------------------------------
 // RUN: %clang -### -target hexagon-unknown-elf \
 // RUN:   -ccc-install-dir %S/Inputs/hexagon_tree/Tools/bin \
-// RUN:   -mcpu=hexagonv4 \
-// RUN:   %s 2>&1 \
-// RUN:   | FileCheck -check-prefix=CHECK020 %s
-// CHECK020: "-cc1" {{.*}} "-target-cpu" "hexagonv4"
-// CHECK020: {{hexagon-link|ld}}{{.*}}/Inputs/hexagon_tree/Tools/bin/../target/hexagon/lib/v4/crt0
-
-// RUN: %clang -### -target hexagon-unknown-elf \
-// RUN:   -ccc-install-dir %S/Inputs/hexagon_tree/Tools/bin \
 // RUN:   -mcpu=hexagonv5 \
 // RUN:   %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHECK021 %s
@@ -107,19 +99,27 @@
 
 // RUN: %clang -### -target hexagon-unknown-elf \
 // RUN:   -ccc-install-dir %S/Inputs/hexagon_tree/Tools/bin \
-// RUN:   -O3 \
+// RUN:   -mcpu=hexagonv66 \
 // RUN:   %s 2>&1 \
 // RUN:   | FileCheck -check-prefix=CHECK026 %s
-// CHECK026-NOT: "-ffp-contract=fast"
-// CHECK026: {{hexagon-link|ld}}
+// CHECK026: "-cc1" {{.*}} "-target-cpu" "hexagonv66"
+// CHECK026: {{hexagon-link|ld}}{{.*}}/Inputs/hexagon_tree/Tools/bin/../target/hexagon/lib/v66/crt0
+
+// RUN: %clang -### -target hexagon-unknown-elf \
+// RUN:   -ccc-install-dir %S/Inputs/hexagon_tree/Tools/bin \
+// RUN:   -O3 \
+// RUN:   %s 2>&1 \
+// RUN:   | FileCheck -check-prefix=CHECK027 %s
+// CHECK027-NOT: "-ffp-contract=fast"
+// CHECK027: {{hexagon-link|ld}}
 
 // RUN: %clang -### -target hexagon-unknown-elf \
 // RUN:   -ccc-install-dir %S/Inputs/hexagon_tree/Tools/bin \
 // RUN:   -O3 -ffp-contract=off \
 // RUN:   %s 2>&1 \
-// RUN:   | FileCheck -check-prefix=CHECK027 %s
-// CHECK027-NOT: "-ffp-contract=fast"
-// CHECK027: {{hexagon-link|ld}}
+// RUN:   | FileCheck -check-prefix=CHECK028 %s
+// CHECK028-NOT: "-ffp-contract=fast"
+// CHECK028: {{hexagon-link|ld}}
 
 // -----------------------------------------------------------------------------
 // Test Linker related args

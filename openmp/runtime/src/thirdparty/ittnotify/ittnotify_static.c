@@ -12,7 +12,11 @@
 #include "ittnotify_config.h"
 
 #if ITT_PLATFORM==ITT_PLATFORM_WIN
+#if defined(__MINGW32__)
+#include <limits.h>
+#else
 #define PATH_MAX 512
+#endif
 #else /* ITT_PLATFORM!=ITT_PLATFORM_WIN */
 #include <limits.h>
 #include <dlfcn.h>
@@ -28,7 +32,9 @@
 #include "ittnotify.h"
 #include "legacy/ittnotify.h"
 
+#if KMP_MSVC_COMPAT
 #include "disable_warnings.h"
+#endif
 
 static const char api_version[] = API_VERSION "\0\n@(#) $Revision: 481659 $\n";
 
@@ -76,6 +82,10 @@ static const char* ittnotify_lib_name = "libittnotify.dylib";
 #define ANDROID_ITTNOTIFY_DEFAULT_PATH  ANDROID_ITTNOTIFY_DEFAULT_PATH_MASK(64)
 #endif
 
+#endif
+
+#ifndef PATH_MAX
+#define PATH_MAX 4096
 #endif
 
 
@@ -190,7 +200,7 @@ static __itt_group_alias group_alias[] = {
 
 #pragma pack(pop)
 
-#if ITT_PLATFORM==ITT_PLATFORM_WIN
+#if ITT_PLATFORM==ITT_PLATFORM_WIN && KMP_MSVC_COMPAT
 #pragma warning(push)
 #pragma warning(disable: 4054) /* warning C4054: 'type cast' : from function pointer 'XXX' to data pointer 'void *' */
 #endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
@@ -213,7 +223,7 @@ static __itt_api_info api_list[] = {
     {NULL, NULL, NULL, NULL, __itt_group_none}
 };
 
-#if ITT_PLATFORM==ITT_PLATFORM_WIN
+#if ITT_PLATFORM==ITT_PLATFORM_WIN && KMP_MSVC_COMPAT
 #pragma warning(pop)
 #endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
 
@@ -248,7 +258,7 @@ typedef void (__itt_api_fini_t)(__itt_global*);
 ITT_EXTERN_C void _N_(error_handler)(__itt_error_code, va_list args);
 #endif /* ITT_NOTIFY_EXT_REPORT */
 
-#if ITT_PLATFORM==ITT_PLATFORM_WIN
+#if ITT_PLATFORM==ITT_PLATFORM_WIN && KMP_MSVC_COMPAT
 #pragma warning(push)
 #pragma warning(disable: 4055) /* warning C4055: 'type cast' : from data pointer 'void *' to function pointer 'XXX' */
 #endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
@@ -274,7 +284,7 @@ static void __itt_report_error(unsigned code_arg, ...)
     va_end(args);
 }
 
-#if ITT_PLATFORM==ITT_PLATFORM_WIN
+#if ITT_PLATFORM==ITT_PLATFORM_WIN && KMP_MSVC_COMPAT
 #pragma warning(pop)
 #endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
 
@@ -1009,7 +1019,7 @@ static void __itt_nullify_all_pointers(void)
         *_N_(_ittapi_global).api_list_ptr[i].func_ptr = _N_(_ittapi_global).api_list_ptr[i].null_func;
 }
 
-#if ITT_PLATFORM==ITT_PLATFORM_WIN
+#if ITT_PLATFORM==ITT_PLATFORM_WIN && KMP_MSVC_COMPAT
 #pragma warning(push)
 #pragma warning(disable: 4054) /* warning C4054: 'type cast' : from function pointer 'XXX' to data pointer 'void *' */
 #pragma warning(disable: 4055) /* warning C4055: 'type cast' : from data pointer 'void *' to function pointer 'XXX' */
@@ -1187,7 +1197,6 @@ ITT_EXTERN_C __itt_error_handler_t* _N_(set_error_handler)(__itt_error_handler_t
     return prev;
 }
 
-#if ITT_PLATFORM==ITT_PLATFORM_WIN
+#if ITT_PLATFORM==ITT_PLATFORM_WIN && KMP_MSVC_COMPAT
 #pragma warning(pop)
 #endif /* ITT_PLATFORM==ITT_PLATFORM_WIN */
-

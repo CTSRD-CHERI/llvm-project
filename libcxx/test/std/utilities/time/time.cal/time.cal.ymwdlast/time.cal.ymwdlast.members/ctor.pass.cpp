@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class year_month_weekday_last;
@@ -41,7 +41,7 @@ int main()
     constexpr weekday Tuesday = std::chrono::Tuesday;
 
     ASSERT_NOEXCEPT(year_month_weekday_last{year{1}, month{1}, weekday_last{Tuesday}});
-    
+
     constexpr year_month_weekday_last ym1{year{2019}, January, weekday_last{Tuesday}};
     static_assert( ym1.year()         == year{2019},            "");
     static_assert( ym1.month()        == January,               "");

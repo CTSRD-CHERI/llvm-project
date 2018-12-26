@@ -479,6 +479,9 @@ void OMPClauseProfiler::VisitOMPReverseOffloadClause(
 void OMPClauseProfiler::VisitOMPDynamicAllocatorsClause(
     const OMPDynamicAllocatorsClause *C) {}
 
+void OMPClauseProfiler::VisitOMPAtomicDefaultMemOrderClause(
+    const OMPAtomicDefaultMemOrderClause *C) {}
+
 void OMPClauseProfiler::VisitOMPScheduleClause(const OMPScheduleClause *C) {
   VistOMPClauseWithPreInit(C);
   if (auto *S = C->getChunkSize())
@@ -996,6 +999,10 @@ void StmtProfiler::VisitExpr(const Expr *S) {
   VisitStmt(S);
 }
 
+void StmtProfiler::VisitConstantExpr(const ConstantExpr *S) {
+  VisitExpr(S);
+}
+
 void StmtProfiler::VisitDeclRefExpr(const DeclRefExpr *S) {
   VisitExpr(S);
   if (!Canonical)
@@ -1010,7 +1017,7 @@ void StmtProfiler::VisitDeclRefExpr(const DeclRefExpr *S) {
 
 void StmtProfiler::VisitPredefinedExpr(const PredefinedExpr *S) {
   VisitExpr(S);
-  ID.AddInteger(S->getIdentType());
+  ID.AddInteger(S->getIdentKind());
 }
 
 void StmtProfiler::VisitIntegerLiteral(const IntegerLiteral *S) {

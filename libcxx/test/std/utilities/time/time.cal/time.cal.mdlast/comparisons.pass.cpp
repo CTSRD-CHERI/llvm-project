@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class month_day_last;
@@ -32,7 +32,7 @@ int main()
 
     AssertComparisons6AreNoexcept<month_day_last>();
     AssertComparisons6ReturnBool<month_day_last>();
-    
+
     static_assert( testComparisons6Values<month_day_last>(month{1}, month{1}), "");
     static_assert( testComparisons6Values<month_day_last>(month{1}, month{2}), "");
 

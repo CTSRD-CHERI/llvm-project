@@ -30,6 +30,10 @@ std::string RecordTypeAsString(RecordTypes T) {
     return "llvm::xray::RecordTypes::TAIL_EXIT";
   case RecordTypes::ENTER_ARG:
     return "llvm::xray::RecordTypes::ENTER_ARG";
+  case RecordTypes::CUSTOM_EVENT:
+    return "llvm::xray::RecordTypes::CUSTOM_EVENT";
+  case RecordTypes::TYPED_EVENT:
+    return "llvm::xray::RecordTypes::TYPED_EVENT";
   }
   return "<UNKNOWN>";
 }
@@ -78,7 +82,7 @@ std::string serialize(BufferQueue &Buffers, int32_t Version) {
   Serialized.append(reinterpret_cast<const char *>(&HeaderStorage),
                     sizeof(XRayFileHeader));
   Buffers.apply([&](const BufferQueue::Buffer &B) {
-    auto Size = atomic_load_relaxed(&B.Extents);
+    auto Size = atomic_load_relaxed(B.Extents);
     auto Extents =
         createMetadataRecord<MetadataRecord::RecordKinds::BufferExtents>(Size);
     Serialized.append(reinterpret_cast<const char *>(&Extents),

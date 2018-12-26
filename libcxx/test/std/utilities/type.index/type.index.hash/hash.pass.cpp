@@ -21,6 +21,7 @@
 // };
 
 #include <typeindex>
+#include <type_traits>
 #include <cassert>
 
 int main()

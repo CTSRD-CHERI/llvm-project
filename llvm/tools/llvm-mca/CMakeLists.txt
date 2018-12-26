@@ -6,6 +6,7 @@ set(LLVM_LINK_COMPONENTS
   AllTargetsDescs
   AllTargetsDisassemblers
   AllTargetsInfos
+  MCA
   MC
   MCParser
   Support
@@ -14,6 +15,7 @@ set(LLVM_LINK_COMPONENTS
 add_llvm_tool(llvm-mca
   llvm-mca.cpp
   CodeRegion.cpp
+  CodeRegionGenerator.cpp
   PipelinePrinter.cpp
   Views/DispatchStatistics.cpp
   Views/InstructionInfoView.cpp
@@ -27,5 +29,3 @@ add_llvm_tool(llvm-mca
   )
 
 set(LLVM_MCA_SOURCE_DIR ${CURRENT_SOURCE_DIR})
-add_subdirectory(lib)
-target_link_libraries(llvm-mca PRIVATE LLVMMCA)

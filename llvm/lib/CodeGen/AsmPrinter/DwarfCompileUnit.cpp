@@ -69,14 +69,16 @@ void DwarfCompileUnit::addLabelAddress(DIE &Die, dwarf::Attribute Attribute,
   // pool from the skeleton - maybe even in non-fission (possibly fewer
   // relocations by sharing them in the pool, but we have other ideas about how
   // to reduce the number of relocations as well/instead).
-  if (!DD->useSplitDwarf() || !Skeleton)
+  if ((!DD->useSplitDwarf() || !Skeleton) && DD->getDwarfVersion() < 5)
     return addLocalLabelAddress(Die, Attribute, Label);
 
   if (Label)
     DD->addArangeLabel(SymbolCU(this, Label));
 
   unsigned idx = DD->getAddressPool().getIndex(Label);
-  Die.addValue(DIEValueAllocator, Attribute, dwarf::DW_FORM_GNU_addr_index,
+  Die.addValue(DIEValueAllocator, Attribute,
+               DD->getDwarfVersion() >= 5 ? dwarf::DW_FORM_addrx
+                                          : dwarf::DW_FORM_GNU_addr_index,
                DIEInteger(idx));
 }
 
@@ -275,6 +277,7 @@ void DwarfCompileUnit::addRange(RangeSpan Range) {
       (&CURanges.back().getEnd()->getSection() !=
        &Range.getEnd()->getSection())) {
     CURanges.push_back(Range);
+    DD->addSectionLabel(Range.getStart());
     return;
   }
 
@@ -422,24 +425,29 @@ void DwarfCompileUnit::addScopeRangeList(DIE &ScopeDIE,
           ? TLOF.getDwarfRnglistsSection()->getBeginSymbol()
           : TLOF.getDwarfRangesSection()->getBeginSymbol();
 
-  RangeSpanList List(Asm->createTempSymbol("debug_ranges"), std::move(Range));
+  HasRangeLists = true;
+
+  // Add the range list to the set of ranges to be emitted.
+  auto IndexAndList =
+      (DD->getDwarfVersion() < 5 && Skeleton ? Skeleton->DU : DU)
+          ->addRange(*(Skeleton ? Skeleton : this), std::move(Range));
+
+  uint32_t Index = IndexAndList.first;
+  auto &List = *IndexAndList.second;
 
   // Under fission, ranges are specified by constant offsets relative to the
   // CU's DW_AT_GNU_ranges_base.
   // FIXME: For DWARF v5, do not generate the DW_AT_ranges attribute under
   // fission until we support the forms using the .debug_addr section
   // (DW_RLE_startx_endx etc.).
-  if (isDwoUnit()) {
-    if (DD->getDwarfVersion() < 5)
-      addSectionDelta(ScopeDIE, dwarf::DW_AT_ranges, List.getSym(),
-                      RangeSectionSym);
-  } else {
+  if (DD->getDwarfVersion() >= 5)
+    addUInt(ScopeDIE, dwarf::DW_AT_ranges, dwarf::DW_FORM_rnglistx, Index);
+  else if (isDwoUnit())
+    addSectionDelta(ScopeDIE, dwarf::DW_AT_ranges, List.getSym(),
+                    RangeSectionSym);
+  else
     addSectionLabel(ScopeDIE, dwarf::DW_AT_ranges, List.getSym(),
                     RangeSectionSym);
-  }
-
-  // Add the range list to the set of ranges to be emitted.
-  (Skeleton ? Skeleton : this)->CURangeLists.push_back(std::move(List));
 }
 
 void DwarfCompileUnit::attachRangesOrLowHighPC(
@@ -813,7 +821,7 @@ void DwarfCompileUnit::constructAbstractSubprogramScopeDIE(
 DIE &DwarfCompileUnit::constructCallSiteEntryDIE(DIE &ScopeDIE,
                                                  const DISubprogram &CalleeSP,
                                                  bool IsTail,
-                                                 const MCSymbol *ReturnPC) {
+                                                 const MCExpr *PCOffset) {
   // Insert a call site entry DIE within ScopeDIE.
   DIE &CallSiteDIE =
       createAndAddDIE(dwarf::DW_TAG_call_site, ScopeDIE, nullptr);
@@ -830,8 +838,8 @@ DIE &DwarfCompileUnit::constructCallSiteEntryDIE(DIE &ScopeDIE,
   } else {
     // Attach the return PC to allow the debugger to disambiguate call paths
     // from one function to another.
-    assert(ReturnPC && "Missing return PC information for a call");
-    addLabelAddress(CallSiteDIE, dwarf::DW_AT_call_return_pc, ReturnPC);
+    assert(PCOffset && "Missing return PC information for a call");
+    addAddressExpr(CallSiteDIE, dwarf::DW_AT_call_return_pc, PCOffset);
   }
   return CallSiteDIE;
 }
@@ -1095,6 +1103,12 @@ void DwarfCompileUnit::addExpr(DIELoc &Die, dwarf::Form Form,
   Die.addValue(DIEValueAllocator, (dwarf::Attribute)0, Form, DIEExpr(Expr));
 }
 
+void DwarfCompileUnit::addAddressExpr(DIE &Die, dwarf::Attribute Attribute,
+                                      const MCExpr *Expr) {
+  Die.addValue(DIEValueAllocator, Attribute, dwarf::DW_FORM_addr,
+               DIEExpr(Expr));
+}
+
 void DwarfCompileUnit::applySubprogramAttributesToDefinition(
     const DISubprogram *SP, DIE &SPDie) {
   auto *SPDecl = SP->getDeclaration();
@@ -1110,4 +1124,13 @@ bool DwarfCompileUnit::isDwoUnit() const {
 bool DwarfCompileUnit::includeMinimalInlineScopes() const {
   return getCUNode()->getEmissionKind() == DICompileUnit::LineTablesOnly ||
          (DD->useSplitDwarf() && !Skeleton);
+}
+
+void DwarfCompileUnit::addAddrTableBase() {
+  const TargetLoweringObjectFile &TLOF = Asm->getObjFileLowering();
+  MCSymbol *Label = DD->getAddressPool().getLabel();
+  addSectionLabel(getUnitDie(),
+                  getDwarfVersion() >= 5 ? dwarf::DW_AT_addr_base
+                                         : dwarf::DW_AT_GNU_addr_base,
+                  Label, TLOF.getDwarfAddrSection()->getBeginSymbol());
 }

@@ -315,14 +315,21 @@ unsigned DwarfTypeUnit::getOrCreateSourceID(const DIFile *File) {
 }
 
 void DwarfUnit::addOpAddress(DIELoc &Die, const MCSymbol *Sym) {
-  if (!DD->useSplitDwarf()) {
-    addUInt(Die, dwarf::DW_FORM_data1, dwarf::DW_OP_addr);
-    addLabel(Die, dwarf::DW_FORM_udata, Sym);
-  } else {
+  if (DD->getDwarfVersion() >= 5) {
+    addUInt(Die, dwarf::DW_FORM_data1, dwarf::DW_OP_addrx);
+    addUInt(Die, dwarf::DW_FORM_addrx, DD->getAddressPool().getIndex(Sym));
+    return;
+  }
+
+  if (DD->useSplitDwarf()) {
     addUInt(Die, dwarf::DW_FORM_data1, dwarf::DW_OP_GNU_addr_index);
     addUInt(Die, dwarf::DW_FORM_GNU_addr_index,
             DD->getAddressPool().getIndex(Sym));
+    return;
   }
+
+  addUInt(Die, dwarf::DW_FORM_data1, dwarf::DW_OP_addr);
+  addLabel(Die, dwarf::DW_FORM_udata, Sym);
 }
 
 void DwarfUnit::addLabelDelta(DIE &Die, dwarf::Attribute Attribute,
@@ -1546,7 +1553,14 @@ DIE *DwarfUnit::getOrCreateStaticMemberDIE(const DIDerivedType *DT) {
 void DwarfUnit::emitCommonHeader(bool UseOffsets, dwarf::UnitType UT) {
   // Emit size of content not including length itself
   Asm->OutStreamer->AddComment("Length of Unit");
-  Asm->emitInt32(getHeaderSize() + getUnitDie().getSize());
+  if (!DD->useSectionsAsReferences()) {
+    StringRef Prefix = isDwoUnit() ? "debug_info_dwo_" : "debug_info_";
+    MCSymbol *BeginLabel = Asm->createTempSymbol(Prefix + "start");
+    EndLabel = Asm->createTempSymbol(Prefix + "end");
+    Asm->EmitLabelDifference(EndLabel, BeginLabel, 4);
+    Asm->OutStreamer->EmitLabel(BeginLabel);
+  } else
+    Asm->emitInt32(getHeaderSize() + getUnitDie().getSize());
 
   Asm->OutStreamer->AddComment("DWARF version number");
   unsigned Version = DD->getDwarfVersion();
@@ -1649,9 +1663,11 @@ void DwarfUnit::addRnglistsBase() {
                   TLOF.getDwarfRnglistsSection()->getBeginSymbol());
 }
 
-void DwarfUnit::addAddrTableBase() {
+void DwarfUnit::addLoclistsBase() {
+  assert(DD->getDwarfVersion() >= 5 &&
+         "DW_AT_loclists_base requires DWARF version 5 or later");
   const TargetLoweringObjectFile &TLOF = Asm->getObjFileLowering();
-  MCSymbol *Label = DD->getAddressPool().getLabel();
-  addSectionLabel(getUnitDie(), dwarf::DW_AT_GNU_addr_base, Label,
-                  TLOF.getDwarfAddrSection()->getBeginSymbol());
+  addSectionLabel(getUnitDie(), dwarf::DW_AT_loclists_base,
+                  DU->getLoclistsTableBaseSym(),
+                  TLOF.getDwarfLoclistsSection()->getBeginSymbol());
 }

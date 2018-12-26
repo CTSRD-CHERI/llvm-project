@@ -9,10 +9,6 @@
 
 #include "lldb/Interpreter/OptionValueFormatEntity.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/Module.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Utility/Stream.h"
@@ -61,10 +57,10 @@ void OptionValueFormatEntity::DumpValue(const ExecutionContext *exe_ctx,
     strm.Printf("(%s)", GetTypeAsCString());
   if (dump_mask & eDumpOptionValue) {
     if (dump_mask & eDumpOptionType)
-      strm.PutCString(" = \"");
+      strm.PutCString(" = ");
     std::string escaped;
     EscapeBackticks(m_current_format, escaped);
-    strm << escaped << '"';
+    strm << '"' << escaped << '"';
   }
 }
 

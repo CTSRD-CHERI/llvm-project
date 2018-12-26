@@ -78,6 +78,15 @@ WebAssemblyTargetStreamer *WebAssemblyAsmPrinter::getTargetStreamer() {
 //===----------------------------------------------------------------------===//
 
 void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
+  for (auto &It : OutContext.getSymbols()) {
+    // Emit a .globaltype and .eventtype declaration.
+    auto Sym = cast<MCSymbolWasm>(It.getValue());
+    if (Sym->getType() == wasm::WASM_SYMBOL_TYPE_GLOBAL)
+      getTargetStreamer()->emitGlobalType(Sym);
+    else if (Sym->getType() == wasm::WASM_SYMBOL_TYPE_EVENT)
+      getTargetStreamer()->emitEventType(Sym);
+  }
+
   for (const auto &F : M) {
     // Emit function type info for all undefined functions
     if (F.isDeclarationForLinker() && !F.isIntrinsic()) {
@@ -85,6 +94,7 @@ void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
       SmallVector<MVT, 4> Params;
       ComputeSignatureVTs(F.getFunctionType(), F, TM, Params, Results);
       auto *Sym = cast<MCSymbolWasm>(getSymbol(&F));
+      Sym->setType(wasm::WASM_SYMBOL_TYPE_FUNCTION);
       if (!Sym->getSignature()) {
         auto Signature = SignatureFromMVTs(Results, Params);
         Sym->setSignature(Signature.get());
@@ -95,16 +105,18 @@ void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
       // infer the type from a call). With object files it applies to all
       // imports. so fix the names and the tests, or rethink how import
       // delcarations work in asm files.
-      getTargetStreamer()->emitIndirectFunctionType(Sym);
+      getTargetStreamer()->emitFunctionType(Sym);
 
       if (TM.getTargetTriple().isOSBinFormatWasm() &&
           F.hasFnAttribute("wasm-import-module")) {
         StringRef Name =
             F.getFnAttribute("wasm-import-module").getValueAsString();
+        Sym->setModuleName(Name);
         getTargetStreamer()->emitImportModule(Sym, Name);
       }
     }
   }
+
   for (const auto &G : M.globals()) {
     if (!G.hasInitializer() && G.hasExternalLinkage()) {
       if (G.getValueType()->isSized()) {
@@ -154,9 +166,10 @@ void WebAssemblyAsmPrinter::EmitFunctionBodyStart() {
   auto *WasmSym = cast<MCSymbolWasm>(CurrentFnSym);
   WasmSym->setSignature(Signature.get());
   addSignature(std::move(Signature));
+  WasmSym->setType(wasm::WASM_SYMBOL_TYPE_FUNCTION);
 
   // FIXME: clean up how params and results are emitted (use signatures)
-  getTargetStreamer()->emitParam(CurrentFnSym, ParamVTs);
+  getTargetStreamer()->emitFunctionType(WasmSym);
 
   // Emit the function index.
   if (MDNode *Idx = F.getMetadata("wasm.index")) {
@@ -166,8 +179,9 @@ void WebAssemblyAsmPrinter::EmitFunctionBodyStart() {
         cast<ConstantAsMetadata>(Idx->getOperand(0))->getValue()));
   }
 
-  getTargetStreamer()->emitResult(CurrentFnSym, ResultVTs);
-  getTargetStreamer()->emitLocal(MFI->getLocals());
+  SmallVector<wasm::ValType, 16> Locals;
+  ValTypesFromMVTs(MFI->getLocals(), Locals);
+  getTargetStreamer()->emitLocal(Locals);
 
   AsmPrinter::EmitFunctionBodyStart();
 }

@@ -7,13 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringRef.h"
 
-// Project includes
 #include "CommandObjectExpression.h"
 #include "Plugins/ExpressionParser/Clang/ClangExpressionVariable.h"
 #include "lldb/Core/Debugger.h"
@@ -424,8 +420,7 @@ bool CommandObjectExpression::EvaluateExpression(llvm::StringRef expr,
     if (m_command_options.auto_apply_fixits == eLazyBoolCalculate)
       auto_apply_fixits = target->GetEnableAutoApplyFixIts();
     else
-      auto_apply_fixits =
-          m_command_options.auto_apply_fixits == eLazyBoolYes ? true : false;
+      auto_apply_fixits = m_command_options.auto_apply_fixits == eLazyBoolYes;
 
     options.SetAutoApplyFixIts(auto_apply_fixits);
 

@@ -270,7 +270,8 @@ void USRGenerator::VisitFunctionDecl(const FunctionDecl *D) {
   if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(D)) {
     if (MD->isStatic())
       Out << 'S';
-    if (unsigned quals = MD->getTypeQualifiers())
+    // FIXME: OpenCL: Need to consider address spaces
+    if (unsigned quals = MD->getTypeQualifiers().getCVRUQualifiers())
       Out << (char)('0' + quals);
     switch (MD->getRefQualifier()) {
     case RQ_None: break;
@@ -711,6 +712,9 @@ void USRGenerator::VisitType(QualType T) {
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
         case BuiltinType::Id:
 #include "clang/Basic/OpenCLImageTypes.def"
+#define EXT_OPAQUE_TYPE(ExtType, Id, Ext) \
+        case BuiltinType::Id:
+#include "clang/Basic/OpenCLExtensionTypes.def"
         case BuiltinType::OCLEvent:
         case BuiltinType::OCLClkEvent:
         case BuiltinType::OCLQueue:
@@ -942,7 +946,7 @@ void USRGenerator::VisitTemplateArgument(const TemplateArgument &Arg) {
 
   case TemplateArgument::TemplateExpansion:
     Out << 'P'; // pack expansion of...
-    // Fall through
+    LLVM_FALLTHROUGH;
   case TemplateArgument::Template:
     VisitTemplateName(Arg.getAsTemplateOrTemplatePattern());
     break;
@@ -1100,6 +1104,17 @@ bool clang::index::generateUSRForMacro(StringRef MacroName, SourceLocation Loc,
   Out << "@macro@";
   Out << MacroName;
   return false;
+}
+
+bool clang::index::generateUSRForType(QualType T, ASTContext &Ctx,
+                                      SmallVectorImpl<char> &Buf) {
+  if (T.isNull())
+    return true;
+  T = T.getCanonicalType();
+
+  USRGenerator UG(&Ctx, Buf);
+  UG.VisitType(T);
+  return UG.ignoreResults();
 }
 
 bool clang::index::generateFullUSRForModule(const Module *Mod,

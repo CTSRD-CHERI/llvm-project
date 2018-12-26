@@ -44,6 +44,7 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
+#include <sstream>
 
 using namespace llvm;
 
@@ -146,6 +147,15 @@ static cl::opt<bool>
                          cl::desc("Record stack frames with tagged allocations "
                                   "in a thread-local ring buffer"),
                          cl::Hidden, cl::init(true));
+static cl::opt<bool>
+    ClCreateFrameDescriptions("hwasan-create-frame-descriptions",
+                              cl::desc("create static frame descriptions"),
+                              cl::Hidden, cl::init(true));
+
+static cl::opt<bool>
+    ClInstrumentMemIntrinsics("hwasan-instrument-mem-intrinsics",
+                              cl::desc("instrument memory intrinsics"),
+                              cl::Hidden, cl::init(false));
 namespace {
 
 /// An instrumentation pass implementing detection of addressability bugs
@@ -176,6 +186,7 @@ public:
   void instrumentMemAccessInline(Value *PtrLong, bool IsWrite,
                                  unsigned AccessSizeIndex,
                                  Instruction *InsertBefore);
+  void instrumentMemIntrinsic(MemIntrinsic *MI);
   bool instrumentMemAccess(Instruction *I);
   Value *isInterestingMemoryAccess(Instruction *I, bool *IsWrite,
                                    uint64_t *TypeSize, unsigned *Alignment,
@@ -198,7 +209,27 @@ public:
 
 private:
   LLVMContext *C;
+  std::string CurModuleUniqueId;
   Triple TargetTriple;
+  Function *HWAsanMemmove, *HWAsanMemcpy, *HWAsanMemset;
+
+  // Frame description is a way to pass names/sizes of local variables
+  // to the run-time w/o adding extra executable code in every function.
+  // We do this by creating a separate section with {PC,Descr} pairs and passing
+  // the section beg/end to __hwasan_init_frames() at module init time.
+  std::string createFrameString(ArrayRef<AllocaInst*> Allocas);
+  void createFrameGlobal(Function &F, const std::string &FrameString);
+  // Get the section name for frame descriptions. Currently ELF-only.
+  const char *getFrameSection() { return "__hwasan_frames"; }
+  const char *getFrameSectionBeg() { return  "__start___hwasan_frames"; }
+  const char *getFrameSectionEnd() { return  "__stop___hwasan_frames"; }
+  GlobalVariable *createFrameSectionBound(Module &M, Type *Ty,
+                                          const char *Name) {
+    auto GV = new GlobalVariable(M, Ty, false, GlobalVariable::ExternalLinkage,
+                                 nullptr, Name);
+    GV->setVisibility(GlobalValue::HiddenVisibility);
+    return GV;
+  }
 
   /// This struct defines the shadow mapping using the rule:
   ///   shadow = (mem >> Scale) + Offset.
@@ -207,7 +238,7 @@ private:
   ///   shadow = (mem >> Scale) + &__hwasan_shadow
   /// If InTls is true, then
   ///   extern char *__hwasan_tls;
-  ///   shadow = (mem >> Scale) + align_up(__hwasan_shadow, kShadowBaseAlignment)
+  ///   shadow = (mem>>Scale) + align_up(__hwasan_shadow, kShadowBaseAlignment)
   struct ShadowMapping {
     int Scale;
     uint64_t Offset;
@@ -271,6 +302,7 @@ bool HWAddressSanitizer::doInitialization(Module &M) {
   Mapping.init(TargetTriple);
 
   C = &(M.getContext());
+  CurModuleUniqueId = getUniqueModuleId(&M);
   IRBuilder<> IRB(*C);
   IntptrTy = IRB.getIntPtrTy(DL);
   Int8PtrTy = IRB.getInt8PtrTy();
@@ -283,8 +315,32 @@ bool HWAddressSanitizer::doInitialization(Module &M) {
                                             kHwasanInitName,
                                             /*InitArgTypes=*/{},
                                             /*InitArgs=*/{});
-    appendToGlobalCtors(M, HwasanCtorFunction, 0);
+    Comdat *CtorComdat = M.getOrInsertComdat(kHwasanModuleCtorName);
+    HwasanCtorFunction->setComdat(CtorComdat);
+    appendToGlobalCtors(M, HwasanCtorFunction, 0, HwasanCtorFunction);
+
+    // Create a zero-length global in __hwasan_frame so that the linker will
+    // always create start and stop symbols.
+    //
+    // N.B. If we ever start creating associated metadata in this pass this
+    // global will need to be associated with the ctor.
+    Type *Int8Arr0Ty = ArrayType::get(Int8Ty, 0);
+    auto GV =
+        new GlobalVariable(M, Int8Arr0Ty, /*isConstantGlobal*/ true,
+                           GlobalVariable::PrivateLinkage,
+                           Constant::getNullValue(Int8Arr0Ty), "__hwasan");
+    GV->setSection(getFrameSection());
+    GV->setComdat(CtorComdat);
+    appendToCompilerUsed(M, GV);
+
+    IRBuilder<> IRBCtor(HwasanCtorFunction->getEntryBlock().getTerminator());
+    IRBCtor.CreateCall(
+        declareSanitizerInitFunction(M, "__hwasan_init_frames",
+                                     {Int8PtrTy, Int8PtrTy}),
+        {createFrameSectionBound(M, Int8Ty, getFrameSectionBeg()),
+         createFrameSectionBound(M, Int8Ty, getFrameSectionEnd())});
   }
+
   if (!TargetTriple.isAndroid())
     appendToCompilerUsed(
         M, ThreadPtrGlobal = new GlobalVariable(
@@ -323,6 +379,18 @@ void HWAddressSanitizer::initializeCallbacks(Module &M) {
   if (Mapping.InGlobal)
     ShadowGlobal = M.getOrInsertGlobal("__hwasan_shadow",
                                        ArrayType::get(IRB.getInt8Ty(), 0));
+
+  const std::string MemIntrinCallbackPrefix =
+      CompileKernel ? std::string("") : ClMemoryAccessCallbackPrefix;
+  HWAsanMemmove = checkSanitizerInterfaceFunction(M.getOrInsertFunction(
+      MemIntrinCallbackPrefix + "memmove", IRB.getInt8PtrTy(),
+      IRB.getInt8PtrTy(), IRB.getInt8PtrTy(), IntptrTy));
+  HWAsanMemcpy = checkSanitizerInterfaceFunction(M.getOrInsertFunction(
+      MemIntrinCallbackPrefix + "memcpy", IRB.getInt8PtrTy(),
+      IRB.getInt8PtrTy(), IRB.getInt8PtrTy(), IntptrTy));
+  HWAsanMemset = checkSanitizerInterfaceFunction(M.getOrInsertFunction(
+      MemIntrinCallbackPrefix + "memset", IRB.getInt8PtrTy(),
+      IRB.getInt8PtrTy(), IRB.getInt32Ty(), IntptrTy));
 }
 
 Value *HWAddressSanitizer::getDynamicShadowNonTls(IRBuilder<> &IRB) {
@@ -498,12 +566,36 @@ void HWAddressSanitizer::instrumentMemAccessInline(Value *PtrLong, bool IsWrite,
   IRB.CreateCall(Asm, PtrLong);
 }
 
+void HWAddressSanitizer::instrumentMemIntrinsic(MemIntrinsic *MI) {
+  IRBuilder<> IRB(MI);
+  if (isa<MemTransferInst>(MI)) {
+    IRB.CreateCall(
+        isa<MemMoveInst>(MI) ? HWAsanMemmove : HWAsanMemcpy,
+        {IRB.CreatePointerCast(MI->getOperand(0), IRB.getInt8PtrTy()),
+         IRB.CreatePointerCast(MI->getOperand(1), IRB.getInt8PtrTy()),
+         IRB.CreateIntCast(MI->getOperand(2), IntptrTy, false)});
+  } else if (isa<MemSetInst>(MI)) {
+    IRB.CreateCall(
+        HWAsanMemset,
+        {IRB.CreatePointerCast(MI->getOperand(0), IRB.getInt8PtrTy()),
+         IRB.CreateIntCast(MI->getOperand(1), IRB.getInt32Ty(), false),
+         IRB.CreateIntCast(MI->getOperand(2), IntptrTy, false)});
+  }
+  MI->eraseFromParent();
+}
+
 bool HWAddressSanitizer::instrumentMemAccess(Instruction *I) {
   LLVM_DEBUG(dbgs() << "Instrumenting: " << *I << "\n");
   bool IsWrite = false;
   unsigned Alignment = 0;
   uint64_t TypeSize = 0;
   Value *MaybeMask = nullptr;
+
+  if (ClInstrumentMemIntrinsics && isa<MemIntrinsic>(I)) {
+    instrumentMemIntrinsic(cast<MemIntrinsic>(I));
+    return true;
+  }
+
   Value *Addr =
       isInterestingMemoryAccess(I, &IsWrite, &TypeSize, &Alignment, &MaybeMask);
 
@@ -676,6 +768,36 @@ Value *HWAddressSanitizer::getHwasanThreadSlotPtr(IRBuilder<> &IRB, Type *Ty) {
   return nullptr;
 }
 
+// Creates a string with a description of the stack frame (set of Allocas).
+// The string is intended to be human readable.
+// The current form is: Size1 Name1; Size2 Name2; ...
+std::string
+HWAddressSanitizer::createFrameString(ArrayRef<AllocaInst *> Allocas) {
+  std::ostringstream Descr;
+  for (auto AI : Allocas)
+    Descr << getAllocaSizeInBytes(*AI) << " " <<  AI->getName().str() << "; ";
+  return Descr.str();
+}
+
+// Creates a global in the frame section which consists of two pointers:
+// the function PC and the frame string constant.
+void HWAddressSanitizer::createFrameGlobal(Function &F,
+                                           const std::string &FrameString) {
+  Module &M = *F.getParent();
+  auto DescrGV = createPrivateGlobalForString(M, FrameString, true);
+  auto PtrPairTy = StructType::get(F.getType(), DescrGV->getType());
+  auto GV = new GlobalVariable(
+      M, PtrPairTy, /*isConstantGlobal*/ true, GlobalVariable::PrivateLinkage,
+      ConstantStruct::get(PtrPairTy, (Constant *)&F, (Constant *)DescrGV),
+      "__hwasan");
+  GV->setSection(getFrameSection());
+  appendToCompilerUsed(M, GV);
+  // Put GV into the F's Comadat so that if F is deleted GV can be deleted too.
+  if (auto Comdat =
+          GetOrCreateFunctionComdat(F, TargetTriple, CurModuleUniqueId))
+    GV->setComdat(Comdat);
+}
+
 Value *HWAddressSanitizer::emitPrologue(IRBuilder<> &IRB,
                                         bool WithFrameRecord) {
   if (!Mapping.InTls)
@@ -837,6 +959,9 @@ bool HWAddressSanitizer::runOnFunction(Function &F) {
 
   if (AllocasToInstrument.empty() && ToInstrument.empty())
     return false;
+
+  if (ClCreateFrameDescriptions && !AllocasToInstrument.empty())
+    createFrameGlobal(F, createFrameString(AllocasToInstrument));
 
   initializeCallbacks(*F.getParent());
 

@@ -12,7 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ClangSACheckers.h"
+#include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
 #include "clang/StaticAnalyzer/Core/Checker.h"
 #include "clang/StaticAnalyzer/Core/CheckerManager.h"
@@ -174,10 +174,10 @@ void UndefResultChecker::checkPostStmt(const BinaryOperator *B,
     auto report = llvm::make_unique<BugReport>(*BT, OS.str(), N);
     if (Ex) {
       report->addRange(Ex->getSourceRange());
-      bugreporter::trackNullOrUndefValue(N, Ex, *report);
+      bugreporter::trackExpressionValue(N, Ex, *report);
     }
     else
-      bugreporter::trackNullOrUndefValue(N, B, *report);
+      bugreporter::trackExpressionValue(N, B, *report);
 
     C.emitReport(std::move(report));
   }

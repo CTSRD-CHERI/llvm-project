@@ -19,6 +19,7 @@
 #include "MCInstrDescView.h"
 #include "SnippetGenerator.h"
 
+namespace llvm {
 namespace exegesis {
 
 class LatencySnippetGenerator : public SnippetGenerator {
@@ -37,12 +38,10 @@ public:
   ~LatencyBenchmarkRunner() override;
 
 private:
-  std::vector<BenchmarkMeasure>
-  runMeasurements(const ExecutableFunction &EF,
-                  ScratchSpace &Scratch) const override;
-
-  virtual const char *getCounterName() const;
+  llvm::Expected<std::vector<BenchmarkMeasure>>
+  runMeasurements(const FunctionExecutor &Executor) const override;
 };
 } // namespace exegesis
+} // namespace llvm
 
 #endif // LLVM_TOOLS_LLVM_EXEGESIS_LATENCY_H

@@ -61,7 +61,7 @@ static const opt::OptTable::Info ObjcopyInfoTable[] = {
 
 class ObjcopyOptTable : public opt::OptTable {
 public:
-  ObjcopyOptTable() : OptTable(ObjcopyInfoTable, true) {}
+  ObjcopyOptTable() : OptTable(ObjcopyInfoTable) {}
 };
 
 enum StripID {
@@ -90,7 +90,7 @@ static const opt::OptTable::Info StripInfoTable[] = {
 
 class StripOptTable : public opt::OptTable {
 public:
-  StripOptTable() : OptTable(StripInfoTable, true) {}
+  StripOptTable() : OptTable(StripInfoTable) {}
 };
 
 enum SectionFlag {
@@ -226,6 +226,7 @@ DriverConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   }
 
   if (InputArgs.hasArg(OBJCOPY_version)) {
+    outs() << "llvm-objcopy, compatible with GNU objcopy\n";
     cl::PrintVersionMessage();
     exit(0);
   }
@@ -285,8 +286,15 @@ DriverConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
     }
   }
 
-  Config.SplitDWO = InputArgs.getLastArgValue(OBJCOPY_split_dwo);
   Config.AddGnuDebugLink = InputArgs.getLastArgValue(OBJCOPY_add_gnu_debuglink);
+  Config.BuildIdLinkDir = InputArgs.getLastArgValue(OBJCOPY_build_id_link_dir);
+  if (InputArgs.hasArg(OBJCOPY_build_id_link_input))
+    Config.BuildIdLinkInput =
+        InputArgs.getLastArgValue(OBJCOPY_build_id_link_input);
+  if (InputArgs.hasArg(OBJCOPY_build_id_link_output))
+    Config.BuildIdLinkOutput =
+        InputArgs.getLastArgValue(OBJCOPY_build_id_link_output);
+  Config.SplitDWO = InputArgs.getLastArgValue(OBJCOPY_split_dwo);
   Config.SymbolsPrefix = InputArgs.getLastArgValue(OBJCOPY_prefix_symbols);
 
   for (auto Arg : InputArgs.filtered(OBJCOPY_redefine_symbol)) {
@@ -305,10 +313,10 @@ DriverConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
 
   for (auto Arg : InputArgs.filtered(OBJCOPY_remove_section))
     Config.ToRemove.push_back(Arg->getValue());
-  for (auto Arg : InputArgs.filtered(OBJCOPY_keep))
-    Config.Keep.push_back(Arg->getValue());
-  for (auto Arg : InputArgs.filtered(OBJCOPY_only_keep))
-    Config.OnlyKeep.push_back(Arg->getValue());
+  for (auto Arg : InputArgs.filtered(OBJCOPY_keep_section))
+    Config.KeepSection.push_back(Arg->getValue());
+  for (auto Arg : InputArgs.filtered(OBJCOPY_only_section))
+    Config.OnlySection.push_back(Arg->getValue());
   for (auto Arg : InputArgs.filtered(OBJCOPY_add_section))
     Config.AddSection.push_back(Arg->getValue());
   for (auto Arg : InputArgs.filtered(OBJCOPY_dump_section))
@@ -343,10 +351,12 @@ DriverConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   for (auto Arg : InputArgs.filtered(OBJCOPY_keep_symbol))
     Config.SymbolsToKeep.push_back(Arg->getValue());
 
+  Config.DeterministicArchives = InputArgs.hasFlag(
+      OBJCOPY_enable_deterministic_archives,
+      OBJCOPY_disable_deterministic_archives, /*default=*/true);
+
   Config.PreserveDates = InputArgs.hasArg(OBJCOPY_preserve_dates);
 
-  DriverConfig DC;
-  DC.CopyConfigs.push_back(std::move(Config));
   if (Config.DecompressDebugSections &&
       Config.CompressionType != DebugCompressionType::None) {
     error("Cannot specify --compress-debug-sections at the same time as "
@@ -356,6 +366,8 @@ DriverConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr) {
   if (Config.DecompressDebugSections && !zlib::isAvailable())
     error("LLVM was not compiled with LLVM_ENABLE_ZLIB: cannot decompress.");
 
+  DriverConfig DC;
+  DC.CopyConfigs.push_back(std::move(Config));
   return DC;
 }
 
@@ -379,6 +391,7 @@ DriverConfig parseStripOptions(ArrayRef<const char *> ArgsArr) {
   }
 
   if (InputArgs.hasArg(STRIP_version)) {
+    outs() << "llvm-strip, compatible with GNU strip\n";
     cl::PrintVersionMessage();
     exit(0);
   }
@@ -401,15 +414,24 @@ DriverConfig parseStripOptions(ArrayRef<const char *> ArgsArr) {
   Config.DiscardAll = InputArgs.hasArg(STRIP_discard_all);
   Config.StripUnneeded = InputArgs.hasArg(STRIP_strip_unneeded);
   Config.StripAll = InputArgs.hasArg(STRIP_strip_all);
+  Config.StripAllGNU = InputArgs.hasArg(STRIP_strip_all_gnu);
 
-  if (!Config.StripDebug && !Config.StripUnneeded && !Config.DiscardAll)
+  if (!Config.StripDebug && !Config.StripUnneeded && !Config.DiscardAll &&
+      !Config.StripAllGNU)
     Config.StripAll = true;
+
+  for (auto Arg : InputArgs.filtered(STRIP_keep_section))
+    Config.KeepSection.push_back(Arg->getValue());
 
   for (auto Arg : InputArgs.filtered(STRIP_remove_section))
     Config.ToRemove.push_back(Arg->getValue());
 
   for (auto Arg : InputArgs.filtered(STRIP_keep_symbol))
     Config.SymbolsToKeep.push_back(Arg->getValue());
+
+  Config.DeterministicArchives =
+      InputArgs.hasFlag(STRIP_enable_deterministic_archives,
+                        STRIP_disable_deterministic_archives, /*default=*/true);
 
   Config.PreserveDates = InputArgs.hasArg(STRIP_preserve_dates);
 

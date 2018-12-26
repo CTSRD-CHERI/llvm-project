@@ -2280,6 +2280,50 @@ unsigned LLVMGetIntrinsicID(LLVMValueRef Fn) {
   return 0;
 }
 
+static Intrinsic::ID llvm_map_to_intrinsic_id(unsigned ID) {
+  assert(ID < llvm::Intrinsic::num_intrinsics && "Intrinsic ID out of range");
+  return llvm::Intrinsic::ID(ID);
+}
+
+LLVMValueRef LLVMGetIntrinsicDeclaration(LLVMModuleRef Mod,
+                                         unsigned ID,
+                                         LLVMTypeRef *ParamTypes,
+                                         size_t ParamCount) {
+  ArrayRef<Type*> Tys(unwrap(ParamTypes), ParamCount);
+  auto IID = llvm_map_to_intrinsic_id(ID);
+  return wrap(llvm::Intrinsic::getDeclaration(unwrap(Mod), IID, Tys));
+}
+
+const char *LLVMIntrinsicGetName(unsigned ID, size_t *NameLength) {
+  auto IID = llvm_map_to_intrinsic_id(ID);
+  auto Str = llvm::Intrinsic::getName(IID);
+  *NameLength = Str.size();
+  return Str.data();
+}
+
+LLVMTypeRef LLVMIntrinsicGetType(LLVMContextRef Ctx, unsigned ID,
+                                 LLVMTypeRef *ParamTypes, size_t ParamCount) {
+  auto IID = llvm_map_to_intrinsic_id(ID);
+  ArrayRef<Type*> Tys(unwrap(ParamTypes), ParamCount);
+  return wrap(llvm::Intrinsic::getType(*unwrap(Ctx), IID, Tys));
+}
+
+const char *LLVMIntrinsicCopyOverloadedName(unsigned ID,
+                                            LLVMTypeRef *ParamTypes,
+                                            size_t ParamCount,
+                                            size_t *NameLength) {
+  auto IID = llvm_map_to_intrinsic_id(ID);
+  ArrayRef<Type*> Tys(unwrap(ParamTypes), ParamCount);
+  auto Str = llvm::Intrinsic::getName(IID, Tys);
+  *NameLength = Str.length();
+  return strdup(Str.c_str());
+}
+
+LLVMBool LLVMIntrinsicIsOverloaded(unsigned ID) {
+  auto IID = llvm_map_to_intrinsic_id(ID);
+  return llvm::Intrinsic::isOverloaded(IID);
+}
+
 unsigned LLVMGetFunctionCallConv(LLVMValueRef Fn) {
   return unwrap<Function>(Fn)->getCallingConv();
 }
@@ -2595,6 +2639,11 @@ LLVMValueRef LLVMInstructionClone(LLVMValueRef Inst) {
   return nullptr;
 }
 
+LLVMValueRef LLVMIsATerminatorInst(LLVMValueRef Inst) {
+  Instruction *I = dyn_cast<Instruction>(unwrap(Inst));
+  return (I && I->isTerminator()) ? wrap(I) : nullptr;
+}
+
 unsigned LLVMGetNumArgOperands(LLVMValueRef Instr) {
   if (FuncletPadInst *FPI = dyn_cast<FuncletPadInst>(unwrap(Instr))) {
     return FPI->getNumArgOperands();
@@ -2710,15 +2759,15 @@ void LLVMSetUnwindDest(LLVMValueRef Invoke, LLVMBasicBlockRef B) {
 /*--.. Operations on terminators ...........................................--*/
 
 unsigned LLVMGetNumSuccessors(LLVMValueRef Term) {
-  return unwrap<TerminatorInst>(Term)->getNumSuccessors();
+  return unwrap<Instruction>(Term)->getNumSuccessors();
 }
 
 LLVMBasicBlockRef LLVMGetSuccessor(LLVMValueRef Term, unsigned i) {
-  return wrap(unwrap<TerminatorInst>(Term)->getSuccessor(i));
+  return wrap(unwrap<Instruction>(Term)->getSuccessor(i));
 }
 
 void LLVMSetSuccessor(LLVMValueRef Term, unsigned i, LLVMBasicBlockRef block) {
-  return unwrap<TerminatorInst>(Term)->setSuccessor(i,unwrap(block));
+  return unwrap<Instruction>(Term)->setSuccessor(i, unwrap(block));
 }
 
 /*--.. Operations on branch instructions (only) ............................--*/
@@ -3227,6 +3276,30 @@ LLVMValueRef LLVMBuildArrayMalloc(LLVMBuilderRef B, LLVMTypeRef Ty,
                                                ITy, unwrap(Ty), AllocSize,
                                                unwrap(Val), nullptr, "");
   return wrap(unwrap(B)->Insert(Malloc, Twine(Name)));
+}
+
+LLVMValueRef LLVMBuildMemSet(LLVMBuilderRef B, LLVMValueRef Ptr, 
+                             LLVMValueRef Val, LLVMValueRef Len,
+                             unsigned Align) {
+  return wrap(unwrap(B)->CreateMemSet(unwrap(Ptr), unwrap(Val), unwrap(Len), Align));
+}
+
+LLVMValueRef LLVMBuildMemCpy(LLVMBuilderRef B, 
+                             LLVMValueRef Dst, unsigned DstAlign,
+                             LLVMValueRef Src, unsigned SrcAlign,
+                             LLVMValueRef Size) {
+  return wrap(unwrap(B)->CreateMemCpy(unwrap(Dst), DstAlign,
+                                      unwrap(Src), SrcAlign,
+                                      unwrap(Size)));
+}
+
+LLVMValueRef LLVMBuildMemMove(LLVMBuilderRef B,
+                              LLVMValueRef Dst, unsigned DstAlign,
+                              LLVMValueRef Src, unsigned SrcAlign,
+                              LLVMValueRef Size) {
+  return wrap(unwrap(B)->CreateMemMove(unwrap(Dst), DstAlign,
+                                       unwrap(Src), SrcAlign,
+                                       unwrap(Size)));
 }
 
 LLVMValueRef LLVMBuildAlloca(LLVMBuilderRef B, LLVMTypeRef Ty,

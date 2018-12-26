@@ -34,6 +34,7 @@
 #include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Analysis/VectorUtils.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/Attributes.h"
@@ -476,6 +477,17 @@ void llvm::RecursivelyDeleteTriviallyDeadInstructions(
   }
 }
 
+bool llvm::replaceDbgUsesWithUndef(Instruction *I) {
+  SmallVector<DbgVariableIntrinsic *, 1> DbgUsers;
+  findDbgUsers(DbgUsers, I);
+  for (auto *DII : DbgUsers) {
+    Value *Undef = UndefValue::get(I->getType());
+    DII->setOperand(0, MetadataAsValue::get(DII->getContext(),
+                                            ValueAsMetadata::get(Undef)));
+  }
+  return !DbgUsers.empty();
+}
+
 /// areAllUsesEqual - Check whether the uses of a value are all the same.
 /// This is similar to Instruction::hasOneUse() except this will also return
 /// true when there are no uses or multiple uses that all refer to the same
@@ -682,10 +694,9 @@ void llvm::MergeBasicBlockIntoOnlyPred(BasicBlock *DestBB,
 
   // DTU updates: Collect all the edges that enter
   // PredBB. These dominator edges will be redirected to DestBB.
-  std::vector <DominatorTree::UpdateType> Updates;
+  SmallVector<DominatorTree::UpdateType, 32> Updates;
 
   if (DTU) {
-    Updates.reserve(1 + (2 * pred_size(PredBB)));
     Updates.push_back({DominatorTree::Delete, PredBB, DestBB});
     for (auto I = pred_begin(PredBB), E = pred_end(PredBB); I != E; ++I) {
       Updates.push_back({DominatorTree::Delete, *I, PredBB});
@@ -989,9 +1000,8 @@ bool llvm::TryToSimplifyUncondBranchFromEmptyBlock(BasicBlock *BB,
 
   LLVM_DEBUG(dbgs() << "Killing Trivial BB: \n" << *BB);
 
-  std::vector<DominatorTree::UpdateType> Updates;
+  SmallVector<DominatorTree::UpdateType, 32> Updates;
   if (DTU) {
-    Updates.reserve(1 + (2 * pred_size(BB)));
     Updates.push_back({DominatorTree::Delete, BB, Succ});
     // All predecessors of BB will be moved to Succ.
     for (auto I = pred_begin(BB), E = pred_end(BB); I != E; ++I) {
@@ -1288,33 +1298,6 @@ void llvm::ConvertDebugDeclareToDebugValue(DbgVariableIntrinsic *DII,
     return;
   }
 
-  // If an argument is zero extended then use argument directly. The ZExt
-  // may be zapped by an optimization pass in future.
-  Argument *ExtendedArg = nullptr;
-  if (ZExtInst *ZExt = dyn_cast<ZExtInst>(SI->getOperand(0)))
-    ExtendedArg = dyn_cast<Argument>(ZExt->getOperand(0));
-  if (SExtInst *SExt = dyn_cast<SExtInst>(SI->getOperand(0)))
-    ExtendedArg = dyn_cast<Argument>(SExt->getOperand(0));
-  if (ExtendedArg) {
-    // If this DII was already describing only a fragment of a variable, ensure
-    // that fragment is appropriately narrowed here.
-    // But if a fragment wasn't used, describe the value as the original
-    // argument (rather than the zext or sext) so that it remains described even
-    // if the sext/zext is optimized away. This widens the variable description,
-    // leaving it up to the consumer to know how the smaller value may be
-    // represented in a larger register.
-    if (auto Fragment = DIExpr->getFragmentInfo()) {
-      unsigned FragmentOffset = Fragment->OffsetInBits;
-      SmallVector<uint64_t, 3> Ops(DIExpr->elements_begin(),
-                                   DIExpr->elements_end() - 3);
-      Ops.push_back(dwarf::DW_OP_LLVM_fragment);
-      Ops.push_back(FragmentOffset);
-      const DataLayout &DL = DII->getModule()->getDataLayout();
-      Ops.push_back(DL.getTypeSizeInBits(ExtendedArg->getType()));
-      DIExpr = Builder.createExpression(Ops);
-    }
-    DV = ExtendedArg;
-  }
   if (!LdStHasDebugValue(DIVar, DIExpr, SI))
     Builder.insertDbgValueIntrinsic(DV, DIVar, DIExpr, DII->getDebugLoc(),
                                     SI);
@@ -1961,6 +1944,7 @@ static void changeToCall(InvokeInst *II, DomTreeUpdater *DTU = nullptr) {
   NewCall->setCallingConv(II->getCallingConv());
   NewCall->setAttributes(II->getAttributes());
   NewCall->setDebugLoc(II->getDebugLoc());
+  NewCall->copyMetadata(*II);
   II->replaceAllUsesWith(NewCall);
 
   // Follow the call by a branch to the normal destination.
@@ -2183,7 +2167,7 @@ void llvm::removeUnwindEdge(BasicBlock *BB, DomTreeUpdater *DTU) {
     return;
   }
 
-  TerminatorInst *NewTI;
+  Instruction *NewTI;
   BasicBlock *UnwindDest;
 
   if (auto *CRI = dyn_cast<CleanupReturnInst>(TI)) {
@@ -2260,7 +2244,7 @@ bool llvm::removeUnreachableBlocks(Function &F, LazyValueInfo *LVI,
       continue;
     }
     if (DTU) {
-      // Remove the TerminatorInst of BB to clear the successor list of BB.
+      // Remove the terminator of BB to clear the successor list of BB.
       if (BB->getTerminator())
         BB->getInstList().pop_back();
       new UnreachableInst(BB->getContext(), BB);
@@ -2314,8 +2298,20 @@ void llvm::combineMetadata(Instruction *K, const Instruction *J,
       case LLVMContext::MD_mem_parallel_loop_access:
         K->setMetadata(Kind, MDNode::intersect(JMD, KMD));
         break;
+      case LLVMContext::MD_access_group:
+        K->setMetadata(LLVMContext::MD_access_group,
+                       intersectAccessGroups(K, J));
+        break;
       case LLVMContext::MD_range:
-        K->setMetadata(Kind, MDNode::getMostGenericRange(JMD, KMD));
+
+        // If K does move, use most generic range. Otherwise keep the range of
+        // K.
+        if (DoesKMove)
+          // FIXME: If K does move, we should drop the range info and nonnull.
+          //        Currently this function is used with DoesKMove in passes
+          //        doing hoisting/sinking and the current behavior of using the
+          //        most generic range is correct in those cases.
+          K->setMetadata(Kind, MDNode::getMostGenericRange(JMD, KMD));
         break;
       case LLVMContext::MD_fpmath:
         K->setMetadata(Kind, MDNode::getMostGenericFPMath(JMD, KMD));
@@ -2362,7 +2358,8 @@ void llvm::combineMetadataForCSE(Instruction *K, const Instruction *J,
       LLVMContext::MD_invariant_load,  LLVMContext::MD_nonnull,
       LLVMContext::MD_invariant_group, LLVMContext::MD_align,
       LLVMContext::MD_dereferenceable,
-      LLVMContext::MD_dereferenceable_or_null};
+      LLVMContext::MD_dereferenceable_or_null,
+      LLVMContext::MD_access_group};
   combineMetadata(K, J, KnownIDs, KDominatesJ);
 }
 
@@ -2393,7 +2390,8 @@ void llvm::patchReplacementInstruction(Instruction *I, Value *Repl) {
       LLVMContext::MD_tbaa,            LLVMContext::MD_alias_scope,
       LLVMContext::MD_noalias,         LLVMContext::MD_range,
       LLVMContext::MD_fpmath,          LLVMContext::MD_invariant_load,
-      LLVMContext::MD_invariant_group, LLVMContext::MD_nonnull};
+      LLVMContext::MD_invariant_group, LLVMContext::MD_nonnull,
+      LLVMContext::MD_access_group};
   combineMetadata(ReplInst, I, KnownIDs, false);
 }
 
@@ -2527,6 +2525,47 @@ void llvm::dropDebugUsers(Instruction &I) {
   findDbgUsers(DbgUsers, &I);
   for (auto *DII : DbgUsers)
     DII->eraseFromParent();
+}
+
+void llvm::hoistAllInstructionsInto(BasicBlock *DomBlock, Instruction *InsertPt,
+                                    BasicBlock *BB) {
+  // Since we are moving the instructions out of its basic block, we do not
+  // retain their original debug locations (DILocations) and debug intrinsic
+  // instructions (dbg.values).
+  //
+  // Doing so would degrade the debugging experience and adversely affect the
+  // accuracy of profiling information.
+  //
+  // Currently, when hoisting the instructions, we take the following actions:
+  // - Remove their dbg.values.
+  // - Set their debug locations to the values from the insertion point.
+  //
+  // As per PR39141 (comment #8), the more fundamental reason why the dbg.values
+  // need to be deleted, is because there will not be any instructions with a
+  // DILocation in either branch left after performing the transformation. We
+  // can only insert a dbg.value after the two branches are joined again.
+  //
+  // See PR38762, PR39243 for more details.
+  //
+  // TODO: Extend llvm.dbg.value to take more than one SSA Value (PR39141) to
+  // encode predicated DIExpressions that yield different results on different
+  // code paths.
+  for (BasicBlock::iterator II = BB->begin(), IE = BB->end(); II != IE;) {
+    Instruction *I = &*II;
+    I->dropUnknownNonDebugMetadata();
+    if (I->isUsedByMetadata())
+      dropDebugUsers(*I);
+    if (isa<DbgVariableIntrinsic>(I)) {
+      // Remove DbgInfo Intrinsics.
+      II = I->eraseFromParent();
+      continue;
+    }
+    I->setDebugLoc(InsertPt->getDebugLoc());
+    ++II;
+  }
+  DomBlock->getInstList().splice(InsertPt->getIterator(), BB->getInstList(),
+                                 BB->begin(),
+                                 BB->getTerminator()->getIterator());
 }
 
 namespace {

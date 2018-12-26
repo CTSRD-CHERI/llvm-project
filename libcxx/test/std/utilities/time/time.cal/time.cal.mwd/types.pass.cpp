@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class month_weekday;
@@ -20,7 +20,7 @@
 int main()
 {
     using month_weekday = std::chrono::month_weekday;
-    
+
     static_assert(std::is_trivially_copyable_v<month_weekday>, "");
     static_assert(std::is_standard_layout_v<month_weekday>, "");
 }

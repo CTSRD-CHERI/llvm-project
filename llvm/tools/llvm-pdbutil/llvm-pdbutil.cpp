@@ -13,7 +13,6 @@
 
 #include "llvm-pdbutil.h"
 
-#include "Analyze.h"
 #include "BytesOutputStyle.h"
 #include "DumpOutputStyle.h"
 #include "ExplainOutputStyle.h"
@@ -116,10 +115,6 @@ cl::SubCommand
 cl::SubCommand
     PdbToYamlSubcommand("pdb2yaml",
                         "Generate a detailed YAML description of a PDB File");
-
-cl::SubCommand
-    AnalyzeSubcommand("analyze",
-                      "Analyze various aspects of a PDB's structure");
 
 cl::SubCommand MergeSubcommand("merge",
                                "Merge multiple PDBs into a single PDB");
@@ -663,6 +658,10 @@ cl::opt<bool> IpiStream("ipi-stream",
                         cl::desc("Dump the IPI Stream (Stream 5)"),
                         cl::sub(PdbToYamlSubcommand), cl::init(false));
 
+cl::opt<bool> PublicsStream("publics-stream",
+                            cl::desc("Dump the Publics Stream"),
+                            cl::sub(PdbToYamlSubcommand), cl::init(false));
+
 // MODULE & FILE OPTIONS
 cl::opt<bool> DumpModules("modules", cl::desc("dump compiland information"),
                           cl::cat(FileOptions), cl::sub(PdbToYamlSubcommand));
@@ -681,14 +680,6 @@ cl::list<std::string> InputFilename(cl::Positional,
                                     cl::desc("<input PDB file>"), cl::Required,
                                     cl::sub(PdbToYamlSubcommand));
 } // namespace pdb2yaml
-
-namespace analyze {
-cl::opt<bool> StringTable("hash-collisions", cl::desc("Find hash collisions"),
-                          cl::sub(AnalyzeSubcommand), cl::init(false));
-cl::list<std::string> InputFilename(cl::Positional,
-                                    cl::desc("<input PDB file>"), cl::Required,
-                                    cl::sub(AnalyzeSubcommand));
-}
 
 namespace merge {
 cl::list<std::string> InputFilenames(cl::Positional,
@@ -883,14 +874,6 @@ static void dumpBytes(StringRef Path) {
   auto &File = loadPDB(Path, Session);
 
   auto O = llvm::make_unique<BytesOutputStyle>(File);
-
-  ExitOnErr(O->dump());
-}
-
-static void dumpAnalysis(StringRef Path) {
-  std::unique_ptr<IPDBSession> Session;
-  auto &File = loadPDB(Path, Session);
-  auto O = llvm::make_unique<AnalysisStyle>(File);
 
   ExitOnErr(O->dump());
 }
@@ -1495,6 +1478,7 @@ int main(int Argc, const char **Argv) {
       opts::pdb2yaml::DbiStream = true;
       opts::pdb2yaml::TpiStream = true;
       opts::pdb2yaml::IpiStream = true;
+      opts::pdb2yaml::PublicsStream = true;
       opts::pdb2yaml::DumpModules = true;
       opts::pdb2yaml::DumpModuleFiles = true;
       opts::pdb2yaml::DumpModuleSyms = true;
@@ -1521,8 +1505,6 @@ int main(int Argc, const char **Argv) {
       opts::yaml2pdb::YamlPdbOutputFile = OutputFilename.str();
     }
     yamlToPdb(opts::yaml2pdb::InputFilename);
-  } else if (opts::AnalyzeSubcommand) {
-    dumpAnalysis(opts::analyze::InputFilename.front());
   } else if (opts::DiaDumpSubcommand) {
     llvm::for_each(opts::diadump::InputFilenames, dumpDia);
   } else if (opts::PrettySubcommand) {

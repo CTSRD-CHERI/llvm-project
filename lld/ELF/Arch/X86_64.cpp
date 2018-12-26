@@ -67,7 +67,7 @@ template <class ELFT> X86_64<ELFT>::X86_64() {
   PltEntrySize = 16;
   PltHeaderSize = 16;
   TlsGdRelaxSkip = 2;
-  TrapInstr = 0xcccccccc; // 0xcc = INT3
+  TrapInstr = {0xcc, 0xcc, 0xcc, 0xcc}; // 0xcc = INT3
 
   // Align to the large page size (known as a superpage or huge page).
   // FreeBSD automatically promotes large, superpage-aligned allocations.
@@ -592,7 +592,7 @@ void Retpoline<ELFT>::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
   };
   memcpy(Buf, Insn, sizeof(Insn));
 
-  uint64_t Off = TargetInfo::getPltEntryOffset(Index);
+  uint64_t Off = getPltEntryOffset(Index);
 
   write32le(Buf + 3, GotPltEntryAddr - PltEntryAddr - 7);
   write32le(Buf + 8, -Off - 12 + 32);
@@ -635,7 +635,7 @@ void RetpolineZNow<ELFT>::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
   memcpy(Buf, Insn, sizeof(Insn));
 
   write32le(Buf + 3, GotPltEntryAddr - PltEntryAddr - 7);
-  write32le(Buf + 8, -TargetInfo::getPltEntryOffset(Index) - 12);
+  write32le(Buf + 8, -getPltEntryOffset(Index) - 12);
 }
 
 template <class ELFT> static TargetInfo *getTargetInfo() {

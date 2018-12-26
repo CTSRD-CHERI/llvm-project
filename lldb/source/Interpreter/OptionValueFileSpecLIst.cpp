@@ -9,10 +9,6 @@
 
 #include "lldb/Interpreter/OptionValueFileSpecList.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Host/StringConvert.h"
 #include "lldb/Utility/Args.h"
 #include "lldb/Utility/Stream.h"
@@ -25,16 +21,24 @@ void OptionValueFileSpecList::DumpValue(const ExecutionContext *exe_ctx,
   if (dump_mask & eDumpOptionType)
     strm.Printf("(%s)", GetTypeAsCString());
   if (dump_mask & eDumpOptionValue) {
-    if (dump_mask & eDumpOptionType)
-      strm.Printf(" =%s", m_current_value.GetSize() > 0 ? "\n" : "");
-    strm.IndentMore();
+    const bool one_line = dump_mask & eDumpOptionCommand;
     const uint32_t size = m_current_value.GetSize();
+    if (dump_mask & eDumpOptionType)
+      strm.Printf(" =%s",
+                  (m_current_value.GetSize() > 0 && !one_line) ? "\n" : "");
+    if (!one_line)
+      strm.IndentMore();
     for (uint32_t i = 0; i < size; ++i) {
-      strm.Indent();
-      strm.Printf("[%u]: ", i);
+      if (!one_line) {
+        strm.Indent();
+        strm.Printf("[%u]: ", i);
+      }
       m_current_value.GetFileSpecAtIndex(i).Dump(&strm);
+      if (one_line)
+        strm << ' ';
     }
-    strm.IndentLess();
+    if (!one_line)
+      strm.IndentLess();
   }
 }
 
@@ -61,7 +65,7 @@ Status OptionValueFileSpecList::SetValueFromString(llvm::StringRef value,
             count);
       } else {
         for (size_t i = 1; i < argc; ++i, ++idx) {
-          FileSpec file(args.GetArgumentAtIndex(i), false);
+          FileSpec file(args.GetArgumentAtIndex(i));
           if (idx < count)
             m_current_value.Replace(idx, file);
           else
@@ -83,7 +87,7 @@ Status OptionValueFileSpecList::SetValueFromString(llvm::StringRef value,
     if (argc > 0) {
       m_value_was_set = true;
       for (size_t i = 0; i < argc; ++i) {
-        FileSpec file(args.GetArgumentAtIndex(i), false);
+        FileSpec file(args.GetArgumentAtIndex(i));
         m_current_value.Append(file);
       }
       NotifyValueChanged();
@@ -107,7 +111,7 @@ Status OptionValueFileSpecList::SetValueFromString(llvm::StringRef value,
         if (op == eVarSetOperationInsertAfter)
           ++idx;
         for (size_t i = 1; i < argc; ++i, ++idx) {
-          FileSpec file(args.GetArgumentAtIndex(i), false);
+          FileSpec file(args.GetArgumentAtIndex(i));
           m_current_value.Insert(idx, file);
         }
         NotifyValueChanged();

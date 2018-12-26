@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 
 // <chrono>
 // class year;
@@ -43,7 +43,7 @@ int main()
 
     ASSERT_SAME_TYPE(year&, decltype(std::declval<year&>() += std::declval<years>()));
     ASSERT_SAME_TYPE(year&, decltype(std::declval<year&>() -= std::declval<years>()));
-    
+
     static_assert(testConstexpr<year, years>(), "");
 
     for (int i = 10000; i <= 10020; ++i)

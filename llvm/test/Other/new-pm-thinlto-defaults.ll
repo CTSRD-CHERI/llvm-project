@@ -26,6 +26,10 @@
 ; RUN: opt -disable-verify -debug-pass-manager -new-pm-debug-info-for-profiling \
 ; RUN:     -passes='thinlto-pre-link<O2>,name-anon-globals' -S  %s 2>&1 \
 ; RUN:     | FileCheck %s --check-prefixes=CHECK-DIS,CHECK-O,CHECK-O2,CHECK-PRELINK-O,CHECK-PRELINK-O2
+; Enabling the hot-cold-split pass should not affect the ThinLTO pre-link
+; RUN: opt -disable-verify -debug-pass-manager \
+; RUN:     -passes='thinlto-pre-link<O2>,name-anon-globals' -hot-cold-split -S  %s 2>&1 \
+; RUN:     | FileCheck %s --check-prefixes=CHECK-O,CHECK-O2,CHECK-PRELINK-O,CHECK-PRELINK-O-NODIS,CHECK-PRELINK-O2
 ;
 ; Postlink pipelines:
 ; RUN: opt -disable-verify -debug-pass-manager \
@@ -220,6 +224,7 @@
 ; CHECK-POSTLINK-O-NEXT: Running pass: InstCombinePass
 ; CHECK-POSTLINK-O-NEXT: Running pass: LoopUnrollPass
 ; CHECK-POSTLINK-O-NEXT: Running analysis: OuterAnalysisManagerProxy
+; CHECK-POSTLINK-O-NEXT: Running pass: WarnMissedTransformationsPass
 ; CHECK-POSTLINK-O-NEXT: Running pass: InstCombinePass
 ; CHECK-POSTLINK-O-NEXT: Running pass: RequireAnalysisPass<{{.*}}OptimizationRemarkEmitterAnalysis
 ; CHECK-POSTLINK-O-NEXT: Running pass: FunctionToLoopPassAdaptor<{{.*}}LICMPass

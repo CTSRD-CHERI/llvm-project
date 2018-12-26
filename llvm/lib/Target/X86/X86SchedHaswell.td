@@ -720,7 +720,7 @@ def HWWriteRDRAND : SchedWriteRes<[HWPort23, HWPort015]> {
   let NumMicroOps = 17;
   let ResourceCycles = [1, 16];
 }
-def : InstRW<[HWWriteRDRAND], (instregex "RDRAND(16|32|64)r")>;
+def : InstRW<[HWWriteRDRAND], (instrs RDRAND16r, RDRAND32r, RDRAND64r)>;
 
 //=== Floating Point x87 Instructions ===//
 //-- Move instructions --//
@@ -1408,10 +1408,10 @@ def HWWriteResGroup81 : SchedWriteRes<[HWPort0156]> {
 }
 def: InstRW<[HWWriteResGroup81], (instrs FNCLEX)>;
 
-def HWWriteResGroup82 : SchedWriteRes<[HWPort015,HWPort0156]> {
-  let Latency = 4;
+def HWWriteResGroup82 : SchedWriteRes<[]> {
+  let Latency = 0;
   let NumMicroOps = 4;
-  let ResourceCycles = [1,3];
+  let ResourceCycles = [];
 }
 def: InstRW<[HWWriteResGroup82], (instrs VZEROUPPER)>;
 

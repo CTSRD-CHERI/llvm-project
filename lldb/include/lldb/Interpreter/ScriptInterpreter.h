@@ -10,16 +10,12 @@
 #ifndef liblldb_ScriptInterpreter_h_
 #define liblldb_ScriptInterpreter_h_
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/lldb-private.h"
 
 #include "lldb/Breakpoint/BreakpointOptions.h"
-#include "lldb/Core/Broadcaster.h"
 #include "lldb/Core/PluginInterface.h"
 #include "lldb/Core/SearchFilter.h"
+#include "lldb/Utility/Broadcaster.h"
 #include "lldb/Utility/Status.h"
 #include "lldb/Utility/StructuredData.h"
 
@@ -171,6 +167,17 @@ public:
   virtual StructuredData::GenericSP
   CreateScriptCommandObject(const char *class_name) {
     return StructuredData::GenericSP();
+  }
+
+  virtual StructuredData::GenericSP
+  CreateFrameRecognizer(const char *class_name) {
+    return StructuredData::GenericSP();
+  }
+
+  virtual lldb::ValueObjectListSP GetRecognizedArguments(
+      const StructuredData::ObjectSP &implementor,
+      lldb::StackFrameSP frame_sp) {
+    return lldb::ValueObjectListSP();
   }
 
   virtual StructuredData::GenericSP

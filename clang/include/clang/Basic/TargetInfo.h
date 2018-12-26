@@ -1082,9 +1082,15 @@ public:
     return false;
   }
 
-  /// Identify whether this taret supports multiversioning of functions,
+  /// Identify whether this target supports multiversioning of functions,
   /// which requires support for cpu_supports and cpu_is functionality.
-  virtual bool supportsMultiVersioning() const { return false; }
+  bool supportsMultiVersioning() const {
+    return getTriple().getArch() == llvm::Triple::x86 ||
+           getTriple().getArch() == llvm::Triple::x86_64;
+  }
+
+  /// Identify whether this target supports IFuncs.
+  bool supportsIFunc() const { return getTriple().isOSBinFormatELF(); }
 
   // Validate the contents of the __builtin_cpu_supports(const char*)
   // argument.
@@ -1313,6 +1319,12 @@ public:
   /// DWARF.
   virtual Optional<unsigned> getDWARFAddressSpace(unsigned AddressSpace) const {
     return None;
+  }
+
+  /// \returns The version of the SDK which was used during the compilation if
+  /// one was specified, or an empty version otherwise.
+  const llvm::VersionTuple &getSDKVersion() const {
+    return getTargetOpts().SDKVersion;
   }
 
   /// Check the target is valid after it is fully initialized.

@@ -265,9 +265,20 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
 "`CMakeFiles'. Please delete them.")
 endif()
 
-# Compute the LLDB version from the LLVM version.
-string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" LLDB_VERSION
-  ${PACKAGE_VERSION})
+# If LLDB_VERSION_* is specified, use it, if not use LLVM_VERSION_*.
+if(NOT DEFINED LLDB_VERSION_MAJOR)
+  set(LLDB_VERSION_MAJOR ${LLVM_VERSION_MAJOR})
+endif()
+if(NOT DEFINED LLDB_VERSION_MINOR)
+  set(LLDB_VERSION_MINOR ${LLVM_VERSION_MINOR})
+endif()
+if(NOT DEFINED LLDB_VERSION_PATCH)
+  set(LLDB_VERSION_PATCH ${LLVM_VERSION_PATCH})
+endif()
+if(NOT DEFINED LLDB_VERSION_SUFFIX)
+  set(LLDB_VERSION_SUFFIX ${LLVM_VERSION_SUFFIX})
+endif()
+set(LLDB_VERSION "${LLDB_VERSION_MAJOR}.${LLDB_VERSION_MINOR}.${LLDB_VERSION_PATCH}${LLDB_VERSION_SUFFIX}")
 message(STATUS "LLDB version: ${LLDB_VERSION}")
 
 include_directories(BEFORE
@@ -304,11 +315,7 @@ if (NOT LLVM_INSTALL_TOOLCHAIN_ONLY)
   endif()
 endif()
 
-if (NOT LIBXML2_FOUND AND NOT (CMAKE_SYSTEM_NAME MATCHES "Windows"))
-  # Skip Libxml2 on Windows.  In CMake 3.4 and higher, the algorithm for
-  # finding libxml2 got "smarter", and it can now locate the version which is
-  # in gnuwin32, even though that version does not contain the headers that
-  # LLDB uses.
+if (NOT LIBXML2_FOUND)
   find_package(LibXml2)
 endif()
 
@@ -337,12 +344,10 @@ if (APPLE)
        ${SECURITY_LIBRARY}
        ${DEBUG_SYMBOLS_LIBRARY})
   include_directories(${LIBXML2_INCLUDE_DIR})
-else()
-  if (LIBXML2_FOUND)
-    add_definitions( -DLIBXML2_DEFINED )
-    list(APPEND system_libs ${LIBXML2_LIBRARIES})
-    include_directories(${LIBXML2_INCLUDE_DIR})
-  endif()
+elseif(LIBXML2_FOUND AND LIBXML2_VERSION_STRING VERSION_GREATER 2.8)
+  add_definitions( -DLIBXML2_DEFINED )
+  list(APPEND system_libs ${LIBXML2_LIBRARIES})
+  include_directories(${LIBXML2_INCLUDE_DIR})
 endif()
 
 if( WIN32 AND NOT CYGWIN )

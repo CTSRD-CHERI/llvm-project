@@ -15,15 +15,16 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+using namespace llvm;
 namespace clang {
 namespace clangd {
-using namespace llvm;
-
 namespace {
+
 using testing::ElementsAre;
 using testing::Field;
 using testing::IsEmpty;
 using testing::Pair;
+using testing::UnorderedElementsAre;
 
 testing::Matcher<const Diag &> WithFix(testing::Matcher<Fix> FixMatcher) {
   return Field(&Diag::Fixes, ElementsAre(FixMatcher));
@@ -34,24 +35,23 @@ testing::Matcher<const Diag &> WithNote(testing::Matcher<Note> NoteMatcher) {
 }
 
 MATCHER_P2(Diag, Range, Message,
-           "Diag at " + llvm::to_string(Range) + " = [" + Message + "]") {
+           "Diag at " + to_string(Range) + " = [" + Message + "]") {
   return arg.Range == Range && arg.Message == Message;
 }
 
 MATCHER_P3(Fix, Range, Replacement, Message,
-           "Fix " + llvm::to_string(Range) + " => " +
+           "Fix " + to_string(Range) + " => " +
                testing::PrintToString(Replacement) + " = [" + Message + "]") {
   return arg.Message == Message && arg.Edits.size() == 1 &&
          arg.Edits[0].range == Range && arg.Edits[0].newText == Replacement;
 }
 
-MATCHER_P(EqualToLSPDiag, LSPDiag,
-          "LSP diagnostic " + llvm::to_string(LSPDiag)) {
+MATCHER_P(EqualToLSPDiag, LSPDiag, "LSP diagnostic " + to_string(LSPDiag)) {
   return std::tie(arg.range, arg.severity, arg.message) ==
          std::tie(LSPDiag.range, LSPDiag.severity, LSPDiag.message);
 }
 
-MATCHER_P(EqualToFix, Fix, "LSP fix " + llvm::to_string(Fix)) {
+MATCHER_P(EqualToFix, Fix, "LSP fix " + to_string(Fix)) {
   if (arg.Message != Fix.Message)
     return false;
   if (arg.Edits.size() != Fix.Edits.size())
@@ -129,6 +129,41 @@ TEST(DiagnosticsTest, FlagsMatter) {
           WithFix(Fix(Test.range(), "int", "change return type to 'int'")))));
 }
 
+TEST(DiagnosticsTest, ClangTidy) {
+  Annotations Test(R"cpp(
+    #include $deprecated[["assert.h"]]
+
+    #define $macrodef[[SQUARE]](X) (X)*(X)
+    int main() {
+      return $doubled[[sizeof]](sizeof(int));
+      int y = 4;
+      return SQUARE($macroarg[[++]]y);
+    }
+  )cpp");
+  auto TU = TestTU::withCode(Test.code());
+  TU.HeaderFilename = "assert.h"; // Suppress "not found" error.
+  EXPECT_THAT(
+      TU.build().getDiagnostics(),
+      UnorderedElementsAre(
+          AllOf(Diag(Test.range("deprecated"),
+                     "inclusion of deprecated C++ header 'assert.h'; consider "
+                     "using 'cassert' instead [modernize-deprecated-headers]"),
+                WithFix(Fix(Test.range("deprecated"), "<cassert>",
+                            "change '\"assert.h\"' to '<cassert>'"))),
+          Diag(Test.range("doubled"),
+               "suspicious usage of 'sizeof(sizeof(...))' "
+               "[bugprone-sizeof-expression]"),
+          AllOf(
+              Diag(Test.range("macroarg"),
+                   "side effects in the 1st macro argument 'X' are repeated in "
+                   "macro expansion [bugprone-macro-repeated-side-effects]"),
+              WithNote(Diag(Test.range("macrodef"),
+                            "macro 'SQUARE' defined here "
+                            "[bugprone-macro-repeated-side-effects]"))),
+          Diag(Test.range("macroarg"),
+               "multiple unsequenced modifications to 'y'")));
+}
+
 TEST(DiagnosticsTest, Preprocessor) {
   // This looks like a preamble, but there's an #else in the middle!
   // Check that:
@@ -146,6 +181,27 @@ TEST(DiagnosticsTest, Preprocessor) {
   EXPECT_THAT(
       TestTU::withCode(Test.code()).build().getDiagnostics(),
       ElementsAre(Diag(Test.range(), "use of undeclared identifier 'b'")));
+}
+
+TEST(DiagnosticsTest, InsideMacros) {
+  Annotations Test(R"cpp(
+    #define TEN 10
+    #define RET(x) return x + 10
+
+    int* foo() {
+      RET($foo[[0]]);
+    }
+    int* bar() {
+      return $bar[[TEN]];
+    }
+    )cpp");
+  EXPECT_THAT(TestTU::withCode(Test.code()).build().getDiagnostics(),
+              ElementsAre(Diag(Test.range("foo"),
+                               "cannot initialize return object of type "
+                               "'int *' with an rvalue of type 'int'"),
+                          Diag(Test.range("bar"),
+                               "cannot initialize return object of type "
+                               "'int *' with an rvalue of type 'int'")));
 }
 
 TEST(DiagnosticsTest, ToLSP) {
@@ -176,7 +232,7 @@ TEST(DiagnosticsTest, ToLSP) {
   F.Message = "do something";
   D.Fixes.push_back(F);
 
-  auto MatchingLSP = [](const DiagBase &D, llvm::StringRef Message) {
+  auto MatchingLSP = [](const DiagBase &D, StringRef Message) {
     clangd::Diagnostic Res;
     Res.range = D.Range;
     Res.severity = getSeverity(D.Severity);
@@ -199,11 +255,20 @@ main.cpp:2:3: error: something terrible happened)");
 
   // Transform dianostics and check the results.
   std::vector<std::pair<clangd::Diagnostic, std::vector<clangd::Fix>>> LSPDiags;
-  toLSPDiags(D, [&](clangd::Diagnostic LSPDiag,
-                    llvm::ArrayRef<clangd::Fix> Fixes) {
-    LSPDiags.push_back({std::move(LSPDiag),
-                        std::vector<clangd::Fix>(Fixes.begin(), Fixes.end())});
-  });
+  toLSPDiags(
+      D,
+#ifdef _WIN32
+      URIForFile::canonicalize("c:\\path\\to\\foo\\bar\\main.cpp",
+                               /*TUPath=*/""),
+#else
+      URIForFile::canonicalize("/path/to/foo/bar/main.cpp", /*TUPath=*/""),
+#endif
+      ClangdDiagnosticOptions(),
+      [&](clangd::Diagnostic LSPDiag, ArrayRef<clangd::Fix> Fixes) {
+        LSPDiags.push_back(
+            {std::move(LSPDiag),
+             std::vector<clangd::Fix>(Fixes.begin(), Fixes.end())});
+      });
 
   EXPECT_THAT(
       LSPDiags,
@@ -248,6 +313,28 @@ Bar* bar;
         SourceMgr.getFileOffset(SourceMgr.getSpellingLoc(Actual)));
     EXPECT_EQ(TestCase.points().front(), ActualPos) << Text;
   }
+}
+
+MATCHER_P(DeclNamed, Name, "") {
+  if (NamedDecl *ND = dyn_cast<NamedDecl>(arg))
+    if (ND->getName() == Name)
+      return true;
+  if (auto *Stream = result_listener->stream()) {
+    llvm::raw_os_ostream OS(*Stream);
+    arg->dump(OS);
+  }
+  return false;
+}
+
+TEST(ClangdUnitTest, TopLevelDecls) {
+  TestTU TU;
+  TU.HeaderCode = R"(
+    int header1();
+    int header2;
+  )";
+  TU.Code = "int main();";
+  auto AST = TU.build();
+  EXPECT_THAT(AST.getLocalTopLevelDecls(), ElementsAre(DeclNamed("main")));
 }
 
 } // namespace

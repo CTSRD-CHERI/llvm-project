@@ -26,7 +26,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ClangSACheckers.h"
+#include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugReporter.h"
 #include "clang/StaticAnalyzer/Core/BugReporter/BugType.h"
@@ -87,9 +87,10 @@ void Callback::run(const MatchFinder::MatchResult &Result) {
         MacroIndicatesWeShouldSkipTheCheck = true;
     }
     if (!MacroIndicatesWeShouldSkipTheCheck) {
-      llvm::APSInt Result;
+      Expr::EvalResult EVResult;
       if (CheckIfNull->IgnoreParenCasts()->EvaluateAsInt(
-              Result, ACtx, Expr::SE_AllowSideEffects)) {
+              EVResult, ACtx, Expr::SE_AllowSideEffects)) {
+        llvm::APSInt Result = EVResult.Val.getInt();
         if (Result == 0) {
           if (!C->Pedantic)
             return;
@@ -346,5 +347,5 @@ void ento::registerNumberObjectConversionChecker(CheckerManager &Mgr) {
   NumberObjectConversionChecker *Chk =
       Mgr.registerChecker<NumberObjectConversionChecker>();
   Chk->Pedantic =
-      Mgr.getAnalyzerOptions().getBooleanOption("Pedantic", false, Chk);
+      Mgr.getAnalyzerOptions().getCheckerBooleanOption("Pedantic", false, Chk);
 }

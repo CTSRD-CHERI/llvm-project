@@ -50,10 +50,11 @@ public:
       MR.addDependenciesForAll(Deps);
     };
 
-    MR.getTargetJITDylib().withSearchOrderDo([&](const JITDylibList &JDs) {
-      ES.lookup(JDs, InternedSymbols, OnResolvedWithUnwrap, OnReady,
-                RegisterDependencies, &MR.getTargetJITDylib());
-    });
+    JITDylibSearchList SearchOrder;
+    MR.getTargetJITDylib().withSearchOrderDo(
+        [&](const JITDylibSearchList &JDs) { SearchOrder = JDs; });
+    ES.lookup(SearchOrder, InternedSymbols, OnResolvedWithUnwrap, OnReady,
+              RegisterDependencies);
   }
 
   Expected<LookupSet> getResponsibilitySet(const LookupSet &Symbols) {
@@ -84,8 +85,7 @@ RTDyldObjectLinkingLayer::RTDyldObjectLinkingLayer(
       NotifyEmitted(std::move(NotifyEmitted)) {}
 
 void RTDyldObjectLinkingLayer::emit(MaterializationResponsibility R,
-                                     VModuleKey K,
-                                     std::unique_ptr<MemoryBuffer> O) {
+                                    std::unique_ptr<MemoryBuffer> O) {
   assert(O && "Object must not be null");
 
   // This method launches an asynchronous link step that will fulfill our
@@ -121,14 +121,15 @@ void RTDyldObjectLinkingLayer::emit(MaterializationResponsibility R,
     }
   }
 
-  auto MemoryManager = GetMemoryManager(K);
-  auto &MemMgr = *MemoryManager;
-  {
-    std::lock_guard<std::mutex> Lock(RTDyldLayerMutex);
+  auto K = R.getVModuleKey();
+  RuntimeDyld::MemoryManager *MemMgr = nullptr;
 
-    assert(!MemMgrs.count(K) &&
-           "A memory manager already exists for this key?");
-    MemMgrs[K] = std::move(MemoryManager);
+  // Create a record a memory manager for this object.
+  {
+    auto Tmp = GetMemoryManager();
+    std::lock_guard<std::mutex> Lock(RTDyldLayerMutex);
+    MemMgrs.push_back(std::move(Tmp));
+    MemMgr = MemMgrs.back().get();
   }
 
   JITDylibSearchOrderResolver Resolver(*SharedR);
@@ -141,7 +142,7 @@ void RTDyldObjectLinkingLayer::emit(MaterializationResponsibility R,
    * duplicate defs.
    */
   jitLinkForORC(
-      **Obj, std::move(O), MemMgr, Resolver, ProcessAllSections,
+      **Obj, std::move(O), *MemMgr, Resolver, ProcessAllSections,
       [this, K, SharedR, &Obj, InternalSymbols](
           std::unique_ptr<RuntimeDyld::LoadedObjectInfo> LoadedObjInfo,
           std::map<StringRef, JITEvaluatedSymbol> ResolvedSymbols) {

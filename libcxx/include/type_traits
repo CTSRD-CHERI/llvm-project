@@ -709,6 +709,9 @@ template <>          struct __libcpp_is_integral<char>               : public tr
 template <>          struct __libcpp_is_integral<signed char>        : public true_type {};
 template <>          struct __libcpp_is_integral<unsigned char>      : public true_type {};
 template <>          struct __libcpp_is_integral<wchar_t>            : public true_type {};
+#ifndef _LIBCPP_NO_HAS_CHAR8_T
+template <>          struct __libcpp_is_integral<char8_t>            : public true_type {};
+#endif
 #ifndef _LIBCPP_HAS_NO_UNICODE_CHARS
 template <>          struct __libcpp_is_integral<char16_t>           : public true_type {};
 template <>          struct __libcpp_is_integral<char32_t>           : public true_type {};
@@ -743,12 +746,6 @@ _LIBCPP_INLINE_VAR _LIBCPP_CONSTEXPR bool is_integral_v
 // is_floating_point
 
 template <class _Tp> struct __libcpp_is_floating_point              : public false_type {};
-#ifdef __clang__
-template <>          struct __libcpp_is_floating_point<__fp16>      : public true_type {};
-#endif
-#ifdef __FLT16_MANT_DIG__
-template <>          struct __libcpp_is_floating_point<_Float16>    : public true_type {};
-#endif
 template <>          struct __libcpp_is_floating_point<float>       : public true_type {};
 template <>          struct __libcpp_is_floating_point<double>      : public true_type {};
 template <>          struct __libcpp_is_floating_point<long double> : public true_type {};

@@ -478,6 +478,85 @@ TEST(VirtualFileSystemTest, BasicRealFSRecursiveIteration) {
   EXPECT_EQ(1, Counts[3]); // d
 }
 
+TEST(VirtualFileSystemTest, BasicRealFSRecursiveIterationNoPush) {
+  ScopedDir TestDirectory("virtual-file-system-test", /*Unique*/ true);
+
+  ScopedDir _a(TestDirectory + "/a");
+  ScopedDir _ab(TestDirectory + "/a/b");
+  ScopedDir _c(TestDirectory + "/c");
+  ScopedDir _cd(TestDirectory + "/c/d");
+  ScopedDir _e(TestDirectory + "/e");
+  ScopedDir _ef(TestDirectory + "/e/f");
+  ScopedDir _g(TestDirectory + "/g");
+
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = vfs::getRealFileSystem();
+
+  // Test that calling no_push on entries without subdirectories has no effect.
+  {
+    std::error_code EC;
+    auto I = vfs::recursive_directory_iterator(*FS, Twine(TestDirectory), EC);
+    ASSERT_FALSE(EC);
+
+    std::vector<std::string> Contents;
+    for (auto E = vfs::recursive_directory_iterator(); !EC && I != E;
+         I.increment(EC)) {
+      Contents.push_back(I->path());
+      char last = I->path().back();
+      switch (last) {
+      case 'b':
+      case 'd':
+      case 'f':
+      case 'g':
+        I.no_push();
+        break;
+      default:
+        break;
+      }
+    }
+    EXPECT_EQ(7U, Contents.size());
+  }
+
+  // Test that calling no_push skips subdirectories.
+  {
+    std::error_code EC;
+    auto I = vfs::recursive_directory_iterator(*FS, Twine(TestDirectory), EC);
+    ASSERT_FALSE(EC);
+
+    std::vector<std::string> Contents;
+    for (auto E = vfs::recursive_directory_iterator(); !EC && I != E;
+         I.increment(EC)) {
+      Contents.push_back(I->path());
+      char last = I->path().back();
+      switch (last) {
+      case 'a':
+      case 'c':
+      case 'e':
+        I.no_push();
+        break;
+      default:
+        break;
+      }
+    }
+
+    // Check contents, which may be in any order
+    EXPECT_EQ(4U, Contents.size());
+    int Counts[7] = {0, 0, 0, 0, 0, 0, 0};
+    for (const std::string &Name : Contents) {
+      ASSERT_FALSE(Name.empty());
+      int Index = Name[Name.size() - 1] - 'a';
+      ASSERT_TRUE(Index >= 0 && Index < 7);
+      Counts[Index]++;
+    }
+    EXPECT_EQ(1, Counts[0]); // a
+    EXPECT_EQ(0, Counts[1]); // b
+    EXPECT_EQ(1, Counts[2]); // c
+    EXPECT_EQ(0, Counts[3]); // d
+    EXPECT_EQ(1, Counts[4]); // e
+    EXPECT_EQ(0, Counts[5]); // f
+    EXPECT_EQ(1, Counts[6]); // g
+  }
+}
+
 #ifdef LLVM_ON_UNIX
 TEST(VirtualFileSystemTest, BrokenSymlinkRealFSRecursiveIteration) {
   ScopedDir TestDirectory("virtual-file-system-test", /*Unique*/ true);
@@ -664,6 +743,43 @@ TEST(VirtualFileSystemTest, HiddenInIteration) {
   }
 }
 
+TEST(ProxyFileSystemTest, Basic) {
+  IntrusiveRefCntPtr<vfs::InMemoryFileSystem> Base(
+      new vfs::InMemoryFileSystem());
+  vfs::ProxyFileSystem PFS(Base);
+
+  Base->addFile("/a", 0, MemoryBuffer::getMemBuffer("test"));
+
+  auto Stat = PFS.status("/a");
+  ASSERT_FALSE(Stat.getError());
+
+  auto File = PFS.openFileForRead("/a");
+  ASSERT_FALSE(File.getError());
+  EXPECT_EQ("test", (*(*File)->getBuffer("ignored"))->getBuffer());
+
+  std::error_code EC;
+  vfs::directory_iterator I = PFS.dir_begin("/", EC);
+  ASSERT_FALSE(EC);
+  ASSERT_EQ("/a", I->path());
+  I.increment(EC);
+  ASSERT_FALSE(EC);
+  ASSERT_EQ(vfs::directory_iterator(), I);
+
+  ASSERT_FALSE(PFS.setCurrentWorkingDirectory("/"));
+
+  auto PWD = PFS.getCurrentWorkingDirectory();
+  ASSERT_FALSE(PWD.getError());
+  ASSERT_EQ("/", *PWD);
+
+  SmallString<16> Path;
+  ASSERT_FALSE(PFS.getRealPath("a", Path));
+  ASSERT_EQ("/a", Path);
+
+  bool Local = true;
+  ASSERT_FALSE(PFS.isLocal("/a", Local));
+  ASSERT_EQ(false, Local);
+}
+
 class InMemoryFileSystemTest : public ::testing::Test {
 protected:
   llvm::vfs::InMemoryFileSystem FS;
@@ -804,6 +920,17 @@ TEST_F(InMemoryFileSystemTest, WorkingDirectory) {
   NormalizedFS.setCurrentWorkingDirectory("..");
   ASSERT_EQ("/b",
             getPosixPath(NormalizedFS.getCurrentWorkingDirectory().get()));
+}
+
+TEST_F(InMemoryFileSystemTest, IsLocal) {
+  FS.setCurrentWorkingDirectory("/b");
+  FS.addFile("c", 0, MemoryBuffer::getMemBuffer(""));
+
+  std::error_code EC;
+  bool IsLocal = true;
+  EC = FS.isLocal("c", IsLocal);
+  ASSERT_FALSE(EC);
+  ASSERT_FALSE(IsLocal);
 }
 
 #if !defined(_WIN32)
@@ -1598,4 +1725,136 @@ TEST_F(VFSFromYAMLTest, RelativePaths) {
   EXPECT_EQ(nullptr, FS.get());
 
   EXPECT_EQ(3, NumDiagnostics);
+}
+
+TEST_F(VFSFromYAMLTest, NonFallthroughDirectoryIteration) {
+  IntrusiveRefCntPtr<DummyFileSystem> Lower(new DummyFileSystem());
+  Lower->addDirectory("//root/");
+  Lower->addRegularFile("//root/a");
+  Lower->addRegularFile("//root/b");
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = getFromYAMLString(
+      "{ 'use-external-names': false,\n"
+      "  'fallthrough': false,\n"
+      "  'roots': [\n"
+      "{\n"
+      "  'type': 'directory',\n"
+      "  'name': '//root/',\n"
+      "  'contents': [ {\n"
+      "                  'type': 'file',\n"
+      "                  'name': 'c',\n"
+      "                  'external-contents': '//root/a'\n"
+      "                }\n"
+      "              ]\n"
+      "}\n"
+      "]\n"
+      "}",
+      Lower);
+  ASSERT_TRUE(FS.get() != nullptr);
+
+  std::error_code EC;
+  checkContents(FS->dir_begin("//root/", EC),
+                {"//root/c"});
+}
+
+TEST_F(VFSFromYAMLTest, DirectoryIterationWithDuplicates) {
+  IntrusiveRefCntPtr<DummyFileSystem> Lower(new DummyFileSystem());
+  Lower->addDirectory("//root/");
+  Lower->addRegularFile("//root/a");
+  Lower->addRegularFile("//root/b");
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = getFromYAMLString(
+      "{ 'use-external-names': false,\n"
+      "  'roots': [\n"
+      "{\n"
+      "  'type': 'directory',\n"
+      "  'name': '//root/',\n"
+      "  'contents': [ {\n"
+      "                  'type': 'file',\n"
+      "                  'name': 'a',\n"
+      "                  'external-contents': '//root/a'\n"
+      "                }\n"
+      "              ]\n"
+      "}\n"
+      "]\n"
+      "}",
+	  Lower);
+  ASSERT_TRUE(FS.get() != nullptr);
+
+  std::error_code EC;
+  checkContents(FS->dir_begin("//root/", EC),
+                {"//root/a", "//root/b"});
+}
+
+TEST_F(VFSFromYAMLTest, DirectoryIterationErrorInVFSLayer) {
+  IntrusiveRefCntPtr<DummyFileSystem> Lower(new DummyFileSystem());
+  Lower->addDirectory("//root/");
+  Lower->addDirectory("//root/foo");
+  Lower->addRegularFile("//root/foo/a");
+  Lower->addRegularFile("//root/foo/b");
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = getFromYAMLString(
+      "{ 'use-external-names': false,\n"
+      "  'roots': [\n"
+      "{\n"
+      "  'type': 'directory',\n"
+      "  'name': '//root/',\n"
+      "  'contents': [ {\n"
+      "                  'type': 'file',\n"
+      "                  'name': 'bar/a',\n"
+      "                  'external-contents': '//root/foo/a'\n"
+      "                }\n"
+      "              ]\n"
+      "}\n"
+      "]\n"
+      "}",
+      Lower);
+  ASSERT_TRUE(FS.get() != nullptr);
+
+  std::error_code EC;
+  checkContents(FS->dir_begin("//root/foo", EC),
+                {"//root/foo/a", "//root/foo/b"});
+}
+
+TEST_F(VFSFromYAMLTest, GetRealPath) {
+  IntrusiveRefCntPtr<DummyFileSystem> Lower(new DummyFileSystem());
+  Lower->addDirectory("//dir/");
+  Lower->addRegularFile("/foo");
+  Lower->addSymlink("/link");
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = getFromYAMLString(
+      "{ 'use-external-names': false,\n"
+      "  'roots': [\n"
+      "{\n"
+      "  'type': 'directory',\n"
+      "  'name': '//root/',\n"
+      "  'contents': [ {\n"
+      "                  'type': 'file',\n"
+      "                  'name': 'bar',\n"
+      "                  'external-contents': '/link'\n"
+      "                }\n"
+      "              ]\n"
+      "},\n"
+      "{\n"
+      "  'type': 'directory',\n"
+      "  'name': '//dir/',\n"
+      "  'contents': []\n"
+      "}\n"
+      "]\n"
+      "}",
+      Lower);
+  ASSERT_TRUE(FS.get() != nullptr);
+
+  // Regular file present in underlying file system.
+  SmallString<16> RealPath;
+  EXPECT_FALSE(FS->getRealPath("/foo", RealPath));
+  EXPECT_EQ(RealPath.str(), "/foo");
+
+  // File present in YAML pointing to symlink in underlying file system.
+  EXPECT_FALSE(FS->getRealPath("//root/bar", RealPath));
+  EXPECT_EQ(RealPath.str(), "/symlink");
+
+  // Directories should fall back to the underlying file system is possible.
+  EXPECT_FALSE(FS->getRealPath("//dir/", RealPath));
+  EXPECT_EQ(RealPath.str(), "//dir/");
+
+  // Try a non-existing file.
+  EXPECT_EQ(FS->getRealPath("/non_existing", RealPath),
+            errc::no_such_file_or_directory);
 }

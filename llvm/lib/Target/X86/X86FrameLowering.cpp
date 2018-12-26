@@ -1103,15 +1103,6 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF,
     if (TRI->needsStackRealignment(MF) && !IsWin64Prologue)
       NumBytes = alignTo(NumBytes, MaxAlign);
 
-    // Get the offset of the stack slot for the EBP register, which is
-    // guaranteed to be the last slot by processFunctionBeforeFrameFinalized.
-    // Update the frame offset adjustment.
-    if (!IsFunclet)
-      MFI.setOffsetAdjustment(-NumBytes);
-    else
-      assert(MFI.getOffsetAdjustment() == -(int)NumBytes &&
-             "should calculate same local variable offset for funclets");
-
     // Save EBP/RBP into the appropriate stack slot.
     BuildMI(MBB, MBBI, DL, TII.get(Is64Bit ? X86::PUSH64r : X86::PUSH32r))
       .addReg(MachineFramePtr, RegState::Kill)
@@ -1165,6 +1156,15 @@ void X86FrameLowering::emitPrologue(MachineFunction &MF,
   } else {
     assert(!IsFunclet && "funclets without FPs not yet implemented");
     NumBytes = StackSize - X86FI->getCalleeSavedFrameSize();
+  }
+
+  // Update the offset adjustment, which is mainly used by codeview to translate
+  // from ESP to VFRAME relative local variable offsets.
+  if (!IsFunclet) {
+    if (HasFP && TRI->needsStackRealignment(MF))
+      MFI.setOffsetAdjustment(-NumBytes);
+    else
+      MFI.setOffsetAdjustment(-StackSize);
   }
 
   // For EH funclets, only allocate enough space for outgoing calls. Save the
@@ -2270,9 +2270,15 @@ void X86FrameLowering::adjustForSegmentedStacks(
 
   // Do not generate a prologue for leaf functions with a stack of size zero.
   // For non-leaf functions we have to allow for the possibility that the
-  // call is to a non-split function, as in PR37807.
-  if (StackSize == 0 && !MFI.hasTailCall())
+  // callis to a non-split function, as in PR37807. This function could also
+  // take the address of a non-split function. When the linker tries to adjust
+  // its non-existent prologue, it would fail with an error. Mark the object
+  // file so that such failures are not errors. See this Go language bug-report
+  // https://go-review.googlesource.com/c/go/+/148819/
+  if (StackSize == 0 && !MFI.hasTailCall()) {
+    MF.getMMI().setHasNosplitStack(true);
     return;
+  }
 
   MachineBasicBlock *allocMBB = MF.CreateMachineBasicBlock();
   MachineBasicBlock *checkMBB = MF.CreateMachineBasicBlock();
@@ -2471,8 +2477,8 @@ void X86FrameLowering::adjustForSegmentedStacks(
 
   allocMBB->addSuccessor(&PrologueMBB);
 
-  checkMBB->addSuccessor(allocMBB);
-  checkMBB->addSuccessor(&PrologueMBB);
+  checkMBB->addSuccessor(allocMBB, BranchProbability::getZero());
+  checkMBB->addSuccessor(&PrologueMBB, BranchProbability::getOne());
 
 #ifdef EXPENSIVE_CHECKS
   MF.verify();

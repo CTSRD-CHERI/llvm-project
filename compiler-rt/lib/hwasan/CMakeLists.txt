@@ -7,6 +7,7 @@ set(HWASAN_RTL_SOURCES
   hwasan_dynamic_shadow.cc
   hwasan_interceptors.cc
   hwasan_linux.cc
+  hwasan_memintrinsics.cc
   hwasan_poisoning.cc
   hwasan_report.cc
   hwasan_thread.cc
@@ -61,6 +62,10 @@ append_list_if(COMPILER_RT_HAS_LIBRT rt HWASAN_DYNAMIC_LIBS)
 append_list_if(COMPILER_RT_HAS_LIBM m HWASAN_DYNAMIC_LIBS)
 append_list_if(COMPILER_RT_HAS_LIBPTHREAD pthread HWASAN_DYNAMIC_LIBS)
 
+if (TARGET cxx-headers OR HAVE_LIBCXX)
+  set(HWASAN_DEPS cxx-headers)
+endif()
+
 # Static runtime library.
 add_compiler_rt_component(hwasan)
 
@@ -69,26 +74,30 @@ add_compiler_rt_object_libraries(RTHwasan
   SOURCES ${HWASAN_RTL_SOURCES}
   ADDITIONAL_HEADERS ${HWASAN_RTL_HEADERS}
   CFLAGS ${HWASAN_RTL_CFLAGS}
-  DEFS ${HWASAN_DEFINITIONS})
+  DEFS ${HWASAN_DEFINITIONS}
+  DEPS ${HWASAN_DEPS})
 add_compiler_rt_object_libraries(RTHwasan_cxx
   ARCHS ${HWASAN_SUPPORTED_ARCH}
   SOURCES ${HWASAN_RTL_CXX_SOURCES}
   ADDITIONAL_HEADERS ${HWASAN_RTL_HEADERS}
   CFLAGS ${HWASAN_RTL_CFLAGS}
-  DEFS ${HWASAN_DEFINITIONS})
+  DEFS ${HWASAN_DEFINITIONS}
+  DEPS ${HWASAN_DEPS})
 add_compiler_rt_object_libraries(RTHwasan_dynamic
   ARCHS ${HWASAN_SUPPORTED_ARCH}
   SOURCES ${HWASAN_RTL_SOURCES} ${HWASAN_RTL_CXX_SOURCES}
   ADDITIONAL_HEADERS ${HWASAN_RTL_HEADERS}
   CFLAGS ${HWASAN_DYNAMIC_CFLAGS}
-  DEFS ${HWASAN_DEFINITIONS})
+  DEFS ${HWASAN_DEFINITIONS}
+  DEPS ${HWASAN_DEPS})
 
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/dummy.cc "")
 add_compiler_rt_object_libraries(RTHwasan_dynamic_version_script_dummy
   ARCHS ${HWASAN_SUPPORTED_ARCH}
   SOURCES ${CMAKE_CURRENT_BINARY_DIR}/dummy.cc
   CFLAGS ${HWASAN_DYNAMIC_CFLAGS}
-  DEFS ${HWASAN_DEFINITIONS})
+  DEFS ${HWASAN_DEFINITIONS}
+  DEPS ${HWASAN_DEPS})
 
 foreach(arch ${HWASAN_SUPPORTED_ARCH})
   add_compiler_rt_runtime(clang_rt.hwasan
@@ -137,6 +146,7 @@ foreach(arch ${HWASAN_SUPPORTED_ARCH})
             RTSanitizerCommonCoverage
             RTSanitizerCommonSymbolizer
             RTUbsan
+            RTUbsan_cxx
             # The only purpose of RTHWAsan_dynamic_version_script_dummy is to
             # carry a dependency of the shared runtime on the version script.
             # Replacing it with a straightforward

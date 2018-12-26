@@ -18,13 +18,9 @@
 #ifndef liblldb_DynamicLoaderMacOS_h_
 #define liblldb_DynamicLoaderMacOS_h_
 
-// C Includes
-// C++ Includes
 #include <mutex>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Target/DynamicLoader.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Utility/FileSpec.h"
@@ -108,6 +104,12 @@ protected:
                                   // loaded/unloaded images
   lldb::user_id_t m_break_id;
   mutable std::recursive_mutex m_mutex;
+  lldb::addr_t m_maybe_image_infos_address; // If dyld is still maintaining the
+                                            // all_image_infos address, store it
+                                            // here so we can use it to detect
+                                            // exec's when talking to
+                                            // debugservers that don't support
+                                            // the "reason:exec" annotation.
 
 private:
   DISALLOW_COPY_AND_ASSIGN(DynamicLoaderMacOS);

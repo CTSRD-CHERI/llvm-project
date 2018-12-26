@@ -20,6 +20,7 @@ def HasAddr32 : Predicate<"!Subtarget->hasAddr64()">;
 def HasAddr64 : Predicate<"Subtarget->hasAddr64()">;
 def HasSIMD128 : Predicate<"Subtarget->hasSIMD128()">,
                            AssemblerPredicate<"FeatureSIMD128", "simd128">;
+def HasUnimplementedSIMD : Predicate<"EnableUnimplementedWasmSIMDInstrs">;
 def HasAtomics : Predicate<"Subtarget->hasAtomics()">,
                            AssemblerPredicate<"FeatureAtomics", "atomics">;
 def HasNontrappingFPToInt :
@@ -64,6 +65,7 @@ def SDT_WebAssemblyArgument : SDTypeProfile<1, 1, [SDTCisVT<1, i32>]>;
 def SDT_WebAssemblyReturn   : SDTypeProfile<0, -1, []>;
 def SDT_WebAssemblyWrapper  : SDTypeProfile<1, 1, [SDTCisSameAs<0, 1>,
                                                    SDTCisPtrTy<0>]>;
+def SDT_WebAssemblyThrow    : SDTypeProfile<0, 2, [SDTCisPtrTy<0>]>;
 
 //===----------------------------------------------------------------------===//
 // WebAssembly-specific DAG Nodes.
@@ -90,6 +92,8 @@ def WebAssemblyreturn   : SDNode<"WebAssemblyISD::RETURN",
                                  SDT_WebAssemblyReturn, [SDNPHasChain]>;
 def WebAssemblywrapper  : SDNode<"WebAssemblyISD::Wrapper",
                                  SDT_WebAssemblyWrapper>;
+def WebAssemblythrow : SDNode<"WebAssemblyISD::THROW", SDT_WebAssemblyThrow,
+                              [SDNPHasChain]>;
 
 //===----------------------------------------------------------------------===//
 // WebAssembly-specific Operands.
@@ -140,6 +144,10 @@ let OperandType = "OPERAND_P2ALIGN" in {
 def P2Align : Operand<i32> {
   let PrintMethod = "printWebAssemblyP2AlignOperand";
 }
+
+let OperandType = "OPERAND_EVENT" in
+def event_op : Operand<i32>;
+
 } // OperandType = "OPERAND_P2ALIGN"
 
 let OperandType = "OPERAND_SIGNATURE" in {
@@ -152,6 +160,19 @@ let OperandType = "OPERAND_TYPEINDEX" in
 def TypeIndex : Operand<i32>;
 
 } // OperandNamespace = "WebAssembly"
+
+//===----------------------------------------------------------------------===//
+// WebAssembly Register to Stack instruction mapping
+//===----------------------------------------------------------------------===//
+
+class StackRel;
+def getStackOpcode : InstrMapping {
+  let FilterClass = "StackRel";
+  let RowFields = ["BaseName"];
+  let ColFields = ["StackBased"];
+  let KeyCol = ["false"];
+  let ValueCols = [["true"]];
+}
 
 //===----------------------------------------------------------------------===//
 // WebAssembly Instruction Format Definitions.
@@ -269,6 +290,8 @@ def : Pat<(i32 (WebAssemblywrapper tglobaladdr:$addr)),
           (CONST_I32 tglobaladdr:$addr)>;
 def : Pat<(i32 (WebAssemblywrapper texternalsym:$addr)),
           (CONST_I32 texternalsym:$addr)>;
+def : Pat<(i32 (WebAssemblywrapper mcsym:$sym)), (CONST_I32 mcsym:$sym)>;
+def : Pat<(i64 (WebAssemblywrapper mcsym:$sym)), (CONST_I64 mcsym:$sym)>;
 
 //===----------------------------------------------------------------------===//
 // Additional sets of instructions.

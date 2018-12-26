@@ -672,6 +672,12 @@ public:
       case ISD::STRICT_FLOG2:
       case ISD::STRICT_FRINT:
       case ISD::STRICT_FNEARBYINT:
+      case ISD::STRICT_FMAXNUM:
+      case ISD::STRICT_FMINNUM:
+      case ISD::STRICT_FCEIL:
+      case ISD::STRICT_FFLOOR:
+      case ISD::STRICT_FROUND:
+      case ISD::STRICT_FTRUNC:
         return true;
     }
   }
@@ -1607,6 +1613,21 @@ ConstantSDNode *isConstOrConstSplat(SDValue N, bool AllowUndefs = false);
 /// Returns the SDNode if it is a constant splat BuildVector or constant float.
 ConstantFPSDNode *isConstOrConstSplatFP(SDValue N, bool AllowUndefs = false);
 
+/// Return true if the value is a constant 0 integer or a splatted vector of
+/// a constant 0 integer (with no undefs).
+/// Build vector implicit truncation is not an issue for null values.
+bool isNullOrNullSplat(SDValue V);
+
+/// Return true if the value is a constant 1 integer or a splatted vector of a
+/// constant 1 integer (with no undefs).
+/// Does not permit build vector implicit truncation.
+bool isOneOrOneSplat(SDValue V);
+
+/// Return true if the value is a constant -1 integer or a splatted vector of a
+/// constant -1 integer (with no undefs).
+/// Does not permit build vector implicit truncation.
+bool isAllOnesOrAllOnesSplat(SDValue V);
+
 class GlobalAddressSDNode : public SDNode {
   friend class SelectionDAG;
 
@@ -2466,15 +2487,18 @@ namespace ISD {
 
   /// Attempt to match a unary predicate against a scalar/splat constant or
   /// every element of a constant BUILD_VECTOR.
+  /// If AllowUndef is true, then UNDEF elements will pass nullptr to Match.
   bool matchUnaryPredicate(SDValue Op,
-                           std::function<bool(ConstantSDNode *)> Match);
+                           std::function<bool(ConstantSDNode *)> Match,
+                           bool AllowUndefs = false);
 
   /// Attempt to match a binary predicate against a pair of scalar/splat
   /// constants or every element of a pair of constant BUILD_VECTORs.
+  /// If AllowUndef is true, then UNDEF elements will pass nullptr to Match.
   bool matchBinaryPredicate(
       SDValue LHS, SDValue RHS,
-      std::function<bool(ConstantSDNode *, ConstantSDNode *)> Match);
-
+      std::function<bool(ConstantSDNode *, ConstantSDNode *)> Match,
+      bool AllowUndefs = false);
 } // end namespace ISD
 
 } // end namespace llvm

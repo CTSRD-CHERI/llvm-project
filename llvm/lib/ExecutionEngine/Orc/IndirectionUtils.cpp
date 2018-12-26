@@ -27,8 +27,9 @@ public:
   using CompileFunction = JITCompileCallbackManager::CompileFunction;
 
   CompileCallbackMaterializationUnit(SymbolStringPtr Name,
-                                     CompileFunction Compile)
-      : MaterializationUnit(SymbolFlagsMap({{Name, JITSymbolFlags::Exported}})),
+                                     CompileFunction Compile, VModuleKey K)
+      : MaterializationUnit(SymbolFlagsMap({{Name, JITSymbolFlags::Exported}}),
+                            std::move(K)),
         Name(std::move(Name)), Compile(std::move(Compile)) {}
 
   StringRef getName() const override { return "<Compile Callbacks>"; }
@@ -67,7 +68,8 @@ JITCompileCallbackManager::getCompileCallback(CompileFunction Compile) {
     AddrToSymbol[*TrampolineAddr] = CallbackName;
     cantFail(CallbacksJD.define(
         llvm::make_unique<CompileCallbackMaterializationUnit>(
-            std::move(CallbackName), std::move(Compile))));
+            std::move(CallbackName), std::move(Compile),
+            ES.allocateVModule())));
     return *TrampolineAddr;
   } else
     return TrampolineAddr.takeError();
@@ -90,7 +92,7 @@ JITTargetAddress JITCompileCallbackManager::executeCompileCallback(
       {
         raw_string_ostream ErrMsgStream(ErrMsg);
         ErrMsgStream << "No compile callback for trampoline at "
-                     << format("0x%016x", TrampolineAddr);
+                     << format("0x%016" PRIx64, TrampolineAddr);
       }
       ES.reportError(
           make_error<StringError>(std::move(ErrMsg), inconvertibleErrorCode()));
@@ -99,7 +101,7 @@ JITTargetAddress JITCompileCallbackManager::executeCompileCallback(
       Name = I->second;
   }
 
-  if (auto Sym = ES.lookup({&CallbacksJD}, Name, true))
+  if (auto Sym = ES.lookup(JITDylibSearchList({{&CallbacksJD, true}}), Name))
     return Sym->getAddress();
   else {
     llvm::dbgs() << "Didn't find callback.\n";

@@ -67,7 +67,8 @@ void WebAssemblyMCCodeEmitter::encodeInstruction(
     OS << uint8_t(Binary);
   } else {
     assert(Binary <= UINT16_MAX && "Several-byte opcodes not supported yet");
-    OS << uint8_t(Binary >> 8) << uint8_t(Binary);
+    OS << uint8_t(Binary >> 8);
+    encodeULEB128(uint8_t(Binary), OS);
   }
 
   // For br_table instructions, encode the size of the table. In the MCInst,
@@ -85,10 +86,9 @@ void WebAssemblyMCCodeEmitter::encodeInstruction(
     const MCOperand &MO = MI.getOperand(i);
     if (MO.isReg()) {
       /* nothing to encode */
+
     } else if (MO.isImm()) {
       if (i < Desc.getNumOperands()) {
-        assert(Desc.TSFlags == 0 &&
-               "WebAssembly non-variable_ops don't use TSFlags");
         const MCOperandInfo &Info = Desc.OpInfo[i];
         LLVM_DEBUG(dbgs() << "Encoding immediate: type="
                           << int(Info.OperandType) << "\n");
@@ -123,15 +123,10 @@ void WebAssemblyMCCodeEmitter::encodeInstruction(
           encodeULEB128(uint64_t(MO.getImm()), OS);
         }
       } else {
-        assert(Desc.TSFlags == (WebAssemblyII::VariableOpIsImmediate |
-                                WebAssemblyII::VariableOpImmediateIsLabel));
         encodeULEB128(uint64_t(MO.getImm()), OS);
       }
+
     } else if (MO.isFPImm()) {
-      assert(i < Desc.getNumOperands() &&
-             "Unexpected floating-point immediate as a non-fixed operand");
-      assert(Desc.TSFlags == 0 &&
-             "WebAssembly variable_ops floating point ops don't use TSFlags");
       const MCOperandInfo &Info = Desc.OpInfo[i];
       if (Info.OperandType == WebAssembly::OPERAND_F32IMM) {
         // TODO: MC converts all floating point immediate operands to double.
@@ -143,22 +138,27 @@ void WebAssemblyMCCodeEmitter::encodeInstruction(
         double d = MO.getFPImm();
         support::endian::write<double>(OS, d, support::little);
       }
+
     } else if (MO.isExpr()) {
       const MCOperandInfo &Info = Desc.OpInfo[i];
       llvm::MCFixupKind FixupKind;
       size_t PaddedSize = 5;
-      if (Info.OperandType == WebAssembly::OPERAND_I32IMM) {
+      switch (Info.OperandType) {
+      case WebAssembly::OPERAND_I32IMM:
         FixupKind = MCFixupKind(WebAssembly::fixup_code_sleb128_i32);
-      } else if (Info.OperandType == WebAssembly::OPERAND_I64IMM) {
+        break;
+      case WebAssembly::OPERAND_I64IMM:
         FixupKind = MCFixupKind(WebAssembly::fixup_code_sleb128_i64);
         PaddedSize = 10;
-      } else if (Info.OperandType == WebAssembly::OPERAND_FUNCTION32 ||
-                 Info.OperandType == WebAssembly::OPERAND_OFFSET32 ||
-                 Info.OperandType == WebAssembly::OPERAND_TYPEINDEX) {
+        break;
+      case WebAssembly::OPERAND_FUNCTION32:
+      case WebAssembly::OPERAND_OFFSET32:
+      case WebAssembly::OPERAND_TYPEINDEX:
+      case WebAssembly::OPERAND_GLOBAL:
+      case WebAssembly::OPERAND_EVENT:
         FixupKind = MCFixupKind(WebAssembly::fixup_code_uleb128_i32);
-      } else if (Info.OperandType == WebAssembly::OPERAND_GLOBAL) {
-        FixupKind = MCFixupKind(WebAssembly::fixup_code_uleb128_i32);
-      } else {
+        break;
+      default:
         llvm_unreachable("unexpected symbolic operand kind");
       }
       Fixups.push_back(MCFixup::create(OS.tell() - Start, MO.getExpr(),

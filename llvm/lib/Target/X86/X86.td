@@ -98,6 +98,9 @@ def FeatureSlowSHLD : SubtargetFeature<"slow-shld", "IsSHLDSlow", "true",
                                        "SHLD instruction is slow">;
 def FeatureSlowPMULLD : SubtargetFeature<"slow-pmulld", "IsPMULLDSlow", "true",
                                         "PMULLD instruction is slow">;
+def FeatureSlowPMADDWD : SubtargetFeature<"slow-pmaddwd", "IsPMADDWDSlow",
+                                          "true",
+                                          "PMADDWD is slower than PMULLD">;
 // FIXME: This should not apply to CPUs that do not have SSE.
 def FeatureSlowUAMem16 : SubtargetFeature<"slow-unaligned-mem-16",
                                 "IsUAMem16Slow", "true",
@@ -446,6 +449,7 @@ include "X86SchedHaswell.td"
 include "X86SchedBroadwell.td"
 include "X86ScheduleSLM.td"
 include "X86ScheduleZnver1.td"
+include "X86ScheduleBdVer2.td"
 include "X86ScheduleBtVer2.td"
 include "X86SchedSkylakeClient.td"
 include "X86SchedSkylakeServer.td"
@@ -460,22 +464,6 @@ def ProcIntelGLP  : SubtargetFeature<"glp", "X86ProcFamily", "IntelGLP",
                     "Intel Goldmont Plus processors">;
 def ProcIntelTRM  : SubtargetFeature<"tremont", "X86ProcFamily", "IntelTRM",
                     "Intel Tremont processors">;
-def ProcIntelHSW  : SubtargetFeature<"haswell", "X86ProcFamily",
-                    "IntelHaswell", "Intel Haswell processors">;
-def ProcIntelBDW  : SubtargetFeature<"broadwell", "X86ProcFamily",
-                    "IntelBroadwell", "Intel Broadwell processors">;
-def ProcIntelSKL  : SubtargetFeature<"skylake", "X86ProcFamily",
-                    "IntelSkylake", "Intel Skylake processors">;
-def ProcIntelKNL  : SubtargetFeature<"knl", "X86ProcFamily",
-                    "IntelKNL", "Intel Knights Landing processors">;
-def ProcIntelSKX  : SubtargetFeature<"skx", "X86ProcFamily",
-                    "IntelSKX", "Intel Skylake Server processors">;
-def ProcIntelCNL  : SubtargetFeature<"cannonlake", "X86ProcFamily",
-                    "IntelCannonlake", "Intel Cannonlake processors">;
-def ProcIntelICL  : SubtargetFeature<"icelake-client", "X86ProcFamily",
-                    "IntelIcelakeClient", "Intel Icelake processors">;
-def ProcIntelICX  : SubtargetFeature<"icelake-server", "X86ProcFamily",
-                    "IntelIcelakeServer", "Intel Icelake Server processors">;
 
 class Proc<string Name, list<SubtargetFeature> Features>
  : ProcessorModel<Name, GenericModel, Features>;
@@ -787,7 +775,6 @@ def HSWFeatures : ProcessorFeatures<IVBFeatures.Value, [
 
 class HaswellProc<string Name> : ProcModel<Name, HaswellModel,
                                            HSWFeatures.Value, [
-  ProcIntelHSW,
   FeaturePOPCNTFalseDeps,
   FeatureLZCNTFalseDeps
 ]>;
@@ -801,7 +788,6 @@ def BDWFeatures : ProcessorFeatures<HSWFeatures.Value, [
 ]>;
 class BroadwellProc<string Name> : ProcModel<Name, BroadwellModel,
                                              BDWFeatures.Value, [
-  ProcIntelBDW,
   FeaturePOPCNTFalseDeps,
   FeatureLZCNTFalseDeps
 ]>;
@@ -818,14 +804,32 @@ def SKLFeatures : ProcessorFeatures<BDWFeatures.Value, [
 
 class SkylakeClientProc<string Name> : ProcModel<Name, SkylakeClientModel,
                                                  SKLFeatures.Value, [
-  ProcIntelSKL,
   FeatureHasFastGather,
   FeaturePOPCNTFalseDeps,
   FeatureSGX
 ]>;
 def : SkylakeClientProc<"skylake">;
 
-def KNLFeatures : ProcessorFeatures<IVBFeatures.Value, [
+def KNLFeatures : ProcessorFeatures<[], [
+  FeatureX87,
+  FeatureCMOV,
+  FeatureMMX,
+  FeatureFXSR,
+  FeatureNOPL,
+  Feature64Bit,
+  FeatureCMPXCHG16B,
+  FeaturePOPCNT,
+  FeatureSlowDivide64,
+  FeaturePCLMUL,
+  FeatureXSAVE,
+  FeatureXSAVEOPT,
+  FeatureLAHFSAHF,
+  FeatureSlow3OpsLEA,
+  FeatureSlowIncDec,
+  FeatureAES,
+  FeatureRDRAND,
+  FeatureF16C,
+  FeatureFSGSBase,
   FeatureAVX512,
   FeatureERI,
   FeatureCDI,
@@ -844,19 +848,19 @@ def KNLFeatures : ProcessorFeatures<IVBFeatures.Value, [
 // FIXME: define KNL model
 class KnightsLandingProc<string Name> : ProcModel<Name, HaswellModel,
                                                   KNLFeatures.Value, [
-  ProcIntelKNL,
   FeatureSlowTwoMemOps,
   FeatureFastPartialYMMorZMMWrite,
-  FeatureHasFastGather
+  FeatureHasFastGather,
+  FeatureSlowPMADDWD
 ]>;
 def : KnightsLandingProc<"knl">;
 
 class KnightsMillProc<string Name> : ProcModel<Name, HaswellModel,
                                                KNLFeatures.Value, [
-  ProcIntelKNL,
   FeatureSlowTwoMemOps,
   FeatureFastPartialYMMorZMMWrite,
   FeatureHasFastGather,
+  FeatureSlowPMADDWD,
   FeatureVPOPCNTDQ
 ]>;
 def : KnightsMillProc<"knm">; // TODO Add AVX5124FMAPS/AVX5124VNNIW features
@@ -873,12 +877,22 @@ def SKXFeatures : ProcessorFeatures<SKLFeatures.Value, [
 
 class SkylakeServerProc<string Name> : ProcModel<Name, SkylakeServerModel,
                                                  SKXFeatures.Value, [
-  ProcIntelSKX,
   FeatureHasFastGather,
   FeaturePOPCNTFalseDeps
 ]>;
 def : SkylakeServerProc<"skylake-avx512">;
 def : SkylakeServerProc<"skx">; // Legacy alias.
+
+def CLXFeatures : ProcessorFeatures<SKXFeatures.Value, [
+  FeatureVNNI
+]>;
+
+class CascadelakeProc<string Name> : ProcModel<Name, SkylakeServerModel,
+                                              CLXFeatures.Value, [
+  FeatureHasFastGather,
+  FeaturePOPCNTFalseDeps
+]>;
+def : CascadelakeProc<"cascadelake">;
 
 def CNLFeatures : ProcessorFeatures<SKLFeatures.Value, [
   FeatureAVX512,
@@ -895,7 +909,6 @@ def CNLFeatures : ProcessorFeatures<SKLFeatures.Value, [
 
 class CannonlakeProc<string Name> : ProcModel<Name, SkylakeServerModel,
                                               CNLFeatures.Value, [
-  ProcIntelCNL,
   FeatureHasFastGather
 ]>;
 def : CannonlakeProc<"cannonlake">;
@@ -914,14 +927,12 @@ def ICLFeatures : ProcessorFeatures<CNLFeatures.Value, [
 
 class IcelakeClientProc<string Name> : ProcModel<Name, SkylakeServerModel,
                                                  ICLFeatures.Value, [
-  ProcIntelICL,
   FeatureHasFastGather
 ]>;
 def : IcelakeClientProc<"icelake-client">;
 
 class IcelakeServerProc<string Name> : ProcModel<Name, SkylakeServerModel,
                                                  ICLFeatures.Value, [
-  ProcIntelICX,
   FeaturePCONFIG,
   FeatureWBNOINVD,
   FeatureHasFastGather
@@ -1012,7 +1023,7 @@ def : ProcessorModel<"btver2", BtVer2Model, [
 ]>;
 
 // Bulldozer
-def : Proc<"bdver1", [
+def : ProcessorModel<"bdver1", BdVer2Model, [
   FeatureX87,
   FeatureCMOV,
   FeatureXOP,
@@ -1037,7 +1048,7 @@ def : Proc<"bdver1", [
   FeatureMacroFusion
 ]>;
 // Piledriver
-def : Proc<"bdver2", [
+def : ProcessorModel<"bdver2", BdVer2Model, [
   FeatureX87,
   FeatureCMOV,
   FeatureXOP,

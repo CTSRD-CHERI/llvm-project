@@ -10,10 +10,6 @@
 #ifndef LLDB_SBTarget_h_
 #define LLDB_SBTarget_h_
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/API/SBAddress.h"
 #include "lldb/API/SBAttachInfo.h"
 #include "lldb/API/SBBreakpoint.h"
@@ -907,6 +903,7 @@ protected:
   friend class SBSourceManager;
   friend class SBSymbol;
   friend class SBValue;
+  friend class SBVariablesOptions;
 
   //------------------------------------------------------------------
   // Constructors are private, use static Target::Create function to create an

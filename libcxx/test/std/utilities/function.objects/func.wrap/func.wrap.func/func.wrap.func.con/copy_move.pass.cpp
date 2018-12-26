@@ -12,7 +12,7 @@
 // class function<R(ArgTypes...)>
 
 // function(const function&  f);
-// function(function&& f);
+// function(function&& f); // noexcept in C++20
 
 #include <functional>
 #include <memory>
@@ -127,6 +127,10 @@ int main()
         assert(f.target<A>());
         assert(f.target<int(*)(int)>() == 0);
 #endif
+		LIBCPP_ASSERT_NOEXCEPT(std::function<int(int)>(std::move(f)));
+#if TEST_STD_VER > 17
+		ASSERT_NOEXCEPT(std::function<int(int)>(std::move(f)));
+#endif
         std::function<int(int)> f2 = std::move(f);
         assert(A::count == 1);
         assert(globalMemCounter.checkOutstandingNewEq(1));
@@ -151,6 +155,10 @@ int main()
         assert(f.target<A>() == nullptr);
         assert(f.target<Ref>());
 #endif
+		LIBCPP_ASSERT_NOEXCEPT(std::function<int(int)>(std::move(f)));
+#if TEST_STD_VER > 17
+		ASSERT_NOEXCEPT(std::function<int(int)>(std::move(f)));
+#endif
         std::function<int(int)> f2(std::move(f));
         assert(A::count == 1);
 #ifndef _LIBCPP_NO_RTTI
@@ -169,6 +177,10 @@ int main()
 #ifndef _LIBCPP_NO_RTTI
         assert(f.target<A>() == nullptr);
         assert(f.target<Ptr>());
+#endif
+		LIBCPP_ASSERT_NOEXCEPT(std::function<int(int)>(std::move(f)));
+#if TEST_STD_VER > 17
+		ASSERT_NOEXCEPT(std::function<int(int)>(std::move(f)));
 #endif
         std::function<int(int)> f2(std::move(f));
 #ifndef _LIBCPP_NO_RTTI

@@ -389,10 +389,6 @@ public:
   /// set is returned.
   AliasSet &getAliasSetFor(const MemoryLocation &MemLoc);
 
-  /// Return true if the specified instruction "may" (or must) alias one of the
-  /// members in any of the sets.
-  bool containsUnknown(const Instruction *I) const;
-
   /// Return the underlying alias analysis object used by this tracker.
   AliasAnalysis &getAliasAnalysis() const { return AA; }
 
@@ -441,12 +437,7 @@ private:
     return *Entry;
   }
 
-  AliasSet &addPointer(Value *P, LocationSize Size, const AAMDNodes &AAInfo,
-                       AliasSet::AccessLattice E);
-  AliasSet &addPointer(MemoryLocation Loc,
-                       AliasSet::AccessLattice E) {
-    return addPointer(const_cast<Value*>(Loc.Ptr), Loc.Size, Loc.AATags, E);
-  }
+  AliasSet &addPointer(MemoryLocation Loc, AliasSet::AccessLattice E);
   AliasSet *mergeAliasSetsForPointer(const Value *Ptr, LocationSize Size,
                                      const AAMDNodes &AAInfo);
 

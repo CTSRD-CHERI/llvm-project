@@ -37,11 +37,6 @@ let hasSideEffects = 0, isNotDuplicable = 1, Uses = [ESP, SSP],
   def MOVPC32r : Ii32<0xE8, Pseudo, (outs GR32:$reg), (ins i32imm:$label),
                       "", []>;
 
-// 64-bit large code model PIC base construction.
-let hasSideEffects = 0, mayLoad = 1, isNotDuplicable = 1, SchedRW = [WriteJump] in
-  def MOVGOT64r : PseudoI<(outs GR64:$reg),
-                          (ins GR64:$scratch, i64i32imm_pcrel:$got), []>;
-
 // ADJCALLSTACKDOWN/UP implicitly use/def ESP because they may be expanded into
 // a stack adjustment and the codegen must know that they may modify the stack
 // pointer before prolog-epilog rewriting occurs.
@@ -148,7 +143,7 @@ def WIN_ALLOCA_64 : I<0, Pseudo, (outs), (ins GR64:$size),
 // These instructions XOR the frame pointer into a GPR. They are used in some
 // stack protection schemes. These are post-RA pseudos because we only know the
 // frame register after register allocation.
-let Constraints = "$src = $dst", isPseudo = 1, Defs = [EFLAGS] in {
+let Constraints = "$src = $dst", isMoveImm = 1, isPseudo = 1, Defs = [EFLAGS] in {
   def XOR32_FP : I<0, Pseudo, (outs GR32:$dst), (ins GR32:$src),
                   "xorl\t$$FP, $src", []>,
                   Requires<[NotLP64]>, Sched<[WriteALU]>;
@@ -275,7 +270,7 @@ def MORESTACK_RET_RESTORE_R10 : I<0, Pseudo, (outs), (ins), "", []>;
 // Alias instruction mapping movr0 to xor.
 // FIXME: remove when we can teach regalloc that xor reg, reg is ok.
 let Defs = [EFLAGS], isReMaterializable = 1, isAsCheapAsAMove = 1,
-    isPseudo = 1, AddedComplexity = 10 in
+    isPseudo = 1, isMoveImm = 1, AddedComplexity = 10 in
 def MOV32r0  : I<0, Pseudo, (outs GR32:$dst), (ins), "",
                  [(set GR32:$dst, 0)]>, Sched<[WriteZero]>;
 
@@ -367,29 +362,20 @@ def : Pat<(i64 (sext (i8 (X86setcc_c X86_COND_B, EFLAGS)))),
 def : Pat<(and (i8 (X86setcc_c X86_COND_B, EFLAGS)), 1),
           (SETBr)>;
 
-// (add OP, SETB) -> (adc OP, 0)
-def : Pat<(add (and (i8 (X86setcc_c X86_COND_B, EFLAGS)), 1), GR8:$op),
-          (ADC8ri GR8:$op, 0)>;
-def : Pat<(add (and (i32 (X86setcc_c X86_COND_B, EFLAGS)), 1), GR32:$op),
-          (ADC32ri8 GR32:$op, 0)>;
-def : Pat<(add (and (i64 (X86setcc_c X86_COND_B, EFLAGS)), 1), GR64:$op),
-          (ADC64ri8 GR64:$op, 0)>;
-
-// (sub OP, SETB) -> (sbb OP, 0)
-def : Pat<(sub GR8:$op, (and (i8 (X86setcc_c X86_COND_B, EFLAGS)), 1)),
-          (SBB8ri GR8:$op, 0)>;
-def : Pat<(sub GR32:$op, (and (i32 (X86setcc_c X86_COND_B, EFLAGS)), 1)),
-          (SBB32ri8 GR32:$op, 0)>;
-def : Pat<(sub GR64:$op, (and (i64 (X86setcc_c X86_COND_B, EFLAGS)), 1)),
-          (SBB64ri8 GR64:$op, 0)>;
-
-// (sub OP, SETCC_CARRY) -> (adc OP, 0)
-def : Pat<(sub GR8:$op, (i8 (X86setcc_c X86_COND_B, EFLAGS))),
-          (ADC8ri GR8:$op, 0)>;
-def : Pat<(sub GR32:$op, (i32 (X86setcc_c X86_COND_B, EFLAGS))),
-          (ADC32ri8 GR32:$op, 0)>;
-def : Pat<(sub GR64:$op, (i64 (X86setcc_c X86_COND_B, EFLAGS))),
-          (ADC64ri8 GR64:$op, 0)>;
+// Patterns to give priority when both inputs are zero so that we don't use
+// an immediate for the RHS.
+// TODO: Should we use a 32-bit sbb for 8/16 to push the extract_subreg out?
+def : Pat<(X86sbb_flag (i8 0), (i8 0), EFLAGS),
+          (SBB8rr (EXTRACT_SUBREG (MOV32r0), sub_8bit),
+                  (EXTRACT_SUBREG (MOV32r0), sub_8bit))>;
+def : Pat<(X86sbb_flag (i16 0), (i16 0), EFLAGS),
+          (SBB16rr (EXTRACT_SUBREG (MOV32r0), sub_16bit),
+                   (EXTRACT_SUBREG (MOV32r0), sub_16bit))>;
+def : Pat<(X86sbb_flag (i32 0), (i32 0), EFLAGS),
+          (SBB32rr (MOV32r0), (MOV32r0))>;
+def : Pat<(X86sbb_flag (i64 0), (i64 0), EFLAGS),
+          (SBB64rr (SUBREG_TO_REG (i64 0), (MOV32r0), sub_32bit),
+                   (SUBREG_TO_REG (i64 0), (MOV32r0), sub_32bit))>;
 
 //===----------------------------------------------------------------------===//
 // String Pseudo Instructions
@@ -1325,6 +1311,15 @@ def : Pat<(i64 (anyext GR16:$src)),
 def : Pat<(i64 (anyext GR32:$src)),
           (INSERT_SUBREG (i64 (IMPLICIT_DEF)), GR32:$src, sub_32bit)>;
 
+// If this is an anyext of the remainder of an 8-bit sdivrem, use a MOVSX
+// instead of a MOVZX. The sdivrem lowering will emit emit a MOVSX to move
+// %ah to the lower byte of a register. By using a MOVSX here we allow a
+// post-isel peephole to merge the two MOVSX instructions into one.
+def anyext_sdiv : PatFrag<(ops node:$lhs), (anyext node:$lhs),[{
+  return (N->getOperand(0).getOpcode() == ISD::SDIVREM &&
+          N->getOperand(0).getResNo() == 1);
+}]>;
+def : Pat<(i32 (anyext_sdiv GR8:$src)), (MOVSX32rr8 GR8:$src)>;
 
 // Any instruction that defines a 32-bit result leaves the high half of the
 // register. Truncate can be lowered to EXTRACT_SUBREG. CopyFromReg may
@@ -1359,10 +1354,8 @@ def or_is_add : PatFrag<(ops node:$lhs, node:$rhs), (or node:$lhs, node:$rhs),[{
   if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(N->getOperand(1)))
     return CurDAG->MaskedValueIsZero(N->getOperand(0), CN->getAPIntValue());
 
-  KnownBits Known0;
-  CurDAG->computeKnownBits(N->getOperand(0), Known0, 0);
-  KnownBits Known1;
-  CurDAG->computeKnownBits(N->getOperand(1), Known1, 0);
+  KnownBits Known0 = CurDAG->computeKnownBits(N->getOperand(0), 0);
+  KnownBits Known1 = CurDAG->computeKnownBits(N->getOperand(1), 0);
   return (~Known0.Zero & ~Known1.Zero) == 0;
 }]>;
 
@@ -1429,8 +1422,7 @@ def ADD64ri32_DB : I<0, Pseudo,
 
 def sub_is_xor : PatFrag<(ops node:$lhs, node:$rhs), (sub node:$lhs, node:$rhs),[{
   if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(N->getOperand(0))) {
-    KnownBits Known;
-    CurDAG->computeKnownBits(N->getOperand(1), Known);
+    KnownBits Known = CurDAG->computeKnownBits(N->getOperand(1));
 
     // If all possible ones in the RHS are set in the LHS then there can't be
     // a borrow and we can use xor.

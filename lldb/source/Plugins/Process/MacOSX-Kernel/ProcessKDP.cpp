@@ -7,14 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
 #include <errno.h>
 #include <stdlib.h>
 
-// C++ Includes
 #include <mutex>
 
-// Other libraries and framework includes
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
@@ -43,7 +40,6 @@
 
 #define USEC_PER_SEC 1000000
 
-// Project includes
 #include "Plugins/DynamicLoader/Darwin-Kernel/DynamicLoaderDarwinKernel.h"
 #include "Plugins/DynamicLoader/Static/DynamicLoaderStatic.h"
 #include "ProcessKDP.h"
@@ -300,7 +296,8 @@ Status ProcessKDP::DoConnectRemote(Stream *strm, llvm::StringRef remote_url) {
               if (module_spec.GetSymbolFileSpec()) {
                 ModuleSpec executable_module_spec =
                     Symbols::LocateExecutableObjectFile(module_spec);
-                if (executable_module_spec.GetFileSpec().Exists()) {
+                if (FileSystem::Instance().Exists(
+                        executable_module_spec.GetFileSpec())) {
                   module_spec.GetFileSpec() =
                       executable_module_spec.GetFileSpec();
                 }
@@ -309,7 +306,7 @@ Status ProcessKDP::DoConnectRemote(Stream *strm, llvm::StringRef remote_url) {
                   !module_spec.GetSymbolFileSpec())
                 Symbols::DownloadObjectAndSymbolFile(module_spec, true);
 
-              if (module_spec.GetFileSpec().Exists()) {
+              if (FileSystem::Instance().Exists(module_spec.GetFileSpec())) {
                 ModuleSP module_sp(new Module(module_spec));
                 if (module_sp.get() && module_sp->GetObjectFile()) {
                   // Get the current target executable

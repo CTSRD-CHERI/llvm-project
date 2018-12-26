@@ -47,11 +47,12 @@ std::string runDumpAST(ClangdServer &Server, PathRef File);
 llvm::Expected<std::vector<SymbolInformation>>
 runWorkspaceSymbols(ClangdServer &Server, StringRef Query, int Limit);
 
-llvm::Expected<std::vector<SymbolInformation>>
-runDocumentSymbols(ClangdServer &Server, PathRef File);
+Expected<std::vector<DocumentSymbol>> runDocumentSymbols(ClangdServer &Server,
+                                                         PathRef File);
 
 SymbolSlab runFuzzyFind(const SymbolIndex &Index, StringRef Query);
 SymbolSlab runFuzzyFind(const SymbolIndex &Index, const FuzzyFindRequest &Req);
+RefSlab getRefs(const SymbolIndex &Index, SymbolID ID);
 
 } // namespace clangd
 } // namespace clang

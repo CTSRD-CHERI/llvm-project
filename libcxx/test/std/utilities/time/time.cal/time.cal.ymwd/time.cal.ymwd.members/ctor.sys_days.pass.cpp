@@ -6,7 +6,7 @@
 // Source Licenses. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-// UNSUPPORTED: c++03, c++11, c++14, c++17
+// UNSUPPORTED: c++98, c++03, c++11, c++14, c++17
 // XFAIL: *
 
 // <chrono>
@@ -14,10 +14,10 @@
 
 //  constexpr year_month_weekday(const sys_days& dp) noexcept;
 //
-//  Effects:  Constructs an object of type year_month_weekday that corresponds 
+//  Effects:  Constructs an object of type year_month_weekday that corresponds
 //                to the date represented by dp
 //
-//  Remarks: For any value ymd of type year_month_weekday for which ymd.ok() is true, 
+//  Remarks: For any value ymd of type year_month_weekday for which ymd.ok() is true,
 //                ymd == year_month_weekday{sys_days{ymd}} is true.
 //
 //  constexpr chrono::year   year() const noexcept;

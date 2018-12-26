@@ -10,14 +10,10 @@
 #include "CommandObjectWatchpoint.h"
 #include "CommandObjectWatchpointCommand.h"
 
-// C Includes
-// C++ Includes
 #include <vector>
 
-// Other libraries and framework includes
 #include "llvm/ADT/StringRef.h"
 
-// Project includes
 #include "lldb/Breakpoint/Watchpoint.h"
 #include "lldb/Breakpoint/WatchpointList.h"
 #include "lldb/Core/ValueObject.h"
@@ -142,11 +138,9 @@ bool CommandObjectMultiwordWatchpoint::VerifyWatchpointIDs(
       return false;
     wp_ids.push_back(beg);
   }
-  // It is an error if after the loop, we're still in_range.
-  if (in_range)
-    return false;
 
-  return true; // Success!
+  // It is an error if after the loop, we're still in_range.
+  return !in_range;
 }
 
 //-------------------------------------------------------------------------

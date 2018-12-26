@@ -24,6 +24,7 @@
 #include "hwasan_thread.h"
 #include "hwasan_thread_list.h"
 
+#include <dlfcn.h>
 #include <elf.h>
 #include <link.h>
 #include <pthread.h>
@@ -283,6 +284,22 @@ uptr *GetCurrentThreadLongPtr() {
 }
 #endif
 
+#if SANITIZER_ANDROID
+void AndroidTestTlsSlot() {
+  uptr kMagicValue = 0x010203040A0B0C0D;
+  *(uptr *)get_android_tls_ptr() = kMagicValue;
+  dlerror();
+  if (*(uptr *)get_android_tls_ptr() != kMagicValue) {
+    Printf(
+        "ERROR: Incompatible version of Android: TLS_SLOT_SANITIZER(6) is used "
+        "for dlerror().\n");
+    Die();
+  }
+}
+#else
+void AndroidTestTlsSlot() {}
+#endif
+
 Thread *GetCurrentThread() {
   auto *R = (StackAllocationsRingBuffer*)GetCurrentThreadLongPtr();
   return hwasanThreadList().GetThreadByBufferAddress((uptr)(R->Next()));
@@ -358,11 +375,10 @@ static bool HwasanOnSIGTRAP(int signo, siginfo_t *info, ucontext_t *uc) {
   GetStackTrace(stack, kStackTraceMax, StackTrace::GetNextInstructionPc(sig.pc),
                 sig.bp, uc, common_flags()->fast_unwind_on_fatal);
 
-  ReportTagMismatch(stack, ai.addr, ai.size, ai.is_store);
-
   ++hwasan_report_count;
-  if (flags()->halt_on_error || !ai.recover)
-    Die();
+
+  bool fatal = flags()->halt_on_error || !ai.recover;
+  ReportTagMismatch(stack, ai.addr, ai.size, ai.is_store, fatal);
 
 #if defined(__aarch64__)
   uc->uc_mcontext.pc += 4;

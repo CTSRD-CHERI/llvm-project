@@ -4,6 +4,7 @@ Test SB API support for identifying artificial (tail call) frames.
 
 import lldb
 import lldbsuite.test.lldbutil as lldbutil
+from lldbsuite.test.decorators import *
 from lldbsuite.test.lldbtest import *
 
 class TestTailCallFrameSBAPI(TestBase):
@@ -14,6 +15,8 @@ class TestTailCallFrameSBAPI(TestBase):
     # each debug info format.
     NO_DEBUG_INFO_TESTCASE = True
 
+    @skipIf(compiler="clang", compiler_version=['<', '7.0'])
+    @expectedFailureAll(oslist=["windows"], bugnumber="llvm.org/pr26265")
     def test_tail_call_frame_sbapi(self):
         self.build()
         self.do_test()

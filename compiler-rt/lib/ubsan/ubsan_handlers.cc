@@ -119,7 +119,9 @@ static void handleIntegerOverflowImpl(OverflowData *Data, ValueHandle LHS,
   if (ignoreReport(Loc, Opts, ET))
     return;
 
-  if (!IsSigned && flags()->silence_unsigned_overflow)
+  // If this is an unsigned overflow in non-fatal mode, potentially ignore it.
+  if (!IsSigned && !Opts.FromUnrecoverableHandler &&
+      flags()->silence_unsigned_overflow)
     return;
 
   ScopedReport R(Opts, Loc, ET);
@@ -480,6 +482,12 @@ static void handleImplicitConversion(ImplicitConversionData *Data,
     break;
   case ICCK_SignedIntegerTruncation:
     ET = ErrorType::ImplicitSignedIntegerTruncation;
+    break;
+  case ICCK_IntegerSignChange:
+    ET = ErrorType::ImplicitIntegerSignChange;
+    break;
+  case ICCK_SignedIntegerTruncationOrSignChange:
+    ET = ErrorType::ImplicitSignedIntegerTruncationOrSignChange;
     break;
   }
 

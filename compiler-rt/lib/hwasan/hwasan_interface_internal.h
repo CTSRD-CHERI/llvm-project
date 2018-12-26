@@ -37,6 +37,9 @@ using __sanitizer::u16;
 using __sanitizer::u8;
 
 SANITIZER_INTERFACE_ATTRIBUTE
+void __hwasan_init_frames(uptr, uptr);
+
+SANITIZER_INTERFACE_ATTRIBUTE
 extern uptr __hwasan_shadow_memory_dynamic_address;
 
 SANITIZER_INTERFACE_ATTRIBUTE
@@ -191,6 +194,13 @@ void * __sanitizer_realloc(void *ptr, uptr size);
 
 SANITIZER_INTERFACE_ATTRIBUTE
 void * __sanitizer_malloc(uptr size);
+
+SANITIZER_INTERFACE_ATTRIBUTE
+void *__hwasan_memcpy(void *dst, const void *src, uptr size);
+SANITIZER_INTERFACE_ATTRIBUTE
+void *__hwasan_memset(void *s, int c, uptr n);
+SANITIZER_INTERFACE_ATTRIBUTE
+void *__hwasan_memmove(void *dest, const void *src, uptr n);
 }  // extern "C"
 
 #endif  // HWASAN_INTERFACE_INTERNAL_H

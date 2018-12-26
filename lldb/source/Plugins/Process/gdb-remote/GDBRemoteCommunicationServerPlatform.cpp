@@ -11,15 +11,12 @@
 
 #include <errno.h>
 
-// C Includes
-// C++ Includes
 #include <chrono>
 #include <csignal>
 #include <cstring>
 #include <mutex>
 #include <sstream>
 
-// Other libraries and framework includes
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Threading.h"
 
@@ -38,7 +35,6 @@
 #include "lldb/Utility/StructuredData.h"
 #include "lldb/Utility/UriParser.h"
 
-// Project includes
 #include "lldb/Utility/StringExtractorGDBRemote.h"
 
 using namespace lldb;
@@ -532,7 +528,7 @@ const FileSpec &GDBRemoteCommunicationServerPlatform::GetDomainSocketDir() {
     const char *domainsocket_dir_env =
         ::getenv("LLDB_DEBUGSERVER_DOMAINSOCKET_DIR");
     if (domainsocket_dir_env != nullptr)
-      g_domainsocket_dir = FileSpec(domainsocket_dir_env, false);
+      g_domainsocket_dir = FileSpec(domainsocket_dir_env);
     else
       g_domainsocket_dir = HostInfo::GetProcessTempDir();
   });
@@ -542,15 +538,15 @@ const FileSpec &GDBRemoteCommunicationServerPlatform::GetDomainSocketDir() {
 
 FileSpec
 GDBRemoteCommunicationServerPlatform::GetDomainSocketPath(const char *prefix) {
-  llvm::SmallString<PATH_MAX> socket_path;
-  llvm::SmallString<PATH_MAX> socket_name(
+  llvm::SmallString<128> socket_path;
+  llvm::SmallString<128> socket_name(
       (llvm::StringRef(prefix) + ".%%%%%%").str());
 
   FileSpec socket_path_spec(GetDomainSocketDir());
   socket_path_spec.AppendPathComponent(socket_name.c_str());
 
   llvm::sys::fs::createUniqueFile(socket_path_spec.GetCString(), socket_path);
-  return FileSpec(socket_path.c_str(), false);
+  return FileSpec(socket_path.c_str());
 }
 
 void GDBRemoteCommunicationServerPlatform::SetPortOffset(uint16_t port_offset) {

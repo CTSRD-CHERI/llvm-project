@@ -42,8 +42,9 @@ protected:
       return;
 
     TargetOptions Options;
-    TM = std::unique_ptr<TargetMachine>(T->createTargetMachine(
-        "AArch64", "", "", Options, None, None, CodeGenOpt::Aggressive));
+    TM = std::unique_ptr<LLVMTargetMachine>(static_cast<LLVMTargetMachine*>(
+        T->createTargetMachine("AArch64", "", "", Options, None, None,
+                               CodeGenOpt::Aggressive)));
     if (!TM)
       return;
 
@@ -70,7 +71,7 @@ protected:
   }
 
   LLVMContext Context;
-  std::unique_ptr<TargetMachine> TM = nullptr;
+  std::unique_ptr<LLVMTargetMachine> TM;
   std::unique_ptr<Module> M;
   Function *F;
   std::unique_ptr<MachineFunction> MF;
@@ -86,10 +87,9 @@ TEST_F(AArch64SelectionDAGTest, computeKnownBits_ZERO_EXTEND_VECTOR_INREG) {
   auto InVecVT = EVT::getVectorVT(Context, Int8VT, 4);
   auto OutVecVT = EVT::getVectorVT(Context, Int16VT, 2);
   auto InVec = DAG->getConstant(0, Loc, InVecVT);
-  auto Op = DAG->getZeroExtendVectorInReg(InVec, Loc, OutVecVT);
-  auto DemandedElts = APInt(4, 15);
-  KnownBits Known;
-  DAG->computeKnownBits(Op, Known, DemandedElts);
+  auto Op = DAG->getNode(ISD::ZERO_EXTEND_VECTOR_INREG, Loc, OutVecVT, InVec);
+  auto DemandedElts = APInt(2, 3);
+  KnownBits Known = DAG->computeKnownBits(Op, DemandedElts);
   EXPECT_TRUE(Known.isZero());
 }
 
@@ -104,8 +104,7 @@ TEST_F(AArch64SelectionDAGTest, computeKnownBits_EXTRACT_SUBVECTOR) {
   auto ZeroIdx = DAG->getConstant(0, Loc, IdxVT);
   auto Op = DAG->getNode(ISD::EXTRACT_SUBVECTOR, Loc, VecVT, Vec, ZeroIdx);
   auto DemandedElts = APInt(3, 7);
-  KnownBits Known;
-  DAG->computeKnownBits(Op, Known, DemandedElts);
+  KnownBits Known = DAG->computeKnownBits(Op, DemandedElts);
   EXPECT_TRUE(Known.isZero());
 }
 
@@ -118,8 +117,8 @@ TEST_F(AArch64SelectionDAGTest, ComputeNumSignBits_SIGN_EXTEND_VECTOR_INREG) {
   auto InVecVT = EVT::getVectorVT(Context, Int8VT, 4);
   auto OutVecVT = EVT::getVectorVT(Context, Int16VT, 2);
   auto InVec = DAG->getConstant(1, Loc, InVecVT);
-  auto Op = DAG->getSignExtendVectorInReg(InVec, Loc, OutVecVT);
-  auto DemandedElts = APInt(4, 15);
+  auto Op = DAG->getNode(ISD::SIGN_EXTEND_VECTOR_INREG, Loc, OutVecVT, InVec);
+  auto DemandedElts = APInt(2, 3);
   EXPECT_EQ(DAG->ComputeNumSignBits(Op, DemandedElts), 15u);
 }
 

@@ -25,23 +25,13 @@ extern __device__ omptarget_nvptx_Queue<
     omptarget_nvptx_SimpleThreadPrivateContext, OMP_STATE_COUNT>
     omptarget_nvptx_device_simpleState[MAX_SM];
 
-extern __device__ __shared__ void *omptarget_nvptx_simpleGlobalData;
-
 ////////////////////////////////////////////////////////////////////////////////
 // init entry points
 ////////////////////////////////////////////////////////////////////////////////
 
-INLINE unsigned nsmid() {
-  unsigned n;
-  asm("mov.u32 %0, %%nsmid;" : "=r"(n));
-  return n;
-}
-
 INLINE unsigned smid() {
   unsigned id;
   asm("mov.u32 %0, %%smid;" : "=r"(id));
-  ASSERT0(LT_FUSSY, nsmid() <= MAX_SM,
-          "Expected number of SMs is less than reported.");
   return id;
 }
 
@@ -66,11 +56,9 @@ EXTERN void __kmpc_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime) {
 
   // Get a state object from the queue.
   int slot = smid() % MAX_SM;
+  usedSlotIdx = slot;
   omptarget_nvptx_threadPrivateContext =
       omptarget_nvptx_device_State[slot].Dequeue();
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
-  omptarget_nvptx_threadPrivateContext->SetSourceQueue(slot);
-#endif
 
   // init thread private
   int threadId = GetLogicalThreadIdInBlock();
@@ -96,11 +84,7 @@ EXTERN void __kmpc_kernel_deinit(int16_t IsOMPRuntimeInitialized) {
   ASSERT0(LT_FUSSY, IsOMPRuntimeInitialized,
           "Generic always requires initialized runtime.");
   // Enqueue omp state object for use by another team.
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
-  int slot = omptarget_nvptx_threadPrivateContext->GetSourceQueue();
-#else
-  int slot = smid() % MAX_SM;
-#endif
+  int slot = usedSlotIdx;
   omptarget_nvptx_device_State[slot].Enqueue(
       omptarget_nvptx_threadPrivateContext);
   // Done with work.  Kill the workers.
@@ -116,12 +100,9 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
     setExecutionParameters(Spmd, RuntimeUninitialized);
     if (GetThreadIdInBlock() == 0) {
       int slot = smid() % MAX_SM;
+      usedSlotIdx = slot;
       omptarget_nvptx_simpleThreadPrivateContext =
           omptarget_nvptx_device_simpleState[slot].Dequeue();
-      // Reuse the memory allocated for the full runtime as the preallocated
-      // global memory buffer for the lightweight runtime.
-      omptarget_nvptx_simpleGlobalData =
-          omptarget_nvptx_device_State[slot].Dequeue();
     }
     __syncthreads();
     omptarget_nvptx_simpleThreadPrivateContext->Init();
@@ -138,6 +119,7 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
   if (threadId == 0) {
     // Get a state object from the queue.
     int slot = smid() % MAX_SM;
+    usedSlotIdx = slot;
     omptarget_nvptx_threadPrivateContext =
         omptarget_nvptx_device_State[slot].Dequeue();
 
@@ -168,7 +150,7 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
   PRINT(LD_PAR,
         "thread will execute parallel region with id %d in a team of "
         "%d threads\n",
-        newTaskDescr->ThreadId(), newTaskDescr->ThreadsInTeam());
+        (int)newTaskDescr->ThreadId(), (int)newTaskDescr->ThreadsInTeam());
 
   if (RequiresDataSharing && threadId % WARPSIZE == 0) {
     // Warp master innitializes data sharing environment.
@@ -180,27 +162,27 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
   }
 }
 
-EXTERN void __kmpc_spmd_kernel_deinit() {
+EXTERN __attribute__((deprecated)) void __kmpc_spmd_kernel_deinit() {
+  __kmpc_spmd_kernel_deinit_v2(isRuntimeInitialized());
+}
+
+EXTERN void __kmpc_spmd_kernel_deinit_v2(int16_t RequiresOMPRuntime) {
   // We're not going to pop the task descr stack of each thread since
   // there are no more parallel regions in SPMD mode.
   __syncthreads();
   int threadId = GetThreadIdInBlock();
-  if (isRuntimeUninitialized()) {
+  if (!RequiresOMPRuntime) {
     if (threadId == 0) {
       // Enqueue omp state object for use by another team.
-      int slot = smid() % MAX_SM;
+      int slot = usedSlotIdx;
       omptarget_nvptx_device_simpleState[slot].Enqueue(
           omptarget_nvptx_simpleThreadPrivateContext);
-      // Enqueue global memory back.
-      omptarget_nvptx_device_State[slot].Enqueue(
-          reinterpret_cast<omptarget_nvptx_ThreadPrivateContext *>(
-              omptarget_nvptx_simpleGlobalData));
     }
     return;
   }
   if (threadId == 0) {
     // Enqueue omp state object for use by another team.
-    int slot = smid() % MAX_SM;
+    int slot = usedSlotIdx;
     omptarget_nvptx_device_State[slot].Enqueue(
         omptarget_nvptx_threadPrivateContext);
   }

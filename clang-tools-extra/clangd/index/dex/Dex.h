@@ -43,19 +43,9 @@ class Dex : public SymbolIndex {
 public:
   // All data must outlive this index.
   template <typename SymbolRange, typename RefsRange>
-  Dex(SymbolRange &&Symbols, RefsRange &&Refs,
-      llvm::ArrayRef<std::string> Schemes)
-      : Corpus(0), URISchemes(Schemes) {
-    // If Schemes don't contain any items, fall back to SymbolCollector's
-    // default URI schemes.
-    if (URISchemes.empty()) {
-      SymbolCollector::Options Opts;
-      URISchemes = Opts.URISchemes;
-    }
-    llvm::DenseSet<SymbolID> SeenIDs;
+  Dex(SymbolRange &&Symbols, RefsRange &&Refs) : Corpus(0) {
     for (auto &&Sym : Symbols)
-      if (SeenIDs.insert(Sym.ID).second)
-        this->Symbols.push_back(&Sym);
+      this->Symbols.push_back(&Sym);
     for (auto &&Ref : Refs)
       this->Refs.try_emplace(Ref.first, Ref.second);
     buildIndex();
@@ -63,17 +53,15 @@ public:
   // Symbols and Refs are owned by BackingData, Index takes ownership.
   template <typename SymbolRange, typename RefsRange, typename Payload>
   Dex(SymbolRange &&Symbols, RefsRange &&Refs, Payload &&BackingData,
-      size_t BackingDataSize, llvm::ArrayRef<std::string> URISchemes)
-      : Dex(std::forward<SymbolRange>(Symbols), std::forward<RefsRange>(Refs),
-            URISchemes) {
+      size_t BackingDataSize)
+      : Dex(std::forward<SymbolRange>(Symbols), std::forward<RefsRange>(Refs)) {
     KeepAlive = std::shared_ptr<void>(
         std::make_shared<Payload>(std::move(BackingData)), nullptr);
     this->BackingDataSize = BackingDataSize;
   }
 
   /// Builds an index from slabs. The index takes ownership of the slab.
-  static std::unique_ptr<SymbolIndex>
-  build(SymbolSlab, RefSlab, llvm::ArrayRef<std::string> URISchemes);
+  static std::unique_ptr<SymbolIndex> build(SymbolSlab, RefSlab);
 
   bool
   fuzzyFind(const FuzzyFindRequest &Req,
@@ -108,8 +96,6 @@ private:
   std::shared_ptr<void> KeepAlive; // poor man's move-only std::any
   // Size of memory retained by KeepAlive.
   size_t BackingDataSize = 0;
-
-  std::vector<std::string> URISchemes;
 };
 
 /// Returns Search Token for a number of parent directories of given Path.

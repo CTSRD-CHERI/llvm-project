@@ -7,10 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-#include <cctype> // for alnum
-// Other libraries and framework includes
+#include <cctype>
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTDiagnostic.h"
 #include "clang/AST/ExternalASTSource.h"
@@ -59,7 +56,6 @@
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Signals.h"
 
-// Project includes
 #include "ClangDiagnostic.h"
 #include "ClangExpressionParser.h"
 
@@ -381,8 +377,7 @@ ClangExpressionParser::ClangExpressionParser(ExecutionContextScope *exe_scope,
     m_compiler->getLangOpts().CPlusPlus = true;
     break;
   case lldb::eLanguageTypeObjC:
-    m_compiler->getLangOpts().ObjC1 = true;
-    m_compiler->getLangOpts().ObjC2 = true;
+    m_compiler->getLangOpts().ObjC = true;
     // FIXME: the following language option is a temporary workaround,
     // to "ask for ObjC, get ObjC++" (see comment above).
     m_compiler->getLangOpts().CPlusPlus = true;
@@ -403,16 +398,14 @@ ClangExpressionParser::ClangExpressionParser(ExecutionContextScope *exe_scope,
     LLVM_FALLTHROUGH;
   case lldb::eLanguageTypeC_plus_plus_03:
     m_compiler->getLangOpts().CPlusPlus = true;
-    // FIXME: the following language option is a temporary workaround,
-    // to "ask for C++, get ObjC++".  Apple hopes to remove this requirement on
-    // non-Apple platforms, but for now it is needed.
-    m_compiler->getLangOpts().ObjC1 = true;
+    if (process_sp)
+      m_compiler->getLangOpts().ObjC =
+          process_sp->GetLanguageRuntime(lldb::eLanguageTypeObjC) != nullptr;
     break;
   case lldb::eLanguageTypeObjC_plus_plus:
   case lldb::eLanguageTypeUnknown:
   default:
-    m_compiler->getLangOpts().ObjC1 = true;
-    m_compiler->getLangOpts().ObjC2 = true;
+    m_compiler->getLangOpts().ObjC = true;
     m_compiler->getLangOpts().CPlusPlus = true;
     m_compiler->getLangOpts().CPlusPlus11 = true;
     m_compiler->getHeaderSearchOpts().UseLibcxx = true;
@@ -436,7 +429,7 @@ ClangExpressionParser::ClangExpressionParser(ExecutionContextScope *exe_scope,
   // long time parsing and importing debug information.
   m_compiler->getLangOpts().SpellChecking = false;
 
-  if (process_sp && m_compiler->getLangOpts().ObjC1) {
+  if (process_sp && m_compiler->getLangOpts().ObjC) {
     if (process_sp->GetObjCLanguageRuntime()) {
       if (process_sp->GetObjCLanguageRuntime()->GetRuntimeVersion() ==
           ObjCLanguageRuntime::ObjCRuntimeVersions::eAppleObjC_V2)
@@ -839,7 +832,7 @@ ClangExpressionParser::ParseInternal(DiagnosticManager &diagnostic_manager,
 
   if (should_create_file) {
     int temp_fd = -1;
-    llvm::SmallString<PATH_MAX> result_path;
+    llvm::SmallString<128> result_path;
     if (FileSpec tmpdir_file_spec = HostInfo::GetProcessTempDir()) {
       tmpdir_file_spec.AppendPathComponent("lldb-%%%%%%.expr");
       std::string temp_source_path = tmpdir_file_spec.GetPath();
