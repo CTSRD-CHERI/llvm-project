@@ -72,6 +72,9 @@ class Configuration(object):
         self.abi_library_root = None
         self.link_shared = self.get_lit_bool('enable_shared', default=True)
         self.debug_build = self.get_lit_bool('debug_build',   default=False)
+        # increase timeouts when running on a slow test host (such as QEMU full
+        # sytem emulation for a different architecture)
+        self.slow_test_host = self.get_lit_bool('slow_test_host', default=False)
         # XXXAR: don't pass in local environment when running remote commands:
         self.exec_env = dict(os.environ)
         self.use_target = False
@@ -550,6 +553,7 @@ class Configuration(object):
         # Configure feature flags.
         self.configure_compile_flags_exceptions()
         self.configure_compile_flags_rtti()
+        self.configure_compile_flags_test_host()
         self.configure_compile_flags_abi_version()
         enable_32bit = self.get_lit_bool('enable_32bit', False)
         if enable_32bit:
@@ -699,6 +703,11 @@ class Configuration(object):
         if not enable_rtti:
             self.config.available_features.add('libcpp-no-rtti')
             self.cxx.compile_flags += ['-fno-rtti', '-D_LIBCPP_NO_RTTI']
+
+    def configure_compile_flags_test_host(self):
+        if self.slow_test_host:
+            self.config.available_features.add('libcpp-slow-test-host')
+            self.cxx.compile_flags += ['-D_LIBCPP_SLOW_TEST_HOST']
 
     def configure_compile_flags_abi_version(self):
         abi_version = self.get_lit_conf('abi_version', '').strip()

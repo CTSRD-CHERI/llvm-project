@@ -35,7 +35,11 @@ int main()
 {
     test t;
     std::ios_base& b = t;
+#ifdef _LIBCPP_SLOW_TEST_HOST
+    for (std::intptr_t i = 0; i < 1000; ++i)
+#else
     for (std::intptr_t i = 0; i < 10000; ++i)
+#endif
     {
         assert(b.pword(i) == 0);
         b.pword(i) = (void*)i;
