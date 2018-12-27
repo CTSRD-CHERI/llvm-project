@@ -7,12 +7,14 @@
 #
 #===----------------------------------------------------------------------===##
 
+from __future__ import print_function
 import platform
 import os
 import errno
 import tempfile
 import datetime
 import shutil
+import sys
 
 from libcxx.test import tracing
 from libcxx.util import executeCommand, ExecuteCommandTimeoutException
@@ -253,7 +255,7 @@ class SSHExecutor(RemoteExecutor):
         remote = self.user_prefix + remote
         cmd = self.scp_command + ['-p', src, remote + ':' + dst]
         if self.config and self.config.lit_config.debug:
-            print('{}: Copying {} to {}'.format(datetime.datetime.now(), src, dst))
+            print('{}: Copying {} to {}'.format(datetime.datetime.now(), src, dst), file=sys.stderr)
         self.local_run(cmd)
 
     def _execute_command_remote(self, cmd, remote_work_dir='.', env=None):
@@ -268,10 +270,11 @@ class SSHExecutor(RemoteExecutor):
         if remote_work_dir != '.':
             remote_cmd = 'cd \'' + remote_work_dir + '\' && ' + remote_cmd
         if self.config and self.config.lit_config.debug:
-            print('{}: About to run {}'.format(datetime.datetime.now(), remote_cmd))
+        # FIXME_ USE SOMETHING THAT PRINTS IMMEDIATELY
+            print('{}: About to run {}'.format(datetime.datetime.now(), remote_cmd), file=sys.stderr)
         out, err, rc = self.local_run(ssh_cmd + [remote_cmd], timeout=self.config.lit_config.maxIndividualTestTime)
         if self.config and self.config.lit_config.debug:
-            print('{}: Remote command completed'.format(datetime.datetime.now()))
+            print('{}: Remote command completed'.format(datetime.datetime.now()), file=sys.stderr)
         if rc != 0 and ("Connection closed by remote host" in err or
                         "ssh_exchange_identification: read: Connection reset by peer" in err):
             # accept up to N failed connections before giving up
