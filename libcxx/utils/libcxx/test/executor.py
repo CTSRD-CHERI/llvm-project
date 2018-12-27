@@ -270,7 +270,6 @@ class SSHExecutor(RemoteExecutor):
         if remote_work_dir != '.':
             remote_cmd = 'cd \'' + remote_work_dir + '\' && ' + remote_cmd
         if self.config and self.config.lit_config.debug:
-        # FIXME_ USE SOMETHING THAT PRINTS IMMEDIATELY
             print('{}: About to run {}'.format(datetime.datetime.now(), remote_cmd), file=sys.stderr)
         out, err, rc = self.local_run(ssh_cmd + [remote_cmd], timeout=self.config.lit_config.maxIndividualTestTime)
         if self.config and self.config.lit_config.debug:
