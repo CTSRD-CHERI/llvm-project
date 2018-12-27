@@ -35,7 +35,7 @@ typedef std::chrono::milliseconds ms;
 typedef std::chrono::nanoseconds ns;
 
 
-#if !defined(TEST_HAS_SANITIZERS)
+#if !defined(TEST_HAS_SANITIZERS) && !defined(TEST_SLOW_HOST)
 ms Tolerance = ms(200);
 #else
 ms Tolerance = ms(200 * 5);

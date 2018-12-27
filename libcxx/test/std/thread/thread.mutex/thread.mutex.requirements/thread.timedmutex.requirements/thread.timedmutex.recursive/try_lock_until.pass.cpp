@@ -38,7 +38,7 @@ void f1()
     m.unlock();
     m.unlock();
     ns d = t1 - t0 - ms(250);
-#ifdef _LIBCPP_SLOW_TEST_HOST
+#ifdef TEST_SLOW_HOST
     assert(d < ms(150));  // within 150ms
 #else
     assert(d < ms(50));  // within 50ms
@@ -51,7 +51,7 @@ void f2()
     assert(m.try_lock_until(Clock::now() + ms(250)) == false);
     time_point t1 = Clock::now();
     ns d = t1 - t0 - ms(250);
-#ifdef _LIBCPP_SLOW_TEST_HOST
+#ifdef TEST_SLOW_HOST
     assert(d < ms(150));  // within 150ms
 #else
     assert(d < ms(50));  // within 50ms

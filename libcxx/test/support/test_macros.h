@@ -190,6 +190,10 @@
 #define TEST_HAS_SANITIZERS
 #endif
 
+#if defined(_LIBCPP_SLOW_TEST_HOST)
+#define TEST_SLOW_HOST
+#endif
+
 #if defined(_LIBCPP_NORETURN)
 #define TEST_NORETURN _LIBCPP_NORETURN
 #else
