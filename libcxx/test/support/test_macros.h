@@ -271,18 +271,12 @@ struct is_same<T, T> { enum {value = 1}; };
 template <class Tp>
 inline
 void DoNotOptimize(Tp const& value) {
-#if defined(__CHERI_PURE_CAPABILITY__)
-    asm volatile("" : : "C"(value) : "memory");
-#else
     asm volatile("" : : "r,m"(value) : "memory");
-#endif
 }
 
 template <class Tp>
 inline void DoNotOptimize(Tp& value) {
-#if defined(__CHERI_PURE_CAPABILITY__)
-  asm volatile("" : "+C"(value) : : "memory");
-#elif defined(__clang__)
+#if defined(__clang__)
   asm volatile("" : "+r,m"(value) : : "memory");
 #else
   asm volatile("" : "+m,r"(value) : : "memory");
