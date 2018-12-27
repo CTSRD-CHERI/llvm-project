@@ -4632,7 +4632,7 @@ MipsTargetLowering::getSingleConstraintMatchWeight(
 /// is true if the numeric part exists.
 static std::pair<bool, bool> parsePhysicalReg(StringRef C, StringRef &Prefix,
                                               unsigned long long &Reg) {
-  if (C.front() != '{' || C.back() != '}')
+  if (C.empty() || C.front() != '{' || C.back() != '}')
     return std::make_pair(false, false);
 
   // Search for the first numeric character.
