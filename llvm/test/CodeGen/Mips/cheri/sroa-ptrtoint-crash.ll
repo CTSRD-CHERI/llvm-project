@@ -1,5 +1,5 @@
 ; RUN: %cheri_opt -sroa -o - -S %s
-; RUN: %cheri_opt -sroa -o - -S -O2 %s
+; TODO: %cheri_opt -sroa -o - -S -O2 %s
 ; ModuleID = '/Users/alex/cheri/build/llvm-clion-build/libcxx-filesystem-crash.cpp-reduce.ll-reduced-simplified.bc'
 source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cheri/libcxx-filesystem-crash.cpp-reduce.ll"
 target datalayout = "Eme-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"

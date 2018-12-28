@@ -754,6 +754,7 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
           F->getParent(), Intrinsic::returnaddress, F->getReturnType());
       return true;
     }
+    break;
   case 's':
     if (Name == "stackprotectorcheck") {
       NewFn = nullptr;
