@@ -1706,15 +1706,24 @@ static bool canConvertValue(const DataLayout &DL, Type *OldTy, Type *NewTy) {
         cast<PointerType>(OldTy)->getPointerAddressSpace();
     }
 
+    // XXXAR: converting i8 addrspace(200) <-> i128/i256 also causes errors
+    // TODO: Do we lose any important optimizations by skipping conversion?
+
     // We can convert integers to integral pointers, but not to non-integral
     // pointers.
-    if (OldTy->isIntegerTy())
+    if (OldTy->isIntegerTy()) {
+      if (DL.isFatPointer(NewTy))
+        return false;
       return !DL.isNonIntegralPointerType(NewTy);
+    }
 
     // We can convert integral pointers to integers, but non-integral pointers
     // need to remain pointers.
-    if (!DL.isNonIntegralPointerType(OldTy))
+    if (!DL.isNonIntegralPointerType(OldTy)) {
+      if (DL.isFatPointer(OldTy))
+        return false;
       return NewTy->isIntegerTy();
+    }
 
     return false;
   }
