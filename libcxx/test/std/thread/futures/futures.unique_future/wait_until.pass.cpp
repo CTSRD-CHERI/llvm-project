@@ -63,6 +63,10 @@ void func5(std::promise<void> p)
 
 int main()
 {
+    ms delay = ms(10);
+#if defined(TEST_HAS_SANITIZERS) || defined(TEST_SLOW_HOST)
+    delay *= 3;
+#endif
     typedef std::chrono::high_resolution_clock Clock;
     {
         typedef int T;
@@ -70,14 +74,14 @@ int main()
         std::future<T> f = p.get_future();
         std::thread(func1, std::move(p)).detach();
         assert(f.valid());
-        assert(f.wait_until(Clock::now() + ms(10)) == std::future_status::timeout);
+        assert(f.wait_until(Clock::now() + delay) == std::future_status::timeout);
         assert(f.valid());
 
         // allow the worker thread to produce the result and wait until the worker is done
         set_worker_thread_state(WorkerThreadState::AllowedToRun);
         wait_for_worker_thread_state(WorkerThreadState::Exiting);
 
-        assert(f.wait_until(Clock::now() + ms(10)) == std::future_status::ready);
+        assert(f.wait_until(Clock::now() + delay) == std::future_status::ready);
         assert(f.valid());
         Clock::time_point t0 = Clock::now();
         f.wait();
@@ -91,14 +95,14 @@ int main()
         std::future<T> f = p.get_future();
         std::thread(func3, std::move(p)).detach();
         assert(f.valid());
-        assert(f.wait_until(Clock::now() + ms(10)) == std::future_status::timeout);
+        assert(f.wait_until(Clock::now() + delay) == std::future_status::timeout);
         assert(f.valid());
 
         // allow the worker thread to produce the result and wait until the worker is done
         set_worker_thread_state(WorkerThreadState::AllowedToRun);
         wait_for_worker_thread_state(WorkerThreadState::Exiting);
 
-        assert(f.wait_until(Clock::now() + ms(10)) == std::future_status::ready);
+        assert(f.wait_until(Clock::now() + delay) == std::future_status::ready);
         assert(f.valid());
         Clock::time_point t0 = Clock::now();
         f.wait();
@@ -112,14 +116,14 @@ int main()
         std::future<T> f = p.get_future();
         std::thread(func5, std::move(p)).detach();
         assert(f.valid());
-        assert(f.wait_until(Clock::now() + ms(10)) == std::future_status::timeout);
+        assert(f.wait_until(Clock::now() + delay) == std::future_status::timeout);
         assert(f.valid());
 
         // allow the worker thread to produce the result and wait until the worker is done
         set_worker_thread_state(WorkerThreadState::AllowedToRun);
         wait_for_worker_thread_state(WorkerThreadState::Exiting);
 
-        assert(f.wait_until(Clock::now() + ms(10)) == std::future_status::ready);
+        assert(f.wait_until(Clock::now() + delay) == std::future_status::ready);
         assert(f.valid());
         Clock::time_point t0 = Clock::now();
         f.wait();
