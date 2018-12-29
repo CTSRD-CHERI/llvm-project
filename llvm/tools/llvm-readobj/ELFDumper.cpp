@@ -1757,10 +1757,6 @@ static const EnumEntry<unsigned> ElfDynamicDTMipsFlags[] = {
 };
 
 static const EnumEntry<unsigned> ElfDynamicDTMipsCheriAbiFlags[] = {
-    LLVM_READOBJ_DT_FLAG_ENT(DF_MIPS_CHERI, ABI_LEGACY),
-    LLVM_READOBJ_DT_FLAG_ENT(DF_MIPS_CHERI, ABI_PCREL),
-    LLVM_READOBJ_DT_FLAG_ENT(DF_MIPS_CHERI, ABI_PLT),
-    LLVM_READOBJ_DT_FLAG_ENT(DF_MIPS_CHERI, ABI_FNDESC),
 };
 
 #undef LLVM_READOBJ_DT_FLAG_ENT
@@ -1884,6 +1880,13 @@ void ELFDumper<ELFT>::printValue(uint64_t Type, uint64_t Value) {
     printFlags(Value, makeArrayRef(ElfDynamicDTMipsFlags), OS);
     break;
   case DT_MIPS_CHERI_FLAGS:
+    switch (Value & DF_MIPS_CHERI_ABI_MASK) {
+      case DF_MIPS_CHERI_ABI_LEGACY: OS << "ABI_LEGACY"; break;
+      case DF_MIPS_CHERI_ABI_PCREL:  OS << "ABI_PCREL"; break;
+      case DF_MIPS_CHERI_ABI_PLT:    OS << "ABI_PLT"; break;
+      case DF_MIPS_CHERI_ABI_FNDESC: OS << "ABI_FNDESC"; break;
+    }
+    Value &= ~DF_MIPS_CHERI_ABI_MASK;
     printFlags(Value, makeArrayRef(ElfDynamicDTMipsCheriAbiFlags), OS);
     break;
   case DT_FLAGS:
