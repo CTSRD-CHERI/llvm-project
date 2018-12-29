@@ -2862,14 +2862,23 @@ bool CastInst::isBitCastable(Type *SrcTy, Type *DestTy) {
 bool CastInst::isBitOrNoopPointerCastable(Type *SrcTy, Type *DestTy,
                                           const DataLayout &DL) {
   // ptrtoint and inttoptr are not allowed on non-integral pointers
+  // XXXAR: Have to return false here for casts between i128/i8 addrspace(200)*
+  // On CHERI these are not noop casts since we currently can't use capability
+  // registers as a i128/i256 registers. Returning false here ensures that
+  // we don't assert during code generation when we encounter an invalid pattern
+  // It seems to happen a lot when compiling C code using __int128_t and we
+  // replace memcpy intrinsics with addrspace(200) loads.
+  // TODO: Can we allow this cast some times? See InstCombineLoadStoreAlloca.cpp
+  // and FindAvailablePtrLoadStore().
+  // This makes some code generation involving structs with i128/i256 members worse
   if (auto *PtrTy = dyn_cast<PointerType>(SrcTy))
     if (auto *IntTy = dyn_cast<IntegerType>(DestTy))
       return (IntTy->getBitWidth() == DL.getPointerTypeSizeInBits(PtrTy) &&
-              !DL.isNonIntegralPointerType(PtrTy));
+              !DL.isNonIntegralPointerType(PtrTy) && !DL.isFatPointer(PtrTy));
   if (auto *PtrTy = dyn_cast<PointerType>(DestTy))
     if (auto *IntTy = dyn_cast<IntegerType>(SrcTy))
       return (IntTy->getBitWidth() == DL.getPointerTypeSizeInBits(PtrTy) &&
-              !DL.isNonIntegralPointerType(PtrTy));
+              !DL.isNonIntegralPointerType(PtrTy) && !DL.isFatPointer(PtrTy));
 
   return isBitCastable(SrcTy, DestTy);
 }
