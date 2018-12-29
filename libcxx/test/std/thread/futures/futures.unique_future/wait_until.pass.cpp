@@ -64,8 +64,10 @@ void func5(std::promise<void> p)
 int main()
 {
     ms delay = ms(10);
+    ms Tolerance = ms(5)
 #if defined(TEST_HAS_SANITIZERS) || defined(TEST_SLOW_HOST)
-    delay *= 3;
+    delay *= 4;
+    Tolerance *= 4;
 #endif
     typedef std::chrono::high_resolution_clock Clock;
     {
@@ -87,7 +89,7 @@ int main()
         f.wait();
         Clock::time_point t1 = Clock::now();
         assert(f.valid());
-        assert(t1-t0 < ms(5));
+        assert(t1-t0 < Tolerance);
     }
     {
         typedef int& T;
@@ -108,7 +110,7 @@ int main()
         f.wait();
         Clock::time_point t1 = Clock::now();
         assert(f.valid());
-        assert(t1-t0 < ms(5));
+        assert(t1-t0 < Tolerance);
     }
     {
         typedef void T;
@@ -129,6 +131,6 @@ int main()
         f.wait();
         Clock::time_point t1 = Clock::now();
         assert(f.valid());
-        assert(t1-t0 < ms(5));
+        assert(t1-t0 < Tolerance);
     }
 }
