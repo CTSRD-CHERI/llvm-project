@@ -987,6 +987,7 @@ private:
 // Can only be forward declared here since it depends on SyntheticSection
 template <class ELFT> class CheriCapRelocsSection;
 class CheriCapTableSection;
+class CheriCapTableMappingSection;
 
 InputSection *createInterpSection();
 MergeInputSection *createCommentSection();
@@ -1003,6 +1004,8 @@ struct InStruct {
   BssSection *BssRelRo;
   BuildIdSection *BuildId;
   CheriCapTableSection *CheriCapTable;
+  // For per-file/per-function tables:
+  CheriCapTableMappingSection *CheriCapTableMapping;
   EhFrameHeader *EhFrameHdr;
   EhFrameSection *EhFrame;
   SyntheticSection *Dynamic;

@@ -149,3 +149,46 @@ __attribute__((noinline)) static void *function3(void) {
 // SYMBOLS: 0000000000030060 l     O .captable		 00000010 function3@CAPTABLE@x.6
 // SYMBOLS: 0000000000030070 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function3
 // SYMBOLS: 0000000000030080 l     O .captable		 00000010 extern_int@CAPTABLE@function3
+
+// RUN: llvm-objdump --full-contents ---section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
+// Check that the mapping between functions + captable subsets is sensible:
+
+// MAPPING: Idx Name          Size      Address          Type
+// MAPPING:   9 .captable_mapping 00000090 0000000000000620 DATA
+// MAPPING-EMPTY:
+// MAPPING: Contents of section .captable_mapping:
+// MAPPING-NEXT:  0620 00000000 [[FUNCTION1_ADDR:00010000]]
+// MAPPING-SAME:       00000000 00010020
+// MAPPING-NEXT:  0630 00000000 00000010
+// Start addr  00010000, size 0x20, captable index 0, size 1
+// MAPPING-SAME:       00000000 [[FUNCTION2_ADDR:00010020]]
+// MAPPING-NEXT:  0640 00000000 00010040
+// MAPPING-SAME:       00000010 00000010
+// Start addr  00010020, size 0x20, captable index 1, size 1
+// MAPPING-NEXT:  0650 00000000 [[FUNCTION4_ADDR:00010040]]
+// MAPPING-SAME:       00000000 00010088
+// MAPPING-NEXT:  0660 00000020 00000020
+// Start addr  00010040, size 0x48, captable index 2, size 2
+// MAPPING-SAME:       00000000 [[FUNCTION5_ADDR:00010088]]
+// MAPPING-NEXT:  0670 00000000 00010094
+// MAPPING-SAME:       00000040 00000010
+// Start addr  00010088, size 0xc, captable index 4, size 1
+// MAPPING-NEXT:  0680 00000000 [[SAME_GLOBALS_ADDR:00010098]]
+// MAPPING-SAME:       00000000 000100b8
+// MAPPING-NEXT:  0690 00000050 00000010
+// Start addr  00010098, size 0x20, captable index 5, size 1
+// MAPPING-SAME:       00000000 [[X_ADDR:000100b8]]
+// MAPPING-NEXT:  06a0 00000000 000100d8
+// MAPPING-SAME:       00000060 00000010
+// Start addr  000100b8, size 0x20, captable index 6, size 1
+// FIXME: also need to emit the mapping for static functions!!!
+// MAPPING-NEXT: SYMBOL TABLE:
+// FIXME: local symbols are missing!
+// MAPPING: 00000000000100d8 l     F .text		 00000048 function3
+// MAPPING: 00000000[[FUNCTION1_ADDR]] g     F .text		 00000020 function1
+// MAPPING: 00000000[[FUNCTION2_ADDR]] g     F .text		 00000020 function2
+// MAPPING: 00000000[[FUNCTION4_ADDR]] g     F .text		 00000048 function4
+// MAPPING: 00000000[[FUNCTION5_ADDR]] g     F .text		 0000000c function5
+// MAPPING: 0000000000000000         *UND*		 00000000 global_int
+// MAPPING: 00000000[[SAME_GLOBALS_ADDR]] g     F .text		 00000020 same_globals_as_function1
+// MAPPING: 00000000[[X_ADDR]] g     F .text		 00000020 x

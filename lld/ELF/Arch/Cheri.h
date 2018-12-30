@@ -269,15 +269,30 @@ private:
   CaptableMap DynTlsEntries;
   CaptableMap TlsEntries;
   bool ValuesAssigned = false;
+  friend class CheriCapTableMappingSection;
 };
 
-// TODO: could shrink these to reduce size overhead but this is not production
-// code so it's fine
+// TODO: could shrink these to reduce size overhead but this is experimental
+// code that will never be particularly efficient so it's fine
 struct CaptableMappingEntry {
   uint64_t FuncStart;      // virtual address relative to base address
   uint64_t FuncEnd;        // virtual address relative to base address
   uint32_t CapTableOffset; // offset in bytes into captable
   uint32_t SubTableSize;   // Size in bytes of this sub-table
+};
+
+// Map from symbol vaddr -> captable subset so that RTLD can setup the correct
+// trampolines to initialize $cgp to the correct subset
+class CheriCapTableMappingSection : public SyntheticSection {
+public:
+  CheriCapTableMappingSection();
+  bool empty() const override {
+    if (Config->CapTableScope == CapTableScope::All)
+      return true;
+    return !In.CheriCapTable || In.CheriCapTable->empty();
+  }
+  void writeTo(uint8_t *Buf) override;
+  size_t getSize() const override;
 };
 
 template <typename ELFT, typename CallBack>

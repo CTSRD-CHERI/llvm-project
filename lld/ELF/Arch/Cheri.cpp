@@ -655,9 +655,12 @@ uint32_t CheriCapTableSection::getIndex(const Symbol &Sym, InputSectionBase *IS,
   // start of the current captable subset (or the global table in the default
   // case). When using per-function tables the first index in every function
   // will always be zero.
-  message("Index for " + toString(Sym) + " is " +
+#if defined(DEBUG_CAP_TABLE)
+  message("captable index for " + toString(Sym) + " is " +
           Twine(it->second.Index.getValue()) + " - " +
-          Twine(Entries.FirstIndex));
+          Twine(Entries.FirstIndex) + ": " +
+          Twine(it->second.Index.getValue() - Entries.FirstIndex));
+#endif
   return it->second.Index.getValue() - Entries.FirstIndex;
 }
 
@@ -882,6 +885,83 @@ template void
 CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF64LE>();
 template void
 CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF64BE>();
+
+CheriCapTableMappingSection::CheriCapTableMappingSection()
+    : SyntheticSection(SHF_ALLOC, SHT_PROGBITS, 8, ".captable_mapping") {
+  assert(Config->CapabilitySize > 0);
+  this->Entsize = sizeof(CaptableMappingEntry);
+  static_assert(sizeof(CaptableMappingEntry) == 24, "");
+}
+
+size_t CheriCapTableMappingSection::getSize() const {
+  assert(Config->CapTableScope != CapTableScope::All);
+  if (empty())
+    return 0;
+  size_t Count = 0;
+  for (Symbol *Sym : Symtab->getSymbols()) {
+    if (!Sym->isDefined() || !Sym->isFunc())
+      continue;
+    Count++;
+  }
+  return Count * sizeof(CaptableMappingEntry);
+}
+
+void CheriCapTableMappingSection::writeTo(uint8_t *Buf) {
+  assert(Config->CapTableScope != CapTableScope::All);
+  if (!In.CheriCapTable)
+    return;
+  // Write the mapping from function vaddr -> captable subset for RTLD
+  std::vector<CaptableMappingEntry> Entries;
+  for (Symbol *Sym : Symtab->getSymbols()) {
+    if (!Sym->isDefined() || !Sym->isFunc())
+      continue;
+    const CheriCapTableSection::CaptableMap *CapTableMap = nullptr;
+    if (Config->CapTableScope == CapTableScope::Function) {
+      auto it = In.CheriCapTable->PerFunctionEntries.find(Sym);
+      if (it != In.CheriCapTable->PerFunctionEntries.end())
+        CapTableMap = &it->second;
+    } else if (Config->CapTableScope == CapTableScope::File) {
+      auto it = In.CheriCapTable->PerFileEntries.find(Sym->File);
+      if (it != In.CheriCapTable->PerFileEntries.end())
+        CapTableMap = &it->second;
+    } else {
+      llvm_unreachable("Invalid mode!");
+    }
+    CaptableMappingEntry Entry;
+    Entry.FuncStart = Sym->getVA(0);
+    Entry.FuncEnd = Entry.FuncStart + Sym->getSize();
+    if (CapTableMap) {
+      assert(CapTableMap->FirstIndex != std::numeric_limits<uint64_t>::max());
+      Entry.CapTableOffset = CapTableMap->FirstIndex * Config->CapabilitySize;
+      Entry.SubTableSize = CapTableMap->size() * Config->CapabilitySize;
+    } else {
+      // TODO: don't write an entry for functions that don't use the captable
+      Entry.CapTableOffset = 0;
+      Entry.SubTableSize = 0;
+    }
+    Entries.push_back(Entry);
+  }
+  // Sort all the entries so that RTLD can do a binary search to find the
+  // correct entry instead of having to scan all of them.
+  // Do this before swapping to target endianess to simplify the comparisons.
+  llvm::sort(Entries, [](const CaptableMappingEntry &E1,
+                         const CaptableMappingEntry &E2) {
+    if (E1.FuncStart == E2.FuncStart)
+      return E1.FuncEnd < E2.FuncEnd;
+    return E1.FuncStart < E2.FuncStart;
+  });
+  // Byte-swap all the values so that we can memcpy the sorted buffer
+  for (CaptableMappingEntry &E : Entries) {
+    E.FuncStart = support::endian::byte_swap(E.FuncStart, Config->Endianness);
+    E.FuncEnd = support::endian::byte_swap(E.FuncEnd, Config->Endianness);
+    E.CapTableOffset =
+        support::endian::byte_swap(E.CapTableOffset, Config->Endianness);
+    E.SubTableSize =
+        support::endian::byte_swap(E.SubTableSize, Config->Endianness);
+  }
+  assert(Entries.size() * sizeof(CaptableMappingEntry) == getSize());
+  memcpy(Buf, Entries.data(), Entries.size() * sizeof(CaptableMappingEntry));
+}
 
 } // namespace elf
 } // namespace lld

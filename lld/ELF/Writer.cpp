@@ -344,6 +344,10 @@ template <class ELFT> static void createSyntheticSections() {
     if (Config->CapabilitySize > 0) {
       In.CheriCapTable = make<CheriCapTableSection>();
       Add(In.CheriCapTable);
+      if (Config->CapTableScope != CapTableScope::All) {
+        In.CheriCapTableMapping = make<CheriCapTableMappingSection>();
+        Add(In.CheriCapTableMapping);
+      }
     }
     if (!Config->Shared && Config->HasDynSymTab) {
       In.MipsRldMap = make<MipsRldMapSection>();
