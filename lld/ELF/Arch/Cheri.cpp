@@ -792,9 +792,13 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
   if (LLVM_UNLIKELY(Config->CapTableScope != CapTableScope::All)) {
     assert(AssignedEntries == 0 && "Should not have any global entries in"
                                    " per-file/per-function captable mode");
-    for (auto &it : PerFileEntries)
+    for (auto &it : PerFileEntries) {
+      std::string FullContext = toString(it.first);
+      auto LastSlash = StringRef(FullContext).find_last_of("/\\") + 1;
+      StringRef Context = StringRef(FullContext).substr(LastSlash);
       AssignedEntries += assignIndices<ELFT>(AssignedEntries, it.second,
-                                             "@" + toString(it.first));
+                                             "@" + Context);
+    }
     for (auto &it : PerFunctionEntries)
       AssignedEntries += assignIndices<ELFT>(AssignedEntries, it.second,
                                              "@" + toString(*it.first));

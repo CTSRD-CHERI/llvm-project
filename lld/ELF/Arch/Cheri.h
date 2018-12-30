@@ -245,14 +245,14 @@ private:
                                               uint64_t Offset);
   size_t nonTlsEntryCount() const {
     size_t TotalCount = GlobalEntries.size();
-    if (LLVM_UNLIKELY(Config->CapTableScope != CapTableScope::All)) {
+    if (LLVM_LIKELY(Config->CapTableScope == CapTableScope::All)) {
+      assert(PerFileEntries.empty() && PerFunctionEntries.empty());
+    } else {
       // Add all the per-file and per-function entries
       for (const auto &it : PerFileEntries)
         TotalCount += it.second.size();
       for (const auto &it : PerFunctionEntries)
         TotalCount += it.second.size();
-    } else {
-      assert(PerFileEntries.empty() && PerFunctionEntries.empty());
     }
     return TotalCount;
   }
