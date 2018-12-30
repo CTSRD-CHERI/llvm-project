@@ -610,21 +610,21 @@ uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
 uint32_t CheriCapTableSection::getDynTlsOffset(const Symbol &Sym) const {
   assert(ValuesAssigned && "getDynTlsOffset called before index assignment");
   auto it = DynTlsEntries.find(const_cast<Symbol *>(&Sym));
-  assert(it != Entries.end());
+  assert(it != DynTlsEntries.end());
   return it->second.Index.getValue() * Config->Wordsize;
 }
 
 uint32_t CheriCapTableSection::getTlsIndexOffset() const {
   assert(ValuesAssigned && "getTlsIndexOffset called before index assignment");
   auto it = DynTlsEntries.find(nullptr);
-  assert(it != Entries.end());
+  assert(it != DynTlsEntries.end());
   return it->second.Index.getValue() * Config->Wordsize;
 }
 
 uint32_t CheriCapTableSection::getTlsOffset(const Symbol &Sym) const {
   assert(ValuesAssigned && "getTlsOffset called before index assignment");
   auto it = TlsEntries.find(const_cast<Symbol *>(&Sym));
-  assert(it != Entries.end());
+  assert(it != TlsEntries.end());
   return it->second.Index.getValue() * Config->Wordsize;
 }
 
