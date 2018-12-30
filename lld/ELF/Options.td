@@ -518,6 +518,12 @@ def local_caprelocs_elf: F<"local-caprelocs=elf">,
 def local_caprelocs_cbuildcap: F<"local-caprelocs=cbuildcap">,
   HelpText<"Emit capability relocations for local symbols by writing bits to be initialized using CBuildCap.">;
 
+def captable_scope_all: F<"captable-scope=all">,
+  HelpText<"Use one captable for the whole DSO for global accesses (this is the default)">;
+def captable_scope_file: F<"captable-scope=file">,
+  HelpText<"Use one captable per input file for global accesses (slower but reduces scope of $cgp)">;
+def captable_scope_function: F<"captable-scope=function">,
+  HelpText<"Use one captable per function for global accesses (very slow but minimizes scope of $cgp)">;
 
 // Options listed below are silently ignored for now for compatibility.
 def: F<"allow-shlib-undefined">;

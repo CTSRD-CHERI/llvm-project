@@ -612,7 +612,8 @@ static int64_t getTlsTpOffset() {
 }
 
 static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
-                                 uint64_t P, const Symbol &Sym, RelExpr Expr) {
+                                 uint64_t P, const Symbol &Sym, RelExpr Expr,
+                                 InputSectionBase *IS, uint64_t Offset) {
   switch (Expr) {
   case R_INVALID:
     return 0;
@@ -701,7 +702,7 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
     if (!HiRel)
       return 0;
     return getRelocTargetVA(File, HiRel->Type, HiRel->Addend, Sym.getVA(),
-                            *HiRel->Sym, HiRel->Expr);
+                            *HiRel->Sym, HiRel->Expr, IS, Offset);
   }
   case R_PC: {
     uint64_t Dest;
@@ -783,7 +784,7 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
   case R_CHERI_CAPABILITY_TABLE_INDEX:
   case R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE:
     assert(A == 0 && "capability table index relocs should not have addends");
-    return Config->CapabilitySize * In.CheriCapTable->getIndex(Sym);
+    return Config->CapabilitySize * In.CheriCapTable->getIndex(Sym, IS, Offset);
   case R_CHERI_CAPABILITY_TABLE_REL:
     if (!ElfSym::CheriCapabilityTable) {
       error("cannot compute difference between non-existent "
@@ -920,9 +921,10 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
       error(getErrorLocation(BufLoc) + "cannot create relocation against NULL symbol");
       continue;
     }
-    uint64_t TargetVA = SignExtend64(
-        getRelocTargetVA(File, Type, Rel.Addend, AddrLoc, *Rel.Sym, Expr),
-        Bits);
+    uint64_t TargetVA =
+        SignExtend64(getRelocTargetVA(File, Type, Rel.Addend, AddrLoc, *Rel.Sym,
+                                      Expr, this, Rel.Offset),
+                     Bits);
 
     switch (Expr) {
     case R_RELAX_GOT_PC:

@@ -142,29 +142,79 @@ private:
 // | IE TPREL q-1  |  IE TPREL q   |
 // +-------------------------------+
 //
+// If we are compiling with per function/per file tables it starts as follows:
+// +---------------------------------------+
+// | Small Index Cap 1 for File/Function 1 |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Small Index Cap m for File/Function 1 |
+// +---------------------------------------+
+// | Large Index Cap 1 for File/Function 1 |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Large Index Cap n for File/Function 1 |
+// +---------------------------------------+
+// | Small Index Cap 1 for File/Function 2 |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Small Index Cap m for File/Function 2 |
+// +---------------------------------------+
+// | Large Index Cap 1 for File/Function 2 |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Large Index Cap n for File/Function 2 |
+// +---------------------------------------+
+// |                :                      |
+// |                :                      |
+// +---------------------------------------+
+// | Small Index Cap 1 for File/Function N |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Small Index Cap m for File/Function N |
+// +---------------------------------------+
+// | Large Index Cap 1 for File/Function N |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Large Index Cap n for File/Function N |
+// +---------------------------------------+
+// TODO: TLS caps also need to be per file/function
+
 class CheriCapTableSection : public SyntheticSection {
 public:
   CheriCapTableSection();
-  void addEntry(Symbol &Sym, bool NeedsSmallImm, RelType Type);
+  // InputFile and Offset is needed in order to implement per-file/per-function
+  // tables
+  void addEntry(Symbol &Sym, bool NeedsSmallImm, RelType Type,
+                InputSectionBase *IS, uint64_t Offset);
   void addDynTlsEntry(Symbol &Sym);
   void addTlsIndex();
   void addTlsEntry(Symbol &Sym);
-  uint32_t getIndex(const Symbol &Sym) const;
+  uint32_t getIndex(const Symbol &Sym, InputSectionBase *IS,
+                    uint64_t Offset) const;
   uint32_t getDynTlsOffset(const Symbol &Sym) const;
   uint32_t getTlsIndexOffset() const;
   uint32_t getTlsOffset(const Symbol &Sym) const;
   bool empty() const override {
-    return Entries.empty() && DynTlsEntries.empty() && TlsEntries.empty();
+    return nonTlsEntryCount() == 0 && DynTlsEntries.empty() &&
+           TlsEntries.empty();
   }
   void writeTo(uint8_t *Buf) override;
   template <class ELFT> void assignValuesAndAddCapTableSymbols();
   size_t getSize() const override {
-    if (!Entries.empty() > 0)
+    size_t NonTlsEntries = nonTlsEntryCount();
+    if (NonTlsEntries > 0 || !TlsEntries.empty() || !DynTlsEntries.empty()) {
       assert(Config->CapabilitySize > 0 &&
              "Cap table entries present but cap size unknown???");
+    }
     size_t Bytes =
-      Entries.size() * Config->CapabilitySize +
-      (DynTlsEntries.size() * 2 + TlsEntries.size()) * Config->Wordsize;
+        nonTlsEntryCount() * Config->CapabilitySize +
+        (DynTlsEntries.size() * 2 + TlsEntries.size()) * Config->Wordsize;
     return llvm::alignTo(Bytes, Config->CapabilitySize);
   }
 private:
@@ -178,10 +228,51 @@ private:
     bool NeedsSmallImm = false;
     bool UsedAsFunctionPointer = true;
   };
-  llvm::MapVector<Symbol *, CapTableIndex> Entries;
-  llvm::MapVector<Symbol *, CapTableIndex> DynTlsEntries;
-  llvm::MapVector<Symbol *, CapTableIndex> TlsEntries;
+  using CaptableMap = llvm::MapVector<Symbol *, CapTableIndex>;
+  template <class ELFT>
+  uint64_t assignIndices(uint64_t StartIndex, CaptableMap &Entries,
+                         const Twine &SymContext);
+  /// @return a refernces to the captable map where the given symbol should
+  /// be inserted. Usually this will just be the GlobalEntries map, but when
+  /// compiling with the experimental per-function/per-file captables it will
+  /// return a reference to the file/function that matches InputFile+Offset
+  const CaptableMap &getCaptableMapForFileAndOffset(InputSectionBase *IS,
+                                                    uint64_t Offset) const {
+    return const_cast<CheriCapTableSection *>(this)
+        ->getCaptableMapForFileAndOffset(IS, Offset);
+  }
+  CaptableMap &getCaptableMapForFileAndOffset(InputSectionBase *IS,
+                                              uint64_t Offset);
+  size_t nonTlsEntryCount() const {
+    size_t TotalCount = GlobalEntries.size();
+    if (LLVM_UNLIKELY(Config->CapTableScope != CapTableScope::All)) {
+      // Add all the per-file and per-function entries
+      for (const auto &it : PerFileEntries)
+        TotalCount += it.second.size();
+      for (const auto &it : PerFunctionEntries)
+        TotalCount += it.second.size();
+    } else {
+      assert(PerFileEntries.empty() && PerFunctionEntries.empty());
+    }
+    return TotalCount;
+  }
+
+  // The two maps are only used in the experimental
+  llvm::MapVector<InputFile *, CaptableMap> PerFileEntries;
+  llvm::MapVector<Symbol *, CaptableMap> PerFunctionEntries;
+  CaptableMap GlobalEntries;
+  CaptableMap DynTlsEntries;
+  CaptableMap TlsEntries;
   bool ValuesAssigned = false;
+};
+
+// TODO: could shrink these to reduce size overhead but this is not production
+// code so it's fine
+struct CaptableMappingEntry {
+  uint64_t FuncStart;      // virtual address relative to base address
+  uint64_t FuncEnd;        // virtual address relative to base address
+  uint32_t CapTableOffset; // offset in bytes into captable
+  uint32_t SubTableSize;   // Size in bytes of this sub-table
 };
 
 template <typename ELFT, typename CallBack>

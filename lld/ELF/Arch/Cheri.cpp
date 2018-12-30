@@ -550,7 +550,46 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
           it.first->IsPreemptible ? 0 : -0x7000);
 }
 
-void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type) {
+static Defined *findMatchingFunction(InputSectionBase *IS, uint64_t SymOffset) {
+  switch (Config->EKind) {
+  default:
+    llvm_unreachable("Invalid kind");
+  case ELF32LEKind:
+    return IS->getEnclosingFunction<ELF32LE>(SymOffset);
+  case ELF32BEKind:
+    return IS->getEnclosingFunction<ELF32BE>(SymOffset);
+  case ELF64LEKind:
+    return IS->getEnclosingFunction<ELF64LE>(SymOffset);
+  case ELF64BEKind:
+    return IS->getEnclosingFunction<ELF64BE>(SymOffset);
+  }
+}
+
+CheriCapTableSection::CaptableMap &
+CheriCapTableSection::getCaptableMapForFileAndOffset(InputSectionBase *IS,
+                                                     uint64_t Offset) {
+  if (LLVM_LIKELY(Config->CapTableScope == CapTableScope::All))
+    return GlobalEntries;
+  if (Config->CapTableScope == CapTableScope::File) {
+    // operator[] will insert if missing
+    return PerFileEntries[IS->File];
+  }
+  if (Config->CapTableScope == CapTableScope::Function) {
+    Symbol *Func = findMatchingFunction(IS, Offset);
+    if (!Func) {
+      warn(
+          "Could not find corresponding function with per-function captable: " +
+          IS->getObjMsg(Offset));
+    }
+    // operator[] will insert if missing
+    return PerFunctionEntries[Func];
+  }
+  llvm_unreachable("INVALID CONFIG OPTION");
+  return GlobalEntries;
+}
+
+void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
+                                    InputSectionBase *IS, uint64_t Offset) {
   // FIXME: can this be called from multiple threads?
   CapTableIndex Idx;
   Idx.NeedsSmallImm = SmallImm;
@@ -570,6 +609,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type) {
   default:
     break;
   }
+  CaptableMap &Entries = getCaptableMapForFileAndOffset(IS, Offset);
   auto it = Entries.insert(std::make_pair(&Sym, Idx));
   if (!it.second) {
     // If it is references by a small immediate relocation we need to update
@@ -579,9 +619,15 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type) {
     if (Idx.UsedAsFunctionPointer)
       it.first->second.UsedAsFunctionPointer = true;
   }
-#ifdef DEBUG_CAP_TABLE
-  llvm::errs() << "Added symbol " << toString(Sym)
-               << " to .captable. Total count " << Entries.size() << "\n";
+#if defined(DEBUG_CAP_TABLE)
+  std::string DbgContext;
+  if (Config->CapTableScope == CapTableScope::File) {
+    DbgContext = " for file '" + toString(IS->File) + "'";
+  } else if (Config->CapTableScope == CapTableScope::Function) {
+    DbgContext =  " for function '" + toString(*findMatchingFunction(IS, Offset)) + "'";
+  }
+  llvm::errs() << "Added symbol " << toString(Sym) << " to .captable"
+               << DbgContext << ". Total count " << Entries.size() << "\n";
 #endif
 }
 
@@ -597,8 +643,10 @@ void CheriCapTableSection::addTlsEntry(Symbol &Sym) {
   TlsEntries.insert(std::make_pair(&Sym, CapTableIndex()));
 }
 
-uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
+uint32_t CheriCapTableSection::getIndex(const Symbol &Sym, InputSectionBase *IS,
+                                        uint64_t Offset) const {
   assert(ValuesAssigned && "getIndex called before index assignment");
+  const CaptableMap &Entries = getCaptableMapForFileAndOffset(IS, Offset);
   auto it = Entries.find(const_cast<Symbol *>(&Sym));
   assert(it != Entries.end());
   return it->second.Index.getValue();
@@ -626,11 +674,11 @@ uint32_t CheriCapTableSection::getTlsOffset(const Symbol &Sym) const {
 }
 
 template <class ELFT>
-void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
-  // FIXME: we should not be hardcoding architecture specific relocation numbers
-  // here
-  assert(Config->EMachine == EM_MIPS);
-
+uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
+                                             CaptableMap &Entries,
+                                             const Twine &SymContext) {
+  // Usually StartIndex will be zero (one global captable) but if we are
+  // compiling with per-file/per-function
   uint64_t SmallEntryCount = 0;
   for (auto &it : Entries) {
     // TODO: looping twice is inefficient, we could keep track of the number of
@@ -665,14 +713,15 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     CapTableIndex &CTI = it.second;
     if (CTI.NeedsSmallImm) {
       assert(AssignedSmallIndexes < SmallEntryCount);
-      CTI.Index = AssignedSmallIndexes;
+      CTI.Index = StartIndex + AssignedSmallIndexes;
       AssignedSmallIndexes++;
     } else {
-      CTI.Index = SmallEntryCount + AssignedLargeIndexes;
+      CTI.Index = StartIndex + SmallEntryCount + AssignedLargeIndexes;
       AssignedLargeIndexes++;
     }
 
     uint32_t Index = *CTI.Index;
+    assert(Index >= StartIndex && Index < StartIndex + Entries.size());
     Symbol *TargetSym = it.first;
 
     StringRef Name = TargetSym->getName();
@@ -682,12 +731,13 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     // might not be unique. If there is a global with the same name we always
     // want the global to have the plain @CAPTABLE name
     if (Name.empty() /* || Name.startswith(".L") */ || TargetSym->isLocal())
-      RefName = (Name + "@CAPTABLE." + Twine(Index)).str();
+      RefName = (Name + "@CAPTABLE" + SymContext + "." + Twine(Index)).str();
     else
-      RefName = (Name + "@CAPTABLE").str();
+      RefName = (Name + "@CAPTABLE" + SymContext).str();
 
     if (Symtab->find(RefName)) {
-      std::string NewRefName = (Name + "@CAPTABLE." + Twine(Index)).str();
+      std::string NewRefName =
+          (Name + "@CAPTABLE" + SymContext + "." + Twine(Index)).str();
       // XXXAR: for some reason we sometimes create more than one cap table entry
       // for a given global name, for now just rename the symbol
       // assert(TargetSym->isLocal());
@@ -728,11 +778,39 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         [&]() { return "\n>>> referenced by " + RefName; }, DynRelSec);
   }
   assert(AssignedSmallIndexes + AssignedLargeIndexes == Entries.size());
+  return AssignedSmallIndexes + AssignedLargeIndexes;
+}
+
+template <class ELFT>
+void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
+  // FIXME: we should not be hardcoding architecture specific relocation numbers
+  // here
+  assert(Config->EMachine == EM_MIPS);
+
+  // First assign the global indices (which will usually be the only ones)
+  uint64_t AssignedEntries = assignIndices<ELFT>(0, GlobalEntries, "");
+  if (LLVM_UNLIKELY(Config->CapTableScope != CapTableScope::All)) {
+    assert(AssignedEntries == 0 && "Should not have any global entries in"
+                                   " per-file/per-function captable mode");
+    for (auto &it : PerFileEntries)
+      AssignedEntries += assignIndices<ELFT>(AssignedEntries, it.second,
+                                             "@" + toString(it.first));
+    for (auto &it : PerFunctionEntries)
+      AssignedEntries += assignIndices<ELFT>(AssignedEntries, it.second,
+                                             "@" + toString(*it.first));
+  }
+  assert(AssignedEntries == nonTlsEntryCount());
 
   uint32_t AssignedTlsIndexes = 0;
   uint32_t TlsBaseIndex =
-    (AssignedSmallIndexes + AssignedLargeIndexes) *
-    (Config->CapabilitySize / Config->Wordsize);
+      AssignedEntries * (Config->CapabilitySize / Config->Wordsize);
+
+  // TODO: support TLS for per-function captable
+  if (Config->CapTableScope != CapTableScope::All &&
+      (!DynTlsEntries.empty() || !TlsEntries.empty())) {
+    error("TLS is not supported yet with per-file or per-function captable");
+    return;
+  }
 
   for (auto &it : DynTlsEntries) {
     CapTableIndex &CTI = it.second;
