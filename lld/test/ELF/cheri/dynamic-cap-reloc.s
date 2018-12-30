@@ -117,12 +117,8 @@ local_ref_with_addend:
 # R_CAPABILITY_FOR_ALL-NEXT:   }
 # R_CAPABILITY_FOR_ALL-NEXT: ]
 
-
-# Would be nice to have a CHECK-EMPTY directiveinstead of this regex hack:
-# See https://reviews.llvm.org/D28896
-
-# DUMP-R_CAPABILITY_FOR_ALL: CAPABILITY RELOCATION RECORDS:{{$}}
-# DUMP-R_CAPABILITY_FOR_ALL-SAME:{{[[:space:]]$}}
+# DUMP-R_CAPABILITY_FOR_ALL: CAPABILITY RELOCATION RECORDS:
+# DUMP-R_CAPABILITY_FOR_ALL-EMPTY:
 # DUMP-R_CAPABILITY_FOR_ALL-NEXT: Contents of section .data:
 # DUMP-R_CAPABILITY_FOR_ALL-NEXT:  20000 00000000 00000000 cacacaca cacacaca
 #                                             ^---- addend 0 for preemptible_ref
