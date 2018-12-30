@@ -532,7 +532,7 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
   // initialized by zero. Write down adjusted TLS symbol's values otherwise.
   // To calculate the adjustments use offsets for thread-local storage.
   // TODO: Don't hard-code MIPS offsets here.
-  for (auto &it : DynTlsEntries) {
+  for (auto &it : DynTlsEntries.Map) {
     if (it.first == nullptr && !Config->Pic)
       Write(it.second.Index.getValue(), nullptr, 1);
     else if (it.first && !it.first->IsPreemptible) {
@@ -545,7 +545,7 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
     }
   }
 
-  for (auto &it : TlsEntries)
+  for (auto &it : TlsEntries.Map)
     Write(it.second.Index.getValue(), it.first,
           it.first->IsPreemptible ? 0 : -0x7000);
 }
@@ -610,7 +610,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
     break;
   }
   CaptableMap &Entries = getCaptableMapForFileAndOffset(IS, Offset);
-  auto it = Entries.insert(std::make_pair(&Sym, Idx));
+  auto it = Entries.Map.insert(std::make_pair(&Sym, Idx));
   if (!it.second) {
     // If it is references by a small immediate relocation we need to update
     // the small immediate flag
@@ -632,44 +632,53 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
 }
 
 void CheriCapTableSection::addDynTlsEntry(Symbol &Sym) {
-  DynTlsEntries.insert(std::make_pair(&Sym, CapTableIndex()));
+  DynTlsEntries.Map.insert(std::make_pair(&Sym, CapTableIndex()));
 }
 
 void CheriCapTableSection::addTlsIndex() {
-  DynTlsEntries.insert(std::make_pair(nullptr, CapTableIndex()));
+  DynTlsEntries.Map.insert(std::make_pair(nullptr, CapTableIndex()));
 }
 
 void CheriCapTableSection::addTlsEntry(Symbol &Sym) {
-  TlsEntries.insert(std::make_pair(&Sym, CapTableIndex()));
+  TlsEntries.Map.insert(std::make_pair(&Sym, CapTableIndex()));
 }
 
 uint32_t CheriCapTableSection::getIndex(const Symbol &Sym, InputSectionBase *IS,
                                         uint64_t Offset) const {
   assert(ValuesAssigned && "getIndex called before index assignment");
   const CaptableMap &Entries = getCaptableMapForFileAndOffset(IS, Offset);
-  auto it = Entries.find(const_cast<Symbol *>(&Sym));
-  assert(it != Entries.end());
-  return it->second.Index.getValue();
+  auto it = Entries.Map.find(const_cast<Symbol *>(&Sym));
+  assert(Entries.FirstIndex != std::numeric_limits<uint64_t>::max() &&
+         "First index not set yet?");
+  assert(it != Entries.Map.end());
+  // The index that is written as part of the relocation is relative to the
+  // start of the current captable subset (or the global table in the default
+  // case). When using per-function tables the first index in every function
+  // will always be zero.
+  message("Index for " + toString(Sym) + " is " +
+          Twine(it->second.Index.getValue()) + " - " +
+          Twine(Entries.FirstIndex));
+  return it->second.Index.getValue() - Entries.FirstIndex;
 }
 
 uint32_t CheriCapTableSection::getDynTlsOffset(const Symbol &Sym) const {
   assert(ValuesAssigned && "getDynTlsOffset called before index assignment");
-  auto it = DynTlsEntries.find(const_cast<Symbol *>(&Sym));
-  assert(it != DynTlsEntries.end());
+  auto it = DynTlsEntries.Map.find(const_cast<Symbol *>(&Sym));
+  assert(it != DynTlsEntries.Map.end());
   return it->second.Index.getValue() * Config->Wordsize;
 }
 
 uint32_t CheriCapTableSection::getTlsIndexOffset() const {
   assert(ValuesAssigned && "getTlsIndexOffset called before index assignment");
-  auto it = DynTlsEntries.find(nullptr);
-  assert(it != DynTlsEntries.end());
+  auto it = DynTlsEntries.Map.find(nullptr);
+  assert(it != DynTlsEntries.Map.end());
   return it->second.Index.getValue() * Config->Wordsize;
 }
 
 uint32_t CheriCapTableSection::getTlsOffset(const Symbol &Sym) const {
   assert(ValuesAssigned && "getTlsOffset called before index assignment");
-  auto it = TlsEntries.find(const_cast<Symbol *>(&Sym));
-  assert(it != TlsEntries.end());
+  auto it = TlsEntries.Map.find(const_cast<Symbol *>(&Sym));
+  assert(it != TlsEntries.Map.end());
   return it->second.Index.getValue() * Config->Wordsize;
 }
 
@@ -680,7 +689,10 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
   // Usually StartIndex will be zero (one global captable) but if we are
   // compiling with per-file/per-function
   uint64_t SmallEntryCount = 0;
-  for (auto &it : Entries) {
+  assert(Entries.FirstIndex == std::numeric_limits<uint64_t>::max() &&
+         "Should not be initialized yet!");
+  Entries.FirstIndex = StartIndex;
+  for (auto &it : Entries.Map) {
     // TODO: looping twice is inefficient, we could keep track of the number of
     // small entries during insertion
     if (it.second.NeedsSmallImm) {
@@ -709,7 +721,7 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
   const bool ShouldAddAtCaptableSymbols = !errorHandler().ExitEarly;
   uint32_t AssignedSmallIndexes = 0;
   uint32_t AssignedLargeIndexes = 0;
-  for (auto &it : Entries) {
+  for (auto &it : Entries.Map) {
     CapTableIndex &CTI = it.second;
     if (CTI.NeedsSmallImm) {
       assert(AssignedSmallIndexes < SmallEntryCount);
@@ -816,7 +828,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     return;
   }
 
-  for (auto &it : DynTlsEntries) {
+  for (auto &it : DynTlsEntries.Map) {
     CapTableIndex &CTI = it.second;
     assert(!CTI.NeedsSmallImm);
     CTI.Index = TlsBaseIndex + AssignedTlsIndexes;
@@ -844,7 +856,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     }
   }
 
-  for (auto &it : TlsEntries) {
+  for (auto &it : TlsEntries.Map) {
     CapTableIndex &CTI = it.second;
     assert(!CTI.NeedsSmallImm);
     CTI.Index = TlsBaseIndex + AssignedTlsIndexes++;

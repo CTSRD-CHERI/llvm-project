@@ -1,11 +1,11 @@
 
 // REQUIRES: clang
 
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 %s -o %t.o
+// RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 %s -o %t.o
+// RUN: ld.lld -shared -o %t.so %t.o -captable-scope=function
 // RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t.so | FileCheck %s -check-prefixes CHECK,PER-FUNCTION
-// RUN: llvm-objdump --syms %t.so | FileCheck %s -check-prefix SYMBOLS
+// RUN: llvm-objdump --syms -d %t.so | FileCheck %s -check-prefixes SYMBOLS,DISAS
 // RUN: ld.lld -shared -o %t-file.so %t.o -captable-scope=file
-// RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t-file.so
 // RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t-file.so | FileCheck %s -check-prefixes CHECK,PER-FILE
 // RUN: ld.lld -shared -o %t-all.so %t.o -captable-scope=all
 // RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t-all.so | FileCheck %s -check-prefixes CHECK,GLOBAL
@@ -73,6 +73,72 @@
 
 // CHECK-NEXT:        ]
 
+extern void *extern_void_ptr(void);
+extern char *extern_char_ptr(void);
+extern int extern_int(void);
+extern int global_int;
+
+// Check that the indices for the per-function table are correct (should be 0 or 16)
+
+// DISAS-LABEL: Disassembly of section .text:
+void *function1(void) { return extern_void_ptr(); }
+// DISAS-LABEL: function1:
+// DISAS:      clcbi	$c12, 0($c26)
+// DISAS-NEXT: cjalr	$c12, $c17
+// DISAS:      cjr	$c17
+
+__attribute__((visibility("protected"))) void *function2(void) {
+  return extern_char_ptr();
+}
+// DISAS-LABEL: function2:
+// DISAS:      clcbi	$c12, 0($c26)
+// DISAS-NEXT: cjalr	$c12, $c17
+// DISAS:      cjr	$c17
+
+__attribute__((visibility("protected"))) void *function4(void) {
+  return (char *)extern_void_ptr() + extern_int();
+}
+// DISAS-LABEL: function4:
+// DISAS:      cmove	$c19, $c26
+// DISAS:      clcbi	$c12, 0($c19)
+// DISAS-NEXT: cjalr	$c12, $c17
+// DISAS:      clcbi	$c12, 16($c19)
+// DISAS-NEXT: cjalr	$c12, $c17
+// DISAS:      cjr	$c17
+
+int function5(void) { return global_int; }
+// DISAS-LABEL: function5:
+// DISAS-NEXT: clcbi	$c1, 0($c26)
+// DISAS-NEXT: cjr	$c17
+// DISAS-NEXT: clw	$2, $zero, 0($c1)
+
+// TODO: this could share a table with function1 but that's not implemented yet
+void *same_globals_as_function1(void) { return (char *)extern_void_ptr(); }
+// DISAS-LABEL: same_globals_as_function1:
+// DISAS:      clcbi	$c12, 0($c26)
+// DISAS-NEXT: cjalr	$c12, $c17
+// DISAS:      cjr	$c17
+
+static void *function3(void);
+void *x(void) { return function3(); }
+// DISAS-LABEL: x:
+// DISAS:      clcbi	$c12, 0($c26)
+// DISAS-NEXT: cjalr	$c12, $c17
+// DISAS:      cjr	$c17
+
+__attribute__((noinline)) static void *function3(void) {
+  return extern_char_ptr() + extern_int();
+}
+// DISAS-LABEL: function3:
+// DISAS:      cmove	$c19, $c26
+// DISAS:      clcbi	$c12, 0($c19)
+// DISAS-NEXT: cjalr	$c12, $c17
+// DISAS:      clcbi	$c12, 16($c19)
+// DISAS-NEXT: cjalr	$c12, $c17
+// DISAS:      cjr	$c17
+
+
+// SYMBOLS-LABEL: SYMBOL TABLE:
 // SYMBOLS: 0000000000030000         .captable		 00000090 _CHERI_CAPABILITY_TABLE_
 // SYMBOLS: 0000000000030000 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function1
 // SYMBOLS: 0000000000030010 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function2
@@ -83,29 +149,3 @@
 // SYMBOLS: 0000000000030060 l     O .captable		 00000010 function3@CAPTABLE@x.6
 // SYMBOLS: 0000000000030070 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function3
 // SYMBOLS: 0000000000030080 l     O .captable		 00000010 extern_int@CAPTABLE@function3
-
-extern void *extern_void_ptr(void);
-extern char *extern_char_ptr(void);
-extern int extern_int(void);
-extern int global_int;
-
-void *function1(void) { return extern_void_ptr(); }
-
-__attribute__((visibility("protected"))) void *function2(void) {
-  return extern_char_ptr();
-}
-
-__attribute__((noinline)) static void *function3(void) {
-  return extern_char_ptr() + extern_int();
-}
-
-__attribute__((visibility("protected"))) void *function4(void) {
-  return (char *)extern_void_ptr() + extern_int();
-}
-
-int function5(void) { return global_int; }
-
-// TODO: this could share a table with function1 but that's not implemented yet
-void *same_globals_as_function1(void) { return (char *)extern_void_ptr(); }
-
-void *x(void) { return function3(); }

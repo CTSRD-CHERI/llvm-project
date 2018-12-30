@@ -228,7 +228,12 @@ private:
     bool NeedsSmallImm = false;
     bool UsedAsFunctionPointer = true;
   };
-  using CaptableMap = llvm::MapVector<Symbol *, CapTableIndex>;
+  struct CaptableMap {
+    uint64_t FirstIndex = std::numeric_limits<uint64_t>::max();
+    llvm::MapVector<Symbol *, CapTableIndex> Map;
+    size_t size() const { return Map.size(); }
+    bool empty() const { return Map.empty(); }
+  };
   template <class ELFT>
   uint64_t assignIndices(uint64_t StartIndex, CaptableMap &Entries,
                          const Twine &SymContext);
