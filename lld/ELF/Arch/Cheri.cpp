@@ -741,15 +741,16 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
 
     StringRef Name = TargetSym->getName();
     // Avoid duplicate symbol name errors for unnamed string constants:
-    std::string RefName;
+    StringRef RefName;
     // For now always append .INDEX to local symbols @CAPTABLE names since they
     // might not be unique. If there is a global with the same name we always
     // want the global to have the plain @CAPTABLE name
     if (Name.empty() /* || Name.startswith(".L") */ || TargetSym->isLocal())
-      RefName = (Name + "@CAPTABLE" + SymContext + "." + Twine(Index)).str();
+      RefName = Saver.save(Name + "@CAPTABLE" + SymContext + "." + Twine(Index));
     else
-      RefName = (Name + "@CAPTABLE" + SymContext).str();
-
+      RefName = Saver.save(Name + "@CAPTABLE" + SymContext);
+    // XXXAR: This should no longer be necessary now that I am using addSyntheticLocal?
+#if 0
     if (Symtab->find(RefName)) {
       std::string NewRefName =
           (Name + "@CAPTABLE" + SymContext + "." + Twine(Index)).str();
@@ -768,10 +769,10 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
       RefName = std::move(NewRefName);
       assert(!Symtab->find(RefName) && "RefName should be unique");
     }
+#endif
     uint64_t Off = Index * Config->CapabilitySize;
     if (ShouldAddAtCaptableSymbols) {
-      Symtab->addDefined(Saver.save(RefName), STV_HIDDEN, STT_OBJECT, Off,
-                         Config->CapabilitySize, STB_LOCAL, this, nullptr);
+      addSyntheticLocal(RefName, STT_OBJECT, Off, Config->CapabilitySize, *this);
     }
     // If the symbol is used as a function pointer the runtime linker has to
     // ensure that all pointers to that function compare equal. This is done
