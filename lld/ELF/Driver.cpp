@@ -353,11 +353,11 @@ static bool getZFlag(opt::InputArgList &Args, StringRef K1, StringRef K2,
 }
 
 static bool isKnownZFlag(StringRef S) {
-  return S == "combreloc" || S == "copyreloc" || S == "defs" ||
+  return S == "captabledebug" || S == "combreloc" || S == "copyreloc" || S == "defs" ||
          S == "execstack" || S == "global" || S == "hazardplt" ||
          S == "initfirst" || S == "interpose" ||
          S == "keep-text-section-prefix" || S == "lazy" || S == "muldefs" ||
-         S == "nocombreloc" || S == "nocopyreloc" || S == "nodelete" ||
+         S == "nocaptabledebug" || S == "nocombreloc" || S == "nocopyreloc" || S == "nodelete" ||
          S == "nodlopen" || S == "noexecstack" ||
          S == "nokeep-text-section-prefix" || S == "norelro" || S == "notext" ||
          S == "now" || S == "origin" || S == "relro" || S == "retpolineplt" ||
@@ -931,6 +931,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Args.hasFlag(OPT_warn_ifunc_textrel, OPT_no_warn_ifunc_textrel, false);
   Config->WarnSymbolOrdering =
       Args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
+  Config->ZCapTableDebug = getZFlag(Args, "captabledebug", "nocaptabledebug", false);
   Config->ZCombreloc = getZFlag(Args, "combreloc", "nocombreloc", true);
   Config->ZCopyreloc = getZFlag(Args, "copyreloc", "nocopyreloc", true);
   Config->ZExecstack = getZFlag(Args, "execstack", "noexecstack", false);

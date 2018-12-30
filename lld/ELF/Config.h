@@ -189,6 +189,9 @@ struct Configuration {
   bool WarnMissingEntry;
   bool WarnSymbolOrdering;
   bool WriteAddends;
+  // -z captabledebug: add additional symbols $captable_load_<symbols> before
+  // each captable clc instruction that indicates which symbol should be loaded
+  bool ZCapTableDebug;
   bool ZCombreloc;
   bool ZCopyreloc;
   bool ZExecstack;

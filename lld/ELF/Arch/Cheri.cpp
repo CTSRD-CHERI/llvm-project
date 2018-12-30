@@ -610,6 +610,12 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
     break;
   }
   CaptableMap &Entries = getCaptableMapForFileAndOffset(IS, Offset);
+  if (Config->ZCapTableDebug) {
+    // Add a local helper symbol to improve disassembly:
+    StringRef HelperSymName = Saver.save("$captable_load_" + (Sym.getName().empty() ? "$anonymous_symbol" : Sym.getName()));
+    addSyntheticLocal(HelperSymName, STT_NOTYPE, Offset, 0, *IS);
+  }
+
   auto it = Entries.Map.insert(std::make_pair(&Sym, Idx));
   if (!it.second) {
     // If it is references by a small immediate relocation we need to update
