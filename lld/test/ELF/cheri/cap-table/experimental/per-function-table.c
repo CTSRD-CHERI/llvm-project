@@ -162,7 +162,7 @@ __attribute__((noinline)) static void *function3(void) {
 // Check that the mapping between functions + captable subsets is sensible:
 
 // MAPPING: Idx Name          Size      Address          Type
-// MAPPING:   9 .captable_mapping 00000090 0000000000000620 DATA
+// MAPPING:   9 .captable_mapping 000000a8 0000000000000620 DATA
 // MAPPING-EMPTY:
 // MAPPING: Contents of section .captable_mapping:
 // MAPPING-NEXT:  0620 00000000 [[FUNCTION1_ADDR:00010000]]
@@ -189,10 +189,12 @@ __attribute__((noinline)) static void *function3(void) {
 // MAPPING-NEXT:  06a0 00000000 000100d8
 // MAPPING-SAME:       00000060 00000010
 // Start addr  000100b8, size 0x20, captable index 6, size 1
-// FIXME: also need to emit the mapping for static functions!!!
+// MAPPING-NEXT:  06b0 00000000 [[FUNCTION3_ADDR:000100d8]]
+// MAPPING-SAME:       00000000 00010120
+// MAPPING-NEXT:  06c0 00000070 00000020
+// Start addr  000100d8, size 0x48, captable index 7, size 2
 // MAPPING-NEXT: SYMBOL TABLE:
-// FIXME: local symbols are missing!
-// MAPPING: 00000000000100d8 l     F .text		 00000048 function3
+// MAPPING: 00000000[[FUNCTION3_ADDR]] l     F .text		 00000048 function3
 // MAPPING: 00000000[[FUNCTION1_ADDR]] g     F .text		 00000020 function1
 // MAPPING: 00000000[[FUNCTION2_ADDR]] g     F .text		 00000020 function2
 // MAPPING: 00000000[[FUNCTION4_ADDR]] g     F .text		 00000048 function4

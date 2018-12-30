@@ -905,8 +905,12 @@ size_t CheriCapTableMappingSection::getSize() const {
   if (empty())
     return 0;
   size_t Count = 0;
-  for (Symbol *Sym : Symtab->getSymbols()) {
-    if (!Sym->isDefined() || !Sym->isFunc())
+  if (!In.SymTab) {
+    error("Cannot use " + this->Name + " without .symtab section!");
+    return 0;
+  }
+  for (const SymbolTableEntry &STE : In.SymTab->getSymbols()) {
+    if (!STE.Sym->isDefined() || !STE.Sym->isFunc())
       continue;
     Count++;
   }
@@ -917,9 +921,17 @@ void CheriCapTableMappingSection::writeTo(uint8_t *Buf) {
   assert(Config->CapTableScope != CapTableScope::All);
   if (!In.CheriCapTable)
     return;
+  if (!In.SymTab) {
+    error("Cannot write " + this->Name + " without .symtab section!");
+    return;
+  }
+
   // Write the mapping from function vaddr -> captable subset for RTLD
   std::vector<CaptableMappingEntry> Entries;
-  for (Symbol *Sym : Symtab->getSymbols()) {
+  // Note: Symtab->getSymbols() only returns the symbols in .dynsym. We need
+  // to use In.Symtab instead since we also want to add all local functions!
+  for (const SymbolTableEntry &STE : In.SymTab->getSymbols()) {
+    Symbol* Sym = STE.Sym;
     if (!Sym->isDefined() || !Sym->isFunc())
       continue;
     const CheriCapTableSection::CaptableMap *CapTableMap = nullptr;
