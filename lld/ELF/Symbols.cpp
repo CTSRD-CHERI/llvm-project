@@ -326,7 +326,22 @@ std::string lld::toString(const Symbol &B) {
   return B.getName();
 }
 
-template <class ELFT>
+static std::string getLocationNonTemplate(InputSectionBase *IS,
+                                          uint64_t SymOffset) {
+  switch (Config->EKind) {
+  default:
+    llvm_unreachable("Invalid kind");
+  case ELF32LEKind:
+    return IS->getLocation<ELF32LE>(SymOffset);
+  case ELF32BEKind:
+    return IS->getLocation<ELF32BE>(SymOffset);
+  case ELF64LEKind:
+    return IS->getLocation<ELF64LE>(SymOffset);
+  case ELF64BEKind:
+    return IS->getLocation<ELF64BE>(SymOffset);
+  }
+}
+
 std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
   std::string Msg;
 
@@ -374,7 +389,7 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
   if (Name.empty()) {
     if (DR && DR->Section) {
       if (IS) {
-        Name = IS->getLocation<ELFT>(SymOffset);
+        Name = getLocationNonTemplate(IS, SymOffset);
       } else {
         Name = (DR->Section->Name + "+0x" + utohexstr(SymOffset)).str();
       }
@@ -394,8 +409,3 @@ std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
   }
   return Msg;
 }
-
-template std::string lld::verboseToString<ELF32LE>(Symbol *B, uint64_t SymOffset);
-template std::string lld::verboseToString<ELF32BE>(Symbol *B, uint64_t SymOffset);
-template std::string lld::verboseToString<ELF64LE>(Symbol *B, uint64_t SymOffset);
-template std::string lld::verboseToString<ELF64BE>(Symbol *B, uint64_t SymOffset);

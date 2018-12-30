@@ -856,9 +856,9 @@ static void processRelocAux(InputSectionBase &Sec, RelExpr Expr, RelType Type,
   if (Expr == R_CHERI_CAPABILITY) {
     static auto getRelocTargetLocation = [&]() -> std::string {
       auto RelocTarget = SymbolAndOffset::fromSectionWithOffset(&Sec, Offset);
-      return RelocTarget.Sym ? ("\n>>> referenced by " +
-                                RelocTarget.verboseToString<ELFT>())
-                             : getLocation(Sec, Sym, Offset);
+      return RelocTarget.Sym
+                 ? ("\n>>> referenced by " + RelocTarget.verboseToString())
+                 : getLocation(Sec, Sym, Offset);
     };
     if (!CanWrite) {
       readOnlyCapRelocsError(Sym, getRelocTargetLocation());

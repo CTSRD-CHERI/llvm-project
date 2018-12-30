@@ -1016,8 +1016,7 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
         ResolvedSize = Config->CapabilitySize;
         SizeIsUnknown = false;
       } else {
-        warn("Could not find .global_size for " +
-             verboseToString<ELFT>(Target));
+        warn("Could not find .global_size for " + verboseToString(Target));
       }
     }
     if (SizeIsUnknown && (IS->getOutputSection()->Flags & SHF_WRITE) == 0) {
@@ -1038,7 +1037,7 @@ static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufE
     write64<E>(Location, ResolvedSize);
     if (Config->VerboseCapRelocs)
       message("Writing size 0x" + utohexstr(ResolvedSize) + " for " +
-              verboseToString<ELFT>(Target));
+              verboseToString(Target));
   });
 }
 

@@ -42,8 +42,8 @@ struct SymbolAndOffset {
                                                uint64_t Offset,
                                                Symbol *Default = nullptr);
 
-  template <typename ELFT> inline std::string verboseToString() const {
-    return lld::verboseToString<ELFT>(Sym, Offset);
+  inline std::string verboseToString() const {
+    return lld::verboseToString(Sym, Offset);
   }
 };
 
@@ -94,10 +94,10 @@ private:
     if (!(it.first->second == Relocation)) {
       error("Newly inserted relocation at " + Loc.toString<ELFT>() +
             " does not match existing one:\n>   Existing: " +
-            it.first->second.Target.template verboseToString<ELFT>() +
+            it.first->second.Target.template verboseToString() +
             ", cap offset=" + Twine(it.first->second.CapabilityOffset) +
             ", dyn=" + Twine(it.first->second.NeedsDynReloc) +
-            "\n>   New:     " + Relocation.Target.verboseToString<ELFT>() +
+            "\n>   New:     " + Relocation.Target.verboseToString() +
             ", cap offset=" + Twine(Relocation.CapabilityOffset) +
             ", dyn=" + Twine(Relocation.NeedsDynReloc));
     }
@@ -197,8 +197,7 @@ static void foreachGlobalSizesSymbol(InputSection *IS, CallBack &&CB) {
         continue;
       StringRef Name = D->getName();
       if (!Name.startswith(".size.")) {
-        error(".global_sizes symbol name is invalid: " +
-              verboseToString<ELFT>(D));
+        error(".global_sizes symbol name is invalid: " + verboseToString(D));
         continue;
       }
       StringRef RealSymName = Name.drop_front(strlen(".size."));
@@ -292,7 +291,7 @@ addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
     if (!Sym.includeInDynsym()) {
       error("added a R_CHERI_CAPABILITY relocation but symbol not included "
             "in dynamic symbol: " +
-            verboseToString<ELFT>(&Sym));
+            verboseToString(&Sym));
       return;
     }
   } else if (CapRelocMode == CapRelocsMode::Legacy) {

@@ -126,7 +126,7 @@ std::string CheriCapRelocLocation::toString() const {
   SymbolAndOffset Resolved =
       SymbolAndOffset::fromSectionWithOffset(Section, Offset);
   if (Resolved.Sym)
-    return Resolved.verboseToString<ELFT>();
+    return Resolved.verboseToString();
   return Section->getObjMsg(Offset);
 }
 
@@ -197,8 +197,8 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     SymbolAndOffset RealTarget = RelocTarget.findRealSymbol();
     if (Config->VerboseCapRelocs) {
       message("Adding capability relocation at " +
-              RealLocation.verboseToString<ELFT>() + "\nagainst " +
-              RealTarget.verboseToString<ELFT>());
+              RealLocation.verboseToString() + "\nagainst " +
+              RealTarget.verboseToString());
     }
 
     bool TargetNeedsDynReloc = false;
@@ -248,7 +248,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
 
   std::string SourceMsg =
-      SourceSymbol ? verboseToString<ELFT>(SourceSymbol) : Loc.toString<ELFT>();
+      SourceSymbol ? verboseToString(SourceSymbol) : Loc.toString<ELFT>();
   if (Target.Sym->isUndefined() && !Target.Sym->isUndefWeak()) {
     std::string Msg =
         "cap_reloc against undefined symbol: " + toString(*Target.Sym) +
@@ -263,7 +263,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   if (errorHandler().Verbose && CapabilityOffset < 0)
     message("global capability offset " + Twine(CapabilityOffset) +
             " is less than 0:\n>>> Location: " + Loc.toString<ELFT>() +
-            "\n>>> Target: " + Target.verboseToString<ELFT>());
+            "\n>>> Target: " + Target.verboseToString());
 
   bool CanWriteLoc = (Loc.Section->Flags & SHF_WRITE) || !Config->ZText;
   if (!CanWriteLoc) {
@@ -311,8 +311,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   if (TargetNeedsDynReloc) {
 #ifdef DEBUG_CAP_RELOCS
     message("Adding dyn reloc at " + toString(this) + "+0x" +
-            utohexstr(OffsetInOutSec) + " against " +
-            Target.verboseToString<ELFT>());
+            utohexstr(OffsetInOutSec) + " against " + Target.verboseToString());
     message("Symbol preemptible:" + Twine(Target.Sym->IsPreemptible));
 #endif
 
@@ -353,9 +352,8 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
                               const CheriCapReloc &Reloc, bool Strict) {
   uint64_t TargetSize = Reloc.Target.Sym->getSize();
   if (TargetSize > INT_MAX) {
-    error("Insanely large symbol size for " +
-          Reloc.Target.verboseToString<ELFT>() + "for cap_reloc at" +
-          Location.toString<ELFT>());
+    error("Insanely large symbol size for " + Reloc.Target.verboseToString() +
+          "for cap_reloc at" + Location.toString<ELFT>());
     return 0;
   }
   auto TargetSym = Reloc.Target.Sym;
@@ -400,7 +398,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
 
     if (WarnAboutUnknownSize || errorHandler().Verbose) {
       std::string Msg = "could not determine size of cap reloc against " +
-                        Reloc.Target.verboseToString<ELFT>() +
+                        Reloc.Target.verboseToString() +
                         "\n>>> referenced by " + Location.toString<ELFT>();
       if (Strict)
         warn(Msg);
@@ -423,8 +421,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
                  << " -> target size 0x" << utohexstr(TargetSize) << "\n";
 #endif
     } else {
-      warn("Could not find size for symbol " +
-           Reloc.Target.verboseToString<ELFT>() +
+      warn("Could not find size for symbol " + Reloc.Target.verboseToString() +
            " and could not determine section size. Using 0.");
       // TargetSize = std::numeric_limits<uint64_t>::max();
       return 0;
@@ -468,7 +465,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       if (Reloc.Target.Offset != 0)
         error("Dyn Reloc Target offset was nonzero: " +
               Twine(Reloc.Target.Offset) + " - " +
-              Reloc.Target.verboseToString<ELFT>());
+              Reloc.Target.verboseToString());
       TargetVA = Reloc.Target.Offset;
     } else {
       // For non-preemptible symbols we can write the target size:
@@ -697,7 +694,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       if (!TargetSym->isLocal()) {
         error("Found duplicate global captable ref name " + RefName +
               " but referenced symbol was not local\n>>> " +
-              verboseToString<ELFT>(TargetSym));
+              verboseToString(TargetSym));
       } else {
         // TODO: make this a warning
         message("Found duplicate captable name " + RefName +

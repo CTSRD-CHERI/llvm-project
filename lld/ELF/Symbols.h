@@ -27,7 +27,6 @@ class InputFile;
 } // namespace elf
 
 std::string toString(const elf::Symbol &);
-template<class ELFT>
 std::string verboseToString(elf::Symbol *B, uint64_t SymOffset = 0);
 std::string toString(const elf::InputFile *);
 
