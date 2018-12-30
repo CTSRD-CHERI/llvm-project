@@ -2,7 +2,7 @@
 // REQUIRES: clang
 
 // RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 %s -o %t.o
-// RUN: ld.lld -shared -o %t.so %t.o -captable-scope=function
+// RUN: ld.lld -shared -o %t.so %t.o -captable-scope=function -z captabledebug
 // RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t.so | FileCheck %s -check-prefixes CHECK,PER-FUNCTION
 // RUN: llvm-objdump --syms -d %t.so | FileCheck %s -check-prefixes SYMBOLS,DISAS
 // RUN: ld.lld -shared -o %t-file.so %t.o -captable-scope=file
@@ -82,64 +82,71 @@ extern int global_int;
 
 // DISAS-LABEL: Disassembly of section .text:
 void *function1(void) { return extern_void_ptr(); }
-// DISAS-LABEL: function1:
-// DISAS:      clcbi	$c12, 0($c26)
+// DISAS: function1:
+// DISAS: $captable_load_extern_void_ptr:
+// DISAS-NEXT: clcbi	$c12, 0($c26)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
 __attribute__((visibility("protected"))) void *function2(void) {
   return extern_char_ptr();
 }
-// DISAS-LABEL: function2:
-// DISAS:      clcbi	$c12, 0($c26)
+// DISAS: function2:
+// DISAS: $captable_load_extern_char_ptr:
+// DISAS-NEXT: clcbi	$c12, 0($c26)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
 __attribute__((visibility("protected"))) void *function4(void) {
   return (char *)extern_void_ptr() + extern_int();
 }
-// DISAS-LABEL: function4:
+// DISAS: function4:
 // DISAS:      cmove	$c19, $c26
-// DISAS:      clcbi	$c12, 0($c19)
+// DISAS: $captable_load_extern_void_ptr:
+// DISAS-NEXT: clcbi	$c12, 0($c19)
 // DISAS-NEXT: cjalr	$c12, $c17
-// DISAS:      clcbi	$c12, 16($c19)
+// DISAS: $captable_load_extern_int:
+// DISAS-NEXT: clcbi	$c12, 16($c19)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
 int function5(void) { return global_int; }
-// DISAS-LABEL: function5:
+// DISAS: function5:
 // DISAS-NEXT: clcbi	$c1, 0($c26)
 // DISAS-NEXT: cjr	$c17
 // DISAS-NEXT: clw	$2, $zero, 0($c1)
 
 // TODO: this could share a table with function1 but that's not implemented yet
 void *same_globals_as_function1(void) { return (char *)extern_void_ptr(); }
-// DISAS-LABEL: same_globals_as_function1:
-// DISAS:      clcbi	$c12, 0($c26)
+// DISAS: same_globals_as_function1:
+// DISAS: $captable_load_extern_void_ptr:
+// DISAS-NEXT: clcbi	$c12, 0($c26)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
 static void *function3(void);
 void *x(void) { return function3(); }
-// DISAS-LABEL: x:
-// DISAS:      clcbi	$c12, 0($c26)
+// DISAS: x:
+// DISAS: $captable_load_function3:
+// DISAS-NEXT: clcbi $c12, 0($c26)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
 __attribute__((noinline)) static void *function3(void) {
   return extern_char_ptr() + extern_int();
 }
-// DISAS-LABEL: function3:
+// DISAS: function3:
 // DISAS:      cmove	$c19, $c26
-// DISAS:      clcbi	$c12, 0($c19)
+// DISAS: $captable_load_extern_char_ptr:
+// DISAS-NEXT: clcbi	$c12, 0($c19)
 // DISAS-NEXT: cjalr	$c12, $c17
-// DISAS:      clcbi	$c12, 16($c19)
+// DISAS: $captable_load_extern_int:
+// DISAS-NEXT: clcbi	$c12, 16($c19)
 // DISAS-NEXT: cjalr	$c12, $c17
 // DISAS:      cjr	$c17
 
 
 // SYMBOLS-LABEL: SYMBOL TABLE:
-// SYMBOLS: 0000000000030000         .captable		 00000090 _CHERI_CAPABILITY_TABLE_
 // SYMBOLS: 0000000000030000 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function1
 // SYMBOLS: 0000000000030010 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function2
 // SYMBOLS: 0000000000030020 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function4
@@ -149,6 +156,7 @@ __attribute__((noinline)) static void *function3(void) {
 // SYMBOLS: 0000000000030060 l     O .captable		 00000010 function3@CAPTABLE@x.6
 // SYMBOLS: 0000000000030070 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function3
 // SYMBOLS: 0000000000030080 l     O .captable		 00000010 extern_int@CAPTABLE@function3
+// SYMBOLS: 0000000000030000         .captable		 00000090 _CHERI_CAPABILITY_TABLE_
 
 // RUN: llvm-objdump --full-contents ---section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
 // Check that the mapping between functions + captable subsets is sensible:
