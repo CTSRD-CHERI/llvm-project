@@ -1392,6 +1392,11 @@ template std::string InputSectionBase::getLocation<ELF32BE>(uint64_t);
 template std::string InputSectionBase::getLocation<ELF64LE>(uint64_t);
 template std::string InputSectionBase::getLocation<ELF64BE>(uint64_t);
 
+template Defined *InputSectionBase::getEnclosingFunction<ELF32LE>(uint64_t Offset);
+template Defined *InputSectionBase::getEnclosingFunction<ELF32BE>(uint64_t Offset);
+template Defined *InputSectionBase::getEnclosingFunction<ELF64LE>(uint64_t Offset);
+template Defined *InputSectionBase::getEnclosingFunction<ELF64BE>(uint64_t Offset);
+
 template void InputSection::writeTo<ELF32LE>(uint8_t *);
 template void InputSection::writeTo<ELF32BE>(uint8_t *);
 template void InputSection::writeTo<ELF64LE>(uint8_t *);
