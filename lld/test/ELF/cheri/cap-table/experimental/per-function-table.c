@@ -158,9 +158,22 @@ __attribute__((noinline)) static void *function3(void) {
 // SYMBOLS: 0000000000030080 l     O .captable		 00000010 extern_int@CAPTABLE@function3
 // SYMBOLS: 0000000000030000         .captable		 00000090 _CHERI_CAPABILITY_TABLE_
 
-// RUN: llvm-objdump --full-contents ---section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
+// RUN: llvm-readobj --cap-table-mapping %t.so | FileCheck %s -check-prefix READOBJ-MAPPING
 // Check that the mapping between functions + captable subsets is sensible:
 
+// READOBJ-MAPPING: CHERI .captable per-file/per-function mapping information [
+// READOBJ-MAPPING:   Function start: 0x10000 Function end: 0x10020 .captable offset: 0x0 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x10020 Function end: 0x10040 .captable offset: 0x10 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x10040 Function end: 0x10088 .captable offset: 0x20 Length:0x20
+// READOBJ-MAPPING:   Function start: 0x10088 Function end: 0x10094 .captable offset: 0x40 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x10098 Function end: 0x100B8 .captable offset: 0x50 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x100B8 Function end: 0x100D8 .captable offset: 0x60 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x100D8 Function end: 0x10120 .captable offset: 0x70 Length:0x20
+// READOBJ-MAPPING: ]
+
+
+// Also check that the raw bytes are correct in addition to the llvm-readobj output
+// RUN: llvm-objdump --full-contents ---section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
 // MAPPING: Idx Name          Size      Address          Type
 // MAPPING:   9 .captable_mapping 000000a8 0000000000000620 DATA
 // MAPPING-EMPTY:
