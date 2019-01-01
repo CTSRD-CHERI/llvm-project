@@ -4,7 +4,7 @@
 ; ModuleID = '/Users/alex/cheri/llvm/tools/clang/test/CodeGen/CHERI/cap-table-call-extern.c'
 
 ; Function Attrs: nounwind
-define preserve_allcc i32 @a() {
+define i32 @a() {
 ; Make sure we don't use $gp and save $cgp prior to every external call
 ; CHECK-LABEL: a:
 ; CHECK:       # %bb.0: # %entry
