@@ -354,12 +354,21 @@ void RegDefsUses::init(const MachineInstr &MI) {
   // If MI is a call, add RA to Defs to prevent users of RA from going into
   // delay slot.
   if (MI.isCall()) {
-    // XXXAR: currently have to mark $cgp as a def for cjalr since I don't see
-    // a better way
     assert(MI.getDesc().getNumImplicitDefs() <= 2 &&
            "Expected one implicit def for call instruction");
-    for (unsigned i = 0; i < MI.getDesc().getNumImplicitDefs(); i++)
-      Defs.set(MI.getDesc().getImplicitDefs()[i]);
+    for (unsigned i = 0; i < MI.getDesc().getNumImplicitDefs(); i++) {
+      MCPhysReg Reg = MI.getDesc().getImplicitDefs()[i];
+      // XXXAR: currently $cgp is marked as a def for cjalr since I don't see
+      // a better way to ensure that $cgp is saved and restored prior to the
+      // call. However, $cgp will only be clobbered after the cjalr instruction
+      // has been executed (and will still have the old value in the delay slot)
+      // so we should not count it as a def for the delay slot filler.
+      // Otherwise we can't move the restore of $cgp prior to the next call into
+      // delay slots.
+      if (Reg == Mips::C26)
+        continue;
+      Defs.set(Reg);
+    }
   }
 
   // Add all implicit register operands of branch instructions except
@@ -678,6 +687,8 @@ bool MipsDelaySlotFiller::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
     }
 
     // Bundle the NOP to the instruction with the delay slot.
+    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": could not fill delay slot for";
+               I->dump());
     BuildMI(MBB, std::next(I), I->getDebugLoc(), TII->get(Mips::NOP));
     MIBundleBuilder(MBB, I, std::next(I, 2));
     ++FilledSlots;
@@ -746,8 +757,13 @@ bool MipsDelaySlotFiller::searchRange(MachineBasicBlock &MBB, IterTy Begin,
        continue;
 
     Filler = CurrI;
+    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": found instruction for delay slot:";
+               I->dump());
+
     return true;
   }
+  LLVM_DEBUG(dbgs() << DEBUG_TYPE
+                    << ": could not find instruction for delay slot\n";);
 
   return false;
 }
