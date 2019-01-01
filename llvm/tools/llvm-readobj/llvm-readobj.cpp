@@ -239,11 +239,14 @@ namespace opts {
 
   cl::opt<bool> CheriCapTable("cap-table",
                               cl::desc("Display the CHERI .captable section"));
-
+  cl::opt<bool> CheriCapTableMapping(
+      "cap-table-mapping",
+      cl::desc("Display the CHERI .captable_mapping section"));
   // -coff-imports
   cl::opt<bool>
   COFFImports("coff-imports", cl::desc("Display the PE/COFF import table"));
 
+  // -coff-exports
   // -coff-exports
   cl::opt<bool>
   COFFExports("coff-exports", cl::desc("Display the PE/COFF export table"));
@@ -511,6 +514,8 @@ static void dumpObject(const ObjectFile *Obj, ScopedPrinter &Writer) {
         Dumper->printCheriCapRelocs();
       if (opts::CheriCapTable)
         Dumper->printCheriCapTable();
+      if (opts::CheriCapTableMapping)
+        Dumper->printCheriCapTableMapping();
     }
     if (opts::SectionGroups)
       Dumper->printGroupSections();

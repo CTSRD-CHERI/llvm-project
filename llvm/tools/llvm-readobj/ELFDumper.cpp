@@ -167,6 +167,7 @@ public:
   void printMipsOptions() override;
   void printCheriCapRelocs() override;
   void printCheriCapTable() override;
+  void printCheriCapTableMapping() override;
 
   void printStackMap() const override;
 
@@ -1756,6 +1757,11 @@ static const EnumEntry<unsigned> ElfDynamicDTMipsFlags[] = {
   LLVM_READOBJ_DT_FLAG_ENT(RHF, RLD_ORDER_SAFE)
 };
 
+static const EnumEntry<unsigned> ElfDynamicDTMipsCheriAbiFlags[] = {
+    LLVM_READOBJ_DT_FLAG_ENT(DF_MIPS_CHERI, CAPTABLE_PER_FILE),
+    LLVM_READOBJ_DT_FLAG_ENT(DF_MIPS_CHERI, CAPTABLE_PER_FUNC),
+};
+
 #undef LLVM_READOBJ_DT_FLAG_ENT
 
 template <typename T, typename TFlag>
@@ -1884,6 +1890,10 @@ void ELFDumper<ELFT>::printValue(uint64_t Type, uint64_t Value) {
       case DF_MIPS_CHERI_ABI_FNDESC: OS << "ABI_FNDESC"; break;
     }
     Value &= ~DF_MIPS_CHERI_ABI_MASK;
+    if (Value) {
+      OS << ' ';
+      printFlags(Value, makeArrayRef(ElfDynamicDTMipsCheriAbiFlags), OS);
+    }
     break;
   case DT_FLAGS:
     printFlags(Value, makeArrayRef(ElfDynamicDTFlags), OS);
@@ -2660,6 +2670,58 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
       // TODO: getSymbol(dynamic_symbols()); StrTable = DynamicStringTable;
     }
     OS << "\n";
+  }
+}
+
+template <class ELFT> void ELFDumper<ELFT>::printCheriCapTableMapping() {
+  const Elf_Shdr *Shdr = findSectionByName(*Obj, ".captable_mapping");
+  if (!Shdr) {
+    W.startLine() << "There is no .captable_mapping section in the file.\n";
+    return;
+  }
+  ArrayRef<uint8_t> Data = unwrapOrError(Obj->getSectionContents(Shdr));
+  const size_t EntrySize = 24;
+
+  typename ELFT::SymRange Syms;
+  StringRef StrTable;
+  bool UsingDynsym = false;
+  if (DotSymtabSec) {
+    StrTable = unwrapOrError(Obj->getStringTableForSymtab(*DotSymtabSec));
+    Syms = unwrapOrError(Obj->symbols(DotSymtabSec));
+  } else {
+    StrTable = DynamicStringTable;
+    Syms = dynamic_symbols();
+    UsingDynsym = true;
+  }
+
+  ListScope L(W, "CHERI .captable per-file/per-function mapping information");
+  for (int CurrentOffset = 0, e = Data.size(); CurrentOffset < e;
+       CurrentOffset += EntrySize) {
+    const uint8_t *CurrentEntry = Data.data() + CurrentOffset;
+    uint64_t FunctionStart =
+        support::endian::read64<ELFT::TargetEndianness>(CurrentEntry);
+    uint64_t FunctionEnd =
+        support::endian::read64<ELFT::TargetEndianness>(CurrentEntry + 8);
+    uint32_t TableOffset =
+        support::endian::read32<ELFT::TargetEndianness>(CurrentEntry + 16);
+    uint32_t SubTableLength =
+        support::endian::read32<ELFT::TargetEndianness>(CurrentEntry + 20);
+    auto& OS = W.startLine();
+    OS << "Function start: " << W.hex(FunctionStart);
+    // Try to find a matching symbol
+    std::string SymName = "<unknown function>";
+    for (const auto &Sym : Syms) {
+      if (Sym.getType() != ELF::STT_FUNC)
+        continue;
+      if (Sym.st_value >= FunctionStart && Sym.st_value < FunctionEnd) {
+        SymName = getFullSymbolName(&Sym, StrTable, UsingDynsym);
+        break;
+      }
+    }
+    OS << " (" << SymName << ")";
+    OS << " Function end: " << W.hex(FunctionEnd)
+       << " .captable offset: " << W.hex(TableOffset)
+       << " Length:" << W.hex(SubTableLength) << "\n";
   }
 }
 

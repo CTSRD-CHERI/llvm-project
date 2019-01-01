@@ -64,12 +64,9 @@ public:
   virtual void printMipsABIFlags() { }
   virtual void printMipsReginfo() { }
   virtual void printMipsOptions() { }
-  virtual void printCheriCapRelocs() {
-    errs() << __func__ << " is not implemented!\n";
-  }
-  virtual void printCheriCapTable() {
-    errs() << __func__ << " is not implemented!\n";
-  }
+  virtual void printCheriCapRelocs() {}
+  virtual void printCheriCapTable() {}
+  virtual void printCheriCapTableMapping() {}
 
   // Only implemented for PE/COFF.
   virtual void printCOFFImports() { }
