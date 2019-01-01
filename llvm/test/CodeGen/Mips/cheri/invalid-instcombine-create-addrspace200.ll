@@ -5,9 +5,9 @@
 ; RUN: %cheri256_opt -instcombine -o - -S %s -data-layout="Eme-pf200:256:256:256:64-i8:8:32-i16:16:32-i64:64-n32:64-S128"
 ; RUNTODO: | FileCheck %s -check-prefix CHERI256
 ; RUN: %cheri128_opt -data-layout="Eme-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128" -o - \
-; RUN: -O2 -S %s | %cheri_llc - -o - | FileCheck %s -check-prefixes ASM,N64-CHERI128-BAD-CODE
+; RUN:     -O2 -S %s | %cheri128_llc - -o - | FileCheck %s -check-prefixes ASM,N64-CHERI128-BAD-CODE
 ; RUN: %cheri256_opt -data-layout="Eme-pf200:256:256:256:64-i8:8:32-i16:16:32-i64:64-n32:64-S128" -o - \
-; RUN: -O2 -S %s | %cheri_llc - -o - | FileCheck %s -check-prefixes ASM,N64-ASM
+; RUN:     -O2 -S %s | %cheri256_llc - -o - | FileCheck %s -check-prefixes ASM,N64-ASM
 
 
 ; source_filename = "/Users/alex/cheri/llvm/tools/clang/test/CodeGen/cheri/libcxx-filesystem-crash.cpp-reduce.ll"
