@@ -3524,6 +3524,12 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
         std::make_pair(GPReg, getGlobalReg(CLI.DAG, Ty, /*IsForTls=*/false)));
   }
 
+  if (ABI.UsesCapabilityTable()) {
+    // TODO: don't do this for pcrelative
+    RegsToPass.push_back(std::make_pair(ABI.GetGlobalCapability(),
+                                        getCapGlobalReg(CLI.DAG, CapType)));
+  }
+
   // Build a sequence of copy-to-reg nodes chained together with token
   // chain and flag operands which copy the outgoing args into registers.
   // The InFlag in necessary since all emitted instructions must be
