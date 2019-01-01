@@ -1,9 +1,9 @@
 // REQUIRES: clang
 
 // RUN: mkdir -p %t
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 -DFILE1 %s -o %t/file1.o
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 -DFILE2 %s -o %t/foo.o
-// RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 -DFILE3 %s -o %t/bar.o
+// RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 -DFILE1 %s -o %t/file1.o
+// RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 -DFILE2 %s -o %t/foo.o
+// RUN: %cheri128_purecap_cc1 -mllvm -cheri-cap-table-abi=plt -emit-obj -O2 -DFILE3 %s -o %t/bar.o
 
 // RUN: ld.lld -shared -o %t/per-file.so %t/file1.o %t/foo.o %t/bar.o -captable-scope=file
 // RUN: llvm-readobj --cap-relocs --cap-table -dynamic-table -r %t/per-file.so | FileCheck %s -check-prefixes PER-FILE,PER-FILE-OBJECTS
@@ -37,7 +37,7 @@
 // PER-FILE:       0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FILE
 // PER-FILE:      ]
 // PER-FILE-NEXT: CHERI __cap_relocs [
-// PER-FILE-NEXT:    0x030040 (function3@CAPTABLE@file1.o.4) Base: 0x100d8 (function3+0) Length: 72 Perms: Function
+// PER-FILE-NEXT:    0x030040 (function3@CAPTABLE@file1.o.4) Base: 0x100{{.+}} (function3+0) Length: {{.+}} Perms: Function
 // PER-FILE-NEXT: ]
 // PER-FILE-NEXT: CHERI .captable [
 // PER-FILE-NEXT:   0x0      extern_void_ptr@CAPTABLE@file1.o   R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE against extern_void_ptr

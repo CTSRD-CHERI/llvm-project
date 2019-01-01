@@ -125,9 +125,9 @@ bar:
 # CHECK-NEXT:  0000000000030028         .data           00000008 bar
 # CHECK-NEXT:  000000000002002c l     F .text           00000014 fn_2
 # CHECK-NEXT:  0000000000030020         .data           00000008 foo
-# CHECK-NEXT:  0000000000040000         .captable              00000000 _CHERI_CAPABILITY_TABLE_
+# CHECK-NEXT:  0000000000040000 l     O .captable       00000010 bar@CAPTABLE
+# CHECK-NEXT:  0000000000040000         .captable       00000000 _CHERI_CAPABILITY_TABLE_
 # CHECK-NEXT:  0000000000038020         .got            00000000 .hidden _gp
-# CHECK-NEXT:  0000000000040000 l     O .captable              00000010 bar@CAPTABLE
 # CHECK-NEXT:  0000000000020000 g     F .text           0000002c __start
 
 
