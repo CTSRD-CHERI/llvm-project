@@ -3538,8 +3538,10 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
   //  problem for the pc-relative ABI since that derives $cgp from $pcc on
   //  function entry.
   //
-  // TODO: don't do this for pcrelative
-  if (ABI.UsesCapabilityTable()) {
+  // Note: we do not need to do this for the pc-relative ABI since each function
+  // derives the value of $cgp from the $pcc on entry ($c12)
+  if (ABI.UsesCapabilityTable() && MCTargetOptions::cheriCapabilityTableABI() !=
+                                       CheriCapabilityTableABI::Pcrel) {
     // Note: we don't need to restore the entry $cgp when calling a function
     // pointer since all function pointers must resolve to a trampoline that
     // sets $cgp or point to a function using the pc-relative ABI!
