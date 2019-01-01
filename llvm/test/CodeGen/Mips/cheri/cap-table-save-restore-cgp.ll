@@ -174,4 +174,131 @@ entry:
 }
 
 
+; Some more test cases (not a call but a global variable, etc)
+@global = local_unnamed_addr addrspace(200) global i8 123, align 8
+
+declare void @external_call1() addrspace(200)
+declare void @external_call2() addrspace(200)
+declare i32 @external_i32() addrspace(200)
+
+define i8 addrspace(200)* @access_global_after_external_call() addrspace(200) nounwind {
+; CHECK-LABEL: access_global_after_external_call:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
+; CHECK-NEXT:    csc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(access_global_after_external_call)))
+; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(access_global_after_external_call)))
+; PCREL-NEXT:    cincoffset $c26, $c12, $1
+; CHECK-NEXT:    cmove $c18, $c26
+; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c18)
+; CHECK-NEXT:    cjalr $c12, $c17
+; PLT-NEXT:      cmove $c26, $c18
+; PCREL-NEXT:    nop
+; CHECK-NEXT:    clcbi $c3, %captab20(global)($c18)
+; CHECK-NEXT:    clc $c17, $zero, 0($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    cjr $c17
+; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+; We need to save $cgp before the call so it is moved to $c18 (callee-save)
+entry:
+  call addrspace(200) void @external_call1()
+  ret i8 addrspace(200)* @global
+}
+
+define void @call_two_functions() addrspace(200) nounwind {
+; CHECK-LABEL: call_two_functions:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
+; CHECK-NEXT:    csc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(call_two_functions)))
+; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_two_functions)))
+; PCREL-NEXT:    cincoffset $c26, $c12, $1
+; CHECK-NEXT:    cmove $c18, $c26
+; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c18)
+; CHECK-NEXT:    cjalr $c12, $c17
+; PLT-NEXT:      cmove $c26, $c18
+; PCREL-NEXT:    nop
+; CHECK-NEXT:    clcbi $c12, %capcall20(external_call2)($c18)
+; CHECK-NEXT:    cjalr $c12, $c17
+; PLT-NEXT:      cmove $c26, $c18
+; PCREL-NEXT:    nop
+; CHECK-NEXT:    clc $c17, $zero, 0($c11)
+; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    cjr $c17
+; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+entry:
+  call addrspace(200) void @external_call1()
+  call addrspace(200) void @external_call2()
+  ret void
+}
+
+define i32 @not_needed_after_call(i32 %arg1, i32 %arg2) addrspace(200) nounwind {
+; CHECK-LABEL: not_needed_after_call:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:32|64]]
+; CHECK-NEXT:    csd $17, $zero, {{24|56}}($c11) # 8-byte Folded Spill
+; CHECK-NEXT:    csd $16, $zero, {{16|48}}($c11) # 8-byte Folded Spill
+; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(not_needed_after_call)))
+; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(not_needed_after_call)))
+; PCREL-NEXT:    cincoffset $c26, $c12, $1
+; CHECK-NEXT:    sll $16, $5, 0
+; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c26)
+; CHECK-NEXT:    cjalr $c12, $c17
+; CHECK-NEXT:    sll $17, $4, 0
+; CHECK-NEXT:    addu $2, $17, $16
+; CHECK-NEXT:    clc $c17, $zero, 0($c11)
+; CHECK-NEXT:    cld $16, $zero, {{16|48}}($c11) # 8-byte Folded Reload
+; CHECK-NEXT:    cld $17, $zero, {{24|56}}($c11) # 8-byte Folded Reload
+; CHECK-NEXT:    cjr $c17
+; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+entry:
+  call addrspace(200) void @external_call1()
+  %ret = add i32 %arg1, %arg2
+  ret i32 %ret
+}
+
+define void @tailcall_external(i32 %arg1, i32 %arg2) addrspace(200) nounwind {
+; CHECK-LABEL: tailcall_external:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
+; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(tailcall_external)))
+; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(tailcall_external)))
+; PCREL-NEXT:    cincoffset $c26, $c12, $1
+; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c26)
+; CHECK-NEXT:    cjalr $c12, $c17
+; CHECK-NEXT:    nop
+; CHECK-NEXT:    clc $c17, $zero, 0($c11)
+; CHECK-NEXT:    cjr $c17
+; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+entry:
+  tail call addrspace(200) void @external_call1()
+  ret void
+}
+
+
+; TODO: why can't this be optimized to a jump?
+define internal i32 @tailcall_local(i32 %arg1, i32 %arg2) addrspace(200) nounwind {
+; CHECK-LABEL: tailcall_local:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:16|32]]
+; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(tailcall_local)))
+; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(tailcall_local)))
+; PCREL-NEXT:    cincoffset $c26, $c12, $1
+; CHECK-NEXT:    clcbi $c12, %capcall20(local_func)($c26)
+; CHECK-NEXT:    cjalr $c12, $c17
+; CHECK-NEXT:    nop
+; CHECK-NEXT:    clc $c17, $zero, 0($c11)
+; CHECK-NEXT:    cjr $c17
+; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+entry:
+  %ret = tail call addrspace(200) i32 @local_func()
+  ret i32 %ret
+}
+
+
 
