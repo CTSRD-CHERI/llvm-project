@@ -3524,10 +3524,29 @@ getOpndList(SmallVectorImpl<SDValue> &Ops,
         std::make_pair(GPReg, getGlobalReg(CLI.DAG, Ty, /*IsForTls=*/false)));
   }
 
+  // Calling an external function could change the value of $cgp. We need to
+  // restore it to the $cgp on entry before calling the next function.
+  // This could cause errors in the following sequence of calls:
+  //
+  // func_in_dso1() calls func_in_dso2() -> on return $cgp is set to the $cgp of
+  // DSO2. If func_in_dso1() then calls another function in DSO1 (i.e. any call
+  // without a trampoline that changes $cgp) that function will still have the
+  // $cgp of DSO2 and will crash (or load the wrong globals).
+  //
+  // TODO: It might make sense to always clear $cgp on return for lower
+  //  optimization levels to catch this problem more easily. This is not a
+  //  problem for the pc-relative ABI since that derives $cgp from $pcc on
+  //  function entry.
+  //
+  // TODO: don't do this for pcrelative
   if (ABI.UsesCapabilityTable()) {
-    // TODO: don't do this for pcrelative
-    RegsToPass.push_back(std::make_pair(ABI.GetGlobalCapability(),
-                                        getCapGlobalReg(CLI.DAG, CapType)));
+    // Note: we don't need to restore the entry $cgp when calling a function
+    // pointer since all function pointers must resolve to a trampoline that
+    // sets $cgp or point to a function using the pc-relative ABI!
+    if (IsCallReloc) {
+      RegsToPass.push_back(std::make_pair(ABI.GetGlobalCapability(),
+                                          getCapGlobalReg(CLI.DAG, CapType)));
+    }
   }
 
   // Build a sequence of copy-to-reg nodes chained together with token
