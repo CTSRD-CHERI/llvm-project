@@ -230,7 +230,7 @@ def do_cfi_offset_sub(match):
   return ".cfi_offset " + match.group('reg') + ", -" + offset_str
 
 
-def do_stackframe_size_sub(match):
+def do_stackframe_size_sub_impl(match, with_cfa):
   size = match.group("size")
   cfa_offset = match.group("size")
   if size != cfa_offset:
@@ -240,8 +240,18 @@ def do_stackframe_size_sub(match):
   last_frame_size = int(size)
   # assume double the size for CHERI256 stackframe:
   size_str = size + "|" + str(int(size) * 2)
-  return "cincoffset $c11, $c11, -[[STACKFRAME_SIZE:" + size_str + "]]\n  .cfi_def_cfa_offset [[STACKFRAME_SIZE]]"
+  result = "cincoffset $c11, $c11, -[[STACKFRAME_SIZE:" + size_str + "]]\n"
+  if with_cfa:
+    result += "  .cfi_def_cfa_offset [[STACKFRAME_SIZE]]"
+  return result
 
+
+def do_stackframe_size_sub(match):
+    return do_stackframe_size_sub_impl(match, with_cfa=True)
+
+
+def do_stackframe_size_fallback_sub(match):
+    return do_stackframe_size_sub_impl(match, with_cfa=False)
 
 def scrub_asm_mips(asm, args):
   # Scrub runs of whitespace out of the assembly, but leave the leading
@@ -251,12 +261,17 @@ def scrub_asm_mips(asm, args):
   asm = string.expandtabs(asm, 2)
   # Strip trailing whitespace.
   asm = common.SCRUB_TRAILING_WHITESPACE_RE.sub(r'', asm)
+  last_frame_size = None
 
   # Expand .cfi offsets and clc offset to @EXPR for CHERI128/256
   stack_store_cap_re = re.compile(r'(?P<insn>csc|clc) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# (?P<cap_size>16|32)\-byte Folded (Spill|Reload)')
   asm = stack_store_cap_re.sub(do_clc_csc_sub, asm)
   stackframe_size_regex = re.compile(r'cincoffset \$c11, \$c11, -(?P<size>\d+)\n *.cfi_def_cfa_offset (?P<cfa>\d+)')
   asm = stackframe_size_regex.sub(do_stackframe_size_sub, asm, count=1)
+  if not last_frame_size:
+    stackframe_size_fallback_regex = re.compile(r'cincoffset \$c11, \$c11, -(?P<size>\d+)\n')
+    asm = stackframe_size_fallback_regex.sub(do_stackframe_size_fallback_sub, asm, count=1)
+
   stack_store_dword_re = re.compile(r'(?P<insn>csd|cld) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# 8\-byte Folded (Spill|Reload)')
   asm = stack_store_dword_re.sub(do_save_load_dword_sub, asm)
   cfi_offset_regex = re.compile(r'\.cfi_offset (?P<reg>[$\w]+), -(?P<offset>\d+)')
