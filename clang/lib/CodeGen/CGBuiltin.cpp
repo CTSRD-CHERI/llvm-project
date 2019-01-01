@@ -1332,9 +1332,10 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
   ASTContext &Ctx = RD->getASTContext();
   const ASTRecordLayout &RL = Ctx.getASTRecordLayout(RD);
   std::string Pad = std::string(Lvl * 4, ' ');
+  unsigned GlobalAS = CGF.CGM.getDataLayout().getGlobalsAddressSpace();
 
   Value *GString =
-      CGF.Builder.CreateGlobalStringPtr(RType.getAsString() + " {\n");
+      CGF.Builder.CreateGlobalStringPtr(RType.getAsString() + " {\n", "", GlobalAS);
   Value *Res = CGF.Builder.CreateCall(Func, {GString});
 
   static llvm::DenseMap<QualType, const char *> Types;
@@ -1377,7 +1378,7 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
             .concat(llvm::Twine(' '))
             .concat(FD->getNameAsString())
             .concat(" : ")
-            .str());
+            .str(), "", GlobalAS);
     Value *TmpRes = CGF.Builder.CreateCall(Func, {GString});
     Res = CGF.Builder.CreateAdd(Res, TmpRes);
 
@@ -1402,12 +1403,12 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
 
     // FIXME Need to handle bitfield here
     GString = CGF.Builder.CreateGlobalStringPtr(
-        Format.concat(llvm::Twine('\n')).str());
+        Format.concat(llvm::Twine('\n')).str(), "", GlobalAS);
     TmpRes = CGF.Builder.CreateCall(Func, {GString, FieldPtr});
     Res = CGF.Builder.CreateAdd(Res, TmpRes);
   }
 
-  GString = CGF.Builder.CreateGlobalStringPtr(Pad + "}\n");
+  GString = CGF.Builder.CreateGlobalStringPtr(Pad + "}\n", "", GlobalAS );
   Value *TmpRes = CGF.Builder.CreateCall(Func, {GString});
   Res = CGF.Builder.CreateAdd(Res, TmpRes);
   return Res;
