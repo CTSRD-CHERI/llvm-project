@@ -37,10 +37,14 @@
 
 // CHECK-NEXT:   }
 // CHECK-NEXT: ]
-// CHECK-LABEL: DynamicSection [ (25 entries)
+// CHECK-LABEL: DynamicSection [
 // CHECK-NEXT:    Tag                Type                 Name/Value
 // PER-FUNCTION:  0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FUNC
+// PER-FUNCTION:  0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING0x640
+// PER-FUNCTION:  0x000000007000C006 MIPS_CHERI_CAPTABLE_MAPPINGSZ0xA8
 // PER-FILE:      0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FILE
+// PER-FILE:      0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING0x600
+// PER-FILE:      0x000000007000C006 MIPS_CHERI_CAPTABLE_MAPPINGSZ0xA8
 // GLOBAL:        0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT{{$}}
 // CHECK:      ]
 // CHECK-NEXT: CHERI __cap_relocs [
@@ -162,49 +166,49 @@ __attribute__((noinline)) static void *function3(void) {
 // Check that the mapping between functions + captable subsets is sensible:
 
 // READOBJ-MAPPING: CHERI .captable per-file/per-function mapping information [
-// READOBJ-MAPPING:   Function start: 0x10000 Function end: 0x10020 .captable offset: 0x0 Length:0x10
-// READOBJ-MAPPING:   Function start: 0x10020 Function end: 0x10040 .captable offset: 0x10 Length:0x10
-// READOBJ-MAPPING:   Function start: 0x10040 Function end: 0x10088 .captable offset: 0x20 Length:0x20
-// READOBJ-MAPPING:   Function start: 0x10088 Function end: 0x10094 .captable offset: 0x40 Length:0x10
-// READOBJ-MAPPING:   Function start: 0x10098 Function end: 0x100B8 .captable offset: 0x50 Length:0x10
-// READOBJ-MAPPING:   Function start: 0x100B8 Function end: 0x100D8 .captable offset: 0x60 Length:0x10
-// READOBJ-MAPPING:   Function start: 0x100D8 Function end: 0x10120 .captable offset: 0x70 Length:0x20
+// READOBJ-MAPPING:   Function start: 0x10000 (function1) Function end: 0x10020 .captable offset: 0x0 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x10020 (function2) Function end: 0x10040 .captable offset: 0x10 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x10040 (function4) Function end: 0x10088 .captable offset: 0x20 Length:0x20
+// READOBJ-MAPPING:   Function start: 0x10088 (function5) Function end: 0x10094 .captable offset: 0x40 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x10098 (same_globals_as_function1) Function end: 0x100B8 .captable offset: 0x50 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x100B8 (x) Function end: 0x100D8 .captable offset: 0x60 Length:0x10
+// READOBJ-MAPPING:   Function start: 0x100D8 (function3) Function end: 0x10120 .captable offset: 0x70 Length:0x20
 // READOBJ-MAPPING: ]
 
 
 // Also check that the raw bytes are correct in addition to the llvm-readobj output
 // RUN: llvm-objdump --full-contents ---section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
 // MAPPING: Idx Name          Size      Address          Type
-// MAPPING:   9 .captable_mapping 000000a8 0000000000000620 DATA
+// MAPPING:   9 .captable_mapping 000000a8 0000000000000640 DATA
 // MAPPING-EMPTY:
 // MAPPING: Contents of section .captable_mapping:
-// MAPPING-NEXT:  0620 00000000 [[FUNCTION1_ADDR:00010000]]
+// MAPPING-NEXT:  0640 00000000 [[FUNCTION1_ADDR:00010000]]
 // MAPPING-SAME:       00000000 00010020
-// MAPPING-NEXT:  0630 00000000 00000010
+// MAPPING-NEXT:  0650 00000000 00000010
 // Start addr  00010000, size 0x20, captable index 0, size 1
 // MAPPING-SAME:       00000000 [[FUNCTION2_ADDR:00010020]]
-// MAPPING-NEXT:  0640 00000000 00010040
+// MAPPING-NEXT:  0660 00000000 00010040
 // MAPPING-SAME:       00000010 00000010
 // Start addr  00010020, size 0x20, captable index 1, size 1
-// MAPPING-NEXT:  0650 00000000 [[FUNCTION4_ADDR:00010040]]
+// MAPPING-NEXT:  0670 00000000 [[FUNCTION4_ADDR:00010040]]
 // MAPPING-SAME:       00000000 00010088
-// MAPPING-NEXT:  0660 00000020 00000020
+// MAPPING-NEXT:  0680 00000020 00000020
 // Start addr  00010040, size 0x48, captable index 2, size 2
 // MAPPING-SAME:       00000000 [[FUNCTION5_ADDR:00010088]]
-// MAPPING-NEXT:  0670 00000000 00010094
+// MAPPING-NEXT:  0690 00000000 00010094
 // MAPPING-SAME:       00000040 00000010
 // Start addr  00010088, size 0xc, captable index 4, size 1
-// MAPPING-NEXT:  0680 00000000 [[SAME_GLOBALS_ADDR:00010098]]
+// MAPPING-NEXT:  06a0 00000000 [[SAME_GLOBALS_ADDR:00010098]]
 // MAPPING-SAME:       00000000 000100b8
-// MAPPING-NEXT:  0690 00000050 00000010
+// MAPPING-NEXT:  06b0 00000050 00000010
 // Start addr  00010098, size 0x20, captable index 5, size 1
 // MAPPING-SAME:       00000000 [[X_ADDR:000100b8]]
-// MAPPING-NEXT:  06a0 00000000 000100d8
+// MAPPING-NEXT:  06c0 00000000 000100d8
 // MAPPING-SAME:       00000060 00000010
 // Start addr  000100b8, size 0x20, captable index 6, size 1
-// MAPPING-NEXT:  06b0 00000000 [[FUNCTION3_ADDR:000100d8]]
+// MAPPING-NEXT:  06d0 00000000 [[FUNCTION3_ADDR:000100d8]]
 // MAPPING-SAME:       00000000 00010120
-// MAPPING-NEXT:  06c0 00000070 00000020
+// MAPPING-NEXT:  06e0 00000070 00000020
 // Start addr  000100d8, size 0x48, captable index 7, size 2
 // MAPPING-NEXT: SYMBOL TABLE:
 // MAPPING: 00000000[[FUNCTION3_ADDR]] l     F .text		 00000048 function3
