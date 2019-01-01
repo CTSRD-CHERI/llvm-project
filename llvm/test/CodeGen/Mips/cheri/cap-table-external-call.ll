@@ -18,13 +18,12 @@ define i32 @a() {
 ; CHECK-NEXT:    .cfi_offset 89, -[[@EXPR 3 * $CAP_SIZE]]
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_fn1)($c18)
-; CHECK-NEXT:    cmove $c26, $c18
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
-; CHECK-NEXT:    clcbi $c12, %capcall20(external_fn2)($c18)
 ; CHECK-NEXT:    cmove $c26, $c18
-; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    move $16, $2
+; CHECK-NEXT:    clcbi $c12, %capcall20(external_fn2)($c18)
+; CHECK-NEXT:    cjalr $c12, $c17
+; CHECK-NEXT:    cmove $c26, $c18
 ; CHECK-NEXT:    addu $2, $16, $2
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)

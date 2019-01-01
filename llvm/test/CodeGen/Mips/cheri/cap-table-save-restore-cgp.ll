@@ -43,16 +43,15 @@ define i32 @test1() addrspace(200) nounwind {
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c18)
 ; FIXME: this move should go into the delay slot!
 ; $cgp only needs to be restored when not using the pc-relative ABI
-; PLT-NEXT:      cmove $c26, $c18
-; PCREL-NOT:     $c26
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
+; PLT-NEXT:      cmove $c26, $c18
+; PCREL-NEXT:    nop
+; PLT-NEXT:      move $16, $2
 ; CHECK-NEXT:    clcbi $c12, %capcall20(local_func)($c18)
 ; $cgp only needs to be restored when not using the pc-relative ABI
-; PLT-NEXT:      cmove $c26, $c18
-; PCREL-NOT:     $c26
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    move $16, $2
+; PLT-NEXT:      cmove $c26, $c18
+; PCREL-NEXT:    move $16, $2
 ; CHECK-NEXT:    addu $2, $16, $2
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
@@ -80,16 +79,15 @@ define i32 @test2() addrspace(200) nounwind {
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c18)
 ; $cgp only needs to be restored when not using the pc-relative ABI
-; PLT-NEXT:      cmove $c26, $c18
-; PCREL-NOT:     $c26
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
+; PLT-NEXT:      cmove $c26, $c18
+; PCREL-NEXT:    nop
+; PLT-NEXT:      move $16, $2
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_func2)($c18)
 ; $cgp only needs to be restored when not using the pc-relative ABI
-; PLT-NEXT:      cmove $c26, $c18
-; PCREL-NOT:     $c26
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    move $16, $2
+; PLT-NEXT:      cmove $c26, $c18
+; PCREL-NEXT:    move $16, $2
 ; CHECK-NEXT:    addu $2, $16, $2
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
@@ -118,16 +116,15 @@ define i32 @test3() addrspace(200) nounwind {
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(local_func)($c18)
 ; $cgp only needs to be restored when not using the pc-relative ABI
-; PLT-NEXT:      cmove $c26, $c18
-; PCREL-NOT:     $c26
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
+; PLT-NEXT:      cmove $c26, $c18
+; PCREL-NEXT:    nop
+; PLT-NEXT:      move $16, $2
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c18)
 ; $cgp only needs to be restored when not using the pc-relative ABI
-; PLT-NEXT:      cmove $c26, $c18
-; PCREL-NOT:     $c26
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    move $16, $2
+; PLT-NEXT:      cmove $c26, $c18
+; PCREL-NEXT:    move $16, $2
 ; CHECK-NEXT:    addu $2, $16, $2
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
@@ -155,10 +152,9 @@ define i32 @test4() addrspace(200) nounwind {
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c18)
 ; $cgp only needs to be restored when not using the pc-relative ABI
-; PLT-NEXT:      cmove $c26, $c18
-; PCREL-NOT:     $c26
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
+; PLT-NEXT:      cmove $c26, $c18
+; PCREL-NEXT:    nop
 ; CHECK-NEXT:    clcbi $c1, %captab20(fn_ptr)($c18)
 ; CHECK-NEXT:    clc $c12, $zero, 0($c1)
 ; CHECK-NEXT:    cjalr $c12, $c17
