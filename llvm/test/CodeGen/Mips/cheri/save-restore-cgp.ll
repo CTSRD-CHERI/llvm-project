@@ -20,7 +20,7 @@ define i8 addrspace(200)* @access_global_after_external_call() {
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    cmove $c26, $c18
 ; CHECK-NEXT:    clcbi $c3, %captab20(global)($c18)
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
@@ -44,10 +44,10 @@ define void @call_two_functions() {
 ; CHECK-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    cmove $c26, $c18
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_call2)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    cmove $c26, $c18
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cjr $c17
