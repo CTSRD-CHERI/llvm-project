@@ -19934,8 +19934,7 @@ SDValue X86TargetLowering::LowerSELECT(SDValue Op, SelectionDAG &DAG) const {
     }
   } else if (CondOpcode == ISD::USUBO || CondOpcode == ISD::SSUBO ||
              CondOpcode == ISD::UADDO || CondOpcode == ISD::SADDO ||
-             ((CondOpcode == ISD::UMULO || CondOpcode == ISD::SMULO) &&
-              Cond.getOperand(0).getValueType() != MVT::i8)) {
+             CondOpcode == ISD::UMULO || CondOpcode == ISD::SMULO) {
     SDValue Value;
     X86::CondCode X86Cond;
     std::tie(Value, Cond) = getX86XALUOOp(X86Cond, Cond.getValue(0), DAG);
@@ -20618,8 +20617,7 @@ SDValue X86TargetLowering::LowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
   CondOpcode = Cond.getOpcode();
   if (CondOpcode == ISD::UADDO || CondOpcode == ISD::SADDO ||
       CondOpcode == ISD::USUBO || CondOpcode == ISD::SSUBO ||
-      ((CondOpcode == ISD::UMULO || CondOpcode == ISD::SMULO) &&
-       Cond.getOperand(0).getValueType() != MVT::i8)) {
+      CondOpcode == ISD::UMULO || CondOpcode == ISD::SMULO) {
     SDValue Value;
     X86::CondCode X86Cond;
     std::tie(Value, Cond) = getX86XALUOOp(X86Cond, Cond.getValue(0), DAG);
