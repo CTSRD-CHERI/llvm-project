@@ -146,7 +146,7 @@ static __attribute__((always_inline)) void cheri_init_globals(void) {
   void *pcc = __builtin_cheri_program_counter_get();
   /*
    * We can assume that all relocations in the __cap_relocs section have already
-   * been processed so we don't need to a a relocation base address to the
+   * been processed so we don't need to add a relocation base address to the
    * location of the capreloc.
    */
   cheri_init_globals_impl(start_relocs, stop_relocs, gdc, pcc, /*relocbase=*/0);
