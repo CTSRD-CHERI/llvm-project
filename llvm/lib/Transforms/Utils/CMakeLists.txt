@@ -6,6 +6,7 @@ add_llvm_library(LLVMTransformUtils
   BuildLibCalls.cpp
   BypassSlowDivision.cpp
   CallPromotionUtils.cpp
+  CanonicalizeAliases.cpp
   CheriSetBounds.cpp
   CheriLogSetBoundsPass.cpp
   CloneFunction.cpp
