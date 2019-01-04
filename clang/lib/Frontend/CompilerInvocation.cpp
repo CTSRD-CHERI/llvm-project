@@ -1332,6 +1332,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.SpeculativeLoadHardening = Args.hasArg(OPT_mspeculative_load_hardening);
 
+  Opts.DefaultFunctionAttrs = Args.getAllArgValues(OPT_default_function_attr);
+
   return Success;
 }
 
