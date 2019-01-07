@@ -36,7 +36,6 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
-#include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/Cheri.h"
 #include "llvm/IR/Comdat.h"
@@ -1001,9 +1000,9 @@ void SlotTracker::processFunction() {
 
       // We allow direct calls to any llvm.foo function here, because the
       // target may not be linked into the optimizer.
-      if (auto CS = ImmutableCallSite(&I)) {
+      if (const auto *Call = dyn_cast<CallBase>(&I)) {
         // Add all the call attributes to the table.
-        AttributeSet Attrs = CS.getAttributes().getFnAttributes();
+        AttributeSet Attrs = Call->getAttributes().getFnAttributes();
         if (Attrs.hasAttributes())
           CreateAttributeSetSlot(Attrs);
       }
@@ -2362,7 +2361,7 @@ public:
 
   void writeOperand(const Value *Op, bool PrintType);
   void writeParamOperand(const Value *Operand, AttributeSet Attrs);
-  void writeOperandBundles(ImmutableCallSite CS);
+  void writeOperandBundles(const CallBase *Call);
   void writeSyncScope(const LLVMContext &Context,
                       SyncScope::ID SSID);
   void writeAtomic(const LLVMContext &Context,
@@ -2513,15 +2512,15 @@ void AssemblyWriter::writeParamOperand(const Value *Operand,
   WriteAsOperandInternal(Out, Operand, &TypePrinter, &Machine, TheModule);
 }
 
-void AssemblyWriter::writeOperandBundles(ImmutableCallSite CS) {
-  if (!CS.hasOperandBundles())
+void AssemblyWriter::writeOperandBundles(const CallBase *Call) {
+  if (!Call->hasOperandBundles())
     return;
 
   Out << " [ ";
 
   bool FirstBundle = true;
-  for (unsigned i = 0, e = CS.getNumOperandBundles(); i != e; ++i) {
-    OperandBundleUse BU = CS.getOperandBundleAt(i);
+  for (unsigned i = 0, e = Call->getNumOperandBundles(); i != e; ++i) {
+    OperandBundleUse BU = Call->getOperandBundleAt(i);
 
     if (!FirstBundle)
       Out << ", ";
