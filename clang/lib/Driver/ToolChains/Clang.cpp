@@ -5379,6 +5379,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
                       !TC.getTriple().isPS4() &&
                       !TC.getTriple().isOSNetBSD() &&
                       !Distro(D.getVFS()).IsGentoo() &&
+                      !TC.getTriple().isAndroid() &&
                        TC.useIntegratedAs()))
     CmdArgs.push_back("-faddrsig");
 
