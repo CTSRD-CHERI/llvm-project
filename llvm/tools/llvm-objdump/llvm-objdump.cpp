@@ -1601,6 +1601,9 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
       }
 
       outs() << '\n';
+      if (!NoLeadingAddr)
+        outs() << format("%016" PRIx64 " ", SectionAddr + Start);
+
       StringRef SymbolName = std::get<1>(Symbols[si]);
       if (Demangle)
         outs() << demangle(SymbolName) << ":\n";
