@@ -286,7 +286,7 @@ class SSHExecutor(RemoteExecutor):
                 # accept up to N failed connections before giving up
                 self.config.lit_config.warning("Remote host seems to have died?: " + " ".join(ssh_cmd))
                 self.remote_host_failed_connections += 1
-            raise ExecuteCommandTimeoutException("REMOTE HOST SEEMS DEAD", out, err, rc, command=ssh_cmd + [remote_cmd])
+                raise ExecuteCommandTimeoutException("REMOTE HOST SEEMS DEAD", out, err, rc, command=ssh_cmd + [remote_cmd])
         return ssh_cmd + [remote_cmd], out, err, rc
 
     def run(self, *args, **kwargs):
