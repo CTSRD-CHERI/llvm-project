@@ -352,9 +352,6 @@ bool TargetLowering::ShrinkDemandedConstant(SDValue Op, const APInt &Demanded,
   SDLoc DL(Op);
   unsigned Opcode = Op.getOpcode();
 
-  if (!Op.hasOneUse())
-    return false;
-
   // Do target-specific constant optimization.
   if (targetShrinkDemandedConstant(Op, Demanded, TLO))
     return TLO.New.getNode();
