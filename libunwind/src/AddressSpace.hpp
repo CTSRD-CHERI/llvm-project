@@ -399,7 +399,9 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
     // do nothing
     break;
   case DW_EH_PE_pcrel:
-    result += startAddr;
+    // Note: for CHERI we must add the result (untagged offset) to startAddr
+    // to get a value with valid tag since uintptr_t addition is not commutative
+    result = assert_pointer_in_bounds(startAddr + result);
     break;
   case DW_EH_PE_textrel:
     _LIBUNWIND_ABORT("DW_EH_PE_textrel pointer encoding not supported");
@@ -410,7 +412,10 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
     // function with a datarelBase of 0 and DW_EH_PE_datarel encoding.
     if (datarelBase == 0)
       _LIBUNWIND_ABORT("DW_EH_PE_datarel is invalid with a datarelBase of 0");
-    result += datarelBase;
+    // Note: for CHERI we must add the result (untagged offset) to startAddr
+    // to get a value with valid tag since uintptr_t addition is not commutative
+    assert_pointer_in_bounds(datarelBase);
+    result = assert_pointer_in_bounds(datarelBase + result);
     break;
   case DW_EH_PE_funcrel:
     _LIBUNWIND_ABORT("DW_EH_PE_funcrel pointer encoding not supported");
@@ -423,11 +428,15 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
     break;
   }
 
-  if (encoding & DW_EH_PE_indirect)
-    result = getAddr(pcc_address(result));
+  if (encoding & DW_EH_PE_indirect) {
+    // FIXME: this might not always work: we are always reading an address
+    // but what if we actually wanted a pointer?
+    result = getAddr(assert_pointer_in_bounds(result));
+  }
 
-  // FIXME: Is this always PCC-relative?
-  return pcc_address(result);
+  if ((encoding & 0x0F) == DW_EH_PE_ptr)
+    result = assert_pointer_in_bounds(result);
+  return result;
 }
 
 template<typename T1, typename T2>
