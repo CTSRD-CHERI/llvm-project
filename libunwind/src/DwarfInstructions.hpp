@@ -241,7 +241,7 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pint_t pc,
                                               prolog.savedRegisters[i]));
             CHERI_DBG("SETTING CAPABILITY REGISTER %d (%s): %#p \n",
                       i, newRegisters.getRegisterName(i),
-                      (void*)newRegisters.getCapabilityRegister(i));
+                      (void*)A::to_pint_t(newRegisters.getCapabilityRegister(i)));
           } else if (registers.validRegister(i))
             newRegisters.setRegister(
                 i, getSavedRegister(i, addressSpace, registers, cfa,
