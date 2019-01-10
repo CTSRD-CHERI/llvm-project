@@ -584,6 +584,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm) {
   CapTableIndex Idx;
   Idx.NeedsSmallImm = SmallImm;
   auto it = Entries.insert(std::make_pair(&Sym, Idx));
+  // Aid deduplication by always moving to the end
   if (!it.second) {
     // If it is references by a small immediate relocation we need to update
     // the small immediate flag
@@ -591,6 +592,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm) {
       it.first->second.NeedsSmallImm = true;
     }
   }
+  it.first->second.Index = LastUseCounter++;
 #ifdef DEBUG_CAP_TABLE
   llvm::errs() << "Added symbol " << toString(Sym)
                << " to .cap_table. Total count " << Entries.size() << "\n";
@@ -617,6 +619,11 @@ uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
   assert(it != Entries.end());
   return it->second.Index.getValue();
 }
+
+struct sort_pair {
+  uint32_t vector_index;
+  uint32_t last_used;
+};
 
 template <class ELFT>
 void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
@@ -666,8 +673,31 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
   uint32_t AssignedSmallIndexes = 0;
   uint32_t AssignedLargeIndexes = 0;
 
+  // We assigned an index to entries where larger = referenced later. Put them in the cap captable in reverse order.
 
-  AssignedSmallIndexes += (LargestFixed + 1);
+  // First create a map that we can sort efficiently
+  sort_pair* SortMap = (sort_pair*)alloca(sizeof(sort_pair) * SmallEntryCount);
+
+  uint32_t vector_index = 0;
+  uint32_t map_index = 0;
+  for (auto &it : Entries) {
+      if(!it.second.IsFixed && it.second.NeedsSmallImm) {
+          SortMap[map_index].vector_index = vector_index;
+          SortMap[map_index].last_used = it.second.Index.getValue();
+          map_index++;
+      }
+      vector_index++;
+  }
+
+  // Then sort the map
+  llvm::sort(SortMap, SortMap+SmallEntryCount,
+       [](sort_pair a, sort_pair b) -> bool {return a.last_used > b.last_used;}); // Items that are seen last come first
+
+  // Then assign the indexs
+  for(uint32_t i = 0; i != SmallEntryCount; i++) {
+      (Entries.begin()+SortMap[i].vector_index)->second.Index = LargestFixed + 1 + i;
+  }
+
   SmallEntryCount += (LargestFixed + 1);
 
   for (auto &it : Entries) {
@@ -677,7 +707,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
 
     if (CTI.NeedsSmallImm) {
       assert(AssignedSmallIndexes < SmallEntryCount);
-      CTI.Index = AssignedSmallIndexes;
+      // Already given an index by the sort
       AssignedSmallIndexes++;
     } else {
       CTI.Index = SmallEntryCount + AssignedLargeIndexes;
@@ -725,6 +755,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         R_CHERI_CAPABILITY, 0,
         [&]() { return "\n>>> referenced by " + RefName; });
   }
+  AssignedSmallIndexes += (LargestFixed + 1);
   assert(AssignedSmallIndexes + AssignedLargeIndexes == Entries.size());
   ValuesAssigned = true;
 }

@@ -155,6 +155,7 @@ private:
     bool IsFixed = false;
   };
   llvm::MapVector<Symbol *, CapTableIndex> Entries;
+  uint32_t LastUseCounter = 0;
   uint32_t fixed_entries = 0;
   bool ValuesAssigned = false;
   bool IsLocal;
