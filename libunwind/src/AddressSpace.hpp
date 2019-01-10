@@ -429,13 +429,16 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
   }
 
   if (encoding & DW_EH_PE_indirect) {
+#if 0
     // FIXME: this might not always work: we are always reading an address
     // but what if we actually wanted a pointer?
     result = getAddr(assert_pointer_in_bounds(result));
+#endif
+    // TODO: should this update addr?
+    pint_t indirect_addr = assert_pointer_in_bounds(result);
+    result = getEncodedP(indirect_addr, end, encoding & ~DW_EH_PE_indirect, datarelBase);
   }
 
-  if ((encoding & 0x0F) == DW_EH_PE_ptr)
-    result = assert_pointer_in_bounds(result);
   return result;
 }
 
