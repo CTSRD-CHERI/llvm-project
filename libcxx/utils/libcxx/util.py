@@ -222,7 +222,7 @@ def executeCommand(command, cwd=None, env=None, input=None, timeout=0):
             timerObject = threading.Timer(timeout, killProcess)
             timerObject.start()
 
-        out,err = p.communicate(input=input)
+        out,err = p.communicate(input=input, timeout=timeout)
         exitCode = p.wait()
     finally:
         if timerObject != None:
