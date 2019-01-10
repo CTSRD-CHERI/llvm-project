@@ -758,12 +758,10 @@ bool MipsDelaySlotFiller::searchRange(MachineBasicBlock &MBB, IterTy Begin,
 
     Filler = CurrI;
     LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": found instruction for delay slot:";
-               I->dump());
+               CurrI->dump());
 
     return true;
   }
-  LLVM_DEBUG(dbgs() << DEBUG_TYPE
-                    << ": could not find instruction for delay slot\n";);
 
   return false;
 }
