@@ -179,12 +179,14 @@ template <typename A>
 bool CFI_Parser<A>::findFDE(A &addressSpace, pint_t pc, pint_t ehSectionStart,
                             uint32_t sectionLength, pint_t fdeHint,
                             FDE_Info *fdeInfo, CIE_Info *cieInfo) {
-  //fprintf(stderr, "findFDE(0x%llX)\n", (long long)pc);
+  // fprintf(stderr, "findFDE(%#p)\n", (void*)pc);
+  // fprintf(stderr, "findFDE(ehSectionStart=%#p, sectionLengt=%u, fdeHint=%#p)\n", (void*)ehSectionStart, sectionLength, (void*)fdeHint);
   pint_t p = (fdeHint != 0) ? fdeHint : ehSectionStart;
-  const pint_t ehSectionEnd = p + sectionLength;
+  const pint_t ehSectionEnd = assert_pointer_in_bounds(p + sectionLength);
+  // fprintf(stderr, "findFDE(ehSectionEnd=%#p, p=%#p)\n", (void*)ehSectionEnd, (void*)p);
   while (p < ehSectionEnd) {
     pint_t currentCFI = p;
-    //fprintf(stderr, "findFDE() CFI at 0x%llX\n", (long long)p);
+    // fprintf(stderr, "findFDE() CFI at %#p\n", (void*)p);
     pint_t cfiLength = addressSpace.get32(p);
     p += 4;
     if (cfiLength == 0xffffffff) {
