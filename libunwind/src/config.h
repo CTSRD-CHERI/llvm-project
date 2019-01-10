@@ -85,18 +85,32 @@
 #define PPC64_HAS_VMX
 #endif
 
+#ifdef __CHERI_PURE_CAPABILITY__
+#define _LIBUNWIND_FMT_PTR "%-#p"
+#else
+#define _LIBUNWIND_FMT_PTR "%p"
+#endif
+
 #if defined(NDEBUG) && defined(_LIBUNWIND_IS_BAREMETAL)
 #define _LIBUNWIND_ABORT(msg)                                                  \
   do {                                                                         \
     abort();                                                                   \
   } while (0)
+#define _LIBUNWIND_ABORT_FMT(fmt, msg, ...) _LIBUNWIND_ABORT(msg)
 #else
 #define _LIBUNWIND_ABORT(msg)                                                  \
   do {                                                                         \
     fprintf(stderr, "libunwind: %s %s:%d - %s\n", __func__, __FILE__,          \
             __LINE__, msg);                                                    \
     fflush(stderr);                                                            \
-    abort();                                                                   \
+    __builtin_trap(); abort();                                                 \
+  } while (0)
+#define _LIBUNWIND_ABORT_FMT(fmt, ...)                                         \
+  do {                                                                         \
+    fprintf(stderr, "libunwind: %s %s:%d - " fmt "\n", __func__, __FILE__,     \
+            __LINE__, __VA_ARGS__);                                            \
+    fflush(stderr);                                                            \
+    __builtin_trap(); abort();                                                 \
   } while (0)
 #endif
 
@@ -119,6 +133,24 @@
       if (!_ret)                                                               \
         _LIBUNWIND_LOG("" #x " failed in %s", __FUNCTION__);                   \
     } while (0)
+#endif
+
+#ifdef __CHERI_PURE_CAPABILITY__
+static inline uintptr_t assert_pointer_in_bounds(uintptr_t value) {
+  if (!__builtin_cheri_tag_get((void*)value)) {
+    _LIBUNWIND_ABORT_FMT("Untagged value " _LIBUNWIND_FMT_PTR
+                         " used for dwarf section", (void*)value);
+  } else if (__builtin_cheri_offset_get((void*)value) >=
+             __builtin_cheri_length_get((void*)value)) {
+    _LIBUNWIND_ABORT_FMT("Out-of-bounds value " _LIBUNWIND_FMT_PTR
+                         " used for dwarf section", (void*)value);
+  }
+  return value;
+}
+#else
+static inline uintptr_t assert_pointer_in_bounds(uintptr_t value) {
+  return value;
+}
 #endif
 
 // Macros that define away in non-Debug builds

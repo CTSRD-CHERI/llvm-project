@@ -66,6 +66,7 @@ void EHHeaderParser<A>::decodeEHHdr(A &addressSpace, pint_t ehHdrStart,
 
   ehHdrInfo.eh_frame_ptr =
       addressSpace.getEncodedP(p, ehHdrEnd, eh_frame_ptr_enc, ehHdrStart);
+  assert_pointer_in_bounds(ehHdrInfo.eh_frame_ptr);
   ehHdrInfo.fde_count = fde_count_enc == DW_EH_PE_omit
                             ? 0
                             : (size_t)addressSpace.getEncodedP(

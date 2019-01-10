@@ -160,11 +160,23 @@ struct UnwindInfoSections {
   uintptr_t       dso_base;
 #endif
 #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
-  uintptr_t       dwarf_section;
+private:
+  uintptr_t       __dwarf_section;
+public:
+  void set_dwarf_section(uintptr_t value) {
+      __dwarf_section = assert_pointer_in_bounds(value);
+  }
+  uintptr_t dwarf_section() const { return __dwarf_section; }
   uintptr_t       dwarf_section_length;
 #endif
 #if defined(_LIBUNWIND_SUPPORT_DWARF_INDEX)
-  uintptr_t       dwarf_index_section;
+private:
+  uintptr_t       __dwarf_index_section;
+public:
+  void set_dwarf_index_section(uintptr_t value) {
+      __dwarf_index_section = assert_pointer_in_bounds(value);
+  }
+  uintptr_t dwarf_index_section() const { return __dwarf_index_section; }
   uintptr_t       dwarf_index_section_length;
 #endif
 #if defined(_LIBUNWIND_SUPPORT_COMPACT_UNWIND)
@@ -436,7 +448,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
   if (_dyld_find_unwind_sections((void *)targetAddr, &dyldInfo)) {
     info.dso_base                      = (uintptr_t)dyldInfo.mh;
  #if defined(_LIBUNWIND_SUPPORT_DWARF_UNWIND)
-    info.dwarf_section                 = (uintptr_t)dyldInfo.dwarf_section;
+    info.set_dwarf_section((uintptr_t)dyldInfo.dwarf_section);
     info.dwarf_section_length          = dyldInfo.dwarf_section_length;
  #endif
     info.compact_unwind_section        = (uintptr_t)dyldInfo.compact_unwind_section;
@@ -628,12 +640,12 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
             if (!__builtin_cheri_tag_get((void*)eh_frame_hdr_start))
               _LIBUNWIND_ABORT("eh_frame_hdr_start cap became unpresentable!");
 #endif
-            cbdata->sects->dwarf_index_section = eh_frame_hdr_start;
+            cbdata->sects->set_dwarf_index_section(eh_frame_hdr_start);
             cbdata->sects->dwarf_index_section_length = phdr->p_memsz;
             EHHeaderParser<LocalAddressSpace>::decodeEHHdr(
                 *cbdata->addressSpace, eh_frame_hdr_start, phdr->p_memsz,
                 hdrInfo);
-            cbdata->sects->dwarf_section = hdrInfo.eh_frame_ptr;
+            cbdata->sects->set_dwarf_section(hdrInfo.eh_frame_ptr);
             found_hdr = true;
           }
         }
