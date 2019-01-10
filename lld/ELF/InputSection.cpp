@@ -300,14 +300,17 @@ Defined *InputSectionBase::getEnclosingObject(uint64_t Offset) {
 // Returns a source location string. Used to construct an error message.
 template <class ELFT>
 std::string InputSectionBase::getLocation(uint64_t Offset) {
+  std::string SecAndOffset = (Name + "+0x" + utohexstr(Offset)).str();
+
   // We don't have file for synthetic sections.
   if (getFile<ELFT>() == nullptr)
-    return (Config->OutputFile + ":(" + Name + "+0x" + utohexstr(Offset) + ")")
+    return (Config->OutputFile + ":(" + SecAndOffset + ")")
         .str();
 
   // First check if we can get desired values from debugging information.
   if (Optional<DILineInfo> Info = getFile<ELFT>()->getDILineInfo(this, Offset))
-    return Info->FileName + ":" + std::to_string(Info->Line);
+    return Info->FileName + ":" + std::to_string(Info->Line) + ":(" +
+           SecAndOffset + ")";
 
   // File->SourceFile contains STT_FILE symbol that contains a
   // source file name. If it's missing, we use an object file name.
@@ -316,12 +319,12 @@ std::string InputSectionBase::getLocation(uint64_t Offset) {
     SrcFile = toString(File);
 
   if (Defined *D = getEnclosingFunction<ELFT>(Offset))
-    return SrcFile + ":(function " + toString(*D) + ")";
+    return SrcFile + ":(function " + toString(*D) + ": " + SecAndOffset + ")";
   else if (Defined *D = getEnclosingObject<ELFT>(Offset))
-    return SrcFile + ":(object " + toString(*D) + ")";
+    return SrcFile + ":(object " + toString(*D) + ": " + SecAndOffset + ")";
 
   // If there's no symbol, print out the offset in the section.
-  return (SrcFile + ":(" + Name + "+0x" + utohexstr(Offset) + ")").str();
+  return (SrcFile + ":(" + SecAndOffset + ")");
 }
 
 // This function is intended to be used for constructing an error message.
