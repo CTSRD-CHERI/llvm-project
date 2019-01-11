@@ -10911,7 +10911,7 @@ QualType Sema::deduceVarTypeFromInitializer(VarDecl *VDecl,
                                             DeclarationName Name, QualType Type,
                                             TypeSourceInfo *TSI,
                                             SourceRange Range, bool DirectInit,
-                                            Expr *Init) {
+                                            Expr *&Init) {
   bool IsInitCapture = !VDecl;
   assert((!VDecl || !VDecl->isInitCapture()) &&
          "init captures are expected to be deduced prior to initialization");
@@ -11027,7 +11027,8 @@ QualType Sema::deduceVarTypeFromInitializer(VarDecl *VDecl,
           << (DeduceInit->getType().isNull() ? TSI->getType()
                                              : DeduceInit->getType())
           << DeduceInit->getSourceRange();
-  }
+  } else
+    Init = DeduceInit;
 
   // Warn if we deduced 'id'. 'auto' usually implies type-safety, but using
   // 'id' instead of a specific object type prevents most of our usual
@@ -11044,7 +11045,7 @@ QualType Sema::deduceVarTypeFromInitializer(VarDecl *VDecl,
 }
 
 bool Sema::DeduceVariableDeclarationType(VarDecl *VDecl, bool DirectInit,
-                                         Expr *Init) {
+                                         Expr *&Init) {
   QualType DeducedType = deduceVarTypeFromInitializer(
       VDecl, VDecl->getDeclName(), VDecl->getType(), VDecl->getTypeSourceInfo(),
       VDecl->getSourceRange(), DirectInit, Init);
@@ -11550,8 +11551,9 @@ void Sema::ActOnUninitializedDecl(Decl *RealDecl) {
       return;
     }
 
+    Expr *TmpInit = nullptr;
     if (Type->isUndeducedType() &&
-        DeduceVariableDeclarationType(Var, false, nullptr))
+        DeduceVariableDeclarationType(Var, false, TmpInit))
       return;
 
     // C++11 [class.static.data]p3: A static data member can be declared with
