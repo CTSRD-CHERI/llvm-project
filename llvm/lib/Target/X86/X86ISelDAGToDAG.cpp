@@ -3361,7 +3361,6 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
     }
     break;
 
-  case X86ISD::SELECT:
   case X86ISD::SHRUNKBLEND: {
     // SHRUNKBLEND selects like a regular VSELECT. Same with X86ISD::SELECT.
     SDValue VSelect = CurDAG->getNode(
