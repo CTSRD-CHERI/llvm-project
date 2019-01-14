@@ -67,6 +67,7 @@ extern "C" void LLVMInitializeMipsTarget() {
   initializeMipsDelaySlotFillerPass(*PR);
   initializeMipsBranchExpansionPass(*PR);
   initializeMicroMipsSizeReducePass(*PR);
+  initializeMipsPreLegalizerCombinerPass(*PR);
   initializeMipsOptimizePICCallPass(*PR);
   initializeCHERICapDirectCallsPass(*PR);
   initializeCHERICapFoldIntrinsicsPass(*PR);
@@ -284,6 +285,7 @@ public:
   void addPreEmitPass() override;
   void addPreRegAlloc() override;
   bool addIRTranslator() override;
+  void addPreLegalizeMachineIR() override;
   bool addLegalizeMachineIR() override;
   bool addRegBankSelect() override;
   bool addGlobalInstructionSelect() override;
@@ -373,6 +375,10 @@ void MipsPassConfig::addPreEmitPass() {
 bool MipsPassConfig::addIRTranslator() {
   addPass(new IRTranslator());
   return false;
+}
+
+void MipsPassConfig::addPreLegalizeMachineIR() {
+  addPass(createMipsPreLegalizeCombiner());
 }
 
 bool MipsPassConfig::addLegalizeMachineIR() {
