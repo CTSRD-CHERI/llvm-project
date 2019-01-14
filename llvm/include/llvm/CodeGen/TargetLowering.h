@@ -2182,6 +2182,8 @@ public:
     case ISD::UADDO:
     case ISD::ADDC:
     case ISD::ADDE:
+    case ISD::SADDSAT:
+    case ISD::UADDSAT:
     case ISD::FMINNUM:
     case ISD::FMAXNUM:
     case ISD::FMINIMUM:
