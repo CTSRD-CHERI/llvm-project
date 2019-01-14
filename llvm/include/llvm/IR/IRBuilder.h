@@ -2139,11 +2139,12 @@ public:
 private:
   /// Helper function that creates an assume intrinsic call that
   /// represents an alignment assumption on the provided Ptr, Mask, Type
-  /// and Offset.
+  /// and Offset. It may be sometimes useful to do some other logic
+  /// based on this alignment check, thus it can be stored into 'TheCheck'.
   CallInst *CreateAlignmentAssumptionHelper(const DataLayout &DL,
                                             Value *PtrValue, Value *Mask,
-                                            Type *IntPtrTy,
-                                            Value *OffsetValue) {
+                                            Type *IntPtrTy, Value *OffsetValue,
+                                            Value **TheCheck) {
     Value *PtrIntValue = CreatePtrToInt(PtrValue, IntPtrTy, "ptrint");
 
     if (OffsetValue) {
@@ -2162,6 +2163,9 @@ private:
     Value *Zero = ConstantInt::get(IntPtrTy, 0);
     Value *MaskedPtr = CreateAnd(PtrIntValue, Mask, "maskedptr");
     Value *InvCond = CreateICmpEQ(MaskedPtr, Zero, "maskcond");
+    if (TheCheck)
+      *TheCheck = InvCond;
+
     return CreateAssumption(InvCond);
   }
 
@@ -2172,9 +2176,13 @@ public:
   /// An optional offset can be provided, and if it is provided, the offset
   /// must be subtracted from the provided pointer to get the pointer with the
   /// specified alignment.
+  ///
+  /// It may be sometimes useful to do some other logic
+  /// based on this alignment check, thus it can be stored into 'TheCheck'.
   CallInst *CreateAlignmentAssumption(const DataLayout &DL, Value *PtrValue,
                                       unsigned Alignment,
-                                      Value *OffsetValue = nullptr) {
+                                      Value *OffsetValue = nullptr,
+                                      Value **TheCheck = nullptr) {
     assert(isa<PointerType>(PtrValue->getType()) &&
            "trying to create an alignment assumption on a non-pointer?");
     auto *PtrTy = cast<PointerType>(PtrValue->getType());
@@ -2182,7 +2190,7 @@ public:
 
     Value *Mask = ConstantInt::get(IntPtrTy, Alignment > 0 ? Alignment - 1 : 0);
     return CreateAlignmentAssumptionHelper(DL, PtrValue, Mask, IntPtrTy,
-                                           OffsetValue);
+                                           OffsetValue, TheCheck);
   }
 
   /// Create an assume intrinsic call that represents an alignment
@@ -2192,11 +2200,15 @@ public:
   /// must be subtracted from the provided pointer to get the pointer with the
   /// specified alignment.
   ///
+  /// It may be sometimes useful to do some other logic
+  /// based on this alignment check, thus it can be stored into 'TheCheck'.
+  ///
   /// This overload handles the condition where the Alignment is dependent
   /// on an existing value rather than a static value.
   CallInst *CreateAlignmentAssumption(const DataLayout &DL, Value *PtrValue,
                                       Value *Alignment,
-                                      Value *OffsetValue = nullptr) {
+                                      Value *OffsetValue = nullptr,
+                                      Value **TheCheck = nullptr) {
     assert(isa<PointerType>(PtrValue->getType()) &&
            "trying to create an alignment assumption on a non-pointer?");
     auto *PtrTy = cast<PointerType>(PtrValue->getType());
@@ -2214,7 +2226,7 @@ public:
                                ConstantInt::get(IntPtrTy, 0), "mask");
 
     return CreateAlignmentAssumptionHelper(DL, PtrValue, Mask, IntPtrTy,
-                                           OffsetValue);
+                                           OffsetValue, TheCheck);
   }
 };
 
