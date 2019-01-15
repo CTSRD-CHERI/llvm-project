@@ -2477,6 +2477,12 @@ bool Generic_GCC::IsIntegratedAssemblerDefault() const {
   case llvm::Triple::mips64el:
   case llvm::Triple::cheri:
     return true;
+  case llvm::Triple::sparc:
+  case llvm::Triple::sparcel:
+  case llvm::Triple::sparcv9:
+    if (getTriple().isOSSolaris())
+      return true;
+    return false;
   default:
     return false;
   }
