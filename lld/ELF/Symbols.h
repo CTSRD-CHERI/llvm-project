@@ -364,7 +364,8 @@ struct ElfSym {
   // .captable section
   static Defined *CheriCapabilityTable;
 
-  // __rela_iplt_end or __rel_iplt_end
+  // __rel{,a}_iplt_{start,end} symbols.
+  static Defined *RelaIpltStart;
   static Defined *RelaIpltEnd;
 };
 
