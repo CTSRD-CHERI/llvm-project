@@ -94,7 +94,7 @@ private:
     if (!(it.first->second == Relocation)) {
       error("Newly inserted relocation at " + Loc.toString<ELFT>() +
             " does not match existing one:\n>   Existing: " +
-            it.first->second.Target.template verboseToString() +
+            it.first->second.Target.verboseToString() +
             ", cap offset=" + Twine(it.first->second.CapabilityOffset) +
             ", dyn=" + Twine(it.first->second.NeedsDynReloc) +
             "\n>   New:     " + Relocation.Target.verboseToString() +
