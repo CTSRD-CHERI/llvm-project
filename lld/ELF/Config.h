@@ -39,7 +39,7 @@ enum class BuildIdKind { None, Fast, Md5, Sha1, Hexstring, Uuid };
 
 enum class CapRelocsMode { Legacy, ElfReloc, CBuildCap };
 
-enum class CapTableScope { All, File, Function };
+enum class CapTableScopePolicy { All, File, Function };
 
 // For --discard-{all,locals,none}.
 enum class DiscardPolicy { Default, All, Locals, None };
@@ -220,7 +220,7 @@ struct Configuration {
   CapRelocsMode PreemptibleCapRelocsMode;
   // Method used for capability relocations for non-preemptible symbols
   CapRelocsMode LocalCapRelocsMode;
-  CapTableScope CapTableScope;
+  CapTableScopePolicy CapTableScope;
 
   ARMVFPArgKind ARMVFPArgs = ARMVFPArgKind::Default;
   BuildIdKind BuildId = BuildIdKind::None;

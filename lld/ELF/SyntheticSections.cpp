@@ -1456,7 +1456,7 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       if (InX<ELFT>::MipsAbiFlags)
         if (auto ABI = InX<ELFT>::MipsAbiFlags->getCheriAbiVariant())
           CheriFlags |= *ABI;
-      // if (Config->CapTableScope != CapTableScope::All)
+      // if (Config->CapTableScope != CapTableScopePolicy::All)
       // Add the captable scope to the CHERI flags:
       CheriFlags |= ((unsigned)Config->CapTableScope) << 3;
       addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);

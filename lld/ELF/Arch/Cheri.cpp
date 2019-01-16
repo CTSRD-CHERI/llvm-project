@@ -568,13 +568,13 @@ static Defined *findMatchingFunction(InputSectionBase *IS, uint64_t SymOffset) {
 CheriCapTableSection::CaptableMap &
 CheriCapTableSection::getCaptableMapForFileAndOffset(InputSectionBase *IS,
                                                      uint64_t Offset) {
-  if (LLVM_LIKELY(Config->CapTableScope == CapTableScope::All))
+  if (LLVM_LIKELY(Config->CapTableScope == CapTableScopePolicy::All))
     return GlobalEntries;
-  if (Config->CapTableScope == CapTableScope::File) {
+  if (Config->CapTableScope == CapTableScopePolicy::File) {
     // operator[] will insert if missing
     return PerFileEntries[IS->File];
   }
-  if (Config->CapTableScope == CapTableScope::Function) {
+  if (Config->CapTableScope == CapTableScopePolicy::Function) {
     Symbol *Func = findMatchingFunction(IS, Offset);
     if (!Func) {
       warn(
@@ -627,9 +627,9 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
   }
 #if defined(DEBUG_CAP_TABLE)
   std::string DbgContext;
-  if (Config->CapTableScope == CapTableScope::File) {
+  if (Config->CapTableScope == CapTableScopePolicy::File) {
     DbgContext = " for file '" + toString(IS->File) + "'";
-  } else if (Config->CapTableScope == CapTableScope::Function) {
+  } else if (Config->CapTableScope == CapTableScopePolicy::Function) {
     DbgContext =  " for function '" + toString(*findMatchingFunction(IS, Offset)) + "'";
   }
   llvm::errs() << "Added symbol " << toString(Sym) << " to .captable"
@@ -811,7 +811,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
 
   // First assign the global indices (which will usually be the only ones)
   uint64_t AssignedEntries = assignIndices<ELFT>(0, GlobalEntries, "");
-  if (LLVM_UNLIKELY(Config->CapTableScope != CapTableScope::All)) {
+  if (LLVM_UNLIKELY(Config->CapTableScope != CapTableScopePolicy::All)) {
     assert(AssignedEntries == 0 && "Should not have any global entries in"
                                    " per-file/per-function captable mode");
     for (auto &it : PerFileEntries) {
@@ -832,7 +832,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       AssignedEntries * (Config->CapabilitySize / Config->Wordsize);
 
   // TODO: support TLS for per-function captable
-  if (Config->CapTableScope != CapTableScope::All &&
+  if (Config->CapTableScope != CapTableScopePolicy::All &&
       (!DynTlsEntries.empty() || !TlsEntries.empty())) {
     error("TLS is not supported yet with per-file or per-function captable");
     return;
@@ -901,7 +901,7 @@ CheriCapTableMappingSection::CheriCapTableMappingSection()
 }
 
 size_t CheriCapTableMappingSection::getSize() const {
-  assert(Config->CapTableScope != CapTableScope::All);
+  assert(Config->CapTableScope != CapTableScopePolicy::All);
   if (empty())
     return 0;
   size_t Count = 0;
@@ -918,7 +918,7 @@ size_t CheriCapTableMappingSection::getSize() const {
 }
 
 void CheriCapTableMappingSection::writeTo(uint8_t *Buf) {
-  assert(Config->CapTableScope != CapTableScope::All);
+  assert(Config->CapTableScope != CapTableScopePolicy::All);
   if (!In.CheriCapTable)
     return;
   if (!In.SymTab) {
@@ -935,11 +935,11 @@ void CheriCapTableMappingSection::writeTo(uint8_t *Buf) {
     if (!Sym->isDefined() || !Sym->isFunc())
       continue;
     const CheriCapTableSection::CaptableMap *CapTableMap = nullptr;
-    if (Config->CapTableScope == CapTableScope::Function) {
+    if (Config->CapTableScope == CapTableScopePolicy::Function) {
       auto it = In.CheriCapTable->PerFunctionEntries.find(Sym);
       if (it != In.CheriCapTable->PerFunctionEntries.end())
         CapTableMap = &it->second;
-    } else if (Config->CapTableScope == CapTableScope::File) {
+    } else if (Config->CapTableScope == CapTableScopePolicy::File) {
       auto it = In.CheriCapTable->PerFileEntries.find(Sym->File);
       if (it != In.CheriCapTable->PerFileEntries.end())
         CapTableMap = &it->second;

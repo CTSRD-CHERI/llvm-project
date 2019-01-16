@@ -551,17 +551,17 @@ static CapRelocsMode getPreemptibleCapRelocsMode(opt::InputArgList &Args) {
   llvm_unreachable("Invalid arg");
 }
 
-static CapTableScope getCapTableScope(opt::InputArgList &Args) {
+static CapTableScopePolicy getCapTableScope(opt::InputArgList &Args) {
   auto *Arg = Args.getLastArg(OPT_captable_scope_all, OPT_captable_scope_file,
                               OPT_captable_scope_function);
   // The default behaviour is to use one captable per DSO as the others modes
   // require PLT stubs even for intra-library calls
   if (!Arg || Arg->getOption().getID() == OPT_captable_scope_all) {
-    return CapTableScope::All;
+    return CapTableScopePolicy::All;
   } else if (Arg->getOption().getID() == OPT_captable_scope_file) {
-    return CapTableScope::File;
+    return CapTableScopePolicy::File;
   } else if (Arg->getOption().getID() == OPT_captable_scope_function) {
-    return CapTableScope::Function;
+    return CapTableScopePolicy::Function;
   }
   llvm_unreachable("Invalid arg");
 }
