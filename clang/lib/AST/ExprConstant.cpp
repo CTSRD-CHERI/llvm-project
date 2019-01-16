@@ -2039,6 +2039,9 @@ static bool HandleConversionToBool(const APValue &Val, bool &Result) {
   case APValue::Int:
     Result = Val.getInt().getBoolValue();
     return true;
+  case APValue::FixedPoint:
+    Result = Val.getFixedPoint().getBoolValue();
+    return true;
   case APValue::Float:
     Result = !Val.getFloat().isZero();
     return true;

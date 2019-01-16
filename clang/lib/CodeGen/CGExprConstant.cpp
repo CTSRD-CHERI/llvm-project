@@ -1940,6 +1940,9 @@ llvm::Constant *ConstantEmitter::tryEmitPrivate(const APValue &Value,
 #endif
     return AsInt;
   }
+  case APValue::FixedPoint:
+    return llvm::ConstantInt::get(CGM.getLLVMContext(),
+                                  Value.getFixedPoint().getValue());
   case APValue::ComplexInt: {
     llvm::Constant *Complex[2];
 
