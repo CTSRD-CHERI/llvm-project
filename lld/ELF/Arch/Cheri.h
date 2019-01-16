@@ -250,7 +250,7 @@ private:
                                               uint64_t Offset);
   size_t nonTlsEntryCount() const {
     size_t TotalCount = GlobalEntries.size();
-    if (LLVM_LIKELY(Config->CapTableScope == CapTableScope::All)) {
+    if (LLVM_LIKELY(Config->CapTableScope == CapTableScopePolicy::All)) {
       assert(PerFileEntries.empty() && PerFunctionEntries.empty());
     } else {
       // Add all the per-file and per-function entries
@@ -287,7 +287,7 @@ class CheriCapTableMappingSection : public SyntheticSection {
 public:
   CheriCapTableMappingSection();
   bool empty() const override {
-    if (Config->CapTableScope == CapTableScope::All)
+    if (Config->CapTableScope == CapTableScopePolicy::All)
       return true;
     return !In.CheriCapTable || In.CheriCapTable->empty();
   }
