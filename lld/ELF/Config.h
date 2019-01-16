@@ -164,6 +164,7 @@ struct Configuration {
   bool OFormatBinary;
   bool Omagic;
   bool OptRemarksWithHotness;
+  bool PicThunk;
   bool Pie;
   bool PrintGcSections;
   bool PrintIcfSections;
