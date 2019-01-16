@@ -6227,6 +6227,8 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
           .addFrameIndex(FI);
     }
 
+    MF.setHasLocalEscape(true);
+
     return nullptr;
   }
 
