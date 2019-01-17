@@ -1074,3 +1074,5 @@ def NoDeref : DiagGroup<"noderef">;
 
 // A group for cross translation unit static analysis related warnings.
 def CrossTU : DiagGroup<"ctu">;
+
+def CTADMaybeUnsupported : DiagGroup<"ctad-maybe-unsupported">;

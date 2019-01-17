@@ -9394,9 +9394,14 @@ QualType Sema::DeduceTemplateSpecializationFromInitializer(
   OverloadCandidateSet Candidates(Kind.getLocation(),
                                   OverloadCandidateSet::CSK_Normal);
   OverloadCandidateSet::iterator Best;
+
+  bool HasAnyDeductionGuide = false;
+
   auto tryToResolveOverload =
       [&](bool OnlyListConstructors) -> OverloadingResult {
     Candidates.clear(OverloadCandidateSet::CSK_Normal);
+    HasAnyDeductionGuide = false;
+
     for (auto I = Guides.begin(), E = Guides.end(); I != E; ++I) {
       NamedDecl *D = (*I)->getUnderlyingDecl();
       if (D->isInvalidDecl())
@@ -9407,6 +9412,9 @@ QualType Sema::DeduceTemplateSpecializationFromInitializer(
           TD ? TD->getTemplatedDecl() : dyn_cast<FunctionDecl>(D));
       if (!GD)
         continue;
+
+      if (!GD->isImplicit())
+        HasAnyDeductionGuide = true;
 
       // C++ [over.match.ctor]p1: (non-list copy-initialization from non-class)
       //   For copy-initialization, the candidate functions are all the
@@ -9560,5 +9568,15 @@ QualType Sema::DeduceTemplateSpecializationFromInitializer(
   Diag(TSInfo->getTypeLoc().getBeginLoc(),
        diag::warn_cxx14_compat_class_template_argument_deduction)
       << TSInfo->getTypeLoc().getSourceRange() << 1 << DeducedType;
+
+  // Warn if CTAD was used on a type that does not have any user-defined
+  // deduction guides.
+  if (!HasAnyDeductionGuide) {
+    Diag(TSInfo->getTypeLoc().getBeginLoc(),
+         diag::warn_ctad_maybe_unsupported)
+        << TemplateName;
+    Diag(Template->getLocation(), diag::note_suppress_ctad_maybe_unsupported);
+  }
+
   return DeducedType;
 }
