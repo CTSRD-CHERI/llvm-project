@@ -751,6 +751,8 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(critical);
   KEYWORD(relbf);
   KEYWORD(variable);
+  KEYWORD(vTableFuncs);
+  KEYWORD(virtFunc);
   KEYWORD(aliasee);
   KEYWORD(refs);
   KEYWORD(typeIdInfo);
@@ -763,6 +765,7 @@ lltok::Kind LLLexer::LexIdentifier() {
   KEYWORD(offset);
   KEYWORD(args);
   KEYWORD(typeid);
+  KEYWORD(typeidMetadata);
   KEYWORD(summary);
   KEYWORD(typeTestRes);
   KEYWORD(kind);
