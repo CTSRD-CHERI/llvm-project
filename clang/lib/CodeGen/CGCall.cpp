@@ -1855,8 +1855,6 @@ void CodeGenModule::ConstructDefaultFnAttrList(StringRef Name, bool HasOptnone,
     if (CodeGenOpts.Backchain)
       FuncAttrs.addAttribute("backchain");
 
-    // FIXME: The interaction of this attribute with the SLH command line flag
-    // has not been determined.
     if (CodeGenOpts.SpeculativeLoadHardening)
       FuncAttrs.addAttribute(llvm::Attribute::SpeculativeLoadHardening);
   }
@@ -1926,8 +1924,6 @@ void CodeGenModule::ConstructAttributeList(
       FuncAttrs.addAttribute(llvm::Attribute::NoDuplicate);
     if (TargetDecl->hasAttr<ConvergentAttr>())
       FuncAttrs.addAttribute(llvm::Attribute::Convergent);
-    if (TargetDecl->hasAttr<SpeculativeLoadHardeningAttr>())
-      FuncAttrs.addAttribute(llvm::Attribute::SpeculativeLoadHardening);
 
     if (const FunctionDecl *Fn = dyn_cast<FunctionDecl>(TargetDecl)) {
       AddAttributesFromFunctionProtoType(
@@ -1971,6 +1967,16 @@ void CodeGenModule::ConstructAttributeList(
   }
 
   ConstructDefaultFnAttrList(Name, HasOptnone, AttrOnCallSite, FuncAttrs);
+
+  // This must run after constructing the default function attribute list
+  // to ensure that the speculative load hardening attribute is removed
+  // in the case where the -mspeculative-load-hardening flag was passed.
+  if (TargetDecl) {
+    if (TargetDecl->hasAttr<NoSpeculativeLoadHardeningAttr>())
+      FuncAttrs.removeAttribute(llvm::Attribute::SpeculativeLoadHardening);
+    if (TargetDecl->hasAttr<SpeculativeLoadHardeningAttr>())
+      FuncAttrs.addAttribute(llvm::Attribute::SpeculativeLoadHardening);
+  }
 
   if (CodeGenOpts.EnableSegmentedStacks &&
       !(TargetDecl && TargetDecl->hasAttr<NoSplitStackAttr>()))
