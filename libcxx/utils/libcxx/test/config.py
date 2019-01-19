@@ -58,6 +58,8 @@ def intMacroValue(token):
 class Configuration(object):
     # pylint: disable=redefined-outer-name
     def __init__(self, lit_config, config):
+        if sys.version_info < (3, 3):
+            raise RuntimeError("Cannot run tests with python < 3.3")
         self.lit_config = lit_config
         self.config = config
         self.is_windows = platform.system() == 'Windows'

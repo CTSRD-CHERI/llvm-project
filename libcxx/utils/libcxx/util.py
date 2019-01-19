@@ -210,6 +210,7 @@ def executeCommand(command, cwd=None, env=None, input=None, timeout=0):
     # need to use a reference to a mutable object rather than a plain
     # bool. In Python 3 we could use the "nonlocal" keyword but we need
     # to support Python 2 as well.
+    # FIXME: this seems broken?
     hitTimeOut = [False]
     try:
         if timeout > 0:
@@ -222,7 +223,10 @@ def executeCommand(command, cwd=None, env=None, input=None, timeout=0):
             timerObject = threading.Timer(timeout, killProcess)
             timerObject.start()
 
-        out,err = p.communicate(input=input, timeout=timeout)
+        kwargs = dict()
+        if sys.version_info > (3, 3) and timeout > 0:
+            kwargs["timeout"] = timeout
+        out, err = p.communicate(input=input, **kwargs)
         exitCode = p.wait()
     finally:
         if timerObject != None:
