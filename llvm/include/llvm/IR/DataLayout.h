@@ -347,7 +347,7 @@ public:
   bool isFatPointer(unsigned AS) const;
 
   unsigned isFatPointer(const Type *Ty) const {
-    return isFatPointer(Ty->getPointerAddressSpace());
+    return Ty->isPointerTy() && isFatPointer(Ty->getPointerAddressSpace());
   }
 
   unsigned getPointerBaseSizeInBits(unsigned AS) const {
