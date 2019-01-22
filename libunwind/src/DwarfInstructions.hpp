@@ -98,12 +98,11 @@ DwarfInstructions<A, R>::getSavedRegister(int reg, A &addressSpace,
         getSavedCapabilityRegister(addressSpace, registers, cfa, savedReg));
   switch (savedReg.location) {
   case CFI_Parser<A>::kRegisterInCFA:
-    return addressSpace.getRegister(cfa + (pint_t)savedReg.value);
+    return (pint_t)addressSpace.getRegister(cfa + (pint_t)savedReg.value);
 
-  case CFI_Parser<A>::kRegisterAtExpression: {
-    return addressSpace.getRegister(evaluateExpression(
+  case CFI_Parser<A>::kRegisterAtExpression:
+    return (pint_t)addressSpace.getRegister(evaluateExpression(
         (pint_t)savedReg.value, addressSpace, registers, cfa));
-  }
 
   case CFI_Parser<A>::kRegisterIsExpression:
     return evaluateExpression((pint_t)savedReg.value, addressSpace,
