@@ -3259,6 +3259,7 @@ bool AttributedType::isQualifier() const {
   case attr::TypeNullable:
   case attr::TypeNullUnspecified:
   case attr::LifetimeBound:
+  case attr::AddressSpace:
   case attr::CHERICapability:
   case attr::MemoryAddress:
     return true;
