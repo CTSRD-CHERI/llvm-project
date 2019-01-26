@@ -120,3 +120,7 @@ bool BuiltinFunctionChecker::evalCall(const CallExpr *CE,
 void ento::registerBuiltinFunctionChecker(CheckerManager &mgr) {
   mgr.registerChecker<BuiltinFunctionChecker>();
 }
+
+bool ento::shouldRegisterBuiltinFunctionChecker(const LangOptions &LO) {
+  return true;
+}
