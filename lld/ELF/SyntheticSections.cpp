@@ -1587,8 +1587,11 @@ void RelocationBaseSection::finalizeContents() {
   if (Config->isCheriABI() && In.CheriCapTable) {
     // For MIPS CheriABI we use the captable as the sh_info value
     getParent()->Info = In.CheriCapTable->getParent()->SectionIndex;
-  } else if (In.RelaIplt == this || In.RelaPlt == this) {
-    getParent()->Info = In.GotPlt->getParent()->SectionIndex;
+  } else {
+    if (In.RelaPlt == this)
+      getParent()->Info = In.GotPlt->getParent()->SectionIndex;
+    if (In.RelaIplt == this)
+      getParent()->Info = In.IgotPlt->getParent()->SectionIndex;
   }
 }
 
