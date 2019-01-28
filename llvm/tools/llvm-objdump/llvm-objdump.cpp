@@ -1434,7 +1434,7 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
               continue;
             }
 
-            // Stop when rel_cur's address is past the current instruction.
+            // Stop when RelCur's offset is past the current instruction.
             if (Offset >= Index + Size)
               break;
 
