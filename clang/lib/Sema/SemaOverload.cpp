@@ -1176,8 +1176,8 @@ bool Sema::IsOverload(FunctionDecl *New, FunctionDecl *Old,
     // function yet (because we haven't yet resolved whether this is a static
     // or non-static member function). Add it now, on the assumption that this
     // is a redeclaration of OldMethod.
-    auto OldQuals = OldMethod->getTypeQualifiers();
-    auto NewQuals = NewMethod->getTypeQualifiers();
+    auto OldQuals = OldMethod->getMethodQualifiers();
+    auto NewQuals = NewMethod->getMethodQualifiers();
     if (!getLangOpts().CPlusPlus14 && NewMethod->isConstexpr() &&
         !isa<CXXConstructorDecl>(NewMethod))
       NewQuals.addConst();
@@ -2567,7 +2567,7 @@ bool Sema::isObjCPointerConversion(QualType FromType, QualType ToType,
     // function types are obviously different.
     if (FromFunctionType->getNumParams() != ToFunctionType->getNumParams() ||
         FromFunctionType->isVariadic() != ToFunctionType->isVariadic() ||
-        FromFunctionType->getTypeQuals() != ToFunctionType->getTypeQuals())
+        FromFunctionType->getMethodQuals() != ToFunctionType->getMethodQuals())
       return false;
 
     bool HasObjCConversion = false;
@@ -2874,9 +2874,9 @@ void Sema::HandleFunctionTypeMismatch(PartialDiagnostic &PDiag,
     return;
   }
 
-  if (FromFunction->getTypeQuals() != ToFunction->getTypeQuals()) {
-    PDiag << ft_qualifer_mismatch << ToFunction->getTypeQuals()
-          << FromFunction->getTypeQuals();
+  if (FromFunction->getMethodQuals() != ToFunction->getMethodQuals()) {
+    PDiag << ft_qualifer_mismatch << ToFunction->getMethodQuals()
+          << FromFunction->getMethodQuals();
     return;
   }
 
@@ -5115,7 +5115,7 @@ TryObjectArgumentInitialization(Sema &S, SourceLocation Loc, QualType FromType,
     Quals.addConst();
     Quals.addVolatile();
   } else {
-    Quals = Method->getTypeQualifiers();
+    Quals = Method->getMethodQualifiers();
   }
 
   QualType ImplicitParamType = S.Context.getQualifiedType(ClassType, Quals);
@@ -7984,7 +7984,7 @@ public:
         continue;
 
       if (const FunctionProtoType *Proto =PointeeTy->getAs<FunctionProtoType>())
-        if (Proto->getTypeQuals() || Proto->getRefQualifier())
+        if (Proto->getMethodQuals() || Proto->getRefQualifier())
           continue;
 
       S.AddBuiltinCandidate(&ParamTy, Args, CandidateSet);
@@ -12912,7 +12912,7 @@ Sema::BuildCallToMemberFunction(Scope *S, Expr *MemExprE,
 
     // Check that the object type isn't more qualified than the
     // member function we're calling.
-    Qualifiers funcQuals = proto->getTypeQuals();
+    Qualifiers funcQuals = proto->getMethodQuals();
 
     QualType objectType = op->getLHS()->getType();
     if (op->getOpcode() == BO_PtrMemI)
