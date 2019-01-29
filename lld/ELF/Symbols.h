@@ -71,6 +71,7 @@ public:
   uint32_t GotIndex = -1;
   uint32_t PltIndex = -1;
   uint32_t GlobalDynIndex = -1;
+  InputFile* ArchiveColoured;
 
   // This field is a index to the symbol's version definition.
   uint32_t VerdefIndex = -1;

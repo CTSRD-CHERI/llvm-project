@@ -583,6 +583,8 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm) {
   // FIXME: can this be called from multiple threads?
   CapTableIndex Idx;
   Idx.NeedsSmallImm = SmallImm;
+  Idx.IsFixed = false;
+  Idx.priority = -1;
   auto it = Entries.insert(std::make_pair(&Sym, Idx));
   // Aid deduplication by always moving to the end
   if (!it.second) {
@@ -591,8 +593,12 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm) {
     if (SmallImm) {
       it.first->second.NeedsSmallImm = true;
     }
+  } else {
+      unfixed_entries++;
+      if (SmallImm) {
+          small_entries++;
+      }
   }
-  it.first->second.Index = LastUseCounter++;
 #ifdef DEBUG_CAP_TABLE
   llvm::errs() << "Added symbol " << toString(Sym)
                << " to .cap_table. Total count " << Entries.size() << "\n";
@@ -604,8 +610,11 @@ void CheriCapTableSection::addFixedEntry(Symbol &Sym, uint32_t index) {
   CapTableIndex Idx;
   Idx.IsFixed = true;
   Idx.Index = index;
-  Entries.insert(std::make_pair(&Sym, Idx));
+  Idx.priority = -1;
+  bool added = Entries.insert(std::make_pair(&Sym, Idx)).second;
+  assert(added);
   fixed_entries++;
+  small_entries++;
 #ifdef DEBUG_CAP_TABLE
   llvm::errs() << "Added fixed symbol at index " << index
              << " to .cap_table. Total count " << Entries.size() << "\n";
@@ -622,7 +631,7 @@ uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
 
 struct sort_pair {
   uint32_t vector_index;
-  uint32_t last_used;
+  int32_t priority; // priority of being placed in the cap table (larger more priority)
 };
 
 template <class ELFT>
@@ -636,83 +645,182 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
   if (CheriCapabilityTable && !Config->Relocatable)
     CheriCapabilityTable->Size = getSize();
 
-  uint64_t SmallEntryCount = 0;
-  int64_t LargestFixed = -1;
-  for (auto &it : Entries) {
-    // TODO: looping twice is inefficient, we could keep track of the number of
-    // small entries during insertion
-    if (it.second.IsFixed) {
-        if(it.second.Index.getValue() > LargestFixed) {
-            LargestFixed = it.second.Index.getValue();
-        }
-    }
-    else if (it.second.NeedsSmallImm) {
-      SmallEntryCount++;
-    }
-  }
+  uint64_t total_entries = unfixed_entries + fixed_entries;
+
+  assert(total_entries == Entries.size());
+
+  // A map if which slots are taken.
+  bool* taken_map = (bool*)alloca((sizeof(bool)) * total_entries);
+  bzero(taken_map, (sizeof(bool)) * total_entries);
+
+  // Everything taken until
+  size_t taken_till = 0;
 
   unsigned MaxSmallEntries = (1 << 19) / Config->CapabilitySize;
-  if (SmallEntryCount > MaxSmallEntries) {
+  if (small_entries > MaxSmallEntries) {
     // Use warn here since the calculation may be wrong if the 11 bit clc is
     // used. We will error when writing the relocation values later anyway
     // so this will help find the error
-    warn("added " + Twine(SmallEntryCount) + " entries to .cap_table but "
+    warn("added " + Twine(small_entries) + " entries to .cap_table but "
         "current maximum is " + Twine(MaxSmallEntries) + "; try recompiling "
         "non-performance critical source files with -mxcaptable");
   }
   if (errorHandler().Verbose) {
     message("Total " + Twine(Entries.size()) + " .cap_table entries: " +
-        Twine(SmallEntryCount) + " use a small immediate and " +
-        Twine(Entries.size() - SmallEntryCount) + " use -mxcaptable. ");
+        Twine(small_entries) + " use a small immediate and " +
+        Twine(Entries.size() - small_entries) + " use -mxcaptable. ");
   }
 
   // Only add the @CAPTABLE symbols when running the LLD unit tests
   // errorHandler().ExitEarly is set to false if LLD_IN_TEST=1 so just reuse
   // that instead of calling getenv on every iteration
   const bool ShouldAddAtCaptableSymbols = !errorHandler().ExitEarly;
-  uint32_t AssignedSmallIndexes = 0;
-  uint32_t AssignedLargeIndexes = 0;
 
   // We assigned an index to entries where larger = referenced later. Put them in the cap captable in reverse order.
 
   // First create a map that we can sort efficiently
-  sort_pair* SortMap = (sort_pair*)alloca(sizeof(sort_pair) * SmallEntryCount);
+  sort_pair* SortMap = (sort_pair*)alloca(sizeof(sort_pair) * unfixed_entries);
 
+  uint32_t assigned = 0;
   uint32_t vector_index = 0;
   uint32_t map_index = 0;
-  for (auto &it : Entries) {
-      if(!it.second.IsFixed && it.second.NeedsSmallImm) {
-          SortMap[map_index].vector_index = vector_index;
-          SortMap[map_index].last_used = it.second.Index.getValue();
-          map_index++;
+
+  // Hopefully we have done all lazy resolution now. Added the remaining symbol to an aux table to not cause any output
+  if(!CheriCapTableSection::auxSymTab) {
+    SymbolTable* old = Symtab;
+    CheriCapTableSection::auxSymTab = make<SymbolTable>();
+    Symtab = CheriCapTableSection::auxSymTab; // And THIS is why we don't use globals kids
+    // Process all of the archives
+    for(ArchiveFile* Arc : old->ArcVector) {
+      Arc->fetchRemaining<ELFT>(CheriCapTableSection::auxSymTab);
+    }
+    Symtab = old;
+  }
+
+  for(ArchiveFile* Arc: Symtab->ArcVector) {
+    // process the archive and assign indexs
+    uint32_t pref_glob = 0;
+    int32_t prio = (int32_t)Arc->GroupId;
+
+    for(auto child : Arc->Children) {
+      InputFile* file = child.second;
+      for(Symbol* S: file->getSymbols()) {
+
+        Symbol* AuxS = auxSymTab->find(S->getName());
+        Symbol* MainS = Symtab->find(S->getName());
+
+        if(AuxS != nullptr && MainS != nullptr) {
+          // Due to the way we add symbols to the aux table, they may be duplicated
+          // If we find two we need to choose a canonical one
+          // We prefer to take mains, unless it is lazy, then we take the aux
+          S = MainS->isLazy() ? AuxS : MainS;
+        }
+
+        if(S->ArchiveColoured == Arc || (S->isTls() != IsLocal)) continue; // Don't double count usage of the same symbol in the same archive
+        S->ArchiveColoured = Arc;
+        bool likely = (S->isUndefWeak() ||
+                S->isTls() ||
+                S->isObject() ||
+                (S->isFunc() && !S->getName().startswith("__cross_domain")) ||
+                (S->isDefined() && S->isLocal() && S->getName().startswith(".LJTI"))) &&
+                      ~(S->isFile() || S->isSection());
+        uint32_t pref = likely ? (pref_glob++) : (uint32_t)(~0);
+
+        auto SEnt = Entries.find(S);
+        if(SEnt != Entries.end()) {
+          if(MainS) {
+              assert(S == MainS); // We should only see symbols from the main symtab need entries.
+          }
+          if(prio > (*SEnt).second.priority) {
+            (*SEnt).second.Index = pref;
+            (*SEnt).second.priority = prio;
+          }
+        }
       }
-      vector_index++;
+    }
   }
 
-  // Then sort the map
-  llvm::sort(SortMap, SortMap+SmallEntryCount,
-       [](sort_pair a, sort_pair b) -> bool {return a.last_used > b.last_used;}); // Items that are seen last come first
+  for (auto &it : Entries) {
+    if(it.second.IsFixed) {
+      assert(it.second.Index.hasValue());
+      assert(it.second.Index.getValue() < total_entries);
+      assert(!taken_map[it.second.Index.getValue()]);
+      taken_map[it.second.Index.getValue()] = true;
+      assigned++;
+    } else {
+      Symbol* Sym = it.first;
 
-  // Then assign the indexs
-  for(uint32_t i = 0; i != SmallEntryCount; i++) {
-      (Entries.begin()+SortMap[i].vector_index)->second.Index = LargestFixed + 1 + i;
+      // Has a preferred index
+      if(it.second.Index.hasValue()) {
+        assert(map_index < unfixed_entries);
+        SortMap[map_index].vector_index = vector_index;
+        SortMap[map_index].priority = it.second.priority;
+        map_index++;
+      }
+    }
+    vector_index++;
   }
 
-  SmallEntryCount += (LargestFixed + 1);
+  // TODO: Currently sort of ignoring the small entry thing. In the case that we have small entries < small max < total
+  // TODO: we need to assign small entries first and THEN other entries. Otherwise what we have now works if total <
 
+  // Then sort the map. Give priority for placement first
+  llvm::sort(SortMap, SortMap+map_index,
+       [](sort_pair a, sort_pair b) -> bool
+       {
+         return a.priority > b.priority;
+       }); // Items that are seen last come first
+
+  // Now assign the indexs.
+  // First give prefered positions.
+  for(uint32_t i = 0; i != map_index; i++) {
+    auto& entry = (Entries.begin()+SortMap[i].vector_index)->second;
+    Symbol* Sym = (Entries.begin()+SortMap[i].vector_index)->first;
+    assert(entry.Index.hasValue());
+    uint32_t Position = entry.Index.getValue();
+    if(Position == (uint32_t)-1) continue;
+      Position += fixed_entries; // Fixed entries tend to go first and be of constant size. Bump everything up.
+
+      if(Position < total_entries && !taken_map[Position]) {
+        assigned++;
+        taken_map[Position] = true;
+        entry.Index = Position;
+      } else {
+        entry.Index.reset();
+      }
+  }
+
+  uint32_t counted = 0;
+  for(auto &it : Entries) {
+    counted++;
+      auto& entry = it.second;
+      if(!entry.Index.hasValue() || (entry.Index.getValue() == (uint32_t)(~0))) {
+        while(taken_map[taken_till]) {
+          taken_till++;
+          assert(taken_till < total_entries);
+        }
+        assigned++;
+        taken_map[taken_till] = true;
+        entry.Index = taken_till;
+        taken_till++;
+      }
+    assert(entry.Index.hasValue() && entry.Index.getValue() < total_entries);
+    assert(taken_map[entry.Index.getValue()]);
+  }
+
+
+  assert(assigned == total_entries);
+
+  /*
+  for(uint32_t i = 0; i != total_entries; i++) {
+      assert(taken_map[i]);
+  }
+  */
   for (auto &it : Entries) {
     CapTableIndex& CTI = it.second;
 
+    assert(CTI.Index.hasValue());
     if (CTI.IsFixed) continue;
-
-    if (CTI.NeedsSmallImm) {
-      assert(AssignedSmallIndexes < SmallEntryCount);
-      // Already given an index by the sort
-      AssignedSmallIndexes++;
-    } else {
-      CTI.Index = SmallEntryCount + AssignedLargeIndexes;
-      AssignedLargeIndexes++;
-    }
 
     uint32_t Index = *CTI.Index;
     Symbol *TargetSym = it.first;
@@ -755,10 +863,11 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         R_CHERI_CAPABILITY, 0,
         [&]() { return "\n>>> referenced by " + RefName; });
   }
-  AssignedSmallIndexes += (LargestFixed + 1);
-  assert(AssignedSmallIndexes + AssignedLargeIndexes == Entries.size());
+
   ValuesAssigned = true;
 }
+
+SymbolTable* CheriCapTableSection::auxSymTab = nullptr;
 
 CheriCapTableSection *InX::CheriCapTable;
 CheriCapTableSection *InX::CheriCapTableLocal;

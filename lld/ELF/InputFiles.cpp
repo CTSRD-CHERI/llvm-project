@@ -770,6 +770,8 @@ ArchiveFile::ArchiveFile(std::unique_ptr<Archive> &&File)
 template <class ELFT> void ArchiveFile::parse() {
   for (const Archive::Symbol &Sym : File->symbols())
     Symtab->addLazyArchive<ELFT>(Sym.getName(), *this, Sym);
+
+  Symtab->ArcVector.push_back(this);
 }
 
 // Returns a buffer pointing to a member file containing a given symbol.
@@ -794,7 +796,47 @@ InputFile *ArchiveFile::fetch(const Archive::Symbol &Sym) {
   InputFile *File = createObjectFile(
       MB, getName(), C.getParent()->isThin() ? 0 : C.getChildOffset());
   File->GroupId = GroupId;
+
+  Children.insert(std::make_pair(C.getChildOffset(),File));
   return File;
+}
+
+// Adds all remaining files to a (potentially) different symbol table.
+// Only call this when all lazy symbols have been resolved.
+template <class ELFT> void ArchiveFile::fetchRemaining(SymbolTable* STab) {
+  Error Err = Error::success();
+
+  for (const ErrorOr<Archive::Child> &COrErr : File->children(Err)) {
+    Archive::Child C =
+        CHECK(COrErr, toString(this) +
+                      ": could not get the child of the archive");
+
+    if (!Seen.insert(C.getChildOffset()).second) continue;
+
+    MemoryBufferRef MB =
+        CHECK(C.getMemoryBufferRef(),
+              toString(this) +
+              ": could not get the buffer for a child of the archive");
+
+    InputFile *File = createObjectFile(
+        MB, getName(), C.getParent()->isThin() ? 0 : C.getChildOffset());
+    File->GroupId = GroupId;
+
+    Children.insert(std::make_pair(C.getChildOffset(),File));
+
+    STab->addFile<ELFT>(File);
+  }
+
+  if(Err) error(toString(this) + ": Error getting all of archives children\n");
+
+  // Now we reorder the Map.
+  llvm::sort(Children.begin(), Children.end(),
+             [](std::pair<uint64_t, InputFile*> a, std::pair<uint64_t, InputFile*> b) -> bool
+    {
+      return a.first < b.first;
+    });
+
+  Children.orderChanged();
 }
 
 template <class ELFT>
@@ -1269,6 +1311,11 @@ template void ArchiveFile::parse<ELF32LE>();
 template void ArchiveFile::parse<ELF32BE>();
 template void ArchiveFile::parse<ELF64LE>();
 template void ArchiveFile::parse<ELF64BE>();
+
+template void ArchiveFile::fetchRemaining<ELF32LE>(SymbolTable*);
+template void ArchiveFile::fetchRemaining<ELF32BE>(SymbolTable*);
+template void ArchiveFile::fetchRemaining<ELF64LE>(SymbolTable*);
+template void ArchiveFile::fetchRemaining<ELF64BE>(SymbolTable*);
 
 template void BitcodeFile::parse<ELF32LE>(DenseSet<CachedHashStringRef> &);
 template void BitcodeFile::parse<ELF32BE>(DenseSet<CachedHashStringRef> &);

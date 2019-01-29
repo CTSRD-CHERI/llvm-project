@@ -132,6 +132,7 @@ public:
   bool empty() const override { return Entries.empty(); }
   void writeTo(uint8_t *Buf) override;
   template <class ELFT> void assignValuesAndAddCapTableSymbols();
+  void calculatePreferredPositions(InputFile* file);
   size_t getSize() const override {
     if (!Entries.empty() > 0)
       assert(Config->CapabilitySize > 0 &&
@@ -142,6 +143,7 @@ public:
   // The _CHERI_CAPABILITY_TABLE_ symbol points to the beginning of the
   // this section
   Defined *CheriCapabilityTable;
+  static SymbolTable*  auxSymTab;
 
 private:
   struct CapTableIndex {
@@ -151,12 +153,14 @@ private:
     // longer sequence of instructions
     // int64_t Index = -1;
     llvm::Optional<uint32_t> Index;
+    int32_t priority;
     bool NeedsSmallImm = false;
     bool IsFixed = false;
   };
   llvm::MapVector<Symbol *, CapTableIndex> Entries;
-  uint32_t LastUseCounter = 0;
-  uint32_t fixed_entries = 0;
+  uint64_t fixed_entries = 0;
+  uint64_t unfixed_entries = 0;
+  uint64_t small_entries = 0;
   bool ValuesAssigned = false;
   bool IsLocal;
 };
