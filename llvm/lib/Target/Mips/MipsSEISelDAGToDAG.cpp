@@ -406,11 +406,19 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
     // we explicitly use $cgp here the register allocator will be able to use
     // one additional register (since it can optimize away the copy node and
     // just use $cgp directly for loads)
-    BuildMI(MBB, I, DL, TII.get(Mips::CIncOffset), ABIGlobalCapReg)
-        .addReg(Mips::C12)
-        .addReg(Tmp2);
-    BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
-        .addReg(ABIGlobalCapReg);
+    if (OptLevel == CodeGenOpt::None) {
+        // At -O0 ensure that the global register ends up in $c26
+        BuildMI(MBB, I, DL, TII.get(Mips::CIncOffset), ABIGlobalCapReg)
+            .addReg(Mips::C12)
+            .addReg(Tmp2);
+        BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
+            .addReg(ABIGlobalCapReg);
+    } else {
+        // Otherwise we will use the first available callee-save register for $cgp
+        BuildMI(MBB, I, DL, TII.get(Mips::CIncOffset), CapGlobalBaseReg)
+            .addReg(Mips::C12)
+            .addReg(Tmp2);
+    }
 #endif
   } else {
     MF.getRegInfo().addLiveIn(ABIGlobalCapReg);

@@ -38,9 +38,7 @@ define %class.QWebSettings addrspace(200)* @_ZN16QGraphicsWebView8settingsEv(%cl
 ; PCREL-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN16QGraphicsWebView8settingsEv)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN16QGraphicsWebView8settingsEv)))
-; TODO: this two instruction sequence on every function entry is not necessary! Just genereate $cgp in $c18 directly...
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; PCREL-NEXT:    cmove $c18, $c26
+; PCREL-NEXT:    cincoffset $c18, $c12, $1
 ; PCREL-NEXT:    clcbi $c12, %capcall20(_ZN16QGraphicsWebView4pageEv)($c18)
 ; PCREL-NEXT:    cjalr $c12, $c17
 ; PCREL-NEXT:    nop
