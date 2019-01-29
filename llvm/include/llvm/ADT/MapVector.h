@@ -96,6 +96,14 @@ public:
     std::swap(Vector, RHS.Vector);
   }
 
+  void orderChanged() {
+    unsigned I = 0;
+    for(auto E: Vector) {
+      typename MapType::iterator Pos = Map.find(E.first);
+      Pos->second = I++;
+    }
+  }
+
   ValueT &operator[](const KeyT &Key) {
     std::pair<KeyT, typename MapType::mapped_type> Pair = std::make_pair(Key, 0);
     std::pair<typename MapType::iterator, bool> Result = Map.insert(Pair);
