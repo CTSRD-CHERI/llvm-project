@@ -95,6 +95,7 @@ public:
 
   unsigned GetDefaultDataCapability() const;
   unsigned GetReturnAddress() const;
+  unsigned GetFunctionAddress() const;
   unsigned GetReturnData() const   ;
   unsigned GetReturnSelector() const;
   unsigned GetStackPtr() const;

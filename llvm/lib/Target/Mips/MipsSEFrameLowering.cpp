@@ -433,6 +433,8 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   unsigned AND = ABI.IsN64() ? Mips::AND64 : Mips::AND;
   unsigned CTLP = ABI.GetLocalCapability();
   unsigned CRD = ABI.GetReturnData();
+  unsigned FuncP = ABI.GetFunctionAddress();
+
   // C0 is always live in.  In non-CHERI MIPS, C0 is treated as a read-only
   // register that is implicitly read by loads and stores.
   MBB.addLiveIn(Mips::DDC);
@@ -446,7 +448,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
     MBB.addLiveIn(CTLP);
 
     if(NeedAuxEntry) {
-      unsigned TA = Mips::C12;
+      unsigned TA = FuncP;
       unsigned TMP = Mips::C14;
 
       // Create BBs
@@ -459,7 +461,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
 
       // Add CTLP live in
       exteralMBB.addLiveIn(CTLP);
-
+      exteralMBB.addLiveIn(FuncP);
 
       // Called for cross domain calls
       MachineBasicBlock::iterator exteralMBBI = exteralMBB.begin();
@@ -475,6 +477,10 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       BuildMI(exteralMBB, exteralMBBI, dl, TII.get(Mips::CJALRSlotless), TA).addReg(TMP);
 
       // simple_stub     <-- called only if we trust every library we link with (fastest)
+
+      int n_instr = 0;
+
+      n_instr +=2; // The AUX_FUNC_START is not an actual instruction
       BuildMI(exteralMBB, exteralMBBI, dl, TII.get(TargetOpcode::AUX_FUNC_START)).addSym(
           MipsFI->getTrustedExternalEntrySymbol());
       BuildMI(exteralMBB, exteralMBBI, dl, TII.get(Mips::LOADCAP), SP).addReg(ZERO)
@@ -484,10 +490,16 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
 
       if (ABI.GetGlobalCapability() != 0) {
         // If this should be live in, make it so
+        n_instr ++;
         BuildMI(exteralMBB, exteralMBBI, dl, TII.get(Mips::LOADCAP), ABI.GetGlobalCapability())
             .addReg(ABI.GetNullPtr()).addImm((ABI.GetTABILayout()->GetThreadLocalOffset_CGP()))
             .addReg(CTLP);
       }
+
+      n_instr++;
+      BuildMI(exteralMBB, exteralMBBI, dl, TII.get(Mips::CIncOffsetImm), FuncP)
+          .addReg(FuncP)
+          .addImm(4 * n_instr); // Accounts for the 4 instructions in the simple_stub.
 
       // Function actually starts here
       MF.setHasCustomFunctionStarts(true);

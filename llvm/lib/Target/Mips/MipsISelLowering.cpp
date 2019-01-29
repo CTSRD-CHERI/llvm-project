@@ -59,6 +59,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/CommandLine.h"
@@ -3103,6 +3104,14 @@ SDValue MipsTargetLowering::lowerFP_TO_SINT(SDValue Op,
   return DAG.getNode(ISD::BITCAST, SDLoc(Op), Op.getValueType(), Trunc);
 }
 
+static MCSymbol* getJumpTablePCLabel(int JTI, const MachineFunction& MF) {
+  SmallString<40> Name;
+  raw_svector_ostream(Name) << ".LGPC"
+                            << MF.getFunctionNumber() << '_' << JTI;
+  return MF.getContext().getOrCreateSymbol(Name);
+}
+
+
 SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
                                        SelectionDAG &DAG) const {
   // FIXME: this is almost the same as the code in LegalizeDAG.cpp, can
@@ -3122,56 +3131,50 @@ SDValue MipsTargetLowering::lowerBR_JT(SDValue Op,
     DAG.getMachineFunction().getJumpTableInfo()->getEntrySize(TD);
   assert(EntrySize == 4);
   assert(isPowerOf2_64(EntrySize));
-  // FIXME: or should this be something else? like in lowerCall?
+
+  // Each jump table is now .LBBX_N - .LFuncStart.
+  // Just get c12 and add the offset
+
+  MachineFunction& MF = DAG.getMachineFunction();
+
+  /*
+
+  MCContext& ctx = MF.getContext();
+
+  int JTI = cast<JumpTableSDNode>(Table.getNode())->getIndex();
+  unsigned FNO = MF.getFunctionNumber();
+
+
+  auto GetPCCIntr = DAG.getConstant(Intrinsic::cheri_pcc_get_label, dl, MVT::i64);
+  auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, PTy, GetPCCIntr,
+                         DAG.getConstant((uint64_t)FNO, dl, MVT::i32),
+                         DAG.getConstant((uint64_t)JTI, dl, MVT::i32));
+  */
+  const TargetRegisterClass *RC = getRegClassFor(PTy.V);
+
+  unsigned Reg = MF.addLiveIn(ABI.GetFunctionAddress(), RC);
+  auto FuncStart = DAG.getCopyFromReg(Chain, dl, Reg, PTy);
+
+  // Now load the jump table entry
   auto PtrInfo = MachinePointerInfo::getCapTable(DAG.getMachineFunction());
   SDValue JtAddr = getFromCapTable(false, cast<JumpTableSDNode>(Table.getNode()),
                                    dl, PTy, DAG, Chain, PtrInfo);
-  // TODO: use a mul here and let the code later on convert it to a shift?
+
   Index = DAG.getNode(ISD::SHL, dl, MVT::i64, Index,
                       DAG.getConstant(Log2_32(EntrySize), dl, MVT::i64));
-  EVT MemVT = EVT::getIntegerVT(*DAG.getContext(), EntrySize * 8);
+
   auto LoadAddr = DAG.getNode(ISD::PTRADD, dl, PTy, JtAddr, Index);
+  EVT MemVT = EVT::getIntegerVT(*DAG.getContext(), EntrySize * 8);
   SDValue JTEntryValue = DAG.getExtLoad(
       ISD::SEXTLOAD, dl, MVT::i64, Chain, LoadAddr,
       MachinePointerInfo::getJumpTable(DAG.getMachineFunction()), MemVT);
   Chain = JTEntryValue.getValue(1);
-  assert(isJumpTableRelative());
-  // Each jump table entry contains .4byte	.LBB0_N - .LJTI0_0.
-  // Since the jump table comes before .text this will generally be a positive
-  // number that we can add to the address of the jump-table to get the
-  // address of the basic block:
-  // addrof(BB) = addrof(JT) + *(JT[INDEX])
-  // New PPC = CIncOffset, PCC, (addrof(BB) - addrof(PCC))
 
-  // TODO: use a smarter model for jump tables, this is just used because
-  // there is existing infrastucture. Maybe use offset from beginning of func
-  // instead?
-  auto GetPCC = DAG.getConstant(Intrinsic::cheri_pcc_get, dl, MVT::i64);
-  auto PCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, PTy, GetPCC);
-#if 0
-  // this is the old approach that creates out-of-bounds capabilities that might
-  // become unrep
-  auto Addr = DAG.getNode(ISD::PTRADD, dl, PTy, JtAddr, JTEntryValue);
-  // Addr is a data capability so won't have Permit_Execute so we have to derive
-  // a new capabiilty from PCC
-  auto CSub = DAG.getConstant(Intrinsic::cheri_cap_diff, dl, MVT::i64);
-  auto OffsetFromPCC = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64,
-                                   CSub, Addr, PCC);
-#endif
-  // In order to avoid creating out-of-bounds capabilties we look at the
-  // virtual address only. This is less efficient since we need two more
-  // cgetaddr instructions
-  auto GetAddr =
-      DAG.getConstant(Intrinsic::cheri_cap_address_get, dl, MVT::i64);
-  auto JTAddrI64 =
-      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetAddr, JtAddr);
-  auto BBAddr = DAG.getNode(ISD::ADD, dl, MVT::i64, JTAddrI64, JTEntryValue);
-  auto PCCAddrI64 =
-      DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, MVT::i64, GetAddr, PCC);
-  auto OffsetFromPCC = DAG.getNode(ISD::SUB, dl, MVT::i64, BBAddr, PCCAddrI64);
+  // Add it to PCC
 
-  JTEntryValue = DAG.getNode(ISD::PTRADD, dl, PTy, PCC, OffsetFromPCC);
-  return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, JTEntryValue);
+  auto Target = DAG.getNode(ISD::PTRADD, dl, PTy, FuncStart, JTEntryValue);
+
+  return DAG.getNode(ISD::BRIND, dl, MVT::Other, Chain, Target);
 }
 
 
@@ -4830,7 +4833,7 @@ bool MipsTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT) const {
 unsigned MipsTargetLowering::getJumpTableEncoding() const {
   // XXXAR: should we emit capabilities instead?
   if (ABI.UsesCapabilityTable())
-    return MachineJumpTableInfo::EK_LabelDifference32;
+    return MachineJumpTableInfo::EK_Custom32;
   // TODO: use EK_Custom32 with function entry point - label address?
 
   // FIXME: For space reasons this should be: EK_GPRel32BlockAddress.
@@ -4838,6 +4841,23 @@ unsigned MipsTargetLowering::getJumpTableEncoding() const {
     return MachineJumpTableInfo::EK_GPRel64BlockAddress;
 
   return TargetLowering::getJumpTableEncoding();
+}
+
+const MCExpr *MipsTargetLowering::LowerCustomJumpTableEntry(
+    const MachineJumpTableInfo *MJTI,
+    const MachineBasicBlock *MBB, unsigned uid,
+    MCContext &Ctx) const {
+
+  const MCExpr *Value = MCSymbolRefExpr::create(MBB->getSymbol(), Ctx); // case label
+  const MachineFunction* MF = MBB->getParent();
+
+  //MCSymbol* sym = getJumpTablePCLabel(uid, *MF);
+  MCSymbol* sym = MF->getTarget().getSymbol(&MF->getFunction());
+
+  const MCExpr* GetPCCLabel = MCSymbolRefExpr::create(sym, Ctx); // getpcc label
+  Value = MCBinaryExpr::createSub(Value, GetPCCLabel, Ctx);
+
+  return Value;
 }
 
 bool MipsTargetLowering::useSoftFloat() const {

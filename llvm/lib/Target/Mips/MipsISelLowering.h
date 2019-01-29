@@ -296,6 +296,11 @@ extern bool LargeCapTable;
       return MVT::i32;
     }
 
+    const MCExpr *
+    LowerCustomJumpTableEntry(const MachineJumpTableInfo *MJTI,
+                              const MachineBasicBlock *MBB, unsigned uid,
+                              MCContext &Ctx) const override;
+
     bool isCheapToSpeculateCttz() const override;
     bool isCheapToSpeculateCtlz() const override;
 

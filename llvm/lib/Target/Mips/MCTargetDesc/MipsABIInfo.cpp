@@ -123,6 +123,10 @@ unsigned MipsABIInfo::GetReturnAddress() const {
     (ArePtrs64bit() ? Mips::RA_64 : Mips::RA);
 }
 
+unsigned MipsABIInfo::GetFunctionAddress() const {
+  return Mips::C12;
+}
+
 unsigned MipsABIInfo::GetReturnData() const {
   return IsCheriPureCap() ?
          Mips::C18 :
