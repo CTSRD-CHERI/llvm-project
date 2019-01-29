@@ -263,9 +263,10 @@ ArgType ScanfSpecifier::getArgType(ASTContext &Ctx) const {
         case LengthModifier::AsInt32:
         case LengthModifier::AsInt3264:
         case LengthModifier::AsWide:
+        case LengthModifier::AsShortLong:
           return ArgType::Invalid();
       }
-      llvm_unreachable("Unsupported LenghtModifier Type");
+      llvm_unreachable("Unsupported LengthModifier Type");
 
     // Unsigned int.
     case ConversionSpecifier::oArg:
@@ -305,9 +306,10 @@ ArgType ScanfSpecifier::getArgType(ASTContext &Ctx) const {
         case LengthModifier::AsInt32:
         case LengthModifier::AsInt3264:
         case LengthModifier::AsWide:
+        case LengthModifier::AsShortLong:
           return ArgType::Invalid();
       }
-      llvm_unreachable("Unsupported LenghtModifier Type");
+      llvm_unreachable("Unsupported LengthModifier Type");
 
     // Float.
     case ConversionSpecifier::aArg:
@@ -402,6 +404,7 @@ ArgType ScanfSpecifier::getArgType(ASTContext &Ctx) const {
         case LengthModifier::AsInt32:
         case LengthModifier::AsInt3264:
         case LengthModifier::AsWide:
+        case LengthModifier::AsShortLong:
           return ArgType::Invalid();
         }
 
@@ -507,7 +510,7 @@ bool ScanfSpecifier::fixType(QualType QT, QualType RawQT,
     namedTypeToLengthModifier(PT, LM);
 
   // If fixing the length modifier was enough, we are done.
-  if (hasValidLengthModifier(Ctx.getTargetInfo())) {
+  if (hasValidLengthModifier(Ctx.getTargetInfo(), LangOpt)) {
     const analyze_scanf::ArgType &AT = getArgType(Ctx);
     if (AT.isValid() && AT.matchesType(Ctx, QT))
       return true;

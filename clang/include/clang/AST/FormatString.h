@@ -67,6 +67,7 @@ public:
     None,
     AsChar,       // 'hh'
     AsShort,      // 'h'
+    AsShortLong,  // 'hl' (OpenCL float/int vector element)
     AsLong,       // 'l'
     AsLongLong,   // 'll'
     AsQuad,       // 'q' (BSD, deprecated, for 64-bit integer types)
@@ -437,7 +438,8 @@ public:
 
   bool usesPositionalArg() const { return UsesPositionalArg; }
 
-  bool hasValidLengthModifier(const TargetInfo &Target) const;
+  bool hasValidLengthModifier(const TargetInfo &Target,
+                              const LangOptions &LO) const;
 
   bool hasStandardLengthModifier() const;
 
