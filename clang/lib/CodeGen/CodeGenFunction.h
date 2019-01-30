@@ -48,7 +48,6 @@ class Module;
 class SwitchInst;
 class Twine;
 class Value;
-class CallSite;
 }
 
 namespace clang {
@@ -3614,10 +3613,10 @@ public:
   /// LLVM arguments and the types they were derived from.
   RValue EmitCall(const CGFunctionInfo &CallInfo, const CGCallee &Callee,
                   ReturnValueSlot ReturnValue, const CallArgList &Args,
-                  llvm::Instruction **callOrInvoke, SourceLocation Loc);
+                  llvm::CallBase **callOrInvoke, SourceLocation Loc);
   RValue EmitCall(const CGFunctionInfo &CallInfo, const CGCallee &Callee,
                   ReturnValueSlot ReturnValue, const CallArgList &Args,
-                  llvm::Instruction **callOrInvoke = nullptr) {
+                  llvm::CallBase **callOrInvoke = nullptr) {
     return EmitCall(CallInfo, Callee, ReturnValue, Args, callOrInvoke,
                     SourceLocation());
   }
@@ -3644,14 +3643,14 @@ public:
   SmallVector<llvm::OperandBundleDef, 1>
   getBundlesForFunclet(llvm::Value *Callee);
 
-  llvm::CallSite EmitCallOrInvoke(llvm::Value *Callee,
-                                  ArrayRef<llvm::Value *> Args,
-                                  const Twine &Name = "");
-  llvm::CallSite EmitRuntimeCallOrInvoke(llvm::Value *callee,
-                                         ArrayRef<llvm::Value*> args,
-                                         const Twine &name = "");
-  llvm::CallSite EmitRuntimeCallOrInvoke(llvm::Value *callee,
-                                         const Twine &name = "");
+  llvm::CallBase *EmitCallOrInvoke(llvm::Value *Callee,
+                                   ArrayRef<llvm::Value *> Args,
+                                   const Twine &Name = "");
+  llvm::CallBase *EmitRuntimeCallOrInvoke(llvm::Value *callee,
+                                          ArrayRef<llvm::Value *> args,
+                                          const Twine &name = "");
+  llvm::CallBase *EmitRuntimeCallOrInvoke(llvm::Value *callee,
+                                          const Twine &name = "");
   void EmitNoreturnRuntimeCallOrInvoke(llvm::Value *callee,
                                        ArrayRef<llvm::Value*> args);
 
