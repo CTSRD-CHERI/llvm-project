@@ -258,6 +258,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         assert(IncOffset);
 
         MachineOperand& Cap = IncOffset->getOperand(1);
+        // Cannot handle frame indexes (yet?):
+        if (Cap.isFI())
+          continue;
         MachineOperand& Offset = IncOffset->getOperand(2);
         assert(Cap.isReg());
         // If the IncOffset is in a different basic block we need to be more

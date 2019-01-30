@@ -1,0 +1,91 @@
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o - | FileCheck %s
+--- |
+  ; ModuleID = '/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/addressing-folder-crash.ll'
+  source_filename = "/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/addressing-folder-crash.ll"
+  target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
+  target triple = "cheri-unknown-freebsd"
+  
+  %"class.JSC::WeakImpl" = type { i8 addrspace(200)* }
+  
+  $_ZN3JSC8WeakImpl7jsValueEv = comdat any
+  
+  define hidden void @_ZN3JSC8WeakImpl7jsValueEv(%"class.JSC::WeakImpl" addrspace(200)* %this) addrspace(200) #0 comdat align 2 {
+  entry:
+    %this.addr = alloca %"class.JSC::WeakImpl" addrspace(200)*, align 16, addrspace(200)
+    %0 = bitcast %"class.JSC::WeakImpl" addrspace(200)* addrspace(200)* %this.addr to i8 addrspace(200)*
+    %1 = call i8 addrspace(200)* @llvm.mips.stack.to.cap(i8 addrspace(200)* %0)
+    %2 = bitcast i8 addrspace(200)* %1 to %"class.JSC::WeakImpl" addrspace(200)* addrspace(200)*
+    store %"class.JSC::WeakImpl" addrspace(200)* %this, %"class.JSC::WeakImpl" addrspace(200)* addrspace(200)* %2, align 16
+    ret void
+  }
+  
+  ; Function Attrs: nounwind readnone
+  declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)*, i64) addrspace(200) #1
+  
+  ; Function Attrs: nounwind readnone
+  declare i8 addrspace(200)* @llvm.mips.stack.to.cap(i8 addrspace(200)*) addrspace(200) #1
+  
+  ; Function Attrs: nounwind
+  declare void @llvm.stackprotector(i8*, i8**) addrspace(200) #2
+  
+  attributes #0 = { "target-cpu"="cheri128" "target-features"="+cheri128" }
+  attributes #1 = { nounwind readnone }
+  attributes #2 = { nounwind }
+
+...
+---
+name:            _ZN3JSC8WeakImpl7jsValueEv
+alignment:       3
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+hasWinCFI:       false
+registers:       
+  - { id: 0, class: cherigpr, preferred-register: '' }
+  - { id: 1, class: cherigpr, preferred-register: '' }
+liveins:         
+  - { reg: '$c3', virtual-reg: '%0' }
+frameInfo:       
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    16
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  maxCallFrameSize: 4294967295
+  cvBytesOfCalleeSavedRegisters: 0
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  localFrameSize:  0
+  savePoint:       ''
+  restorePoint:    ''
+fixedStack:      []
+stack:           
+  - { id: 0, name: this.addr, type: default, offset: 0, size: 16, alignment: 16, 
+      stack-id: 0, callee-saved-register: '', callee-saved-restored: true, 
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+constants:       []
+body:             |
+  bb.0.entry:
+    liveins: $c3
+  
+    %0:cherigpr = COPY $c3
+    %1:cherigpr = CIncOffset %stack.0.this.addr, $zero_64
+    STORECAP %0, $zero_64, 0, killed %1 :: (store 16 into %ir.2, addrspace 200)
+    CapRetPseudo
+
+...
+
+# Do not change frame indexes:
+# CHECK:      %0:cherigpr = COPY $c3
+# CHECK-NEXT: %1:cherigpr = CIncOffset %stack.0.this.addr, $zero_64
+# CHECK-NEXT: STORECAP %0, $zero_64, 0, killed %1 :: (store 16 into %ir.2, addrspace 200)
+# CHECK-NEXT: CapRetPseudo
