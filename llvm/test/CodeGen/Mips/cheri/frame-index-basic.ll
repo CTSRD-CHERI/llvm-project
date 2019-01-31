@@ -30,8 +30,8 @@ define i8 addrspace(200)* @pass_var(i64 %arg) addrspace(200) nounwind {
   %result = tail call i8 addrspace(200)* @bar(i64 addrspace(200)* %stack_var)
   ret i8 addrspace(200)* %result
   ; CHECK-LABEL: pass_var
-  ; CHECK:      clcbi	$c12, %capcall20(bar)($c1)
-  ; CHECK-NEXT: cincoffset	$c1, $c11, [[@EXPR $CAP_SIZE - 8]]
-  ; CHECK-NEXT: cjalr	$c12, $c17
-  ; CHECK-NEXT: csetbounds	$c3, $c1, 8
+  ; CHECK:      cincoffset $c2, $c11, [[@EXPR $CAP_SIZE - 8]]
+  ; CHECK-NEXT: clcbi $c12, %capcall20(bar)($c1)
+  ; CHECK-NEXT: cjalr $c12, $c17
+  ; CHECK-NEXT: csetbounds $c3, $c2, 8
 }

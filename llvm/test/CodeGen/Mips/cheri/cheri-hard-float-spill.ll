@@ -201,8 +201,7 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 ; CAPTABLE-NEXT:    csc $c17, $zero, 0($c11)
 ; CAPTABLE-NEXT:    lui $1, %hi(%neg(%captab_rel(eo_fermion_force)))
 ; CAPTABLE-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(eo_fermion_force)))
-; CAPTABLE-NEXT:    cincoffset $c26, $c12, $1
-; CAPTABLE-NEXT:    cmove $c18, $c26
+; CAPTABLE-NEXT:    cincoffset $c18, $c12, $1
 ; CAPTABLE-NEXT:    clcbi $c1, %captab20(.LCPI0_0)($c18)
 ; CAPTABLE-NEXT:    cld $2, $zero, 0($c1)
 ; CAPTABLE-NEXT:    b .LBB0_20

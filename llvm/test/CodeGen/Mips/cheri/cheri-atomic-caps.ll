@@ -12,7 +12,7 @@ declare void @test(i32 addrspace(200)* nocapture %cap, i1 %bool)
 ; CHECK-LABEL: cmpxchg_cap:
 define i32 @cmpxchg_cap(i32 addrspace(200)* nocapture %exp, i32 addrspace(200)* %newval) {
 entry:
-; CHECK: clcbi   [[GLOBAL:\$c[0-9]+]], %captab20(cap)($c26)
+; CHECK: clcbi   [[GLOBAL:\$c[0-9]+]], %captab20(cap)([[CGP:\$c.+]])
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK: cllc    [[DST:\$c[0-9]+]], [[GLOBAL]]
 ; $c3 is the expected value (arg 1)
@@ -24,7 +24,7 @@ entry:
 ; CHECK: [[BB1]]:
 ; CHECK-NEXT: ceq	$4, [[DST]], $c3
 ; CHECK-NEXT:	sync
-; CHECK-NEXT:	clcbi	$c12, %capcall20(test)($c26)
+; CHECK-NEXT:	clcbi	$c12, %capcall20(test)([[CGP]])
 ; CHECK-NEXT:	cjalr	$c12, $c17
 ; CHECK-NEXT:	cmove	$c3,  [[DST]]
 ; CHECK: .end cmpxchg_cap
@@ -37,7 +37,7 @@ entry:
 
 define i32 addrspace(200)* @atomic_fetch_swap_cap(i32 addrspace(200)* %x) nounwind {
 ; CHECK-LABEL:   atomic_fetch_swap_cap:
-; CHECK: clcbi   [[GLOBAL:\$c[0-9]+]], %captab20(cap)($c26)
+; CHECK: clcbi   [[GLOBAL:\$c[0-9]+]], %captab20(cap)([[CGP:\$c.+]])
 ; CHECK-NEXT: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; Load into $2 (return value)
 ; CHECK-NEXT: cllc    [[DST:\$c[0-9]+]], [[GLOBAL]]

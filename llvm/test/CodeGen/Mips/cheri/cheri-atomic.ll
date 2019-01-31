@@ -120,7 +120,7 @@ define i32 @swapd(i64 addrspace(200)* nocapture %e, i64 signext %n) #0 {
 entry:
 
 ; CHECK: cld     $[[OLDVAL:[0-9]+]], $zero, 0($c3)
-; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(d)($c26)
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(d)([[CGP:\$c[0-9]+]])
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK:      clld    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK-NEXT: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
@@ -150,7 +150,7 @@ cmpxchg.continue:                                 ; preds = %cmpxchg.store_expec
 define i32 @swapw(i32 addrspace(200)* nocapture %e, i32 signext %n) #0 {
 entry:
 ; CHECK: clw     $[[OLDVAL:[0-9]+]], $zero, 0($c3)
-; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(w)($c26)
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(w)([[CGP:\$c[0-9]+]])
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK: cllw    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
@@ -177,7 +177,7 @@ cmpxchg.continue:                                 ; preds = %cmpxchg.store_expec
 ; CHECK-LABEL: swaph:
 define i32 @swaph(i16 addrspace(200)* nocapture %e, i16 signext %n) #0 {
 ; CHECK: clh $[[OLDVAL:[0-9]+]], $zero, 0($c{{.*}})
-; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(h)($c26)
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(h)([[CGP:\$c[0-9]+]])
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK: cllh    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
@@ -206,7 +206,7 @@ cmpxchg.continue:                                 ; preds = %cmpxchg.store_expec
 define i32 @swapb(i8 addrspace(200)* nocapture %e, i8 signext %n) #0 {
 entry:
 ; CHECK: clb $[[OLDVAL:[0-9]+]], $zero, 0($c{{.*}})
-; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(b)($c26)
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(b)([[CGP:\$c[0-9]+]])
 ; CHECK: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; CHECK: cllb    $[[DST:[0-9]+]], $[[CR]]
 ; CHECK: bne     $[[DST]], $[[OLDVAL]], [[BB1:(\$|\.L)[A-Z_0-9]+]]
@@ -271,7 +271,7 @@ entry:
 
 define i8 @atomic_fetch_swap8(i8 %x) nounwind {
 ; CHECK-LABEL:   atomic_fetch_swap8:
-; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(b)($c26)
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(b)([[CGP:\$c[0-9]+]])
 ; CHECK-NEXT: sll $[[ARG:[0-9]+]], $4, 0
 ; CHECK-NEXT: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; Load into $2 (return value)
@@ -286,7 +286,7 @@ define i8 @atomic_fetch_swap8(i8 %x) nounwind {
 
 define i16 @atomic_fetch_swap16(i16 %x) nounwind {
 ; CHECK-LABEL:   atomic_fetch_swap16:
-; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(h)($c26)
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(h)([[CGP:\$c[0-9]+]])
 ; CHECK-NEXT: sll $[[ARG:[0-9]+]], $4, 0
 ; CHECK-NEXT: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; Load into $2 (return value)
@@ -301,7 +301,7 @@ define i16 @atomic_fetch_swap16(i16 %x) nounwind {
 
 define i32 @atomic_fetch_swap32(i32 %x) nounwind {
 ; CHECK-LABEL:   atomic_fetch_swap32:
-; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(w)($c26)
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(w)([[CGP:\$c[0-9]+]])
 ; CHECK-NEXT: sll $[[ARG:[0-9]+]], $4, 0
 ; CHECK-NEXT: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; Load into $2 (return value)
@@ -316,7 +316,7 @@ define i32 @atomic_fetch_swap32(i32 %x) nounwind {
 
 define i64 @atomic_fetch_swap64(i64 %x) nounwind {
 ; CHECK-LABEL:   atomic_fetch_swap64:
-; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(d)($c26)
+; CHECK: clcbi   $[[CR:c[0-9]+]], %captab20(d)([[CGP:\$c[0-9]+]])
 ; 64-bit -> no need for the sign extend: sll $[[ARG:[0-9]+]], $4, 0
 ; CHECK-NEXT: [[BB0:(\$|\.L)[A-Z_0-9]+]]:
 ; Load into $2 (return value)

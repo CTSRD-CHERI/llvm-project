@@ -17,7 +17,7 @@ define void @xo_emit(i8 addrspace(200)* %fmt, ...) {
 ; LEGACY:  ld [[SIZE_OF_B:\$[0-9]+]], %got_disp(.size.b)($1)
 ; Save the incoming varargs in a temporary register:
 ; CHECK:   cmove [[VARARGS_CAP:\$c[0-9]+]],  $c13
-; PCREL:   clcbi [[CAP_FOR_B:\$c[0-9]+]], %captab20(b)($c26)
+; PCREL:   clcbi [[CAP_FOR_B:\$c[0-9]+]], %captab20(b)($c2)
 ; LEGACY:  ld [[ADDR_OF_B:\$[0-9]+]], %got_disp(b)($1)
 ; LEGACY:  cfromddc	[[TMP:\$c[0-9]+]], [[ADDR_OF_B]]
 ; LEGACY:  csetbounds	[[CAP_FOR_B:\$c[0-9]+]], [[TMP]], [[SIZE_OF_B]]

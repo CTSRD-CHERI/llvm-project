@@ -26,8 +26,8 @@ entry:
 ; MIPS:   Function Live Ins: $t9_64
 ; We currently fall back to tls via mips hwr $29 for all CHERI abis:
 ; LEGACY-HACK: Function Live Ins: $c12
-; PLT: Function Live Ins: $c26
-; FN-DESC: Function Live Ins: $c26
+; PLT: Function Live Ins: [[CGP:\$c26]]
+; FNDESC: Function Live Ins: [[CGP:\$c26]]
 ; PCREL: Function Live Ins: $c12
 
 ; COMMON-LABEL: bb.0.entry:
@@ -82,8 +82,7 @@ entry:
 ; PCREL-NEXT: liveins: $c12
 ; PCREL-NEXT: [[CGPOFF_HI:%[0-9]+]]:gpr64 = LUi64 target-flags(mips-captable-off-hi) @test
 ; PCREL-NEXT: [[CGPOFF_LO:%[0-9]+]]:gpr64 = DADDiu [[CGPOFF_HI]]:gpr64, target-flags(mips-captable-off-lo) @test
-; PCREL-NEXT: $c26 = CIncOffset $c12, [[CGPOFF_LO]]:gpr64
-; PCREL-NEXT: %0:cherigpr = COPY $c26
+; PCREL-NEXT: %0:cherigpr = CIncOffset $c12, [[CGPOFF_LO]]:gpr64
 
 
 ; CAP-TABLE-HACK-NEXT:  $t9_64 = CGetOffset $c12
@@ -146,11 +145,11 @@ entry:
 
 
 ; Get $t9 for the tls hack:
-; CAP-TABLE-HACK-NEXT:  cgetoffset      $25, $c12
 ; PCREL-NEXT:           lui     $1, %hi(%neg(%captab_rel(test))) # encoding: [0x3c,0x01,A,A]
 ; PCREL-NEXT:                   #   fixup A - offset: 0, value: %hi(%neg(%captab_rel(test))), kind: fixup_Mips_CAPTABLEREL_HI
 ; PCREL-NEXT:           daddiu  $1, $1, %lo(%neg(%captab_rel(test))) # encoding: [0x64,0x21,A,A]
 ; PCREL-NEXT:                   #   fixup A - offset: 0, value: %lo(%neg(%captab_rel(test))), kind: fixup_Mips_CAPTABLEREL_LO
+; CAP-TABLE-HACK-NEXT:  cgetoffset      $25, $c12
 ; From now on it's all the same TLS hack:
 ; CAP-TABLE-HACK-NEXT:  lui     [[TLSADDR:\$.+]], %hi(%neg(%gp_rel(test)))
 ; CAP-TABLE-HACK-NEXT:                                  #   fixup A - offset: 0, value: %hi(%neg(%gp_rel(test))), kind: fixup_Mips_GPOFF_HI
@@ -164,13 +163,13 @@ entry:
 ; CAP-TABLE-HACK-NEXT:  ld      [[TLSPTR:\$.+]], %gottprel(global_tls)([[TLSADDR]])
 ; CAP-TABLE-HACK-NEXT:                       #   fixup A - offset: 0, value: %gottprel(global_tls), kind: fixup_Mips_GOTTPREL
 ; For PCREL derive $cgp from $c12 now:
-; PCREL-NEXT:           cincoffset      $c26, $c12, $1
+; PCREL-NEXT:           cincoffset      [[CGP:\$c1]], $c12, $1
 ; CAP-EQUIV-NEXT:       lui     [[CAPTAB_TPREL:\$[0-9]+]], %captab_tprel_hi(global_tls)
 ; CAP-EQUIV-NEXT:                                       #   fixup A - offset: 0, value: %captab_tprel_hi(global_tls), kind: fixup_CHERI_CAPTAB_TPREL_HI16
 ; CAP-EQUIV-NEXT:       daddiu  [[CAPTAB_TPREL]], [[CAPTAB_TPREL]], %captab_tprel_lo(global_tls)
 ; CAP-EQUIV-NEXT:                                       #   fixup A - offset: 0, value: %captab_tprel_lo(global_tls), kind: fixup_CHERI_CAPTAB_TPREL_LO16
-; CAP-EQUIV-NEXT:       cld     [[TLSOFF:\$[0-9]+]], [[CAPTAB_TPREL]], 0($c26)
-; CAP-TABLE-NEXT:       clcbi   $c1, %captab20(global_normal)($c26)
+; CAP-EQUIV-NEXT:       cld     [[TLSOFF:\$[0-9]+]], [[CAPTAB_TPREL]], 0([[CGP]])
+; CAP-TABLE-NEXT:       clcbi   $c1, %captab20(global_normal)([[CGP]])
 ; CAP-TABLE-NEXT:                    #   fixup A - offset: 0, value: %captab20(global_normal), kind: fixup_CHERI_CAPTABLE20
 ; CAP-TABLE-HACK-NEXT:  daddu   $1, [[HWREG]], [[TLSPTR]]
 ; CAP-TABLE-HACK-NEXT:  ld      $1, 0($1)
