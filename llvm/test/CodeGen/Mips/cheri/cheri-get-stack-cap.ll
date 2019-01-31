@@ -23,7 +23,7 @@ entry:
   ; CHECK:	csc	$c3, $1, 0($ddc)
 
   ; PCREL-LABEL: getstack:
-  ; PCREL:      clcbi	$c1, %captab20(reserved_reg_target)($c26)
+  ; PCREL:      clcbi	$c1, %captab20(reserved_reg_target)($c1)
   ; PCREL-NEXT: cincoffset	$c3, $c11, $zero
   ; PCREL-NEXT: cjr	$c17
   ; PCREL-NEXT: csc	$c3, $zero, 0($c1)
@@ -42,7 +42,7 @@ entry:
   ; CHECK: cjr	$c17
   ; CHECK: csc	[[EPCC]], $1, 0($ddc)
   ; PCREL-LABEL: test_fault_read_epcc:
-  ; PCREL:      clcbi   $c1, %captab20(reserved_reg_target)($c26)
+  ; PCREL:      clcbi   $c1, %captab20(reserved_reg_target)($c1)
   ; PCREL-NEXT: creadhwr        $c2, $chwr_epcc
   ; PCREL-NEXT: cjr     $c17
   ; PCREL-NEXT: csc     $c2, $zero, 0($c1)

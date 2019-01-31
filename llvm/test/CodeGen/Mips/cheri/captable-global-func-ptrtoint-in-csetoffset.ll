@@ -18,7 +18,7 @@ entry:
   %1 = bitcast i8 addrspace(200)* %0 to i32 (%class.A addrspace(200)*) addrspace(200)*
   %call3 = call i32 %1(%class.A addrspace(200)* undef)
   ret void
-  ; PURECAP: clcbi	$c1, %captab20(foo)($c26)
+  ; PURECAP: clcbi	$c1, %captab20(foo)($c1)
   ; LEGACY: ld	$1, %got_disp(foo)($1)
   ; LEGACY-NEXT: cgetpccsetoffset	$c1, $1
   ; CHECK-NEXT: cgetaddr	$1, $c1

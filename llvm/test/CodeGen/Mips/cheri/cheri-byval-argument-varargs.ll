@@ -20,10 +20,9 @@ define i32 @fn1() local_unnamed_addr #0 {
 ; CHECK-NEXT:    csc $c17, $zero, [[@EXPR STACKFRAME_SIZE - (3 * $CAP_SIZE)]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(fn1)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(fn1)))
-; CHECK-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c19, $c26
-; CHECK-NEXT:    cincoffset $c1, $c11, [[@EXPR 2 * $CAP_SIZE]]
+; CHECK-NEXT:    cincoffset $c19, $c12, $1
 ; CHECK-NEXT:    daddiu $1, $zero, 4096
+; CHECK-NEXT:    cincoffset $c1, $c11, [[@EXPR (2 * $CAP_SIZE)]]
 ; CHECK-NEXT:    csetbounds $c18, $c1, $1
 ; CHECK-NEXT:    clcbi $c4, %captab20(a)($c19)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c19)

@@ -14,9 +14,9 @@ define void @call_one_arg_from_many_arg(i8 addrspace(200)* %in_arg1, i8 addrspac
 ; CHECK-NEXT:    .cfi_offset 89, -[[$CAP_SIZE]]
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(call_one_arg_from_many_arg)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_one_arg_from_many_arg)))
-; CHECK-NEXT:    cincoffset $c26, $c12, $1
+; CHECK-NEXT:    cincoffset [[CGP:\$c1]], $c12, $1
 ; CHECK-NEXT:    cincoffset $c3, $c3, 77
-; CHECK-NEXT:    clcbi $c12, %capcall20(one_arg)($c26)
+; CHECK-NEXT:    clcbi $c12, %capcall20(one_arg)([[CGP]])
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cgetnull $c13

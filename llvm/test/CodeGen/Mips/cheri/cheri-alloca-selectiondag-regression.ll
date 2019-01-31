@@ -42,8 +42,7 @@ define i32 @d(i64 %i) {
 ; C128-NEXT:    csetoffset $c1, $c1, $3
 ; C128-NEXT:    csetbounds $c2, $c1, $2
 ; C128-NEXT:    cmove $c11, $c1
-; C128-NEXT:    cincoffset $c1, $c2, $zero
-; C128-NEXT:    csetbounds $c3, $c1, $4
+; C128-NEXT:    csetbounds $c3, $c2, $4
 ; C128-NEXT:    clcbi $c12, %capcall20(a)($c12)
 ; C128-NEXT:    cgetnull $c13
 ; C128-NEXT:    csd $1, $zero, 504($c25) # 8-byte Folded Spill
@@ -83,8 +82,7 @@ define i32 @d(i64 %i) {
 ; C256-NEXT:    csetoffset $c1, $c1, $3
 ; C256-NEXT:    csetbounds $c2, $c1, $2
 ; C256-NEXT:    cmove $c11, $c1
-; C256-NEXT:    cincoffset $c1, $c2, $zero
-; C256-NEXT:    csetbounds $c3, $c1, $4
+; C256-NEXT:    csetbounds $c3, $c2, $4
 ; C256-NEXT:    clcbi $c12, %capcall20(a)($c12)
 ; C256-NEXT:    cgetnull $c13
 ; C256-NEXT:    csd $1, $zero, 24($c24) # 8-byte Folded Spill

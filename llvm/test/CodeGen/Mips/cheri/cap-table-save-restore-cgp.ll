@@ -17,8 +17,8 @@ define internal i32 @local_func() addrspace(200) nounwind noinline {
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(local_func)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(local_func)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c26)
+; PCREL-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c{{1|26}})
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
@@ -38,8 +38,8 @@ define i32 @test1() addrspace(200) nounwind {
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(test1)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test1)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c18, $c26
+; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c18)
 ; FIXME: this move should go into the delay slot!
 ; $cgp only needs to be restored when not using the pc-relative ABI
@@ -75,8 +75,8 @@ define i32 @test2() addrspace(200) nounwind {
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(test2)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test2)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c18, $c26
+; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c18)
 ; $cgp only needs to be restored when not using the pc-relative ABI
 ; CHECK-NEXT:    cjalr $c12, $c17
@@ -112,8 +112,8 @@ define i32 @test3() addrspace(200) nounwind {
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(test3)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test3)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c18, $c26
+; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PLT-NEXT:    cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(local_func)($c18)
 ; $cgp only needs to be restored when not using the pc-relative ABI
 ; CHECK-NEXT:    cjalr $c12, $c17
@@ -148,8 +148,8 @@ define i32 @test4() addrspace(200) nounwind {
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(test4)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test4)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c18, $c26
+; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_func)($c18)
 ; $cgp only needs to be restored when not using the pc-relative ABI
 ; CHECK-NEXT:    cjalr $c12, $c17
@@ -189,8 +189,8 @@ define i8 addrspace(200)* @access_global_after_external_call() addrspace(200) no
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(access_global_after_external_call)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(access_global_after_external_call)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c18, $c26
+; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; PLT-NEXT:      cmove $c26, $c18
@@ -214,8 +214,8 @@ define void @call_two_functions() addrspace(200) nounwind {
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(call_two_functions)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(call_two_functions)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c18, $c26
+; PCREL-NEXT:    cincoffset $c18, $c12, $1
+; PLT-NEXT:      cmove $c18, $c26
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; PLT-NEXT:      cmove $c26, $c18
@@ -243,9 +243,9 @@ define i32 @not_needed_after_call(i32 %arg1, i32 %arg2) addrspace(200) nounwind 
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(not_needed_after_call)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(not_needed_after_call)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
+; PCREL-NEXT:    cincoffset $c1, $c12, $1
 ; CHECK-NEXT:    sll $16, $5, 0
-; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c26)
+; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c{{1|26}})
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    sll $17, $4, 0
 ; CHECK-NEXT:    addu $2, $17, $16
@@ -267,8 +267,8 @@ define void @tailcall_external(i32 %arg1, i32 %arg2) addrspace(200) nounwind {
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(tailcall_external)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(tailcall_external)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c26)
+; PCREL-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c{{1|26}})
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
@@ -288,8 +288,8 @@ define internal i32 @tailcall_local(i32 %arg1, i32 %arg2) addrspace(200) nounwin
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(tailcall_local)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(tailcall_local)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    clcbi $c12, %capcall20(local_func)($c26)
+; PCREL-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    clcbi $c12, %capcall20(local_func)($c{{1|26}})
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
