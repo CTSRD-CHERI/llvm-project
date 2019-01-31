@@ -870,10 +870,11 @@ bool IRTranslator::translateKnownIntrinsic(const CallInst &CI, Intrinsic::ID ID,
         TLI.getVaListSizeInBits(*DL, Ptr->getType()->getPointerAddressSpace()) /
         8;
 
+    // FIXME: Get alignment
     MIRBuilder.buildInstr(TargetOpcode::G_VASTART)
         .addUse(getOrCreateVReg(*Ptr))
         .addMemOperand(MF->getMachineMemOperand(
-            MachinePointerInfo(Ptr), MachineMemOperand::MOStore, ListSize, 0));
+            MachinePointerInfo(Ptr), MachineMemOperand::MOStore, ListSize, 1));
     return true;
   }
   case Intrinsic::dbg_value: {
@@ -1215,6 +1216,9 @@ bool IRTranslator::translateCall(const User &U, MachineIRBuilder &MIRBuilder) {
   // TODO: Add a GlobalISel version of getTgtMemIntrinsic.
   if (TLI.getTgtMemIntrinsic(Info, CI, *MF, ID)) {
     uint64_t Size = Info.memVT.getStoreSize();
+    if (Info.align == 0)
+      Info.align = Size;
+
     MIB.addMemOperand(MF->getMachineMemOperand(MachinePointerInfo(Info.ptrVal),
                                                Info.flags, Size, Info.align));
   }
