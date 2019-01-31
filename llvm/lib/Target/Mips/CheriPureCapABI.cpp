@@ -99,8 +99,6 @@ public:
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
       Value *Alloca = BitCast;
-      if (BitCast == AI)
-        BitCast = cast<Instruction>(Alloca);
       if (cheri::ShouldCollectCSetBoundsStats) {
         cheri::addSetBoundsStats(AI->getAlignment(), Size, getPassName(),
                                  cheri::SetBoundsPointerSource::Stack,
@@ -108,10 +106,20 @@ public:
                                      cheri::inferLocalVariableName(AI),
                                  cheri::inferSourceLocation(AI));
       }
-      Alloca = B.CreateCall(SetLenFun, {Alloca, Size});
-      Alloca = B.CreateBitCast(Alloca, AllocaTy);
+      auto WithBounds = B.CreateCall(SetLenFun, {Alloca, Size});
+      Alloca = B.CreateBitCast(WithBounds, AllocaTy);
       AI->replaceNonMetadataUsesWith(Alloca);
-      BitCast->setOperand(0, AI);
+      // If we didn't create a bitcast because the alloca has the right type
+      // we need to set the @llvm.cheri.cap.bounds.set() argument to be the
+      // alloca instruction!
+      // Otherwise we need to update the bitcast operand to be the alloca again
+      // since it was replaced with the setbounds result by replaceNonMetadataUsesWith()
+      // This is invalid IR so we need to undo it.
+      if (BitCast == AI)
+        WithBounds->setOperand(0, BitCast);
+      else
+        BitCast->setOperand(0, AI);
+
     }
     return true;
   }
