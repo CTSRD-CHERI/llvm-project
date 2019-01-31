@@ -544,7 +544,7 @@ bool MipsSEDAGToDAGISel::selectAddrFI(SDValue Addr, SDValue &Base) const {
   if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
     EVT ValTy = Addr.getValueType();
 
-    Base   = CurDAG->getTargetFrameIndex(FIN->getIndex(), ValTy);
+    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), ValTy);
     return true;
   }
   return false;

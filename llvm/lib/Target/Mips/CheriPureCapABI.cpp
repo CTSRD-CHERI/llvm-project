@@ -60,8 +60,6 @@ public:
 
     Intrinsic::ID SetLength = Intrinsic::cheri_cap_bounds_set;
     Function *SetLenFun = Intrinsic::getDeclaration(M, SetLength);
-    Intrinsic::ID StackToCap = Intrinsic::mips_stack_to_cap;
-    Function *StackToCapFn = Intrinsic::getDeclaration(M, StackToCap);
 
     IRBuilder<> B(C);
     const DataLayout &DL = F.getParent()->getDataLayout();
@@ -100,7 +98,7 @@ public:
       Value *Size = ConstantInt::get(Type::getInt64Ty(C), ElementSize);
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
-      Value *Alloca = B.CreateCall(StackToCapFn, BitCast);
+      Value *Alloca = BitCast;
       if (BitCast == AI)
         BitCast = cast<Instruction>(Alloca);
       if (cheri::ShouldCollectCSetBoundsStats) {
