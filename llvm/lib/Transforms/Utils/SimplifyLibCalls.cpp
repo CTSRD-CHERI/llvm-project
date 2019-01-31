@@ -1509,9 +1509,8 @@ Value *LibCallSimplifier::optimizeExp2(CallInst *CI, IRBuilder<> &B) {
         One = ConstantExpr::getFPExtend(One, Op->getType());
 
       Module *M = CI->getModule();
-      Value *NewCallee =
-          M->getOrInsertFunction(TLI->getName(LdExp), Op->getType(),
-                                 Op->getType(), B.getInt32Ty());
+      FunctionCallee NewCallee = M->getOrInsertFunction(
+          TLI->getName(LdExp), Op->getType(), Op->getType(), B.getInt32Ty());
       CallInst *CI = B.CreateCall(NewCallee, {One, LdExpArg});
       if (const Function *F = dyn_cast<Function>(Callee->stripPointerCasts()))
         CI->setCallingConv(F->getCallingConv());
@@ -1733,8 +1732,8 @@ static void insertSinCosCall(IRBuilder<> &B, Function *OrigCallee, Value *Arg,
   }
 
   Module *M = OrigCallee->getParent();
-  Value *Callee = M->getOrInsertFunction(Name, OrigCallee->getAttributes(),
-                                         ResTy, ArgTy);
+  FunctionCallee Callee =
+      M->getOrInsertFunction(Name, OrigCallee->getAttributes(), ResTy, ArgTy);
 
   if (Instruction *ArgInst = dyn_cast<Instruction>(Arg)) {
     // If the argument is an instruction, it must dominate all uses so put our
@@ -2034,7 +2033,7 @@ Value *LibCallSimplifier::optimizePrintF(CallInst *CI, IRBuilder<> &B) {
   // arguments.
   if (TLI->has(LibFunc_iprintf) && !callHasFloatingPointArgument(CI)) {
     Module *M = B.GetInsertBlock()->getParent()->getParent();
-    Constant *IPrintFFn =
+    FunctionCallee IPrintFFn =
         M->getOrInsertFunction("iprintf", FT, Callee->getAttributes());
     CallInst *New = cast<CallInst>(CI->clone());
     New->setCalledFunction(IPrintFFn);
@@ -2113,7 +2112,7 @@ Value *LibCallSimplifier::optimizeSPrintF(CallInst *CI, IRBuilder<> &B) {
   // point arguments.
   if (TLI->has(LibFunc_siprintf) && !callHasFloatingPointArgument(CI)) {
     Module *M = B.GetInsertBlock()->getParent()->getParent();
-    Constant *SIPrintFFn =
+    FunctionCallee SIPrintFFn =
         M->getOrInsertFunction("siprintf", FT, Callee->getAttributes());
     CallInst *New = cast<CallInst>(CI->clone());
     New->setCalledFunction(SIPrintFFn);
@@ -2270,7 +2269,7 @@ Value *LibCallSimplifier::optimizeFPrintF(CallInst *CI, IRBuilder<> &B) {
   // floating point arguments.
   if (TLI->has(LibFunc_fiprintf) && !callHasFloatingPointArgument(CI)) {
     Module *M = B.GetInsertBlock()->getParent()->getParent();
-    Constant *FIPrintFFn =
+    FunctionCallee FIPrintFFn =
         M->getOrInsertFunction("fiprintf", FT, Callee->getAttributes());
     CallInst *New = cast<CallInst>(CI->clone());
     New->setCalledFunction(FIPrintFFn);
