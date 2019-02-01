@@ -101,7 +101,7 @@ static CallInst *createCallHelper(Function *Callee, ArrayRef<Value *> Ops,
   return CI;
 }
 
-static InvokeInst *createInvokeHelper(Value *Invokee, BasicBlock *NormalDest,
+static InvokeInst *createInvokeHelper(Function *Invokee, BasicBlock *NormalDest,
                                       BasicBlock *UnwindDest,
                                       ArrayRef<Value *> Ops,
                                       IRBuilderBase *Builder,
