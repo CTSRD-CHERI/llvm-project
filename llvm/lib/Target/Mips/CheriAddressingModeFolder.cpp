@@ -260,11 +260,14 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
             // inc-offset and attempt to fold that into the register operand
             MachineInstr *ImmInput =
                 RI.getUniqueVRegDef(IncOffset->getOperand(1).getReg());
-            if (ImmInput->getOpcode() == Mips::CIncOffset) {
+            if (ImmInput && ImmInput->getOpcode() == Mips::CIncOffset) {
               LLVM_DEBUG(dbgs()<< "However, the input Reg for CIncOffsetImm is "
                         "CIncOffset. Trying to fold that: "; ImmInput->dump(););
               auto MemopRegOff = MI.getOperand(1).getReg();
-              if (MemopRegOff == Mips::ZERO_64 || MemopRegOff == Mips::ZERO) {
+              // Note: The first operand to CIncOffset could also be a frame Index in which case we
+              // cannot fold it.
+              assert(ImmInput->getOperand(1).isReg() || ImmInput->getOperand(1).isFI());
+              if (ImmInput->getOperand(1).isReg() && (MemopRegOff == Mips::ZERO_64 || MemopRegOff == Mips::ZERO)) {
                 auto IncRegOff = ImmInput->getOperand(2).getReg();
                 MI.getOperand(1).setReg(IncRegOff);
                 if (std::distance(RI.use_begin(IncRegOff), RI.use_end()) > 2) {
