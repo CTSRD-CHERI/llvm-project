@@ -59,10 +59,10 @@ public:
       auto AllocaSize = Alloca->getAllocationSizeInBits(DL);
       APInt Zero(BitWidth, 0);
       APInt Max(BitWidth, AllocaSize ? *AllocaSize / 8: 0);
-      LLVM_DEBUG(dbgs() << "MAX in " << GEPI.getFunction()->getName() << ": " << Max; GEPI.dump(););
-      LLVM_DEBUG(dbgs() << "OFFSET in " << GEPI.getFunction()->getName() << ": " << Offset; GEPI.dump(););
+      LLVM_DEBUG(dbgs() << GEPI.getFunction()->getName() << ": MAX IS" << Max; GEPI.dump(););
+      LLVM_DEBUG(dbgs() << GEPI.getFunction()->getName() << ": OFFSET IS: " << Offset; GEPI.dump(););
       if (Offset.slt(Zero) || Offset.sge(Max)) {
-        errs() << "OFFSET IS OUT OF BOUNDS in " << GEPI.getFunction()->getName() << ": " <<  Offset; GEPI.dump();
+        LLVM_DEBUG(dbgs() << GEPI.getFunction()->getName() << ": OFFSET IS OUT OF BOUNDS: " <<  Offset; GEPI.dump());
         PI.setEscaped(&GEPI);
       }
     } else {
