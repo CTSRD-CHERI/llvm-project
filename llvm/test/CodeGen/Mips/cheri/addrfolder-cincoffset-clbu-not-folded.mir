@@ -129,9 +129,8 @@ body:             |
 # CHECK-NEXT:     %3:cherigpr = LOADCAP $zero_64, 80, killed %0 :: (load 16 from %ir.value.i.i, addrspace 200)
 # CHECK-NEXT:     %4:gpr64 = ANDi64 %1, 16383
 # CHECK-NEXT:     %6:gpr64 = nsw DSUBu killed $zero_64, killed %4
-# CHECK-NEXT:     %7:cherigpr = CIncOffset killed %3, killed %6
-# CHECK-NEXT:     %8:cherigpr = CIncOffsetImm killed %7, 200
-# CHECK-NEXT:     %9:gpr32 = CAPLOAD832 $zero_64, 0, killed %8 :: (load 1 from %ir.gep, align 8, addrspace 200)
+# CHECK-NEXT:     %8:cherigpr = CIncOffsetImm killed %3, 200
+# CHECK-NEXT:     %9:gpr32 = CAPLOAD832 killed %6, 0, killed %8 :: (load 1 from %ir.gep, align 8, addrspace 200)
 # CHECK-NEXT:     $v0 = COPY %9
 # CHECK-NEXT:     CapRetPseudo implicit $v0
 

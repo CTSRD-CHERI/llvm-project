@@ -250,13 +250,46 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
               MI.getOperand(3).setIsKill(false);
             }
             MI.getOperand(2).setImm(offset + offsetImm);
-            Adds.insert(IncOffset);
+            IncOffsets.insert(IncOffset);
             LLVM_DEBUG(dbgs() << "Was able to fold CIncOffsetImm. New Instr: "; MI.dump(););
             ImmediateWasFolded = true;
             modified = true;
           } else {
             LLVM_DEBUG(dbgs() << "Could not fold input CIncOffsetImm due to immediate range: " << Twine(offset + offsetImm) << "\n";);
+            // Check if there the input to the CIncOffsetImm was a non-constant
+            // inc-offset and attempt to fold that into the register operand
+            MachineInstr *ImmInput =
+                RI.getUniqueVRegDef(IncOffset->getOperand(1).getReg());
+            if (ImmInput->getOpcode() == Mips::CIncOffset) {
+              LLVM_DEBUG(dbgs()<< "However, the input Reg for CIncOffsetImm is "
+                        "CIncOffset. Trying to fold that: "; ImmInput->dump(););
+              auto MemopRegOff = MI.getOperand(1).getReg();
+              if (MemopRegOff == Mips::ZERO_64 || MemopRegOff == Mips::ZERO) {
+                auto IncRegOff = ImmInput->getOperand(2).getReg();
+                MI.getOperand(1).setReg(IncRegOff);
+                if (std::distance(RI.use_begin(IncRegOff), RI.use_end()) > 2) {
+                  // Don't kill the register if there are other uses
+                  MI.getOperand(1).setIsKill(false);
+                } else {
+                  MI.getOperand(1).setIsKill(true);
+                }
+                assert(IncOffset->getOperand(1).getReg() == ImmInput->getOperand(0).getReg());
+                IncOffset->getOperand(1).setReg(ImmInput->getOperand(1).getReg());
+                if (std::distance(RI.use_begin(IncOffset->getOperand(1).getReg()), RI.use_end()) > 2) {
+                  // Don't kill the IncOffsetImm input register if there are other uses
+                  IncOffset->getOperand(1).setIsKill(false);
+                } else {
+                  IncOffset->getOperand(1).setIsKill(true);
+                }
+                IncOffsets.insert(ImmInput);
+                modified = true;
+                LLVM_DEBUG(dbgs() << "Folded register offset from CIncOffsetImm"
+                           " input into the memop. New CIncOffsetImm: ";
+                           IncOffset->dump(); dbgs() <<  "New memop: "; MI.dump(););
+              }
+            }
           }
+
           continue;
         }
 
