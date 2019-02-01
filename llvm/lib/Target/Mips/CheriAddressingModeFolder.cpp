@@ -180,6 +180,7 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         if (!MI.getOperand(2).isImm())
           continue;
 
+        LLVM_DEBUG(dbgs() << "Attempting to fold: "; MI.dump(););
 
         // If the load is not currently at register-zero offset, we can't fix
         // it up to use relative addressing, but we may be able to modify it so
@@ -238,6 +239,8 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         // the operation.
         if (IncOffset->getOpcode() == Mips::CIncOffsetImm) {
           uint64_t offsetImm = IncOffset->getOperand(2).getImm();
+          bool ImmediateWasFolded = false;
+          LLVM_DEBUG(dbgs() << "Trying to fold input CIncOffsetImm: "; IncOffset->dump(););
           if (IsValidOffset(Op, offset + offsetImm)) {
             IncOffset->getOperand(1).setIsKill(false);
             auto IncOffsetArg = IncOffset->getOperand(1).getReg();
@@ -248,6 +251,11 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
             }
             MI.getOperand(2).setImm(offset + offsetImm);
             Adds.insert(IncOffset);
+            LLVM_DEBUG(dbgs() << "Was able to fold CIncOffsetImm. New Instr: "; MI.dump(););
+            ImmediateWasFolded = true;
+            modified = true;
+          } else {
+            LLVM_DEBUG(dbgs() << "Could not fold input CIncOffsetImm due to immediate range: " << Twine(offset + offsetImm) << "\n";);
           }
           continue;
         }
