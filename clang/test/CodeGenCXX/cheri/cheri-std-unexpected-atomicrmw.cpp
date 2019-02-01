@@ -36,7 +36,7 @@ handler set_handler_atomic(handler func) noexcept {
   return __atomic_exchange_n(&__handler, func, __ATOMIC_SEQ_CST);
 
   // ASM-LABEL: _Z18set_handler_atomicU3capPFvvE:
-  // ASM:      clcbi   $c2, %captab20(_ZL9__handler)($c26)
+  // ASM:      clcbi   $c2, %captab20(_ZL9__handler)($c{{.+}})
   // ASM-NEXT: sync
   // ASM-NEXT: .LBB0_1:
   // ASM-NEXT: cllc    $c1, $c2
@@ -54,7 +54,7 @@ handler get_handler_atomic() noexcept {
 
   // ASM-LABEL: _Z18get_handler_atomicv:
   // This should just use a load + sync
-  // ASM: clcbi   [[HANDLER_ADDR:\$c[0-9]+]], %captab20(_ZL9__handler)($c26)
+  // ASM: clcbi   [[HANDLER_ADDR:\$c[0-9]+]], %captab20(_ZL9__handler)($c{{.+}})
   // ASM: clc     $c3, $zero, 0([[HANDLER_ADDR]])
   // ASM: sync
   // ASM: .end _Z18get_handler_atomicv
@@ -76,7 +76,7 @@ handler set_handler_c11_atomic(handler func) noexcept {
   return __c11_atomic_exchange(&__atomic_handler, func, __ATOMIC_SEQ_CST);
 
   // ASM-LABEL: _Z22set_handler_c11_atomicU3capPFvvE:
-  // ASM:      clcbi   $c2, %captab20(_ZL16__atomic_handler)($c26)
+  // ASM:      clcbi   $c2, %captab20(_ZL16__atomic_handler)($c{{.+}})
   // ASM-NEXT: sync
   // ASM-NEXT: .LBB2_1:
   // ASM-NEXT: cllc    $c1, $c2
@@ -95,7 +95,7 @@ handler get_handler_c11_atomic() noexcept {
   return __c11_atomic_load(&__atomic_handler, __ATOMIC_SEQ_CST);
   // ASM-LABEL: _Z22get_handler_c11_atomicv:
   // This should just use a load + sync
-  // ASM: clcbi   [[HANDLER_ADDR:\$c[0-9]+]], %captab20(_ZL16__atomic_handler)($c26)
+  // ASM: clcbi   [[HANDLER_ADDR:\$c[0-9]+]], %captab20(_ZL16__atomic_handler)($c{{.+}})
   // ASM: clc     $c3, $zero, 0([[HANDLER_ADDR]])
   // ASM: sync
   // ASM: .end _Z22get_handler_c11_atomicv

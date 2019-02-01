@@ -51,10 +51,10 @@ extern "C" void test() {
   // ASM-LABEL: test:
   DoNotOptimize(cancel);
   // N64_ASM: ld $3, %got_disp(cancel)($2)
-  // PURECAP_ASM: clcbi	$c1, %captab20(cancel)($c26)
+  // PURECAP_ASM: clcbi	$c{{.+}}, %captab20(cancel)($c{{.+}})
   DoNotOptimize(foo);
   // N64_ASM: ld $2, %got_disp(foo)($2)
-  // PURECAP_ASM: clcbi	$c2, %captab20(foo)($c26)
+  // PURECAP_ASM: clcbi	$c{{.+}}, %captab20(foo)($c{{.+}})
   // ASM: .end test
 }
 
@@ -85,7 +85,7 @@ extern "C" void test2() {
   // The load of cancel is not emitted as ASM since it caused an error:
   // WITH_ERROR_ASM-LABEL: test2:
   // WITH_ERROR_ASM-NOT:   %captab20(cancel)
-  // WITH_ERROR_ASM:       clcbi $c1, %captab20(foo)($c26)
+  // WITH_ERROR_ASM:       clcbi $c{{.+}}, %captab20(foo)($c{{.+}})
   // WITH_ERROR_ASM-NOT:   %captab20(cancel)
   // WITH_ERROR_ASM:       .end test2
   DoNotOptimize2(cancel);

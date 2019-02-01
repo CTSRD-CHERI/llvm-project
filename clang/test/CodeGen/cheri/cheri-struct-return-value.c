@@ -89,7 +89,7 @@ IntCapSizeUnion intcap_size_union() {
   // CHECK-LABEL: define inreg i8 addrspace(200)* @intcap_size_union() local_unnamed_addr
   // CHECK: ret i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*)
   // ASM-LABEL: intcap_size_union
-  // ASM: clcbi $c3, %captab20(global)($c26)
+  // ASM: clcbi $c3, %captab20(global)($c{{.+}})
 }
 
 // Check that a union with size > intcap_t is not returned as a value
@@ -110,7 +110,7 @@ GreaterThanIntCapSizeUnion greater_than_intcap_size_union() {
   // CHECK: store i8 addrspace(200)* bitcast (i32 addrspace(200)* @global to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* [[CAP_MEMBER]], align [[$CAP_SIZE]]
   // CHECK: ret void
   // ASM-LABEL: greater_than_intcap_size_union
-  // ASM:       clcbi $c1, %captab20(global)($c26)
+  // ASM:       clcbi $c1, %captab20(global)($c{{.+}})
   // ASM-NEXT:  cjr     $c17
   // ASM-NEXT:  csc     $c1, $zero, 0($c3)
 }
@@ -157,10 +157,10 @@ ThreeLongs three_longs() {
   // CHECK-LABEL: define void @three_longs(%struct.ThreeLongs addrspace(200)* noalias nocapture sret %agg.result) local_unnamed_addr
   // ASM-LABEL: three_longs
   // Clang now uses a memcpy from a global for cheri128
-  // CHERI128-ASM: clcbi $c4, %captab20(.L__const.three_longs.t)($c26)
-  // CHERI128-ASM: clcbi   $c12, %capcall20(memcpy)($c26)
+  // CHERI128-ASM: clcbi $c4, %captab20(.L__const.three_longs.t)($c{{.+}})
+  // CHERI128-ASM: clcbi   $c12, %capcall20(memcpy)($c{{.+}})
   // For cheri256 clang will inline the memcpy from a global (since it is smaller than 1 cap)
-  // CHERI256-ASM:      clcbi $c1, %captab20(.L__const.three_longs.t)($c26)
+  // CHERI256-ASM:      clcbi $c1, %captab20(.L__const.three_longs.t)($c{{.+}})
   // CHERI256-ASM-NEXT: cld	$1, $zero, 16($c1)
   // CHERI256-ASM-NEXT: cld	$2, $zero, 8($c1)
   // CHERI256-ASM-NEXT: cld	$3, $zero, 0($c1)
