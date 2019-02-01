@@ -446,8 +446,14 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
     bool modified = false;
     MachineLoopInfo &MLI = getAnalysis<MachineLoopInfo>();
     MachineDominatorTree &MDT = getAnalysis<MachineDominatorTree>();
-    while (foldMachineFunction(MF, MLI, MDT))
+    // Try iterating as long as we are making changs but add a cut-off at 1000
+    // to find inifite loops
+    unsigned NumIterations = 0;
+    while (foldMachineFunction(MF, MLI, MDT)) {
       modified = true;
+      NumIterations++;
+      assert(NumIterations < 1000 && "Infinite loop in CheriAddrModeFolder?");
+    }
     return modified;
   }
 };
