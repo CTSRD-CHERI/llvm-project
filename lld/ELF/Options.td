@@ -63,6 +63,10 @@ defm allow_multiple_definition: B<"allow-multiple-definition",
     "Allow multiple definitions",
     "Do not allow multiple definitions (default)">;
 
+defm allow_shlib_undefined: B<"allow-shlib-undefined",
+    "Allow unresolved references in shared libraries (default)",
+    "Do not allow unresolved references in shared libraries">;
+
 def allow_undefined_cap_relocs: F<"allow-undefined-cap-relocs">,
   HelpText<"Allow multiple definitions">;
 
@@ -530,12 +534,10 @@ def captable_scope_function: F<"captable-scope=function">,
   HelpText<"Use one captable per function for global accesses (very slow but minimizes scope of $cgp)">;
 
 // Options listed below are silently ignored for now for compatibility.
-def: F<"allow-shlib-undefined">;
 def: F<"detect-odr-violations">;
 def: Flag<["-"], "g">;
 def: F<"long-plt">;
 def: F<"no-add-needed">;
-def: F<"no-allow-shlib-undefined">;
 def: F<"no-copy-dt-needed-entries">;
 def: F<"no-ctors-in-init-array">;
 def: F<"no-keep-memory">;
