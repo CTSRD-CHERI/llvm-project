@@ -128,6 +128,8 @@ public:
 
     Intrinsic::ID SetLength = Intrinsic::cheri_cap_bounds_set;
     Function *SetLenFun = Intrinsic::getDeclaration(M, SetLength);
+    Intrinsic::ID StackToCap = Intrinsic::mips_stack_to_cap;
+    Function *StackToCapFn = Intrinsic::getDeclaration(M, StackToCap);
 
     IRBuilder<> B(C);
     const DataLayout &DL = F.getParent()->getDataLayout();
@@ -162,10 +164,6 @@ public:
       CheckPtrEscape::PtrInfo PI = CPE.checkAlloca(AI);
       // Only set bounds for allocas that escape this function
       const bool NeedBounds = PI.isEscaped();
-      if (!NeedBounds) {
-        LLVM_DEBUG(dbgs() << "No need to set bounds on stack alloca"; AI->dump());
-        continue;
-      }
 
       Instruction *BitCast =
           cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
@@ -175,23 +173,30 @@ public:
       Value *Size = ConstantInt::get(Type::getInt64Ty(C), ElementSize);
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
-      Value *Alloca = BitCast;
 
-      if (cheri::ShouldCollectCSetBoundsStats) {
-        cheri::addSetBoundsStats(AI->getAlignment(), Size, getPassName(),
-                                 cheri::SetBoundsPointerSource::Stack,
-                                 "set bounds on " +
-                                     cheri::inferLocalVariableName(AI),
-                                 cheri::inferSourceLocation(AI));
+      Value *Alloca = B.CreateCall(StackToCapFn, BitCast);
+      if (BitCast == AI)
+         BitCast = cast<Instruction>(Alloca);
+
+      if (NeedBounds) {
+        LLVM_DEBUG(dbgs() << "No need to set bounds on stack alloca";
+                   AI->dump());
+
+        if (cheri::ShouldCollectCSetBoundsStats) {
+          cheri::addSetBoundsStats(AI->getAlignment(), Size, getPassName(),
+                                   cheri::SetBoundsPointerSource::Stack,
+                                   "set bounds on " +
+                                       cheri::inferLocalVariableName(AI),
+                                   cheri::inferSourceLocation(AI));
+        }
+        LLVM_DEBUG(auto S = cheri::inferConstantValue(Size);
+                   dbgs() << AI->getFunction()->getName()
+                          << ": setting bounds on stack alloca to "
+                          << (S ? Twine(*S) : Twine("<unknown>"));
+                   AI->dump());
+        Alloca = B.CreateCall(SetLenFun, {Alloca, Size});
       }
-      LLVM_DEBUG(auto S = cheri::inferConstantValue(Size);
-                 dbgs() << AI->getFunction()->getName()
-                        << ": setting bounds on stack alloca to "
-                        << (S ? Twine(*S) : Twine("<unknown>"));
-                 AI->dump());
-
-      auto WithBounds = B.CreateCall(SetLenFun, {Alloca, Size});
-      Alloca = B.CreateBitCast(WithBounds, AllocaTy);
+      Alloca = B.CreateBitCast(Alloca, AllocaTy);
       AI->replaceNonMetadataUsesWith(Alloca);
       // If we didn't create a bitcast because the alloca has the right type
       // we need to set the @llvm.cheri.cap.bounds.set() argument to be the
@@ -199,10 +204,8 @@ public:
       // Otherwise we need to update the bitcast operand to be the alloca again
       // since it was replaced with the setbounds result by replaceNonMetadataUsesWith()
       // This is invalid IR so we need to undo it.
-      if (BitCast == AI)
-        WithBounds->setOperand(0, BitCast);
-      else
-        BitCast->setOperand(0, AI);
+      assert(BitCast != AI);
+      BitCast->setOperand(0, AI);
     }
     return true;
   }

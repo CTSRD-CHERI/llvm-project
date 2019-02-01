@@ -848,68 +848,31 @@ def CSCB  : CheriFmtCSC<0, (outs GPR32Opnd:$rd), (ins GPR32Opnd: $rs, CheriOpnd0
 def AddrFI64  : ComplexPattern<iFATPTR64, 1, "selectAddrFI", [frameindex], []>;
 def AddrFI128 : ComplexPattern<iFATPTR128, 1, "selectAddrFI", [frameindex], []>;
 def AddrFI256 : ComplexPattern<iFATPTR256, 1, "selectAddrFI", [frameindex], []>;
-// Load and store patterns for frame indices
-// FIXME: truncstore/extload nodes are not being used?
+
+def StackToCapPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd: $fi),
+                            "#StackToCapPseudo $cd, $fi",
+                            []>;
+
+def : Pat<(int_mips_stack_to_cap CheriOpnd:$addr), (CIncOffset $addr, ZERO_64)>;
+
 // These patterns need duplicating for each of the capability sizes.  It's not
 // clear why: we should be able to pattern match a ComplexPattern with an
 // overloaded return type, but that appears to be broken.
-
-multiclass FrameIndexPatterns<ComplexPattern Addr = addr> {
-  // FIXME: avoid this pattern for i8/i16 stack loads
-  def : Pat<(store CheriOpnd:$cs, Addr:$addr), (STORECAP $cs, ZERO_64, (i64 0), $addr)>;
-  def : Pat<(load Addr:$addr), (LOADCAP ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (sextloadi32 Addr:$addr)), (CAPLOAD3264 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (sextloadi16 Addr:$addr)), (CAPLOAD16 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (extloadi16 Addr:$addr)), (CAPLOAD16 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (sextloadi8 Addr:$addr)), (CAPLOAD8 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (extloadi8 Addr:$addr)), (CAPLOAD8 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (zextloadi32 Addr:$addr)), (CAPLOADU32 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (zextloadi16 Addr:$addr)), (CAPLOADU16 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (zextloadi8 Addr:$addr)), (CAPLOADU8 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (load Addr:$addr)), (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (extloadi32 Addr:$addr)), (CAPLOAD3264 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i32 (load Addr:$addr)), (CAPLOAD32 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i32 (sextloadi16 Addr:$addr)), (CAPLOAD1632 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i32 (extloadi16 Addr:$addr)), (CAPLOAD1632 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i32 (zextloadi16 Addr:$addr)), (CAPLOADU1632 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i32 (sextloadi8 Addr:$addr)), (CAPLOAD832 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i32 (extloadi8 Addr:$addr)), (CAPLOAD832 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i32 (zextloadi8 Addr:$addr)), (CAPLOADU832 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(truncstorei32 i64:$rs, Addr:$addr), (CAPSTORE3264 $rs, ZERO_64, (i64 0), $addr)>;
-  def : Pat<(truncstorei16 i64:$rs, Addr:$addr), (CAPSTORE16 $rs, ZERO_64, (i64 0), $addr)>;
-  def : Pat<(truncstorei16 i32:$rs, Addr:$addr), (CAPSTORE1632 $rs, ZERO_64, (i64 0), $addr)>;
-  def : Pat<(truncstorei8 i64:$rs, Addr:$addr), (CAPSTORE8 $rs, ZERO_64, (i64 0), $addr)>;
-  def : Pat<(truncstorei8 i32:$rs, Addr:$addr), (CAPSTORE832 $rs, ZERO_64, (i64 0), $addr)>;
-  def : Pat<(store i64:$rs, Addr:$addr), (CAPSTORE64 $rs, ZERO_64, (i64 0), $addr)>;
-  def : Pat<(store i32:$rs, Addr:$addr), (CAPSTORE32 $rs, ZERO_64, (i64 0), $addr)>;
-}
-defm : FrameIndexPatterns<AddrFI64>;
-defm : FrameIndexPatterns<AddrFI128>;
-defm : FrameIndexPatterns<AddrFI256>;
-
-// NOTE: removing the parentheses around (AddrFI128:$fi) in the output pattern will result in
-// an invalid CIncOffset: %2:cherigpr = CIncOffset %2:cherigpr, $zero_64
-def : Pat<(iFATPTR64 AddrFI64:$fi), (CIncOffset (AddrFI64:$fi), ZERO_64)>;
-def : Pat<(iFATPTR128 AddrFI128:$fi), (CIncOffset (AddrFI128:$fi), ZERO_64)>;
-def : Pat<(iFATPTR256 AddrFI256:$fi), (CIncOffset (AddrFI256:$fi), ZERO_64)>;
-
-// This would also work:
-// def frameindex_to_targetframeindex : SDNodeXForm<frameindex, [{
-//   auto FI = cast<FrameIndexSDNode>(N);
-//   return CurDAG->getTargetFrameIndex(FI->getIndex(), MVT::i32);
-// }]>;
-// def : Pat<(iFATPTR128 frameindex:$fi), (CIncOffset (frameindex_to_targetframeindex $fi), ZERO_64)>;
-//
-// Using a Pseudo instruction also seems to work fine:
-// def StackToCapPseudo64 : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi), "#StackToCapPseudo $cd, $fi", [(set CheriOpnd:$cd, AddrFI64:$fi)]>;
-// def StackToCapPseudo128 : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi), "#StackToCapPseudo $cd, $fi", [(set CheriOpnd:$cd, AddrFI128:$fi)]>;
-// def StackToCapPseudo256 : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi), "#StackToCapPseudo $cd, $fi", [(set CheriOpnd:$cd, AddrFI256:$fi)]>;
-
-// TODO: maybe this will allow folding more offsets into the CIncOffset/clc/csc, etc.
-// def addrRegImm64 : ComplexPattern<iFATPTR64, 2, "selectAddrRegImm", [frameindex]>;
-// def addrRegImm128 : ComplexPattern<iFATPTR128, 2, "selectAddrRegImm", [frameindex]>;
-// def addrRegImm256 : ComplexPattern<iFATPTR256, 2, "selectAddrRegImm", [frameindex]>;
-
+def : Pat<(int_mips_stack_to_cap AddrFI64:$addr), (CIncOffset $addr, ZERO_64)>;
+def : Pat<(load (CapRegType (AddrFI64:$addr))),
+              (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
+def : Pat<(load (CapRegType (AddrFI64:$addr))),
+              (LOADCAP ZERO_64, (i64 0), $addr)>;
+def : Pat<(int_mips_stack_to_cap AddrFI128:$addr), (CIncOffset $addr, ZERO_64)>;
+def : Pat<(load (CapRegType (AddrFI128:$addr))),
+              (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
+def : Pat<(load (CapRegType (AddrFI128:$addr))),
+              (LOADCAP ZERO_64, (i64 0), $addr)>;
+def : Pat<(int_mips_stack_to_cap AddrFI256:$addr), (CIncOffset $addr, ZERO_64)>;
+def : Pat<(load (CapRegType (AddrFI256:$addr))),
+              (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
+def : Pat<(load (CapRegType (AddrFI256:$addr))),
+              (LOADCAP ZERO_64, (i64 0), $addr)>;
 
 let Defs = [C11], Uses = [C11], hasSideEffects = 1, Predicates=[IsCHERIABI] in {
 def ADJCALLSTACKCAPDOWN : MipsPseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),

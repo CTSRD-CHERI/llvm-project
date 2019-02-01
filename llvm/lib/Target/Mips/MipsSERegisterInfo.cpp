@@ -241,36 +241,16 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   int ImmOpNo = OpNo + 1;
   if (ABI.IsCheriPureCap()) {
     RegOpNo = OpNo;
-    switch (MI.getOpcode()) {
-    case Mips::CAPSTORE64:
-    case Mips::CAPSTORE32:
-    case Mips::CAPSTORE3264:
-    case Mips::CAPSTORE16:
-    case Mips::CAPSTORE1632:
-    case Mips::CAPSTORE8:
-    case Mips::CAPSTORE832:
-    case Mips::STORECAP:
-    case Mips::LOADCAP:
-    case Mips::CAPLOAD64:
-    case Mips::CAPLOAD32:
-    case Mips::CAPLOAD3264:
-    case Mips::CAPLOADU32:
-    case Mips::CAPLOAD16:
-    case Mips::CAPLOAD1632:
-    case Mips::CAPLOADU16:
-    case Mips::CAPLOADU1632:
-    case Mips::CAPLOAD8:
-    case Mips::CAPLOAD832:
-    case Mips::CAPLOADU8:
-    case Mips::CAPLOADU832:
+    if ((MI.getOpcode() == Mips::CAPSTORE64) ||
+        (MI.getOpcode() == Mips::CAPSTORE32) ||
+        (MI.getOpcode() == Mips::STORECAP) ||
+        (MI.getOpcode() == Mips::CAPLOAD64) ||
+        (MI.getOpcode() == Mips::CAPLOAD32) ||
+        (MI.getOpcode() == Mips::LOADCAP)) {
       ImmOpNo = 2;
       RegOpNo = 3;
-      break;
-    case Mips::CIncOffset:
-      break;
-    default:
-      llvm_unreachable("Unsupported instruction in eliminateFI!");
-    }
+    } else
+      assert(MI.getOpcode() == Mips::CIncOffset);
   }
 
 
