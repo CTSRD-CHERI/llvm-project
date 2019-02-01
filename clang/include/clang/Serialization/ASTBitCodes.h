@@ -1543,6 +1543,9 @@ namespace serialization {
       /// A PragmaDetectMismatchDecl record.
       DECL_PRAGMA_DETECT_MISMATCH,
 
+      /// An OMPDeclareMapperDecl record.
+      DECL_OMP_DECLARE_MAPPER,
+
       /// An OMPDeclareReductionDecl record.
       DECL_OMP_DECLARE_REDUCTION,
 

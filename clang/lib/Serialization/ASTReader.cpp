@@ -12306,7 +12306,7 @@ void OMPClauseReader::VisitOMPMapClause(OMPMapClause *C) {
   SmallVector<Expr *, 16> Vars;
   Vars.reserve(NumVars);
   for (unsigned i = 0; i != NumVars; ++i)
-    Vars.push_back(Record.readSubExpr());
+    Vars.push_back(Record.readExpr());
   C->setVarRefs(Vars);
 
   SmallVector<ValueDecl *, 16> Decls;
@@ -12330,7 +12330,7 @@ void OMPClauseReader::VisitOMPMapClause(OMPMapClause *C) {
   SmallVector<OMPClauseMappableExprCommon::MappableComponent, 32> Components;
   Components.reserve(TotalComponents);
   for (unsigned i = 0; i < TotalComponents; ++i) {
-    Expr *AssociatedExpr = Record.readSubExpr();
+    Expr *AssociatedExpr = Record.readExpr();
     auto *AssociatedDecl = Record.readDeclAs<ValueDecl>();
     Components.push_back(OMPClauseMappableExprCommon::MappableComponent(
         AssociatedExpr, AssociatedDecl));
