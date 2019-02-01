@@ -154,7 +154,8 @@ public:
 
   void printDynamicTable() override;
   void printNeededLibraries() override;
-  void printProgramHeaders() override;
+  void printProgramHeaders(bool PrintProgramHeaders,
+                           cl::boolOrDefault PrintSectionMapping) override;
   void printHashTable() override;
   void printGnuHashTable() override;
   void printLoadName() override;
@@ -341,7 +342,9 @@ public:
   virtual void printSymbol(const ELFFile<ELFT> *Obj, const Elf_Sym *Symbol,
                            const Elf_Sym *FirstSym, StringRef StrTable,
                            bool IsDynamic) = 0;
-  virtual void printProgramHeaders(const ELFFile<ELFT> *Obj) = 0;
+  virtual void printProgramHeaders(const ELFFile<ELFT> *Obj,
+                                   bool PrintProgramHeaders,
+                                   cl::boolOrDefault PrintSectionMapping) = 0;
   virtual void printHashHistogram(const ELFFile<ELFT> *Obj) = 0;
   virtual void printCGProfile(const ELFFile<ELFT> *Obj) = 0;
   virtual void printAddrsig(const ELFFile<ELFT> *Obj) = 0;
@@ -374,7 +377,8 @@ public:
   void printDynamicRelocations(const ELFO *Obj) override;
   void printSymtabMessage(const ELFO *Obj, StringRef Name,
                           size_t Offset) override;
-  void printProgramHeaders(const ELFO *Obj) override;
+  void printProgramHeaders(const ELFO *Obj, bool PrintProgramHeaders,
+                           cl::boolOrDefault PrintSectionMapping) override;
   void printHashHistogram(const ELFFile<ELFT> *Obj) override;
   void printCGProfile(const ELFFile<ELFT> *Obj) override;
   void printAddrsig(const ELFFile<ELFT> *Obj) override;
@@ -448,6 +452,8 @@ private:
   bool checkoffsets(const Elf_Phdr &Phdr, const Elf_Shdr &Sec);
   bool checkVMA(const Elf_Phdr &Phdr, const Elf_Shdr &Sec);
   bool checkPTDynamic(const Elf_Phdr &Phdr, const Elf_Shdr &Sec);
+  void printProgramHeaders(const ELFO *Obj);
+  void printSectionMapping(const ELFO *Obj);
 };
 
 template <typename ELFT> class LLVMStyle : public DumpStyle<ELFT> {
@@ -465,7 +471,8 @@ public:
   void printSymbols(const ELFO *Obj, bool PrintSymbols,
                     bool PrintDynamicSymbols) override;
   void printDynamicRelocations(const ELFO *Obj) override;
-  void printProgramHeaders(const ELFO *Obj) override;
+  void printProgramHeaders(const ELFO *Obj, bool PrintProgramHeaders,
+                           cl::boolOrDefault PrintSectionMapping) override;
   void printHashHistogram(const ELFFile<ELFT> *Obj) override;
   void printCGProfile(const ELFFile<ELFT> *Obj) override;
   void printAddrsig(const ELFFile<ELFT> *Obj) override;
@@ -482,6 +489,8 @@ private:
   void printDynamicSymbols(const ELFO *Obj);
   void printSymbol(const ELFO *Obj, const Elf_Sym *Symbol, const Elf_Sym *First,
                    StringRef StrTable, bool IsDynamic) override;
+  void printProgramHeaders(const ELFO *Obj);
+  void printSectionMapping(const ELFO *Obj) {}
 
   ScopedPrinter &W;
 };
@@ -1623,8 +1632,11 @@ void ELFDumper<ELFT>::printRelocations() {
   ELFDumperStyle->printRelocations(ObjF->getELFFile());
 }
 
-template <class ELFT> void ELFDumper<ELFT>::printProgramHeaders() {
-  ELFDumperStyle->printProgramHeaders(ObjF->getELFFile());
+template <class ELFT>
+void ELFDumper<ELFT>::printProgramHeaders(
+    bool PrintProgramHeaders, cl::boolOrDefault PrintSectionMapping) {
+  ELFDumperStyle->printProgramHeaders(ObjF->getELFFile(), PrintProgramHeaders,
+                                      PrintSectionMapping);
 }
 
 template <class ELFT> void ELFDumper<ELFT>::printDynamicRelocations() {
@@ -3577,6 +3589,19 @@ bool GNUStyle<ELFT>::checkPTDynamic(const Elf_Phdr &Phdr, const Elf_Shdr &Sec) {
 }
 
 template <class ELFT>
+void GNUStyle<ELFT>::printProgramHeaders(
+    const ELFO *Obj, bool PrintProgramHeaders,
+    cl::boolOrDefault PrintSectionMapping) {
+  if (PrintProgramHeaders)
+    printProgramHeaders(Obj);
+
+  // Display the section mapping along with the program headers, unless
+  // -section-mapping is explicitly set to false.
+  if (PrintSectionMapping != cl::BOU_FALSE)
+    printSectionMapping(Obj);
+}
+
+template <class ELFT>
 void GNUStyle<ELFT>::printProgramHeaders(const ELFO *Obj) {
   unsigned Bias = ELFT::Is64Bits ? 8 : 0;
   const Elf_Ehdr *Header = Obj->getHeader();
@@ -3614,6 +3639,10 @@ void GNUStyle<ELFT>::printProgramHeaders(const ELFO *Obj) {
     }
     OS << "\n";
   }
+}
+
+template <class ELFT>
+void GNUStyle<ELFT>::printSectionMapping(const ELFO *Obj) {
   OS << "\n Section to Segment mapping:\n  Segment Sections...\n";
   int Phnum = 0;
   for (const Elf_Phdr &Phdr : unwrapOrError(Obj->program_headers())) {
@@ -4750,6 +4779,16 @@ void LLVMStyle<ELFT>::printDynamicRelocation(const ELFO *Obj, Elf_Rela Rel) {
        << (!SymbolName.empty() ? SymbolName : "-") << " "
        << W.hex(Rel.r_addend) << "\n";
   }
+}
+
+template <class ELFT>
+void LLVMStyle<ELFT>::printProgramHeaders(
+    const ELFO *Obj, bool PrintProgramHeaders,
+    cl::boolOrDefault PrintSectionMapping) {
+  if (PrintProgramHeaders)
+    printProgramHeaders(Obj);
+  if (PrintSectionMapping == cl::BOU_TRUE)
+    printSectionMapping(Obj);
 }
 
 template <class ELFT>
