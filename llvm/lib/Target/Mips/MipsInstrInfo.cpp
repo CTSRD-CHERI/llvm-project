@@ -756,6 +756,17 @@ static bool verifyInsExtInstruction(const MachineInstr &MI, StringRef &ErrInfo,
 }
 
 //  Perform target specific instruction verification.
+template<unsigned Width, unsigned Scale>
+bool checkScaledImmediate(const MachineInstr &MI, StringRef& ErrInfo, unsigned OpndIdx) {
+  assert(MI.getDesc().OpInfo[OpndIdx].OperandType == MCOI::OPERAND_IMMEDIATE);
+  if (MI.getOperand(OpndIdx).isImm() && !isShiftedInt<Width, Scale>(MI.getOperand(OpndIdx).getImm())) {
+    ErrInfo = "Operand immediate is not representable!";
+    return false;
+  }
+  return true;
+}
+
+
 bool MipsInstrInfo::verifyInstruction(const MachineInstr &MI,
                                       StringRef &ErrInfo) const {
   // Verify that ins and ext instructions are well formed.
@@ -818,7 +829,40 @@ bool MipsInstrInfo::verifyInstruction(const MachineInstr &MI,
         }
       }
       return true;
-
+    // FIXME: duplicating all this here is silly, tablegen should
+    //   be able to generate those checks!
+    case Mips::CAPLOADU8:
+    case Mips::CAPLOADU832:
+    case Mips::CAPLOAD8:
+    case Mips::CAPLOAD832:
+    case Mips::CAPSTORE8:
+    case Mips::CAPSTORE832:
+      return checkScaledImmediate<8, 0>(MI, ErrInfo, 2);
+    case Mips::CAPLOADU16:
+    case Mips::CAPLOADU1632:
+    case Mips::CAPLOAD16:
+    case Mips::CAPLOAD1632:
+    case Mips::CAPSTORE16:
+    case Mips::CAPSTORE1632:
+      return checkScaledImmediate<8, 1>(MI, ErrInfo, 2);
+    case Mips::CAPLOADU32:
+    case Mips::CAPLOAD3264:
+    case Mips::CAPSTORE32:
+    case Mips::CAPSTORE3264:
+      return checkScaledImmediate<8, 2>(MI, ErrInfo, 2);
+    case Mips::CAPLOAD64:
+    case Mips::CAPSTORE64:
+      return checkScaledImmediate<8, 3>(MI, ErrInfo, 2);
+    case Mips::STORECAP:
+    case Mips::LOADCAP:
+      return checkScaledImmediate<11, 4>(MI, ErrInfo, 2);
+    case Mips::LOADCAP_BigImm:
+      return checkScaledImmediate<16, 4>(MI, ErrInfo, 1);
+    case Mips::CIncOffsetImm:
+      return checkScaledImmediate<11, 0>(MI, ErrInfo, 2);
+    case Mips::CSetBoundsImm:
+      // FIXME: actually 11 bit unsigned
+      return checkScaledImmediate<12, 0>(MI, ErrInfo, 2);
     default:
       return true;
   }
