@@ -60,7 +60,7 @@ multiclass ShiftUImmPattern<int Width, int Shift> {
     >;
   def NAME : Operand<i64> {
     let ParserMatchClass = UImmScaled<Width, Shift>;
-    let EncoderMethod = "getShiftedImmediate<" # Width # ", " # Shift # ">";
+    let EncoderMethod = "getShiftedUnsignedImmediate<" # Width # ", " # Shift # ">";
     let DecoderMethod = "DecodeUImmWithOffsetAndScale<" # Width # ", 0, (1 <<" # Shift # ")>";
   }
 }
