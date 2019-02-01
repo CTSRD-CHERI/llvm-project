@@ -44,6 +44,7 @@ multiclass ShiftSImmPattern<int Width, int Shift> {
     let ParserMatchClass = SImmScaled<Width, Shift>;
     let EncoderMethod = "getShiftedImmediate<" # Width # ", " # Shift # ">";
     let DecoderMethod = "DecodeSImmWithOffsetAndScale<" # Width # ", 0, (1 <<" # Shift # ")>";
+    let OperandType = "OPERAND_IMMEDIATE";
   }
 }
 
@@ -62,6 +63,7 @@ multiclass ShiftUImmPattern<int Width, int Shift> {
     let ParserMatchClass = UImmScaled<Width, Shift>;
     let EncoderMethod = "getShiftedUnsignedImmediate<" # Width # ", " # Shift # ">";
     let DecoderMethod = "DecodeUImmWithOffsetAndScale<" # Width # ", 0, (1 <<" # Shift # ")>";
+    let OperandType = "OPERAND_IMMEDIATE";
   }
 }
 
