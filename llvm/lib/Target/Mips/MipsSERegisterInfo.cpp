@@ -68,14 +68,24 @@ MipsSERegisterInfo::intRegClass(unsigned Size) const {
 static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode,
                                                     MachineOperand MO) {
   switch (Opcode) {
+  case Mips::CAPSTORE8:
+  case Mips::CAPSTORE832:
+  case Mips::CAPLOAD8:
+  case Mips::CAPLOAD832:
+  case Mips::CAPLOADU8:
+  case Mips::CAPLOADU832:
+    return 8;
   case Mips::CAPSTORE16:
+  case Mips::CAPSTORE1632:
   case Mips::CAPLOAD16:
   case Mips::CAPLOAD1632:
-  case Mips::CAPLOADU1632:
   case Mips::CAPLOADU16:
+  case Mips::CAPLOADU1632:
     return 8 + 1 /* scale factor */;
   case Mips::CAPSTORE32:
+  case Mips::CAPSTORE3264:
   case Mips::CAPLOAD32:
+  case Mips::CAPLOAD3264:
   case Mips::CAPLOADU32:
     return 8 + 2 /* scale factor */;
   case Mips::CAPSTORE64:
@@ -84,6 +94,9 @@ static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode,
   case Mips::LOADCAP:
   case Mips::STORECAP:
     return 11 + 4 /* scale factor */;
+  case Mips::LOADCAP_BigImm:
+  case Mips::STORECAP_BigImm:
+    return 16 + 4 /* scale factor */;
   case Mips::LD_B:
   case Mips::ST_B:
     return 10;
@@ -316,7 +329,8 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     }
 
     if (ABI.IsCheriPureCap()) {
-      if (!isIntN(OffsetBitSize, Offset)) {
+      assert(isInt<16>(Offset) && "Cannot handle > 16bit offsets here!");
+      if (!isIntN(OffsetBitSize, Offset) || OffsetToAlignment(Offset, OffsetAlign) != 0) {
         MachineBasicBlock &MBB = *MI.getParent();
         // If we have an offset that needs to fit into a signed n-bit immediate
         // (where n < 16) and doesn't, but does fit into 16-bits then use an ADDiu
@@ -326,6 +340,7 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
             ABI.ArePtrs64bit() ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
         MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
         unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
+        // TODO: use CIncOffsetImmediate here!
         if (needsIncOffset) {
           BuildMI(MBB, II, DL, TII.get(Mips::CIncOffset), FrameReg)
               .addReg(FrameReg)
