@@ -64,8 +64,8 @@ defm allow_multiple_definition: B<"allow-multiple-definition",
     "Do not allow multiple definitions (default)">;
 
 defm allow_shlib_undefined: B<"allow-shlib-undefined",
-    "Allow unresolved references in shared libraries (default)",
-    "Do not allow unresolved references in shared libraries">;
+    "Allow unresolved references in shared libraries (default when linking a shared library)",
+    "Do not allow unresolved references in shared libraries (default when linking an executable)">;
 
 def allow_undefined_cap_relocs: F<"allow-undefined-cap-relocs">,
   HelpText<"Allow multiple definitions">;
