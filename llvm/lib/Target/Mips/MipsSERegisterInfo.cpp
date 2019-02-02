@@ -334,8 +334,11 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
         MachineBasicBlock &MBB = *MI.getParent();
         // If we have an offset that needs to fit into a signed n-bit immediate
         // (where n < 16) and doesn't, but does fit into 16-bits then use an ADDiu
-        bool isFrameReg = MI.getOperand(0).getReg() == FrameReg;
+        bool isFrameRegLoad = MI.getOperand(0).getReg() == FrameReg && MI.getOpcode() != Mips::STORECAP;
         bool needsIncOffset = MI.getOperand(1).getReg() != Mips::ZERO_64;
+        MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
+#if 0
+        // This was the original code which avoids allocating a new capreg.
         const TargetRegisterClass *PtrRC =
             ABI.ArePtrs64bit() ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
         MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
@@ -354,8 +357,26 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
               .addReg(FrameReg)
               .addReg(NegReg, RegState::Kill);
           }
-        } else
+#endif
+        unsigned TmpCap = RegInfo.createVirtualRegister(&Mips::CheriGPRRegClass);
+        // TODO: use CIncOffsetImmediate here!
+        if (needsIncOffset) {
+          if (isInt<11>(Offset)) {
+            BuildMI(MBB, II, DL, TII.get(Mips::CIncOffsetImm), TmpCap)
+                .addReg(FrameReg, isFrameRegLoad ? RegState::Kill : 0)
+                .addImm(Offset);
+          } else {
+            unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
+            BuildMI(MBB, II, DL, TII.get(Mips::CIncOffset), TmpCap)
+                .addReg(FrameReg, isFrameRegLoad ? RegState::Kill : 0)
+                .addReg(Reg, RegState::Kill);
+          }
+          FrameReg = TmpCap;
+          IsKill = true;
+        } else {
+          unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
           MI.getOperand(1).ChangeToRegister(Reg, false, false, true);
+        }
         Offset = 0;
       }
     } else if (OffsetBitSize < 16 && isInt<16>(Offset) &&
