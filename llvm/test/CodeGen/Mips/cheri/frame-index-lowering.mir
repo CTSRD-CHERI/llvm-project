@@ -11,10 +11,13 @@
   %"class.Webcore::Settings" = type {}
   %"class.Webcore::URL" = type { i8 addrspace(200)*, i8, [300 x i8], i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, [4 x i8] }
   %"class.huge_pad" = type { [20000 x i8] }
+  %"class.over_16_pad" = type { [60000 x i8] }
 
   declare void @_BAR(%"class.Webcore::Settings" addrspace(200)*, %"class.Webcore::URL" addrspace(200)* dereferenceable(64)) local_unnamed_addr addrspace(200) #0
 
   define hidden void @_ZN19QWebSettingsPrivate5applyEv() local_unnamed_addr addrspace(200) #0 align 2 {
+    %over_16_bit_imm = alloca i8, align 4, addrspace(200)
+    %over_16_bit_imm_pad = alloca %"class.over_16_pad", align 8, addrspace(200)
     %huge_imm = alloca i8, align 4, addrspace(200)
     %huge_pad = alloca %"class.huge_pad", align 8, addrspace(200)
     %medium_imm = alloca i8, align 4, addrspace(200)
@@ -70,22 +73,28 @@ frameInfo:
   restorePoint:    ''
 fixedStack:      []
 stack:
-  - { id: 0, name: huge_imm, type: spill-slot, offset: 0, size: 8, alignment: 8,
+  - { id: 0, name: over_16_bit_imm, type: spill-slot, offset: 0, size: 8, alignment: 8,
       stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
-  - { id: 1, name: huge_pad, type: spill-slot, offset: 0, size: 20000, alignment: 16,
+  - { id: 1, name: over_16_bit_imm_pad, type: spill-slot, offset: 0, size: 60000, alignment: 16,
       stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
-  - { id: 2, name: medium_imm, type: default, offset: 0, size: 1, alignment: 4,
+  - { id: 2, name: huge_imm, type: spill-slot, offset: 0, size: 8, alignment: 8,
       stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
-  - { id: 3, name: medium_pad, type: default, offset: 0, size: 368, alignment: 16,
+  - { id: 3, name: huge_pad, type: spill-slot, offset: 0, size: 20000, alignment: 16,
       stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
-  - { id: 4, name: tiny_imm, type: spill-slot, offset: 0, size: 4, alignment: 4,
+  - { id: 4, name: medium_imm, type: default, offset: 0, size: 1, alignment: 4,
       stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
-  - { id: 5, name: tiny_pad, type: spill-slot, offset: 0, size: 4, alignment: 4,
+  - { id: 5, name: medium_pad, type: default, offset: 0, size: 368, alignment: 16,
+      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 6, name: tiny_imm, type: spill-slot, offset: 0, size: 4, alignment: 4,
+      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+  - { id: 7, name: tiny_pad, type: spill-slot, offset: 0, size: 4, alignment: 4,
       stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
       debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
 constants:       []
@@ -95,30 +104,60 @@ body:             |
 
     ; CHECK-LABEL: name: _ZN19QWebSettingsPrivate5applyEv
     ; CHECK: liveins: $c12, $a0, $ddc
-    ; CHECK: $at_64 = DADDiu $zero_64, -20416
     ; CHECK: $c11 = CIncOffset $c11, killed $at_64
-    ; CHECK: CFI_INSTRUCTION def_cfa_offset 20416
-    CAPSTORE8 killed $zero_64, $zero_64, 0, %stack.4.tiny_imm :: (store 1 into %ir.tiny_imm, align 4, addrspace 200)
-    ; CHECK: CAPSTORE8 killed $zero_64, $zero_64, 12, $c11 :: (store 1 into %ir.tiny_imm, align 4, addrspace 200)
-    CAPSTORE16 killed $zero_64, $zero_64, 0, %stack.2.medium_imm :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
-    ; CHECK: $at_64 = DADDiu $zero_64, 396
-    ; CHECK: CAPSTORE16 killed $zero_64, killed $at_64, 0, $c11 :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
-    CAPSTORE16 killed $zero_64, $a0_64, 0, %stack.2.medium_imm :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
-    ; CHECK: $c1 = CIncOffsetImm $c11, 396
-    ; CHECK: CAPSTORE16 killed $zero_64, $a0_64, 0, killed $c1 :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
-    CAPSTORE8 killed $zero_64, $zero_64, 0, %stack.0.huge_imm :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
-    ; CHECK: $at_64 = DADDiu $zero_64, 20408
-    ; CHECK: CAPSTORE8 killed $zero_64, killed $at_64, 0, $c11 :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
-    CAPSTORE8 killed $zero_64, $a0_64, 0, %stack.0.huge_imm :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
-    ; CHECK: $at_64 = DADDiu $zero_64, 20408
-    ; CHECK: $c1 = CIncOffset $c11, killed $at_64
-    ; CHECK: CAPSTORE8 killed $zero_64, $a0_64, 0, killed $c1 :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: CFI_INSTRUCTION def_cfa_offset 80432
+
+    CAPSTORE8 killed $zero_64, $zero_64, 0, %stack.6.tiny_imm :: (store 1 into %ir.tiny_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: CAPSTORE8 killed $zero_64, $zero_64, 12, $c11 :: (store 1 into %ir.tiny_imm, align 4, addrspace 200)
+
+    CAPSTORE16 killed $zero_64, $zero_64, 0, %stack.4.medium_imm :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 396
+    ; CHECK-NEXT: CAPSTORE16 killed $zero_64, killed $at_64, 0, $c11 :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
+
+    CAPSTORE16 killed $zero_64, $a0_64, 0, %stack.4.medium_imm :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: $c1 = CIncOffsetImm $c11, 396
+    ; CHECK-NEXT: CAPSTORE16 killed $zero_64, $a0_64, 0, killed $c1 :: (store 1 into %ir.medium_imm, align 4, addrspace 200)
+
+    CAPSTORE8 killed $zero_64, $zero_64, 0, %stack.2.huge_imm :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 20408
+    ; CHECK-NEXT: CAPSTORE8 killed $zero_64, killed $at_64, 0, $c11 :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
+
+    CAPSTORE8 killed $zero_64, $a0_64, 0, %stack.2.huge_imm :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
+    ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 20408
+    ; CHECK-NEXT: $c1 = CIncOffset $c11, killed $at_64
+    ; CHECK-NEXT: CAPSTORE8 killed $zero_64, $a0_64, 0, killed $c1 :: (store 1 into %ir.huge_imm, align 4, addrspace 200)
+
     ; Try loading into the frame register:
-    $c11 = LOADCAP $zero_64, 0, %stack.0.huge_imm :: (load 16 from %ir.huge_imm, align 16, addrspace 200)
-    ; CHECK: $at_64 = DADDiu $zero_64, 20408
-    ; CHECK: $c11 = LOADCAP killed $at_64, 0, $c11 :: (load 16 from %ir.huge_imm, addrspace 200)
-    $c11 = LOADCAP $a0_64, 0, %stack.0.huge_imm :: (load 16 from %ir.huge_imm, align 16, addrspace 200)
-    ; CHECK: $at_64 = DADDiu $zero_64, 20408
-    ; CHECK: $c1 = CIncOffset killed $c11, killed $at_64
-    ; CHECK: $c11 = LOADCAP $a0_64, 0, killed $c1 :: (load 16 from %ir.huge_imm, addrspace 200)
+    $c11 = LOADCAP $zero_64, 0, %stack.2.huge_imm :: (load 16 from %ir.huge_imm, align 16, addrspace 200)
+    ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 20408
+    ; CHECK-NEXT: $c11 = LOADCAP killed $at_64, 0, $c11 :: (load 16 from %ir.huge_imm, addrspace 200)
+
+    $c11 = LOADCAP $a0_64, 0, %stack.2.huge_imm :: (load 16 from %ir.huge_imm, align 16, addrspace 200)
+    ; CHECK-NEXT: $at_64 = DADDiu $zero_64, 20408
+    ; CHECK-NEXT: $c1 = CIncOffset killed $c11, killed $at_64
+    ; CHECK-NEXT: $c11 = LOADCAP $a0_64, 0, killed $c1 :: (load 16 from %ir.huge_imm, addrspace 200)
+
+    ; more than 16 bits test here:
+    CAPSTORE64 killed $zero_64, $zero_64, 0, %stack.0.over_16_bit_imm :: (store 8 into %ir.over_16_bit_imm, align 8, addrspace 200)
+    ; CHECK-NEXT: $at_64 = LUi64 1
+    ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, 14888
+    ; CHECK-NEXT: CAPSTORE64 killed $zero_64, killed $at_64, 0, $c11 :: (store 8 into %ir.over_16_bit_imm, addrspace 200)
+
+    CAPSTORE64 killed $zero_64, $a0_64, 0, %stack.0.over_16_bit_imm :: (store 8 into %ir.over_16_bit_imm, align 8, addrspace 200)
+    ; CHECK-NEXT: $at_64 = LUi64 1
+    ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, 14888
+    ; CHECK-NEXT: $c1 = CIncOffset $c11, killed $at_64
+    ; CHECK-NEXT: CAPSTORE64 killed $zero_64, $a0_64, 0, killed $c1 :: (store 8 into %ir.over_16_bit_imm, addrspace 200)
+
+
+    $c11 = LOADCAP $zero_64, 0, %stack.0.over_16_bit_imm :: (load 16 from %ir.over_16_bit_imm, align 16, addrspace 200)
+    ; CHECK-NEXT: $at_64 = LUi64 1
+    ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, 14888
+    ; CHECK-NEXT: $c11 = LOADCAP killed $at_64, 0, $c11 :: (load 16 from %ir.over_16_bit_imm, addrspace 200)
+
+    $c11 = LOADCAP $a0_64, 0, %stack.0.over_16_bit_imm :: (load 16 from %ir.over_16_bit_imm, align 16, addrspace 200)
+    ; CHECK-NEXT: $at_64 = LUi64 1
+    ; CHECK-NEXT: $at_64 = DADDiu killed $at_64, 14888
+    ; CHECK-NEXT: $c1 = CIncOffset killed $c11, killed $at_64
+    ; CHECK-NEXT: $c11 = LOADCAP $a0_64, 0, killed $c1 :: (load 16 from %ir.over_16_bit_imm, addrspace 200)
 ...

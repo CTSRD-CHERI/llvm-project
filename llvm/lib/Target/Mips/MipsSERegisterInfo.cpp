@@ -329,7 +329,6 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
     }
 
     if (ABI.IsCheriPureCap()) {
-      assert(isInt<16>(Offset) && "Cannot handle > 16bit offsets here!");
       if (!isIntN(OffsetBitSize, Offset) || OffsetToAlignment(Offset, OffsetAlign) != 0) {
         MachineBasicBlock &MBB = *MI.getParent();
         // If we have an offset that needs to fit into a signed n-bit immediate
