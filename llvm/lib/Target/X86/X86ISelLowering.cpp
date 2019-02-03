@@ -20029,7 +20029,7 @@ getX86XALUOOp(X86::CondCode &Cond, SDValue Op, SelectionDAG &DAG) {
     break;
   case ISD::UADDO:
     BaseOp = X86ISD::ADD;
-    Cond = X86::COND_B;
+    Cond = isOneConstant(RHS) ? X86::COND_E : X86::COND_B;
     break;
   case ISD::SSUBO:
     BaseOp = X86ISD::SUB;
@@ -35056,6 +35056,12 @@ static SDValue combineCarryThroughADD(SDValue EFLAGS, SelectionDAG &DAG) {
             return SDValue(SubCommute.getNode(), CarryOp1.getResNo());
           }
         }
+        // If this is a check of the z flag of an add with 1, switch to the
+        // C flag.
+        if (CarryCC == X86::COND_E &&
+            CarryOp1.getOpcode() == X86ISD::ADD &&
+            isOneConstant(CarryOp1.getOperand(1)))
+          return CarryOp1;
       }
     }
   }
