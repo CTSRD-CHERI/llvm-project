@@ -80,8 +80,7 @@ void test_store() {
   // ASM-LABEL: test_store:
   // TODO: why is this not going in the delay slot?
   // ASM: clcbi	$c1, %captab20(a)($c26)
-  // ASM-NEXT: cgetnull	$c2
-  // ASM-NEXT: cincoffset	$c2, $c2, 1
+  // ASM-NEXT: cincoffset	$c2, $cnull, 1
   // ASM-NEXT: sync
   // ASM-NEXT: csc	$c2, $zero, 0($c1)
   // ASM-NEXT: sync

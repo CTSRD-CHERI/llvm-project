@@ -117,8 +117,9 @@ void test_twolevels_nodive() {
 int test_semun_read_int(union semun s) {
   return s.val + 1;
   // ASM-LABEL: test_semun_read_int:
-  // ASM-:     csc	$c3, $zero, 0($c1)
-  // ASM:      clw	$1, $zero, 0($c1)
+  // ASM:      cincoffset	$c11, $c11, -[[$CAP_SIZE]]
+  // ASM-NEXT: csc	$c3, $zero, 0($c11)
+  // ASM-NEXT: clw	$1, $zero, 0($c11)
   // ASM-NEXT: addiu	$2, $1, 1
   // ASM-NEXT: cjr	$c17
   // ASM: .end test_semun_read_int
@@ -128,10 +129,10 @@ extern int semun_pass_int_helper(union semun s);
 int test_semun_pass_int(union semun s) {
   s.val = 1234;
   // ASM-LABEL: test_semun_pass_int:
-  // ASM:      csc	$c3, $zero, 0($c1)
+  // ASM:      csc	$c3, $zero, 0($c11)
   // ASM-NEXT: addiu	$1, $zero, 1234
-  // ASM-NEXT: csw	$1, $zero, 0($c1)
-  // ASM-NEXT: clc	$c3, $zero, 0($c1)
+  // ASM-NEXT: csw	$1, $zero, 0($c11)
+  // ASM:      clc	$c3, $zero, 0($c11)
   // ASM-LABEL: .end test_semun_pass_int
   return semun_pass_int_helper(s);
 }
@@ -139,8 +140,8 @@ int test_semun_pass_int(union semun s) {
 int test_semun_pass_int_2() {
   // ASM-LABEL: test_semun_pass_int_2:
   // ASM:      addiu	$1, $zero, 1234
-  // ASM-NEXT: csw	$1, $zero, 0($c1)
-  // ASM-NEXT: clc	$c3, $zero, 0($c1)
+  // ASM-NEXT: csw	$1, $zero, 0($c11)
+  // ASM:      clc	$c3, $zero, 0($c11)
   // ASM-LABEL: .end test_semun_pass_int_2
   return semun_pass_int_helper((union semun){.val = 1234});
 }
