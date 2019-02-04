@@ -641,10 +641,8 @@ def : InstAlias<"csetkr2c $src",    (CWriteHwr CAPHWR23, CheriOpnd:$src), 0>;
 
 
 // Must come before cfromddc to have a higher priority when disassembling
-// TODO: once $c0 is a null register change this
-def : InstAlias<"cgetnull $dst", (CFromPtr CheriOpnd:$dst, DDC, ZERO_64), 1>;
-// TODO: enable these once we have a null register:
-// def : InstAlias<"cgetnull $dst", (CMove CheriOpnd:$dst, CNULL), 1>;
+def : InstAlias<"cgetnull $dst", (CMove CheriOpnd:$dst, CNULL), 1>;
+def : InstAlias<"cgetnull_old $dst", (CFromPtr CheriOpnd:$dst, DDC, ZERO_64), 1>;
 // def : InstAlias<"cfromint $dst, $src", (CIncOffset CheriOpnd:$dst, CNULL, GPR64Opnd:$src), 1>;
 
 // So that we can use ptr -> int without a warning that $c0 access is deprecated in .s files
