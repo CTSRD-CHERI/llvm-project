@@ -405,17 +405,36 @@ def CCSeal : CheriFmt3Op<0x1f, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOp
 def CTestSubset : CheriFmt3Op<0x20, (outs GPR64Opnd:$r1), (ins CheriOpnd0IsDDC:$r2, CheriOpnd:$r3),
   "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (int_cheri_cap_subset_test CheriOpnd0IsDDC: $r2, CheriOpnd: $r3))]>;
 
+
+// Note: we need to duplicate these patterns for iFATPTR128,256, etc. for some reason
+multiclass UseCNullPatterns<PatFrag NullPat> {
+  def : Pat<(ptradd NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
+  def : Pat<(int_cheri_cap_offset_increment NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
+  def : Pat<(int_cheri_cap_offset_set NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
+  // The immediate versions should be used first!
+  let AddedComplexity = 10 in {
+    def : Pat<(int_cheri_cap_offset_increment NullPat, simm11s0Pattern:$imm), (CIncOffsetImm CNULL, simm11s0Pattern:$imm)>;
+    def : Pat<(int_cheri_cap_offset_set NullPat, simm11s0Pattern:$imm), (CIncOffsetImm CNULL, simm11s0Pattern:$imm)>;
+  }
+}
+defm : UseCNullPatterns<(iFATPTR64 (inttoptr (i64 0)))>;
+defm : UseCNullPatterns<(iFATPTR128 (inttoptr (i64 0)))>;
+defm : UseCNullPatterns<(iFATPTR256 (inttoptr (i64 0)))>;
+
+
 // Cursors
-def : Pat<(ptradd CheriOpnd:$r2, simm11s0Pattern:$imm),
+let AddedComplexity = 10 in {
+  def : Pat<(ptradd CheriOpnd:$r2, simm11s0Pattern:$imm),
           (CIncOffsetImm $r2, simm11s0Pattern: $imm)>;
+}
 def : Pat<(ptradd CheriOpnd:$r2, GPR64Opnd:$r3),
           (CIncOffset $r2, $r3)>;
 // Int to pointer in address space 0
+def : Pat<(inttoptr (i64 0)),
+          (CMove CNULL)>;
 let Predicates=[IsCHERIABI] in {
 def : Pat<(inttoptr simm11s0Pattern:$imm),
           (CIncOffsetImm CNULL, simm11s0Pattern: $imm)>;
-def : Pat<(inttoptr (i64 0)),
-          (CFromPtr DDC, ZERO_64)>;
 def : Pat<(inttoptr GPR64Opnd:$rt),
           (CIncOffset CNULL, $rt)>;
 def : Pat<(ptrtoint CheriOpnd:$rt),
