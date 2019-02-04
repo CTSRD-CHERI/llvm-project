@@ -94,13 +94,19 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     MachineRegisterInfo *MRI, const MachineInstr &GetNullMI) {
 
   unsigned SrcReg = 0;
-  if (GetNullMI.getOpcode() == Mips::CFromPtr &&
-      GetNullMI.getOperand(2).getReg() == Mips::ZERO_64) {
+  if ((GetNullMI.getOpcode() == Mips::CFromPtr &&
+       GetNullMI.getOperand(2).getReg() == Mips::ZERO_64)) {
     // When zeroing capability registers codegen will often create NULL in a
     // saved register (e.g. $c18 and then move it to other registers). This is
     // stupid since it will often spill to the stack and add additional
     // instructions when we can just use a CGetNull to the destination register
-    LLVM_DEBUG(dbgs() << "Trying to replace uses of CGetNull: ";
+    LLVM_DEBUG(dbgs() << "Trying to replace uses of CFromPtr $ddc, $zero: ";
+               GetNullMI.dump());
+    SrcReg = GetNullMI.getOperand(0).getReg();
+  }
+  if ((GetNullMI.getOpcode() == Mips::CMove &&
+       GetNullMI.getOperand(1).getReg() == Mips::CNULL)) {
+    LLVM_DEBUG(dbgs() << "Trying to replace uses of CMove $cnull: ";
                GetNullMI.dump());
     SrcReg = GetNullMI.getOperand(0).getReg();
   }
@@ -112,22 +118,16 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
   if (TargetRegisterInfo::isPhysicalRegister(SrcReg))
     return false;
 
-  llvm::SmallVector<MachineInstr *, 4> UsesToReplace;
+  llvm::SmallVector<MachineInstr *, 4> COPYUses;
   for (MachineInstr &UseMI : MRI->use_instructions(SrcReg)) {
-    // TODO: Once we have a null register this will also work for non-CMove
-    // instrs
-    assert(UseMI.getOpcode() != Mips::CMove &&
-           "Should not have been expanded yet!");
-    if (UseMI.getOpcode() != TargetOpcode::COPY) {
-      LLVM_DEBUG(
-          dbgs() << "Found use of NULL register, but cannot replace yet:";
-          UseMI.dump(););
-      continue;
+    LLVM_DEBUG(dbgs() << "Found use of NULL register:"; UseMI.dump(););
+    if (UseMI.getOpcode() == TargetOpcode::COPY) {
+      COPYUses.push_back(&UseMI);
+      LLVM_DEBUG(dbgs() << "Found COPY use of NULL register:"; UseMI.dump(););
     }
-    UsesToReplace.push_back(&UseMI);
   }
-  for (MachineInstr *UseMI : UsesToReplace) {
-    LLVM_DEBUG(dbgs() << "Replacing copy of synthesized NULL: "; UseMI->dump());
+  for (MachineInstr *UseMI : COPYUses) {
+    LLVM_DEBUG(dbgs() << "Replacing COPY of synthesized NULL: "; UseMI->dump());
     MachineBasicBlock *MBB = UseMI->getParent();
     auto TargetReg = UseMI->getOperand(0).getReg();
     // FIXME: this assert only works with virtregs so not for $c13
@@ -157,12 +157,50 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
       // Check that the physreg is a valid CHERI general-purpose register
       assert(Mips::CheriGPROrCNullRegClass.contains(TargetReg));
     }
-    BuildMI(*MBB, *UseMI, UseMI->getDebugLoc(), TII->get(Mips::CFromPtr),
+    // Remove from parent and replace with the CMove $cnull
+    BuildMI(*MBB, *UseMI, UseMI->getDebugLoc(), TII->get(Mips::CMove),
             UseMI->getOperand(0).getReg())
-        .addReg(Mips::DDC, getRegState(GetNullMI.getOperand(1)))
-        .addReg(Mips::ZERO_64, getRegState(GetNullMI.getOperand(2)));
-    // Remove from parent and replace with the CFromPtr
+        .addReg(Mips::CNULL);
     UseMI->removeFromParent();
+  }
+
+  // Replace uses with NullReg.
+  const auto NullReg = Mips::CNULL;
+  for (auto U = MRI->use_begin(SrcReg), E = MRI->use_end(); U != E;) {
+    MachineOperand &MO = *U;
+    unsigned OpNo = U.getOperandNo();
+    MachineInstr *MI = MO.getParent();
+    LLVM_DEBUG(dbgs() << "Found use of NULL register, will try to replace:";
+               MI->dump(););
+    ++U; // increment U now before we potentially change the successors using MO.setReg()
+
+    // Do not replace if it is a phi's operand or is tied to def operand.
+    if (MI->isPHI() || MI->isRegTiedToDefOperand(OpNo) || MI->isPseudo()) {
+      LLVM_DEBUG(
+          dbgs() << "Cannot replace use of NULL register for PHI or def:";
+          MI->dump(););
+      continue;
+    }
+
+    // Also, we have to check that the register class of the operand
+    // contains the null register.
+    // This can happen for instructions where register zero encodes $ddc.
+    auto OperandType = MI->getDesc().OpInfo[OpNo].OperandType;
+    if (OperandType != Mips::OPERAND_CHERI_GPR_OR_NULL) {
+      if (OperandType == Mips::OPERAND_CHERI_GPR_OR_DDC) {
+        LLVM_DEBUG(dbgs() << "Cannot replace use of NULL register for operand "
+                             "where 0 encodes $ddc: ";
+                   MO.dump(); dbgs() << " in "; MI->dump(););
+      } else {
+        errs() << "Found OPERAND of unknown type " << (int)OperandType
+               << " while attempting to replace uses of NULL";
+      }
+      continue;
+    }
+
+    MO.setReg(NullReg);
+    LLVM_DEBUG(dbgs() << "Was able to replace use of NULL register:";
+               MI->dump(););
   }
 
   // If there are no more uses of the NULL vreg after this pass we can delete it

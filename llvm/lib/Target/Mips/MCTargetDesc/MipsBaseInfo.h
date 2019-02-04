@@ -17,10 +17,19 @@
 #include "MipsFixupKinds.h"
 #include "MipsMCTargetDesc.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCInstrDesc.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/ErrorHandling.h"
 
 namespace llvm {
+
+namespace Mips {
+enum OperandType {
+  /// Operands with register or 32-bit immediate
+  OPERAND_CHERI_GPR_OR_DDC = MCOI::OPERAND_FIRST_TARGET,
+  OPERAND_CHERI_GPR_OR_NULL
+};
+}
 
 /// MipsII - This namespace holds all of the target specific flags that
 /// instruction info tracks.
