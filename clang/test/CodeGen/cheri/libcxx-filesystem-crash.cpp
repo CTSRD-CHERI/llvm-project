@@ -10,7 +10,8 @@
 // RUN: %cheri256_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,N64-ASM
 // RUN: %cheri128_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,N64-CHERI128-BAD-CODE
 // RUN: %cheri256_purecap_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,PURECAP-ASM
-// RUN: %cheri128_purecap_cc1 -O2 -std=c++11 -o - -S %s
+// RUN: %cheri128_purecap_cc1 -O2 -std=c++11 -o %S/addrfolder-two-uses.mir -S %s -mllvm -stop-before=cheriaddrmodefolder
+// RUN: %cheri128_purecap_cc1 -O2 -std=c++11 -o - -S %s -mllvm -stop-after=cheriaddrmodefolder
 // RUN: %cheri128_purecap_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,PURECAP-CHERI128-BAD-CODE
 
 // sstd::chrono duration with __int128_t (which is what filesystem uses) was
@@ -117,11 +118,9 @@ extern "C" __int128 test2(duration<__int128_t> &e) {
 
   // PURECAP-CHERI128-BAD-CODE-NEXT: cincoffset $c11, $c11, -16
   // PURECAP-CHERI128-BAD-CODE-NEXT: clc $c1, $zero, 0($c3)
-  // PURECAP-CHERI128-BAD-CODE-NEXT: cincoffset $c2, $c11, 0
-  // PURECAP-CHERI128-BAD-CODE-NEXT: csetbounds $c2, $c2, 16
-  // PURECAP-CHERI128-BAD-CODE-NEXT: csc $c1, $zero, 0($c2)
-  // PURECAP-CHERI128-BAD-CODE-NEXT: cld $2, $zero, 0($c2)
-  // PURECAP-CHERI128-BAD-CODE-NEXT: cld $3, $zero, 8($c2)
+  // PURECAP-CHERI128-BAD-CODE-NEXT: csc $c1, $zero, 0($c11)
+  // PURECAP-CHERI128-BAD-CODE-NEXT: cld $2, $zero, 0($c11)
+  // PURECAP-CHERI128-BAD-CODE-NEXT: cld $3, $zero, 8($c11)
   // PURECAP-CHERI128-BAD-CODE-NEXT: cjr $c17
   // PURECAP-CHERI128-BAD-CODE-NEXT: cincoffset $c11, $c11, 16
 

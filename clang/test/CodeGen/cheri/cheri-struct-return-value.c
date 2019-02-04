@@ -25,9 +25,8 @@ IntptrStruct set_int() {
   // CHECK: %.fca.0.insert = insertvalue { i8 addrspace(200)* } undef, i8 addrspace(200)* [[VAR0]], 0
   // CHECK: ret { i8 addrspace(200)* } %.fca.0.insert
   // ASM-LABEL: set_int
-  // ASM:       cgetnull        $c1
-  // ASM-NEXT:  cjr     $c17
-  // ASM-NEXT:  cincoffset      $c3, $c1, 0
+  // ASM:  cjr     $c17
+  // ASM-NEXT:  cincoffset      $c3, $cnull, 0
 }
 
 IntptrStruct set_int2(IntptrStruct p) {
