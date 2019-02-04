@@ -740,7 +740,6 @@ class Reducer(object):
         if "-emit-obj" in generate_ir_cmd:
             generate_ir_cmd.remove("-emit-obj")
         if self._check_crash(generate_ir_cmd, infile):
-            new_command = generate_ir_cmd
             # Try to remove the flags that were added:
             new_command = generate_ir_cmd
             new_command = self._try_remove_args(
@@ -859,11 +858,11 @@ class Reducer(object):
             print("Failed to shrink", infile, "-> will use the unprocessed source", e)
 
         if "-emit-obj" in new_command:
-            # check if floating point args are relevant
             new_command = self._try_remove_args(
-                new_command + ["-S"], infile, "Checking whether emitting ASM instead of object crashes:",
-                noargs_opts_to_remove=["-emit-obj"])
+                new_command, infile, "Checking whether emitting ASM instead of object crashes:",
+                noargs_opts_to_remove=["-emit-obj"], extra_args=["-S"])
 
+        print(new_command)
         # check if floating point args are relevant
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without floating point arguments crashes:",
