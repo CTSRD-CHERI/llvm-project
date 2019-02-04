@@ -52,10 +52,9 @@ entry:
   ; IR: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1024)
 
   ; CHECK-LABEL: add_uintcap_t
-  ; CHECK: cgetnull $c1
   ; CHECK: daddiu	$1, $zero, 1024
   ; CHECK: jr	$ra
-  ; CHECK: cincoffset	$c3, $c1, $1
+  ; CHECK: cincoffset	$c3, $cnull, $1
 }
 
 ; Function Attrs: nounwind readnone

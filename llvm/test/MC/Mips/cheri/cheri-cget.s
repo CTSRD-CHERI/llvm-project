@@ -197,22 +197,22 @@ old_cset_c4 28
 
 
 # Check that cgetnull $cN is an alias for cfromptr $cN, $c0, $zero:
-# CHECK:      cgetnull  $c2
+# CHECK:      cgetnull_old  $c2
 # CHECK-SAME: encoding: [0x48,0x02,0x00,0x13]
 	cfromptr	$c2, $ddc, $zero
 # CHECK:      cgetnull  $c1
-# CHECK-SAME: encoding: [0x48,0x01,0x00,0x13]
+# CHECK-SAME: encoding: [0x48,0x01,0x02,0xbf]
 	cgetnull	$c1
 # Both should disassemble to cgetnull:
-# DUMP-NEXT: 48 02 00 13 	cgetnull	$c2
-# DUMP-NEXT: 48 01 00 13 	cgetnull	$c1
+# DUMP-NEXT: 48 02 00 13 	cgetnull_old	$c2
+# DUMP-NEXT: 48 01 02 bf 	cgetnull	$c1
 
 # CHECK:      cfromddc  $c3, $4
 # CHECK-SAME: encoding: [0x48,0x03,0x01,0x13]
 # DUMP-NEXT: 48 03 01 13 cfromddc $c3, $4
 	cfromddc	$c3, $4
 	# Check that cfromddc	$c4, $zero disassembles to cgetnull
-# CHECK:      cgetnull	$c4
+# CHECK:      cgetnull_old	$c4
 # CHECK-SAME: encoding: [0x48,0x04,0x00,0x13]
-# DUMP-NEXT: 48 04 00 13 cgetnull $c4
+# DUMP-NEXT: 48 04 00 13 cgetnull_old $c4
 	cfromddc	$c4, $zero

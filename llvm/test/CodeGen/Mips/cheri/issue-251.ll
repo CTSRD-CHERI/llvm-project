@@ -1,7 +1,7 @@
 ; RUN: %cheri_purecap_llc %s -o -
 ; RUN: %cheri_purecap_llc %s -o - -disable-cheri-addressing-mode-folder
 ; RUN: %cheri_purecap_llc %s -o - -disable-cheri-addressing-mode-folder | FileCheck %s -check-prefix CHECK-NOFOLD
-; RUN: %cheri_purecap_llc %s -o - | FileCheck %s -check-prefix CHECK-OPT
+; RUN: %cheri_purecap_llc %s -o - | FileCheck %s -check-prefix CHECK-NOFOLD
 
 ; Can't fold the immediate in csetoffset on NULL
 ; https://github.com/CTSRD-CHERI/llvm/issues/251
@@ -21,11 +21,9 @@ entry:
   store i8 addrspace(200)* %2, i8 addrspace(200)* addrspace(200)* %testCap, align 32
   ret void
   ; CHECK-NOFOLD:      daddiu  $1, $zero, 4096
-  ; CHECK-NOFOLD-NEXT: cgetnull $c2
-  ; CHECK-NOFOLD-NEXT: cincoffset $c2, $c2, $1
-  ; CHECK-NOFOLD-NEXT: clc $c2, $zero, 0($c2)
-  ; CHECK-OPT: cgetnull $c2
-  ; CHECK-OPT: clc $c2, $zero, 4096($c2)
+  ; CHECK-NOFOLD-NEXT: cincoffset $c1, $cnull, $1
+  ; CHECK-NOFOLD-NEXT: clc $c1, $zero, 0($c1)
+  ; Note: this could be more efficient if we fold the constant into the clc.
 }
 
 ; Function Attrs: nounwind readnone
