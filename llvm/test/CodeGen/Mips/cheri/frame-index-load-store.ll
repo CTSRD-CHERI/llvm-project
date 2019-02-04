@@ -1,4 +1,3 @@
-; RUN: %cheri_purecap_llc -o - -O2 -verify-machineinstrs %s -debug
 ; RUN: %cheri_purecap_llc -o - -O2 -verify-machineinstrs %s | FileCheck %s -check-prefixes CHECK,PURECAP
 ; Should be the same without the addressing mode folder
 ; RUN: %cheri_purecap_llc -o - -O2 -verify-machineinstrs %s -disable-cheri-addressing-mode-folder | FileCheck %s -check-prefixes CHECK,PURECAP
@@ -11,7 +10,7 @@ define i64 addrspace(200)* @load_store_ptr_to_stack(i64 addrspace(200)* %arg1, i
   %arg1.stack = alloca i64 addrspace(200)*, align 32, addrspace(200)
   store volatile i64 addrspace(200)* %arg1, i64 addrspace(200)* addrspace(200)* %arg1.stack, align 32
   ; CHECK:      #NO_APP
-  ; PURECAP-NEXT: csc $c3, $zero, 32($c11)
+  ; PURECAP-NEXT: csc $c3, $zero, {{32|64}}($c11)
   ; MIPS-NEXT: sd $4, 32($sp)
   ; CHECK-NEXT: #APP
   tail call void asm sideeffect "", ""()
@@ -19,14 +18,14 @@ define i64 addrspace(200)* @load_store_ptr_to_stack(i64 addrspace(200)* %arg1, i
   %arg2.stack = alloca i8 addrspace(200)*, align 32, addrspace(200)
   store volatile i8 addrspace(200)* %arg2, i8 addrspace(200)* addrspace(200)* %arg2.stack, align 32
   ; CHECK:      #NO_APP
-  ; PURECAP-NEXT: csc $c4, $zero, 0($c11)
+  ; PURECAP-NEXT: csc $c4, $zero, {{0|32}}($c11)
   ; MIPS-NEXT: sd $5, 0($sp)
   ; CHECK-NEXT: #APP
   tail call void asm sideeffect "", ""()
   ; Load to stack slot 1
   %loaded1 = load volatile i64 addrspace(200)*, i64 addrspace(200)* addrspace(200)* %arg1.stack, align 32
   ; CHECK:      #NO_APP
-  ; PURECAP-NEXT: clc $c3, $zero, 32($c11)
+  ; PURECAP-NEXT: clc $c3, $zero, {{32|64}}($c11)
   ; MIPS-NEXT: ld $2, 32($sp)
   ; CHECK-NEXT: #APP
   tail call void asm sideeffect "", ""()
