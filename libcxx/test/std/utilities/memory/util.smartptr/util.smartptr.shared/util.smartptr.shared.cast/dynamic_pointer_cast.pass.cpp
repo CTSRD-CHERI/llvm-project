@@ -41,7 +41,7 @@ struct A
 
 int A::count = 0;
 
-int main()
+int main(int, char**)
 {
     {
         const std::shared_ptr<B> pB(new A);
@@ -55,4 +55,6 @@ int main()
         assert(pA.get() == 0);
         assert(pA.use_count() == 0);
     }
+
+  return 0;
 }

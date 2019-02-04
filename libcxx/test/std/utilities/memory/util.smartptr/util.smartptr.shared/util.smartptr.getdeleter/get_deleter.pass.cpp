@@ -27,7 +27,7 @@ struct A
 
 int A::count = 0;
 
-int main()
+int main(int, char**)
 {
     {
         {
@@ -73,4 +73,6 @@ int main()
         assert(d == 0);
 #endif
     }
+
+  return 0;
 }

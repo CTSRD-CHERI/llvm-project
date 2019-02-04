@@ -50,7 +50,7 @@ int A::count = 0;
 
 int g(int) {return 0;}
 
-int main()
+int main(int, char**)
 {
     assert(globalMemCounter.checkOutstandingNewEq(0));
     {
@@ -189,4 +189,6 @@ int main()
 #endif
     }
 #endif  // TEST_STD_VER >= 11
+
+  return 0;
 }

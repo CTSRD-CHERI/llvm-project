@@ -69,7 +69,7 @@ void g()
 }
 
 
-int main()
+int main(int, char**)
 {
     m.lock();
     std::vector<std::thread> v;
@@ -88,4 +88,6 @@ int main()
     for (auto& t : v)
         t.join();
     q.join();
+
+  return 0;
 }

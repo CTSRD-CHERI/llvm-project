@@ -57,7 +57,7 @@ void f2()
 #endif
 }
 
-int main()
+int main(int, char**)
 {
     {
         m.lock();
@@ -73,4 +73,6 @@ int main()
         m.unlock();
         t.join();
     }
+
+  return 0;
 }

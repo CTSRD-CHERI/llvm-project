@@ -39,7 +39,7 @@ void test_message_for_bad_value() {
 #endif
 }
 
-int main()
+int main(int, char**)
 {
     const std::error_category& e_cat1 = std::system_category();
     std::error_condition e_cond = e_cat1.default_error_condition(5);
@@ -51,4 +51,6 @@ int main()
     {
         test_message_for_bad_value();
     }
+
+  return 0;
 }

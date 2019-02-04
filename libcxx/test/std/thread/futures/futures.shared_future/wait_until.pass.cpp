@@ -62,7 +62,7 @@ void func5(std::promise<void> p)
     set_worker_thread_state(WorkerThreadState::Exiting);
 }
 
-int main()
+int main(int, char**)
 {
 
     ms delay = ms(10);
@@ -136,4 +136,6 @@ int main()
         assert(f.valid());
         assert(t1-t0 < Tolerance);
     }
+
+  return 0;
 }

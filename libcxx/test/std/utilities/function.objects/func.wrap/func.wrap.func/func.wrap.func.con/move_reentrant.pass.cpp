@@ -33,7 +33,7 @@ struct A
 std::function<void()> A::global;
 bool A::cancel = false;
 
-int main()
+int main(int, char**)
 {
   A::global = A();
 #ifndef TEST_HAS_NO_RTTI
@@ -46,4 +46,6 @@ int main()
 #ifndef TEST_HAS_NO_RTTI
   assert(!A::global.target<A>());
 #endif
+
+  return 0;
 }

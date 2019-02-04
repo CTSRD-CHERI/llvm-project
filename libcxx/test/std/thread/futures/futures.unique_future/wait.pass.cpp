@@ -39,7 +39,7 @@ void func5(std::promise<void> p)
     p.set_value();
 }
 
-int main()
+int main(int, char**)
 {
     typedef std::chrono::high_resolution_clock Clock;
     typedef std::chrono::duration<double, std::milli> ms;
@@ -89,4 +89,6 @@ int main()
         assert(f.valid());
         assert(t1-t0 < Tolerance);
     }
+
+  return 0;
 }

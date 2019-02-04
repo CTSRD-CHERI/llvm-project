@@ -24,7 +24,7 @@
 #include "poisoned_hash_helper.hpp"
 #endif
 
-int main()
+int main(int, char**)
 {
   {
     typedef std::hash<std::type_index> H;
@@ -36,4 +36,6 @@ int main()
     test_hash_enabled_for_type<std::type_index>(std::type_index(typeid(int)));
   }
 #endif
+
+  return 0;
 }

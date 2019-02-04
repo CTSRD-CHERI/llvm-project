@@ -46,7 +46,7 @@ test()
     }
 }
 
-int main()
+int main(int, char**)
 {
     test<bool>();
     test<char>();
@@ -113,4 +113,6 @@ int main()
   test<__intcap_t>();
   test<__uintcap_t>();
 #endif
+
+  return 0;
 }

@@ -46,7 +46,7 @@ int A::count = 0;
 
 int g(int) {return 0;}
 
-int main()
+int main(int, char**)
 {
     assert(globalMemCounter.checkOutstandingNewEq(0));
     {
@@ -76,4 +76,6 @@ int main()
     assert(f.target<int(*)(int)>() == 0);
 #endif
     }
+
+  return 0;
 }

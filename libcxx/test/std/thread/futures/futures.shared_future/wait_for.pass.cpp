@@ -43,7 +43,7 @@ void func5(std::promise<void> p)
     p.set_value();
 }
 
-int main()
+int main(int, char**)
 {
     ms Tolerance = ms(5)
 #if defined(TEST_HAS_SANITIZERS) || defined(TEST_SLOW_HOST)
@@ -98,4 +98,6 @@ int main()
         assert(f.valid());
         assert(t1-t0 < Tolerance);
     }
+
+  return 0;
 }

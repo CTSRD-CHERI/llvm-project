@@ -35,7 +35,7 @@
 
 void sig_action(int) {}
 
-int main()
+int main(int, char**)
 {
     int ec;
     struct sigaction action;
@@ -70,5 +70,6 @@ int main()
 #endif
     // The time slept is within 5% of 500ms
     assert(std::abs(ns.count()) < err.count());
-    abort();
+
+  return 0;
 }

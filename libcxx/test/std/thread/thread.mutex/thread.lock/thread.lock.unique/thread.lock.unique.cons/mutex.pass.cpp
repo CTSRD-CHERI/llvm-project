@@ -50,7 +50,7 @@ void f()
 #endif
 }
 
-int main()
+int main(int, char**)
 {
     m.lock();
     std::thread t(f);
@@ -62,4 +62,6 @@ int main()
     std::unique_lock ul(m);
     static_assert((std::is_same<decltype(ul), std::unique_lock<decltype(m)>>::value), "" );
 #endif
+
+  return 0;
 }

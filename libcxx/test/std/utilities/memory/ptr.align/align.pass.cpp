@@ -15,7 +15,7 @@
 #include <memory>
 #include <cassert>
 
-int main()
+int main(int, char**)
 {
     const unsigned N = 20;
     char buf[N];
@@ -82,4 +82,6 @@ int main()
     assert(p == &buf[0]);
     assert(r == nullptr);
     assert(s == N);
+
+  return 0;
 }
