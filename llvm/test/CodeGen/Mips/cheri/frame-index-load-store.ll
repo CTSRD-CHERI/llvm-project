@@ -32,7 +32,7 @@ define i64 addrspace(200)* @load_store_ptr_to_stack(i64 addrspace(200)* %arg1, i
   ; Load from stack slot 1
   %loaded2 = load volatile i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %arg2.stack, align 32
   ; CHECK:      #NO_APP
-  ; PURECAP-NEXT: clc $c1, $zero, 0($c11)
+  ; PURECAP-NEXT: clc $c1, $zero, {{0|32}}($c11)
   ; MIPS-NEXT: ld $1, 0($sp)
   ; CHECK-NEXT: #APP
   tail call void asm sideeffect "", ""()
