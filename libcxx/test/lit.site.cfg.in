@@ -28,7 +28,7 @@ config.slow_test_host           = "@LIBCXX_SLOW_TEST_HOST@"
 
 config.executor                 = "@LIBCXX_EXECUTOR@"
 config.llvm_unwinder            = @LIBCXXABI_USE_LLVM_UNWINDER@
-config.compiler_rt              = @LIBCXX_USE_COMPILER_RT@
+config.builtins_library         = "@LIBCXX_BUILTINS_LIBRARY@"
 config.has_libatomic            = @LIBCXX_HAS_ATOMIC_LIB@
 config.use_libatomic            = @LIBCXX_HAVE_CXX_ATOMICS_WITH_LIB@
 config.debug_build              = @LIBCXX_DEBUG_BUILD@
