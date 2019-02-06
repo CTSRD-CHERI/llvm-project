@@ -526,7 +526,11 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
     uint64_t VA = A;
     if (S)
       VA = S->getVA(A);
-    writeUint(Buf + I * Config->Wordsize, VA);
+
+    if (Config->Is64)
+      write64(Buf + I * 8, Val);
+    else
+      write32(Buf + I * 4, Val);
   };
   // If TLS entry has a corresponding dynamic relocations, leave it
   // initialized by zero. Write down adjusted TLS symbol's values otherwise.
