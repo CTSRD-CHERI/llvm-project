@@ -21,6 +21,7 @@
 #include "MipsRegisterBankInfo.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -302,6 +303,25 @@ const LegalizerInfo *MipsSubtarget::getLegalizerInfo() const {
 
 const RegisterBankInfo *MipsSubtarget::getRegBankInfo() const {
   return RegBankInfo.get();
+}
+
+void MipsSubtarget::overrideSchedPolicy(MachineSchedPolicy &Policy,
+                                        unsigned NumRegionInstrs) const {
+  // copied from AMDGPU:
+#if 0
+
+  // Track register pressure so the scheduler can try to decrease
+  // pressure once register usage is above the threshold defined by
+  // SIRegisterInfo::getRegPressureSetLimit()
+  Policy.ShouldTrackPressure = true;
+  // Enabling both top down and bottom up scheduling seems to give us less
+  // register spills than just using one of these approaches on its own.
+  Policy.OnlyTopDown = false;
+  Policy.OnlyBottomUp = true;
+
+  Policy.ShouldTrackLaneMasks = false;
+  Policy.DisableLatencyHeuristic = true;
+#endif
 }
 
 const InstructionSelector *MipsSubtarget::getInstructionSelector() const {
