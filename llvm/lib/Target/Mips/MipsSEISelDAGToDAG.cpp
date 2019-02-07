@@ -192,8 +192,11 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
                              "where 0 encodes $ddc: ";
                    MO.dump(); dbgs() << " in "; MI->dump(););
       } else {
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
         errs() << "Found OPERAND of unknown type " << (int)OperandType
-               << " while attempting to replace uses of NULL";
+               << " while attempting to replace uses of NULL\n";
+        MI->dump();
+#endif
       }
       continue;
     }
