@@ -87,8 +87,8 @@ entry:
 ; CHECK: csetoffset	$c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[OFFSET1]]
 ; CHECK: csetbounds	$c[[TEMPCAP2:([0-9]+)]], $c[[TEMPCAP1]], ${{([0-9]+|sp)}}
 ; CHECK: cmove	$c11, $c[[TEMPCAP1]]
-; CHECK: cincoffset	$c[[TEMPCAP3:([0-9]+)]], $c[[TEMPCAP2]], $zero
-; CHECK: csetbounds	$c{{([0-9]+|sp)}}, $c[[TEMPCAP3]]
+; CHECK: csetbounds	$c{{([0-9]+|sp)}}, $c[[TEMPCAP2]]
+; CHECK: clcbi	$c12, %capcall20(use_arg)($c12)
   %0 = zext i32 %x to i64
   %vla = alloca i32, i64 %0, align 4, addrspace(200)
   %call = call i32 @use_arg(i32 addrspace(200)* nonnull %vla) #4
