@@ -591,7 +591,7 @@ def : Pat<(int_mips_kdc_get),  (CReadHwr CAPHWR30)>;
 def : Pat<(int_mips_epcc_get), (CReadHwr CAPHWR31)>;
 let Predicates=[IsCHERIABI] in {
   // C11 is only defined in the purecap ABI
-  def : Pat<(int_cheri_stack_cap_get), (CIncOffset C11, ZERO_64)>;
+  def : Pat<(int_cheri_stack_cap_get), (CMove C11)>;
 }
 
 
