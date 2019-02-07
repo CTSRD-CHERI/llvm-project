@@ -30,10 +30,10 @@ out:                                              ; preds = %entry, %if.then
 ; CHECK-NEXT:    bnez	$1, .LBB0_2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT: # %bb.1:
-; CHECK-NEXT:    addiu	$4, $4, 3
 ; CHECK-NEXT:    #APP
 ; CHECK:         .space	100
 ; CHECK:         #NO_APP
+; CHECK-NEXT:    addiu	$4, $4, 3
 ; CHECK-NEXT:  .LBB0_2:
 ; N64-NEXT:      jr	$ra
 ; PURECAP-NEXT:  cjr	$c17
@@ -81,10 +81,10 @@ out:                                              ; preds = %entry, %if.then
 ; PURECAP-NEXT: cjr	$c12
 ; PURECAP-NEXT: nop
 ; CHECK-NEXT: .LBB1_3:
-; CHECK-NEXT:  addiu	$4, $4, 3
 ; CHECK-NEXT:  #APP
 ; CHECK:       .space	1000000
 ; CHECK:       #NO_APP
+; CHECK-NEXT:  addiu	$4, $4, 3
 ; CHECK-NEXT:  .LBB1_4:
 ; N64-NEXT:      jr	$ra
 ; PURECAP-NEXT:  cjr	$c17

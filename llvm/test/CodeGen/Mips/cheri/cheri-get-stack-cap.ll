@@ -18,15 +18,17 @@
 define i8 addrspace(200)* @getstack() nounwind {
 entry:
   ; CHECK-LABEL: getstack:
-  ; CHECK: 	cincoffset	$c3, $c11, $zero
+  ; CHECK:       cmove $c1, $c11
+  ; CHECK:       cmove $c3, $c11
   ; CHECK:	cjr	$c17
-  ; CHECK:	csc	$c3, $1, 0($ddc)
+  ; CHECK:	csc	$c1, $1, 0($ddc)
 
   ; PCREL-LABEL: getstack:
   ; PCREL:      clcbi	$c1, %captab20(reserved_reg_target)($c1)
-  ; PCREL-NEXT: cincoffset	$c3, $c11, $zero
+  ; PCREL-NEXT: cmove	$c2, $c11
+  ; PCREL-NEXT: cmove	$c3, $c11
   ; PCREL-NEXT: cjr	$c17
-  ; PCREL-NEXT: csc	$c3, $zero, 0($c1)
+  ; PCREL-NEXT: csc	$c2, $zero, 0($c1)
   %0 = call i8 addrspace(200)* @llvm.cheri.stack.cap.get()
   store i8 addrspace(200)* %0, i8 addrspace(200)** @reserved_reg_target, align 32
   ret i8 addrspace(200)* %0
