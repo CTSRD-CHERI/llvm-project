@@ -201,7 +201,7 @@ def CReturn : CheriFmt3CRet<0x06, (outs), (ins variable_ops),
 ////////////////////////////////////////////////////////////////////////////////
 // Capability-based pointer comparisons
 ////////////////////////////////////////////////////////////////////////////////
-let isCompare=1 in {
+let isCompare=1, isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def CEQ : CheriFmtPtrCmp<0x14, GPR64Opnd, "ceq", []>;
 def CNE : CheriFmtPtrCmp<0x15, GPR64Opnd, "cne", []>;
 def CLT : CheriFmtPtrCmp<0x16, GPR64Opnd, "clt", []>;
@@ -219,7 +219,7 @@ def : InstAlias<"cgtu $rd, $cb, $ct",
                 (CLEU GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : InstAlias<"cgeu $rd, $cb, $ct",
                 (CLTU GPR64Opnd: $rd, CheriOpnd: $ct, CheriOpnd:$cb)>;
-let isCodeGenOnly=1, isCompare=1 in {
+let isCodeGenOnly=1, isCompare=1, isReMaterializable = 1, isAsCheapAsAMove = 1 in {
   def CEQ32 : CheriFmtPtrCmp<0x14, GPR32Opnd, "ceq", []>;
   def CEXEQ32 : CheriFmtPtrCmp<0x1a, GPR32Opnd, "cexeq", []>;
   def CNEXEQ32 : CheriFmtPtrCmp<0x21, GPR32Opnd, "cnexeq", []>;
@@ -237,6 +237,7 @@ def : Pat<(setogt CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $ct, CheriOp
 def : Pat<(setoge CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $ct, CheriOpnd:$cb)>;
 def : Pat<(setolt CheriOpnd: $cb, CheriOpnd:$ct), (CLT32 CheriOpnd: $cb, CheriOpnd:$ct)>;
 def : Pat<(setole CheriOpnd: $cb, CheriOpnd:$ct), (CLE32 CheriOpnd: $cb, CheriOpnd:$ct)>;
+let isAsCheapAsAMove = 1 in {
 def CMOVZ : CheriFmt3Op<0x1b, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3, CheriOpnd:$S),
                          "cmovz\t$r1, $r2, $r3",
                          []> {
@@ -257,6 +258,7 @@ def CMOVN32 : CheriFmt3Op<0x1c, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR32O
                            "cmovn\t$r1, $r2, $r3",
                            []> {
   let Constraints = "$S = $r1";
+}
 }
 }
 defm : MovnPats<GPR64, CheriGPROrCNull, CMOVN, XOR64>;
@@ -292,6 +294,7 @@ def CNEPseudo32 : CheriPseudo<(outs GPR32Opnd: $rd), (ins CheriOpnd: $cb, CheriO
 // Capability manipulation
 ////////////////////////////////////////////////////////////////////////////////
 
+let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 // Property accessors
 def CGetPerms  : CheriFmtCGet<0, "perm", "perms">;
 def CGetType   : CheriFmtCGet<1, "type">;
@@ -304,6 +307,7 @@ def CGetAddr   : CheriFmtCGet<0xf, "addr", "address">;
 // Versions of property setters that take immediate operands
 def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, simm11s0Pattern, "offset", "offset", "inc", "increment">;
 def CSetBoundsImm : CheriFmtCSetImm<0x14, uimm11s0, uimm11s0Pattern, "bounds">;
+}
 
 // Accept CIncOffsetImm as an assembler mnemonic because ancient binutils is too stupid to have an opcode
 // with differing encoding depending on the parameters
@@ -313,6 +317,7 @@ def : InstAlias<"cincoffsetimm $dst, $src, $imm",
                 (CIncOffsetImm CheriOpnd:$dst, CheriOpnd:$src, simm11s0:$imm), 0>;
 
 // Property setters
+let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def CAndPerms  : CheriFmtCSet<0xd, "perm", "perms", "and">;
 def CSetOffset : CheriFmtCSet<0xf, "offset">;
 def CSetBounds : CheriFmtCSet<0x8, "bounds">;
@@ -324,6 +329,8 @@ def CIncOffset : CheriFmtCSet<0x11, "offset", "offset", "inc", "increment">;
 def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2), 
                               "ccleartag\t$r1, $r2",
                               [(set CheriOpnd:$r1, (int_cheri_cap_tag_clear CheriOpnd:$r2))]>;
+}
+
 
 
 let isMoveReg = 1 in {
@@ -360,7 +367,7 @@ def CUnSeal : CheriFmt3Op<0xc, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOp
                                [(set CheriOpnd:$r1, (int_cheri_cap_unseal CheriOpnd:$r2, CheriOpnd:$r3))]>;
 
 // Pointer arithmetic
-
+let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def CFromPtr : CheriFmt3Op<0x13, (outs CheriOpnd:$r1), (ins CheriOpnd0IsDDC:$r2, GPR64Opnd:$r3),
   "cfromptr\t$r1, $r2, $r3", [(set CheriOpnd: $r1, (int_cheri_cap_from_pointer CheriOpnd0IsDDC: $r2, GPR64Opnd: $r3))]>;
 def CToPtr : CheriFmt3Op<0x12, (outs GPR64Opnd:$r1), (ins CheriOpnd0IsDDC:$r3, CheriOpnd:$r2),
@@ -374,6 +381,7 @@ def CSub : CheriFmt3Op<0xa, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:
 
 def CMove : CheriFmt2Op<0xa, (outs CheriOpnd: $r1), (ins CheriOpnd:$r2), "cmove\t$r1,  $r2", []> {
   let isMoveReg = 1;
+}
 }
 
 

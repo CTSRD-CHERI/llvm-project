@@ -82,6 +82,7 @@ protected:
   /// @Source machine operand and @Destination machine operand.
   bool isCopyInstrImpl(const MachineInstr &MI, const MachineOperand *&Source,
                        const MachineOperand *&Destination) const override;
+  bool isReallyTriviallyReMaterializable(const MachineInstr &MI, AliasAnalysis *AA) const override;
 
 private:
   unsigned getAnalyzableBrOpc(unsigned Opc) const override;

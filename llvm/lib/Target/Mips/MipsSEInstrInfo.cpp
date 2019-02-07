@@ -1048,6 +1048,26 @@ void MipsSEInstrInfo::expandCCallPseudo(MachineBasicBlock &MBB,
   MIBundleBuilder(MBB, BundleStart, std::next(BundleStart, 3));
 }
 
+// For opcodes with the ReMaterializable flag set, this function is called to
+// verify the instruction is really rematable.
+bool MipsSEInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
+                                                        AliasAnalysis *AA) const {
+  switch(MI.getOpcode()) {
+    case Mips::CIncOffsetImm:
+    case Mips::CMove:
+      return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == Mips::CNULL;
+    case Mips::LUi64: {
+      auto Flags = MI.getOperand(1).getTargetFlags();
+      if (Flags == MipsII::MO_CAPTABLE_OFF_HI) {
+         return true;
+      }
+      return false;
+    }
+  default:
+    return false;
+  }
+}
+
 void MipsSEInstrInfo::expandCPSETUP(MachineBasicBlock &MBB,
                                     MachineBasicBlock::iterator I) const {
   unsigned GP = I->getOperand(0).getReg();
