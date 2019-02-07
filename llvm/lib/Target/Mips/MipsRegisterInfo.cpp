@@ -395,6 +395,10 @@ getFrameRegister(const MachineFunction &MF) const {
     return TFI->hasFP(MF) ? ABI.GetFramePtr() : ABI.GetStackPtr();
 }
 
+bool MipsRegisterInfo::isConstantPhysReg(unsigned PhysReg) const {
+  return PhysReg == Mips::ZERO || PhysReg == Mips::ZERO_64 || PhysReg == Mips::CNULL;
+}
+
 bool MipsRegisterInfo::canRealignStack(const MachineFunction &MF) const {
   // Avoid realigning functions that explicitly do not want to be realigned.
   // Normally, we should report an error when a function should be dynamically
