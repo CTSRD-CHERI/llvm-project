@@ -6,188 +6,184 @@ source_filename = "DerivedSources/WebCore/JSInternalSettingsGenerated.cpp"
 ; DUMP:      Disassembly of section .text:
 ; DUMP-NEXT: _ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE:
 ; DUMP-NEXT:       0:	4a 6b 5f 70 	cincoffset	$c11, $c11, -144
-; DUMP-NEXT:         	ea 2b 00 8b 	csd	$17, $zero, 136($c11)
-; DUMP-NEXT:         	ea 0b 00 83 	csd	$16, $zero, 128($c11)
-; DUMP-NEXT:         	fb 0b 00 07 	csc	$c24, $zero, 112($c11)
-; DUMP-NEXT:         	fa 8b 00 06 	csc	$c20, $zero, 96($c11)
-; DUMP-NEXT:         	fa 6b 00 05 	csc	$c19, $zero, 80($c11)
-; DUMP-NEXT:         	fa 4b 00 04 	csc	$c18, $zero, 64($c11)
-; DUMP-NEXT:         	fa 2b 00 03 	csc	$c17, $zero, 48($c11)
-; DUMP-NEXT:         	48 18 58 11 	cincoffset	$c24, $c11, $zero
-; DUMP-NEXT:         	48 12 1a bf 	cmove	$c18,  $c3
-; DUMP-NEXT:         	d8 23 00 05 	clc	$c1, $zero, 80($c3)
-; DUMP-NEXT:         	3c 01 00 00 	lui	$1, 0
-; DUMP-NEXT:         	64 21 00 00 	daddiu	$1, $1, 0
-; DUMP-NEXT:         	49 21 00 24 	cbtu	$c1, 148 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xc8>
-; DUMP-NEXT:         	48 14 60 51 	cincoffset	$c20, $c12, $1
-; DUMP-NEXT:         	48 01 0b ff 	cgetaddr	$1, $c1
-; DUMP-NEXT:         	30 21 3f ff 	andi	$1, $1, 16383
-; DUMP-NEXT:         	00 01 08 2f 	dnegu	$1, $1
-; DUMP-NEXT:         	4a 62 08 c8 	cincoffset	$c2, $c1, 200
-; DUMP-NEXT:         	c8 42 08 00 	clbu	$2, $1, 0($c2)
-; DUMP-NEXT:         	10 40 00 0b 	beqz	$2, 48 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x80>
-; DUMP-NEXT:         	48 02 08 51 	cincoffset	$c2, $c1, $1
-; DUMP-NEXT:         	c8 21 00 30 	clbu	$1, $zero, 6($c1)
-; DUMP-NEXT:         	30 21 00 20 	andi	$1, $1, 32
-; DUMP-NEXT:         	14 20 00 07 	bnez	$1, 32 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x80>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	4a 62 08 20 	cincoffset	$c2, $c1, 32
-; DUMP-NEXT:         	d8 42 00 00 	clc	$c2, $zero, 0($c2)
-; DUMP-NEXT:         	4a 42 00 0c 	cbnz	$c2, 52 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xa4>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	10 00 00 13 	b	80 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xc8>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	d8 42 00 13 	clc	$c2, $zero, 304($c2)
-; DUMP-NEXT:         	c8 21 00 02 	clwu	$1, $zero, 0($c1)
-; DUMP-NEXT:         	d8 42 00 0e 	clc	$c2, $zero, 224($c2)
-; DUMP-NEXT:         	00 01 09 38 	dsll	$1, $1, 4
-; DUMP-NEXT:         	d8 42 08 00 	clc	$c2, $1, 0($c2)
-; DUMP-NEXT:         	4a 62 10 70 	cincoffset	$c2, $c2, 112
-; DUMP-NEXT:         	d8 42 00 00 	clc	$c2, $zero, 0($c2)
-; DUMP-NEXT:         	4a 22 00 0a 	cbez	$c2, 44 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xc8>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	74 74 00 00 	clcbi	$c3, 0($c20)
-; DUMP-NEXT:         	4a 64 c0 20 	cincoffset	$c4, $c24, 32
-; DUMP-NEXT:         	4a 93 20 10 	csetbounds	$c19, $c4, 16
-; DUMP-NEXT:         	48 01 10 d4 	ceq	$1, $c2, $c3
-; DUMP-NEXT:         	14 20 00 0b 	bnez	$1, 48 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xe4>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	d8 42 00 01 	clc	$c2, $zero, 16($c2)
-; DUMP-NEXT:         	4a 42 ff fb 	cbnz	$c2, -16 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xb0>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	74 94 00 00 	clcbi	$c4, 0($c20)
-; DUMP-NEXT:         	74 b4 00 00 	clcbi	$c5, 0($c20)
-; DUMP-NEXT:         	75 94 00 00 	clcbi	$c12, 0($c20)
-; DUMP-NEXT:         	48 11 63 3f 	cjalr	$c12, $c17
-; DUMP-NEXT:         	48 03 92 bf 	cmove	$c3,  $c18
-; DUMP-NEXT:         	10 00 00 60 	b	388 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x260>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	4a 21 ff f8 	cbez	$c1, -28 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xc8>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	c8 32 00 9e 	clw	$1, $zero, 76($c18)
-; DUMP-NEXT:         	24 02 00 01 	addiu	$2, $zero, 1
-; DUMP-NEXT:         	10 22 00 64 	beq	$1, $2, 404 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x288>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	d8 52 00 06 	clc	$c2, $zero, 96($c18)
-; DUMP-NEXT:         	f8 58 00 00 	csc	$c2, $zero, 0($c24)
-; DUMP-NEXT:         	4a 63 c0 00 	cincoffset	$c3, $c24, 0
-; DUMP-NEXT:         	c8 43 00 0b 	cld	$2, $zero, 8($c3)
-; DUMP-NEXT:         	da 61 00 03 	clc	$c19, $zero, 48($c1)
-; DUMP-NEXT:         	64 01 ff ff 	daddiu	$1, $zero, -1
-; DUMP-NEXT:         	00 01 1c 3c 	dsll32	$3, $1, 16
-; DUMP-NEXT:         	00 43 08 2b 	sltu	$1, $2, $3
-; DUMP-NEXT:         	14 20 00 04 	bnez	$1, 20 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x130>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	00 02 08 00 	sll	$1, $2, 0
-; DUMP-NEXT:         	10 00 00 3b 	b	240 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x218>
-; DUMP-NEXT:         	00 01 10 2b 	sltu	$2, $zero, $1
-; DUMP-NEXT:         	00 43 80 2d 	daddu	$16, $2, $3
-; DUMP-NEXT:         	64 01 7f ff 	daddiu	$1, $zero, 32767
-; DUMP-NEXT:         	00 01 0c 7c 	dsll32	$1, $1, 17
-; DUMP-NEXT:         	64 21 ff ff 	daddiu	$1, $1, -1
-; DUMP-NEXT:         	00 30 08 2b 	sltu	$1, $1, $16
-; DUMP-NEXT:         	14 20 00 0d 	bnez	$1, 56 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x17c>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	75 94 00 00 	clcbi	$c12, 0($c20)
-; DUMP-NEXT:         	64 05 00 00 	daddiu	$5, $zero, 0
-; DUMP-NEXT:         	48 11 63 3f 	cjalr	$c12, $c17
-; DUMP-NEXT:         	02 00 20 25 	move	$4, $16
-; DUMP-NEXT:         	00 02 88 2a 	slt	$17, $zero, $2
-; DUMP-NEXT:         	75 94 00 00 	clcbi	$c12, 0($c20)
-; DUMP-NEXT:         	64 05 00 00 	daddiu	$5, $zero, 0
-; DUMP-NEXT:         	48 11 63 3f 	cjalr	$c12, $c17
-; DUMP-NEXT:         	02 00 20 25 	move	$4, $16
-; DUMP-NEXT:         	28 41 00 00 	slti	$1, $2, 0
-; DUMP-NEXT:         	10 00 00 28 	b	164 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x218>
-; DUMP-NEXT:         	00 31 10 25 	or	$2, $1, $17
-; DUMP-NEXT:         	49 22 00 08 	cbtu	$c2, 36 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x1a0>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	c8 22 00 28 	clbu	$1, $zero, 5($c2)
-; DUMP-NEXT:         	24 02 00 06 	addiu	$2, $zero, 6
-; DUMP-NEXT:         	14 22 00 0a 	bne	$1, $2, 44 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x1b8>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	c8 22 00 1e 	clw	$1, $zero, 12($c2)
-; DUMP-NEXT:         	10 00 00 1f 	b	128 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x218>
-; DUMP-NEXT:         	00 01 10 2b 	sltu	$2, $zero, $1
-; DUMP-NEXT:         	4a 61 c0 10 	cincoffset	$c1, $c24, 16
-; DUMP-NEXT:         	64 01 00 07 	daddiu	$1, $zero, 7
-; DUMP-NEXT:         	e8 21 00 0b 	csd	$1, $zero, 8($c1)
-; DUMP-NEXT:         	d8 38 00 01 	clc	$c1, $zero, 16($c24)
-; DUMP-NEXT:         	10 00 00 19 	b	104 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x218>
-; DUMP-NEXT:         	48 02 10 54 	ceq	$2, $c2, $c1
-; DUMP-NEXT:         	48 01 13 ff 	cgetaddr	$1, $c2
-; DUMP-NEXT:         	30 21 3f ff 	andi	$1, $1, 16383
-; DUMP-NEXT:         	00 01 08 2f 	dnegu	$1, $1
-; DUMP-NEXT:         	d8 22 08 13 	clc	$c1, $1, 304($c2)
-; DUMP-NEXT:         	c8 22 00 02 	clwu	$1, $zero, 0($c2)
-; DUMP-NEXT:         	d8 21 00 0e 	clc	$c1, $zero, 224($c1)
-; DUMP-NEXT:         	00 01 09 38 	dsll	$1, $1, 4
-; DUMP-NEXT:         	d8 21 08 00 	clc	$c1, $1, 0($c1)
-; DUMP-NEXT:         	c8 21 00 70 	clbu	$1, $zero, 14($c1)
-; DUMP-NEXT:         	30 21 00 01 	andi	$1, $1, 1
-; DUMP-NEXT:         	10 20 00 0d 	beqz	$1, 56 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x218>
-; DUMP-NEXT:         	24 02 00 01 	addiu	$2, $zero, 1
-; DUMP-NEXT:         	d8 52 00 03 	clc	$c2, $zero, 48($c18)
-; DUMP-NEXT:         	48 01 13 ff 	cgetaddr	$1, $c2
-; DUMP-NEXT:         	30 21 3f ff 	andi	$1, $1, 16383
-; DUMP-NEXT:         	00 01 08 2f 	dnegu	$1, $1
-; DUMP-NEXT:         	d8 62 08 13 	clc	$c3, $1, 304($c2)
-; DUMP-NEXT:         	c8 22 00 02 	clwu	$1, $zero, 0($c2)
-; DUMP-NEXT:         	d8 43 00 0e 	clc	$c2, $zero, 224($c3)
-; DUMP-NEXT:         	00 01 09 38 	dsll	$1, $1, 4
-; DUMP-NEXT:         	d8 42 08 00 	clc	$c2, $1, 0($c2)
-; DUMP-NEXT:         	d8 42 00 02 	clc	$c2, $zero, 32($c2)
-; DUMP-NEXT:         	d8 21 00 02 	clc	$c1, $zero, 32($c1)
-; DUMP-NEXT:         	48 02 08 95 	cne	$2, $c1, $c2
-; DUMP-NEXT:         	d8 32 00 03 	clc	$c1, $zero, 48($c18)
-; DUMP-NEXT:         	48 01 0b ff 	cgetaddr	$1, $c1
-; DUMP-NEXT:         	30 21 3f ff 	andi	$1, $1, 16383
-; DUMP-NEXT:         	00 01 08 2f 	dnegu	$1, $1
-; DUMP-NEXT:         	d8 21 08 13 	clc	$c1, $1, 304($c1)
-; DUMP-NEXT:         	34 01 b8 60 	ori	$1, $zero, 47200
-; DUMP-NEXT:         	d8 21 08 00 	clc	$c1, $1, 0($c1)
-; DUMP-NEXT:         	4a 41 00 24 	cbnz	$c1, 148 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x2c8>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	00 02 08 3c 	dsll32	$1, $2, 0
-; DUMP-NEXT:         	75 94 00 00 	clcbi	$c12, 0($c20)
-; DUMP-NEXT:         	00 01 20 3e 	dsrl32	$4, $1, 0
-; DUMP-NEXT:         	48 11 63 3f 	cjalr	$c12, $c17
-; DUMP-NEXT:         	48 03 9a bf 	cmove	$c3,  $c19
-; DUMP-NEXT:         	4a 61 c0 10 	cincoffset	$c1, $c24, 16
-; DUMP-NEXT:         	64 01 00 0a 	daddiu	$1, $zero, 10
-; DUMP-NEXT:         	e8 21 00 0b 	csd	$1, $zero, 8($c1)
-; DUMP-NEXT:         	d8 78 00 01 	clc	$c3, $zero, 16($c24)
-; DUMP-NEXT:         	48 0b c0 11 	cincoffset	$c11, $c24, $zero
-; DUMP-NEXT:         	da 2b 00 03 	clc	$c17, $zero, 48($c11)
-; DUMP-NEXT:         	da 4b 00 04 	clc	$c18, $zero, 64($c11)
-; DUMP-NEXT:         	da 6b 00 05 	clc	$c19, $zero, 80($c11)
-; DUMP-NEXT:         	da 8b 00 06 	clc	$c20, $zero, 96($c11)
-; DUMP-NEXT:         	db 0b 00 07 	clc	$c24, $zero, 112($c11)
-; DUMP-NEXT:         	ca 0b 00 83 	cld	$16, $zero, 128($c11)
-; DUMP-NEXT:         	ca 2b 00 8b 	cld	$17, $zero, 136($c11)
-; DUMP-NEXT:         	48 11 1f ff 	cjr	$c17
-; DUMP-NEXT:         	4a 6b 58 90 	cincoffset	$c11, $c11, 144
-; DUMP-NEXT:         	75 94 00 00 	clcbi	$c12, 0($c20)
-; DUMP-NEXT:         	48 11 63 3f 	cjalr	$c12, $c17
-; DUMP-NEXT:         	48 03 92 bf 	cmove	$c3,  $c18
-; DUMP-NEXT:         	d8 32 00 03 	clc	$c1, $zero, 48($c18)
-; DUMP-NEXT:         	48 01 0b ff 	cgetaddr	$1, $c1
-; DUMP-NEXT:         	30 21 3f ff 	andi	$1, $1, 16383
-; DUMP-NEXT:         	00 01 08 2f 	dnegu	$1, $1
-; DUMP-NEXT:         	d8 21 08 13 	clc	$c1, $1, 304($c1)
-; DUMP-NEXT:         	f8 73 00 00 	csc	$c3, $zero, 0($c19)
-; DUMP-NEXT:         	75 94 00 00 	clcbi	$c12, 0($c20)
-; DUMP-NEXT:         	48 03 0a bf 	cmove	$c3,  $c1
-; DUMP-NEXT:         	48 04 92 bf 	cmove	$c4,  $c18
-; DUMP-NEXT:         	48 11 63 3f 	cjalr	$c12, $c17
-; DUMP-NEXT:         	48 05 9a bf 	cmove	$c5,  $c19
-; DUMP-NEXT:         	10 00 ff e7 	b	-96 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x260>
-; DUMP-NEXT:         	00 00 00 00 	nop
-; DUMP-NEXT:         	4a 61 c0 10 	cincoffset	$c1, $c24, 16
-; DUMP-NEXT:         	64 01 00 0a 	daddiu	$1, $zero, 10
-; DUMP-NEXT:         	e8 21 00 0b 	csd	$1, $zero, 8($c1)
-; DUMP-NEXT:         	10 00 ff e2 	b	-116 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x260>
-; DUMP-NEXT:     2d8:	d8 78 00 01 	clc	$c3, $zero, 16($c24)
+; DUMP-NEXT:         ea 2b 00 8b csd $17, $zero, 136($c11)
+; DUMP-NEXT:         ea 0b 00 83 csd $16, $zero, 128($c11)
+; DUMP-NEXT:         fb 0b 00 07 csc $c24, $zero, 112($c11)
+; DUMP-NEXT:         fa 8b 00 06 csc $c20, $zero, 96($c11)
+; DUMP-NEXT:         fa 6b 00 05 csc $c19, $zero, 80($c11)
+; DUMP-NEXT:         fa 4b 00 04 csc $c18, $zero, 64($c11)
+; DUMP-NEXT:         fa 2b 00 03 csc $c17, $zero, 48($c11)
+; DUMP-NEXT:         48 18 58 11 cincoffset $c24, $c11, $zero
+; DUMP-NEXT:         48 12 1a bf cmove $c18, $c3
+; DUMP-NEXT:         d8 23 00 05 clc $c1, $zero, 80($c3)
+; DUMP-NEXT:         3c 01 00 00 lui $1, 0
+; DUMP-NEXT:         64 21 00 00 daddiu $1, $1, 0
+; DUMP-NEXT:         49 21 00 24 cbtu $c1, 148 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xc8>
+; DUMP-NEXT:         48 14 60 51 cincoffset $c20, $c12, $1
+; DUMP-NEXT:         48 01 0b ff cgetaddr $1, $c1
+; DUMP-NEXT:         30 21 3f ff andi $1, $1, 16383
+; DUMP-NEXT:         00 01 08 2f dnegu $1, $1
+; DUMP-NEXT:         4a 62 08 c8 cincoffset $c2, $c1, 200
+; DUMP-NEXT:         c8 42 08 00 clbu $2, $1, 0($c2)
+; DUMP-NEXT:         10 40 00 0b beqz $2, 48 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x80>
+; DUMP-NEXT:         48 02 08 51 cincoffset $c2, $c1, $1
+; DUMP-NEXT:         c8 21 00 30 clbu $1, $zero, 6($c1)
+; DUMP-NEXT:         30 21 00 20 andi $1, $1, 32
+; DUMP-NEXT:         14 20 00 07 bnez $1, 32 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x80>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         4a 62 08 20 cincoffset $c2, $c1, 32
+; DUMP-NEXT:         d8 42 00 00 clc $c2, $zero, 0($c2)
+; DUMP-NEXT:         4a 42 00 0c cbnz $c2, 52 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xa4>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         10 00 00 13 b 80 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xc8>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         d8 42 00 13 clc $c2, $zero, 304($c2)
+; DUMP-NEXT:         c8 21 00 02 clwu $1, $zero, 0($c1)
+; DUMP-NEXT:         d8 42 00 0e clc $c2, $zero, 224($c2)
+; DUMP-NEXT:         00 01 09 38 dsll $1, $1, 4
+; DUMP-NEXT:         d8 42 08 00 clc $c2, $1, 0($c2)
+; DUMP-NEXT:         4a 62 10 70 cincoffset $c2, $c2, 112
+; DUMP-NEXT:         d8 42 00 00 clc $c2, $zero, 0($c2)
+; DUMP-NEXT:         4a 22 00 0a cbez $c2, 44 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xc8>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         74 74 00 00 clcbi $c3, 0($c20)
+; DUMP-NEXT:         4a 64 c0 20 cincoffset $c4, $c24, 32
+; DUMP-NEXT:         4a 93 20 10 csetbounds $c19, $c4, 16
+; DUMP-NEXT:         48 01 10 d4 ceq $1, $c2, $c3
+; DUMP-NEXT:         14 20 00 0b bnez $1, 48 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xe4>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         d8 42 00 01 clc $c2, $zero, 16($c2)
+; DUMP-NEXT:         4a 42 ff fb cbnz $c2, -16 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xb0>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         74 94 00 00 clcbi $c4, 0($c20)
+; DUMP-NEXT:         74 b4 00 00 clcbi $c5, 0($c20)
+; DUMP-NEXT:         75 94 00 00 clcbi $c12, 0($c20)
+; DUMP-NEXT:         48 11 63 3f cjalr $c12, $c17
+; DUMP-NEXT:         48 03 92 bf cmove $c3, $c18
+; DUMP-NEXT:         10 00 00 5d b 376 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x254>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         4a 21 ff f8 cbez $c1, -28 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xc8>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         c8 32 00 9e clw $1, $zero, 76($c18)
+; DUMP-NEXT:         24 02 00 01 addiu $2, $zero, 1
+; DUMP-NEXT:         10 22 00 61 beq $1, $2, 392 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x27c>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         d8 52 00 06 clc $c2, $zero, 96($c18)
+; DUMP-NEXT:         f8 58 00 00 csc $c2, $zero, 0($c24)
+; DUMP-NEXT:         c8 58 00 0b cld $2, $zero, 8($c24)
+; DUMP-NEXT:         da 61 00 03 clc $c19, $zero, 48($c1)
+; DUMP-NEXT:         64 01 ff ff daddiu $1, $zero, -1
+; DUMP-NEXT:         00 01 1c 3c dsll32 $3, $1, 16
+; DUMP-NEXT:         00 43 08 2b sltu $1, $2, $3
+; DUMP-NEXT:         14 20 00 04 bnez $1, 20 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x12c>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         00 02 08 00 sll $1, $2, 0
+; DUMP-NEXT:         10 00 00 3a b 236 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x210>
+; DUMP-NEXT:         00 01 10 2b sltu $2, $zero, $1
+; DUMP-NEXT:         00 43 80 2d daddu $16, $2, $3
+; DUMP-NEXT:         64 01 7f ff daddiu $1, $zero, 32767
+; DUMP-NEXT:         00 01 0c 7c dsll32 $1, $1, 17
+; DUMP-NEXT:         64 21 ff ff daddiu $1, $1, -1
+; DUMP-NEXT:         00 30 08 2b sltu $1, $1, $16
+; DUMP-NEXT:         14 20 00 0d bnez $1, 56 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x178>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         75 94 00 00 clcbi $c12, 0($c20)
+; DUMP-NEXT:         64 05 00 00 daddiu $5, $zero, 0
+; DUMP-NEXT:         48 11 63 3f cjalr $c12, $c17
+; DUMP-NEXT:         02 00 20 25 move $4, $16
+; DUMP-NEXT:         00 02 88 2a slt $17, $zero, $2
+; DUMP-NEXT:         75 94 00 00 clcbi $c12, 0($c20)
+; DUMP-NEXT:         64 05 00 00 daddiu $5, $zero, 0
+; DUMP-NEXT:         48 11 63 3f cjalr $c12, $c17
+; DUMP-NEXT:         02 00 20 25 move $4, $16
+; DUMP-NEXT:         28 41 00 00 slti $1, $2, 0
+; DUMP-NEXT:         10 00 00 27 b 160 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x210>
+; DUMP-NEXT:         00 31 10 25 or $2, $1, $17
+; DUMP-NEXT:         49 22 00 08 cbtu $c2, 36 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x19c>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         c8 22 00 28 clbu $1, $zero, 5($c2)
+; DUMP-NEXT:         24 02 00 06 addiu $2, $zero, 6
+; DUMP-NEXT:         14 22 00 09 bne $1, $2, 40 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x1b0>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         c8 22 00 1e clw $1, $zero, 12($c2)
+; DUMP-NEXT:         10 00 00 1e b 124 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x210>
+; DUMP-NEXT:         00 01 10 2b sltu $2, $zero, $1
+; DUMP-NEXT:         64 01 00 07 daddiu $1, $zero, 7
+; DUMP-NEXT:         e8 38 00 1b csd $1, $zero, 24($c24)
+; DUMP-NEXT:         d8 38 00 01 clc $c1, $zero, 16($c24)
+; DUMP-NEXT:         10 00 00 19 b 104 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x210>
+; DUMP-NEXT:         48 02 10 54 ceq $2, $c2, $c1
+; DUMP-NEXT:         48 01 13 ff cgetaddr $1, $c2
+; DUMP-NEXT:         30 21 3f ff andi $1, $1, 16383
+; DUMP-NEXT:         00 01 08 2f dnegu $1, $1
+; DUMP-NEXT:         d8 22 08 13 clc $c1, $1, 304($c2)
+; DUMP-NEXT:         c8 22 00 02 clwu $1, $zero, 0($c2)
+; DUMP-NEXT:         d8 21 00 0e clc $c1, $zero, 224($c1)
+; DUMP-NEXT:         00 01 09 38 dsll $1, $1, 4
+; DUMP-NEXT:         d8 21 08 00 clc $c1, $1, 0($c1)
+; DUMP-NEXT:         c8 21 00 70 clbu $1, $zero, 14($c1)
+; DUMP-NEXT:         30 21 00 01 andi $1, $1, 1
+; DUMP-NEXT:         10 20 00 0d beqz $1, 56 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x210>
+; DUMP-NEXT:         24 02 00 01 addiu $2, $zero, 1
+; DUMP-NEXT:         d8 52 00 03 clc $c2, $zero, 48($c18)
+; DUMP-NEXT:         48 01 13 ff cgetaddr $1, $c2
+; DUMP-NEXT:         30 21 3f ff andi $1, $1, 16383
+; DUMP-NEXT:         00 01 08 2f dnegu $1, $1
+; DUMP-NEXT:         d8 62 08 13 clc $c3, $1, 304($c2)
+; DUMP-NEXT:         c8 22 00 02 clwu $1, $zero, 0($c2)
+; DUMP-NEXT:         d8 43 00 0e clc $c2, $zero, 224($c3)
+; DUMP-NEXT:         00 01 09 38 dsll $1, $1, 4
+; DUMP-NEXT:         d8 42 08 00 clc $c2, $1, 0($c2)
+; DUMP-NEXT:         d8 21 00 02 clc $c1, $zero, 32($c1)
+; DUMP-NEXT:         d8 42 00 02 clc $c2, $zero, 32($c2)
+; DUMP-NEXT:         48 02 08 95 cne $2, $c1, $c2
+; DUMP-NEXT:         d8 32 00 03 clc $c1, $zero, 48($c18)
+; DUMP-NEXT:         48 01 0b ff cgetaddr $1, $c1
+; DUMP-NEXT:         30 21 3f ff andi $1, $1, 16383
+; DUMP-NEXT:         00 01 08 2f dnegu $1, $1
+; DUMP-NEXT:         d8 21 08 13 clc $c1, $1, 304($c1)
+; DUMP-NEXT:         34 01 b8 60 ori $1, $zero, 47200
+; DUMP-NEXT:         d8 21 08 00 clc $c1, $1, 0($c1)
+; DUMP-NEXT:         4a 41 00 23 cbnz $c1, 144 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x2bc>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         00 02 08 3c dsll32 $1, $2, 0
+; DUMP-NEXT:         75 94 00 00 clcbi $c12, 0($c20)
+; DUMP-NEXT:         00 01 20 3e dsrl32 $4, $1, 0
+; DUMP-NEXT:         48 11 63 3f cjalr $c12, $c17
+; DUMP-NEXT:         48 03 9a bf cmove $c3, $c19
+; DUMP-NEXT:         64 01 00 0a daddiu $1, $zero, 10
+; DUMP-NEXT:         e8 38 00 1b csd $1, $zero, 24($c24)
+; DUMP-NEXT:         d8 78 00 01 clc $c3, $zero, 16($c24)
+; DUMP-NEXT:         48 0b c0 11 cincoffset $c11, $c24, $zero
+; DUMP-NEXT:         da 2b 00 03 clc $c17, $zero, 48($c11)
+; DUMP-NEXT:         da 4b 00 04 clc $c18, $zero, 64($c11)
+; DUMP-NEXT:         da 6b 00 05 clc $c19, $zero, 80($c11)
+; DUMP-NEXT:         da 8b 00 06 clc $c20, $zero, 96($c11)
+; DUMP-NEXT:         db 0b 00 07 clc $c24, $zero, 112($c11)
+; DUMP-NEXT:         ca 0b 00 83 cld $16, $zero, 128($c11)
+; DUMP-NEXT:         ca 2b 00 8b cld $17, $zero, 136($c11)
+; DUMP-NEXT:         48 11 1f ff cjr $c17
+; DUMP-NEXT:         4a 6b 58 90 cincoffset $c11, $c11, 144
+; DUMP-NEXT:         75 94 00 00 clcbi $c12, 0($c20)
+; DUMP-NEXT:         48 11 63 3f cjalr $c12, $c17
+; DUMP-NEXT:         48 03 92 bf cmove $c3, $c18
+; DUMP-NEXT:         d8 32 00 03 clc $c1, $zero, 48($c18)
+; DUMP-NEXT:         48 01 0b ff cgetaddr $1, $c1
+; DUMP-NEXT:         30 21 3f ff andi $1, $1, 16383
+; DUMP-NEXT:         00 01 08 2f dnegu $1, $1
+; DUMP-NEXT:         d8 21 08 13 clc $c1, $1, 304($c1)
+; DUMP-NEXT:         f8 73 00 00 csc $c3, $zero, 0($c19)
+; DUMP-NEXT:         75 94 00 00 clcbi $c12, 0($c20)
+; DUMP-NEXT:         48 03 0a bf cmove $c3, $c1
+; DUMP-NEXT:         48 04 92 bf cmove $c4, $c18
+; DUMP-NEXT:         48 11 63 3f cjalr $c12, $c17
+; DUMP-NEXT:         48 05 9a bf cmove $c5, $c19
+; DUMP-NEXT:         10 00 ff e7 b -96 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x254>
+; DUMP-NEXT:         00 00 00 00 nop
+; DUMP-NEXT:         64 01 00 0a daddiu $1, $zero, 10
+; DUMP-NEXT:         e8 38 00 1b csd $1, $zero, 24($c24)
+; DUMP-NEXT:         10 00 ff e3 b -112 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x254>
+; DUMP-NEXT:  2c8:   d8 78 00 01 	clc	$c3, $zero, 16($c24)
 
 
 %"struct.JSC::ClassInfo" = type { i8 addrspace(200)*, %"struct.JSC::ClassInfo" addrspace(200)*, %"struct.JSC::HashTable" addrspace(200)*, %"struct.JSC::MethodTable", i32, [12 x i8] }
@@ -838,8 +834,8 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    cincoffset $c2, $c1, 200
 ; CHECK-NEXT:    clbu $2, $1, 0($c2)
 ; CHECK-NEXT:    beqz $2, .LBB0_5
-; CHECK-NEXT:    cincoffset $c2, $c1, $1
 ; Note: this cincoffset is not dead, it is used later (in .LBB0_5)
+; CHECK-NEXT:    cincoffset $c2, $c1, $1
 ; CHECK-NEXT:  # %bb.2: # %land.lhs.true.i.i.i
 ; CHECK-NEXT:    clbu $1, $zero, 6($c1)
 ; CHECK-NEXT:    andi $1, $1, 32
@@ -896,8 +892,7 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:  # %bb.12: # %if.end19
 ; CHECK-NEXT:    clc $c2, $zero, 96($c18)
 ; CHECK-NEXT:    csc $c2, $zero, 0($c24)
-; CHECK-NEXT:    cincoffset $c3, $c24, 0
-; CHECK-NEXT:    cld $2, $zero, 8($c3)
+; CHECK-NEXT:    cld $2, $zero, 8($c24)
 ; CHECK-NEXT:    clc $c19, $zero, 48($c1)
 ; CHECK-NEXT:    daddiu $1, $zero, -1
 ; CHECK-NEXT:    dsll $3, $1, 48
@@ -942,9 +937,8 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    b .LBB0_22
 ; CHECK-NEXT:    sltu $2, $zero, $1
 ; CHECK-NEXT:  .LBB0_19: # %if.end13.i
-; CHECK-NEXT:    cincoffset $c1, $c24, 16
 ; CHECK-NEXT:    daddiu $1, $zero, 7
-; CHECK-NEXT:    csd $1, $zero, 8($c1)
+; CHECK-NEXT:    csd $1, $zero, 24($c24)
 ; CHECK-NEXT:    clc $c1, $zero, 16($c24)
 ; CHECK-NEXT:    b .LBB0_22
 ; CHECK-NEXT:    ceq $2, $c2, $c1
@@ -971,8 +965,8 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    clc $c2, $zero, 224($c3)
 ; CHECK-NEXT:    dsll $1, $1, 4
 ; CHECK-NEXT:    clc $c2, $1, 0($c2)
-; CHECK-NEXT:    clc $c2, $zero, 32($c2)
 ; CHECK-NEXT:    clc $c1, $zero, 32($c1)
+; CHECK-NEXT:    clc $c2, $zero, 32($c2)
 ; CHECK-NEXT:    cne $2, $c1, $c2
 ; CHECK-NEXT:  .LBB0_22: # %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
 ; CHECK-NEXT:    clc $c1, $zero, 48($c18)
@@ -990,9 +984,8 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    dsrl $4, $1, 32
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c19
-; CHECK-NEXT:    cincoffset $c1, $c24, 16
 ; CHECK-NEXT:    daddiu $1, $zero, 10
-; CHECK-NEXT:    csd $1, $zero, 8($c1)
+; CHECK-NEXT:    csd $1, $zero, 24($c24)
 ; CHECK-NEXT:    clc $c3, $zero, 16($c24)
 ; CHECK-NEXT:  .LBB0_24: # %cleanup44
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero
@@ -1023,9 +1016,8 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    b .LBB0_24
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB0_26: # %if.then30
-; CHECK-NEXT:    cincoffset $c1, $c24, 16
 ; CHECK-NEXT:    daddiu $1, $zero, 10
-; CHECK-NEXT:    csd $1, $zero, 8($c1)
+; CHECK-NEXT:    csd $1, $zero, 24($c24)
 ; CHECK-NEXT:    b .LBB0_24
 ; CHECK-NEXT:    clc $c3, $zero, 16($c24)
 entry:

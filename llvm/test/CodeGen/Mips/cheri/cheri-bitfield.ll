@@ -26,9 +26,6 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(main)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
 ; CHECK-NEXT:    clcbi $c1, %captab20(x)($c1)
-; CHECK-NEXT:    csw $zero, $zero, 44($c11)
-; CHECK-NEXT:    csw $4, $zero, 40($c11)
-; CHECK-NEXT:    csc $c3, $zero, 0($c11)
 ; CHECK-NEXT:    cld $1, $zero, 8($c1)
 ; CHECK-NEXT:    lui $2, 65535
 ; CHECK-NEXT:    ori $2, $2, 65535
@@ -36,8 +33,11 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK-NEXT:    daddiu $2, $2, 1
 ; CHECK-NEXT:    and $1, $1, $2
 ; CHECK-NEXT:    ori $1, $1, 2
-; CHECK-NEXT:    addiu $2, $zero, 0
 ; CHECK-NEXT:    csd $1, $zero, 8($c1)
+; CHECK-NEXT:    csc $c3, $zero, 0($c11)
+; CHECK-NEXT:    csw $zero, $zero, 44($c11)
+; CHECK-NEXT:    addiu $2, $zero, 0
+; CHECK-NEXT:    csw $4, $zero, 40($c11)
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero
 ; CHECK-NEXT:    clc $c24, $zero, 48($c11)
 ; CHECK-NEXT:    cjr $c17

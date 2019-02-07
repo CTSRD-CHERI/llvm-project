@@ -36,8 +36,8 @@ entry:
 define void @store_null2(%struct.foo addrspace(200)* nocapture %foo, i8 addrspace(200)* %arg) local_unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: store_null2:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
 ; CHECK-NEXT:    csc $c4, $zero, {{16|32}}($c3)
+; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csc $cnull, $zero, {{32|64}}($c3)
 ; TODO: this could use $cnull but it doesn't matter since we had to

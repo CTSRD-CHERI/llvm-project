@@ -32,6 +32,7 @@ define void @call_variadic_one_onstack_long(i8 addrspace(200)* %in_arg1) {
 ; CHECK-LABEL: call_variadic_one_onstack_long:
 ; Verify that $c13 is used for one on-stack i64:
 ; CHECK:         csetbounds [[VARARG_TMP:\$c[0-9]+]], $c11, 8
+; CHECK:         clcbi $c12, %capcall20(variadic)($c
 ; CHECK-NEXT:    ori $1, $zero, 65495
 ; CHECK:         candperm $c13, [[VARARG_TMP]], $1
 ; CHECK: .end call_variadic_one_onstack_long
@@ -45,6 +46,7 @@ define void @call_variadic_one_onstack_cap(i8 addrspace(200)* %in_arg1) {
 ; CHECK-LABEL: call_variadic_one_onstack_cap:
 ; Verify that $c13 is used for one on-stack cap:
 ; CHECK:         csetbounds [[VARARG_TMP:\$c[0-9]+]], $c11, [[$CAP_SIZE]]
+; CHECK:         clcbi $c12, %capcall20(variadic)($c
 ; CHECK-NEXT:    ori $1, $zero, 65495
 ; CHECK-NEXT:    candperm $c13, [[VARARG_TMP]], $1
 ; CHECK: .end call_variadic_one_onstack_cap
@@ -100,26 +102,27 @@ entry:
 define void @call_nonvariadic_many_args(i8 addrspace(200)* %in_arg1) {
 ; CHECK-LABEL: call_nonvariadic_many_args:
 ; Test that we are passing all the arguments after $c10 on the stack and not zeroing $c13
-; CHECK:    cincoffset $c1, $c3, 17
+; CHECK:         cincoffset $c2, $c12, $1
+; CHECK-NEXT:    cincoffset $c1, $c3, 127
+; CHECK-NEXT:    csc $c1, $zero, [[@EXPR $CAP_SIZE * 3]]($c11)
+; CHECK-NEXT:    cincoffset $c1, $c3, 117
+; CHECK-NEXT:    csc $c1, $zero, [[@EXPR $CAP_SIZE * 2]]($c11)
+; CHECK-NEXT:    cincoffset $c1, $c3, 107
+; CHECK-NEXT:    csc $c1, $zero, [[@EXPR $CAP_SIZE * 1]]($c11)
+; CHECK-NEXT:    cincoffset $c1, $c3, 97
+; CHECK-NEXT:    csc $c1, $zero, [[@EXPR $CAP_SIZE * 0]]($c11)
+; CHECK-NEXT:    csetbounds $c1, $c11, [[@EXPR $CAP_SIZE * 4]]
+; CHECK-NEXT:    ori $1, $zero, 65495
+; CHECK-NEXT:    candperm $c13, $c1, $1
+; CHECK-NEXT:    cincoffset $c1, $c3, 17
 ; CHECK-NEXT:    cincoffset $c4, $c3, 27
 ; CHECK-NEXT:    cincoffset $c5, $c3, 37
 ; CHECK-NEXT:    cincoffset $c6, $c3, 47
 ; CHECK-NEXT:    cincoffset $c7, $c3, 57
+; CHECK-NEXT:    clcbi $c12, %capcall20(many_cap_args)($c2)
 ; CHECK-NEXT:    cincoffset $c8, $c3, 67
 ; CHECK-NEXT:    cincoffset $c9, $c3, 77
 ; CHECK-NEXT:    cincoffset $c10, $c3, 87
-; CHECK-NEXT:    cincoffset $c12, $c3, 97
-; CHECK-NEXT:    cincoffset $c13, $c3, 107
-; CHECK-NEXT:    cincoffset $c14, $c3, 117
-; CHECK-NEXT:    cincoffset $c3, $c3, 127
-; CHECK-NEXT:    csc $c12, $zero, 0($c11)
-; CHECK-NEXT:    csc $c3, $zero, [[@EXPR $CAP_SIZE * 3]]($c11)
-; CHECK-NEXT:    csc $c14, $zero, [[@EXPR $CAP_SIZE * 2]]($c11)
-; CHECK-NEXT:    csc $c13, $zero, [[@EXPR $CAP_SIZE * 1]]($c11)
-; CHECK-NEXT:    clcbi $c12, %capcall20(many_cap_args)($c2)
-; CHECK-NEXT:    csetbounds $c2, $c11, [[@EXPR $CAP_SIZE * 4]]
-; CHECK-NEXT:    ori $1, $zero, 65495
-; CHECK-NEXT:    candperm $c13, $c2, $1
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    cmove $c3, $c1
 ; CHECK-NEXT:    clc $c17, $zero, {{.*}}($c11)
@@ -251,8 +254,8 @@ entry:
 define void @call_variadic_onstack_and_no_stack_fn_from_nostack_fn(i8 addrspace(200)* %in_arg1) {
 ; Calling a varargs function without onstack args from a varargs function should clear $c13
 ; CHECK-LABEL: call_variadic_onstack_and_no_stack_fn_from_nostack_fn:
-; CHECK:       cincoffset	$c3, $c3, 77
 ; CHECK:       candperm        $c13, $c1, $1
+; CHECK:       cincoffset	$c3, $c3, 77
 ; Since the variadic fn clears $c13 on return we should not have another cgetnull here!
 ; OPT-NOT:   $c13
 ; CHECK:       cincoffset      $c3, $c18, 97
