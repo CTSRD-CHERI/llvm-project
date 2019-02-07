@@ -871,38 +871,87 @@ def AddrFI256 : ComplexPattern<iFATPTR256, 1, "selectAddrFI", [frameindex], []>;
 // clear why: we should be able to pattern match a ComplexPattern with an
 // overloaded return type, but that appears to be broken.
 
-multiclass FrameIndexPatterns<ComplexPattern Addr = addr> {
+multiclass FrameIndexPatterns<ValueType iFatptrTy, ComplexPattern Addr = addr> {
   // FIXME: avoid this pattern for i8/i16 stack loads
+  def : Pat<(store CheriOpnd:$cs, (iFatptrTy (ptradd Addr:$addr, simm11s4Pattern:$offset))), (STORECAP $cs, ZERO_64, imm:$offset, $addr)>;
   def : Pat<(store CheriOpnd:$cs, Addr:$addr), (STORECAP $cs, ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(load (iFatptrTy (ptradd Addr:$addr, simm11s4Pattern:$offset))), (LOADCAP ZERO_64, imm:$offset, $addr)>;
   def : Pat<(load Addr:$addr), (LOADCAP ZERO_64, (i64 0), $addr)>;
+
   def : Pat<(i64 (sextloadi32 Addr:$addr)), (CAPLOAD3264 ZERO_64, (i64 0), $addr)>;
   def : Pat<(i64 (sextloadi16 Addr:$addr)), (CAPLOAD16 ZERO_64, (i64 0), $addr)>;
   def : Pat<(i64 (extloadi16 Addr:$addr)), (CAPLOAD16 ZERO_64, (i64 0), $addr)>;
   def : Pat<(i64 (sextloadi8 Addr:$addr)), (CAPLOAD8 ZERO_64, (i64 0), $addr)>;
   def : Pat<(i64 (extloadi8 Addr:$addr)), (CAPLOAD8 ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(i64 (sextloadi32 (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset)))), (CAPLOAD3264 ZERO_64, imm:$offset, $addr)>;
+  def : Pat<(i64 (sextloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOAD16 ZERO_64, imm:$offset, $addr)>;
+  def : Pat<(i64 (extloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOAD16 ZERO_64, imm:$offset, $addr)>;
+  def : Pat<(i64 (sextloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOAD8 ZERO_64, imm:$offset, $addr)>;
+  def : Pat<(i64 (extloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOAD8 ZERO_64, imm:$offset, $addr)>;
+
   def : Pat<(i64 (zextloadi32 Addr:$addr)), (CAPLOADU32 ZERO_64, (i64 0), $addr)>;
   def : Pat<(i64 (zextloadi16 Addr:$addr)), (CAPLOADU16 ZERO_64, (i64 0), $addr)>;
   def : Pat<(i64 (zextloadi8 Addr:$addr)), (CAPLOADU8 ZERO_64, (i64 0), $addr)>;
+  def : Pat<(i64 (zextloadi32 (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset)))), (CAPLOADU32 ZERO_64, imm:$offset, $addr)>;
+  def : Pat<(i64 (zextloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOADU16 ZERO_64, imm:$offset, $addr)>;
+  def : Pat<(i64 (zextloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOADU8 ZERO_64, imm:$offset, $addr)>;
+
+  def : Pat<(i64 (load (iFatptrTy (ptradd Addr:$addr, simm8s3Pattern:$offset)))), (CAPLOAD64 ZERO_64, imm:$offset, $addr)>;
   def : Pat<(i64 (load Addr:$addr)), (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(i64 (extloadi32 (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset)))), (CAPLOAD3264 ZERO_64, imm:$offset, $addr)>;
   def : Pat<(i64 (extloadi32 Addr:$addr)), (CAPLOAD3264 ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(i32 (load (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset)))), (CAPLOAD32 ZERO_64, imm:$offset, $addr)>;
   def : Pat<(i32 (load Addr:$addr)), (CAPLOAD32 ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(i32 (sextloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOAD1632 ZERO_64, imm:$offset, $addr)>;
   def : Pat<(i32 (sextloadi16 Addr:$addr)), (CAPLOAD1632 ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(i32 (extloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOAD1632 ZERO_64, imm:$offset, $addr)>;
   def : Pat<(i32 (extloadi16 Addr:$addr)), (CAPLOAD1632 ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(i32 (zextloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOADU1632 ZERO_64, imm:$offset, $addr)>;
   def : Pat<(i32 (zextloadi16 Addr:$addr)), (CAPLOADU1632 ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(i32 (sextloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOAD832 ZERO_64, imm:$offset, $addr)>;
   def : Pat<(i32 (sextloadi8 Addr:$addr)), (CAPLOAD832 ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(i32 (extloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOAD832 ZERO_64, imm:$offset, $addr)>;
   def : Pat<(i32 (extloadi8 Addr:$addr)), (CAPLOAD832 ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(i32 (zextloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOADU832 ZERO_64, imm:$offset, $addr)>;
   def : Pat<(i32 (zextloadi8 Addr:$addr)), (CAPLOADU832 ZERO_64, (i64 0), $addr)>;
+
+
+  def : Pat<(truncstorei32 i64:$rs, (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset))), (CAPSTORE3264 $rs, ZERO_64, imm:$offset, $addr)>;
   def : Pat<(truncstorei32 i64:$rs, Addr:$addr), (CAPSTORE3264 $rs, ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(truncstorei16 i64:$rs, (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset))), (CAPSTORE16 $rs, ZERO_64, imm:$offset, $addr)>;
   def : Pat<(truncstorei16 i64:$rs, Addr:$addr), (CAPSTORE16 $rs, ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(truncstorei16 i32:$rs, (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset))), (CAPSTORE1632 $rs, ZERO_64, imm:$offset, $addr)>;
   def : Pat<(truncstorei16 i32:$rs, Addr:$addr), (CAPSTORE1632 $rs, ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(truncstorei8 i64:$rs, (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset))), (CAPSTORE8 $rs, ZERO_64, imm:$offset, $addr)>;
   def : Pat<(truncstorei8 i64:$rs, Addr:$addr), (CAPSTORE8 $rs, ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(truncstorei8 i32:$rs, (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset))), (CAPSTORE832 $rs, ZERO_64, imm:$offset, $addr)>;
   def : Pat<(truncstorei8 i32:$rs, Addr:$addr), (CAPSTORE832 $rs, ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(store i64:$rs, (iFatptrTy (ptradd Addr:$addr, simm8s3Pattern:$offset))), (CAPSTORE64 $rs, ZERO_64, imm:$offset, $addr)>;
   def : Pat<(store i64:$rs, Addr:$addr), (CAPSTORE64 $rs, ZERO_64, (i64 0), $addr)>;
+
+  def : Pat<(store i32:$rs, (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset))), (CAPSTORE32 $rs, ZERO_64, imm:$offset, $addr)>;
   def : Pat<(store i32:$rs, Addr:$addr), (CAPSTORE32 $rs, ZERO_64, (i64 0), $addr)>;
+
 }
-defm : FrameIndexPatterns<AddrFI64>;
-defm : FrameIndexPatterns<AddrFI128>;
-defm : FrameIndexPatterns<AddrFI256>;
+defm : FrameIndexPatterns<iFATPTR64, AddrFI64>;
+defm : FrameIndexPatterns<iFATPTR128, AddrFI128>;
+defm : FrameIndexPatterns<iFATPTR256, AddrFI256>;
+
 
 // NOTE: removing the parentheses around (AddrFI128:$fi) in the output pattern will result in
 // an invalid CIncOffset: %2:cherigpr = CIncOffset %2:cherigpr, $zero_64
