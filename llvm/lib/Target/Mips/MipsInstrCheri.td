@@ -909,6 +909,12 @@ defm : FrameIndexPatterns<AddrFI256>;
 def : Pat<(iFATPTR64 AddrFI64:$fi), (CIncOffset (AddrFI64:$fi), ZERO_64)>;
 def : Pat<(iFATPTR128 AddrFI128:$fi), (CIncOffset (AddrFI128:$fi), ZERO_64)>;
 def : Pat<(iFATPTR256 AddrFI256:$fi), (CIncOffset (AddrFI256:$fi), ZERO_64)>;
+let AddedComplexity = 5 in {
+// Add complexity to select this before the generic CIncOffsetImm pattern
+def : Pat<(iFATPTR64 (ptradd AddrFI64:$fi, simm11s0Pattern:$offset)), (CIncOffsetImm (AddrFI64:$fi), imm:$offset)>;
+def : Pat<(iFATPTR128 (ptradd AddrFI128:$fi, simm11s0Pattern:$offset)), (CIncOffsetImm (AddrFI128:$fi), imm:$offset)>;
+def : Pat<(iFATPTR256 (ptradd AddrFI256:$fi, simm11s0Pattern:$offset)), (CIncOffsetImm (AddrFI256:$fi), imm:$offset)>;
+}
 
 // This would also work:
 // def frameindex_to_targetframeindex : SDNodeXForm<frameindex, [{

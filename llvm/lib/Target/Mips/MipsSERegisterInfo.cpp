@@ -279,6 +279,10 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
       ImmOpNo = 2;
       RegOpNo = 3;
       break;
+    case Mips::CIncOffsetImm:
+      ImmOpNo = 2;
+      RegOpNo = 1;
+      break;
     case Mips::CIncOffset:
       break;
     default:
@@ -313,18 +317,22 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
           STI->getInstrInfo());
     DebugLoc DL = II->getDebugLoc();
 
-    if (MI.getOpcode() == Mips::CIncOffset) {
+    // Convert CIncOffset <-> CIncOffsetImm depending on offset value
+    if (MI.getOpcode() == Mips::CIncOffset || MI.getOpcode() == Mips::CIncOffsetImm) {
       MI.getOperand(1).ChangeToRegister(FrameReg, false);
       // If this is an 11-bit offset, then replace the CIncOffset that takes a
       // register with one that takes an immediate.
       if (isInt<11>(Offset)) {
-        MI.setDesc(TII.get(Mips::CIncOffsetImm));
+        if (MI.getOpcode() == Mips::CIncOffset)
+          MI.setDesc(TII.get(Mips::CIncOffsetImm));
         MI.getOperand(2).ChangeToImmediate(Offset);
-        return;
+      } else {
+        if (MI.getOpcode() == Mips::CIncOffsetImm)
+          MI.setDesc(TII.get(Mips::CIncOffset));
+        MachineBasicBlock &MBB = *MI.getParent();
+        unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
+        MI.getOperand(2).ChangeToRegister(Reg, false, false, true);
       }
-      MachineBasicBlock &MBB = *MI.getParent();
-      unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
-      MI.getOperand(2).ChangeToRegister(Reg, false, false, true);
       return;
     }
 
