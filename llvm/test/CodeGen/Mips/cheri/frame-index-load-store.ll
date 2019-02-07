@@ -88,8 +88,8 @@ define i32 @load_store_stack_i32(i32 %arg, i64 addrspace(200)* %padding) addrspa
   %arg.stack = alloca i32, align 8, addrspace(200)
   store volatile i32 %arg, i32 addrspace(200)* %arg.stack, align 4
   ; CHECK:      #NO_APP
-  ; CHECK-NEXT: sll $1, $4, 0
-  ; PURECAP-NEXT: csw $1, $zero, 24($c11)
+  ; PURECAP-NEXT: csw $4, $zero, 24($c11)
+  ; MIPS-NEXT:  sll $1, $4, 0
   ; MIPS-NEXT:  sw $1, 24($sp)
   ; CHECK-NEXT: #APP
   tail call void asm sideeffect "", ""()
@@ -129,8 +129,7 @@ define i16 @load_store_stack_i16(i16 %arg, i64 addrspace(200)* %padding) addrspa
   ; And load it back
   %loaded = load volatile i16, i16 addrspace(200)* %arg.stack, align 2
   ; CHECK:      #NO_APP
-  ; PURECAP-NEXT: clh $2, $zero, 24($c11)
-  ; FIXME: why does MIPS use lbu and CHERI clb?
+  ; PURECAP-NEXT: clhu $2, $zero, 24($c11)
   ; MIPS-NEXT: lhu $2, 24($sp)
   ; CHECK-NEXT: #APP
   tail call void asm sideeffect "", ""()
@@ -162,8 +161,7 @@ define i8 @load_store_stack_i8(i8 %arg, i64 addrspace(200)* %padding) addrspace(
   ; And load it back
   %loaded = load volatile i8, i8 addrspace(200)* %arg.stack, align 1
   ; CHECK:      #NO_APP
-  ; FIXME: why does MIPS use lbu and CHERI clb?
-  ; PURECAP-NEXT: clb $2, $zero, 24($c11)
+  ; PURECAP-NEXT: clbu $2, $zero, 24($c11)
   ; MIPS-NEXT: lbu $2, 24($sp)
   ; CHECK-NEXT: #APP
   tail call void asm sideeffect "", ""()
@@ -189,8 +187,8 @@ define i64 @load_store_stack_i32_truncstore(i64 %arg, i64 addrspace(200)* %paddi
   ; TODO: MIPS backend can't fold the trunc into the store?
   ; CHECK:      #NO_APP
   ; TODO: this sll is unncessary
-  ; CHECK-NEXT: sll	$1, $4, 0
-  ; PURECAP-NEXT: csw	$1, $zero, 24($c11)
+  ; PURECAP-NEXT: csw	$4, $zero, 24($c11)
+  ; MIPS-NEXT: sll $1, $4, 0
   ; MIPS-NEXT: sw	$1, 24($sp)
   ; CHECK-NEXT: #APP
   ; And load it back
@@ -213,8 +211,8 @@ define i64 @load_store_stack_i32_sext(i32 %arg, i64 addrspace(200)* %padding) ad
   tail call void asm sideeffect "", ""()
   store volatile i32 %arg, i32 addrspace(200)* %arg.stack, align 4
   ; CHECK:      #NO_APP
-  ; CHECK-NEXT: sll	$1, $4, 0
-  ; PURECAP-NEXT: csw	$1, $zero, 24($c11)
+  ; PURECAP-NEXT: csw	$4, $zero, 24($c11)
+  ; MIPS-NEXT: sll $1, $4, 0
   ; MIPS-NEXT: sw	$1, 24($sp)
   ; CHECK-NEXT: #APP
   ; And load it back
@@ -228,5 +226,36 @@ define i64 @load_store_stack_i32_sext(i32 %arg, i64 addrspace(200)* %padding) ad
   ; MIPS-NEXT: lw $1, 24($sp)
   ; TODO: this sext is not folded into the load
   ; CHECK-NEXT: sll $2, $1, 0
+  ; CHECK-NEXT: #APP
+}
+
+
+define i1 @load_store_stack_i1(i1 %arg, i64 addrspace(200)* %padding) addrspace(200) nounwind {
+  ; CHECK-LABEL: load_store_stack_i1:
+  tail call void asm sideeffect "", ""()
+  ; Store dummy cap to stack slot 1
+  %padding.stack = alloca i64 addrspace(200)*, align 32, addrspace(200)
+  store volatile i64 addrspace(200)* %padding, i64 addrspace(200)* addrspace(200)* %padding.stack, align 32
+  ; CHECK:      #NO_APP
+  ; PURECAP-NEXT: csc $c3, $zero, 32($c11)
+  ; MIPS-NEXT:  sd $5, 32($sp)
+  ; CHECK-NEXT: #APP
+  ; Store the i32 to stack slot 2
+  %arg.stack = alloca i1, align 8, addrspace(200)
+  tail call void asm sideeffect "", ""()
+  store volatile i1 %arg, i1 addrspace(200)* %arg.stack, align 4
+  ; CHECK:      #NO_APP
+  ; CHECK-NEXT:   andi $1, $4, 1
+  ; PURECAP-NEXT: csb	$1, $zero, 24($c11)
+  ; MIPS-NEXT:    sb	$1, 24($sp)
+  ; CHECK-NEXT: #APP
+  ; And load it back
+  tail call void asm sideeffect "", ""()
+  %loaded = load volatile i1, i1 addrspace(200)* %arg.stack, align 4
+  tail call void asm sideeffect "", ""()
+  ret i1 %loaded
+  ; CHECK: #NO_APP
+  ; PURECAP-NEXT:  clbu $2, $zero, 24($c11)
+  ; MIPS-NEXT: lbu $2, 24($sp)
   ; CHECK-NEXT: #APP
 }

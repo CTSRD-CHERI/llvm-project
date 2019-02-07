@@ -933,6 +933,10 @@ multiclass FrameIndexPatterns<ValueType iFatptrTy, ComplexPattern Addr = addr> {
   defm: FrameIndexLoadPatterns<extloadi1, iFATPTR128, i64, Addr, CAPLOADU8, simm8, simm8Pattern>;
 
   // stores
+
+  // This pattern allows omitting lots of unnncessary sll instructions
+  def : Pat<(store (i32 (trunc GPR64:$rs)), Addr:$addr), (CAPSTORE3264 $rs, ZERO_64, (i64 0), $addr)>;
+
   defm: FrameIndexStorePatterns<truncstorei32, iFatptrTy, i64, Addr, CAPSTORE3264, simm8s2, simm8s2Pattern>;
   defm: FrameIndexStorePatterns<truncstorei16, iFatptrTy, i64, Addr, CAPSTORE16, simm8s1, simm8s1Pattern>;
   defm: FrameIndexStorePatterns<truncstorei8, iFatptrTy, i64, Addr, CAPSTORE8, simm8, simm8Pattern>;
