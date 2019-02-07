@@ -242,19 +242,25 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
           bool ImmediateWasFolded = false;
           LLVM_DEBUG(dbgs() << "Trying to fold input CIncOffsetImm: "; IncOffset->dump(););
           if (IsValidOffset(Op, offset + offsetImm)) {
-            IncOffset->getOperand(1).setIsKill(false);
-            auto IncOffsetArg = IncOffset->getOperand(1).getReg();
-            MI.getOperand(3).setReg(IncOffsetArg);
-            if (std::distance(RI.use_begin(IncOffsetArg), RI.use_end()) > 2) {
-              // Don't kill the register if there are other uses
-              MI.getOperand(3).setIsKill(false);
+            if (IncOffset->getOperand(1).isReg()) {
+              IncOffset->getOperand(1).setIsKill(false);
+              auto IncOffsetArg = IncOffset->getOperand(1).getReg();
+              MI.getOperand(3).setReg(IncOffsetArg);
+              if (std::distance(RI.use_begin(IncOffsetArg), RI.use_end()) > 2) {
+                // Don't kill the register if there are other uses
+                MI.getOperand(3).setIsKill(false);
+              }
+            } else {
+              // If it is a frame index we can just replace the register operand with a frame index operand
+              assert(IncOffset->getOperand(1).isFI());
+              MI.getOperand(3).ChangeToFrameIndex(IncOffset->getOperand(1).getIndex());
             }
             MI.getOperand(2).setImm(offset + offsetImm);
             IncOffsets.insert(IncOffset);
             LLVM_DEBUG(dbgs() << "Was able to fold CIncOffsetImm. New Instr: "; MI.dump(););
             ImmediateWasFolded = true;
             modified = true;
-          } else {
+          } else if (IncOffset->getOperand(1).isReg()) {
             LLVM_DEBUG(dbgs() << "Could not fold input CIncOffsetImm due to immediate range: " << Twine(offset + offsetImm) << "\n";);
             // Check if there the input to the CIncOffsetImm was a non-constant
             // inc-offset and attempt to fold that into the register operand
