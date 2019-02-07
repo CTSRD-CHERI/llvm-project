@@ -879,6 +879,15 @@ def AddrFI256 : ComplexPattern<iFATPTR256, 1, "selectAddrFI", [frameindex], []>;
 // clear why: we should be able to pattern match a ComplexPattern with an
 // overloaded return type, but that appears to be broken.
 
+multiclass FrameIndexStorePatterns<PatFrag storeOp, ValueType iFatptrTy, ValueType intTy, ComplexPattern Addr, Instruction OutOp, Operand simm, PatFrag immfrag> {
+  def : Pat<(storeOp intTy:$rs, (iFatptrTy (ptradd Addr:$addr, immfrag:$offset))), (OutOp $rs, ZERO_64, simm:$offset, $addr)>;
+  def : Pat<(storeOp intTy:$rs, Addr:$addr), (OutOp $rs, ZERO_64, (i64 0), $addr)>;
+}
+multiclass FrameIndexLoadPatterns<PatFrag loadOp, ValueType iFatptrTy, ValueType intTy, ComplexPattern Addr, Instruction OutOp, Operand simm, PatFrag immfrag> {
+  def : Pat<(intTy (loadOp (iFatptrTy (ptradd Addr:$addr, immfrag:$offset)))), (OutOp ZERO_64, simm:$offset, $addr)>;
+  def : Pat<(intTy (loadOp Addr:$addr)), (OutOp ZERO_64, (i64 0), $addr)>;
+}
+
 multiclass FrameIndexPatterns<ValueType iFatptrTy, ComplexPattern Addr = addr> {
   // FIXME: avoid this pattern for i8/i16 stack loads
   def : Pat<(store CheriOpnd:$cs, (iFatptrTy (ptradd Addr:$addr, simm11s4Pattern:$offset))), (STORECAP $cs, ZERO_64, imm:$offset, $addr)>;
@@ -887,75 +896,54 @@ multiclass FrameIndexPatterns<ValueType iFatptrTy, ComplexPattern Addr = addr> {
   def : Pat<(load (iFatptrTy (ptradd Addr:$addr, simm11s4Pattern:$offset))), (LOADCAP ZERO_64, imm:$offset, $addr)>;
   def : Pat<(load Addr:$addr), (LOADCAP ZERO_64, (i64 0), $addr)>;
 
-  def : Pat<(i64 (sextloadi32 Addr:$addr)), (CAPLOAD3264 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (sextloadi16 Addr:$addr)), (CAPLOAD16 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (extloadi16 Addr:$addr)), (CAPLOAD16 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (sextloadi8 Addr:$addr)), (CAPLOAD8 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (extloadi8 Addr:$addr)), (CAPLOAD8 ZERO_64, (i64 0), $addr)>;
+  // i64 load
+  defm: FrameIndexLoadPatterns<load, iFATPTR128, i64, Addr, CAPLOAD64, simm8s3, simm8s3Pattern>;
 
-  def : Pat<(i64 (sextloadi32 (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset)))), (CAPLOAD3264 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i64 (sextloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOAD16 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i64 (extloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOAD16 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i64 (sextloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOAD8 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i64 (extloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOAD8 ZERO_64, imm:$offset, $addr)>;
+  // i32 load
+  defm: FrameIndexLoadPatterns<sextloadi32, iFATPTR128, i64, Addr, CAPLOAD3264, simm8s2, simm8s2Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi32, iFATPTR128, i64, Addr, CAPLOAD3264, simm8s2, simm8s2Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi32, iFATPTR128, i64, Addr, CAPLOADU32, simm8s2, simm8s2Pattern>;
+  defm: FrameIndexLoadPatterns<load, iFATPTR128, i32, Addr, CAPLOAD32, simm8s2, simm8s2Pattern>;
 
-  def : Pat<(i64 (zextloadi32 Addr:$addr)), (CAPLOADU32 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (zextloadi16 Addr:$addr)), (CAPLOADU16 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (zextloadi8 Addr:$addr)), (CAPLOADU8 ZERO_64, (i64 0), $addr)>;
-  def : Pat<(i64 (zextloadi32 (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset)))), (CAPLOADU32 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i64 (zextloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOADU16 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i64 (zextloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOADU8 ZERO_64, imm:$offset, $addr)>;
+  // i16 load
+  defm: FrameIndexLoadPatterns<zextloadi16, iFATPTR128, i32, Addr, CAPLOADU1632, simm8s1, simm8s1Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi16, iFATPTR128, i64, Addr, CAPLOADU16, simm8s1, simm8s1Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi16, iFATPTR128, i32, Addr, CAPLOAD1632, simm8s1, simm8s1Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi16, iFATPTR128, i64, Addr, CAPLOAD16, simm8s1, simm8s1Pattern>;
+  // Use clhu instead of clh for anyext to match MIPS
+  defm: FrameIndexLoadPatterns<extloadi16, iFATPTR128, i32, Addr, CAPLOADU1632, simm8s1, simm8s1Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi16, iFATPTR128, i64, Addr, CAPLOADU16, simm8s1, simm8s1Pattern>;
 
-  def : Pat<(i64 (load (iFatptrTy (ptradd Addr:$addr, simm8s3Pattern:$offset)))), (CAPLOAD64 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i64 (load Addr:$addr)), (CAPLOAD64 ZERO_64, (i64 0), $addr)>;
+  // i8 load
+  defm: FrameIndexLoadPatterns<zextloadi8, iFATPTR128, i32, Addr, CAPLOADU832, simm8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi8, iFATPTR128, i64, Addr, CAPLOADU8, simm8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi8, iFATPTR128, i32, Addr, CAPLOAD832, simm8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi8, iFATPTR128, i64, Addr, CAPLOAD8, simm8, simm8Pattern>;
+  // Use clbu instead of clb for anyext to match MIPS
+  defm: FrameIndexLoadPatterns<extloadi8, iFATPTR128, i32, Addr, CAPLOADU832, simm8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi8, iFATPTR128, i64, Addr, CAPLOADU8, simm8, simm8Pattern>;
 
-  def : Pat<(i64 (extloadi32 (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset)))), (CAPLOAD3264 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i64 (extloadi32 Addr:$addr)), (CAPLOAD3264 ZERO_64, (i64 0), $addr)>;
+  // i1 load
+  defm: FrameIndexLoadPatterns<zextloadi1, iFATPTR128, i32, Addr, CAPLOADU832, simm8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<zextloadi1, iFATPTR128, i64, Addr, CAPLOADU8, simm8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi1, iFATPTR128, i32, Addr, CAPLOAD832, simm8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<sextloadi1, iFATPTR128, i64, Addr, CAPLOAD8, simm8, simm8Pattern>;
+  // Use clbu instead of clb for anyext to match MIPS
+  defm: FrameIndexLoadPatterns<extloadi1, iFATPTR128, i32, Addr, CAPLOADU832, simm8, simm8Pattern>;
+  defm: FrameIndexLoadPatterns<extloadi1, iFATPTR128, i64, Addr, CAPLOADU8, simm8, simm8Pattern>;
 
-  def : Pat<(i32 (load (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset)))), (CAPLOAD32 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i32 (load Addr:$addr)), (CAPLOAD32 ZERO_64, (i64 0), $addr)>;
+  // stores
+  defm: FrameIndexStorePatterns<truncstorei32, iFatptrTy, i64, Addr, CAPSTORE3264, simm8s2, simm8s2Pattern>;
+  defm: FrameIndexStorePatterns<truncstorei16, iFatptrTy, i64, Addr, CAPSTORE16, simm8s1, simm8s1Pattern>;
+  defm: FrameIndexStorePatterns<truncstorei8, iFatptrTy, i64, Addr, CAPSTORE8, simm8, simm8Pattern>;
+  // GPR32 versions
+  defm: FrameIndexStorePatterns<truncstorei16, iFatptrTy, i32, Addr, CAPSTORE1632, simm8s1, simm8s1Pattern>;
+  defm: FrameIndexStorePatterns<truncstorei8, iFatptrTy, i32, Addr, CAPSTORE832, simm8, simm8Pattern>;
 
-  def : Pat<(i32 (sextloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOAD1632 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i32 (sextloadi16 Addr:$addr)), (CAPLOAD1632 ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(i32 (extloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOAD1632 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i32 (extloadi16 Addr:$addr)), (CAPLOAD1632 ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(i32 (zextloadi16 (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset)))), (CAPLOADU1632 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i32 (zextloadi16 Addr:$addr)), (CAPLOADU1632 ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(i32 (sextloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOAD832 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i32 (sextloadi8 Addr:$addr)), (CAPLOAD832 ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(i32 (extloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOAD832 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i32 (extloadi8 Addr:$addr)), (CAPLOAD832 ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(i32 (zextloadi8 (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset)))), (CAPLOADU832 ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(i32 (zextloadi8 Addr:$addr)), (CAPLOADU832 ZERO_64, (i64 0), $addr)>;
-
-
-  def : Pat<(truncstorei32 i64:$rs, (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset))), (CAPSTORE3264 $rs, ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(truncstorei32 i64:$rs, Addr:$addr), (CAPSTORE3264 $rs, ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(truncstorei16 i64:$rs, (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset))), (CAPSTORE16 $rs, ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(truncstorei16 i64:$rs, Addr:$addr), (CAPSTORE16 $rs, ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(truncstorei16 i32:$rs, (iFatptrTy (ptradd Addr:$addr, simm8s1Pattern:$offset))), (CAPSTORE1632 $rs, ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(truncstorei16 i32:$rs, Addr:$addr), (CAPSTORE1632 $rs, ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(truncstorei8 i64:$rs, (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset))), (CAPSTORE8 $rs, ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(truncstorei8 i64:$rs, Addr:$addr), (CAPSTORE8 $rs, ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(truncstorei8 i32:$rs, (iFatptrTy (ptradd Addr:$addr, simm8Pattern:$offset))), (CAPSTORE832 $rs, ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(truncstorei8 i32:$rs, Addr:$addr), (CAPSTORE832 $rs, ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(store i64:$rs, (iFatptrTy (ptradd Addr:$addr, simm8s3Pattern:$offset))), (CAPSTORE64 $rs, ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(store i64:$rs, Addr:$addr), (CAPSTORE64 $rs, ZERO_64, (i64 0), $addr)>;
-
-  def : Pat<(store i32:$rs, (iFatptrTy (ptradd Addr:$addr, simm8s2Pattern:$offset))), (CAPSTORE32 $rs, ZERO_64, imm:$offset, $addr)>;
-  def : Pat<(store i32:$rs, Addr:$addr), (CAPSTORE32 $rs, ZERO_64, (i64 0), $addr)>;
-
+  defm: FrameIndexStorePatterns<store, iFatptrTy, i64, Addr, CAPSTORE64, simm8s3, simm8s3Pattern>;
+  defm: FrameIndexStorePatterns<store, iFatptrTy, i32, Addr, CAPSTORE32, simm8s2, simm8s2Pattern>;
 }
+
 defm : FrameIndexPatterns<iFATPTR64, AddrFI64>;
 defm : FrameIndexPatterns<iFATPTR128, AddrFI128>;
 defm : FrameIndexPatterns<iFATPTR256, AddrFI256>;
