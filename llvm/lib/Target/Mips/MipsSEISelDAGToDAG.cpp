@@ -175,7 +175,7 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     ++U; // increment U now before we potentially change the successors using MO.setReg()
 
     // Do not replace if it is a phi's operand or is tied to def operand.
-    if (MI->isPHI() || MI->isRegTiedToDefOperand(OpNo) || MI->isPseudo()) {
+    if (MI->isPHI() || MI->isRegTiedToDefOperand(OpNo)) {
       LLVM_DEBUG(
           dbgs() << "Cannot replace use of NULL register for PHI or def:";
           MI->dump(););
