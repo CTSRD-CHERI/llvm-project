@@ -88,6 +88,7 @@ define i32 @load_store_stack_i32(i32 %arg, i64 addrspace(200)* %padding) addrspa
   %arg.stack = alloca i32, align 8, addrspace(200)
   store volatile i32 %arg, i32 addrspace(200)* %arg.stack, align 4
   ; CHECK:      #NO_APP
+  ; CHECK-NEXT: sll $1, $4, 0
   ; PURECAP-NEXT: csw $1, $zero, 24($c11)
   ; MIPS-NEXT:  sw $1, 24($sp)
   ; CHECK-NEXT: #APP
@@ -212,6 +213,7 @@ define i64 @load_store_stack_i32_sext(i32 %arg, i64 addrspace(200)* %padding) ad
   tail call void asm sideeffect "", ""()
   store volatile i32 %arg, i32 addrspace(200)* %arg.stack, align 4
   ; CHECK:      #NO_APP
+  ; CHECK-NEXT: sll	$1, $4, 0
   ; PURECAP-NEXT: csw	$1, $zero, 24($c11)
   ; MIPS-NEXT: sw	$1, 24($sp)
   ; CHECK-NEXT: #APP

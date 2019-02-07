@@ -228,6 +228,12 @@ public:
   bool isPositionIndependent() const;
   /// This overrides the PostRAScheduler bit in the SchedModel for each CPU.
   bool enableMachineScheduler() const override { return isCheri(); }
+  // TODO: unless we set enableMachineSchedDefaultSched() to false
+  // this causes lots of unncessary stack spills really likely
+  // See stack-spill-unncessary.c test
+  // See also createDefaultScheduler() in SelectionDAGISel.cpp
+  bool enableMachineSchedDefaultSched() const override { return false; }
+
   bool enablePostRAScheduler() const override;
   void getCriticalPathRCs(RegClassVector &CriticalPathRCs) const override;
   CodeGenOpt::Level getOptLevelToEnablePostRAScheduler() const override;
