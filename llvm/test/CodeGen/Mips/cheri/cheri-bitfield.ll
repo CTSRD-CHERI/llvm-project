@@ -16,7 +16,7 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK-LABEL: main:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:64|128]]
-; CHECK-NEXT:    csc $c24, $zero, 48($c11)
+; CHECK-NEXT:    csc $c24, $zero, [[@EXPR 3 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cincoffset $c24, $c11, $zero
 ; CHECK-NEXT:    cgetoffset $1, $c11
 ; CHECK-NEXT:    daddiu $2, $zero, -32
@@ -35,11 +35,11 @@ define i32 @main(i32 signext %argc, i8 addrspace(200)* addrspace(200)* %argv) #0
 ; CHECK-NEXT:    ori $1, $1, 2
 ; CHECK-NEXT:    csd $1, $zero, 8($c1)
 ; CHECK-NEXT:    csc $c3, $zero, 0($c11)
-; CHECK-NEXT:    csw $zero, $zero, 44($c11)
-; CHECK-NEXT:    addiu $2, $zero, 0
 ; CHECK-NEXT:    csw $4, $zero, 40($c11)
+; CHECK-NEXT:    addiu $2, $zero, 0
+; CHECK-NEXT:    csw $zero, $zero, 44($c11)
 ; CHECK-NEXT:    cincoffset $c11, $c24, $zero
-; CHECK-NEXT:    clc $c24, $zero, 48($c11)
+; CHECK-NEXT:    clc $c24, $zero, [[@EXPR 3 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 entry:

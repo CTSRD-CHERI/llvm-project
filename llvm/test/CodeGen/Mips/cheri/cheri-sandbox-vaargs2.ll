@@ -14,15 +14,14 @@
 define void @xo_emit(i8 addrspace(200)* %fmt, ...) {
 ; CHECK-LABEL: xo_emit:
 ; CHECK: # %bb.0: # %entry
-; LEGACY:  ld [[SIZE_OF_B:\$[0-9]+]], %got_disp(.size.b)($1)
 ; Save the incoming varargs in a temporary register:
 ; PCREL:   clcbi [[CAP_FOR_B:\$c[0-9]+]], %captab20(b)($c{{[0-9]+}})
 ; LEGACY:  ld [[ADDR_OF_B:\$[0-9]+]], %got_disp(b)($1)
-; CHECK:   cmove [[VARARGS_CAP:\$c[0-9]+]],  $c13
+; LEGACY:  ld [[SIZE_OF_B:\$[0-9]+]], %got_disp(.size.b)($1)
 ; LEGACY:  cfromddc	[[TMP:\$c[0-9]+]], [[ADDR_OF_B]]
 ; LEGACY:  csetbounds	[[CAP_FOR_B:\$c[0-9]+]], [[TMP]], [[SIZE_OF_B]]
 ; Now store in the global:
-; CHECK: csc	[[VARARGS_CAP]], $zero, 0([[CAP_FOR_B]])
+; CHECK: csc	$c13, $zero, 0([[CAP_FOR_B]])
 
 entry:
   %fmt.addr = alloca i8 addrspace(200)*, align 32, addrspace(200)

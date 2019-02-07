@@ -888,7 +888,7 @@ multiclass FrameIndexLoadPatterns<PatFrag loadOp, ValueType iFatptrTy, ValueType
   def : Pat<(intTy (loadOp Addr:$addr)), (OutOp ZERO_64, (i64 0), $addr)>;
 }
 
-multiclass FrameIndexPatterns<ValueType iFatptrTy, ComplexPattern Addr = addr> {
+multiclass FrameIndexPatterns<ValueType iFatptrTy, ComplexPattern Addr> {
   // FIXME: avoid this pattern for i8/i16 stack loads
   def : Pat<(store CheriOpnd:$cs, (iFatptrTy (ptradd Addr:$addr, simm11s4Pattern:$offset))), (STORECAP $cs, ZERO_64, imm:$offset, $addr)>;
   def : Pat<(store CheriOpnd:$cs, Addr:$addr), (STORECAP $cs, ZERO_64, (i64 0), $addr)>;
