@@ -880,11 +880,11 @@ def AddrFI256 : ComplexPattern<iFATPTR256, 1, "selectAddrFI", [frameindex], []>;
 // overloaded return type, but that appears to be broken.
 
 multiclass FrameIndexStorePatterns<PatFrag storeOp, ValueType iFatptrTy, ValueType intTy, ComplexPattern Addr, Instruction OutOp, Operand simm, PatFrag immfrag> {
-  def : Pat<(storeOp intTy:$rs, (iFatptrTy (ptradd Addr:$addr, immfrag:$offset))), (OutOp $rs, ZERO_64, simm:$offset, $addr)>;
+  def : Pat<(storeOp intTy:$rs, (iFatptrTy (ptradd Addr:$addr, immfrag:$offset))), (OutOp $rs, ZERO_64, imm:$offset, $addr)>;
   def : Pat<(storeOp intTy:$rs, Addr:$addr), (OutOp $rs, ZERO_64, (i64 0), $addr)>;
 }
 multiclass FrameIndexLoadPatterns<PatFrag loadOp, ValueType iFatptrTy, ValueType intTy, ComplexPattern Addr, Instruction OutOp, Operand simm, PatFrag immfrag> {
-  def : Pat<(intTy (loadOp (iFatptrTy (ptradd Addr:$addr, immfrag:$offset)))), (OutOp ZERO_64, simm:$offset, $addr)>;
+  def : Pat<(intTy (loadOp (iFatptrTy (ptradd Addr:$addr, immfrag:$offset)))), (OutOp ZERO_64, imm:$offset, $addr)>;
   def : Pat<(intTy (loadOp Addr:$addr)), (OutOp ZERO_64, (i64 0), $addr)>;
 }
 
