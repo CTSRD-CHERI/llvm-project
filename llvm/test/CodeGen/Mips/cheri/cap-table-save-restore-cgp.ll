@@ -29,6 +29,7 @@ entry:
   ret i32 %call
 }
 
+; FIXME: this is inefficient (enabling machine scheduler by default fixes it but makes many other things worse)
 define i32 @test1() addrspace(200) nounwind {
 ; CHECK-LABEL: test1:
 ; CHECK:       # %bb.0: # %entry
@@ -241,14 +242,16 @@ define i32 @not_needed_after_call(i32 %arg1, i32 %arg2) addrspace(200) nounwind 
 ; CHECK-NEXT:    csd $17, $zero, {{24|56}}($c11) # 8-byte Folded Spill
 ; CHECK-NEXT:    csd $16, $zero, {{16|48}}($c11) # 8-byte Folded Spill
 ; CHECK-NEXT:    csc $c17, $zero, 0($c11)
+; CHECK-NEXT:    move $16, $5
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(not_needed_after_call)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(not_needed_after_call)))
 ; PCREL-NEXT:    cincoffset $c1, $c12, $1
-; CHECK-NEXT:    sll $16, $5, 0
 ; CHECK-NEXT:    clcbi $c12, %capcall20(external_call1)($c{{1|26}})
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    sll $17, $4, 0
-; CHECK-NEXT:    addu $2, $17, $16
+; CHECK-NEXT:    move $17, $4
+; CHECK-NEXT:    sll $1, $16, 0
+; CHECK-NEXT:    sll $2, $17, 0
+; CHECK-NEXT:    addu $2, $2, $1
 ; CHECK-NEXT:    clc $c17, $zero, 0($c11)
 ; CHECK-NEXT:    cld $16, $zero, {{16|48}}($c11) # 8-byte Folded Reload
 ; CHECK-NEXT:    cld $17, $zero, {{24|56}}($c11) # 8-byte Folded Reload
