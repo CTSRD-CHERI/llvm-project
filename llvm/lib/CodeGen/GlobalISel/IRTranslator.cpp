@@ -1261,6 +1261,12 @@ bool IRTranslator::translateInvoke(const User &U,
   return true;
 }
 
+bool IRTranslator::translateCallBr(const User &U,
+                                   MachineIRBuilder &MIRBuilder) {
+  // FIXME: Implement this.
+  return false;
+}
+
 bool IRTranslator::translateLandingPad(const User &U,
                                        MachineIRBuilder &MIRBuilder) {
   const LandingPadInst &LP = cast<LandingPadInst>(U);

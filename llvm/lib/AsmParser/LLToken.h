@@ -329,6 +329,7 @@ enum Kind {
   kw_catchret,
   kw_catchpad,
   kw_cleanuppad,
+  kw_callbr,
 
   kw_alloca,
   kw_load,
