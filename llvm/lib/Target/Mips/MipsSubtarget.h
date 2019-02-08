@@ -229,10 +229,11 @@ public:
   /// This overrides the PostRAScheduler bit in the SchedModel for each CPU.
   bool enableMachineScheduler() const override { return isCheri(); }
   // TODO: unless we set enableMachineSchedDefaultSched() to false
-  // this causes lots of unncessary stack spills really likely
-  // See stack-spill-unncessary.c test
-  // See also createDefaultScheduler() in SelectionDAGISel.cpp
-  bool enableMachineSchedDefaultSched() const override { return false; }
+  //  this causes lots of unncessary stack spills really likely
+  //  See stack-spill-unncessary.c test
+  //  See also createDefaultScheduler() in SelectionDAGISel.cpp
+  // TODO: However, it seems like the MachineScheduler is better overall for webkit so keep it on
+  bool enableMachineSchedDefaultSched() const override { return true; }
 
   bool enablePostRAScheduler() const override;
   void getCriticalPathRCs(RegClassVector &CriticalPathRCs) const override;
