@@ -126,8 +126,8 @@ public:
     if (Allocas.empty())
       return false;
 
-    Intrinsic::ID SetLength = Intrinsic::cheri_cap_bounds_set;
-    Function *SetLenFun = Intrinsic::getDeclaration(M, SetLength);
+    Intrinsic::ID BoundedStackCap = Intrinsic::cheri_bounded_stack_cap;
+    Function *BoundedStackFn = Intrinsic::getDeclaration(M, BoundedStackCap);
 
     IRBuilder<> B(C);
     const DataLayout &DL = F.getParent()->getDataLayout();
@@ -190,8 +190,14 @@ public:
                         << (S ? Twine(*S) : Twine("<unknown>"));
                  AI->dump());
 
-      auto WithBounds = B.CreateCall(SetLenFun, {Alloca, Size});
+      auto WithBounds = B.CreateCall(BoundedStackFn, {Alloca, Size});
       Alloca = B.CreateBitCast(WithBounds, AllocaTy);
+#if 0
+      // TODO: don't replace load/store instructions with the bounded value
+      for (Use& U : AI->uses()) {
+        errs() << "Alloc is used here: user"; U.getUser()->dump();
+      }
+#endif
       AI->replaceNonMetadataUsesWith(Alloca);
       // If we didn't create a bitcast because the alloca has the right type
       // we need to set the @llvm.cheri.cap.bounds.set() argument to be the

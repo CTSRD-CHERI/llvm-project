@@ -952,6 +952,17 @@ defm : FrameIndexPatterns<iFATPTR128, AddrFI128>;
 defm : FrameIndexPatterns<iFATPTR256, AddrFI256>;
 
 
+// Add a pseudo instruction to pretend this is only one instruction to avoid register spills
+let usesCustomInserter = 0, isReMaterializable = 1, isAsCheapAsAMove = 1 in {
+def CheriBoundedStackPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi, GPR64Opnd:$frameoffs, GPR64Opnd:$size),
+                                      "#CapGlobalAddrPseudo $cd, $fi, $frameoffs, $size", []>;
+}
+
+def : Pat<(iFATPTR128 (int_cheri_bounded_stack_cap AddrFI128:$fi, simm11s0Pattern:$off)),
+          (CheriBoundedStackPseudo (AddrFI128:$fi), (i64 0), imm:$off)>;
+def : Pat<(iFATPTR128 (int_cheri_bounded_stack_cap AddrFI128:$fi, GPR64Opnd:$off)),
+          (CheriBoundedStackPseudo (AddrFI128:$fi), (i64 0), $off)>;
+
 // NOTE: removing the parentheses around (AddrFI128:$fi) in the output pattern will result in
 // an invalid CIncOffset: %2:cherigpr = CIncOffset %2:cherigpr, $zero_64
 def : Pat<(iFATPTR64 AddrFI64:$fi), (CIncOffset (AddrFI64:$fi), ZERO_64)>;

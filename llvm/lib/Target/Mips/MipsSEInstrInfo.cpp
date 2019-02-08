@@ -587,6 +587,17 @@ bool MipsSEInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     BuildMI(MBB, MI, MI.getDebugLoc(), get(Mips::PseudoReturnCap))
       .addReg(Mips::C17);
     break;
+  case Mips::CheriBoundedStackPseudo: {
+    auto Op = MI.getOperand(3).isImm() ? Mips::CSetBoundsImm : Mips::CSetBounds;
+    if (Op == Mips::CSetBoundsImm)
+      assert(isInt<11>(MI.getOperand(3).getImm()));
+    else
+      assert(MI.getOperand(3).isReg());
+    assert(MI.getOperand(2).getImm() == 0 && "This operand is a dummy and must be zero!");
+    BuildMI(MBB, MI, MI.getDebugLoc(), get(Op), MI.getOperand(0).getReg())
+      .addReg(MI.getOperand(1).getReg()).add(MI.getOperand(3));
+    break;
+  }
   case Mips::CPSETUP:
     expandCPSETUP(MBB, MI);
     break;
@@ -1052,6 +1063,9 @@ void MipsSEInstrInfo::expandCCallPseudo(MachineBasicBlock &MBB,
 bool MipsSEInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
                                                         AliasAnalysis *AA) const {
   switch(MI.getOpcode()) {
+    // To allow moving CSetBounds on the stack as late as possible.
+    case Mips::CheriBoundedStackPseudo:
+      return true;
     case Mips::CIncOffsetImm:
     case Mips::CMove:
       return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == Mips::CNULL;

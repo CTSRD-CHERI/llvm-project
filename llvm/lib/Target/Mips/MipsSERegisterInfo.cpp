@@ -96,6 +96,10 @@ static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode,
   case Mips::LOADCAP_BigImm:
   case Mips::STORECAP_BigImm:
     return 16 + 4 /* scale factor */;
+  case Mips::CIncOffsetImm:
+    return 11;
+  case Mips::CheriBoundedStackPseudo:
+    return 1;  // only 0 is valid, otherwise we need a CIncOffset
   case Mips::LD_B:
   case Mips::ST_B:
     return 10;
@@ -159,6 +163,8 @@ static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode,
 /// Get the scale factor applied to the immediate in the given load/store.
 static inline unsigned getLoadStoreOffsetAlign(const unsigned Opcode) {
   switch (Opcode) {
+  case Mips::CheriBoundedStackPseudo:
+    return 64; // Ensure that only 0 is valid (since max witdth is 1)
   case Mips::CAPSTORE16:
   case Mips::CAPLOAD16:
   case Mips::CAPLOAD1632:
@@ -282,6 +288,10 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
       ImmOpNo = 2;
       RegOpNo = 1;
       break;
+    case Mips::CheriBoundedStackPseudo:
+      ImmOpNo = 2;
+      RegOpNo = 1;
+      break;
     case Mips::CIncOffset:
       break;
     default:
@@ -341,7 +351,8 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
         // If we have an offset that needs to fit into a signed n-bit immediate
         // (where n < 16) and doesn't, but does fit into 16-bits then use an ADDiu
         bool isFrameRegLoad = MI.getOperand(0).getReg() == FrameReg && MI.getOpcode() != Mips::STORECAP;
-        bool needsIncOffset = MI.getOperand(1).getReg() != Mips::ZERO_64;
+        // bounded stack caps always need inc-offset (except for offset 0)
+        bool needsIncOffset = MI.isPseudo() || MI.getOperand(1).getReg() != Mips::ZERO_64;
         MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
 #if 0
         // This was the original code which avoids allocating a new capreg.
@@ -364,7 +375,13 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
               .addReg(NegReg, RegState::Kill);
           }
 #endif
-        unsigned TmpCap = RegInfo.createVirtualRegister(&Mips::CheriGPRRegClass);
+        unsigned TmpCap = -1;
+        if (isFrameRegLoad || MI.getOpcode() == Mips::CheriBoundedStackPseudo) {
+          assert(MI.getOpcode() == Mips::LOADCAP || MI.isPseudo());
+          TmpCap = MI.getOperand(0).getReg();
+        } else {
+          TmpCap = RegInfo.createVirtualRegister(&Mips::CheriGPRRegClass);
+        }
         // TODO: use CIncOffsetImmediate here!
         if (needsIncOffset) {
           if (isInt<11>(Offset)) {

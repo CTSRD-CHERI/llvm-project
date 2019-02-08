@@ -167,3 +167,10 @@ def int_cheri_cap_type_copy:
 def int_cheri_cap_load_tags:
   GCCBuiltin<"__builtin_cheri_cap_load_tags">,
   Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrReadMem]>;
+
+
+/// This intrinsics makes it easier to avoid spilling registers to create
+/// bounded capabilities for the stack (such as when passing a stack buffer to
+/// another function, etc)
+def int_cheri_bounded_stack_cap :
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
