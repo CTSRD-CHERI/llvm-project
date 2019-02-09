@@ -1161,7 +1161,7 @@ EnterStructPointerForCoercedAccess(Address SrcPtr,
     return SrcPtr;
 
   // GEP into the first element.
-  SrcPtr = CGF.Builder.CreateStructGEP(SrcPtr, 0, CharUnits(), "coerce.dive");
+  SrcPtr = CGF.Builder.CreateStructGEP(SrcPtr, 0, "coerce.dive");
 
   // If the first element is a struct, recurse.
   llvm::Type *SrcTy = SrcPtr.getElementType();
@@ -1321,12 +1321,8 @@ static void BuildAggStore(CodeGenFunction &CGF, llvm::Value *Val,
   // Prefer scalar stores to first-class aggregate stores.
   if (llvm::StructType *STy =
         dyn_cast<llvm::StructType>(Val->getType())) {
-    const llvm::StructLayout *Layout =
-      CGF.CGM.getDataLayout().getStructLayout(STy);
-
     for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i) {
-      auto EltOffset = CharUnits::fromQuantity(Layout->getElementOffset(i));
-      Address EltPtr = CGF.Builder.CreateStructGEP(Dest, i, EltOffset);
+      Address EltPtr = CGF.Builder.CreateStructGEP(Dest, i);
       llvm::Value *Elt = CGF.Builder.CreateExtractValue(Val, i);
       CGF.Builder.CreateStore(Elt, EltPtr, DestIsVolatile);
     }
@@ -2333,9 +2329,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
   // If we're using inalloca, all the memory arguments are GEPs off of the last
   // parameter, which is a pointer to the complete memory area.
   Address ArgStruct = Address::invalid();
-  const llvm::StructLayout *ArgStructLayout = nullptr;
   if (IRFunctionArgs.hasInallocaArg()) {
-    ArgStructLayout = CGM.getDataLayout().getStructLayout(FI.getArgStruct());
     ArgStruct = Address(FnArgs[IRFunctionArgs.getInallocaArgNo()],
                         FI.getArgStructAlignment());
 
@@ -2384,10 +2378,8 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
     case ABIArgInfo::InAlloca: {
       assert(NumIRArgs == 0);
       auto FieldIndex = ArgI.getInAllocaFieldIndex();
-      CharUnits FieldOffset =
-        CharUnits::fromQuantity(ArgStructLayout->getElementOffset(FieldIndex));
-      Address V = Builder.CreateStructGEP(ArgStruct, FieldIndex, FieldOffset,
-                                          Arg->getName());
+      Address V =
+          Builder.CreateStructGEP(ArgStruct, FieldIndex, Arg->getName());
       ArgVals.push_back(ParamValue::forIndirect(V));
       break;
     }
@@ -2548,7 +2540,6 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
       llvm::StructType *STy = dyn_cast<llvm::StructType>(ArgI.getCoerceToType());
       if (ArgI.isDirect() && ArgI.getCanBeFlattened() && STy &&
           STy->getNumElements() > 1) {
-        auto SrcLayout = CGM.getDataLayout().getStructLayout(STy);
         uint64_t SrcSize = CGM.getDataLayout().getTypeAllocSize(STy);
         llvm::Type *DstTy = Ptr.getElementType();
         uint64_t DstSize = CGM.getDataLayout().getTypeAllocSize(DstTy);
@@ -2565,9 +2556,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
         for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i) {
           auto AI = FnArgs[FirstIRArg + i];
           AI->setName(Arg->getName() + ".coerce" + Twine(i));
-          auto Offset = CharUnits::fromQuantity(SrcLayout->getElementOffset(i));
-          Address EltPtr =
-            Builder.CreateStructGEP(AddrToStoreInto, i, Offset);
+          Address EltPtr = Builder.CreateStructGEP(AddrToStoreInto, i);
           Builder.CreateStore(AI, EltPtr);
         }
 
@@ -2603,7 +2592,6 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
 
       auto coercionType = ArgI.getCoerceAndExpandType();
       alloca = Builder.CreateElementBitCast(alloca, coercionType);
-      auto layout = CGM.getDataLayout().getStructLayout(coercionType);
 
       unsigned argIndex = FirstIRArg;
       for (unsigned i = 0, e = coercionType->getNumElements(); i != e; ++i) {
@@ -2611,7 +2599,7 @@ void CodeGenFunction::EmitFunctionProlog(const CGFunctionInfo &FI,
         if (ABIArgInfo::isPaddingForCoerceAndExpand(eltType))
           continue;
 
-        auto eltAddr = Builder.CreateStructGEP(alloca, i, layout);
+        auto eltAddr = Builder.CreateStructGEP(alloca, i);
         auto elt = FnArgs[argIndex++];
         Builder.CreateStore(elt, eltAddr);
       }
@@ -3016,7 +3004,6 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
 
   case ABIArgInfo::CoerceAndExpand: {
     auto coercionType = RetAI.getCoerceAndExpandType();
-    auto layout = CGM.getDataLayout().getStructLayout(coercionType);
 
     // Load all of the coerced elements out into results.
     llvm::SmallVector<llvm::Value*, 4> results;
@@ -3026,7 +3013,7 @@ void CodeGenFunction::EmitFunctionEpilog(const CGFunctionInfo &FI,
       if (ABIArgInfo::isPaddingForCoerceAndExpand(coercedEltType))
         continue;
 
-      auto eltAddr = Builder.CreateStructGEP(addr, i, layout);
+      auto eltAddr = Builder.CreateStructGEP(addr, i);
       auto elt = Builder.CreateLoad(eltAddr);
       results.push_back(elt);
     }
@@ -3918,10 +3905,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
   // If we're using inalloca, insert the allocation after the stack save.
   // FIXME: Do this earlier rather than hacking it in here!
   Address ArgMemory = Address::invalid();
-  const llvm::StructLayout *ArgMemoryLayout = nullptr;
   if (llvm::StructType *ArgStruct = CallInfo.getArgStruct()) {
     const llvm::DataLayout &DL = CGM.getDataLayout();
-    ArgMemoryLayout = DL.getStructLayout(ArgStruct);
     llvm::Instruction *IP = CallArgs.getStackBase();
     llvm::AllocaInst *AI;
     if (IP) {
@@ -3937,13 +3922,6 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     assert(AI->isUsedWithInAlloca() && !AI->isStaticAlloca());
     ArgMemory = Address(AI, Align);
   }
-
-  // Helper function to drill into the inalloca allocation.
-  auto createInAllocaStructGEP = [&](unsigned FieldIndex) -> Address {
-    auto FieldOffset =
-      CharUnits::fromQuantity(ArgMemoryLayout->getElementOffset(FieldIndex));
-    return Builder.CreateStructGEP(ArgMemory, FieldIndex, FieldOffset);
-  };
 
   ClangToLLVMArgMapping IRFunctionArgs(CGM.getContext(), CallInfo);
   SmallVector<llvm::Value *, 16> IRCallArgs(IRFunctionArgs.totalIRArgs());
@@ -3967,7 +3945,8 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     if (IRFunctionArgs.hasSRetArg()) {
       IRCallArgs[IRFunctionArgs.getSRetArgNo()] = SRetPtr.getPointer();
     } else if (RetAI.isInAlloca()) {
-      Address Addr = createInAllocaStructGEP(RetAI.getInAllocaFieldIndex());
+      Address Addr =
+          Builder.CreateStructGEP(ArgMemory, RetAI.getInAllocaFieldIndex());
       Builder.CreateStore(SRetPtr.getPointer(), Addr);
     }
   }
@@ -4005,12 +3984,14 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
             cast<llvm::Instruction>(Addr.getPointer());
         CGBuilderTy::InsertPoint IP = Builder.saveIP();
         Builder.SetInsertPoint(Placeholder);
-        Addr = createInAllocaStructGEP(ArgInfo.getInAllocaFieldIndex());
+        Addr =
+            Builder.CreateStructGEP(ArgMemory, ArgInfo.getInAllocaFieldIndex());
         Builder.restoreIP(IP);
         deferPlaceholderReplacement(Placeholder, Addr.getPointer());
       } else {
         // Store the RValue into the argument struct.
-        Address Addr = createInAllocaStructGEP(ArgInfo.getInAllocaFieldIndex());
+        Address Addr =
+            Builder.CreateStructGEP(ArgMemory, ArgInfo.getInAllocaFieldIndex());
         unsigned AS = Addr.getType()->getPointerAddressSpace();
         llvm::Type *MemType = ConvertTypeForMem(I->Ty)->getPointerTo(AS);
         // There are some cases where a trivial bitcast is not avoidable.  The
@@ -4191,11 +4172,9 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
                                       STy->getPointerTo(Src.getAddressSpace()));
         }
 
-        auto SrcLayout = CGM.getDataLayout().getStructLayout(STy);
         assert(NumIRArgs == STy->getNumElements());
         for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i) {
-          auto Offset = CharUnits::fromQuantity(SrcLayout->getElementOffset(i));
-          Address EltPtr = Builder.CreateStructGEP(Src, i, Offset);
+          Address EltPtr = Builder.CreateStructGEP(Src, i);
           llvm::Value *LI = Builder.CreateLoad(EltPtr);
           IRCallArgs[FirstIRArg + i] = LI;
         }
@@ -4245,7 +4224,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
       for (unsigned i = 0, e = coercionType->getNumElements(); i != e; ++i) {
         llvm::Type *eltType = coercionType->getElementType(i);
         if (ABIArgInfo::isPaddingForCoerceAndExpand(eltType)) continue;
-        Address eltAddr = Builder.CreateStructGEP(addr, i, layout);
+        Address eltAddr = Builder.CreateStructGEP(addr, i);
         llvm::Value *elt = Builder.CreateLoad(eltAddr);
         IRCallArgs[IRArgPos++] = elt;
       }
@@ -4547,7 +4526,6 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
     switch (RetAI.getKind()) {
     case ABIArgInfo::CoerceAndExpand: {
       auto coercionType = RetAI.getCoerceAndExpandType();
-      auto layout = CGM.getDataLayout().getStructLayout(coercionType);
 
       Address addr = SRetPtr;
       addr = Builder.CreateElementBitCast(addr, coercionType);
@@ -4559,7 +4537,7 @@ RValue CodeGenFunction::EmitCall(const CGFunctionInfo &CallInfo,
       for (unsigned i = 0, e = coercionType->getNumElements(); i != e; ++i) {
         llvm::Type *eltType = coercionType->getElementType(i);
         if (ABIArgInfo::isPaddingForCoerceAndExpand(eltType)) continue;
-        Address eltAddr = Builder.CreateStructGEP(addr, i, layout);
+        Address eltAddr = Builder.CreateStructGEP(addr, i);
         llvm::Value *elt = CI;
         if (requiresExtract)
           elt = Builder.CreateExtractValue(elt, unpaddedIndex++);
