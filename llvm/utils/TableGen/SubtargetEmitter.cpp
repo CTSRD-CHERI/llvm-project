@@ -93,6 +93,8 @@ class SubtargetEmitter {
                          &ProcItinLists);
   unsigned EmitRegisterFileTables(const CodeGenProcModel &ProcModel,
                                   raw_ostream &OS);
+  void EmitLoadStoreQueueInfo(const CodeGenProcModel &ProcModel,
+                              raw_ostream &OS);
   void EmitExtraProcessorInfo(const CodeGenProcModel &ProcModel,
                               raw_ostream &OS);
   void EmitProcessorProp(raw_ostream &OS, const Record *R, StringRef Name,
@@ -697,6 +699,30 @@ SubtargetEmitter::EmitRegisterFileTables(const CodeGenProcModel &ProcModel,
   return CostTblIndex;
 }
 
+void SubtargetEmitter::EmitLoadStoreQueueInfo(const CodeGenProcModel &ProcModel,
+                                              raw_ostream &OS) {
+  unsigned QueueID = 0;
+  if (ProcModel.LoadQueue) {
+    const Record *Queue = ProcModel.LoadQueue->getValueAsDef("QueueDescriptor");
+    QueueID =
+        1 + std::distance(ProcModel.ProcResourceDefs.begin(),
+                          std::find(ProcModel.ProcResourceDefs.begin(),
+                                    ProcModel.ProcResourceDefs.end(), Queue));
+  }
+  OS << "  " << QueueID << ", // Resource Descriptor for the Load Queue\n";
+
+  QueueID = 0;
+  if (ProcModel.StoreQueue) {
+    const Record *Queue =
+        ProcModel.StoreQueue->getValueAsDef("QueueDescriptor");
+    QueueID =
+        1 + std::distance(ProcModel.ProcResourceDefs.begin(),
+                          std::find(ProcModel.ProcResourceDefs.begin(),
+                                    ProcModel.ProcResourceDefs.end(), Queue));
+  }
+  OS << "  " << QueueID << ", // Resource Descriptor for the Store Queue\n";
+}
+
 void SubtargetEmitter::EmitExtraProcessorInfo(const CodeGenProcModel &ProcModel,
                                               raw_ostream &OS) {
   // Generate a table of register file descriptors (one entry per each user
@@ -714,6 +740,9 @@ void SubtargetEmitter::EmitExtraProcessorInfo(const CodeGenProcModel &ProcModel,
   // file descriptors and register costs).
   EmitRegisterFileInfo(ProcModel, ProcModel.RegisterFiles.size(),
                        NumCostEntries, OS);
+
+  // Add information about load/store queues.
+  EmitLoadStoreQueueInfo(ProcModel, OS);
 
   OS << "};\n";
 }
@@ -1504,9 +1533,9 @@ void collectVariantClasses(const CodeGenSchedModels &SchedModels,
       continue;
 
     if (OnlyExpandMCInstPredicates) {
-      // Ignore this variant scheduling class if transitions don't uses any
+      // Ignore this variant scheduling class no transitions use any meaningful
       // MCSchedPredicate definitions.
-      if (!all_of(SC.Transitions, [](const CodeGenSchedTransition &T) {
+      if (!any_of(SC.Transitions, [](const CodeGenSchedTransition &T) {
             return hasMCSchedPredicates(T);
           }))
         continue;
@@ -1560,6 +1589,7 @@ void SubtargetEmitter::emitSchedModelHelpersImpl(
     PE.setExpandForMC(OnlyExpandMCInstPredicates);
     for (unsigned PI : ProcIndices) {
       OS << "    ";
+
       // Emit a guard on the processor ID.
       if (PI != 0) {
         OS << (OnlyExpandMCInstPredicates
@@ -1573,11 +1603,23 @@ void SubtargetEmitter::emitSchedModelHelpersImpl(
       for (const CodeGenSchedTransition &T : SC.Transitions) {
         if (PI != 0 && !count(T.ProcIndices, PI))
           continue;
+
+        // Emit only transitions based on MCSchedPredicate, if it's the case.
+        // At least the transition specified by NoSchedPred is emitted,
+        // which becomes the default transition for those variants otherwise
+        // not based on MCSchedPredicate.
+        // FIXME: preferably, llvm-mca should instead assume a reasonable
+        // default when a variant transition is not based on MCSchedPredicate
+        // for a given processor.
+        if (OnlyExpandMCInstPredicates && !hasMCSchedPredicates(T))
+          continue;
+
         PE.setIndentLevel(3);
         emitPredicates(T, SchedModels.getSchedClass(T.ToClassIdx), PE, OS);
       }
 
       OS << "    }\n";
+
       if (PI == 0)
         break;
     }

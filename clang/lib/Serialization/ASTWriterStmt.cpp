@@ -559,11 +559,11 @@ void ASTStmtWriter::VisitParenExpr(ParenExpr *E) {
 
 void ASTStmtWriter::VisitParenListExpr(ParenListExpr *E) {
   VisitExpr(E);
-  Record.push_back(E->NumExprs);
-  for (unsigned i=0; i != E->NumExprs; ++i)
-    Record.AddStmt(E->Exprs[i]);
-  Record.AddSourceLocation(E->LParenLoc);
-  Record.AddSourceLocation(E->RParenLoc);
+  Record.push_back(E->getNumExprs());
+  for (auto *SubStmt : E->exprs())
+    Record.AddStmt(SubStmt);
+  Record.AddSourceLocation(E->getLParenLoc());
+  Record.AddSourceLocation(E->getRParenLoc());
   Code = serialization::EXPR_PAREN_LIST;
 }
 
@@ -651,6 +651,7 @@ void ASTStmtWriter::VisitCallExpr(CallExpr *E) {
   for (CallExpr::arg_iterator Arg = E->arg_begin(), ArgEnd = E->arg_end();
        Arg != ArgEnd; ++Arg)
     Record.AddStmt(*Arg);
+  Record.push_back(static_cast<unsigned>(E->getADLCallKind()));
   Code = serialization::EXPR_CALL;
 }
 
@@ -1302,8 +1303,8 @@ void ASTStmtWriter::VisitMSDependentExistsStmt(MSDependentExistsStmt *S) {
 void ASTStmtWriter::VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E) {
   VisitCallExpr(E);
   Record.push_back(E->getOperator());
-  Record.AddSourceRange(E->Range);
   Record.push_back(E->getFPFeatures().getInt());
+  Record.AddSourceRange(E->Range);
   Code = serialization::EXPR_CXX_OPERATOR_CALL;
 }
 
@@ -1506,7 +1507,7 @@ void ASTStmtWriter::VisitCXXDeleteExpr(CXXDeleteExpr *E) {
   Record.push_back(E->doesUsualArrayDeleteWantSize());
   Record.AddDeclRef(E->getOperatorDelete());
   Record.AddStmt(E->getArgument());
-  Record.AddSourceLocation(E->getSourceRange().getBegin());
+  Record.AddSourceLocation(E->getBeginLoc());
 
   Code = serialization::EXPR_CXX_DELETE;
 }

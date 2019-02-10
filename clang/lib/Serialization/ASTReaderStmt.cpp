@@ -643,10 +643,9 @@ void ASTStmtReader::VisitParenExpr(ParenExpr *E) {
 void ASTStmtReader::VisitParenListExpr(ParenListExpr *E) {
   VisitExpr(E);
   unsigned NumExprs = Record.readInt();
-  E->Exprs = new (Record.getContext()) Stmt*[NumExprs];
-  for (unsigned i = 0; i != NumExprs; ++i)
-    E->Exprs[i] = Record.readSubStmt();
-  E->NumExprs = NumExprs;
+  assert((NumExprs == E->getNumExprs()) && "Wrong NumExprs!");
+  for (unsigned I = 0; I != NumExprs; ++I)
+    E->getTrailingObjects<Stmt *>()[I] = Record.readSubStmt();
   E->LParenLoc = ReadSourceLocation();
   E->RParenLoc = ReadSourceLocation();
 }
@@ -732,11 +731,13 @@ void ASTStmtReader::VisitOMPArraySectionExpr(OMPArraySectionExpr *E) {
 
 void ASTStmtReader::VisitCallExpr(CallExpr *E) {
   VisitExpr(E);
-  E->setNumArgs(Record.getContext(), Record.readInt());
+  unsigned NumArgs = Record.readInt();
+  assert((NumArgs == E->getNumArgs()) && "Wrong NumArgs!");
   E->setRParenLoc(ReadSourceLocation());
   E->setCallee(Record.readSubExpr());
-  for (unsigned I = 0, N = E->getNumArgs(); I != N; ++I)
+  for (unsigned I = 0; I != NumArgs; ++I)
     E->setArg(I, Record.readSubExpr());
+  E->setADLCallKind(static_cast<CallExpr::ADLCallKind>(Record.readInt()));
 }
 
 void ASTStmtReader::VisitCXXMemberCallExpr(CXXMemberCallExpr *E) {
@@ -1345,9 +1346,9 @@ void ASTStmtReader::VisitMSDependentExistsStmt(MSDependentExistsStmt *S) {
 
 void ASTStmtReader::VisitCXXOperatorCallExpr(CXXOperatorCallExpr *E) {
   VisitCallExpr(E);
-  E->Operator = (OverloadedOperatorKind)Record.readInt();
+  E->CXXOperatorCallExprBits.OperatorKind = Record.readInt();
+  E->CXXOperatorCallExprBits.FPFeatures = Record.readInt();
   E->Range = Record.readSourceRange();
-  E->setFPFeatures(FPOptions(Record.readInt()));
 }
 
 void ASTStmtReader::VisitCXXConstructExpr(CXXConstructExpr *E) {
@@ -1528,13 +1529,13 @@ void ASTStmtReader::VisitCXXNewExpr(CXXNewExpr *E) {
 
 void ASTStmtReader::VisitCXXDeleteExpr(CXXDeleteExpr *E) {
   VisitExpr(E);
-  E->GlobalDelete = Record.readInt();
-  E->ArrayForm = Record.readInt();
-  E->ArrayFormAsWritten = Record.readInt();
-  E->UsualArrayDeleteWantsSize = Record.readInt();
+  E->CXXDeleteExprBits.GlobalDelete = Record.readInt();
+  E->CXXDeleteExprBits.ArrayForm = Record.readInt();
+  E->CXXDeleteExprBits.ArrayFormAsWritten = Record.readInt();
+  E->CXXDeleteExprBits.UsualArrayDeleteWantsSize = Record.readInt();
   E->OperatorDelete = ReadDeclAs<FunctionDecl>();
   E->Argument = Record.readSubExpr();
-  E->Loc = ReadSourceLocation();
+  E->CXXDeleteExprBits.Loc = ReadSourceLocation();
 }
 
 void ASTStmtReader::VisitCXXPseudoDestructorExpr(CXXPseudoDestructorExpr *E) {
@@ -2347,14 +2348,14 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
     case STMT_SWITCH:
       S = SwitchStmt::CreateEmpty(
           Context,
-          /* HasInit=*/Record[ASTStmtReader::NumStmtFields + 0],
+          /* HasInit=*/Record[ASTStmtReader::NumStmtFields],
           /* HasVar=*/Record[ASTStmtReader::NumStmtFields + 1]);
       break;
 
     case STMT_WHILE:
       S = WhileStmt::CreateEmpty(
           Context,
-          /* HasVar=*/Record[ASTStmtReader::NumStmtFields + 0]);
+          /* HasVar=*/Record[ASTStmtReader::NumStmtFields]);
       break;
 
     case STMT_DO:
@@ -2438,7 +2439,7 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
     case EXPR_STRING_LITERAL:
       S = StringLiteral::CreateEmpty(
           Context,
-          /* NumConcatenated=*/Record[ASTStmtReader::NumExprFields + 0],
+          /* NumConcatenated=*/Record[ASTStmtReader::NumExprFields],
           /* Length=*/Record[ASTStmtReader::NumExprFields + 1],
           /* CharByteWidth=*/Record[ASTStmtReader::NumExprFields + 2]);
       break;
@@ -2452,7 +2453,9 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       break;
 
     case EXPR_PAREN_LIST:
-      S = new (Context) ParenListExpr(Empty);
+      S = ParenListExpr::CreateEmpty(
+          Context,
+          /* NumExprs=*/Record[ASTStmtReader::NumExprFields]);
       break;
 
     case EXPR_UNARY_OPERATOR:
@@ -2478,7 +2481,8 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       break;
 
     case EXPR_CALL:
-      S = new (Context) CallExpr(Context, Stmt::CallExprClass, Empty);
+      S = CallExpr::CreateEmpty(
+          Context, /*NumArgs=*/Record[ASTStmtReader::NumExprFields], Empty);
       break;
 
     case EXPR_MEMBER: {
@@ -3068,11 +3072,13 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
     }
 
     case EXPR_CXX_OPERATOR_CALL:
-      S = new (Context) CXXOperatorCallExpr(Context, Empty);
+      S = CXXOperatorCallExpr::CreateEmpty(
+          Context, /*NumArgs=*/Record[ASTStmtReader::NumExprFields], Empty);
       break;
 
     case EXPR_CXX_MEMBER_CALL:
-      S = new (Context) CXXMemberCallExpr(Context, Empty);
+      S = CXXMemberCallExpr::CreateEmpty(
+          Context, /*NumArgs=*/Record[ASTStmtReader::NumExprFields], Empty);
       break;
 
     case EXPR_CXX_CONSTRUCT:
@@ -3112,7 +3118,8 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       break;
 
     case EXPR_USER_DEFINED_LITERAL:
-      S = new (Context) UserDefinedLiteral(Context, Empty);
+      S = UserDefinedLiteral::CreateEmpty(
+          Context, /*NumArgs=*/Record[ASTStmtReader::NumExprFields], Empty);
       break;
 
     case EXPR_CXX_STD_INITIALIZER_LIST:
@@ -3282,7 +3289,8 @@ Stmt *ASTReader::ReadStmtFromStream(ModuleFile &F) {
       break;
 
     case EXPR_CUDA_KERNEL_CALL:
-      S = new (Context) CUDAKernelCallExpr(Context, Empty);
+      S = CUDAKernelCallExpr::CreateEmpty(
+          Context, /*NumArgs=*/Record[ASTStmtReader::NumExprFields], Empty);
       break;
 
     case EXPR_ASTYPE:

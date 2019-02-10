@@ -2,8 +2,7 @@
 // REQUIRES: lld
 
 // Test that we can display function signatures with class types.
-// RUN: %clang_cl /Z7 /GS- /GR- /c -fstandalone-debug -Xclang -fkeep-static-consts /Fo%t.obj -- %s
-// RUN: lld-link /DEBUG /nodefaultlib /entry:main /OUT:%t.exe /PDB:%t.pdb -- %t.obj
+// RUN: %build --compiler=clang-cl --nodefaultlib -o %t.exe -- %s 
 // RUN: env LLDB_USE_NATIVE_PDB_READER=1 %lldb -f %t.exe -s \
 // RUN:     %p/Inputs/function-types-classes.lldbinit | FileCheck %s
 
@@ -109,10 +108,10 @@ auto incomplete = &three<Incomplete*, Incomplete**, const Incomplete*>;
 // CHECK: (Incomplete *(*)(Incomplete **, const Incomplete *)) incomplete = {{.*}}
 
 // CHECK: TranslationUnitDecl {{.*}}
-// CHECK: |-CXXRecordDecl {{.*}} class C definition
-// CHECK: |-CXXRecordDecl {{.*}} union U definition
+// CHECK: |-CXXRecordDecl {{.*}} class C
+// CHECK: |-CXXRecordDecl {{.*}} union U
 // CHECK: |-EnumDecl {{.*}} E
-// CHECK: |-CXXRecordDecl {{.*}} struct S definition
+// CHECK: |-CXXRecordDecl {{.*}} struct S
 // CHECK: |-CXXRecordDecl {{.*}} struct B
 // CHECK: | |-CXXRecordDecl {{.*}} struct A
 // CHECK: | | |-CXXRecordDecl {{.*}} struct S
@@ -120,11 +119,11 @@ auto incomplete = &three<Incomplete*, Incomplete**, const Incomplete*>;
 // CHECK: | |-CXXRecordDecl {{.*}} struct C
 // CHECK: | | |-CXXRecordDecl {{.*}} struct S
 // CHECK: | `-NamespaceDecl {{.*}} B
-// CHECK: |   `-CXXRecordDecl {{.*}} struct S definition
-// CHECK: |-CXXRecordDecl {{.*}} struct TC<int> definition
-// CHECK: |-CXXRecordDecl {{.*}} struct TC<struct TC<int>> definition
-// CHECK: |-CXXRecordDecl {{.*}} struct TC<struct A::B::S> definition
-// CHECK: |-CXXRecordDecl {{.*}} struct TC<void> definition
+// CHECK: |   `-CXXRecordDecl {{.*}} struct S
+// CHECK: |-CXXRecordDecl {{.*}} struct TC<int>
+// CHECK: |-CXXRecordDecl {{.*}} struct TC<struct TC<int>>
+// CHECK: |-CXXRecordDecl {{.*}} struct TC<struct A::B::S>
+// CHECK: |-CXXRecordDecl {{.*}} struct TC<void>
 // CHECK: |-CXXRecordDecl {{.*}} struct Incomplete
 
 int main(int argc, char **argv) {

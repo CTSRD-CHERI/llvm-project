@@ -195,7 +195,7 @@ struct ClassWithMembers {
   int AAA();
   int BBB();
   int CCC();
-}
+};
 int main() { ClassWithMembers().^ }
       )cpp",
                              /*IndexSymbols=*/{}, Opts);
@@ -416,6 +416,11 @@ TEST(CompletionTest, InjectedTypename) {
               Has("X"));
 }
 
+TEST(CompletionTest, SkipInjectedWhenUnqualified) {
+  EXPECT_THAT(completions("struct X { void f() { X^ }};").Completions,
+              ElementsAre(Named("X"), Named("~X")));
+}
+
 TEST(CompletionTest, Snippets) {
   clangd::CodeCompleteOptions Opts;
   auto Results = completions(
@@ -581,7 +586,7 @@ TEST(CompletionTest, IncludeInsertionPreprocessorIntegrationTests) {
 
   IgnoreDiagnostics DiagConsumer;
   ClangdServer Server(CDB, FS, DiagConsumer, ClangdServer::optsForTest());
-  auto BarURI = URI::createFile(BarHeader).toString();
+  auto BarURI = URI::create(BarHeader).toString();
   Symbol Sym = cls("ns::X");
   Sym.CanonicalDeclaration.FileURI = BarURI.c_str();
   Sym.IncludeHeaders.emplace_back(BarURI, 1);
@@ -613,7 +618,7 @@ TEST(CompletionTest, NoIncludeInsertionWhenDeclFoundInFile) {
   Symbol SymX = cls("ns::X");
   Symbol SymY = cls("ns::Y");
   std::string BarHeader = testPath("bar.h");
-  auto BarURI = URI::createFile(BarHeader).toString();
+  auto BarURI = URI::create(BarHeader).toString();
   SymX.CanonicalDeclaration.FileURI = BarURI.c_str();
   SymY.CanonicalDeclaration.FileURI = BarURI.c_str();
   SymX.IncludeHeaders.emplace_back("<bar>", 1);
@@ -623,7 +628,7 @@ TEST(CompletionTest, NoIncludeInsertionWhenDeclFoundInFile) {
                              R"cpp(
           namespace ns {
             class X;
-            class Y {}
+            class Y {};
           }
           int main() { ns::^ }
       )cpp",
@@ -646,7 +651,7 @@ TEST(CompletionTest, IndexSuppressesPreambleCompletions) {
       #include "bar.h"
       namespace ns { int local; }
       void f() { ns::^; }
-      void f() { ns::preamble().$2^; }
+      void f2() { ns::preamble().$2^; }
   )cpp");
   runAddDocument(Server, File, Test.code());
   clangd::CodeCompleteOptions Opts = {};
@@ -1251,7 +1256,7 @@ TEST(CompletionTest, OverloadBundling) {
       UnorderedElementsAre(Labeled("GFuncC(…)"), Labeled("GFuncD(int)")));
 
   // Differences in header-to-insert suppress bundling.
-  std::string DeclFile = URI::createFile(testPath("foo")).toString();
+  std::string DeclFile = URI::create(testPath("foo")).toString();
   NoArgsGFunc.CanonicalDeclaration.FileURI = DeclFile.c_str();
   NoArgsGFunc.IncludeHeaders.emplace_back("<foo>", 1);
   EXPECT_THAT(
@@ -1922,7 +1927,7 @@ TEST(CompletionTest, EnableSpeculativeIndexRequest) {
       namespace ns1 { int abc; }
       namespace ns2 { int abc; }
       void f() { ns1::ab$1^; ns1::ab$2^; }
-      void f() { ns2::ab$3^; }
+      void f2() { ns2::ab$3^; }
   )cpp");
   runAddDocument(Server, File, Test.code());
   clangd::CodeCompleteOptions Opts = {};
@@ -1957,7 +1962,7 @@ TEST(CompletionTest, EnableSpeculativeIndexRequest) {
 }
 
 TEST(CompletionTest, InsertTheMostPopularHeader) {
-  std::string DeclFile = URI::createFile(testPath("foo")).toString();
+  std::string DeclFile = URI::create(testPath("foo")).toString();
   Symbol sym = func("Func");
   sym.CanonicalDeclaration.FileURI = DeclFile.c_str();
   sym.IncludeHeaders.emplace_back("\"foo.h\"", 2);
@@ -1979,7 +1984,7 @@ TEST(CompletionTest, NoInsertIncludeIfOnePresent) {
   IgnoreDiagnostics DiagConsumer;
   ClangdServer Server(CDB, FS, DiagConsumer, ClangdServer::optsForTest());
 
-  std::string DeclFile = URI::createFile(testPath("foo")).toString();
+  std::string DeclFile = URI::create(testPath("foo")).toString();
   Symbol sym = func("Func");
   sym.CanonicalDeclaration.FileURI = DeclFile.c_str();
   sym.IncludeHeaders.emplace_back("\"foo.h\"", 2);

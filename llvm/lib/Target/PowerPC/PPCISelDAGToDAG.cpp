@@ -81,6 +81,8 @@ STATISTIC(NumLogicOpsOnComparison,
           "Number of logical ops on i1 values calculated in GPR.");
 STATISTIC(OmittedForNonExtendUses,
           "Number of compares not eliminated as they have non-extending uses.");
+STATISTIC(NumP9Setb,
+          "Number of compares lowered to setb.");
 
 // FIXME: Remove this once the bug has been fixed!
 cl::opt<bool> ANDIGlueBug("expose-ppc-andi-glue-bug",
@@ -327,7 +329,6 @@ private:
 
     bool isOffsetMultipleOf(SDNode *N, unsigned Val) const;
     void transferMemOperands(SDNode *N, SDNode *Result);
-    MachineSDNode *flipSignBit(const SDValue &N, SDNode **SignBit = nullptr);
   };
 
 } // end anonymous namespace
@@ -687,9 +688,8 @@ bool PPCDAGToDAGISel::tryBitfieldInsert(SDNode *N) {
   SDValue Op1 = N->getOperand(1);
   SDLoc dl(N);
 
-  KnownBits LKnown, RKnown;
-  CurDAG->computeKnownBits(Op0, LKnown);
-  CurDAG->computeKnownBits(Op1, RKnown);
+  KnownBits LKnown = CurDAG->computeKnownBits(Op0);
+  KnownBits RKnown = CurDAG->computeKnownBits(Op1);
 
   unsigned TargetMask = LKnown.Zero.getZExtValue();
   unsigned InsertMask = RKnown.Zero.getZExtValue();
@@ -733,8 +733,7 @@ bool PPCDAGToDAGISel::tryBitfieldInsert(SDNode *N) {
        // The AND mask might not be a constant, and we need to make sure that
        // if we're going to fold the masking with the insert, all bits not
        // know to be zero in the mask are known to be one.
-        KnownBits MKnown;
-        CurDAG->computeKnownBits(Op1.getOperand(1), MKnown);
+        KnownBits MKnown = CurDAG->computeKnownBits(Op1.getOperand(1));
         bool CanFoldMask = InsertMask == MKnown.One.getZExtValue();
 
         unsigned SHOpc = Op1.getOperand(0).getOpcode();
@@ -4138,49 +4137,144 @@ void PPCDAGToDAGISel::transferMemOperands(SDNode *N, SDNode *Result) {
   CurDAG->setNodeMemRefs(cast<MachineSDNode>(Result), {MemOp});
 }
 
-/// This method returns a node after flipping the MSB of each element
-/// of vector integer type. Additionally, if SignBitVec is non-null,
-/// this method sets a node with one at MSB of all elements
-/// and zero at other bits in SignBitVec.
-MachineSDNode *
-PPCDAGToDAGISel::flipSignBit(const SDValue &N, SDNode **SignBitVec) {
-  SDLoc dl(N);
-  EVT VecVT = N.getValueType();
-  if (VecVT == MVT::v4i32) {
-    if (SignBitVec) {
-      SDNode *ZV = CurDAG->getMachineNode(PPC::V_SET0, dl, MVT::v4i32);
-      *SignBitVec = CurDAG->getMachineNode(PPC::XVNEGSP, dl, VecVT,
-                                        SDValue(ZV, 0));
-    }
-    return CurDAG->getMachineNode(PPC::XVNEGSP, dl, VecVT, N);
+static bool mayUseP9Setb(SDNode *N, const ISD::CondCode &CC, SelectionDAG *DAG,
+                         bool &NeedSwapOps, bool &IsUnCmp) {
+
+  assert(N->getOpcode() == ISD::SELECT_CC && "Expecting a SELECT_CC here.");
+
+  SDValue LHS = N->getOperand(0);
+  SDValue RHS = N->getOperand(1);
+  SDValue TrueRes = N->getOperand(2);
+  SDValue FalseRes = N->getOperand(3);
+  ConstantSDNode *TrueConst = dyn_cast<ConstantSDNode>(TrueRes);
+  if (!TrueConst)
+    return false;
+
+  assert((N->getSimpleValueType(0) == MVT::i64 ||
+          N->getSimpleValueType(0) == MVT::i32) &&
+         "Expecting either i64 or i32 here.");
+
+  // We are looking for any of:
+  // (select_cc lhs, rhs,  1, (sext (setcc [lr]hs, [lr]hs, cc2)), cc1)
+  // (select_cc lhs, rhs, -1, (zext (setcc [lr]hs, [lr]hs, cc2)), cc1)
+  // (select_cc lhs, rhs,  0, (select_cc [lr]hs, [lr]hs,  1, -1, cc2), seteq)
+  // (select_cc lhs, rhs,  0, (select_cc [lr]hs, [lr]hs, -1,  1, cc2), seteq)
+  int64_t TrueResVal = TrueConst->getSExtValue();
+  if ((TrueResVal < -1 || TrueResVal > 1) ||
+      (TrueResVal == -1 && FalseRes.getOpcode() != ISD::ZERO_EXTEND) ||
+      (TrueResVal == 1 && FalseRes.getOpcode() != ISD::SIGN_EXTEND) ||
+      (TrueResVal == 0 &&
+       (FalseRes.getOpcode() != ISD::SELECT_CC || CC != ISD::SETEQ)))
+    return false;
+
+  bool InnerIsSel = FalseRes.getOpcode() == ISD::SELECT_CC;
+  SDValue SetOrSelCC = InnerIsSel ? FalseRes : FalseRes.getOperand(0);
+  if (SetOrSelCC.getOpcode() != ISD::SETCC &&
+      SetOrSelCC.getOpcode() != ISD::SELECT_CC)
+    return false;
+
+  // Without this setb optimization, the outer SELECT_CC will be manually
+  // selected to SELECT_CC_I4/SELECT_CC_I8 Pseudo, then expand-isel-pseudos pass
+  // transforms pseduo instruction to isel instruction. When there are more than
+  // one use for result like zext/sext, with current optimization we only see
+  // isel is replaced by setb but can't see any significant gain. Since
+  // setb has longer latency than original isel, we should avoid this. Another
+  // point is that setb requires comparison always kept, it can break the
+  // oppotunity to get the comparison away if we have in future.
+  if (!SetOrSelCC.hasOneUse() || (!InnerIsSel && !FalseRes.hasOneUse()))
+    return false;
+
+  SDValue InnerLHS = SetOrSelCC.getOperand(0);
+  SDValue InnerRHS = SetOrSelCC.getOperand(1);
+  ISD::CondCode InnerCC =
+      cast<CondCodeSDNode>(SetOrSelCC.getOperand(InnerIsSel ? 4 : 2))->get();
+  // If the inner comparison is a select_cc, make sure the true/false values are
+  // 1/-1 and canonicalize it if needed.
+  if (InnerIsSel) {
+    ConstantSDNode *SelCCTrueConst =
+        dyn_cast<ConstantSDNode>(SetOrSelCC.getOperand(2));
+    ConstantSDNode *SelCCFalseConst =
+        dyn_cast<ConstantSDNode>(SetOrSelCC.getOperand(3));
+    if (!SelCCTrueConst || !SelCCFalseConst)
+      return false;
+    int64_t SelCCTVal = SelCCTrueConst->getSExtValue();
+    int64_t SelCCFVal = SelCCFalseConst->getSExtValue();
+    // The values must be -1/1 (requiring a swap) or 1/-1.
+    if (SelCCTVal == -1 && SelCCFVal == 1) {
+      std::swap(InnerLHS, InnerRHS);
+    } else if (SelCCTVal != 1 || SelCCFVal != -1)
+      return false;
   }
-  else if (VecVT == MVT::v8i16) {
-    SDNode *Hi = CurDAG->getMachineNode(PPC::LIS, dl, MVT::i32,
-                                     getI32Imm(0x8000, dl));
-    SDNode *ScaImm = CurDAG->getMachineNode(PPC::ORI, dl, MVT::i32,
-                                         SDValue(Hi, 0),
-                                         getI32Imm(0x8000, dl));
-    SDNode *VecImm = CurDAG->getMachineNode(PPC::MTVSRWS, dl, VecVT,
-                                         SDValue(ScaImm, 0));
-    /*
-    Alternatively, we can do this as follow to use VRF instead of GPR.
-      vspltish 5, 1
-      vspltish 6, 15
-      vslh 5, 6, 5
-    */
-    if (SignBitVec) *SignBitVec = VecImm;
-    return CurDAG->getMachineNode(PPC::VADDUHM, dl, VecVT, N,
-                                  SDValue(VecImm, 0));
+
+  // Canonicalize unsigned case
+  if (InnerCC == ISD::SETULT || InnerCC == ISD::SETUGT) {
+    IsUnCmp = true;
+    InnerCC = (InnerCC == ISD::SETULT) ? ISD::SETLT : ISD::SETGT;
   }
-  else if (VecVT == MVT::v16i8) {
-    SDNode *VecImm = CurDAG->getMachineNode(PPC::XXSPLTIB, dl, MVT::i32,
-                                         getI32Imm(0x80, dl));
-    if (SignBitVec) *SignBitVec = VecImm;
-    return CurDAG->getMachineNode(PPC::VADDUBM, dl, VecVT, N,
-                                  SDValue(VecImm, 0));
+
+  bool InnerSwapped = false;
+  if (LHS == InnerRHS && RHS == InnerLHS)
+    InnerSwapped = true;
+  else if (LHS != InnerLHS || RHS != InnerRHS)
+    return false;
+
+  switch (CC) {
+  // (select_cc lhs, rhs,  0, \
+  //     (select_cc [lr]hs, [lr]hs, 1, -1, setlt/setgt), seteq)
+  case ISD::SETEQ:
+    if (!InnerIsSel)
+      return false;
+    if (InnerCC != ISD::SETLT && InnerCC != ISD::SETGT)
+      return false;
+    NeedSwapOps = (InnerCC == ISD::SETGT) ? InnerSwapped : !InnerSwapped;
+    break;
+
+  // (select_cc lhs, rhs, -1, (zext (setcc [lr]hs, [lr]hs, setne)), setu?lt)
+  // (select_cc lhs, rhs, -1, (zext (setcc lhs, rhs, setgt)), setu?lt)
+  // (select_cc lhs, rhs, -1, (zext (setcc rhs, lhs, setlt)), setu?lt)
+  // (select_cc lhs, rhs, 1, (sext (setcc [lr]hs, [lr]hs, setne)), setu?lt)
+  // (select_cc lhs, rhs, 1, (sext (setcc lhs, rhs, setgt)), setu?lt)
+  // (select_cc lhs, rhs, 1, (sext (setcc rhs, lhs, setlt)), setu?lt)
+  case ISD::SETULT:
+    if (!IsUnCmp && InnerCC != ISD::SETNE)
+      return false;
+    IsUnCmp = true;
+    LLVM_FALLTHROUGH;
+  case ISD::SETLT:
+    if (InnerCC == ISD::SETNE || (InnerCC == ISD::SETGT && !InnerSwapped) ||
+        (InnerCC == ISD::SETLT && InnerSwapped))
+      NeedSwapOps = (TrueResVal == 1);
+    else
+      return false;
+    break;
+
+  // (select_cc lhs, rhs, 1, (sext (setcc [lr]hs, [lr]hs, setne)), setu?gt)
+  // (select_cc lhs, rhs, 1, (sext (setcc lhs, rhs, setlt)), setu?gt)
+  // (select_cc lhs, rhs, 1, (sext (setcc rhs, lhs, setgt)), setu?gt)
+  // (select_cc lhs, rhs, -1, (zext (setcc [lr]hs, [lr]hs, setne)), setu?gt)
+  // (select_cc lhs, rhs, -1, (zext (setcc lhs, rhs, setlt)), setu?gt)
+  // (select_cc lhs, rhs, -1, (zext (setcc rhs, lhs, setgt)), setu?gt)
+  case ISD::SETUGT:
+    if (!IsUnCmp && InnerCC != ISD::SETNE)
+      return false;
+    IsUnCmp = true;
+    LLVM_FALLTHROUGH;
+  case ISD::SETGT:
+    if (InnerCC == ISD::SETNE || (InnerCC == ISD::SETLT && !InnerSwapped) ||
+        (InnerCC == ISD::SETGT && InnerSwapped))
+      NeedSwapOps = (TrueResVal == -1);
+    else
+      return false;
+    break;
+
+  default:
+    return false;
   }
-  else
-    llvm_unreachable("Unsupported vector data type for flipSignBit");
+
+  LLVM_DEBUG(dbgs() << "Found a node that can be lowered to a SETB: ");
+  LLVM_DEBUG(N->dump());
+
+  return true;
 }
 
 // Select - Convert the specified operand from a target-independent to a
@@ -4517,8 +4611,7 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
     int16_t Imm;
     if (N->getOperand(0)->getOpcode() == ISD::FrameIndex &&
         isIntS16Immediate(N->getOperand(1), Imm)) {
-      KnownBits LHSKnown;
-      CurDAG->computeKnownBits(N->getOperand(0), LHSKnown);
+      KnownBits LHSKnown = CurDAG->computeKnownBits(N->getOperand(0));
 
       // If this is equivalent to an add, then we can fold it with the
       // FrameIndex calculation.
@@ -4644,6 +4737,31 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
     if (PPCSubTarget->useCRBits() &&
         N->getOperand(0).getValueType() == MVT::i1)
       break;
+
+    if (PPCSubTarget->isISA3_0() && PPCSubTarget->isPPC64()) {
+      bool NeedSwapOps = false;
+      bool IsUnCmp = false;
+      if (mayUseP9Setb(N, CC, CurDAG, NeedSwapOps, IsUnCmp)) {
+        SDValue LHS = N->getOperand(0);
+        SDValue RHS = N->getOperand(1);
+        if (NeedSwapOps)
+          std::swap(LHS, RHS);
+
+        // Make use of SelectCC to generate the comparison to set CR bits, for
+        // equality comparisons having one literal operand, SelectCC probably
+        // doesn't need to materialize the whole literal and just use xoris to
+        // check it first, it leads the following comparison result can't
+        // exactly represent GT/LT relationship. So to avoid this we specify
+        // SETGT/SETUGT here instead of SETEQ.
+        SDValue GenCC =
+            SelectCC(LHS, RHS, IsUnCmp ? ISD::SETUGT : ISD::SETGT, dl);
+        CurDAG->SelectNodeTo(
+            N, N->getSimpleValueType(0) == MVT::i64 ? PPC::SETB8 : PPC::SETB,
+            N->getValueType(0), GenCC);
+        NumP9Setb++;
+        return;
+      }
+    }
 
     // Handle the setcc cases here.  select_cc lhs, 0, 1, 0, cc
     if (!isPPC64)
@@ -4832,6 +4950,15 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
       case PPC::PRED_NE: Opc = PPC::CRXOR;  Swap = false; break;
       }
 
+      // A signed comparison of i1 values produces the opposite result to an
+      // unsigned one if the condition code includes less-than or greater-than.
+      // This is because 1 is the most negative signed i1 number and the most
+      // positive unsigned i1 number. The CR-logical operations used for such
+      // comparisons are non-commutative so for signed comparisons vs. unsigned
+      // ones, the input operands just need to be swapped.
+      if (ISD::isSignedIntSetCC(CC))
+        Swap = !Swap;
+
       SDValue BitComp(CurDAG->getMachineNode(Opc, dl, MVT::i1,
                                              N->getOperand(Swap ? 3 : 2),
                                              N->getOperand(Swap ? 2 : 3)), 0);
@@ -4888,9 +5015,9 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
     SDValue TOCbase = N->getOperand(1);
     SDNode *Tmp = CurDAG->getMachineNode(PPC::ADDIStocHA, dl, MVT::i64,
                                          TOCbase, GA);
-
-    if (isa<JumpTableSDNode>(GA) || isa<BlockAddressSDNode>(GA) ||
-        CModel == CodeModel::Large) {
+    if (PPCLowering->isAccessedAsGotIndirect(GA)) {
+      // If it is access as got-indirect, we need an extra LD to load
+      // the address.
       SDNode *MN = CurDAG->getMachineNode(PPC::LDtocL, dl, MVT::i64, GA,
                                           SDValue(Tmp, 0));
       transferMemOperands(N, MN);
@@ -4898,18 +5025,7 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
       return;
     }
 
-    if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(GA)) {
-      const GlobalValue *GV = G->getGlobal();
-      unsigned char GVFlags = PPCSubTarget->classifyGlobalReference(GV);
-      if (GVFlags & PPCII::MO_NLP_FLAG) {
-        SDNode *MN = CurDAG->getMachineNode(PPC::LDtocL, dl, MVT::i64, GA,
-                                            SDValue(Tmp, 0));
-        transferMemOperands(N, MN);
-        ReplaceNode(N, MN);
-        return;
-      }
-    }
-
+    // Build the address relative to the TOC-pointer..
     ReplaceNode(N, CurDAG->getMachineNode(PPC::ADDItocL, dl, MVT::i64,
                                           SDValue(Tmp, 0), GA));
     return;
@@ -4994,55 +5110,6 @@ void PPCDAGToDAGISel::Select(SDNode *N) {
                                             SDValue(Tmp2, 0)));
       return;
     }
-  }
-  case ISD::ABS: {
-    assert(PPCSubTarget->hasP9Vector() && "ABS is supported with P9 Vector");
-
-    // For vector absolute difference, we use VABSDUW instruction of POWER9.
-    // Since VABSDU instructions are for unsigned integers, we need adjustment
-    // for signed integers.
-    // For abs(sub(a, b)), we generate VABSDUW(a+0x80000000, b+0x80000000).
-    // Otherwise, abs(sub(-1, 0)) returns 0xFFFFFFFF(=-1) instead of 1.
-    // For abs(a), we generate VABSDUW(a+0x80000000, 0x80000000).
-    EVT VecVT = N->getOperand(0).getValueType();
-    SDNode *AbsOp = nullptr;
-    unsigned AbsOpcode;
-
-    if (VecVT == MVT::v4i32)
-      AbsOpcode = PPC::VABSDUW;
-    else if (VecVT == MVT::v8i16)
-      AbsOpcode = PPC::VABSDUH;
-    else if (VecVT == MVT::v16i8)
-      AbsOpcode = PPC::VABSDUB;
-    else
-      llvm_unreachable("Unsupported vector data type for ISD::ABS");
-
-    // Even for signed integers, we can skip adjustment if all values are
-    // known to be positive (as signed integer) due to zero-extended inputs.
-    if (N->getOperand(0).getOpcode() == ISD::SUB &&
-        N->getOperand(0)->getOperand(0).getOpcode() == ISD::ZERO_EXTEND &&
-        N->getOperand(0)->getOperand(1).getOpcode() == ISD::ZERO_EXTEND) {
-      AbsOp = CurDAG->getMachineNode(AbsOpcode, dl, VecVT,
-                                     SDValue(N->getOperand(0)->getOperand(0)),
-                                     SDValue(N->getOperand(0)->getOperand(1)));
-      ReplaceNode(N, AbsOp);
-      return;
-    }
-    if (N->getOperand(0).getOpcode() == ISD::SUB) {
-      SDValue SubVal = N->getOperand(0);
-      SDNode *Op0 = flipSignBit(SubVal->getOperand(0));
-      SDNode *Op1 = flipSignBit(SubVal->getOperand(1));
-      AbsOp = CurDAG->getMachineNode(AbsOpcode, dl, VecVT,
-                                     SDValue(Op0, 0), SDValue(Op1, 0));
-    }
-    else {
-      SDNode *Op1 = nullptr;
-      SDNode *Op0 = flipSignBit(N->getOperand(0), &Op1);
-      AbsOp = CurDAG->getMachineNode(AbsOpcode, dl, VecVT, SDValue(Op0, 0),
-                                     SDValue(Op1, 0));
-    }
-    ReplaceNode(N, AbsOp);
-    return;
   }
   }
 

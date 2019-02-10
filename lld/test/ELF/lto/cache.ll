@@ -1,5 +1,7 @@
 ; REQUIRES: x86
 ; This randomly fails in jenkins. Add some debug info otherwise we need to add unsupp: system-freebsd
+; NetBSD: noatime mounts currently inhibit 'touch' from updating atime
+; UNSUPPORTED: system-netbsd
 
 ; RUN: opt -module-hash -module-summary %s -o %t.o
 ; RUN: opt -module-hash -module-summary %p/Inputs/cache.ll -o %t2.o

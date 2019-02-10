@@ -469,11 +469,9 @@ Sema::ActOnCaseStmt(SourceLocation CaseLoc, ExprResult LHSVal,
 }
 
 /// ActOnCaseStmtBody - This installs a statement as the body of a case.
-void Sema::ActOnCaseStmtBody(Stmt *caseStmt, Stmt *SubStmt) {
+void Sema::ActOnCaseStmtBody(Stmt *S, Stmt *SubStmt) {
   DiagnoseUnusedExprResult(SubStmt);
-
-  auto *CS = static_cast<CaseStmt *>(caseStmt);
-  CS->setSubStmt(SubStmt);
+  cast<CaseStmt>(S)->setSubStmt(SubStmt);
 }
 
 StmtResult
@@ -945,8 +943,11 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
     llvm::APSInt ConstantCondValue;
     bool HasConstantCond = false;
     if (!HasDependentValue && !TheDefaultStmt) {
-      HasConstantCond = CondExpr->EvaluateAsInt(ConstantCondValue, Context,
+      Expr::EvalResult Result;
+      HasConstantCond = CondExpr->EvaluateAsInt(Result, Context,
                                                 Expr::SE_AllowSideEffects);
+      if (Result.Val.isInt())
+        ConstantCondValue = Result.Val.getInt();
       assert(!HasConstantCond ||
              (ConstantCondValue.getBitWidth() == CondWidth &&
               ConstantCondValue.isSigned() == CondIsSigned));

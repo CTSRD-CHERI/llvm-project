@@ -112,18 +112,22 @@ of ``cxx_rvalue_references``.
 ``__has_cpp_attribute``
 -----------------------
 
-This function-like macro takes a single argument that is the name of a
-C++11-style attribute. The argument can either be a single identifier, or a
-scoped identifier. If the attribute is supported, a nonzero value is returned.
-If the attribute is a standards-based attribute, this macro returns a nonzero
-value based on the year and month in which the attribute was voted into the
-working draft. If the attribute is not supported by the current compliation
-target, this macro evaluates to 0.  It can be used like this:
+This function-like macro is available in C++2a by default, and is provided as an
+extension in earlier language standards. It takes a single argument that is the
+name of a double-square-bracket-style attribute. The argument can either be a
+single identifier or a scoped identifier. If the attribute is supported, a
+nonzero value is returned. If the attribute is a standards-based attribute, this
+macro returns a nonzero value based on the year and month in which the attribute
+was voted into the working draft. See `WG21 SD-6
+<https://isocpp.org/std/standing-documents/sd-6-sg10-feature-test-recommendations>`_
+for the list of values returned for standards-based attributes. If the attribute
+is not supported by the current compliation target, this macro evaluates to 0.
+It can be used like this:
 
 .. code-block:: c++
 
-  #ifndef __has_cpp_attribute         // Optional of course.
-    #define __has_cpp_attribute(x) 0  // Compatibility with non-clang compilers.
+  #ifndef __has_cpp_attribute         // For backwards compatibility
+    #define __has_cpp_attribute(x) 0
   #endif
 
   ...
@@ -134,10 +138,11 @@ target, this macro evaluates to 0.  It can be used like this:
   #endif
   ...
 
-The attribute identifier (but not scope) can also be specified with a preceding
-and following ``__`` (double underscore) to avoid interference from a macro with
-the same name.  For instance, ``gnu::__const__`` can be used instead of
-``gnu::const``.
+The attribute scope tokens ``clang`` and ``_Clang`` are interchangeable, as are
+the attribute scope tokens ``gnu`` and ``__gnu__``. Attribute tokens in either
+of these namespaces can be specified with a preceding and following ``__``
+(double underscore) to avoid interference from a macro with the same name. For
+instance, ``gnu::__const__`` can be used instead of ``gnu::const``.
 
 ``__has_c_attribute``
 ---------------------
@@ -162,11 +167,11 @@ current compilation target, this macro evaluates to 0. It can be used like this:
   #endif
   ...
 
-The attribute identifier (but not scope) can also be specified with a preceding
-and following ``__`` (double underscore) to avoid interference from a macro with
-the same name.  For instance, ``gnu::__const__`` can be used instead of
-``gnu::const``.
-
+The attribute scope tokens ``clang`` and ``_Clang`` are interchangeable, as are
+the attribute scope tokens ``gnu`` and ``__gnu__``. Attribute tokens in either
+of these namespaces can be specified with a preceding and following ``__``
+(double underscore) to avoid interference from a macro with the same name. For
+instance, ``gnu::__const__`` can be used instead of ``gnu::const``.
 
 ``__has_attribute``
 -------------------
@@ -2691,6 +2696,36 @@ The ``__declspec`` style syntax is also supported:
 
 A single push directive accepts only one attribute regardless of the syntax
 used.
+
+Because multiple push directives can be nested, if you're writing a macro that
+expands to ``_Pragma("clang attribute")`` it's good hygiene (though not
+required) to add a namespace to your push/pop directives. A pop directive with a
+namespace will pop the innermost push that has that same namespace. This will
+ensure that another macro's ``pop`` won't inadvertently pop your attribute. Note
+that an ``pop`` without a namespace will pop the innermost ``push`` without a
+namespace. ``push``es with a namespace can only be popped by ``pop`` with the
+same namespace. For instance:
+
+.. code-block:: c++
+
+   #define ASSUME_NORETURN_BEGIN _Pragma("clang attribute AssumeNoreturn.push ([[noreturn]], apply_to = function)")
+   #define ASSUME_NORETURN_END   _Pragma("clang attribute AssumeNoreturn.pop")
+
+   #define ASSUME_UNAVAILABLE_BEGIN _Pragma("clang attribute Unavailable.push (__attribute__((unavailable)), apply_to=function)")
+   #define ASSUME_UNAVAILABLE_END   _Pragma("clang attribute Unavailable.pop")
+
+
+   ASSUME_NORETURN_BEGIN
+   ASSUME_UNAVAILABLE_BEGIN
+   void function(); // function has [[noreturn]] and __attribute__((unavailable))
+   ASSUME_NORETURN_END
+   void other_function(); // function has __attribute__((unavailable))
+   ASSUME_UNAVAILABLE_END
+
+Without the namespaces on the macros, ``other_function`` will be annotated with
+``[[noreturn]]`` instead of ``__attribute__((unavailable))``. This may seem like
+a contrived example, but its very possible for this kind of situation to appear
+in real code if the pragmas are spread out accross a large file.
 
 Subject Match Rules
 -------------------

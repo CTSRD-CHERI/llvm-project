@@ -19,9 +19,11 @@ add_clang_library(clangDaemon
   Context.cpp
   Diagnostics.cpp
   DraftStore.cpp
+  ExpectedTypes.cpp
   FindSymbols.cpp
   FileDistance.cpp
   FS.cpp
+  FSProvider.cpp
   FuzzyMatch.cpp
   GlobalCompilationDatabase.cpp
   Headers.cpp
@@ -45,6 +47,7 @@ add_clang_library(clangDaemon
   index/IndexAction.cpp
   index/MemIndex.cpp
   index/Merge.cpp
+  index/SymbolID.cpp
   index/Serialization.cpp
   index/SymbolCollector.cpp
   index/YAMLSerialization.cpp
