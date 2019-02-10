@@ -167,8 +167,6 @@ public:
 
     ZArg, // MS extension
 
-    VArg, // OpenCL vectors
-
     // Objective-C specific specifiers.
     ObjCObjArg, // '@'
     ObjCBeg = ObjCObjArg,
@@ -306,6 +304,8 @@ public:
 
   QualType getRepresentativeType(ASTContext &C) const;
 
+  ArgType makeVectorType(ASTContext &C, unsigned NumElts) const;
+
   std::string getRepresentativeTypeName(ASTContext &C) const;
 };
 
@@ -324,6 +324,10 @@ public:
   OptionalAmount(bool valid = true)
   : start(nullptr),length(0), hs(valid ? NotSpecified : Invalid), amt(0),
   UsesPositionalArg(0), UsesDotPrefix(0) {}
+
+  explicit OptionalAmount(unsigned Amount)
+    : start(nullptr), length(0), hs(Constant), amt(Amount),
+    UsesPositionalArg(false), UsesDotPrefix(false) {}
 
   bool isInvalid() const {
     return hs == Invalid;
@@ -382,6 +386,8 @@ protected:
   LengthModifier LM;
   OptionalAmount FieldWidth;
   ConversionSpecifier CS;
+  OptionalAmount VectorNumElts;
+
   /// Positional arguments, an IEEE extension:
   ///  IEEE Std 1003.1, 2004 Edition
   ///  http://www.opengroup.org/onlinepubs/009695399/functions/printf.html
@@ -389,7 +395,8 @@ protected:
   unsigned argIndex;
 public:
   FormatSpecifier(bool isPrintf)
-    : CS(isPrintf), UsesPositionalArg(false), argIndex(0) {}
+    : CS(isPrintf), VectorNumElts(false),
+      UsesPositionalArg(false), argIndex(0) {}
 
   void setLengthModifier(LengthModifier lm) {
     LM = lm;
@@ -415,6 +422,14 @@ public:
 
   const OptionalAmount &getFieldWidth() const {
     return FieldWidth;
+  }
+
+  void setVectorNumElts(const OptionalAmount &Amt) {
+    VectorNumElts = Amt;
+  }
+
+  const OptionalAmount &getVectorNumElts() const {
+    return VectorNumElts;
   }
 
   void setFieldWidth(const OptionalAmount &Amt) {
@@ -481,6 +496,9 @@ class PrintfSpecifier : public analyze_format_string::FormatSpecifier {
   OptionalFlag IsSensitive;          // '{sensitive}'
   OptionalAmount Precision;
   StringRef MaskType;
+
+  ArgType getScalarArgType(ASTContext &Ctx, bool IsObjCLiteral) const;
+
 public:
   PrintfSpecifier()
       : FormatSpecifier(/* isPrintf = */ true), HasThousandsGrouping("'"),

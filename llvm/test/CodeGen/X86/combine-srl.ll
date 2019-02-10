@@ -35,6 +35,14 @@ define <4 x i32> @combine_vec_lshr_outofrange1(<4 x i32> %x) {
   ret <4 x i32> %1
 }
 
+define <4 x i32> @combine_vec_lshr_outofrange2(<4 x i32> %x) {
+; CHECK-LABEL: combine_vec_lshr_outofrange2:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    retq
+  %1 = lshr <4 x i32> %x, <i32 33, i32 34, i32 35, i32 undef>
+  ret <4 x i32> %1
+}
+
 ; fold (srl x, 0) -> x
 define <4 x i32> @combine_vec_lshr_by_zero(<4 x i32> %x) {
 ; CHECK-LABEL: combine_vec_lshr_by_zero:
@@ -237,25 +245,7 @@ define <4 x i32> @combine_vec_lshr_trunc_lshr_zero0(<4 x i64> %x) {
 define <4 x i32> @combine_vec_lshr_trunc_lshr_zero1(<4 x i64> %x) {
 ; SSE-LABEL: combine_vec_lshr_trunc_lshr_zero1:
 ; SSE:       # %bb.0:
-; SSE-NEXT:    movdqa %xmm1, %xmm2
-; SSE-NEXT:    psrlq $51, %xmm2
-; SSE-NEXT:    psrlq $50, %xmm1
-; SSE-NEXT:    pblendw {{.*#+}} xmm1 = xmm1[0,1,2,3],xmm2[4,5,6,7]
-; SSE-NEXT:    movdqa %xmm0, %xmm2
-; SSE-NEXT:    psrlq $49, %xmm2
-; SSE-NEXT:    psrlq $48, %xmm0
-; SSE-NEXT:    pblendw {{.*#+}} xmm0 = xmm0[0,1,2,3],xmm2[4,5,6,7]
-; SSE-NEXT:    packusdw %xmm1, %xmm0
-; SSE-NEXT:    movdqa %xmm0, %xmm1
-; SSE-NEXT:    psrld $27, %xmm1
-; SSE-NEXT:    movdqa %xmm0, %xmm2
-; SSE-NEXT:    psrld $25, %xmm2
-; SSE-NEXT:    pblendw {{.*#+}} xmm2 = xmm2[0,1,2,3],xmm1[4,5,6,7]
-; SSE-NEXT:    movdqa %xmm0, %xmm1
-; SSE-NEXT:    psrld $26, %xmm1
-; SSE-NEXT:    psrld $24, %xmm0
-; SSE-NEXT:    pblendw {{.*#+}} xmm0 = xmm0[0,1,2,3],xmm1[4,5,6,7]
-; SSE-NEXT:    pblendw {{.*#+}} xmm0 = xmm0[0,1],xmm2[2,3],xmm0[4,5],xmm2[6,7]
+; SSE-NEXT:    xorps %xmm0, %xmm0
 ; SSE-NEXT:    retq
 ;
 ; AVX-LABEL: combine_vec_lshr_trunc_lshr_zero1:

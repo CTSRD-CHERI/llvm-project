@@ -189,36 +189,6 @@ define {i8, i1} @test_smul4(i8 %V) {
   ret {i8, i1} %x
 }
 
-declare i256 @llvm.cttz.i256(i256 %src, i1 %is_zero_undef)
-
-define i256 @test_cttz() {
-; CHECK-LABEL: @test_cttz(
-; CHECK-NEXT:    ret i256 1
-;
-  %x = call i256 @llvm.cttz.i256(i256 10, i1 false)
-  ret i256 %x
-}
-
-declare <2 x i256> @llvm.cttz.v2i256(<2 x i256> %src, i1 %is_zero_undef)
-
-define <2 x i256> @test_cttz_vec() {
-; CHECK-LABEL: @test_cttz_vec(
-; CHECK-NEXT:    ret <2 x i256> <i256 1, i256 1>
-;
-  %x = call <2 x i256> @llvm.cttz.v2i256(<2 x i256> <i256 10, i256 10>, i1 false)
-  ret <2 x i256> %x
-}
-
-declare i256 @llvm.ctpop.i256(i256 %src)
-
-define i256 @test_ctpop() {
-; CHECK-LABEL: @test_ctpop(
-; CHECK-NEXT:    ret i256 2
-;
-  %x = call i256 @llvm.ctpop.i256(i256 10)
-  ret i256 %x
-}
-
 ; Test a non-intrinsic that we know about as a library call.
 declare float @fabs(float %x)
 
@@ -626,5 +596,41 @@ define <2 x i8> @fshr_zero_shift_guard_splat(<2 x i8> %x, <2 x i8> %y, <2 x i8> 
   %f = call <2 x i8> @llvm.fshr.v2i8(<2 x i8> %x, <2 x i8> %y, <2 x i8> %sh)
   %s = select <2 x i1> %c, <2 x i8> %y, <2 x i8> %f
   ret <2 x i8> %s
+}
+
+; If first two operands of funnel shift are undef, the result is undef
+
+define i8 @fshl_ops_undef(i8 %shamt) {
+; CHECK-LABEL: @fshl_ops_undef(
+; CHECK-NEXT:    ret i8 undef
+;
+  %r = call i8 @llvm.fshl.i8(i8 undef, i8 undef, i8 %shamt)
+  ret i8 %r
+}
+
+define i9 @fshr_ops_undef(i9 %shamt) {
+; CHECK-LABEL: @fshr_ops_undef(
+; CHECK-NEXT:    ret i9 undef
+;
+  %r = call i9 @llvm.fshr.i9(i9 undef, i9 undef, i9 %shamt)
+  ret i9 %r
+}
+
+; If shift amount is undef, treat it as zero, returning operand 0 or 1
+
+define i8 @fshl_shift_undef(i8 %x, i8 %y) {
+; CHECK-LABEL: @fshl_shift_undef(
+; CHECK-NEXT:    ret i8 [[X:%.*]]
+;
+  %r = call i8 @llvm.fshl.i8(i8 %x, i8 %y, i8 undef)
+  ret i8 %r
+}
+
+define i9 @fshr_shift_undef(i9 %x, i9 %y) {
+; CHECK-LABEL: @fshr_shift_undef(
+; CHECK-NEXT:    ret i9 [[Y:%.*]]
+;
+  %r = call i9 @llvm.fshr.i9(i9 %x, i9 %y, i9 undef)
+  ret i9 %r
 }
 

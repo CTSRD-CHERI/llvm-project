@@ -45,6 +45,7 @@
 #include "clang/AST/TypeLoc.h"
 #include "clang/Basic/Builtins.h"
 #include "clang/Basic/TargetInfo.h"
+#include "llvm/Support/SaveAndRestore.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstring>
 #include <functional>
@@ -509,7 +510,7 @@ namespace {
     }
 
     // FIXME: Adding this to every 'CallStackFrame' may have a nontrivial impact
-    // on the overall stack usage of deeply-recursing constexpr evaluataions.
+    // on the overall stack usage of deeply-recursing constexpr evaluations.
     // (We should cache this map rather than recomputing it repeatedly.)
     // But let's try this and see how it goes; we can look into caching the map
     // as a later change.
@@ -724,6 +725,10 @@ namespace {
     /// Whether or not we're currently speculatively evaluating.
     bool IsSpeculativelyEvaluating;
 
+    /// Whether or not we're in a context where the front end requires a
+    /// constant value.
+    bool InConstantContext;
+
     enum EvaluationMode {
       /// Evaluate as a constant expression. Stop if we find that the expression
       /// is not a constant expression.
@@ -785,7 +790,7 @@ namespace {
         EvaluatingDecl((const ValueDecl *)nullptr),
         EvaluatingDeclValue(nullptr), HasActiveDiagnostic(false),
         HasFoldFailureDiagnostic(false), IsSpeculativelyEvaluating(false),
-        EvalMode(Mode) {}
+        InConstantContext(false), EvalMode(Mode) {}
 
     void setEvaluatingDecl(APValue::LValueBase Base, APValue &Value) {
       EvaluatingDecl = Base;
@@ -1297,6 +1302,14 @@ void EvalInfo::addCallStack(unsigned Limit) {
   }
 }
 
+/// Kinds of access we can perform on an object, for diagnostics.
+enum AccessKinds {
+  AK_Read,
+  AK_Assign,
+  AK_Increment,
+  AK_Decrement
+};
+
 namespace {
   struct ComplexValue {
   private:
@@ -1402,19 +1415,34 @@ namespace {
       set(B, true);
     }
 
+  private:
     // Check that this LValue is not based on a null pointer. If it is, produce
     // a diagnostic and mark the designator as invalid.
-    bool checkNullPointer(EvalInfo &Info, const Expr *E,
-                          CheckSubobjectKind CSK) {
+    template <typename GenDiagType>
+    bool checkNullPointerDiagnosingWith(const GenDiagType &GenDiag) {
       if (Designator.Invalid)
         return false;
       if (IsNullPtr) {
-        Info.CCEDiag(E, diag::note_constexpr_null_subobject)
-          << CSK;
+        GenDiag();
         Designator.setInvalid();
         return false;
       }
       return true;
+    }
+
+  public:
+    bool checkNullPointer(EvalInfo &Info, const Expr *E,
+                          CheckSubobjectKind CSK) {
+      return checkNullPointerDiagnosingWith([&Info, E, CSK] {
+        Info.CCEDiag(E, diag::note_constexpr_null_subobject) << CSK;
+      });
+    }
+
+    bool checkNullPointerForFoldAccess(EvalInfo &Info, const Expr *E,
+                                       AccessKinds AK) {
+      return checkNullPointerDiagnosingWith([&Info, E, AK] {
+        Info.FFDiag(E, diag::note_constexpr_access_null) << AK;
+      });
     }
 
     // Check this LValue refers to an object. If not, set the designator to be
@@ -2753,14 +2781,6 @@ static bool diagnoseUnreadableFields(EvalInfo &Info, const Expr *E,
   return false;
 }
 
-/// Kinds of access we can perform on an object, for diagnostics.
-enum AccessKinds {
-  AK_Read,
-  AK_Assign,
-  AK_Increment,
-  AK_Decrement
-};
-
 namespace {
 /// A handle to a complete object (an object that is not a subobject of
 /// another object).
@@ -3431,19 +3451,31 @@ struct CompoundAssignSubobjectHandler {
     if (!checkConst(SubobjType))
       return false;
 
-    if (!SubobjType->isIntegerType() || !RHS.isInt()) {
+    if (!SubobjType->isIntegerType()) {
       // We don't support compound assignment on integer-cast-to-pointer
       // values.
       Info.FFDiag(E);
       return false;
     }
 
-    APSInt LHS = HandleIntToIntCast(Info, E, PromotedLHSType,
-                                    SubobjType, Value);
-    if (!handleIntIntBinOp(Info, E, LHS, Opcode, RHS.getInt(), LHS))
-      return false;
-    Value = HandleIntToIntCast(Info, E, SubobjType, PromotedLHSType, LHS);
-    return true;
+    if (RHS.isInt()) {
+      APSInt LHS =
+          HandleIntToIntCast(Info, E, PromotedLHSType, SubobjType, Value);
+      if (!handleIntIntBinOp(Info, E, LHS, Opcode, RHS.getInt(), LHS))
+        return false;
+      Value = HandleIntToIntCast(Info, E, SubobjType, PromotedLHSType, LHS);
+      return true;
+    } else if (RHS.isFloat()) {
+      APFloat FValue(0.0);
+      return HandleIntToFloatCast(Info, E, SubobjType, Value, PromotedLHSType,
+                                  FValue) &&
+             handleFloatFloatBinOp(Info, E, FValue, Opcode, RHS.getFloat()) &&
+             HandleFloatToIntCast(Info, E, PromotedLHSType, FValue, SubobjType,
+                                  Value);
+    }
+
+    Info.FFDiag(E);
+    return false;
   }
   bool found(APFloat &Value, QualType SubobjType) {
     return checkConst(SubobjType) &&
@@ -4286,6 +4318,9 @@ static EvalStmtResult EvaluateStmt(StmtResult &Result, EvalInfo &Info,
   case Stmt::CaseStmtClass:
   case Stmt::DefaultStmtClass:
     return EvaluateStmt(Result, Info, cast<SwitchCase>(S)->getSubStmt(), Case);
+  case Stmt::CXXTryStmtClass:
+    // Evaluate try blocks by evaluating all sub statements.
+    return EvaluateStmt(Result, Info, cast<CXXTryStmt>(S)->getTryBlock(), Case);
   }
 }
 
@@ -5648,8 +5683,10 @@ static bool getBytesReturnedByAllocSizeCall(const ASTContext &Ctx,
     return false;
 
   auto EvaluateAsSizeT = [&](const Expr *E, APSInt &Into) {
-    if (!E->EvaluateAsInt(Into, Ctx, Expr::SE_AllowSideEffects))
+    Expr::EvalResult ExprResult;
+    if (!E->EvaluateAsInt(ExprResult, Ctx, Expr::SE_AllowSideEffects))
       return false;
+    Into = ExprResult.Val.getInt();
     if (Into.isNegative() || !Into.isIntN(BitsInSizeT))
       return false;
     Into = Into.zextOrSelf(BitsInSizeT);
@@ -6122,7 +6159,8 @@ bool PointerExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
 
     return true;
   }
-
+  case Builtin::BI__builtin_launder:
+    return evaluatePointer(E->getArg(0), Result);
   case Builtin::BIstrchr:
   case Builtin::BIwcschr:
   case Builtin::BImemchr:
@@ -6154,9 +6192,27 @@ bool PointerExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
         return false;
       MaxLength = N.getExtValue();
     }
-
-    QualType CharTy = E->getArg(0)->getType()->getPointeeType();
-
+    // We cannot find the value if there are no candidates to match against.
+    if (MaxLength == 0u)
+      return ZeroInitialization(E);
+    if (!Result.checkNullPointerForFoldAccess(Info, E, AK_Read) ||
+        Result.Designator.Invalid)
+      return false;
+    QualType CharTy = Result.Designator.getType(Info.Ctx);
+    bool IsRawByte = BuiltinOp == Builtin::BImemchr ||
+                     BuiltinOp == Builtin::BI__builtin_memchr;
+    assert(IsRawByte ||
+           Info.Ctx.hasSameUnqualifiedType(
+               CharTy, E->getArg(0)->getType()->getPointeeType()));
+    // Pointers to const void may point to objects of incomplete type.
+    if (IsRawByte && CharTy->isIncompleteType()) {
+      Info.FFDiag(E, diag::note_constexpr_ltor_incomplete_type) << CharTy;
+      return false;
+    }
+    // Give up on byte-oriented matching against multibyte elements.
+    // FIXME: We can compare the bytes in the correct order.
+    if (IsRawByte && Info.Ctx.getTypeSizeInChars(CharTy) != CharUnits::One())
+      return false;
     // Figure out what value we're actually looking for (after converting to
     // the corresponding unsigned type if necessary).
     uint64_t DesiredVal;
@@ -7383,6 +7439,8 @@ public:
   //                            Visitor Methods
   //===--------------------------------------------------------------------===//
 
+  bool VisitConstantExpr(const ConstantExpr *E);
+
   bool VisitIntegerLiteral(const IntegerLiteral *E) {
     return Success(E->getValue(), E);
   }
@@ -8124,6 +8182,11 @@ static bool tryEvaluateBuiltinObjectSize(const Expr *E, unsigned Type,
   return true;
 }
 
+bool IntExprEvaluator::VisitConstantExpr(const ConstantExpr *E) {
+  llvm::SaveAndRestore<bool> InConstantContext(Info.InConstantContext, true);
+  return ExprEvaluatorBaseTy::VisitConstantExpr(E);
+}
+
 bool IntExprEvaluator::VisitCallExpr(const CallExpr *E) {
   if (unsigned BuiltinOp = E->getBuiltinCallee())
     return VisitBuiltinCallExpr(E, BuiltinOp);
@@ -8275,8 +8338,20 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
     return Success(Val.countLeadingZeros(), E);
   }
 
-  case Builtin::BI__builtin_constant_p:
-    return Success(EvaluateBuiltinConstantP(Info.Ctx, E->getArg(0)), E);
+  case Builtin::BI__builtin_constant_p: {
+    auto Arg = E->getArg(0);
+    if (EvaluateBuiltinConstantP(Info.Ctx, Arg))
+      return Success(true, E);
+    auto ArgTy = Arg->IgnoreImplicit()->getType();
+    if (!Info.InConstantContext && !Arg->HasSideEffects(Info.Ctx) &&
+        !ArgTy->isAggregateType() && !ArgTy->isPointerType()) {
+      // We can delay calculation of __builtin_constant_p until after
+      // inlining. Note: This diagnostic won't be shown to the user.
+      Info.FFDiag(E, diag::note_invalid_subexpr_in_const_expr);
+      return false;
+    }
+    return Success(false, E);
+  }
 
   case Builtin::BI__builtin_ctz:
   case Builtin::BI__builtin_ctzl:
@@ -8456,8 +8531,6 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
         !EvaluatePointer(E->getArg(1), String2, Info))
       return false;
 
-    QualType CharTy = E->getArg(0)->getType()->getPointeeType();
-
     uint64_t MaxLength = uint64_t(-1);
     if (BuiltinOp != Builtin::BIstrcmp &&
         BuiltinOp != Builtin::BIwcscmp &&
@@ -8468,6 +8541,88 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
         return false;
       MaxLength = N.getExtValue();
     }
+
+    // Empty substrings compare equal by definition.
+    if (MaxLength == 0u)
+      return Success(0, E);
+
+    if (!String1.checkNullPointerForFoldAccess(Info, E, AK_Read) ||
+        !String2.checkNullPointerForFoldAccess(Info, E, AK_Read) ||
+        String1.Designator.Invalid || String2.Designator.Invalid)
+      return false;
+
+    QualType CharTy1 = String1.Designator.getType(Info.Ctx);
+    QualType CharTy2 = String2.Designator.getType(Info.Ctx);
+
+    bool IsRawByte = BuiltinOp == Builtin::BImemcmp ||
+                     BuiltinOp == Builtin::BI__builtin_memcmp;
+
+    assert(IsRawByte ||
+           (Info.Ctx.hasSameUnqualifiedType(
+                CharTy1, E->getArg(0)->getType()->getPointeeType()) &&
+            Info.Ctx.hasSameUnqualifiedType(CharTy1, CharTy2)));
+
+    const auto &ReadCurElems = [&](APValue &Char1, APValue &Char2) {
+      return handleLValueToRValueConversion(Info, E, CharTy1, String1, Char1) &&
+             handleLValueToRValueConversion(Info, E, CharTy2, String2, Char2) &&
+             Char1.isInt() && Char2.isInt();
+    };
+    const auto &AdvanceElems = [&] {
+      return HandleLValueArrayAdjustment(Info, E, String1, CharTy1, 1) &&
+             HandleLValueArrayAdjustment(Info, E, String2, CharTy2, 1);
+    };
+
+    if (IsRawByte) {
+      uint64_t BytesRemaining = MaxLength;
+      // Pointers to const void may point to objects of incomplete type.
+      if (CharTy1->isIncompleteType()) {
+        Info.FFDiag(E, diag::note_constexpr_ltor_incomplete_type) << CharTy1;
+        return false;
+      }
+      if (CharTy2->isIncompleteType()) {
+        Info.FFDiag(E, diag::note_constexpr_ltor_incomplete_type) << CharTy2;
+        return false;
+      }
+      uint64_t CharTy1Width{Info.Ctx.getTypeSize(CharTy1)};
+      CharUnits CharTy1Size = Info.Ctx.toCharUnitsFromBits(CharTy1Width);
+      // Give up on comparing between elements with disparate widths.
+      if (CharTy1Size != Info.Ctx.getTypeSizeInChars(CharTy2))
+        return false;
+      uint64_t BytesPerElement = CharTy1Size.getQuantity();
+      assert(BytesRemaining && "BytesRemaining should not be zero: the "
+                               "following loop considers at least one element");
+      while (true) {
+        APValue Char1, Char2;
+        if (!ReadCurElems(Char1, Char2))
+          return false;
+        // We have compatible in-memory widths, but a possible type and
+        // (for `bool`) internal representation mismatch.
+        // Assuming two's complement representation, including 0 for `false` and
+        // 1 for `true`, we can check an appropriate number of elements for
+        // equality even if they are not byte-sized.
+        APSInt Char1InMem = Char1.getInt().extOrTrunc(CharTy1Width);
+        APSInt Char2InMem = Char2.getInt().extOrTrunc(CharTy1Width);
+        if (Char1InMem.ne(Char2InMem)) {
+          // If the elements are byte-sized, then we can produce a three-way
+          // comparison result in a straightforward manner.
+          if (BytesPerElement == 1u) {
+            // memcmp always compares unsigned chars.
+            return Success(Char1InMem.ult(Char2InMem) ? -1 : 1, E);
+          }
+          // The result is byte-order sensitive, and we have multibyte elements.
+          // FIXME: We can compare the remaining bytes in the correct order.
+          return false;
+        }
+        if (!AdvanceElems())
+          return false;
+        if (BytesRemaining <= BytesPerElement)
+          break;
+        BytesRemaining -= BytesPerElement;
+      }
+      // Enough elements are equal to account for the memcmp limit.
+      return Success(0, E);
+    }
+
     bool StopAtNull = (BuiltinOp != Builtin::BImemcmp &&
                        BuiltinOp != Builtin::BIwmemcmp &&
                        BuiltinOp != Builtin::BI__builtin_memcmp &&
@@ -8478,11 +8633,10 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
                   BuiltinOp == Builtin::BI__builtin_wcscmp ||
                   BuiltinOp == Builtin::BI__builtin_wcsncmp ||
                   BuiltinOp == Builtin::BI__builtin_wmemcmp;
+
     for (; MaxLength; --MaxLength) {
       APValue Char1, Char2;
-      if (!handleLValueToRValueConversion(Info, E, CharTy, String1, Char1) ||
-          !handleLValueToRValueConversion(Info, E, CharTy, String2, Char2) ||
-          !Char1.isInt() || !Char2.isInt())
+      if (!ReadCurElems(Char1, Char2))
         return false;
       if (Char1.getInt() != Char2.getInt()) {
         if (IsWide) // wmemcmp compares with wchar_t signedness.
@@ -8493,8 +8647,7 @@ bool IntExprEvaluator::VisitBuiltinCallExpr(const CallExpr *E,
       if (StopAtNull && !Char1.getInt())
         return Success(0, E);
       assert(!(StopAtNull && !Char2.getInt()));
-      if (!HandleLValueArrayAdjustment(Info, E, String1, CharTy, 1) ||
-          !HandleLValueArrayAdjustment(Info, E, String2, CharTy, 1))
+      if (!AdvanceElems())
         return false;
     }
     // We hit the strncmp / memcmp limit.
@@ -10434,7 +10587,7 @@ bool ComplexExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
   case BO_Mul:
     if (Result.isComplexFloat()) {
       // This is an implementation of complex multiplication according to the
-      // constraints laid out in C11 Annex G. The implemention uses the
+      // constraints laid out in C11 Annex G. The implementation uses the
       // following naming scheme:
       //   (a + ib) * (c + id)
       ComplexValue LHS = Result;
@@ -10515,7 +10668,7 @@ bool ComplexExprEvaluator::VisitBinaryOperator(const BinaryOperator *E) {
   case BO_Div:
     if (Result.isComplexFloat()) {
       // This is an implementation of complex division according to the
-      // constraints laid out in C11 Annex G. The implemention uses the
+      // constraints laid out in C11 Annex G. The implementation uses the
       // following naming scheme:
       //   (a + ib) / (c + id)
       ComplexValue LHS = Result;
@@ -10891,19 +11044,59 @@ static bool FastEvaluateAsRValue(const Expr *Exp, Expr::EvalResult &Result,
   return false;
 }
 
+static bool hasUnacceptableSideEffect(Expr::EvalStatus &Result,
+                                      Expr::SideEffectsKind SEK) {
+  return (SEK < Expr::SE_AllowSideEffects && Result.HasSideEffects) ||
+         (SEK < Expr::SE_AllowUndefinedBehavior && Result.HasUndefinedBehavior);
+}
+
+static bool EvaluateAsRValue(const Expr *E, Expr::EvalResult &Result,
+                             const ASTContext &Ctx, EvalInfo &Info) {
+  bool IsConst;
+  if (FastEvaluateAsRValue(E, Result, Ctx, IsConst))
+    return IsConst;
+
+  return EvaluateAsRValue(Info, E, Result.Val);
+}
+
+static bool EvaluateAsInt(const Expr *E, Expr::EvalResult &ExprResult,
+                          const ASTContext &Ctx,
+                          Expr::SideEffectsKind AllowSideEffects,
+                          EvalInfo &Info) {
+  if (!E->getType()->isIntegralOrEnumerationType())
+    return false;
+
+  bool DidEvaluate = ::EvaluateAsRValue(E, ExprResult, Ctx, Info);
+  if (!DidEvaluate || !ExprResult.Val.isInt() ||
+      hasUnacceptableSideEffect(ExprResult, AllowSideEffects)) {
+    // For intcap_t, pass through the result even if it isn't actually an
+    // int.
+    if (DidEvaluate &&
+        E->getType()->isCHERICapabilityType(const_cast<ASTContext&>(Ctx)))
+      if (ExprResult.Val.isLValue() &&
+          ExprResult.Val.getLValueBase().isNull()) {
+        // FIXME: Ugly hack!
+        APSInt Val(64);
+        Val = ExprResult.Val.getLValueOffset().getQuantity();
+        ExprResult.Val = APValue(Val);
+        return true;
+      }
+    return false;
+  }
+
+  return true;
+}
 
 /// EvaluateAsRValue - Return true if this is a constant which we can fold using
 /// any crazy technique (that has nothing to do with language standards) that
 /// we want to.  If this function returns true, it returns the folded constant
 /// in Result. If this expression is a glvalue, an lvalue-to-rvalue conversion
 /// will be applied to the result.
-bool Expr::EvaluateAsRValue(EvalResult &Result, const ASTContext &Ctx) const {
-  bool IsConst;
-  if (FastEvaluateAsRValue(this, Result, Ctx, IsConst))
-    return IsConst;
-
+bool Expr::EvaluateAsRValue(EvalResult &Result, const ASTContext &Ctx,
+                            bool InConstantContext) const {
   EvalInfo Info(Ctx, Result, EvalInfo::EM_IgnoreSideEffects);
-  return ::EvaluateAsRValue(Info, this, Result.Val);
+  Info.InConstantContext = InConstantContext;
+  return ::EvaluateAsRValue(this, Result, Ctx, Info);
 }
 
 bool Expr::EvaluateAsBooleanCondition(bool &Result,
@@ -10913,38 +11106,10 @@ bool Expr::EvaluateAsBooleanCondition(bool &Result,
          HandleConversionToBool(Scratch.Val, Result);
 }
 
-static bool hasUnacceptableSideEffect(Expr::EvalStatus &Result,
-                                      Expr::SideEffectsKind SEK) {
-  return (SEK < Expr::SE_AllowSideEffects && Result.HasSideEffects) ||
-         (SEK < Expr::SE_AllowUndefinedBehavior && Result.HasUndefinedBehavior);
-}
-
-bool Expr::EvaluateAsInt(APSInt &Result, const ASTContext &Ctx,
+bool Expr::EvaluateAsInt(EvalResult &Result, const ASTContext &Ctx,
                          SideEffectsKind AllowSideEffects) const {
-  if (!getType()->isIntegralOrEnumerationType())
-    return false;
-
-  EvalResult ExprResult;
-  bool DidEvaluate = EvaluateAsRValue(ExprResult, Ctx);
-  if (!DidEvaluate || !ExprResult.Val.isInt() ||
-      hasUnacceptableSideEffect(ExprResult, AllowSideEffects)) {
-    // For intcap_t, pass through the result even if it isn't actually an
-    // int.
-    if (DidEvaluate &&
-        getType()->isCHERICapabilityType(const_cast<ASTContext&>(Ctx)))
-      if (ExprResult.Val.isLValue() &&
-          ExprResult.Val.getLValueBase().isNull()) {
-        // FIXME: Ugly hack!
-        APSInt Val(64);
-        Val = ExprResult.Val.getLValueOffset().getQuantity();
-        Result = Val;
-        return true;
-      }
-    return false;
-  }
-
-  Result = ExprResult.Val.getInt();
-  return true;
+  EvalInfo Info(Ctx, Result, EvalInfo::EM_IgnoreSideEffects);
+  return ::EvaluateAsInt(this, Result, Ctx, AllowSideEffects, Info);
 }
 
 bool Expr::EvaluateAsFloat(APFloat &Result, const ASTContext &Ctx,
@@ -11002,6 +11167,7 @@ bool Expr::EvaluateAsInitializer(APValue &Value, const ASTContext &Ctx,
                                       ? EvalInfo::EM_ConstantExpression
                                       : EvalInfo::EM_ConstantFold);
   InitInfo.setEvaluatingDecl(VD, Value);
+  InitInfo.InConstantContext = true;
 
   LValue LVal;
   LVal.set(VD);
@@ -11034,47 +11200,52 @@ bool Expr::EvaluateAsInitializer(APValue &Value, const ASTContext &Ctx,
 /// constant folded, but discard the result.
 bool Expr::isEvaluatable(const ASTContext &Ctx, SideEffectsKind SEK) const {
   EvalResult Result;
-  return EvaluateAsRValue(Result, Ctx) &&
+  return EvaluateAsRValue(Result, Ctx, /* in constant context */ true) &&
          !hasUnacceptableSideEffect(Result, SEK);
 }
 
 APSInt Expr::EvaluateKnownConstInt(const ASTContext &Ctx,
                     SmallVectorImpl<PartialDiagnosticAt> *Diag) const {
-  EvalResult ER;
-  ER.Diag = Diag;
-  bool Result = EvaluateAsRValue(ER, Ctx);
+  EvalResult EVResult;
+  EVResult.Diag = Diag;
+  EvalInfo Info(Ctx, EVResult, EvalInfo::EM_IgnoreSideEffects);
+  Info.InConstantContext = true;
+
+  bool Result = ::EvaluateAsRValue(this, EVResult, Ctx, Info);
   (void)Result;
   assert(Result && "Could not evaluate expression");
-  if (ER.Val.isLValue() && ER.Val.getLValueBase().isNull()) {
+  if (EVResult.Val.isLValue() && EVResult.Val.getLValueBase().isNull()) {
     // FIXME: Ugly hack!
     APSInt Val(64);
-    Val = ER.Val.getLValueOffset().getQuantity();
-    ER.Val = APValue(Val);
+    Val = EVResult.Val.getLValueOffset().getQuantity();
+    EVResult.Val = APValue(Val);
   }
-  assert(ER.Val.isInt() && "Expression did not evaluate to integer");
+  assert(EVResult.Val.isInt() && "Expression did not evaluate to integer");
 
-  return ER.Val.getInt();
+  return EVResult.Val.getInt();
 }
 
 APSInt Expr::EvaluateKnownConstIntCheckOverflow(
     const ASTContext &Ctx, SmallVectorImpl<PartialDiagnosticAt> *Diag) const {
-  EvalResult EvalResult;
-  EvalResult.Diag = Diag;
-  EvalInfo Info(Ctx, EvalResult, EvalInfo::EM_EvaluateForOverflow);
-  bool Result = ::EvaluateAsRValue(Info, this, EvalResult.Val);
+  EvalResult EVResult;
+  EVResult.Diag = Diag;
+  EvalInfo Info(Ctx, EVResult, EvalInfo::EM_EvaluateForOverflow);
+  Info.InConstantContext = true;
+
+  bool Result = ::EvaluateAsRValue(Info, this, EVResult.Val);
   (void)Result;
   assert(Result && "Could not evaluate expression");
-  assert(EvalResult.Val.isInt() && "Expression did not evaluate to integer");
+  assert(EVResult.Val.isInt() && "Expression did not evaluate to integer");
 
-  return EvalResult.Val.getInt();
+  return EVResult.Val.getInt();
 }
 
 void Expr::EvaluateForOverflow(const ASTContext &Ctx) const {
   bool IsConst;
-  EvalResult EvalResult;
-  if (!FastEvaluateAsRValue(this, EvalResult, Ctx, IsConst)) {
-    EvalInfo Info(Ctx, EvalResult, EvalInfo::EM_EvaluateForOverflow);
-    (void)::EvaluateAsRValue(Info, this, EvalResult.Val);
+  EvalResult EVResult;
+  if (!FastEvaluateAsRValue(this, EVResult, Ctx, IsConst)) {
+    EvalInfo Info(Ctx, EVResult, EvalInfo::EM_EvaluateForOverflow);
+    (void)::EvaluateAsRValue(Info, this, EVResult.Val);
   }
 }
 
@@ -11127,7 +11298,11 @@ static ICEDiag Worst(ICEDiag A, ICEDiag B) { return A.Kind >= B.Kind ? A : B; }
 
 static ICEDiag CheckEvalInICE(const Expr* E, const ASTContext &Ctx) {
   Expr::EvalResult EVResult;
-  if (!E->EvaluateAsRValue(EVResult, Ctx) || EVResult.HasSideEffects ||
+  Expr::EvalStatus Status;
+  EvalInfo Info(Ctx, Status, EvalInfo::EM_ConstantExpression);
+
+  Info.InConstantContext = true;
+  if (!::EvaluateAsRValue(E, EVResult, Ctx, Info) || EVResult.HasSideEffects ||
       !EVResult.Val.isInt())
     return ICEDiag(IK_NotICE, E->getBeginLoc());
 
@@ -11565,12 +11740,20 @@ bool Expr::isIntegerConstantExpr(llvm::APSInt &Value, const ASTContext &Ctx,
 
   if (!isIntegerConstantExpr(Ctx, Loc))
     return false;
+
   // The only possible side-effects here are due to UB discovered in the
   // evaluation (for instance, INT_MAX + 1). In such a case, we are still
   // required to treat the expression as an ICE, so we produce the folded
   // value.
-  if (!EvaluateAsInt(Value, Ctx, SE_AllowSideEffects))
+  EvalResult ExprResult;
+  Expr::EvalStatus Status;
+  EvalInfo Info(Ctx, Status, EvalInfo::EM_IgnoreSideEffects);
+  Info.InConstantContext = true;
+
+  if (!::EvaluateAsInt(this, ExprResult, Ctx, SE_AllowSideEffects, Info))
     llvm_unreachable("ICE cannot be evaluated!");
+
+  Value = ExprResult.Val.getInt();
   return true;
 }
 
@@ -11656,6 +11839,7 @@ bool Expr::isPotentialConstantExpr(const FunctionDecl *FD,
 
   EvalInfo Info(FD->getASTContext(), Status,
                 EvalInfo::EM_PotentialConstantExpression);
+  Info.InConstantContext = true;
 
   const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(FD);
   const CXXRecordDecl *RD = MD ? MD->getParent()->getCanonicalDecl() : nullptr;

@@ -702,6 +702,12 @@ getIntelProcessorTypeAndSubtype(unsigned Family, unsigned Model,
         break;
       }
 
+      if (Features2 & (1 << (X86::FEATURE_AVX512VNNI - 32))) {
+        *Type = X86::INTEL_COREI7;
+        *Subtype = X86::INTEL_COREI7_CASCADELAKE;
+        break;
+      }
+
       if (Features & (1 << X86::FEATURE_AVX512VL)) {
         *Type = X86::INTEL_COREI7;
         *Subtype = X86::INTEL_COREI7_SKYLAKE_AVX512;
@@ -903,11 +909,11 @@ static void getAvailableFeatures(unsigned ECX, unsigned EDX, unsigned MaxLeaf,
 
   auto setFeature = [&](unsigned F) {
     if (F < 32)
-      Features |= 1 << F;
+      Features |= 1U << (F & 0x1f);
     else if (F < 64)
-      Features2 |= 1 << (F - 32);
+      Features2 |= 1U << ((F - 32) & 0x1f);
     else if (F < 96)
-      Features3 |= 1 << (F - 64);
+      Features3 |= 1U << ((F - 64) & 0x1f);
     else
       llvm_unreachable("Unexpected FeatureBit");
   };

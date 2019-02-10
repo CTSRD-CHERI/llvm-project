@@ -132,8 +132,8 @@ public:
             std::max(DefaultAlignForAttributeAligned, (unsigned short)CapSize);
       }
     }
-    CanUseBSDABICalls = Triple.getOS() == llvm::Triple::FreeBSD ||
-                        Triple.getOS() == llvm::Triple::OpenBSD;
+    CanUseBSDABICalls = Triple.isOSFreeBSD() ||
+                        Triple.isOSOpenBSD();
   }
 
   bool isIEEE754_2008Default() const {
@@ -193,7 +193,7 @@ public:
   void setN32N64ABITypes() {
     LongDoubleWidth = LongDoubleAlign = 128;
     LongDoubleFormat = &llvm::APFloat::IEEEquad();
-    if (getTriple().getOS() == llvm::Triple::FreeBSD) {
+    if (getTriple().isOSFreeBSD()) {
       LongDoubleWidth = LongDoubleAlign = 64;
       LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     }
@@ -205,7 +205,7 @@ public:
 
   void setN64ABITypes() {
     setN32N64ABITypes();
-    if (getTriple().getOS() == llvm::Triple::OpenBSD) {
+    if (getTriple().isOSOpenBSD()) {
       Int64Type = SignedLongLong;
     } else {
       Int64Type = SignedLong;

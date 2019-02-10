@@ -362,29 +362,20 @@ def : Pat<(i64 (sext (i8 (X86setcc_c X86_COND_B, EFLAGS)))),
 def : Pat<(and (i8 (X86setcc_c X86_COND_B, EFLAGS)), 1),
           (SETBr)>;
 
-// (add OP, SETB) -> (adc OP, 0)
-def : Pat<(add (and (i8 (X86setcc_c X86_COND_B, EFLAGS)), 1), GR8:$op),
-          (ADC8ri GR8:$op, 0)>;
-def : Pat<(add (and (i32 (X86setcc_c X86_COND_B, EFLAGS)), 1), GR32:$op),
-          (ADC32ri8 GR32:$op, 0)>;
-def : Pat<(add (and (i64 (X86setcc_c X86_COND_B, EFLAGS)), 1), GR64:$op),
-          (ADC64ri8 GR64:$op, 0)>;
-
-// (sub OP, SETB) -> (sbb OP, 0)
-def : Pat<(sub GR8:$op, (and (i8 (X86setcc_c X86_COND_B, EFLAGS)), 1)),
-          (SBB8ri GR8:$op, 0)>;
-def : Pat<(sub GR32:$op, (and (i32 (X86setcc_c X86_COND_B, EFLAGS)), 1)),
-          (SBB32ri8 GR32:$op, 0)>;
-def : Pat<(sub GR64:$op, (and (i64 (X86setcc_c X86_COND_B, EFLAGS)), 1)),
-          (SBB64ri8 GR64:$op, 0)>;
-
-// (sub OP, SETCC_CARRY) -> (adc OP, 0)
-def : Pat<(sub GR8:$op, (i8 (X86setcc_c X86_COND_B, EFLAGS))),
-          (ADC8ri GR8:$op, 0)>;
-def : Pat<(sub GR32:$op, (i32 (X86setcc_c X86_COND_B, EFLAGS))),
-          (ADC32ri8 GR32:$op, 0)>;
-def : Pat<(sub GR64:$op, (i64 (X86setcc_c X86_COND_B, EFLAGS))),
-          (ADC64ri8 GR64:$op, 0)>;
+// Patterns to give priority when both inputs are zero so that we don't use
+// an immediate for the RHS.
+// TODO: Should we use a 32-bit sbb for 8/16 to push the extract_subreg out?
+def : Pat<(X86sbb_flag (i8 0), (i8 0), EFLAGS),
+          (SBB8rr (EXTRACT_SUBREG (MOV32r0), sub_8bit),
+                  (EXTRACT_SUBREG (MOV32r0), sub_8bit))>;
+def : Pat<(X86sbb_flag (i16 0), (i16 0), EFLAGS),
+          (SBB16rr (EXTRACT_SUBREG (MOV32r0), sub_16bit),
+                   (EXTRACT_SUBREG (MOV32r0), sub_16bit))>;
+def : Pat<(X86sbb_flag (i32 0), (i32 0), EFLAGS),
+          (SBB32rr (MOV32r0), (MOV32r0))>;
+def : Pat<(X86sbb_flag (i64 0), (i64 0), EFLAGS),
+          (SBB64rr (SUBREG_TO_REG (i64 0), (MOV32r0), sub_32bit),
+                   (SUBREG_TO_REG (i64 0), (MOV32r0), sub_32bit))>;
 
 //===----------------------------------------------------------------------===//
 // String Pseudo Instructions
@@ -1363,10 +1354,8 @@ def or_is_add : PatFrag<(ops node:$lhs, node:$rhs), (or node:$lhs, node:$rhs),[{
   if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(N->getOperand(1)))
     return CurDAG->MaskedValueIsZero(N->getOperand(0), CN->getAPIntValue());
 
-  KnownBits Known0;
-  CurDAG->computeKnownBits(N->getOperand(0), Known0, 0);
-  KnownBits Known1;
-  CurDAG->computeKnownBits(N->getOperand(1), Known1, 0);
+  KnownBits Known0 = CurDAG->computeKnownBits(N->getOperand(0), 0);
+  KnownBits Known1 = CurDAG->computeKnownBits(N->getOperand(1), 0);
   return (~Known0.Zero & ~Known1.Zero) == 0;
 }]>;
 
@@ -1433,8 +1422,7 @@ def ADD64ri32_DB : I<0, Pseudo,
 
 def sub_is_xor : PatFrag<(ops node:$lhs, node:$rhs), (sub node:$lhs, node:$rhs),[{
   if (ConstantSDNode *CN = dyn_cast<ConstantSDNode>(N->getOperand(0))) {
-    KnownBits Known;
-    CurDAG->computeKnownBits(N->getOperand(1), Known);
+    KnownBits Known = CurDAG->computeKnownBits(N->getOperand(1));
 
     // If all possible ones in the RHS are set in the LHS then there can't be
     // a borrow and we can use xor.

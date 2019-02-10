@@ -583,7 +583,8 @@ public:
   /// this function returns true, it returns the folded constant in Result. If
   /// the expression is a glvalue, an lvalue-to-rvalue conversion will be
   /// applied.
-  bool EvaluateAsRValue(EvalResult &Result, const ASTContext &Ctx) const;
+  bool EvaluateAsRValue(EvalResult &Result, const ASTContext &Ctx,
+                        bool InConstantContext = false) const;
 
   /// EvaluateAsBooleanCondition - Return true if this is a constant
   /// which we can fold and convert to a boolean condition using
@@ -600,7 +601,7 @@ public:
 
   /// EvaluateAsInt - Return true if this is a constant which we can fold and
   /// convert to an integer, using any crazy technique that we want to.
-  bool EvaluateAsInt(llvm::APSInt &Result, const ASTContext &Ctx,
+  bool EvaluateAsInt(EvalResult &Result, const ASTContext &Ctx,
                      SideEffectsKind AllowSideEffects = SE_NoSideEffects) const;
 
   /// EvaluateAsFloat - Return true if this is a constant which we can fold and
@@ -907,9 +908,14 @@ public:
 
 /// ConstantExpr - An expression that occurs in a constant context.
 class ConstantExpr : public FullExpr {
-public:
   ConstantExpr(Expr *subexpr)
     : FullExpr(ConstantExprClass, subexpr) {}
+
+public:
+  static ConstantExpr *Create(const ASTContext &Context, Expr *E) {
+    assert(!isa<ConstantExpr>(E));
+    return new (Context) ConstantExpr(E);
+  }
 
   /// Build an empty constant expression wrapper.
   explicit ConstantExpr(EmptyShell Empty)
@@ -1086,20 +1092,10 @@ class DeclRefExpr final
   void computeDependence(const ASTContext &Ctx);
 
 public:
-  DeclRefExpr(ValueDecl *D, bool RefersToEnclosingVariableOrCapture, QualType T,
+  DeclRefExpr(const ASTContext &Ctx, ValueDecl *D,
+              bool RefersToEnclosingVariableOrCapture, QualType T,
               ExprValueKind VK, SourceLocation L,
-              const DeclarationNameLoc &LocInfo = DeclarationNameLoc())
-      : Expr(DeclRefExprClass, T, VK, OK_Ordinary, false, false, false, false),
-        D(D), DNLoc(LocInfo) {
-    DeclRefExprBits.HasQualifier = false;
-    DeclRefExprBits.HasTemplateKWAndArgsInfo = false;
-    DeclRefExprBits.HasFoundDecl = false;
-    DeclRefExprBits.HadMultipleCandidates = false;
-    DeclRefExprBits.RefersToEnclosingVariableOrCapture =
-        RefersToEnclosingVariableOrCapture;
-    DeclRefExprBits.Loc = L;
-    computeDependence(D->getASTContext());
-  }
+              const DeclarationNameLoc &LocInfo = DeclarationNameLoc());
 
   static DeclRefExpr *
   Create(const ASTContext &Context, NestedNameSpecifierLoc QualifierLoc,
@@ -2321,9 +2317,11 @@ public:
 
 /// ArraySubscriptExpr - [C99 6.5.2.1] Array Subscripting.
 class ArraySubscriptExpr : public Expr {
-  enum { LHS, RHS, END_EXPR=2 };
-  Stmt* SubExprs[END_EXPR];
-  SourceLocation RBracketLoc;
+  enum { LHS, RHS, END_EXPR };
+  Stmt *SubExprs[END_EXPR];
+
+  bool lhsIsBase() const { return getRHS()->getType()->isIntegerType(); }
+
 public:
   ArraySubscriptExpr(Expr *lhs, Expr *rhs, QualType t,
                      ExprValueKind VK, ExprObjectKind OK,
@@ -2334,10 +2332,10 @@ public:
          (lhs->isInstantiationDependent() ||
           rhs->isInstantiationDependent()),
          (lhs->containsUnexpandedParameterPack() ||
-          rhs->containsUnexpandedParameterPack())),
-    RBracketLoc(rbracketloc) {
+          rhs->containsUnexpandedParameterPack())) {
     SubExprs[LHS] = lhs;
     SubExprs[RHS] = rhs;
+    ArraySubscriptExprBits.RBracketLoc = rbracketloc;
   }
 
   /// Create an empty array subscript expression.
@@ -2361,29 +2359,23 @@ public:
   const Expr *getRHS() const { return cast<Expr>(SubExprs[RHS]); }
   void setRHS(Expr *E) { SubExprs[RHS] = E; }
 
-  Expr *getBase() {
-    return getRHS()->getType()->isIntegerType() ? getLHS() : getRHS();
-  }
+  Expr *getBase() { return lhsIsBase() ? getLHS() : getRHS(); }
+  const Expr *getBase() const { return lhsIsBase() ? getLHS() : getRHS(); }
 
-  const Expr *getBase() const {
-    return getRHS()->getType()->isIntegerType() ? getLHS() : getRHS();
-  }
-
-  Expr *getIdx() {
-    return getRHS()->getType()->isIntegerType() ? getRHS() : getLHS();
-  }
-
-  const Expr *getIdx() const {
-    return getRHS()->getType()->isIntegerType() ? getRHS() : getLHS();
-  }
+  Expr *getIdx() { return lhsIsBase() ? getRHS() : getLHS(); }
+  const Expr *getIdx() const { return lhsIsBase() ? getRHS() : getLHS(); }
 
   SourceLocation getBeginLoc() const LLVM_READONLY {
     return getLHS()->getBeginLoc();
   }
-  SourceLocation getEndLoc() const LLVM_READONLY { return RBracketLoc; }
+  SourceLocation getEndLoc() const { return getRBracketLoc(); }
 
-  SourceLocation getRBracketLoc() const { return RBracketLoc; }
-  void setRBracketLoc(SourceLocation L) { RBracketLoc = L; }
+  SourceLocation getRBracketLoc() const {
+    return ArraySubscriptExprBits.RBracketLoc;
+  }
+  void setRBracketLoc(SourceLocation L) {
+    ArraySubscriptExprBits.RBracketLoc = L;
+  }
 
   SourceLocation getExprLoc() const LLVM_READONLY {
     return getBase()->getExprLoc();
@@ -2409,93 +2401,188 @@ public:
 /// a subclass for overloaded operator calls that use operator syntax, e.g.,
 /// "str1 + str2" to resolve to a function call.
 class CallExpr : public Expr {
-  enum { FN=0, PREARGS_START=1 };
-  Stmt **SubExprs;
+  enum { FN = 0, PREARGS_START = 1 };
+
+  /// The number of arguments in the call expression.
   unsigned NumArgs;
+
+  /// The location of the right parenthese. This has a different meaning for
+  /// the derived classes of CallExpr.
   SourceLocation RParenLoc;
 
   void updateDependenciesFromArg(Expr *Arg);
 
+  // CallExpr store some data in trailing objects. However since CallExpr
+  // is used a base of other expression classes we cannot use
+  // llvm::TrailingObjects. Instead we manually perform the pointer arithmetic
+  // and casts.
+  //
+  // The trailing objects are in order:
+  //
+  // * A single "Stmt *" for the callee expression.
+  //
+  // * An array of getNumPreArgs() "Stmt *" for the pre-argument expressions.
+  //
+  // * An array of getNumArgs() "Stmt *" for the argument expressions.
+  //
+  // Note that we store the offset in bytes from the this pointer to the start
+  // of the trailing objects. It would be perfectly possible to compute it
+  // based on the dynamic kind of the CallExpr. However 1.) we have plenty of
+  // space in the bit-fields of Stmt. 2.) It was benchmarked to be faster to
+  // compute this once and then load the offset from the bit-fields of Stmt,
+  // instead of re-computing the offset each time the trailing objects are
+  // accessed.
+
+  /// Return a pointer to the start of the trailing array of "Stmt *".
+  Stmt **getTrailingStmts() {
+    return reinterpret_cast<Stmt **>(reinterpret_cast<char *>(this) +
+                                     CallExprBits.OffsetToTrailingObjects);
+  }
+  Stmt *const *getTrailingStmts() const {
+    return const_cast<CallExpr *>(this)->getTrailingStmts();
+  }
+
+  /// Map a statement class to the appropriate offset in bytes from the
+  /// this pointer to the trailing objects.
+  static unsigned offsetToTrailingObjects(StmtClass SC);
+
+public:
+  enum class ADLCallKind : bool { NotADL, UsesADL };
+  static constexpr ADLCallKind NotADL = ADLCallKind::NotADL;
+  static constexpr ADLCallKind UsesADL = ADLCallKind::UsesADL;
+
 protected:
-  // These versions of the constructor are for derived classes.
-  CallExpr(const ASTContext &C, StmtClass SC, Expr *fn,
-           ArrayRef<Expr *> preargs, ArrayRef<Expr *> args, QualType t,
-           ExprValueKind VK, SourceLocation rparenloc);
-  CallExpr(const ASTContext &C, StmtClass SC, Expr *fn, ArrayRef<Expr *> args,
-           QualType t, ExprValueKind VK, SourceLocation rparenloc);
-  CallExpr(const ASTContext &C, StmtClass SC, unsigned NumPreArgs,
+  /// Build a call expression, assuming that appropriate storage has been
+  /// allocated for the trailing objects.
+  CallExpr(StmtClass SC, Expr *Fn, ArrayRef<Expr *> PreArgs,
+           ArrayRef<Expr *> Args, QualType Ty, ExprValueKind VK,
+           SourceLocation RParenLoc, unsigned MinNumArgs, ADLCallKind UsesADL);
+
+  /// Build an empty call expression, for deserialization.
+  CallExpr(StmtClass SC, unsigned NumPreArgs, unsigned NumArgs,
            EmptyShell Empty);
 
-  Stmt *getPreArg(unsigned i) {
-    assert(i < getNumPreArgs() && "Prearg access out of range!");
-    return SubExprs[PREARGS_START+i];
+  /// Return the size in bytes needed for the trailing objects.
+  /// Used by the derived classes to allocate the right amount of storage.
+  static unsigned sizeOfTrailingObjects(unsigned NumPreArgs, unsigned NumArgs) {
+    return (1 + NumPreArgs + NumArgs) * sizeof(Stmt *);
   }
-  const Stmt *getPreArg(unsigned i) const {
-    assert(i < getNumPreArgs() && "Prearg access out of range!");
-    return SubExprs[PREARGS_START+i];
+
+  Stmt *getPreArg(unsigned I) {
+    assert(I < getNumPreArgs() && "Prearg access out of range!");
+    return getTrailingStmts()[PREARGS_START + I];
   }
-  void setPreArg(unsigned i, Stmt *PreArg) {
-    assert(i < getNumPreArgs() && "Prearg access out of range!");
-    SubExprs[PREARGS_START+i] = PreArg;
+  const Stmt *getPreArg(unsigned I) const {
+    assert(I < getNumPreArgs() && "Prearg access out of range!");
+    return getTrailingStmts()[PREARGS_START + I];
+  }
+  void setPreArg(unsigned I, Stmt *PreArg) {
+    assert(I < getNumPreArgs() && "Prearg access out of range!");
+    getTrailingStmts()[PREARGS_START + I] = PreArg;
   }
 
   unsigned getNumPreArgs() const { return CallExprBits.NumPreArgs; }
 
 public:
-  CallExpr(const ASTContext& C, Expr *fn, ArrayRef<Expr*> args, QualType t,
-           ExprValueKind VK, SourceLocation rparenloc);
+  /// Create a call expression. Fn is the callee expression, Args is the
+  /// argument array, Ty is the type of the call expression (which is *not*
+  /// the return type in general), VK is the value kind of the call expression
+  /// (lvalue, rvalue, ...), and RParenLoc is the location of the right
+  /// parenthese in the call expression. MinNumArgs specifies the minimum
+  /// number of arguments. The actual number of arguments will be the greater
+  /// of Args.size() and MinNumArgs. This is used in a few places to allocate
+  /// enough storage for the default arguments. UsesADL specifies whether the
+  /// callee was found through argument-dependent lookup.
+  ///
+  /// Note that you can use CreateTemporary if you need a temporary call
+  /// expression on the stack.
+  static CallExpr *Create(const ASTContext &Ctx, Expr *Fn,
+                          ArrayRef<Expr *> Args, QualType Ty, ExprValueKind VK,
+                          SourceLocation RParenLoc, unsigned MinNumArgs = 0,
+                          ADLCallKind UsesADL = NotADL);
 
-  /// Build an empty call expression.
-  CallExpr(const ASTContext &C, StmtClass SC, EmptyShell Empty);
+  /// Create a temporary call expression with no arguments in the memory
+  /// pointed to by Mem. Mem must points to at least sizeof(CallExpr)
+  /// + sizeof(Stmt *) bytes of storage, aligned to alignof(CallExpr):
+  ///
+  /// \code{.cpp}
+  ///   llvm::AlignedCharArray<alignof(CallExpr),
+  ///                          sizeof(CallExpr) + sizeof(Stmt *)> Buffer;
+  ///   CallExpr *TheCall = CallExpr::CreateTemporary(Buffer.buffer, etc);
+  /// \endcode
+  static CallExpr *CreateTemporary(void *Mem, Expr *Fn, QualType Ty,
+                                   ExprValueKind VK, SourceLocation RParenLoc,
+                                   ADLCallKind UsesADL = NotADL);
 
-  const Expr *getCallee() const { return cast<Expr>(SubExprs[FN]); }
-  Expr *getCallee() { return cast<Expr>(SubExprs[FN]); }
-  void setCallee(Expr *F) { SubExprs[FN] = F; }
+  /// Create an empty call expression, for deserialization.
+  static CallExpr *CreateEmpty(const ASTContext &Ctx, unsigned NumArgs,
+                               EmptyShell Empty);
 
-  Decl *getCalleeDecl();
+  Expr *getCallee() { return cast<Expr>(getTrailingStmts()[FN]); }
+  const Expr *getCallee() const { return cast<Expr>(getTrailingStmts()[FN]); }
+  void setCallee(Expr *F) { getTrailingStmts()[FN] = F; }
+
+  ADLCallKind getADLCallKind() const {
+    return static_cast<ADLCallKind>(CallExprBits.UsesADL);
+  }
+  void setADLCallKind(ADLCallKind V = UsesADL) {
+    CallExprBits.UsesADL = static_cast<bool>(V);
+  }
+  bool usesADL() const { return getADLCallKind() == UsesADL; }
+
+  Decl *getCalleeDecl() { return getCallee()->getReferencedDeclOfCallee(); }
   const Decl *getCalleeDecl() const {
-    return const_cast<CallExpr*>(this)->getCalleeDecl();
+    return getCallee()->getReferencedDeclOfCallee();
   }
 
-  /// If the callee is a FunctionDecl, return it. Otherwise return 0.
-  FunctionDecl *getDirectCallee();
+  /// If the callee is a FunctionDecl, return it. Otherwise return null.
+  FunctionDecl *getDirectCallee() {
+    return dyn_cast_or_null<FunctionDecl>(getCalleeDecl());
+  }
   const FunctionDecl *getDirectCallee() const {
-    return const_cast<CallExpr*>(this)->getDirectCallee();
+    return dyn_cast_or_null<FunctionDecl>(getCalleeDecl());
   }
 
   /// getNumArgs - Return the number of actual arguments to this call.
-  ///
   unsigned getNumArgs() const { return NumArgs; }
 
   /// Retrieve the call arguments.
   Expr **getArgs() {
-    return reinterpret_cast<Expr **>(SubExprs+getNumPreArgs()+PREARGS_START);
+    return reinterpret_cast<Expr **>(getTrailingStmts() + PREARGS_START +
+                                     getNumPreArgs());
   }
   const Expr *const *getArgs() const {
-    return reinterpret_cast<Expr **>(SubExprs + getNumPreArgs() +
-                                     PREARGS_START);
+    return reinterpret_cast<const Expr *const *>(
+        getTrailingStmts() + PREARGS_START + getNumPreArgs());
   }
 
   /// getArg - Return the specified argument.
   Expr *getArg(unsigned Arg) {
-    assert(Arg < NumArgs && "Arg access out of range!");
-    return cast_or_null<Expr>(SubExprs[Arg + getNumPreArgs() + PREARGS_START]);
+    assert(Arg < getNumArgs() && "Arg access out of range!");
+    return getArgs()[Arg];
   }
   const Expr *getArg(unsigned Arg) const {
-    assert(Arg < NumArgs && "Arg access out of range!");
-    return cast_or_null<Expr>(SubExprs[Arg + getNumPreArgs() + PREARGS_START]);
+    assert(Arg < getNumArgs() && "Arg access out of range!");
+    return getArgs()[Arg];
   }
 
   /// setArg - Set the specified argument.
   void setArg(unsigned Arg, Expr *ArgExpr) {
-    assert(Arg < NumArgs && "Arg access out of range!");
-    SubExprs[Arg+getNumPreArgs()+PREARGS_START] = ArgExpr;
+    assert(Arg < getNumArgs() && "Arg access out of range!");
+    getArgs()[Arg] = ArgExpr;
   }
 
-  /// setNumArgs - This changes the number of arguments present in this call.
-  /// Any orphaned expressions are deleted by this, and any new operands are set
-  /// to null.
-  void setNumArgs(const ASTContext& C, unsigned NumArgs);
+  /// Reduce the number of arguments in this call expression. This is used for
+  /// example during error recovery to drop extra arguments. There is no way
+  /// to perform the opposite because: 1.) We don't track how much storage
+  /// we have for the argument array 2.) This would potentially require growing
+  /// the argument array, something we cannot support since the arguments are
+  /// stored in a trailing array.
+  void shrinkNumArgs(unsigned NewNumArgs) {
+    assert((NewNumArgs <= getNumArgs()) &&
+           "shrinkNumArgs cannot increase the number of arguments!");
+    NumArgs = NewNumArgs;
+  }
 
   typedef ExprIterator arg_iterator;
   typedef ConstExprIterator const_arg_iterator;
@@ -2507,29 +2594,28 @@ public:
     return const_arg_range(arg_begin(), arg_end());
   }
 
-  arg_iterator arg_begin() { return SubExprs+PREARGS_START+getNumPreArgs(); }
-  arg_iterator arg_end() {
-    return SubExprs+PREARGS_START+getNumPreArgs()+getNumArgs();
+  arg_iterator arg_begin() {
+    return getTrailingStmts() + PREARGS_START + getNumPreArgs();
   }
+  arg_iterator arg_end() { return arg_begin() + getNumArgs(); }
+
   const_arg_iterator arg_begin() const {
-    return SubExprs+PREARGS_START+getNumPreArgs();
+    return getTrailingStmts() + PREARGS_START + getNumPreArgs();
   }
-  const_arg_iterator arg_end() const {
-    return SubExprs+PREARGS_START+getNumPreArgs()+getNumArgs();
-  }
+  const_arg_iterator arg_end() const { return arg_begin() + getNumArgs(); }
 
   /// This method provides fast access to all the subexpressions of
   /// a CallExpr without going through the slower virtual child_iterator
   /// interface.  This provides efficient reverse iteration of the
   /// subexpressions.  This is currently used for CFG construction.
-  ArrayRef<Stmt*> getRawSubExprs() {
-    return llvm::makeArrayRef(SubExprs,
-                              getNumPreArgs() + PREARGS_START + getNumArgs());
+  ArrayRef<Stmt *> getRawSubExprs() {
+    return llvm::makeArrayRef(getTrailingStmts(),
+                              PREARGS_START + getNumPreArgs() + getNumArgs());
   }
 
   /// getNumCommas - Return the number of commas that must have been present in
   /// this function call.
-  unsigned getNumCommas() const { return NumArgs ? NumArgs - 1 : 0; }
+  unsigned getNumCommas() const { return getNumArgs() ? getNumArgs() - 1 : 0; }
 
   /// getBuiltinCallee - If this is a call to a builtin, return the builtin ID
   /// of the callee. If not, return 0.
@@ -2555,7 +2641,7 @@ public:
   bool isBuiltinAssumeFalse(const ASTContext &Ctx) const;
 
   bool isCallToStdMove() const {
-    const FunctionDecl* FD = getDirectCallee();
+    const FunctionDecl *FD = getDirectCallee();
     return getNumArgs() == 1 && FD && FD->isInStdNamespace() &&
            FD->getIdentifier() && FD->getIdentifier()->isStr("move");
   }
@@ -2567,13 +2653,14 @@ public:
 
   // Iterators
   child_range children() {
-    return child_range(&SubExprs[0],
-                       &SubExprs[0]+NumArgs+getNumPreArgs()+PREARGS_START);
+    return child_range(getTrailingStmts(), getTrailingStmts() + PREARGS_START +
+                                               getNumPreArgs() + getNumArgs());
   }
 
   const_child_range children() const {
-    return const_child_range(&SubExprs[0], &SubExprs[0] + NumArgs +
-                                               getNumPreArgs() + PREARGS_START);
+    return const_child_range(getTrailingStmts(),
+                             getTrailingStmts() + PREARGS_START +
+                                 getNumPreArgs() + getNumArgs());
   }
 };
 
@@ -3097,8 +3184,8 @@ inline Expr *Expr::IgnoreImpCasts() {
   while (true)
     if (ImplicitCastExpr *ice = dyn_cast<ImplicitCastExpr>(e))
       e = ice->getSubExpr();
-    else if (ConstantExpr *ce = dyn_cast<ConstantExpr>(e))
-      e = ce->getSubExpr();
+    else if (FullExpr *fe = dyn_cast<FullExpr>(e))
+      e = fe->getSubExpr();
     else
       break;
   return e;
@@ -4854,31 +4941,46 @@ public:
   }
 };
 
-class ParenListExpr : public Expr {
-  Stmt **Exprs;
-  unsigned NumExprs;
+class ParenListExpr final
+    : public Expr,
+      private llvm::TrailingObjects<ParenListExpr, Stmt *> {
+  friend class ASTStmtReader;
+  friend TrailingObjects;
+
+  /// The location of the left and right parentheses.
   SourceLocation LParenLoc, RParenLoc;
 
-public:
-  ParenListExpr(const ASTContext& C, SourceLocation lparenloc,
-                ArrayRef<Expr*> exprs, SourceLocation rparenloc);
+  /// Build a paren list.
+  ParenListExpr(SourceLocation LParenLoc, ArrayRef<Expr *> Exprs,
+                SourceLocation RParenLoc);
 
   /// Build an empty paren list.
-  explicit ParenListExpr(EmptyShell Empty) : Expr(ParenListExprClass, Empty) { }
+  ParenListExpr(EmptyShell Empty, unsigned NumExprs);
 
-  unsigned getNumExprs() const { return NumExprs; }
+public:
+  /// Create a paren list.
+  static ParenListExpr *Create(const ASTContext &Ctx, SourceLocation LParenLoc,
+                               ArrayRef<Expr *> Exprs,
+                               SourceLocation RParenLoc);
 
-  const Expr* getExpr(unsigned Init) const {
+  /// Create an empty paren list.
+  static ParenListExpr *CreateEmpty(const ASTContext &Ctx, unsigned NumExprs);
+
+  /// Return the number of expressions in this paren list.
+  unsigned getNumExprs() const { return ParenListExprBits.NumExprs; }
+
+  Expr *getExpr(unsigned Init) {
     assert(Init < getNumExprs() && "Initializer access out of range!");
-    return cast_or_null<Expr>(Exprs[Init]);
+    return getExprs()[Init];
   }
 
-  Expr* getExpr(unsigned Init) {
-    assert(Init < getNumExprs() && "Initializer access out of range!");
-    return cast_or_null<Expr>(Exprs[Init]);
+  const Expr *getExpr(unsigned Init) const {
+    return const_cast<ParenListExpr *>(this)->getExpr(Init);
   }
 
-  Expr **getExprs() { return reinterpret_cast<Expr **>(Exprs); }
+  Expr **getExprs() {
+    return reinterpret_cast<Expr **>(getTrailingObjects<Stmt *>());
+  }
 
   ArrayRef<Expr *> exprs() {
     return llvm::makeArrayRef(getExprs(), getNumExprs());
@@ -4886,9 +4988,8 @@ public:
 
   SourceLocation getLParenLoc() const { return LParenLoc; }
   SourceLocation getRParenLoc() const { return RParenLoc; }
-
-  SourceLocation getBeginLoc() const LLVM_READONLY { return LParenLoc; }
-  SourceLocation getEndLoc() const LLVM_READONLY { return RParenLoc; }
+  SourceLocation getBeginLoc() const { return getLParenLoc(); }
+  SourceLocation getEndLoc() const { return getRParenLoc(); }
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() == ParenListExprClass;
@@ -4896,14 +4997,13 @@ public:
 
   // Iterators
   child_range children() {
-    return child_range(&Exprs[0], &Exprs[0]+NumExprs);
+    return child_range(getTrailingObjects<Stmt *>(),
+                       getTrailingObjects<Stmt *>() + getNumExprs());
   }
   const_child_range children() const {
-    return const_child_range(&Exprs[0], &Exprs[0] + NumExprs);
+    return const_child_range(getTrailingObjects<Stmt *>(),
+                             getTrailingObjects<Stmt *>() + getNumExprs());
   }
-
-  friend class ASTStmtReader;
-  friend class ASTStmtWriter;
 };
 
 /// Represents a C11 generic selection.

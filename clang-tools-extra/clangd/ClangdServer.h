@@ -18,6 +18,7 @@
 #include "GlobalCompilationDatabase.h"
 #include "Protocol.h"
 #include "TUScheduler.h"
+#include "index/Background.h"
 #include "index/FileIndex.h"
 #include "index/Index.h"
 #include "clang/Tooling/CompilationDatabase.h"
@@ -36,6 +37,7 @@ class PCHContainerOperations;
 
 namespace clangd {
 
+// FIXME: find a better name.
 class DiagnosticsConsumer {
 public:
   virtual ~DiagnosticsConsumer() = default;
@@ -43,6 +45,8 @@ public:
   /// Called by ClangdServer when \p Diagnostics for \p File are ready.
   virtual void onDiagnosticsReady(PathRef File,
                                   std::vector<Diag> Diagnostics) = 0;
+  /// Called whenever the file status is updated.
+  virtual void onFileUpdated(PathRef File, const TUStatus &Status){};
 };
 
 /// Manages a collection of source files and derived data (ASTs, indexes),
@@ -78,10 +82,13 @@ public:
     /// Use a heavier and faster in-memory index implementation.
     /// FIXME: we should make this true if it isn't too slow to build!.
     bool HeavyweightDynamicSymbolIndex = false;
-
-    /// URI schemes to use when building the dynamic index.
-    /// If empty, the default schemes in SymbolCollector will be used.
-    std::vector<std::string> URISchemes;
+    /// If true, ClangdServer automatically indexes files in the current project
+    /// on background threads. The index is stored in the project root.
+    bool BackgroundIndex = false;
+    /// If set to non-zero, the background index rebuilds the symbol index
+    /// periodically every BuildIndexPeriodMs milliseconds; otherwise, the
+    /// symbol index will be updated for each indexed file.
+    size_t BackgroundIndexRebuildPeriodMs = 0;
 
     /// If set, use this index to augment code completion results.
     SymbolIndex *StaticIndex = nullptr;
@@ -129,7 +136,8 @@ public:
                    WantDiagnostics WD = WantDiagnostics::Auto);
 
   /// Remove \p File from list of tracked files, schedule a request to free
-  /// resources associated with it.
+  /// resources associated with it. Pending diagnostics for closed files may not
+  /// be delivered, even if requested with WantDiags::Auto or WantDiags::Yes.
   void removeDocument(PathRef File);
 
   /// Run code completion for \p File at \p Pos.
@@ -170,7 +178,7 @@ public:
 
   /// Retrieve the symbols within the specified file.
   void documentSymbols(StringRef File,
-                       Callback<std::vector<SymbolInformation>> CB);
+                       Callback<std::vector<DocumentSymbol>> CB);
 
   /// Retrieve locations for symbol references.
   void findReferences(PathRef File, Position Pos,
@@ -201,6 +209,11 @@ public:
   /// Called when an event occurs for a watched file in the workspace.
   void onFileEvent(const DidChangeWatchedFilesParams &Params);
 
+  /// Get symbol info for given position.
+  /// Clangd extension - not part of official LSP.
+  void symbolInfo(PathRef File, Position Pos,
+                  Callback<std::vector<SymbolDetails>> CB);
+
   /// Returns estimated memory usage for each of the currently open files.
   /// The order of results is unspecified.
   /// Overall memory usage of clangd may be significantly more than reported
@@ -226,19 +239,10 @@ private:
   formatCode(llvm::StringRef Code, PathRef File,
              ArrayRef<tooling::Range> Ranges);
 
-  typedef uint64_t DocVersion;
-
-  void consumeDiagnostics(PathRef File, DocVersion Version,
-                          std::vector<Diag> Diags);
-
   tooling::CompileCommand getCompileCommand(PathRef File);
 
   const GlobalCompilationDatabase &CDB;
-  DiagnosticsConsumer &DiagConsumer;
   const FileSystemProvider &FSProvider;
-
-  /// Used to synchronize diagnostic responses for added and removed files.
-  llvm::StringMap<DocVersion> InternalVersion;
 
   Path ResourceDir;
   // The index used to look up symbols. This could be:
@@ -246,11 +250,13 @@ private:
   //   - the dynamic index owned by ClangdServer (DynamicIdx)
   //   - the static index passed to the constructor
   //   - a merged view of a static and dynamic index (MergedIndex)
-  const SymbolIndex *Index;
+  const SymbolIndex *Index = nullptr;
   // If present, an index of symbols in open files. Read via *Index.
   std::unique_ptr<FileIndex> DynamicIdx;
-  // If present, storage for the merged static/dynamic index. Read via *Index.
-  std::unique_ptr<SymbolIndex> MergedIdx;
+  // If present, the new "auto-index" maintained in background threads.
+  std::unique_ptr<BackgroundIndex> BackgroundIdx;
+  // Storage for merged views of the various indexes.
+  std::vector<std::unique_ptr<SymbolIndex>> MergedIdx;
 
   // GUARDED_BY(CachedCompletionFuzzyFindRequestMutex)
   llvm::StringMap<llvm::Optional<FuzzyFindRequest>>
@@ -259,12 +265,6 @@ private:
 
   llvm::Optional<std::string> WorkspaceRoot;
   std::shared_ptr<PCHContainerOperations> PCHs;
-  /// Used to serialize diagnostic callbacks.
-  /// FIXME(ibiryukov): get rid of an extra map and put all version counters
-  /// into CppFile.
-  std::mutex DiagnosticsMutex;
-  /// Maps from a filename to the latest version of reported diagnostics.
-  llvm::StringMap<DocVersion> ReportedDiagnosticVersions;
   // WorkScheduler has to be the last member, because its destructor has to be
   // called before all other members to stop the worker thread that references
   // ClangdServer.

@@ -75,43 +75,46 @@ class TemplateParameterList;
 /// function itself will be a (possibly empty) set of functions and
 /// function templates that were found by name lookup at template
 /// definition time.
-class CXXOperatorCallExpr : public CallExpr {
-  /// The overloaded operator.
-  OverloadedOperatorKind Operator;
-
-  SourceRange Range;
-
-  // Only meaningful for floating point types.
-  FPOptions FPFeatures;
-
-  SourceRange getSourceRangeImpl() const LLVM_READONLY;
-
-public:
+class CXXOperatorCallExpr final : public CallExpr {
   friend class ASTStmtReader;
   friend class ASTStmtWriter;
 
-  CXXOperatorCallExpr(ASTContext& C, OverloadedOperatorKind Op, Expr *fn,
-                      ArrayRef<Expr*> args, QualType t, ExprValueKind VK,
-                      SourceLocation operatorloc, FPOptions FPFeatures)
-      : CallExpr(C, CXXOperatorCallExprClass, fn, args, t, VK, operatorloc),
-        Operator(Op), FPFeatures(FPFeatures) {
-    Range = getSourceRangeImpl();
+  SourceRange Range;
+
+  // CXXOperatorCallExpr has some trailing objects belonging
+  // to CallExpr. See CallExpr for the details.
+
+  SourceRange getSourceRangeImpl() const LLVM_READONLY;
+
+  CXXOperatorCallExpr(OverloadedOperatorKind OpKind, Expr *Fn,
+                      ArrayRef<Expr *> Args, QualType Ty, ExprValueKind VK,
+                      SourceLocation OperatorLoc, FPOptions FPFeatures,
+                      ADLCallKind UsesADL);
+
+  CXXOperatorCallExpr(unsigned NumArgs, EmptyShell Empty);
+
+public:
+  static CXXOperatorCallExpr *
+  Create(const ASTContext &Ctx, OverloadedOperatorKind OpKind, Expr *Fn,
+         ArrayRef<Expr *> Args, QualType Ty, ExprValueKind VK,
+         SourceLocation OperatorLoc, FPOptions FPFeatures,
+         ADLCallKind UsesADL = NotADL);
+
+  static CXXOperatorCallExpr *CreateEmpty(const ASTContext &Ctx,
+                                          unsigned NumArgs, EmptyShell Empty);
+
+  /// Returns the kind of overloaded operator that this expression refers to.
+  OverloadedOperatorKind getOperator() const {
+    return static_cast<OverloadedOperatorKind>(
+        CXXOperatorCallExprBits.OperatorKind);
   }
 
-  explicit CXXOperatorCallExpr(ASTContext& C, EmptyShell Empty)
-      : CallExpr(C, CXXOperatorCallExprClass, Empty) {}
-
-  /// Returns the kind of overloaded operator that this
-  /// expression refers to.
-  OverloadedOperatorKind getOperator() const { return Operator; }
-
   static bool isAssignmentOp(OverloadedOperatorKind Opc) {
-    return Opc == OO_Equal || Opc == OO_StarEqual ||
-           Opc == OO_SlashEqual || Opc == OO_PercentEqual ||
-           Opc == OO_PlusEqual || Opc == OO_MinusEqual ||
-           Opc == OO_LessLessEqual || Opc == OO_GreaterGreaterEqual ||
-           Opc == OO_AmpEqual || Opc == OO_CaretEqual ||
-           Opc == OO_PipeEqual;
+    return Opc == OO_Equal || Opc == OO_StarEqual || Opc == OO_SlashEqual ||
+           Opc == OO_PercentEqual || Opc == OO_PlusEqual ||
+           Opc == OO_MinusEqual || Opc == OO_LessLessEqual ||
+           Opc == OO_GreaterGreaterEqual || Opc == OO_AmpEqual ||
+           Opc == OO_CaretEqual || Opc == OO_PipeEqual;
   }
   bool isAssignmentOp() const { return isAssignmentOp(getOperator()); }
 
@@ -126,14 +129,15 @@ public:
   SourceLocation getOperatorLoc() const { return getRParenLoc(); }
 
   SourceLocation getExprLoc() const LLVM_READONLY {
+    OverloadedOperatorKind Operator = getOperator();
     return (Operator < OO_Plus || Operator >= OO_Arrow ||
             Operator == OO_PlusPlus || Operator == OO_MinusMinus)
                ? getBeginLoc()
                : getOperatorLoc();
   }
 
-  SourceLocation getBeginLoc() const LLVM_READONLY { return Range.getBegin(); }
-  SourceLocation getEndLoc() const LLVM_READONLY { return Range.getEnd(); }
+  SourceLocation getBeginLoc() const { return Range.getBegin(); }
+  SourceLocation getEndLoc() const { return Range.getEnd(); }
   SourceRange getSourceRange() const { return Range; }
 
   static bool classof(const Stmt *T) {
@@ -142,14 +146,17 @@ public:
 
   // Set the FP contractability status of this operator. Only meaningful for
   // operations on floating point types.
-  void setFPFeatures(FPOptions F) { FPFeatures = F; }
-
-  FPOptions getFPFeatures() const { return FPFeatures; }
+  void setFPFeatures(FPOptions F) {
+    CXXOperatorCallExprBits.FPFeatures = F.getInt();
+  }
+  FPOptions getFPFeatures() const {
+    return FPOptions(CXXOperatorCallExprBits.FPFeatures);
+  }
 
   // Get the FP contractability status of this operator. Only meaningful for
   // operations on floating point types.
   bool isFPContractableWithinStatement() const {
-    return FPFeatures.allowFPContractWithinStatement();
+    return getFPFeatures().allowFPContractWithinStatement();
   }
 };
 
@@ -161,14 +168,23 @@ public:
 /// both the object argument and the member function, while the
 /// arguments are the arguments within the parentheses (not including
 /// the object argument).
-class CXXMemberCallExpr : public CallExpr {
-public:
-  CXXMemberCallExpr(ASTContext &C, Expr *fn, ArrayRef<Expr*> args,
-                    QualType t, ExprValueKind VK, SourceLocation RP)
-      : CallExpr(C, CXXMemberCallExprClass, fn, args, t, VK, RP) {}
+class CXXMemberCallExpr final : public CallExpr {
+  // CXXMemberCallExpr has some trailing objects belonging
+  // to CallExpr. See CallExpr for the details.
 
-  CXXMemberCallExpr(ASTContext &C, EmptyShell Empty)
-      : CallExpr(C, CXXMemberCallExprClass, Empty) {}
+  CXXMemberCallExpr(Expr *Fn, ArrayRef<Expr *> Args, QualType Ty,
+                    ExprValueKind VK, SourceLocation RP, unsigned MinNumArgs);
+
+  CXXMemberCallExpr(unsigned NumArgs, EmptyShell Empty);
+
+public:
+  static CXXMemberCallExpr *Create(const ASTContext &Ctx, Expr *Fn,
+                                   ArrayRef<Expr *> Args, QualType Ty,
+                                   ExprValueKind VK, SourceLocation RP,
+                                   unsigned MinNumArgs = 0);
+
+  static CXXMemberCallExpr *CreateEmpty(const ASTContext &Ctx, unsigned NumArgs,
+                                        EmptyShell Empty);
 
   /// Retrieves the implicit object argument for the member call.
   ///
@@ -200,18 +216,26 @@ public:
 };
 
 /// Represents a call to a CUDA kernel function.
-class CUDAKernelCallExpr : public CallExpr {
-private:
+class CUDAKernelCallExpr final : public CallExpr {
   enum { CONFIG, END_PREARG };
 
-public:
-  CUDAKernelCallExpr(ASTContext &C, Expr *fn, CallExpr *Config,
-                     ArrayRef<Expr*> args, QualType t, ExprValueKind VK,
-                     SourceLocation RP)
-      : CallExpr(C, CUDAKernelCallExprClass, fn, Config, args, t, VK, RP) {}
+  // CUDAKernelCallExpr has some trailing objects belonging
+  // to CallExpr. See CallExpr for the details.
 
-  CUDAKernelCallExpr(ASTContext &C, EmptyShell Empty)
-      : CallExpr(C, CUDAKernelCallExprClass, END_PREARG, Empty) {}
+  CUDAKernelCallExpr(Expr *Fn, CallExpr *Config, ArrayRef<Expr *> Args,
+                     QualType Ty, ExprValueKind VK, SourceLocation RP,
+                     unsigned MinNumArgs);
+
+  CUDAKernelCallExpr(unsigned NumArgs, EmptyShell Empty);
+
+public:
+  static CUDAKernelCallExpr *Create(const ASTContext &Ctx, Expr *Fn,
+                                    CallExpr *Config, ArrayRef<Expr *> Args,
+                                    QualType Ty, ExprValueKind VK,
+                                    SourceLocation RP, unsigned MinNumArgs = 0);
+
+  static CUDAKernelCallExpr *CreateEmpty(const ASTContext &Ctx,
+                                         unsigned NumArgs, EmptyShell Empty);
 
   const CallExpr *getConfig() const {
     return cast_or_null<CallExpr>(getPreArg(CONFIG));
@@ -474,22 +498,30 @@ public:
 ///
 /// Since literal operators are never found by ADL and can only be declared at
 /// namespace scope, a user-defined literal is never dependent.
-class UserDefinedLiteral : public CallExpr {
-  /// The location of a ud-suffix within the literal.
-  SourceLocation UDSuffixLoc;
-
-public:
+class UserDefinedLiteral final : public CallExpr {
   friend class ASTStmtReader;
   friend class ASTStmtWriter;
 
-  UserDefinedLiteral(const ASTContext &C, Expr *Fn, ArrayRef<Expr*> Args,
-                     QualType T, ExprValueKind VK, SourceLocation LitEndLoc,
-                     SourceLocation SuffixLoc)
-      : CallExpr(C, UserDefinedLiteralClass, Fn, Args, T, VK, LitEndLoc),
-        UDSuffixLoc(SuffixLoc) {}
+  /// The location of a ud-suffix within the literal.
+  SourceLocation UDSuffixLoc;
 
-  explicit UserDefinedLiteral(const ASTContext &C, EmptyShell Empty)
-      : CallExpr(C, UserDefinedLiteralClass, Empty) {}
+  // UserDefinedLiteral has some trailing objects belonging
+  // to CallExpr. See CallExpr for the details.
+
+  UserDefinedLiteral(Expr *Fn, ArrayRef<Expr *> Args, QualType Ty,
+                     ExprValueKind VK, SourceLocation LitEndLoc,
+                     SourceLocation SuffixLoc);
+
+  UserDefinedLiteral(unsigned NumArgs, EmptyShell Empty);
+
+public:
+  static UserDefinedLiteral *Create(const ASTContext &Ctx, Expr *Fn,
+                                    ArrayRef<Expr *> Args, QualType Ty,
+                                    ExprValueKind VK, SourceLocation LitEndLoc,
+                                    SourceLocation SuffixLoc);
+
+  static UserDefinedLiteral *CreateEmpty(const ASTContext &Ctx,
+                                         unsigned NumArgs, EmptyShell Empty);
 
   /// The kind of literal operator which is invoked.
   enum LiteralOperatorKind {
@@ -2086,55 +2118,43 @@ public:
 /// Represents a \c delete expression for memory deallocation and
 /// destructor calls, e.g. "delete[] pArray".
 class CXXDeleteExpr : public Expr {
+  friend class ASTStmtReader;
+
   /// Points to the operator delete overload that is used. Could be a member.
   FunctionDecl *OperatorDelete = nullptr;
 
   /// The pointer expression to be deleted.
   Stmt *Argument = nullptr;
 
-  /// Location of the expression.
-  SourceLocation Loc;
-
-  /// Is this a forced global delete, i.e. "::delete"?
-  bool GlobalDelete : 1;
-
-  /// Is this the array form of delete, i.e. "delete[]"?
-  bool ArrayForm : 1;
-
-  /// ArrayFormAsWritten can be different from ArrayForm if 'delete' is applied
-  /// to pointer-to-array type (ArrayFormAsWritten will be false while ArrayForm
-  /// will be true).
-  bool ArrayFormAsWritten : 1;
-
-  /// Does the usual deallocation function for the element type require
-  /// a size_t argument?
-  bool UsualArrayDeleteWantsSize : 1;
-
 public:
-  friend class ASTStmtReader;
+  CXXDeleteExpr(QualType Ty, bool GlobalDelete, bool ArrayForm,
+                bool ArrayFormAsWritten, bool UsualArrayDeleteWantsSize,
+                FunctionDecl *OperatorDelete, Expr *Arg, SourceLocation Loc)
+      : Expr(CXXDeleteExprClass, Ty, VK_RValue, OK_Ordinary, false, false,
+             Arg->isInstantiationDependent(),
+             Arg->containsUnexpandedParameterPack()),
+        OperatorDelete(OperatorDelete), Argument(Arg) {
+    CXXDeleteExprBits.GlobalDelete = GlobalDelete;
+    CXXDeleteExprBits.ArrayForm = ArrayForm;
+    CXXDeleteExprBits.ArrayFormAsWritten = ArrayFormAsWritten;
+    CXXDeleteExprBits.UsualArrayDeleteWantsSize = UsualArrayDeleteWantsSize;
+    CXXDeleteExprBits.Loc = Loc;
+  }
 
-  CXXDeleteExpr(QualType ty, bool globalDelete, bool arrayForm,
-                bool arrayFormAsWritten, bool usualArrayDeleteWantsSize,
-                FunctionDecl *operatorDelete, Expr *arg, SourceLocation loc)
-      : Expr(CXXDeleteExprClass, ty, VK_RValue, OK_Ordinary, false, false,
-             arg->isInstantiationDependent(),
-             arg->containsUnexpandedParameterPack()),
-        OperatorDelete(operatorDelete), Argument(arg), Loc(loc),
-        GlobalDelete(globalDelete),
-        ArrayForm(arrayForm), ArrayFormAsWritten(arrayFormAsWritten),
-        UsualArrayDeleteWantsSize(usualArrayDeleteWantsSize) {}
   explicit CXXDeleteExpr(EmptyShell Shell) : Expr(CXXDeleteExprClass, Shell) {}
 
-  bool isGlobalDelete() const { return GlobalDelete; }
-  bool isArrayForm() const { return ArrayForm; }
-  bool isArrayFormAsWritten() const { return ArrayFormAsWritten; }
+  bool isGlobalDelete() const { return CXXDeleteExprBits.GlobalDelete; }
+  bool isArrayForm() const { return CXXDeleteExprBits.ArrayForm; }
+  bool isArrayFormAsWritten() const {
+    return CXXDeleteExprBits.ArrayFormAsWritten;
+  }
 
   /// Answers whether the usual array deallocation function for the
   /// allocated type expects the size of the allocation as a
   /// parameter.  This can be true even if the actual deallocation
   /// function that we're using doesn't want a size.
   bool doesUsualArrayDeleteWantSize() const {
-    return UsualArrayDeleteWantsSize;
+    return CXXDeleteExprBits.UsualArrayDeleteWantsSize;
   }
 
   FunctionDecl *getOperatorDelete() const { return OperatorDelete; }
@@ -2148,7 +2168,7 @@ public:
   /// be a pointer, return an invalid type.
   QualType getDestroyedType() const;
 
-  SourceLocation getBeginLoc() const LLVM_READONLY { return Loc; }
+  SourceLocation getBeginLoc() const { return CXXDeleteExprBits.Loc; }
   SourceLocation getEndLoc() const LLVM_READONLY {
     return Argument->getEndLoc();
   }
@@ -2158,7 +2178,7 @@ public:
   }
 
   // Iterators
-  child_range children() { return child_range(&Argument, &Argument+1); }
+  child_range children() { return child_range(&Argument, &Argument + 1); }
 };
 
 /// Stores the type being destroyed by a pseudo-destructor expression.
@@ -2460,8 +2480,6 @@ class ArrayTypeTraitExpr : public Expr {
   /// The type being queried.
   TypeSourceInfo *QueriedType = nullptr;
 
-  virtual void anchor();
-
 public:
   friend class ASTStmtReader;
 
@@ -2478,8 +2496,6 @@ public:
 
   explicit ArrayTypeTraitExpr(EmptyShell Empty)
       : Expr(ArrayTypeTraitExprClass, Empty), ATT(0) {}
-
-  virtual ~ArrayTypeTraitExpr() = default;
 
   SourceLocation getBeginLoc() const LLVM_READONLY { return Loc; }
   SourceLocation getEndLoc() const LLVM_READONLY { return RParen; }

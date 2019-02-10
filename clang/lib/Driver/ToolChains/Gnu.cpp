@@ -1880,7 +1880,8 @@ void Generic_GCC::GCCInstallationDetector::AddDefaultGCCPrefixes(
       "i386-linux-gnu",       "i386-redhat-linux6E",   "i686-redhat-linux",
       "i586-redhat-linux",    "i386-redhat-linux",     "i586-suse-linux",
       "i486-slackware-linux", "i686-montavista-linux", "i586-linux-gnu",
-      "i686-linux-android"};
+      "i686-linux-android",   "i386-gnu",              "i486-gnu",
+      "i586-gnu",             "i686-gnu"};
 
   static const char *const MIPSLibDirs[] = {"/lib"};
   static const char *const MIPSTriples[] = {
@@ -2260,6 +2261,9 @@ void Generic_GCC::GCCInstallationDetector::ScanLibDirForGCCTriple(
       // triple.
       {"i386-linux-gnu/gcc/" + CandidateTriple.str(), "../../..",
        (TargetArch == llvm::Triple::x86 &&
+        TargetTriple.getOS() != llvm::Triple::Solaris)},
+      {"i386-gnu/gcc/" + CandidateTriple.str(), "../../..",
+       (TargetArch == llvm::Triple::x86 &&
         TargetTriple.getOS() != llvm::Triple::Solaris)}};
 
   for (auto &Suffix : Suffixes) {
@@ -2431,7 +2435,7 @@ bool Generic_GCC::isPICDefault() const {
   case llvm::Triple::x86_64:
     return getTriple().isOSWindows();
   case llvm::Triple::ppc64:
-  case llvm::Triple::ppc64le:
+    // Big endian PPC is PIC by default
     return !getTriple().isOSBinFormatMachO() && !getTriple().isMacOSX();
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
@@ -2469,22 +2473,10 @@ bool Generic_GCC::IsIntegratedAssemblerDefault() const {
   case llvm::Triple::systemz:
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
-  case llvm::Triple::cheri:
-    return true;
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-    // Enabled for Debian, Android, FreeBSD and OpenBSD mips64/mipsel, as they
-    // can precisely identify the ABI in use (Debian) or only use N64 for MIPS64
-    // (Android). Other targets are unable to distinguish N32 from N64.
-    if (getTriple().getEnvironment() == llvm::Triple::GNUABI64 ||
-        getTriple().isAndroid() ||
-        getTriple().isOSFreeBSD() ||
-        getTriple().isOSOpenBSD())
-      return true;
-    // Also use the integrated assembler when targetting FreeBSD
-    if (getTriple().getOS() == llvm::Triple::FreeBSD)
-      return true;
-    return false;
+  case llvm::Triple::cheri:
+    return true;
   default:
     return false;
   }
@@ -2607,7 +2599,7 @@ void Generic_ELF::addClangTargetOptions(const ArgList &DriverArgs,
   bool UseInitArrayDefault =
       getTriple().getArch() == llvm::Triple::aarch64 ||
       getTriple().getArch() == llvm::Triple::aarch64_be ||
-      (getTriple().getOS() == llvm::Triple::FreeBSD &&
+      (getTriple().isOSFreeBSD() &&
        getTriple().getOSMajorVersion() >= 12) ||
       (getTriple().getOS() == llvm::Triple::Linux &&
        ((!GCCInstallation.isValid() || !V.isOlderThan(4, 7, 0)) ||
@@ -2619,7 +2611,7 @@ void Generic_ELF::addClangTargetOptions(const ArgList &DriverArgs,
       getTriple().getArch() == llvm::Triple::riscv32 ||
       getTriple().getArch() == llvm::Triple::riscv64;
 
-  if (getTriple().getOS() == llvm::Triple::FreeBSD) {
+  if (getTriple().isOSFreeBSD()) {
     switch (getTriple().getArch()) {
       case llvm::Triple::cheri:
       case llvm::Triple::mips:

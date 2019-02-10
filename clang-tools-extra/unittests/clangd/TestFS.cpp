@@ -39,7 +39,8 @@ MockCompilationDatabase::MockCompilationDatabase(StringRef Directory,
 }
 
 Optional<tooling::CompileCommand>
-MockCompilationDatabase::getCompileCommand(PathRef File) const {
+MockCompilationDatabase::getCompileCommand(PathRef File,
+                                           ProjectInfo *Project) const {
   if (ExtraClangFlags.empty())
     return None;
 
@@ -58,6 +59,8 @@ MockCompilationDatabase::getCompileCommand(PathRef File) const {
     CommandLine.push_back(RelativeFilePath.str());
   }
 
+  if (Project)
+    Project->SourceRoot = Directory;
   return {tooling::CompileCommand(
       Directory != StringRef() ? Directory : sys::path::parent_path(File),
       FileName, std::move(CommandLine), "")};
@@ -90,7 +93,10 @@ public:
 
   Expected<std::string> getAbsolutePath(StringRef /*Authority*/, StringRef Body,
                                         StringRef HintPath) const override {
-    assert(HintPath.startswith(testRoot()));
+    if (!HintPath.startswith(testRoot()))
+      return make_error<StringError>(
+          "Hint path doesn't start with test root: " + HintPath,
+          inconvertibleErrorCode());
     if (!Body.consume_front("/"))
       return make_error<StringError>(
           "Body of an unittest: URI must start with '/'",

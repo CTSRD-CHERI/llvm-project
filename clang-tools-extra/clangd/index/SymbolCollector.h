@@ -48,10 +48,6 @@ public:
     /// with symbols' paths to get absolute paths. This must be an absolute
     /// path.
     std::string FallbackDir;
-    /// Specifies URI schemes that can be used to generate URIs for file paths
-    /// in symbols. The list of schemes will be tried in order until a working
-    /// scheme is found. If no scheme works, symbol location will be dropped.
-    std::vector<std::string> URISchemes = {"file"};
     bool CollectIncludePath = false;
     /// If set, this is used to map symbol #include path to a potentially
     /// different #include path.
@@ -84,8 +80,7 @@ public:
   SymbolCollector(Options Opts);
 
   /// Returns true is \p ND should be collected.
-  /// AST matchers require non-const ASTContext.
-  static bool shouldCollectSymbol(const NamedDecl &ND, ASTContext &ASTCtx,
+  static bool shouldCollectSymbol(const NamedDecl &ND, const ASTContext &ASTCtx,
                                   const Options &Opts);
 
   void initialize(ASTContext &Ctx) override;

@@ -253,7 +253,6 @@ public:
   // Splittable sections are handled as a sequence of data
   // rather than a single large blob of data.
   std::vector<SectionPiece> Pieces;
-  llvm::DenseMap<uint32_t, uint32_t> OffsetMap;
 
   // Returns I'th piece's data. This function is very hot when
   // string merging is enabled, so we want to inline.
@@ -362,7 +361,6 @@ private:
 // The list of all input sections.
 extern std::vector<InputSectionBase *> InputSections;
 
-Relocation *getRISCVPCRelHi20(const Symbol *Sym, const uint64_t Addend);
 } // namespace elf
 
 std::string toString(const elf::InputSectionBase *);
