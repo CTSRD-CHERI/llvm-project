@@ -5390,6 +5390,11 @@ SDValue TargetLowering::expandAddSubSat(SDNode *Node, SelectionDAG &DAG) const {
   EVT VT = LHS.getValueType();
   SDLoc dl(Node);
 
+  assert(LHS.getValueType().isInteger() && "Expected operands to be integers");
+  assert(RHS.getValueType().isInteger() && "Expected operands to be integers");
+  assert(LHS.getValueType() == RHS.getValueType() &&
+         "Expected both operands to be the same type");
+
   // usub.sat(a, b) -> umax(a, b) - b
   if (Opcode == ISD::USUBSAT && isOperationLegalOrCustom(ISD::UMAX, VT)) {
     SDValue Max = DAG.getNode(ISD::UMAX, dl, VT, LHS, RHS);
@@ -5400,11 +5405,6 @@ SDValue TargetLowering::expandAddSubSat(SDNode *Node, SelectionDAG &DAG) const {
     SDValue InvRHS = DAG.getNOT(dl, RHS, VT);
     SDValue Min = DAG.getNode(ISD::UMIN, dl, VT, LHS, InvRHS);
     return DAG.getNode(ISD::ADD, dl, VT, Min, RHS);
-  }
-
-  if (VT.isVector()) {
-    // TODO: Consider not scalarizing here.
-    return SDValue();
   }
 
   unsigned OverflowOp;
@@ -5426,16 +5426,7 @@ SDValue TargetLowering::expandAddSubSat(SDNode *Node, SelectionDAG &DAG) const {
                      "addition or subtraction node.");
   }
 
-  assert(LHS.getValueType().isScalarInteger() &&
-         "Expected operands to be integers. Vector of int arguments should "
-         "already be unrolled.");
-  assert(RHS.getValueType().isScalarInteger() &&
-         "Expected operands to be integers. Vector of int arguments should "
-         "already be unrolled.");
-  assert(LHS.getValueType() == RHS.getValueType() &&
-         "Expected both operands to be the same type");
-
-  unsigned BitWidth = LHS.getValueSizeInBits();
+  unsigned BitWidth = LHS.getScalarValueSizeInBits();
   EVT ResultType = LHS.getValueType();
   EVT BoolVT =
       getSetCCResultType(DAG.getDataLayout(), *DAG.getContext(), ResultType);
