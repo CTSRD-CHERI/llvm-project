@@ -46,7 +46,7 @@ SymbolFile *SymbolFileSymtab::CreateInstance(ObjectFile *obj_file) {
 }
 
 size_t SymbolFileSymtab::GetTypes(SymbolContextScope *sc_scope,
-                                  uint32_t type_mask,
+                                  TypeClass type_mask,
                                   lldb_private::TypeList &type_list) {
   return 0;
 }
@@ -239,12 +239,18 @@ Type *SymbolFileSymtab::ResolveTypeUID(lldb::user_id_t type_uid) {
   return NULL;
 }
 
+llvm::Optional<SymbolFile::ArrayInfo>
+SymbolFileSymtab::GetDynamicArrayInfoForUID(
+    lldb::user_id_t type_uid, const lldb_private::ExecutionContext *exe_ctx) {
+  return llvm::None;
+}
+
 bool SymbolFileSymtab::CompleteType(lldb_private::CompilerType &compiler_type) {
   return false;
 }
 
 uint32_t SymbolFileSymtab::ResolveSymbolContext(const Address &so_addr,
-                                                uint32_t resolve_scope,
+                                                SymbolContextItem resolve_scope,
                                                 SymbolContext &sc) {
   if (m_obj_file->GetSymtab() == NULL)
     return 0;

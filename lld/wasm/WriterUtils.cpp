@@ -17,22 +17,6 @@
 
 using namespace llvm;
 using namespace llvm::wasm;
-using namespace lld::wasm;
-
-static const char *valueTypeToString(ValType Type) {
-  switch (Type) {
-  case wasm::ValType::I32:
-    return "i32";
-  case wasm::ValType::I64:
-    return "i64";
-  case wasm::ValType::F32:
-    return "f32";
-  case wasm::ValType::F64:
-    return "f64";
-  default:
-    llvm_unreachable("invalid value type");
-  }
-}
 
 namespace lld {
 
@@ -75,7 +59,7 @@ void wasm::writeU32(raw_ostream &OS, uint32_t Number, const Twine &Msg) {
 
 void wasm::writeValueType(raw_ostream &OS, ValType Type, const Twine &Msg) {
   writeU8(OS, static_cast<uint8_t>(Type),
-          Msg + "[type: " + valueTypeToString(Type) + "]");
+          Msg + "[type: " + toString(Type) + "]");
 }
 
 void wasm::writeSig(raw_ostream &OS, const WasmSignature &Sig) {
@@ -126,6 +110,15 @@ void wasm::writeGlobal(raw_ostream &OS, const WasmGlobal &Global) {
   writeInitExpr(OS, Global.InitExpr);
 }
 
+void wasm::writeEventType(raw_ostream &OS, const WasmEventType &Type) {
+  writeUleb128(OS, Type.Attribute, "event attribute");
+  writeUleb128(OS, Type.SigIndex, "sig index");
+}
+
+void wasm::writeEvent(raw_ostream &OS, const WasmEvent &Event) {
+  writeEventType(OS, Event.Type);
+}
+
 void wasm::writeTableType(raw_ostream &OS, const llvm::wasm::WasmTable &Type) {
   writeU8(OS, WASM_TYPE_ANYFUNC, "table type");
   writeLimits(OS, Type.Limits);
@@ -141,6 +134,9 @@ void wasm::writeImport(raw_ostream &OS, const WasmImport &Import) {
     break;
   case WASM_EXTERNAL_GLOBAL:
     writeGlobalType(OS, Import.Global);
+    break;
+  case WASM_EXTERNAL_EVENT:
+    writeEventType(OS, Import.Event);
     break;
   case WASM_EXTERNAL_MEMORY:
     writeLimits(OS, Import.Memory);
@@ -178,15 +174,15 @@ void wasm::writeExport(raw_ostream &OS, const WasmExport &Export) {
 std::string lld::toString(ValType Type) {
   switch (Type) {
   case ValType::I32:
-    return "I32";
+    return "i32";
   case ValType::I64:
-    return "I64";
+    return "i64";
   case ValType::F32:
-    return "F32";
+    return "f32";
   case ValType::F64:
-    return "F64";
+    return "f64";
   case ValType::V128:
-    return "V128";
+    return "v128";
   case ValType::EXCEPT_REF:
     return "except_ref";
   }
@@ -208,7 +204,13 @@ std::string lld::toString(const WasmSignature &Sig) {
   return S.str();
 }
 
-std::string lld::toString(const WasmGlobalType &Sig) {
-  return (Sig.Mutable ? "var " : "const ") +
-         toString(static_cast<ValType>(Sig.Type));
+std::string lld::toString(const WasmGlobalType &Type) {
+  return (Type.Mutable ? "var " : "const ") +
+         toString(static_cast<ValType>(Type.Type));
+}
+
+std::string lld::toString(const WasmEventType &Type) {
+  if (Type.Attribute == WASM_EVENT_ATTRIBUTE_EXCEPTION)
+    return "exception";
+  return "unknown";
 }

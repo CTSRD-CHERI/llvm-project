@@ -31,14 +31,17 @@ subdirectories =
  IRReader
  LTO
  MC
+ MCA
  Object
  BinaryFormat
  ObjectYAML
  Option
+ OptRemarks
  Passes
  ProfileData
  Support
  TableGen
+ TextAPI
  Target
  Testing
  ToolDrivers

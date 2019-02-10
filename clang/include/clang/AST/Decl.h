@@ -1719,6 +1719,13 @@ private:
   unsigned getParameterIndexLarge() const;
 };
 
+enum class MultiVersionKind {
+  None,
+  Target,
+  CPUSpecific,
+  CPUDispatch
+};
+
 /// Represents a function declaration or definition.
 ///
 /// Since a given function can be declared several times in a program,
@@ -2226,12 +2233,22 @@ public:
     getCanonicalDecl()->FunctionDeclBits.IsMultiVersion = V;
   }
 
+  /// Gets the kind of multiversioning attribute this declaration has. Note that
+  /// this can return a value even if the function is not multiversion, such as
+  /// the case of 'target'.
+  MultiVersionKind getMultiVersionKind() const;
+
+
   /// True if this function is a multiversioned dispatch function as a part of
   /// the cpu_specific/cpu_dispatch functionality.
   bool isCPUDispatchMultiVersion() const;
   /// True if this function is a multiversioned processor specific function as a
   /// part of the cpu_specific/cpu_dispatch functionality.
   bool isCPUSpecificMultiVersion() const;
+
+  /// True if this function is a multiversioned dispatch function as a part of
+  /// the target functionality.
+  bool isTargetMultiVersion() const;
 
   void setPreviousDeclaration(FunctionDecl * PrevDecl);
 

@@ -10,15 +10,11 @@
 #ifndef SymbolFileDWARF_DWARFASTParserClang_h_
 #define SymbolFileDWARF_DWARFASTParserClang_h_
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 #include "clang/AST/CharUnits.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 
-// Project includes
 #include "DWARFASTParser.h"
 #include "DWARFDefines.h"
 #include "lldb/Core/ClangForward.h"
@@ -28,6 +24,7 @@
 
 class DWARFDebugInfoEntry;
 class DWARFDIECollection;
+class SymbolFileDWARF;
 
 class DWARFASTParserClang : public DWARFASTParser {
 public:
@@ -80,16 +77,16 @@ protected:
       lldb_private::ClangASTContext::TemplateParameterInfos
           &template_param_infos);
 
-  bool
-  ParseChildMembers(const lldb_private::SymbolContext &sc, const DWARFDIE &die,
-                    lldb_private::CompilerType &class_compiler_type,
-                    const lldb::LanguageType class_language,
-                    std::vector<clang::CXXBaseSpecifier *> &base_classes,
-                    std::vector<int> &member_accessibilities,
-                    DWARFDIECollection &member_function_dies,
-                    DelayedPropertyList &delayed_properties,
-                    lldb::AccessType &default_accessibility, bool &is_a_class,
-                    lldb_private::ClangASTImporter::LayoutInfo &layout_info);
+  bool ParseChildMembers(
+      const lldb_private::SymbolContext &sc, const DWARFDIE &die,
+      lldb_private::CompilerType &class_compiler_type,
+      const lldb::LanguageType class_language,
+      std::vector<std::unique_ptr<clang::CXXBaseSpecifier>> &base_classes,
+      std::vector<int> &member_accessibilities,
+      DWARFDIECollection &member_function_dies,
+      DelayedPropertyList &delayed_properties,
+      lldb::AccessType &default_accessibility, bool &is_a_class,
+      lldb_private::ClangASTImporter::LayoutInfo &layout_info);
 
   size_t
   ParseChildParameters(const lldb_private::SymbolContext &sc,
@@ -100,11 +97,6 @@ protected:
                        std::vector<lldb_private::CompilerType> &function_args,
                        std::vector<clang::ParmVarDecl *> &function_param_decls,
                        unsigned &type_quals);
-
-  void ParseChildArrayInfo(const lldb_private::SymbolContext &sc,
-                           const DWARFDIE &parent_die, int64_t &first_index,
-                           std::vector<uint64_t> &element_orders,
-                           uint32_t &byte_stride, uint32_t &bit_stride);
 
   size_t ParseChildEnumerators(const lldb_private::SymbolContext &sc,
                                lldb_private::CompilerType &compiler_type,

@@ -14,6 +14,7 @@
 #include "lldb/Core/Mangled.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
+#include "lldb/Host/FileSystem.h"
 #include "lldb/Host/HostInfo.h"
 #include "lldb/Symbol/SymbolContext.h"
 
@@ -61,6 +62,7 @@ TEST(MangledTest, EmptyForInvalidName) {
   }
 
 TEST(MangledTest, NameIndexes_FindFunctionSymbols) {
+  FileSystem::Initialize();
   HostInfo::Initialize();
   ObjectFileELF::Initialize();
   SymbolVendorELF::Initialize();
@@ -81,8 +83,8 @@ TEST(MangledTest, NameIndexes_FindFunctionSymbols) {
   ASSERT_NO_ERROR(llvm::sys::fs::file_size(Obj, Size));
   ASSERT_GT(Size, 0u);
 
-  ModuleSpec Spec{FileSpec(Obj, false)};
-  Spec.GetSymbolFileSpec().SetFile(Obj, false, FileSpec::Style::native);
+  ModuleSpec Spec{FileSpec(Obj)};
+  Spec.GetSymbolFileSpec().SetFile(Obj, FileSpec::Style::native);
   auto M = std::make_shared<Module>(Spec);
 
   auto Count = [M](const char *Name, FunctionNameType Type) -> int {
@@ -167,4 +169,5 @@ TEST(MangledTest, NameIndexes_FindFunctionSymbols) {
   SymbolVendorELF::Terminate();
   ObjectFileELF::Terminate();
   HostInfo::Terminate();
+  FileSystem::Terminate();
 }

@@ -62,7 +62,7 @@ namespace orc {
 
 class ExtractingIRMaterializationUnit;
 
-class CompileOnDemandLayer2 : public IRLayer {
+class CompileOnDemandLayer : public IRLayer {
   friend class PartitioningIRMaterializationUnit;
 
 public:
@@ -84,8 +84,8 @@ public:
   /// symbol in them is requested.
   static Optional<GlobalValueSet> compileWholeModule(GlobalValueSet Requested);
 
-  /// Construct a CompileOnDemandLayer2.
-  CompileOnDemandLayer2(ExecutionSession &ES, IRLayer &BaseLayer,
+  /// Construct a CompileOnDemandLayer.
+  CompileOnDemandLayer(ExecutionSession &ES, IRLayer &BaseLayer,
                         LazyCallThroughManager &LCTMgr,
                         IndirectStubsManagerBuilder BuildIndirectStubsManager);
 
@@ -94,8 +94,7 @@ public:
 
   /// Emits the given module. This should not be called by clients: it will be
   /// called by the JIT when a definition added via the add method is requested.
-  void emit(MaterializationResponsibility R, VModuleKey K,
-            ThreadSafeModule TSM) override;
+  void emit(MaterializationResponsibility R, ThreadSafeModule TSM) override;
 
 private:
   struct PerDylibResources {
@@ -129,6 +128,7 @@ private:
   IndirectStubsManagerBuilder BuildIndirectStubsManager;
   PerDylibResourcesMap DylibResources;
   PartitionFunction Partition = compileRequested;
+  SymbolLinkagePromoter PromoteSymbols;
 };
 
 /// Compile-on-demand layer.
@@ -141,7 +141,7 @@ private:
 template <typename BaseLayerT,
           typename CompileCallbackMgrT = JITCompileCallbackManager,
           typename IndirectStubsMgrT = IndirectStubsManager>
-class CompileOnDemandLayer {
+class LegacyCompileOnDemandLayer {
 private:
   template <typename MaterializerFtor>
   class LambdaMaterializer final : public ValueMaterializer {
@@ -265,13 +265,13 @@ public:
       std::function<void(VModuleKey K, std::shared_ptr<SymbolResolver> R)>;
 
   /// Construct a compile-on-demand layer instance.
-  CompileOnDemandLayer(ExecutionSession &ES, BaseLayerT &BaseLayer,
-                       SymbolResolverGetter GetSymbolResolver,
-                       SymbolResolverSetter SetSymbolResolver,
-                       PartitioningFtor Partition,
-                       CompileCallbackMgrT &CallbackMgr,
-                       IndirectStubsManagerBuilderT CreateIndirectStubsManager,
-                       bool CloneStubsIntoPartitions = true)
+  LegacyCompileOnDemandLayer(ExecutionSession &ES, BaseLayerT &BaseLayer,
+                             SymbolResolverGetter GetSymbolResolver,
+                             SymbolResolverSetter SetSymbolResolver,
+                             PartitioningFtor Partition,
+                             CompileCallbackMgrT &CallbackMgr,
+                             IndirectStubsManagerBuilderT CreateIndirectStubsManager,
+                             bool CloneStubsIntoPartitions = true)
       : ES(ES), BaseLayer(BaseLayer),
         GetSymbolResolver(std::move(GetSymbolResolver)),
         SetSymbolResolver(std::move(SetSymbolResolver)),
@@ -279,7 +279,7 @@ public:
         CreateIndirectStubsManager(std::move(CreateIndirectStubsManager)),
         CloneStubsIntoPartitions(CloneStubsIntoPartitions) {}
 
-  ~CompileOnDemandLayer() {
+  ~LegacyCompileOnDemandLayer() {
     // FIXME: Report error on log.
     while (!LogicalDylibs.empty())
       consumeError(removeModule(LogicalDylibs.begin()->first));

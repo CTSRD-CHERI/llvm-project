@@ -1600,9 +1600,9 @@ bool Sema::isModuleVisible(const Module *M, bool ModulePrivate) {
     return false;
 
   // Check whether M is transitively exported to an import of the lookup set.
-  return std::any_of(LookupModules.begin(), LookupModules.end(),
-                     [&](const Module *LookupM) {
-                       return LookupM->isModuleVisible(M); });
+  return llvm::any_of(LookupModules, [&](const Module *LookupM) {
+    return LookupM->isModuleVisible(M);
+  });
 }
 
 bool Sema::isVisibleSlow(const NamedDecl *D) {
@@ -4062,7 +4062,7 @@ void TypoCorrectionConsumer::addNamespaces(
   }
   // Do not transform this into an iterator-based loop. The loop body can
   // trigger the creation of further types (through lazy deserialization) and
-  // invalide iterators into this list.
+  // invalid iterators into this list.
   auto &Types = SemaRef.getASTContext().getTypes();
   for (unsigned I = 0; I != Types.size(); ++I) {
     const auto *TI = Types[I];
@@ -4203,7 +4203,7 @@ void TypoCorrectionConsumer::performQualifiedLookups() {
           SS->getScopeRep()->print(OldOStream, SemaRef.getPrintingPolicy());
           OldOStream << Typo->getName();
           // If correction candidate would be an identical written qualified
-          // identifer, then the existing CXXScopeSpec probably included a
+          // identifier, then the existing CXXScopeSpec probably included a
           // typedef that didn't get accounted for properly.
           if (OldOStream.str() == NewQualified)
             break;

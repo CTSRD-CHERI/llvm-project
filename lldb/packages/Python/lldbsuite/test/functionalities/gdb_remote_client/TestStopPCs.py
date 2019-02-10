@@ -5,7 +5,9 @@ from lldbsuite.test.decorators import *
 from gdbclientutils import *
 
 
-class TestThreadSelectionBug(GDBRemoteTestBase):
+class TestStopPCs(GDBRemoteTestBase):
+
+    @skipIfXmlSupportMissing
     def test(self):
         class MyResponder(MockGDBServerResponder):
             def haltReason(self):

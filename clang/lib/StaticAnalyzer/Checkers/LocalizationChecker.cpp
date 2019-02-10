@@ -15,7 +15,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "ClangSACheckers.h"
+#include "clang/StaticAnalyzer/Checkers/BuiltinCheckerRegistration.h"
 #include "clang/AST/Attr.h"
 #include "clang/AST/Decl.h"
 #include "clang/AST/DeclObjC.h"
@@ -1398,7 +1398,8 @@ void ento::registerNonLocalizedStringChecker(CheckerManager &mgr) {
   NonLocalizedStringChecker *checker =
       mgr.registerChecker<NonLocalizedStringChecker>();
   checker->IsAggressive =
-      mgr.getAnalyzerOptions().getBooleanOption("AggressiveReport", false);
+      mgr.getAnalyzerOptions().getCheckerBooleanOption("AggressiveReport",
+                                                       false, checker);
 }
 
 void ento::registerEmptyLocalizationContextChecker(CheckerManager &mgr) {

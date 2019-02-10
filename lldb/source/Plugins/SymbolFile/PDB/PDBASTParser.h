@@ -65,13 +65,12 @@ public:
     return m_ast_importer;
   }
 
-  static std::string PDBNameDropScope(const std::string &name);
-
 private:
   typedef llvm::DenseMap<clang::CXXRecordDecl *, lldb::user_id_t>
       CXXRecordDeclToUidMap;
   typedef llvm::DenseMap<lldb::user_id_t, clang::Decl *> UidToDeclMap;
-  typedef llvm::DenseMap<clang::DeclContext *, std::set<clang::NamespaceDecl *>>
+  typedef std::set<clang::NamespaceDecl *> NamespacesSet;
+  typedef llvm::DenseMap<clang::DeclContext *, NamespacesSet>
       ParentToNamespacesMap;
   typedef llvm::DenseMap<clang::DeclContext *, lldb::user_id_t>
       DeclContextToUidMap;
@@ -100,6 +99,10 @@ private:
   void AddRecordMethods(lldb_private::SymbolFile &symbol_file,
                         lldb_private::CompilerType &record_type,
                         PDBFuncSymbolEnumerator &methods_enum);
+  clang::CXXMethodDecl *
+  AddRecordMethod(lldb_private::SymbolFile &symbol_file,
+                  lldb_private::CompilerType &record_type,
+                  const llvm::pdb::PDBSymbolFunc &method) const;
 
   lldb_private::ClangASTContext &m_ast;
   lldb_private::ClangASTImporter m_ast_importer;
@@ -107,6 +110,7 @@ private:
   CXXRecordDeclToUidMap m_forward_decl_to_uid;
   UidToDeclMap m_uid_to_decl;
   ParentToNamespacesMap m_parent_to_namespaces;
+  NamespacesSet m_namespaces;
   DeclContextToUidMap m_decl_context_to_uid;
 };
 

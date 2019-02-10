@@ -33,6 +33,9 @@ ELF Improvements
   non-superpages to a superpage if they are aligned to the superpage
   size. (`r342746 <https://reviews.llvm.org/rL342746>`_)
 
+* lld/Hexagon can now link Linux kernel and musl libc for Qualcomm
+  Hexagon ISA.
+
 * The following flags have been added: ``-z interpose``, ``-z global``
 
 COFF Improvements
@@ -62,3 +65,11 @@ MachO Improvements
 ------------------
 
 * Item 1.
+
+WebAssembly Improvements
+------------------------
+
+* Add initial support for creating shared libraries (-shared).
+  Note: The shared library format is still under active development and may
+  undergo significant changes in future versions.
+  See: https://github.com/WebAssembly/tool-conventions/blob/master/DynamicLinking.md

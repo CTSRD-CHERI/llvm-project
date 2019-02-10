@@ -10,10 +10,6 @@
 #ifndef liblldb_ObjectFileMachO_h_
 #define liblldb_ObjectFileMachO_h_
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/Address.h"
 #include "lldb/Core/FileSpecList.h"
 #include "lldb/Core/RangeMap.h"
@@ -108,7 +104,7 @@ public:
 
   lldb_private::Address GetEntryPointAddress() override;
 
-  lldb_private::Address GetHeaderAddress() override;
+  lldb_private::Address GetBaseAddress() override;
 
   uint32_t GetNumThreadContexts() override;
 

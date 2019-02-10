@@ -10,13 +10,9 @@
 #ifndef liblldb_StackFrame_h_
 #define liblldb_StackFrame_h_
 
-// C Includes
-// C++ Includes
 #include <memory>
 #include <mutex>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Utility/Flags.h"
 
 #include "lldb/Core/ValueObjectList.h"
@@ -173,7 +169,7 @@ public:
   ///   A SymbolContext reference which includes the types of information
   ///   requested by resolve_scope, if they are available.
   //------------------------------------------------------------------
-  const SymbolContext &GetSymbolContext(uint32_t resolve_scope);
+  const SymbolContext &GetSymbolContext(lldb::SymbolContextItem resolve_scope);
 
   //------------------------------------------------------------------
   /// Return the Canonical Frame Address (DWARF term) for this frame.
@@ -544,6 +540,8 @@ public:
 
   void CalculateExecutionContext(ExecutionContext &exe_ctx) override;
 
+  lldb::RecognizedStackFrameSP GetRecognizedFrame();
+
 protected:
   friend class StackFrameList;
 
@@ -578,6 +576,7 @@ private:
   ValueObjectList m_variable_list_value_objects; // Value objects for each
                                                  // variable in
                                                  // m_variable_list_sp
+  lldb::RecognizedStackFrameSP m_recognized_frame_sp;
   StreamString m_disassembly;
   std::recursive_mutex m_mutex;
 

@@ -152,7 +152,7 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
   for (unsigned I = 0; I != NSAPI::NumNSNumberLiteralMethods; ++I)
     NSNumberLiteralMethods[I] = nullptr;
 
-  if (getLangOpts().ObjC1)
+  if (getLangOpts().ObjC)
     NSAPIObj.reset(new NSAPI(Context));
 
   if (getLangOpts().CPlusPlus)
@@ -167,7 +167,7 @@ Sema::Sema(Preprocessor &pp, ASTContext &ctxt, ASTConsumer &consumer,
 
   PreallocatedFunctionScope.reset(new FunctionScopeInfo(Diags));
 
-  // Initilization of data sharing attributes stack for OpenMP
+  // Initialization of data sharing attributes stack for OpenMP
   InitDataSharingAttributesStack();
 
   std::unique_ptr<sema::SemaPPCallbacks> Callbacks =
@@ -214,7 +214,7 @@ void Sema::Initialize() {
 
 
   // Initialize predefined Objective-C types:
-  if (getLangOpts().ObjC1) {
+  if (getLangOpts().ObjC) {
     // If 'SEL' does not yet refer to any declarations, make it refer to the
     // predefined 'SEL'.
     DeclarationName SEL = &Context.Idents.get("SEL");
@@ -320,6 +320,10 @@ void Sema::Initialize() {
 #define GENERIC_IMAGE_TYPE_EXT(Type, Id, Ext) \
     setOpenCLExtensionForType(Context.Id, Ext);
 #include "clang/Basic/OpenCLImageTypes.def"
+#define EXT_OPAQUE_TYPE(ExtType, Id, Ext) \
+    addImplicitTypedef(#ExtType, Context.Id##Ty); \
+    setOpenCLExtensionForType(Context.Id##Ty, #Ext);
+#include "clang/Basic/OpenCLExtensionTypes.def"
     };
 
   if (Context.getTargetInfo().hasBuiltinMSVaList()) {
@@ -533,6 +537,7 @@ CastKind Sema::ScalarTypeToBooleanCastKind(QualType ScalarTy) {
   case Type::STK_Floating: return CK_FloatingToBoolean;
   case Type::STK_IntegralComplex: return CK_IntegralComplexToBoolean;
   case Type::STK_FloatingComplex: return CK_FloatingComplexToBoolean;
+  case Type::STK_FixedPoint: return CK_FixedPointToBoolean;
   }
   llvm_unreachable("unknown scalar type kind");
 }
@@ -1912,6 +1917,34 @@ void Sema::setCurrentOpenCLExtensionForDecl(Decl *D) {
   if (CurrOpenCLExtension.empty())
     return;
   setOpenCLExtensionForDecl(D, CurrOpenCLExtension);
+}
+
+std::string Sema::getOpenCLExtensionsFromDeclExtMap(FunctionDecl *FD) {
+  if (!OpenCLDeclExtMap.empty())
+    return getOpenCLExtensionsFromExtMap(FD, OpenCLDeclExtMap);
+
+  return "";
+}
+
+std::string Sema::getOpenCLExtensionsFromTypeExtMap(FunctionType *FT) {
+  if (!OpenCLTypeExtMap.empty())
+    return getOpenCLExtensionsFromExtMap(FT, OpenCLTypeExtMap);
+
+  return "";
+}
+
+template <typename T, typename MapT>
+std::string Sema::getOpenCLExtensionsFromExtMap(T *FDT, MapT &Map) {
+  std::string ExtensionNames = "";
+  auto Loc = Map.find(FDT);
+
+  for (auto const& I : Loc->second) {
+    ExtensionNames += I;
+    ExtensionNames += " ";
+  }
+  ExtensionNames.pop_back();
+
+  return ExtensionNames;
 }
 
 bool Sema::isOpenCLDisabledDecl(Decl *FD) {

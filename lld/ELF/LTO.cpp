@@ -88,6 +88,7 @@ static lto::Config createConfig() {
   C.DiagHandler = diagnosticHandler;
   C.OptLevel = Config->LTOO;
   C.CPU = GetCPUStr();
+  C.MAttrs = GetMAttrs();
 
   // Set up a custom pipeline if we've been asked to.
   C.OptPipeline = Config->LTONewPmPasses;
@@ -101,6 +102,14 @@ static lto::Config createConfig() {
   C.UseNewPM = Config->LTONewPassManager;
   C.DebugPassManager = Config->LTODebugPassManager;
   C.DwoDir = Config->DwoDir;
+
+  if (Config->EmitLLVM) {
+    C.PostInternalizeModuleHook = [](size_t Task, const Module &M) {
+      if (std::unique_ptr<raw_fd_ostream> OS = openFile(Config->OutputFile))
+        WriteBitcodeToFile(M, *OS, false);
+      return false;
+    };
+  }
 
   if (Config->SaveTemps)
     checkError(C.addSaveTemps(Config->OutputFile.str() + ".",

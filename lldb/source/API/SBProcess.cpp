@@ -9,7 +9,6 @@
 
 #include "lldb/API/SBProcess.h"
 
-// C Includes
 #include <inttypes.h>
 
 #include "lldb/lldb-defines.h"
@@ -30,7 +29,6 @@
 #include "lldb/Utility/State.h"
 #include "lldb/Utility/Stream.h"
 
-// Project includes
 
 #include "lldb/API/SBBroadcaster.h"
 #include "lldb/API/SBCommandReturnObject.h"
@@ -130,10 +128,9 @@ bool SBProcess::RemoteLaunch(char const **argv, char const **envp,
     if (process_sp->GetState() == eStateConnected) {
       if (stop_at_entry)
         launch_flags |= eLaunchFlagStopAtEntry;
-      ProcessLaunchInfo launch_info(
-          FileSpec{stdin_path, false}, FileSpec{stdout_path, false},
-          FileSpec{stderr_path, false}, FileSpec{working_directory, false},
-          launch_flags);
+      ProcessLaunchInfo launch_info(FileSpec(stdin_path), FileSpec(stdout_path),
+                                    FileSpec(stderr_path),
+                                    FileSpec(working_directory), launch_flags);
       Module *exe_module = process_sp->GetTarget().GetExecutableModulePointer();
       if (exe_module)
         launch_info.SetExecutableFile(exe_module->GetPlatformFileSpec(), true);
@@ -1351,7 +1348,7 @@ lldb::SBError SBProcess::SaveCore(const char *file_name) {
     return error;
   }
 
-  FileSpec core_file(file_name, false);
+  FileSpec core_file(file_name);
   error.ref() = PluginManager::SaveCore(process_sp, core_file);
   return error;
 }

@@ -22,7 +22,7 @@ namespace {
 class RISCV final : public TargetInfo {
 public:
   RISCV();
-  virtual uint32_t calcEFlags() const override;
+  uint32_t calcEFlags() const override;
   RelExpr getRelExpr(RelType Type, const Symbol &S,
                      const uint8_t *Loc) const override;
   void relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const override;
@@ -35,8 +35,7 @@ RISCV::RISCV() { NoneRel = R_RISCV_NONE; }
 static uint32_t getEFlags(InputFile *F) {
   if (Config->Is64)
     return cast<ObjFile<ELF64LE>>(F)->getObj().getHeader()->e_flags;
-  else
-    return cast<ObjFile<ELF32LE>>(F)->getObj().getHeader()->e_flags;
+  return cast<ObjFile<ELF32LE>>(F)->getObj().getHeader()->e_flags;
 }
 
 uint32_t RISCV::calcEFlags() const {

@@ -1130,6 +1130,10 @@ void UnwrappedLineParser::parseStructuralElement() {
         nextToken();
         parseBracedList();
         break;
+      } else if (Style.Language == FormatStyle::LK_Java &&
+                 FormatTok->is(Keywords.kw_interface)) {
+        nextToken();
+        break;
       }
       switch (FormatTok->Tok.getObjCKeywordID()) {
       case tok::objc_public:
@@ -2164,6 +2168,8 @@ void UnwrappedLineParser::parseObjCMethod() {
       addUnwrappedLine();
       return;
     } else if (FormatTok->Tok.is(tok::l_brace)) {
+      if (Style.BraceWrapping.AfterFunction)
+        addUnwrappedLine();
       parseBlock(/*MustBeDeclaration=*/false);
       addUnwrappedLine();
       return;

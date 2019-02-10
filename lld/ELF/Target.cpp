@@ -73,7 +73,7 @@ TargetInfo *elf::getTarget() {
     case ELF64BEKind:
       return getMipsTargetInfo<ELF64BE>();
     default:
-      fatal("unsupported MIPS target");
+      llvm_unreachable("unsupported MIPS target");
     }
   case EM_PPC:
     return getPPCTargetInfo();
@@ -88,7 +88,7 @@ TargetInfo *elf::getTarget() {
       return getX32TargetInfo();
     return getX86_64TargetInfo();
   }
-  fatal("unknown target machine");
+  llvm_unreachable("unknown target machine");
 }
 
 template <class ELFT> static ErrorPlace getErrPlace(const uint8_t *Loc) {
@@ -132,11 +132,10 @@ bool TargetInfo::needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
   return false;
 }
 
-bool TargetInfo::adjustPrologueForCrossSplitStack(uint8_t *Loc,
-                                                  uint8_t *End) const {
+bool TargetInfo::adjustPrologueForCrossSplitStack(uint8_t *Loc, uint8_t *End,
+                                                  uint8_t StOther) const {
   llvm_unreachable("Target doesn't support split stacks.");
 }
-
 
 bool TargetInfo::inBranchRange(RelType Type, uint64_t Src, uint64_t Dst) const {
   return true;

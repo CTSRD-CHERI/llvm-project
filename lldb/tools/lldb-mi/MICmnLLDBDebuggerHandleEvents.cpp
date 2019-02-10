@@ -20,9 +20,9 @@
 #include "lldb/API/SBUnixSignals.h"
 #include "llvm/Support/Compiler.h"
 #ifdef _WIN32
-#include <io.h> // For the ::_access()
+#include <io.h>
 #else
-#include <unistd.h> // For the ::access()
+#include <unistd.h>
 #endif              // _WIN32
 
 // In-house headers:
@@ -39,7 +39,7 @@
 #include "MICmnStreamStdout.h"
 #include "MIDriver.h"
 #include "MIUtilDebug.h"
-#include "Platform.h" // for PATH_MAX
+#include "Platform.h"
 
 #include <algorithm>
 
@@ -437,10 +437,10 @@ bool CMICmnLLDBDebuggerHandleEvents::HandleEventSBBreakpointAdded(
     sBrkPtInfo.m_nIgnore = brkPt.GetIgnoreCount();
     sBrkPtInfo.m_bPending = false;
     const char *pStrCondition = brkPt.GetCondition();
-    sBrkPtInfo.m_bCondition = (pStrCondition != nullptr) ? true : false;
+    sBrkPtInfo.m_bCondition = pStrCondition != nullptr;
     sBrkPtInfo.m_strCondition =
         (pStrCondition != nullptr) ? pStrCondition : "??";
-    sBrkPtInfo.m_bBrkPtThreadId = (brkPt.GetThreadID() != 0) ? true : false;
+    sBrkPtInfo.m_bBrkPtThreadId = brkPt.GetThreadID() != 0;
     sBrkPtInfo.m_nBrkPtThreadId = brkPt.GetThreadID();
   }
 

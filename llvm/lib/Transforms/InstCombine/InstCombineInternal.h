@@ -82,8 +82,8 @@ class User;
 ///   5 -> Other instructions
 static inline unsigned getComplexity(Value *V) {
   if (isa<Instruction>(V)) {
-    if (isa<CastInst>(V) || BinaryOperator::isNeg(V) ||
-        BinaryOperator::isFNeg(V) || BinaryOperator::isNot(V))
+    if (isa<CastInst>(V) || match(V, m_Neg(m_Value())) ||
+        match(V, m_Not(m_Value())) || match(V, m_FNeg(m_Value())))
       return 4;
     return 5;
   }
@@ -141,7 +141,7 @@ static inline Constant *SubOne(Constant *C) {
 /// uses of V and only keep uses of ~V.
 static inline bool IsFreeToInvert(Value *V, bool WillInvertAllUses) {
   // ~(~(X)) -> X.
-  if (BinaryOperator::isNot(V))
+  if (match(V, m_Not(m_Value())))
     return true;
 
   // Constants can be considered to be not'ed values.
@@ -589,6 +589,9 @@ private:
 
   Value *foldAndOrOfICmpsOfAndWithPow2(ICmpInst *LHS, ICmpInst *RHS,
                                        bool JoinedByAnd, Instruction &CxtI);
+  Value *matchSelectFromAndOr(Value *A, Value *B, Value *C, Value *D);
+  Value *getSelectCondition(Value *A, Value *B);
+
 public:
   /// Inserts an instruction \p New before instruction \p Old
   ///
@@ -854,6 +857,7 @@ private:
   Instruction *foldICmpWithCastAndCast(ICmpInst &ICI);
 
   Instruction *foldICmpUsingKnownBits(ICmpInst &Cmp);
+  Instruction *foldICmpWithDominatingICmp(ICmpInst &Cmp);
   Instruction *foldICmpWithConstant(ICmpInst &Cmp);
   Instruction *foldICmpInstWithConstant(ICmpInst &Cmp);
   Instruction *foldICmpInstWithConstantNotInt(ICmpInst &Cmp);
@@ -916,8 +920,11 @@ private:
   Value *insertRangeTest(Value *V, const APInt &Lo, const APInt &Hi,
                          bool isSigned, bool Inside);
   Instruction *PromoteCastOfAllocation(BitCastInst &CI, AllocaInst &AI);
-  Instruction *MatchBSwap(BinaryOperator &I);
-  bool SimplifyStoreAtEndOfBlock(StoreInst &SI);
+  bool mergeStoreIntoSuccessor(StoreInst &SI);
+
+  /// Given an 'or' instruction, check to see if it is part of a bswap idiom.
+  /// If so, return the equivalent bswap intrinsic.
+  Instruction *matchBSwap(BinaryOperator &Or);
 
   Instruction *SimplifyAnyMemTransfer(AnyMemTransferInst *MI);
   Instruction *SimplifyAnyMemSet(AnyMemSetInst *MI);

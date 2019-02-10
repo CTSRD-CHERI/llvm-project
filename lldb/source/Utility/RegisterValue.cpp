@@ -15,20 +15,20 @@
 #include "lldb/Utility/Status.h"
 #include "lldb/Utility/Stream.h"
 #include "lldb/Utility/StreamString.h"
-#include "lldb/lldb-defines.h"       // for LLDB_INVALID_ADDRESS
-#include "lldb/lldb-private-types.h" // for RegisterInfo, type128
+#include "lldb/lldb-defines.h"
+#include "lldb/lldb-private-types.h"
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 
-#include <cstdint> // for uint8_t, uint32_t, uint64_t
-#include <string>  // for string
-#include <tuple>   // for tie, tuple
+#include <cstdint>
+#include <string>
+#include <tuple>
 #include <vector>
 
-#include <assert.h>   // for assert
-#include <inttypes.h> // for PRIx64
-#include <stdio.h>    // for sscanf
+#include <assert.h>
+#include <inttypes.h>
+#include <stdio.h>
 
 using namespace lldb;
 using namespace lldb_private;
@@ -475,7 +475,7 @@ bool RegisterValue::SignExtend(uint32_t sign_bitpos) {
 
 bool RegisterValue::CopyValue(const RegisterValue &rhs) {
   if (this == &rhs)
-    return rhs.m_type == eTypeInvalid ? false : true;
+    return rhs.m_type != eTypeInvalid;
 
   m_type = rhs.m_type;
   switch (m_type) {

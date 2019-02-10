@@ -74,7 +74,6 @@ uint64_t elf::getPPC64TocBase() {
   return TocVA + PPC64TocOffset;
 }
 
-
 unsigned elf::getPPC64GlobalEntryToLocalEntryOffset(uint8_t StOther) {
   // The offset is encoded into the 3 most significant bits of the st_other
   // field, with some special values described in section 3.4.1 of the ABI:
@@ -114,12 +113,16 @@ public:
   void writeGotHeader(uint8_t *Buf) const override;
   bool needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
                   uint64_t BranchAddr, const Symbol &S) const override;
+  bool inBranchRange(RelType Type, uint64_t Src, uint64_t Dst) const override;
   RelExpr adjustRelaxExpr(RelType Type, const uint8_t *Data,
                           RelExpr Expr) const override;
   void relaxTlsGdToIe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
   void relaxTlsGdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
   void relaxTlsLdToLe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
   void relaxTlsIeToLe(uint8_t *Loc, RelType Type, uint64_t Val) const override;
+
+  bool adjustPrologueForCrossSplitStack(uint8_t *Loc, uint8_t *End,
+                                        uint8_t StOther) const override;
 };
 } // namespace
 
@@ -205,13 +208,13 @@ PPC64::PPC64() {
   GotPltHeaderEntriesNum = 2;
   PltHeaderSize = 60;
   NeedsThunks = true;
-  TcbSize = 8;
-  TlsTpOffset = 0x7000;
 
   TlsModuleIndexRel = R_PPC64_DTPMOD64;
   TlsOffsetRel = R_PPC64_DTPREL64;
 
   TlsGotRel = R_PPC64_TPREL64;
+
+  NeedsMoreStackNonSplit = false;
 
   // We need 64K pages (at least under glibc/Linux, the loader won't
   // set different permissions on a finer granularity than that).
@@ -227,8 +230,7 @@ PPC64::PPC64() {
   // use 0x10000000 as the starting address.
   DefaultImageBase = 0x10000000;
 
-  TrapInstr =
-      (Config->IsLE == sys::IsLittleEndianHost) ? 0x7fe00008 : 0x0800e07f;
+  write32(TrapInstr.data(), 0x7fe00008);
 }
 
 static uint32_t getEFlags(InputFile *File) {
@@ -410,6 +412,13 @@ void PPC64::relaxTlsIeToLe(uint8_t *Loc, RelType Type, uint64_t Val) const {
 RelExpr PPC64::getRelExpr(RelType Type, const Symbol &S,
                           const uint8_t *Loc) const {
   switch (Type) {
+  case R_PPC64_GOT16:
+  case R_PPC64_GOT16_DS:
+  case R_PPC64_GOT16_HA:
+  case R_PPC64_GOT16_HI:
+  case R_PPC64_GOT16_LO:
+  case R_PPC64_GOT16_LO_DS:
+    return R_GOT_OFF;
   case R_PPC64_TOC16:
   case R_PPC64_TOC16_DS:
   case R_PPC64_TOC16_HA:
@@ -419,6 +428,7 @@ RelExpr PPC64::getRelExpr(RelType Type, const Symbol &S,
     return R_GOTREL;
   case R_PPC64_TOC:
     return R_PPC_TOC;
+  case R_PPC64_REL14:
   case R_PPC64_REL24:
     return R_PPC_CALL_PLT;
   case R_PPC64_REL16_LO:
@@ -510,9 +520,9 @@ void PPC64::writePltHeader(uint8_t *Buf) const {
 void PPC64::writePlt(uint8_t *Buf, uint64_t GotPltEntryAddr,
                      uint64_t PltEntryAddr, int32_t Index,
                      unsigned RelOff) const {
- int32_t Offset = PltHeaderSize + Index * PltEntrySize;
- // bl __glink_PLTresolve
- write32(Buf, 0x48000000 | ((-Offset) & 0x03FFFFFc));
+  int32_t Offset = PltHeaderSize + Index * PltEntrySize;
+  // bl __glink_PLTresolve
+  write32(Buf, 0x48000000 | ((-Offset) & 0x03FFFFFc));
 }
 
 static std::pair<RelType, uint64_t> toAddr16Rel(RelType Type, uint64_t Val) {
@@ -523,30 +533,36 @@ static std::pair<RelType, uint64_t> toAddr16Rel(RelType Type, uint64_t Val) {
 
   switch (Type) {
   // TOC biased relocation.
+  case R_PPC64_GOT16:
   case R_PPC64_GOT_TLSGD16:
   case R_PPC64_GOT_TLSLD16:
   case R_PPC64_TOC16:
     return {R_PPC64_ADDR16, TocBiasedVal};
+  case R_PPC64_GOT16_DS:
   case R_PPC64_TOC16_DS:
   case R_PPC64_GOT_TPREL16_DS:
   case R_PPC64_GOT_DTPREL16_DS:
     return {R_PPC64_ADDR16_DS, TocBiasedVal};
+  case R_PPC64_GOT16_HA:
   case R_PPC64_GOT_TLSGD16_HA:
   case R_PPC64_GOT_TLSLD16_HA:
   case R_PPC64_GOT_TPREL16_HA:
   case R_PPC64_GOT_DTPREL16_HA:
   case R_PPC64_TOC16_HA:
     return {R_PPC64_ADDR16_HA, TocBiasedVal};
+  case R_PPC64_GOT16_HI:
   case R_PPC64_GOT_TLSGD16_HI:
   case R_PPC64_GOT_TLSLD16_HI:
   case R_PPC64_GOT_TPREL16_HI:
   case R_PPC64_GOT_DTPREL16_HI:
   case R_PPC64_TOC16_HI:
     return {R_PPC64_ADDR16_HI, TocBiasedVal};
+  case R_PPC64_GOT16_LO:
   case R_PPC64_GOT_TLSGD16_LO:
   case R_PPC64_GOT_TLSLD16_LO:
   case R_PPC64_TOC16_LO:
     return {R_PPC64_ADDR16_LO, TocBiasedVal};
+  case R_PPC64_GOT16_LO_DS:
   case R_PPC64_TOC16_LO_DS:
   case R_PPC64_GOT_TPREL16_LO_DS:
   case R_PPC64_GOT_DTPREL16_LO_DS:
@@ -587,9 +603,11 @@ static bool isTocRelType(RelType Type) {
 }
 
 void PPC64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
-  // For a TOC-relative relocation, proceed in terms of the corresponding
-  // ADDR16 relocation type.
+  // We need to save the original relocation type to determine if we should
+  // toc-optimize the instructions being relocated.
   bool IsTocRelType = isTocRelType(Type);
+  // For TOC-relative and GOT-indirect relocations, proceed in terms of the
+  // corresponding ADDR16 relocation type.
   std::tie(Type, Val) = toAddr16Rel(Type, Val);
 
   switch (Type) {
@@ -690,9 +708,17 @@ void PPC64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_PPC64_TOC:
     write64(Loc, Val);
     break;
+  case R_PPC64_REL14: {
+    uint32_t Mask = 0x0000FFFC;
+    checkInt(Loc, Val, 16, Type);
+    checkAlignment(Loc, Val, 4, Type);
+    write32(Loc, (read32(Loc) & ~Mask) | (Val & Mask));
+    break;
+  }
   case R_PPC64_REL24: {
     uint32_t Mask = 0x03FFFFFC;
-    checkInt(Loc, Val, 24, Type);
+    checkInt(Loc, Val, 26, Type);
+    checkAlignment(Loc, Val, 4, Type);
     write32(Loc, (read32(Loc) & ~Mask) | (Val & Mask));
     break;
   }
@@ -706,9 +732,30 @@ void PPC64::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
 
 bool PPC64::needsThunk(RelExpr Expr, RelType Type, const InputFile *File,
                        uint64_t BranchAddr, const Symbol &S) const {
-  // If a function is in the plt it needs to be called through
-  // a call stub.
-  return Type == R_PPC64_REL24 && S.isInPlt();
+  if (Type != R_PPC64_REL14 && Type != R_PPC64_REL24)
+    return false;
+
+  // If a function is in the Plt it needs to be called with a call-stub.
+  if (S.isInPlt())
+    return true;
+
+  // If a symbol is a weak undefined and we are compiling an executable
+  // it doesn't need a range-extending thunk since it can't be called.
+  if (S.isUndefWeak() && !Config->Shared)
+    return false;
+
+  // If the offset exceeds the range of the branch type then it will need
+  // a range-extending thunk.
+  return !inBranchRange(Type, BranchAddr, S.getVA());
+}
+
+bool PPC64::inBranchRange(RelType Type, uint64_t Src, uint64_t Dst) const {
+  int64_t Offset = Dst - Src;
+  if (Type == R_PPC64_REL14)
+    return isInt<16>(Offset);
+  if (Type == R_PPC64_REL24)
+    return isInt<26>(Offset);
+  llvm_unreachable("unsupported relocation type used in branch");
 }
 
 RelExpr PPC64::adjustRelaxExpr(RelType Type, const uint8_t *Data,
@@ -759,6 +806,113 @@ void PPC64::relaxTlsGdToIe(uint8_t *Loc, RelType Type, uint64_t Val) const {
   default:
     llvm_unreachable("unsupported relocation for TLS GD to IE relaxation");
   }
+}
+
+// The prologue for a split-stack function is expected to look roughly
+// like this:
+//    .Lglobal_entry_point:
+//      # TOC pointer initalization.
+//      ...
+//    .Llocal_entry_point:
+//      # load the __private_ss member of the threads tcbhead.
+//      ld r0,-0x7000-64(r13)
+//      # subtract the functions stack size from the stack pointer.
+//      addis r12, r1, ha(-stack-frame size)
+//      addi  r12, r12, l(-stack-frame size)
+//      # compare needed to actual and branch to allocate_more_stack if more
+//      # space is needed, otherwise fallthrough to 'normal' function body.
+//      cmpld cr7,r12,r0
+//      blt- cr7, .Lallocate_more_stack
+//
+// -) The allocate_more_stack block might be placed after the split-stack
+//    prologue and the `blt-` replaced with a `bge+ .Lnormal_func_body`
+//    instead.
+// -) If either the addis or addi is not needed due to the stack size being
+//    smaller then 32K or a multiple of 64K they will be replaced with a nop,
+//    but there will always be 2 instructions the linker can overwrite for the
+//    adjusted stack size.
+//
+// The linkers job here is to increase the stack size used in the addis/addi
+// pair by split-stack-size-adjust.
+// addis r12, r1, ha(-stack-frame size - split-stack-adjust-size)
+// addi  r12, r12, l(-stack-frame size - split-stack-adjust-size)
+bool PPC64::adjustPrologueForCrossSplitStack(uint8_t *Loc, uint8_t *End,
+                                             uint8_t StOther) const {
+  // If the caller has a global entry point adjust the buffer past it. The start
+  // of the split-stack prologue will be at the local entry point.
+  Loc += getPPC64GlobalEntryToLocalEntryOffset(StOther);
+
+  // At the very least we expect to see a load of some split-stack data from the
+  // tcb, and 2 instructions that calculate the ending stack address this
+  // function will require. If there is not enough room for at least 3
+  // instructions it can't be a split-stack prologue.
+  if (Loc + 12 >= End)
+    return false;
+
+  // First instruction must be `ld r0, -0x7000-64(r13)`
+  if (read32(Loc) != 0xe80d8fc0)
+    return false;
+
+  int16_t HiImm = 0;
+  int16_t LoImm = 0;
+  // First instruction can be either an addis if the frame size is larger then
+  // 32K, or an addi if the size is less then 32K.
+  int32_t FirstInstr = read32(Loc + 4);
+  if (getPrimaryOpCode(FirstInstr) == 15) {
+    HiImm = FirstInstr & 0xFFFF;
+  } else if (getPrimaryOpCode(FirstInstr) == 14) {
+    LoImm = FirstInstr & 0xFFFF;
+  } else {
+    return false;
+  }
+
+  // Second instruction is either an addi or a nop. If the first instruction was
+  // an addi then LoImm is set and the second instruction must be a nop.
+  uint32_t SecondInstr = read32(Loc + 8);
+  if (!LoImm && getPrimaryOpCode(SecondInstr) == 14) {
+    LoImm = SecondInstr & 0xFFFF;
+  } else if (SecondInstr != 0x60000000) {
+    return false;
+  }
+
+  // The register operands of the first instruction should be the stack-pointer
+  // (r1) as the input (RA) and r12 as the output (RT). If the second
+  // instruction is not a nop, then it should use r12 as both input and output.
+  auto CheckRegOperands = [](uint32_t Instr, uint8_t ExpectedRT,
+                             uint8_t ExpectedRA) {
+    return ((Instr & 0x3E00000) >> 21 == ExpectedRT) &&
+           ((Instr & 0x1F0000) >> 16 == ExpectedRA);
+  };
+  if (!CheckRegOperands(FirstInstr, 12, 1))
+    return false;
+  if (SecondInstr != 0x60000000 && !CheckRegOperands(SecondInstr, 12, 12))
+    return false;
+
+  int32_t StackFrameSize = (HiImm * 65536) + LoImm;
+  // Check that the adjusted size doesn't overflow what we can represent with 2
+  // instructions.
+  if (StackFrameSize < Config->SplitStackAdjustSize + INT32_MIN) {
+    error(getErrorLocation(Loc) + "split-stack prologue adjustment overflows");
+    return false;
+  }
+
+  int32_t AdjustedStackFrameSize =
+      StackFrameSize - Config->SplitStackAdjustSize;
+
+  LoImm = AdjustedStackFrameSize & 0xFFFF;
+  HiImm = (AdjustedStackFrameSize + 0x8000) >> 16;
+  if (HiImm) {
+    write32(Loc + 4, 0x3D810000 | (uint16_t)HiImm);
+    // If the low immediate is zero the second instruction will be a nop.
+    SecondInstr = LoImm ? 0x398C0000 | (uint16_t)LoImm : 0x60000000;
+    write32(Loc + 8, SecondInstr);
+  } else {
+    // addi r12, r1, imm
+    write32(Loc + 4, (0x39810000) | (uint16_t)LoImm);
+    write32(Loc + 8, 0x60000000);
+  }
+
+  return true;
 }
 
 TargetInfo *elf::getPPC64TargetInfo() {

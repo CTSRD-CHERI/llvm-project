@@ -650,10 +650,6 @@ public:
     return MetadataList.getMetadataFwdRef(ID);
   }
 
-  MDNode *getMDNodeFwdRefOrNull(unsigned Idx) {
-    return MetadataList.getMDNodeFwdRefOrNull(Idx);
-  }
-
   DISubprogram *lookupSubprogramForFunction(Function *F) {
     return FunctionsWithSPs.lookup(F);
   }
@@ -772,7 +768,7 @@ MetadataLoader::MetadataLoaderImpl::lazyLoadModuleMetadataBlock() {
           // It is acknowledged by 'TODO: Inherit from Metadata' in the
           // NamedMDNode class definition.
           MDNode *MD = MetadataList.getMDNodeFwdRefOrNull(Record[i]);
-          assert(MD && "Invalid record");
+          assert(MD && "Invalid metadata: expect fwd ref to MDNode");
           NMD->addOperand(MD);
         }
         break;
@@ -1049,7 +1045,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     for (unsigned i = 0; i != Size; ++i) {
       MDNode *MD = MetadataList.getMDNodeFwdRefOrNull(Record[i]);
       if (!MD)
-        return error("Invalid record");
+        return error("Invalid named metadata: expect fwd ref to MDNode");
       NMD->addOperand(MD);
     }
     break;
@@ -1395,7 +1391,8 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
         Record.size() <= 14 ? 0 : Record[14],
         Record.size() <= 16 ? true : Record[16],
         Record.size() <= 17 ? false : Record[17],
-        Record.size() <= 18 ? 0 : Record[18]);
+        Record.size() <= 18 ? 0 : Record[18],
+        Record.size() <= 19 ? 0 : Record[19]);
 
     MetadataList.assignValue(CU, NextMetadataNo);
     NextMetadataNo++;
@@ -1409,20 +1406,43 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
     if (Record.size() < 18 || Record.size() > 21)
       return error("Invalid record");
 
-    IsDistinct =
-        (Record[0] & 1) || Record[8]; // All definitions should be distinct.
+    bool HasSPFlags = Record[0] & 4;
+    DISubprogram::DISPFlags SPFlags =
+        HasSPFlags
+            ? static_cast<DISubprogram::DISPFlags>(Record[9])
+            : DISubprogram::toSPFlags(
+                  /*IsLocalToUnit=*/Record[7], /*IsDefinition=*/Record[8],
+                  /*IsOptimized=*/Record[14], /*Virtuality=*/Record[11]);
+
+    // All definitions should be distinct.
+    IsDistinct = (Record[0] & 1) || (SPFlags & DISubprogram::SPFlagDefinition);
     // Version 1 has a Function as Record[15].
     // Version 2 has removed Record[15].
     // Version 3 has the Unit as Record[15].
     // Version 4 added thisAdjustment.
-    bool HasUnit = Record[0] >= 2;
-    if (HasUnit && Record.size() < 19)
+    // Version 5 repacked flags into DISPFlags, changing many element numbers.
+    bool HasUnit = Record[0] & 2;
+    if (!HasSPFlags && HasUnit && Record.size() < 19)
       return error("Invalid record");
-    Metadata *CUorFn = getMDOrNull(Record[15]);
-    unsigned Offset = Record.size() >= 19 ? 1 : 0;
-    bool HasFn = Offset && !HasUnit;
-    bool HasThisAdj = Record.size() >= 20;
-    bool HasThrownTypes = Record.size() >= 21;
+    if (HasSPFlags && !HasUnit)
+      return error("Invalid record");
+    // Accommodate older formats.
+    bool HasFn = false;
+    bool HasThisAdj = true;
+    bool HasThrownTypes = true;
+    unsigned OffsetA = 0;
+    unsigned OffsetB = 0;
+    if (!HasSPFlags) {
+      OffsetA = 2;
+      OffsetB = 2;
+      if (Record.size() >= 19) {
+        HasFn = !HasUnit;
+        OffsetB++;
+      }
+      HasThisAdj = Record.size() >= 20;
+      HasThrownTypes = Record.size() >= 21;
+    }
+    Metadata *CUorFn = getMDOrNull(Record[12 + OffsetB]);
     DISubprogram *SP = GET_OR_DISTINCT(
         DISubprogram,
         (Context,
@@ -1432,20 +1452,18 @@ Error MetadataLoader::MetadataLoaderImpl::parseOneMetadata(
          getMDOrNull(Record[4]),                            // file
          Record[5],                                         // line
          getMDOrNull(Record[6]),                            // type
-         Record[7],                                         // isLocal
-         Record[8],                                         // isDefinition
-         Record[9],                                         // scopeLine
-         getDITypeRefOrNull(Record[10]),                    // containingType
-         Record[11],                                        // virtuality
-         Record[12],                                        // virtualIndex
-         HasThisAdj ? Record[19] : 0,                       // thisAdjustment
-         static_cast<DINode::DIFlags>(Record[13]),          // flags
-         Record[14],                                        // isOptimized
+         Record[7 + OffsetA],                               // scopeLine
+         getDITypeRefOrNull(Record[8 + OffsetA]),           // containingType
+         Record[10 + OffsetA],                              // virtualIndex
+         HasThisAdj ? Record[16 + OffsetB] : 0,             // thisAdjustment
+         static_cast<DINode::DIFlags>(Record[11 + OffsetA]),// flags
+         SPFlags,                                           // SPFlags
          HasUnit ? CUorFn : nullptr,                        // unit
-         getMDOrNull(Record[15 + Offset]),                  // templateParams
-         getMDOrNull(Record[16 + Offset]),                  // declaration
-         getMDOrNull(Record[17 + Offset]),                  // retainedNodes
-         HasThrownTypes ? getMDOrNull(Record[20]) : nullptr // thrownTypes
+         getMDOrNull(Record[13 + OffsetB]),                 // templateParams
+         getMDOrNull(Record[14 + OffsetB]),                 // declaration
+         getMDOrNull(Record[15 + OffsetB]),                 // retainedNodes
+         HasThrownTypes ? getMDOrNull(Record[17 + OffsetB])
+                        : nullptr                           // thrownTypes
          ));
     MetadataList.assignValue(SP, NextMetadataNo);
     NextMetadataNo++;
@@ -1833,7 +1851,7 @@ Error MetadataLoader::MetadataLoaderImpl::parseGlobalObjectAttachment(
       return error("Invalid ID");
     MDNode *MD = MetadataList.getMDNodeFwdRefOrNull(Record[I + 1]);
     if (!MD)
-      return error("Invalid metadata attachment");
+      return error("Invalid metadata attachment: expect fwd ref to MDNode");
     GO.addMetadata(K->second, *MD);
   }
   return Error::success();
@@ -2001,10 +2019,6 @@ bool MetadataLoader::hasFwdRefs() const { return Pimpl->hasFwdRefs(); }
 /// necessary.
 Metadata *MetadataLoader::getMetadataFwdRefOrLoad(unsigned Idx) {
   return Pimpl->getMetadataFwdRefOrLoad(Idx);
-}
-
-MDNode *MetadataLoader::getMDNodeFwdRefOrNull(unsigned Idx) {
-  return Pimpl->getMDNodeFwdRefOrNull(Idx);
 }
 
 DISubprogram *MetadataLoader::lookupSubprogramForFunction(Function *F) {

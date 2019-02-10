@@ -14,6 +14,7 @@
 #include "lld/Common/ErrorHandler.h"
 #include "llvm/Object/ELF.h"
 #include "llvm/Support/MathExtras.h"
+#include <array>
 
 namespace lld {
 std::string toString(elf::RelType Type);
@@ -44,10 +45,6 @@ public:
   virtual void addPltHeaderSymbols(InputSection &IS) const {}
   virtual void addPltSymbols(InputSection &IS, uint64_t Off) const {}
 
-  unsigned getPltEntryOffset(unsigned Index) const {
-    return Index * PltEntrySize + PltHeaderSize;
-  }
-
   // Returns true if a relocation only uses the low bits of a value such that
   // all those bits are in the same page. For example, if the relocation
   // only uses the low 12 bits in a system with 4k pages. If this is true, the
@@ -69,8 +66,10 @@ public:
   // The function with a prologue starting at Loc was compiled with
   // -fsplit-stack and it calls a function compiled without. Adjust the prologue
   // to do the right thing. See https://gcc.gnu.org/wiki/SplitStacks.
-  virtual bool adjustPrologueForCrossSplitStack(uint8_t *Loc,
-                                                uint8_t *End) const;
+  // The symbols st_other flags are needed on PowerPC64 for determining the
+  // offset to the split-stack prologue.
+  virtual bool adjustPrologueForCrossSplitStack(uint8_t *Loc, uint8_t *End,
+                                                uint8_t StOther) const;
 
   // Return true if we can reach Dst from Src with Relocation RelocType
   virtual bool inBranchRange(RelType Type, uint64_t Src,
@@ -115,20 +114,16 @@ public:
   // On PPC ELF V2 abi, the first entry in the .got is the .TOC.
   unsigned GotHeaderEntriesNum = 0;
 
-  // For TLS variant 1, the TCB is a fixed size specified by the Target.
-  // For variant 2, the TCB is an unspecified size.
-  // Set to 0 for variant 2.
-  unsigned TcbSize = 0;
-
-  // Set to the offset (in bytes) that the thread pointer is initialized to
-  // point to, relative to the start of the thread local storage.
-  unsigned TlsTpOffset = 0;
-
   bool NeedsThunks = false;
 
   // A 4-byte field corresponding to one or more trap instructions, used to pad
   // executable OutputSections.
-  uint32_t TrapInstr = 0;
+  std::array<uint8_t, 4> TrapInstr;
+
+  // If a target needs to rewrite calls to __morestack to instead call
+  // __morestack_non_split when a split-stack enabled caller calls a
+  // non-split-stack callee this will return true. Otherwise returns false.
+  bool NeedsMoreStackNonSplit = true;
 
   virtual RelExpr adjustRelaxExpr(RelType Type, const uint8_t *Data,
                                   RelExpr Expr) const;
@@ -197,9 +192,13 @@ static inline void reportRangeError(uint8_t *Loc, RelType Type, const Twine &V,
     Hint = "; consider recompiling with -fdebug-types-section to reduce size "
            "of debug sections";
 
-  error(ErrPlace.Loc + "relocation " + lld::toString(Type) +
-        " out of range: " + V.str() + " is not in [" + Twine(Min).str() + ", " +
-        Twine(Max).str() + "]" + Hint);
+  errorOrWarn(ErrPlace.Loc + "relocation " + lld::toString(Type) +
+              " out of range: " + V.str() + " is not in [" + Twine(Min).str() +
+              ", " + Twine(Max).str() + "]" + Hint);
+}
+
+inline unsigned getPltEntryOffset(unsigned Idx) {
+  return Target->PltHeaderSize + Target->PltEntrySize * Idx;
 }
 
 // Make sure that V can be represented as an N bit signed integer.

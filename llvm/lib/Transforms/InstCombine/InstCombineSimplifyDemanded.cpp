@@ -314,11 +314,32 @@ Value *InstCombiner::SimplifyDemandedUseBits(Value *V, APInt DemandedMask,
     Known.One  = std::move(IKnownOne);
     break;
   }
-  case Instruction::Select:
-    // If this is a select as part of a min/max pattern, don't simplify any
-    // further in case we break the structure.
+  case Instruction::Select: {
     Value *LHS, *RHS;
-    if (matchSelectPattern(I, LHS, RHS).Flavor != SPF_UNKNOWN)
+    SelectPatternFlavor SPF = matchSelectPattern(I, LHS, RHS).Flavor;
+    if (SPF == SPF_UMAX) {
+      // UMax(A, C) == A if ...
+      // The lowest non-zero bit of DemandMask is higher than the highest
+      // non-zero bit of C.
+      const APInt *C;
+      unsigned CTZ = DemandedMask.countTrailingZeros();
+      if (match(RHS, m_APInt(C)) && CTZ >= C->getActiveBits())
+        return LHS;
+    } else if (SPF == SPF_UMIN) {
+      // UMin(A, C) == A if ...
+      // The lowest non-zero bit of DemandMask is higher than the highest
+      // non-one bit of C.
+      // This comes from using DeMorgans on the above umax example.
+      const APInt *C;
+      unsigned CTZ = DemandedMask.countTrailingZeros();
+      if (match(RHS, m_APInt(C)) &&
+          CTZ >= C->getBitWidth() - C->countLeadingOnes())
+        return LHS;
+    }
+
+    // If this is a select as part of any other min/max pattern, don't simplify
+    // any further in case we break the structure.
+    if (SPF != SPF_UNKNOWN)
       return nullptr;
 
     if (SimplifyDemandedBits(I, 2, DemandedMask, RHSKnown, Depth + 1) ||
@@ -336,6 +357,7 @@ Value *InstCombiner::SimplifyDemandedUseBits(Value *V, APInt DemandedMask,
     Known.One = RHSKnown.One & LHSKnown.One;
     Known.Zero = RHSKnown.Zero & LHSKnown.Zero;
     break;
+  }
   case Instruction::ZExt:
   case Instruction::Trunc: {
     unsigned SrcBitWidth = I->getOperand(0)->getType()->getScalarSizeInBits();
@@ -666,6 +688,30 @@ Value *InstCombiner::SimplifyDemandedUseBits(Value *V, APInt DemandedMask,
         }
 
         // TODO: Could compute known zero/one bits based on the input.
+        break;
+      }
+      case Intrinsic::fshr:
+      case Intrinsic::fshl: {
+        const APInt *SA;
+        if (!match(I->getOperand(2), m_APInt(SA)))
+          break;
+
+        // Normalize to funnel shift left. APInt shifts of BitWidth are well-
+        // defined, so no need to special-case zero shifts here.
+        uint64_t ShiftAmt = SA->urem(BitWidth);
+        if (II->getIntrinsicID() == Intrinsic::fshr)
+          ShiftAmt = BitWidth - ShiftAmt;
+
+        APInt DemandedMaskLHS(DemandedMask.lshr(ShiftAmt));
+        APInt DemandedMaskRHS(DemandedMask.shl(BitWidth - ShiftAmt));
+        if (SimplifyDemandedBits(I, 0, DemandedMaskLHS, LHSKnown, Depth + 1) ||
+            SimplifyDemandedBits(I, 1, DemandedMaskRHS, RHSKnown, Depth + 1))
+          return I;
+
+        Known.Zero = LHSKnown.Zero.shl(ShiftAmt) |
+                     RHSKnown.Zero.lshr(BitWidth - ShiftAmt);
+        Known.One = LHSKnown.One.shl(ShiftAmt) |
+                    RHSKnown.One.lshr(BitWidth - ShiftAmt);
         break;
       }
       case Intrinsic::x86_mmx_pmovmskb:

@@ -7,12 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 #include "llvm/Support/Casting.h"
 
-// Project includes
 #include "lldb/Breakpoint/Breakpoint.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Breakpoint/BreakpointLocationCollection.h"
@@ -855,6 +851,10 @@ size_t Breakpoint::GetNumResolvedLocations() const {
   // Return the number of breakpoints that are actually resolved and set down
   // in the inferior process.
   return m_locations.GetNumResolvedLocations();
+}
+
+bool Breakpoint::HasResolvedLocations() const {
+  return GetNumResolvedLocations() > 0;
 }
 
 size_t Breakpoint::GetNumLocations() const { return m_locations.GetSize(); }

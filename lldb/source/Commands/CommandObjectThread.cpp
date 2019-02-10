@@ -9,10 +9,6 @@
 
 #include "CommandObjectThread.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/SourceManager.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Host/Host.h"
@@ -654,6 +650,7 @@ protected:
       bool_stop_other_threads = true;
 
     ThreadPlanSP new_plan_sp;
+    Status new_plan_status;
 
     if (m_step_type == eStepTypeInto) {
       StackFrame *frame = thread->GetStackFrameAtIndex(0).get();
@@ -703,7 +700,7 @@ protected:
             abort_other_plans, range,
             frame->GetSymbolContext(eSymbolContextEverything),
             m_options.m_step_in_target.c_str(), stop_other_threads,
-            m_options.m_step_in_avoid_no_debug,
+            new_plan_status, m_options.m_step_in_avoid_no_debug,
             m_options.m_step_out_avoid_no_debug);
 
         if (new_plan_sp && !m_options.m_avoid_regexp.empty()) {
@@ -713,7 +710,7 @@ protected:
         }
       } else
         new_plan_sp = thread->QueueThreadPlanForStepSingleInstruction(
-            false, abort_other_plans, bool_stop_other_threads);
+            false, abort_other_plans, bool_stop_other_threads, new_plan_status);
     } else if (m_step_type == eStepTypeOver) {
       StackFrame *frame = thread->GetStackFrameAtIndex(0).get();
 
@@ -722,25 +719,26 @@ protected:
             abort_other_plans,
             frame->GetSymbolContext(eSymbolContextEverything).line_entry,
             frame->GetSymbolContext(eSymbolContextEverything),
-            stop_other_threads, m_options.m_step_out_avoid_no_debug);
+            stop_other_threads, new_plan_status,
+            m_options.m_step_out_avoid_no_debug);
       else
         new_plan_sp = thread->QueueThreadPlanForStepSingleInstruction(
-            true, abort_other_plans, bool_stop_other_threads);
+            true, abort_other_plans, bool_stop_other_threads, new_plan_status);
     } else if (m_step_type == eStepTypeTrace) {
       new_plan_sp = thread->QueueThreadPlanForStepSingleInstruction(
-          false, abort_other_plans, bool_stop_other_threads);
+          false, abort_other_plans, bool_stop_other_threads, new_plan_status);
     } else if (m_step_type == eStepTypeTraceOver) {
       new_plan_sp = thread->QueueThreadPlanForStepSingleInstruction(
-          true, abort_other_plans, bool_stop_other_threads);
+          true, abort_other_plans, bool_stop_other_threads, new_plan_status);
     } else if (m_step_type == eStepTypeOut) {
       new_plan_sp = thread->QueueThreadPlanForStepOut(
           abort_other_plans, nullptr, false, bool_stop_other_threads, eVoteYes,
-          eVoteNoOpinion, thread->GetSelectedFrameIndex(),
+          eVoteNoOpinion, thread->GetSelectedFrameIndex(), new_plan_status,
           m_options.m_step_out_avoid_no_debug);
     } else if (m_step_type == eStepTypeScripted) {
       new_plan_sp = thread->QueueThreadPlanForStepScripted(
           abort_other_plans, m_options.m_class_name.c_str(),
-          bool_stop_other_threads);
+          bool_stop_other_threads, new_plan_status);
     } else {
       result.AppendError("step type is not supported");
       result.SetStatus(eReturnStatusFailed);
@@ -798,7 +796,7 @@ protected:
         result.SetStatus(eReturnStatusSuccessContinuingNoResult);
       }
     } else {
-      result.AppendError("Couldn't find thread plan to implement step type.");
+      result.SetError(new_plan_status);
       result.SetStatus(eReturnStatusFailed);
     }
     return result.Succeeded();
@@ -1194,6 +1192,7 @@ protected:
       }
 
       ThreadPlanSP new_plan_sp;
+      Status new_plan_status;
 
       if (frame->HasDebugInformation()) {
         // Finally we got here...  Translate the given line number to a bunch
@@ -1274,13 +1273,19 @@ protected:
 
         new_plan_sp = thread->QueueThreadPlanForStepUntil(
             abort_other_plans, &address_list.front(), address_list.size(),
-            m_options.m_stop_others, m_options.m_frame_idx);
-        // User level plans should be master plans so they can be interrupted
-        // (e.g. by hitting a breakpoint) and other plans executed by the user
-        // (stepping around the breakpoint) and then a "continue" will resume
-        // the original plan.
-        new_plan_sp->SetIsMasterPlan(true);
-        new_plan_sp->SetOkayToDiscard(false);
+            m_options.m_stop_others, m_options.m_frame_idx, new_plan_status);
+        if (new_plan_sp) {
+          // User level plans should be master plans so they can be interrupted
+          // (e.g. by hitting a breakpoint) and other plans executed by the
+          // user (stepping around the breakpoint) and then a "continue" will
+          // resume the original plan.
+          new_plan_sp->SetIsMasterPlan(true);
+          new_plan_sp->SetOkayToDiscard(false);
+        } else {
+          result.SetError(new_plan_status);
+          result.SetStatus(eReturnStatusFailed);
+          return false;
+        }
       } else {
         result.AppendErrorWithFormat(
             "Frame index %u of thread %u has no debug information.\n",
@@ -1515,6 +1520,52 @@ public:
 };
 
 //-------------------------------------------------------------------------
+// CommandObjectThreadException
+//-------------------------------------------------------------------------
+
+class CommandObjectThreadException : public CommandObjectIterateOverThreads {
+ public:
+  CommandObjectThreadException(CommandInterpreter &interpreter)
+      : CommandObjectIterateOverThreads(
+            interpreter, "thread exception",
+            "Display the current exception object for a thread. Defaults to "
+            "the current thread.",
+            "thread exception",
+            eCommandRequiresProcess | eCommandTryTargetAPILock |
+                eCommandProcessMustBeLaunched | eCommandProcessMustBePaused) {}
+
+  ~CommandObjectThreadException() override = default;
+
+  bool HandleOneThread(lldb::tid_t tid, CommandReturnObject &result) override {
+    ThreadSP thread_sp =
+        m_exe_ctx.GetProcessPtr()->GetThreadList().FindThreadByID(tid);
+    if (!thread_sp) {
+      result.AppendErrorWithFormat("thread no longer exists: 0x%" PRIx64 "\n",
+                                   tid);
+      result.SetStatus(eReturnStatusFailed);
+      return false;
+    }
+
+    Stream &strm = result.GetOutputStream();
+    ValueObjectSP exception_object_sp = thread_sp->GetCurrentException();
+    if (exception_object_sp) {
+      exception_object_sp->Dump(strm);
+    }
+
+    /* TODO(kubamracek)
+    ThreadSP exception_thread_sp = thread_sp->GetCurrentExceptionBacktrace();
+    if (exception_thread_sp && exception_thread_sp->IsValid()) {
+      const uint32_t num_frames_with_source = 0;
+      const bool stop_format = false;
+      exception_thread_sp->GetStatus(strm, m_options.m_start, m_options.m_count,
+                                     num_frames_with_source, stop_format);
+    }*/
+
+    return true;
+  }
+};
+
+//-------------------------------------------------------------------------
 // CommandObjectThreadReturn
 //-------------------------------------------------------------------------
 
@@ -1729,7 +1780,7 @@ public:
 
       switch (short_option) {
       case 'f':
-        m_filenames.AppendIfUnique(FileSpec(option_arg, false));
+        m_filenames.AppendIfUnique(FileSpec(option_arg));
         if (m_filenames.GetSize() > 1)
           return Status("only one source file expected.");
         break;
@@ -2059,6 +2110,9 @@ CommandObjectMultiwordThread::CommandObjectMultiwordThread(
                  CommandObjectSP(new CommandObjectThreadUntil(interpreter)));
   LoadSubCommand("info",
                  CommandObjectSP(new CommandObjectThreadInfo(interpreter)));
+  LoadSubCommand(
+      "exception",
+      CommandObjectSP(new CommandObjectThreadException(interpreter)));
   LoadSubCommand("step-in",
                  CommandObjectSP(new CommandObjectThreadStepWithTypeAndScope(
                      interpreter, "thread step-in",

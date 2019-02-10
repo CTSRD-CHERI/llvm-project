@@ -75,6 +75,7 @@ DynamicLoader *DynamicLoaderMacOSXDYLD::CreateInstance(Process *process,
       case llvm::Triple::IOS:
       case llvm::Triple::TvOS:
       case llvm::Triple::WatchOS:
+      // NEED_BRIDGEOS_TRIPLE case llvm::Triple::BridgeOS:
         create = triple_ref.getVendor() == llvm::Triple::Apple;
         break;
       default:
@@ -84,7 +85,7 @@ DynamicLoader *DynamicLoaderMacOSXDYLD::CreateInstance(Process *process,
     }
   }
 
-  if (UseDYLDSPI(process) == true) {
+  if (UseDYLDSPI(process)) {
     create = false;
   }
 
@@ -121,12 +122,12 @@ bool DynamicLoaderMacOSXDYLD::ProcessDidExec() {
       // value differs from the Process' image info address. When a process
       // execs itself it might cause a change if ASLR is enabled.
       const addr_t shlib_addr = m_process->GetImageInfoAddress();
-      if (m_process_image_addr_is_all_images_infos == true &&
+      if (m_process_image_addr_is_all_images_infos &&
           shlib_addr != m_dyld_all_image_infos_addr) {
         // The image info address from the process is the
         // 'dyld_all_image_infos' address and it has changed.
         did_exec = true;
-      } else if (m_process_image_addr_is_all_images_infos == false &&
+      } else if (!m_process_image_addr_is_all_images_infos &&
                  shlib_addr == m_dyld.address) {
         // The image info address from the process is the mach_header address
         // for dyld and it has changed.
@@ -692,9 +693,7 @@ bool DynamicLoaderMacOSXDYLD::ReadImageInfos(
                                        error);
       // don't resolve the path
       if (error.Success()) {
-        const bool resolve_path = false;
-        image_infos[i].file_spec.SetFile(raw_path, resolve_path,
-                                         FileSpec::Style::native);
+        image_infos[i].file_spec.SetFile(raw_path, FileSpec::Style::native);
       }
     }
     return true;
@@ -893,7 +892,8 @@ uint32_t DynamicLoaderMacOSXDYLD::ParseLoadCommands(const DataExtractor &data,
           const lldb::offset_t name_offset =
               load_cmd_offset + data.GetU32(&offset);
           const char *path = data.PeekCStr(name_offset);
-          lc_id_dylinker->SetFile(path, true, FileSpec::Style::native);
+          lc_id_dylinker->SetFile(path, FileSpec::Style::native);
+          FileSystem::Instance().Resolve(*lc_id_dylinker);
         }
         break;
 

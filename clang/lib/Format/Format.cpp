@@ -29,7 +29,6 @@
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/DiagnosticOptions.h"
 #include "clang/Basic/SourceManager.h"
-#include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Lex/Lexer.h"
 #include "clang/Tooling/Inclusions/HeaderIncludes.h"
 #include "llvm/ADT/STLExtras.h"
@@ -38,6 +37,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Regex.h"
+#include "llvm/Support/VirtualFileSystem.h"
 #include "llvm/Support/YAMLTraits.h"
 #include <algorithm>
 #include <memory>
@@ -1504,7 +1504,8 @@ public:
           SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
           FormatTokenLexer &Tokens) override {
     assert(Style.Language == FormatStyle::LK_Cpp);
-    IsObjC = guessIsObjC(AnnotatedLines, Tokens.getKeywords());
+    IsObjC = guessIsObjC(Env.getSourceManager(), AnnotatedLines,
+                         Tokens.getKeywords());
     tooling::Replacements Result;
     return {Result, 0};
   }
@@ -1512,8 +1513,10 @@ public:
   bool isObjC() { return IsObjC; }
 
 private:
-  static bool guessIsObjC(const SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
-                          const AdditionalKeywords &Keywords) {
+  static bool
+  guessIsObjC(const SourceManager &SourceManager,
+              const SmallVectorImpl<AnnotatedLine *> &AnnotatedLines,
+              const AdditionalKeywords &Keywords) {
     // Keep this array sorted, since we are binary searching over it.
     static constexpr llvm::StringLiteral FoundationIdentifiers[] = {
         "CGFloat",
@@ -1604,9 +1607,15 @@ private:
                                TT_ObjCBlockLBrace, TT_ObjCBlockLParen,
                                TT_ObjCDecl, TT_ObjCForIn, TT_ObjCMethodExpr,
                                TT_ObjCMethodSpecifier, TT_ObjCProperty)) {
+          LLVM_DEBUG(llvm::dbgs()
+                     << "Detected ObjC at location "
+                     << FormatTok->Tok.getLocation().printToString(
+                            SourceManager)
+                     << " token: " << FormatTok->TokenText << " token type: "
+                     << getTokenTypeName(FormatTok->Type) << "\n");
           return true;
         }
-        if (guessIsObjC(Line->Children, Keywords))
+        if (guessIsObjC(SourceManager, Line->Children, Keywords))
           return true;
       }
     }
@@ -2264,8 +2273,7 @@ LangOptions getFormattingLangOpts(const FormatStyle &Style) {
   bool AlternativeOperators = Style.isCpp();
   LangOpts.CXXOperatorNames = AlternativeOperators ? 1 : 0;
   LangOpts.Bool = 1;
-  LangOpts.ObjC1 = 1;
-  LangOpts.ObjC2 = 1;
+  LangOpts.ObjC = 1;
   LangOpts.MicrosoftExt = 1;    // To get kw___try, kw___finally.
   LangOpts.DeclSpecKeyword = 1; // To get __declspec.
   return LangOpts;
@@ -2326,9 +2334,10 @@ const char *DefaultFallbackStyle = "LLVM";
 
 llvm::Expected<FormatStyle> getStyle(StringRef StyleName, StringRef FileName,
                                      StringRef FallbackStyleName,
-                                     StringRef Code, vfs::FileSystem *FS) {
+                                     StringRef Code,
+                                     llvm::vfs::FileSystem *FS) {
   if (!FS) {
-    FS = vfs::getRealFileSystem().get();
+    FS = llvm::vfs::getRealFileSystem().get();
   }
   FormatStyle Style = getLLVMStyle();
   Style.Language = guessLanguage(FileName, Code);

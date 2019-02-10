@@ -192,10 +192,10 @@ def _decorateTest(mode,
             py_version is None) or _check_expected_version(
             py_version[0], py_version[1], sys.version_info)
         skip_for_macos_version = (macos_version is None) or (
-            _check_expected_version(
+            (platform.mac_ver()[0] != "") and (_check_expected_version(
                 macos_version[0],
                 macos_version[1],
-                platform.mac_ver()[0]))
+                platform.mac_ver()[0])))
 
         # For the test to be skipped, all specified (e.g. not None) parameters must be True.
         # An unspecified parameter means "any", so those are marked skip by default.  And we skip
@@ -457,12 +457,6 @@ def expectedFlakey(expected_fn, bugnumber=None):
         return expectedFailure_impl
 
 
-def expectedFlakeyDsym(bugnumber=None):
-    def fn(self):
-        return self.getDebugInfo() == "dwarf"
-    return expectedFlakey(fn, bugnumber)
-
-
 def expectedFlakeyOS(oslist, bugnumber=None, compilers=None):
     def fn(self):
         return (self.getPlatform() in oslist and
@@ -598,28 +592,6 @@ def skipUnlessWindows(func):
 def skipUnlessDarwin(func):
     """Decorate the item to skip tests that should be skipped on any non Darwin platform."""
     return skipUnlessPlatform(lldbplatformutil.getDarwinOSTriples())(func)
-
-
-def skipUnlessGoInstalled(func):
-    """Decorate the item to skip tests when no Go compiler is available."""
-
-    def is_go_missing(self):
-        compiler = self.getGoCompilerVersion()
-        if not compiler:
-            return "skipping because go compiler not found"
-        match_version = re.search(r"(\d+\.\d+(\.\d+)?)", compiler)
-        if not match_version:
-            # Couldn't determine version.
-            return "skipping because go version could not be parsed out of {}".format(
-                compiler)
-        else:
-            min_strict_version = StrictVersion("1.4.0")
-            compiler_strict_version = StrictVersion(match_version.group(1))
-            if compiler_strict_version < min_strict_version:
-                return "skipping because available version ({}) does not meet minimum required version ({})".format(
-                    compiler_strict_version, min_strict_version)
-        return None
-    return skipTestIfFn(is_go_missing)(func)
 
 
 def skipIfHostIncompatibleWithRemote(func):

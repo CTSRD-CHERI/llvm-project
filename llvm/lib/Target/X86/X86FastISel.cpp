@@ -3734,9 +3734,6 @@ unsigned X86FastISel::X86MaterializeInt(const ConstantInt *CI, MVT VT) {
   switch (VT.SimpleTy) {
   default: llvm_unreachable("Unexpected value type");
   case MVT::i1:
-    // TODO: Support this properly.
-    if (Subtarget->hasAVX512())
-      return 0;
     VT = MVT::i8;
     LLVM_FALLTHROUGH;
   case MVT::i8:  Opc = X86::MOV8ri;  break;
@@ -4001,7 +3998,8 @@ bool X86FastISel::tryToFoldLoadIntoMI(MachineInstr *MI, unsigned OpNo,
   }
 
   Result->addMemOperand(*FuncInfo.MF, createMachineMemOperandFor(LI));
-  MI->eraseFromParent();
+  MachineBasicBlock::iterator I(MI);
+  removeDeadCode(I, std::next(I));
   return true;
 }
 

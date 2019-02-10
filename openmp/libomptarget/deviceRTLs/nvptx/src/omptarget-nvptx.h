@@ -123,7 +123,7 @@ enum DATA_SHARING_SIZES {
 struct DataSharingStateTy {
   __kmpc_data_sharing_slot *SlotPtr[DS_Max_Warp_Number];
   void *StackPtr[DS_Max_Warp_Number];
-  void *FramePtr[DS_Max_Warp_Number];
+  void * volatile FramePtr[DS_Max_Warp_Number];
   int32_t ActiveThreads[DS_Max_Warp_Number];
 };
 // Additional worker slot type which is initialized with the default worker slot
@@ -251,7 +251,6 @@ public:
   INLINE omptarget_nvptx_WorkDescr &WorkDescr() {
     return workDescrForActiveParallel;
   }
-  INLINE omp_lock_t *CriticalLock() { return &criticalLock; }
   INLINE uint64_t *getLastprivateIterBuffer() { return &lastprivateIterBuffer; }
 
   // init
@@ -303,7 +302,6 @@ private:
       levelZeroTaskDescr; // icv for team master initial thread
   omptarget_nvptx_WorkDescr
       workDescrForActiveParallel; // one, ONLY for the active par
-  omp_lock_t criticalLock;
   uint64_t lastprivateIterBuffer;
 
   __align__(16)
@@ -344,8 +342,6 @@ public:
   INLINE omptarget_nvptx_TeamDescr &TeamContext() { return teamContext; }
 
   INLINE void InitThreadPrivateContext(int tid);
-  INLINE void SetSourceQueue(uint64_t Src) { SourceQueue = Src; }
-  INLINE uint64_t GetSourceQueue() { return SourceQueue; }
 
 private:
   // team context for this team
@@ -368,13 +364,27 @@ private:
   // state for dispatch with dyn/guided OR static (never use both at a time)
   int64_t nextLowerBound[MAX_THREADS_PER_TEAM];
   int64_t stride[MAX_THREADS_PER_TEAM];
-  // Queue to which this object must be returned.
-  uint64_t SourceQueue;
 };
 
 /// Device envrionment data
 struct omptarget_device_environmentTy {
   int32_t debug_level;
+};
+
+/// Memory manager for statically allocated memory.
+class omptarget_nvptx_SimpleMemoryManager {
+private:
+  __align__(128) struct MemDataTy {
+    volatile unsigned keys[OMP_STATE_COUNT];
+  } MemData[MAX_SM];
+
+  INLINE uint32_t hash(unsigned key) const {
+    return key & (OMP_STATE_COUNT - 1);
+  }
+
+public:
+  INLINE void Release();
+  INLINE const void *Acquire(const void *buf, size_t size);
 };
 
 class omptarget_nvptx_SimpleThreadPrivateContext {
@@ -386,8 +396,6 @@ public:
             "Expected SPMD + uninitialized runtime modes.");
     par_level[GetThreadIdInBlock()] = 0;
   }
-  static INLINE void *Allocate(size_t DataSize);
-  static INLINE void Deallocate(void *Ptr);
   INLINE void IncParLevel() {
     ASSERT0(LT_FUSSY, isSPMDMode() && isRuntimeUninitialized(),
             "Expected SPMD + uninitialized runtime modes.");
@@ -424,6 +432,10 @@ extern __device__ omptarget_device_environmentTy omptarget_device_environment;
 // global data tables
 ////////////////////////////////////////////////////////////////////////////////
 
+extern __device__ omptarget_nvptx_SimpleMemoryManager
+    omptarget_nvptx_simpleMemoryManager;
+extern __device__ __shared__ uint32_t usedMemIdx;
+extern __device__ __shared__ uint32_t usedSlotIdx;
 extern __device__ __shared__
     omptarget_nvptx_ThreadPrivateContext *omptarget_nvptx_threadPrivateContext;
 extern __device__ __shared__ omptarget_nvptx_SimpleThreadPrivateContext

@@ -503,10 +503,14 @@ static void addParameterValuesToBindings(const StackFrameContext *CalleeCtx,
     const ParmVarDecl *ParamDecl = *I;
     assert(ParamDecl && "Formal parameter has no decl?");
 
+    // TODO: Support allocator calls.
     if (Call.getKind() != CE_CXXAllocator)
       if (Call.isArgumentConstructedDirectly(Idx))
         continue;
 
+    // TODO: Allocators should receive the correct size and possibly alignment,
+    // determined in compile-time but not represented as arg-expressions,
+    // which makes getArgSVal() fail and return UnknownVal.
     SVal ArgVal = Call.getArgSVal(Idx);
     if (!ArgVal.isUnknown()) {
       Loc ParamLoc = SVB.makeLoc(MRMgr.getVarRegion(ParamDecl, CalleeCtx));
@@ -546,17 +550,18 @@ RuntimeDefinition AnyFunctionCall::getRuntimeDefinition() const {
     return RuntimeDefinition(Decl);
   }
 
-  SubEngine *Engine = getState()->getStateManager().getOwningEngine();
-  AnalyzerOptions &Opts = Engine->getAnalysisManager().options;
+  SubEngine &Engine = getState()->getStateManager().getOwningEngine();
+  AnalyzerOptions &Opts = Engine.getAnalysisManager().options;
 
   // Try to get CTU definition only if CTUDir is provided.
-  if (!Opts.naiveCTUEnabled())
+  if (!Opts.IsNaiveCTUEnabled)
     return {};
 
   cross_tu::CrossTranslationUnitContext &CTUCtx =
-      *Engine->getCrossTranslationUnitContext();
+      *Engine.getCrossTranslationUnitContext();
   llvm::Expected<const FunctionDecl *> CTUDeclOrError =
-      CTUCtx.getCrossTUDefinition(FD, Opts.getCTUDir(), Opts.getCTUIndexName());
+      CTUCtx.getCrossTUDefinition(FD, Opts.CTUDir, Opts.CTUIndexName,
+                                  Opts.DisplayCTUProgress);
 
   if (!CTUDeclOrError) {
     handleAllErrors(CTUDeclOrError.takeError(),
@@ -832,7 +837,7 @@ const BlockDataRegion *BlockCall::getBlockRegion() const {
 ArrayRef<ParmVarDecl*> BlockCall::parameters() const {
   const BlockDecl *D = getDecl();
   if (!D)
-    return nullptr;
+    return None;
   return D->parameters();
 }
 
@@ -1082,7 +1087,7 @@ bool ObjCMethodCall::canBeOverridenInSubclass(ObjCInterfaceDecl *IDecl,
                                              Selector Sel) const {
   assert(IDecl);
   AnalysisManager &AMgr =
-      getState()->getStateManager().getOwningEngine()->getAnalysisManager();
+      getState()->getStateManager().getOwningEngine().getAnalysisManager();
   // If the class interface is declared inside the main file, assume it is not
   // subcassed.
   // TODO: It could actually be subclassed if the subclass is private as well.

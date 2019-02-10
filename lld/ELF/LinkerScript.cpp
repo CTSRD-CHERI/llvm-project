@@ -169,7 +169,7 @@ void LinkerScript::addSymbol(SymbolAssignment *Cmd) {
   // Define a symbol.
   Symbol *Sym;
   uint8_t Visibility = Cmd->Hidden ? STV_HIDDEN : STV_DEFAULT;
-  std::tie(Sym, std::ignore) = Symtab->insert(Cmd->Name, /*Type*/ 0, Visibility,
+  std::tie(Sym, std::ignore) = Symtab->insert(Cmd->Name, Visibility,
                                               /*CanOmitFromDynSym*/ false,
                                               /*File*/ nullptr);
   ExprValue Value = Cmd->Expression();
@@ -202,7 +202,7 @@ static void declareSymbol(SymbolAssignment *Cmd) {
   // We can't calculate final value right now.
   Symbol *Sym;
   uint8_t Visibility = Cmd->Hidden ? STV_HIDDEN : STV_DEFAULT;
-  std::tie(Sym, std::ignore) = Symtab->insert(Cmd->Name, /*Type*/ 0, Visibility,
+  std::tie(Sym, std::ignore) = Symtab->insert(Cmd->Name, Visibility,
                                               /*CanOmitFromDynSym*/ false,
                                               /*File*/ nullptr);
   replaceSymbol<Defined>(Sym, nullptr, Cmd->Name, STB_GLOBAL, Visibility,
@@ -415,9 +415,7 @@ LinkerScript::computeInputSections(const InputSectionDescription *Cmd) {
 
 void LinkerScript::discard(ArrayRef<InputSection *> V) {
   for (InputSection *S : V) {
-    if (S == In.ShStrTab || S == In.Dynamic || S == In.DynSymTab ||
-        S == In.DynStrTab || S == In.RelaPlt || S == In.RelaDyn ||
-        S == In.RelrDyn)
+    if (S == In.ShStrTab || S == In.RelaDyn || S == In.RelrDyn)
       error("discarding " + S->Name + " section is not allowed");
 
     // You can discard .hash and .gnu.hash sections by linker scripts. Since

@@ -12,9 +12,11 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/FormatVariadic.h"
+#include <limits>
 #include <unordered_set>
 #include <vector>
 
+namespace llvm {
 namespace exegesis {
 
 static const char kCsvSep = ',';
@@ -94,7 +96,21 @@ writeClusterId(llvm::raw_ostream &OS,
 
 template <EscapeTag Tag>
 static void writeMeasurementValue(llvm::raw_ostream &OS, const double Value) {
-  writeEscaped<Tag>(OS, llvm::formatv("{0:F}", Value).str());
+  // Given Value, if we wanted to serialize it to a string,
+  // how many base-10 digits will we need to store, max?
+  static constexpr auto MaxDigitCount =
+      std::numeric_limits<decltype(Value)>::max_digits10;
+  // Also, we will need a decimal separator.
+  static constexpr auto DecimalSeparatorLen = 1; // '.' e.g.
+  // So how long of a string will the serialization produce, max?
+  static constexpr auto SerializationLen = MaxDigitCount + DecimalSeparatorLen;
+
+  // WARNING: when changing the format, also adjust the small-size estimate ^.
+  static constexpr StringLiteral SimpleFloatFormat = StringLiteral("{0:F}");
+
+  writeEscaped<Tag>(
+      OS,
+      llvm::formatv(SimpleFloatFormat.data(), Value).sstr<SerializationLen>());
 }
 
 template <typename EscapeTag, EscapeTag Tag>
@@ -113,13 +129,11 @@ void Analysis::writeSnippet(llvm::raw_ostream &OS,
       writeEscaped<Tag>(OS, "[error decoding asm snippet]");
       return;
     }
-    Lines.emplace_back();
-    std::string &Line = Lines.back();
-    llvm::raw_string_ostream OSS(Line);
+    llvm::SmallString<128> InstPrinterStr; // FIXME: magic number.
+    llvm::raw_svector_ostream OSS(InstPrinterStr);
     InstPrinter_->printInst(&MI, OSS, "", *SubtargetInfo_);
     Bytes = Bytes.drop_front(MISize);
-    OSS.flush();
-    Line = llvm::StringRef(Line).trim().str();
+    Lines.emplace_back(llvm::StringRef(InstPrinterStr).trim());
   }
   writeEscaped<Tag>(OS, llvm::join(Lines, Separator));
 }
@@ -657,11 +671,11 @@ llvm::Error Analysis::run<Analysis::PrintSchedClassInconsistencies>(
 
     // Print any scheduling class that has at least one cluster that does not
     // match the checked-in data.
-    if (std::all_of(SchedClassClusters.begin(), SchedClassClusters.end(),
-                    [this, &RSCAndPoints](const SchedClassCluster &C) {
-                      return C.measurementsMatch(*SubtargetInfo_,
-                                                 RSCAndPoints.RSC, Clustering_);
-                    }))
+    if (llvm::all_of(SchedClassClusters,
+                     [this, &RSCAndPoints](const SchedClassCluster &C) {
+                       return C.measurementsMatch(
+                           *SubtargetInfo_, RSCAndPoints.RSC, Clustering_);
+                     }))
       continue; // Nothing weird.
 
     OS << "<div class=\"inconsistency\"><p>Sched Class <span "
@@ -796,3 +810,4 @@ std::vector<std::pair<uint16_t, float>> computeIdealizedProcResPressure(
 }
 
 } // namespace exegesis
+} // namespace llvm

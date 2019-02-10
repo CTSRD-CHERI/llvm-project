@@ -7,10 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/API/SBBreakpoint.h"
 #include "lldb/API/SBBreakpointLocation.h"
 #include "lldb/API/SBDebugger.h"
@@ -690,6 +686,13 @@ SBBreakpoint::GetNumBreakpointLocationsFromEvent(const lldb::SBEvent &event) {
         (Breakpoint::BreakpointEventData::GetNumBreakpointLocationsFromEvent(
             event.GetSP()));
   return num_locations;
+}
+
+bool SBBreakpoint::IsHardware() const {
+  BreakpointSP bkpt_sp = GetSP();
+  if (bkpt_sp)
+    return bkpt_sp->IsHardware();
+  return false;
 }
 
 BreakpointSP SBBreakpoint::GetSP() const { return m_opaque_wp.lock(); }

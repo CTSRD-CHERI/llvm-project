@@ -7,12 +7,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "MCTargetDesc/RISCVAsmBackend.h"
 #include "MCTargetDesc/RISCVMCExpr.h"
 #include "MCTargetDesc/RISCVMCTargetDesc.h"
 #include "MCTargetDesc/RISCVTargetStreamer.h"
 #include "Utils/RISCVBaseInfo.h"
+#include "Utils/RISCVMatInt.h"
 #include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
@@ -39,6 +43,8 @@ namespace {
 struct RISCVOperand;
 
 class RISCVAsmParser : public MCTargetAsmParser {
+  SmallVector<FeatureBitset, 4> FeatureBitStack;
+
   SMLoc getLoc() const { return getParser().getTok().getLoc(); }
   bool isRV64() const { return getSTI().hasFeature(RISCV::Feature64Bit); }
 
@@ -115,6 +121,20 @@ class RISCVAsmParser : public MCTargetAsmParser {
     }
   }
 
+  void pushFeatureBits() {
+    FeatureBitStack.push_back(getSTI().getFeatureBits());
+  }
+
+  bool popFeatureBits() {
+    if (FeatureBitStack.empty())
+      return true;
+
+    FeatureBitset FeatureBits = FeatureBitStack.pop_back_val();
+    copySTI().setFeatureBits(FeatureBits);
+    setAvailableFeatures(ComputeAvailableFeatures(FeatureBits));
+
+    return false;
+  }
 public:
   enum RISCVMatchResultTy {
     Match_Dummy = FIRST_TARGET_MATCH_RESULT_TY,
@@ -1164,6 +1184,21 @@ bool RISCVAsmParser::parseOperand(OperandVector &Operands, StringRef Mnemonic) {
 bool RISCVAsmParser::ParseInstruction(ParseInstructionInfo &Info,
                                       StringRef Name, SMLoc NameLoc,
                                       OperandVector &Operands) {
+  // Ensure that if the instruction occurs when relaxation is enabled,
+  // relocations are forced for the file. Ideally this would be done when there
+  // is enough information to reliably determine if the instruction itself may
+  // cause relaxations. Unfortunately instruction processing stage occurs in the
+  // same pass as relocation emission, so it's too late to set a 'sticky bit'
+  // for the entire file.
+  if (getSTI().getFeatureBits()[RISCV::FeatureRelax]) {
+    auto *Assembler = getTargetStreamer().getStreamer().getAssemblerPtr();
+    if (Assembler != nullptr) {
+      RISCVAsmBackend &MAB =
+          static_cast<RISCVAsmBackend &>(Assembler->getBackend());
+      MAB.setForceRelocs();
+    }
+  }
+
   // First operand is token for instruction
   Operands.push_back(RISCVOperand::createToken(Name, NameLoc, isRV64()));
 
@@ -1267,6 +1302,33 @@ bool RISCVAsmParser::parseDirectiveOption() {
 
   StringRef Option = Tok.getIdentifier();
 
+  if (Option == "push") {
+    getTargetStreamer().emitDirectiveOptionPush();
+
+    Parser.Lex();
+    if (Parser.getTok().isNot(AsmToken::EndOfStatement))
+      return Error(Parser.getTok().getLoc(),
+                   "unexpected token, expected end of statement");
+
+    pushFeatureBits();
+    return false;
+  }
+
+  if (Option == "pop") {
+    SMLoc StartLoc = Parser.getTok().getLoc();
+    getTargetStreamer().emitDirectiveOptionPop();
+
+    Parser.Lex();
+    if (Parser.getTok().isNot(AsmToken::EndOfStatement))
+      return Error(Parser.getTok().getLoc(),
+                   "unexpected token, expected end of statement");
+
+    if (popFeatureBits())
+      return Error(StartLoc, ".option pop with no .option push");
+
+    return false;
+  }
+
   if (Option == "rvc") {
     getTargetStreamer().emitDirectiveOptionRVC();
 
@@ -1291,9 +1353,34 @@ bool RISCVAsmParser::parseDirectiveOption() {
     return false;
   }
 
+  if (Option == "relax") {
+    getTargetStreamer().emitDirectiveOptionRelax();
+
+    Parser.Lex();
+    if (Parser.getTok().isNot(AsmToken::EndOfStatement))
+      return Error(Parser.getTok().getLoc(),
+                   "unexpected token, expected end of statement");
+
+    setFeatureBits(RISCV::FeatureRelax, "relax");
+    return false;
+  }
+
+  if (Option == "norelax") {
+    getTargetStreamer().emitDirectiveOptionNoRelax();
+
+    Parser.Lex();
+    if (Parser.getTok().isNot(AsmToken::EndOfStatement))
+      return Error(Parser.getTok().getLoc(),
+                   "unexpected token, expected end of statement");
+
+    clearFeatureBits(RISCV::FeatureRelax, "relax");
+    return false;
+  }
+
   // Unknown option.
   Warning(Parser.getTok().getLoc(),
-          "unknown option, expected 'rvc' or 'norvc'");
+          "unknown option, expected 'push', 'pop', 'rvc', 'norvc', 'relax' or "
+          "'norelax'");
   Parser.eatToEndOfStatement();
   return false;
 }
@@ -1307,80 +1394,23 @@ void RISCVAsmParser::emitToStreamer(MCStreamer &S, const MCInst &Inst) {
 
 void RISCVAsmParser::emitLoadImm(unsigned DestReg, int64_t Value,
                                  MCStreamer &Out) {
-  if (isInt<32>(Value)) {
-    // Emits the MC instructions for loading a 32-bit constant into a register.
-    //
-    // Depending on the active bits in the immediate Value v, the following
-    // instruction sequences are emitted:
-    //
-    // v == 0                        : ADDI(W)
-    // v[0,12) != 0 && v[12,32) == 0 : ADDI(W)
-    // v[0,12) == 0 && v[12,32) != 0 : LUI
-    // v[0,32) != 0                  : LUI+ADDI(W)
-    //
-    int64_t Hi20 = ((Value + 0x800) >> 12) & 0xFFFFF;
-    int64_t Lo12 = SignExtend64<12>(Value);
-    unsigned SrcReg = RISCV::X0;
+  RISCVMatInt::InstSeq Seq;
+  RISCVMatInt::generateInstSeq(Value, isRV64(), Seq);
 
-    if (Hi20) {
-      emitToStreamer(Out,
-                     MCInstBuilder(RISCV::LUI).addReg(DestReg).addImm(Hi20));
-      SrcReg = DestReg;
+  unsigned SrcReg = RISCV::X0;
+  for (RISCVMatInt::Inst &Inst : Seq) {
+    if (Inst.Opc == RISCV::LUI) {
+      emitToStreamer(
+          Out, MCInstBuilder(RISCV::LUI).addReg(DestReg).addImm(Inst.Imm));
+    } else {
+      emitToStreamer(
+          Out, MCInstBuilder(Inst.Opc).addReg(DestReg).addReg(SrcReg).addImm(
+                   Inst.Imm));
     }
 
-    if (Lo12 || Hi20 == 0) {
-      unsigned AddiOpcode =
-          STI->hasFeature(RISCV::Feature64Bit) ? RISCV::ADDIW : RISCV::ADDI;
-      emitToStreamer(Out, MCInstBuilder(AddiOpcode)
-                              .addReg(DestReg)
-                              .addReg(SrcReg)
-                              .addImm(Lo12));
-    }
-    return;
+    // Only the first instruction has X0 as its source.
+    SrcReg = DestReg;
   }
-  assert(STI->hasFeature(RISCV::Feature64Bit) &&
-         "Target must be 64-bit to support a >32-bit constant");
-
-  // In the worst case, for a full 64-bit constant, a sequence of 8 instructions
-  // (i.e., LUI+ADDIW+SLLI+ADDI+SLLI+ADDI+SLLI+ADDI) has to be emmitted. Note
-  // that the first two instructions (LUI+ADDIW) can contribute up to 32 bits
-  // while the following ADDI instructions contribute up to 12 bits each.
-  //
-  // On the first glance, implementing this seems to be possible by simply
-  // emitting the most significant 32 bits (LUI+ADDIW) followed by as many left
-  // shift (SLLI) and immediate additions (ADDI) as needed. However, due to the
-  // fact that ADDI performs a sign extended addition, doing it like that would
-  // only be possible when at most 11 bits of the ADDI instructions are used.
-  // Using all 12 bits of the ADDI instructions, like done by GAS, actually
-  // requires that the constant is processed starting with the least significant
-  // bit.
-  //
-  // In the following, constants are processed from LSB to MSB but instruction
-  // emission is performed from MSB to LSB by recursively calling
-  // emitLoadImm. In each recursion, first the lowest 12 bits are removed
-  // from the constant and the optimal shift amount, which can be greater than
-  // 12 bits if the constant is sparse, is determined. Then, the shifted
-  // remaining constant is processed recursively and gets emitted as soon as it
-  // fits into 32 bits. The emission of the shifts and additions is subsequently
-  // performed when the recursion returns.
-  //
-  int64_t Lo12 = SignExtend64<12>(Value);
-  int64_t Hi52 = (Value + 0x800) >> 12;
-  int ShiftAmount = 12 + findFirstSet((uint64_t)Hi52);
-  Hi52 = SignExtend64(Hi52 >> (ShiftAmount - 12), 64 - ShiftAmount);
-
-  emitLoadImm(DestReg, Hi52, Out);
-
-  emitToStreamer(Out, MCInstBuilder(RISCV::SLLI)
-                          .addReg(DestReg)
-                          .addReg(DestReg)
-                          .addImm(ShiftAmount));
-
-  if (Lo12)
-    emitToStreamer(Out, MCInstBuilder(RISCV::ADDI)
-                            .addReg(DestReg)
-                            .addReg(DestReg)
-                            .addImm(Lo12));
 }
 
 void RISCVAsmParser::emitLoadLocalAddress(MCInst &Inst, SMLoc IDLoc,

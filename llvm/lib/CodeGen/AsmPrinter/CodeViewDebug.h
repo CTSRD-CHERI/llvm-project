@@ -54,6 +54,9 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   BumpPtrAllocator Allocator;
   codeview::GlobalTypeTableBuilder TypeTable;
 
+  /// Whether to emit type record hashes into .debug$H.
+  bool EmitDebugGlobalHashes = false;
+
   /// The codeview CPU type used by the translation unit.
   codeview::CPUType TheCPU;
 
@@ -152,6 +155,9 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
 
     /// Number of bytes pushed to save CSRs.
     unsigned CSRSize = 0;
+
+    /// Adjustment to apply on x86 when using the VFRAME frame pointer.
+    int OffsetAdjustment = 0;
 
     /// Two-bit value indicating which register is the designated frame pointer
     /// register for local variables. Included in S_FRAMEPROC.
@@ -272,6 +278,8 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
 
   void emitCompilerInformation();
 
+  void emitBuildInfo();
+
   void emitInlineeLinesSubsection();
 
   void emitDebugInfoForThunk(const Function *GV,
@@ -294,8 +302,17 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   /// Returns an end label for use with endCVSubsection when the subsection is
   /// finished.
   MCSymbol *beginCVSubsection(codeview::DebugSubsectionKind Kind);
-
   void endCVSubsection(MCSymbol *EndLabel);
+
+  /// Opens a symbol record of the given kind. Returns an end label for use with
+  /// endSymbolRecord.
+  MCSymbol *beginSymbolRecord(codeview::SymbolKind Kind);
+  void endSymbolRecord(MCSymbol *SymEnd);
+
+  /// Emits an S_END, S_INLINESITE_END, or S_PROC_ID_END record. These records
+  /// are empty, so we emit them with a simpler assembly sequence that doesn't
+  /// involve labels.
+  void emitEndSymbolRecord(codeview::SymbolKind EndKind);
 
   void emitInlinedCallSite(const FunctionInfo &FI, const DILocation *InlinedAt,
                            const InlineSite &Site);
@@ -337,6 +354,10 @@ class LLVM_LIBRARY_VISIBILITY CodeViewDebug : public DebugHandlerBase {
   /// for it.
   codeview::TypeIndex getTypeIndex(DITypeRef TypeRef,
                                    DITypeRef ClassTyRef = DITypeRef());
+
+  codeview::TypeIndex
+  getTypeIndexForThisPtr(DITypeRef TypeRef,
+                         const DISubroutineType *SubroutineTy);
 
   codeview::TypeIndex getTypeIndexForReferenceTo(DITypeRef TypeRef);
 

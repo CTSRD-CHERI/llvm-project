@@ -16,9 +16,10 @@
 #ifndef LLVM_TOOLS_LLVM_MCA_VIEW_H
 #define LLVM_TOOLS_LLVM_MCA_VIEW_H
 
-#include "HWEventListener.h"
+#include "llvm/MCA/HWEventListener.h"
 #include "llvm/Support/raw_ostream.h"
 
+namespace llvm {
 namespace mca {
 
 class View : public HWEventListener {
@@ -28,5 +29,6 @@ public:
   void anchor() override;
 };
 } // namespace mca
+} // namespace llvm
 
 #endif

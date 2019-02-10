@@ -84,7 +84,7 @@ static Symbol *getSymbol(SectionChunk *SC, uint32_t Addr) {
   return Candidate;
 }
 
-static std::string getSymbolLocations(ObjFile *File, uint32_t SymIndex) {
+std::string getSymbolLocations(ObjFile *File, uint32_t SymIndex) {
   struct Location {
     Symbol *Sym;
     std::pair<StringRef, uint32_t> FileLine;
@@ -187,8 +187,7 @@ bool SymbolTable::handleMinGWAutomaticImport(Symbol *Sym, StringRef Name) {
   // for __imp_<name> instead, and drop the whole .refptr.<name> chunk.
   DefinedRegular *Refptr =
       dyn_cast_or_null<DefinedRegular>(find((".refptr." + Name).str()));
-  size_t PtrSize = Config->is64() ? 8 : 4;
-  if (Refptr && Refptr->getChunk()->getSize() == PtrSize) {
+  if (Refptr && Refptr->getChunk()->getSize() == Config->Wordsize) {
     SectionChunk *SC = dyn_cast_or_null<SectionChunk>(Refptr->getChunk());
     if (SC && SC->Relocs.size() == 1 && *SC->symbols().begin() == Sym) {
       log("Replacing .refptr." + Name + " with " + Imp->getName());
@@ -241,6 +240,11 @@ void SymbolTable::reportRemainingUndefines() {
         continue;
       }
     }
+
+    // We don't want to report missing Microsoft precompiled headers symbols.
+    // A proper message will be emitted instead in PDBLinker::aquirePrecompObj
+    if (Name.contains("_PchSym_"))
+      continue;
 
     if (Config->MinGW && handleMinGWAutomaticImport(Sym, Name))
       continue;
