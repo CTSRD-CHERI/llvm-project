@@ -557,6 +557,8 @@ public:
     return TargetInfo::hasBuiltinAtomic(AtomicSizeInBits, AlignmentInBits);
   }
 
+  unsigned getUnwindWordWidth() const override;
+
   bool validateTarget(DiagnosticsEngine &Diags) const override;
 };
 } // namespace targets
