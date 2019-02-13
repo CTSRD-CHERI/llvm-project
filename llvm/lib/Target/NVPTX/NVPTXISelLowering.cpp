@@ -180,6 +180,18 @@ static void ComputePTXValueVTs(const TargetLowering &TLI, const DataLayout &DL,
     return;
   }
 
+  // Given a struct type, recursively traverse the elements with custom ComputePTXValueVTs.
+  if (StructType *STy = dyn_cast<StructType>(Ty)) {
+    auto const *SL = DL.getStructLayout(STy);
+    auto ElementNum = 0;
+    for(auto *EI : STy->elements()) {
+      ComputePTXValueVTs(TLI, DL, EI, ValueVTs, Offsets,
+                         StartingOffset + SL->getElementOffset(ElementNum));
+      ++ElementNum;
+    }
+    return;
+  }
+
   ComputeValueVTs(TLI, DL, Ty, TempVTs, &TempOffsets, StartingOffset);
   for (unsigned i = 0, e = TempVTs.size(); i != e; ++i) {
     EVT VT = TempVTs[i];
@@ -1649,7 +1661,12 @@ SDValue NVPTXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     }
   }
 
-  if (!Func) {
+  // Both indirect calls and libcalls have nullptr Func. In order to distinguish
+  // between them we must rely on the call site value which is valid for
+  // indirect calls but is always null for libcalls.
+  bool isIndirectCall = !Func && CS;
+
+  if (isIndirectCall) {
     // This is indirect function call case : PTX requires a prototype of the
     // form
     // proto_0 : .callprototype(.param .b32 _) _ (.param .b32 _);
@@ -1673,7 +1690,7 @@ SDValue NVPTXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     Chain, DAG.getConstant((Ins.size() == 0) ? 0 : 1, dl, MVT::i32), InFlag
   };
   // We model convergent calls as separate opcodes.
-  unsigned Opcode = Func ? NVPTXISD::PrintCallUni : NVPTXISD::PrintCall;
+  unsigned Opcode = isIndirectCall ? NVPTXISD::PrintCall : NVPTXISD::PrintCallUni;
   if (CLI.IsConvergent)
     Opcode = Opcode == NVPTXISD::PrintCallUni ? NVPTXISD::PrintConvergentCallUni
                                               : NVPTXISD::PrintConvergentCall;
@@ -1707,12 +1724,12 @@ SDValue NVPTXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
   SDVTList CallArgEndVTs = DAG.getVTList(MVT::Other, MVT::Glue);
   SDValue CallArgEndOps[] = { Chain,
-                              DAG.getConstant(Func ? 1 : 0, dl, MVT::i32),
+                              DAG.getConstant(isIndirectCall ? 0 : 1, dl, MVT::i32),
                               InFlag };
   Chain = DAG.getNode(NVPTXISD::CallArgEnd, dl, CallArgEndVTs, CallArgEndOps);
   InFlag = Chain.getValue(1);
 
-  if (!Func) {
+  if (isIndirectCall) {
     SDVTList PrototypeVTs = DAG.getVTList(MVT::Other, MVT::Glue);
     SDValue PrototypeOps[] = { Chain,
                                DAG.getConstant(uniqueCallSite, dl, MVT::i32),

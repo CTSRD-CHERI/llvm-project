@@ -23,9 +23,9 @@
 #include "clang/AST/Expr.h"
 #include "clang/AST/RecordLayout.h"
 #include "clang/AST/StmtVisitor.h"
+#include "clang/Basic/CodeGenOptions.h"
 #include "clang/Basic/FixedPoint.h"
 #include "clang/Basic/TargetInfo.h"
-#include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
@@ -1717,8 +1717,9 @@ Value *ScalarExprEmitter::VisitMemberExpr(MemberExpr *E) {
     CGF.EmitIgnoredExpr(E->getBase());
     return CGF.emitScalarConstant(Constant, E);
   } else {
-    llvm::APSInt Value;
-    if (E->EvaluateAsInt(Value, CGF.getContext(), Expr::SE_AllowSideEffects)) {
+    Expr::EvalResult Result;
+    if (E->EvaluateAsInt(Result, CGF.getContext(), Expr::SE_AllowSideEffects)) {
+      llvm::APSInt Value = Result.Val.getInt();
       CGF.EmitIgnoredExpr(E->getBase());
       return Builder.getInt(Value);
     }
@@ -2597,9 +2598,11 @@ Value *ScalarExprEmitter::VisitUnaryLNot(const UnaryOperator *E) {
 
 Value *ScalarExprEmitter::VisitOffsetOfExpr(OffsetOfExpr *E) {
   // Try folding the offsetof to a constant.
-  llvm::APSInt Value;
-  if (E->EvaluateAsInt(Value, CGF.getContext()))
+  Expr::EvalResult EVResult;
+  if (E->EvaluateAsInt(EVResult, CGF.getContext())) {
+    llvm::APSInt Value = EVResult.Val.getInt();
     return Builder.getInt(Value);
+  }
 
   // Loop over the components of the offsetof to compute the value.
   unsigned n = E->getNumComponents();

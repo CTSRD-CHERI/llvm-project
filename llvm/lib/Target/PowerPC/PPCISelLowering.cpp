@@ -251,12 +251,6 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
     setOperationAction(ISD::UREM, MVT::i64, Expand);
   }
 
-  if (Subtarget.hasP9Vector()) {
-    setOperationAction(ISD::ABS, MVT::v4i32, Legal);
-    setOperationAction(ISD::ABS, MVT::v8i16, Legal);
-    setOperationAction(ISD::ABS, MVT::v16i8, Legal);
-  }
-
   // Don't use SMUL_LOHI/UMUL_LOHI or SDIVREM/UDIVREM to lower SREM/UREM.
   setOperationAction(ISD::UMUL_LOHI, MVT::i32, Expand);
   setOperationAction(ISD::SMUL_LOHI, MVT::i32, Expand);
@@ -323,12 +317,14 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
   // to speed up scalar BSWAP64.
   // CTPOP or CTTZ were introduced in P8/P9 respectively
   setOperationAction(ISD::BSWAP, MVT::i32  , Expand);
-  if (Subtarget.isISA3_0()) {
+  if (Subtarget.hasP9Vector())
     setOperationAction(ISD::BSWAP, MVT::i64  , Custom);
+  else
+    setOperationAction(ISD::BSWAP, MVT::i64  , Expand);
+  if (Subtarget.isISA3_0()) {
     setOperationAction(ISD::CTTZ , MVT::i32  , Legal);
     setOperationAction(ISD::CTTZ , MVT::i64  , Legal);
   } else {
-    setOperationAction(ISD::BSWAP, MVT::i64  , Expand);
     setOperationAction(ISD::CTTZ , MVT::i32  , Expand);
     setOperationAction(ISD::CTTZ , MVT::i64  , Expand);
   }
@@ -554,6 +550,7 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
       // add/sub are legal for all supported vector VT's.
       setOperationAction(ISD::ADD, VT, Legal);
       setOperationAction(ISD::SUB, VT, Legal);
+      setOperationAction(ISD::ABS, VT, Custom);
 
       // Vector instructions introduced in P8
       if (Subtarget.hasP8Altivec() && (VT.SimpleTy != MVT::v1i128)) {
@@ -658,6 +655,11 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
     setOperationAction(ISD::FCEIL, MVT::v4f32, Legal);
     setOperationAction(ISD::FTRUNC, MVT::v4f32, Legal);
     setOperationAction(ISD::FNEARBYINT, MVT::v4f32, Legal);
+
+    // Without hasP8Altivec set, v2i64 SMAX isn't available.
+    // But ABS custom lowering requires SMAX support.
+    if (!Subtarget.hasP8Altivec())
+      setOperationAction(ISD::ABS, MVT::v2i64, Expand);
 
     addRegisterClass(MVT::v4f32, &PPC::VRRCRegClass);
     addRegisterClass(MVT::v4i32, &PPC::VRRCRegClass);
@@ -1081,6 +1083,11 @@ PPCTargetLowering::PPCTargetLowering(const PPCTargetMachine &TM,
     setTargetDAGCombine(ISD::FSQRT);
   }
 
+  if (Subtarget.hasP9Altivec()) {
+    setTargetDAGCombine(ISD::ABS);
+    setTargetDAGCombine(ISD::VSELECT);
+  }
+
   // Darwin long double math library functions have $LDBL128 appended.
   if (Subtarget.isDarwin()) {
     setLibcallName(RTLIB::COS_PPCF128, "cosl$LDBL128");
@@ -1341,6 +1348,7 @@ const char *PPCTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case PPCISD::RFEBB:           return "PPCISD::RFEBB";
   case PPCISD::XXSWAPD:         return "PPCISD::XXSWAPD";
   case PPCISD::SWAP_NO_CHAIN:   return "PPCISD::SWAP_NO_CHAIN";
+  case PPCISD::VABSD:           return "PPCISD::VABSD";
   case PPCISD::QVFPERM:         return "PPCISD::QVFPERM";
   case PPCISD::QVGPCI:          return "PPCISD::QVGPCI";
   case PPCISD::QVALIGNI:        return "PPCISD::QVALIGNI";
@@ -2208,11 +2216,10 @@ bool PPCTargetLowering::SelectAddressRegReg(SDValue N, SDValue &Base,
     // If this is an or of disjoint bitfields, we can codegen this as an add
     // (for better address arithmetic) if the LHS and RHS of the OR are provably
     // disjoint.
-    KnownBits LHSKnown, RHSKnown;
-    DAG.computeKnownBits(N.getOperand(0), LHSKnown);
+    KnownBits LHSKnown = DAG.computeKnownBits(N.getOperand(0));
 
     if (LHSKnown.Zero.getBoolValue()) {
-      DAG.computeKnownBits(N.getOperand(1), RHSKnown);
+      KnownBits RHSKnown = DAG.computeKnownBits(N.getOperand(1));
       // If all of the bits are known zero on the LHS or RHS, the add won't
       // carry.
       if (~(LHSKnown.Zero | RHSKnown.Zero) == 0) {
@@ -2311,8 +2318,7 @@ bool PPCTargetLowering::SelectAddressRegImm(SDValue N, SDValue &Disp,
       // If this is an or of disjoint bitfields, we can codegen this as an add
       // (for better address arithmetic) if the LHS and RHS of the OR are
       // provably disjoint.
-      KnownBits LHSKnown;
-      DAG.computeKnownBits(N.getOperand(0), LHSKnown);
+      KnownBits LHSKnown = DAG.computeKnownBits(N.getOperand(0));
 
       if ((LHSKnown.Zero.getZExtValue()|~(uint64_t)imm) == ~0ULL) {
         // If all of the bits are known zero on the LHS or RHS, the add won't
@@ -9000,35 +9006,6 @@ SDValue PPCTargetLowering::LowerINTRINSIC_WO_CHAIN(SDValue Op,
     return DAG.getRegister(PPC::R2, MVT::i32);
   }
 
-  // We are looking for absolute values here.
-  // The idea is to try to fit one of two patterns:
-  //  max (a, (0-a))  OR  max ((0-a), a)
-  if (Subtarget.hasP9Vector() &&
-      (IntrinsicID == Intrinsic::ppc_altivec_vmaxsw ||
-       IntrinsicID == Intrinsic::ppc_altivec_vmaxsh ||
-       IntrinsicID == Intrinsic::ppc_altivec_vmaxsb)) {
-    SDValue V1 = Op.getOperand(1);
-    SDValue V2 = Op.getOperand(2);
-    if (V1.getSimpleValueType() == V2.getSimpleValueType() &&
-        (V1.getSimpleValueType() == MVT::v4i32 ||
-         V1.getSimpleValueType() == MVT::v8i16 ||
-         V1.getSimpleValueType() == MVT::v16i8)) {
-      if ( V1.getOpcode() == ISD::SUB &&
-           ISD::isBuildVectorAllZeros(V1.getOperand(0).getNode()) &&
-           V1.getOperand(1) == V2 ) {
-        // Generate the abs instruction with the operands
-        return DAG.getNode(ISD::ABS, dl, V2.getValueType(),V2);
-      }
-
-      if ( V2.getOpcode() == ISD::SUB &&
-           ISD::isBuildVectorAllZeros(V2.getOperand(0).getNode()) &&
-           V2.getOperand(1) == V1 ) {
-        // Generate the abs instruction with the operands
-        return DAG.getNode(ISD::ABS, dl, V1.getValueType(),V1);
-      }
-    }
-  }
-
   // If this is a lowered altivec predicate compare, CompareOpc is set to the
   // opcode number of the comparison.
   int CompareOpc;
@@ -9569,6 +9546,44 @@ SDValue PPCTargetLowering::LowerMUL(SDValue Op, SelectionDAG &DAG) const {
   }
 }
 
+SDValue PPCTargetLowering::LowerABS(SDValue Op, SelectionDAG &DAG) const {
+
+  assert(Op.getOpcode() == ISD::ABS && "Should only be called for ISD::ABS");
+
+  EVT VT = Op.getValueType();
+  assert(VT.isVector() &&
+         "Only set vector abs as custom, scalar abs shouldn't reach here!");
+  assert((VT == MVT::v2i64 || VT == MVT::v4i32 || VT == MVT::v8i16 ||
+          VT == MVT::v16i8) &&
+         "Unexpected vector element type!");
+  assert((VT != MVT::v2i64 || Subtarget.hasP8Altivec()) &&
+         "Current subtarget doesn't support smax v2i64!");
+
+  // For vector abs, it can be lowered to:
+  // abs x
+  // ==>
+  // y = -x
+  // smax(x, y)
+
+  SDLoc dl(Op);
+  SDValue X = Op.getOperand(0);
+  SDValue Zero = DAG.getConstant(0, dl, VT);
+  SDValue Y = DAG.getNode(ISD::SUB, dl, VT, Zero, X);
+
+  // SMAX patch https://reviews.llvm.org/D47332
+  // hasn't landed yet, so use intrinsic first here.
+  // TODO: Should use SMAX directly once SMAX patch landed
+  Intrinsic::ID BifID = Intrinsic::ppc_altivec_vmaxsw;
+  if (VT == MVT::v2i64)
+    BifID = Intrinsic::ppc_altivec_vmaxsd;
+  else if (VT == MVT::v8i16)
+    BifID = Intrinsic::ppc_altivec_vmaxsh;
+  else if (VT == MVT::v16i8)
+    BifID = Intrinsic::ppc_altivec_vmaxsb;
+  
+  return BuildIntrinsicOp(BifID, X, Y, DAG, dl, VT);
+}
+
 /// LowerOperation - Provide custom lowering hooks for some operations.
 ///
 SDValue PPCTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
@@ -9621,6 +9636,7 @@ SDValue PPCTargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   case ISD::EXTRACT_VECTOR_ELT: return LowerEXTRACT_VECTOR_ELT(Op, DAG);
   case ISD::INSERT_VECTOR_ELT:  return LowerINSERT_VECTOR_ELT(Op, DAG);
   case ISD::MUL:                return LowerMUL(Op, DAG);
+  case ISD::ABS:                return LowerABS(Op, DAG);
 
   // For counter-based loop handling.
   case ISD::INTRINSIC_W_CHAIN:  return SDValue();
@@ -11297,9 +11313,8 @@ SDValue PPCTargetLowering::DAGCombineTruncBoolExt(SDNode *N,
     } else {
       // This is neither a signed nor an unsigned comparison, just make sure
       // that the high bits are equal.
-      KnownBits Op1Known, Op2Known;
-      DAG.computeKnownBits(N->getOperand(0), Op1Known);
-      DAG.computeKnownBits(N->getOperand(1), Op2Known);
+      KnownBits Op1Known = DAG.computeKnownBits(N->getOperand(0));
+      KnownBits Op2Known = DAG.computeKnownBits(N->getOperand(1));
 
       // We don't really care about what is known about the first bit (if
       // anything), so clear it in all masks prior to comparing them.
@@ -12603,9 +12618,10 @@ SDValue PPCTargetLowering::PerformDAGCombine(SDNode *N,
         (Op1VT == MVT::i32 || Op1VT == MVT::i16 ||
          (Subtarget.hasLDBRX() && Subtarget.isPPC64() && Op1VT == MVT::i64))) {
 
-      // STBRX can only handle simple types.
+      // STBRX can only handle simple types and it makes no sense to store less
+      // two bytes in byte-reversed order.
       EVT mVT = cast<StoreSDNode>(N)->getMemoryVT();
-      if (mVT.isExtended())
+      if (mVT.isExtended() || mVT.getSizeInBits() < 16)
         break;
 
       SDValue BSwapOp = N->getOperand(1).getOperand(0);
@@ -12981,6 +12997,39 @@ SDValue PPCTargetLowering::PerformDAGCombine(SDNode *N,
           }
         }
       }
+
+      // Combine vmaxsw/h/b(a, a's negation) to abs(a)
+      // Expose the vabsduw/h/b opportunity for down stream
+      if (!DCI.isAfterLegalizeDAG() && Subtarget.hasP9Altivec() &&
+          (IID == Intrinsic::ppc_altivec_vmaxsw ||
+           IID == Intrinsic::ppc_altivec_vmaxsh ||
+           IID == Intrinsic::ppc_altivec_vmaxsb)) {
+        SDValue V1 = N->getOperand(1);
+        SDValue V2 = N->getOperand(2);
+        if ((V1.getSimpleValueType() == MVT::v4i32 ||
+             V1.getSimpleValueType() == MVT::v8i16 ||
+             V1.getSimpleValueType() == MVT::v16i8) &&
+            V1.getSimpleValueType() == V2.getSimpleValueType()) {
+          // (0-a, a)
+          if (V1.getOpcode() == ISD::SUB &&
+              ISD::isBuildVectorAllZeros(V1.getOperand(0).getNode()) &&
+              V1.getOperand(1) == V2) {
+            return DAG.getNode(ISD::ABS, dl, V2.getValueType(), V2);
+          }
+          // (a, 0-a)
+          if (V2.getOpcode() == ISD::SUB &&
+              ISD::isBuildVectorAllZeros(V2.getOperand(0).getNode()) &&
+              V2.getOperand(1) == V1) {
+            return DAG.getNode(ISD::ABS, dl, V1.getValueType(), V1);
+          }
+          // (x-y, y-x)
+          if (V1.getOpcode() == ISD::SUB && V2.getOpcode() == ISD::SUB &&
+              V1.getOperand(0) == V2.getOperand(1) &&
+              V1.getOperand(1) == V2.getOperand(0)) {
+            return DAG.getNode(ISD::ABS, dl, V1.getValueType(), V1);
+          }
+        }
+      }
     }
 
     break;
@@ -13213,6 +13262,10 @@ SDValue PPCTargetLowering::PerformDAGCombine(SDNode *N,
   }
   case ISD::BUILD_VECTOR:
     return DAGCombineBuildVector(N, DCI);
+  case ISD::ABS: 
+    return combineABS(N, DCI);
+  case ISD::VSELECT: 
+    return combineVSelect(N, DCI);
   }
 
   return SDValue();
@@ -13704,6 +13757,35 @@ unsigned PPCTargetLowering::getRegisterByName(const char* RegName, EVT VT,
   if (Reg)
     return Reg;
   report_fatal_error("Invalid register name global variable");
+}
+
+bool PPCTargetLowering::isAccessedAsGotIndirect(SDValue GA) const {
+  // 32-bit SVR4 ABI access everything as got-indirect.
+  if (Subtarget.isSVR4ABI() && !Subtarget.isPPC64())
+    return true;
+
+  CodeModel::Model CModel = getTargetMachine().getCodeModel();
+  // If it is small or large code model, module locals are accessed
+  // indirectly by loading their address from .toc/.got. The difference
+  // is that for large code model we have ADDISTocHa + LDtocL and for
+  // small code model we simply have LDtoc.
+  if (CModel == CodeModel::Small || CModel == CodeModel::Large)
+    return true;
+
+  // JumpTable and BlockAddress are accessed as got-indirect. 
+  if (isa<JumpTableSDNode>(GA) || isa<BlockAddressSDNode>(GA))
+    return true;
+
+  if (GlobalAddressSDNode *G = dyn_cast<GlobalAddressSDNode>(GA)) {
+    const GlobalValue *GV = G->getGlobal();
+    unsigned char GVFlags = Subtarget.classifyGlobalReference(GV);
+    // The NLP flag indicates that a global access has to use an
+    // extra indirection.
+    if (GVFlags & PPCII::MO_NLP_FLAG)
+      return true;
+  }
+
+  return false;
 }
 
 bool
@@ -14469,4 +14551,110 @@ isMaskAndCmp0FoldingBeneficial(const Instruction &AndI) const {
 
   // For non-constant masks, we can always use the record-form and.
   return true;
+}
+
+// Transform (abs (sub (zext a), (zext b))) to (vabsd a b 0)
+// Transform (abs (sub (zext a), (zext_invec b))) to (vabsd a b 0)
+// Transform (abs (sub (zext_invec a), (zext_invec b))) to (vabsd a b 0)
+// Transform (abs (sub (zext_invec a), (zext b))) to (vabsd a b 0)
+// Transform (abs (sub a, b) to (vabsd a b 1)) if a & b of type v4i32
+SDValue PPCTargetLowering::combineABS(SDNode *N, DAGCombinerInfo &DCI) const {
+  assert((N->getOpcode() == ISD::ABS) && "Need ABS node here");
+  assert(Subtarget.hasP9Altivec() &&
+         "Only combine this when P9 altivec supported!");
+  EVT VT = N->getValueType(0);
+  if (VT != MVT::v4i32 && VT != MVT::v8i16 && VT != MVT::v16i8)
+    return SDValue();
+
+  SelectionDAG &DAG = DCI.DAG;
+  SDLoc dl(N);
+  if (N->getOperand(0).getOpcode() == ISD::SUB) {
+    // Even for signed integers, if it's known to be positive (as signed
+    // integer) due to zero-extended inputs.
+    unsigned SubOpcd0 = N->getOperand(0)->getOperand(0).getOpcode();
+    unsigned SubOpcd1 = N->getOperand(0)->getOperand(1).getOpcode();
+    if ((SubOpcd0 == ISD::ZERO_EXTEND ||
+         SubOpcd0 == ISD::ZERO_EXTEND_VECTOR_INREG) &&
+        (SubOpcd1 == ISD::ZERO_EXTEND ||
+         SubOpcd1 == ISD::ZERO_EXTEND_VECTOR_INREG)) {
+      return DAG.getNode(PPCISD::VABSD, dl, N->getOperand(0).getValueType(),
+                         N->getOperand(0)->getOperand(0),
+                         N->getOperand(0)->getOperand(1),
+                         DAG.getTargetConstant(0, dl, MVT::i32));
+    }
+
+    // For type v4i32, it can be optimized with xvnegsp + vabsduw
+    if (N->getOperand(0).getValueType() == MVT::v4i32 &&
+        N->getOperand(0).hasOneUse()) {
+      return DAG.getNode(PPCISD::VABSD, dl, N->getOperand(0).getValueType(),
+                         N->getOperand(0)->getOperand(0),
+                         N->getOperand(0)->getOperand(1),
+                         DAG.getTargetConstant(1, dl, MVT::i32));
+    }
+  }
+
+  return SDValue();
+}
+
+// For type v4i32/v8ii16/v16i8, transform
+// from (vselect (setcc a, b, setugt), (sub a, b), (sub b, a)) to (vabsd a, b)
+// from (vselect (setcc a, b, setuge), (sub a, b), (sub b, a)) to (vabsd a, b)
+// from (vselect (setcc a, b, setult), (sub b, a), (sub a, b)) to (vabsd a, b)
+// from (vselect (setcc a, b, setule), (sub b, a), (sub a, b)) to (vabsd a, b)
+SDValue PPCTargetLowering::combineVSelect(SDNode *N,
+                                          DAGCombinerInfo &DCI) const {
+  assert((N->getOpcode() == ISD::VSELECT) && "Need VSELECT node here");
+  assert(Subtarget.hasP9Altivec() &&
+         "Only combine this when P9 altivec supported!");
+
+  SelectionDAG &DAG = DCI.DAG;
+  SDLoc dl(N);
+  SDValue Cond = N->getOperand(0);
+  SDValue TrueOpnd = N->getOperand(1);
+  SDValue FalseOpnd = N->getOperand(2);
+  EVT VT = N->getOperand(1).getValueType();
+
+  if (Cond.getOpcode() != ISD::SETCC || TrueOpnd.getOpcode() != ISD::SUB ||
+      FalseOpnd.getOpcode() != ISD::SUB)
+    return SDValue();
+
+  // ABSD only available for type v4i32/v8i16/v16i8
+  if (VT != MVT::v4i32 && VT != MVT::v8i16 && VT != MVT::v16i8)
+    return SDValue();
+
+  // At least to save one more dependent computation
+  if (!(Cond.hasOneUse() || TrueOpnd.hasOneUse() || FalseOpnd.hasOneUse()))
+    return SDValue();
+
+  ISD::CondCode CC = cast<CondCodeSDNode>(Cond.getOperand(2))->get();
+
+  // Can only handle unsigned comparison here
+  switch (CC) {
+  default:
+    return SDValue();
+  case ISD::SETUGT:
+  case ISD::SETUGE:
+    break;
+  case ISD::SETULT:
+  case ISD::SETULE:
+    std::swap(TrueOpnd, FalseOpnd);
+    break;
+  }
+
+  SDValue CmpOpnd1 = Cond.getOperand(0);
+  SDValue CmpOpnd2 = Cond.getOperand(1);
+
+  // SETCC CmpOpnd1 CmpOpnd2 cond
+  // TrueOpnd = CmpOpnd1 - CmpOpnd2
+  // FalseOpnd = CmpOpnd2 - CmpOpnd1
+  if (TrueOpnd.getOperand(0) == CmpOpnd1 &&
+      TrueOpnd.getOperand(1) == CmpOpnd2 &&
+      FalseOpnd.getOperand(0) == CmpOpnd2 &&
+      FalseOpnd.getOperand(1) == CmpOpnd1) {
+    return DAG.getNode(PPCISD::VABSD, dl, N->getOperand(1).getValueType(),
+                       CmpOpnd1, CmpOpnd2,
+                       DAG.getTargetConstant(0, dl, MVT::i32));
+  }
+
+  return SDValue();
 }

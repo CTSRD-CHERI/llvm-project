@@ -495,6 +495,7 @@ private:
     DK_CFI_UNDEFINED,
     DK_CFI_REGISTER,
     DK_CFI_WINDOW_SAVE,
+    DK_CFI_B_KEY_FRAME,
     DK_MACROS_ON,
     DK_MACROS_OFF,
     DK_ALTMACRO,
@@ -2954,20 +2955,20 @@ bool AsmParser::parseDirectiveAscii(StringRef IDVal, bool ZeroTerminated) {
 bool AsmParser::parseDirectiveReloc(SMLoc DirectiveLoc) {
   const MCExpr *Offset;
   const MCExpr *Expr = nullptr;
-
-  SMLoc OffsetLoc = Lexer.getTok().getLoc();
   int64_t OffsetValue;
-  // We can only deal with constant expressions at the moment.
+  SMLoc OffsetLoc = Lexer.getTok().getLoc();
 
   if (parseExpression(Offset))
     return true;
 
-  if (check(!Offset->evaluateAsAbsolute(OffsetValue,
-                                        getStreamer().getAssemblerPtr()),
-            OffsetLoc, "expression is not a constant value") ||
-      check(OffsetValue < 0, OffsetLoc, "expression is negative") ||
-      parseToken(AsmToken::Comma, "expected comma") ||
-      check(getTok().isNot(AsmToken::Identifier), "expected relocation name"))
+  if ((Offset->evaluateAsAbsolute(OffsetValue,
+                                  getStreamer().getAssemblerPtr()) &&
+       check(OffsetValue < 0, OffsetLoc, "expression is negative")) ||
+      (check(Offset->getKind() != llvm::MCExpr::Constant &&
+             Offset->getKind() != llvm::MCExpr::SymbolRef,
+             OffsetLoc, "expected non-negative number or a label")) ||
+      (parseToken(AsmToken::Comma, "expected comma") ||
+       check(getTok().isNot(AsmToken::Identifier), "expected relocation name")))
     return true;
 
   SMLoc NameLoc = Lexer.getTok().getLoc();
@@ -3375,9 +3376,12 @@ bool AsmParser::parseDirectiveFile(SMLoc DirectiveLoc) {
     }
   }
 
-  if (FileNumber == -1)
+  if (FileNumber == -1) {
+    if (!getContext().getAsmInfo()->hasSingleParameterDotFile())
+      return Error(DirectiveLoc,
+                   "target does not support '.file' without a number");
     getStreamer().EmitFileDirective(Filename);
-  else {
+  } else {
     // In case there is a -g option as well as debug info from directive .file,
     // we turn off the -g option, directly use the existing debug info instead.
     // Also reset any implicit ".file 0" for the assembler source.
@@ -5318,6 +5322,7 @@ void AsmParser::initializeDirectiveKindMap() {
   DirectiveKindMap[".cfi_undefined"] = DK_CFI_UNDEFINED;
   DirectiveKindMap[".cfi_register"] = DK_CFI_REGISTER;
   DirectiveKindMap[".cfi_window_save"] = DK_CFI_WINDOW_SAVE;
+  DirectiveKindMap[".cfi_b_key_frame"] = DK_CFI_B_KEY_FRAME;
   DirectiveKindMap[".macros_on"] = DK_MACROS_ON;
   DirectiveKindMap[".macros_off"] = DK_MACROS_OFF;
   DirectiveKindMap[".macro"] = DK_MACRO;

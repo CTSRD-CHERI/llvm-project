@@ -376,6 +376,8 @@ Optional<MCFixupKind> MipsAsmBackend::getFixupKind(StringRef Name) const {
             (MCFixupKind)Mips::fixup_MICROMIPS_TLS_TPREL_HI16)
       .Case("R_MICROMIPS_TLS_TPREL_LO16",
             (MCFixupKind)Mips::fixup_MICROMIPS_TLS_TPREL_LO16)
+      .Case("R_MIPS_JALR", (MCFixupKind)Mips::fixup_Mips_JALR)
+      .Case("R_MICROMIPS_JALR", (MCFixupKind)Mips::fixup_MICROMIPS_JALR)
 
       .Case("R_MIPS_CHERI_CAPABILITY", (MCFixupKind)Mips::fixup_CHERI_CAPABILITY)
       .Case("R_MIPS_CHERI_CAPCALL11", (MCFixupKind)Mips::fixup_CHERI_CAPCALL11)
@@ -474,6 +476,8 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_MICROMIPS_TLS_TPREL_LO16",  0,     16,   0 },
     { "fixup_Mips_SUB",                  0,     64,   0 },
     { "fixup_MICROMIPS_SUB",             0,     64,   0 },
+    { "fixup_Mips_JALR",                 0,     32,   0 },
+    { "fixup_MICROMIPS_JALR",            0,     32,   0 }
 
     { "fixup_CHERI_CAPTABLE11",          0,     11,   0 },
     { "fixup_CHERI_CAPTABLE20",          0,     16,   0 },
@@ -574,6 +578,8 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_MICROMIPS_TLS_TPREL_LO16",  16,     16,   0 },
     { "fixup_Mips_SUB",                   0,     64,   0 },
     { "fixup_MICROMIPS_SUB",              0,     64,   0 },
+    { "fixup_Mips_JALR",                  0,     32,   0 },
+    { "fixup_MICROMIPS_JALR",             0,     32,   0 }
 
     { "fixup_CHERI_CAPTABLE11",    21,    11,   0 },
     { "fixup_CHERI_CAPTABLE20",    16,    16,   0 },
@@ -655,6 +661,7 @@ bool MipsAsmBackend::shouldForceRelocation(const MCAssembler &Asm,
   case Mips::fixup_Mips_TLSLDM:
   case Mips::fixup_Mips_TPREL_HI:
   case Mips::fixup_Mips_TPREL_LO:
+  case Mips::fixup_Mips_JALR:
   case Mips::fixup_MICROMIPS_CALL16:
   case Mips::fixup_MICROMIPS_GOT_DISP:
   case Mips::fixup_MICROMIPS_GOT_PAGE:
@@ -667,6 +674,7 @@ bool MipsAsmBackend::shouldForceRelocation(const MCAssembler &Asm,
   case Mips::fixup_MICROMIPS_TLS_LDM:
   case Mips::fixup_MICROMIPS_TLS_TPREL_HI16:
   case Mips::fixup_MICROMIPS_TLS_TPREL_LO16:
+  case Mips::fixup_MICROMIPS_JALR:
   case Mips::fixup_CHERI_CAPTAB_TLSGD_HI16:
   case Mips::fixup_CHERI_CAPTAB_TLSGD_LO16:
   case Mips::fixup_CHERI_CAPTAB_TLSLDM_HI16:

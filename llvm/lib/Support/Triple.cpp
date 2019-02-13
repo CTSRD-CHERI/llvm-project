@@ -212,6 +212,7 @@ StringRef Triple::getOSTypeName(OSType Kind) {
   case Contiki: return "contiki";
   case AMDPAL: return "amdpal";
   case HermitCore: return "hermit";
+  case Hurd: return "hurd";
   }
 
   llvm_unreachable("Invalid OSType");
@@ -514,6 +515,7 @@ static Triple::OSType parseOS(StringRef OSName) {
     .StartsWith("contiki", Triple::Contiki)
     .StartsWith("amdpal", Triple::AMDPAL)
     .StartsWith("hermit", Triple::HermitCore)
+    .StartsWith("hurd", Triple::Hurd)
     .Default(Triple::UnknownOS);
 }
 

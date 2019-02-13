@@ -3759,6 +3759,10 @@ struct DIFlagField : public MDFieldImpl<DINode::DIFlags> {
   DIFlagField() : MDFieldImpl(DINode::FlagZero) {}
 };
 
+struct DISPFlagField : public MDFieldImpl<DISubprogram::DISPFlags> {
+  DISPFlagField() : MDFieldImpl(DISubprogram::SPFlagZero) {}
+};
+
 struct MDSignedField : public MDFieldImpl<int64_t> {
   int64_t Min;
   int64_t Max;
@@ -4042,6 +4046,46 @@ bool LLParser::ParseMDField(LocTy Loc, StringRef Name, DIFlagField &Result) {
   DINode::DIFlags Combined = DINode::FlagZero;
   do {
     DINode::DIFlags Val;
+    if (parseFlag(Val))
+      return true;
+    Combined |= Val;
+  } while (EatIfPresent(lltok::bar));
+
+  Result.assign(Combined);
+  return false;
+}
+
+/// DISPFlagField
+///  ::= uint32
+///  ::= DISPFlagVector
+///  ::= DISPFlagVector '|' DISPFlag* '|' uint32
+template <>
+bool LLParser::ParseMDField(LocTy Loc, StringRef Name, DISPFlagField &Result) {
+
+  // Parser for a single flag.
+  auto parseFlag = [&](DISubprogram::DISPFlags &Val) {
+    if (Lex.getKind() == lltok::APSInt && !Lex.getAPSIntVal().isSigned()) {
+      uint32_t TempVal = static_cast<uint32_t>(Val);
+      bool Res = ParseUInt32(TempVal);
+      Val = static_cast<DISubprogram::DISPFlags>(TempVal);
+      return Res;
+    }
+
+    if (Lex.getKind() != lltok::DISPFlag)
+      return TokError("expected debug info flag");
+
+    Val = DISubprogram::getFlag(Lex.getStrVal());
+    if (!Val)
+      return TokError(Twine("invalid subprogram debug info flag '") +
+                      Lex.getStrVal() + "'");
+    Lex.Lex();
+    return false;
+  };
+
+  // Parse the flags and combine them together.
+  DISubprogram::DISPFlags Combined = DISubprogram::SPFlagZero;
+  do {
+    DISubprogram::DISPFlags Val;
     if (parseFlag(Val))
       return true;
     Combined |= Val;
@@ -4527,8 +4571,8 @@ bool LLParser::ParseDICompileUnit(MDNode *&Result, bool IsDistinct) {
 ///                     isDefinition: true, scopeLine: 8, containingType: !3,
 ///                     virtuality: DW_VIRTUALTIY_pure_virtual,
 ///                     virtualIndex: 10, thisAdjustment: 4, flags: 11,
-///                     isOptimized: false, templateParams: !4, declaration: !5,
-///                     retainedNodes: !6, thrownTypes: !7)
+///                     spFlags: 10, isOptimized: false, templateParams: !4,
+///                     declaration: !5, retainedNodes: !6, thrownTypes: !7)
 bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
   auto Loc = Lex.getLoc();
 #define VISIT_MD_FIELDS(OPTIONAL, REQUIRED)                                    \
@@ -4546,21 +4590,26 @@ bool LLParser::ParseDISubprogram(MDNode *&Result, bool IsDistinct) {
   OPTIONAL(virtualIndex, MDUnsignedField, (0, UINT32_MAX));                    \
   OPTIONAL(thisAdjustment, MDSignedField, (0, INT32_MIN, INT32_MAX));          \
   OPTIONAL(flags, DIFlagField, );                                              \
+  OPTIONAL(spFlags, DISPFlagField, );                                          \
   OPTIONAL(isOptimized, MDBoolField, );                                        \
   OPTIONAL(unit, MDField, );                                                   \
   OPTIONAL(templateParams, MDField, );                                         \
   OPTIONAL(declaration, MDField, );                                            \
-  OPTIONAL(retainedNodes, MDField, );                                              \
+  OPTIONAL(retainedNodes, MDField, );                                          \
   OPTIONAL(thrownTypes, MDField, );
   PARSE_MD_FIELDS();
 #undef VISIT_MD_FIELDS
 
-  if (isDefinition.Val && !IsDistinct)
+  // An explicit spFlags field takes precedence over individual fields in
+  // older IR versions.
+  DISubprogram::DISPFlags SPFlags =
+      spFlags.Seen ? spFlags.Val
+                   : DISubprogram::toSPFlags(isLocal.Val, isDefinition.Val,
+                                             isOptimized.Val, virtuality.Val);
+  if ((SPFlags & DISubprogram::SPFlagDefinition) && !IsDistinct)
     return Lex.Error(
         Loc,
-        "missing 'distinct', required for !DISubprogram when 'isDefinition'");
-  DISubprogram::DISPFlags SPFlags = DISubprogram::toSPFlags(
-      isLocal.Val, isDefinition.Val, isOptimized.Val, virtuality.Val);
+        "missing 'distinct', required for !DISubprogram that is a Definition");
   Result = GET_OR_DISTINCT(
       DISubprogram,
       (Context, scope.Val, name.Val, linkageName.Val, file.Val, line.Val,
@@ -7483,8 +7532,14 @@ bool LLParser::ParseArgs(std::vector<uint64_t> &Args) {
   return false;
 }
 
-static ValueInfo EmptyVI =
-    ValueInfo(false, (GlobalValueSummaryMapTy::value_type *)-8);
+auto FwdVIRef = (GlobalValueSummaryMapTy::value_type *)-8;
+
+static void resolveFwdRef(ValueInfo *Fwd, ValueInfo &Resolved) {
+  bool ReadOnly = Fwd->isReadOnly();
+  *Fwd = Resolved;
+  if (ReadOnly)
+    Fwd->setReadOnly();
+}
 
 /// Stores the given Name/GUID and associated summary into the Index.
 /// Also updates any forward references to the associated entry ID.
@@ -7520,9 +7575,9 @@ void LLParser::AddGlobalValueToIndex(
   auto FwdRefVIs = ForwardRefValueInfos.find(ID);
   if (FwdRefVIs != ForwardRefValueInfos.end()) {
     for (auto VIRef : FwdRefVIs->second) {
-      assert(*VIRef.first == EmptyVI &&
+      assert(VIRef.first->getRef() == FwdVIRef &&
              "Forward referenced ValueInfo expected to be empty");
-      *VIRef.first = VI;
+      resolveFwdRef(VIRef.first, VI);
     }
     ForwardRefValueInfos.erase(FwdRefVIs);
   }
@@ -7685,8 +7740,8 @@ bool LLParser::ParseFunctionSummary(std::string Name, GlobalValue::GUID GUID,
     return true;
 
   auto FS = llvm::make_unique<FunctionSummary>(
-      GVFlags, InstCount, FFlags, std::move(Refs), std::move(Calls),
-      std::move(TypeIdInfo.TypeTests),
+      GVFlags, InstCount, FFlags, /*EntryCount=*/0, std::move(Refs),
+      std::move(Calls), std::move(TypeIdInfo.TypeTests),
       std::move(TypeIdInfo.TypeTestAssumeVCalls),
       std::move(TypeIdInfo.TypeCheckedLoadVCalls),
       std::move(TypeIdInfo.TypeTestAssumeConstVCalls),
@@ -7712,11 +7767,14 @@ bool LLParser::ParseVariableSummary(std::string Name, GlobalValue::GUID GUID,
   GlobalValueSummary::GVFlags GVFlags = GlobalValueSummary::GVFlags(
       /*Linkage=*/GlobalValue::ExternalLinkage, /*NotEligibleToImport=*/false,
       /*Live=*/false, /*IsLocal=*/false);
+  GlobalVarSummary::GVarFlags GVarFlags(/*ReadOnly*/ false);
   std::vector<ValueInfo> Refs;
   if (ParseToken(lltok::colon, "expected ':' here") ||
       ParseToken(lltok::lparen, "expected '(' here") ||
       ParseModuleReference(ModulePath) ||
-      ParseToken(lltok::comma, "expected ',' here") || ParseGVFlags(GVFlags))
+      ParseToken(lltok::comma, "expected ',' here") || ParseGVFlags(GVFlags) ||
+      ParseToken(lltok::comma, "expected ',' here") ||
+      ParseGVarFlags(GVarFlags))
     return true;
 
   // Parse optional refs field
@@ -7728,8 +7786,8 @@ bool LLParser::ParseVariableSummary(std::string Name, GlobalValue::GUID GUID,
   if (ParseToken(lltok::rparen, "expected ')' here"))
     return true;
 
-  auto GS = llvm::make_unique<GlobalVarSummary>(
-      GVFlags, GlobalVarSummary::GVarFlags(), std::move(Refs));
+  auto GS =
+      llvm::make_unique<GlobalVarSummary>(GVFlags, GVarFlags, std::move(Refs));
 
   GS->setModulePath(ModulePath);
 
@@ -7774,7 +7832,7 @@ bool LLParser::ParseAliasSummary(std::string Name, GlobalValue::GUID GUID,
   AS->setModulePath(ModulePath);
 
   // Record forward reference if the aliasee is not parsed yet.
-  if (AliaseeVI == EmptyVI) {
+  if (AliaseeVI.getRef() == FwdVIRef) {
     auto FwdRef = ForwardRefAliasees.insert(
         std::make_pair(GVId, std::vector<std::pair<AliasSummary *, LocTy>>()));
     FwdRef.first->second.push_back(std::make_pair(AS.get(), Loc));
@@ -7896,7 +7954,7 @@ bool LLParser::ParseOptionalCalls(std::vector<FunctionSummary::EdgeTy> &Calls) {
     // Keep track of the Call array index needing a forward reference.
     // We will save the location of the ValueInfo needing an update, but
     // can only do so once the std::vector is finalized.
-    if (VI == EmptyVI)
+    if (VI.getRef() == FwdVIRef)
       IdToIndexMap[GVId].push_back(std::make_pair(Calls.size(), Loc));
     Calls.push_back(FunctionSummary::EdgeTy{VI, CalleeInfo(Hotness, RelBF)});
 
@@ -7908,7 +7966,7 @@ bool LLParser::ParseOptionalCalls(std::vector<FunctionSummary::EdgeTy> &Calls) {
   // of any forward GV references that need updating later.
   for (auto I : IdToIndexMap) {
     for (auto P : I.second) {
-      assert(Calls[P.first].first == EmptyVI &&
+      assert(Calls[P.first].first.getRef() == FwdVIRef &&
              "Forward referenced ValueInfo expected to be empty");
       auto FwdRef = ForwardRefValueInfos.insert(std::make_pair(
           I.first, std::vector<std::pair<ValueInfo *, LocTy>>()));
@@ -7959,28 +8017,42 @@ bool LLParser::ParseOptionalRefs(std::vector<ValueInfo> &Refs) {
       ParseToken(lltok::lparen, "expected '(' in refs"))
     return true;
 
-  IdToIndexMapType IdToIndexMap;
+  struct ValueContext {
+    ValueInfo VI;
+    unsigned GVId;
+    LocTy Loc;
+  };
+  std::vector<ValueContext> VContexts;
   // Parse each ref edge
   do {
-    ValueInfo VI;
-    LocTy Loc = Lex.getLoc();
-    unsigned GVId;
-    if (ParseGVReference(VI, GVId))
+    ValueContext VC;
+    VC.Loc = Lex.getLoc();
+    if (ParseGVReference(VC.VI, VC.GVId))
       return true;
+    VContexts.push_back(VC);
+  } while (EatIfPresent(lltok::comma));
 
+  // Sort value contexts so that ones with readonly ValueInfo are at the end
+  // of VContexts vector. This is needed to match immutableRefCount() behavior.
+  llvm::sort(VContexts, [](const ValueContext &VC1, const ValueContext &VC2) {
+    return VC1.VI.isReadOnly() < VC2.VI.isReadOnly();
+  });
+
+  IdToIndexMapType IdToIndexMap;
+  for (auto &VC : VContexts) {
     // Keep track of the Refs array index needing a forward reference.
     // We will save the location of the ValueInfo needing an update, but
     // can only do so once the std::vector is finalized.
-    if (VI == EmptyVI)
-      IdToIndexMap[GVId].push_back(std::make_pair(Refs.size(), Loc));
-    Refs.push_back(VI);
-  } while (EatIfPresent(lltok::comma));
+    if (VC.VI.getRef() == FwdVIRef)
+      IdToIndexMap[VC.GVId].push_back(std::make_pair(Refs.size(), VC.Loc));
+    Refs.push_back(VC.VI);
+  }
 
   // Now that the Refs vector is finalized, it is safe to save the locations
   // of any forward GV references that need updating later.
   for (auto I : IdToIndexMap) {
     for (auto P : I.second) {
-      assert(Refs[P.first] == EmptyVI &&
+      assert(Refs[P.first].getRef() == FwdVIRef &&
              "Forward referenced ValueInfo expected to be empty");
       auto FwdRef = ForwardRefValueInfos.insert(std::make_pair(
           I.first, std::vector<std::pair<ValueInfo *, LocTy>>()));
@@ -8266,6 +8338,27 @@ bool LLParser::ParseGVFlags(GlobalValueSummary::GVFlags &GVFlags) {
   return false;
 }
 
+/// GVarFlags
+///   ::= 'varFlags' ':' '(' 'readonly' ':' Flag ')'
+bool LLParser::ParseGVarFlags(GlobalVarSummary::GVarFlags &GVarFlags) {
+  assert(Lex.getKind() == lltok::kw_varFlags);
+  Lex.Lex();
+
+  unsigned Flag;
+  if (ParseToken(lltok::colon, "expected ':' here") ||
+      ParseToken(lltok::lparen, "expected '(' here") ||
+      ParseToken(lltok::kw_readonly, "expected 'readonly' here") ||
+      ParseToken(lltok::colon, "expected ':' here"))
+    return true;
+
+  ParseFlag(Flag);
+  GVarFlags.ReadOnly = Flag;
+
+  if (ParseToken(lltok::rparen, "expected ')' here"))
+    return true;
+  return false;
+}
+
 /// ModuleReference
 ///   ::= 'module' ':' UInt
 bool LLParser::ParseModuleReference(StringRef &ModulePath) {
@@ -8286,18 +8379,20 @@ bool LLParser::ParseModuleReference(StringRef &ModulePath) {
 /// GVReference
 ///   ::= SummaryID
 bool LLParser::ParseGVReference(ValueInfo &VI, unsigned &GVId) {
+  bool ReadOnly = EatIfPresent(lltok::kw_readonly);
   if (ParseToken(lltok::SummaryID, "expected GV ID"))
     return true;
 
   GVId = Lex.getUIntVal();
-
   // Check if we already have a VI for this GV
   if (GVId < NumberedValueInfos.size()) {
-    assert(NumberedValueInfos[GVId] != EmptyVI);
+    assert(NumberedValueInfos[GVId].getRef() != FwdVIRef);
     VI = NumberedValueInfos[GVId];
   } else
     // We will create a forward reference to the stored location.
-    VI = EmptyVI;
+    VI = ValueInfo(false, FwdVIRef);
 
+  if (ReadOnly)
+    VI.setReadOnly();
   return false;
 }

@@ -796,6 +796,14 @@ const MCExpr *TargetLoweringObjectFileELF::lowerRelativeReference(
       MCSymbolRefExpr::create(TM.getSymbol(RHS), getContext()), getContext());
 }
 
+MCSection *TargetLoweringObjectFileELF::getSectionForCommandLines() const {
+  // Use ".GCC.command.line" since this feature is to support clang's
+  // -frecord-gcc-switches which in turn attempts to mimic GCC's switch of the
+  // same name.
+  return getContext().getELFSection(".GCC.command.line", ELF::SHT_PROGBITS,
+                                    ELF::SHF_MERGE | ELF::SHF_STRINGS, 1, "");
+}
+
 void
 TargetLoweringObjectFileELF::InitializeELF(bool UseInitArray_) {
   UseInitArray = UseInitArray_;
@@ -1101,6 +1109,22 @@ const MCExpr *TargetLoweringObjectFileMachO::getIndirectSymViaGOTPCRel(
   //       .indirect_symbol        _extfoo
   //       .long   0
   //
+  // The indirect symbol table (and sections of non_lazy_symbol_pointers type)
+  // may point to both local (same translation unit) and global (other
+  // translation units) symbols. Example:
+  //
+  // .section __DATA,__pointers,non_lazy_symbol_pointers
+  // L1:
+  //    .indirect_symbol _myGlobal
+  //    .long 0
+  // L2:
+  //    .indirect_symbol _myLocal
+  //    .long _myLocal
+  //
+  // If the symbol is local, instead of the symbol's index, the assembler
+  // places the constant INDIRECT_SYMBOL_LOCAL into the indirect symbol table.
+  // Then the linker will notice the constant in the table and will look at the
+  // content of the symbol.
   MachineModuleInfoMachO &MachOMMI =
     MMI->getObjFileInfo<MachineModuleInfoMachO>();
   MCContext &Ctx = getContext();
@@ -1120,9 +1144,12 @@ const MCExpr *TargetLoweringObjectFileMachO::getIndirectSymViaGOTPCRel(
   MCSymbol *Stub = Ctx.getOrCreateSymbol(Name);
 
   MachineModuleInfoImpl::StubValueTy &StubSym = MachOMMI.getGVStubEntry(Stub);
-  if (!StubSym.getPointer())
-    StubSym = MachineModuleInfoImpl::
-      StubValueTy(const_cast<MCSymbol *>(Sym), true /* access indirectly */);
+  if (!StubSym.getPointer()) {
+    bool IsIndirectLocal = Sym->isDefined() && !Sym->isExternal();
+    // With the assumption that IsIndirectLocal == GV->hasLocalLinkage().
+    StubSym = MachineModuleInfoImpl::StubValueTy(const_cast<MCSymbol *>(Sym),
+                                                 !IsIndirectLocal);
+  }
 
   const MCExpr *BSymExpr =
     MCSymbolRefExpr::create(BaseSym, MCSymbolRefExpr::VK_None, Ctx);
@@ -1318,10 +1345,11 @@ MCSection *TargetLoweringObjectFileCOFF::SelectSectionForGlobal(
       MCSymbol *Sym = TM.getSymbol(ComdatGV);
       StringRef COMDATSymName = Sym->getName();
 
-      // Append "$symbol" to the section name when targetting mingw. The ld.bfd
+      // Append "$symbol" to the section name *before* IR-level mangling is
+      // applied when targetting mingw. This is what GCC does, and the ld.bfd
       // COFF linker will not properly handle comdats otherwise.
       if (getTargetTriple().isWindowsGNUEnvironment())
-        raw_svector_ostream(Name) << '$' << COMDATSymName;
+        raw_svector_ostream(Name) << '$' << ComdatGV->getName();
 
       return getContext().getCOFFSection(Name, Characteristics, Kind,
                                          COMDATSymName, Selection, UniqueID);

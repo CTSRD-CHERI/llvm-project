@@ -9,6 +9,8 @@
 
 #include "Logger.h"
 #include "index/Background.h"
+#include "llvm/ADT/ScopeExit.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Path.h"
@@ -30,7 +32,35 @@ std::string getShardPathFromFilePath(llvm::StringRef ShardRoot,
   llvm::sys::path::append(ShardRootSS, llvm::sys::path::filename(FilePath) +
                                            "." + llvm::toHex(digest(FilePath)) +
                                            ".idx");
-  return ShardRoot.str();
+  return ShardRootSS.str();
+}
+
+llvm::Error
+writeAtomically(llvm::StringRef OutPath,
+                llvm::function_ref<void(llvm::raw_ostream &)> Writer) {
+  // Write to a temporary file first.
+  llvm::SmallString<128> TempPath;
+  int FD;
+  auto EC =
+      llvm::sys::fs::createUniqueFile(OutPath + ".tmp.%%%%%%%%", FD, TempPath);
+  if (EC)
+    return llvm::errorCodeToError(EC);
+  // Make sure temp file is destroyed on failure.
+  auto RemoveOnFail =
+      llvm::make_scope_exit([TempPath] { llvm::sys::fs::remove(TempPath); });
+  llvm::raw_fd_ostream OS(FD, /*shouldClose=*/true);
+  Writer(OS);
+  OS.close();
+  if (OS.has_error())
+    return llvm::errorCodeToError(OS.error());
+  // Then move to real location.
+  EC = llvm::sys::fs::rename(TempPath, OutPath);
+  if (EC)
+    return llvm::errorCodeToError(EC);
+  // If everything went well, we already moved the file to another name. So
+  // don't delete the file, as the name might be taken by another file.
+  RemoveOnFail.release();
+  return llvm::ErrorSuccess();
 }
 
 // Uses disk as a storage for index shards. Creates a directory called
@@ -70,26 +100,41 @@ public:
 
   llvm::Error storeShard(llvm::StringRef ShardIdentifier,
                          IndexFileOut Shard) const override {
-    auto ShardPath = getShardPathFromFilePath(DiskShardRoot, ShardIdentifier);
-    std::error_code EC;
-    llvm::raw_fd_ostream OS(ShardPath, EC);
-    if (EC)
-      return llvm::errorCodeToError(EC);
-    OS << Shard;
-    OS.close();
-    return llvm::errorCodeToError(OS.error());
+    return writeAtomically(
+        getShardPathFromFilePath(DiskShardRoot, ShardIdentifier),
+        [&Shard](llvm::raw_ostream &OS) { OS << Shard; });
+  }
+};
+
+// Doesn't persist index shards anywhere (used when the CDB dir is unknown).
+// We could consider indexing into ~/.clangd/ or so instead.
+class NullStorage : public BackgroundIndexStorage {
+public:
+  std::unique_ptr<IndexFileIn>
+  loadShard(llvm::StringRef ShardIdentifier) const override {
+    return nullptr;
+  }
+
+  llvm::Error storeShard(llvm::StringRef ShardIdentifier,
+                         IndexFileOut Shard) const override {
+    vlog("Couldn't find project for {0}, indexing in-memory only",
+         ShardIdentifier);
+    return llvm::Error::success();
   }
 };
 
 // Creates and owns IndexStorages for multiple CDBs.
 class DiskBackedIndexStorageManager {
 public:
+  DiskBackedIndexStorageManager()
+      : IndexStorageMapMu(llvm::make_unique<std::mutex>()) {}
+
   // Creates or fetches to storage from cache for the specified CDB.
   BackgroundIndexStorage *operator()(llvm::StringRef CDBDirectory) {
     std::lock_guard<std::mutex> Lock(*IndexStorageMapMu);
     auto &IndexStorage = IndexStorageMap[CDBDirectory];
     if (!IndexStorage)
-      IndexStorage = llvm::make_unique<DiskBackedIndexStorage>(CDBDirectory);
+      IndexStorage = create(CDBDirectory);
     return IndexStorage.get();
   }
 
@@ -97,6 +142,12 @@ public:
   BackgroundIndexStorage *createStorage(llvm::StringRef CDBDirectory);
 
 private:
+  std::unique_ptr<BackgroundIndexStorage> create(llvm::StringRef CDBDirectory) {
+    if (CDBDirectory.empty())
+      return llvm::make_unique<NullStorage>();
+    return llvm::make_unique<DiskBackedIndexStorage>(CDBDirectory);
+  }
+
   llvm::StringMap<std::unique_ptr<BackgroundIndexStorage>> IndexStorageMap;
   std::unique_ptr<std::mutex> IndexStorageMapMu;
 };

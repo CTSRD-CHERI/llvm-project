@@ -7687,6 +7687,18 @@ ExprResult InitializationSequence::Perform(Sema &S,
 
     case SK_ConversionSequence:
     case SK_ConversionSequenceNoNarrowing: {
+      if (const auto *FromPtrType =
+              CurInit.get()->getType()->getAs<PointerType>()) {
+        if (const auto *ToPtrType = Step->Type->getAs<PointerType>()) {
+          if (FromPtrType->getPointeeType()->hasAttr(attr::NoDeref) &&
+              !ToPtrType->getPointeeType()->hasAttr(attr::NoDeref)) {
+            S.Diag(CurInit.get()->getExprLoc(),
+                   diag::warn_noderef_to_dereferenceable_pointer)
+                << CurInit.get()->getSourceRange();
+          }
+        }
+      }
+
       Sema::CheckedConversionKind CCK
         = Kind.isCStyleCast()? Sema::CCK_CStyleCast
         : Kind.isFunctionalCast()? Sema::CCK_FunctionalCast
@@ -7853,6 +7865,7 @@ ExprResult InitializationSequence::Perform(Sema &S,
 
     case SK_CAssignment: {
       QualType SourceType = CurInit.get()->getType();
+
       // Save off the initial CurInit in case we need to emit a diagnostic
       ExprResult InitialCurInit = CurInit;
       ExprResult Result = CurInit;
@@ -7988,7 +8001,7 @@ ExprResult InitializationSequence::Perform(Sema &S,
     }
 
     case SK_OCLSamplerInit: {
-      // Sampler initialzation have 5 cases:
+      // Sampler initialization have 5 cases:
       //   1. function argument passing
       //      1a. argument is a file-scope variable
       //      1b. argument is a function-scope variable
@@ -8050,8 +8063,9 @@ ExprResult InitializationSequence::Perform(Sema &S,
           break;
         }
 
-        llvm::APSInt Result;
-        Init->EvaluateAsInt(Result, S.Context);
+        Expr::EvalResult EVResult;
+        Init->EvaluateAsInt(EVResult, S.Context);
+        llvm::APSInt Result = EVResult.Val.getInt();
         const uint64_t SamplerValue = Result.getLimitedValue();
         // 32-bit value of sampler's initializer is interpreted as
         // bit-field with the following structure:

@@ -48,6 +48,9 @@ void MipsMCExpr::printImpl(raw_ostream &OS, const MCAsmInfo *MAI) const {
   case MEK_Special:
     llvm_unreachable("MEK_None and MEK_Special are invalid");
     break;
+  case MEK_DTPREL:
+    llvm_unreachable("MEK_DTPREL is used for TLS DIEExpr only");
+    break;
   case MEK_CALL_HI16:
     OS << "%call_hi";
     break;
@@ -211,6 +214,8 @@ MipsMCExpr::evaluateAsRelocatableImpl(MCValue &Res,
     case MEK_None:
     case MEK_Special:
       llvm_unreachable("MEK_None and MEK_Special are invalid");
+    case MEK_DTPREL:
+      llvm_unreachable("MEK_DTPREL is used for TLS DIEExpr only");
     case MEK_CHERI_CAP:
       llvm_unreachable("MEK_CHERI_CAP is invalid");
     case MEK_DTPREL_HI:
@@ -314,6 +319,9 @@ void MipsMCExpr::fixELFSymbolsInTLSFixups(MCAssembler &Asm) const {
   case MEK_None:
   case MEK_Special:
     llvm_unreachable("MEK_None and MEK_Special are invalid");
+    break;
+  case MEK_DTPREL:
+    llvm_unreachable("MEK_DTPREL is used for TLS DIEExpr only");
     break;
   case MEK_CHERI_CAP:
     llvm_unreachable("MEK_CHERI_CAP is not handled here");

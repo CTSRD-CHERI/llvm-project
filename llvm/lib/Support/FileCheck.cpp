@@ -862,9 +862,28 @@ void FileCheckPattern::PrintVariableUses(const SourceMgr &SM, StringRef Buffer,
   }
 }
 
+static SMRange ProcessMatchResult(FileCheckDiag::MatchType MatchTy,
+                                  const SourceMgr &SM, SMLoc Loc,
+                                  Check::FileCheckType CheckTy,
+                                  StringRef Buffer, size_t Pos, size_t Len,
+                                  std::vector<FileCheckDiag> *Diags,
+                                  bool AdjustPrevDiag = false) {
+  SMLoc Start = SMLoc::getFromPointer(Buffer.data() + Pos);
+  SMLoc End = SMLoc::getFromPointer(Buffer.data() + Pos + Len);
+  SMRange Range(Start, End);
+  if (Diags) {
+    if (AdjustPrevDiag)
+      Diags->rbegin()->MatchTy = MatchTy;
+    else
+      Diags->emplace_back(SM, CheckTy, Loc, MatchTy, Range);
+  }
+  return Range;
+}
+
 void FileCheckPattern::PrintFuzzyMatch(
     const SourceMgr &SM, StringRef Buffer,
-    const StringMap<StringRef> &VariableTable) const {
+    const StringMap<StringRef> &VariableTable,
+    std::vector<FileCheckDiag> *Diags) const {
   // Attempt to find the closest/best fuzzy match.  Usually an error happens
   // because some string in the output didn't exactly match. In these cases, we
   // would like to show the user a best guess at what "should have" matched, to
@@ -898,8 +917,11 @@ void FileCheckPattern::PrintFuzzyMatch(
   // reasonable and not equal to what we showed in the "scanning from here"
   // line.
   if (Best && Best != StringRef::npos && BestQuality < 50) {
-    SM.PrintMessage(SMLoc::getFromPointer(Buffer.data() + Best),
-                    SourceMgr::DK_Note, "possible intended match here");
+    SMRange MatchRange =
+        ProcessMatchResult(FileCheckDiag::MatchFuzzy, SM, getLoc(),
+                           getCheckTy(), Buffer, Best, 0, Diags);
+    SM.PrintMessage(MatchRange.Start, SourceMgr::DK_Note,
+                    "possible intended match here");
 
     // FIXME: If we wanted to be really friendly we would show why the match
     // failed, as it can be hard to spot simple one character differences.
@@ -979,6 +1001,22 @@ llvm::FileCheck::CanonicalizeFile(MemoryBuffer &MB,
   // Add a null byte and then return all but that byte.
   OutputBuffer.push_back('\0');
   return StringRef(OutputBuffer.data(), OutputBuffer.size() - 1);
+}
+
+FileCheckDiag::FileCheckDiag(const SourceMgr &SM,
+                             const Check::FileCheckType &CheckTy,
+                             SMLoc CheckLoc, MatchType MatchTy,
+                             SMRange InputRange)
+    : CheckTy(CheckTy), MatchTy(MatchTy) {
+  auto Start = SM.getLineAndColumn(InputRange.Start);
+  auto End = SM.getLineAndColumn(InputRange.End);
+  InputStartLine = Start.first;
+  InputStartCol = Start.second;
+  InputEndLine = End.first;
+  InputEndCol = End.second;
+  Start = SM.getLineAndColumn(CheckLoc);
+  CheckLine = Start.first;
+  CheckCol = Start.second;
 }
 
 static bool IsPartOfWord(char c) {
@@ -1311,16 +1349,18 @@ static void PrintMatch(bool ExpectedMatch, const SourceMgr &SM,
                        StringRef Prefix, SMLoc Loc, const FileCheckPattern &Pat,
                        int MatchedCount, StringRef Buffer,
                        StringMap<StringRef> &VariableTable, size_t MatchPos,
-                       size_t MatchLen, const FileCheckRequest &Req) {
+                       size_t MatchLen, const FileCheckRequest &Req,
+                       std::vector<FileCheckDiag> *Diags) {
   if (ExpectedMatch) {
     if (!Req.Verbose)
       return;
     if (!Req.VerboseVerbose && Pat.getCheckTy() == Check::CheckEOF)
       return;
   }
-  SMLoc MatchStart = SMLoc::getFromPointer(Buffer.data() + MatchPos);
-  SMLoc MatchEnd = SMLoc::getFromPointer(Buffer.data() + MatchPos + MatchLen);
-  SMRange MatchRange(MatchStart, MatchEnd);
+  SMRange MatchRange = ProcessMatchResult(
+      ExpectedMatch ? FileCheckDiag::MatchFoundAndExpected
+                    : FileCheckDiag::MatchFoundButExcluded,
+      SM, Loc, Pat.getCheckTy(), Buffer, MatchPos, MatchLen, Diags);
   std::string Message = formatv("{0}: {1} string found in input",
                                 Pat.getCheckTy().getDescription(Prefix),
                                 (ExpectedMatch ? "expected" : "excluded"))
@@ -1330,24 +1370,27 @@ static void PrintMatch(bool ExpectedMatch, const SourceMgr &SM,
 
   SM.PrintMessage(
       Loc, ExpectedMatch ? SourceMgr::DK_Remark : SourceMgr::DK_Error, Message);
-  SM.PrintMessage(MatchStart, SourceMgr::DK_Note, "found here", {MatchRange});
+  SM.PrintMessage(MatchRange.Start, SourceMgr::DK_Note, "found here",
+                  {MatchRange});
   Pat.PrintVariableUses(SM, Buffer, VariableTable, MatchRange);
 }
 
 static void PrintMatch(bool ExpectedMatch, const SourceMgr &SM,
                        const FileCheckString &CheckStr, int MatchedCount,
                        StringRef Buffer, StringMap<StringRef> &VariableTable,
-                       size_t MatchPos, size_t MatchLen,
-                       FileCheckRequest &Req) {
+                       size_t MatchPos, size_t MatchLen, FileCheckRequest &Req,
+                       std::vector<FileCheckDiag> *Diags) {
   PrintMatch(ExpectedMatch, SM, CheckStr.Prefix, CheckStr.Loc, CheckStr.Pat,
-             MatchedCount, Buffer, VariableTable, MatchPos, MatchLen, Req);
+             MatchedCount, Buffer, VariableTable, MatchPos, MatchLen, Req,
+             Diags);
 }
 
 static void PrintNoMatch(bool ExpectedMatch, const SourceMgr &SM,
                          StringRef Prefix, SMLoc Loc,
                          const FileCheckPattern &Pat, int MatchedCount,
                          StringRef Buffer, StringMap<StringRef> &VariableTable,
-                         bool VerboseVerbose) {
+                         bool VerboseVerbose,
+                         std::vector<FileCheckDiag> *Diags) {
   if (!ExpectedMatch && !VerboseVerbose)
     return;
 
@@ -1365,22 +1408,26 @@ static void PrintNoMatch(bool ExpectedMatch, const SourceMgr &SM,
   // Print the "scanning from here" line.  If the current position is at the
   // end of a line, advance to the start of the next line.
   Buffer = Buffer.substr(Buffer.find_first_not_of(" \t\n\r"));
-
-  SM.PrintMessage(SMLoc::getFromPointer(Buffer.data()), SourceMgr::DK_Note,
-                  "scanning from here");
+  SMRange SearchRange = ProcessMatchResult(
+      ExpectedMatch ? FileCheckDiag::MatchNoneButExpected
+                    : FileCheckDiag::MatchNoneAndExcluded,
+      SM, Loc, Pat.getCheckTy(), Buffer, 0, Buffer.size(), Diags);
+  SM.PrintMessage(SearchRange.Start, SourceMgr::DK_Note, "scanning from here");
 
   // Allow the pattern to print additional information if desired.
   Pat.PrintVariableUses(SM, Buffer, VariableTable);
+
   if (ExpectedMatch)
-    Pat.PrintFuzzyMatch(SM, Buffer, VariableTable);
+    Pat.PrintFuzzyMatch(SM, Buffer, VariableTable, Diags);
 }
 
 static void PrintNoMatch(bool ExpectedMatch, const SourceMgr &SM,
                          const FileCheckString &CheckStr, int MatchedCount,
                          StringRef Buffer, StringMap<StringRef> &VariableTable,
-                         bool VerboseVerbose) {
+                         bool VerboseVerbose,
+                         std::vector<FileCheckDiag> *Diags) {
   PrintNoMatch(ExpectedMatch, SM, CheckStr.Prefix, CheckStr.Loc, CheckStr.Pat,
-               MatchedCount, Buffer, VariableTable, VerboseVerbose);
+               MatchedCount, Buffer, VariableTable, VerboseVerbose, Diags);
 }
 
 /// Count the number of newlines in the specified range.
@@ -1408,9 +1455,10 @@ static unsigned CountNumNewlinesBetween(StringRef Range,
 
 /// Match check string and its "not strings" and/or "dag strings".
 size_t FileCheckString::Check(const SourceMgr &SM, StringRef Buffer,
-                          bool IsLabelScanMode, size_t &MatchLen,
-                          StringMap<StringRef> &VariableTable,
-                          FileCheckRequest &Req) const {
+                              bool IsLabelScanMode, size_t &MatchLen,
+                              StringMap<StringRef> &VariableTable,
+                              FileCheckRequest &Req,
+                              std::vector<FileCheckDiag> *Diags) const {
   size_t LastPos = 0;
   std::vector<const FileCheckPattern *> NotStrings;
 
@@ -1420,7 +1468,7 @@ size_t FileCheckString::Check(const SourceMgr &SM, StringRef Buffer,
   // over the block again (including the last CHECK-LABEL) in normal mode.
   if (!IsLabelScanMode) {
     // Match "dag strings" (with mixed "not strings" if any).
-    LastPos = CheckDag(SM, Buffer, NotStrings, VariableTable, Req);
+    LastPos = CheckDag(SM, Buffer, NotStrings, VariableTable, Req, Diags);
     if (LastPos == StringRef::npos)
       return StringRef::npos;
   }
@@ -1442,11 +1490,11 @@ size_t FileCheckString::Check(const SourceMgr &SM, StringRef Buffer,
     // report
     if (MatchPos == StringRef::npos) {
       PrintNoMatch(true, SM, *this, i, MatchBuffer, VariableTable,
-                   Req.VerboseVerbose);
+                   Req.VerboseVerbose, Diags);
       return StringRef::npos;
     }
     PrintMatch(true, SM, *this, i, MatchBuffer, VariableTable, MatchPos,
-               CurrentMatchLen, Req);
+               CurrentMatchLen, Req, Diags);
 
     // move start point after the match
     LastMatchEnd += MatchPos + CurrentMatchLen;
@@ -1457,21 +1505,31 @@ size_t FileCheckString::Check(const SourceMgr &SM, StringRef Buffer,
   // Similar to the above, in "label-scan mode" we can't yet handle CHECK-NEXT
   // or CHECK-NOT
   if (!IsLabelScanMode) {
-    StringRef SkippedRegion = Buffer.substr(LastPos, FirstMatchPos - LastPos);
+    size_t MatchPos = FirstMatchPos - LastPos;
+    StringRef MatchBuffer = Buffer.substr(LastPos);
+    StringRef SkippedRegion = Buffer.substr(LastPos, MatchPos);
 
     // If this check is a "CHECK-NEXT", verify that the previous match was on
     // the previous line (i.e. that there is one newline between them).
-    if (CheckNext(SM, SkippedRegion))
+    if (CheckNext(SM, SkippedRegion)) {
+      ProcessMatchResult(FileCheckDiag::MatchFoundButWrongLine, SM, Loc,
+                         Pat.getCheckTy(), MatchBuffer, MatchPos, MatchLen,
+                         Diags, Req.Verbose);
       return StringRef::npos;
+    }
 
     // If this check is a "CHECK-SAME", verify that the previous match was on
     // the same line (i.e. that there is no newline between them).
-    if (CheckSame(SM, SkippedRegion))
+    if (CheckSame(SM, SkippedRegion)) {
+      ProcessMatchResult(FileCheckDiag::MatchFoundButWrongLine, SM, Loc,
+                         Pat.getCheckTy(), MatchBuffer, MatchPos, MatchLen,
+                         Diags, Req.Verbose);
       return StringRef::npos;
+    }
 
     // If this match had "not strings", verify that they don't exist in the
     // skipped region.
-    if (CheckNot(SM, SkippedRegion, NotStrings, VariableTable, Req))
+    if (CheckNot(SM, SkippedRegion, NotStrings, VariableTable, Req, Diags))
       return StringRef::npos;
   }
 
@@ -1554,10 +1612,11 @@ bool FileCheckString::CheckSame(const SourceMgr &SM, StringRef Buffer) const {
 }
 
 /// Verify there's no "not strings" in the given buffer.
-bool FileCheckString::CheckNot(const SourceMgr &SM, StringRef Buffer,
-                           const std::vector<const FileCheckPattern *> &NotStrings,
-                           StringMap<StringRef> &VariableTable,
-                           const FileCheckRequest &Req) const {
+bool FileCheckString::CheckNot(
+    const SourceMgr &SM, StringRef Buffer,
+    const std::vector<const FileCheckPattern *> &NotStrings,
+    StringMap<StringRef> &VariableTable, const FileCheckRequest &Req,
+    std::vector<FileCheckDiag> *Diags) const {
   for (const FileCheckPattern *Pat : NotStrings) {
     assert((Pat->getCheckTy() == Check::CheckNot) && "Expect CHECK-NOT!");
 
@@ -1566,12 +1625,12 @@ bool FileCheckString::CheckNot(const SourceMgr &SM, StringRef Buffer,
 
     if (Pos == StringRef::npos) {
       PrintNoMatch(false, SM, Prefix, Pat->getLoc(), *Pat, 1, Buffer,
-                   VariableTable, Req.VerboseVerbose);
+                   VariableTable, Req.VerboseVerbose, Diags);
       continue;
     }
 
     PrintMatch(false, SM, Prefix, Pat->getLoc(), *Pat, 1, Buffer, VariableTable,
-               Pos, MatchLen, Req);
+               Pos, MatchLen, Req, Diags);
 
     return true;
   }
@@ -1580,10 +1639,12 @@ bool FileCheckString::CheckNot(const SourceMgr &SM, StringRef Buffer,
 }
 
 /// Match "dag strings" and their mixed "not strings".
-size_t FileCheckString::CheckDag(const SourceMgr &SM, StringRef Buffer,
-                             std::vector<const FileCheckPattern *> &NotStrings,
-                             StringMap<StringRef> &VariableTable,
-                             const FileCheckRequest &Req) const {
+size_t
+FileCheckString::CheckDag(const SourceMgr &SM, StringRef Buffer,
+                          std::vector<const FileCheckPattern *> &NotStrings,
+                          StringMap<StringRef> &VariableTable,
+                          const FileCheckRequest &Req,
+                          std::vector<FileCheckDiag> *Diags) const {
   if (DagNotStrings.empty())
     return 0;
 
@@ -1627,14 +1688,14 @@ size_t FileCheckString::CheckDag(const SourceMgr &SM, StringRef Buffer,
       // that group of CHECK-DAGs fails immediately.
       if (MatchPosBuf == StringRef::npos) {
         PrintNoMatch(true, SM, Prefix, Pat.getLoc(), Pat, 1, MatchBuffer,
-                     VariableTable, Req.VerboseVerbose);
+                     VariableTable, Req.VerboseVerbose, Diags);
         return StringRef::npos;
       }
       // Re-calc it as the offset relative to the start of the original string.
       MatchPos += MatchPosBuf;
       if (Req.VerboseVerbose)
         PrintMatch(true, SM, Prefix, Pat.getLoc(), Pat, 1, Buffer,
-                   VariableTable, MatchPos, MatchLen, Req);
+                   VariableTable, MatchPos, MatchLen, Req, Diags);
       MatchRange M{MatchPos, MatchPos + MatchLen};
       if (Req.AllowDeprecatedDagOverlap) {
         // We don't need to track all matches in this mode, so we just maintain
@@ -1671,12 +1732,14 @@ size_t FileCheckString::CheckDag(const SourceMgr &SM, StringRef Buffer,
         SM.PrintMessage(OldStart, SourceMgr::DK_Note,
                         "match discarded, overlaps earlier DAG match here",
                         {OldRange});
+        if (Diags)
+          Diags->rbegin()->MatchTy = FileCheckDiag::MatchFoundButDiscarded;
       }
       MatchPos = MI->End;
     }
     if (!Req.VerboseVerbose)
       PrintMatch(true, SM, Prefix, Pat.getLoc(), Pat, 1, Buffer, VariableTable,
-                 MatchPos, MatchLen, Req);
+                 MatchPos, MatchLen, Req, Diags);
 
     // Handle the end of a CHECK-DAG group.
     if (std::next(PatItr) == PatEnd ||
@@ -1687,7 +1750,7 @@ size_t FileCheckString::CheckDag(const SourceMgr &SM, StringRef Buffer,
         // region.
         StringRef SkippedRegion =
             Buffer.slice(StartPos, MatchRanges.begin()->Pos);
-        if (CheckNot(SM, SkippedRegion, NotStrings, VariableTable, Req))
+        if (CheckNot(SM, SkippedRegion, NotStrings, VariableTable, Req, Diags))
           return StringRef::npos;
         // Clear "not strings".
         NotStrings.clear();
@@ -1768,7 +1831,8 @@ static void ClearLocalVars(StringMap<StringRef> &VariableTable) {
 ///
 /// Returns false if the input fails to satisfy the checks.
 bool llvm::FileCheck::CheckInput(SourceMgr &SM, StringRef Buffer,
-                ArrayRef<FileCheckString> CheckStrings) {
+                                 ArrayRef<FileCheckString> CheckStrings,
+                                 std::vector<FileCheckDiag> *Diags) {
   bool ChecksFailed = false;
 
   /// VariableTable - This holds all the current filecheck variables.
@@ -1791,9 +1855,8 @@ bool llvm::FileCheck::CheckInput(SourceMgr &SM, StringRef Buffer,
 
       // Scan to next CHECK-LABEL match, ignoring CHECK-NOT and CHECK-DAG
       size_t MatchLabelLen = 0;
-      size_t MatchLabelPos =
-          CheckLabelStr.Check(SM, Buffer, true, MatchLabelLen, VariableTable,
-                              Req);
+      size_t MatchLabelPos = CheckLabelStr.Check(
+          SM, Buffer, true, MatchLabelLen, VariableTable, Req, Diags);
       if (MatchLabelPos == StringRef::npos)
         // Immediately bail of CHECK-LABEL fails, nothing else we can do.
         return false;
@@ -1812,8 +1875,8 @@ bool llvm::FileCheck::CheckInput(SourceMgr &SM, StringRef Buffer,
       // Check each string within the scanned region, including a second check
       // of any final CHECK-LABEL (to verify CHECK-NOT and CHECK-DAG)
       size_t MatchLen = 0;
-      size_t MatchPos =
-          CheckStr.Check(SM, CheckRegion, false, MatchLen, VariableTable, Req);
+      size_t MatchPos = CheckStr.Check(SM, CheckRegion, false, MatchLen,
+                                       VariableTable, Req, Diags);
 
       if (MatchPos == StringRef::npos) {
         ChecksFailed = true;

@@ -985,6 +985,9 @@ public:
   /// Try to simplify a select/vselect into 1 of its operands or a constant.
   SDValue simplifySelect(SDValue Cond, SDValue TVal, SDValue FVal);
 
+  /// Try to simplify a shift into 1 of its operands or a constant.
+  SDValue simplifyShift(SDValue X, SDValue Y);
+
   /// VAArg produces a result and token chain, and takes a pointer
   /// and a source value as input.
   SDValue getVAArg(EVT VT, const SDLoc &dl, SDValue Chain, SDValue Ptr,
@@ -1450,18 +1453,6 @@ public:
   KnownBits computeKnownBits(SDValue Op, const APInt &DemandedElts,
                              unsigned Depth = 0) const;
 
-  /// \copydoc SelectionDAG::computeKnownBits(SDValue,unsigned)
-  void computeKnownBits(SDValue Op, KnownBits &Known,
-                        unsigned Depth = 0) const {
-    Known = computeKnownBits(Op, Depth);
-  }
-
-  /// \copydoc SelectionDAG::computeKnownBits(SDValue,const APInt&,unsigned)
-  void computeKnownBits(SDValue Op, KnownBits &Known, const APInt &DemandedElts,
-                        unsigned Depth = 0) const {
-    Known = computeKnownBits(Op, DemandedElts, Depth);
-  }
-
   /// Used to represent the possible overflow behavior of an operation.
   /// Never: the operation cannot overflow.
   /// Always: the operation will always overflow.
@@ -1532,6 +1523,18 @@ public:
   /// Return true if A and B have no common bits set. As an example, this can
   /// allow an 'add' to be transformed into an 'or'.
   bool haveNoCommonBitsSet(SDValue A, SDValue B) const;
+
+  /// Test whether \p V has a splatted value for all the demanded elements.
+  ///
+  /// On success \p UndefElts will indicate the elements that have UNDEF
+  /// values instead of the splat value, this is only guaranteed to be correct
+  /// for \p DemandedElts.
+  ///
+  /// NOTE: The function will return true for a demanded splat of UNDEF values.
+  bool isSplatValue(SDValue V, const APInt &DemandedElts, APInt &UndefElts);
+
+  /// Test whether \p V has a splatted value.
+  bool isSplatValue(SDValue V, bool AllowUndefs = false);
 
   /// Match a binop + shuffle pyramid that represents a horizontal reduction
   /// over the elements of a vector starting from the EXTRACT_VECTOR_ELT node /p

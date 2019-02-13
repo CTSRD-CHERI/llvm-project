@@ -420,6 +420,7 @@ enum Kind {
   kw_info,
   kw_byte,
   kw_bit,
+  kw_varFlags,
 
   // Unsigned Valued tokens (UIntVal).
   GlobalID,   // @42
@@ -443,6 +444,7 @@ enum Kind {
   NameTableKind,    // GNU
   DwarfOp,          // DW_OP_foo
   DIFlag,           // DIFlagFoo
+  DISPFlag,         // DISPFlagFoo
   DwarfMacinfo,     // DW_MACINFO_foo
   ChecksumKind,     // CSK_foo
 

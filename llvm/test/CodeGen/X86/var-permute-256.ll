@@ -876,11 +876,10 @@ define <32 x i8> @var_shuffle_v32i8_from_v16i8(<16 x i8> %v, <32 x i8> %indices)
 ; AVX512VLBW-LABEL: var_shuffle_v32i8_from_v16i8:
 ; AVX512VLBW:       # %bb.0:
 ; AVX512VLBW-NEXT:    # kill: def $xmm0 killed $xmm0 def $ymm0
-; AVX512VLBW-NEXT:    vinserti128 $1, %xmm0, %ymm0, %ymm2
-; AVX512VLBW-NEXT:    vpshufb %ymm1, %ymm2, %ymm2
+; AVX512VLBW-NEXT:    vinserti128 $1, %xmm0, %ymm0, %ymm0
+; AVX512VLBW-NEXT:    vpshufb %ymm1, %ymm0, %ymm0
 ; AVX512VLBW-NEXT:    vpcmpgtb {{.*}}(%rip), %ymm1, %k1
-; AVX512VLBW-NEXT:    vpshufb %ymm1, %ymm0, %ymm2 {%k1}
-; AVX512VLBW-NEXT:    vmovdqa %ymm2, %ymm0
+; AVX512VLBW-NEXT:    vpshufb %ymm1, %ymm0, %ymm0 {%k1}
 ; AVX512VLBW-NEXT:    retq
 ;
 ; VLVBMI-LABEL: var_shuffle_v32i8_from_v16i8:
@@ -1133,8 +1132,6 @@ define <4 x i32> @var_shuffle_v4i32_from_v8i32(<8 x i32> %v, <4 x i32> %indices)
 ; AVX1-NEXT:    vinsertf128 $1, %xmm0, %ymm0, %ymm0
 ; AVX1-NEXT:    vpermilps %ymm1, %ymm0, %ymm0
 ; AVX1-NEXT:    vpcmpgtd {{.*}}(%rip), %xmm1, %xmm1
-; AVX1-NEXT:    vpcmpgtd {{\.LCPI.*}}+{{.*}}(%rip), %xmm0, %xmm3
-; AVX1-NEXT:    vinsertf128 $1, %xmm3, %ymm1, %ymm1
 ; AVX1-NEXT:    vblendvps %ymm1, %ymm2, %ymm0, %ymm0
 ; AVX1-NEXT:    # kill: def $xmm0 killed $xmm0 killed $ymm0
 ; AVX1-NEXT:    vzeroupper

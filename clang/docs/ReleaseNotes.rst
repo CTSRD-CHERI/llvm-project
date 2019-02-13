@@ -55,11 +55,77 @@ Major New Features
 Improvements to Clang's diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+- ``-Wextra-semi-stmt`` is a new diagnostic that diagnoses extra semicolons,
+  much like ``-Wextra-semi``. This new diagnostic diagnoses all *unnecessary*
+  null statements (expression statements without an expression), unless: the
+  semicolon directly follows a macro that was expanded to nothing or if the
+  semicolon is within the macro itself. This applies to macros defined in system
+  headers as well as user-defined macros.
+
+  .. code-block:: c++
+
+      #define MACRO(x) int x;
+      #define NULLMACRO(varname)
+
+      void test() {
+        ; // <- warning: ';' with no preceding expression is a null statement
+
+        while (true)
+          ; // OK, it is needed.
+
+        switch (my_enum) {
+        case E1:
+          // stuff
+          break;
+        case E2:
+          ; // OK, it is needed.
+        }
+
+        MACRO(v0;) // Extra semicolon, but within macro, so ignored.
+
+        MACRO(v1); // <- warning: ';' with no preceding expression is a null statement
+
+        NULLMACRO(v2); // ignored, NULLMACRO expanded to nothing.
+      }
+
+- ``-Wempty-init-stmt`` is a new diagnostic that diagnoses empty init-statements
+  of ``if``, ``switch``, ``range-based for``, unless: the semicolon directly
+  follows a macro that was expanded to nothing or if the semicolon is within the
+  macro itself (both macros from system headers, and normal macros). This
+  diagnostic is in the ``-Wextra-semi-stmt`` group and is enabled in
+  ``-Wextra``.
+
+  .. code-block:: c++
+
+      void test() {
+        if(; // <- warning: init-statement of 'if' is a null statement
+           true)
+          ;
+
+        switch (; // <- warning: init-statement of 'switch' is a null statement
+                x) {
+          ...
+        }
+
+        for (; // <- warning: init-statement of 'range-based for' is a null statement
+             int y : S())
+          ;
+      }
+
 
 Non-comprehensive list of changes in this release
 -------------------------------------------------
 
-- ...
+- The experimental feature Pretokenized Headers (PTH) was removed in its
+  entirely from Clang. The feature did not properly work with about 1/3 of the
+  possible tokens available and was unmaintained.
+
+- The internals of libc++ include directory detection on MacOS have changed.
+  Instead of running a search based on the ``-resource-dir`` flag, the search
+  is now based on the path of the compiler in the filesystem. The default
+  behaviour should not change. However, if you override ``-resource-dir``
+  manually and rely on the old behaviour you will need to add appropriate
+  compiler flags for finding the corresponding libc++ include directory.
 
 New Compiler Flags
 ------------------

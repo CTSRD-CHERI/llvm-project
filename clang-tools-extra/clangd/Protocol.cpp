@@ -14,10 +14,13 @@
 #include "Protocol.h"
 #include "Logger.h"
 #include "URI.h"
+#include "index/Index.h"
 #include "clang/Basic/LLVM.h"
+#include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/FormatVariadic.h"
+#include "llvm/Support/JSON.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
 
@@ -27,29 +30,44 @@ namespace clangd {
 
 char LSPError::ID;
 
-URIForFile::URIForFile(std::string AbsPath) {
+URIForFile URIForFile::canonicalize(StringRef AbsPath, StringRef TUPath) {
   assert(sys::path::is_absolute(AbsPath) && "the path is relative");
-  File = std::move(AbsPath);
+  auto Resolved = URI::resolvePath(AbsPath, TUPath);
+  if (!Resolved) {
+    elog("URIForFile: failed to resolve path {0} with TU path {1}: "
+         "{2}.\nUsing unresolved path.",
+         AbsPath, TUPath, Resolved.takeError());
+    return URIForFile(AbsPath);
+  }
+  return URIForFile(std::move(*Resolved));
+}
+
+Expected<URIForFile> URIForFile::fromURI(const URI &U, StringRef HintPath) {
+  auto Resolved = URI::resolve(U, HintPath);
+  if (!Resolved)
+    return Resolved.takeError();
+  return URIForFile(std::move(*Resolved));
 }
 
 bool fromJSON(const json::Value &E, URIForFile &R) {
   if (auto S = E.getAsString()) {
-    auto U = URI::parse(*S);
-    if (!U) {
-      elog("Failed to parse URI {0}: {1}", *S, U.takeError());
+    auto Parsed = URI::parse(*S);
+    if (!Parsed) {
+      elog("Failed to parse URI {0}: {1}", *S, Parsed.takeError());
       return false;
     }
-    if (U->scheme() != "file" && U->scheme() != "test") {
+    if (Parsed->scheme() != "file" && Parsed->scheme() != "test") {
       elog("Clangd only supports 'file' URI scheme for workspace files: {0}",
            *S);
       return false;
     }
-    auto Path = URI::resolve(*U);
-    if (!Path) {
-      log("{0}", Path.takeError());
+    // "file" and "test" schemes do not require hint path.
+    auto U = URIForFile::fromURI(*Parsed, /*HintPath=*/"");
+    if (!U) {
+      elog("{0}", U.takeError());
       return false;
     }
-    R = URIForFile(*Path);
+    R = std::move(*U);
     return true;
   }
   return false;
@@ -221,6 +239,11 @@ bool fromJSON(const json::Value &Params, ClientCapabilities &R) {
     if (auto *CodeAction = TextDocument->getObject("codeAction")) {
       if (CodeAction->getObject("codeActionLiteralSupport"))
         R.CodeActionStructure = true;
+    }
+    if (auto *DocumentSymbol = TextDocument->getObject("documentSymbol")) {
+      if (auto HierarchicalSupport =
+              DocumentSymbol->getBoolean("hierarchicalDocumentSymbolSupport"))
+        R.HierarchicalDocumentSymbol = *HierarchicalSupport;
     }
   }
   if (auto *Workspace = O->getObject("workspace")) {
@@ -422,6 +445,45 @@ raw_ostream &operator<<(raw_ostream &O, const SymbolInformation &SI) {
   return O;
 }
 
+bool operator==(const SymbolDetails &LHS, const SymbolDetails &RHS) {
+  return LHS.name == RHS.name && LHS.containerName == RHS.containerName &&
+         LHS.USR == RHS.USR && LHS.ID == RHS.ID;
+}
+
+llvm::json::Value toJSON(const SymbolDetails &P) {
+  json::Object result{{"name", llvm::json::Value(nullptr)},
+                      {"containerName", llvm::json::Value(nullptr)},
+                      {"usr", llvm::json::Value(nullptr)},
+                      {"id", llvm::json::Value(nullptr)}};
+
+  if (!P.name.empty())
+    result["name"] = P.name;
+
+  if (!P.containerName.empty())
+    result["containerName"] = P.containerName;
+
+  if (!P.USR.empty())
+    result["usr"] = P.USR;
+
+  if (P.ID.hasValue())
+    result["id"] = P.ID.getValue().str();
+
+  // Older clang cannot compile 'return Result', even though it is legal.
+  return json::Value(std::move(result));
+}
+
+llvm::raw_ostream &operator<<(llvm::raw_ostream &O, const SymbolDetails &S) {
+  if (!S.containerName.empty()) {
+    O << S.containerName;
+    StringRef ContNameRef;
+    if (!ContNameRef.endswith("::")) {
+      O << " ";
+    }
+  }
+  O << S.name << " - " << toJSON(S);
+  return O;
+}
+
 bool fromJSON(const json::Value &Params, WorkspaceSymbolParams &R) {
   json::ObjectMapper O(Params);
   return O && O.map("query", R.query);
@@ -447,6 +509,26 @@ json::Value toJSON(const CodeAction &CA) {
   if (CA.command)
     CodeAction["command"] = *CA.command;
   return std::move(CodeAction);
+}
+
+raw_ostream &operator<<(raw_ostream &O, const DocumentSymbol &S) {
+  return O << S.name << " - " << toJSON(S);
+}
+
+json::Value toJSON(const DocumentSymbol &S) {
+  json::Object Result{{"name", S.name},
+                      {"kind", static_cast<int>(S.kind)},
+                      {"range", S.range},
+                      {"selectionRange", S.selectionRange}};
+
+  if (!S.detail.empty())
+    Result["detail"] = S.detail;
+  if (!S.children.empty())
+    Result["children"] = S.children;
+  if (S.deprecated)
+    Result["deprecated"] = true;
+  // Older gcc cannot compile 'return Result', even though it is legal.
+  return json::Value(std::move(Result));
 }
 
 json::Value toJSON(const WorkspaceEdit &WE) {
@@ -634,6 +716,12 @@ json::Value toJSON(const DocumentHighlight &DH) {
   };
 }
 
+llvm::json::Value toJSON(const FileStatus &FStatus) {
+  return json::Object{
+      {"uri", FStatus.uri}, {"state", FStatus.state},
+  };
+}
+
 raw_ostream &operator<<(raw_ostream &O, const DocumentHighlight &V) {
   O << V.range;
   if (V.kind == DocumentHighlightKind::Read)
@@ -670,6 +758,7 @@ bool fromJSON(const json::Value &Params, InitializationOptions &Opts) {
   fromJSON(Params, Opts.ConfigSettings);
   O.map("compilationDatabasePath", Opts.compilationDatabasePath);
   O.map("fallbackFlags", Opts.fallbackFlags);
+  O.map("clangdFileStatus", Opts.FileStatus);
   return true;
 }
 
