@@ -1156,7 +1156,7 @@ static void emitStoresForZeroInit(CodeGenModule &CGM, const VarDecl &D,
                                   CGBuilderTy &Builder) {
   llvm::Type *ElTy = Loc.getElementType();
   llvm::Constant *constant = llvm::Constant::getNullValue(ElTy);
-  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant);
+  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant, false);
 }
 
 static void emitStoresForPatternInit(CodeGenModule &CGM, const VarDecl &D,
@@ -1165,7 +1165,7 @@ static void emitStoresForPatternInit(CodeGenModule &CGM, const VarDecl &D,
   llvm::Type *ElTy = Loc.getElementType();
   llvm::Constant *constant = patternFor(CGM, ElTy);
   assert(!isa<llvm::UndefValue>(constant));
-  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant);
+  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant, false);
 }
 
 static bool containsUndef(llvm::Constant *constant) {

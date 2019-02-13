@@ -246,9 +246,10 @@ static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
   }
   // err_argument_invalid_range
   // TODO: allow zero as an always true result?
-  llvm::APSInt AlignValue;
+  Expr::EvalResult AlignResult;
   unsigned MaxAlignmentBits = S.Context.getIntRange(SrcTy) - 1;
-  if (AlignOp->EvaluateAsInt(AlignValue, S.Context, Expr::SE_AllowSideEffects)) {
+  if (AlignOp->EvaluateAsInt(AlignResult, S.Context, Expr::SE_AllowSideEffects)) {
+    llvm::APSInt AlignValue = AlignResult.Val.getInt();
     if (PowerOfTwo) {
      if (AlignValue == 0) {
         // aligning to 2^0 is always true/a noop -> add the tautological warning

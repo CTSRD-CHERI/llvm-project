@@ -798,8 +798,8 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
     return ArrayBoundsResult::Always;
   }
   const Expr *Index = ASE->getIdx();
-  llvm::APSInt ConstLength;
-  if (!Index->EvaluateAsInt(ConstLength, CGF.getContext())) {
+  Expr::EvalResult ConstLengthResult;
+  if (!Index->EvaluateAsInt(ConstLengthResult, CGF.getContext())) {
     // If the index is not a constant we should be able to set bounds:
     // This indicates the code is something like
     // for (int i = 0; i < max; i++) { do_something(array[i]); }
@@ -815,6 +815,7 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
     }
     return ArrayBoundsResult::DependsOnType;
   }
+  llvm::APSInt ConstLength = ConstLengthResult.Val.getInt();
   CHERI_BOUNDS_DBG(<< "Index is a constant -> ");
   if (BoundsMode >= LangOptions::CBM_VeryAggressive) {
     CHERI_BOUNDS_DBG(<< "bounds-mode is very-aggressive -> bounds on "

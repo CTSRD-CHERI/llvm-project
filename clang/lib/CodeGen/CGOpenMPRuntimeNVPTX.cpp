@@ -1696,7 +1696,7 @@ CGOpenMPRuntimeNVPTX::createNVPTXRuntimeFunction(unsigned Function) {
     // global_tid, kmp_critical_name *lck)
     llvm::Type *TypeParams[] = {
         getIdentTyPointerTy(), CGM.Int32Ty,
-        llvm::PointerType::getUnqual(getKmpCriticalNameTy())};
+        getKmpCriticalNameTy()->getPointerTo(DefaultAS)};
     auto *FnTy =
         llvm::FunctionType::get(CGM.Int32Ty, TypeParams, /*isVarArg=*/false);
     RTLFn = CGM.CreateRuntimeFunction(
@@ -1708,7 +1708,7 @@ CGOpenMPRuntimeNVPTX::createNVPTXRuntimeFunction(unsigned Function) {
     // global_tid, kmp_critical_name *lck)
     llvm::Type *TypeParams[] = {
         getIdentTyPointerTy(), CGM.Int32Ty,
-        llvm::PointerType::getUnqual(getKmpCriticalNameTy())};
+        getKmpCriticalNameTy()->getPointerTo(DefaultAS)};
     auto *FnTy =
         llvm::FunctionType::get(CGM.VoidTy, TypeParams, /*isVarArg=*/false);
     RTLFn = CGM.CreateRuntimeFunction(

@@ -351,9 +351,9 @@ int align_down_builtin_const() {
 #ifndef CODEGEN
 void bad_align_macro(int* ptr) {
   (void)__macro_is_aligned_array(ptr, 7);// expected-error {{'__check_align_is_power_of_two' declared as an array with a negative size}}
-  (void)__macro_is_aligned(ptr, 7);// expected-error {{static_assert failed "Alignment must be a power-of-two"}}
-  (void)__macro_align_up(ptr, 7);// expected-error {{static_assert failed "Alignment must be a power-of-two"}}
-  (void)__macro_align_down(ptr, 7);// expected-error {{static_assert failed "Alignment must be a power-of-two"}}
+  (void)__macro_is_aligned(ptr, 7);// expected-error {{static_assert failed due to requirement '(7 & (7 - 1)) == 0' "Alignment must be a power-of-two"}}
+  (void)__macro_align_up(ptr, 7);// expected-error {{static_assert failed due to requirement '(7 & (7 - 1)) == 0' "Alignment must be a power-of-two"}}
+  (void)__macro_align_down(ptr, 7);// expected-error {{static_assert failed due to requirement '(7 & (7 - 1)) == 0' "Alignment must be a power-of-two"}}
 }
 
 _Bool bad_align_builtin(int* ptr) {

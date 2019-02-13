@@ -196,7 +196,7 @@ void check_bad_macro_values(void *mtx) {
 
   // getting or clearing too many bits should warn:
   unsigned long value;
-  value = cheri_get_low_ptr_bits(u, 32); // expected-error{{static_assert failed "Should only use the low 5 pointer bits"}}
+  value = cheri_get_low_ptr_bits(u, 32); // expected-error{{static_assert failed due to requirement '32 < 32' "Should only use the low 5 pointer bits"}}
   value = cheri_get_low_ptr_bits(u, 31); // This is fine
 
   // Check that the other macros also work in if statements

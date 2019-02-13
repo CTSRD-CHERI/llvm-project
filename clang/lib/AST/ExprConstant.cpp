@@ -5084,11 +5084,11 @@ public:
       // CHERI: If the LValue is a capability with an integer initializer, then
       //        extract the int value.
       if (SubExpr->getType()->isIntCapType()) {
-        APSInt IntValue;
-        if (!SubExpr->EvaluateAsInt(IntValue, Info.Ctx))
+        Expr::EvalResult ExprResult;
+        if (!SubExpr->EvaluateAsInt(ExprResult, Info.Ctx))
           return false;
-        IntValue.setIsUnsigned(SubExpr->getType()->isUnsignedIntegerOrEnumerationType());
-        RVal = APValue(IntValue);
+        ExprResult.Val.getInt().setIsUnsigned(SubExpr->getType()->isUnsignedIntegerOrEnumerationType());
+        RVal = ExprResult.Val;
       }
       return DerivedSuccess(RVal, E);
     }
@@ -8197,10 +8197,13 @@ bool IntExprEvaluator::VisitCallExpr(const CallExpr *E) {
 static bool getBuiltinAlignArguments(const CallExpr *E, EvalInfo &Info,
                                      bool IsPowerOfTwo, APSInt &Val,
                                      APSInt &Alignment, unsigned *ValWidth) {
-  if (!E->getArg(0)->EvaluateAsInt(Val, Info.Ctx))
+  Expr::EvalResult ExprResult;
+  if (!E->getArg(0)->EvaluateAsInt(ExprResult, Info.Ctx))
     return false;
-  if (!E->getArg(1)->EvaluateAsInt(Alignment, Info.Ctx))
+  Val = ExprResult.Val.getInt();
+  if (!E->getArg(1)->EvaluateAsInt(ExprResult, Info.Ctx))
     return false;
+  Alignment = ExprResult.Val.getInt();
   if (Alignment < 0)
     return false;
   if (IsPowerOfTwo) {
@@ -9914,11 +9917,11 @@ bool IntExprEvaluator::VisitCastExpr(const CastExpr *E) {
       // CHERI: If we are doing an integer cast from a capability, then extract
       // the int value
       if (SrcType->isIntCapType()) {
-        APSInt IntValue;
-        if (!SubExpr->EvaluateAsInt(IntValue, Info.Ctx))
+        Expr::EvalResult ExprResult;
+        if (!SubExpr->EvaluateAsInt(ExprResult, Info.Ctx))
           return false;
-        IntValue.setIsUnsigned(SrcType->isUnsignedIntegerOrEnumerationType());
-        Result = APValue(IntValue);
+        ExprResult.Val.getInt().setIsUnsigned(SrcType->isUnsignedIntegerOrEnumerationType());
+        Result = ExprResult.Val;
       } else
         // Only allow casts of lvalues if they are lossless.
         return Info.Ctx.getTypeSize(DestType) == Info.Ctx.getTypeSize(SrcType);
