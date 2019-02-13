@@ -1,7 +1,7 @@
 @Library('ctsrd-jenkins-scripts') _
 
 properties([disableConcurrentBuilds(),
-            compressBuildLog(),
+            // compressBuildLog(), // Broken, see https://issues.jenkins-ci.org/browse/JENKINS-54680
             disableResume(),
             [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/CTSRD-CHERI/llvm/'],
             [$class: 'CopyArtifactPermissionProperty', projectNames: '*'],
