@@ -6400,7 +6400,7 @@
 // PPC64LE:#define _ARCH_PWR5 1
 // PPC64LE:#define _ARCH_PWR5X 1
 // PPC64LE:#define _ARCH_PWR6 1
-// PPC64LE:#define _ARCH_PWR6X 1
+// PPC64LE-NOT:#define _ARCH_PWR6X 1
 // PPC64LE:#define _ARCH_PWR7 1
 // PPC64LE:#define _CALL_ELF 2
 // PPC64LE:#define _LITTLE_ENDIAN 1
@@ -6740,7 +6740,7 @@
 // PPCPWR7:#define _ARCH_PWR5 1
 // PPCPWR7:#define _ARCH_PWR5X 1
 // PPCPWR7:#define _ARCH_PWR6 1
-// PPCPWR7:#define _ARCH_PWR6X 1
+// PPCPWR7-NOT:#define _ARCH_PWR6X 1
 // PPCPWR7:#define _ARCH_PWR7 1
 //
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc64-none-none -target-cpu power7 -fno-signed-char < /dev/null | FileCheck -match-full-lines -check-prefix PPCPOWER7 %s
@@ -6753,7 +6753,7 @@
 // PPCPOWER7:#define _ARCH_PWR5 1
 // PPCPOWER7:#define _ARCH_PWR5X 1
 // PPCPOWER7:#define _ARCH_PWR6 1
-// PPCPOWER7:#define _ARCH_PWR6X 1
+// PPCPOWER7-NOT:#define _ARCH_PWR6X 1
 // PPCPOWER7:#define _ARCH_PWR7 1
 //
 // RUN: %clang_cc1 -E -dM -ffreestanding -triple=powerpc64-none-none -target-cpu pwr8 -fno-signed-char < /dev/null | FileCheck -match-full-lines -check-prefix PPCPWR8 %s
@@ -6766,7 +6766,7 @@
 // PPCPWR8:#define _ARCH_PWR5 1
 // PPCPWR8:#define _ARCH_PWR5X 1
 // PPCPWR8:#define _ARCH_PWR6 1
-// PPCPWR8:#define _ARCH_PWR6X 1
+// PPCPWR8-NOT:#define _ARCH_PWR6X 1
 // PPCPWR8:#define _ARCH_PWR7 1
 // PPCPWR8:#define _ARCH_PWR8 1
 //
@@ -6783,7 +6783,7 @@
 // PPCPOWER8:#define _ARCH_PWR5 1
 // PPCPOWER8:#define _ARCH_PWR5X 1
 // PPCPOWER8:#define _ARCH_PWR6 1
-// PPCPOWER8:#define _ARCH_PWR6X 1
+// PPCPOWER8-NOT:#define _ARCH_PWR6X 1
 // PPCPOWER8:#define _ARCH_PWR7 1
 // PPCPOWER8:#define _ARCH_PWR8 1
 //
@@ -6797,7 +6797,7 @@
 // PPCPWR9:#define _ARCH_PWR5 1
 // PPCPWR9:#define _ARCH_PWR5X 1
 // PPCPWR9:#define _ARCH_PWR6 1
-// PPCPWR9:#define _ARCH_PWR6X 1
+// PPCPWR9-NOT:#define _ARCH_PWR6X 1
 // PPCPWR9:#define _ARCH_PWR7 1
 // PPCPWR9:#define _ARCH_PWR9 1
 //
@@ -6811,7 +6811,7 @@
 // PPCPOWER9:#define _ARCH_PWR5 1
 // PPCPOWER9:#define _ARCH_PWR5X 1
 // PPCPOWER9:#define _ARCH_PWR6 1
-// PPCPOWER9:#define _ARCH_PWR6X 1
+// PPCPOWER9-NOT:#define _ARCH_PWR6X 1
 // PPCPOWER9:#define _ARCH_PWR7 1
 // PPCPOWER9:#define _ARCH_PWR9 1
 //
