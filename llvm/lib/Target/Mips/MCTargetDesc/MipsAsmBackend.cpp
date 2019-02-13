@@ -477,7 +477,7 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_Mips_SUB",                  0,     64,   0 },
     { "fixup_MICROMIPS_SUB",             0,     64,   0 },
     { "fixup_Mips_JALR",                 0,     32,   0 },
-    { "fixup_MICROMIPS_JALR",            0,     32,   0 }
+    { "fixup_MICROMIPS_JALR",            0,     32,   0 },
 
     { "fixup_CHERI_CAPTABLE11",          0,     11,   0 },
     { "fixup_CHERI_CAPTABLE20",          0,     16,   0 },
@@ -579,7 +579,7 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_Mips_SUB",                   0,     64,   0 },
     { "fixup_MICROMIPS_SUB",              0,     64,   0 },
     { "fixup_Mips_JALR",                  0,     32,   0 },
-    { "fixup_MICROMIPS_JALR",             0,     32,   0 }
+    { "fixup_MICROMIPS_JALR",             0,     32,   0 },
 
     { "fixup_CHERI_CAPTABLE11",    21,    11,   0 },
     { "fixup_CHERI_CAPTABLE20",    16,    16,   0 },

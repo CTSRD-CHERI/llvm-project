@@ -2447,6 +2447,7 @@ static const EnumEntry<uint64_t> CapRelocsPermsFlags[] = {
     {"Function", 0x8000000000000000ULL}};
 
 template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
+  const ELFFile<ELFT> *Obj = ObjF->getELFFile();
   const Elf_Shdr *Shdr = findSectionByName(*Obj, "__cap_relocs");
   if (!Shdr) {
     W.startLine() << "There is no __cap_relocs section in the file.\n";
@@ -2571,6 +2572,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
 }
 
 template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
+  const ELFFile<ELFT> *Obj = ObjF->getELFFile();
   const Elf_Shdr *Shdr = findSectionByName(*Obj, ".captable");
   if (!Shdr) {
     W.startLine() << "There is no .captable section in the file.\n";
@@ -2681,6 +2683,7 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapTable() {
 }
 
 template <class ELFT> void ELFDumper<ELFT>::printCheriCapTableMapping() {
+  const ELFFile<ELFT> *Obj = ObjF->getELFFile();
   const Elf_Shdr *Shdr = findSectionByName(*Obj, ".captable_mapping");
   if (!Shdr) {
     W.startLine() << "There is no .captable_mapping section in the file.\n";

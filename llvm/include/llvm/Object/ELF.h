@@ -45,7 +45,7 @@ getElfArchType(StringRef Object) {
                         (uint8_t)Object[ELF::EI_DATA]);
 }
 
-static inline Error createError(StringRef Err) {
+static inline Error createError(const Twine &Err) {
   return make_error<StringError>(Err, object_error::parse_failed);
 }
 
