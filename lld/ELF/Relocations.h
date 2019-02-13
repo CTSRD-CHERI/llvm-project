@@ -30,7 +30,6 @@ typedef uint32_t RelType;
 // from files are converted to these types so that the main code
 // doesn't have to know about architecture-specific details.
 enum RelExpr {
-  R_INVALID,
   R_ABS,
   R_ADDEND,
   R_AARCH64_GOT_PAGE_PC,
@@ -97,7 +96,6 @@ enum RelExpr {
   R_TLSLD_GOT_OFF,
   R_TLSLD_HINT,
   R_TLSLD_PC,
-  R_CHERI_CAPABILITY,
   R_CHERI_CAPABILITY_TABLE_INDEX,
   R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
   R_CHERI_CAPABILITY_TABLE_REL, // relative offset to _CHERI_CAPABILITY_TABLE_
@@ -114,9 +112,13 @@ enum RelExpr {
   LAST_REL_EXPR_USED_IN_isRelExprOneOf = R_CHERI_CAPABILITY_TABLE_REL,
   REL_EXPR_NOT_USED_IN_isRelExprOneOf = 128,
 
+  R_CHERI_CAPABILITY,
+
   R_MIPS_CHERI_CAPTAB_TLSGD,
   R_MIPS_CHERI_CAPTAB_TLSLD,
-  R_MIPS_CHERI_CAPTAB_TPREL
+  R_MIPS_CHERI_CAPTAB_TPREL,
+
+  R_INVALID,
 };
 
 static_assert(LAST_REL_EXPR_USED_IN_isRelExprOneOf < 64,
