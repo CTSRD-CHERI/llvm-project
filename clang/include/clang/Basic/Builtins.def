@@ -452,7 +452,7 @@ BUILTIN(__builtin_stdarg_start, "vA.", "n")
 BUILTIN(__builtin_assume_aligned, "v*vC*z.", "nc")
 // adding a _cap suffix is easier than supporting overloading
 BUILTIN(__builtin_assume_aligned_cap, "v*mvC*mz.", "nc")
-BUILTIN(__builtin_bcmp, "iv*v*z", "Fn")
+BUILTIN(__builtin_bcmp, "ivC*vC*z", "Fn")
 BUILTIN(__builtin_bcopy, "vv*v*z", "n")
 BUILTIN(__builtin_bzero, "vv*z", "nF")
 BUILTIN(__builtin_fprintf, "iP*cC*.", "Fp:1:")
@@ -957,6 +957,7 @@ LIBBUILTIN(strndup, "c*cC*z",     "f",     "string.h", ALL_GNU_LANGUAGES)
 LIBBUILTIN(index, "c*cC*i",       "f",     "strings.h", ALL_GNU_LANGUAGES)
 LIBBUILTIN(rindex, "c*cC*i",      "f",     "strings.h", ALL_GNU_LANGUAGES)
 LIBBUILTIN(bzero, "vv*z",         "f",     "strings.h", ALL_GNU_LANGUAGES)
+LIBBUILTIN(bcmp, "ivC*vC*z",      "f",     "strings.h", ALL_GNU_LANGUAGES)
 // In some systems str[n]casejmp is a macro that expands to _str[n]icmp.
 // We undefine then here to avoid wrong name.
 #undef strcasecmp
