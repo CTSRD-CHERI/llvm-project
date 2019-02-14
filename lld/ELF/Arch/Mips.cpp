@@ -206,7 +206,9 @@ RelExpr MIPS<ELFT>::getRelExpr(RelType Type, const Symbol &S,
   case R_MIPS_CHERI_CAPTAB_TLS_TPREL_HI16:
     return R_MIPS_CHERI_CAPTAB_TPREL;
   default:
-    return R_INVALID;
+    error(getErrorLocation(Loc) + "unknown relocation (" + Twine(Type) +
+          ") against symbol " + toString(S));
+    return R_NONE;
   }
 }
 
@@ -698,7 +700,7 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   case R_MIPS_CHERI_CAPABILITY:
     llvm_unreachable("R_MIPS_CHERI_CAPABILITY should never be handled here!");
   default:
-    error(getErrorLocation(Loc) + "unrecognized reloc " + Twine(Type));
+    llvm_unreachable("unknown relocation");
   }
 }
 
