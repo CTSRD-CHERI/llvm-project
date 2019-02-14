@@ -104,6 +104,7 @@ public:
   uint16_t EMachine = llvm::ELF::EM_NONE;
   uint64_t EFlags = 0;
   uint8_t OSABI = 0;
+  uint8_t ABIVersion = 0;
 
   // Cache for toString(). Only toString() should use this member.
   mutable std::string ToStringCache;

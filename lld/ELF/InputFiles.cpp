@@ -238,8 +238,9 @@ ELFFileBase<ELFT>::ELFFileBase(Kind K, MemoryBufferRef MB) : InputFile(K, MB) {
     EKind = ELFT::Is64Bits ? ELF64BEKind : ELF32BEKind;
 
   EMachine = getObj().getHeader()->e_machine;
-  OSABI = getObj().getHeader()->e_ident[llvm::ELF::EI_OSABI];
   EFlags = getObj().getHeader()->e_flags;
+  OSABI = getObj().getHeader()->e_ident[llvm::ELF::EI_OSABI];
+  ABIVersion = getObj().getHeader()->e_ident[llvm::ELF::EI_ABIVERSION];
 }
 
 template <class ELFT>
