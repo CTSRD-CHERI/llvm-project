@@ -105,55 +105,18 @@ enum RelExpr {
   // expression matches one on many possible options. This initially worked
   // for all members of RelExpr, but lately we have come close to the limit of
   // 64 entries in the RelExpr enum. If a given RelExpr is not used in a
-  // isRelExprOneOf() check with many possibly options, it should be placed
-  // at the end of the enum after whatever LAST_REL_EXPR_USED_IN_isRelExprOneOf
-  // aliases so that the available 64 bits can be used by other more common
-  // expressions. We can also skip the first few relocations.
+  // oneof() check with many possibly options, it should be placed at the end
+  // of the enum after whatever LAST_REL_EXPR_USED_IN_oneof aliases so that the
+  // available 64 bits can be used by other more common expressions. We can
+  // also skip the first few relocations.
   // TODO: If we end up neededing many more expressions we could also start
   // using two 64-bit masking operations
-  FIRST_REL_EXPR_USED_IN_isRelExprOneOf = R_AARCH64_GOT_PAGE_PC,
-  LAST_REL_EXPR_USED_IN_isRelExprOneOf = R_CHERI_CAPABILITY_TABLE_REL,
+  FIRST_REL_EXPR_USED_IN_oneof = R_AARCH64_GOT_PAGE_PC,
+  LAST_REL_EXPR_USED_IN_oneof = R_CHERI_CAPABILITY_TABLE_REL,
 };
 
-static_assert((LAST_REL_EXPR_USED_IN_isRelExprOneOf -
-               FIRST_REL_EXPR_USED_IN_isRelExprOneOf) < 64,
+static_assert((LAST_REL_EXPR_USED_IN_oneof - FIRST_REL_EXPR_USED_IN_oneof) < 64,
               "RelExpr is too large for 64-bit mask!");
-
-// Build a bitmask with one bit set for each RelExpr.
-//
-// Constexpr function arguments can't be used in static asserts, so we
-// use template arguments to build the mask.
-// But function template partial specializations don't exist (needed
-// for base case of the recursion), so we need a dummy struct.
-template <RelExpr... Exprs> struct RelExprMaskBuilder {
-  static inline uint64_t build() { return 0; }
-};
-
-// Specialization for recursive case.
-template <RelExpr Head, RelExpr... Tail>
-struct RelExprMaskBuilder<Head, Tail...> {
-  static inline uint64_t build() {
-    static_assert(0 <= Head - FIRST_REL_EXPR_USED_IN_isRelExprOneOf &&
-                  Head - FIRST_REL_EXPR_USED_IN_isRelExprOneOf < 64,
-                  "RelExpr is too large for 64-bit mask!");
-    return (uint64_t(1) << (Head - FIRST_REL_EXPR_USED_IN_isRelExprOneOf)) |
-        RelExprMaskBuilder<Tail...>::build();
-  }
-};
-
-// Return true if `Expr` is one of `Exprs`.
-// There are fewer than 64 RelExpr's, so we can represent any set of
-// RelExpr's as a constant bit mask and test for membership with a
-// couple cheap bitwise operations.
-template <RelExpr... Exprs> bool isRelExprOneOf(RelExpr Expr) {
-  if (Expr < FIRST_REL_EXPR_USED_IN_isRelExprOneOf ||
-      Expr > LAST_REL_EXPR_USED_IN_isRelExprOneOf)
-    return false;
-  unsigned Bit = (unsigned)Expr - FIRST_REL_EXPR_USED_IN_isRelExprOneOf;
-  assert(0 <= Bit && Bit < 64 &&
-         "RelExpr is too large for 64-bit mask!");
-  return (uint64_t(1) << Bit) & RelExprMaskBuilder<Exprs...>::build();
-}
 
 // Architecture-neutral representation of relocation.
 struct Relocation {
