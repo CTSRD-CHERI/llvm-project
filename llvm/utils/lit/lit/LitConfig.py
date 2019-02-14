@@ -24,7 +24,7 @@ class LitConfig(object):
 
     def __init__(self, progname, path, quiet,
                  useValgrind, valgrindLeakCheck, valgrindArgs,
-                 noExecute, debug, isWindows, singleProcess,
+                 noExecute, debug, isWindows,
                  params, shardNumber=None, config_prefix = None,
                  maxIndividualTestTime = 0,
                  maxFailures = None,
@@ -40,7 +40,6 @@ class LitConfig(object):
         self.valgrindUserArgs = list(valgrindArgs)
         self.noExecute = noExecute
         self.debug = debug
-        self.singleProcess = singleProcess
         self.isWindows = bool(isWindows)
         self.params = dict(params)
         self.shardNumber = shardNumber
