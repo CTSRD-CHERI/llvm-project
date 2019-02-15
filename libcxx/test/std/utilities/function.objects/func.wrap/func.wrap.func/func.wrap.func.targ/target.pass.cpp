@@ -61,33 +61,41 @@ int main()
     {
     std::function<int(int)> f = A();
     assert(A::count == 1);
+#ifndef _LIBCPP_NO_RTTI
     assert(f.target<A>());
     assert(f.target<int(*)(int)>() == 0);
     assert(f.target<int>() == nullptr);
+#endif
     }
     assert(A::count == 0);
     {
     std::function<int(int)> f = g;
     assert(A::count == 0);
+#ifndef _LIBCPP_NO_RTTI
     assert(f.target<int(*)(int)>());
     assert(f.target<A>() == 0);
     assert(f.target<int>() == nullptr);
+#endif
     }
     assert(A::count == 0);
     {
     const std::function<int(int)> f = A();
     assert(A::count == 1);
+#ifndef _LIBCPP_NO_RTTI
     assert(f.target<A>());
     assert(f.target<int(*)(int)>() == 0);
     assert(f.target<int>() == nullptr);
+#endif
     }
     assert(A::count == 0);
     {
     const std::function<int(int)> f = g;
     assert(A::count == 0);
+#ifndef _LIBCPP_NO_RTTI
     assert(f.target<int(*)(int)>());
     assert(f.target<A>() == 0);
     assert(f.target<int>() == nullptr);
+#endif
     }
     assert(A::count == 0);
 }

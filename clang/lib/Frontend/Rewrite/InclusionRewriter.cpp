@@ -532,13 +532,21 @@ void InclusionRewriter::Process(FileID FileId,
                 SourceLocation Loc = RawToken.getLocation();
 
                 // Rewrite __has_include(x)
-                if (RawToken.getIdentifierInfo()->isStr("__has_include")) {
+                // HACK: also handle QT_HAS_INCLUDE() and __libcpp_has_include()
+                auto IsTokenOneOf = [&](std::initializer_list<const char *> L) {
+                  return any_of(L, [&](const StringRef S) {
+                    return RawToken.getIdentifierInfo()->isStr(S);
+                  });
+                };
+                if (IsTokenOneOf({"__has_include", "QT_HAS_INCLUDE",
+                                  "__libcpp_has_include"})) {
                   if (!HandleHasInclude(FileId, RawLex, nullptr, RawToken,
                                         HasFile))
                     continue;
                   // Rewrite __has_include_next(x)
-                } else if (RawToken.getIdentifierInfo()->isStr(
-                               "__has_include_next")) {
+                } else if (IsTokenOneOf({"__has_include_next",
+                                         "QT_HAS_INCLUDE_NEXT",
+                                         "__libcpp_has_include_next"})) {
                   if (DirLookup)
                     ++DirLookup;
 

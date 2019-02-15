@@ -102,6 +102,7 @@ public:
   RelType TlsGotRel;
   RelType TlsModuleIndexRel;
   RelType TlsOffsetRel;
+  llvm::Optional<RelType> AbsPointerRel; // TODO: remove the optional
   unsigned GotEntrySize = 0;
   unsigned GotPltEntrySize = 0;
   unsigned PltEntrySize;

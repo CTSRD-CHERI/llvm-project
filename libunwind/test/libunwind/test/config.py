@@ -53,6 +53,23 @@ class Configuration(LibcxxConfiguration):
             self.config.available_features.add('libunwind-no-threads')
         super(Configuration, self).configure_compile_flags()
 
+    def configure_link_flags(self):
+        super(Configuration, self).configure_link_flags()
+        # Ensure that libunwind is always added to the linker flags
+        # This should be the case for most TargetInfo classes anyway but some
+        # of them don't add it.
+        self.cxx.link_flags += ['-nodefaultlibs', '-lc']
+        if self.link_shared:
+            # dladdr needs libdl on Linux
+            self.cxx.link_flags += ['-ldl', '-lunwind']
+        else:
+            libname = self.make_static_lib_name('unwind')
+            abs_path = os.path.join(self.libunwind_obj_root, "lib", libname)
+            assert os.path.exists(abs_path) and "static libunwind library does not exist", abs_path
+            self.cxx.link_flags += [abs_path]
+
+        print(self.cxx.link_flags)
+
     def configure_compile_flags_header_includes(self):
         self.configure_config_site_header()
 

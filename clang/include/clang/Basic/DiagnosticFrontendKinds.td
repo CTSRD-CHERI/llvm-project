@@ -98,6 +98,9 @@ def warn_fe_cc_log_diagnostics_failure : Warning<
 def warn_fe_unable_to_open_stats_file : Warning<
     "unable to open statistics output file '%0': '%1'">,
     InGroup<DiagGroup<"unable-to-open-stats-file">>;
+def warn_fe_unable_to_lock_stats_file : Warning<
+    "unable to lock statistics output file '%0': '%1'">,
+    InGroup<DiagGroup<"unable-to-lock-stats-file">>, DefaultError;
 def err_fe_no_pch_in_dir : Error<
     "no suitable precompiled header file found in directory '%0'">;
 def err_fe_action_not_available : Error<
@@ -217,6 +220,26 @@ def err_module_header_file_invalid :
 def err_test_module_file_extension_version : Error<
   "test module file extension '%0' has different version (%1.%2) than expected "
   "(%3.%4)">;
+
+
+def remark_setting_cheri_subobject_bounds :
+  Remark<"setting %select{|sub-object }0bounds for "
+         "%select{pointer to|reference to}1 %2 to %3 bytes">,
+  InGroup<CheriSubobjectBounds>;
+def remark_setting_cheri_subobject_bounds_field :
+  Remark<"setting sub-object bounds for field %0 "
+         "(%select{pointer to|reference to}1 %2) to %3 bytes">,
+  InGroup<CheriSubobjectBounds>;
+def remark_subobject_using_container_size :
+  Remark<"using size of containing type %0 instead of object type %1 for "
+         "subobject bounds on %2">, InGroup<CheriSubobjectBounds>;
+def remark_no_cheri_subobject_bounds :
+  Remark<"not setting bounds for %0 (%1)">,
+  InGroup<CheriSubobjectBounds>;
+
+def warn_subobject_bounds_unknown_type :
+  Warning<"unhandled type '%0' in CHERI bounds setting">,
+  InGroup<CheriSubobjectBounds>, DefaultWarnNoWerror;
 
 def err_missing_vfs_overlay_file : Error<
   "virtual filesystem overlay file '%0' not found">, DefaultFatal;

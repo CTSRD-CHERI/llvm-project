@@ -82,7 +82,7 @@ OutputSection::OutputSection(StringRef Name, uint32_t Type, uint64_t Flags)
 static bool canMergeToProgbits(unsigned Type) {
   return Type == SHT_NOBITS || Type == SHT_PROGBITS || Type == SHT_INIT_ARRAY ||
          Type == SHT_PREINIT_ARRAY || Type == SHT_FINI_ARRAY ||
-         Type == SHT_NOTE;
+         Type == SHT_NOTE || Type == SHT_MIPS_DWARF;  // XXXAR: Old GCC emits SHT_MIPS_DWARF this for .debug_* sections...
 }
 
 void OutputSection::addSection(InputSection *IS) {

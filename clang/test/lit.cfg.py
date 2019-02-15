@@ -40,7 +40,8 @@ config.test_source_root = os.path.dirname(__file__)
 config.test_exec_root = os.path.join(config.clang_obj_root, 'test')
 
 llvm_config.use_default_substitutions()
-
+# Not really required but makes debugging tests easier
+llvm_config.add_cheri_tool_substitutions(["llc", "opt"])
 llvm_config.use_clang()
 
 config.substitutions.append(
@@ -61,6 +62,7 @@ config.substitutions.append(('%PATH%', config.environment['PATH']))
 tool_dirs = [config.clang_tools_dir, config.llvm_tools_dir]
 
 tools = [
+    'llvm-readobj', 'llvm-objdump', 'llvm-dwarfdump', # XXXAR: needed by some CHERI tests
     'c-index-test', 'clang-check', 'clang-diff', 'clang-format', 'clang-tblgen',
     'opt',
     ToolSubst('%clang_func_map', command=FindTool(

@@ -15,6 +15,7 @@
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTLambda.h"
+#include "clang/AST/RecordLayout.h"
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/CommentDiagnostic.h"
@@ -5814,6 +5815,9 @@ Sema::ActOnTypedefNameDecl(Scope *S, DeclContext *DC, TypedefNameDecl *NewTD,
         Context.setucontext_tDecl(NewTD);
     }
 
+  if (isa<TypedefDecl>(NewTD) && NewTD->hasAttrs())
+    CheckAlignasUnderalignment(NewTD);
+
   return NewTD;
 }
 
@@ -6269,6 +6273,16 @@ static bool isDeclExternC(const Decl *D) {
   llvm_unreachable("Unknown type of decl!");
 }
 
+template <typename AttrTy>
+static void copyAttrFromTypedefToDecl(Sema &S, Decl *D, const TypedefType *TT) {
+  const TypedefNameDecl *TND = TT->getDecl();
+  if (const auto *Attribute = TND->getAttr<AttrTy>()) {
+    AttrTy *Clone = Attribute->clone(S.Context);
+    Clone->setInherited(true);
+    D->addAttr(Clone);
+  }
+}
+
 NamedDecl *Sema::ActOnVariableDeclarator(
     Scope *S, Declarator &D, DeclContext *DC, TypeSourceInfo *TInfo,
     LookupResult &Previous, MultiTemplateParamsArg TemplateParamLists,
@@ -6710,6 +6724,14 @@ NamedDecl *Sema::ActOnVariableDeclarator(
 
   // Handle attributes prior to checking for duplicates in MergeVarDecl
   ProcessDeclAttributes(S, NewVD, D);
+
+  // FIXME: this is probably the wrong location to be doing this and we should
+  // probably be doing this for more attributes (especially for function
+  // pointer attributes (such as format, warn_unused_result, etc)
+  if (R->isFunctionPointerType())
+    if (const auto* TT = R->getAs<TypedefType>())
+      copyAttrFromTypedefToDecl<AllocSizeAttr>(*this, NewVD, TT);
+
 
   if (getLangOpts().CUDA || getLangOpts().OpenMPIsDevice) {
     if (EmitTLSUnsupportedError &&
@@ -8801,6 +8823,83 @@ Sema::ActOnFunctionDeclarator(Scope *S, Declarator &D, DeclContext *DC,
 
   // Handle attributes.
   ProcessDeclAttributes(S, NewFD, D);
+
+  if (NewFD->hasAttr<PointerInterpretationCapsAttr>()) {
+    // FIXME: This will assert on failure - it should print a nice error.
+    //unsigned CapAS = Context.getTargetInfo() .AddressSpaceForCapabilities();
+    const FunctionProtoType *FPT =
+      NewFD->getType()->getAs<FunctionProtoType>();
+    ArrayRef<QualType> OldParams = FPT->getParamTypes();
+    llvm::SmallVector<QualType, 8> NewParams;
+    for (QualType T : OldParams) {
+      if (const PointerType *PT = T->getAs<PointerType>())
+        NewParams.push_back(Context.getPointerType(PT->getPointeeType(),
+                                                   ASTContext::PIK_Capability));
+      else
+        NewParams.push_back(T);
+    }
+    QualType RetTy = FPT->getReturnType();
+    if (const PointerType *PT = RetTy->getAs<PointerType>())
+      RetTy = Context.getPointerType(PT->getPointeeType(),
+                                     ASTContext::PIK_Capability);
+    NewFD->setType(Context.getFunctionType(RetTy, NewParams,
+          FPT->getExtProtoInfo()));
+  }
+
+  QualType RetType = NewFD->getReturnType();
+
+  if (CHERIMethodSuffixAttr *Attr = NewFD->getAttr<CHERIMethodSuffixAttr>()) {
+    auto *TU = Context.getTranslationUnitDecl();
+    // Lookup the type of cheri_object, or generate it if it isn't specified.
+    QualType CHERIClassTy;
+    IdentifierInfo &ClassII = Context.Idents.get("cheri_object");
+    DeclarationName ClassDN(&ClassII);
+    auto Defs = TU->lookup(ClassDN);
+    for (NamedDecl *D : Defs)
+      if (RecordDecl *RD = dyn_cast<RecordDecl>(D))
+        CHERIClassTy = Context.getTypeDeclType(RD);
+    if (CHERIClassTy == QualType())
+      CHERIClassTy = Context.getCHERIClassType();
+    // Construct a new function prototype that is the same as the original,
+    // except that it has an extra struct cheri_object as the first argument.
+    const FunctionProtoType *OFT =
+      NewFD->getType()->getAs<FunctionProtoType>();
+    const ArrayRef<QualType> Params = OFT->getParamTypes();
+    SmallVector<QualType, 16> NewParams;
+    NewParams.push_back(CHERIClassTy);
+    NewParams.insert(NewParams.end(), Params.begin(), Params.end());
+    FunctionProtoType::ExtProtoInfo EPI = OFT->getExtProtoInfo();
+    EPI.ExtInfo = EPI.ExtInfo.withCallingConv(CC_CHERICCall);
+    QualType WrappedType = Context.getFunctionType(RetType, NewParams, EPI);
+    // Construct the new function name, taking the old one and adding the
+    // suffix.
+    std::string Name = (NewFD->getName() + Attr->getSuffix()).str();
+    IdentifierInfo &II = Context.Idents.get(Name);
+    DeclarationName DN(&II);
+    DeclarationNameInfo DNI(DN, SourceLocation());
+    // construct the function decl and its associated parameter decls
+    FunctionDecl *WrappedFD = FunctionDecl::Create(Context,
+        NewFD->getDeclContext(), NewFD->getTypeSpecStartLoc(), DNI,
+        WrappedType, TInfo, SC_Extern, false, true);
+    SmallVector<ParmVarDecl*, 16> Parms;
+    for (QualType Ty : NewParams) {
+      Parms.push_back(ParmVarDecl::Create(Context, NewFD, SourceLocation(),
+            SourceLocation(), nullptr, Ty, Context.getTrivialTypeSourceInfo(Ty,
+              SourceLocation()), SC_None, nullptr));
+    }
+    WrappedFD->setParams(Parms);
+    // Propagate the default class (the calling convention is copied
+    // automatically).  This won't be used in the suffixed version, but is used
+    // to look up the method number.
+    if (CHERIMethodClassAttr *Cls = NewFD->getAttr<CHERIMethodClassAttr>())
+      WrappedFD->addAttr(Cls->clone(Context));
+    WrappedFD->addAttr(Attr->clone(Context));
+    Attr->setSuffix(Context, "");
+    // Make the new prototype visible.
+    NewFD->getLexicalDeclContext()->addDecl(WrappedFD);
+    S->AddDecl(WrappedFD);
+    IdResolver.AddDecl(WrappedFD);
+  }
 
   if (getLangOpts().OpenCL) {
     // OpenCL v1.1 s6.5: Using an address space qualifier in a function return
@@ -15054,8 +15153,48 @@ void Sema::ActOnTagFinishDefinition(Scope *S, Decl *TagD,
     Tag->setTopLevelDeclInObjCContainer();
 
   // Notify the consumer that we've defined a tag.
-  if (!Tag->isInvalidDecl())
+  if (!Tag->isInvalidDecl()) {
     Consumer.HandleTagDeclDefinition(Tag);
+    // Don't try to compute excess padding (which can be expensive) if the diag
+    // is ignored.
+    if (RecordDecl *RD = dyn_cast<RecordDecl>(Tag))
+      if (!RD->isDependentContext() && !Diags.isIgnored(diag::warn_excess_padding, RD->getLocation())) {
+        unsigned CharBitNum = Context.getTargetInfo().getCharWidth();
+        unsigned NumFields = 0;
+        unsigned LastFieldEnd = 0;
+        unsigned Padding = 0;
+        const ASTRecordLayout &Layout = Context.getASTRecordLayout(RD);
+        unsigned BitEnd = 0;
+        for (auto F : RD->fields()) {
+          unsigned Offset = Layout.getFieldOffset(NumFields);
+          NumFields++;
+          // Count the bits in a bitfield.
+          if (F->isBitField()) {
+            BitEnd += F->getBitWidthValue(Context);
+            continue;
+          }
+          // If the last field was a bitfield then round the width up to a char
+          // and use that.
+          if (BitEnd) {
+            LastFieldEnd += (BitEnd + (CharBitNum - 1)) / CharBitNum;
+            BitEnd = 0;
+          }
+          Padding += Offset - LastFieldEnd;
+          LastFieldEnd = Offset + Context.getTypeSizeInChars(F->getType()).getQuantity();
+        }
+        unsigned Size = Layout.getSize().getQuantity();
+        Padding += Size - LastFieldEnd;
+        unsigned UnpaddedSize = Size - Padding;
+
+        // Don't warn for empty structs even though they have 1 byte padding in
+        // a 1 byte record
+        if (NumFields > 0)
+          if ((Padding > 8) || ((Padding * 3) > (UnpaddedSize * 4)))
+            getDiagnostics().Report(RD->getLocation(),
+                                    diag::warn_excess_padding)
+                << Context.getTypeDeclType(RD) << Padding << Size;
+      }
+  }
 }
 
 void Sema::ActOnObjCContainerFinishDefinition() {
@@ -16171,6 +16310,77 @@ void Sema::ActOnFields(Scope *S, SourceLocation RecLoc, Decl *EnclosingDecl,
       CDecl->setIvarRBraceLoc(RBrac);
     }
   }
+  if (Record && Record->hasAttr<PackedAttr>() && !Record->isDependentType()) {
+    std::function<bool(const RecordDecl *R)> contains_capabilities =
+      [&](const RecordDecl *R) {
+        for (const auto *F : R->fields()) {
+          auto FTy = F->getType();
+          if (FTy->isCHERICapabilityType(getASTContext()))
+            return true;
+          if (FTy->isRecordType() &&
+              contains_capabilities(FTy->getAs<RecordType>()->getDecl()))
+            return true;
+        }
+        return false;
+      };
+    const FieldDecl *CheckForUseInArray = nullptr;
+    for (const auto *F : Record->fields()) {
+      auto FTy = F->getType();
+      // We shouldn't be calling Context.getTypeAlign() as this alters the
+      // order in which some Record layouts get initialized and therefore
+      // breaks CodeGen/override-layout.c and CodeGenCXX/override-layout.cpp
+      // Context.getDeclAlign() appears to be the correct function to call
+      // but it will always return 1 byte alignment for fields in a struct
+      // that has a packed attribute and is only an estimate otherwise (and
+      // appears to be wrong quite frequently).
+      // To avoid breaking any existing test cases that depend on the order, we
+      // make sure to only call getTypeAlign() if the field is actually a
+      // capability type
+      auto checkCapabilityFieldAlignment = [&](unsigned DiagID) {
+        // Calling getTypeAlign on dependent types will fail, so we need to fall
+        // back to an estimate from GetDeclAlign
+        unsigned CapAlign = FTy->isDependentType() ?
+            Context.toBits(Context.getDeclAlign(F)) : Context.getTypeAlign(FTy);
+        unsigned FieldOffset = Context.getFieldOffset(F);
+        if (FieldOffset % CapAlign) {
+          Diag(F->getLocation(), DiagID)
+              << (unsigned)Context.toCharUnitsFromBits(FieldOffset).getQuantity();
+          // only check use in array if we haven't diagnosed anything yet
+          CheckForUseInArray = nullptr;
+        } else {
+          CheckForUseInArray = F;
+        }
+      };
+      if (FTy->isCHERICapabilityType(Context)) {
+        checkCapabilityFieldAlignment(diag::warn_packed_capability);
+      } else if (FTy->isRecordType() &&
+                 contains_capabilities(FTy->getAs<RecordType>()->getDecl())) {
+        checkCapabilityFieldAlignment(diag::warn_packed_struct_capability);
+      }
+    }
+    if (CheckForUseInArray) {
+      assert(!Record->isDependentType());
+      unsigned RecordAlign = Context.getTypeAlign(Record->getTypeForDecl());
+      unsigned RecordSize = Context.getTypeSize(Record->getTypeForDecl());
+      unsigned CapAlign = Context.getTargetInfo().getCHERICapabilityAlign();
+      // Warn if alignment is not a multiple of CapAlign unless size is a
+      // multiple of CapAlign
+      // I.e. struct { char pad[sizeof(void*)]; void* cap; char bad; } __packed
+      // will cause a warning but
+      // struct { char pad[sizeof(void*)]; void* cap; } __packed is okay
+      if ((RecordAlign % CapAlign) && (RecordSize % CapAlign)) {
+        unsigned AlignBytes = Context.toCharUnitsFromBits(CapAlign).getQuantity();
+        unsigned FieldOffset = Context.toCharUnitsFromBits(
+            Context.getFieldOffset(CheckForUseInArray)).getQuantity();
+        Diag(CheckForUseInArray->getLocation(),
+             diag::warn_packed_capability_in_array) << FieldOffset;
+        Diag(Record->getSourceRange().getEnd(),
+            diag::note_insert_attribute_aligned) << AlignBytes
+            << FixItHint::CreateInsertion(Record->getSourceRange().getEnd(),
+            ("__attribute__((aligned(" + Twine(AlignBytes) + ")))").str());
+      }
+    }
+  }
 }
 
 /// Determine whether the given integral value is representable within
@@ -16381,7 +16591,7 @@ EnumConstantDecl *Sema::CheckEnumConstant(EnumDecl *Enum,
   if (!EltTy->isDependentType()) {
     // Make the enumerator value match the signedness and size of the
     // enumerator's type.
-    EnumVal = EnumVal.extOrTrunc(Context.getIntWidth(EltTy));
+    EnumVal = EnumVal.extOrTrunc(Context.getIntRange(EltTy));
     EnumVal.setIsSigned(EltTy->isSignedIntegerOrEnumerationType());
   }
 
@@ -17257,6 +17467,30 @@ void Sema::createImplicitModuleImportForErrorRecovery(SourceLocation Loc,
   // Make the module visible.
   getModuleLoader().makeModuleVisible(Mod, Module::AllVisible, Loc);
   VisibleModules.setVisible(Mod, Loc);
+}
+void Sema::ActOnPragmaOpaque(IdentifierInfo* TypeName,
+                             IdentifierInfo* KeyName,
+                             SourceLocation PragmaLoc,
+                             SourceLocation TypeLoc,
+                             SourceLocation KeyLoc) {
+
+  Decl *TD = LookupSingleName(TUScope, TypeName, TypeLoc, LookupOrdinaryName);
+  TypedefDecl *TypeDecl = TD ? dyn_cast<TypedefDecl>(TD) : 0;
+  // Check that this is a valid typedef of an opaque type
+  if (!TypeDecl || !TypeDecl->getUnderlyingType()->isPointerType()) {
+    Diag(TypeLoc, diag::err_pragma_opaque_invalid_type);
+    return;
+  }
+
+  Decl *KD = LookupSingleName(TUScope, KeyName, KeyLoc, LookupOrdinaryName);
+  VarDecl *KeyDecl = KD ? dyn_cast<VarDecl>(KD) : 0;
+
+  if (!KeyDecl) {
+    Diag(KeyLoc, diag::err_pragma_opaque_invalid_key);
+    return;
+  }
+
+  TypeDecl->setOpaqueKey(KeyDecl);
 }
 
 /// We have parsed the start of an export declaration, including the '{'

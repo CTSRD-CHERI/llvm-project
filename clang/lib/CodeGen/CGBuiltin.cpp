@@ -124,14 +124,15 @@ static Value *MakeBinaryAtomicValue(
   return EmitFromInt(CGF, Result, T, ValueType);
 }
 
-static Value *EmitNontemporalStore(CodeGenFunction &CGF, const CallExpr *E) {
+static Value *EmitNontemporalStore(CodeGenFunction &CGF, const CallExpr *E,
+                                   unsigned AddrSpace) {
   Value *Val = CGF.EmitScalarExpr(E->getArg(0));
   Value *Address = CGF.EmitScalarExpr(E->getArg(1));
 
   // Convert the type of the pointer to a pointer to the stored type.
   Val = CGF.EmitToMemory(Val, E->getArg(0)->getType());
   Value *BC = CGF.Builder.CreateBitCast(
-      Address, llvm::PointerType::getUnqual(Val->getType()), "cast");
+      Address, llvm::PointerType::get(Val->getType(), AddrSpace), "cast");
   LValue LV = CGF.MakeNaturalAlignAddrLValue(BC, E->getArg(0)->getType());
   LV.setNontemporal(true);
   CGF.EmitStoreOfScalar(Val, LV, false);
@@ -385,8 +386,8 @@ static Value *EmitSignBit(CodeGenFunction &CGF, Value *V) {
 }
 
 static RValue emitLibraryCall(CodeGenFunction &CGF, const FunctionDecl *FD,
-                              const CallExpr *E, llvm::Constant *calleeValue) {
-  CGCallee callee = CGCallee::forDirect(calleeValue, GlobalDecl(FD));
+                              const CallExpr *E, llvm::Value *calleeValue) {
+  CGCallee callee = CGCallee(GlobalDecl(FD), calleeValue);
   return CGF.EmitCall(E->getCallee()->getType(), callee, E, ReturnValueSlot());
 }
 
@@ -470,13 +471,14 @@ EncompassingIntegerType(ArrayRef<struct WidthAndSignedness> Types) {
 }
 
 Value *CodeGenFunction::EmitVAStartEnd(Value *ArgValue, bool IsStart) {
-  llvm::Type *DestType = Int8PtrTy;
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Type *DestType = llvm::PointerType::get(Int8Ty, AS);
   if (ArgValue->getType() != DestType)
-    ArgValue =
-        Builder.CreateBitCast(ArgValue, DestType, ArgValue->getName().data());
+    ArgValue = Builder.CreatePointerBitCastOrAddrSpaceCast(ArgValue, DestType,
+                                         ArgValue->getName().data());
 
   Intrinsic::ID inst = IsStart ? Intrinsic::vastart : Intrinsic::vaend;
-  return Builder.CreateCall(CGM.getIntrinsic(inst), ArgValue);
+  return Builder.CreateCall(CGM.getIntrinsic(inst, DestType), ArgValue);
 }
 
 /// Checks if using the result of __builtin_object_size(p, @p From) in place of
@@ -782,9 +784,11 @@ static RValue EmitMSVCRTSetJmp(CodeGenFunction &CGF, MSVCSetJmpKind SJKind,
     Name = SJKind == MSVCSetJmpKind::_setjmp ? "_setjmp" : "_setjmpex";
     Arg1Ty = CGF.Int8PtrTy;
     if (CGF.getTarget().getTriple().getArch() == llvm::Triple::aarch64) {
-      Arg1 = CGF.Builder.CreateCall(CGF.CGM.getIntrinsic(Intrinsic::sponentry));
+      Arg1 = CGF.Builder.CreateCall(CGF.CGM.getIntrinsic(Intrinsic::sponentry,
+                                                         {CGF.CGM.ProgramInt8PtrTy}));
     } else
-      Arg1 = CGF.Builder.CreateCall(CGF.CGM.getIntrinsic(Intrinsic::frameaddress),
+      Arg1 = CGF.Builder.CreateCall(CGF.CGM.getIntrinsic(Intrinsic::frameaddress,
+                                                         {CGF.CGM.ProgramInt8PtrTy}),
                                     llvm::ConstantInt::get(CGF.Int32Ty, 0));
   }
 
@@ -1338,9 +1342,10 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
   ASTContext &Ctx = RD->getASTContext();
   const ASTRecordLayout &RL = Ctx.getASTRecordLayout(RD);
   std::string Pad = std::string(Lvl * 4, ' ');
+  unsigned GlobalAS = CGF.CGM.getDataLayout().getGlobalsAddressSpace();
 
   Value *GString =
-      CGF.Builder.CreateGlobalStringPtr(RType.getAsString() + " {\n");
+      CGF.Builder.CreateGlobalStringPtr(RType.getAsString() + " {\n", "", GlobalAS);
   Value *Res = CGF.Builder.CreateCall(Func, {GString});
 
   static llvm::DenseMap<QualType, const char *> Types;
@@ -1383,7 +1388,7 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
             .concat(llvm::Twine(' '))
             .concat(FD->getNameAsString())
             .concat(" : ")
-            .str());
+            .str(), "", GlobalAS);
     Value *TmpRes = CGF.Builder.CreateCall(Func, {GString});
     Res = CGF.Builder.CreateAdd(Res, TmpRes);
 
@@ -1408,12 +1413,12 @@ static llvm::Value *dumpRecord(CodeGenFunction &CGF, QualType RType,
 
     // FIXME Need to handle bitfield here
     GString = CGF.Builder.CreateGlobalStringPtr(
-        Format.concat(llvm::Twine('\n')).str());
+        Format.concat(llvm::Twine('\n')).str(), "", GlobalAS);
     TmpRes = CGF.Builder.CreateCall(Func, {GString, FieldPtr});
     Res = CGF.Builder.CreateAdd(Res, TmpRes);
   }
 
-  GString = CGF.Builder.CreateGlobalStringPtr(Pad + "}\n");
+  GString = CGF.Builder.CreateGlobalStringPtr(Pad + "}\n", "", GlobalAS );
   Value *TmpRes = CGF.Builder.CreateCall(Func, {GString});
   Res = CGF.Builder.CreateAdd(Res, TmpRes);
   return Res;
@@ -1485,6 +1490,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       return RValue::get(llvm::ConstantFP::get(getLLVMContext(),
                                                Result.Val.getFloat()));
   }
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   // There are LLVM math intrinsics/instructions corresponding to math library
   // functions except the LLVM op will never set errno while the math library
@@ -1691,11 +1697,13 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Value *DstPtr = EmitVAListRef(E->getArg(0)).getPointer();
     Value *SrcPtr = EmitVAListRef(E->getArg(1)).getPointer();
 
-    llvm::Type *Type = Int8PtrTy;
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    llvm::Type *Type = Int8Ty->getPointerTo(AS);
 
-    DstPtr = Builder.CreateBitCast(DstPtr, Type);
-    SrcPtr = Builder.CreateBitCast(SrcPtr, Type);
-    return RValue::get(Builder.CreateCall(CGM.getIntrinsic(Intrinsic::vacopy),
+    DstPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(DstPtr, Type);
+    SrcPtr = Builder.CreatePointerBitCastOrAddrSpaceCast(SrcPtr, Type);
+    return RValue::get(Builder.CreateCall(CGM.getIntrinsic(Intrinsic::vacopy,
+                                                           { Type, Type }),
                                           {DstPtr, SrcPtr}));
   }
   case Builtin::BI__builtin_abs:
@@ -1903,6 +1911,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         Builder.CreateCall(FnExpect, {ArgValue, ExpectedValue}, "expval");
     return RValue::get(Result);
   }
+  case Builtin::BI__builtin_assume_aligned_cap:
   case Builtin::BI__builtin_assume_aligned: {
     Value *PtrValue = EmitScalarExpr(E->getArg(0));
     Value *OffsetValue =
@@ -1996,6 +2005,10 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       llvm::ConstantInt::get(Int32Ty, 3);
     Value *Data = llvm::ConstantInt::get(Int32Ty, 1);
     Value *F = CGM.getIntrinsic(Intrinsic::prefetch);
+    // ASO OKAY: llvm.prefetch() needs an addr space 0 i8* even on CHERI
+    // XXXAR: we might want to change that some time
+    llvm::Type* AddressType = Builder.getInt8PtrTy(0);
+    Address = Builder.CreatePointerBitCastOrAddrSpaceCast(Address, AddressType);
     return RValue::get(Builder.CreateCall(F, {Address, RW, Locality, Data}));
   }
   case Builtin::BI__builtin_readcyclecounter: {
@@ -2005,6 +2018,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin___clear_cache: {
     Value *Begin = EmitScalarExpr(E->getArg(0));
     Value *End = EmitScalarExpr(E->getArg(1));
+    llvm::Type *ArgType = Builder.getInt8PtrTy(0);
+    Begin = Builder.CreatePointerBitCastOrAddrSpaceCast(Begin, ArgType);
+    End = Builder.CreatePointerBitCastOrAddrSpaceCast(End, ArgType);
     Value *F = CGM.getIntrinsic(Intrinsic::clear_cache);
     return RValue::get(Builder.CreateCall(F, {Begin, End}));
   }
@@ -2391,23 +2407,29 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     int32_t Offset = 0;
 
     Value *F = CGM.getIntrinsic(Intrinsic::eh_dwarf_cfa);
-    return RValue::get(Builder.CreateCall(F,
-                                      llvm::ConstantInt::get(Int32Ty, Offset)));
+    F = Builder.CreateCall(F, llvm::ConstantInt::get(Int32Ty, Offset));
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    if (AS != 0)
+      F = Builder.CreateAddrSpaceCast(F, Int8Ty->getPointerTo(AS));
+    return RValue::get(F);
   }
   case Builtin::BI__builtin_return_address: {
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),
                                                    getContext().UnsignedIntTy);
-    Value *F = CGM.getIntrinsic(Intrinsic::returnaddress);
+    Value *F =
+        CGM.getIntrinsic(Intrinsic::returnaddress, {CGM.ProgramInt8PtrTy});
     return RValue::get(Builder.CreateCall(F, Depth));
   }
   case Builtin::BI_ReturnAddress: {
-    Value *F = CGM.getIntrinsic(Intrinsic::returnaddress);
+    Value *F =
+        CGM.getIntrinsic(Intrinsic::returnaddress, {CGM.ProgramInt8PtrTy});
     return RValue::get(Builder.CreateCall(F, Builder.getInt32(0)));
   }
   case Builtin::BI__builtin_frame_address: {
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),
                                                    getContext().UnsignedIntTy);
-    Value *F = CGM.getIntrinsic(Intrinsic::frameaddress);
+    Value *F =
+        CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.AllocaInt8PtrTy});
     return RValue::get(Builder.CreateCall(F, Depth));
   }
   case Builtin::BI__builtin_extract_return_addr: {
@@ -2439,6 +2461,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_eh_return: {
     Value *Int = EmitScalarExpr(E->getArg(0));
     Value *Ptr = EmitScalarExpr(E->getArg(1));
+    Ptr = Builder.CreatePointerBitCastOrAddrSpaceCast(Ptr,
+        Int8Ty->getPointerTo(0));
 
     llvm::IntegerType *IntTy = cast<llvm::IntegerType>(Int->getType());
     assert((IntTy->getBitWidth() == 32 || IntTy->getBitWidth() == 64) &&
@@ -2488,14 +2512,15 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Address Buf = EmitPointerWithAlignment(E->getArg(0));
 
     // Store the frame pointer to the setjmp buffer.
-    Value *FrameAddr =
-      Builder.CreateCall(CGM.getIntrinsic(Intrinsic::frameaddress),
-                         ConstantInt::get(Int32Ty, 0));
+    Value *FrameAddr = Builder.CreateCall(
+        CGM.getIntrinsic(Intrinsic::frameaddress, {CGM.AllocaInt8PtrTy}),
+        ConstantInt::get(Int32Ty, 0));
     Builder.CreateStore(FrameAddr, Buf);
 
     // Store the stack pointer to the setjmp buffer.
     Value *StackAddr =
-        Builder.CreateCall(CGM.getIntrinsic(Intrinsic::stacksave));
+        Builder.CreateCall(CGM.getIntrinsic(Intrinsic::stacksave,
+          { CGM.Int8PtrTy }));
     Address StackSaveSlot =
       Builder.CreateConstInBoundsGEP(Buf, 2, getPointerSize());
     Builder.CreateStore(StackAddr, StackSaveSlot);
@@ -2675,7 +2700,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     CharUnits StoreSize = getContext().getTypeSizeInChars(ElTy);
     llvm::Type *ITy = llvm::IntegerType::get(getLLVMContext(),
                                              StoreSize.getQuantity() * 8);
-    Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo());
+    Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
     llvm::StoreInst *Store =
       Builder.CreateAlignedStore(llvm::Constant::getNullValue(ITy), Ptr,
                                  StoreSize);
@@ -2698,7 +2723,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_nontemporal_load:
     return RValue::get(EmitNontemporalLoad(*this, E));
   case Builtin::BI__builtin_nontemporal_store:
-    return RValue::get(EmitNontemporalStore(*this, E));
+    return RValue::get(EmitNontemporalStore(*this, E, DefaultAS));
   case Builtin::BI__c11_atomic_is_lock_free:
   case Builtin::BI__atomic_is_lock_free: {
     // Call "bool __atomic_is_lock_free(size_t size, void *ptr)". For the
@@ -3198,14 +3223,35 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
     return RValue::get(Carry);
   }
-  case Builtin::BI__builtin_addressof:
-    return RValue::get(EmitLValue(E->getArg(0)).getPointer());
+  case Builtin::BI__builtin_addressof: {
+    Value *Addr = EmitLValue(E->getArg(0)).getPointer();
+    if (getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
+      auto BoundedAddr = setCHERIBoundsOnAddrOf(Addr, E->getArg(0)->getType(),
+                                                E->getArg(0), E->getExprLoc());
+      assert(BoundedAddr->getType() == Addr->getType());
+      Addr = BoundedAddr;
+    }
+    return RValue::get(Addr);
+  }
   case Builtin::BI__builtin_operator_new:
     return EmitBuiltinNewDeleteCall(
         E->getCallee()->getType()->castAs<FunctionProtoType>(), E, false);
   case Builtin::BI__builtin_operator_delete:
     return EmitBuiltinNewDeleteCall(
         E->getCallee()->getType()->castAs<FunctionProtoType>(), E, true);
+
+  case Builtin::BI__builtin_is_aligned:
+    return EmitBuiltinIsAligned(E, false);
+  case Builtin::BI__builtin_is_p2aligned:
+    return EmitBuiltinIsAligned(E, true);
+  case Builtin::BI__builtin_align_up:
+    return EmitBuiltinAlignTo(E, false, true);
+  case Builtin::BI__builtin_p2align_up:
+    return EmitBuiltinAlignTo(E, true, true);
+  case Builtin::BI__builtin_align_down:
+    return EmitBuiltinAlignTo(E, false, false);
+  case Builtin::BI__builtin_p2align_down:
+    return EmitBuiltinAlignTo(E, true, false);
 
   case Builtin::BI__noop:
     // __noop always evaluates to an integer literal zero.
@@ -3229,7 +3275,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     llvm::IntegerType *IntType =
       IntegerType::get(getLLVMContext(),
                        getContext().getTypeSize(E->getType()));
-    llvm::Type *IntPtrType = IntType->getPointerTo();
+    llvm::Type *IntPtrType = IntType->getPointerTo(DefaultAS);
 
     llvm::Value *Destination =
       Builder.CreateBitCast(EmitScalarExpr(E->getArg(0)), IntPtrType);
@@ -3338,6 +3384,46 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
       return RValue::get(llvm::ConstantExpr::getBitCast(GV, CGM.Int8PtrTy));
     break;
   }
+  case Builtin::BI__builtin_cheri_cap_from_pointer: {
+    Value *GlobalCap = EmitScalarExpr(E->getArg(0));
+    Value *Ptr = Builder.CreatePtrToInt(EmitScalarExpr(E->getArg(1)), Int64Ty);
+    return RValue::get(Builder.CreateCall(
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer),
+        {GlobalCap, Ptr}));
+  }
+  case Builtin::BI__builtin_cheri_cap_to_pointer: {
+    Value *GlobalCap = EmitScalarExpr(E->getArg(0));
+    Value *Cap = EmitScalarExpr(E->getArg(1));
+    Value *Ptr = Builder.CreateCall(
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_to_pointer),
+        {GlobalCap, Cap});
+    return RValue::get(Builder.CreateIntToPtr(Ptr, ConvertType(E->getType())));
+  }
+  case Builtin::BI__builtin_cheri_callback_create: {
+    StringRef ClassName = cast<StringLiteral>(E->getArg(0))->getString();
+    auto Fn = cast<DeclRefExpr>(E->getArg(2));
+    StringRef FunctionName = cast<NamedDecl>(Fn->getDecl())->getName().str();
+    auto *MethodNumVar =
+      CGM.EmitSandboxRequiredMethod(ClassName, FunctionName);
+    // Load the global and use it in the call
+    // FIXME: EmitSandboxRequiredMethod should return an Address so that we
+    // don't have to know the alignment here.
+    auto *MethodNum = Builder.CreateLoad(Address(MethodNumVar,
+          CharUnits::fromQuantity(8)));
+
+    auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
+    auto ClsTy = ConvertType(CGM.getContext().getCHERIClassType());
+    auto ResultType = llvm::StructType::get(ClsTy, MethNoTy);
+    LValue Obj = EmitAggExprToLValue(E->getArg(1));
+    auto ClsVal = Builder.CreateBitCast(Obj.getAddress(),
+        ClsTy->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS()));
+    llvm::Value *Struct = llvm::Constant::getNullValue(ResultType);
+    llvm::Value *ObjVal = Builder.CreateLoad(ClsVal);
+    ObjVal = Builder.CreateBitCast(ObjVal, ClsTy);
+    Struct = Builder.CreateInsertValue(Struct, ObjVal, {0});
+    Struct = Builder.CreateInsertValue(Struct, MethodNum, {1});
+    return RValue::get(Struct);
+  }
 
   case Builtin::BI__fastfail:
     return RValue::get(EmitMSVCBuiltinExpr(MSVCIntrin::__fastfail, E));
@@ -3388,7 +3474,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
     // Type of the generic packet parameter.
     unsigned GenericAS =
-        getContext().getTargetAddressSpace(LangAS::opencl_generic);
+        CGM.getTargetAddressSpace(LangAS::opencl_generic);
     llvm::Type *I8PTy = llvm::PointerType::get(
         llvm::Type::getInt8Ty(getLLVMContext()), GenericAS);
 
@@ -3538,10 +3624,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BIto_private: {
     auto Arg0 = EmitScalarExpr(E->getArg(0));
     auto NewArgT = llvm::PointerType::get(Int8Ty,
-      CGM.getContext().getTargetAddressSpace(LangAS::opencl_generic));
+      CGM.getTargetAddressSpace(LangAS::opencl_generic));
     auto NewRetT = llvm::PointerType::get(Int8Ty,
-      CGM.getContext().getTargetAddressSpace(
-        E->getType()->getPointeeType().getAddressSpace()));
+      CGM.getTargetAddressSpace(E->getType()->getPointeeType().getAddressSpace()));
     auto FTy = llvm::FunctionType::get(NewRetT, {NewArgT}, false);
     llvm::Value *NewArg;
     if (Arg0->getType()->getPointerAddressSpace() !=
@@ -3564,7 +3649,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
     llvm::Type *QueueTy = ConvertType(getContext().OCLQueueTy);
     llvm::Type *GenericVoidPtrTy = Builder.getInt8PtrTy(
-        getContext().getTargetAddressSpace(LangAS::opencl_generic));
+        CGM.getTargetAddressSpace(LangAS::opencl_generic));
 
     llvm::Value *Queue = EmitScalarExpr(E->getArg(0));
     llvm::Value *Flags = EmitScalarExpr(E->getArg(1));
@@ -3665,7 +3750,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     if (NumArgs >= 7) {
       llvm::Type *EventTy = ConvertType(getContext().OCLClkEventTy);
       llvm::Type *EventPtrTy = EventTy->getPointerTo(
-          CGM.getContext().getTargetAddressSpace(LangAS::opencl_generic));
+          CGM.getTargetAddressSpace(LangAS::opencl_generic));
 
       llvm::Value *NumEvents =
           Builder.CreateZExtOrTrunc(EmitScalarExpr(E->getArg(3)), Int32Ty);
@@ -3728,7 +3813,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   // parameter.
   case Builtin::BIget_kernel_work_group_size: {
     llvm::Type *GenericVoidPtrTy = Builder.getInt8PtrTy(
-        getContext().getTargetAddressSpace(LangAS::opencl_generic));
+        CGM.getTargetAddressSpace(LangAS::opencl_generic));
     auto Info =
         CGM.getOpenCLRuntime().emitOpenCLEnqueuedBlock(*this, E->getArg(0));
     Value *Kernel = Builder.CreatePointerCast(Info.Kernel, GenericVoidPtrTy);
@@ -3742,7 +3827,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   }
   case Builtin::BIget_kernel_preferred_work_group_size_multiple: {
     llvm::Type *GenericVoidPtrTy = Builder.getInt8PtrTy(
-        getContext().getTargetAddressSpace(LangAS::opencl_generic));
+        CGM.getTargetAddressSpace(LangAS::opencl_generic));
     auto Info =
         CGM.getOpenCLRuntime().emitOpenCLEnqueuedBlock(*this, E->getArg(0));
     Value *Kernel = Builder.CreatePointerCast(Info.Kernel, GenericVoidPtrTy);
@@ -3757,7 +3842,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BIget_kernel_max_sub_group_size_for_ndrange:
   case Builtin::BIget_kernel_sub_group_count_for_ndrange: {
     llvm::Type *GenericVoidPtrTy = Builder.getInt8PtrTy(
-        getContext().getTargetAddressSpace(LangAS::opencl_generic));
+        CGM.getTargetAddressSpace(LangAS::opencl_generic));
     LValue NDRangeL = EmitAggExprToLValue(E->getArg(0));
     llvm::Value *NDRange = NDRangeL.getAddress().getPointer();
     auto Info =
@@ -3919,8 +4004,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   // If this is a predefined lib function (e.g. malloc), emit the call
   // using exactly the normal call path.
   if (getContext().BuiltinInfo.isPredefinedLibFunction(BuiltinID))
-    return emitLibraryCall(*this, FD, E,
-                      cast<llvm::Constant>(EmitScalarExpr(E->getCallee())));
+    return emitLibraryCall(*this, FD, E, EmitScalarExpr(E->getCallee()));
 
   // Check that a call to a target specific builtin has the correct target
   // features.
@@ -4049,6 +4133,9 @@ static Value *EmitTargetArchBuiltinExpr(CodeGenFunction *CGF,
   case llvm::Triple::ppc64:
   case llvm::Triple::ppc64le:
     return CGF->EmitPPCBuiltinExpr(BuiltinID, E);
+  case llvm::Triple::mips64:
+  case llvm::Triple::cheri:
+    return CGF->EmitMIPSBuiltinExpr(BuiltinID, E);
   case llvm::Triple::r600:
   case llvm::Triple::amdgcn:
     return CGF->EmitAMDGPUBuiltinExpr(BuiltinID, E);
@@ -5280,12 +5367,12 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   case NEON::BI__builtin_neon_vld1q_x3_v:
   case NEON::BI__builtin_neon_vld1_x4_v:
   case NEON::BI__builtin_neon_vld1q_x4_v: {
-    llvm::Type *PTy = llvm::PointerType::getUnqual(VTy->getVectorElementType());
+    llvm::Type *PTy = CGM.getPointerInDefaultAS(VTy->getVectorElementType());
     Ops[1] = Builder.CreateBitCast(Ops[1], PTy);
     llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(LLVMIntrinsic, Tys);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld1xN");
-    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ty = CGM.getPointerInDefaultAS(Ops[1]->getType());
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
@@ -5305,14 +5392,14 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
     Function *F = CGM.getIntrinsic(LLVMIntrinsic, Tys);
     Value *Align = getAlignmentValue32(PtrOp1);
     Ops[1] = Builder.CreateCall(F, {Ops[1], Align}, NameHint);
-    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ty = CGM.getPointerInDefaultAS(Ops[1]->getType());
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
   case NEON::BI__builtin_neon_vld1_dup_v:
   case NEON::BI__builtin_neon_vld1q_dup_v: {
     Value *V = UndefValue::get(Ty);
-    Ty = llvm::PointerType::getUnqual(VTy->getElementType());
+    Ty = CGM.getPointerInDefaultAS(VTy->getElementType());
     PtrOp0 = Builder.CreateBitCast(PtrOp0, Ty);
     LoadInst *Ld = Builder.CreateLoad(PtrOp0);
     llvm::Constant *CI = ConstantInt::get(SizeTy, 0);
@@ -5331,7 +5418,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
       Ops[I] = Builder.CreateBitCast(Ops[I], Ty);
     Ops.push_back(getAlignmentValue32(PtrOp1));
     Ops[1] = Builder.CreateCall(F, makeArrayRef(Ops).slice(1), NameHint);
-    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ty = CGM.getPointerInDefaultAS(Ops[1]->getType());
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
@@ -5459,7 +5546,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   case NEON::BI__builtin_neon_vst1q_x3_v:
   case NEON::BI__builtin_neon_vst1_x4_v:
   case NEON::BI__builtin_neon_vst1q_x4_v: {
-    llvm::Type *PTy = llvm::PointerType::getUnqual(VTy->getVectorElementType());
+    llvm::Type *PTy = CGM.getPointerInDefaultAS(VTy->getVectorElementType());
     // TODO: Currently in AArch32 mode the pointer operand comes first, whereas
     // in AArch64 it comes last. We may want to stick to one or another.
     if (Arch == llvm::Triple::aarch64 || Arch == llvm::Triple::aarch64_be) {
@@ -5489,7 +5576,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   }
   case NEON::BI__builtin_neon_vtrn_v:
   case NEON::BI__builtin_neon_vtrnq_v: {
-    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
+    Ops[0] = Builder.CreateBitCast(Ops[0], CGM.getPointerInDefaultAS(Ty));
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
     Value *SV = nullptr;
@@ -5517,7 +5604,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   }
   case NEON::BI__builtin_neon_vuzp_v:
   case NEON::BI__builtin_neon_vuzpq_v: {
-    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
+    Ops[0] = Builder.CreateBitCast(Ops[0], CGM.getPointerInDefaultAS(Ty));
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
     Value *SV = nullptr;
@@ -5535,7 +5622,7 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
   }
   case NEON::BI__builtin_neon_vzip_v:
   case NEON::BI__builtin_neon_vzipq_v: {
-    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
+    Ops[0] = Builder.CreateBitCast(Ops[0], CGM.getPointerInDefaultAS(Ty));
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
     Value *SV = nullptr;
@@ -5802,7 +5889,8 @@ Value *CodeGenFunction::EmitISOVolatileLoad(const CallExpr *E) {
   CharUnits LoadSize = getContext().getTypeSizeInChars(ElTy);
   llvm::Type *ITy = llvm::IntegerType::get(getLLVMContext(),
                                            LoadSize.getQuantity() * 8);
-  Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo());
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
   llvm::LoadInst *Load =
     Builder.CreateAlignedLoad(Ptr, LoadSize);
   Load->setVolatile(true);
@@ -5816,7 +5904,8 @@ Value *CodeGenFunction::EmitISOVolatileStore(const CallExpr *E) {
   CharUnits StoreSize = getContext().getTypeSizeInChars(ElTy);
   llvm::Type *ITy = llvm::IntegerType::get(getLLVMContext(),
                                            StoreSize.getQuantity() * 8);
-  Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo());
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
   llvm::StoreInst *Store =
     Builder.CreateAlignedStore(Value, Ptr,
                                StoreSize);
@@ -5829,6 +5918,7 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
                                            llvm::Triple::ArchType Arch) {
   if (auto Hint = GetValueForARMHint(BuiltinID))
     return Hint;
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   if (BuiltinID == ARM::BI__emit) {
     bool IsThumb = getTarget().getTriple().getArch() == llvm::Triple::thumb;
@@ -5995,7 +6085,7 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     QualType Ty = E->getType();
     llvm::Type *RealResTy = ConvertType(Ty);
     llvm::Type *PtrTy = llvm::IntegerType::get(
-        getLLVMContext(), getContext().getTypeSize(Ty))->getPointerTo();
+        getLLVMContext(), getContext().getTypeSize(Ty))->getPointerTo(DefaultAS);
     LoadAddr = Builder.CreateBitCast(LoadAddr, PtrTy);
 
     Function *F = CGM.getIntrinsic(BuiltinID == ARM::BI__builtin_arm_ldaex
@@ -6027,7 +6117,8 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     Value *Val = EmitScalarExpr(E->getArg(0));
     Builder.CreateStore(Val, Tmp);
 
-    Address LdPtr = Builder.CreateBitCast(Tmp,llvm::PointerType::getUnqual(STy));
+    Address LdPtr =
+        Builder.CreateBitCast(Tmp, llvm::PointerType::get(STy, DefaultAS));
     Val = Builder.CreateLoad(LdPtr);
 
     Value *Arg0 = Builder.CreateExtractValue(Val, 0);
@@ -6044,7 +6135,7 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
     QualType Ty = E->getArg(0)->getType();
     llvm::Type *StoreTy = llvm::IntegerType::get(getLLVMContext(),
                                                  getContext().getTypeSize(Ty));
-    StoreAddr = Builder.CreateBitCast(StoreAddr, StoreTy->getPointerTo());
+    StoreAddr = Builder.CreateBitCast(StoreAddr, StoreTy->getPointerTo(DefaultAS));
 
     if (StoreVal->getType()->isPointerTy())
       StoreVal = Builder.CreatePtrToInt(StoreVal, Int32Ty);
@@ -6573,7 +6664,7 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vst1_lane_v: {
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ops[1] = Builder.CreateExtractElement(Ops[1], Ops[2]);
-    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ty = llvm::PointerType::get(Ops[1]->getType(), DefaultAS);
     auto St = Builder.CreateStore(Ops[1], Builder.CreateBitCast(PtrOp0, Ty));
     return St;
   }
@@ -6765,6 +6856,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
                                                const CallExpr *E,
                                                llvm::Triple::ArchType Arch) {
   unsigned HintID = static_cast<unsigned>(-1);
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   switch (BuiltinID) {
   default: break;
   case AArch64::BI__builtin_arm_nop:
@@ -6875,7 +6967,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     QualType Ty = E->getType();
     llvm::Type *RealResTy = ConvertType(Ty);
     llvm::Type *PtrTy = llvm::IntegerType::get(
-        getLLVMContext(), getContext().getTypeSize(Ty))->getPointerTo();
+        getLLVMContext(), getContext().getTypeSize(Ty))->getPointerTo(DefaultAS);
     LoadAddr = Builder.CreateBitCast(LoadAddr, PtrTy);
 
     Function *F = CGM.getIntrinsic(BuiltinID == AArch64::BI__builtin_arm_ldaex
@@ -6904,7 +6996,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Address Tmp = CreateMemTemp(E->getArg(0)->getType());
     EmitAnyExprToMem(E->getArg(0), Tmp, Qualifiers(), /*init*/ true);
 
-    Tmp = Builder.CreateBitCast(Tmp, llvm::PointerType::getUnqual(STy));
+    Tmp = Builder.CreateBitCast(Tmp, llvm::PointerType::get(STy, DefaultAS));
     llvm::Value *Val = Builder.CreateLoad(Tmp);
 
     Value *Arg0 = Builder.CreateExtractValue(Val, 0);
@@ -6922,7 +7014,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     QualType Ty = E->getArg(0)->getType();
     llvm::Type *StoreTy = llvm::IntegerType::get(getLLVMContext(),
                                                  getContext().getTypeSize(Ty));
-    StoreAddr = Builder.CreateBitCast(StoreAddr, StoreTy->getPointerTo());
+    StoreAddr = Builder.CreateBitCast(StoreAddr, StoreTy->getPointerTo(DefaultAS));
 
     if (StoreVal->getType()->isPointerTy())
       StoreVal = Builder.CreatePtrToInt(StoreVal, Int64Ty);
@@ -7068,7 +7160,8 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   }
 
   if (BuiltinID == AArch64::BI_AddressOfReturnAddress) {
-    llvm::Value *F = CGM.getIntrinsic(Intrinsic::addressofreturnaddress);
+    llvm::Value *F = CGM.getIntrinsic(Intrinsic::addressofreturnaddress,
+                                      {CGM.ProgramInt8PtrTy});
     return Builder.CreateCall(F);
   }
 
@@ -7129,7 +7222,8 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
                                      CharUnits::fromQuantity(16));
   }
   case NEON::BI__builtin_neon_vstrq_p128: {
-    llvm::Type *Int128PTy = llvm::Type::getIntNPtrTy(getLLVMContext(), 128);
+    llvm::Type *Int128PTy = llvm::Type::getIntNPtrTy(getLLVMContext(), 128,
+                                                     DefaultAS);
     Value *Ptr = Builder.CreateBitCast(Ops[0], Int128PTy);
     return Builder.CreateDefaultAlignedStore(EmitScalarExpr(E->getArg(1)), Ptr);
   }
@@ -8586,20 +8680,20 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vld1_v:
   case NEON::BI__builtin_neon_vld1q_v: {
-    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(VTy));
+    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::get(VTy, DefaultAS));
     auto Alignment = CharUnits::fromQuantity(
         BuiltinID == NEON::BI__builtin_neon_vld1_v ? 8 : 16);
     return Builder.CreateAlignedLoad(VTy, Ops[0], Alignment);
   }
   case NEON::BI__builtin_neon_vst1_v:
   case NEON::BI__builtin_neon_vst1q_v:
-    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(VTy));
+    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::get(VTy, DefaultAS));
     Ops[1] = Builder.CreateBitCast(Ops[1], VTy);
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   case NEON::BI__builtin_neon_vld1_lane_v:
   case NEON::BI__builtin_neon_vld1q_lane_v: {
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
-    Ty = llvm::PointerType::getUnqual(VTy->getElementType());
+    Ty = llvm::PointerType::get(VTy->getElementType(), DefaultAS);
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     auto Alignment = CharUnits::fromQuantity(
         BuiltinID == NEON::BI__builtin_neon_vld1_lane_v ? 8 : 16);
@@ -8610,7 +8704,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vld1_dup_v:
   case NEON::BI__builtin_neon_vld1q_dup_v: {
     Value *V = UndefValue::get(Ty);
-    Ty = llvm::PointerType::getUnqual(VTy->getElementType());
+    Ty = llvm::PointerType::get(VTy->getElementType(), DefaultAS);
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     auto Alignment = CharUnits::fromQuantity(
         BuiltinID == NEON::BI__builtin_neon_vld1_dup_v ? 8 : 16);
@@ -8624,76 +8718,76 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   case NEON::BI__builtin_neon_vst1q_lane_v:
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ops[1] = Builder.CreateExtractElement(Ops[1], Ops[2]);
-    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ty = llvm::PointerType::get(Ops[1]->getType(), DefaultAS);
     return Builder.CreateDefaultAlignedStore(Ops[1],
                                              Builder.CreateBitCast(Ops[0], Ty));
   case NEON::BI__builtin_neon_vld2_v:
   case NEON::BI__builtin_neon_vld2q_v: {
-    llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
+    llvm::Type *PTy = llvm::PointerType::get(VTy, DefaultAS);
     Ops[1] = Builder.CreateBitCast(Ops[1], PTy);
     llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::aarch64_neon_ld2, Tys);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld2");
     Ops[0] = Builder.CreateBitCast(Ops[0],
-                llvm::PointerType::getUnqual(Ops[1]->getType()));
+                CGM.getPointerInDefaultAS(Ops[1]->getType()));
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
   case NEON::BI__builtin_neon_vld3_v:
   case NEON::BI__builtin_neon_vld3q_v: {
-    llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
+    llvm::Type *PTy = llvm::PointerType::get(VTy, DefaultAS);
     Ops[1] = Builder.CreateBitCast(Ops[1], PTy);
     llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::aarch64_neon_ld3, Tys);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld3");
     Ops[0] = Builder.CreateBitCast(Ops[0],
-                llvm::PointerType::getUnqual(Ops[1]->getType()));
+                CGM.getPointerInDefaultAS(Ops[1]->getType()));
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
   case NEON::BI__builtin_neon_vld4_v:
   case NEON::BI__builtin_neon_vld4q_v: {
-    llvm::Type *PTy = llvm::PointerType::getUnqual(VTy);
+    llvm::Type *PTy = llvm::PointerType::get(VTy, DefaultAS);
     Ops[1] = Builder.CreateBitCast(Ops[1], PTy);
     llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::aarch64_neon_ld4, Tys);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld4");
     Ops[0] = Builder.CreateBitCast(Ops[0],
-                llvm::PointerType::getUnqual(Ops[1]->getType()));
+                llvm::PointerType::get(Ops[1]->getType(), DefaultAS));
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
   case NEON::BI__builtin_neon_vld2_dup_v:
   case NEON::BI__builtin_neon_vld2q_dup_v: {
     llvm::Type *PTy =
-      llvm::PointerType::getUnqual(VTy->getElementType());
+      llvm::PointerType::get(VTy->getElementType(), DefaultAS);
     Ops[1] = Builder.CreateBitCast(Ops[1], PTy);
     llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::aarch64_neon_ld2r, Tys);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld2");
     Ops[0] = Builder.CreateBitCast(Ops[0],
-                llvm::PointerType::getUnqual(Ops[1]->getType()));
+                llvm::PointerType::get(Ops[1]->getType(), DefaultAS));
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
   case NEON::BI__builtin_neon_vld3_dup_v:
   case NEON::BI__builtin_neon_vld3q_dup_v: {
     llvm::Type *PTy =
-      llvm::PointerType::getUnqual(VTy->getElementType());
+      llvm::PointerType::get(VTy->getElementType(), DefaultAS);
     Ops[1] = Builder.CreateBitCast(Ops[1], PTy);
     llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::aarch64_neon_ld3r, Tys);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld3");
     Ops[0] = Builder.CreateBitCast(Ops[0],
-                llvm::PointerType::getUnqual(Ops[1]->getType()));
+                llvm::PointerType::get(Ops[1]->getType(), DefaultAS));
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
   case NEON::BI__builtin_neon_vld4_dup_v:
   case NEON::BI__builtin_neon_vld4q_dup_v: {
     llvm::Type *PTy =
-      llvm::PointerType::getUnqual(VTy->getElementType());
+      llvm::PointerType::get(VTy->getElementType(), DefaultAS);
     Ops[1] = Builder.CreateBitCast(Ops[1], PTy);
     llvm::Type *Tys[2] = { VTy, PTy };
     Function *F = CGM.getIntrinsic(Intrinsic::aarch64_neon_ld4r, Tys);
     Ops[1] = Builder.CreateCall(F, Ops[1], "vld4");
     Ops[0] = Builder.CreateBitCast(Ops[0],
-                llvm::PointerType::getUnqual(Ops[1]->getType()));
+                llvm::PointerType::get(Ops[1]->getType(), DefaultAS));
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
   case NEON::BI__builtin_neon_vld2_lane_v:
@@ -8706,7 +8800,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
     Ops[3] = Builder.CreateZExt(Ops[3], Int64Ty);
     Ops[1] = Builder.CreateCall(F, makeArrayRef(Ops).slice(1), "vld2_lane");
-    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ty = llvm::PointerType::get(Ops[1]->getType(), DefaultAS);
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
@@ -8721,7 +8815,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Ops[3] = Builder.CreateBitCast(Ops[3], Ty);
     Ops[4] = Builder.CreateZExt(Ops[4], Int64Ty);
     Ops[1] = Builder.CreateCall(F, makeArrayRef(Ops).slice(1), "vld3_lane");
-    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ty = llvm::PointerType::get(Ops[1]->getType(), DefaultAS);
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
@@ -8737,7 +8831,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Ops[4] = Builder.CreateBitCast(Ops[4], Ty);
     Ops[5] = Builder.CreateZExt(Ops[5], Int64Ty);
     Ops[1] = Builder.CreateCall(F, makeArrayRef(Ops).slice(1), "vld4_lane");
-    Ty = llvm::PointerType::getUnqual(Ops[1]->getType());
+    Ty = llvm::PointerType::get(Ops[1]->getType(), DefaultAS);
     Ops[0] = Builder.CreateBitCast(Ops[0], Ty);
     return Builder.CreateDefaultAlignedStore(Ops[1], Ops[0]);
   }
@@ -8794,7 +8888,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vtrn_v:
   case NEON::BI__builtin_neon_vtrnq_v: {
-    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
+    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::get(Ty, DefaultAS));
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
     Value *SV = nullptr;
@@ -8813,7 +8907,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vuzp_v:
   case NEON::BI__builtin_neon_vuzpq_v: {
-    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
+    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::get(Ty, DefaultAS));
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
     Value *SV = nullptr;
@@ -8831,7 +8925,7 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
   }
   case NEON::BI__builtin_neon_vzip_v:
   case NEON::BI__builtin_neon_vzipq_v: {
-    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::getUnqual(Ty));
+    Ops[0] = Builder.CreateBitCast(Ops[0], llvm::PointerType::get(Ty, DefaultAS));
     Ops[1] = Builder.CreateBitCast(Ops[1], Ty);
     Ops[2] = Builder.CreateBitCast(Ops[2], Ty);
     Value *SV = nullptr;
@@ -9099,8 +9193,8 @@ static Value *EmitX86MaskedStore(CodeGenFunction &CGF,
                                  ArrayRef<Value *> Ops,
                                  unsigned Align) {
   // Cast the pointer to right type.
-  Value *Ptr = CGF.Builder.CreateBitCast(Ops[0],
-                               llvm::PointerType::getUnqual(Ops[1]->getType()));
+  Value *Ptr =
+      CGF.Builder.CreateBitCast(Ops[0], CGF.CGM.getPointerInDefaultAS(Ops[1]->getType()));
 
   Value *MaskVec = getMaskVecValue(CGF, Ops[2],
                                    Ops[1]->getType()->getVectorNumElements());
@@ -9112,7 +9206,7 @@ static Value *EmitX86MaskedLoad(CodeGenFunction &CGF,
                                 ArrayRef<Value *> Ops, unsigned Align) {
   // Cast the pointer to right type.
   Value *Ptr = CGF.Builder.CreateBitCast(Ops[0],
-                               llvm::PointerType::getUnqual(Ops[1]->getType()));
+                               CGF.CGM.getPointerInDefaultAS(Ops[1]->getType()));
 
   Value *MaskVec = getMaskVecValue(CGF, Ops[2],
                                    Ops[1]->getType()->getVectorNumElements());
@@ -9126,8 +9220,8 @@ static Value *EmitX86ExpandLoad(CodeGenFunction &CGF,
   llvm::Type *PtrTy = ResultTy->getVectorElementType();
 
   // Cast the pointer to element type.
-  Value *Ptr = CGF.Builder.CreateBitCast(Ops[0],
-                                         llvm::PointerType::getUnqual(PtrTy));
+  Value *Ptr =
+      CGF.Builder.CreateBitCast(Ops[0], CGF.CGM.getPointerInDefaultAS(PtrTy));
 
   Value *MaskVec = getMaskVecValue(CGF, Ops[2],
                                    ResultTy->getVectorNumElements());
@@ -9143,8 +9237,8 @@ static Value *EmitX86CompressStore(CodeGenFunction &CGF,
   llvm::Type *PtrTy = ResultTy->getVectorElementType();
 
   // Cast the pointer to element type.
-  Value *Ptr = CGF.Builder.CreateBitCast(Ops[0],
-                                         llvm::PointerType::getUnqual(PtrTy));
+  Value *Ptr =
+      CGF.Builder.CreateBitCast(Ops[0], CGF.CGM.getPointerInDefaultAS(PtrTy));
 
   Value *MaskVec = getMaskVecValue(CGF, Ops[2],
                                    ResultTy->getVectorNumElements());
@@ -10073,7 +10167,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
 
   case X86::BI__builtin_ia32_storehps:
   case X86::BI__builtin_ia32_storelps: {
-    llvm::Type *PtrTy = llvm::PointerType::getUnqual(Int64Ty);
+    llvm::Type *PtrTy = CGM.getPointerInDefaultAS(Int64Ty);
     llvm::Type *VecTy = llvm::VectorType::get(Int64Ty, 2);
 
     // cast val v2i64
@@ -10592,7 +10686,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
 
     // Convert the type of the pointer to a pointer to the stored type.
     Value *BC = Builder.CreateBitCast(
-        Ptr, llvm::PointerType::getUnqual(Src->getType()), "cast");
+        Ptr, CGM.getPointerInDefaultAS(Src->getType()), "cast");
 
     // Unaligned nontemporal store of the scalar value.
     StoreInst *SI = Builder.CreateDefaultAlignedStore(Src, BC);
@@ -11372,7 +11466,10 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
   }
 
   case X86::BI_AddressOfReturnAddress: {
-    Value *F = CGM.getIntrinsic(Intrinsic::addressofreturnaddress);
+    auto *RetTy = CGM.getTarget().areAllPointersCapabilities()
+                      ? CGM.Int8CheriCapTy
+                      : CGM.Int8PtrTy;
+    Value *F = CGM.getIntrinsic(Intrinsic::addressofreturnaddress, {RetTy});
     return Builder.CreateCall(F);
   }
   case X86::BI__stosb: {
@@ -11448,6 +11545,36 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
   case X86::BI__builtin_ia32_psubusw128:
     return EmitX86AddSubSatExpr(*this, Ops, false, false);
   }
+}
+
+Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
+                                            const CallExpr *E) {
+  if (BuiltinID == Builtin::BI__builtin_cheri_callback_create) {
+    StringRef ClassName = cast<StringLiteral>(E->getArg(0))->getString();
+    auto Fn = cast<DeclRefExpr>(E->getArg(2));
+    StringRef FunctionName = cast<NamedDecl>(Fn->getDecl())->getName().str();
+    auto *MethodNumVar =
+      CGM.EmitSandboxRequiredMethod(ClassName, FunctionName);
+    // Load the global and use it in the call
+    // FIXME: EmitSandboxRequiredMethod should return an Address so that we
+    // don't have to know the alignment here.
+    auto *MethodNum = Builder.CreateLoad(Address(MethodNumVar,
+          CharUnits::fromQuantity(8)));
+
+    auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
+    auto ClsTy = ConvertType(CGM.getContext().getCHERIClassType());
+    auto ResultType = llvm::StructType::get(ClsTy, MethNoTy);
+    LValue Obj = EmitAggExprToLValue(E->getArg(1));
+    auto ClsVal = Builder.CreateBitCast(Obj.getAddress(),
+        ClsTy->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS()));
+    llvm::Value *Struct = llvm::Constant::getNullValue(ResultType);
+    llvm::Value *ObjVal = Builder.CreateLoad(ClsVal);
+    ObjVal = Builder.CreateBitCast(ObjVal, ClsTy);
+    Struct = Builder.CreateInsertValue(Struct, ObjVal, {0});
+    Struct = Builder.CreateInsertValue(Struct, MethodNum, {1});
+    return Struct;
+  }
+  return 0;
 }
 
 Value *CodeGenFunction::EmitPPCBuiltinExpr(unsigned BuiltinID,
@@ -12976,6 +13103,121 @@ Value *CodeGenFunction::EmitNVPTXBuiltinExpr(unsigned BuiltinID,
   default:
     return nullptr;
   }
+}
+
+struct BuiltinAlignArgs {
+  llvm::Value *Src = nullptr;
+  llvm::Value *SrcAddr = nullptr;
+  llvm::Value *SrcAsI8Cap = nullptr;
+  llvm::Value *Alignment = nullptr;
+  llvm::Value *Mask = nullptr;
+  bool IsCheri = false;
+
+  BuiltinAlignArgs(const CallExpr *E, CodeGenFunction &CGF, bool PowerOfTwo) {
+    QualType AstType = E->getArg(0)->getType();
+    IsCheri = AstType->isCHERICapabilityType(CGF.CGM.getContext());
+    llvm::IntegerType *IntType = IntegerType::get(
+        CGF.getLLVMContext(), CGF.getContext().getIntRange(AstType));
+    Src = CGF.EmitScalarExpr(E->getArg(0));
+    // We need to convert source to an integer in order to perform the masking
+    // For CHERI we need to get the virtual address and perform add the
+    // difference instead of masking since that only works on the offset.
+
+    if (IsCheri) {
+      Value *Callee = CGF.CGM.getIntrinsic(Intrinsic::cheri_cap_address_get);
+      SrcAsI8Cap = CGF.Builder.CreateBitCast(Src, CGF.CGM.Int8CheriCapTy);
+      SrcAddr = CGF.Builder.CreateCall(Callee, {SrcAsI8Cap});
+    } else {
+      SrcAddr = CGF.Builder.CreateBitOrPointerCast(Src, IntType);
+    }
+    auto *One = llvm::ConstantInt::get(IntType, 1);
+    Alignment = CGF.EmitScalarExpr(E->getArg(1));
+    // Ensure that we also handle __uintcap_t values as the alignment param
+    if (E->getArg(1)->getType()->isIntCapType()) {
+      Value *Callee = CGF.CGM.getIntrinsic(Intrinsic::cheri_cap_address_get);
+      Alignment = CGF.Builder.CreateCall(Callee, {Alignment});
+    }
+
+    Alignment = CGF.Builder.CreateZExtOrTrunc(
+        Alignment, IntType, PowerOfTwo ? "pow2" : "alignment");
+    if (PowerOfTwo) {
+      Alignment = CGF.Builder.CreateShl(One, Alignment, "alignment");
+    }
+    Mask = CGF.Builder.CreateSub(Alignment, One, "mask");
+  }
+};
+
+/// Generate (x & (y-1)) == 0
+RValue CodeGenFunction::EmitBuiltinIsAligned(const CallExpr *E,
+                                             bool PowerOfTwo) {
+  BuiltinAlignArgs Args(E, *this, PowerOfTwo);
+  return RValue::get(Builder.CreateICmpEQ(
+      Builder.CreateAnd(Args.SrcAddr, Args.Mask, "set_bits"),
+      llvm::Constant::getNullValue(Args.SrcAddr->getType()), "is_aligned"));
+}
+
+/// Generate (x & ~(y-1)) to align down or ((x + (y - 1)) & ~(y - 1)) to align
+/// up. Note: for capability types we can't do the bitwise operations but
+/// instead need to add/subtract the difference to/from the pointer. For
+/// capabilities we do x - (x & y) for down and x + (y - (x & y))
+RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool PowerOfTwo,
+                                           bool AlignUp) {
+  // FIXME this needs to use minus/plus for CHERI and not masking!!!!
+  BuiltinAlignArgs Args(E, *this, PowerOfTwo);
+  if (Args.IsCheri) {
+    // We can't use bitwise and here since we can't create a capability from
+    // a virtual address. We could set the offset but that calculation is more
+    // complex that just adding/subtracting the difference to the next alignment
+    // boundary
+    auto *Unaligned =
+        Builder.CreateAnd(Args.SrcAddr, Args.Mask, "unaligned_bits");
+    Value *Result;
+    // Value *IncOffset =
+    // CGM.getIntrinsic(Intrinsic::cheri_cap_offset_increment);
+    if (AlignUp) {
+      // if it is not aligned we now need to add Align - unaligned_bits
+      // Unfortunately we can't do this unconditionally since otherwise we would
+      // turn a __builtin_align_up(32, 16) into 48.
+      // This is equivalent to the following code:
+      //  if (((unsigned long)p & (align - 1)) == 0)
+      //     return p;
+      //  else
+      //     return (p + (align - ((unsigned long)p & (align - 1))));
+      Value *Zero = llvm::Constant::getNullValue(Args.SrcAddr->getType());
+      Value *IsAligned = Builder.CreateICmpEQ(Unaligned, Zero, "is_aligned");
+      Value *Add = Builder.CreateSub(Args.Alignment, Unaligned, "missing_bits");
+      // TODO: which of the two is optimized better? Seems like both have
+      // drawbacks now
+      Value *AlignedUp = Builder.CreateInBoundsGEP(Int8Ty, Args.SrcAsI8Cap, Add,
+                                                   "aligned_cap");
+      // Value* AlignedUp = Builder.CreateCall(IncOffset, {Args.SrcAsI8Cap,
+      // Add}, "aligned_cap");
+      Result =
+          Builder.CreateSelect(IsAligned, Args.SrcAsI8Cap, AlignedUp, "result");
+    } else {
+      // When aligning down, we can just mask and subtract whatever value is
+      // not aligned: return (p - (((unsigned long)p & (align - 1))));
+      Value *Sub = Builder.CreateNeg(Unaligned, "sub");
+      // TODO: Is inbounds GEP better for other analysis? It won't be folded by
+      // FoldCapIntrinsics.cpp though...
+      Result = Builder.CreateInBoundsGEP(Int8Ty, Args.SrcAsI8Cap, Sub,
+                                         "aligned_cap");
+      // Result = Builder.CreateCall(IncOffset, {Args.SrcAsI8Cap, Sub},
+      // "aligned_cap");
+    }
+    return RValue::get(Builder.CreateBitCast(Result, Args.Src->getType()));
+  }
+  // When not targeting CHERI we can just use bitwise masking and cast the
+  // result back to a pointer
+  if (AlignUp) {
+    // When aligning up we have to first add the mask to ensure we go over the
+    // next alignment value and then align it correctly
+    Args.SrcAddr = Builder.CreateAdd(Args.SrcAddr, Args.Mask, "over_boundary");
+  }
+  auto *Ret = Builder.CreateAnd(Args.SrcAddr,
+                                Builder.CreateNot(Args.Mask, "negated_mask"));
+  return RValue::get(Builder.CreateBitOrPointerCast(Ret, Args.Src->getType(),
+                                                    "aligned_result"));
 }
 
 Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,

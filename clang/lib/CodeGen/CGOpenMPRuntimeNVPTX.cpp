@@ -1557,6 +1557,7 @@ void CGOpenMPRuntimeNVPTX::emitWorkerLoop(CodeGenFunction &CGF,
 llvm::Constant *
 CGOpenMPRuntimeNVPTX::createNVPTXRuntimeFunction(unsigned Function) {
   llvm::Constant *RTLFn = nullptr;
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   switch (static_cast<OpenMPRTLFunctionNVPTX>(Function)) {
   case OMPRTL_NVPTX__kmpc_kernel_init: {
     // Build void __kmpc_kernel_init(kmp_int32 thread_limit, int16_t
@@ -1673,8 +1674,8 @@ CGOpenMPRuntimeNVPTX::createNVPTXRuntimeFunction(unsigned Function) {
                                 CGM.Int32Ty,
                                 CGM.SizeTy,
                                 CGM.VoidPtrTy,
-                                ShuffleReduceFnTy->getPointerTo(),
-                                InterWarpCopyFnTy->getPointerTo()};
+                                ShuffleReduceFnTy->getPointerTo(DefaultAS),
+                                InterWarpCopyFnTy->getPointerTo(DefaultAS)};
     auto *FnTy =
         llvm::FunctionType::get(CGM.Int32Ty, TypeParams, /*isVarArg=*/false);
     RTLFn = CGM.CreateRuntimeFunction(
@@ -1695,7 +1696,7 @@ CGOpenMPRuntimeNVPTX::createNVPTXRuntimeFunction(unsigned Function) {
     // global_tid, kmp_critical_name *lck)
     llvm::Type *TypeParams[] = {
         getIdentTyPointerTy(), CGM.Int32Ty,
-        llvm::PointerType::getUnqual(getKmpCriticalNameTy())};
+        getKmpCriticalNameTy()->getPointerTo(DefaultAS)};
     auto *FnTy =
         llvm::FunctionType::get(CGM.Int32Ty, TypeParams, /*isVarArg=*/false);
     RTLFn = CGM.CreateRuntimeFunction(
@@ -1707,7 +1708,7 @@ CGOpenMPRuntimeNVPTX::createNVPTXRuntimeFunction(unsigned Function) {
     // global_tid, kmp_critical_name *lck)
     llvm::Type *TypeParams[] = {
         getIdentTyPointerTy(), CGM.Int32Ty,
-        llvm::PointerType::getUnqual(getKmpCriticalNameTy())};
+        getKmpCriticalNameTy()->getPointerTo(DefaultAS)};
     auto *FnTy =
         llvm::FunctionType::get(CGM.VoidTy, TypeParams, /*isVarArg=*/false);
     RTLFn = CGM.CreateRuntimeFunction(
@@ -3142,7 +3143,7 @@ static llvm::Value *emitInterWarpCopyFunction(CodeGenModule &CGM,
       M.getGlobalVariable(TransferMediumName);
   if (!TransferMedium) {
     auto *Ty = llvm::ArrayType::get(CGM.Int32Ty, WarpSize);
-    unsigned SharedAddressSpace = C.getTargetAddressSpace(LangAS::cuda_shared);
+    unsigned SharedAddressSpace = CGM.getTargetAddressSpace(LangAS::cuda_shared);
     TransferMedium = new llvm::GlobalVariable(
         M, Ty, /*isConstant=*/false, llvm::GlobalVariable::CommonLinkage,
         llvm::Constant::getNullValue(Ty), TransferMediumName,
@@ -3159,11 +3160,12 @@ static llvm::Value *emitInterWarpCopyFunction(CodeGenModule &CGM,
   llvm::Value *WarpID = getNVPTXWarpID(CGF);
 
   Address AddrReduceListArg = CGF.GetAddrOfLocalVar(&ReduceListArg);
+  unsigned DefaultAS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
   Address LocalReduceList(
       Bld.CreatePointerBitCastOrAddrSpaceCast(
           CGF.EmitLoadOfScalar(AddrReduceListArg, /*Volatile=*/false,
                                C.VoidPtrTy, Loc),
-          CGF.ConvertTypeForMem(ReductionArrayTy)->getPointerTo()),
+          CGF.ConvertTypeForMem(ReductionArrayTy)->getPointerTo(DefaultAS)),
       CGF.getPointerAlign());
 
   unsigned Idx = 0;
@@ -3432,11 +3434,12 @@ static llvm::Value *emitShuffleAndReduceFunction(
   CGBuilderTy &Bld = CGF.Builder;
 
   Address AddrReduceListArg = CGF.GetAddrOfLocalVar(&ReduceListArg);
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   Address LocalReduceList(
       Bld.CreatePointerBitCastOrAddrSpaceCast(
           CGF.EmitLoadOfScalar(AddrReduceListArg, /*Volatile=*/false,
                                C.VoidPtrTy, SourceLocation()),
-          CGF.ConvertTypeForMem(ReductionArrayTy)->getPointerTo()),
+          CGF.ConvertTypeForMem(ReductionArrayTy)->getPointerTo(DefaultAS)),
       CGF.getPointerAlign());
 
   Address AddrLaneIDArg = CGF.GetAddrOfLocalVar(&LaneIDArg);
@@ -3861,8 +3864,9 @@ void CGOpenMPRuntimeNVPTX::emitReduction(
     llvm::Value *ReductionArrayTySize = CGF.getTypeSize(ReductionArrayTy);
     llvm::Value *RL = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(
         ReductionList.getPointer(), CGF.VoidPtrTy);
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
     llvm::Value *ReductionFn = emitReductionFunction(
-        CGM, Loc, CGF.ConvertTypeForMem(ReductionArrayTy)->getPointerTo(),
+        CGM, Loc, CGF.ConvertTypeForMem(ReductionArrayTy)->getPointerTo(DefaultAS),
         Privates, LHSExprs, RHSExprs, ReductionOps);
     llvm::Value *ShuffleAndReduceFn = emitShuffleAndReduceFunction(
         CGM, Privates, ReductionArrayTy, ReductionFn, Loc);
@@ -3992,7 +3996,7 @@ CGOpenMPRuntimeNVPTX::getParameterAddress(CodeGenFunction &CGF,
   const Type *NonQualTy = QC.strip(NativeParamType);
   QualType NativePointeeTy = cast<ReferenceType>(NonQualTy)->getPointeeType();
   unsigned NativePointeeAddrSpace =
-      CGF.getContext().getTargetAddressSpace(NativePointeeTy);
+      CGF.CGM.getTargetAddressSpace(NativePointeeTy.getAddressSpace());
   QualType TargetTy = TargetParam->getType();
   llvm::Value *TargetAddr = CGF.EmitLoadOfScalar(
       LocalAddr, /*Volatile=*/false, TargetTy, SourceLocation());

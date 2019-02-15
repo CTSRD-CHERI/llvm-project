@@ -10,6 +10,7 @@
 #include "clang/Driver/ToolChain.h"
 #include "InputInfo.h"
 #include "ToolChains/Arch/ARM.h"
+#include "ToolChains/Arch/Mips.h"
 #include "ToolChains/Clang.h"
 #include "clang/Basic/ObjCRuntime.h"
 #include "clang/Basic/Sanitizers.h"

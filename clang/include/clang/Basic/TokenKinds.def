@@ -308,6 +308,8 @@ KEYWORD(_Thread_local               , KEYALL)
 KEYWORD(__func__                    , KEYALL)
 KEYWORD(__objc_yes                  , KEYALL)
 KEYWORD(__objc_no                   , KEYALL)
+KEYWORD(__output                    , KEYALL)
+KEYWORD(__input                     , KEYALL)
 
 
 // C++ 2.11p1: Keywords.
@@ -581,6 +583,16 @@ KEYWORD(__bridge_transfer            , KEYOBJC)
 KEYWORD(__bridge_retained            , KEYOBJC)
 KEYWORD(__bridge_retain              , KEYOBJC)
 
+
+// CHERI casts.
+KEYWORD(__cheri_tocap               , KEYALL) // cast ptr -> capability
+KEYWORD(__cheri_fromcap             , KEYALL) // cast capability -> ptr
+KEYWORD(__cheri_offset              , KEYALL) // get the capability offset field
+KEYWORD(__cheri_addr                , KEYALL) // convert capability to an address
+KEYWORD(__cheri_cast                , KEYALL) // old name for ptr <-> capability
+                                              // casts. Now an error.
+
+
 // Objective-C keywords.
 KEYWORD(__covariant                  , KEYOBJC)
 KEYWORD(__contravariant              , KEYOBJC)
@@ -721,6 +733,8 @@ ANNOTATION(decltype)     // annotation for a decltype expression,
 // For each argument inside the parentheses the pragma handler will produce
 // one 'pragma_unused' annotation token followed by the argument token.
 ANNOTATION(pragma_unused)
+
+ANNOTATION(pragma_pointer_interpretation)
 
 // Annotation for #pragma GCC visibility...
 // The lexer produces these so that they only take effect when the parser

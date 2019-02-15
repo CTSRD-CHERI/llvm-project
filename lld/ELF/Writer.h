@@ -52,12 +52,16 @@ llvm::StringRef getOutputSectionName(const InputSectionBase *S);
 
 template <class ELFT> uint32_t calcMipsEFlags();
 
-uint8_t getMipsFpAbiFlag(uint8_t OldFlag, uint8_t NewFlag,
-                         llvm::StringRef FileName);
+uint8_t getMipsFpAbiFlag(uint8_t OldFlag, llvm::StringRef OldFile,
+                         uint8_t NewFlag, llvm::StringRef NewFile);
+uint8_t getMipsIsaExt(uint64_t OldExt, llvm::StringRef OldFile, uint64_t NewExt,
+                      llvm::StringRef NewFile);
 
 bool isMipsN32Abi(const InputFile *F);
 bool isMicroMips();
 bool isMipsR6();
+
+bool needsInterpSection();
 } // namespace elf
 } // namespace lld
 

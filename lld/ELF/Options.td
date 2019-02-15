@@ -63,6 +63,9 @@ defm allow_multiple_definition: B<"allow-multiple-definition",
     "Allow multiple definitions",
     "Do not allow multiple definitions (default)">;
 
+def allow_undefined_cap_relocs: F<"allow-undefined-cap-relocs">,
+  HelpText<"Allow multiple definitions">;
+
 defm apply_dynamic_relocs: B<"apply-dynamic-relocs",
     "Apply link-time values for dynamic relocations",
     "Do not apply link-time values for dynamic relocations (default)">;
@@ -135,6 +138,9 @@ defm entry: Eq<"entry", "Name of entry point symbol">,
 
 defm error_limit:
   Eq<"error-limit", "Maximum number of errors to emit before stopping (0 = no limit)">;
+
+defm warning_limit:
+  Eq<"warning-limit", "Maximum number of warnings to emit before stopping (0 = no limit)">;
 
 def error_unresolved_symbols: F<"error-unresolved-symbols">,
   HelpText<"Report unresolved symbols as errors">;
@@ -487,6 +493,38 @@ def plugin_opt_fresolution_eq: J<"plugin-opt=-fresolution=">;
 def plugin_opt_pass_through_eq: J<"plugin-opt=-pass-through=">;
 def plugin_opt_thinlto: J<"plugin-opt=thinlto">;
 def plugin_opt_slash: J<"plugin-opt=/">;
+
+
+// CHERI options:
+// -no-process-cap-relocs flag to fall back to using external capsizefix tool
+defm process_cap_relocs: B<"process-cap-relocs",
+    "Enable special processing of __cap_relocs sections",
+    "Don't do any special processing for the __cap_relocs section">;
+defm sort_cap_relocs: B<"sort-cap-relocs",
+    "Sort the __cap_relocs section by capability location",
+    "Do not sort the __cap_relocs section by capability location">, Flags<[HelpHidden]>;
+def verbose_cap_relocs : F<"verbose-cap-relocs">, HelpText<"Print all cap_relocs information (this is a lot!)">;
+
+// Select which method is used to emit dynamic capability relocations:
+def preemptible_caprelocs_legacy: F<"preemptible-caprelocs=legacy">,
+  HelpText<"Emit capability relocations for preemptible symbols using the __cap_relocs mechanism">;
+def preemptible_caprelocs_elf: F<"preemptible-caprelocs=elf">,
+  HelpText<"Emit capability relocations for preemptible symbols using R_CAPABILITY relocations in .rel(a).dyn.">;
+
+def local_caprelocs_legacy: F<"local-caprelocs=legacy">,
+  HelpText<"Emit capability relocations for local symbols using the __cap_relocs mechanism">;
+def local_caprelocs_elf: F<"local-caprelocs=elf">,
+  HelpText<"Emit capability relocations for local symbols using R_CAPABILITY relocations in .rel(a).dyn. "
+  "This options is for debugging only since it means any capability needs to be added to the dynamic symbol table.">;
+def local_caprelocs_cbuildcap: F<"local-caprelocs=cbuildcap">,
+  HelpText<"Emit capability relocations for local symbols by writing bits to be initialized using CBuildCap.">;
+
+def captable_scope_all: F<"captable-scope=all">,
+  HelpText<"Use one captable for the whole DSO for global accesses (this is the default)">;
+def captable_scope_file: F<"captable-scope=file">,
+  HelpText<"Use one captable per input file for global accesses (slower but reduces scope of $cgp)">;
+def captable_scope_function: F<"captable-scope=function">,
+  HelpText<"Use one captable per function for global accesses (very slow but minimizes scope of $cgp)">;
 
 // Options listed below are silently ignored for now for compatibility.
 def: F<"allow-shlib-undefined">;

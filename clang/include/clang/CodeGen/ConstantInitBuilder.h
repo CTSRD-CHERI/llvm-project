@@ -81,7 +81,7 @@ private:
                                      bool constant = false,
                                      llvm::GlobalValue::LinkageTypes linkage
                                        = llvm::GlobalValue::InternalLinkage,
-                                     unsigned addressSpace = 0);
+                                     unsigned addressSpace = -1);
 
   ConstantInitFuture createFuture(llvm::Constant *initializer);
 
@@ -208,6 +208,10 @@ public:
   /// Add a bitcast of a value to a specific type.
   void addBitCast(llvm::Constant *value, llvm::Type *type) {
     add(llvm::ConstantExpr::getBitCast(value, type));
+  }
+
+  void addPointerdBitCastOrAddrSpaceCast(llvm::Constant *value, llvm::Type *type) {
+    add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(value, type));
   }
 
   /// Add a bunch of new values to this initializer.

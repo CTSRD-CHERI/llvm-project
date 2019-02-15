@@ -58,6 +58,8 @@ def intMacroValue(token):
 class Configuration(object):
     # pylint: disable=redefined-outer-name
     def __init__(self, lit_config, config):
+        if sys.version_info < (3, 3):
+            raise RuntimeError("Cannot run tests with python < 3.3")
         self.lit_config = lit_config
         self.config = config
         self.is_windows = platform.system() == 'Windows'
@@ -72,6 +74,10 @@ class Configuration(object):
         self.abi_library_root = None
         self.link_shared = self.get_lit_bool('enable_shared', default=True)
         self.debug_build = self.get_lit_bool('debug_build',   default=False)
+        # increase timeouts when running on a slow test host (such as QEMU full
+        # sytem emulation for a different architecture)
+        self.slow_test_host = self.get_lit_bool('slow_test_host', default=False)
+        # XXXAR: don't pass in local environment when running remote commands:
         self.exec_env = dict(os.environ)
         self.use_target = False
         self.use_system_cxx_lib = False
@@ -196,13 +202,22 @@ class Configuration(object):
                 # ValgrindExecutor is supposed to go. It is likely
                 # that the user wants it at the end, but we have no
                 # way of getting at that easily.
-                selt.lit_config.fatal("Cannot infer how to create a Valgrind "
+                self.lit_config.fatal("Cannot infer how to create a Valgrind "
                                       " executor.")
+            # Set config on the excutor even if the user forgot to pass it as
+            # an argument in the exuctor string:
+            if hasattr(te, "config") and te.config is None:
+                te.config = self
         else:
             te = LocalExecutor()
             if self.lit_config.useValgrind:
                 te = ValgrindExecutor(self.lit_config.valgrindArgs, te)
         self.executor = te
+        if te.is_remote:
+            # Don't pass in the current local environment variables to the remote machine
+            # since this might completely break the test
+            self.exec_env = {k: v for k, v in self.exec_env.items() if k not in os.environ or v != os.environ[k]}
+
 
     def configure_target_info(self):
         self.target_info = make_target_info(self)
@@ -540,6 +555,7 @@ class Configuration(object):
         # Configure feature flags.
         self.configure_compile_flags_exceptions()
         self.configure_compile_flags_rtti()
+        self.configure_compile_flags_test_host()
         self.configure_compile_flags_abi_version()
         enable_32bit = self.get_lit_bool('enable_32bit', False)
         if enable_32bit:
@@ -689,6 +705,11 @@ class Configuration(object):
         if not enable_rtti:
             self.config.available_features.add('libcpp-no-rtti')
             self.cxx.compile_flags += ['-fno-rtti', '-D_LIBCPP_NO_RTTI']
+
+    def configure_compile_flags_test_host(self):
+        if self.slow_test_host:
+            self.config.available_features.add('libcpp-slow-test-host')
+            self.cxx.compile_flags += ['-D_LIBCPP_SLOW_TEST_HOST']
 
     def configure_compile_flags_abi_version(self):
         abi_version = self.get_lit_conf('abi_version', '').strip()
@@ -1007,8 +1028,16 @@ class Configuration(object):
         if not supports_modules:
             return
         self.config.available_features.add('modules-support')
-        module_cache = os.path.join(self.config.test_exec_root,
-                                   'modules.cache')
+        exec_str = self.get_lit_conf('modules', "None")
+
+        modules_cache_dirname = 'modules.cache'
+        # Avoid reusing the same directory when running parallel jobs
+        if self.lit_config.shardNumber is not None:
+            self.lit_config.note('Running parallel jobs -> appending ' +
+                str(self.lit_config.shardNumber) + ' to modules cache dir')
+            modules_cache_dirname += "." + str(self.lit_config.shardNumber)
+
+        module_cache = os.path.join(self.config.test_exec_root, modules_cache_dirname)
         module_cache = os.path.realpath(module_cache)
         if os.path.isdir(module_cache):
             shutil.rmtree(module_cache)
@@ -1076,7 +1105,7 @@ class Configuration(object):
         # Get or infer the target triple.
         target_triple = self.get_lit_conf('target_triple')
         self.use_target = self.get_lit_bool('use_target', False)
-        if self.use_target and target_triple:
+        if self.use_target and not target_triple:
             self.lit_config.warning('use_target is true but no triple is specified')
 
         # Use deployment if possible.

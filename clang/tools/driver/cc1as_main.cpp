@@ -137,6 +137,8 @@ struct AssemblerInvocation {
 
   /// The name of the relocation model to use.
   std::string RelocationModel;
+  /// The name of the target ABI to use.
+  std::string ABIName;
 
   /// @}
 
@@ -286,6 +288,7 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
   Opts.IncrementalLinkerCompatible =
       Args.hasArg(OPT_mincremental_linker_compatible);
   Opts.SymbolDefs = Args.getAllArgValues(OPT_defsym);
+  Opts.ABIName = Args.getLastArgValue(OPT_target_abi);
 
   // EmbedBitcode Option. If -fembed-bitcode is enabled, set the flag.
   // EmbedBitcode behaves the same for all embed options for assembly files.
@@ -482,6 +485,7 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
 
   // FIXME: init MCTargetOptions from sanitizer flags here.
   MCTargetOptions Options;
+  Options.ABIName = Opts.ABIName;
   std::unique_ptr<MCTargetAsmParser> TAP(
       TheTarget->createMCAsmParser(*STI, *Parser, *MCII, Options));
   if (!TAP)

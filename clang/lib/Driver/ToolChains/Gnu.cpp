@@ -2439,6 +2439,7 @@ bool Generic_GCC::isPICDefault() const {
     return !getTriple().isOSBinFormatMachO() && !getTriple().isMacOSX();
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
+  case llvm::Triple::cheri:
     return true;
   default:
     return false;
@@ -2474,6 +2475,7 @@ bool Generic_GCC::IsIntegratedAssemblerDefault() const {
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
+  case llvm::Triple::cheri:
     return true;
   default:
     return false;
@@ -2608,6 +2610,22 @@ void Generic_ELF::addClangTargetOptions(const ArgList &DriverArgs,
       getTriple().getOS() == llvm::Triple::Solaris ||
       getTriple().getArch() == llvm::Triple::riscv32 ||
       getTriple().getArch() == llvm::Triple::riscv64;
+
+  if (getTriple().isOSFreeBSD()) {
+    switch (getTriple().getArch()) {
+      case llvm::Triple::cheri:
+      case llvm::Triple::mips:
+      case llvm::Triple::mipsel:
+      case llvm::Triple::mips64:
+      case llvm::Triple::mips64el:
+        // Default to .init_array for FreeBSD mips since e.g. the CHERI purecap
+        // rtld won't process .ctors anymore.
+        UseInitArrayDefault = true;
+        break;
+      default:
+        break;
+    }
+  }
 
   if (DriverArgs.hasFlag(options::OPT_fuse_init_array,
                          options::OPT_fno_use_init_array, UseInitArrayDefault))

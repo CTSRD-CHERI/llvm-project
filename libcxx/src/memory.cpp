@@ -213,6 +213,7 @@ __undeclare_reachable(void* p)
     return p;
 }
 
+#ifndef __CHERI_PURE_CAPABILITY__
 void*
 align(size_t alignment, size_t size, void*& ptr, size_t& space)
 {
@@ -231,5 +232,6 @@ align(size_t alignment, size_t size, void*& ptr, size_t& space)
     }
     return r;
 }
+#endif
 
 _LIBCPP_END_NAMESPACE_STD

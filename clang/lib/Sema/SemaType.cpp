@@ -25,6 +25,7 @@
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
+#include "clang/Parse/ParseDiagnostic.h"
 #include "clang/Sema/DeclSpec.h"
 #include "clang/Sema/DelayedDiagnostic.h"
 #include "clang/Sema/Lookup.h"
@@ -109,6 +110,9 @@ static void diagnoseBadTypeAttribute(Sema &S, const ParsedAttr &attr,
 // Calling convention attributes.
 #define CALLING_CONV_ATTRS_CASELIST                                            \
   case ParsedAttr::AT_CDecl:                                                   \
+  case ParsedAttr::AT_CHERICCall:                                              \
+  case ParsedAttr::AT_CHERICCallee:                                            \
+  case ParsedAttr::AT_CHERICCallback:                                          \
   case ParsedAttr::AT_FastCall:                                                \
   case ParsedAttr::AT_StdCall:                                                 \
   case ParsedAttr::AT_ThisCall:                                                \
@@ -1712,6 +1716,16 @@ static QualType ConvertDeclSpecToType(TypeProcessingState &state) {
     else
       Result = Qualified;
   }
+  if (DS.HasOutput()) {
+    Qualifiers Quals;
+    Quals.addOutput();
+    Result = Context.getQualifiedType(Result, Quals);
+  }
+  if (DS.HasInput()) {
+    Qualifiers Quals;
+    Quals.addInput();
+    Result = Context.getQualifiedType(Result, Quals);
+  }
 
   assert(!Result.isNull() && "This function should not return a null type");
   return Result;
@@ -1938,7 +1952,8 @@ static bool checkQualifiedFunction(Sema &S, QualType T, SourceLocation Loc,
 /// \returns A suitable pointer type, if there are no
 /// errors. Otherwise, returns a NULL type.
 QualType Sema::BuildPointerType(QualType T,
-                                SourceLocation Loc, DeclarationName Entity) {
+                                SourceLocation Loc, DeclarationName Entity,
+                                bool* ValidPointer) {
   if (T->isReferenceType()) {
     // C++ 8.3.2p4: There shall be no ... pointers to references ...
     Diag(Loc, diag::err_illegal_decl_pointer_to_reference)
@@ -1960,8 +1975,22 @@ QualType Sema::BuildPointerType(QualType T,
   if (getLangOpts().ObjCAutoRefCount)
     T = inferARCLifetimeForPointee(*this, T, Loc, /*reference*/ false);
 
+  // If we are in sandbox ABI turn pointers marked integer representations into
+  // a plain pointer range sized integer
+  if (PointerInterpretation == ASTContext::PIK_Integer
+      && Context.getTargetInfo().areAllPointersCapabilities()) {
+    // This is not a real pointer type in the sandbox ABI
+    // ptrdiff_t will be the same size as a plain mips pointer
+    // FIXME: this ValidPointer approach is a HACK to ensure that we return
+    // getTrivialTypeSourceInfo(T) later, need to do something better
+    if (ValidPointer)
+      *ValidPointer = false;
+    return Context.getPointerDiffType();
+  }
   // Build the pointer type.
-  return Context.getPointerType(T);
+  if (ValidPointer)
+    *ValidPointer = true;
+  return Context.getPointerType(T, PointerInterpretation);
 }
 
 /// Build a reference type.
@@ -3935,6 +3964,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
   Sema &S = state.getSema();
   ASTContext &Context = S.Context;
   const LangOptions &LangOpts = S.getLangOpts();
+  bool IsIntegerPointerInPureCapABI = false;
 
   // The name we're declaring, if any.
   DeclarationName Name;
@@ -4327,7 +4357,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
         T = S.BuildQualifiedType(T, DeclType.Loc, DeclType.Cls.TypeQuals);
       }
       break;
-    case DeclaratorChunk::Pointer:
+    case DeclaratorChunk::Pointer: {
       // Verify that we're not building a pointer to pointer to function with
       // exception specification.
       if (LangOpts.CPlusPlus && S.CheckDistantExceptionSpec(T)) {
@@ -4357,11 +4387,14 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
           D.setInvalidType(true);
         }
       }
-
-      T = S.BuildPointerType(T, DeclType.Loc, Name);
-      if (DeclType.Ptr.TypeQuals)
+      bool ValidPointer = false;
+      T = S.BuildPointerType(T, DeclType.Loc, Name, &ValidPointer);
+      if (!ValidPointer) {
+        IsIntegerPointerInPureCapABI = true;  // FIXME: is this correct?
+      } else if (DeclType.Ptr.TypeQuals)
         T = S.BuildQualifiedType(T, DeclType.Loc, DeclType.Ptr.TypeQuals);
       break;
+    }
     case DeclaratorChunk::Reference: {
       // Verify that we're not building a reference to pointer to function with
       // exception specification.
@@ -5155,7 +5188,7 @@ static TypeSourceInfo *GetFullTypeForDeclarator(TypeProcessingState &state,
   }
 
   assert(!T.isNull() && "T must not be null at the end of this function");
-  if (D.isInvalidType())
+  if (D.isInvalidType() || IsIntegerPointerInPureCapABI)
     return Context.getTrivialTypeSourceInfo(T);
 
   return GetTypeSourceInfoForDeclarator(state, T, TInfo);
@@ -5834,7 +5867,10 @@ static void HandleAddressSpaceTypeAttribute(QualType &Type,
 
   // ISO/IEC TR 18037 S5.3 (amending C99 6.7.3): "A function type shall not be
   // qualified by an address-space qualifier."
-  if (Type->isFunctionType()) {
+  if (Type->isFunctionType() && !S.Context.getTargetInfo().SupportsCapabilities()) {
+    // FIXME: We should only allow function pointers to be qualified with an AS
+    // if it's the capability AS, but for now allow them to be any AS when the
+    // target supports capabilities.
     S.Diag(Attr.getLoc(), diag::err_attribute_address_function_type);
     Attr.setInvalid();
     return;
@@ -6717,6 +6753,12 @@ static Attr *getCCTypeAttr(ASTContext &Ctx, ParsedAttr &Attr) {
     return ::new (Ctx) PcsAttr(Attr.getRange(), Ctx, Type,
                                Attr.getAttributeSpellingListIndex());
   }
+  case ParsedAttr::AT_CHERICCall:
+    return createSimpleAttr<CHERICCallAttr>(Ctx, Attr);
+  case ParsedAttr::AT_CHERICCallee:
+    return createSimpleAttr<CHERICCalleeAttr>(Ctx, Attr);
+  case ParsedAttr::AT_CHERICCallback:
+    return createSimpleAttr<CHERICCallAttr>(Ctx, Attr);
   case ParsedAttr::AT_IntelOclBicc:
     return createSimpleAttr<IntelOclBiccAttr>(Ctx, Attr);
   case ParsedAttr::AT_MSABI:
@@ -7199,6 +7241,153 @@ static void HandleOpenCLAccessAttr(QualType &CurType, const ParsedAttr &Attr,
   }
 }
 
+/// HandleCHERICapabilityAttr - Process the cheri_capability attribute. It is
+/// only applicable to pointer and reference types and specifies that this
+/// pointer/reference should be treated as a capability.
+static void HandleCHERICapabilityAttr(QualType &CurType, TypeProcessingState &state,
+                                       TypeAttrLocation TAL, ParsedAttr& attr) {
+  static bool isDeprecatedUse = false;
+  Declarator &declarator = state.getDeclarator();
+  Sema& S = state.getSema();
+
+  if (TAL == TAL_DeclName) {
+    // TODO: we should use the spelling as written in the source
+    // StringRef Name = attr.getName()->getName();
+    StringRef Name = "__capability";
+    S.Diag(attr.getLoc(), diag::err_attr_wrong_position) << Name
+        << FixItHint::CreateRemoval(attr.getLoc())
+        << FixItHint::CreateInsertion(state.getDeclarator().getName().getBeginLoc(), Name);
+    return;
+  }
+
+  if (TAL == TAL_DeclSpec) {
+    // possible deprecated use; move to the outermost pointer declarator
+    // unless this is a typedef'd pointer type
+    if (const TypedefType *TT = CurType->getAs<TypedefType>()) {
+      // If the underlying type is a pointer, Create a new instance of this
+      // Typedef with a memory capability as the underlying type
+      if (TT->isPointerType()) {
+        CurType = S.Context.getTypedefType(TT->getDecl(), QualType(), true);
+        return;
+      }
+    }
+    isDeprecatedUse = true;
+    for (unsigned i = state.getCurrentChunkIndex(); i != 0; --i) {
+      DeclaratorChunk &chunk = declarator.getTypeObject(i-1);
+      switch (chunk.Kind) {
+        case DeclaratorChunk::Pointer: {
+          ParsedAttr *attrCopy = declarator.getAttributePool()
+                 .create(attr.getName(), attr.getRange(),
+                         attr.getScopeName(), attr.getScopeLoc(),
+                         nullptr, 0, ParsedAttr::AS_GNU);
+          chunk.getAttrs().addAtEnd(attrCopy);
+          return;
+        }
+        case DeclaratorChunk::BlockPointer:
+        case DeclaratorChunk::Paren:
+        case DeclaratorChunk::Array:
+        case DeclaratorChunk::Function:
+        case DeclaratorChunk::Reference:
+        case DeclaratorChunk::Pipe:
+          continue;
+        case DeclaratorChunk::MemberPointer:
+          llvm_unreachable("Should this be handled?"); continue;
+
+      }
+    }
+  } else {
+    unsigned currChunkIdx = state.getCurrentChunkIndex();
+    DeclaratorChunk &chunk = declarator.getTypeObject(state.getCurrentChunkIndex());
+    if (chunk.Kind == DeclaratorChunk::Pointer || chunk.Kind == DeclaratorChunk::Reference) {
+      if (isDeprecatedUse) {
+        // Check for an ambiguous use where this is more than one pointer
+        // level, like __capability T **. We do this by checking that the next
+        // chunk isn't a pointer without the attribute.
+        if (currChunkIdx > 0) {
+          DeclaratorChunk &nextChunk = declarator.getTypeObject(currChunkIdx-1);
+          if (nextChunk.Kind == DeclaratorChunk::Pointer) {
+            auto Attr = nextChunk.getAttrs();
+            if (!Attr.hasAttribute(ParsedAttr::AT_CHERICapability)) {
+              isDeprecatedUse = false;
+              S.Diag(nextChunk.Loc, diag::err_cheri_capability_attribute_ambiguous);
+              return;
+            }
+          }
+        }
+
+        // Output a deprecated usage warning with a FixItHint
+        SourceRange AttrRange;
+        SourceLocation AttrLoc = attr.getLoc();
+        if (AttrLoc.isValid()) {
+          // The cheri_capability attribute should always be inserted via
+          // the predefined __capability macro, but we also cater for when it
+          // isn't in the else branch
+          if (AttrLoc.isMacroID()) {
+            CharSourceRange expansionRange =
+                S.SourceMgr.getImmediateExpansionRange(AttrLoc);
+            AttrRange.setBegin(expansionRange.getBegin());
+            AttrRange.setEnd(expansionRange.getEnd());
+          } else {
+            // Calculate extended range to include the preceding
+            // __attribute(( and following ))
+            AttrRange.setBegin(AttrLoc.getLocWithOffset(-15));
+            AttrRange.setEnd(AttrLoc.getLocWithOffset(18));
+          }
+        }
+        S.Diag(chunk.Loc, diag::warn_cheri_capability_attribute_location)
+            << FixItHint::CreateRemoval(AttrRange)
+            << FixItHint::CreateInsertion(chunk.Loc.getLocWithOffset(1),
+                                          " __capability ");
+        isDeprecatedUse = false;
+      }
+      if (CurType->isPointerType() || CurType->isReferenceType()) {
+        // preserve existing qualifiers on CurType
+        Qualifiers Qs = CurType.getQualifiers();
+        if (const PointerType *PT = CurType->getAs<PointerType>())
+          CurType = S.Context.getPointerType(PT->getPointeeType(), ASTContext::PIK_Capability);
+        else if (const LValueReferenceType *LRT = CurType->getAs<LValueReferenceType>()) 
+          CurType = S.Context.getLValueReferenceType(LRT->getPointeeType(), true, ASTContext::PIK_Capability);
+        else if (const RValueReferenceType *RRT = CurType->getAs<RValueReferenceType>()) 
+          CurType = S.Context.getRValueReferenceType(RRT->getPointeeType(), ASTContext::PIK_Capability);
+        if (Qs.hasQualifiers())
+          CurType = S.Context.getQualifiedType(CurType, Qs);
+        return;
+      }
+    }
+  }
+
+  S.Diag(attr.getLoc(), diag::err_cheri_capability_attribute_pointers_only) << CurType;
+}
+
+
+static bool HandleMemoryAddressAttr(QualType &T, TypeProcessingState &State,
+                                    TypeAttrLocation TAL, ParsedAttr& Attr) {
+  Sema &S = State.getSema();
+  assert(Attr.getKind() == ParsedAttr::AT_MemoryAddress);
+  // XXXAR: FIXME: Why do I get an assertion later if I don't error out here?
+  if (TAL == TAL_DeclName) {
+    StringRef Name = Attr.getName()->getName();
+    S.Diag(Attr.getLoc(), diag::err_attr_wrong_position) << Name
+        << FixItHint::CreateRemoval(Attr.getLoc())
+        << FixItHint::CreateInsertion(State.getDeclarator().getDeclSpec().getBeginLoc(), Name);
+    return true;
+  }
+
+  if (!T->isIntegerType() || T->isCHERICapabilityType(S.Context)) {
+    S.Diag(Attr.getLoc(), diag::err_attribute_address_integers_only)
+      << Attr.getName() << T;
+    return true;
+  }
+
+  // llvm::errs() << __func__ << ": hasAttr():" << T->hasAttr(attr::MemoryAddress) <<  " dump: "; T.dump();
+  if (T->hasAttr(attr::MemoryAddress))
+    S.Diag(Attr.getLoc(), diag::warn_duplicate_attribute_exact) << Attr.getName();
+  T = State.getAttributedType(
+      createSimpleAttr<MemoryAddressAttr>(State.getSema().Context, Attr), T, T);
+  // llvm::errs() << __func__ << ": modified type: "; T.dump();
+  return false;
+}
+
 static void deduceOpenCLImplicitAddrSpace(TypeProcessingState &State,
                                           QualType &T, TypeAttrLocation TAL) {
   Declarator &D = State.getDeclarator();
@@ -7468,7 +7657,7 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       case TAL_DeclChunk:
       case TAL_DeclName:
         state.getSema().Diag(attr.getLoc(),
-                             diag::err_objc_kindof_wrong_position)
+                             diag::err_attr_wrong_position) << "__kindof"
             << FixItHint::CreateRemoval(attr.getLoc())
             << FixItHint::CreateInsertion(
                    state.getDeclarator().getDeclSpec().getBeginLoc(),
@@ -7492,6 +7681,28 @@ static void processTypeAttrs(TypeProcessingState &state, QualType &type,
       // Otherwise, handle the possible delays.
       else if (!handleFunctionTypeAttr(state, attr, type))
         distributeFunctionTypeAttr(state, attr, type);
+      break;
+
+    case ParsedAttr::AT_CHERICapability:
+      attr.setUsedAsTypeAttr();
+      HandleCHERICapabilityAttr(type, state, TAL, attr);
+      break;
+    case ParsedAttr::AT_CHERINoSubobjectBounds:
+      attr.setUsedAsTypeAttr();
+      if (type->hasAttr(attr::CHERINoSubobjectBounds))
+        state.getSema().Diag(attr.getLoc(),
+                             diag::warn_duplicate_attribute_exact)
+            << attr.getName();
+      type =
+          state.getAttributedType(createSimpleAttr<CHERINoSubobjectBoundsAttr>(
+                                      state.getSema().Context, attr),
+                                  type, type);
+      break;
+    case ParsedAttr::AT_MemoryAddress:
+      // llvm::errs() << "applying memory_address to "; type.dump();
+      if (!HandleMemoryAddressAttr(type, state, TAL, attr)) {
+          attr.setUsedAsTypeAttr();
+      }
       break;
     }
   }

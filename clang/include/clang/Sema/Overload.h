@@ -283,6 +283,17 @@ class Sema;
     /// Objective-C lifetime qualifier.
     unsigned ObjCLifetimeConversionBinding : 1;
 
+    /// \brief e.g. conversions from pointer -> capability without an explicit __cheri_tocap
+    unsigned IncompatibleCHERIConversion : 1;  // XXXAR: would be nice if we had a ctor to initialize this
+
+    bool isInvalidCHERICapabilityConversion() const {
+      return IncompatibleCHERIConversion;
+    }
+    void setInvalidCHERIConversion(bool IsInvalid = true) {
+      assert(!IncompatibleCHERIConversion); // should have been initialized to false (see above)
+      IncompatibleCHERIConversion = IsInvalid;
+    }
+
     /// FromType - The type that this conversion is converting
     /// from. This is an opaque pointer that can be translated into a
     /// QualType.
@@ -498,6 +509,11 @@ class Sema;
       BadConversion
     };
 
+    enum SetKindAction {
+        MemsetToZero,
+        KeepState,
+    };
+
   private:
     enum {
       Uninitialized = BadConversion + 1
@@ -624,7 +640,15 @@ class Sema;
       Bad.init(Failure, FromType, ToType);
     }
 
-    void setStandard() { setKind(StandardConversion); }
+    void setStandard(SetKindAction Action) {
+      setKind(StandardConversion);
+      if (Action == MemsetToZero)
+        memset(&Standard, 0, sizeof(Standard));
+    }
+    void setStandard(const StandardConversionSequence& NewSeq) {
+      setKind(StandardConversion);
+      Standard = NewSeq;
+    }
     void setEllipsis() { setKind(EllipsisConversion); }
     void setUserDefined() { setKind(UserDefinedConversion); }
 
@@ -635,7 +659,7 @@ class Sema;
     }
 
     void setAsIdentityConversion(QualType T) {
-      setStandard();
+      setStandard(MemsetToZero);  // XXXAR: not sure this is correct
       Standard.setAsIdentityConversion();
       Standard.setFromType(T);
       Standard.setAllToTypes(T);

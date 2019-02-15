@@ -377,6 +377,10 @@ void ExprEngine::VisitCast(const CastExpr *CastE, const Expr *Ex,
       case CK_Dependent:
       case CK_ArrayToPointerDecay:
       case CK_BitCast:
+      case CK_CHERICapabilityToPointer:
+      case CK_PointerToCHERICapability:
+      case CK_CHERICapabilityToOffset:
+      case CK_CHERICapabilityToAddress:
       case CK_AddressSpaceConversion:
       case CK_BooleanToSignedIntegral:
       case CK_NullToPointer:

@@ -1397,8 +1397,8 @@ public:
                               const DeclSpec *DS = nullptr);
   QualType BuildQualifiedType(QualType T, SourceLocation Loc, unsigned CVRA,
                               const DeclSpec *DS = nullptr);
-  QualType BuildPointerType(QualType T,
-                            SourceLocation Loc, DeclarationName Entity);
+  QualType BuildPointerType(QualType T, SourceLocation Loc,
+                            DeclarationName Entity, bool* ValidPointer);
   QualType BuildReferenceType(QualType T, bool LValueRef,
                               SourceLocation Loc, DeclarationName Entity);
   QualType BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
@@ -8302,6 +8302,23 @@ public:
                                   SourceLocation RParenLoc,
                                   Expr *SubExpr);
 
+  ExprResult BuildCheriToOrFromCap(SourceLocation LParenLoc, SourceLocation KeywordLoc,
+                                   bool IsToCap, QualType DestTy,
+                                   TypeSourceInfo *TSInfo, SourceLocation
+                                   RParenLoc, Expr *SubExpr);
+
+  ExprResult BuildCheriOffsetOrAddress(SourceLocation LParenLoc, SourceLocation KeywordLoc,
+                                       bool IsOffsetCast, QualType DestTy,
+                                       TypeSourceInfo *TSInfo, SourceLocation
+                                       RParenLoc, Expr *SubExpr);
+
+  ExprResult ActOnCheriCast(Scope *S, SourceLocation LParenLoc, tok::TokenKind Kind,
+                            SourceLocation CheriPtrKeywordLoc, ParsedType Type,
+                            SourceLocation RParenLoc, Expr *SubExpr);
+
+  bool CheckCHERIAssignCompatible(QualType LHS, QualType RHS, Expr *&RHSExpr,
+                                  bool InsertBitCast = true);
+
   void CheckTollFreeBridgeCast(QualType castType, Expr *castExpr);
 
   void CheckObjCBridgeRelatedCast(QualType castType, Expr *castExpr);
@@ -8360,9 +8377,21 @@ public:
   void ActOnPragmaOptionsAlign(PragmaOptionsAlignKind Kind,
                                SourceLocation PragmaLoc);
 
+  ASTContext::PointerInterpretationKind PointerInterpretation = ASTContext::PIK_Default;
+  llvm::SmallVector<ASTContext::PointerInterpretationKind, 4> PointerInterpretationStack;
+
   /// ActOnPragmaPack - Called on well formed \#pragma pack(...).
   void ActOnPragmaPack(SourceLocation PragmaLoc, PragmaMsStackAction Action,
                        StringRef SlotLabel, Expr *Alignment);
+
+  void ActOnPragmaPointerInterpretation(ASTContext::PointerInterpretationKind K);
+  void ActOnPragmaPointerInterpretationPush() {
+    PointerInterpretationStack.push_back(PointerInterpretation);
+  }
+  void ActOnPragmaPointerInterpretationPop() {
+    PointerInterpretation = PointerInterpretationStack.back();
+    PointerInterpretationStack.pop_back();
+  }
 
   enum class PragmaPackDiagnoseKind {
     NonDefaultStateAtInclude,
@@ -8454,6 +8483,12 @@ public:
                                   SourceLocation PragmaLoc,
                                   SourceLocation WeakNameLoc,
                                   SourceLocation AliasNameLoc);
+
+  void ActOnPragmaOpaque(IdentifierInfo* TypeName,
+                         IdentifierInfo* KeyName,
+                         SourceLocation PragmaLoc,
+                         SourceLocation TypeLoc,
+                         SourceLocation KeyLoc);
 
   /// ActOnPragmaWeakAlias - Called on well formed \#pragma weak ident = ident.
   void ActOnPragmaWeakAlias(IdentifierInfo* WeakName,
@@ -9410,6 +9445,10 @@ public:
                                CheckedConversionKind CCK
                                   = CCK_ImplicitConversion);
 
+  /// ImpCastPointerToCHERICapability - Checks if pointer type FromTy can be implicitly converted to
+  /// capability type ToTy
+  bool ImpCastPointerToCHERICapability(QualType FromTy, QualType ToTy, Expr *&From, bool Diagnose = true);
+
   /// ScalarTypeToBooleanCastKind - Returns the cast kind corresponding
   /// to the conversion from scalar type ScalarTy to the Boolean type.
   static CastKind ScalarTypeToBooleanCastKind(QualType ScalarTy);
@@ -9525,6 +9564,13 @@ public:
     /// IntToPointer - The assignment converts an int to a pointer, which we
     /// accept as an extension.
     IntToPointer,
+
+    /// CHERICapabilityToPointer - The assignment converts a capability to a
+    /// pointer, which we reject (it needs an explicit __cheri_fromcap).
+    CHERICapabilityToPointer,
+    /// PointerToCHERICapability - The assignment converts a pointer to a
+    /// capability, which we reject (it needs an explicit __cheri_tocap).
+    PointerToCHERICapability,
 
     /// FunctionVoidPointer - The assignment is between a function pointer and
     /// void*, which the standard doesn't allow, but we accept as an extension.

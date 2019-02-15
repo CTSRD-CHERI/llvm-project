@@ -130,7 +130,9 @@ public:
       return EmitLoadOfLValue(Constant.getReferenceLValue(CGF, E),
                               E->getExprLoc());
 
-    llvm::Constant *pair = Constant.getValue();
+    // XXXAR: this cast is needed because I had to change the return type to
+    // Value* instead (see https://github.com/CTSRD-CHERI/llvm/issues/268)
+    llvm::Constant *pair = cast<llvm::Constant>(Constant.getValue(CGF));
     return ComplexPairTy(pair->getAggregateElement(0U),
                          pair->getAggregateElement(1U));
   }
@@ -510,6 +512,10 @@ ComplexPairTy ComplexExprEmitter::EmitCast(CastKind CK, Expr *Op,
   case CK_BuiltinFnToFnPtr:
   case CK_ZeroToOCLOpaqueType:
   case CK_AddressSpaceConversion:
+  case CK_CHERICapabilityToPointer:
+  case CK_PointerToCHERICapability:
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress:
   case CK_IntToOCLSampler:
   case CK_FixedPointCast:
   case CK_FixedPointToBoolean:

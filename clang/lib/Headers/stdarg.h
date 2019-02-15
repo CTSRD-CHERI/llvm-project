@@ -26,13 +26,20 @@
 #ifndef __STDARG_H
 #define __STDARG_H
 
-#ifndef _VA_LIST
+#if !defined(_VA_LIST) && !defined(_VA_LIST_DECLARED)
 typedef __builtin_va_list va_list;
 #define _VA_LIST
+#define _VA_LIST_DECLARED /* FreeBSD */
 #endif
+#ifndef va_start
 #define va_start(ap, param) __builtin_va_start(ap, param)
+#endif
+#ifndef va_end
 #define va_end(ap)          __builtin_va_end(ap)
+#endif
+#ifndef va_arg
 #define va_arg(ap, type)    __builtin_va_arg(ap, type)
+#endif
 
 /* GCC always defines __va_copy, but does not define va_copy unless in c99 mode
  * or -ansi is not specified, since it was not part of C90.
@@ -40,7 +47,9 @@ typedef __builtin_va_list va_list;
 #define __va_copy(d,s) __builtin_va_copy(d,s)
 
 #if __STDC_VERSION__ >= 199901L || __cplusplus >= 201103L || !defined(__STRICT_ANSI__)
+#ifndef va_copy
 #define va_copy(dest, src)  __builtin_va_copy(dest, src)
+#endif
 #endif
 
 #ifndef __GNUC_VA_LIST

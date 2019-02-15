@@ -6,7 +6,7 @@ Empty emptyvar;
 int take_args(int a, ...) {
   __builtin_va_list l;
   __builtin_va_start(l, a);
-// CHECK: call void @llvm.va_start
+// CHECK: call void @llvm.va_start.p0i8
 
   emptyvar = __builtin_va_arg(l, Empty);
 // CHECK: load i8*, i8**

@@ -1900,7 +1900,6 @@ Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
   }
 
   QualType ResultType = Context.getPointerType(AllocType);
-
   if (ArraySize && ArraySize->getType()->isNonOverloadPlaceholderType()) {
     ExprResult result = CheckPlaceholderExpr(ArraySize);
     if (result.isInvalid()) return ExprError();
@@ -2370,7 +2369,7 @@ bool Sema::FindAllocationFunctions(SourceLocation StartLoc, SourceRange Range,
   // tree? Or should the consumer just recalculate the value?
   // FIXME: Using a dummy value will interact poorly with attribute enable_if.
   IntegerLiteral Size(Context, llvm::APInt::getNullValue(
-                      Context.getTargetInfo().getPointerWidth(0)),
+                      Context.getTargetInfo().getPointerRange(0)),
                       Context.getSizeType(),
                       SourceLocation());
   AllocArgs.push_back(&Size);
@@ -4106,8 +4105,12 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
     }
     if (getLangOpts().allowsNonTrivialObjCLifetimeQualifiers())
       CheckObjCConversion(SourceRange(), ToType, From, CCK);
-    From = ImpCastExprToType(From, ToType, Kind, VK_RValue, &BasePath, CCK)
-             .get();
+    ExprResult E = ImpCastExprToType(From, ToType, Kind, VK_RValue, &BasePath, CCK);
+    if (E.isInvalid())
+      return ExprError();
+    else
+      From = E.get();
+
     break;
   }
 
@@ -4291,18 +4294,37 @@ Sema::PerformImplicitConversion(Expr *From, QualType ToType,
             From->getType()->getPointeeType().getAddressSpace())
       CK = CK_AddressSpaceConversion;
 
+    const bool FromIsCap = FromType->isCHERICapabilityType(Context);
+    const bool ToIsCap = ToType->isCHERICapabilityType(Context);
+    if (FromIsCap != ToIsCap) {
+      if (SCS.isInvalidCHERICapabilityConversion()) {
+        unsigned DiagID = FromIsCap ? diag::err_typecheck_convert_cap_to_ptr :
+                                      diag::err_typecheck_convert_ptr_to_cap;
+        Diag(From->getBeginLoc(), DiagID) << FromType << ToType << false
+            << FixItHint::CreateInsertion(From->getBeginLoc(), "(__cheri_" +
+                                          std::string(FromIsCap ? "from" : "to") +
+                                          "cap " + ToType.getAsString() + ")");
+        return ExprError();
+      }
+      CK = FromIsCap ? CK_CHERICapabilityToPointer : CK_PointerToCHERICapability;
+    }
+    // ImpCastExprToType may return an ExprError, so cache the current value of
+    Expr *FromOld = From;
     From = ImpCastExprToType(From, ToType.getNonLValueExprType(Context), CK, VK,
                              /*BasePath=*/nullptr, CCK)
                .get();
 
     if (SCS.DeprecatedStringLiteralToCharPtr &&
         !getLangOpts().WritableStrings) {
-      Diag(From->getBeginLoc(),
+      Diag(FromOld->getBeginLoc(),
            getLangOpts().CPlusPlus11
                ? diag::ext_deprecated_string_literal_conversion
                : diag::warn_deprecated_string_literal_conversion)
           << ToType.getNonReferenceType();
     }
+
+    if (!From)
+      return ExprError();
 
     break;
   }

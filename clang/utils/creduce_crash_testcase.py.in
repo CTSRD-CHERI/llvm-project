@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+import os
+import sys
+
+real_script = "@CREDUCE_CRASH_TESTCASE_SCRIPT@"
+bindir = "@CMAKE_BINARY_DIR@/bin"
+os.execv(real_script, [real_script, "--bindir", bindir] + sys.argv[1:])

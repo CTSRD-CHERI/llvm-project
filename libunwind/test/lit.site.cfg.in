@@ -24,6 +24,8 @@ config.use_target               = len("@LIBUNWIND_TARGET_TRIPLE@") > 0
 config.sysroot                  = "@LIBUNWIND_SYSROOT@"
 config.gcc_toolchain            = "@LIBUNWIND_GCC_TOOLCHAIN@"
 config.cxx_ext_threads          = "@LIBUNWIND_BUILD_EXTERNAL_THREAD_LIBRARY@"
+# Avoid pulling in the C++ standard library and instead add -nodefaultlibs
+config.cxx_stdlib_under_test    = "cxx_default"
 
 # Let the main config do the real work.
 lit_config.load_config(config, "@LIBUNWIND_SOURCE_DIR@/test/lit.cfg")

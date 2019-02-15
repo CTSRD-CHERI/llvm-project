@@ -79,6 +79,9 @@ bool elf::link(ArrayRef<const char *> Args, bool CanExitEarly,
   errorHandler().ErrorLimitExceededMsg =
       "too many errors emitted, stopping now (use "
       "-error-limit=0 to see all errors)";
+  errorHandler().WarningLimitExceededMsg =
+      "too many warnings emitted, stopping now (use "
+      "-warning-limit=0 to see all warnings)\n";
   errorHandler().ErrorOS = &Error;
   errorHandler().ExitEarly = CanExitEarly;
   errorHandler().ColorDiagnostics = Error.has_colors();
@@ -132,6 +135,7 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(StringRef Emul) {
           .Case("elf32lriscv", {ELF32LEKind, EM_RISCV})
           .Case("elf32ppc", {ELF32BEKind, EM_PPC})
           .Case("elf64btsmip", {ELF64BEKind, EM_MIPS})
+          .Case("elf64btsmip_cheri", {ELF64BEKind, EM_MIPS})
           .Case("elf64ltsmip", {ELF64LEKind, EM_MIPS})
           .Case("elf64lriscv", {ELF64LEKind, EM_RISCV})
           .Case("elf64ppc", {ELF64BEKind, EM_PPC64})
@@ -311,6 +315,9 @@ static void checkOptions() {
     if (Config->Pie)
       error("-r and -pie may not be used together");
   }
+  if (Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap)
+    error("local-cap-relocs=cbuildcap is not implemented yet");
+  assert(Config->PreemptibleCapRelocsMode != CapRelocsMode::CBuildCap);
 
   if (Config->ExecuteOnly) {
     if (Config->EMachine != EM_AARCH64)
@@ -346,11 +353,11 @@ static bool getZFlag(opt::InputArgList &Args, StringRef K1, StringRef K2,
 }
 
 static bool isKnownZFlag(StringRef S) {
-  return S == "combreloc" || S == "copyreloc" || S == "defs" ||
+  return S == "captabledebug" || S == "combreloc" || S == "copyreloc" || S == "defs" ||
          S == "execstack" || S == "global" || S == "hazardplt" ||
          S == "initfirst" || S == "interpose" ||
          S == "keep-text-section-prefix" || S == "lazy" || S == "muldefs" ||
-         S == "nocombreloc" || S == "nocopyreloc" || S == "nodefaultlib" ||
+         S == "nocaptabledebug" || S == "nocombreloc" || S == "nocopyreloc" || S == "nodefaultlib" ||
          S == "nodelete" || S == "nodlopen" || S == "noexecstack" ||
          S == "nokeep-text-section-prefix" || S == "norelro" || S == "notext" ||
          S == "now" || S == "origin" || S == "relro" || S == "retpolineplt" ||
@@ -371,6 +378,7 @@ void LinkerDriver::main(ArrayRef<const char *> ArgsArr) {
 
   // Interpret this flag early because error() depends on them.
   errorHandler().ErrorLimit = args::getInteger(Args, OPT_error_limit, 20);
+  errorHandler().WarningLimit = args::getInteger(Args, OPT_warning_limit, 20);
 
   // Handle -help
   if (Args.hasArg(OPT_help)) {
@@ -524,6 +532,52 @@ static DiscardPolicy getDiscard(opt::InputArgList &Args) {
   if (Arg->getOption().getID() == OPT_discard_locals)
     return DiscardPolicy::Locals;
   return DiscardPolicy::None;
+}
+
+static CapRelocsMode getPreemptibleCapRelocsMode(opt::InputArgList &Args) {
+  auto *Arg = Args.getLastArg(OPT_preemptible_caprelocs_legacy,
+                              OPT_preemptible_caprelocs_elf);
+  // The default behaviour is to emit R_CHERI_CAPABILITY relocations for
+  // preemptible symbols
+  if (!Arg)
+    return CapRelocsMode::ElfReloc;
+  if (Arg->getOption().getID() == OPT_preemptible_caprelocs_legacy) {
+    return CapRelocsMode::Legacy;
+  } else if (Arg->getOption().getID() == OPT_preemptible_caprelocs_elf) {
+    return CapRelocsMode::ElfReloc;
+  }
+  llvm_unreachable("Invalid arg");
+}
+
+static CapTableScopePolicy getCapTableScope(opt::InputArgList &Args) {
+  auto *Arg = Args.getLastArg(OPT_captable_scope_all, OPT_captable_scope_file,
+                              OPT_captable_scope_function);
+  // The default behaviour is to use one captable per DSO as the others modes
+  // require PLT stubs even for intra-library calls
+  if (!Arg || Arg->getOption().getID() == OPT_captable_scope_all) {
+    return CapTableScopePolicy::All;
+  } else if (Arg->getOption().getID() == OPT_captable_scope_file) {
+    return CapTableScopePolicy::File;
+  } else if (Arg->getOption().getID() == OPT_captable_scope_function) {
+    return CapTableScopePolicy::Function;
+  }
+  llvm_unreachable("Invalid arg");
+}
+
+static CapRelocsMode getLocalCapRelocsMode(opt::InputArgList &Args) {
+  auto *Arg =
+      Args.getLastArg(OPT_local_caprelocs_cbuildcap, OPT_local_caprelocs_elf,
+                      OPT_local_caprelocs_cbuildcap);
+  if (!Arg) // TODO: change default to CBuildCap (at least for non-PIC)
+    return CapRelocsMode::Legacy;
+  if (Arg->getOption().getID() == OPT_local_caprelocs_legacy) {
+    return CapRelocsMode::Legacy;
+  } else if (Arg->getOption().getID() == OPT_local_caprelocs_elf) {
+    return CapRelocsMode::ElfReloc;
+  } else if (Arg->getOption().getID() == OPT_local_caprelocs_cbuildcap) {
+    return CapRelocsMode::CBuildCap;
+  }
+  llvm_unreachable("Invalid arg");
 }
 
 static StringRef getDynamicLinker(opt::InputArgList &Args) {
@@ -757,9 +811,11 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Args.hasFlag(OPT_allow_multiple_definition,
                    OPT_no_allow_multiple_definition, false) ||
       hasZOption(Args, "muldefs");
+  Config->AllowUndefinedCapRelocs = Args.hasArg(OPT_allow_undefined_cap_relocs);
   Config->AuxiliaryList = args::getStrings(Args, OPT_auxiliary);
   Config->Bsymbolic = Args.hasArg(OPT_Bsymbolic);
   Config->BsymbolicFunctions = Args.hasArg(OPT_Bsymbolic_functions);
+  Config->CapTableScope = getCapTableScope(Args);
   Config->CheckSections =
       Args.hasFlag(OPT_check_sections, OPT_no_check_sections, true);
   Config->Chroot = Args.getLastArgValue(OPT_chroot);
@@ -797,6 +853,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->IgnoreFunctionAddressEquality =
       Args.hasArg(OPT_ignore_function_address_equality);
   Config->Init = Args.getLastArgValue(OPT_init, "_init");
+  Config->LocalCapRelocsMode = getLocalCapRelocsMode(Args);
   Config->LTOAAPipeline = Args.getLastArgValue(OPT_lto_aa_pipeline);
   Config->LTODebugPassManager = Args.hasArg(OPT_lto_debug_pass_manager);
   Config->LTONewPassManager = Args.hasArg(OPT_lto_new_pass_manager);
@@ -819,18 +876,24 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->OrphanHandling = getOrphanHandling(Args);
   Config->OutputFile = Args.getLastArgValue(OPT_o);
   Config->Pie = Args.hasFlag(OPT_pie, OPT_no_pie, false);
+  Config->PreemptibleCapRelocsMode = getPreemptibleCapRelocsMode(Args);
   Config->PrintIcfSections =
       Args.hasFlag(OPT_print_icf_sections, OPT_no_print_icf_sections, false);
   Config->PrintGcSections =
       Args.hasFlag(OPT_print_gc_sections, OPT_no_print_gc_sections, false);
+  Config->ProcessCapRelocs = Args.hasFlag(OPT_process_cap_relocs,
+                                          OPT_no_process_cap_relocs, true);
   Config->Rpath = getRpath(Args);
   Config->Relocatable = Args.hasArg(OPT_relocatable);
   Config->SaveTemps = Args.hasArg(OPT_save_temps);
+  assert(Config->SearchPaths.empty() && "Should not be set yet!");
   Config->SearchPaths = args::getStrings(Args, OPT_library_path);
   Config->SectionStartMap = getSectionStartMap(Args);
   Config->Shared = Args.hasArg(OPT_shared);
   Config->SingleRoRx = Args.hasArg(OPT_no_rosegment);
   Config->SoName = Args.getLastArgValue(OPT_soname);
+  Config->SortCapRelocs =
+      Args.hasFlag(OPT_sort_cap_relocs, OPT_no_sort_cap_relocs, true);
   Config->SortSection = getSortSection(Args);
   Config->SplitStackAdjustSize = args::getInteger(Args, OPT_split_stack_adjust_size, 16384);
   Config->Strip = getStrip(Args);
@@ -859,6 +922,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
   Config->UseAndroidRelrTags = Args.hasFlag(
       OPT_use_android_relr_tags, OPT_no_use_android_relr_tags, false);
   Config->UnresolvedSymbols = getUnresolvedSymbolPolicy(Args);
+  Config->VerboseCapRelocs = Args.hasArg(OPT_verbose_cap_relocs);
   Config->WarnBackrefs =
       Args.hasFlag(OPT_warn_backrefs, OPT_no_warn_backrefs, false);
   Config->WarnCommon = Args.hasFlag(OPT_warn_common, OPT_no_warn_common, false);
@@ -866,6 +930,7 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
       Args.hasFlag(OPT_warn_ifunc_textrel, OPT_no_warn_ifunc_textrel, false);
   Config->WarnSymbolOrdering =
       Args.hasFlag(OPT_warn_symbol_ordering, OPT_no_warn_symbol_ordering, true);
+  Config->ZCapTableDebug = getZFlag(Args, "captabledebug", "nocaptabledebug", false);
   Config->ZCombreloc = getZFlag(Args, "combreloc", "nocombreloc", true);
   Config->ZCopyreloc = getZFlag(Args, "copyreloc", "nocopyreloc", true);
   Config->ZExecstack = getZFlag(Args, "execstack", "noexecstack", false);
@@ -914,6 +979,9 @@ void LinkerDriver::readConfigs(opt::InputArgList &Args) {
     StringRef S = Arg->getValue();
     std::tie(Config->EKind, Config->EMachine, Config->OSABI) =
         parseEmulation(S);
+
+    Config->setIsCheriABI(S == "elf64btsmip_cheri_fbsd");
+    // TODO: add CHERI128 or CHERI256 flags (command line option?)
     Config->MipsN32Abi = (S == "elf32btsmipn32" || S == "elf32ltsmipn32");
     Config->Emulation = S;
   }
@@ -1162,7 +1230,10 @@ void LinkerDriver::inferMachineType() {
     Config->EKind = F->EKind;
     Config->EMachine = F->EMachine;
     Config->OSABI = F->OSABI;
-    Config->MipsN32Abi = Config->EMachine == EM_MIPS && isMipsN32Abi(F);
+    if (F->EMachine == EM_MIPS) {
+      Config->MipsN32Abi = isMipsN32Abi(F);
+      Config->setIsCheriABI((F->EFlags & EF_MIPS_ABI) == EF_MIPS_ABI_CHERIABI);
+    }
     return;
   }
   error("target emulation unknown: -m or at least one .o file required");
@@ -1442,6 +1513,8 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Target = getTarget();
   InX<ELFT>::VerSym = nullptr;
   InX<ELFT>::VerNeed = nullptr;
+  InX<ELFT>::CapRelocs = nullptr;
+  InX<ELFT>::MipsAbiFlags = nullptr;
 
   Config->MaxPageSize = getMaxPageSize(Args);
   Config->ImageBase = getImageBase(Args);
@@ -1493,7 +1566,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   // We also need one if any shared libraries are used and for pie executables
   // (probably because the dynamic linker needs it).
   Config->HasDynSymTab =
-      !SharedFiles.empty() || Config->Pic || Config->ExportDynamic;
+      !SharedFiles.empty() || Config->Pic || (Config->ExportDynamic && !Config->Static);
 
   // Some symbols (such as __ehdr_start) are defined lazily only when there
   // are undefined symbols for them, so we add these to trigger that logic.
@@ -1618,6 +1691,19 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
       warn("lld uses blx instruction, no object with architecture supporting "
            "feature detected");
   }
+
+  if (Config->EMachine == EM_MIPS) {
+    // Compute the size of a CHERI capability based on the MIPS ABI flags:
+    if ((Config->EFlags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI128)
+      Config->CapabilitySize = 16;
+    if ((Config->EFlags & EF_MIPS_MACH) == EF_MIPS_MACH_CHERI256)
+      Config->CapabilitySize = 32;
+    if (errorCount())
+      return;
+  }
+  // CapabilitySize must be set if we are targeting the purecap ABI
+  if (Config->isCheriABI())
+    assert(Config->CapabilitySize > 0);
 
   // This adds a .comment section containing a version string. We have to add it
   // before mergeSections because the .comment section is a mergeable section.

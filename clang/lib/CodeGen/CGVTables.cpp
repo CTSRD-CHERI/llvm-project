@@ -652,7 +652,7 @@ void CodeGenVTables::addVTableComponent(
       llvm::Constant *fn = CGM.CreateRuntimeFunction(fnTy, name);
       if (auto f = dyn_cast<llvm::Function>(fn))
         f->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
-      return llvm::ConstantExpr::getBitCast(fn, CGM.Int8PtrTy);
+      return llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(fn, CGM.Int8PtrTy);
     };
 
     llvm::Constant *fnPtr;
@@ -685,7 +685,8 @@ void CodeGenVTables::addVTableComponent(
       fnPtr = CGM.GetAddrOfFunction(GD, fnTy, /*ForVTable=*/true);
     }
 
-    fnPtr = llvm::ConstantExpr::getBitCast(fnPtr, CGM.Int8PtrTy);
+    fnPtr = llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(fnPtr,
+                                                                 CGM.Int8PtrTy);
     builder.add(fnPtr);
     return;
   }

@@ -27,6 +27,7 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>    // std::sort
@@ -302,7 +303,17 @@ static Address emitVoidPtrDirectVAArg(CodeGenFunction &CGF,
   // If the CC aligns values higher than the slot size, do so if needed.
   Address Addr = Address::invalid();
   if (AllowHigherAlign && DirectAlign > SlotSize) {
-    Addr = Address(emitRoundPointerUpToAlignment(CGF, Ptr, DirectAlign),
+    llvm::Value *PtrAsInt = Ptr;
+    if (CGF.getTarget().SupportsCapabilities() &&
+        CGF.CGM.getDataLayout().isFatPointer(Ptr->getType())) {
+      PtrAsInt = CGF.getPointerAddress(PtrAsInt);
+      PtrAsInt = CGF.Builder.CreateAdd(PtrAsInt,
+            llvm::ConstantInt::get(CGF.IntPtrTy, DirectAlign.getQuantity() - 1));
+      PtrAsInt = CGF.Builder.CreateAnd(PtrAsInt,
+               llvm::ConstantInt::get(CGF.IntPtrTy, -DirectAlign.getQuantity()));
+      Addr = Address(CGF.setPointerAddress(Ptr, PtrAsInt), DirectAlign);
+    } else
+      Addr = Address(emitRoundPointerUpToAlignment(CGF, Ptr, DirectAlign),
                                                  DirectAlign);
   } else {
     Addr = Address(Ptr, SlotSize);
@@ -452,6 +463,29 @@ llvm::Value *TargetCodeGenInfo::performAddrSpaceCast(
   if (auto *C = dyn_cast<llvm::Constant>(Src))
     return performAddrSpaceCast(CGF.CGM, C, SrcAddr, DestAddr, DestTy);
   return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Src, DestTy);
+}
+
+unsigned TargetCodeGenInfo::getAddressSpaceForType(QualType DestTy,
+                                                   ASTContext& Context) const {
+  if (DestTy->isCHERICapabilityType(Context)) {
+    return getCHERICapabilityAS();
+  }
+  return Context.getTargetAddressSpace(DestTy.getQualifiers());
+}
+
+llvm::Value *TargetCodeGenInfo::getPointerAddress(CodeGen::CodeGenFunction &CGF,
+                                                  llvm::Value *V,
+                                                  const Twine &Name) const {
+  assert(isa<llvm::PointerType>(V->getType()));
+  return CGF.Builder.CreatePtrToInt(V, CGF.PtrDiffTy);
+}
+
+bool TargetCodeGenInfo::canMarkAsNonNull(QualType DestTy, ASTContext& Context) const {
+  unsigned AS = getAddressSpaceForType(DestTy, Context);
+  if (AS == 0 || (Context.getTargetInfo().SupportsCapabilities() &&
+                  AS == getCHERICapabilityAS()))
+    return true;
+  return false;
 }
 
 llvm::Constant *
@@ -625,7 +659,7 @@ Address EmitVAArgInstr(CodeGenFunction &CGF, Address VAListAddr, QualType Ty,
     CharUnits TyAlignForABI = TyInfo.second;
 
     llvm::Type *BaseTy =
-        llvm::PointerType::getUnqual(CGF.ConvertTypeForMem(Ty));
+        CGF.CGM.getPointerInDefaultAS(CGF.ConvertTypeForMem(Ty));
     llvm::Value *Addr =
         CGF.Builder.CreateVAArg(VAListAddr.getPointer(), BaseTy);
     return Address(Addr, TyAlignForABI);
@@ -1193,7 +1227,7 @@ void X86_32TargetCodeGenInfo::addReturnRegisterOutputs(
 
   // Coerce the integer by bitcasting the return slot pointer.
   ReturnSlot.setAddress(CGF.Builder.CreateBitCast(ReturnSlot.getAddress(),
-                                                  CoerceTy->getPointerTo()));
+                                                  CoerceTy->getPointerTo(getDefaultAS())));
   ResultRegDests.push_back(ReturnSlot);
 
   rewriteInputConstraintReferences(NumOutputs, 1, AsmString);
@@ -3635,7 +3669,7 @@ static Address EmitX86_64VAArgFromMemory(CodeGenFunction &CGF,
   llvm::Type *LTy = CGF.ConvertTypeForMem(Ty);
   llvm::Value *Res =
     CGF.Builder.CreateBitCast(overflow_arg_area,
-                              llvm::PointerType::getUnqual(LTy));
+                              CGF.CGM.getPointerInDefaultAS(LTy));
 
   // AMD64-ABI 3.5.7p5: Step 9. Set l->overflow_arg_area to:
   // l->overflow_arg_area + sizeof(type).
@@ -3743,8 +3777,8 @@ Address X86_64ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
     llvm::Type *TyHi = ST->getElementType(1);
     assert((TyLo->isFPOrFPVectorTy() ^ TyHi->isFPOrFPVectorTy()) &&
            "Unexpected ABI info for mixed regs");
-    llvm::Type *PTyLo = llvm::PointerType::getUnqual(TyLo);
-    llvm::Type *PTyHi = llvm::PointerType::getUnqual(TyHi);
+    llvm::Type *PTyLo = CGF.CGM.getPointerInDefaultAS(TyLo);
+    llvm::Type *PTyHi = CGF.CGM.getPointerInDefaultAS(TyHi);
     llvm::Value *GPAddr = CGF.Builder.CreateGEP(RegSaveArea, gp_offset);
     llvm::Value *FPAddr = CGF.Builder.CreateGEP(RegSaveArea, fp_offset);
     llvm::Value *RegLoAddr = TyLo->isFPOrFPVectorTy() ? FPAddr : GPAddr;
@@ -5245,7 +5279,7 @@ Address AArch64ABIInfo::EmitAAPCSVAArg(Address VAListAddr,
 
   llvm::Type *BaseTy = CGF.ConvertType(Ty);
   if (IsIndirect)
-    BaseTy = llvm::PointerType::getUnqual(BaseTy);
+    BaseTy = CGF.CGM.getPointerInDefaultAS(BaseTy);
   else if (AI.getCoerceToType())
     BaseTy = AI.getCoerceToType();
 
@@ -5369,7 +5403,7 @@ Address AArch64ABIInfo::EmitAAPCSVAArg(Address VAListAddr,
   if (IsIndirect) {
     // If it's been passed indirectly (actually a struct), whatever we find from
     // stored registers or on the stack will actually be a struct **.
-    MemTy = llvm::PointerType::getUnqual(MemTy);
+    MemTy = CGF.CGM.getPointerInDefaultAS(MemTy);
   }
 
   const Type *Base = nullptr;
@@ -6547,7 +6581,7 @@ Address SystemZABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   CharUnits UnpaddedSize;
   CharUnits DirectAlign;
   if (IsIndirect) {
-    DirectTy = llvm::PointerType::getUnqual(DirectTy);
+    DirectTy = CGF.CGM.getPointerInDefaultAS(DirectTy);
     UnpaddedSize = DirectAlign = CharUnits::fromQuantity(8);
   } else {
     if (AI.getCoerceToType())
@@ -6787,8 +6821,11 @@ void MSP430TargetCodeGenInfo::setTargetAttributes(
 //===----------------------------------------------------------------------===//
 
 namespace {
+
+
 class MipsABIInfo : public ABIInfo {
   bool IsO32;
+  CodeGenModule &CGM;
   unsigned MinABIStackAlignInBytes, StackAlignInBytes;
   void CoerceToIntArgs(uint64_t TySize,
                        SmallVectorImpl<llvm::Type *> &ArgList) const;
@@ -6796,9 +6833,15 @@ class MipsABIInfo : public ABIInfo {
   llvm::Type* returnAggregateInRegs(QualType RetTy, uint64_t Size) const;
   llvm::Type* getPaddingType(uint64_t Align, uint64_t Offset) const;
 public:
-  MipsABIInfo(CodeGenTypes &CGT, bool _IsO32) :
-    ABIInfo(CGT), IsO32(_IsO32), MinABIStackAlignInBytes(IsO32 ? 4 : 8),
-    StackAlignInBytes(IsO32 ? 8 : 16) {}
+  MipsABIInfo(CodeGenTypes &CGT, bool _IsO32, CodeGenModule &_CGM) :
+    ABIInfo(CGT),
+    IsO32(_IsO32), CGM(_CGM), MinABIStackAlignInBytes(IsO32 ? 4 : 8) {
+      const TargetInfo& TI = _CGM.getTarget();
+      if (TI.areAllPointersCapabilities())
+        StackAlignInBytes = TI.getCHERICapabilityWidth();
+      else
+        StackAlignInBytes = (IsO32 ? 8 : 16);
+  }
 
   ABIArgInfo classifyReturnType(QualType RetTy) const;
   ABIArgInfo classifyArgumentType(QualType RetTy, uint64_t &Offset) const;
@@ -6810,13 +6853,81 @@ public:
 
 class MIPSTargetCodeGenInfo : public TargetCodeGenInfo {
   unsigned SizeOfUnwindException;
+  mutable llvm::Function *GetOffset = nullptr;
+  mutable llvm::Function *SetOffset = nullptr;
+  mutable llvm::Function *SetAddr = nullptr;
+  mutable llvm::Function *GetBase = nullptr;
+  mutable llvm::Function *GetAddress = nullptr;
+  mutable llvm::Function *SetBounds = nullptr;
+  mutable llvm::PointerType *I8Cap = nullptr;
+  llvm::PointerType *getI8CapTy(CodeGen::CodeGenFunction &CGF) const {
+    if (!I8Cap)
+      I8Cap = llvm::PointerType::get(CGF.Int8Ty, getCHERICapabilityAS());
+    return I8Cap;
+  }
 public:
-  MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32)
-    : TargetCodeGenInfo(new MipsABIInfo(CGT, IsO32)),
+  MIPSTargetCodeGenInfo(CodeGenTypes &CGT, bool IsO32, CodeGenModule &CGM)
+    : TargetCodeGenInfo(new MipsABIInfo(CGT, IsO32, CGM)),
       SizeOfUnwindException(IsO32 ? 24 : 32) {}
 
   int getDwarfEHStackPointer(CodeGen::CodeGenModule &CGM) const override {
     return 29;
+  }
+
+  llvm::Value *getPointerOffset(CodeGen::CodeGenFunction &CGF,
+                                        llvm::Value *V) const override {
+    if (!GetOffset)
+      GetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_get);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
+    return CGF.Builder.CreateCall(GetOffset, V);
+  }
+
+  llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &CGF,
+          llvm::Value *Ptr, llvm::Value *Offset) const override {
+    if (!SetOffset)
+      SetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_set);
+    llvm::Type *DstTy = Ptr->getType();
+    auto &B = CGF.Builder;
+    Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    return B.CreateBitCast(B.CreateCall(SetOffset, {Ptr, Offset}), DstTy);
+  }
+
+  llvm::Value *setPointerAddress(CodeGen::CodeGenFunction &CGF,
+                                 llvm::Value *Ptr,
+                                 llvm::Value *Offset) const override {
+    if (!SetAddr)
+      SetAddr = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_set);
+    llvm::Type *DstTy = Ptr->getType();
+    auto &B = CGF.Builder;
+    Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    return B.CreateBitCast(B.CreateCall(SetAddr, {Ptr, Offset}), DstTy);
+  }
+
+  llvm::Value *setPointerBounds(CodeGen::CodeGenFunction &CGF, llvm::Value *Ptr,
+                                llvm::Value *Size,
+                                const llvm::Twine &Name) const override {
+    if (!SetBounds)
+      SetBounds = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_bounds_set);
+    llvm::Type *DstTy = Ptr->getType();
+    auto &B = CGF.Builder;
+    Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    return B.CreateBitCast(B.CreateCall(SetBounds, {Ptr, Size}), DstTy, Name);
+  }
+
+  llvm::Value *getPointerBase(CodeGen::CodeGenFunction &CGF,
+                              llvm::Value *V) const override {
+    if (!GetBase)
+      GetBase = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_base_get);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
+    return CGF.Builder.CreateCall(GetBase, V);
+  }
+
+  llvm::Value *getPointerAddress(CodeGen::CodeGenFunction &CGF, llvm::Value *V,
+                              const llvm::Twine &Name) const override {
+    if (!GetAddress)
+      GetAddress = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_get);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
+    return CGF.Builder.CreateCall(GetAddress, V, Name);
   }
 
   void setTargetAttributes(const Decl *D, llvm::GlobalValue *GV,
@@ -6873,6 +6984,55 @@ public:
   unsigned getSizeOfUnwindException() const override {
     return SizeOfUnwindException;
   }
+
+  unsigned getDefaultAS() const override {
+    const TargetInfo &Target = getABIInfo().getContext().getTargetInfo();
+    return Target.areAllPointersCapabilities() ? getCHERICapabilityAS() : 0;
+  }
+  unsigned getTlsAddressSpace() const override {
+    const TargetInfo &Target = getABIInfo().getContext().getTargetInfo();
+    if (Target.areAllPointersCapabilities()) {
+      // For the legacy ABI we still need rdhwr29 for TLS (which is AS0)
+      if (!llvm::MCTargetOptions::cheriUsesCapabilityTls())
+        return 0;
+      return getCHERICapabilityAS();
+    }
+    return getDefaultAS();
+  }
+  unsigned getCHERICapabilityAS() const override {
+    return 200;
+  }
+
+  bool cheriCapabilityAtomicNeedsLibcall(AtomicExpr::AtomicOp Op) const override {
+    switch (Op) {
+    case AtomicExpr::AO__c11_atomic_init:
+    case AtomicExpr::AO__atomic_load:
+    case AtomicExpr::AO__atomic_load_n:
+    case AtomicExpr::AO__c11_atomic_load:
+    case AtomicExpr::AO__c11_atomic_store:
+    case AtomicExpr::AO__atomic_store:
+    case AtomicExpr::AO__atomic_store_n:
+    case AtomicExpr::AO__c11_atomic_exchange:
+    case AtomicExpr::AO__atomic_exchange:
+    case AtomicExpr::AO__atomic_exchange_n:
+    case AtomicExpr::AO__c11_atomic_compare_exchange_strong:
+    case AtomicExpr::AO__c11_atomic_compare_exchange_weak:
+    case AtomicExpr::AO__atomic_compare_exchange:
+    case AtomicExpr::AO__atomic_compare_exchange_n:
+      return false;
+    case AtomicExpr::AO__atomic_fetch_add:
+    case AtomicExpr::AO__atomic_fetch_sub:
+    case AtomicExpr::AO__atomic_add_fetch:
+    case AtomicExpr::AO__atomic_sub_fetch:
+    case AtomicExpr::AO__c11_atomic_fetch_add:
+    case AtomicExpr::AO__c11_atomic_fetch_sub:
+      return true; // TODO: allow emitting this without a libcall
+
+    default:
+      llvm_unreachable("Atomic op should not be supported for capabilities");
+      return true;
+    }
+  }
 };
 }
 
@@ -6907,8 +7067,22 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
 
   const RecordType *RT = Ty->getAs<RecordType>();
 
+  // On CHERI, we must pass unions containing capabilities in capability
+  // registers.  Otherwise, pass them as integers.
+  if (RT &&
+      (RT->isUnionType() && getContext().containsCapabilities(RT->getDecl()))
+      && getTarget().SupportsCapabilities())
+    return llvm::Type::getInt8Ty(getVMContext())->getPointerTo(
+                            CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
+
   // Unions/vectors are passed in integer registers.
   if (!RT || !RT->isStructureOrClassType()) {
+    const TargetInfo &Target = getContext().getTargetInfo();
+    if (Target.areAllPointersCapabilities()) {
+      if (Ty->isMemberFunctionPointerType()) {
+        return llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy);
+      }
+    }
     CoerceToIntArgs(TySize, ArgList);
     return llvm::StructType::get(getVMContext(), ArgList);
   }
@@ -6917,9 +7091,43 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
   const ASTRecordLayout &Layout = getContext().getASTRecordLayout(RD);
   assert(!(TySize % 8) && "Size of structure must be multiple of 8.");
 
+
   uint64_t LastOffset = 0;
-  unsigned idx = 0;
   llvm::IntegerType *I64 = llvm::IntegerType::get(getVMContext(), 64);
+  unsigned CapSize = getTarget().getCHERICapabilityWidth();
+
+  // If this is a C++ record, look for any capabilities in base classes first
+  if (const CXXRecordDecl *CXXRD = dyn_cast<CXXRecordDecl>(RD)) {
+    for (const auto &I : CXXRD->bases()) {
+      unsigned idx = 0;
+      RecordDecl *BRD = I.getType()->getAs<RecordType>()->getDecl();
+      const ASTRecordLayout &BaseLayout = getContext().getASTRecordLayout(BRD);
+      for (RecordDecl::field_iterator i = BRD->field_begin(), e = BRD->field_end();
+           i != e; ++i, ++idx) {
+        const QualType Ty = i->getType();
+        uint64_t Offset = BaseLayout.getFieldOffset(idx);
+        if (const RecordType *FRT = Ty->getAs<RecordType>()) {
+          if (getContext().containsCapabilities(FRT->getDecl())) {
+            uint64_t FieldSize = getContext().getTypeSize(Ty);
+            LastOffset = Offset + FieldSize;
+            ArgList.push_back(HandleAggregates(Ty, FieldSize));
+            continue;
+          }
+        }
+        if (!Ty->isConstantArrayType() && Ty->isCHERICapabilityType(getContext())) {
+          // Add ((Offset - LastOffset) / 64) args of type i64.
+          for (unsigned j = (Offset - LastOffset) / 64; j > 0; --j)
+            ArgList.push_back(I64);
+          const uint64_t TySize = getContext().getTypeSize(Ty);
+          LastOffset = Offset + TySize;
+          assert(CapSize == TySize || (Ty->isMemberFunctionPointerType() && TySize == 2 * CapSize));
+          ArgList.push_back(CGT.ConvertType(Ty));
+          continue;
+        }
+      }
+    }
+  }
+  unsigned idx = 0;
 
   // Iterate over fields in the struct/class and check if there are any aligned
   // double fields.
@@ -6927,11 +7135,50 @@ llvm::Type* MipsABIInfo::HandleAggregates(QualType Ty, uint64_t TySize) const {
        i != e; ++i, ++idx) {
     const QualType Ty = i->getType();
     const BuiltinType *BT = Ty->getAs<BuiltinType>();
+    uint64_t Offset = Layout.getFieldOffset(idx);
+
+    if (const RecordType *FRT = Ty->getAs<RecordType>()) {
+      if (getContext().containsCapabilities(FRT->getDecl())) {
+        uint64_t FieldSize = getContext().getTypeSize(Ty);
+        LastOffset = Layout.getFieldOffset(idx) + FieldSize;
+        ArgList.push_back(HandleAggregates(Ty, FieldSize));
+        continue;
+      }
+    }
+    if (!Ty->isConstantArrayType() && Ty->isCHERICapabilityType(getContext())) {
+      // Add ((Offset - LastOffset) / 64) args of type i64.
+      for (unsigned j = (Offset - LastOffset) / 64; j > 0; --j)
+        ArgList.push_back(I64);
+      const uint64_t TySize = getContext().getTypeSize(Ty);
+      LastOffset = Layout.getFieldOffset(idx) + TySize;
+      assert(CapSize == TySize || (Ty->isMemberFunctionPointerType() && TySize == 2 * CapSize));
+      ArgList.push_back(CGT.ConvertType(Ty));
+      continue;
+    }
+    if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(Ty)) {
+      auto ElementType = CAT->getElementType();
+      unsigned Elements = CAT->getSize().getLimitedValue();
+      if (ElementType->isCHERICapabilityType(getContext())) {
+        llvm::Type *ElTy = CGT.ConvertType(ElementType);
+        for (unsigned i=0 ; i<Elements ; ++i)
+          ArgList.push_back(ElTy);
+        const uint64_t ElemSize = getContext().getTypeSize(ElementType);
+        LastOffset += Elements * ElemSize;
+        assert(CapSize == ElemSize || (Ty->isMemberFunctionPointerType() && ElemSize == 2 * CapSize));
+        continue;
+      } else if (getContext().containsCapabilities(ElementType)) {
+        uint64_t FieldSize = getContext().getTypeSize(ElementType);
+        LastOffset += FieldSize * Elements;
+        auto ElTy = HandleAggregates(ElementType, FieldSize);
+        for (unsigned i=0 ; i<Elements ; ++i)
+          ArgList.push_back(ElTy);
+        continue;
+      }
+    }
 
     if (!BT || BT->getKind() != BuiltinType::Double)
       continue;
 
-    uint64_t Offset = Layout.getFieldOffset(idx);
     if (Offset % 64) // Ignore doubles that are not aligned.
       continue;
 
@@ -6981,6 +7228,28 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
       return getNaturalAlignIndirect(Ty, RAA == CGCXXABI::RAA_DirectInMemory);
     }
 
+    // Use indirect if the aggregate cannot fit into registers for
+    // passing arguments according to the ABI
+    unsigned Threshold = IsO32 ? 16 : 64;
+    const TargetInfo &Target = getContext().getTargetInfo();
+    if (Target.areAllPointersCapabilities()) {
+      // assume we can pass structs up to 8 capabilities in size directly
+      Threshold = 8 * (Target.getCHERICapabilityWidth() / 8);
+    }
+    bool PassIndirect = false;
+    if (getContext().getTypeSizeInChars(Ty) > CharUnits::fromQuantity(Threshold))
+      PassIndirect = true;
+    // For CHERI, also pass C++ classes and structs that contain capabilities
+    // indirectly (for now).
+    // XXXKG: We should revisit passing fields in registers.
+    else if (Ty->isCXXStructureOrClassType() &&
+             Target.SupportsCapabilities() &&
+             getContext().containsCapabilities(Ty))
+      PassIndirect = true;
+    if (PassIndirect)
+      return ABIArgInfo::getIndirect(CharUnits::fromQuantity(Align), true,
+                                     getContext().getTypeAlign(Ty) / 8 > Align);
+
     // If we have reached here, aggregates are passed directly by coercing to
     // another structure type. Padding is inserted if the offset of the
     // aggregate is unaligned.
@@ -6996,8 +7265,12 @@ MipsABIInfo::classifyArgumentType(QualType Ty, uint64_t &Offset) const {
     Ty = EnumTy->getDecl()->getIntegerType();
 
   // All integral types are promoted to the GPR width.
-  if (Ty->isIntegralOrEnumerationType())
+  if (Ty->isIntegralOrEnumerationType() &&
+      !Ty->isCHERICapabilityType(getContext()))
     return extendType(Ty);
+
+  if (Ty->isCHERICapabilityType(getContext()))
+    return ABIArgInfo::getDirect(CGT.ConvertType(Ty));
 
   return ABIArgInfo::getDirect(
       nullptr, 0, IsO32 ? nullptr : getPaddingType(OrigOffset, CurrOffset));
@@ -7022,7 +7295,7 @@ MipsABIInfo::returnAggregateInRegs(QualType RetTy, uint64_t Size) const {
     //
     // Any other composite results are returned in integer registers.
     //
-    if (FieldCnt && (FieldCnt <= 2) && !Layout.getFieldOffset(0)) {
+    if (FieldCnt && (FieldCnt <= 2) && Layout.getFieldOffset(0) == 0) {
       RecordDecl::field_iterator b = RD->field_begin(), e = RD->field_end();
       for (; b != e; ++b) {
         const BuiltinType *BT = b->getType()->getAs<BuiltinType>();
@@ -7040,9 +7313,11 @@ MipsABIInfo::returnAggregateInRegs(QualType RetTy, uint64_t Size) const {
       RTList.clear();
     }
   }
-
-  CoerceToIntArgs(Size, RTList);
-  return llvm::StructType::get(getVMContext(), RTList);
+  // TODO: if containscapabilities
+  // XXXAR: keeping old upstream code here in case I broke something
+  // CoerceToIntArgs(Size, RTList);
+  // return llvm::StructType::get(getVMContext(), RTList);
+  return HandleAggregates(RetTy, Size);
 }
 
 ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
@@ -7070,8 +7345,18 @@ ABIArgInfo MipsABIInfo::classifyReturnType(QualType RetTy) const {
         ArgInfo.setInReg(true);
         return ArgInfo;
       }
+    } else if (getTarget().SupportsCapabilities() &&
+               Size <= getTarget().getCHERICapabilityWidth()) {
+      // On CHERI, we can return unions containing capabilities or
+      // structs containing only one capability directly
+      const RecordType *RT = RetTy->getAs<RecordType>();
+      if (RT && getContext().containsCapabilities(RT->getDecl())) {
+        ABIArgInfo ArgInfo =
+            ABIArgInfo::getDirect(returnAggregateInRegs(RetTy, Size));
+        ArgInfo.setInReg(true);
+        return ArgInfo;
+      }
     }
-
     return getNaturalAlignIndirect(RetTy);
   }
 
@@ -7121,9 +7406,10 @@ Address MipsABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   auto TyInfo = getContext().getTypeInfoInChars(Ty);
 
   // The alignment of things in the argument area is never larger than
-  // StackAlignInBytes.
-  TyInfo.second =
-    std::min(TyInfo.second, CharUnits::fromQuantity(StackAlignInBytes));
+  // StackAlignInBytes for O32.
+  if (IsO32)
+    TyInfo.second =
+      std::min(TyInfo.second, CharUnits::fromQuantity(StackAlignInBytes));
 
   // MinABIStackAlignInBytes is the size of argument slots on the stack.
   CharUnits ArgSlotSize = CharUnits::fromQuantity(MinABIStackAlignInBytes);
@@ -7841,10 +8127,9 @@ llvm::Constant *AMDGPUTargetCodeGenInfo::getNullPointer(
     QualType QT) const {
   if (CGM.getContext().getTargetNullPointerValue(QT) == 0)
     return llvm::ConstantPointerNull::get(PT);
-
-  auto &Ctx = CGM.getContext();
+  // XXXAR: FIXME: remove const_cast here
   auto NPT = llvm::PointerType::get(PT->getElementType(),
-      Ctx.getTargetAddressSpace(LangAS::opencl_generic));
+      const_cast<CodeGen::CodeGenModule &>(CGM).getTargetAddressSpace(LangAS::opencl_generic));
   return llvm::ConstantExpr::getAddrSpaceCast(
       llvm::ConstantPointerNull::get(NPT), PT);
 }
@@ -7856,7 +8141,7 @@ AMDGPUTargetCodeGenInfo::getGlobalVarAddressSpace(CodeGenModule &CGM,
          !(CGM.getLangOpts().CUDA && CGM.getLangOpts().CUDAIsDevice) &&
          "Address space agnostic languages only");
   LangAS DefaultGlobalAS = getLangASFromTargetAS(
-      CGM.getContext().getTargetAddressSpace(LangAS::opencl_global));
+      CGM.getTargetAddressSpace(LangAS::opencl_global));
   if (!D)
     return DefaultGlobalAS;
 
@@ -8149,7 +8434,7 @@ Address SparcV9ABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
 
   CGBuilderTy &Builder = CGF.Builder;
   Address Addr(Builder.CreateLoad(VAListAddr, "ap.cur"), SlotSize);
-  llvm::Type *ArgPtrTy = llvm::PointerType::getUnqual(ArgTy);
+  llvm::Type *ArgPtrTy = CGF.CGM.getPointerInDefaultAS(ArgTy);
 
   auto TypeInfo = getContext().getTypeInfoInChars(Ty);
 
@@ -8513,7 +8798,7 @@ Address XCoreABIInfo::EmitVAArg(CodeGenFunction &CGF, Address VAListAddr,
   llvm::Type *ArgTy = CGT.ConvertType(Ty);
   if (AI.canHaveCoerceToType() && !AI.getCoerceToType())
     AI.setCoerceToType(ArgTy);
-  llvm::Type *ArgPtrTy = llvm::PointerType::getUnqual(ArgTy);
+  llvm::Type *ArgPtrTy = CGF.CGM.getPointerInDefaultAS(ArgTy);
 
   Address Val = Address::invalid();
   CharUnits ArgSize = CharUnits::Zero();
@@ -9255,11 +9540,12 @@ const TargetCodeGenInfo &CodeGenModule::getTargetCodeGenInfo() {
   case llvm::Triple::mipsel:
     if (Triple.getOS() == llvm::Triple::NaCl)
       return SetCGInfo(new PNaClTargetCodeGenInfo(Types));
-    return SetCGInfo(new MIPSTargetCodeGenInfo(Types, true));
+    return SetCGInfo(new MIPSTargetCodeGenInfo(Types, true, *this));
 
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-    return SetCGInfo(new MIPSTargetCodeGenInfo(Types, false));
+  case llvm::Triple::cheri:
+    return SetCGInfo(new MIPSTargetCodeGenInfo(Types, false, *this));
 
   case llvm::Triple::avr:
     return SetCGInfo(new AVRTargetCodeGenInfo(Types));

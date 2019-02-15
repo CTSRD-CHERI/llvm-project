@@ -39,6 +39,7 @@
 #include "ToolChains/OpenBSD.h"
 #include "ToolChains/PS4CPU.h"
 #include "ToolChains/RISCVToolchain.h"
+#include "ToolChains/RTEMS.h"
 #include "ToolChains/Solaris.h"
 #include "ToolChains/TCE.h"
 #include "ToolChains/WebAssembly.h"
@@ -216,6 +217,19 @@ InputArgList Driver::ParseArgStrings(ArrayRef<const char *> ArgStrings,
       ContainsError |= Diags.getDiagnosticLevel(
                            diag::warn_drv_empty_joined_argument,
                            SourceLocation()) > DiagnosticsEngine::Warning;
+    }
+
+    if (A->getOption().matches(options::OPT_mabi_EQ)) {
+      StringRef Value = A->getValue();
+      A->claim();
+      if (Value == "sandbox") {
+        // output a warning that -mabi=sandbox is deprecated and replace with
+        // -mabi=purecap
+        Diag(diag::warn_cheri_sandbox_abi_is_purecap);
+        Args.append(
+            new Arg(Opts->getOption(options::OPT_mabi_EQ), "-mabi=",
+                    A->getIndex(), "purecap"));
+      }
     }
   }
 
@@ -513,6 +527,8 @@ static llvm::Triple computeTargetTriple(const Driver &D,
       if (Target.getEnvironment() == llvm::Triple::GNU ||
           Target.getEnvironment() == llvm::Triple::GNUABIN32)
         Target.setEnvironment(llvm::Triple::GNUABI64);
+    } else if (ABIName == "purecap") {
+      Target.setEnvironment(llvm::Triple::CheriPurecap);
     }
   }
 
@@ -4583,6 +4599,14 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
       break;
     case llvm::Triple::Hurd:
       TC = llvm::make_unique<toolchains::Hurd>(*this, Target, Args);
+      break;
+    case llvm::Triple::RTEMS:
+      if (Target.getVendor() == llvm::Triple::Myriad)
+        TC = llvm::make_unique<toolchains::MyriadToolChain>(*this, Target,
+                                                            Args);
+      else
+        // FIXME: This will probably break the x86 rtems build but should work for MIPS/CHERI
+        TC = llvm::make_unique<toolchains::RTEMS>(*this, Target, Args);
       break;
     default:
       // Of these targets, Hexagon is the only one that might have

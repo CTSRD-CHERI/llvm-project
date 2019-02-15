@@ -152,6 +152,18 @@
 // RUN:   | FileCheck -check-prefix=MIPS-ARCH-OCTEON %s
 // MIPS-ARCH-OCTEON: "-target-cpu" "octeon"
 // MIPS-ARCH-OCTEON: "-target-abi" "n64"
+
+// FIXME: should "-target-cpu" "cheri" also be passed?
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd -### -c %s -mabi=n64 2>&1 \
+// RUN:   | FileCheck -check-prefix=CHERI-ABI-N64 %s
+// CHERI-ABI-N64: "-target-abi" "n64"
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd -### -c %s -mabi=purecap 2>&1 \
+// RUN:   | FileCheck -check-prefix=CHERI-ABI-SANDBOX %s
+// CHERI-ABI-SANDBOX: "-target-abi" "purecap"
+// RUN: %plain_clang_cheri_triple_allowed -target cheri-unknown-freebsd -### -c %s 2>&1 \
+// RUN:   | FileCheck -check-prefix=CHERI-ABI-NONE %s
+// CHERI-ABI-NONE: "-target-abi" "n64"
+
 //
 // RUN: not %clang -target mips64-linux-gnu -c %s \
 // RUN:        -march=mips32 2>&1 \

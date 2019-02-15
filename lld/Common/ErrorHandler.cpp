@@ -114,11 +114,17 @@ void ErrorHandler::warn(const Twine &Msg) {
     error(Msg);
     return;
   }
-
+  static uint64_t WarningCount = 0;
   std::lock_guard<std::mutex> Lock(Mu);
   newline(ErrorOS, Msg);
-  print("warning: ", raw_ostream::MAGENTA);
-  *ErrorOS << Msg << "\n";
+  if (WarningLimit == 0 || WarningCount < WarningLimit) {
+    print("warning: ", raw_ostream::MAGENTA);
+    *ErrorOS << Msg << "\n";
+  } else if (WarningCount == WarningLimit) {
+    print("warning: ", raw_ostream::MAGENTA);
+    *ErrorOS << WarningLimitExceededMsg << "\n";
+  }
+  ++WarningCount;
 }
 
 void ErrorHandler::error(const Twine &Msg) {

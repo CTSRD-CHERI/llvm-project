@@ -72,6 +72,7 @@ public:
     AsLongLong,   // 'll'
     AsQuad,       // 'q' (BSD, deprecated, for 64-bit integer types)
     AsIntMax,     // 'j'
+    AsIntPtr,     // 'P'
     AsSizeT,      // 'z'
     AsPtrDiff,    // 't'
     AsInt32,      // 'I32' (MSVCRT, like __int32)

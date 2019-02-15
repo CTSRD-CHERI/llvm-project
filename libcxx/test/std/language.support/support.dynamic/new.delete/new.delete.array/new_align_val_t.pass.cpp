@@ -94,7 +94,11 @@ int main()
     {
         A* ap = new A[2];
         assert(ap);
+#ifdef __CHERI_PURE_CAPABILITY__
+        assert((unsigned)reinterpret_cast<std::uintptr_t>(ap) % OverAligned == 0);
+#else
         assert(reinterpret_cast<std::uintptr_t>(ap) % OverAligned == 0);
+#endif
         assert(A_constructed == 2);
         delete [] ap;
         assert(A_constructed == 0);

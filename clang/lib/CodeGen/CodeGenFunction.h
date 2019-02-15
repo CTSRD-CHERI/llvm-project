@@ -21,6 +21,7 @@
 #include "CodeGenModule.h"
 #include "CodeGenPGO.h"
 #include "EHScopeStack.h"
+#include "TargetInfo.h"
 #include "VarBypassDetector.h"
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/ExprCXX.h"
@@ -2145,6 +2146,14 @@ public:
                             TBAAAccessInfo *TBAAInfo = nullptr);
   LValue EmitLoadOfPointerLValue(Address Ptr, const PointerType *PtrTy);
 
+  // FunctionAddressToCapability - converts function pointer Addr to a
+  // PCC-relative CHERI capability (if CapType is non-null it will also add a
+  // bitcast to that type)
+  static llvm::Value *FunctionAddressToCapability(CodeGenFunction &CGF,
+                                                  llvm::Value *Addr,
+                                                  llvm::Type *CapType = nullptr,
+                                                  bool IsDirectCall = false);
+
   /// CreateTempAlloca - This creates an alloca and inserts it into the entry
   /// block if \p ArraySize is nullptr, otherwise inserts it at the current
   /// insertion point of the builder. The caller is responsible for setting an
@@ -2567,6 +2576,14 @@ public:
   llvm::Value *EmitCXXTypeidExpr(const CXXTypeidExpr *E);
   llvm::Value *EmitDynamicCast(Address V, const CXXDynamicCastExpr *DCE);
   Address EmitCXXUuidofExpr(const CXXUuidofExpr *E);
+
+  /// Emit a pointer cast.  This should be used for all pointer casts and will
+  /// emit a simple bitcast where applicable or a more complex sequence for
+  /// different address spaces.
+  llvm::Value* EmitPointerCast(llvm::Value *From,
+                               QualType FromTy,
+                               QualType ToTy);
+  llvm::Value* EmitPointerCast(llvm::Value *From, llvm::PointerType *ToType);
 
   /// Situations in which we might emit a check for the suitability of a
   ///        pointer or glvalue.
@@ -3517,10 +3534,24 @@ public:
       return CGF.MakeNaturalAlignAddrLValue(ValueAndIsReference.getPointer(),
                                             refExpr->getType());
     }
-
-    llvm::Constant *getValue() const {
+    // XXXAR: the CGF parameter exists to prevent inttoptr instructions
+    // that are lowered incorrectly
+    // See https://github.com/CTSRD-CHERI/llvm/issues/268
+    llvm::Value *getValue(CodeGenFunction &CGF) const {
       assert(!isReference());
-      return ValueAndIsReference.getPointer();
+      llvm::Constant *C = ValueAndIsReference.getPointer();
+      if (auto *PTy = dyn_cast<llvm::PointerType>(C->getType())) {
+        if (auto *CE = dyn_cast<llvm::ConstantExpr>(C)) {
+          if (CE->getOpcode() == llvm::Instruction::IntToPtr &&
+              CGF.CGM.getDataLayout().isFatPointer(PTy)) {
+            return CGF.setCapabilityIntegerValue(
+                llvm::ConstantPointerNull::get(PTy), CE->getOperand(0));
+          }
+        }
+        // TODO: are there any other exprs we need to special case?
+        // assert(!CGF.CGM.getDataLayout().isFatPointer(PTy));
+      }
+      return C;
     }
   };
 
@@ -3670,6 +3701,9 @@ public:
   RValue EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
                                       ReturnValueSlot ReturnValue);
 
+  llvm::Value* EmitCXXMemberPointerAddressOf(const UnaryOperator *uo);
+
+
   RValue EmitCXXOperatorMemberCallExpr(const CXXOperatorCallExpr *E,
                                        const CXXMethodDecl *MD,
                                        ReturnValueSlot ReturnValue);
@@ -3688,6 +3722,10 @@ public:
 
   /// Emit IR for __builtin_os_log_format.
   RValue emitBuiltinOSLogFormat(const CallExpr &E);
+
+  // Emit IR for __builtin_is_aligned/__builtin_is_p2aligned
+  RValue EmitBuiltinIsAligned(const CallExpr *E, bool PowerOfTwo);
+  RValue EmitBuiltinAlignTo(const CallExpr *E, bool PowerOfTwo, bool AlignUp);
 
   llvm::Function *generateBuiltinOSLogHelperFunction(
       const analyze_os_log::OSLogBufferLayout &Layout,
@@ -3738,6 +3776,7 @@ public:
   llvm::Value *BuildVector(ArrayRef<llvm::Value*> Ops);
   llvm::Value *EmitX86BuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitPPCBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
+  llvm::Value *EmitMIPSBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitAMDGPUBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitSystemZBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitNVPTXBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
@@ -3841,6 +3880,21 @@ public:
 
   /// Emits a reference binding to the passed in expression.
   RValue EmitReferenceBindingToExpr(const Expr *E);
+  llvm::Value *setCHERIBoundsOnReference(llvm::Value *Ptr, QualType Ty,
+                                         const Expr *E, SourceLocation Loc);
+  llvm::Value *setCHERIBoundsOnAddrOf(llvm::Value *Ptr, QualType Ty,
+                                      const Expr *E, SourceLocation Loc);
+
+  struct TightenBoundsResult {
+    uint64_t Size;
+    bool IsSubObject = false;
+    bool IsContainerSize = false;
+    ValueDecl* TargetField = nullptr;
+  };
+  Optional<TightenBoundsResult> canTightenCheriBounds(llvm::Value *Ptr,
+                                                      QualType Ty,
+                                                      const Expr *E,
+                                                      bool IsReference = false);
 
   //===--------------------------------------------------------------------===//
   //                           Expression Emission
@@ -4259,6 +4313,51 @@ public:
                     AbstractCallee AC = AbstractCallee(),
                     unsigned ParamsToSkip = 0,
                     EvaluationOrder Order = EvaluationOrder::Default);
+
+  llvm::Value *getPointerOffset(llvm::Value *V) {
+    return getTargetHooks().getPointerOffset(*this, V);
+  }
+  /// Returns the result of casting a __uintcap_t to long:
+  /// This is a getoffset operation by default but if -cheri-uintcap=addr is
+  /// passed we will return the address instead
+  llvm::Value *getCapabilityIntegerValue(llvm::Value *V) {
+    return getLangOpts().getCheriUIntCap() == LangOptions::UIntCap_Addr
+               ? getPointerAddress(V)
+               : getPointerOffset(V);
+  }
+  /// Update a __uintcap_t with a long value:
+  /// This is a getoffset operation by default but if -cheri-uintcap=addr is
+  /// passed we will return the address instead (this may make certain alignment
+  /// code work unchanged)
+  llvm::Value *setCapabilityIntegerValue(llvm::Value *Ptr,
+                                         llvm::Value *NewVal) {
+    return getLangOpts().getCheriUIntCap() == LangOptions::UIntCap_Addr
+               ? setPointerAddress(Ptr, NewVal)
+               : setPointerOffset(Ptr, NewVal);
+  }
+  llvm::Value *setPointerOffset(llvm::Value *Ptr, llvm::Value *Offset) {
+    return getTargetHooks().setPointerOffset(*this, Ptr, Offset);
+  }
+  llvm::Value *setPointerAddress(llvm::Value *Ptr, llvm::Value *Offset) {
+    return getTargetHooks().setPointerAddress(*this, Ptr, Offset);
+  }
+  llvm::Value *getPointerAddress(llvm::Value *V, const llvm::Twine &Name = "") {
+    return getTargetHooks().getPointerAddress(*this, V, Name);
+  }
+  llvm::Value *setPointerBounds(llvm::Value *V, llvm::Value *Size,
+                                SourceLocation Loc, const llvm::Twine &Name,
+                                StringRef Pass, bool isSubObject,
+                                const llvm::Twine &Details = "",
+                                Optional<uint64_t> KnownAlignment = None);
+
+  llvm::Value *setPointerBounds(llvm::Value *V, uint64_t Size,
+                                SourceLocation Loc, const llvm::Twine &Name,
+                                StringRef Pass, bool IsSubObject,
+                                const llvm::Twine &Details = "",
+                                Optional<uint64_t> KnownAlignment = None) {
+    return setPointerBounds(V, llvm::ConstantInt::get(Int64Ty, Size), Loc, Name,
+                            Pass, IsSubObject, Details);
+  }
 
   /// EmitPointerWithAlignment - Given an expression with a pointer type,
   /// emit the value and compute our best estimate of the alignment of the

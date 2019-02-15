@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcpp-no-rtti
+
 // <typeindex>
 
 // struct hash<type_index>

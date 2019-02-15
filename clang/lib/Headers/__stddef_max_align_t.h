@@ -25,6 +25,7 @@
 
 #ifndef __CLANG_MAX_ALIGN_T_DEFINED
 #define __CLANG_MAX_ALIGN_T_DEFINED
+#define _GCC_MAX_ALIGN_T /* Compat with GCC/FreeBSD headers */
 
 #if defined(_MSC_VER)
 typedef double max_align_t;
@@ -37,6 +38,10 @@ typedef struct {
       __attribute__((__aligned__(__alignof__(long long))));
   long double __clang_max_align_nonce2
       __attribute__((__aligned__(__alignof__(long double))));
+#if defined(__CHERI_PURE_CAPABILITY__)
+  void *__clang_max_align_nonce3
+      __attribute__((__aligned__(__alignof__(void *))));
+#endif
 } max_align_t;
 #endif
 

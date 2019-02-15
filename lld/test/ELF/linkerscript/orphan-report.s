@@ -42,7 +42,7 @@
 
 ## Check --orphan-handling=warn reports warnings about orphans.
 # RUN: ld.lld -shared --orphan-handling=warn -o %t.out --script %t.script \
-# RUN:   %t.o 2>&1 -verbose | FileCheck %s --check-prefix=REPORT
+# RUN:   %t.o 2>&1 -verbose -warning-limit=0 | FileCheck %s --check-prefix=REPORT
 
 # RUN: not ld.lld --orphan-handling=foo -o %t.out --script %t.script %t.o 2>&1 \
 # RUN:   | FileCheck %s --check-prefix=UNKNOWN

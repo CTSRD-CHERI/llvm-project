@@ -37,9 +37,9 @@ void g(intptr_t n) {
 // CHECK: [[N:%.+]] = load [[INTPTR_T]], [[INTPTR_T]]* [[N_ADDR]]
 // CHECK: [[BUFFER_ADDR:%.+]] = getelementptr inbounds [[CAP_TYPE1]], [[CAP_TYPE1]]* [[THIS]], i{{.+}} 0, i{{.+}} 1
 // CHECK: [[BUFFER:%.+]] = load [[INTPTR_T]]*, [[INTPTR_T]]** [[BUFFER_ADDR]]
-// CHECK: call i{{.+}}* @llvm.stacksave()
+// CHECK: call i{{.+}}* @llvm.stacksave.p0i8()
 // CHECK: alloca [[INTPTR_T]], [[INTPTR_T]] [[N]]
-// CHECK: call void @llvm.stackrestore(
+// CHECK: call void @llvm.stackrestore.p0i8(
 // CHECK: ret void
 
 template <typename T>
@@ -82,18 +82,18 @@ int main() {
 
 // CHECK: define linkonce_odr {{.*}}void [[F_INT]]([[INTPTR_T]]
 // CHECK: [[SIZE:%.+]] = add
-// CHECK: call i{{.+}}* @llvm.stacksave()
+// CHECK: call i{{.+}}* @llvm.stacksave.p0i8()
 // CHECK: [[BUFFER_ADDR:%.+]] = alloca [[INTPTR_T]], [[INTPTR_T]] [[SIZE]]
 // CHECK: [[CAP_SIZE_REF:%.+]] = getelementptr inbounds [[CAP_TYPE2]], [[CAP_TYPE2]]* [[CAP_ARG:%.+]], i{{.+}} 0, i{{.+}} 0
 // CHECK: store [[INTPTR_T]] [[SIZE]], [[INTPTR_T]]* [[CAP_SIZE_REF]]
 // CHECK: [[CAP_BUFFER_ADDR_REF:%.+]] = getelementptr inbounds [[CAP_TYPE2]], [[CAP_TYPE2]]* [[CAP_ARG]], i{{.+}} 0, i{{.+}} 1
 // CHECK: store [[INTPTR_T]]* [[BUFFER_ADDR]], [[INTPTR_T]]** [[CAP_BUFFER_ADDR_REF]]
 // CHECK: call{{.*}} void [[F_INT_LAMBDA:@.+]]([[CAP_TYPE2]]* [[CAP_ARG]])
-// CHECK: call void @llvm.stackrestore(
+// CHECK: call void @llvm.stackrestore.p0i8(
 // CHECK: ret void
 // CHECK: void [[B_INT]]([[INTPTR_T]]
 // CHECK: [[SIZE1:%.+]] = call {{.*}}[[INTPTR_T]]
-// CHECK: call i{{.+}}* @llvm.stacksave()
+// CHECK: call i{{.+}}* @llvm.stacksave.p0i8()
 // CHECK: [[BUFFER2_ADDR:%.+]] = alloca [[INTPTR_T]], [[INTPTR_T]] [[SIZE1]]
 // CHECK: [[SIZE2:%.+]] = add
 // CHECK: [[BUFFER1_ADDR:%.+]] = alloca [[INTPTR_T]], [[INTPTR_T]]
@@ -108,16 +108,16 @@ int main() {
 // CHECK: [[CAP_BUFFER2_ADDR_REF:%.+]] = getelementptr inbounds [[CAP_TYPE3]], [[CAP_TYPE3]]* [[CAP_ARG]], i{{.+}} 0, i{{.+}} 4
 // CHECK: store [[INTPTR_T]]* [[BUFFER2_ADDR]], [[INTPTR_T]]** [[CAP_BUFFER2_ADDR_REF]]
 // CHECK: call{{.*}} void [[B_INT_LAMBDA:@.+]]([[CAP_TYPE3]]* [[CAP_ARG]])
-// CHECK: call void @llvm.stackrestore(
+// CHECK: call void @llvm.stackrestore.p0i8(
 // CHECK: ret void
 
 // CHECK: define linkonce_odr{{.*}} void [[F_INT_LAMBDA]]([[CAP_TYPE2]]*
 // CHECK: [[THIS:%.+]] = load [[CAP_TYPE2]]*, [[CAP_TYPE2]]**
 // CHECK: [[SIZE_REF:%.+]] = getelementptr inbounds [[CAP_TYPE2]], [[CAP_TYPE2]]* [[THIS]], i{{.+}} 0, i{{.+}} 0
 // CHECK: [[SIZE:%.+]] = load [[INTPTR_T]], [[INTPTR_T]]* [[SIZE_REF]]
-// CHECK: call i{{.+}}* @llvm.stacksave()
+// CHECK: call i{{.+}}* @llvm.stacksave.p0i8()
 // CHECK: alloca [[INTPTR_T]], [[INTPTR_T]] [[SIZE]]
-// CHECK: call void @llvm.stackrestore(
+// CHECK: call void @llvm.stackrestore.p0i8(
 // CHECK: ret void
 
 // CHECK: define linkonce_odr{{.*}} void [[B_INT_LAMBDA]]([[CAP_TYPE3]]*

@@ -1660,6 +1660,20 @@ bool CastExpr::CastConsistency() const {
     assert(getSubExpr()->getType()->isFunctionType());
     goto CheckNoBasePath;
 
+  case CK_CHERICapabilityToPointer:
+    assert(getType()->isPointerType());
+    assert(!getType()->getAs<PointerType>()->isCHERICapability());
+    assert(getSubExpr()->getType()->isPointerType());
+    assert(getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
+    goto CheckNoBasePath;
+
+  case CK_PointerToCHERICapability:
+    assert(getType()->isPointerType());
+    assert(getType()->getAs<PointerType>()->isCHERICapability());
+    assert(getSubExpr()->getType()->isPointerType());
+    assert(!getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
+    goto CheckNoBasePath;
+
   case CK_AddressSpaceConversion: {
     auto Ty = getType();
     auto SETy = getSubExpr()->getType();
@@ -1706,6 +1720,20 @@ bool CastExpr::CastConsistency() const {
   case CK_FixedPointCast:
     assert(!getType()->isBooleanType() && "unheralded conversion to bool");
     goto CheckNoBasePath;
+
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress: {
+    QualType SubType = getSubExpr()->getRealReferenceType();
+    assert(SubType->isIntCapType() ||
+           (SubType->isPointerType() &&
+            SubType->getAs<PointerType>()->isCHERICapability()) ||
+           (SubType->isReferenceType() &&
+            SubType->getAs<ReferenceType>()->isCHERICapability()) ||
+           SubType->isNullPtrType());
+    assert(getType()->isIntegerType());
+    assert(!getType()->isEnumeralType());
+    goto CheckNoBasePath;
+  }
 
   case CK_Dependent:
   case CK_LValueToRValue:
@@ -4294,4 +4322,25 @@ QualType OMPArraySectionExpr::getBaseOriginalType(const Expr *Base) {
     }
   }
   return OriginalTy;
+}
+
+
+QualType Expr::getRealReferenceType() const {
+  const Expr* E = this;
+  // The type of an InitListExpr is void -> if it is a single element one get
+  // the type of that element
+  if (const InitListExpr* ILE = dyn_cast<const InitListExpr>(E)) {
+    if (ILE->getNumInits() == 1)
+      E = ILE->getInit(0);
+  }
+  if (const DeclRefExpr* DRE = dyn_cast<const DeclRefExpr>(E)) {
+    // XXXAR: or should this be getFoundDecl instead of getDecl?
+    if (const ValueDecl* V = dyn_cast_or_null<const ValueDecl>(DRE->getDecl())) {
+      QualType TargetType = V->getType();
+      if (TargetType->isReferenceType()) {
+        return TargetType;
+      }
+    }
+  }
+  return E->getType();
 }

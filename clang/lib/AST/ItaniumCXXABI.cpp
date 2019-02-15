@@ -168,8 +168,14 @@ public:
     MPI.Width = Target.getTypeWidth(PtrDiff);
     MPI.Align = Target.getTypeAlign(PtrDiff);
     MPI.HasPadding = false;
-    if (MPT->isMemberFunctionPointer())
-      MPI.Width *= 2;
+    if (MPT->isMemberFunctionPointer()) {
+      if (Context.getTargetInfo().areAllPointersCapabilities()) {
+        MPI.Width = 2 * Context.getTargetInfo().getCHERICapabilityWidth();
+        MPI.Align = Context.getTargetInfo().getCHERICapabilityAlign();
+      } else {
+        MPI.Width *= 2;
+      }
+    }
     return MPI;
   }
 

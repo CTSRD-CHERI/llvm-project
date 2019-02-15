@@ -346,6 +346,9 @@ _Unwind_RaiseException(_Unwind_Exception *exception_object) {
                        (void *)exception_object);
   unw_context_t uc;
   unw_cursor_t cursor;
+#ifndef NDEBUG
+  memset((void*)&uc, 0, sizeof(uc));
+#endif
   unw_getcontext(&uc);
 
   // Mark that this is a non-forced unwind, so _Unwind_Resume()

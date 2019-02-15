@@ -317,6 +317,7 @@ static void getTargetFeatures(const ToolChain &TC, const llvm::Triple &Triple,
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
+  case llvm::Triple::cheri:
     mips::getMIPSTargetFeatures(D, Triple, Args, Features);
     break;
 
@@ -447,6 +448,7 @@ static void addExceptionArgs(const ArgList &Args, types::ID InputType,
     Arg *ExceptionArg = Args.getLastArg(
         options::OPT_fcxx_exceptions, options::OPT_fno_cxx_exceptions,
         options::OPT_fexceptions, options::OPT_fno_exceptions);
+
     if (ExceptionArg)
       CXXExceptionsEnabled =
           ExceptionArg->getOption().matches(options::OPT_fcxx_exceptions) ||
@@ -1364,7 +1366,9 @@ void Clang::AddARMTargetArgs(const llvm::Triple &Triple, const ArgList &Args,
 
 void Clang::RenderTargetOptions(const llvm::Triple &EffectiveTriple,
                                 const ArgList &Args, bool KernelOrKext,
-                                ArgStringList &CmdArgs) const {
+                                ArgStringList &CmdArgs,
+                                llvm::Reloc::Model RelocationModel,
+                                const JobAction &JA) const {
   const ToolChain &TC = getToolChain();
 
   // Add the target features
@@ -1389,12 +1393,13 @@ void Clang::RenderTargetOptions(const llvm::Triple &EffectiveTriple,
     AddAArch64TargetArgs(Args, CmdArgs);
     CmdArgs.push_back("-fallow-half-arguments-and-returns");
     break;
-
+  case llvm::Triple::cheri:
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
-    AddMIPSTargetArgs(Args, CmdArgs);
+    Args.ClaimAllArgs(options::OPT_cheri_linker);
+    AddMIPSTargetArgs(Args, CmdArgs, RelocationModel == llvm::Reloc::Static, JA);
     break;
 
   case llvm::Triple::ppc:
@@ -1572,16 +1577,76 @@ void Clang::AddAArch64TargetArgs(const ArgList &Args,
   }
 }
 
+static void addCheriFlags(const ArgList &Args, ArgStringList &CmdArgs,
+                          StringRef ABIName) {
+  if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
+    CmdArgs.push_back("-cheri-size");
+    if (A->getOption().matches(options::OPT_cheri))
+      CmdArgs.push_back("128");
+    else {
+      CmdArgs.push_back(Args.MakeArgString(A->getValue()));
+    }
+  }
+
+  // Add the -cap-table-abi and -cap-tls-abi flags (ignore for non-purecap ABIs)
+  bool IsCapTable = true;
+  StringRef DefaultCapTableABI = "pcrel";
+  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_table_abi)) {
+    StringRef v = A->getValue();
+    if (ABIName == "purecap") {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-table-abi=" + v));
+    }
+    IsCapTable = v != "legacy";
+    A->claim();
+  } else {
+    // TODO: eventually remove this and drop legacy support
+    IsCapTable = Args.hasFlag(options::OPT_cheri_cap_table,
+                              options::OPT_no_cheri_cap_table, true);
+    StringRef ChosenABI = IsCapTable ? DefaultCapTableABI : "legacy";
+    if (ABIName == "purecap") {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back(
+          Args.MakeArgString("-cheri-cap-table-abi=" + ChosenABI));
+    }
+  }
+  bool MxCapTable = Args.hasFlag(options::OPT_cheri_large_cap_table,
+                                 options::OPT_no_cheri_large_cap_table, false);
+  if (IsCapTable) {
+    CmdArgs.push_back("-mllvm");
+    CmdArgs.push_back(MxCapTable ? "-mxcaptable=true" : "-mxcaptable=false");
+  }
+
+  if (Arg *A = Args.getLastArg(options::OPT_cheri_cap_tls_abi)) {
+    StringRef v = A->getValue();
+    if (ABIName == "purecap") {
+      CmdArgs.push_back("-mllvm");
+      CmdArgs.push_back(Args.MakeArgString("-cheri-cap-tls-abi=" + v));
+    }
+    A->claim();
+  }
+}
+
 void Clang::AddMIPSTargetArgs(const ArgList &Args,
-                              ArgStringList &CmdArgs) const {
+                              ArgStringList &CmdArgs,
+                              bool IsNonPic, const JobAction &JA) const {
   const Driver &D = getToolChain().getDriver();
   StringRef CPUName;
   StringRef ABIName;
   const llvm::Triple &Triple = getToolChain().getTriple();
   mips::getMipsCPUAndABI(Args, Triple, CPUName, ABIName);
+  if (IsNonPic && ABIName == "purecap" && !isa<PreprocessJobAction>(JA)) {
+    D.Diag(diag::warn_cheri_purecap_nopic_broken);
+  }
 
   CmdArgs.push_back("-target-abi");
   CmdArgs.push_back(ABIName.data());
+
+  // Add warning about calling functions without prototypes in MIPS CHERI
+  if ((Triple.getArch() == llvm::Triple::cheri ||
+       Triple.getArch() == llvm::Triple::mips64) &&
+      ABIName == "purecap")
+    CmdArgs.push_back("-Wmips-cheri-prototypes");
 
   mips::FloatABI ABI = mips::getMipsFloatABI(D, Args);
   if (ABI == mips::FloatABI::Soft) {
@@ -1712,6 +1777,8 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
     } else
       D.Diag(diag::warn_target_unsupported_compact_branches) << CPUName;
   }
+
+  addCheriFlags(Args, CmdArgs, ABIName);
 }
 
 void Clang::AddPPCTargetArgs(const ArgList &Args,
@@ -2051,6 +2118,7 @@ static void CollectArgsForIntegratedAssembler(Compilation &C,
       case llvm::Triple::mipsel:
       case llvm::Triple::mips64:
       case llvm::Triple::mips64el:
+      case llvm::Triple::cheri:
         if (Value == "--trap") {
           CmdArgs.push_back("-target-feature");
           CmdArgs.push_back("+use-tcc-in-div");
@@ -4006,7 +4074,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(CPU));
   }
 
-  RenderTargetOptions(Triple, Args, KernelOrKext, CmdArgs);
+  RenderTargetOptions(Triple, Args, KernelOrKext, CmdArgs, RelocationModel, JA);
 
   // These two are potentially updated by AddClangCLArgs.
   codegenoptions::DebugInfoKind DebugInfoKind = codegenoptions::NoDebugInfo;
@@ -4134,6 +4202,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back(D.ResourceDir.c_str());
 
   Args.AddLastArg(CmdArgs, options::OPT_working_directory);
+
+  Args.AddLastArg(CmdArgs, options::OPT_cheri_uintcap_offset,
+                  options::OPT_cheri_uintcap_addr);
 
   RenderARCMigrateToolOptions(D, Args, CmdArgs);
 
@@ -5035,6 +5106,9 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back(Args.MakeArgString(A->getValue()));
   }
 
+  if (Args.hasFlag(options::OPT_cheri_linker, options::OPT_no_cheri_linker, true))
+    CmdArgs.push_back("-cheri-linker");
+
   if (Args.hasArg(options::OPT_fretain_comments_from_system_headers))
     CmdArgs.push_back("-fretain-comments-from-system-headers");
 
@@ -5072,6 +5146,19 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
   }
   for (const Arg *A : Args.filtered(options::OPT_mllvm)) {
     A->claim();
+    if (StringRef(A->getValue(0)).startswith("-cheri-cap-table")) {
+      D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
+          << A->getAsString(Args) << StringRef(A->getValue(0));
+    }
+    if (StringRef(A->getValue(0)).startswith("-mxcaptable")) {
+      StringRef Replacement = StringRef(A->getValue(0)) == "-mxcaptable=false" ? "-no-mxcaptable" : "-mxcaptable";
+      D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
+          << A->getAsString(Args) << Replacement;
+    }
+    if (StringRef(A->getValue(0)).startswith("-cheri-cap-tls-abi")) {
+      D.Diag(diag::err_drv_unsupported_opt_with_suggestion)
+          << A->getAsString(Args) << StringRef(A->getValue(0));
+    }
 
     // We translate this by hand to the -cc1 argument, since nightly test uses
     // it and developers have been trained to spell it with -mllvm. Both
@@ -5808,6 +5895,8 @@ void ClangAs::AddMIPSTargetArgs(const ArgList &Args,
 
   CmdArgs.push_back("-target-abi");
   CmdArgs.push_back(ABIName.data());
+
+  addCheriFlags(Args, CmdArgs, ABIName);
 }
 
 void ClangAs::AddX86TargetArgs(const ArgList &Args,
@@ -5973,6 +6062,7 @@ void ClangAs::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
   case llvm::Triple::mips64el:
+  case llvm::Triple::cheri:
     AddMIPSTargetArgs(Args, CmdArgs);
     break;
 

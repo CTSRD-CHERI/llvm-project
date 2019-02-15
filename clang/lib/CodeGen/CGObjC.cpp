@@ -991,15 +991,16 @@ CodeGenFunction::generateObjCGetterBody(const ObjCImplementationDecl *classImpl,
 
     LValue LV = EmitLValueForIvar(TypeOfSelfObject(), LoadObjCSelf(), ivar, 0);
 
-    // Currently, all atomic accesses have to be through integer
-    // types, so there's no point in trying to pick a prettier type.
-    uint64_t ivarSize = getContext().toBits(strategy.getIvarSize());
-    llvm::Type *bitcastType = llvm::Type::getIntNTy(getLLVMContext(), ivarSize);
-    bitcastType = bitcastType->getPointerTo(); // addrspace 0 okay
-
     // Perform an atomic load.  This does not impose ordering constraints.
     Address ivarAddr = LV.getAddress();
-    ivarAddr = Builder.CreateBitCast(ivarAddr, bitcastType);
+    uint64_t ivarSize = getContext().toBits(strategy.getIvarSize());
+    if (!ivarAddr.getElementType()->isSingleValueType()) {
+      llvm::Type *bitcastType =
+        llvm::Type::getIntNTy(getLLVMContext(), ivarSize);
+      bitcastType = bitcastType->getPointerTo(ivarAddr.getAddressSpace());
+      ivarAddr = Builder.CreateBitCast(ivarAddr, bitcastType);
+    }
+
     llvm::LoadInst *load = Builder.CreateLoad(ivarAddr, "load");
     load->setAtomic(llvm::AtomicOrdering::Unordered);
 
@@ -1009,13 +1010,12 @@ CodeGenFunction::generateObjCGetterBody(const ObjCImplementationDecl *classImpl,
     llvm::Type *retTy = ConvertType(getterMethod->getReturnType());
     uint64_t retTySize = CGM.getDataLayout().getTypeSizeInBits(retTy);
     llvm::Value *ivarVal = load;
-    if (ivarSize > retTySize) {
-      llvm::Type *newTy = llvm::Type::getIntNTy(getLLVMContext(), retTySize);
-      ivarVal = Builder.CreateTrunc(load, newTy);
-      bitcastType = newTy->getPointerTo();
-    }
+    if (ivarSize > retTySize)
+      ivarVal = Builder.CreateTrunc(load, retTy);
+    llvm::Type *bitcastType =
+      ivarVal->getType()->getPointerTo(ReturnValue.getAddressSpace());
     Builder.CreateStore(ivarVal,
-                        Builder.CreateBitCast(ReturnValue, bitcastType));
+        Builder.CreateBitCast(ReturnValue, bitcastType));
 
     // Make sure we don't do an autorelease.
     AutoreleaseResult = false;
@@ -1277,17 +1277,21 @@ CodeGenFunction::generateObjCSetterBody(const ObjCImplementationDecl *classImpl,
       EmitLValueForIvar(TypeOfSelfObject(), LoadObjCSelf(), ivar, /*quals*/ 0);
     Address ivarAddr = ivarLValue.getAddress();
 
-    // Currently, all atomic accesses have to be through integer
-    // types, so there's no point in trying to pick a prettier type.
-    llvm::Type *bitcastType =
-      llvm::Type::getIntNTy(getLLVMContext(),
-                            getContext().toBits(strategy.getIvarSize()));
+    llvm::Type *ivarType = ivarAddr.getElementType();
+    if (ivarType->isAggregateType()) {
+      // Currently, all atomic accesses have to be through integer
+      // types, so there's no point in trying to pick a prettier type.
+      llvm::Type *bitcastType =
+        llvm::Type::getIntNTy(getLLVMContext(),
+                              getContext().toBits(strategy.getIvarSize()));
 
-    // Cast both arguments to the chosen operation type.
-    argAddr = Builder.CreateElementBitCast(argAddr, bitcastType);
-    ivarAddr = Builder.CreateElementBitCast(ivarAddr, bitcastType);
+      // Cast both arguments to the chosen operation type.
+      argAddr = Builder.CreateElementBitCast(argAddr, bitcastType);
+      ivarAddr = Builder.CreateElementBitCast(ivarAddr, bitcastType);
+    } else 
+      // Just ensure that the types match
+      argAddr = Builder.CreateElementBitCast(argAddr, ivarAddr.getElementType());
 
-    // This bitcast load is likely to cause some nasty IR.
     llvm::Value *load = Builder.CreateLoad(argAddr);
 
     // Perform an atomic store.  There are no memory ordering requirements.
@@ -1929,7 +1933,7 @@ static llvm::Value *emitARCValueOperation(CodeGenFunction &CGF,
 
   // Cast the argument to 'id'.
   llvm::Type *origType = returnType ? returnType : value->getType();
-  value = CGF.Builder.CreateBitCast(value, CGF.Int8PtrTy);
+  value = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(value, CGF.Int8PtrTy);
 
   // Call the function.
   llvm::CallInst *call = CGF.EmitNounwindRuntimeCall(fn, value);
@@ -1937,7 +1941,7 @@ static llvm::Value *emitARCValueOperation(CodeGenFunction &CGF,
     call->setTailCall();
 
   // Cast the result back to the original type.
-  return CGF.Builder.CreateBitCast(call, origType);
+  return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(call, origType);
 }
 
 /// Perform an operation having the following signature:

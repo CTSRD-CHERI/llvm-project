@@ -473,7 +473,8 @@ public:
         CGM.IntTy,
         CGM.IntTy,
         CGM.IntTy,
-        getImageRelativeType(getClassHierarchyDescriptorType()->getPointerTo()),
+        getImageRelativeType(getClassHierarchyDescriptorType()->getPointerTo(
+          CGM.getTargetCodeGenInfo().getDefaultAS())),
     };
     BaseClassDescriptorType = llvm::StructType::create(
         CGM.getLLVMContext(), FieldTypes, "rtti.BaseClassDescriptor");
@@ -486,12 +487,13 @@ public:
     // Forward-declare RTTIClassHierarchyDescriptor to break a cycle.
     ClassHierarchyDescriptorType = llvm::StructType::create(
         CGM.getLLVMContext(), "rtti.ClassHierarchyDescriptor");
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     llvm::Type *FieldTypes[] = {
         CGM.IntTy,
         CGM.IntTy,
         CGM.IntTy,
         getImageRelativeType(
-            getBaseClassDescriptorType()->getPointerTo()->getPointerTo()),
+            getBaseClassDescriptorType()->getPointerTo(AS)->getPointerTo(AS)),
     };
     ClassHierarchyDescriptorType->setBody(FieldTypes);
     return ClassHierarchyDescriptorType;
@@ -507,7 +509,8 @@ public:
         CGM.IntTy,
         CGM.IntTy,
         getImageRelativeType(CGM.Int8PtrTy),
-        getImageRelativeType(getClassHierarchyDescriptorType()->getPointerTo()),
+        getImageRelativeType(getClassHierarchyDescriptorType()->getPointerTo(
+          CGM.getTargetCodeGenInfo().getDefaultAS())),
         getImageRelativeType(CompleteObjectLocatorType),
     };
     llvm::ArrayRef<llvm::Type *> FieldTypesRef(FieldTypes);
@@ -632,8 +635,13 @@ public:
 
   llvm::Constant *EmitMemberDataPointer(const MemberPointerType *MPT,
                                         CharUnits offset) override;
-  llvm::Constant *EmitMemberFunctionPointer(const CXXMethodDecl *MD) override;
-  llvm::Constant *EmitMemberPointer(const APValue &MP, QualType MPT) override;
+  llvm::Constant *
+  EmitMemberFunctionPointerGlobal(const CXXMethodDecl *MD) override;
+  llvm::Constant *EmitMemberPointer(const APValue &MP, QualType MPT,
+                                    CodeGenFunction * CGF) override;
+  llvm::Value *
+  EmitNonGlobalMemberFunctionPointer(CodeGenFunction& CGF,
+                                     const CXXMethodDecl *MD) override;
 
   llvm::Value *EmitMemberPointerComparison(CodeGenFunction &CGF,
                                            llvm::Value *L,
@@ -701,8 +709,9 @@ public:
 
     llvm::SmallString<23> CTATypeName("eh.CatchableTypeArray.");
     CTATypeName += llvm::utostr(NumEntries);
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
     llvm::Type *CTType =
-        getImageRelativeType(getCatchableTypeType()->getPointerTo());
+        getImageRelativeType(getCatchableTypeType()->getPointerTo(DefaultAS));
     llvm::Type *FieldTypes[] = {
         CGM.IntTy,                               // NumEntries
         llvm::ArrayType::get(CTType, NumEntries) // CatchableTypes
@@ -729,7 +738,11 @@ public:
   llvm::Constant *getThrowFn() {
     // _CxxThrowException is passed an exception object and a ThrowInfo object
     // which describes the exception.
-    llvm::Type *Args[] = {CGM.Int8PtrTy, getThrowInfoType()->getPointerTo()};
+    unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    llvm::Type *Args[] = {
+      CGM.Int8PtrTy,
+      getThrowInfoType()->getPointerTo(DefaultAS)
+    };
     llvm::FunctionType *FTy =
         llvm::FunctionType::get(CGM.VoidTy, Args, /*IsVarArgs=*/false);
     auto *Fn = cast<llvm::Function>(
@@ -850,9 +863,10 @@ void MicrosoftCXXABI::emitVirtualObjectDelete(CodeGenFunction &CGF,
 }
 
 void MicrosoftCXXABI::emitRethrow(CodeGenFunction &CGF, bool isNoReturn) {
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::Value *Args[] = {
       llvm::ConstantPointerNull::get(CGM.Int8PtrTy),
-      llvm::ConstantPointerNull::get(getThrowInfoType()->getPointerTo())};
+      llvm::ConstantPointerNull::get(getThrowInfoType()->getPointerTo(DefaultAS))};
   auto *Fn = getThrowFn();
   if (isNoReturn)
     CGF.EmitNoreturnRuntimeCallOrInvoke(Fn, Args);
@@ -1836,7 +1850,8 @@ CGCallee MicrosoftCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
                                                     SourceLocation Loc) {
   CGBuilderTy &Builder = CGF.Builder;
 
-  Ty = Ty->getPointerTo()->getPointerTo();
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  Ty = Ty->getPointerTo(DefaultAS)->getPointerTo(DefaultAS);
   Address VPtr =
       adjustThisArgumentForVirtualFunctionCall(CGF, GD, This, true);
 
@@ -1988,8 +2003,9 @@ MicrosoftCXXABI::EmitVirtualMemPtrThunk(const CXXMethodDecl *MD,
 
   // Load the vfptr and then callee from the vftable.  The callee should have
   // adjusted 'this' so that the vfptr is at offset zero.
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::Value *VTable = CGF.GetVTablePtr(
-      getThisAddress(CGF), ThunkTy->getPointerTo()->getPointerTo(), MD->getParent());
+      getThisAddress(CGF), ThunkTy->getPointerTo(DefaultAS)->getPointerTo(DefaultAS), MD->getParent());
 
   llvm::Value *VFuncPtr =
       CGF.Builder.CreateConstInBoundsGEP1_64(VTable, ML.Index, "vfn");
@@ -2326,9 +2342,10 @@ static ConstantAddress getInitThreadEpochPtr(CodeGenModule &CGM) {
 }
 
 static llvm::Constant *getInitThreadHeaderFn(CodeGenModule &CGM) {
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::FunctionType *FTy =
       llvm::FunctionType::get(llvm::Type::getVoidTy(CGM.getLLVMContext()),
-                              CGM.IntTy->getPointerTo(), /*isVarArg=*/false);
+                              CGM.IntTy->getPointerTo(DefaultAS), /*isVarArg=*/false);
   return CGM.CreateRuntimeFunction(
       FTy, "_Init_thread_header",
       llvm::AttributeList::get(CGM.getLLVMContext(),
@@ -2338,9 +2355,10 @@ static llvm::Constant *getInitThreadHeaderFn(CodeGenModule &CGM) {
 }
 
 static llvm::Constant *getInitThreadFooterFn(CodeGenModule &CGM) {
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::FunctionType *FTy =
       llvm::FunctionType::get(llvm::Type::getVoidTy(CGM.getLLVMContext()),
-                              CGM.IntTy->getPointerTo(), /*isVarArg=*/false);
+                              CGM.IntTy->getPointerTo(DefaultAS), /*isVarArg=*/false);
   return CGM.CreateRuntimeFunction(
       FTy, "_Init_thread_footer",
       llvm::AttributeList::get(CGM.getLLVMContext(),
@@ -2350,9 +2368,10 @@ static llvm::Constant *getInitThreadFooterFn(CodeGenModule &CGM) {
 }
 
 static llvm::Constant *getInitThreadAbortFn(CodeGenModule &CGM) {
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::FunctionType *FTy =
       llvm::FunctionType::get(llvm::Type::getVoidTy(CGM.getLLVMContext()),
-                              CGM.IntTy->getPointerTo(), /*isVarArg=*/false);
+                              CGM.IntTy->getPointerTo(DefaultAS), /*isVarArg=*/false);
   return CGM.CreateRuntimeFunction(
       FTy, "_Init_thread_abort",
       llvm::AttributeList::get(CGM.getLLVMContext(),
@@ -2679,7 +2698,8 @@ MicrosoftCXXABI::EmitMemberDataPointer(const MemberPointerType *MPT,
 }
 
 llvm::Constant *MicrosoftCXXABI::EmitMemberPointer(const APValue &MP,
-                                                   QualType MPType) {
+                                                   QualType MPType,
+                                                   CodeGenFunction* CGF) {
   const MemberPointerType *DstTy = MPType->castAs<MemberPointerType>();
   const ValueDecl *MPD = MP.getMemberPointerDecl();
   if (!MPD)
@@ -2690,7 +2710,7 @@ llvm::Constant *MicrosoftCXXABI::EmitMemberPointer(const APValue &MP,
 
   llvm::Constant *C;
   if (const CXXMethodDecl *MD = dyn_cast<CXXMethodDecl>(MPD)) {
-    C = EmitMemberFunctionPointer(MD);
+    C = EmitMemberFunctionPointerGlobal(MD);
   } else {
     CharUnits FieldOffset = Ctx.toCharUnitsFromBits(Ctx.getFieldOffset(MPD));
     C = EmitMemberDataPointer(DstTy, FieldOffset);
@@ -2732,8 +2752,15 @@ llvm::Constant *MicrosoftCXXABI::EmitMemberPointer(const APValue &MP,
   return C;
 }
 
+llvm::Value *
+MicrosoftCXXABI::EmitNonGlobalMemberFunctionPointer(CodeGenFunction& CGF,
+                                                    const CXXMethodDecl *MD) {
+  // Only needs to be different from EmitMemberFunctionPointerGlobal for target CHERI
+  return EmitMemberFunctionPointerGlobal(MD);
+}
+
 llvm::Constant *
-MicrosoftCXXABI::EmitMemberFunctionPointer(const CXXMethodDecl *MD) {
+MicrosoftCXXABI::EmitMemberFunctionPointerGlobal(const CXXMethodDecl *MD) {
   assert(MD->isInstance() && "Member function must not be static!");
 
   CharUnits NonVirtualBaseAdjustment = CharUnits::Zero();
@@ -3333,8 +3360,9 @@ CGCallee MicrosoftCXXABI::EmitLoadOfMemberFunctionPointer(
                                            "this.adjusted");
   }
 
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   FunctionPointer =
-    Builder.CreateBitCast(FunctionPointer, FTy->getPointerTo());
+    Builder.CreateBitCast(FunctionPointer, FTy->getPointerTo(DefaultAS));
   CGCallee Callee(FPT, FunctionPointer);
   return Callee;
 }
@@ -3592,8 +3620,9 @@ MSRTTIBuilder::getBaseClassArray(SmallVectorImpl<MSRTTIClass> &Classes) {
   // mode) bytes of padding.  We provide a pointer sized amount of padding by
   // adding +1 to Classes.size().  The sections have pointer alignment and are
   // marked pick-any so it shouldn't matter.
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::Type *PtrType = ABI.getImageRelativeType(
-      ABI.getBaseClassDescriptorType()->getPointerTo());
+      ABI.getBaseClassDescriptorType()->getPointerTo(DefaultAS));
   auto *ArrType = llvm::ArrayType::get(PtrType, Classes.size() + 1);
   auto *BCA =
       new llvm::GlobalVariable(Module, ArrType,
@@ -4149,8 +4178,9 @@ llvm::GlobalVariable *MicrosoftCXXABI::getCatchableTypeArray(QualType T) {
     CatchableTypes.insert(getCatchableType(getContext().VoidPtrTy));
 
   uint32_t NumEntries = CatchableTypes.size();
+  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
   llvm::Type *CTType =
-      getImageRelativeType(getCatchableTypeType()->getPointerTo());
+      getImageRelativeType(getCatchableTypeType()->getPointerTo(DefaultAS));
   llvm::ArrayType *AT = llvm::ArrayType::get(CTType, NumEntries);
   llvm::StructType *CTAType = getCatchableTypeArrayType(NumEntries);
   llvm::Constant *Fields[] = {

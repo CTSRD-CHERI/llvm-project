@@ -19,7 +19,7 @@ struct B : A {};
 int main() {
 #if defined(TEST_HAS_NO_RTTI)
     A* ptr = new B;
-    (void)dynamic_cast<B*>(ptr); // expected-error{{cannot use dynamic_cast}}
+    (void)dynamic_cast<B*>(ptr); // expected-error-re{{{{(cannot use dynamic_cast)|(use of dynamic_cast requires -frtti)}}}}
 #else
     A* ptr = new B;
     (void)dynamic_cast<B*>(ptr);

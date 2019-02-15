@@ -57,7 +57,8 @@ CGCallee CGCXXABI::EmitLoadOfMemberFunctionPointer(
     cast<CXXRecordDecl>(MPT->getClass()->getAs<RecordType>()->getDecl());
   llvm::FunctionType *FTy = CGM.getTypes().GetFunctionType(
       CGM.getTypes().arrangeCXXMethodType(RD, FPT, /*FD=*/nullptr));
-  llvm::Constant *FnPtr = llvm::Constant::getNullValue(FTy->getPointerTo());
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  llvm::Constant *FnPtr = llvm::Constant::getNullValue(FTy->getPointerTo(AS));
   return CGCallee::forDirect(FnPtr, FPT);
 }
 
@@ -106,7 +107,7 @@ CGCXXABI::EmitNullMemberPointer(const MemberPointerType *MPT) {
   return GetBogusMemberPointer(QualType(MPT, 0));
 }
 
-llvm::Constant *CGCXXABI::EmitMemberFunctionPointer(const CXXMethodDecl *MD) {
+llvm::Constant *CGCXXABI::EmitMemberFunctionPointerGlobal(const CXXMethodDecl *MD) {
   return GetBogusMemberPointer(CGM.getContext().getMemberPointerType(
       MD->getType(), MD->getParent()->getTypeForDecl()));
 }
@@ -116,7 +117,8 @@ llvm::Constant *CGCXXABI::EmitMemberDataPointer(const MemberPointerType *MPT,
   return GetBogusMemberPointer(QualType(MPT, 0));
 }
 
-llvm::Constant *CGCXXABI::EmitMemberPointer(const APValue &MP, QualType MPT) {
+llvm::Constant *CGCXXABI::EmitMemberPointer(const APValue &MP, QualType MPT,
+                                            CodeGenFunction* CGF) {
   return GetBogusMemberPointer(MPT);
 }
 

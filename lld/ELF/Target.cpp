@@ -41,7 +41,19 @@ using namespace lld::elf;
 TargetInfo *elf::Target;
 
 std::string lld::toString(RelType Type) {
-  StringRef S = getELFRelocationTypeName(elf::Config->EMachine, Type);
+  auto Machine = elf::Config->EMachine;
+  if (Machine == EM_MIPS && Type > 0xff) {
+    uint32_t Type1 = Type & 0xff;
+    llvm::Twine Result = getELFRelocationTypeName(Machine, Type1);
+    uint32_t Type2 = (Type >> 8) & 0xff;
+    uint32_t Type3 = (Type >> 16) & 0xff;
+    if (Type2 || Type3) {
+      return (Result + "/" + getELFRelocationTypeName(Machine, Type2) + "/" +
+              getELFRelocationTypeName(Machine, Type3)).str();
+    }
+    return Result.str();
+  }
+  StringRef S = getELFRelocationTypeName(Machine, Type);
   if (S == "Unknown")
     return ("Unknown (" + Twine(Type) + ")").str();
   return S;
@@ -63,6 +75,8 @@ TargetInfo *elf::getTarget() {
   case EM_HEXAGON:
     return getHexagonTargetInfo();
   case EM_MIPS:
+    if (Config->isCheriABI())
+      return getMipsTargetInfo<ELF64BE>(); // TODO: custom target info?
     switch (Config->EKind) {
     case ELF32LEKind:
       return getMipsTargetInfo<ELF32LE>();

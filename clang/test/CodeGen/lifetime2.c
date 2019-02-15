@@ -6,14 +6,14 @@
 extern int bar(char *A, int n);
 
 // CHECK-LABEL: @foo
-// O0-NOT: @llvm.lifetime.start
+// O0-NOT: @llvm.lifetime.start.p0i8
 int foo (int n) {
   if (n) {
-// O2: @llvm.lifetime.start
+// O2: @llvm.lifetime.start.p0i8
     char A[100];
     return bar(A, 1);
   } else {
-// O2: @llvm.lifetime.start
+// O2: @llvm.lifetime.start.p0i8
     char A[100];
     return bar(A, 2);
   }

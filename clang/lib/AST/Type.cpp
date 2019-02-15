@@ -11,6 +11,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "clang/Basic/TargetInfo.h"
 #include "clang/AST/Type.h"
 #include "Linkage.h"
 #include "clang/AST/ASTContext.h"
@@ -462,6 +463,47 @@ bool Type::isStructureOrClassType() const {
   if (const auto *RT = getAs<RecordType>()) {
     RecordDecl *RD = RT->getDecl();
     return RD->isStruct() || RD->isClass() || RD->isInterface();
+  }
+  return false;
+}
+
+bool Type::isCHERICapabilityType(const ASTContext &Context,
+                                 bool IncludeIntCap) const {
+  if (const PointerType *PT = getAs<PointerType>())
+    return PT->isCHERICapability();
+  else if (const ReferenceType *RT = getAs<ReferenceType>())
+    return RT->isCHERICapability();
+  else if (isObjCObjectPointerType() || isBlockPointerType())
+    return Context.getTargetInfo().areAllPointersCapabilities();
+  else if (const EnumType *ET = getAs<EnumType>()) {
+    QualType Ty = ET->getDecl()->getIntegerType();
+    return Ty.isNull() ? false
+                       : Ty->isCHERICapabilityType(Context, IncludeIntCap);
+  } else if (const BuiltinType *BT = getAs<BuiltinType>()) {
+    auto Kind = BT->getKind();
+    if (Kind == BuiltinType::IntCap ||
+        Kind == BuiltinType::UIntCap)
+      return IncludeIntCap;
+    if (Kind == BuiltinType::ObjCId || Kind == BuiltinType::NullPtr)
+      return Context.getTargetInfo().areAllPointersCapabilities();
+  } else if (const AtomicType *AT = getAs<AtomicType>())
+    return AT->getValueType()->isCHERICapabilityType(Context, IncludeIntCap);
+  else if  (const MemberPointerType *MPT = getAs<MemberPointerType>())
+    // XXXAR: Currently member function pointers contain capabities, but
+    // pointers to member data don't
+    return Context.getTargetInfo().areAllPointersCapabilities() && MPT->isMemberFunctionPointer();
+  return false;
+}
+
+bool Type::isIntCapType() const {
+  if (const BuiltinType *BT = dyn_cast<BuiltinType>(CanonicalType))
+    return BT->getKind() == BuiltinType::IntCap ||
+           BT->getKind() == BuiltinType::UIntCap;
+  // Also handle enums with underlying type __intcap_t
+  if (const EnumType *ET = dyn_cast<EnumType>(CanonicalType)) {
+    QualType Ty = ET->getDecl()->getIntegerType();
+    if (!Ty.isNull())
+      return Ty->isIntCapType();
   }
   return false;
 }
@@ -2434,6 +2476,11 @@ bool QualType::isCXX11PODType(const ASTContext &Context) const {
   return false;
 }
 
+bool Type::isCXXStructureOrClassType() const {
+  CXXRecordDecl *CRD = getAsCXXRecordDecl();
+  return CRD && isStructureOrClassType();
+}
+
 bool Type::isAlignValT() const {
   if (const auto *ET = getAs<EnumType>()) {
     IdentifierInfo *II = ET->getDecl()->getIdentifier();
@@ -2675,6 +2722,8 @@ StringRef BuiltinType::getName(const PrintingPolicy &Policy) const {
     return "long long";
   case Int128:
     return "__int128";
+  case IntCap:
+    return "__intcap_t";
   case UChar:
     return "unsigned char";
   case UShort:
@@ -2685,6 +2734,8 @@ StringRef BuiltinType::getName(const PrintingPolicy &Policy) const {
     return "unsigned long";
   case ULongLong:
     return "unsigned long long";
+  case UIntCap:
+    return "__uintcap_t";
   case UInt128:
     return "unsigned __int128";
   case Half:
@@ -2822,6 +2873,9 @@ QualType QualType::getNonLValueExprType(const ASTContext &Context) const {
 StringRef FunctionType::getNameForCallConv(CallingConv CC) {
   switch (CC) {
   case CC_C: return "cdecl";
+  case CC_CHERICCall: return "cheri_ccall";
+  case CC_CHERICCallee: return "cheri_ccallee";
+  case CC_CHERICCallback: return "attr_cheri_ccallback";
   case CC_X86StdCall: return "stdcall";
   case CC_X86FastCall: return "fastcall";
   case CC_X86ThisCall: return "thiscall";
@@ -3206,6 +3260,8 @@ bool AttributedType::isQualifier() const {
   case attr::TypeNullable:
   case attr::TypeNullUnspecified:
   case attr::LifetimeBound:
+  case attr::CHERICapability:
+  case attr::MemoryAddress:
     return true;
 
   // All other type attributes aren't qualifiers; they rewrite the modified
@@ -3234,6 +3290,9 @@ bool AttributedType::isCallingConv() const {
   default: return false;
   case attr::Pcs:
   case attr::CDecl:
+  case attr::CHERICCall:
+  case attr::CHERICCallback:
+  case attr::CHERICCallee:
   case attr::FastCall:
   case attr::StdCall:
   case attr::ThisCall:

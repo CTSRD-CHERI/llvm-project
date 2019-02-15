@@ -1020,6 +1020,15 @@ public:
     /// Implicit conversion failed.
     FK_ConversionFromPropertyFailed,
 
+    /// \brief Implicit conversion failed.
+    FK_ConversionFromCapabilityFailed,
+
+    /// \brief Implicit conversion failed.
+    FK_ConversionToCapabilityFailed,
+
+    /// \brief Reference binding changes __capability qualifier.
+    FK_ReferenceInitChangesCapabilityQualifier,
+
     /// Too many initializers for scalar
     FK_TooManyInitsForScalar,
 

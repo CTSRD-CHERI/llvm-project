@@ -24,6 +24,7 @@ namespace elf {
 
 class Symbol;
 struct SectionPiece;
+class DynamicReloc;
 
 class Defined;
 class SyntheticSection;
@@ -173,6 +174,10 @@ public:
   // section.
   template <class ELFT>
   Defined *getEnclosingFunction(uint64_t Offset);
+  template <class ELFT>
+  Defined *getEnclosingObject(uint64_t Offset);
+  template <class ELFT, unsigned SymbolType>
+  Defined *getEnclosingSymbol(uint64_t Offset);
 
   // Returns a source location string. Used to construct an error message.
   template <class ELFT> std::string getLocation(uint64_t Offset);
@@ -189,6 +194,7 @@ public:
   // So we convert ELF reloc records to our own records in Relocations.cpp.
   // This vector contains such "cooked" relocations.
   std::vector<Relocation> Relocations;
+  std::vector<DynamicReloc> FreeBSDMipsRelocationsHack;
 
   // A function compiled with -fsplit-stack calling a function
   // compiled without -fsplit-stack needs its prologue adjusted. Find

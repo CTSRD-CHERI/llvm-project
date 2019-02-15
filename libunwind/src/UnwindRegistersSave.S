@@ -8,6 +8,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "assembly.h"
+#include "__libunwind_config.h"
 
     .text
 
@@ -224,6 +225,120 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   # return UNW_ESUCCESS
   or    $2, $0, $0
   .set pop
+END_LIBUNWIND_FUNCTION(unw_getcontext)
+
+#elif defined(__mips__) && defined(__CHERI_PURE_CAPABILITY__)
+
+#if !defined(__mips_soft_float)
+#error "Only soft float supported"
+#endif
+
+.set noreorder
+#
+# extern int unw_getcontext(unw_context_t* thread_state)
+#
+# On entry:
+#  thread_state pointer is in $c3
+#
+# This is always called from ABI C code, so we only need to initialise the
+# registers that are preserved across calls
+
+DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
+#define SAVE_GPR(x) csd $x, $zero, (8*x)($c3)
+  SAVE_GPR(1) # $at
+  SAVE_GPR(2) # $v0
+  SAVE_GPR(3) # $v1
+  SAVE_GPR(4) # $a0
+  SAVE_GPR(5) # $a1
+  SAVE_GPR(6) # $a2
+  SAVE_GPR(7) # $a3
+  SAVE_GPR(8) # $a4
+  SAVE_GPR(9) # $a5
+  SAVE_GPR(10) # $a6
+  SAVE_GPR(11) # $a7
+  SAVE_GPR(12) # $t0/t4
+  SAVE_GPR(13) # $t1/t5
+  SAVE_GPR(14) # $t2/t6
+  SAVE_GPR(15) # $t3/t7
+  SAVE_GPR(16) # $s0
+  SAVE_GPR(17) # $s1
+  SAVE_GPR(18) # $s2
+  SAVE_GPR(19) # $s3
+  SAVE_GPR(20) # $s4
+  SAVE_GPR(21) # $s5
+  SAVE_GPR(22) # $s6
+  SAVE_GPR(23) # $s7
+  SAVE_GPR(24) # $t8
+  SAVE_GPR(25) # $t9
+  SAVE_GPR(26) # $k0
+  SAVE_GPR(27) # $k1
+  SAVE_GPR(28) # $gp
+  SAVE_GPR(29) # $sp
+  SAVE_GPR(30) # $fp
+  SAVE_GPR(31) # $ra
+
+  # hi and lo
+  mfhi	$t0
+  csd	$t0, $zero, (8*64)($c3)
+  mflo	$t0
+  csd	$t0, $zero, (8*65)($c3)
+  # TODO: floating point registers
+
+#ifndef _LIBUNWIND_CAPREG_START
+#error "_LIBUNWIND_CAPREG_START not defined"
+#endif
+#if ((_LIBUNWIND_CAPREG_START*64) % _MIPS_SZCAP) != 0
+#error "unw_context capability register offset is not capability aligned!"
+#endif
+  /* Add the offset of the start of the capability register set to $at */
+  daddiu $1, $zero, _LIBUNWIND_CAPREG_START*8
+#define SAVE_CAP_REG(src, x) csc $c ## src, $1, (x * _MIPS_SZCAP/8)($c3)
+#define SAVE_CAP(x) SAVE_CAP_REG(x, x)
+  SAVE_CAP(1)
+  SAVE_CAP(2)
+  SAVE_CAP(3)
+  SAVE_CAP(4)
+  SAVE_CAP(5)
+  SAVE_CAP(6)
+  SAVE_CAP(7)
+  SAVE_CAP(8)
+  SAVE_CAP(9)
+  SAVE_CAP(10)
+  SAVE_CAP(11)
+  SAVE_CAP(12)
+  SAVE_CAP(13)
+  SAVE_CAP(14)
+  SAVE_CAP(15)
+  SAVE_CAP(16)
+  SAVE_CAP(17)
+  SAVE_CAP(18)
+  SAVE_CAP(19)
+  SAVE_CAP(20)
+  SAVE_CAP(21)
+  SAVE_CAP(22)
+  SAVE_CAP(23)
+  SAVE_CAP(24)
+  SAVE_CAP(25)
+  SAVE_CAP(26)
+  // store NULL for 27-31 since they are reserved for kernel use
+  SAVE_CAP_REG(null, 27)
+  SAVE_CAP_REG(null, 28)
+  SAVE_CAP_REG(null, 29)
+  SAVE_CAP_REG(null, 30)
+  SAVE_CAP_REG(null, 31)
+
+  // Use $c12 as a temp register in order to save it $ddc since $c12 will hold
+  // the cap for unw_getcontext and it doesn't make sense to save it
+  cgetdefault $c12
+  SAVE_CAP_REG(12, 0)
+
+  // return UNW_ESUCCESS
+  daddiu $v0, $zero, 0
+  # Store the return address where we expect the current PC
+  daddiu $1, $1, 32*_MIPS_SZCAP/8
+  cjr $c17
+  csc $c17, $1, 0($c3)
+END_LIBUNWIND_FUNCTION(unw_getcontext)
 
 #elif defined(__mips64)
 
@@ -314,6 +429,7 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   # return UNW_ESUCCESS
   or    $2, $0, $0
   .set pop
+END_LIBUNWIND_FUNCTION(unw_getcontext)
 
 # elif defined(__mips__)
 
@@ -323,6 +439,7 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
 # Just trap for the time being.
 DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   teq $0, $0
+END_LIBUNWIND_FUNCTION(unw_getcontext)
 
 #elif defined(__powerpc64__)
 
