@@ -794,6 +794,17 @@ public:
 
 #define TRIVIAL_TYPE_CLASS(Class) \
   QualType Visit##Class##Type(const Class##Type *T) { return QualType(T, 0); }
+#define SUGARED_TYPE_CLASS(Class) \
+  QualType Visit##Class##Type(const Class##Type *T) { \
+    if (!T->isSugared()) \
+      return QualType(T, 0); \
+    QualType desugaredType = recurse(T->desugar()); \
+    if (desugaredType.isNull()) \
+      return {}; \
+    if (desugaredType.getAsOpaquePtr() == T->desugar().getAsOpaquePtr()) \
+      return QualType(T, 0); \
+    return desugaredType; \
+  }
 
   TRIVIAL_TYPE_CLASS(Builtin)
 
@@ -997,8 +1008,8 @@ public:
     return Ctx.getParenType(innerType);
   }
 
-  TRIVIAL_TYPE_CLASS(Typedef)
-  TRIVIAL_TYPE_CLASS(ObjCTypeParam)
+  SUGARED_TYPE_CLASS(Typedef)
+  SUGARED_TYPE_CLASS(ObjCTypeParam)
 
   QualType VisitAdjustedType(const AdjustedType *T) {
     QualType originalType = recurse(T->getOriginalType());
@@ -1029,15 +1040,15 @@ public:
     return Ctx.getDecayedType(originalType);
   }
 
-  TRIVIAL_TYPE_CLASS(TypeOfExpr)
-  TRIVIAL_TYPE_CLASS(TypeOf)
-  TRIVIAL_TYPE_CLASS(Decltype)
-  TRIVIAL_TYPE_CLASS(UnaryTransform)
+  SUGARED_TYPE_CLASS(TypeOfExpr)
+  SUGARED_TYPE_CLASS(TypeOf)
+  SUGARED_TYPE_CLASS(Decltype)
+  SUGARED_TYPE_CLASS(UnaryTransform)
   TRIVIAL_TYPE_CLASS(Record)
   TRIVIAL_TYPE_CLASS(Enum)
 
   // FIXME: Non-trivial to implement, but important for C++
-  TRIVIAL_TYPE_CLASS(Elaborated)
+  SUGARED_TYPE_CLASS(Elaborated)
 
   QualType VisitAttributedType(const AttributedType *T) {
     QualType modifiedType = recurse(T->getModifiedType());
@@ -1072,7 +1083,7 @@ public:
   }
 
   // FIXME: Non-trivial to implement, but important for C++
-  TRIVIAL_TYPE_CLASS(TemplateSpecialization)
+  SUGARED_TYPE_CLASS(TemplateSpecialization)
 
   QualType VisitAutoType(const AutoType *T) {
     if (!T->isDeduced())
@@ -1091,7 +1102,7 @@ public:
   }
 
   // FIXME: Non-trivial to implement, but important for C++
-  TRIVIAL_TYPE_CLASS(PackExpansion)
+  SUGARED_TYPE_CLASS(PackExpansion)
 
   QualType VisitObjCObjectType(const ObjCObjectType *T) {
     QualType baseType = recurse(T->getBaseType());
@@ -1149,6 +1160,7 @@ public:
   }
 
 #undef TRIVIAL_TYPE_CLASS
+#undef SUGARED_TYPE_CLASS
 };
 
 } // namespace
