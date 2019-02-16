@@ -3,7 +3,7 @@
 properties([disableConcurrentBuilds(),
             // compressBuildLog(), // Broken, see https://issues.jenkins-ci.org/browse/JENKINS-54680
             disableResume(),
-            [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/CTSRD-CHERI/llvm/'],
+            [$class: 'GithubProjectProperty', displayName: '', projectUrlStr: 'https://github.com/CTSRD-CHERI/llvm-project/'],
             [$class: 'CopyArtifactPermissionProperty', projectNames: '*'],
             [$class: 'JobPropertyImpl', throttle: [count: 2, durationName: 'hour', userBoost: true]],
             durabilityHint('PERFORMANCE_OPTIMIZED'),
@@ -12,14 +12,10 @@ properties([disableConcurrentBuilds(),
 
 // global vars needed to update github status
 llvmRepo = null
-clangRepo = null
-lldRepo = null
 TEST_RELEASE_BUILD = false
 
 def updateGithubStatus(String message) {
-    for (repo in [llvmRepo, clangRepo, lldRepo])  {
-        setGitHubStatus(repo, [message: message])
-    }
+    setGitHubStatus(llvmRepo, [message: message])
 }
 
 def doGit(String url, String branch, String subdir, String referenceDirName) {
@@ -57,7 +53,7 @@ def runTests(String targetSuffix) {
         sh """#!/usr/bin/env bash
 set -xe
 
-cd \${WORKSPACE}/llvm-build
+cd \${WORKSPACE}/llvm-project/Build
 # run tests
 rm -fv "\${WORKSPACE}/llvm-test-output.xml"
 ninja check-${targetSuffix} \${JFLAG} || echo "Some check-${targetSuffix} tests failed!"
@@ -70,23 +66,21 @@ echo "Done running check-${targetSuffix} tests"
 
 def doBuild() {
     String llvmBranch = env.BRANCH_NAME
-    String clangBranch = llvmBranch
-    String lldBranch = llvmBranch == 'cap-table' ? 'master' : llvmBranch
     stage("Checkout sources") {
         timestamps {
             echo("scm=${scm}")
-            llvmRepo = doGit('https://github.com/CTSRD-CHERI/llvm', llvmBranch, 'llvm', 'llvm')
+            llvmRepo = doGit('https://github.com/CTSRD-CHERI/llvm-project.git', llvmBranch, 'llvm-project', 'llvm-project')
             echo("LLVM = ${llvmRepo}")
-            clangRepo = doGit('https://github.com/CTSRD-CHERI/clang', clangBranch, 'llvm/tools/clang', 'clang')
-            echo("CLANG = ${clangRepo}")
-            lldRepo = doGit('https://github.com/CTSRD-CHERI/lld', lldBranch, 'llvm/tools/lld', 'lld')
-            echo("LLD = ${lldRepo}")
         }
     }
     stage("Build") {
         updateGithubStatus('Compiling...')
         buildScript = '''#!/usr/bin/env bash
 set -xe
+# Remove old split-repo checkout
+if [ -e "${WORKSPACE}/llvm" ]; then
+    rm -rf "${WORKSPACE}/llvm"
+fi
 
 #remove old artifacts
 rm -fv cheri-*-clang-*.tar.xz
@@ -94,21 +88,22 @@ rm -fv cheri-*-clang-*.tar.xz
 if [ -e "${SDKROOT_DIR}" ]; then
    echo "ERROR, old SDK was not deleted!" && exit 1
 fi
-# if [ -e "${WORKSPACE}/llvm-build" ]; then
+# if [ -e "${WORKSPACE}/llvm-project/Build" ]; then
 #   echo "ERROR, old build was not deleted!" && exit 1
 # fi
 
-# go to llvm, checkout the appropriate branch and create the Build directory
-git -C "${WORKSPACE}/llvm" rev-parse HEAD
-git -C "${WORKSPACE}/llvm/tools/clang" rev-parse HEAD
-git -C "${WORKSPACE}/llvm/tools/lld" rev-parse HEAD
+# go to llvm-project, checkout the appropriate branch and create the Build directory
+git -C "${WORKSPACE}/llvm-project" rev-parse HEAD
 
-cd "${WORKSPACE}" || exit 1
-mkdir -p llvm-build
+cd "${WORKSPACE}/llvm-project" || exit 1
+mkdir -p Build
+
+# Remove some files that may have been created in a previous run:
+find "${WORKSPACE}/llvm-project" -name cheri-cap-index.ll.mir -delete || true
 
 # run cmake
-cd llvm-build || exit 1
-CMAKE_ARGS=("-DCMAKE_INSTALL_PREFIX=${SDKROOT_DIR}" "-DLLVM_OPTIMIZED_TABLEGEN=OFF")
+cd llvm-project/Build || exit 1
+CMAKE_ARGS=("-DCMAKE_INSTALL_PREFIX=${SDKROOT_DIR}" "-DLLVM_OPTIMIZED_TABLEGEN=OFF" "-DLLVM_ENABLE_PROJECTS=clang;lld;llvm")
 if [ "$label" == "linux" ] ; then
     export CMAKE_CXX_COMPILER=clang++-6.0
     export CMAKE_C_COMPILER=clang-6.0
@@ -127,13 +122,13 @@ CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}" "-DCMAKE_C_COMPILER=${
         buildScript += '''
 # Also don't set the default target or default sysroot when running tests as it breaks quite a few
 # max 1 hour total and max 2 minutes per test
-CMAKE_ARGS+=("-DLLVM_LIT_ARGS=--xunit-xml-output ${WORKSPACE}/llvm-test-output.xml --max-time 3600 --timeout 240 ${JFLAG}")
+CMAKE_ARGS+=("-DLLVM_LIT_ARGS=--xunit-xml-output ${WORKSPACE}/llvm-test-output.xml --max-time 3600 --timeout 240")
 
 rm -f CMakeCache.txt
 cmake -G Ninja "${CMAKE_ARGS[@]}" ../llvm
 
 # build
-ninja ${JFLAG}
+ninja -v ${JFLAG}
 
 # install
 ninja install
@@ -173,6 +168,15 @@ ln -fs clang++ cheri-unknown-freebsd-c++
 ln -fs clang-cpp mips64-unknown-freebsd-cpp
 ln -fs clang-cpp cheri-unknown-freebsd-cpp
 
+# create symlinks for llvm-{ar,ranlib,nm,objdump,readelf}
+LLVM_SYMLINK_KBINUTILS="ar ranlib nm objdump readelf"
+for TOOL in $LLVM_SYMLINK_KBINUTILS ; do
+    ln -fs llvm-$TOOL $TOOL
+    ln -fs llvm-$TOOL cheri-unknown-freebsd-$TOOL
+    ln -fs llvm-$TOOL mips4-unknown-freebsd-$TOOL
+    ln -fs llvm-$TOOL mips64-unknown-freebsd-$TOOL
+done
+
 # clean & bundle up
 cd ${WORKSPACE}
 ls -laS "${SDKROOT_DIR}/bin"
@@ -198,7 +202,7 @@ cd ${SDKROOT_DIR}/..
 tar -cJf "cheri-${BRANCH_NAME}-clang-llvm.tar.xz" `basename ${SDKROOT_DIR}`
 
 # clean up to save some disk space
-# rm -rf "${WORKSPACE}/llvm-build"
+# rm -rf "${WORKSPACE}/llvm-project/Build"
 rm -rf "$SDKROOT_DIR"
 '''
         archiveArtifacts artifacts: 'cheri-*-clang-*.tar.xz', onlyIfSuccessful: true
@@ -234,8 +238,8 @@ node(nodeLabel) {
     } finally {
         // Remove the test binaries to save some disk space and to make typos in
         // test scripts fail the build even if a previous commit created that file
-        for (path in ['llvm/Build', env.SDKROOT_DIR, 'llvm-build/test',
-                     'llvm-build/tools/clang/test', 'llvm-build/tools/lld/test']) {
+        for (path in [env.SDKROOT_DIR, 'llvm-project/Build/test',
+                     'llvm-project/Build/tools/clang/test', 'llvm-project/Build/tools/lld/test']) {
             dir(path) {
                 deleteDir()
             }
