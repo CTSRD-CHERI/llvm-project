@@ -32,7 +32,7 @@ declare void @free(i8 addrspace(200)* nocapture) #1
 define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x_off) nounwind {
 ; LEGACY-LABEL: eo_fermion_force:
 ; LEGACY:       # %bb.0: # %entry
-; LEGACY-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:80|160]]
+; LEGACY-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:80|96]]
 ; LEGACY-NEXT:    dmfc1 $1, $f28
 ; LEGACY-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 8]]($c11)
 ; LEGACY-NEXT:    dmfc1 $1, $f27
@@ -171,7 +171,7 @@ define void @eo_fermion_force(double %eps, i32 signext %nflavors, i32 signext %x
 
 ; CAPTABLE-LABEL: eo_fermion_force:
 ; CAPTABLE:       # %bb.0: # %entry
-; CAPTABLE-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:96|192]]
+; CAPTABLE-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:96|128]]
 ; CAPTABLE-NEXT:    dmfc1 $1, $f29
 ; CAPTABLE-NEXT:    csd $1, $zero, [[@EXPR STACKFRAME_SIZE - 8]]($c11)
 ; CAPTABLE-NEXT:    dmfc1 $1, $f28

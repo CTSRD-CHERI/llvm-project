@@ -134,8 +134,8 @@ source_filename = "DerivedSources/WebCore/JSInternalSettingsGenerated.cpp"
 ; DUMP-NEXT:         d8 43 00 0e clc $c2, $zero, 224($c3)
 ; DUMP-NEXT:         00 01 09 38 dsll $1, $1, 4
 ; DUMP-NEXT:         d8 42 08 00 clc $c2, $1, 0($c2)
-; DUMP-NEXT:         d8 21 00 02 clc $c1, $zero, 32($c1)
 ; DUMP-NEXT:         d8 42 00 02 clc $c2, $zero, 32($c2)
+; DUMP-NEXT:         d8 21 00 02 clc $c1, $zero, 32($c1)
 ; DUMP-NEXT:         48 02 08 95 cne $2, $c1, $c2
 ; DUMP-NEXT:         d8 32 00 03 clc $c1, $zero, 48($c18)
 ; DUMP-NEXT:         48 01 0b ff cgetaddr $1, $c1
@@ -965,8 +965,8 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    clc $c2, $zero, 224($c3)
 ; CHECK-NEXT:    dsll $1, $1, 4
 ; CHECK-NEXT:    clc $c2, $1, 0($c2)
-; CHECK-NEXT:    clc $c1, $zero, 32($c1)
 ; CHECK-NEXT:    clc $c2, $zero, 32($c2)
+; CHECK-NEXT:    clc $c1, $zero, 32($c1)
 ; CHECK-NEXT:    cne $2, $c1, $c2
 ; CHECK-NEXT:  .LBB0_22: # %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
 ; CHECK-NEXT:    clc $c1, $zero, 48($c18)
