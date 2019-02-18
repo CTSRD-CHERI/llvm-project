@@ -78,6 +78,7 @@ define i32 @load_store_stack_i32(i32 %arg, i64 addrspace(200)* %padding) addrspa
   %padding.stack = alloca i64 addrspace(200)*, align 32, addrspace(200)
   ; Store dummy cap to stack slot 1
   store volatile i64 addrspace(200)* %padding, i64 addrspace(200)* addrspace(200)* %padding.stack, align 32
+  ; MIPS:       sll $1, $4, 0
   ; CHECK:      #NO_APP
   ; PURECAP-NEXT: csc $c3, $zero, 32($c11)
   ; MIPS-NEXT:  sd $5, 32($sp)
@@ -89,7 +90,6 @@ define i32 @load_store_stack_i32(i32 %arg, i64 addrspace(200)* %padding) addrspa
   store volatile i32 %arg, i32 addrspace(200)* %arg.stack, align 4
   ; CHECK:      #NO_APP
   ; PURECAP-NEXT: csw $4, $zero, 24($c11)
-  ; MIPS-NEXT:  sll $1, $4, 0
   ; MIPS-NEXT:  sw $1, 24($sp)
   ; CHECK-NEXT: #APP
   tail call void asm sideeffect "", ""()
@@ -212,8 +212,7 @@ define i64 @load_store_stack_i32_sext(i32 %arg, i64 addrspace(200)* %padding) ad
   store volatile i32 %arg, i32 addrspace(200)* %arg.stack, align 4
   ; CHECK:      #NO_APP
   ; PURECAP-NEXT: csw	$4, $zero, 24($c11)
-  ; MIPS-NEXT: sll $1, $4, 0
-  ; MIPS-NEXT: sw	$1, 24($sp)
+  ; MIPS-NEXT: sw   $1, 24($sp)
   ; CHECK-NEXT: #APP
   ; And load it back
   tail call void asm sideeffect "", ""()

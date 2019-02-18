@@ -4,16 +4,16 @@
 define i32 @foo() nounwind {
 ; CHECK-LABEL: foo:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:192|224]]
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:192|384]]
+; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 11 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(foo)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foo)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
+; CHECK-NEXT:    cincoffset $c2, $c11, 8
 ; CHECK-NEXT:    clcbi $c12, %capcall20(bar)($c1)
-; CHECK-NEXT:    cincoffset $c1, $c11, [[@EXPR $CAP_SIZE - 8]]
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    csetbounds $c3, $c1, 168
-; CHECK-NEXT:    clc $c17, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csetbounds $c3, $c2, 168
+; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 11 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 entry:
