@@ -196,8 +196,7 @@ cheriabi_kinfo_proc_out(const struct kinfo_proc *ki, struct kinfo_proc_c *ki_c)
   // CHECK-LABEL: cheriabi_kinfo_proc_out
   // CHECK-NOT: cfromddc
   // CHECK-NOT: cfromptr
-  // CHECK:	     cgetnull	$c1
-  // CHECK-NEXT: csetoffset	$c1, $c1, ${{[0-9]+}}
+  // CHECK:     cincoffset	$c1, $cnull, ${{[0-9]+}}
   // CHECK-NOT: cfromddc
   // CHECK-NOT: cfromptr
   // CHECK: .end cheriabi_kinfo_proc_out
@@ -210,8 +209,7 @@ void * __capability same_thing_expanded(const struct kinfo_proc *ki, struct kinf
   // CHECK-LABEL: same_thing_expanded:
   // CHECK-NOT: cfromddc
   // CHECK-NOT: cfromptr
-  // CHECK:	     cgetnull	$c1
-  // CHECK-NEXT: csetoffset	$c1, $c1, ${{[0-9]+}}
+  // CHECK:     cincoffset	$c1, $cnull, ${{[0-9]+}}
   // CHECK-NOT: cfromddc
   // CHECK-NOT: cfromptr
   // CHECK: .end same_thing_expanded

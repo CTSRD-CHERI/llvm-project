@@ -1,7 +1,6 @@
 // RUN: rm -f %t-hybrid.csv %t-purecap.csv
 // RUN: %cheri128_purecap_cc1 %s -mllvm -cheri-cap-table-abi=pcrel -cheri-bounds=aggressive \
 // RUN:   -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t-purecap.csv -S -o /dev/null
-// RUN: cat %t-purecap.csv
 // RUN: FileCheck -input-file %t-purecap.csv %s -check-prefixes CSV
 
 // CSV: alignment_bits,size,kind,source_loc,compiler_pass,details
@@ -70,20 +69,11 @@ int test(void) {
   return foo(3, 1, 2, 3, 4ULL); // promoted to u64 in variadic call -> 4 * 8 bytes
 }
 
-// CSV-NEXT: 4,16,s,"<somewhere in _Z27test_subobject_addrof_basicU3capP3Foo>","CHERI sandbox ABI setup","set bounds on AllocaInst s.addr"
-// CSV-NEXT: 4,16,s,"<somewhere in _Z16test_onstack_intU3capP3Foo>","CHERI sandbox ABI setup","set bounds on AllocaInst s.addr"
 // CSV-NEXT: 2,4,s,"<somewhere in _Z16test_onstack_intU3capP3Foo>","CHERI sandbox ABI setup","set bounds on AllocaInst x"
-// CSV-NEXT: 4,16,s,"<somewhere in _Z28test_onstack_int_overalignedU3capP3Foo>","CHERI sandbox ABI setup","set bounds on AllocaInst s.addr"
 // CSV-NEXT: 5,4,s,"<somewhere in _Z28test_onstack_int_overalignedU3capP3Foo>","CHERI sandbox ABI setup","set bounds on AllocaInst x"
 // CSV-NEXT: 0,333,s,"<somewhere in _Z17test__stack_arrayv>","CHERI sandbox ABI setup","set bounds on AllocaInst buf"
-// CSV-NEXT: 2,4,s,"<somewhere in _Z11test_allocai>","CHERI sandbox ABI setup","set bounds on AllocaInst n.addr"
-// CSV-NEXT: 4,16,s,"<somewhere in _Z11test_allocai>","CHERI sandbox ABI setup","set bounds on AllocaInst allocabuf"
 // CSV-NEXT: 7,<unknown>,s,"<somewhere in _Z11test_allocai>","CHERI sandbox ABI setup","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
-// CSV-NEXT: 2,4,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst n.addr"
-// CSV-NEXT: 4,16,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst saved_stack"
-// CSV-NEXT: 3,8,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst __vla_expr0"
 // CSV-NEXT: 7,<unknown>,s,"<somewhere in _Z23test_varlen_stack_arrayi>","CHERI sandbox ABI setup","set bounds on AllocaInst vla"
-// CSV-NEXT: 2,4,s,"<somewhere in _Z20load_global_variablev>","CHERI sandbox ABI setup","set bounds on AllocaInst x"
 // CSV-NEXT: 7,<unknown>,s,"<somewhere in _Z11test_allocai>","ExpandDYNAMIC_STACKALLOC",""
 // CSV-NEXT: 7,<unknown>,s,"<somewhere in _Z23test_varlen_stack_arrayi>","ExpandDYNAMIC_STACKALLOC",""
 // CSV-NEXT: 2,12,g,"<somewhere in _Z20load_global_variablev>","MipsTargetLowering::lowerGlobalAddress","load of global global_foo (alloc size=12)"
