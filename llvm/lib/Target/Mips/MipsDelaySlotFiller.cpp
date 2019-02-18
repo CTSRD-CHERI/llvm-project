@@ -706,13 +706,20 @@ bool MipsDelaySlotFiller::searchRange(MachineBasicBlock &MBB, IterTy Begin,
   for (IterTy I = Begin; I != End;) {
     IterTy CurrI = I;
     ++I;
-
+    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": checking instruction for delay slot: ";
+               CurrI->dump());
     // skip debug value
-    if (CurrI->isDebugInstr())
+    if (CurrI->isDebugInstr()) {
+      LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": ignoring debug instruction for delay slot: ";
+                 CurrI->dump());
       continue;
+    }
 
-    if (terminateSearch(*CurrI))
+    if (terminateSearch(*CurrI)) {
+      LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": should terminate search: ";
+                 CurrI->dump());
       break;
+    }
 
     assert((!CurrI->isCall() && !CurrI->isReturn() && !CurrI->isBranch()) &&
            "Cannot put calls, returns or branches in delay slot.");

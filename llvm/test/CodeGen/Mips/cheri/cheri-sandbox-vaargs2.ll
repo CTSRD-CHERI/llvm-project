@@ -1,5 +1,5 @@
-; RUN: %cheri128_purecap_llc -cheri-cap-table-abi=pcrel -O2 -o - %s | FileCheck %s -check-prefixes CHECK,PCREL
-; RUN: %cheri128_purecap_llc -cheri-cap-table-abi=legacy -O2 -o - %s | FileCheck %s -check-prefixes CHECK,LEGACY
+; RUN: %cheri128_purecap_llc -cheri-cap-table-abi=pcrel -O2 -o - %s | FileCheck %s -check-prefixes PCREL
+; RUN: %cheri128_purecap_llc -cheri-cap-table-abi=legacy -O2 -o - %s | FileCheck %s -check-prefixes LEGACY
 ; ModuleID = 'libxo.i'
 
 %struct.xo_handle_s = type { i8 addrspace(200)* }
@@ -16,8 +16,8 @@ define void @xo_emit(i8 addrspace(200)* %fmt, ...) {
 ; CHECK: # %bb.0: # %entry
 ; Save the incoming varargs in a temporary register:
 ; PCREL:   clcbi [[CAP_FOR_B:\$c[0-9]+]], %captab20(b)($c{{[0-9]+}})
-; LEGACY:  ld [[ADDR_OF_B:\$[0-9]+]], %got_disp(b)($1)
 ; LEGACY:  ld [[SIZE_OF_B:\$[0-9]+]], %got_disp(.size.b)($1)
+; LEGACY:  ld [[ADDR_OF_B:\$[0-9]+]], %got_disp(b)($1)
 ; LEGACY:  cfromddc	[[TMP:\$c[0-9]+]], [[ADDR_OF_B]]
 ; LEGACY:  csetbounds	[[CAP_FOR_B:\$c[0-9]+]], [[TMP]], [[SIZE_OF_B]]
 ; Now store in the global:
