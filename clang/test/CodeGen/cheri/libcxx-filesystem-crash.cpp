@@ -10,7 +10,6 @@
 // RUN: %cheri256_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,N64-ASM
 // RUN: %cheri128_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,N64-CHERI128-BAD-CODE
 // RUN: %cheri256_purecap_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,PURECAP-ASM
-// RUN: %cheri128_purecap_cc1 -O2 -std=c++11 -o %S/addrfolder-two-uses.mir -S %s -mllvm -stop-before=cheriaddrmodefolder
 // RUN: %cheri128_purecap_cc1 -O2 -std=c++11 -o - -S %s -mllvm -stop-after=cheriaddrmodefolder
 // RUN: %cheri128_purecap_cc1 -O2 -std=c++11 -o - -S %s | FileCheck %s -check-prefixes ASM,PURECAP-CHERI128-BAD-CODE
 
