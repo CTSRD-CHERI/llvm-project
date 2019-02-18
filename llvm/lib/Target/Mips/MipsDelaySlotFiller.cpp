@@ -637,12 +637,15 @@ bool MipsDelaySlotFiller::runOnMachineBasicBlock(MachineBasicBlock &MBB) {
       if (MipsCompactBranchPolicy.getValue() != CB_Always ||
            !TII->getEquivalentCompactForm(I)) {
         if (searchBackward(MBB, *I)) {
+          LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": found instruction for delay slot using forward search.\n");
           Filled = true;
         } else if (I->isTerminator()) {
           if (searchSuccBBs(MBB, I)) {
             Filled = true;
+            LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": found instruction for delay slot using successor BB search.\n");
           }
         } else if (searchForward(MBB, I)) {
+          LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": found instruction for delay slot using forward search.\n");
           Filled = true;
         }
       }
@@ -787,8 +790,10 @@ bool MipsDelaySlotFiller::searchBackward(MachineBasicBlock &MBB,
 
   MachineBasicBlock::iterator SlotI = Slot;
   if (!searchRange(MBB, ++SlotI.getReverse(), MBB.rend(), RegDU, MemDU, Slot,
-                   Filler))
+                   Filler)) {
+    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": could not find instruction for delay slot using backwards search.\n");
     return false;
+  }
 
   MBB.splice(std::next(SlotI), &MBB, Filler.getReverse());
   MIBundleBuilder(MBB, SlotI, std::next(SlotI, 2));
@@ -808,8 +813,10 @@ bool MipsDelaySlotFiller::searchForward(MachineBasicBlock &MBB,
 
   RegDU.setCallerSaved(*Slot);
 
-  if (!searchRange(MBB, std::next(Slot), MBB.end(), RegDU, NM, Slot, Filler))
+  if (!searchRange(MBB, std::next(Slot), MBB.end(), RegDU, NM, Slot, Filler)) {
+    LLVM_DEBUG(dbgs() << DEBUG_TYPE << ": could not find instruction for delay slot using forwards search.\n");
     return false;
+  }
 
   MBB.splice(std::next(Slot), &MBB, Filler);
   MIBundleBuilder(MBB, Slot, std::next(Slot, 2));
