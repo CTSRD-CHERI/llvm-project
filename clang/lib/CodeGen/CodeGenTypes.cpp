@@ -664,7 +664,9 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
 
   case Type::BlockPointer: {
     const QualType FTy = cast<BlockPointerType>(Ty)->getPointeeType();
-    llvm::Type *PointeeType = ConvertTypeForMem(FTy);
+    llvm::Type *PointeeType = CGM.getLangOpts().OpenCL
+                                  ? CGM.getGenericBlockLiteralType()
+                                  : ConvertTypeForMem(FTy);
     // XXXAR: If Ty is capability, use AS200 otherwise the same as LangAS as the
     // underlying type
     unsigned AS = Ty->isCHERICapabilityType(CGM.getContext())
