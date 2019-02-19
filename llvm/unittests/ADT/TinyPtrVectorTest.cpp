@@ -39,7 +39,7 @@ protected:
     for (size_t i = 0, e = array_lengthof(TestValues); i != e; ++i)
       TestPtrs.push_back(&TestValues[i]);
 
-    std::shuffle(TestPtrs.begin(), TestPtrs.end(), std::mt19937{});
+    llvm::shuffle(TestPtrs.begin(), TestPtrs.end(), std::mt19937{});
   }
 
   ArrayRef<PtrT> testArray(size_t N) {

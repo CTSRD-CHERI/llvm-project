@@ -1045,7 +1045,7 @@ AllocaSlices::AllocaSlices(const DataLayout &DL, AllocaInst &AI)
   if (SROARandomShuffleSlices) {
     std::mt19937 MT(static_cast<unsigned>(
         std::chrono::system_clock::now().time_since_epoch().count()));
-    std::shuffle(Slices.begin(), Slices.end(), MT);
+    llvm::shuffle(Slices.begin(), Slices.end(), MT);
   }
 #endif
 

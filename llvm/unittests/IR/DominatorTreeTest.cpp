@@ -939,7 +939,7 @@ TEST(DominatorTree, InsertDeleteExhaustive) {
 
   std::mt19937 Generator(0);
   for (unsigned i = 0; i < 16; ++i) {
-    std::shuffle(Updates.begin(), Updates.end(), Generator);
+    llvm::shuffle(Updates.begin(), Updates.end(), Generator);
     CFGHolder Holder;
     CFGBuilder B(Holder.F, Arcs, Updates);
     DominatorTree DT(*Holder.F);
