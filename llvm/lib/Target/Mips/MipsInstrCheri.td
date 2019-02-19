@@ -965,6 +965,15 @@ multiclass StackCapPatterns<ValueType iFatptrTy, ComplexPattern Addr> {
   def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, GPR64Opnd:$off)),
             (CheriBoundedStackPseudo (Addr:$fi), (i64 0), $off)>;
 
+  let AddedComplexity = -100 in {
+    // TODO: should fix to not add a int_cheri_bounded_stack_cap after Expand_DYNAMIC_STACKALLOC since that already
+    //  includes it instead of working around it here
+    def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap (iFatptrTy (int_cheri_cap_bounds_set CheriOpnd:$dyn_alloc, GPR64Opnd:$size1)), GPR64Opnd:$size2)),
+              (iFatptrTy (CSetBounds (iFatptrTy (CSetBounds CheriOpnd:$dyn_alloc, GPR64Opnd:$size1)), GPR64Opnd:$size2))>;
+    // def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap CheriOpnd:$dyn_alloc, GPR64Opnd:$size)),
+    //           (iFatptrTy (CSetBounds CheriOpnd:$dyn_alloc, GPR64Opnd:$size))>;
+  }
+
   // NOTE: removing the parentheses around (AddrFI128:$fi) in the output pattern will result in
   // an invalid CIncOffset: %2:cherigpr = CIncOffset %2:cherigpr, $zero_64
   def : Pat<(iFatptrTy Addr:$fi), (CIncOffset (Addr:$fi), ZERO_64)>;
