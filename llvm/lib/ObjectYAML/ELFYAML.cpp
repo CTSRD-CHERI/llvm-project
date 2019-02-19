@@ -449,7 +449,6 @@ void ScalarEnumerationTraits<ELFYAML::ELF_SHT>::enumeration(
   ECase(SHT_GROUP);
   ECase(SHT_SYMTAB_SHNDX);
   ECase(SHT_RELR);
-  ECase(SHT_LOOS);
   ECase(SHT_ANDROID_REL);
   ECase(SHT_ANDROID_RELA);
   ECase(SHT_ANDROID_RELR);
@@ -462,8 +461,6 @@ void ScalarEnumerationTraits<ELFYAML::ELF_SHT>::enumeration(
   ECase(SHT_GNU_verdef);
   ECase(SHT_GNU_verneed);
   ECase(SHT_GNU_versym);
-  ECase(SHT_HIOS);
-  ECase(SHT_LOPROC);
   switch (Object->Header.Machine) {
   case ELF::EM_ARM:
     ECase(SHT_ARM_EXIDX);
@@ -488,6 +485,7 @@ void ScalarEnumerationTraits<ELFYAML::ELF_SHT>::enumeration(
     break;
   }
 #undef ECase
+  IO.enumFallback<Hex32>(Value);
 }
 
 void ScalarBitSetTraits<ELFYAML::ELF_PF>::bitset(IO &IO,
