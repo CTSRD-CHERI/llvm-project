@@ -953,7 +953,7 @@ defm : FrameIndexPatterns<iFATPTR256, AddrFI256>;
 
 
 // Add a pseudo instruction to pretend this is only one instruction to avoid register spills
-let usesCustomInserter = 0, isReMaterializable = 1, isAsCheapAsAMove = 1 in {
+let usesCustomInserter = 0, isReMaterializable = 1 in {
 def CheriBoundedStackPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi, GPR64Opnd:$frameoffs, GPR64Opnd:$size),
                                       "#CapGlobalAddrPseudo $cd, $fi, $frameoffs, $size", []>;
 }
