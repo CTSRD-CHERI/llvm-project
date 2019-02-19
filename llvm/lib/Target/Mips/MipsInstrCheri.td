@@ -958,22 +958,24 @@ def CheriBoundedStackPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:
                                       "#CapGlobalAddrPseudo $cd, $fi, $frameoffs, $size", []>;
 }
 
-def : Pat<(iFATPTR128 (int_cheri_bounded_stack_cap AddrFI128:$fi, simm11s0Pattern:$off)),
-          (CheriBoundedStackPseudo (AddrFI128:$fi), (i64 0), imm:$off)>;
-def : Pat<(iFATPTR128 (int_cheri_bounded_stack_cap AddrFI128:$fi, GPR64Opnd:$off)),
-          (CheriBoundedStackPseudo (AddrFI128:$fi), (i64 0), $off)>;
+// TODO: for some reason all these need to be duplicated for the AddrFI patterns again
+multiclass StackCapPatterns<ValueType iFatptrTy, ComplexPattern Addr> {
+  def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, simm11s0Pattern:$off)),
+            (CheriBoundedStackPseudo (Addr:$fi), (i64 0), imm:$off)>;
+  def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, GPR64Opnd:$off)),
+            (CheriBoundedStackPseudo (Addr:$fi), (i64 0), $off)>;
 
-// NOTE: removing the parentheses around (AddrFI128:$fi) in the output pattern will result in
-// an invalid CIncOffset: %2:cherigpr = CIncOffset %2:cherigpr, $zero_64
-def : Pat<(iFATPTR64 AddrFI64:$fi), (CIncOffset (AddrFI64:$fi), ZERO_64)>;
-def : Pat<(iFATPTR128 AddrFI128:$fi), (CIncOffset (AddrFI128:$fi), ZERO_64)>;
-def : Pat<(iFATPTR256 AddrFI256:$fi), (CIncOffset (AddrFI256:$fi), ZERO_64)>;
-let AddedComplexity = 5 in {
-// Add complexity to select this before the generic CIncOffsetImm pattern
-def : Pat<(iFATPTR64 (ptradd AddrFI64:$fi, simm11s0Pattern:$offset)), (CIncOffsetImm (AddrFI64:$fi), imm:$offset)>;
-def : Pat<(iFATPTR128 (ptradd AddrFI128:$fi, simm11s0Pattern:$offset)), (CIncOffsetImm (AddrFI128:$fi), imm:$offset)>;
-def : Pat<(iFATPTR256 (ptradd AddrFI256:$fi, simm11s0Pattern:$offset)), (CIncOffsetImm (AddrFI256:$fi), imm:$offset)>;
+  // NOTE: removing the parentheses around (AddrFI128:$fi) in the output pattern will result in
+  // an invalid CIncOffset: %2:cherigpr = CIncOffset %2:cherigpr, $zero_64
+  def : Pat<(iFatptrTy Addr:$fi), (CIncOffset (Addr:$fi), ZERO_64)>;
+  let AddedComplexity = 5 in {
+    // Add complexity to select this before the generic CIncOffsetImm pattern
+    def : Pat<(iFatptrTy (ptradd Addr:$fi, simm11s0Pattern:$offset)), (CIncOffsetImm (Addr:$fi), imm:$offset)>;
+  }
 }
+defm : StackCapPatterns<iFATPTR64, AddrFI64>;
+defm : StackCapPatterns<iFATPTR128, AddrFI128>;
+defm : StackCapPatterns<iFATPTR256, AddrFI256>;
 
 // This would also work:
 // def frameindex_to_targetframeindex : SDNodeXForm<frameindex, [{
