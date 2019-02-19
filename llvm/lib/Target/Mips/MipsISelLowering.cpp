@@ -3953,11 +3953,8 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   }
   if (ABI.IsCheriPureCap()) {
     if (FirstOffset != -1) {
-      Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
       SDValue PtrOff = DAG.getPointerAdd(DL, StackPtr, FirstOffset);
-      PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType,
-          DAG.getConstant(SetBounds, DL, MVT::i64), PtrOff,
-          DAG.getIntPtrConstant(LastOffset, DL));
+      PtrOff = setBounds(DAG, PtrOff, LastOffset, /*CSetBoundsStatsLogged=*/true);
       PtrOff = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, CapType,
           DAG.getConstant(Intrinsic::cheri_cap_perms_and, DL, MVT::i64), PtrOff,
           DAG.getIntPtrConstant(0xFFD7, DL));
