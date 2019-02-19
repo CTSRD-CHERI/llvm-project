@@ -2537,7 +2537,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   // functions)
   if (const Arg *A = Args.getLastArg(OPT_cheri_bounds_EQ)) {
     auto BoundsMode =
-        llvm::StringSwitch<LangOptions::CheriBoundsMode>(A->getValue())
+        llvm::StringSwitch<int>(A->getValue())
             .Case("conservative", LangOptions::CBM_Conservative)
             .Case("references-only", LangOptions::CBM_References)
             .Case("subobject-safe", LangOptions::CBM_SubObjectsSafe)
@@ -2546,11 +2546,11 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
             .Case("everywhere-unsafe", LangOptions::CBM_EverywhereUnsafe)
             .Default((LangOptions::CheriBoundsMode)-1);
 
-    if (BoundsMode == (LangOptions::CheriBoundsMode)-1) {
+    if (BoundsMode == -1) {
       Diags.Report(diag::err_drv_invalid_value)
           << A->getAsString(Args) << A->getValue();
     } else {
-      Opts.setCheriBounds(BoundsMode);
+      Opts.setCheriBounds((LangOptions::CheriBoundsMode)BoundsMode);
     }
   }
 

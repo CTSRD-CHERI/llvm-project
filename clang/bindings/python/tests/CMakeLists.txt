@@ -25,6 +25,10 @@ list(FIND LLVM_USE_SANITIZER "Address" LLVM_USE_ASAN_INDEX)
 if(NOT LLVM_USE_ASAN_INDEX EQUAL -1)
   set(RUN_PYTHON_TESTS FALSE)
 endif()
+list(FIND LLVM_USE_SANITIZER "Undefined" LLVM_USE_UBSAN_INDEX)
+if(NOT LLVM_USE_UBSAN_INDEX EQUAL -1)
+  set(RUN_PYTHON_TESTS FALSE)
+endif()
 
 # Tests fail on Windows, and need someone knowledgeable to fix.
 # It's not clear whether it's a test or a valid binding problem.
