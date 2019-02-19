@@ -1,8 +1,8 @@
-// RUN:  %cheri128_cc1 "-triple" "cheri-unknown-freebsd" "-emit-obj" "-target-feature" "+soft-float" "-target-abi" "purecap" "-O2" "-x" "c" %s -o - -emit-llvm | FileCheck %s
-// RUN:  %cheri256_cc1 "-triple" "cheri-unknown-freebsd" "-emit-obj" "-target-feature" "+soft-float" "-target-abi" "purecap" "-O2" "-x" "c" %s -o - -emit-llvm | FileCheck %s
-// RUN:  %cheri128_cc1 "-triple" "cheri-unknown-freebsd" "-emit-obj" "-target-feature" "+soft-float" "-target-abi" "purecap" "-O2" "-x" "c" %s -o - | FileCheck %s
-// RUN:  %cheri256_cc1 "-triple" "cheri-unknown-freebsd" "-emit-obj" "-target-feature" "+soft-float" "-target-abi" "purecap" "-O2" "-x" "c" %s -o - | FileCheck %s
-// CHECK-NOT: safasdg
+// RUN: %cheri128_purecap_cc1 "-emit-obj" "-O2" "-x" "c" %s -o /dev/null -emit-llvm -verify
+// RUN: %cheri256_purecap_cc1 "-emit-obj" "-O2" "-x" "c" %s -o /dev/null -emit-llvm -verify
+// RUN: %cheri128_purecap_cc1 "-emit-obj" "-O2" "-x" "c" %s -o /dev/null -S -verify
+// RUN: %cheri256_purecap_cc1 "-emit-obj" "-O2" "-x" "c" %s -o /dev/null -S -verify
+
 void other_func(void* x);
 
 #define TEST_BYVAL(count, type)                                         \
@@ -30,14 +30,19 @@ TEST_BYVAL(1000, __intcap_t)
 // This is the original reduced test case:
 typedef struct { int err_msg[1024]; } Dwarf_Error;
 Dwarf_Error a;
-int varargs_fn();
+int varargs_fn(); // expected-note{{candidate function declaration needs parameter types}}
 int val_fn(Dwarf_Error a);
 int ptr_fn(Dwarf_Error* a);
 
 int main() {
   ptr_fn(&a);
   val_fn(a);
-  varargs_fn(a);
-  undefined_fn(a);
+  varargs_fn(a); // expected-warning{{call to function 'varargs_fn' with no prototype may lead to run-time stack corruption on CHERI.}}
+  // expected-note@-1{{Calling functions without prototypes is dangerous}}
+  undefined_fn(a); // expected-warning{{implicit declaration of function 'undefined_fn' is invalid in C99}}
+  // expected-warning@-1{{call to function 'undefined_fn' with no prototype may lead to run-time stack corruption on CHERI.}}
+  // expected-note@-2{{Calling functions without prototypes is dangerous}}
+  // expected-note@-3{{candidate function declaration needs parameter types}}
+
   return 0;
 }
