@@ -961,9 +961,15 @@ defm : FrameIndexPatterns<iFATPTR256, AddrFI256>;
 
 
 // Add a pseudo instruction to pretend this is only one instruction to avoid register spills
-let usesCustomInserter = 0, isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def CheriBoundedStackPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:$fi, GPR64Opnd:$frameoffs, GPR64Opnd:$size),
-                                      "#CapGlobalAddrPseudo $cd, $fi, $frameoffs, $size", []>;
+                                      "#CapGlobalAddrPseudo $cd, $fi, $frameoffs, $size", []> {
+  let hasSideEffects = 0; // could actually trap if we are out of stack space but I don't think that matters
+  let isReMaterializable = 1;
+  // Actually two instructions but for now pretend that it is only one since otherwise
+  // the regalloc passes will not attempt to rematerialize this which results in
+  // stack spills and more saved registers.
+  let isAsCheapAsAMove = 1;  // TODO: this should be false
+  let usesCustomInserter = 0;
 }
 
 // TODO: for some reason all these need to be duplicated for the AddrFI patterns again
