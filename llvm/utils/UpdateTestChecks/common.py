@@ -28,11 +28,20 @@ def should_add_line_to_output(input_line, prefix_set):
   return True
 
 # Invoke the tool that is being tested.
-def invoke_tool(exe, cmd_args, ir):
+def invoke_tool(exe, cmd_args, ir, preprocess_cmd=None, verbose=False):
   with open(ir) as ir_file:
     # TODO Remove the str form which is used by update_test_checks.py and
     # update_llc_test_checks.py
     # The safer list form is used by update_cc_test_checks.py
+    if preprocess_cmd:
+      # Allow pre-processing the IR file (e.g. using sed):
+      assert isinstance(preprocess_cmd, str)  # TODO: use a list instead of using shell
+      preprocess_cmd = preprocess_cmd.replace('%s', ir).strip()
+      if verbose:
+        print('Pre-processing ir_file: ', ir, " with command '",
+              preprocess_cmd, "'", sep="", file=sys.stderr)
+      pp = subprocess.Popen(preprocess_cmd, shell=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE)
+      ir_file = pp.stdout
     if isinstance(cmd_args, list):
       stdout = subprocess.check_output([exe] + cmd_args, stdin=ir_file)
     else:

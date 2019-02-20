@@ -71,7 +71,17 @@ def main():
 
     run_list = []
     for l in run_lines:
-      commands = [cmd.strip() for cmd in l.split('|', 1)]
+      commands = [cmd.strip() for cmd in l.split('|', 2)]
+      preprocess_cmd = None
+      # Allow pre-preocessing test inputs with sed, etc.
+      if len(commands) == 3:
+        # TODO: allow other tools
+        if commands[0].startswith("sed"):
+          preprocess_cmd = commands[0]
+          commands = commands[1:]
+        else:
+          print('WARNING: Skipping RUN line with more than two commands and unknown first tool: ' + l, file=sys.stderr)
+          continue
       llc_cmd = commands[0]
       if llc_cmd.startswith("%cheri"):
         llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
@@ -109,19 +119,21 @@ def main():
 
       # FIXME: We should use multiple check prefixes to common check lines. For
       # now, we just ignore all but the last.
-      run_list.append((check_prefixes, llc_cmd_args, triple_in_cmd))
+      run_list.append((check_prefixes, llc_cmd_args, triple_in_cmd, preprocess_cmd))
 
     func_dict = {}
     for p in run_list:
       prefixes = p[0]
       for prefix in prefixes:
         func_dict.update({prefix: dict()})
-    for prefixes, llc_args, triple_in_cmd in run_list:
+    for prefixes, llc_args, triple_in_cmd, preprocess_cmd in run_list:
       if args.verbose:
         print('Extracted LLC cmd: llc ' + llc_args, file=sys.stderr)
         print('Extracted FileCheck prefixes: ' + str(prefixes), file=sys.stderr)
+        if preprocess_cmd:
+          print('Extracted pre-processing command: ' + str(preprocess_cmd), file=sys.stderr)
 
-      raw_tool_output = common.invoke_tool(args.llc_binary, llc_args, test)
+      raw_tool_output = common.invoke_tool(args.llc_binary, llc_args, test, preprocess_cmd, verbose=args.verbose)
       if not (triple_in_cmd or triple_in_ir):
         print("Cannot find a triple. Assume 'x86'", file=sys.stderr)
 
