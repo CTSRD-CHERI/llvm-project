@@ -312,6 +312,8 @@ extern bool LargeCapTable;
 
     bool isCheapToSpeculateCttz() const override;
     bool isCheapToSpeculateCtlz() const override;
+    bool shouldFoldShiftPairToMask(const SDNode *N,
+                                   CombineLevel Level) const override;
 
     /// Return the register type for a given MVT, ensuring vectors are treated
     /// as a series of gpr sized integers.
