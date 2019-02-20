@@ -1,4 +1,5 @@
 from __future__ import print_function
+import os
 import re
 import string
 import subprocess
@@ -40,8 +41,11 @@ def invoke_tool(exe, cmd_args, ir, preprocess_cmd=None, verbose=False):
       if verbose:
         print('Pre-processing ir_file: ', ir, " with command '",
               preprocess_cmd, "'", sep="", file=sys.stderr)
-      pp = subprocess.Popen(preprocess_cmd, shell=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE)
-      ir_file = pp.stdout
+      # Python 2.7 doesn't have subprocess.DEVNULL:
+      with open(os.devnull, 'w') as devnull:
+        pp = subprocess.Popen(preprocess_cmd, shell=True, stdin=devnull,
+                              stdout=subprocess.PIPE)
+        ir_file = pp.stdout
     if isinstance(cmd_args, list):
       stdout = subprocess.check_output([exe] + cmd_args, stdin=ir_file)
     else:
