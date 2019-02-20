@@ -1016,7 +1016,6 @@ struct InStruct {
   SymbolTableBaseSection *DynSymTab;
   GnuHashTableSection *GnuHashTab;
   HashTableSection *HashTab;
-  GdbIndexSection *GdbIndex;
   GotSection *Got;
   GotPltSection *GotPlt;
   IgotPltSection *IgotPlt;
