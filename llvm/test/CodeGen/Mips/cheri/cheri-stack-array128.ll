@@ -9,8 +9,8 @@ define i32 @foo() nounwind {
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(foo)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foo)))
 ; CHECK-NEXT:    cincoffset $c1, $c12, $1
-; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 8]]
 ; CHECK-NEXT:    clcbi $c12, %capcall20(bar)($c1)
+; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 8]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 168
 ; CHECK-NEXT:    clc $c17, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)

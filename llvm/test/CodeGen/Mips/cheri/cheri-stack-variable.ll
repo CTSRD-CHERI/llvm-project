@@ -23,10 +23,10 @@ for.body:                                         ; preds = %for.body, %for.body
   ; CHECK: cmove	$c[[SPSAVE:[0-9]+]], $c11
   ; Adjust $csp and allocate a new bounded stack object
   ; CHECK: cgetoffset	$[[SPOFFSET:[0-9]+]], $c11
-  ; CHECK: dsubu	$[[NEWSPOFFSET:[0-9]+]], $[[SPOFFSET]], $[[SIZE:[0-9]+]]
+  ; CHECK-NEXT: dsubu	$[[NEWSPOFFSET:[0-9]+]], $[[SPOFFSET]], $[[SIZE:[0-9]+]]
   ; CHECK: csetoffset	$c[[TMPSP:[0-9]+]], $c11, $[[NEWSPOFFSET]]
-  ; CHECK: csetbounds	$c{{[0-9]+}}, $c[[TMPSP]], $[[SIZE]]
-  ; CHECK: cmove	$c11, $c[[TMPSP]]
+  ; CHECK-NEXT: cmove	$c11, $c[[TMPSP]]
+  ; CHECK-NEXT: csetbounds $c{{[0-9]+}}, $c[[TMPSP]], $[[SIZE]]
 
   %i.05 = phi i32 [ 0, %for.body.lr.ph ], [ %inc, %for.body ]
   %1 = call i8 addrspace(200)* @llvm.stacksave.p200i8()

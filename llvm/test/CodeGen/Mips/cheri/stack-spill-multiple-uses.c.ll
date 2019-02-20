@@ -55,14 +55,14 @@ define void @multi_use() addrspace(200) nounwind {
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(multi_use)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(multi_use)))
 ; CHECK-NEXT:    cincoffset $c18, $c12, $1
-; CHECK-NEXT:    cincoffset $c19, $c11, 8
+; CHECK-NEXT:    cincoffset $c19, $c11, [[@EXPR $CAP_SIZE - 8]]
 ; CHECK-NEXT:    clcbi $c12, %capcall20(foo)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c19, $c19, 4
 ; CHECK-NEXT:    cincoffset $c4, $c19, 4
 ; CHECK-NEXT:    cincoffset $c5, $c19, 1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(multi_arg)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, 8
+; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 8]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clcbi $c12, %capcall20(one_arg)($c18)
@@ -70,7 +70,7 @@ define void @multi_use() addrspace(200) nounwind {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clcbi $c12, %capcall20(one_arg)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, 8
+; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 8]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)

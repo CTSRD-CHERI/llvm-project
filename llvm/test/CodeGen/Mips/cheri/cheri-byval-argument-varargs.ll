@@ -22,8 +22,8 @@ define i32 @fn1() local_unnamed_addr #0 {
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(fn1)))
 ; CHECK-NEXT:    cincoffset $c19, $c12, $1
 ; CHECK-NEXT:    daddiu $1, $zero, 4096
-; CHECK-NEXT:    cincoffset $c1, $c11, [[@EXPR (2 * $CAP_SIZE)]]
-; CHECK-NEXT:    csetbounds $c18, $c1, $1
+; CHECK-NEXT:    cincoffset $c18, $c11, [[@EXPR (2 * $CAP_SIZE)]]
+; CHECK-NEXT:    csetbounds $c18, $c18, $1
 ; CHECK-NEXT:    clcbi $c4, %captab20(a)($c19)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c19)
 ; CHECK-NEXT:    daddiu $4, $zero, 4096
