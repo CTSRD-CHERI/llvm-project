@@ -1065,7 +1065,10 @@ bool MipsSEInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
   switch(MI.getOpcode()) {
     // To allow moving CSetBounds on the stack as late as possible.
     case Mips::CheriBoundedStackPseudo:
-      return true;
+      // LLVM_DEBUG(dbgs() << "isReallyTriviallyReMaterializable: CHECKING "; MI.dump();)
+      // We cannot trivially rematerialize if the size operand is a GPR since
+      // That might be dead by the time we use it. Only remat
+      return MI.getOperand(3).isImm();
     case Mips::CIncOffsetImm:
     case Mips::CMove:
       return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == Mips::CNULL;
