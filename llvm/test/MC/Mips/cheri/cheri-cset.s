@@ -35,6 +35,21 @@
 # CHECK: cincoffset	$c1, $c2, 65
 # CHECK-SAME: encoding: [0x4a,0x61,0x10,0x41]
 	cincoffsetimm	$c1, $c2, 65
+
+# CIncOffsetImmediate and CSetBoundsImmediate allow two-arg versions
+# CHECK: cincoffset	$c1, $c1, 66
+# CHECK-SAME: encoding: [0x4a,0x61,0x08,0x42]
+	cincoffset	$c1, 66
+# CHECK: cincoffset	$c1, $c1, 67
+# CHECK-SAME: encoding: [0x4a,0x61,0x08,0x43]
+	cincoffsetimm	$c1, 67
+# CHECK: csetbounds	$c1, $c1, 68
+# CHECK-SAME: encoding: [0x4a,0x81,0x08,0x44]
+	csetbounds	$c1, 68
+# CHECK: csetbounds	$c1, $c1, 69
+# CHECK-SAME: encoding: [0x4a,0x81,0x08,0x45]
+	csetboundsimm	$c1, 69
+
 # CHECK: ccleartag	$c1
 # CHECK-SAME: encoding: [0x48,0x01,0x0a,0xff]
 	ccleartag	$c1, $c1

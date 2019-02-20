@@ -305,8 +305,11 @@ def CGetSealed : CheriFmtCGet<5, "sealed">;
 def CGetOffset : CheriFmtCGet<6, "offset">;
 def CGetAddr   : CheriFmtCGet<0xf, "addr", "address">;
 // Versions of property setters that take immediate operands
-def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, simm11s0Pattern, "offset", "offset", "inc", "increment">;
-def CSetBoundsImm : CheriFmtCSetImm<0x14, uimm11s0, uimm11s0Pattern, "bounds">;
+// We allow CIncOffset $c1, 10 as an alias for CIncOffset $c1, $c1, 10, and the same for CSetBounds
+let TwoOperandAliasConstraint = "$cd = $cb" in {
+  def CIncOffsetImm : CheriFmtCSetImm<0x13, simm11s0, simm11s0Pattern, "offset", "offset", "inc", "increment">;
+  def CSetBoundsImm : CheriFmtCSetImm<0x14, uimm11s0, uimm11s0Pattern, "bounds">;
+}
 }
 
 // Accept CIncOffsetImm as an assembler mnemonic because ancient binutils is too stupid to have an opcode
@@ -315,6 +318,11 @@ def : InstAlias<"csetboundsimm $dst, $src, $imm",
                 (CSetBoundsImm CheriOpnd:$dst, CheriOpnd:$src, simm11s0:$imm), 0>;
 def : InstAlias<"cincoffsetimm $dst, $src, $imm",
                 (CIncOffsetImm CheriOpnd:$dst, CheriOpnd:$src, simm11s0:$imm), 0>;
+def : InstAlias<"csetboundsimm $dst, $imm",
+                (CSetBoundsImm CheriOpnd:$dst, CheriOpnd:$dst, simm11s0:$imm), 0>;
+def : InstAlias<"cincoffsetimm $dst, $imm",
+                (CIncOffsetImm CheriOpnd:$dst, CheriOpnd:$dst, simm11s0:$imm), 0>;
+
 
 // Property setters
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
