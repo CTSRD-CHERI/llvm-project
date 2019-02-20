@@ -47,8 +47,8 @@ source_filename = "DerivedSources/WebCore/JSInternalSettingsGenerated.cpp"
 ; DUMP-NEXT:         4a 22 00 0a cbez $c2, 44 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xc8>
 ; DUMP-NEXT:         00 00 00 00 nop
 ; DUMP-NEXT:         74 74 00 00 clcbi $c3, 0($c20)
-; DUMP-NEXT:         4a 64 c0 20 cincoffset $c4, $c24, 32
-; DUMP-NEXT:         4a 93 20 10 csetbounds $c19, $c4, 16
+; DUMP-NEXT:         4a 73 c0 20 cincoffset $c19, $c24, 32
+; DUMP-NEXT:         4a 93 98 10 csetbounds $c19, $c19, 16
 ; DUMP-NEXT:         48 01 10 d4 ceq $1, $c2, $c3
 ; DUMP-NEXT:         14 20 00 0b bnez $1, 48 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0xe4>
 ; DUMP-NEXT:         00 00 00 00 nop
@@ -144,7 +144,7 @@ source_filename = "DerivedSources/WebCore/JSInternalSettingsGenerated.cpp"
 ; DUMP-NEXT:         d8 21 08 13 clc $c1, $1, 304($c1)
 ; DUMP-NEXT:         34 01 b8 60 ori $1, $zero, 47200
 ; DUMP-NEXT:         d8 21 08 00 clc $c1, $1, 0($c1)
-; DUMP-NEXT:         4a 41 00 23 cbnz $c1, 144 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x2bc>
+; DUMP-NEXT:         4a 41 00 24 cbnz $c1, 148 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x2c0>
 ; DUMP-NEXT:         00 00 00 00 nop
 ; DUMP-NEXT:         00 02 08 3c dsll32 $1, $2, 0
 ; DUMP-NEXT:         75 94 00 00 clcbi $c12, 0($c20)
@@ -174,16 +174,17 @@ source_filename = "DerivedSources/WebCore/JSInternalSettingsGenerated.cpp"
 ; DUMP-NEXT:         d8 21 08 13 clc $c1, $1, 304($c1)
 ; DUMP-NEXT:         f8 73 00 00 csc $c3, $zero, 0($c19)
 ; DUMP-NEXT:         75 94 00 00 clcbi $c12, 0($c20)
+; DUMP-NEXT:         4a 65 c0 20 cincoffset $c5, $c24, 32
+; DUMP-NEXT:         4a 85 28 10 csetbounds $c5, $c5, 16
 ; DUMP-NEXT:         48 03 0a bf cmove $c3, $c1
-; DUMP-NEXT:         48 04 92 bf cmove $c4, $c18
 ; DUMP-NEXT:         48 11 63 3f cjalr $c12, $c17
-; DUMP-NEXT:         48 05 9a bf cmove $c5, $c19
-; DUMP-NEXT:         10 00 ff e7 b -96 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x254>
+; DUMP-NEXT:         48 04 92 bf cmove $c4, $c18
+; DUMP-NEXT:         10 00 ff e6 b -100 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x254>
 ; DUMP-NEXT:         00 00 00 00 nop
 ; DUMP-NEXT:         64 01 00 0a daddiu $1, $zero, 10
 ; DUMP-NEXT:         e8 38 00 1b csd $1, $zero, 24($c24)
-; DUMP-NEXT:         10 00 ff e3 b -112 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x254>
-; DUMP-NEXT:  2c8:   d8 78 00 01 	clc	$c3, $zero, 16($c24)
+; DUMP-NEXT:         10 00 ff e2 b -116 <_ZN7WebCore67jsInternalSettingsGeneratedPrototypeFunctionSetCaretBrowsingEnabledEU3capPN3JSC9ExecStateE+0x254>
+; DUMP-NEXT:  2cc:   d8 78 00 01 clc $c3, $zero, 16($c24)
 
 
 %"struct.JSC::ClassInfo" = type { i8 addrspace(200)*, %"struct.JSC::ClassInfo" addrspace(200)*, %"struct.JSC::HashTable" addrspace(200)*, %"struct.JSC::MethodTable", i32, [12 x i8] }
@@ -861,8 +862,8 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB0_6: # %for.body.i.i.i.preheader
 ; CHECK-NEXT:    clcbi $c3, %captab20(_ZN7WebCore27JSInternalSettingsGenerated6s_infoE)($c20)
-; CHECK-NEXT:    cincoffset $c4, $c24, 32
-; CHECK-NEXT:    csetbounds $c19, $c4, 16
+; CHECK-NEXT:    cincoffset $c19, $c24, 32
+; CHECK-NEXT:    csetbounds $c19, $c19, 16
 ; CHECK-NEXT:  .LBB0_7: # %for.body.i.i.i
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
 ; CHECK-NEXT:    ceq $1, $c2, $c3
@@ -1009,10 +1010,11 @@ define hidden i8 addrspace(200)* @_ZN7WebCore67jsInternalSettingsGeneratedProtot
 ; CHECK-NEXT:    clc $c1, $1, 304($c1)
 ; CHECK-NEXT:    csc $c3, $zero, 0($c19)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(_ZN3JSC2VM14throwExceptionEU3capPNS_9ExecStateENS_7JSValueE)($c20)
+; CHECK-NEXT:    cincoffset $c5, $c24, 32
+; CHECK-NEXT:    csetbounds $c5, $c5, 16
 ; CHECK-NEXT:    cmove $c3, $c1
-; CHECK-NEXT:    cmove $c4, $c18
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    cmove $c5, $c19
+; CHECK-NEXT:    cmove $c4, $c18
 ; CHECK-NEXT:    b .LBB0_24
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB0_26: # %if.then30
