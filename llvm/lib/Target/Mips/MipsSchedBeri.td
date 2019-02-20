@@ -7,5 +7,7 @@ def BeriModel : SchedMachineModel {
                              // Itineraries are queried instead.
   let MispredictPenalty = 8;
   let CompleteModel = 0;
+
+  let PostRAScheduler = 1;
 }
 
