@@ -241,16 +241,21 @@ static int analyzeLoadFromClobberingWrite(Type *LoadTy, Value *LoadPtr,
 int analyzeLoadFromClobberingStore(Type *LoadTy, Value *LoadPtr,
                                    StoreInst *DepSI, const DataLayout &DL,
                                    const TargetLibraryInfo *TLI) {
+  auto *StoredVal = DepSI->getValueOperand();
+  
   // Cannot handle reading from store of first-class aggregate yet.
-  if (DepSI->getValueOperand()->getType()->isStructTy() ||
-      DepSI->getValueOperand()->getType()->isArrayTy())
+  if (StoredVal->getType()->isStructTy() ||
+      StoredVal->getType()->isArrayTy())
     return -1;
 
-  // If this is a pointer type that's larger than the largest integer that we
-  // support, then ignore it.
-  if (LoadTy->isPointerTy() &&
-      DL.getTypeSizeInBits(LoadTy) > DL.getLargestLegalIntTypeSizeInBits())
-    return -1;
+  // Don't coerce non-integral pointers to integers or vice versa.
+  if (DL.isNonIntegralPointerType(StoredVal->getType()->getScalarType()) !=
+      DL.isNonIntegralPointerType(LoadTy->getScalarType())) {
+    // Allow casts of zero values to null as a special case
+    auto *CI = dyn_cast<Constant>(StoredVal);
+    if (!CI || !CI->isNullValue())
+      return -1;
+  }
 
   Value *StorePtr = DepSI->getPointerOperand();
   uint64_t StoreSize =
@@ -267,6 +272,11 @@ int analyzeLoadFromClobberingLoad(Type *LoadTy, Value *LoadPtr, LoadInst *DepLI,
                                   const TargetLibraryInfo *TLI) {
   // Cannot handle reading from store of first-class aggregate yet.
   if (DepLI->getType()->isStructTy() || DepLI->getType()->isArrayTy())
+    return -1;
+
+  // Don't coerce non-integral pointers to integers or vice versa.
+  if (DL.isNonIntegralPointerType(DepLI->getType()->getScalarType()) !=
+      DL.isNonIntegralPointerType(LoadTy->getScalarType()))
     return -1;
 
   Value *DepPtr = DepLI->getPointerOperand();
