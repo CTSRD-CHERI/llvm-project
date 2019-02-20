@@ -18,8 +18,12 @@ define i8 addrspace(200)* @setoffset(i64 %arg) addrspace(200) nounwind {
   ret i8 addrspace(200)* %result
 ; CHECK-LABEL: setoffset:
 ; CHECK:      cincoffset $c11, $c11, -{{64|128}}
-; CHECK:      cincoffset	$c2, $c11, 0
-; CHECK-NEXT: csetbounds	$c2, $c2, [[$CAP_SIZE]]
+; CHECK:      lui $1, %hi(%neg(%captab_rel(setoffset)))
+; CHECK-NEXT: daddiu $1, $1, %lo(%neg(%captab_rel(setoffset)))
+; CHECK-NEXT: cincoffset $c1, $c12, $1
+; After adding the stack-to-bounded-cap pseudo the cincoffset 0 should no longer be needed
+; CHECK-NOT:  cincoffset $c2
+; CHECK-NEXT: csetbounds	$c2, $c11, [[$CAP_SIZE]]
 ; CHECK-NEXT: clcbi	$c12, %capcall20(foo)($c1)
 ; CHECK-NEXT: cjalr	$c12, $c17
 ; CHECK-NEXT: csetoffset	$c3, $c2, $4
