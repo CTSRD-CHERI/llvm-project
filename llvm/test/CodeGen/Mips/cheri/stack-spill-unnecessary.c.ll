@@ -3,14 +3,37 @@
 ; is a single trivially rematerizable instruction so it can freely move it around to avoid stack spills.
 ; we were moving the allocation of the register that is only used later to the beginning
 
-; RUN: %cheri_purecap_llc %s -O2 -o - -debug-only=isel -print-before-all | %cheri_FileCheck %s
+; RUN: sed 's/addrspace(200)/addrspace(0)/g' %s | %cheri_llc -o - -O2 -verify-machineinstrs -relocation-model pic | FileCheck -check-prefix MIPS %s
+; RUN: %cheri_purecap_llc %s -O2 -o - | %cheri_FileCheck %s
+
 
 declare void @foo() addrspace(200)
 
 declare void @bar(i32 addrspace(200)*) addrspace(200)
 
 define void @foobar() addrspace(200) nounwind {
-; TODO: we should not need a stack spill here! The CSetBounds can be rematerialized[
+; MIPS-LABEL: foobar:
+; MIPS:       # %bb.0: # %entry
+; MIPS-NEXT:    daddiu $sp, $sp, -32
+; MIPS-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
+; MIPS-NEXT:    sd $gp, 16($sp) # 8-byte Folded Spill
+; MIPS-NEXT:    lui $1, %hi(%neg(%gp_rel(foobar)))
+; MIPS-NEXT:    daddu $1, $1, $25
+; MIPS-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(foobar)))
+; MIPS-NEXT:    addiu $1, $zero, 123
+; MIPS-NEXT:    sw $1, 12($sp)
+; MIPS-NEXT:    ld $25, %call16(foo)($gp)
+; MIPS-NEXT:    jalr $25
+; MIPS-NEXT:    nop
+; MIPS-NEXT:    ld $25, %call16(bar)($gp)
+; MIPS-NEXT:    jalr $25
+; MIPS-NEXT:    daddiu $4, $sp, 12
+; MIPS-NEXT:    ld $gp, 16($sp) # 8-byte Folded Reload
+; MIPS-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
+; MIPS-NEXT:    jr $ra
+; MIPS-NEXT:    daddiu $sp, $sp, 32
+;
+; TODO: we should not be adding a csetbounds for the first store!
 ; CHECK-LABEL: foobar:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|96]]
@@ -19,15 +42,15 @@ define void @foobar() addrspace(200) nounwind {
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(foobar)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foobar)))
 ; CHECK-NEXT:    cincoffset $c18, $c12, $1
-; CHECK-NEXT:    cincoffset $c1, $c11, 12
+; CHECK-NEXT:    cincoffset $c1, $c11, [[@EXPR $CAP_SIZE - 4]]
 ; CHECK-NEXT:    csetbounds $c1, $c1, 4
-; CHECK-NEXT:    addiu $1, $zero, 4
+; CHECK-NEXT:    addiu $1, $zero, 123
 ; CHECK-NEXT:    csw $1, $zero, 0($c1)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(foo)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clcbi $c12, %capcall20(bar)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, 12
+; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 4]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
@@ -36,7 +59,7 @@ define void @foobar() addrspace(200) nounwind {
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 entry:
   %x = alloca i32, align 4, addrspace(200)
-  store i32 4, i32 addrspace(200)* %x, align 4
+  store i32 123, i32 addrspace(200)* %x, align 4
   call void @foo()
   call void @bar(i32 addrspace(200)* %x)
   ret void
@@ -44,6 +67,28 @@ entry:
 
 
 define void @foobar_without_store() addrspace(200) nounwind {
+; MIPS-LABEL: foobar_without_store:
+; MIPS:       # %bb.0: # %entry
+; MIPS-NEXT:    daddiu $sp, $sp, -32
+; MIPS-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
+; MIPS-NEXT:    sd $gp, 16($sp) # 8-byte Folded Spill
+; MIPS-NEXT:    lui $1, %hi(%neg(%gp_rel(foobar_without_store)))
+; MIPS-NEXT:    daddu $1, $1, $25
+; MIPS-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(foobar_without_store)))
+; MIPS-NEXT:    ld $25, %call16(foo)($gp)
+; MIPS-NEXT:    jalr $25
+; MIPS-NEXT:    nop
+; MIPS-NEXT:    ld $25, %call16(bar)($gp)
+; MIPS-NEXT:    jalr $25
+; MIPS-NEXT:    daddiu $4, $sp, 12
+; MIPS-NEXT:    ld $25, %call16(bar)($gp)
+; MIPS-NEXT:    jalr $25
+; MIPS-NEXT:    daddiu $4, $sp, 8
+; MIPS-NEXT:    ld $gp, 16($sp) # 8-byte Folded Reload
+; MIPS-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
+; MIPS-NEXT:    jr $ra
+; MIPS-NEXT:    daddiu $sp, $sp, 32
+;
 ; CHECK-LABEL: foobar_without_store:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|96]]
@@ -56,11 +101,11 @@ define void @foobar_without_store() addrspace(200) nounwind {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clcbi $c12, %capcall20(bar)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, 12
+; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 4]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clcbi $c12, %capcall20(bar)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, 8
+; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 8]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
