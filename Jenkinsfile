@@ -86,7 +86,8 @@ fi
 rm -fv cheri-*-clang-*.tar.xz
 
 if [ -e "${SDKROOT_DIR}" ]; then
-   echo "ERROR, old SDK was not deleted!" && exit 1
+   echo "ERROR, old SDK was not deleted!"
+   rm -rf "${SDKROOT_DIR}"
 fi
 # if [ -e "${WORKSPACE}/llvm-project/Build" ]; then
 #   echo "ERROR, old build was not deleted!" && exit 1
@@ -112,7 +113,7 @@ else
     export CMAKE_C_COMPILER=clang40
 fi
 CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}" "-DLLVM_ENABLE_LLD=ON")
-# Run lit with python3 to avoid multiprocessing errorserrors
+# Run lit with python3 to avoid multiprocessing errors
 CMAKE_ARGS+=("-DPYTHON_EXECUTABLE=$(which python3)")
 '''
     if (TEST_RELEASE_BUILD) {
