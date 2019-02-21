@@ -321,10 +321,7 @@ let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def CAndPerms  : CheriFmtCSet<0xd, "perm", "perms", "and">;
 def CSetOffset : CheriFmtCSet<0xf, "offset">;
 def CSetBounds : CheriFmtCSet<0x8, "bounds">;
-// TODO: do we want an intrinsic for this as well?
-def CSetBoundsExact : CheriFmt3Op<0x9, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
-                              !strconcat("csetboundsexact", "\t$r1, $r2, $r3"),
-                              []>;
+def CSetBoundsExact : CheriFmtCSet<0x9, "boundsexact", "bounds", "set", "set_exact">;
 def CIncOffset : CheriFmtCSet<0x11, "offset", "offset", "inc", "increment">;
 def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2), 
                               "ccleartag\t$r1, $r2",

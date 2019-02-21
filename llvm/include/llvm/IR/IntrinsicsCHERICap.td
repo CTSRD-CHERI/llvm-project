@@ -42,6 +42,11 @@ def int_cheri_cap_bounds_set :
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_i64_ty],
             [IntrNoMem]>;
+def int_cheri_cap_bounds_set_exact :
+  GCCBuiltin<"__builtin_cheri_bounds_set_exact">,
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_i64_ty],
+            [IntrNoMem]>;
 def int_cheri_cap_type_get :
   GCCBuiltinAlias<"__builtin_mips_cheri_get_cap_type">,
   GCCBuiltin<"__builtin_cheri_type_get">,

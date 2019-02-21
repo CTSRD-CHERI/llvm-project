@@ -1457,6 +1457,7 @@ BUILTIN(__builtin_p2align_down, "v*vC*z", "nct")
 // Memory capability builtins
 BUILTIN(__builtin_cheri_length_set, "v*mvC*mz", "nc")
 BUILTIN(__builtin_cheri_bounds_set, "v*mvC*mz", "nc")
+BUILTIN(__builtin_cheri_bounds_set_exact, "v*mvC*mz", "nc")
 BUILTIN(__builtin_cheri_length_get, "zvC*m", "nc")
 BUILTIN(__builtin_cheri_base_increment, "v*mvC*mz", "nc")
 BUILTIN(__builtin_cheri_base_get, "zvC*m", "nc")

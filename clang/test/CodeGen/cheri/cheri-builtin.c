@@ -1,6 +1,5 @@
 // RUN: %cheri_cc1 -o - -O0 -emit-llvm %s | FileCheck %s
 // FIXME: we shouldn't really be testing ASM output in clang
-// RUN: %cheri_cc1 -o - -O0 -S %s
 // RUN: %cheri_cc1 -o - -O0 -S %s | FileCheck %s -check-prefix=ASM
 void * __capability results[12];
 
@@ -72,8 +71,17 @@ long long test(void* __capability foo)
   // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.unseal
   // ASM: cunseal $c{{[0-9]+}}, $c{{[0-9]+}}, $c{{[0-9]+}}
   results[6] = __builtin_cheri_bounds_set(foo, 42);
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set
+  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* {{.+}}, i64 42)
   // ASM: csetbounds $c{{[0-9]+}}, $c{{[0-9]+}}, 42
+  results[6] = __builtin_cheri_bounds_set(foo, 16384); // too big for immediate csetbounds
+  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* {{.+}}, i64 16384)
+  // ASM: daddiu [[INEXACT_SIZE:\$[0-9]+]], $zero, 16384
+  // ASM: csetbounds $c{{[0-9]+}}, $c{{[0-9]+}}, [[INEXACT_SIZE]]
+  results[7] = __builtin_cheri_bounds_set_exact(foo, 43);
+  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.exact(i8 addrspace(200)* {{.+}}, i64 43)
+  // ASM: daddiu [[EXACT_SIZE:\$[0-9]+]], $zero, 43
+  // ASM: csetboundsexact $c{{[0-9]+}}, $c{{[0-9]+}}, [[EXACT_SIZE]]
+
   __builtin_mips_cheri_cause_set(42);
   // CHECK: call void @llvm.mips.cap.cause.set(i64 42)
   // ASM: csetcause ${{[0-9]+}}
