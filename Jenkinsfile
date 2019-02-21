@@ -103,7 +103,7 @@ find "${WORKSPACE}/llvm-project" -name cheri-cap-index.ll.mir -delete || true
 
 # run cmake
 cd Build || exit 1
-CMAKE_ARGS=("-DCMAKE_INSTALL_PREFIX=${SDKROOT_DIR}" "-DLLVM_OPTIMIZED_TABLEGEN=OFF" "-DLLVM_ENABLE_PROJECTS=clang;lld;llvm")
+CMAKE_ARGS=("-DCMAKE_INSTALL_PREFIX=${SDKROOT_DIR}" "-DLLVM_OPTIMIZED_TABLEGEN=OFF" "-DLLVM_ENABLE_PROJECTS=clang;lld;llvm" "-DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=RISCV")
 if [ "$label" == "linux" ] ; then
     export CMAKE_CXX_COMPILER=clang++-6.0
     export CMAKE_C_COMPILER=clang-6.0
