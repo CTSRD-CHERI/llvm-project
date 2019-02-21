@@ -430,14 +430,16 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
   }
 
   if (encoding & DW_EH_PE_indirect) {
-#if 0
-    // FIXME: this might not always work: we are always reading an address
-    // but what if we actually wanted a pointer?
-    result = getAddr(assert_pointer_in_bounds(result));
+    // Always read a pointer sized value for DW_EH_PE_indirect
+    // This seems to be the way that GNU tools interpret this but it will almost
+    // certainly cause some issues for CHERI since we might want non-capability
+    // values to be indirect to avoid RODATA relocations.
+    result = getP(assert_pointer_in_bounds(result));
+#ifdef __CHERI_PURE_CAPABILITY__
+    fprintf(stderr, "Warning: DW_EH_PE_indirect is not implemented "
+            "correctly! Result was %#p\n", (void*)result);
+    result = assert_pointer_in_bounds(result);
 #endif
-    // TODO: should this update addr?
-    pint_t indirect_addr = assert_pointer_in_bounds(result);
-    result = getEncodedP(indirect_addr, end, encoding & ~DW_EH_PE_indirect, datarelBase);
   }
 
   return result;
