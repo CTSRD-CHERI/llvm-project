@@ -16,7 +16,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <algorithm>  // std::min/std::max
+
+// We can no longer include C++ headers so duplicate std::min() here
+template<typename T> T uw_min(T a, T b) { return a < b ? a : b; }
 
 #ifndef _LIBUNWIND_USE_DLADDR
   #if !defined(_LIBUNWIND_IS_BAREMETAL) && !defined(_WIN32)
@@ -262,7 +264,7 @@ public:
     return (__cheri_addr pint_t)cap;
 #else
     pint_t result;
-    memcpy(&result, &cap, std::min(sizeof(result), sizeof(cap)));
+    memcpy(&result, &cap, uw_min(sizeof(result), sizeof(cap)));
     return result;
 #endif
   }
@@ -271,7 +273,7 @@ public:
     return (uintcap_t)pint;
 #else
     capability_t result;
-    memcpy(&result, &pint, std::min(sizeof(result), sizeof(pint)));
+    memcpy(&result, &pint, uw_min(sizeof(result), sizeof(pint)));
     return result;
 #endif
   }
@@ -443,7 +445,7 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
 
 template<typename T1, typename T2>
 constexpr int check_same_type() {
-  static_assert(std::is_same<T1, T2>::value, "Should be same type! Update CheriBSD!");
+  static_assert(__is_same(T1, T2), "Should be same type! Update CheriBSD!");
   return 0;
 }
 
