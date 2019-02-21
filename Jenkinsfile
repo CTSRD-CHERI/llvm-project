@@ -245,7 +245,12 @@ node(nodeLabel) {
             }
         }
         // set the final build result so we can update the github status
-        currentBuild.result = currentBuild.currentResult
-        updateGithubStatus("Build completed.")
+        try {
+            currentBuild.result = currentBuild.currentResult
+            updateGithubStatus("Build completed.")
+        }
+        catch(Exception e) {
+           echo("Failed to set github status: ${e}")
+        }
     }
 }
