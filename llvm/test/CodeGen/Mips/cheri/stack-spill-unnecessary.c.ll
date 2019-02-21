@@ -23,9 +23,13 @@ define void @foobar() addrspace(200) nounwind {
 ; MIPS-NEXT:    addiu $1, $zero, 123
 ; MIPS-NEXT:    sw $1, 12($sp)
 ; MIPS-NEXT:    ld $25, %call16(foo)($gp)
+; MIPS-NEXT:    .reloc .Ltmp0, R_MIPS_JALR, foo
+; MIPS-NEXT:  .Ltmp0:
 ; MIPS-NEXT:    jalr $25
 ; MIPS-NEXT:    nop
 ; MIPS-NEXT:    ld $25, %call16(bar)($gp)
+; MIPS-NEXT:    .reloc .Ltmp1, R_MIPS_JALR, bar
+; MIPS-NEXT:  .Ltmp1:
 ; MIPS-NEXT:    jalr $25
 ; MIPS-NEXT:    daddiu $4, $sp, 12
 ; MIPS-NEXT:    ld $gp, 16($sp) # 8-byte Folded Reload
@@ -76,12 +80,18 @@ define void @foobar_without_store() addrspace(200) nounwind {
 ; MIPS-NEXT:    daddu $1, $1, $25
 ; MIPS-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(foobar_without_store)))
 ; MIPS-NEXT:    ld $25, %call16(foo)($gp)
+; MIPS-NEXT:    .reloc .Ltmp2, R_MIPS_JALR, foo
+; MIPS-NEXT:  .Ltmp2:
 ; MIPS-NEXT:    jalr $25
 ; MIPS-NEXT:    nop
 ; MIPS-NEXT:    ld $25, %call16(bar)($gp)
+; MIPS-NEXT:    .reloc .Ltmp3, R_MIPS_JALR, bar
+; MIPS-NEXT:  .Ltmp3:
 ; MIPS-NEXT:    jalr $25
 ; MIPS-NEXT:    daddiu $4, $sp, 12
 ; MIPS-NEXT:    ld $25, %call16(bar)($gp)
+; MIPS-NEXT:    .reloc .Ltmp4, R_MIPS_JALR, bar
+; MIPS-NEXT:  .Ltmp4:
 ; MIPS-NEXT:    jalr $25
 ; MIPS-NEXT:    daddiu $4, $sp, 8
 ; MIPS-NEXT:    ld $gp, 16($sp) # 8-byte Folded Reload

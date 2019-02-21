@@ -22,18 +22,26 @@ define void @multi_use() addrspace(200) nounwind {
 ; MIPS-NEXT:    daddu $1, $1, $25
 ; MIPS-NEXT:    daddiu $gp, $1, %lo(%neg(%gp_rel(multi_use)))
 ; MIPS-NEXT:    ld $25, %call16(foo)($gp)
+; MIPS-NEXT:    .reloc .Ltmp0, R_MIPS_JALR, foo
+; MIPS-NEXT:  .Ltmp0:
 ; MIPS-NEXT:    jalr $25
 ; MIPS-NEXT:    nop
 ; MIPS-NEXT:    daddiu $16, $sp, 0
 ; MIPS-NEXT:    daddiu $5, $16, 4
 ; MIPS-NEXT:    ori $6, $16, 1
 ; MIPS-NEXT:    ld $25, %call16(multi_arg)($gp)
+; MIPS-NEXT:    .reloc .Ltmp1, R_MIPS_JALR, multi_arg
+; MIPS-NEXT:  .Ltmp1:
 ; MIPS-NEXT:    jalr $25
 ; MIPS-NEXT:    move $4, $16
 ; MIPS-NEXT:    ld $25, %call16(one_arg)($gp)
+; MIPS-NEXT:    .reloc .Ltmp2, R_MIPS_JALR, one_arg
+; MIPS-NEXT:  .Ltmp2:
 ; MIPS-NEXT:    jalr $25
 ; MIPS-NEXT:    daddiu $4, $sp, 4
 ; MIPS-NEXT:    ld $25, %call16(one_arg)($gp)
+; MIPS-NEXT:    .reloc .Ltmp3, R_MIPS_JALR, one_arg
+; MIPS-NEXT:  .Ltmp3:
 ; MIPS-NEXT:    jalr $25
 ; MIPS-NEXT:    move $4, $16
 ; MIPS-NEXT:    ld $16, 8($sp) # 8-byte Folded Reload
