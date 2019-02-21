@@ -116,7 +116,7 @@ bool EHHeaderParser<A>::findFDE(A &addressSpace, pint_t pc, pint_t ehHdrStart,
   size_t low = 0;
   for (size_t len = hdrInfo.fde_count; len > 1;) {
     size_t mid = low + (len / 2);
-    tableEntry = hdrInfo.table + mid * tableEntrySize;
+    tableEntry = assert_pointer_in_bounds(hdrInfo.table + mid * tableEntrySize);
     pint_t start = addressSpace.getEncodedP(tableEntry, ehHdrEnd,
                                             hdrInfo.table_enc, ehHdrStart);
 
