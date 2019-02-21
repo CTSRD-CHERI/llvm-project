@@ -223,6 +223,18 @@ macro(add_target_flags_if condition var)
   endif()
 endmacro()
 
+# Add a list of flags to all of 'CMAKE_CXX_FLAGS', 'CMAKE_C_FLAGS',
+# 'LIBCXX_COMPILE_FLAGS' and 'LIBCXX_LINK_FLAGS'.
+macro(add_target_flags)
+  foreach(value ${ARGN})
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${value}")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${value}")
+    list(APPEND LIBCXX_COMPILE_FLAGS ${value})
+    list(APPEND LIBCXX_LINK_FLAGS ${value})
+  endforeach()
+endmacro()
+
+
 add_target_flags_if(LIBUNWIND_BUILD_32_BITS "-m32")
 
 if(LIBUNWIND_TARGET_TRIPLE)
