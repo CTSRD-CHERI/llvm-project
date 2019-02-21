@@ -63,8 +63,8 @@
 
 
 # DATA-RELA:      Contents of section .data:
-# DATA-RELA-NEXT: 10000 00000000 00000000 abcdef00 12345678  .............4Vx
+# DATA-RELA-NEXT: 0000 00000000 00000000 abcdef00 12345678  .............4Vx
 
 # Rel should have the relocation value 10 in .data
 # DATA-REL:      Contents of section .data:
-# DATA-REL-NEXT: 10000 00000000 00000010 abcdef00 12345678  .............4Vx
+# DATA-REL-NEXT: 0000 00000000 00000010 abcdef00 12345678  .............4Vx
