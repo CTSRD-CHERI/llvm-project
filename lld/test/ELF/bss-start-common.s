@@ -14,7 +14,7 @@
 # RUN: llvm-objdump -t -section-headers %t-cheri | FileCheck %s -check-prefix CHERI
 
 # CHERI: Sections:
-# CHERI: Idx Name          Size      Address          Type
+# CHERI: Idx Name          Size      VMA          Type
 # CHERI:   6 .bss          00000010  0000000120010010 BSS
 # CHERI: SYMBOL TABLE:
 # CHERI: 0000000120010010  .bss 00000010 __bss_start

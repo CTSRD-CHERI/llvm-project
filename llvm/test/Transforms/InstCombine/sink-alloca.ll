@@ -40,13 +40,13 @@ ret:                                              ; preds = %sinktarget, %nonent
 ; CHECK-LABEL: define void @foo(i32 %x)
 ; CHECK: nonentry:
 ; CHECK:   %argmem = alloca i32, i32 %x
-; CHECK:   %sp = call i8* @llvm.stacksave()
+; CHECK:   %sp = call i8* @llvm.stacksave.p0i8()
 ; CHECK:   %c2 = call i1 @cond()
 ; CHECK:   br i1 %c2, label %ret, label %sinktarget
 ; CHECK: sinktarget:
 ; CHECK:   %p = call i32* @use_and_return(i32* nonnull %argmem)
 ; CHECK:   store i32 13, i32* %p
-; CHECK:   call void @llvm.stackrestore(i8* %sp)
+; CHECK:   call void @llvm.stackrestore.p0i8(i8* %sp)
 ; CHECK:   %0 = call i32* @use_and_return(i32* %p)
 
 attributes #0 = { nounwind }

@@ -1,9 +1,9 @@
 #include "Cheri.h"
-#include "../Bits.h"
 #include "../OutputSections.h"
 #include "../SymbolTable.h"
 #include "../SyntheticSections.h"
 #include "../Target.h"
+#include "../Writer.h"
 #include "lld/Common/Memory.h"
 #include "llvm/Support/Path.h"
 
@@ -210,7 +210,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     case Symbol::DefinedKind:
       break;
     case Symbol::SharedKind:
-      if (!Config->Shared && !In.Interp) {
+      if (!Config->Shared && !needsInterpSection()) {
         error("cannot create a capability relocation against a shared symbol"
               " when linking statically");
         continue;
@@ -452,8 +452,8 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     // if we need a dynamic reloc we write zero
     // TODO: would it be more efficient for local symbols to write the DSO VA
     // and add a relocation against the load address?
-    // Also this would make llvm-objdump -C more useful because it would
-    // actually display the symbol that the relocation is against
+    // Also this would make llvm-objdump --cap-relocs more useful because it
+    // would actually display the symbol that the relocation is against
     uint64_t TargetVA = Reloc.Target.Sym->getVA(Reloc.Target.Offset);
     bool PreemptibleDynReloc =
         Reloc.NeedsDynReloc && Reloc.Target.Sym->IsPreemptible;
@@ -528,9 +528,9 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
       VA = S->getVA(A);
 
     if (Config->Is64)
-      write64(Buf + I * 8, Val);
+      write64(Buf + I * 8, VA);
     else
-      write32(Buf + I * 4, Val);
+      write32(Buf + I * 4, VA);
   };
   // If TLS entry has a corresponding dynamic relocations, leave it
   // initialized by zero. Write down adjusted TLS symbol's values otherwise.

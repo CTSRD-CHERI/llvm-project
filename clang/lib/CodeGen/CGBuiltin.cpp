@@ -1832,8 +1832,9 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
 
   case Builtin::BI__builtin_dump_struct: {
     llvm::Type *LLVMIntTy = getTypes().ConvertType(getContext().IntTy);
+    unsigned GlobalAS = CGM.getDataLayout().getGlobalsAddressSpace();
     llvm::FunctionType *LLVMFuncType = llvm::FunctionType::get(
-        LLVMIntTy, {llvm::Type::getInt8PtrTy(getLLVMContext())}, true);
+        LLVMIntTy, {llvm::Type::getInt8PtrTy(getLLVMContext(), GlobalAS)}, true);
 
     Value *Func = EmitScalarExpr(E->getArg(1)->IgnoreImpCasts());
     CharUnits Arg0Align = EmitPointerWithAlignment(E->getArg(0)).getAlignment();
@@ -2522,11 +2523,11 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     int32_t Offset = 0;
 
     Function *F = CGM.getIntrinsic(Intrinsic::eh_dwarf_cfa);
-    F = Builder.CreateCall(F, llvm::ConstantInt::get(Int32Ty, Offset));
+    Value *V = Builder.CreateCall(F, llvm::ConstantInt::get(Int32Ty, Offset));
     unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     if (AS != 0)
-      F = Builder.CreateAddrSpaceCast(F, Int8Ty->getPointerTo(AS));
-    return RValue::get(F);
+      V = Builder.CreateAddrSpaceCast(V, Int8Ty->getPointerTo(AS));
+    return RValue::get(V);
   }
   case Builtin::BI__builtin_return_address: {
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),

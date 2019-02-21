@@ -5428,8 +5428,8 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
       V = EmitBitCastOfLValueToProperType(*this, V, RealVarTy);
       CharUnits Alignment = getContext().getDeclAlign(Cls);
       LValue LV = MakeAddrLValue(V, ClsTy, Alignment);
-      Address A1 = Builder.CreateStructGEP(LV.getAddress(), 0, CharUnits::Zero(), "arg1");
-      Address A2 = Builder.CreateStructGEP(LV.getAddress(), 1, CharUnits::Zero(), "arg2");
+      Address A1 = Builder.CreateStructGEP(LV.getAddress(), 0, "arg1");
+      Address A2 = Builder.CreateStructGEP(LV.getAddress(), 1, "arg2");
       auto Fields = ClsTy->getAs<RecordType>()->getDecl()->fields();
       auto FieldsIt = Fields.begin();
       assert(std::distance(Fields.begin(), Fields.end()) == 2);
@@ -5456,7 +5456,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
 
   if (CallCHERIInvoke)
     Callee.setFunctionPointer(CGM.getModule().getOrInsertFunction("cheri_invoke",
-        getTypes().GetFunctionType(FnInfo)));
+        getTypes().GetFunctionType(FnInfo)).getCallee());
 
   // C99 6.5.2.2p6:
   //   If the expression that denotes the called function has a type
@@ -5512,9 +5512,10 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
     llvm::FunctionType *FTy = llvm::FunctionType::get(VoidTy, IntTy, false);
     llvm::AttrBuilder B;
     B.addAttribute(llvm::Attribute::NoReturn);
-    auto *ErrorFn = CGM.CreateRuntimeFunction(FTy, "__cxa_cheri_sandbox_invoke_failure",
-        llvm::AttributeList::get(getLLVMContext(),
-          llvm::AttributeList::FunctionIndex, B));
+    llvm::FunctionCallee ErrorFn =
+        CGM.CreateRuntimeFunction(FTy, "__cxa_cheri_sandbox_invoke_failure",
+          llvm::AttributeList::get(getLLVMContext(),
+            llvm::AttributeList::FunctionIndex, B));
     EmitBlock(Error);
     Builder.CreateCall(ErrorFn, ErrVal);
     Builder.CreateUnreachable();

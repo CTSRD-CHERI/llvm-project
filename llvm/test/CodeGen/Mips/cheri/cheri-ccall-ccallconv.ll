@@ -39,6 +39,8 @@ define void @a(i8 addrspace(200)* %a1, i8 addrspace(200)* %a2, i64 %foo, i64 %ba
   ; Move argument 0 from a0 to v0, arg 1 from a1 to a0.
   ; Then do the function call
 ; CHECK-NEXT:    move $2, $4
+; CHECK-NEXT:    .reloc .Ltmp0, R_MIPS_JALR, b
+; CHECK-NEXT:  .Ltmp0:
 ; CHECK-NEXT:    jalr $25
 ; CHECK-NEXT:    move $4, $1
 ; CHECK-NEXT:    move $sp, $fp

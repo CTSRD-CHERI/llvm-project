@@ -799,7 +799,7 @@ Value *llvm::emitStrLen(Value *Ptr, IRBuilder<> &B, const DataLayout &DL,
   LLVMContext &Context = B.GetInsertBlock()->getContext();
   Ptr = castToCStr(Ptr, B);
   FunctionCallee StrLen = M->getOrInsertFunction(
-      StrlenName, DL.getIntPtrType(Context), Ptr.getType());
+      StrlenName, DL.getIntPtrType(Context), Ptr->getType());
   inferLibFuncAttributes(M, StrlenName, *TLI);
   CallInst *CI = B.CreateCall(StrLen, Ptr, StrlenName);
   if (const Function *F =

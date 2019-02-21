@@ -58,7 +58,6 @@ value_of_HAS__DYNAMIC:
 #                        ^----- _HAS__DYNAMIC == 0
 # STATIC-LABEL: SYMBOL TABLE:
 
-# STATIC-NEXT: 0000000000000000         *UND*		 00000000 
 # STATIC-NEXT: 0000000000000000         *ABS*		 00000000 .hidden _HAS__DYNAMIC
 # STATIC-NEXT: {{.+}}         .got		 00000000 .hidden _gp
 # STATIC-NEXT: 0000000000000000  w      *UND*		 00000000 _DYNAMIC
@@ -73,7 +72,6 @@ value_of_HAS__DYNAMIC:
 # DYNAMIC-NEXT: {{3|2}}0010 00000000 00000001 fedcba09 87654321
 #                        ^----- _HAS__DYNAMIC == 1
 # DYNAMIC-LABEL: SYMBOL TABLE:
-# DYNAMIC-NEXT: 0000000000000000         *UND*		 00000000
 # DYNAMIC-PIE-NEXT:    00000000[[DYNAMIC_ADDR]]        .dynamic  00000000 .hidden _DYNAMIC
 # DYNAMIC-SHLIB-NEXT:  00000000[[DYNAMIC_ADDR]]        .dynamic  00000000 .hidden _DYNAMIC
 #                       ^----- _DYNAMIC == relocbase + 0x1f8/258

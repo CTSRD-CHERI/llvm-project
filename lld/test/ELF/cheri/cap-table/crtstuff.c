@@ -3,12 +3,12 @@
 // RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable %S/Inputs/crtendC.c -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt -o %t-crtend.o
 // RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable %s -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt -o %t-main.o
 // RUN: ld.lld --fatal-warnings -o %t.exe %t-crt1.o %t-crtbegin.o %t-main.o %t-crtend.o -verbose
-// RUN: llvm-readobj -r -C %t.exe | FileCheck %s -check-prefixes CHECK,WITHOUT_CTORS
+// RUN: llvm-readobj -r --cap-relocs %t.exe | FileCheck %s -check-prefixes CHECK,WITHOUT_CTORS
 // RUN: llvm-objdump -t %t.exe | FileCheck %s -check-prefixes CHECK-SYMS,WITHOUT_CTORS-SYMS
 // Check that we also don't get any warnings if there are any init_array entries
 // RUN: %cheri128_purecap_cc1 -mllvm -mxcaptable %s -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt -DINIT_ARRAY_ENTRIES -o %t-main-with-ctors.o
 // RUN: ld.lld --fatal-warnings -o %t-ctors.exe %t-crt1.o %t-crtbegin.o %t-main-with-ctors.o %t-crtend.o -verbose
-// RUN: llvm-readobj -r -C %t-ctors.exe | FileCheck %s -check-prefixes CHECK,WITH_CTORS
+// RUN: llvm-readobj -r --cap-relocs %t-ctors.exe | FileCheck %s -check-prefixes CHECK,WITH_CTORS
 // RUN: llvm-objdump -t %t-ctors.exe | FileCheck %s -check-prefixes CHECK-SYMS,WITH_CTORS-SYMS
 
 #ifdef INIT_ARRAY_ENTRIES

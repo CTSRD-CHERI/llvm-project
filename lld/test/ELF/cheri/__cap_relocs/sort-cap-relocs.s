@@ -38,7 +38,7 @@
 // SHLIB-UNSORTED1-NEXT: 0x0000000000010040	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x8000000000000000 (Function)
 // SHLIB-UNSORTED1-NEXT: 0x0000000000020020	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x8000000000000000 (Function)
 // SHLIB-UNSORTED1-LABEL: Sections:
-// SHLIB-UNSORTED1-NEXT:  Idx Name          Size      Address          Type
+// SHLIB-UNSORTED1-NEXT:  Idx Name          Size      VMA          Type
 // SHLIB-UNSORTED1-NEXT:    5 __cap_relocs  00000050 0000000000020040 DATA
 // SHLIB-UNSORTED1-LABEL: Contents of section __cap_relocs:
 // SHLIB-UNSORTED1-NEXT:  20040 00000000 00010040 00000000 00000000
@@ -62,7 +62,7 @@
 // RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.so
 // RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED2
 // SHLIB-UNSORTED2-LABEL: Sections:
-// SHLIB-UNSORTED2-NEXT:  Idx Name          Size      Address          Type
+// SHLIB-UNSORTED2-NEXT:  Idx Name          Size      VMA          Type
 // SHLIB-UNSORTED2-NEXT:    5 __cap_relocs  00000050 0000000000020040 DATA
 // SHLIB-UNSORTED2-LABEL: Contents of section __cap_relocs:
 // SHLIB-UNSORTED2-NEXT:  20040 00000000 00020020 00000000 00000000

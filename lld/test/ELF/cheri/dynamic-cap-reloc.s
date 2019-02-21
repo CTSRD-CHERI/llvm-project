@@ -87,7 +87,7 @@ local_ref_with_addend:
 # R_CAPABILITY_FOR_ALL-NEXT: }
 # R_CAPABILITY_FOR_ALL-NEXT: DynamicSymbols [
 # R_CAPABILITY_FOR_ALL-NEXT:   Symbol {
-# R_CAPABILITY_FOR_ALL-NEXT:     Name: @ (0)
+# R_CAPABILITY_FOR_ALL-NEXT:     Name:  (0)
 # R_CAPABILITY_FOR_ALL-NEXT:     Value: 0x0
 # R_CAPABILITY_FOR_ALL-NEXT:     Size: 0
 # R_CAPABILITY_FOR_ALL-NEXT:     Binding: Local
@@ -96,7 +96,7 @@ local_ref_with_addend:
 # R_CAPABILITY_FOR_ALL-NEXT:     Section: Undefined (0x0)
 # R_CAPABILITY_FOR_ALL-NEXT:   }
 # R_CAPABILITY_FOR_ALL-NEXT:   Symbol {
-# R_CAPABILITY_FOR_ALL-NEXT:     Name: bar@ (1)
+# R_CAPABILITY_FOR_ALL-NEXT:     Name: bar (1)
 # R_CAPABILITY_FOR_ALL-NEXT:     Value: 0x10040
 # R_CAPABILITY_FOR_ALL-NEXT:     Size: 8
 # R_CAPABILITY_FOR_ALL-NEXT:     Binding: Local
@@ -107,7 +107,7 @@ local_ref_with_addend:
 # R_CAPABILITY_FOR_ALL-NEXT:     Section: .text (0x8)
 # R_CAPABILITY_FOR_ALL-NEXT:  }
 # R_CAPABILITY_FOR_ALL-NEXT:   Symbol {
-# R_CAPABILITY_FOR_ALL-NEXT:     Name: foo@ (5)
+# R_CAPABILITY_FOR_ALL-NEXT:     Name: foo (5)
 # R_CAPABILITY_FOR_ALL-NEXT:     Value: 0x10000
 # R_CAPABILITY_FOR_ALL-NEXT:     Size: 4
 # R_CAPABILITY_FOR_ALL-NEXT:     Binding: Global

@@ -1019,8 +1019,8 @@ ItaniumCXXABI::BuildMemberPointer(const CXXMethodDecl *MD,
     auto MemPtrTy = llvm::StructType::get(CGM.VoidPtrTy, CGM.PtrDiffTy);
     auto Align = CGM.getContext().toCharUnitsFromBits(TI.getCHERICapabilityAlign());
     auto alloca = CGF->CreateTempAlloca(MemPtrTy, Align, "memptr_tmp");
-    CGF->Builder.CreateStore(NonConstAddr, CGF->Builder.CreateStructGEP(alloca, 0, CharUnits::Zero()));
-    CGF->Builder.CreateStore(MemPtr[1], CGF->Builder.CreateStructGEP(alloca, 1, CharUnits::Zero()));
+    CGF->Builder.CreateStore(NonConstAddr, CGF->Builder.CreateStructGEP(alloca, 0));
+    CGF->Builder.CreateStore(MemPtr[1], CGF->Builder.CreateStructGEP(alloca, 1));
     return CGF->Builder.CreateLoad(alloca);
   } else {
     auto Result = llvm::ConstantStruct::getAnon(MemPtr, false);

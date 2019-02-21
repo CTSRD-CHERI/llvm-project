@@ -4586,10 +4586,12 @@ void Verifier::visitIntrinsicCall(Intrinsic::ID ID, CallBase &Call) {
   case Intrinsic::vastart:
   case Intrinsic::vacopy:
   case Intrinsic::vaend: {
-    Assert(CS.isCall(), "variadic argument intrinsics cannot be invoked", CS);
-    Value *Val = CS.getArgOperand(0);
+    Assert(isa<CallInst>(Call),
+           "variadic argument intrinsics cannot be invoked", Call);
+    Value *Val = Call.getArgOperand(0);
     Assert(Val->getType()->getPointerAddressSpace() == DL.getAllocaAddrSpace(),
-           "variadic argument intrinsics must be in alloca address space", CS);
+           "variadic argument intrinsics must be in alloca address space",
+           Call);
     break;
   }
 

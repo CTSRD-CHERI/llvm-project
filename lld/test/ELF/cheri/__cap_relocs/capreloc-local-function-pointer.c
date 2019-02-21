@@ -4,21 +4,21 @@
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
 
 // RUN: ld.lld -preemptible-caprelocs=legacy %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
-// RUN: llvm-readobj -C -t -s -sd %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
+// RUN: llvm-readobj --cap-relocs -t -s -sd %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
 
 // same again for statically dynamically linked exe:
 // RUN: %cheri_purecap_clang %S/Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -preemptible-caprelocs=legacy -pie -Bdynamic %t.o -o %t-dynamic.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
-// RUN: llvm-readobj -C -t -s -sd -r %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC,DYNAMIC-RELOCS %s
+// RUN: llvm-readobj --cap-relocs -t -s -sd -r %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC,DYNAMIC-RELOCS %s
 
 // Look at shared libraries:
 // RUN: ld.lld -preemptible-caprelocs=legacy %t.o -shared -o %t.so -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
-// RUN: llvm-readobj -C -t -s -sd -r %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC,DYNAMIC-RELOCS %s
+// RUN: llvm-readobj --cap-relocs -t -s -sd -r %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC,DYNAMIC-RELOCS %s
 
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t-legacy.o
 // RUN: ld.lld -preemptible-caprelocs=legacy %t-legacy.o -no-process-cap-relocs -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
-// RUN: llvm-readobj -C -s -t -sd %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
+// RUN: llvm-readobj --cap-relocs -s -t -sd %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
 
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1

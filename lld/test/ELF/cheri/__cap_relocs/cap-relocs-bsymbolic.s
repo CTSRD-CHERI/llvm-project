@@ -43,7 +43,7 @@
 # Now check for CHERI:
 # RUN: ld.lld -preemptible-caprelocs=legacy %t-cheri.o -shared -o %t-cheri.so
 # We have 3 load-address relocations for the location field in __cap_relocs and 3 dynamic relocations for the base against the symbols:
-# RUN: llvm-readobj -r -C %t-cheri.so | FileCheck %s -check-prefix CHERI-PREEMPTIBLE
+# RUN: llvm-readobj -r --cap-relocs %t-cheri.so | FileCheck %s -check-prefix CHERI-PREEMPTIBLE
 # CHERI-PREEMPTIBLE-LABEL:  Relocations [
 # CHERI-PREEMPTIBLE-NEXT:    Section (7) .rel.dyn {
 # CHERI-PREEMPTIBLE-NEXT:      0x30000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
@@ -95,7 +95,7 @@
 # RUN: ld.lld -preemptible-caprelocs=legacy %t-cheri.o -shared -Bsymbolic -o %t-cheri-symbolic.so
 # With -BSymbolic all 6 relocations should be against the load address:
 # We have 3 load-address relocations for the location field in __cap_relocs and 3 dynamic relocations for the base against the symbols:
-# RUN: llvm-readobj -r -C %t-cheri-symbolic.so | FileCheck %s -check-prefix CHERI-BSYMBOLIC
+# RUN: llvm-readobj -r --cap-relocs %t-cheri-symbolic.so | FileCheck %s -check-prefix CHERI-BSYMBOLIC
 # CHERI-BSYMBOLIC-LABEL:  Relocations [
 # CHERI-BSYMBOLIC-NEXT:    Section (7) .rel.dyn {
 # CHERI-BSYMBOLIC-NEXT:      0x30000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)

@@ -124,8 +124,7 @@ declare i8 addrspace(200)* @llvm.mips.epcc.get()
 ; DUMP-LABEL: getcause:
 ; DUMP-NEXT:       48 02 0f ff 	cgetcause	$2
 ; DUMP-NEXT:       03 e0 00 08 	jr	$ra
-; DUMP-NEXT:       00 00 00 00 	nop
-; DUMP-NEXT:       00 00 00 00 	nop
+; DUMP-NEXT:       ...
 
 ; DUMP-LABEL: setcause:
 ; DUMP-NEXT:       64 01 00 01 	daddiu	$1, $zero, 1

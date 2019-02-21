@@ -178,7 +178,7 @@ __attribute__((noinline)) static void *function3(void) {
 
 // Also check that the raw bytes are correct in addition to the llvm-readobj output
 // RUN: llvm-objdump --full-contents ---section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
-// MAPPING: Idx Name          Size      Address          Type
+// MAPPING: Idx Name          Size      VMA          Type
 // MAPPING:   9 .captable_mapping 000000a8 0000000000000640 DATA
 // MAPPING-EMPTY:
 // MAPPING: Contents of section .captable_mapping:

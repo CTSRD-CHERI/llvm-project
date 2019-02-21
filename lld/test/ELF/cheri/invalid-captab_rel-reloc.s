@@ -1,6 +1,6 @@
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -pie %t.o -o %t.exe
-# RUsN: llvm-readobj -C -dynamic-table %t.exe | FileCheck %s
+# RUsN: llvm-readobj --cap-relocs -dynamic-table %t.exe | FileCheck %s
 # RUN: %cheri128_llvm-mc -filetype=obj -defsym=EMPTY_CAP_TABLE=1 %s -o %t2.o
 # This used to crash:
 # RUN: not ld.lld -pie %t2.o -o %t.exe 2>&1 | FileCheck %s -check-prefix=EMPTY-TABLE

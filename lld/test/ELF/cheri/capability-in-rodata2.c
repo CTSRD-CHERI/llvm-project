@@ -7,10 +7,10 @@
 // RUNNOT: llvm-readobj -r %t.o
 // RUN: not ld.lld -shared %t.o -o %t.so 2>&1 | FileCheck %s
 // RUN: ld.lld -shared %t.o -o %t.so -z notext
-// RUN: llvm-readobj -C %t.so | FileCheck %s -check-prefix SHLIB
+// RUN: llvm-readobj --cap-relocs %t.so | FileCheck %s -check-prefix SHLIB
 // RUN: not ld.lld -static %t.o -o %t.exe 2>&1 | FileCheck %s
 // RUN: ld.lld -static %t.o -o %t.exe -z notext
-// RUN: llvm-readobj -C %t.exe | FileCheck %s -check-prefix EXE
+// RUN: llvm-readobj --cap-relocs %t.exe | FileCheck %s -check-prefix EXE
 
 
 __attribute((visibility("protected"))) int __start(int x) {

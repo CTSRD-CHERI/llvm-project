@@ -5577,14 +5577,14 @@ std::pair<SDValue, SDValue> TargetLowering::expandMULO(
       // The high part is obtained by SRA'ing all but one of the bits of low
       // part.
       unsigned LoSize = VT.getSizeInBits();
-      HiLHS = DAG.getNode(
-          ISD::SRA, dl, VT, LHS,
-          DAG.getConstant(LoSize - 1, dl,
-                          TLI.getPointerRangeTy(DAG.getDataLayout())));
-      HiRHS = DAG.getNode(
-          ISD::SRA, dl, VT, RHS,
-          DAG.getConstant(LoSize - 1, dl,
-                          TLI.getPointerRangeTy(DAG.getDataLayout())));
+      HiLHS =
+          DAG.getNode(ISD::SRA, dl, VT, LHS,
+                      DAG.getConstant(LoSize - 1, dl,
+                                      getPointerRangeTy(DAG.getDataLayout())));
+      HiRHS =
+          DAG.getNode(ISD::SRA, dl, VT, RHS,
+                      DAG.getConstant(LoSize - 1, dl,
+                                      getPointerRangeTy(DAG.getDataLayout())));
     } else {
         HiLHS = DAG.getConstant(0, dl, VT);
         HiRHS = DAG.getConstant(0, dl, VT);

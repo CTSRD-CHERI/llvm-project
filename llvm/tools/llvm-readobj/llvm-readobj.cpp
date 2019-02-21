@@ -254,7 +254,7 @@ namespace opts {
   cl::opt<bool>
       CheriCapRelocs("cap-relocs",
                      cl::desc("Display the CHERI __cap_relocs section"));
-  cl::alias CheriCapRelocsShort("C",
+  cl::alias CheriCapRelocsShort("c",
     cl::desc("Alias for --cap-relocs"),
     cl::aliasopt(CheriCapRelocs));
   cl::alias CheriCapRelocsOld("cheri-caprelocs",

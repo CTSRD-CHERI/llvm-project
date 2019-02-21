@@ -22,7 +22,6 @@ entry:
 declare i32 @external_fn()
 
 ; SYMTAB-LABEL: SYMBOL TABLE:
-; SYMTAB-NEXT: 0000000000000000         *UND*		 00000000
 ; SYMTAB-NEXT: 0000000000000000 l    df *ABS*		 00000000 csetbounds-stats-function.ll
 ; SYMTAB-NEXT: 0000000000000000 l     F .text		 00000014 maybe_inline
 ; SYMTAB-NEXT: 0000000000000000 l    d  .text		 00000000 .text

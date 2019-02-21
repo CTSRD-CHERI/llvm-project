@@ -1,11 +1,11 @@
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld -pie %t.o -o %t.exe
-# RUN: llvm-readobj -C -dynamic-table %t.exe
-# RUN: llvm-readobj -C -dynamic-table %t.exe | FileCheck %s -check-prefixes CHECK,WITH-TABLE
+# RUN: llvm-readobj --cap-relocs -dynamic-table %t.exe
+# RUN: llvm-readobj --cap-relocs -dynamic-table %t.exe | FileCheck %s -check-prefixes CHECK,WITH-TABLE
 # RUN: %cheri128_llvm-mc -filetype=obj -defsym=EMPTY_CAP_TABLE=1 %s -o %t2.o
 # RUN: ld.lld -pie %t2.o -o %t.exe
-# RUN: llvm-readobj -C -dynamic-table %t.exe
-# RUN: llvm-readobj -C -dynamic-table %t.exe | FileCheck %s -check-prefixes CHECK,EMPTY-TABLE
+# RUN: llvm-readobj --cap-relocs -dynamic-table %t.exe
+# RUN: llvm-readobj --cap-relocs -dynamic-table %t.exe | FileCheck %s -check-prefixes CHECK,EMPTY-TABLE
 
 .text
 

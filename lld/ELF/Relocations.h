@@ -111,7 +111,7 @@ enum RelExpr {
   // also skip the first few relocations.
   // TODO: If we end up neededing many more expressions we could also start
   // using two 64-bit masking operations
-  FIRST_REL_EXPR_USED_IN_oneof = R_AARCH64_GOT_PAGE_PC,
+  FIRST_REL_EXPR_USED_IN_oneof = R_GOT,
   LAST_REL_EXPR_USED_IN_oneof = R_CHERI_CAPABILITY_TABLE_REL,
 };
 
