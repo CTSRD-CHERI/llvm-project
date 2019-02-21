@@ -112,6 +112,8 @@ else
     export CMAKE_C_COMPILER=clang40
 fi
 CMAKE_ARGS+=("-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}" "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}" "-DLLVM_ENABLE_LLD=ON")
+# Run lit with python3 to avoid multiprocessing errorserrors
+CMAKE_ARGS+=("-DPYTHON_EXECUTABLE=$(which python3)")
 '''
     if (TEST_RELEASE_BUILD) {
          buildScript += '''CMAKE_ARGS+=("-DCMAKE_BUILD_TYPE=Release" "-DLLVM_ENABLE_ASSERTIONS=OFF" "-DBUILD_SHARED_LIBS=OFF" "-DLLVM_ENABLE_EXPENSIVE_CHECKS=OFF")'''
