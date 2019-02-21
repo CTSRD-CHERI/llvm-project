@@ -2651,8 +2651,6 @@ template <class ELFT> void Writer<ELFT>::openFile() {
   unsigned Flags = 0;
   if (!Config->Relocatable)
     Flags = FileOutputBuffer::F_executable;
-  if (Config->OutputFile == "-")
-    Config->OutputFile = "/dev/stdout";
   Expected<std::unique_ptr<FileOutputBuffer>> BufferOrErr =
       FileOutputBuffer::create(Config->OutputFile, FileSize, Flags);
 
