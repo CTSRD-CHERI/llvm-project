@@ -49,13 +49,13 @@
 # SHARED-NEXT: ]
 
 # RELOCATABLE:     Relocations [
-# RELOCATABLE-NEXT:   Section (3) .rela.data {
+# RELOCATABLE-NEXT:   Section ({{.+}}) .rela.data {
 # RELOCATABLE-NEXT:    0x0 R_MIPS_64/R_MIPS_NONE/R_MIPS_NONE foo 0x10
 # RELOCATABLE-NEXT:  }
 # RELOCATABLE-NEXT:]
 
 # RELOCATABLE-REL:     Relocations [
-# RELOCATABLE-REL-NEXT:   Section (3) .rel.data {
+# RELOCATABLE-REL-NEXT:   Section ({{.+}}) .rel.data {
 # FIXME: 0x10 is in the location of the relocation but llvm-readobj doesn't print it....
 # RELOCATABLE-REL-NEXT:    0x0 R_MIPS_64 foo 0x0 (real addend unknown)
 # RELOCATABLE-REL-NEXT:  }
@@ -63,8 +63,8 @@
 
 
 # DATA-RELA:      Contents of section .data:
-# DATA-RELA-NEXT: 0000 00000000 00000000 abcdef00 12345678  .............4Vx
+# DATA-RELA-NEXT: 10000 00000000 00000000 abcdef00 12345678  .............4Vx
 
 # Rel should have the relocation value 10 in .data
 # DATA-REL:      Contents of section .data:
-# DATA-REL-NEXT: 0000 00000000 00000010 abcdef00 12345678  .............4Vx
+# DATA-REL-NEXT: 10000 00000000 00000010 abcdef00 12345678  .............4Vx
