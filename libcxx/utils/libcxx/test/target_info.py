@@ -34,6 +34,7 @@ class DefaultTargetInfo(object):
     def allow_cxxabi_link(self): return True
     def add_sanitizer_features(self, sanitizer_type, features): pass
     def use_lit_shell_default(self): return False
+    def default_cxx_abi_library(self): raise NotImplementedError(self.__class__.__name__)
 
 
 def test_locale(loc):
@@ -170,6 +171,9 @@ class DarwinLocalTI(DefaultTargetInfo):
         # should be available in libc++ directly.
         return False
 
+    def default_cxx_abi_library(self):
+        return "libcxxabi"
+
 
 class FreeBSDLocalTI(DefaultTargetInfo):
     def __init__(self, full_config):
@@ -180,6 +184,9 @@ class FreeBSDLocalTI(DefaultTargetInfo):
 
     def add_cxx_link_flags(self, flags):
         flags += ['-lc', '-lm', '-lpthread', '-lgcc_s', '-lcxxrt']
+
+    def default_cxx_abi_library(self):
+        return "libcxxrt"
 
 
 class CheriBSDRemoteTI(DefaultTargetInfo):
@@ -222,6 +229,8 @@ class CheriBSDRemoteTI(DefaultTargetInfo):
     # def add_sanitizer_features(self, sanitizer_type, features): pass
     # def use_lit_shell_default(self): return False
 
+    def default_cxx_abi_library(self):
+        return "libcxxrt"
 
 class NetBSDLocalTI(DefaultTargetInfo):
     def __init__(self, full_config):
@@ -307,6 +316,9 @@ class LinuxLocalTI(DefaultTargetInfo):
             # linkSanitizerRuntimeDeps function in
             # clang/lib/Driver/Tools.cpp
             flags += ['-lpthread', '-lrt', '-lm', '-ldl']
+
+    def default_cxx_abi_library(self):
+        return "libsupc++"
 
 
 class WindowsLocalTI(DefaultTargetInfo):

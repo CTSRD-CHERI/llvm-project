@@ -19,6 +19,7 @@ class Configuration(LibcxxConfiguration):
         self.libunwind_obj_root = None
         self.abi_library_path = None
         self.libcxx_src_root = None
+        self.default_cxx_abi_library = None  # set later
 
     def configure_src_root(self):
         self.libunwind_src_root = self.get_lit_conf(

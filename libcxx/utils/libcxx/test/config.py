@@ -86,6 +86,7 @@ class Configuration(object):
         self.use_clang_verify = False
         self.long_tests = None
         self.execute_external = False
+        self.default_cxx_abi_library = 'libcxxabi'
 
     def get_lit_conf(self, name, default=None):
         val = self.lit_config.params.get(name, None)
@@ -224,7 +225,6 @@ class Configuration(object):
             # Don't pass in the current local environment variables to the remote machine
             # since this might completely break the test
             self.exec_env = {k: v for k, v in self.exec_env.items() if k not in os.environ or v != os.environ[k]}
-
 
     def configure_target_info(self):
         self.target_info = make_target_info(self)
@@ -853,7 +853,10 @@ class Configuration(object):
         self.cxx.link_flags += self.get_link_flags_abi_library()
 
     def get_link_flags_abi_library(self):
-        cxx_abi = self.get_lit_conf('cxx_abi', 'libcxxabi')
+        if self.default_cxx_abi_library is None:
+            self.default_cxx_abi_library = self.target_info.default_cxx_abi_library()
+        cxx_abi = self.get_lit_conf('cxx_abi', self.default_cxx_abi_library)
+        print("self.default_cxx_abi_library:", self.default_cxx_abi_library)
         link_flags = []
         if cxx_abi == 'libstdc++':
             link_flags += ['-lstdc++']
