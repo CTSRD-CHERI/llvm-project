@@ -1,4 +1,4 @@
-# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o - | FileCheck %s
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -run-pass=cheriaddrmodefolder  -o - | FileCheck %s
 
 --- |
   ; ModuleID = '/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/a.ll'

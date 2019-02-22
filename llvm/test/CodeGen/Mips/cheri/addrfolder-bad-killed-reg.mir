@@ -1,4 +1,4 @@
-# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o - | FileCheck %s
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -run-pass=cheriaddrmodefolder  -o - | FileCheck %s
 # previously the CheriAddressModeFolder would produce a due to setting the kill flag on a register that wasn't killed: *** Bad machine code: Using a killed virtual register ***
 --- |
   ; ModuleID = '/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/fprintf-bad-killed-reg.ll'
