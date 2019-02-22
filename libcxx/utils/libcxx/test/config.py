@@ -75,6 +75,9 @@ class Configuration(object):
         # for testing libunwind
         self.abi_library_only = False
         self.link_shared = self.get_lit_bool('enable_shared', default=True)
+        self.force_static_executable = self.get_lit_bool('force_static_executable', default=False)
+        if self.link_shared and self.force_static_executable:
+            lit_config.fatal('Cannot set both enable_shared and force_static_executable!')
         self.debug_build = self.get_lit_bool('debug_build',   default=False)
         # increase timeouts when running on a slow test host (such as QEMU full
         # sytem emulation for a different architecture)
@@ -764,6 +767,10 @@ class Configuration(object):
         # Configure library path
         self.configure_link_flags_cxx_library_path()
         self.configure_link_flags_abi_library_path()
+
+        # Handle force_static_executable
+        if self.force_static_executable:
+            self.cxx.link_flags += ['-static']
 
         # Configure libraries
         if self.cxx_stdlib_under_test == 'libc++':
