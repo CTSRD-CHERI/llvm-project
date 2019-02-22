@@ -213,6 +213,13 @@ class CXXCompiler(object):
             parsed_macros[macro] = value
         return parsed_macros
 
+    def getRtlibPath(self, flags=[], cwd=None):
+        cmd = self._basicCmd([], None, flags=flags,
+                             mode=self.CM_Default)
+        rtlib = libcxx.util.capture(cmd + ["--print-libgcc-file-name"]).strip()
+        print("Detected rtlib as", rtlib)
+        return rtlib
+
     def getTriple(self):
         cmd = [self.path] + self.flags + ['-dumpmachine']
         return libcxx.util.capture(cmd).strip()

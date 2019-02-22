@@ -72,11 +72,25 @@ class Configuration(LibcxxConfiguration):
             abs_path = os.path.join(self.libunwind_obj_root, "lib", libname)
             assert os.path.exists(abs_path) and "static libunwind library does not exist", abs_path
             self.cxx.link_flags += [abs_path]
+
         super(Configuration, self).configure_link_flags()
         # Ensure that libunwind is always added to the linker flags
         # This should be the case for most TargetInfo classes anyway but some
         # of them don't add it.
         self.cxx.link_flags += ['-nodefaultlibs', '-lc']
+        # If we are building a static binary, we also need to add the compiler
+        # buitins library to the build since we are building with -nodefaultlibs.
+        if self.force_static_executable:
+            assert '-static' in self.cxx.link_flags  # should be set by super()
+            rtlib = self.abi_library_root = self.get_lit_conf('runtime_library')
+            if not rtlib:
+                rtlib = self.cxx.getRtlibPath()
+            if not os.path.exists(rtlib):
+                self.lit_config.fatal("Cannot find compiler runtime library" +
+                                      " at expected path " + rtlib + ". Set" +
+                                      " -Druntime_library=.... to fix this.")
+            self.cxx.link_flags += [rtlib]
+
         print("LINKER FLAGS:", self.cxx.link_flags)
 
     def configure_compile_flags_header_includes(self):

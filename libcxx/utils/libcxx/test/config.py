@@ -62,7 +62,7 @@ class Configuration(object):
         self.lit_config = lit_config
         self.config = config
         self.is_windows = platform.system() == 'Windows'
-        self.cxx = None
+        self.cxx = None  # type: CXXCompiler
         self.cxx_is_clang_cl = None
         self.cxx_stdlib_under_test = None
         self.project_obj_root = None
