@@ -179,7 +179,7 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 EVT RISCVTargetLowering::getSetCCResultType(const DataLayout &DL, LLVMContext &,
                                             EVT VT) const {
   if (!VT.isVector())
-    return getPointerTy(DL);
+    return getPointerTy(DL, 0);
   return VT.changeVectorElementTypeToInteger();
 }
 
@@ -468,8 +468,9 @@ SDValue RISCVTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
   RISCVMachineFunctionInfo *FuncInfo = MF.getInfo<RISCVMachineFunctionInfo>();
 
   SDLoc DL(Op);
+  // TODO-CHERI: Stack address space
   SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
-                                 getPointerTy(MF.getDataLayout()));
+                                 getPointerTy(MF.getDataLayout(), 0));
 
   // vastart just stores the address of the VarArgsFrameIndex slot into the
   // memory location argument.
@@ -1256,7 +1257,8 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
         "Function interrupt attribute argument not supported!");
   }
 
-  EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  // TODO-CHERI: Stack address space (and uses)
+  EVT PtrVT = getPointerTy(DAG.getDataLayout(), 0);
   MVT XLenVT = Subtarget.getXLenVT();
   unsigned XLenInBytes = Subtarget.getXLen() / 8;
   // Used with vargs to acumulate store chains.
@@ -1346,7 +1348,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
       RegInfo.addLiveIn(ArgRegs[I], Reg);
       SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, XLenVT);
       FI = MFI.CreateFixedObject(XLenInBytes, VaArgOffset, true);
-      SDValue PtrOff = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+      SDValue PtrOff = DAG.getFrameIndex(FI, PtrVT);
       SDValue Store = DAG.getStore(Chain, DL, ArgValue, PtrOff,
                                    MachinePointerInfo::getFixedStack(MF, FI));
       cast<StoreSDNode>(Store.getNode())
@@ -1463,7 +1465,8 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   bool &IsTailCall = CLI.IsTailCall;
   CallingConv::ID CallConv = CLI.CallConv;
   bool IsVarArg = CLI.IsVarArg;
-  EVT PtrVT = getPointerTy(DAG.getDataLayout());
+  // TODO-CHERI: Stack address space (and uses)
+  EVT PtrVT = getPointerTy(DAG.getDataLayout(), 0);
   MVT XLenVT = Subtarget.getXLenVT();
 
   MachineFunction &MF = DAG.getMachineFunction();
@@ -1498,7 +1501,7 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     unsigned Align = Flags.getByValAlign();
 
     int FI = MF.getFrameInfo().CreateStackObject(Size, Align, /*isSS=*/false);
-    SDValue FIPtr = DAG.getFrameIndex(FI, getPointerTy(DAG.getDataLayout()));
+    SDValue FIPtr = DAG.getFrameIndex(FI, PtrVT);
     SDValue SizeNode = DAG.getConstant(Size, DL, XLenVT);
 
     Chain = DAG.getMemcpy(Chain, DL, FIPtr, Arg, SizeNode, Align,
