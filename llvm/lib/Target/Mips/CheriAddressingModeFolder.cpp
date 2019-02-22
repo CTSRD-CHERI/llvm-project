@@ -136,9 +136,16 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
 
   template <typename T>
   void Remove(T &Instrs, MachineRegisterInfo &RI) {
-    for (auto *I : Instrs)
-      if (RI.use_empty(I->getOperand(0).getReg()))
-        I->eraseFromBundle();
+    for (MachineInstr *I : Instrs) {
+      // If all uses of operand were fully folded we can delete the CIncOffset,
+      // etc. We can ignore DBG_VALUE calls and should then also
+      if (RI.use_nodbg_empty(I->getOperand(0).getReg())) {
+        // If all uses of this variable have folded into immediate args, then
+        // the dbg values are not particularly useful and can be deleted since
+        // there is no register holding the target address.
+        I->eraseFromParentAndMarkDBGValuesForRemoval();
+      }
+    }
   }
 
   bool foldMachineFunction(MachineFunction &MF, MachineLoopInfo &MLI,
