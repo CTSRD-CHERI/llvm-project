@@ -574,6 +574,9 @@ public:
                             bool isTarget = false);
   SDValue getNullCapability(const SDLoc &DL, EVT CapType);
 
+  SDValue getShiftAmountConstant(uint64_t Val, EVT VT, const SDLoc &DL,
+                                 bool LegalTypes = true);
+
   SDValue getTargetConstant(uint64_t Val, const SDLoc &DL, EVT VT,
                             bool isOpaque = false) {
     return getConstant(Val, DL, VT, true, isOpaque);
