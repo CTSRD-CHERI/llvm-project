@@ -66,3 +66,5 @@ void sigsetjmp(struct __jmp_buf_tag[1], int); // expected-warning{{declaration o
 // CHECK:     FunctionDecl {{.*}} <line:[[@LINE-2]]:1, col:44> col:6 sigsetjmp '
 // CHECK-NOT: FunctionDecl
 // CHECK:     ReturnsTwiceAttr {{.*}} <{{.*}}> Implicit
+
+int pthread_create(); // expected-warning{{declaration of built-in function 'pthread_create' requires inclusion of the header <pthread.h>}}

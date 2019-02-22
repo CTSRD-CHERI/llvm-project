@@ -1944,6 +1944,8 @@ static StringRef getHeaderName(Builtin::Context &BuiltinInfo, unsigned ID,
     return "setjmp.h";
   case ASTContext::GE_Missing_ucontext:
     return "ucontext.h";
+  case ASTContext::GE_Missing_pthread:
+    return "pthread.h";
   }
   llvm_unreachable("unhandled error kind");
 }
@@ -5810,6 +5812,10 @@ Sema::ActOnTypedefNameDecl(Scope *S, DeclContext *DC, TypedefNameDecl *NewTD,
         Context.setsigjmp_bufDecl(NewTD);
       else if (II->isStr("ucontext_t"))
         Context.setucontext_tDecl(NewTD);
+      else if (II->isStr("pthread_t"))
+        Context.setpthread_tDecl(NewTD);
+      else if (II->isStr("pthread_attr_t"))
+        Context.setpthread_attr_tDecl(NewTD);
     }
 
   if (isa<TypedefDecl>(NewTD) && NewTD->hasAttrs())

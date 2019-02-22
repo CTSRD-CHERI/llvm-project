@@ -9435,6 +9435,13 @@ void ASTMutationListener::DeducedReturnType(const FunctionDecl *FD,
 //                          Builtin Type Computation
 //===----------------------------------------------------------------------===//
 
+static QualType DecodeFunctionTypeFromStr(const char *&TypeStr, bool IsNested,
+                                          bool IsNoReturn, bool IsNoThrow,
+                                          bool ForceEmptyTy,
+                                          const ASTContext &Context,
+                                          ASTContext::GetBuiltinTypeError &Error,
+                                          unsigned *IntegerConstantArgs);
+
 /// DecodeTypeFromStr - This decodes one type descriptor from Str, advancing the
 /// pointer over the consumed characters.  This returns the resultant type.  If
 /// AllowTypeModifiers is false then modifier like * are not parsed, just basic
@@ -9678,6 +9685,25 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
   case 'p':
     Type = Context.getProcessIDType();
     break;
+  case 'Q':
+    if (Signed)
+      Type = Context.getpthread_attr_tType();
+    else
+      Type = Context.getpthread_tType();
+
+    if (Type.isNull()) {
+      Error = ASTContext::GE_Missing_pthread;
+      return {};
+    }
+    break;
+  case '(':
+    Type =
+      DecodeFunctionTypeFromStr(Str, /*IsNested=*/true, /*IsNoReturn=*/false,
+                                /*IsNoThrow=*/false, /*ForceEmptyTy=*/false,
+                                Context, Error, nullptr);
+    assert(Str[0] == ')' && "unmatched '('");
+    Str++;
+    break;
   }
 
   // If there are modifiers and if we're allowed to parse them, go for it.
@@ -9729,30 +9755,38 @@ static QualType DecodeTypeFromStr(const char *&Str, const ASTContext &Context,
   return Type;
 }
 
-/// GetBuiltinType - Return the type for the specified builtin.
-QualType ASTContext::GetBuiltinType(unsigned Id,
-                                    GetBuiltinTypeError &Error,
-                                    unsigned *IntegerConstantArgs) const {
-  const char *TypeStr = BuiltinInfo.getTypeString(Id);
+/// DecodeFunctionTypeFromStr - This decodes the entire type descriptor
+static QualType DecodeFunctionTypeFromStr(const char *&TypeStr, bool IsNested,
+                                          bool IsNoReturn, bool IsNoThrow,
+                                          bool ForceEmptyTy,
+                                          const ASTContext &Context,
+                                          ASTContext::GetBuiltinTypeError &Error,
+                                          unsigned *IntegerConstantArgs) {
   if (TypeStr[0] == '\0') {
-    Error = GE_Missing_type;
+    Error = ASTContext::GE_Missing_type;
+    return {};
+  }
+
+  if (TypeStr[0] == ')') {
+    assert(IsNested && "unmatched ')' found at end of type list");
+    Error = ASTContext::GE_Missing_type;
     return {};
   }
 
   SmallVector<QualType, 8> ArgTypes;
 
   bool RequiresICE = false;
-  Error = GE_None;
-  QualType ResType = DecodeTypeFromStr(TypeStr, *this, Error,
+  Error = ASTContext::GE_None;
+  QualType ResType = DecodeTypeFromStr(TypeStr, Context, Error,
                                        RequiresICE, true);
-  if (Error != GE_None)
+  if (Error != ASTContext::GE_None)
     return {};
 
-  assert(!RequiresICE && "Result of intrinsic cannot be required to be an ICE");
+  assert(!RequiresICE && "Result of function cannot be required to be an ICE");
 
-  while (TypeStr[0] && TypeStr[0] != '.') {
-    QualType Ty = DecodeTypeFromStr(TypeStr, *this, Error, RequiresICE, true);
-    if (Error != GE_None)
+  while (TypeStr[0] && TypeStr[0] != '.' && TypeStr[0] != ')') {
+    QualType Ty = DecodeTypeFromStr(TypeStr, Context, Error, RequiresICE, true);
+    if (Error != ASTContext::GE_None)
       return {};
 
     // If this argument is required to be an IntegerConstantExpression and the
@@ -9762,34 +9796,50 @@ QualType ASTContext::GetBuiltinType(unsigned Id,
 
     // Do array -> pointer decay.  The builtin should use the decayed type.
     if (Ty->isArrayType())
-      Ty = getArrayDecayedType(Ty);
+      Ty = Context.getArrayDecayedType(Ty);
 
     ArgTypes.push_back(Ty);
   }
 
-  if (Id == Builtin::BI__GetExceptionInfo)
+  assert((TypeStr[0] != ')' || IsNested) &&
+         "unmatched ')' found at end of type list");
+
+  if (ForceEmptyTy)
     return {};
 
   assert((TypeStr[0] != '.' || TypeStr[1] == 0) &&
          "'.' should only occur at end of builtin type list!");
 
   FunctionType::ExtInfo EI(CC_C);
-  if (BuiltinInfo.isNoReturn(Id)) EI = EI.withNoReturn(true);
+  if (IsNoReturn) EI = EI.withNoReturn(true);
 
   bool Variadic = (TypeStr[0] == '.');
 
   // We really shouldn't be making a no-proto type here.
-  if (ArgTypes.empty() && Variadic && !getLangOpts().CPlusPlus)
-    return getFunctionNoProtoType(ResType, EI);
+  if (ArgTypes.empty() && Variadic && !Context.getLangOpts().CPlusPlus)
+    return Context.getFunctionNoProtoType(ResType, EI);
 
   FunctionProtoType::ExtProtoInfo EPI;
   EPI.ExtInfo = EI;
   EPI.Variadic = Variadic;
-  if (getLangOpts().CPlusPlus && BuiltinInfo.isNoThrow(Id))
+  if (Context.getLangOpts().CPlusPlus && IsNoThrow)
     EPI.ExceptionSpec.Type =
-        getLangOpts().CPlusPlus11 ? EST_BasicNoexcept : EST_DynamicNone;
+        Context.getLangOpts().CPlusPlus11 ? EST_BasicNoexcept : EST_DynamicNone;
 
-  return getFunctionType(ResType, ArgTypes, EPI);
+  return Context.getFunctionType(ResType, ArgTypes, EPI);
+}
+
+/// GetBuiltinType - Return the type for the specified builtin.
+QualType ASTContext::GetBuiltinType(unsigned Id,
+                                    GetBuiltinTypeError &Error,
+                                    unsigned *IntegerConstantArgs) const {
+  const char *TypeStr = BuiltinInfo.getTypeString(Id);
+  return DecodeFunctionTypeFromStr(TypeStr, /*IsNested=*/false,
+                                   BuiltinInfo.isNoReturn(Id),
+                                   BuiltinInfo.isNoThrow(Id),
+                                   /*ForceEmptyTy=*/
+                                   Id == Builtin::BI__GetExceptionInfo,
+                                   *this, Error, IntegerConstantArgs);
 }
 
 static GVALinkage basicGVALinkageForFunction(const ASTContext &Context,
