@@ -154,6 +154,7 @@ set(LIBUNWIND_TEST_LINKER_FLAGS "" CACHE STRING
 set(LIBUNWIND_TEST_COMPILER_FLAGS "" CACHE STRING
     "Additional compiler flags for test programs.")
 option(LIBUNWIND_TEST_ENABLE_EXCEPTIONS "Also include tests requiring C++ exceptions." ON)
+set(LIBUNWIND_USE_VERSION_SCRIPT "" CACHE PATH "version script to use when linking libunwind.so.")
 
 
 if (NOT LIBUNWIND_ENABLE_SHARED AND NOT LIBUNWIND_ENABLE_STATIC)
@@ -265,6 +266,7 @@ include(config-ix)
 if (LIBUNWIND_USE_COMPILER_RT AND NOT LIBUNWIND_HAS_NODEFAULTLIBS_FLAG)
   list(APPEND LIBUNWIND_LINK_FLAGS "-rtlib=compiler-rt")
 endif()
+
 
 #===============================================================================
 # Setup Compiler Flags

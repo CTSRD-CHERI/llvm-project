@@ -153,6 +153,10 @@ if (LIBUNWIND_ENABLE_SHARED)
                           OUTPUT_NAME   "unwind"
                           VERSION       "1.0"
                           SOVERSION     "1")
+  # To allow testing exceptions with a shared libcxxrt.so
+  if (LIBUNWIND_USE_VERSION_SCRIPT)
+    target_link_libraries(unwind_shared PRIVATE "-Wl,--version-script=${LIBUNWIND_USE_VERSION_SCRIPT}")
+  endif()
   list(APPEND LIBUNWIND_BUILD_TARGETS "unwind_shared")
   if (LIBUNWIND_INSTALL_SHARED_LIBRARY)
     list(APPEND LIBUNWIND_INSTALL_TARGETS "unwind_shared")
