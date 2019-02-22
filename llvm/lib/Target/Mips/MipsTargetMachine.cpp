@@ -327,6 +327,9 @@ void MipsPassConfig::addPreRegAlloc() {
   addPass(createMipsOptimizePICCallPass());
   if (getMipsSubtarget().isCheri()) {
     addPass(createCheriAddressingModeFolder());
+    // The CheriAddressingModeFolder can sometimes produce new dead instructions
+    // be sure to clean them up:
+    addPass(&DeadMachineInstructionElimID);
     addPass(createCheri128FailHardPass());
   }
 }
