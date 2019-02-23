@@ -74,7 +74,7 @@ define void @multi_use() addrspace(200) nounwind {
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clcbi $c12, %capcall20(one_arg)($c18)
-; CHECK-NEXT:    cincoffset $c3, $c11, 12
+; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 4]]
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clcbi $c12, %capcall20(one_arg)($c18)
