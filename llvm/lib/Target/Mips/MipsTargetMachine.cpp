@@ -329,7 +329,8 @@ void MipsPassConfig::addPreRegAlloc() {
     addPass(createCheriAddressingModeFolder());
     // The CheriAddressingModeFolder can sometimes produce new dead instructions
     // be sure to clean them up:
-    addPass(&DeadMachineInstructionElimID);
+    if (getOptLevel() != CodeGenOpt::Level::None)
+      addPass(&DeadMachineInstructionElimID);
     addPass(createCheri128FailHardPass());
   }
 }
