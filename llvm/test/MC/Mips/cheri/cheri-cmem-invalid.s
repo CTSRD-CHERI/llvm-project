@@ -1,5 +1,5 @@
-# RUN: not %cheri_llvm-mc %s -show-encoding 2>&1 | FileCheck %s
-# RUN: not %cheri_purecap_llvm-mc %s -show-encoding 2>&1 | FileCheck %s
+# RUN: not %cheri_llvm-mc %s -show-encoding 2>&1 | FileCheck %s -implicit-check-not fixup_Mips_32
+# RUN: not %cheri_purecap_llvm-mc %s -show-encoding 2>&1 | FileCheck %s -implicit-check-not fixup_Mips_32
 #
 # Check that the assembler is able to handle capability memory instructions.
 #
@@ -23,6 +23,20 @@ csd $2, $3, CR_EPCC
 # CHECK: [[@LINE-1]]:20: error: expecting capability register when parsing capability-relative address
 clw $3, $29, 0(REG_FOO)
 # CHECK: [[@LINE-1]]:16: error: expected general-purpose CHERI register operand or $ddc
+
+
+# Check the other instructions with immediate operands
+cincoffset $c1, $c2, CR_EPCC
+# CHECK: [[@LINE-1]]:22: error: expected immediate operand kind
+cincoffsetimm $c2, $c3, CR_EPCC
+# CHECK: [[@LINE-1]]:25: error: expected immediate operand kind
+csetbounds $c1, $c2, CR_EPCC
+# CHECK: [[@LINE-1]]:22: error: expected 11-bit unsigned immediate
+csetboundsimm $c2, $c3, CR_EPCC
+# CHECK: [[@LINE-1]]:25: error: expected 11-bit unsigned immediate
+ccall $c1, $c2, CR_EPCC
+# CHECK: [[@LINE-1]]:17: error: expected 11-bit unsigned immediate
+
 
 # test that we don't allow the wrong reloations in CLC/CLCBI:
 # corret width but not shifted:

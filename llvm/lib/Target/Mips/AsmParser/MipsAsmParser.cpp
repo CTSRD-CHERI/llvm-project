@@ -2484,6 +2484,7 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
   switch (Inst.getOpcode()) {
   default:
     break;
+
   case Mips::CAPLOAD8:
   case Mips::CAPLOAD16:
   case Mips::CAPLOAD32:
@@ -2502,7 +2503,13 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
   case Mips::CAPSTORE1632:
   case Mips::CAPSTORE32:
   case Mips::CAPSTORE3264:
-  case Mips::CAPSTORE64: {
+  case Mips::CAPSTORE64:
+  // For CIncOffsetImm/CSetBoundsImm/CCallSelector we also need to check that
+  // operand two is actually an immediate.
+  case Mips::CIncOffsetImm:
+  case Mips::CSetBoundsImm:
+  case Mips::CCall:
+  {
     const MCOperand &Opnd = Inst.getOperand(2);
     if (!Opnd.isImm())
       return Error(Opnd.isExpr() ? Opnd.getExpr()->getLoc() : IDLoc,
