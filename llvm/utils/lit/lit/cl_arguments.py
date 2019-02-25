@@ -128,10 +128,10 @@ def parse_args():
             metavar="N",
             help="Maximum time to spend testing (in seconds)",
             type=_positive_int)
-    selection_group.add_argument("--shuffle",
-            help="Run tests in random order",
+    selection_group.add_argument("--shuffle",   # TODO(yln): --order=random
+            help="Run tests in random order",   # default or 'by-path' (+ isEarlyTest())
             action="store_true")
-    selection_group.add_argument("-i", "--incremental",
+    selection_group.add_argument("-i", "--incremental",  # TODO(yln): --order=failing-first
             help="Run modified and failing tests first (updates mtimes)",
             action="store_true")
     selection_group.add_argument("--filter",
@@ -186,6 +186,14 @@ def parse_args():
     if opts.echoAllCommands:
         opts.showOutput = True
 
+    # TODO(python3): Could be enum
+    if opts.shuffle:
+        opts.order = 'random'
+    elif opts.incremental:
+        opts.order = 'failing-first'
+    else:
+        opts.order = 'default'
+
     if opts.numShards or opts.runShard:
         if not opts.numShards or not opts.runShard:
             parser.error("--num-shards and --run-shard must be used together")
@@ -193,7 +201,7 @@ def parse_args():
             parser.error("--run-shard must be between 1 and --num-shards (inclusive)")
         opts.shard = (opts.runShard, opts.numShards)
     else:
-      opts.shard = None
+        opts.shard = None
 
     return opts
 
