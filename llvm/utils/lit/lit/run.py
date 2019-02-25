@@ -69,7 +69,12 @@ class Run(object):
             # parent process will update the display.
             for a in async_results:
                 if deadline:
-                    a.wait(deadline - time.time())
+                    # This will raise a TimeOutError if it does not complete by
+                    # the deadline. It will also raise any exceptions caused
+                    # by the worker. Note: we cannot use wait here, because
+                    # otherwise we will assert when calling a.successful()
+                    # below (since it asserts that a.read() returns True)
+                    a.get(deadline - time.time())
                 else:
                     # Python condition variables cannot be interrupted unless
                     # they have a timeout. This can make lit unresponsive to
