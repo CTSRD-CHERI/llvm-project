@@ -2480,6 +2480,72 @@ bool MipsAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
     }
   }
 
+  // prevent invalid relocations in CHERI load/store instruction
+  switch (Inst.getOpcode()) {
+  default:
+    break;
+  case Mips::CAPLOAD8:
+  case Mips::CAPLOAD16:
+  case Mips::CAPLOAD32:
+  case Mips::CAPLOAD64:
+  case Mips::CAPLOAD832:
+  case Mips::CAPLOAD1632:
+  case Mips::CAPLOAD3264:
+  case Mips::CAPLOADU8:
+  case Mips::CAPLOADU16:
+  case Mips::CAPLOADU32:
+  case Mips::CAPLOADU832:
+  case Mips::CAPLOADU1632:
+  case Mips::CAPSTORE8:
+  case Mips::CAPSTORE832:
+  case Mips::CAPSTORE16:
+  case Mips::CAPSTORE1632:
+  case Mips::CAPSTORE32:
+  case Mips::CAPSTORE3264:
+  case Mips::CAPSTORE64: {
+    const MCOperand &Opnd = Inst.getOperand(2);
+    if (!Opnd.isImm())
+      return Error(Opnd.isExpr() ? Opnd.getExpr()->getLoc() : IDLoc,
+                   "expected immediate operand kind");
+    break;
+  }
+
+  // The clc/csc instructions can use some relocations:
+  case Mips::STORECAP:
+  case Mips::LOADCAP: {
+    const MCOperand &Opnd = Inst.getOperand(2);
+    // allow captable relocations:
+    SMLoc ErrLoc = IDLoc;
+    bool ValidRelocation = false;
+    if (Opnd.isExpr()) {
+      ErrLoc = Opnd.getExpr()->getLoc();
+      if (auto Expr = dyn_cast<MipsMCExpr>(Opnd.getExpr()))
+        ValidRelocation = Expr->getKind() == MipsMCExpr::MEK_CAPTABLE11 ||
+                          Expr->getKind() == MipsMCExpr::MEK_CAPCALL11;
+    }
+    if (!ValidRelocation && !Opnd.isImm())
+      return Error(ErrLoc,
+                   "expected immediate operand or valid relocation type");
+    break;
+  }
+  case Mips::STORECAP_BigImm:
+  case Mips::LOADCAP_BigImm: {
+    const MCOperand &Opnd = Inst.getOperand(1);
+    SMLoc ErrLoc = IDLoc;
+    bool ValidRelocation = false;
+    if (Opnd.isExpr()) {
+      ErrLoc = Opnd.getExpr()->getLoc();
+      if (auto Expr = dyn_cast<MipsMCExpr>(Opnd.getExpr()))
+        ValidRelocation = Expr->getKind() == MipsMCExpr::MEK_CAPTABLE20 ||
+                          Expr->getKind() == MipsMCExpr::MEK_CAPCALL20;
+    }
+    if (!ValidRelocation && !Opnd.isImm())
+      return Error(ErrLoc,
+                   "expected immediate operand or valid relocation type");
+    break;
+  }
+  }
+
   bool FillDelaySlot =
       MCID.hasDelaySlot() && AssemblerOptions.back()->isReorder();
   if (FillDelaySlot)
