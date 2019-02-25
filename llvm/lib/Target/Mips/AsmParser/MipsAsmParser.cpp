@@ -1473,16 +1473,10 @@ public:
     // offset in case of relocations.
     if (Kind != k_Immediate)
       return false;
-
-    if (isConstantImm()) {
-      return isShiftedInt<Bits, ShiftLeftAmount>(getConstantImm());
-    }
-
     MCValue Res;
     // FIXME: it would be nice to somehow get at the MCFixup here and check the size
     // using MCAsmBackend::getFixupKindInfo()
     bool Success = getImm()->evaluateAsRelocatable(Res, nullptr, nullptr);
-    bool SupportedReloc = false;
     // FIXME: how can we get at the MCFixup object (to check size generically)?
     if (auto Expr = dyn_cast<MipsMCExpr>(getImm())) {
       // HACK: Check that only %captab and %capcall are allowed in clc / csc
@@ -1491,19 +1485,14 @@ public:
           if (Expr->getKind() != MipsMCExpr::MEK_CAPTABLE11 &&
               Expr->getKind() != MipsMCExpr::MEK_CAPCALL11)
             return false;
-          else
-            SupportedReloc = true;
         } else if (Bits == 16) {
           if (Expr->getKind() != MipsMCExpr::MEK_CAPTABLE20 &&
               Expr->getKind() != MipsMCExpr::MEK_CAPCALL20)
             return false;
-          else
-            SupportedReloc = true;
         }
       }
     }
-    return Success && SupportedReloc &&
-           isShiftedInt<Bits, ShiftLeftAmount>(Res.getConstant());
+    return Success && isShiftedInt<Bits, ShiftLeftAmount>(Res.getConstant());
   }
 
   bool isRegList16() const {
