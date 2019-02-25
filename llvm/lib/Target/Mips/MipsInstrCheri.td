@@ -315,11 +315,11 @@ let TwoOperandAliasConstraint = "$cd = $cb" in {
 // Accept CIncOffsetImm as an assembler mnemonic because ancient binutils is too stupid to have an opcode
 // with differing encoding depending on the parameters
 def : InstAlias<"csetboundsimm $dst, $src, $imm",
-                (CSetBoundsImm CheriOpnd:$dst, CheriOpnd:$src, simm11s0:$imm), 0>;
+                (CSetBoundsImm CheriOpnd:$dst, CheriOpnd:$src, uimm11s0:$imm), 0>;
 def : InstAlias<"cincoffsetimm $dst, $src, $imm",
                 (CIncOffsetImm CheriOpnd:$dst, CheriOpnd:$src, simm11s0:$imm), 0>;
 def : InstAlias<"csetboundsimm $dst, $imm",
-                (CSetBoundsImm CheriOpnd:$dst, CheriOpnd:$dst, simm11s0:$imm), 0>;
+                (CSetBoundsImm CheriOpnd:$dst, CheriOpnd:$dst, uimm11s0:$imm), 0>;
 def : InstAlias<"cincoffsetimm $dst, $imm",
                 (CIncOffsetImm CheriOpnd:$dst, CheriOpnd:$dst, simm11s0:$imm), 0>;
 
