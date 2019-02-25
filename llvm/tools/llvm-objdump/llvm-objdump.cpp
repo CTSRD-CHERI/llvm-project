@@ -2000,7 +2000,9 @@ static void printFaultMaps(const ObjectFile *Obj) {
 static void printPrivateFileHeaders(const ObjectFile *O, bool OnlyFirst) {
   if (O->isELF()) {
     printELFFileHeader(O);
-    return printELFDynamicSection(O);
+    printELFDynamicSection(O);
+    printELFSymbolVersionInfo(O);
+    return;
   }
   if (O->isCOFF())
     return printCOFFFileHeader(O);
