@@ -2,7 +2,7 @@
 # Should be the same both with and without dead-mi elimination
 # RUN: %cheri_purecap_llc -run-pass=cheriaddrmodefolder -o - %s | FileCheck %s
 # Should should also produce the same thing with dead-mi-elimination
-# RUN: %cheri_purecap_llc -run-pass=cheriaddrmodefolder,dead-mi-elimination -verify-machineinstrs %t.mir -o - | FileCheck %s
+# RUN: %cheri_purecap_llc -run-pass=cheriaddrmodefolder,dead-mi-elimination -verify-machineinstrs %s -o - | FileCheck %s
 
 --- |
   ; ModuleID = '/Users/alex/cheri/llvm-project/llvm/test/CodeGen/Mips/cheri/compiling-with-debug-info-keeps-dead-instrs.c'
