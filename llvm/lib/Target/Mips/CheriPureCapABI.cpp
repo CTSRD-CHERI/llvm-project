@@ -1,3 +1,4 @@
+#include "Mips.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/PtrUseVisitor.h"
 #include "llvm/Analysis/Utils/Local.h"
@@ -32,67 +33,223 @@ using std::pair;
 
 namespace {
 
-class CheckPtrEscape : public PtrUseVisitor<CheckPtrEscape> {
-  using Base = PtrUseVisitor<CheckPtrEscape>;
-  AllocaInst* Alloca = nullptr;
+// TODO: remove this option after eval
+static cl::opt<bool> UseRematerializableIntrinsic(
+    "cheri-stack-bounds-allow-remat", cl::init(true),
+    cl::desc("Use bounded.stack.cap() instead of bounds.set() for stack "
+             "allocations (allows rematerialization)"),
+    cl::Hidden);
+
+// Loading/storing from constant stack indices does not need to use a small
+// tightly bounded capability and can use $csp instead
+// TODO: remove these options once we know what the best stragegy is?
+// TODO: change this to an integer threshold (more than N uses -> reuse the same one)
+static cl::opt<bool> ReuseSingleIntrinsicCall(
+    "cheri-stack-bounds-single-intrinsic-call", cl::init(true),
+    cl::desc("Reuse the result of a single CHERI bounds intrinsic"),
+    cl::Hidden);
+
+// single option instead of the booleans?
+enum class StackBoundsMethod {
+  Never,
+  ForAllUsesIfOneNeedsBounds, // This is not particularly useful, just for
+                              // comparison
+  IfNeeded,
+  AllUses,
+};
+
+static cl::opt<StackBoundsMethod> BoundsSettingMode(
+    "cheri-stack-bounds", cl::desc("Strategy for setting bounds on stack capabilities:"),
+    cl::init(StackBoundsMethod::ForAllUsesIfOneNeedsBounds), // TODO: IfNeeded
+    cl::values(clEnumValN(StackBoundsMethod::Never, "never",
+                          "Do not add bounds on stack allocations (UNSAFE!)"),
+               clEnumValN(StackBoundsMethod::ForAllUsesIfOneNeedsBounds,
+                          "all-or-none",
+                          "Set stack allocation bounds for all uses if at "
+                          "least one use neededs bounds, otherwise omit"),
+               clEnumValN(StackBoundsMethod::IfNeeded, "if-needed",
+                          "Set stack allocation bounds for all uses except for "
+                          "loads/stores to statically known in-bounds offsets"),
+               clEnumValN(StackBoundsMethod::AllUses, "all-uses",
+                          "Set stack allocation bounds even for loads/stores "
+                          "to statically known in-bounds offset")));
+
+// This is similar to CaptureTracking but we treat way more cases as "captured"
+
+#define DBG_MESSAGE(...) LLVM_DEBUG(dbgs() << DEBUG_TYPE ": " << __VA_ARGS__)
+#define DBG_INDENTED(...) DBG_MESSAGE(llvm::right_justify("-", Depth + 1) << __VA_ARGS__)
+
+
+class StackAllocNeedBoundsChecker {
 public:
-  CheckPtrEscape(const DataLayout &DL) : PtrUseVisitor<CheckPtrEscape>(DL) {}
+  StackAllocNeedBoundsChecker(AllocaInst *AI, const DataLayout &DL)
+      : AI(AI), DL(DL) {
 
-  PtrInfo checkAlloca(AllocaInst* AI) {
-    Alloca = AI;
-    return visitPtr(*AI);
+    AllocaSize = AI->getAllocationSizeInBits(DL);
   }
-
-  void visitGetElementPtrInst(GetElementPtrInst &GEPI) {
-    Base::visitGetElementPtrInst(GEPI);
-#if 1
-    // We also treat a GetElementPtrInst with a non-constant offset as escaped
-    // since this means we need to set bounds.
-    // Example:
-    // int foo(int n) { int buffer[128]; /* ... */ return buffer[n] }
-    // The basic PtrUseVisitor does not treat GEPs as escaped so without
-    // this check we would not be setting bounds.
-    if (!GEPI.isInBounds() && !GEPI.hasAllConstantIndices()) {
-      PI.setEscaped(&GEPI);
-    } else if (IsOffsetKnown) {
-      unsigned BitWidth = DL.getIndexTypeSizeInBits(GEPI.getType());
-      auto AllocaSize = Alloca->getAllocationSizeInBits(DL);
-      APInt Zero(BitWidth, 0);
-      APInt Max(BitWidth, AllocaSize ? *AllocaSize / 8: 0);
-      LLVM_DEBUG(dbgs() << GEPI.getFunction()->getName() << ": MAX IS" << Max; GEPI.dump(););
-      LLVM_DEBUG(dbgs() << GEPI.getFunction()->getName() << ": OFFSET IS: " << Offset; GEPI.dump(););
-      if (Offset.slt(Zero) || Offset.sge(Max)) {
-        LLVM_DEBUG(dbgs() << GEPI.getFunction()->getName() << ": OFFSET IS OUT OF BOUNDS: " <<  Offset; GEPI.dump());
-        PI.setEscaped(&GEPI);
-      }
-    } else {
-       LLVM_DEBUG(dbgs() << "OFFSET IS UNKNOWN in " << GEPI.getFunction()->getName(); GEPI.dump(););
-       PI.setEscaped(&GEPI);
+  bool check(const Use &U) {
+    if (!AllocaSize) {
+      DBG_MESSAGE("dyanmic size alloca always needs bounds: ";
+                  U.getUser()->dump());
+      return true;
     }
-#else
-    // for now just always treat a GEP as needing bounds.
-    // TODO: be a bit more smart about this to allow struct member loads/stores
-    PI.setEscaped(&GEPI);
-#endif
+    APInt CurrentGEPOffset =
+        APInt(DL.getIndexSizeInBits(AI->getType()->getAddressSpace()), 0);
+    bool Result = useNeedsBounds(U, CurrentGEPOffset, 0);
+    DBG_MESSAGE("Found alloca use that needs bounds: "; U.getUser()->dump());
+    return Result;
   }
 
-  void visitReturnInst(ReturnInst &R) {
-    // Returning the alloca also causes it to escape (even if that shouldn't
-    // happen in practice we should still be setting bounds here.
-    // Example:
-    // int foo(int n) { int stack_var; /* ... */ return &stack_var; }
-    PI.setEscaped(&R);
-    Base::visitReturnInst(R);
+  void findUsesThatNeedBounds(SmallVectorImpl<const Use *> *UsesThatNeedBounds,
+                              bool BoundAllUses) {
+    // TODO: don't replace load/store instructions with the bounded value
+    for (const Use &U : AI->uses()) {
+      if (BoundAllUses || check(U))
+        UsesThatNeedBounds->push_back(&U);
+    }
   }
-#if 0
-  // TODO: do I need this for visitGetElementPtr too?
-  void visitGetElementPtr(GetElementPtrInst &GEPI) {
-    if (!GEPI.hasAllConstantIndices())
-      PI.setEscaped(&GEPI);
 
-    PtrUseVisitor<CheckPtrEscape>::visitGetElementPtr(GEPI);
+private:
+  bool useNeedsBounds(const Use &U, const APInt &CurrentGEPOffset, unsigned Depth) {
+    const Instruction *I = cast<Instruction>(U.getUser());
+    // Value *V = U->get();
+    if (Depth > 10) {
+      DBG_INDENTED("reached max depth, assuming bounds needed.");
+    }
+
+    switch (I->getOpcode()) {
+    case Instruction::Call:
+    case Instruction::Invoke: {
+      auto CI = cast<CallBase>(I);
+      switch (CI->getIntrinsicID()) {
+      case Intrinsic::not_intrinsic:
+          // not an intrinsic call -> always need bounds:
+          DBG_INDENTED("Adding stack bounds since it is passed to call: ";
+                    I->dump());
+          return true;
+      default:
+        errs() << "DON'T know how to handle intrinsic"; I->dump();
+        DBG_INDENTED("Adding stack bounds for unknown intrinsic call: ";
+                     I->dump());
+        return true;
+      }
+    }
+    case Instruction::Load:
+      // Storing to a stack slot does not need bounds if the offset is known to
+      // be within the alloca. We can just use cs* offset($csp) istead of adding
+      // a cincoffset+csetbouds.
+      return canLoadStoreBeOutOfBounds(I, CurrentGEPOffset, Depth);
+    case Instruction::Store:
+      // Storing to a stack slot does not need bounds if the offset is known to
+      // be within the alloca. We can just use cs* offset($csp) istead of adding
+      // a cincoffset+csetbouds.
+      return canLoadStoreBeOutOfBounds(I, CurrentGEPOffset, Depth);
+
+    case Instruction::AtomicRMW:
+    case Instruction::AtomicCmpXchg:
+      // cmpxchg and rmw are the same as load/store: if it is a fixed stack
+      // slot we can omit the bounds
+      return canLoadStoreBeOutOfBounds(I, CurrentGEPOffset, Depth);
+
+    case Instruction::GetElementPtr: {
+      auto GEPI = cast<GetElementPtrInst>(I);
+      if (!GEPI->isInBounds() && !GEPI->hasAllConstantIndices()) {
+        DBG_INDENTED("Adding stack bounds since GEP is not all constants: ";
+                    I->dump());
+        return true;
+      }
+      APInt NewGepOffset(CurrentGEPOffset);
+      if (!GEPI->accumulateConstantOffset(DL, NewGepOffset)) {
+        DBG_INDENTED("Could not accumulate constant GEP Offset -> need bounds: ";
+                    I->dump());
+      }
+      return anyUserNeedsBounds(GEPI, NewGepOffset, Depth);
+    }
+    case Instruction::PHI:
+    case Instruction::Select:
+    case Instruction::BitCast:
+    case Instruction::AddrSpaceCast:
+      // If any use of the cast/phi/selects needs bounds then we must add bounds
+      // for the initial value.
+      return anyUserNeedsBounds(I, CurrentGEPOffset, Depth);
+    case Instruction::ICmp:
+      // comparisons need bounds since cexeq takes bounds into account.
+      // TODO: when only comparing addresses we might not need them
+      DBG_INDENTED("Adding stack bounds since comparisons need bounds: ";
+                  I->dump());
+      return true;
+    case Instruction::Ret:
+      DBG_INDENTED("Adding stack bounds for alloca that is returned: ";
+                  I->dump());
+      return true;
+    default:
+      // Something else - be conservative and say it needs bounds.
+      errs() << "DON'T know how to handle "; I->dump();
+      DBG_INDENTED("Adding stack bounds since don't know how to handle: ";
+                  I->dump());
+      return true;
+    }
   }
-#endif
+
+  bool anyUserNeedsBounds(const Instruction *I, const APInt &CurrentGEPOffset, unsigned Depth) {
+    DBG_INDENTED("Checking if " << I->getOpcodeName() << " needs stack bounds: ";
+                I->dump());
+    for (const Use &U : I->uses()) {
+      if (useNeedsBounds(U, CurrentGEPOffset, Depth + 1)) {
+        DBG_INDENTED("Adding stack bounds since " << I->getOpcodeName()
+                                                 << " user needs bounds: ";
+                    U.getUser()->dump());
+        return true;
+      }
+    }
+    DBG_INDENTED("no " << I->getOpcodeName() << " users need bounds: ";
+                I->dump());
+    return false;
+  }
+
+  bool canLoadStoreBeOutOfBounds(const Instruction *I,
+                                 const APInt &CurrentGEPOffset, unsigned Depth) {
+    DBG_INDENTED("Checking if load/store needs bounds (GEP offset is "
+                    << CurrentGEPOffset << "): ";
+                I->dump());
+    assert(AllocaSize &&
+           "dynamic size alloca should have been checked earlier");
+    Type *LoadStoreType = nullptr;
+    if (auto CmpXchg = dyn_cast<AtomicCmpXchgInst>(I)) {
+      LoadStoreType = CmpXchg->getNewValOperand()->getType();
+    } else if (auto RMW = dyn_cast<AtomicRMWInst>(I)) {
+      LoadStoreType = RMW->getValOperand()->getType();
+    } else if (const auto *Store = dyn_cast<StoreInst>(I)) {
+      LoadStoreType = Store->getValueOperand()->getType();
+    } else if (const auto *Load = dyn_cast<LoadInst>(I)) {
+      LoadStoreType = Load->getType();
+    } else {
+      llvm_unreachable("Invalid load/store type");
+    }
+    auto Size = DL.getTypeStoreSize(LoadStoreType);
+    assert((*AllocaSize % 8) == 0 && "AllocaSize must be a multiple of 8 bits");
+    uint64_t AllocaSizeInBytes = (*AllocaSize / 8);
+    DBG_INDENTED("Load/store size="
+                    << Size << ", alloca size=" << AllocaSizeInBytes
+                    << ", current GEP offset=" << CurrentGEPOffset << " for ";
+                LoadStoreType->dump(););
+    APInt Zero(CurrentGEPOffset.getBitWidth(), 0);
+    APInt Max(CurrentGEPOffset.getBitWidth(), AllocaSizeInBytes);
+    APInt LastAddr = CurrentGEPOffset + Size;
+    if (CurrentGEPOffset.slt(Zero) || LastAddr.sgt(Max)) {
+      DBG_INDENTED(I->getFunction()->getName()
+                      << ": stack load/store offset OUT OF BOUNDS -> adding "
+                         "csetbounds: ";
+                  I->dump());
+      return true;
+    }
+    DBG_INDENTED("Load/store is in bounds -> can reuse $csp for "; I->dump(););
+    return false;
+  }
+
+  const AllocaInst *AI;
+  const DataLayout &DL;
+  Optional<uint64_t> AllocaSize;
 };
 
 class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
@@ -119,6 +276,10 @@ public:
   }
 
   bool runOnFunction(Function &F) {
+    // always set bounds with optnone
+    bool IsOptNone = F.hasFnAttribute(Attribute::OptimizeNone);
+    // FIXME: should still ignore lifetime-start + lifetime-end intrinsics
+
     LLVMContext &C = M->getContext();
     Allocas.clear();
     visit(F);
@@ -126,12 +287,19 @@ public:
     if (Allocas.empty())
       return false;
 
-    Intrinsic::ID BoundedStackCap = Intrinsic::cheri_bounded_stack_cap;
+    LLVM_DEBUG(dbgs() << "\nChecking function " << F.getName() << "\n");
+
+    // TODO: csetboundsexact and round up sizes
+    // Keep around the non-rematerializable cheri_cap_bounds_set code path to
+    // compare how much rematerialization can help
+    Intrinsic::ID BoundedStackCap = UseRematerializableIntrinsic
+                                        ? Intrinsic::cheri_bounded_stack_cap
+                                        : Intrinsic::cheri_cap_bounds_set;
     Function *BoundedStackFn = Intrinsic::getDeclaration(M, BoundedStackCap);
+    StackBoundsMethod BoundsMode = BoundsSettingMode;
 
     IRBuilder<> B(C);
     const DataLayout &DL = F.getParent()->getDataLayout();
-    CheckPtrEscape CPE(DL);
 
     for (AllocaInst *AI : Allocas) {
       // Insert immediately after the alloca
@@ -148,6 +316,7 @@ public:
       // For imprecise capabilities, we need to increase the alignment for
       // on-stack allocations to ensure that we can create precise bounds.
       if (IsCheri128) {
+        // TODO: do a sane calculation based on capability precision
         uint64_t AllocaSize = DL.getTypeAllocSize(AllocationTy);
         if (ConstantInt *CI = dyn_cast<ConstantInt>(ArraySize))
           AllocaSize *= CI->getValue().getLimitedValue();
@@ -159,23 +328,49 @@ public:
         ForcedAlignment = std::min(ForcedAlignment, 0x4000U);
       }
       AI->setAlignment(std::max(AI->getAlignment(), ForcedAlignment));
-      CheckPtrEscape::PtrInfo PI = CPE.checkAlloca(AI);
       // Only set bounds for allocas that escape this function
-      const bool NeedBounds = PI.isEscaped();
+      bool NeedBounds = true;
+      // Always set bounds if the function has the optnone attribute
+      SmallVector<const Use *, 32> UsesThatNeedBounds;
+      if (BoundsMode == StackBoundsMethod::Never) {
+        NeedBounds = false;
+      } else {
+        StackAllocNeedBoundsChecker BoundsChecker(AI, DL);
+        // With -O0 or =always we set bounds on every stack allocation even
+        // if it is not necessary
+        bool BoundAll = IsOptNone || BoundsMode == StackBoundsMethod::AllUses;
+        BoundsChecker.findUsesThatNeedBounds(&UsesThatNeedBounds, BoundAll);
+        NeedBounds = !UsesThatNeedBounds.empty();
+        DBG_MESSAGE(F.getName()
+                        << ": " << UsesThatNeedBounds.size() << " of "
+                        << AI->getNumUses() << " users need bounds for ";
+                    AI->dump());
+        // TODO: remove the all-or-nothing case
+        if (NeedBounds &&
+            BoundsMode == StackBoundsMethod::ForAllUsesIfOneNeedsBounds) {
+          // We are compiling with the all-or-nothing case and found at least
+          // one use that needs bounds -> set bounds on all uses
+          UsesThatNeedBounds.clear();
+          LLVM_DEBUG(dbgs() << "Checking if alloca needs bounds: "; AI->dump());
+
+          BoundsChecker.findUsesThatNeedBounds(&UsesThatNeedBounds,
+                                               /*BoundAllUses=*/true);
+        }
+      }
       if (!NeedBounds) {
-        LLVM_DEBUG(dbgs() << "No need to set bounds on stack alloca"; AI->dump());
+        DBG_MESSAGE("No need to set bounds on stack alloca"; AI->dump());
         continue;
       }
 
+      // We need at least one setbounds -> create the bitcast
       Instruction *BitCast =
           cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
-
       // Get the size of the alloca
       unsigned ElementSize = DL.getTypeAllocSize(AllocationTy);
       Value *Size = ConstantInt::get(Type::getInt64Ty(C), ElementSize);
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
-      Value *Alloca = BitCast;
+      Value *AllocaI8 = BitCast;
 
       if (cheri::ShouldCollectCSetBoundsStats) {
         cheri::addSetBoundsStats(AI->getAlignment(), Size, getPassName(),
@@ -190,25 +385,27 @@ public:
                         << (S ? Twine(*S) : Twine("<unknown>"));
                  AI->dump());
 
-      auto WithBounds = B.CreateCall(BoundedStackFn, {Alloca, Size});
-      Alloca = B.CreateBitCast(WithBounds, AllocaTy);
-#if 0
-      // TODO: don't replace load/store instructions with the bounded value
-      for (Use& U : AI->uses()) {
-        errs() << "Alloc is used here: user"; U.getUser()->dump();
+      Value *SingleBoundedAlloc = nullptr;
+      if (ReuseSingleIntrinsicCall) {
+        SingleBoundedAlloc = B.CreateCall(BoundedStackFn, {AllocaI8, Size});
+        SingleBoundedAlloc = B.CreateBitCast(SingleBoundedAlloc, AllocaTy);
       }
-#endif
-      AI->replaceNonMetadataUsesWith(Alloca);
-      // If we didn't create a bitcast because the alloca has the right type
-      // we need to set the @llvm.cheri.cap.bounds.set() argument to be the
-      // alloca instruction!
-      // Otherwise we need to update the bitcast operand to be the alloca again
-      // since it was replaced with the setbounds result by replaceNonMetadataUsesWith()
-      // This is invalid IR so we need to undo it.
-      if (BitCast == AI)
-        WithBounds->setOperand(0, BitCast);
-      else
-        BitCast->setOperand(0, AI);
+      for (const Use *U : UsesThatNeedBounds) {
+        Instruction *I = cast<Instruction>(U->getUser());
+        assert(I != BitCast);
+        if (ReuseSingleIntrinsicCall) {
+          const_cast<Use *>(U)->set(SingleBoundedAlloc);
+        } else {
+          // insert a new intrinsic call before every use. This can avoid
+          // stack spills but will result in additional instructions.
+          // This should avoid spilling registers when using an alloca in a
+          // different basic block
+          // TODO: there should be a MIR pass to merge unncessary calls
+          B.SetInsertPoint(I);
+          auto WithBounds = B.CreateCall(BoundedStackFn, {AllocaI8, Size});
+          const_cast<Use *>(U)->set(B.CreateBitCast(WithBounds, AllocaTy));
+        }
+      }
     }
     return true;
   }
@@ -217,6 +414,8 @@ public:
 } // anonymous namespace
 
 char CheriPureCapABI::ID;
+INITIALIZE_PASS(CheriPureCapABI, DEBUG_TYPE,
+                "CHERI add bounds to alloca instructions", false, false)
 
 namespace llvm {
 ModulePass *createCheriPureCapABI(void) { return new CheriPureCapABI(); }

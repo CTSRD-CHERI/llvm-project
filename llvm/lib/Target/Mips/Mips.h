@@ -58,6 +58,8 @@ namespace llvm {
   void initializeMipsPreLegalizerCombinerPass(PassRegistry&);
   void initializeMipsOptimizePICCallPass(PassRegistry &);
   void initializeCheriAddressingModeFolderPass(PassRegistry &);
+  // TODO: should probably rename this to something like CheriStackBoundsPass
+  void initializeCheriPureCapABIPass(PassRegistry &);
 } // end namespace llvm;
 
 #endif
