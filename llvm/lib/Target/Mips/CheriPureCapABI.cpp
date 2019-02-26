@@ -96,7 +96,9 @@ public:
     APInt CurrentGEPOffset =
         APInt(DL.getIndexSizeInBits(AI->getType()->getAddressSpace()), 0);
     bool Result = useNeedsBounds(U, CurrentGEPOffset, 0);
-    DBG_MESSAGE("Found alloca use that needs bounds: "; U.getUser()->dump());
+    if (Result) {
+      DBG_MESSAGE("Found alloca use that needs bounds: "; U.getUser()->dump());
+    }
     return Result;
   }
 
@@ -127,6 +129,11 @@ private:
           DBG_INDENTED("Adding stack bounds since it is passed to call: ";
                     I->dump());
           return true;
+      case Intrinsic::lifetime_start:
+      case Intrinsic::lifetime_end:
+        DBG_INDENTED("No need for stack bounds for lifetime_{start,end}: ";
+                     I->dump());
+        return false;
       default:
         errs() << "DON'T know how to handle intrinsic"; I->dump();
         DBG_INDENTED("Adding stack bounds for unknown intrinsic call: ";
