@@ -953,7 +953,8 @@ static void emitStoresForInitAfterBZero(CodeGenModule &CGM,
 /// variable instead of using a memcpy from a constant global.  It is beneficial
 /// to use bzero if the global is all zeros, or mostly zeros and large.
 static bool shouldUseBZeroPlusStoresToInitialize(llvm::Constant *Init,
-                                                 uint64_t GlobalSize) {
+                                                 uint64_t GlobalSize,
+                                                 uint64_t AddedThreshold) {
   // If a global is all zeros, always use a bzero.
   if (isa<llvm::ConstantAggregateZero>(Init)) return true;
 
@@ -962,7 +963,10 @@ static bool shouldUseBZeroPlusStoresToInitialize(llvm::Constant *Init,
   // TODO: Should budget depends on the size?  Avoiding a large global warrants
   // plopping in more stores.
   unsigned StoreBudget = 6;
-  uint64_t SizeLimit = 32;
+  // TODO: should maybe check if more than x% of the struct needs initialization
+  // after bzero instead?
+  // XXXAR: Don't do a bzero if the size is only 32 over the capability size
+  uint64_t SizeLimit = 32  + AddedThreshold;
 
   return GlobalSize > SizeLimit &&
          canEmitInitWithFewStoresAfterBZero(Init, StoreBudget);
@@ -1123,8 +1127,13 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
   // then do a few stores afterward.
   uint64_t ConstantSize = CGM.getDataLayout().getTypeAllocSize(Ty);
   auto *SizeVal = llvm::ConstantInt::get(IntPtrTy, ConstantSize);
-  // FIXME: is this fine with capabilities?
-  if (!ContainsCaps && shouldUseBZeroPlusStoresToInitialize(constant, ConstantSize)) {
+  uint64_t AddedThreshold = 0;
+  // Avoid generating a memset() intrinisic for structs that are just capability
+  // and an integer (at least for CHERI256)
+  if (ContainsCaps)
+    AddedThreshold = CGM.getTarget().getCHERICapabilityWidth() / 8;
+
+  if (shouldUseBZeroPlusStoresToInitialize(constant, ConstantSize, AddedThreshold)) {
     Builder.CreateMemSet(Loc, llvm::ConstantInt::get(Int8Ty, 0), SizeVal,
                          isVolatile);
 
@@ -1139,7 +1148,7 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
 
   // FIXME: is this fine with capabilities?
   llvm::Value *Pattern = shouldUseMemSetToInitialize(constant, ConstantSize);
-  if (!ContainsCaps && Pattern) {
+  if (Pattern) {
     uint64_t Value = 0x00;
     if (!isa<llvm::UndefValue>(Pattern)) {
       const llvm::APInt &AP = cast<llvm::ConstantInt>(Pattern)->getValue();
