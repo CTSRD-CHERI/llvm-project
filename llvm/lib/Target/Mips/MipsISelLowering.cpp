@@ -5115,26 +5115,33 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
   if (Subtarget.isCheri() && (!IsMemset || ZeroMemset)) {
     unsigned Align = IsMemset ? DstAlign : std::min(SrcAlign, DstAlign);
     unsigned CapSize = Subtarget.getCapSizeInBytes();
-    if (ZeroMemset && (Align >= CapSize) && (Size % CapSize > 0))
-      return MVT::i64;
+    if (ZeroMemset && (Align >= CapSize)) {
+      // for bzero() always use capability stores of $cnull.
+      return CapType;
+    }
     // If this is going to include a capability, then pretend that we have to
     // copy it using single bytes, which will cause SelectionDAG to decide to
     // do the memcpy call.
     if (!IsMemset && (Size > CapSize ) & (Align < CapSize))
       return MVT::i8;
     switch (Align) {
-      case 32: return CapType;
+      default:
+        assert(isPowerOf2_32(Align));
+        if (Size >= CapSize)
+          return CapType;
+        LLVM_FALLTHROUGH;
       case 16:
-        if (Subtarget.isCheri128())
+        if (Size >= CapSize && Subtarget.isCheri128())
           return CapType;
         LLVM_FALLTHROUGH;
       case 8:
-        if (Subtarget.isCheri64())
+        if (Size >= CapSize && Subtarget.isCheri64())
           return CapType;
         return MVT::i64;
       case 4: return MVT::i32;
       case 2: return MVT::i16;
-      default: return MVT::i8;
+      case 1: return MVT::i8;
+      case 0: llvm_unreachable("Invalid zero alignment");
     }
   }
 
