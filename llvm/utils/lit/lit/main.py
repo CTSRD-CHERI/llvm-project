@@ -41,7 +41,6 @@ def main(builtin_params={}):
         params=params,
         shardNumber=opts.runShard,
         config_prefix=opts.configPrefix,
-        maxFailures=opts.maxFailures, # TODO(yln): doesn't need to be in lit config
         echo_all_commands=opts.echoAllCommands)
 
     litConfig.cheri_test_mode = opts.cheri_tests_filter
@@ -201,6 +200,7 @@ def filter_by_shard(tests, run, shards, lit_config):
     lit_config.note(msg)
     return selected_tests
 
+
 def run_tests(tests, lit_config, opts, numTotalTests):
     display = lit.display.create_display(opts, len(tests), numTotalTests,
                                          opts.workers)
@@ -210,7 +210,7 @@ def run_tests(tests, lit_config, opts, numTotalTests):
             touch_file(test)
 
     run = lit.run.create_run(tests, lit_config, opts.workers, progress_callback,
-                             opts.timeout)
+                             opts.max_failures, opts.timeout)
 
     display.print_header()
     try:
@@ -219,6 +219,7 @@ def run_tests(tests, lit_config, opts, numTotalTests):
     except KeyboardInterrupt:
         display.clear(interrupted=True)
         print(' [interrupted by user]')
+
 
 def execute_in_tmp_dir(run, lit_config):
     # Create a temp directory inside the normal temp directory so that we can
@@ -270,7 +271,7 @@ def print_summary(tests, elapsed, opts):
                        ('Timed Out Tests', lit.Test.TIMEOUT)):
         if (lit.Test.XFAIL == code and not opts.show_xfail) or \
            (lit.Test.UNSUPPORTED == code and not opts.show_unsupported) or \
-           (lit.Test.UNRESOLVED == code and (opts.maxFailures is not None)):
+           (lit.Test.UNRESOLVED == code and (opts.max_failures is not None)):
             continue
         elts = byCode.get(code)
         if not elts:
