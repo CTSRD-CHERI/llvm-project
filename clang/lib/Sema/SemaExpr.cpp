@@ -12642,6 +12642,14 @@ ExprResult Sema::CreateBuiltinBinOp(SourceLocation OpLoc,
     }
   }
 
+  // Diagnose operations on the unsupported types for OpenMP device compilation.
+  if (getLangOpts().OpenMP && getLangOpts().OpenMPIsDevice) {
+    if (Opc != BO_Assign && Opc != BO_Comma) {
+      checkOpenMPDeviceExpr(LHSExpr);
+      checkOpenMPDeviceExpr(RHSExpr);
+    }
+  }
+
   switch (Opc) {
   case BO_Assign:
     ResultTy = CheckAssignmentOperands(LHS.get(), RHS, OpLoc, QualType());
@@ -13243,6 +13251,13 @@ ExprResult Sema::CreateBuiltinUnaryOp(SourceLocation OpLoc,
                        << Input.get()->getSourceRange());
     }
   }
+  // Diagnose operations on the unsupported types for OpenMP device compilation.
+  if (getLangOpts().OpenMP && getLangOpts().OpenMPIsDevice) {
+    if (UnaryOperator::isIncrementDecrementOp(Opc) ||
+        UnaryOperator::isArithmeticOp(Opc))
+      checkOpenMPDeviceExpr(InputExpr);
+  }
+
   switch (Opc) {
   case UO_PreInc:
   case UO_PreDec:
