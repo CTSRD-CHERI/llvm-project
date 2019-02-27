@@ -111,15 +111,20 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
     run_line = run_line.replace("-Werror=implicit-int", "")  # important for creduce but not for the test
     if "%clang_cc1" in run_line:
         target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
-        triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd(-purecap)?\d*\s+"
-        if re.search(target_cpu_re, run_line) or re.search(triple_cheri_freebsd_re, run_line):
+        triple_cheri_freebsd_re = re.compile(r"-triple\s+(cheri-unknown-freebsd\d*(-purecap)?)*\s+")
+        found_cheri_triple = None
+        triple_match = re.search(triple_cheri_freebsd_re, run_line)
+        if triple_match:
+            found_cheri_triple = triple_match.group(1)
+        if re.search(target_cpu_re, run_line) or found_cheri_triple:
             run_line = re.sub(target_cpu_re, "", run_line)  # remove
             run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
             run_line = run_line.replace("%clang_cc1", "%cheri_cc1")
             run_line = run_line.replace("-mllvm -cheri128", "")
-            run_line = re.sub(r"-cheri-size \d+", "", run_line)  # remove
+            run_line = re.sub(r"-cheri-size \d+ ", "", run_line)  # remove
+            run_line = re.sub(r"-target-cpu mips4 ", "", run_line)  # remove
             target_abi_re = r"-target-abi\s+purecap\s*"
-            if re.search(target_abi_re, run_line) is not None:
+            if re.search(target_abi_re, run_line) is not None or "-purecap" in found_cheri_triple:
                 run_line = re.sub(target_abi_re, "", run_line)  # remove
                 assert "%cheri_cc1" in run_line
                 run_line = run_line.replace("%cheri_cc1", "%cheri_purecap_cc1")
@@ -130,6 +135,15 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
     if "opt " in run_line:
         run_line = re.sub(r"opt\s+-mtriple=cheri-unknown-freebsd", "%cheri_opt", run_line)
     return run_line
+
+
+# to test the lit substitutions
+#class fake_args:
+#    clang_cmd = "/path/to/clang"
+#    llc_cmd = "/path/to/llc"
+# opt_cmd = "/path/to/opt"
+# print(add_lit_substitutions(fake_args(), "/path/to/clang -cc1 ...."))
+# sys.exit()
 
 class ReduceTool(metaclass=ABCMeta):
     def __init__(self, args: "Options", name: str, tool: Path) -> None:
