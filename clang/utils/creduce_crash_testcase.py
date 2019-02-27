@@ -92,6 +92,8 @@ def expand_lit_substitutions(args: "Options", cmd) -> str:
         compiler_cmd = re.sub(r"^\s*opt\b", " " + str(args.opt_cmd) + " ", compiler_cmd)
     compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(args.opt_cmd) +
                                         " -mtriple=cheri-unknown-freebsd ")
+    compiler_cmd = compiler_cmd.replace("%cheri_purecap_opt ", str(args.opt_cmd) +
+                                        " -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic ")
 
     # ignore all the piping to FileCheck parts of the command
     if "|" in compiler_cmd:
@@ -809,8 +811,8 @@ class Reducer(object):
         # Try to make implicit int an error to generate more sensible test output
         # If we don't add this we get really obscure code that doesn't look like it should compile
         new_command = self._try_remove_args(
-            new_command, infile, "Checking whether compiling without -Werror=implicit-int crashes:",
-            extra_args=["-Werror=implicit-int"])
+            new_command, infile, "Checking whether compiling with -Werror=implicit-int crashes:",
+            extra_args=["-Wimplicit-int", "-Werror=implicit-int"])
         # speed up test case reduction by aborting the compilation on the first error
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling with -Wfatal-errors crashes:",
