@@ -23,7 +23,7 @@ declare i32 @fnmatch(i8 addrspace(200)*, i8 addrspace(200)*, i32 signext) #0
 ; Function Attrs: noinline nounwind optnone
 define internal i32 @fnmatch1(i8 addrspace(200)* %pattern, i8 addrspace(200)* %string, i8 addrspace(200)* %stringstart, i32 signext %flags, i64 inreg %patmbs.coerce0, i64 inreg %patmbs.coerce1, i64 inreg %patmbs.coerce2, i64 inreg %patmbs.coerce3, i64 inreg %patmbs.coerce4, i64 inreg %patmbs.coerce5, i64 inreg %patmbs.coerce6, i64 inreg %patmbs.coerce7, i64 inreg %patmbs.coerce8, i64 inreg %patmbs.coerce9, i64 inreg %patmbs.coerce10, i64 inreg %patmbs.coerce11, i64 inreg %patmbs.coerce12, i64 inreg %patmbs.coerce13, i64 inreg %patmbs.coerce14, i64 inreg %patmbs.coerce15, i64 inreg %strmbs.coerce0, i64 inreg %strmbs.coerce1, i64 inreg %strmbs.coerce2, i64 inreg %strmbs.coerce3, i64 inreg %strmbs.coerce4, i64 inreg %strmbs.coerce5, i64 inreg %strmbs.coerce6, i64 inreg %strmbs.coerce7, i64 inreg %strmbs.coerce8, i64 inreg %strmbs.coerce9, i64 inreg %strmbs.coerce10, i64 inreg %strmbs.coerce11, i64 inreg %strmbs.coerce12, i64 inreg %strmbs.coerce13, i64 inreg %strmbs.coerce14, i64 inreg %strmbs.coerce15) #0 {
 entry:
-  store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* undef, align 16
+  store i8 addrspace(200)* null, i8 addrspace(200)* addrspace(200)* undef, align 32
   unreachable
 }
 ; CHECK-LABEL: fnmatch1:

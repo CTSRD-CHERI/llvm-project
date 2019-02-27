@@ -1,5 +1,5 @@
 // RUN: %cheri_purecap_cc1 %s -O0 -emit-llvm -o - | %cheri_FileCheck %s
-// RUN: %cheri_purecap_cc1 %s -O2 -S -o - -mllvm -cheri-cap-table-abi=plt  | %cheri_FileCheck %s -check-prefix ASM
+// RUN: %cheri_purecap_cc1 %s -O2 -S -o - -mllvm -cheri-cap-table-abi=plt -mllvm -cheri-stack-bounds=if-needed | %cheri_FileCheck %s -check-prefixes ASM,%cheri_type
 
 // example union from WebKit
 union CallData {
@@ -12,7 +12,7 @@ union CallData {
 // example union that is passed into semctl()
 union semun {
   int val;
-  char  * buf1;
+  char *buf1;
   char *buf2;
   char *buf3;
 };
@@ -139,9 +139,15 @@ int test_semun_pass_int(union semun s) {
 
 int test_semun_pass_int_2() {
   // ASM-LABEL: test_semun_pass_int_2:
-  // ASM:      addiu	$1, $zero, 1234
-  // ASM-NEXT: csw	$1, $zero, 0($c11)
-  // ASM:      clc	$c3, $zero, 0($c11)
+  // CHERI256 does a memset to zero before (this happens because clang thinks it
+  // should do it for aggregates > 16
+  // TODO: do it for (> 16 || containsCaps)?
+  // CHERI256:        csetbounds $c1, $c11, 32
+  // CHERI256:        csc $cnull, $zero, 0($c1)
+  // ASM:             addiu	$1, $zero, 1234
+  // ASM-NEXT:        csw	$1, $zero, 0($c11)
+  // ASM:             cjalr $c12, $c17
+  // ASM-NEXT:        clc	$c3, $zero, 0($c11)
   // ASM-LABEL: .end test_semun_pass_int_2
   return semun_pass_int_helper((union semun){.val = 1234});
 }

@@ -8,7 +8,7 @@ target datalayout = "E-m:e-pf200:128:128-i8:8:32-i16:16:32-i64:64-n32:64-S128-A2
 target triple = "cheri-unknown-freebsd"
 
 @d = common addrspace(200) global i32 0, align 4
-@e = common addrspace(200) global i8 addrspace(200)* null, align 16
+@e = common addrspace(200) global i8 addrspace(200)* null, align 32
 
 ; C Source code:
 ;int d;
@@ -40,7 +40,7 @@ target triple = "cheri-unknown-freebsd"
 ;  %10 = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %8)
 ;  %add1 = add i64 %9, %10
 ;  %11 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %5, i64 %add1)
-;  store i8 addrspace(200)* %11, i8 addrspace(200)* addrspace(200)* @e, align 16
+;  store i8 addrspace(200)* %11, i8 addrspace(200)* addrspace(200)* @e, align 32
 ;  ret void
 ;}
 
@@ -61,7 +61,7 @@ target triple = "cheri-unknown-freebsd"
 ;  %add1 = add i64 %5, %7
 ;  %8 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %3, i64 %5)
 ;  %9 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %3, i64 %add1)
-;  store i8 addrspace(200)* %8, i8 addrspace(200)* addrspace(200)* @e, align 16
+;  store i8 addrspace(200)* %8, i8 addrspace(200)* addrspace(200)* @e, align 32
 ;  ret void
 ;}
 
@@ -73,7 +73,7 @@ entry:
   %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* bitcast (i32 addrspace(200)* @d to i8 addrspace(200)*), i64 %0)
   %2 = sext i32 %y to i64
   %3 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %1, i64 %2)
-  store i8 addrspace(200)* %3, i8 addrspace(200)* addrspace(200)* @e, align 16
+  store i8 addrspace(200)* %3, i8 addrspace(200)* addrspace(200)* @e, align 32
   ret void
 }
 
