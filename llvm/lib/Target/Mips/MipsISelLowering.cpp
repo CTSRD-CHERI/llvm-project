@@ -5113,7 +5113,9 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
   // case, because the capability tag will always be 0.  For very long memsets,
   // we can use the capability registers in the library implementation.
   if (Subtarget.isCheri() && (!IsMemset || ZeroMemset)) {
-    unsigned Align = IsMemset ? DstAlign : std::min(SrcAlign, DstAlign);
+    unsigned MinSrcAlign = SrcAlign == 0 ? DstAlign : SrcAlign;
+    unsigned MinDstAlign = DstAlign == 0 ? SrcAlign : DstAlign;
+    unsigned Align = IsMemset ? DstAlign : std::min(MinSrcAlign, MinDstAlign);
     unsigned CapSize = Subtarget.getCapSizeInBytes();
     if (ZeroMemset && (Align >= CapSize)) {
       // for bzero() always use capability stores of $cnull.
@@ -5127,6 +5129,8 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
     switch (Align) {
       default:
         assert(isPowerOf2_32(Align));
+        LLVM_FALLTHROUGH;
+      case 0: // Zero means any alignment is fine
         if (Size >= CapSize)
           return CapType;
         LLVM_FALLTHROUGH;
@@ -5141,7 +5145,6 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
       case 4: return MVT::i32;
       case 2: return MVT::i16;
       case 1: return MVT::i8;
-      case 0: llvm_unreachable("Invalid zero alignment");
     }
   }
 
