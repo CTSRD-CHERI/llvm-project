@@ -24,6 +24,7 @@
 #include "clang/Basic/TargetBuiltins.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/CodeGen/CGFunctionInfo.h"
+#include "clang/Frontend/FrontendDiagnostic.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/DataLayout.h"
@@ -1559,6 +1560,31 @@ RValue CodeGenFunction::emitFortifiedStdLibCall(CodeGenFunction &CGF,
   return RValue::get(V);
 }
 
+// Diagnose misaligned copies (memmove/memcpy) of source types that contain
+// capabilities to a dst buffer that is less than capability aligned.
+// This can result in tags being lost at runtime if the buffer is not actually
+// capability aligned. Furthermore, if the user adds a __builtin_assume_aligned()
+// or a cast to a capability we can assume it is capability aligned an use
+// csc/clc if the memcpy()/memmove() is expanded inline.
+// TODO: maybe there needs to be an attribute __memmove_like__ or similar to
+// indicate that a function behaves like memmove/memcpy and we can use that
+// to diagnose unaligned copies.
+static void diagnoseMisalignedCapabiliyCopyDest(CodeGenModule& CGM, StringRef Function, const Expr* Src, CharUnits DstAlign) {
+  // we want the real type not the implicit conversion to void*
+  // TODO: ignore the first explicit cast to void*?
+  auto UnderlyingSrc = Src->IgnoreParenImpCasts();
+  auto& Ctx = CGM.getContext();
+  if (Ctx.containsCapabilities(UnderlyingSrc->getType())) {
+    if ((uint64_t)Ctx.toBits(DstAlign) < Ctx.getTargetInfo().getCHERICapabilityAlign()) {
+      CGM.getDiags().Report(Src->getExprLoc(), diag::warn_cheri_memintrin_misaligned)
+          << Function << (unsigned)DstAlign.getQuantity();
+      // TODO: add a fixit?
+      CGM.getDiags().Report(Src->getExprLoc(), diag::note_cheri_memintrin_misaligned_fixit);
+    }
+  }
+}
+
+
 RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                                         const CallExpr *E,
                                         ReturnValueSlot ReturnValue) {
@@ -2358,6 +2384,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_memcpy: {
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
+    diagnoseMisalignedCapabiliyCopyDest(CGM, "memcpy", E->getArg(1), Dest.getAlignment());
     Value *SizeVal = EmitScalarExpr(E->getArg(2));
     EmitNonNullArgCheck(RValue::get(Dest.getPointer()), E->getArg(0)->getType(),
                         E->getArg(0)->getExprLoc(), FD, 0);
@@ -2375,14 +2402,19 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     // fold __builtin_memcpy_chk(x, y, cst1, cst2) to memcpy iff cst1<=cst2.
     Expr::EvalResult SizeResult, DstSizeResult;
     if (!E->getArg(2)->EvaluateAsInt(SizeResult, CGM.getContext()) ||
-        !E->getArg(3)->EvaluateAsInt(DstSizeResult, CGM.getContext()))
+        !E->getArg(3)->EvaluateAsInt(DstSizeResult, CGM.getContext())) {
+        diagnoseMisalignedCapabiliyCopyDest(CGM, "__memcpy_chk", E->getArg(1), getNaturalPointeeTypeAlignment(E->getArg(0)->IgnoreImpCasts()->getType()));
       break;
+    }
     llvm::APSInt Size = SizeResult.Val.getInt();
     llvm::APSInt DstSize = DstSizeResult.Val.getInt();
-    if (Size.ugt(DstSize))
+    if (Size.ugt(DstSize)) {
+      diagnoseMisalignedCapabiliyCopyDest(CGM, "__memcpy_chk", E->getArg(1), getNaturalPointeeTypeAlignment(E->getArg(0)->IgnoreImpCasts()->getType()));
       break;
+    }
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
+    diagnoseMisalignedCapabiliyCopyDest(CGM, "memcpy", E->getArg(1), Dest.getAlignment());
     Value *SizeVal = llvm::ConstantInt::get(Builder.getContext(), Size);
     Builder.CreateMemCpy(Dest, Src, SizeVal, false);
     return RValue::get(Dest.getPointer());
@@ -2401,14 +2433,19 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     // fold __builtin_memmove_chk(x, y, cst1, cst2) to memmove iff cst1<=cst2.
     Expr::EvalResult SizeResult, DstSizeResult;
     if (!E->getArg(2)->EvaluateAsInt(SizeResult, CGM.getContext()) ||
-        !E->getArg(3)->EvaluateAsInt(DstSizeResult, CGM.getContext()))
+        !E->getArg(3)->EvaluateAsInt(DstSizeResult, CGM.getContext())) {
+      diagnoseMisalignedCapabiliyCopyDest(CGM, "__memmove_chk", E->getArg(1), getNaturalPointeeTypeAlignment(E->getArg(0)->IgnoreImpCasts()->getType()));
       break;
+    }
     llvm::APSInt Size = SizeResult.Val.getInt();
     llvm::APSInt DstSize = DstSizeResult.Val.getInt();
-    if (Size.ugt(DstSize))
+    if (Size.ugt(DstSize)) {
+      diagnoseMisalignedCapabiliyCopyDest(CGM, "__memmove_chk", E->getArg(1), getNaturalPointeeTypeAlignment(E->getArg(0)->IgnoreImpCasts()->getType()));
       break;
+    }
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
+    diagnoseMisalignedCapabiliyCopyDest(CGM, "memmove", E->getArg(1), Dest.getAlignment());
     Value *SizeVal = llvm::ConstantInt::get(Builder.getContext(), Size);
     Builder.CreateMemMove(Dest, Src, SizeVal, false);
     return RValue::get(Dest.getPointer());
@@ -2418,6 +2455,7 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI__builtin_memmove: {
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
     Address Src = EmitPointerWithAlignment(E->getArg(1));
+    diagnoseMisalignedCapabiliyCopyDest(CGM, "memmove", E->getArg(1), Dest.getAlignment());
     Value *SizeVal = EmitScalarExpr(E->getArg(2));
     EmitNonNullArgCheck(RValue::get(Dest.getPointer()), E->getArg(0)->getType(),
                         E->getArg(0)->getExprLoc(), FD, 0);

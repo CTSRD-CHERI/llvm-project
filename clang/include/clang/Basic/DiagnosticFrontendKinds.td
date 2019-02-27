@@ -240,6 +240,16 @@ def warn_subobject_bounds_unknown_type :
   Warning<"unhandled type '%0' in CHERI bounds setting">,
   InGroup<CheriSubobjectBounds>, DefaultWarnNoWerror;
 
+def warn_cheri_memintrin_misaligned : Warning<
+  "%0 operation with underaligned capability argument (aligned to %1 bytes) may"
+  " result in CHERI tags bits being stripped">, InGroup<CHERIMisaligned>;
+def note_cheri_memintrin_misaligned_fixit : Note<
+  "use __builtin_assume_aligned() or cast to __intcap_t* if you know that the"
+  " pointer is actually aligned to capability size; this will also allow more"
+  " efficient code generation if the operation is inlined">;
+
+
+
 def err_missing_vfs_overlay_file : Error<
   "virtual filesystem overlay file '%0' not found">, DefaultFatal;
 def err_invalid_vfs_overlay : Error<

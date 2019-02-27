@@ -87,6 +87,7 @@ def BuiltinRequiresHeader : DiagGroup<"builtin-requires-header">;
 
 // Generally useful CHERI warnings
 def CHERICaps : DiagGroup<"cheri-capability-misuse">;
+def CHERIMisaligned : DiagGroup<"cheri-misaligned">;
 def CHERIBitwiseOps : DiagGroup<"cheri-bitwise-operations">;
 def CHERIImplicitConversion : DiagGroup<"cheri-implicit-conversion">;
 def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
@@ -95,7 +96,7 @@ def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
 def MIPSCHERIPrototypesStrict: DiagGroup<"mips-cheri-prototypes-strict">;
 
 def CheriAll : DiagGroup<"cheri",
-     [CHERICaps, CHERIBitwiseOps, CHERIImplicitConversion,
+     [CHERICaps, CHERIBitwiseOps, CHERIMisaligned, CHERIImplicitConversion,
       CHERIImplicitConversionSign, MIPSCHERIPrototypes, MIPSCHERIPrototypesStrict]>;
 // CHERI warnings that are too noisy to turn on by default
 def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
