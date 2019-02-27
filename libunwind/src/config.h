@@ -192,17 +192,15 @@ static inline uintptr_t assert_pointer_in_bounds(uintptr_t value) {
   #define _LIBUNWIND_TRACE_DWARF(...)
   #define CHERI_DBG(...) (void)0
 #else
-  #ifndef __CHERI_PURE_CAPABILITY__
-    #define CHERI_DBG(...) (void)0
-  #else
-    #define CHERI_DBG(...) fprintf(stderr, __VA_ARGS__)
-  #endif
   #ifdef __cplusplus
     extern "C" {
   #endif
     extern  bool logAPIs();
     extern  bool logUnwinding();
     extern  bool logDWARF();
+  #ifdef __CHERI_PURE_CAPABILITY__
+    extern  bool logCHERI();
+  #endif
   #ifdef __cplusplus
     }
   #endif
@@ -224,6 +222,15 @@ static inline uintptr_t assert_pointer_in_bounds(uintptr_t value) {
       if (logDWARF())                                                          \
         fprintf(stderr, __VA_ARGS__);                                          \
     } while (0)
+  #ifndef __CHERI_PURE_CAPABILITY__
+    #define CHERI_DBG(...) (void)0
+  #else
+    #define CHERI_DBG(...)                                                     \
+      do {                                                                     \
+        if (logCHERI())                                                        \
+          fprintf(stderr, __VA_ARGS__);                                        \
+      } while (0)
+  #endif
 #endif
 
 #ifdef __cplusplus
