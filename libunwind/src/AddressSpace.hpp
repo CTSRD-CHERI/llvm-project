@@ -581,7 +581,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
         // TODO: __builtin_cheri_top_get_would be nice
         if (__builtin_cheri_length_get((void *)pinfo->dlpi_addr) +
                 __builtin_cheri_base_get((void *)pinfo->dlpi_addr) <
-            (vaddr_t)cbdata->targetAddr) {
+            (__cheri_addr vaddr_t)cbdata->targetAddr) {
           CHERI_DBG("%#p out of bounds of %#p (%s)\n", (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr, pinfo->dlpi_name);
           return false;
         }
