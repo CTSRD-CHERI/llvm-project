@@ -149,6 +149,41 @@ private:
         DBG_INDENTED("Adding stack bounds for memset/memcpy/memmove: ";
                      I->dump());
         return true;
+
+      case Intrinsic::cheri_bounded_stack_cap:
+      case Intrinsic::cheri_cap_address_get:
+      case Intrinsic::cheri_cap_address_set:
+      case Intrinsic::cheri_cap_base_get:
+      case Intrinsic::cheri_cap_bounds_set:
+      case Intrinsic::cheri_cap_bounds_set_exact:
+      case Intrinsic::cheri_cap_build:
+      case Intrinsic::cheri_cap_conditional_seal:
+      case Intrinsic::cheri_cap_diff:
+      case Intrinsic::cheri_cap_from_ddc:
+      case Intrinsic::cheri_cap_from_pointer:
+      case Intrinsic::cheri_cap_length_get:
+      case Intrinsic::cheri_cap_load_tags:
+      case Intrinsic::cheri_cap_offset_get:
+      case Intrinsic::cheri_cap_offset_increment:
+      case Intrinsic::cheri_cap_offset_set:
+      case Intrinsic::cheri_cap_perms_and:
+      case Intrinsic::cheri_cap_perms_check:
+      case Intrinsic::cheri_cap_perms_get:
+      case Intrinsic::cheri_cap_seal:
+      case Intrinsic::cheri_cap_sealed_get:
+      case Intrinsic::cheri_cap_subset_test:
+      case Intrinsic::cheri_cap_tag_clear:
+      case Intrinsic::cheri_cap_tag_get:
+      case Intrinsic::cheri_cap_to_pointer:
+      case Intrinsic::cheri_cap_type_check:
+      case Intrinsic::cheri_cap_type_copy:
+      case Intrinsic::cheri_cap_type_get:
+      case Intrinsic::cheri_cap_unseal:
+        // CHERI intrinsics might depend on the bounds
+        DBG_INDENTED("Adding stack bounds for alloca used in CHERI intrinsic:";
+                     I->dump());
+        return true;
+
       default:
         errs() << DEBUG_TYPE << ": Don't know how to handle intrinsic. Assuming bounds needed"; I->dump();
         DBG_INDENTED("Adding stack bounds for unknown intrinsic call: ";
