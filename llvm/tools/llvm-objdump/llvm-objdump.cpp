@@ -511,7 +511,8 @@ public:
     Symbolizer.reset(new symbolize::LLVMSymbolizer(SymbolizerOpts));
   }
   virtual ~SourcePrinter() = default;
-  virtual void printSourceLine(raw_ostream &OS, uint64_t Address,
+  virtual void printSourceLine(raw_ostream &OS,
+                               object::SectionedAddress Address,
                                StringRef Delimiter = "; ");
 };
 
@@ -541,7 +542,8 @@ bool SourcePrinter::cacheSource(const DILineInfo &LineInfo) {
   return true;
 }
 
-void SourcePrinter::printSourceLine(raw_ostream &OS, uint64_t Address,
+void SourcePrinter::printSourceLine(raw_ostream &OS,
+                                    object::SectionedAddress Address,
                                     StringRef Delimiter) {
   if (!Symbolizer)
     return;
@@ -602,14 +604,15 @@ class PrettyPrinter {
 public:
   virtual ~PrettyPrinter() = default;
   virtual void printInst(MCInstPrinter &IP, const MCInst *MI,
-                         ArrayRef<uint8_t> Bytes, uint64_t Address,
-                         raw_ostream &OS, StringRef Annot,
-                         MCSubtargetInfo const &STI, SourcePrinter *SP,
+                         ArrayRef<uint8_t> Bytes,
+                         object::SectionedAddress Address, raw_ostream &OS,
+                         StringRef Annot, MCSubtargetInfo const &STI,
+                         SourcePrinter *SP,
                          std::vector<RelocationRef> *Rels = nullptr) {
     if (SP && (PrintSource || PrintLines))
       SP->printSourceLine(OS, Address);
     if (!NoLeadingAddr)
-      OS << format("%8" PRIx64 ":", Address);
+      OS << format("%8" PRIx64 ":", Address.Address);
     if (!NoShowRawInsn) {
       OS << "\t";
       dumpBytes(Bytes, OS);
@@ -636,13 +639,13 @@ public:
     }
   }
   void printInst(MCInstPrinter &IP, const MCInst *MI, ArrayRef<uint8_t> Bytes,
-                 uint64_t Address, raw_ostream &OS, StringRef Annot,
-                 MCSubtargetInfo const &STI, SourcePrinter *SP,
+                 object::SectionedAddress Address, raw_ostream &OS,
+                 StringRef Annot, MCSubtargetInfo const &STI, SourcePrinter *SP,
                  std::vector<RelocationRef> *Rels) override {
     if (SP && (PrintSource || PrintLines))
       SP->printSourceLine(OS, Address, "");
     if (!MI) {
-      printLead(Bytes, Address, OS);
+      printLead(Bytes, Address.Address, OS);
       OS << " <unknown>";
       return;
     }
@@ -664,9 +667,9 @@ public:
     std::vector<RelocationRef>::const_iterator RelCur = Rels->begin();
     std::vector<RelocationRef>::const_iterator RelEnd = Rels->end();
     auto PrintReloc = [&]() -> void {
-      while ((RelCur != RelEnd) && (RelCur->getOffset() <= Address)) {
-        if (RelCur->getOffset() == Address) {
-          printRelocation(*RelCur, Address, 4);
+      while ((RelCur != RelEnd) && (RelCur->getOffset() <= Address.Address)) {
+        if (RelCur->getOffset() == Address.Address) {
+          printRelocation(*RelCur, Address.Address, 4);
           return;
         }
         ++RelCur;
@@ -678,7 +681,7 @@ public:
       Separator = "\n";
       if (SP && (PrintSource || PrintLines))
         SP->printSourceLine(OS, Address, "");
-      printLead(Bytes, Address, OS);
+      printLead(Bytes, Address.Address, OS);
       OS << Preamble;
       Preamble = "   ";
       StringRef Inst;
@@ -696,7 +699,7 @@ public:
         OS << " } " << PacketBundle.second;
       PrintReloc();
       Bytes = Bytes.slice(4);
-      Address += 4;
+      Address.Address += 4;
     }
   }
 };
@@ -705,8 +708,8 @@ HexagonPrettyPrinter HexagonPrettyPrinterInst;
 class AMDGCNPrettyPrinter : public PrettyPrinter {
 public:
   void printInst(MCInstPrinter &IP, const MCInst *MI, ArrayRef<uint8_t> Bytes,
-                 uint64_t Address, raw_ostream &OS, StringRef Annot,
-                 MCSubtargetInfo const &STI, SourcePrinter *SP,
+                 object::SectionedAddress Address, raw_ostream &OS,
+                 StringRef Annot, MCSubtargetInfo const &STI, SourcePrinter *SP,
                  std::vector<RelocationRef> *Rels) override {
     if (SP && (PrintSource || PrintLines))
       SP->printSourceLine(OS, Address);
@@ -736,7 +739,7 @@ public:
       }
     }
 
-    OS << format("// %012" PRIX64 ": ", Address);
+    OS << format("// %012" PRIX64 ": ", Address.Address);
     if (Bytes.size() >=4) {
       for (auto D : makeArrayRef(reinterpret_cast<const U32*>(Bytes.data()),
                                  Bytes.size() / sizeof(U32)))
@@ -757,13 +760,13 @@ AMDGCNPrettyPrinter AMDGCNPrettyPrinterInst;
 class BPFPrettyPrinter : public PrettyPrinter {
 public:
   void printInst(MCInstPrinter &IP, const MCInst *MI, ArrayRef<uint8_t> Bytes,
-                 uint64_t Address, raw_ostream &OS, StringRef Annot,
-                 MCSubtargetInfo const &STI, SourcePrinter *SP,
+                 object::SectionedAddress Address, raw_ostream &OS,
+                 StringRef Annot, MCSubtargetInfo const &STI, SourcePrinter *SP,
                  std::vector<RelocationRef> *Rels) override {
     if (SP && (PrintSource || PrintLines))
       SP->printSourceLine(OS, Address);
     if (!NoLeadingAddr)
-      OS << format("%8" PRId64 ":", Address / 8);
+      OS << format("%8" PRId64 ":", Address.Address / 8);
     if (!NoShowRawInsn) {
       OS << "\t";
       dumpBytes(Bytes, OS);
@@ -1332,9 +1335,10 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
         if (Size == 0)
           Size = 1;
 
-        PIP.printInst(
-            *IP, Disassembled ? &Inst : nullptr, Bytes.slice(Index, Size),
-            SectionAddr + Index + VMAAdjustment, outs(), "", *STI, &SP, &Rels);
+        PIP.printInst(*IP, Disassembled ? &Inst : nullptr,
+                      Bytes.slice(Index, Size),
+                      {SectionAddr + Index + VMAAdjustment, Section.getIndex()},
+                      outs(), "", *STI, &SP, &Rels);
         outs() << CommentStream.str();
         Comments.clear();
 
