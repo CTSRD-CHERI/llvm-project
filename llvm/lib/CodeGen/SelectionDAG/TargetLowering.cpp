@@ -32,6 +32,7 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include <cctype>
 using namespace llvm;
 
@@ -4976,6 +4977,11 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
   SDLoc dl(LD);
   auto &MF = DAG.getMachineFunction();
 
+  if (VT.isFatPointer()) {
+    auto Loc = cheri::inferSourceLocation(LD->getDebugLoc(), DAG.getMachineFunction().getName());
+    report_fatal_error("Cannot expand unaligned load of capability type. Created here: " + Loc);
+  }
+
   if (VT.isFloatingPoint() || VT.isVector()) {
     EVT intVT = EVT::getIntegerVT(*DAG.getContext(), LoadedVT.getSizeInBits());
     if (isTypeLegal(intVT) && isTypeLegal(LoadedVT)) {
@@ -5131,6 +5137,11 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
   int Alignment = ST->getAlignment();
   auto &MF = DAG.getMachineFunction();
   EVT MemVT = ST->getMemoryVT();
+
+  if (MemVT.isFatPointer()) {
+    auto Loc = cheri::inferSourceLocation(ST->getDebugLoc(), DAG.getMachineFunction().getName());
+    report_fatal_error("Cannot expand unaligned store of capability type. Created here: " + Loc);
+  }
 
   SDLoc dl(ST);
   if (MemVT.isFloatingPoint() || MemVT.isVector()) {
