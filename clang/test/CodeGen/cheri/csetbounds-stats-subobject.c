@@ -3,7 +3,7 @@
 //
 // RUN: FileCheck -input-file %t-hybrid.csv %s -check-prefix HYBRID-CSV
 // RUN: %cheri128_purecap_cc1 %s -mllvm -cheri-cap-table-abi=pcrel -cheri-bounds=aggressive \
-// RUN:     -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t-purecap.csv -S -o /dev/null
+// RUN:     -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t-purecap.csv -S -o /dev/null -O1
 // RUN: FileCheck -input-file %t-purecap.csv %s -check-prefix PURECAP-CSV
 
 
