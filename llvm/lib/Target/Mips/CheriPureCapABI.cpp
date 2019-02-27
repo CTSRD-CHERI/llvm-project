@@ -118,6 +118,7 @@ private:
     // Value *V = U->get();
     if (Depth > 10) {
       DBG_INDENTED("reached max depth, assuming bounds needed.");
+      return true;
     }
 
     switch (I->getOpcode()) {
