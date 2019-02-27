@@ -669,8 +669,32 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
 
         if (found_obj && found_hdr) {
           CHERI_DBG("found_obj && found_hdr in %s\n", pinfo->dlpi_name);
-          cbdata->sects->dwarf_section_length = object_length;
-          return true;
+
+	  // Find the PT_LOAD containing .eh_frame.
+          for (Elf_Half i = 0; i < pinfo->dlpi_phnum; i++) {
+            const Elf_Phdr *phdr = &pinfo->dlpi_phdr[i];
+            if (phdr->p_type == PT_LOAD) {
+              uintptr_t begin = getPhdrCapability(pinfo, phdr);
+              uintptr_t end = begin + phdr->p_memsz;
+#if defined(__ANDROID__)
+              if (pinfo->dlpi_addr == 0 && phdr->p_vaddr < image_base)
+                begin = begin + image_base;
+#endif
+              if (cbdata->sects->dwarf_section() >= begin &&
+                  cbdata->sects->dwarf_section() < end) {
+
+                // This still overestimates the length of .eh_frame, but it
+                // should respect the bounds of the containing PT_LOAD.
+                cbdata->sects->dwarf_section_length = phdr->p_memsz -
+                  ((__cheri_addr vaddr_t)cbdata->sects->dwarf_section() -
+                   (__cheri_addr vaddr_t)begin);
+                return true;
+              }
+            }
+          }
+          CHERI_DBG("Could not find PT_LOAD of .eh_frame in %s\n",
+                    pinfo->dlpi_name);
+          return false;
         } else {
           CHERI_DBG("Could not find EHDR in %s\n", pinfo->dlpi_name);
           return false;
