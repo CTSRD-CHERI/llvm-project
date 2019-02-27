@@ -331,5 +331,17 @@ bool logDWARF() {
   return log;
 }
 
+_LIBUNWIND_HIDDEN
+bool logCHERI() {
+  // do manual lock to avoid use of _cxa_guard_acquire or initializers
+  static bool checked = false;
+  static bool log = false;
+  if (!checked) {
+    log = (getenv("LIBUNWIND_PRINT_CHERI") != NULL);
+    checked = true;
+  }
+  return log;
+}
+
 #endif // NDEBUG
 
