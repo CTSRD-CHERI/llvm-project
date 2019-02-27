@@ -348,6 +348,7 @@ class LLVMConfig(object):
             self.config.substitutions.append(('%cheri_type', 'CHERI256'))
             self.config.available_features.add("cheri_is_256")
             default_args = cheri256_args
+        self.config.substitutions.append(('%cheri_cap_bytes', default_cheri_size))
         tool_patterns = [
             ToolSubst('%cheri_' + tool, FindTool(tool), extra_args=default_args),
             ToolSubst('%cheri128_' + tool, FindTool(tool), extra_args=cheri128_args),

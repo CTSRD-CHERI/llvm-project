@@ -5,7 +5,7 @@
 
 ; RUNNOT: %cheri_purecap_llc %S/Inputs/purecap-debuginfo-test1.ll -O0 -filetype=obj -o - | llvm-dwarfdump -debug-info -
 ; RUN: %cheri_llc %S/Inputs/hybrid-debuginfo-test1.ll -O0 -filetype=obj -o - | llvm-dwarfdump -debug-info - | FileCheck %s -check-prefixes CHECK,MIPS
-; RUN: %cheri_purecap_llc %S/Inputs/purecap-debuginfo-test1.ll -O0 -filetype=obj -o - | llvm-dwarfdump -debug-info - | FileCheck %s -check-prefixes CHECK,CHERI
+; RUN: sed 's/align 16/align %cheri_cap_bytes/g' %S/Inputs/purecap-debuginfo-test1.ll | %cheri_purecap_llc - -O0 -filetype=obj -o - | llvm-dwarfdump -debug-info - | FileCheck %s -check-prefixes CHECK,CHERI
 
 
 // CHECK-LABEL: .debug_info contents:

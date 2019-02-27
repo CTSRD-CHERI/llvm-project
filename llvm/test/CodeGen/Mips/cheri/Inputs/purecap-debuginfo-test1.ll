@@ -6,12 +6,12 @@ target triple = "cheri-unknown-freebsd"
 ; Function Attrs: noinline nounwind optnone
 define i32 @foo(i32 addrspace(200)* %i) addrspace(200) #0 !dbg !9 {
 entry:
-  %i.addr = alloca i32 addrspace(200)*, align 32, addrspace(200)
+  %i.addr = alloca i32 addrspace(200)*, align 16, addrspace(200)
   %j = alloca i32, align 4, addrspace(200)
   %j1 = alloca i32, align 4, addrspace(200)
-  store i32 addrspace(200)* %i, i32 addrspace(200)* addrspace(200)* %i.addr, align 32
+  store i32 addrspace(200)* %i, i32 addrspace(200)* addrspace(200)* %i.addr, align 16
   call void @llvm.dbg.declare(metadata i32 addrspace(200)* addrspace(200)* %i.addr, metadata !14, metadata !DIExpression()), !dbg !15
-  %0 = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %i.addr, align 32, !dbg !16
+  %0 = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %i.addr, align 16, !dbg !16
   %tobool = icmp ne i32 addrspace(200)* %0, null, !dbg !16
   br i1 %tobool, label %if.then, label %if.else, !dbg !18
 
@@ -26,7 +26,7 @@ if.else:                                          ; preds = %entry
   br label %if.end
 
 if.end:                                           ; preds = %if.else, %if.then
-  %1 = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %i.addr, align 32, !dbg !26
+  %1 = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %i.addr, align 16, !dbg !26
   %2 = bitcast i32 addrspace(200)* %1 to i8 addrspace(200)*, !dbg !27
   %3 = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %2), !dbg !27
   %4 = trunc i64 %3 to i32, !dbg !27
