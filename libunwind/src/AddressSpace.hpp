@@ -571,7 +571,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
         }
 #endif
 
-        if ((vaddr_t)cbdata->targetAddr < (vaddr_t)pinfo->dlpi_addr) {
+        if (cbdata->targetAddr < pinfo->dlpi_addr) {
           CHERI_DBG("%#p out of bounds of %#p (%s)\n", (void*)cbdata->targetAddr, (void*)pinfo->dlpi_addr, pinfo->dlpi_name);
           return false;
         }
@@ -641,7 +641,7 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
             if (pinfo->dlpi_addr == 0 && phdr->p_vaddr < image_base)
               begin = begin + image_base;
 #endif
-            if ((vaddr_t)cbdata->targetAddr >= (vaddr_t)begin && (vaddr_t)cbdata->targetAddr < (vaddr_t)end) {
+            if (cbdata->targetAddr >= begin && cbdata->targetAddr < end) {
               cbdata->sects->dso_base = begin;
               object_length = phdr->p_memsz;
               found_obj = true;
