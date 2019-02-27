@@ -1,6 +1,7 @@
 #include "Mips.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/PtrUseVisitor.h"
+#include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/Analysis/Utils/Local.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Cheri.h"
@@ -134,8 +135,21 @@ private:
         DBG_INDENTED("No need for stack bounds for lifetime_{start,end}: ";
                      I->dump());
         return false;
+      case Intrinsic::dbg_declare:
+      case Intrinsic::dbg_value:
+      case Intrinsic::dbg_label:
+        DBG_INDENTED("No need for stack bounds for dbg_{declare,value,label}: ";
+                     I->dump());
+        return false;
+      case Intrinsic::memset:
+      case Intrinsic::memcpy:
+      case Intrinsic::memmove:
+        // TODO: an inline-expanded memset/memcpy/memmove doesn't need bounds!
+        DBG_INDENTED("Adding stack bounds for memset/memcpy/memmove: ";
+                     I->dump());
+        return true;
       default:
-        errs() << "DON'T know how to handle intrinsic"; I->dump();
+        errs() << DEBUG_TYPE << ": Don't know how to handle intrinsic. Assuming bounds needed"; I->dump();
         DBG_INDENTED("Adding stack bounds for unknown intrinsic call: ";
                      I->dump());
         return true;
@@ -268,9 +282,9 @@ class CheriPureCapABI : public ModulePass, public InstVisitor<CheriPureCapABI> {
 public:
   static char ID;
   CheriPureCapABI() : ModulePass(ID) {}
-  virtual StringRef getPassName() const { return "CHERI sandbox ABI setup"; }
+  StringRef getPassName() const override { return "CHERI sandbox ABI setup"; }
   void visitAllocaInst(AllocaInst &AI) { Allocas.push_back(&AI); }
-  virtual bool runOnModule(Module &Mod) {
+  bool runOnModule(Module &Mod) override {
     M = &Mod;
     // Early abort if we aren't using capabilities on the stack
     if (Mod.getDataLayout().getAllocaAddrSpace() != 200)
@@ -285,7 +299,10 @@ public:
   bool runOnFunction(Function &F) {
     // always set bounds with optnone
     bool IsOptNone = F.hasFnAttribute(Attribute::OptimizeNone);
-    // FIXME: should still ignore lifetime-start + lifetime-end intrinsics
+    // FIXME: should still ignore lifetime-start + lifetime-end intrinsics even at -O0
+
+
+    // TargetTransformInfo& TTI = getAnalysis<TargetTransformInfoWrapperPass>().getTTI(F);
 
     LLVMContext &C = M->getContext();
     Allocas.clear();
@@ -415,6 +432,11 @@ public:
       }
     }
     return true;
+  }
+
+  void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.addRequired<TargetTransformInfoWrapperPass>();
+    AU.setPreservesCFG();
   }
 };
 
