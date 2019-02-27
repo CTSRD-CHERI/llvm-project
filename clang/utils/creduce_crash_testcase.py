@@ -812,11 +812,11 @@ class Reducer(object):
         # If we don't add this we get really obscure code that doesn't look like it should compile
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling with -Werror=implicit-int crashes:",
-            extra_args=["-Wimplicit-int", "-Werror=implicit-int"])
+            noargs_opts_to_remove=["-w"], extra_args=["-Wimplicit-int", "-Werror=implicit-int"])
         # speed up test case reduction by aborting the compilation on the first error
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling with -Wfatal-errors crashes:",
-            extra_args=["-Wfatal-errors"]
+            noargs_opts_to_remove=["-w"], extra_args=["-Wfatal-errors"]
         )
 
         # Removing all the #ifdefs and #defines that get added by the #included headers can speed up reduction a lot
