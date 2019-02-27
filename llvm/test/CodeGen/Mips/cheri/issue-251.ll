@@ -1,5 +1,3 @@
-; RUN: %cheri_purecap_llc %s -o -
-; RUN: %cheri_purecap_llc %s -o - -disable-cheri-addressing-mode-folder
 ; RUN: %cheri_purecap_llc %s -o - -disable-cheri-addressing-mode-folder | FileCheck %s -check-prefix CHECK-NOFOLD
 ; RUN: %cheri_purecap_llc %s -o - | FileCheck %s -check-prefix CHECK-NOFOLD
 
@@ -21,8 +19,8 @@ entry:
   store i8 addrspace(200)* %2, i8 addrspace(200)* addrspace(200)* %testCap, align 32
   ret void
   ; CHECK-NOFOLD:      daddiu  $1, $zero, 4096
-  ; CHECK-NOFOLD-NEXT: cincoffset $c1, $cnull, $1
-  ; CHECK-NOFOLD-NEXT: clc $c1, $zero, 0($c1)
+  ; CHECK-NOFOLD-NEXT: cincoffset [[CREG:\$c[0-9]+]], $cnull, $1
+  ; CHECK-NOFOLD-NEXT: clc $c{{[0-9+]}}, $zero, 0([[CREG]])
   ; Note: this could be more efficient if we fold the constant into the clc.
 }
 
