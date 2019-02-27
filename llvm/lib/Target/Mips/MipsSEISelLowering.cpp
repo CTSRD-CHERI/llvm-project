@@ -448,6 +448,10 @@ MipsSETargetLowering::allowsMisalignedMemoryAccesses(EVT VT,
                                                      unsigned AS,
                                                      unsigned,
                                                      bool *Fast) const {
+  // capabilities must be aligned
+  if (VT.isFatPointer())
+    return false;
+
   MVT::SimpleValueType SVT = VT.getSimpleVT().SimpleTy;
 
   if (Subtarget.systemSupportsUnalignedAccess(AS)) {

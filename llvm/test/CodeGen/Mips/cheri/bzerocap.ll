@@ -24,6 +24,28 @@ entry:
 }
 
 ; Function Attrs: nounwind
+; CHECK-LABEL: zero64_unaligned
+define void @zero64_unaligned(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed_addr #0 {
+; CHECK-LABEL: zero64_unaligned:
+; CHECK:       # %bb.0: # %entry
+; CHECK-NEXT:    csd $zero, $zero, 0($c3)
+; CHECK-NEXT:    csd $zero, $zero, 56($c3)
+; CHECK-NEXT:    csd $zero, $zero, 48($c3)
+; CHECK-NEXT:    csd $zero, $zero, 40($c3)
+; CHECK-NEXT:    csd $zero, $zero, 32($c3)
+; CHECK-NEXT:    csd $zero, $zero, 24($c3)
+; CHECK-NEXT:    csd $zero, $zero, 16($c3)
+; CHECK-NEXT:    cjr $c17
+; CHECK-NEXT:    csd $zero, $zero, 8($c3)
+; If the buffer is not aligned to cap_size we cannot use csc:
+
+entry:
+  %.compoundliteral.sroa.0.0..sroa_cast1 = bitcast %struct.bigbuf addrspace(200)* %out to i8 addrspace(200)*
+  call void @llvm.memset.p200i8.i64(i8 addrspace(200)* align 8 %.compoundliteral.sroa.0.0..sroa_cast1, i8 0, i64 64, i1 false)
+  ret void
+}
+
+; Function Attrs: nounwind
 ; CHECK-LABEL: zero65
 define void @zero65(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed_addr #0 {
 ; CHECK-LABEL: zero65:
@@ -63,8 +85,8 @@ define void @zero67(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero67:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    csb $zero, $zero, 66($c3)
-; CHECK-NEXT:    csh $zero, $zero, 64($c3)
+; CHECK-NEXT:    cincoffset $c1, $c3, 63
+; CHECK-NEXT:    csw $zero, $zero, 0($c1)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
 ; CHECK-NEXT:    cjr $c17
@@ -98,8 +120,8 @@ define void @zero69(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero69:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    csb $zero, $zero, 68($c3)
-; CHECK-NEXT:    csw $zero, $zero, 64($c3)
+; CHECK-NEXT:    cincoffset $c1, $c3, 61
+; CHECK-NEXT:    csd $zero, $zero, 0($c1)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
 ; CHECK-NEXT:    cjr $c17
@@ -116,8 +138,8 @@ define void @zero70(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero70:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    csh $zero, $zero, 68($c3)
-; CHECK-NEXT:    csw $zero, $zero, 64($c3)
+; CHECK-NEXT:    cincoffset $c1, $c3, 62
+; CHECK-NEXT:    csd $zero, $zero, 0($c1)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
 ; CHECK-NEXT:    cjr $c17
@@ -207,8 +229,8 @@ define void @zero75(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero75:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    csb $zero, $zero, 74($c3)
-; CHECK-NEXT:    csh $zero, $zero, 72($c3)
+; CHECK-NEXT:    cincoffset $c1, $c3, 71
+; CHECK-NEXT:    csw $zero, $zero, 0($c1)
 ; CHECK-NEXT:    csd $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
@@ -244,8 +266,8 @@ define void @zero77(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero77:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    csb $zero, $zero, 76($c3)
-; CHECK-NEXT:    csw $zero, $zero, 72($c3)
+; CHECK-NEXT:    cincoffset $c1, $c3, 69
+; CHECK-NEXT:    csd $zero, $zero, 0($c1)
 ; CHECK-NEXT:    csd $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
@@ -263,8 +285,8 @@ define void @zero78(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero78:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    csh $zero, $zero, 76($c3)
-; CHECK-NEXT:    csw $zero, $zero, 72($c3)
+; CHECK-NEXT:    cincoffset $c1, $c3, 70
+; CHECK-NEXT:    csd $zero, $zero, 0($c1)
 ; CHECK-NEXT:    csd $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)

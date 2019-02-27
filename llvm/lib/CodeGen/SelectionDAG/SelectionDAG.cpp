@@ -5588,7 +5588,8 @@ static bool FindOptimalMemOpLowering(std::vector<EVT> &MemOps,
                                    DAG.getMachineFunction());
 
   // If the type is a fat pointer, then forcibly disable overlap.
-  AllowOverlap &= !VT.isFatPointer();
+  // XXXAR: this is handled by TLI.allowsMisalignedMemoryAccesses()
+  // AllowOverlap &= !VT.isFatPointer();
 
   if (VT == MVT::Other) {
     // Use the largest integer type whose alignment constraints are satisfied.
