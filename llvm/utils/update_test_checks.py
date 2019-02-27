@@ -93,10 +93,10 @@ def main():
 
     prefix_list = []
     for l in run_lines:
-      if '|' not in l:
-        print >>sys.stderr, 'WARNING: Skipping non-FileChecked RUN line: ' + l
-        continue
-      (tool_cmd, filecheck_cmd) = tuple([cmd.strip() for cmd in l.split('|', 1)])
+      cmds = [cmd.strip() for cmd in l.split('|', 1)]
+      if len(cmds) < 2:
+        cmds.append("INVALID")
+      (tool_cmd, filecheck_cmd) = tuple(cmds)
 
       if tool_cmd.startswith("%cheri_"):
         tool_cmd = tool_cmd.replace("%cheri_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
