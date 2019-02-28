@@ -13698,6 +13698,7 @@ void ARMTargetLowering::computeKnownBitsForTargetNode(const SDValue Op,
     EVT VT = Op.getValueType();
     const unsigned DstSz = VT.getScalarSizeInBits();
     const unsigned SrcSz = VecVT.getVectorElementType().getSizeInBits();
+    (void)SrcSz;
     assert(SrcSz == Known.getBitWidth());
     assert(DstSz > SrcSz);
     if (Op.getOpcode() == ARMISD::VGETLANEs)
