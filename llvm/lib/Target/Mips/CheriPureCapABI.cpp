@@ -143,10 +143,21 @@ private:
                      I->dump());
         return false;
       case Intrinsic::memset:
+      case Intrinsic::memset_element_unordered_atomic:
       case Intrinsic::memcpy:
+      case Intrinsic::memcpy_element_unordered_atomic:
       case Intrinsic::memmove:
+      case Intrinsic::memmove_element_unordered_atomic:
         // TODO: an inline-expanded memset/memcpy/memmove doesn't need bounds!
         DBG_INDENTED("Adding stack bounds for memset/memcpy/memmove: ";
+                     I->dump());
+        return true;
+
+      case Intrinsic::vastart:
+      case Intrinsic::vacopy:
+      case Intrinsic::vaend:
+        // TODO: are bounds always needed?
+        DBG_INDENTED("Adding stack bounds for va_start/va_copy/va_end: ";
                      I->dump());
         return true;
 
