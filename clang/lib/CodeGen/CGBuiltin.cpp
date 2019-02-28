@@ -1572,12 +1572,16 @@ RValue CodeGenFunction::emitFortifiedStdLibCall(CodeGenFunction &CGF,
 static void diagnoseMisalignedCapabiliyCopyDest(CodeGenModule& CGM, StringRef Function, const Expr* Src, CharUnits DstAlign) {
   // we want the real type not the implicit conversion to void*
   // TODO: ignore the first explicit cast to void*?
-  auto UnderlyingSrc = Src->IgnoreParenImpCasts();
+  auto UnderlyingSrcTy = Src->IgnoreParenImpCasts()->getType();
+  assert(UnderlyingSrcTy->isPointerType());
+  // The pointer will always be a capability in the purecap ABI, we only care
+  // about the pointee type (i.e. the type that is being copied)
+  UnderlyingSrcTy = UnderlyingSrcTy->getPointeeType();
   auto& Ctx = CGM.getContext();
-  if (Ctx.containsCapabilities(UnderlyingSrc->getType())) {
+  if (Ctx.containsCapabilities(UnderlyingSrcTy)) {
     if ((uint64_t)Ctx.toBits(DstAlign) < Ctx.getTargetInfo().getCHERICapabilityAlign()) {
       CGM.getDiags().Report(Src->getExprLoc(), diag::warn_cheri_memintrin_misaligned)
-          << Function << (unsigned)DstAlign.getQuantity();
+          << Function << (unsigned)DstAlign.getQuantity() << UnderlyingSrcTy;
       // TODO: add a fixit?
       CGM.getDiags().Report(Src->getExprLoc(), diag::note_cheri_memintrin_misaligned_fixit);
     }
