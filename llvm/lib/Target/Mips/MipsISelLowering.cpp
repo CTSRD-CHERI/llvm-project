@@ -2160,7 +2160,6 @@ SDValue MipsTargetLowering::lowerADDRSPACECAST(SDValue Op, SelectionDAG &DAG)
     // INTTOPTR will lower to a cincoffset on null in the purecap ABI, so we
     // need to use cfromddc here to keep the legacy ABI working:
     auto Ptr = cFromDDC(DAG, DL, Src);
-    // auto Ptr = DAG.getNode(ISD::INTTOPTR, DL, DstTy, Src);
     if (auto *N = dyn_cast<GlobalAddressSDNode>(Src)) {
       const GlobalValue *GV = N->getGlobal();
       auto *Ty = GV->getValueType();
@@ -4008,8 +4007,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     static const unsigned RegList[] = { Mips::C3, Mips::C4, Mips::C5, Mips::C6,
       Mips::C7, Mips::C8, Mips::C9, Mips::C10 };
     for (unsigned i=CapArgs ; i<8 ; i++) {
-      SDValue Zero = DAG.getNode(ISD::INTTOPTR, DL, CapType,
-          DAG.getConstant(0, DL, MVT::i64));
+      SDValue Zero = DAG.getNullCapability(DL, CapType);
       RegsToPass.push_back(std::make_pair(RegList[i], Zero));
     }
     static const unsigned IntRegList[] = { Mips::A0_64, Mips::A1_64,
