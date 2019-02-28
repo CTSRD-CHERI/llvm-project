@@ -1173,6 +1173,11 @@ SDValue SelectionDAG::getBoolConstant(bool V, const SDLoc &DL, EVT VT,
   llvm_unreachable("Unexpected boolean content enum!");
 }
 
+SDValue SelectionDAG::getNullCapability(const SDLoc &DL, EVT CapType) {
+  assert(CapType.isFatPointer());
+  return getNode(ISD::INTTOPTR, DL, CapType, getConstant(0, DL, MVT::i64));
+}
+
 SDValue SelectionDAG::getConstant(uint64_t Val, const SDLoc &DL, EVT VT,
                                   bool isT, bool isO) {
   EVT EltVT = VT.getScalarType();
@@ -5496,6 +5501,8 @@ static SDValue getMemsetStringVal(EVT VT, const SDLoc &dl, SelectionDAG &DAG,
                                   const ConstantDataArraySlice &Slice) {
   // Handle vector with all elements zero.
   if (Slice.Array == nullptr) {
+    if (VT.isFatPointer())
+      return DAG.getNullCapability(dl, VT);
     if (VT.isInteger())
       return DAG.getConstant(0, dl, VT);
     else if (VT == MVT::f32 || VT == MVT::f64 || VT == MVT::f128)
