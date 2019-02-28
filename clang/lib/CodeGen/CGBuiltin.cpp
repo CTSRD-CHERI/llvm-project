@@ -1579,10 +1579,15 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
   // we want the real type not the implicit conversion to void*
   // TODO: ignore the first explicit cast to void*?
   auto UnderlyingSrcTy = Src->IgnoreParenImpCasts()->getType();
-  assert(UnderlyingSrcTy->isPointerType());
-  // The pointer will always be a capability in the purecap ABI, we only care
-  // about the pointee type (i.e. the type that is being copied)
-  UnderlyingSrcTy = UnderlyingSrcTy->getPointeeType();
+  if (UnderlyingSrcTy->isPointerType()) {
+    // The pointer will always be a capability in the purecap ABI, we only care
+    // about the pointee type (i.e. the type that is being copied)
+    UnderlyingSrcTy = UnderlyingSrcTy->getPointeeType();
+  } else if (UnderlyingSrcTy->isArrayType()) {
+    UnderlyingSrcTy = QualType(UnderlyingSrcTy->getPointeeOrArrayElementType(), 0);
+  } else {
+    llvm_unreachable("Unhandled memcpy argument type");
+  }
   auto &Ctx = CGF.CGM.getContext();
   if (Ctx.containsCapabilities(UnderlyingSrcTy)) {
     uint64_t CapSizeBytes =

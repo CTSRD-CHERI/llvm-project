@@ -1,6 +1,5 @@
-// RUN: %cheri_purecap_cc1 -O0 -o - -emit-llvm %s -verify
-// RUN: %cheri_purecap_cc1 -O0 -o - -emit-llvm %s -verify | FileCheck %s
-// RUN: %cheri_purecap_cc1 -DBUILTIN -O0 -o - -emit-llvm %s -verify | FileCheck %s
+// RUN: %cheri128_purecap_cc1 -O0 -o - -emit-llvm %s -verify | FileCheck %s
+// RUN: %cheri128_purecap_cc1 -DBUILTIN -O0 -o - -emit-llvm %s -verify | FileCheck %s
 
 typedef __uintcap_t a;
 void *b;
@@ -235,4 +234,13 @@ void test_builtin_assume_aligned_fix(long *align8, char *align1, char *align1_ag
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
+}
+
+
+extern __uintcap_t foo_array[10][2];
+void test_no_crash_with_array(void) {
+  char buffer[1234];
+  memcpy(buffer, foo_array, sizeof(foo_array));
+  // expected-warning@-1{{memcpy operation with underaligned capability argument (aligned to 1 bytes) may result in CHERI tags bits being stripped from type '__uintcap_t'}}
+  // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
 }
