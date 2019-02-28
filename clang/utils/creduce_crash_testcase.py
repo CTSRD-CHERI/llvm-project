@@ -123,15 +123,35 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
             run_line = run_line.replace("-mllvm -cheri128", "")
             run_line = re.sub(r"-cheri-size \d+ ", "", run_line)  # remove
             run_line = re.sub(r"-target-cpu mips4 ", "", run_line)  # remove
-            target_abi_re = r"-target-abi\s+purecap\s*"
+            target_abi_re = re.compile(r"-target-abi\s+purecap\s*")
             if re.search(target_abi_re, run_line) is not None or "-purecap" in found_cheri_triple:
                 run_line = re.sub(target_abi_re, "", run_line)  # remove
                 assert "%cheri_cc1" in run_line
                 run_line = run_line.replace("%cheri_cc1", "%cheri_purecap_cc1")
     if "llc " in run_line:
         # TODO: convert the 128/256 variants?
-        run_line = re.sub(r"llc\s+-mtriple=cheri-unknown-freebsd\s+-mcpu=cheri\d+\s+-mattr=\+cheri\d+", "%cheri_llc", run_line)
-        run_line = re.sub(r"%cheri_llc\s+-target-abi purecap\s+-relocation-model\s+pic", "%cheri_purecap_llc", run_line)
+        triple_cheri_freebsd_re = re.compile(r"-mtriple=+(cheri-unknown-freebsd\d*(-purecap)?)*\s+")
+        found_cheri_triple = None
+        triple_match = re.search(triple_cheri_freebsd_re, run_line)
+        if triple_match:
+            found_cheri_triple = triple_match.group(1)
+            run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove triple
+
+            target_abi_re = re.compile(r"-target-abi\s+purecap\s*")
+            if re.search(target_abi_re, run_line) is not None or "-purecap" in found_cheri_triple:
+                # purecap
+                run_line = re.sub(target_abi_re, "", run_line)  # remove
+                run_line = re.sub(r"\s-relocation-model=pic", "", run_line)  # remove
+                run_line = re.sub("llc\s+", "%cheri_purecap_llc ", run_line)  # remove triple
+            else:
+                # hybrid
+                run_line = re.sub("llc\s+", "%cheri_llc ", run_line)  # remove triple
+
+            # remove 128 vs 256:
+            run_line = re.sub(r" -cheri-size \d+", "", run_line)  # remove
+            run_line = re.sub(r" -mattr=\+cheri\d+", "", run_line)  # remove
+            run_line = re.sub(r" -mcpu=\+cheri\d+", "", run_line)  # remove
+            run_line = re.sub(r" -mattr=\+chericap", "", run_line)  # remove (implied by %cheri)
     if "opt " in run_line:
         run_line = re.sub(r"opt\s+-mtriple=cheri-unknown-freebsd", "%cheri_opt", run_line)
     return run_line
@@ -141,9 +161,10 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
 #class fake_args:
 #    clang_cmd = "/path/to/clang"
 #    llc_cmd = "/path/to/llc"
-# opt_cmd = "/path/to/opt"
-# print(add_lit_substitutions(fake_args(), "/path/to/clang -cc1 ...."))
-# sys.exit()
+#    opt_cmd = "/path/to/opt"
+#
+#print(add_lit_substitutions(fake_args(), "llc -o /dev/null -mtriple=cheri-unknown-freebsd-purecap -relocation-model=pic -thread-model=posix -mattr=-noabicalls -mattr=+soft-float -mattr=+chericap -mattr=+cheri128 -target-abi purecap -float-abi=soft -vectorize-loops -vectorize-slp -mcpu=mips4 -O2 -mxcaptable=false -mips-ssection-threshold=0 -cheri-cap-table-abi=pcrel -verify-machineinstrs %s"))
+#sys.exit()
 
 class ReduceTool(metaclass=ABCMeta):
     def __init__(self, args: "Options", name: str, tool: Path) -> None:
