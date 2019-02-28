@@ -1698,9 +1698,6 @@ MCSection *TargetLoweringObjectFileWasm::getExplicitSectionGlobal(
       getContext().getWasmSection(Name, Kind, Group,
                                   MCContext::GenericSectionID);
 
-  if (TM.Options.ThreadModel != ThreadModel::Single)
-    Section->setPassive();
-
   return Section;
 }
 
@@ -1731,11 +1728,7 @@ static MCSectionWasm *selectWasmSectionForGlobal(
     (*NextUniqueID)++;
   }
 
-  MCSectionWasm* Section = Ctx.getWasmSection(Name, Kind, Group, UniqueID);
-  if (Section->isWasmData() && TM.Options.ThreadModel != ThreadModel::Single)
-    Section->setPassive();
-
-  return Section;
+  return Ctx.getWasmSection(Name, Kind, Group, UniqueID);
 }
 
 MCSection *TargetLoweringObjectFileWasm::SelectSectionForGlobal(
