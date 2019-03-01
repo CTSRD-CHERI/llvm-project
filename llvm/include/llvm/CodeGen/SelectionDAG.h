@@ -924,12 +924,13 @@ public:
 
   SDValue getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                     SDValue Size, unsigned Align, bool isVol, bool AlwaysInline,
-                    bool isTailCall, MachinePointerInfo DstPtrInfo,
+                    bool isTailCall, bool ForceLibcall,
+                    MachinePointerInfo DstPtrInfo,
                     MachinePointerInfo SrcPtrInfo);
 
   SDValue getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                      SDValue Size, unsigned Align, bool isVol, bool isTailCall,
-                     MachinePointerInfo DstPtrInfo,
+                     bool ForceLibcall, MachinePointerInfo DstPtrInfo,
                      MachinePointerInfo SrcPtrInfo);
 
   SDValue getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,

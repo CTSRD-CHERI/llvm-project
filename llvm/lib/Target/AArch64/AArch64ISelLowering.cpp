@@ -3742,7 +3742,7 @@ AArch64TargetLowering::LowerCall(CallLoweringInfo &CLI,
         SDValue Cpy = DAG.getMemcpy(
             Chain, DL, DstAddr, Arg, SizeNode, Outs[i].Flags.getByValAlign(),
             /*isVol = */ false, /*AlwaysInline = */ false,
-            /*isTailCall = */ false,
+            /*isTailCall = */ false, /*ForceLibcall = */ false,
             DstInfo, MachinePointerInfo());
 
         MemOpChains.push_back(Cpy);
@@ -5122,7 +5122,7 @@ SDValue AArch64TargetLowering::LowerVACOPY(SDValue Op,
   return DAG.getMemcpy(Op.getOperand(0), DL, Op.getOperand(1),
                        Op.getOperand(2),
                        DAG.getConstant(VaListSize, DL, MVT::i32),
-                       8, false, false, false, MachinePointerInfo(DestSV),
+                       8, false, false, false, false, MachinePointerInfo(DestSV),
                        MachinePointerInfo(SrcSV));
 }
 

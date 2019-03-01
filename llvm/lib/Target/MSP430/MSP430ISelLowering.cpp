@@ -849,6 +849,7 @@ SDValue MSP430TargetLowering::LowerCCCCallTo(
                               /*isVolatile*/false,
                               /*AlwaysInline=*/true,
                               /*isTailCall=*/false,
+                              /*ForceLibcall=*/false,
                               MachinePointerInfo(),
                               MachinePointerInfo());
       } else {

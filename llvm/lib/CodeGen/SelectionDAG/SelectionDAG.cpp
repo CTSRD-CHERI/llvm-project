@@ -6111,6 +6111,7 @@ static void checkAddrSpaceIsValidForLibcall(const TargetLowering *TLI,
 SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                 SDValue Src, SDValue Size, unsigned Align,
                                 bool isVol, bool AlwaysInline, bool isTailCall,
+                                bool ForceLibcall,
                                 MachinePointerInfo DstPtrInfo,
                                 MachinePointerInfo SrcPtrInfo) {
   assert(Align && "The SDAG layer expects explicit alignment and reserves 0");
@@ -6123,16 +6124,18 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
     if (ConstantSize->isNullValue())
       return Chain;
 
-    SDValue Result = getMemcpyLoadsAndStores(*this, dl, Chain, Dst, Src,
-                                             ConstantSize->getZExtValue(),Align,
-                                isVol, false, DstPtrInfo, SrcPtrInfo);
+    SDValue Result;
+    if (!ForceLibcall)
+      Result = getMemcpyLoadsAndStores(*this, dl, Chain, Dst, Src,
+                                       ConstantSize->getZExtValue(), Align,
+                                       isVol, false, DstPtrInfo, SrcPtrInfo);
     if (Result.getNode())
       return Result;
   }
 
   // Then check to see if we should lower the memcpy with target-specific
   // code. If the target chooses to do this, this is the next best.
-  if (TSI) {
+  if (TSI && !ForceLibcall) {
     SDValue Result = TSI->EmitTargetCodeForMemcpy(
         *this, dl, Chain, Dst, Src, Size, Align, isVol, AlwaysInline,
         DstPtrInfo, SrcPtrInfo);
@@ -6143,6 +6146,7 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
   // If we really need inline code and the target declined to provide it,
   // use a (potentially long) sequence of loads and stores.
   if (AlwaysInline) {
+    assert(!ForceLibcall && "Both AlwaysInline and ForceLibcall used!");
     assert(ConstantSize && "AlwaysInline requires a constant size!");
     return getMemcpyLoadsAndStores(*this, dl, Chain, Dst, Src,
                                    ConstantSize->getZExtValue(), Align, isVol,
@@ -6226,7 +6230,7 @@ SDValue SelectionDAG::getAtomicMemcpy(SDValue Chain, const SDLoc &dl,
 
 SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                  SDValue Src, SDValue Size, unsigned Align,
-                                 bool isVol, bool isTailCall,
+                                 bool isVol, bool isTailCall, bool ForceLibcall,
                                  MachinePointerInfo DstPtrInfo,
                                  MachinePointerInfo SrcPtrInfo) {
   assert(Align && "The SDAG layer expects explicit alignment and reserves 0");
@@ -6239,17 +6243,18 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
     if (ConstantSize->isNullValue())
       return Chain;
 
-    SDValue Result =
-      getMemmoveLoadsAndStores(*this, dl, Chain, Dst, Src,
-                               ConstantSize->getZExtValue(), Align, isVol,
-                               false, DstPtrInfo, SrcPtrInfo);
+    SDValue Result;
+    if (!ForceLibcall)
+      Result = getMemmoveLoadsAndStores(*this, dl, Chain, Dst, Src,
+                                        ConstantSize->getZExtValue(), Align,
+                                        isVol, false, DstPtrInfo, SrcPtrInfo);
     if (Result.getNode())
       return Result;
   }
 
   // Then check to see if we should lower the memmove with target-specific
   // code. If the target chooses to do this, this is the next best.
-  if (TSI) {
+  if (TSI && !ForceLibcall) {
     SDValue Result = TSI->EmitTargetCodeForMemmove(
         *this, dl, Chain, Dst, Src, Size, Align, isVol, DstPtrInfo, SrcPtrInfo);
     if (Result.getNode())

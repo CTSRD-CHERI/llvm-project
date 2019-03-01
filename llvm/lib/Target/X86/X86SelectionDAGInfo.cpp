@@ -288,7 +288,7 @@ SDValue X86SelectionDAGInfo::EmitTargetCodeForMemcpy(
                                     DAG.getConstant(Repeats.BytesLeft(), dl,
                                                     SizeVT),
                                     Align, isVolatile, AlwaysInline, false,
-                                    DstPtrInfo.getWithOffset(Offset),
+                                    false, DstPtrInfo.getWithOffset(Offset),
                                     SrcPtrInfo.getWithOffset(Offset)));
   }
 
