@@ -243,10 +243,7 @@ def warn_subobject_bounds_unknown_type :
 def warn_cheri_memintrin_misaligned_inefficient : Warning<
   "%0 operation with capability argument %2 and underaligned destination"
   " (aligned to %1 bytes) may be inefficient or result in CHERI tags bits"
-  " being stripped">, InGroup<CHERIMisaligned>;
-//def warn_cheri_memintrin_misaligned : Warning<
-//  "%0 operation with capability argument and underaligned destination (aligned to %1 bytes) may"
-//  " result in CHERI tags bits being stripped from type %2">, InGroup<CHERIMisaligned>, DefaultError;
+  " being stripped">, InGroup<CHERIMisaligned>, DefaultWarnNoWerror;
 def note_cheri_memintrin_misaligned_fixit : Note<
   "use __builtin_assume_aligned() or cast to __intcap_t* if you know that the"
   " pointer is actually aligned to capability size; this will allow the %0"
