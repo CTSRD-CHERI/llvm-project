@@ -1,10 +1,10 @@
 // REQUIRES: asserts
 // RUN: %cheri_purecap_clang -mcpu=cheri128 -cheri=128 -xc -O0 -fsanitize-address-use-after-scope -g0 %s -o %t.ll -c -S -emit-llvm -Xclang -disable-O0-optnone -Wno-array-bounds -Wno-return-stack-address
-// RUN: %cheri128_purecap_opt -cheri-purecap-alloca %t.ll -o /dev/null -S -cheri-stack-bounds-single-intrinsic-call=false \
+// RUN: %cheri128_purecap_opt -cheri-purecap-alloca %t.ll -o /dev/null -S -cheri-stack-bounds-single-intrinsic-threshold=10 \
 // RUN:    -cheri-stack-bounds=if-needed -debug-only="cheri-purecap-alloca" 2>&1 | FileCheck -check-prefix DBG %s
 
 // RUN: %cheri_purecap_clang -mcpu=cheri128 -cheri=128 -xc -O1 -fsanitize-address-use-after-scope -g0 %s -o %t-lifetime.ll -c -S -emit-llvm -Xclang -disable-O0-optnone -Wno-array-bounds -Wno-return-stack-address
-// RUN: %cheri128_purecap_opt -cheri-purecap-alloca %t-lifetime.ll -o /dev/null -S -cheri-stack-bounds-single-intrinsic-call=false \
+// RUN: %cheri128_purecap_opt -cheri-purecap-alloca %t-lifetime.ll -o /dev/null -S -cheri-stack-bounds-single-intrinsic-threshold=10 \
 // RUN:     -cheri-stack-bounds=if-needed -debug-only="cheri-purecap-alloca" 2>&1 | FileCheck -check-prefix DBG-OPT %s
 
 // chec that we ignore lifetime.start and lifetime.end intrinisics at -O1 and higher

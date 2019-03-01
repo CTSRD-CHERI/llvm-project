@@ -5,9 +5,9 @@
 
 ; REQUIRES: asserts
 ; RUN: %cheri_purecap_opt -cheri-purecap-alloca %s -o - -S | FileCheck %s -check-prefix DEFAULT
-; RUN: %cheri_purecap_opt -cheri-purecap-alloca %s -o - -S -cheri-stack-bounds-single-intrinsic-call=true -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-SINGLE
-; RUN: %cheri_purecap_opt -cheri-purecap-alloca %s -o - -S -cheri-stack-bounds-single-intrinsic-call=false -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-PER-USE
-; RUN: %cheri_purecap_opt -cheri-purecap-alloca %s -o - -S -cheri-stack-bounds-single-intrinsic-call=false -cheri-stack-bounds=all-or-none | FileCheck %s -check-prefix ALL-OR-NONE-PER-USE
+; RUN: %cheri_purecap_opt -cheri-purecap-alloca %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=0 -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-SINGLE
+; RUN: %cheri_purecap_opt -cheri-purecap-alloca %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=10 -cheri-stack-bounds=if-needed | FileCheck %s -check-prefix IF-NEEDED-PER-USE
+; RUN: %cheri_purecap_opt -cheri-purecap-alloca %s -o - -S -cheri-stack-bounds-single-intrinsic-threshold=10 -cheri-stack-bounds=all-or-none | FileCheck %s -check-prefix ALL-OR-NONE-PER-USE
 
 target datalayout = "Eme-pf200:128:128:128:64-A200-P200-G200"
 

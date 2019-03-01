@@ -46,9 +46,10 @@ static cl::opt<bool> UseRematerializableIntrinsic(
 // tightly bounded capability and can use $csp instead
 // TODO: remove these options once we know what the best stragegy is?
 // TODO: change this to an integer threshold (more than N uses -> reuse the same one)
-static cl::opt<bool> ReuseSingleIntrinsicCall(
-    "cheri-stack-bounds-single-intrinsic-call", cl::init(true),
-    cl::desc("Reuse the result of a single CHERI bounds intrinsic"),
+static cl::opt<unsigned> SingleIntrinsicThreshold(
+    "cheri-stack-bounds-single-intrinsic-threshold", cl::init(0),
+    cl::desc("Reuse the result of a single CHERI bounds intrinsic if there are "
+             "more than N uses (default=5). A value of 0 means always."),
     cl::Hidden);
 
 // single option instead of the booleans?
@@ -447,6 +448,11 @@ public:
         DBG_MESSAGE("No need to set bounds on stack alloca"; AI->dump());
         continue;
       }
+
+      // Reuse the result of a single csetbounds intrinisic if we are at -O0 or
+      // there are more than N users of this bounded stack capability.
+      const bool ReuseSingleIntrinsicCall =
+          IsOptNone || UsesThatNeedBounds.size() >= SingleIntrinsicThreshold;
 
       // We need at least one setbounds -> create the bitcast
       Instruction *BitCast =
