@@ -32,6 +32,7 @@
 using namespace llvm;
 using std::pair;
 
+// FIXME: if the stack variable itself is stored this will break
 namespace {
 
 // TODO: remove this option after eval
@@ -96,7 +97,7 @@ public:
     }
     APInt CurrentGEPOffset =
         APInt(DL.getIndexSizeInBits(AI->getType()->getAddressSpace()), 0);
-    bool Result = useNeedsBounds(U, CurrentGEPOffset, 0);
+    bool Result = useNeedsBounds(U, CurrentGEPOffset, 1);
     if (Result) {
       DBG_MESSAGE("Found alloca use that needs bounds: "; U.getUser()->dump());
     }
@@ -203,21 +204,21 @@ private:
       }
     }
     case Instruction::Load:
-      // Storing to a stack slot does not need bounds if the offset is known to
-      // be within the alloca. We can just use cs* offset($csp) istead of adding
+      // Loading from a stack slot does not need bounds if the offset is known to
+      // be within the alloca. We can just use cl* offset($csp) istead of adding
       // a cincoffset+csetbouds.
-      return canLoadStoreBeOutOfBounds(I, CurrentGEPOffset, Depth);
+      return canLoadStoreBeOutOfBounds(I, U, CurrentGEPOffset, Depth);
     case Instruction::Store:
       // Storing to a stack slot does not need bounds if the offset is known to
       // be within the alloca. We can just use cs* offset($csp) istead of adding
       // a cincoffset+csetbouds.
-      return canLoadStoreBeOutOfBounds(I, CurrentGEPOffset, Depth);
+      return canLoadStoreBeOutOfBounds(I, U, CurrentGEPOffset, Depth);
 
     case Instruction::AtomicRMW:
     case Instruction::AtomicCmpXchg:
       // cmpxchg and rmw are the same as load/store: if it is a fixed stack
       // slot we can omit the bounds
-      return canLoadStoreBeOutOfBounds(I, CurrentGEPOffset, Depth);
+      return canLoadStoreBeOutOfBounds(I, U, CurrentGEPOffset, Depth);
 
     case Instruction::GetElementPtr: {
       auto GEPI = cast<GetElementPtrInst>(I);
@@ -275,21 +276,35 @@ private:
     return false;
   }
 
-  bool canLoadStoreBeOutOfBounds(const Instruction *I,
+  bool canLoadStoreBeOutOfBounds(const Instruction *I, const Use& U,
                                  const APInt &CurrentGEPOffset, unsigned Depth) {
     DBG_INDENTED("Checking if load/store needs bounds (GEP offset is "
                     << CurrentGEPOffset << "): ";
                 I->dump());
+    Depth++; // indent the next debug message more
     assert(AllocaSize &&
            "dynamic size alloca should have been checked earlier");
     Type *LoadStoreType = nullptr;
     if (auto CmpXchg = dyn_cast<AtomicCmpXchgInst>(I)) {
+      if (U.get() != CmpXchg->getPointerOperand()) {
+        DBG_INDENTED("Stack slot used as value and not pointer -> must set bounds\n";);
+        return true;
+      }
       LoadStoreType = CmpXchg->getNewValOperand()->getType();
     } else if (auto RMW = dyn_cast<AtomicRMWInst>(I)) {
       LoadStoreType = RMW->getValOperand()->getType();
+      if (U.get() != RMW->getPointerOperand()) {
+        DBG_INDENTED("Stack slot used as value and not pointer -> must set bounds\n";);
+        return true;
+      }
     } else if (const auto *Store = dyn_cast<StoreInst>(I)) {
+      if (U.get() != Store->getPointerOperand()) {
+        DBG_INDENTED("Stack slot used as value and not pointer -> must set bounds\n";);
+        return true;
+      }
       LoadStoreType = Store->getValueOperand()->getType();
     } else if (const auto *Load = dyn_cast<LoadInst>(I)) {
+      assert(U.get() == Load->getPointerOperand() && "Invalid load?");
       LoadStoreType = Load->getType();
     } else {
       llvm_unreachable("Invalid load/store type");
