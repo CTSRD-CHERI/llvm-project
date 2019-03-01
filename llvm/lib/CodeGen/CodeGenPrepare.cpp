@@ -1756,6 +1756,7 @@ bool CodeGenPrepare::optimizeCallInst(CallInst *CI, bool &ModifiedDT) {
     }
     // If this is a memcpy (or similar) then we may be able to improve the
     // alignment
+    // FIXME: this does not work without an assumptioncache!!!
     if (MemIntrinsic *MI = dyn_cast<MemIntrinsic>(CI)) {
       unsigned DestAlign = getKnownAlignment(MI->getDest(), *DL);
       if (DestAlign > MI->getDestAlignment())
