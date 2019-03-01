@@ -6135,10 +6135,10 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
 
   // Then check to see if we should lower the memcpy with target-specific
   // code. If the target chooses to do this, this is the next best.
-  if (TSI && !ForceLibcall) {
+  if (TSI) {
     SDValue Result = TSI->EmitTargetCodeForMemcpy(
         *this, dl, Chain, Dst, Src, Size, Align, isVol, AlwaysInline,
-        DstPtrInfo, SrcPtrInfo);
+        ForceLibcall, DstPtrInfo, SrcPtrInfo);
     if (Result.getNode())
       return Result;
   }
@@ -6254,9 +6254,10 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
 
   // Then check to see if we should lower the memmove with target-specific
   // code. If the target chooses to do this, this is the next best.
-  if (TSI && !ForceLibcall) {
+  if (TSI) {
     SDValue Result = TSI->EmitTargetCodeForMemmove(
-        *this, dl, Chain, Dst, Src, Size, Align, isVol, DstPtrInfo, SrcPtrInfo);
+        *this, dl, Chain, Dst, Src, Size, Align, isVol, ForceLibcall,
+        DstPtrInfo, SrcPtrInfo);
     if (Result.getNode())
       return Result;
   }

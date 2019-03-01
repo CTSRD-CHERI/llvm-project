@@ -57,13 +57,17 @@ SDValue callFunction(SelectionDAG &DAG, SDLoc dl, SDValue Chain, const char
 }
 
 /// Helper that emits the memcpy / memmove call, as required.
-SDValue EmitTargetCodeForMemOp(SelectionDAG &DAG, const
-    SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src, SDValue Size, unsigned
-    Align, bool isVolatile, bool AlwaysInline, MachinePointerInfo DstPtrInfo,
-    MachinePointerInfo SrcPtrInfo, bool isMemCpy) {
+SDValue EmitTargetCodeForMemOp(SelectionDAG &DAG, const SDLoc &dl,
+                               SDValue Chain, SDValue Dst, SDValue Src,
+                               SDValue Size, unsigned Align, bool isVolatile,
+                               bool AlwaysInline, bool ForceLibcall,
+                               MachinePointerInfo DstPtrInfo,
+                               MachinePointerInfo SrcPtrInfo, bool isMemCpy) {
   // If AlwaysInline is set, let SelectionDAG expand this.
-  if (AlwaysInline)
+  if (AlwaysInline) {
+    assert(!ForceLibcall && "Incompatible with AlwaysInline");
     return SDValue();
+  }
   // If we're copying AS0 to AS0, do the normal thing.
   unsigned DstAS = DstPtrInfo.getAddrSpace();
   unsigned SrcAS = SrcPtrInfo.getAddrSpace();
@@ -83,26 +87,28 @@ SDValue EmitTargetCodeForMemOp(SelectionDAG &DAG, const
     (STI.isABI_CheriPureCap() ?  "memmove" : "memmove_c");
   return callFunction(DAG, dl, Chain, memFnName, Dst, Src, Size);
 }
-
 }
 
 MipsSelectionDAGInfo::~MipsSelectionDAGInfo() {
 }
 
-SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemcpy(SelectionDAG &DAG, const
-    SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src, SDValue Size, unsigned
-    Align, bool isVolatile, bool AlwaysInline, MachinePointerInfo DstPtrInfo,
+SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemcpy(
+    SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
+    SDValue Size, unsigned Align, bool isVolatile, bool AlwaysInline,
+    bool ForceLibcall, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo) const {
   return EmitTargetCodeForMemOp(DAG, dl, Chain, Dst, Src, Size, Align,
-      isVolatile, AlwaysInline, DstPtrInfo, SrcPtrInfo, true);
+                                isVolatile, AlwaysInline, ForceLibcall,
+                                DstPtrInfo, SrcPtrInfo, true);
 }
 
-SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemmove( SelectionDAG &DAG,
-    const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src, SDValue Size,
-    unsigned Align, bool isVolatile, MachinePointerInfo DstPtrInfo,
-    MachinePointerInfo SrcPtrInfo) const {
+SDValue MipsSelectionDAGInfo::EmitTargetCodeForMemmove(
+    SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
+    SDValue Size, unsigned Align, bool isVolatile, bool ForceLibcall,
+    MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
   return EmitTargetCodeForMemOp(DAG, dl, Chain, Dst, Src, Size, Align,
-      isVolatile, false, DstPtrInfo, SrcPtrInfo, false);
+                                isVolatile, false, ForceLibcall, DstPtrInfo,
+                                SrcPtrInfo, false);
 }
 
 SDValue

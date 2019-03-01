@@ -19,7 +19,8 @@ using namespace llvm;
 SDValue HexagonSelectionDAGInfo::EmitTargetCodeForMemcpy(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
     SDValue Size, unsigned Align, bool isVolatile, bool AlwaysInline,
-    MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
+    bool ForceLibcall, MachinePointerInfo DstPtrInfo,
+    MachinePointerInfo SrcPtrInfo) const {
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
   if (AlwaysInline || (Align & 0x3) != 0 || !ConstantSize)
     return SDValue();

@@ -202,13 +202,14 @@ SDValue X86SelectionDAGInfo::EmitTargetCodeForMemset(
 SDValue X86SelectionDAGInfo::EmitTargetCodeForMemcpy(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
     SDValue Size, unsigned Align, bool isVolatile, bool AlwaysInline,
-    MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
+    bool ForceLibcall, MachinePointerInfo DstPtrInfo,
+    MachinePointerInfo SrcPtrInfo) const {
   // This requires the copy size to be a constant, preferably
   // within a subtarget-specific limit.
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
   const X86Subtarget &Subtarget =
       DAG.getMachineFunction().getSubtarget<X86Subtarget>();
-  if (!ConstantSize)
+  if (!ConstantSize || ForceLibcall)
     return SDValue();
   RepMovsRepeats Repeats(ConstantSize->getZExtValue());
   if (!AlwaysInline && Repeats.Size > Subtarget.getMaxInlineSizeThreshold())

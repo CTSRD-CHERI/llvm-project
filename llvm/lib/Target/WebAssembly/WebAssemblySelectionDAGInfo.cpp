@@ -21,10 +21,11 @@ WebAssemblySelectionDAGInfo::~WebAssemblySelectionDAGInfo() = default; // anchor
 SDValue WebAssemblySelectionDAGInfo::EmitTargetCodeForMemcpy(
     SelectionDAG &DAG, const SDLoc &DL, SDValue Chain, SDValue Dst, SDValue Src,
     SDValue Size, unsigned Align, bool IsVolatile, bool AlwaysInline,
-    MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
-  if (!DAG.getMachineFunction()
-           .getSubtarget<WebAssemblySubtarget>()
-           .hasBulkMemory())
+    bool ForceLibcall, MachinePointerInfo DstPtrInfo,
+    MachinePointerInfo SrcPtrInfo) const {
+  if (ForceLibcall || !DAG.getMachineFunction()
+                           .getSubtarget<WebAssemblySubtarget>()
+                           .hasBulkMemory())
     return SDValue();
 
   SDValue MemIdx = DAG.getConstant(0, DL, MVT::i32);
@@ -35,10 +36,10 @@ SDValue WebAssemblySelectionDAGInfo::EmitTargetCodeForMemcpy(
 
 SDValue WebAssemblySelectionDAGInfo::EmitTargetCodeForMemmove(
     SelectionDAG &DAG, const SDLoc &DL, SDValue Chain, SDValue Op1, SDValue Op2,
-    SDValue Op3, unsigned Align, bool IsVolatile,
+    SDValue Op3, unsigned Align, bool IsVolatile, bool ForceLibcall,
     MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
   return EmitTargetCodeForMemcpy(DAG, DL, Chain, Op1, Op2, Op3, Align,
-                                 IsVolatile, false, DstPtrInfo,
+                                 IsVolatile, false, ForceLibcall, DstPtrInfo,
                                  SrcPtrInfo);
 }
 
