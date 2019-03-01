@@ -85,7 +85,7 @@ private:
 
   std::vector<PhdrEntry *> Phdrs;
 
-  uint64_t FileSize;
+  size_t FileSize;
   uint64_t SectionHeaderOff;
 };
 } // anonymous namespace
