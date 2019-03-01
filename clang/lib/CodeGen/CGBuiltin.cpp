@@ -1622,12 +1622,13 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
       }
     }
     if (UnderAligned) {
-      CGF.CGM.getDiags().Report(Src->getExprLoc(),
-                                diag::warn_cheri_memintrin_misaligned)
+      CGF.CGM.getDiags().Report(
+          Src->getExprLoc(), diag::warn_cheri_memintrin_misaligned_inefficient)
           << Function << (unsigned)DstAlignBytes << UnderlyingSrcTy;
       // TODO: add a fixit?
       CGF.CGM.getDiags().Report(Src->getExprLoc(),
-                                diag::note_cheri_memintrin_misaligned_fixit);
+                                diag::note_cheri_memintrin_misaligned_fixit)
+          << Function;
     }
   }
 }
