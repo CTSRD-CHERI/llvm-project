@@ -1579,15 +1579,10 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
   // we want the real type not the implicit conversion to void*
   // TODO: ignore the first explicit cast to void*?
   auto UnderlyingSrcTy = Src->IgnoreParenImpCasts()->getType();
-  if (UnderlyingSrcTy->isPointerType()) {
-    // The pointer will always be a capability in the purecap ABI, we only care
-    // about the pointee type (i.e. the type that is being copied)
-    UnderlyingSrcTy = UnderlyingSrcTy->getPointeeType();
-  } else if (UnderlyingSrcTy->isArrayType()) {
-    UnderlyingSrcTy = QualType(UnderlyingSrcTy->getPointeeOrArrayElementType(), 0);
-  } else {
-    llvm_unreachable("Unhandled memcpy argument type");
-  }
+  // The pointer will always be a capability in the purecap ABI, we only care
+  // about the pointee type (i.e. the type that is being copied)
+  UnderlyingSrcTy =
+      QualType(UnderlyingSrcTy->getPointeeOrArrayElementType(), 0);
   auto &Ctx = CGF.CGM.getContext();
   if (Ctx.containsCapabilities(UnderlyingSrcTy)) {
     uint64_t CapSizeBytes =
@@ -1621,6 +1616,7 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
         MemInst->setDestAlignment(DstAlignBytes);
       }
     }
+    // TODO: should only really warn if the size is small enough to be inlined.
     if (UnderAligned) {
       CGF.CGM.getDiags().Report(
           Src->getExprLoc(), diag::warn_cheri_memintrin_misaligned_inefficient)
@@ -1629,6 +1625,16 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
       CGF.CGM.getDiags().Report(Src->getExprLoc(),
                                 diag::note_cheri_memintrin_misaligned_fixit)
           << Function;
+      if (MemInst) {
+        // Add a nobuiltin attribute to the memcpy/memmove intrinsic to ensure
+        // that the backend will not lower it to an inlined sequence of 1/2/4/8
+        // byte loads and stores which would strip the tag bits.
+        // TODO: a clc/csc that works on unaligned data but traps for a csc
+        // with a tagged value and unaligned address could also prevent tags
+        // from being lost.
+        MemInst->addAttribute(llvm::AttributeList::FunctionIndex,
+                              llvm::Attribute::NoBuiltin);
+      }
     }
   }
 }
