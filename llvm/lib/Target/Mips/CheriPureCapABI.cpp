@@ -107,11 +107,16 @@ public:
   }
 
   void findUsesThatNeedBounds(SmallVectorImpl<const Use *> *UsesThatNeedBounds,
-                              bool BoundAllUses) {
+                              bool BoundAllUses, bool *MustUseSingleIntrinsic) {
     // TODO: don't replace load/store instructions with the bounded value
     for (const Use &U : AI->uses()) {
-      if (BoundAllUses || check(U))
+      if (BoundAllUses || check(U)) {
         UsesThatNeedBounds->push_back(&U);
+        // See comment further down as to why we must reuse a single intrinsic
+        // if one of the bounded users is a phi node.
+        if (isa<PHINode>(U.getUser()))
+          *MustUseSingleIntrinsic = true;
+      }
     }
   }
 
@@ -420,6 +425,12 @@ public:
       bool NeedBounds = true;
       // Always set bounds if the function has the optnone attribute
       SmallVector<const Use *, 32> UsesThatNeedBounds;
+      // If one of the bounded alloca users is a PHI we must reuse the single
+      // intrinsic since PHIs must be the first instruction in the basic block
+      // and we can't insert anything before. Theoretically we could still
+      // use separate intrinsics for the other users but if we are already
+      // saving a bounded stack slot we might as well reuse it.
+      bool MustUseSingleIntrinsic = false;
       if (BoundsMode == StackBoundsMethod::Never) {
         NeedBounds = false;
       } else {
@@ -427,7 +438,8 @@ public:
         // With -O0 or =always we set bounds on every stack allocation even
         // if it is not necessary
         bool BoundAll = IsOptNone || BoundsMode == StackBoundsMethod::AllUses;
-        BoundsChecker.findUsesThatNeedBounds(&UsesThatNeedBounds, BoundAll);
+        BoundsChecker.findUsesThatNeedBounds(&UsesThatNeedBounds, BoundAll,
+                                             &MustUseSingleIntrinsic);
         NeedBounds = !UsesThatNeedBounds.empty();
         DBG_MESSAGE(F.getName()
                         << ": " << UsesThatNeedBounds.size() << " of "
@@ -442,7 +454,8 @@ public:
           LLVM_DEBUG(dbgs() << "Checking if alloca needs bounds: "; AI->dump());
 
           BoundsChecker.findUsesThatNeedBounds(&UsesThatNeedBounds,
-                                               /*BoundAllUses=*/true);
+                                               /*BoundAllUses=*/true,
+                                               &MustUseSingleIntrinsic);
         }
       }
       if (!NeedBounds) {
@@ -453,7 +466,8 @@ public:
       // Reuse the result of a single csetbounds intrinisic if we are at -O0 or
       // there are more than N users of this bounded stack capability.
       const bool ReuseSingleIntrinsicCall =
-          IsOptNone || UsesThatNeedBounds.size() >= SingleIntrinsicThreshold;
+          MustUseSingleIntrinsic || IsOptNone ||
+          UsesThatNeedBounds.size() >= SingleIntrinsicThreshold;
 
       // Get the size of the alloca
       unsigned ElementSize = DL.getTypeAllocSize(AllocationTy);
@@ -487,10 +501,11 @@ public:
         if (ReuseSingleIntrinsicCall) {
           const_cast<Use *>(U)->set(SingleBoundedAlloc);
         } else {
+          assert(!isa<PHINode>(I) && "Should reuse single intrinsic for PHIs");
           // insert a new intrinsic call before every use. This can avoid
           // stack spills but will result in additional instructions.
           // This should avoid spilling registers when using an alloca in a
-          // different basic block
+          // different basic block.
           // TODO: there should be a MIR pass to merge unncessary calls
           B.SetInsertPoint(I);
           // We need to convert it to an i8* for the intrinisic. Note: we must
