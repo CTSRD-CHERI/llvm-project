@@ -51,8 +51,13 @@ entry:
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   ; Load the address of the global
   ; CHECK: clcbi [[CPYADDR:\$c[0-9]+]], %captab20(va_cpy)($c1)
-  ; Load the va_list into the return capability
-  ; CHECK: clc	$c3, $zero, 0([[CPYADDR]])
+  ; CHECK-NEXT: clc $c1, $zero, 0([[CPYADDR]])
+  ; TODO: there is no need to set the bounds on the va_copy() destination
+  ; since it is just a single capability store.
+  ; CHECK-NEXT: csetbounds [[BOUNDED_STACK:\$c[0-9]+]], [[STACK:\$c(11|24)]], [[$CAP_SIZE]]
+  ; CHECK-NEXT: csc $c1, $zero, 0([[BOUNDED_STACK]])
+  ; Load the va_list into the return capability: note: 0($c11) == $c2
+  ; CHECK-NEXT: clc $c3, $zero, 0([[STACK]])
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   call void @llvm.lifetime.start.p200i8(i64 32, i8 addrspace(200)* %0) #1
   call void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)* %0, i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_cpy to i8 addrspace(200)*))
@@ -68,7 +73,10 @@ entry:
   ; When calling from a variadic function to one that takes a va_list, we
   ; should simply move the va capability from $c13 to the relevant argument
   ; register.
-  ; CHECK: cmove	$c3, $c13
+  ; TODO: this could be a simple cmove!
+  ; CHECK: csetbounds [[BOUNDED_STACK:\$c[0-9]+]], [[STACK:\$c(11|24)]], [[$CAP_SIZE]]
+  ; CHECK-NEXT: csc $c13, $zero, 0([[BOUNDED_STACK]])
+  ; CHECK-NEXT: clc $c3, $zero, 0([[STACK]])
   ; CHECK: clcbi   $c12, %capcall20(g)($c1)
   ; Call the non-variadic function and clear $c13 in the delay slot:
   ; CHECK: cjalr $c12, $c17

@@ -49,16 +49,12 @@ define i32 @has_spill(i32 signext %x) local_unnamed_addr #1 {
 entry:
 ; Check that we spill and reload relative to the correct frame capability and
 ; that we're loading from the same place that we spill
-; Note: We're running this test at -O0, which means that we end up with a spill
-; that's never reloaded.
 ; CHECK-LABEL: has_spill
 ; 
 ; CHECK: cincoffset	$c11, $c11, -[[FRAMESIZE:([0-9]+)]]
 ; CHECK: csc	$c17, $zero, [[C17OFFSET:([0-9]+|sp)]]($c11)
-; CHECK: cincoffset	[[ALLOCACAP:\$c([0-9]+|sp)]], $c11, [[@EXPR $CAP_SIZE - 4]]
-; CHECK-NEXT: csetbounds	[[ALLOCACAP]], [[ALLOCACAP]], 4
-; CHECK-NEXT: csw	$2, $zero, 0([[ALLOCACAP]])
-; CHECK: csw $2, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
+; CHECK: clcbi $c12, %capcall20(use_arg)
+; CHECK: csw    $2, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
 ; CHECK: cjalr	$c12, $c17
 ; CHECK: clw	${{([0-9]+)}}, $zero, [[@EXPR $CAP_SIZE - 8]]($c11)
 ; CHECK: clc	$c17, $zero, [[C17OFFSET]]($c11)

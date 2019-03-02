@@ -37,7 +37,6 @@ define void @foobar() addrspace(200) nounwind {
 ; MIPS-NEXT:    jr $ra
 ; MIPS-NEXT:    daddiu $sp, $sp, 32
 ;
-; TODO: we should not be adding a csetbounds for the first store!
 ; CHECK-LABEL: foobar:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|96]]
@@ -46,10 +45,8 @@ define void @foobar() addrspace(200) nounwind {
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(foobar)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foobar)))
 ; CHECK-NEXT:    cincoffset $c18, $c12, $1
-; CHECK-NEXT:    cincoffset $c1, $c11, [[@EXPR $CAP_SIZE - 4]]
-; CHECK-NEXT:    csetbounds $c1, $c1, 4
 ; CHECK-NEXT:    addiu $1, $zero, 123
-; CHECK-NEXT:    csw $1, $zero, 0($c1)
+; CHECK-NEXT:    csw $1, $zero, [[@EXPR $CAP_SIZE - 4]]($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(foo)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop

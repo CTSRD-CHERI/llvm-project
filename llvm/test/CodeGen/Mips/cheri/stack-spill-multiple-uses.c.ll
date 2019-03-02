@@ -50,25 +50,21 @@ define void @multi_use() addrspace(200) nounwind {
 ; MIPS-NEXT:    jr $ra
 ; MIPS-NEXT:    daddiu $sp, $sp, 32
 ;
-
-; TODO: we should avoid some of the duplicate csetbounds in the CHERI case
-
-
 ; CHECK-LABEL: multi_use:
 ; CHECK:       # %bb.0: # %entry
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:64|128]]
-; CHECK-NEXT:    csc $c19, $zero, [[@EXPR 3 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:48|96]]
 ; CHECK-NEXT:    csc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(multi_use)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(multi_use)))
 ; CHECK-NEXT:    cincoffset $c18, $c12, $1
-; CHECK-NEXT:    cincoffset $c19, $c11, [[@EXPR $CAP_SIZE - 8]]
 ; CHECK-NEXT:    clcbi $c12, %capcall20(foo)($c18)
 ; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    csetbounds $c19, $c19, 4
-; CHECK-NEXT:    cincoffset $c4, $c19, 4
-; CHECK-NEXT:    cincoffset $c5, $c19, 1
+; CHECK-NEXT:    nop
+; CHECK-NEXT:    cincoffset $c1, $c11, [[@EXPR $CAP_SIZE - 8]]
+; CHECK-NEXT:    csetbounds $c1, $c1, 4
+; CHECK-NEXT:    cincoffset $c4, $c1, 4
+; CHECK-NEXT:    cincoffset $c5, $c1, 1
 ; CHECK-NEXT:    clcbi $c12, %capcall20(multi_arg)($c18)
 ; CHECK-NEXT:    cincoffset $c3, $c11, [[@EXPR $CAP_SIZE - 8]]
 ; CHECK-NEXT:    cjalr $c12, $c17
@@ -83,9 +79,9 @@ define void @multi_use() addrspace(200) nounwind {
 ; CHECK-NEXT:    csetbounds $c3, $c3, 4
 ; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    clc $c18, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    clc $c19, $zero, [[@EXPR 3 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
+
 entry:
   %y = alloca i32, align 4, addrspace(200)
   ; Note: if we move the alloca after the call we don't unncesarily save a register
