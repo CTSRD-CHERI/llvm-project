@@ -47,7 +47,7 @@ static cl::opt<bool> UseRematerializableIntrinsic(
 // TODO: remove these options once we know what the best stragegy is?
 // TODO: change this to an integer threshold (more than N uses -> reuse the same one)
 static cl::opt<unsigned> SingleIntrinsicThreshold(
-    "cheri-stack-bounds-single-intrinsic-threshold", cl::init(0),
+    "cheri-stack-bounds-single-intrinsic-threshold", cl::init(5),
     cl::desc("Reuse the result of a single CHERI bounds intrinsic if there are "
              "more than N uses (default=5). A value of 0 means always."),
     cl::Hidden);
@@ -62,8 +62,9 @@ enum class StackBoundsMethod {
 };
 
 static cl::opt<StackBoundsMethod> BoundsSettingMode(
-    "cheri-stack-bounds", cl::desc("Strategy for setting bounds on stack capabilities:"),
-    cl::init(StackBoundsMethod::ForAllUsesIfOneNeedsBounds), // TODO: IfNeeded
+    "cheri-stack-bounds",
+    cl::desc("Strategy for setting bounds on stack capabilities:"),
+    cl::init(StackBoundsMethod::IfNeeded),
     cl::values(clEnumValN(StackBoundsMethod::Never, "never",
                           "Do not add bounds on stack allocations (UNSAFE!)"),
                clEnumValN(StackBoundsMethod::ForAllUsesIfOneNeedsBounds,
