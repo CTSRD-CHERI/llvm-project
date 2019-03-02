@@ -72,8 +72,8 @@ define [16 x i32] addrspace(200)* @store_stack_to_other_slot() addrspace(200) no
 ; CHECK-LABEL: @store_stack_to_other_slot(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[SLOT_SRC:%.*]] = alloca [16 x i32], align 4, addrspace(200)
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast [16 x i32] addrspace(200)* [[SLOT_SRC]] to i8 addrspace(200)*
 ; CHECK-NEXT:    [[SLOT_LEAK:%.*]] = alloca [16 x i32] addrspace(200)*, align 16, addrspace(200)
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast [16 x i32] addrspace(200)* [[SLOT_SRC]] to i8 addrspace(200)*
 ; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 64)
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [16 x i32] addrspace(200)*
 ; CHECK-NEXT:    store [16 x i32] addrspace(200)* [[TMP2]], [16 x i32] addrspace(200)* addrspace(200)* [[SLOT_LEAK]], align 16
