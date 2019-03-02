@@ -85,6 +85,15 @@ class Run(object):
                     a.get() # Exceptions raised here come from the worker.
                 if self.hit_max_failures:
                     break
+        except multiprocessing.TimeoutError:
+            pool.terminate()
+            pool.join()
+            print('\nReached test timeout, terminating.')
+            # Mark any tests that weren't run as FAILED.
+            for test in self.tests:
+                if test.result is None:
+                    test.setResult(lit.Test.Result(lit.Test.TIMEOUT, '', 0.0))
+            return True
         except:
             # Stop the workers and wait for any straggling results to come in
             # if we exited without waiting on every async result.
