@@ -3828,8 +3828,7 @@ bool SelectionDAG::isBaseWithConstantOffset(SDValue Op) const {
   }
 
   if (Op.getOpcode() == ISD::OR &&
-      !MaskedValueIsZero(Op.getOperand(0),
-                     cast<ConstantSDNode>(Op.getOperand(1))->getAPIntValue()))
+      !MaskedValueIsZero(Op.getOperand(0), Op.getConstantOperandAPInt(1)))
     return false;
 
   return true;
