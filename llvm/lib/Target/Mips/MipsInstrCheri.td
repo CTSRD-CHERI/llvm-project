@@ -984,8 +984,14 @@ multiclass StackCapPatterns<ValueType iFatptrTy, ComplexPattern Addr> {
     //  includes it instead of working around it here
     def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap (iFatptrTy (int_cheri_cap_bounds_set CheriOpnd:$dyn_alloc, GPR64Opnd:$size1)), GPR64Opnd:$size2)),
               (iFatptrTy (CSetBounds (iFatptrTy (CSetBounds CheriOpnd:$dyn_alloc, GPR64Opnd:$size1)), GPR64Opnd:$size2))>;
-    // def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap CheriOpnd:$dyn_alloc, GPR64Opnd:$size)),
-    //           (iFatptrTy (CSetBounds CheriOpnd:$dyn_alloc, GPR64Opnd:$size))>;
+    // If the incoffset was placed in a different basic block we
+    // might have to turn the bounded stack cap into a plain setbounds:
+    def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap CheriOpnd:$reg, uimm11s0Pattern:$size)),
+              (iFatptrTy (CSetBounds CheriOpnd:$reg, imm:$size))>;
+  }
+  let AddedComplexity = -120 in {
+    def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap CheriOpnd:$reg, GPR64Opnd:$size)),
+              (iFatptrTy (CSetBounds CheriOpnd:$reg, GPR64Opnd:$size))>;
   }
 
   // NOTE: removing the parentheses around (AddrFI128:$fi) in the output pattern will result in
