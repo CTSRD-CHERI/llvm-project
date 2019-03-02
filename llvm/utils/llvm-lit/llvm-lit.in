@@ -30,9 +30,5 @@ builtin_parameters = { 'build_mode' : "@BUILD_MODE@",
 builtin_parameters['config_map'] = config_map
 
 if __name__=='__main__':
-    if sys.platform.startswith("freebsd") and sys.version_info < (3, 0):
-        sys.exit("LLVM-LIT multiprocessing is flaky with python 2.7 on FreeBSD."
-                 " Reconfigure with -DPYTHON_EXECUTABLE=/usr/local/bin/python3"
-                 " to fix this error.")
     from lit.main import main
     main(builtin_parameters)
