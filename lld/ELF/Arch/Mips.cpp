@@ -560,18 +560,20 @@ void MIPS<ELFT>::relocateOne(uint8_t *Loc, RelType Type, uint64_t Val) const {
   // Detect cross-mode jump/branch and fix instruction.
   Val = fixupCrossModeJump<ELFT>(Loc, Type, Val);
 
-  // Thread pointer and DRP offsets from the start of TLS data area.
-  // https://www.linux-mips.org/wiki/NPTL
-  if (Type == R_MIPS_TLS_DTPREL_HI16 || Type == R_MIPS_TLS_DTPREL_LO16 ||
-      Type == R_MIPS_TLS_DTPREL32 || Type == R_MIPS_TLS_DTPREL64 ||
-      Type == R_MICROMIPS_TLS_DTPREL_HI16 ||
-      Type == R_MICROMIPS_TLS_DTPREL_LO16) {
-    Val -= 0x8000;
-  } else if (Type == R_MIPS_TLS_TPREL_HI16 || Type == R_MIPS_TLS_TPREL_LO16 ||
-             Type == R_MIPS_TLS_TPREL32 || Type == R_MIPS_TLS_TPREL64 ||
-             Type == R_MICROMIPS_TLS_TPREL_HI16 ||
-             Type == R_MICROMIPS_TLS_TPREL_LO16) {
-    Val -= 0x7000;
+  if (!Config->isCheriABI()) {
+    // Thread pointer and DRP offsets from the start of TLS data area.
+    // https://www.linux-mips.org/wiki/NPTL
+    if (Type == R_MIPS_TLS_DTPREL_HI16 || Type == R_MIPS_TLS_DTPREL_LO16 ||
+        Type == R_MIPS_TLS_DTPREL32 || Type == R_MIPS_TLS_DTPREL64 ||
+        Type == R_MICROMIPS_TLS_DTPREL_HI16 ||
+        Type == R_MICROMIPS_TLS_DTPREL_LO16) {
+      Val -= 0x8000;
+    } else if (Type == R_MIPS_TLS_TPREL_HI16 || Type == R_MIPS_TLS_TPREL_LO16 ||
+               Type == R_MIPS_TLS_TPREL32 || Type == R_MIPS_TLS_TPREL64 ||
+               Type == R_MICROMIPS_TLS_TPREL_HI16 ||
+               Type == R_MICROMIPS_TLS_TPREL_LO16) {
+      Val -= 0x7000;
+    }
   }
 
   switch (Type) {

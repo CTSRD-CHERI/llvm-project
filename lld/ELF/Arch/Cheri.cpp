@@ -545,13 +545,12 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
       // one will be treated as an addend and will cause crashes at runtime
       if (!Config->Pic)
         Write(it.second.Index.getValue(), nullptr, 1);
-      Write(it.second.Index.getValue() + 1, it.first, -0x8000);
+      Write(it.second.Index.getValue() + 1, it.first, 0);
     }
   }
 
   for (auto &it : TlsEntries.Map)
-    Write(it.second.Index.getValue(), it.first,
-          it.first->IsPreemptible ? 0 : -0x7000);
+    Write(it.second.Index.getValue(), it.first, 0);
 }
 
 static Defined *findMatchingFunction(InputSectionBase *IS, uint64_t SymOffset) {
