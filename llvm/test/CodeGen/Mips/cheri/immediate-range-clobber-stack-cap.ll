@@ -13,26 +13,24 @@ declare void @_BAR(%"class.Webcore::Settings" addrspace(200)*, %"class.Webcore::
 define hidden void @_ZN19QWebSettingsPrivate5applyEv() local_unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: _ZN19QWebSettingsPrivate5applyEv:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:432|512]]
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:416|480]]
 ; CHECK-NEXT:    csc $c17, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN19QWebSettingsPrivate5applyEv)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN19QWebSettingsPrivate5applyEv)))
 ; CHECK-NEXT:    cincoffset $c26, $c12, $1
 ; CHECK-NEXT:    cmove $c12, $c26
-; CHECK-NEXT:    cincoffset $c1, $c11, [[@EXPR 4 * $CAP_SIZE]]
 ; CHECK-NEXT:    daddiu $1, $zero, 0
-; CHECK-NEXT:    daddiu $2, $zero, {{412|476}}
+; CHECK-NEXT:    daddiu $2, $zero, {{396|444}}
 ; CHECK-NEXT:    csb $zero, $2, 0($c11)
-; CHECK-NEXT:    csd $1, $zero, {{56|120}}($c11)
-; CHECK-NEXT:    csc $c12, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    csc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csd $1, $zero, {{40|88}}($c11)
+; CHECK-NEXT:    csc $c12, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    b .LBB0_1
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB0_1: # %_FOOOO.exit
+; CHECK-NEXT:    cincoffset $c4, $c11, [[@EXPR 3 * $CAP_SIZE]]
+; CHECK-NEXT:    csetbounds $c4, $c4, 348
 ; CHECK-NEXT:    clc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    csetbounds $c4, $c1, 348
-; CHECK-NEXT:    clc $c2, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    clcbi $c12, %capcall20(_BAR)($c2)
+; CHECK-NEXT:    clcbi $c12, %capcall20(_BAR)($c1)
 ; CHECK-NEXT:    # implicit-def: $c3
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17

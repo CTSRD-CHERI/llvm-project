@@ -455,15 +455,11 @@ public:
       const bool ReuseSingleIntrinsicCall =
           IsOptNone || UsesThatNeedBounds.size() >= SingleIntrinsicThreshold;
 
-      // We need at least one setbounds -> create the bitcast
-      Instruction *BitCast =
-          cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
       // Get the size of the alloca
       unsigned ElementSize = DL.getTypeAllocSize(AllocationTy);
       Value *Size = ConstantInt::get(Type::getInt64Ty(C), ElementSize);
       if (AI->isArrayAllocation())
         Size = B.CreateMul(Size, AI->getArraySize());
-      Value *AllocaI8 = BitCast;
 
       if (cheri::ShouldCollectCSetBoundsStats) {
         cheri::addSetBoundsStats(AI->getAlignment(), Size, getPassName(),
@@ -480,12 +476,14 @@ public:
 
       Value *SingleBoundedAlloc = nullptr;
       if (ReuseSingleIntrinsicCall) {
+        // We need to convert it to an i8* for the intrinisic:
+        Instruction *AllocaI8 =
+          cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
         SingleBoundedAlloc = B.CreateCall(BoundedStackFn, {AllocaI8, Size});
         SingleBoundedAlloc = B.CreateBitCast(SingleBoundedAlloc, AllocaTy);
       }
       for (const Use *U : UsesThatNeedBounds) {
         Instruction *I = cast<Instruction>(U->getUser());
-        assert(I != BitCast);
         if (ReuseSingleIntrinsicCall) {
           const_cast<Use *>(U)->set(SingleBoundedAlloc);
         } else {
@@ -495,6 +493,14 @@ public:
           // different basic block
           // TODO: there should be a MIR pass to merge unncessary calls
           B.SetInsertPoint(I);
+          // We need to convert it to an i8* for the intrinisic. Note: we must
+          // not reuse a bitcast since otherwise that results in spilling the
+          // register that was incremented and doing a setbounds in a different
+          // basic block. This is stupid and we should be either using the
+          // bounded capability everywhere or be doing inc+setoffset in the
+          // other block.
+          Instruction *AllocaI8 =
+            cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
           auto WithBounds = B.CreateCall(BoundedStackFn, {AllocaI8, Size});
           const_cast<Use *>(U)->set(B.CreateBitCast(WithBounds, AllocaTy));
         }
