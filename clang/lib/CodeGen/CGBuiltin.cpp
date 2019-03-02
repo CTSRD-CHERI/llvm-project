@@ -1648,6 +1648,16 @@ static void diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF,
       MemInst);
 }
 
+static void diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF,
+                                                StringRef Function,
+                                                const Expr *Src,
+                                                const Expr *Dst) {
+  auto UnderlyingDstTy = QualType(
+      Dst->IgnoreImpCasts()->getType()->getPointeeOrArrayElementType(), 0);
+  diagnoseMisalignedCapabiliyCopyDest(
+      CGF, Function, Src, CGF.getNaturalTypeAlignment(UnderlyingDstTy));
+}
+
 RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                                         const CallExpr *E,
                                         ReturnValueSlot ReturnValue) {
@@ -2466,19 +2476,15 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Expr::EvalResult SizeResult, DstSizeResult;
     if (!E->getArg(2)->EvaluateAsInt(SizeResult, CGM.getContext()) ||
         !E->getArg(3)->EvaluateAsInt(DstSizeResult, CGM.getContext())) {
-      diagnoseMisalignedCapabiliyCopyDest(
-          *this, "__memcpy_chk", E->getArg(1),
-          getNaturalPointeeTypeAlignment(
-              E->getArg(0)->IgnoreImpCasts()->getType()));
+      diagnoseMisalignedCapabiliyCopyDest(*this, "__memcpy_chk", E->getArg(1),
+                                          E->getArg(0));
       break;
     }
     llvm::APSInt Size = SizeResult.Val.getInt();
     llvm::APSInt DstSize = DstSizeResult.Val.getInt();
     if (Size.ugt(DstSize)) {
-      diagnoseMisalignedCapabiliyCopyDest(
-          *this, "__memcpy_chk", E->getArg(1),
-          getNaturalPointeeTypeAlignment(
-              E->getArg(0)->IgnoreImpCasts()->getType()));
+      diagnoseMisalignedCapabiliyCopyDest(*this, "__memcpy_chk", E->getArg(1),
+                                          E->getArg(0));
       break;
     }
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
@@ -2503,19 +2509,15 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Expr::EvalResult SizeResult, DstSizeResult;
     if (!E->getArg(2)->EvaluateAsInt(SizeResult, CGM.getContext()) ||
         !E->getArg(3)->EvaluateAsInt(DstSizeResult, CGM.getContext())) {
-      diagnoseMisalignedCapabiliyCopyDest(
-          *this, "__memmove_chk", E->getArg(1),
-          getNaturalPointeeTypeAlignment(
-              E->getArg(0)->IgnoreImpCasts()->getType()));
+      diagnoseMisalignedCapabiliyCopyDest(*this, "__memmove_chk", E->getArg(1),
+                                          E->getArg(0));
       break;
     }
     llvm::APSInt Size = SizeResult.Val.getInt();
     llvm::APSInt DstSize = DstSizeResult.Val.getInt();
     if (Size.ugt(DstSize)) {
-      diagnoseMisalignedCapabiliyCopyDest(
-          *this, "__memmove_chk", E->getArg(1),
-          getNaturalPointeeTypeAlignment(
-              E->getArg(0)->IgnoreImpCasts()->getType()));
+      diagnoseMisalignedCapabiliyCopyDest(*this, "__memmove_chk", E->getArg(1),
+                                          E->getArg(0));
       break;
     }
     Address Dest = EmitPointerWithAlignment(E->getArg(0));
