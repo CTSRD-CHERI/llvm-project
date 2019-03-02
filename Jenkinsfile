@@ -201,6 +201,11 @@ ls -laS "${SDKROOT_DIR}/bin"
 # remove more useless stuff
 rm -rf ${SDKROOT_DIR}/share
 rm -rf ${SDKROOT_DIR}/include
+
+# strip the binaries to save space:
+(cd ${SDKROOT_DIR}/bin && for i in *; do if test -L $i; then echo "SYMLINK"; else ./llvm-strip $i || echo "Could not strip $i"; fi; done);
+ls -laS "${SDKROOT_DIR}/bin"
+
 cd ${SDKROOT_DIR}/..
 tar -cJf "cheri-${BRANCH_NAME}-clang-llvm.tar.xz" `basename ${SDKROOT_DIR}`
 
