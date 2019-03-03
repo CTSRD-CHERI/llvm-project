@@ -1688,6 +1688,8 @@ static void findUnwindDestinations(
 
   if (IsWasmCXX) {
     findWasmUnwindDestinations(FuncInfo, EHPadBB, Prob, UnwindDests);
+    assert(UnwindDests.size() <= 1 &&
+           "There should be at most one unwind destination for wasm");
     return;
   }
 
