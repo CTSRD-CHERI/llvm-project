@@ -9813,10 +9813,11 @@ static QualType DecodeFunctionTypeFromStr(const char *&TypeStr, bool IsNested,
   assert((TypeStr[0] != '.' || TypeStr[1] == 0) &&
          "'.' should only occur at end of builtin type list!");
 
-  FunctionType::ExtInfo EI(CC_C);
-  if (IsNoReturn) EI = EI.withNoReturn(true);
-
   bool Variadic = (TypeStr[0] == '.');
+
+  FunctionType::ExtInfo EI(
+      getDefaultCallingConvention(Variadic, /*IsCXXMethod=*/false));
+  if (IsNoReturn) EI = EI.withNoReturn(true);
 
   // We really shouldn't be making a no-proto type here.
   if (ArgTypes.empty() && Variadic && !Context.getLangOpts().CPlusPlus)
