@@ -83,8 +83,9 @@ entry:
 ; CHERI128-NEXT: and	$[[OFFSET1:([0-9]+|sp)]], $[[OFFSET]], $[[SP_ALIGN_MASK]]
 ; CHERI128-NEXT: csetoffset $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[OFFSET1]]
 ; CHERI256-NEXT: csetoffset $c[[TEMPCAP1:([0-9]+)]], $c[[TEMPCAP]], $[[OFFSET]]
-; CHECK-NEXT: cmove $c11, $c[[TEMPCAP1]]
 ; CHECK-NEXT: csetbounds $c[[TEMPCAP2:([0-9]+)]], $c[[TEMPCAP1]], ${{([0-9]+|sp)}}
+; CHECK-NEXT: cmove $c11, $c[[TEMPCAP1]]
+; CHECK-NEXT: csetbounds $c{{[0-9]+}}, $c[[TEMPCAP2]], ${{([0-9]+)}}
 ; CHECK: clcbi	$c12, %capcall20(use_arg)($c12)
   %vla = alloca i32, i64 %x, align 4, addrspace(200)
   %call = call i32 @use_arg(i32 addrspace(200)* nonnull %vla) #4

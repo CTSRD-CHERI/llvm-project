@@ -395,6 +395,7 @@ public:
     const DataLayout &DL = F.getParent()->getDataLayout();
 
     for (AllocaInst *AI : Allocas) {
+      Function *SetBoundsIntrin = BoundedStackFn;
       // Insert immediately after the alloca
       B.SetInsertPoint(AI);
       B.SetInsertPoint(&*++B.GetInsertPoint());
@@ -463,6 +464,16 @@ public:
         continue;
       }
 
+      if (!AI->isStaticAlloca()) {
+        // TODO: skip bounds on dynamic allocas (maybe add a TLI hook to check
+        // whether the backend already adds bounds to the dynamic_stackalloc)
+        DBG_MESSAGE("Found dynamic alloca: must use single intrinisic and "
+                    "bounds.set intrinisic");
+        MustUseSingleIntrinsic = true;
+        SetBoundsIntrin =
+            Intrinsic::getDeclaration(M, Intrinsic::cheri_cap_bounds_set);
+      }
+
       // Reuse the result of a single csetbounds intrinisic if we are at -O0 or
       // there are more than N users of this bounded stack capability.
       const bool ReuseSingleIntrinsicCall =
@@ -493,7 +504,7 @@ public:
         // We need to convert it to an i8* for the intrinisic:
         Instruction *AllocaI8 =
           cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
-        SingleBoundedAlloc = B.CreateCall(BoundedStackFn, {AllocaI8, Size});
+        SingleBoundedAlloc = B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
         SingleBoundedAlloc = B.CreateBitCast(SingleBoundedAlloc, AllocaTy);
       }
       for (const Use *U : UsesThatNeedBounds) {
@@ -516,7 +527,7 @@ public:
           // other block.
           Instruction *AllocaI8 =
             cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
-          auto WithBounds = B.CreateCall(BoundedStackFn, {AllocaI8, Size});
+          auto WithBounds = B.CreateCall(SetBoundsIntrin, {AllocaI8, Size});
           const_cast<Use *>(U)->set(B.CreateBitCast(WithBounds, AllocaTy));
         }
       }

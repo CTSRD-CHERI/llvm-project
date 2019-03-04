@@ -25,8 +25,10 @@ for.body:                                         ; preds = %for.body, %for.body
   ; CHECK: cgetoffset	$[[SPOFFSET:[0-9]+]], $c11
   ; CHECK-NEXT: dsubu	$[[NEWSPOFFSET:[0-9]+]], $[[SPOFFSET]], $[[SIZE:[0-9]+]]
   ; CHECK: csetoffset	$c[[TMPSP:[0-9]+]], $c11, $[[NEWSPOFFSET]]
+  ; CHECK-NEXT: csetbounds [[BOUNDED_ALLOCA:\$c[0-9]+]], $c[[TMPSP]], $[[SIZE]]
   ; CHECK-NEXT: cmove	$c11, $c[[TMPSP]]
-  ; CHECK-NEXT: csetbounds $c{{[0-9]+}}, $c[[TMPSP]], $[[SIZE]]
+  ; TODO: this is not needed
+  ; CHECK-NEXT: csetbounds $c{{[0-9]+}}, [[BOUNDED_ALLOCA]], ${{[0-9]+}}
 
   %i.05 = phi i32 [ 0, %for.body.lr.ph ], [ %inc, %for.body ]
   %1 = call i8 addrspace(200)* @llvm.stacksave.p200i8()

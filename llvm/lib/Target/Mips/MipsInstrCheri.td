@@ -979,12 +979,6 @@ multiclass StackCapPatterns<ValueType iFatptrTy, ComplexPattern Addr> {
   def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap Addr:$fi, GPR64Opnd:$off)),
             (CheriBoundedStackPseudo (Addr:$fi), (i64 0), $off)>;
 
-  let AddedComplexity = -100 in {
-    // TODO: should fix to not add a int_cheri_bounded_stack_cap after Expand_DYNAMIC_STACKALLOC since that already
-    //  includes it instead of working around it here
-    def : Pat<(iFatptrTy (int_cheri_bounded_stack_cap (iFatptrTy (int_cheri_cap_bounds_set CheriOpnd:$dyn_alloc, GPR64Opnd:$size1)), GPR64Opnd:$size2)),
-              (iFatptrTy (CSetBounds (iFatptrTy (CSetBounds CheriOpnd:$dyn_alloc, GPR64Opnd:$size1)), GPR64Opnd:$size2))>;
-  }
   // These  should not be needed since they would mask bugs in CheriPureCapABI.cpp.
   // (but keep them here just in case):
   // let AddedComplexity = -120 in {
