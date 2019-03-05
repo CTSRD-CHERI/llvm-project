@@ -538,9 +538,8 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
     }
 
     // Store old csp
-    BuildMI(MBB, MBBI, dl, TII.get(Mips::STORECAP))
+    BuildMI(MBB, MBBI, dl, TII.get(Mips::STORECAP_BigImm))
             .addReg(SP)
-            .addReg(ZERO)
             .addImm(-UnsafeStackSize+ABI.GetTABILayout()->GetStackPointerOffset_Prev())
             .addReg(USP);
 
@@ -552,7 +551,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
     } else {
       unsigned Reg = TII.loadImmediate(-StackSize, MBB, MBBI, dl, nullptr);
       BuildMI(MBB, MBBI, dl, TII.get(Mips::CIncOffset), SP)
-          .addReg(SP).addReg(Reg, RegState::Kill);
+          .addReg(USP).addReg(Reg, RegState::Kill);
     }
 
     // Get new cusp
@@ -920,9 +919,8 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
     // csetboundsback $ca, $cb, im -> cgetoffset $at, $cb; daddiu $at, $at, im; csetoffset $ca, $zero, $zero; csetbounds $ca, $ca, $at; csetoffset $ca, $ca, $at
 
     // Store old csp
-    BuildMI(MBB, MBBI, DL, TII.get(Mips::STORECAP))
+    BuildMI(MBB, MBBI, DL, TII.get(Mips::STORECAP_BigImm))
             .addReg(USP)
-            .addReg(ZERO)
             .addImm(SafeStackSize + ABI.GetTABILayout()->GetStackPointerOffset_Next())
             .addReg(SP);
 
