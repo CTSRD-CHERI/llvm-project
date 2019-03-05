@@ -15,6 +15,15 @@
 
 namespace llvm {
 
+enum analysis_type {
+  NONE = 0,
+  ALL_SAFE = 1,
+  ALL_UNSAFE = 2,
+  USE_CAPTURE_TRACK = 3,
+  ANALYSIS = 4,
+  ANALYSIS_ALL_SAFE = 5,
+};
+
 enum class ExceptionHandling {
   None,     /// No exception support
   DwarfCFI, /// DWARF-like instruction based exceptions

@@ -13,6 +13,36 @@
 
 using namespace llvm;
 
+static cl::opt<analysis_type> TemporalType("TemporalType",
+                                           cl::desc("Tag everything not manually tagged..."),
+                                           cl::init(NONE),
+                                           cl::values(
+                                               clEnumValN(NONE, "none",
+                                                          "Do no tagging"),
+                                               clEnumValN(ALL_SAFE, "all_safe",
+                                                          "as safe"),
+                                               clEnumValN(ALL_UNSAFE, "all_unsafe",
+                                                          "as unsafe"),
+                                               clEnumValN(USE_CAPTURE_TRACK, "capture_track",
+                                                          "unsafe if it may be captured"),
+                                               clEnumValN(ANALYSIS, "analysis",
+                                                          "unsafe if more complex analysis shows it is"),
+                                               clEnumValN(ANALYSIS_ALL_SAFE, "analysis_all_safe",
+                                                          "safe, but throw an error if something is unsafe")
+                                           ));
+static cl::opt<int> TemporalExpandLimit("TemporalExpandLimit",
+    cl::desc("How many functions to statically expand for escape analysis"),
+    cl::init(1));
+
+
+analysis_type get_temporal_analysis_type() {
+  return TemporalType.getValue();
+}
+
+int get_temporal_expand_limit() {
+  return TemporalExpandLimit.getValue();
+}
+
 static cl::opt<CheriCapabilityTableABI> CapTableABI(
     "cheri-cap-table-abi", cl::desc("ABI to use for :"),
     cl::init(CheriCapabilityTableABI::Legacy),
