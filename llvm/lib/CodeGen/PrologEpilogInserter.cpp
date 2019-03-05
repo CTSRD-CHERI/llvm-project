@@ -723,8 +723,6 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
   // Skew to be applied to alignment.
   unsigned Skew = TFI.getStackAlignmentSkew(MF);
 
-  assert(!(MFI.getObjectIndexBegin() != 0 && MFI.hasStaticUnsafeObjects() && partitionUnsafeObjects)
-         && "Caller cannot allocate objects in the unsafe region");
   assert(!(MFI.getStackProtectorIndex() >= 0 && MFI.hasStaticUnsafeObjects() && partitionUnsafeObjects)
          && "Stack protector does not play with unsafe regions");
 
@@ -732,19 +730,23 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
   // non-fixed objects can't be allocated right at the start of local area.
   // Adjust 'Offset' to point to the end of last fixed sized preallocated
   // object.
-  for (int i = MFI.getObjectIndexBegin(); i != 0; ++i) {
-    int64_t FixedOff;
-    if (StackGrowsDown) {
-      // The maximum distance from the stack pointer is at lower address of
-      // the object -- which is given by offset. For down growing stack
-      // the offset is negative, so we negate the offset to get the distance.
-      FixedOff = -MFI.getObjectOffset(i);
-    } else {
-      // The maximum distance from the start pointer is at the upper
-      // address of the object.
-      FixedOff = MFI.getObjectOffset(i) + MFI.getObjectSize(i);
+
+  // If we have unsafe stacks then the fixed objects are on the _previous_ stack and so don't overlap with ours
+  if(!(MFI.hasStaticUnsafeObjects() && partitionUnsafeObjects)) {
+    for (int i = MFI.getObjectIndexBegin(); i != 0; ++i) {
+      int64_t FixedOff;
+      if (StackGrowsDown) {
+        // The maximum distance from the stack pointer is at lower address of
+        // the object -- which is given by offset. For down growing stack
+        // the offset is negative, so we negate the offset to get the distance.
+        FixedOff = -MFI.getObjectOffset(i);
+      } else {
+        // The maximum distance from the start pointer is at the upper
+        // address of the object.
+        FixedOff = MFI.getObjectOffset(i) + MFI.getObjectSize(i);
+      }
+      if (FixedOff > Offset) Offset = FixedOff;
     }
-    if (FixedOff > Offset) Offset = FixedOff;
   }
 
   unsigned MaxAlign = MFI.getMaxAlignment();
