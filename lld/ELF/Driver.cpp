@@ -1514,8 +1514,6 @@ static const char *LibcallRoutineNames[] = {
 // all linker scripts have already been parsed.
 template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Target = getTarget();
-  InX<ELFT>::VerSym = nullptr;
-  InX<ELFT>::VerNeed = nullptr;
   InX<ELFT>::CapRelocs = nullptr;
   InX<ELFT>::MipsAbiFlags = nullptr;
 
