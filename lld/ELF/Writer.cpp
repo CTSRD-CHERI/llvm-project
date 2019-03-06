@@ -1852,7 +1852,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     return;
 
   if (In.MipsGot)
-    In.MipsGot->build<ELFT>();
+    In.MipsGot->build();
 
   removeUnusedSyntheticSections();
 
@@ -1964,7 +1964,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   // at the end because some tags like RELSZ depend on result
   // of finalizing other sections.
   for (OutputSection *Sec : OutputSections)
-    Sec->finalize<ELFT>();
+    Sec->finalize();
 
   // If a synthetic section was removed from the output we have to manually
   // change the start&stop symbols to be NULL since otherwise we create a
