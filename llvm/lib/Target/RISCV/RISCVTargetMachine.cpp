@@ -30,13 +30,33 @@ extern "C" void LLVMInitializeRISCVTarget() {
   initializeRISCVExpandPseudoPass(*PR);
 }
 
-static StringRef computeDataLayout(const Triple &TT) {
-  if (TT.isArch64Bit()) {
-    return "e-m:e-p:64:64-i64:64-i128:128-n64-S128";
-  } else {
-    assert(TT.isArch32Bit() && "only RV32 and RV64 are currently supported");
-    return "e-m:e-p:32:32-i64:64-n32-S128";
+static std::string computeDataLayout(const Triple &TT, StringRef FS,
+                                     const TargetOptions &Options) {
+  assert((TT.isArch32Bit() || TT.isArch64Bit()) &&
+         "only RV32 and RV64 are currently supported");
+
+  StringRef IntegerTypes;
+  if (TT.isArch64Bit())
+    IntegerTypes = "-p:64:64-i64:64-i128:128-n64";
+  else
+    IntegerTypes = "-p:32:32-i64:64-n32";
+
+  StringRef CapTypes = "";
+  StringRef PurecapOptions = "";
+  if (FS.contains("+xcheri")) {
+    if (TT.isArch64Bit())
+      CapTypes = "-pf200:128:128:128:64";
+    else
+      CapTypes = "-pf200:64:64:64:32";
+
+    StringRef ABI = Options.MCOptions.getABIName();
+    if (ABI.startswith("il32pc64") || ABI.startswith("l64pc128"))
+      PurecapOptions = MCTargetOptions::cheriUsesCapabilityTable()
+                           ? "-A200-P200-G200"
+                           : "-A200-P200";
   }
+
+  return ("e-m:e" + CapTypes + IntegerTypes + "-S128" + PurecapOptions).str();
 }
 
 static Reloc::Model getEffectiveRelocModel(const Triple &TT,
@@ -52,8 +72,8 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
                                        Optional<Reloc::Model> RM,
                                        Optional<CodeModel::Model> CM,
                                        CodeGenOpt::Level OL, bool JIT)
-    : LLVMTargetMachine(T, computeDataLayout(TT), TT, CPU, FS, Options,
-                        getEffectiveRelocModel(TT, RM),
+    : LLVMTargetMachine(T, computeDataLayout(TT, FS, Options), TT, CPU,
+                        FS, Options, getEffectiveRelocModel(TT, RM),
                         getEffectiveCodeModel(CM, CodeModel::Small), OL),
       TLOF(make_unique<RISCVELFTargetObjectFile>()),
       Subtarget(TT, CPU, FS, Options.MCOptions.getABIName(), *this) {

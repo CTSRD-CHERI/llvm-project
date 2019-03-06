@@ -17,9 +17,16 @@ ABI computeTargetABI(const Triple &TT, FeatureBitset FeatureBits,
                        .Case("ilp32f", ABI_ILP32F)
                        .Case("ilp32d", ABI_ILP32D)
                        .Case("ilp32e", ABI_ILP32E)
+                       .Case("il32pc64", ABI_IL32PC64)
+                       .Case("il32pc64f", ABI_IL32PC64F)
+                       .Case("il32pc64d", ABI_IL32PC64D)
+                       .Case("il32pc64e", ABI_IL32PC64E)
                        .Case("lp64", ABI_LP64)
                        .Case("lp64f", ABI_LP64F)
                        .Case("lp64d", ABI_LP64D)
+                       .Case("l64pc128", ABI_L64PC128)
+                       .Case("l64pc128f", ABI_L64PC128F)
+                       .Case("l64pc128d", ABI_L64PC128D)
                        .Default(ABI_Unknown);
 
   bool IsRV64 = TT.isArch64Bit();
@@ -29,11 +36,13 @@ ABI computeTargetABI(const Triple &TT, FeatureBitset FeatureBits,
     errs()
         << "'" << ABIName
         << "' is not a recognized ABI for this target (ignoring target-abi)\n";
-  } else if (ABIName.startswith("ilp32") && IsRV64) {
+  } else if ((ABIName.startswith("ilp32") || ABIName.startswith("il32")) &&
+             IsRV64) {
     errs() << "32-bit ABIs are not supported for 64-bit targets (ignoring "
               "target-abi)\n";
     TargetABI = ABI_Unknown;
-  } else if (ABIName.startswith("lp64") && !IsRV64) {
+  } else if ((ABIName.startswith("lp64") || ABIName.startswith("l64")) &&
+             !IsRV64) {
     errs() << "64-bit ABIs are not supported for 32-bit targets (ignoring "
               "target-abi)\n";
     TargetABI = ABI_Unknown;
@@ -47,9 +56,16 @@ ABI computeTargetABI(const Triple &TT, FeatureBitset FeatureBits,
               "doesn't support the D instruction set extension (ignoring "
               "target-abi)\n";
     TargetABI = ABI_Unknown;
-  } else if (IsRV32E && TargetABI != ABI_ILP32E && TargetABI != ABI_Unknown) {
-    errs()
-        << "Only the ilp32e ABI is supported for RV32E (ignoring target-abi)\n";
+  } else if ((ABIName.startswith("il32pc") || ABIName.startswith("l64pc")) &&
+             !FeatureBits[RISCV::FeatureCheri]) {
+    errs() << "Pure-capability ABI can't be used for a target that "
+              "doesn't support the XCheri instruction set extension (ignoring "
+              "target-abi)\n";
+    TargetABI = ABI_Unknown;
+  } else if (IsRV32E && TargetABI != ABI_ILP32E &&
+             TargetABI != ABI_IL32PC64E && TargetABI != ABI_Unknown) {
+    errs() << "Only the ilp32e and il32pc64e ABIs are supported for RV32E "
+              "(ignoring target-abi)\n";
     TargetABI = ABI_Unknown;
   }
 

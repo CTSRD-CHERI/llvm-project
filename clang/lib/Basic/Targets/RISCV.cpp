@@ -66,6 +66,37 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
 
   if (HasC)
     Builder.defineMacro("__riscv_compressed");
+
+  if (HasCheri) {
+    // XXX-JC: Do we really want the same ABI constants as CHERI-MIPS?
+    if (CapabilityABI) {
+      auto CapTableABI = llvm::MCTargetOptions::cheriCapabilityTableABI();
+      if (CapTableABI != llvm::CheriCapabilityTableABI::Legacy) {
+        Builder.defineMacro("__CHERI_CAPABILITY_TABLE__",
+                            Twine(((int)CapTableABI) + 1));
+      }
+    }
+
+    // Macros for use with the set and get permissions builtins.
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1<<0));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__",
+            Twine(1<<1));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD__", Twine(1<<2));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE__", Twine(1<<3));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__",
+            Twine(1<<4));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__",
+            Twine(1<<5));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__",
+            Twine(1<<6));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__", Twine(1<<7));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_CCALL__", Twine(1<<8));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_UNSEAL__", Twine(1<<9));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__", Twine(1<<10));
+
+    Builder.defineMacro("__riscv_clen", Twine(getCHERICapabilityWidth()));
+    // TODO: _MIPS_CAP_ALIGN_MASK equivalent?
+  }
 }
 
 /// Return true if has this feature, need to sync with handleTargetFeatures.
@@ -80,6 +111,7 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
       .Case("f", HasF)
       .Case("d", HasD)
       .Case("c", HasC)
+      .Case("xcheri", HasCheri)
       .Default(false);
 }
 
@@ -97,7 +129,13 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
       HasD = true;
     else if (Feature == "+c")
       HasC = true;
+    else if (Feature == "+xcheri") {
+      HasCheri = true;
+      CapSize = PointerWidth * 2;
+    }
   }
+
+  setDataLayout();
 
   return true;
 }

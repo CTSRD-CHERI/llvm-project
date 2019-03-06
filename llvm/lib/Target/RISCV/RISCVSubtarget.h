@@ -37,6 +37,7 @@ class RISCVSubtarget : public RISCVGenSubtargetInfo {
   bool HasStdExtC = false;
   bool HasRV64 = false;
   bool IsRV32E = false;
+  bool HasCheri = false;
   bool EnableLinkerRelax = false;
   unsigned XLen = 32;
   MVT XLenVT = MVT::i32;
@@ -82,10 +83,15 @@ public:
   bool hasStdExtC() const { return HasStdExtC; }
   bool is64Bit() const { return HasRV64; }
   bool isRV32E() const { return IsRV32E; }
+  bool hasCheri() const { return HasCheri; }
   bool enableLinkerRelax() const { return EnableLinkerRelax; }
   MVT getXLenVT() const { return XLenVT; }
   unsigned getXLen() const { return XLen; }
   RISCVABI::ABI getTargetABI() const { return TargetABI; }
+  MVT typeForCapabilities() const {
+    assert(HasCheri && "Cannot get capability type for non-CHERI");
+    return is64Bit() ? MVT::iFATPTR128 : MVT::iFATPTR64;
+  }
 };
 } // End llvm namespace
 
