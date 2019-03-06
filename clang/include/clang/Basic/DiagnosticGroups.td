@@ -94,6 +94,8 @@ def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
 def CHERIPointerConversion : DiagGroup<"cheri-pointer-conversion", [CHERIImplicitConversionSign, CHERIImplicitConversion]>;
 def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
 def MIPSCHERIPrototypesStrict: DiagGroup<"mips-cheri-prototypes-strict">;
+// Remarks about setting/not setting subobject bounds
+def CheriSubobjectBounds : DiagGroup<"cheri-subobject-bounds">;
 
 def CheriAll : DiagGroup<"cheri",
      [CHERICaps, CHERIBitwiseOps, CHERIMisaligned, CHERIImplicitConversion,
@@ -372,8 +374,7 @@ def MismatchedReturnTypes : DiagGroup<"mismatched-return-types">;
 def MismatchedTags : DiagGroup<"mismatched-tags">;
 def MissingFieldInitializers : DiagGroup<"missing-field-initializers">;
 def ModuleBuild : DiagGroup<"module-build">;
-// Remarks about setting/not setting subobject bounds
-def CheriSubobjectBounds : DiagGroup<"cheri-subobject-bounds">;
+def ModuleImport : DiagGroup<"module-import">;
 def ModuleConflict : DiagGroup<"module-conflict">;
 def ModuleFileExtension : DiagGroup<"module-file-extension">;
 def NewlineEOF : DiagGroup<"newline-eof">;
