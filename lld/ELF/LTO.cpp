@@ -87,6 +87,7 @@ static lto::Config createConfig() {
   C.DiagHandler = diagnosticHandler;
   C.OptLevel = Config->LTOO;
   C.CPU = GetCPUStr();
+  C.MAttrs = GetFeatureList();
 
   // Set up a custom pipeline if we've been asked to.
   C.OptPipeline = Config->LTONewPmPasses;
@@ -103,6 +104,10 @@ static lto::Config createConfig() {
   if (Config->SaveTemps)
     checkError(C.addSaveTemps(Config->OutputFile.str() + ".",
                               /*UseInputModulePath*/ true));
+
+  // TODO control with a lld flag
+  C.StatsFile = (Config->OutputFile + ".stats").str();
+
   return C;
 }
 
