@@ -44,6 +44,7 @@
 #include "CheriSetBounds.h"
 #include "EscapeAnalysis/EscapeAnalysis.h"
 #include "llvm/MC/MCTargetOptions.h"
+#include "llvm/Transforms/CHERICap.h"
 
 using namespace llvm;
 using namespace llvm::cheri;
@@ -164,9 +165,16 @@ llvm::MDNode *Temporal::GetNodeForSafety(AllocaInst *Inst, bool safe) {
 extern analysis_type get_temporal_analysis_type();
 extern int get_temporal_expand_limit();
 
-static void loadPass(const PassManagerBuilder &Builder, legacy::PassManagerBase &PM) {
-  PM.add(new Temporal(false, get_temporal_analysis_type(), get_temporal_expand_limit()));
+Pass *llvm::createCHERISafeStacksPass() {
+  return new Temporal(false, get_temporal_analysis_type(), get_temporal_expand_limit());
 }
 
+
+static void loadPass(const PassManagerBuilder &Builder, legacy::PassManagerBase &PM) {
+  PM.add(createCHERISafeStacksPass());
+}
+
+/* If this is loaded
 static RegisterStandardPasses clangtoolLoader_Ox(PassManagerBuilder::EP_OptimizerLast, loadPass);
 static RegisterStandardPasses clangtoolLoader_O0(PassManagerBuilder::EP_EnabledOnOptLevel0, loadPass);
+*/

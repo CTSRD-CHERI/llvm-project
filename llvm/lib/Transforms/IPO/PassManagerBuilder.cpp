@@ -12,6 +12,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Transforms/CHERICap.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm-c/Transforms/PassManagerBuilder.h"
 #include "llvm/ADT/SmallVector.h"
@@ -946,6 +947,9 @@ void PassManagerBuilder::populateLTOPassManager(legacy::PassManagerBase &PM) {
 
   if (OptLevel != 0)
     addLateLTOOptimizationPasses(PM);
+
+  // This should be last
+  PM.add(createCHERISafeStacksPass());
 
   if (VerifyOutput)
     PM.add(createVerifierPass());

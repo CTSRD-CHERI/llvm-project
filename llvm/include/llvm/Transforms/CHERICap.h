@@ -31,6 +31,8 @@ Pass *createCHERICapDirectCallsPass();
 //
 Pass *createCHERICapFoldIntrinsicsPass();
 
+Pass *createCHERISafeStacksPass();
+
 } // End llvm namespace
 
 #endif

@@ -1,10 +1,8 @@
 
-add_llvm_loadable_module( libTemporal
+add_llvm_library( LLVMCHERITemporalOpts
   TemporalStackPass.cpp
   EscapeAnalysis/EscapeAnalysis.cpp
   CheriSetBounds.cpp
-  DEPENDS
-  intrinsics_gen
-  PLUGIN_TOOL
-  opt
-  )
+)
+
+add_dependencies(LLVMCHERITemporalOpts intrinsics_gen)
