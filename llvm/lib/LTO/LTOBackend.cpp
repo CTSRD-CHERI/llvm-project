@@ -138,6 +138,9 @@ createTargetMachine(Config &Conf, const Target *TheTarget, Module &M) {
     RelocModel =
         M.getPICLevel() == PICLevel::NotPIC ? Reloc::Static : Reloc::PIC_;
 
+  // CHERI specfic hack. We might be compiling PIC shared objects into a non-pie thing
+  if(Conf.Options.MCOptions.getABIName().startswith("purecap")) RelocModel = Reloc::PIC_;
+
   return std::unique_ptr<TargetMachine>(TheTarget->createTargetMachine(
       TheTriple, Conf.CPU, Features.getString(), Conf.Options, RelocModel,
       Conf.CodeModel, Conf.CGOptLevel));
