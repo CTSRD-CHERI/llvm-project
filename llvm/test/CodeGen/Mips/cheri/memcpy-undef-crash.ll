@@ -17,7 +17,7 @@ define hidden void @_thr_umutex_init_undef(i8 addrspace(200)* %arg) addrspace(20
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 entry:
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %arg, i8 addrspace(200)* align 16 undef, i64 48, i1 true)
+  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %arg, i8 addrspace(200)* align 16 undef, i64 48, i1 false)
   ret void
 }
 
@@ -29,7 +29,7 @@ define hidden void @_thr_umutex_init_zero(i8 addrspace(200)* %arg) addrspace(200
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    csc $cnull, $zero, 16($c3)
 entry:
-  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %arg, i8 addrspace(200)* align 16 bitcast (%struct.umutex addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*), i64 48, i1 true)
+  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %arg, i8 addrspace(200)* align 16 bitcast (%struct.umutex addrspace(200)* @_thr_umutex_init.default_mtx to i8 addrspace(200)*), i64 48, i1 false)
   ret void
 }
 

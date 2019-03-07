@@ -5593,6 +5593,10 @@ static bool FindOptimalMemOpLowering(std::vector<EVT> &MemOps,
   EVT VT = TLI.getOptimalMemOpType(Size, DstAlign, SrcAlign,
                                    IsMemset, ZeroMemset, MemcpyStrSrc,
                                    DAG.getMachineFunction());
+  // XXXAR: (ab)use MVT::isVoid to indicate that a memcpy call must be made
+  if (VT == MVT::isVoid) {
+    return false; // cannot lower as memops
+  }
 
   // If the type is a fat pointer, then forcibly disable overlap.
   // XXXAR: this is handled by TLI.allowsMisalignedMemoryAccesses()
@@ -6115,6 +6119,7 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                 MachinePointerInfo DstPtrInfo,
                                 MachinePointerInfo SrcPtrInfo) {
   assert(Align && "The SDAG layer expects explicit alignment and reserves 0");
+  LLVM_DEBUG(dbgs() << "DAG.getMemcpy() align=" << Align <<  " size="; Size.dump(););
 
   // Check to see if we should lower the memcpy to loads and stores first.
   // For cases within the target-specified limits, this is the best choice.

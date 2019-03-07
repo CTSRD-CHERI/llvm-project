@@ -5115,15 +5115,21 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
     unsigned MinDstAlign = DstAlign == 0 ? SrcAlign : DstAlign;
     unsigned Align = IsMemset ? DstAlign : std::min(MinSrcAlign, MinDstAlign);
     unsigned CapSize = Subtarget.getCapSizeInBytes();
-    if (ZeroMemset && (Align >= CapSize)) {
+    LLVM_DEBUG(dbgs() << __func__ << " Size=" << Size << " DstAlign=" << DstAlign << " SrcAlign=" << SrcAlign << "\n");
+    LLVM_DEBUG(dbgs() << __func__ << " CapSize=" << CapSize << " Align=" << Align << "\n");
+    if (ZeroMemset && (Align >= CapSize) && (Size >= CapSize)) {
       // for bzero() always use capability stores of $cnull.
       return CapType;
     }
     // If this is going to include a capability, then pretend that we have to
     // copy it using single bytes, which will cause SelectionDAG to decide to
     // do the memcpy call.
-    if (!IsMemset && (Size > CapSize ) & (Align < CapSize))
-      return MVT::i8;
+    if (!IsMemset && (Size >= CapSize) && (Align < CapSize)) {
+      // llvm_unreachable("This function should not be called for underaligned "
+      //                  "memcpy greater than CAP_SIZE");
+      // return MVT::i8; // INVALID_SIMPLE_VALUE_TYPE
+      return MVT::isVoid; // This will tell selectiondag that a call must be made
+    }
     switch (Align) {
       default:
         assert(isPowerOf2_32(Align));
