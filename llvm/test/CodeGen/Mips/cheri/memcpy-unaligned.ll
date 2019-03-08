@@ -4,7 +4,9 @@
 ; RUN: %cheri128_purecap_opt -sroa %s -o - -S -data-layout="E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200" | FileCheck %s -check-prefix SROA
 ; RUN: %cheri128_purecap_opt -sroa %s -o - -S -data-layout="E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200" | %cheri128_purecap_llc -O2 - -o - | FileCheck %s
 
+
 @b = common addrspace(200) global i8 addrspace(200)* null, align 16
+@nocaps = common addrspace(200) global [2 x i64] zeroinitializer, align 16
 
 ; Function Attrs: nounwind readnone
 declare i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)*, i64) addrspace(200) #1
@@ -35,6 +37,28 @@ entry:
   ret void
 
   ; CHECK-LABEL: spgFormLeafTuple:
+  ; CHECK: clcbi $c12, %capcall20(memcpy)($c1)
+}
+
+define void @copy_nocaps() addrspace(200) #0 {
+; SROA-LABEL: @copy_nocaps(
+; SROA-NEXT:  entry:
+; SROA-NEXT:    [[C:%.*]] = alloca [2 x i64], align 8, addrspace(200)
+; SROA-NEXT:    [[GLOBAL_CAST:%.*]] = bitcast [2 x i64] addrspace(200)* @nocaps to i8 addrspace(200)*
+; SROA-NEXT:    [[C_CAST:%.*]] = bitcast [2 x i64] addrspace(200)* [[C]] to i8 addrspace(200)*
+; This should not be turned into a store since the target is not aligned!
+; SROA-NEXT:    call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 [[C_CAST]], i8 addrspace(200)* align 8 [[GLOBAL_CAST]], i64 16, i1 false)
+; SROA-NEXT:    ret void
+;
+entry:
+  %c = alloca [2 x i64], align 8, addrspace(200)
+  %src = bitcast [2 x i64] addrspace(200)* @nocaps to i8 addrspace(200)*
+  %dst = bitcast [2 x i64] addrspace(200)* %c to i8 addrspace(200)*
+  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %dst, i8 addrspace(200)* align 8 %src, i64 16, i1 false)
+  ret void
+
+  ; CHECK-LABEL: copy_nocaps:
+  ; TODO: they type doesn't contain capabilities -> could use inlined memcpy()
   ; CHECK: clcbi $c12, %capcall20(memcpy)($c1)
 }
 

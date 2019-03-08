@@ -5599,8 +5599,14 @@ static bool FindOptimalMemOpLowering(std::vector<EVT> &MemOps,
   }
 
   // If the type is a fat pointer, then forcibly disable overlap.
-  // XXXAR: this is handled by TLI.allowsMisalignedMemoryAccesses()
-  // AllowOverlap &= !VT.isFatPointer();
+  // XXXAR: Note this is not the same as TLI.allowsMisalignedMemoryAccesses().
+  // Even if we support unaligned access for 8-byte values, we must never
+  // perform an overlapping store if the previous store was a capability store
+  // since the 8-byte store will clear the the tag bit if it overlaps with the
+  // prior capability store!
+  if (VT.isFatPointer()) {
+    AllowOverlap = false;
+  }
 
   if (VT == MVT::Other) {
     // Use the largest integer type whose alignment constraints are satisfied.
