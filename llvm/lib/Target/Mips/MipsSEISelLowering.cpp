@@ -459,14 +459,20 @@ MipsSETargetLowering::allowsMisalignedMemoryAccesses(EVT VT,
     // implementation defined whether this is handled by hardware, software, or
     // a hybrid of the two but it's expected that most implementations will
     // handle the majority of cases in hardware.
-    if (Fast)
-      *Fast = true;
+    if (Fast) {
+      // CHERI used to support unaligned loads and stores within a cache-line
+      // but now it is emulated in the OS instead.
+      if (Subtarget.isCheri())
+        *Fast = false;
+      else
+        *Fast = true;
+    }
     return true;
   }
 
   switch (SVT) {
-  case MVT::i64:
-  case MVT::i32:
+  case MVT::i64: // LDL/LDR/SDL/SDR
+  case MVT::i32: // LWL/LWR/SWL/SWR
     if (Fast)
       *Fast = true;
     return AS == 0;
