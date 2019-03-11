@@ -1690,9 +1690,15 @@ MipsTargetLowering::emitAtomicBinary(MachineInstr &MI,
   //
 
   unsigned PtrCopy = RegInfo.createVirtualRegister(RegInfo.getRegClass(Ptr));
-  unsigned IncrCopy = RegInfo.createVirtualRegister(RegInfo.getRegClass(Incr));
-
-  BuildMI(*BB, II, DL, TII->get(Mips::COPY), IncrCopy).addReg(Incr);
+  // If the increment is NULL/ZERO we might not have to make a copy since it
+  // will be a constant physical register
+  unsigned IncrCopy = Incr;
+  if (TargetRegisterInfo::isVirtualRegister(Incr)) {
+    IncrCopy = RegInfo.createVirtualRegister(RegInfo.getRegClass(Incr));
+    BuildMI(*BB, II, DL, TII->get(Mips::COPY), IncrCopy).addReg(Incr);
+  } else {
+    assert(RegInfo.isConstantPhysReg(Incr));
+  }
   BuildMI(*BB, II, DL, TII->get(Mips::COPY), PtrCopy).addReg(Ptr);
 
   BuildMI(*BB, II, DL, TII->get(AtomicOp))
@@ -1954,16 +1960,29 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
 
   unsigned DestCopy = MRI.createVirtualRegister(MRI.getRegClass(Dest));
   unsigned PtrCopy = MRI.createVirtualRegister(MRI.getRegClass(Ptr));
-  unsigned OldValCopy = MRI.createVirtualRegister(MRI.getRegClass(OldVal));
-  unsigned NewValCopy = MRI.createVirtualRegister(MRI.getRegClass(NewVal));
 
   // We have different ptr + output registers for csc* -> no need for this copy
   // FIXME: is this also an error for MIPS (since it is defined by the op below)?
   if (!IsCheriOp)
     BuildMI(*BB, II, DL, TII->get(Mips::COPY), DestCopy).addReg(Dest);
   BuildMI(*BB, II, DL, TII->get(Mips::COPY), PtrCopy).addReg(Ptr);
-  BuildMI(*BB, II, DL, TII->get(Mips::COPY), OldValCopy).addReg(OldVal);
-  BuildMI(*BB, II, DL, TII->get(Mips::COPY), NewValCopy).addReg(NewVal);
+
+  // If one of the operands is NULL it was replaced with $CNULL/ZERO so we don't
+  // need to create a copy in that case.
+  unsigned OldValCopy = OldVal;
+  unsigned NewValCopy = NewVal;
+  if (TargetRegisterInfo::isVirtualRegister(OldValCopy)) {
+    OldValCopy = MRI.createVirtualRegister(MRI.getRegClass(OldVal));
+    BuildMI(*BB, II, DL, TII->get(Mips::COPY), OldValCopy).addReg(OldVal);
+  } else {
+    assert(MRI.isConstantPhysReg(OldValCopy));
+  }
+  if (TargetRegisterInfo::isVirtualRegister(NewValCopy)) {
+    NewValCopy = MRI.createVirtualRegister(MRI.getRegClass(NewVal));
+    BuildMI(*BB, II, DL, TII->get(Mips::COPY), NewValCopy).addReg(NewVal);
+  } else {
+    assert(MRI.isConstantPhysReg(NewVal));
+  }
 
   // The purposes of the flags on the scratch registers is explained in
   // emitAtomicBinary. In summary, we need a scratch register which is going to

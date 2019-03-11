@@ -666,82 +666,83 @@ def : InstAlias<"cfromddc $dst, $src", (CFromPtr CheriOpnd:$dst, DDC, GPR64Opnd:
 // Atomic operations.
 ////////////////////////////////////////////////////////////////////////////////
 
-class CapAtomic2Ops<PatFrag Op, RegisterClass DRC> :
-  PseudoSE<(outs DRC:$dst), (ins CheriOpnd0IsDDC:$ptr, DRC:$incr),
-           [(set DRC:$dst, (Op CheriOpnd0IsDDC:$ptr, DRC:$incr))]>;
-class CapAtomicCmpSwap<PatFrag Op, RegisterClass DRC> :
-  PseudoSE<(outs DRC:$dst), (ins CheriOpnd0IsDDC:$ptr, DRC:$cmp, DRC:$swap),
-           [(set DRC:$dst, (Op CheriOpnd0IsDDC:$ptr, DRC:$cmp, DRC:$swap))]>;
+class CapAtomic2Ops<PatFrag Op, RegisterOperand ValOpnd> :
+  PseudoSE<(outs ValOpnd:$dst), (ins CheriOpnd0IsDDC:$ptr, ValOpnd:$incr),
+           [(set ValOpnd:$dst, (Op CheriOpnd0IsDDC:$ptr, ValOpnd:$incr))]>;
+class CapAtomicCmpSwap<PatFrag Op, RegisterOperand ValOpnd> :
+  PseudoSE<(outs ValOpnd:$dst), (ins CheriOpnd0IsDDC:$ptr, ValOpnd:$cmp, ValOpnd:$swap),
+           [(set ValOpnd:$dst, (Op CheriOpnd0IsDDC:$ptr, ValOpnd:$cmp, ValOpnd:$swap))]>;
 
 
 let usesCustomInserter = 1 in {
-  def CAP_ATOMIC_LOAD_ADD_I8   : CapAtomic2Ops<atomic_load_add_8, GPR32>;
-  def CAP_ATOMIC_LOAD_ADD_I16  : CapAtomic2Ops<atomic_load_add_16, GPR32>;
-  def CAP_ATOMIC_LOAD_ADD_I32  : CapAtomic2Ops<atomic_load_add_32, GPR32>;
-  def CAP_ATOMIC_LOAD_SUB_I8   : CapAtomic2Ops<atomic_load_sub_8, GPR32>;
-  def CAP_ATOMIC_LOAD_SUB_I16  : CapAtomic2Ops<atomic_load_sub_16, GPR32>;
-  def CAP_ATOMIC_LOAD_SUB_I32  : CapAtomic2Ops<atomic_load_sub_32, GPR32>;
-  def CAP_ATOMIC_LOAD_AND_I8   : CapAtomic2Ops<atomic_load_and_8, GPR32>;
-  def CAP_ATOMIC_LOAD_AND_I16  : CapAtomic2Ops<atomic_load_and_16, GPR32>;
-  def CAP_ATOMIC_LOAD_AND_I32  : CapAtomic2Ops<atomic_load_and_32, GPR32>;
-  def CAP_ATOMIC_LOAD_OR_I8    : CapAtomic2Ops<atomic_load_or_8, GPR32>;
-  def CAP_ATOMIC_LOAD_OR_I16   : CapAtomic2Ops<atomic_load_or_16, GPR32>;
-  def CAP_ATOMIC_LOAD_OR_I32   : CapAtomic2Ops<atomic_load_or_32, GPR32>;
-  def CAP_ATOMIC_LOAD_XOR_I8   : CapAtomic2Ops<atomic_load_xor_8, GPR32>;
-  def CAP_ATOMIC_LOAD_XOR_I16  : CapAtomic2Ops<atomic_load_xor_16, GPR32>;
-  def CAP_ATOMIC_LOAD_XOR_I32  : CapAtomic2Ops<atomic_load_xor_32, GPR32>;
-  def CAP_ATOMIC_LOAD_NAND_I8  : CapAtomic2Ops<atomic_load_nand_8, GPR32>;
-  def CAP_ATOMIC_LOAD_NAND_I16 : CapAtomic2Ops<atomic_load_nand_16, GPR32>;
-  def CAP_ATOMIC_LOAD_NAND_I32 : CapAtomic2Ops<atomic_load_nand_32, GPR32>;
+  def CAP_ATOMIC_LOAD_ADD_I8   : CapAtomic2Ops<atomic_load_add_8, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_ADD_I16  : CapAtomic2Ops<atomic_load_add_16, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_ADD_I32  : CapAtomic2Ops<atomic_load_add_32, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_SUB_I8   : CapAtomic2Ops<atomic_load_sub_8, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_SUB_I16  : CapAtomic2Ops<atomic_load_sub_16, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_SUB_I32  : CapAtomic2Ops<atomic_load_sub_32, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_AND_I8   : CapAtomic2Ops<atomic_load_and_8, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_AND_I16  : CapAtomic2Ops<atomic_load_and_16, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_AND_I32  : CapAtomic2Ops<atomic_load_and_32, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_OR_I8    : CapAtomic2Ops<atomic_load_or_8, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_OR_I16   : CapAtomic2Ops<atomic_load_or_16, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_OR_I32   : CapAtomic2Ops<atomic_load_or_32, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_XOR_I8   : CapAtomic2Ops<atomic_load_xor_8, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_XOR_I16  : CapAtomic2Ops<atomic_load_xor_16, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_XOR_I32  : CapAtomic2Ops<atomic_load_xor_32, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_NAND_I8  : CapAtomic2Ops<atomic_load_nand_8, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_NAND_I16 : CapAtomic2Ops<atomic_load_nand_16, GPR32Opnd>;
+  def CAP_ATOMIC_LOAD_NAND_I32 : CapAtomic2Ops<atomic_load_nand_32, GPR32Opnd>;
 
-  def CAP_ATOMIC_SWAP_I8       : CapAtomic2Ops<atomic_swap_8, GPR32>;
-  def CAP_ATOMIC_SWAP_I16      : CapAtomic2Ops<atomic_swap_16, GPR32>;
-  def CAP_ATOMIC_SWAP_I32      : CapAtomic2Ops<atomic_swap_32, GPR32>;
-  def CAP_ATOMIC_CMP_SWAP_I8   : CapAtomicCmpSwap<atomic_cmp_swap_8, GPR32>;
-  def CAP_ATOMIC_CMP_SWAP_I16  : CapAtomicCmpSwap<atomic_cmp_swap_16, GPR32>;
-  def CAP_ATOMIC_CMP_SWAP_I32  : CapAtomicCmpSwap<atomic_cmp_swap_32, GPR32>;
+  def CAP_ATOMIC_SWAP_I8       : CapAtomic2Ops<atomic_swap_8, GPR32Opnd>;
+  def CAP_ATOMIC_SWAP_I16      : CapAtomic2Ops<atomic_swap_16, GPR32Opnd>;
+  def CAP_ATOMIC_SWAP_I32      : CapAtomic2Ops<atomic_swap_32, GPR32Opnd>;
+  def CAP_ATOMIC_CMP_SWAP_I8   : CapAtomicCmpSwap<atomic_cmp_swap_8, GPR32Opnd>;
+  def CAP_ATOMIC_CMP_SWAP_I16  : CapAtomicCmpSwap<atomic_cmp_swap_16, GPR32Opnd>;
+  def CAP_ATOMIC_CMP_SWAP_I32  : CapAtomicCmpSwap<atomic_cmp_swap_32, GPR32Opnd>;
 
-  def CAP_ATOMIC_LOAD_ADD_I64  : CapAtomic2Ops<atomic_load_add_64, GPR64>;
-  def CAP_ATOMIC_LOAD_SUB_I64  : CapAtomic2Ops<atomic_load_sub_64, GPR64>;
-  def CAP_ATOMIC_LOAD_AND_I64  : CapAtomic2Ops<atomic_load_and_64, GPR64>;
-  def CAP_ATOMIC_LOAD_OR_I64   : CapAtomic2Ops<atomic_load_or_64, GPR64>;
-  def CAP_ATOMIC_LOAD_XOR_I64  : CapAtomic2Ops<atomic_load_xor_64, GPR64>;
-  def CAP_ATOMIC_LOAD_NAND_I64 : CapAtomic2Ops<atomic_load_nand_64, GPR64>;
-  def CAP_ATOMIC_SWAP_I64      : CapAtomic2Ops<atomic_swap_64, GPR64>;
-  def CAP_ATOMIC_CMP_SWAP_I64  : CapAtomicCmpSwap<atomic_cmp_swap_64, GPR64>;
+  def CAP_ATOMIC_LOAD_ADD_I64  : CapAtomic2Ops<atomic_load_add_64, GPR64Opnd>;
+  def CAP_ATOMIC_LOAD_SUB_I64  : CapAtomic2Ops<atomic_load_sub_64, GPR64Opnd>;
+  def CAP_ATOMIC_LOAD_AND_I64  : CapAtomic2Ops<atomic_load_and_64, GPR64Opnd>;
+  def CAP_ATOMIC_LOAD_OR_I64   : CapAtomic2Ops<atomic_load_or_64, GPR64Opnd>;
+  def CAP_ATOMIC_LOAD_XOR_I64  : CapAtomic2Ops<atomic_load_xor_64, GPR64Opnd>;
+  def CAP_ATOMIC_LOAD_NAND_I64 : CapAtomic2Ops<atomic_load_nand_64, GPR64Opnd>;
+  def CAP_ATOMIC_SWAP_I64      : CapAtomic2Ops<atomic_swap_64, GPR64Opnd>;
+  def CAP_ATOMIC_CMP_SWAP_I64  : CapAtomicCmpSwap<atomic_cmp_swap_64, GPR64Opnd>;
 
   // Capability atomics:
-  def CAP_ATOMIC_SWAP_CAP      : CapAtomic2Ops<atomic_swap_cap, CheriGPROrDDC>;
-  def CAP_ATOMIC_CMP_SWAP_CAP  : CapAtomicCmpSwap<atomic_cmp_swap_cap, CheriGPROrDDC>;
+  // FIXME: this seems wrong it should be CheriGPROrCNULL
+  def CAP_ATOMIC_SWAP_CAP      : CapAtomic2Ops<atomic_swap_cap, CheriOpnd>;
+  def CAP_ATOMIC_CMP_SWAP_CAP  : CapAtomicCmpSwap<atomic_cmp_swap_cap, CheriOpnd>;
 
   // TODO: implement these:
-  // def ATOMIC_LOAD_ADD_CAP  : Atomic2Ops<atomic_load_add_cap, CheriGPROrDDC>;
-  // def ATOMIC_LOAD_SUB_CAP  : Atomic2Ops<atomic_load_sub_cap, CheriGPROrDDC>;
+  // def ATOMIC_LOAD_ADD_CAP  : Atomic2Ops<atomic_load_add_cap, CheriOpnd>;
+  // def ATOMIC_LOAD_SUB_CAP  : Atomic2Ops<atomic_load_sub_cap, CheriOpnd>;
   // Not sure about the bitwise ops though, they are probably useless on caps
-  // def ATOMIC_LOAD_AND_CAP  : Atomic2Ops<atomic_load_and_cap, CheriGPROrDDC>;
-  // def ATOMIC_LOAD_OR_CAP   : Atomic2Ops<atomic_load_or_cap, CheriGPROrDDC>;
-  // def ATOMIC_LOAD_XOR_CAP  : Atomic2Ops<atomic_load_xor_cap, CheriGPROrDDC>;
-  // def ATOMIC_LOAD_NAND_CAP : Atomic2Ops<atomic_load_nand_cap, CheriGPROrDDC>;
+  // def ATOMIC_LOAD_AND_CAP  : Atomic2Ops<atomic_load_and_cap, CheriOpnd>;
+  // def ATOMIC_LOAD_OR_CAP   : Atomic2Ops<atomic_load_or_cap, CheriOpnd>;
+  // def ATOMIC_LOAD_XOR_CAP  : Atomic2Ops<atomic_load_xor_cap, CheriOpnd>;
+  // def ATOMIC_LOAD_NAND_CAP : Atomic2Ops<atomic_load_nand_cap, CheriOpnd>;
 }
 
-class CapAtomic2OpsPostRA<RegisterClass RC> :
-  PseudoSE<(outs RC:$dst), (ins CheriGPROrCNull:$ptr, RC:$incr), []> {
+class CapAtomic2OpsPostRA<RegisterOperand ValOpnd> :
+  PseudoSE<(outs ValOpnd:$dst), (ins CheriGPROrCNull:$ptr, ValOpnd:$incr), []> {
   let mayLoad = 1;
   let mayStore = 1;
 }
 
-class CapAtomicCmpSwapPostRA<RegisterClass RC> :
-  PseudoSE<(outs RC:$dst), (ins CheriGPROrCNull:$ptr, RC:$cmp, RC:$swap), []> {
+class CapAtomicCmpSwapPostRA<RegisterOperand ValOpnd> :
+  PseudoSE<(outs ValOpnd:$dst), (ins CheriGPROrCNull:$ptr, ValOpnd:$cmp, ValOpnd:$swap), []> {
   let mayLoad = 1;
   let mayStore = 1;
 }
 
 multiclass CapAtomicPostRA2Ops {
-  def NAME # _I8_POSTRA : CapAtomic2OpsPostRA<GPR32>;
-  def NAME # _I16_POSTRA : CapAtomic2OpsPostRA<GPR32>;
-  def NAME # _I32_POSTRA : CapAtomic2OpsPostRA<GPR32>;
-  def NAME # _I64_POSTRA : CapAtomic2OpsPostRA<GPR64>;
-  // def NAME # _CAP_POSTRA : CapAtomic2OpsPostRA<CheriGPROrCNull>;
+  def NAME # _I8_POSTRA : CapAtomic2OpsPostRA<GPR32Opnd>;
+  def NAME # _I16_POSTRA : CapAtomic2OpsPostRA<GPR32Opnd>;
+  def NAME # _I32_POSTRA : CapAtomic2OpsPostRA<GPR32Opnd>;
+  def NAME # _I64_POSTRA : CapAtomic2OpsPostRA<GPR64Opnd>;
+  // def NAME # _CAP_POSTRA : CapAtomic2OpsPostRA<CheriOpnd>;
 }
 
 defm CAP_ATOMIC_LOAD_ADD  : CapAtomicPostRA2Ops;
@@ -752,19 +753,19 @@ defm CAP_ATOMIC_LOAD_XOR  : CapAtomicPostRA2Ops;
 defm CAP_ATOMIC_LOAD_NAND : CapAtomicPostRA2Ops;
 defm CAP_ATOMIC_SWAP      : CapAtomicPostRA2Ops;
 
-def CAP_ATOMIC_CMP_SWAP_I8_POSTRA   : CapAtomicCmpSwapPostRA<GPR32>;
-def CAP_ATOMIC_CMP_SWAP_I16_POSTRA  : CapAtomicCmpSwapPostRA<GPR32>;
-def CAP_ATOMIC_CMP_SWAP_I32_POSTRA  : CapAtomicCmpSwapPostRA<GPR32>;
-def CAP_ATOMIC_CMP_SWAP_I64_POSTRA  : CapAtomicCmpSwapPostRA<GPR64>;
+def CAP_ATOMIC_CMP_SWAP_I8_POSTRA   : CapAtomicCmpSwapPostRA<GPR32Opnd>;
+def CAP_ATOMIC_CMP_SWAP_I16_POSTRA  : CapAtomicCmpSwapPostRA<GPR32Opnd>;
+def CAP_ATOMIC_CMP_SWAP_I32_POSTRA  : CapAtomicCmpSwapPostRA<GPR32Opnd>;
+def CAP_ATOMIC_CMP_SWAP_I64_POSTRA  : CapAtomicCmpSwapPostRA<GPR64Opnd>;
 
 // Capability postra atomics:
 // TODO: do we want add/sub/or/xor/nand/and for capabilities?
 // I guess add/sub makes sense but the others don't
-def CAP_ATOMIC_SWAP_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriGPROrCNull>;
-def CAP_ATOMIC_CMP_SWAP_CAP_POSTRA  : CapAtomicCmpSwapPostRA<CheriGPROrCNull>;
+def CAP_ATOMIC_SWAP_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriOpnd>;
+def CAP_ATOMIC_CMP_SWAP_CAP_POSTRA  : CapAtomicCmpSwapPostRA<CheriOpnd>;
 // TODO:
-// def CAP_ATOMIC_LOAD_ADD_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriGPROrCNull>;
-// def CAP_ATOMIC_LOAD_SUB_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriGPROrCNull>;
+// def CAP_ATOMIC_LOAD_ADD_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriOpnd>;
+// def CAP_ATOMIC_LOAD_SUB_CAP_POSTRA      : CapAtomic2OpsPostRA<CheriOpnd>;
 
 // Atomic load patterns.  These (and the store patterns) expand to simple loads
 // because an IR pass adds the required barriers.
