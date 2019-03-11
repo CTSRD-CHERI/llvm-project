@@ -246,11 +246,13 @@ def : Pat<(ptrtoint GPCR:$rs1), (CToPtr $rs1, DDC)>;
 /// Memory-Access with Explicit Address Type Instructions
 
 multiclass CheriLdPat<PatFrag LoadOp, RVInst Inst, RegisterClass AddrTy> {
+  let AddedComplexity = -10 in
   def : Pat<(LoadOp AddrTy:$rs1), (Inst AddrTy:$rs1)>;
 }
 
 multiclass CheriStPat<PatFrag StoreOp, RVInst Inst, RegisterClass StTy,
                       RegisterClass AddrTy> {
+  let AddedComplexity = -10 in
   def : Pat<(StoreOp StTy:$rs2, AddrTy:$rs1), (Inst StTy:$rs2, AddrTy:$rs1)>;
 }
 

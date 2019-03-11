@@ -35,10 +35,13 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   auto &Subtarget = MF->getSubtarget<RISCVSubtarget>();
   if (MF->getFunction().hasFnAttribute("interrupt")) {
     if (Subtarget.hasStdExtD())
-      return CSR_XLEN_F64_Interrupt_SaveList;
+      return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F64_Interrupt_SaveList
+                                  : CSR_XLEN_F64_Interrupt_SaveList;
     if (Subtarget.hasStdExtF())
-      return CSR_XLEN_F32_Interrupt_SaveList;
-    return CSR_Interrupt_SaveList;
+      return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F32_Interrupt_SaveList
+                                  : CSR_XLEN_F32_Interrupt_SaveList;
+    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_Interrupt_SaveList
+                                : CSR_Interrupt_SaveList;
   }
 
   switch (Subtarget.getTargetABI()) {
@@ -48,17 +51,20 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   case RISCVABI::ABI_LP64:
   case RISCVABI::ABI_IL32PC64:
   case RISCVABI::ABI_L64PC128:
-    return CSR_ILP32_LP64_SaveList;
+    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_SaveList
+                                : CSR_XLEN_SaveList;
   case RISCVABI::ABI_ILP32F:
   case RISCVABI::ABI_LP64F:
   case RISCVABI::ABI_IL32PC64F:
   case RISCVABI::ABI_L64PC128F:
-    return CSR_ILP32F_LP64F_SaveList;
+    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F32_SaveList
+                                : CSR_XLEN_F32_SaveList;
   case RISCVABI::ABI_ILP32D:
   case RISCVABI::ABI_LP64D:
   case RISCVABI::ABI_IL32PC64D:
   case RISCVABI::ABI_L64PC128D:
-    return CSR_ILP32D_LP64D_SaveList;
+    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F64_SaveList
+                                : CSR_XLEN_F64_SaveList;
   }
 }
 
@@ -74,6 +80,15 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   markSuperRegs(Reserved, RISCV::X4); // tp
   if (TFI->hasFP(MF))
     markSuperRegs(Reserved, RISCV::X8); // fp
+
+  markSuperRegs(Reserved, RISCV::C0); // cnull
+  markSuperRegs(Reserved, RISCV::C1); // cra
+  markSuperRegs(Reserved, RISCV::C2); // csp
+  markSuperRegs(Reserved, RISCV::C3); // cgp
+  markSuperRegs(Reserved, RISCV::C4); // ctp
+  if (TFI->hasFP(MF))
+    markSuperRegs(Reserved, RISCV::C8); // cfp
+
   assert(checkAllSuperRegsMarked(Reserved));
   return Reserved;
 }
@@ -141,10 +156,13 @@ RISCVRegisterInfo::getCallPreservedMask(const MachineFunction & MF,
   auto &Subtarget = MF.getSubtarget<RISCVSubtarget>();
   if (MF.getFunction().hasFnAttribute("interrupt")) {
     if (Subtarget.hasStdExtD())
-      return CSR_XLEN_F64_Interrupt_RegMask;
+      return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F64_Interrupt_RegMask
+                                  : CSR_XLEN_F64_Interrupt_RegMask;
     if (Subtarget.hasStdExtF())
-      return CSR_XLEN_F32_Interrupt_RegMask;
-    return CSR_Interrupt_RegMask;
+      return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F32_Interrupt_RegMask
+                                  : CSR_XLEN_F32_Interrupt_RegMask;
+    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_Interrupt_RegMask
+                                : CSR_Interrupt_RegMask;
   }
 
   switch (Subtarget.getTargetABI()) {
@@ -154,16 +172,19 @@ RISCVRegisterInfo::getCallPreservedMask(const MachineFunction & MF,
   case RISCVABI::ABI_LP64:
   case RISCVABI::ABI_IL32PC64:
   case RISCVABI::ABI_L64PC128:
-    return CSR_ILP32_LP64_RegMask;
+    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_RegMask
+                                : CSR_XLEN_RegMask;
   case RISCVABI::ABI_ILP32F:
   case RISCVABI::ABI_LP64F:
   case RISCVABI::ABI_IL32PC64F:
   case RISCVABI::ABI_L64PC128F:
-    return CSR_ILP32F_LP64F_RegMask;
+    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F32_RegMask
+                                : CSR_XLEN_F32_RegMask;
   case RISCVABI::ABI_ILP32D:
   case RISCVABI::ABI_LP64D:
   case RISCVABI::ABI_IL32PC64D:
   case RISCVABI::ABI_L64PC128D:
-    return CSR_ILP32D_LP64D_RegMask;
+    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F64_RegMask
+                                : CSR_XLEN_F64_RegMask;
   }
 }
