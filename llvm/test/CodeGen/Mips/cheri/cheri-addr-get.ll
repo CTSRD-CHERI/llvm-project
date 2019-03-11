@@ -43,10 +43,8 @@ define i64 @null_set_vaddr() #1 {
 ; OPT-NEXT:    jr $ra
 ; OPT-NEXT:    daddiu $sp, $sp
 ; IR-LABEL: @null_set_vaddr(
-; IR-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* null)
-; IR-NEXT:    [[TMP4:%.*]] = sub i64 12345, [[TMP1]]
-; IR-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 [[TMP4]])
-; IR-NEXT:    [[RET_CHECK:%.*]] = call i64 @check_fold_cap(i8 addrspace(200)* [[TMP5]])
+; IR-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 12345)
+; IR-NEXT:    [[RET_CHECK:%.*]] = call i64 @check_fold_cap(i8 addrspace(200)* [[TMP]])
 ; IR-NEXT:    ret i64 [[RET_CHECK]]
   %ret = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 12345)
   %ret_check = call i64 @check_fold_cap(i8 addrspace(200)* %ret)

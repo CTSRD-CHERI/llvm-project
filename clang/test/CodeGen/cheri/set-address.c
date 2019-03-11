@@ -1,5 +1,4 @@
 // RUN: %cheri_purecap_cc1 %s -o - -emit-llvm -O2 | FileCheck %s
-// RUN: %cheri_purecap_cc1 %s -o - -S -O2
 // RUN: %cheri_purecap_cc1 %s -o - -S -O2 | FileCheck %s -check-prefix=ASM
 
 typedef __SIZE_TYPE__ vaddr_t;

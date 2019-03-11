@@ -1,4 +1,3 @@
-// RUN: %cheri_purecap_cc1 %s -mllvm -mxgot -mllvm -cheri-cap-table-abi=plt -x c -S -O2 -o -
 // RUN: %cheri_purecap_cc1 %s -mllvm -mxgot -mllvm -cheri-cap-table-abi=plt -x c -S -O2 -o - | FileCheck %s
 
 #include <cheri_init_globals.h>
@@ -24,7 +23,7 @@ int _start(void) {
   // CHECK-NEXT: daddiu	$1, $1, %lo(__cap_table_end)
   // CHECK-NEXT: dsll32	$3, $3, 0
   // CHECK-NEXT: daddu	$3, $3, $1
-  // CHECK-NEXT: csetoffset $c26, $c14, $2
+  // CHECK-NEXT: csetaddr $c26, $c14, $2
   // CHECK-NEXT: dsubu	$1, $3, $2
   // CHECK-NEXT: cgetnull $c14
   // CHECK-NEXT: csetbounds	$c26, $c26, $1

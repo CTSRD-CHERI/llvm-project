@@ -85,8 +85,8 @@ define void @zero67(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero67:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    cincoffset $c1, $c3, 63
-; CHECK-NEXT:    csw $zero, $zero, 0($c1)
+; CHECK-NEXT:    csb $zero, $zero, 66($c3)
+; CHECK-NEXT:    csh $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
 ; CHECK-NEXT:    cjr $c17
@@ -120,8 +120,8 @@ define void @zero69(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero69:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    cincoffset $c1, $c3, 61
-; CHECK-NEXT:    csd $zero, $zero, 0($c1)
+; CHECK-NEXT:    csb $zero, $zero, 68($c3)
+; CHECK-NEXT:    csw $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
 ; CHECK-NEXT:    cjr $c17
@@ -138,8 +138,8 @@ define void @zero70(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero70:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    cincoffset $c1, $c3, 62
-; CHECK-NEXT:    csd $zero, $zero, 0($c1)
+; CHECK-NEXT:    csh $zero, $zero, 68($c3)
+; CHECK-NEXT:    csw $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
 ; CHECK-NEXT:    cjr $c17
@@ -156,8 +156,9 @@ define void @zero71(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero71:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    cincoffset $c1, $c3, 63
-; CHECK-NEXT:    csd $zero, $zero, 0($c1)
+; CHECK-NEXT:    csb $zero, $zero, 70($c3)
+; CHECK-NEXT:    csh $zero, $zero, 68($c3)
+; CHECK-NEXT:    csw $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
 ; CHECK-NEXT:    cjr $c17
@@ -229,8 +230,8 @@ define void @zero75(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero75:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    cincoffset $c1, $c3, 71
-; CHECK-NEXT:    csw $zero, $zero, 0($c1)
+; CHECK-NEXT:    csb $zero, $zero, 74($c3)
+; CHECK-NEXT:    csh $zero, $zero, 72($c3)
 ; CHECK-NEXT:    csd $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
@@ -266,8 +267,8 @@ define void @zero77(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero77:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    cincoffset $c1, $c3, 69
-; CHECK-NEXT:    csd $zero, $zero, 0($c1)
+; CHECK-NEXT:    csb $zero, $zero, 76($c3)
+; CHECK-NEXT:    csw $zero, $zero, 72($c3)
 ; CHECK-NEXT:    csd $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
@@ -285,8 +286,8 @@ define void @zero78(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero78:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    cincoffset $c1, $c3, 70
-; CHECK-NEXT:    csd $zero, $zero, 0($c1)
+; CHECK-NEXT:    csh $zero, $zero, 76($c3)
+; CHECK-NEXT:    csw $zero, $zero, 72($c3)
 ; CHECK-NEXT:    csd $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)
@@ -304,8 +305,9 @@ define void @zero79(%struct.bigbuf addrspace(200)* nocapture %out) local_unnamed
 ; CHECK-LABEL: zero79:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    csc $cnull, $zero, 0($c3)
-; CHECK-NEXT:    cincoffset $c1, $c3, 71
-; CHECK-NEXT:    csd $zero, $zero, 0($c1)
+; CHECK-NEXT:    csb $zero, $zero, 78($c3)
+; CHECK-NEXT:    csh $zero, $zero, 76($c3)
+; CHECK-NEXT:    csw $zero, $zero, 72($c3)
 ; CHECK-NEXT:    csd $zero, $zero, 64($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 48($c3)
 ; CHECK-NEXT:    csc $cnull, $zero, 32($c3)

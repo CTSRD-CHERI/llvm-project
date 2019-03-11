@@ -50,10 +50,8 @@ declare i64 @llvm.cheri.cap.address.get(i8 addrspace(200)*) nounwind readnone
 ; CHECK-LABEL: setAddress
 define i8 addrspace(200)* @setAddress(i8 addrspace(200)* %c) nounwind readnone {
 entry:
-  ; CHECK:  cgetaddr        $1, $c3
-  ; CHECK:  daddiu  $2, $zero, 1234
-  ; CHECK:  dsubu   $1, $2, $1
-  ; CHECK:  cincoffset      $c3, $c3, $1
+  ; CHECK:  daddiu  $1, $zero, 1234
+  ; CHECK:  csetaddr $c3, $c3, $1
   ; CHECK: .end setAddress
   %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* %c, i64 1234)
   ret i8 addrspace(200)* %0
