@@ -100,13 +100,17 @@ def main():
         cmds.append("INVALID")
       (tool_cmd, filecheck_cmd) = tuple(cmds)
 
-      if tool_cmd.startswith("%cheri"):
+      if tool_cmd.startswith("%"):
         tool_cmd = tool_cmd.replace("%cheri_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri128_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri256_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri256 -mattr=+cheri256")
         tool_cmd = tool_cmd.replace("%cheri_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri128_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri256_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
+        tool_cmd = tool_cmd.replace("%riscv32_cheri_purecap_opt", "opt -mtriple=riscv32-unknown-freebsd -target-abi il32pc64 -mattr=+xcheri")
+        tool_cmd = tool_cmd.replace("%riscv64_cheri_purecap_opt", "opt -mtriple=riscv64-unknown-freebsd -target-abi l64pc128 -mattr=+xcheri")
+        tool_cmd = tool_cmd.replace("%riscv32_cheri_opt", "opt -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
+        tool_cmd = tool_cmd.replace("%riscv64_cheri_opt", "opt -mtriple=riscv64-unknown-freebsd -mattr=+xcheri")
 
       if not tool_cmd.startswith(opt_basename + ' '):
         print('WARNING: Skipping non-%s RUN line: %s' % (opt_basename, l), file=sys.stderr)
