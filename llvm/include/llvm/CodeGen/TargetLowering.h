@@ -3940,6 +3940,10 @@ public:
   bool expandMULO(SDNode *Node, SDValue &Result, SDValue &Overflow,
                   SelectionDAG &DAG) const;
 
+  /// Expand a VECREDUCE_* into an explicit calculation. If Count is specified,
+  /// only the first Count elements of the vector are used.
+  SDValue expandVecReduce(SDNode *Node, SelectionDAG &DAG) const;
+
   //===--------------------------------------------------------------------===//
   // Instruction Emitting Hooks
   //
