@@ -12,6 +12,7 @@
 
 #include "RISCVELFStreamer.h"
 #include "MCTargetDesc/RISCVAsmBackend.h"
+#include "RISCVFixupKinds.h"
 #include "RISCVMCTargetDesc.h"
 #include "Utils/RISCVBaseInfo.h"
 #include "llvm/BinaryFormat/ELF.h"
@@ -66,3 +67,43 @@ void RISCVTargetELFStreamer::emitDirectiveOptionRVC() {}
 void RISCVTargetELFStreamer::emitDirectiveOptionNoRVC() {}
 void RISCVTargetELFStreamer::emitDirectiveOptionRelax() {}
 void RISCVTargetELFStreamer::emitDirectiveOptionNoRelax() {}
+
+void RISCVELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
+  unsigned XLenInBytes = Is64Bit ? 8 : 4;
+  assert(CapSize == 2 * XLenInBytes);
+
+  // Pad to ensure that the (u)intcap_t is aligned
+  EmitValueToAlignment(CapSize, 0, 1, 0);
+
+  if (Value == 0) {
+    EmitZeros(CapSize);
+  } else {
+    // TODO: we should probably move the CHERI capability encoding somewhere else.
+    // Maybe to BinaryFormat or Object?
+    // NB: Opposite order to MIPS due to endianness.
+    EmitIntValue(Value, XLenInBytes);
+    EmitIntValue(0, XLenInBytes);
+  }
+}
+
+void RISCVELFStreamer::EmitCheriCapabilityImpl(const MCSymbol *Symbol,
+                                               const MCExpr *Addend,
+                                               unsigned CapSize, SMLoc Loc) {
+  assert(Addend && "Should have received a MCConstExpr(0) instead of nullptr");
+  visitUsedSymbol(*Symbol);
+  MCContext &Context = getContext();
+
+  const MCSymbolRefExpr *SRE =
+      MCSymbolRefExpr::create(Symbol, MCSymbolRefExpr::VK_None, Context, Loc);
+  const MCBinaryExpr *CapExpr = MCBinaryExpr::createAdd(SRE, Addend, Context);
+
+  // Pad to ensure that the capability is aligned
+  EmitValueToAlignment(CapSize, 0, 1, 0);
+
+  MCDataFragment *DF = new MCDataFragment();
+  MCFixup CapFixup =
+      MCFixup::create(0, CapExpr, MCFixupKind(RISCV::fixup_riscv_capability));
+  DF->getFixups().push_back(CapFixup);
+  DF->getContents().resize(DF->getContents().size() + CapSize, '\xca');
+  insert(DF);
+}

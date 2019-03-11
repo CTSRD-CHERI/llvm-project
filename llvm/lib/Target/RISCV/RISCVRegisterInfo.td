@@ -33,6 +33,25 @@ class RISCVReg64<RISCVReg32 subreg> : Register<""> {
   let AltNames = subreg.AltNames;
 }
 
+// I don't think the size matters here as it's only used if there are multiple
+// sub-registers involved to calculate coverings and other relationships, but
+// we have a simple nesting here with no inference required. Since XLen is
+// based on runtime flags and SubRegIndex wants an integer literal it's awkward
+// to express this properly without introducing separate 32/64-bit registers,
+// classes etc.
+def sub_cap_addr : SubRegIndex<-1, -1>;
+class RISCVCapReg<RISCVReg subreg, string n, list<string> alt = []> : Register<n> {
+  let HWEncoding{4-0} = subreg.HWEncoding{4-0};
+  let SubRegs = [subreg];
+  let SubRegIndices = [sub_cap_addr];
+  let AltNames = alt;
+}
+
+class RISCVCapRegPseudo<bits<5> Enc, string n, list<string> alt = []> : Register<n> {
+  let HWEncoding{4-0} = Enc;
+  let AltNames = alt;
+}
+
 def ABIRegAltName : RegAltNameIndex;
 } // Namespace = "RISCV"
 
@@ -81,10 +100,54 @@ let RegAltNameIndices = [ABIRegAltName] in {
   def X30 : RISCVReg<30,"x30", ["t5"]>, DwarfRegNum<[30]>;
   def X31 : RISCVReg<31,"x31", ["t6"]>, DwarfRegNum<[31]>;
   }
+
+  // TODO: Review costs
+  def C0  : RISCVCapReg<X0, "c0", ["cnull"]>, DwarfRegNum<[0]>;
+  let CostPerUse = 1 in {
+  def C1  : RISCVCapReg<X1, "c1", ["cra"]>, DwarfRegNum<[1]>;
+  def C2  : RISCVCapReg<X2, "c2", ["csp"]>, DwarfRegNum<[2]>;
+  def C3  : RISCVCapReg<X3, "c3", ["cgp"]>, DwarfRegNum<[3]>;
+  def C4  : RISCVCapReg<X4, "c4", ["ctp"]>, DwarfRegNum<[4]>;
+  def C5  : RISCVCapReg<X5, "c5", ["ct0"]>, DwarfRegNum<[5]>;
+  def C6  : RISCVCapReg<X6, "c6", ["ct1"]>, DwarfRegNum<[6]>;
+  def C7  : RISCVCapReg<X7, "c7", ["ct2"]>, DwarfRegNum<[7]>;
+  }
+  def C8  : RISCVCapReg<X8, "c8", ["cs0", "cfp"]>, DwarfRegNum<[8]>;
+  def C9  : RISCVCapReg<X9, "c9", ["cs1"]>, DwarfRegNum<[9]>;
+  def C10 : RISCVCapReg<X10,"c10", ["ca0"]>, DwarfRegNum<[10]>;
+  def C11 : RISCVCapReg<X11,"c11", ["ca1"]>, DwarfRegNum<[11]>;
+  def C12 : RISCVCapReg<X12,"c12", ["ca2"]>, DwarfRegNum<[12]>;
+  def C13 : RISCVCapReg<X13,"c13", ["ca3"]>, DwarfRegNum<[13]>;
+  def C14 : RISCVCapReg<X14,"c14", ["ca4"]>, DwarfRegNum<[14]>;
+  def C15 : RISCVCapReg<X15,"c15", ["ca5"]>, DwarfRegNum<[15]>;
+  let CostPerUse = 1 in {
+  def C16 : RISCVCapReg<X16,"c16", ["ca6"]>, DwarfRegNum<[16]>;
+  def C17 : RISCVCapReg<X17,"c17", ["ca7"]>, DwarfRegNum<[17]>;
+  def C18 : RISCVCapReg<X18,"c18", ["cs2"]>, DwarfRegNum<[18]>;
+  def C19 : RISCVCapReg<X19,"c19", ["cs3"]>, DwarfRegNum<[19]>;
+  def C20 : RISCVCapReg<X20,"c20", ["cs4"]>, DwarfRegNum<[20]>;
+  def C21 : RISCVCapReg<X21,"c21", ["cs5"]>, DwarfRegNum<[21]>;
+  def C22 : RISCVCapReg<X22,"c22", ["cs6"]>, DwarfRegNum<[22]>;
+  def C23 : RISCVCapReg<X23,"c23", ["cs7"]>, DwarfRegNum<[23]>;
+  def C24 : RISCVCapReg<X24,"c24", ["cs8"]>, DwarfRegNum<[24]>;
+  def C25 : RISCVCapReg<X25,"c25", ["cs9"]>, DwarfRegNum<[25]>;
+  def C26 : RISCVCapReg<X26,"c26", ["cs10"]>, DwarfRegNum<[26]>;
+  def C27 : RISCVCapReg<X27,"c27", ["cs11"]>, DwarfRegNum<[27]>;
+  def C28 : RISCVCapReg<X28,"c28", ["ct3"]>, DwarfRegNum<[28]>;
+  def C29 : RISCVCapReg<X29,"c29", ["ct4"]>, DwarfRegNum<[29]>;
+  def C30 : RISCVCapReg<X30,"c30", ["ct5"]>, DwarfRegNum<[30]>;
+  def C31 : RISCVCapReg<X31,"c31", ["ct6"]>, DwarfRegNum<[31]>;
+  }
+
+  // This is the encoding of DDC when C0 means DDC, and not the encoding of DDC
+  // as a special capability register.
+  def DDC : RISCVCapRegPseudo<0, "ddc", ["ddc"]>;
 }
 
 def XLenVT : ValueTypeByHwMode<[RV32, RV64, DefaultMode],
                                [i32,  i64,  i32]>;
+def CLenVT : ValueTypeByHwMode<[RV32, RV64, DefaultMode],
+                               [iFATPTR64, iFATPTR128, iFATPTR64]>;
 
 // The order of registers represents the preferred allocation sequence.
 // Registers are listed in the order caller-save, callee-save, specials.
@@ -99,6 +162,33 @@ def GPR : RegisterClass<"RISCV", [XLenVT], 32, (add
   let RegInfos = RegInfoByHwMode<
       [RV32,              RV64,              DefaultMode],
       [RegInfo<32,32,32>, RegInfo<64,64,64>, RegInfo<32,32,32>]>;
+}
+
+def GPCR : RegisterClass<"RISCV", [CLenVT], 64, (add
+    (sequence "C%u", 10, 17),
+    (sequence "C%u", 5, 7),
+    (sequence "C%u", 28, 31),
+    (sequence "C%u", 8, 9),
+    (sequence "C%u", 18, 27),
+    (sequence "C%u", 0, 4)
+  )> {
+  let RegInfos = RegInfoByHwMode<
+      [RV32,              RV64,                 DefaultMode],
+      [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<64,64,64>]>;
+}
+
+def GPCRC0IsDDC : RegisterClass<"RISCV", [CLenVT], 64, (add
+    (sequence "C%u", 10, 17),
+    (sequence "C%u", 5, 7),
+    (sequence "C%u", 28, 31),
+    (sequence "C%u", 8, 9),
+    (sequence "C%u", 18, 27),
+    (sequence "C%u", 1, 4),
+    DDC
+  )> {
+  let RegInfos = RegInfoByHwMode<
+      [RV32,              RV64,                 DefaultMode],
+      [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<64,64,64>]>;
 }
 
 def GPRX0 : RegisterClass<"RISCV", [XLenVT], 32, (add X0)> {

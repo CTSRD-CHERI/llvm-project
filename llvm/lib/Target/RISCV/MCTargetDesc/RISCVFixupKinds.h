@@ -82,6 +82,9 @@ enum Fixups {
   // relaxation.
   fixup_riscv_align,
 
+  // fixup_riscv_capability - CLen-bit fixup corresponding to .chericap
+  fixup_riscv_capability,
+
   // fixup_riscv_invalid - used as a sentinel and a marker, must be last fixup
   fixup_riscv_invalid,
   NumTargetFixupKinds = fixup_riscv_invalid - FirstTargetFixupKind

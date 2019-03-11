@@ -35,6 +35,8 @@ public:
                     raw_ostream &O, const char *Modifier = nullptr);
   void printCSRSystemRegister(const MCInst *MI, unsigned OpNo,
                               const MCSubtargetInfo &STI, raw_ostream &O);
+  void printSpecialCapRegister(const MCInst *MI, unsigned OpNo,
+                               const MCSubtargetInfo &STI, raw_ostream &O);
   void printFenceArg(const MCInst *MI, unsigned OpNo,
                      const MCSubtargetInfo &STI, raw_ostream &O);
   void printFRMArg(const MCInst *MI, unsigned OpNo, const MCSubtargetInfo &STI,

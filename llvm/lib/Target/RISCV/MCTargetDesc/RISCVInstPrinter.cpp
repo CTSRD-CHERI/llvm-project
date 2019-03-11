@@ -113,6 +113,17 @@ void RISCVInstPrinter::printCSRSystemRegister(const MCInst *MI, unsigned OpNo,
     O << Imm;
 }
 
+void RISCVInstPrinter::printSpecialCapRegister(const MCInst *MI, unsigned OpNo,
+                                               const MCSubtargetInfo &STI,
+                                               raw_ostream &O) {
+  unsigned Imm = MI->getOperand(OpNo).getImm();
+  auto SpecialCapReg = RISCVSpecialCapReg::lookupSpecialCapRegByEncoding(Imm);
+  if (SpecialCapReg)
+    O << SpecialCapReg->Name;
+  else
+    O << Imm;
+}
+
 void RISCVInstPrinter::printFenceArg(const MCInst *MI, unsigned OpNo,
                                      const MCSubtargetInfo &STI,
                                      raw_ostream &O) {
