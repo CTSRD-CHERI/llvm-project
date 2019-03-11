@@ -334,9 +334,12 @@ def CIncOffset : CheriFmtCSet<0x11, "offset", "offset", "inc", "increment">;
 def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2), 
                               "ccleartag\t$r1, $r2",
                               [(set CheriOpnd:$r1, (int_cheri_cap_tag_clear CheriOpnd:$r2))]>;
+def CSetAddr : CheriFmtCSet<0x22, "addr", "address">;
 }
 
-
+// Convert CIncOffsets of the difference to csetaddr
+def : Pat<(CapRegType (int_cheri_cap_offset_increment CheriOpnd:$src, (sub GPR64Opnd:$addr, (int_cheri_cap_address_get CheriOpnd:$src)))),
+          (CSetAddr $src, $addr)>;
 
 let isMoveReg = 1 in {
 def CReadHwr : CheriFmt2Op<0xd, (outs CheriOpnd:$r1), (ins CheriHWRegsOpnd:$r2),

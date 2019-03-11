@@ -1484,6 +1484,7 @@ BUILTIN(__builtin_cheri_offset_get, "zvC*m", "nc")
 BUILTIN(__builtin_cheri_base_only_increment, "v*mvC*mz", "nc")
 BUILTIN(__builtin_cheri_callback_create, "v.", "nct")
 BUILTIN(__builtin_cheri_address_get, "zvC*m", "nc")
+BUILTIN(__builtin_cheri_address_set, "v*mvC*mz", "nc")
 
 BUILTIN(__builtin_cheri_cap_load_tags, "zvC*m", "n")
 

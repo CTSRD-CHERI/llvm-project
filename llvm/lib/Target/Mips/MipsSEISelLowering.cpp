@@ -2301,11 +2301,6 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
       PtrVT = CapType;
     return DAG.getNode(MipsISD::ThreadPointer, DL, PtrVT);
   }
-  case Intrinsic::cheri_cap_address_set: {
-    llvm_unreachable(
-        "This should have been removed by CheriExpandIntrinsicsPass");
-    abort();
-  }
   }
 }
 

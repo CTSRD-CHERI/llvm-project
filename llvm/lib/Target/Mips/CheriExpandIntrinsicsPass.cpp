@@ -16,6 +16,8 @@
 
 using namespace llvm;
 
+// TODO: remove this pass
+
 /// Expand the @llvm.cheri.cap.address.set() instrinsic to getaddr + sub + cincoffset
 namespace {
 
@@ -40,6 +42,10 @@ public:
     if (!SetAddr)
       return;
 
+    // CSetAddr is now supported by hardware!
+    NumSetAddrCalls += SetAddr->getNumUses();
+    return;
+#if 0
     Function* GetAddr = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_get);
     Function *IncOffset =
         Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_increment);
@@ -64,6 +70,7 @@ public:
     for (CallInst* CI : ToErase) {
       CI->eraseFromParent();
     }
+#endif
   }
 
   bool runOnModule(Module &M) override {
