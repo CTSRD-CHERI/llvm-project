@@ -154,6 +154,16 @@ struct SysReg {
 #include "RISCVGenSystemOperands.inc"
 } // end namespace RISCVSysReg
 
+namespace RISCVSpecialCapReg {
+struct SpecialCapReg {
+  const char *Name;
+  unsigned Encoding;
+};
+
+#define GET_SpecialCapRegsList_DECL
+#include "RISCVGenSystemOperands.inc"
+} // end namespace RISCVSpecialCapReg
+
 namespace RISCVABI {
 
 enum ABI {

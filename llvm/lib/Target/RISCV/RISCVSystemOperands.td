@@ -347,3 +347,9 @@ def : SysReg<"tdata3", 0x7A3>;
 def : SysReg<"dcsr", 0x7B0>;
 def : SysReg<"dpc", 0x7B1>;
 def : SysReg<"dscratch", 0x7B2>;
+
+//===-----------------------------------------------
+// Non-standard Extensions
+//===-----------------------------------------------
+
+include "RISCVSystemOperandsXCheri.td"

@@ -9,6 +9,11 @@ namespace RISCVSysReg {
 #include "RISCVGenSystemOperands.inc"
 } // namespace RISCVSysReg
 
+namespace RISCVSpecialCapReg {
+#define GET_SpecialCapRegsList_IMPL
+#include "RISCVGenSystemOperands.inc"
+} // namespace RISCVSpecialCapReg
+
 namespace RISCVABI {
 ABI computeTargetABI(const Triple &TT, FeatureBitset FeatureBits,
                      StringRef ABIName) {

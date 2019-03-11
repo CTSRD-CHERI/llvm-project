@@ -86,6 +86,31 @@ static DecodeStatus DecodeGPRRegisterClass(MCInst &Inst, uint64_t RegNo,
   return MCDisassembler::Success;
 }
 
+static const unsigned GPCRDecoderTable[] = {
+  RISCV::C0,  RISCV::C1,  RISCV::C2,  RISCV::C3,
+  RISCV::C4,  RISCV::C5,  RISCV::C6,  RISCV::C7,
+  RISCV::C8,  RISCV::C9,  RISCV::C10, RISCV::C11,
+  RISCV::C12, RISCV::C13, RISCV::C14, RISCV::C15,
+  RISCV::C16, RISCV::C17, RISCV::C18, RISCV::C19,
+  RISCV::C20, RISCV::C21, RISCV::C22, RISCV::C23,
+  RISCV::C24, RISCV::C25, RISCV::C26, RISCV::C27,
+  RISCV::C28, RISCV::C29, RISCV::C30, RISCV::C31
+};
+
+static DecodeStatus DecodeGPCRRegisterClass(MCInst &Inst, uint64_t RegNo,
+                                            uint64_t Address,
+                                            const void *Decoder) {
+  if (RegNo > array_lengthof(GPCRDecoderTable))
+    return MCDisassembler::Fail;
+
+  // We must define our own mapping from RegNo to register identifier.
+  // Accessing index RegNo in the register class will work in the case that
+  // registers were added in ascending order, but not in general.
+  unsigned Reg = GPCRDecoderTable[RegNo];
+  Inst.addOperand(MCOperand::createReg(Reg));
+  return MCDisassembler::Success;
+}
+
 static const unsigned FPR32DecoderTable[] = {
   RISCV::F0_32,  RISCV::F1_32,  RISCV::F2_32,  RISCV::F3_32,
   RISCV::F4_32,  RISCV::F5_32,  RISCV::F6_32,  RISCV::F7_32,
@@ -156,6 +181,17 @@ static DecodeStatus DecodeFPR64CRegisterClass(MCInst &Inst, uint64_t RegNo,
   unsigned Reg = FPR64DecoderTable[RegNo + 8];
   Inst.addOperand(MCOperand::createReg(Reg));
   return MCDisassembler::Success;
+}
+
+static DecodeStatus DecodeGPCRC0IsDDCRegisterClass(MCInst &Inst, uint64_t RegNo,
+                                                   uint64_t Address,
+                                                   const void *Decoder) {
+  if (RegNo == 0) {
+    Inst.addOperand(MCOperand::createReg(RISCV::DDC));
+    return MCDisassembler::Success;
+  }
+
+  return DecodeGPCRRegisterClass(Inst, RegNo, Address, Decoder);
 }
 
 static DecodeStatus DecodeGPRNoX0RegisterClass(MCInst &Inst, uint64_t RegNo,
@@ -297,6 +333,17 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
       return MCDisassembler::Fail;
     }
     Insn = support::endian::read32le(Bytes.data());
+
+    if (!STI.getFeatureBits()[RISCV::Feature64Bit]) {
+      LLVM_DEBUG(dbgs() << "Trying RISCV32Only_32 table:\n");
+      Result = decodeInstruction(DecoderTableRISCV32Only_32, MI, Insn, Address,
+                                 this, STI);
+      if (Result != MCDisassembler::Fail) {
+        Size = 4;
+        return Result;
+      }
+    }
+
     LLVM_DEBUG(dbgs() << "Trying RISCV32 table :\n");
     Result = decodeInstruction(DecoderTable32, MI, Insn, Address, this, STI);
     Size = 4;

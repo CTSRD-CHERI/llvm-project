@@ -56,6 +56,7 @@ class RISCVOpcode<bits<7> val> {
 }
 def OPC_LOAD      : RISCVOpcode<0b0000011>;
 def OPC_LOAD_FP   : RISCVOpcode<0b0000111>;
+def OPC_CHERI_MEM : RISCVOpcode<0b0001011>;
 def OPC_MISC_MEM  : RISCVOpcode<0b0001111>;
 def OPC_OP_IMM    : RISCVOpcode<0b0010011>;
 def OPC_AUIPC     : RISCVOpcode<0b0010111>;
@@ -71,6 +72,7 @@ def OPC_MSUB      : RISCVOpcode<0b1000111>;
 def OPC_NMSUB     : RISCVOpcode<0b1001011>;
 def OPC_NMADD     : RISCVOpcode<0b1001111>;
 def OPC_OP_FP     : RISCVOpcode<0b1010011>;
+def OPC_CHERI     : RISCVOpcode<0b1011011>;
 def OPC_BRANCH    : RISCVOpcode<0b1100011>;
 def OPC_JALR      : RISCVOpcode<0b1100111>;
 def OPC_JAL       : RISCVOpcode<0b1101111>;
