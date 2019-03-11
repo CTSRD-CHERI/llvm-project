@@ -65,7 +65,7 @@ __cap_table_end;
   /* If we are running without a DDC we should have a valid $cgp already */    \
   "cbtu $c14, .Lskip_cgp_setup\n\t"                                            \
   "dla $3, __cap_table_end\n\t"                                                \
-  "csetoffset $cgp, $c14, $2\n\t"                                              \
+  "csetaddr $cgp, $c14, $2\n\t"                                                \
   "dsubu $1, $3, $2\n\t"                                                       \
   /* Avoid leaking original DDC in $c14 */                                     \
   "cgetnull $c14\n\t"                                                          \
@@ -100,11 +100,9 @@ void cheri_init_globals_impl(const struct capreloc *start_relocs,
                              void* gdc, void* pcc, __UINT64_TYPE__ relocbase) {
   gdc = __builtin_cheri_perms_and(gdc, global_pointer_permissions);
   pcc = __builtin_cheri_perms_and(pcc, function_pointer_permissions);
-  __UINT64_TYPE__ gdc_base = __builtin_cheri_base_get(gdc);
-  __UINT64_TYPE__ pcc_base = __builtin_cheri_base_get(pcc);
   for (const struct capreloc *reloc = start_relocs; reloc < stop_relocs; reloc++) {
     _Bool isFunction = (reloc->permissions & function_reloc_flag) == function_reloc_flag;
-    void **dest = __builtin_cheri_offset_set(gdc, reloc->capability_location + relocbase - gdc_base);
+    void **dest = __builtin_cheri_address_set(gdc, reloc->capability_location + relocbase);
     if (reloc->object == 0) {
       /* XXXAR: clang fills uninitialized capabilities with 0xcacaca..., so we
        * we need to explicitly write NULL here */
@@ -112,8 +110,7 @@ void cheri_init_globals_impl(const struct capreloc *start_relocs,
       continue;
     }
     void *base_cap = isFunction ? pcc : gdc;
-    __UINT64_TYPE__ base = isFunction ? pcc_base : gdc_base;
-    void *src = __builtin_cheri_offset_set(base_cap, reloc->object - base);
+    void *src = __builtin_cheri_address_set(base_cap, reloc->object);
     if (!isFunction && (reloc->size != 0)) {
       src = __builtin_cheri_bounds_set(src, reloc->size);
     }
@@ -141,9 +138,13 @@ static __attribute__((always_inline)) void cheri_init_globals_gdc(void *gdc) {
        "dla %1, __stop___cap_relocs\n\t"
        :"=r"(start_addr), "=r"(end_addr));
   long relocs_size = end_addr - start_addr;
-  start_relocs = __builtin_cheri_offset_set(gdc, start_addr - __builtin_cheri_base_get(gdc));
+  start_relocs = __builtin_cheri_address_set(gdc, start_addr);
   start_relocs = __builtin_cheri_bounds_set(start_relocs, relocs_size);
-  stop_relocs = __builtin_cheri_offset_set(start_relocs, relocs_size);
+  /* Note: with imprecise capabilities start_relocs could have a non-zero offset
+   * so we must not use setoffset!
+   * TODO: use csetboundsexact and teach the linker to align __cap_relocs.
+   */
+  stop_relocs = __builtin_cheri_address_set(start_relocs, end_addr);
 #endif
   void *pcc = __builtin_cheri_program_counter_get();
   /*
