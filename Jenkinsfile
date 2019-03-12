@@ -55,6 +55,10 @@ set -xe
 
 cd \${WORKSPACE}/llvm-project/Build
 # run tests
+if [ "$label" = "freebsd" ]; then
+  # without this lit attempts to encode some things as ASCII and fails
+  export LC_ALL=en_US.UTF-8
+fi
 rm -fv "\${WORKSPACE}/llvm-test-output.xml"
 ninja check-${targetSuffix} \${JFLAG} || echo "Some check-${targetSuffix} tests failed!"
 mv -fv "\${WORKSPACE}/llvm-test-output.xml" "\${WORKSPACE}/llvm-test-output-${targetSuffix}.xml"
