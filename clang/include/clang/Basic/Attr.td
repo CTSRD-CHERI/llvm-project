@@ -3211,6 +3211,7 @@ def OMPAllocateDecl : InheritableAttr {
   // This attribute has no spellings as it is only ever created implicitly.
   let Spellings = [];
   let SemaHandler = 0;
+  let Args = [ExprArgument<"Allocator">];
   let Documentation = [Undocumented];
 }
 

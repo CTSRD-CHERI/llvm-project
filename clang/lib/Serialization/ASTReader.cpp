@@ -11746,6 +11746,9 @@ OMPClause *OMPClauseReader::readClause() {
   case OMPC_simdlen:
     C = new (Context) OMPSimdlenClause();
     break;
+  case OMPC_allocator:
+    C = new (Context) OMPAllocatorClause();
+    break;
   case OMPC_collapse:
     C = new (Context) OMPCollapseClause();
     break;
@@ -11968,6 +11971,11 @@ void OMPClauseReader::VisitOMPSafelenClause(OMPSafelenClause *C) {
 
 void OMPClauseReader::VisitOMPSimdlenClause(OMPSimdlenClause *C) {
   C->setSimdlen(Record.readSubExpr());
+  C->setLParenLoc(Record.readSourceLocation());
+}
+
+void OMPClauseReader::VisitOMPAllocatorClause(OMPAllocatorClause *C) {
+  C->setAllocator(Record.readExpr());
   C->setLParenLoc(Record.readSourceLocation());
 }
 

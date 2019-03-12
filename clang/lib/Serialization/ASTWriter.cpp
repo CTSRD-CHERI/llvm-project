@@ -5296,6 +5296,7 @@ void ASTWriter::WriteDeclUpdatesBlocks(RecordDataImpl &OffsetsRecord) {
         break;
 
       case UPD_DECL_MARKED_OPENMP_ALLOCATE:
+        Record.AddStmt(D->getAttr<OMPAllocateDeclAttr>()->getAllocator());
         Record.AddSourceRange(D->getAttr<OMPAllocateDeclAttr>()->getRange());
         break;
 
@@ -6536,6 +6537,11 @@ void OMPClauseWriter::VisitOMPSafelenClause(OMPSafelenClause *C) {
 
 void OMPClauseWriter::VisitOMPSimdlenClause(OMPSimdlenClause *C) {
   Record.AddStmt(C->getSimdlen());
+  Record.AddSourceLocation(C->getLParenLoc());
+}
+
+void OMPClauseWriter::VisitOMPAllocatorClause(OMPAllocatorClause *C) {
+  Record.AddStmt(C->getAllocator());
   Record.AddSourceLocation(C->getLParenLoc());
 }
 
