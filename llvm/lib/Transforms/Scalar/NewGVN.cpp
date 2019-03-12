@@ -3503,7 +3503,7 @@ bool NewGVN::runGVN() {
            "BB containing ToErase deleted unexpectedly!");
     ToErase->eraseFromParent();
   }
-	Changed |= !InstructionsToErase.empty();
+  Changed |= !InstructionsToErase.empty();
 
   // Delete all unreachable blocks.
   auto UnreachableBlockPred = [&](const BasicBlock &BB) {
