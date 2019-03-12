@@ -230,6 +230,12 @@ public:
   /// Prefix to use for -save-temps output.
   std::string SaveTempsFilePrefix;
 
+  /// The name of the file to which the backend should save CHERI-related
+  /// statistics (number of ptr->int casts, csetbounds info, etc..) as JSON.
+  /// Note: This file can be a shared between multiple compiler instances
+  /// since we will use a lock file global
+  std::string CHERIStatsFile;
+
   /// Name of file passed with -fcuda-include-gpubinary option to forward to
   /// CUDA runtime back-end for incorporating them into host-side object file.
   std::string CudaGpuBinaryFileName;
@@ -238,11 +244,9 @@ public:
   /// records.
   std::string OptRecordFile;
 
-  /// The name of the file to whcih the backend should save CHERI-related
-  /// statistics (number of ptr->int casts, csetbounds info, etc..) as JSON
-  /// Note: This file can be a shared between multiple compiler instances
-  /// since we will use a lock file global
-  std::string CHERIStatsFile;
+  /// The regex that filters the passes that should be saved to the optimization
+  /// records.
+  std::string OptRecordPasses;
 
   /// Regular expression to select optimizations for which we should enable
   /// optimization remarks. Transformation passes whose name matches this
