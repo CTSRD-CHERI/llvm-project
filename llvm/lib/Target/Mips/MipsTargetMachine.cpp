@@ -92,13 +92,18 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   else
     Ret += "-m:e";
 
+  // For CHERI256 we need to ensure at least capability-aligned stacks
+  unsigned MinStackAlignBits = 1;
   if (FS.find("+cheri128") != StringRef::npos) {
     Ret += "-pf200:128:128:128:64";
+    MinStackAlignBits = 128;
   } else if (FS.find("+cheri64") != StringRef::npos) {
     Ret += "-pf200:64:64:64:32";
+    MinStackAlignBits = 64;
   } else if (FS.find("+cheri256") != StringRef::npos ||
              Triple(TT).getArch() == Triple::cheri) {
     Ret += "-pf200:256:256:256:64";
+    MinStackAlignBits = 256;
   }
 
   // Pointers are 32 bit on some ABIs.
@@ -113,7 +118,7 @@ static std::string computeDataLayout(const Triple &TT, StringRef CPU,
   // aligned. On N64 64 bit registers are also available and the stack is
   // 128 bit aligned.
   if (ABI.IsN64() || ABI.IsN32())
-    Ret += "-n32:64-S128";
+    Ret += "-n32:64-S" + llvm::utostr(std::max(128u, MinStackAlignBits));
   else
     Ret += "-n32-S64";
 
@@ -162,6 +167,9 @@ MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
 
   // HACK: Update the default CFA register for CHERI purecap
   ABI.updateCheriInitialFrameStateHack(*AsmInfo, *MRI);
+  if (Subtarget->isCheri()) {
+    assert(DL.getStackAlignment() >= Subtarget->getCapSizeInBytes());
+  }
 }
 
 MipsTargetMachine::~MipsTargetMachine() = default;

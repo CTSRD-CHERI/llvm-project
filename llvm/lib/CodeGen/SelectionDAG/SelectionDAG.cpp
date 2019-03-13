@@ -5762,7 +5762,14 @@ static SDValue getMemcpyLoadsAndStores(SelectionDAG &DAG, const SDLoc &dl,
 
   if (DstAlignCanChange) {
     Type *Ty = MemOps[0].getTypeForEVT(C);
+    LLVM_DEBUG(dbgs() << " DstAlignCanChange -> using type "; Ty->dump());
     unsigned NewAlign = (unsigned)DL.getABITypeAlignment(Ty);
+    LLVM_DEBUG(dbgs() << "\t->NewAlign = " << NewAlign << ", stack alignment="
+                      << DL.getStackAlignment() << "\n");
+    if (MemOps[0].isFatPointer()) {
+      assert(!DL.exceedsNaturalStackAlignment(NewAlign) &&
+             "Stack not capability-aligned?");
+    }
 
     // Don't promote to an alignment that would require dynamic stack
     // realignment.
@@ -5771,7 +5778,10 @@ static SDValue getMemcpyLoadsAndStores(SelectionDAG &DAG, const SDLoc &dl,
       while (NewAlign > Align &&
              DL.exceedsNaturalStackAlignment(NewAlign))
           NewAlign /= 2;
-
+    if (MemOps[0].isFatPointer()) {
+      assert(NewAlign == (unsigned)DL.getABITypeAlignment(Ty) &&
+             "Stack not capability-aligned?");
+    }
     if (NewAlign > Align) {
       // Give the stack frame object a larger alignment if needed.
       if (MFI.getObjectAlignment(FI->getIndex()) < NewAlign)
@@ -5943,6 +5953,10 @@ static SDValue getMemmoveLoadsAndStores(SelectionDAG &DAG, const SDLoc &dl,
   if (DstAlignCanChange) {
     Type *Ty = MemOps[0].getTypeForEVT(C);
     unsigned NewAlign = (unsigned)DL.getABITypeAlignment(Ty);
+    if (MemOps[0].isFatPointer()) {
+      assert(!DL.exceedsNaturalStackAlignment(NewAlign) &&
+             "Stack not capability-aligned?");
+    }
     if (NewAlign > Align) {
       // Give the stack frame object a larger alignment if needed.
       if (MFI.getObjectAlignment(FI->getIndex()) < NewAlign)
@@ -6042,6 +6056,10 @@ static SDValue getMemsetStores(SelectionDAG &DAG, const SDLoc &dl,
   if (DstAlignCanChange) {
     Type *Ty = MemOps[0].getTypeForEVT(*DAG.getContext());
     unsigned NewAlign = (unsigned)DAG.getDataLayout().getABITypeAlignment(Ty);
+    if (MemOps[0].isFatPointer()) {
+      assert(!DAG.getDataLayout().exceedsNaturalStackAlignment(NewAlign) &&
+             "Stack not capability-aligned?");
+    }
     if (NewAlign > Align) {
       // Give the stack frame object a larger alignment if needed.
       if (MFI.getObjectAlignment(FI->getIndex()) < NewAlign)
