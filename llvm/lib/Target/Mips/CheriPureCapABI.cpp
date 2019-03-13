@@ -1,4 +1,5 @@
 #include "Mips.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/Analysis/PtrUseVisitor.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
@@ -31,6 +32,14 @@
 
 using namespace llvm;
 using std::pair;
+
+STATISTIC(NumProcessed,  "Number of allocas that were analyzed for CHERI bounds");
+STATISTIC(NumDynamicAllocas,  "Number of dyanmic allocas that were analyzed"); // TODO: skip them
+STATISTIC(NumUsesProcessed, "Total number of alloca uses that were analyzed");
+STATISTIC(NumCompletelyUnboundedAllocas, "Number of allocas where CHERI bounds were completely unncessary");
+STATISTIC(NumUsesWithBounds, "Number of alloca uses that had CHERI bounds added");
+STATISTIC(NumUsesWithoutBounds, "Number of alloca uses that did not needed CHERI bounds");
+STATISTIC(NumSingleIntrin, "Number of times that a single intrinisic was used instead of per-use");
 
 // FIXME: if the stack variable itself is stored this will break
 namespace {
@@ -395,6 +404,8 @@ public:
     const DataLayout &DL = F.getParent()->getDataLayout();
 
     for (AllocaInst *AI : Allocas) {
+      const uint64_t TotalUses = AI->getNumUses();
+      NumProcessed++;
       Function *SetBoundsIntrin = BoundedStackFn;
       // Insert immediately after the alloca
       B.SetInsertPoint(AI);
@@ -442,9 +453,10 @@ public:
         BoundsChecker.findUsesThatNeedBounds(&UsesThatNeedBounds, BoundAll,
                                              &MustUseSingleIntrinsic);
         NeedBounds = !UsesThatNeedBounds.empty();
+        NumUsesProcessed += TotalUses;
         DBG_MESSAGE(F.getName()
                         << ": " << UsesThatNeedBounds.size() << " of "
-                        << AI->getNumUses() << " users need bounds for ";
+                        << TotalUses << " users need bounds for ";
                     AI->dump());
         // TODO: remove the all-or-nothing case
         if (NeedBounds &&
@@ -460,11 +472,13 @@ public:
         }
       }
       if (!NeedBounds) {
+        NumCompletelyUnboundedAllocas++;
         DBG_MESSAGE("No need to set bounds on stack alloca"; AI->dump());
         continue;
       }
 
       if (!AI->isStaticAlloca()) {
+        NumDynamicAllocas++;
         // TODO: skip bounds on dynamic allocas (maybe add a TLI hook to check
         // whether the backend already adds bounds to the dynamic_stackalloc)
         DBG_MESSAGE("Found dynamic alloca: must use single intrinisic and "
@@ -480,6 +494,8 @@ public:
           MustUseSingleIntrinsic || IsOptNone ||
           UsesThatNeedBounds.size() >= SingleIntrinsicThreshold;
 
+      NumUsesWithBounds += UsesThatNeedBounds.size();
+      NumUsesWithoutBounds += TotalUses - UsesThatNeedBounds.size();
       // Get the size of the alloca
       unsigned ElementSize = DL.getTypeAllocSize(AllocationTy);
       Value *Size = ConstantInt::get(Type::getInt64Ty(C), ElementSize);
@@ -501,6 +517,7 @@ public:
 
       Value *SingleBoundedAlloc = nullptr;
       if (ReuseSingleIntrinsicCall) {
+        NumSingleIntrin++;
         // We need to convert it to an i8* for the intrinisic:
         Instruction *AllocaI8 =
           cast<Instruction>(B.CreateBitCast(AI, Type::getInt8PtrTy(C, 200)));
