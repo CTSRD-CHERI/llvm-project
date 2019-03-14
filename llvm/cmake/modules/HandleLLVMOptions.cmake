@@ -744,6 +744,12 @@ if (UNIX AND
   append("-fdiagnostics-color" CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
 endif()
 
+if (uppercase_CMAKE_BUILD_TYPE STREQUAL "DEBUG" AND LLVM_OPTIMIZE_DEBUG_BUILDS)
+  # Allow building debug builds with -O1 to get acceptable performance while
+  # generating output that is reasonably debuggable.
+  add_flag_if_supported("-O1" O1)
+endif()
+
 # lld doesn't print colored diagnostics when invoked from Ninja
 if (UNIX AND CMAKE_GENERATOR STREQUAL "Ninja")
   include(CheckLinkerFlag)
