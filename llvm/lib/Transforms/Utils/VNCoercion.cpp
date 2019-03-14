@@ -44,12 +44,10 @@ bool canCoerceMustAliasedValueToLoad(Value *StoredVal, Type *LoadTy,
   }
 
   // We can't coerce a store of a fat pointer to a load of anything that isn't
-  // a fat pointer
-  if (auto *PT = dyn_cast<PointerType>(StoredVal->getType()))
-    if (DL.isFatPointer(PT->getPointerAddressSpace())) {
-      auto *LPTy = dyn_cast<PointerType>(LoadTy);
-      return LPTy ? (DL.isFatPointer(LPTy->getPointerAddressSpace())) : false;
-    }
+  // a fat pointer. We also can't coerce a store of a non fat pointer to
+  // anything that is a fat pointer.
+  if (DL.isFatPointer(StoredVal->getType()) != DL.isFatPointer(LoadTy))
+    return false;
 
   return true;
 }
