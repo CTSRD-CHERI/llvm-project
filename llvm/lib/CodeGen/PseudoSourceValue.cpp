@@ -22,10 +22,11 @@
 using namespace llvm;
 
 static const char *const PSVNames[] = {
-    "Stack", "GOT", "JumpTable", "ConstantPool", "FixedStack",
+    "Stack", "GOT", "CapTable", "JumpTable", "ConstantPool", "FixedStack",
     "GlobalValueCallEntry", "ExternalSymbolCallEntry"};
+static_assert(array_lengthof(PSVNames) == PseudoSourceValue::TargetCustom, "Missing entry?");
 
-PseudoSourceValue::PseudoSourceValue(PSVKind Kind, const TargetInstrInfo &TII)
+PseudoSourceValue::PseudoSourceValue(unsigned Kind, const TargetInstrInfo &TII)
     : Kind(Kind) {
   AddressSpace = TII.getAddressSpaceForPseudoSourceKind(Kind);
 }
@@ -81,7 +82,7 @@ void FixedStackPseudoSourceValue::printCustom(raw_ostream &OS) const {
 }
 
 CallEntryPseudoSourceValue::CallEntryPseudoSourceValue(
-    PSVKind Kind, const TargetInstrInfo &TII)
+    unsigned Kind, const TargetInstrInfo &TII)
     : PseudoSourceValue(Kind, TII) {}
 
 bool CallEntryPseudoSourceValue::isConstant(const MachineFrameInfo *) const {

@@ -21,6 +21,7 @@
 #include "MipsRegisterBankInfo.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/CodeGen/MachineScheduler.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/TargetRegistry.h"
@@ -60,9 +61,16 @@ static cl::opt<bool>
     GPOpt("mgpopt", cl::Hidden,
           cl::desc("Enable gp-relative addressing of mips small data items"));
 
-bool MipsSubtarget::DspWarningPrinted = false;
+static cl::opt<bool> CheriExactEqualsOpt(
+    "cheri-exact-equals",
+    cl::desc("CHERI: Capability equality comparisons are exact."),
+    cl::init(false));
 
+bool MipsSubtarget::DspWarningPrinted = false;
 bool MipsSubtarget::MSAWarningPrinted = false;
+bool MipsSubtarget::VirtWarningPrinted = false;
+bool MipsSubtarget::CRCWarningPrinted = false;
+bool MipsSubtarget::GINVWarningPrinted = false;
 
 void MipsSubtarget::anchor() {}
 
@@ -74,18 +82,17 @@ MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
       NoABICalls(false), IsFP64bit(false), UseOddSPReg(true),
       IsNaN2008bit(false), IsGP64bit(false), HasVFPU(false), HasCnMips(false),
       HasMips3_32(false), HasMips3_32r2(false), HasMips4_32(false),
-      HasMips4_32r2(false), HasMips5_32r2(false),
-      IsCheri64(false), IsCheri128(false), IsCheri256(false), IsCheri(false),
-      InMips16Mode(false),
+      HasMips4_32r2(false), HasMips5_32r2(false), IsCheri64(false),
+      IsCheri128(false), IsCheri256(false), IsCheri(false),
+      UseCheriExactEquals(CheriExactEqualsOpt), InMips16Mode(false),
       InMips16HardFloat(Mips16HardFloat), InMicroMipsMode(false), HasDSP(false),
       HasDSPR2(false), HasDSPR3(false), AllowMixed16_32(Mixed16_32 | Mips_Os16),
       Os16(Mips_Os16), HasMSA(false), UseTCCInDIV(false), HasSym32(false),
       HasEVA(false), DisableMadd4(false), HasMT(false), HasCRC(false),
       HasVirt(false), HasGINV(false), UseIndirectJumpsHazard(false),
-      StackAlignOverride(StackAlignOverride),
-      TM(TM), TargetTriple(TT), TSInfo(),
-      InstrInfo(
-          MipsInstrInfo::create(initializeSubtargetDependencies(CPU, FS, TM))),
+      StackAlignOverride(StackAlignOverride), TM(TM), TargetTriple(TT),
+      TSInfo(), InstrInfo(MipsInstrInfo::create(
+                    initializeSubtargetDependencies(CPU, FS, TM))),
       FrameLowering(MipsFrameLowering::create(*this)),
       TLInfo(MipsTargetLowering::create(TM, *this)) {
 
@@ -174,16 +181,27 @@ MipsSubtarget::MipsSubtarget(const Triple &TT, StringRef CPU, StringRef FS,
     }
   }
 
-  if (hasMSA() && !MSAWarningPrinted) {
-    if (hasMips64() && !hasMips64r5()) {
-      errs() << "warning: the 'msa' ASE requires MIPS64 revision 5 or "
-             << "greater\n";
-      MSAWarningPrinted = true;
-    } else if (hasMips32() && !hasMips32r5()) {
-      errs() << "warning: the 'msa' ASE requires MIPS32 revision 5 or "
-             << "greater\n";
-      MSAWarningPrinted = true;
-    }
+  StringRef ArchName = hasMips64() ? "MIPS64" : "MIPS32";
+
+  if (!hasMips32r5() && hasMSA() && !MSAWarningPrinted) {
+    errs() << "warning: the 'msa' ASE requires " << ArchName
+           << " revision 5 or greater\n";
+    MSAWarningPrinted = true;
+  }
+  if (!hasMips32r5() && hasVirt() && !VirtWarningPrinted) {
+    errs() << "warning: the 'virt' ASE requires " << ArchName
+           << " revision 5 or greater\n";
+    VirtWarningPrinted = true;
+  }
+  if (!hasMips32r6() && hasCRC() && !CRCWarningPrinted) {
+    errs() << "warning: the 'crc' ASE requires " << ArchName
+           << " revision 6 or greater\n";
+    CRCWarningPrinted = true;
+  }
+  if (!hasMips32r6() && hasGINV() && !GINVWarningPrinted) {
+    errs() << "warning: the 'ginv' ASE requires " << ArchName
+           << " revision 6 or greater\n";
+    GINVWarningPrinted = true;
   }
 
   CallLoweringInfo.reset(new MipsCallLowering(*getTargetLowering()));
@@ -285,6 +303,25 @@ const LegalizerInfo *MipsSubtarget::getLegalizerInfo() const {
 
 const RegisterBankInfo *MipsSubtarget::getRegBankInfo() const {
   return RegBankInfo.get();
+}
+
+void MipsSubtarget::overrideSchedPolicy(MachineSchedPolicy &Policy,
+                                        unsigned NumRegionInstrs) const {
+  // copied from AMDGPU:
+#if 0
+
+  // Track register pressure so the scheduler can try to decrease
+  // pressure once register usage is above the threshold defined by
+  // SIRegisterInfo::getRegPressureSetLimit()
+  Policy.ShouldTrackPressure = true;
+  // Enabling both top down and bottom up scheduling seems to give us less
+  // register spills than just using one of these approaches on its own.
+  Policy.OnlyTopDown = false;
+  Policy.OnlyBottomUp = true;
+
+  Policy.ShouldTrackLaneMasks = false;
+  Policy.DisableLatencyHeuristic = true;
+#endif
 }
 
 const InstructionSelector *MipsSubtarget::getInstructionSelector() const {

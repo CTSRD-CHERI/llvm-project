@@ -7,16 +7,19 @@
 ; PROG-AS200: target datalayout = "P200"
 
 ; Check that a function declaration without an address space (i.e. AS0) does not
-; have the addrspace() attribute printed:
+; have the addrspace() attribute printed if it is address space zero and it is
+; equal to the program address space.
 
-; CHECK: define void @no_as() {
+; PROG-AS0: define void @no_as() {
+; PROG-AS200: define void @no_as() addrspace(200) {
 define void @no_as() {
   ret void
 }
 
 ; A function with an explicit addrspace should only have the addrspace printed
-; if it is non-zero
-; CHECK: define void @explit_as0()  {
+; if it is non-zero or if the module has a nonzero datalayout
+; PROG-AS0: define void @explit_as0()  {
+; PROG-AS200: define void @explit_as0() addrspace(0) {
 define void @explit_as0() addrspace(0) {
   ret void
 }

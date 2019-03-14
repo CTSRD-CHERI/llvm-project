@@ -8,7 +8,10 @@ add  %ecx, %ebx
 # CHECK:      Iterations:        1
 # CHECK-NEXT: Instructions:      3
 # CHECK-NEXT: Total Cycles:      8
-# CHECK-NEXT: Dispatch Width:    2
+# CHECK-NEXT: Total uOps:        4
+
+# CHECK:      Dispatch Width:    2
+# CHECK-NEXT: uOps Per Cycle:    0.50
 # CHECK-NEXT: IPC:               0.38
 # CHECK-NEXT: Block RThroughput: 2.0
 
@@ -18,7 +21,7 @@ add  %ecx, %ebx
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
 # CHECK-NEXT:  2      3     1.00                        imulw	%ax, %cx

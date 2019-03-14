@@ -35,8 +35,8 @@ define i32 @a(i64 addrspace(200) *, i32 addrspace(200) *, i32 addrspace(200) *,
 ; PCREL-NEXT:    .cfi_offset 89, -[[$CAP_SIZE]]
 ; PCREL-NEXT:    lui $1, %hi(%neg(%captab_rel(a)))
 ; PCREL-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(a)))
-; PCREL-NEXT:    cincoffset $c26, $c12, $1
-; PCREL-NEXT:    clcbi $c12, %capcall20(b)($c26)
+; PCREL-NEXT:    cincoffset $c1, $c12, $1
+; PCREL-NEXT:    clcbi $c12, %capcall20(b)($c1)
 ; PCREL-NEXT:    cjalr $c12, $c17
 ; PCREL-NEXT:    cgetnull $c13
 ; PCREL-NEXT:    cgetnull $c13

@@ -55,6 +55,15 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   // Used to avoid printing msa warnings multiple times.
   static bool MSAWarningPrinted;
 
+  // Used to avoid printing crc warnings multiple times.
+  static bool CRCWarningPrinted;
+
+  // Used to avoid printing ginv warnings multiple times.
+  static bool GINVWarningPrinted;
+
+  // Used to avoid printing virt warnings multiple times.
+  static bool VirtWarningPrinted;
+
   // Mips architecture version
   MipsArchEnum MipsArchVersion;
 
@@ -136,6 +145,8 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
   /// IsCheri - Supports the CHERI capability extensions
   bool IsCheri;
 
+  bool UseCheriExactEquals;
+
   // InMips16 -- can process Mips16 instructions
   bool InMips16Mode;
 
@@ -167,7 +178,7 @@ class MipsSubtarget : public MipsGenSubtargetInfo {
 
   // HasEVA -- supports EVA ASE.
   bool HasEVA;
- 
+
   // nomadd4 - disables generation of 4-operand madd.s, madd.d and
   // related instructions.
   bool DisableMadd4;
@@ -217,6 +228,13 @@ public:
   bool isPositionIndependent() const;
   /// This overrides the PostRAScheduler bit in the SchedModel for each CPU.
   bool enableMachineScheduler() const override { return isCheri(); }
+  // TODO: unless we set enableMachineSchedDefaultSched() to false
+  //  this causes lots of unncessary stack spills really likely
+  //  See stack-spill-unncessary.c test
+  //  See also createDefaultScheduler() in SelectionDAGISel.cpp
+  // TODO: However, it seems like the MachineScheduler is better overall for webkit so keep it on
+  bool enableMachineSchedDefaultSched() const override { return true; }
+
   bool enablePostRAScheduler() const override;
   void getCriticalPathRCs(RegClassVector &CriticalPathRCs) const override;
   CodeGenOpt::Level getOptLevelToEnablePostRAScheduler() const override;
@@ -305,8 +323,10 @@ public:
   bool inMips16HardFloat() const {
     return inMips16Mode() && InMips16HardFloat;
   }
-  bool inMicroMipsMode() const { return InMicroMipsMode; }
-  bool inMicroMips32r6Mode() const { return InMicroMipsMode && hasMips32r6(); }
+  bool inMicroMipsMode() const { return InMicroMipsMode && !InMips16Mode; }
+  bool inMicroMips32r6Mode() const {
+    return inMicroMipsMode() && hasMips32r6();
+  }
   bool hasDSP() const { return HasDSP; }
   bool hasDSPR2() const { return HasDSPR2; }
   bool hasDSPR3() const { return HasDSPR3; }
@@ -326,6 +346,7 @@ public:
   bool isCheri128() const { return IsCheri128; }
   bool isCheri256() const { return IsCheri256; }
   bool useCheriCapTable() const { return getABI().UsesCapabilityTable(); };
+  bool useCheriCapTls() const { return getABI().UsesCapabilityTls(); };
   MVT typeForCapabilities() const {
     return IsCheri64 ? MVT::iFATPTR64 :
       (IsCheri128 ? MVT::iFATPTR128 : MVT::iFATPTR256);
@@ -342,14 +363,16 @@ public:
   /// this for CHERI.
   bool useAA() const override { return IsCheri; }
 
-  bool hasStandardEncoding() const { return !inMips16Mode(); }
+  bool hasStandardEncoding() const { return !InMips16Mode && !InMicroMipsMode; }
 
   bool useSoftFloat() const { return IsSoftFloat; }
 
   bool useLongCalls() const { return UseLongCalls; }
 
+  bool useCheriExactEquals() const { return UseCheriExactEquals; }
+
   bool enableLongBranchPass() const {
-    return hasStandardEncoding() || allowMixed16_32();
+    return hasStandardEncoding() || inMicroMipsMode() || allowMixed16_32();
   }
 
   /// Features related to the presence of specific instructions.
@@ -364,6 +387,8 @@ public:
   bool isTargetNaCl() const { return TargetTriple.isOSNaCl(); }
 
   bool isXRaySupported() const override { return true; }
+
+  void overrideSchedPolicy(MachineSchedPolicy &Policy, unsigned NumRegionInstrs) const override;
 
   // for now constant islands are on for the whole compilation unit but we only
   // really use them if in addition we are in mips16 mode

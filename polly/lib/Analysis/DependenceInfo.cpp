@@ -25,6 +25,7 @@
 #include "polly/Options.h"
 #include "polly/ScopInfo.h"
 #include "polly/Support/GICHelper.h"
+#include "polly/Support/ISLTools.h"
 #include "llvm/Support/Debug.h"
 #include <isl/aff.h>
 #include <isl/ctx.h>
@@ -189,12 +190,10 @@ static void collectInfo(Scop &S, isl_union_map *&Read,
 }
 
 /// Fix all dimension of @p Zero to 0 and add it to @p user
-static isl_stat fixSetToZero(__isl_take isl_set *Zero, void *user) {
-  isl_union_set **User = (isl_union_set **)user;
-  for (unsigned i = 0; i < isl_set_dim(Zero, isl_dim_set); i++)
-    Zero = isl_set_fix_si(Zero, isl_dim_set, i, 0);
-  *User = isl_union_set_add_set(*User, Zero);
-  return isl_stat_ok;
+static void fixSetToZero(isl::set Zero, isl::union_set *User) {
+  for (unsigned i = 0; i < Zero.dim(isl::dim::set); i++)
+    Zero = Zero.fix_si(isl::dim::set, i, 0);
+  *User = User->add_set(Zero);
 }
 
 /// Compute the privatization dependences for a given dependency @p Map
@@ -256,9 +255,14 @@ void Dependences::addPrivatizationDependences() {
   //        want to eliminate here.
   isl_union_set *UDeltas = isl_union_map_deltas(isl_union_map_copy(TC_RED));
   isl_union_set *Universe = isl_union_set_universe(isl_union_set_copy(UDeltas));
-  isl_union_set *Zero = isl_union_set_empty(isl_union_set_get_space(Universe));
-  isl_union_set_foreach_set(Universe, fixSetToZero, &Zero);
-  isl_union_map *NonPositive = isl_union_set_lex_le_union_set(UDeltas, Zero);
+  isl::union_set Zero =
+      isl::manage(isl_union_set_empty(isl_union_set_get_space(Universe)));
+
+  for (isl::set Set : isl::manage_copy(Universe).get_set_list())
+    fixSetToZero(Set, &Zero);
+
+  isl_union_map *NonPositive =
+      isl_union_set_lex_le_union_set(UDeltas, Zero.release());
 
   TC_RED = isl_union_map_subtract(TC_RED, NonPositive);
 
@@ -731,51 +735,46 @@ void Dependences::calculateDependences(Scop &S) {
   LLVM_DEBUG(dump());
 }
 
-bool Dependences::isValidSchedule(Scop &S,
-                                  StatementToIslMapTy *NewSchedule) const {
+bool Dependences::isValidSchedule(
+    Scop &S, const StatementToIslMapTy &NewSchedule) const {
   if (LegalityCheckDisabled)
     return true;
 
-  isl_union_map *Dependences =
-      (getDependences(TYPE_RAW | TYPE_WAW | TYPE_WAR)).release();
-  isl_space *Space = S.getParamSpace().release();
-  isl_union_map *Schedule = isl_union_map_empty(Space);
+  isl::union_map Dependences = getDependences(TYPE_RAW | TYPE_WAW | TYPE_WAR);
+  isl::space Space = S.getParamSpace();
+  isl::union_map Schedule = isl::union_map::empty(Space);
 
-  isl_space *ScheduleSpace = nullptr;
+  isl::space ScheduleSpace;
 
   for (ScopStmt &Stmt : S) {
-    isl_map *StmtScat;
+    isl::map StmtScat;
 
-    if (NewSchedule->find(&Stmt) == NewSchedule->end())
-      StmtScat = Stmt.getSchedule().release();
+    auto Lookup = NewSchedule.find(&Stmt);
+    if (Lookup == NewSchedule.end())
+      StmtScat = Stmt.getSchedule();
     else
-      StmtScat = isl_map_copy((*NewSchedule)[&Stmt]);
-    assert(StmtScat &&
+      StmtScat = Lookup->second;
+    assert(!StmtScat.is_null() &&
            "Schedules that contain extension nodes require special handling.");
 
     if (!ScheduleSpace)
-      ScheduleSpace = isl_space_range(isl_map_get_space(StmtScat));
+      ScheduleSpace = StmtScat.get_space().range();
 
-    Schedule = isl_union_map_add_map(Schedule, StmtScat);
+    Schedule = Schedule.add_map(StmtScat);
   }
 
-  Dependences =
-      isl_union_map_apply_domain(Dependences, isl_union_map_copy(Schedule));
-  Dependences = isl_union_map_apply_range(Dependences, Schedule);
+  Dependences = Dependences.apply_domain(Schedule);
+  Dependences = Dependences.apply_range(Schedule);
 
-  isl_set *Zero = isl_set_universe(isl_space_copy(ScheduleSpace));
-  for (unsigned i = 0; i < isl_set_dim(Zero, isl_dim_set); i++)
-    Zero = isl_set_fix_si(Zero, isl_dim_set, i, 0);
+  isl::set Zero = isl::set::universe(ScheduleSpace);
+  for (unsigned i = 0; i < Zero.dim(isl::dim::set); i++)
+    Zero = Zero.fix_si(isl::dim::set, i, 0);
 
-  isl_union_set *UDeltas = isl_union_map_deltas(Dependences);
-  isl_set *Deltas = isl_union_set_extract_set(UDeltas, ScheduleSpace);
-  isl_union_set_free(UDeltas);
+  isl::union_set UDeltas = Dependences.deltas();
+  isl::set Deltas = singleton(UDeltas, ScheduleSpace);
 
-  isl_map *NonPositive = isl_set_lex_le_set(Deltas, Zero);
-  bool IsValid = isl_map_is_empty(NonPositive);
-  isl_map_free(NonPositive);
-
-  return IsValid;
+  isl::map NonPositive = Deltas.lex_le_set(Zero);
+  return NonPositive.is_empty();
 }
 
 // Check if the current scheduling dimension is parallel.

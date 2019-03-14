@@ -34,6 +34,9 @@ set(NVPTXCodeGen_sources
   NVVMReflect.cpp
   )
 
+# TODO: remove
+add_definitions(-DLLVM_TARGETLOWERINGINFO_DEFAULT_AS=0)
+
 add_llvm_target(NVPTXCodeGen ${NVPTXCodeGen_sources})
 
 add_subdirectory(InstPrinter)

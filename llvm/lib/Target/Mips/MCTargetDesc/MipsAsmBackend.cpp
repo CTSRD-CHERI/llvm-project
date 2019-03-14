@@ -13,6 +13,7 @@
 //
 
 #include "MCTargetDesc/MipsAsmBackend.h"
+#include "MCTargetDesc/MipsABIInfo.h"
 #include "MCTargetDesc/MipsFixupKinds.h"
 #include "MCTargetDesc/MipsMCExpr.h"
 #include "MCTargetDesc/MipsMCTargetDesc.h"
@@ -375,6 +376,27 @@ Optional<MCFixupKind> MipsAsmBackend::getFixupKind(StringRef Name) const {
             (MCFixupKind)Mips::fixup_MICROMIPS_TLS_TPREL_HI16)
       .Case("R_MICROMIPS_TLS_TPREL_LO16",
             (MCFixupKind)Mips::fixup_MICROMIPS_TLS_TPREL_LO16)
+      .Case("R_MIPS_JALR", (MCFixupKind)Mips::fixup_Mips_JALR)
+      .Case("R_MICROMIPS_JALR", (MCFixupKind)Mips::fixup_MICROMIPS_JALR)
+
+      .Case("R_MIPS_CHERI_CAPABILITY", (MCFixupKind)Mips::fixup_CHERI_CAPABILITY)
+      .Case("R_MIPS_CHERI_CAPCALL11", (MCFixupKind)Mips::fixup_CHERI_CAPCALL11)
+      .Case("R_MIPS_CHERI_CAPCALL20", (MCFixupKind)Mips::fixup_CHERI_CAPCALL20)
+      .Case("R_MIPS_CHERI_CAPCALL_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPCALL_HI16)
+      .Case("R_MIPS_CHERI_CAPCALL_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPCALL_LO16)
+      .Case("R_MIPS_CHERI_CAPTABLE11", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE11)
+      .Case("R_MIPS_CHERI_CAPTABLE20", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE20)
+      .Case("R_MIPS_CHERI_CAPTABLE_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE_HI16)
+      .Case("R_MIPS_CHERI_CAPTABLE_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPTABLE_LO16)
+      // CHERI TLS:
+      .Case("R_MIPS_CHERI_CAPTAB_TLSGD_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TLSGD_HI16)
+      .Case("R_MIPS_CHERI_CAPTAB_TLSGD_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TLSGD_LO16)
+      .Case("R_MIPS_CHERI_CAPTAB_TLSDM_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TLSLDM_HI16)
+      .Case("R_MIPS_CHERI_CAPTAB_TLSDM_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TLSLDM_LO16)
+      .Case("R_MIPS_CHERI_CAPTAB_TPREL_HI16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TPREL_HI16)
+      .Case("R_MIPS_CHERI_CAPTAB_TPREL_LO16", (MCFixupKind)Mips::fixup_CHERI_CAPTAB_TPREL_LO16)
+
+
       .Default(MCAsmBackend::getFixupKind(Name));
 }
 
@@ -454,6 +476,8 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_MICROMIPS_TLS_TPREL_LO16",  0,     16,   0 },
     { "fixup_Mips_SUB",                  0,     64,   0 },
     { "fixup_MICROMIPS_SUB",             0,     64,   0 },
+    { "fixup_Mips_JALR",                 0,     32,   0 },
+    { "fixup_MICROMIPS_JALR",            0,     32,   0 },
 
     { "fixup_CHERI_CAPTABLE11",          0,     11,   0 },
     { "fixup_CHERI_CAPTABLE20",          0,     16,   0 },
@@ -469,6 +493,13 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_Mips_CAPTABLEREL16",        0,     16,   0 }, // like GPREL16
     { "fixup_Mips_CAPTABLEREL_HI",       0,     16,   0 }, // like GPOFF_HI
     { "fixup_Mips_CAPTABLEREL_LO",       0,     16,   0 }, // like GPOFF_LO
+
+    { "fixup_CHERI_CAPTAB_TLSGD_HI16",   0,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSGD_LO16",   0,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSLDM_HI16",  0,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSLDM_LO16",  0,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TPREL_HI16",   0,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TPREL_LO16",   0,     16,   0 },
 
   };
   static_assert(array_lengthof(LittleEndianInfos) == Mips::NumTargetFixupKinds,
@@ -548,6 +579,8 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_MICROMIPS_TLS_TPREL_LO16",  16,     16,   0 },
     { "fixup_Mips_SUB",                   0,     64,   0 },
     { "fixup_MICROMIPS_SUB",              0,     64,   0 },
+    { "fixup_Mips_JALR",                  0,     32,   0 },
+    { "fixup_MICROMIPS_JALR",             0,     32,   0 },
 
     { "fixup_CHERI_CAPTABLE11",    21,    11,   0 },
     { "fixup_CHERI_CAPTABLE20",    16,    16,   0 },
@@ -563,6 +596,13 @@ getFixupKindInfo(MCFixupKind Kind) const {
     { "fixup_Mips_CAPTABLEREL16",  16,    16,   0 }, // like GPREL16
     { "fixup_Mips_CAPTABLEREL_HI", 16,    16,   0 }, // like GPOFF_HI
     { "fixup_Mips_CAPTABLEREL_LO", 16,    16,   0 }, // like GPOFF_LO
+
+    { "fixup_CHERI_CAPTAB_TLSGD_HI16",  16,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSGD_LO16",  16,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSLDM_HI16", 16,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TLSLDM_LO16", 16,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TPREL_HI16",  16,     16,   0 },
+    { "fixup_CHERI_CAPTAB_TPREL_LO16",  16,     16,   0 },
 
   };
   static_assert(array_lengthof(BigEndianInfos) == Mips::NumTargetFixupKinds,
@@ -623,6 +663,7 @@ bool MipsAsmBackend::shouldForceRelocation(const MCAssembler &Asm,
   case Mips::fixup_Mips_TLSLDM:
   case Mips::fixup_Mips_TPREL_HI:
   case Mips::fixup_Mips_TPREL_LO:
+  case Mips::fixup_Mips_JALR:
   case Mips::fixup_MICROMIPS_CALL16:
   case Mips::fixup_MICROMIPS_GOT_DISP:
   case Mips::fixup_MICROMIPS_GOT_PAGE:
@@ -635,14 +676,29 @@ bool MipsAsmBackend::shouldForceRelocation(const MCAssembler &Asm,
   case Mips::fixup_MICROMIPS_TLS_LDM:
   case Mips::fixup_MICROMIPS_TLS_TPREL_HI16:
   case Mips::fixup_MICROMIPS_TLS_TPREL_LO16:
+  case Mips::fixup_MICROMIPS_JALR:
+  case Mips::fixup_CHERI_CAPTAB_TLSGD_HI16:
+  case Mips::fixup_CHERI_CAPTAB_TLSGD_LO16:
+  case Mips::fixup_CHERI_CAPTAB_TLSLDM_HI16:
+  case Mips::fixup_CHERI_CAPTAB_TLSLDM_LO16:
+  case Mips::fixup_CHERI_CAPTAB_TPREL_HI16:
+  case Mips::fixup_CHERI_CAPTAB_TPREL_LO16:
     return true;
   }
+}
+
+bool MipsAsmBackend::isMicroMips(const MCSymbol *Sym) const {
+  if (const auto *ElfSym = dyn_cast<const MCSymbolELF>(Sym)) {
+    if (ElfSym->getOther() & ELF::STO_MIPS_MICROMIPS)
+      return true;
+  }
+  return false;
 }
 
 MCAsmBackend *llvm::createMipsAsmBackend(const Target &T,
                                          const MCSubtargetInfo &STI,
                                          const MCRegisterInfo &MRI,
                                          const MCTargetOptions &Options) {
-  return new MipsAsmBackend(T, MRI, STI.getTargetTriple(), STI.getCPU(),
-                            Options.ABIName == "n32");
+  MipsABIInfo ABI = MipsABIInfo::computeTargetABI(STI.getTargetTriple(), STI.getCPU(), Options);
+  return new MipsAsmBackend(T, MRI, STI.getTargetTriple(), STI.getCPU(), ABI.IsN32());
 }

@@ -130,20 +130,11 @@ void Value::destroyValueName() {
 }
 
 bool Value::hasNUses(unsigned N) const {
-  const_use_iterator UI = use_begin(), E = use_end();
-
-  for (; N; --N, ++UI)
-    if (UI == E) return false;  // Too few.
-  return UI == E;
+  return hasNItems(use_begin(), use_end(), N);
 }
 
 bool Value::hasNUsesOrMore(unsigned N) const {
-  const_use_iterator UI = use_begin(), E = use_end();
-
-  for (; N; --N, ++UI)
-    if (UI == E) return false;  // Too few.
-
-  return true;
+  return hasNItemsOrMore(use_begin(), use_end(), N);
 }
 
 bool Value::isUsedInBasicBlock(const BasicBlock *BB) const {
@@ -405,7 +396,7 @@ static bool contains(Value *Expr, Value *V) {
 }
 #endif // NDEBUG
 
-void Value::doRAUW(Value *New, bool NoMetadata) {
+void Value::doRAUW(Value *New, ReplaceMetadataUses ReplaceMetaUses) {
   assert(New && "Value::replaceAllUsesWith(<null>) is invalid!");
   assert(!contains(New, this) &&
          "this->replaceAllUsesWith(expr(this)) is NOT valid!");
@@ -415,7 +406,7 @@ void Value::doRAUW(Value *New, bool NoMetadata) {
   // Notify all ValueHandles (if present) that this value is going away.
   if (HasValueHandle)
     ValueHandleBase::ValueIsRAUWd(this, New);
-  if (!NoMetadata && isUsedByMetadata())
+  if (ReplaceMetaUses == ReplaceMetadataUses::Yes && isUsedByMetadata())
     ValueAsMetadata::handleRAUW(this, New);
 
   while (!materialized_use_empty()) {
@@ -437,11 +428,11 @@ void Value::doRAUW(Value *New, bool NoMetadata) {
 }
 
 void Value::replaceAllUsesWith(Value *New) {
-  doRAUW(New, false /* NoMetadata */);
+  doRAUW(New, ReplaceMetadataUses::Yes);
 }
 
 void Value::replaceNonMetadataUsesWith(Value *New) {
-  doRAUW(New, true /* NoMetadata */);
+  doRAUW(New, ReplaceMetadataUses::No);
 }
 
 // Like replaceAllUsesWith except it does not handle constants or basic blocks.
@@ -521,7 +512,8 @@ static const Value *stripPointerCastsAndOffsets(const Value *V) {
         // but it can't be marked with returned attribute, that's why it needs
         // special case.
         if (StripKind == PSK_ZeroIndicesAndAliasesAndInvariantGroups &&
-            CS.getIntrinsicID() == Intrinsic::launder_invariant_group) {
+            (CS.getIntrinsicID() == Intrinsic::launder_invariant_group ||
+             CS.getIntrinsicID() == Intrinsic::strip_invariant_group)) {
           V = CS.getArgOperand(0);
           continue;
         }

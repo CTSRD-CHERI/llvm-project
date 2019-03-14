@@ -150,20 +150,19 @@ define <2 x float> @sltof2f32(<2 x i64> %a) {
 define <4 x float> @slto4f32_mem(<4 x i64>* %a) {
 ; NODQ-LABEL: slto4f32_mem:
 ; NODQ:       # %bb.0:
-; NODQ-NEXT:    vmovdqu (%rdi), %ymm0
+; NODQ-NEXT:    vmovdqu (%rdi), %xmm0
+; NODQ-NEXT:    vmovdqu 16(%rdi), %xmm1
 ; NODQ-NEXT:    vpextrq $1, %xmm0, %rax
-; NODQ-NEXT:    vcvtsi2ssq %rax, %xmm1, %xmm1
-; NODQ-NEXT:    vmovq %xmm0, %rax
 ; NODQ-NEXT:    vcvtsi2ssq %rax, %xmm2, %xmm2
-; NODQ-NEXT:    vinsertps {{.*#+}} xmm1 = xmm2[0],xmm1[0],xmm2[2,3]
-; NODQ-NEXT:    vextracti128 $1, %ymm0, %xmm0
 ; NODQ-NEXT:    vmovq %xmm0, %rax
-; NODQ-NEXT:    vcvtsi2ssq %rax, %xmm3, %xmm2
-; NODQ-NEXT:    vinsertps {{.*#+}} xmm1 = xmm1[0,1],xmm2[0],xmm1[3]
-; NODQ-NEXT:    vpextrq $1, %xmm0, %rax
 ; NODQ-NEXT:    vcvtsi2ssq %rax, %xmm3, %xmm0
-; NODQ-NEXT:    vinsertps {{.*#+}} xmm0 = xmm1[0,1,2],xmm0[0]
-; NODQ-NEXT:    vzeroupper
+; NODQ-NEXT:    vinsertps {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[2,3]
+; NODQ-NEXT:    vmovq %xmm1, %rax
+; NODQ-NEXT:    vcvtsi2ssq %rax, %xmm3, %xmm2
+; NODQ-NEXT:    vinsertps {{.*#+}} xmm0 = xmm0[0,1],xmm2[0],xmm0[3]
+; NODQ-NEXT:    vpextrq $1, %xmm1, %rax
+; NODQ-NEXT:    vcvtsi2ssq %rax, %xmm3, %xmm1
+; NODQ-NEXT:    vinsertps {{.*#+}} xmm0 = xmm0[0,1,2],xmm1[0]
 ; NODQ-NEXT:    retq
 ;
 ; VLDQ-LABEL: slto4f32_mem:
@@ -324,32 +323,12 @@ define <4 x float> @ulto4f32(<4 x i64> %a) {
 define <8 x double> @ulto8f64(<8 x i64> %a) {
 ; NODQ-LABEL: ulto8f64:
 ; NODQ:       # %bb.0:
-; NODQ-NEXT:    vextracti32x4 $3, %zmm0, %xmm1
-; NODQ-NEXT:    vpextrq $1, %xmm1, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm2, %xmm2
-; NODQ-NEXT:    vmovq %xmm1, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm3, %xmm1
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm1 = xmm1[0],xmm2[0]
-; NODQ-NEXT:    vextracti32x4 $2, %zmm0, %xmm2
-; NODQ-NEXT:    vpextrq $1, %xmm2, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm3, %xmm3
-; NODQ-NEXT:    vmovq %xmm2, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm4, %xmm2
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm2 = xmm2[0],xmm3[0]
-; NODQ-NEXT:    vinsertf128 $1, %xmm1, %ymm2, %ymm1
-; NODQ-NEXT:    vextracti128 $1, %ymm0, %xmm2
-; NODQ-NEXT:    vpextrq $1, %xmm2, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm4, %xmm3
-; NODQ-NEXT:    vmovq %xmm2, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm4, %xmm2
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm2 = xmm2[0],xmm3[0]
-; NODQ-NEXT:    vpextrq $1, %xmm0, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm4, %xmm3
-; NODQ-NEXT:    vmovq %xmm0, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm4, %xmm0
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm0 = xmm0[0],xmm3[0]
-; NODQ-NEXT:    vinsertf128 $1, %xmm2, %ymm0, %ymm0
-; NODQ-NEXT:    vinsertf64x4 $1, %ymm1, %zmm0, %zmm0
+; NODQ-NEXT:    vpandq {{.*}}(%rip){1to8}, %zmm0, %zmm1
+; NODQ-NEXT:    vporq {{.*}}(%rip){1to8}, %zmm1, %zmm1
+; NODQ-NEXT:    vpsrlq $32, %zmm0, %zmm0
+; NODQ-NEXT:    vporq {{.*}}(%rip){1to8}, %zmm0, %zmm0
+; NODQ-NEXT:    vsubpd {{.*}}(%rip){1to8}, %zmm0, %zmm0
+; NODQ-NEXT:    vaddpd %zmm0, %zmm1, %zmm0
 ; NODQ-NEXT:    retq
 ;
 ; VLDQ-LABEL: ulto8f64:
@@ -368,58 +347,22 @@ define <8 x double> @ulto8f64(<8 x i64> %a) {
 define <16 x double> @ulto16f64(<16 x i64> %a) {
 ; NODQ-LABEL: ulto16f64:
 ; NODQ:       # %bb.0:
-; NODQ-NEXT:    vextracti32x4 $3, %zmm0, %xmm2
-; NODQ-NEXT:    vpextrq $1, %xmm2, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm3, %xmm3
-; NODQ-NEXT:    vmovq %xmm2, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm4, %xmm2
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm2 = xmm2[0],xmm3[0]
-; NODQ-NEXT:    vextracti32x4 $2, %zmm0, %xmm3
-; NODQ-NEXT:    vpextrq $1, %xmm3, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm4, %xmm4
-; NODQ-NEXT:    vmovq %xmm3, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm3
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm3 = xmm3[0],xmm4[0]
-; NODQ-NEXT:    vinsertf128 $1, %xmm2, %ymm3, %ymm2
-; NODQ-NEXT:    vextracti128 $1, %ymm0, %xmm3
-; NODQ-NEXT:    vpextrq $1, %xmm3, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm4
-; NODQ-NEXT:    vmovq %xmm3, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm3
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm3 = xmm3[0],xmm4[0]
-; NODQ-NEXT:    vpextrq $1, %xmm0, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm4
-; NODQ-NEXT:    vmovq %xmm0, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm0
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm0 = xmm0[0],xmm4[0]
-; NODQ-NEXT:    vinsertf128 $1, %xmm3, %ymm0, %ymm0
-; NODQ-NEXT:    vinsertf64x4 $1, %ymm2, %zmm0, %zmm0
-; NODQ-NEXT:    vextracti32x4 $3, %zmm1, %xmm2
-; NODQ-NEXT:    vpextrq $1, %xmm2, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm3
-; NODQ-NEXT:    vmovq %xmm2, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm2
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm2 = xmm2[0],xmm3[0]
-; NODQ-NEXT:    vextracti32x4 $2, %zmm1, %xmm3
-; NODQ-NEXT:    vpextrq $1, %xmm3, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm4
-; NODQ-NEXT:    vmovq %xmm3, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm3
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm3 = xmm3[0],xmm4[0]
-; NODQ-NEXT:    vinsertf128 $1, %xmm2, %ymm3, %ymm2
-; NODQ-NEXT:    vextracti128 $1, %ymm1, %xmm3
-; NODQ-NEXT:    vpextrq $1, %xmm3, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm4
-; NODQ-NEXT:    vmovq %xmm3, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm3
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm3 = xmm3[0],xmm4[0]
-; NODQ-NEXT:    vpextrq $1, %xmm1, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm4
-; NODQ-NEXT:    vmovq %xmm1, %rax
-; NODQ-NEXT:    vcvtusi2sdq %rax, %xmm5, %xmm1
-; NODQ-NEXT:    vmovlhps {{.*#+}} xmm1 = xmm1[0],xmm4[0]
-; NODQ-NEXT:    vinsertf128 $1, %xmm3, %ymm1, %ymm1
-; NODQ-NEXT:    vinsertf64x4 $1, %ymm2, %zmm1, %zmm1
+; NODQ-NEXT:    vpbroadcastq {{.*#+}} zmm2 = [4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295,4294967295]
+; NODQ-NEXT:    vpandq %zmm2, %zmm0, %zmm3
+; NODQ-NEXT:    vpbroadcastq {{.*#+}} zmm4 = [4841369599423283200,4841369599423283200,4841369599423283200,4841369599423283200,4841369599423283200,4841369599423283200,4841369599423283200,4841369599423283200]
+; NODQ-NEXT:    vporq %zmm4, %zmm3, %zmm3
+; NODQ-NEXT:    vpsrlq $32, %zmm0, %zmm0
+; NODQ-NEXT:    vpbroadcastq {{.*#+}} zmm5 = [4985484787499139072,4985484787499139072,4985484787499139072,4985484787499139072,4985484787499139072,4985484787499139072,4985484787499139072,4985484787499139072]
+; NODQ-NEXT:    vporq %zmm5, %zmm0, %zmm0
+; NODQ-NEXT:    vbroadcastsd {{.*#+}} zmm6 = [1.9342813118337666E+25,1.9342813118337666E+25,1.9342813118337666E+25,1.9342813118337666E+25,1.9342813118337666E+25,1.9342813118337666E+25,1.9342813118337666E+25,1.9342813118337666E+25]
+; NODQ-NEXT:    vsubpd %zmm6, %zmm0, %zmm0
+; NODQ-NEXT:    vaddpd %zmm0, %zmm3, %zmm0
+; NODQ-NEXT:    vpandq %zmm2, %zmm1, %zmm2
+; NODQ-NEXT:    vporq %zmm4, %zmm2, %zmm2
+; NODQ-NEXT:    vpsrlq $32, %zmm1, %zmm1
+; NODQ-NEXT:    vporq %zmm5, %zmm1, %zmm1
+; NODQ-NEXT:    vsubpd %zmm6, %zmm1, %zmm1
+; NODQ-NEXT:    vaddpd %zmm1, %zmm2, %zmm1
 ; NODQ-NEXT:    retq
 ;
 ; VLDQ-LABEL: ulto16f64:
@@ -681,6 +624,44 @@ define <8 x i32> @f64to8si(<8 x double> %a) {
 ; ALL-NEXT:    retq
   %b = fptosi <8 x double> %a to <8 x i32>
   ret <8 x i32> %b
+}
+
+define <8 x i16> @f64to8ss(<8 x double> %f) {
+; NOVL-LABEL: f64to8ss:
+; NOVL:       # %bb.0:
+; NOVL-NEXT:    vcvttpd2dq %zmm0, %ymm0
+; NOVL-NEXT:    vpmovdw %zmm0, %ymm0
+; NOVL-NEXT:    # kill: def $xmm0 killed $xmm0 killed $ymm0
+; NOVL-NEXT:    vzeroupper
+; NOVL-NEXT:    retq
+;
+; VL-LABEL: f64to8ss:
+; VL:       # %bb.0:
+; VL-NEXT:    vcvttpd2dq %zmm0, %ymm0
+; VL-NEXT:    vpmovdw %ymm0, %xmm0
+; VL-NEXT:    vzeroupper
+; VL-NEXT:    retq
+  %res = fptosi <8 x double> %f to <8 x i16>
+  ret <8 x i16> %res
+}
+
+define <8 x i8> @f64to8sc(<8 x double> %f) {
+; NOVL-LABEL: f64to8sc:
+; NOVL:       # %bb.0:
+; NOVL-NEXT:    vcvttpd2dq %zmm0, %ymm0
+; NOVL-NEXT:    vpmovdw %zmm0, %ymm0
+; NOVL-NEXT:    # kill: def $xmm0 killed $xmm0 killed $ymm0
+; NOVL-NEXT:    vzeroupper
+; NOVL-NEXT:    retq
+;
+; VL-LABEL: f64to8sc:
+; VL:       # %bb.0:
+; VL-NEXT:    vcvttpd2dq %zmm0, %ymm0
+; VL-NEXT:    vpmovdw %ymm0, %xmm0
+; VL-NEXT:    vzeroupper
+; VL-NEXT:    retq
+  %res = fptosi <8 x double> %f to <8 x i8>
+  ret <8 x i8> %res
 }
 
 define <4 x i32> @f64to4si(<4 x double> %a) {
@@ -1542,17 +1523,17 @@ define <16 x double> @scto16f64(<16 x i8> %a) {
 }
 
 define <16 x double> @sbto16f64(<16 x double> %a) {
-; NOVLDQ-LABEL: sbto16f64:
-; NOVLDQ:       # %bb.0:
-; NOVLDQ-NEXT:    vxorpd %xmm2, %xmm2, %xmm2
-; NOVLDQ-NEXT:    vcmpltpd %zmm0, %zmm2, %k0
-; NOVLDQ-NEXT:    vcmpltpd %zmm1, %zmm2, %k1
-; NOVLDQ-NEXT:    kunpckbw %k0, %k1, %k1
-; NOVLDQ-NEXT:    vpternlogd $255, %zmm1, %zmm1, %zmm1 {%k1} {z}
-; NOVLDQ-NEXT:    vcvtdq2pd %ymm1, %zmm0
-; NOVLDQ-NEXT:    vextracti64x4 $1, %zmm1, %ymm1
-; NOVLDQ-NEXT:    vcvtdq2pd %ymm1, %zmm1
-; NOVLDQ-NEXT:    retq
+; NODQ-LABEL: sbto16f64:
+; NODQ:       # %bb.0:
+; NODQ-NEXT:    vxorpd %xmm2, %xmm2, %xmm2
+; NODQ-NEXT:    vcmpltpd %zmm0, %zmm2, %k0
+; NODQ-NEXT:    vcmpltpd %zmm1, %zmm2, %k1
+; NODQ-NEXT:    kunpckbw %k0, %k1, %k1
+; NODQ-NEXT:    vpternlogd $255, %zmm1, %zmm1, %zmm1 {%k1} {z}
+; NODQ-NEXT:    vcvtdq2pd %ymm1, %zmm0
+; NODQ-NEXT:    vextracti64x4 $1, %zmm1, %ymm1
+; NODQ-NEXT:    vcvtdq2pd %ymm1, %zmm1
+; NODQ-NEXT:    retq
 ;
 ; VLDQ-LABEL: sbto16f64:
 ; VLDQ:       # %bb.0:
@@ -1565,18 +1546,6 @@ define <16 x double> @sbto16f64(<16 x double> %a) {
 ; VLDQ-NEXT:    vextracti64x4 $1, %zmm1, %ymm1
 ; VLDQ-NEXT:    vcvtdq2pd %ymm1, %zmm1
 ; VLDQ-NEXT:    retq
-;
-; VLNODQ-LABEL: sbto16f64:
-; VLNODQ:       # %bb.0:
-; VLNODQ-NEXT:    vpxor %xmm2, %xmm2, %xmm2
-; VLNODQ-NEXT:    vcmpltpd %zmm0, %zmm2, %k0
-; VLNODQ-NEXT:    vcmpltpd %zmm1, %zmm2, %k1
-; VLNODQ-NEXT:    kunpckbw %k0, %k1, %k1
-; VLNODQ-NEXT:    vpternlogd $255, %zmm1, %zmm1, %zmm1 {%k1} {z}
-; VLNODQ-NEXT:    vcvtdq2pd %ymm1, %zmm0
-; VLNODQ-NEXT:    vextracti64x4 $1, %zmm1, %ymm1
-; VLNODQ-NEXT:    vcvtdq2pd %ymm1, %zmm1
-; VLNODQ-NEXT:    retq
 ;
 ; DQNOVL-LABEL: sbto16f64:
 ; DQNOVL:       # %bb.0:
@@ -1613,7 +1582,7 @@ define <8 x double> @sbto8f64(<8 x double> %a) {
 ;
 ; VLNODQ-LABEL: sbto8f64:
 ; VLNODQ:       # %bb.0:
-; VLNODQ-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; VLNODQ-NEXT:    vxorpd %xmm1, %xmm1, %xmm1
 ; VLNODQ-NEXT:    vcmpltpd %zmm0, %zmm1, %k1
 ; VLNODQ-NEXT:    vpcmpeqd %ymm0, %ymm0, %ymm0
 ; VLNODQ-NEXT:    vmovdqa32 %ymm0, %ymm0 {%k1} {z}
@@ -1633,52 +1602,24 @@ define <8 x double> @sbto8f64(<8 x double> %a) {
 }
 
 define <8 x float> @sbto8f32(<8 x float> %a) {
-; NOVL-LABEL: sbto8f32:
-; NOVL:       # %bb.0:
-; NOVL-NEXT:    vxorps %xmm1, %xmm1, %xmm1
-; NOVL-NEXT:    vcmpltps %ymm0, %ymm1, %ymm0
-; NOVL-NEXT:    vcvtdq2ps %ymm0, %ymm0
-; NOVL-NEXT:    retq
-;
-; VLDQ-LABEL: sbto8f32:
-; VLDQ:       # %bb.0:
-; VLDQ-NEXT:    vxorps %xmm1, %xmm1, %xmm1
-; VLDQ-NEXT:    vcmpltps %ymm0, %ymm1, %ymm0
-; VLDQ-NEXT:    vcvtdq2ps %ymm0, %ymm0
-; VLDQ-NEXT:    retq
-;
-; VLNODQ-LABEL: sbto8f32:
-; VLNODQ:       # %bb.0:
-; VLNODQ-NEXT:    vpxor %xmm1, %xmm1, %xmm1
-; VLNODQ-NEXT:    vcmpltps %ymm0, %ymm1, %ymm0
-; VLNODQ-NEXT:    vcvtdq2ps %ymm0, %ymm0
-; VLNODQ-NEXT:    retq
+; ALL-LABEL: sbto8f32:
+; ALL:       # %bb.0:
+; ALL-NEXT:    vxorps %xmm1, %xmm1, %xmm1
+; ALL-NEXT:    vcmpltps %ymm0, %ymm1, %ymm0
+; ALL-NEXT:    vcvtdq2ps %ymm0, %ymm0
+; ALL-NEXT:    retq
   %cmpres = fcmp ogt <8 x float> %a, zeroinitializer
   %1 = sitofp <8 x i1> %cmpres to <8 x float>
   ret <8 x float> %1
 }
 
 define <4 x float> @sbto4f32(<4 x float> %a) {
-; NOVL-LABEL: sbto4f32:
-; NOVL:       # %bb.0:
-; NOVL-NEXT:    vxorps %xmm1, %xmm1, %xmm1
-; NOVL-NEXT:    vcmpltps %xmm0, %xmm1, %xmm0
-; NOVL-NEXT:    vcvtdq2ps %xmm0, %xmm0
-; NOVL-NEXT:    retq
-;
-; VLDQ-LABEL: sbto4f32:
-; VLDQ:       # %bb.0:
-; VLDQ-NEXT:    vxorps %xmm1, %xmm1, %xmm1
-; VLDQ-NEXT:    vcmpltps %xmm0, %xmm1, %xmm0
-; VLDQ-NEXT:    vcvtdq2ps %xmm0, %xmm0
-; VLDQ-NEXT:    retq
-;
-; VLNODQ-LABEL: sbto4f32:
-; VLNODQ:       # %bb.0:
-; VLNODQ-NEXT:    vpxor %xmm1, %xmm1, %xmm1
-; VLNODQ-NEXT:    vcmpltps %xmm0, %xmm1, %xmm0
-; VLNODQ-NEXT:    vcvtdq2ps %xmm0, %xmm0
-; VLNODQ-NEXT:    retq
+; ALL-LABEL: sbto4f32:
+; ALL:       # %bb.0:
+; ALL-NEXT:    vxorps %xmm1, %xmm1, %xmm1
+; ALL-NEXT:    vcmpltps %xmm0, %xmm1, %xmm0
+; ALL-NEXT:    vcvtdq2ps %xmm0, %xmm0
+; ALL-NEXT:    retq
   %cmpres = fcmp ogt <4 x float> %a, zeroinitializer
   %1 = sitofp <4 x i1> %cmpres to <4 x float>
   ret <4 x float> %1
@@ -1703,7 +1644,7 @@ define <4 x double> @sbto4f64(<4 x double> %a) {
 ;
 ; VLNODQ-LABEL: sbto4f64:
 ; VLNODQ:       # %bb.0:
-; VLNODQ-NEXT:    vpxor %xmm1, %xmm1, %xmm1
+; VLNODQ-NEXT:    vxorpd %xmm1, %xmm1, %xmm1
 ; VLNODQ-NEXT:    vcmpltpd %ymm0, %ymm1, %k1
 ; VLNODQ-NEXT:    vpcmpeqd %xmm0, %xmm0, %xmm0
 ; VLNODQ-NEXT:    vmovdqa32 %xmm0, %xmm0 {%k1} {z}
@@ -1715,55 +1656,25 @@ define <4 x double> @sbto4f64(<4 x double> %a) {
 }
 
 define <2 x float> @sbto2f32(<2 x float> %a) {
-; NOVL-LABEL: sbto2f32:
-; NOVL:       # %bb.0:
-; NOVL-NEXT:    vxorps %xmm1, %xmm1, %xmm1
-; NOVL-NEXT:    vcmpltps %xmm0, %xmm1, %xmm0
-; NOVL-NEXT:    vcvtdq2ps %xmm0, %xmm0
-; NOVL-NEXT:    retq
-;
-; VLDQ-LABEL: sbto2f32:
-; VLDQ:       # %bb.0:
-; VLDQ-NEXT:    vxorps %xmm1, %xmm1, %xmm1
-; VLDQ-NEXT:    vcmpltps %xmm0, %xmm1, %xmm0
-; VLDQ-NEXT:    vcvtdq2ps %xmm0, %xmm0
-; VLDQ-NEXT:    retq
-;
-; VLNODQ-LABEL: sbto2f32:
-; VLNODQ:       # %bb.0:
-; VLNODQ-NEXT:    vpxor %xmm1, %xmm1, %xmm1
-; VLNODQ-NEXT:    vcmpltps %xmm0, %xmm1, %xmm0
-; VLNODQ-NEXT:    vcvtdq2ps %xmm0, %xmm0
-; VLNODQ-NEXT:    retq
+; ALL-LABEL: sbto2f32:
+; ALL:       # %bb.0:
+; ALL-NEXT:    vxorps %xmm1, %xmm1, %xmm1
+; ALL-NEXT:    vcmpltps %xmm0, %xmm1, %xmm0
+; ALL-NEXT:    vcvtdq2ps %xmm0, %xmm0
+; ALL-NEXT:    retq
   %cmpres = fcmp ogt <2 x float> %a, zeroinitializer
   %1 = sitofp <2 x i1> %cmpres to <2 x float>
   ret <2 x float> %1
 }
 
 define <2 x double> @sbto2f64(<2 x double> %a) {
-; NOVL-LABEL: sbto2f64:
-; NOVL:       # %bb.0:
-; NOVL-NEXT:    vxorpd %xmm1, %xmm1, %xmm1
-; NOVL-NEXT:    vcmpltpd %xmm0, %xmm1, %xmm0
-; NOVL-NEXT:    vpermilps {{.*#+}} xmm0 = xmm0[0,2,2,3]
-; NOVL-NEXT:    vcvtdq2pd %xmm0, %xmm0
-; NOVL-NEXT:    retq
-;
-; VLDQ-LABEL: sbto2f64:
-; VLDQ:       # %bb.0:
-; VLDQ-NEXT:    vxorpd %xmm1, %xmm1, %xmm1
-; VLDQ-NEXT:    vcmpltpd %xmm0, %xmm1, %xmm0
-; VLDQ-NEXT:    vpermilps {{.*#+}} xmm0 = xmm0[0,2,2,3]
-; VLDQ-NEXT:    vcvtdq2pd %xmm0, %xmm0
-; VLDQ-NEXT:    retq
-;
-; VLNODQ-LABEL: sbto2f64:
-; VLNODQ:       # %bb.0:
-; VLNODQ-NEXT:    vpxor %xmm1, %xmm1, %xmm1
-; VLNODQ-NEXT:    vcmpltpd %xmm0, %xmm1, %xmm0
-; VLNODQ-NEXT:    vpermilps {{.*#+}} xmm0 = xmm0[0,2,2,3]
-; VLNODQ-NEXT:    vcvtdq2pd %xmm0, %xmm0
-; VLNODQ-NEXT:    retq
+; ALL-LABEL: sbto2f64:
+; ALL:       # %bb.0:
+; ALL-NEXT:    vxorpd %xmm1, %xmm1, %xmm1
+; ALL-NEXT:    vcmpltpd %xmm0, %xmm1, %xmm0
+; ALL-NEXT:    vpermilps {{.*#+}} xmm0 = xmm0[0,2,2,3]
+; ALL-NEXT:    vcvtdq2pd %xmm0, %xmm0
+; ALL-NEXT:    retq
   %cmpres = fcmp ogt <2 x double> %a, zeroinitializer
   %1 = sitofp <2 x i1> %cmpres to <2 x double>
   ret <2 x double> %1

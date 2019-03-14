@@ -725,8 +725,7 @@ SDValue LanaiTargetLowering::LowerCCCCallTo(
     Callee = DAG.getTargetGlobalAddress(
         G->getGlobal(), DL, getPointerTy(DAG.getDataLayout()), 0, OpFlag);
   } else if (ExternalSymbolSDNode *E = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    Callee = DAG.getTargetExternalSymbol(
-        E->getSymbol(), getPointerTy(DAG.getDataLayout()), OpFlag);
+    Callee = DAG.getTargetExternalFunctionSymbol(E->getSymbol(), OpFlag);
   }
 
   // Returns a chain & a flag for retval copy to use.
@@ -1498,8 +1497,8 @@ void LanaiTargetLowering::computeKnownBitsForTargetNode(
     break;
   case LanaiISD::SELECT_CC:
     KnownBits Known2;
-    DAG.computeKnownBits(Op->getOperand(0), Known, Depth + 1);
-    DAG.computeKnownBits(Op->getOperand(1), Known2, Depth + 1);
+    Known = DAG.computeKnownBits(Op->getOperand(0), Depth + 1);
+    Known2 = DAG.computeKnownBits(Op->getOperand(1), Depth + 1);
     Known.Zero &= Known2.Zero;
     Known.One &= Known2.One;
     break;

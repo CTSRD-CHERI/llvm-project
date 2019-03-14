@@ -24,6 +24,7 @@ using namespace llvm;
 
 enum ActionType {
   PrintRecords,
+  DumpJSON,
   GenEmitter,
   GenRegisterInfo,
   GenInstrInfo,
@@ -52,6 +53,7 @@ enum ActionType {
   GenX86EVEX2VEXTables,
   GenX86FoldTables,
   GenRegisterBank,
+  GenExegesis,
 };
 
 namespace {
@@ -59,6 +61,8 @@ namespace {
   Action(cl::desc("Action to perform:"),
          cl::values(clEnumValN(PrintRecords, "print-records",
                                "Print all records to stdout (default)"),
+                    clEnumValN(DumpJSON, "dump-json",
+                               "Dump all records as machine-readable JSON"),
                     clEnumValN(GenEmitter, "gen-emitter",
                                "Generate machine code emitter"),
                     clEnumValN(GenRegisterInfo, "gen-register-info",
@@ -114,7 +118,9 @@ namespace {
                     clEnumValN(GenX86FoldTables, "gen-x86-fold-tables",
                                "Generate X86 fold tables"),
                     clEnumValN(GenRegisterBank, "gen-register-bank",
-                               "Generate registers bank descriptions")));
+                               "Generate registers bank descriptions"),
+                    clEnumValN(GenExegesis, "gen-exegesis",
+                               "Generate llvm-exegesis tables")));
 
   cl::OptionCategory PrintEnumsCat("Options for -print-enums");
   cl::opt<std::string>
@@ -125,6 +131,9 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
   switch (Action) {
   case PrintRecords:
     OS << Records;           // No argument, dump all contents
+    break;
+  case DumpJSON:
+    EmitJSON(Records, OS);
     break;
   case GenEmitter:
     EmitCodeEmitter(Records, OS);
@@ -224,6 +233,9 @@ bool LLVMTableGenMain(raw_ostream &OS, RecordKeeper &Records) {
     break;
   case GenX86FoldTables:
     EmitX86FoldTables(Records, OS);
+    break;
+  case GenExegesis:
+    EmitExegesis(Records, OS);
     break;
   }
 

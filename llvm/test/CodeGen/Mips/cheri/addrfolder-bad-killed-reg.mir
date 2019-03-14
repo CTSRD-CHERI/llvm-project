@@ -1,0 +1,120 @@
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o - | FileCheck %s
+# previously the CheriAddressModeFolder would produce a due to setting the kill flag on a register that wasn't killed: *** Bad machine code: Using a killed virtual register ***
+--- |
+  ; ModuleID = '/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/fprintf-bad-killed-reg.ll'
+  source_filename = "/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/fprintf-bad-killed-reg.ll"
+  target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
+  target triple = "cheri-unknown-freebsd"
+
+  @stderr = external addrspace(200) global i32 addrspace(200)*, align 16
+  @.str = private unnamed_addr addrspace(200) constant [7 x i8] c"%c: %d\00", align 1
+
+  declare i32 @fprintf(i32 addrspace(200)*, i8 addrspace(200)*, ...) addrspace(200) #0
+
+  define void @b(i8 signext %a) addrspace(200) #0 {
+  entry:
+    %a.addr = alloca i8, align 1, addrspace(200)
+    %0 = call i8 addrspace(200)* @llvm.mips.stack.to.cap(i8 addrspace(200)* %a.addr)
+    %1 = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %0, i64 1)
+    store i8 %a, i8 addrspace(200)* %1, align 1
+    %2 = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* @stderr, align 16
+    %3 = load i8, i8 addrspace(200)* %1, align 1
+    %conv = sext i8 %3 to i32
+    %call = call i32 (i32 addrspace(200)*, i8 addrspace(200)*, ...) @fprintf(i32 addrspace(200)* %2, i8 addrspace(200)* getelementptr inbounds ([7 x i8], [7 x i8] addrspace(200)* @.str, i32 0, i32 0), i32 signext %conv, i32 signext 0)
+    ret void
+  }
+
+  ; Function Attrs: nounwind readnone
+  declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)*, i64) addrspace(200) #1
+
+  ; Function Attrs: nounwind readnone
+  declare i8 addrspace(200)* @llvm.mips.stack.to.cap(i8 addrspace(200)*) addrspace(200) #1
+
+  ; Function Attrs: nounwind
+  declare void @llvm.stackprotector(i8*, i8**) addrspace(200) #2
+
+  attributes #0 = { "target-cpu"="cheri128" "target-features"="+cheri128" }
+  attributes #1 = { nounwind readnone }
+  attributes #2 = { nounwind }
+
+...
+---
+name:            b
+alignment:       3
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+registers:
+  - { id: 0, class: gpr64, preferred-register: '' }
+  - { id: 1, class: cherigpr, preferred-register: '' }
+  - { id: 2, class: cherigpr, preferred-register: '' }
+  - { id: 3, class: cherigpr, preferred-register: '' }
+  - { id: 4, class: cherigpr, preferred-register: '' }
+  - { id: 5, class: cherigpr, preferred-register: '' }
+  - { id: 6, class: cherigpr, preferred-register: '' }
+  - { id: 7, class: cherigpr, preferred-register: '' }
+  - { id: 8, class: gpr64, preferred-register: '' }
+  - { id: 9, class: cherigpr, preferred-register: '' }
+  - { id: 10, class: cherigpr, preferred-register: '' }
+  - { id: 11, class: cherigpr, preferred-register: '' }
+  - { id: 12, class: cherigpr, preferred-register: '' }
+liveins:
+  - { reg: '$a0_64', virtual-reg: '%0' }
+  - { reg: '$c12', virtual-reg: '' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    8
+  adjustsStack:    false
+  hasCalls:        true
+  stackProtector:  ''
+  maxCallFrameSize: 4294967295
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  localFrameSize:  0
+  savePoint:       ''
+  restorePoint:    ''
+fixedStack:
+stack:
+  - { id: 0, name: a.addr, type: default, offset: 0, size: 1, alignment: 4,
+      stack-id: 0, callee-saved-register: '', callee-saved-restored: true,
+      debug-info-variable: '', debug-info-expression: '', debug-info-location: '' }
+constants:
+body:             |
+  bb.0.entry:
+    liveins: $a0_64, $c12
+
+    %15:gpr64 = LUi64 target-flags(mips-captable-off-hi) @b
+    %16:gpr64 = DADDiu %15, target-flags(mips-captable-off-lo) @b
+    $c26 = CIncOffset $c12, %16
+    %1:cherigpr = COPY $c26
+    %0:gpr64 = COPY $a0_64
+    %2:cherigpr = CIncOffset %stack.0.a.addr, $zero_64
+    %3:cherigpr = CSetBoundsImm killed %2, 1
+    CAPSTORE8 %0, $zero_64, 0, killed %3 :: (store 1 into %ir.1, addrspace 200)
+    %4:cherigpr = LOADCAP_BigImm target-flags(mips-captable20) @stderr, %1 :: (load 16 from cap-table)
+    %5:cherigpr = LOADCAP $zero_64, 0, killed %4 :: (dereferenceable load 16 from @stderr, addrspace 200)
+    ADJCALLSTACKCAPDOWN 16, 0, implicit-def dead $c11, implicit $c11
+    %6:cherigpr = COPY $c11
+    CAPSTORE64 %0, $zero_64, 0, %6 :: (store 8)
+
+    %7:cherigpr = CIncOffsetImm %6, 8
+    CAPSTORE64 killed $zero_64, $zero_64, 0, killed %7 :: (store 8)
+    %9:cherigpr = CSetBoundsImm %6, 16
+    %10:cherigpr = CIncOffsetImm %9, 8
+    CAPSTORE64 killed $zero_64, $zero_64, 0, killed %10 :: (store 8)
+
+...
+# We can't call %6 in the first store since it is used afterwards but in the second we can:
+# CHECK:      CAPSTORE64 %0, $zero_64, 0, %6 :: (store 8)
+# CHECK-NEXT: CAPSTORE64 killed $zero_64, $zero_64, 8, %6 :: (store 8)
+# CHECK-NEXT: %9:cherigpr = CSetBoundsImm %6, 16
+# CHECK-NEXT: CAPSTORE64 killed $zero_64, $zero_64, 8, killed %9 :: (store 8)

@@ -71,8 +71,10 @@ def main():
     for l in run_lines:
       commands = [cmd.strip() for cmd in l.split('|', 1)]
       llc_cmd = commands[0]
-      if llc_cmd.startswith("%cheri_"):
+      if llc_cmd.startswith("%cheri"):
         llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+        llc_cmd = llc_cmd.replace("%cheri128_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+        llc_cmd = llc_cmd.replace("%cheri256_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri256 -mattr=+cheri256")
         llc_cmd = llc_cmd.replace("%cheri_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
         llc_cmd = llc_cmd.replace("%cheri128_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
         llc_cmd = llc_cmd.replace("%cheri256_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")

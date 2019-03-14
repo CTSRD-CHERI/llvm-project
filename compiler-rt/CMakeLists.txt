@@ -9,6 +9,7 @@ cmake_minimum_required(VERSION 3.4.3)
 if (CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR OR COMPILER_RT_STANDALONE_BUILD)
   project(CompilerRT C CXX ASM)
   set(COMPILER_RT_STANDALONE_BUILD TRUE)
+  set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 endif()
 
 # Add path for custom compiler-rt modules.
@@ -58,11 +59,19 @@ if (NOT COMPILER_RT_ASAN_SHADOW_SCALE STREQUAL "")
       -D${COMPILER_RT_ASAN_SHADOW_SCALE_DEFINITION})
 endif()
 
+set(COMPILER_RT_HWASAN_WITH_INTERCEPTORS ON CACHE BOOLEAN
+    "Enable libc interceptors in HWASan (testing mode)")
+
 set(COMPILER_RT_BAREMETAL_BUILD OFF CACHE BOOLEAN
   "Build for a bare-metal target.")
 
 if (COMPILER_RT_STANDALONE_BUILD)
   load_llvm_config()
+  if (TARGET intrinsics_gen)
+    # Loading the llvm config causes this target to be imported so place it
+    # under the appropriate folder in an IDE.
+    set_target_properties(intrinsics_gen PROPERTIES FOLDER "Compiler-RT Misc")
+  endif()
 
   # Find Python interpreter.
   set(Python_ADDITIONAL_VERSIONS 2.7 2.6 2.5)
@@ -71,6 +80,61 @@ if (COMPILER_RT_STANDALONE_BUILD)
     message(FATAL_ERROR "
       Unable to find Python interpreter required testing. Please install Python
       or specify the PYTHON_EXECUTABLE CMake variable.")
+  endif()
+
+  # Ensure that fat libraries are built correctly on Darwin
+  if(CMAKE_SYSTEM_NAME STREQUAL Darwin)
+    if(NOT CMAKE_LIBTOOL)
+      find_program(CMAKE_XCRUN
+                   NAMES
+                     xcrun)
+      if(CMAKE_XCRUN)
+        execute_process(COMMAND
+                          ${CMAKE_XCRUN} -find libtool
+                        OUTPUT_VARIABLE
+                          CMAKE_LIBTOOL
+                        OUTPUT_STRIP_TRAILING_WHITESPACE)
+      endif()
+
+      if(NOT CMAKE_LIBTOOL OR NOT EXISTS CMAKE_LIBTOOL)
+        find_program(CMAKE_LIBTOOL
+                     NAMES
+                       libtool)
+      endif()
+    endif()
+
+    get_property(languages GLOBAL PROPERTY ENABLED_LANGUAGES)
+
+    if(CMAKE_LIBTOOL)
+      set(CMAKE_LIBTOOL ${CMAKE_LIBTOOL} CACHE PATH "libtool executable")
+      message(STATUS "Found libtool - ${CMAKE_LIBTOOL}")
+
+      execute_process(COMMAND
+                        ${CMAKE_LIBTOOL} -V
+                      OUTPUT_VARIABLE
+                        LIBTOOL_V_OUTPUT
+                      OUTPUT_STRIP_TRAILING_WHITESPACE)
+      if("${LIBTOOL_V_OUTPUT}" MATCHES ".*cctools-([0-9]+).*")
+        string(REGEX REPLACE ".*cctools-([0-9]+).*" "\\1" LIBTOOL_VERSION ${LIBTOOL_V_OUTPUT})
+        if(NOT LIBTOOL_VERSION VERSION_LESS "862")
+          set(LIBTOOL_NO_WARNING_FLAG "-no_warning_for_no_symbols")
+        endif()
+      endif()
+
+      foreach(lang ${languages})
+        set(CMAKE_${lang}_CREATE_STATIC_LIBRARY "\"${CMAKE_LIBTOOL}\" -static ${LIBTOOL_NO_WARNING_FLAG} -o <TARGET> <LINK_FLAGS> <OBJECTS>")
+      endforeach()
+    endif()
+
+    # Workaround SIP :-(
+    if(DYLD_LIBRARY_PATH)
+      set(dyld_envar "DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH}")
+      foreach(lang ${languages})
+        foreach(cmd ${CMAKE_${lang}_CREATE_STATIC_LIBRARY})
+          list(APPEND CMAKE_${lang}_CREATE_STATIC_LIBRARY_NEW "${dyld_envar} ${cmd}")
+        endforeach()
+      endforeach()
+    endif()
   endif()
 
   # Define default arguments to lit.
@@ -83,18 +147,20 @@ if (COMPILER_RT_STANDALONE_BUILD)
 endif()
 
 construct_compiler_rt_default_triple()
-if ("${COMPILER_RT_DEFAULT_TARGET_ABI}" MATCHES "hf$")
+if ("${COMPILER_RT_DEFAULT_TARGET_TRIPLE}" MATCHES ".*hf$")
   if (${COMPILER_RT_DEFAULT_TARGET_ARCH} MATCHES "^arm")
     set(COMPILER_RT_DEFAULT_TARGET_ARCH "armhf")
   endif()
 endif()
-if ("${COMPILER_RT_DEFAULT_TARGET_ABI}" MATCHES "^android")
+if ("${COMPILER_RT_DEFAULT_TARGET_TRIPLE}" MATCHES ".*android.*")
   set(ANDROID 1)
 endif()
 pythonize_bool(ANDROID)
 
 set(COMPILER_RT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(COMPILER_RT_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR})
+
+pythonize_bool(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR)
 
 # We support running instrumented tests when we're not cross compiling
 # and target a UNIX-like system or Windows.
@@ -134,10 +200,7 @@ set(CXXABIS none default libstdc++ libc++)
 set_property(CACHE SANITIZER_CXX_ABI PROPERTY STRINGS ;${CXXABIS})
 
 if (SANITIZER_CXX_ABI STREQUAL "default")
-  if (CLANG_DEFAULT_CXX_STDLIB STREQUAL "libc++" AND (TARGET cxx OR HAVE_LIBCXX))
-    set(SANITIZER_CXX_ABI_LIBNAME "libc++")
-    set(SANITIZER_CXX_ABI_INTREE 1)
-  elseif (APPLE)
+  if (APPLE)
     set(SANITIZER_CXX_ABI_LIBNAME "libc++")
     set(SANITIZER_CXX_ABI_SYSTEM 1)
   elseif (FUCHSIA)
@@ -152,18 +215,13 @@ else()
   set(SANITIZER_CXX_ABI_SYSTEM 1)
 endif()
 
-set(COMPILER_RT_RUNTIME "default" CACHE STRING
-    "Compiler runtime to use.")
-
-if (COMPILER_RT_RUNTIME STREQUAL "default")
-  if (CLANG_DEFAULT_RTLIB STREQUAL "compiler-rt")
-    set(COMPILER_RT_RUNTIME_LIBRARY "builtins")
-  elseif (FUCHSIA)
-    set(COMPILER_RT_RUNTIME_LIBRARY "builtins")
-  endif()
-else()
-  set(COMPILER_RT_RUNTIME_LIBRARY "${COMPILER_RT_RUNTIME}")
+set(DEFAULT_COMPILER_RT_USE_BUILTINS_LIBRARY OFF)
+if (FUCHSIA)
+  set(DEFAULT_COMPILER_RT_USE_BUILTINS_LIBRARY ON)
 endif()
+
+option(COMPILER_RT_USE_BUILTINS_LIBRARY
+  "Use compiler-rt builtins instead of libgcc" ${DEFAULT_COMPILER_RT_USE_BUILTINS_LIBRARY})
 
 include(config-ix)
 
@@ -310,11 +368,14 @@ append_list_if(COMPILER_RT_HAS_WD4391_FLAG /wd4391 SANITIZER_COMMON_CFLAGS)
 append_list_if(COMPILER_RT_HAS_WD4722_FLAG /wd4722 SANITIZER_COMMON_CFLAGS)
 append_list_if(COMPILER_RT_HAS_WD4800_FLAG /wd4800 SANITIZER_COMMON_CFLAGS)
 
+append_list_if(MINGW -fms-extensions SANITIZER_COMMON_CFLAGS)
+
 # Set common link flags.
 append_list_if(COMPILER_RT_HAS_NODEFAULTLIBS_FLAG -nodefaultlibs SANITIZER_COMMON_LINK_FLAGS)
 
-if (COMPILER_RT_RUNTIME_LIBRARY STREQUAL "builtins")
+if (COMPILER_RT_USE_BUILTINS_LIBRARY)
   list(APPEND SANITIZER_COMMON_LINK_LIBS ${COMPILER_RT_BUILTINS_LIBRARY})
+  string(REPLACE "-Wl,-z,defs" "" CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS}")
 else()
   if (ANDROID)
     append_list_if(COMPILER_RT_HAS_GCC_LIB gcc SANITIZER_COMMON_LINK_LIBS)
@@ -345,6 +406,8 @@ if (SANITIZER_CXX_ABI_LIBNAME STREQUAL "libc++")
   else()
     append_list_if(COMPILER_RT_HAS_LIBCXX c++ SANITIZER_CXX_ABI_LIBRARY)
   endif()
+elseif (SANITIZER_CXX_ABI_LIBNAME STREQUAL "libcxxabi")
+  list(APPEND SANITIZER_CXX_ABI_LIBRARY "c++abi")
 elseif (SANITIZER_CXX_ABI_LIBNAME STREQUAL "libstdc++")
   append_list_if(COMPILER_RT_HAS_LIBSTDCXX stdc++ SANITIZER_CXX_ABI_LIBRARY)
 endif()

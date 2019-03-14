@@ -17,10 +17,19 @@
 #include "MipsFixupKinds.h"
 #include "MipsMCTargetDesc.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCInstrDesc.h"
 #include "llvm/Support/DataTypes.h"
 #include "llvm/Support/ErrorHandling.h"
 
 namespace llvm {
+
+namespace Mips {
+enum OperandType {
+  /// Operands with register or 32-bit immediate
+  OPERAND_CHERI_GPR_OR_DDC = MCOI::OPERAND_FIRST_TARGET,
+  OPERAND_CHERI_GPR_OR_NULL
+};
+}
 
 /// MipsII - This namespace holds all of the target specific flags that
 /// instruction info tracks.
@@ -91,6 +100,11 @@ namespace MipsII {
     MO_CALL_HI16,
     MO_CALL_LO16,
 
+    /// MO_PCREL_HI/LO - Represents the hi or low part of an PC-relative symbol
+    /// address.
+    MO_PCREL_HI,
+    MO_PCREL_LO,
+
     /// CHERI capability relocations:
     MO_CAPTAB11,       // offset into the capability table
     MO_CAPTAB_CALL11,  // same as above but only for calls
@@ -107,6 +121,24 @@ namespace MipsII {
     // Offset to the capability table
     MO_CAPTABLE_OFF_HI,
     MO_CAPTABLE_OFF_LO,
+
+    /// MO_CAPTAB_TLSGD* - Represents the offset into the capability table at
+    // which the module ID and TSL block offset reside during execution (General
+    // Dynamic TLS).
+    MO_CAPTAB_TLSGD_HI16,
+    MO_CAPTAB_TLSGD_LO16,
+
+    /// MO_CAPTAB_TLSLDM* - Represents the offset into the capability table at
+    // which the module ID and TSL block offset reside during execution (Local
+    // Dynamic TLS).
+    MO_CAPTAB_TLSLDM_HI16,
+    MO_CAPTAB_TLSLDM_LO16,
+
+    /// MO_CAPTAB_TPREL* - Represents the offset into the capability table at
+    // which the offset from the thread pointer resides during execution
+    // (Initial Exec TLS).
+    MO_CAPTAB_TPREL_HI16,
+    MO_CAPTAB_TPREL_LO16,
   };
 
   enum {

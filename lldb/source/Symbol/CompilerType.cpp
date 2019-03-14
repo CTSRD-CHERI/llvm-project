@@ -10,7 +10,6 @@
 #include "lldb/Symbol/CompilerType.h"
 
 #include "lldb/Core/Debugger.h"
-#include "lldb/Core/Scalar.h"
 #include "lldb/Core/StreamFile.h"
 #include "lldb/Symbol/ClangASTContext.h"
 #include "lldb/Symbol/ClangExternalASTSourceCommon.h"
@@ -20,6 +19,7 @@
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Scalar.h"
 #include "lldb/Utility/Stream.h"
 #include "lldb/Utility/StreamString.h"
 
@@ -535,10 +535,12 @@ lldb::Format CompilerType::GetFormat() const {
   return m_type_system->GetFormat(m_type);
 }
 
-uint32_t CompilerType::GetNumChildren(bool omit_empty_base_classes) const {
+uint32_t CompilerType::GetNumChildren(bool omit_empty_base_classes,
+                                      const ExecutionContext *exe_ctx) const {
   if (!IsValid())
     return 0;
-  return m_type_system->GetNumChildren(m_type, omit_empty_base_classes);
+  return m_type_system->GetNumChildren(m_type, omit_empty_base_classes,
+                                       exe_ctx);
 }
 
 lldb::BasicType CompilerType::GetBasicTypeEnumeration() const {

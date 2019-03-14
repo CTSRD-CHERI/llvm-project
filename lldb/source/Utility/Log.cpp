@@ -12,24 +12,24 @@
 
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallString.h"
-#include "llvm/ADT/Twine.h"    // for operator+, Twine
-#include "llvm/ADT/iterator.h" // for iterator_facade_base
+#include "llvm/ADT/Twine.h"
+#include "llvm/ADT/iterator.h"
 
 #include "llvm/Support/Chrono.h"
-#include "llvm/Support/ManagedStatic.h" // for ManagedStatic
+#include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/Threading.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include <chrono> // for duration, system_clock, syst...
+#include <chrono>
 #include <cstdarg>
 #include <mutex>
-#include <utility> // for pair
+#include <utility>
 
-#include <assert.h>  // for assert
+#include <assert.h>
 #if defined(_WIN32)
-#include <process.h> // for getpid
+#include <process.h>
 #else
 #include <unistd.h>
 #include <pthread.h>
@@ -286,7 +286,11 @@ void Log::WriteHeader(llvm::raw_ostream &OS, llvm::StringRef file,
   if (options.Test(LLDB_LOG_OPTION_PREPEND_THREAD_NAME)) {
     llvm::SmallString<32> thread_name;
     llvm::get_thread_name(thread_name);
-    OS << llvm::formatv("{0,-16} ", thread_name);
+
+    llvm::SmallString<12> format_str;
+    llvm::raw_svector_ostream format_os(format_str);
+    format_os << "{0,-" << llvm::alignTo<16>(thread_name.size()) << "} ";
+    OS << llvm::formatv(format_str.c_str(), thread_name);
   }
 
   if (options.Test(LLDB_LOG_OPTION_BACKTRACE))

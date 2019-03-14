@@ -1,16 +1,17 @@
-//===--- ClangdUnit.h -------------------------------------------*- C++-*-===//
+//===--- ClangdUnit.h --------------------------------------------*- C++-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDUNIT_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDUNIT_H
 
 #include "Diagnostics.h"
+#include "FS.h"
 #include "Function.h"
 #include "Headers.h"
 #include "Path.h"
@@ -27,14 +28,14 @@
 
 namespace llvm {
 class raw_ostream;
-}
-
-namespace clang {
-class PCHContainerOperations;
 
 namespace vfs {
 class FileSystem;
 }
+} // namespace llvm
+
+namespace clang {
+class PCHContainerOperations;
 
 namespace tooling {
 struct CompileCommand;
@@ -45,20 +46,24 @@ namespace clangd {
 // Stores Preamble and associated data.
 struct PreambleData {
   PreambleData(PrecompiledPreamble Preamble, std::vector<Diag> Diags,
-               std::vector<Inclusion> Inclusions);
+               IncludeStructure Includes,
+               std::unique_ptr<PreambleFileStatusCache> StatCache);
 
   tooling::CompileCommand CompileCommand;
   PrecompiledPreamble Preamble;
   std::vector<Diag> Diags;
   // Processes like code completions and go-to-definitions will need #include
   // information, and their compile action skips preamble range.
-  std::vector<Inclusion> Inclusions;
+  IncludeStructure Includes;
+  // Cache of FS operations performed when building the preamble.
+  // When reusing a preamble, this cache can be consumed to save IO.
+  std::unique_ptr<PreambleFileStatusCache> StatCache;
 };
 
 /// Information required to run clang, e.g. to parse AST or do code completion.
 struct ParseInputs {
   tooling::CompileCommand CompileCommand;
-  IntrusiveRefCntPtr<vfs::FileSystem> FS;
+  IntrusiveRefCntPtr<llvm::vfs::FileSystem> FS;
   std::string Contents;
 };
 
@@ -68,11 +73,11 @@ public:
   /// Attempts to run Clang and store parsed AST. If \p Preamble is non-null
   /// it is reused during parsing.
   static llvm::Optional<ParsedAST>
-  Build(std::unique_ptr<clang::CompilerInvocation> CI,
+  build(std::unique_ptr<clang::CompilerInvocation> CI,
         std::shared_ptr<const PreambleData> Preamble,
         std::unique_ptr<llvm::MemoryBuffer> Buffer,
         std::shared_ptr<PCHContainerOperations> PCHs,
-        IntrusiveRefCntPtr<vfs::FileSystem> VFS);
+        IntrusiveRefCntPtr<llvm::vfs::FileSystem> VFS);
 
   ParsedAST(ParsedAST &&Other);
   ParsedAST &operator=(ParsedAST &&Other);
@@ -99,14 +104,14 @@ public:
   /// Returns the esitmated size of the AST and the accessory structures, in
   /// bytes. Does not include the size of the preamble.
   std::size_t getUsedBytes() const;
-  const std::vector<Inclusion> &getInclusions() const;
+  const IncludeStructure &getIncludeStructure() const;
 
 private:
   ParsedAST(std::shared_ptr<const PreambleData> Preamble,
             std::unique_ptr<CompilerInstance> Clang,
             std::unique_ptr<FrontendAction> Action,
             std::vector<Decl *> LocalTopLevelDecls, std::vector<Diag> Diags,
-            std::vector<Inclusion> Inclusions);
+            IncludeStructure Includes);
 
   // In-memory preambles must outlive the AST, it is important that this member
   // goes before Clang and Action.
@@ -124,11 +129,11 @@ private:
   // Top-level decls inside the current file. Not that this does not include
   // top-level decls from the preamble.
   std::vector<Decl *> LocalTopLevelDecls;
-  std::vector<Inclusion> Inclusions;
+  IncludeStructure Includes;
 };
 
-using PreambleParsedCallback = std::function<void(
-    PathRef Path, ASTContext &, std::shared_ptr<clang::Preprocessor>)>;
+using PreambleParsedCallback =
+    std::function<void(ASTContext &, std::shared_ptr<clang::Preprocessor>)>;
 
 /// Builds compiler invocation that could be used to build AST or preamble.
 std::unique_ptr<CompilerInvocation>
@@ -168,4 +173,5 @@ void dumpAST(ParsedAST &AST, llvm::raw_ostream &OS);
 
 } // namespace clangd
 } // namespace clang
-#endif
+
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDUNIT_H

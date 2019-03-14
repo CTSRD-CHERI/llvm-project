@@ -27,25 +27,27 @@ using namespace clang::driver;
 using namespace llvm::opt;
 
 enum : SanitizerMask {
-  NeedsUbsanRt = Undefined | Integer | Nullability | CFI,
+  NeedsUbsanRt = Undefined | Integer | ImplicitConversion | Nullability | CFI,
   NeedsUbsanCxxRt = Vptr | CFI,
   NotAllowedWithTrap = Vptr,
   NotAllowedWithMinimalRuntime = Vptr,
   RequiresPIE = DataFlow | HWAddress | Scudo,
   NeedsUnwindTables = Address | HWAddress | Thread | Memory | DataFlow,
   SupportsCoverage = Address | HWAddress | KernelAddress | KernelHWAddress |
-                     Memory | Leak | Undefined | Integer | Nullability |
-                     DataFlow | Fuzzer | FuzzerNoLink,
-  RecoverableByDefault = Undefined | Integer | Nullability,
+                     Memory | KernelMemory | Leak | Undefined | Integer |
+                     ImplicitConversion | Nullability | DataFlow | Fuzzer |
+                     FuzzerNoLink,
+  RecoverableByDefault = Undefined | Integer | ImplicitConversion | Nullability,
   Unrecoverable = Unreachable | Return,
   AlwaysRecoverable = KernelAddress | KernelHWAddress,
   LegacyFsanitizeRecoverMask = Undefined | Integer,
   NeedsLTO = CFI,
   TrappingSupported = (Undefined & ~Vptr) | UnsignedIntegerOverflow |
-                      Nullability | LocalBounds | CFI,
+                      ImplicitConversion | Nullability | LocalBounds | CFI,
   TrappingDefault = CFI,
-  CFIClasses = CFIVCall | CFINVCall | CFIDerivedCast | CFIUnrelatedCast,
-  CompatibleWithMinimalRuntime = TrappingSupported | Scudo,
+  CFIClasses =
+      CFIVCall | CFINVCall | CFIMFCall | CFIDerivedCast | CFIUnrelatedCast,
+  CompatibleWithMinimalRuntime = TrappingSupported | Scudo | ShadowCallStack,
 };
 
 enum CoverageFeature {
@@ -219,6 +221,10 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
                                      // Used to deduplicate diagnostics.
   SanitizerMask Kinds = 0;
   const SanitizerMask Supported = setGroupBits(TC.getSupportedSanitizers());
+
+  CfiCrossDso = Args.hasFlag(options::OPT_fsanitize_cfi_cross_dso,
+                             options::OPT_fno_sanitize_cfi_cross_dso, false);
+
   ToolChain::RTTIMode RTTIMode = TC.getRTTIMode();
 
   const Driver &D = TC.getDriver();
@@ -278,6 +284,24 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
         Add &= ~NotAllowedWithMinimalRuntime;
       }
 
+      // FIXME: Make CFI on member function calls compatible with cross-DSO CFI.
+      // There are currently two problems:
+      // - Virtual function call checks need to pass a pointer to the function
+      //   address to llvm.type.test and a pointer to the address point to the
+      //   diagnostic function. Currently we pass the same pointer to both
+      //   places.
+      // - Non-virtual function call checks may need to check multiple type
+      //   identifiers.
+      // Fixing both of those may require changes to the cross-DSO CFI
+      // interface.
+      if (CfiCrossDso && (Add & CFIMFCall & ~DiagnosedKinds)) {
+        D.Diag(diag::err_drv_argument_not_allowed_with)
+            << "-fsanitize=cfi-mfcall"
+            << "-fsanitize-cfi-cross-dso";
+        Add &= ~CFIMFCall;
+        DiagnosedKinds |= CFIMFCall;
+      }
+
       if (SanitizerMask KindsToDiagnose = Add & ~Supported & ~DiagnosedKinds) {
         std::string Desc = describeSanitizeArg(*I, KindsToDiagnose);
         D.Diag(diag::err_drv_unsupported_opt_for_target)
@@ -298,7 +322,7 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
           D.Diag(diag::err_drv_argument_not_allowed_with)
               << "-fsanitize=vptr" << NoRTTIArg->getAsString(Args);
         } else {
-          // The vptr sanitizer requires RTTI, but RTTI is disabled (by 
+          // The vptr sanitizer requires RTTI, but RTTI is disabled (by
           // default). Warn that the vptr sanitizer is being disabled.
           D.Diag(diag::warn_drv_disabling_vptr_no_rtti_default);
         }
@@ -316,6 +340,8 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
       if (MinimalRuntime) {
         Add &= ~NotAllowedWithMinimalRuntime;
       }
+      if (CfiCrossDso)
+        Add &= ~CFIMFCall;
       Add &= Supported;
 
       if (Add & Fuzzer)
@@ -350,13 +376,12 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
                                 KernelAddress | Efficiency),
       std::make_pair(SafeStack, Address | HWAddress | Leak | Thread | Memory |
                                     KernelAddress | Efficiency),
-      std::make_pair(ShadowCallStack, Address | HWAddress | Leak | Thread |
-                                          Memory | KernelAddress | Efficiency |
-                                          SafeStack),
       std::make_pair(KernelHWAddress, Address | HWAddress | Leak | Thread |
                                           Memory | KernelAddress | Efficiency |
-                                          SafeStack | ShadowCallStack)};
-
+                                          SafeStack),
+      std::make_pair(KernelMemory, Address | HWAddress | Leak | Thread |
+                                       Memory | KernelAddress | Efficiency |
+                                       Scudo | SafeStack)};
   // Enable toolchain specific default sanitizers if not explicitly disabled.
   SanitizerMask Default = TC.getDefaultSanitizers() & ~AllRemove;
 
@@ -554,8 +579,6 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
   }
 
   if (AllAddedKinds & CFI) {
-    CfiCrossDso = Args.hasFlag(options::OPT_fsanitize_cfi_cross_dso,
-                               options::OPT_fno_sanitize_cfi_cross_dso, false);
     // Without PIE, external function address may resolve to a PLT record, which
     // can not be verified by the target module.
     NeedPIE |= CfiCrossDso;
@@ -698,12 +721,22 @@ SanitizerArgs::SanitizerArgs(const ToolChain &TC,
         options::OPT_fsanitize_address_use_after_scope,
         options::OPT_fno_sanitize_address_use_after_scope, AsanUseAfterScope);
 
+    AsanPoisonCustomArrayCookie = Args.hasFlag(
+        options::OPT_fsanitize_address_poison_custom_array_cookie,
+        options::OPT_fno_sanitize_address_poison_custom_array_cookie,
+        AsanPoisonCustomArrayCookie);
+
     // As a workaround for a bug in gold 2.26 and earlier, dead stripping of
     // globals in ASan is disabled by default on ELF targets.
     // See https://sourceware.org/bugzilla/show_bug.cgi?id=19002
     AsanGlobalsDeadStripping =
         !TC.getTriple().isOSBinFormatELF() || TC.getTriple().isOSFuchsia() ||
         Args.hasArg(options::OPT_fsanitize_address_globals_dead_stripping);
+
+    AsanUseOdrIndicator =
+        Args.hasFlag(options::OPT_fsanitize_address_use_odr_indicator,
+                     options::OPT_fno_sanitize_address_use_odr_indicator,
+                     AsanUseOdrIndicator);
   } else {
     AsanUseAfterScope = false;
   }
@@ -871,8 +904,14 @@ void SanitizerArgs::addArgs(const ToolChain &TC, const llvm::opt::ArgList &Args,
   if (AsanUseAfterScope)
     CmdArgs.push_back("-fsanitize-address-use-after-scope");
 
+  if (AsanPoisonCustomArrayCookie)
+    CmdArgs.push_back("-fsanitize-address-poison-custom-array-cookie");
+
   if (AsanGlobalsDeadStripping)
     CmdArgs.push_back("-fsanitize-address-globals-dead-stripping");
+
+  if (AsanUseOdrIndicator)
+    CmdArgs.push_back("-fsanitize-address-use-odr-indicator");
 
   // MSan: Workaround for PR16386.
   // ASan: This is mainly to help LSan with cases such as

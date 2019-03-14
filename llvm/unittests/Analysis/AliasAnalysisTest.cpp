@@ -55,8 +55,8 @@ struct AATestPass : FunctionPass {
 
     for (Value *P1 : Pointers)
       for (Value *P2 : Pointers)
-        (void)AA.alias(P1, MemoryLocation::UnknownSize, P2,
-                       MemoryLocation::UnknownSize);
+        (void)AA.alias(P1, LocationSize::unknown(), P2,
+                       LocationSize::unknown());
 
     return false;
   }
@@ -156,7 +156,7 @@ protected:
 
     // Build the various AA results and register them.
     AC.reset(new AssumptionCache(F));
-    BAR.reset(new BasicAAResult(M.getDataLayout(), TLI, *AC));
+    BAR.reset(new BasicAAResult(M.getDataLayout(), F, TLI, *AC));
     AAR->addAAResult(*BAR);
 
     return *AAR;

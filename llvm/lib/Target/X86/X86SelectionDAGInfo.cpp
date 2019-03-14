@@ -93,7 +93,6 @@ SDValue X86SelectionDAGInfo::EmitTargetCodeForMemset(
         ? DAG.getTargetLoweringInfo().getLibcallName(RTLIB::BZERO)
         : nullptr) {
       const TargetLowering &TLI = DAG.getTargetLoweringInfo();
-      EVT IntPtr = TLI.getPointerTy(DAG.getDataLayout());
       Type *IntPtrTy = DAG.getDataLayout().getIntPtrType(*DAG.getContext());
       TargetLowering::ArgListTy Args;
       TargetLowering::ArgListEntry Entry;
@@ -107,7 +106,7 @@ SDValue X86SelectionDAGInfo::EmitTargetCodeForMemset(
       CLI.setDebugLoc(dl)
           .setChain(Chain)
           .setLibCallee(CallingConv::C, Type::getVoidTy(*DAG.getContext()),
-                        DAG.getExternalSymbol(bzeroName, IntPtr),
+                        DAG.getExternalFunctionSymbol(bzeroName),
                         std::move(Args))
           .setDiscardResult();
 
@@ -170,10 +169,11 @@ SDValue X86SelectionDAGInfo::EmitTargetCodeForMemset(
     InFlag = Chain.getValue(1);
   }
 
-  Chain = DAG.getCopyToReg(Chain, dl, Subtarget.is64Bit() ? X86::RCX : X86::ECX,
+  bool Use64BitRegs = Subtarget.isTarget64BitLP64();
+  Chain = DAG.getCopyToReg(Chain, dl, Use64BitRegs ? X86::RCX : X86::ECX,
                            Count, InFlag);
   InFlag = Chain.getValue(1);
-  Chain = DAG.getCopyToReg(Chain, dl, Subtarget.is64Bit() ? X86::RDI : X86::EDI,
+  Chain = DAG.getCopyToReg(Chain, dl, Use64BitRegs ? X86::RDI : X86::EDI,
                            Dst, InFlag);
   InFlag = Chain.getValue(1);
 
@@ -249,20 +249,21 @@ SDValue X86SelectionDAGInfo::EmitTargetCodeForMemcpy(
 
     if (Repeats.BytesLeft() > 0 &&
         DAG.getMachineFunction().getFunction().optForMinSize()) {
-      // When agressively optimizing for size, avoid generating the code to
+      // When aggressively optimizing for size, avoid generating the code to
       // handle BytesLeft.
       Repeats.AVT = MVT::i8;
     }
   }
 
+  bool Use64BitRegs = Subtarget.isTarget64BitLP64();
   SDValue InFlag;
-  Chain = DAG.getCopyToReg(Chain, dl, Subtarget.is64Bit() ? X86::RCX : X86::ECX,
+  Chain = DAG.getCopyToReg(Chain, dl, Use64BitRegs ? X86::RCX : X86::ECX,
                            DAG.getIntPtrConstant(Repeats.Count(), dl), InFlag);
   InFlag = Chain.getValue(1);
-  Chain = DAG.getCopyToReg(Chain, dl, Subtarget.is64Bit() ? X86::RDI : X86::EDI,
+  Chain = DAG.getCopyToReg(Chain, dl, Use64BitRegs ? X86::RDI : X86::EDI,
                            Dst, InFlag);
   InFlag = Chain.getValue(1);
-  Chain = DAG.getCopyToReg(Chain, dl, Subtarget.is64Bit() ? X86::RSI : X86::ESI,
+  Chain = DAG.getCopyToReg(Chain, dl, Use64BitRegs ? X86::RSI : X86::ESI,
                            Src, InFlag);
   InFlag = Chain.getValue(1);
 

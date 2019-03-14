@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
+#include "llvm/CodeGen/StackProtector.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/GlobalValue.h"
 #include "llvm/IR/Instructions.h"
@@ -46,6 +47,13 @@ using namespace llvm;
 // instructions for SelectionDAG operations.
 //===----------------------------------------------------------------------===//
 
+void MipsDAGToDAGISel::getAnalysisUsage(AnalysisUsage &AU) const {
+  // There are multiple MipsDAGToDAGISel instances added to the pass pipeline.
+  // We need to preserve StackProtector for the next one.
+  AU.addPreserved<StackProtector>();
+  SelectionDAGISel::getAnalysisUsage(AU);
+}
+
 bool MipsDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
   Subtarget = &static_cast<const MipsSubtarget &>(MF.getSubtarget());
   bool Ret = SelectionDAGISel::runOnMachineFunction(MF);
@@ -59,8 +67,11 @@ bool MipsDAGToDAGISel::runOnMachineFunction(MachineFunction &MF) {
 /// GOT address into a register.
 SDNode *MipsDAGToDAGISel::getGlobalBaseReg(bool IsForTls) {
   unsigned GlobalBaseReg = MF->getInfo<MipsFunctionInfo>()->getGlobalBaseReg(IsForTls);
-  return CurDAG->getRegister(GlobalBaseReg, getTargetLowering()->getPointerTy(
-                                                CurDAG->getDataLayout()))
+  // XXXAR: address space 0 is correct here since it will never be used
+  // for capabilities
+  return CurDAG
+      ->getRegister(GlobalBaseReg, getTargetLowering()->getPointerTy(
+                                       CurDAG->getDataLayout(), 0))
       .getNode();
 }
 

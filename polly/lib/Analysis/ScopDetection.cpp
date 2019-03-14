@@ -483,8 +483,7 @@ bool ScopDetection::onlyValidRequiredInvariantLoads(
     // very function (and its children).
     if (Context.RequiredILS.count(Load))
       continue;
-
-    if (!isHoistableLoad(Load, CurRegion, LI, SE, DT))
+    if (!isHoistableLoad(Load, CurRegion, LI, SE, DT, Context.RequiredILS))
       return false;
 
     for (auto NonAffineRegion : Context.NonAffineSubRegionSet) {
@@ -658,7 +657,7 @@ bool ScopDetection::isValidCFG(BasicBlock &BB, bool IsLoopBranch,
                                DetectionContext &Context) const {
   Region &CurRegion = Context.CurRegion;
 
-  TerminatorInst *TI = BB.getTerminator();
+  Instruction *TI = BB.getTerminator();
 
   if (AllowUnreachable && isa<UnreachableInst>(TI))
     return true;
@@ -718,7 +717,9 @@ bool ScopDetection::isValidCallInst(CallInst &CI,
       // Implicitly disable delinearization since we have an unknown
       // accesses with an unknown access function.
       Context.HasUnknownAccess = true;
-      Context.AST.add(&CI);
+      // Explicitly use addUnknown so we don't put a loop-variant
+      // pointer into the alias set.
+      Context.AST.addUnknown(&CI);
       return true;
     case FMRB_OnlyReadsArgumentPointees:
     case FMRB_OnlyAccessesArgumentPointees:
@@ -741,7 +742,9 @@ bool ScopDetection::isValidCallInst(CallInst &CI,
         Context.HasUnknownAccess = true;
       }
 
-      Context.AST.add(&CI);
+      // Explicitly use addUnknown so we don't put a loop-variant
+      // pointer into the alias set.
+      Context.AST.addUnknown(&CI);
       return true;
     case FMRB_DoesNotReadMemory:
     case FMRB_OnlyAccessesInaccessibleMem:
@@ -776,7 +779,7 @@ bool ScopDetection::isValidIntrinsicInst(IntrinsicInst &II,
       if (!isValidAccess(&II, AF, BP, Context))
         return false;
     }
-  // Fall through
+    LLVM_FALLTHROUGH;
   case Intrinsic::memset:
     AF = SE.getSCEVAtScope(cast<MemIntrinsic>(II).getDest(), L);
     if (!AF->isZero()) {
@@ -938,7 +941,7 @@ bool ScopDetection::hasValidArraySizes(DetectionContext &Context,
       auto *V = dyn_cast<Value>(Unknown->getValue());
       if (auto *Load = dyn_cast<LoadInst>(V)) {
         if (Context.CurRegion.contains(Load) &&
-            isHoistableLoad(Load, CurRegion, LI, SE, DT))
+            isHoistableLoad(Load, CurRegion, LI, SE, DT, Context.RequiredILS))
           Context.RequiredILS.insert(Load);
         continue;
       }
@@ -1137,8 +1140,8 @@ bool ScopDetection::isValidAccess(Instruction *Inst, const SCEV *AF,
   // any other pointer. This cannot be handled at the moment.
   AAMDNodes AATags;
   Inst->getAAMetadata(AATags);
-  AliasSet &AS = Context.AST.getAliasSetForPointer(
-      BP->getValue(), MemoryLocation::UnknownSize, AATags);
+  AliasSet &AS = Context.AST.getAliasSetFor(
+      MemoryLocation(BP->getValue(), MemoryLocation::UnknownSize, AATags));
 
   if (!AS.isMustAlias()) {
     if (PollyUseRuntimeAliasChecks) {
@@ -1148,18 +1151,38 @@ bool ScopDetection::isValidAccess(Instruction *Inst, const SCEV *AF,
       // inside the scop. Hence, we can only create a run-time check if we are
       // sure the base pointer is not an instruction defined inside the scop.
       // However, we can ignore loads that will be hoisted.
-      for (const auto &Ptr : AS) {
-        Instruction *Inst = dyn_cast<Instruction>(Ptr.getValue());
-        if (Inst && Context.CurRegion.contains(Inst)) {
-          auto *Load = dyn_cast<LoadInst>(Inst);
-          if (Load && isHoistableLoad(Load, Context.CurRegion, LI, SE, DT)) {
-            Context.RequiredILS.insert(Load);
-            continue;
-          }
 
-          CanBuildRunTimeCheck = false;
-          break;
+      InvariantLoadsSetTy VariantLS, InvariantLS;
+      // In order to detect loads which are dependent on other invariant loads
+      // as invariant, we use fixed-point iteration method here i.e we iterate
+      // over the alias set for arbitrary number of times until it is safe to
+      // assume that all the invariant loads have been detected
+      while (1) {
+        const unsigned int VariantSize = VariantLS.size(),
+                           InvariantSize = InvariantLS.size();
+
+        for (const auto &Ptr : AS) {
+          Instruction *Inst = dyn_cast<Instruction>(Ptr.getValue());
+          if (Inst && Context.CurRegion.contains(Inst)) {
+            auto *Load = dyn_cast<LoadInst>(Inst);
+            if (Load && InvariantLS.count(Load))
+              continue;
+            if (Load && isHoistableLoad(Load, Context.CurRegion, LI, SE, DT,
+                                        InvariantLS)) {
+              if (VariantLS.count(Load))
+                VariantLS.remove(Load);
+              Context.RequiredILS.insert(Load);
+              InvariantLS.insert(Load);
+            } else {
+              CanBuildRunTimeCheck = false;
+              VariantLS.insert(Load);
+            }
+          }
         }
+
+        if (InvariantSize == InvariantLS.size() &&
+            VariantSize == VariantLS.size())
+          break;
       }
 
       if (CanBuildRunTimeCheck)
@@ -1195,7 +1218,8 @@ bool ScopDetection::isValidInstruction(Instruction &Inst,
       auto *PHI = dyn_cast<PHINode>(OpInst);
       if (PHI) {
         for (User *U : PHI->users()) {
-          if (!isa<TerminatorInst>(U))
+          auto *UI = dyn_cast<Instruction>(U);
+          if (!UI || !UI->isTerminator())
             return false;
         }
       } else {
@@ -1732,7 +1756,7 @@ bool ScopDetection::isReducibleRegion(Region &R, DebugLoc &DbgLoc) const {
     DFSStack.pop();
 
     // Loop to iterate over the successors of current BB.
-    const TerminatorInst *TInst = CurrBB->getTerminator();
+    const Instruction *TInst = CurrBB->getTerminator();
     unsigned NSucc = TInst->getNumSuccessors();
     for (unsigned I = AdjacentBlockIndex; I < NSucc;
          ++I, ++AdjacentBlockIndex) {

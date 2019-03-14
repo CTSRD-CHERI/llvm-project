@@ -16,6 +16,7 @@
 
 #include "kmp_config.h"
 #include <stdlib.h>
+#include <atomic>
 
 #define KMP_FTN_PLAIN 1
 #define KMP_FTN_APPEND 2
@@ -85,9 +86,12 @@
    128-bit extended precision type yet */
 typedef long double _Quad;
 #elif KMP_COMPILER_GCC
+/* GCC on NetBSD lacks __multc3/__divtc3 builtins needed for quad */
+#if !KMP_OS_NETBSD
 typedef __float128 _Quad;
 #undef KMP_HAVE_QUAD
 #define KMP_HAVE_QUAD 1
+#endif
 #elif KMP_COMPILER_MSVC
 typedef long double _Quad;
 #endif
@@ -99,7 +103,9 @@ typedef long double _Quad;
 #endif
 #endif /* KMP_ARCH_X86 || KMP_ARCH_X86_64 */
 
+#define KMP_USE_X87CONTROL 0
 #if KMP_OS_WINDOWS
+#define KMP_END_OF_LINE "\r\n"
 typedef char kmp_int8;
 typedef unsigned char kmp_uint8;
 typedef short kmp_int16;
@@ -121,6 +127,10 @@ typedef struct kmp_struct64 kmp_int64;
 typedef struct kmp_struct64 kmp_uint64;
 /* Not sure what to use for KMP_[U]INT64_SPEC here */
 #endif
+#if KMP_ARCH_X86 && KMP_MSVC_COMPAT
+#undef KMP_USE_X87CONTROL
+#define KMP_USE_X87CONTROL 1
+#endif
 #if KMP_ARCH_X86_64
 #define KMP_INTPTR 1
 typedef __int64 kmp_intptr_t;
@@ -131,6 +141,7 @@ typedef unsigned __int64 kmp_uintptr_t;
 #endif /* KMP_OS_WINDOWS */
 
 #if KMP_OS_UNIX
+#define KMP_END_OF_LINE "\n"
 typedef char kmp_int8;
 typedef unsigned char kmp_uint8;
 typedef short kmp_int16;
@@ -245,7 +256,7 @@ template <> struct traits_t<unsigned long long> {
 
 #define KMP_EXPORT extern /* export declaration in guide libraries */
 
-#if __GNUC__ >= 4
+#if __GNUC__ >= 4 && !defined(__MINGW32__)
 #define __forceinline __inline
 #endif
 
@@ -295,7 +306,7 @@ extern "C" {
 #define KMP_NORETURN __attribute__((noreturn))
 #endif
 
-#if KMP_OS_WINDOWS
+#if KMP_OS_WINDOWS && KMP_MSVC_COMPAT
 #define KMP_ALIGN(bytes) __declspec(align(bytes))
 #define KMP_THREAD_LOCAL __declspec(thread)
 #define KMP_ALIAS /* Nothing */
@@ -312,9 +323,12 @@ extern "C" {
 #endif
 
 // Define KMP_VERSION_SYMBOL and KMP_EXPAND_NAME
-#ifdef KMP_USE_VERSION_SYMBOLS
+#ifndef KMP_STR
 #define KMP_STR(x) _KMP_STR(x)
 #define _KMP_STR(x) #x
+#endif
+
+#ifdef KMP_USE_VERSION_SYMBOLS
 // If using versioned symbols, KMP_EXPAND_NAME prepends
 // __kmp_api_ to the real API name
 #define KMP_EXPAND_NAME(api_name) _KMP_EXPAND_NAME(api_name)
@@ -352,10 +366,12 @@ enum kmp_mem_fence_type {
 
 #if KMP_ASM_INTRINS && KMP_OS_WINDOWS
 
+#if KMP_MSVC_COMPAT && !KMP_COMPILER_CLANG
 #pragma intrinsic(InterlockedExchangeAdd)
 #pragma intrinsic(InterlockedCompareExchange)
 #pragma intrinsic(InterlockedExchange)
 #pragma intrinsic(InterlockedExchange64)
+#endif
 
 // Using InterlockedIncrement / InterlockedDecrement causes a library loading
 // ordering problem, so we use InterlockedExchangeAdd instead.
@@ -904,6 +920,45 @@ enum kmp_warnings_level {
 #ifdef __cplusplus
 } // extern "C"
 #endif // __cplusplus
+
+// Macros for C++11 atomic functions
+#define KMP_ATOMIC_LD(p, order) (p)->load(std::memory_order_##order)
+#define KMP_ATOMIC_OP(op, p, v, order) (p)->op(v, std::memory_order_##order)
+
+// For non-default load/store
+#define KMP_ATOMIC_LD_ACQ(p) KMP_ATOMIC_LD(p, acquire)
+#define KMP_ATOMIC_LD_RLX(p) KMP_ATOMIC_LD(p, relaxed)
+#define KMP_ATOMIC_ST_REL(p, v) KMP_ATOMIC_OP(store, p, v, release)
+#define KMP_ATOMIC_ST_RLX(p, v) KMP_ATOMIC_OP(store, p, v, relaxed)
+
+// For non-default fetch_<op>
+#define KMP_ATOMIC_ADD(p, v) KMP_ATOMIC_OP(fetch_add, p, v, acq_rel)
+#define KMP_ATOMIC_SUB(p, v) KMP_ATOMIC_OP(fetch_sub, p, v, acq_rel)
+#define KMP_ATOMIC_AND(p, v) KMP_ATOMIC_OP(fetch_and, p, v, acq_rel)
+#define KMP_ATOMIC_OR(p, v) KMP_ATOMIC_OP(fetch_or, p, v, acq_rel)
+#define KMP_ATOMIC_INC(p) KMP_ATOMIC_OP(fetch_add, p, 1, acq_rel)
+#define KMP_ATOMIC_DEC(p) KMP_ATOMIC_OP(fetch_sub, p, 1, acq_rel)
+#define KMP_ATOMIC_ADD_RLX(p, v) KMP_ATOMIC_OP(fetch_add, p, v, relaxed)
+#define KMP_ATOMIC_INC_RLX(p) KMP_ATOMIC_OP(fetch_add, p, 1, relaxed)
+
+// Callers of the following functions cannot see the side effect on "expected".
+template <typename T>
+bool __kmp_atomic_compare_store(std::atomic<T> *p, T expected, T desired) {
+  return p->compare_exchange_strong(
+      expected, desired, std::memory_order_acq_rel, std::memory_order_relaxed);
+}
+
+template <typename T>
+bool __kmp_atomic_compare_store_acq(std::atomic<T> *p, T expected, T desired) {
+  return p->compare_exchange_strong(
+      expected, desired, std::memory_order_acquire, std::memory_order_relaxed);
+}
+
+template <typename T>
+bool __kmp_atomic_compare_store_rel(std::atomic<T> *p, T expected, T desired) {
+  return p->compare_exchange_strong(
+      expected, desired, std::memory_order_release, std::memory_order_relaxed);
+}
 
 #endif /* KMP_OS_H */
 // Safe C API

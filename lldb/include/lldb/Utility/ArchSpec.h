@@ -10,15 +10,16 @@
 #ifndef LLDB_UTILITY_ARCHSPEC_H
 #define LLDB_UTILITY_ARCHSPEC_H
 
+#include "lldb/Utility/CompletionRequest.h"
 #include "lldb/Utility/ConstString.h"
 #include "lldb/lldb-enumerations.h"
 #include "lldb/lldb-forward.h"
 #include "lldb/lldb-private-enumerations.h"
-#include "llvm/ADT/StringRef.h" // for StringRef
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
-#include <cstddef> // for size_t
-#include <cstdint> // for uint32_t
-#include <string>  // for string
+#include <cstddef>
+#include <cstdint>
+#include <string>
 
 namespace lldb_private {
 
@@ -288,7 +289,8 @@ public:
   //---------------------------------------------------------------------------
   static bool ContainsOnlyArch(const llvm::Triple &normalized_triple);
 
-  static size_t AutoComplete(llvm::StringRef name, StringList &matches);
+  static void ListSupportedArchNames(StringList &list);
+  static size_t AutoComplete(CompletionRequest &request);
 
   //------------------------------------------------------------------
   /// Returns a static string representing the current architecture.

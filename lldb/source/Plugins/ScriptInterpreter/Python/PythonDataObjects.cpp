@@ -222,9 +222,7 @@ PythonBytes::~PythonBytes() {}
 bool PythonBytes::Check(PyObject *py_obj) {
   if (!py_obj)
     return false;
-  if (PyBytes_Check(py_obj))
-    return true;
-  return false;
+  return PyBytes_Check(py_obj);
 }
 
 void PythonBytes::Reset(PyRefType type, PyObject *py_obj) {
@@ -294,9 +292,7 @@ PythonByteArray::~PythonByteArray() {}
 bool PythonByteArray::Check(PyObject *py_obj) {
   if (!py_obj)
     return false;
-  if (PyByteArray_Check(py_obj))
-    return true;
-  return false;
+  return PyByteArray_Check(py_obj);
 }
 
 void PythonByteArray::Reset(PyRefType type, PyObject *py_obj) {
@@ -399,14 +395,16 @@ llvm::StringRef PythonString::GetString() const {
     return llvm::StringRef();
 
   Py_ssize_t size;
-  char *c;
+  const char *data;
 
 #if PY_MAJOR_VERSION >= 3
-  c = PyUnicode_AsUTF8AndSize(m_py_obj, &size);
+  data = PyUnicode_AsUTF8AndSize(m_py_obj, &size);
 #else
+  char *c;
   PyString_AsStringAndSize(m_py_obj, &c, &size);
+  data = c;
 #endif
-  return llvm::StringRef(c, size);
+  return llvm::StringRef(data, size);
 }
 
 size_t PythonString::GetSize() const {
@@ -937,7 +935,8 @@ PythonFile::PythonFile() : PythonObject() {}
 PythonFile::PythonFile(File &file, const char *mode) { Reset(file, mode); }
 
 PythonFile::PythonFile(const char *path, const char *mode) {
-  lldb_private::File file(path, GetOptionsFromMode(mode));
+  lldb_private::File file;
+  FileSystem::Instance().Open(file, FileSpec(path), GetOptionsFromMode(mode));
   Reset(file, mode);
 }
 

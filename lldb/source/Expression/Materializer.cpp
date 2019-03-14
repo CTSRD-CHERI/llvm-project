@@ -7,13 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Expression/Materializer.h"
 #include "lldb/Core/DumpDataExtractor.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectVariable.h"
 #include "lldb/Expression/ExpressionVariable.h"
@@ -27,6 +22,7 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
 
 using namespace lldb_private;
 
@@ -532,7 +528,7 @@ public:
 
         if (data.GetByteSize() < m_variable_sp->GetType()->GetByteSize()) {
           if (data.GetByteSize() == 0 &&
-              m_variable_sp->LocationExpression().IsValid() == false) {
+              !m_variable_sp->LocationExpression().IsValid()) {
             err.SetErrorStringWithFormat("the variable '%s' has no location, "
                                          "it may have been optimized out",
                                          m_variable_sp->GetName().AsCString());

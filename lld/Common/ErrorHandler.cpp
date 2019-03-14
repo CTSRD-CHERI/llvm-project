@@ -47,8 +47,9 @@ ErrorHandler &lld::errorHandler() {
 }
 
 void lld::exitLld(int Val) {
-  // Delete the output buffer so that any tempory file is deleted.
-  errorHandler().OutputBuffer.reset();
+  // Delete any temporary file, while keeping the memory mapping open.
+  if (errorHandler().OutputBuffer)
+    errorHandler().OutputBuffer->discard();
 
   // Dealloc/destroy ManagedStatic variables before calling
   // _exit(). In a non-LTO build, this is a nop. In an LTO
@@ -65,7 +66,18 @@ void lld::diagnosticHandler(const DiagnosticInfo &DI) {
   raw_svector_ostream OS(S);
   DiagnosticPrinterRawOStream DP(OS);
   DI.print(DP);
-  warn(S);
+  switch (DI.getSeverity()) {
+  case DS_Error:
+    error(S);
+    break;
+  case DS_Warning:
+    warn(S);
+    break;
+  case DS_Remark:
+  case DS_Note:
+    message(S);
+    break;
+  }
 }
 
 void lld::checkError(Error E) {

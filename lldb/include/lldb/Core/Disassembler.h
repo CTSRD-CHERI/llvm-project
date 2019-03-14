@@ -12,32 +12,32 @@
 
 #include "lldb/Core/Address.h"
 #include "lldb/Core/EmulateInstruction.h"
-#include "lldb/Core/FormatEntity.h" // for FormatEntity
+#include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/Opcode.h"
 #include "lldb/Core/PluginInterface.h"
 #include "lldb/Interpreter/OptionValue.h"
 #include "lldb/Symbol/LineEntry.h"
-#include "lldb/Target/ExecutionContext.h" // for ExecutionContext
+#include "lldb/Target/ExecutionContext.h"
 #include "lldb/Utility/ArchSpec.h"
-#include "lldb/Utility/ConstString.h" // for ConstString
+#include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/FileSpec.h"
-#include "lldb/lldb-defines.h"      // for DISALLOW_COPY_AND_ASSIGN
-#include "lldb/lldb-enumerations.h" // for AddressClass, AddressClass...
-#include "lldb/lldb-forward.h"      // for InstructionSP, DisassemblerSP
-#include "lldb/lldb-types.h"        // for addr_t, offset_t
+#include "lldb/lldb-defines.h"
+#include "lldb/lldb-forward.h"
+#include "lldb/lldb-private-enumerations.h"
+#include "lldb/lldb-types.h"
 
-#include "llvm/ADT/StringRef.h" // for StringRef
+#include "llvm/ADT/StringRef.h"
 
-#include <functional> // for function
+#include <functional>
 #include <map>
-#include <memory> // for enable_shared_from_this
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
 
-#include <stddef.h> // for size_t
-#include <stdint.h> // for uint32_t, int64_t
-#include <stdio.h>  // for FILE
+#include <stddef.h>
+#include <stdint.h>
+#include <stdio.h>
 
 namespace lldb_private {
 class AddressRange;
@@ -78,7 +78,7 @@ namespace lldb_private {
 class Instruction {
 public:
   Instruction(const Address &address,
-              lldb::AddressClass addr_class = lldb::eAddressClassInvalid);
+              AddressClass addr_class = AddressClass::eInvalid);
 
   virtual ~Instruction();
 
@@ -102,11 +102,11 @@ public:
   virtual void
   CalculateMnemonicOperandsAndComment(const ExecutionContext *exe_ctx) = 0;
 
-  lldb::AddressClass GetAddressClass();
+  AddressClass GetAddressClass();
 
   void SetAddress(const Address &addr) {
     // Invalidate the address class to lazily discover it if we need to.
-    m_address_class = lldb::eAddressClassInvalid;
+    m_address_class = AddressClass::eInvalid;
     m_address = addr;
   }
 
@@ -235,14 +235,14 @@ protected:
   Address m_address; // The section offset address of this instruction
                      // We include an address class in the Instruction class to
                      // allow the instruction specify the
-                     // eAddressClassCodeAlternateISA (currently used for
-                     // thumb), and also to specify data (eAddressClassData).
-                     // The usual value will be eAddressClassCode, but often
+                     // AddressClass::eCodeAlternateISA (currently used for
+                     // thumb), and also to specify data (AddressClass::eData).
+                     // The usual value will be AddressClass::eCode, but often
                      // when disassembling memory, you might run into data.
                      // This can help us to disassemble appropriately.
 private:
-  lldb::AddressClass
-      m_address_class; // Use GetAddressClass () accessor function!
+  AddressClass m_address_class; // Use GetAddressClass () accessor function!
+
 protected:
   Opcode m_opcode; // The opcode for this instruction
   std::string m_opcode_name;

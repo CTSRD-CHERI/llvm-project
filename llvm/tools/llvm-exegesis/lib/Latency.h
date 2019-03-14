@@ -17,35 +17,31 @@
 
 #include "BenchmarkRunner.h"
 #include "MCInstrDescView.h"
+#include "SnippetGenerator.h"
 
+namespace llvm {
 namespace exegesis {
+
+class LatencySnippetGenerator : public SnippetGenerator {
+public:
+  LatencySnippetGenerator(const LLVMState &State) : SnippetGenerator(State) {}
+  ~LatencySnippetGenerator() override;
+
+  llvm::Expected<std::vector<CodeTemplate>>
+  generateCodeTemplates(const Instruction &Instr) const override;
+};
 
 class LatencyBenchmarkRunner : public BenchmarkRunner {
 public:
-  using BenchmarkRunner::BenchmarkRunner;
+  LatencyBenchmarkRunner(const LLVMState &State)
+      : BenchmarkRunner(State, InstructionBenchmark::Latency) {}
   ~LatencyBenchmarkRunner() override;
 
-  llvm::Expected<SnippetPrototype>
-  generatePrototype(unsigned Opcode) const override;
-
 private:
-  llvm::Error isInfeasible(const llvm::MCInstrDesc &MCInstrDesc) const;
-
-  llvm::Expected<SnippetPrototype> generateSelfAliasingPrototype(
-      const Instruction &Instr,
-      const AliasingConfigurations &SelfAliasing) const;
-
-  llvm::Expected<SnippetPrototype> generateTwoInstructionPrototype(
-      const Instruction &Instr,
-      const AliasingConfigurations &SelfAliasing) const;
-
-  InstructionBenchmark::ModeE getMode() const override;
-
-  std::vector<BenchmarkMeasure>
-  runMeasurements(const ExecutableFunction &EF,
-                  const unsigned NumRepetitions) const override;
+  llvm::Expected<std::vector<BenchmarkMeasure>>
+  runMeasurements(const FunctionExecutor &Executor) const override;
 };
-
 } // namespace exegesis
+} // namespace llvm
 
 #endif // LLVM_TOOLS_LLVM_EXEGESIS_LATENCY_H

@@ -535,6 +535,33 @@ MCSubtargetInfo &MCContext::getSubtargetCopy(const MCSubtargetInfo &STI) {
   return *new (MCSubtargetAllocator.Allocate()) MCSubtargetInfo(STI);
 }
 
+void MCContext::addDebugPrefixMapEntry(const std::string &From,
+                                       const std::string &To) {
+  DebugPrefixMap.insert(std::make_pair(From, To));
+}
+
+void MCContext::RemapDebugPaths() {
+  const auto &DebugPrefixMap = this->DebugPrefixMap;
+  const auto RemapDebugPath = [&DebugPrefixMap](std::string &Path) {
+    for (const auto &Entry : DebugPrefixMap)
+      if (StringRef(Path).startswith(Entry.first)) {
+        std::string RemappedPath =
+            (Twine(Entry.second) + Path.substr(Entry.first.size())).str();
+        Path.swap(RemappedPath);
+      }
+  };
+
+  // Remap compilation directory.
+  std::string CompDir = CompilationDir.str();
+  RemapDebugPath(CompDir);
+  CompilationDir = CompDir;
+
+  // Remap MCDwarfDirs in all compilation units.
+  for (auto &CUIDTablePair : MCDwarfLineTablesCUMap)
+    for (auto &Dir : CUIDTablePair.second.getMCDwarfDirs())
+      RemapDebugPath(Dir);
+}
+
 //===----------------------------------------------------------------------===//
 // Dwarf Management
 //===----------------------------------------------------------------------===//
@@ -565,7 +592,7 @@ bool MCContext::isValidDwarfFileNumber(unsigned FileNumber, unsigned CUID) {
   return !LineTable.getMCDwarfFiles()[FileNumber].Name.empty();
 }
 
-/// Remove empty sections from SectionStartEndSyms, to avoid generating
+/// Remove empty sections from SectionsForRanges, to avoid generating
 /// useless debug info for them.
 void MCContext::finalizeDwarfSections(MCStreamer &MCOS) {
   SectionsForRanges.remove_if(
@@ -576,11 +603,6 @@ CodeViewContext &MCContext::getCVContext() {
   if (!CVContext.get())
     CVContext.reset(new CodeViewContext);
   return *CVContext.get();
-}
-
-void MCContext::clearCVLocSeen() {
-  if (CVContext)
-    CVContext->clearCVLocSeen();
 }
 
 //===----------------------------------------------------------------------===//

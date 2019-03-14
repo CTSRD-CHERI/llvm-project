@@ -141,7 +141,7 @@ public:
 
   // TODO: remove this once all users have been updated to pass an AddrSpace
   static Function *Create(FunctionType *Ty, LinkageTypes Linkage,
-                          const Twine &N, Module *M = nullptr) {
+                          const Twine &N = "", Module *M = nullptr) {
     return new Function(Ty, Linkage, static_cast<unsigned>(-1), N, M);
   }
 
@@ -161,7 +161,7 @@ public:
   /// Returns the number of non-debug IR instructions in this function.
   /// This is equivalent to the sum of the sizes of each basic block contained
   /// within this function.
-  unsigned getInstructionCount();
+  unsigned getInstructionCount() const;
 
   /// Returns the FunctionType for me.
   FunctionType *getFunctionType() const {
@@ -574,7 +574,7 @@ public:
 
   /// True if this function needs an unwind table.
   bool needsUnwindTableEntry() const {
-    return hasUWTable() || !doesNotThrow();
+    return hasUWTable() || !doesNotThrow() || hasPersonalityFn();
   }
 
   /// Determine if the function returns a structure through first
@@ -798,6 +798,12 @@ public:
   /// Returns true if we should emit debug info for profiling.
   bool isDebugInfoForProfiling() const;
 
+  /// Check if null pointer dereferencing is considered undefined behavior for
+  /// the function.
+  /// Return value: false => null pointer dereference is undefined.
+  /// Return value: true =>  null pointer dereference is not undefined.
+  bool nullPointerIsDefined() const;
+
 private:
   void allocHungoffUselist();
   template<int Idx> void setHungoffOperand(Constant *C);
@@ -809,6 +815,13 @@ private:
   }
   void setValueSubclassDataBit(unsigned Bit, bool On);
 };
+
+/// Check whether null pointer dereferencing is considered undefined behavior
+/// for a given function or an address space.
+/// Null pointer access in non-zero address space is not considered undefined.
+/// Return value: false => null pointer dereference is undefined.
+/// Return value: true =>  null pointer dereference is not undefined.
+bool NullPointerIsDefined(const Function *F, unsigned AS = 0);
 
 template <>
 struct OperandTraits<Function> : public HungoffOperandTraits<3> {};

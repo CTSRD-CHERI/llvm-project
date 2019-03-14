@@ -9,15 +9,11 @@
 
 #include "lldb/Interpreter/Options.h"
 
-// C Includes
-// C++ Includes
 #include <algorithm>
 #include <bitset>
 #include <map>
 #include <set>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Host/OptionParser.h"
 #include "lldb/Interpreter/CommandCompletions.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
@@ -461,7 +457,7 @@ void Options::GenerateOptionUsage(Stream &strm, CommandObject *cmd,
         }
       }
 
-      if (options.empty() == false) {
+      if (!options.empty()) {
         // We have some required options with no arguments
         strm.PutCString(" -");
         for (i = 0; i < 2; ++i)
@@ -480,14 +476,14 @@ void Options::GenerateOptionUsage(Stream &strm, CommandObject *cmd,
         if (def.usage_mask & opt_set_mask && isprint8(def.short_option)) {
           // Add current option to the end of out_stream.
 
-          if (def.required == false &&
+          if (!def.required &&
               def.option_has_arg == OptionParser::eNoArgument) {
             options.insert(def.short_option);
           }
         }
       }
 
-      if (options.empty() == false) {
+      if (!options.empty()) {
         // We have some required options with no arguments
         strm.PutCString(" [-");
         for (i = 0; i < 2; ++i)
@@ -601,15 +597,17 @@ void Options::GenerateOptionUsage(Stream &strm, CommandObject *cmd,
 
       if (opt_defs[i].usage_text)
         OutputFormattedUsageText(strm, opt_defs[i], screen_width);
-      if (opt_defs[i].enum_values != nullptr) {
+      if (!opt_defs[i].enum_values.empty()) {
         strm.Indent();
         strm.Printf("Values: ");
-        for (int k = 0; opt_defs[i].enum_values[k].string_value != nullptr;
-             k++) {
-          if (k == 0)
-            strm.Printf("%s", opt_defs[i].enum_values[k].string_value);
+        bool is_first = true;
+        for (const auto &enum_value : opt_defs[i].enum_values) {
+          if (is_first) {
+            strm.Printf("%s", enum_value.string_value);
+            is_first = false;
+          }
           else
-            strm.Printf(" | %s", opt_defs[i].enum_values[k].string_value);
+            strm.Printf(" | %s", enum_value.string_value);
         }
         strm.EOL();
       }
@@ -647,12 +645,10 @@ bool Options::VerifyPartialOptions(CommandReturnObject &result) {
   return options_are_valid;
 }
 
-bool Options::HandleOptionCompletion(
-    Args &input, OptionElementVector &opt_element_vector, int cursor_index,
-    int char_pos, int match_start_point, int max_return_elements,
-    CommandInterpreter &interpreter, bool &word_complete,
-    lldb_private::StringList &matches) {
-  word_complete = true;
+bool Options::HandleOptionCompletion(CompletionRequest &request,
+                                     OptionElementVector &opt_element_vector,
+                                     CommandInterpreter &interpreter) {
+  request.SetWordComplete(true);
 
   // For now we just scan the completions to see if the cursor position is in
   // an option or its argument.  Otherwise we'll call HandleArgumentCompletion.
@@ -661,15 +657,14 @@ bool Options::HandleOptionCompletion(
 
   auto opt_defs = GetDefinitions();
 
-  std::string cur_opt_std_str(input.GetArgumentAtIndex(cursor_index));
-  cur_opt_std_str.erase(char_pos);
+  std::string cur_opt_std_str = request.GetCursorArgumentPrefix().str();
   const char *cur_opt_str = cur_opt_std_str.c_str();
 
   for (size_t i = 0; i < opt_element_vector.size(); i++) {
     int opt_pos = opt_element_vector[i].opt_pos;
     int opt_arg_pos = opt_element_vector[i].opt_arg_pos;
     int opt_defs_index = opt_element_vector[i].opt_defs_index;
-    if (opt_pos == cursor_index) {
+    if (opt_pos == request.GetCursorIndex()) {
       // We're completing the option itself.
 
       if (opt_defs_index == OptionArgElement::eBareDash) {
@@ -683,7 +678,7 @@ bool Options::HandleOptionCompletion(
           if (!def.short_option)
             continue;
           opt_str[1] = def.short_option;
-          matches.AppendString(opt_str);
+          request.AddCompletion(opt_str);
         }
 
         return true;
@@ -695,7 +690,7 @@ bool Options::HandleOptionCompletion(
 
           full_name.erase(full_name.begin() + 2, full_name.end());
           full_name.append(def.long_option);
-          matches.AppendString(full_name.c_str());
+          request.AddCompletion(full_name.c_str());
         }
         return true;
       } else if (opt_defs_index != OptionArgElement::eUnrecognizedArg) {
@@ -708,10 +703,10 @@ bool Options::HandleOptionCompletion(
             strcmp(opt_defs[opt_defs_index].long_option, cur_opt_str) != 0) {
           std::string full_name("--");
           full_name.append(opt_defs[opt_defs_index].long_option);
-          matches.AppendString(full_name.c_str());
+          request.AddCompletion(full_name.c_str());
           return true;
         } else {
-          matches.AppendString(input.GetArgumentAtIndex(cursor_index));
+          request.AddCompletion(request.GetCursorArgument());
           return true;
         }
       } else {
@@ -731,32 +726,23 @@ bool Options::HandleOptionCompletion(
             if (strstr(def.long_option, cur_opt_str + 2) == def.long_option) {
               std::string full_name("--");
               full_name.append(def.long_option);
-              // The options definitions table has duplicates because of the
-              // way the grouping information is stored, so only add once.
-              bool duplicate = false;
-              for (size_t k = 0; k < matches.GetSize(); k++) {
-                if (matches.GetStringAtIndex(k) == full_name) {
-                  duplicate = true;
-                  break;
-                }
-              }
-              if (!duplicate)
-                matches.AppendString(full_name.c_str());
+              request.AddCompletion(full_name.c_str());
             }
           }
         }
         return true;
       }
 
-    } else if (opt_arg_pos == cursor_index) {
+    } else if (opt_arg_pos == request.GetCursorIndex()) {
       // Okay the cursor is on the completion of an argument. See if it has a
       // completion, otherwise return no matches.
 
+      CompletionRequest subrequest = request;
+      subrequest.SetCursorCharPosition(subrequest.GetCursorArgument().size());
       if (opt_defs_index != -1) {
-        HandleOptionArgumentCompletion(
-            input, cursor_index, strlen(input.GetArgumentAtIndex(cursor_index)),
-            opt_element_vector, i, match_start_point, max_return_elements,
-            interpreter, word_complete, matches);
+        HandleOptionArgumentCompletion(subrequest, opt_element_vector, i,
+                                       interpreter);
+        request.SetWordComplete(subrequest.GetWordComplete());
         return true;
       } else {
         // No completion callback means no completions...
@@ -772,11 +758,8 @@ bool Options::HandleOptionCompletion(
 }
 
 bool Options::HandleOptionArgumentCompletion(
-    Args &input, int cursor_index, int char_pos,
-    OptionElementVector &opt_element_vector, int opt_element_index,
-    int match_start_point, int max_return_elements,
-    CommandInterpreter &interpreter, bool &word_complete,
-    lldb_private::StringList &matches) {
+    CompletionRequest &request, OptionElementVector &opt_element_vector,
+    int opt_element_index, CommandInterpreter &interpreter) {
   auto opt_defs = GetDefinitions();
   std::unique_ptr<SearchFilter> filter_ap;
 
@@ -785,15 +768,18 @@ bool Options::HandleOptionArgumentCompletion(
 
   // See if this is an enumeration type option, and if so complete it here:
 
-  OptionEnumValueElement *enum_values = opt_defs[opt_defs_index].enum_values;
-  if (enum_values != nullptr) {
+  const auto &enum_values = opt_defs[opt_defs_index].enum_values;
+  if (!enum_values.empty()) {
     bool return_value = false;
-    std::string match_string(input.GetArgumentAtIndex(opt_arg_pos),
-                             input.GetArgumentAtIndex(opt_arg_pos) + char_pos);
-    for (int i = 0; enum_values[i].string_value != nullptr; i++) {
-      if (strstr(enum_values[i].string_value, match_string.c_str()) ==
-          enum_values[i].string_value) {
-        matches.AppendString(enum_values[i].string_value);
+    std::string match_string(
+        request.GetParsedLine().GetArgumentAtIndex(opt_arg_pos),
+        request.GetParsedLine().GetArgumentAtIndex(opt_arg_pos) +
+            request.GetCursorCharPosition());
+
+    for (const auto &enum_value : enum_values) {
+      if (strstr(enum_value.string_value, match_string.c_str()) ==
+          enum_value.string_value) {
+        request.AddCompletion(enum_value.string_value);
         return_value = true;
       }
     }
@@ -838,9 +824,10 @@ bool Options::HandleOptionArgumentCompletion(
       // restrict it to that shared library.
       if (cur_opt_name && strcmp(cur_opt_name, "shlib") == 0 &&
           cur_arg_pos != -1) {
-        const char *module_name = input.GetArgumentAtIndex(cur_arg_pos);
+        const char *module_name =
+            request.GetParsedLine().GetArgumentAtIndex(cur_arg_pos);
         if (module_name) {
-          FileSpec module_spec(module_name, false);
+          FileSpec module_spec(module_name);
           lldb::TargetSP target_sp =
               interpreter.GetDebugger().GetSelectedTarget();
           // Search filters require a target...
@@ -853,9 +840,7 @@ bool Options::HandleOptionArgumentCompletion(
   }
 
   return CommandCompletions::InvokeCommonCompletionCallbacks(
-      interpreter, completion_mask, input.GetArgumentAtIndex(opt_arg_pos),
-      match_start_point, max_return_elements, filter_ap.get(), word_complete,
-      matches);
+      interpreter, completion_mask, request, filter_ap.get());
 }
 
 void OptionGroupOptions::Append(OptionGroup *group) {
@@ -1334,7 +1319,7 @@ OptionElementVector Options::ParseForCompletion(const Args &args,
   const Args::ArgEntry &cursor = args[cursor_index];
   if ((static_cast<int32_t>(dash_dash_pos) == -1 ||
        cursor_index < dash_dash_pos) &&
-      cursor.quote == '\0' && cursor.ref == "-") {
+      !cursor.IsQuoted() && cursor.ref == "-") {
     option_element_vector.push_back(
         OptionArgElement(OptionArgElement::eBareDash, cursor_index,
                          OptionArgElement::eBareDash));

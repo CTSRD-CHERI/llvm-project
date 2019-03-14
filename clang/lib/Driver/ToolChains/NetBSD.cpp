@@ -122,6 +122,10 @@ void netbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back("--eh-frame-hdr");
   if (Args.hasArg(options::OPT_static)) {
     CmdArgs.push_back("-Bstatic");
+    if (Args.hasArg(options::OPT_pie)) {
+      Args.AddAllArgs(CmdArgs, options::OPT_pie);
+      CmdArgs.push_back("--no-dynamic-linker");
+    }
   } else {
     if (Args.hasArg(options::OPT_rdynamic))
       CmdArgs.push_back("-export-dynamic");
@@ -160,7 +164,7 @@ void netbsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     break;
   case llvm::Triple::armeb:
   case llvm::Triple::thumbeb:
-    arm::appendEBLinkFlags(Args, CmdArgs, ToolChain.getEffectiveTriple());
+    arm::appendBE8LinkFlag(Args, CmdArgs, ToolChain.getEffectiveTriple());
     CmdArgs.push_back("-m");
     switch (ToolChain.getTriple().getEnvironment()) {
     case llvm::Triple::EABI:
@@ -452,4 +456,12 @@ SanitizerMask NetBSD::getSupportedSanitizers() const {
     Res |= SanitizerKind::Thread;
   }
   return Res;
+}
+
+void NetBSD::addClangTargetOptions(const ArgList &,
+                                   ArgStringList &CC1Args,
+                                   Action::OffloadKind) const {
+  const SanitizerArgs &SanArgs = getSanitizerArgs();
+  if (SanArgs.hasAnySanitizer())
+    CC1Args.push_back("-D_REENTRANT");
 }

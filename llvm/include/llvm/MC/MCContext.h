@@ -137,6 +137,9 @@ namespace llvm {
     /// The compilation directory to use for DW_AT_comp_dir.
     SmallString<128> CompilationDir;
 
+    /// Prefix replacement map for source file information.
+    std::map<const std::string, const std::string> DebugPrefixMap;
+
     /// The main file name if passed in explicitly.
     std::string MainFileName;
 
@@ -294,10 +297,6 @@ namespace llvm {
     const MCObjectFileInfo *getObjectFileInfo() const { return MOFI; }
 
     CodeViewContext &getCVContext();
-
-    /// Clear the current cv_loc, if there is one. Avoids lazily creating a
-    /// CodeViewContext if none is needed.
-    void clearCVLocSeen();
 
     void setAllowTemporaryLabels(bool Value) { AllowTemporaryLabels = Value; }
     void setUseNamesOnTempLabels(bool Value) { UseNamesOnTempLabels = Value; }
@@ -489,6 +488,18 @@ namespace llvm {
 
     /// Set the compilation directory for DW_AT_comp_dir
     void setCompilationDir(StringRef S) { CompilationDir = S.str(); }
+
+    /// Get the debug prefix map.
+    const std::map<const std::string, const std::string> &
+    getDebugPrefixMap() const {
+      return DebugPrefixMap;
+    }
+
+    /// Add an entry to the debug prefix map.
+    void addDebugPrefixMapEntry(const std::string &From, const std::string &To);
+
+    // Remaps all debug directory paths in-place as per the debug prefix map.
+    void RemapDebugPaths();
 
     /// Get the main file name for use in error messages and debug
     /// info. This can be set to ensure we've got the correct file name

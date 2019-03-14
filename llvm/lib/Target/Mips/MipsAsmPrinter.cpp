@@ -242,6 +242,10 @@ void MipsAsmPrinter::EmitInstruction(const MachineInstr *MI) {
     if (emitPseudoExpansionLowering(*OutStreamer, &*I))
       continue;
 
+    // FIXME: not sure this is correct
+    if (I->getOpcode() == Mips::BUNDLE)
+      continue;
+
     if (I->getOpcode() == Mips::PseudoReturn ||
         I->getOpcode() == Mips::PseudoReturn64 ||
         I->getOpcode() == Mips::PseudoReturnCap ||
@@ -596,6 +600,7 @@ bool MipsAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNum,
         O << '$' << MipsInstPrinter::getRegisterName(Reg);
         return false;
       }
+      break;
     }
     case 'w':
       // Print MSA registers for the 'f' constraint
@@ -1138,7 +1143,7 @@ void MipsAsmPrinter::EmitSled(const MachineInstr &MI, SledKind Kind) {
   //   ALIGN
   //   B .tmpN
   //   11 NOP instructions (44 bytes)
-  //   ADDIU T9, T9, 52 
+  //   ADDIU T9, T9, 52
   // .tmpN
   //
   // We need the 44 bytes (11 instructions) because at runtime, we'd
@@ -1247,18 +1252,23 @@ void MipsAsmPrinter::PrintDebugValueComment(const MachineInstr *MI,
 
 // Emit .dtprelword or .dtpreldword directive
 // and value for debug thread local expression.
-void MipsAsmPrinter::EmitDebugThreadLocal(const MCExpr *Value,
-                                          unsigned Size) const {
-  switch (Size) {
-  case 4:
-    OutStreamer->EmitDTPRel32Value(Value);
-    break;
-  case 8:
-    OutStreamer->EmitDTPRel64Value(Value);
-    break;
-  default:
-    llvm_unreachable("Unexpected size of expression value.");
+void MipsAsmPrinter::EmitDebugValue(const MCExpr *Value, unsigned Size) const {
+  if (auto *MipsExpr = dyn_cast<MipsMCExpr>(Value)) {
+    if (MipsExpr && MipsExpr->getKind() == MipsMCExpr::MEK_DTPREL) {
+      switch (Size) {
+      case 4:
+        OutStreamer->EmitDTPRel32Value(MipsExpr->getSubExpr());
+        break;
+      case 8:
+        OutStreamer->EmitDTPRel64Value(MipsExpr->getSubExpr());
+        break;
+      default:
+        llvm_unreachable("Unexpected size of expression value.");
+      }
+      return;
+    }
   }
+  AsmPrinter::EmitDebugValue(Value, Size);
 }
 
 // Align all targets of indirect branches on bundle size.  Used only if target
@@ -1284,8 +1294,12 @@ void MipsAsmPrinter::NaClAlignIndirectJumpTargets(MachineFunction &MF) {
 
 bool MipsAsmPrinter::isLongBranchPseudo(int Opcode) const {
   return (Opcode == Mips::LONG_BRANCH_LUi
+          || Opcode == Mips::LONG_BRANCH_LUi2Op
+          || Opcode == Mips::LONG_BRANCH_LUi2Op_64
           || Opcode == Mips::LONG_BRANCH_ADDiu
-          || Opcode == Mips::LONG_BRANCH_DADDiu);
+          || Opcode == Mips::LONG_BRANCH_ADDiu2Op
+          || Opcode == Mips::LONG_BRANCH_DADDiu
+          || Opcode == Mips::LONG_BRANCH_DADDiu2Op);
 }
 
 // Force static initialization.

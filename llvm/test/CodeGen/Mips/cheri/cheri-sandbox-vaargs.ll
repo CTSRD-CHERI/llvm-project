@@ -15,7 +15,7 @@ entry:
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
   ; Load the address of va_cpy
   ; CHECK: cmove [[VA_LIST:\$c[0-9]+]],  $c13
-  ; CHECK: clcbi   $c[[CPYADDR:[0-9]+]], %captab20(va_cpy)($c26)
+  ; CHECK: clcbi   $c[[CPYADDR:[0-9]+]], %captab20(va_cpy)($c2)
   ; Store the va_list (passed in $c13) in the global
   ; CHECK: cgetnull $c13
   ; CHECK: csc	[[VA_LIST]], $zero, 0($c[[CPYADDR]])
@@ -50,7 +50,7 @@ entry:
   ; Check that va_copy can copy from a global to a register
   %v = alloca i8 addrspace(200)*, align 32, addrspace(200)
   ; Load the address of the global
-  ; CHECK: clcbi [[CPYADDR:\$c[0-9]+]], %captab20(va_cpy)($c26)
+  ; CHECK: clcbi [[CPYADDR:\$c[0-9]+]], %captab20(va_cpy)($c1)
   ; Load the va_list into the return capability
   ; CHECK: clc	$c3, $zero, 0([[CPYADDR]])
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %v to i8 addrspace(200)*
@@ -69,7 +69,7 @@ entry:
   ; should simply move the va capability from $c13 to the relevant argument
   ; register.
   ; CHECK: cmove	$c3, $c13
-  ; CHECK: clcbi   $c12, %capcall20(g)($c26)
+  ; CHECK: clcbi   $c12, %capcall20(g)($c1)
   ; Call the non-variadic function and clear $c13 in the delay slot:
   ; CHECK: cjalr $c12, $c17
   ; CHECK-NEXT: cgetnull $c13

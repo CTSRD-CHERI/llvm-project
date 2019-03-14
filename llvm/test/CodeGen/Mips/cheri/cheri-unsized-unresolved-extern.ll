@@ -16,12 +16,12 @@ target triple = "cheri-unknown-freebsd"
 define void @fn1() #0 {
 entry:
   ; Load the address of a
+  ; LEGACY: ld	$[[FN2ADDR:([0-9]+|sp)]], %call16(fn2)($gp)
   ; LEGACY: ld	$[[AADDR:[0-9]+]], %got_disp(a)($gp)
   ; LEGACY: cfromddc $c1, $[[AADDR]]
-  ; LEGACY: ld	$[[FN2ADDR:([0-9]+|sp)]], %call16(fn2)($gp)
   ; Call fn2
   ; LEGACY: cgetpccsetoffset	$c12, $[[FN2ADDR]]
-  ; NEW: clcbi $c3, %captab20(a)($c26)
+  ; NEW: clcbi $c3, %captab20(a)($c1)
   ; CHECK: cjalr	$c12, $c17
   tail call void @fn2(%struct.ASN1_ITEM_st addrspace(200)* @a) #2
   ret void

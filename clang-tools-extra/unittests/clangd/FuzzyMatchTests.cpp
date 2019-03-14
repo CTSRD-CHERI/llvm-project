@@ -13,10 +13,10 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
+using namespace llvm;
 namespace clang {
 namespace clangd {
 namespace {
-using namespace llvm;
 using testing::Not;
 
 struct ExpectedMatch {
@@ -208,7 +208,7 @@ struct RankMatcher : public testing::MatcherInterface<StringRef> {
         Ok = false;
       } else {
         std::string Buf;
-        llvm::raw_string_ostream Info(Buf);
+        raw_string_ostream Info(Buf);
         auto AnnotatedMatch = Matcher.dumpLast(Info);
 
         if (!Str.accepts(AnnotatedMatch)) {
@@ -271,6 +271,29 @@ TEST(FuzzyMatch, Scoring) {
   EXPECT_THAT("abs", matches("[abs]l", 1.f));
   EXPECT_THAT("abs", matches("[abs]", 2.f));
   EXPECT_THAT("Abs", matches("[abs]", 2.f));
+}
+
+// Returns pretty-printed segmentation of Text.
+// e.g. std::basic_string --> +--  +---- +-----
+std::string segment(StringRef Text) {
+  std::vector<CharRole> Roles(Text.size());
+  calculateRoles(Text, Roles);
+  std::string Printed;
+  for (unsigned I = 0; I < Text.size(); ++I)
+    Printed.push_back("?-+ "[static_cast<unsigned>(Roles[I])]);
+  return Printed;
+}
+
+// this is a no-op hack so clang-format will vertically align our testcases.
+StringRef returns(StringRef Text) { return Text; }
+
+TEST(FuzzyMatch, Segmentation) {
+  EXPECT_THAT(segment("std::basic_string"), //
+              returns("+--  +---- +-----"));
+  EXPECT_THAT(segment("XMLHttpRequest"), //
+              returns("+--+---+------"));
+  EXPECT_THAT(segment("t3h PeNgU1N oF d00m!!!!!!!!"), //
+              returns("+-- +-+-+-+ ++ +---        "));
 }
 
 } // namespace

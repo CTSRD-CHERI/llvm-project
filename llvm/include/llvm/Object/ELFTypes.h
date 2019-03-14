@@ -62,6 +62,7 @@ public:
   using Phdr = Elf_Phdr_Impl<ELFType<E, Is64>>;
   using Rel = Elf_Rel_Impl<ELFType<E, Is64>, false>;
   using Rela = Elf_Rel_Impl<ELFType<E, Is64>, true>;
+  using Relr = packed<uint>;
   using Verdef = Elf_Verdef_Impl<ELFType<E, Is64>>;
   using Verdaux = Elf_Verdaux_Impl<ELFType<E, Is64>>;
   using Verneed = Elf_Verneed_Impl<ELFType<E, Is64>>;
@@ -79,6 +80,7 @@ public:
   using SymRange = ArrayRef<Sym>;
   using RelRange = ArrayRef<Rel>;
   using RelaRange = ArrayRef<Rela>;
+  using RelrRange = ArrayRef<Relr>;
   using PhdrRange = ArrayRef<Phdr>;
 
   using Half = packed<uint16_t>;
@@ -603,13 +605,12 @@ public:
   }
 
   /// Get the note's descriptor.
-  ArrayRef<Elf_Word> getDesc() const {
+  ArrayRef<uint8_t> getDesc() const {
     if (!Nhdr.n_descsz)
-      return ArrayRef<Elf_Word>();
-    return ArrayRef<Elf_Word>(
-        reinterpret_cast<const Elf_Word *>(
-            reinterpret_cast<const uint8_t *>(&Nhdr) + sizeof(Nhdr) +
-            alignTo<Elf_Nhdr_Impl<ELFT>::Align>(Nhdr.n_namesz)),
+      return ArrayRef<uint8_t>();
+    return ArrayRef<uint8_t>(
+        reinterpret_cast<const uint8_t *>(&Nhdr) + sizeof(Nhdr) +
+          alignTo<Elf_Nhdr_Impl<ELFT>::Align>(Nhdr.n_namesz),
         Nhdr.n_descsz);
   }
 
@@ -641,14 +642,19 @@ class Elf_Note_Iterator_Impl
   // container, either cleanly or with an overflow error.
   void advanceNhdr(const uint8_t *NhdrPos, size_t NoteSize) {
     RemainingSize -= NoteSize;
-    if (RemainingSize == 0u)
+    if (RemainingSize == 0u) {
+      // Ensure that if the iterator walks to the end, the error is checked
+      // afterwards.
+      *Err = Error::success();
       Nhdr = nullptr;
-    else if (sizeof(*Nhdr) > RemainingSize)
+    } else if (sizeof(*Nhdr) > RemainingSize)
       stopWithOverflowError();
     else {
       Nhdr = reinterpret_cast<const Elf_Nhdr_Impl<ELFT> *>(NhdrPos + NoteSize);
       if (Nhdr->getSize() > RemainingSize)
         stopWithOverflowError();
+      else
+        *Err = Error::success();
     }
   }
 
@@ -656,6 +662,7 @@ class Elf_Note_Iterator_Impl
   explicit Elf_Note_Iterator_Impl(Error &Err) : Err(&Err) {}
   Elf_Note_Iterator_Impl(const uint8_t *Start, size_t Size, Error &Err)
       : RemainingSize(Size), Err(&Err) {
+    consumeError(std::move(Err));
     assert(Start && "ELF note iterator starting at NULL");
     advanceNhdr(Start, 0u);
   }
@@ -669,6 +676,10 @@ public:
     return *this;
   }
   bool operator==(Elf_Note_Iterator_Impl Other) const {
+    if (!Nhdr && Other.Err)
+      (void)(bool)(*Other.Err);
+    if (!Other.Nhdr && Err)
+      (void)(bool)(*Err);
     return Nhdr == Other.Nhdr;
   }
   bool operator!=(Elf_Note_Iterator_Impl Other) const {

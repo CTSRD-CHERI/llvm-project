@@ -20,6 +20,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
@@ -282,7 +283,7 @@ void DataLayout::parseSpecifier(StringRef Desc) {
       unsigned AddrSpace = Tok.empty() ? 0 : getInt(Tok);
       if (!isUInt<24>(AddrSpace))
         report_fatal_error("Invalid address space, must be a 24bit integer");
-      assert(isFat == (AddrSpace == 200));
+      assert(isFat == isCheriPointer(AddrSpace, nullptr));
 
       // Size.
       if (Rest.empty())
@@ -830,15 +831,29 @@ int64_t DataLayout::getIndexedOffsetInType(Type *ElemTy,
 /// global.  This includes an explicitly requested alignment (if the global
 /// has one).
 unsigned DataLayout::getPreferredAlignment(const GlobalVariable *GV) const {
+  unsigned GVAlignment = GV->getAlignment();
+  // If a section is specified, always precisely honor explicit alignment,
+  // so we don't insert padding into a section we don't control.
+  if (GVAlignment && GV->hasSection())
+    return GVAlignment;
+
+  // If no explicit alignment is specified, compute the alignment based on
+  // the IR type. If an alignment is specified, increase it to match the ABI
+  // alignment of the IR type.
+  //
+  // FIXME: Not sure it makes sense to use the alignment of the type if
+  // there's already an explicit alignment specification.
   Type *ElemType = GV->getValueType();
   unsigned Alignment = getPrefTypeAlignment(ElemType);
-  unsigned GVAlignment = GV->getAlignment();
   if (GVAlignment >= Alignment) {
     Alignment = GVAlignment;
   } else if (GVAlignment != 0) {
     Alignment = std::max(GVAlignment, getABITypeAlignment(ElemType));
   }
 
+  // If no explicit alignment is specified, and the global is large, increase
+  // the alignment to 16.
+  // FIXME: Why 16, specifically?
   if (GV->hasInitializer() && GVAlignment == 0) {
     if (Alignment < 16) {
       // If the global is not external, see if it is large.  If so, give it a

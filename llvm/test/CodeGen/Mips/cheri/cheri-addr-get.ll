@@ -36,10 +36,9 @@ define i64 @null_set_vaddr() #1 {
 ; OPT:       # %bb.0:
 ; OPT-NEXT:    daddiu $sp, $sp,
 ; OPT-NEXT:    sd $ra, {{8|24}}($sp) # 8-byte Folded Spill
-; OPT-NEXT:    cgetnull $c1
 ; OPT-NEXT:    daddiu $1, $zero, 12345
 ; OPT-NEXT:    jal check_fold_cap
-; OPT-NEXT:    cincoffset $c3, $c1, $1
+; OPT-NEXT:    cincoffset $c3, $cnull, $1
 ; OPT-NEXT:    ld $ra, {{8|24}}($sp) # 8-byte Folded Reload
 ; OPT-NEXT:    jr $ra
 ; OPT-NEXT:    daddiu $sp, $sp

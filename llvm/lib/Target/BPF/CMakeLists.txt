@@ -20,10 +20,16 @@ add_llvm_target(BPFCodeGen
   BPFISelLowering.cpp
   BPFMCInstLower.cpp
   BPFRegisterInfo.cpp
+  BPFSelectionDAGInfo.cpp
   BPFSubtarget.cpp
   BPFTargetMachine.cpp
   BPFMIPeephole.cpp
+  BPFMIChecking.cpp
+  BTFDebug.cpp
   )
+
+# TODO: remove
+add_definitions(-DLLVM_TARGETLOWERINGINFO_DEFAULT_AS=0)
 
 add_subdirectory(AsmParser)
 add_subdirectory(Disassembler)

@@ -454,10 +454,6 @@ static DecodeStatus DecodeANDI16Imm(MCInst &Inst, unsigned Insn,
 static DecodeStatus DecodeSimm23Lsl2(MCInst &Inst, unsigned Insn,
                                      uint64_t Address, const void *Decoder);
 
-template<int Width, int Shift>
-static DecodeStatus DecodeShiftedImmediate(MCInst &Inst, unsigned Insn,
-                                           uint64_t Address, const void *Decoder);
-
 /// INSVE_[BHWD] have an implicit operand that the generated decoder doesn't
 /// handle.
 template <typename InsnType>
@@ -563,6 +559,9 @@ static DecodeStatus DecodeRegListOperand16(MCInst &Inst, unsigned Insn,
 static DecodeStatus DecodeMovePRegPair(MCInst &Inst, unsigned RegPair,
                                        uint64_t Address,
                                        const void *Decoder);
+
+static DecodeStatus DecodeMovePOperands(MCInst &Inst, unsigned Insn,
+                                        uint64_t Address, const void *Decoder);
 
 namespace llvm {
 
@@ -2561,6 +2560,32 @@ static DecodeStatus DecodeRegListOperand16(MCInst &Inst, unsigned Insn,
   return MCDisassembler::Success;
 }
 
+static DecodeStatus DecodeMovePOperands(MCInst &Inst, unsigned Insn,
+                                          uint64_t Address,
+                                          const void *Decoder) {
+  unsigned RegPair = fieldFromInstruction(Insn, 7, 3);
+  if (DecodeMovePRegPair(Inst, RegPair, Address, Decoder) ==
+      MCDisassembler::Fail)
+    return MCDisassembler::Fail;
+
+  unsigned RegRs;
+  if (static_cast<const MipsDisassembler*>(Decoder)->hasMips32r6())
+    RegRs = fieldFromInstruction(Insn, 0, 2) |
+            (fieldFromInstruction(Insn, 3, 1) << 2);
+  else
+    RegRs = fieldFromInstruction(Insn, 1, 3);
+  if (DecodeGPRMM16MovePRegisterClass(Inst, RegRs, Address, Decoder) ==
+      MCDisassembler::Fail)
+    return MCDisassembler::Fail;
+
+  unsigned RegRt = fieldFromInstruction(Insn, 4, 3);
+  if (DecodeGPRMM16MovePRegisterClass(Inst, RegRt, Address, Decoder) ==
+      MCDisassembler::Fail)
+    return MCDisassembler::Fail;
+
+  return MCDisassembler::Success;
+}
+
 static DecodeStatus DecodeMovePRegPair(MCInst &Inst, unsigned RegPair,
                                        uint64_t Address, const void *Decoder) {
   switch (RegPair) {
@@ -2606,13 +2631,6 @@ static DecodeStatus DecodeMovePRegPair(MCInst &Inst, unsigned RegPair,
 static DecodeStatus DecodeSimm23Lsl2(MCInst &Inst, unsigned Insn,
                                      uint64_t Address, const void *Decoder) {
   Inst.addOperand(MCOperand::createImm(SignExtend32<25>(Insn << 2)));
-  return MCDisassembler::Success;
-}
-
-template<int Width, int Shift>
-static DecodeStatus DecodeShiftedImmediate(MCInst &Inst, unsigned Insn,
-                                           uint64_t Address, const void *Decoder) {
-  Inst.addOperand(MCOperand::createImm(SignExtend64<Width+Shift>(Insn << Shift)));
   return MCDisassembler::Success;
 }
 

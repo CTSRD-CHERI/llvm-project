@@ -37,8 +37,7 @@ SDValue XCoreSelectionDAGInfo::EmitTargetCodeForMemcpy(
         .setChain(Chain)
         .setLibCallee(TLI.getLibcallCallingConv(RTLIB::MEMCPY),
                       Type::getVoidTy(*DAG.getContext()),
-                      DAG.getExternalSymbol(
-                          "__memcpy_4", TLI.getPointerTy(DAG.getDataLayout())),
+                      DAG.getExternalFunctionSymbol("__memcpy_4"),
                       std::move(Args))
         .setDiscardResult();
 

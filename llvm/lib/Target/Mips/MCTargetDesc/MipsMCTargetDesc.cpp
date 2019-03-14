@@ -14,6 +14,7 @@
 #include "MipsMCTargetDesc.h"
 #include "InstPrinter/MipsInstPrinter.h"
 #include "MipsAsmBackend.h"
+#include "MipsBaseInfo.h"
 #include "MipsELFStreamer.h"
 #include "MipsMCAsmInfo.h"
 #include "MipsMCNaCl.h"
@@ -47,12 +48,20 @@ using namespace llvm;
 /// FIXME: Merge with the copy in MipsSubtarget.cpp
 StringRef MIPS_MC::selectMipsCPU(const Triple &TT, StringRef CPU) {
   if (CPU.empty() || CPU == "generic") {
-    if (TT.isMIPS32())
-      CPU = "mips32";
-    else if (TT.getArch() == Triple::cheri)
+    if (TT.getSubArch() == llvm::Triple::MipsSubArch_r6) {
+      if (TT.isMIPS32())
+        CPU = "mips32r6";
+      else
+        CPU = "mips64r6";
+    } else if (TT.getArch() == Triple::cheri) {
+      // FIXME: do we really want this?
       CPU = "cheri128";
-    else
-      CPU = "mips64";
+    } else {
+      if (TT.isMIPS32())
+        CPU = "mips32";
+      else
+        CPU = "mips64";
+    }
   }
   return CPU;
 }
@@ -79,7 +88,8 @@ static MCAsmInfo *createMipsMCAsmInfo(const MCRegisterInfo &MRI,
                                       const Triple &TT) {
   MCAsmInfo *MAI = new MipsMCAsmInfo(TT);
 
-  unsigned SP = MRI.getDwarfRegNum(Mips::SP, true);
+  unsigned SP = MRI.getDwarfRegNum(
+      TT.getEnvironment() == Triple::CheriPurecap ? Mips::C11 : Mips::SP, true);
   MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(nullptr, SP, 0);
   MAI->addInitialFrameState(Inst);
 

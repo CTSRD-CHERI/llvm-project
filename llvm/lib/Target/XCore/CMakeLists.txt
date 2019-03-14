@@ -27,6 +27,9 @@ add_llvm_target(XCoreCodeGen
   XCoreFrameToArgsOffsetElim.cpp
   )
 
+# TODO: remove
+add_definitions(-DLLVM_TARGETLOWERINGINFO_DEFAULT_AS=0)
+
 add_subdirectory(Disassembler)
 add_subdirectory(InstPrinter)
 add_subdirectory(MCTargetDesc)

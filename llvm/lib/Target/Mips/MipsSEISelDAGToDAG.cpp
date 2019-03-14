@@ -94,13 +94,19 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
     MachineRegisterInfo *MRI, const MachineInstr &GetNullMI) {
 
   unsigned SrcReg = 0;
-  if (GetNullMI.getOpcode() == Mips::CFromPtr &&
-      GetNullMI.getOperand(2).getReg() == Mips::ZERO_64) {
+  if ((GetNullMI.getOpcode() == Mips::CFromPtr &&
+       GetNullMI.getOperand(2).getReg() == Mips::ZERO_64)) {
     // When zeroing capability registers codegen will often create NULL in a
     // saved register (e.g. $c18 and then move it to other registers). This is
     // stupid since it will often spill to the stack and add additional
     // instructions when we can just use a CGetNull to the destination register
-    LLVM_DEBUG(dbgs() << "Trying to replace uses of CGetNull: ";
+    LLVM_DEBUG(dbgs() << "Trying to replace uses of CFromPtr $ddc, $zero: ";
+               GetNullMI.dump());
+    SrcReg = GetNullMI.getOperand(0).getReg();
+  }
+  if ((GetNullMI.getOpcode() == Mips::CMove &&
+       GetNullMI.getOperand(1).getReg() == Mips::CNULL)) {
+    LLVM_DEBUG(dbgs() << "Trying to replace uses of CMove $cnull: ";
                GetNullMI.dump());
     SrcReg = GetNullMI.getOperand(0).getReg();
   }
@@ -112,22 +118,16 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
   if (TargetRegisterInfo::isPhysicalRegister(SrcReg))
     return false;
 
-  llvm::SmallVector<MachineInstr *, 4> UsesToReplace;
+  llvm::SmallVector<MachineInstr *, 4> COPYUses;
   for (MachineInstr &UseMI : MRI->use_instructions(SrcReg)) {
-    // TODO: Once we have a null register this will also work for non-CMove
-    // instrs
-    assert(UseMI.getOpcode() != Mips::CMove &&
-           "Should not have been expanded yet!");
-    if (UseMI.getOpcode() != TargetOpcode::COPY) {
-      LLVM_DEBUG(
-          dbgs() << "Found use of NULL register, but cannot replace yet:";
-          UseMI.dump(););
-      continue;
+    LLVM_DEBUG(dbgs() << "Found use of NULL register:"; UseMI.dump(););
+    if (UseMI.getOpcode() == TargetOpcode::COPY) {
+      COPYUses.push_back(&UseMI);
+      LLVM_DEBUG(dbgs() << "Found COPY use of NULL register:"; UseMI.dump(););
     }
-    UsesToReplace.push_back(&UseMI);
   }
-  for (MachineInstr *UseMI : UsesToReplace) {
-    LLVM_DEBUG(dbgs() << "Replacing copy of synthesized NULL: "; UseMI->dump());
+  for (MachineInstr *UseMI : COPYUses) {
+    LLVM_DEBUG(dbgs() << "Replacing COPY of synthesized NULL: "; UseMI->dump());
     MachineBasicBlock *MBB = UseMI->getParent();
     auto TargetReg = UseMI->getOperand(0).getReg();
     // FIXME: this assert only works with virtregs so not for $c13
@@ -157,12 +157,56 @@ bool MipsSEDAGToDAGISel::replaceUsesWithCheriNullReg(
       // Check that the physreg is a valid CHERI general-purpose register
       assert(Mips::CheriGPROrCNullRegClass.contains(TargetReg));
     }
-    BuildMI(*MBB, *UseMI, UseMI->getDebugLoc(), TII->get(Mips::CFromPtr),
+    // Remove from parent and replace with the CMove $cnull
+    BuildMI(*MBB, *UseMI, UseMI->getDebugLoc(), TII->get(Mips::CMove),
             UseMI->getOperand(0).getReg())
-        .addReg(Mips::DDC, getRegState(GetNullMI.getOperand(1)))
-        .addReg(Mips::ZERO_64, getRegState(GetNullMI.getOperand(2)));
-    // Remove from parent and replace with the CFromPtr
+        .addReg(Mips::CNULL);
     UseMI->removeFromParent();
+  }
+
+  // Replace uses with NullReg.
+  const auto NullReg = Mips::CNULL;
+  for (auto U = MRI->use_begin(SrcReg), E = MRI->use_end(); U != E;) {
+    MachineOperand &MO = *U;
+    unsigned OpNo = U.getOperandNo();
+    MachineInstr *MI = MO.getParent();
+    LLVM_DEBUG(dbgs() << "Found use of NULL register, will try to replace:";
+               MI->dump(););
+    ++U; // increment U now before we potentially change the successors using MO.setReg()
+
+    // Do not replace if it is a phi's operand or is tied to def operand.
+    // Also, since we allow pseudos, unlike for $zero below, we could see an
+    // instruction which doesn't have full operand info, including inline asm.
+    if (MI->isPHI() || MI->isRegTiedToDefOperand(OpNo) || MI->isDebugInstr() ||
+        OpNo >= MI->getDesc().NumOperands) {
+      LLVM_DEBUG(
+          dbgs() << "Cannot replace use of NULL register for PHI or def:";
+          MI->dump(););
+      continue;
+    }
+
+    // Also, we have to check that the register class of the operand
+    // contains the null register.
+    // This can happen for instructions where register zero encodes $ddc.
+    auto OperandType = MI->getDesc().OpInfo[OpNo].OperandType;
+    if (OperandType != Mips::OPERAND_CHERI_GPR_OR_NULL) {
+      if (OperandType == Mips::OPERAND_CHERI_GPR_OR_DDC) {
+        LLVM_DEBUG(dbgs() << "Cannot replace use of NULL register for operand "
+                             "where 0 encodes $ddc: ";
+                   MO.dump(); dbgs() << " in "; MI->dump(););
+      } else {
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+        errs() << "Found OPERAND of unknown type " << (int)OperandType
+               << " while attempting to replace uses of NULL\n";
+        MI->dump();
+#endif
+      }
+      continue;
+    }
+
+    MO.setReg(NullReg);
+    LLVM_DEBUG(dbgs() << "Was able to replace use of NULL register:";
+               MI->dump(););
   }
 
   // If there are no more uses of the NULL vreg after this pass we can delete it
@@ -344,8 +388,8 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
 
   if (!MipsFI->capGlobalBaseRegSet() && !MipsFI->capLocalBaseRegSet())
     return;
-  //assert(Subtarget->useCheriCapTable());
-  assert(MF.getTarget().isPositionIndependent() && "CHERI CODEGEN REQUIRES -fPIC");
+  assert(Subtarget->useCheriCapTable());
+  // assert(MF.getTarget().isPositionIndependent() && "CHERI CODEGEN REQUIRES -fPIC");
 
   MachineBasicBlock &MBB = MF.front();
   MachineBasicBlock::iterator I = MBB.begin();
@@ -356,7 +400,7 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
   const MipsABIInfo &ABI = static_cast<const MipsTargetMachine &>(TM).getABI();
 
   assert(ABI.IsCheriPureCap());
-  const unsigned GlobalCapReg = ABI.GetGlobalCapability();
+  const unsigned ABIGlobalCapReg = ABI.GetGlobalCapability();
   const unsigned LocalCapReg = ABI.GetLocalCapability();
 
   // For the purecap ABI, $cgp is required to point to the function's/DSOs
@@ -368,16 +412,16 @@ void MipsSEDAGToDAGISel::initCapGlobalBaseReg(MachineFunction &MF) {
   BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapLocalBaseReg)
     .addReg(LocalCapReg);
 
-  if(GlobalCapReg == 0) {
+  if(ABIGlobalCapReg == 0) {
     // Load from local
     BuildMI(MBB, I, DL, TII.get(Mips::LOADCAP), CapGlobalBaseReg).addReg(ABI.GetNullPtr()).addImm((ABI.GetTABILayout()->GetThreadLocalOffset_CGP()))
         .addReg(CapLocalBaseReg);
   } else {
     // Is live in
-    MF.getRegInfo().addLiveIn(GlobalCapReg);
-    MBB.addLiveIn(GlobalCapReg);
+    MF.getRegInfo().addLiveIn(ABIGlobalCapReg);
+    MBB.addLiveIn(ABIGlobalCapReg);
     BuildMI(MBB, I, DL, TII.get(TargetOpcode::COPY), CapGlobalBaseReg)
-        .addReg(GlobalCapReg);
+        .addReg(ABIGlobalCapReg);
   }
 }
 
@@ -397,12 +441,27 @@ void MipsSEDAGToDAGISel::processFunctionAfterISel(MachineFunction &MF) {
       case Mips::WRDSP:
         addDSPCtrlRegOperands(true, MI, MF);
         break;
+      case Mips::BuildPairF64_64:
+      case Mips::ExtractElementF64_64:
+        if (!Subtarget->useOddSPReg()) {
+          MI.addOperand(MachineOperand::CreateReg(Mips::SP, false, true));
+          break;
+        }
+        LLVM_FALLTHROUGH;
+      case Mips::BuildPairF64:
+      case Mips::ExtractElementF64:
+        if (Subtarget->isABI_FPXX() && !Subtarget->hasMTHC1())
+          MI.addOperand(MachineOperand::CreateReg(Mips::SP, false, true));
+        break;
       default:
         if (replaceUsesWithZeroReg(MRI, MI))
           DeadNullInsts.push_back(&MI);
       }
     }
   }
+  // TODO: it seems to me like there should be a pass that removes dead instrs?
+  for (MachineInstr* MI : DeadNullInsts)
+    MI->removeFromParent();
 }
 
 void MipsSEDAGToDAGISel::selectAddE(SDNode *Node, const SDLoc &DL) const {
@@ -482,7 +541,7 @@ bool MipsSEDAGToDAGISel::selectAddrFI(SDValue Addr, SDValue &Base) const {
   if (FrameIndexSDNode *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
     EVT ValTy = Addr.getValueType();
 
-    Base   = CurDAG->getTargetFrameIndex(FIN->getIndex(), ValTy);
+    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), ValTy);
     return true;
   }
   return false;
@@ -1134,7 +1193,8 @@ bool MipsSEDAGToDAGISel::trySelect(SDNode *Node) {
   }
 
   case MipsISD::ThreadPointer: {
-    EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout());
+    assert(!Subtarget->getABI().UsesCapabilityTls());
+    EVT PtrVT = getTargetLowering()->getPointerTy(CurDAG->getDataLayout(), 0);
     unsigned RdhwrOpc, DestReg;
 
     if (PtrVT == MVT::i32) {
@@ -1153,6 +1213,15 @@ bool MipsSEDAGToDAGISel::trySelect(SDNode *Node) {
                                          SDValue(Rdhwr, 0));
     SDValue ResNode = CurDAG->getCopyFromReg(Chain, DL, DestReg, PtrVT);
     ReplaceNode(Node, ResNode.getNode());
+    return true;
+  }
+
+  case MipsISD::CapThreadPointer: {
+    EVT CapVT = Subtarget->typeForCapabilities();
+    SDNode *CReadHwr =
+        CurDAG->getMachineNode(Mips::CReadHwr, DL, CapVT,
+                               CurDAG->getRegister(Mips::CAPHWR1, CapVT));
+    ReplaceNode(Node, CReadHwr);
     return true;
   }
 

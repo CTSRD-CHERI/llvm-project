@@ -45,7 +45,7 @@ int get_temporal_expand_limit() {
 
 static cl::opt<CheriCapabilityTableABI> CapTableABI(
     "cheri-cap-table-abi", cl::desc("ABI to use for :"),
-    cl::init(CheriCapabilityTableABI::Legacy),
+    cl::init(CheriCapabilityTableABI::Pcrel),
     cl::values(clEnumValN(CheriCapabilityTableABI::Legacy, "legacy",
                           "Disable capability table and use the legacy ABI"),
                clEnumValN(CheriCapabilityTableABI::PLT, "plt",
@@ -62,6 +62,27 @@ bool MCTargetOptions::cheriUsesCapabilityTable() {
 
 CheriCapabilityTableABI MCTargetOptions::cheriCapabilityTableABI() {
   return CapTableABI;
+}
+
+static cl::opt<CheriCapabilityTlsABI> CapTlsABI(
+    "cheri-cap-tls-abi", cl::desc("ABI to use for :"),
+    cl::values(clEnumValN(CheriCapabilityTlsABI::Legacy, "legacy",
+                          "Disable capability TLS and use the legacy ABI"),
+               clEnumValN(CheriCapabilityTlsABI::CapEquiv, "cap-equiv",
+                          "Use a capability equivalent of the normal ABI")));
+
+bool MCTargetOptions::cheriUsesCapabilityTls() {
+  return cheriCapabilityTlsABI() != CheriCapabilityTlsABI::Legacy &&
+         cheriUsesCapabilityTable();
+}
+
+CheriCapabilityTlsABI MCTargetOptions::cheriCapabilityTlsABI() {
+  if (!cheriUsesCapabilityTable())
+    return CheriCapabilityTlsABI::Legacy;
+  // For cap-table default to CapEquiv unless there is an explicit =legacy set.
+  if (CapTlsABI.getNumOccurrences() > 0)
+    return CapTlsABI;
+  return CheriCapabilityTlsABI::CapEquiv;
 }
 
 MCTargetOptions::MCTargetOptions()

@@ -17,9 +17,8 @@ define i8 addrspace(200)* @null_set_addr_const() {
 ; IR-NEXT:    ret i8 addrspace(200)* [[TMP]]
 ; CHECK-LABEL: null_set_addr_const:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cgetnull $c1
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    cincoffset $c3, $c1, 42
+; CHECK-NEXT:    cincoffset $c3, $cnull, 42
   %ret = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 42)
   ret i8 addrspace(200)* %ret
 }
@@ -30,9 +29,8 @@ define i8 addrspace(200)* @null_set_addr_dynamic(i64 %arg) {
 ; IR-NEXT:    ret i8 addrspace(200)* [[TMP]]
 ; CHECK-LABEL: null_set_addr_dynamic:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cgetnull $c1
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    cincoffset $c3, $c1, $4
+; CHECK-NEXT:    cincoffset $c3, $cnull, $4
   %ret = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 %arg)
   ret i8 addrspace(200)* %ret
 }
@@ -43,9 +41,8 @@ define i8 addrspace(200)* @null_set_offset_const() {
 ; IR-NEXT:    ret i8 addrspace(200)* [[RET]]
 ; CHECK-LABEL: null_set_offset_const:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cgetnull $c1
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    cincoffset $c3, $c1, 42
+; CHECK-NEXT:    cincoffset $c3, $cnull, 42
   %ret = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 42)
   ret i8 addrspace(200)* %ret
 }
@@ -56,9 +53,8 @@ define i8 addrspace(200)* @null_set_offset_dynamic(i64 %arg) {
 ; IR-NEXT:    ret i8 addrspace(200)* [[RET]]
 ; CHECK-LABEL: null_set_offset_dynamic:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cgetnull $c1
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    cincoffset $c3, $c1, $4
+; CHECK-NEXT:    cincoffset $c3, $cnull, $4
   %ret = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 %arg)
   ret i8 addrspace(200)* %ret
 }
@@ -70,9 +66,8 @@ define i8 addrspace(200)* @null_inc_offset_const() {
 ;
 ; CHECK-LABEL: null_inc_offset_const:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cgetnull $c1
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    cincoffset $c3, $c1, 42
+; CHECK-NEXT:    cincoffset $c3, $cnull, 42
   %ret = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 42)
   ret i8 addrspace(200)* %ret
 }
@@ -84,9 +79,8 @@ define i8 addrspace(200)* @null_inc_offset_dynamic(i64 %arg) {
 ;
 ; CHECK-LABEL: null_inc_offset_dynamic:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    cgetnull $c1
 ; CHECK-NEXT:    jr $ra
-; CHECK-NEXT:    cincoffset $c3, $c1, $4
+; CHECK-NEXT:    cincoffset $c3, $cnull, $4
   %ret = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 %arg)
   ret i8 addrspace(200)* %ret
 }

@@ -12,6 +12,7 @@
 #include "clang/AST/RecursiveASTVisitor.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Lex/Lexer.h"
+#include "llvm/ADT/STLExtras.h"
 #include <unordered_set>
 
 using namespace clang::ast_matchers;
@@ -29,11 +30,10 @@ bool isOverrideMethod(const FunctionDecl *Function) {
 } // namespace
 
 void UnusedParametersCheck::registerMatchers(MatchFinder *Finder) {
-  Finder->addMatcher(functionDecl(isDefinition(),
-                                  hasBody(stmt(hasDescendant(stmt()))),
-                                  hasAnyParameter(decl()))
-                         .bind("function"),
-                     this);
+  Finder->addMatcher(
+      functionDecl(isDefinition(), hasBody(stmt()), hasAnyParameter(decl()))
+          .bind("function"),
+      this);
 }
 
 template <typename T>
@@ -41,15 +41,15 @@ static CharSourceRange removeNode(const MatchFinder::MatchResult &Result,
                                   const T *PrevNode, const T *Node,
                                   const T *NextNode) {
   if (NextNode)
-    return CharSourceRange::getCharRange(Node->getLocStart(),
-                                         NextNode->getLocStart());
+    return CharSourceRange::getCharRange(Node->getBeginLoc(),
+                                         NextNode->getBeginLoc());
 
   if (PrevNode)
     return CharSourceRange::getTokenRange(
-        Lexer::getLocForEndOfToken(PrevNode->getLocEnd(), 0,
+        Lexer::getLocForEndOfToken(PrevNode->getEndLoc(), 0,
                                    *Result.SourceManager,
                                    Result.Context->getLangOpts()),
-        Node->getLocEnd());
+        Node->getEndLoc());
 
   return CharSourceRange::getTokenRange(Node->getSourceRange());
 }
@@ -74,7 +74,7 @@ static FixItHint removeArgument(const MatchFinder::MatchResult &Result,
 class UnusedParametersCheck::IndexerVisitor
     : public RecursiveASTVisitor<IndexerVisitor> {
 public:
-  IndexerVisitor(TranslationUnitDecl *Top) { TraverseDecl(Top); }
+  IndexerVisitor(ASTContext &Ctx) { TraverseAST(Ctx); }
 
   const std::unordered_set<const CallExpr *> &
   getFnCalls(const FunctionDecl *Fn) {
@@ -122,7 +122,12 @@ UnusedParametersCheck::~UnusedParametersCheck() = default;
 
 UnusedParametersCheck::UnusedParametersCheck(StringRef Name,
                                              ClangTidyContext *Context)
-    : ClangTidyCheck(Name, Context) {}
+    : ClangTidyCheck(Name, Context),
+      StrictMode(Options.getLocalOrGlobal("StrictMode", 0) != 0) {}
+
+void UnusedParametersCheck::storeOptions(ClangTidyOptions::OptionMap &Opts) {
+  Options.store(Opts, "StrictMode", StrictMode);
+}
 
 void UnusedParametersCheck::warnOnUnusedParameter(
     const MatchFinder::MatchResult &Result, const FunctionDecl *Function,
@@ -131,8 +136,7 @@ void UnusedParametersCheck::warnOnUnusedParameter(
   auto MyDiag = diag(Param->getLocation(), "parameter %0 is unused") << Param;
 
   if (!Indexer) {
-    Indexer = llvm::make_unique<IndexerVisitor>(
-        Result.Context->getTranslationUnitDecl());
+    Indexer = llvm::make_unique<IndexerVisitor>(*Result.Context);
   }
 
   // Comment out parameter name for non-local functions.
@@ -154,8 +158,9 @@ void UnusedParametersCheck::warnOnUnusedParameter(
       MyDiag << removeParameter(Result, FD, ParamIndex);
 
   // Fix all call sites.
-  for (const auto *Call : Indexer->getFnCalls(Function))
-    MyDiag << removeArgument(Result, Call, ParamIndex);
+  for (const CallExpr *Call : Indexer->getFnCalls(Function))
+    if (ParamIndex < Call->getNumArgs()) // See PR38055 for example.
+      MyDiag << removeArgument(Result, Call, ParamIndex);
 }
 
 void UnusedParametersCheck::check(const MatchFinder::MatchResult &Result) {
@@ -170,7 +175,15 @@ void UnusedParametersCheck::check(const MatchFinder::MatchResult &Result) {
     if (Param->isUsed() || Param->isReferenced() || !Param->getDeclName() ||
         Param->hasAttr<UnusedAttr>())
       continue;
-    warnOnUnusedParameter(Result, Function, i);
+
+    // In non-strict mode ignore function definitions with empty bodies
+    // (constructor initializer counts for non-empty body).
+    if (StrictMode ||
+        (Function->getBody()->child_begin() !=
+         Function->getBody()->child_end()) ||
+        (isa<CXXConstructorDecl>(Function) &&
+         cast<CXXConstructorDecl>(Function)->getNumCtorInitializers() > 0))
+      warnOnUnusedParameter(Result, Function, i);
   }
 }
 

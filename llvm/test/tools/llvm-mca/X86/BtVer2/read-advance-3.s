@@ -8,7 +8,10 @@
 # CHECK:      Iterations:        1
 # CHECK-NEXT: Instructions:      3
 # CHECK-NEXT: Total Cycles:      7
-# CHECK-NEXT: Dispatch Width:    3
+# CHECK-NEXT: Total uOps:        3
+
+# CHECK:      Dispatch Width:    3
+# CHECK-NEXT: uOps Per Cycle:    0.43
 # CHECK-NEXT: IPC:               0.43
 # CHECK-NEXT: Block RThroughput: 1.5
 
@@ -18,7 +21,7 @@
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
 # CHECK-NEXT:  1      1     0.50                        addq	%rdi, %rsi

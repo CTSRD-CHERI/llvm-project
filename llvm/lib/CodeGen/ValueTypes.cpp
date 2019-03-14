@@ -10,6 +10,7 @@
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/ErrorHandling.h"
 using namespace llvm;
@@ -306,8 +307,8 @@ MVT MVT::getVT(Type *Ty, bool HandleUnknown){
   case Type::FP128TyID:     return MVT(MVT::f128);
   case Type::PPC_FP128TyID: return MVT(MVT::ppcf128);
   case Type::PointerTyID: {
-    // FIXME!
-    if (cast<PointerType>(Ty)->getAddressSpace() == 200)
+    // FIXME: require a DataLayout here!
+    if (isCheriPointer(Ty, nullptr))
       return MVT(MVT::iFATPTRAny);
     return MVT(MVT::iPTR);
   }

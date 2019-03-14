@@ -1,11 +1,11 @@
-//===--- TestTU.h - Scratch source files for testing ------------*- C++-*-===//
+//===--- TestTU.h - Scratch source files for testing -------------*- C++-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Many tests for indexing, code completion etc are most naturally expressed
 // using code examples.
@@ -14,8 +14,10 @@
 // AST, particular symbols, etc.
 //
 //===---------------------------------------------------------------------===//
+
 #ifndef LLVM_CLANG_TOOLS_EXTRA_UNITTESTS_CLANGD_TESTTU_H
 #define LLVM_CLANG_TOOLS_EXTRA_UNITTESTS_CLANGD_TESTTU_H
+
 #include "ClangdUnit.h"
 #include "index/Index.h"
 #include "gtest/gtest.h"
@@ -44,6 +46,9 @@ struct TestTU {
   std::string HeaderCode;
   std::string HeaderFilename = "TestTU.h";
 
+  // Extra arguments for the compiler invocation.
+  std::vector<const char *> ExtraArgs;
+
   ParsedAST build() const;
   SymbolSlab headerSymbols() const;
   std::unique_ptr<SymbolIndex> index() const;
@@ -53,9 +58,13 @@ struct TestTU {
 const Symbol &findSymbol(const SymbolSlab &, llvm::StringRef QName);
 // Look up an AST symbol by qualified name, which must be unique and top-level.
 const NamedDecl &findDecl(ParsedAST &AST, llvm::StringRef QName);
-// Look up a main-file AST symbol by unqualified name, which must be unique.
-const NamedDecl &findAnyDecl(ParsedAST &AST, llvm::StringRef Name);
+// Look up an AST symbol that satisfies \p Filter.
+const NamedDecl &findDecl(ParsedAST &AST,
+                          std::function<bool(const NamedDecl &)> Filter);
+// Look up an AST symbol by unqualified name, which must be unique.
+const NamedDecl &findUnqualifiedDecl(ParsedAST &AST, llvm::StringRef Name);
 
 } // namespace clangd
 } // namespace clang
-#endif
+
+#endif // LLVM_CLANG_TOOLS_EXTRA_UNITTESTS_CLANGD_TESTTU_H

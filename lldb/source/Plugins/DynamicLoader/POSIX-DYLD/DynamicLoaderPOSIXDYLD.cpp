@@ -10,10 +10,8 @@
 // Main header include
 #include "DynamicLoaderPOSIXDYLD.h"
 
-// Project includes
 #include "AuxVector.h"
 
-// Other libraries and framework includes
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
@@ -29,8 +27,6 @@
 #include "lldb/Target/ThreadPlanRunToAddress.h"
 #include "lldb/Utility/Log.h"
 
-// C++ Includes
-// C Includes
 
 using namespace lldb;
 using namespace lldb_private;
@@ -121,7 +117,7 @@ void DynamicLoaderPOSIXDYLD::DidAttach() {
   EvalSpecialModulesStatus();
 
   // if we dont have a load address we cant re-base
-  bool rebase_exec = (load_offset == LLDB_INVALID_ADDRESS) ? false : true;
+  bool rebase_exec = load_offset != LLDB_INVALID_ADDRESS;
 
   // if we have a valid executable
   if (executable_sp.get()) {
@@ -512,7 +508,7 @@ void DynamicLoaderPOSIXDYLD::LoadVDSO() {
   if (m_vdso_base == LLDB_INVALID_ADDRESS)
     return;
 
-  FileSpec file("[vdso]", false);
+  FileSpec file("[vdso]");
 
   MemoryRegionInfo info;
   Status status = m_process->GetMemoryRegionInfo(m_vdso_base, info);
@@ -543,7 +539,7 @@ ModuleSP DynamicLoaderPOSIXDYLD::LoadInterpreterModule() {
     return nullptr;
   }
 
-  FileSpec file(info.GetName().GetCString(), false);
+  FileSpec file(info.GetName().GetCString());
   ModuleSpec module_spec(file, target.GetArchitecture());
 
   if (ModuleSP module_sp = target.GetSharedModule(module_spec)) {
@@ -756,7 +752,7 @@ void DynamicLoaderPOSIXDYLD::ResolveExecutableModule(
     return;
   }
 
-  target.SetExecutableModule(module_sp, false);
+  target.SetExecutableModule(module_sp, eLoadDependentsNo);
 }
 
 bool DynamicLoaderPOSIXDYLD::AlwaysRelyOnEHUnwindInfo(

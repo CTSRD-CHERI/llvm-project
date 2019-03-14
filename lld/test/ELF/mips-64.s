@@ -1,11 +1,10 @@
+# REQUIRES: mips
 # Check R_MIPS_64 relocation calculation.
 
 # RUN: llvm-mc -filetype=obj -triple=mips64-unknown-linux %s -o %t.o
 # RUN: ld.lld -shared %t.o -o %t.so
 # RUN: llvm-objdump -t %t.so | FileCheck -check-prefix=SYM %s
 # RUN: llvm-readobj -r -dynamic-table -mips-plt-got %t.so | FileCheck %s
-
-# REQUIRES: mips
 
   .global  __start
 __start:
@@ -26,8 +25,8 @@ v2:
 
 
 # SYM: SYMBOL TABLE:
-# SYM: 00020000 l       .data           00000004 v1
-# SYM: 00020008 g       .data           00000008 v2
+# SYM: 00020000 l     O .data           00000004 v1
+# SYM: 00020008 g     O .data           00000008 v2
 
 # CHECK:      Relocations [
 # CHECK-NEXT:   Section (7) .rel.dyn {

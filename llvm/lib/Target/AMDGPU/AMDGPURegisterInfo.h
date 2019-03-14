@@ -21,13 +21,11 @@
 
 namespace llvm {
 
-class AMDGPUSubtarget;
+class GCNSubtarget;
 class TargetInstrInfo;
 
 struct AMDGPURegisterInfo : public AMDGPUGenRegisterInfo {
   AMDGPURegisterInfo();
-
-  bool enableMultipleCopyHints() const override { return true; }
 
   /// \returns the sub reg enum value for the given \p Channel
   /// (e.g. getSubRegFromChannel(0) -> AMDGPU::sub0)

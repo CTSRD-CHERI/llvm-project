@@ -38,7 +38,6 @@
 #include "llvm/CodeGen/MachineOptimizationRemarkEmitter.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
-#include "llvm/CodeGen/StackProtector.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
@@ -75,6 +74,10 @@ using namespace llvm;
 #define DEBUG_TYPE "prologepilog"
 
 using MBBVector = SmallVector<MachineBasicBlock *, 4>;
+
+STATISTIC(NumLeafFuncWithSpills, "Number of leaf functions with CSRs");
+STATISTIC(NumFuncSeen, "Number of functions seen in PEI");
+
 
 namespace {
 
@@ -143,7 +146,6 @@ INITIALIZE_PASS_BEGIN(PEI, DEBUG_TYPE, "Prologue/Epilogue Insertion", false,
                       false)
 INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
 INITIALIZE_PASS_DEPENDENCY(MachineDominatorTree)
-INITIALIZE_PASS_DEPENDENCY(StackProtector)
 INITIALIZE_PASS_DEPENDENCY(MachineOptimizationRemarkEmitterPass)
 INITIALIZE_PASS_END(PEI, DEBUG_TYPE,
                     "Prologue/Epilogue Insertion & Frame Finalization", false,
@@ -160,7 +162,6 @@ void PEI::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.setPreservesCFG();
   AU.addPreserved<MachineLoopInfo>();
   AU.addPreserved<MachineDominatorTree>();
-  AU.addRequired<StackProtector>();
   AU.addRequired<MachineOptimizationRemarkEmitterPass>();
   MachineFunctionPass::getAnalysisUsage(AU);
 }
@@ -171,6 +172,7 @@ using StackObjSet = SmallSetVector<int, 8>;
 /// runOnMachineFunction - Insert prolog/epilog code and replace abstract
 /// frame indexes with appropriate references.
 bool PEI::runOnMachineFunction(MachineFunction &MF) {
+  NumFuncSeen++;
   const Function &F = MF.getFunction();
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   const TargetFrameLowering *TFI = MF.getSubtarget().getFrameLowering();
@@ -360,6 +362,11 @@ static void assignCalleeSavedSpillSlots(MachineFunction &F,
     // Now that we know which registers need to be saved and restored, allocate
     // stack slots for them.
     for (auto &CS : CSI) {
+      // If the target has spilled this register to another register, we don't
+      // need to allocate a stack slot.
+      if (CS.isSpilledToReg())
+        continue;
+
       unsigned Reg = CS.getReg();
       const TargetRegisterClass *RC = RegInfo->getMinimalPhysRegClass(Reg);
 
@@ -457,7 +464,22 @@ static void updateLiveness(MachineFunction &MF) {
       if (!MRI.isReserved(Reg) && !MBB->isLiveIn(Reg))
         MBB->addLiveIn(Reg);
     }
+    // If callee-saved register is spilled to another register rather than
+    // spilling to stack, the destination register has to be marked as live for
+    // each MBB between the prologue and epilogue so that it is not clobbered
+    // before it is reloaded in the epilogue. The Visited set contains all
+    // blocks outside of the region delimited by prologue/epilogue.
+    if (CSI[i].isSpilledToReg()) {
+      for (MachineBasicBlock &MBB : MF) {
+        if (Visited.count(&MBB))
+          continue;
+        MCPhysReg DstReg = CSI[i].getDstReg();
+        if (!MBB.isLiveIn(DstReg))
+          MBB.addLiveIn(DstReg);
+      }
+    }
   }
+
 }
 
 /// Insert restore code for the callee-saved registers used in the function.
@@ -533,6 +555,9 @@ void PEI::spillCalleeSavedRegs(MachineFunction &MF) {
 
     std::vector<CalleeSavedInfo> &CSI = MFI.getCalleeSavedInfo();
     if (!CSI.empty()) {
+      if (!MFI.hasCalls())
+        NumLeafFuncWithSpills++;
+
       for (MachineBasicBlock *SaveBlock : SaveBlocks) {
         insertCSRSaves(*SaveBlock, CSI);
         // Update the live-in information of all the blocks up to the save
@@ -695,7 +720,6 @@ AssignProtectedObjSet(const StackObjSet &UnassignedObjs,
 /// abstract stack objects.
 void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
   const TargetFrameLowering &TFI = *MF.getSubtarget().getFrameLowering();
-  StackProtector *SP = &getAnalysis<StackProtector>();
 
   bool StackGrowsDown =
     TFI.getStackGrowthDirection() == TargetFrameLowering::StackGrowsDown;
@@ -889,16 +913,16 @@ void PEI::calculateFrameObjectOffsets(MachineFunction &MF) {
           EHRegNodeFrameIndex == (int)i)
         continue;
 
-      switch (SP->getSSPLayout(MFI.getObjectAllocation(i))) {
-      case StackProtector::SSPLK_None:
+      switch (MFI.getObjectSSPLayout(i)) {
+      case MachineFrameInfo::SSPLK_None:
         continue;
-      case StackProtector::SSPLK_SmallArray:
+      case MachineFrameInfo::SSPLK_SmallArray:
         SmallArrayObjs.insert(i);
         continue;
-      case StackProtector::SSPLK_AddrOf:
+      case MachineFrameInfo::SSPLK_AddrOf:
         AddrOfObjs.insert(i);
         continue;
-      case StackProtector::SSPLK_LargeArray:
+      case MachineFrameInfo::SSPLK_LargeArray:
         LargeArrayObjs.insert(i);
         continue;
       }
@@ -1141,7 +1165,7 @@ void PEI::replaceFrameIndices(MachineBasicBlock *BB, MachineFunction &MF,
         MachineOperand &Offset = MI.getOperand(i + 1);
         int refOffset = TFI->getFrameIndexReferencePreferSP(
             MF, MI.getOperand(i).getIndex(), Reg, /*IgnoreSPUpdates*/ false);
-        Offset.setImm(Offset.getImm() + refOffset);
+        Offset.setImm(Offset.getImm() + refOffset + SPAdj);
         MI.getOperand(i).ChangeToRegister(Reg, false /*isDef*/);
         continue;
       }

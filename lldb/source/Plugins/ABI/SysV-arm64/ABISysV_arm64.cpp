@@ -9,19 +9,13 @@
 
 #include "ABISysV_arm64.h"
 
-// C Includes
-// C++ Includes
 #include <vector>
 
-// Other libraries and framework includes
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Triple.h"
 
-// Project includes
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
-#include "lldb/Core/Scalar.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Symbol/UnwindPlan.h"
@@ -31,6 +25,8 @@
 #include "lldb/Target/Thread.h"
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Scalar.h"
 #include "lldb/Utility/Status.h"
 
 #include "Utility/ARM64_DWARF_Registers.h"
@@ -1671,15 +1667,12 @@ size_t ABISysV_arm64::GetRedZoneSize() const { return 128; }
 
 ABISP
 ABISysV_arm64::CreateInstance(lldb::ProcessSP process_sp, const ArchSpec &arch) {
-  static ABISP g_abi_sp;
   const llvm::Triple::ArchType arch_type = arch.GetTriple().getArch();
   const llvm::Triple::VendorType vendor_type = arch.GetTriple().getVendor();
 
   if (vendor_type != llvm::Triple::Apple) {
     if (arch_type == llvm::Triple::aarch64) {
-      if (!g_abi_sp)
-        g_abi_sp.reset(new ABISysV_arm64(process_sp));
-      return g_abi_sp;
+      return ABISP(new ABISysV_arm64(process_sp));
     }
   }
 

@@ -87,6 +87,10 @@ public:
   /// floating-point constant with all NaN elements.
   bool isNaN() const;
 
+  /// Return true if this is a vector constant that includes any undefined
+  /// elements.
+  bool containsUndefElement() const;
+
   /// Return true if evaluation of this constant could trap. This is true for
   /// things like constant expressions that could divide by zero.
   bool canTrap() const;
@@ -110,7 +114,8 @@ public:
 
   /// For aggregates (struct/array/vector) return the constant that corresponds
   /// to the specified element if possible, or null if not. This can return null
-  /// if the element index is a ConstantExpr, or if 'this' is a constant expr.
+  /// if the element index is a ConstantExpr, if 'this' is a constant expr or
+  /// if the constant does not fit into an uint64_t.
   Constant *getAggregateElement(unsigned Elt) const;
   Constant *getAggregateElement(Constant *Elt) const;
 

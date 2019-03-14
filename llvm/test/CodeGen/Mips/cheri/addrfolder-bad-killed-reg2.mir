@@ -1,0 +1,105 @@
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o - | FileCheck %s
+
+--- |
+  ; ModuleID = '/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/a.ll'
+  source_filename = "/tmp/localtime-ea7b00.c"
+  target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200"
+  target triple = "cheri-unknown-freebsd12"
+  
+  ; Function Attrs: noinline nounwind optnone
+  define void @tzparse() addrspace(200) #0 {
+  entry:
+    br label %if.end49
+  
+  if.end49:                                         ; preds = %entry
+    br i1 undef, label %if.then53, label %if.else393
+  
+  if.then53:                                        ; preds = %if.end49
+    unreachable
+  
+  if.else393:                                       ; preds = %if.end49
+    %add.ptr403 = getelementptr i8, i8 addrspace(200)* undef, i64 undef
+    store i8 addrspace(200)* %add.ptr403, i8 addrspace(200)* addrspace(200)* undef, align 16
+    %add.ptr408 = getelementptr i8, i8 addrspace(200)* undef, i64 undef
+    store i8 0, i8 addrspace(200)* %add.ptr408, align 1
+    unreachable
+  }
+  
+  attributes #0 = { noinline nounwind optnone "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="mips4" "target-features"="-noabicalls,+soft-float,+chericap,+cheri128" "unsafe-fp-math"="false" "use-soft-float"="true" }
+  
+  !llvm.ident = !{!0}
+  
+  !0 = !{!"clang version 7.0.0 (https://github.com/llvm-mirror/clang.git 60ff21cc977b80c9420c7e825c36b0746f3b3985) (https://github.com/llvm-mirror/llvm.git 56fe090f994bf2ba07cb48e85cdcc3fee4288091)"}
+
+...
+---
+name:            tzparse
+alignment:       3
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+registers:       
+  - { id: 0, class: gpr32, preferred-register: '' }
+  - { id: 1, class: cherigpr, preferred-register: '' }
+  - { id: 2, class: cherigpr, preferred-register: '' }
+  - { id: 3, class: gpr64, preferred-register: '' }
+  - { id: 4, class: cherigpr, preferred-register: '' }
+  - { id: 5, class: gpr64, preferred-register: '' }
+liveins:         
+frameInfo:       
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    1
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  maxCallFrameSize: 4294967295
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  localFrameSize:  0
+  savePoint:       ''
+  restorePoint:    ''
+fixedStack:      
+stack:           
+constants:       
+body:             |
+  bb.0.entry:
+    %2:cherigpr = IMPLICIT_DEF
+    %3:gpr64 = IMPLICIT_DEF
+    %1:cherigpr = CIncOffset %2, killed %3
+    %4:cherigpr = IMPLICIT_DEF
+    STORECAP %1, $zero_64, 0, %4 :: (store 16 into `i8 addrspace(200)* addrspace(200)* undef`, addrspace 200)
+    %5:gpr64 = DADDiu $zero_64, 0
+    CAPSTORE8 killed $zero_64, $zero_64, 0, %1 :: (store 1 into %ir.add.ptr408, addrspace 200)
+
+    %6:cherigpr = IMPLICIT_DEF
+    %7:gpr64 = IMPLICIT_DEF
+    %8:cherigpr = CIncOffset %6, killed %7
+    CAPSTORE8 killed $zero_64, $zero_64, 0, %8 :: (store 1 into %ir.add.ptr408, addrspace 200)
+
+...
+
+# Previously the addrmodefolder would move the use of the killed register %3 into the capstore8 at the end
+# without marking it as no longer killed
+
+# CHECK:      bb.0.entry:
+# CHECK-NEXT:   %2:cherigpr = IMPLICIT_DEF
+# CHECK-NEXT:   %3:gpr64 = IMPLICIT_DEF
+# CHECK-NEXT:   %1:cherigpr = CIncOffset %2, %3
+# CHECK-NEXT:   %4:cherigpr = IMPLICIT_DEF
+# CHECK-NEXT:   STORECAP %1, $zero_64, 0, %4 :: (store 16 into `i8 addrspace(200)* addrspace(200)* undef`, addrspace 200)
+# CHECK-NEXT:   %5:gpr64 = DADDiu $zero_64, 0
+# CHECK-NEXT:   CAPSTORE8 killed $zero_64, killed %3, 0, killed %2 :: (store 1 into %ir.add.ptr408, addrspace 200)
+
+# Also check what happens if the CIncOffset can be removed:
+# CHECK-NEXT:   %6:cherigpr = IMPLICIT_DEF
+# CHECK-NEXT:   %7:gpr64 = IMPLICIT_DEF
+# CHECK-NEXT:   CAPSTORE8 killed $zero_64, killed %7, 0, killed %6 :: (store 1 into %ir.add.ptr408, addrspace 200)

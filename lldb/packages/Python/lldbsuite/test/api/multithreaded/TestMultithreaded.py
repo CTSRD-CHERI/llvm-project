@@ -16,7 +16,7 @@ import subprocess
 class SBBreakpointCallbackCase(TestBase):
 
     NO_DEBUG_INFO_TESTCASE = True
-   
+
     def setUp(self):
         TestBase.setUp(self)
         self.generateSource('driver.cpp')
@@ -68,7 +68,7 @@ class SBBreakpointCallbackCase(TestBase):
     # clang-cl does not support throw or catch (llvm.org/pr24538)
     @skipIfWindows
     @expectedFlakeyFreeBSD
-    @expectedFailureAll(oslist=["linux"])
+    @skipIf(oslist=["linux"]) # flakey
     def test_sb_api_listener_resume(self):
         """ Test that a process can be resumed from a non-main thread. """
         self.build_and_test(

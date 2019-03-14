@@ -1,4 +1,5 @@
-// RUN: llvm-mc -filetype=obj -triple=armv7a-none-linux-gnueabi %s -o %t
+// REQUIRES: arm
+// RUN: llvm-mc -arm-add-build-attributes -filetype=obj -triple=armv7a-none-linux-gnueabi %s -o %t
 // RUN: echo "SECTIONS { \
 // RUN:       . = SIZEOF_HEADERS; \
 // RUN:       .text_low : { *(.text_low) *(.text_low2) } \
@@ -6,7 +7,6 @@
 // RUN:       } " > %t.script
 // RUN: ld.lld --script %t.script %t -o %t2 2>&1
 // RUN: llvm-objdump -d -triple=thumbv7a-none-linux-gnueabi %t2 | FileCheck %s
-// REQUIRES: arm
 // Simple test that we can support range extension thunks with linker scripts
  .syntax unified
  .section .text_low, "ax", %progbits

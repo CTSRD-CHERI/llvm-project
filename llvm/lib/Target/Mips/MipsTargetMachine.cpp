@@ -34,13 +34,14 @@
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/CHERICap.h"
+#include "llvm/Transforms/Scalar.h"
 #include <string>
 
 using namespace llvm;
@@ -66,6 +67,10 @@ extern "C" void LLVMInitializeMipsTarget() {
   initializeMipsDelaySlotFillerPass(*PR);
   initializeMipsBranchExpansionPass(*PR);
   initializeMicroMipsSizeReducePass(*PR);
+  initializeMipsOptimizePICCallPass(*PR);
+  initializeCHERICapDirectCallsPass(*PR);
+  initializeCHERICapFoldIntrinsicsPass(*PR);
+  initializeCheriAddressingModeFolderPass(*PR);
 }
 
 static std::string computeDataLayout(const Triple &TT, StringRef CPU,
@@ -128,12 +133,6 @@ static Reloc::Model getEffectiveRelocModel(bool JIT,
   return *RM;
 }
 
-static CodeModel::Model getEffectiveCodeModel(Optional<CodeModel::Model> CM) {
-  if (CM)
-    return *CM;
-  return CodeModel::Small;
-}
-
 // On function prologue, the stack is created by decrementing
 // its pointer. Once decremented, all references are done with positive
 // offset from the stack/frame pointer, using StackGrowsUp enables
@@ -148,7 +147,7 @@ MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
                                      bool isLittle)
     : LLVMTargetMachine(T, computeDataLayout(TT, CPU, Options, FS, isLittle), TT,
                         CPU, FS, Options, getEffectiveRelocModel(JIT, RM),
-                        getEffectiveCodeModel(CM), OL),
+                        getEffectiveCodeModel(CM, CodeModel::Small), OL),
       isLittle(isLittle), TLOF(llvm::make_unique<MipsTargetObjectFile>()),
       ABI(MipsABIInfo::computeTargetABI(TT, CPU, Options.MCOptions)),
       Subtarget(nullptr), DefaultSubtarget(TT, CPU, FS, isLittle, *this,
@@ -159,6 +158,9 @@ MipsTargetMachine::MipsTargetMachine(const Target &T, const Triple &TT,
                       isLittle, *this, Options.StackAlignmentOverride) {
   Subtarget = &DefaultSubtarget;
   initAsmInfo();
+
+  // HACK: Update the default CFA register for CHERI purecap
+  ABI.updateCheriInitialFrameStateHack(*AsmInfo, *MRI);
 }
 
 MipsTargetMachine::~MipsTargetMachine() = default;
@@ -344,6 +346,11 @@ MipsTargetMachine::getTargetTransformInfo(const Function &F) {
 // machine code is emitted. return true if -print-machineinstrs should
 // print out the code after the passes.
 void MipsPassConfig::addPreEmitPass() {
+  // Expand pseudo instructions that are sensitive to register allocation.
+  addPass(createMipsExpandPseudoPass());
+
+  // The microMIPS size reduction pass performs instruction reselection for
+  // instructions which can be remapped to a 16 bit instruction.
   addPass(createMicroMipsSizeReducePass());
 
   // The delay slot filler pass can potientially create forbidden slot hazards

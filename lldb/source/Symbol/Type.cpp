@@ -7,16 +7,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
 #include <stdio.h>
 
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/Module.h"
-#include "lldb/Core/Scalar.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Scalar.h"
 #include "lldb/Utility/StreamString.h"
 
 #include "lldb/Symbol/CompilerType.h"
@@ -342,7 +338,7 @@ uint64_t Type::GetByteSize() {
 }
 
 uint32_t Type::GetNumChildren(bool omit_empty_base_classes) {
-  return GetForwardCompilerType().GetNumChildren(omit_empty_base_classes);
+  return GetForwardCompilerType().GetNumChildren(omit_empty_base_classes, nullptr);
 }
 
 bool Type::IsAggregateType() {
@@ -750,10 +746,7 @@ void TypeAndOrName::SetCompilerType(CompilerType compiler_type) {
 }
 
 bool TypeAndOrName::IsEmpty() const {
-  if ((bool)m_type_name || (bool)m_type_pair)
-    return false;
-  else
-    return true;
+  return !((bool)m_type_name || (bool)m_type_pair);
 }
 
 void TypeAndOrName::Clear() {

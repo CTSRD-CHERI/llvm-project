@@ -23,6 +23,7 @@ add_llvm_target(ARMCodeGen
   ARMBaseInstrInfo.cpp
   ARMBaseRegisterInfo.cpp
   ARMCallLowering.cpp
+  ARMCodeGenPrepare.cpp
   ARMConstantIslandPass.cpp
   ARMConstantPoolValue.cpp
   ARMExpandPseudoInsts.cpp
@@ -34,6 +35,7 @@ add_llvm_target(ARMCodeGen
   ARMISelLowering.cpp
   ARMInstrInfo.cpp
   ARMLegalizerInfo.cpp
+  ARMParallelDSP.cpp
   ARMLoadStoreOptimizer.cpp
   ARMMCInstLower.cpp
   ARMMachineFunctionInfo.cpp
@@ -55,6 +57,9 @@ add_llvm_target(ARMCodeGen
   Thumb2SizeReduction.cpp
   ARMComputeBlockSize.cpp
   )
+
+# TODO: remove
+add_definitions(-DLLVM_TARGETLOWERINGINFO_DEFAULT_AS=0)
 
 add_subdirectory(AsmParser)
 add_subdirectory(Disassembler)

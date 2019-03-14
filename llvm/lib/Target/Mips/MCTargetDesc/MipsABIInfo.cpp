@@ -11,6 +11,7 @@
 #include "MipsRegisterInfo.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCTargetOptions.h"
 
 using namespace llvm;
@@ -67,7 +68,9 @@ MipsABIInfo MipsABIInfo::computeTargetABI(const Triple &TT, StringRef CPU,
     return MipsABIInfo::N64();
   if (ABIName.startswith("sandbox") || ABIName.startswith("purecap"))
     return MipsABIInfo::CheriPureCap(CPU.endswith("128") ? 16 : 32);
-  assert(ABIName.empty() && "Unknown ABI option for MIPS");
+  if (TT.getEnvironment() == llvm::Triple::GNUABIN32)
+    return MipsABIInfo::N32();
+  assert(Options.getABIName().empty() && "Unknown ABI option for MIPS");
 
   if (TT.isMIPS64())
     return MipsABIInfo::N64();
@@ -109,12 +112,41 @@ unsigned MipsABIInfo::GetLocalCapability() const {
   return Mips::C26;
 }
 
+// HACK: Update the default CFA register for CHERI purecap
+void MipsABIInfo::updateCheriInitialFrameStateHack(const MCAsmInfo &MAI,
+                                                   const MCRegisterInfo &MRI) {
+  if (!IsCheriPureCap())
+    return;
+
+  auto &InitialState = MAI.getInitialFrameState();
+  unsigned C11Dwarf = MRI.getDwarfRegNum(Mips::C11, true);
+  for (const MCCFIInstruction &Inst : InitialState) {
+    if (Inst.getOperation() == MCCFIInstruction::OpDefCfaRegister) {
+      if (Inst.getRegister() != C11Dwarf) {
+        // errs() << __func__ << ": Updating default OpDefCfaRegister from "
+        //       << Inst.getRegister() << " to " << C11Dwarf << "\n";
+        const_cast<MCCFIInstruction &>(Inst).setRegister(C11Dwarf);
+      }
+    } else if (Inst.getOperation() == MCCFIInstruction::OpDefCfa) {
+      if (Inst.getRegister() != C11Dwarf) {
+        // errs() << __func__ << ": Updating default OpDefCfa from "
+        //        << Inst.getRegister() << "to" << C11Dwarf << "\n";
+        const_cast<MCCFIInstruction &>(Inst).setRegister(C11Dwarf);
+      }
+    }
+  }
+}
+
 bool MipsABIInfo::UsesCapabilityTable() const {
   return IsCheriPureCap() && MCTargetOptions::cheriUsesCapabilityTable();
 }
 
 const MipsABIInfo::TemporalABILayout* MipsABIInfo::GetTABILayout() const {
   return isCheriPureCap ? &temporalABILayout : nullptr;
+}
+
+bool MipsABIInfo::UsesCapabilityTls() const {
+  return IsCheriPureCap() && MCTargetOptions::cheriUsesCapabilityTls();
 }
 
 unsigned MipsABIInfo::GetReturnAddress() const {
@@ -140,7 +172,7 @@ unsigned MipsABIInfo::GetReturnSelector() const {
 }
 
 unsigned MipsABIInfo::GetGlobalPtr() const {
-  //assert(!UsesCapabilityTable());
+  assert(!UsesCapabilityTable());
   return ArePtrs64bit() ? Mips::GP_64 : Mips::GP;
 }
 

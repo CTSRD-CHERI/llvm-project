@@ -119,6 +119,52 @@ while.end:                                        ; preds = %while.end.loopexit,
 ; Here it will replace the loop -
 ; assume builtin is always profitable.
 ;
+; int ctlz_zero_check_lshr(int n)
+; {
+;   int i = 0;
+;   while(n) {
+;     n >>= 1;
+;     i++;
+;   }
+;   return i;
+; }
+;
+; ALL:  entry
+; ALL:  %0 = call i32 @llvm.ctlz.i32(i32 %n, i1 true)
+; ALL-NEXT:  %1 = sub i32 32, %0
+; ALL:  %inc.lcssa = phi i32 [ %1, %while.body ]
+; ALL:  %i.0.lcssa = phi i32 [ 0, %entry ], [ %inc.lcssa, %while.end.loopexit ]
+; ALL:  ret i32 %i.0.lcssa
+
+; Function Attrs: norecurse nounwind readnone uwtable
+define i32 @ctlz_zero_check_lshr(i32 %n) {
+entry:
+  %tobool4 = icmp eq i32 %n, 0
+  br i1 %tobool4, label %while.end, label %while.body.preheader
+
+while.body.preheader:                             ; preds = %entry
+  br label %while.body
+
+while.body:                                       ; preds = %while.body.preheader, %while.body
+  %i.06 = phi i32 [ %inc, %while.body ], [ 0, %while.body.preheader ]
+  %n.addr.05 = phi i32 [ %shr, %while.body ], [ %n, %while.body.preheader ]
+  %shr = lshr i32 %n.addr.05, 1
+  %inc = add nsw i32 %i.06, 1
+  %tobool = icmp eq i32 %shr, 0
+  br i1 %tobool, label %while.end.loopexit, label %while.body
+
+while.end.loopexit:                               ; preds = %while.body
+  br label %while.end
+
+while.end:                                        ; preds = %while.end.loopexit, %entry
+  %i.0.lcssa = phi i32 [ 0, %entry ], [ %inc, %while.end.loopexit ]
+  ret i32 %i.0.lcssa
+}
+
+; Recognize CTLZ builtin pattern.
+; Here it will replace the loop -
+; assume builtin is always profitable.
+;
 ; int ctlz(int n)
 ; {
 ;   n = n >= 0 ? n : -n;
@@ -149,6 +195,44 @@ while.cond:                                       ; preds = %while.cond, %entry
   %n.addr.0 = phi i32 [ %abs_n, %entry ], [ %shr, %while.cond ]
   %i.0 = phi i32 [ 0, %entry ], [ %inc, %while.cond ]
   %shr = ashr i32 %n.addr.0, 1
+  %tobool = icmp eq i32 %shr, 0
+  %inc = add nsw i32 %i.0, 1
+  br i1 %tobool, label %while.end, label %while.cond
+
+while.end:                                        ; preds = %while.cond
+  ret i32 %i.0
+}
+
+; Recognize CTLZ builtin pattern.
+; Here it will replace the loop -
+; assume builtin is always profitable.
+;
+; int ctlz_lshr(int n)
+; {
+;   int i = 0;
+;   while(n >>= 1) {
+;     i++;
+;   }
+;   return i;
+; }
+;
+; ALL:  entry
+; ALL:  %0 = lshr i32 %n, 1
+; ALL-NEXT:  %1 = call i32 @llvm.ctlz.i32(i32 %0, i1 false)
+; ALL-NEXT:  %2 = sub i32 32, %1
+; ALL-NEXT:  %3 = add i32 %2, 1
+; ALL:  %i.0.lcssa = phi i32 [ %2, %while.cond ]
+; ALL:  ret i32 %i.0.lcssa
+
+; Function Attrs: norecurse nounwind readnone uwtable
+define i32 @ctlz_lshr(i32 %n) {
+entry:
+  br label %while.cond
+
+while.cond:                                       ; preds = %while.cond, %entry
+  %n.addr.0 = phi i32 [ %n, %entry ], [ %shr, %while.cond ]
+  %i.0 = phi i32 [ 0, %entry ], [ %inc, %while.cond ]
+  %shr = lshr i32 %n.addr.0, 1
   %tobool = icmp eq i32 %shr, 0
   %inc = add nsw i32 %i.0, 1
   br i1 %tobool, label %while.end, label %while.cond
@@ -204,6 +288,45 @@ while.end:                                        ; preds = %while.cond
 ; Here it will replace the loop -
 ; assume builtin is always profitable.
 ;
+; int ctlz_add_lshr(int n, int i0)
+; {
+;   int i = i0;
+;   while(n >>= 1) {
+;     i++;
+;   }
+;   return i;
+; }
+;
+; ALL:  entry
+; ALL:  %0 = lshr i32 %n, 1
+; ALL-NEXT:  %1 = call i32 @llvm.ctlz.i32(i32 %0, i1 false)
+; ALL-NEXT:  %2 = sub i32 32, %1
+; ALL-NEXT:  %3 = add i32 %2, 1
+; ALL-NEXT:  %4 = add i32 %2, %i0
+; ALL:  %i.0.lcssa = phi i32 [ %4, %while.cond ]
+; ALL:  ret i32 %i.0.lcssa
+;
+; Function Attrs: norecurse nounwind readnone uwtable
+define i32 @ctlz_add_lshr(i32 %n, i32 %i0) {
+entry:
+  br label %while.cond
+
+while.cond:                                       ; preds = %while.cond, %entry
+  %n.addr.0 = phi i32 [ %n, %entry ], [ %shr, %while.cond ]
+  %i.0 = phi i32 [ %i0, %entry ], [ %inc, %while.cond ]
+  %shr = lshr i32 %n.addr.0, 1
+  %tobool = icmp eq i32 %shr, 0
+  %inc = add nsw i32 %i.0, 1
+  br i1 %tobool, label %while.end, label %while.cond
+
+while.end:                                        ; preds = %while.cond
+  ret i32 %i.0
+}
+
+; Recognize CTLZ builtin pattern.
+; Here it will replace the loop -
+; assume builtin is always profitable.
+;
 ; int ctlz_sext(short in)
 ; {
 ;   int n = in;
@@ -237,6 +360,45 @@ while.cond:                                       ; preds = %while.cond, %entry
   %n.addr.0 = phi i32 [ %abs_n, %entry ], [ %shr, %while.cond ]
   %i.0 = phi i32 [ 0, %entry ], [ %inc, %while.cond ]
   %shr = ashr i32 %n.addr.0, 1
+  %tobool = icmp eq i32 %shr, 0
+  %inc = add nsw i32 %i.0, 1
+  br i1 %tobool, label %while.end, label %while.cond
+
+while.end:                                        ; preds = %while.cond
+  ret i32 %i.0
+}
+
+; Recognize CTLZ builtin pattern.
+; Here it will replace the loop -
+; assume builtin is always profitable.
+;
+; int ctlz_sext_lshr(short in)
+; {
+;   int i = 0;
+;   while(in >>= 1) {
+;     i++;
+;   }
+;   return i;
+; }
+;
+; ALL:  entry
+; ALL:  %0 = lshr i32 %n, 1
+; ALL-NEXT:  %1 = call i32 @llvm.ctlz.i32(i32 %0, i1 false)
+; ALL-NEXT:  %2 = sub i32 32, %1
+; ALL-NEXT:  %3 = add i32 %2, 1
+; ALL:  %i.0.lcssa = phi i32 [ %2, %while.cond ]
+; ALL:  ret i32 %i.0.lcssa
+
+; Function Attrs: norecurse nounwind readnone uwtable
+define i32 @ctlz_sext_lshr(i16 %in) {
+entry:
+  %n = sext i16 %in to i32
+  br label %while.cond
+
+while.cond:                                       ; preds = %while.cond, %entry
+  %n.addr.0 = phi i32 [ %n, %entry ], [ %shr, %while.cond ]
+  %i.0 = phi i32 [ 0, %entry ], [ %inc, %while.cond ]
+  %shr = lshr i32 %n.addr.0, 1
   %tobool = icmp eq i32 %shr, 0
   %inc = add nsw i32 %i.0, 1
   br i1 %tobool, label %while.end, label %while.cond
@@ -321,3 +483,46 @@ while.end:                                        ; preds = %while.cond.while.en
   ret i32 %cnt.0.lcssa
 }
 
+; We can't easily transform this loop. It returns 1 for an input of both
+; 0 and 1.
+;
+; int ctlz_bad(unsigned n)
+; {
+;   int i = 0;
+;   do {
+;     i++;
+;     n >>= 1;
+;   } while(n != 0) {
+;   return i;
+; }
+;
+; Function Attrs: norecurse nounwind readnone uwtable
+define i32 @ctlz_bad(i32 %n) {
+; ALL-LABEL: @ctlz_bad(
+; ALL-NEXT:  entry:
+; ALL-NEXT:    br label [[WHILE_COND:%.*]]
+; ALL:       while.cond:
+; ALL-NEXT:    [[N_ADDR_0:%.*]] = phi i32 [ [[N:%.*]], [[ENTRY:%.*]] ], [ [[SHR:%.*]], [[WHILE_COND]] ]
+; ALL-NEXT:    [[I_0:%.*]] = phi i32 [ 0, [[ENTRY]] ], [ [[INC:%.*]], [[WHILE_COND]] ]
+; ALL-NEXT:    [[SHR]] = lshr i32 [[N_ADDR_0]], 1
+; ALL-NEXT:    [[TOBOOL:%.*]] = icmp eq i32 [[SHR]], 0
+; ALL-NEXT:    [[INC]] = add nsw i32 [[I_0]], 1
+; ALL-NEXT:    br i1 [[TOBOOL]], label [[WHILE_END:%.*]], label [[WHILE_COND]]
+; ALL:       while.end:
+; ALL-NEXT:    [[INC_LCSSA:%.*]] = phi i32 [ [[INC]], [[WHILE_COND]] ]
+; ALL-NEXT:    ret i32 [[INC_LCSSA]]
+;
+entry:
+  br label %while.cond
+
+while.cond:                                       ; preds = %while.cond, %entry
+  %n.addr.0 = phi i32 [ %n, %entry ], [ %shr, %while.cond ]
+  %i.0 = phi i32 [ 0, %entry ], [ %inc, %while.cond ]
+  %shr = lshr i32 %n.addr.0, 1
+  %tobool = icmp eq i32 %shr, 0
+  %inc = add nsw i32 %i.0, 1
+  br i1 %tobool, label %while.end, label %while.cond
+
+while.end:                                        ; preds = %while.cond
+  ret i32 %inc
+}

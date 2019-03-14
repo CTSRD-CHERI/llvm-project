@@ -27,7 +27,7 @@
 // -- We define Function* container class with custom "operator<" (FunctionPtr).
 // -- "FunctionPtr" instances are stored in std::set collection, so every
 //    std::set::insert operation will give you result in log(N) time.
-// 
+//
 // As an optimization, a hash of the function structure is calculated first, and
 // two functions are only compared if they have the same hash. This hash is
 // cheap to compute, and has the property that if function F == G according to
@@ -136,6 +136,7 @@ using namespace llvm;
 
 STATISTIC(NumFunctionsMerged, "Number of functions merged");
 STATISTIC(NumThunksWritten, "Number of thunks generated");
+STATISTIC(NumAliasesWritten, "Number of aliases generated");
 STATISTIC(NumDoubleWeak, "Number of new functions created");
 
 static cl::opt<unsigned> NumFunctionsForSanityCheck(
@@ -164,6 +165,11 @@ static cl::opt<bool>
                       cl::init(false),
                       cl::desc("Preserve debug info in thunk when mergefunc "
                                "transformations are made."));
+
+static cl::opt<bool>
+    MergeFunctionsAliases("mergefunc-use-aliases", cl::Hidden,
+                          cl::init(false),
+                          cl::desc("Allow mergefunc to create aliases"));
 
 namespace {
 
@@ -272,6 +278,13 @@ private:
   /// delete G.
   void writeThunk(Function *F, Function *G);
 
+  // Replace G with an alias to F (deleting function G)
+  void writeAlias(Function *F, Function *G);
+
+  // Replace G with an alias to F if possible, or a thunk to F if
+  // profitable. Returns false if neither is the case.
+  bool writeThunkOrAlias(Function *F, Function *G);
+
   /// Replace function F with function G in the function tree.
   void replaceFunctionInTree(const FunctionNode &FN, Function *G);
 
@@ -284,7 +297,7 @@ private:
   // modified, i.e. in insert(), remove(), and replaceFunctionInTree(), to avoid
   // dangling iterators into FnTree. The invariant that preserves this is that
   // there is exactly one mapping F -> FN for each FunctionNode FN in FnTree.
-  ValueMap<Function*, FnTreeType::iterator> FNodesInTree;
+  DenseMap<AssertingVH<Function>, FnTreeType::iterator> FNodesInTree;
 };
 
 } // end anonymous namespace
@@ -383,7 +396,7 @@ bool MergeFunctions::runOnModule(Module &M) {
   for (Function &Func : M) {
     if (!Func.isDeclaration() && !Func.hasAvailableExternallyLinkage()) {
       HashedFuncs.push_back({FunctionComparator::functionHash(Func), &Func});
-    } 
+    }
   }
 
   std::stable_sort(
@@ -402,7 +415,7 @@ bool MergeFunctions::runOnModule(Module &M) {
       Deferred.push_back(WeakTrackingVH(I->second));
     }
   }
-  
+
   do {
     std::vector<WeakTrackingVH> Worklist;
     Deferred.swap(Worklist);
@@ -425,6 +438,7 @@ bool MergeFunctions::runOnModule(Module &M) {
   } while (!Deferred.empty());
 
   FnTree.clear();
+  FNodesInTree.clear();
   GlobalNumbers.clear();
 
   return Changed;
@@ -608,7 +622,7 @@ void MergeFunctions::filterInstsUnrelatedToPDI(
         LLVM_DEBUG(BI->print(dbgs()));
         LLVM_DEBUG(dbgs() << "\n");
       }
-    } else if (dyn_cast<TerminatorInst>(BI) == GEntryBlock->getTerminator()) {
+    } else if (BI->isTerminator() && &*BI == GEntryBlock->getTerminator()) {
       LLVM_DEBUG(dbgs() << " Will Include Terminator: ");
       LLVM_DEBUG(BI->print(dbgs()));
       LLVM_DEBUG(dbgs() << "\n");
@@ -679,8 +693,8 @@ void MergeFunctions::writeThunk(Function *F, Function *G) {
     GEntryBlock->getTerminator()->eraseFromParent();
     BB = GEntryBlock;
   } else {
-    NewG = Function::Create(G->getFunctionType(), G->getLinkage(), "",
-                            G->getParent());
+    NewG = Function::Create(G->getFunctionType(), G->getLinkage(),
+                            G->getAddressSpace(), "", G->getParent());
     BB = BasicBlock::Create(F->getContext(), "", NewG);
   }
 
@@ -734,27 +748,76 @@ void MergeFunctions::writeThunk(Function *F, Function *G) {
   ++NumThunksWritten;
 }
 
+// Whether this function may be replaced by an alias
+static bool canCreateAliasFor(Function *F) {
+  if (!MergeFunctionsAliases || !F->hasGlobalUnnamedAddr())
+    return false;
+
+  // We should only see linkages supported by aliases here
+  assert(F->hasLocalLinkage() || F->hasExternalLinkage()
+      || F->hasWeakLinkage() || F->hasLinkOnceLinkage());
+  return true;
+}
+
+// Replace G with an alias to F (deleting function G)
+void MergeFunctions::writeAlias(Function *F, Function *G) {
+  Constant *BitcastF = ConstantExpr::getBitCast(F, G->getType());
+  PointerType *PtrType = G->getType();
+  auto *GA = GlobalAlias::create(
+      PtrType->getElementType(), PtrType->getAddressSpace(),
+      G->getLinkage(), "", BitcastF, G->getParent());
+
+  F->setAlignment(std::max(F->getAlignment(), G->getAlignment()));
+  GA->takeName(G);
+  GA->setVisibility(G->getVisibility());
+  GA->setUnnamedAddr(GlobalValue::UnnamedAddr::Global);
+
+  removeUsers(G);
+  G->replaceAllUsesWith(GA);
+  G->eraseFromParent();
+
+  LLVM_DEBUG(dbgs() << "writeAlias: " << GA->getName() << '\n');
+  ++NumAliasesWritten;
+}
+
+// Replace G with an alias to F if possible, or a thunk to F if
+// profitable. Returns false if neither is the case.
+bool MergeFunctions::writeThunkOrAlias(Function *F, Function *G) {
+  if (canCreateAliasFor(G)) {
+    writeAlias(F, G);
+    return true;
+  }
+  if (isThunkProfitable(F)) {
+    writeThunk(F, G);
+    return true;
+  }
+  return false;
+}
+
 // Merge two equivalent functions. Upon completion, Function G is deleted.
 void MergeFunctions::mergeTwoFunctions(Function *F, Function *G) {
   if (F->isInterposable()) {
     assert(G->isInterposable());
 
-    if (!isThunkProfitable(F)) {
+    // Both writeThunkOrAlias() calls below must succeed, either because we can
+    // create aliases for G and NewF, or because a thunk for F is profitable.
+    // F here has the same signature as NewF below, so that's what we check.
+    if (!isThunkProfitable(F) && (!canCreateAliasFor(F) || !canCreateAliasFor(G))) {
       return;
     }
 
     // Make them both thunks to the same internal function.
-    Function *H = Function::Create(F->getFunctionType(), F->getLinkage(), "",
-                                   F->getParent());
-    H->copyAttributesFrom(F);
-    H->takeName(F);
+    Function *NewF = Function::Create(F->getFunctionType(), F->getLinkage(),
+                                      F->getAddressSpace(), "", F->getParent());
+    NewF->copyAttributesFrom(F);
+    NewF->takeName(F);
     removeUsers(F);
-    F->replaceAllUsesWith(H);
+    F->replaceAllUsesWith(NewF);
 
-    unsigned MaxAlignment = std::max(G->getAlignment(), H->getAlignment());
+    unsigned MaxAlignment = std::max(G->getAlignment(), NewF->getAlignment());
 
-    writeThunk(F, G);
-    writeThunk(F, H);
+    writeThunkOrAlias(F, G);
+    writeThunkOrAlias(F, NewF);
 
     F->setAlignment(MaxAlignment);
     F->setLinkage(GlobalValue::PrivateLinkage);
@@ -770,6 +833,7 @@ void MergeFunctions::mergeTwoFunctions(Function *F, Function *G) {
         GlobalNumbers.erase(G);
         // If G's address is not significant, replace it entirely.
         Constant *BitcastF = ConstantExpr::getBitCast(F, G->getType());
+        removeUsers(G);
         G->replaceAllUsesWith(BitcastF);
       } else {
         // Redirect direct callers of G to F. (See note on MergeFunctionsPDI
@@ -787,12 +851,9 @@ void MergeFunctions::mergeTwoFunctions(Function *F, Function *G) {
       return;
     }
 
-    if (!isThunkProfitable(F)) {
-      return;
+    if (writeThunkOrAlias(F, G)) {
+      ++NumFunctionsMerged;
     }
-
-    writeThunk(F, G);
-    ++NumFunctionsMerged;
   }
 }
 
@@ -802,11 +863,11 @@ void MergeFunctions::replaceFunctionInTree(const FunctionNode &FN,
   Function *F = FN.getFunc();
   assert(FunctionComparator(F, G, &GlobalNumbers).compare() == 0 &&
          "The two functions must be equal");
-  
+
   auto I = FNodesInTree.find(F);
   assert(I != FNodesInTree.end() && "F should be in FNodesInTree");
   assert(FNodesInTree.count(G) == 0 && "FNodesInTree should not contain G");
-  
+
   FnTreeType::iterator IterToFNInFnTree = I->second;
   assert(&(*IterToFNInFnTree) == &FN && "F should map to FN in FNodesInTree.");
   // Remove F -> FN and insert G -> FN
@@ -814,6 +875,24 @@ void MergeFunctions::replaceFunctionInTree(const FunctionNode &FN,
   FNodesInTree.insert({G, IterToFNInFnTree});
   // Replace F with G in FN, which is stored inside the FnTree.
   FN.replaceBy(G);
+}
+
+// Ordering for functions that are equal under FunctionComparator
+static bool isFuncOrderCorrect(const Function *F, const Function *G) {
+  if (F->isInterposable() != G->isInterposable()) {
+    // Strong before weak, because the weak function may call the strong
+    // one, but not the other way around.
+    return !F->isInterposable();
+  }
+  if (F->hasLocalLinkage() != G->hasLocalLinkage()) {
+    // External before local, because we definitely have to keep the external
+    // function, but may be able to drop the local one.
+    return !F->hasLocalLinkage();
+  }
+  // Impose a total order (by name) on the replacement of functions. This is
+  // important when operating on more than one module independently to prevent
+  // cycles of thunks calling each other when the modules are linked together.
+  return F->getName() <= G->getName();
 }
 
 // Insert a ComparableFunction into the FnTree, or merge it away if equal to one
@@ -832,14 +911,7 @@ bool MergeFunctions::insert(Function *NewFunction) {
 
   const FunctionNode &OldF = *Result.first;
 
-  // Impose a total order (by name) on the replacement of functions. This is
-  // important when operating on more than one module independently to prevent
-  // cycles of thunks calling each other when the modules are linked together.
-  //
-  // First of all, we process strong functions before weak functions.
-  if ((OldF.getFunc()->isInterposable() && !NewFunction->isInterposable()) ||
-     (OldF.getFunc()->isInterposable() == NewFunction->isInterposable() &&
-       OldF.getFunc()->getName() > NewFunction->getName())) {
+  if (!isFuncOrderCorrect(OldF.getFunc(), NewFunction)) {
     // Swap the two functions.
     Function *F = OldF.getFunc();
     replaceFunctionInTree(*Result.first, NewFunction);

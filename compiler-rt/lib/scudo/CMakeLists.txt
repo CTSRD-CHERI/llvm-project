@@ -17,6 +17,14 @@ set(SCUDO_DYNAMIC_LINK_FLAGS ${SANITIZER_COMMON_LINK_FLAGS})
 # Use gc-sections by default to avoid unused code being pulled in.
 list(APPEND SCUDO_DYNAMIC_LINK_FLAGS -Wl,--gc-sections)
 
+if(ANDROID)
+# Put most Sanitizer shared libraries in the global group. For more details, see
+# android-changes-for-ndk-developers.md#changes-to-library-search-order
+  if (COMPILER_RT_HAS_Z_GLOBAL)
+    list(APPEND SCUDO_DYNAMIC_LINK_FLAGS -Wl,-z,global)
+  endif()
+endif()
+
 # The minimal Scudo runtime does not inlude the UBSan runtime.
 set(SCUDO_MINIMAL_OBJECT_LIBS
   RTSanitizerCommonNoTermination
@@ -50,6 +58,21 @@ set(SCUDO_SOURCES
 set(SCUDO_CXX_SOURCES
   scudo_new_delete.cpp)
 
+set(SCUDO_HEADERS
+  scudo_allocator.h
+  scudo_allocator_combined.h
+  scudo_allocator_secondary.h
+  scudo_crc32.h
+  scudo_errors.h
+  scudo_flags.h
+  scudo_flags.inc
+  scudo_interface_internal.h
+  scudo_platform.h
+  scudo_tsd.h
+  scudo_tsd_exclusive.inc
+  scudo_tsd_shared.inc
+  scudo_utils.h)
+
 # Enable the SSE 4.2 instruction set for scudo_crc32.cpp, if available.
 if (COMPILER_RT_HAS_MSSE4_2_FLAG)
   set_source_files_properties(scudo_crc32.cpp PROPERTIES COMPILE_FLAGS -msse4.2)
@@ -66,6 +89,7 @@ if(COMPILER_RT_HAS_SCUDO)
     STATIC
     ARCHS ${SCUDO_SUPPORTED_ARCH}
     SOURCES ${SCUDO_SOURCES}
+    ADDITIONAL_HEADERS ${SCUDO_HEADERS}
     OBJECT_LIBS ${SCUDO_MINIMAL_OBJECT_LIBS}
     CFLAGS ${SCUDO_CFLAGS}
     PARENT_TARGET scudo)
@@ -73,6 +97,7 @@ if(COMPILER_RT_HAS_SCUDO)
     STATIC
     ARCHS ${SCUDO_SUPPORTED_ARCH}
     SOURCES ${SCUDO_CXX_SOURCES}
+    ADDITIONAL_HEADERS ${SCUDO_HEADERS}
     CFLAGS ${SCUDO_CFLAGS}
     PARENT_TARGET scudo)
 
@@ -80,6 +105,7 @@ if(COMPILER_RT_HAS_SCUDO)
     STATIC
     ARCHS ${SCUDO_SUPPORTED_ARCH}
     SOURCES ${SCUDO_SOURCES}
+    ADDITIONAL_HEADERS ${SCUDO_HEADERS}
     OBJECT_LIBS ${SCUDO_OBJECT_LIBS}
     CFLAGS ${SCUDO_CFLAGS}
     PARENT_TARGET scudo)
@@ -87,6 +113,7 @@ if(COMPILER_RT_HAS_SCUDO)
     STATIC
     ARCHS ${SCUDO_SUPPORTED_ARCH}
     SOURCES ${SCUDO_CXX_SOURCES}
+    ADDITIONAL_HEADERS ${SCUDO_HEADERS}
     OBJECT_LIBS RTUbsan_cxx
     CFLAGS ${SCUDO_CFLAGS}
     PARENT_TARGET scudo)
@@ -95,6 +122,7 @@ if(COMPILER_RT_HAS_SCUDO)
     SHARED
     ARCHS ${SCUDO_SUPPORTED_ARCH}
     SOURCES ${SCUDO_SOURCES} ${SCUDO_CXX_SOURCES}
+    ADDITIONAL_HEADERS ${SCUDO_HEADERS}
     OBJECT_LIBS ${SCUDO_MINIMAL_OBJECT_LIBS}
     CFLAGS ${SCUDO_CFLAGS}
     LINK_FLAGS ${SCUDO_DYNAMIC_LINK_FLAGS}
@@ -105,6 +133,7 @@ if(COMPILER_RT_HAS_SCUDO)
     SHARED
     ARCHS ${SCUDO_SUPPORTED_ARCH}
     SOURCES ${SCUDO_SOURCES} ${SCUDO_CXX_SOURCES}
+    ADDITIONAL_HEADERS ${SCUDO_HEADERS}
     OBJECT_LIBS ${SCUDO_OBJECT_LIBS}
     CFLAGS ${SCUDO_CFLAGS}
     LINK_FLAGS ${SCUDO_DYNAMIC_LINK_FLAGS}

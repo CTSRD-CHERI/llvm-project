@@ -268,6 +268,10 @@ private:
 
     // If we can't track the function's return values, there's nothing to do.
     if (!F || !canTrackReturnsInterprocedurally(F)) {
+      // Void return, No need to create and update CVPLattice state as no one
+      // can use it.
+      if (I->getType()->isVoidTy())
+        return;
       ChangedValues[RegI] = getOverdefinedVal();
       return;
     }
@@ -283,6 +287,12 @@ private:
       ChangedValues[RegFormal] =
           MergeValues(SS.getValueState(RegFormal), SS.getValueState(RegActual));
     }
+
+    // Void return, No need to create and update CVPLattice state as no one can
+    // use it.
+    if (I->getType()->isVoidTy())
+      return;
+
     ChangedValues[RegI] =
         MergeValues(SS.getValueState(RegI), SS.getValueState(RetF));
   }
@@ -335,6 +345,9 @@ private:
   void visitInst(Instruction &I,
                  DenseMap<CVPLatticeKey, CVPLatticeVal> &ChangedValues,
                  SparseSolver<CVPLatticeKey, CVPLatticeVal> &SS) {
+    // Simply bail if this instruction has no user.
+    if (I.use_empty())
+      return;
     auto RegI = CVPLatticeKey(&I, IPOGrouping::Register);
     ChangedValues[RegI] = getOverdefinedVal();
   }

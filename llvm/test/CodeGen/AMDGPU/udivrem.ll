@@ -1,6 +1,6 @@
-; RUN: llc -march=amdgcn -mcpu=tahiti -verify-machineinstrs < %s | FileCheck --check-prefix=SI --check-prefix=FUNC %s
-; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck --check-prefix=SI --check-prefix=FUNC %s
-; RUN: llc -march=r600 -mcpu=redwood < %s | FileCheck --check-prefix=EG --check-prefix=FUNC %s
+; RUN: llc -march=amdgcn -mcpu=tahiti -verify-machineinstrs < %s | FileCheck -allow-deprecated-dag-overlap --check-prefix=SI --check-prefix=FUNC %s
+; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -allow-deprecated-dag-overlap --check-prefix=SI --check-prefix=FUNC %s
+; RUN: llc -march=r600 -mcpu=redwood < %s | FileCheck -allow-deprecated-dag-overlap --check-prefix=EG --check-prefix=FUNC %s
 
 ; FUNC-LABEL: {{^}}test_udivrem:
 ; EG: RECIP_UINT
@@ -51,7 +51,7 @@
 ; SI-DAG: v_cndmask_b32_e64
 ; SI-NOT: v_and_b32
 ; SI: s_endpgm
-define amdgpu_kernel void @test_udivrem(i32 addrspace(1)* %out0, i32 addrspace(1)* %out1, i32 %x, i32 %y) {
+define amdgpu_kernel void @test_udivrem(i32 addrspace(1)* %out0, [8 x i32], i32 addrspace(1)* %out1, [8 x i32], i32 %x, [8 x i32], i32 %y) {
   %result0 = udiv i32 %x, %y
   store i32 %result0, i32 addrspace(1)* %out0
   %result1 = urem i32 %x, %y

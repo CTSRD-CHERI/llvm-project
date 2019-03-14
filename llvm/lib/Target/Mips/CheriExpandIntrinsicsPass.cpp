@@ -32,6 +32,9 @@ public:
   CHERIExpandCapIntrinsics() : ModulePass(ID) {}
 
   void expandAddrSet(Module &M, bool *Modified) {
+
+    // SetAddr($cap, $addr) -> CIncOffset($cap, $addr - GetAddr($cap))
+
     Function *SetAddr =
         M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_set));
     if (!SetAddr)

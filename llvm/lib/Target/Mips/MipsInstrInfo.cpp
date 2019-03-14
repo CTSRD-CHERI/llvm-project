@@ -283,6 +283,8 @@ bool MipsInstrInfo::isBranchOffsetInRange(unsigned BranchOpc, int64_t BrOffset) 
   switch (BranchOpc) {
   case Mips::B:
   case Mips::BAL:
+  case Mips::BAL_BR:
+  case Mips::BAL_BR_MM:
   case Mips::BC1F:
   case Mips::BC1FL:
   case Mips::BC1T:
@@ -672,8 +674,7 @@ MipsInstrInfo::genInstrWithNewOpc(unsigned NewOpc,
   }
 
   MIB.copyImplicitOps(*I);
-
-  MIB.setMemRefs(I->memoperands_begin(), I->memoperands_end());
+  MIB.cloneMemRefs(*I);
   return MIB;
 }
 
@@ -755,6 +756,17 @@ static bool verifyInsExtInstruction(const MachineInstr &MI, StringRef &ErrInfo,
 }
 
 //  Perform target specific instruction verification.
+template<unsigned Width, unsigned Scale>
+bool checkScaledImmediate(const MachineInstr &MI, StringRef& ErrInfo, unsigned OpndIdx) {
+  assert(MI.getDesc().OpInfo[OpndIdx].OperandType == MCOI::OPERAND_IMMEDIATE);
+  if (MI.getOperand(OpndIdx).isImm() && !isShiftedInt<Width, Scale>(MI.getOperand(OpndIdx).getImm())) {
+    ErrInfo = "Operand immediate is not representable!";
+    return false;
+  }
+  return true;
+}
+
+
 bool MipsInstrInfo::verifyInstruction(const MachineInstr &MI,
                                       StringRef &ErrInfo) const {
   // Verify that ins and ext instructions are well formed.
@@ -796,6 +808,61 @@ bool MipsInstrInfo::verifyInstruction(const MachineInstr &MI,
 
       ErrInfo = "invalid instruction when using jump guards!";
       return false;
+
+    // Check that we don't use the cjalr output register (usually $c17) in the
+    // delay slot since it will have changed
+    case Mips::CapJumpLinkPseudo:
+    case Mips::CJALR:
+      // errs() << "CAPJUMPLINK: (delay slot: " << MI.hasDelaySlot()
+      //    << ", bundle size: " << MI.getBundleSize() << ") "; MI.dump();
+      if (MI.isBundledWithSucc()) {
+        auto &OutputOp =
+            MI.getOpcode() == Mips::CJALR ? MI.getOperand(0) : MI.getOperand(2);
+        if (MI.getOpcode() ==
+            Mips::CapJumpLinkPseudo) // Op2 here is implicitly c17:
+          assert(OutputOp.isReg() && OutputOp.getReg() == Mips::C17);
+        auto DelaySlotInstr = MI.getNextNode();
+        if (DelaySlotInstr->readsRegister(Mips::C17)) {
+          ErrInfo = "Filled CapJumpLinkPseudo delay slot with a read of $c17 "
+                    "(which will have been clobbered!)";
+          return false;
+        }
+      }
+      return true;
+    // FIXME: duplicating all this here is silly, tablegen should
+    //   be able to generate those checks!
+    case Mips::CAPLOADU8:
+    case Mips::CAPLOADU832:
+    case Mips::CAPLOAD8:
+    case Mips::CAPLOAD832:
+    case Mips::CAPSTORE8:
+    case Mips::CAPSTORE832:
+      return checkScaledImmediate<8, 0>(MI, ErrInfo, 2);
+    case Mips::CAPLOADU16:
+    case Mips::CAPLOADU1632:
+    case Mips::CAPLOAD16:
+    case Mips::CAPLOAD1632:
+    case Mips::CAPSTORE16:
+    case Mips::CAPSTORE1632:
+      return checkScaledImmediate<8, 1>(MI, ErrInfo, 2);
+    case Mips::CAPLOADU32:
+    case Mips::CAPLOAD3264:
+    case Mips::CAPSTORE32:
+    case Mips::CAPSTORE3264:
+      return checkScaledImmediate<8, 2>(MI, ErrInfo, 2);
+    case Mips::CAPLOAD64:
+    case Mips::CAPSTORE64:
+      return checkScaledImmediate<8, 3>(MI, ErrInfo, 2);
+    case Mips::STORECAP:
+    case Mips::LOADCAP:
+      return checkScaledImmediate<11, 4>(MI, ErrInfo, 2);
+    case Mips::LOADCAP_BigImm:
+      return checkScaledImmediate<16, 4>(MI, ErrInfo, 1);
+    case Mips::CIncOffsetImm:
+      return checkScaledImmediate<11, 0>(MI, ErrInfo, 2);
+    case Mips::CSetBoundsImm:
+      // FIXME: actually 11 bit unsigned
+      return checkScaledImmediate<12, 0>(MI, ErrInfo, 2);
     default:
       return true;
   }
@@ -837,6 +904,9 @@ MipsInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
     {MO_CALL_HI16,    "mips-call-hi16"},
     {MO_CALL_LO16,    "mips-call-lo16"},
 
+    { MO_PCREL_LO,  "mips-pcrel-lo16" },
+    { MO_PCREL_HI,  "mips-pcrel-hi16" },
+
     { MO_CAPTAB11,         "mips-captable11" },
     { MO_CAPTAB_CALL11,    "mips-captable11-call" },
     { MO_CAPTAB20,         "mips-captable20" },
@@ -849,6 +919,12 @@ MipsInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
     { MO_CAPTABLE_OFF_HI, "mips-captable-off-hi" },
     { MO_CAPTABLE_OFF_LO, "mips-captable-off-lo" },
 
+    { MO_CAPTAB_TLSGD_HI16,  "mips-captable-tlsgd-hi16" },
+    { MO_CAPTAB_TLSGD_LO16,  "mips-captable-tlsgd-lo16" },
+    { MO_CAPTAB_TLSLDM_HI16, "mips-captable-tlsldm-hi16" },
+    { MO_CAPTAB_TLSLDM_LO16, "mips-captable-tlsldm-lo16" },
+    { MO_CAPTAB_TPREL_HI16,  "mips-captable-gottprel-hi16" },
+    { MO_CAPTAB_TPREL_LO16,  "mips-captable-gottprel-lo16" },
   };
   return makeArrayRef(Flags);
 }

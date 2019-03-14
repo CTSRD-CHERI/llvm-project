@@ -82,11 +82,11 @@ enum ActionKind {
   /// Generate pre-compiled module from a C++ module interface file.
   GenerateModuleInterface,
 
+  /// Generate pre-compiled module from a set of header files.
+  GenerateHeaderModule,
+
   /// Generate pre-compiled header.
   GeneratePCH,
-
-  /// Generate pre-tokenized header.
-  GeneratePTH,
 
   /// Only execute frontend initialization.
   InitOnly,
@@ -102,9 +102,6 @@ enum ActionKind {
 
   /// Run a plugin action, \see ActionName.
   PluginAction,
-
-  /// Print DeclContext and their Decls.
-  PrintDeclContext,
 
   /// Print the "preamble" of the input file
   PrintPreamble,
@@ -434,10 +431,6 @@ public:
 
   /// Auxiliary triple for CUDA compilation.
   std::string AuxTriple;
-
-  /// If non-empty, search the pch input file as if it was a header
-  /// included by this file.
-  std::string FindPchSource;
 
   /// Filename to write statistics to.
   std::string StatsFile;

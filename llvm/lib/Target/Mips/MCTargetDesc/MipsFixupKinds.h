@@ -114,7 +114,7 @@ namespace Mips {
     // resulting in - R_MIPS_GOT_DISP
     fixup_Mips_GOT_DISP,
 
-    // resulting in - R_MIPS_HIGHER/R_MICROMIPS_HIGHER 
+    // resulting in - R_MIPS_HIGHER/R_MICROMIPS_HIGHER
     fixup_Mips_HIGHER,
     fixup_MICROMIPS_HIGHER,
 
@@ -222,6 +222,10 @@ namespace Mips {
     fixup_Mips_SUB,
     fixup_MICROMIPS_SUB,
 
+    // resulting in - R_MIPS_JALR/R_MICROMIPS_JALR
+    fixup_Mips_JALR,
+    fixup_MICROMIPS_JALR,
+
     // Fixups for load instructions (R_MIPS_CHERI_CAPTAB_*)
     fixup_CHERI_CAPTABLE11,
     fixup_CHERI_CAPTABLE20,
@@ -242,6 +246,14 @@ namespace Mips {
     fixup_Mips_CAPTABLEOFF_HI,
     // resulting in - R_MIPS_CHERI_CAPTABLEREL16/R_MIPS_SUB/R_MIPS_LO16
     fixup_Mips_CAPTABLEOFF_LO,
+
+    // Fixups for capability TLS (R_MIPS_CHERI_CAPTAB_*)
+    fixup_CHERI_CAPTAB_TLSGD_HI16,
+    fixup_CHERI_CAPTAB_TLSGD_LO16,
+    fixup_CHERI_CAPTAB_TLSLDM_HI16,
+    fixup_CHERI_CAPTAB_TLSLDM_LO16,
+    fixup_CHERI_CAPTAB_TPREL_HI16,
+    fixup_CHERI_CAPTAB_TPREL_LO16,
 
     // Marker
     LastTargetFixupKind,

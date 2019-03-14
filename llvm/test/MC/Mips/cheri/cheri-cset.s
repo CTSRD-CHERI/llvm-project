@@ -59,14 +59,14 @@
 	CGetDefault	$c1
 
 .ifdef BAD
-# WARN: error: Register $kr1c is no longer a general-purpose CHERI register.
+# WARN: error: Register $kr1c is no longer a general-purpose CHERI register. If you want to access the special register use c{get,set}kr1c instead. If you really want to access $c27 (which is ABI-reserved for kernel use and may be clobbered at any time), use that instead.
 	CMove	$c1, $kr1c
-# WARN: error: Register $kr1c is no longer a general-purpose CHERI register.
+# WARN: error: Register $kr1c is no longer a general-purpose CHERI register. If you want to access the special register use c{get,set}kr1c instead. If you really want to access $c27 (which is ABI-reserved for kernel use and may be clobbered at any time), use that instead.
 	CMove	$kr1c, $c1
-# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
+# WARN: warning: Registers $c27 to $c31 are ABI-reserved for kernel use
 # WARN-NEXT:	CMove	$c27, $c1
 	CMove	$c27, $c1
-# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
+# WARN: warning: Registers $c27 to $c31 are ABI-reserved for kernel use
 # WARN-NEXT:	CMove	$c1, $c27
 	CMove	$c1, $c27
 
@@ -74,10 +74,10 @@
 	CMove	$c1, $kr2c
 # WARN: error: Register $kr2c is no longer a general-purpose CHERI register.
 	CMove	$kr2c, $c1
-# WARN: warning: Direct access to KR2C is deprecated: use C(Get/Set)KR2C instead.
+# WARN: warning: Registers $c27 to $c31 are ABI-reserved for kernel use
 # WARN-NEXT:	CMove	$c28, $c1
 	CMove	$c28, $c1
-# WARN: warning: Direct access to KR2C is deprecated: use C(Get/Set)KR2C instead.
+# WARN: warning: Registers $c27 to $c31 are ABI-reserved for kernel use
 # WARN-NEXT:	CMove	$c1, $c28
 	CMove	$c1, $c28
 
@@ -85,10 +85,10 @@
 	CMove	$c1, $kcc
 # WARN: error: Register $kcc is no longer a general-purpose CHERI register.
 	CMove	$kcc, $c1
-# WARN: warning: Direct access to KCC is deprecated: use C(Get/Set)KCC instead.
+# WARN: warning: Registers $c27 to $c31 are ABI-reserved for kernel use
 # WARN-NEXT:	CMove	$c29, $c1
 	CMove	$c29, $c1
-# WARN: warning: Direct access to KCC is deprecated: use C(Get/Set)KCC instead.
+# WARN: warning: Registers $c27 to $c31 are ABI-reserved for kernel use
 # WARN-NEXT:	CMove	$c1, $c29
 	CMove	$c1, $c29
 
@@ -96,10 +96,10 @@
 	CMove	$c1, $kdc
 # WARN: error: Register $kdc is no longer a general-purpose CHERI register.
 	CMove	$kdc, $c1
-# WARN: warning: Direct access to KDC is deprecated: use C(Get/Set)KDC instead.
+# WARN: warning: Registers $c27 to $c31 are ABI-reserved for kernel use
 # WARN-NEXT:	CMove	$c30, $c1
 	CMove	$c30, $c1
-# WARN: warning: Direct access to KDC is deprecated: use C(Get/Set)KDC instead.
+# WARN: warning: Registers $c27 to $c31 are ABI-reserved for kernel use
 # WARN-NEXT:	CMove	$c1, $c30
 	CMove	$c1, $c30
 
@@ -108,10 +108,10 @@
 	CMove	$c1, $epcc
 # WARN: error: Register $epcc is no longer a general-purpose CHERI register.
 	CMove	$epcc, $c1
-# WARN: [[@LINE+2]]:8: warning: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:8: warning: Registers $c27 to $c31 are ABI-reserved for kernel use
 # WARN-NEXT:	CMove	$c31, $c1
 	CMove	$c31, $c1
-# WARN: [[@LINE+2]]:13: warning: Direct access to EPCC is deprecated: use C(Get/Set)EPCC instead.
+# WARN: [[@LINE+2]]:13: warning: Registers $c27 to $c31 are ABI-reserved for kernel use
 # WARN-NEXT:	CMove	$c1, $c31
 	CMove	$c1, $c31
 
@@ -152,8 +152,8 @@
 
   # Check that disabling works:
 	.set nocheri_sysregs_accessible
-	# WARN: warning: Direct access to KR1C is deprecated: use C(Get/Set)KR1C instead.
-  # WARN-SAME: If you really meant to access $c27 you can use `.set cheri_sysregs_accessible` to silence this warning.
+	# WARN: warning: Registers $c27 to $c31 are ABI-reserved for kernel use and may be clobbered at any time.
+  # WARN-SAME: If you are writing kernel code and really meant to access $c27 you can use `.set cheri_sysregs_accessible` to silence this warning.
   # WARN-NEXT:	CMove	$c1, $c27
 	CMove	$c1, $c27
 

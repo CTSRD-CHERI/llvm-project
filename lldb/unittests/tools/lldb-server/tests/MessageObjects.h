@@ -10,8 +10,8 @@
 #ifndef LLDB_SERVER_TESTS_MESSAGEOBJECTS_H
 #define LLDB_SERVER_TESTS_MESSAGEOBJECTS_H
 
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Host/Host.h"
+#include "lldb/Utility/RegisterValue.h"
 #include "lldb/Utility/StructuredData.h"
 #include "lldb/lldb-types.h"
 #include "llvm/ADT/DenseMap.h"
@@ -60,7 +60,6 @@ private:
   std::string m_name;
   std::string m_reason;
   RegisterMap m_registers;
-  unsigned int m_signal;
 };
 
 class JThreadsInfo : public Parser<JThreadsInfo> {

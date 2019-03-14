@@ -40,8 +40,7 @@ SDValue callFunction(SelectionDAG &DAG, SDLoc dl, SDValue Chain, const char
   pushArg(Src);
   pushArg(Size);
 
-  SDValue memOpFn = DAG.getExternalSymbol(fnName, STI.isGP64bit() ?
-      MVT::i64 : MVT::i32);
+  SDValue memOpFn = DAG.getExternalFunctionSymbol(fnName);
 
   TargetLowering::CallLoweringInfo CLI(DAG);
   CLI.setDebugLoc(dl)

@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # Check MIPS TLS relocations handling.
 
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-linux \
@@ -13,8 +14,6 @@
 # RUN: llvm-objdump -d -s -t %t-out.so | FileCheck -check-prefix=DIS-SO %s
 # RUN: llvm-readobj -r -mips-plt-got %t-out.so | FileCheck -check-prefix=SO %s
 
-# REQUIRES: mips
-
 # DIS:      __start:
 # DIS-NEXT:    20000:   24 62 80 20   addiu   $2, $3, -32736
 # DIS-NEXT:    20004:   24 62 80 18   addiu   $2, $3, -32744
@@ -27,9 +26,9 @@
 # DIS-NEXT:  30020 00000000 00000000 00000001 00000000
 # DIS-NEXT:  30030 00000001 ffff8004
 
-# DIS: 00000000 l       .tdata          00000000 loc
-# DIS: 00000004 g       .tdata          00000000 bar
-# DIS: 00000000 g       *UND*           00000000 foo
+# DIS: 00000000 l    O .tdata          00000000 loc
+# DIS: 00000004 g    O .tdata          00000000 bar
+# DIS: 00000000 g    O *UND*           00000000 foo
 
 # CHECK:      Relocations [
 # CHECK-NEXT:   Section (7) .rel.dyn {

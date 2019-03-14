@@ -147,9 +147,9 @@ public:
   void EmitLinkerOptions(ArrayRef<std::string> Options) override;
   void EmitDataRegion(MCDataRegionType Kind) override;
   void EmitVersionMin(MCVersionMinType Kind, unsigned Major, unsigned Minor,
-                      unsigned Update) override;
+                      unsigned Update, VersionTuple SDKVersion) override;
   void EmitBuildVersion(unsigned Platform, unsigned Major, unsigned Minor,
-                        unsigned Update) override;
+                        unsigned Update, VersionTuple SDKVersion) override;
   void EmitThumbFunc(MCSymbol *Func) override;
 
   void EmitAssignment(MCSymbol *Symbol, const MCExpr *Value) override;
@@ -165,6 +165,7 @@ public:
   void EmitCOFFSymbolIndex(MCSymbol const *Symbol) override;
   void EmitCOFFSectionIndex(MCSymbol const *Symbol) override;
   void EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) override;
+  void EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) override;
   void emitELFSize(MCSymbol *Symbol, const MCExpr *Value) override;
   void EmitCommonSymbol(MCSymbol *Symbol, uint64_t Size,
                         unsigned ByteAlignment) override;
@@ -178,7 +179,8 @@ public:
                              unsigned ByteAlignment) override;
 
   void EmitZerofill(MCSection *Section, MCSymbol *Symbol = nullptr,
-                    uint64_t Size = 0, unsigned ByteAlignment = 0) override;
+                    uint64_t Size = 0, unsigned ByteAlignment = 0,
+                    SMLoc Loc = SMLoc()) override;
 
   void EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol, uint64_t Size,
                       unsigned ByteAlignment = 0) override;
@@ -264,6 +266,7 @@ public:
   void EmitCVFPOData(const MCSymbol *ProcSym, SMLoc L) override;
 
   void EmitIdent(StringRef IdentString) override;
+  void EmitCFIBKeyFrame() override;
   void EmitCFISections(bool EH, bool Debug) override;
   void EmitCFIDefCfa(int64_t Register, int64_t Offset) override;
   void EmitCFIDefCfaOffset(int64_t Offset) override;
@@ -283,10 +286,12 @@ public:
   void EmitCFIUndefined(int64_t Register) override;
   void EmitCFIRegister(int64_t Register1, int64_t Register2) override;
   void EmitCFIWindowSave() override;
+  void EmitCFINegateRAState() override;
   void EmitCFIReturnColumn(int64_t Register) override;
 
   void EmitWinCFIStartProc(const MCSymbol *Symbol, SMLoc Loc) override;
   void EmitWinCFIEndProc(SMLoc Loc) override;
+  void EmitWinCFIFuncletOrFuncEnd(SMLoc Loc) override;
   void EmitWinCFIStartChained(SMLoc Loc) override;
   void EmitWinCFIEndChained(SMLoc Loc) override;
   void EmitWinCFIPushReg(unsigned Register, SMLoc Loc) override;
@@ -323,6 +328,9 @@ public:
                           const MCExpr *Expr, SMLoc Loc,
                           const MCSubtargetInfo &STI) override;
 
+  void EmitAddrsig() override;
+  void EmitAddrsigSym(const MCSymbol *Sym) override;
+
   /// If this file is backed by an assembly streamer, this dumps the specified
   /// string in the output .s file. This capability is indicated by the
   /// hasRawTextSupport() predicate.
@@ -337,7 +345,7 @@ void MCAsmStreamer::AddComment(const Twine &T, bool EOL) {
   if (!IsVerboseAsm) return;
 
   T.toVector(CommentToEmit);
- 
+
   if (EOL)
     CommentToEmit.push_back('\n'); // Place comment in a new line.
 }
@@ -513,31 +521,51 @@ static const char *getVersionMinDirective(MCVersionMinType Type) {
   llvm_unreachable("Invalid MC version min type");
 }
 
+static void EmitSDKVersionSuffix(raw_ostream &OS,
+                                 const VersionTuple &SDKVersion) {
+  if (SDKVersion.empty())
+    return;
+  OS << '\t' << "sdk_version " << SDKVersion.getMajor();
+  if (auto Minor = SDKVersion.getMinor()) {
+    OS << ", " << *Minor;
+    if (auto Subminor = SDKVersion.getSubminor()) {
+      OS << ", " << *Subminor;
+    }
+  }
+}
+
 void MCAsmStreamer::EmitVersionMin(MCVersionMinType Type, unsigned Major,
-                                   unsigned Minor, unsigned Update) {
+                                   unsigned Minor, unsigned Update,
+                                   VersionTuple SDKVersion) {
   OS << '\t' << getVersionMinDirective(Type) << ' ' << Major << ", " << Minor;
   if (Update)
     OS << ", " << Update;
+  EmitSDKVersionSuffix(OS, SDKVersion);
   EmitEOL();
 }
 
 static const char *getPlatformName(MachO::PlatformType Type) {
   switch (Type) {
-  case MachO::PLATFORM_MACOS:    return "macos";
-  case MachO::PLATFORM_IOS:      return "ios";
-  case MachO::PLATFORM_TVOS:     return "tvos";
-  case MachO::PLATFORM_WATCHOS:  return "watchos";
-  case MachO::PLATFORM_BRIDGEOS: return "bridgeos";
+  case MachO::PLATFORM_MACOS:            return "macos";
+  case MachO::PLATFORM_IOS:              return "ios";
+  case MachO::PLATFORM_TVOS:             return "tvos";
+  case MachO::PLATFORM_WATCHOS:          return "watchos";
+  case MachO::PLATFORM_BRIDGEOS:         return "bridgeos";
+  case MachO::PLATFORM_IOSSIMULATOR:     return "iossimulator";
+  case MachO::PLATFORM_TVOSSIMULATOR:    return "tvossimulator";
+  case MachO::PLATFORM_WATCHOSSIMULATOR: return "watchossimulator";
   }
   llvm_unreachable("Invalid Mach-O platform type");
 }
 
 void MCAsmStreamer::EmitBuildVersion(unsigned Platform, unsigned Major,
-                                     unsigned Minor, unsigned Update) {
+                                     unsigned Minor, unsigned Update,
+                                     VersionTuple SDKVersion) {
   const char *PlatformName = getPlatformName((MachO::PlatformType)Platform);
   OS << "\t.build_version " << PlatformName << ", " << Major << ", " << Minor;
   if (Update)
     OS << ", " << Update;
+  EmitSDKVersionSuffix(OS, SDKVersion);
   EmitEOL();
 }
 
@@ -655,7 +683,7 @@ void MCAsmStreamer::EmitSyntaxDirective() {
     EmitEOL();
   }
   // FIXME: Currently emit unprefix'ed registers.
-  // The intel_syntax directive has one optional argument 
+  // The intel_syntax directive has one optional argument
   // with may have a value of prefix or noprefix.
 }
 
@@ -707,6 +735,16 @@ void MCAsmStreamer::EmitCOFFSecRel32(MCSymbol const *Symbol, uint64_t Offset) {
   EmitEOL();
 }
 
+void MCAsmStreamer::EmitCOFFImgRel32(MCSymbol const *Symbol, int64_t Offset) {
+  OS << "\t.rva\t";
+  Symbol->print(OS, MAI);
+  if (Offset > 0)
+    OS << '+' << Offset;
+  else if (Offset < 0)
+    OS << '-' << -Offset;
+  EmitEOL();
+}
+
 void MCAsmStreamer::emitELFSize(MCSymbol *Symbol, const MCExpr *Value) {
   assert(MAI->hasDotTypeDotSizeDirective());
   OS << "\t.size\t";
@@ -754,14 +792,18 @@ void MCAsmStreamer::EmitLocalCommonSymbol(MCSymbol *Symbol, uint64_t Size,
 }
 
 void MCAsmStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                 uint64_t Size, unsigned ByteAlignment) {
+                                 uint64_t Size, unsigned ByteAlignment,
+                                 SMLoc Loc) {
   if (Symbol)
     AssignFragment(Symbol, &Section->getDummyFragment());
 
   // Note: a .zerofill directive does not switch sections.
   OS << ".zerofill ";
 
+  assert(Section->getVariant() == MCSection::SV_MachO &&
+         ".zerofill is a Mach-O specific directive");
   // This is a mach-o specific directive.
+
   const MCSectionMachO *MOSection = ((const MCSectionMachO*)Section);
   OS << MOSection->getSegmentName() << "," << MOSection->getSectionName();
 
@@ -784,7 +826,11 @@ void MCAsmStreamer::EmitTBSSSymbol(MCSection *Section, MCSymbol *Symbol,
 
   assert(Symbol && "Symbol shouldn't be NULL!");
   // Instead of using the Section we'll just use the shortcut.
+
+  assert(Section->getVariant() == MCSection::SV_MachO &&
+         ".zerofill is a Mach-O specific directive");
   // This is a mach-o specific directive and section.
+
   OS << ".tbss ";
   Symbol->print(OS, MAI);
   OS << ", " << Size;
@@ -808,7 +854,7 @@ static void PrintQuotedString(StringRef Data, raw_ostream &OS) {
       continue;
     }
 
-    if (isprint((unsigned char)C)) {
+    if (isPrint((unsigned char)C)) {
       OS << (char)C;
       continue;
     }
@@ -840,10 +886,14 @@ void MCAsmStreamer::EmitBytes(StringRef Data) {
   // supported, emit as vector of 8bits data.
   if (Data.size() == 1 ||
       !(MAI->getAscizDirective() || MAI->getAsciiDirective())) {
-    const char *Directive = MAI->getData8bitsDirective();
-    for (const unsigned char C : Data.bytes()) {
-      OS << Directive << (unsigned)C;
-      EmitEOL();
+    if (MCTargetStreamer *TS = getTargetStreamer()) {
+      TS->emitRawBytes(Data);
+    } else {
+      const char *Directive = MAI->getData8bitsDirective();
+      for (const unsigned char C : Data.bytes()) {
+        OS << Directive << (unsigned)C;
+        EmitEOL();
+      }
     }
     return;
   }
@@ -1280,20 +1330,17 @@ void MCAsmStreamer::EmitCVLocDirective(unsigned FunctionId, unsigned FileNo,
                                        unsigned Line, unsigned Column,
                                        bool PrologueEnd, bool IsStmt,
                                        StringRef FileName, SMLoc Loc) {
+  // Validate the directive.
+  if (!checkCVLocSection(FunctionId, FileNo, Loc))
+    return;
+
   OS << "\t.cv_loc\t" << FunctionId << " " << FileNo << " " << Line << " "
      << Column;
   if (PrologueEnd)
     OS << " prologue_end";
 
-  unsigned OldIsStmt = getContext().getCVContext().getCurrentCVLoc().isStmt();
-  if (IsStmt != OldIsStmt) {
-    OS << " is_stmt ";
-
-    if (IsStmt)
-      OS << "1";
-    else
-      OS << "0";
-  }
+  if (IsStmt)
+    OS << " is_stmt 1";
 
   if (IsVerboseAsm) {
     OS.PadToColumn(MAI->getCommentColumn());
@@ -1301,8 +1348,6 @@ void MCAsmStreamer::EmitCVLocDirective(unsigned FunctionId, unsigned FileNo,
        << Column;
   }
   EmitEOL();
-  this->MCStreamer::EmitCVLocDirective(FunctionId, FileNo, Line, Column,
-                                       PrologueEnd, IsStmt, FileName, Loc);
 }
 
 void MCAsmStreamer::EmitCVLinetableDirective(unsigned FunctionId,
@@ -1551,9 +1596,21 @@ void MCAsmStreamer::EmitCFIWindowSave() {
   EmitEOL();
 }
 
+void MCAsmStreamer::EmitCFINegateRAState() {
+  MCStreamer::EmitCFINegateRAState();
+  OS << "\t.cfi_negate_ra_state";
+  EmitEOL();
+}
+
 void MCAsmStreamer::EmitCFIReturnColumn(int64_t Register) {
   MCStreamer::EmitCFIReturnColumn(Register);
   OS << "\t.cfi_return_column " << Register;
+  EmitEOL();
+}
+
+void MCAsmStreamer::EmitCFIBKeyFrame() {
+  MCStreamer::EmitCFIBKeyFrame();
+  OS << "\t.cfi_b_key_frame";
   EmitEOL();
 }
 
@@ -1570,6 +1627,10 @@ void MCAsmStreamer::EmitWinCFIEndProc(SMLoc Loc) {
 
   OS << "\t.seh_endproc";
   EmitEOL();
+}
+
+// TODO: Implement
+void MCAsmStreamer::EmitWinCFIFuncletOrFuncEnd(SMLoc Loc) {
 }
 
 void MCAsmStreamer::EmitWinCFIStartChained(SMLoc Loc) {
@@ -1859,6 +1920,17 @@ bool MCAsmStreamer::EmitRelocDirective(const MCExpr &Offset, StringRef Name,
   }
   EmitEOL();
   return false;
+}
+
+void MCAsmStreamer::EmitAddrsig() {
+  OS << "\t.addrsig";
+  EmitEOL();
+}
+
+void MCAsmStreamer::EmitAddrsigSym(const MCSymbol *Sym) {
+  OS << "\t.addrsig_sym ";
+  Sym->print(OS, MAI);
+  EmitEOL();
 }
 
 /// EmitRawText - If this file is backed by an assembly streamer, this dumps

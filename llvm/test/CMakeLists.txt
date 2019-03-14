@@ -8,6 +8,7 @@ llvm_canonicalize_cmake_booleans(
   HAVE_LIBXAR
   LLVM_ENABLE_DIA_SDK
   LLVM_ENABLE_FFI
+  LLVM_ENABLE_THREADS
   BUILD_SHARED_LIBS
   LLVM_LINK_LLVM_DYLIB
   )
@@ -53,6 +54,7 @@ set(LLVM_TEST_DEPENDS
           llvm-cvtres
           llvm-cxxdump
           llvm-cxxfilt
+          llvm-cxxmap
           llvm-diff
           llvm-dis
           llvm-dlltool
@@ -65,7 +67,6 @@ set(LLVM_TEST_DEPENDS
           llvm-link
           llvm-lto2
           llvm-mc
-          llvm-mca
           llvm-modextract
           llvm-mt
           llvm-nm
@@ -76,7 +77,6 @@ set(LLVM_TEST_DEPENDS
           llvm-pdbutil
           llvm-profdata
           llvm-ranlib
-          llvm-rc
           llvm-readobj
           llvm-readelf
           llvm-rtdyld
@@ -86,6 +86,7 @@ set(LLVM_TEST_DEPENDS
           llvm-strip
           llvm-symbolizer
           llvm-tblgen
+          llvm-undname
           llvm-xray
           not
           obj2yaml
@@ -96,6 +97,16 @@ set(LLVM_TEST_DEPENDS
           yaml-bench
           yaml2obj
         )
+
+if (TARGET llvm-mca)
+  list(APPEND LLVM_TEST_DEPENDS llvm-mca)
+endif()
+if (TARGET llvm-rc)
+  list(APPEND LLVM_TEST_DEPENDS llvm-rc)
+endif()
+if (TARGET llvm-exegesis)
+  list(APPEND LLVM_TEST_DEPENDS llvm-exegesis)
+endif()
 
 if(TARGET llvm-lto)
   set(LLVM_TEST_DEPENDS ${LLVM_TEST_DEPENDS} llvm-lto)

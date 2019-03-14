@@ -19,6 +19,7 @@ namespace llvm {
 
 template <typename T> class ArrayRef;
 class MCTargetOptions;
+class MCAsmInfo;
 class StringRef;
 class TargetRegisterClass;
 
@@ -72,6 +73,11 @@ public:
     assert(IsCheriPureCap());
     return MCTargetOptions::cheriCapabilityTableABI();
   }
+  bool UsesCapabilityTls() const;
+  CheriCapabilityTlsABI CapabilityTlsABI() const {
+    assert(IsCheriPureCap());
+    return MCTargetOptions::cheriCapabilityTlsABI();
+  }
   unsigned StackAddrSpace() const { return isCheriPureCap ? 200 : 0; }
   ABI GetEnumValue() const { return ThisABI; }
 
@@ -120,6 +126,10 @@ public:
   inline bool AreGprs64bit() const { return IsN32() || IsN64(); }
 
   unsigned GetEhDataReg(unsigned I) const;
+
+  // Update the initial CFA register from SP to C11 if needed
+  void updateCheriInitialFrameStateHack(const MCAsmInfo &MAI,
+                                        const MCRegisterInfo &MRI);
 };
 }
 

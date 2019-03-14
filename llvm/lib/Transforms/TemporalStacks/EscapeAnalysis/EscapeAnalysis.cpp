@@ -36,7 +36,8 @@
 #include "llvm/Support/Debug.h"
 #include "BitTree.h"
 #include "EscapeAnalysis.h"
-#include "CheriSetBounds.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
+#include "llvm/IR/Cheri.h"
 
 namespace llvm {
 namespace cheri {
@@ -46,7 +47,7 @@ const SafetyState SafetyState::UnsafeState = SafetyState(BitTrees::AllOnes,BitTr
 const SafetyState SafetyState::UnsafeToDeriveFrom = SafetyState(BitTrees::AllOnes,BitTrees::AllZeros);
 
 inline bool isUnsafeTrackable(const Value *I) {
-  return cheri::isCheriPointer(I) && !isa<Function>(I);
+  return isCheriPointer(I->getType(), nullptr) && !isa<Function>(I);
 }
 
 CallSort EscapeAnalyser::getSort(const Instruction &I, const Use* Use) {
@@ -294,6 +295,7 @@ bool cheri::EscapeAnalyser::DecreaseSafety(StaticFuncionAnalysis *FA, const Valu
       // Otherwise fall through
     }
 
+      LLVM_FALLTHROUGH;
     case Instruction::BitCast:
     case Instruction::GetElementPtr:
     case Instruction::PHI:
@@ -302,6 +304,7 @@ bool cheri::EscapeAnalyser::DecreaseSafety(StaticFuncionAnalysis *FA, const Valu
       // I could be derived from this pointer
       if(IsCap && DecreaseSafety(FA, I, safetyDerivedBy))
         TRY_RETURN_EARLY;
+      break;
     default:
     {}
     }
@@ -402,6 +405,7 @@ bool cheri::EscapeAnalyser::DecreaseSafety(StaticFuncionAnalysis *FA, const Valu
           TRY_RETURN_EARLY;
         }
       }
+      break;
     default:
     {}
     }
@@ -475,6 +479,7 @@ void EscapeAnalyser::addRootSet(StaticFuncionAnalysis* funcionAnalysis) {
 
       case Instruction::Ret:
         if(isRoot) allOperandsUnsafe = true;
+        break;
       default:{}
       }
 

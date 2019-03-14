@@ -325,7 +325,7 @@ SDValue ARCTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   if (auto *G = dyn_cast<GlobalAddressSDNode>(Callee))
     Callee = DAG.getTargetGlobalAddress(G->getGlobal(), dl, MVT::i32);
   else if (auto *E = dyn_cast<ExternalSymbolSDNode>(Callee))
-    Callee = DAG.getTargetExternalSymbol(E->getSymbol(), MVT::i32);
+    Callee = DAG.getTargetExternalFunctionSymbol(E->getSymbol(), MVT::i32);
   else
     IsDirect = false;
   // Branch + Link = #chain, #target_address, #opt_in_flags...

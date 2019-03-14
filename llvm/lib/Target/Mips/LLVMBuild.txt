@@ -45,5 +45,6 @@ required_libraries =
  CHERICap
  Support
  Target
+ TransformUtils
  GlobalISel
 add_to_library_groups = Mips

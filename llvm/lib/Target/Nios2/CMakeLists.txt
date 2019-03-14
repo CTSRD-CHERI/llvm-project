@@ -24,6 +24,9 @@ add_llvm_target(Nios2CodeGen
  Nios2TargetObjectFile.cpp
  )
 
+# TODO: remove
+add_definitions(-DLLVM_TARGETLOWERINGINFO_DEFAULT_AS=0)
+
 #Should match with "subdirectories =  InstPrinter MCTargetDesc TargetInfo" in LLVMBuild.txt
 add_subdirectory(InstPrinter)
 add_subdirectory(MCTargetDesc)

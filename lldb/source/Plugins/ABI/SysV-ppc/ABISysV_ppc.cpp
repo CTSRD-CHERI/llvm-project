@@ -9,16 +9,11 @@
 
 #include "ABISysV_ppc.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Triple.h"
 
-// Project includes
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectMemory.h"
@@ -32,6 +27,7 @@
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
 #include "lldb/Utility/Status.h"
 
 using namespace lldb;
@@ -224,11 +220,8 @@ size_t ABISysV_ppc::GetRedZoneSize() const { return 224; }
 
 ABISP
 ABISysV_ppc::CreateInstance(lldb::ProcessSP process_sp, const ArchSpec &arch) {
-  static ABISP g_abi_sp;
   if (arch.GetTriple().getArch() == llvm::Triple::ppc) {
-    if (!g_abi_sp)
-      g_abi_sp.reset(new ABISysV_ppc(process_sp));
-    return g_abi_sp;
+     return ABISP(new ABISysV_ppc(process_sp));
   }
   return ABISP();
 }

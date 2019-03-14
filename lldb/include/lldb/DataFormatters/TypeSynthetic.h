@@ -10,18 +10,14 @@
 #ifndef lldb_TypeSynthetic_h_
 #define lldb_TypeSynthetic_h_
 
-// C Includes
 #include <stdint.h>
 
-// C++ Includes
 #include <functional>
 #include <initializer_list>
 #include <memory>
 #include <string>
 #include <vector>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/lldb-enumerations.h"
 #include "lldb/lldb-public.h"
 
@@ -207,6 +203,19 @@ public:
       return *this;
     }
 
+    bool GetFrontEndWantsDereference() const {
+      return (m_flags & lldb::eTypeOptionFrontEndWantsDereference) ==
+             lldb::eTypeOptionFrontEndWantsDereference;
+    }
+
+    Flags &SetFrontEndWantsDereference(bool value = true) {
+      if (value)
+        m_flags |= lldb::eTypeOptionFrontEndWantsDereference;
+      else
+        m_flags &= ~lldb::eTypeOptionFrontEndWantsDereference;
+      return *this;
+    }
+
     uint32_t GetValue() { return m_flags; }
 
     void SetValue(uint32_t value) { m_flags = value; }
@@ -226,6 +235,8 @@ public:
   bool SkipsReferences() const { return m_flags.GetSkipReferences(); }
 
   bool NonCacheable() const { return m_flags.GetNonCacheable(); }
+  
+  bool WantsDereference() const { return m_flags.GetFrontEndWantsDereference();} 
 
   void SetCascades(bool value) { m_flags.SetCascades(value); }
 

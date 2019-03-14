@@ -36,20 +36,24 @@ SUBST = {
     '%clang_cc1': ['-cc1'],
     '%clangxx': ['--driver-mode=g++'],
     '%cheri_cc1': ['-cc1', "-triple=cheri-unknown-freebsd"],
+    '%cheri_clang': ['-target', 'cheri-unknown-freebsd'],
     '%cheri128_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-cpu", "cheri128", "-cheri-size", "128"],
     '%cheri256_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-cpu", "cheri256", "-cheri-size", "256"],
+    '%cheri_purecap_clang': ['-target', 'cheri-unknown-freebsd', '-mabi=purecap'],
     '%cheri_purecap_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-abi", "purecap"],
-    '%cheri256_purecap_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-abi", "purecap", "-target-cpu", "cheri128", "-cheri-size", "128"],
-    '%cheri123_purecap_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-abi", "purecap", "-target-cpu", "cheri256", "-cheri-size", "256"],
+    '%cheri128_purecap_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-abi", "purecap", "-target-cpu", "cheri128", "-cheri-size", "128"],
+    '%cheri256_purecap_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-abi", "purecap", "-target-cpu", "cheri256", "-cheri-size", "256"],
 }
 
 def get_line2spell_and_mangled(args, clang_args):
   ret = {}
   with tempfile.NamedTemporaryFile() as f:
     # TODO Make c-index-test print mangled names without circumventing through precompiled headers
-    status = subprocess.run([args.c_index_test, '-write-pch', f.name, *clang_args],
+    c_index_args = [args.c_index_test, '-write-pch', f.name, *clang_args]
+    status = subprocess.run(c_index_args,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     if status.returncode:
+      sys.stderr.write("Failed to run " + " ".join(c_index_args) + "\n")
       sys.stderr.write(status.stdout.decode())
       sys.exit(2)
     output = subprocess.check_output([args.c_index_test,
@@ -166,12 +170,15 @@ def main():
 
       # Apply %clang substitution rule, replace %s by `filename`, and append args.clang_args
       clang_args = shlex.split(commands[0])
+      if args.verbose:
+        print("Before subst:", clang_args)
       if clang_args[0] not in SUBST:
         print('WARNING: Skipping non-clang RUN line: ' + l, file=sys.stderr)
         continue
       clang_args[0:1] = SUBST[clang_args[0]]
       clang_args = [filename if i == '%s' else i for i in clang_args] + args.clang_args
-
+      if args.verbose:
+        print("After subst:", clang_args)
       # Extract -check-prefix in FileCheck args
       filecheck_cmd = commands[-1]
       if not filecheck_cmd.startswith('FileCheck '):

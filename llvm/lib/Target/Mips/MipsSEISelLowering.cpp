@@ -56,10 +56,6 @@ static cl::opt<bool>
 UseMipsTailCalls("mips-tail-calls", cl::Hidden,
                     cl::desc("MIPS: permit tail calls."), cl::init(false));
 
-static cl::opt<bool>
-CheriExactEquals("cheri-exact-equals", 
-                 cl::desc("CHERI: Capability equality comparisons are exact."), cl::init(false));
-
 static cl::opt<bool> NoDPLoadStore("mno-ldc1-sdc1", cl::init(false),
                                    cl::desc("Expand double precision loads and "
                                             "stores to their single precision "
@@ -162,8 +158,8 @@ MipsSETargetLowering::MipsSETargetLowering(const MipsTargetMachine &TM,
     setOperationAction(ISD::FTRUNC, MVT::f16, Promote);
     setOperationAction(ISD::FMINNUM, MVT::f16, Promote);
     setOperationAction(ISD::FMAXNUM, MVT::f16, Promote);
-    setOperationAction(ISD::FMINNAN, MVT::f16, Promote);
-    setOperationAction(ISD::FMAXNAN, MVT::f16, Promote);
+    setOperationAction(ISD::FMINIMUM, MVT::f16, Promote);
+    setOperationAction(ISD::FMAXIMUM, MVT::f16, Promote);
 
     setTargetDAGCombine(ISD::AND);
     setTargetDAGCombine(ISD::OR);
@@ -2291,7 +2287,9 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
     return DAG.getNode(ISD::XOR, DL, Op->getValueType(0),
                        Op->getOperand(1), lowerMSASplatImm(Op, 2, DAG));
   case Intrinsic::thread_pointer: {
-    EVT PtrVT = getPointerTy(DAG.getDataLayout());
+    EVT PtrVT = getPointerTy(DAG.getDataLayout(), 0);
+    if (ABI.UsesCapabilityTls())
+      PtrVT = CapType;
     return DAG.getNode(MipsISD::ThreadPointer, DL, PtrVT);
   }
   case Intrinsic::cheri_cap_address_set: {
@@ -2411,24 +2409,6 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_VOID(SDValue Op,
   }
 }
 
-/// Check if the given BuildVectorSDNode is a splat.
-/// This method currently relies on DAG nodes being reused when equivalent,
-/// so it's possible for this to return false even when isConstantSplat returns
-/// true.
-static bool isSplatVector(const BuildVectorSDNode *N) {
-  unsigned int nOps = N->getNumOperands();
-  assert(nOps > 1 && "isSplatVector has 0 or 1 sized build vector");
-
-  SDValue Operand0 = N->getOperand(0);
-
-  for (unsigned int i = 1; i < nOps; ++i) {
-    if (N->getOperand(i) != Operand0)
-      return false;
-  }
-
-  return true;
-}
-
 // Lower ISD::EXTRACT_VECTOR_ELT into MipsISD::VEXTRACT_SEXT_ELT.
 //
 // The non-value bits resulting from ISD::EXTRACT_VECTOR_ELT are undefined. We
@@ -2539,7 +2519,7 @@ SDValue MipsSETargetLowering::lowerBUILD_VECTOR(SDValue Op,
       Result = DAG.getNode(ISD::BITCAST, SDLoc(Node), ResTy, Result);
 
     return Result;
-  } else if (isSplatVector(Node))
+  } else if (DAG.isSplatValue(Op, /* AllowUndefs */ false))
     return Op;
   else if (!isConstantOrUndefBUILD_VECTOR(Node)) {
     // Use INSERT_VECTOR_ELT operations rather than expand to stores.
@@ -3929,8 +3909,9 @@ MachineBasicBlock *
 MipsSETargetLowering::emitCapNotEqual(MachineInstr &MI,
                                     MachineBasicBlock *BB) const {
   bool is64 = (MI.getOpcode() == Mips::CNEPseudo);
-  unsigned Op = CheriExactEquals ? (is64 ? Mips::CNEXEQ : Mips::CNEXEQ32)
-                                 : (is64 ? Mips::CNE : Mips::CNE32);
+  unsigned Op = Subtarget.useCheriExactEquals()
+                    ? (is64 ? Mips::CNEXEQ : Mips::CNEXEQ32)
+                    : (is64 ? Mips::CNE : Mips::CNE32);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   BuildMI(*BB, MI, MI.getDebugLoc(), TII->get(Op))
       .add(MI.getOperand(0))
@@ -3943,8 +3924,9 @@ MachineBasicBlock *
 MipsSETargetLowering::emitCapEqual(MachineInstr &MI,
                                     MachineBasicBlock *BB) const {
   bool is64 = (MI.getOpcode() == Mips::CEQPseudo);
-  unsigned Op = CheriExactEquals ? (is64 ? Mips::CEXEQ : Mips::CEXEQ32)
-                                 : (is64 ? Mips::CEQ : Mips::CEQ32);
+  unsigned Op = Subtarget.useCheriExactEquals()
+                    ? (is64 ? Mips::CEXEQ : Mips::CEXEQ32)
+                    : (is64 ? Mips::CEQ : Mips::CEQ32);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   BuildMI(*BB, MI, MI.getDebugLoc(), TII->get(Op))
       .add(MI.getOperand(0))
@@ -3957,10 +3939,11 @@ template<unsigned MFC1, unsigned CAPSTORE>
 static MachineBasicBlock *
 emitCapFloatStore(const MipsSubtarget &Subtarget,
                   MachineInstr &MI,
+                  const llvm::TargetRegisterClass &RC,
                   MachineBasicBlock *BB) {
   DebugLoc DL = MI.getDebugLoc();
   MachineRegisterInfo &RegInfo = BB->getParent()->getRegInfo();
-  unsigned IntReg = RegInfo.createVirtualRegister(&Mips::GPR64RegClass);
+  unsigned IntReg = RegInfo.createVirtualRegister(&RC);
   const TargetInstrInfo *TII = Subtarget.getInstrInfo();
   BuildMI(*BB, MI, DL, TII->get(MFC1), IntReg)
       .add(MI.getOperand(0));
@@ -3975,10 +3958,10 @@ emitCapFloatStore(const MipsSubtarget &Subtarget,
 MachineBasicBlock *
 MipsSETargetLowering::emitCapFloat64Store(MachineInstr &MI,
                                     MachineBasicBlock *BB) const {
-  return emitCapFloatStore<Mips::DMFC1, Mips::CAPSTORE64>(Subtarget, MI, BB);
+  return emitCapFloatStore<Mips::DMFC1, Mips::CAPSTORE64>(Subtarget, MI, Mips::GPR64RegClass, BB);
 }
 MachineBasicBlock *
 MipsSETargetLowering::emitCapFloat32Store(MachineInstr &MI,
                                     MachineBasicBlock *BB) const {
-  return emitCapFloatStore<Mips::MFC1, Mips::CAPSTORE32>(Subtarget, MI, BB);
+  return emitCapFloatStore<Mips::MFC1, Mips::CAPSTORE32>(Subtarget, MI, Mips::GPR32RegClass, BB);
 }

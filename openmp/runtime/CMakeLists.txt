@@ -302,7 +302,7 @@ endif()
 # OMPT-support defaults to ON for OpenMP 5.0+ and if the requirements in
 # cmake/config-ix.cmake are fulfilled.
 set(OMPT_DEFAULT FALSE)
-if ((${LIBOMP_OMP_VERSION} GREATER 49) AND (LIBOMP_HAVE_OMPT_SUPPORT))
+if ((${LIBOMP_OMP_VERSION} GREATER 49) AND (LIBOMP_HAVE_OMPT_SUPPORT) AND (NOT WIN32))
   set(OMPT_DEFAULT TRUE)
 endif()
 set(LIBOMP_OMPT_SUPPORT ${OMPT_DEFAULT} CACHE BOOL
@@ -330,6 +330,10 @@ endif()
 if(LIBOMP_USE_HWLOC AND (NOT LIBOMP_HAVE_HWLOC))
   libomp_error_say("Hwloc requested but not available")
 endif()
+
+# Hierarchical scheduling support
+set(LIBOMP_USE_HIER_SCHED FALSE CACHE BOOL
+  "Hierarchical scheduling support?")
 
 # Setting final library name
 set(LIBOMP_DEFAULT_LIB_NAME libomp)

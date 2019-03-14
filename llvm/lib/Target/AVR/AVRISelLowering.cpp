@@ -63,6 +63,13 @@ AVRTargetLowering::AVRTargetLowering(AVRTargetMachine &tm)
 
   setTruncStoreAction(MVT::i16, MVT::i8, Expand);
 
+  for (MVT VT : MVT::integer_valuetypes()) {
+    setOperationAction(ISD::ADDC, VT, Legal);
+    setOperationAction(ISD::SUBC, VT, Legal);
+    setOperationAction(ISD::ADDE, VT, Legal);
+    setOperationAction(ISD::SUBE, VT, Legal);
+  }
+
   // sub (x, imm) gets canonicalized to add (x, -imm), so for illegal types
   // revert into a sub since we don't have an add with immediate instruction.
   setOperationAction(ISD::ADD, MVT::i32, Custom);
@@ -362,8 +369,7 @@ SDValue AVRTargetLowering::LowerDivRem(SDValue Op, SelectionDAG &DAG) const {
     Args.push_back(Entry);
   }
 
-  SDValue Callee = DAG.getExternalSymbol(getLibcallName(LC),
-                                         getPointerTy(DAG.getDataLayout()));
+  SDValue Callee = DAG.getExternalFunctionSymbol(getLibcallName(LC));
 
   Type *RetTy = (Type *)StructType::get(Ty, Ty);
 
@@ -1162,8 +1168,7 @@ SDValue AVRTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
         DAG.getTargetGlobalAddress(GV, DL, getPointerTy(DAG.getDataLayout()));
   } else if (const ExternalSymbolSDNode *ES =
                  dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    Callee = DAG.getTargetExternalSymbol(ES->getSymbol(),
-                                         getPointerTy(DAG.getDataLayout()));
+    Callee = DAG.getTargetExternalFunctionSymbol(ES->getSymbol());
   }
 
   analyzeArguments(&CLI, F, &DAG.getDataLayout(), &Outs, 0, CallConv, ArgLocs, CCInfo,
@@ -1423,6 +1428,7 @@ MachineBasicBlock *AVRTargetLowering::insertShift(MachineInstr &MI,
                                                   MachineBasicBlock *BB) const {
   unsigned Opc;
   const TargetRegisterClass *RC;
+  bool HasRepeatedOperand = false;
   MachineFunction *F = BB->getParent();
   MachineRegisterInfo &RI = F->getRegInfo();
   const AVRTargetMachine &TM = (const AVRTargetMachine &)getTargetMachine();
@@ -1433,8 +1439,9 @@ MachineBasicBlock *AVRTargetLowering::insertShift(MachineInstr &MI,
   default:
     llvm_unreachable("Invalid shift opcode!");
   case AVR::Lsl8:
-    Opc = AVR::LSLRd;
+    Opc = AVR::ADDRdRr; // LSL is an alias of ADD Rd, Rd
     RC = &AVR::GPR8RegClass;
+    HasRepeatedOperand = true;
     break;
   case AVR::Lsl16:
     Opc = AVR::LSLWRd;
@@ -1457,8 +1464,9 @@ MachineBasicBlock *AVRTargetLowering::insertShift(MachineInstr &MI,
     RC = &AVR::DREGSRegClass;
     break;
   case AVR::Rol8:
-    Opc = AVR::ROLRd;
+    Opc = AVR::ADCRdRr; // ROL is an alias of ADC Rd, Rd
     RC = &AVR::GPR8RegClass;
+    HasRepeatedOperand = true;
     break;
   case AVR::Rol16:
     Opc = AVR::ROLWRd;
@@ -1528,7 +1536,11 @@ MachineBasicBlock *AVRTargetLowering::insertShift(MachineInstr &MI,
       .addMBB(BB)
       .addReg(ShiftAmtReg2)
       .addMBB(LoopBB);
-  BuildMI(LoopBB, dl, TII.get(Opc), ShiftReg2).addReg(ShiftReg);
+
+  auto ShiftMI = BuildMI(LoopBB, dl, TII.get(Opc), ShiftReg2).addReg(ShiftReg);
+  if (HasRepeatedOperand)
+    ShiftMI.addReg(ShiftReg);
+
   BuildMI(LoopBB, dl, TII.get(AVR::SUBIRdK), ShiftAmtReg2)
       .addReg(ShiftAmtReg)
       .addImm(1);

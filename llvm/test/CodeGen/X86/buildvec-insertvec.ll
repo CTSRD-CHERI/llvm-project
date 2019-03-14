@@ -38,7 +38,7 @@ define <4 x float> @test_negative_zero_1(<4 x float> %A) {
 ; SSE2-LABEL: test_negative_zero_1:
 ; SSE2:       # %bb.0: # %entry
 ; SSE2-NEXT:    movaps %xmm0, %xmm1
-; SSE2-NEXT:    movhlps {{.*#+}} xmm1 = xmm0[1],xmm1[1]
+; SSE2-NEXT:    unpckhpd {{.*#+}} xmm1 = xmm1[1],xmm0[1]
 ; SSE2-NEXT:    xorps %xmm2, %xmm2
 ; SSE2-NEXT:    movss {{.*#+}} xmm2 = xmm1[0],xmm2[1,2,3]
 ; SSE2-NEXT:    movss {{.*#+}} xmm1 = mem[0],zero,zero,zero
@@ -65,7 +65,7 @@ entry:
 define <2 x double> @test_negative_zero_2(<2 x double> %A) {
 ; SSE2-LABEL: test_negative_zero_2:
 ; SSE2:       # %bb.0: # %entry
-; SSE2-NEXT:    movapd {{.*#+}} xmm1 = <u,-0>
+; SSE2-NEXT:    movapd {{.*#+}} xmm1 = <u,-0.0E+0>
 ; SSE2-NEXT:    movsd {{.*#+}} xmm1 = xmm0[0],xmm1[1]
 ; SSE2-NEXT:    movapd %xmm1, %xmm0
 ; SSE2-NEXT:    retq
@@ -107,10 +107,10 @@ define <4 x float> @test_buildvector_v4f32_load(float* %p0, float* %p1, float* %
 ; SSE2:       # %bb.0:
 ; SSE2-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero
 ; SSE2-NEXT:    movss {{.*#+}} xmm1 = mem[0],zero,zero,zero
-; SSE2-NEXT:    unpcklps {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1]
+; SSE2-NEXT:    unpcklps {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
+; SSE2-NEXT:    movss {{.*#+}} xmm1 = mem[0],zero,zero,zero
 ; SSE2-NEXT:    movss {{.*#+}} xmm2 = mem[0],zero,zero,zero
-; SSE2-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; SSE2-NEXT:    unpcklps {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1]
+; SSE2-NEXT:    unpcklps {{.*#+}} xmm1 = xmm1[0],xmm2[0],xmm1[1],xmm2[1]
 ; SSE2-NEXT:    movlhps {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; SSE2-NEXT:    retq
 ;
@@ -135,9 +135,9 @@ define <4 x float> @test_buildvector_v4f32_load(float* %p0, float* %p1, float* %
 define <4 x float> @test_buildvector_v4f32_partial_load(float %f0, float %f1, float %f2, float* %p3) {
 ; SSE2-LABEL: test_buildvector_v4f32_partial_load:
 ; SSE2:       # %bb.0:
+; SSE2-NEXT:    movss {{.*#+}} xmm3 = mem[0],zero,zero,zero
 ; SSE2-NEXT:    unpcklps {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
-; SSE2-NEXT:    movss {{.*#+}} xmm1 = mem[0],zero,zero,zero
-; SSE2-NEXT:    unpcklps {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1]
+; SSE2-NEXT:    unpcklps {{.*#+}} xmm2 = xmm2[0],xmm3[0],xmm2[1],xmm3[1]
 ; SSE2-NEXT:    movlhps {{.*#+}} xmm0 = xmm0[0],xmm2[0]
 ; SSE2-NEXT:    retq
 ;

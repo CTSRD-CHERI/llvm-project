@@ -39,12 +39,21 @@ class MCObjectStreamer : public MCStreamer {
   bool EmitEHFrame;
   bool EmitDebugFrame;
   SmallVector<MCSymbol *, 2> PendingLabels;
+  struct PendingMCFixup {
+    const MCSymbol *Sym;
+    MCFixup Fixup;
+    MCDataFragment *DF;
+    PendingMCFixup(const MCSymbol *McSym, MCDataFragment *F, MCFixup McFixup)
+        : Sym(McSym), Fixup(McFixup), DF(F) {}
+  };
+  SmallVector<PendingMCFixup, 2> PendingFixups;
 
   virtual void EmitInstToData(const MCInst &Inst, const MCSubtargetInfo&) = 0;
   void EmitCFIStartProcImpl(MCDwarfFrameInfo &Frame) override;
   void EmitCFIEndProcImpl(MCDwarfFrameInfo &Frame) override;
   MCSymbol *EmitCFILabel() override;
   void EmitInstructionImpl(const MCInst &Inst, const MCSubtargetInfo &STI);
+  void resolvePendingFixups();
 
 protected:
   MCObjectStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> TAB,
@@ -89,6 +98,9 @@ protected:
 
 public:
   void visitUsedSymbol(const MCSymbol &Sym) override;
+
+  /// Create a dummy fragment to assign any pending labels.
+  void flushPendingLabels() { flushPendingLabels(nullptr); }
 
   MCAssembler &getAssembler() { return *Assembler; }
   MCAssembler *getAssemblerPtr() override;
@@ -167,13 +179,18 @@ public:
                 SMLoc Loc = SMLoc()) override;
   void EmitFileDirective(StringRef Filename) override;
 
+  void EmitAddrsig() override;
+  void EmitAddrsigSym(const MCSymbol *Sym) override;
+
   void FinishImpl() override;
 
   /// Emit the absolute difference between two symbols if possible.
   ///
   /// Emit the absolute difference between \c Hi and \c Lo, as long as we can
   /// compute it.  Currently, that requires that both symbols are in the same
-  /// data fragment.  Otherwise, do nothing and return \c false.
+  /// data fragment and that the target has not specified that diff expressions
+  /// require relocations to be emitted. Otherwise, do nothing and return
+  /// \c false.
   ///
   /// \pre Offset of \c Hi is greater than the offset \c Lo.
   void emitAbsoluteSymbolDiff(const MCSymbol *Hi, const MCSymbol *Lo,

@@ -390,6 +390,7 @@ def main_with_tmp(builtinParameters):
         debug = opts.debug,
         isWindows = isWindows,
         params = userParams,
+        shardNumber=opts.runShard,
         config_prefix = opts.configPrefix,
         maxIndividualTestTime = maxIndividualTestTime,
         maxFailures = opts.maxFailures,

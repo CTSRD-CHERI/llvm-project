@@ -50,6 +50,7 @@
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/WithColor.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include <memory>
 using namespace llvm;
@@ -563,6 +564,9 @@ static int compileModule(char **argv, LLVMContext &Context) {
       }
       TPC.setInitialized();
       PM.add(createPrintMIRPass(*OS));
+      if (cheri::ShouldCollectCSetBoundsStats) {
+        PM.add(createLogCheriSetBoundsPass());
+      }
       PM.add(createFreeMachineFunctionPass());
     } else if (Target->addPassesToEmitFile(PM, *OS,
                                            DwoOut ? &DwoOut->os() : nullptr,
@@ -571,6 +575,8 @@ static int compileModule(char **argv, LLVMContext &Context) {
           << "target does not support generation of this"
           << " file type!\n";
       return 1;
+    } else if (cheri::ShouldCollectCSetBoundsStats) {
+      PM.add(createLogCheriSetBoundsPass());
     }
 
     if (MIR) {
@@ -626,6 +632,19 @@ static int compileModule(char **argv, LLVMContext &Context) {
   Out->keep();
   if (DwoOut)
     DwoOut->keep();
+
+  if (cheri::ShouldCollectCSetBoundsStats) {
+    auto StatsFile = llvm::cheri::StatsOutputFile::open(
+        cheri::CSetBoundsStatistics::outputFile(),
+        [](StringRef StatsFile, const std::error_code &EC) {
+          errs() << "Couldn't open CSetBounds stats file " << StatsFile << ": " << EC.message();
+        },
+        [](StringRef StatsFile, const std::error_code &EC) {
+          errs() << "Couldn't lock CSetBounds stats file " << StatsFile << ": " << EC.message();
+        });
+    if (StatsFile)
+      llvm::cheri::CSetBoundsStats->print(*StatsFile, InputFilename);
+  }
 
   return 0;
 }

@@ -54,8 +54,7 @@ SDValue HexagonSelectionDAGInfo::EmitTargetCodeForMemcpy(
       .setLibCallee(
           TLI.getLibcallCallingConv(RTLIB::MEMCPY),
           Type::getVoidTy(*DAG.getContext()),
-          DAG.getTargetExternalSymbol(
-              SpecialMemcpyName, TLI.getPointerTy(DAG.getDataLayout()), Flags),
+          DAG.getTargetExternalFunctionSymbol(SpecialMemcpyName, Flags),
           std::move(Args))
       .setDiscardResult();
 

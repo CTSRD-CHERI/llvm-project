@@ -118,6 +118,12 @@ MCOperand MipsMCInstLower::LowerSymbolOperand(const MachineOperand &MO,
   case MipsII::MO_CALL_LO16:
     TargetKind = MipsMCExpr::MEK_CALL_LO16;
     break;
+  case MipsII::MO_PCREL_HI:
+    TargetKind = MipsMCExpr::MEK_PCREL_HI16;
+    break;
+  case MipsII::MO_PCREL_LO:
+    TargetKind = MipsMCExpr::MEK_PCREL_LO16;
+    break;
   case MipsII::MO_CAPTAB11:
     TargetKind = MipsMCExpr::MEK_CAPTABLE11;
     break;
@@ -152,6 +158,24 @@ MCOperand MipsMCInstLower::LowerSymbolOperand(const MachineOperand &MO,
   case MipsII::MO_CAPTABLE_OFF_LO:
     TargetKind = MipsMCExpr::MEK_LO;
     IsCapTableOff = true;
+    break;
+  case MipsII::MO_CAPTAB_TLSGD_HI16:
+    TargetKind = MipsMCExpr::MEK_CAPTAB_TLSGD_HI16;
+    break;
+  case MipsII::MO_CAPTAB_TLSGD_LO16:
+    TargetKind = MipsMCExpr::MEK_CAPTAB_TLSGD_LO16;
+    break;
+  case MipsII::MO_CAPTAB_TLSLDM_HI16:
+    TargetKind = MipsMCExpr::MEK_CAPTAB_TLSLDM_HI16;
+    break;
+  case MipsII::MO_CAPTAB_TLSLDM_LO16:
+    TargetKind = MipsMCExpr::MEK_CAPTAB_TLSLDM_LO16;
+    break;
+  case MipsII::MO_CAPTAB_TPREL_HI16:
+    TargetKind = MipsMCExpr::MEK_CAPTAB_TPREL_HI16;
+    break;
+  case MipsII::MO_CAPTAB_TPREL_LO16:
+    TargetKind = MipsMCExpr::MEK_CAPTAB_TPREL_LO16;
     break;
   }
 
@@ -336,12 +360,16 @@ bool MipsMCInstLower::lowerLongBranch(const MachineInstr *MI,
   default:
     return false;
   case Mips::LONG_BRANCH_LUi:
+  case Mips::LONG_BRANCH_LUi2Op:
+  case Mips::LONG_BRANCH_LUi2Op_64:
     lowerLongBranchLUi(MI, OutMI);
     return true;
   case Mips::LONG_BRANCH_ADDiu:
+  case Mips::LONG_BRANCH_ADDiu2Op:
     lowerLongBranchADDiu(MI, OutMI, Mips::ADDiu);
     return true;
   case Mips::LONG_BRANCH_DADDiu:
+  case Mips::LONG_BRANCH_DADDiu2Op:
     lowerLongBranchADDiu(MI, OutMI, Mips::DADDiu);
     return true;
   }

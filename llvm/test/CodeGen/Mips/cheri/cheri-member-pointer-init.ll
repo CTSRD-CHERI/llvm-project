@@ -1,9 +1,8 @@
-; RUN: %cheri_purecap_llc -cheri-cap-table-abi=legacy %s -o - | %cheri_FileCheck %s -check-prefixes CHECK,LEGACY_ABI
-; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - | %cheri_FileCheck %s -check-prefixes CHECK,NEW_ABI
+; RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -o - | %cheri_FileCheck %s
 ; RUsN: %cheri256_purecap_llc %s -legacy-cheri-cap-relocs -o - | FileCheck %s -check-prefix REALLY_OLD_STUFF
 ; ModuleID = 'cheri-member-pointer-init.cpp'
 source_filename = "cheri-member-pointer-init.cpp"
-target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
+target datalayout = "P200"
 target triple = "cheri-unknown-freebsd"
 
 ; CHECK-LABEL: global_nonvirt_ptr:
@@ -59,19 +58,21 @@ target triple = "cheri-unknown-freebsd"
 %class.A = type { i32 (...) addrspace(200)* addrspace(200)* }
 
 
-@global_nonvirt_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A7nonvirtEv to i8*) to i8 addrspace(200)*), i64 0 }, align 32
+@global_nonvirt_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A7nonvirtEv to i8 addrspace(200)*), i64 0 }, align 32
 @global_virt_ptr = addrspace(200) global { i8 addrspace(200)*, i64 } { i8 addrspace(200)* null, i64 1 }, align 32
-@global_fn_ptr = addrspace(200) global i32 () addrspace(200)* addrspacecast (i32 ()* @_Z9global_fnv to i32 () addrspace(200)*), align 32
-@_ZTV1A = linkonce_odr unnamed_addr addrspace(200) constant { [4 x i8 addrspace(200)*] } { [4 x i8 addrspace(200)*] [i8 addrspace(200)* null, i8 addrspace(200)* null, i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A4virtEv to i8*) to i8 addrspace(200)*), i8 addrspace(200)* addrspacecast (i8* bitcast (i32 (%class.A addrspace(200)*)* @_ZN1A5virt2Ev to i8*) to i8 addrspace(200)*)] }, align 32
+@global_fn_ptr = addrspace(200) global i32 () addrspace(200)* @_Z9global_fnv, align 32
+@_ZTV1A = linkonce_odr unnamed_addr addrspace(200) constant { [4 x i8 addrspace(200)*] } { [4 x i8 addrspace(200)*] [i8 addrspace(200)* null, i8 addrspace(200)* null,
+     i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A4virtEv to i8 addrspace(200)*),
+     i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A5virt2Ev to i8 addrspace(200)*)] }, align 32
 
 ; Function Attrs: noinline nounwind
-define i32 @_Z9global_fnv() #0 {
+define i32 @_Z9global_fnv() addrspace(200) #0 {
 entry:
   ret i32 5
 }
 
 ; Function Attrs: noinline nounwind
-define linkonce_odr i32 @_ZN1A7nonvirtEv(%class.A addrspace(200)* %this) #0 align 2 {
+define linkonce_odr i32 @_ZN1A7nonvirtEv(%class.A addrspace(200)* %this) addrspace(200) #0 align 2 {
 entry:
   %this.addr = alloca %class.A addrspace(200)*, align 32, addrspace(200)
   store %class.A addrspace(200)* %this, %class.A addrspace(200)* addrspace(200)* %this.addr, align 32
@@ -80,7 +81,7 @@ entry:
 }
 
 ; Function Attrs: noinline nounwind
-define i32 @_Z12call_nonvirtP1A(%class.A addrspace(200)* %a) #0 {
+define i32 @_Z12call_nonvirtP1A(%class.A addrspace(200)* %a) addrspace(200) #0 {
 entry:
   %a.addr = alloca %class.A addrspace(200)*, align 32, addrspace(200)
   store %class.A addrspace(200)* %a, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
@@ -116,7 +117,7 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
 }
 
 ; Function Attrs: noinline nounwind
-define i32 @_Z9call_virtP1A(%class.A addrspace(200)* %a) #0 {
+define i32 @_Z9call_virtP1A(%class.A addrspace(200)* %a) addrspace(200) #0 {
 entry:
   %a.addr = alloca %class.A addrspace(200)*, align 32, addrspace(200)
   store %class.A addrspace(200)* %a, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
@@ -152,14 +153,14 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
 }
 
 ; Function Attrs: noinline nounwind
-define i32 @_Z18call_local_nonvirtP1A(%class.A addrspace(200)* %a) #0 {
+define i32 @_Z18call_local_nonvirtP1A(%class.A addrspace(200)* %a) addrspace(200) #0 {
 entry:
   %a.addr = alloca %class.A addrspace(200)*, align 32, addrspace(200)
   %local_nonvirt = alloca { i8 addrspace(200)*, i64 }, align 32, addrspace(200)
   %memptr_tmp = alloca { i8 addrspace(200)*, i64 }, align 32, addrspace(200)
   store %class.A addrspace(200)* %a, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
   %0 = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  %1 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %0, i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A8nonvirt2Ev to i64))
+  %1 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %0, i64 ptrtoint (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A8nonvirt2Ev to i64))
   %2 = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %memptr_tmp, i32 0, i32 0
   store i8 addrspace(200)* %1, i8 addrspace(200)* addrspace(200)* %2, align 32
   %3 = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %memptr_tmp, i32 0, i32 1
@@ -198,7 +199,7 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
 }
 
 ; Function Attrs: noinline nounwind
-define linkonce_odr i32 @_ZN1A8nonvirt2Ev(%class.A addrspace(200)* %this) #0 align 2 {
+define linkonce_odr i32 @_ZN1A8nonvirt2Ev(%class.A addrspace(200)* %this) addrspace(200) #0 align 2 {
 entry:
   %this.addr = alloca %class.A addrspace(200)*, align 32, addrspace(200)
   store %class.A addrspace(200)* %this, %class.A addrspace(200)* addrspace(200)* %this.addr, align 32
@@ -207,13 +208,13 @@ entry:
 }
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.pcc.get() #1
+declare i8 addrspace(200)* @llvm.cheri.pcc.get() addrspace(200) #1
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) addrspace(200) #1
 
 ; Function Attrs: noinline nounwind
-define i32 @_Z15call_local_virtP1A(%class.A addrspace(200)* %a) #0 {
+define i32 @_Z15call_local_virtP1A(%class.A addrspace(200)* %a) addrspace(200) #0 {
 entry:
   %a.addr = alloca %class.A addrspace(200)*, align 32, addrspace(200)
   %local_virt = alloca { i8 addrspace(200)*, i64 }, align 32, addrspace(200)
@@ -251,13 +252,13 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
 }
 
 ; Function Attrs: noinline nounwind
-define i32 @_Z17call_local_fn_ptrP1A(%class.A addrspace(200)* %a) #0 {
+define i32 @_Z17call_local_fn_ptrP1A(%class.A addrspace(200)* %a) addrspace(200) #0 {
 entry:
   %a.addr = alloca %class.A addrspace(200)*, align 32, addrspace(200)
   %local_fn_ptr = alloca i32 () addrspace(200)*, align 32, addrspace(200)
   store %class.A addrspace(200)* %a, %class.A addrspace(200)* addrspace(200)* %a.addr, align 32
   %0 = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  %1 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %0, i64 ptrtoint (i32 ()* @_Z9global_fnv to i64))
+  %1 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %0, i64 ptrtoint (i32 () addrspace(200)* @_Z9global_fnv to i64))
   %2 = bitcast i8 addrspace(200)* %1 to i32 () addrspace(200)*
   store i32 () addrspace(200)* %2, i32 () addrspace(200)* addrspace(200)* %local_fn_ptr, align 32
   %3 = load i32 () addrspace(200)*, i32 () addrspace(200)* addrspace(200)* %local_fn_ptr, align 32
@@ -266,29 +267,29 @@ entry:
 }
 
 ; Function Attrs: noinline norecurse nounwind
-define i32 @main() #2 {
+define i32 @main() addrspace(200) #2 {
 entry:
   %a = alloca %class.A, align 32, addrspace(200)
   call void @_ZN1AC2Ev(%class.A addrspace(200)* %a) #3
   %0 = load i32 () addrspace(200)*, i32 () addrspace(200)* addrspace(200)* @global_fn_ptr, align 32
   %call = call i32 %0()
   %1 = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  %2 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %1, i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_Z9call_virtP1A to i64))
+  %2 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %1, i64 ptrtoint (i32 (%class.A addrspace(200)*) addrspace(200)* @_Z9call_virtP1A to i64))
   %3 = bitcast i8 addrspace(200)* %2 to i32 (%class.A addrspace(200)*) addrspace(200)*
   %call1 = call i32 %3(%class.A addrspace(200)* %a)
   %4 = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  %5 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %4, i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_Z12call_nonvirtP1A to i64))
+  %5 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %4, i64 ptrtoint (i32 (%class.A addrspace(200)*) addrspace(200)* @_Z12call_nonvirtP1A to i64))
   %6 = bitcast i8 addrspace(200)* %5 to i32 (%class.A addrspace(200)*) addrspace(200)*
   %call2 = call i32 %6(%class.A addrspace(200)* %a)
   %7 = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  %8 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %7, i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_Z9call_virtP1A to i64))
+  %8 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %7, i64 ptrtoint (i32 (%class.A addrspace(200)*) addrspace(200)* @_Z9call_virtP1A to i64))
   %9 = bitcast i8 addrspace(200)* %8 to i32 (%class.A addrspace(200)*) addrspace(200)*
   %call3 = call i32 %9(%class.A addrspace(200)* %a)
   ret i32 0
 }
 
 ; Function Attrs: noinline nounwind
-define linkonce_odr void @_ZN1AC2Ev(%class.A addrspace(200)* %this) unnamed_addr #0 align 2 {
+define linkonce_odr void @_ZN1AC2Ev(%class.A addrspace(200)* %this) addrspace(200) #0 align 2 {
 entry:
   %this.addr = alloca %class.A addrspace(200)*, align 32, addrspace(200)
   store %class.A addrspace(200)* %this, %class.A addrspace(200)* addrspace(200)* %this.addr, align 32
@@ -299,7 +300,7 @@ entry:
 }
 
 ; Function Attrs: noinline nounwind
-define linkonce_odr i32 @_ZN1A4virtEv(%class.A addrspace(200)* %this) unnamed_addr #0 align 2 {
+define linkonce_odr i32 @_ZN1A4virtEv(%class.A addrspace(200)* %this) addrspace(200) #0 align 2 {
 entry:
   %this.addr = alloca %class.A addrspace(200)*, align 32, addrspace(200)
   store %class.A addrspace(200)* %this, %class.A addrspace(200)* addrspace(200)* %this.addr, align 32
@@ -308,7 +309,7 @@ entry:
 }
 
 ; Function Attrs: noinline nounwind
-define linkonce_odr i32 @_ZN1A5virt2Ev(%class.A addrspace(200)* %this) unnamed_addr #0 align 2 {
+define linkonce_odr i32 @_ZN1A5virt2Ev(%class.A addrspace(200)* %this) addrspace(200) #0 align 2 {
 entry:
   %this.addr = alloca %class.A addrspace(200)*, align 32, addrspace(200)
   store %class.A addrspace(200)* %this, %class.A addrspace(200)* addrspace(200)* %this.addr, align 32

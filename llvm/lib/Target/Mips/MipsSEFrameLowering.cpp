@@ -306,8 +306,12 @@ bool ExpandPseudo::expandBuildPairF64(MachineBasicBlock &MBB,
   // register). Unfortunately, we have to make this decision before register
   // allocation so for now we use a spill/reload sequence for all
   // double-precision values in regardless of being an odd/even register.
-  if ((Subtarget.isABI_FPXX() && !Subtarget.hasMTHC1()) ||
-      (FP64 && !Subtarget.useOddSPReg())) {
+  //
+  // For the cases that should be covered here MipsSEISelDAGToDAG adds $sp as
+  // implicit operand, so other passes (like ShrinkWrapping) are aware that
+  // stack is used.
+  if (I->getNumOperands() == 4 && I->getOperand(3).isReg()
+      && I->getOperand(3).getReg() == Mips::SP) {
     unsigned DstReg = I->getOperand(0).getReg();
     unsigned LoReg = I->getOperand(1).getReg();
     unsigned HiReg = I->getOperand(2).getReg();
@@ -367,9 +371,12 @@ bool ExpandPseudo::expandExtractElementF64(MachineBasicBlock &MBB,
   // register). Unfortunately, we have to make this decision before register
   // allocation so for now we use a spill/reload sequence for all
   // double-precision values in regardless of being an odd/even register.
-
-  if ((Subtarget.isABI_FPXX() && !Subtarget.hasMTHC1()) ||
-      (FP64 && !Subtarget.useOddSPReg())) {
+  //
+  // For the cases that should be covered here MipsSEISelDAGToDAG adds $sp as
+  // implicit operand, so other passes (like ShrinkWrapping) are aware that
+  // stack is used.
+  if (I->getNumOperands() == 4 && I->getOperand(3).isReg()
+      && I->getOperand(3).getReg() == Mips::SP) {
     unsigned DstReg = I->getOperand(0).getReg();
     unsigned SrcReg = Op1.getReg();
     unsigned N = Op2.getImm();
@@ -412,7 +419,6 @@ bool MipsSEFrameLowering::partitionUnsafeObjects(void) const {
 
 void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
                                        MachineBasicBlock &MBB) const {
-  assert(&MF.front() == &MBB && "Shrink-wrapping not yet supported");
   MachineFrameInfo &MFI    = MF.getFrameInfo();
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
 
@@ -442,10 +448,10 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   bool NeedAuxEntry = ABI.IsCheriPureCap() &&  MF.getFunction().hasExternalLinkage();
 
   if(ABI.IsCheriPureCap()) {
-    MF.getRegInfo().addLiveIn(CRD);
-    MBB.addLiveIn(CRD);
-    MF.getRegInfo().addLiveIn(CTLP);
-    MBB.addLiveIn(CTLP);
+    if(!MF.getRegInfo().isLiveIn(CRD)) MF.getRegInfo().addLiveIn(CRD);
+    if(!MBB.isLiveIn(CRD)) MBB.addLiveIn(CRD);
+    if(!MF.getRegInfo().isLiveIn(CTLP)) MF.getRegInfo().addLiveIn(CTLP);
+    if(!MBB.isLiveIn(CTLP)) MBB.addLiveIn(CTLP);
 
     if(NeedAuxEntry) {
       unsigned TA = FuncP;
@@ -455,12 +461,17 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       MachineBasicBlock &exteralMBB = *MF.CreateMachineBasicBlock(MBB.getBasicBlock());
 
       MachineFunction::iterator iter = MF.begin();
+
+      MachineBasicBlock* EntryMBB = &*iter;
+
       MF.insert(iter, &exteralMBB);
 
       MBB.setHasAddressTaken();
       exteralMBB.setHasAddressTaken();
+      EntryMBB->setHasAddressTaken();
+      exteralMBB.addSuccessorWithoutProb(EntryMBB);
 
-      exteralMBB.addSuccessorWithoutProb(&MBB);
+      assert(exteralMBB.getFallThrough() == EntryMBB);
 
       // Add CTLP live in
       exteralMBB.addLiveIn(CTLP);
@@ -845,7 +856,7 @@ void MipsSEFrameLowering::emitInterruptPrologueStub(
 
 void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
                                        MachineBasicBlock &MBB) const {
-  MachineBasicBlock::iterator MBBI = MBB.getLastNonDebugInstr();
+  MachineBasicBlock::iterator MBBI = MBB.getFirstTerminator();
   MachineFrameInfo &MFI            = MF.getFrameInfo();
   MipsFunctionInfo *MipsFI = MF.getInfo<MipsFunctionInfo>();
 
@@ -854,7 +865,7 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
   const MipsRegisterInfo &RegInfo =
       *static_cast<const MipsRegisterInfo *>(STI.getRegisterInfo());
 
-  DebugLoc DL = MBBI->getDebugLoc();
+  DebugLoc DL = MBBI != MBB.end() ? MBBI->getDebugLoc() : DebugLoc();
   MipsABIInfo ABI = STI.getABI();
   unsigned SP = ABI.GetStackPtr();
   unsigned USP = ABI.GetUnsafeStackPtr();
@@ -1035,7 +1046,6 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
                           const std::vector<CalleeSavedInfo> &CSI,
                           const TargetRegisterInfo *TRI) const {
   MachineFunction *MF = MBB.getParent();
-  MachineBasicBlock *EntryBlock = &MF->front();
   const TargetInstrInfo &TII = *STI.getInstrInfo();
 
   bool IsRetAddrTaken = MF->getFrameInfo().isReturnAddressTaken();
@@ -1056,7 +1066,8 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
       IsRA = (Reg == Mips::C17);
     bool IsRAAndRetAddrIsTaken = IsRA && IsRetAddrTaken;
     if (!IsRAAndRetAddrIsTaken)
-      EntryBlock->addLiveIn(Reg);
+      MBB.addLiveIn(Reg);
+
     // $c16 is not a callee-save register, so if we're being asked to spill it
     // then we're actually using it to hold the return address as a capability.
     if (Reg == Mips::C16) {
@@ -1090,7 +1101,7 @@ spillCalleeSavedRegisters(MachineBasicBlock &MBB,
     // Insert the spill to the stack frame.
     bool IsKill = !IsRAAndRetAddrIsTaken && KillRAOnSpill;
     const TargetRegisterClass *RC = TRI->getMinimalPhysRegClass(Reg);
-    TII.storeRegToStackSlot(*EntryBlock, MI, Reg, IsKill,
+    TII.storeRegToStackSlot(MBB, MI, Reg, IsKill,
                             CSI[i].getFrameIdx(), RC, TRI);
   }
 

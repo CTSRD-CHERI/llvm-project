@@ -26,9 +26,14 @@
 
 using namespace llvm;
 
+static unsigned getUnconditionalBranch(const MipsSubtarget &STI) {
+  if (STI.inMicroMipsMode())
+    return STI.isPositionIndependent() ? Mips::B_MM : Mips::J_MM;
+  return STI.isPositionIndependent() ? Mips::B : Mips::J;
+}
+
 MipsSEInstrInfo::MipsSEInstrInfo(const MipsSubtarget &STI)
-    : MipsInstrInfo(STI, STI.isPositionIndependent() ? Mips::B : Mips::J),
-      RI(STI) {}
+    : MipsInstrInfo(STI, getUnconditionalBranch(STI)), RI(STI) {}
 
 const MipsRegisterInfo &MipsSEInstrInfo::getRegisterInfo() const {
   return RI;
@@ -236,9 +241,9 @@ static bool isReadOrWriteToDSPReg(const MachineInstr &MI, bool &isWrite) {
 /// We check for the common case of 'or', as it's MIPS' preferred instruction
 /// for GPRs but we have to check the operands to ensure that is the case.
 /// Other move instructions for MIPS are directly identifiable.
-bool MipsSEInstrInfo::isCopyInstr(const MachineInstr &MI,
-                                  const MachineOperand *&Src,
-                                  const MachineOperand *&Dest) const {
+bool MipsSEInstrInfo::isCopyInstrImpl(const MachineInstr &MI,
+                                      const MachineOperand *&Src,
+                                      const MachineOperand *&Dest) const {
   bool isDSPControlWrite = false;
   // Condition is made to match the creation of WRDSP/RDDSP copy instruction
   // from copyPhysReg function.
@@ -521,12 +526,16 @@ bool MipsSEInstrInfo::expandPostRAPseudo(MachineInstr &MI) const {
     expandERet(MBB, MI);
     break;
   case Mips::PseudoMFHI:
-    Opc = isMicroMips ? Mips::MFHI16_MM : Mips::MFHI;
-    expandPseudoMFHiLo(MBB, MI, Opc);
+    expandPseudoMFHiLo(MBB, MI, Mips::MFHI);
+    break;
+  case Mips::PseudoMFHI_MM:
+    expandPseudoMFHiLo(MBB, MI, Mips::MFHI16_MM);
     break;
   case Mips::PseudoMFLO:
-    Opc = isMicroMips ? Mips::MFLO16_MM : Mips::MFLO;
-    expandPseudoMFHiLo(MBB, MI, Opc);
+    expandPseudoMFHiLo(MBB, MI, Mips::MFLO);
+    break;
+  case Mips::PseudoMFLO_MM:
+    expandPseudoMFHiLo(MBB, MI, Mips::MFLO16_MM);
     break;
   case Mips::PseudoMFHI64:
     expandPseudoMFHiLo(MBB, MI, Mips::MFHI64);
@@ -775,7 +784,7 @@ unsigned MipsSEInstrInfo::getAnalyzableBrOpc(unsigned Opc) const {
           Opc == Mips::CBTS   || Opc == Mips::CBTU   || Opc == Mips::CBEZ   ||
           Opc == Mips::CBNZ   ||
           Opc == Mips::BC1F   || Opc == Mips::B      || Opc == Mips::J      ||
-          Opc == Mips::B_MM   || Opc == Mips::BEQZC_MM ||
+          Opc == Mips::J_MM   || Opc == Mips::B_MM   || Opc == Mips::BEQZC_MM ||
           Opc == Mips::BNEZC_MM || Opc == Mips::BEQC || Opc == Mips::BNEC   ||
           Opc == Mips::BLTC   || Opc == Mips::BGEC   || Opc == Mips::BLTUC  ||
           Opc == Mips::BGEUC  || Opc == Mips::BGTZC  || Opc == Mips::BLEZC  ||
@@ -1040,6 +1049,26 @@ void MipsSEInstrInfo::expandCCallPseudo(MachineBasicBlock &MBB,
   BuildMI(MBB, I, DL, TII->get(Mips::ClearLo)).addImm(ClearMask & 0xffff);
   // Ensure that the jump and the delay slot are not split
   MIBundleBuilder(MBB, BundleStart, std::next(BundleStart, 3));
+}
+
+// For opcodes with the ReMaterializable flag set, this function is called to
+// verify the instruction is really rematable.
+bool MipsSEInstrInfo::isReallyTriviallyReMaterializable(const MachineInstr &MI,
+                                                        AliasAnalysis *AA) const {
+  switch(MI.getOpcode()) {
+    case Mips::CIncOffsetImm:
+    case Mips::CMove:
+      return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == Mips::CNULL;
+    case Mips::LUi64: {
+      auto Flags = MI.getOperand(1).getTargetFlags();
+      if (Flags == MipsII::MO_CAPTABLE_OFF_HI) {
+         return true;
+      }
+      return false;
+    }
+  default:
+    return false;
+  }
 }
 
 void MipsSEInstrInfo::expandCPSETUP(MachineBasicBlock &MBB,

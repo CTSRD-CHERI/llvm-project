@@ -57,8 +57,8 @@ define <4 x float> @vselect(<4 x float>*%p, <4 x i32> %q) {
 ; X86-NEXT:    jne .LBB1_8
 ; X86-NEXT:  .LBB1_7:
 ; X86-NEXT:    movss {{.*#+}} xmm3 = mem[0],zero,zero,zero
-; X86-NEXT:    cmpl $0, {{[0-9]+}}(%esp)
 ; X86-NEXT:    unpcklps {{.*#+}} xmm2 = xmm2[0],xmm3[0],xmm2[1],xmm3[1]
+; X86-NEXT:    cmpl $0, {{[0-9]+}}(%esp)
 ; X86-NEXT:    je .LBB1_10
 ; X86-NEXT:    jmp .LBB1_11
 ; X86-NEXT:  .LBB1_1:
@@ -71,8 +71,8 @@ define <4 x float> @vselect(<4 x float>*%p, <4 x i32> %q) {
 ; X86-NEXT:    je .LBB1_7
 ; X86-NEXT:  .LBB1_8: # %entry
 ; X86-NEXT:    xorps %xmm3, %xmm3
-; X86-NEXT:    cmpl $0, {{[0-9]+}}(%esp)
 ; X86-NEXT:    unpcklps {{.*#+}} xmm2 = xmm2[0],xmm3[0],xmm2[1],xmm3[1]
+; X86-NEXT:    cmpl $0, {{[0-9]+}}(%esp)
 ; X86-NEXT:    jne .LBB1_11
 ; X86-NEXT:  .LBB1_10:
 ; X86-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero
@@ -96,8 +96,8 @@ define <4 x float> @vselect(<4 x float>*%p, <4 x i32> %q) {
 ; X64-NEXT:    jne .LBB1_8
 ; X64-NEXT:  .LBB1_7:
 ; X64-NEXT:    movss {{.*#+}} xmm3 = mem[0],zero,zero,zero
-; X64-NEXT:    testl %esi, %esi
 ; X64-NEXT:    unpcklps {{.*#+}} xmm2 = xmm2[0],xmm3[0],xmm2[1],xmm3[1]
+; X64-NEXT:    testl %esi, %esi
 ; X64-NEXT:    je .LBB1_10
 ; X64-NEXT:    jmp .LBB1_11
 ; X64-NEXT:  .LBB1_1:
@@ -110,8 +110,8 @@ define <4 x float> @vselect(<4 x float>*%p, <4 x i32> %q) {
 ; X64-NEXT:    je .LBB1_7
 ; X64-NEXT:  .LBB1_8: # %entry
 ; X64-NEXT:    xorps %xmm3, %xmm3
-; X64-NEXT:    testl %esi, %esi
 ; X64-NEXT:    unpcklps {{.*#+}} xmm2 = xmm2[0],xmm3[0],xmm2[1],xmm3[1]
+; X64-NEXT:    testl %esi, %esi
 ; X64-NEXT:    jne .LBB1_11
 ; X64-NEXT:  .LBB1_10:
 ; X64-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero
@@ -190,26 +190,27 @@ define <4 x i32> @PR30512(<4 x i32> %x, <4 x i32> %y) nounwind {
 ;
 ; X64-LABEL: PR30512:
 ; X64:       # %bb.0:
-; X64-NEXT:    xorl %eax, %eax
+; X64-NEXT:    movq %rdi, %rax
+; X64-NEXT:    xorl %edi, %edi
 ; X64-NEXT:    cmpl {{[0-9]+}}(%rsp), %r8d
-; X64-NEXT:    sete %al
-; X64-NEXT:    negl %eax
-; X64-NEXT:    movl %eax, -{{[0-9]+}}(%rsp)
-; X64-NEXT:    xorl %eax, %eax
+; X64-NEXT:    sete %dil
+; X64-NEXT:    negl %edi
+; X64-NEXT:    movl %edi, -{{[0-9]+}}(%rsp)
+; X64-NEXT:    xorl %edi, %edi
 ; X64-NEXT:    cmpl {{[0-9]+}}(%rsp), %ecx
-; X64-NEXT:    sete %al
-; X64-NEXT:    negl %eax
-; X64-NEXT:    movl %eax, -{{[0-9]+}}(%rsp)
-; X64-NEXT:    xorl %eax, %eax
+; X64-NEXT:    sete %dil
+; X64-NEXT:    negl %edi
+; X64-NEXT:    movl %edi, -{{[0-9]+}}(%rsp)
+; X64-NEXT:    xorl %ecx, %ecx
 ; X64-NEXT:    cmpl {{[0-9]+}}(%rsp), %edx
-; X64-NEXT:    sete %al
-; X64-NEXT:    negl %eax
-; X64-NEXT:    movl %eax, -{{[0-9]+}}(%rsp)
-; X64-NEXT:    xorl %eax, %eax
+; X64-NEXT:    sete %cl
+; X64-NEXT:    negl %ecx
+; X64-NEXT:    movl %ecx, -{{[0-9]+}}(%rsp)
+; X64-NEXT:    xorl %ecx, %ecx
 ; X64-NEXT:    cmpl %r9d, %esi
-; X64-NEXT:    sete %al
-; X64-NEXT:    negl %eax
-; X64-NEXT:    movl %eax, -{{[0-9]+}}(%rsp)
+; X64-NEXT:    sete %cl
+; X64-NEXT:    negl %ecx
+; X64-NEXT:    movl %ecx, -{{[0-9]+}}(%rsp)
 ; X64-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero
 ; X64-NEXT:    movss {{.*#+}} xmm1 = mem[0],zero,zero,zero
 ; X64-NEXT:    unpcklps {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1]
@@ -218,8 +219,7 @@ define <4 x i32> @PR30512(<4 x i32> %x, <4 x i32> %y) nounwind {
 ; X64-NEXT:    unpcklps {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1]
 ; X64-NEXT:    movlhps {{.*#+}} xmm2 = xmm2[0],xmm1[0]
 ; X64-NEXT:    andps {{.*}}(%rip), %xmm2
-; X64-NEXT:    movaps %xmm2, (%rdi)
-; X64-NEXT:    movq %rdi, %rax
+; X64-NEXT:    movaps %xmm2, (%rax)
 ; X64-NEXT:    retq
   %cmp = icmp eq <4 x i32> %x, %y
   %zext = zext <4 x i1> %cmp to <4 x i32>

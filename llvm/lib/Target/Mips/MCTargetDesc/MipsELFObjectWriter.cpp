@@ -417,6 +417,10 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
     return ELF::R_MICROMIPS_HIGHER;
   case Mips::fixup_MICROMIPS_HIGHEST:
     return ELF::R_MICROMIPS_HIGHEST;
+  case Mips::fixup_Mips_JALR:
+    return ELF::R_MIPS_JALR;
+  case Mips::fixup_MICROMIPS_JALR:
+    return ELF::R_MICROMIPS_JALR;
 
   // CHERI relocations:
   case Mips::fixup_CHERI_CAPTABLE11:
@@ -441,6 +445,19 @@ unsigned MipsELFObjectWriter::getRelocType(MCContext &Ctx,
 
   case Mips::fixup_CHERI_CAPABILITY:
     return ELF::R_MIPS_CHERI_CAPABILITY;
+
+  case Mips::fixup_CHERI_CAPTAB_TLSGD_HI16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_GD_HI16;
+  case Mips::fixup_CHERI_CAPTAB_TLSGD_LO16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_GD_LO16;
+  case Mips::fixup_CHERI_CAPTAB_TLSLDM_HI16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_LDM_HI16;
+  case Mips::fixup_CHERI_CAPTAB_TLSLDM_LO16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_LDM_LO16;
+  case Mips::fixup_CHERI_CAPTAB_TPREL_HI16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_TPREL_HI16;
+  case Mips::fixup_CHERI_CAPTAB_TPREL_LO16:
+    return ELF::R_MIPS_CHERI_CAPTAB_TLS_TPREL_LO16;
   }
 
   llvm_unreachable("invalid fixup kind!");
@@ -493,7 +510,7 @@ void MipsELFObjectWriter::sortRelocs(const MCAssembler &Asm,
     return;
 
   // Sort relocations by the address they are applied to.
-  llvm::sort(Relocs.begin(), Relocs.end(),
+  llvm::sort(Relocs,
              [](const ELFRelocationEntry &A, const ELFRelocationEntry &B) {
                return A.Offset < B.Offset;
              });

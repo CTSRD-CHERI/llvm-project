@@ -220,13 +220,15 @@ namespace CallingConv {
     /// shader if tessellation is in use, or otherwise the vertex shader.
     AMDGPU_ES = 96,
 
+    // Calling convention between AArch64 Advanced SIMD functions
+    AArch64_VectorCall = 97,
     /// CHERI_CCall - Calling convention used for CHERI when crossing a
     /// protection boundary.
-    CHERI_CCall = 97,
+    CHERI_CCall = 98,
     /// CHERI_CCallee - Calling convention used for the callee of CHERI_CCall.
     /// Ignores the first two capability arguments and the first integer
     /// argument, zeroes all unused return registers on return.
-    CHERI_CCallee = 98,
+    CHERI_CCallee = 99,
 
     /// The highest possible calling convention ID. Must be some 2^k - 1.
     MaxID = 1023

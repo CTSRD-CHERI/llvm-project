@@ -25,22 +25,22 @@
 
 .else
 cscbi		$c1, 1($c1)  # not multiple of 16
-# BAD: [[@LINE-1]]:13: error: invalid operand for instruction
+# BAD: [[@LINE-1]]:13: error: expected both 20-bit signed immediate and multiple of 16
 cscbi		$c1, 17($c1)  # not multiple of 16
-# BAD: [[@LINE-1]]:13: error: invalid operand for instruction
+# BAD: [[@LINE-1]]:13: error: expected both 20-bit signed immediate and multiple of 16
 cscbi		$c1, 0x80000($c1) # one out of range
-# BAD: [[@LINE-1]]:13: error: invalid operand for instruction
+# BAD: [[@LINE-1]]:13: error: expected both 20-bit signed immediate and multiple of 16
 cscbi		$c1, -0x80010($c1) # one out of range
-# BAD: [[@LINE-1]]:13: error: invalid operand for instruction
+# BAD: [[@LINE-1]]:13: error: expected both 20-bit signed immediate and multiple of 16
 
 clcbi		$c1, 1($c1)  # not multiple of 16
-# BAD: [[@LINE-1]]:13: error: invalid operand for instruction
+# BAD: [[@LINE-1]]:13: error: expected both 20-bit signed immediate and multiple of 16
 clcbi		$c1, 17($c1)  # not multiple of 16
-# BAD: [[@LINE-1]]:13: error: invalid operand for instruction
+# BAD: [[@LINE-1]]:13: error: expected both 20-bit signed immediate and multiple of 16
 clcbi		$c1, 0x80000($c1) # one out of range
-# BAD: [[@LINE-1]]:13: error: invalid operand for instruction
+# BAD: [[@LINE-1]]:13: error: expected both 20-bit signed immediate and multiple of 16
 clcbi		$c1, -0x80010($c1) # one out of range
-# BAD: [[@LINE-1]]:13: error: invalid operand for instruction
+# BAD: [[@LINE-1]]:13: error: expected both 20-bit signed immediate and multiple of 16
 
 # Check that jalx doesn't work
 foo:

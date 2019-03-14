@@ -75,6 +75,13 @@ ELF_RELOC(R_MIPS_CHERI_ABSPTR,       70)
 ELF_RELOC(R_MIPS_CHERI_SIZE,         71)
 
 
+ELF_RELOC(R_MIPS_CHERI_CAPTAB_TLS_GD_HI16,    74)
+ELF_RELOC(R_MIPS_CHERI_CAPTAB_TLS_GD_LO16,    75)
+ELF_RELOC(R_MIPS_CHERI_CAPTAB_TLS_LDM_HI16,   76)
+ELF_RELOC(R_MIPS_CHERI_CAPTAB_TLS_LDM_LO16,   77)
+ELF_RELOC(R_MIPS_CHERI_CAPTAB_TLS_TPREL_HI16, 78)
+ELF_RELOC(R_MIPS_CHERI_CAPTAB_TLS_TPREL_LO16, 79)
+
 // Low 16 bits GCT index into GPR
 ELF_RELOC(R_MIPS_CHERI_CAPTAB_LO16,     80)
 // High 16 bits GCT index into GPR
@@ -96,14 +103,18 @@ ELF_RELOC(R_MIPS_CHERI_CAPTAB_TLS20,  89)
 // from $pcc)
 ELF_RELOC(R_MIPS_CHERI_CAPTABLEREL16,  88)
 
-// RTLD should set the following to a capability pointing to symbol. This can be
-// preemptible and if not we can optimize it to a
-// R_MIPS_CHERI_SETTAG/R_MIPS_CHERI_SETTAG_LOADADDR
+// RTLD should set the following to a capability pointing to symbol.
+// These relocations should be processed immediatedly at load time.
+// Note: All R_MIPS_CHERI_CAPABILITY relocations for STT_FUNC symbols must
+// resolve to the same address to ensure function pointer comparison works as
+// required by the C standard. If a function is only called but the address is
+// not taken, the static linker should emit a R_MIPS_CHERI_CAPABILITY_CALL
+// relocation instead since this allows RTLD to only perform the symbol lookup
+// on the first call rather than at load time
 ELF_RELOC(R_MIPS_CHERI_CAPABILITY,      90)
-// The same as R_MIPS_CHERI_CAPABILITY but must not be preemptible
-// The linker should always be able to optimize this into a
-// R_MIPS_CHERI_SETTAG_LOADADDR or R_MIPS_CHERI_SETTAG
-ELF_RELOC(R_MIPS_CHERI_LOCAL_CAPABILITY,91)  // XXXAR: probably not needed
+// The same as R_MIPS_CHERI_CAPABILITY but RTLD may use lazy binding.
+ELF_RELOC(R_MIPS_CHERI_CAPABILITY_CALL, 91)
+
 // Set the tag bit on the referenced data (must point within the current object)
 // Must not be preemtible!
 ELF_RELOC(R_MIPS_CHERI_SETTAG,          92)
@@ -114,7 +125,11 @@ ELF_RELOC(R_MIPS_CHERI_SETTAG_LOADADDR, 93)
 // fill in the bits and change it to a R_MIPS_CHERI_SETTAG
 // When linking dynamically it should always be possible to change this to a
 // R_MIPS_CHERI_SETTAG_LOADADDR relocation
-ELF_RELOC(R_MIPS_CHERI_GLOBALS_TABLE,   94)
+// The same as R_MIPS_CHERI_CAPABILITY but must not be preemptible
+// The linker should always be able to optimize this into a
+// R_MIPS_CHERI_SETTAG_LOADADDR or R_MIPS_CHERI_SETTAG
+ELF_RELOC(R_MIPS_CHERI_LOCAL_CAPABILITY,94)  // XXXAR: probably not needed
+ELF_RELOC(R_MIPS_CHERI_GLOBALS_TABLE,   95)  // XXXAR: probably not needed
 
 // So that I can have only one LLD brach:
 #define HAVE_R_MIPS_CHERI_CAPABILITY    1

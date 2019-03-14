@@ -289,7 +289,7 @@ public:
   /// Returns whether V is a source of divergence.
   ///
   /// This function provides the target-dependent information for
-  /// the target-independent DivergenceAnalysis. DivergenceAnalysis first
+  /// the target-independent LegacyDivergenceAnalysis. LegacyDivergenceAnalysis first
   /// builds the dependency graph, and then runs the reachability algorithm
   /// starting with the sources of divergence.
   bool isSourceOfDivergence(const Value *V) const;
@@ -422,6 +422,13 @@ public:
     bool AllowPeeling;
     /// Allow unrolling of all the iterations of the runtime loop remainder.
     bool UnrollRemainder;
+    /// Allow unroll and jam. Used to enable unroll and jam for the target.
+    bool UnrollAndJam;
+    /// Threshold for unroll and jam, for inner loop size. The 'Threshold'
+    /// value above is used during unroll and jam for the outer loop size.
+    /// This value is used in the same manner to limit the size of the inner
+    /// loop.
+    unsigned UnrollAndJamInnerLoopThreshold;
   };
 
   /// Get target-customized preferences for the generic loop unrolling
@@ -574,11 +581,20 @@ public:
   struct MemCmpExpansionOptions {
     // The list of available load sizes (in bytes), sorted in decreasing order.
     SmallVector<unsigned, 8> LoadSizes;
+    // Set to true to allow overlapping loads. For example, 7-byte compares can
+    // be done with two 4-byte compares instead of 4+2+1-byte compares. This
+    // requires all loads in LoadSizes to be doable in an unaligned way.
+    bool AllowOverlappingLoads = false;
   };
   const MemCmpExpansionOptions *enableMemCmpExpansion(bool IsZeroCmp) const;
 
   /// Enable matching of interleaved access groups.
   bool enableInterleavedAccessVectorization() const;
+
+  /// Enable matching of interleaved access groups that contain predicated
+  /// accesses or gaps and therefore vectorized using masked
+  /// vector loads/stores.
+  bool enableMaskedInterleavedAccessVectorization() const;
 
   /// Indicate that it is potentially unsafe to automatically vectorize
   /// floating-point operations because the semantics of vector and scalar
@@ -732,6 +748,10 @@ public:
   /// and the number of execution units in the CPU.
   unsigned getMaxInterleaveFactor(unsigned VF) const;
 
+  /// Collect properties of V used in cost analysis, e.g. OP_PowerOf2.
+  static OperandValueKind getOperandInfo(Value *V,
+                                         OperandValueProperties &OpProps);
+
   /// This is an approximation of reciprocal throughput of a math/logic op.
   /// A higher cost indicates less expected throughput.
   /// From Agner Fog's guides, reciprocal throughput is "the average number of
@@ -755,7 +775,9 @@ public:
 
   /// \return The cost of a shuffle instruction of kind Kind and of type Tp.
   /// The index and subtype parameters are used by the subvector insertion and
-  /// extraction shuffle kinds.
+  /// extraction shuffle kinds to show the insert/extract point and the type of
+  /// the subvector being inserted/extracted.
+  /// NOTE: For subvector extractions Tp represents the source type.
   int getShuffleCost(ShuffleKind Kind, Type *Tp, int Index = 0,
                      Type *SubTp = nullptr) const;
 
@@ -810,9 +832,13 @@ public:
   ///    load allows gaps)
   /// \p Alignment is the alignment of the memory operation
   /// \p AddressSpace is address space of the pointer.
+  /// \p UseMaskForCond indicates if the memory access is predicated.
+  /// \p UseMaskForGaps indicates if gaps should be masked.
   int getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy, unsigned Factor,
                                  ArrayRef<unsigned> Indices, unsigned Alignment,
-                                 unsigned AddressSpace) const;
+                                 unsigned AddressSpace,
+                                 bool UseMaskForCond = false,
+                                 bool UseMaskForGaps = false) const;
 
   /// Calculate the cost of performing a vector reduction.
   ///
@@ -1061,6 +1087,7 @@ public:
   virtual const MemCmpExpansionOptions *enableMemCmpExpansion(
       bool IsZeroCmp) const = 0;
   virtual bool enableInterleavedAccessVectorization() = 0;
+  virtual bool enableMaskedInterleavedAccessVectorization() = 0;
   virtual bool isFPVectorizationPotentiallyUnsafe() = 0;
   virtual bool allowsMisalignedMemoryAccesses(LLVMContext &Context,
                                               unsigned BitWidth,
@@ -1121,7 +1148,9 @@ public:
                                          unsigned Factor,
                                          ArrayRef<unsigned> Indices,
                                          unsigned Alignment,
-                                         unsigned AddressSpace) = 0;
+                                         unsigned AddressSpace,
+                                         bool UseMaskForCond = false,
+                                         bool UseMaskForGaps = false) = 0;
   virtual int getArithmeticReductionCost(unsigned Opcode, Type *Ty,
                                          bool IsPairwiseForm) = 0;
   virtual int getMinMaxReductionCost(Type *Ty, Type *CondTy,
@@ -1335,6 +1364,9 @@ public:
   bool enableInterleavedAccessVectorization() override {
     return Impl.enableInterleavedAccessVectorization();
   }
+  bool enableMaskedInterleavedAccessVectorization() override {
+    return Impl.enableMaskedInterleavedAccessVectorization();
+  }
   bool isFPVectorizationPotentiallyUnsafe() override {
     return Impl.isFPVectorizationPotentiallyUnsafe();
   }
@@ -1460,9 +1492,11 @@ public:
   }
   int getInterleavedMemoryOpCost(unsigned Opcode, Type *VecTy, unsigned Factor,
                                  ArrayRef<unsigned> Indices, unsigned Alignment,
-                                 unsigned AddressSpace) override {
+                                 unsigned AddressSpace, bool UseMaskForCond,
+                                 bool UseMaskForGaps) override {
     return Impl.getInterleavedMemoryOpCost(Opcode, VecTy, Factor, Indices,
-                                           Alignment, AddressSpace);
+                                           Alignment, AddressSpace,
+                                           UseMaskForCond, UseMaskForGaps);
   }
   int getArithmeticReductionCost(unsigned Opcode, Type *Ty,
                                  bool IsPairwiseForm) override {

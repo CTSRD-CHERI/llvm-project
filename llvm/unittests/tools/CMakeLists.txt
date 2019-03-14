@@ -4,7 +4,7 @@ if(LLVM_TARGETS_TO_BUILD MATCHES "X86")
   )
 endif()
 
-add_subdirectory(
-  llvm-exegesis
-)
+if (TARGET llvm-exegesis)
+  add_subdirectory(llvm-exegesis)
+endif()
 

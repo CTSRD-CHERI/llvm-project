@@ -68,14 +68,24 @@ MipsSERegisterInfo::intRegClass(unsigned Size) const {
 static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode,
                                                     MachineOperand MO) {
   switch (Opcode) {
+  case Mips::CAPSTORE8:
+  case Mips::CAPSTORE832:
+  case Mips::CAPLOAD8:
+  case Mips::CAPLOAD832:
+  case Mips::CAPLOADU8:
+  case Mips::CAPLOADU832:
+    return 8;
   case Mips::CAPSTORE16:
+  case Mips::CAPSTORE1632:
   case Mips::CAPLOAD16:
   case Mips::CAPLOAD1632:
-  case Mips::CAPLOADU1632:
   case Mips::CAPLOADU16:
+  case Mips::CAPLOADU1632:
     return 8 + 1 /* scale factor */;
   case Mips::CAPSTORE32:
+  case Mips::CAPSTORE3264:
   case Mips::CAPLOAD32:
+  case Mips::CAPLOAD3264:
   case Mips::CAPLOADU32:
     return 8 + 2 /* scale factor */;
   case Mips::CAPSTORE64:
@@ -84,6 +94,9 @@ static inline unsigned getLoadStoreOffsetSizeInBits(const unsigned Opcode,
   case Mips::LOADCAP:
   case Mips::STORECAP:
     return 11 + 4 /* scale factor */;
+  case Mips::LOADCAP_BigImm:
+  case Mips::STORECAP_BigImm:
+    return 16 + 4 /* scale factor */;
   case Mips::LD_B:
   case Mips::ST_B:
     return 10;
@@ -161,7 +174,9 @@ static inline unsigned getLoadStoreOffsetAlign(const unsigned Opcode) {
   case Mips::CAPLOAD64:
     return 8;
   case Mips::LOADCAP:
+  case Mips::LOADCAP_BigImm:
   case Mips::STORECAP:
+  case Mips::STORECAP_BigImm:
     return 16;
   case Mips::LD_H:
   case Mips::ST_H:
@@ -239,16 +254,40 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
   int ImmOpNo = OpNo + 1;
   if (ABI.IsCheriPureCap()) {
     RegOpNo = OpNo;
-    if ((MI.getOpcode() == Mips::CAPSTORE64) ||
-        (MI.getOpcode() == Mips::CAPSTORE32) ||
-        (MI.getOpcode() == Mips::STORECAP) ||
-        (MI.getOpcode() == Mips::CAPLOAD64) ||
-        (MI.getOpcode() == Mips::CAPLOAD32) ||
-        (MI.getOpcode() == Mips::LOADCAP)) {
+    switch (MI.getOpcode()) {
+    case Mips::CAPSTORE64:
+    case Mips::CAPSTORE32:
+    case Mips::CAPSTORE3264:
+    case Mips::CAPSTORE16:
+    case Mips::CAPSTORE1632:
+    case Mips::CAPSTORE8:
+    case Mips::CAPSTORE832:
+    case Mips::STORECAP:
+    case Mips::LOADCAP:
+    case Mips::CAPLOAD64:
+    case Mips::CAPLOAD32:
+    case Mips::CAPLOAD3264:
+    case Mips::CAPLOADU32:
+    case Mips::CAPLOAD16:
+    case Mips::CAPLOAD1632:
+    case Mips::CAPLOADU16:
+    case Mips::CAPLOADU1632:
+    case Mips::CAPLOAD8:
+    case Mips::CAPLOAD832:
+    case Mips::CAPLOADU8:
+    case Mips::CAPLOADU832:
       ImmOpNo = 2;
       RegOpNo = 3;
-    } else
-      assert(MI.getOpcode() == Mips::CIncOffset);
+      break;
+    case Mips::CIncOffsetImm:
+      ImmOpNo = 2;
+      RegOpNo = 1;
+      break;
+    case Mips::CIncOffset:
+      break;
+    default:
+      llvm_unreachable("Unsupported instruction in eliminateFI!");
+    }
   }
 
 
@@ -278,32 +317,40 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
           STI->getInstrInfo());
     DebugLoc DL = II->getDebugLoc();
 
-    if (MI.getOpcode() == Mips::CIncOffset) {
+    // Convert CIncOffset <-> CIncOffsetImm depending on offset value
+    if (MI.getOpcode() == Mips::CIncOffset || MI.getOpcode() == Mips::CIncOffsetImm) {
       MI.getOperand(1).ChangeToRegister(FrameReg, false);
       // If this is an 11-bit offset, then replace the CIncOffset that takes a
       // register with one that takes an immediate.
       if (isInt<11>(Offset)) {
-        MI.setDesc(TII.get(Mips::CIncOffsetImm));
+        if (MI.getOpcode() == Mips::CIncOffset)
+          MI.setDesc(TII.get(Mips::CIncOffsetImm));
         MI.getOperand(2).ChangeToImmediate(Offset);
-        return;
+      } else {
+        if (MI.getOpcode() == Mips::CIncOffsetImm)
+          MI.setDesc(TII.get(Mips::CIncOffset));
+        MachineBasicBlock &MBB = *MI.getParent();
+        unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
+        MI.getOperand(2).ChangeToRegister(Reg, false, false, true);
       }
-      MachineBasicBlock &MBB = *MI.getParent();
-      unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
-      MI.getOperand(2).ChangeToRegister(Reg, false, false, true);
       return;
     }
 
     if (ABI.IsCheriPureCap()) {
-      if (!isIntN(OffsetBitSize, Offset)) {
+      if (!isIntN(OffsetBitSize, Offset) || OffsetToAlignment(Offset, OffsetAlign) != 0) {
         MachineBasicBlock &MBB = *MI.getParent();
         // If we have an offset that needs to fit into a signed n-bit immediate
         // (where n < 16) and doesn't, but does fit into 16-bits then use an ADDiu
-        bool isFrameReg = MI.getOperand(0).getReg() == FrameReg;
+        bool isFrameRegLoad = MI.getOperand(0).getReg() == FrameReg && MI.getOpcode() != Mips::STORECAP;
         bool needsIncOffset = MI.getOperand(1).getReg() != Mips::ZERO_64;
+        MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
+#if 0
+        // This was the original code which avoids allocating a new capreg.
         const TargetRegisterClass *PtrRC =
             ABI.ArePtrs64bit() ? &Mips::GPR64RegClass : &Mips::GPR32RegClass;
         MachineRegisterInfo &RegInfo = MBB.getParent()->getRegInfo();
         unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
+        // TODO: use CIncOffsetImmediate here!
         if (needsIncOffset) {
           BuildMI(MBB, II, DL, TII.get(Mips::CIncOffset), FrameReg)
               .addReg(FrameReg)
@@ -317,8 +364,26 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
               .addReg(FrameReg)
               .addReg(NegReg, RegState::Kill);
           }
-        } else
+#endif
+        unsigned TmpCap = RegInfo.createVirtualRegister(&Mips::CheriGPRRegClass);
+        // TODO: use CIncOffsetImmediate here!
+        if (needsIncOffset) {
+          if (isInt<11>(Offset)) {
+            BuildMI(MBB, II, DL, TII.get(Mips::CIncOffsetImm), TmpCap)
+                .addReg(FrameReg, isFrameRegLoad ? RegState::Kill : 0)
+                .addImm(Offset);
+          } else {
+            unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
+            BuildMI(MBB, II, DL, TII.get(Mips::CIncOffset), TmpCap)
+                .addReg(FrameReg, isFrameRegLoad ? RegState::Kill : 0)
+                .addReg(Reg, RegState::Kill);
+          }
+          FrameReg = TmpCap;
+          IsKill = true;
+        } else {
+          unsigned Reg = TII.loadImmediate(Offset, MBB, II, DL, nullptr);
           MI.getOperand(1).ChangeToRegister(Reg, false, false, true);
+        }
         Offset = 0;
       }
     } else if (OffsetBitSize < 16 && isInt<16>(Offset) &&

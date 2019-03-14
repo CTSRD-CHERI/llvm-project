@@ -1,3 +1,4 @@
+// REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %S/Inputs/shared2-x86-64.s -o %t1.o
 // RUN: ld.lld %t1.o --shared -o %t.so
 // RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %s -o %t.o
@@ -5,7 +6,6 @@
 // RUN: llvm-objdump -d %tout | FileCheck %s --check-prefix=DISASM
 // RUN: llvm-objdump -s %tout | FileCheck %s --check-prefix=GOTPLT
 // RUN: llvm-readobj -r -dynamic-table %tout | FileCheck %s
-// REQUIRES: x86
 
 // Check that the IRELATIVE relocations are after the JUMP_SLOT in the plt
 // CHECK: Relocations [
@@ -42,18 +42,22 @@
 // DISASM-NEXT:   201020:       ff 35 e2 0f 00 00       pushq   4066(%rip)
 // DISASM-NEXT:   201026:       ff 25 e4 0f 00 00       jmpq    *4068(%rip)
 // DISASM-NEXT:   20102c:       0f 1f 40 00     nopl    (%rax)
+// DISASM-EMPTY:
+// DISASM-NEXT:   bar2@plt:
 // DISASM-NEXT:   201030:       ff 25 e2 0f 00 00       jmpq    *4066(%rip)
 // DISASM-NEXT:   201036:       68 00 00 00 00          pushq   $0
 // DISASM-NEXT:   20103b:       e9 e0 ff ff ff          jmp     -32 <.plt>
+// DISASM-EMPTY:
+// DISASM-NEXT:   zed2@plt:
 // DISASM-NEXT:   201040:       ff 25 da 0f 00 00       jmpq    *4058(%rip)
 // DISASM-NEXT:   201046:       68 01 00 00 00          pushq   $1
 // DISASM-NEXT:   20104b:       e9 d0 ff ff ff          jmp     -48 <.plt>
 // DISASM-NEXT:   201050:       ff 25 d2 0f 00 00       jmpq    *4050(%rip)
 // DISASM-NEXT:   201056:       68 00 00 00 00          pushq   $0
-// DISASM-NEXT:   20105b:       e9 e0 ff ff ff          jmp     -32 <.plt+0x20>
+// DISASM-NEXT:   20105b:       e9 e0 ff ff ff          jmp     -32 <zed2@plt>
 // DISASM-NEXT:   201060:       ff 25 ca 0f 00 00       jmpq    *4042(%rip)
 // DISASM-NEXT:   201066:       68 01 00 00 00          pushq   $1
-// DISASM-NEXT:   20106b:       e9 d0 ff ff ff          jmp     -48 <.plt+0x20>
+// DISASM-NEXT:   20106b:       e9 d0 ff ff ff          jmp     -48 <zed2@plt>
 
 .text
 .type foo STT_GNU_IFUNC

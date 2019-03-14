@@ -213,6 +213,12 @@ encodeInstruction(const MCInst &MI, raw_ostream &OS,
       TmpInst.setOpcode (NewOpcode);
       Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
     }
+
+    if (((MI.getOpcode() == Mips::MOVEP_MM) ||
+         (MI.getOpcode() == Mips::MOVEP_MMR6))) {
+      unsigned RegPair = getMovePRegPairOpValue(MI, 0, Fixups, STI);
+      Binary = (Binary & 0xFFFFFC7F) | (RegPair << 7);
+    }
   }
 
   const MCInstrDesc &Desc = MCII.get(TmpInst.getOpcode());
@@ -607,6 +613,9 @@ getExprOpValue(const MCExpr *Expr, SmallVectorImpl<MCFixup> &Fixups,
     case MipsMCExpr::MEK_Special:
       llvm_unreachable("Unhandled fixup kind!");
       break;
+    case MipsMCExpr::MEK_DTPREL:
+      llvm_unreachable("MEK_DTPREL is used for TLS DIEExpr only");
+      break;
     case MipsMCExpr::MEK_CALL_HI16:
       FixupKind = Mips::fixup_Mips_CALL_HI16;
       break;
@@ -740,6 +749,24 @@ getExprOpValue(const MCExpr *Expr, SmallVectorImpl<MCFixup> &Fixups,
       break;
     case MipsMCExpr::MEK_CAPCALL_LO16:
       FixupKind = Mips::fixup_CHERI_CAPCALL_LO16;
+      break;
+    case MipsMCExpr::MEK_CAPTAB_TLSGD_HI16:
+      FixupKind = Mips::fixup_CHERI_CAPTAB_TLSGD_HI16;
+      break;
+    case MipsMCExpr::MEK_CAPTAB_TLSGD_LO16:
+      FixupKind = Mips::fixup_CHERI_CAPTAB_TLSGD_LO16;
+      break;
+    case MipsMCExpr::MEK_CAPTAB_TLSLDM_HI16:
+      FixupKind = Mips::fixup_CHERI_CAPTAB_TLSLDM_HI16;
+      break;
+    case MipsMCExpr::MEK_CAPTAB_TLSLDM_LO16:
+      FixupKind = Mips::fixup_CHERI_CAPTAB_TLSLDM_LO16;
+      break;
+    case MipsMCExpr::MEK_CAPTAB_TPREL_HI16:
+      FixupKind = Mips::fixup_CHERI_CAPTAB_TPREL_HI16;
+      break;
+    case MipsMCExpr::MEK_CAPTAB_TPREL_LO16:
+      FixupKind = Mips::fixup_CHERI_CAPTAB_TPREL_LO16;
       break;
 
     case MipsMCExpr::MEK_CHERI_CAP:
@@ -1096,13 +1123,6 @@ MipsMCCodeEmitter::getRegisterListOpValue16(const MCInst &MI, unsigned OpNo,
                                             SmallVectorImpl<MCFixup> &Fixups,
                                             const MCSubtargetInfo &STI) const {
   return (MI.getNumOperands() - 4);
-}
-
-unsigned
-MipsMCCodeEmitter::getRegisterPairOpValue(const MCInst &MI, unsigned OpNo,
-                                          SmallVectorImpl<MCFixup> &Fixups,
-                                          const MCSubtargetInfo &STI) const {
-  return getMachineOpValue(MI, MI.getOperand(OpNo), Fixups, STI);
 }
 
 unsigned

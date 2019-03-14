@@ -7,7 +7,10 @@ vandps (%rdi), %xmm1, %xmm2
 # CHECK:      Iterations:        1
 # CHECK-NEXT: Instructions:      2
 # CHECK-NEXT: Total Cycles:      9
-# CHECK-NEXT: Dispatch Width:    2
+# CHECK-NEXT: Total uOps:        2
+
+# CHECK:      Dispatch Width:    2
+# CHECK-NEXT: uOps Per Cycle:    0.22
 # CHECK-NEXT: IPC:               0.22
 # CHECK-NEXT: Block RThroughput: 1.0
 
@@ -17,7 +20,7 @@ vandps (%rdi), %xmm1, %xmm2
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
 # CHECK-NEXT:  1      3     1.00                        vaddps	%xmm0, %xmm0, %xmm1

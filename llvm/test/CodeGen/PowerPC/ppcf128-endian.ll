@@ -1,4 +1,4 @@
-; RUN: llc -verify-machineinstrs -mcpu=pwr7 -mattr=+altivec -mattr=-vsx < %s | FileCheck %s
+; RUN: llc -relocation-model=pic -verify-machineinstrs -mcpu=pwr7 -mattr=+altivec -mattr=-vsx < %s | FileCheck %s
 
 target datalayout = "e-m:e-i64:64-n32:64"
 target triple = "powerpc64le-unknown-linux-gnu"
@@ -105,9 +105,8 @@ entry:
   ret ppc_fp128 %0
 }
 ; CHECK: convert_to:
-; CHECK: std 3, [[OFF1:.*]](1)
-; CHECK: std 4, [[OFF2:.*]](1)
-; CHECK: ori 2, 2, 0
+; CHECK-DAG: std 3, [[OFF1:.*]](1)
+; CHECK-DAG: std 4, [[OFF2:.*]](1)
 ; CHECK: lfd 1, [[OFF1]](1)
 ; CHECK: lfd 2, [[OFF2]](1)
 ; CHECK: blr
@@ -122,7 +121,6 @@ entry:
 ; CHECK: convert_to2:
 ; CHECK: std 3, [[OFF1:.*]](1)
 ; CHECK: std 5, [[OFF2:.*]](1)
-; CHECK: ori 2, 2, 0
 ; CHECK: lfd 1, [[OFF1]](1)
 ; CHECK: lfd 2, [[OFF2]](1)
 ; CHECK: blr

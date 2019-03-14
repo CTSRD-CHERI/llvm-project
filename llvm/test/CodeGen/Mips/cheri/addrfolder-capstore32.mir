@@ -1,0 +1,100 @@
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -stop-after=cheriaddrmodefolder  -o - | FileCheck %s
+# previously the CheriAddressModeFolder would produce a due to setting the kill flag on a register that wasn't killed: *** Bad machine code: Using a killed virtual register ***
+--- |
+  ; ModuleID = '/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/cap-table-cheri-errno-tls.ll'
+  source_filename = "cheritest_libcheri-d2fe5e-bugpoint-reduce.ll-output-14b49b1.bc"
+  target datalayout = "E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200"
+  target triple = "cheri-unknown-freebsd"
+
+  @cheri_errno = external thread_local(initialexec) global i32, align 4
+
+  ; Function Attrs: noinline nounwind optnone
+  define void @test_sandbox_cs_clock_gettime_default() #0 {
+  entry:
+    store i32 0, i32 addrspace(200)* addrspacecast (i32* @cheri_errno to i32 addrspace(200)*), align 4
+    unreachable
+  }
+
+  attributes #0 = { noinline nounwind optnone "target-cpu"="cheri128" "target-features"="+cheri128" }
+
+...
+---
+name:            test_sandbox_cs_clock_gettime_default
+alignment:       3
+exposesReturnsTwice: false
+legalized:       false
+regBankSelected: false
+selected:        false
+failedISel:      false
+tracksRegLiveness: true
+registers:
+  - { id: 0, class: gpr64, preferred-register: '' }
+  - { id: 1, class: gpr64, preferred-register: '' }
+  - { id: 2, class: gpr64, preferred-register: '' }
+  - { id: 3, class: gpr64, preferred-register: '' }
+  - { id: 4, class: gpr64, preferred-register: '' }
+  - { id: 5, class: cherigpr, preferred-register: '' }
+  - { id: 6, class: gpr32, preferred-register: '' }
+  - { id: 7, class: gpr64, preferred-register: '' }
+  - { id: 8, class: gpr64, preferred-register: '' }
+  - { id: 9, class: gpr64, preferred-register: '' }
+liveins:
+  - { reg: '$c12', virtual-reg: '' }
+frameInfo:
+  isFrameAddressTaken: false
+  isReturnAddressTaken: false
+  hasStackMap:     false
+  hasPatchPoint:   false
+  stackSize:       0
+  offsetAdjustment: 0
+  maxAlignment:    1
+  adjustsStack:    false
+  hasCalls:        false
+  stackProtector:  ''
+  maxCallFrameSize: 4294967295
+  hasOpaqueSPAdjustment: false
+  hasVAStart:      false
+  hasMustTailInVarArgFunc: false
+  localFrameSize:  0
+  savePoint:       ''
+  restorePoint:    ''
+fixedStack:
+stack:
+constants:
+body:             |
+  bb.0.entry:
+    liveins: $c12
+
+    $t9_64 = CGetOffset $c12
+    %7:gpr64 = LUi64 target-flags(mips-gpoff-hi) @test_sandbox_cs_clock_gettime_default
+    %8:gpr64 = DADDu %7, $t9_64
+    %0:gpr64 = DADDiu %8, target-flags(mips-gpoff-lo) @test_sandbox_cs_clock_gettime_default
+    %1:gpr64 = RDHWR64 $hwr29, 0
+    $v1_64 = COPY %1
+    %2:gpr64 = LD %0, target-flags(mips-gottprel) @cheri_errno, implicit $ddc :: (load 8)
+    %3:gpr64 = COPY $v1_64
+    %4:gpr64 = DADDu %3, killed %2
+    %5:cherigpr = CFromPtr $ddc, killed %4
+    %6:gpr32 = ADDiu $zero, 0
+    CAPSTORE32 killed $zero, $zero_64, 0, %5 :: (store 4 into `i32 addrspace(200)* addrspacecast (i32* @cheri_errno to i32 addrspace(200)*)`, addrspace 200)
+    CAPSTORE3264 killed $zero_64, $zero_64, 0, %5 :: (store 4 into `i32 addrspace(200)* addrspacecast (i32* @cheri_errno to i32 addrspace(200)*)`, addrspace 200)
+    CAPSTORE16 killed $zero_64, $zero_64, 0, %5 :: (store 4 into `i32 addrspace(200)* addrspacecast (i32* @cheri_errno to i32 addrspace(200)*)`, addrspace 200)
+    CAPSTORE1632 killed $zero, $zero_64, 0, %5 :: (store 4 into `i32 addrspace(200)* addrspacecast (i32* @cheri_errno to i32 addrspace(200)*)`, addrspace 200)
+    CAPSTORE8 killed $zero_64, $zero_64, 0, %5 :: (store 4 into `i32 addrspace(200)* addrspacecast (i32* @cheri_errno to i32 addrspace(200)*)`, addrspace 200)
+    CAPSTORE832 killed $zero, $zero_64, 0, %5 :: (store 4 into `i32 addrspace(200)* addrspacecast (i32* @cheri_errno to i32 addrspace(200)*)`, addrspace 200)
+    CAPSTORE64 killed $zero_64, $zero_64, 0, %5 :: (store 4 into `i32 addrspace(200)* addrspacecast (i32* @cheri_errno to i32 addrspace(200)*)`, addrspace 200)
+    %9:gpr64 = DADDiu $zero_64, 0
+
+
+...
+# This would previously create SW64 $zero, %4:gpr64, 0, implicit $ddc from the CAPSTORE32
+# However, we need to use a SW here since $zero is a GPR32 register
+# CHECK: %6:gpr32 = ADDiu $zero, 0
+# CHECK-NEXT: SW $zero, %4, 0, implicit $ddc
+# CHECK-NEXT: SW64 $zero_64, %4, 0, implicit $ddc
+# CHECK-NEXT: SH64 $zero_64, %4, 0, implicit $ddc
+# CHECK-NEXT: SH $zero, %4, 0, implicit $ddc
+# CHECK-NEXT: SB64 $zero_64, %4, 0, implicit $ddc
+# CHECK-NEXT: SB $zero, %4, 0, implicit $ddc
+# CHECK-NEXT: SD $zero_64, %4, 0, implicit $ddc
+# CHECK-NEXT: %9:gpr64 = DADDiu $zero_64, 0

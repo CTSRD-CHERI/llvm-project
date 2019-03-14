@@ -23,7 +23,7 @@ class UnwindFromExpressionTest(TestBase):
     def build_and_run_to_bkpt(self):
         self.build()
 
-        (target, process, self.thread, bkpt) = lldbutil.run_to_source_breakpoint(self, 
+        (target, process, self.thread, bkpt) = lldbutil.run_to_source_breakpoint(self,
                 "// Set a breakpoint here to get started", self.main_spec)
 
         # Next set a breakpoint in this function, set up Expression options to stop on
@@ -55,7 +55,6 @@ class UnwindFromExpressionTest(TestBase):
 
 
     @add_test_categories(['pyapi'])
-    @expectedFailureAll(oslist=["windows"])
     def test_unwind_expression(self):
         """Test unwinding from an expression."""
         self.build_and_run_to_bkpt()

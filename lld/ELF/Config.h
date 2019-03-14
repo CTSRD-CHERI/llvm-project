@@ -40,11 +40,14 @@ enum class BuildIdKind { None, Fast, Md5, Sha1, Hexstring, Uuid };
 // For --discard-{all,locals,none}.
 enum class DiscardPolicy { Default, All, Locals, None };
 
+// For --icf={none,safe,all}.
+enum class ICFLevel { None, Safe, All };
+
 // For --strip-{all,debug}.
 enum class StripPolicy { None, All, Debug };
 
 // For --unresolved-symbols.
-enum class UnresolvedPolicy { ReportError, Warn, Ignore, IgnoreAll };
+enum class UnresolvedPolicy { ReportError, Warn, Ignore };
 
 // For --orphan-handling.
 enum class OrphanHandlingPolicy { Place, Warn, Error };
@@ -54,6 +57,9 @@ enum class SortSectionPolicy { Default, None, Alignment, Name, Priority };
 
 // For --target2
 enum class Target2Policy { Abs, Rel, GotRel };
+
+// For tracking ARM Float Argument PCS
+enum class ARMVFPArgKind { Default, Base, VFP, ToolChain };
 
 struct SymbolVersion {
   llvm::StringRef Name;
@@ -80,6 +86,7 @@ struct Configuration {
   llvm::StringMap<uint64_t> SectionStartMap;
   llvm::StringRef Chroot;
   llvm::StringRef DynamicLinker;
+  llvm::StringRef DwoDir;
   llvm::StringRef Entry;
   llvm::StringRef Emulation;
   llvm::StringRef Fini;
@@ -113,13 +120,14 @@ struct Configuration {
                   uint64_t>
       CallGraphProfile;
   bool AllowMultipleDefinition;
-  bool AndroidPackDynRelocs = false;
+  bool AndroidPackDynRelocs;
   bool ARMHasBlx = false;
   bool ARMHasMovtMovw = false;
   bool ARMJ1J2BranchEncoding = false;
   bool AsNeeded = false;
   bool Bsymbolic;
   bool BsymbolicFunctions;
+  bool CallGraphProfileSort;
   bool CheckSections;
   bool CompressDebugSections;
   bool Cref;
@@ -127,17 +135,19 @@ struct Configuration {
   bool Demangle = true;
   bool DisableVerify;
   bool EhFrameHdr;
+  bool EmitLLVM;
   bool EmitRelocs;
   bool EnableNewDtags;
+  bool ExecuteOnly;
   bool ExportDynamic;
   bool FixCortexA53Errata843419;
+  bool FormatBinary = false;
   bool GcSections;
   bool GdbIndex;
   bool GnuHash = false;
   bool GnuUnique;
   bool HasDynamicList = false;
   bool HasDynSymTab;
-  bool ICF;
   bool IgnoreDataAddressEquality;
   bool IgnoreFunctionAddressEquality;
   bool LTODebugPassManager;
@@ -153,6 +163,7 @@ struct Configuration {
   bool PrintGcSections;
   bool PrintIcfSections;
   bool Relocatable;
+  bool RelrPackDynRelocs;
   bool SaveTemps;
   bool SingleRoRx;
   bool Shared;
@@ -162,18 +173,24 @@ struct Configuration {
   bool Trace;
   bool ThinLTOEmitImportsFiles;
   bool ThinLTOIndexOnly;
+  bool TocOptimize;
   bool UndefinedVersion;
+  bool UseAndroidRelrTags = false;
   bool WarnBackrefs;
   bool WarnCommon;
+  bool WarnIfuncTextrel;
   bool WarnMissingEntry;
   bool WarnSymbolOrdering;
   bool WriteAddends;
   bool ZCombreloc;
   bool ZCopyreloc;
   bool ZExecstack;
+  bool ZGlobal;
   bool ZHazardplt;
   bool ZInitfirst;
+  bool ZInterpose;
   bool ZKeepTextSectionPrefix;
+  bool ZNodefaultlib;
   bool ZNodelete;
   bool ZNodlopen;
   bool ZNow;
@@ -184,11 +201,13 @@ struct Configuration {
   bool ZRetpolineplt;
   bool ZWxneeded;
   DiscardPolicy Discard;
+  ICFLevel ICF;
   OrphanHandlingPolicy OrphanHandling;
   SortSectionPolicy SortSection;
   StripPolicy Strip;
   UnresolvedPolicy UnresolvedSymbols;
   Target2Policy Target2;
+  ARMVFPArgKind ARMVFPArgs = ARMVFPArgKind::Default;
   BuildIdKind BuildId = BuildIdKind::None;
   ELFKind EKind = ELFNoneKind;
   uint16_t DefaultSymbolVersion = llvm::ELF::VER_NDX_GLOBAL;
@@ -201,6 +220,7 @@ struct Configuration {
   unsigned LTOO;
   unsigned Optimize;
   unsigned ThinLTOJobs;
+  int32_t SplitStackAdjustSize;
 
   // The following config options do not directly correspond to any
   // particualr command line options.

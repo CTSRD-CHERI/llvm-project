@@ -379,14 +379,20 @@ namespace llvm {
   ///
   FunctionPass *createInterleavedAccessPass();
 
+  /// InterleavedLoadCombines Pass - This pass identifies interleaved loads and
+  /// combines them into wide loads detectable by InterleavedAccessPass
+  ///
+  FunctionPass *createInterleavedLoadCombinePass();
+
   /// LowerEmuTLS - This pass generates __emutls_[vt].xyz variables for all
   /// TLS variables for the emulated TLS model.
   ///
   ModulePass *createLowerEmuTLSPass();
 
-  /// This pass lowers the \@llvm.load.relative intrinsic to instructions.
-  /// This is unsafe to do earlier because a pass may combine the constant
-  /// initializer into the load, which may result in an overflowing evaluation.
+  /// This pass lowers the \@llvm.load.relative and \@llvm.objc.* intrinsics to
+  /// instructions.  This is unsafe to do earlier because a pass may combine the
+  /// constant initializer into the load, which may result in an overflowing
+  /// evaluation.
   ModulePass *createPreISelIntrinsicLoweringPass();
 
   /// GlobalMerge - This pass merges internal (by default) globals into structs
@@ -421,9 +427,12 @@ namespace llvm {
   /// This pass frees the memory occupied by the MachineFunction.
   FunctionPass *createFreeMachineFunctionPass();
 
+  /// This pass logs information on generated CSetBounds calls
+  FunctionPass *createLogCheriSetBoundsPass();
+
   /// This pass performs outlining on machine instructions directly before
   /// printing assembly.
-  ModulePass *createMachineOutlinerPass();
+  ModulePass *createMachineOutlinerPass(bool RunOnAllFunctions = true);
 
   /// This pass expands the experimental reduction intrinsics into sequences of
   /// shuffles.

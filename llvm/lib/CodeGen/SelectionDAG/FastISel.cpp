@@ -89,6 +89,7 @@
 #include "llvm/IR/Mangler.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/IR/PatternMatch.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
@@ -110,6 +111,7 @@
 #include <utility>
 
 using namespace llvm;
+using namespace PatternMatch;
 
 #define DEBUG_TYPE "isel"
 
@@ -512,7 +514,7 @@ std::pair<unsigned, bool> FastISel::getRegForGEPIndex(const Value *Idx) {
   bool IdxNIsKill = hasTrivialKill(Idx);
 
   // If the index is smaller or larger than intptr_t, truncate or extend it.
-  MVT PtrVT = TLI.getPointerTy(DL);
+  MVT PtrVT = TLI.getPointerRangeTy(DL);
   EVT IdxVT = EVT::getEVT(Idx->getType(), /*HandleUnknown=*/false);
   if (IdxVT.bitsLT(PtrVT)) {
     IdxN = fastEmit_r(IdxVT.getSimpleVT(), PtrVT, ISD::SIGN_EXTEND, IdxN,
@@ -545,6 +547,15 @@ void FastISel::removeDeadCode(MachineBasicBlock::iterator I,
   assert(I.isValid() && E.isValid() && std::distance(I, E) > 0 &&
          "Invalid iterator!");
   while (I != E) {
+    if (LastFlushPoint == I)
+      LastFlushPoint = E;
+    if (SavedInsertPt == I)
+      SavedInsertPt = E;
+    if (EmitStartPt == I)
+      EmitStartPt = E.isValid() ? &*E : nullptr;
+    if (LastLocalValue == I)
+      LastLocalValue = E.isValid() ? &*E : nullptr;
+
     MachineInstr *Dead = &*I;
     ++I;
     Dead->eraseFromParent();
@@ -1132,7 +1143,7 @@ bool FastISel::lowerCallTo(CallLoweringInfo &CLI) {
   ComputeValueVTs(TLI, DL, CLI.RetTy, RetTys);
 
   SmallVector<ISD::OutputArg, 4> Outs;
-  GetReturnInfo(CLI.RetTy, getReturnAttrs(CLI), Outs, TLI, DL);
+  GetReturnInfo(CLI.CallConv, CLI.RetTy, getReturnAttrs(CLI), Outs, TLI, DL);
 
   bool CanLowerReturn = TLI.CanLowerReturn(
       CLI.CallConv, *FuncInfo.MF, CLI.IsVarArg, Outs, CLI.RetTy->getContext());
@@ -1428,6 +1439,18 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
     }
     return true;
   }
+  case Intrinsic::dbg_label: {
+    const DbgLabelInst *DI = cast<DbgLabelInst>(II);
+    assert(DI->getLabel() && "Missing label");
+    if (!FuncInfo.MF->getMMI().hasDebugInfo()) {
+      LLVM_DEBUG(dbgs() << "Dropping debug info for " << *DI << "\n");
+      return true;
+    }
+
+    BuildMI(*FuncInfo.MBB, FuncInfo.InsertPt, DbgLoc,
+            TII.get(TargetOpcode::DBG_LABEL)).addMetadata(DI->getLabel());
+    return true;
+  }
   case Intrinsic::objectsize: {
     ConstantInt *CI = cast<ConstantInt>(II->getArgOperand(1));
     unsigned long long Res = CI->isZero() ? -1ULL : 0;
@@ -1438,7 +1461,16 @@ bool FastISel::selectIntrinsicCall(const IntrinsicInst *II) {
     updateValueMap(II, ResultReg);
     return true;
   }
+  case Intrinsic::is_constant: {
+    Constant *ResCI = ConstantInt::get(II->getType(), 0);
+    unsigned ResultReg = getRegForValue(ResCI);
+    if (!ResultReg)
+      return false;
+    updateValueMap(II, ResultReg);
+    return true;
+  }
   case Intrinsic::launder_invariant_group:
+  case Intrinsic::strip_invariant_group:
   case Intrinsic::expect: {
     unsigned ResultReg = getRegForValue(II->getArgOperand(0));
     if (!ResultReg)
@@ -1549,7 +1581,7 @@ void FastISel::removeDeadLocalValueCode(MachineInstr *SavedLastLocalValue)
 {
   MachineInstr *CurLastLocalValue = getLastLocalValue();
   if (CurLastLocalValue != SavedLastLocalValue) {
-    // Find the first local value instruction to be deleted. 
+    // Find the first local value instruction to be deleted.
     // This is the instruction after SavedLastLocalValue if it is non-NULL.
     // Otherwise it's the first instruction in the block.
     MachineBasicBlock::iterator FirstDeadInst(SavedLastLocalValue);
@@ -1566,11 +1598,11 @@ bool FastISel::selectInstruction(const Instruction *I) {
   MachineInstr *SavedLastLocalValue = getLastLocalValue();
   // Just before the terminator instruction, insert instructions to
   // feed PHI nodes in successor blocks.
-  if (isa<TerminatorInst>(I)) {
+  if (I->isTerminator()) {
     if (!handlePHINodesInSuccessorBlocks(I->getParent())) {
       // PHI node handling may have generated local value instructions,
       // even though it failed to handle all PHI nodes.
-      // We remove these instructions because SelectionDAGISel will generate 
+      // We remove these instructions because SelectionDAGISel will generate
       // them again.
       removeDeadLocalValueCode(SavedLastLocalValue);
       return false;
@@ -1630,8 +1662,8 @@ bool FastISel::selectInstruction(const Instruction *I) {
 
   DbgLoc = DebugLoc();
   // Undo phi node updates, because they will be added again by SelectionDAG.
-  if (isa<TerminatorInst>(I)) {
-    // PHI node handling may have generated local value instructions. 
+  if (I->isTerminator()) {
+    // PHI node handling may have generated local value instructions.
     // We remove them because SelectionDAGISel will generate them again.
     removeDeadLocalValueCode(SavedLastLocalValue);
     FuncInfo.PHINodesToUpdate.resize(FuncInfo.OrigNumPHINodesToUpdate);
@@ -1681,7 +1713,10 @@ void FastISel::finishCondBranch(const BasicBlock *BranchBB,
 
 /// Emit an FNeg operation.
 bool FastISel::selectFNeg(const User *I) {
-  unsigned OpReg = getRegForValue(BinaryOperator::getFNegArgument(I));
+  Value *X;
+  if (!match(I, m_FNeg(m_Value(X))))
+    return false;
+  unsigned OpReg = getRegForValue(X);
   if (!OpReg)
     return false;
   bool OpRegIsKill = hasTrivialKill(I);
@@ -1771,11 +1806,9 @@ bool FastISel::selectOperator(const User *I, unsigned Opcode) {
     return selectBinaryOp(I, ISD::FADD);
   case Instruction::Sub:
     return selectBinaryOp(I, ISD::SUB);
-  case Instruction::FSub:
+  case Instruction::FSub: 
     // FNeg is currently represented in LLVM IR as a special case of FSub.
-    if (BinaryOperator::isFNeg(I))
-      return selectFNeg(I);
-    return selectBinaryOp(I, ISD::FSUB);
+    return selectFNeg(I) || selectBinaryOp(I, ISD::FSUB);
   case Instruction::Mul:
     return selectBinaryOp(I, ISD::MUL);
   case Instruction::FMul:
@@ -2212,7 +2245,7 @@ unsigned FastISel::fastEmitZExtFromI1(MVT VT, unsigned Op0, bool Op0IsKill) {
 /// might result in multiple MBB's for one BB.  As such, the start of the
 /// BB might correspond to a different MBB than the end.
 bool FastISel::handlePHINodesInSuccessorBlocks(const BasicBlock *LLVMBB) {
-  const TerminatorInst *TI = LLVMBB->getTerminator();
+  const Instruction *TI = LLVMBB->getTerminator();
 
   SmallPtrSet<MachineBasicBlock *, 4> SuccsHandled;
   FuncInfo.OrigNumPHINodesToUpdate = FuncInfo.PHINodesToUpdate.size();

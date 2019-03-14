@@ -84,10 +84,11 @@ protected:
   unsigned char LongFractWidth, LongFractAlign;
 
   // If true, unsigned fixed point types have the same number of fractional bits
-  // as their signed counterparts. Otherwise, unsigned fixed point types have
+  // as their signed counterparts, forcing the unsigned types to have one extra
+  // bit of padding. Otherwise, unsigned fixed point types have
   // one more fractional bit than its corresponding signed type. This is false
   // by default.
-  bool SameFBits;
+  bool PaddingOnUnsignedFixedPoint;
 
   // Fixed point integral and fractional bit sizes
   // Saturated types share the same integral/fractional bits as their
@@ -95,7 +96,7 @@ protected:
   // For simplicity, the fractional bits in a _Fract type will be one less the
   // width of that _Fract type. This leaves all signed _Fract types having no
   // padding and unsigned _Fract types will only have 1 bit of padding after the
-  // sign if SameFBits is set.
+  // sign if PaddingOnUnsignedFixedPoint is set.
   unsigned char ShortAccumScale;
   unsigned char AccumScale;
   unsigned char LongAccumScale;
@@ -311,6 +312,14 @@ public:
     }
   }
 
+  /// In the event this target uses the same number of fractional bits for its
+  /// unsigned types as it does with its signed counterparts, there will be
+  /// exactly one bit of padding.
+  /// Return true if unsigned fixed point types have padding for this target.
+  bool doUnsignedFixedPointTypesHavePadding() const {
+    return PaddingOnUnsignedFixedPoint;
+  }
+
   /// Return the width (in bits) of the specified integer type enum.
   ///
   /// For example, SignedInt -> getIntWidth().
@@ -436,30 +445,33 @@ public:
   /// getUnsignedShortAccumScale/IBits - Return the number of
   /// fractional/integral bits in a 'unsigned short _Accum' type.
   unsigned getUnsignedShortAccumScale() const {
-    return SameFBits ? ShortAccumScale : ShortAccumScale + 1;
+    return PaddingOnUnsignedFixedPoint ? ShortAccumScale : ShortAccumScale + 1;
   }
   unsigned getUnsignedShortAccumIBits() const {
-    return SameFBits ? getShortAccumIBits()
-                     : ShortAccumWidth - getUnsignedShortAccumScale();
+    return PaddingOnUnsignedFixedPoint
+               ? getShortAccumIBits()
+               : ShortAccumWidth - getUnsignedShortAccumScale();
   }
 
   /// getUnsignedAccumScale/IBits - Return the number of fractional/integral
   /// bits in a 'unsigned _Accum' type.
   unsigned getUnsignedAccumScale() const {
-    return SameFBits ? AccumScale : AccumScale + 1;
+    return PaddingOnUnsignedFixedPoint ? AccumScale : AccumScale + 1;
   }
   unsigned getUnsignedAccumIBits() const {
-    return SameFBits ? getAccumIBits() : AccumWidth - getUnsignedAccumScale();
+    return PaddingOnUnsignedFixedPoint ? getAccumIBits()
+                                       : AccumWidth - getUnsignedAccumScale();
   }
 
   /// getUnsignedLongAccumScale/IBits - Return the number of fractional/integral
   /// bits in a 'unsigned long _Accum' type.
   unsigned getUnsignedLongAccumScale() const {
-    return SameFBits ? LongAccumScale : LongAccumScale + 1;
+    return PaddingOnUnsignedFixedPoint ? LongAccumScale : LongAccumScale + 1;
   }
   unsigned getUnsignedLongAccumIBits() const {
-    return SameFBits ? getLongAccumIBits()
-                     : LongAccumWidth - getUnsignedLongAccumScale();
+    return PaddingOnUnsignedFixedPoint
+               ? getLongAccumIBits()
+               : LongAccumWidth - getUnsignedLongAccumScale();
   }
 
   /// getShortFractScale - Return the number of fractional bits
@@ -477,19 +489,21 @@ public:
   /// getUnsignedShortFractScale - Return the number of fractional bits
   /// in a 'unsigned short _Fract' type.
   unsigned getUnsignedShortFractScale() const {
-    return SameFBits ? getShortFractScale() : getShortFractScale() + 1;
+    return PaddingOnUnsignedFixedPoint ? getShortFractScale()
+                                       : getShortFractScale() + 1;
   }
 
   /// getUnsignedFractScale - Return the number of fractional bits
   /// in a 'unsigned _Fract' type.
   unsigned getUnsignedFractScale() const {
-    return SameFBits ? getFractScale() : getFractScale() + 1;
+    return PaddingOnUnsignedFixedPoint ? getFractScale() : getFractScale() + 1;
   }
 
   /// getUnsignedLongFractScale - Return the number of fractional bits
   /// in a 'unsigned long _Fract' type.
   unsigned getUnsignedLongFractScale() const {
-    return SameFBits ? getLongFractScale() : getLongFractScale() + 1;
+    return PaddingOnUnsignedFixedPoint ? getLongFractScale()
+                                       : getLongFractScale() + 1;
   }
 
   /// Determine whether the __int128 type is supported on this target.
@@ -1068,9 +1082,15 @@ public:
     return false;
   }
 
-  /// Identify whether this taret supports multiversioning of functions,
+  /// Identify whether this target supports multiversioning of functions,
   /// which requires support for cpu_supports and cpu_is functionality.
-  virtual bool supportsMultiVersioning() const { return false; }
+  bool supportsMultiVersioning() const {
+    return getTriple().getArch() == llvm::Triple::x86 ||
+           getTriple().getArch() == llvm::Triple::x86_64;
+  }
+
+  /// Identify whether this target supports IFuncs.
+  bool supportsIFunc() const { return getTriple().isOSBinFormatELF(); }
 
   // Validate the contents of the __builtin_cpu_supports(const char*)
   // argument.
@@ -1085,6 +1105,27 @@ public:
   // Validate the contents of the __builtin_cpu_is(const char*)
   // argument.
   virtual bool validateCpuIs(StringRef Name) const { return false; }
+
+  // Validate a cpu_dispatch/cpu_specific CPU option, which is a different list
+  // from cpu_is, since it checks via features rather than CPUs directly.
+  virtual bool validateCPUSpecificCPUDispatch(StringRef Name) const {
+    return false;
+  }
+
+  // Get the character to be added for mangling purposes for cpu_specific.
+  virtual char CPUSpecificManglingCharacter(StringRef Name) const {
+    llvm_unreachable(
+        "cpu_specific Multiversioning not implemented on this target");
+  }
+
+  // Get a list of the features that make up the CPU option for
+  // cpu_specific/cpu_dispatch so that it can be passed to llvm as optimization
+  // options.
+  virtual void getCPUSpecificCPUDispatchFeatures(
+      StringRef Name, llvm::SmallVectorImpl<StringRef> &Features) const {
+    llvm_unreachable(
+        "cpu_specific Multiversioning not implemented on this target");
+  }
 
   // Returns maximal number of args passed in registers.
   unsigned getRegParmMax() const {
@@ -1112,7 +1153,8 @@ public:
   bool isSEHTrySupported() const {
     return getTriple().isOSWindows() &&
            (getTriple().getArch() == llvm::Triple::x86 ||
-            getTriple().getArch() == llvm::Triple::x86_64);
+            getTriple().getArch() == llvm::Triple::x86_64 ||
+            getTriple().getArch() == llvm::Triple::aarch64);
   }
 
   /// Return true if {|} are normal characters in the asm string.
@@ -1139,6 +1181,18 @@ public:
   }
 
   const LangASMap &getAddressSpaceMap() const { return *AddrSpaceMap; }
+
+  /// Map from the address space field in builtin description strings to the
+  /// language address space.
+  virtual LangAS getOpenCLBuiltinAddressSpace(unsigned AS) const {
+    return getLangASFromTargetAS(AS);
+  }
+
+  /// Map from the address space field in builtin description strings to the
+  /// language address space.
+  virtual LangAS getCUDABuiltinAddressSpace(unsigned AS) const {
+    return getLangASFromTargetAS(AS);
+  }
 
   /// Return an AST address space which can be used opportunistically
   /// for constant global memory. It must be possible to convert pointers into
@@ -1196,7 +1250,7 @@ public:
   enum CallingConvKind {
     CCK_Default,
     CCK_ClangABI4OrPS4,
-    CCK_MicrosoftX86_64
+    CCK_MicrosoftWin64
   };
 
   virtual CallingConvKind getCallingConvKind(bool ClangABICompat4) const;
@@ -1265,6 +1319,12 @@ public:
   /// DWARF.
   virtual Optional<unsigned> getDWARFAddressSpace(unsigned AddressSpace) const {
     return None;
+  }
+
+  /// \returns The version of the SDK which was used during the compilation if
+  /// one was specified, or an empty version otherwise.
+  const llvm::VersionTuple &getSDKVersion() const {
+    return getTargetOpts().SDKVersion;
   }
 
   /// Check the target is valid after it is fully initialized.

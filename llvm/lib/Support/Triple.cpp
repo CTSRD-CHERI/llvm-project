@@ -170,6 +170,7 @@ StringRef Triple::getVendorTypeName(VendorType Kind) {
   case AMD: return "amd";
   case Mesa: return "mesa";
   case SUSE: return "suse";
+  case OpenEmbedded: return "oe";
   }
 
   llvm_unreachable("Invalid VendorType!");
@@ -210,6 +211,8 @@ StringRef Triple::getOSTypeName(OSType Kind) {
   case Mesa3D: return "mesa3d";
   case Contiki: return "contiki";
   case AMDPAL: return "amdpal";
+  case HermitCore: return "hermit";
+  case Hurd: return "hurd";
   }
 
   llvm_unreachable("Invalid OSType");
@@ -218,6 +221,7 @@ StringRef Triple::getOSTypeName(OSType Kind) {
 StringRef Triple::getEnvironmentTypeName(EnvironmentType Kind) {
   switch (Kind) {
   case UnknownEnvironment: return "unknown";
+  case CheriPurecap: return "purecap";
   case GNU: return "gnu";
   case GNUABIN32: return "gnuabin32";
   case GNUABI64: return "gnuabi64";
@@ -400,10 +404,16 @@ static Triple::ArchType parseArch(StringRef ArchName) {
     .Case("thumbeb", Triple::thumbeb)
     .Case("avr", Triple::avr)
     .Case("msp430", Triple::msp430)
-    .Cases("mips", "mipseb", "mipsallegrex", Triple::mips)
-    .Cases("mipsel", "mipsallegrexel", Triple::mipsel)
-    .Cases("mips64", "mips64eb", Triple::mips64)
-    .Case("mips64el", Triple::mips64el)
+    .Cases("mips", "mipseb", "mipsallegrex", "mipsisa32r6",
+           "mipsr6", Triple::mips)
+    .Cases("mipsel", "mipsallegrexel", "mipsisa32r6el", "mipsr6el",
+           Triple::mipsel)
+    .Cases("mips64", "mips64eb", "mipsn32", "mipsisa64r6",
+           "mips64r6", "mipsn32r6", Triple::mips64)
+    .StartsWith("mips64c", Triple::mips64) // purecap/hybrid CHERI
+    .Case("cheri", Triple::cheri)          // TODO: remove
+    .Cases("mips64el", "mipsn32el", "mipsisa64r6el", "mips64r6el",
+           "mipsn32r6el", Triple::mips64el)
     .Case("nios2", Triple::nios2)
     .Case("r600", Triple::r600)
     .Case("amdgcn", Triple::amdgcn)
@@ -427,7 +437,6 @@ static Triple::ArchType parseArch(StringRef ArchName) {
     .Case("hsail64", Triple::hsail64)
     .Case("spir", Triple::spir)
     .Case("spir64", Triple::spir64)
-    .Case("cheri", Triple::cheri)
     .StartsWith("kalimba", Triple::kalimba)
     .Case("lanai", Triple::lanai)
     .Case("shave", Triple::shave)
@@ -467,6 +476,7 @@ static Triple::VendorType parseVendor(StringRef VendorName) {
     .Case("amd", Triple::AMD)
     .Case("mesa", Triple::Mesa)
     .Case("suse", Triple::SUSE)
+    .Case("oe", Triple::OpenEmbedded)
     .Default(Triple::UnknownVendor);
 }
 
@@ -504,11 +514,15 @@ static Triple::OSType parseOS(StringRef OSName) {
     .StartsWith("mesa3d", Triple::Mesa3D)
     .StartsWith("contiki", Triple::Contiki)
     .StartsWith("amdpal", Triple::AMDPAL)
+    .StartsWith("hermit", Triple::HermitCore)
+    .StartsWith("hurd", Triple::Hurd)
     .Default(Triple::UnknownOS);
 }
 
 static Triple::EnvironmentType parseEnvironment(StringRef EnvironmentName) {
   return StringSwitch<Triple::EnvironmentType>(EnvironmentName)
+    .StartsWith("cheripurecap", Triple::CheriPurecap)
+    .StartsWith("purecap", Triple::CheriPurecap)
     .StartsWith("eabihf", Triple::EABIHF)
     .StartsWith("eabi", Triple::EABI)
     .StartsWith("gnuabin32", Triple::GNUABIN32)
@@ -540,6 +554,21 @@ static Triple::ObjectFormatType parseFormat(StringRef EnvironmentName) {
 }
 
 static Triple::SubArchType parseSubArch(StringRef SubArchName) {
+  if (SubArchName.startswith("mips")) {
+    if (SubArchName.endswith("r6el") || SubArchName.endswith("r6")) {
+      return Triple::MipsSubArch_r6;
+    }
+    // Support encoding the CHERI abi and size in the triple name
+    return StringSwitch<Triple::SubArchType>(SubArchName)
+        .EndsWith("c128", Triple::MipsSubArch_cheri128)
+        .EndsWith("c128hybrid", Triple::MipsSubArch_cheri128)
+        .EndsWith("c256", Triple::MipsSubArch_cheri256)
+        .EndsWith("c256hybrid", Triple::MipsSubArch_cheri256)
+        .EndsWith("c64", Triple::MipsSubArch_cheri64)
+        .EndsWith("c64hybrid", Triple::MipsSubArch_cheri64)
+        .Default(Triple::NoSubArch);
+  }
+
   StringRef ARMSubArch = ARM::getCanonicalArchName(SubArchName);
 
   // For now, this is the small part. Early return.
@@ -594,6 +623,10 @@ static Triple::SubArchType parseSubArch(StringRef SubArchName) {
     return Triple::ARMSubArch_v8_2a;
   case ARM::ArchKind::ARMV8_3A:
     return Triple::ARMSubArch_v8_3a;
+  case ARM::ArchKind::ARMV8_4A:
+    return Triple::ARMSubArch_v8_4a;
+  case ARM::ArchKind::ARMV8_5A:
+    return Triple::ARMSubArch_v8_5a;
   case ARM::ArchKind::ARMV8R:
     return Triple::ARMSubArch_v8r;
   case ARM::ArchKind::ARMV8MBaseline:
@@ -710,6 +743,23 @@ Triple::Triple(const Twine &Str)
           ObjectFormat = parseFormat(Components[3]);
         }
       }
+    } else {
+      Environment =
+          StringSwitch<Triple::EnvironmentType>(Components[0])
+              .StartsWith("mipsn32", Triple::GNUABIN32)
+              .StartsWith("mips64c", Triple::UnknownEnvironment) // see below
+              .StartsWith("mips64", Triple::GNUABI64)
+              .StartsWith("mipsisa64", Triple::GNUABI64)
+              .StartsWith("mipsisa32", Triple::GNU)
+              .Cases("mips", "mipsel", "mipsr6", "mipsr6el", Triple::GNU)
+              .Default(UnknownEnvironment);
+    }
+  }
+  if (Environment == UnknownEnvironment) {
+    if (Components[0].startswith("mips64c")) {
+      // allow mips64c for purecap and mips64c128hybrid for CHERI128 (hybrid)
+      Environment = Components[0].endswith("hybrid") ? Triple::GNUABI64
+                                                     : Triple::CheriPurecap;
     }
   }
   if (ObjectFormat == UnknownObjectFormat)
@@ -886,6 +936,12 @@ std::string Triple::normalize(StringRef Str) {
       Found[Pos] = true;
       break;
     }
+  }
+
+  // Replace empty components with "unknown" value.
+  for (unsigned i = 0, e = Components.size(); i < e; ++i) {
+    if (Components[i].empty())
+      Components[i] = "unknown";
   }
 
   // Special case logic goes here.  At this point Arch, Vendor and OS have the

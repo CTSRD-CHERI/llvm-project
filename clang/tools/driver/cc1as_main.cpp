@@ -33,6 +33,7 @@
 #include "llvm/MC/MCParser/MCAsmParser.h"
 #include "llvm/MC/MCParser/MCTargetAsmParser.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCTargetOptions.h"
@@ -94,6 +95,7 @@ struct AssemblerInvocation {
   std::string DwarfDebugFlags;
   std::string DwarfDebugProducer;
   std::string DebugCompilationDir;
+  std::map<const std::string, const std::string> DebugPrefixMap;
   llvm::DebugCompressionType CompressDebugSections =
       llvm::DebugCompressionType::None;
   std::string MainFileName;
@@ -131,6 +133,7 @@ struct AssemblerInvocation {
   unsigned NoExecStack : 1;
   unsigned FatalWarnings : 1;
   unsigned IncrementalLinkerCompatible : 1;
+  unsigned EmbedBitcode : 1;
 
   /// The name of the relocation model to use.
   std::string RelocationModel;
@@ -152,6 +155,7 @@ public:
     FatalWarnings = 0;
     IncrementalLinkerCompatible = 0;
     DwarfVersion = 0;
+    EmbedBitcode = 0;
   }
 
   static bool CreateFromArgs(AssemblerInvocation &Res,
@@ -233,6 +237,9 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
   Opts.DebugCompilationDir = Args.getLastArgValue(OPT_fdebug_compilation_dir);
   Opts.MainFileName = Args.getLastArgValue(OPT_main_file_name);
 
+  for (const auto &Arg : Args.getAllArgValues(OPT_fdebug_prefix_map_EQ))
+    Opts.DebugPrefixMap.insert(StringRef(Arg).split('='));
+
   // Frontend Options
   if (Args.hasArg(OPT_INPUT)) {
     bool First = true;
@@ -279,6 +286,16 @@ bool AssemblerInvocation::CreateFromArgs(AssemblerInvocation &Opts,
   Opts.IncrementalLinkerCompatible =
       Args.hasArg(OPT_mincremental_linker_compatible);
   Opts.SymbolDefs = Args.getAllArgValues(OPT_defsym);
+
+  // EmbedBitcode Option. If -fembed-bitcode is enabled, set the flag.
+  // EmbedBitcode behaves the same for all embed options for assembly files.
+  if (auto *A = Args.getLastArg(OPT_fembed_bitcode_EQ)) {
+    Opts.EmbedBitcode = llvm::StringSwitch<unsigned>(A->getValue())
+                            .Case("all", 1)
+                            .Case("bitcode", 1)
+                            .Case("marker", 1)
+                            .Default(0);
+  }
 
   return Success;
 }
@@ -377,6 +394,9 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
     Ctx.setDwarfDebugProducer(StringRef(Opts.DwarfDebugProducer));
   if (!Opts.DebugCompilationDir.empty())
     Ctx.setCompilationDir(Opts.DebugCompilationDir);
+  if (!Opts.DebugPrefixMap.empty())
+    for (const auto &KV : Opts.DebugPrefixMap)
+      Ctx.addDebugPrefixMapEntry(KV.first, KV.second);
   if (!Opts.MainFileName.empty())
     Ctx.setMainFileName(StringRef(Opts.MainFileName));
   Ctx.setDwarfVersion(Opts.DwarfVersion);
@@ -440,6 +460,16 @@ static bool ExecuteAssembler(AssemblerInvocation &Opts,
         Opts.RelaxAll, Opts.IncrementalLinkerCompatible,
         /*DWARFMustBeAtTheEnd*/ true));
     Str.get()->InitSections(Opts.NoExecStack);
+  }
+
+  // When -fembed-bitcode is passed to clang_as, a 1-byte marker
+  // is emitted in __LLVM,__asm section if the object file is MachO format.
+  if (Opts.EmbedBitcode && Ctx.getObjectFileInfo()->getObjectFileType() ==
+                               MCObjectFileInfo::IsMachO) {
+    MCSection *AsmLabel = Ctx.getMachOSection(
+        "__LLVM", "__asm", MachO::S_REGULAR, 4, SectionKind::getReadOnly());
+    Str.get()->SwitchSection(AsmLabel);
+    Str.get()->EmitZeros(1);
   }
 
   // Assembly to object compilation should leverage assembly info.
@@ -527,7 +557,8 @@ int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
 
   if (Asm.ShowHelp) {
     std::unique_ptr<OptTable> Opts(driver::createDriverOptTable());
-    Opts->PrintHelp(llvm::outs(), "clang -cc1as", "Clang Integrated Assembler",
+    Opts->PrintHelp(llvm::outs(), "clang -cc1as [options] file...",
+                    "Clang Integrated Assembler",
                     /*Include=*/driver::options::CC1AsOption, /*Exclude=*/0,
                     /*ShowAllAliases=*/false);
     return 0;

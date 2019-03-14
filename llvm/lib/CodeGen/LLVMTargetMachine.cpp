@@ -33,6 +33,8 @@
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
+
 using namespace llvm;
 
 static cl::opt<bool> EnableTrapUnreachable("trap-unreachable",
@@ -40,14 +42,14 @@ static cl::opt<bool> EnableTrapUnreachable("trap-unreachable",
   cl::desc("Enable generating trap for unreachable"));
 
 void LLVMTargetMachine::initAsmInfo() {
-  MRI = TheTarget.createMCRegInfo(getTargetTriple().str());
-  MII = TheTarget.createMCInstrInfo();
+  MRI.reset(TheTarget.createMCRegInfo(getTargetTriple().str()));
+  MII.reset(TheTarget.createMCInstrInfo());
   // FIXME: Having an MCSubtargetInfo on the target machine is a hack due
   // to some backends having subtarget feature dependent module level
   // code generation. This is similar to the hack in the AsmPrinter for
   // module level assembly etc.
-  STI = TheTarget.createMCSubtargetInfo(getTargetTriple().str(), getTargetCPU(),
-                                        getTargetFeatureString());
+  STI.reset(TheTarget.createMCSubtargetInfo(
+      getTargetTriple().str(), getTargetCPU(), getTargetFeatureString()));
 
   MCAsmInfo *TmpAsmInfo =
       TheTarget.createMCAsmInfo(*MRI, getTargetTriple().str());
@@ -71,7 +73,7 @@ void LLVMTargetMachine::initAsmInfo() {
   if (Options.ExceptionModel != ExceptionHandling::None)
     TmpAsmInfo->setExceptionsType(Options.ExceptionModel);
 
-  AsmInfo = TmpAsmInfo;
+  AsmInfo.reset(TmpAsmInfo);
 }
 
 LLVMTargetMachine::LLVMTargetMachine(const Target &T,
@@ -95,29 +97,22 @@ LLVMTargetMachine::getTargetTransformInfo(const Function &F) {
 }
 
 /// addPassesToX helper drives creation and initialization of TargetPassConfig.
-static MCContext *
-addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM,
-                        bool DisableVerify, bool &WillCompleteCodeGenPipeline,
-                        raw_pwrite_stream &Out, MachineModuleInfo *MMI) {
+static TargetPassConfig *
+addPassesToGenerateCode(LLVMTargetMachine &TM, PassManagerBase &PM,
+                        bool DisableVerify, MachineModuleInfo &MMI) {
   // Targets may override createPassConfig to provide a target-specific
   // subclass.
-  TargetPassConfig *PassConfig = TM->createPassConfig(PM);
+  TargetPassConfig *PassConfig = TM.createPassConfig(PM);
   // Set PassConfig options provided by TargetMachine.
   PassConfig->setDisableVerify(DisableVerify);
-  WillCompleteCodeGenPipeline = PassConfig->willCompleteCodeGenPipeline();
   PM.add(PassConfig);
-  if (!MMI)
-    MMI = new MachineModuleInfo(TM);
-  PM.add(MMI);
+  PM.add(&MMI);
 
   if (PassConfig->addISelPasses())
     return nullptr;
   PassConfig->addMachinePasses();
   PassConfig->setInitialized();
-  if (!WillCompleteCodeGenPipeline)
-    PM.add(createPrintMIRPass(Out));
-
-  return &MMI->getContext();
+  return PassConfig;
 }
 
 bool LLVMTargetMachine::addAsmPrinter(PassManagerBase &PM,
@@ -201,14 +196,16 @@ bool LLVMTargetMachine::addPassesToEmitFile(PassManagerBase &PM,
                                             bool DisableVerify,
                                             MachineModuleInfo *MMI) {
   // Add common CodeGen passes.
-  bool WillCompleteCodeGenPipeline = true;
-  MCContext *Context = addPassesToGenerateCode(
-      this, PM, DisableVerify, WillCompleteCodeGenPipeline, Out, MMI);
-  if (!Context)
+  if (!MMI)
+    MMI = new MachineModuleInfo(this);
+  TargetPassConfig *PassConfig =
+      addPassesToGenerateCode(*this, PM, DisableVerify, *MMI);
+  if (!PassConfig)
     return true;
 
-  if (WillCompleteCodeGenPipeline &&
-      addAsmPrinter(PM, Out, DwoOut, FileType, *Context))
+  if (!TargetPassConfig::willCompleteCodeGenPipeline()) {
+    PM.add(createPrintMIRPass(Out));
+  } else if (addAsmPrinter(PM, Out, DwoOut, FileType, MMI->getContext()))
     return true;
 
   PM.add(createFreeMachineFunctionPass());
@@ -224,14 +221,15 @@ bool LLVMTargetMachine::addPassesToEmitMC(PassManagerBase &PM, MCContext *&Ctx,
                                           raw_pwrite_stream &Out,
                                           bool DisableVerify) {
   // Add common CodeGen passes.
-  bool WillCompleteCodeGenPipeline = true;
-  Ctx = addPassesToGenerateCode(this, PM, DisableVerify,
-                                WillCompleteCodeGenPipeline, Out,
-                                /*MachineModuleInfo*/ nullptr);
-  if (!Ctx)
+  MachineModuleInfo *MMI = new MachineModuleInfo(this);
+  TargetPassConfig *PassConfig =
+      addPassesToGenerateCode(*this, PM, DisableVerify, *MMI);
+  if (!PassConfig)
     return true;
-  assert(WillCompleteCodeGenPipeline && "CodeGen pipeline has been altered");
+  assert(TargetPassConfig::willCompleteCodeGenPipeline() &&
+         "Cannot emit MC with limited codegen pipeline");
 
+  Ctx = &MMI->getContext();
   if (Options.MCOptions.MCSaveTempLabels)
     Ctx->setAllowTemporaryLabels(false);
 
@@ -260,6 +258,9 @@ bool LLVMTargetMachine::addPassesToEmitMC(PassManagerBase &PM, MCContext *&Ctx,
     return true;
 
   PM.add(Printer);
+  if (cheri::ShouldCollectCSetBoundsStats) {
+    PM.add(createLogCheriSetBoundsPass());
+  }
   PM.add(createFreeMachineFunctionPass());
 
   return false; // success!
