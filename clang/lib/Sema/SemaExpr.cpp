@@ -3009,7 +3009,6 @@ ExprResult Sema::BuildDeclarationNameExpr(
 
     // These shouldn't make it here.
     case Decl::ObjCAtDefsField:
-    case Decl::ObjCIvar:
       llvm_unreachable("forming non-member reference to ivar?");
 
     // Enum constants are always r-values and never references.
@@ -3027,6 +3026,7 @@ ExprResult Sema::BuildDeclarationNameExpr(
     // exist in the high-level semantics.
     case Decl::Field:
     case Decl::IndirectField:
+    case Decl::ObjCIvar:
       assert(getLangOpts().CPlusPlus &&
              "building reference to field in C?");
 
