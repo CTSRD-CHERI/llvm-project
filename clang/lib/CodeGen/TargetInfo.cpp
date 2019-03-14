@@ -6876,7 +6876,8 @@ public:
   llvm::Value *getPointerOffset(CodeGen::CodeGenFunction &CGF,
                                         llvm::Value *V) const override {
     if (!GetOffset)
-      GetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_get);
+      GetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_get,
+                                       CGF.SizeTy);
     V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
     return CGF.Builder.CreateCall(GetOffset, V);
   }
@@ -6884,7 +6885,8 @@ public:
   llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &CGF,
           llvm::Value *Ptr, llvm::Value *Offset) const override {
     if (!SetOffset)
-      SetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_set);
+      SetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_set,
+                                       CGF.SizeTy);
     llvm::Type *DstTy = Ptr->getType();
     auto &B = CGF.Builder;
     Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
@@ -6895,7 +6897,8 @@ public:
                                  llvm::Value *Ptr,
                                  llvm::Value *Offset) const override {
     if (!SetAddr)
-      SetAddr = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_set);
+      SetAddr = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_set,
+                                     CGF.IntPtrTy);
     llvm::Type *DstTy = Ptr->getType();
     auto &B = CGF.Builder;
     Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
@@ -6906,7 +6909,8 @@ public:
                                 llvm::Value *Size,
                                 const llvm::Twine &Name) const override {
     if (!SetBounds)
-      SetBounds = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_bounds_set);
+      SetBounds = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_bounds_set,
+                                       CGF.SizeTy);
     llvm::Type *DstTy = Ptr->getType();
     auto &B = CGF.Builder;
     Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
@@ -6916,7 +6920,8 @@ public:
   llvm::Value *getPointerBase(CodeGen::CodeGenFunction &CGF,
                               llvm::Value *V) const override {
     if (!GetBase)
-      GetBase = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_base_get);
+      GetBase = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_base_get,
+                                     CGF.IntPtrTy);
     V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
     return CGF.Builder.CreateCall(GetBase, V);
   }
@@ -6924,7 +6929,8 @@ public:
   llvm::Value *getPointerAddress(CodeGen::CodeGenFunction &CGF, llvm::Value *V,
                               const llvm::Twine &Name) const override {
     if (!GetAddress)
-      GetAddress = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_get);
+      GetAddress = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_get,
+                                        CGF.IntPtrTy);
     V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
     return CGF.Builder.CreateCall(GetAddress, V, Name);
   }

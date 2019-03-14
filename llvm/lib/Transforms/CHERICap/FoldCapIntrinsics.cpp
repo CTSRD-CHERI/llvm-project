@@ -44,13 +44,15 @@ class CHERICapFoldIntrinsics : public ModulePass {
   Function *GetAddr;
 
   Type* I8CapTy;
-  Type* CapOffsetTy;
+  Type* CapAddrTy;
+  Type* CapSizeTy;
   const DataLayout *DL;
   bool Modified;
 
   template <typename Infer>
-  void foldGet(Module *M, Intrinsic::ID ID, Infer infer, int NullValue = 0) {
-    Function *Func = M->getFunction(Intrinsic::getName(ID));
+  void foldGet(Module *M, Intrinsic::ID ID, ArrayRef<Type*> Tys, Infer infer,
+               int NullValue = 0) {
+    Function *Func = M->getFunction(Intrinsic::getName(ID, Tys));
     if (!Func)
       return;
     // Calling eraseFromParent() inside the following loop causes iterators
@@ -69,11 +71,11 @@ class CHERICapFoldIntrinsics : public ModulePass {
   }
 
   void foldGetIntrinisics(Module *M) {
-    foldGet(M, Intrinsic::cheri_cap_offset_get,
+    foldGet(M, Intrinsic::cheri_cap_offset_get, {CapSizeTy},
             [this](Value *V, CallInst *CI, int) {
               return inferCapabilityOffset(V, CI, CI->getType());
             });
-    foldGet(M, Intrinsic::cheri_cap_address_get,
+    foldGet(M, Intrinsic::cheri_cap_address_get, {CapAddrTy},
             [this](Value *V, CallInst *CI, int) {
               return inferCapabilityAddress(V, CI, CI->getType());
             });
@@ -84,13 +86,13 @@ class CHERICapFoldIntrinsics : public ModulePass {
       // these intrinsics?
       return inferCapabilityNonOffsetField(V, CI, NullValue);
     };
-    foldGet(M, Intrinsic::cheri_cap_base_get, inferOther);
-    foldGet(M, Intrinsic::cheri_cap_perms_get, inferOther);
-    foldGet(M, Intrinsic::cheri_cap_tag_get, inferOther);
-    foldGet(M, Intrinsic::cheri_cap_sealed_get, inferOther);
+    foldGet(M, Intrinsic::cheri_cap_base_get, {CapAddrTy}, inferOther);
+    foldGet(M, Intrinsic::cheri_cap_perms_get, {CapSizeTy}, inferOther);
+    foldGet(M, Intrinsic::cheri_cap_tag_get, {}, inferOther);
+    foldGet(M, Intrinsic::cheri_cap_sealed_get, {}, inferOther);
     // CGetType and CGetLen on a null capability now return -1
-    foldGet(M, Intrinsic::cheri_cap_length_get, inferOther, -1);
-    foldGet(M, Intrinsic::cheri_cap_type_get, inferOther, -1);
+    foldGet(M, Intrinsic::cheri_cap_length_get, {CapSizeTy}, inferOther, -1);
+    foldGet(M, Intrinsic::cheri_cap_type_get, {CapSizeTy}, inferOther, -1);
   }
 
   static Constant* getIntToPtrSourceValue(Value* V) {
@@ -148,10 +150,10 @@ class CHERICapFoldIntrinsics : public ModulePass {
 
       // XXXAR: do I need the inbounds check here?
       if (GEP->isInBounds() && GEP->getType() == I8CapTy) {
-        APInt Offset(CapOffsetTy->getIntegerBitWidth(), 0, true);
+        APInt Offset(CapSizeTy->getIntegerBitWidth(), 0, true);
         if (GEP->accumulateConstantOffset(*DL, Offset)) {
-          return ConstantInt::get(CapOffsetTy, Offset);
-        } else if (GEP->getOperand(1)->getType() == CapOffsetTy) {
+          return ConstantInt::get(CapSizeTy, Offset);
+        } else if (GEP->getOperand(1)->getType() == CapSizeTy) {
           // also handle non-constant GEPs:
           // XXXAR: not sure this is always profitable, sometimes a CIncOffset
           // might be is better
@@ -387,50 +389,54 @@ public:
   bool runOnModule(Module &M) override {
     Modified = false;
     DL = &M.getDataLayout();
+    LLVMContext &C = M.getContext();
+    I8CapTy = Type::getInt8PtrTy(C, 200);
+    CapAddrTy = Type::getIntNTy(C, DL->getPointerBaseSizeInBits(200));
+    CapSizeTy = Type::getIntNTy(C, DL->getIndexSizeInBits(200));
     // Don't add these intrinsics to the module if none of them are used:
     IncOffset = M.getFunction(
-        Intrinsic::getName(Intrinsic::cheri_cap_offset_increment));
+        Intrinsic::getName(Intrinsic::cheri_cap_offset_increment, CapSizeTy));
     SetOffset =
-        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_set));
+        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_set,
+                                         CapSizeTy));
     GetOffset =
-        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_get));
+        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_offset_get,
+                                         CapSizeTy));
     SetAddr =
-        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_set));
+        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_set,
+                                         CapAddrTy));
     GetAddr =
-        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_get));
+        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_get,
+                                         CapAddrTy));
     // at least one intrinsic was used -> we need to run the fold
     // setoffset/incoffset pass
 
     if (IncOffset || SetOffset || GetOffset) {
+      // Ensure that all the intrinsics exist in the module
       if (!IncOffset)
         IncOffset = Intrinsic::getDeclaration(
-            &M, Intrinsic::cheri_cap_offset_increment);
+            &M, Intrinsic::cheri_cap_offset_increment, CapSizeTy);
       if (!SetOffset)
-        SetOffset =
-            Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_set);
+        SetOffset = Intrinsic::getDeclaration(
+            &M, Intrinsic::cheri_cap_offset_set, CapSizeTy);
       if (!GetOffset)
-        GetOffset =
-            Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_get);
-      // Ensure that all the intrinsics exist in the module
-      I8CapTy = IncOffset->getReturnType();
-      CapOffsetTy = GetOffset->getReturnType();
+        GetOffset = Intrinsic::getDeclaration(
+            &M, Intrinsic::cheri_cap_offset_get, CapSizeTy);
       // TODO: does the order here matter?
       foldIncOffset();
       foldSetOffset(&M);
     }
     if (SetAddr || GetAddr) {
+      // Ensure that all the intrinsics exist in the module
       if (!SetAddr)
-        SetAddr =
-            Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_set);
+        SetAddr = Intrinsic::getDeclaration(
+            &M, Intrinsic::cheri_cap_address_set, CapAddrTy);
       if (!GetAddr)
-        GetAddr =
-            Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_get);
+        GetAddr = Intrinsic::getDeclaration(
+            &M, Intrinsic::cheri_cap_address_get, CapAddrTy);
       if (!IncOffset)
         IncOffset = Intrinsic::getDeclaration(
-            &M, Intrinsic::cheri_cap_offset_increment);
-      // Ensure that all the intrinsics exist in the module
-      I8CapTy = IncOffset->getReturnType();
-      CapOffsetTy = GetAddr->getReturnType();
+            &M, Intrinsic::cheri_cap_offset_increment, CapSizeTy);
       // TODO: does the order here matter?
       foldSetAddress(&M);
     }

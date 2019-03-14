@@ -403,6 +403,10 @@ extern bool LargeCapTable;
       return getTargetMachine().isPositionIndependent();
     }
 
+    // Although we don't currently have a CSetAddr, our CheriExpandIntrinsics
+    // pass handles the intrinsic so we want to keep the intrinsic as-is.
+    bool hasCapabilitySetAddress() const override { return true; }
+
    CCAssignFn *CCAssignFnForCall() const;
 
    CCAssignFn *CCAssignFnForReturn() const;

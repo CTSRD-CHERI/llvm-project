@@ -6698,6 +6698,28 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     // MachineFunction in SelectionDAGISel::PrepareEHLandingPad. We can safely
     // delete it now.
     return nullptr;
+
+  case Intrinsic::cheri_cap_address_set: {
+    if (TLI.hasCapabilitySetAddress()) {
+      visitTargetIntrinsic(I, Intrinsic);
+      return nullptr;
+    }
+    // SetAddr($cap, $addr) -> CIncOffset($cap, $addr - GetAddr($cap))
+    SDValue Cap = getValue(I.getArgOperand(0));
+    SDValue Addr = getValue(I.getArgOperand(1));
+    EVT CapVT = Cap.getValueType();
+    EVT PtrVT = TLI.getPointerTy(DAG.getDataLayout(), 0);
+    SDValue CapAddr = DAG.getNode(
+        ISD::INTRINSIC_WO_CHAIN, sdl, PtrVT,
+        DAG.getConstant(Intrinsic::cheri_cap_address_get, sdl, PtrVT), Cap);
+    SDValue Delta = DAG.getNode(ISD::SUB, sdl, PtrVT, Addr, CapAddr);
+    Res = DAG.getNode(
+        ISD::INTRINSIC_WO_CHAIN, sdl, CapVT,
+        DAG.getConstant(Intrinsic::cheri_cap_offset_increment, sdl, PtrVT),
+        Cap, Delta);
+    setValue(&I, Res);
+    return nullptr;
+  }
   }
 }
 

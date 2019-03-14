@@ -13,44 +13,32 @@
 
 
 def int_cheri_cap_length_get :
-  GCCBuiltinAlias<"__builtin_mips_cheri_get_cap_length">,
-  GCCBuiltin<"__builtin_cheri_length_get">,
-  Intrinsic<[llvm_i64_ty],
+  Intrinsic<[llvm_anyint_ty],
             [llvm_fatptr_ty],
             [IntrNoMem]>;
 def int_cheri_cap_base_get :
-  GCCBuiltinAlias<"__builtin_mips_cheri_get_cap_base">,
-  GCCBuiltin<"__builtin_cheri_base_get">,
-  Intrinsic<[llvm_i64_ty],
+  Intrinsic<[llvm_anyint_ty],
             [llvm_fatptr_ty],
             [IntrNoMem]>;
 
 def int_cheri_cap_perms_and :
-  GCCBuiltinAlias<"__builtin_mips_cheri_and_cap_perms">,
-  GCCBuiltin<"__builtin_cheri_perms_and">,
   Intrinsic<[llvm_fatptr_ty],
-            [llvm_fatptr_ty, llvm_i64_ty],
+            [llvm_fatptr_ty, llvm_anyint_ty],
             [IntrNoMem]>;
 def int_cheri_cap_perms_get :
-  GCCBuiltinAlias<"__builtin_mips_cheri_get_cap_perms">,
-  GCCBuiltin<"__builtin_cheri_perms_get">,
-  Intrinsic<[llvm_i64_ty],
+  Intrinsic<[llvm_anyint_ty],
             [llvm_fatptr_ty],
             [IntrNoMem]>;
 def int_cheri_cap_bounds_set :
-  GCCBuiltin<"__builtin_cheri_bounds_set">,
   Intrinsic<[llvm_fatptr_ty],
-            [llvm_fatptr_ty, llvm_i64_ty],
+            [llvm_fatptr_ty, llvm_anyint_ty],
             [IntrNoMem]>;
 def int_cheri_cap_bounds_set_exact :
-  GCCBuiltin<"__builtin_cheri_bounds_set_exact">,
   Intrinsic<[llvm_fatptr_ty],
-            [llvm_fatptr_ty, llvm_i64_ty],
+            [llvm_fatptr_ty, llvm_anyint_ty],
             [IntrNoMem]>;
 def int_cheri_cap_type_get :
-  GCCBuiltinAlias<"__builtin_mips_cheri_get_cap_type">,
-  GCCBuiltin<"__builtin_cheri_type_get">,
-  Intrinsic<[llvm_i64_ty],
+  Intrinsic<[llvm_anyint_ty],
             [llvm_fatptr_ty],
             [IntrNoMem]>;
 def int_cheri_cap_tag_get  :
@@ -91,9 +79,7 @@ def int_cheri_cap_unseal  :
             [llvm_fatptr_ty, llvm_fatptr_ty],
             [IntrNoMem]>;
 def int_cheri_cap_perms_check :
-  GCCBuiltinAlias<"__builtin_mips_cheri_check_perms">,
-  GCCBuiltin<"__builtin_cheri_perms_check">,
-  Intrinsic<[], [llvm_fatptr_ty, llvm_i64_ty],
+  Intrinsic<[], [llvm_fatptr_ty, llvm_anyint_ty],
             [IntrNoMem, IntrHasSideEffects]>;
 def int_cheri_cap_type_check :
   GCCBuiltinAlias<"__builtin_mips_cheri_check_type">,
@@ -121,37 +107,29 @@ def int_cheri_pcc_get :
 ////////////////////////////////////////////////////////////////////////////////
 
 def int_cheri_cap_offset_increment:
-  GCCBuiltinAlias<"__builtin_mips_cheri_cap_offset_increment">,
-  GCCBuiltin<"__builtin_cheri_offset_increment">,
-  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_anyint_ty], [IntrNoMem]>;
 def int_cheri_cap_offset_set:
-  GCCBuiltinAlias<"__builtin_mips_cheri_cap_offset_set">,
-  GCCBuiltin<"__builtin_cheri_offset_set">,
-  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_anyint_ty], [IntrNoMem]>;
 def int_cheri_cap_offset_get:
-  GCCBuiltinAlias<"__builtin_mips_cheri_cap_offset_get">,
-  GCCBuiltin<"__builtin_cheri_offset_get">,
-  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_anyint_ty], [llvm_fatptr_ty], [IntrNoMem]>;
 def int_cheri_cap_diff:
-  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty,llvm_fatptr_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_anyint_ty], [llvm_fatptr_ty,llvm_fatptr_ty], [IntrNoMem]>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Pointer / capability interoperation intrinsics
 ////////////////////////////////////////////////////////////////////////////////
 def int_cheri_cap_address_get:
-  GCCBuiltin<"__builtin_cheri_address_get">,
-  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_anyint_ty], [llvm_fatptr_ty], [IntrNoMem]>;
 def int_cheri_cap_address_set:
-  GCCBuiltin<"__builtin_cheri_address_set">,
-  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_anyint_ty], [IntrNoMem]>;
 
 
 def int_cheri_cap_to_pointer:
-  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_anyint_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
 def int_cheri_cap_from_pointer:
-  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_anyint_ty], [IntrNoMem]>;
 def int_cheri_cap_from_ddc:
-  Intrinsic<[llvm_fatptr_ty], [llvm_i64_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_fatptr_ty], [llvm_anyint_ty], [IntrNoMem]>;
 
 ////////////////////////////////////////////////////////////////////////////////
 // Building capabilities from untagged data
@@ -167,12 +145,11 @@ def int_cheri_cap_type_copy:
 // Tag memory accessor functions
 ////////////////////////////////////////////////////////////////////////////////
 def int_cheri_cap_load_tags:
-  GCCBuiltin<"__builtin_cheri_cap_load_tags">,
-  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty], [IntrReadMem]>;
+  Intrinsic<[llvm_anyint_ty], [llvm_fatptr_ty], [IntrReadMem]>;
 
 
 /// This intrinsics makes it easier to avoid spilling registers to create
 /// bounded capabilities for the stack (such as when passing a stack buffer to
 /// another function, etc)
 def int_cheri_bounded_stack_cap :
-  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_i64_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_fatptr_ty], [llvm_fatptr_ty, llvm_anyint_ty], [IntrNoMem]>;

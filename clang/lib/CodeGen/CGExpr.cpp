@@ -2927,7 +2927,8 @@ llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
   if (auto *F = dyn_cast<llvm::Function>(Addr->stripPointerCasts())) {
     if (F->hasWeakLinkage() || F->hasExternalWeakLinkage()) {
       V = CGF.Builder.CreateCall(
-          CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer),
+          CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer,
+                               CGF.IntPtrTy),
           {PCC, V});
       return CGF.Builder.CreateBitCast(V, CapTy);
     }

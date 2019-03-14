@@ -2150,7 +2150,7 @@ llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
       flags &= 0xFFEB;
 
     if (flags != 0xffff) {
-      llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_perms_and);
+      llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_perms_and, SizeTy);
       if (F->getFunctionType()->getParamType(0) != result->getType())
         result = Builder.CreateBitCast(result, F->getFunctionType()->getParamType(0));
       result = Builder.CreateCall(F, {result,
@@ -3887,7 +3887,7 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
   Value *diffInChars;
   if (expr->getLHS()->getType()->isCHERICapabilityType(CGF.getContext())) {
     llvm::Function *CapPtrDiff =
-      CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_diff);
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_diff, CGF.PtrDiffTy);
     llvm::Type *CapTy = CapPtrDiff->getFunctionType()->getParamType(0);
     LHS = Builder.CreateBitCast(LHS, CapTy);
     RHS = Builder.CreateBitCast(RHS, CapTy);

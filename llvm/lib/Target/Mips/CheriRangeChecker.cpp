@@ -38,7 +38,7 @@ class CheriRangeChecker : public FunctionPass,
   };
   std::unique_ptr<DataLayout> TD;
   Module *M;
-  IntegerType *Int64Ty;
+  IntegerType *SizeTy;
   PointerType *CapPtrTy;
   SmallVector<pair<AllocOperands, Instruction *>, 32> Casts;
   SmallVector<pair<AllocOperands, ConstantCast>, 32> ConstantCasts;
@@ -91,8 +91,8 @@ class CheriRangeChecker : public FunctionPass,
                       ? B.CreateMul(std::get<0>(AO), std::get<1>(AO))
                       : std::get<0>(AO);
     BitCast = B.CreateBitCast(I2P, CapPtrTy);
-    if (Size->getType() != Int64Ty)
-      Size = B.CreateZExt(Size, Int64Ty);
+    if (Size->getType() != SizeTy)
+      Size = B.CreateZExt(Size, SizeTy);
     CallInst *SetLength = B.CreateCall(SetLengthFn, {BitCast, Size});
     if (cheri::ShouldCollectCSetBoundsStats) {
       // FIXME: can't be in add due to layering issues
@@ -116,7 +116,7 @@ public:
   bool doInitialization(Module &Mod) override {
     M = &Mod;
     TD = llvm::make_unique<DataLayout>(M);
-    Int64Ty = IntegerType::get(M->getContext(), 64);
+    SizeTy = IntegerType::get(M->getContext(), TD->getIndexSizeInBits(200));
     CapPtrTy = PointerType::get(IntegerType::get(M->getContext(), 8), 200);
     return true;
   }
@@ -206,7 +206,7 @@ public:
 
     if (!(Casts.empty() && ConstantCasts.empty())) {
       Intrinsic::ID SetLength = Intrinsic::cheri_cap_bounds_set;
-      SetLengthFn = Intrinsic::getDeclaration(M, SetLength);
+      SetLengthFn = Intrinsic::getDeclaration(M, SetLength, SizeTy);
       Value *BitCast = 0;
 
       for (auto *i = Casts.begin(), *e = Casts.end(); i != e; ++i) {

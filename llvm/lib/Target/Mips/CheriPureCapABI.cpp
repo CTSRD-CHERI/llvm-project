@@ -397,11 +397,13 @@ public:
     Intrinsic::ID BoundedStackCap = UseRematerializableIntrinsic
                                         ? Intrinsic::cheri_bounded_stack_cap
                                         : Intrinsic::cheri_cap_bounds_set;
-    Function *BoundedStackFn = Intrinsic::getDeclaration(M, BoundedStackCap);
+    const DataLayout &DL = F.getParent()->getDataLayout();
+    Type *SizeTy = Type::getIntNTy(C, DL.getIndexSizeInBits(200));
+    Function *BoundedStackFn =
+        Intrinsic::getDeclaration(M, BoundedStackCap, SizeTy);
     StackBoundsMethod BoundsMode = BoundsSettingMode;
 
     IRBuilder<> B(C);
-    const DataLayout &DL = F.getParent()->getDataLayout();
 
     for (AllocaInst *AI : Allocas) {
       const uint64_t TotalUses = AI->getNumUses();
@@ -485,7 +487,8 @@ public:
                     "bounds.set intrinisic");
         MustUseSingleIntrinsic = true;
         SetBoundsIntrin =
-            Intrinsic::getDeclaration(M, Intrinsic::cheri_cap_bounds_set);
+            Intrinsic::getDeclaration(M, Intrinsic::cheri_cap_bounds_set,
+                                      SizeTy);
       }
 
       // Reuse the result of a single csetbounds intrinisic if we are at -O0 or

@@ -2494,6 +2494,9 @@ public:
   // same blocks of its users.
   virtual bool shouldConsiderGEPOffsetSplit() const { return false; }
 
+  // Return true if the target has a capability set address instruction.
+  virtual bool hasCapabilitySetAddress() const { return false; }
+
   //===--------------------------------------------------------------------===//
   // Runtime Library hooks
   //

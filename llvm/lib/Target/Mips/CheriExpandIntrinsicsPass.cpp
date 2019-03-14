@@ -11,6 +11,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/InstVisitor.h"
+#include "llvm/IR/Type.h"
 
 #include <string>
 
@@ -37,8 +38,13 @@ public:
 
     // SetAddr($cap, $addr) -> CIncOffset($cap, $addr - GetAddr($cap))
 
+    LLVMContext &C = M.getContext();
+    const DataLayout &DL = M.getDataLayout();
+    Type *AddrTy = Type::getIntNTy(C, DL.getPointerBaseSizeInBits(200));
+    Type *SizeTy = Type::getIntNTy(C, DL.getIndexSizeInBits(200));
     Function *SetAddr =
-        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_set));
+        M.getFunction(Intrinsic::getName(Intrinsic::cheri_cap_address_set,
+                                         AddrTy));
     if (!SetAddr)
       return;
 
@@ -46,9 +52,11 @@ public:
     NumSetAddrCalls += SetAddr->getNumUses();
     return;
 #if 0
-    Function* GetAddr = Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_get);
+    Function* GetAddr =
+        Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_address_get, AddrTy);
     Function *IncOffset =
-        Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_increment);
+        Intrinsic::getDeclaration(&M, Intrinsic::cheri_cap_offset_increment,
+                                  SizeTy);
 
     std::vector<CallInst*> ToErase;
     for (Value* V : SetAddr->users()) {
