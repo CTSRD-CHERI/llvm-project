@@ -193,6 +193,7 @@ void ASTTypeWriter::VisitComplexType(const ComplexType *T) {
 
 void ASTTypeWriter::VisitPointerType(const PointerType *T) {
   Record.AddTypeRef(T->getPointeeType());
+  Record.push_back(T->isCHERICapability());
   Code = TYPE_POINTER;
 }
 
@@ -215,11 +216,13 @@ void ASTTypeWriter::VisitBlockPointerType(const BlockPointerType *T) {
 void ASTTypeWriter::VisitLValueReferenceType(const LValueReferenceType *T) {
   Record.AddTypeRef(T->getPointeeTypeAsWritten());
   Record.push_back(T->isSpelledAsLValue());
+  Record.push_back(T->isCHERICapability());
   Code = TYPE_LVALUE_REFERENCE;
 }
 
 void ASTTypeWriter::VisitRValueReferenceType(const RValueReferenceType *T) {
   Record.AddTypeRef(T->getPointeeTypeAsWritten());
+  Record.push_back(T->isCHERICapability());
   Code = TYPE_RVALUE_REFERENCE;
 }
 

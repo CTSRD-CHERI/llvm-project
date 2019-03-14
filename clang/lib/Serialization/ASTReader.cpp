@@ -5935,12 +5935,12 @@ QualType ASTReader::readTypeRecord(unsigned Index) {
   }
 
   case TYPE_POINTER: {
-    if (Record.size() != 1) {
+    if (Record.size() != 2) {
       Error("Incorrect encoding of pointer type");
       return QualType();
     }
     QualType PointeeType = readType(*Loc.F, Record, Idx);
-    return Context.getPointerType(PointeeType);
+    return Context.getPointerType(PointeeType, Record[1] ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
   }
 
   case TYPE_DECAYED: {
@@ -5975,21 +5975,21 @@ QualType ASTReader::readTypeRecord(unsigned Index) {
   }
 
   case TYPE_LVALUE_REFERENCE: {
-    if (Record.size() != 2) {
+    if (Record.size() != 3) {
       Error("Incorrect encoding of lvalue reference type");
       return QualType();
     }
     QualType PointeeType = readType(*Loc.F, Record, Idx);
-    return Context.getLValueReferenceType(PointeeType, Record[1]);
+    return Context.getLValueReferenceType(PointeeType, Record[1], Record[2] ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
   }
 
   case TYPE_RVALUE_REFERENCE: {
-    if (Record.size() != 1) {
+    if (Record.size() != 2) {
       Error("Incorrect encoding of rvalue reference type");
       return QualType();
     }
     QualType PointeeType = readType(*Loc.F, Record, Idx);
-    return Context.getRValueReferenceType(PointeeType);
+    return Context.getRValueReferenceType(PointeeType, Record[1] ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
   }
 
   case TYPE_MEMBER_POINTER: {

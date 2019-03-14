@@ -378,12 +378,15 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
       return false;
     break;
 
-  case Type::Pointer:
-    if (!IsStructurallyEquivalent(Context,
-                                  cast<PointerType>(T1)->getPointeeType(),
-                                  cast<PointerType>(T2)->getPointeeType()))
+  case Type::Pointer: {
+    const auto *Ptr1 = cast<PointerType>(T1);
+    const auto *Ptr2 = cast<PointerType>(T2);
+    if (Ptr1->isCHERICapability() != Ptr2->isCHERICapability())
+      return false;
+    if (!IsStructurallyEquivalent(Context, Ptr1->getPointeeType(), Ptr2->getPointeeType()))
       return false;
     break;
+  }
 
   case Type::BlockPointer:
     if (!IsStructurallyEquivalent(Context,
@@ -397,6 +400,8 @@ static bool IsStructurallyEquivalent(StructuralEquivalenceContext &Context,
     const auto *Ref1 = cast<ReferenceType>(T1);
     const auto *Ref2 = cast<ReferenceType>(T2);
     if (Ref1->isSpelledAsLValue() != Ref2->isSpelledAsLValue())
+      return false;
+    if (Ref1->isCHERICapability() != Ref2->isCHERICapability())
       return false;
     if (Ref1->isInnerRef() != Ref2->isInnerRef())
       return false;
