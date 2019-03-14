@@ -2549,6 +2549,11 @@ static uint16_t getELFType() {
 static uint8_t getAbiVersion() {
   // MIPS non-PIC executable gets ABI version 1.
   if (Config->EMachine == EM_MIPS) {
+    // Bump this number everytime we break the ABI to avoid strange runtime
+    // crashes (happened e.g. when using a binary with the old TLS offset
+    // on a new kernel).
+    if (Config->isCheriABI())
+      return 2; // Bump for every incompatible change
     if (getELFType() == ET_EXEC &&
         (Config->EFlags & (EF_MIPS_PIC | EF_MIPS_CPIC)) == EF_MIPS_CPIC)
       return 1;
