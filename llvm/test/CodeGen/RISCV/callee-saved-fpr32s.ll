@@ -208,3 +208,24 @@ define void @caller() {
   store volatile [32 x float] %val, [32 x float]* @var
   ret void
 }
+
+; This function tests that RISCVRegisterInfo::getCallPreservedMask returns
+; something appropriate.
+;
+; For the soft float ABIs, no floating point registers are preserved, and
+; codegen will use only ft0 in the body of caller.
+
+define void @caller() {
+; ILP32-LP64-LABEL: caller:
+; ILP32-LP64-NOT:     ft{{[1-9][0-9]*}}
+; ILP32-LP64-NOT:     fs{{[0-9]+}}
+; ILP32-LP64-NOT:     fa{{[0-9]+}}
+; ILP32-LP64:         ret
+; ILP32-LP64-NOT:     ft{{[1-9][0-9]*}}
+; ILP32-LP64-NOT:     fs{{[0-9]+}}
+; ILP32-LP64-NOT:     fa{{[0-9]+}}
+  %val = load [32 x float], [32 x float]* @var
+  call void @callee()
+  store volatile [32 x float] %val, [32 x float]* @var
+  ret void
+}
