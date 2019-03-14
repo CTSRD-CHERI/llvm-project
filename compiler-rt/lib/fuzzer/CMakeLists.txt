@@ -3,7 +3,7 @@ set(LIBFUZZER_SOURCES
   FuzzerDataFlowTrace.cpp
   FuzzerDriver.cpp
   FuzzerExtFunctionsDlsym.cpp
-  FuzzerExtFunctionsDlsymWin.cpp
+  FuzzerExtFunctionsWeakAlias.cpp
   FuzzerExtFunctionsWeak.cpp
   FuzzerExtraCounters.cpp
   FuzzerIO.cpp
@@ -22,8 +22,29 @@ set(LIBFUZZER_SOURCES
   FuzzerUtilFuchsia.cpp
   FuzzerUtilLinux.cpp
   FuzzerUtilPosix.cpp
-  FuzzerUtilWindows.cpp
-  )
+  FuzzerUtilWindows.cpp)
+
+set(LIBFUZZER_HEADERS
+  FuzzerCommand.h
+  FuzzerCorpus.h
+  FuzzerDataFlowTrace.h
+  FuzzerDefs.h
+  FuzzerDictionary.h
+  FuzzerExtFunctions.def
+  FuzzerExtFunctions.h
+  FuzzerFlags.def
+  FuzzerIO.h
+  FuzzerInterface.h
+  FuzzerInternal.h
+  FuzzerMerge.h
+  FuzzerMutate.h
+  FuzzerOptions.h
+  FuzzerRandom.h
+  FuzzerSHA1.h
+  FuzzerShmem.h
+  FuzzerTracePC.h
+  FuzzerUtil.h
+  FuzzerValueBitMap.h)
 
 CHECK_CXX_SOURCE_COMPILES("
   static thread_local int blah;
@@ -38,8 +59,8 @@ if(OS_NAME MATCHES "Linux|Fuchsia" AND COMPILER_RT_LIBCXX_PATH)
   list(APPEND LIBFUZZER_CFLAGS -nostdinc++ -D_LIBCPP_ABI_VERSION=Fuzzer)
   # Remove -stdlib= which is unused when passing -nostdinc++.
   string(REGEX REPLACE "-stdlib=[a-zA-Z+]*" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
-elseif(CLANG_DEFAULT_CXX_STDLIB STREQUAL "libc++" AND (TARGET cxx OR HAVE_LIBCXX))
-  set(LIBFUZZER_DEPS cxx)
+elseif(TARGET cxx-headers OR HAVE_LIBCXX)
+  set(LIBFUZZER_DEPS cxx-headers)
 endif()
 
 append_list_if(COMPILER_RT_HAS_OMIT_FRAME_POINTER_FLAG -fno-omit-frame-pointer LIBFUZZER_CFLAGS)
@@ -58,6 +79,7 @@ add_compiler_rt_object_libraries(RTfuzzer
   OS ${FUZZER_SUPPORTED_OS}
   ARCHS ${FUZZER_SUPPORTED_ARCH}
   SOURCES ${LIBFUZZER_SOURCES}
+  ADDITIONAL_HEADERS ${LIBFUZZER_HEADERS}
   CFLAGS ${LIBFUZZER_CFLAGS}
   DEPS ${LIBFUZZER_DEPS})
 
@@ -102,12 +124,12 @@ if(OS_NAME MATCHES "Linux|Fuchsia" AND COMPILER_RT_LIBCXX_PATH)
     set(LIBCXX_${arch}_PREFIX ${CMAKE_CURRENT_BINARY_DIR}/libcxx_fuzzer_${arch})
     add_custom_libcxx(libcxx_fuzzer_${arch} ${LIBCXX_${arch}_PREFIX}
       CFLAGS ${TARGET_CFLAGS}
-             -D_LIBCPP_ABI_VERSION=Fuzzer
              -D_LIBCPP_DISABLE_VISIBILITY_ANNOTATIONS=1
              -fvisibility=hidden
       CMAKE_ARGS -DCMAKE_CXX_COMPILER_WORKS=ON
                  -DLIBCXX_ENABLE_EXCEPTIONS=OFF
                  -DLIBCXX_ENABLE_SHARED=OFF
+                 -DLIBCXX_ABI_NAMESPACE=Fuzzer
                  -DLIBCXX_CXX_ABI=none)
     target_compile_options(RTfuzzer.${arch} PRIVATE -isystem ${LIBCXX_${arch}_PREFIX}/include/c++/v1)
     add_dependencies(RTfuzzer.${arch} libcxx_fuzzer_${arch}-build)

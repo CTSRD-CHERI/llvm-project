@@ -60,20 +60,8 @@ static QualType lookupPromiseType(Sema &S, const FunctionDecl *FD,
     return QualType();
   }
 
-  LookupResult Result(S, &S.PP.getIdentifierTable().get("coroutine_traits"),
-                      FuncLoc, Sema::LookupOrdinaryName);
-  if (!S.LookupQualifiedName(Result, StdExp)) {
-    S.Diag(KwLoc, diag::err_implied_coroutine_type_not_found)
-        << "std::experimental::coroutine_traits";
-    return QualType();
-  }
-
-  ClassTemplateDecl *CoroTraits = Result.getAsSingle<ClassTemplateDecl>();
+  ClassTemplateDecl *CoroTraits = S.lookupCoroutineTraits(KwLoc, FuncLoc);
   if (!CoroTraits) {
-    Result.suppressDiagnostics();
-    // We found something weird. Complain about the first thing we found.
-    NamedDecl *Found = *Result.begin();
-    S.Diag(Found->getLocation(), diag::err_malformed_std_coroutine_traits);
     return QualType();
   }
 
@@ -465,7 +453,7 @@ static ReadySuspendResumeResult buildCoawaitCalls(Sema &S, VarDecl *CoroPromise,
     // to bool.
     ExprResult Conv = S.PerformContextuallyConvertToBool(AwaitReady);
     if (Conv.isInvalid()) {
-      S.Diag(AwaitReady->getDirectCallee()->getLocStart(),
+      S.Diag(AwaitReady->getDirectCallee()->getBeginLoc(),
              diag::note_await_ready_no_bool_conversion);
       S.Diag(Loc, diag::note_coroutine_promise_call_implicitly_required)
           << AwaitReady->getDirectCallee() << E->getSourceRange();
@@ -577,8 +565,8 @@ VarDecl *Sema::buildCoroutinePromise(SourceLocation Loc) {
 
   // Create an initialization sequence for the promise type using the
   // constructor arguments, wrapped in a parenthesized list expression.
-  Expr *PLE = new (Context) ParenListExpr(Context, FD->getLocation(),
-                                          CtorArgExprs, FD->getLocation());
+  Expr *PLE = ParenListExpr::Create(Context, FD->getLocation(),
+                                    CtorArgExprs, FD->getLocation());
   InitializedEntity Entity = InitializedEntity::InitializeVariable(VD);
   InitializationKind Kind = InitializationKind::CreateForInit(
       VD->getLocation(), /*DirectInit=*/true, PLE);
@@ -851,6 +839,19 @@ StmtResult Sema::BuildCoreturnStmt(SourceLocation Loc, Expr *E,
     ExprResult R = CheckPlaceholderExpr(E);
     if (R.isInvalid()) return StmtError();
     E = R.get();
+  }
+
+  // Move the return value if we can
+  if (E) {
+    auto NRVOCandidate = this->getCopyElisionCandidate(E->getType(), E, CES_AsIfByStdMove);
+    if (NRVOCandidate) {
+      InitializedEntity Entity =
+          InitializedEntity::InitializeResult(Loc, E->getType(), NRVOCandidate);
+      ExprResult MoveResult = this->PerformMoveOrCopyInitialization(
+          Entity, NRVOCandidate, E->getType(), E);
+      if (MoveResult.get())
+        E = MoveResult.get();
+    }
   }
 
   // FIXME: If the operand is a reference to a variable that's about to go out
@@ -1472,7 +1473,7 @@ static Expr *castForMoving(Sema &S, Expr *E, QualType T = QualType()) {
     T = E->getType();
   QualType TargetType = S.BuildReferenceType(
       T, /*SpelledAsLValue*/ false, SourceLocation(), DeclarationName());
-  SourceLocation ExprLoc = E->getLocStart();
+  SourceLocation ExprLoc = E->getBeginLoc();
   TypeSourceInfo *TargetLoc =
       S.Context.getTrivialTypeSourceInfo(TargetType, ExprLoc);
 
@@ -1537,4 +1538,28 @@ StmtResult Sema::BuildCoroutineBodyStmt(CoroutineBodyStmt::CtorArgs Args) {
   if (!Res)
     return StmtError();
   return Res;
+}
+
+ClassTemplateDecl *Sema::lookupCoroutineTraits(SourceLocation KwLoc,
+                                               SourceLocation FuncLoc) {
+  if (!StdCoroutineTraitsCache) {
+    if (auto StdExp = lookupStdExperimentalNamespace()) {
+      LookupResult Result(*this,
+                          &PP.getIdentifierTable().get("coroutine_traits"),
+                          FuncLoc, LookupOrdinaryName);
+      if (!LookupQualifiedName(Result, StdExp)) {
+        Diag(KwLoc, diag::err_implied_coroutine_type_not_found)
+            << "std::experimental::coroutine_traits";
+        return nullptr;
+      }
+      if (!(StdCoroutineTraitsCache =
+                Result.getAsSingle<ClassTemplateDecl>())) {
+        Result.suppressDiagnostics();
+        NamedDecl *Found = *Result.begin();
+        Diag(Found->getLocation(), diag::err_malformed_std_coroutine_traits);
+        return nullptr;
+      }
+    }
+  }
+  return StdCoroutineTraitsCache;
 }

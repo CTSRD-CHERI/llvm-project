@@ -1,6 +1,6 @@
-// RUN: %cheri_purecap_cc1 -std=c11 -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
+// RUN: %cheri_purecap_cc1 -std=c11 -cheri-uintcap=offset -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
 // also check that the same warnings trigger in C++ modes
-// RUN: %cheri_purecap_cc1 -xc++ -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
+// RUN: %cheri_purecap_cc1 -xc++ -cheri-uintcap=offset -verify=expected,offset,bitand -Wpedantic -Wall -Wno-unused-parameter -Wno-unused-variable -Wno-self-assign -Wno-missing-prototypes -Wno-sign-conversion %s
 
 // Check that we don't warn about bitwise operations (other than &) when in cheri-uintcap=addr mode
 // For & we can't just rely on vaddr mode to make it work, we also need data-dependent provenance
@@ -196,7 +196,7 @@ void check_bad_macro_values(void *mtx) {
 
   // getting or clearing too many bits should warn:
   unsigned long value;
-  value = cheri_get_low_ptr_bits(u, 32); // expected-error{{static_assert failed "Should only use the low 5 pointer bits"}}
+  value = cheri_get_low_ptr_bits(u, 32); // expected-error{{static_assert failed due to requirement '32 < 32' "Should only use the low 5 pointer bits"}}
   value = cheri_get_low_ptr_bits(u, 31); // This is fine
 
   // Check that the other macros also work in if statements

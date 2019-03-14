@@ -46,9 +46,10 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
                      .Case("256", "cheri256")
                      .Default("cheri128");
   }
-  if (Triple.getArch() == llvm::Triple::cheri || ABIName == "purecap") {
-    DefMips32CPU = CHERICPU;
-    DefMips64CPU = CHERICPU;
+
+  if (Triple.getSubArch() == llvm::Triple::MipsSubArch_r6) {
+    DefMips32CPU = "mips32r6";
+    DefMips64CPU = "mips64r6";
   }
 
   // MIPS64r6 is the default for Android MIPS64 (mips64el-linux-android).
@@ -58,8 +59,20 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
   }
 
   // MIPS3 is the default for mips64*-unknown-openbsd.
-  if (Triple.getOS() == llvm::Triple::OpenBSD)
+  if (Triple.isOSOpenBSD())
     DefMips64CPU = "mips3";
+
+  // MIPS2 is the default for mips(el)?-unknown-freebsd.
+  // MIPS3 is the default for mips64(el)?-unknown-freebsd.
+  if (Triple.isOSFreeBSD()) {
+    DefMips32CPU = "mips2";
+    DefMips64CPU = "mips3";
+  }
+
+  if (Triple.getArch() == llvm::Triple::cheri || ABIName == "purecap") {
+    DefMips32CPU = CHERICPU;
+    DefMips64CPU = CHERICPU;
+  }
 
   if (Arg *A = Args.getLastArg(clang::driver::options::OPT_march_EQ,
                                options::OPT_mcpu_EQ))
@@ -94,6 +107,9 @@ void mips::getMipsCPUAndABI(const ArgList &Args, const llvm::Triple &Triple,
       break;
     }
   }
+
+  if (ABIName.empty() && (Triple.getEnvironment() == llvm::Triple::GNUABIN32))
+    ABIName = "n32";
 
   if (ABIName.empty() &&
       (Triple.getVendor() == llvm::Triple::MipsTechnologies ||
@@ -374,6 +390,12 @@ void mips::getMIPSTargetFeatures(const Driver &D, const llvm::Triple &Triple,
   AddTargetFeature(Args, Features, options::OPT_mno_madd4, options::OPT_mmadd4,
                    "nomadd4");
   AddTargetFeature(Args, Features, options::OPT_mmt, options::OPT_mno_mt, "mt");
+  AddTargetFeature(Args, Features, options::OPT_mcrc, options::OPT_mno_crc,
+                   "crc");
+  AddTargetFeature(Args, Features, options::OPT_mvirt, options::OPT_mno_virt,
+                   "virt");
+  AddTargetFeature(Args, Features, options::OPT_mginv, options::OPT_mno_ginv,
+                   "ginv");
 
   if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
     Features.push_back("+chericap");

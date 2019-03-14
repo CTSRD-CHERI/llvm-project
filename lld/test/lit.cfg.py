@@ -68,6 +68,7 @@ llvm_config.feature_config(
                           'Hexagon': 'hexagon',
                           'Mips': 'mips',
                           'PowerPC': 'ppc',
+                          'RISCV': 'riscv',
                           'Sparc': 'sparc',
                           'WebAssembly': 'wasm',
                           'X86': 'x86'})
@@ -93,7 +94,10 @@ if config.have_dia_sdk:
 tar_executable = lit.util.which('tar', config.environment['PATH'])
 if tar_executable:
     tar_version = subprocess.Popen(
-        [tar_executable, '--version'], stdout=subprocess.PIPE, env={'LANG': 'C'})
-    if 'GNU tar' in tar_version.stdout.read().decode():
+        [tar_executable, '--version'],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env={'LANG': 'C'})
+    sout, _ = tar_version.communicate()
+    if 'GNU tar' in sout.decode():
         config.available_features.add('gnutar')
-    tar_version.wait()

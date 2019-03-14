@@ -64,7 +64,7 @@ class NumberOfThreadsTestCase(TestBase):
             'Number of expected threads and actual threads do not match.')
 
     @skipIfDarwin # rdar://33462362
-    @expectedFailureAll(oslist=["windows"], bugnumber="llvm.org/pr37658")
+    @skipIfWindows # This is flakey on Windows: llvm.org/pr37658, llvm.org/pr38373
     def test_unique_stacks(self):
         """Test backtrace unique with multiple threads executing the same stack."""
         self.build()
@@ -92,7 +92,7 @@ class NumberOfThreadsTestCase(TestBase):
         self.assertTrue(
             num_threads >= 10,
             'Number of expected threads and actual threads do not match.')
-        
+
         # Attempt to walk each of the thread's executing the thread3 function to
         # the same breakpoint.
         def is_thread3(thread):

@@ -12,11 +12,12 @@
 #include "Arch/Mips.h"
 #include "Arch/Sparc.h"
 #include "CommonArgs.h"
-#include "clang/Basic/VirtualFileSystem.h"
 #include "clang/Driver/Compilation.h"
+#include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
 #include "llvm/Option/ArgList.h"
+#include "llvm/Support/VirtualFileSystem.h"
 
 using namespace clang::driver;
 using namespace clang::driver::tools;
@@ -126,22 +127,37 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       static_cast<const toolchains::FreeBSD &>(getToolChain());
   const Driver &D = ToolChain.getDriver();
   const llvm::Triple::ArchType Arch = ToolChain.getArch();
-  const bool IsPIE =
-      !Args.hasArg(options::OPT_shared) &&
-      (Args.hasArg(options::OPT_pie) || ToolChain.isPIEDefault());
-  ArgStringList CmdArgs;
-
   bool IsCHERIPureCapABI = false;
-  if (ToolChain.getArch() == llvm::Triple::cheri ||
-      ToolChain.getArch() == llvm::Triple::mips64)
-    if (Args.hasArg(options::OPT_mabi_EQ)) {
-      auto A = Args.getLastArg(options::OPT_mabi_EQ);
-      IsCHERIPureCapABI = StringRef(A->getValue()).lower() == "purecap";
-    }
+  if (ToolChain.getTriple().isMIPS())
+    IsCHERIPureCapABI = tools::mips::hasMipsAbiArg(Args, "purecap");
+  // For CheriABI default to -pie unless -static is also passed
+  // TODO: enable static PIE?
+  const bool CheriAbiPIEDefault =
+      IsCHERIPureCapABI && !Args.hasArg(options::OPT_static);
+  const bool IsPIEDefault = ToolChain.isPIEDefault() || CheriAbiPIEDefault;
+  // We can't pass -pie to the linker if any of -shared,-r,-no-pie,-no-pie are
+  // set
+  Arg *ConflictsWithPie = Args.getLastArg(options::OPT_r, options::OPT_shared);
+  // Have to negate here to handle the no-pie and nopie aliases
+  Arg *LastPIEArg = Args.getLastArg(options::OPT_pie, options::OPT_no_pie,
+                                    options::OPT_nopie);
+  const bool ExplicitPIE =
+      LastPIEArg && LastPIEArg->getOption().matches(options::OPT_pie);
+  if (ExplicitPIE && ConflictsWithPie) {
+    getToolChain().getDriver().Diag(diag::err_drv_argument_not_allowed_with)
+        << LastPIEArg->getAsString(Args) << ConflictsWithPie->getAsString(Args);
+  }
+  const bool IsPIE =
+      (LastPIEArg ? ExplicitPIE : IsPIEDefault) && !ConflictsWithPie;
+
+  ArgStringList CmdArgs;
 
   // Silence warning for -cheri=NNN
   Args.ClaimAllArgs(options::OPT_cheri_EQ);
   Args.ClaimAllArgs(options::OPT_cheri);
+  // And -cheri-uintcap=
+  Args.ClaimAllArgs(options::OPT_cheri_uintcap_offset);
+  Args.ClaimAllArgs(options::OPT_cheri_uintcap_addr);
 
   // Silence warning for "clang -g foo.o -o foo"
   Args.ClaimAllArgs(options::OPT_g_Group);
@@ -181,16 +197,44 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("--enable-new-dtags");
   }
 
-  // When building 32-bit code on FreeBSD/amd64, we have to explicitly
-  // instruct ld in the base system to link 32-bit code.
-  if (Arch == llvm::Triple::x86) {
+  // Explicitly set the linker emulation for platforms that might not
+  // be the default emulation for the linker.
+  switch (Arch) {
+  case llvm::Triple::x86:
     CmdArgs.push_back("-m");
     CmdArgs.push_back("elf_i386_fbsd");
-  }
-
-  if (Arch == llvm::Triple::ppc) {
+    break;
+  case llvm::Triple::ppc:
     CmdArgs.push_back("-m");
     CmdArgs.push_back("elf32ppc_fbsd");
+    break;
+  case llvm::Triple::mips:
+    CmdArgs.push_back("-m");
+    CmdArgs.push_back("elf32btsmip_fbsd");
+    break;
+  case llvm::Triple::mipsel:
+    CmdArgs.push_back("-m");
+    CmdArgs.push_back("elf32ltsmip_fbsd");
+    break;
+  case llvm::Triple::mips64:
+  case llvm::Triple::cheri:
+    CmdArgs.push_back("-m");
+    if (IsCHERIPureCapABI)
+      CmdArgs.push_back("elf64btsmip_cheri_fbsd");
+    else if (tools::mips::hasMipsAbiArg(Args, "n32"))
+      CmdArgs.push_back("elf32btsmipn32_fbsd");
+    else
+      CmdArgs.push_back("elf64btsmip_fbsd");
+    break;
+  case llvm::Triple::mips64el:
+    CmdArgs.push_back("-m");
+    if (tools::mips::hasMipsAbiArg(Args, "n32"))
+      CmdArgs.push_back("elf32ltsmipn32_fbsd");
+    else
+      CmdArgs.push_back("elf64ltsmip_fbsd");
+    break;
+  default:
+    break;
   }
 
   if (Arg *A = Args.getLastArg(options::OPT_G)) {
@@ -364,7 +408,8 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
   else if ((Triple.getArch() == llvm::Triple::cheri ||
             Triple.getArch() == llvm::Triple::mips64) &&
-           tools::mips::hasMipsAbiArg(Args, "purecap"))
+           tools::mips::hasMipsAbiArg(Args, "purecap") &&
+           D.getVFS().exists(getDriver().SysRoot + "/usr/libcheri/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
   else
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
@@ -428,7 +473,7 @@ bool FreeBSD::isPIEDefault() const { return getSanitizerArgs().requiresPIE(); }
 SanitizerMask FreeBSD::getSupportedSanitizers() const {
   const bool IsX86 = getTriple().getArch() == llvm::Triple::x86;
   const bool IsX86_64 = getTriple().getArch() == llvm::Triple::x86_64;
-  const bool IsMIPS64 = getTriple().isMIPS32();
+  const bool IsMIPS64 = getTriple().isMIPS64();
   SanitizerMask Res = ToolChain::getSupportedSanitizers();
   Res |= SanitizerKind::Address;
   Res |= SanitizerKind::Vptr;

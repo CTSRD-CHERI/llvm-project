@@ -39,6 +39,45 @@ class CommandLineCompletionTestCase(TestBase):
         self.complete_from_to('de', 'detach ')
 
     @skipIfFreeBSD  # timing out on the FreeBSD buildbot
+    def test_frame_variable(self):
+        self.build()
+        self.main_source = "main.cpp"
+        self.main_source_spec = lldb.SBFileSpec(self.main_source)
+
+        (target, process, thread, bkpt) = lldbutil.run_to_source_breakpoint(self,
+                                          '// Break here', self.main_source_spec)
+        self.assertEquals(process.GetState(), lldb.eStateStopped)
+        # FIXME: This pulls in the debug information to make the completions work,
+        # but the completions should also work without.
+        self.runCmd("frame variable fooo")
+
+        self.complete_from_to('frame variable fo',
+                              'frame variable fooo')
+        self.complete_from_to('frame variable fooo.',
+                              'frame variable fooo.')
+        self.complete_from_to('frame variable fooo.dd',
+                              'frame variable fooo.dd')
+
+        self.complete_from_to('frame variable ptr_fooo->',
+                              'frame variable ptr_fooo->')
+        self.complete_from_to('frame variable ptr_fooo->dd',
+                              'frame variable ptr_fooo->dd')
+
+        self.complete_from_to('frame variable cont',
+                              'frame variable container')
+        self.complete_from_to('frame variable container.',
+                              'frame variable container.MemberVar')
+        self.complete_from_to('frame variable container.Mem',
+                              'frame variable container.MemberVar')
+
+        self.complete_from_to('frame variable ptr_cont',
+                              'frame variable ptr_container')
+        self.complete_from_to('frame variable ptr_container->',
+                              'frame variable ptr_container->MemberVar')
+        self.complete_from_to('frame variable ptr_container->Mem',
+                              'frame variable ptr_container->MemberVar')
+
+    @skipIfFreeBSD  # timing out on the FreeBSD buildbot
     def test_process_attach_dash_dash_con(self):
         """Test that 'process attach --con' completes to 'process attach --continue '."""
         self.complete_from_to(
@@ -137,8 +176,8 @@ class CommandLineCompletionTestCase(TestBase):
 
     @skipIfFreeBSD  # timing out on the FreeBSD buildbot
     def test_settings_s_dash(self):
-        """Test that 'settings set -' completes to 'settings set -g'."""
-        self.complete_from_to('settings set -', 'settings set -g')
+        """Test that 'settings set --g' completes to 'settings set --global'."""
+        self.complete_from_to('settings set --g', 'settings set --global')
 
     @skipIfFreeBSD  # timing out on the FreeBSD buildbot
     def test_settings_clear_th(self):
@@ -235,6 +274,22 @@ class CommandLineCompletionTestCase(TestBase):
         self.complete_from_to("watchpoint set variable foo --watch w", "watchpoint set variable foo --watch write")
         self.complete_from_to('watchpoint set variable foo -w read_', 'watchpoint set variable foo -w read_write')
 
+    def test_completion_description_commands(self):
+        """Test descriptions of top-level command completions"""
+        self.check_completion_with_desc("", [
+            ["command", "Commands for managing custom LLDB commands."],
+            ["bugreport", "Commands for creating domain-specific bug reports."]
+        ])
+
+        self.check_completion_with_desc("pl", [
+            ["platform", "Commands to manage and create platforms."],
+            ["plugin", "Commands for managing LLDB plugins."]
+        ])
+
+        # Just check that this doesn't crash.
+        self.check_completion_with_desc("comman", [])
+        self.check_completion_with_desc("non-existent-command", [])
+
     @expectedFailureAll(oslist=["windows"], bugnumber="llvm.org/pr24489")
     def test_symbol_name(self):
         self.build()
@@ -242,39 +297,3 @@ class CommandLineCompletionTestCase(TestBase):
         self.complete_from_to('breakpoint set -n Fo',
                               'breakpoint set -n Foo::Bar(int,\\ int)',
                               turn_off_re_match=True)
-
-    def complete_from_to(self, str_input, patterns, turn_off_re_match=False):
-        """Test that the completion mechanism completes str_input to patterns,
-        where patterns could be a pattern-string or a list of pattern-strings"""
-        # Patterns should not be None in order to proceed.
-        self.assertFalse(patterns is None)
-        # And should be either a string or list of strings.  Check for list type
-        # below, if not, make a list out of the singleton string.  If patterns
-        # is not a string or not a list of strings, there'll be runtime errors
-        # later on.
-        if not isinstance(patterns, list):
-            patterns = [patterns]
-
-        interp = self.dbg.GetCommandInterpreter()
-        match_strings = lldb.SBStringList()
-        num_matches = interp.HandleCompletion(str_input, len(str_input), 0, -1, match_strings)
-        common_match = match_strings.GetStringAtIndex(0)
-        if num_matches == 0:
-            compare_string = str_input
-        else: 
-            if common_match != None and len(common_match) > 0:
-                compare_string = str_input + common_match
-            else:
-                compare_string = ""
-                for idx in range(1, num_matches+1):
-                    compare_string += match_strings.GetStringAtIndex(idx) + "\n"
-
-        for p in patterns:
-            if turn_off_re_match:
-                self.expect(
-                    compare_string, msg=COMPLETION_MSG(
-                        str_input, p), exe=False, substrs=[p])
-            else:
-                self.expect(
-                    compare_string, msg=COMPLETION_MSG(
-                        str_input, p), exe=False, patterns=[p])

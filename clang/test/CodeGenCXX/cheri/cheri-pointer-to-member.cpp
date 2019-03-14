@@ -148,7 +148,7 @@ bool data_ptr_not_equal(int A::* ptr1, int A::* ptr2) {
 
 int data_ptr_dereferece(A* a, int A::* ptr) {
   return a->*ptr;
-  // CHECK-LABEL: define i32 @_Z19data_ptr_derefereceU3capP1AMS_i(%class.A addrspace(200)*{{.*}}, i64{{.*}})
+  // CHECK-LABEL: define signext i32 @_Z19data_ptr_derefereceU3capP1AMS_i(%class.A addrspace(200)*{{.*}}, i64{{.*}})
   // CHECK: [[A_ADDR:%.+]] = alloca %class.A addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR_ADDR:%.+]] = alloca i64, align 8
   // CHECK-NEXT: store %class.A addrspace(200)* [[A:%.+]], %class.A addrspace(200)* addrspace(200)* [[A_ADDR]], align [[$CAP_SIZE]]
@@ -252,7 +252,7 @@ bool func_ptr_not_equal(AMemberFuncPtr ptr1, AMemberFuncPtr ptr2) {
 
 int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
   return (a->*ptr)();
-  // CHECK-LABEL: define i32 @_Z20func_ptr_dereferenceU3capP1AMS_FivE(%class.A addrspace(200)*{{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
+  // CHECK-LABEL: define signext i32 @_Z20func_ptr_dereferenceU3capP1AMS_FivE(%class.A addrspace(200)*{{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
   // CHECK: [[PTR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[A_ADDR:%.+]] = alloca %class.A addrspace(200)*, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR_ADDR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
@@ -283,7 +283,7 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
 
   // CHECK: [[MEMPTR_END_LABEL]]:                                       ; preds = %[[MEMPTR_NONVIRTUAL_LABEL]], %[[MEMPTR_VIRTUAL_LABEL]]
   // CHECK-NEXT: [[VAR8:%.+]] = phi i32 (%class.A addrspace(200)*) addrspace(200)* [ [[MEMPTR_VIRTUALFN]], %[[MEMPTR_VIRTUAL_LABEL]] ], [ [[MEMPTR_NONVIRTUALFN]], %[[MEMPTR_NONVIRTUAL_LABEL]] ]
-  // CHECK-NEXT: [[CALL:%.+]] = call i32 [[VAR8]](%class.A addrspace(200)* [[THIS_ADJUSTED]])
+  // CHECK-NEXT: [[CALL:%.+]] = call signext i32 [[VAR8]](%class.A addrspace(200)* [[THIS_ADJUSTED]])
   // CHECK-NEXT: ret i32 [[CALL]]
   // N64: [[MEMPTR_ADJ_SHIFTED:%.+]] = ashr i64 [[PTR_COERCE1:%.+]], 1
   // N64-NEXT: [[THIS_NOT_ADJUSTED:%.+]] = bitcast %class.A* [[A:%.+]] to i8*
@@ -307,7 +307,7 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
 
   // N64: [[MEMPTR_END_LABEL]]:
   // N64-NEXT: [[VAR4:%.+]] = phi i32 (%class.A*)* [ [[MEMPTR_VIRTUALFN]], %[[MEMPTR_VIRTUAL_LABEL]] ], [ [[MEMPTR_NONVIRTUALFN]], %[[MEMPTR_NONVIRTUAL_LABEL]] ]
-  // N64-NEXT: [[CALL:%.+]] = tail call i32 [[VAR4]](%class.A* [[THIS_ADJUSTED]])
+  // N64-NEXT: [[CALL:%.+]] = tail call signext i32 [[VAR4]](%class.A* [[THIS_ADJUSTED]])
   // N64-NEXT: ret i32 [[CALL]]
 
   // N64 ASM on entry: $4 = A* a, $5 = memptr.ptr, $6 = memptr.adj
@@ -331,11 +331,10 @@ int func_ptr_dereference(A* a, AMemberFuncPtr ptr) {
 
 // Check using Member pointers as return values an parameters
 AMemberFuncPtr return_func_ptr() {
-  // CHECK-LABEL: define void @_Z15return_func_ptrv({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret{{.*}})
-  // CHECK: [[RETVAL:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
-  // CHECK-NEXT: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[$CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[RETVAL]], align [[$CAP_SIZE]]
-  // CHECK-NEXT: [[VAR0:%.+]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[RETVAL]], align [[$CAP_SIZE]]
-  // CHECK-NEXT: store { i8 addrspace(200)*, i64 } [[VAR0]], { i8 addrspace(200)*, i64 } addrspace(200)* [[AGG_RESULT:%.+]], align [[$CAP_SIZE]]
+  // CHECK-LABEL: define void @_Z15return_func_ptrv({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret %agg.result)
+  // CHECK: store { i8 addrspace(200)*, i64 } { i8 addrspace(200)* inttoptr (i64 [[$CAP_SIZE]] to i8 addrspace(200)*), i64 1 }, { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align [[$CAP_SIZE]]
+  // CHECK-NEXT: [[VAR0:%.+]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align [[$CAP_SIZE]]
+  // CHECK-NEXT: store { i8 addrspace(200)*, i64 } [[VAR0]], { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align [[$CAP_SIZE]]
   // CHECK-NEXT: ret void
   return &A::bar_virtual;
 }
@@ -346,9 +345,8 @@ void take_func_ptr(AMemberFuncPtr ptr) {
 }
 
 AMemberFuncPtr passthrough_func_ptr(AMemberFuncPtr ptr) {
-  // CHECK-LABEL: define void @_Z20passthrough_func_ptrM1AFivE({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret{{.*}}, {{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
-  // CHECK: [[RETVAL:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
-  // CHECK-NEXT: [[PTR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
+  // CHECK-LABEL: define void @_Z20passthrough_func_ptrM1AFivE({ i8 addrspace(200)*, i64 } addrspace(200)* noalias sret %agg.result, {{.*}}, i8 addrspace(200)* inreg{{.*}}, i64 inreg{{.*}})
+  // CHECK: [[PTR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[PTR_ADDR:%.+]] = alloca { i8 addrspace(200)*, i64 }, align [[$CAP_SIZE]]
   // CHECK-NEXT: [[VAR1:%.+]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[PTR]], i32 0, i32 0
   // CHECK-NEXT: store i8 addrspace(200)* [[PTR_COERCE0:%.+]], i8 addrspace(200)* addrspace(200)* [[VAR1]], align [[$CAP_SIZE]]
@@ -357,9 +355,9 @@ AMemberFuncPtr passthrough_func_ptr(AMemberFuncPtr ptr) {
   // CHECK-NEXT: [[PTR1:%.+]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[PTR]], align [[$CAP_SIZE]]
   // CHECK-NEXT: store { i8 addrspace(200)*, i64 } [[PTR1]], { i8 addrspace(200)*, i64 } addrspace(200)* [[PTR_ADDR]], align [[$CAP_SIZE]]
   // CHECK-NEXT: [[VAR3:%.+]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[PTR_ADDR]], align [[$CAP_SIZE]]
-  // CHECK-NEXT: store { i8 addrspace(200)*, i64 } [[VAR3]], { i8 addrspace(200)*, i64 } addrspace(200)* [[RETVAL]], align [[$CAP_SIZE]]
-  // CHECK-NEXT: [[VAR4:%.+]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[RETVAL]], align [[$CAP_SIZE]]
-  // CHECK-NEXT: store { i8 addrspace(200)*, i64 } [[VAR4]], { i8 addrspace(200)*, i64 } addrspace(200)* [[AGG_RESULT:%.+]], align [[$CAP_SIZE]]
+  // CHECK-NEXT: store { i8 addrspace(200)*, i64 } [[VAR3]], { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align [[$CAP_SIZE]]
+  // CHECK-NEXT: [[VAR4:%.+]] = load { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align [[$CAP_SIZE]]
+  // CHECK-NEXT: store { i8 addrspace(200)*, i64 } [[VAR4]], { i8 addrspace(200)*, i64 } addrspace(200)* %agg.result, align [[$CAP_SIZE]]
   // CHECK-NEXT: ret void
   return ptr;
 }

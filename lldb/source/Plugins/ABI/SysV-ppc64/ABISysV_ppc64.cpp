@@ -9,18 +9,13 @@
 
 #include "ABISysV_ppc64.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Triple.h"
 
-// Project includes
 #include "Utility/PPC64LE_DWARF_Registers.h"
 #include "Utility/PPC64_DWARF_Registers.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Core/ValueObjectMemory.h"
@@ -35,6 +30,7 @@
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/RegisterValue.h"
 #include "lldb/Utility/Status.h"
 
 #include "clang/AST/ASTContext.h"
@@ -773,7 +769,7 @@ private:
 
     // get number of children
     const bool omit_empty_base_classes = true;
-    uint32_t n = m_type.GetNumChildren(omit_empty_base_classes);
+    uint32_t n = m_type.GetNumChildren(omit_empty_base_classes, nullptr);
     if (!n) {
       LLDB_LOG(m_log, LOG_PREFIX "No children found in struct");
       return ValueObjectSP();

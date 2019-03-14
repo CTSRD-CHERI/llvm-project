@@ -31,7 +31,7 @@ int call_always_inline(void) {
 
 // CHECK-NOT: always_inlined
 // This function must be inlined even at -O0
-// CHECK-LABEL: define i32 @call_always_inline()
+// CHECK-LABEL: define signext i32 @call_always_inline()
 // CHECK-NEXT: entry:
 // CHECK-NEXT:   ret i32 5
 // CHECK-NEXT: }
@@ -46,12 +46,12 @@ int call_not_inlined(void) {
 }
 
 // This function must be inlined even at -O0
-// CHECK-LABEL: define i32 @call_not_inlined()
+// CHECK-LABEL: define signext i32 @call_not_inlined()
 // CHECK-NEXT: entry:
-// OPT-NEXT:                    [[CALL:%.+]] = {{(tail )?}}call i32 @not_inlined(i32 signext 0)
-// N64-NOOPT-NEXT:              [[CALL:%.+]] = {{(tail )?}}call i32 @not_inlined(i32 signext 0)
-// PURECAP-LEGACY-NOOPT-NEXT:   [[CALL:%.+]] = {{(tail )?}}call i32 @not_inlined(i32 signext 0)
-// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = {{(tail )?}}call i32 @not_inlined(i32 signext 0)
+// OPT-NEXT:                    [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
+// N64-NOOPT-NEXT:              [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
+// PURECAP-LEGACY-NOOPT-NEXT:   [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
+// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = {{(tail )?}}call signext i32 @not_inlined(i32 signext 0)
 // CHECK-NEXT:    ret i32 [[CALL]]
 // CHECK-NEXT: }
 
@@ -65,12 +65,12 @@ int call_maybe_inlined(void) {
 
 // OPT-NOT: maybe_inlined
 // This function must be inlined even at -O0
-// CHECK-LABEL: define i32 @call_maybe_inlined()
+// CHECK-LABEL: define signext i32 @call_maybe_inlined()
 // CHECK-NEXT: entry:
 // OPT-NEXT:     ret i32 7
-// N64-NOOPT-NEXT:              [[CALL:%.+]] = call i32 @maybe_inlined(i32 signext 0)
-// PURECAP-LEGACY-NOOPT-NEXT:   [[CALL:%.+]] = call i32 @maybe_inlined(i32 signext 0)
-// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = call i32 @maybe_inlined(i32 signext 0)
+// N64-NOOPT-NEXT:              [[CALL:%.+]] = call signext i32 @maybe_inlined(i32 signext 0)
+// PURECAP-LEGACY-NOOPT-NEXT:   [[CALL:%.+]] = call signext i32 @maybe_inlined(i32 signext 0)
+// PURECAP-CAPTABLE-NOOPT-NEXT: [[CALL:%.+]] = call signext i32 @maybe_inlined(i32 signext 0)
 // NOOPT-NEXT:   ret i32 [[CALL]]
 // CHECK-NEXT: }
 // OPT-NOT: maybe_inlined

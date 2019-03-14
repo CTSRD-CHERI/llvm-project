@@ -11,7 +11,7 @@
 
 #include <objbase.h>
 
-#include <mutex> // std::once
+#include <mutex>
 
 #include "lldb/Host/windows/HostInfoWindows.h"
 #include "lldb/Host/windows/PosixApi.h"
@@ -92,15 +92,20 @@ FileSpec HostInfoWindows::GetProgramFileSpec() {
     ::GetModuleFileNameW(NULL, buffer.data(), buffer.size());
     std::string path;
     llvm::convertWideToUTF8(buffer.data(), path);
-    m_program_filespec.SetFile(path, false, FileSpec::Style::native);
+    m_program_filespec.SetFile(path, FileSpec::Style::native);
   });
   return m_program_filespec;
 }
 
 FileSpec HostInfoWindows::GetDefaultShell() {
+  // Try to retrieve ComSpec from the environment. On the rare occasion
+  // that it fails, try a well-known path for ComSpec instead.
+
   std::string shell;
-  GetEnvironmentVar("ComSpec", shell);
-  return FileSpec(shell, false);
+  if (GetEnvironmentVar("ComSpec", shell))
+    return FileSpec(shell);
+
+  return FileSpec("C:\\Windows\\system32\\cmd.exe");
 }
 
 bool HostInfoWindows::GetEnvironmentVar(const std::string &var_name,

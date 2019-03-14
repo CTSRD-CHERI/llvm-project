@@ -39,8 +39,6 @@ public:
 
   BitVector getReservedRegs(const MachineFunction &MF) const override;
 
-  bool enableMultipleCopyHints() const override { return true; }
-
   void eliminateFrameIndex(MachineBasicBlock::iterator II, int SPAdj,
         unsigned FIOperandNum, RegScavenger *RS = nullptr) const override;
 
@@ -62,6 +60,10 @@ public:
   bool trackLivenessAfterRegAlloc(const MachineFunction &MF) const override {
     return true;
   }
+
+  bool shouldCoalesce(MachineInstr *MI, const TargetRegisterClass *SrcRC,
+        unsigned SubReg, const TargetRegisterClass *DstRC, unsigned DstSubReg,
+        const TargetRegisterClass *NewRC, LiveIntervals &LIS) const override;
 
   // Debug information queries.
   unsigned getRARegister() const;

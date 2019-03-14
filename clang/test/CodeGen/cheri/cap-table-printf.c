@@ -5,11 +5,12 @@
 
 // The optimize libcalls pass changes the global string from AS200 to AS0
 // This happens when in converts printf to puts
+extern int printf(const char * __capability, ...);
 
 void a(void) {
   printf("Hello\n");
   // CHECK: @.str = private unnamed_addr addrspace(200) constant [7 x i8] c"Hello\0A\00"
-  // CHECK: call i32 (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* getelementptr inbounds ([7 x i8], [7 x i8] addrspace(200)* @.str
+  // CHECK: call signext i32 (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* getelementptr inbounds ([7 x i8], [7 x i8] addrspace(200)* @.str
   // OPT: @str = private unnamed_addr addrspace(200) constant [6 x i8] c"Hello\00"
   // OPT: call {{.+}} @puts({{.+}} [6 x i8] addrspace(200)* @str
 }

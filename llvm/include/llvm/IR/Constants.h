@@ -290,7 +290,11 @@ public:
 
   static Constant *get(Type* Ty, StringRef Str);
   static ConstantFP *get(LLVMContext &Context, const APFloat &V);
-  static Constant *getNaN(Type *Ty, bool Negative = false, unsigned type = 0);
+  static Constant *getNaN(Type *Ty, bool Negative = false, uint64_t Payload = 0);
+  static Constant *getQNaN(Type *Ty, bool Negative = false,
+                           APInt *Payload = nullptr);
+  static Constant *getSNaN(Type *Ty, bool Negative = false,
+                           APInt *Payload = nullptr);
   static Constant *getNegativeZero(Type *Ty);
   static Constant *getInfinity(Type *Ty, bool Negative = false);
 
@@ -1018,10 +1022,15 @@ public:
     return getLShr(C1, C2, true);
   }
 
-  /// Return the identity for the given binary operation,
-  /// i.e. a constant C such that X op C = X and C op X = X for every X.  It
-  /// returns null if the operator doesn't have an identity.
-  static Constant *getBinOpIdentity(unsigned Opcode, Type *Ty);
+  /// Return the identity constant for a binary opcode.
+  /// The identity constant C is defined as X op C = X and C op X = X for every
+  /// X when the binary operation is commutative. If the binop is not
+  /// commutative, callers can acquire the operand 1 identity constant by
+  /// setting AllowRHSConstant to true. For example, any shift has a zero
+  /// identity constant for operand 1: X shift 0 = X.
+  /// Return nullptr if the operator does not have an identity constant.
+  static Constant *getBinOpIdentity(unsigned Opcode, Type *Ty,
+                                    bool AllowRHSConstant = false);
 
   /// Return the absorbing element for the given binary
   /// operation, i.e. a constant C such that X op C = C and C op X = C for
@@ -1108,6 +1117,13 @@ public:
   /// \param OnlyIfReducedTy see \a getWithOperands() docs.
   static Constant *getSelect(Constant *C, Constant *V1, Constant *V2,
                              Type *OnlyIfReducedTy = nullptr);
+
+  /// get - Return a unary operator constant expression,
+  /// folding if possible.
+  ///
+  /// \param OnlyIfReducedTy see \a getWithOperands() docs.
+  static Constant *get(unsigned Opcode, Constant *C1, unsigned Flags = 0, 
+                       Type *OnlyIfReducedTy = nullptr);
 
   /// get - Return a binary or shift operator constant expression,
   /// folding if possible.

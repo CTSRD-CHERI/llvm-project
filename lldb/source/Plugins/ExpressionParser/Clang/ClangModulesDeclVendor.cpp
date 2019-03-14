@@ -7,11 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
 #include <mutex>
 
-// Other libraries and framework includes
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/FrontendActions.h"
@@ -24,7 +21,6 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/Threading.h"
 
-// Project includes
 #include "ClangHost.h"
 #include "ClangModulesDeclVendor.h"
 
@@ -601,7 +597,7 @@ ClangModulesDeclVendor::Create(Target &target) {
   {
     FileSpec clang_resource_dir = GetClangResourceDir();
 
-    if (llvm::sys::fs::is_directory(clang_resource_dir.GetPath())) {
+    if (FileSystem::Instance().IsDirectory(clang_resource_dir.GetPath())) {
       compiler_invocation_arguments.push_back("-resource-dir");
       compiler_invocation_arguments.push_back(clang_resource_dir.GetPath());
     }

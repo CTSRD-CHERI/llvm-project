@@ -16,7 +16,7 @@
 // PTRS: ret i8*
 // PTRS: define i32 @cheri_type_get(i8* nocapture readnone
 // PTRS: ret i32 0
-// PTRS: define  zeroext i16 @cheri_perms_get(i8* nocapture readnone
+// PTRS: define zeroext i16 @cheri_perms_get(i8* nocapture readnone
 // PTRS: ret i16 0
 // PTRS: define i8* @cheri_perms_and(i8* readnone returned{{( %.+)?}}, i16 zeroext
 // PTRS: ret i8*
@@ -54,7 +54,7 @@
 // CAPS: call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_offset_set(i8 addrspace(200)* readnone{{( %.+)?}}, i64 zeroext{{( %.+)?}}
 // CAPS: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*{{( %.+)?}}, i64{{( %.+)?}})
-// CAPS: define i32 @cheri_type_get(i8 addrspace(200)*
+// CAPS: define signext i32 @cheri_type_get(i8 addrspace(200)*
 // CAPS: call i64 @llvm.cheri.cap.type.get(i8 addrspace(200)*
 // CAPS: define zeroext i16 @cheri_perms_get(i8 addrspace(200)*
 // CAPS: call i64 @llvm.cheri.cap.perms.get(i8 addrspace(200)*

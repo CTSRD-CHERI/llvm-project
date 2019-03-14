@@ -57,6 +57,11 @@ OPTIONS
 
  Print all records to standard output (default).
 
+.. option:: -dump-json
+
+ Print a JSON representation of all records, suitable for further
+ automated processing.
+
 .. option:: -print-enums
 
  Print enumeration values for a class.
@@ -124,6 +129,10 @@ OPTIONS
 .. option:: -gen-enhanced-disassembly-info
 
  Generate enhanced disassembly info.
+
+.. option:: -gen-exegesis
+
+ Generate llvm-exegesis tables.
 
 .. option:: -version
 

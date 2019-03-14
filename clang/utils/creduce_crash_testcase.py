@@ -56,7 +56,7 @@ def run(cmd: list, **kwargs):
 class ErrorKind(Enum):
     CRASH = tuple()
     INFINITE_LOOP = (b"INFINITE LOOP:", )
-    FATAL_ERROR = (b"fatal error:", b"LLVM ERROR:")
+    FATAL_ERROR = (b"fatal error:", b"LLVM ERROR:", b"*** Bad machine code:")
     AddressSanitizer_ERROR = (b"ERROR: AddressSanitizer:", )
 
 
@@ -74,7 +74,8 @@ def expand_lit_substitutions(args: "Options", cmd) -> str:
                                         "-target-abi purecap ")
     # llc substitutions:
     if "llc" in compiler_cmd:
-        compiler_cmd = re.sub(r"\sllc\b", " " + str(args.llc_cmd) + " ", compiler_cmd)
+        print("COMPILER_CMD: '" + compiler_cmd + "'")
+        compiler_cmd = re.sub(r"^\s*llc\b", " " + str(args.llc_cmd) + " ", compiler_cmd)
     compiler_cmd = compiler_cmd.replace("%cheri128_llc ", str(args.llc_cmd) +
                                         " -mtriple=cheri-unknown-freebsd -mcpu=cheri128")
     compiler_cmd = compiler_cmd.replace("%cheri256_llc ", str(args.llc_cmd) +
@@ -88,9 +89,9 @@ def expand_lit_substitutions(args: "Options", cmd) -> str:
 
     # opt substitutions
     if "opt" in compiler_cmd:
-        compiler_cmd = re.sub(r"\sopt\b", " " + str(args.opt_cmd) + " ", compiler_cmd)
+        compiler_cmd = re.sub(r"^\s*opt\b", " " + str(args.opt_cmd) + " ", compiler_cmd)
     compiler_cmd = compiler_cmd.replace("%cheri_opt ", str(args.opt_cmd) +
-                                        " -mtriple=cheri-unknown-freebsd")
+                                        " -mtriple=cheri-unknown-freebsd ")
 
     # ignore all the piping to FileCheck parts of the command
     if "|" in compiler_cmd:
@@ -108,7 +109,7 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
     run_line = run_line.replace("-Werror=implicit-int", "")  # important for creduce but not for the test
     if "%clang_cc1" in run_line:
         target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
-        triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd\d*\s+"
+        triple_cheri_freebsd_re = r"-triple\s+cheri-unknown-freebsd(-purecap)?\d*\s+"
         if re.search(target_cpu_re, run_line) or re.search(triple_cheri_freebsd_re, run_line):
             run_line = re.sub(target_cpu_re, "", run_line)  # remove
             run_line = re.sub(triple_cheri_freebsd_re, "", run_line)  # remove
@@ -472,13 +473,23 @@ class Reducer(object):
             command = shlex.split(line)
             if "clang" not in command[0]:
                 die("Executed program should contain 'clang', but was", command[0])
-            source_file_name = command[-1]
+            source_file_index = -1
+            source_file_name = command[source_file_index]
             source_file = infile.with_name(source_file_name)
+            while source_file_name.startswith("-"):
+                print("WARNING: crash reproducer command line probably does not end with the input file",
+                      "name: got", blue(source_file_name), "which is probably not a file!")
+                source_file_index = source_file_index - 1
+                source_file_name = command[source_file_index]
+                source_file = infile.with_name(source_file_name)
+                if not source_file.exists():
+                    continue
+
             if not source_file.exists():
                 die("Reproducer input file", source_file, "does not exist!")
             real_in_file = source_file
             verbose_print("Real input file is", real_in_file)
-            command[-1] = "%s"
+            command[source_file_index] = "%s"
             # output to stdout
             if "-o" not in command:
                 print("Adding '-o -' to the compiler invocation")
@@ -618,6 +629,8 @@ class Reducer(object):
             r"Generating code for declaration '(.+)'",
             r"LLVM ERROR: Cannot select: (.+)",
             r"LLVM ERROR: Cannot select:",
+            r"LLVM ERROR: (.+)",
+            r"\*\*\* Bad machine code: (.+) \*\*\*",
        )]
         regexes = [(r, 0) for r in simple_regexes]
         # For this crash message we only want group 1
@@ -727,7 +740,6 @@ class Reducer(object):
         if "-emit-obj" in generate_ir_cmd:
             generate_ir_cmd.remove("-emit-obj")
         if self._check_crash(generate_ir_cmd, infile):
-            new_command = generate_ir_cmd
             # Try to remove the flags that were added:
             new_command = generate_ir_cmd
             new_command = self._try_remove_args(
@@ -846,11 +858,11 @@ class Reducer(object):
             print("Failed to shrink", infile, "-> will use the unprocessed source", e)
 
         if "-emit-obj" in new_command:
-            # check if floating point args are relevant
             new_command = self._try_remove_args(
-                new_command + ["-S"], infile, "Checking whether emitting ASM instead of object crashes:",
-                noargs_opts_to_remove=["-emit-obj"])
+                new_command, infile, "Checking whether emitting ASM instead of object crashes:",
+                noargs_opts_to_remove=["-emit-obj"], extra_args=["-S"])
 
+        print(new_command)
         # check if floating point args are relevant
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without floating point arguments crashes:",
@@ -1029,10 +1041,14 @@ class Reducer(object):
         # test case: just search for RUN: lines
         for line in f.readlines():
             match = re.match(r".*\s+RUN: (.+)", line)
+            if line.endswith("\\"):
+                die("RUN lines with continuations not handled yet")
             if match:
                 command = match.group(1).strip()
                 if "%s" not in command:
                     die("RUN: line does not contain %s -> cannot create replacement invocation")
+                if "2>&1" in line:
+                    die("Cannot handle 2>&1 in RUN lines yet")
                 verbose_print("Found RUN: ", command)
                 command = expand_lit_substitutions(self.options, command)
                 verbose_print("After expansion:", command)

@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # Check MIPS multi-GOT layout.
 
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-linux %s -o %t0.o
@@ -9,8 +10,6 @@
 # RUN: llvm-objdump -s -section=.got -t %t.so | FileCheck %s
 # RUN: llvm-readobj -r -dt -mips-plt-got %t.so | FileCheck -check-prefix=GOT %s
 
-# REQUIRES: mips
-
 # CHECK:      Contents of section .got:
 # CHECK-NEXT:  60000 00000000 80000000 00010000 00010030
 # CHECK-NEXT:  60010 00000000 00000004 00020000 00030000
@@ -19,13 +18,13 @@
 # CHECK-NEXT:  60040 00000000 00000000 00000000
 
 # CHECK: SYMBOL TABLE:
-# CHECK: 00000000 l       .tdata          00000000 loc0
-# CHECK: 00010000         .text           00000000 foo0
-# CHECK: 00000000 g       .tdata          00000000 tls0
-# CHECK: 00010020         .text           00000000 foo1
-# CHECK: 00000004 g       .tdata          00000000 tls1
-# CHECK: 00010030         .text           00000000 foo2
-# CHECK: 00000008 g       .tdata          00000000 tls2
+# CHECK: 00000000 l    O .tdata          00000000 loc0
+# CHECK: 00010000        .text           00000000 foo0
+# CHECK: 00000000 g    O .tdata          00000000 tls0
+# CHECK: 00010020        .text           00000000 foo1
+# CHECK: 00000004 g    O .tdata          00000000 tls1
+# CHECK: 00010030        .text           00000000 foo2
+# CHECK: 00000008 g    O .tdata          00000000 tls2
 
 # GOT:      Relocations [
 # GOT-NEXT:   Section (7) .rel.dyn {

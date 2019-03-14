@@ -90,7 +90,8 @@ size_t SBModuleSpec::GetUUIDLength() {
 }
 
 bool SBModuleSpec::SetUUIDBytes(const uint8_t *uuid, size_t uuid_len) {
-  return m_opaque_ap->GetUUID().SetBytes(uuid, uuid_len);
+  m_opaque_ap->GetUUID() = UUID::fromOptionalData(uuid, uuid_len);
+  return m_opaque_ap->GetUUID().IsValid();
 }
 
 bool SBModuleSpec::GetDescription(lldb::SBStream &description) {
@@ -113,7 +114,8 @@ SBModuleSpecList::~SBModuleSpecList() {}
 
 SBModuleSpecList SBModuleSpecList::GetModuleSpecifications(const char *path) {
   SBModuleSpecList specs;
-  FileSpec file_spec(path, true);
+  FileSpec file_spec(path);
+  FileSystem::Instance().Resolve(file_spec);
   Host::ResolveExecutableInBundle(file_spec);
   ObjectFile::GetModuleSpecifications(file_spec, 0, 0, *specs.m_opaque_ap);
   return specs;

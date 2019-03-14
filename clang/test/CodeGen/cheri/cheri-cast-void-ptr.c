@@ -31,7 +31,7 @@ void c(void) {
 
 struct foo;
 
-// CHECK-LABEL: define i32 @test(
+// CHECK-LABEL: define signext i32 @test(
 // CHECK:       entry:
 // CHECK-NEXT:    %fooptr.addr = alloca %struct.foo addrspace(200)*, align [[$CAP_SIZE]], addrspace(200)
 // CHECK-NEXT:    %foocap.addr = alloca %struct.foo addrspace(200)*, align [[$CAP_SIZE]], addrspace(200)
@@ -54,7 +54,7 @@ struct foo;
 // CHECK-NEXT:    %add = add nsw i32 %7, %9
 // CHECK-NEXT:    ret i32 %add
 //
-// HYBRID-LABEL: define i32 @test(
+// HYBRID-LABEL: define signext i32 @test(
 // HYBRID:       entry:
 // HYBRID-NEXT:    %fooptr.addr = alloca %struct.foo*, align 8
 // HYBRID-NEXT:    %foocap.addr = alloca %struct.foo addrspace(200)*, align [[$CAP_SIZE]]

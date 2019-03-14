@@ -12,16 +12,16 @@
 //===----------------------------------------------------------------------===//
 
 def isGCN : Predicate<"Subtarget->getGeneration() "
-                      ">= SISubtarget::SOUTHERN_ISLANDS">,
+                      ">= AMDGPUSubtarget::SOUTHERN_ISLANDS">,
             AssemblerPredicate<"FeatureGCN">;
 def isSI : Predicate<"Subtarget->getGeneration() "
-                      "== SISubtarget::SOUTHERN_ISLANDS">,
+                      "== AMDGPUSubtarget::SOUTHERN_ISLANDS">,
            AssemblerPredicate<"FeatureSouthernIslands">;
 
 
 class InstSI <dag outs, dag ins, string asm = "",
               list<dag> pattern = []> :
-  AMDGPUInst<outs, ins, asm, pattern>, PredicateControl {
+  AMDGPUInst<outs, ins, asm, pattern>, GCNPredicateControl {
   let SubtargetPredicate = isGCN;
 
   // Low bits - basic encoding information.
@@ -121,6 +121,10 @@ class InstSI <dag outs, dag ins, string asm = "",
   // This bit indicates that this is a D16 buffer instruction.
   field bit D16Buf = 0;
 
+  // This bit indicates that this uses the floating point double precision
+  // rounding mode flags
+  field bit FPDPRounding = 0;
+
   // These need to be kept in sync with the enum in SIInstrFlags.
   let TSFlags{0} = SALU;
   let TSFlags{1} = VALU;
@@ -177,6 +181,8 @@ class InstSI <dag outs, dag ins, string asm = "",
   let TSFlags{49} = IsPacked;
 
   let TSFlags{50} = D16Buf;
+
+  let TSFlags{51} = FPDPRounding;
 
   let SchedRW = [Write32Bit];
 
@@ -319,6 +325,7 @@ class VINTRPCommon <dag outs, dag ins, string asm, list<dag> pattern> :
   let mayLoad = 0;
   let mayStore = 0;
   let hasSideEffects = 0;
+  let VALU = 1;
 }
 
 class EXPCommon<dag outs, dag ins, string asm, list<dag> pattern> :

@@ -55,17 +55,17 @@ shrx        %rax, (%rbx), %rcx
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
 # CHECK-NEXT:  1      1     0.50                        bzhil	%eax, %ebx, %ecx
 # CHECK-NEXT:  2      6     0.50    *                   bzhil	%eax, (%rbx), %ecx
 # CHECK-NEXT:  1      1     0.50                        bzhiq	%rax, %rbx, %rcx
 # CHECK-NEXT:  2      6     0.50    *                   bzhiq	%rax, (%rbx), %rcx
-# CHECK-NEXT:  3      4     1.00                        mulxl	%eax, %ebx, %ecx
-# CHECK-NEXT:  4      9     1.00    *                   mulxl	(%rax), %ebx, %ecx
-# CHECK-NEXT:  2      4     1.00                        mulxq	%rax, %rbx, %rcx
-# CHECK-NEXT:  3      9     1.00    *                   mulxq	(%rax), %rbx, %rcx
+# CHECK-NEXT:  4      4     1.00                        mulxl	%eax, %ebx, %ecx
+# CHECK-NEXT:  5      9     1.00    *                   mulxl	(%rax), %ebx, %ecx
+# CHECK-NEXT:  3      4     1.00                        mulxq	%rax, %rbx, %rcx
+# CHECK-NEXT:  4      9     1.00    *                   mulxq	(%rax), %rbx, %rcx
 # CHECK-NEXT:  1      3     1.00                        pdepl	%eax, %ebx, %ecx
 # CHECK-NEXT:  2      8     1.00    *                   pdepl	(%rax), %ebx, %ecx
 # CHECK-NEXT:  1      3     1.00                        pdepq	%rax, %rbx, %rcx

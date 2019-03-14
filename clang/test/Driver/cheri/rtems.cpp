@@ -14,11 +14,12 @@
 // CHECK: "--sysroot=[[SYSROOT]]"
 // CHECK: "--build-id"
 // CHECK: "-Bstatic" "-static" "-o" "a.out"
-// QRTEMS: "start.o"
-// DEFAULT: "crt0.o"
+// QRTEMS-NOT: {{.*}}.o"
+// DEFAULT: "{{.+}}/lib/crt0.o"
 // CHECK-NOT: crti.o
 // CHECK-NOT: crtbegin.o
 // CHECK: "-L[[SYSROOT]]{{/|\\\\}}lib"
+// QRTEMS: "-Tlinkcmds"
 // QRTEMS: "-lrtemsbsp" "-lrtemscpu"
 // CHECK: "-lc++" "-lunwind" "-lm"
 // CHECK: "[[SYSROOT]]/lib/libclang_rt.builtins-mips64.a"

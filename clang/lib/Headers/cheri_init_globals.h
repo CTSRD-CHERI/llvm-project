@@ -61,10 +61,14 @@ __cap_table_end;
   "dla $2, __cap_table_start\n\t"                                              \
   "beqz $2, .Lskip_cgp_setup\n\t"                                              \
   "nop\n\t"                                                                    \
+  "cgetdefault $c14\n\t"                                                       \
+  /* If we are running without a DDC we should have a valid $cgp already */    \
+  "cbtu $c14, .Lskip_cgp_setup\n\t"                                            \
   "dla $3, __cap_table_end\n\t"                                                \
-  "cgetdefault $cgp\n\t"                                                       \
-  "csetoffset $cgp, $cgp, $2\n\t"                                              \
+  "csetoffset $cgp, $c14, $2\n\t"                                              \
   "dsubu $1, $3, $2\n\t"                                                       \
+  /* Avoid leaking original DDC in $c14 */                                     \
+  "cgetnull $c14\n\t"                                                          \
   "csetbounds $cgp, $cgp, $1\n\t"                                              \
   ".Lskip_cgp_setup: \n\t"
 
@@ -96,17 +100,20 @@ void cheri_init_globals_impl(const struct capreloc *start_relocs,
                              void* gdc, void* pcc, __UINT64_TYPE__ relocbase) {
   gdc = __builtin_cheri_perms_and(gdc, global_pointer_permissions);
   pcc = __builtin_cheri_perms_and(pcc, function_pointer_permissions);
+  __UINT64_TYPE__ gdc_base = __builtin_cheri_base_get(gdc);
+  __UINT64_TYPE__ pcc_base = __builtin_cheri_base_get(pcc);
   for (const struct capreloc *reloc = start_relocs; reloc < stop_relocs; reloc++) {
     _Bool isFunction = (reloc->permissions & function_reloc_flag) == function_reloc_flag;
-    void **dest = __builtin_cheri_offset_set(gdc, reloc->capability_location + relocbase);
+    void **dest = __builtin_cheri_offset_set(gdc, reloc->capability_location + relocbase - gdc_base);
     if (reloc->object == 0) {
       /* XXXAR: clang fills uninitialized capabilities with 0xcacaca..., so we
        * we need to explicitly write NULL here */
       *dest = (void*)0;
       continue;
     }
-    void *base = isFunction ? pcc : gdc;
-    void *src = __builtin_cheri_offset_set(base, reloc->object);
+    void *base_cap = isFunction ? pcc : gdc;
+    __UINT64_TYPE__ base = isFunction ? pcc_base : gdc_base;
+    void *src = __builtin_cheri_offset_set(base_cap, reloc->object - base);
     if (!isFunction && (reloc->size != 0)) {
       src = __builtin_cheri_bounds_set(src, reloc->size);
     }
@@ -118,7 +125,7 @@ void cheri_init_globals_impl(const struct capreloc *start_relocs,
 #ifndef ADDITIONAL_CAPRELOC_PROCESSING
 #define ADDITIONAL_CAPRELOC_PROCESSING
 #endif
-static __attribute__((always_inline)) void cheri_init_globals(void) {
+static __attribute__((always_inline)) void cheri_init_globals_gdc(void *gdc) {
   struct capreloc *start_relocs;
   struct capreloc *stop_relocs;
 #ifndef __CHERI_CAPABILITY_TABLE__
@@ -134,16 +141,21 @@ static __attribute__((always_inline)) void cheri_init_globals(void) {
        "dla %1, __stop___cap_relocs\n\t"
        :"=r"(start_addr), "=r"(end_addr));
   long relocs_size = end_addr - start_addr;
-  start_relocs = __builtin_cheri_offset_set(__builtin_cheri_global_data_get(), start_addr);
+  start_relocs = __builtin_cheri_offset_set(gdc, start_addr - __builtin_cheri_base_get(gdc));
   start_relocs = __builtin_cheri_bounds_set(start_relocs, relocs_size);
   stop_relocs = __builtin_cheri_offset_set(start_relocs, relocs_size);
 #endif
-  void *gdc = __builtin_cheri_global_data_get();
   void *pcc = __builtin_cheri_program_counter_get();
   /*
    * We can assume that all relocations in the __cap_relocs section have already
-   * been processed so we don't need to a a relocation base address to the
+   * been processed so we don't need to add a relocation base address to the
    * location of the capreloc.
    */
   cheri_init_globals_impl(start_relocs, stop_relocs, gdc, pcc, /*relocbase=*/0);
 }
+
+#ifndef CHERI_INIT_GLOBALS_GDC_ONLY
+static __attribute__((always_inline)) void cheri_init_globals(void) {
+  cheri_init_globals_gdc(__builtin_cheri_global_data_get());
+}
+#endif

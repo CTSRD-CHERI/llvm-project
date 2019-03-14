@@ -1,11 +1,11 @@
-//===--- Quality.h - Ranking alternatives for ambiguous queries -*- C++-*-===//
+//===--- Quality.h - Ranking alternatives for ambiguous queries --*- C++-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 ///
 /// Some operations such as code completion produce a set of candidates.
 /// Usually the user can choose between them, but we should put the best options
@@ -23,21 +23,31 @@
 ///   - sorting utilities like the TopN container.
 /// These could be split up further to isolate dependencies if we care.
 ///
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
+
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_QUALITY_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_QUALITY_H
+
+#include "ExpectedTypes.h"
+#include "FileDistance.h"
+#include "clang/Sema/CodeCompleteConsumer.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/StringRef.h"
 #include <algorithm>
 #include <functional>
 #include <vector>
+
 namespace llvm {
 class raw_ostream;
 }
+
 namespace clang {
 class CodeCompletionResult;
+
 namespace clangd {
+
 struct Symbol;
+class URIDistance;
 
 // Signals structs are designed to be aggregated from 0 or more sources.
 // A default instance has neutral signals, and sources are merged into it.
@@ -48,6 +58,7 @@ struct SymbolQualitySignals {
   bool Deprecated = false;
   bool ReservedName = false; // __foo, _Foo are usually implementation details.
                              // FIXME: make these findable once user types _.
+  bool ImplementationDetail = false;
   unsigned References = 0;
 
   enum SymbolCategory {
@@ -56,8 +67,11 @@ struct SymbolQualitySignals {
     Macro,
     Type,
     Function,
+    Constructor,
+    Destructor,
     Namespace,
     Keyword,
+    Operator,
   } Category = Unknown;
 
   void merge(const CodeCompletionResult &SemaCCResult);
@@ -69,22 +83,29 @@ struct SymbolQualitySignals {
 llvm::raw_ostream &operator<<(llvm::raw_ostream &,
                               const SymbolQualitySignals &);
 
-class FileProximityMatcher;
-
 /// Attributes of a symbol-query pair that affect how much we like it.
 struct SymbolRelevanceSignals {
   /// 0-1+ fuzzy-match score for unqualified name. Must be explicitly assigned.
   float NameMatch = 1;
   bool Forbidden = false; // Unavailable (e.g const) or inaccessible (private).
+  /// Whether fixits needs to be applied for that completion or not.
+  bool NeedsFixIts = false;
+  bool InBaseClass = false; // A member from base class of the accessed class.
 
-  const FileProximityMatcher *FileProximityMatch = nullptr;
-  /// This is used to calculate proximity between the index symbol and the
+  URIDistance *FileProximityMatch = nullptr;
+  /// These are used to calculate proximity between the index symbol and the
   /// query.
   llvm::StringRef SymbolURI;
-  /// Proximity between best declaration and the query. [0-1], 1 is closest.
   /// FIXME: unify with index proximity score - signals should be
   /// source-independent.
-  float SemaProximityScore = 0;
+  /// Proximity between best declaration and the query. [0-1], 1 is closest.
+  float SemaFileProximityScore = 0;
+
+  // Scope proximity is only considered (both index and sema) when this is set.
+  ScopeDistance *ScopeProximityMatch = nullptr;
+  llvm::Optional<llvm::StringRef> SymbolScope;
+  // A symbol from sema should be accessible from the current scope.
+  bool SemaSaysInScope = false;
 
   // An approximate measure of where we expect the symbol to be used.
   enum AccessibleScope {
@@ -99,6 +120,18 @@ struct SymbolRelevanceSignals {
     Generic,
   } Query = Generic;
 
+  CodeCompletionContext::Kind Context = CodeCompletionContext::CCC_Other;
+
+  // Whether symbol is an instance member of a class.
+  bool IsInstanceMember = false;
+
+  // Whether clang provided a preferred type in the completion context.
+  bool HadContextType = false;
+  // Whether a source completion item or a symbol had a type information.
+  bool HadSymbolType = false;
+  // Whether the item matches the type expected in the completion context.
+  bool TypeMatchesPreferred = false;
+
   void merge(const CodeCompletionResult &SemaResult);
   void merge(const Symbol &IndexResult);
 
@@ -110,25 +143,6 @@ llvm::raw_ostream &operator<<(llvm::raw_ostream &,
 
 /// Combine symbol quality and relevance into a single score.
 float evaluateSymbolAndRelevance(float SymbolQuality, float SymbolRelevance);
-
-class FileProximityMatcher {
-  public:
-    /// \p ProximityPaths are used to compute proximity scores from symbol's
-    /// declaring file. The best score will be used.
-    explicit FileProximityMatcher(
-        llvm::ArrayRef<llvm::StringRef> ProximityPaths);
-
-    /// Calculates the best proximity score from proximity paths to the symbol's
-    /// URI. Score is [0-1], 1 means \p SymbolURI exactly matches a proximity
-    /// path. When a path cannot be encoded into the same scheme as \p
-    /// SymbolURI, the proximity will be 0.
-    float uriProximity(llvm::StringRef SymbolURI) const;
-
-  private:
-    llvm::SmallVector<std::string, 2> ProximityPaths;
-    friend llvm::raw_ostream &operator<<(llvm::raw_ostream &,
-                                         const FileProximityMatcher &);
-};
 
 /// TopN<T> is a lossy container that preserves only the "best" N elements.
 template <typename T, typename Compare = std::greater<T>> class TopN {
@@ -174,7 +188,17 @@ private:
 /// LSP. (The highest score compares smallest so it sorts at the top).
 std::string sortText(float Score, llvm::StringRef Tiebreak = "");
 
+struct SignatureQualitySignals {
+  uint32_t NumberOfParameters = 0;
+  uint32_t NumberOfOptionalParameters = 0;
+  bool ContainsActiveParameter = false;
+  CodeCompleteConsumer::OverloadCandidate::CandidateKind Kind =
+      CodeCompleteConsumer::OverloadCandidate::CandidateKind::CK_Function;
+};
+llvm::raw_ostream &operator<<(llvm::raw_ostream &,
+                              const SignatureQualitySignals &);
+
 } // namespace clangd
 } // namespace clang
 
-#endif
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANGD_QUALITY_H

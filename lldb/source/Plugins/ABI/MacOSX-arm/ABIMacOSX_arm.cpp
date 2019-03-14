@@ -9,19 +9,13 @@
 
 #include "ABIMacOSX_arm.h"
 
-// C Includes
-// C++ Includes
 #include <vector>
 
-// Other libraries and framework includes
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/Triple.h"
 
-// Project includes
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RegisterValue.h"
-#include "lldb/Core/Scalar.h"
 #include "lldb/Core/Value.h"
 #include "lldb/Core/ValueObjectConstResult.h"
 #include "lldb/Symbol/UnwindPlan.h"
@@ -30,6 +24,8 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Target/Thread.h"
 #include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/RegisterValue.h"
+#include "lldb/Utility/Scalar.h"
 #include "lldb/Utility/Status.h"
 
 #include "Plugins/Process/Utility/ARMDefines.h"
@@ -1327,16 +1323,13 @@ size_t ABIMacOSX_arm::GetRedZoneSize() const { return 0; }
 
 ABISP
 ABIMacOSX_arm::CreateInstance(ProcessSP process_sp, const ArchSpec &arch) {
-  static ABISP g_abi_sp;
   const llvm::Triple::ArchType arch_type = arch.GetTriple().getArch();
   const llvm::Triple::VendorType vendor_type = arch.GetTriple().getVendor();
 
   if (vendor_type == llvm::Triple::Apple) {
     if ((arch_type == llvm::Triple::arm) ||
         (arch_type == llvm::Triple::thumb)) {
-      if (!g_abi_sp)
-        g_abi_sp.reset(new ABIMacOSX_arm(process_sp));
-      return g_abi_sp;
+      return ABISP(new ABIMacOSX_arm(process_sp));
     }
   }
 

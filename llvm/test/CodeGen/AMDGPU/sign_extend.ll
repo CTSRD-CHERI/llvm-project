@@ -1,5 +1,5 @@
-; RUN: llc -amdgpu-scalarize-global-loads=false -march=amdgcn -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN,SI %s
-; RUN: llc -amdgpu-scalarize-global-loads=false -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN,VI %s
+; RUN: llc -amdgpu-scalarize-global-loads=false -march=amdgcn -verify-machineinstrs < %s | FileCheck -allow-deprecated-dag-overlap -enable-var-scope -check-prefixes=GCN,SI %s
+; RUN: llc -amdgpu-scalarize-global-loads=false -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -allow-deprecated-dag-overlap -enable-var-scope -check-prefixes=GCN,VI %s
 
 ; GCN-LABEL: {{^}}s_sext_i1_to_i32:
 ; GCN: v_cndmask_b32_e64
@@ -55,6 +55,7 @@ define amdgpu_kernel void @v_sext_i32_to_i64(i64 addrspace(1)* %out, i32 addrspa
 }
 
 ; GCN-LABEL: {{^}}s_sext_i16_to_i64:
+; GCN: s_load_dword [[VAL:s[0-9]+]]
 ; GCN: s_bfe_i64 s{{\[[0-9]+:[0-9]+\]}}, s{{\[[0-9]+:[0-9]+\]}}, 0x100000
 define amdgpu_kernel void @s_sext_i16_to_i64(i64 addrspace(1)* %out, i16 %a) nounwind {
   %sext = sext i16 %a to i64

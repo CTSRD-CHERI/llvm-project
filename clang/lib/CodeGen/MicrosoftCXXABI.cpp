@@ -165,7 +165,7 @@ public:
   llvm::BasicBlock *
   EmitCtorCompleteObjectHandler(CodeGenFunction &CGF,
                                 const CXXRecordDecl *RD) override;
-  
+
   llvm::BasicBlock *
   EmitDtorCompleteObjectHandler(CodeGenFunction &CGF);
 
@@ -840,6 +840,7 @@ MicrosoftCXXABI::getRecordArgABI(const CXXRecordDecl *RD) const {
     return RAA_Default;
 
   case llvm::Triple::x86_64:
+  case llvm::Triple::aarch64:
     return !canCopyArgument(RD) ? RAA_Indirect : RAA_Default;
   }
 
@@ -1074,10 +1075,22 @@ bool MicrosoftCXXABI::classifyReturnType(CGFunctionInfo &FI) const {
     // the second parameter.
     FI.getReturnInfo() = ABIArgInfo::getIndirect(Align, /*ByVal=*/false);
     FI.getReturnInfo().setSRetAfterThis(FI.isInstanceMethod());
+
+    // aarch64-windows requires that instance methods use X1 for the return
+    // address. So for aarch64-windows we do not mark the
+    // return as SRet.
+    FI.getReturnInfo().setSuppressSRet(CGM.getTarget().getTriple().getArch() ==
+                                       llvm::Triple::aarch64);
     return true;
   } else if (!RD->isPOD()) {
     // If it's a free function, non-POD types are returned indirectly.
     FI.getReturnInfo() = ABIArgInfo::getIndirect(Align, /*ByVal=*/false);
+
+    // aarch64-windows requires that non-POD, non-instance returns use X0 for
+    // the return address. So for aarch64-windows we do not mark the return as
+    // SRet.
+    FI.getReturnInfo().setSuppressSRet(CGM.getTarget().getTriple().getArch() ==
+                                       llvm::Triple::aarch64);
     return true;
   }
 
@@ -1124,7 +1137,7 @@ MicrosoftCXXABI::EmitDtorCompleteObjectHandler(CodeGenFunction &CGF) {
 
   CGF.EmitBlock(CallVbaseDtorsBB);
   // CGF will put the base dtor calls in this basic block for us later.
-    
+
   return SkipVbaseDtorsBB;
 }
 
@@ -1394,7 +1407,7 @@ Address MicrosoftCXXABI::adjustThisArgumentForVirtualFunctionCall(
   Address Result = This;
   if (ML.VBase) {
     Result = CGF.Builder.CreateElementBitCast(Result, CGF.Int8Ty);
-    
+
     const CXXRecordDecl *Derived = MD->getParent();
     const CXXRecordDecl *VBase = ML.VBase;
     llvm::Value *VBaseOffset =
@@ -1553,9 +1566,9 @@ void MicrosoftCXXABI::EmitDestructorCall(CodeGenFunction &CGF,
   if (Type == Dtor_Complete && DD->getParent()->getNumVBases() == 0)
     Type = Dtor_Base;
 
-  CGCallee Callee = CGCallee::forDirect(
-                          CGM.getAddrOfCXXStructor(DD, getFromDtorType(Type)),
-                                        DD);
+  CGCallee Callee =
+      CGCallee::forDirect(CGM.getAddrOfCXXStructor(DD, getFromDtorType(Type)),
+                          GlobalDecl(DD, Type));
 
   if (DD->isVirtual()) {
     assert(Type != CXXDtorType::Dtor_Deleting &&
@@ -1563,21 +1576,21 @@ void MicrosoftCXXABI::EmitDestructorCall(CodeGenFunction &CGF,
     This = adjustThisArgumentForVirtualFunctionCall(CGF, GlobalDecl(DD, Type),
                                                     This, false);
   }
-  
+
   llvm::BasicBlock *BaseDtorEndBB = nullptr;
   if (ForVirtualBase && isa<CXXConstructorDecl>(CGF.CurCodeDecl)) {
     BaseDtorEndBB = EmitDtorCompleteObjectHandler(CGF);
-  }  
+  }
 
   CGF.EmitCXXDestructorCall(DD, Callee, This.getPointer(),
                             /*ImplicitParam=*/nullptr,
                             /*ImplicitParamTy=*/QualType(), nullptr,
                             getFromDtorType(Type));
   if (BaseDtorEndBB) {
-    // Complete object handler should continue to be the remaining 
+    // Complete object handler should continue to be the remaining
     CGF.Builder.CreateBr(BaseDtorEndBB);
     CGF.EmitBlock(BaseDtorEndBB);
-  } 
+  }
 }
 
 void MicrosoftCXXABI::emitVTableTypeMetadata(const VPtrInfo &Info,
@@ -1874,7 +1887,7 @@ CGCallee MicrosoftCXXABI::getVirtualFunctionPointer(CodeGenFunction &CGF,
     VFunc = Builder.CreateAlignedLoad(VFuncPtr, CGF.getPointerAlign());
   }
 
-  CGCallee Callee(MethodDecl->getCanonicalDecl(), VFunc);
+  CGCallee Callee(GD, VFunc);
   return Callee;
 }
 
@@ -2027,8 +2040,10 @@ MicrosoftCXXABI::getAddrOfVBTable(const VPtrInfo &VBT, const CXXRecordDecl *RD,
 
   assert(!CGM.getModule().getNamedGlobal(Name) &&
          "vbtable with this name already exists: mangling bug?");
-  llvm::GlobalVariable *GV =
-      CGM.CreateOrReplaceCXXRuntimeVariable(Name, VBTableType, Linkage);
+  CharUnits Alignment =
+      CGM.getContext().getTypeAlignInChars(CGM.getContext().IntTy);
+  llvm::GlobalVariable *GV = CGM.CreateOrReplaceCXXRuntimeVariable(
+      Name, VBTableType, Linkage, Alignment.getQuantity());
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
 
   if (RD->hasAttr<DLLImportAttr>())
@@ -2243,6 +2258,9 @@ static void emitGlobalDtorWithTLRegDtor(CodeGenFunction &CGF, const VarDecl &VD,
 void MicrosoftCXXABI::registerGlobalDtor(CodeGenFunction &CGF, const VarDecl &D,
                                          llvm::Constant *Dtor,
                                          llvm::Constant *Addr) {
+  if (D.isNoDestroy(CGM.getContext()))
+    return;
+
   if (D.getTLSKind())
     return emitGlobalDtorWithTLRegDtor(CGF, D, Dtor, Addr);
 
@@ -3364,7 +3382,7 @@ CGCXXABI *clang::CodeGen::CreateMicrosoftCXXABI(CodeGenModule &CGM) {
 //   a reference to the TypeInfo for the type and a reference to the
 //   CompleteHierarchyDescriptor for the type.
 //
-// ClassHieararchyDescriptor: Contains information about a class hierarchy.
+// ClassHierarchyDescriptor: Contains information about a class hierarchy.
 //   Used during dynamic_cast to walk a class hierarchy.  References a base
 //   class array and the size of said array.
 //
@@ -3967,7 +3985,8 @@ MicrosoftCXXABI::getAddrOfCXXCtorClosure(const CXXConstructorDecl *CD,
   // Call the destructor with our arguments.
   llvm::Constant *CalleePtr =
     CGM.getAddrOfCXXStructor(CD, StructorType::Complete);
-  CGCallee Callee = CGCallee::forDirect(CalleePtr, CD);
+  CGCallee Callee =
+      CGCallee::forDirect(CalleePtr, GlobalDecl(CD, Ctor_Complete));
   const CGFunctionInfo &CalleeInfo = CGM.getTypes().arrangeCXXConstructorCall(
       Args, CD, Ctor_Complete, ExtraArgs.Prefix, ExtraArgs.Suffix);
   CGF.EmitCall(CalleeInfo, Callee, ReturnValueSlot(), Args);

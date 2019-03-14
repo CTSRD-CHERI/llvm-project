@@ -7,14 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
 
-// Project includes
 #include "lldb/Expression/FunctionCaller.h"
 #include "lldb/Core/Module.h"
-#include "lldb/Core/State.h"
 #include "lldb/Core/ValueObject.h"
 #include "lldb/Core/ValueObjectList.h"
 #include "lldb/Expression/DiagnosticManager.h"
@@ -31,6 +26,7 @@
 #include "lldb/Target/ThreadPlanCallFunction.h"
 #include "lldb/Utility/DataExtractor.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/State.h"
 
 using namespace lldb_private;
 
@@ -91,8 +87,12 @@ bool FunctionCaller::WriteFunctionWrapper(
       m_jit_start_addr, m_jit_end_addr, m_execution_unit_sp, exe_ctx,
       can_interpret, eExecutionPolicyAlways));
 
-  if (!jit_error.Success())
+  if (!jit_error.Success()) {
+    diagnostic_manager.Printf(eDiagnosticSeverityError,
+                              "Error in PrepareForExecution: %s.",
+                              jit_error.AsCString());
     return false;
+  }
 
   if (m_parser->GetGenerateDebugInfo()) {
     lldb::ModuleSP jit_module_sp(m_execution_unit_sp->GetJITModule());

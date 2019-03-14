@@ -6,7 +6,10 @@ idiv %eax
 # CHECK:      Iterations:        22
 # CHECK-NEXT: Instructions:      22
 # CHECK-NEXT: Total Cycles:      553
-# CHECK-NEXT: Dispatch Width:    2
+# CHECK-NEXT: Total uOps:        44
+
+# CHECK:      Dispatch Width:    2
+# CHECK-NEXT: uOps Per Cycle:    0.08
 # CHECK-NEXT: IPC:               0.04
 # CHECK-NEXT: Block RThroughput: 25.0
 
@@ -16,23 +19,23 @@ idiv %eax
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
-# CHECK-NEXT:  2      25    25.00                 *     idivl	%eax
+# CHECK-NEXT:  2      25    25.00                 U     idivl	%eax
 
 # CHECK:      Dynamic Dispatch Stall Cycles:
-# CHECK-NEXT: RAT     - Register unavailable:                      6
+# CHECK-NEXT: RAT     - Register unavailable:                      6  (1.1%)
 # CHECK-NEXT: RCU     - Retire tokens unavailable:                 0
 # CHECK-NEXT: SCHEDQ  - Scheduler full:                            0
 # CHECK-NEXT: LQ      - Load queue full:                           0
 # CHECK-NEXT: SQ      - Store queue full:                          0
 # CHECK-NEXT: GROUP   - Static restrictions on the dispatch group: 0
 
-# CHECK:      Dispatch Logic - number of cycles where we saw N instructions dispatched:
+# CHECK:      Dispatch Logic - number of cycles where we saw N micro opcodes dispatched:
 # CHECK-NEXT: [# dispatched], [# cycles]
 # CHECK-NEXT:  0,              531  (96.0%)
-# CHECK-NEXT:  1,              22  (4.0%)
+# CHECK-NEXT:  2,              22  (4.0%)
 
 # CHECK:      Register File statistics:
 # CHECK-NEXT: Total number of mappings created:    66

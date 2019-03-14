@@ -16,15 +16,17 @@ int _start(void) {
   // CHECK-NEXT: daddu	$2, $2, $1
   // CHECK-NEXT: beqz	$2, .Lskip_cgp_setup
   // CHECK-NEXT: nop
+  // CHECK-NEXT: creadhwr $c14, $chwr_ddc
+  // CHECK-NEXT: cbtu $c14, .Lskip_cgp_setup
   // CHECK-NEXT: lui	$3, %highest(__cap_table_end)
   // CHECK-NEXT: lui	$1, %hi(__cap_table_end)
   // CHECK-NEXT: daddiu	$3, $3, %higher(__cap_table_end)
   // CHECK-NEXT: daddiu	$1, $1, %lo(__cap_table_end)
   // CHECK-NEXT: dsll32	$3, $3, 0
   // CHECK-NEXT: daddu	$3, $3, $1
-  // CHECK-NEXT: creadhwr $c26, $chwr_ddc
-  // CHECK-NEXT: csetoffset	$c26, $c26, $2
+  // CHECK-NEXT: csetoffset $c26, $c14, $2
   // CHECK-NEXT: dsubu	$1, $3, $2
+  // CHECK-NEXT: cgetnull $c14
   // CHECK-NEXT: csetbounds	$c26, $c26, $1
   // CHECK-NEXT: .Lskip_cgp_setup:
   // CHECK-NEXT: .set    noat

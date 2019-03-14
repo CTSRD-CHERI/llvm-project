@@ -80,10 +80,9 @@ public:
 
   lldb::SBLineEntry GetLineEntry();
 
-  lldb::AddressClass GetAddressClass();
-
 protected:
   friend class SBBlock;
+  friend class SBBreakpoint;
   friend class SBBreakpointLocation;
   friend class SBFrame;
   friend class SBFunction;
@@ -103,7 +102,7 @@ protected:
 
   const lldb_private::Address *operator->() const;
 
-  friend bool operator==(const SBAddress &lhs, const SBAddress &rhs);
+  friend bool LLDB_API operator==(const SBAddress &lhs, const SBAddress &rhs);
 
   lldb_private::Address *get();
 
@@ -119,7 +118,7 @@ private:
   std::unique_ptr<lldb_private::Address> m_opaque_ap;
 };
 
-bool operator==(const SBAddress &lhs, const SBAddress &rhs);
+bool LLDB_API operator==(const SBAddress &lhs, const SBAddress &rhs);
 
 } // namespace lldb
 

@@ -13,7 +13,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Option/Arg.h"
+#include "clang/Basic/Stack.h"
 #include "clang/CodeGen/ObjectFilePCHContainerOperations.h"
 #include "clang/Config/config.h"
 #include "clang/Driver/DriverDiagnostic.h"
@@ -28,8 +28,10 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/LinkAllPasses.h"
+#include "llvm/Option/Arg.h"
 #include "llvm/Option/ArgList.h"
 #include "llvm/Option/OptTable.h"
+#include "llvm/Support/BuryPointer.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -37,6 +39,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include <cstdio>
 
 #ifdef CLANG_HAVE_RLIMITS
@@ -73,13 +76,6 @@ void initializePollyPasses(llvm::PassRegistry &Registry);
 #endif
 
 #ifdef CLANG_HAVE_RLIMITS
-// The amount of stack we think is "sufficient". If less than this much is
-// available, we may be unable to reach our template instantiation depth
-// limit and other similar limits.
-// FIXME: Unify this with the stack we request when spawning a thread to build
-// a module.
-static const int kSufficientStack = 8 << 20;
-
 #if defined(__linux__) && defined(__PIE__)
 static size_t getCurrentStackAllocation() {
   // If we can't compute the current stack usage, allow for 512K of command
@@ -117,7 +113,7 @@ static size_t getCurrentStackAllocation() {
 #include <alloca.h>
 
 LLVM_ATTRIBUTE_NOINLINE
-static void ensureStackAddressSpace(int ExtraChunks = 0) {
+static void ensureStackAddressSpace() {
   // Linux kernels prior to 4.1 will sometimes locate the heap of a PIE binary
   // relatively close to the stack (they are only guaranteed to be 128MiB
   // apart). This results in crashes if we happen to heap-allocate more than
@@ -126,7 +122,7 @@ static void ensureStackAddressSpace(int ExtraChunks = 0) {
   // To avoid these crashes, ensure that we have sufficient virtual memory
   // pages allocated before we start running.
   size_t Curr = getCurrentStackAllocation();
-  const int kTargetStack = kSufficientStack - 256 * 1024;
+  const int kTargetStack = DesiredStackSize - 256 * 1024;
   if (Curr < kTargetStack) {
     volatile char *volatile Alloc =
         static_cast<volatile char *>(alloca(kTargetStack - Curr));
@@ -146,21 +142,23 @@ static void ensureSufficientStack() {
 
   // Increase the soft stack limit to our desired level, if necessary and
   // possible.
-  if (rlim.rlim_cur != RLIM_INFINITY && rlim.rlim_cur < kSufficientStack) {
+  if (rlim.rlim_cur != RLIM_INFINITY &&
+      rlim.rlim_cur < rlim_t(DesiredStackSize)) {
     // Try to allocate sufficient stack.
-    if (rlim.rlim_max == RLIM_INFINITY || rlim.rlim_max >= kSufficientStack)
-      rlim.rlim_cur = kSufficientStack;
+    if (rlim.rlim_max == RLIM_INFINITY ||
+        rlim.rlim_max >= rlim_t(DesiredStackSize))
+      rlim.rlim_cur = DesiredStackSize;
     else if (rlim.rlim_cur == rlim.rlim_max)
       return;
     else
       rlim.rlim_cur = rlim.rlim_max;
 
     if (setrlimit(RLIMIT_STACK, &rlim) != 0 ||
-        rlim.rlim_cur != kSufficientStack)
+        rlim.rlim_cur != DesiredStackSize)
       return;
   }
 
-  // We should now have a stack of size at least kSufficientStack. Ensure
+  // We should now have a stack of size at least DesiredStackSize. Ensure
   // that we can actually use that much, if necessary.
   ensureStackAddressSpace();
 }
@@ -221,6 +219,35 @@ int cc1_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
   // Execute the frontend actions.
   Success = ExecuteCompilerInvocation(Clang.get());
 
+  // Dump the CHERI CSetBounds stats now
+  if (llvm::cheri::ShouldCollectCSetBoundsStats) {
+    StringRef StatsOutput = llvm::cheri::CSetBoundsStatistics::outputFile();
+    if (StatsOutput.empty())
+      StatsOutput = Clang->getCodeGenOpts().CHERIStatsFile;
+    auto StatsFile = llvm::cheri::StatsOutputFile::open(
+        StatsOutput,
+        [&Clang](StringRef StatsFile, const std::error_code &EC) {
+          Clang->getDiagnostics().Report(
+              diag::warn_fe_unable_to_open_stats_file)
+              << StatsFile << EC.message();
+        },
+        [&Clang](StringRef StatsFile, const std::error_code &EC) {
+          Clang->getDiagnostics().Report(
+              diag::warn_fe_unable_to_lock_stats_file)
+              << StatsFile << EC.message();
+        });
+    if (StatsFile) {
+      StringRef MainFile = Clang->getCodeGenOpts().MainFileName;
+      if (MainFile.empty()) {
+        const SourceManager &SM = Clang->getSourceManager();
+        SourceLocation MainFileLoc =
+            SM.getLocForStartOfFile(SM.getMainFileID());
+        MainFile = SM.getFilename(MainFileLoc);
+      }
+      llvm::cheri::CSetBoundsStats->print(*StatsFile, MainFile);
+    }
+  }
+
   // If any timers were active but haven't been destroyed yet, print their
   // results now.  This happens in -disable-free mode.
   llvm::TimerGroup::printAll(llvm::errs());
@@ -232,7 +259,7 @@ int cc1_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
 
   // When running with -disable-free, don't do any destruction or shutdown.
   if (Clang->getFrontendOpts().DisableFree) {
-    BuryPointer(std::move(Clang));
+    llvm::BuryPointer(std::move(Clang));
     return !Success;
   }
 

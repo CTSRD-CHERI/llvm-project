@@ -42,11 +42,11 @@
 
 // now try a non-cheri triple with -cheri
 // RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri \
-// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI128 -DARCHNAME=MIPS64R2 %s
+// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI128 -DARCHNAME=MIPS3 %s
 // RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri=128 \
-// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI128 -DARCHNAME=MIPS64R2 %s
+// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI128 -DARCHNAME=MIPS3 %s
 // RUN: %plain_clang_cheri_triple_allowed -target mips64-unknown-freebsd11 -cheri=256 \
-// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI256 -DARCHNAME=MIPS64R2 %s
+// RUN:   -mabi=n64 -E -dM -xc /dev/null 2>&1 | FileCheck --check-prefixes=MIPS-CHERI256 -DARCHNAME=MIPS3 %s
 
 
 // CHERI128: #define _MIPS_CAP_ALIGN_MASK 0xfffffffffffffff0

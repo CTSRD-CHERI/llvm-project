@@ -65,7 +65,8 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("-r");
   } else {
     CmdArgs.push_back("--build-id");
-    CmdArgs.push_back("--hash-style=gnu");
+    // LLD rejects gnu hash style for MIPS
+    //CmdArgs.push_back("--hash-style=gnu");
   }
 
   CmdArgs.push_back("--eh-frame-hdr");
@@ -81,8 +82,20 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   CmdArgs.push_back(Output.getFilename());
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
-    const char* Crt0 = Args.hasArg(options::OPT_q_rtems) ? "start.o" : "crt0.o";
-    CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(Crt0)));
+    if (!Args.hasArg(options::OPT_q_rtems)) {
+
+      // RTEMS must provide a --sysroot path to its installed C library
+      const char* arg = nullptr;
+      if (D.SysRoot.empty()) {
+        ToolChain.getDriver().Diag(diag::err_drv_argument_not_allowed_with)
+          << "missing --sysroot= option" << "rtems driver";
+        arg = Args.MakeArgString(ToolChain.GetFilePath("crt0.o"));
+      } else {
+        arg = Args.MakeArgString(D.SysRoot + "/lib/crt0.o");
+      }
+      CmdArgs.push_back(arg);
+    }
+    // Otherwise, RTEMS build system should provide its own start file
   }
 
   Args.AddAllArgs(CmdArgs, options::OPT_L);
@@ -98,6 +111,7 @@ void rtems::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     // Add the rtems libns:
     if (Args.hasArg(options::OPT_q_rtems)) {
+      CmdArgs.push_back("-Tlinkcmds");
       CmdArgs.push_back("-lrtemsbsp");
       CmdArgs.push_back("-lrtemscpu");
     }

@@ -10,43 +10,43 @@
 #include "lldb/Core/Address.h"
 #include "lldb/Core/DumpDataExtractor.h"
 #include "lldb/Core/Module.h"
-#include "lldb/Core/ModuleList.h" // for ModuleList
+#include "lldb/Core/ModuleList.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Symbol/Block.h"
-#include "lldb/Symbol/Declaration.h" // for Declaration
-#include "lldb/Symbol/LineEntry.h"   // for LineEntry
+#include "lldb/Symbol/Declaration.h"
+#include "lldb/Symbol/LineEntry.h"
 #include "lldb/Symbol/ObjectFile.h"
-#include "lldb/Symbol/Symbol.h"        // for Symbol
-#include "lldb/Symbol/SymbolContext.h" // for SymbolContext
+#include "lldb/Symbol/Symbol.h"
+#include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Symbol/SymbolVendor.h"
-#include "lldb/Symbol/Symtab.h" // for Symtab
-#include "lldb/Symbol/Type.h"   // for Type
+#include "lldb/Symbol/Symtab.h"
+#include "lldb/Symbol/Type.h"
 #include "lldb/Symbol/Variable.h"
 #include "lldb/Symbol/VariableList.h"
 #include "lldb/Target/ExecutionContext.h"
-#include "lldb/Target/ExecutionContextScope.h" // for ExecutionContextScope
+#include "lldb/Target/ExecutionContextScope.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
-#include "lldb/Utility/ConstString.h"   // for ConstString
-#include "lldb/Utility/DataExtractor.h" // for DataExtractor
-#include "lldb/Utility/Endian.h"        // for InlHostByteOrder
-#include "lldb/Utility/FileSpec.h"      // for FileSpec
-#include "lldb/Utility/Status.h"        // for Status
-#include "lldb/Utility/Stream.h"        // for Stream
-#include "lldb/Utility/StreamString.h"  // for StreamString
+#include "lldb/Utility/ConstString.h"
+#include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Endian.h"
+#include "lldb/Utility/FileSpec.h"
+#include "lldb/Utility/Status.h"
+#include "lldb/Utility/Stream.h"
+#include "lldb/Utility/StreamString.h"
 
-#include "llvm/ADT/StringRef.h" // for StringRef
+#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Triple.h"
-#include "llvm/Support/Compiler.h" // for LLVM_FALLTHROUGH
+#include "llvm/Support/Compiler.h"
 
-#include <cstdint> // for uint8_t, uint32_t
-#include <memory>  // for shared_ptr, operator!=
-#include <vector>  // for vector
+#include <cstdint>
+#include <memory>
+#include <vector>
 
-#include <assert.h>   // for assert
-#include <inttypes.h> // for PRIu64, PRIx64
-#include <string.h>   // for size_t, strlen
+#include <assert.h>
+#include <inttypes.h>
+#include <string.h>
 
 namespace lldb_private {
 class CompileUnit;
@@ -351,7 +351,7 @@ addr_t Address::GetOpcodeLoadAddress(Target *target,
                                      AddressClass addr_class) const {
   addr_t code_addr = GetLoadAddress(target);
   if (code_addr != LLDB_INVALID_ADDRESS) {
-    if (addr_class == eAddressClassInvalid)
+    if (addr_class == AddressClass::eInvalid)
       addr_class = GetAddressClass();
     code_addr = target->GetOpcodeLoadAddress(code_addr, addr_class);
   }
@@ -363,7 +363,7 @@ bool Address::SetOpcodeLoadAddress(lldb::addr_t load_addr, Target *target,
                                    bool allow_section_end) {
   if (SetLoadAddress(load_addr, target, allow_section_end)) {
     if (target) {
-      if (addr_class == eAddressClassInvalid)
+      if (addr_class == AddressClass::eInvalid)
         addr_class = GetAddressClass();
       m_offset = target->GetOpcodeLoadAddress(m_offset, addr_class);
     }
@@ -438,7 +438,7 @@ bool Address::Dump(Stream *s, ExecutionContextScope *exe_scope, DumpStyle style,
     /*
      * MIPS:
      * Display address in compressed form for MIPS16 or microMIPS
-     * if the address belongs to eAddressClassCodeAlternateISA.
+     * if the address belongs to AddressClass::eCodeAlternateISA.
     */
     if (target) {
       const llvm::Triple::ArchType llvm_arch =
@@ -779,8 +779,9 @@ bool Address::SectionWasDeletedPrivate() const {
          m_section_wp.owner_before(empty_section_wp);
 }
 
-uint32_t Address::CalculateSymbolContext(SymbolContext *sc,
-                                         uint32_t resolve_scope) const {
+uint32_t
+Address::CalculateSymbolContext(SymbolContext *sc,
+                                SymbolContextItem resolve_scope) const {
   sc->Clear(false);
   // Absolute addresses don't have enough information to reconstruct even their
   // target.
@@ -987,12 +988,14 @@ AddressClass Address::GetAddressClass() const {
   if (module_sp) {
     ObjectFile *obj_file = module_sp->GetObjectFile();
     if (obj_file) {
-      // Give the symbol vendor a chance to add to the unified section list.
-      module_sp->GetSymbolVendor();
+      // Give the symbol vendor a chance to add to the unified section list
+      // and to symtab from symbol file
+      if (SymbolVendor *vendor = module_sp->GetSymbolVendor())
+        vendor->GetSymtab();
       return obj_file->GetAddressClass(GetFileAddress());
     }
   }
-  return eAddressClassUnknown;
+  return AddressClass::eUnknown;
 }
 
 bool Address::SetLoadAddress(lldb::addr_t load_addr, Target *target,

@@ -10,15 +10,11 @@
 #ifndef liblldb_RangeMap_h_
 #define liblldb_RangeMap_h_
 
-// C Includes
-// C++ Includes
 #include <algorithm>
 #include <vector>
 
-// Other libraries and framework includes
 #include "llvm/ADT/SmallVector.h"
 
-// Project includes
 #include "lldb/lldb-private.h"
 
 // Uncomment to make sure all Range objects are sorted when needed
@@ -169,8 +165,6 @@ public:
 #ifdef ASSERT_RANGEMAP_ARE_SORTED
   bool IsSorted() const {
     typename Collection::const_iterator pos, end, prev;
-    // First we determine if we can combine any of the Entry objects so we
-    // don't end up allocating and making a new collection for no reason
     for (pos = m_entries.begin(), end = m_entries.end(), prev = end; pos != end;
          prev = pos++) {
       if (prev != end && *pos < *prev)

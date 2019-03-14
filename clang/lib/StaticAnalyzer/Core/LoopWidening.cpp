@@ -56,7 +56,7 @@ ProgramStateRef getWidenedLoopState(ProgramStateRef PrevState,
   //      being so inprecise. When the invalidation is improved, the handling
   //      of nested loops will also need to be improved.
   ASTContext &ASTCtx = LCtx->getAnalysisDeclContext()->getASTContext();
-  const StackFrameContext *STC = LCtx->getCurrentStackFrame();
+  const StackFrameContext *STC = LCtx->getStackFrame();
   MemRegionManager &MRMgr = PrevState->getStateManager().getRegionManager();
   const MemRegion *Regions[] = {MRMgr.getStackLocalsRegion(STC),
                                 MRMgr.getStackArgumentsRegion(STC),
@@ -81,8 +81,10 @@ ProgramStateRef getWidenedLoopState(ProgramStateRef PrevState,
 
   // 'this' pointer is not an lvalue, we should not invalidate it. If the loop
   // is located in a method, constructor or destructor, the value of 'this'
-  // pointer shoule remain unchanged.
-  if (const CXXMethodDecl *CXXMD = dyn_cast<CXXMethodDecl>(STC->getDecl())) {
+  // pointer should remain unchanged.  Ignore static methods, since they do not
+  // have 'this' pointers.
+  const CXXMethodDecl *CXXMD = dyn_cast<CXXMethodDecl>(STC->getDecl());
+  if (CXXMD && !CXXMD->isStatic()) {
     const CXXThisRegion *ThisR = MRMgr.getCXXThisRegion(
         CXXMD->getThisType(STC->getAnalysisDeclContext()->getASTContext()),
         STC);

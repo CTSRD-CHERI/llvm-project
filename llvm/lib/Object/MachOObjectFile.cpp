@@ -1592,8 +1592,8 @@ MachOObjectFile::MachOObjectFile(MemoryBufferRef Object, bool IsLittleEndian,
                            "command extends past the end of the symbol table");
       return;
     }
-    if (Dysymtab.nextdefsym != 0 && Dysymtab.ilocalsym > Symtab.nsyms) {
-      Err = malformedError("nextdefsym in LC_DYSYMTAB load command "
+    if (Dysymtab.nextdefsym != 0 && Dysymtab.iextdefsym > Symtab.nsyms) {
+      Err = malformedError("iextdefsym in LC_DYSYMTAB load command "
                            "extends past the end of the symbol table");
       return;
     }
@@ -1606,7 +1606,7 @@ MachOObjectFile::MachOObjectFile(MemoryBufferRef Object, bool IsLittleEndian,
       return;
     }
     if (Dysymtab.nundefsym != 0 && Dysymtab.iundefsym > Symtab.nsyms) {
-      Err = malformedError("nundefsym in LC_DYSYMTAB load command "
+      Err = malformedError("iundefsym in LC_DYSYMTAB load command "
                            "extends past the end of the symbol table");
       return;
     }
@@ -1937,6 +1937,27 @@ uint64_t MachOObjectFile::getSectionAlignment(DataRefImpl Sec) const {
   }
 
   return uint64_t(1) << Align;
+}
+
+Expected<SectionRef> MachOObjectFile::getSection(unsigned SectionIndex) const {
+  if (SectionIndex < 1 || SectionIndex > Sections.size())
+    return malformedError("bad section index: " + Twine((int)SectionIndex));
+
+  DataRefImpl DRI;
+  DRI.d.a = SectionIndex - 1;
+  return SectionRef(DRI, this);
+}
+
+Expected<SectionRef> MachOObjectFile::getSection(StringRef SectionName) const {
+  StringRef SecName;
+  for (const SectionRef &Section : sections()) {
+    if (std::error_code E = Section.getName(SecName))
+      return errorCodeToError(E);
+    if (SecName == SectionName) {
+      return Section;
+    }
+  }
+  return errorCodeToError(object_error::parse_failed);
 }
 
 bool MachOObjectFile::isSectionCompressed(DataRefImpl Sec) const {

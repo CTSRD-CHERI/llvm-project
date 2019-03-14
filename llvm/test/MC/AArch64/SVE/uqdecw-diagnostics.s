@@ -3,11 +3,6 @@
 // ------------------------------------------------------------------------- //
 // Invalid result register
 
-uqdecw w0
-// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand
-// CHECK-NEXT: uqdecw w0
-// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
-
 uqdecw wsp
 // CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand
 // CHECK-NEXT: uqdecw wsp
@@ -16,6 +11,30 @@ uqdecw wsp
 uqdecw sp
 // CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand
 // CHECK-NEXT: uqdecw sp
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+uqdecw z0.d
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid element width
+// CHECK-NEXT: uqdecw z0.d
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+
+// ------------------------------------------------------------------------- //
+// Operands not matching up (unsigned dec only has one register operand)
+
+uqdecw x0, w0
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand
+// CHECK-NEXT: uqdecw x0, w0
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+uqdecw w0, w0
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand
+// CHECK-NEXT: uqdecw w0, w0
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+uqdecw x0, x0
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand
+// CHECK-NEXT: uqdecw x0, x0
 // CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
 
 
@@ -42,12 +61,12 @@ uqdecw x0, all, mul #17
 // Invalid predicate patterns
 
 uqdecw x0, vl512
-// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid predicate pattern
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand
 // CHECK-NEXT: uqdecw x0, vl512
 // CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
 
 uqdecw x0, vl9
-// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid predicate pattern
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid operand
 // CHECK-NEXT: uqdecw x0, vl9
 // CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
 
@@ -59,4 +78,26 @@ uqdecw x0, #-1
 uqdecw x0, #32
 // CHECK: [[@LINE-1]]:{{[0-9]+}}: error: invalid predicate pattern
 // CHECK-NEXT: uqdecw x0, #32
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+
+// --------------------------------------------------------------------------//
+// Negative tests for instructions that are incompatible with movprfx
+
+movprfx z0.s, p0/z, z7.s
+uqdecw  z0.s
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: instruction is unpredictable when following a predicated movprfx, suggest using unpredicated movprfx
+// CHECK-NEXT: uqdecw  z0.s
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+movprfx z0.s, p0/z, z7.s
+uqdecw  z0.s, pow2, mul #16
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: instruction is unpredictable when following a predicated movprfx, suggest using unpredicated movprfx
+// CHECK-NEXT: uqdecw  z0.s, pow2, mul #16
+// CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:
+
+movprfx z0.s, p0/z, z7.s
+uqdecw  z0.s, pow2
+// CHECK: [[@LINE-1]]:{{[0-9]+}}: error: instruction is unpredictable when following a predicated movprfx, suggest using unpredicated movprfx
+// CHECK-NEXT: uqdecw  z0.s, pow2
 // CHECK-NOT: [[@LINE-1]]:{{[0-9]+}}:

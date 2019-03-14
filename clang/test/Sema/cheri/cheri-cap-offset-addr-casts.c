@@ -1,5 +1,5 @@
-// RUN: %cheri_cc1 -verify %s
-// RUN: %cheri_purecap_cc1 -verify %s
+// RUN: %cheri_cc1 -verify=expected,hybrid %s
+// RUN: %cheri_purecap_cc1 -verify=expected,purecap %s
 // RUN: not %cheri_cc1 -ast-dump %s 2>/dev/null | FileCheck --check-prefix=AST %s
 // RUN: not %cheri_purecap_cc1 -ast-dump %s 2>/dev/null | FileCheck --check-prefixes=AST,PURECAP-AST %s
 //
@@ -41,6 +41,24 @@ void types_addr(char * __capability c) {
   // expected-error@-4 {{integral pointer type 'char *' is not a valid target type for __cheri_addr}}
 #endif
 }
+
+struct foo { char* x; };
+
+void bad_src_type(long l, struct foo foo, struct foo* fooptr) {
+  long a1 = (__cheri_addr long)l; // expected-error{{invalid source type 'long' for __cheri_addr: source must be a capability}}
+  long a2 = (__cheri_addr long)foo;  // expected-error{{invalid source type 'struct foo' for __cheri_addr: source must be a capability}}
+  // These are fine (both hybrid and purecap):
+  long a3 = (__cheri_addr long)foo.x;
+  long a4 = (__cheri_addr long)fooptr;
+
+  // However, for __cheri_offset the source must be a capability
+  long o1 = (__cheri_offset long)l;    // expected-error{{invalid source type 'long' for __cheri_offset: source must be a capability}}
+  long o2 = (__cheri_offset long)foo;  // expected-error{{invalid source type 'struct foo' for __cheri_offset: source must be a capability}}
+  // These are errors in the hybrid ABI::
+  long o3 = (__cheri_offset long)foo.x; // hybrid-error{{invalid source type 'char *' for __cheri_offset: source must be a capability}}
+  long o4 = (__cheri_offset long)fooptr; // hybrid-error{{invalid source type 'struct foo *' for __cheri_offset: source must be a capability}}
+}
+
 
 #ifdef __CHERI_PURE_CAPABILITY__
 void decay() {

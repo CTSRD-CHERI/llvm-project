@@ -254,7 +254,7 @@ bool ELFAsmParser::ParseSectionName(StringRef &SectionName) {
     if (getLexer().is(AsmToken::Comma) ||
       getLexer().is(AsmToken::EndOfStatement))
       break;
-    
+
     unsigned CurSize;
     if (getLexer().is(AsmToken::String)) {
       CurSize = getTok().getIdentifier().size() + 2;
@@ -320,6 +320,9 @@ static unsigned parseSectionFlags(StringRef flagsStr, bool *UseLastGroup) {
       break;
     case 'y':
       flags |= ELF::SHF_ARM_PURECODE;
+      break;
+    case 's':
+      flags |= ELF::SHF_HEX_GPREL;
       break;
     case 'G':
       flags |= ELF::SHF_GROUP;

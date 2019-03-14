@@ -9,12 +9,10 @@
 
 #pragma once
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
+#include <functional>
+
 #include "lldb/API/SBError.h"
 
-// Project includes
 #include "MICmdArgSet.h"
 #include "MICmdData.h"
 #include "MICmdFactory.h"

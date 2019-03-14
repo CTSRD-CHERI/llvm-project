@@ -7,6 +7,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ADT/ilist.h"
 #include "llvm/ADT/iterator.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
@@ -34,6 +35,34 @@ static_assert(std::is_same<typename AdaptedIter::pointer, Shadow<2>>::value,
               "");
 static_assert(std::is_same<typename AdaptedIter::reference, Shadow<3>>::value,
               "");
+
+// Ensure that pointe{e,r}_iterator adaptors correctly forward the category of
+// the underlying iterator.
+
+using RandomAccessIter = SmallVectorImpl<int*>::iterator;
+using BidiIter = ilist<int*>::iterator;
+
+template<class T>
+using pointee_iterator_defaulted = pointee_iterator<T>;
+template<class T>
+using pointer_iterator_defaulted = pointer_iterator<T>;
+
+// Ensures that an iterator and its adaptation have the same iterator_category.
+template<template<typename> class A, typename It>
+using IsAdaptedIterCategorySame =
+  std::is_same<typename std::iterator_traits<It>::iterator_category,
+               typename std::iterator_traits<A<It>>::iterator_category>;
+
+// pointeE_iterator
+static_assert(IsAdaptedIterCategorySame<pointee_iterator_defaulted,
+                                        RandomAccessIter>::value, "");
+static_assert(IsAdaptedIterCategorySame<pointee_iterator_defaulted,
+                                        BidiIter>::value, "");
+// pointeR_iterator
+static_assert(IsAdaptedIterCategorySame<pointer_iterator_defaulted,
+                                        RandomAccessIter>::value, "");
+static_assert(IsAdaptedIterCategorySame<pointer_iterator_defaulted,
+                                        BidiIter>::value, "");
 
 TEST(PointeeIteratorTest, Basic) {
   int arr[4] = {1, 2, 3, 4};
@@ -126,6 +155,20 @@ TEST(PointeeIteratorTest, Range) {
   int I = 0;
   for (int II : make_pointee_range(V))
     EXPECT_EQ(A[I++], II);
+}
+
+TEST(PointeeIteratorTest, PointeeType) {
+  struct S {
+    int X;
+    bool operator==(const S &RHS) const { return X == RHS.X; };
+  };
+  S A[] = {S{0}, S{1}};
+  SmallVector<S *, 2> V{&A[0], &A[1]};
+
+  pointee_iterator<SmallVectorImpl<S *>::const_iterator, const S> I = V.begin();
+  for (int j = 0; j < 2; ++j, ++I) {
+    EXPECT_EQ(*V[j], *I);
+  }
 }
 
 TEST(FilterIteratorTest, Lambda) {
@@ -285,6 +328,40 @@ TEST(ZipIteratorTest, ZipFirstBasic) {
   EXPECT_EQ(iters, 4u);
 }
 
+TEST(ZipIteratorTest, ZipLongestBasic) {
+  using namespace std;
+  const vector<unsigned> pi{3, 1, 4, 1, 5, 9};
+  const vector<StringRef> e{"2", "7", "1", "8"};
+
+  {
+    // Check left range longer than right.
+    const vector<tuple<Optional<unsigned>, Optional<StringRef>>> expected{
+        make_tuple(3, StringRef("2")), make_tuple(1, StringRef("7")),
+        make_tuple(4, StringRef("1")), make_tuple(1, StringRef("8")),
+        make_tuple(5, None),           make_tuple(9, None)};
+    size_t iters = 0;
+    for (auto tup : zip_longest(pi, e)) {
+      EXPECT_EQ(tup, expected[iters]);
+      iters += 1;
+    }
+    EXPECT_EQ(iters, expected.size());
+  }
+
+  {
+    // Check right range longer than left.
+    const vector<tuple<Optional<StringRef>, Optional<unsigned>>> expected{
+        make_tuple(StringRef("2"), 3), make_tuple(StringRef("7"), 1),
+        make_tuple(StringRef("1"), 4), make_tuple(StringRef("8"), 1),
+        make_tuple(None, 5),           make_tuple(None, 9)};
+    size_t iters = 0;
+    for (auto tup : zip_longest(e, pi)) {
+      EXPECT_EQ(tup, expected[iters]);
+      iters += 1;
+    }
+    EXPECT_EQ(iters, expected.size());
+  }
+}
+
 TEST(ZipIteratorTest, Mutability) {
   using namespace std;
   const SmallVector<unsigned, 4> pi{3, 1, 4, 1, 5, 9};
@@ -371,6 +448,19 @@ TEST(RangeTest, Distance) {
 
   EXPECT_EQ(std::distance(v1.begin(), v1.end()), size(v1));
   EXPECT_EQ(std::distance(v2.begin(), v2.end()), size(v2));
+}
+
+TEST(IteratorRangeTest, DropBegin) {
+  SmallVector<int, 5> vec{0, 1, 2, 3, 4};
+
+  for (int n = 0; n < 5; ++n) {
+    int i = n;
+    for (auto &v : drop_begin(vec, n)) {
+      EXPECT_EQ(v, i);
+      i += 1;
+    }
+    EXPECT_EQ(i, 5);
+  }
 }
 
 } // anonymous namespace

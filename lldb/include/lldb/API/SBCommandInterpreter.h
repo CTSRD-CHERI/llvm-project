@@ -10,12 +10,8 @@
 #ifndef LLDB_SBCommandInterpreter_h_
 #define LLDB_SBCommandInterpreter_h_
 
-// C Includes
-// C++ Includes
 #include <memory>
 
-// Other libraries and framework includes
-// Project includes
 #include "lldb/API/SBDebugger.h"
 #include "lldb/API/SBDefines.h"
 
@@ -44,6 +40,10 @@ public:
   bool GetEchoCommands() const;
 
   void SetEchoCommands(bool);
+
+  bool GetEchoCommentCommands() const;
+
+  void SetEchoCommentCommands(bool echo);
 
   bool GetPrintResults() const;
 
@@ -162,6 +162,20 @@ public:
                        int match_start_point, int max_return_elements,
                        lldb::SBStringList &matches);
 
+  // Same as HandleCompletion, but also fills out `descriptions` with
+  // descriptions for each match.
+  int HandleCompletionWithDescriptions(
+      const char *current_line, const char *cursor, const char *last_char,
+      int match_start_point, int max_return_elements,
+      lldb::SBStringList &matches, lldb::SBStringList &descriptions);
+
+  int HandleCompletionWithDescriptions(const char *current_line,
+                                       uint32_t cursor_pos,
+                                       int match_start_point,
+                                       int max_return_elements,
+                                       lldb::SBStringList &matches,
+                                       lldb::SBStringList &descriptions);
+
   bool WasInterrupted() const;
 
   // Catch commands before they execute by registering a callback that will get
@@ -206,6 +220,25 @@ public:
   bool GetPromptOnQuit();
 
   void SetPromptOnQuit(bool b);
+
+  //----------------------------------------------------------------------
+  /// Sets whether the command interpreter should allow custom exit codes
+  /// for the 'quit' command.
+  //----------------------------------------------------------------------
+  void AllowExitCodeOnQuit(bool allow);
+
+  //----------------------------------------------------------------------
+  /// Returns true if the user has called the 'quit' command with a custom exit
+  /// code.
+  //----------------------------------------------------------------------
+  bool HasCustomQuitExitCode();
+
+  //----------------------------------------------------------------------
+  /// Returns the exit code that the user has specified when running the
+  /// 'quit' command. Returns 0 if the user hasn't called 'quit' at all or
+  /// without a custom exit code.
+  //----------------------------------------------------------------------
+  int GetQuitStatus();
 
   //----------------------------------------------------------------------
   /// Resolve the command just as HandleCommand would, expanding abbreviations

@@ -211,10 +211,10 @@ ompt_data_t *__ompt_get_thread_data_internal() {
 void __ompt_thread_assign_wait_id(void *variable) {
   kmp_info_t *ti = ompt_get_thread();
 
-  ti->th.ompt_thread_info.wait_id = (omp_wait_id_t)variable;
+  ti->th.ompt_thread_info.wait_id = (ompt_wait_id_t)variable;
 }
 
-omp_state_t __ompt_get_state_internal(omp_wait_id_t *omp_wait_id) {
+ompt_state_t __ompt_get_state_internal(ompt_wait_id_t *omp_wait_id) {
   kmp_info_t *ti = ompt_get_thread();
 
   if (ti) {
@@ -222,7 +222,7 @@ omp_state_t __ompt_get_state_internal(omp_wait_id_t *omp_wait_id) {
       *omp_wait_id = ti->th.ompt_thread_info.wait_id;
     return ti->th.ompt_thread_info.state;
   }
-  return omp_state_undefined;
+  return ompt_state_undefined;
 }
 
 //----------------------------------------------------------
@@ -259,8 +259,8 @@ void __ompt_lw_taskteam_init(ompt_lw_taskteam_t *lwt, kmp_info_t *thr, int gtid,
   lwt->ompt_team_info.parallel_data = *ompt_pid;
   lwt->ompt_team_info.master_return_address = codeptr;
   lwt->ompt_task_info.task_data.value = 0;
-  lwt->ompt_task_info.frame.enter_frame = NULL;
-  lwt->ompt_task_info.frame.exit_frame = NULL;
+  lwt->ompt_task_info.frame.enter_frame = ompt_data_none;
+  lwt->ompt_task_info.frame.exit_frame = ompt_data_none;
   lwt->ompt_task_info.scheduling_parent = NULL;
   lwt->ompt_task_info.deps = NULL;
   lwt->ompt_task_info.ndeps = 0;
@@ -328,7 +328,7 @@ void __ompt_lw_taskteam_unlink(kmp_info_t *thr) {
 
 int __ompt_get_task_info_internal(int ancestor_level, int *type,
                                   ompt_data_t **task_data,
-                                  omp_frame_t **task_frame,
+                                  ompt_frame_t **task_frame,
                                   ompt_data_t **parallel_data,
                                   int *thread_num) {
   if (__kmp_get_gtid() < 0)
@@ -341,18 +341,23 @@ int __ompt_get_task_info_internal(int ancestor_level, int *type,
   ompt_task_info_t *info = NULL;
   ompt_team_info_t *team_info = NULL;
   kmp_info_t *thr = ompt_get_thread();
+  int level = ancestor_level;
 
   if (thr) {
     kmp_taskdata_t *taskdata = thr->th.th_current_task;
     if (taskdata == NULL)
       return 0;
-    kmp_team *team = thr->th.th_team;
+    kmp_team *team = thr->th.th_team, *prev_team = NULL;
     if (team == NULL)
       return 0;
     ompt_lw_taskteam_t *lwt = NULL,
-                       *next_lwt = LWT_FROM_TEAM(taskdata->td_team);
+                       *next_lwt = LWT_FROM_TEAM(taskdata->td_team),
+                       *prev_lwt = NULL;
 
     while (ancestor_level > 0) {
+      // needed for thread_num
+      prev_team = team;
+      prev_lwt = lwt;
       // next lightweight team (if any)
       if (lwt)
         lwt = lwt->parent;
@@ -410,7 +415,13 @@ int __ompt_get_task_info_internal(int ancestor_level, int *type,
       *parallel_data = team_info ? &(team_info->parallel_data) : NULL;
     }
     if (thread_num) {
-      *thread_num = __kmp_get_gtid();
+      if (level == 0)
+        *thread_num = __kmp_get_tid();
+      else if (prev_lwt)
+        *thread_num = 0;
+      else
+        *thread_num = prev_team->t.t_master_tid;
+      //        *thread_num = team->t.t_master_tid;
     }
     return info ? 2 : 0;
   }

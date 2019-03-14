@@ -34,6 +34,13 @@ TEST(Fuzzer, Basename) {
   EXPECT_EQ(Basename("/bar"), "bar");
   EXPECT_EQ(Basename("foo/x"), "x");
   EXPECT_EQ(Basename("foo/"), "");
+#if LIBFUZZER_WINDOWS
+  EXPECT_EQ(Basename("foo\\bar"), "bar");
+  EXPECT_EQ(Basename("foo\\bar/baz"), "baz");
+  EXPECT_EQ(Basename("\\bar"), "bar");
+  EXPECT_EQ(Basename("foo\\x"), "x");
+  EXPECT_EQ(Basename("foo\\"), "");
+#endif
 }
 
 TEST(Fuzzer, CrossOver) {
@@ -588,7 +595,8 @@ TEST(Corpus, Distribution) {
   size_t N = 10;
   size_t TriesPerUnit = 1<<16;
   for (size_t i = 0; i < N; i++)
-    C->AddToCorpus(Unit{ static_cast<uint8_t>(i) }, 1, false, false, {}, DFT);
+    C->AddToCorpus(Unit{static_cast<uint8_t>(i)}, 1, false, false, {}, DFT,
+                   nullptr);
 
   Vector<size_t> Hist(N);
   for (size_t i = 0; i < N * TriesPerUnit; i++) {

@@ -125,6 +125,30 @@ INLINE void omptarget_nvptx_TaskDescr::CopyConvergentParent(
   items.threadId = tid;
 }
 
+INLINE void omptarget_nvptx_TaskDescr::SaveLoopData() {
+  loopData.loopUpperBound =
+      omptarget_nvptx_threadPrivateContext->LoopUpperBound(items.threadId);
+  loopData.nextLowerBound =
+      omptarget_nvptx_threadPrivateContext->NextLowerBound(items.threadId);
+  loopData.schedule =
+      omptarget_nvptx_threadPrivateContext->ScheduleType(items.threadId);
+  loopData.chunk = omptarget_nvptx_threadPrivateContext->Chunk(items.threadId);
+  loopData.stride =
+      omptarget_nvptx_threadPrivateContext->Stride(items.threadId);
+}
+
+INLINE void omptarget_nvptx_TaskDescr::RestoreLoopData() const {
+  omptarget_nvptx_threadPrivateContext->Chunk(items.threadId) = loopData.chunk;
+  omptarget_nvptx_threadPrivateContext->LoopUpperBound(items.threadId) =
+      loopData.loopUpperBound;
+  omptarget_nvptx_threadPrivateContext->NextLowerBound(items.threadId) =
+      loopData.nextLowerBound;
+  omptarget_nvptx_threadPrivateContext->Stride(items.threadId) =
+      loopData.stride;
+  omptarget_nvptx_threadPrivateContext->ScheduleType(items.threadId) =
+      loopData.schedule;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Thread Private Context
 ////////////////////////////////////////////////////////////////////////////////
@@ -144,21 +168,9 @@ omptarget_nvptx_ThreadPrivateContext::InitThreadPrivateContext(int tid) {
   topTaskDescr[tid] = NULL;
   // no num threads value has been pushed
   nextRegion.tnum[tid] = 0;
-  // priv counter init to zero
-  priv[tid] = 0;
   // the following don't need to be init here; they are init when using dyn
   // sched
   // current_Event, events_Number, chunk, num_Iterations, schedule
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Work Descriptor
-////////////////////////////////////////////////////////////////////////////////
-
-INLINE void omptarget_nvptx_WorkDescr::InitWorkDescr() {
-  cg.Clear(); // start and stop to zero too
-  // threadsInParallelTeam does not need to be init (done in start parallel)
-  hasCancel = FALSE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -167,8 +179,6 @@ INLINE void omptarget_nvptx_WorkDescr::InitWorkDescr() {
 
 INLINE void omptarget_nvptx_TeamDescr::InitTeamDescr() {
   levelZeroTaskDescr.InitLevelZeroTaskDescr();
-  workDescrForActiveParallel.InitWorkDescr();
-  // omp_init_lock(criticalLock);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -191,4 +201,32 @@ INLINE omptarget_nvptx_TaskDescr *getMyTopTaskDescriptor(int threadId) {
 
 INLINE omptarget_nvptx_TaskDescr *getMyTopTaskDescriptor() {
   return getMyTopTaskDescriptor(GetLogicalThreadIdInBlock());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Memory management runtime functions.
+////////////////////////////////////////////////////////////////////////////////
+
+INLINE void omptarget_nvptx_SimpleMemoryManager::Release() {
+  ASSERT0(LT_FUSSY, usedSlotIdx < MAX_SM,
+          "SlotIdx is too big or uninitialized.");
+  ASSERT0(LT_FUSSY, usedMemIdx < OMP_STATE_COUNT,
+          "MemIdx is too big or uninitialized.");
+  MemDataTy &MD = MemData[usedSlotIdx];
+  atomicExch((unsigned *)&MD.keys[usedMemIdx], 0);
+}
+
+INLINE const void *omptarget_nvptx_SimpleMemoryManager::Acquire(const void *buf,
+                                                                size_t size) {
+  ASSERT0(LT_FUSSY, usedSlotIdx < MAX_SM,
+          "SlotIdx is too big or uninitialized.");
+  const unsigned sm = usedSlotIdx;
+  MemDataTy &MD = MemData[sm];
+  unsigned i = hash(GetBlockIdInKernel());
+  while (atomicCAS((unsigned *)&MD.keys[i], 0, 1) != 0) {
+    i = hash(i + 1);
+  }
+  usedSlotIdx = sm;
+  usedMemIdx = i;
+  return static_cast<const char *>(buf) + (sm * OMP_STATE_COUNT + i) * size;
 }

@@ -42,6 +42,12 @@ defm compress_debug_sections:
 
 defm defsym: Eq<"defsym", "Define a symbol alias">, MetaVarName<"<symbol>=<value>">;
 
+defm split_stack_adjust_size
+    : Eq<"split-stack-adjust-size",
+         "Specify adjustment to stack size when a split-stack function calls a "
+         "non-split-stack function">,
+      MetaVarName<"<value>">;
+
 defm library_path:
   Eq<"library-path", "Add a directory to the library search path">, MetaVarName<"<dir>">;
 
@@ -58,8 +64,8 @@ defm allow_multiple_definition: B<"allow-multiple-definition",
     "Do not allow multiple definitions (default)">;
 
 defm apply_dynamic_relocs: B<"apply-dynamic-relocs",
-    "Apply dynamic relocations to place",
-    "Do not apply dynamic relocations to place">;
+    "Apply link-time values for dynamic relocations",
+    "Do not apply link-time values for dynamic relocations (default)">;
 
 defm as_needed: B<"as-needed",
     "Only set DT_NEEDED for shared libraries if used",
@@ -67,6 +73,10 @@ defm as_needed: B<"as-needed",
 
 defm call_graph_ordering_file:
   Eq<"call-graph-ordering-file", "Layout sections to optimize the given callgraph">;
+
+defm call_graph_profile_sort: B<"call-graph-profile-sort",
+    "Reorder sections with call graph profile (default)",
+    "Do not reorder sections with call graph profile">;
 
 // -chroot doesn't have a help text because it is an internal option.
 def chroot: Separate<["--", "-"], "chroot">;
@@ -131,6 +141,10 @@ def error_unresolved_symbols: F<"error-unresolved-symbols">,
 
 defm exclude_libs: Eq<"exclude-libs", "Exclude static libraries from automatic export">;
 
+defm execute_only: B<"execute-only",
+    "Mark executable sections unreadable",
+    "Mark executable sections readable (default)">;
+
 defm export_dynamic: B<"export-dynamic",
     "Put symbols in the dynamic symbol table",
     "Do not put symbols in the dynamic symbol table (default)">;
@@ -169,6 +183,8 @@ defm hash_style: Eq<"hash-style", "Specify hash style (sysv, gnu or both)">;
 def help: F<"help">, HelpText<"Print option help">;
 
 def icf_all: F<"icf=all">, HelpText<"Enable identical code folding">;
+
+def icf_safe: F<"icf=safe">, HelpText<"Enable safe identical code folding">;
 
 def icf_none: F<"icf=none">, HelpText<"Disable identical code folding (default)">;
 
@@ -233,7 +249,11 @@ defm orphan_handling:
 
 defm pack_dyn_relocs:
   Eq<"pack-dyn-relocs", "Pack dynamic relocations in the given format">,
-  MetaVarName<"[none,android]">;
+  MetaVarName<"[none,android,relr,android+relr]">;
+
+defm use_android_relr_tags: B<"use-android-relr-tags",
+    "Use SHT_ANDROID_RELR / DT_ANDROID_RELR* tags instead of SHT_RELR / DT_RELR*",
+    "Use SHT_RELR / DT_RELR* tags (default)">;
 
 defm pie: B<"pie",
     "Create a position independent executable",
@@ -305,6 +325,10 @@ defm threads: B<"threads",
     "Run the linker multi-threaded (default)",
     "Do not run the linker multi-threaded">;
 
+defm toc_optimize : B<"toc-optimize",
+    "(PowerPC64) Enable TOC related optimizations (default)",
+    "(PowerPC64) Disable TOC related optimizations">;
+
 def trace: F<"trace">, HelpText<"Print the names of the input files">;
 
 defm trace_symbol: Eq<"trace-symbol", "Trace references to symbols">;
@@ -337,6 +361,10 @@ defm warn_backrefs: B<"warn-backrefs",
 defm warn_common: B<"warn-common",
     "Warn about duplicate common symbols",
     "Do not warn about duplicate common symbols (default)">;
+
+defm warn_ifunc_textrel: B<"warn-ifunc-textrel",
+    "Warn about using ifunc symbols with text relocations",
+    "Do not warn about using ifunc symbols with text relocations (default)">;
 
 defm warn_symbol_ordering: B<"warn-symbol-ordering",
     "Warn about problems with the symbol ordering file (default)",
@@ -428,6 +456,9 @@ def: J<"plugin-opt=O">, Alias<lto_O>, HelpText<"Alias for -lto-O">;
 def: F<"plugin-opt=debug-pass-manager">,
   Alias<lto_debug_pass_manager>, HelpText<"Alias for -lto-debug-pass-manager">;
 def: F<"plugin-opt=disable-verify">, Alias<disable_verify>, HelpText<"Alias for -disable-verify">;
+def plugin_opt_dwo_dir_eq: J<"plugin-opt=dwo_dir=">,
+  HelpText<"Directory to store .dwo files when LTO and debug fission are used">;
+def plugin_opt_emit_llvm: F<"plugin-opt=emit-llvm">;
 def: J<"plugin-opt=jobs=">, Alias<thinlto_jobs>, HelpText<"Alias for -thinlto-jobs">;
 def: J<"plugin-opt=lto-partitions=">, Alias<lto_partitions>, HelpText<"Alias for -lto-partitions">;
 def plugin_opt_mcpu_eq: J<"plugin-opt=mcpu=">;

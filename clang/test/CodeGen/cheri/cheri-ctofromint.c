@@ -9,6 +9,6 @@ void* __capability foo(void *__capability x){
   int pi = (int)x; // pi contains the result of CToPtr x, which is probably null
   // CHECK-HYBRID: inttoptr
   // CHECK-PURECAP: [[CONV:%.+]] = sext i32 {{%.+}} to i64
-  // CHECK-PURECAP-NEXT: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 [[CONV]])
+  // CHECK-PURECAP-NEXT: call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 [[CONV]])
   return (void* __capability)pi;
 }

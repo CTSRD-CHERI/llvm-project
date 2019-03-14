@@ -68,7 +68,7 @@ bool Builtin::Context::builtinIsSupported(const Builtin::Info &BuiltinInfo,
   bool GnuModeUnsupported = !LangOpts.GNUMode && (BuiltinInfo.Langs & GNU_LANG);
   bool MSModeUnsupported =
       !LangOpts.MicrosoftExt && (BuiltinInfo.Langs & MS_LANG);
-  bool ObjCUnsupported = !LangOpts.ObjC1 && BuiltinInfo.Langs == OBJC_LANG;
+  bool ObjCUnsupported = !LangOpts.ObjC && BuiltinInfo.Langs == OBJC_LANG;
   bool OclC1Unsupported = (LangOpts.OpenCLVersion / 100) != 1 &&
                           (BuiltinInfo.Langs & ALL_OCLC_LANGUAGES ) ==  OCLC1X_LANG;
   bool OclC2Unsupported = LangOpts.OpenCLVersion != 200 &&
@@ -105,6 +105,22 @@ void Builtin::Context::initializeBuiltins(IdentifierTable &Table,
 
 void Builtin::Context::forgetBuiltin(unsigned ID, IdentifierTable &Table) {
   Table.get(getRecord(ID).Name).setBuiltinID(0);
+}
+
+unsigned Builtin::Context::getRequiredVectorWidth(unsigned ID) const {
+  const char *WidthPos = ::strchr(getRecord(ID).Attributes, 'V');
+  if (!WidthPos)
+    return 0;
+
+  ++WidthPos;
+  assert(*WidthPos == ':' &&
+         "Vector width specifier must be followed by a ':'");
+  ++WidthPos;
+
+  char *EndPos;
+  unsigned Width = ::strtol(WidthPos, &EndPos, 10);
+  assert(*EndPos == ':' && "Vector width specific must end with a ':'");
+  return Width;
 }
 
 bool Builtin::Context::isLike(unsigned ID, unsigned &FormatIdx,

@@ -28,14 +28,14 @@ namespace clang {
     TSW_long,
     TSW_longlong
   };
-  
+
   /// Specifies the signedness of a type, e.g., signed or unsigned.
   enum TypeSpecifierSign {
     TSS_unspecified,
     TSS_signed,
     TSS_unsigned
   };
-  
+
   enum TypeSpecifiersPipe {
     TSP_unspecified,
     TSP_pipe
@@ -134,7 +134,7 @@ namespace clang {
     /// An Objective-C property is a logical field of an Objective-C
     /// object which is read and written via Objective-C method calls.
     OK_ObjCProperty,
-    
+
     /// An Objective-C array/dictionary subscripting which reads an
     /// object or writes at the subscripted array/dictionary element via
     /// Objective-C method calls.
@@ -254,6 +254,7 @@ namespace clang {
     CC_Swift,        // __attribute__((swiftcall))
     CC_PreserveMost, // __attribute__((preserve_most))
     CC_PreserveAll,  // __attribute__((preserve_all))
+    CC_AArch64VectorCall, // __attribute__((aarch64_vector_pcs))
   };
 
   /// Checks whether the given calling convention supports variadic
@@ -296,6 +297,12 @@ namespace clang {
     /// though it has been considered.
     Unspecified
   };
+
+  /// Return true if \p L has a weaker nullability annotation than \p R. The
+  /// ordering is: Unspecified < Nullable < NonNull.
+  inline bool hasWeakerNullability(NullabilityKind L, NullabilityKind R) {
+    return uint8_t(L) > uint8_t(R);
+  }
 
   /// Retrieve the spelling of the given nullability kind.
   llvm::StringRef getNullabilitySpelling(NullabilityKind kind,

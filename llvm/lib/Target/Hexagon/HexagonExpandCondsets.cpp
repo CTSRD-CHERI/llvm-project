@@ -499,14 +499,18 @@ void HexagonExpandCondsets::updateDeadsInRange(unsigned Reg, LaneBitmask LM,
       if (!Op.isReg() || !DefRegs.count(Op))
         continue;
       if (Op.isDef()) {
-        ImpUses.insert({Op, i});
+        // Tied defs will always have corresponding uses, so no extra
+        // implicit uses are needed.
+        if (!Op.isTied())
+          ImpUses.insert({Op, i});
       } else {
         // This function can be called for the same register with different
         // lane masks. If the def in this instruction was for the whole
         // register, we can get here more than once. Avoid adding multiple
         // implicit uses (or adding an implicit use when an explicit one is
         // present).
-        ImpUses.erase(Op);
+        if (Op.isTied())
+          ImpUses.erase(Op);
       }
     }
     if (ImpUses.empty())
@@ -887,14 +891,7 @@ void HexagonExpandCondsets::predicateAt(const MachineOperand &DefOp,
       MB.add(MO);
     Ox++;
   }
-
-  MachineFunction &MF = *B.getParent();
-  MachineInstr::mmo_iterator I = MI.memoperands_begin();
-  unsigned NR = std::distance(I, MI.memoperands_end());
-  MachineInstr::mmo_iterator MemRefs = MF.allocateMemRefsArray(NR);
-  for (unsigned i = 0; i < NR; ++i)
-    MemRefs[i] = *I++;
-  MB.setMemRefs(MemRefs, MemRefs+NR);
+  MB.cloneMemRefs(MI);
 
   MachineInstr *NewI = MB;
   NewI->clearKillInfo();

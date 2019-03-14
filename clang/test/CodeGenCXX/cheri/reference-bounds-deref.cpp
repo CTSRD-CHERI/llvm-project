@@ -4,7 +4,7 @@
 // RUNNOT: %clang_cc1 -O0 -triple=x86_64-unknown-linux -fcolor-diagnostics %s -o - -fsanitize=local-bounds,array-bounds,object-size -emit-llvm -mllvm -debug
 // RUNNOT: %clang_cc1 -O2 -triple=x86_64-unknown-linux -fcolor-diagnostics %s -o - -fsanitize=local-bounds,array-bounds,object-size -emit-llvm
 // RUN: %cheri_purecap_cc1 -cheri-bounds=references-only -O2 -std=c++17 -emit-llvm %s -o - -mllvm -debug-only=cheri-bounds 2>%t.dbg -print-stats | %cheri_FileCheck %s
-// RUN: %cheri_FileCheck %s -check-prefix DEBUG-MSG < %t.dbg
+// RUN: %cheri_FileCheck %s -check-prefix DEBUG-MSG -input-file=%t.dbg
 
 class Foo {
 public:
@@ -110,7 +110,7 @@ TEST_PTR_TO_REF(EnumClass)
 
 // No bounds here since Foo might be subclassed
 TEST_PTR_TO_REF(Foo)
-// DEBUG-MSG-NEXT: Found record type 'class Foo' -> not final -> can't assume it has no inheritors
+// DEBUG-MSG-NEXT: Found record type 'class Foo' -> non-final class and using sub-object-safe mode -> not setting bounds
 // CHECK-LABEL: declare void @_Z17do_stuff_with_refI3FooEvU3capRT_(%class.Foo addrspace(200)*
 // CHECK-NOT: @llvm.cheri.cap.bounds.set
 
@@ -149,18 +149,18 @@ TEST_PTR_TO_REF(FinalClassInheritedWithVTable)
 
 // Shouldn't be able to set bounds here since there is a flexible array member
 TEST_PTR_TO_REF(FlexArrayBase)
-// DEBUG-MSG-NEXT: Found record type 'struct FlexArrayBase' -> has flexible array member -> can't set bounds
+// DEBUG-MSG-NEXT: subobj bounds check: Found record type 'struct FlexArrayBase' -> found real VLA in struct FlexArrayBase -> has flexible array member -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP13FlexArrayBase(
 // CHECK-NOT: @llvm.cheri.cap.bounds.set
 TEST_PTR_TO_REF(FlexArrayFinal)
-// DEBUG-MSG-NEXT: Found record type 'struct FlexArrayFinal' -> has flexible array member -> can't set bounds
+// DEBUG-MSG-NEXT: subobj bounds check: Found record type 'struct FlexArrayFinal' -> found real VLA in struct FlexArrayFinal -> has flexible array member -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP14FlexArrayFinal(
 // CHECK-NOT: @llvm.cheri.cap.bounds.set
 
 // No bounds on this struct (even though it is C-like) since it might have inheritors
 // TODO: add a mode where we do add the bounds and require annotations?
 TEST_PTR_TO_REF(CLike)
-// DEBUG-MSG-NEXT: Found record type 'struct CLike' -> not final -> can't assume it has no inheritors
+// DEBUG-MSG-NEXT: Found record type 'struct CLike' -> non-final class and using sub-object-safe mode -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP5CLike(
 // CHECK-NOT: @llvm.cheri.cap.bounds.set
 // Should have bounds here:
@@ -182,5 +182,5 @@ TEST_PTR_TO_REF(IntOrFloat)
 // finally check the dumped statistics:
 // DEBUG-MSG-LABEL: STATISTICS:
 // DEBUG-MSG: ... Statistics Collected ...
+// DEBUG-MSG: 15 cheri-bounds     - Number of references checked for tightening bounds
 // DEBUG-MSG:  8 cheri-bounds     - Number of references where bounds were tightend
-// DEBUG-MSG: 15 cheri-bounds     - Number of references processed for tightening bounds

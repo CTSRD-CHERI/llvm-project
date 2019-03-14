@@ -7,14 +7,11 @@
 //
 //===----------------------------------------------------------------------===//
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Target/ThreadPlanCallFunction.h"
 #include "lldb/Breakpoint/Breakpoint.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Core/Address.h"
+#include "lldb/Core/DumpRegisterValue.h"
 #include "lldb/Core/Module.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/ABI.h"
@@ -186,7 +183,8 @@ void ThreadPlanCallFunction::ReportRegisterState(const char *message) {
          reg_idx < num_registers; ++reg_idx) {
       const RegisterInfo *reg_info = reg_ctx->GetRegisterInfoAtIndex(reg_idx);
       if (reg_ctx->ReadRegister(reg_info, reg_value)) {
-        reg_value.Dump(&strm, reg_info, true, false, eFormatDefault);
+        DumpRegisterValue(reg_value, &strm, reg_info, true, false,
+                          eFormatDefault);
         strm.EOL();
       }
     }

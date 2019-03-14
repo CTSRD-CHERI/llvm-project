@@ -263,7 +263,7 @@ public:
     } else if (const CXXDestructorDecl *Dtor = dyn_cast<CXXDestructorDecl>(D)) {
       if (auto TypeNameInfo = Dtor->getNameInfo().getNamedTypeInfo()) {
         IndexCtx.handleReference(Dtor->getParent(),
-                                 TypeNameInfo->getTypeLoc().getLocStart(),
+                                 TypeNameInfo->getTypeLoc().getBeginLoc(),
                                  Dtor->getParent(), Dtor->getDeclContext());
       }
     } else if (const auto *Guide = dyn_cast<CXXDeductionGuideDecl>(D)) {
@@ -726,7 +726,7 @@ bool IndexingContext::indexDecl(const Decl *D) {
   if (D->isImplicit() && shouldIgnoreIfImplicit(D))
     return true;
 
-  if (isTemplateImplicitInstantiation(D))
+  if (isTemplateImplicitInstantiation(D) && !shouldIndexImplicitInstantiation())
     return true;
 
   IndexingDeclVisitor Visitor(*this);

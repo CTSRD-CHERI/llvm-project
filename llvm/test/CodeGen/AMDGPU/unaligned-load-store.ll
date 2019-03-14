@@ -442,7 +442,7 @@ define amdgpu_kernel void @constant_align2_load_i32(i32 addrspace(4)* %p, i32 ad
 ; ALIGNED: buffer_load_ushort
 ; ALIGNED: buffer_load_ushort
 
-; UNALIGNED: s_load_dwordx2
+; UNALIGNED: s_load_dwordx4
 ; UNALIGNED: buffer_store_dwordx2
 define amdgpu_kernel void @constant_align2_load_i64(i64 addrspace(4)* %p, i64 addrspace(1)* %r) #0 {
   %v = load i64, i64 addrspace(4)* %p, align 2
@@ -598,6 +598,70 @@ define amdgpu_kernel void @local_load_align1_v16i8(<16 x i8> addrspace(1)* %out,
 ; SI: ScratchSize: 0{{$}}
 define amdgpu_kernel void @local_store_align1_v16i8(<16 x i8> addrspace(3)* %out) #0 {
   store <16 x i8> zeroinitializer, <16 x i8> addrspace(3)* %out, align 1
+  ret void
+}
+
+; SI-LABEL: {{^}}private_load_align1_f64:
+; SI: buffer_load_ubyte
+; SI: buffer_load_ubyte
+; SI: buffer_load_ubyte
+; SI: buffer_load_ubyte
+; SI: buffer_load_ubyte
+; SI: buffer_load_ubyte
+; SI: buffer_load_ubyte
+; SI: buffer_load_ubyte
+define double @private_load_align1_f64(double addrspace(5)* %in) {
+  %x = load double, double addrspace(5)* %in, align 1
+  ret double %x
+}
+
+; SI-LABEL: {{^}}private_store_align1_f64:
+; SI: buffer_store_byte
+; SI: buffer_store_byte
+; SI: buffer_store_byte
+; SI: buffer_store_byte
+; SI: buffer_store_byte
+; SI: buffer_store_byte
+; SI: buffer_store_byte
+; SI: buffer_store_byte
+define void @private_store_align1_f64(double addrspace(5)* %out, double %x) #0 {
+  store double %x, double addrspace(5)* %out, align 1
+  ret void
+}
+
+; SI-LABEL: {{^}}private_load_align4_f64:
+; SI: buffer_load_dword
+; SI: buffer_load_dword
+define double @private_load_align4_f64(double addrspace(5)* %in) {
+  %x = load double, double addrspace(5)* %in, align 4
+  ret double %x
+}
+
+; SI-LABEL: {{^}}private_store_align4_f64:
+; SI: buffer_store_dword
+; SI: buffer_store_dword
+define void @private_store_align4_f64(double addrspace(5)* %out, double %x) #0 {
+  store double %x, double addrspace(5)* %out, align 4
+  ret void
+}
+
+; SI-LABEL: {{^}}private_load_align2_f64:
+; SI: buffer_load_ushort
+; SI: buffer_load_ushort
+; SI: buffer_load_ushort
+; SI: buffer_load_ushort
+define double @private_load_align2_f64(double addrspace(5)* %in) {
+  %x = load double, double addrspace(5)* %in, align 2
+  ret double %x
+}
+
+; SI-LABEL: {{^}}private_store_align2_f64:
+; SI: buffer_store_short
+; SI: buffer_store_short
+; SI: buffer_store_short
+; SI: buffer_store_short
+define void @private_store_align2_f64(double addrspace(5)* %out, double %x) #0 {
+  store double %x, double addrspace(5)* %out, align 2
   ret void
 }
 

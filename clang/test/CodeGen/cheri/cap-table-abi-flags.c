@@ -10,9 +10,9 @@
 // RUN: %cheri_purecap_clang -cheri-cap-table-abi=fn-desc -c %s -o - | llvm-readobj -mips-abi-flags - | FileCheck %s -check-prefix FNDESC
 // FNDESC: ISA Extension: CHERI purecap (function descriptor) (0xC4)
 
-// The default is still legacy:
+// The default is pcrel:
 // RUN: %cheri_purecap_clang -c %s -o - | llvm-readobj -mips-abi-flags - | FileCheck %s -check-prefix DEFAULT
-// DEFAULT: ISA Extension: CHERI purecap (legacy) (0xC1)
+// DEFAULT: ISA Extension: CHERI purecap (pc-relative) (0xC3)
 
 int __start(void) {
   return 0;

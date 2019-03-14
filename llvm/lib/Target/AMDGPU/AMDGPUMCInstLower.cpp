@@ -204,7 +204,7 @@ void AMDGPUMCInstLower::lower(const MachineInstr *MI, MCInst &OutMI) const {
 
 bool AMDGPUAsmPrinter::lowerOperand(const MachineOperand &MO,
                                     MCOperand &MCOp) const {
-  const AMDGPUSubtarget &STI = MF->getSubtarget<AMDGPUSubtarget>();
+  const GCNSubtarget &STI = MF->getSubtarget<GCNSubtarget>();
   AMDGPUMCInstLower MCInstLowering(OutContext, STI, *this);
   return MCInstLowering.lowerOperand(MO, MCOp);
 }
@@ -243,7 +243,7 @@ void AMDGPUAsmPrinter::EmitInstruction(const MachineInstr *MI) {
   if (emitPseudoExpansionLowering(*OutStreamer, MI))
     return;
 
-  const AMDGPUSubtarget &STI = MF->getSubtarget<AMDGPUSubtarget>();
+  const GCNSubtarget &STI = MF->getSubtarget<GCNSubtarget>();
   AMDGPUMCInstLower MCInstLowering(OutContext, STI, *this);
 
   StringRef Err;
@@ -300,6 +300,26 @@ void AMDGPUAsmPrinter::EmitInstruction(const MachineInstr *MI) {
     MCInst TmpInst;
     MCInstLowering.lower(MI, TmpInst);
     EmitToStreamer(*OutStreamer, TmpInst);
+
+#ifdef EXPENSIVE_CHECKS
+    // Sanity-check getInstSizeInBytes on explicitly specified CPUs (it cannot
+    // work correctly for the generic CPU).
+    //
+    // The isPseudo check really shouldn't be here, but unfortunately there are
+    // some negative lit tests that depend on being able to continue through
+    // here even when pseudo instructions haven't been lowered.
+    if (!MI->isPseudo() && STI.isCPUStringValid(STI.getCPU())) {
+      SmallVector<MCFixup, 4> Fixups;
+      SmallVector<char, 16> CodeBytes;
+      raw_svector_ostream CodeStream(CodeBytes);
+
+      std::unique_ptr<MCCodeEmitter> InstEmitter(createSIMCCodeEmitter(
+          *STI.getInstrInfo(), *OutContext.getRegisterInfo(), OutContext));
+      InstEmitter->encodeInstruction(TmpInst, CodeStream, Fixups, STI);
+
+      assert(CodeBytes.size() == STI.getInstrInfo()->getInstSizeInBytes(*MI));
+    }
+#endif
 
     if (STI.dumpCode()) {
       // Disassemble instruction/operands to text.

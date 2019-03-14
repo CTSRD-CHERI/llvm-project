@@ -7,6 +7,7 @@ add_clang_library(clangTidyBugproneModule
   BugproneTidyModule.cpp
   CopyConstructorInitCheck.cpp
   DanglingHandleCheck.cpp
+  ExceptionEscapeCheck.cpp
   FoldInitTypeCheck.cpp
   ForwardDeclarationNamespaceCheck.cpp
   ForwardingReferenceOverloadCheck.cpp
@@ -34,6 +35,7 @@ add_clang_library(clangTidyBugproneModule
   SwappedArgumentsCheck.cpp
   TerminatingContinueCheck.cpp
   ThrowKeywordMissingCheck.cpp
+  TooSmallLoopVariableCheck.cpp
   UndefinedMemoryManipulationCheck.cpp
   UndelegatedConstructorCheck.cpp
   UnusedRaiiCheck.cpp

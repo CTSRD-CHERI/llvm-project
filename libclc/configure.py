@@ -86,6 +86,7 @@ llvm_cxxflags = llvm_config(['--cxxflags']) + ' -fno-exceptions -fno-rtti ' + \
 llvm_libdir = llvm_config(['--libdir'])
 
 llvm_clang = os.path.join(llvm_bindir, 'clang')
+llvm_as = os.path.join(llvm_bindir, 'llvm-as')
 llvm_link = os.path.join(llvm_bindir, 'llvm-link')
 llvm_opt = os.path.join(llvm_bindir, 'opt')
 
@@ -100,14 +101,24 @@ available_targets = {
                 {'gpu' : 'barts',   'aliases' : ['turks', 'caicos'] },
                 {'gpu' : 'cayman',  'aliases' : ['aruba']} ]},
   'amdgcn--': { 'devices' :
-                [{'gpu' : 'tahiti', 'aliases' : ['pitcairn', 'verde', 'oland', 'hainan', 'bonaire', 'kabini', 'kaveri', 'hawaii', 'mullins', 'tonga', 'iceland', 'carrizo', 'fiji', 'stoney', 'polaris10', 'polaris11', 'gfx900']} ]},
+                [{'gpu' : 'tahiti', 'aliases' : ['pitcairn', 'verde', 'oland', 'hainan', 'bonaire', 'kabini', 'kaveri', 'hawaii', 'mullins', 'tonga', 'iceland', 'carrizo', 'fiji', 'stoney', 'polaris10', 'polaris11']} ]},
   'amdgcn--amdhsa': { 'devices' :
-                      [{'gpu' : '', 'aliases' : ['bonaire', 'kabini', 'kaveri', 'hawaii', 'mullins', 'tonga', 'iceland', 'carrizo', 'fiji', 'stoney', 'polaris10', 'polaris11', 'gfx900']} ]},
+                      [{'gpu' : '', 'aliases' : ['bonaire', 'kabini', 'kaveri', 'hawaii', 'mullins', 'tonga', 'iceland', 'carrizo', 'fiji', 'stoney', 'polaris10', 'polaris11']} ]},
   'nvptx--'   : { 'devices' : [{'gpu' : '', 'aliases' : []} ]},
   'nvptx64--' : { 'devices' : [{'gpu' : '', 'aliases' : []} ]},
   'nvptx--nvidiacl'   : { 'devices' : [{'gpu' : '', 'aliases' : []} ]},
   'nvptx64--nvidiacl' : { 'devices' : [{'gpu' : '', 'aliases' : []} ]},
 }
+
+# Support for gfx9 was added in LLVM 5 (r295554)
+if llvm_int_version >= 500:
+    available_targets['amdgcn--']['devices'][0]['aliases'] += ['gfx900', 'gfx902']
+    available_targets['amdgcn--amdhsa']['devices'][0]['aliases'] += ['gfx900', 'gfx902']
+
+# Support for Vega12 and Vega20 was added in LLVM 7 (r331215)
+if llvm_int_version >= 700:
+    available_targets['amdgcn--']['devices'][0]['aliases'] += ['gfx904', 'gfx906']
+    available_targets['amdgcn--amdhsa']['devices'][0]['aliases'] += ['gfx904', 'gfx906']
 
 
 default_targets = ['nvptx--nvidiacl', 'nvptx64--nvidiacl', 'r600--', 'amdgcn--', 'amdgcn--amdhsa']
@@ -123,8 +134,7 @@ if not targets:
 
 b = metabuild.from_name(options.g)
 
-b.rule("LLVM_AS", "%s -o $out $in" % os.path.join(llvm_bindir, "llvm-as"),
-       'LLVM-AS $out')
+b.rule("LLVM_AS", "%s -o $out $in" % llvm_as, 'LLVM-AS $out')
 b.rule("LLVM_LINK", command = llvm_link + " -o $out $in",
        description = 'LLVM-LINK $out')
 b.rule("OPT", command = llvm_opt + " -O3 -o $out $in",
@@ -177,8 +187,6 @@ for target in targets:
   for arch in archs:
     subdirs.append("%s-%s-%s" % (arch, t_vendor, t_os))
     subdirs.append("%s-%s" % (arch, t_os))
-    if t_os == 'mesa3d':
-        subdirs.append('amdgcn-amdhsa')
     subdirs.append(arch)
     if arch == 'amdgcn' or arch == 'r600':
         subdirs.append('amdgpu')
@@ -205,6 +213,8 @@ for target in targets:
       clang_bc_flags += ' -mcpu=' + device['gpu']
     clang_bc_rule = "CLANG_CL_BC_" + target + "_" + device['gpu']
     c_compiler_rule(b, clang_bc_rule, "LLVM-CC", llvm_clang, clang_bc_flags)
+    as_bc_rule = "LLVM_AS_BC_" + target + "_" + device['gpu']
+    b.rule(as_bc_rule, "%s -E -P %s -x cl $in -o - | %s -o $out" % (llvm_clang, clang_bc_flags, llvm_as), 'LLVM-AS $out')
 
     objects = []
     sources_seen = set()
@@ -257,7 +267,7 @@ for target in targets:
           src_file = os.path.join(src_path, src)
           ext = os.path.splitext(src)[1]
           if ext == '.ll':
-            b.build(obj, 'LLVM_AS', src_file)
+            b.build(obj, as_bc_rule, src_file)
           else:
             b.build(obj, clang_bc_rule, src_file)
 

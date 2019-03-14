@@ -53,3 +53,19 @@ struct Empty2 : public Empty1 {
 }; // fine
 struct Empty3 : private Empty1 {
 }; // fine
+
+
+// This used to crash:
+template <class mapT> class Dependent {
+  mapT val;
+  void *__capability cap;
+};
+
+template <class mapT> class NonDependent {
+   int val;
+   void *__capability cap;
+};
+
+// TODO: these should probably warn on instantiation!
+Dependent<char> D1;
+NonDependent<char> N1;

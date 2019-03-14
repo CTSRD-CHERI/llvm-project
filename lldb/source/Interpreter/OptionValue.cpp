@@ -9,10 +9,6 @@
 
 #include "lldb/Interpreter/OptionValue.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Interpreter/OptionValues.h"
 #include "lldb/Utility/StringList.h"
 
@@ -573,12 +569,9 @@ bool OptionValue::DumpQualifiedName(Stream &strm) const {
 }
 
 size_t OptionValue::AutoComplete(CommandInterpreter &interpreter,
-                                 llvm::StringRef s, int match_start_point,
-                                 int max_return_elements, bool &word_complete,
-                                 StringList &matches) {
-  word_complete = false;
-  matches.Clear();
-  return matches.GetSize();
+                                 CompletionRequest &request) {
+  request.SetWordComplete(false);
+  return request.GetNumberOfMatches();
 }
 
 Status OptionValue::SetValueFromString(llvm::StringRef value,

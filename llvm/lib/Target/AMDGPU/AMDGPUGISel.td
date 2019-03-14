@@ -85,6 +85,18 @@ class GISelVop3Pat2CommutePat <
   (inst src0_vt:$src1, src1_vt:$src0)
 >;
 
+class GISelVop3Pat2ModsPat <
+  SDPatternOperator node,
+  Instruction inst,
+  ValueType dst_vt,
+  ValueType src0_vt = dst_vt, ValueType src1_vt = src0_vt> : GCNPat <
+
+  (dst_vt (node (src0_vt (VOP3Mods0 src0_vt:$src0, i32:$src0_modifiers, i1:$clamp, i32:$omods)),
+                (src1_vt (VOP3Mods src1_vt:$src1, i32:$src1_modifiers)))),
+  (inst i32:$src0_modifiers, src0_vt:$src0,
+        i32:$src1_modifiers, src1_vt:$src1, $clamp, $omods)
+>;
+
 multiclass GISelVop2IntrPat <
   SDPatternOperator node, Instruction inst,
   ValueType dst_vt, ValueType src_vt = dst_vt> {
@@ -110,12 +122,16 @@ def : GISelVop2CommutePat <sra, V_ASHRREV_I32_e32, i32>;
 }
 def : GISelVop3Pat2CommutePat <sra, V_ASHRREV_I32_e64, i32>;
 
-// FIXME: Select directly to _e32 so we don't need to deal with modifiers.
 // FIXME: We can't re-use SelectionDAG patterns here because they match
 // against a custom SDNode and we would need to create a generic machine
 // instruction that is equivalent to the custom SDNode.  This would also require
 // us to custom legalize the intrinsic to the new generic machine instruction,
 // but I can't get custom legalizing of intrinsic to work and I'm not sure if
 // this is even supported yet.
-defm : GISelVop2IntrPat <
-  int_amdgcn_cvt_pkrtz, V_CVT_PKRTZ_F16_F32_e32, v2f16, f32>;
+def : GISelVop3Pat2ModsPat <
+  int_amdgcn_cvt_pkrtz, V_CVT_PKRTZ_F16_F32_e64, v2f16, f32>;
+
+defm : GISelVop2IntrPat <int_maxnum, V_MAX_F32_e32, f32>;
+def : GISelVop3Pat2ModsPat <int_maxnum, V_MAX_F64, f64>;
+defm : GISelVop2IntrPat <int_minnum, V_MIN_F32_e32, f32>;
+def : GISelVop3Pat2ModsPat <int_minnum, V_MIN_F64, f64>;

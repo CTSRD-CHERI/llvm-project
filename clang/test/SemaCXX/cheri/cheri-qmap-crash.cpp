@@ -20,5 +20,5 @@ struct QMapNodeBase
     bool comparisonOp() const { return (p & Mask) == Black; } // expected-warning {{using bitwise and on capability types may give surprising results}}
     bool comparisonOp2() const { return Red == (p & Mask); } // expected-warning {{using bitwise and on capability types may give surprising results}}
 
-    bool capRHS() const { return (Black | p) == p; } // expected-warning{{binary expression on capability and non-capability types: 'int' and 'quintptr' (aka '__uintcap_t')}}
+    bool capRHS() const { return (Black | p) == p; } // expected-warning{{binary expression on capability and non-capability types: 'QMapNodeBase::Color' and 'quintptr' (aka '__uintcap_t')}}
 };

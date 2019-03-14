@@ -6,7 +6,10 @@ add %edi, %eax
 # CHECK:      Iterations:        100
 # CHECK-NEXT: Instructions:      100
 # CHECK-NEXT: Total Cycles:      103
-# CHECK-NEXT: Dispatch Width:    2
+# CHECK-NEXT: Total uOps:        100
+
+# CHECK:      Dispatch Width:    2
+# CHECK-NEXT: uOps Per Cycle:    0.97
 # CHECK-NEXT: IPC:               0.97
 # CHECK-NEXT: Block RThroughput: 0.5
 
@@ -16,7 +19,7 @@ add %edi, %eax
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
 # CHECK-NEXT:  1      1     0.50                        addl	%edi, %eax

@@ -54,17 +54,16 @@ UnrollRuntimeEpilog("unroll-runtime-epilog", cl::init(false), cl::Hidden,
 static cl::opt<bool>
 UnrollVerifyDomtree("unroll-verify-domtree", cl::Hidden,
                     cl::desc("Verify domtree after unrolling"),
-#ifdef NDEBUG
-    cl::init(false)
-#else
+#ifdef EXPENSIVE_CHECKS
     cl::init(true)
+#else
+    cl::init(false)
 #endif
                     );
 
 /// Convert the instruction operands from referencing the current values into
 /// those specified by VMap.
-static inline void remapInstruction(Instruction *I,
-                                    ValueToValueMapTy &VMap) {
+void llvm::remapInstruction(Instruction *I, ValueToValueMapTy &VMap) {
   for (unsigned op = 0, E = I->getNumOperands(); op != E; ++op) {
     Value *Op = I->getOperand(op);
 
@@ -98,9 +97,9 @@ static inline void remapInstruction(Instruction *I,
 /// Folds a basic block into its predecessor if it only has one predecessor, and
 /// that predecessor only has one successor.
 /// The LoopInfo Analysis that is passed will be kept consistent.
-static BasicBlock *
-foldBlockIntoPredecessor(BasicBlock *BB, LoopInfo *LI, ScalarEvolution *SE,
-                         DominatorTree *DT) {
+BasicBlock *llvm::foldBlockIntoPredecessor(BasicBlock *BB, LoopInfo *LI,
+                                           ScalarEvolution *SE,
+                                           DominatorTree *DT) {
   // Merge basic blocks into their predecessor if there is only one distinct
   // pred, and if there is only one distinct successor of the predecessor, and
   // if there are no PHI nodes.
@@ -110,7 +109,8 @@ foldBlockIntoPredecessor(BasicBlock *BB, LoopInfo *LI, ScalarEvolution *SE,
   if (OnlyPred->getTerminator()->getNumSuccessors() != 1)
     return nullptr;
 
-  LLVM_DEBUG(dbgs() << "Merging: " << *BB << "into: " << *OnlyPred);
+  LLVM_DEBUG(dbgs() << "Merging: " << BB->getName() << " into "
+                    << OnlyPred->getName() << "\n");
 
   // Resolve any PHI nodes at the start of the block.  They are all
   // guaranteed to have exactly one entry if they exist, unless there are
@@ -255,9 +255,9 @@ static bool isEpilogProfitable(Loop *L) {
 /// Perform some cleanup and simplifications on loops after unrolling. It is
 /// useful to simplify the IV's in the new loop, as well as do a quick
 /// simplify/dce pass of the instructions.
-static void simplifyLoopAfterUnroll(Loop *L, bool SimplifyIVs, LoopInfo *LI,
-                                    ScalarEvolution *SE, DominatorTree *DT,
-                                    AssumptionCache *AC) {
+void llvm::simplifyLoopAfterUnroll(Loop *L, bool SimplifyIVs, LoopInfo *LI,
+                                   ScalarEvolution *SE, DominatorTree *DT,
+                                   AssumptionCache *AC) {
   // Simplify any new induction variables in the partially unrolled loop.
   if (SE && SimplifyIVs) {
     SmallVector<WeakTrackingVH, 16> DeadInsts;
@@ -275,8 +275,7 @@ static void simplifyLoopAfterUnroll(Loop *L, bool SimplifyIVs, LoopInfo *LI,
   // inserted code, doing constant propagation and dead code elimination as we
   // go.
   const DataLayout &DL = L->getHeader()->getModule()->getDataLayout();
-  const std::vector<BasicBlock *> &NewLoopBlocks = L->getBlocks();
-  for (BasicBlock *BB : NewLoopBlocks) {
+  for (BasicBlock *BB : L->getBlocks()) {
     for (BasicBlock::iterator I = BB->begin(), E = BB->end(); I != E;) {
       Instruction *Inst = &*I++;
 
@@ -330,12 +329,15 @@ static void simplifyLoopAfterUnroll(Loop *L, bool SimplifyIVs, LoopInfo *LI,
 ///
 /// This utility preserves LoopInfo. It will also preserve ScalarEvolution and
 /// DominatorTree if they are non-null.
+///
+/// If RemainderLoop is non-null, it will receive the remainder loop (if
+/// required and not fully unrolled).
 LoopUnrollResult llvm::UnrollLoop(
     Loop *L, unsigned Count, unsigned TripCount, bool Force, bool AllowRuntime,
     bool AllowExpensiveTripCount, bool PreserveCondBr, bool PreserveOnlyFirst,
     unsigned TripMultiple, unsigned PeelCount, bool UnrollRemainder,
     LoopInfo *LI, ScalarEvolution *SE, DominatorTree *DT, AssumptionCache *AC,
-    OptimizationRemarkEmitter *ORE, bool PreserveLCSSA) {
+    OptimizationRemarkEmitter *ORE, bool PreserveLCSSA, Loop **RemainderLoop) {
 
   BasicBlock *Preheader = L->getLoopPreheader();
   if (!Preheader) {
@@ -469,12 +471,12 @@ LoopUnrollResult llvm::UnrollLoop(
   if (RuntimeTripCount && TripMultiple % Count != 0 &&
       !UnrollRuntimeLoopRemainder(L, Count, AllowExpensiveTripCount,
                                   EpilogProfitability, UnrollRemainder, LI, SE,
-                                  DT, AC, PreserveLCSSA)) {
+                                  DT, AC, PreserveLCSSA, RemainderLoop)) {
     if (Force)
       RuntimeTripCount = false;
     else {
-      LLVM_DEBUG(dbgs() << "Wont unroll; remainder loop could not be generated"
-                           "when assuming runtime trip count\n");
+      LLVM_DEBUG(dbgs() << "Won't unroll; remainder loop could not be "
+                           "generated when assuming runtime trip count\n");
       return LoopUnrollResult::Unmodified;
     }
   }
@@ -782,7 +784,7 @@ LoopUnrollResult llvm::UnrollLoop(
         // there is no such latch.
         NewIDom = Latches.back();
         for (BasicBlock *IterLatch : Latches) {
-          TerminatorInst *Term = IterLatch->getTerminator();
+          Instruction *Term = IterLatch->getTerminator();
           if (isa<BranchInst>(Term) && cast<BranchInst>(Term)->isConditional()) {
             NewIDom = IterLatch;
             break;

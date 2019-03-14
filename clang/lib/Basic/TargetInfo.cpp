@@ -53,7 +53,7 @@ TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
   // We give the _Accum 1 fewer fractional bits than their corresponding _Fract
   // types by default to have the same number of fractional bits between _Accum
   // and _Fract types.
-  SameFBits = false;
+  PaddingOnUnsignedFixedPoint = false;
   ShortAccumScale = 7;
   AccumScale = 15;
   LongAccumScale = 31;
@@ -63,8 +63,9 @@ TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
   MinGlobalAlign = 0;
   // From the glibc documentation, on GNU systems, malloc guarantees 16-byte
   // alignment on 64-bit systems and 8-byte alignment on 32-bit systems. See
-  // https://www.gnu.org/software/libc/manual/html_node/Malloc-Examples.html
-  if (T.isGNUEnvironment() || T.isWindowsMSVCEnvironment())
+  // https://www.gnu.org/software/libc/manual/html_node/Malloc-Examples.html.
+  // This alignment guarantee also applies to Windows and Android.
+  if (T.isGNUEnvironment() || T.isWindowsMSVCEnvironment() || T.isAndroid())
     NewAlign = Triple.isArch64Bit() ? 128 : Triple.isArch32Bit() ? 64 : 0;
   else
     NewAlign = 0; // Infer from basic type alignment.
@@ -162,7 +163,7 @@ const char *TargetInfo::getTypeName(IntType T) {
   case SignedLongLong:   return "long long int";
   case UnsignedLongLong: return "long long unsigned int";
   case UnsignedIntCap:   return "__uintcap_t";
-  case SignedIntCap:           return "__intcap_t";
+  case SignedIntCap:     return "__intcap_t";
   }
 }
 
@@ -390,7 +391,7 @@ void TargetInfo::adjust(LangOptions &Opts) {
 
   // Each unsigned fixed point type has the same number of fractional bits as
   // its corresponding signed type.
-  SameFBits |= Opts.SameFBits;
+  PaddingOnUnsignedFixedPoint |= Opts.PaddingOnUnsignedFixedPoint;
   CheckFixedPointBits();
 }
 
@@ -567,6 +568,7 @@ bool TargetInfo::validateOutputConstraint(ConstraintInfo &Info) const {
     case 'm': // memory operand.
       if (areAllPointersCapabilities())
         break;
+      LLVM_FALLTHROUGH;
     case 'o': // offsetable memory operand.
     case 'V': // non-offsetable memory operand.
     case '<': // autodecrement memory operand.
@@ -699,7 +701,9 @@ bool TargetInfo::validateInputConstraint(
       // FIXME: Fail if % is used with the last operand.
       break;
     case 'i': // immediate integer.
+      break;
     case 'n': // immediate integer with a known value.
+      Info.setRequiresImmediate();
       break;
     case 'I':  // Various constant constraints with target-specific meanings.
     case 'J':

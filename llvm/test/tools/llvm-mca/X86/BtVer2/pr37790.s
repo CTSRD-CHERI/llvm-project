@@ -7,7 +7,10 @@ stmxcsr (%rsp)
 # CHECK:      Iterations:        2
 # CHECK-NEXT: Instructions:      4
 # CHECK-NEXT: Total Cycles:      205
-# CHECK-NEXT: Dispatch Width:    2
+# CHECK-NEXT: Total uOps:        4
+
+# CHECK:      Dispatch Width:    2
+# CHECK-NEXT: uOps Per Cycle:    0.02
 # CHECK-NEXT: IPC:               0.02
 # CHECK-NEXT: Block RThroughput: 1.0
 
@@ -17,11 +20,11 @@ stmxcsr (%rsp)
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
-# CHECK-NEXT:  1      100   0.50    *      *      *     int3
-# CHECK-NEXT:  1      1     1.00    *      *      *     stmxcsr	(%rsp)
+# CHECK-NEXT:  1      100   0.50    *      *      U     int3
+# CHECK-NEXT:  1      1     1.00    *      *      U     stmxcsr	(%rsp)
 
 # CHECK:      Timeline view:
 # CHECK-NEXT:                     0123456789          0123456789          0123456789          0123456789          0123456789
@@ -37,5 +40,5 @@ stmxcsr (%rsp)
 # CHECK-NEXT: [3]: Average time elapsed from WB until retire stage
 
 # CHECK:            [0]    [1]    [2]    [3]
-# CHECK-NEXT: 0.     1     1.0    1.0    0.0       int3
-# CHECK-NEXT: 1.     1     101.0  0.0    0.0       stmxcsr	(%rsp)
+# CHECK-NEXT: 0.     2     1.0    0.5    0.0       int3
+# CHECK-NEXT: 1.     2     100.5  0.0    0.0       stmxcsr	(%rsp)

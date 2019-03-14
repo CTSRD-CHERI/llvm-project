@@ -713,26 +713,6 @@ MemoryBufferRef convertResToCOFF(ArrayRef<MemoryBufferRef> MBs) {
   return MBRef;
 }
 
-// Run MSVC link.exe for given in-memory object files.
-// Command line options are copied from those given to LLD.
-// This is for the /msvclto option.
-void runMSVCLinker(std::string Rsp, ArrayRef<StringRef> Objects) {
-  // Write the in-memory object files to disk.
-  std::vector<TemporaryFile> Temps;
-  for (StringRef S : Objects) {
-    Temps.emplace_back("lto", "obj", S);
-    Rsp += quote(Temps.back().Path) + "\n";
-  }
-
-  log("link.exe " + Rsp);
-
-  // Run MSVC link.exe.
-  Temps.emplace_back("lto", "rsp", Rsp);
-  Executor E("link.exe");
-  E.add(Twine("@" + Temps.back().Path));
-  E.run();
-}
-
 // Create OptTable
 
 // Create prefix string literals used in Options.td
@@ -791,25 +771,30 @@ opt::InputArgList ArgParser::parse(ArrayRef<const char *> Argv) {
   // Make InputArgList from string vectors.
   unsigned MissingIndex;
   unsigned MissingCount;
-  SmallVector<const char *, 256> Vec(Argv.data(), Argv.data() + Argv.size());
 
   // We need to get the quoting style for response files before parsing all
   // options so we parse here before and ignore all the options but
   // --rsp-quoting.
-  opt::InputArgList Args = Table.ParseArgs(Vec, MissingIndex, MissingCount);
+  opt::InputArgList Args = Table.ParseArgs(Argv, MissingIndex, MissingCount);
 
   // Expand response files (arguments in the form of @<filename>)
   // and then parse the argument again.
-  cl::ExpandResponseFiles(Saver, getQuotingStyle(Args), Vec);
-  Args = Table.ParseArgs(Vec, MissingIndex, MissingCount);
+  SmallVector<const char *, 256> ExpandedArgv(Argv.data(), Argv.data() + Argv.size());
+  cl::ExpandResponseFiles(Saver, getQuotingStyle(Args), ExpandedArgv);
+  Args = Table.ParseArgs(makeArrayRef(ExpandedArgv).drop_front(), MissingIndex,
+                         MissingCount);
 
   // Print the real command line if response files are expanded.
-  if (Args.hasArg(OPT_verbose) && Argv.size() != Vec.size()) {
+  if (Args.hasArg(OPT_verbose) && Argv.size() != ExpandedArgv.size()) {
     std::string Msg = "Command line:";
-    for (const char *S : Vec)
+    for (const char *S : ExpandedArgv)
       Msg += " " + std::string(S);
     message(Msg);
   }
+
+  // Save the command line after response file expansion so we can write it to
+  // the PDB if necessary.
+  Config->Argv = {ExpandedArgv.begin(), ExpandedArgv.end()};
 
   // Handle /WX early since it converts missing argument warnings to errors.
   errorHandler().FatalWarnings = Args.hasFlag(OPT_WX, OPT_WX_no, false);
@@ -821,6 +806,10 @@ opt::InputArgList ArgParser::parse(ArrayRef<const char *> Argv) {
 
   for (auto *Arg : Args.filtered(OPT_UNKNOWN))
     warn("ignoring unknown argument: " + Arg->getSpelling());
+
+  if (Args.hasArg(OPT_lib))
+    warn("ignoring /lib since it's not the first argument");
+
   return Args;
 }
 
@@ -858,11 +847,11 @@ opt::InputArgList ArgParser::parseLINK(std::vector<const char *> Argv) {
   // Concatenate LINK env and command line arguments, and then parse them.
   if (Optional<std::string> S = Process::GetEnv("LINK")) {
     std::vector<const char *> V = tokenize(*S);
-    Argv.insert(Argv.begin(), V.begin(), V.end());
+    Argv.insert(std::next(Argv.begin()), V.begin(), V.end());
   }
   if (Optional<std::string> S = Process::GetEnv("_LINK_")) {
     std::vector<const char *> V = tokenize(*S);
-    Argv.insert(Argv.begin(), V.begin(), V.end());
+    Argv.insert(std::next(Argv.begin()), V.begin(), V.end());
   }
   return parse(Argv);
 }
@@ -874,7 +863,9 @@ std::vector<const char *> ArgParser::tokenize(StringRef S) {
 }
 
 void printHelp(const char *Argv0) {
-  COFFOptTable().PrintHelp(outs(), Argv0, "LLVM Linker", false);
+  COFFOptTable().PrintHelp(outs(),
+                           (std::string(Argv0) + " [options] file...").c_str(),
+                           "LLVM Linker", false);
 }
 
 } // namespace coff

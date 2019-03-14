@@ -12,7 +12,14 @@ check_include_file(unwind.h HAVE_UNWIND_H)
 add_custom_target(compiler-rt ALL)
 add_custom_target(install-compiler-rt)
 add_custom_target(install-compiler-rt-stripped)
-set_target_properties(compiler-rt PROPERTIES FOLDER "Compiler-RT Misc")
+set_property(
+  TARGET
+    compiler-rt
+    install-compiler-rt
+    install-compiler-rt-stripped
+  PROPERTY
+    FOLDER "Compiler-RT Misc"
+)
 
 # Setting these variables from an LLVM build is sufficient that compiler-rt can
 # construct the output paths, so it can behave as if it were in-tree here.
@@ -69,10 +76,17 @@ endif()
 if(NOT DEFINED COMPILER_RT_OS_DIR)
   string(TOLOWER ${CMAKE_SYSTEM_NAME} COMPILER_RT_OS_DIR)
 endif()
-set(COMPILER_RT_LIBRARY_OUTPUT_DIR
-  ${COMPILER_RT_OUTPUT_DIR}/lib/${COMPILER_RT_OS_DIR})
-set(COMPILER_RT_LIBRARY_INSTALL_DIR
-  ${COMPILER_RT_INSTALL_PATH}/lib/${COMPILER_RT_OS_DIR})
+if(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR AND NOT APPLE)
+  set(COMPILER_RT_LIBRARY_OUTPUT_DIR
+    ${COMPILER_RT_OUTPUT_DIR})
+  set(COMPILER_RT_LIBRARY_INSTALL_DIR
+    ${COMPILER_RT_INSTALL_PATH})
+else(LLVM_ENABLE_PER_TARGET_RUNTIME_DIR)
+  set(COMPILER_RT_LIBRARY_OUTPUT_DIR
+    ${COMPILER_RT_OUTPUT_DIR}/lib/${COMPILER_RT_OS_DIR})
+  set(COMPILER_RT_LIBRARY_INSTALL_DIR
+    ${COMPILER_RT_INSTALL_PATH}/lib/${COMPILER_RT_OS_DIR})
+endif()
 
 if(APPLE)
   # On Darwin if /usr/include doesn't exist, the user probably has Xcode but not
@@ -108,8 +122,6 @@ macro(test_targets)
   # what version of MSVC to pretend to be so that the STL works.
   set(MSVC_VERSION_FLAG "")
   if (MSVC)
-    # Find and run MSVC (not clang-cl) and get its version. This will tell
-    # clang-cl what version of MSVC to pretend to be so that the STL works.
     execute_process(COMMAND "$ENV{VSINSTALLDIR}/VC/bin/cl.exe"
       OUTPUT_QUIET
       ERROR_VARIABLE MSVC_COMPAT_VERSION
@@ -177,11 +189,11 @@ macro(test_targets)
       # clang's default CPU's. In the 64-bit case, we must also specify the ABI
       # since the default ABI differs between gcc and clang.
       # FIXME: Ideally, we would build the N32 library too.
-      test_target_arch(mipsel "" "-mips32r2" "--target=mipsel-linux-gnu")
-      test_target_arch(mips64el "" "-mips64r2" "--target=mips64el-linux-gnu" "-mabi=64")
+      test_target_arch(mipsel "" "-mips32r2" "-mabi=32")
+      test_target_arch(mips64el "" "-mips64r2" "-mabi=64")
     elseif("${COMPILER_RT_DEFAULT_TARGET_ARCH}" MATCHES "mips")
-      test_target_arch(mips "" "-mips32r2" "--target=mips-linux-gnu")
-      test_target_arch(mips64 "" "-mips64r2" "--target=mips64-linux-gnu" "-mabi=64")
+      test_target_arch(mips "" "-mips32r2" "-mabi=32")
+      test_target_arch(mips64 "" "-mips64r2" "-mabi=64")
     elseif("${COMPILER_RT_DEFAULT_TARGET_ARCH}" MATCHES "arm")
       if(WIN32)
         test_target_arch(arm "" "" "")

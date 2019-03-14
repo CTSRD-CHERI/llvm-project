@@ -80,14 +80,15 @@ set(TSAN_HEADERS
   rtl/tsan_flags.inc
   rtl/tsan_ignoreset.h
   rtl/tsan_interceptors.h
-  rtl/tsan_interface_ann.h
   rtl/tsan_interface.h
+  rtl/tsan_interface_ann.h
   rtl/tsan_interface_inl.h
   rtl/tsan_interface_java.h
   rtl/tsan_mman.h
   rtl/tsan_mutex.h
   rtl/tsan_mutexset.h
   rtl/tsan_platform.h
+  rtl/tsan_ppc_regs.h
   rtl/tsan_report.h
   rtl/tsan_rtl.h
   rtl/tsan_stack_trace.h
@@ -114,6 +115,7 @@ if(APPLE)
     OS ${TSAN_SUPPORTED_OS}
     ARCHS ${TSAN_SUPPORTED_ARCH}
     SOURCES ${TSAN_SOURCES} ${TSAN_CXX_SOURCES} ${TSAN_ASM_SOURCES}
+    ADDITIONAL_HEADERS ${TSAN_HEADERS}
     OBJECT_LIBS RTInterception
                 RTSanitizerCommon
                 RTSanitizerCommonLibc
@@ -128,6 +130,7 @@ if(APPLE)
     OS ${TSAN_SUPPORTED_OS}
     ARCHS ${TSAN_SUPPORTED_ARCH}
     SOURCES ${TSAN_SOURCES} ${TSAN_CXX_SOURCES} ${TSAN_ASM_SOURCES}
+    ADDITIONAL_HEADERS ${TSAN_HEADERS}
     CFLAGS ${TSAN_RTL_CFLAGS})
 
   # Build and check Go runtime.
@@ -139,6 +142,7 @@ if(APPLE)
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/go
     COMMENT "Checking TSan Go runtime..."
     VERBATIM)
+  set_target_properties(GotsanRuntimeCheck PROPERTIES FOLDER "Compiler-RT Misc")
 else()
   foreach(arch ${TSAN_SUPPORTED_ARCH})
     if(arch STREQUAL "x86_64")
@@ -154,6 +158,15 @@ else()
         VERBATIM)
     elseif(arch STREQUAL "aarch64")
       add_asm_sources(TSAN_ASM_SOURCES rtl/tsan_rtl_aarch64.S)
+      # Sanity check for Go runtime.
+      set(BUILDGO_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/go/buildgo.sh)
+      add_custom_target(GotsanRuntimeCheck
+	COMMAND env "CC=${CMAKE_C_COMPILER} ${CMAKE_C_COMPILER_ARG1}"
+		IN_TMPDIR=1 SILENT=1 ${BUILDGO_SCRIPT}
+	DEPENDS clang_rt.tsan-${arch} ${BUILDGO_SCRIPT}
+	WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/go
+	COMMENT "Checking TSan Go runtime..."
+	VERBATIM)
     elseif(arch MATCHES "powerpc64|powerpc64le")
       add_asm_sources(TSAN_ASM_SOURCES rtl/tsan_rtl_ppc64.S)
       # Sanity check for Go runtime.
@@ -180,6 +193,7 @@ else()
               $<TARGET_OBJECTS:RTSanitizerCommonCoverage.${arch}>
               $<TARGET_OBJECTS:RTSanitizerCommonSymbolizer.${arch}>
               $<TARGET_OBJECTS:RTUbsan.${arch}>
+      ADDITIONAL_HEADERS ${TSAN_HEADERS}
       CFLAGS ${TSAN_RTL_CFLAGS}
       PARENT_TARGET tsan)
     add_compiler_rt_runtime(clang_rt.tsan_cxx
@@ -187,6 +201,7 @@ else()
       ARCHS ${arch}
       SOURCES ${TSAN_CXX_SOURCES}
               $<TARGET_OBJECTS:RTUbsan_cxx.${arch}>
+      ADDITIONAL_HEADERS ${TSAN_HEADERS}
       CFLAGS ${TSAN_RTL_CFLAGS}
       PARENT_TARGET tsan)
     list(APPEND TSAN_RUNTIME_LIBRARIES clang_rt.tsan-${arch}
@@ -205,11 +220,12 @@ else()
 endif()
 
 # Make sure that non-platform-specific files don't include any system headers.
-# FreeBSD does not install a number of Clang-provided headers for the compiler
-# in the base system due to incompatibilities between FreeBSD's and Clang's
-# versions. As a workaround do not use --sysroot=. on FreeBSD until this is
-# addressed.
-if(COMPILER_RT_HAS_SYSROOT_FLAG AND NOT CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+# FreeBSD/NetBSD do not install a number of Clang-provided headers for the
+# compiler in the base system due to incompatibilities between FreeBSD/NetBSD's
+# and Clang's versions. As a workaround do not use --sysroot=. on FreeBSD/NetBSD
+# until this is addressed.
+if(COMPILER_RT_HAS_SYSROOT_FLAG AND NOT CMAKE_SYSTEM_NAME MATCHES "FreeBSD"
+   AND NOT CMAKE_SYSTEM_NAME MATCHES "NetBSD")
   file(GLOB _tsan_generic_sources rtl/tsan*)
   file(GLOB _tsan_platform_sources rtl/tsan*posix* rtl/tsan*mac*
                                    rtl/tsan*linux*)
@@ -234,6 +250,7 @@ if(COMPILER_RT_LIBCXX_PATH AND
   endforeach()
 
   add_custom_target(libcxx_tsan DEPENDS ${libcxx_tsan_deps})
+  set_target_properties(libcxx_tsan PROPERTIES FOLDER "Compiler-RT Misc")
 endif()
 
 if(COMPILER_RT_INCLUDE_TESTS)

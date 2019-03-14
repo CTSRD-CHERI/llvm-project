@@ -22,12 +22,14 @@
 # CHECK-NEXT:        "moreTriggerCharacter": []
 # CHECK-NEXT:      },
 # CHECK-NEXT:      "documentRangeFormattingProvider": true,
+# CHECK-NEXT:      "documentSymbolProvider": true,
 # CHECK-NEXT:      "executeCommandProvider": {
 # CHECK-NEXT:        "commands": [
 # CHECK-NEXT:          "clangd.applyFix"
 # CHECK-NEXT:        ]
 # CHECK-NEXT:      },
 # CHECK-NEXT:      "hoverProvider": true,
+# CHECK-NEXT:      "referencesProvider": true,
 # CHECK-NEXT:      "renameProvider": true,
 # CHECK-NEXT:      "signatureHelpProvider": {
 # CHECK-NEXT:        "triggerCharacters": [
@@ -45,4 +47,4 @@
 # CHECK-NEXT:  "jsonrpc": "2.0",
 # CHECK-NEXT:  "result": null
 ---
-{"jsonrpc":"2.0":"method":"exit"}
+{"jsonrpc":"2.0","method":"exit"}
