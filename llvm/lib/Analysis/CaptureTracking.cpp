@@ -22,6 +22,7 @@
 #include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/OrderedBasicBlock.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Instructions.h"
@@ -335,7 +336,7 @@ void llvm::PointerMayBeCaptured(const Value *V, CaptureTracker *Tracker,
       // with null, for example.
       if (ConstantPointerNull *CPN =
           dyn_cast<ConstantPointerNull>(I->getOperand(1)))
-        if (CPN->getType()->getAddressSpace() == 0)  // XXXAR: should we also allow this for CHERI AS 200?
+        if (CPN->getType()->getAddressSpace() == 0 || isCheriPointer(CPN->getType(), getDataLayoutOrNull(I)))
           if (isNoAliasCall(V->stripPointerCasts()))
             break;
       // Comparison against value stored in global variable. Given the pointer
