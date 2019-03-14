@@ -12227,32 +12227,7 @@ Value *CodeGenFunction::EmitX86BuiltinExpr(unsigned BuiltinID,
 
 Value *CodeGenFunction::EmitMIPSBuiltinExpr(unsigned BuiltinID,
                                             const CallExpr *E) {
-  if (BuiltinID == Builtin::BI__builtin_cheri_callback_create) {
-    StringRef ClassName = cast<StringLiteral>(E->getArg(0))->getString();
-    auto Fn = cast<DeclRefExpr>(E->getArg(2));
-    StringRef FunctionName = cast<NamedDecl>(Fn->getDecl())->getName().str();
-    auto *MethodNumVar =
-      CGM.EmitSandboxRequiredMethod(ClassName, FunctionName);
-    // Load the global and use it in the call
-    // FIXME: EmitSandboxRequiredMethod should return an Address so that we
-    // don't have to know the alignment here.
-    auto *MethodNum = Builder.CreateLoad(Address(MethodNumVar,
-          CharUnits::fromQuantity(8)));
-
-    auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
-    auto ClsTy = ConvertType(CGM.getContext().getCHERIClassType());
-    auto ResultType = llvm::StructType::get(ClsTy, MethNoTy);
-    LValue Obj = EmitAggExprToLValue(E->getArg(1));
-    auto ClsVal = Builder.CreateBitCast(Obj.getAddress(),
-        ClsTy->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS()));
-    llvm::Value *Struct = llvm::Constant::getNullValue(ResultType);
-    llvm::Value *ObjVal = Builder.CreateLoad(ClsVal);
-    ObjVal = Builder.CreateBitCast(ObjVal, ClsTy);
-    Struct = Builder.CreateInsertValue(Struct, ObjVal, {0});
-    Struct = Builder.CreateInsertValue(Struct, MethodNum, {1});
-    return Struct;
-  }
-  return 0;
+  return nullptr;
 }
 
 Value *CodeGenFunction::EmitPPCBuiltinExpr(unsigned BuiltinID,
