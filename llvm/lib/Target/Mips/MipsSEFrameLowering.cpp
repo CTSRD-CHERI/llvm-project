@@ -457,6 +457,9 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
       MachineFunction::iterator iter = MF.begin();
       MF.insert(iter, &exteralMBB);
 
+      MBB.setHasAddressTaken();
+      exteralMBB.setHasAddressTaken();
+
       exteralMBB.addSuccessorWithoutProb(&MBB);
 
       // Add CTLP live in
@@ -503,7 +506,7 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
 
       // Function actually starts here
       MF.setHasCustomFunctionStarts(true);
-      BuildMI(MBB, MBBI, dl, TII.get(TargetOpcode::FUNC_START));
+      BuildMI(exteralMBB, exteralMBBI, dl, TII.get(TargetOpcode::FUNC_START));
     }
   }
 
@@ -515,27 +518,17 @@ void MipsSEFrameLowering::emitPrologue(MachineFunction &MF,
   uint64_t UnsafeStackSize = MFI.getUnsafeStackSize();
 
   if(MFI.hasStaticUnsafeObjects()) {
-    // We allocate and set bounds to ensure the stack is still large enough
-    // It will alos fail if there is no stack. Either way get a new one
+    // Make sure that the remaining space on the stack (which is its offset) is of a minimun size
+    MachineRegisterInfo &MRegInfo = MBB.getParent()->getRegInfo();
+    const TargetRegisterClass *RC = STI.isABI_N64() ?
+                                    &Mips::GPR64RegClass : &Mips::GPR32RegClass;
+    unsigned StackLenReg = MRegInfo.createVirtualRegister(RC);
+
     int64_t minSize = ABI.GetTABILayout()->GetMinStack_Size();
-    // FIXME lasyness made use c15, should be a new virtual register
-    if (isInt<11>(minSize) && isInt<11>(-minSize)) {
-      BuildMI(MBB, MBBI, dl, TII.get(Mips::CIncOffsetImm), Mips::C15)
-          .addReg(USP)
-          .addImm(-minSize);
-      BuildMI(MBB, MBBI, dl, TII.get(Mips::CSetBoundsImm), Mips::C15)
-          .addReg(Mips::C15)
-          .addImm(minSize);
-    } else {
-        unsigned MinReg = TII.loadImmediate(-minSize, MBB, MBBI, dl, nullptr);
-        BuildMI(MBB, MBBI, dl, TII.get(Mips::CIncOffset), Mips::C15)
-            .addReg(USP)
-            .addReg(MinReg);
-        BuildMI(MBB, MBBI, dl, TII.get(Mips::DSUBu), MinReg).addReg(ZERO).addReg(MinReg);
-        BuildMI(MBB, MBBI, dl, TII.get(Mips::CSetBounds), Mips::C15)
-            .addReg(Mips::C15, RegState::Kill)
-            .addReg(MinReg, RegState::Kill);
-    }
+    assert(isInt<16>(minSize));
+
+    BuildMI(MBB, MBBI, dl, TII.get(Mips::CGetOffset), StackLenReg).addReg(USP);
+    BuildMI(MBB, MBBI, dl, TII.get(Mips::TTLTIU)).addReg(StackLenReg, RegState::Kill).addImm(minSize);
 
     // Store old csp
     BuildMI(MBB, MBBI, dl, TII.get(Mips::STORECAP_BigImm))
@@ -926,11 +919,18 @@ void MipsSEFrameLowering::emitEpilogue(MachineFunction &MF,
 
     // setboundsback $cusp, $csp, SAFE needs a whole bunch of instructions as this instruction does not exist
     // instead we sacrifice a little memory safety and only use incoffset
+  // FIXME: SafeStackSize migh be too large
+    if(isInt<11>(SafeStackSize)) {
+      BuildMI(MBB, MBBI, DL, TII.get(Mips::CIncOffsetImm), USP)
+          .addReg(SP)
+          .addImm(SafeStackSize);
+    } else {
+      unsigned Reg = TII.loadImmediate(SafeStackSize, MBB, MBBI, DL, nullptr);
+      BuildMI(MBB, MBBI, DL, TII.get(Mips::CIncOffset), USP)
+          .addReg(SP).addReg(Reg, RegState::Kill);
+    }
 
 
-    BuildMI(MBB, MBBI, DL, TII.get(Mips::CIncOffsetImm), USP)
-           .addReg(SP)
-           .addImm(SafeStackSize);
 
     /* Implements set bounds back. Too long.
     BuildMI(MBB, MBBI, DL, TII.get(Mips::CGetOffset), (Mips::AT))
