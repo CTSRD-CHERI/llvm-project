@@ -9,15 +9,15 @@
 
 #include "lldb/Core/ValueObjectConstResult.h"
 
-#include "lldb/Core/Scalar.h" // for Scalar
 #include "lldb/Core/ValueObjectDynamicValue.h"
 #include "lldb/Symbol/CompilerType.h"
 #include "lldb/Target/ExecutionContext.h"
-#include "lldb/Target/ExecutionContextScope.h" // for ExecutionContextScope
+#include "lldb/Target/ExecutionContextScope.h"
 #include "lldb/Target/Process.h"
-#include "lldb/Utility/DataBuffer.h"     // for DataBuffer
-#include "lldb/Utility/DataBufferHeap.h" // for DataBufferHeap
+#include "lldb/Utility/DataBuffer.h"
+#include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/Scalar.h"
 
 namespace lldb_private {
 class Module;
@@ -208,7 +208,8 @@ uint64_t ValueObjectConstResult::GetByteSize() {
 void ValueObjectConstResult::SetByteSize(size_t size) { m_byte_size = size; }
 
 size_t ValueObjectConstResult::CalculateNumChildren(uint32_t max) {
-  auto children_count = GetCompilerType().GetNumChildren(true);
+  ExecutionContext exe_ctx(GetExecutionContextRef());
+  auto children_count = GetCompilerType().GetNumChildren(true, &exe_ctx);
   return children_count <= max ? children_count : max;
 }
 

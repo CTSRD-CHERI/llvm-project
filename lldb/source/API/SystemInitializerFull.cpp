@@ -24,9 +24,6 @@
 #include "lldb/Initialization/SystemInitializerCommon.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Symbol/ClangASTContext.h"
-#include "lldb/Symbol/GoASTContext.h"
-#include "lldb/Symbol/JavaASTContext.h"
-#include "lldb/Symbol/OCamlASTContext.h"
 #include "lldb/Utility/Timer.h"
 
 #include "Plugins/ABI/MacOSX-arm/ABIMacOSX_arm.h"
@@ -43,6 +40,7 @@
 #include "Plugins/ABI/SysV-s390x/ABISysV_s390x.h"
 #include "Plugins/ABI/SysV-x86_64/ABISysV_x86_64.h"
 #include "Plugins/Architecture/Arm/ArchitectureArm.h"
+#include "Plugins/Architecture/Mips/ArchitectureMips.h"
 #include "Plugins/Architecture/PPC64/ArchitecturePPC64.h"
 #include "Plugins/Disassembler/llvm/DisassemblerLLVMC.h"
 #include "Plugins/DynamicLoader/MacOSX-DYLD/DynamicLoaderMacOS.h"
@@ -58,22 +56,17 @@
 #include "Plugins/InstrumentationRuntime/UBSan/UBSanRuntime.h"
 #include "Plugins/JITLoader/GDB/JITLoaderGDB.h"
 #include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
-#include "Plugins/Language/Go/GoLanguage.h"
-#include "Plugins/Language/Java/JavaLanguage.h"
-#include "Plugins/Language/OCaml/OCamlLanguage.h"
 #include "Plugins/Language/ObjC/ObjCLanguage.h"
 #include "Plugins/Language/ObjCPlusPlus/ObjCPlusPlusLanguage.h"
 #include "Plugins/LanguageRuntime/CPlusPlus/ItaniumABI/ItaniumABILanguageRuntime.h"
-#include "Plugins/LanguageRuntime/Go/GoLanguageRuntime.h"
-#include "Plugins/LanguageRuntime/Java/JavaLanguageRuntime.h"
 #include "Plugins/LanguageRuntime/ObjC/AppleObjCRuntime/AppleObjCRuntimeV1.h"
 #include "Plugins/LanguageRuntime/ObjC/AppleObjCRuntime/AppleObjCRuntimeV2.h"
 #include "Plugins/LanguageRuntime/RenderScript/RenderScriptRuntime/RenderScriptRuntime.h"
 #include "Plugins/MemoryHistory/asan/MemoryHistoryASan.h"
+#include "Plugins/ObjectFile/Breakpad/ObjectFileBreakpad.h"
 #include "Plugins/ObjectFile/ELF/ObjectFileELF.h"
 #include "Plugins/ObjectFile/Mach-O/ObjectFileMachO.h"
 #include "Plugins/ObjectFile/PECOFF/ObjectFilePECOFF.h"
-#include "Plugins/OperatingSystem/Go/OperatingSystemGo.h"
 #include "Plugins/OperatingSystem/Python/OperatingSystemPython.h"
 #include "Plugins/Platform/Android/PlatformAndroid.h"
 #include "Plugins/Platform/FreeBSD/PlatformFreeBSD.h"
@@ -106,6 +99,7 @@
 #include "Plugins/Platform/MacOSX/PlatformDarwinKernel.h"
 #include "Plugins/Platform/MacOSX/PlatformRemoteAppleTV.h"
 #include "Plugins/Platform/MacOSX/PlatformRemoteAppleWatch.h"
+#include "Plugins/Platform/MacOSX/PlatformRemoteAppleBridge.h"
 #include "Plugins/Platform/MacOSX/PlatformiOSSimulator.h"
 #include "Plugins/Process/MacOSX-Kernel/ProcessKDP.h"
 #include "Plugins/SymbolVendor/MacOSX/SymbolVendorMacOSX.h"
@@ -177,6 +171,18 @@ extern "C" bool LLDBSWIGPythonCallThreadPlan(void *implementor,
                                              const char *method_name,
                                              Event *event_sp, bool &got_error);
 
+extern "C" void *LLDBSwigPythonCreateScriptedBreakpointResolver(
+    const char *python_class_name,
+    const char *session_dictionary_name,
+    lldb_private::StructuredDataImpl *args,
+    lldb::BreakpointSP &bkpt_sp);
+
+extern "C" unsigned int LLDBSwigPythonCallBreakpointResolver(
+    void *implementor,
+    const char *method_name,
+    lldb_private::SymbolContext *sym_ctx
+);
+
 extern "C" size_t LLDBSwigPython_CalculateNumChildren(void *implementor,
                                                       uint32_t max);
 
@@ -222,6 +228,13 @@ LLDBSWIGPythonCreateOSPlugin(const char *python_class_name,
                              const char *session_dictionary_name,
                              const lldb::ProcessSP &process_sp);
 
+extern "C" void *LLDBSWIGPython_CreateFrameRecognizer(
+    const char *python_class_name,
+    const char *session_dictionary_name);
+
+extern "C" void *LLDBSwigPython_GetRecognizedArguments(void *implementor,
+    const lldb::StackFrameSP& frame_sp);
+
 extern "C" bool LLDBSWIGPythonRunScriptKeywordProcess(
     const char *python_function_name, const char *session_dictionary_name,
     lldb::ProcessSP &process, std::string &output);
@@ -252,9 +265,12 @@ SystemInitializerFull::SystemInitializerFull() {}
 
 SystemInitializerFull::~SystemInitializerFull() {}
 
-void SystemInitializerFull::Initialize() {
-  SystemInitializerCommon::Initialize();
+llvm::Error
+SystemInitializerFull::Initialize(const InitializerOptions &options) {
+  if (auto e = SystemInitializerCommon::Initialize(options))
+    return e;
 
+  breakpad::ObjectFileBreakpad::Initialize();
   ObjectFileELF::Initialize();
   ObjectFileMachO::Initialize();
   ObjectFilePECOFF::Initialize();
@@ -264,7 +280,6 @@ void SystemInitializerFull::Initialize() {
 #ifndef LLDB_DISABLE_PYTHON
   OperatingSystemPython::Initialize();
 #endif
-  OperatingSystemGo::Initialize();
 
 #if !defined(LLDB_DISABLE_PYTHON)
   InitializeSWIG();
@@ -296,9 +311,6 @@ void SystemInitializerFull::Initialize() {
   llvm::InitializeAllDisassemblers();
 
   ClangASTContext::Initialize();
-  GoASTContext::Initialize();
-  JavaASTContext::Initialize();
-  OCamlASTContext::Initialize();
 
   ABIMacOSX_i386::Initialize();
   ABIMacOSX_arm::Initialize();
@@ -315,6 +327,7 @@ void SystemInitializerFull::Initialize() {
   ABISysV_s390x::Initialize();
 
   ArchitectureArm::Initialize();
+  ArchitectureMips::Initialize();
   ArchitecturePPC64::Initialize();
 
   DisassemblerLLVMC::Initialize();
@@ -343,15 +356,10 @@ void SystemInitializerFull::Initialize() {
   AppleObjCRuntimeV1::Initialize();
   SystemRuntimeMacOSX::Initialize();
   RenderScriptRuntime::Initialize();
-  GoLanguageRuntime::Initialize();
-  JavaLanguageRuntime::Initialize();
 
   CPlusPlusLanguage::Initialize();
-  GoLanguage::Initialize();
-  JavaLanguage::Initialize();
   ObjCLanguage::Initialize();
   ObjCPlusPlusLanguage::Initialize();
-  OCamlLanguage::Initialize();
 
 #if defined(_WIN32)
   ProcessWindows::Initialize();
@@ -366,6 +374,7 @@ void SystemInitializerFull::Initialize() {
   PlatformAppleWatchSimulator::Initialize();
   PlatformRemoteAppleTV::Initialize();
   PlatformRemoteAppleWatch::Initialize();
+  PlatformRemoteAppleBridge::Initialize();
   DynamicLoaderDarwinKernel::Initialize();
 #endif
 
@@ -393,6 +402,8 @@ void SystemInitializerFull::Initialize() {
   // AFTER PluginManager::Initialize is called.
 
   Debugger::SettingsInitialize();
+
+  return llvm::Error::success();
 }
 
 void SystemInitializerFull::InitializeSWIG() {
@@ -409,11 +420,14 @@ void SystemInitializerFull::InitializeSWIG() {
       LLDBSwigPython_MightHaveChildrenSynthProviderInstance,
       LLDBSwigPython_GetValueSynthProviderInstance, LLDBSwigPythonCallCommand,
       LLDBSwigPythonCallCommandObject, LLDBSwigPythonCallModuleInit,
-      LLDBSWIGPythonCreateOSPlugin, LLDBSWIGPythonRunScriptKeywordProcess,
+      LLDBSWIGPythonCreateOSPlugin, LLDBSWIGPython_CreateFrameRecognizer,
+      LLDBSwigPython_GetRecognizedArguments,
+      LLDBSWIGPythonRunScriptKeywordProcess,
       LLDBSWIGPythonRunScriptKeywordThread,
       LLDBSWIGPythonRunScriptKeywordTarget, LLDBSWIGPythonRunScriptKeywordFrame,
       LLDBSWIGPythonRunScriptKeywordValue, LLDBSWIGPython_GetDynamicSetting,
-      LLDBSwigPythonCreateScriptedThreadPlan, LLDBSWIGPythonCallThreadPlan);
+      LLDBSwigPythonCreateScriptedThreadPlan, LLDBSWIGPythonCallThreadPlan,
+      LLDBSwigPythonCreateScriptedBreakpointResolver, LLDBSwigPythonCallBreakpointResolver);
 #endif
 }
 
@@ -427,9 +441,10 @@ void SystemInitializerFull::Terminate() {
   PluginManager::Terminate();
 
   ClangASTContext::Terminate();
-  GoASTContext::Terminate();
-  JavaASTContext::Terminate();
-  OCamlASTContext::Terminate();
+
+  ArchitectureArm::Terminate();
+  ArchitectureMips::Terminate();
+  ArchitecturePPC64::Terminate();
 
   ABIMacOSX_i386::Terminate();
   ABIMacOSX_arm::Terminate();
@@ -469,14 +484,10 @@ void SystemInitializerFull::Terminate() {
   AppleObjCRuntimeV1::Terminate();
   SystemRuntimeMacOSX::Terminate();
   RenderScriptRuntime::Terminate();
-  JavaLanguageRuntime::Terminate();
 
   CPlusPlusLanguage::Terminate();
-  GoLanguage::Terminate();
-  JavaLanguage::Terminate();
   ObjCLanguage::Terminate();
   ObjCPlusPlusLanguage::Terminate();
-  OCamlLanguage::Terminate();
 
 #if defined(__APPLE__)
   DynamicLoaderDarwinKernel::Terminate();
@@ -486,6 +497,7 @@ void SystemInitializerFull::Terminate() {
   PlatformAppleWatchSimulator::Terminate();
   PlatformRemoteAppleTV::Terminate();
   PlatformRemoteAppleWatch::Terminate();
+  PlatformRemoteAppleBridge::Terminate();
 #endif
 
 #if defined(__FreeBSD__)
@@ -506,7 +518,6 @@ void SystemInitializerFull::Terminate() {
 #ifndef LLDB_DISABLE_PYTHON
   OperatingSystemPython::Terminate();
 #endif
-  OperatingSystemGo::Terminate();
 
   platform_freebsd::PlatformFreeBSD::Terminate();
   platform_linux::PlatformLinux::Terminate();
@@ -522,6 +533,7 @@ void SystemInitializerFull::Terminate() {
   PlatformDarwinKernel::Terminate();
 #endif
 
+  breakpad::ObjectFileBreakpad::Terminate();
   ObjectFileELF::Terminate();
   ObjectFileMachO::Terminate();
   ObjectFilePECOFF::Terminate();

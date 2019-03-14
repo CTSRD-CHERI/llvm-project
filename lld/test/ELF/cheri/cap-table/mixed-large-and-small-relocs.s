@@ -4,16 +4,16 @@
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: %cheri128_llvm-mc -filetype=obj -defsym=TOO_MANY_SMALL_RELOCS=1 %s -o %t-bad.o
 # RUN: ld.lld %t.o -o %t.exe
-# RUN: llvm-objdump -C -t -d -D %t.exe | FileCheck %s -check-prefix EXE
+# RUN: llvm-objdump --cap-relocs -t -d -D %t.exe | FileCheck %s -check-prefix EXE
 # check that symbols with small immediates come first:
-# EXE-LABEL: Disassembly of section .cap_table:
+# EXE-LABEL: Disassembly of section .captable:
 # EXE-NEXT: sym_small000@CAPTABLE:
 # EXE-LABEL: CAPABILITY RELOCATION RECORDS:
 # EXE-NEXT: 0x0000000000050000	Base: sym_small000 (0x00000000000403e8)	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
 # EXE:      0x0000000000053e80	Base: sym_mxcaptable000 (0x0000000000040000)	Offset: 0x0000000000000000	Length: 0x0000000000000001	Permissions: 0x00000000
 # EXE-LABEL: SYMBOL TABLE
-# EXE: 0000000000053e80 l       .cap_table		 00000010 sym_mxcaptable000@CAPTABLE
-# EXE: 0000000000050000 l       .cap_table		 00000010 sym_small000@CAPTABLE
+# EXE: 0000000000053e80 l     O .captable		 00000010 sym_mxcaptable000@CAPTABLE
+# EXE: 0000000000050000 l     O .captable		 00000010 sym_small000@CAPTABLE
 
 
 # But if there are too many small relocs there is nothing we can do

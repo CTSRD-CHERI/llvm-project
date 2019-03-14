@@ -3,53 +3,32 @@ include_directories(..)
 add_custom_target(XRayUnitTests)
 set_target_properties(XRayUnitTests PROPERTIES FOLDER "XRay unittests")
 
-# Create an XRAY_IMPL_FILES variable which must include all the implementation
-# files that are in the lib directory. We *must* keep this list up-to-date.
-set(XRAY_IMPL_FILES
-  ../../xray_AArch64.cc
-  ../../xray_allocator.h
-  ../../xray_arm.cc
-  ../../xray_basic_flags.cc
-  ../../xray_basic_flags.h
-  ../../xray_basic_logging.cc
-  ../../xray_basic_logging.h
-  ../../xray_buffer_queue.cc
-  ../../xray_buffer_queue.h
-  ../../xray_defs.h
-  ../../xray_fdr_flags.cc
-  ../../xray_fdr_flags.h
-  ../../xray_fdr_logging.cc
-  ../../xray_fdr_logging.h
-  ../../xray_fdr_log_records.h
-  ../../xray_flags.cc
-  ../../xray_flags.h
-  ../../xray_function_call_trie.h
-  ../../xray_init.cc
-  ../../xray_interface.cc
-  ../../xray_interface_internal.h
-  ../../xray_log_interface.cc
-  ../../xray_mips64.cc
-  ../../xray_mips.cc
-  ../../xray_powerpc64.cc
-  ../../xray_profile_collector.cc
-  ../../xray_profile_collector.h
-  ../../xray_profiling_flags.cc
-  ../../xray_profiling_flags.h
-  ../../xray_recursion_guard.h
-  ../../xray_segmented_array.h
-  ../../xray_trampoline_powerpc64.cc
-  ../../xray_tsc.h
-  ../../xray_utils.cc
-  ../../xray_utils.h
-  ../../xray_x86_64.cc)
+# Sanity check XRAY_ALL_SOURCE_FILES_ABS_PATHS
+list(LENGTH XRAY_ALL_SOURCE_FILES_ABS_PATHS XASFAP_LENGTH)
+if (${XASFAP_LENGTH} EQUAL 0)
+  message(FATAL_ERROR "XRAY_ALL_SOURCE_FILES_ABS_PATHS cannot be empty")
+endif()
+unset(XASFAP_LENGTH)
+foreach (src_file ${XRAY_ALL_SOURCE_FILES_ABS_PATHS})
+  if (NOT EXISTS "${src_file}")
+    message(FATAL_ERROR "Source file \"${src_file}\" does not exist")
+  endif()
+endforeach()
 
 set(XRAY_UNITTEST_CFLAGS
   ${XRAY_CFLAGS}
   ${COMPILER_RT_UNITTEST_CFLAGS}
   ${COMPILER_RT_GTEST_CFLAGS}
+  ${COMPILER_RT_GMOCK_CFLAGS}
   -I${COMPILER_RT_SOURCE_DIR}/include
   -I${COMPILER_RT_SOURCE_DIR}/lib/xray
-  -I${COMPILER_RT_SOURCE_DIR}/lib)
+  -I${COMPILER_RT_SOURCE_DIR}/lib
+  )
+
+# We add the include directories one at a time in our CFLAGS.
+foreach (DIR ${LLVM_INCLUDE_DIR} ${LLVM_MAIN_INCLUDE_DIR})
+  list(APPEND XRAY_UNITTEST_CFLAGS -I${DIR})
+endforeach()
 
 function(add_xray_lib library)
   add_library(${library} STATIC ${ARGN})
@@ -68,8 +47,33 @@ function(get_xray_lib_for_arch arch lib)
 endfunction()
 
 set(XRAY_TEST_ARCH ${XRAY_SUPPORTED_ARCH})
-set(XRAY_UNITTEST_LINK_FLAGS ${CMAKE_THREAD_LIBS_INIT})
+set(XRAY_UNITTEST_LINK_FLAGS
+  ${CMAKE_THREAD_LIBS_INIT}
+  -l${SANITIZER_CXX_ABI_LIBRARY})
+
 if (NOT APPLE)
+  # Needed by LLVMSupport.
+  append_list_if(
+    COMPILER_RT_HAS_TERMINFO
+    -l${COMPILER_RT_TERMINFO_LIB} XRAY_UNITTEST_LINK_FLAGS)
+
+  if (COMPILER_RT_STANDALONE_BUILD)
+    append_list_if(COMPILER_RT_HAS_LLVMXRAY ${LLVM_XRAY_LDFLAGS} XRAY_UNITTEST_LINK_FLAGS)
+    append_list_if(COMPILER_RT_HAS_LLVMXRAY ${LLVM_XRAY_LIBLIST} XRAY_UNITTEST_LINK_FLAGS)
+    append_list_if(COMPILER_RT_HAS_LLVMTESTINGSUPPORT
+      ${LLVM_TESTINGSUPPORT_LDFLAGS} XRAY_UNITTEST_LINK_FLAGS)
+    append_list_if(COMPILER_RT_HAS_LLVMTESTINGSUPPORT
+      ${LLVM_TESTINGSUPPORT_LIBLIST} XRAY_UNITTEST_LINK_FLAGS)
+  else()
+    # We add the library directories one at a time in our CFLAGS.
+    foreach (DIR ${LLVM_LIBRARY_DIR})
+      list(APPEND XRAY_UNITTEST_LINK_FLAGS -L${DIR})
+    endforeach()
+
+    # We also add the actual libraries to link as dependencies.
+    list(APPEND XRAY_UNITTEST_LINK_FLAGS -lLLVMXRay -lLLVMSupport -lLLVMTestingSupport)
+  endif()
+
   append_list_if(COMPILER_RT_HAS_LIBM -lm XRAY_UNITTEST_LINK_FLAGS)
   append_list_if(COMPILER_RT_HAS_LIBRT -lrt XRAY_UNITTEST_LINK_FLAGS)
   append_list_if(COMPILER_RT_HAS_LIBDL -ldl XRAY_UNITTEST_LINK_FLAGS)
@@ -86,17 +90,22 @@ macro(add_xray_unittest testname)
       generate_compiler_rt_tests(TEST_OBJECTS
         XRayUnitTests "${testname}-${arch}-Test" "${arch}"
         SOURCES ${TEST_SOURCES} ${COMPILER_RT_GTEST_SOURCE}
+                ${COMPILER_RT_GMOCK_SOURCE}
+
         # Note that any change in the implementations will cause all the unit
         # tests to be re-built. This is by design, but may be cumbersome during
         # the build/test cycle.
         COMPILE_DEPS ${TEST_SOURCES} ${COMPILER_RT_GTEST_SOURCE}
-        ${XRAY_HEADERS} ${XRAY_IMPL_FILES}
+        ${XRAY_HEADERS} ${XRAY_ALL_SOURCE_FILES_ABS_PATHS}
+        "test_helpers.h"
         RUNTIME "${XRAY_RUNTIME_LIBS}"
-        DEPS gtest xray
+        DEPS gtest xray llvm-xray LLVMXRay LLVMTestingSupport
         CFLAGS ${XRAY_UNITTEST_CFLAGS}
-        LINK_FLAGS ${TARGET_LINK_FLAGS} ${XRAY_UNITTEST_LINK_FLAGS} -lstdc++)
+        LINK_FLAGS ${TARGET_LINK_FLAGS} ${XRAY_UNITTEST_LINK_FLAGS}
+        )
       set_target_properties(XRayUnitTests
-        PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     endforeach()
   endif()
 endmacro()

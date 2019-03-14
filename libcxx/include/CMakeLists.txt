@@ -2,6 +2,7 @@ set(files
   __bit_reference
   __bsd_locale_defaults.h
   __bsd_locale_fallbacks.h
+  __errc
   __debug
   __functional_03
   __functional_base
@@ -10,6 +11,7 @@ set(files
   __libcpp_version
   __locale
   __mutex_base
+  __node_handle
   __nullptr
   __split_buffer
   __sso_allocator
@@ -23,6 +25,7 @@ set(files
   any
   array
   atomic
+  bit
   bitset
   cassert
   ccomplex
@@ -30,6 +33,7 @@ set(files
   cerrno
   cfenv
   cfloat
+  charconv
   chrono
   cinttypes
   ciso646
@@ -65,7 +69,6 @@ set(files
   experimental/chrono
   experimental/coroutine
   experimental/deque
-  experimental/dynarray
   experimental/filesystem
   experimental/forward_list
   experimental/functional
@@ -92,6 +95,7 @@ set(files
   ext/__hash
   ext/hash_map
   ext/hash_set
+  filesystem
   float.h
   forward_list
   fstream
@@ -127,6 +131,7 @@ set(files
   set
   setjmp.h
   shared_mutex
+  span
   sstream
   stack
   stdbool.h
@@ -203,8 +208,8 @@ else()
     )
 endif()
 
-if(NOT LIBCXX_USING_INSTALLED_LLVM AND LLVM_BINARY_DIR)
-  set(output_dir ${LLVM_BINARY_DIR}/include/c++/v1)
+if(NOT LIBCXX_USING_INSTALLED_LLVM AND LIBCXX_HEADER_DIR)
+  set(output_dir ${LIBCXX_HEADER_DIR}/include/c++/v1)
 
   set(out_files)
   foreach(f ${files})
@@ -228,17 +233,17 @@ if(NOT LIBCXX_USING_INSTALLED_LLVM AND LLVM_BINARY_DIR)
     list(APPEND out_files ${dst})
   endif()
 
-  add_custom_target(cxx_headers ALL DEPENDS ${out_files} ${LIBCXX_CXX_ABI_HEADER_TARGET})
+  add_custom_target(cxx-headers ALL DEPENDS ${out_files} ${LIBCXX_CXX_ABI_HEADER_TARGET})
 else()
-  add_custom_target(cxx_headers)
+  add_custom_target(cxx-headers)
 endif()
-set_target_properties(cxx_headers PROPERTIES FOLDER "Misc")
+set_target_properties(cxx-headers PROPERTIES FOLDER "Misc")
 
 if (LIBCXX_INSTALL_HEADERS)
   foreach(file ${files})
     get_filename_component(dir ${file} DIRECTORY)
     install(FILES ${file}
-      DESTINATION ${LIBCXX_INSTALL_PREFIX}include/c++/v1/${dir}
+      DESTINATION ${LIBCXX_INSTALL_HEADER_PREFIX}include/c++/v1/${dir}
       COMPONENT cxx-headers
       PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
     )
@@ -247,7 +252,7 @@ if (LIBCXX_INSTALL_HEADERS)
   if (LIBCXX_NEEDS_SITE_CONFIG)
     # Install the generated header as __config.
     install(FILES ${LIBCXX_BINARY_DIR}/__generated_config
-      DESTINATION ${LIBCXX_INSTALL_PREFIX}include/c++/v1
+      DESTINATION ${LIBCXX_INSTALL_HEADER_PREFIX}include/c++/v1
       PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_READ
       RENAME __config
       COMPONENT cxx-headers)
@@ -255,7 +260,7 @@ if (LIBCXX_INSTALL_HEADERS)
 
   if (NOT CMAKE_CONFIGURATION_TYPES)
     add_custom_target(install-cxx-headers
-                      DEPENDS cxx_headers ${generated_config_deps}
+                      DEPENDS cxx-headers ${generated_config_deps}
                       COMMAND "${CMAKE_COMMAND}"
                               -DCMAKE_INSTALL_COMPONENT=cxx-headers
                               -P "${CMAKE_BINARY_DIR}/cmake_install.cmake")

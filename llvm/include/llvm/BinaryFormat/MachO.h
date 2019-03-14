@@ -486,7 +486,10 @@ enum PlatformType {
   PLATFORM_IOS = 2,
   PLATFORM_TVOS = 3,
   PLATFORM_WATCHOS = 4,
-  PLATFORM_BRIDGEOS = 5
+  PLATFORM_BRIDGEOS = 5,
+  PLATFORM_IOSSIMULATOR = 7,
+  PLATFORM_TVOSSIMULATOR = 8,
+  PLATFORM_WATCHOSSIMULATOR = 9
 };
 
 // Values for tools enum in build_tool_version.
@@ -1974,7 +1977,7 @@ const uint32_t PPC_THREAD_STATE_COUNT =
 #define LOAD_COMMAND_STRUCT(LCStruct) LCStruct LCStruct##_data;
 
 LLVM_PACKED_START
-union LLVM_ALIGNAS(4) macho_load_command {
+union alignas(4) macho_load_command {
 #include "llvm/BinaryFormat/MachO.def"
 };
 LLVM_PACKED_END

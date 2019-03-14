@@ -135,9 +135,10 @@ public:
 
   /// Variable decls are numbered by identifier.
   unsigned getManglingNumber(const VarDecl *VD, unsigned) override {
-    if (auto *DD = dyn_cast<DecompositionDecl>(VD))
-      return ++DecompsitionDeclManglingNumbers[
-          DecompositionDeclName{DD->bindings()}];
+    if (auto *DD = dyn_cast<DecompositionDecl>(VD)) {
+      DecompositionDeclName Name{DD->bindings()};
+      return ++DecompsitionDeclManglingNumbers[Name];
+    }
 
     const IdentifierInfo *Identifier = VD->getIdentifier();
     if (!Identifier) {
@@ -189,7 +190,7 @@ public:
       return false;
 
     const ASTRecordLayout &Layout = Context.getASTRecordLayout(RD);
-    CharUnits PointerSize = 
+    CharUnits PointerSize =
       Context.toCharUnitsFromBits(Context.getTargetInfo().getPointerWidth(0));
     return Layout.getNonVirtualSize() == PointerSize;
   }

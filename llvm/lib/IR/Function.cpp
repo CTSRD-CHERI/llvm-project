@@ -79,7 +79,8 @@ bool Argument::hasNonNullAttr() const {
   if (getParent()->hasParamAttribute(getArgNo(), Attribute::NonNull))
     return true;
   else if (getDereferenceableBytes() > 0 &&
-           getType()->getPointerAddressSpace() == 0)
+           !NullPointerIsDefined(getParent(),
+                                 getType()->getPointerAddressSpace()))
     return true;
   return false;
 }
@@ -194,12 +195,17 @@ LLVMContext &Function::getContext() const {
   return getType()->getContext();
 }
 
-unsigned Function::getInstructionCount() {
+unsigned Function::getInstructionCount() const {
   unsigned NumInstrs = 0;
-  for (BasicBlock &BB : BasicBlocks)
+  for (const BasicBlock &BB : BasicBlocks)
     NumInstrs += std::distance(BB.instructionsWithoutDebug().begin(),
                                BB.instructionsWithoutDebug().end());
   return NumInstrs;
+}
+
+Function *Function::Create(FunctionType *Ty, LinkageTypes Linkage,
+                           const Twine &N, Module &M) {
+  return Create(Ty, Linkage, M.getDataLayout().getProgramAddressSpace(), N, &M);
 }
 
 void Function::removeFromParent() {
@@ -214,10 +220,19 @@ void Function::eraseFromParent() {
 // Function Implementation
 //===----------------------------------------------------------------------===//
 
-Function::Function(FunctionType *Ty, LinkageTypes Linkage, const Twine &name,
-                   Module *ParentModule)
+static unsigned computeAddrSpace(unsigned AddrSpace, Module *M) {
+  // If AS == -1 and we are passed a valid module pointer we place the function
+  // in the program address space. Otherwise we default to AS0.
+  if (AddrSpace == static_cast<unsigned>(-1))
+    return M ? M->getDataLayout().getProgramAddressSpace() : 0;
+  return AddrSpace;
+}
+
+Function::Function(FunctionType *Ty, LinkageTypes Linkage, unsigned AddrSpace,
+                   const Twine &name, Module *ParentModule)
     : GlobalObject(Ty, Value::FunctionVal,
-                   OperandTraits<Function>::op_begin(this), 0, Linkage, name),
+                   OperandTraits<Function>::op_begin(this), 0, Linkage, name,
+                   computeAddrSpace(AddrSpace, ParentModule)),
       NumArgs(Ty->getNumParams()) {
   assert(FunctionType::isValidReturnType(getReturnType()) &&
          "invalid return type");
@@ -585,7 +600,7 @@ static std::string getMangledTypeStr(Type* Ty) {
     if (FT->isVarArg())
       Result += "vararg";
     // Ensure nested function types are distinguishable.
-    Result += "f"; 
+    Result += "f";
   } else if (isa<VectorType>(Ty)) {
     Result += "v" + utostr(Ty->getVectorNumElements()) +
       getMangledTypeStr(Ty->getVectorElementType());
@@ -673,7 +688,8 @@ enum IIT_Info {
   IIT_V1024 = 37,
   IIT_STRUCT6 = 38,
   IIT_STRUCT7 = 39,
-  IIT_STRUCT8 = 40
+  IIT_STRUCT8 = 40,
+  IIT_F128 = 41
 };
 
 static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
@@ -707,6 +723,9 @@ static void DecodeIITType(unsigned &NextElt, ArrayRef<unsigned char> Infos,
     return;
   case IIT_F64:
     OutputTable.push_back(IITDescriptor::get(IITDescriptor::Double, 0));
+    return;
+  case IIT_F128:
+    OutputTable.push_back(IITDescriptor::get(IITDescriptor::Quad, 0));
     return;
   case IIT_I1:
     OutputTable.push_back(IITDescriptor::get(IITDescriptor::Integer, 1));
@@ -892,6 +911,7 @@ static Type *DecodeFixedType(ArrayRef<Intrinsic::IITDescriptor> &Infos,
   case IITDescriptor::Half: return Type::getHalfTy(Context);
   case IITDescriptor::Float: return Type::getFloatTy(Context);
   case IITDescriptor::Double: return Type::getDoubleTy(Context);
+  case IITDescriptor::Quad: return Type::getFP128Ty(Context);
 
   case IITDescriptor::Integer:
     return IntegerType::get(Context, D.Integer_Width);
@@ -1034,6 +1054,7 @@ bool Intrinsic::matchIntrinsicType(Type *Ty, ArrayRef<Intrinsic::IITDescriptor> 
     case IITDescriptor::Half: return !Ty->isHalfTy();
     case IITDescriptor::Float: return !Ty->isFloatTy();
     case IITDescriptor::Double: return !Ty->isDoubleTy();
+    case IITDescriptor::Quad: return !Ty->isFP128Ty();
     case IITDescriptor::Integer: return !Ty->isIntegerTy(D.Integer_Width);
     case IITDescriptor::Vector: {
       VectorType *VT = dyn_cast<VectorType>(Ty);
@@ -1408,4 +1429,20 @@ Optional<StringRef> Function::getSectionPrefix() const {
     return cast<MDString>(MD->getOperand(1))->getString();
   }
   return None;
+}
+
+bool Function::nullPointerIsDefined() const {
+  return getFnAttribute("null-pointer-is-valid")
+          .getValueAsString()
+          .equals("true");
+}
+
+bool llvm::NullPointerIsDefined(const Function *F, unsigned AS) {
+  if (F && F->nullPointerIsDefined())
+    return true;
+
+  if (AS != 0)
+    return true;
+
+  return false;
 }

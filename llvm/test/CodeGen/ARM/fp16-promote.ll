@@ -1,6 +1,6 @@
-; RUN: llc -asm-verbose=false < %s -mattr=+vfp3,+fp16 | FileCheck %s -check-prefix=CHECK-FP16  --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL
-; RUN: llc -asm-verbose=false < %s | FileCheck %s -check-prefix=CHECK-LIBCALL --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL --check-prefix=CHECK-LIBCALL-VFP
-; RUN: llc -asm-verbose=false < %s -mattr=-vfp2 | FileCheck %s --check-prefix=CHECK-LIBCALL -check-prefix=CHECK-NOVFP -check-prefix=CHECK-ALL
+; RUN: llc -asm-verbose=false < %s -mattr=+vfp3,+fp16 | FileCheck -allow-deprecated-dag-overlap %s -check-prefix=CHECK-FP16  --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL
+; RUN: llc -asm-verbose=false < %s | FileCheck -allow-deprecated-dag-overlap %s -check-prefix=CHECK-LIBCALL --check-prefix=CHECK-VFP -check-prefix=CHECK-ALL --check-prefix=CHECK-LIBCALL-VFP
+; RUN: llc -asm-verbose=false < %s -mattr=-vfp2 | FileCheck -allow-deprecated-dag-overlap %s --check-prefix=CHECK-LIBCALL -check-prefix=CHECK-NOVFP -check-prefix=CHECK-ALL
 
 target datalayout = "e-p:32:32:32-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64-f32:32:32-f64:64:64-v64:64:64-v128:128:128-a0:0:64-n32"
 target triple = "armv7---eabihf"
@@ -644,7 +644,7 @@ define void @test_maxnum(half* %p, half* %q) #0 {
   ret void
 }
 
-; CHECK-ALL-LABEL: test_minnan:
+; CHECK-ALL-LABEL: test_minimum:
 ; CHECK-FP16: vmov.f32 s0, #1.000000e+00
 ; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-LIBCALL: bl __aeabi_h2f
@@ -654,7 +654,7 @@ define void @test_maxnum(half* %p, half* %q) #0 {
 ; CHECK-NOVFP: bl __aeabi_fcmpge
 ; CHECK-FP16: vcvtb.f16.f32
 ; CHECK-LIBCALL: bl __aeabi_f2h
-define void @test_minnan(half* %p) #0 {
+define void @test_minimum(half* %p) #0 {
   %a = load half, half* %p, align 2
   %c = fcmp ult half %a, 1.0
   %r = select i1 %c, half %a, half 1.0
@@ -662,7 +662,7 @@ define void @test_minnan(half* %p) #0 {
   ret void
 }
 
-; CHECK-ALL-LABEL: test_maxnan:
+; CHECK-ALL-LABEL: test_maximum:
 ; CHECK-FP16: vmov.f32 s0, #1.000000e+00
 ; CHECK-FP16: vcvtb.f32.f16
 ; CHECK-LIBCALL: bl __aeabi_h2f
@@ -672,7 +672,7 @@ define void @test_minnan(half* %p) #0 {
 ; CHECK-NOVFP: bl __aeabi_fcmple
 ; CHECK-FP16: vcvtb.f16.f32
 ; CHECK-LIBCALL: bl __aeabi_f2h
-define void @test_maxnan(half* %p) #0 {
+define void @test_maximum(half* %p) #0 {
   %a = load half, half* %p, align 2
   %c = fcmp ugt half %a, 1.0
   %r = select i1 %c, half %a, half 1.0

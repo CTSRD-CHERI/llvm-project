@@ -115,6 +115,8 @@ public:
   RangeSet Intersect(BasicValueFactory &BV, Factory &F, llvm::APSInt Lower,
                      llvm::APSInt Upper) const;
 
+  RangeSet Negate(BasicValueFactory &BV, Factory &F) const;
+
   void print(raw_ostream &os) const;
 
   bool operator==(const RangeSet &other) const {
@@ -129,7 +131,7 @@ using ConstraintRangeTy = llvm::ImmutableMap<SymbolRef, RangeSet>;
 template <>
 struct ProgramStateTrait<ConstraintRange>
   : public ProgramStatePartialTrait<ConstraintRangeTy> {
-  static void *GDMIndex() { static int Index; return &Index; }
+  static void *GDMIndex();
 };
 
 

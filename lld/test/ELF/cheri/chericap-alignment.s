@@ -2,7 +2,7 @@
 # RUN: %cheri256_purecap_llvm-mc %s -filetype=obj -defsym=FIRST=1 -o %t1.o
 # RUN: %cheri256_purecap_llvm-mc %s -filetype=obj -defsym=FIRST=0 -o %t2.o
 # RUN: ld.lld %t1.o %t2.o -shared -o %t.so
-# RUN: llvm-objdump -C -s -t %t.so | FileCheck %s
+# RUN: llvm-objdump --cap-relocs -s -t %t.so | FileCheck %s
 
 .if FIRST
 

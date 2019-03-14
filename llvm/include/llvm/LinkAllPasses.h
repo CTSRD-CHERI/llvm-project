@@ -49,6 +49,8 @@
 #include "llvm/Transforms/ObjCARC.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
+#include "llvm/Transforms/Scalar/InstSimplifyPass.h"
+#include "llvm/Transforms/Scalar/Scalarizer.h"
 #include "llvm/Transforms/Utils.h"
 #include "llvm/Transforms/Utils/SymbolRewriter.h"
 #include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
@@ -87,13 +89,13 @@ namespace {
       (void) llvm::createCalledValuePropagationPass();
       (void) llvm::createConstantMergePass();
       (void) llvm::createConstantPropagationPass();
+      (void) llvm::createControlHeightReductionLegacyPass();
       (void) llvm::createCostModelAnalysisPass();
       (void) llvm::createDeadArgEliminationPass();
       (void) llvm::createDeadCodeEliminationPass();
       (void) llvm::createDeadInstEliminationPass();
       (void) llvm::createDeadStoreEliminationPass();
       (void) llvm::createDependenceAnalysisWrapperPass();
-      (void) llvm::createDivergenceAnalysisPass();
       (void) llvm::createDomOnlyPrinterPass();
       (void) llvm::createDomPrinterPass();
       (void) llvm::createDomOnlyViewerPass();
@@ -116,9 +118,11 @@ namespace {
       (void) llvm::createIPSCCPPass();
       (void) llvm::createInductiveRangeCheckEliminationPass();
       (void) llvm::createIndVarSimplifyPass();
+      (void) llvm::createInstSimplifyLegacyPass();
       (void) llvm::createInstructionCombiningPass();
       (void) llvm::createInternalizePass();
       (void) llvm::createLCSSAPass();
+      (void) llvm::createLegacyDivergenceAnalysisPass();
       (void) llvm::createLICMPass();
       (void) llvm::createLoopSinkPass();
       (void) llvm::createLazyValueInfoPass();
@@ -130,6 +134,7 @@ namespace {
       (void) llvm::createLoopStrengthReducePass();
       (void) llvm::createLoopRerollPass();
       (void) llvm::createLoopUnrollPass();
+      (void) llvm::createLoopUnrollAndJamPass();
       (void) llvm::createLoopUnswitchPass();
       (void) llvm::createLoopVersioningLICMPass();
       (void) llvm::createLoopIdiomPass();
@@ -200,7 +205,6 @@ namespace {
       (void) llvm::createLowerAtomicPass();
       (void) llvm::createCorrelatedValuePropagationPass();
       (void) llvm::createMemDepPrinter();
-      (void) llvm::createInstructionSimplifierPass();
       (void) llvm::createLoopVectorizePass();
       (void) llvm::createSLPVectorizerPass();
       (void) llvm::createLoadStoreVectorizerPass();
@@ -216,6 +220,7 @@ namespace {
       (void) llvm::createFloat2IntPass();
       (void) llvm::createEliminateAvailableExternallyPass();
       (void) llvm::createScalarizeMaskedMemIntrinPass();
+      (void) llvm::createWarnMissedTransformationsPass();
 
       (void)new llvm::IntervalPartition();
       (void)new llvm::ScalarEvolutionWrapperPass();

@@ -1,8 +1,8 @@
 // RUN: %cheri128_purecap_cc1 -emit-obj -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t.o
 // RUN: %cheri128_purecap_cc1 -emit-obj -DCRTEND -O2 -mllvm -cheri-cap-table-abi=plt %s -o %t-crtend.o
-// RUN: llvm-objdump -d -r -C -t %t.o
+// RUN: llvm-objdump -d -r -cap-relocs -t %t.o
 // RUN: ld.lld -o %t.exe %t.o %t-crtend.o
-// RUN: llvm-objdump -d -r -C -t %t.exe | FileCheck %s
+// RUN: llvm-objdump -d -r -cap-relocs -t %t.exe | FileCheck %s
 
 // Check that we add a symbol for __ctors_start and size it correctly
 
@@ -45,5 +45,5 @@ crt_call_constructors(void) {
 // CHECK-LABEL: SYMBOL TABLE:
 // CHECK: 0000000120030010         .ctors		 00000000 .hidden __ctors_end
 // CHECK: 0000000120030000         .ctors		 00000010 .hidden __ctors_start
-// CHECK: 0000000120030000 g       .ctors		 00000010 __CTOR_END__
+// CHECK: 0000000120030000 g     O .ctors		 00000010 __CTOR_END__
 

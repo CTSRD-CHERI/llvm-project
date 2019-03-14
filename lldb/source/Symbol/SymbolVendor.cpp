@@ -9,10 +9,6 @@
 
 #include "lldb/Symbol/SymbolVendor.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/Module.h"
 #include "lldb/Core/PluginManager.h"
 #include "lldb/Symbol/CompileUnit.h"
@@ -61,7 +57,7 @@ SymbolVendor *SymbolVendor::FindPlugin(const lldb::ModuleSP &module_sp,
 //----------------------------------------------------------------------
 SymbolVendor::SymbolVendor(const lldb::ModuleSP &module_sp)
     : ModuleChild(module_sp), m_type_list(), m_compile_units(),
-      m_sym_file_ap() {}
+      m_sym_file_ap(), m_symtab() {}
 
 //----------------------------------------------------------------------
 // Destructor
@@ -235,7 +231,7 @@ Type *SymbolVendor::ResolveTypeUID(lldb::user_id_t type_uid) {
 }
 
 uint32_t SymbolVendor::ResolveSymbolContext(const Address &so_addr,
-                                            uint32_t resolve_scope,
+                                            SymbolContextItem resolve_scope,
                                             SymbolContext &sc) {
   ModuleSP module_sp(GetModule());
   if (module_sp) {
@@ -248,7 +244,7 @@ uint32_t SymbolVendor::ResolveSymbolContext(const Address &so_addr,
 
 uint32_t SymbolVendor::ResolveSymbolContext(const FileSpec &file_spec,
                                             uint32_t line, bool check_inlines,
-                                            uint32_t resolve_scope,
+                                            SymbolContextItem resolve_scope,
                                             SymbolContextList &sc_list) {
   ModuleSP module_sp(GetModule());
   if (module_sp) {
@@ -288,7 +284,7 @@ size_t SymbolVendor::FindGlobalVariables(const RegularExpression &regex,
 
 size_t SymbolVendor::FindFunctions(const ConstString &name,
                                    const CompilerDeclContext *parent_decl_ctx,
-                                   uint32_t name_type_mask,
+                                   FunctionNameType name_type_mask,
                                    bool include_inlines, bool append,
                                    SymbolContextList &sc_list) {
   ModuleSP module_sp(GetModule());
@@ -345,7 +341,7 @@ size_t SymbolVendor::FindTypes(const std::vector<CompilerContext> &context,
   return 0;
 }
 
-size_t SymbolVendor::GetTypes(SymbolContextScope *sc_scope, uint32_t type_mask,
+size_t SymbolVendor::GetTypes(SymbolContextScope *sc_scope, TypeClass type_mask,
                               lldb_private::TypeList &type_list) {
   ModuleSP module_sp(GetModule());
   if (module_sp) {
@@ -438,14 +434,23 @@ FileSpec SymbolVendor::GetMainFileSpec() const {
 
 Symtab *SymbolVendor::GetSymtab() {
   ModuleSP module_sp(GetModule());
-  if (module_sp) {
-    ObjectFile *objfile = module_sp->GetObjectFile();
-    if (objfile) {
-      // Get symbol table from unified section list.
-      return objfile->GetSymtab();
-    }
-  }
-  return nullptr;
+  if (!module_sp)
+    return nullptr;
+
+  std::lock_guard<std::recursive_mutex> guard(module_sp->GetMutex());
+
+  if (m_symtab)
+    return m_symtab;
+
+  ObjectFile *objfile = module_sp->GetObjectFile();
+  if (!objfile)
+    return nullptr;
+
+  m_symtab = objfile->GetSymtab();
+  if (m_symtab && m_sym_file_ap)
+    m_sym_file_ap->AddSymbols(*m_symtab);
+
+  return m_symtab;
 }
 
 void SymbolVendor::ClearSymtab() {

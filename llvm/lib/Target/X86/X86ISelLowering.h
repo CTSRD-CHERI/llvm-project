@@ -226,14 +226,6 @@ namespace llvm {
       SCALEF,
       SCALEFS,
 
-      // Integer add/sub with unsigned saturation.
-      ADDUS,
-      SUBUS,
-
-      // Integer add/sub with signed saturation.
-      ADDS,
-      SUBS,
-
       // Unsigned Integer average.
       AVG,
 
@@ -295,11 +287,6 @@ namespace llvm {
       // Vector move to low scalar and zero higher vector elements.
       VZEXT_MOVL,
 
-      // Vector integer zero-extend.
-      VZEXT,
-      // Vector integer signed-extend.
-      VSEXT,
-
       // Vector integer truncate.
       VTRUNC,
       // Vector integer truncate with unsigned/signed saturation.
@@ -355,15 +342,14 @@ namespace llvm {
       // Bit field extract.
       BEXTR,
 
+      // Zero High Bits Starting with Specified Bit Position.
+      BZHI,
+
       // LOW, HI, FLAGS = umul LHS, RHS.
       UMUL,
 
       // 8-bit SMUL/UMUL - AX, FLAGS = smul8/umul8 AL, RHS.
       SMUL8, UMUL8,
-
-      // 8-bit divrem that zero-extend the high result (AH).
-      UDIVREM8_ZEXT_HREG,
-      SDIVREM8_SEXT_HREG,
 
       // X86-specific multiply by immediate.
       MUL_IMM,
@@ -408,8 +394,6 @@ namespace llvm {
       MOVSLDUP,
       MOVLHPS,
       MOVHLPS,
-      MOVLPS,
-      MOVLPD,
       MOVSD,
       MOVSS,
       UNPCKL,
@@ -501,22 +485,6 @@ namespace llvm {
       FMADDSUB_RND,
       FMSUBADD_RND,
 
-      // FMA4 specific scalar intrinsics bits that zero the non-scalar bits.
-      FMADD4S, FNMADD4S, FMSUB4S, FNMSUB4S,
-
-      // Scalar intrinsic FMA.
-      FMADDS1, FMADDS3,
-      FNMADDS1, FNMADDS3,
-      FMSUBS1, FMSUBS3,
-      FNMSUBS1, FNMSUBS3,
-
-      // Scalar intrinsic FMA with rounding mode.
-      // Two versions, passthru bits on op1 or op3.
-      FMADDS1_RND, FMADDS3_RND,
-      FNMADDS1_RND, FNMADDS3_RND,
-      FMSUBS1_RND, FMSUBS3_RND,
-      FNMSUBS1_RND, FNMSUBS3_RND,
-
       // Compress and expand.
       COMPRESS,
       EXPAND,
@@ -531,12 +499,12 @@ namespace llvm {
       // Vector float/double to signed/unsigned integer.
       CVTP2SI, CVTP2UI, CVTP2SI_RND, CVTP2UI_RND,
       // Scalar float/double to signed/unsigned integer.
-      CVTS2SI_RND, CVTS2UI_RND,
+      CVTS2SI, CVTS2UI, CVTS2SI_RND, CVTS2UI_RND,
 
       // Vector float/double to signed/unsigned integer with truncation.
       CVTTP2SI, CVTTP2UI, CVTTP2SI_RND, CVTTP2UI_RND,
       // Scalar float/double to signed/unsigned integer with truncation.
-      CVTTS2SI_RND, CVTTS2UI_RND,
+      CVTTS2SI, CVTTS2UI, CVTTS2SI_RND, CVTTS2UI_RND,
 
       // Vector signed/unsigned integer to float/double.
       CVTSI2P, CVTUI2P,
@@ -831,6 +799,28 @@ namespace llvm {
 
     bool hasAndNot(SDValue Y) const override;
 
+    bool preferShiftsToClearExtremeBits(SDValue Y) const override;
+
+    bool
+    shouldTransformSignedTruncationCheck(EVT XVT,
+                                         unsigned KeptBits) const override {
+      // For vectors, we don't have a preference..
+      if (XVT.isVector())
+        return false;
+
+      auto VTIsOk = [](EVT VT) -> bool {
+        return VT == MVT::i8 || VT == MVT::i16 || VT == MVT::i32 ||
+               VT == MVT::i64;
+      };
+
+      // We are ok with KeptBitsVT being byte/word/dword, what MOVS supports.
+      // XVT will be larger than KeptBitsVT.
+      MVT KeptBitsVT = MVT::getIntegerVT(KeptBits);
+      return VTIsOk(XVT) && VTIsOk(KeptBitsVT);
+    }
+
+    bool shouldSplatInsEltVarIndex(EVT VT) const override;
+
     bool convertSetCCLogicToBitwiseLogic(EVT VT) const override {
       return VT.isScalarInteger();
     }
@@ -864,10 +854,21 @@ namespace llvm {
                                              const SelectionDAG &DAG,
                                              unsigned Depth) const override;
 
-    SDValue unwrapAddress(SDValue N) const override;
+    bool SimplifyDemandedVectorEltsForTargetNode(SDValue Op,
+                                                 const APInt &DemandedElts,
+                                                 APInt &KnownUndef,
+                                                 APInt &KnownZero,
+                                                 TargetLoweringOpt &TLO,
+                                                 unsigned Depth) const override;
 
-    bool isGAPlusOffset(SDNode *N, const GlobalValue* &GA,
-                        int64_t &Offset) const override;
+    bool SimplifyDemandedBitsForTargetNode(SDValue Op,
+                                           const APInt &DemandedBits,
+                                           const APInt &DemandedElts,
+                                           KnownBits &Known,
+                                           TargetLoweringOpt &TLO,
+                                           unsigned Depth) const override;
+
+    SDValue unwrapAddress(SDValue N) const override;
 
     SDValue getReturnAddressFrameIndex(SelectionDAG &DAG) const;
 
@@ -929,6 +930,8 @@ namespace llvm {
     /// add a register and the immediate without having to materialize
     /// the immediate into a register.
     bool isLegalAddImmediate(int64_t Imm) const override;
+
+    bool isLegalStoreImmediate(int64_t Imm) const override;
 
     /// Return the cost of the scaling factor used in the addressing
     /// mode represented by AM for this target, for a load/store
@@ -993,11 +996,10 @@ namespace llvm {
     /// be legal.
     bool isShuffleMaskLegal(ArrayRef<int> Mask, EVT VT) const override;
 
-    /// Similar to isShuffleMaskLegal. This is used by Targets can use this to
-    /// indicate if there is a suitable VECTOR_SHUFFLE that can be used to
-    /// replace a VAND with a constant pool entry.
-    bool isVectorClearMaskLegal(const SmallVectorImpl<int> &Mask,
-                                EVT VT) const override;
+    /// Similar to isShuffleMaskLegal. Targets can use this to indicate if there
+    /// is a suitable VECTOR_SHUFFLE that can be used to replace a VAND with a
+    /// constant pool entry.
+    bool isVectorClearMaskLegal(ArrayRef<int> Mask, EVT VT) const override;
 
     /// Returns true if lowering to a jump table is allowed.
     bool areJTsAllowed(const Function *Fn) const override;
@@ -1029,7 +1031,14 @@ namespace llvm {
     bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                            Type *Ty) const override;
 
+    bool reduceSelectOfFPConstantLoads(bool IsFPSetCC) const override;
+
     bool convertSelectOfConstantsToMath(EVT VT) const override;
+
+    bool decomposeMulByConstant(EVT VT, SDValue C) const override;
+
+    bool shouldUseStrictFP_TO_INT(EVT FpVT, EVT IntVT,
+                                  bool IsSigned) const override;
 
     /// Return true if EXTRACT_SUBVECTOR is cheap for this result type
     /// with this index.
@@ -1094,12 +1103,13 @@ namespace llvm {
     bool isNoopAddrSpaceCast(unsigned SrcAS, unsigned DestAS) const override;
 
     /// Customize the preferred legalization strategy for certain types.
-    LegalizeTypeAction getPreferredVectorAction(EVT VT) const override;
+    LegalizeTypeAction getPreferredVectorAction(MVT VT) const override;
 
-    MVT getRegisterTypeForCallingConv(LLVMContext &Context,
+    MVT getRegisterTypeForCallingConv(LLVMContext &Context, CallingConv::ID CC,
                                       EVT VT) const override;
 
     unsigned getNumRegistersForCallingConv(LLVMContext &Context,
+                                           CallingConv::ID CC,
                                            EVT VT) const override;
 
     bool isIntDivCheap(EVT VT, AttributeList Attr) const override;
@@ -1124,8 +1134,8 @@ namespace llvm {
     bool lowerInterleavedStore(StoreInst *SI, ShuffleVectorInst *SVI,
                                unsigned Factor) const override;
 
-    SDValue expandIndirectJTBranch(const SDLoc& dl, SDValue Value, 
-                                   SDValue Addr, SelectionDAG &DAG) 
+    SDValue expandIndirectJTBranch(const SDLoc& dl, SDValue Value,
+                                   SDValue Addr, SelectionDAG &DAG)
                                    const override;
 
   protected:
@@ -1345,11 +1355,6 @@ namespace llvm {
     MachineBasicBlock *EmitSjLjDispatchBlock(MachineInstr &MI,
                                              MachineBasicBlock *MBB) const;
 
-    /// Emit nodes that will be selected as "test Op0,Op0", or something
-    /// equivalent, for use with the given x86 condition code.
-    SDValue EmitTest(SDValue Op0, unsigned X86CC, const SDLoc &dl,
-                     SelectionDAG &DAG) const;
-
     /// Emit nodes that will be selected as "cmp Op0,Op1", or something
     /// equivalent, for use with the given x86 condition code.
     SDValue EmitCmp(SDValue Op0, SDValue Op1, unsigned X86CC, const SDLoc &dl,
@@ -1405,9 +1410,9 @@ namespace llvm {
                          MachineMemOperand *MMO)
       : MemSDNode(Opcode, Order, dl, VTs, MemVT, MMO) {}
 
-    const SDValue &getBasePtr() const { return getOperand(1); }
-    const SDValue &getMask()    const { return getOperand(2); }
-    const SDValue &getValue()   const { return getOperand(3); }
+    const SDValue &getValue()   const { return getOperand(1); }
+    const SDValue &getBasePtr() const { return getOperand(2); }
+    const SDValue &getMask()    const { return getOperand(3); }
 
     static bool classof(const SDNode *N) {
       return N->getOpcode() == X86ISD::VMTRUNCSTORES ||
@@ -1478,7 +1483,6 @@ namespace llvm {
     const SDValue &getBasePtr() const { return getOperand(3); }
     const SDValue &getIndex()   const { return getOperand(4); }
     const SDValue &getMask()    const { return getOperand(2); }
-    const SDValue &getValue()   const { return getOperand(1); }
     const SDValue &getScale()   const { return getOperand(5); }
 
     static bool classof(const SDNode *N) {
@@ -1494,6 +1498,8 @@ namespace llvm {
         : X86MaskedGatherScatterSDNode(X86ISD::MGATHER, Order, dl, VTs, MemVT,
                                        MMO) {}
 
+    const SDValue &getPassThru() const { return getOperand(1); }
+
     static bool classof(const SDNode *N) {
       return N->getOpcode() == X86ISD::MGATHER;
     }
@@ -1505,6 +1511,8 @@ namespace llvm {
                            EVT MemVT, MachineMemOperand *MMO)
         : X86MaskedGatherScatterSDNode(X86ISD::MSCATTER, Order, dl, VTs, MemVT,
                                        MMO) {}
+
+    const SDValue &getValue() const { return getOperand(1); }
 
     static bool classof(const SDNode *N) {
       return N->getOpcode() == X86ISD::MSCATTER;

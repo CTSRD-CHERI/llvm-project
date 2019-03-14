@@ -9,10 +9,10 @@
 
 #include "lldb/Utility/DataExtractor.h"
 
-#include "lldb/lldb-defines.h"      // for LLDB_INVALID_ADDRESS
-#include "lldb/lldb-enumerations.h" // for ByteOrder::eByteOrderBig
-#include "lldb/lldb-forward.h"      // for DataBufferSP
-#include "lldb/lldb-types.h"        // for offset_t
+#include "lldb/lldb-defines.h"
+#include "lldb/lldb-enumerations.h"
+#include "lldb/lldb-forward.h"
+#include "lldb/lldb-types.h"
 
 #include "lldb/Utility/DataBuffer.h"
 #include "lldb/Utility/DataBufferHeap.h"
@@ -28,15 +28,15 @@
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/MathExtras.h"
 
-#include <algorithm> // for min
-#include <array>     // for array
+#include <algorithm>
+#include <array>
 #include <cassert>
-#include <cstdint> // for uint8_t, uint32_t, uint64_t
+#include <cstdint>
 #include <string>
 
-#include <ctype.h>    // for isprint
-#include <inttypes.h> // for PRIx64, PRId64
-#include <string.h>   // for memcpy, memset, memchr
+#include <ctype.h>
+#include <inttypes.h>
+#include <string.h>
 
 using namespace lldb;
 using namespace lldb_private;
@@ -1091,24 +1091,6 @@ lldb::offset_t DataExtractor::PutToLog(Log *log, offset_t start_offset,
     log->PutString(sstr.GetString());
 
   return offset; // Return the offset at which we ended up
-}
-
-//----------------------------------------------------------------------
-// DumpUUID
-//
-// Dump out a UUID starting at 'offset' bytes into the buffer
-//----------------------------------------------------------------------
-void DataExtractor::DumpUUID(Stream *s, offset_t offset) const {
-  if (s) {
-    const uint8_t *uuid_data = PeekData(offset, 16);
-    if (uuid_data) {
-      lldb_private::UUID uuid(uuid_data, 16);
-      uuid.Dump(s);
-    } else {
-      s->Printf("<not enough data for UUID at offset 0x%8.8" PRIx64 ">",
-                offset);
-    }
-  }
 }
 
 size_t DataExtractor::Copy(DataExtractor &dest_data) const {

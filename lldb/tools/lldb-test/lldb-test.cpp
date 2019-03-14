@@ -30,13 +30,14 @@
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/CleanUp.h"
 #include "lldb/Utility/DataExtractor.h"
+#include "lldb/Utility/State.h"
 #include "lldb/Utility/StreamString.h"
 
 #include "llvm/ADT/IntervalMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/CommandLine.h"
-#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Signals.h"
@@ -51,14 +52,15 @@ using namespace llvm;
 namespace opts {
 static cl::SubCommand BreakpointSubcommand("breakpoints",
                                            "Test breakpoint resolution");
-cl::SubCommand ModuleSubcommand("module-sections",
-                                "Display LLDB Module Information");
+cl::SubCommand ObjectFileSubcommand("object-file",
+                                    "Display LLDB object file information");
 cl::SubCommand SymbolsSubcommand("symbols", "Dump symbols for an object file");
 cl::SubCommand IRMemoryMapSubcommand("ir-memory-map", "Test IRMemoryMap");
 
 cl::opt<std::string> Log("log", cl::desc("Path to a log file"), cl::init(""),
                          cl::sub(BreakpointSubcommand),
-                         cl::sub(ModuleSubcommand), cl::sub(SymbolsSubcommand),
+                         cl::sub(ObjectFileSubcommand),
+                         cl::sub(SymbolsSubcommand),
                          cl::sub(IRMemoryMapSubcommand));
 
 /// Create a target using the file pointed to by \p Filename, or abort.
@@ -85,13 +87,17 @@ static std::string substitute(StringRef Cmd);
 static int evaluateBreakpoints(Debugger &Dbg);
 } // namespace breakpoint
 
-namespace module {
+namespace object {
 cl::opt<bool> SectionContents("contents",
                               cl::desc("Dump each section's contents"),
-                              cl::sub(ModuleSubcommand));
+                              cl::sub(ObjectFileSubcommand));
+cl::opt<bool> SectionDependentModules("dep-modules",
+                                      cl::desc("Dump each dependent module"),
+                                      cl::sub(ObjectFileSubcommand));
 cl::list<std::string> InputFilenames(cl::Positional, cl::desc("<input files>"),
-                                     cl::OneOrMore, cl::sub(ModuleSubcommand));
-} // namespace module
+                                     cl::OneOrMore,
+                                     cl::sub(ObjectFileSubcommand));
+} // namespace object
 
 namespace symbols {
 static cl::list<std::string> InputFilenames(cl::Positional,
@@ -101,6 +107,7 @@ static cl::list<std::string> InputFilenames(cl::Positional,
 enum class FindType {
   None,
   Function,
+  Block,
   Namespace,
   Type,
   Variable,
@@ -108,9 +115,9 @@ enum class FindType {
 static cl::opt<FindType> Find(
     "find", cl::desc("Choose search type:"),
     cl::values(
-        clEnumValN(FindType::None, "none",
-                   "No search, just dump the module."),
+        clEnumValN(FindType::None, "none", "No search, just dump the module."),
         clEnumValN(FindType::Function, "function", "Find functions."),
+        clEnumValN(FindType::Block, "block", "Find blocks."),
         clEnumValN(FindType::Namespace, "namespace", "Find namespaces."),
         clEnumValN(FindType::Type, "type", "Find types."),
         clEnumValN(FindType::Variable, "variable", "Find global variables.")),
@@ -145,25 +152,33 @@ static FunctionNameType getFunctionNameFlags() {
   return Result;
 }
 
+static cl::opt<bool> DumpAST("dump-ast",
+                             cl::desc("Dump AST restored from symbols."),
+                             cl::sub(SymbolsSubcommand));
+
 static cl::opt<bool> Verify("verify", cl::desc("Verify symbol information."),
                             cl::sub(SymbolsSubcommand));
 
 static cl::opt<std::string> File("file",
                                  cl::desc("File (compile unit) to search."),
                                  cl::sub(SymbolsSubcommand));
+static cl::opt<int> Line("line", cl::desc("Line to search."),
+                         cl::sub(SymbolsSubcommand));
 
 static Expected<CompilerDeclContext> getDeclContext(SymbolVendor &Vendor);
 
 static Error findFunctions(lldb_private::Module &Module);
+static Error findBlocks(lldb_private::Module &Module);
 static Error findNamespaces(lldb_private::Module &Module);
 static Error findTypes(lldb_private::Module &Module);
 static Error findVariables(lldb_private::Module &Module);
 static Error dumpModule(lldb_private::Module &Module);
+static Error dumpAST(lldb_private::Module &Module);
 static Error verify(lldb_private::Module &Module);
 
 static Expected<Error (*)(lldb_private::Module &)> getAction();
 static int dumpSymbols(Debugger &Dbg);
-}
+} // namespace symbols
 
 namespace irmemorymap {
 static cl::opt<std::string> Target(cl::Positional, cl::desc("<target>"),
@@ -179,7 +194,7 @@ static cl::opt<bool> UseHostOnlyAllocationPolicy(
 
 using AllocationT = std::pair<addr_t, addr_t>;
 using AddrIntervalMap =
-      IntervalMap<addr_t, unsigned, 8, IntervalMapHalfOpenInfo<addr_t>>;
+    IntervalMap<addr_t, unsigned, 8, IntervalMapHalfOpenInfo<addr_t>>;
 
 struct IRMemoryMapTestState {
   TargetSP Target;
@@ -211,10 +226,9 @@ static Error make_string_error(const char *Format, Args &&... args) {
 
 TargetSP opts::createTarget(Debugger &Dbg, const std::string &Filename) {
   TargetSP Target;
-  Status ST =
-      Dbg.GetTargetList().CreateTarget(Dbg, Filename, /*triple*/ "",
-                                       /*get_dependent_modules*/ false,
-                                       /*platform_options*/ nullptr, Target);
+  Status ST = Dbg.GetTargetList().CreateTarget(
+      Dbg, Filename, /*triple*/ "", eLoadDependentsNo,
+      /*platform_options*/ nullptr, Target);
   if (ST.Fail()) {
     errs() << formatv("Failed to create target '{0}: {1}\n", Filename, ST);
     exit(1);
@@ -275,7 +289,7 @@ std::string opts::breakpoint::substitute(StringRef Cmd) {
         OS << sys::path::parent_path(breakpoint::CommandFile);
         break;
       }
-      // fall through
+      LLVM_FALLTHROUGH;
     default:
       size_t pos = Cmd.find('%');
       OS << Cmd.substr(0, pos);
@@ -334,7 +348,32 @@ opts::symbols::getDeclContext(SymbolVendor &Vendor) {
 Error opts::symbols::findFunctions(lldb_private::Module &Module) {
   SymbolVendor &Vendor = *Module.GetSymbolVendor();
   SymbolContextList List;
-  if (Regex) {
+  if (!File.empty()) {
+    assert(Line != 0);
+
+    FileSpec src_file(File);
+    size_t cu_count = Module.GetNumCompileUnits();
+    for (size_t i = 0; i < cu_count; i++) {
+      lldb::CompUnitSP cu_sp = Module.GetCompileUnitAtIndex(i);
+      if (!cu_sp)
+        continue;
+
+      LineEntry le;
+      cu_sp->FindLineEntry(0, Line, &src_file, false, &le);
+      if (!le.IsValid())
+        continue;
+
+      auto addr = le.GetSameLineContiguousAddressRange().GetBaseAddress();
+      if (!addr.IsValid())
+        continue;
+
+      SymbolContext sc;
+      uint32_t resolved =
+          addr.CalculateSymbolContext(&sc, eSymbolContextFunction);
+      if (resolved & eSymbolContextFunction)
+        List.Append(sc);
+    }
+  } else if (Regex) {
     RegularExpression RE(Name);
     assert(RE.IsValid());
     Vendor.FindFunctions(RE, true, false, List);
@@ -346,9 +385,45 @@ Error opts::symbols::findFunctions(lldb_private::Module &Module) {
         ContextOr->IsValid() ? &*ContextOr : nullptr;
 
     Vendor.FindFunctions(ConstString(Name), ContextPtr, getFunctionNameFlags(),
-                          true, false, List);
+                         true, false, List);
   }
   outs() << formatv("Found {0} functions:\n", List.GetSize());
+  StreamString Stream;
+  List.Dump(&Stream, nullptr);
+  outs() << Stream.GetData() << "\n";
+  return Error::success();
+}
+
+Error opts::symbols::findBlocks(lldb_private::Module &Module) {
+  assert(!Regex);
+  assert(!File.empty());
+  assert(Line != 0);
+
+  SymbolContextList List;
+
+  FileSpec src_file(File);
+  size_t cu_count = Module.GetNumCompileUnits();
+  for (size_t i = 0; i < cu_count; i++) {
+    lldb::CompUnitSP cu_sp = Module.GetCompileUnitAtIndex(i);
+    if (!cu_sp)
+      continue;
+
+    LineEntry le;
+    cu_sp->FindLineEntry(0, Line, &src_file, false, &le);
+    if (!le.IsValid())
+      continue;
+
+    auto addr = le.GetSameLineContiguousAddressRange().GetBaseAddress();
+    if (!addr.IsValid())
+      continue;
+
+    SymbolContext sc;
+    uint32_t resolved = addr.CalculateSymbolContext(&sc, eSymbolContextBlock);
+    if (resolved & eSymbolContextBlock)
+      List.Append(sc);
+  }
+
+  outs() << formatv("Found {0} blocks:\n", List.GetSize());
   StreamString Stream;
   List.Dump(&Stream, nullptr);
   outs() << Stream.GetData() << "\n";
@@ -386,7 +461,7 @@ Error opts::symbols::findTypes(lldb_private::Module &Module) {
   DenseSet<SymbolFile *> SearchedFiles;
   TypeMap Map;
   Vendor.FindTypes(SC, ConstString(Name), ContextPtr, true, UINT32_MAX,
-                    SearchedFiles, Map);
+                   SearchedFiles, Map);
 
   outs() << formatv("Found {0} types:\n", Map.GetSize());
   StreamString Stream;
@@ -442,6 +517,34 @@ Error opts::symbols::dumpModule(lldb_private::Module &Module) {
   return Error::success();
 }
 
+Error opts::symbols::dumpAST(lldb_private::Module &Module) {
+  SymbolVendor &plugin = *Module.GetSymbolVendor();
+
+  auto symfile = plugin.GetSymbolFile();
+  if (!symfile)
+    return make_string_error("Module has no symbol file.");
+
+  auto clang_ast_ctx = llvm::dyn_cast_or_null<ClangASTContext>(
+      symfile->GetTypeSystemForLanguage(eLanguageTypeC_plus_plus));
+  if (!clang_ast_ctx)
+    return make_string_error("Can't retrieve Clang AST context.");
+
+  auto ast_ctx = clang_ast_ctx->getASTContext();
+  if (!ast_ctx)
+    return make_string_error("Can't retrieve AST context.");
+
+  auto tu = ast_ctx->getTranslationUnitDecl();
+  if (!tu)
+    return make_string_error("Can't retrieve translation unit declaration.");
+
+  symfile->ParseDeclsForContext(CompilerDeclContext(
+      clang_ast_ctx, static_cast<clang::DeclContext *>(tu)));
+
+  tu->print(outs());
+
+  return Error::success();
+}
+
 Error opts::symbols::verify(lldb_private::Module &Module) {
   SymbolVendor &plugin = *Module.GetSymbolVendor();
 
@@ -458,8 +561,8 @@ Error opts::symbols::verify(lldb_private::Module &Module) {
     if (!comp_unit)
       return make_string_error("Connot parse compile unit {0}.", i);
 
-    outs() << "Processing '" << comp_unit->GetFilename().AsCString() <<
-      "' compile unit.\n";
+    outs() << "Processing '" << comp_unit->GetFilename().AsCString()
+           << "' compile unit.\n";
 
     LineTable *lt = comp_unit->GetLineTable();
     if (!lt)
@@ -478,7 +581,7 @@ Error opts::symbols::verify(lldb_private::Module &Module) {
 
     for (uint32_t i = 1; i < count; i++) {
       lldb::addr_t curr_end =
-        le.range.GetBaseAddress().GetFileAddress() + le.range.GetByteSize();
+          le.range.GetBaseAddress().GetFileAddress() + le.range.GetByteSize();
 
       if (!lt->GetLineEntryAtIndex(i, le))
         return make_string_error("Can't get a line entry of a compile unit");
@@ -495,14 +598,31 @@ Error opts::symbols::verify(lldb_private::Module &Module) {
 }
 
 Expected<Error (*)(lldb_private::Module &)> opts::symbols::getAction() {
+  if (Verify && DumpAST)
+    return make_string_error(
+        "Cannot both verify symbol information and dump AST.");
+
   if (Verify) {
     if (Find != FindType::None)
       return make_string_error(
           "Cannot both search and verify symbol information.");
-    if (Regex || !Context.empty() || !Name.empty() || !File.empty())
-      return make_string_error("-regex, -context, -name and -file options are not "
-                               "applicable for symbol verification.");
+    if (Regex || !Context.empty() || !Name.empty() || !File.empty() ||
+        Line != 0)
+      return make_string_error(
+          "-regex, -context, -name, -file and -line options are not "
+          "applicable for symbol verification.");
     return verify;
+  }
+
+  if (DumpAST) {
+    if (Find != FindType::None)
+      return make_string_error("Cannot both search and dump AST.");
+    if (Regex || !Context.empty() || !Name.empty() || !File.empty() ||
+        Line != 0)
+      return make_string_error(
+          "-regex, -context, -name, -file and -line options are not "
+          "applicable for dumping AST.");
+    return dumpAST;
   }
 
   if (Regex && !Context.empty())
@@ -520,34 +640,51 @@ Expected<Error (*)(lldb_private::Module &)> opts::symbols::getAction() {
 
   switch (Find) {
   case FindType::None:
-    if (!Context.empty() || !Name.empty() || !File.empty())
+    if (!Context.empty() || !Name.empty() || !File.empty() || Line != 0)
       return make_string_error(
           "Specify search type (-find) to use search options.");
     return dumpModule;
 
   case FindType::Function:
-    if (!File.empty())
-      return make_string_error("Cannot search for functions by file name.");
-    if (Regex && getFunctionNameFlags() != 0)
-      return make_string_error("Cannot search for functions using both regular "
-                               "expressions and function-flags.");
+    if (!File.empty() + (Line != 0) == 1)
+      return make_string_error("Both file name and line number must be "
+                               "specified when searching a function "
+                               "by file position.");
+    if (Regex + (getFunctionNameFlags() != 0) + !File.empty() >= 2)
+      return make_string_error("Only one of regular expression, function-flags "
+                               "and file position may be used simultaneously "
+                               "when searching a function.");
     return findFunctions;
 
+  case FindType::Block:
+    if (File.empty() || Line == 0)
+      return make_string_error("Both file name and line number must be "
+                               "specified when searching a block.");
+    if (Regex || getFunctionNameFlags() != 0)
+      return make_string_error("Cannot use regular expression or "
+                               "function-flags for searching a block.");
+    return findBlocks;
+
   case FindType::Namespace:
-    if (Regex || !File.empty())
+    if (Regex || !File.empty() || Line != 0)
       return make_string_error("Cannot search for namespaces using regular "
-                               "expressions or file names.");
+                               "expressions, file names or line numbers.");
     return findNamespaces;
 
   case FindType::Type:
-    if (Regex || !File.empty())
+    if (Regex || !File.empty() || Line != 0)
       return make_string_error("Cannot search for types using regular "
-                               "expressions or file names.");
+                               "expressions, file names or line numbers.");
     return findTypes;
 
   case FindType::Variable:
+    if (Line != 0)
+      return make_string_error("Cannot search for variables "
+                               "using line numbers.");
     return findVariables;
   }
+
+  llvm_unreachable("Unsupported symbol action.");
 }
 
 int opts::symbols::dumpSymbols(Debugger &Dbg) {
@@ -561,8 +698,8 @@ int opts::symbols::dumpSymbols(Debugger &Dbg) {
   int HadErrors = 0;
   for (const auto &File : InputFilenames) {
     outs() << "Module: " << File << "\n";
-    ModuleSpec Spec{FileSpec(File, false)};
-    Spec.GetSymbolFileSpec().SetFile(File, false, FileSpec::Style::native);
+    ModuleSpec Spec{FileSpec(File)};
+    Spec.GetSymbolFileSpec().SetFile(File, FileSpec::Style::native);
 
     auto ModulePtr = std::make_shared<lldb_private::Module>(Spec);
     SymbolVendor *Vendor = ModulePtr->GetSymbolVendor();
@@ -582,14 +719,57 @@ int opts::symbols::dumpSymbols(Debugger &Dbg) {
   return HadErrors;
 }
 
-static int dumpModules(Debugger &Dbg) {
+static void dumpSectionList(LinePrinter &Printer, const SectionList &List, bool is_subsection) {
+  size_t Count = List.GetNumSections(0);
+  if (Count == 0) {
+    Printer.formatLine("There are no {0}sections", is_subsection ? "sub" : "");
+    return;
+  }
+  Printer.formatLine("Showing {0} {1}sections", Count,
+                     is_subsection ? "sub" : "");
+  for (size_t I = 0; I < Count; ++I) {
+    auto S = List.GetSectionAtIndex(I);
+    assert(S);
+    AutoIndent Indent(Printer, 2);
+    Printer.formatLine("Index: {0}", I);
+    Printer.formatLine("ID: {0:x}", S->GetID());
+    Printer.formatLine("Name: {0}", S->GetName().GetStringRef());
+    Printer.formatLine("Type: {0}", S->GetTypeAsCString());
+    Printer.formatLine("Permissions: {0}", GetPermissionsAsCString(S->GetPermissions()));
+    Printer.formatLine("Thread specific: {0:y}", S->IsThreadSpecific());
+    Printer.formatLine("VM address: {0:x}", S->GetFileAddress());
+    Printer.formatLine("VM size: {0}", S->GetByteSize());
+    Printer.formatLine("File size: {0}", S->GetFileSize());
+
+    if (opts::object::SectionContents) {
+      DataExtractor Data;
+      S->GetSectionData(Data);
+      ArrayRef<uint8_t> Bytes = {Data.GetDataStart(), Data.GetDataEnd()};
+      Printer.formatBinary("Data: ", Bytes, 0);
+    }
+
+    if (S->GetType() == eSectionTypeContainer)
+      dumpSectionList(Printer, S->GetChildren(), true);
+    Printer.NewLine();
+  }
+}
+
+static int dumpObjectFiles(Debugger &Dbg) {
   LinePrinter Printer(4, llvm::outs());
 
   int HadErrors = 0;
-  for (const auto &File : opts::module::InputFilenames) {
-    ModuleSpec Spec{FileSpec(File, false)};
+  for (const auto &File : opts::object::InputFilenames) {
+    ModuleSpec Spec{FileSpec(File)};
 
     auto ModulePtr = std::make_shared<lldb_private::Module>(Spec);
+
+    ObjectFile *ObjectPtr = ModulePtr->GetObjectFile();
+    if (!ObjectPtr) {
+      WithColor::error() << File << " not recognised as an object file\n";
+      HadErrors = 1;
+      continue;
+    }
+
     // Fetch symbol vendor before we get the section list to give the symbol
     // vendor a chance to populate it.
     ModulePtr->GetSymbolVendor();
@@ -600,23 +780,27 @@ static int dumpModules(Debugger &Dbg) {
       continue;
     }
 
-    size_t Count = Sections->GetNumSections(0);
-    Printer.formatLine("Showing {0} sections", Count);
-    for (size_t I = 0; I < Count; ++I) {
-      AutoIndent Indent(Printer, 2);
-      auto S = Sections->GetSectionAtIndex(I);
-      assert(S);
-      Printer.formatLine("Index: {0}", I);
-      Printer.formatLine("Name: {0}", S->GetName().GetStringRef());
-      Printer.formatLine("Type: {0}", S->GetTypeAsCString());
-      Printer.formatLine("VM size: {0}", S->GetByteSize());
-      Printer.formatLine("File size: {0}", S->GetFileSize());
+    Printer.formatLine("Plugin name: {0}", ObjectPtr->GetPluginName());
+    Printer.formatLine("Architecture: {0}",
+                       ModulePtr->GetArchitecture().GetTriple().getTriple());
+    Printer.formatLine("UUID: {0}", ModulePtr->GetUUID().GetAsString());
+    Printer.formatLine("Executable: {0}", ObjectPtr->IsExecutable());
+    Printer.formatLine("Stripped: {0}", ObjectPtr->IsStripped());
+    Printer.formatLine("Type: {0}", ObjectPtr->GetType());
+    Printer.formatLine("Strata: {0}", ObjectPtr->GetStrata());
 
-      if (opts::module::SectionContents) {
-        DataExtractor Data;
-        S->GetSectionData(Data);
-        ArrayRef<uint8_t> Bytes = {Data.GetDataStart(), Data.GetDataEnd()};
-        Printer.formatBinary("Data: ", Bytes, 0);
+    dumpSectionList(Printer, *Sections, /*is_subsection*/ false);
+
+    if (opts::object::SectionDependentModules) {
+      // A non-empty section list ensures a valid object file.
+      auto Obj = ModulePtr->GetObjectFile();
+      FileSpecList Files;
+      auto Count = Obj->GetDependentModules(Files);
+      Printer.formatLine("Showing {0} dependent module(s)", Count);
+      for (size_t I = 0; I < Files.GetSize(); ++I) {
+        AutoIndent Indent(Printer, 2);
+        Printer.formatLine("Name: {0}",
+                           Files.GetFileSpecAtIndex(I).GetCString());
       }
       Printer.NewLine();
     }
@@ -694,8 +878,8 @@ bool opts::irmemorymap::evalMalloc(StringRef Line,
     ++Probe;
   }
 
-  // Insert the new allocation into the interval map. Use unique allocation IDs
-  // to inhibit interval coalescing.
+  // Insert the new allocation into the interval map. Use unique allocation
+  // IDs to inhibit interval coalescing.
   static unsigned AllocationID = 0;
   if (Size)
     State.Allocations.insert(Addr, EndOfRegion, AllocationID++);
@@ -796,8 +980,13 @@ int main(int argc, const char *argv[]) {
   cl::ParseCommandLineOptions(argc, argv, "LLDB Testing Utility\n");
 
   SystemLifetimeManager DebuggerLifetime;
-  DebuggerLifetime.Initialize(llvm::make_unique<SystemInitializerTest>(),
-                              nullptr);
+  if (auto e = DebuggerLifetime.Initialize(
+          llvm::make_unique<SystemInitializerTest>(), {}, nullptr)) {
+    WithColor::error() << "initialization failed: " << toString(std::move(e))
+                       << '\n';
+    return 1;
+  }
+
   CleanUp TerminateDebugger([&] { DebuggerLifetime.Terminate(); });
 
   auto Dbg = lldb_private::Debugger::CreateInstance();
@@ -807,8 +996,8 @@ int main(int argc, const char *argv[]) {
 
   if (opts::BreakpointSubcommand)
     return opts::breakpoint::evaluateBreakpoints(*Dbg);
-  if (opts::ModuleSubcommand)
-    return dumpModules(*Dbg);
+  if (opts::ObjectFileSubcommand)
+    return dumpObjectFiles(*Dbg);
   if (opts::SymbolsSubcommand)
     return opts::symbols::dumpSymbols(*Dbg);
   if (opts::IRMemoryMapSubcommand)

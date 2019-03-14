@@ -9,10 +9,6 @@
 
 #include "PlatformPOSIX.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/Module.h"
@@ -128,23 +124,25 @@ PlatformPOSIX::ResolveExecutable(const ModuleSpec &module_spec,
   if (IsHost()) {
     // If we have "ls" as the exe_file, resolve the executable location based
     // on the current path variables
-    if (!resolved_module_spec.GetFileSpec().Exists()) {
+    if (!FileSystem::Instance().Exists(resolved_module_spec.GetFileSpec())) {
       resolved_module_spec.GetFileSpec().GetPath(exe_path, sizeof(exe_path));
-      resolved_module_spec.GetFileSpec().SetFile(exe_path, true,
+      resolved_module_spec.GetFileSpec().SetFile(exe_path,
                                                  FileSpec::Style::native);
+      FileSystem::Instance().Resolve(resolved_module_spec.GetFileSpec());
     }
 
-    if (!resolved_module_spec.GetFileSpec().Exists())
-      resolved_module_spec.GetFileSpec().ResolveExecutableLocation();
+    if (!FileSystem::Instance().Exists(resolved_module_spec.GetFileSpec()))
+      FileSystem::Instance().ResolveExecutableLocation(
+          resolved_module_spec.GetFileSpec());
 
     // Resolve any executable within a bundle on MacOSX
     Host::ResolveExecutableInBundle(resolved_module_spec.GetFileSpec());
 
-    if (resolved_module_spec.GetFileSpec().Exists())
+    if (FileSystem::Instance().Exists(resolved_module_spec.GetFileSpec()))
       error.Clear();
     else {
-      const uint32_t permissions =
-          resolved_module_spec.GetFileSpec().GetPermissions();
+      const uint32_t permissions = FileSystem::Instance().GetPermissions(
+          resolved_module_spec.GetFileSpec());
       if (permissions && (permissions & eFilePermissionsEveryoneR) == 0)
         error.SetErrorStringWithFormat(
             "executable '%s' is not readable",
@@ -166,7 +164,7 @@ PlatformPOSIX::ResolveExecutable(const ModuleSpec &module_spec,
       // Resolve any executable within a bundle on MacOSX
       Host::ResolveExecutableInBundle(resolved_module_spec.GetFileSpec());
 
-      if (resolved_module_spec.GetFileSpec().Exists())
+      if (FileSystem::Instance().Exists(resolved_module_spec.GetFileSpec()))
         error.Clear();
       else
         error.SetErrorStringWithFormat("the platform is not currently "
@@ -237,7 +235,8 @@ PlatformPOSIX::ResolveExecutable(const ModuleSpec &module_spec,
       }
 
       if (error.Fail() || !exe_module_sp) {
-        if (resolved_module_spec.GetFileSpec().Readable()) {
+        if (FileSystem::Instance().Readable(
+                resolved_module_spec.GetFileSpec())) {
           error.SetErrorStringWithFormat(
               "'%s' doesn't contain any '%s' platform architectures: %s",
               resolved_module_spec.GetFileSpec().GetPath().c_str(),
@@ -455,7 +454,7 @@ lldb::user_id_t PlatformPOSIX::GetFileSize(const FileSpec &file_spec) {
 
 Status PlatformPOSIX::CreateSymlink(const FileSpec &src, const FileSpec &dst) {
   if (IsHost())
-    return FileSystem::Symlink(src, dst);
+    return FileSystem::Instance().Symlink(src, dst);
   else if (m_remote_platform_sp)
     return m_remote_platform_sp->CreateSymlink(src, dst);
   else
@@ -464,7 +463,7 @@ Status PlatformPOSIX::CreateSymlink(const FileSpec &src, const FileSpec &dst) {
 
 bool PlatformPOSIX::GetFileExists(const FileSpec &file_spec) {
   if (IsHost())
-    return file_spec.Exists();
+    return FileSystem::Instance().Exists(file_spec);
   else if (m_remote_platform_sp)
     return m_remote_platform_sp->GetFileExists(file_spec);
   else
@@ -813,8 +812,8 @@ lldb::ProcessSP PlatformPOSIX::Attach(ProcessAttachInfo &attach_info,
     if (target == NULL) {
       TargetSP new_target_sp;
 
-      error = debugger.GetTargetList().CreateTarget(debugger, "", "", false,
-                                                    NULL, new_target_sp);
+      error = debugger.GetTargetList().CreateTarget(
+          debugger, "", "", eLoadDependentsNo, NULL, new_target_sp);
       target = new_target_sp.get();
       if (log)
         log->Printf("PlatformPOSIX::%s created new target", __FUNCTION__);
@@ -945,13 +944,40 @@ PlatformPOSIX::MakeLoadImageUtilityFunction(ExecutionContext &exe_ctx,
     void *image_ptr;
     const char *error_str;
   };
+  
+  extern void *memcpy(void *, const void *, size_t size);
+  extern size_t strlen(const char *);
+  
 
-  void * __lldb_dlopen_wrapper (const char *path, 
+  void * __lldb_dlopen_wrapper (const char *name, 
+                                const char *path_strings,
+                                char *buffer,
                                 __lldb_dlopen_result *result_ptr)
   {
-    result_ptr->image_ptr = dlopen(path, 2);
-    if (result_ptr->image_ptr == (void *) 0x0)
+    // This is the case where the name is the full path:
+    if (!path_strings) {
+      result_ptr->image_ptr = dlopen(name, 2);
+      if (result_ptr->image_ptr)
+        result_ptr->error_str = nullptr;
+      return nullptr;
+    }
+    
+    // This is the case where we have a list of paths:
+    size_t name_len = strlen(name);
+    while (path_strings && path_strings[0] != '\0') {
+      size_t path_len = strlen(path_strings);
+      memcpy((void *) buffer, (void *) path_strings, path_len);
+      buffer[path_len] = '/';
+      char *target_ptr = buffer+path_len+1; 
+      memcpy((void *) target_ptr, (void *) name, name_len + 1);
+      result_ptr->image_ptr = dlopen(buffer, 2);
+      if (result_ptr->image_ptr) {
+        result_ptr->error_str = nullptr;
+        break;
+      }
       result_ptr->error_str = dlerror();
+      path_strings = path_strings + path_len + 1;
+    }
     return nullptr;
   }
   )";
@@ -993,12 +1019,15 @@ PlatformPOSIX::MakeLoadImageUtilityFunction(ExecutionContext &exe_ctx,
   CompilerType clang_char_pointer_type
         = ast->GetBasicType(eBasicTypeChar).GetPointerType();
 
-  // We are passing two arguments, the path to dlopen, and a pointer to the
-  // storage we've made for the result:
+  // We are passing four arguments, the basename, the list of places to look,
+  // a buffer big enough for all the path + name combos, and
+  // a pointer to the storage we've made for the result:
   value.SetValueType(Value::eValueTypeScalar);
   value.SetCompilerType(clang_void_pointer_type);
   arguments.PushValue(value);
   value.SetCompilerType(clang_char_pointer_type);
+  arguments.PushValue(value);
+  arguments.PushValue(value);
   arguments.PushValue(value);
   
   do_dlopen_function = dlopen_utility_func_up->MakeFunctionCaller(
@@ -1021,7 +1050,12 @@ PlatformPOSIX::MakeLoadImageUtilityFunction(ExecutionContext &exe_ctx,
 
 uint32_t PlatformPOSIX::DoLoadImage(lldb_private::Process *process,
                                     const lldb_private::FileSpec &remote_file,
-                                    lldb_private::Status &error) {
+                                    const std::vector<std::string> *paths,
+                                    lldb_private::Status &error,
+                                    lldb_private::FileSpec *loaded_image) {
+  if (loaded_image)
+    loaded_image->Clear();
+
   std::string path;
   path = remote_file.GetPath();
   
@@ -1100,10 +1134,86 @@ uint32_t PlatformPOSIX::DoLoadImage(lldb_private::Process *process,
       process->DeallocateMemory(return_addr);
   });
   
-  // Set the values into our args and write them to the target:
-  arguments.GetValueAtIndex(0)->GetScalar() = path_addr;
-  arguments.GetValueAtIndex(1)->GetScalar() = return_addr;
+  // This will be the address of the storage for paths, if we are using them,
+  // or nullptr to signal we aren't.
+  lldb::addr_t path_array_addr = 0x0;
+  llvm::Optional<CleanUp> path_array_cleanup;
+
+  // This is the address to a buffer large enough to hold the largest path
+  // conjoined with the library name we're passing in.  This is a convenience 
+  // to avoid having to call malloc in the dlopen function.
+  lldb::addr_t buffer_addr = 0x0;
+  llvm::Optional<CleanUp> buffer_cleanup;
   
+  // Set the values into our args and write them to the target:
+  if (paths != nullptr) {
+    // First insert the paths into the target.  This is expected to be a 
+    // continuous buffer with the strings laid out null terminated and
+    // end to end with an empty string terminating the buffer.
+    // We also compute the buffer's required size as we go.
+    size_t buffer_size = 0;
+    std::string path_array;
+    for (auto path : *paths) {
+      // Don't insert empty paths, they will make us abort the path
+      // search prematurely.
+      if (path.empty())
+        continue;
+      size_t path_size = path.size();
+      path_array.append(path);
+      path_array.push_back('\0');
+      if (path_size > buffer_size)
+        buffer_size = path_size;
+    }
+    path_array.push_back('\0');
+    
+    path_array_addr = process->AllocateMemory(path_array.size(), 
+                                              permissions,
+                                              utility_error);
+    if (path_array_addr == LLDB_INVALID_ADDRESS) {
+      error.SetErrorStringWithFormat("dlopen error: could not allocate memory"
+                                      "for path array: %s", 
+                                      utility_error.AsCString());
+      return LLDB_INVALID_IMAGE_TOKEN;
+    }
+    
+    // Make sure we deallocate the paths array.
+    path_array_cleanup.emplace([process, path_array_addr] { 
+        process->DeallocateMemory(path_array_addr); 
+    });
+
+    process->WriteMemory(path_array_addr, path_array.data(), 
+                         path_array.size(), utility_error);
+
+    if (utility_error.Fail()) {
+      error.SetErrorStringWithFormat("dlopen error: could not write path array:"
+                                     " %s", utility_error.AsCString());
+      return LLDB_INVALID_IMAGE_TOKEN;
+    }
+    // Now make spaces in the target for the buffer.  We need to add one for
+    // the '/' that the utility function will insert and one for the '\0':
+    buffer_size += path.size() + 2;
+    
+    buffer_addr = process->AllocateMemory(buffer_size, 
+                                          permissions,
+                                          utility_error);
+    if (buffer_addr == LLDB_INVALID_ADDRESS) {
+      error.SetErrorStringWithFormat("dlopen error: could not allocate memory"
+                                      "for buffer: %s", 
+                                      utility_error.AsCString());
+      return LLDB_INVALID_IMAGE_TOKEN;
+    }
+  
+    // Make sure we deallocate the buffer memory:
+    buffer_cleanup.emplace([process, buffer_addr] { 
+        process->DeallocateMemory(buffer_addr); 
+    });
+  }
+    
+  arguments.GetValueAtIndex(0)->GetScalar() = path_addr;
+  arguments.GetValueAtIndex(1)->GetScalar() = path_array_addr;
+  arguments.GetValueAtIndex(2)->GetScalar() = buffer_addr;
+  arguments.GetValueAtIndex(3)->GetScalar() = return_addr;
+
   lldb::addr_t func_args_addr = LLDB_INVALID_ADDRESS;
   
   diagnostics.Clear();
@@ -1133,7 +1243,8 @@ uint32_t PlatformPOSIX::DoLoadImage(lldb_private::Process *process,
   options.SetTrapExceptions(false); // dlopen can't throw exceptions, so
                                     // don't do the work to trap them.
   options.SetTimeout(std::chrono::seconds(2));
-  
+  options.SetIsForUtilityExpr(true);
+
   Value return_value;
   // Fetch the clang types we will need:
   ClangASTContext *ast = process->GetTarget().GetScratchClangASTContext();
@@ -1146,7 +1257,7 @@ uint32_t PlatformPOSIX::DoLoadImage(lldb_private::Process *process,
   ExpressionResults results = do_dlopen_function->ExecuteFunction(
       exe_ctx, &func_args_addr, options, diagnostics, return_value);
   if (results != eExpressionCompleted) {
-    error.SetErrorStringWithFormat("dlopen error: could write execute "
+    error.SetErrorStringWithFormat("dlopen error: failed executing "
                                    "dlopen wrapper function: %s", 
                                    diagnostics.GetString().c_str());
     return LLDB_INVALID_IMAGE_TOKEN;
@@ -1162,8 +1273,18 @@ uint32_t PlatformPOSIX::DoLoadImage(lldb_private::Process *process,
   }
   
   // The dlopen succeeded!
-  if (token != 0x0)
+  if (token != 0x0) {
+    if (loaded_image && buffer_addr != 0x0)
+    {
+      // Capture the image which was loaded.  We leave it in the buffer on
+      // exit from the dlopen function, so we can just read it from there:
+      std::string name_string;
+      process->ReadCStringFromMemory(buffer_addr, name_string, utility_error);
+      if (utility_error.Success())
+        loaded_image->SetFile(name_string, llvm::sys::path::Style::posix);
+    }
     return process->AddImageToken(token);
+  }
     
   // We got an error, lets read in the error string:
   std::string dlopen_error_str;

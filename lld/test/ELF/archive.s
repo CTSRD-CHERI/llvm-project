@@ -1,16 +1,21 @@
+# REQUIRES: x86
 # RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %s -o %t
 # RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %S/Inputs/archive.s -o %t2
 # RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %S/Inputs/archive2.s -o %t3
 # RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %S/Inputs/archive3.s -o %t4
 # RUN: llvm-mc -filetype=obj -triple=x86_64-pc-linux %S/Inputs/archive4.s -o %t5
+
+# RUN: rm -f %t.a
 # RUN: llvm-ar rcs %t.a %t2 %t3 %t4
+
 # RUN: ld.lld %t %t.a %t5 -o %t.out
 # RUN: llvm-nm %t.out | FileCheck %s
+
 # RUN: rm -f %t.thin
 # RUN: llvm-ar --format=gnu rcsT %t.thin %t2 %t3 %t4
+
 # RUN: ld.lld %t %t.thin %t5 -o %t.out
 # RUN: llvm-nm %t.out | FileCheck %s
-# REQUIRES: x86
 
 # Nothing here. Just needed for the linker to create a undefined _start symbol.
 

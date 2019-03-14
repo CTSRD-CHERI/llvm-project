@@ -36,6 +36,8 @@ def guard   : P<"guard", "Control flow guard">;
 def heap    : P<"heap", "Size of the heap">;
 def ignore : P<"ignore", "Specify warning codes to ignore">;
 def implib  : P<"implib", "Import library name">;
+def lib : F<"lib">,
+    HelpText<"Act like lib.exe; must be first argument if present">;
 def libpath : P<"libpath", "Additional library search path">;
 def linkrepro : P<"linkrepro", "Dump linker invocation and input files for debugging">;
 def lldltocache : P<"lldltocache", "Path to ThinLTO cached object file directory">;
@@ -83,7 +85,7 @@ def deffile : Joined<["/", "-"], "def:">,
     HelpText<"Use module-definition file">;
 
 def debug : F<"debug">, HelpText<"Embed a symbol table in the image">;
-def debug_full : F<"debug:full">, Alias<debug>;
+def debug_opt : P<"debug", "Embed a symbol table in the image with option">;
 def debugtype : P<"debugtype", "Debug Info Options">;
 def dll : F<"dll">, HelpText<"Create a DLL">;
 def driver : P<"driver", "Generate a Windows NT Kernel Mode Driver">;
@@ -97,8 +99,11 @@ def verbose : F<"verbose">;
 def wholearchive_flag : F<"wholearchive">;
 
 def force : F<"force">,
+    HelpText<"Allow undefined and multiply defined symbols when creating executables">;
+def force_unresolved : F<"force:unresolved">,
     HelpText<"Allow undefined symbols when creating executables">;
-def force_unresolved : F<"force:unresolved">;
+def force_multiple : F<"force:multiple">,
+    HelpText<"Allow multiply defined symbols when creating executables">;
 defm WX : B<"WX", "Treat warnings as errors", "Don't treat warnings as errors">;
 
 defm allowbind : B<"allowbind", "Enable DLL binding (default)",
@@ -137,13 +142,12 @@ def help : F<"help">;
 def help_q : Flag<["/?", "-?"], "">, Alias<help>;
 
 // LLD extensions
-def debug_ghash : F<"debug:ghash">;
-def debug_dwarf : F<"debug:dwarf">;
 def export_all_symbols : F<"export-all-symbols">;
 def kill_at : F<"kill-at">;
 def lldmingw : F<"lldmingw">;
-def msvclto : F<"msvclto">;
 def output_def : Joined<["/", "-"], "output-def:">;
+def pdb_source_path : P<"pdbsourcepath",
+                        "Base path used to make relative source file path absolute in PDB">;
 def rsp_quoting : Joined<["--"], "rsp-quoting=">,
   HelpText<"Quoting style for response files, 'windows' (default) or 'posix'">;
 def dash_dash_version : Flag<["--"], "version">,

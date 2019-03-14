@@ -70,7 +70,7 @@ private:
   bool processRegUses(const MachineInstr &MI, RegUse &Defs, RegUse &Uses,
                       GCNDownwardRPTracker &RPT);
 
-  const SISubtarget *ST;
+  const GCNSubtarget *ST;
   const SIRegisterInfo *TRI;
   const MachineRegisterInfo *MRI;
   SIMachineFunctionInfo *MFI;
@@ -168,16 +168,15 @@ void SIFormMemoryClauses::forAllLanes(unsigned Reg, LaneBitmask LaneMask,
     CoveringSubregs.push_back(Idx);
   }
 
-  llvm::sort(CoveringSubregs.begin(), CoveringSubregs.end(),
-             [this](unsigned A, unsigned B) {
-               LaneBitmask MaskA = TRI->getSubRegIndexLaneMask(A);
-               LaneBitmask MaskB = TRI->getSubRegIndexLaneMask(B);
-               unsigned NA = MaskA.getNumLanes();
-               unsigned NB = MaskB.getNumLanes();
-               if (NA != NB)
-                 return NA > NB;
-               return MaskA.getHighestLane() > MaskB.getHighestLane();
-             });
+  llvm::sort(CoveringSubregs, [this](unsigned A, unsigned B) {
+    LaneBitmask MaskA = TRI->getSubRegIndexLaneMask(A);
+    LaneBitmask MaskB = TRI->getSubRegIndexLaneMask(B);
+    unsigned NA = MaskA.getNumLanes();
+    unsigned NB = MaskB.getNumLanes();
+    if (NA != NB)
+      return NA > NB;
+    return MaskA.getHighestLane() > MaskB.getHighestLane();
+  });
 
   for (unsigned Idx : CoveringSubregs) {
     LaneBitmask SubRegMask = TRI->getSubRegIndexLaneMask(Idx);
@@ -296,7 +295,7 @@ bool SIFormMemoryClauses::runOnMachineFunction(MachineFunction &MF) {
   if (skipFunction(MF.getFunction()))
     return false;
 
-  ST = &MF.getSubtarget<SISubtarget>();
+  ST = &MF.getSubtarget<GCNSubtarget>();
   if (!ST->isXNACKEnabled())
     return false;
 

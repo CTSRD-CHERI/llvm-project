@@ -51,8 +51,8 @@ struct SymbolAndOffset {
                                                uint64_t Offset,
                                                Symbol *Default = nullptr);
 
-  template <typename ELFT> inline std::string verboseToString() const {
-    return lld::verboseToString<ELFT>(Sym, Offset);
+  inline std::string verboseToString() const {
+    return lld::verboseToString(Sym, Offset);
   }
 };
 
@@ -103,10 +103,10 @@ private:
     if (!(it.first->second == Relocation)) {
       error("Newly inserted relocation at " + Loc.toString<ELFT>() +
             " does not match existing one:\n>   Existing: " +
-            it.first->second.Target.template verboseToString<ELFT>() +
+            it.first->second.Target.verboseToString() +
             ", cap offset=" + Twine(it.first->second.CapabilityOffset) +
             ", dyn=" + Twine(it.first->second.NeedsDynReloc) +
-            "\n>   New:     " + Relocation.Target.verboseToString<ELFT>() +
+            "\n>   New:     " + Relocation.Target.verboseToString() +
             ", cap offset=" + Twine(Relocation.CapabilityOffset) +
             ", dyn=" + Twine(Relocation.NeedsDynReloc));
     }
@@ -123,21 +123,110 @@ private:
   bool containsLegacyCapRelocs() const { return !LegacyInputs.empty(); }
 };
 
+// General cap table structure (for CapSize = 2*WordSize):
+//
+// +-------------------------------+
+// |       Small Index Cap 1       |
+// +-------------------------------+
+// |               :               |
+// +-------------------------------+
+// |       Small Index Cap m       |
+// +-------------------------------+
+// |       Large Index Cap 1       |
+// +-------------------------------+
+// |               :               |
+// +-------------------------------+
+// |       Large Index Cap n       |
+// +---------------+---------------+
+// | Dyn TLS Mod 1 | Dyn TLS Off 2 |
+// +---------------+---------------+
+// |               :               |
+// +---------------+---------------+
+// | Dyn TLS Mod p | Dyn TLS Off p |
+// +---------------+---------------+
+// |  IE TPREL 1   |  IE TPREL 2   |
+// +---------------+---------------+
+// |               :               |
+// +---------------+---------------+
+// | IE TPREL q-1  |  IE TPREL q   |
+// +-------------------------------+
+//
+// If we are compiling with per function/per file tables it starts as follows:
+// +---------------------------------------+
+// | Small Index Cap 1 for File/Function 1 |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Small Index Cap m for File/Function 1 |
+// +---------------------------------------+
+// | Large Index Cap 1 for File/Function 1 |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Large Index Cap n for File/Function 1 |
+// +---------------------------------------+
+// | Small Index Cap 1 for File/Function 2 |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Small Index Cap m for File/Function 2 |
+// +---------------------------------------+
+// | Large Index Cap 1 for File/Function 2 |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Large Index Cap n for File/Function 2 |
+// +---------------------------------------+
+// |                :                      |
+// |                :                      |
+// +---------------------------------------+
+// | Small Index Cap 1 for File/Function N |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Small Index Cap m for File/Function N |
+// +---------------------------------------+
+// | Large Index Cap 1 for File/Function N |
+// +---------------------------------------+
+// |                :                      |
+// +---------------------------------------+
+// | Large Index Cap n for File/Function N |
+// +---------------------------------------+
+// TODO: TLS caps also need to be per file/function
+
 class CheriCapTableSection : public SyntheticSection {
 public:
   CheriCapTableSection(bool local);
-  void addEntry(Symbol &Sym, bool NeedsSmallImm);
-  void addFixedEntry(Symbol &Sym, uint32_t index);
-  uint32_t getIndex(const Symbol &Sym) const;
-  bool empty() const override { return Entries.empty(); }
+  // InputFile and Offset is needed in order to implement per-file/per-function
+  // tables
+  void addEntry(Symbol &Sym, bool NeedsSmallImm, RelType Type,
+                InputSectionBase *IS, uint64_t Offset);
+  void addFixedEntry(Symbol &Sym, uint64_t index);
+  void addDynTlsEntry(Symbol &Sym);
+  void addTlsIndex();
+  void addTlsEntry(Symbol &Sym);
+  uint32_t getIndex(const Symbol &Sym, InputSectionBase *IS,
+                    uint64_t Offset) const;
+  uint32_t getDynTlsOffset(const Symbol &Sym) const;
+  uint32_t getTlsIndexOffset() const;
+  uint32_t getTlsOffset(const Symbol &Sym) const;
+  bool empty() const override {
+    return nonTlsEntryCount() == 0 && DynTlsEntries.empty() &&
+           TlsEntries.empty();
+  }
   void writeTo(uint8_t *Buf) override;
   template <class ELFT> void assignValuesAndAddCapTableSymbols();
   void calculatePreferredPositions(InputFile* file);
   size_t getSize() const override {
-    if (!Entries.empty() > 0)
+    size_t NonTlsEntries = nonTlsEntryCount();
+    if (NonTlsEntries > 0 || !TlsEntries.empty() || !DynTlsEntries.empty()) {
       assert(Config->CapabilitySize > 0 &&
              "Cap table entries present but cap size unknown???");
-    return Entries.size() * Config->CapabilitySize;
+    }
+    size_t Bytes =
+        nonTlsEntryCount() * Config->CapabilitySize +
+        (DynTlsEntries.size() * 2 + TlsEntries.size()) * Config->Wordsize;
+    return llvm::alignTo(Bytes, Config->CapabilitySize);
   }
 
   // The _CHERI_CAPABILITY_TABLE_ symbol points to the beginning of the
@@ -156,13 +245,77 @@ private:
     int32_t priority;
     bool NeedsSmallImm = false;
     bool IsFixed = false;
+    bool UsedAsFunctionPointer = true;
   };
-  llvm::MapVector<Symbol *, CapTableIndex> Entries;
-  uint64_t fixed_entries = 0;
-  uint64_t unfixed_entries = 0;
-  uint64_t small_entries = 0;
+  struct CaptableMap {
+    uint64_t FirstIndex = std::numeric_limits<uint64_t>::max();
+    llvm::MapVector<Symbol *, CapTableIndex> Map;
+    size_t size() const { return Map.size(); }
+    bool empty() const { return Map.empty(); }
+    uint64_t fixed_entries = 0;
+    uint64_t unfixed_entries = 0;
+    uint64_t small_entries = 0;
+  };
+  template <class ELFT>
+  uint64_t assignIndices(uint64_t StartIndex, CaptableMap &Entries,
+                         const Twine &SymContext);
+  /// @return a refernces to the captable map where the given symbol should
+  /// be inserted. Usually this will just be the GlobalEntries map, but when
+  /// compiling with the experimental per-function/per-file captables it will
+  /// return a reference to the file/function that matches InputFile+Offset
+  const CaptableMap &getCaptableMapForFileAndOffset(InputSectionBase *IS,
+                                                    uint64_t Offset) const {
+    return const_cast<CheriCapTableSection *>(this)
+        ->getCaptableMapForFileAndOffset(IS, Offset);
+  }
+  CaptableMap &getCaptableMapForFileAndOffset(InputSectionBase *IS,
+                                              uint64_t Offset);
+  size_t nonTlsEntryCount() const {
+    size_t TotalCount = GlobalEntries.size();
+    if (LLVM_LIKELY(Config->CapTableScope == CapTableScopePolicy::All)) {
+      assert(PerFileEntries.empty() && PerFunctionEntries.empty());
+    } else {
+      // Add all the per-file and per-function entries
+      for (const auto &it : PerFileEntries)
+        TotalCount += it.second.size();
+      for (const auto &it : PerFunctionEntries)
+        TotalCount += it.second.size();
+    }
+    return TotalCount;
+  }
+
+  // The two maps are only used in the experimental
+  llvm::MapVector<InputFile *, CaptableMap> PerFileEntries;
+  llvm::MapVector<Symbol *, CaptableMap> PerFunctionEntries;
+  CaptableMap GlobalEntries;
+  CaptableMap DynTlsEntries;
+  CaptableMap TlsEntries;
   bool ValuesAssigned = false;
   bool IsLocal;
+  friend class CheriCapTableMappingSection;
+};
+
+// TODO: could shrink these to reduce size overhead but this is experimental
+// code that will never be particularly efficient so it's fine
+struct CaptableMappingEntry {
+  uint64_t FuncStart;      // virtual address relative to base address
+  uint64_t FuncEnd;        // virtual address relative to base address
+  uint32_t CapTableOffset; // offset in bytes into captable
+  uint32_t SubTableSize;   // Size in bytes of this sub-table
+};
+
+// Map from symbol vaddr -> captable subset so that RTLD can setup the correct
+// trampolines to initialize $cgp to the correct subset
+class CheriCapTableMappingSection : public SyntheticSection {
+public:
+  CheriCapTableMappingSection();
+  bool empty() const override {
+    if (Config->CapTableScope == CapTableScopePolicy::All)
+      return true;
+    return !In.CheriCapTable || In.CheriCapTable->empty();
+  }
+  void writeTo(uint8_t *Buf) override;
+  size_t getSize() const override;
 };
 
 template <typename ELFT, typename CallBack>
@@ -178,8 +331,7 @@ static void foreachGlobalSizesSymbol(InputSection *IS, CallBack &&CB) {
         continue;
       StringRef Name = D->getName();
       if (!Name.startswith(".size.")) {
-        error(".global_sizes symbol name is invalid: " +
-              verboseToString<ELFT>(D));
+        error(".global_sizes symbol name is invalid: " + verboseToString(D));
         continue;
       }
       StringRef RealSymName = Name.drop_front(strlen(".size."));
@@ -217,10 +369,11 @@ inline void readOnlyCapRelocsError(Symbol &Sym, const Twine &SourceMsg) {
 }
 
 template <typename ELFT, typename ReferencedByFunc>
-inline void addCapabilityRelocation(Symbol &Sym, RelType Type,
-                                    InputSectionBase *Sec, uint64_t Offset,
-                                    RelExpr Expr, int64_t Addend,
-                                    ReferencedByFunc &&ReferencedBy) {
+inline void
+addCapabilityRelocation(Symbol &Sym, RelType Type, InputSectionBase *Sec,
+                        uint64_t Offset, RelExpr Expr, int64_t Addend,
+                        ReferencedByFunc &&ReferencedBy,
+                        RelocationBaseSection *DynRelSec = nullptr) {
   // Emit either the legacy __cap_relocs section or a R_CHERI_CAPABILITY reloc
   // For local symbols we can also emit the untagged capability bits and
   // instruct csu/rtld to run CBuildCap
@@ -243,11 +396,13 @@ inline void addCapabilityRelocation(Symbol &Sym, RelType Type,
     // We don't use a R_MIPS_CHERI_CAPABILITY relocation for the input but
     // instead need to use an absolute pointer size relocation to write
     // the offset addend
-    InX::RelaDyn->addReloc(Type, Sec, Offset, &Sym, Addend, Expr,
-                           *Target->AbsPointerRel);
+    if (!DynRelSec)
+      DynRelSec = In.RelaDyn;
+    DynRelSec->addReloc(Type, Sec, Offset, &Sym, Addend, Expr,
+                        *Target->AbsPointerRel);
     // in the case that -local-caprelocs=elf is passed we need to ensure that
     // the target symbol is included in the dynamic symbol table
-    if (!InX::DynSymTab) {
+    if (!In.DynSymTab) {
       error("R_CHERI_CAPABILITY relocations need a dynamic symbol table");
       return;
     }
@@ -264,17 +419,17 @@ inline void addCapabilityRelocation(Symbol &Sym, RelType Type,
       if (Sym.isLocal() && !llvm::is_contained(AddedToDynSymTab, &Sym)) {
         Sym.Binding = llvm::ELF::STB_GLOBAL;
         Sym.Visibility = llvm::ELF::STV_INTERNAL;
-        InX::DynSymTab->addSymbol(&Sym);
+        In.DynSymTab->addSymbol(&Sym);
       }
     }
     if (!Sym.includeInDynsym()) {
       error("added a R_CHERI_CAPABILITY relocation but symbol not included "
             "in dynamic symbol: " +
-            verboseToString<ELFT>(&Sym));
+            verboseToString(&Sym));
       return;
     }
   } else if (CapRelocMode == CapRelocsMode::Legacy) {
-    In<ELFT>::CapRelocs->addCapReloc({Sec, Offset, Config->Pic}, {&Sym, 0u},
+    InX<ELFT>::CapRelocs->addCapReloc({Sec, Offset, Config->Pic}, {&Sym, 0u},
                                      Sym.IsPreemptible, Addend);
   } else {
     assert(Config->LocalCapRelocsMode == CapRelocsMode::CBuildCap);

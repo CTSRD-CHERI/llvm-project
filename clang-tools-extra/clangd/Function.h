@@ -7,83 +7,26 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file provides an analogue to std::function that supports move semantics.
+// This file provides utilities for callable objects.
 //
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_FUNCTION_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_FUNCTION_H
 
-#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/FunctionExtras.h"
 #include "llvm/Support/Error.h"
-#include <cassert>
-#include <memory>
+#include <mutex>
 #include <tuple>
-#include <type_traits>
 #include <utility>
 
 namespace clang {
 namespace clangd {
 
-/// A move-only type-erasing function wrapper. Similar to `std::function`, but
-/// allows to store move-only callables.
-template <class> class UniqueFunction;
 /// A Callback<T> is a void function that accepts Expected<T>.
 /// This is accepted by ClangdServer functions that logically return T.
-template <typename T> using Callback = UniqueFunction<void(llvm::Expected<T>)>;
-
-template <class Ret, class... Args> class UniqueFunction<Ret(Args...)> {
-public:
-  UniqueFunction() = default;
-  UniqueFunction(std::nullptr_t) : UniqueFunction(){};
-
-  UniqueFunction(UniqueFunction const &) = delete;
-  UniqueFunction &operator=(UniqueFunction const &) = delete;
-
-  UniqueFunction(UniqueFunction &&) noexcept = default;
-  UniqueFunction &operator=(UniqueFunction &&) noexcept = default;
-
-  template <class Callable,
-            /// A sfinae-check that Callable can be called with Args... and
-            class = typename std::enable_if<std::is_convertible<
-                decltype(std::declval<Callable>()(std::declval<Args>()...)),
-                Ret>::value>::type>
-  UniqueFunction(Callable &&Func)
-      : CallablePtr(llvm::make_unique<
-                    FunctionCallImpl<typename std::decay<Callable>::type>>(
-            std::forward<Callable>(Func))) {}
-
-  explicit operator bool() { return bool(CallablePtr); }
-
-  Ret operator()(Args... As) {
-    assert(CallablePtr);
-    return CallablePtr->Call(std::forward<Args>(As)...);
-  }
-
-private:
-  class FunctionCallBase {
-  public:
-    virtual ~FunctionCallBase() = default;
-    virtual Ret Call(Args... As) = 0;
-  };
-
-  template <class Callable>
-  class FunctionCallImpl final : public FunctionCallBase {
-    static_assert(
-        std::is_same<Callable, typename std::decay<Callable>::type>::value,
-        "FunctionCallImpl must be instanstiated with std::decay'ed types");
-
-  public:
-    FunctionCallImpl(Callable Func) : Func(std::move(Func)) {}
-
-    Ret Call(Args... As) override { return Func(std::forward<Args>(As)...); }
-
-  private:
-    Callable Func;
-  };
-
-  std::unique_ptr<FunctionCallBase> CallablePtr;
-};
+template <typename T>
+using Callback = llvm::unique_function<void(llvm::Expected<T>)>;
 
 /// Stores a callable object (Func) and arguments (Args) and allows to call the
 /// callable with provided arguments later using `operator ()`. The arguments
@@ -140,6 +83,82 @@ ForwardBinder<Func, Args...> Bind(Func F, Args &&... As) {
   return ForwardBinder<Func, Args...>(
       std::make_tuple(std::forward<Func>(F), std::forward<Args>(As)...));
 }
+
+/// An Event<T> allows events of type T to be broadcast to listeners.
+template <typename T> class Event {
+public:
+  // A Listener is the callback through which events are delivered.
+  using Listener = std::function<void(const T &)>;
+
+  // A subscription defines the scope of when a listener should receive events.
+  // After destroying the subscription, no more events are received.
+  class LLVM_NODISCARD Subscription {
+    Event *Parent;
+    unsigned ListenerID;
+
+    Subscription(Event *Parent, unsigned ListenerID)
+        : Parent(Parent), ListenerID(ListenerID) {}
+    friend Event;
+
+  public:
+    Subscription() : Parent(nullptr) {}
+    Subscription(Subscription &&Other) : Parent(nullptr) {
+      *this = std::move(Other);
+    }
+    Subscription &operator=(Subscription &&Other) {
+      // If *this is active, unsubscribe.
+      if (Parent) {
+        std::lock_guard<std::recursive_mutex>(Parent->ListenersMu);
+        llvm::erase_if(Parent->Listeners,
+                       [&](const std::pair<Listener, unsigned> &P) {
+                         return P.second == ListenerID;
+                       });
+      }
+      // Take over the other subscription, and mark it inactive.
+      std::tie(Parent, ListenerID) = std::tie(Other.Parent, Other.ListenerID);
+      Other.Parent = nullptr;
+      return *this;
+    }
+    // Destroying a subscription may block if an event is being broadcast.
+    ~Subscription() {
+      if (Parent)
+        *this = Subscription(); // Unsubscribe.
+    }
+  };
+
+  // Adds a listener that will observe all future events until the returned
+  // subscription is destroyed.
+  // May block if an event is currently being broadcast.
+  Subscription observe(Listener L) {
+    std::lock_guard<std::recursive_mutex> Lock(ListenersMu);
+    Listeners.push_back({std::move(L), ++ListenerCount});
+    return Subscription(this, ListenerCount);
+    ;
+  }
+
+  // Synchronously sends an event to all registered listeners.
+  // Must not be called from a listener to this event.
+  void broadcast(const T &V) {
+    // FIXME: it would be nice to dynamically check non-reentrancy here.
+    std::lock_guard<std::recursive_mutex> Lock(ListenersMu);
+    for (const auto &L : Listeners)
+      L.first(V);
+  }
+
+  ~Event() {
+    std::lock_guard<std::recursive_mutex> Lock(ListenersMu);
+    assert(Listeners.empty());
+  }
+
+private:
+  static_assert(std::is_same<typename std::decay<T>::type, T>::value,
+                "use a plain type: event values are always passed by const&");
+
+  std::recursive_mutex ListenersMu;
+  bool IsBroadcasting = false;
+  std::vector<std::pair<Listener, unsigned>> Listeners;
+  unsigned ListenerCount = 0;
+};
 
 } // namespace clangd
 } // namespace clang

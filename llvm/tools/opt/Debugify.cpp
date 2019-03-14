@@ -12,7 +12,7 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "PassPrinters.h"
+#include "Debugify.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/BasicBlock.h"
@@ -39,6 +39,10 @@ cl::opt<bool> Quiet("debugify-quiet",
                     cl::desc("Suppress verbose debugify output"));
 
 raw_ostream &dbg() { return Quiet ? nulls() : errs(); }
+
+uint64_t getAllocSizeInBits(Module &M, Type *Ty) {
+  return Ty->isSized() ? M.getDataLayout().getTypeAllocSizeInBits(Ty) : 0;
+}
 
 bool isFunctionSkipped(Function &F) {
   return F.isDeclaration() || !F.hasExactDefinition();
@@ -71,8 +75,7 @@ bool applyDebugifyMetadata(Module &M,
   // Get a DIType which corresponds to Ty.
   DenseMap<uint64_t, DIType *> TypeCache;
   auto getCachedDIType = [&](Type *Ty) -> DIType * {
-    uint64_t Size =
-        Ty->isSized() ? M.getDataLayout().getTypeAllocSizeInBits(Ty) : 0;
+    uint64_t Size = getAllocSizeInBits(M, Ty);
     DIType *&DTy = TypeCache[Size];
     if (!DTy) {
       std::string Name = "ty" + utostr(Size);
@@ -93,11 +96,12 @@ bool applyDebugifyMetadata(Module &M,
       continue;
 
     auto SPType = DIB.createSubroutineType(DIB.getOrCreateTypeArray(None));
-    bool IsLocalToUnit = F.hasPrivateLinkage() || F.hasInternalLinkage();
-    auto SP =
-        DIB.createFunction(CU, F.getName(), F.getName(), File, NextLine, SPType,
-                           IsLocalToUnit, /*isDefinition=*/true, NextLine,
-                           DINode::FlagZero, /*isOptimized=*/true);
+    DISubprogram::DISPFlags SPFlags =
+        DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized;
+    if (F.hasPrivateLinkage() || F.hasInternalLinkage())
+      SPFlags |= DISubprogram::SPFlagLocalToUnit;
+    auto SP = DIB.createFunction(CU, F.getName(), F.getName(), File, NextLine,
+                                 SPType, NextLine, DINode::FlagZero, SPFlags);
     F.setSubprogram(SP);
     for (BasicBlock &BB : F) {
       // Attach debug locations.
@@ -163,10 +167,50 @@ bool applyDebugifyMetadata(Module &M,
   return true;
 }
 
+/// Return true if a mis-sized diagnostic is issued for \p DVI.
+bool diagnoseMisSizedDbgValue(Module &M, DbgValueInst *DVI) {
+  // The size of a dbg.value's value operand should match the size of the
+  // variable it corresponds to.
+  //
+  // TODO: This, along with a check for non-null value operands, should be
+  // promoted to verifier failures.
+  Value *V = DVI->getValue();
+  if (!V)
+    return false;
+
+  // For now, don't try to interpret anything more complicated than an empty
+  // DIExpression. Eventually we should try to handle OP_deref and fragments.
+  if (DVI->getExpression()->getNumElements())
+    return false;
+
+  Type *Ty = V->getType();
+  uint64_t ValueOperandSize = getAllocSizeInBits(M, Ty);
+  Optional<uint64_t> DbgVarSize = DVI->getFragmentSizeInBits();
+  if (!ValueOperandSize || !DbgVarSize)
+    return false;
+
+  bool HasBadSize = false;
+  if (Ty->isIntegerTy()) {
+    auto Signedness = DVI->getVariable()->getSignedness();
+    if (Signedness && *Signedness == DIBasicType::Signedness::Signed)
+      HasBadSize = ValueOperandSize < *DbgVarSize;
+  } else {
+    HasBadSize = ValueOperandSize != *DbgVarSize;
+  }
+
+  if (HasBadSize) {
+    dbg() << "ERROR: dbg.value operand has size " << ValueOperandSize
+          << ", but its variable has size " << *DbgVarSize << ": ";
+    DVI->print(dbg());
+    dbg() << "\n";
+  }
+  return HasBadSize;
+}
+
 bool checkDebugifyMetadata(Module &M,
                            iterator_range<Module::iterator> Functions,
                            StringRef NameOfWrappedPass, StringRef Banner,
-                           bool Strip) {
+                           bool Strip, DebugifyStatsMap *StatsMap) {
   // Skip modules without debugify metadata.
   NamedMDNode *NMD = M.getNamedMetadata("llvm.debugify");
   if (!NMD) {
@@ -183,6 +227,11 @@ bool checkDebugifyMetadata(Module &M,
   unsigned OriginalNumLines = getDebugifyOperand(0);
   unsigned OriginalNumVars = getDebugifyOperand(1);
   bool HasErrors = false;
+
+  // Track debug info loss statistics if able.
+  DebugifyStatistics *Stats = nullptr;
+  if (StatsMap && !NameOfWrappedPass.empty())
+    Stats = &StatsMap->operator[](NameOfWrappedPass);
 
   BitVector MissingLines{OriginalNumLines, true};
   BitVector MissingVars{OriginalNumVars, true};
@@ -201,14 +250,16 @@ bool checkDebugifyMetadata(Module &M,
         continue;
       }
 
-      dbg() << "ERROR: Instruction with empty DebugLoc in function ";
-      dbg() << F.getName() << " --";
-      I.print(dbg());
-      dbg() << "\n";
-      HasErrors = true;
+      if (!DL) {
+        dbg() << "ERROR: Instruction with empty DebugLoc in function ";
+        dbg() << F.getName() << " --";
+        I.print(dbg());
+        dbg() << "\n";
+        HasErrors = true;
+      }
     }
 
-    // Find missing variables.
+    // Find missing variables and mis-sized debug values.
     for (Instruction &I : instructions(F)) {
       auto *DVI = dyn_cast<DbgValueInst>(&I);
       if (!DVI)
@@ -217,7 +268,10 @@ bool checkDebugifyMetadata(Module &M,
       unsigned Var = ~0U;
       (void)to_integer(DVI->getVariable()->getName(), Var, 10);
       assert(Var <= OriginalNumVars && "Unexpected name for DILocalVariable");
-      MissingVars.reset(Var - 1);
+      bool HasBadSize = diagnoseMisSizedDbgValue(M, DVI);
+      if (!HasBadSize)
+        MissingVars.reset(Var - 1);
+      HasErrors |= HasBadSize;
     }
   }
 
@@ -226,8 +280,15 @@ bool checkDebugifyMetadata(Module &M,
     dbg() << "WARNING: Missing line " << Idx + 1 << "\n";
 
   for (unsigned Idx : MissingVars.set_bits())
-    dbg() << "ERROR: Missing variable " << Idx + 1 << "\n";
-  HasErrors |= MissingVars.count() > 0;
+    dbg() << "WARNING: Missing variable " << Idx + 1 << "\n";
+
+  // Update DI loss statistics.
+  if (Stats) {
+    Stats->NumDbgLocsExpected += OriginalNumLines;
+    Stats->NumDbgLocsMissing += MissingLines.count();
+    Stats->NumDbgValuesExpected += OriginalNumVars;
+    Stats->NumDbgValuesMissing += MissingVars.count();
+  }
 
   dbg() << Banner;
   if (!NameOfWrappedPass.empty())
@@ -284,11 +345,13 @@ struct DebugifyFunctionPass : public FunctionPass {
 struct CheckDebugifyModulePass : public ModulePass {
   bool runOnModule(Module &M) override {
     return checkDebugifyMetadata(M, M.functions(), NameOfWrappedPass,
-                                 "CheckModuleDebugify", Strip);
+                                 "CheckModuleDebugify", Strip, StatsMap);
   }
 
-  CheckDebugifyModulePass(bool Strip = false, StringRef NameOfWrappedPass = "")
-      : ModulePass(ID), Strip(Strip), NameOfWrappedPass(NameOfWrappedPass) {}
+  CheckDebugifyModulePass(bool Strip = false, StringRef NameOfWrappedPass = "",
+                          DebugifyStatsMap *StatsMap = nullptr)
+      : ModulePass(ID), Strip(Strip), NameOfWrappedPass(NameOfWrappedPass),
+        StatsMap(StatsMap) {}
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesAll();
@@ -299,6 +362,7 @@ struct CheckDebugifyModulePass : public ModulePass {
 private:
   bool Strip;
   StringRef NameOfWrappedPass;
+  DebugifyStatsMap *StatsMap;
 };
 
 /// FunctionPass for checking debug info inserted by -debugify-function, used
@@ -309,12 +373,14 @@ struct CheckDebugifyFunctionPass : public FunctionPass {
     auto FuncIt = F.getIterator();
     return checkDebugifyMetadata(M, make_range(FuncIt, std::next(FuncIt)),
                                  NameOfWrappedPass, "CheckFunctionDebugify",
-                                 Strip);
+                                 Strip, StatsMap);
   }
 
   CheckDebugifyFunctionPass(bool Strip = false,
-                            StringRef NameOfWrappedPass = "")
-      : FunctionPass(ID), Strip(Strip), NameOfWrappedPass(NameOfWrappedPass) {}
+                            StringRef NameOfWrappedPass = "",
+                            DebugifyStatsMap *StatsMap = nullptr)
+      : FunctionPass(ID), Strip(Strip), NameOfWrappedPass(NameOfWrappedPass),
+        StatsMap(StatsMap) {}
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesAll();
@@ -325,9 +391,31 @@ struct CheckDebugifyFunctionPass : public FunctionPass {
 private:
   bool Strip;
   StringRef NameOfWrappedPass;
+  DebugifyStatsMap *StatsMap;
 };
 
 } // end anonymous namespace
+
+void exportDebugifyStats(llvm::StringRef Path, const DebugifyStatsMap &Map) {
+  std::error_code EC;
+  raw_fd_ostream OS{Path, EC};
+  if (EC) {
+    errs() << "Could not open file: " << EC.message() << ", " << Path << '\n';
+    return;
+  }
+
+  OS << "Pass Name" << ',' << "# of missing debug values" << ','
+     << "# of missing locations" << ',' << "Missing/Expected value ratio" << ','
+     << "Missing/Expected location ratio" << '\n';
+  for (const auto &Entry : Map) {
+    StringRef Pass = Entry.first;
+    DebugifyStatistics Stats = Entry.second;
+
+    OS << Pass << ',' << Stats.NumDbgValuesMissing << ','
+       << Stats.NumDbgLocsMissing << ',' << Stats.getMissingValueRatio() << ','
+       << Stats.getEmptyLocationRatio() << '\n';
+  }
+}
 
 ModulePass *createDebugifyModulePass() { return new DebugifyModulePass(); }
 
@@ -341,18 +429,21 @@ PreservedAnalyses NewPMDebugifyPass::run(Module &M, ModuleAnalysisManager &) {
 }
 
 ModulePass *createCheckDebugifyModulePass(bool Strip,
-                                          StringRef NameOfWrappedPass) {
-  return new CheckDebugifyModulePass(Strip, NameOfWrappedPass);
+                                          StringRef NameOfWrappedPass,
+                                          DebugifyStatsMap *StatsMap) {
+  return new CheckDebugifyModulePass(Strip, NameOfWrappedPass, StatsMap);
 }
 
 FunctionPass *createCheckDebugifyFunctionPass(bool Strip,
-                                              StringRef NameOfWrappedPass) {
-  return new CheckDebugifyFunctionPass(Strip, NameOfWrappedPass);
+                                              StringRef NameOfWrappedPass,
+                                              DebugifyStatsMap *StatsMap) {
+  return new CheckDebugifyFunctionPass(Strip, NameOfWrappedPass, StatsMap);
 }
 
 PreservedAnalyses NewPMCheckDebugifyPass::run(Module &M,
                                               ModuleAnalysisManager &) {
-  checkDebugifyMetadata(M, M.functions(), "", "CheckModuleDebugify", false);
+  checkDebugifyMetadata(M, M.functions(), "", "CheckModuleDebugify", false,
+                        nullptr);
   return PreservedAnalyses::all();
 }
 

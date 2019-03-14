@@ -156,6 +156,15 @@ public:
     SetPromptOnQuit(bool b);
 
     void
+    AllowExitCodeOnQuit(bool b);
+
+    bool
+    HasCustomQuitExitCode();
+
+    int
+    GetQuitStatus();
+
+    void
     ResolveCommand(const char *command_line, SBCommandReturnObject &result);
 
     bool
@@ -210,6 +219,13 @@ public:
                       int max_return_elements,
                       lldb::SBStringList &matches);
 
+    int
+    HandleCompletionWithDescriptions (const char *current_line,
+                                      uint32_t cursor_pos,
+                                      int match_start_point,
+                                      int max_return_elements,
+                                      lldb::SBStringList &matches,
+                                      lldb::SBStringList &descriptions);
     bool
     IsActive ();
 

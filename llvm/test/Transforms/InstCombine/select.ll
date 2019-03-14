@@ -385,6 +385,31 @@ define i32 @test16_neg2(i1 %C, i32 addrspace(1)* %P) {
   ret i32 %V
 }
 
+;; It may be legal to load from a null address with null pointer valid attribute.
+define i32 @test16_no_null_opt(i1 %C, i32* %P) #0 {
+; CHECK-LABEL: @test16_no_null_opt(
+; CHECK-NEXT:    [[P2:%.*]] = select i1 [[C:%.*]], i32* [[P:%.*]], i32* null
+; CHECK-NEXT:    [[V:%.*]] = load i32, i32* [[P2]], align 4
+; CHECK-NEXT:    ret i32 [[V]]
+;
+  %P2 = select i1 %C, i32* %P, i32* null
+  %V = load i32, i32* %P2
+  ret i32 %V
+}
+
+define i32 @test16_no_null_opt_2(i1 %C, i32* %P) #0 {
+; CHECK-LABEL: @test16_no_null_opt_2(
+; CHECK-NEXT:    [[P2:%.*]] = select i1 [[C:%.*]], i32* null, i32* [[P:%.*]]
+; CHECK-NEXT:    [[V:%.*]] = load i32, i32* [[P2]], align 4
+; CHECK-NEXT:    ret i32 [[V]]
+;
+  %P2 = select i1 %C, i32* null, i32* %P
+  %V = load i32, i32* %P2
+  ret i32 %V
+}
+
+attributes #0 = { "null-pointer-is-valid"="true" }
+
 define i1 @test17(i32* %X, i1 %C) {
 ; CHECK-LABEL: @test17(
 ; CHECK-NEXT:    [[RV1:%.*]] = icmp eq i32* [[X:%.*]], null
@@ -1304,13 +1329,13 @@ define i32 @PR23757(i32 %x) {
   ret i32 %sel
 }
 
-; max(max(~a, -1), -1) --> max(~a, -1)
+; max(max(~a, -1), -1) --> ~min(a, 0)
 
 define i32 @PR27137(i32 %a) {
 ; CHECK-LABEL: @PR27137(
-; CHECK-NEXT:    [[NOT_A:%.*]] = xor i32 [[A:%.*]], -1
-; CHECK-NEXT:    [[TMP1:%.*]] = icmp sgt i32 [[NOT_A]], -1
-; CHECK-NEXT:    [[S1:%.*]] = select i1 [[TMP1]], i32 [[NOT_A]], i32 -1
+; CHECK-NEXT:    [[TMP1:%.*]] = icmp slt i32 [[A:%.*]], 0
+; CHECK-NEXT:    [[TMP2:%.*]] = select i1 [[TMP1]], i32 [[A]], i32 0
+; CHECK-NEXT:    [[S1:%.*]] = xor i32 [[TMP2]], -1
 ; CHECK-NEXT:    ret i32 [[S1]]
 ;
   %not_a = xor i32 %a, -1

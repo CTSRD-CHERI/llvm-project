@@ -1,6 +1,6 @@
 // REQUIRES: clang, cheri_is_128
 
-// RUN: %cheri_purecap_clang %s -c -o %t.o
+// RUN: %cheri_purecap_clang -cheri-cap-table-abi=legacy %s -c -o %t.o
 // RUN: llvm-readobj -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
 
 // RUN: ld.lld -preemptible-caprelocs=legacy %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
@@ -77,7 +77,7 @@ void __start(void) {}
 
 
 // DYNAMIC-RELOCS-LABEL: Relocations [
-// DYNAMIC-RELOCS-NEXT:   Section (8) .rel.dyn {
+// DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
 // DYNAMIC-RELOCS-NEXT:     0x30000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:     0x30008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:   }
@@ -107,10 +107,10 @@ void __start(void) {}
 
 
 // DUMP-CAPRELOCS-LABEL: CHERI __cap_relocs [
-// STATIC-NEXT:                     0x120020000 (__error_selector) Base: 0x1200100e0 (__error_unthreaded+0) Length: 68 Perms: Function
+// STATIC-NEXT:                     0x120020000 (__error_selector) Base: 0x1200100{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
 // PIE exe and shlib should have dynamic relocations and only the offset values
-// DYNAMIC-NEXT:                    0x020000 (__error_selector) Base: 0x100e0 (__error_unthreaded+0) Length: 68 Perms: Function
+// DYNAMIC-NEXT:                    0x020000 (__error_selector) Base: 0x100{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
 // The external capsizefix does okay static:
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x120020000 (__error_selector) Base: 0x1200100e0 (__error_unthreaded+0) Length: 68 Perms: Function
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: 0x120020000 (__error_selector) Base: 0x1200100{{.+}} (__error_unthreaded+0) Length: 68 Perms: Function
 // DUMP-CAPRELOCS-NEXT: ]
 

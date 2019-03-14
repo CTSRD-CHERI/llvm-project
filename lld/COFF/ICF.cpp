@@ -22,11 +22,13 @@
 #include "Chunks.h"
 #include "Symbols.h"
 #include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Threads.h"
 #include "lld/Common/Timer.h"
 #include "llvm/ADT/Hashing.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Parallel.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/xxhash.h"
 #include <algorithm>
 #include <atomic>
 #include <vector>
@@ -65,13 +67,6 @@ private:
   std::atomic<bool> Repeat = {false};
 };
 
-// Returns a hash value for S.
-uint32_t ICF::getHash(SectionChunk *C) {
-  return hash_combine(C->getOutputCharacteristics(), C->SectionName,
-                      C->Relocs.size(), uint32_t(C->Header->SizeOfRawData),
-                      C->Checksum, C->getContents());
-}
-
 // Returns true if section S is subject of ICF.
 //
 // Microsoft's documentation
@@ -86,7 +81,7 @@ uint32_t ICF::getHash(SectionChunk *C) {
 bool ICF::isEligible(SectionChunk *C) {
   // Non-comdat chunks, dead chunks, and writable chunks are not elegible.
   bool Writable = C->getOutputCharacteristics() & llvm::COFF::IMAGE_SCN_MEM_WRITE;
-  if (!C->isCOMDAT() || !C->isLive() || Writable)
+  if (!C->isCOMDAT() || !C->Live || Writable)
     return false;
 
   // Code sections are eligible.
@@ -99,7 +94,11 @@ bool ICF::isEligible(SectionChunk *C) {
     return true;
 
   // So are vtables.
-  return C->Sym && C->Sym->getName().startswith("??_7");
+  if (C->Sym && C->Sym->getName().startswith("??_7"))
+    return true;
+
+  // Anything else not in an address-significance table is eligible.
+  return !C->KeepUnique;
 }
 
 // Split an equivalence class into smaller classes.
@@ -228,10 +227,10 @@ void ICF::forEachClass(std::function<void(size_t, size_t)> Fn) {
   size_t Boundaries[NumShards + 1];
   Boundaries[0] = 0;
   Boundaries[NumShards] = Chunks.size();
-  for_each_n(parallel::par, size_t(1), NumShards, [&](size_t I) {
+  parallelForEachN(1, NumShards, [&](size_t I) {
     Boundaries[I] = findBoundary((I - 1) * Step, Chunks.size());
   });
-  for_each_n(parallel::par, size_t(1), NumShards + 1, [&](size_t I) {
+  parallelForEachN(1, NumShards + 1, [&](size_t I) {
     if (Boundaries[I - 1] < Boundaries[I]) {
       forEachClassRange(Boundaries[I - 1], Boundaries[I], Fn);
     }
@@ -263,9 +262,19 @@ void ICF::run(ArrayRef<Chunk *> Vec) {
       SC->Class[0] = NextId++;
 
   // Initially, we use hash values to partition sections.
-  for_each(parallel::par, Chunks.begin(), Chunks.end(), [&](SectionChunk *SC) {
+  parallelForEach(Chunks, [&](SectionChunk *SC) {
+    SC->Class[1] = xxHash64(SC->getContents());
+  });
+
+  // Combine the hashes of the sections referenced by each section into its
+  // hash.
+  parallelForEach(Chunks, [&](SectionChunk *SC) {
+    uint32_t Hash = SC->Class[1];
+    for (Symbol *B : SC->symbols())
+      if (auto *Sym = dyn_cast_or_null<DefinedRegular>(B))
+        Hash ^= Sym->getChunk()->Class[1];
     // Set MSB to 1 to avoid collisions with non-hash classs.
-    SC->Class[0] = getHash(SC) | (1 << 31);
+    SC->Class[0] = Hash | (1U << 31);
   });
 
   // From now on, sections in Chunks are ordered so that sections in

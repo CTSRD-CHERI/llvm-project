@@ -365,7 +365,7 @@ void ScheduleDAGRRList::Schedule() {
   // Build the scheduling graph.
   BuildSchedGraph(nullptr);
 
-  LLVM_DEBUG(for (SUnit &SU : SUnits) SU.dumpAll(this));
+  LLVM_DEBUG(dump());
   Topo.InitDAGTopologicalSorting();
 
   AvailableQueue->initNodes(SUnits);
@@ -396,7 +396,7 @@ void ScheduleDAGRRList::ReleasePred(SUnit *SU, const SDep *PredEdge) {
 #ifndef NDEBUG
   if (PredSU->NumSuccsLeft == 0) {
     dbgs() << "*** Scheduling failed! ***\n";
-    PredSU->dump(this);
+    dumpNode(*PredSU);
     dbgs() << " has been released too many times!\n";
     llvm_unreachable(nullptr);
   }
@@ -729,7 +729,7 @@ static void resetVRegCycle(SUnit *SU);
 /// the Available queue.
 void ScheduleDAGRRList::ScheduleNodeBottomUp(SUnit *SU) {
   LLVM_DEBUG(dbgs() << "\n*** Scheduling [" << CurCycle << "]: ");
-  LLVM_DEBUG(SU->dump(this));
+  LLVM_DEBUG(dumpNode(*SU));
 
 #ifndef NDEBUG
   if (CurCycle < SU->getHeight())
@@ -828,7 +828,7 @@ void ScheduleDAGRRList::CapturePred(SDep *PredEdge) {
 /// its predecessor states to reflect the change.
 void ScheduleDAGRRList::UnscheduleNodeBottomUp(SUnit *SU) {
   LLVM_DEBUG(dbgs() << "*** Unscheduling [" << SU->getHeight() << "]: ");
-  LLVM_DEBUG(SU->dump(this));
+  LLVM_DEBUG(dumpNode(*SU));
 
   for (SDep &Pred : SU->Preds) {
     CapturePred(&Pred);
@@ -1010,6 +1010,34 @@ SUnit *ScheduleDAGRRList::TryUnfoldSU(SUnit *SU) {
     computeLatency(LoadSU);
   }
 
+  bool isNewN = true;
+  SUnit *NewSU;
+  // This can only happen when isNewLoad is false.
+  if (N->getNodeId() != -1) {
+    NewSU = &SUnits[N->getNodeId()];
+    // If NewSU has already been scheduled, we need to clone it, but this
+    // negates the benefit to unfolding so just return SU.
+    if (NewSU->isScheduled)
+      return SU;
+    isNewN = false;
+  } else {
+    NewSU = CreateNewSUnit(N);
+    N->setNodeId(NewSU->NodeNum);
+
+    const MCInstrDesc &MCID = TII->get(N->getMachineOpcode());
+    for (unsigned i = 0; i != MCID.getNumOperands(); ++i) {
+      if (MCID.getOperandConstraint(i, MCOI::TIED_TO) != -1) {
+        NewSU->isTwoAddress = true;
+        break;
+      }
+    }
+    if (MCID.isCommutable())
+      NewSU->isCommutable = true;
+
+    InitNumRegDefsLeft(NewSU);
+    computeLatency(NewSU);
+  }
+
   LLVM_DEBUG(dbgs() << "Unfolding SU #" << SU->NodeNum << "\n");
 
   // Now that we are committed to unfolding replace DAG Uses.
@@ -1017,23 +1045,6 @@ SUnit *ScheduleDAGRRList::TryUnfoldSU(SUnit *SU) {
     DAG->ReplaceAllUsesOfValueWith(SDValue(SU->getNode(), i), SDValue(N, i));
   DAG->ReplaceAllUsesOfValueWith(SDValue(SU->getNode(), OldNumVals - 1),
                                  SDValue(LoadNode, 1));
-
-  SUnit *NewSU = CreateNewSUnit(N);
-  assert(N->getNodeId() == -1 && "Node already inserted!");
-  N->setNodeId(NewSU->NodeNum);
-
-  const MCInstrDesc &MCID = TII->get(N->getMachineOpcode());
-  for (unsigned i = 0; i != MCID.getNumOperands(); ++i) {
-    if (MCID.getOperandConstraint(i, MCOI::TIED_TO) != -1) {
-      NewSU->isTwoAddress = true;
-      break;
-    }
-  }
-  if (MCID.isCommutable())
-    NewSU->isCommutable = true;
-
-  InitNumRegDefsLeft(NewSU);
-  computeLatency(NewSU);
 
   // Record all the edges to and from the old SU, by category.
   SmallVector<SDep, 4> ChainPreds;
@@ -1100,7 +1111,8 @@ SUnit *ScheduleDAGRRList::TryUnfoldSU(SUnit *SU) {
 
   if (isNewLoad)
     AvailableQueue->addNode(LoadSU);
-  AvailableQueue->addNode(NewSU);
+  if (isNewN)
+    AvailableQueue->addNode(NewSU);
 
   ++NumUnfolds;
 
@@ -1118,7 +1130,7 @@ SUnit *ScheduleDAGRRList::CopyAndMoveSuccessors(SUnit *SU) {
     return nullptr;
 
   LLVM_DEBUG(dbgs() << "Considering duplicating the SU\n");
-  LLVM_DEBUG(SU->dump(this));
+  LLVM_DEBUG(dumpNode(*SU));
 
   if (N->getGluedNode() &&
       !TII->canCopyGluedNodeDuringSchedule(N)) {
@@ -1876,7 +1888,7 @@ public:
     while (!DumpQueue.empty()) {
       SUnit *SU = popFromQueue(DumpQueue, DumpPicker, scheduleDAG);
       dbgs() << "Height " << SU->getHeight() << ": ";
-      SU->dump(DAG);
+      DAG->dumpNode(*SU);
     }
   }
 #endif

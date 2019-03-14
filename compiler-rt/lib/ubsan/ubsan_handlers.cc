@@ -15,6 +15,7 @@
 #if CAN_SANITIZE_UB
 #include "ubsan_handlers.h"
 #include "ubsan_diag.h"
+#include "ubsan_flags.h"
 #include "ubsan_monitor.h"
 
 #include "sanitizer_common/sanitizer_common.h"
@@ -118,6 +119,11 @@ static void handleIntegerOverflowImpl(OverflowData *Data, ValueHandle LHS,
   if (ignoreReport(Loc, Opts, ET))
     return;
 
+  // If this is an unsigned overflow in non-fatal mode, potentially ignore it.
+  if (!IsSigned && !Opts.FromUnrecoverableHandler &&
+      flags()->silence_unsigned_overflow)
+    return;
+
   ScopedReport R(Opts, Loc, ET);
 
   Diag(Loc, DL_Error, ET, "%0 integer overflow: "
@@ -150,6 +156,9 @@ static void handleNegateOverflowImpl(OverflowData *Data, ValueHandle OldVal,
                           : ErrorType::UnsignedIntegerOverflow;
 
   if (ignoreReport(Loc, Opts, ET))
+    return;
+
+  if (!IsSigned && flags()->silence_unsigned_overflow)
     return;
 
   ScopedReport R(Opts, Loc, ET);
@@ -444,6 +453,72 @@ void __ubsan::__ubsan_handle_load_invalid_value_abort(InvalidValueData *Data,
   Die();
 }
 
+static void handleImplicitConversion(ImplicitConversionData *Data,
+                                     ReportOptions Opts, ValueHandle Src,
+                                     ValueHandle Dst) {
+  SourceLocation Loc = Data->Loc.acquire();
+  ErrorType ET = ErrorType::GenericUB;
+
+  const TypeDescriptor &SrcTy = Data->FromType;
+  const TypeDescriptor &DstTy = Data->ToType;
+
+  bool SrcSigned = SrcTy.isSignedIntegerTy();
+  bool DstSigned = DstTy.isSignedIntegerTy();
+
+  switch (Data->Kind) {
+  case ICCK_IntegerTruncation: { // Legacy, no longer used.
+    // Let's figure out what it should be as per the new types, and upgrade.
+    // If both types are unsigned, then it's an unsigned truncation.
+    // Else, it is a signed truncation.
+    if (!SrcSigned && !DstSigned) {
+      ET = ErrorType::ImplicitUnsignedIntegerTruncation;
+    } else {
+      ET = ErrorType::ImplicitSignedIntegerTruncation;
+    }
+    break;
+  }
+  case ICCK_UnsignedIntegerTruncation:
+    ET = ErrorType::ImplicitUnsignedIntegerTruncation;
+    break;
+  case ICCK_SignedIntegerTruncation:
+    ET = ErrorType::ImplicitSignedIntegerTruncation;
+    break;
+  case ICCK_IntegerSignChange:
+    ET = ErrorType::ImplicitIntegerSignChange;
+    break;
+  case ICCK_SignedIntegerTruncationOrSignChange:
+    ET = ErrorType::ImplicitSignedIntegerTruncationOrSignChange;
+    break;
+  }
+
+  if (ignoreReport(Loc, Opts, ET))
+    return;
+
+  ScopedReport R(Opts, Loc, ET);
+
+  // FIXME: is it possible to dump the values as hex with fixed width?
+
+  Diag(Loc, DL_Error, ET,
+       "implicit conversion from type %0 of value %1 (%2-bit, %3signed) to "
+       "type %4 changed the value to %5 (%6-bit, %7signed)")
+      << SrcTy << Value(SrcTy, Src) << SrcTy.getIntegerBitWidth()
+      << (SrcSigned ? "" : "un") << DstTy << Value(DstTy, Dst)
+      << DstTy.getIntegerBitWidth() << (DstSigned ? "" : "un");
+}
+
+void __ubsan::__ubsan_handle_implicit_conversion(ImplicitConversionData *Data,
+                                                 ValueHandle Src,
+                                                 ValueHandle Dst) {
+  GET_REPORT_OPTIONS(false);
+  handleImplicitConversion(Data, Opts, Src, Dst);
+}
+void __ubsan::__ubsan_handle_implicit_conversion_abort(
+    ImplicitConversionData *Data, ValueHandle Src, ValueHandle Dst) {
+  GET_REPORT_OPTIONS(true);
+  handleImplicitConversion(Data, Opts, Src, Dst);
+  Die();
+}
+
 static void handleInvalidBuiltin(InvalidBuiltinData *Data, ReportOptions Opts) {
   SourceLocation Loc = Data->Loc.acquire();
   ErrorType ET = ErrorType::InvalidBuiltin;
@@ -660,6 +735,21 @@ static void handleCFIBadIcall(CFICheckFailData *Data, ValueHandle Function,
   if (!FName)
     FName = "(unknown)";
   Diag(FLoc, DL_Note, ET, "%0 defined here") << FName;
+
+  // If the failure involved different DSOs for the check location and icall
+  // target, report the DSO names.
+  const char *DstModule = FLoc.get()->info.module;
+  if (!DstModule)
+    DstModule = "(unknown)";
+
+  const char *SrcModule = Symbolizer::GetOrInit()->GetModuleNameForPc(Opts.pc);
+  if (!SrcModule)
+    SrcModule = "(unknown)";
+
+  if (internal_strcmp(SrcModule, DstModule))
+    Diag(Loc, DL_Note, ET,
+         "check failed in %0, destination function located in %1")
+        << SrcModule << DstModule;
 }
 
 namespace __ubsan {

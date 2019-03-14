@@ -651,7 +651,7 @@ public:
       ArrayRef<Use> DeoptArgs, ArrayRef<Value *> GCArgs,
       const Twine &Name = "");
 
-  // Conveninence function for the common case when CallArgs are filled in using
+  // Convenience function for the common case when CallArgs are filled in using
   // makeArrayRef(CS.arg_begin(), CS.arg_end()); Use needs to be .get()'ed to
   // get the Value *.
   InvokeInst *
@@ -675,32 +675,44 @@ public:
                              Type *ResultType,
                              const Twine &Name = "");
 
+  /// Create a call to intrinsic \p ID with 1 operand which is mangled on its
+  /// type.
+  CallInst *CreateUnaryIntrinsic(Intrinsic::ID ID, Value *V,
+                                 Instruction *FMFSource = nullptr,
+                                 const Twine &Name = "");
+
   /// Create a call to intrinsic \p ID with 2 operands which is mangled on the
   /// first type.
-  CallInst *CreateBinaryIntrinsic(Intrinsic::ID ID,
-                                  Value *LHS, Value *RHS,
+  CallInst *CreateBinaryIntrinsic(Intrinsic::ID ID, Value *LHS, Value *RHS,
+                                  Instruction *FMFSource = nullptr,
                                   const Twine &Name = "");
 
-  /// Create a call to intrinsic \p ID with no operands.
-  CallInst *CreateIntrinsic(Intrinsic::ID ID,
-                            Instruction *FMFSource = nullptr,
-                            const Twine &Name = "");
-
-  /// Create a call to intrinsic \p ID with 1 or more operands assuming the
-  /// intrinsic and all operands have the same type. If \p FMFSource is
-  /// provided, copy fast-math-flags from that instruction to the intrinsic.
-  CallInst *CreateIntrinsic(Intrinsic::ID ID, ArrayRef<Value *> Args,
+  /// Create a call to intrinsic \p ID with \p args, mangled using \p Types. If
+  /// \p FMFSource is provided, copy fast-math-flags from that instruction to
+  /// the intrinsic.
+  CallInst *CreateIntrinsic(Intrinsic::ID ID, ArrayRef<Type *> Types,
+                            ArrayRef<Value *> Args,
                             Instruction *FMFSource = nullptr,
                             const Twine &Name = "");
 
   /// Create call to the minnum intrinsic.
   CallInst *CreateMinNum(Value *LHS, Value *RHS, const Twine &Name = "") {
-    return CreateBinaryIntrinsic(Intrinsic::minnum, LHS, RHS, Name);
+    return CreateBinaryIntrinsic(Intrinsic::minnum, LHS, RHS, nullptr, Name);
   }
 
   /// Create call to the maxnum intrinsic.
   CallInst *CreateMaxNum(Value *LHS, Value *RHS, const Twine &Name = "") {
-    return CreateBinaryIntrinsic(Intrinsic::maxnum, LHS, RHS, Name);
+    return CreateBinaryIntrinsic(Intrinsic::maxnum, LHS, RHS, nullptr, Name);
+  }
+
+  /// Create call to the minimum intrinsic.
+  CallInst *CreateMinimum(Value *LHS, Value *RHS, const Twine &Name = "") {
+    return CreateBinaryIntrinsic(Intrinsic::minimum, LHS, RHS, nullptr, Name);
+  }
+
+  /// Create call to the maximum intrinsic.
+  CallInst *CreateMaximum(Value *LHS, Value *RHS, const Twine &Name = "") {
+    return CreateBinaryIntrinsic(Intrinsic::maximum, LHS, RHS, nullptr, Name);
   }
 
 private:
@@ -2022,6 +2034,7 @@ public:
   Value *CreateLaunderInvariantGroup(Value *Ptr) {
     assert(isa<PointerType>(Ptr->getType()) &&
            "launder.invariant.group only applies to pointers.");
+    // FIXME: we could potentially avoid casts to/from i8*.
     auto *PtrType = Ptr->getType();
     auto *Int8PtrTy = getInt8PtrTy(PtrType->getPointerAddressSpace());
     if (PtrType != Int8PtrTy)
@@ -2036,6 +2049,34 @@ public:
            "LaunderInvariantGroup should take and return the same type");
 
     CallInst *Fn = CreateCall(FnLaunderInvariantGroup, {Ptr});
+
+    if (PtrType != Int8PtrTy)
+      return CreateBitCast(Fn, PtrType);
+    return Fn;
+  }
+
+  /// \brief Create a strip.invariant.group intrinsic call. If Ptr type is
+  /// different from pointer to i8, it's casted to pointer to i8 in the same
+  /// address space before call and casted back to Ptr type after call.
+  Value *CreateStripInvariantGroup(Value *Ptr) {
+    assert(isa<PointerType>(Ptr->getType()) &&
+           "strip.invariant.group only applies to pointers.");
+
+    // FIXME: we could potentially avoid casts to/from i8*.
+    auto *PtrType = Ptr->getType();
+    auto *Int8PtrTy = getInt8PtrTy(PtrType->getPointerAddressSpace());
+    if (PtrType != Int8PtrTy)
+      Ptr = CreateBitCast(Ptr, Int8PtrTy);
+    Module *M = BB->getParent()->getParent();
+    Function *FnStripInvariantGroup = Intrinsic::getDeclaration(
+        M, Intrinsic::strip_invariant_group, {Int8PtrTy});
+
+    assert(FnStripInvariantGroup->getReturnType() == Int8PtrTy &&
+           FnStripInvariantGroup->getFunctionType()->getParamType(0) ==
+               Int8PtrTy &&
+           "StripInvariantGroup should take and return the same type");
+
+    CallInst *Fn = CreateCall(FnStripInvariantGroup, {Ptr});
 
     if (PtrType != Int8PtrTy)
       return CreateBitCast(Fn, PtrType);

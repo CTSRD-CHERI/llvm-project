@@ -115,6 +115,7 @@ static ld_plugin_add_input_file add_input_file = nullptr;
 static ld_plugin_set_extra_library_path set_extra_library_path = nullptr;
 static ld_plugin_get_view get_view = nullptr;
 static bool IsExecutable = false;
+static bool SplitSections = true;
 static Optional<Reloc::Model> RelocationModel = None;
 static std::string output_name = "";
 static std::list<claimed_file> Modules;
@@ -324,6 +325,7 @@ ld_plugin_status onload(ld_plugin_tv *tv) {
       switch (tv->tv_u.tv_val) {
       case LDPO_REL: // .o
         IsExecutable = false;
+        SplitSections = false;
         break;
       case LDPO_DYN: // .so
         IsExecutable = false;
@@ -445,8 +447,8 @@ static void diagnosticHandler(const DiagnosticInfo &DI) {
   ld_plugin_level Level;
   switch (DI.getSeverity()) {
   case DS_Error:
-    message(LDPL_FATAL, "LLVM gold plugin has failed to create LTO module: %s",
-            ErrStorage.c_str());
+    Level = LDPL_FATAL;
+    break;
   case DS_Warning:
     Level = LDPL_WARNING;
     break;
@@ -665,13 +667,9 @@ static void getThinLTOOldAndNewSuffix(std::string &OldSuffix,
 /// suffix matching \p OldSuffix with \p NewSuffix.
 static std::string getThinLTOObjectFileName(StringRef Path, StringRef OldSuffix,
                                             StringRef NewSuffix) {
-  if (OldSuffix.empty() && NewSuffix.empty())
-    return Path;
-  StringRef NewPath = Path;
-  NewPath.consume_back(OldSuffix);
-  std::string NewNewPath = NewPath;
-  NewNewPath += NewSuffix;
-  return NewNewPath;
+  if (Path.consume_back(OldSuffix))
+    return (Path + NewSuffix).str();
+  return Path;
 }
 
 // Returns true if S is valid as a C language identifier.
@@ -834,9 +832,11 @@ static std::unique_ptr<LTO> createLTO(IndexWriteCallback OnIndexWrite,
   // FIXME: Check the gold version or add a new option to enable them.
   Conf.Options.RelaxELFRelocations = false;
 
-  // Enable function/data sections by default.
-  Conf.Options.FunctionSections = true;
-  Conf.Options.DataSections = true;
+  // Toggle function/data sections.
+  if (FunctionSections.getNumOccurrences() == 0)
+    Conf.Options.FunctionSections = SplitSections;
+  if (DataSections.getNumOccurrences() == 0)
+    Conf.Options.DataSections = SplitSections;
 
   Conf.MAttrs = MAttrs;
   Conf.RelocModel = RelocationModel;

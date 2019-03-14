@@ -13,15 +13,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "PipelinePrinter.h"
-#include "View.h"
-#include "llvm/CodeGen/TargetSchedule.h"
+#include "Views/View.h"
 
+namespace llvm {
 namespace mca {
-
-using namespace llvm;
 
 void PipelinePrinter::printReport(llvm::raw_ostream &OS) const {
   for (const auto &V : Views)
     V->printView(OS);
 }
 } // namespace mca.
+} // namespace llvm

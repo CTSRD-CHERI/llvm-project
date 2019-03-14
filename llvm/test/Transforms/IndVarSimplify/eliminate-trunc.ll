@@ -484,3 +484,81 @@ loop:
 exit:
   ret void
 }
+
+define void @test_11() {
+; CHECK-LABEL: @test_11(
+; CHECK-NEXT:    br label [[BB1:%.*]]
+; CHECK:       bb1:
+; CHECK-NEXT:    br i1 undef, label [[BB2:%.*]], label [[BB6:%.*]]
+; CHECK:       bb2:
+; CHECK-NEXT:    br i1 undef, label [[BB3:%.*]], label [[BB4:%.*]]
+; CHECK:       bb3:
+; CHECK-NEXT:    br label [[BB4]]
+; CHECK:       bb4:
+; CHECK-NEXT:    br label [[BB6]]
+; CHECK:       bb5:
+; CHECK-NEXT:    [[_TMP24:%.*]] = icmp slt i16 undef, 0
+; CHECK-NEXT:    br i1 [[_TMP24]], label [[BB5:%.*]], label [[BB5]]
+; CHECK:       bb6:
+; CHECK-NEXT:    br i1 false, label [[BB1]], label [[BB7:%.*]]
+; CHECK:       bb7:
+; CHECK-NEXT:    ret void
+;
+  br label %bb1
+
+bb1:                                              ; preds = %bb6, %0
+  %e.5.0 = phi i32 [ 0, %0 ], [ %_tmp32, %bb6 ]
+  br i1 undef, label %bb2, label %bb6
+
+bb2:                                              ; preds = %bb1
+  %_tmp15 = trunc i32 %e.5.0 to i16
+  br i1 undef, label %bb3, label %bb4
+
+bb3:                                              ; preds = %bb2
+  br label %bb4
+
+bb4:                                              ; preds = %bb3, %bb2
+  br label %bb6
+
+bb5:                                              ; preds = %bb5, %bb5
+  %_tmp24 = icmp slt i16 %_tmp15, 0
+  br i1 %_tmp24, label %bb5, label %bb5
+
+bb6:                                              ; preds = %bb4, %bb1
+  %_tmp32 = add nuw nsw i32 %e.5.0, 1
+  br i1 false, label %bb1, label %bb7
+
+bb7:                                             ; preds = %bb6
+  ret void
+}
+
+; Show that we can turn signed comparison to unsigned and use zext while
+; comparing non-negative values.
+define void @test_12(i32* %p) {
+; CHECK-LABEL: @test_12(
+; CHECK-NEXT:  entry:
+; CHECK-NEXT:    [[N:%.*]] = load i32, i32* [[P:%.*]], !range !0
+; CHECK-NEXT:    [[ZEXT:%.*]] = zext i32 [[N]] to i64
+; CHECK-NEXT:    br label [[LOOP:%.*]]
+; CHECK:       loop:
+; CHECK-NEXT:    [[IV:%.*]] = phi i64 [ 0, [[ENTRY:%.*]] ], [ [[IV_NEXT:%.*]], [[LOOP]] ]
+; CHECK-NEXT:    [[IV_NEXT]] = add nuw nsw i64 [[IV]], 1
+; CHECK-NEXT:    [[TMP0:%.*]] = icmp ult i64 [[IV_NEXT]], [[ZEXT]]
+; CHECK-NEXT:    br i1 [[TMP0]], label [[LOOP]], label [[EXIT:%.*]]
+; CHECK:       exit:
+; CHECK-NEXT:    ret void
+;
+entry:
+  %n = load i32, i32* %p, !range !0
+  br label %loop
+loop:
+  %iv = phi i64 [ 0, %entry ], [ %iv.next, %loop ]
+  %iv.next = add i64 %iv, 1
+  %narrow.iv = trunc i64 %iv.next to i32
+  %cmp = icmp slt i32 %narrow.iv, %n
+  br i1 %cmp, label %loop, label %exit
+exit:
+  ret void
+}
+
+!0 = !{i32 0, i32 1000}

@@ -17,9 +17,9 @@
 #include "MCTargetDesc/X86BaseInfo.h"
 #include "X86InstrFMA3Info.h"
 #include "X86RegisterInfo.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
+#include <vector>
 
 #define GET_INSTRINFO_HEADER
 #include "X86GenInstrInfo.inc"
@@ -117,6 +117,7 @@ inline static bool isGlobalStubReference(unsigned char TargetFlag) {
   case X86II::MO_GOT:                     // normal GOT reference.
   case X86II::MO_DARWIN_NONLAZY_PIC_BASE: // Normal $non_lazy_ptr ref.
   case X86II::MO_DARWIN_NONLAZY:          // Normal $non_lazy_ptr ref.
+  case X86II::MO_COFFSTUB:                // COFF .refptr stub.
     return true;
   default:
     return false;
@@ -167,15 +168,6 @@ inline static bool isMem(const MachineInstr &MI, unsigned Op) {
 class X86InstrInfo final : public X86GenInstrInfo {
   X86Subtarget &Subtarget;
   const X86RegisterInfo RI;
-
-  /// MemOp2RegOpTable - Load / store unfolding opcode map.
-  ///
-  typedef DenseMap<unsigned, std::pair<uint16_t, uint16_t>>
-      MemOp2RegOpTableType;
-  MemOp2RegOpTableType MemOp2RegOpTable;
-
-  static void AddTableEntry(MemOp2RegOpTableType &M2RTable, uint16_t RegOp,
-                            uint16_t MemOp, uint16_t Flags);
 
   virtual void anchor();
 
@@ -266,7 +258,7 @@ public:
   /// operand to the LEA instruction.
   bool classifyLEAReg(MachineInstr &MI, const MachineOperand &Src,
                       unsigned LEAOpcode, bool AllowSP, unsigned &NewSrc,
-                      bool &isKill, bool &isUndef, MachineOperand &ImplicitOp,
+                      bool &isKill, MachineOperand &ImplicitOp,
                       LiveVariables *LV) const;
 
   /// convertToThreeAddress - This method must be implemented by targets that
@@ -335,9 +327,9 @@ public:
                      SmallVectorImpl<MachineOperand> &Cond,
                      bool AllowModify) const override;
 
-  bool getMemOpBaseRegImmOfs(MachineInstr &LdSt, unsigned &BaseReg,
-                             int64_t &Offset,
-                             const TargetRegisterInfo *TRI) const override;
+  bool getMemOperandWithOffset(MachineInstr &LdSt, MachineOperand *&BaseOp,
+                               int64_t &Offset,
+                               const TargetRegisterInfo *TRI) const override;
   bool analyzeBranchPredicate(MachineBasicBlock &MBB,
                               TargetInstrInfo::MachineBranchPredicate &MBP,
                               bool AllowModify = false) const override;
@@ -357,8 +349,6 @@ public:
   void copyPhysReg(MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
                    const DebugLoc &DL, unsigned DestReg, unsigned SrcReg,
                    bool KillSrc) const override;
-  bool isCopyInstr(const MachineInstr &MI, const MachineOperand *&Src,
-                   const MachineOperand *&Dest) const override;
   void storeRegToStackSlot(MachineBasicBlock &MBB,
                            MachineBasicBlock::iterator MI, unsigned SrcReg,
                            bool isKill, int FrameIndex,
@@ -368,8 +358,7 @@ public:
   void storeRegToAddr(MachineFunction &MF, unsigned SrcReg, bool isKill,
                       SmallVectorImpl<MachineOperand> &Addr,
                       const TargetRegisterClass *RC,
-                      MachineInstr::mmo_iterator MMOBegin,
-                      MachineInstr::mmo_iterator MMOEnd,
+                      ArrayRef<MachineMemOperand *> MMOs,
                       SmallVectorImpl<MachineInstr *> &NewMIs) const;
 
   void loadRegFromStackSlot(MachineBasicBlock &MBB,
@@ -380,8 +369,7 @@ public:
   void loadRegFromAddr(MachineFunction &MF, unsigned DestReg,
                        SmallVectorImpl<MachineOperand> &Addr,
                        const TargetRegisterClass *RC,
-                       MachineInstr::mmo_iterator MMOBegin,
-                       MachineInstr::mmo_iterator MMOEnd,
+                       ArrayRef<MachineMemOperand *> MMOs,
                        SmallVectorImpl<MachineInstr *> &NewMIs) const;
 
   bool expandPostRAPseudo(MachineInstr &MI) const override;
@@ -553,10 +541,7 @@ public:
   ArrayRef<std::pair<unsigned, const char *>>
   getSerializableDirectMachineOperandTargetFlags() const override;
 
-  /// X86 supports the MachineOutliner.
-  bool useMachineOutliner() const override { return true; }
-
-  virtual outliner::TargetCostInfo getOutlininingCandidateInfo(
+  virtual outliner::OutlinedFunction getOutliningCandidateInfo(
       std::vector<outliner::Candidate> &RepeatedSequenceLocs) const override;
 
   bool isFunctionSafeToOutlineFrom(MachineFunction &MF,
@@ -566,12 +551,15 @@ public:
   getOutliningType(MachineBasicBlock::iterator &MIT, unsigned Flags) const override;
 
   void buildOutlinedFrame(MachineBasicBlock &MBB, MachineFunction &MF,
-                            const outliner::TargetCostInfo &TCI) const override;
+                          const outliner::OutlinedFunction &OF) const override;
 
   MachineBasicBlock::iterator
   insertOutlinedCall(Module &M, MachineBasicBlock &MBB,
                      MachineBasicBlock::iterator &It, MachineFunction &MF,
-                     const outliner::TargetCostInfo &TCI) const override;
+                     const outliner::Candidate &C) const override;
+
+#define GET_INSTRINFO_HELPER_DECLS
+#include "X86GenInstrInfo.inc"
 
 protected:
   /// Commutes the operands in the given instruction by changing the operands
@@ -589,7 +577,16 @@ protected:
                                        unsigned CommuteOpIdx1,
                                        unsigned CommuteOpIdx2) const override;
 
+  /// If the specific machine instruction is a instruction that moves/copies
+  /// value from one register to another register return true along with
+  /// @Source machine operand and @Destination machine operand.
+  bool isCopyInstrImpl(const MachineInstr &MI, const MachineOperand *&Source,
+                       const MachineOperand *&Destination) const override;
+
 private:
+  /// This is a helper for convertToThreeAddress for 8 and 16-bit instructions.
+  /// We use 32-bit LEA to form 3-address code by promoting to a 32-bit
+  /// super-register and then truncating back down to a 8/16-bit sub-register.
   MachineInstr *convertToThreeAddressWithLEA(unsigned MIOpc,
                                              MachineFunction::iterator &MFI,
                                              MachineInstr &MI,

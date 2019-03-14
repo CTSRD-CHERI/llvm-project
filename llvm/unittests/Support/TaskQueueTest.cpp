@@ -7,13 +7,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/Config/llvm-config.h"
+
+#if LLVM_ENABLE_THREADS
+
 #include "llvm/Support/TaskQueue.h"
 
 #include "gtest/gtest.h"
 
 using namespace llvm;
 
-#if LLVM_ENABLE_THREADS
 class TaskQueueTest : public testing::Test {
 protected:
   TaskQueueTest() {}

@@ -75,12 +75,18 @@ const char *AMDGCN::Linker::constructLLVMLinkCommand(
     std::string ISAVerBC =
         "oclc_isa_version_" + SubArchName.drop_front(3).str() + ".amdgcn.bc";
 
-    BCLibs.append({"hip.amdgcn.bc", "hc.amdgcn.bc", "opencl.amdgcn.bc",
-                   "ockl.amdgcn.bc", "irif.amdgcn.bc", "ocml.amdgcn.bc",
+    llvm::StringRef FlushDenormalControlBC;
+    if (Args.hasArg(options::OPT_fcuda_flush_denormals_to_zero))
+      FlushDenormalControlBC = "oclc_daz_opt_on.amdgcn.bc";
+    else
+      FlushDenormalControlBC = "oclc_daz_opt_off.amdgcn.bc";
+
+    BCLibs.append({"hip.amdgcn.bc", "opencl.amdgcn.bc",
+                   "ocml.amdgcn.bc", "ockl.amdgcn.bc",
                    "oclc_finite_only_off.amdgcn.bc",
-                   "oclc_daz_opt_off.amdgcn.bc",
+                   FlushDenormalControlBC,
                    "oclc_correctly_rounded_sqrt_on.amdgcn.bc",
-                   "oclc_unsafe_math_off.amdgcn.bc", "hc.amdgcn.bc", ISAVerBC});
+                   "oclc_unsafe_math_off.amdgcn.bc", ISAVerBC});
   }
   for (auto Lib : BCLibs)
     addBCLib(C, Args, CmdArgs, LibraryPaths, Lib);
@@ -148,7 +154,7 @@ const char *AMDGCN::Linker::constructLlcCommand(
     llvm::StringRef OutputFilePrefix, const char *InputFileName) const {
   // Construct llc command.
   ArgStringList LlcArgs{InputFileName, "-mtriple=amdgcn-amd-amdhsa",
-                        "-filetype=obj",
+                        "-filetype=obj", "-mattr=-code-object-v3",
                         Args.MakeArgString("-mcpu=" + SubArchName), "-o"};
   std::string LlcOutputFileName =
       C.getDriver().GetTemporaryPath(OutputFilePrefix, "o");
@@ -178,6 +184,40 @@ void AMDGCN::Linker::constructLldCommand(Compilation &C, const JobAction &JA,
   C.addCommand(llvm::make_unique<Command>(JA, *this, Lld, LldArgs, Inputs));
 }
 
+// Construct a clang-offload-bundler command to bundle code objects for
+// different GPU's into a HIP fat binary.
+void AMDGCN::constructHIPFatbinCommand(Compilation &C, const JobAction &JA,
+                  StringRef OutputFileName, const InputInfoList &Inputs,
+                  const llvm::opt::ArgList &Args, const Tool& T) {
+  // Construct clang-offload-bundler command to bundle object files for
+  // for different GPU archs.
+  ArgStringList BundlerArgs;
+  BundlerArgs.push_back(Args.MakeArgString("-type=o"));
+
+  // ToDo: Remove the dummy host binary entry which is required by
+  // clang-offload-bundler.
+  std::string BundlerTargetArg = "-targets=host-x86_64-unknown-linux";
+  std::string BundlerInputArg = "-inputs=/dev/null";
+
+  for (const auto &II : Inputs) {
+    const auto* A = II.getAction();
+    BundlerTargetArg = BundlerTargetArg + ",hip-amdgcn-amd-amdhsa-" +
+                       StringRef(A->getOffloadingArch()).str();
+    BundlerInputArg = BundlerInputArg + "," + II.getFilename();
+  }
+  BundlerArgs.push_back(Args.MakeArgString(BundlerTargetArg));
+  BundlerArgs.push_back(Args.MakeArgString(BundlerInputArg));
+
+  auto BundlerOutputArg =
+      Args.MakeArgString(std::string("-outputs=").append(OutputFileName));
+  BundlerArgs.push_back(BundlerOutputArg);
+
+  SmallString<128> BundlerPath(C.getDriver().Dir);
+  llvm::sys::path::append(BundlerPath, "clang-offload-bundler");
+  const char *Bundler = Args.MakeArgString(BundlerPath);
+  C.addCommand(llvm::make_unique<Command>(JA, T, Bundler, BundlerArgs, Inputs));
+}
+
 // For amdgcn the inputs of the linker job are device bitcode and output is
 // object file. It calls llvm-link, opt, llc, then lld steps.
 void AMDGCN::Linker::ConstructJob(Compilation &C, const JobAction &JA,
@@ -185,6 +225,9 @@ void AMDGCN::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                    const InputInfoList &Inputs,
                                    const ArgList &Args,
                                    const char *LinkingOutput) const {
+
+  if (JA.getType() == types::TY_HIP_FATBIN)
+    return constructHIPFatbinCommand(C, JA, Output.getFilename(), Inputs, Args, *this);
 
   assert(getToolChain().getTriple().getArch() == llvm::Triple::amdgcn &&
          "Unsupported target");
@@ -226,6 +269,8 @@ void HIPToolChain::addClangTargetOptions(
   assert(DeviceOffloadingKind == Action::OFK_HIP &&
          "Only HIP offloading kinds are supported for GPUs.");
 
+  CC1Args.push_back("-target-cpu");
+  CC1Args.push_back(DriverArgs.MakeArgStringRef(GpuArch));
   CC1Args.push_back("-fcuda-is-device");
 
   if (DriverArgs.hasFlag(options::OPT_fcuda_flush_denormals_to_zero,
@@ -236,9 +281,15 @@ void HIPToolChain::addClangTargetOptions(
                          options::OPT_fno_cuda_approx_transcendentals, false))
     CC1Args.push_back("-fcuda-approx-transcendentals");
 
-  if (DriverArgs.hasFlag(options::OPT_fcuda_rdc, options::OPT_fno_cuda_rdc,
+  if (DriverArgs.hasFlag(options::OPT_fgpu_rdc, options::OPT_fno_gpu_rdc,
                          false))
-    CC1Args.push_back("-fcuda-rdc");
+    CC1Args.push_back("-fgpu-rdc");
+
+  // Default to "hidden" visibility, as object level linking will not be
+  // supported for the foreseeable future.
+  if (!DriverArgs.hasArg(options::OPT_fvisibility_EQ,
+                         options::OPT_fvisibility_ms_compat))
+    CC1Args.append({"-fvisibility", "hidden"});
 }
 
 llvm::opt::DerivedArgList *
@@ -254,7 +305,7 @@ HIPToolChain::TranslateArgs(const llvm::opt::DerivedArgList &Args,
 
   for (Arg *A : Args) {
     if (A->getOption().matches(options::OPT_Xarch__)) {
-      // Skip this argument unless the architecture matches BoundArch
+      // Skip this argument unless the architecture matches BoundArch.
       if (BoundArch.empty() || A->getValue(0) != BoundArch)
         continue;
 

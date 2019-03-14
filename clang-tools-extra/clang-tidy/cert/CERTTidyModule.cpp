@@ -16,11 +16,13 @@
 #include "../misc/StaticAssertCheck.h"
 #include "../misc/ThrowByValueCatchByReferenceCheck.h"
 #include "../performance/MoveConstructorInitCheck.h"
+#include "../readability/UppercaseLiteralSuffixCheck.h"
 #include "CommandProcessorCheck.h"
 #include "DontModifyStdNamespaceCheck.h"
 #include "FloatLoopCounter.h"
 #include "LimitedRandomnessCheck.h"
 #include "PostfixOperatorCheck.h"
+#include "ProperlySeededRandomGeneratorCheck.h"
 #include "SetLongJmpCheck.h"
 #include "StaticObjectExceptionCheck.h"
 #include "StrToNumCheck.h"
@@ -58,10 +60,14 @@ public:
         "cert-err61-cpp");
     // MSC
     CheckFactories.registerCheck<LimitedRandomnessCheck>("cert-msc50-cpp");
+    CheckFactories.registerCheck<ProperlySeededRandomGeneratorCheck>(
+        "cert-msc51-cpp");
 
     // C checkers
     // DCL
     CheckFactories.registerCheck<misc::StaticAssertCheck>("cert-dcl03-c");
+    CheckFactories.registerCheck<readability::UppercaseLiteralSuffixCheck>(
+        "cert-dcl16-c");
     // ENV
     CheckFactories.registerCheck<CommandProcessorCheck>("cert-env33-c");
     // FLP
@@ -72,6 +78,15 @@ public:
     CheckFactories.registerCheck<StrToNumCheck>("cert-err34-c");
     // MSC
     CheckFactories.registerCheck<LimitedRandomnessCheck>("cert-msc30-c");
+    CheckFactories.registerCheck<ProperlySeededRandomGeneratorCheck>(
+        "cert-msc32-c");
+  }
+
+  ClangTidyOptions getModuleOptions() override {
+    ClangTidyOptions Options;
+    ClangTidyOptions::OptionMap &Opts = Options.CheckOptions;
+    Opts["cert-dcl16-c.NewSuffixes"] = "L;LL;LU;LLU";
+    return Options;
   }
 };
 

@@ -1,4 +1,5 @@
 #include "Cheri.h"
+#include "../Bits.h"
 #include "../OutputSections.h"
 #include "../SymbolTable.h"
 #include "../SyntheticSections.h"
@@ -133,7 +134,7 @@ std::string CheriCapRelocLocation::toString() const {
   SymbolAndOffset Resolved =
       SymbolAndOffset::fromSectionWithOffset(Section, Offset);
   if (Resolved.Sym)
-    return Resolved.verboseToString<ELFT>();
+    return Resolved.verboseToString();
   return Section->getObjMsg(Offset);
 }
 
@@ -189,7 +190,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     //           << Twine((int)LocationSym.Type) << " against "
     //           << toString(TargetSym) << "\n";
     auto *RawInput = reinterpret_cast<const InMemoryCapRelocEntry<E> *>(
-        S->Data.begin() + CapRelocsOffset);
+        S->data().begin() + CapRelocsOffset);
     int64_t TargetCapabilityOffset = (int64_t)RawInput->offset;
     assert(RawInput->size == 0 && "Clang should not have set size in __cap_relocs");
     if (!isa<Defined>(LocationSym)) {
@@ -204,8 +205,8 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     SymbolAndOffset RealTarget = RelocTarget.findRealSymbol();
     if (Config->VerboseCapRelocs) {
       message("Adding capability relocation at " +
-              RealLocation.verboseToString<ELFT>() + "\nagainst " +
-              RealTarget.verboseToString<ELFT>());
+              RealLocation.verboseToString() + "\nagainst " +
+              RealTarget.verboseToString());
     }
 
     bool TargetNeedsDynReloc = false;
@@ -217,7 +218,7 @@ void CheriCapRelocsSection<ELFT>::processSection(InputSectionBase *S) {
     case Symbol::DefinedKind:
       break;
     case Symbol::SharedKind:
-      if (!Config->Shared && !InX::Interp) {
+      if (!Config->Shared && !In.Interp) {
         error("cannot create a capability relocation against a shared symbol"
               " when linking statically");
         continue;
@@ -255,7 +256,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
 
   std::string SourceMsg =
-      SourceSymbol ? verboseToString<ELFT>(SourceSymbol) : Loc.toString<ELFT>();
+      SourceSymbol ? verboseToString(SourceSymbol) : Loc.toString<ELFT>();
   if (Target.Sym->isUndefined() && !Target.Sym->isUndefWeak()) {
     std::string Msg =
         "cap_reloc against undefined symbol: " + toString(*Target.Sym) +
@@ -270,7 +271,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   if (errorHandler().Verbose && CapabilityOffset < 0)
     message("global capability offset " + Twine(CapabilityOffset) +
             " is less than 0:\n>>> Location: " + Loc.toString<ELFT>() +
-            "\n>>> Target: " + Target.verboseToString<ELFT>());
+            "\n>>> Target: " + Target.verboseToString());
 
   bool CanWriteLoc = (Loc.Section->Flags & SHF_WRITE) || !Config->ZText;
   if (!CanWriteLoc) {
@@ -291,7 +292,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
                                   Filename).str();
     auto LocationSym = Symtab->find(SymbolHackName);
     if (!LocationSym) {
-        Symtab->addRegular<ELFT>(Saver.save(SymbolHackName), STV_DEFAULT,
+        Symtab->addDefined<ELFT>(Saver.save(SymbolHackName), STV_DEFAULT,
                                  STT_OBJECT, Loc.Offset, Config->CapabilitySize,
                                  STB_GLOBAL, Loc.Section, Loc.Section->File);
         LocationSym = Symtab->find(SymbolHackName);
@@ -311,15 +312,14 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     // full Elf_Rel/Elf_Rela
     // The addend is zero here since it will be written in writeTo()
     assert(!Config->IsRela);
-    InX::RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
+    In.RelaDyn->addReloc({elf::Target->RelativeRel, this, CurrentEntryOffset,
                             true, nullptr, 0});
     ContainsDynamicRelocations = true;
   }
   if (TargetNeedsDynReloc) {
 #ifdef DEBUG_CAP_RELOCS
     message("Adding dyn reloc at " + toString(this) + "+0x" +
-            utohexstr(OffsetInOutSec) + " against " +
-            Target.verboseToString<ELFT>());
+            utohexstr(OffsetInOutSec) + " against " + Target.verboseToString());
     message("Symbol preemptible:" + Twine(Target.Sym->IsPreemptible));
 #endif
 
@@ -340,7 +340,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
     int64_t Addend = Target.Offset;
     // Capability target is the second field -> offset + 8
     assert((CurrentEntryOffset + 8) < getSize());
-    InX::RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + 8,
+    In.RelaDyn->addReloc({RelocKind, this, CurrentEntryOffset + 8,
                             RelativeToLoadAddress, Target.Sym, Addend});
     ContainsDynamicRelocations = true;
     if (!RelativeToLoadAddress) {
@@ -349,7 +349,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
       RelType Size64Rel = R_MIPS_CHERI_SIZE | (R_MIPS_64 << 8);
       // Capability size is the fourth field -> offset + 24
       assert((CurrentEntryOffset + 24) < getSize());
-      InX::RelaDyn->addReloc(Size64Rel, this, CurrentEntryOffset + 24,
+      In.RelaDyn->addReloc(Size64Rel, this, CurrentEntryOffset + 24,
                              Target.Sym);
     }
   }
@@ -360,9 +360,8 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
                               const CheriCapReloc &Reloc, bool Strict) {
   uint64_t TargetSize = Reloc.Target.Sym->getSize();
   if (TargetSize > INT_MAX) {
-    error("Insanely large symbol size for " +
-          Reloc.Target.verboseToString<ELFT>() + "for cap_reloc at" +
-          Location.toString<ELFT>());
+    error("Insanely large symbol size for " + Reloc.Target.verboseToString() +
+          "for cap_reloc at" + Location.toString<ELFT>());
     return 0;
   }
   auto TargetSym = Reloc.Target.Sym;
@@ -407,7 +406,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
 
     if (WarnAboutUnknownSize || errorHandler().Verbose) {
       std::string Msg = "could not determine size of cap reloc against " +
-                        Reloc.Target.verboseToString<ELFT>() +
+                        Reloc.Target.verboseToString() +
                         "\n>>> referenced by " + Location.toString<ELFT>();
       if (Strict)
         warn(Msg);
@@ -430,8 +429,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
                  << " -> target size 0x" << utohexstr(TargetSize) << "\n";
 #endif
     } else {
-      warn("Could not find size for symbol " +
-           Reloc.Target.verboseToString<ELFT>() +
+      warn("Could not find size for symbol " + Reloc.Target.verboseToString() +
            " and could not determine section size. Using 0.");
       // TargetSize = std::numeric_limits<uint64_t>::max();
       return 0;
@@ -497,7 +495,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
       if (Reloc.Target.Offset != 0)
         error("Dyn Reloc Target offset was nonzero: " +
               Twine(Reloc.Target.Offset) + " - " +
-              Reloc.Target.verboseToString<ELFT>());
+              Reloc.Target.verboseToString());
       TargetVA = Reloc.Target.Offset;
     } else {
       // For non-preemptible symbols we can write the target size:
@@ -579,67 +577,189 @@ void CheriCapTableSection::writeTo(uint8_t* Buf) {
   (void)Buf;
 }
 
-void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm) {
+static Defined *findMatchingFunction(InputSectionBase *IS, uint64_t SymOffset) {
+  switch (Config->EKind) {
+  default:
+    llvm_unreachable("Invalid kind");
+  case ELF32LEKind:
+    return IS->getEnclosingFunction<ELF32LE>(SymOffset);
+  case ELF32BEKind:
+    return IS->getEnclosingFunction<ELF32BE>(SymOffset);
+  case ELF64LEKind:
+    return IS->getEnclosingFunction<ELF64LE>(SymOffset);
+  case ELF64BEKind:
+    return IS->getEnclosingFunction<ELF64BE>(SymOffset);
+  }
+}
+
+CheriCapTableSection::CaptableMap &
+CheriCapTableSection::getCaptableMapForFileAndOffset(InputSectionBase *IS,
+                                                     uint64_t Offset) {
+  if (LLVM_LIKELY(Config->CapTableScope == CapTableScopePolicy::All))
+    return GlobalEntries;
+  if (Config->CapTableScope == CapTableScopePolicy::File) {
+    // operator[] will insert if missing
+    return PerFileEntries[IS->File];
+  }
+  if (Config->CapTableScope == CapTableScopePolicy::Function) {
+    Symbol *Func = findMatchingFunction(IS, Offset);
+    if (!Func) {
+      warn(
+          "Could not find corresponding function with per-function captable: " +
+          IS->getObjMsg(Offset));
+    }
+    // operator[] will insert if missing
+    return PerFunctionEntries[Func];
+  }
+  llvm_unreachable("INVALID CONFIG OPTION");
+  return GlobalEntries;
+}
+
+void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
+                                    InputSectionBase *IS, uint64_t Offset) {
   // FIXME: can this be called from multiple threads?
   CapTableIndex Idx;
   Idx.NeedsSmallImm = SmallImm;
   Idx.IsFixed = false;
   Idx.priority = -1;
-  auto it = Entries.insert(std::make_pair(&Sym, Idx));
-  // Aid deduplication by always moving to the end
+  Idx.UsedAsFunctionPointer = true;
+  // If the symbol is only ever referenced by the CAP*CALL* relocations we can
+  // emit a R_MIPS_CHERI_CAPABILITY_CALL instead of a R_MIPS_CHERI_CAPABILITY
+  // relocation. This indicates to the runtime linker that the capability is not
+  // used as a function pointer and therefore does not need a unique address
+  // (plt stub) across all DSOs.
+  switch (Type) {
+  case R_MIPS_CHERI_CAPCALL20:
+  case R_MIPS_CHERI_CAPCALL_CLC11:
+  case R_MIPS_CHERI_CAPCALL_HI16:
+  case R_MIPS_CHERI_CAPCALL_LO16:
+    Idx.UsedAsFunctionPointer = false;
+    break;
+  default:
+    break;
+  }
+  CaptableMap &Entries = getCaptableMapForFileAndOffset(IS, Offset);
+  if (Config->ZCapTableDebug) {
+    // Add a local helper symbol to improve disassembly:
+    StringRef HelperSymName = Saver.save("$captable_load_" + (Sym.getName().empty() ? "$anonymous_symbol" : Sym.getName()));
+    addSyntheticLocal(HelperSymName, STT_NOTYPE, Offset, 0, *IS);
+  }
+
+  auto it = Entries.Map.insert(std::make_pair(&Sym, Idx));
   if (!it.second) {
     // If it is references by a small immediate relocation we need to update
     // the small immediate flag
-    if (SmallImm) {
+    if (SmallImm)
       it.first->second.NeedsSmallImm = true;
-    }
+    if (Idx.UsedAsFunctionPointer)
+      it.first->second.UsedAsFunctionPointer = true;
   } else {
-      unfixed_entries++;
+    Entries.unfixed_entries++;
       if (SmallImm) {
-          small_entries++;
+        Entries.small_entries++;
       }
   }
-#ifdef DEBUG_CAP_TABLE
-  llvm::errs() << "Added symbol " << toString(Sym)
-               << " to .cap_table. Total count " << Entries.size() << "\n";
+#if defined(DEBUG_CAP_TABLE)
+  std::string DbgContext;
+  if (Config->CapTableScope == CapTableScopePolicy::File) {
+    DbgContext = " for file '" + toString(IS->File) + "'";
+  } else if (Config->CapTableScope == CapTableScopePolicy::Function) {
+    DbgContext =  " for function '" + toString(*findMatchingFunction(IS, Offset)) + "'";
+  }
+  llvm::errs() << "Added symbol " << toString(Sym) << " to .captable"
+               << DbgContext << ". Total count " << Entries.size() << "\n";
 #endif
 }
 
-void CheriCapTableSection::addFixedEntry(Symbol &Sym, uint32_t index) {
-  // FIXME: can this be called from multiple threads?
+void CheriCapTableSection::addFixedEntry(Symbol &Sym, uint64_t index) {
+  assert((Config->CapTableScope == CapTableScopePolicy::All));
+  CaptableMap &Entries = GlobalEntries;
   CapTableIndex Idx;
   Idx.IsFixed = true;
   Idx.Index = index;
   Idx.priority = -1;
-  bool added = Entries.insert(std::make_pair(&Sym, Idx)).second;
+  bool added = Entries.Map.insert(std::make_pair(&Sym, Idx)).second;
   assert(added);
-  fixed_entries++;
-  small_entries++;
-#ifdef DEBUG_CAP_TABLE
-  llvm::errs() << "Added fixed symbol at index " << index
-             << " to .cap_table. Total count " << Entries.size() << "\n";
-#endif
+  Entries.fixed_entries++;
+  Entries.small_entries++;
 }
 
+void CheriCapTableSection::addDynTlsEntry(Symbol &Sym) {
+  DynTlsEntries.Map.insert(std::make_pair(&Sym, CapTableIndex()));
+}
 
-uint32_t CheriCapTableSection::getIndex(const Symbol &Sym) const {
+void CheriCapTableSection::addTlsIndex() {
+  DynTlsEntries.Map.insert(std::make_pair(nullptr, CapTableIndex()));
+}
+
+void CheriCapTableSection::addTlsEntry(Symbol &Sym) {
+  TlsEntries.Map.insert(std::make_pair(&Sym, CapTableIndex()));
+}
+
+uint32_t CheriCapTableSection::getIndex(const Symbol &Sym, InputSectionBase *IS,
+                                        uint64_t Offset) const {
   assert(ValuesAssigned && "getIndex called before index assignment");
-  auto it = Entries.find(const_cast<Symbol *>(&Sym));
-  assert(it != Entries.end());
-  return it->second.Index.getValue();
+  const CaptableMap &Entries = getCaptableMapForFileAndOffset(IS, Offset);
+  auto it = Entries.Map.find(const_cast<Symbol *>(&Sym));
+  assert(Entries.FirstIndex != std::numeric_limits<uint64_t>::max() &&
+         "First index not set yet?");
+  assert(it != Entries.Map.end());
+  // The index that is written as part of the relocation is relative to the
+  // start of the current captable subset (or the global table in the default
+  // case). When using per-function tables the first index in every function
+  // will always be zero.
+#if defined(DEBUG_CAP_TABLE)
+  message("captable index for " + toString(Sym) + " is " +
+          Twine(it->second.Index.getValue()) + " - " +
+          Twine(Entries.FirstIndex) + ": " +
+          Twine(it->second.Index.getValue() - Entries.FirstIndex));
+#endif
+  return it->second.Index.getValue() - Entries.FirstIndex;
 }
 
+uint32_t CheriCapTableSection::getDynTlsOffset(const Symbol &Sym) const {
+  assert(ValuesAssigned && "getDynTlsOffset called before index assignment");
+  auto it = DynTlsEntries.Map.find(const_cast<Symbol *>(&Sym));
+  assert(it != DynTlsEntries.Map.end());
+  return it->second.Index.getValue() * Config->Wordsize;
+}
+
+uint32_t CheriCapTableSection::getTlsIndexOffset() const {
+  assert(ValuesAssigned && "getTlsIndexOffset called before index assignment");
+  auto it = DynTlsEntries.Map.find(nullptr);
+  assert(it != DynTlsEntries.Map.end());
+  return it->second.Index.getValue() * Config->Wordsize;
+}
+
+uint32_t CheriCapTableSection::getTlsOffset(const Symbol &Sym) const {
+  assert(ValuesAssigned && "getTlsOffset called before index assignment");
+  auto it = TlsEntries.Map.find(const_cast<Symbol *>(&Sym));
+  assert(it != TlsEntries.Map.end());
+  return it->second.Index.getValue() * Config->Wordsize;
+}
 struct sort_pair {
   uint32_t vector_index;
   int32_t priority; // priority of being placed in the cap table (larger more priority)
 };
 
 template <class ELFT>
-void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
+uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
+                                             CaptableMap &Entries,
+                                             const Twine &SymContext) {
   // FIXME: we should not be hardcoding architecture specific relocation numbers
   // here
-  assert(Config->EMachine == EM_MIPS);
-  RelType ElfCapabilityReloc = R_MIPS_CHERI_CAPABILITY;
+
+  assert(Entries.FirstIndex == std::numeric_limits<uint64_t>::max() &&
+         "Should not be initialized yet!");
+  Entries.FirstIndex = StartIndex;
+
+  uint64_t fixed_entries = Entries.fixed_entries;
+  uint64_t unfixed_entries = Entries.unfixed_entries;
+  uint64_t small_entries = Entries.small_entries;
+
+  // TODO allow per function cap tables as well
+  assert(StartIndex == 0);
+
   Defined *CheriCapabilityTable = this->CheriCapabilityTable;
 
   if (CheriCapabilityTable && !Config->Relocatable)
@@ -666,7 +786,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
         "non-performance critical source files with -mxcaptable");
   }
   if (errorHandler().Verbose) {
-    message("Total " + Twine(Entries.size()) + " .cap_table entries: " +
+    message("Total " + Twine(Entries.size()) + " .captable entries: " +
         Twine(small_entries) + " use a small immediate and " +
         Twine(Entries.size() - small_entries) + " use -mxcaptable. ");
   }
@@ -726,8 +846,8 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
                       ~(S->isFile() || S->isSection());
         uint32_t pref = likely ? (pref_glob++) : (uint32_t)(~0);
 
-        auto SEnt = Entries.find(S);
-        if(SEnt != Entries.end()) {
+        auto SEnt = Entries.Map.find(S);
+        if(SEnt != Entries.Map.end()) {
           if(MainS) {
               assert(S == MainS); // We should only see symbols from the main symtab need entries.
           }
@@ -740,7 +860,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
     }
   }
 
-  for (auto &it : Entries) {
+  for (auto &it : Entries.Map) {
     if(it.second.IsFixed) {
       assert(it.second.Index.hasValue());
       assert(it.second.Index.getValue() < total_entries);
@@ -774,8 +894,8 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
   // Now assign the indexs.
   // First give prefered positions.
   for(uint32_t i = 0; i != map_index; i++) {
-    auto& entry = (Entries.begin()+SortMap[i].vector_index)->second;
-    Symbol* Sym = (Entries.begin()+SortMap[i].vector_index)->first;
+    auto& entry = (Entries.Map.begin()+SortMap[i].vector_index)->second;
+    Symbol* Sym = (Entries.Map.begin()+SortMap[i].vector_index)->first;
     assert(entry.Index.hasValue());
     uint32_t Position = entry.Index.getValue();
     if(Position == (uint32_t)-1) continue;
@@ -791,7 +911,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
   }
 
   uint32_t counted = 0;
-  for(auto &it : Entries) {
+  for(auto &it : Entries.Map) {
     counted++;
       auto& entry = it.second;
       if(!entry.Index.hasValue() || (entry.Index.getValue() == (uint32_t)(~0))) {
@@ -816,7 +936,7 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       assert(taken_map[i]);
   }
   */
-  for (auto &it : Entries) {
+  for (auto &it : Entries.Map) {
     CapTableIndex& CTI = it.second;
 
     assert(CTI.Index.hasValue());
@@ -827,24 +947,26 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
 
     StringRef Name = TargetSym->getName();
     // Avoid duplicate symbol name errors for unnamed string constants:
-    std::string RefName;
+    StringRef RefName;
     // For now always append .INDEX to local symbols @CAPTABLE names since they
     // might not be unique. If there is a global with the same name we always
     // want the global to have the plain @CAPTABLE name
     if (Name.empty() /* || Name.startswith(".L") */ || TargetSym->isLocal())
-      RefName = (Name + "@CAPTABLE." + Twine(Index)).str();
+      RefName = Saver.save(Name + "@CAPTABLE" + SymContext + "." + Twine(Index));
     else
-      RefName = (Name + "@CAPTABLE").str();
-
+      RefName = Saver.save(Name + "@CAPTABLE" + SymContext);
+    // XXXAR: This should no longer be necessary now that I am using addSyntheticLocal?
+#if 0
     if (Symtab->find(RefName)) {
-      std::string NewRefName = (Name + "@CAPTABLE." + Twine(Index)).str();
+      std::string NewRefName =
+          (Name + "@CAPTABLE" + SymContext + "." + Twine(Index)).str();
       // XXXAR: for some reason we sometimes create more than one cap table entry
       // for a given global name, for now just rename the symbol
       // assert(TargetSym->isLocal());
       if (!TargetSym->isLocal()) {
         error("Found duplicate global captable ref name " + RefName +
               " but referenced symbol was not local\n>>> " +
-              verboseToString<ELFT>(TargetSym));
+              verboseToString(TargetSym));
       } else {
         // TODO: make this a warning
         message("Found duplicate captable name " + RefName +
@@ -853,24 +975,111 @@ void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
       RefName = std::move(NewRefName);
       assert(!Symtab->find(RefName) && "RefName should be unique");
     }
+#endif
     uint64_t Off = Index * Config->CapabilitySize;
     if (ShouldAddAtCaptableSymbols) {
-      Symtab->addRegular(Saver.save(RefName), STV_HIDDEN, TargetSym->Type, Off,
-                         Config->CapabilitySize, STB_LOCAL, this, nullptr);
+      addSyntheticLocal(RefName, STT_OBJECT, Off, Config->CapabilitySize, *this);
     }
+    // If the symbol is used as a function pointer the runtime linker has to
+    // ensure that all pointers to that function compare equal. This is done
+    // by ensuring that they all point to the same PLT stub.
+    // If it is not used as a function pointer we can use
+    // R_MIPS_CHERI_CAPABILITY_CALL instead which allows the runtime linker to
+    // create non-unique plt stubs.
+    RelType ElfCapabilityReloc = it.second.UsedAsFunctionPointer
+                                     ? R_MIPS_CHERI_CAPABILITY
+                                     : R_MIPS_CHERI_CAPABILITY_CALL;
+    // All R_MIPS_CHERI_CAPABILITY_CALL relocations should end up in
+    // the pltrel section rather than the normal relocation section to make
+    // processing of PLT relocations in RTLD more efficient.
+    RelocationBaseSection *DynRelSec =
+        it.second.UsedAsFunctionPointer ? In.RelaDyn : In.RelaPlt;
     addCapabilityRelocation<ELFT>(
         *TargetSym, ElfCapabilityReloc, this, Off,
         R_CHERI_CAPABILITY, 0,
-        [&]() { return "\n>>> referenced by " + RefName; });
+        [&]() { return "\n>>> referenced by " + RefName; }, DynRelSec);
+  }
+
+  return assigned;
+}
+
+template <class ELFT>
+void CheriCapTableSection::assignValuesAndAddCapTableSymbols() {
+  // FIXME: we should not be hardcoding architecture specific relocation numbers
+  // here
+  assert(Config->EMachine == EM_MIPS);
+
+  // First assign the global indices (which will usually be the only ones)
+  uint64_t AssignedEntries = assignIndices<ELFT>(0, GlobalEntries, "");
+  if (LLVM_UNLIKELY(Config->CapTableScope != CapTableScopePolicy::All)) {
+    assert(AssignedEntries == 0 && "Should not have any global entries in"
+                                   " per-file/per-function captable mode");
+    for (auto &it : PerFileEntries) {
+      std::string FullContext = toString(it.first);
+      auto LastSlash = StringRef(FullContext).find_last_of("/\\") + 1;
+      StringRef Context = StringRef(FullContext).substr(LastSlash);
+      AssignedEntries += assignIndices<ELFT>(AssignedEntries, it.second,
+                                             "@" + Context);
+    }
+    for (auto &it : PerFunctionEntries)
+      AssignedEntries += assignIndices<ELFT>(AssignedEntries, it.second,
+                                             "@" + toString(*it.first));
+  }
+  assert(AssignedEntries == nonTlsEntryCount());
+
+  uint32_t AssignedTlsIndexes = 0;
+  uint32_t TlsBaseIndex =
+      AssignedEntries * (Config->CapabilitySize / Config->Wordsize);
+
+  // TODO: support TLS for per-function captable
+  if (Config->CapTableScope != CapTableScopePolicy::All &&
+      (!DynTlsEntries.empty() || !TlsEntries.empty())) {
+    error("TLS is not supported yet with per-file or per-function captable");
+    return;
+  }
+
+  for (auto &it : DynTlsEntries.Map) {
+    CapTableIndex &CTI = it.second;
+    assert(!CTI.NeedsSmallImm);
+    CTI.Index = TlsBaseIndex + AssignedTlsIndexes;
+    AssignedTlsIndexes += 2;
+    Symbol *S = it.first;
+    uint64_t Offset = CTI.Index.getValue() * Config->Wordsize;
+    if (S == nullptr) {
+      if (!Config->Pic)
+        continue;
+      In.RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+    } else {
+      // When building a shared library we still need a dynamic relocation
+      // for the module index. Therefore only checking for
+      // S->IsPreemptible is not sufficient (this happens e.g. for
+      // thread-locals that have been marked as local through a linker script)
+      if (!S->IsPreemptible && !Config->Pic)
+        continue;
+      In.RelaDyn->addReloc(Target->TlsModuleIndexRel, this, Offset, S);
+      // However, we can skip writing the TLS offset reloc for non-preemptible
+      // symbols since it is known even in shared libraries
+      if (!S->IsPreemptible)
+        continue;
+      Offset += Config->Wordsize;
+      In.RelaDyn->addReloc(Target->TlsOffsetRel, this, Offset, S);
+    }
+  }
+
+  for (auto &it : TlsEntries.Map) {
+    CapTableIndex &CTI = it.second;
+    assert(!CTI.NeedsSmallImm);
+    CTI.Index = TlsBaseIndex + AssignedTlsIndexes++;
+    Symbol *S = it.first;
+    uint64_t Offset = CTI.Index.getValue() * Config->Wordsize;
+    if (S->IsPreemptible)
+      In.RelaDyn->addReloc(Target->TlsGotRel, this, Offset, S);
   }
 
   ValuesAssigned = true;
 }
 
 SymbolTable* CheriCapTableSection::auxSymTab = nullptr;
-
-CheriCapTableSection *InX::CheriCapTable;
-CheriCapTableSection *InX::CheriCapTableLocal;
 
 template class elf::CheriCapRelocsSection<ELF32LE>;
 template class elf::CheriCapRelocsSection<ELF32BE>;
@@ -885,6 +1094,95 @@ template void
 CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF64LE>();
 template void
 CheriCapTableSection::assignValuesAndAddCapTableSymbols<ELF64BE>();
+
+CheriCapTableMappingSection::CheriCapTableMappingSection()
+    : SyntheticSection(SHF_ALLOC, SHT_PROGBITS, 8, ".captable_mapping") {
+  assert(Config->CapabilitySize > 0);
+  this->Entsize = sizeof(CaptableMappingEntry);
+  static_assert(sizeof(CaptableMappingEntry) == 24, "");
+}
+
+size_t CheriCapTableMappingSection::getSize() const {
+  assert(Config->CapTableScope != CapTableScopePolicy::All);
+  if (empty())
+    return 0;
+  size_t Count = 0;
+  if (!In.SymTab) {
+    error("Cannot use " + this->Name + " without .symtab section!");
+    return 0;
+  }
+  for (const SymbolTableEntry &STE : In.SymTab->getSymbols()) {
+    if (!STE.Sym->isDefined() || !STE.Sym->isFunc())
+      continue;
+    Count++;
+  }
+  return Count * sizeof(CaptableMappingEntry);
+}
+
+void CheriCapTableMappingSection::writeTo(uint8_t *Buf) {
+  assert(Config->CapTableScope != CapTableScopePolicy::All);
+  if (!In.CheriCapTable)
+    return;
+  if (!In.SymTab) {
+    error("Cannot write " + this->Name + " without .symtab section!");
+    return;
+  }
+
+  // Write the mapping from function vaddr -> captable subset for RTLD
+  std::vector<CaptableMappingEntry> Entries;
+  // Note: Symtab->getSymbols() only returns the symbols in .dynsym. We need
+  // to use In.Symtab instead since we also want to add all local functions!
+  for (const SymbolTableEntry &STE : In.SymTab->getSymbols()) {
+    Symbol* Sym = STE.Sym;
+    if (!Sym->isDefined() || !Sym->isFunc())
+      continue;
+    const CheriCapTableSection::CaptableMap *CapTableMap = nullptr;
+    if (Config->CapTableScope == CapTableScopePolicy::Function) {
+      auto it = In.CheriCapTable->PerFunctionEntries.find(Sym);
+      if (it != In.CheriCapTable->PerFunctionEntries.end())
+        CapTableMap = &it->second;
+    } else if (Config->CapTableScope == CapTableScopePolicy::File) {
+      auto it = In.CheriCapTable->PerFileEntries.find(Sym->File);
+      if (it != In.CheriCapTable->PerFileEntries.end())
+        CapTableMap = &it->second;
+    } else {
+      llvm_unreachable("Invalid mode!");
+    }
+    CaptableMappingEntry Entry;
+    Entry.FuncStart = Sym->getVA(0);
+    Entry.FuncEnd = Entry.FuncStart + Sym->getSize();
+    if (CapTableMap) {
+      assert(CapTableMap->FirstIndex != std::numeric_limits<uint64_t>::max());
+      Entry.CapTableOffset = CapTableMap->FirstIndex * Config->CapabilitySize;
+      Entry.SubTableSize = CapTableMap->size() * Config->CapabilitySize;
+    } else {
+      // TODO: don't write an entry for functions that don't use the captable
+      Entry.CapTableOffset = 0;
+      Entry.SubTableSize = 0;
+    }
+    Entries.push_back(Entry);
+  }
+  // Sort all the entries so that RTLD can do a binary search to find the
+  // correct entry instead of having to scan all of them.
+  // Do this before swapping to target endianess to simplify the comparisons.
+  llvm::sort(Entries, [](const CaptableMappingEntry &E1,
+                         const CaptableMappingEntry &E2) {
+    if (E1.FuncStart == E2.FuncStart)
+      return E1.FuncEnd < E2.FuncEnd;
+    return E1.FuncStart < E2.FuncStart;
+  });
+  // Byte-swap all the values so that we can memcpy the sorted buffer
+  for (CaptableMappingEntry &E : Entries) {
+    E.FuncStart = support::endian::byte_swap(E.FuncStart, Config->Endianness);
+    E.FuncEnd = support::endian::byte_swap(E.FuncEnd, Config->Endianness);
+    E.CapTableOffset =
+        support::endian::byte_swap(E.CapTableOffset, Config->Endianness);
+    E.SubTableSize =
+        support::endian::byte_swap(E.SubTableSize, Config->Endianness);
+  }
+  assert(Entries.size() * sizeof(CaptableMappingEntry) == getSize());
+  memcpy(Buf, Entries.data(), Entries.size() * sizeof(CaptableMappingEntry));
+}
 
 } // namespace elf
 } // namespace lld

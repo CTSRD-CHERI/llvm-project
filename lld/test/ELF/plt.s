@@ -1,3 +1,4 @@
+// REQUIRES: x86
 // RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %s -o %t.o
 // RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %p/Inputs/shared.s -o %t2.o
 // RUN: ld.lld -shared %t2.o -o %t2.so
@@ -7,8 +8,6 @@
 // RUN: llvm-objdump -d %t | FileCheck --check-prefix=DISASM %s
 // RUN: llvm-readobj -s -r %t3 | FileCheck --check-prefix=CHECK2 %s
 // RUN: llvm-objdump -d %t3 | FileCheck --check-prefix=DISASM2 %s
-
-// REQUIRES: x86
 
 // CHECK:      Name: .plt
 // CHECK-NEXT: Type: SHT_PROGBITS
@@ -74,12 +73,18 @@
 // DISASM-NEXT:   1020:  ff 35 e2 0f 00 00  pushq 4066(%rip)
 // DISASM-NEXT:   1026:  ff 25 e4 0f 00 00  jmpq *4068(%rip)
 // DISASM-NEXT:   102c:  0f 1f 40 00        nopl (%rax)
+// DISASM-EMPTY:
+// DISASM-NEXT:   bar@plt:
 // DISASM-NEXT:   1030:  ff 25 e2 0f 00 00  jmpq *4066(%rip)
 // DISASM-NEXT:   1036:  68 00 00 00 00     pushq $0
 // DISASM-NEXT:   103b:  e9 e0 ff ff ff     jmp -32 <.plt>
+// DISASM-EMPTY:
+// DISASM-NEXT:   zed@plt:
 // DISASM-NEXT:   1040:  ff 25 da 0f 00 00  jmpq *4058(%rip)
 // DISASM-NEXT:   1046:  68 01 00 00 00     pushq $1
 // DISASM-NEXT:   104b:  e9 d0 ff ff ff     jmp -48 <.plt>
+// DISASM-EMPTY:
+// DISASM-NEXT:   _start@plt:
 // DISASM-NEXT:   1050:  ff 25 d2 0f 00 00  jmpq *4050(%rip)
 // DISASM-NEXT:   1056:  68 02 00 00 00     pushq $2
 // DISASM-NEXT:   105b:  e9 c0 ff ff ff     jmp -64 <.plt>
@@ -103,9 +108,13 @@
 // DISASM2-NEXT:  201020:  ff 35 e2 0f 00 00   pushq 4066(%rip)
 // DISASM2-NEXT:  201026:  ff 25 e4 0f 00 00   jmpq *4068(%rip)
 // DISASM2-NEXT:  20102c:  0f 1f 40 00         nopl  (%rax)
+// DISASM2-EMPTY:
+// DISASM2-NEXT:   bar@plt:
 // DISASM2-NEXT:  201030:  ff 25 e2 0f 00 00   jmpq *4066(%rip)
 // DISASM2-NEXT:  201036:  68 00 00 00 00      pushq $0
 // DISASM2-NEXT:  20103b:  e9 e0 ff ff ff      jmp -32 <.plt>
+// DISASM2-EMPTY:
+// DISASM2-NEXT:   zed@plt:
 // DISASM2-NEXT:  201040:  ff 25 da 0f 00 00   jmpq *4058(%rip)
 // DISASM2-NEXT:  201046:  68 01 00 00 00      pushq $1
 // DISASM2-NEXT:  20104b:  e9 d0 ff ff ff      jmp -48 <.plt>

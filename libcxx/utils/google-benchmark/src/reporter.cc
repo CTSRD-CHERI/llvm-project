@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "check.h"
+#include "string_util.h"
 
 namespace benchmark {
 
@@ -37,6 +38,9 @@ void BenchmarkReporter::PrintBasicContext(std::ostream *out,
 
   Out << LocalDateTimeString() << "\n";
 
+  if (context.executable_name)
+    Out << "Running " << context.executable_name << "\n";
+
   const CPUInfo &info = context.cpu_info;
   Out << "Run on (" << info.num_cpus << " X "
       << (info.cycles_per_second / 1000000.0) << " MHz CPU "
@@ -51,6 +55,14 @@ void BenchmarkReporter::PrintBasicContext(std::ostream *out,
       Out << "\n";
     }
   }
+  if (!info.load_avg.empty()) {
+    Out << "Load Average: ";
+    for (auto It = info.load_avg.begin(); It != info.load_avg.end();) {
+      Out << StrFormat("%.2f", *It++);
+      if (It != info.load_avg.end()) Out << ", ";
+    }
+    Out << "\n";
+  }
 
   if (info.scaling_enabled) {
     Out << "***WARNING*** CPU scaling is enabled, the benchmark "
@@ -64,7 +76,19 @@ void BenchmarkReporter::PrintBasicContext(std::ostream *out,
 #endif
 }
 
-BenchmarkReporter::Context::Context() : cpu_info(CPUInfo::Get()) {}
+// No initializer because it's already initialized to NULL.
+const char *BenchmarkReporter::Context::executable_name;
+
+BenchmarkReporter::Context::Context()
+    : cpu_info(CPUInfo::Get()), sys_info(SystemInfo::Get()) {}
+
+std::string BenchmarkReporter::Run::benchmark_name() const {
+  std::string name = run_name;
+  if (run_type == RT_Aggregate) {
+    name += "_" + aggregate_name;
+  }
+  return name;
+}
 
 double BenchmarkReporter::Run::GetAdjustedRealTime() const {
   double new_time = real_accumulated_time * GetTimeUnitMultiplier(time_unit);

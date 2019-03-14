@@ -14,7 +14,7 @@
 // when they're needed.
 //
 // Each struct has a toJSON and fromJSON function, that converts between
-// the struct and a JSON representation. (See JSONExpr.h)
+// the struct and a JSON representation. (See JSON.h)
 //
 // Some structs also have operator<< serialization. This is for debugging and
 // tests, and is not generally machine-readable.
@@ -24,9 +24,10 @@
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_PROTOCOL_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_PROTOCOL_H
 
-#include "JSONExpr.h"
 #include "URI.h"
+#include "index/SymbolID.h"
 #include "llvm/ADT/Optional.h"
+#include "llvm/Support/JSON.h"
 #include <bitset>
 #include <string>
 #include <vector>
@@ -48,10 +49,43 @@ enum class ErrorCode {
   // Defined by the protocol.
   RequestCancelled = -32800,
 };
+// Models an LSP error as an llvm::Error.
+class LSPError : public llvm::ErrorInfo<LSPError> {
+public:
+  std::string Message;
+  ErrorCode Code;
+  static char ID;
 
+  LSPError(std::string Message, ErrorCode Code)
+      : Message(std::move(Message)), Code(Code) {}
+
+  void log(llvm::raw_ostream &OS) const override {
+    OS << int(Code) << ": " << Message;
+  }
+  std::error_code convertToErrorCode() const override {
+    return llvm::inconvertibleErrorCode();
+  }
+};
+
+// URI in "file" scheme for a file.
 struct URIForFile {
   URIForFile() = default;
-  explicit URIForFile(std::string AbsPath);
+
+  /// Canonicalizes \p AbsPath via URI.
+  ///
+  /// File paths in URIForFile can come from index or local AST. Path from
+  /// index goes through URI transformation, and the final path is resolved by
+  /// URI scheme and could potentially be different from the original path.
+  /// Hence, we do the same transformation for all paths.
+  ///
+  /// Files can be referred to by several paths (e.g. in the presence of links).
+  /// Which one we prefer may depend on where we're coming from. \p TUPath is a
+  /// hint, and should usually be the main entrypoint file we're processing.
+  static URIForFile canonicalize(llvm::StringRef AbsPath,
+                                 llvm::StringRef TUPath);
+
+  static llvm::Expected<URIForFile> fromURI(const URI &U,
+                                            llvm::StringRef HintPath);
 
   /// Retrieves absolute path to the file.
   llvm::StringRef file() const { return File; }
@@ -72,19 +106,21 @@ struct URIForFile {
   }
 
 private:
+  explicit URIForFile(std::string &&File) : File(std::move(File)) {}
+
   std::string File;
 };
 
 /// Serialize/deserialize \p URIForFile to/from a string URI.
-json::Expr toJSON(const URIForFile &U);
-bool fromJSON(const json::Expr &, URIForFile &);
+llvm::json::Value toJSON(const URIForFile &U);
+bool fromJSON(const llvm::json::Value &, URIForFile &);
 
 struct TextDocumentIdentifier {
   /// The text document's URI.
   URIForFile uri;
 };
-json::Expr toJSON(const TextDocumentIdentifier &);
-bool fromJSON(const json::Expr &, TextDocumentIdentifier &);
+llvm::json::Value toJSON(const TextDocumentIdentifier &);
+bool fromJSON(const llvm::json::Value &, TextDocumentIdentifier &);
 
 struct Position {
   /// Line position in a document (zero-based).
@@ -111,8 +147,8 @@ struct Position {
            std::tie(RHS.line, RHS.character);
   }
 };
-bool fromJSON(const json::Expr &, Position &);
-json::Expr toJSON(const Position &);
+bool fromJSON(const llvm::json::Value &, Position &);
+llvm::json::Value toJSON(const Position &);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Position &);
 
 struct Range {
@@ -133,9 +169,12 @@ struct Range {
   }
 
   bool contains(Position Pos) const { return start <= Pos && Pos < end; }
+  bool contains(Range Rng) const {
+    return start <= Rng.start && Rng.end <= end;
+  }
 };
-bool fromJSON(const json::Expr &, Range &);
-json::Expr toJSON(const Range &);
+bool fromJSON(const llvm::json::Value &, Range &);
+llvm::json::Value toJSON(const Range &);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Range &);
 
 struct Location {
@@ -155,13 +194,8 @@ struct Location {
     return std::tie(LHS.uri, LHS.range) < std::tie(RHS.uri, RHS.range);
   }
 };
-json::Expr toJSON(const Location &);
+llvm::json::Value toJSON(const Location &);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Location &);
-
-struct Metadata {
-  std::vector<std::string> extraFlags;
-};
-bool fromJSON(const json::Expr &, Metadata &);
 
 struct TextEdit {
   /// The range of the text document to be manipulated. To insert
@@ -171,9 +205,13 @@ struct TextEdit {
   /// The string to be inserted. For delete operations use an
   /// empty string.
   std::string newText;
+
+  bool operator==(const TextEdit &rhs) const {
+    return newText == rhs.newText && range == rhs.range;
+  }
 };
-bool fromJSON(const json::Expr &, TextEdit &);
-json::Expr toJSON(const TextEdit &);
+bool fromJSON(const llvm::json::Value &, TextEdit &);
+llvm::json::Value toJSON(const TextEdit &);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const TextEdit &);
 
 struct TextDocumentItem {
@@ -189,17 +227,17 @@ struct TextDocumentItem {
   /// The content of the opened text document.
   std::string text;
 };
-bool fromJSON(const json::Expr &, TextDocumentItem &);
+bool fromJSON(const llvm::json::Value &, TextDocumentItem &);
 
 enum class TraceLevel {
   Off = 0,
   Messages = 1,
   Verbose = 2,
 };
-bool fromJSON(const json::Expr &E, TraceLevel &Out);
+bool fromJSON(const llvm::json::Value &E, TraceLevel &Out);
 
 struct NoParams {};
-inline bool fromJSON(const json::Expr &, NoParams &) { return true; }
+inline bool fromJSON(const llvm::json::Value &, NoParams &) { return true; }
 using ShutdownParams = NoParams;
 using ExitParams = NoParams;
 
@@ -217,31 +255,45 @@ enum class TextDocumentSyncKind {
   Incremental = 2,
 };
 
-struct CompletionItemClientCapabilities {
-  /// Client supports snippets as insert text.
-  bool snippetSupport = false;
-  /// Client supports commit characters on a completion item.
-  bool commitCharacterSupport = false;
-  // Client supports the follow content formats for the documentation property.
-  // The order describes the preferred format of the client.
-  // NOTE: not used by clangd at the moment.
-  // std::vector<MarkupKind> documentationFormat;
+/// The kind of a completion entry.
+enum class CompletionItemKind {
+  Missing = 0,
+  Text = 1,
+  Method = 2,
+  Function = 3,
+  Constructor = 4,
+  Field = 5,
+  Variable = 6,
+  Class = 7,
+  Interface = 8,
+  Module = 9,
+  Property = 10,
+  Unit = 11,
+  Value = 12,
+  Enum = 13,
+  Keyword = 14,
+  Snippet = 15,
+  Color = 16,
+  File = 17,
+  Reference = 18,
+  Folder = 19,
+  EnumMember = 20,
+  Constant = 21,
+  Struct = 22,
+  Event = 23,
+  Operator = 24,
+  TypeParameter = 25,
 };
-bool fromJSON(const json::Expr &, CompletionItemClientCapabilities &);
-
-struct CompletionClientCapabilities {
-  /// Whether completion supports dynamic registration.
-  bool dynamicRegistration = false;
-  /// The client supports the following `CompletionItem` specific capabilities.
-  CompletionItemClientCapabilities completionItem;
-  // NOTE: not used by clangd at the moment.
-  // llvm::Optional<CompletionItemKindCapabilities> completionItemKind;
-
-  /// The client supports to send additional context information for a
-  /// `textDocument/completion` request.
-  bool contextSupport = false;
-};
-bool fromJSON(const json::Expr &, CompletionClientCapabilities &);
+bool fromJSON(const llvm::json::Value &, CompletionItemKind &);
+constexpr auto CompletionItemKindMin =
+    static_cast<size_t>(CompletionItemKind::Text);
+constexpr auto CompletionItemKindMax =
+    static_cast<size_t>(CompletionItemKind::TypeParameter);
+using CompletionItemKindBitset = std::bitset<CompletionItemKindMax + 1>;
+bool fromJSON(const llvm::json::Value &, CompletionItemKindBitset &);
+CompletionItemKind
+adjustKindToCapability(CompletionItemKind Kind,
+                       CompletionItemKindBitset &supportedCompletionItemKinds);
 
 /// A symbol kind.
 enum class SymbolKind {
@@ -272,55 +324,84 @@ enum class SymbolKind {
   Operator = 25,
   TypeParameter = 26
 };
-
+bool fromJSON(const llvm::json::Value &, SymbolKind &);
 constexpr auto SymbolKindMin = static_cast<size_t>(SymbolKind::File);
 constexpr auto SymbolKindMax = static_cast<size_t>(SymbolKind::TypeParameter);
 using SymbolKindBitset = std::bitset<SymbolKindMax + 1>;
-
-bool fromJSON(const json::Expr &, SymbolKind &);
-
-struct SymbolKindCapabilities {
-  /// The SymbolKinds that the client supports. If not set, the client only
-  /// supports <= SymbolKind::Array and will not fall back to a valid default
-  /// value.
-  llvm::Optional<std::vector<SymbolKind>> valueSet;
-};
-bool fromJSON(const json::Expr &, std::vector<SymbolKind> &);
-bool fromJSON(const json::Expr &, SymbolKindCapabilities &);
+bool fromJSON(const llvm::json::Value &, SymbolKindBitset &);
 SymbolKind adjustKindToCapability(SymbolKind Kind,
                                   SymbolKindBitset &supportedSymbolKinds);
 
-struct WorkspaceSymbolCapabilities {
-  /// Capabilities SymbolKind.
-  llvm::Optional<SymbolKindCapabilities> symbolKind;
-};
-bool fromJSON(const json::Expr &, WorkspaceSymbolCapabilities &);
-
-// FIXME: most of the capabilities are missing from this struct. Only the ones
-// used by clangd are currently there.
-struct WorkspaceClientCapabilities {
-  /// Capabilities specific to `workspace/symbol`.
-  llvm::Optional<WorkspaceSymbolCapabilities> symbol;
-};
-bool fromJSON(const json::Expr &, WorkspaceClientCapabilities &);
-
-// FIXME: most of the capabilities are missing from this struct. Only the ones
-// used by clangd are currently there.
-struct TextDocumentClientCapabilities {
-  /// Capabilities specific to the `textDocument/completion`
-  CompletionClientCapabilities completion;
-};
-bool fromJSON(const json::Expr &, TextDocumentClientCapabilities &);
-
+// This struct doesn't mirror LSP!
+// The protocol defines deeply nested structures for client capabilities.
+// Instead of mapping them all, this just parses out the bits we care about.
 struct ClientCapabilities {
-  // Workspace specific client capabilities.
-  llvm::Optional<WorkspaceClientCapabilities> workspace;
+  /// The supported set of SymbolKinds for workspace/symbol.
+  /// workspace.symbol.symbolKind.valueSet
+  llvm::Optional<SymbolKindBitset> WorkspaceSymbolKinds;
 
-  // Text document specific client capabilities.
-  TextDocumentClientCapabilities textDocument;
+  /// Whether the client accepts diagnostics with codeActions attached inline.
+  /// textDocument.publishDiagnostics.codeActionsInline.
+  bool DiagnosticFixes = false;
+
+  /// Whether the client accepts diagnostics with category attached to it
+  /// using the "category" extension.
+  /// textDocument.publishDiagnostics.categorySupport
+  bool DiagnosticCategory = false;
+
+  /// Client supports snippets as insert text.
+  /// textDocument.completion.completionItem.snippetSupport
+  bool CompletionSnippets = false;
+
+  /// Client supports hierarchical document symbols.
+  bool HierarchicalDocumentSymbol = false;
+
+  /// The supported set of CompletionItemKinds for textDocument/completion.
+  /// textDocument.completion.completionItemKind.valueSet
+  llvm::Optional<CompletionItemKindBitset> CompletionItemKinds;
+
+  /// Client supports CodeAction return value for textDocument/codeAction.
+  /// textDocument.codeAction.codeActionLiteralSupport.
+  bool CodeActionStructure = false;
 };
+bool fromJSON(const llvm::json::Value &, ClientCapabilities &);
 
-bool fromJSON(const json::Expr &, ClientCapabilities &);
+/// Clangd extension that's used in the 'compilationDatabaseChanges' in
+/// workspace/didChangeConfiguration to record updates to the in-memory
+/// compilation database.
+struct ClangdCompileCommand {
+  std::string workingDirectory;
+  std::vector<std::string> compilationCommand;
+};
+bool fromJSON(const llvm::json::Value &, ClangdCompileCommand &);
+
+/// Clangd extension: parameters configurable at any time, via the
+/// `workspace/didChangeConfiguration` notification.
+/// LSP defines this type as `any`.
+struct ConfigurationSettings {
+  // Changes to the in-memory compilation database.
+  // The key of the map is a file name.
+  std::map<std::string, ClangdCompileCommand> compilationDatabaseChanges;
+};
+bool fromJSON(const llvm::json::Value &, ConfigurationSettings &);
+
+/// Clangd extension: parameters configurable at `initialize` time.
+/// LSP defines this type as `any`.
+struct InitializationOptions {
+  // What we can change throught the didChangeConfiguration request, we can
+  // also set through the initialize request (initializationOptions field).
+  ConfigurationSettings ConfigSettings;
+
+  llvm::Optional<std::string> compilationDatabasePath;
+  // Additional flags to be included in the "fallback command" used when
+  // the compilation database doesn't describe an opened file.
+  // The command used will be approximately `clang $FILE $fallbackFlags`.
+  std::vector<std::string> fallbackFlags;
+
+  /// Clients supports show file status for textDocument/clangd.fileStatus.
+  bool FileStatus = false;
+};
+bool fromJSON(const llvm::json::Value &, InitializationOptions &);
 
 struct InitializeParams {
   /// The process Id of the parent process that started
@@ -348,23 +429,23 @@ struct InitializeParams {
 
   /// The initial trace setting. If omitted trace is disabled ('off').
   llvm::Optional<TraceLevel> trace;
+
+  /// User-provided initialization options.
+  InitializationOptions initializationOptions;
 };
-bool fromJSON(const json::Expr &, InitializeParams &);
+bool fromJSON(const llvm::json::Value &, InitializeParams &);
 
 struct DidOpenTextDocumentParams {
   /// The document that was opened.
   TextDocumentItem textDocument;
-
-  /// Extension storing per-file metadata, such as compilation flags.
-  llvm::Optional<Metadata> metadata;
 };
-bool fromJSON(const json::Expr &, DidOpenTextDocumentParams &);
+bool fromJSON(const llvm::json::Value &, DidOpenTextDocumentParams &);
 
 struct DidCloseTextDocumentParams {
   /// The document that was closed.
   TextDocumentIdentifier textDocument;
 };
-bool fromJSON(const json::Expr &, DidCloseTextDocumentParams &);
+bool fromJSON(const llvm::json::Value &, DidCloseTextDocumentParams &);
 
 struct TextDocumentContentChangeEvent {
   /// The range of the document that changed.
@@ -376,7 +457,7 @@ struct TextDocumentContentChangeEvent {
   /// The new text of the range/document.
   std::string text;
 };
-bool fromJSON(const json::Expr &, TextDocumentContentChangeEvent &);
+bool fromJSON(const llvm::json::Value &, TextDocumentContentChangeEvent &);
 
 struct DidChangeTextDocumentParams {
   /// The document that did change. The version number points
@@ -393,7 +474,7 @@ struct DidChangeTextDocumentParams {
   /// This is a clangd extension.
   llvm::Optional<bool> wantDiagnostics;
 };
-bool fromJSON(const json::Expr &, DidChangeTextDocumentParams &);
+bool fromJSON(const llvm::json::Value &, DidChangeTextDocumentParams &);
 
 enum class FileChangeType {
   /// The file got created.
@@ -403,7 +484,7 @@ enum class FileChangeType {
   /// The file got deleted.
   Deleted = 3
 };
-bool fromJSON(const json::Expr &E, FileChangeType &Out);
+bool fromJSON(const llvm::json::Value &E, FileChangeType &Out);
 
 struct FileEvent {
   /// The file's URI.
@@ -411,27 +492,18 @@ struct FileEvent {
   /// The change type.
   FileChangeType type = FileChangeType::Created;
 };
-bool fromJSON(const json::Expr &, FileEvent &);
+bool fromJSON(const llvm::json::Value &, FileEvent &);
 
 struct DidChangeWatchedFilesParams {
   /// The actual file events.
   std::vector<FileEvent> changes;
 };
-bool fromJSON(const json::Expr &, DidChangeWatchedFilesParams &);
-
-/// Clangd extension to manage a workspace/didChangeConfiguration notification
-/// since the data received is described as 'any' type in LSP.
-struct ClangdConfigurationParamsChange {
-  llvm::Optional<std::string> compilationDatabasePath;
-};
-bool fromJSON(const json::Expr &, ClangdConfigurationParamsChange &);
+bool fromJSON(const llvm::json::Value &, DidChangeWatchedFilesParams &);
 
 struct DidChangeConfigurationParams {
-  // We use this predefined struct because it is easier to use
-  // than the protocol specified type of 'any'.
-  ClangdConfigurationParamsChange settings;
+  ConfigurationSettings settings;
 };
-bool fromJSON(const json::Expr &, DidChangeConfigurationParams &);
+bool fromJSON(const llvm::json::Value &, DidChangeConfigurationParams &);
 
 struct FormattingOptions {
   /// Size of a tab in spaces.
@@ -440,8 +512,8 @@ struct FormattingOptions {
   /// Prefer spaces over tabs.
   bool insertSpaces = false;
 };
-bool fromJSON(const json::Expr &, FormattingOptions &);
-json::Expr toJSON(const FormattingOptions &);
+bool fromJSON(const llvm::json::Value &, FormattingOptions &);
+llvm::json::Value toJSON(const FormattingOptions &);
 
 struct DocumentRangeFormattingParams {
   /// The document to format.
@@ -453,7 +525,7 @@ struct DocumentRangeFormattingParams {
   /// The format options
   FormattingOptions options;
 };
-bool fromJSON(const json::Expr &, DocumentRangeFormattingParams &);
+bool fromJSON(const llvm::json::Value &, DocumentRangeFormattingParams &);
 
 struct DocumentOnTypeFormattingParams {
   /// The document to format.
@@ -468,7 +540,7 @@ struct DocumentOnTypeFormattingParams {
   /// The format options.
   FormattingOptions options;
 };
-bool fromJSON(const json::Expr &, DocumentOnTypeFormattingParams &);
+bool fromJSON(const llvm::json::Value &, DocumentOnTypeFormattingParams &);
 
 struct DocumentFormattingParams {
   /// The document to format.
@@ -477,8 +549,15 @@ struct DocumentFormattingParams {
   /// The format options
   FormattingOptions options;
 };
-bool fromJSON(const json::Expr &, DocumentFormattingParams &);
+bool fromJSON(const llvm::json::Value &, DocumentFormattingParams &);
 
+struct DocumentSymbolParams {
+  // The text document to find symbols in.
+  TextDocumentIdentifier textDocument;
+};
+bool fromJSON(const llvm::json::Value &, DocumentSymbolParams &);
+
+struct CodeAction;
 struct Diagnostic {
   /// The range at which the message applies.
   Range range;
@@ -498,7 +577,19 @@ struct Diagnostic {
 
   /// The diagnostic's message.
   std::string message;
+
+  /// The diagnostic's category. Can be omitted.
+  /// An LSP extension that's used to send the name of the category over to the
+  /// client. The category typically describes the compilation stage during
+  /// which the issue was produced, e.g. "Semantic Issue" or "Parse Issue".
+  llvm::Optional<std::string> category;
+
+  /// Clangd extension: code actions related to this diagnostic.
+  /// Only with capability textDocument.publishDiagnostics.codeActionsInline.
+  /// (These actions can also be obtained using textDocument/codeAction).
+  llvm::Optional<std::vector<CodeAction>> codeActions;
 };
+llvm::json::Value toJSON(const Diagnostic &);
 
 /// A LSP-specific comparator used to find diagnostic in a container like
 /// std:map.
@@ -510,14 +601,14 @@ struct LSPDiagnosticCompare {
     return std::tie(LHS.range, LHS.message) < std::tie(RHS.range, RHS.message);
   }
 };
-bool fromJSON(const json::Expr &, Diagnostic &);
+bool fromJSON(const llvm::json::Value &, Diagnostic &);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const Diagnostic &);
 
 struct CodeActionContext {
   /// An array of diagnostics.
   std::vector<Diagnostic> diagnostics;
 };
-bool fromJSON(const json::Expr &, CodeActionContext &);
+bool fromJSON(const llvm::json::Value &, CodeActionContext &);
 
 struct CodeActionParams {
   /// The document in which the command was invoked.
@@ -529,7 +620,7 @@ struct CodeActionParams {
   /// Context carrying additional information.
   CodeActionContext context;
 };
-bool fromJSON(const json::Expr &, CodeActionParams &);
+bool fromJSON(const llvm::json::Value &, CodeActionParams &);
 
 struct WorkspaceEdit {
   /// Holds changes to existing resources.
@@ -538,8 +629,8 @@ struct WorkspaceEdit {
   /// Note: "documentChanges" is not currently used because currently there is
   /// no support for versioned edits.
 };
-bool fromJSON(const json::Expr &, WorkspaceEdit &);
-json::Expr toJSON(const WorkspaceEdit &WE);
+bool fromJSON(const llvm::json::Value &, WorkspaceEdit &);
+llvm::json::Value toJSON(const WorkspaceEdit &WE);
 
 /// Exact commands are not specified in the protocol so we define the
 /// ones supported by Clangd here. The protocol specifies the command arguments
@@ -559,13 +650,71 @@ struct ExecuteCommandParams {
   // Arguments
   llvm::Optional<WorkspaceEdit> workspaceEdit;
 };
-bool fromJSON(const json::Expr &, ExecuteCommandParams &);
+bool fromJSON(const llvm::json::Value &, ExecuteCommandParams &);
 
 struct Command : public ExecuteCommandParams {
   std::string title;
 };
+llvm::json::Value toJSON(const Command &C);
 
-json::Expr toJSON(const Command &C);
+/// A code action represents a change that can be performed in code, e.g. to fix
+/// a problem or to refactor code.
+///
+/// A CodeAction must set either `edit` and/or a `command`. If both are
+/// supplied, the `edit` is applied first, then the `command` is executed.
+struct CodeAction {
+  /// A short, human-readable, title for this code action.
+  std::string title;
+
+  /// The kind of the code action.
+  /// Used to filter code actions.
+  llvm::Optional<std::string> kind;
+  const static llvm::StringLiteral QUICKFIX_KIND;
+
+  /// The diagnostics that this code action resolves.
+  llvm::Optional<std::vector<Diagnostic>> diagnostics;
+
+  /// The workspace edit this code action performs.
+  llvm::Optional<WorkspaceEdit> edit;
+
+  /// A command this code action executes. If a code action provides an edit
+  /// and a command, first the edit is executed and then the command.
+  llvm::Optional<Command> command;
+};
+llvm::json::Value toJSON(const CodeAction &);
+
+/// Represents programming constructs like variables, classes, interfaces etc.
+/// that appear in a document. Document symbols can be hierarchical and they
+/// have two ranges: one that encloses its definition and one that points to its
+/// most interesting range, e.g. the range of an identifier.
+struct DocumentSymbol {
+  /// The name of this symbol.
+  std::string name;
+
+  /// More detail for this symbol, e.g the signature of a function.
+  std::string detail;
+
+  /// The kind of this symbol.
+  SymbolKind kind;
+
+  /// Indicates if this symbol is deprecated.
+  bool deprecated;
+
+  /// The range enclosing this symbol not including leading/trailing whitespace
+  /// but everything else like comments. This information is typically used to
+  /// determine if the clients cursor is inside the symbol to reveal in the
+  /// symbol in the UI.
+  Range range;
+
+  /// The range that should be selected and revealed when this symbol is being
+  /// picked, e.g the name of a function. Must be contained by the `range`.
+  Range selectionRange;
+
+  /// Children of this symbol, e.g. properties of a class.
+  std::vector<DocumentSymbol> children;
+};
+llvm::raw_ostream &operator<<(llvm::raw_ostream &O, const DocumentSymbol &S);
+llvm::json::Value toJSON(const DocumentSymbol &S);
 
 /// Represents information about programming constructs like variables, classes,
 /// interfaces etc.
@@ -582,20 +731,40 @@ struct SymbolInformation {
   /// The name of the symbol containing this symbol.
   std::string containerName;
 };
-json::Expr toJSON(const SymbolInformation &);
+llvm::json::Value toJSON(const SymbolInformation &);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const SymbolInformation &);
+
+/// Represents information about identifier.
+/// This is returned from textDocument/symbolInfo, which is a clangd extension.
+struct SymbolDetails {
+  std::string name;
+
+  std::string containerName;
+
+  /// Unified Symbol Resolution identifier
+  /// This is an opaque string uniquely identifying a symbol.
+  /// Unlike SymbolID, it is variable-length and somewhat human-readable.
+  /// It is a common representation across several clang tools.
+  /// (See USRGeneration.h)
+  std::string USR;
+
+  llvm::Optional<SymbolID> ID;
+};
+llvm::json::Value toJSON(const SymbolDetails &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const SymbolDetails &);
+bool operator==(const SymbolDetails &, const SymbolDetails &);
 
 /// The parameters of a Workspace Symbol Request.
 struct WorkspaceSymbolParams {
   /// A non-empty query string
   std::string query;
 };
-bool fromJSON(const json::Expr &, WorkspaceSymbolParams &);
+bool fromJSON(const llvm::json::Value &, WorkspaceSymbolParams &);
 
 struct ApplyWorkspaceEditParams {
   WorkspaceEdit edit;
 };
-json::Expr toJSON(const ApplyWorkspaceEditParams &);
+llvm::json::Value toJSON(const ApplyWorkspaceEditParams &);
 
 struct TextDocumentPositionParams {
   /// The text document.
@@ -604,7 +773,7 @@ struct TextDocumentPositionParams {
   /// The position inside the text document.
   Position position;
 };
-bool fromJSON(const json::Expr &, TextDocumentPositionParams &);
+bool fromJSON(const llvm::json::Value &, TextDocumentPositionParams &);
 
 enum class MarkupKind {
   PlainText,
@@ -615,7 +784,7 @@ struct MarkupContent {
   MarkupKind kind = MarkupKind::PlainText;
   std::string value;
 };
-json::Expr toJSON(const MarkupContent &MC);
+llvm::json::Value toJSON(const MarkupContent &MC);
 
 struct Hover {
   /// The hover's content
@@ -625,30 +794,7 @@ struct Hover {
   /// that is used to visualize a hover, e.g. by changing the background color.
   llvm::Optional<Range> range;
 };
-json::Expr toJSON(const Hover &H);
-
-/// The kind of a completion entry.
-enum class CompletionItemKind {
-  Missing = 0,
-  Text = 1,
-  Method = 2,
-  Function = 3,
-  Constructor = 4,
-  Field = 5,
-  Variable = 6,
-  Class = 7,
-  Interface = 8,
-  Module = 9,
-  Property = 10,
-  Unit = 11,
-  Value = 12,
-  Enum = 13,
-  Keyword = 14,
-  Snippet = 15,
-  Color = 16,
-  File = 17,
-  Reference = 18,
-};
+llvm::json::Value toJSON(const Hover &H);
 
 /// Defines whether the insert text in a completion item should be interpreted
 /// as plain text or a snippet.
@@ -666,20 +812,6 @@ enum class InsertTextFormat {
   /// See also:
   /// https//github.com/Microsoft/vscode/blob/master/src/vs/editor/contrib/snippet/common/snippet.md
   Snippet = 2,
-};
-
-/// Provides details for how a completion item was scored.
-/// This can be used for client-side filtering of completion items as the
-/// user keeps typing.
-/// This is a clangd extension.
-struct CompletionItemScores {
-  /// The score that items are ranked by.
-  /// This is filterScore * symbolScore.
-  float finalScore = 0.f;
-  /// How the partial identifier matched filterText. [0-1]
-  float filterScore = 0.f;
-  /// How the symbol fits, ignoring the partial identifier.
-  float symbolScore = 0.f;
 };
 
 struct CompletionItem {
@@ -701,9 +833,6 @@ struct CompletionItem {
   /// A string that should be used when comparing this item with other items.
   /// When `falsy` the label is used.
   std::string sortText;
-
-  /// Details about the quality of this completion item. (clangd extension)
-  llvm::Optional<CompletionItemScores> scoreInfo;
 
   /// A string that should be used when filtering a set of completion items.
   /// When `falsy` the label is used.
@@ -729,19 +858,16 @@ struct CompletionItem {
   /// themselves.
   std::vector<TextEdit> additionalTextEdits;
 
+  /// Indicates if this item is deprecated.
+  bool deprecated = false;
+
   // TODO(krasimir): The following optional fields defined by the language
   // server protocol are unsupported:
   //
   // data?: any - A data entry field that is preserved on a completion item
   //              between a completion and a completion resolve request.
-
-  // C++ extension that is only expected to be used by users of ClangdServer's
-  // C++ API. Not serialized from/to json.
-  /// The containing scope (e.g. namespace) of the symbol this item corresponds
-  /// to, e.g. "" (global scope), "ns::" (top-level namespace).
-  std::string SymbolScope;
 };
-json::Expr toJSON(const CompletionItem &);
+llvm::json::Value toJSON(const CompletionItem &);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const CompletionItem &);
 
 bool operator<(const CompletionItem &, const CompletionItem &);
@@ -755,7 +881,7 @@ struct CompletionList {
   /// The completion items.
   std::vector<CompletionItem> items;
 };
-json::Expr toJSON(const CompletionList &);
+llvm::json::Value toJSON(const CompletionList &);
 
 /// A single parameter of a particular signature.
 struct ParameterInformation {
@@ -766,7 +892,7 @@ struct ParameterInformation {
   /// The documentation of this parameter. Optional.
   std::string documentation;
 };
-json::Expr toJSON(const ParameterInformation &);
+llvm::json::Value toJSON(const ParameterInformation &);
 
 /// Represents the signature of something callable.
 struct SignatureInformation {
@@ -780,7 +906,7 @@ struct SignatureInformation {
   /// The parameters of this signature.
   std::vector<ParameterInformation> parameters;
 };
-json::Expr toJSON(const SignatureInformation &);
+llvm::json::Value toJSON(const SignatureInformation &);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &,
                               const SignatureInformation &);
 
@@ -795,8 +921,15 @@ struct SignatureHelp {
 
   /// The active parameter of the active signature.
   int activeParameter = 0;
+
+  /// Position of the start of the argument list, including opening paren. e.g.
+  /// foo("first arg",   "second arg",
+  ///    ^-argListStart   ^-cursor
+  /// This is a clangd-specific extension, it is only available via C++ API and
+  /// not currently serialized for the LSP.
+  Position argListStart;
 };
-json::Expr toJSON(const SignatureHelp &);
+llvm::json::Value toJSON(const SignatureHelp &);
 
 struct RenameParams {
   /// The document that was opened.
@@ -808,7 +941,7 @@ struct RenameParams {
   /// The new name of the symbol.
   std::string newName;
 };
-bool fromJSON(const json::Expr &, RenameParams &);
+bool fromJSON(const llvm::json::Value &, RenameParams &);
 
 enum class DocumentHighlightKind { Text = 1, Read = 2, Write = 3 };
 
@@ -835,8 +968,25 @@ struct DocumentHighlight {
     return LHS.kind == RHS.kind && LHS.range == RHS.range;
   }
 };
-json::Expr toJSON(const DocumentHighlight &DH);
+llvm::json::Value toJSON(const DocumentHighlight &DH);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const DocumentHighlight &);
+
+struct ReferenceParams : public TextDocumentPositionParams {
+  // For now, no options like context.includeDeclaration are supported.
+};
+bool fromJSON(const llvm::json::Value &, ReferenceParams &);
+
+/// Clangd extension: indicates the current state of the file in clangd,
+/// sent from server via the `textDocument/clangd.fileStatus` notification.
+struct FileStatus {
+  /// The text document's URI.
+  URIForFile uri;
+  /// The human-readable string presents the current state of the file, can be
+  /// shown in the UI (e.g. status bar).
+  std::string state;
+  // FIXME: add detail messages.
+};
+llvm::json::Value toJSON(const FileStatus &FStatus);
 
 } // namespace clangd
 } // namespace clang

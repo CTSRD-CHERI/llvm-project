@@ -87,7 +87,8 @@ void ASTResultSynthesizer::TransformTopLevelDecl(Decl *D) {
         SynthesizeObjCMethodResult(method_decl);
       }
     } else if (FunctionDecl *function_decl = dyn_cast<FunctionDecl>(D)) {
-      if (m_ast_context &&
+      // When completing user input the body of the function may be a nullptr.
+      if (m_ast_context && function_decl->hasBody() &&
           !function_decl->getNameInfo().getAsString().compare("$__lldb_expr")) {
         RecordPersistentTypes(function_decl);
         SynthesizeFunctionResult(function_decl);
@@ -292,9 +293,8 @@ bool ASTResultSynthesizer::SynthesizeBodyResult(CompoundStmt *Body,
   //
   //   - During dematerialization, $0 is ignored.
 
-  bool is_lvalue = (last_expr->getValueKind() == VK_LValue ||
-                    last_expr->getValueKind() == VK_XValue) &&
-                   (last_expr->getObjectKind() == OK_Ordinary);
+  bool is_lvalue = last_expr->getValueKind() == VK_LValue &&
+                   last_expr->getObjectKind() == OK_Ordinary;
 
   QualType expr_qual_type = last_expr->getType();
   const clang::Type *expr_type = expr_qual_type.getTypePtr();

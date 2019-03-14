@@ -29,7 +29,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
-#include "llvm/Analysis/DivergenceAnalysis.h"
+#include "llvm/Analysis/LegacyDivergenceAnalysis.h"
 #include "llvm/CodeGen/DAGCombine.h"
 #include "llvm/CodeGen/ISDOpcodes.h"
 #include "llvm/CodeGen/RuntimeLibcalls.h"
@@ -163,6 +163,7 @@ public:
     LLOnly,  // Expand the (load) instruction into just a load-linked, which has
              // greater atomic guarantees than a normal load.
     CmpXChg, // Expand the instruction into cmpxchg; used by at least X86.
+    MaskedIntrinsic, // Use a target-specific intrinsic for the LL/SC loop.
   };
 
   /// Enum that specifies when a multiplication should be expanded.
@@ -268,6 +269,14 @@ public:
     return true;
   }
 
+  /// Return true if it is profitable to convert a select of FP constants into
+  /// a constant pool load whose address depends on the select condition. The
+  /// parameter may be used to differentiate a select with FP compare from
+  /// integer compare.
+  virtual bool reduceSelectOfFPConstantLoads(bool IsFPSetCC) const {
+    return true;
+  }
+
   /// Return true if multiple condition registers are available.
   bool hasMultipleConditionRegisters() const {
     return HasMultipleConditionRegisters;
@@ -278,7 +287,7 @@ public:
 
   /// Return the preferred vector type legalization action.
   virtual TargetLoweringBase::LegalizeTypeAction
-  getPreferredVectorAction(EVT VT) const {
+  getPreferredVectorAction(MVT VT) const {
     // The default action for one element vectors is to scalarize
     if (VT.getVectorNumElements() == 1)
       return TypeScalarizeVector;
@@ -509,6 +518,29 @@ public:
     return hasAndNotCompare(X);
   }
 
+  /// There are two ways to clear extreme bits (either low or high):
+  /// Mask:    x &  (-1 << y)  (the instcombine canonical form)
+  /// Shifts:  x >> y << y
+  /// Return true if the variant with 2 shifts is preferred.
+  /// Return false if there is no preference.
+  virtual bool preferShiftsToClearExtremeBits(SDValue X) const {
+    // By default, let's assume that no one prefers shifts.
+    return false;
+  }
+
+  /// Should we tranform the IR-optimal check for whether given truncation
+  /// down into KeptBits would be truncating or not:
+  ///   (add %x, (1 << (KeptBits-1))) srccond (1 << KeptBits)
+  /// Into it's more traditional form:
+  ///   ((%x << C) a>> C) dstcond %x
+  /// Return true if we should transform.
+  /// Return false if there is no preference.
+  virtual bool shouldTransformSignedTruncationCheck(EVT XVT,
+                                                    unsigned KeptBits) const {
+    // By default, let's assume that no one prefers shifts.
+    return false;
+  }
+
   /// Return true if the target wants to use the optimization that
   /// turns ext(promotableInst1(...(promotableInstN(load)))) into
   /// promotedInst1(...(promotedInstN(ext(load)))).
@@ -519,6 +551,12 @@ public:
   /// \p Cost[out] gives the cost of that transformation when this is true.
   virtual bool canCombineStoreAndExtract(Type *VectorTy, Value *Idx,
                                          unsigned &Cost) const {
+    return false;
+  }
+
+  /// Return true if inserting a scalar into a variable element of an undef
+  /// vector is more efficiently handled by splatting the scalar instead.
+  virtual bool shouldSplatInsEltVarIndex(EVT) const {
     return false;
   }
 
@@ -695,7 +733,7 @@ public:
   /// always broken down into scalars in some contexts. This occurs even if the
   /// vector type is legal.
   virtual unsigned getVectorTypeBreakdownForCallingConv(
-      LLVMContext &Context, EVT VT, EVT &IntermediateVT,
+      LLVMContext &Context, CallingConv::ID CC, EVT VT, EVT &IntermediateVT,
       unsigned &NumIntermediates, MVT &RegisterVT) const {
     return getVectorTypeBreakdown(Context, VT, IntermediateVT, NumIntermediates,
                                   RegisterVT);
@@ -748,10 +786,10 @@ public:
   /// operations don't trap except for integer divide and remainder.
   virtual bool canOpTrap(unsigned Op, EVT VT) const;
 
-  /// Similar to isShuffleMaskLegal. This is used by Targets can use this to
-  /// indicate if there is a suitable VECTOR_SHUFFLE that can be used to replace
-  /// a VAND with a constant pool entry.
-  virtual bool isVectorClearMaskLegal(const SmallVectorImpl<int> &/*Mask*/,
+  /// Similar to isShuffleMaskLegal. Targets can use this to indicate if there
+  /// is a suitable VECTOR_SHUFFLE that can be used to replace a VAND with a
+  /// constant pool entry.
+  virtual bool isVectorClearMaskLegal(ArrayRef<int> /*Mask*/,
                                       EVT /*VT*/) const {
     return false;
   }
@@ -767,6 +805,38 @@ public:
     return OpActions[(unsigned)VT.getSimpleVT().SimpleTy][Op];
   }
 
+  /// Custom method defined by each target to indicate if an operation which
+  /// may require a scale is supported natively by the target.
+  /// If not, the operation is illegal.
+  virtual bool isSupportedFixedPointOperation(unsigned Op, EVT VT,
+                                              unsigned Scale) const {
+    return false;
+  }
+
+  /// Some fixed point operations may be natively supported by the target but
+  /// only for specific scales. This method allows for checking
+  /// if the width is supported by the target for a given operation that may
+  /// depend on scale.
+  LegalizeAction getFixedPointOperationAction(unsigned Op, EVT VT,
+                                              unsigned Scale) const {
+    auto Action = getOperationAction(Op, VT);
+    if (Action != Legal)
+      return Action;
+
+    // This operation is supported in this type but may only work on specific
+    // scales.
+    bool Supported;
+    switch (Op) {
+    default:
+      llvm_unreachable("Unexpected fixed point operation.");
+    case ISD::SMULFIX:
+      Supported = isSupportedFixedPointOperation(Op, VT, Scale);
+      break;
+    }
+
+    return Supported ? Action : Expand;
+  }
+
   LegalizeAction getStrictFPOperationAction(unsigned Op, EVT VT) const {
     unsigned EqOpc;
     switch (Op) {
@@ -775,6 +845,7 @@ public:
       case ISD::STRICT_FSUB: EqOpc = ISD::FSUB; break;
       case ISD::STRICT_FMUL: EqOpc = ISD::FMUL; break;
       case ISD::STRICT_FDIV: EqOpc = ISD::FDIV; break;
+      case ISD::STRICT_FREM: EqOpc = ISD::FREM; break;
       case ISD::STRICT_FSQRT: EqOpc = ISD::FSQRT; break;
       case ISD::STRICT_FPOW: EqOpc = ISD::FPOW; break;
       case ISD::STRICT_FPOWI: EqOpc = ISD::FPOWI; break;
@@ -788,6 +859,12 @@ public:
       case ISD::STRICT_FLOG2: EqOpc = ISD::FLOG2; break;
       case ISD::STRICT_FRINT: EqOpc = ISD::FRINT; break;
       case ISD::STRICT_FNEARBYINT: EqOpc = ISD::FNEARBYINT; break;
+      case ISD::STRICT_FMAXNUM: EqOpc = ISD::FMAXNUM; break;
+      case ISD::STRICT_FMINNUM: EqOpc = ISD::FMINNUM; break;
+      case ISD::STRICT_FCEIL: EqOpc = ISD::FCEIL; break;
+      case ISD::STRICT_FFLOOR: EqOpc = ISD::FFLOOR; break;
+      case ISD::STRICT_FROUND: EqOpc = ISD::FROUND; break;
+      case ISD::STRICT_FTRUNC: EqOpc = ISD::FTRUNC; break;
     }
 
     auto Action = getOperationAction(EqOpc, VT);
@@ -1151,7 +1228,7 @@ public:
   /// are legal for some operations and not for other operations.
   /// For MIPS all vector types must be passed through the integer register set.
   virtual MVT getRegisterTypeForCallingConv(LLVMContext &Context,
-                                            EVT VT) const {
+                                            CallingConv::ID CC, EVT VT) const {
     return getRegisterType(Context, VT);
   }
 
@@ -1159,6 +1236,7 @@ public:
   /// this occurs when a vector type is used, as vector are passed through the
   /// integer register set.
   virtual unsigned getNumRegistersForCallingConv(LLVMContext &Context,
+                                                 CallingConv::ID CC,
                                                  EVT VT) const {
     return getNumRegisters(Context, VT);
   }
@@ -1175,13 +1253,15 @@ public:
   /// reduce runtime.
   virtual bool ShouldShrinkFPConstant(EVT) const { return true; }
 
-  // Return true if it is profitable to reduce the given load node to a smaller
-  // type.
-  //
-  // e.g. (i16 (trunc (i32 (load x))) -> i16 load x should be performed
-  virtual bool shouldReduceLoadWidth(SDNode *Load,
-                                     ISD::LoadExtType ExtTy,
+  /// Return true if it is profitable to reduce a load to a smaller type.
+  /// Example: (i16 (trunc (i32 (load x))) -> i16 load x
+  virtual bool shouldReduceLoadWidth(SDNode *Load, ISD::LoadExtType ExtTy,
                                      EVT NewVT) const {
+    // By default, assume that it is cheaper to extract a subvector from a wide
+    // vector load rather than creating multiple narrow vector loads.
+    if (NewVT.isVector() && !Load->hasOneUse())
+      return false;
+
     return true;
   }
 
@@ -1404,6 +1484,12 @@ public:
     return PrefLoopAlignment;
   }
 
+  /// Should loops be aligned even when the function is marked OptSize (but not
+  /// MinSize).
+  virtual bool alignLoopsWithOptSize() const {
+    return false;
+  }
+
   /// If the target has a standard location for the stack protector guard,
   /// returns the address of that location. Otherwise, returns nullptr.
   /// DEPRECATED: please override useLoadStackGuardNode and customize
@@ -1525,6 +1611,26 @@ public:
     llvm_unreachable("Store conditional unimplemented on this target");
   }
 
+  /// Perform a masked atomicrmw using a target-specific intrinsic. This
+  /// represents the core LL/SC loop which will be lowered at a late stage by
+  /// the backend.
+  virtual Value *emitMaskedAtomicRMWIntrinsic(IRBuilder<> &Builder,
+                                              AtomicRMWInst *AI,
+                                              Value *AlignedAddr, Value *Incr,
+                                              Value *Mask, Value *ShiftAmt,
+                                              AtomicOrdering Ord) const {
+    llvm_unreachable("Masked atomicrmw expansion unimplemented on this target");
+  }
+
+  /// Perform a masked cmpxchg using a target-specific intrinsic. This
+  /// represents the core LL/SC loop which will be lowered at a late stage by
+  /// the backend.
+  virtual Value *emitMaskedAtomicCmpXchgIntrinsic(
+      IRBuilder<> &Builder, AtomicCmpXchgInst *CI, Value *AlignedAddr,
+      Value *CmpVal, Value *NewVal, Value *Mask, AtomicOrdering Ord) const {
+    llvm_unreachable("Masked cmpxchg expansion unimplemented on this target");
+  }
+
   /// Inserts in the IR a target-specific intrinsic specifying a fence.
   /// It is called by AtomicExpandPass before expanding an
   ///   AtomicRMW/AtomicCmpXchg/AtomicStore/AtomicLoad
@@ -1601,11 +1707,11 @@ public:
     return AtomicExpansionKind::None;
   }
 
-  /// Returns true if the given atomic cmpxchg should be expanded by the
-  /// IR-level AtomicExpand pass into a load-linked/store-conditional sequence
-  /// (through emitLoadLinked() and emitStoreConditional()).
-  virtual bool shouldExpandAtomicCmpXchgInIR(AtomicCmpXchgInst *AI) const {
-    return false;
+  /// Returns how the given atomic cmpxchg should be expanded by the IR-level
+  /// AtomicExpand pass.
+  virtual AtomicExpansionKind
+  shouldExpandAtomicCmpXchgInIR(AtomicCmpXchgInst *AI) const {
+    return AtomicExpansionKind::None;
   }
 
   /// Returns how the IR-level AtomicExpand pass should expand the given
@@ -1660,6 +1766,25 @@ public:
   /// transformed into simple math ops with the condition value. For example:
   /// select Cond, C1, C1-1 --> add (zext Cond), C1-1
   virtual bool convertSelectOfConstantsToMath(EVT VT) const {
+    return false;
+  }
+
+  /// Return true if it is profitable to transform an integer
+  /// multiplication-by-constant into simpler operations like shifts and adds.
+  /// This may be true if the target does not directly support the
+  /// multiplication operation for the specified type or the sequence of simpler
+  /// ops is faster than the multiply.
+  virtual bool decomposeMulByConstant(EVT VT, SDValue C) const {
+    return false;
+  }
+
+  /// Return true if it is more correct/profitable to use strict FP_TO_INT
+  /// conversion operations - canonicalizing the FP source value instead of
+  /// converting all cases and then selecting based on value.
+  /// This may be true if the target throws exceptions for out of bounds
+  /// conversions or has fast FP CMOV.
+  virtual bool shouldUseStrictFP_TO_INT(EVT FpVT, EVT IntVT,
+                                        bool IsSigned) const {
     return false;
   }
 
@@ -1991,6 +2116,14 @@ public:
     return true;
   }
 
+  /// Return true if the specified immediate is legal for the value input of a
+  /// store instruction.
+  virtual bool isLegalStoreImmediate(int64_t Value) const {
+    // Default implementation assumes that at least 0 works since it is likely
+    // that a zero register exists or a zero immediate is allowed.
+    return Value == 0;
+  }
+
   /// Return true if it's significantly cheaper to shift a vector by a uniform
   /// scalar than by an amount which will vary across each lane. On x86, for
   /// example, there is a "psllw" instruction for the former case, but no simple
@@ -2024,8 +2157,8 @@ public:
     case ISD::ADDE:
     case ISD::FMINNUM:
     case ISD::FMAXNUM:
-    case ISD::FMINNAN:
-    case ISD::FMAXNAN:
+    case ISD::FMINIMUM:
+    case ISD::FMAXIMUM:
       return true;
     default: return false;
     }
@@ -2126,6 +2259,12 @@ public:
   }
 
   virtual bool isZExtFree(EVT FromTy, EVT ToTy) const {
+    return false;
+  }
+
+  /// Return true if sign-extension from FromTy to ToTy is cheaper than
+  /// zero-extension.
+  virtual bool isSExtCheaperThanZExt(EVT FromTy, EVT ToTy) const {
     return false;
   }
 
@@ -2624,7 +2763,7 @@ public:
 
   virtual bool isSDNodeSourceOfDivergence(const SDNode *N,
                                           FunctionLoweringInfo *FLI,
-                                          DivergenceAnalysis *DA) const {
+                                          LegacyDivergenceAnalysis *DA) const {
     return false;
   }
 
@@ -2760,26 +2899,33 @@ public:
   bool SimplifyDemandedBits(SDNode *User, unsigned OpIdx, const APInt &Demanded,
                             DAGCombinerInfo &DCI, TargetLoweringOpt &TLO) const;
 
-  /// Look at Op.  At this point, we know that only the DemandedMask bits of the
+  /// Look at Op.  At this point, we know that only the DemandedBits bits of the
   /// result of Op are ever used downstream.  If we can use this information to
   /// simplify Op, create a new simplified DAG node and return true, returning
   /// the original and new nodes in Old and New.  Otherwise, analyze the
   /// expression and return a mask of KnownOne and KnownZero bits for the
   /// expression (used to simplify the caller).  The KnownZero/One bits may only
-  /// be accurate for those bits in the DemandedMask.
+  /// be accurate for those bits in the Demanded masks.
   /// \p AssumeSingleUse When this parameter is true, this function will
   ///    attempt to simplify \p Op even if there are multiple uses.
   ///    Callers are responsible for correctly updating the DAG based on the
   ///    results of this function, because simply replacing replacing TLO.Old
   ///    with TLO.New will be incorrect when this parameter is true and TLO.Old
   ///    has multiple uses.
-  bool SimplifyDemandedBits(SDValue Op, const APInt &DemandedMask,
-                            KnownBits &Known,
-                            TargetLoweringOpt &TLO,
+  bool SimplifyDemandedBits(SDValue Op, const APInt &DemandedBits,
+                            const APInt &DemandedElts, KnownBits &Known,
+                            TargetLoweringOpt &TLO, unsigned Depth = 0,
+                            bool AssumeSingleUse = false) const;
+
+  /// Helper wrapper around SimplifyDemandedBits, demanding all elements.
+  /// Adds Op back to the worklist upon success.
+  bool SimplifyDemandedBits(SDValue Op, const APInt &DemandedBits,
+                            KnownBits &Known, TargetLoweringOpt &TLO,
                             unsigned Depth = 0,
                             bool AssumeSingleUse = false) const;
 
-  /// Helper wrapper around SimplifyDemandedBits
+  /// Helper wrapper around SimplifyDemandedBits.
+  /// Adds Op back to the worklist upon success.
   bool SimplifyDemandedBits(SDValue Op, const APInt &DemandedMask,
                             DAGCombinerInfo &DCI) const;
 
@@ -2797,12 +2943,13 @@ public:
   ///    results of this function, because simply replacing replacing TLO.Old
   ///    with TLO.New will be incorrect when this parameter is true and TLO.Old
   ///    has multiple uses.
-  bool SimplifyDemandedVectorElts(SDValue Op, const APInt &DemandedElts,
+  bool SimplifyDemandedVectorElts(SDValue Op, const APInt &DemandedEltMask,
                                   APInt &KnownUndef, APInt &KnownZero,
                                   TargetLoweringOpt &TLO, unsigned Depth = 0,
                                   bool AssumeSingleUse = false) const;
 
-  /// Helper wrapper around SimplifyDemandedVectorElts
+  /// Helper wrapper around SimplifyDemandedVectorElts.
+  /// Adds Op back to the worklist upon success.
   bool SimplifyDemandedVectorElts(SDValue Op, const APInt &DemandedElts,
                                   APInt &KnownUndef, APInt &KnownZero,
                                   DAGCombinerInfo &DCI) const;
@@ -2839,11 +2986,30 @@ public:
   /// elements, returning true on success. Otherwise, analyze the expression and
   /// return a mask of KnownUndef and KnownZero elements for the expression
   /// (used to simplify the caller). The KnownUndef/Zero elements may only be
-  /// accurate for those bits in the DemandedMask
+  /// accurate for those bits in the DemandedMask.
   virtual bool SimplifyDemandedVectorEltsForTargetNode(
       SDValue Op, const APInt &DemandedElts, APInt &KnownUndef,
       APInt &KnownZero, TargetLoweringOpt &TLO, unsigned Depth = 0) const;
 
+  /// Attempt to simplify any target nodes based on the demanded bits/elts,
+  /// returning true on success. Otherwise, analyze the
+  /// expression and return a mask of KnownOne and KnownZero bits for the
+  /// expression (used to simplify the caller).  The KnownZero/One bits may only
+  /// be accurate for those bits in the Demanded masks.
+  virtual bool SimplifyDemandedBitsForTargetNode(SDValue Op,
+                                                 const APInt &DemandedBits,
+                                                 const APInt &DemandedElts,
+                                                 KnownBits &Known,
+                                                 TargetLoweringOpt &TLO,
+                                                 unsigned Depth = 0) const;
+
+  /// If \p SNaN is false, \returns true if \p Op is known to never be any
+  /// NaN. If \p sNaN is true, returns if \p Op is known to never be a signaling
+  /// NaN.
+  virtual bool isKnownNeverNaNForTargetNode(SDValue Op,
+                                            const SelectionDAG &DAG,
+                                            bool SNaN = false,
+                                            unsigned Depth = 0) const;
   struct DAGCombinerInfo {
     void *DC;  // The DAG Combiner object.
     CombineLevel Level;
@@ -2880,7 +3046,7 @@ public:
   bool isConstFalseVal(const SDNode *N) const;
 
   /// Return if \p N is a True value when extended to \p VT.
-  bool isExtendedTrueVal(const ConstantSDNode *N, EVT VT, bool Signed) const;
+  bool isExtendedTrueVal(const ConstantSDNode *N, EVT VT, bool SExt) const;
 
   /// Try to simplify a setcc built with the specified operands and cc. If it is
   /// unable to simplify it, return a null SDValue.
@@ -2911,12 +3077,25 @@ public:
   ///
   virtual SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
-  /// Return true if it is profitable to move a following shift through this
-  //  node, adjusting any immediate operands as necessary to preserve semantics.
-  //  This transformation may not be desirable if it disrupts a particularly
-  //  auspicious target-specific tree (e.g. bitfield extraction in AArch64).
-  //  By default, it returns true.
-  virtual bool isDesirableToCommuteWithShift(const SDNode *N) const {
+  /// Return true if it is profitable to move this shift by a constant amount
+  /// though its operand, adjusting any immediate operands as necessary to
+  /// preserve semantics. This transformation may not be desirable if it
+  /// disrupts a particularly auspicious target-specific tree (e.g. bitfield
+  /// extraction in AArch64). By default, it returns true.
+  ///
+  /// @param N the shift node
+  /// @param Level the current DAGCombine legalization level.
+  virtual bool isDesirableToCommuteWithShift(const SDNode *N,
+                                             CombineLevel Level) const {
+    return true;
+  }
+
+  /// Return true if it is profitable to fold a pair of shifts into a mask.
+  /// This is usually true on most targets. But some targets, like Thumb1,
+  /// have immediate shift instructions, but no immediate "and" instruction;
+  /// this makes the fold unprofitable.
+  virtual bool shouldFoldShiftPairToMask(const SDNode *N,
+                                         CombineLevel Level) const {
     return true;
   }
 
@@ -3464,12 +3643,10 @@ public:
   //===--------------------------------------------------------------------===//
   // Div utility functions
   //
-  SDValue BuildSDIV(SDNode *N, const APInt &Divisor, SelectionDAG &DAG,
-                    bool IsAfterLegalization,
-                    std::vector<SDNode *> *Created) const;
-  SDValue BuildUDIV(SDNode *N, const APInt &Divisor, SelectionDAG &DAG,
-                    bool IsAfterLegalization,
-                    std::vector<SDNode *> *Created) const;
+  SDValue BuildSDIV(SDNode *N, SelectionDAG &DAG, bool IsAfterLegalization,
+                    SmallVectorImpl<SDNode *> &Created) const;
+  SDValue BuildUDIV(SDNode *N, SelectionDAG &DAG, bool IsAfterLegalization,
+                    SmallVectorImpl<SDNode *> &Created) const;
 
   /// Targets may override this function to provide custom SDIV lowering for
   /// power-of-2 denominators.  If the target returns an empty SDValue, LLVM
@@ -3477,7 +3654,7 @@ public:
   /// operations.
   virtual SDValue BuildSDIVPow2(SDNode *N, const APInt &Divisor,
                                 SelectionDAG &DAG,
-                                std::vector<SDNode *> *Created) const;
+                                SmallVectorImpl<SDNode *> &Created) const;
 
   /// Indicate whether this target prefers to combine FDIVs with the same
   /// divisor. If the transform should never be done, return zero. If the
@@ -3560,11 +3737,59 @@ public:
                  SDValue LL = SDValue(), SDValue LH = SDValue(),
                  SDValue RL = SDValue(), SDValue RH = SDValue()) const;
 
+  /// Expand funnel shift.
+  /// \param N Node to expand
+  /// \param Result output after conversion
+  /// \returns True, if the expansion was successful, false otherwise
+  bool expandFunnelShift(SDNode *N, SDValue &Result, SelectionDAG &DAG) const;
+
+  /// Expand rotations.
+  /// \param N Node to expand
+  /// \param Result output after conversion
+  /// \returns True, if the expansion was successful, false otherwise
+  bool expandROT(SDNode *N, SDValue &Result, SelectionDAG &DAG) const;
+
   /// Expand float(f32) to SINT(i64) conversion
   /// \param N Node to expand
   /// \param Result output after conversion
   /// \returns True, if the expansion was successful, false otherwise
   bool expandFP_TO_SINT(SDNode *N, SDValue &Result, SelectionDAG &DAG) const;
+
+  /// Expand float to UINT conversion
+  /// \param N Node to expand
+  /// \param Result output after conversion
+  /// \returns True, if the expansion was successful, false otherwise
+  bool expandFP_TO_UINT(SDNode *N, SDValue &Result, SelectionDAG &DAG) const;
+
+  /// Expand UINT(i64) to double(f64) conversion
+  /// \param N Node to expand
+  /// \param Result output after conversion
+  /// \returns True, if the expansion was successful, false otherwise
+  bool expandUINT_TO_FP(SDNode *N, SDValue &Result, SelectionDAG &DAG) const;
+
+  /// Expand fminnum/fmaxnum into fminnum_ieee/fmaxnum_ieee with quieted inputs.
+  SDValue expandFMINNUM_FMAXNUM(SDNode *N, SelectionDAG &DAG) const;
+
+  /// Expand CTPOP nodes. Expands vector/scalar CTPOP nodes,
+  /// vector nodes can only succeed if all operations are legal/custom.
+  /// \param N Node to expand
+  /// \param Result output after conversion
+  /// \returns True, if the expansion was successful, false otherwise
+  bool expandCTPOP(SDNode *N, SDValue &Result, SelectionDAG &DAG) const;
+
+  /// Expand CTLZ/CTLZ_ZERO_UNDEF nodes. Expands vector/scalar CTLZ nodes,
+  /// vector nodes can only succeed if all operations are legal/custom.
+  /// \param N Node to expand
+  /// \param Result output after conversion
+  /// \returns True, if the expansion was successful, false otherwise
+  bool expandCTLZ(SDNode *N, SDValue &Result, SelectionDAG &DAG) const;
+
+  /// Expand CTTZ/CTTZ_ZERO_UNDEF nodes. Expands vector/scalar CTTZ nodes,
+  /// vector nodes can only succeed if all operations are legal/custom.
+  /// \param N Node to expand
+  /// \param Result output after conversion
+  /// \returns True, if the expansion was successful, false otherwise
+  bool expandCTTZ(SDNode *N, SDValue &Result, SelectionDAG &DAG) const;
 
   /// Turn load of vector type into a load of the individual elements.
   /// \param LD load to expand
@@ -3601,7 +3826,17 @@ public:
   /// bounds the returned pointer is unspecified, but will be within the vector
   /// bounds.
   SDValue getVectorElementPointer(SelectionDAG &DAG, SDValue VecPtr, EVT VecVT,
-                                  SDValue Idx) const;
+                                  SDValue Index) const;
+
+  /// Method for building the DAG expansion of ISD::[US][ADD|SUB]SAT. This
+  /// method accepts integers as its arguments.
+  SDValue getExpandedSaturationAdditionSubtraction(SDNode *Node,
+                                                   SelectionDAG &DAG) const;
+
+  /// Method for building the DAG expansion of ISD::SMULFIX. This method accepts
+  /// integers as its arguments.
+  SDValue getExpandedFixedPointMultiplication(SDNode *Node,
+                                              SelectionDAG &DAG) const;
 
   //===--------------------------------------------------------------------===//
   // Instruction Emitting Hooks
@@ -3657,12 +3892,17 @@ private:
   SDValue simplifySetCCWithAnd(EVT VT, SDValue N0, SDValue N1,
                                ISD::CondCode Cond, DAGCombinerInfo &DCI,
                                const SDLoc &DL) const;
+
+  SDValue optimizeSetCCOfSignedTruncationCheck(EVT SCCVT, SDValue N0,
+                                               SDValue N1, ISD::CondCode Cond,
+                                               DAGCombinerInfo &DCI,
+                                               const SDLoc &DL) const;
 };
 
 /// Given an LLVM IR type and return type attributes, compute the return value
 /// EVTs and flags, and optionally also the offsets, if the return value is
 /// being lowered to memory.
-void GetReturnInfo(Type *ReturnType, AttributeList attr,
+void GetReturnInfo(CallingConv::ID CC, Type *ReturnType, AttributeList attr,
                    SmallVectorImpl<ISD::OutputArg> &Outs,
                    const TargetLowering &TLI, const DataLayout &DL);
 

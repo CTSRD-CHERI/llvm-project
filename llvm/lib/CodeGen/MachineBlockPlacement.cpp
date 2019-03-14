@@ -425,7 +425,7 @@ class MachineBlockPlacement : public MachineFunctionPass {
       MachineBasicBlock *BB, MachineBasicBlock *LPred,
       BlockChain &Chain, BlockFilterSet *BlockFilter,
       MachineFunction::iterator &PrevUnplacedBlockIt,
-      bool &DuplicatedToPred);
+      bool &DuplicatedToLPred);
   bool hasBetterLayoutPredecessor(
       const MachineBasicBlock *BB, const MachineBasicBlock *Succ,
       const BlockChain &SuccChain, BranchProbability SuccProb,
@@ -474,7 +474,7 @@ class MachineBlockPlacement : public MachineFunctionPass {
   /// fallthroughs.
   bool isProfitableToTailDup(
     const MachineBasicBlock *BB, const MachineBasicBlock *Succ,
-    BranchProbability AdjustedSumProb,
+    BranchProbability QProb,
     const BlockChain &Chain, const BlockFilterSet *BlockFilter);
 
   /// Check for a trellis layout.
@@ -2497,7 +2497,8 @@ void MachineBlockPlacement::alignBlocks() {
   // exclusively on the loop info here so that we can align backedges in
   // unnatural CFGs and backedges that were introduced purely because of the
   // loop rotations done during this layout pass.
-  if (F->getFunction().optForSize())
+  if (F->getFunction().optForMinSize() ||
+      (F->getFunction().optForSize() && !TLI->alignLoopsWithOptSize()))
     return;
   BlockChain &FunctionChain = *BlockToChain[&F->front()];
   if (FunctionChain.begin() == FunctionChain.end())

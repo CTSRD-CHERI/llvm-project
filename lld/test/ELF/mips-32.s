@@ -1,3 +1,4 @@
+# REQUIRES: mips
 # Check R_MIPS_32 relocation calculation.
 
 # RUN: llvm-mc -filetype=obj -triple=mips-unknown-linux %s -o %t-be.o
@@ -13,8 +14,6 @@
 # RUN:   | FileCheck -check-prefix=SYM -check-prefix=EL %s
 # RUN: llvm-readobj -r -dynamic-table -mips-plt-got %t-el.so \
 # RUN:   | FileCheck -check-prefix=REL %s
-
-# REQUIRES: mips
 
   .globl  __start
 __start:
@@ -42,8 +41,8 @@ v2:
 #                         ^-- v2+4 ^-- v1
 
 # SYM: SYMBOL TABLE:
-# SYM: 00020000 l       .data           00000004 v1
-# SYM: 00020004 g       .data           00000008 v2
+# SYM: 00020000 l     O .data           00000004 v1
+# SYM: 00020004 g     O .data           00000008 v2
 
 # REL:      Relocations [
 # REL-NEXT:   Section (7) .rel.dyn {

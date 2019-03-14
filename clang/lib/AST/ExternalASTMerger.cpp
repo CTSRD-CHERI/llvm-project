@@ -144,17 +144,17 @@ public:
     }
     if (auto *ToTag = dyn_cast<TagDecl>(To)) {
       ToTag->setHasExternalLexicalStorage();
-      ToTag->setMustBuildLookupTable();
+      ToTag->getPrimaryContext()->setMustBuildLookupTable();
       assert(Parent.CanComplete(ToTag));
     } else if (auto *ToNamespace = dyn_cast<NamespaceDecl>(To)) {
       ToNamespace->setHasExternalVisibleStorage();
       assert(Parent.CanComplete(ToNamespace));
     } else if (auto *ToContainer = dyn_cast<ObjCContainerDecl>(To)) {
       ToContainer->setHasExternalLexicalStorage();
-      ToContainer->setMustBuildLookupTable();
+      ToContainer->getPrimaryContext()->setMustBuildLookupTable();
       assert(Parent.CanComplete(ToContainer));
     }
-    return ASTImporter::Imported(From, To);
+    return To;
   }
   ASTImporter &GetReverse() { return Reverse; }
 };
@@ -229,8 +229,9 @@ void ExternalASTMerger::CompleteType(TagDecl *Tag) {
       SourceTag->getASTContext().getExternalSource()->CompleteType(SourceTag);
     if (!SourceTag->getDefinition())
       return false;
-    Forward.Imported(SourceTag, Tag);
-    Forward.ImportDefinition(SourceTag);
+    Forward.MapImported(SourceTag, Tag);
+    if (llvm::Error Err = Forward.ImportDefinition_New(SourceTag))
+      llvm::consumeError(std::move(Err));
     Tag->setCompleteDefinition(SourceTag->isCompleteDefinition());
     return true;
   });
@@ -248,8 +249,9 @@ void ExternalASTMerger::CompleteType(ObjCInterfaceDecl *Interface) {
               SourceInterface);
         if (!SourceInterface->getDefinition())
           return false;
-        Forward.Imported(SourceInterface, Interface);
-        Forward.ImportDefinition(SourceInterface);
+        Forward.MapImported(SourceInterface, Interface);
+        if (llvm::Error Err = Forward.ImportDefinition_New(SourceInterface))
+          llvm::consumeError(std::move(Err));
         return true;
       });
 }
@@ -304,7 +306,7 @@ void ExternalASTMerger::ForceRecordOrigin(const DeclContext *ToDC,
 void ExternalASTMerger::RecordOriginImpl(const DeclContext *ToDC, DCOrigin Origin,
                                          ASTImporter &Importer) {
   Origins[ToDC] = Origin;
-  Importer.ASTImporter::Imported(cast<Decl>(Origin.DC), const_cast<Decl*>(cast<Decl>(ToDC)));
+  Importer.ASTImporter::MapImported(cast<Decl>(Origin.DC), const_cast<Decl*>(cast<Decl>(ToDC)));
 }
 
 ExternalASTMerger::ExternalASTMerger(const ImporterTarget &Target,

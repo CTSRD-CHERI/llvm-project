@@ -102,12 +102,6 @@ static std::string computeDataLayout(bool is64Bit, bool UseShortPointers) {
   return Ret;
 }
 
-static CodeModel::Model getEffectiveCodeModel(Optional<CodeModel::Model> CM) {
-  if (CM)
-    return *CM;
-  return CodeModel::Small;
-}
-
 NVPTXTargetMachine::NVPTXTargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
@@ -118,7 +112,7 @@ NVPTXTargetMachine::NVPTXTargetMachine(const Target &T, const Triple &TT,
     // specified, as it is the only relocation model currently supported.
     : LLVMTargetMachine(T, computeDataLayout(is64bit, UseShortPointersOpt), TT,
                         CPU, FS, Options, Reloc::PIC_,
-                        getEffectiveCodeModel(CM), OL),
+                        getEffectiveCodeModel(CM, CodeModel::Small), OL),
       is64bit(is64bit), UseShortPointers(UseShortPointersOpt),
       TLOF(llvm::make_unique<NVPTXTargetObjectFile>()),
       Subtarget(TT, CPU, FS, *this) {
@@ -195,7 +189,7 @@ void NVPTXTargetMachine::adjustPassManager(PassManagerBuilder &Builder) {
   Builder.addExtension(
     PassManagerBuilder::EP_EarlyAsPossible,
     [&](const PassManagerBuilder &, legacy::PassManagerBase &PM) {
-      PM.add(createNVVMReflectPass());
+      PM.add(createNVVMReflectPass(Subtarget.getSmVersion()));
       PM.add(createNVVMIntrRangePass(Subtarget.getSmVersion()));
     });
 }
@@ -258,7 +252,8 @@ void NVPTXPassConfig::addIRPasses() {
   // it here does nothing.  But since we need it for correctness when lowering
   // to NVPTX, run it here too, in case whoever built our pass pipeline didn't
   // call addEarlyAsPossiblePasses.
-  addPass(createNVVMReflectPass());
+  const NVPTXSubtarget &ST = *getTM<NVPTXTargetMachine>().getSubtargetImpl();
+  addPass(createNVVMReflectPass(ST.getSmVersion()));
 
   if (getOptLevel() != CodeGenOpt::None)
     addPass(createNVPTXImageOptimizerPass());

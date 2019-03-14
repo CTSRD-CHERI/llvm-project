@@ -27,6 +27,7 @@
 #include <string>
 
 #include "lldb/API/SBValue.h"
+#include "lldb/API/SBFrame.h"
 #include "lldb/Breakpoint/BreakpointLocation.h"
 #include "lldb/Breakpoint/StoppointCallbackContext.h"
 #include "lldb/Breakpoint/WatchpointOptions.h"
@@ -91,6 +92,10 @@ static ScriptInterpreterPython::SWIGPythonCallModuleInit
     g_swig_call_module_init = nullptr;
 static ScriptInterpreterPython::SWIGPythonCreateOSPlugin
     g_swig_create_os_plugin = nullptr;
+static ScriptInterpreterPython::SWIGPythonCreateFrameRecognizer
+    g_swig_create_frame_recognizer = nullptr;
+static ScriptInterpreterPython::SWIGPythonGetRecognizedArguments
+    g_swig_get_recognized_arguments = nullptr;
 static ScriptInterpreterPython::SWIGPythonScriptKeyword_Process
     g_swig_run_script_keyword_process = nullptr;
 static ScriptInterpreterPython::SWIGPythonScriptKeyword_Thread
@@ -107,6 +112,10 @@ static ScriptInterpreterPython::SWIGPythonCreateScriptedThreadPlan
     g_swig_thread_plan_script = nullptr;
 static ScriptInterpreterPython::SWIGPythonCallThreadPlan
     g_swig_call_thread_plan = nullptr;
+static ScriptInterpreterPython::SWIGPythonCreateScriptedBreakpointResolver
+    g_swig_bkpt_resolver_script = nullptr;
+static ScriptInterpreterPython::SWIGPythonCallBreakpointResolver
+    g_swig_call_bkpt_resolver = nullptr;
 
 static bool g_initialized = false;
 
@@ -127,6 +136,9 @@ public:
     m_stdin_tty_state.Save(STDIN_FILENO, false);
 
     InitializePythonHome();
+
+    // Register _lldb as a built-in module.
+    PyImport_AppendInittab("_lldb", g_swig_init_callback);
 
 // Python < 3.2 and Python >= 3.2 reversed the ordering requirements for
 // calling `Py_Initialize` and `PyEval_InitThreads`.  < 3.2 requires that you
@@ -196,7 +208,7 @@ ScriptInterpreterPython::Locker::Locker(ScriptInterpreterPython *py_interpreter,
       m_python_interpreter(py_interpreter) {
   DoAcquireLock();
   if ((on_entry & InitSession) == InitSession) {
-    if (DoInitSession(on_entry, in, out, err) == false) {
+    if (!DoInitSession(on_entry, in, out, err)) {
       // Don't teardown the session if we didn't init it.
       m_teardown_session = false;
     }
@@ -751,12 +763,14 @@ static void ReadThreadBytesReceived(void *baton, const void *src,
 }
 
 bool ScriptInterpreterPython::ExecuteOneLine(
-    const char *command, CommandReturnObject *result,
+    llvm::StringRef command, CommandReturnObject *result,
     const ExecuteScriptOptions &options) {
+  std::string command_str = command.str();
+
   if (!m_valid_session)
     return false;
 
-  if (command && command[0]) {
+  if (!command.empty()) {
     // We want to call run_one_line, passing in the dictionary and the command
     // string.  We cannot do this through PyRun_SimpleString here because the
     // command string may contain escaped characters, and putting it inside
@@ -815,11 +829,15 @@ bool ScriptInterpreterPython::ExecuteOneLine(
                                                  error_file_sp);
     } else {
       input_file_sp.reset(new StreamFile());
-      input_file_sp->GetFile().Open(FileSystem::DEV_NULL,
-                                    File::eOpenOptionRead);
+      FileSystem::Instance().Open(input_file_sp->GetFile(),
+                                  FileSpec(FileSystem::DEV_NULL),
+                                  File::eOpenOptionRead);
+
       output_file_sp.reset(new StreamFile());
-      output_file_sp->GetFile().Open(FileSystem::DEV_NULL,
-                                     File::eOpenOptionWrite);
+      FileSystem::Instance().Open(output_file_sp->GetFile(),
+                                  FileSpec(FileSystem::DEV_NULL),
+                                  File::eOpenOptionWrite);
+
       error_file_sp = output_file_sp;
     }
 
@@ -855,7 +873,7 @@ bool ScriptInterpreterPython::ExecuteOneLine(
           if (PyCallable_Check(m_run_one_line_function.get())) {
             PythonObject pargs(
                 PyRefType::Owned,
-                Py_BuildValue("(Os)", session_dict.get(), command));
+                Py_BuildValue("(Os)", session_dict.get(), command_str.c_str()));
             if (pargs.IsValid()) {
               PythonObject return_value(
                   PyRefType::Owned,
@@ -894,9 +912,10 @@ bool ScriptInterpreterPython::ExecuteOneLine(
       return true;
 
     // The one-liner failed.  Append the error message.
-    if (result)
+    if (result) {
       result->AppendErrorWithFormat(
-          "python failed attempting to evaluate '%s'\n", command);
+          "python failed attempting to evaluate '%s'\n", command_str.c_str());
+    }
     return false;
   }
 
@@ -1021,7 +1040,7 @@ bool ScriptInterpreterPython::Interrupt() {
   return false;
 }
 bool ScriptInterpreterPython::ExecuteOneLineWithReturn(
-    const char *in_string, ScriptInterpreter::ScriptReturnType return_type,
+    llvm::StringRef in_string, ScriptInterpreter::ScriptReturnType return_type,
     void *ret_value, const ExecuteScriptOptions &options) {
 
   Locker locker(this, ScriptInterpreterPython::Locker::AcquireLock |
@@ -1056,116 +1075,111 @@ bool ScriptInterpreterPython::ExecuteOneLineWithReturn(
   if (py_error.IsValid())
     PyErr_Clear();
 
-  if (in_string != nullptr) {
-    { // scope for PythonInputReaderManager
-      // PythonInputReaderManager py_input(options.GetEnableIO() ? this : NULL);
-      py_return.Reset(
-          PyRefType::Owned,
-          PyRun_String(in_string, Py_eval_input, globals.get(), locals.get()));
-      if (!py_return.IsValid()) {
-        py_error.Reset(PyRefType::Borrowed, PyErr_Occurred());
-        if (py_error.IsValid())
-          PyErr_Clear();
+  std::string as_string = in_string.str();
+  { // scope for PythonInputReaderManager
+    // PythonInputReaderManager py_input(options.GetEnableIO() ? this : NULL);
+    py_return.Reset(PyRefType::Owned,
+                    PyRun_String(as_string.c_str(), Py_eval_input,
+                                 globals.get(), locals.get()));
+    if (!py_return.IsValid()) {
+      py_error.Reset(PyRefType::Borrowed, PyErr_Occurred());
+      if (py_error.IsValid())
+        PyErr_Clear();
 
-        py_return.Reset(PyRefType::Owned,
-                        PyRun_String(in_string, Py_single_input, globals.get(),
-                                     locals.get()));
-      }
+      py_return.Reset(PyRefType::Owned,
+                      PyRun_String(as_string.c_str(), Py_single_input,
+                                   globals.get(), locals.get()));
+    }
+  }
+
+  if (py_return.IsValid()) {
+    switch (return_type) {
+    case eScriptReturnTypeCharPtr: // "char *"
+    {
+      const char format[3] = "s#";
+      success = PyArg_Parse(py_return.get(), format, (char **)ret_value);
+      break;
+    }
+    case eScriptReturnTypeCharStrOrNone: // char* or NULL if py_return ==
+                                         // Py_None
+    {
+      const char format[3] = "z";
+      success = PyArg_Parse(py_return.get(), format, (char **)ret_value);
+      break;
+    }
+    case eScriptReturnTypeBool: {
+      const char format[2] = "b";
+      success = PyArg_Parse(py_return.get(), format, (bool *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeShortInt: {
+      const char format[2] = "h";
+      success = PyArg_Parse(py_return.get(), format, (short *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeShortIntUnsigned: {
+      const char format[2] = "H";
+      success =
+          PyArg_Parse(py_return.get(), format, (unsigned short *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeInt: {
+      const char format[2] = "i";
+      success = PyArg_Parse(py_return.get(), format, (int *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeIntUnsigned: {
+      const char format[2] = "I";
+      success = PyArg_Parse(py_return.get(), format, (unsigned int *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeLongInt: {
+      const char format[2] = "l";
+      success = PyArg_Parse(py_return.get(), format, (long *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeLongIntUnsigned: {
+      const char format[2] = "k";
+      success =
+          PyArg_Parse(py_return.get(), format, (unsigned long *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeLongLong: {
+      const char format[2] = "L";
+      success = PyArg_Parse(py_return.get(), format, (long long *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeLongLongUnsigned: {
+      const char format[2] = "K";
+      success =
+          PyArg_Parse(py_return.get(), format, (unsigned long long *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeFloat: {
+      const char format[2] = "f";
+      success = PyArg_Parse(py_return.get(), format, (float *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeDouble: {
+      const char format[2] = "d";
+      success = PyArg_Parse(py_return.get(), format, (double *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeChar: {
+      const char format[2] = "c";
+      success = PyArg_Parse(py_return.get(), format, (char *)ret_value);
+      break;
+    }
+    case eScriptReturnTypeOpaqueObject: {
+      success = true;
+      PyObject *saved_value = py_return.get();
+      Py_XINCREF(saved_value);
+      *((PyObject **)ret_value) = saved_value;
+      break;
+    }
     }
 
-    if (py_return.IsValid()) {
-      switch (return_type) {
-      case eScriptReturnTypeCharPtr: // "char *"
-      {
-        const char format[3] = "s#";
-        success = PyArg_Parse(py_return.get(), format, (char **)ret_value);
-        break;
-      }
-      case eScriptReturnTypeCharStrOrNone: // char* or NULL if py_return ==
-                                           // Py_None
-        {
-          const char format[3] = "z";
-          success = PyArg_Parse(py_return.get(), format, (char **)ret_value);
-          break;
-        }
-      case eScriptReturnTypeBool: {
-        const char format[2] = "b";
-        success = PyArg_Parse(py_return.get(), format, (bool *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeShortInt: {
-        const char format[2] = "h";
-        success = PyArg_Parse(py_return.get(), format, (short *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeShortIntUnsigned: {
-        const char format[2] = "H";
-        success =
-            PyArg_Parse(py_return.get(), format, (unsigned short *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeInt: {
-        const char format[2] = "i";
-        success = PyArg_Parse(py_return.get(), format, (int *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeIntUnsigned: {
-        const char format[2] = "I";
-        success =
-            PyArg_Parse(py_return.get(), format, (unsigned int *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeLongInt: {
-        const char format[2] = "l";
-        success = PyArg_Parse(py_return.get(), format, (long *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeLongIntUnsigned: {
-        const char format[2] = "k";
-        success =
-            PyArg_Parse(py_return.get(), format, (unsigned long *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeLongLong: {
-        const char format[2] = "L";
-        success = PyArg_Parse(py_return.get(), format, (long long *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeLongLongUnsigned: {
-        const char format[2] = "K";
-        success = PyArg_Parse(py_return.get(), format,
-                              (unsigned long long *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeFloat: {
-        const char format[2] = "f";
-        success = PyArg_Parse(py_return.get(), format, (float *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeDouble: {
-        const char format[2] = "d";
-        success = PyArg_Parse(py_return.get(), format, (double *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeChar: {
-        const char format[2] = "c";
-        success = PyArg_Parse(py_return.get(), format, (char *)ret_value);
-        break;
-      }
-      case eScriptReturnTypeOpaqueObject: {
-        success = true;
-        PyObject *saved_value = py_return.get();
-        Py_XINCREF(saved_value);
-        *((PyObject **)ret_value) = saved_value;
-        break;
-      }
-      }
-
-      if (success)
-        ret_success = true;
-      else
-        ret_success = false;
-    }
+    ret_success = success;
   }
 
   py_error.Reset(PyRefType::Borrowed, PyErr_Occurred());
@@ -1491,6 +1505,62 @@ bool ScriptInterpreterPython::GenerateTypeSynthClass(StringList &user_input,
 
   output.assign(auto_generated_class_name);
   return true;
+}
+
+StructuredData::GenericSP ScriptInterpreterPython::CreateFrameRecognizer(
+    const char *class_name) {
+  if (class_name == nullptr || class_name[0] == '\0')
+    return StructuredData::GenericSP();
+
+  void *ret_val;
+
+  {
+    Locker py_lock(this, Locker::AcquireLock | Locker::NoSTDIN,
+                   Locker::FreeLock);
+    ret_val =
+        g_swig_create_frame_recognizer(class_name, m_dictionary_name.c_str());
+  }
+
+  return StructuredData::GenericSP(new StructuredPythonObject(ret_val));
+}
+
+lldb::ValueObjectListSP ScriptInterpreterPython::GetRecognizedArguments(
+    const StructuredData::ObjectSP &os_plugin_object_sp,
+    lldb::StackFrameSP frame_sp) {
+  Locker py_lock(this, Locker::AcquireLock | Locker::NoSTDIN, Locker::FreeLock);
+
+  if (!os_plugin_object_sp) return ValueObjectListSP();
+
+  StructuredData::Generic *generic = os_plugin_object_sp->GetAsGeneric();
+  if (!generic) return nullptr;
+
+  PythonObject implementor(PyRefType::Borrowed,
+                           (PyObject *)generic->GetValue());
+
+  if (!implementor.IsAllocated()) return ValueObjectListSP();
+
+  PythonObject py_return(
+      PyRefType::Owned,
+      (PyObject *)g_swig_get_recognized_arguments(implementor.get(), frame_sp));
+
+  // if it fails, print the error but otherwise go on
+  if (PyErr_Occurred()) {
+    PyErr_Print();
+    PyErr_Clear();
+  }
+  if (py_return.get()) {
+    PythonList result_list(PyRefType::Borrowed, py_return.get());
+    ValueObjectListSP result = ValueObjectListSP(new ValueObjectList());
+    for (size_t i = 0; i < result_list.GetSize(); i++) {
+      PyObject *item = result_list.GetItemAtIndex(i).get();
+      lldb::SBValue *sb_value_ptr =
+          (lldb::SBValue *)g_swig_cast_to_sbvalue(item);
+      auto valobj_sp = g_swig_get_valobj_sp_from_sbvalue(sb_value_ptr);
+      if (valobj_sp) result->Append(valobj_sp);
+    }
+    return result;
+  }
+  return ValueObjectListSP();
 }
 
 StructuredData::GenericSP ScriptInterpreterPython::OSPlugin_CreatePluginObject(
@@ -1870,10 +1940,88 @@ lldb::StateType ScriptInterpreterPython::ScriptedThreadPlanGetRunState(
     return lldb::eStateRunning;
 }
 
+StructuredData::GenericSP
+ScriptInterpreterPython::CreateScriptedBreakpointResolver(
+    const char *class_name,
+    StructuredDataImpl *args_data,
+    lldb::BreakpointSP &bkpt_sp) {
+    
+  if (class_name == nullptr || class_name[0] == '\0')
+    return StructuredData::GenericSP();
+
+  if (!bkpt_sp.get())
+    return StructuredData::GenericSP();
+
+  Debugger &debugger = bkpt_sp->GetTarget().GetDebugger();
+  ScriptInterpreter *script_interpreter =
+      debugger.GetCommandInterpreter().GetScriptInterpreter();
+  ScriptInterpreterPython *python_interpreter =
+      static_cast<ScriptInterpreterPython *>(script_interpreter);
+
+  if (!script_interpreter)
+    return StructuredData::GenericSP();
+
+  void *ret_val;
+
+  {
+    Locker py_lock(this,
+                   Locker::AcquireLock | Locker::InitSession | Locker::NoSTDIN);
+
+    ret_val = g_swig_bkpt_resolver_script(
+        class_name, python_interpreter->m_dictionary_name.c_str(),
+        args_data, bkpt_sp);
+  }
+
+  return StructuredData::GenericSP(new StructuredPythonObject(ret_val));
+}
+
+bool
+ScriptInterpreterPython::ScriptedBreakpointResolverSearchCallback(
+    StructuredData::GenericSP implementor_sp,
+    SymbolContext *sym_ctx) {
+  bool should_continue = false;
+  
+  if (implementor_sp) {
+    Locker py_lock(this,
+                   Locker::AcquireLock | Locker::InitSession | Locker::NoSTDIN);
+    should_continue
+        = g_swig_call_bkpt_resolver(implementor_sp->GetValue(), "__callback__",
+                                    sym_ctx);
+    if (PyErr_Occurred()) {
+      PyErr_Print();
+      PyErr_Clear();
+    }
+  }
+  return should_continue;
+}
+
+lldb::SearchDepth
+ScriptInterpreterPython::ScriptedBreakpointResolverSearchDepth(
+    StructuredData::GenericSP implementor_sp) {
+  int depth_as_int = lldb::eSearchDepthModule;
+  if (implementor_sp) {
+    Locker py_lock(this,
+                   Locker::AcquireLock | Locker::InitSession | Locker::NoSTDIN);
+    depth_as_int
+        = g_swig_call_bkpt_resolver(implementor_sp->GetValue(), "__get_depth__", nullptr);
+    if (PyErr_Occurred()) {
+      PyErr_Print();
+      PyErr_Clear();
+    }
+  }
+  if (depth_as_int == lldb::eSearchDepthInvalid)
+    return lldb::eSearchDepthModule;
+
+  if (depth_as_int <= lldb::kLastSearchDepthKind)
+    return (lldb::SearchDepth) depth_as_int;
+  else
+    return lldb::eSearchDepthModule;
+}
+
 StructuredData::ObjectSP
 ScriptInterpreterPython::LoadPluginModule(const FileSpec &file_spec,
                                           lldb_private::Status &error) {
-  if (!file_spec.Exists()) {
+  if (!FileSystem::Instance().Exists(file_spec)) {
     error.SetErrorString("no such file");
     return StructuredData::ObjectSP();
   }
@@ -2605,7 +2753,8 @@ bool ScriptInterpreterPython::LoadScriptingModule(
   lldb::DebuggerSP debugger_sp = m_interpreter.GetDebugger().shared_from_this();
 
   {
-    FileSpec target_file(pathname, true);
+    FileSpec target_file(pathname);
+    FileSystem::Instance().Resolve(target_file);
     std::string basename(target_file.GetFilename().GetCString());
 
     StreamString command_stream;
@@ -2689,7 +2838,7 @@ bool ScriptInterpreterPython::LoadScriptingModule(
 
     bool was_imported = (was_imported_globally || was_imported_locally);
 
-    if (was_imported == true && can_reload == false) {
+    if (was_imported && !can_reload) {
       error.SetErrorString("module already imported");
       return false;
     }
@@ -2779,7 +2928,7 @@ ScriptInterpreterPython::SynchronicityHandler::~SynchronicityHandler() {
 }
 
 bool ScriptInterpreterPython::RunScriptBasedCommand(
-    const char *impl_function, const char *args,
+    const char *impl_function, llvm::StringRef args,
     ScriptedCommandSynchronicity synchronicity,
     lldb_private::CommandReturnObject &cmd_retobj, Status &error,
     const lldb_private::ExecutionContext &exe_ctx) {
@@ -2813,9 +2962,10 @@ bool ScriptInterpreterPython::RunScriptBasedCommand(
 
     SynchronicityHandler synch_handler(debugger_sp, synchronicity);
 
-    ret_val =
-        g_swig_call_command(impl_function, m_dictionary_name.c_str(),
-                            debugger_sp, args, cmd_retobj, exe_ctx_ref_sp);
+    std::string args_str = args.str();
+    ret_val = g_swig_call_command(impl_function, m_dictionary_name.c_str(),
+                                  debugger_sp, args_str.c_str(), cmd_retobj,
+                                  exe_ctx_ref_sp);
   }
 
   if (!ret_val)
@@ -2827,7 +2977,7 @@ bool ScriptInterpreterPython::RunScriptBasedCommand(
 }
 
 bool ScriptInterpreterPython::RunScriptBasedCommand(
-    StructuredData::GenericSP impl_obj_sp, const char *args,
+    StructuredData::GenericSP impl_obj_sp, llvm::StringRef args,
     ScriptedCommandSynchronicity synchronicity,
     lldb_private::CommandReturnObject &cmd_retobj, Status &error,
     const lldb_private::ExecutionContext &exe_ctx) {
@@ -2861,8 +3011,10 @@ bool ScriptInterpreterPython::RunScriptBasedCommand(
 
     SynchronicityHandler synch_handler(debugger_sp, synchronicity);
 
+    std::string args_str = args.str();
     ret_val = g_swig_call_command_object(impl_obj_sp->GetValue(), debugger_sp,
-                                         args, cmd_retobj, exe_ctx_ref_sp);
+                                         args_str.c_str(), cmd_retobj,
+                                         exe_ctx_ref_sp);
   }
 
   if (!ret_val)
@@ -3099,6 +3251,8 @@ void ScriptInterpreterPython::InitializeInterpreter(
     SWIGPythonCallCommandObject swig_call_command_object,
     SWIGPythonCallModuleInit swig_call_module_init,
     SWIGPythonCreateOSPlugin swig_create_os_plugin,
+    SWIGPythonCreateFrameRecognizer swig_create_frame_recognizer,
+    SWIGPythonGetRecognizedArguments swig_get_recognized_arguments,
     SWIGPythonScriptKeyword_Process swig_run_script_keyword_process,
     SWIGPythonScriptKeyword_Thread swig_run_script_keyword_thread,
     SWIGPythonScriptKeyword_Target swig_run_script_keyword_target,
@@ -3106,7 +3260,9 @@ void ScriptInterpreterPython::InitializeInterpreter(
     SWIGPythonScriptKeyword_Value swig_run_script_keyword_value,
     SWIGPython_GetDynamicSetting swig_plugin_get,
     SWIGPythonCreateScriptedThreadPlan swig_thread_plan_script,
-    SWIGPythonCallThreadPlan swig_call_thread_plan) {
+    SWIGPythonCallThreadPlan swig_call_thread_plan,
+    SWIGPythonCreateScriptedBreakpointResolver swig_bkpt_resolver_script,
+    SWIGPythonCallBreakpointResolver swig_call_bkpt_resolver) {
   g_swig_init_callback = swig_init_callback;
   g_swig_breakpoint_callback = swig_breakpoint_callback;
   g_swig_watchpoint_callback = swig_watchpoint_callback;
@@ -3125,6 +3281,8 @@ void ScriptInterpreterPython::InitializeInterpreter(
   g_swig_call_command_object = swig_call_command_object;
   g_swig_call_module_init = swig_call_module_init;
   g_swig_create_os_plugin = swig_create_os_plugin;
+  g_swig_create_frame_recognizer = swig_create_frame_recognizer;
+  g_swig_get_recognized_arguments = swig_get_recognized_arguments;
   g_swig_run_script_keyword_process = swig_run_script_keyword_process;
   g_swig_run_script_keyword_thread = swig_run_script_keyword_thread;
   g_swig_run_script_keyword_target = swig_run_script_keyword_target;
@@ -3133,6 +3291,8 @@ void ScriptInterpreterPython::InitializeInterpreter(
   g_swig_plugin_get = swig_plugin_get;
   g_swig_thread_plan_script = swig_thread_plan_script;
   g_swig_call_thread_plan = swig_call_thread_plan;
+  g_swig_bkpt_resolver_script = swig_bkpt_resolver_script;
+  g_swig_call_bkpt_resolver = swig_call_bkpt_resolver;
 }
 
 void ScriptInterpreterPython::InitializePrivate() {

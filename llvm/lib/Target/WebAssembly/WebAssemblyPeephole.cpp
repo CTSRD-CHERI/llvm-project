@@ -83,18 +83,13 @@ static bool MaybeRewriteToFallthrough(MachineInstr &MI, MachineBasicBlock &MBB,
     return false;
   if (&MBB != &MF.back())
     return false;
-  if (MF.getSubtarget<WebAssemblySubtarget>()
-        .getTargetTriple().isOSBinFormatELF()) {
-    if (&MI != &MBB.back())
-      return false;
-  } else {
-    MachineBasicBlock::iterator End = MBB.end();
-    --End;
-    assert(End->getOpcode() == WebAssembly::END_FUNCTION);
-    --End;
-    if (&MI != &*End)
-      return false;
-  }
+
+  MachineBasicBlock::iterator End = MBB.end();
+  --End;
+  assert(End->getOpcode() == WebAssembly::END_FUNCTION);
+  --End;
+  if (&MI != &*End)
+    return false;
 
   if (FallthroughOpc != WebAssembly::FALLTHROUGH_RETURN_VOID) {
     // If the operand isn't stackified, insert a COPY to read the operand and
@@ -197,9 +192,19 @@ bool WebAssemblyPeephole::runOnMachineFunction(MachineFunction &MF) {
             MI, MBB, MF, MFI, MRI, TII, WebAssembly::FALLTHROUGH_RETURN_v4i32,
             WebAssembly::COPY_V128);
         break;
+      case WebAssembly::RETURN_v2i64:
+        Changed |= MaybeRewriteToFallthrough(
+            MI, MBB, MF, MFI, MRI, TII, WebAssembly::FALLTHROUGH_RETURN_v2i64,
+            WebAssembly::COPY_V128);
+        break;
       case WebAssembly::RETURN_v4f32:
         Changed |= MaybeRewriteToFallthrough(
             MI, MBB, MF, MFI, MRI, TII, WebAssembly::FALLTHROUGH_RETURN_v4f32,
+            WebAssembly::COPY_V128);
+        break;
+      case WebAssembly::RETURN_v2f64:
+        Changed |= MaybeRewriteToFallthrough(
+            MI, MBB, MF, MFI, MRI, TII, WebAssembly::FALLTHROUGH_RETURN_v2f64,
             WebAssembly::COPY_V128);
         break;
       case WebAssembly::RETURN_VOID:

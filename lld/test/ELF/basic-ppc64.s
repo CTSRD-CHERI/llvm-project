@@ -1,7 +1,7 @@
+# REQUIRES: ppc
 # # RUN: llvm-mc -filetype=obj -triple=powerpc64le-unknown-linux %s -o %t
 # RUN: ld.lld --hash-style=sysv -discard-all -shared %t -o %t2
 # RUN: llvm-readobj -file-headers -sections -section-data -program-headers %t2 | FileCheck %s
-# REQUIRES: ppc
 .abiversion 2
 # Exits with return code 55 on linux.
 .text
@@ -28,7 +28,7 @@
 // CHECK-NEXT:  Version: 1
 // CHECK-NEXT:  Entry: 0x10000
 // CHECK-NEXT:  ProgramHeaderOffset: 0x40
-// CHECK-NEXT:  SectionHeaderOffset:
+// CHECK-NEXT:  SectionHeaderOffset: 0x200F8
 // CHECK-NEXT:  Flags [ (0x2)
 // CHECK-NEXT:    0x2
 // CHECK-NEXT:  ]
@@ -36,8 +36,8 @@
 // CHECK-NEXT:  ProgramHeaderEntrySize: 56
 // CHECK-NEXT:  ProgramHeaderCount: 7
 // CHECK-NEXT:  SectionHeaderEntrySize: 64
-// CHECK-NEXT:  SectionHeaderCount: 10
-// CHECK-NEXT:  StringTableSectionIndex: 8
+// CHECK-NEXT:  SectionHeaderCount: 11
+// CHECK-NEXT:  StringTableSectionIndex: 9
 // CHECK-NEXT:}
 // CHECK-NEXT:Sections [
 // CHECK-NEXT:  Section {
@@ -66,7 +66,7 @@
 // CHECK-NEXT:    Address: 0x1C8
 // CHECK-NEXT:    Offset: 0x1C8
 // CHECK-NEXT:    Size: 24
-// CHECK-NEXT:    Link: 2
+// CHECK-NEXT:    Link: 3
 // CHECK-NEXT:    Info: 1
 // CHECK-NEXT:    AddressAlignment: 8
 // CHECK-NEXT:    EntrySize: 24
@@ -77,31 +77,13 @@
 // CHECK-NEXT:  }
 // CHECK-NEXT:  Section {
 // CHECK-NEXT:    Index: 2
-// CHECK-NEXT:    Name: .dynstr (9)
-// CHECK-NEXT:    Type: SHT_STRTAB (0x3)
+// CHECK-NEXT:    Name: .hash (9)
+// CHECK-NEXT:    Type: SHT_HASH (0x5)
 // CHECK-NEXT:    Flags [ (0x2)
 // CHECK-NEXT:      SHF_ALLOC (0x2)
 // CHECK-NEXT:    ]
 // CHECK-NEXT:    Address: 0x1E0
 // CHECK-NEXT:    Offset: 0x1E0
-// CHECK-NEXT:    Size: 1
-// CHECK-NEXT:    Link: 0
-// CHECK-NEXT:    Info: 0
-// CHECK-NEXT:    AddressAlignment: 1
-// CHECK-NEXT:    EntrySize: 0
-// CHECK-NEXT:    SectionData (
-// CHECK-NEXT:      0000: 00                                   |.|
-// CHECK-NEXT:    )
-// CHECK-NEXT:  }
-// CHECK-NEXT:  Section {
-// CHECK-NEXT:    Index: 3
-// CHECK-NEXT:    Name: .hash (17)
-// CHECK-NEXT:    Type: SHT_HASH (0x5)
-// CHECK-NEXT:    Flags [ (0x2)
-// CHECK-NEXT:      SHF_ALLOC (0x2)
-// CHECK-NEXT:    ]
-// CHECK-NEXT:    Address: 0x1E4
-// CHECK-NEXT:    Offset: 0x1E4
 // CHECK-NEXT:    Size: 16
 // CHECK-NEXT:    Link: 1
 // CHECK-NEXT:    Info: 0
@@ -109,6 +91,24 @@
 // CHECK-NEXT:    EntrySize: 4
 // CHECK-NEXT:    SectionData (
 // CHECK-NEXT:      0000: 01000000 01000000 00000000 00000000  |................|
+// CHECK-NEXT:    )
+// CHECK-NEXT:  }
+// CHECK-NEXT:  Section {
+// CHECK-NEXT:    Index: 3
+// CHECK-NEXT:    Name: .dynstr (15)
+// CHECK-NEXT:    Type: SHT_STRTAB (0x3)
+// CHECK-NEXT:    Flags [ (0x2)
+// CHECK-NEXT:      SHF_ALLOC (0x2)
+// CHECK-NEXT:    ]
+// CHECK-NEXT:    Address: 0x1F0
+// CHECK-NEXT:    Offset: 0x1F0
+// CHECK-NEXT:    Size: 1
+// CHECK-NEXT:    Link: 0
+// CHECK-NEXT:    Info: 0
+// CHECK-NEXT:    AddressAlignment: 1
+// CHECK-NEXT:    EntrySize: 0
+// CHECK-NEXT:    SectionData (
+// CHECK-NEXT:      0000: 00                                   |.|
 // CHECK-NEXT:    )
 // CHECK-NEXT:  }
 // CHECK-NEXT:  Section {
@@ -141,22 +141,38 @@
 // CHECK-NEXT:    Address: 0x20000
 // CHECK-NEXT:    Offset: 0x20000
 // CHECK-NEXT:    Size: 96
-// CHECK-NEXT:    Link: 2
+// CHECK-NEXT:    Link: 3
 // CHECK-NEXT:    Info: 0
 // CHECK-NEXT:    AddressAlignment: 8
 // CHECK-NEXT:    EntrySize: 16
 // CHECK-NEXT:    SectionData (
 // CHECK-NEXT:      0000: 06000000 00000000 C8010000 00000000  |................|
 // CHECK-NEXT:      0010: 0B000000 00000000 18000000 00000000  |................|
-// CHECK-NEXT:      0020: 05000000 00000000 E0010000 00000000  |................|
+// CHECK-NEXT:      0020: 05000000 00000000 F0010000 00000000  |................|
 // CHECK-NEXT:      0030: 0A000000 00000000 01000000 00000000  |................|
-// CHECK-NEXT:      0040: 04000000 00000000 E4010000 00000000  |................|
+// CHECK-NEXT:      0040: 04000000 00000000 E0010000 00000000  |................|
 // CHECK-NEXT:      0050: 00000000 00000000 00000000 00000000  |................|
 // CHECK-NEXT:    )
 // CHECK-NEXT:  }
 // CHECK-NEXT:  Section {
 // CHECK-NEXT:    Index: 6
-// CHECK-NEXT:    Name: .comment (38)
+// CHECK-NEXT:    Name: .branch_lt (38)
+// CHECK-NEXT:    Type: SHT_NOBITS (0x8)
+// CHECK-NEXT:    Flags [ (0x3)
+// CHECK-NEXT:      SHF_ALLOC (0x2)
+// CHECK-NEXT:      SHF_WRITE (0x1)
+// CHECK-NEXT:    ]
+// CHECK-NEXT:    Address: 0x30000
+// CHECK-NEXT:    Offset: 0x20060
+// CHECK-NEXT:    Size: 0
+// CHECK-NEXT:    Link: 0
+// CHECK-NEXT:    Info: 0
+// CHECK-NEXT:    AddressAlignment: 8
+// CHECK-NEXT:    EntrySize: 0
+// CHECK-NEXT:  }
+// CHECK-NEXT:  Section {
+// CHECK-NEXT:    Index: 7
+// CHECK-NEXT:    Name: .comment (49)
 // CHECK-NEXT:    Type: SHT_PROGBITS (0x1)
 // CHECK-NEXT:    Flags [ (0x30)
 // CHECK-NEXT:      SHF_MERGE (0x10)
@@ -174,15 +190,15 @@
 // CHECK-NEXT:    )
 // CHECK-NEXT:  }
 // CHECK-NEXT:  Section {
-// CHECK-NEXT:    Index: 7
-// CHECK-NEXT:    Name: .symtab (47)
+// CHECK-NEXT:    Index: 8
+// CHECK-NEXT:    Name: .symtab (58)
 // CHECK-NEXT:    Type: SHT_SYMTAB (0x2)
 // CHECK-NEXT:    Flags [ (0x0)
 // CHECK-NEXT:    ]
 // CHECK-NEXT:    Address: 0x0
 // CHECK-NEXT:    Offset: 0x20068
 // CHECK-NEXT:    Size: 48
-// CHECK-NEXT:    Link: 9
+// CHECK-NEXT:    Link: 10
 // CHECK-NEXT:    Info: 2
 // CHECK-NEXT:    AddressAlignment: 8
 // CHECK-NEXT:    EntrySize: 24
@@ -193,34 +209,35 @@
 // CHECK-NEXT:    )
 // CHECK-NEXT:  }
 // CHECK-NEXT:  Section {
-// CHECK-NEXT:    Index: 8
-// CHECK-NEXT:    Name: .shstrtab (55)
+// CHECK-NEXT:    Index: 9
+// CHECK-NEXT:    Name: .shstrtab (66)
 // CHECK-NEXT:    Type: SHT_STRTAB (0x3)
 // CHECK-NEXT:    Flags [ (0x0)
 // CHECK-NEXT:    ]
 // CHECK-NEXT:    Address: 0x0
 // CHECK-NEXT:    Offset: 0x20098
-// CHECK-NEXT:    Size: 73
+// CHECK-NEXT:    Size: 84
 // CHECK-NEXT:    Link: 0
 // CHECK-NEXT:    Info: 0
 // CHECK-NEXT:    AddressAlignment: 1
 // CHECK-NEXT:    EntrySize: 0
 // CHECK-NEXT:    SectionData (
-// CHECK-NEXT:      0000: 002E6479 6E73796D 002E6479 6E737472  |..dynsym..dynstr|
-// CHECK-NEXT:      0010: 002E6861 7368002E 74657874 002E6479  |..hash..text..dy|
-// CHECK-NEXT:      0020: 6E616D69 63002E63 6F6D6D65 6E74002E  |namic..comment..|
-// CHECK-NEXT:      0030: 73796D74 6162002E 73687374 72746162  |symtab..shstrtab|
-// CHECK-NEXT:      0040: 002E7374 72746162 00                 |..strtab.|
+// CHECK-NEXT:      0000: 002E6479 6E73796D 002E6861 7368002E  |..dynsym..hash..|
+// CHECK-NEXT:      0010: 64796E73 7472002E 74657874 002E6479  |dynstr..text..dy|
+// CHECK-NEXT:      0020: 6E616D69 63002E62 72616E63 685F6C74  |namic..branch_lt|
+// CHECK-NEXT:      0030: 002E636F 6D6D656E 74002E73 796D7461  |..comment..symta|
+// CHECK-NEXT:      0040: 62002E73 68737472 74616200 2E737472  |b..shstrtab..str|
+// CHECK-NEXT:      0050: 74616200                             |tab.|
 // CHECK-NEXT:    )
 // CHECK-NEXT:  }
 // CHECK-NEXT:  Section {
-// CHECK-NEXT:    Index: 9
-// CHECK-NEXT:    Name: .strtab (65)
+// CHECK-NEXT:    Index: 10
+// CHECK-NEXT:    Name: .strtab (76)
 // CHECK-NEXT:    Type: SHT_STRTAB (0x3)
 // CHECK-NEXT:    Flags [ (0x0)
 // CHECK-NEXT:    ]
 // CHECK-NEXT:    Address: 0x0
-// CHECK-NEXT:    Offset: 0x200E1
+// CHECK-NEXT:    Offset: 0x200EC
 // CHECK-NEXT:    Size: 10
 // CHECK-NEXT:    Link: 0
 // CHECK-NEXT:    Info: 0
@@ -249,8 +266,8 @@
 // CHECK-NEXT:    Offset: 0x0
 // CHECK-NEXT:    VirtualAddress: 0x0
 // CHECK-NEXT:    PhysicalAddress: 0x0
-// CHECK-NEXT:    FileSize: 500
-// CHECK-NEXT:    MemSize: 500
+// CHECK-NEXT:    FileSize: 497
+// CHECK-NEXT:    MemSize: 497
 // CHECK-NEXT:    Flags [ (0x4)
 // CHECK-NEXT:      PF_R (0x4)
 // CHECK-NEXT:    ]
@@ -275,7 +292,7 @@
 // CHECK-NEXT:    VirtualAddress: 0x20000
 // CHECK-NEXT:    PhysicalAddress: 0x20000
 // CHECK-NEXT:    FileSize: 96
-// CHECK-NEXT:    MemSize: 96
+// CHECK-NEXT:    MemSize: 65536
 // CHECK-NEXT:    Flags [ (0x6)
 // CHECK-NEXT:      PF_R (0x4)
 // CHECK-NEXT:      PF_W (0x2)

@@ -59,6 +59,15 @@ struct CompileCommand {
 
   /// The output file associated with the command.
   std::string Output;
+
+  friend bool operator==(const CompileCommand &LHS, const CompileCommand &RHS) {
+    return LHS.Directory == RHS.Directory && LHS.Filename == RHS.Filename &&
+           LHS.CommandLine == RHS.CommandLine && LHS.Output == RHS.Output;
+  }
+
+  friend bool operator!=(const CompileCommand &LHS, const CompileCommand &RHS) {
+    return !(LHS == RHS);
+  }
 };
 
 /// Interface for compilation databases.
@@ -130,27 +139,6 @@ public:
   /// By default, this is implemented in terms of getAllFiles() and
   /// getCompileCommands(). Subclasses may override this for efficiency.
   virtual std::vector<CompileCommand> getAllCompileCommands() const;
-};
-
-/// Interface for compilation database plugins.
-///
-/// A compilation database plugin allows the user to register custom compilation
-/// databases that are picked up as compilation database if the corresponding
-/// library is linked in. To register a plugin, declare a static variable like:
-///
-/// \code
-/// static CompilationDatabasePluginRegistry::Add<MyDatabasePlugin>
-/// X("my-compilation-database", "Reads my own compilation database");
-/// \endcode
-class CompilationDatabasePlugin {
-public:
-  virtual ~CompilationDatabasePlugin();
-
-  /// Loads a compilation database from a build directory.
-  ///
-  /// \see CompilationDatabase::loadFromDirectory().
-  virtual std::unique_ptr<CompilationDatabase>
-  loadFromDirectory(StringRef Directory, std::string &ErrorMessage) = 0;
 };
 
 /// A compilation database that returns a single compile command line.

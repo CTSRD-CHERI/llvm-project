@@ -27,14 +27,97 @@ define <4 x i32> @combine_vec_urem_by_one(<4 x i32> %x) {
   ret <4 x i32> %1
 }
 
-; TODO fold (urem x, x) -> 0
+; fold (urem x, -1) -> select((icmp eq x, -1), 0, x)
+define i32 @combine_urem_by_negone(i32 %x) {
+; CHECK-LABEL: combine_urem_by_negone:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    xorl %eax, %eax
+; CHECK-NEXT:    cmpl $-1, %edi
+; CHECK-NEXT:    cmovnel %edi, %eax
+; CHECK-NEXT:    retq
+  %1 = urem i32 %x, -1
+  ret i32 %1
+}
+
+define <4 x i32> @combine_vec_urem_by_negone(<4 x i32> %x) {
+; SSE-LABEL: combine_vec_urem_by_negone:
+; SSE:       # %bb.0:
+; SSE-NEXT:    pcmpeqd %xmm1, %xmm1
+; SSE-NEXT:    pcmpeqd %xmm0, %xmm1
+; SSE-NEXT:    pandn %xmm0, %xmm1
+; SSE-NEXT:    movdqa %xmm1, %xmm0
+; SSE-NEXT:    retq
+;
+; AVX-LABEL: combine_vec_urem_by_negone:
+; AVX:       # %bb.0:
+; AVX-NEXT:    vpcmpeqd %xmm1, %xmm1, %xmm1
+; AVX-NEXT:    vpcmpeqd %xmm1, %xmm0, %xmm1
+; AVX-NEXT:    vpandn %xmm0, %xmm1, %xmm0
+; AVX-NEXT:    retq
+  %1 = urem <4 x i32> %x, <i32 -1, i32 -1, i32 -1, i32 -1>
+  ret <4 x i32> %1
+}
+
+; fold (urem x, INT_MIN) -> (and x, ~INT_MIN)
+define i32 @combine_urem_by_minsigned(i32 %x) {
+; CHECK-LABEL: combine_urem_by_minsigned:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    movl %edi, %eax
+; CHECK-NEXT:    andl $2147483647, %eax # imm = 0x7FFFFFFF
+; CHECK-NEXT:    retq
+  %1 = urem i32 %x, -2147483648
+  ret i32 %1
+}
+
+define <4 x i32> @combine_vec_urem_by_minsigned(<4 x i32> %x) {
+; SSE-LABEL: combine_vec_urem_by_minsigned:
+; SSE:       # %bb.0:
+; SSE-NEXT:    andps {{.*}}(%rip), %xmm0
+; SSE-NEXT:    retq
+;
+; AVX1-LABEL: combine_vec_urem_by_minsigned:
+; AVX1:       # %bb.0:
+; AVX1-NEXT:    vandps {{.*}}(%rip), %xmm0, %xmm0
+; AVX1-NEXT:    retq
+;
+; AVX2-LABEL: combine_vec_urem_by_minsigned:
+; AVX2:       # %bb.0:
+; AVX2-NEXT:    vbroadcastss {{.*#+}} xmm1 = [2147483647,2147483647,2147483647,2147483647]
+; AVX2-NEXT:    vandps %xmm1, %xmm0, %xmm0
+; AVX2-NEXT:    retq
+  %1 = urem <4 x i32> %x, <i32 -2147483648, i32 -2147483648, i32 -2147483648, i32 -2147483648>
+  ret <4 x i32> %1
+}
+
+; fold (urem 0, x) -> 0
+define i32 @combine_urem_zero(i32 %x) {
+; CHECK-LABEL: combine_urem_zero:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    xorl %eax, %eax
+; CHECK-NEXT:    retq
+  %1 = urem i32 0, %x
+  ret i32 %1
+}
+
+define <4 x i32> @combine_vec_urem_zero(<4 x i32> %x) {
+; SSE-LABEL: combine_vec_urem_zero:
+; SSE:       # %bb.0:
+; SSE-NEXT:    xorps %xmm0, %xmm0
+; SSE-NEXT:    retq
+;
+; AVX-LABEL: combine_vec_urem_zero:
+; AVX:       # %bb.0:
+; AVX-NEXT:    vxorps %xmm0, %xmm0, %xmm0
+; AVX-NEXT:    retq
+  %1 = urem <4 x i32> zeroinitializer, %x
+  ret <4 x i32> %1
+}
+
+; fold (urem x, x) -> 0
 define i32 @combine_urem_dupe(i32 %x) {
 ; CHECK-LABEL: combine_urem_dupe:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    xorl %edx, %edx
-; CHECK-NEXT:    movl %edi, %eax
-; CHECK-NEXT:    divl %edi
-; CHECK-NEXT:    movl %edx, %eax
+; CHECK-NEXT:    xorl %eax, %eax
 ; CHECK-NEXT:    retq
   %1 = urem i32 %x, %x
   ret i32 %1
@@ -43,45 +126,12 @@ define i32 @combine_urem_dupe(i32 %x) {
 define <4 x i32> @combine_vec_urem_dupe(<4 x i32> %x) {
 ; SSE-LABEL: combine_vec_urem_dupe:
 ; SSE:       # %bb.0:
-; SSE-NEXT:    pextrd $1, %xmm0, %eax
-; SSE-NEXT:    xorl %edx, %edx
-; SSE-NEXT:    divl %eax
-; SSE-NEXT:    movl %edx, %ecx
-; SSE-NEXT:    movd %xmm0, %eax
-; SSE-NEXT:    xorl %edx, %edx
-; SSE-NEXT:    divl %eax
-; SSE-NEXT:    movd %edx, %xmm1
-; SSE-NEXT:    pinsrd $1, %ecx, %xmm1
-; SSE-NEXT:    pextrd $2, %xmm0, %eax
-; SSE-NEXT:    xorl %edx, %edx
-; SSE-NEXT:    divl %eax
-; SSE-NEXT:    pinsrd $2, %edx, %xmm1
-; SSE-NEXT:    pextrd $3, %xmm0, %eax
-; SSE-NEXT:    xorl %edx, %edx
-; SSE-NEXT:    divl %eax
-; SSE-NEXT:    pinsrd $3, %edx, %xmm1
-; SSE-NEXT:    movdqa %xmm1, %xmm0
+; SSE-NEXT:    xorps %xmm0, %xmm0
 ; SSE-NEXT:    retq
 ;
 ; AVX-LABEL: combine_vec_urem_dupe:
 ; AVX:       # %bb.0:
-; AVX-NEXT:    vpextrd $1, %xmm0, %eax
-; AVX-NEXT:    xorl %edx, %edx
-; AVX-NEXT:    divl %eax
-; AVX-NEXT:    movl %edx, %ecx
-; AVX-NEXT:    vmovd %xmm0, %eax
-; AVX-NEXT:    xorl %edx, %edx
-; AVX-NEXT:    divl %eax
-; AVX-NEXT:    vmovd %edx, %xmm1
-; AVX-NEXT:    vpinsrd $1, %ecx, %xmm1, %xmm1
-; AVX-NEXT:    vpextrd $2, %xmm0, %eax
-; AVX-NEXT:    xorl %edx, %edx
-; AVX-NEXT:    divl %eax
-; AVX-NEXT:    vpinsrd $2, %edx, %xmm1, %xmm1
-; AVX-NEXT:    vpextrd $3, %xmm0, %eax
-; AVX-NEXT:    xorl %edx, %edx
-; AVX-NEXT:    divl %eax
-; AVX-NEXT:    vpinsrd $3, %edx, %xmm1, %xmm0
+; AVX-NEXT:    vxorps %xmm0, %xmm0, %xmm0
 ; AVX-NEXT:    retq
   %1 = urem <4 x i32> %x, %x
   ret <4 x i32> %1
@@ -284,4 +334,27 @@ define <4 x i32> @combine_vec_urem_by_shl_pow2b(<4 x i32> %x, <4 x i32> %y) {
   %1 = shl <4 x i32> <i32 1, i32 4, i32 8, i32 16>, %y
   %2 = urem <4 x i32> %x, %1
   ret <4 x i32> %2
+}
+
+define i1 @bool_urem(i1 %x, i1 %y) {
+; CHECK-LABEL: bool_urem:
+; CHECK:       # %bb.0:
+; CHECK-NEXT:    xorl %eax, %eax
+; CHECK-NEXT:    retq
+  %r = urem i1 %x, %y
+  ret i1 %r
+}
+
+define <4 x i1> @boolvec_urem(<4 x i1> %x, <4 x i1> %y) {
+; SSE-LABEL: boolvec_urem:
+; SSE:       # %bb.0:
+; SSE-NEXT:    xorps %xmm0, %xmm0
+; SSE-NEXT:    retq
+;
+; AVX-LABEL: boolvec_urem:
+; AVX:       # %bb.0:
+; AVX-NEXT:    vxorps %xmm0, %xmm0, %xmm0
+; AVX-NEXT:    retq
+  %r = urem <4 x i1> %x, %y
+  ret <4 x i1> %r
 }

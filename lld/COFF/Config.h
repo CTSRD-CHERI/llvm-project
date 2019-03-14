@@ -84,6 +84,7 @@ struct Configuration {
   bool is64() { return Machine == AMD64 || Machine == ARM64; }
 
   llvm::COFF::MachineTypes Machine = IMAGE_FILE_MACHINE_UNKNOWN;
+  size_t Wordsize;
   bool Verbose = false;
   WindowsSubsystem Subsystem = llvm::COFF::IMAGE_SUBSYSTEM_UNKNOWN;
   Symbol *Entry = nullptr;
@@ -94,15 +95,18 @@ struct Configuration {
   bool DoICF = true;
   bool TailMerge;
   bool Relocatable = true;
-  bool Force = false;
+  bool ForceMultiple = false;
+  bool ForceUnresolved = false;
   bool Debug = false;
   bool DebugDwarf = false;
   bool DebugGHashes = false;
+  bool DebugSymtab = false;
   bool ShowTiming = false;
   unsigned DebugTypes = static_cast<unsigned>(DebugType::None);
   std::vector<std::string> NatvisFiles;
   llvm::SmallString<128> PDBAltPath;
   llvm::SmallString<128> PDBPath;
+  llvm::SmallString<128> PDBSourcePath;
   std::vector<llvm::StringRef> Argv;
 
   // Symbols in this set are considered as live by the garbage collector.

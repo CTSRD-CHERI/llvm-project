@@ -6,8 +6,8 @@
 // RUN: llvm-objdump -d -r %t-256.o | FileCheck %s -check-prefix OBJECT
 // RUN: ld.lld -o %t-128.exe %t-128.o
 // RUN: ld.lld -o %t-256.exe %t-256.o
-// RUN: llvm-objdump -d -r -C -t %t-128.exe | FileCheck %s -check-prefixes EXE,EXE128
-// RUN: llvm-objdump -d -r -C -t %t-256.exe | FileCheck %s -check-prefixes EXE,EXE256
+// RUN: llvm-objdump -d -r -cap-relocs -t %t-128.exe | FileCheck %s -check-prefixes EXE,EXE128
+// RUN: llvm-objdump -d -r -cap-relocs -t %t-256.exe | FileCheck %s -check-prefixes EXE,EXE256
 
 // OBJECT:       4: 3c 01 00 00 lui	$1, 0
 // OBJECT-NEXT:       0000000000000004: R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE	global
@@ -35,8 +35,8 @@
 // EXE256-NEXT: 0x0000000120030020      Base: global2 (0x0000000120020008)      Offset: 0x0000000000000000      Length: 0x0000000000000008    Permissions: 0x00000000
 
 // EXE: SYMBOL TABLE:
-// EXE-DAG: 0000000120030000       l       .cap_table		 000000{{1|2}}0  global@CAPTABLE
-// EXE-DAG: 00000001200300{{1|2}}0 l       .cap_table		 000000{{1|2}}0  global2@CAPTABLE
+// EXE-DAG: 0000000120030000       l     O .captable		 000000{{1|2}}0  global@CAPTABLE
+// EXE-DAG: 00000001200300{{1|2}}0 l     O .captable		 000000{{1|2}}0  global2@CAPTABLE
 
 int global = 1;
 long global2 = 3;

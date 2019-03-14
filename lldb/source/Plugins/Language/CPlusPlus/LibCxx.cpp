@@ -9,10 +9,7 @@
 
 #include "LibCxx.h"
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
+#include "llvm/ADT/ScopeExit.h"
 #include "lldb/Core/Debugger.h"
 #include "lldb/Core/FormatEntity.h"
 #include "lldb/Core/ValueObject.h"
@@ -22,7 +19,9 @@
 #include "lldb/DataFormatters/TypeSummary.h"
 #include "lldb/DataFormatters/VectorIterator.h"
 #include "lldb/Symbol/ClangASTContext.h"
+#include "lldb/Target/CPPLanguageRuntime.h"
 #include "lldb/Target/ProcessStructReader.h"
+#include "lldb/Target/SectionLoadList.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/Endian.h"
@@ -32,6 +31,76 @@
 using namespace lldb;
 using namespace lldb_private;
 using namespace lldb_private::formatters;
+
+bool lldb_private::formatters::LibcxxOptionalSummaryProvider(
+    ValueObject &valobj, Stream &stream, const TypeSummaryOptions &options) {
+  ValueObjectSP valobj_sp(valobj.GetNonSyntheticValue());
+  if (!valobj_sp)
+    return false;
+
+  // An optional either contains a value or not, the member __engaged_ is
+  // a bool flag, it is true if the optional has a value and false otherwise.
+  ValueObjectSP engaged_sp(
+      valobj_sp->GetChildMemberWithName(ConstString("__engaged_"), true));
+
+  if (!engaged_sp)
+    return false;
+
+  llvm::StringRef engaged_as_cstring(
+      engaged_sp->GetValueAsUnsigned(0) == 1 ? "true" : "false");
+
+  stream.Printf(" Has Value=%s ", engaged_as_cstring.data());
+
+  return true;
+}
+
+bool lldb_private::formatters::LibcxxFunctionSummaryProvider(
+    ValueObject &valobj, Stream &stream, const TypeSummaryOptions &options) {
+
+  ValueObjectSP valobj_sp(valobj.GetNonSyntheticValue());
+
+  if (!valobj_sp)
+    return false;
+
+  ExecutionContext exe_ctx(valobj_sp->GetExecutionContextRef());
+  Process *process = exe_ctx.GetProcessPtr();
+
+  if (process == nullptr)
+    return false;
+
+  CPPLanguageRuntime *cpp_runtime = process->GetCPPLanguageRuntime();
+
+  if (!cpp_runtime)
+    return false;
+
+  CPPLanguageRuntime::LibCppStdFunctionCallableInfo callable_info =
+      cpp_runtime->FindLibCppStdFunctionCallableInfo(valobj_sp);
+
+  switch (callable_info.callable_case) {
+  case CPPLanguageRuntime::LibCppStdFunctionCallableCase::Invalid:
+    stream.Printf(" __f_ = %" PRIu64, callable_info.member__f_pointer_value);
+    return false;
+    break;
+  case CPPLanguageRuntime::LibCppStdFunctionCallableCase::Lambda:
+    stream.Printf(
+        " Lambda in File %s at Line %u",
+        callable_info.callable_line_entry.file.GetFilename().GetCString(),
+        callable_info.callable_line_entry.line);
+    break;
+  case CPPLanguageRuntime::LibCppStdFunctionCallableCase::CallableObject:
+    stream.Printf(
+        " Function in File %s at Line %u",
+        callable_info.callable_line_entry.file.GetFilename().GetCString(),
+        callable_info.callable_line_entry.line);
+    break;
+  case CPPLanguageRuntime::LibCppStdFunctionCallableCase::FreeOrMemberFunction:
+    stream.Printf(" Function = %s ",
+                  callable_info.callable_symbol.GetName().GetCString());
+    break;
+  }
+
+  return true;
+}
 
 bool lldb_private::formatters::LibcxxSmartPointerSummaryProvider(
     ValueObject &valobj, Stream &stream, const TypeSummaryOptions &options) {
@@ -120,9 +189,9 @@ bool lldb_private::formatters::LibCxxMapIteratorSyntheticFrontEnd::Update() {
 
   if (!valobj_sp)
     return false;
-  
+
   static ConstString g___i_("__i_");
-  
+
   // this must be a ValueObject* because it is a child of the ValueObject we
   // are producing children for it if were a ValueObjectSP, we would end up
   // with a loop (iterator -> synthetic -> child -> parent == iterator) and
@@ -163,7 +232,7 @@ bool lldb_private::formatters::LibCxxMapIteratorSyntheticFrontEnd::Update() {
         m_pair_ptr = nullptr;
         return false;
       }
-      
+
       auto addr(m_pair_ptr->GetValueAsUnsigned(LLDB_INVALID_ADDRESS));
       m_pair_ptr = nullptr;
       if (addr && addr!=LLDB_INVALID_ADDRESS) {
@@ -526,9 +595,10 @@ bool lldb_private::formatters::LibcxxWStringSummaryProvider(
   return true;
 }
 
-bool lldb_private::formatters::LibcxxStringSummaryProvider(
-    ValueObject &valobj, Stream &stream,
-    const TypeSummaryOptions &summary_options) {
+template <StringPrinter::StringElementType element_type>
+bool LibcxxStringSummaryProvider(ValueObject &valobj, Stream &stream,
+                                 const TypeSummaryOptions &summary_options,
+                                 std::string prefix_token = "") {
   uint64_t size = 0;
   ValueObjectSP location_sp;
 
@@ -557,31 +627,37 @@ bool lldb_private::formatters::LibcxxStringSummaryProvider(
 
   options.SetData(extractor);
   options.SetStream(&stream);
-  options.SetPrefixToken(nullptr);
+
+  if (prefix_token.empty())
+    options.SetPrefixToken(nullptr);
+  else
+    options.SetPrefixToken(prefix_token);
+
   options.SetQuote('"');
   options.SetSourceSize(size);
   options.SetBinaryZeroIsTerminator(false);
-  StringPrinter::ReadBufferAndDumpToStream<
-      StringPrinter::StringElementType::ASCII>(options);
+  StringPrinter::ReadBufferAndDumpToStream<element_type>(options);
 
   return true;
 }
 
-class LibcxxFunctionFrontEnd : public SyntheticValueProviderFrontEnd {
-public:
-  LibcxxFunctionFrontEnd(ValueObject &backend)
-      : SyntheticValueProviderFrontEnd(backend) {}
+bool lldb_private::formatters::LibcxxStringSummaryProviderASCII(
+    ValueObject &valobj, Stream &stream,
+    const TypeSummaryOptions &summary_options) {
+  return LibcxxStringSummaryProvider<StringPrinter::StringElementType::ASCII>(
+      valobj, stream, summary_options);
+}
 
-  lldb::ValueObjectSP GetSyntheticValue() override {
-    static ConstString g___f_("__f_");
-    return m_backend.GetChildMemberWithName(g___f_, true);
-  }
-};
+bool lldb_private::formatters::LibcxxStringSummaryProviderUTF16(
+    ValueObject &valobj, Stream &stream,
+    const TypeSummaryOptions &summary_options) {
+  return LibcxxStringSummaryProvider<StringPrinter::StringElementType::UTF16>(
+      valobj, stream, summary_options, "u");
+}
 
-SyntheticChildrenFrontEnd *
-lldb_private::formatters::LibcxxFunctionFrontEndCreator(
-    CXXSyntheticChildren *, lldb::ValueObjectSP valobj_sp) {
-  if (valobj_sp)
-    return new LibcxxFunctionFrontEnd(*valobj_sp);
-  return nullptr;
+bool lldb_private::formatters::LibcxxStringSummaryProviderUTF32(
+    ValueObject &valobj, Stream &stream,
+    const TypeSummaryOptions &summary_options) {
+  return LibcxxStringSummaryProvider<StringPrinter::StringElementType::UTF32>(
+      valobj, stream, summary_options, "U");
 }

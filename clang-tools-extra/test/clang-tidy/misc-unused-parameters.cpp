@@ -222,5 +222,56 @@ static Function<void(int, int i)> dontGetConfusedByFunctionReturnTypes() {
   return Function<void(int, int)>();
 }
 
+namespace PR38055 {
+namespace {
+struct a {
+  void b(int c) {;}
+// CHECK-MESSAGES: :[[@LINE-1]]:14: warning: parameter 'c' is unused
+// CHECK-FIXES: {{^}}  void b() {;}{{$}}
+};
+template <class>
+class d {
+  a e;
+  void f() { e.b(); }
+};
+}  // namespace
+}  // namespace PR38055
+
+namespace strict_mode_off {
 // Do not warn on empty function bodies.
-void f(int foo) {}
+void f1(int foo1) {}
+void f2(int foo2) {
+  // "empty" in the AST sense, not in textual sense.
+}
+void f3(int foo3) {;}
+// CHECK-MESSAGES: :[[@LINE-1]]:13: warning: parameter 'foo3' is unused
+// CHECK-FIXES: {{^}}void f3(int  /*foo3*/) {;}{{$}}
+
+class E {
+  int i;
+
+public:
+  E(int j) {}
+};
+class F {
+  int i;
+
+public:
+  // Constructor initializer counts as a non-empty body.
+  F(int j) : i() {}
+// CHECK-MESSAGES: :[[@LINE-1]]:9: warning: parameter 'j' is unused
+// CHECK-FIXES: {{^}}  F(int  /*j*/) : i() {}{{$}}
+};
+
+class A {
+public:
+  A();
+  A(int);
+};
+class B : public A {
+public:
+  B(int i) : A() {}
+// CHECK-MESSAGES: :[[@LINE-1]]:9: warning: parameter 'i' is unused
+// CHECK-FIXES: {{^}}  B(int  /*i*/) : A() {}{{$}}
+};
+} // namespace strict_mode_off

@@ -45,6 +45,7 @@ typedef enum {
 typedef enum {
     LLVMCodeModelDefault,
     LLVMCodeModelJITDefault,
+    LLVMCodeModelTiny,
     LLVMCodeModelSmall,
     LLVMCodeModelKernel,
     LLVMCodeModelMedium,
@@ -136,6 +137,10 @@ LLVMBool LLVMTargetMachineEmitToMemoryBuffer(LLVMTargetMachineRef T, LLVMModuleR
 /** Get a triple for the host machine as a string. The result needs to be
   disposed with LLVMDisposeMessage. */
 char* LLVMGetDefaultTargetTriple(void);
+
+/** Normalize a target triple. The result needs to be disposed with
+  LLVMDisposeMessage. */
+char* LLVMNormalizeTargetTriple(const char* triple);
 
 /** Get the host CPU as a string. The result needs to be disposed with
   LLVMDisposeMessage. */

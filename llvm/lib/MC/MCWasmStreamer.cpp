@@ -61,7 +61,7 @@ void MCWasmStreamer::EmitAssemblerFlag(MCAssemblerFlag Flag) {
 void MCWasmStreamer::ChangeSection(MCSection *Section,
                                    const MCExpr *Subsection) {
   MCAssembler &Asm = getAssembler();
-  auto *SectionWasm = static_cast<const MCSectionWasm *>(Section);
+  auto *SectionWasm = cast<MCSectionWasm>(Section);
   const MCSymbol *Grp = SectionWasm->getGroup();
   if (Grp)
     Asm.registerSymbol(*Grp);
@@ -119,7 +119,6 @@ bool MCWasmStreamer::EmitSymbolAttribute(MCSymbol *S, MCSymbolAttr Attribute) {
     break;
 
   case MCSA_ELF_TypeObject:
-    Symbol->setType(wasm::WASM_SYMBOL_TYPE_DATA);
     break;
 
   default:
@@ -215,7 +214,8 @@ void MCWasmStreamer::EmitSymbolDesc(MCSymbol *Symbol, unsigned DescValue) {
 }
 
 void MCWasmStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
-                                  uint64_t Size, unsigned ByteAlignment) {
+                                  uint64_t Size, unsigned ByteAlignment,
+                                  SMLoc Loc) {
   llvm_unreachable("Wasm doesn't support this directive");
 }
 

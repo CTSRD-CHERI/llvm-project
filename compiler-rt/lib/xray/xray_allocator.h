@@ -16,15 +16,134 @@
 #ifndef XRAY_ALLOCATOR_H
 #define XRAY_ALLOCATOR_H
 
-#include "sanitizer_common/sanitizer_allocator_internal.h"
 #include "sanitizer_common/sanitizer_common.h"
+#include "sanitizer_common/sanitizer_internal_defs.h"
 #include "sanitizer_common/sanitizer_mutex.h"
+#if SANITIZER_FUCHSIA
+#include <zircon/process.h>
+#include <zircon/status.h>
+#include <zircon/syscalls.h>
+#else
+#include "sanitizer_common/sanitizer_posix.h"
+#endif
+#include "xray_defs.h"
+#include "xray_utils.h"
 #include <cstddef>
 #include <cstdint>
-
-#include "sanitizer_common/sanitizer_internal_defs.h"
+#include <sys/mman.h>
 
 namespace __xray {
+
+// We implement our own memory allocation routine which will bypass the
+// internal allocator. This allows us to manage the memory directly, using
+// mmap'ed memory to back the allocators.
+template <class T> T *allocate() XRAY_NEVER_INSTRUMENT {
+  uptr RoundedSize = RoundUpTo(sizeof(T), GetPageSizeCached());
+#if SANITIZER_FUCHSIA
+  zx_handle_t Vmo;
+  zx_status_t Status = _zx_vmo_create(RoundedSize, 0, &Vmo);
+  if (Status != ZX_OK) {
+    if (Verbosity())
+      Report("XRay Profiling: Failed to create VMO of size %zu: %s\n",
+             sizeof(T), _zx_status_get_string(Status));
+    return nullptr;
+  }
+  uintptr_t B;
+  Status =
+      _zx_vmar_map(_zx_vmar_root_self(), ZX_VM_PERM_READ | ZX_VM_PERM_WRITE, 0,
+                   Vmo, 0, sizeof(T), &B);
+  _zx_handle_close(Vmo);
+  if (Status != ZX_OK) {
+    if (Verbosity())
+      Report("XRay Profiling: Failed to map VMAR of size %zu: %s\n", sizeof(T),
+             _zx_status_get_string(Status));
+    return nullptr;
+  }
+  return reinterpret_cast<T *>(B);
+#else
+  uptr B = internal_mmap(NULL, RoundedSize, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  int ErrNo = 0;
+  if (UNLIKELY(internal_iserror(B, &ErrNo))) {
+    if (Verbosity())
+      Report(
+          "XRay Profiling: Failed to allocate memory of size %d; Error = %d.\n",
+          RoundedSize, B);
+    return nullptr;
+  }
+#endif
+  return reinterpret_cast<T *>(B);
+}
+
+template <class T> void deallocate(T *B) XRAY_NEVER_INSTRUMENT {
+  if (B == nullptr)
+    return;
+  uptr RoundedSize = RoundUpTo(sizeof(T), GetPageSizeCached());
+#if SANITIZER_FUCHSIA
+  _zx_vmar_unmap(_zx_vmar_root_self(), reinterpret_cast<uintptr_t>(B),
+                 RoundedSize);
+#else
+  internal_munmap(B, RoundedSize);
+#endif
+}
+
+template <class T = unsigned char>
+T *allocateBuffer(size_t S) XRAY_NEVER_INSTRUMENT {
+  uptr RoundedSize = RoundUpTo(S * sizeof(T), GetPageSizeCached());
+#if SANITIZER_FUCHSIA
+  zx_handle_t Vmo;
+  zx_status_t Status = _zx_vmo_create(RoundedSize, 0, &Vmo);
+  if (Status != ZX_OK) {
+    if (Verbosity())
+      Report("XRay Profiling: Failed to create VMO of size %zu: %s\n", S,
+             _zx_status_get_string(Status));
+    return nullptr;
+  }
+  uintptr_t B;
+  Status = _zx_vmar_map(_zx_vmar_root_self(),
+                        ZX_VM_PERM_READ | ZX_VM_PERM_WRITE, 0, Vmo, 0, S, &B);
+  _zx_handle_close(Vmo);
+  if (Status != ZX_OK) {
+    if (Verbosity())
+      Report("XRay Profiling: Failed to map VMAR of size %zu: %s\n", S,
+             _zx_status_get_string(Status));
+    return nullptr;
+  }
+#else
+  uptr B = internal_mmap(NULL, RoundedSize, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  int ErrNo = 0;
+  if (UNLIKELY(internal_iserror(B, &ErrNo))) {
+    if (Verbosity())
+      Report(
+          "XRay Profiling: Failed to allocate memory of size %d; Error = %d.\n",
+          RoundedSize, B);
+    return nullptr;
+  }
+#endif
+  return reinterpret_cast<T *>(B);
+}
+
+template <class T> void deallocateBuffer(T *B, size_t S) XRAY_NEVER_INSTRUMENT {
+  if (B == nullptr)
+    return;
+  uptr RoundedSize = RoundUpTo(S * sizeof(T), GetPageSizeCached());
+#if SANITIZER_FUCHSIA
+  _zx_vmar_unmap(_zx_vmar_root_self(), reinterpret_cast<uintptr_t>(B),
+                 RoundedSize);
+#else
+  internal_munmap(B, RoundedSize);
+#endif
+}
+
+template <class T, class... U>
+T *initArray(size_t N, U &&... Us) XRAY_NEVER_INSTRUMENT {
+  auto A = allocateBuffer<T>(N);
+  if (A != nullptr)
+    while (N > 0)
+      new (A + (--N)) T(std::forward<U>(Us)...);
+  return A;
+}
 
 /// The Allocator type hands out fixed-sized chunks of memory that are
 /// cache-line aligned and sized. This is useful for placement of
@@ -36,120 +155,134 @@ namespace __xray {
 /// allocation function. N is used to compute the size of a block, which is
 /// cache-line-size multiples worth of memory. We compute the size of a block by
 /// determining how many cache lines worth of memory is required to subsume N.
+///
+/// The Allocator instance will manage its own memory acquired through mmap.
+/// This severely constrains the platforms on which this can be used to POSIX
+/// systems where mmap semantics are well-defined.
+///
+/// FIXME: Isolate the lower-level memory management to a different abstraction
+/// that can be platform-specific.
 template <size_t N> struct Allocator {
   // The Allocator returns memory as Block instances.
   struct Block {
     /// Compute the minimum cache-line size multiple that is >= N.
-    static constexpr auto Size =
-        kCacheLineSize * ((N / kCacheLineSize) + (N % kCacheLineSize ? 1 : 0));
-    void *Data = nullptr;
+    static constexpr auto Size = nearest_boundary(N, kCacheLineSize);
+    void *Data;
   };
 
 private:
-  // A BlockLink will contain a fixed number of blocks, each with an identifier
-  // to specify whether it's been handed out or not. We keep track of BlockLink
-  // iterators, which are basically a pointer to the link and an offset into
-  // the fixed set of blocks associated with a link. The iterators are
-  // bidirectional.
-  //
-  // We're calling it a "link" in the context of seeing these as a chain of
-  // block pointer containers (i.e. links in a chain).
-  struct BlockLink {
-    static_assert(kCacheLineSize % sizeof(void *) == 0,
-                  "Cache line size is not divisible by size of void*; none of "
-                  "the assumptions of the BlockLink will hold.");
-
-    // We compute the number of pointers to areas in memory where we consider as
-    // individual blocks we've allocated. To ensure that instances of the
-    // BlockLink object are cache-line sized, we deduct one additional
-    // pointers worth representing the pointer to the previous link.
-    //
-    // This structure corresponds to the following layout:
-    //
-    //   Blocks [ 0, 1, 2, .., BlockPtrCount - 1]
-    //
-    static constexpr auto BlockPtrCount =
-        (kCacheLineSize / sizeof(Block *)) - 1;
-
-    BlockLink() {
-      // Zero out Blocks.
-      // FIXME: Use a braced member initializer when we drop support for GCC
-      // 4.8.
-      internal_memset(Blocks, 0, sizeof(Blocks));
-    }
-
-    // FIXME: Align this to cache-line address boundaries?
-    Block Blocks[BlockPtrCount];
-    BlockLink *Prev = nullptr;
-  };
-
-  static_assert(sizeof(BlockLink) == kCacheLineSize,
-                "BlockLink instances must be cache-line-sized.");
-
-  static BlockLink NullLink;
-
-  // FIXME: Implement a freelist, in case we actually do intend to return memory
-  // to the allocator, as opposed to just de-allocating everything in one go?
-
-  size_t MaxMemory;
+  size_t MaxMemory{0};
+  unsigned char *BackingStore = nullptr;
+  unsigned char *AlignedNextBlock = nullptr;
+  size_t AllocatedBlocks = 0;
+  bool Owned;
   SpinMutex Mutex{};
-  BlockLink *Tail = &NullLink;
-  size_t Counter = 0;
 
-  BlockLink *NewChainLink() {
-    auto NewChain = reinterpret_cast<BlockLink *>(
-        InternalAlloc(sizeof(BlockLink), nullptr, kCacheLineSize));
-    auto BackingStore = reinterpret_cast<char *>(InternalAlloc(
-        BlockLink::BlockPtrCount * Block::Size, nullptr, kCacheLineSize));
-    size_t Offset = 0;
-    DCHECK_NE(NewChain, nullptr);
-    DCHECK_NE(BackingStore, nullptr);
-    for (auto &B : NewChain->Blocks) {
-      B.Data = BackingStore + Offset;
-      Offset += Block::Size;
+  void *Alloc() XRAY_NEVER_INSTRUMENT {
+    SpinMutexLock Lock(&Mutex);
+    if (UNLIKELY(BackingStore == nullptr)) {
+      BackingStore = allocateBuffer(MaxMemory);
+      if (BackingStore == nullptr) {
+        if (Verbosity())
+          Report("XRay Profiling: Failed to allocate memory for allocator.\n");
+        return nullptr;
+      }
+
+      AlignedNextBlock = BackingStore;
+
+      // Ensure that NextBlock is aligned appropriately.
+      auto BackingStoreNum = reinterpret_cast<uintptr_t>(BackingStore);
+      auto AlignedNextBlockNum = nearest_boundary(
+          reinterpret_cast<uintptr_t>(AlignedNextBlock), kCacheLineSize);
+      if (diff(AlignedNextBlockNum, BackingStoreNum) > ptrdiff_t(MaxMemory)) {
+        deallocateBuffer(BackingStore, MaxMemory);
+        AlignedNextBlock = BackingStore = nullptr;
+        if (Verbosity())
+          Report("XRay Profiling: Cannot obtain enough memory from "
+                 "preallocated region.\n");
+        return nullptr;
+      }
+
+      AlignedNextBlock = reinterpret_cast<unsigned char *>(AlignedNextBlockNum);
+
+      // Assert that AlignedNextBlock is cache-line aligned.
+      DCHECK_EQ(reinterpret_cast<uintptr_t>(AlignedNextBlock) % kCacheLineSize,
+                0);
     }
-    NewChain->Prev = Tail;
-    return NewChain;
+
+    if (((AllocatedBlocks + 1) * Block::Size) > MaxMemory)
+      return nullptr;
+
+    // Align the pointer we'd like to return to an appropriate alignment, then
+    // advance the pointer from where to start allocations.
+    void *Result = AlignedNextBlock;
+    AlignedNextBlock =
+        reinterpret_cast<unsigned char *>(AlignedNextBlock) + Block::Size;
+    ++AllocatedBlocks;
+    return Result;
   }
 
 public:
-  Allocator(size_t M, size_t PreAllocate) : MaxMemory(M) {
-    // FIXME: Implement PreAllocate support!
+  explicit Allocator(size_t M) XRAY_NEVER_INSTRUMENT
+      : MaxMemory(RoundUpTo(M, kCacheLineSize)),
+        BackingStore(nullptr),
+        AlignedNextBlock(nullptr),
+        AllocatedBlocks(0),
+        Owned(true),
+        Mutex() {}
+
+  explicit Allocator(void *P, size_t M) XRAY_NEVER_INSTRUMENT
+      : MaxMemory(M),
+        BackingStore(reinterpret_cast<unsigned char *>(P)),
+        AlignedNextBlock(reinterpret_cast<unsigned char *>(P)),
+        AllocatedBlocks(0),
+        Owned(false),
+        Mutex() {}
+
+  Allocator(const Allocator &) = delete;
+  Allocator &operator=(const Allocator &) = delete;
+
+  Allocator(Allocator &&O) XRAY_NEVER_INSTRUMENT {
+    SpinMutexLock L0(&Mutex);
+    SpinMutexLock L1(&O.Mutex);
+    MaxMemory = O.MaxMemory;
+    O.MaxMemory = 0;
+    BackingStore = O.BackingStore;
+    O.BackingStore = nullptr;
+    AlignedNextBlock = O.AlignedNextBlock;
+    O.AlignedNextBlock = nullptr;
+    AllocatedBlocks = O.AllocatedBlocks;
+    O.AllocatedBlocks = 0;
+    Owned = O.Owned;
+    O.Owned = false;
   }
 
-  Block Allocate() {
-    SpinMutexLock Lock(&Mutex);
-    // Check whether we're over quota.
-    if (Counter * Block::Size >= MaxMemory)
-      return {};
-
-    size_t ChainOffset = Counter % BlockLink::BlockPtrCount;
-
-    Block B{};
-    BlockLink *Link = Tail;
-    if (UNLIKELY(Counter == 0 || ChainOffset == 0))
-      Tail = Link = NewChainLink();
-
-    B = Link->Blocks[ChainOffset];
-    ++Counter;
-    return B;
+  Allocator &operator=(Allocator &&O) XRAY_NEVER_INSTRUMENT {
+    SpinMutexLock L0(&Mutex);
+    SpinMutexLock L1(&O.Mutex);
+    MaxMemory = O.MaxMemory;
+    O.MaxMemory = 0;
+    if (BackingStore != nullptr)
+      deallocateBuffer(BackingStore, MaxMemory);
+    BackingStore = O.BackingStore;
+    O.BackingStore = nullptr;
+    AlignedNextBlock = O.AlignedNextBlock;
+    O.AlignedNextBlock = nullptr;
+    AllocatedBlocks = O.AllocatedBlocks;
+    O.AllocatedBlocks = 0;
+    Owned = O.Owned;
+    O.Owned = false;
+    return *this;
   }
 
-  ~Allocator() NOEXCEPT {
-    // We need to deallocate all the blocks, including the chain links.
-    for (auto *C = Tail; C != &NullLink;) {
-      // We know that the data block is a large contiguous page, we deallocate
-      // that at once.
-      InternalFree(C->Blocks[0].Data);
-      auto Prev = C->Prev;
-      InternalFree(C);
-      C = Prev;
+  Block Allocate() XRAY_NEVER_INSTRUMENT { return {Alloc()}; }
+
+  ~Allocator() NOEXCEPT XRAY_NEVER_INSTRUMENT {
+    if (Owned && BackingStore != nullptr) {
+      deallocateBuffer(BackingStore, MaxMemory);
     }
   }
-}; // namespace __xray
-
-// Storage for the NullLink sentinel.
-template <size_t N> typename Allocator<N>::BlockLink Allocator<N>::NullLink;
+};
 
 } // namespace __xray
 

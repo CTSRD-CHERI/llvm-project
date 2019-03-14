@@ -11,8 +11,8 @@
 #define LLDB_UTILITY_DATAEXTRACTOR_H
 
 #include "lldb/lldb-defines.h"
-#include "lldb/lldb-enumerations.h" // for ByteOrder
-#include "lldb/lldb-forward.h"      // for DataBufferSP
+#include "lldb/lldb-enumerations.h"
+#include "lldb/lldb-forward.h"
 #include "lldb/lldb-types.h"
 
 #include <cassert>
@@ -29,7 +29,6 @@ namespace llvm {
 template <typename T> class SmallVectorImpl;
 }
 
-// C++ Includes
 
 namespace lldb_private {
 
@@ -221,22 +220,6 @@ public:
                           lldb::offset_t length, uint64_t base_addr,
                           uint32_t num_per_line, Type type,
                           const char *type_format = nullptr) const;
-
-  //------------------------------------------------------------------
-  /// Dump a UUID value at \a offset.
-  ///
-  /// Dump a UUID starting at \a offset bytes into this object's data. If the
-  /// stream \a s is nullptr, the output will be sent to Log().
-  ///
-  /// @param[in] s
-  ///     The stream to dump the output to. If nullptr the output will
-  ///     be dumped to Log().
-  ///
-  /// @param[in] offset
-  ///     The offset into the data at which to extract and dump a
-  ///     UUID value.
-  //------------------------------------------------------------------
-  void DumpUUID(Stream *s, lldb::offset_t offset) const;
 
   //------------------------------------------------------------------
   /// Extract an arbitrary number of bytes in the specified byte order.

@@ -2,16 +2,16 @@
 # NOT: llvm-readobj -r %t.o
 # RUN: ld.lld -preemptible-caprelocs=elf -shared %t.o -o %t.so -verbose -verbose-cap-relocs
 # RUN: llvm-readobj -dyn-relocations -dyn-symbols %t.so | FileCheck %s -check-prefix DYN-RELOCS
-# RUN: llvm-objdump -C -s -t --section=.data --section=__cap_relocs %t.so | FileCheck %s -check-prefix DUMP
+# RUN: llvm-objdump --cap-relocs -s -t --section=.data --section=__cap_relocs %t.so | FileCheck %s -check-prefix DUMP
 
 # Test that we can also emit R_CHERI_CAPABILITY relocations for local symbols (even though it is stupid)
 # RUN: ld.lld -preemptible-caprelocs=elf -local-caprelocs=elf -shared %t.o -o %t.so -verbose -verbose-cap-relocs
 # RUN: llvm-readobj -dyn-relocations -dyn-symbols %t.so | FileCheck %s -check-prefixes=R_CAPABILITY_FOR_ALL
-# RUN: llvm-objdump -C -s --section=.data --section=__cap_relocs -t %t.so | FileCheck %s -check-prefix DUMP-R_CAPABILITY_FOR_ALL
+# RUN: llvm-objdump --cap-relocs -s --section=.data --section=__cap_relocs -t %t.so | FileCheck %s -check-prefix DUMP-R_CAPABILITY_FOR_ALL
 
 # RUN: ld.lld -pie -preemptible-caprelocs=elf -local-caprelocs=elf %t.o -o %t.exe
 # RUN: llvm-readobj -dyn-relocations -dyn-symbols %t.exe | FileCheck %s -check-prefixes=R_CAPABILITY_FOR_ALL
-# RUN: llvm-objdump -C -s -t --section=.data --section=__cap_relocs %t.exe | FileCheck %s -check-prefix DUMP-R_CAPABILITY_FOR_ALL
+# RUN: llvm-objdump --cap-relocs -s -t --section=.data --section=__cap_relocs %t.exe | FileCheck %s -check-prefix DUMP-R_CAPABILITY_FOR_ALL
 
 .text
 .global foo
@@ -117,12 +117,8 @@ local_ref_with_addend:
 # R_CAPABILITY_FOR_ALL-NEXT:   }
 # R_CAPABILITY_FOR_ALL-NEXT: ]
 
-
-# Would be nice to have a CHECK-EMPTY directiveinstead of this regex hack:
-# See https://reviews.llvm.org/D28896
-
-# DUMP-R_CAPABILITY_FOR_ALL: CAPABILITY RELOCATION RECORDS:{{$}}
-# DUMP-R_CAPABILITY_FOR_ALL-SAME:{{[[:space:]]$}}
+# DUMP-R_CAPABILITY_FOR_ALL: CAPABILITY RELOCATION RECORDS:
+# DUMP-R_CAPABILITY_FOR_ALL-EMPTY:
 # DUMP-R_CAPABILITY_FOR_ALL-NEXT: Contents of section .data:
 # DUMP-R_CAPABILITY_FOR_ALL-NEXT:  20000 00000000 00000000 cacacaca cacacaca
 #                                             ^---- addend 0 for preemptible_ref

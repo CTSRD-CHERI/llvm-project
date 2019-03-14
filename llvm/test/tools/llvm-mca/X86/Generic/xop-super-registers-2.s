@@ -11,7 +11,10 @@
 # CHECK:      Iterations:        100
 # CHECK-NEXT: Instructions:      600
 # CHECK-NEXT: Total Cycles:      316
-# CHECK-NEXT: Dispatch Width:    4
+# CHECK-NEXT: Total uOps:        600
+
+# CHECK:      Dispatch Width:    4
+# CHECK-NEXT: uOps Per Cycle:    1.90
 # CHECK-NEXT: IPC:               1.90
 # CHECK-NEXT: Block RThroughput: 3.0
 
@@ -21,7 +24,7 @@
 # CHECK-NEXT: [3]: RThroughput
 # CHECK-NEXT: [4]: MayLoad
 # CHECK-NEXT: [5]: MayStore
-# CHECK-NEXT: [6]: HasSideEffects
+# CHECK-NEXT: [6]: HasSideEffects (U)
 
 # CHECK:      [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
 # CHECK-NEXT:  1      5     1.00                        vmulps	%ymm0, %ymm1, %ymm2

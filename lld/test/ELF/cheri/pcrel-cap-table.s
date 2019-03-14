@@ -1,9 +1,9 @@
 # RUN: %cheri128_llvm-mc -filetype=obj %s -o %t.o
 # RUN: ld.lld %t.o -o %t.exe
-# RUN: llvm-objdump -C -t -d -h %t.exe | FileCheck %s
+# RUN: llvm-objdump --cap-relocs -t -d -h %t.exe | FileCheck %s
 # RUN: %cheri128_llvm-mc -filetype=obj -defsym=EMPTY_CAP_TABLE=1 %s -o %t2.o
 # RUN: ld.lld %t2.o -o %t.exe
-# RUN: llvm-objdump -C -t -d -h %t.exe | FileCheck %s -check-prefix EMPTY-TABLE
+# RUN: llvm-objdump --cap-relocs -t -d -h %t.exe | FileCheck %s -check-prefix EMPTY-TABLE
 
 .text
 
@@ -118,16 +118,16 @@ bar:
 # CHECK-LABEL: Sections:
 # CHECK: .text         00000040 0000000000020000 TEXT
 # CHECK: .data         00000030 0000000000030000 DATA
-# CHECK: .cap_table    00000010 0000000000040000 DATA
+# CHECK: .captable    00000010 0000000000040000 DATA
 
 # CHECK-LABEL: SYMBOL TABLE:
 # CHECK-NEXT:  0000000000000000         *UND*           00000000
 # CHECK-NEXT:  0000000000030028         .data           00000008 bar
 # CHECK-NEXT:  000000000002002c l     F .text           00000014 fn_2
 # CHECK-NEXT:  0000000000030020         .data           00000008 foo
-# CHECK-NEXT:  0000000000040000         .cap_table              00000000 _CHERI_CAPABILITY_TABLE_
+# CHECK-NEXT:  0000000000040000 l     O .captable       00000010 bar@CAPTABLE
+# CHECK-NEXT:  0000000000040000         .captable       00000000 _CHERI_CAPABILITY_TABLE_
 # CHECK-NEXT:  0000000000038020         .got            00000000 .hidden _gp
-# CHECK-NEXT:  0000000000040000 l       .cap_table              00000010 bar@CAPTABLE
 # CHECK-NEXT:  0000000000020000 g     F .text           0000002c __start
 
 

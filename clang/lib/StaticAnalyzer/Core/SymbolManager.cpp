@@ -83,7 +83,13 @@ void SymbolCast::dumpToStream(raw_ostream &os) const {
 }
 
 void SymbolConjured::dumpToStream(raw_ostream &os) const {
-  os << "conj_$" << getSymbolID() << '{' << T.getAsString() << '}';
+  os << "conj_$" << getSymbolID() << '{' << T.getAsString() << ", LC"
+     << LCtx->getID();
+  if (S)
+    os << ", S" << S->getID(LCtx->getDecl()->getASTContext());
+  else
+    os << ", no stmt";
+  os << ", #" << Count << '}';
 }
 
 void SymbolDerived::dumpToStream(raw_ostream &os) const {
@@ -157,13 +163,6 @@ void SymExpr::symbol_iterator::expand() {
     }
   }
   llvm_unreachable("unhandled expansion case");
-}
-
-unsigned SymExpr::computeComplexity() const {
-  unsigned R = 0;
-  for (symbol_iterator I = symbol_begin(), E = symbol_end(); I != E; ++I)
-    R++;
-  return R;
 }
 
 const SymbolRegionValue*
@@ -402,7 +401,6 @@ void SymbolReaper::markDependentsLive(SymbolRef sym) {
 
 void SymbolReaper::markLive(SymbolRef sym) {
   TheLiving[sym] = NotProcessed;
-  TheDead.erase(sym);
   markDependentsLive(sym);
 }
 
@@ -425,14 +423,6 @@ void SymbolReaper::markElementIndicesLive(const MemRegion *region) {
 void SymbolReaper::markInUse(SymbolRef sym) {
   if (isa<SymbolMetadata>(sym))
     MetadataInUse.insert(sym);
-}
-
-bool SymbolReaper::maybeDead(SymbolRef sym) {
-  if (isLive(sym))
-    return false;
-
-  TheDead.insert(sym);
-  return true;
 }
 
 bool SymbolReaper::isLiveRegion(const MemRegion *MR) {
@@ -542,7 +532,7 @@ bool SymbolReaper::isLive(const VarRegion *VR, bool includeStoreBindings) const{
 
   if (!LCtx)
     return false;
-  const StackFrameContext *CurrentContext = LCtx->getCurrentStackFrame();
+  const StackFrameContext *CurrentContext = LCtx->getStackFrame();
 
   if (VarContext == CurrentContext) {
     // If no statement is provided, everything is live.

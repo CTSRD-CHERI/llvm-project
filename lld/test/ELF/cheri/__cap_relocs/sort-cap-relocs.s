@@ -9,23 +9,23 @@
 
 // First in the right order:
 // RUN: ld.lld -preemptible-caprelocs=legacy %t1.o %t2.o -static -o %t.exe --script=%t.script --no-sort-cap-relocs
-// RUN: llvm-objdump -s --section=__cap_relocs -C -h %t.exe | FileCheck %s -check-prefix UNSORTED1
+// RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.exe | FileCheck %s -check-prefix UNSORTED1
 // UNSORTED1-LABEL: CAPABILITY RELOCATION RECORDS:
 // UNSORTED1-NEXT: 0x0000000000010040	Base: foo (0x0000000000030000)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x8000000000000000 (Function)
 // UNSORTED1-NEXT: 0x0000000000020020	Base: bar (0x0000000000040000)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x8000000000000000 (Function)
 
 // Now check that we put the 0x20020 __cap_reloc first:
 // RUN: ld.lld -preemptible-caprelocs=legacy %t2.o %t1.o -static -o %t.exe --script=%t.script --no-sort-cap-relocs
-// RUN: llvm-objdump -s --section=__cap_relocs -C -h %t.exe | FileCheck %s -check-prefix UNSORTED2
+// RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.exe | FileCheck %s -check-prefix UNSORTED2
 // UNSORTED2-LABEL: CAPABILITY RELOCATION RECORDS:
 // UNSORTED2-NEXT: 0x0000000000020020	Base: bar (0x0000000000040000)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x8000000000000000 (Function)
 // UNSORTED2-NEXT: 0x0000000000010040	Base: foo (0x0000000000030000)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x8000000000000000 (Function)
 
 // check that both t1.o first and t2.o first produce the same result with --sort-cap-relocs
 // RUN: ld.lld -preemptible-caprelocs=legacy %t1.o %t2.o -static -o %t.exe --script=%t.script --sort-cap-relocs
-// RUN: llvm-objdump -s --section=__cap_relocs -C -h %t.exe | FileCheck %s -check-prefix SORTED
+// RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.exe | FileCheck %s -check-prefix SORTED
 // RUN: ld.lld -preemptible-caprelocs=legacy %t2.o %t1.o -static -o %t.exe --script=%t.script --sort-cap-relocs
-// RUN: llvm-objdump -s --section=__cap_relocs -C -h %t.exe | FileCheck %s -check-prefix SORTED
+// RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.exe | FileCheck %s -check-prefix SORTED
 // SORTED-LABEL: CAPABILITY RELOCATION RECORDS:
 // SORTED-NEXT: 0x0000000000010040	Base: foo (0x0000000000030000)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x8000000000000000 (Function)
 // SORTED-NEXT: 0x0000000000020020	Base: bar (0x0000000000040000)	Offset: 0x0000000000000000	Length: 0x0000000000000004	Permissions: 0x8000000000000000 (Function)
@@ -33,13 +33,13 @@
 
 // Check a shared library without cap_relocs sorting;
 // RUN: ld.lld -preemptible-caprelocs=legacy %t1.o %t2.o -shared -o %t.so --script=%t.script --no-sort-cap-relocs
-// RUN: llvm-objdump -s --section=__cap_relocs -C -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED1
+// RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED1
 // SHLIB-UNSORTED1-LABEL: CAPABILITY RELOCATION RECORDS:
 // SHLIB-UNSORTED1-NEXT: 0x0000000000010040	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x8000000000000000 (Function)
 // SHLIB-UNSORTED1-NEXT: 0x0000000000020020	Base:  (0x0000000000000000)	Offset: 0x0000000000000000	Length: 0x0000000000000000	Permissions: 0x8000000000000000 (Function)
 // SHLIB-UNSORTED1-LABEL: Sections:
 // SHLIB-UNSORTED1-NEXT:  Idx Name          Size      Address          Type
-// SHLIB-UNSORTED1-NEXT:    0 __cap_relocs  00000050 0000000000020040 DATA
+// SHLIB-UNSORTED1-NEXT:    5 __cap_relocs  00000050 0000000000020040 DATA
 // SHLIB-UNSORTED1-LABEL: Contents of section __cap_relocs:
 // SHLIB-UNSORTED1-NEXT:  20040 00000000 00010040 00000000 00000000
 // SHLIB-UNSORTED1-NEXT:  20050 00000000 00000000 00000000 00000000
@@ -48,7 +48,7 @@
 // SHLIB-UNSORTED1-NEXT:  20080 00000000 00000000 80000000 00000000
 // RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix SHLIB-RELOCS-UNSORTED1
 // SHLIB-RELOCS-UNSORTED1-LABEL: Relocations [
-// SHLIB-RELOCS-UNSORTED1-NEXT:    Section (16) .rel.dyn {
+// SHLIB-RELOCS-UNSORTED1-NEXT:    Section ({{.+}}) .rel.dyn {
 // SHLIB-RELOCS-UNSORTED1-NEXT:      0x20040 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED1-NEXT:      0x20068 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED1-NEXT:      0x20048 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
@@ -59,11 +59,11 @@
 // SHLIB-RELOCS-UNSORTED1-NEXT:  ]
 
 // RUN: ld.lld -preemptible-caprelocs=legacy %t2.o %t1.o -shared -o %t.so --script=%t.script --no-sort-cap-relocs
-// RUN: llvm-objdump -s --section=__cap_relocs -C -h %t.so 
-// RUN: llvm-objdump -s --section=__cap_relocs -C -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED2
+// RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.so
+// RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED2
 // SHLIB-UNSORTED2-LABEL: Sections:
 // SHLIB-UNSORTED2-NEXT:  Idx Name          Size      Address          Type
-// SHLIB-UNSORTED2-NEXT:    0 __cap_relocs  00000050 0000000000020040 DATA
+// SHLIB-UNSORTED2-NEXT:    5 __cap_relocs  00000050 0000000000020040 DATA
 // SHLIB-UNSORTED2-LABEL: Contents of section __cap_relocs:
 // SHLIB-UNSORTED2-NEXT:  20040 00000000 00020020 00000000 00000000
 // SHLIB-UNSORTED2-NEXT:  20050 00000000 00000000 00000000 00000000
@@ -72,7 +72,7 @@
 // SHLIB-UNSORTED2-NEXT:  20080 00000000 00000000 80000000 00000000
 // RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix SHLIB-RELOCS-UNSORTED2
 // SHLIB-RELOCS-UNSORTED2-LABEL: Relocations [
-// SHLIB-RELOCS-UNSORTED2-NEXT:    Section (16) .rel.dyn {
+// SHLIB-RELOCS-UNSORTED2-NEXT:    Section ({{.+}}) .rel.dyn {
 // SHLIB-RELOCS-UNSORTED2-NEXT:      0x20040 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED2-NEXT:      0x20068 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // SHLIB-RELOCS-UNSORTED2-NEXT:      0x20048 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE bar 0x0 (real addend unknown)
@@ -86,10 +86,10 @@
 // Now check that we don't sort __cap_relocs (yet) when producing dynamic relocations:
 // TODO: it would be nice to also sort them when emitting dynamic relocs but that needs some refactoring
 // RUN: ld.lld -preemptible-caprelocs=legacy %t1.o %t2.o -shared -o %t.so --script=%t.script --sort-cap-relocs
-// RUN: llvm-objdump -s --section=__cap_relocs -C -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED1
+// RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED1
 // RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix SHLIB-RELOCS-UNSORTED1
 // RUN: ld.lld -preemptible-caprelocs=legacy %t2.o %t1.o -shared -o %t.so --script=%t.script --sort-cap-relocs
-// RUN: llvm-objdump -s --section=__cap_relocs -C -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED2
+// RUN: llvm-objdump -s --section=__cap_relocs  --cap-relocs -h %t.so | FileCheck %s -check-prefix SHLIB-UNSORTED2
 // RUN: llvm-readobj -r %t.so | FileCheck %s -check-prefix SHLIB-RELOCS-UNSORTED2
 // RUN: llvm-readobj -cheri-caprelocs -dyn-relocations  %t.so
 

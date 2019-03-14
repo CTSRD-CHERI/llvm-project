@@ -33,16 +33,28 @@ enum RelExpr {
   R_INVALID,
   R_ABS,
   R_ADDEND,
+  R_AARCH64_GOT_PAGE_PC,
+  // The expression is used for IFUNC support. Describes PC-relative
+  // address of the memory page of GOT entry. This entry is used for
+  // a redirection to IPLT.
+  R_AARCH64_GOT_PAGE_PC_PLT,
+  R_AARCH64_RELAX_TLS_GD_TO_IE_PAGE_PC,
+  R_AARCH64_PAGE_PC,
+  R_AARCH64_PLT_PAGE_PC,
+  R_AARCH64_TLSDESC_PAGE,
   R_ARM_SBREL,
   R_GOT,
+  // The expression is used for IFUNC support. Evaluates to GOT entry,
+  // containing redirection to the IPLT.
+  R_GOT_PLT,
   R_GOTONLY_PC,
   R_GOTONLY_PC_FROM_END,
   R_GOTREL,
   R_GOTREL_FROM_END,
   R_GOT_FROM_END,
   R_GOT_OFF,
-  R_GOT_PAGE_PC,
   R_GOT_PC,
+  R_HEXAGON_GOT,
   R_HINT,
   R_MIPS_GOTREL,
   R_MIPS_GOT_GP,
@@ -54,10 +66,8 @@ enum RelExpr {
   R_MIPS_TLSLD,
   R_NEG_TLS,
   R_NONE,
-  R_PAGE_PC,
   R_PC,
   R_PLT,
-  R_PLT_PAGE_PC,
   R_PLT_PC,
   R_PPC_CALL,
   R_PPC_CALL_PLT,
@@ -67,27 +77,51 @@ enum RelExpr {
   R_RELAX_TLS_GD_TO_IE,
   R_RELAX_TLS_GD_TO_IE_ABS,
   R_RELAX_TLS_GD_TO_IE_END,
-  R_RELAX_TLS_GD_TO_IE_PAGE_PC,
+  R_RELAX_TLS_GD_TO_IE_GOT_OFF,
   R_RELAX_TLS_GD_TO_LE,
   R_RELAX_TLS_GD_TO_LE_NEG,
   R_RELAX_TLS_IE_TO_LE,
   R_RELAX_TLS_LD_TO_LE,
+  R_RELAX_TLS_LD_TO_LE_ABS,
+  R_RISCV_PC_INDIRECT,
   R_SIZE,
   R_TLS,
   R_TLSDESC,
   R_TLSDESC_CALL,
-  R_TLSDESC_PAGE,
   R_TLSGD_GOT,
   R_TLSGD_GOT_FROM_END,
   R_TLSGD_PC,
-  R_TLSLD_GOT_FROM_END,
+  R_TLSIE_HINT,
   R_TLSLD_GOT,
+  R_TLSLD_GOT_FROM_END,
+  R_TLSLD_GOT_OFF,
+  R_TLSLD_HINT,
   R_TLSLD_PC,
-  R_CHERI_CAPABILITY,
   R_CHERI_CAPABILITY_TABLE_INDEX,
   R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
-  R_CHERI_CAPABILITY_TABLE_REL // relative offset to _CHERI_CAPABILITY_TABLE_
+  R_CHERI_CAPABILITY_TABLE_REL, // relative offset to _CHERI_CAPABILITY_TABLE_
+  R_MIPS_CHERI_CAPTAB_TLSGD,
+  R_MIPS_CHERI_CAPTAB_TLSLD,
+  R_MIPS_CHERI_CAPTAB_TPREL,
+  R_CHERI_CAPABILITY,
+
+  // We use a single 64-bit masking operation to quickly check if a relocation
+  // expression matches one on many possible options. This initially worked
+  // for all members of RelExpr, but lately we have come close to the limit of
+  // 64 entries in the RelExpr enum. If a given RelExpr is not used in a
+  // isRelExprOneOf() check with many possibly options, it should be placed
+  // at the end of the enum after whatever LAST_REL_EXPR_USED_IN_isRelExprOneOf
+  // aliases so that the available 64 bits can be used by other more common
+  // expressions. We can also skip the first few relocations.
+  // TODO: If we end up neededing many more expressions we could also start
+  // using two 64-bit masking operations
+  FIRST_REL_EXPR_USED_IN_isRelExprOneOf = R_AARCH64_GOT_PAGE_PC,
+  LAST_REL_EXPR_USED_IN_isRelExprOneOf = R_CHERI_CAPABILITY_TABLE_REL,
 };
+
+static_assert((LAST_REL_EXPR_USED_IN_isRelExprOneOf -
+               FIRST_REL_EXPR_USED_IN_isRelExprOneOf) < 64,
+              "RelExpr is too large for 64-bit mask!");
 
 // Build a bitmask with one bit set for each RelExpr.
 //
@@ -103,9 +137,11 @@ template <RelExpr... Exprs> struct RelExprMaskBuilder {
 template <RelExpr Head, RelExpr... Tail>
 struct RelExprMaskBuilder<Head, Tail...> {
   static inline uint64_t build() {
-    static_assert(0 <= Head && Head < 64,
+    static_assert(0 <= Head - FIRST_REL_EXPR_USED_IN_isRelExprOneOf &&
+                  Head - FIRST_REL_EXPR_USED_IN_isRelExprOneOf < 64,
                   "RelExpr is too large for 64-bit mask!");
-    return (uint64_t(1) << Head) | RelExprMaskBuilder<Tail...>::build();
+    return (uint64_t(1) << (Head - FIRST_REL_EXPR_USED_IN_isRelExprOneOf)) |
+        RelExprMaskBuilder<Tail...>::build();
   }
 };
 
@@ -114,9 +150,13 @@ struct RelExprMaskBuilder<Head, Tail...> {
 // RelExpr's as a constant bit mask and test for membership with a
 // couple cheap bitwise operations.
 template <RelExpr... Exprs> bool isRelExprOneOf(RelExpr Expr) {
-  assert(0 <= Expr && (int)Expr < 64 &&
+  if (Expr < FIRST_REL_EXPR_USED_IN_isRelExprOneOf ||
+      Expr > LAST_REL_EXPR_USED_IN_isRelExprOneOf)
+    return false;
+  unsigned Bit = (unsigned)Expr - FIRST_REL_EXPR_USED_IN_isRelExprOneOf;
+  assert(0 <= Bit && Bit < 64 &&
          "RelExpr is too large for 64-bit mask!");
-  return (uint64_t(1) << Expr) & RelExprMaskBuilder<Exprs...>::build();
+  return (uint64_t(1) << Bit) & RelExprMaskBuilder<Exprs...>::build();
 }
 
 // Architecture-neutral representation of relocation.
@@ -126,6 +166,21 @@ struct Relocation {
   uint64_t Offset;
   int64_t Addend;
   Symbol *Sym;
+};
+
+struct RelocationOffsetComparator {
+  bool operator()(const Relocation &Lhs, const Relocation &Rhs) {
+    return Lhs.Offset < Rhs.Offset;
+  }
+
+  // For std::lower_bound, std::upper_bound, std::equal_range.
+  bool operator()(const Relocation &Rel, uint64_t Val) {
+    return Rel.Offset < Val;
+  }
+
+  bool operator()(uint64_t Val, const Relocation &Rel) {
+    return Val < Rel.Offset;
+  }
 };
 
 template <class ELFT> void scanRelocations(InputSectionBase &);
@@ -154,10 +209,6 @@ private:
   ThunkSection *getISThunkSec(InputSection *IS);
 
   void createInitialThunkSections(ArrayRef<OutputSection *> OutputSections);
-
-  void forEachInputSectionDescription(
-      ArrayRef<OutputSection *> OutputSections,
-      llvm::function_ref<void(OutputSection *, InputSectionDescription *)> Fn);
 
   std::pair<Thunk *, bool> getThunk(Symbol &Sym, RelType Type, uint64_t Src);
 

@@ -30,9 +30,10 @@ namespace llvm {
 template <typename T>
 struct isPodLike {
   // std::is_trivially_copyable is available in libc++ with clang, libstdc++
-  // that comes with GCC 5.
+  // that comes with GCC 5.  MSVC 2015 and newer also have
+  // std::is_trivially_copyable.
 #if (__has_feature(is_trivially_copyable) && defined(_LIBCPP_VERSION)) ||      \
-    (defined(__GNUC__) && __GNUC__ >= 5)
+    (defined(__GNUC__) && __GNUC__ >= 5) || defined(_MSC_VER)
   // If the compiler supports the is_trivially_copyable trait use it, as it
   // matches the definition of isPodLike closely.
   static const bool value = std::is_trivially_copyable<T>::value;
@@ -103,6 +104,45 @@ struct const_pointer_or_const_ref<
     T, typename std::enable_if<std::is_pointer<T>::value>::type> {
   using type = typename add_const_past_pointer<T>::type;
 };
+
+namespace detail {
+/// Internal utility to detect trivial copy construction.
+template<typename T> union copy_construction_triviality_helper {
+    T t;
+    copy_construction_triviality_helper() = default;
+    copy_construction_triviality_helper(const copy_construction_triviality_helper&) = default;
+    ~copy_construction_triviality_helper() = default;
+};
+/// Internal utility to detect trivial move construction.
+template<typename T> union move_construction_triviality_helper {
+    T t;
+    move_construction_triviality_helper() = default;
+    move_construction_triviality_helper(move_construction_triviality_helper&&) = default;
+    ~move_construction_triviality_helper() = default;
+};
+} // end namespace detail
+
+/// An implementation of `std::is_trivially_copy_constructible` since we have
+/// users with STLs that don't yet include it.
+template <typename T>
+struct is_trivially_copy_constructible
+    : std::is_copy_constructible<
+          ::llvm::detail::copy_construction_triviality_helper<T>> {};
+template <typename T>
+struct is_trivially_copy_constructible<T &> : std::true_type {};
+template <typename T>
+struct is_trivially_copy_constructible<T &&> : std::false_type {};
+
+/// An implementation of `std::is_trivially_move_constructible` since we have
+/// users with STLs that don't yet include it.
+template <typename T>
+struct is_trivially_move_constructible
+    : std::is_move_constructible<
+          ::llvm::detail::move_construction_triviality_helper<T>> {};
+template <typename T>
+struct is_trivially_move_constructible<T &> : std::true_type {};
+template <typename T>
+struct is_trivially_move_constructible<T &&> : std::true_type {};
 
 } // end namespace llvm
 

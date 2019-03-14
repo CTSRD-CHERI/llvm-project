@@ -74,7 +74,8 @@ static cl::opt<ThreadModel::Model> TMModel(
 
 static cl::opt<llvm::CodeModel::Model> CMModel(
     "code-model", cl::desc("Choose code model"),
-    cl::values(clEnumValN(CodeModel::Small, "small", "Small code model"),
+    cl::values(clEnumValN(CodeModel::Tiny, "tiny", "Tiny code model"),
+               clEnumValN(CodeModel::Small, "small", "Small code model"),
                clEnumValN(CodeModel::Kernel, "kernel", "Kernel code model"),
                clEnumValN(CodeModel::Medium, "medium", "Medium code model"),
                clEnumValN(CodeModel::Large, "large", "Large code model")));
@@ -261,6 +262,10 @@ static cl::opt<bool> EnableStackSizeSection(
     "stack-size-section",
     cl::desc("Emit a section containing stack size metadata"), cl::init(false));
 
+static cl::opt<bool>
+    EnableAddrsig("addrsig", cl::desc("Emit an address-significance table"),
+                  cl::init(false));
+
 // Common utility function tightly tied to the options listed here. Initializes
 // a TargetOptions object with CodeGen flags and returns it.
 static TargetOptions InitTargetOptionsFromCodeGenFlags() {
@@ -289,6 +294,7 @@ static TargetOptions InitTargetOptionsFromCodeGenFlags() {
   Options.ExplicitEmulatedTLS = EmulatedTLS.getNumOccurrences() > 0;
   Options.ExceptionModel = ExceptionModel;
   Options.EmitStackSizeSection = EnableStackSizeSection;
+  Options.EmitAddrsig = EnableAddrsig;
 
   Options.MCOptions = InitMCTargetOptionsFromFlags();
 

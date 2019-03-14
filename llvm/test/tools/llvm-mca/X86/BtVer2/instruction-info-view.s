@@ -14,7 +14,11 @@ vhaddps  %xmm3, %xmm3, %xmm4
 # ENABLED:       Iterations:        100
 # ENABLED-NEXT:  Instructions:      300
 # ENABLED-NEXT:  Total Cycles:      209
-# ENABLED-NEXT:  Dispatch Width:    2
+# ENABLED-NEXT:  Total uOps:        300
+
+
+# ENABLED:       Dispatch Width:    2
+# ENABLED-NEXT:  uOps Per Cycle:    1.44
 # ENABLED-NEXT:  IPC:               1.44
 # ENABLED-NEXT:  Block RThroughput: 2.0
 
@@ -24,7 +28,7 @@ vhaddps  %xmm3, %xmm3, %xmm4
 # ENABLED-NEXT:  [3]: RThroughput
 # ENABLED-NEXT:  [4]: MayLoad
 # ENABLED-NEXT:  [5]: MayStore
-# ENABLED-NEXT:  [6]: HasSideEffects
+# ENABLED-NEXT:  [6]: HasSideEffects (U)
 
 # ENABLED:       [1]    [2]    [3]    [4]    [5]    [6]    Instructions:
 # ENABLED-NEXT:   1      2     1.00                        vmulps	%xmm0, %xmm1, %xmm2

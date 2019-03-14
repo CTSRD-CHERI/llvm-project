@@ -21,17 +21,9 @@ extern __device__
     omptarget_nvptx_Queue<omptarget_nvptx_ThreadPrivateContext, OMP_STATE_COUNT>
         omptarget_nvptx_device_State[MAX_SM];
 
-extern __device__ __shared__
-    omptarget_nvptx_ThreadPrivateContext *omptarget_nvptx_threadPrivateContext;
-
-//
-// The team master sets the outlined function and its arguments in these
-// variables to communicate with the workers.  Since they are in shared memory,
-// there is one copy of these variables for each kernel, instance, and team.
-//
-extern volatile __device__ __shared__ omptarget_nvptx_WorkFn
-    omptarget_nvptx_workFn;
-extern __device__ __shared__ uint32_t execution_param;
+extern __device__ omptarget_nvptx_Queue<
+    omptarget_nvptx_SimpleThreadPrivateContext, OMP_STATE_COUNT>
+    omptarget_nvptx_device_simpleState[MAX_SM];
 
 ////////////////////////////////////////////////////////////////////////////////
 // init entry points
@@ -53,12 +45,8 @@ EXTERN void __kmpc_kernel_init_params(void *Ptr) {
 EXTERN void __kmpc_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime) {
   PRINT(LD_IO, "call to __kmpc_kernel_init with version %f\n",
         OMPTARGET_NVPTX_VERSION);
-
-  if (!RequiresOMPRuntime) {
-    // If OMP runtime is not required don't initialize OMP state.
-    setExecutionParameters(Generic, RuntimeUninitialized);
-    return;
-  }
+  ASSERT0(LT_FUSSY, RequiresOMPRuntime,
+          "Generic always requires initialized runtime.");
   setExecutionParameters(Generic, RuntimeInitialized);
 
   int threadIdInBlock = GetThreadIdInBlock();
@@ -68,11 +56,9 @@ EXTERN void __kmpc_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime) {
 
   // Get a state object from the queue.
   int slot = smid() % MAX_SM;
+  usedSlotIdx = slot;
   omptarget_nvptx_threadPrivateContext =
       omptarget_nvptx_device_State[slot].Dequeue();
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
-  omptarget_nvptx_threadPrivateContext->SetSourceQueue(slot);
-#endif
 
   // init thread private
   int threadId = GetLogicalThreadIdInBlock();
@@ -95,16 +81,12 @@ EXTERN void __kmpc_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime) {
 }
 
 EXTERN void __kmpc_kernel_deinit(int16_t IsOMPRuntimeInitialized) {
-  if (IsOMPRuntimeInitialized) {
-    // Enqueue omp state object for use by another team.
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 700
-    int slot = omptarget_nvptx_threadPrivateContext->GetSourceQueue();
-#else
-    int slot = smid() % MAX_SM;
-#endif
-    omptarget_nvptx_device_State[slot].Enqueue(
-        omptarget_nvptx_threadPrivateContext);
-  }
+  ASSERT0(LT_FUSSY, IsOMPRuntimeInitialized,
+          "Generic always requires initialized runtime.");
+  // Enqueue omp state object for use by another team.
+  int slot = usedSlotIdx;
+  omptarget_nvptx_device_State[slot].Enqueue(
+      omptarget_nvptx_threadPrivateContext);
   // Done with work.  Kill the workers.
   omptarget_nvptx_workFn = 0;
 }
@@ -116,6 +98,14 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
   if (!RequiresOMPRuntime) {
     // If OMP runtime is not required don't initialize OMP state.
     setExecutionParameters(Spmd, RuntimeUninitialized);
+    if (GetThreadIdInBlock() == 0) {
+      int slot = smid() % MAX_SM;
+      usedSlotIdx = slot;
+      omptarget_nvptx_simpleThreadPrivateContext =
+          omptarget_nvptx_device_simpleState[slot].Dequeue();
+    }
+    __syncthreads();
+    omptarget_nvptx_simpleThreadPrivateContext->Init();
     return;
   }
   setExecutionParameters(Spmd, RuntimeInitialized);
@@ -129,6 +119,7 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
   if (threadId == 0) {
     // Get a state object from the queue.
     int slot = smid() % MAX_SM;
+    usedSlotIdx = slot;
     omptarget_nvptx_threadPrivateContext =
         omptarget_nvptx_device_State[slot].Dequeue();
 
@@ -136,8 +127,6 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
     omptarget_nvptx_WorkDescr &workDescr = getMyWorkDescriptor();
     // init team context
     currTeamDescr.InitTeamDescr();
-    // init counters (copy start to init)
-    workDescr.CounterGroup().Reset();
   }
   __syncthreads();
 
@@ -158,12 +147,10 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
                                                              newTaskDescr);
 
   // init thread private from init value
-  workDescr.CounterGroup().Init(
-      omptarget_nvptx_threadPrivateContext->Priv(threadId));
   PRINT(LD_PAR,
         "thread will execute parallel region with id %d in a team of "
         "%d threads\n",
-        newTaskDescr->ThreadId(), newTaskDescr->ThreadsInTeam());
+        (int)newTaskDescr->ThreadId(), (int)newTaskDescr->ThreadsInTeam());
 
   if (RequiresDataSharing && threadId % WARPSIZE == 0) {
     // Warp master innitializes data sharing environment.
@@ -175,14 +162,27 @@ EXTERN void __kmpc_spmd_kernel_init(int ThreadLimit, int16_t RequiresOMPRuntime,
   }
 }
 
-EXTERN void __kmpc_spmd_kernel_deinit() {
+EXTERN __attribute__((deprecated)) void __kmpc_spmd_kernel_deinit() {
+  __kmpc_spmd_kernel_deinit_v2(isRuntimeInitialized());
+}
+
+EXTERN void __kmpc_spmd_kernel_deinit_v2(int16_t RequiresOMPRuntime) {
   // We're not going to pop the task descr stack of each thread since
   // there are no more parallel regions in SPMD mode.
   __syncthreads();
   int threadId = GetThreadIdInBlock();
+  if (!RequiresOMPRuntime) {
+    if (threadId == 0) {
+      // Enqueue omp state object for use by another team.
+      int slot = usedSlotIdx;
+      omptarget_nvptx_device_simpleState[slot].Enqueue(
+          omptarget_nvptx_simpleThreadPrivateContext);
+    }
+    return;
+  }
   if (threadId == 0) {
     // Enqueue omp state object for use by another team.
-    int slot = smid() % MAX_SM;
+    int slot = usedSlotIdx;
     omptarget_nvptx_device_State[slot].Enqueue(
         omptarget_nvptx_threadPrivateContext);
   }

@@ -86,6 +86,8 @@ public:
   void setARMSubArch(Triple &TheTriple) const override;
 
   virtual uint16_t getEType() const = 0;
+
+  std::vector<std::pair<DataRefImpl, uint64_t>> getPltAddresses() const;
 };
 
 class ELFSectionRef : public SectionRef {
@@ -258,6 +260,8 @@ protected:
   bool isSectionData(DataRefImpl Sec) const override;
   bool isSectionBSS(DataRefImpl Sec) const override;
   bool isSectionVirtual(DataRefImpl Sec) const override;
+  bool isBerkeleyText(DataRefImpl Sec) const override;
+  bool isBerkeleyData(DataRefImpl Sec) const override;
   relocation_iterator section_rel_begin(DataRefImpl Sec) const override;
   relocation_iterator section_rel_end(DataRefImpl Sec) const override;
   std::vector<SectionRef> dynamic_relocation_sections() const override;
@@ -331,9 +335,10 @@ protected:
     // A symbol is exported if its binding is either GLOBAL or WEAK, and its
     // visibility is either DEFAULT or PROTECTED. All other symbols are not
     // exported.
-    return ((Binding == ELF::STB_GLOBAL || Binding == ELF::STB_WEAK) &&
-            (Visibility == ELF::STV_DEFAULT ||
-             Visibility == ELF::STV_PROTECTED));
+    return (
+        (Binding == ELF::STB_GLOBAL || Binding == ELF::STB_WEAK ||
+         Binding == ELF::STB_GNU_UNIQUE) &&
+        (Visibility == ELF::STV_DEFAULT || Visibility == ELF::STV_PROTECTED));
   }
 
   // This flag is used for classof, to distinguish ELFObjectFile from
@@ -373,6 +378,7 @@ public:
   uint8_t getBytesInAddress() const override;
   StringRef getFileFormatName() const override;
   Triple::ArchType getArch() const override;
+  Expected<uint64_t> getStartAddress() const override;
 
   unsigned getPlatformFlags() const override { return EF.getHeader()->e_flags; }
 
@@ -756,6 +762,20 @@ bool ELFObjectFile<ELFT>::isSectionVirtual(DataRefImpl Sec) const {
 }
 
 template <class ELFT>
+bool ELFObjectFile<ELFT>::isBerkeleyText(DataRefImpl Sec) const {
+  return getSection(Sec)->sh_flags & ELF::SHF_ALLOC &&
+         (getSection(Sec)->sh_flags & ELF::SHF_EXECINSTR ||
+          !(getSection(Sec)->sh_flags & ELF::SHF_WRITE));
+}
+
+template <class ELFT>
+bool ELFObjectFile<ELFT>::isBerkeleyData(DataRefImpl Sec) const {
+  const Elf_Shdr *EShdr = getSection(Sec);
+  return !isBerkeleyText(Sec) && EShdr->sh_type != ELF::SHT_NOBITS &&
+         EShdr->sh_flags & ELF::SHF_ALLOC;
+}
+
+template <class ELFT>
 relocation_iterator
 ELFObjectFile<ELFT>::section_rel_begin(DataRefImpl Sec) const {
   DataRefImpl RelData;
@@ -1018,6 +1038,8 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return "ELF32-lanai";
     case ELF::EM_MIPS:
       return "ELF32-mips";
+    case ELF::EM_MSP430:
+      return "ELF32-msp430";
     case ELF::EM_PPC:
       return "ELF32-ppc";
     case ELF::EM_RISCV:
@@ -1025,8 +1047,6 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
     case ELF::EM_SPARC:
     case ELF::EM_SPARC32PLUS:
       return "ELF32-sparc";
-    case ELF::EM_WEBASSEMBLY:
-      return "ELF32-wasm";
     case ELF::EM_AMDGPU:
       return "ELF32-amdgpu";
     default:
@@ -1050,8 +1070,6 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return "ELF64-sparc";
     case ELF::EM_MIPS:
       return "ELF64-mips";
-    case ELF::EM_WEBASSEMBLY:
-      return "ELF64-wasm";
     case ELF::EM_AMDGPU:
       return "ELF64-amdgpu";
     case ELF::EM_BPF:
@@ -1092,6 +1110,8 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
     default:
       report_fatal_error("Invalid ELFCLASS!");
     }
+  case ELF::EM_MSP430:
+    return Triple::msp430;
   case ELF::EM_PPC:
     return Triple::ppc;
   case ELF::EM_PPC64:
@@ -1113,12 +1133,6 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
     return IsLittleEndian ? Triple::sparcel : Triple::sparc;
   case ELF::EM_SPARCV9:
     return Triple::sparcv9;
-  case ELF::EM_WEBASSEMBLY:
-    switch (EF.getHeader()->e_ident[ELF::EI_CLASS]) {
-    case ELF::ELFCLASS32: return Triple::wasm32;
-    case ELF::ELFCLASS64: return Triple::wasm64;
-    default: return Triple::UnknownArch;
-    }
 
   case ELF::EM_AMDGPU: {
     if (!IsLittleEndian)
@@ -1141,6 +1155,11 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
   default:
     return Triple::UnknownArch;
   }
+}
+
+template <class ELFT>
+Expected<uint64_t> ELFObjectFile<ELFT>::getStartAddress() const {
+  return EF.getHeader()->e_entry;
 }
 
 template <class ELFT>

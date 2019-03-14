@@ -43,6 +43,8 @@ thread_local bool Fuzzer::IsMyThread;
 
 SharedMemoryRegion SMR;
 
+bool RunningUserCallback = false;
+
 // Only one Fuzzer per process.
 static Fuzzer *F;
 
@@ -148,7 +150,7 @@ Fuzzer::Fuzzer(UserCallback CB, InputCorpus &Corpus, MutationDispatcher &MD,
   if (Options.DetectLeaks && EF->__sanitizer_install_malloc_and_free_hooks)
     EF->__sanitizer_install_malloc_and_free_hooks(MallocHook, FreeHook);
   TPC.SetUseCounters(Options.UseCounters);
-  TPC.SetUseValueProfile(Options.UseValueProfile);
+  TPC.SetUseValueProfileMask(Options.UseValueProfile);
 
   if (Options.Verbosity)
     TPC.PrintModuleInfo();
@@ -179,6 +181,7 @@ void Fuzzer::StaticDeathCallback() {
 void Fuzzer::DumpCurrentUnit(const char *Prefix) {
   if (!CurrentUnitData)
     return; // Happens when running individual inputs.
+  ScopedDisableMsanInterceptorChecks S;
   MD.PrintMutationSequence();
   Printf("; base unit: %s\n", Sha1ToString(BaseSha1).c_str());
   size_t UnitSize = CurrentUnitSize;
@@ -242,7 +245,7 @@ void Fuzzer::CrashCallback() {
 }
 
 void Fuzzer::ExitCallback() {
-  if (!RunningCB)
+  if (!RunningUserCallback)
     return; // This exit did not come from the user callback
   if (EF->__sanitizer_acquire_crash_state &&
       !EF->__sanitizer_acquire_crash_state())
@@ -272,11 +275,12 @@ NO_SANITIZE_MEMORY
 void Fuzzer::AlarmCallback() {
   assert(Options.UnitTimeoutSec > 0);
   // In Windows Alarm callback is executed by a different thread.
-#if !LIBFUZZER_WINDOWS
+  // NetBSD's current behavior needs this change too.
+#if !LIBFUZZER_WINDOWS && !LIBFUZZER_NETBSD
   if (!InFuzzingThread())
     return;
 #endif
-  if (!RunningCB)
+  if (!RunningUserCallback)
     return; // We have not started running units yet.
   size_t Seconds =
       duration_cast<seconds>(system_clock::now() - UnitStartTime).count();
@@ -351,6 +355,8 @@ void Fuzzer::PrintStats(const char *Where, const char *End, size_t Units) {
 void Fuzzer::PrintFinalStats() {
   if (Options.PrintCoverage)
     TPC.PrintCoverage();
+  if (Options.PrintUnstableStats)
+    TPC.PrintUnstableStats();
   if (Options.DumpCoverage)
     TPC.DumpCoverage();
   if (Options.PrintCorpusStats)
@@ -443,6 +449,29 @@ void Fuzzer::PrintPulseAndReportSlowInput(const uint8_t *Data, size_t Size) {
   }
 }
 
+void Fuzzer::CheckForUnstableCounters(const uint8_t *Data, size_t Size) {
+  auto CBSetupAndRun = [&]() {
+    ScopedEnableMsanInterceptorChecks S;
+    UnitStartTime = system_clock::now();
+    TPC.ResetMaps();
+    RunningUserCallback = true;
+    CB(Data, Size);
+    RunningUserCallback = false;
+    UnitStopTime = system_clock::now();
+  };
+
+  // Copy original run counters into our unstable counters
+  TPC.InitializeUnstableCounters();
+
+  // First Rerun
+  CBSetupAndRun();
+  if (TPC.UpdateUnstableCounters(Options.HandleUnstable)) {
+    // Second Rerun
+    CBSetupAndRun();
+    TPC.UpdateAndApplyUnstableCounters(Options.HandleUnstable);
+  }
+}
+
 bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
                     InputInfo *II, bool *FoundUniqFeatures) {
   if (!Size)
@@ -453,6 +482,17 @@ bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
   UniqFeatureSetTmp.clear();
   size_t FoundUniqFeaturesOfII = 0;
   size_t NumUpdatesBefore = Corpus.NumFeatureUpdates();
+  bool NewFeaturesUnstable = false;
+
+  if (Options.HandleUnstable || Options.PrintUnstableStats) {
+    TPC.CollectFeatures([&](size_t Feature) {
+      if (Corpus.IsFeatureNew(Feature, Size, Options.Shrink))
+        NewFeaturesUnstable = true;
+    });
+    if (NewFeaturesUnstable)
+      CheckForUnstableCounters(Data, Size);
+  }
+
   TPC.CollectFeatures([&](size_t Feature) {
     if (Corpus.AddFeature(Feature, Size, Options.Shrink))
       UniqFeatureSetTmp.push_back(Feature);
@@ -461,15 +501,16 @@ bool Fuzzer::RunOne(const uint8_t *Data, size_t Size, bool MayDeleteFile,
                              II->UniqFeatureSet.end(), Feature))
         FoundUniqFeaturesOfII++;
   });
+
   if (FoundUniqFeatures)
     *FoundUniqFeatures = FoundUniqFeaturesOfII;
   PrintPulseAndReportSlowInput(Data, Size);
   size_t NumNewFeatures = Corpus.NumFeatureUpdates() - NumUpdatesBefore;
+
   if (NumNewFeatures) {
     TPC.UpdateObservedPCs();
     Corpus.AddToCorpus({Data, Data + Size}, NumNewFeatures, MayDeleteFile,
-                       TPC.ObservedFocusFunction(),
-                       UniqFeatureSetTmp, DFT);
+                       TPC.ObservedFocusFunction(), UniqFeatureSetTmp, DFT, II);
     return true;
   }
   if (II && FoundUniqFeaturesOfII &&
@@ -516,19 +557,24 @@ void Fuzzer::ExecuteCallback(const uint8_t *Data, size_t Size) {
   // so that we reliably find buffer overflows in it.
   uint8_t *DataCopy = new uint8_t[Size];
   memcpy(DataCopy, Data, Size);
+  if (EF->__msan_unpoison)
+    EF->__msan_unpoison(DataCopy, Size);
   if (CurrentUnitData && CurrentUnitData != Data)
     memcpy(CurrentUnitData, Data, Size);
   CurrentUnitSize = Size;
-  AllocTracer.Start(Options.TraceMalloc);
-  UnitStartTime = system_clock::now();
-  TPC.ResetMaps();
-  RunningCB = true;
-  int Res = CB(DataCopy, Size);
-  RunningCB = false;
-  UnitStopTime = system_clock::now();
-  (void)Res;
-  assert(Res == 0);
-  HasMoreMallocsThanFrees = AllocTracer.Stop();
+  {
+    ScopedEnableMsanInterceptorChecks S;
+    AllocTracer.Start(Options.TraceMalloc);
+    UnitStartTime = system_clock::now();
+    TPC.ResetMaps();
+    RunningUserCallback = true;
+    int Res = CB(DataCopy, Size);
+    RunningUserCallback = false;
+    UnitStopTime = system_clock::now();
+    (void)Res;
+    assert(Res == 0);
+    HasMoreMallocsThanFrees = AllocTracer.Stop();
+  }
   if (!LooseMemeq(DataCopy, Data, Size))
     CrashOnOverwrittenData();
   CurrentUnitSize = 0;
@@ -647,7 +693,12 @@ void Fuzzer::MutateAndTestOne() {
       break;
     MaybeExitGracefully();
     size_t NewSize = 0;
-    NewSize = MD.Mutate(CurrentUnitData, Size, CurrentMaxMutationLen);
+    if (II.HasFocusFunction && !II.DataFlowTraceForFocusFunction.empty() &&
+        Size <= CurrentMaxMutationLen)
+      NewSize = MD.MutateWithMask(CurrentUnitData, Size, Size,
+                                  II.DataFlowTraceForFocusFunction);
+    else
+      NewSize = MD.Mutate(CurrentUnitData, Size, CurrentMaxMutationLen);
     assert(NewSize > 0 && "Mutator returned empty unit");
     assert(NewSize <= CurrentMaxMutationLen && "Mutator return oversized unit");
     Size = NewSize;

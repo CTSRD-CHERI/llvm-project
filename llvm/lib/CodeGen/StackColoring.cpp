@@ -39,7 +39,6 @@
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/SelectionDAGNodes.h"
 #include "llvm/CodeGen/SlotIndexes.h"
-#include "llvm/CodeGen/StackProtector.h"
 #include "llvm/CodeGen/TargetOpcodes.h"
 #include "llvm/CodeGen/WinEHFuncInfo.h"
 #include "llvm/Config/llvm-config.h"
@@ -423,9 +422,6 @@ class StackColoring : public MachineFunctionPass {
   /// SlotIndex analysis object.
   SlotIndexes *Indexes;
 
-  /// The stack protector object.
-  StackProtector *SP;
-
   /// The list of lifetime markers found. These markers are to be removed
   /// once the coloring is done.
   SmallVector<MachineInstr*, 8> Markers;
@@ -449,7 +445,7 @@ public:
   }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override;
-  bool runOnMachineFunction(MachineFunction &MF) override;
+  bool runOnMachineFunction(MachineFunction &Func) override;
 
 private:
   /// Used in collectMarkers
@@ -524,13 +520,11 @@ char &llvm::StackColoringID = StackColoring::ID;
 INITIALIZE_PASS_BEGIN(StackColoring, DEBUG_TYPE,
                       "Merge disjoint stack slots", false, false)
 INITIALIZE_PASS_DEPENDENCY(SlotIndexes)
-INITIALIZE_PASS_DEPENDENCY(StackProtector)
 INITIALIZE_PASS_END(StackColoring, DEBUG_TYPE,
                     "Merge disjoint stack slots", false, false)
 
 void StackColoring::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<SlotIndexes>();
-  AU.addRequired<StackProtector>();
   MachineFunctionPass::getAnalysisUsage(AU);
 }
 
@@ -936,9 +930,17 @@ void StackColoring::remapInstructions(DenseMap<int, int> &SlotRemap) {
     MergedAllocas.insert(From);
     MergedAllocas.insert(To);
 
-    // Allow the stack protector to adjust its value map to account for the
-    // upcoming replacement.
-    SP->adjustForColoring(From, To);
+    // Transfer the stack protector layout tag, but make sure that SSPLK_AddrOf
+    // does not overwrite SSPLK_SmallArray or SSPLK_LargeArray, and make sure
+    // that SSPLK_SmallArray does not overwrite SSPLK_LargeArray.
+    MachineFrameInfo::SSPLayoutKind FromKind
+        = MFI->getObjectSSPLayout(SI.first);
+    MachineFrameInfo::SSPLayoutKind ToKind = MFI->getObjectSSPLayout(SI.second);
+    if (FromKind != MachineFrameInfo::SSPLK_None &&
+        (ToKind == MachineFrameInfo::SSPLK_None ||
+         (ToKind != MachineFrameInfo::SSPLK_LargeArray &&
+          FromKind != MachineFrameInfo::SSPLK_AddrOf)))
+      MFI->setObjectSSPLayout(SI.second, FromKind);
 
     // The new alloca might not be valid in a llvm.dbg.declare for this
     // variable, so undef out the use to make the verifier happy.
@@ -1020,9 +1022,7 @@ void StackColoring::remapInstructions(DenseMap<int, int> &SlotRemap) {
       }
 
       // We adjust AliasAnalysis information for merged stack slots.
-      MachineSDNode::mmo_iterator NewMemOps =
-          MF->allocateMemRefsArray(I.getNumMemOperands());
-      unsigned MemOpIdx = 0;
+      SmallVector<MachineMemOperand *, 2> NewMMOs;
       bool ReplaceMemOps = false;
       for (MachineMemOperand *MMO : I.memoperands()) {
         // If this memory location can be a slot remapped here,
@@ -1049,17 +1049,17 @@ void StackColoring::remapInstructions(DenseMap<int, int> &SlotRemap) {
           }
         }
         if (MayHaveConflictingAAMD) {
-          NewMemOps[MemOpIdx++] = MF->getMachineMemOperand(MMO, AAMDNodes());
+          NewMMOs.push_back(MF->getMachineMemOperand(MMO, AAMDNodes()));
           ReplaceMemOps = true;
+        } else {
+          NewMMOs.push_back(MMO);
         }
-        else
-          NewMemOps[MemOpIdx++] = MMO;
       }
 
       // If any memory operand is updated, set memory references of
       // this instruction.
       if (ReplaceMemOps)
-        I.setMemRefs(std::make_pair(NewMemOps, I.getNumMemOperands()));
+        I.setMemRefs(*MF, NewMMOs);
     }
 
   // Update the location of C++ catch objects for the MSVC personality routine.
@@ -1139,7 +1139,6 @@ bool StackColoring::runOnMachineFunction(MachineFunction &Func) {
   MF = &Func;
   MFI = &MF->getFrameInfo();
   Indexes = &getAnalysis<SlotIndexes>();
-  SP = &getAnalysis<StackProtector>();
   BlockLiveness.clear();
   BasicBlocks.clear();
   BasicBlockNumbering.clear();
@@ -1232,7 +1231,7 @@ bool StackColoring::runOnMachineFunction(MachineFunction &Func) {
   });
 
   for (auto &s : LiveStarts)
-    llvm::sort(s.begin(), s.end());
+    llvm::sort(s);
 
   bool Changed = true;
   while (Changed) {

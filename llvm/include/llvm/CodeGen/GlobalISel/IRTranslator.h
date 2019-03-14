@@ -210,7 +210,7 @@ private:
 
   /// Translate an LLVM string intrinsic (memcpy, memset, ...).
   bool translateMemfunc(const CallInst &CI, MachineIRBuilder &MIRBuilder,
-                        unsigned Intrinsic);
+                        unsigned ID);
 
   void getStackGuard(unsigned DstReg, MachineIRBuilder &MIRBuilder);
 
@@ -232,6 +232,7 @@ private:
 
   /// Returns true if the value should be split into multiple LLTs.
   /// If \p Offsets is given then the split type's offsets will be stored in it.
+  /// If \p Offsets is not empty it will be cleared first.
   bool valueIsSplit(const Value &V,
                     SmallVectorImpl<uint64_t> *Offsets = nullptr);
 
@@ -298,6 +299,8 @@ private:
   bool translateRet(const User &U, MachineIRBuilder &MIRBuilder);
 
   bool translateFSub(const User &U, MachineIRBuilder &MIRBuilder);
+
+  bool translateFNeg(const User &U, MachineIRBuilder &MIRBuilder);
 
   bool translateAdd(const User &U, MachineIRBuilder &MIRBuilder) {
     return translateBinaryOp(TargetOpcode::G_ADD, U, MIRBuilder);
@@ -399,6 +402,9 @@ private:
 
   bool translateShuffleVector(const User &U, MachineIRBuilder &MIRBuilder);
 
+  bool translateAtomicCmpXchg(const User &U, MachineIRBuilder &MIRBuilder);
+  bool translateAtomicRMW(const User &U, MachineIRBuilder &MIRBuilder);
+
   // Stubs to keep the compiler happy while we implement the rest of the
   // translation.
   bool translateResume(const User &U, MachineIRBuilder &MIRBuilder) {
@@ -414,12 +420,6 @@ private:
     return false;
   }
   bool translateFence(const User &U, MachineIRBuilder &MIRBuilder) {
-    return false;
-  }
-  bool translateAtomicCmpXchg(const User &U, MachineIRBuilder &MIRBuilder) {
-    return false;
-  }
-  bool translateAtomicRMW(const User &U, MachineIRBuilder &MIRBuilder) {
     return false;
   }
   bool translateAddrSpaceCast(const User &U, MachineIRBuilder &MIRBuilder) {

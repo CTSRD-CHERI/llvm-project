@@ -21,7 +21,7 @@ __start:
 
 # CHECK-LABEL: Sections:
 # CHECK-NOT: __cap_relocs
-# CHECK-NOT: .cap_table
+# CHECK-NOT: .captable
 # CHECK-LABEL: SYMBOL TABLE:
 # CHECK-NEXT: 0000000000000000         *UND*           00000000
 # CHECK-NEXT: 0000000000000000         *ABS*           00000000 _CHERI_CAPABILITY_TABLE_

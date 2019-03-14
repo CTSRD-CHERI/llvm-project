@@ -9,65 +9,65 @@
 
 #include "lldb/Core/Module.h"
 
-#include "lldb/Core/AddressRange.h" // for AddressRange
+#include "lldb/Core/AddressRange.h"
 #include "lldb/Core/AddressResolverFileLine.h"
-#include "lldb/Core/Debugger.h"     // for Debugger
-#include "lldb/Core/FileSpecList.h" // for FileSpecList
-#include "lldb/Core/Mangled.h"      // for Mangled
+#include "lldb/Core/Debugger.h"
+#include "lldb/Core/FileSpecList.h"
+#include "lldb/Core/Mangled.h"
 #include "lldb/Core/ModuleSpec.h"
-#include "lldb/Core/SearchFilter.h" // for SearchFilt...
+#include "lldb/Core/SearchFilter.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Host/Host.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
 #include "lldb/Interpreter/ScriptInterpreter.h"
 #include "lldb/Symbol/CompileUnit.h"
-#include "lldb/Symbol/Function.h" // for Function
+#include "lldb/Symbol/Function.h"
 #include "lldb/Symbol/ObjectFile.h"
-#include "lldb/Symbol/Symbol.h" // for Symbol
+#include "lldb/Symbol/Symbol.h"
 #include "lldb/Symbol/SymbolContext.h"
 #include "lldb/Symbol/SymbolFile.h"
 #include "lldb/Symbol/SymbolVendor.h"
-#include "lldb/Symbol/Symtab.h"   // for Symtab
-#include "lldb/Symbol/Type.h"     // for Type
-#include "lldb/Symbol/TypeList.h" // for TypeList
+#include "lldb/Symbol/Symtab.h"
+#include "lldb/Symbol/Type.h"
+#include "lldb/Symbol/TypeList.h"
 #include "lldb/Symbol/TypeMap.h"
 #include "lldb/Symbol/TypeSystem.h"
 #include "lldb/Target/Language.h"
-#include "lldb/Target/Platform.h" // for Platform
+#include "lldb/Target/Platform.h"
 #include "lldb/Target/Process.h"
 #include "lldb/Target/Target.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/Log.h"
-#include "lldb/Utility/Logging.h" // for GetLogIfAn...
+#include "lldb/Utility/Logging.h"
 #include "lldb/Utility/RegularExpression.h"
 #include "lldb/Utility/Status.h"
-#include "lldb/Utility/Stream.h" // for Stream
+#include "lldb/Utility/Stream.h"
 #include "lldb/Utility/StreamString.h"
 #include "lldb/Utility/Timer.h"
 
 #if defined(_WIN32)
-#include "lldb/Host/windows/PosixApi.h" // for PATH_MAX
+#include "lldb/Host/windows/PosixApi.h"
 #endif
 
 #include "Plugins/Language/CPlusPlus/CPlusPlusLanguage.h"
 #include "Plugins/Language/ObjC/ObjCLanguage.h"
 
-#include "llvm/ADT/STLExtras.h"    // for make_unique
-#include "llvm/Support/Compiler.h" // for LLVM_PRETT...
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/Support/Compiler.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/Signals.h"
-#include "llvm/Support/raw_ostream.h" // for raw_string...
+#include "llvm/Support/raw_ostream.h"
 
-#include <assert.h>    // for assert
-#include <cstdint>     // for uint32_t
-#include <inttypes.h>  // for PRIx64
-#include <map>         // for map
-#include <stdarg.h>    // for va_end
-#include <string.h>    // for size_t
-#include <type_traits> // for move
-#include <utility>     // for find, pair
+#include <assert.h>
+#include <cstdint>
+#include <inttypes.h>
+#include <map>
+#include <stdarg.h>
+#include <string.h>
+#include <type_traits>
+#include <utility>
 
 namespace lldb_private {
 class CompilerDeclContext;
@@ -162,15 +162,19 @@ Module::Module(const ModuleSpec &module_spec)
   // fill any ivars in so we don't accidentally grab the wrong file later since
   // they don't match...
   ModuleSpec matching_module_spec;
-  if (modules_specs.FindMatchingModuleSpec(module_spec, matching_module_spec) ==
-      0)
+  if (!modules_specs.FindMatchingModuleSpec(module_spec,
+                                            matching_module_spec)) {
+    if (log) {
+      log->Printf("Found local object file but the specs didn't match");
+    }
     return;
+  }
 
   if (module_spec.GetFileSpec())
-    m_mod_time = FileSystem::GetModificationTime(module_spec.GetFileSpec());
+    m_mod_time = FileSystem::Instance().GetModificationTime(module_spec.GetFileSpec());
   else if (matching_module_spec.GetFileSpec())
     m_mod_time =
-        FileSystem::GetModificationTime(matching_module_spec.GetFileSpec());
+        FileSystem::Instance().GetModificationTime(matching_module_spec.GetFileSpec());
 
   // Copy the architecture from the actual spec if we got one back, else use
   // the one that was specified
@@ -215,7 +219,7 @@ Module::Module(const ModuleSpec &module_spec)
 Module::Module(const FileSpec &file_spec, const ArchSpec &arch,
                const ConstString *object_name, lldb::offset_t object_offset,
                const llvm::sys::TimePoint<> &object_mod_time)
-    : m_mod_time(FileSystem::GetModificationTime(file_spec)), m_arch(arch),
+    : m_mod_time(FileSystem::Instance().GetModificationTime(file_spec)), m_arch(arch),
       m_file(file_spec), m_object_offset(object_offset),
       m_object_mod_time(object_mod_time), m_file_has_changed(false),
       m_first_file_changed_log(false) {
@@ -367,15 +371,13 @@ void Module::ParseAllDebugSymbols() {
 
       symbols->ParseCompileUnitFunctions(sc);
 
-      for (size_t func_idx = 0;
-           (sc.function = sc.comp_unit->GetFunctionAtIndex(func_idx).get()) !=
-           nullptr;
-           ++func_idx) {
+      sc.comp_unit->ForeachFunction([&sc, &symbols](const FunctionSP &f) {
+        sc.function = f.get();
         symbols->ParseFunctionBlocks(sc);
-
         // Parse the variables for this function and all its blocks
         symbols->ParseVariablesForContext(sc);
-      }
+        return false;
+      });
 
       // Parse all types for this compile unit
       sc.function = nullptr;
@@ -431,8 +433,8 @@ bool Module::ResolveFileAddress(lldb::addr_t vm_addr, Address &so_addr) {
 }
 
 uint32_t Module::ResolveSymbolContextForAddress(
-    const Address &so_addr, uint32_t resolve_scope, SymbolContext &sc,
-    bool resolve_tail_call_address) {
+    const Address &so_addr, lldb::SymbolContextItem resolve_scope,
+    SymbolContext &sc, bool resolve_tail_call_address) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
   uint32_t resolved_flags = 0;
 
@@ -564,21 +566,17 @@ uint32_t Module::ResolveSymbolContextForAddress(
   return resolved_flags;
 }
 
-uint32_t Module::ResolveSymbolContextForFilePath(const char *file_path,
-                                                 uint32_t line,
-                                                 bool check_inlines,
-                                                 uint32_t resolve_scope,
-                                                 SymbolContextList &sc_list) {
-  FileSpec file_spec(file_path, false);
+uint32_t Module::ResolveSymbolContextForFilePath(
+    const char *file_path, uint32_t line, bool check_inlines,
+    lldb::SymbolContextItem resolve_scope, SymbolContextList &sc_list) {
+  FileSpec file_spec(file_path);
   return ResolveSymbolContextsForFileSpec(file_spec, line, check_inlines,
                                           resolve_scope, sc_list);
 }
 
-uint32_t Module::ResolveSymbolContextsForFileSpec(const FileSpec &file_spec,
-                                                  uint32_t line,
-                                                  bool check_inlines,
-                                                  uint32_t resolve_scope,
-                                                  SymbolContextList &sc_list) {
+uint32_t Module::ResolveSymbolContextsForFileSpec(
+    const FileSpec &file_spec, uint32_t line, bool check_inlines,
+    lldb::SymbolContextItem resolve_scope, SymbolContextList &sc_list) {
   std::lock_guard<std::recursive_mutex> guard(m_mutex);
   static Timer::Category func_cat(LLVM_PRETTY_FUNCTION);
   Timer scoped_timer(func_cat,
@@ -637,9 +635,11 @@ size_t Module::FindCompileUnits(const FileSpec &path, bool append,
   return sc_list.GetSize() - start_size;
 }
 
-Module::LookupInfo::LookupInfo(const ConstString &name, uint32_t name_type_mask,
-                               lldb::LanguageType language)
-    : m_name(name), m_lookup_name(), m_language(language), m_name_type_mask(0),
+Module::LookupInfo::LookupInfo(const ConstString &name,
+                               FunctionNameType name_type_mask,
+                               LanguageType language)
+    : m_name(name), m_lookup_name(), m_language(language),
+      m_name_type_mask(eFunctionNameTypeNone),
       m_match_name_after_lookup(false) {
   const char *name_cstr = name.GetCString();
   llvm::StringRef basename;
@@ -783,7 +783,7 @@ void Module::LookupInfo::Prune(SymbolContextList &sc_list,
               qualified_name = cpp_method.GetBasename().str();
             else
               qualified_name = cpp_method.GetScopeQualifiedName();
-            if (qualified_name.compare(m_name.GetCString()) != 0) {
+            if (qualified_name != m_name.GetCString()) {
               sc_list.RemoveContextAtIndex(i);
               continue;
             }
@@ -797,9 +797,9 @@ void Module::LookupInfo::Prune(SymbolContextList &sc_list,
 
 size_t Module::FindFunctions(const ConstString &name,
                              const CompilerDeclContext *parent_decl_ctx,
-                             uint32_t name_type_mask, bool include_symbols,
-                             bool include_inlines, bool append,
-                             SymbolContextList &sc_list) {
+                             FunctionNameType name_type_mask,
+                             bool include_symbols, bool include_inlines,
+                             bool append, SymbolContextList &sc_list) {
   if (!append)
     sc_list.Clear();
 
@@ -1062,7 +1062,7 @@ void Module::SetFileSpecAndObjectName(const FileSpec &file,
   // Container objects whose paths do not specify a file directly can call this
   // function to correct the file and object names.
   m_file = file;
-  m_mod_time = FileSystem::GetModificationTime(file);
+  m_mod_time = FileSystem::Instance().GetModificationTime(file);
   m_object_name = object_name;
 }
 
@@ -1125,7 +1125,7 @@ void Module::ReportError(const char *format, ...) {
 bool Module::FileHasChanged() const {
   if (!m_file_has_changed)
     m_file_has_changed =
-        (FileSystem::GetModificationTime(m_file) != m_mod_time);
+        (FileSystem::Instance().GetModificationTime(m_file) != m_mod_time);
   return m_file_has_changed;
 }
 
@@ -1252,7 +1252,8 @@ ObjectFile *Module::GetObjectFile() {
                          GetFileSpec().GetFilename().AsCString(""));
       DataBufferSP data_sp;
       lldb::offset_t data_offset = 0;
-      const lldb::offset_t file_size = m_file.GetByteSize();
+      const lldb::offset_t file_size =
+          FileSystem::Instance().GetByteSize(m_file);
       if (file_size > m_object_offset) {
         m_did_load_objfile = true;
         m_objfile_sp = ObjectFile::FindPlugin(
@@ -1417,7 +1418,7 @@ void Module::PreloadSymbols() {
 }
 
 void Module::SetSymbolFileFileSpec(const FileSpec &file) {
-  if (!file.Exists())
+  if (!FileSystem::Instance().Exists(file))
     return;
   if (m_symfile_ap) {
     // Remove any sections in the unified section list that come from the
@@ -1447,7 +1448,7 @@ void Module::SetSymbolFileFileSpec(const FileSpec &file) {
         // ("/tmp/a.out.dSYM/Contents/Resources/DWARF/a.out"). So we need to
         // check this
 
-        if (llvm::sys::fs::is_directory(file.GetPath())) {
+        if (FileSystem::Instance().IsDirectory(file)) {
           std::string new_path(file.GetPath());
           std::string old_path(obj_file->GetFileSpec().GetPath());
           if (old_path.find(new_path) == 0) {
@@ -1536,7 +1537,8 @@ bool Module::LoadScriptingResourceInTarget(Target *target, Status &error,
       if (script_interpreter) {
         for (uint32_t i = 0; i < num_specs; ++i) {
           FileSpec scripting_fspec(file_specs.GetFileSpecAtIndex(i));
-          if (scripting_fspec && scripting_fspec.Exists()) {
+          if (scripting_fspec &&
+              FileSystem::Instance().Exists(scripting_fspec)) {
             if (should_load == eLoadScriptFromSymFileWarn) {
               if (feedback_stream)
                 feedback_stream->Printf(

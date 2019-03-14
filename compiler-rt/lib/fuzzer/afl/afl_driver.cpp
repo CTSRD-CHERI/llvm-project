@@ -59,7 +59,6 @@ statistics from the file. If that fails then the process will quit.
 #include <sys/resource.h>
 #include <sys/time.h>
 #include <unistd.h>
-#include <limits.h>
 
 #include <fstream>
 #include <iostream>
@@ -290,7 +289,7 @@ extern "C" size_t LLVMFuzzerMutate(uint8_t *Data, size_t Size, size_t MaxSize) {
 // Execute any files provided as parameters.
 int ExecuteFilesOnyByOne(int argc, char **argv) {
   for (int i = 1; i < argc; i++) {
-    std::ifstream in(argv[i]);
+    std::ifstream in(argv[i], std::ios::binary);
     in.seekg(0, in.end);
     size_t length = in.tellg();
     in.seekg (0, in.beg);
@@ -304,18 +303,6 @@ int ExecuteFilesOnyByOne(int argc, char **argv) {
     std::cout << "Execution successful" << std::endl;
   }
   return 0;
-}
-
-static void set_iterations(int *N, const char *arg) {
-  char *next_char;
-  long NL = strtol(arg, &next_char, 10);
-  if (NL < 1 || NL > INT_MAX || *next_char != '\0') {
-    fprintf(stderr, "WARNING: iterations invalid `%s`\n",
-        arg);
-    ::exit(-1);
-  }
-
-  *N = static_cast<int>(NL);
 }
 
 int main(int argc, char **argv) {
@@ -344,12 +331,11 @@ int main(int argc, char **argv) {
 
   int N = 1000;
   if (argc == 2 && argv[1][0] == '-')
-    set_iterations(&N, argv[1] + 1);
-  else if(argc == 2) {
-    fprintf(stderr, "WARNING: using the deprecated call style `%s %d`\n",
-        argv[0], N);
-    set_iterations(&N, argv[1]);
-  } else if (argc > 1)
+      N = atoi(argv[1] + 1);
+  else if(argc == 2 && (N = atoi(argv[1])) > 0)
+      fprintf(stderr, "WARNING: using the deprecated call style `%s %d`\n",
+              argv[0], N);
+  else if (argc > 1)
     return ExecuteFilesOnyByOne(argc, argv);
 
   assert(N > 0);

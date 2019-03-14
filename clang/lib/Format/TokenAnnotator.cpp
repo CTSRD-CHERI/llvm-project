@@ -366,7 +366,8 @@ private:
       // specifier parameter, although this is technically valid:
       // [[foo(:)]]
       if (AttrTok->is(tok::colon) ||
-          AttrTok->startsSequence(tok::identifier, tok::identifier))
+          AttrTok->startsSequence(tok::identifier, tok::identifier) || 
+          AttrTok->startsSequence(tok::r_paren, tok::identifier))
         return false;
       if (AttrTok->is(tok::ellipsis))
         return true;
@@ -398,9 +399,11 @@ private:
     bool IsCpp11AttributeSpecifier = isCpp11AttributeSpecifier(*Left) ||
                                      Contexts.back().InCpp11AttributeSpecifier;
 
+    bool InsideInlineASM = Line.startsWith(tok::kw_asm);
     bool StartsObjCMethodExpr =
-        !CppArrayTemplates && Style.isCpp() && !IsCpp11AttributeSpecifier &&
-        Contexts.back().CanBeExpression && Left->isNot(TT_LambdaLSquare) &&
+        !InsideInlineASM && !CppArrayTemplates && Style.isCpp() &&
+        !IsCpp11AttributeSpecifier && Contexts.back().CanBeExpression &&
+        Left->isNot(TT_LambdaLSquare) &&
         !CurrentToken->isOneOf(tok::l_brace, tok::r_square) &&
         (!Parent ||
          Parent->isOneOf(tok::colon, tok::l_square, tok::l_paren,
@@ -515,11 +518,23 @@ private:
         }
         Left->MatchingParen = CurrentToken;
         CurrentToken->MatchingParen = Left;
+        // FirstObjCSelectorName is set when a colon is found. This does
+        // not work, however, when the method has no parameters.
+        // Here, we set FirstObjCSelectorName when the end of the method call is
+        // reached, in case it was not set already.
+        if (!Contexts.back().FirstObjCSelectorName) {
+            FormatToken* Previous = CurrentToken->getPreviousNonComment();
+            if (Previous && Previous->is(TT_SelectorName)) {
+              Previous->ObjCSelectorNameParts = 1;
+              Contexts.back().FirstObjCSelectorName = Previous;
+            }
+        } else {
+          Left->ParameterCount =
+              Contexts.back().FirstObjCSelectorName->ObjCSelectorNameParts;
+        }
         if (Contexts.back().FirstObjCSelectorName) {
           Contexts.back().FirstObjCSelectorName->LongestObjCSelectorName =
               Contexts.back().LongestObjCSelectorName;
-          Contexts.back().FirstObjCSelectorName->ObjCSelectorNameParts =
-              Left->ParameterCount;
           if (Left->BlockParameterCount > 1)
             Contexts.back().FirstObjCSelectorName->LongestObjCSelectorName = 0;
         }
@@ -539,11 +554,6 @@ private:
                                  TT_DesignatedInitializerLSquare)) {
           Left->Type = TT_ObjCMethodExpr;
           StartsObjCMethodExpr = true;
-          // ParameterCount might have been set to 1 before expression was
-          // recognized as ObjCMethodExpr (as '1 + number of commas' formula is
-          // used for other expression types). Parameter counter has to be,
-          // therefore, reset to 0.
-          Left->ParameterCount = 0;
           Contexts.back().ColonIsObjCMethodExpr = true;
           if (Parent && Parent->is(tok::r_paren))
             // FIXME(bug 36976): ObjC return types shouldn't use TT_CastRParen.
@@ -617,12 +627,12 @@ private:
   }
 
   void updateParameterCount(FormatToken *Left, FormatToken *Current) {
+    // For ObjC methods, the number of parameters is calculated differently as
+    // method declarations have a different structure (the parameters are not
+    // inside a bracket scope).
     if (Current->is(tok::l_brace) && Current->BlockKind == BK_Block)
       ++Left->BlockParameterCount;
-    if (Left->Type == TT_ObjCMethodExpr) {
-      if (Current->is(tok::colon))
-        ++Left->ParameterCount;
-    } else if (Current->is(tok::comma)) {
+    if (Current->is(tok::comma)) {
       ++Left->ParameterCount;
       if (!Left->Role)
         Left->Role.reset(new CommaSeparatedList(Style));
@@ -698,13 +708,19 @@ private:
                  Line.startsWith(TT_ObjCMethodSpecifier)) {
         Tok->Type = TT_ObjCMethodExpr;
         const FormatToken *BeforePrevious = Tok->Previous->Previous;
+        // Ensure we tag all identifiers in method declarations as
+        // TT_SelectorName.
+        bool UnknownIdentifierInMethodDeclaration =
+            Line.startsWith(TT_ObjCMethodSpecifier) &&
+            Tok->Previous->is(tok::identifier) && Tok->Previous->is(TT_Unknown);
         if (!BeforePrevious ||
             // FIXME(bug 36976): ObjC return types shouldn't use TT_CastRParen.
             !(BeforePrevious->is(TT_CastRParen) ||
               (BeforePrevious->is(TT_ObjCMethodExpr) &&
                BeforePrevious->is(tok::colon))) ||
             BeforePrevious->is(tok::r_square) ||
-            Contexts.back().LongestObjCSelectorName == 0) {
+            Contexts.back().LongestObjCSelectorName == 0 ||
+            UnknownIdentifierInMethodDeclaration) {
           Tok->Previous->Type = TT_SelectorName;
           if (!Contexts.back().FirstObjCSelectorName)
             Contexts.back().FirstObjCSelectorName = Tok->Previous;
@@ -712,6 +728,9 @@ private:
                    Contexts.back().LongestObjCSelectorName)
             Contexts.back().LongestObjCSelectorName =
                 Tok->Previous->ColumnWidth;
+          Tok->Previous->ParameterIndex =
+              Contexts.back().FirstObjCSelectorName->ObjCSelectorNameParts;
+          ++Contexts.back().FirstObjCSelectorName->ObjCSelectorNameParts;
         }
       } else if (Contexts.back().ColonIsForRangeExpr) {
         Tok->Type = TT_RangeBasedForLoopColon;
@@ -2128,8 +2147,20 @@ void TokenAnnotator::calculateFormattingInformation(AnnotatedLine &Line) {
     // FIXME: Only calculate this if CanBreakBefore is true once static
     // initializers etc. are sorted out.
     // FIXME: Move magic numbers to a better place.
-    Current->SplitPenalty = 20 * Current->BindingStrength +
-                            splitPenalty(Line, *Current, InFunctionDecl);
+
+    // Reduce penalty for aligning ObjC method arguments using the colon
+    // alignment as this is the canonical way (still prefer fitting everything
+    // into one line if possible). Trying to fit a whole expression into one
+    // line should not force other line breaks (e.g. when ObjC method
+    // expression is a part of other expression).
+    Current->SplitPenalty = splitPenalty(Line, *Current, InFunctionDecl);
+    if (Style.Language == FormatStyle::LK_ObjC &&
+        Current->is(TT_SelectorName) && Current->ParameterIndex > 0) {
+      if (Current->ParameterIndex == 1)
+        Current->SplitPenalty += 5 * Current->BindingStrength;
+    } else {
+      Current->SplitPenalty += 20 * Current->BindingStrength;
+    }
 
     Current = Current->Next;
   }
@@ -2489,7 +2520,9 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
        Right.MatchingParen->BlockKind != BK_Block))
     return !Style.Cpp11BracedListStyle;
   if (Left.is(TT_BlockComment))
-    return !Left.TokenText.endswith("=*/");
+    // No whitespace in x(/*foo=*/1), except for JavaScript.
+    return Style.Language == FormatStyle::LK_JavaScript ||
+           !Left.TokenText.endswith("=*/");
   if (Right.is(tok::l_paren)) {
     if ((Left.is(tok::r_paren) && Left.is(TT_AttributeParen)) ||
         (Left.is(tok::r_square) && Left.is(TT_AttributeSquare)))
@@ -2525,8 +2558,11 @@ bool TokenAnnotator::spaceRequiredBetween(const AnnotatedLine &Line,
     return false;
   if (Left.is(TT_TemplateCloser) && Left.MatchingParen &&
       Left.MatchingParen->Previous &&
-      Left.MatchingParen->Previous->is(tok::period))
+      (Left.MatchingParen->Previous->is(tok::period) ||
+       Left.MatchingParen->Previous->is(tok::coloncolon)))
+    // Java call to generic function with explicit type:
     // A.<B<C<...>>>DoSomething();
+    // A::<B<C<...>>>DoSomething();  // With a Java 8 method reference.
     return false;
   if (Left.is(TT_TemplateCloser) && Right.is(tok::l_square))
     return false;
@@ -2746,6 +2782,9 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
   if (!Style.SpaceBeforeAssignmentOperators &&
       Right.getPrecedence() == prec::Assignment)
     return false;
+  if (Style.Language == FormatStyle::LK_Java && Right.is(tok::coloncolon) &&
+      (Left.is(tok::identifier) || Left.is(tok::kw_this)))
+    return false;
   if (Right.is(tok::coloncolon) && Left.is(tok::identifier))
     // Generally don't remove existing spaces between an identifier and "::".
     // The identifier might actually be a macro name such as ALWAYS_INLINE. If
@@ -2838,6 +2877,7 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
   } else if (Style.Language == FormatStyle::LK_Cpp ||
              Style.Language == FormatStyle::LK_ObjC ||
              Style.Language == FormatStyle::LK_Proto ||
+             Style.Language == FormatStyle::LK_TableGen ||
              Style.Language == FormatStyle::LK_TextProto) {
     if (Left.isStringLiteral() && Right.isStringLiteral())
       return true;
@@ -3013,6 +3053,30 @@ bool TokenAnnotator::mustBreakBefore(const AnnotatedLine &Line,
       return true;
   }
 
+  // Deal with lambda arguments in C++ - we want consistent line breaks whether
+  // they happen to be at arg0, arg1 or argN. The selection is a bit nuanced
+  // as aggressive line breaks are placed when the lambda is not the last arg.
+  if ((Style.Language == FormatStyle::LK_Cpp ||
+       Style.Language == FormatStyle::LK_ObjC) &&
+      Left.is(tok::l_paren) && Left.BlockParameterCount > 0 &&
+      !Right.isOneOf(tok::l_paren, TT_LambdaLSquare)) {
+    // Multiple lambdas in the same function call force line breaks.
+    if (Left.BlockParameterCount > 1)
+      return true;
+
+    // A lambda followed by another arg forces a line break.
+    if (!Left.Role)
+      return false;
+    auto Comma = Left.Role->lastComma();
+    if (!Comma)
+      return false;
+    auto Next = Comma->getNextNonComment();
+    if (!Next)
+      return false;
+    if (!Next->isOneOf(TT_LambdaLSquare, tok::l_brace, tok::caret))
+      return true;
+  }
+
   return false;
 }
 
@@ -3050,14 +3114,33 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
     // Don't wrap between ":" and "!" of a strict prop init ("field!: type;").
     if (Left.is(tok::exclaim) && Right.is(tok::colon))
       return false;
-    if (Right.is(Keywords.kw_is))
-      return false;
+    // Look for is type annotations like:
+    // function f(): a is B { ... }
+    // Do not break before is in these cases.
+    if (Right.is(Keywords.kw_is)) {
+      const FormatToken* Next = Right.getNextNonComment();
+      // If `is` is followed by a colon, it's likely that it's a dict key, so
+      // ignore it for this check.
+      // For example this is common in Polymer:
+      // Polymer({
+      //   is: 'name',
+      //   ...
+      // });
+      if (!Next || !Next->is(tok::colon))
+        return false;
+    }
     if (Left.is(Keywords.kw_in))
       return Style.BreakBeforeBinaryOperators == FormatStyle::BOS_None;
     if (Right.is(Keywords.kw_in))
       return Style.BreakBeforeBinaryOperators != FormatStyle::BOS_None;
     if (Right.is(Keywords.kw_as))
       return false; // must not break before as in 'x as type' casts
+    if (Right.isOneOf(Keywords.kw_extends, Keywords.kw_infer)) {
+      // extends and infer can appear as keywords in conditional types:
+      //   https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-8.html#conditional-types
+      // do not break before them, as the expressions are subject to ASI.
+      return false;
+    }
     if (Left.is(Keywords.kw_as))
       return true;
     if (Left.is(TT_JsNonNullAssertion))

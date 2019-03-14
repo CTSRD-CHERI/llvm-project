@@ -1,8 +1,8 @@
-// RUN: %clang_analyze_cc1 -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
-// RUN: %clang_analyze_cc1 -DUSE_BUILTINS -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
-// RUN: %clang_analyze_cc1 -DVARIANT -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
-// RUN: %clang_analyze_cc1 -DUSE_BUILTINS -DVARIANT -analyzer-checker=alpha.security.taint,core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
-// RUN: %clang_analyze_cc1 -DSUPPRESS_OUT_OF_BOUND -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring.BufferOverlap,alpha.unix.cstring.NotNullTerminated,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify %s
+// RUN: %clang_analyze_cc1 -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify -analyzer-config eagerly-assume=false %s
+// RUN: %clang_analyze_cc1 -DUSE_BUILTINS -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify -analyzer-config eagerly-assume=false %s
+// RUN: %clang_analyze_cc1 -DVARIANT -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify -analyzer-config eagerly-assume=false %s
+// RUN: %clang_analyze_cc1 -DUSE_BUILTINS -DVARIANT -analyzer-checker=alpha.security.taint,core,unix.cstring,unix.Malloc,alpha.unix.cstring,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify -analyzer-config eagerly-assume=false %s
+// RUN: %clang_analyze_cc1 -DSUPPRESS_OUT_OF_BOUND -analyzer-checker=core,unix.cstring,unix.Malloc,alpha.unix.cstring.BufferOverlap,alpha.unix.cstring.NotNullTerminated,debug.ExprInspection -analyzer-store=region -Wno-null-dereference -verify -analyzer-config eagerly-assume=false %s
 
 //===----------------------------------------------------------------------===
 // Declarations
@@ -31,6 +31,8 @@ typedef typeof(sizeof(int)) size_t;
 void clang_analyzer_eval(int);
 
 int scanf(const char *restrict format, ...);
+void *malloc(size_t);
+void free(void *);
 
 //===----------------------------------------------------------------------===
 // strlen()
@@ -110,7 +112,7 @@ void strlen_global() {
   if (a == 0) {
     clang_analyzer_eval(b == 0); // expected-warning{{TRUE}}
     // Make sure clang_analyzer_eval does not invalidate globals.
-    clang_analyzer_eval(strlen(global_str) == 0); // expected-warning{{TRUE}}    
+    clang_analyzer_eval(strlen(global_str) == 0); // expected-warning{{TRUE}}
   }
 
   // Call a function with unknown effects, which should invalidate globals.
@@ -309,11 +311,13 @@ void strcpy_effects(char *x, char *y) {
   clang_analyzer_eval(globalInt == 42); // expected-warning{{TRUE}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
 void strcpy_overflow(char *y) {
   char x[4];
   if (strlen(y) == 4)
     strcpy(x, y); // expected-warning{{String copy function overflows destination buffer}}
 }
+#endif
 
 void strcpy_no_overflow(char *y) {
   char x[4];
@@ -348,11 +352,13 @@ void stpcpy_effect(char *x, char *y) {
   clang_analyzer_eval(a == x[0]); // expected-warning{{UNKNOWN}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
 void stpcpy_overflow(char *y) {
   char x[4];
   if (strlen(y) == 4)
     stpcpy(x, y); // expected-warning{{String copy function overflows destination buffer}}
 }
+#endif
 
 void stpcpy_no_overflow(char *y) {
   char x[4];
@@ -403,6 +409,7 @@ void strcat_effects(char *y) {
   clang_analyzer_eval((int)strlen(x) == (orig_len + strlen(y))); // expected-warning{{TRUE}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
 void strcat_overflow_0(char *y) {
   char x[4] = "12";
   if (strlen(y) == 4)
@@ -420,6 +427,7 @@ void strcat_overflow_2(char *y) {
   if (strlen(y) == 2)
     strcat(x, y); // expected-warning{{String copy function overflows destination buffer}}
 }
+#endif
 
 void strcat_no_overflow(char *y) {
   char x[5] = "12";
@@ -496,6 +504,15 @@ void strncpy_effects(char *x, char *y) {
   clang_analyzer_eval(a == x[0]); // expected-warning{{UNKNOWN}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
+// Enabling the malloc checker enables some of the buffer-checking portions
+// of the C-string checker.
+void cstringchecker_bounds_nocrash() {
+  char *p = malloc(2);
+  strncpy(p, "AAA", sizeof("AAA")); // expected-warning {{Size argument is greater than the length of the destination buffer}}
+  free(p);
+}
+
 void strncpy_overflow(char *y) {
   char x[4];
   if (strlen(y) == 4)
@@ -516,6 +533,7 @@ void strncpy_no_overflow2(char *y, int n) {
   if (strlen(y) == 3)
     strncpy(x, y, n); // expected-warning{{Size argument is greater than the length of the destination buffer}}
 }
+#endif
 
 void strncpy_truncate(char *y) {
   char x[4];
@@ -592,6 +610,7 @@ void strncat_effects(char *y) {
   clang_analyzer_eval(strlen(x) == (orig_len + strlen(y))); // expected-warning{{TRUE}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
 void strncat_overflow_0(char *y) {
   char x[4] = "12";
   if (strlen(y) == 4)
@@ -615,6 +634,8 @@ void strncat_overflow_3(char *y) {
   if (strlen(y) == 4)
     strncat(x, y, 2); // expected-warning{{Size argument is greater than the free space in the destination buffer}}
 }
+#endif
+
 void strncat_no_overflow_1(char *y) {
   char x[5] = "12";
   if (strlen(y) == 2)
@@ -632,6 +653,7 @@ void strncat_symbolic_dst_length(char *dst) {
   clang_analyzer_eval(strlen(dst) >= 4); // expected-warning{{TRUE}}
 }
 
+#ifndef SUPPRESS_OUT_OF_BOUND
 void strncat_symbolic_src_length(char *src) {
   char dst[8] = "1234";
   strncat(dst, src, 3);
@@ -649,6 +671,7 @@ void strncat_unknown_src_length(char *src, int offset) {
   char dst2[8] = "1234";
   strncat(dst2, &src[offset], 4); // expected-warning{{Size argument is greater than the free space in the destination buffer}}
 }
+#endif
 
 // There is no strncat_unknown_dst_length because if we can't get a symbolic
 // length for the "before" strlen, we won't be able to set one for "after".
@@ -1161,10 +1184,13 @@ void strsep_changes_input_string() {
 }
 
 //===----------------------------------------------------------------------===
-// memset()
+// memset() / explicit_bzero() / bzero()
 //===----------------------------------------------------------------------===
 
 void *memset(void *dest, int ch, size_t count);
+
+void bzero(void *dst, size_t count);
+void explicit_bzero(void *dest, size_t count);
 
 void *malloc(size_t size);
 void free(void *);
@@ -1358,6 +1384,57 @@ void memset26_upper_UCHAR_MAX() {
 
   clang_analyzer_eval(strlen(array) == 0); // expected-warning{{TRUE}}
   clang_analyzer_eval(array[4] == 0); // expected-warning{{TRUE}}
+}
+
+void bzero1_null() {
+  char *a = NULL;
+
+  bzero(a, 10); // expected-warning{{Null pointer argument in call to memory clearance function}}
+}
+
+void bzero2_char_array_null() {
+  char str[] = "abcd";
+  clang_analyzer_eval(strlen(str) == 4); // expected-warning{{TRUE}}
+  bzero(str, 2);
+  clang_analyzer_eval(strlen(str) == 0); // expected-warning{{TRUE}}
+}
+
+void bzero3_char_ptr_null() {
+  char *str = "abcd";
+  clang_analyzer_eval(strlen(str) == 4); // expected-warning{{TRUE}}
+  bzero(str + 2, 2);
+  clang_analyzer_eval(strlen(str) == 0); // expected-warning{{FALSE}}
+}
+
+void explicit_bzero1_null() {
+  char *a = NULL;
+
+  explicit_bzero(a, 10); // expected-warning{{Null pointer argument in call to memory clearance function}}
+}
+
+void explicit_bzero2_clear_mypassword() {
+  char passwd[7] = "passwd";
+
+  explicit_bzero(passwd, sizeof(passwd)); // no-warning
+
+  clang_analyzer_eval(strlen(passwd) == 0); // expected-warning{{TRUE}}
+  clang_analyzer_eval(passwd[0] == '\0'); // expected-warning{{TRUE}}
+}
+
+void explicit_bzero3_out_ofbound() {
+  char *privkey = (char *)malloc(7);
+  const char newprivkey[10] = "mysafekey";
+
+  strcpy(privkey, "random");
+  explicit_bzero(privkey, sizeof(newprivkey));
+#ifndef SUPPRESS_OUT_OF_BOUND
+  // expected-warning@-2 {{Memory clearance function accesses out-of-bound array element}}
+#endif
+  clang_analyzer_eval(privkey[0] == '\0');
+#ifdef SUPPRESS_OUT_OF_BOUND
+  // expected-warning@-2 {{UNKNOWN}}
+#endif
+  free(privkey);
 }
 
 //===----------------------------------------------------------------------===

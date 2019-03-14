@@ -162,8 +162,35 @@ function(llvm_ExternalProject_Add name source_dir)
                       -DCMAKE_OBJDUMP=${CMAKE_OBJDUMP}
                       -DCMAKE_STRIP=${CMAKE_STRIP})
     set(llvm_config_path ${LLVM_CONFIG_PATH})
+
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      string(REGEX MATCH "[0-9]+\\.[0-9]+(\\.[0-9]+)?" CLANG_VERSION
+             ${PACKAGE_VERSION})
+      set(resource_dir "${LLVM_LIBRARY_DIR}/clang/${CLANG_VERSION}")
+      set(flag_types ASM C CXX MODULE_LINKER SHARED_LINKER EXE_LINKER)
+      foreach(type ${flag_types})
+        set(${type}_flag -DCMAKE_${type}_FLAGS=-resource-dir=${resource_dir})
+      endforeach()
+      string(REPLACE ";" "|" flag_string "${flag_types}")
+      foreach(arg ${ARG_CMAKE_ARGS})
+        if(arg MATCHES "^-DCMAKE_(${flag_string})_FLAGS")
+          foreach(type ${flag_types})
+            if(arg MATCHES "^-DCMAKE_${type}_FLAGS")
+              string(REGEX REPLACE "^-DCMAKE_${type}_FLAGS=(.*)$" "\\1" flag_value "${arg}")
+              set(${type}_flag "${${type}_flag} ${flag_value}")
+            endif()
+          endforeach()
+        else()
+          list(APPEND cmake_args ${arg})
+        endif()
+      endforeach()
+      foreach(type ${flag_types})
+        list(APPEND cmake_args ${${type}_flag})
+      endforeach()
+    endif()
   else()
     set(llvm_config_path "$<TARGET_FILE:llvm-config>")
+    set(cmake_args ${ARG_CMAKE_ARGS})
   endif()
 
   ExternalProject_Add(${name}
@@ -187,7 +214,7 @@ function(llvm_ExternalProject_Add name source_dir)
                -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
                -DCMAKE_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}
                -DCMAKE_EXPORT_COMPILE_COMMANDS=1
-               ${ARG_CMAKE_ARGS}
+               ${cmake_args}
                ${PASSTHROUGH_VARIABLES}
     INSTALL_COMMAND ""
     STEP_TARGETS configure build
@@ -221,7 +248,7 @@ function(llvm_ExternalProject_Add name source_dir)
   endif()
 
   if(NOT ARG_NO_INSTALL)
-    install(CODE "execute_process\(COMMAND \${CMAKE_COMMAND} -DCMAKE_INSTALL_PREFIX=\${CMAKE_INSTALL_PREFIX} -P ${BINARY_DIR}/cmake_install.cmake \)"
+    install(CODE "execute_process\(COMMAND \${CMAKE_COMMAND} -DCMAKE_INSTALL_PREFIX=\${CMAKE_INSTALL_PREFIX} -DCMAKE_INSTALL_DO_STRIP=\${CMAKE_INSTALL_DO_STRIP} -P ${BINARY_DIR}/cmake_install.cmake\)"
       COMPONENT ${name})
 
     add_llvm_install_targets(install-${name}
@@ -231,16 +258,13 @@ function(llvm_ExternalProject_Add name source_dir)
 
   # Add top-level targets
   foreach(target ${ARG_EXTRA_TARGETS})
-    string(REPLACE ":" ";" target_list ${target})
-    list(GET target_list 0 target)
-    list(LENGTH target_list target_list_len)
-    if(${target_list_len} GREATER 1)
-      list(GET target_list 1 target_name)
+    if(DEFINED ${target})
+      set(external_target "${${target}}")
     else()
-      set(target_name "${target}")
+      set(external_target "${target}")
     endif()
-    llvm_ExternalProject_BuildCmd(build_runtime_cmd ${target} ${BINARY_DIR})
-    add_custom_target(${target_name}
+    llvm_ExternalProject_BuildCmd(build_runtime_cmd ${external_target} ${BINARY_DIR})
+    add_custom_target(${target}
       COMMAND ${build_runtime_cmd}
       DEPENDS ${name}-configure
       WORKING_DIRECTORY ${BINARY_DIR}

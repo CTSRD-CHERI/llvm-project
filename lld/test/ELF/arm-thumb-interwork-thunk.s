@@ -1,4 +1,5 @@
-// RUN: llvm-mc -filetype=obj -triple=armv7a-none-linux-gnueabi %s -o %t
+// REQUIRES: arm
+// RUN: llvm-mc -arm-add-build-attributes -filetype=obj -triple=armv7a-none-linux-gnueabi %s -o %t
 // RUN: echo "SECTIONS { \
 // RUN:       . = SIZEOF_HEADERS; \
 // RUN:       .R_ARM_JUMP24_callee_1 : { *(.R_ARM_JUMP24_callee_low) } \
@@ -19,7 +20,6 @@
 // RUN: llvm-objdump -d -triple=thumbv7a-none-linux-gnueabi %t4 | FileCheck -check-prefix=CHECK-THUMB -check-prefix=CHECK-PI-PLT-THUMB %s
 // RUN: llvm-objdump -d -triple=armv7a-none-linux-gnueabi %t4 | FileCheck -check-prefix=CHECK-ARM -check-prefix=CHECK-PI-PLT-ARM %s
 // RUN: llvm-readobj -s -r %t4 | FileCheck -check-prefix=CHECK-DSO-REL %s
-// REQUIRES: arm
 
 // Test ARM Thumb Interworking
 // The file is linked and checked 3 times to check the following contexts

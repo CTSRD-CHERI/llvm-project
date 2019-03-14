@@ -10,11 +10,8 @@
 #ifndef liblldb_OptionValue_h_
 #define liblldb_OptionValue_h_
 
-// C Includes
-// C++ Includes
-// Other libraries and framework includes
-// Project includes
 #include "lldb/Core/FormatEntity.h"
+#include "lldb/Utility/CompletionRequest.h"
 #include "lldb/Utility/ConstString.h"
 #include "lldb/Utility/Status.h"
 #include "lldb/lldb-defines.h"
@@ -57,9 +54,11 @@ public:
     eDumpOptionValue = (1u << 2),
     eDumpOptionDescription = (1u << 3),
     eDumpOptionRaw = (1u << 4),
+    eDumpOptionCommand = (1u << 5),
     eDumpGroupValue = (eDumpOptionName | eDumpOptionType | eDumpOptionValue),
     eDumpGroupHelp =
-        (eDumpOptionName | eDumpOptionType | eDumpOptionDescription)
+        (eDumpOptionName | eDumpOptionType | eDumpOptionDescription),
+    eDumpGroupExport = (eDumpOptionCommand | eDumpOptionName | eDumpOptionValue)
   };
 
   OptionValue()
@@ -100,9 +99,7 @@ public:
   virtual lldb::OptionValueSP DeepCopy() const = 0;
 
   virtual size_t AutoComplete(CommandInterpreter &interpreter,
-                              llvm::StringRef s, int match_start_point,
-                              int max_return_elements, bool &word_complete,
-                              StringList &matches);
+                              CompletionRequest &request);
 
   //-----------------------------------------------------------------
   // Subclasses can override these functions

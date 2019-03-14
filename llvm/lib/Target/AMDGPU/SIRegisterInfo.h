@@ -21,9 +21,9 @@
 
 namespace llvm {
 
+class GCNSubtarget;
 class LiveIntervals;
 class MachineRegisterInfo;
-class SISubtarget;
 class SIMachineFunctionInfo;
 
 class SIRegisterInfo final : public AMDGPURegisterInfo {
@@ -38,7 +38,7 @@ private:
   void classifyPressureSet(unsigned PSetID, unsigned Reg,
                            BitVector &PressureSets) const;
 public:
-  SIRegisterInfo(const SISubtarget &ST);
+  SIRegisterInfo(const GCNSubtarget &ST);
 
   bool spillSGPRToVGPR() const {
     return SpillSGPRToVGPR;
@@ -227,6 +227,12 @@ public:
   const TargetRegisterClass *
   getConstrainedRegClassForOperand(const MachineOperand &MO,
                                  const MachineRegisterInfo &MRI) const override;
+
+  // Find reaching register definition
+  MachineInstr *findReachingDef(unsigned Reg, unsigned SubReg,
+                                MachineInstr &Use,
+                                MachineRegisterInfo &MRI,
+                                LiveIntervals *LIS) const;
 
 private:
   void buildSpillLoadStore(MachineBasicBlock::iterator MI,

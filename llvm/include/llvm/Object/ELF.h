@@ -32,6 +32,7 @@ namespace llvm {
 namespace object {
 
 StringRef getELFRelocationTypeName(uint32_t Machine, uint32_t Type);
+uint32_t getELFRelativeRelocationType(uint32_t Machine);
 StringRef getELFSectionTypeName(uint32_t Machine, uint32_t Type);
 
 // Subclasses of ELFFile may need this for template instantiation
@@ -60,6 +61,7 @@ public:
   using Elf_Phdr = typename ELFT::Phdr;
   using Elf_Rel = typename ELFT::Rel;
   using Elf_Rela = typename ELFT::Rela;
+  using Elf_Relr = typename ELFT::Relr;
   using Elf_Verdef = typename ELFT::Verdef;
   using Elf_Verdaux = typename ELFT::Verdaux;
   using Elf_Verneed = typename ELFT::Verneed;
@@ -75,6 +77,7 @@ public:
   using Elf_Sym_Range = typename ELFT::SymRange;
   using Elf_Rel_Range = typename ELFT::RelRange;
   using Elf_Rela_Range = typename ELFT::RelaRange;
+  using Elf_Relr_Range = typename ELFT::RelrRange;
   using Elf_Phdr_Range = typename ELFT::PhdrRange;
 
   const uint8_t *base() const {
@@ -110,6 +113,10 @@ public:
   StringRef getRelocationTypeName(uint32_t Type) const;
   void getRelocationTypeName(uint32_t Type,
                              SmallVectorImpl<char> &Result) const;
+  uint32_t getRelativeRelocationType() const;
+
+  const char *getDynamicTagAsString(unsigned Arch, uint64_t Type) const;
+  const char *getDynamicTagAsString(uint64_t Type) const;
 
   /// Get the symbol for a given relocation.
   Expected<const Elf_Sym *> getRelocationSymbol(const Elf_Rel *Rel,
@@ -129,6 +136,10 @@ public:
 
   Expected<Elf_Shdr_Range> sections() const;
 
+  Expected<Elf_Dyn_Range> dynamicEntries() const;
+
+  Expected<const uint8_t *> toMappedAddr(uint64_t VAddr) const;
+
   Expected<Elf_Sym_Range> symbols(const Elf_Shdr *Sec) const {
     if (!Sec)
       return makeArrayRef<Elf_Sym>(nullptr, nullptr);
@@ -142,6 +153,12 @@ public:
   Expected<Elf_Rel_Range> rels(const Elf_Shdr *Sec) const {
     return getSectionContentsAsArray<Elf_Rel>(Sec);
   }
+
+  Expected<Elf_Relr_Range> relrs(const Elf_Shdr *Sec) const {
+    return getSectionContentsAsArray<Elf_Relr>(Sec);
+  }
+
+  Expected<std::vector<Elf_Rela>> decode_relrs(Elf_Relr_Range relrs) const;
 
   Expected<std::vector<Elf_Rela>> android_relas(const Elf_Shdr *Sec) const;
 
@@ -395,6 +412,11 @@ void ELFFile<ELFT>::getRelocationTypeName(uint32_t Type,
     Result.append(1, '/');
     Result.append(Name.begin(), Name.end());
   }
+}
+
+template <class ELFT>
+uint32_t ELFFile<ELFT>::getRelativeRelocationType() const {
+  return getELFRelativeRelocationType(getHeader()->e_machine);
 }
 
 template <class ELFT>

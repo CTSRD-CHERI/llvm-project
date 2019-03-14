@@ -1,25 +1,25 @@
 // REQUIRES: clang
 
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %s -c -o %t.o
-// RUN: llvm-objdump -C -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
+// RUN: llvm-objdump --cap-relocs -r %t.o | FileCheck -check-prefix OBJ-CAPRELOCS %s
 
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-EXE %s
-// RUN: llvm-objdump -C -t -s %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
+// RUN: llvm-objdump --cap-relocs -t -s %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
 
 // same again for statically dynamically linked exe:
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/../Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -process-cap-relocs -pie -Bdynamic %t.o -o %t-dynamic.exe -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
-// RUN: llvm-objdump -C -t -s %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
+// RUN: llvm-objdump --cap-relocs -t -s %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 // RUN: llvm-readobj -r -s %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 
 // Look at shared libraries:
 // RUN: ld.lld -process-cap-relocs %t.o -shared -o %t.so -verbose 2>&1 | FileCheck -check-prefixes LINKING-DYNAMIC %s
 // RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
-// RUN: llvm-objdump -C -t -s %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
+// RUN: llvm-objdump --cap-relocs -t -s %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
 
 // RUN: ld.lld -no-process-cap-relocs %t.o -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
-// RUN: llvm-objdump -C -s -t %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
+// RUN: llvm-objdump --cap-relocs -s -t %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
 
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1
@@ -61,7 +61,7 @@ void __start(void) {}
 
 // dynamic should have 10 relocations against the load address
 // DYNAMIC-RELOCS-LABEL: Relocations [
-// DYNAMIC-RELOCS-NEXT:   Section (8) .rel.dyn {
+// DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
 // DYNAMIC-RELOCS-NEXT:     0x30000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:     0x30008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:   }
@@ -86,5 +86,5 @@ void __start(void) {}
 
 // DUMP-CAPRELOCS-LABEL: SYMBOL TABLE:
 // DUMP-CAPRELOCS: 0000000000000000         *UND*           00000000
-// DUMP-CAPRELOCS: {{.+}} gw      .global_sizes           00000008 .size.errno
-// DUMP-CAPRELOCS: {{.+}} g       .bss            00000004 errno
+// DUMP-CAPRELOCS: {{.+}} gw    O .global_sizes           00000008 .size.errno
+// DUMP-CAPRELOCS: {{.+}} g     O .bss            00000004 errno
