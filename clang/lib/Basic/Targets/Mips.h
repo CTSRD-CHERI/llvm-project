@@ -32,11 +32,15 @@ class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
   void setDataLayout() {
     StringRef Layout;
     // XXXAR: why do we need this here? can't we use the LLVM one?
-    if (ABI == "o32")
+    if (ABI == "o32") {
       Layout = "m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64";
-    else if (ABI == "n32")
+      if (IsCHERI)
+        llvm::report_fatal_error("Cannot use CHERI with " + ABI + " ABI");
+    } else if (ABI == "n32") {
       Layout = "m:e-p:32:32-i8:8:32-i16:16:32-i64:64-n32:64-S128";
-    else if (ABI == "n64") {
+      if (IsCHERI)
+        llvm::report_fatal_error("Cannot use CHERI with " + ABI + " ABI");
+    } else if (ABI == "n64") {
       if (IsCHERI) {
         if (CapSize == 64) {
           Layout = "m:e-pf200:64:64:64:32-i8:8:32-i16:16:32-i64:64-n32:64-S128";
@@ -136,6 +140,8 @@ public:
         DefaultAlignForAttributeAligned =
             std::max(DefaultAlignForAttributeAligned, (unsigned short)CapSize);
       }
+      if (Triple.isMIPS32())
+        llvm::report_fatal_error("Cannot use CHERI with MIPS32 triple");
     }
     CanUseBSDABICalls = Triple.isOSFreeBSD() ||
                         Triple.isOSOpenBSD();
