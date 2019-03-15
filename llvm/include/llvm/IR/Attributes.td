@@ -45,6 +45,9 @@ def Dereferenceable : EnumAttr<"dereferenceable">;
 /// Pointer is either null or dereferenceable.
 def DereferenceableOrNull : EnumAttr<"dereferenceable_or_null">;
 
+/// Function has additional side-effects.
+def HasSideEffects : EnumAttr<"hassideeffects">;
+
 /// Function may only access memory that is inaccessible from IR.
 def InaccessibleMemOnly : EnumAttr<"inaccessiblememonly">;
 

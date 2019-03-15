@@ -260,6 +260,8 @@ std::string Attribute::getAsString(bool InAttrGrp) const {
     return "swifterror";
   if (hasAttribute(Attribute::SwiftSelf))
     return "swiftself";
+  if (hasAttribute(Attribute::HasSideEffects))
+    return "hassideeffects";
   if (hasAttribute(Attribute::InaccessibleMemOnly))
     return "inaccessiblememonly";
   if (hasAttribute(Attribute::InaccessibleMemOrArgMemOnly))

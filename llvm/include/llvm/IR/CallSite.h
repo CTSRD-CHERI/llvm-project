@@ -450,6 +450,14 @@ public:
     CALLSITE_DELEGATE_SETTER(setIsNoInline(Value));
   }
 
+  /// Determine if the call has additional side-effects.
+  bool hasSideEffects() const {
+    CALLSITE_DELEGATE_GETTER(hasSideEffects());
+  }
+  void setHasSideEffects() {
+    CALLSITE_DELEGATE_SETTER(setHasSideEffects());
+  }
+
   /// Determine if the call does not access memory.
   bool doesNotAccessMemory() const {
     CALLSITE_DELEGATE_GETTER(doesNotAccessMemory());

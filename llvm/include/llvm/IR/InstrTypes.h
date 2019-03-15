@@ -1529,6 +1529,15 @@ public:
   void setIsNoInline() {
     addAttribute(AttributeList::FunctionIndex, Attribute::NoInline);
   }
+
+  /// Determine if the function has additional side-effects.
+  bool hasSideEffects() const {
+    return hasFnAttr(Attribute::HasSideEffects);
+  }
+  void setHasSideEffects() {
+    addAttribute(AttributeList::FunctionIndex, Attribute::HasSideEffects);
+  }
+
   /// Determine if the call does not access memory.
   bool doesNotAccessMemory() const { return hasFnAttr(Attribute::ReadNone); }
   void setDoesNotAccessMemory() {

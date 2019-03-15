@@ -458,6 +458,14 @@ public:
     return AttributeSets.getParamDereferenceableOrNullBytes(ArgNo);
   }
 
+  /// Determine if the function has additional side-effects.
+  bool hasSideEffects() const {
+    return hasFnAttribute(Attribute::HasSideEffects);
+  }
+  void setHasSideEffects() {
+    addFnAttr(Attribute::HasSideEffects);
+  }
+
   /// Determine if the function does not access memory.
   bool doesNotAccessMemory() const {
     return hasFnAttribute(Attribute::ReadNone);

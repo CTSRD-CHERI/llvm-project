@@ -1240,6 +1240,8 @@ bool LLParser::ParseFnAttributeValuePairs(AttrBuilder &B,
     case lltok::kw_builtin: B.addAttribute(Attribute::Builtin); break;
     case lltok::kw_cold: B.addAttribute(Attribute::Cold); break;
     case lltok::kw_convergent: B.addAttribute(Attribute::Convergent); break;
+    case lltok::kw_hassideeffects:
+      B.addAttribute(Attribute::HasSideEffects); break;
     case lltok::kw_inaccessiblememonly:
       B.addAttribute(Attribute::InaccessibleMemOnly); break;
     case lltok::kw_inaccessiblemem_or_argmemonly:
@@ -1616,6 +1618,7 @@ bool LLParser::ParseOptionalParamAttrs(AttrBuilder &B) {
     case lltok::kw_alwaysinline:
     case lltok::kw_argmemonly:
     case lltok::kw_builtin:
+    case lltok::kw_hassideeffects:
     case lltok::kw_inlinehint:
     case lltok::kw_jumptable:
     case lltok::kw_minsize:
@@ -1713,6 +1716,7 @@ bool LLParser::ParseOptionalReturnAttrs(AttrBuilder &B) {
     case lltok::kw_argmemonly:
     case lltok::kw_builtin:
     case lltok::kw_cold:
+    case lltok::kw_hassideeffects:
     case lltok::kw_inlinehint:
     case lltok::kw_jumptable:
     case lltok::kw_minsize:

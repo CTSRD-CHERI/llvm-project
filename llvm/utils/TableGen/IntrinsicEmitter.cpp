@@ -651,7 +651,8 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
     if (!intrinsic.canThrow ||
         intrinsic.ModRef != CodeGenIntrinsic::ReadWriteMem ||
         intrinsic.isNoReturn || intrinsic.isCold || intrinsic.isNoDuplicate ||
-        intrinsic.isConvergent || intrinsic.isSpeculatable) {
+        intrinsic.isConvergent || intrinsic.isSpeculatable ||
+        intrinsic.hasSideEffects) {
       OS << "      const Attribute::AttrKind Atts[] = {";
       bool addComma = false;
       if (!intrinsic.canThrow) {
@@ -686,6 +687,12 @@ void IntrinsicEmitter::EmitAttributes(const CodeGenIntrinsicTable &Ints,
         if (addComma)
           OS << ",";
         OS << "Attribute::Speculatable";
+        addComma = true;
+      }
+      if (intrinsic.hasSideEffects) {
+        if (addComma)
+          OS << ",";
+        OS << "Attribute::HasSideEffects";
         addComma = true;
       }
 

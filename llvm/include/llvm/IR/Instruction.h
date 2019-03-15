@@ -549,6 +549,9 @@ public:
   /// Return true if this instruction may throw an exception.
   bool mayThrow() const;
 
+  /// Return true if this instruction unmodeled side-effects.
+  bool hasSideEffects() const;
+
   /// Return true if this instruction behaves like a memory fence: it can load
   /// or store to memory location without being given a memory location.
   bool isFenceLike() const {
@@ -572,7 +575,9 @@ public:
   /// effects because the newly allocated memory is completely invisible to
   /// instructions which don't use the returned value.  For cases where this
   /// matters, isSafeToSpeculativelyExecute may be more appropriate.
-  bool mayHaveSideEffects() const { return mayWriteToMemory() || mayThrow(); }
+  bool mayHaveSideEffects() const {
+    return mayWriteToMemory() || mayThrow() || hasSideEffects();
+  }
 
   /// Return true if the instruction can be removed if the result is unused.
   ///

@@ -1534,6 +1534,7 @@ static bool isFuncOnlyAttr(Attribute::AttrKind Kind) {
   case Attribute::Convergent:
   case Attribute::ArgMemOnly:
   case Attribute::NoRecurse:
+  case Attribute::HasSideEffects:
   case Attribute::InaccessibleMemOnly:
   case Attribute::InaccessibleMemOrArgMemOnly:
   case Attribute::AllocSize:

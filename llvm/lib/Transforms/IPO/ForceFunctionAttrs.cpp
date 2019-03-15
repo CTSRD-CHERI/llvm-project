@@ -30,6 +30,7 @@ static Attribute::AttrKind parseAttrKind(StringRef Kind) {
       .Case("builtin", Attribute::Builtin)
       .Case("cold", Attribute::Cold)
       .Case("convergent", Attribute::Convergent)
+      .Case("hassideeffects", Attribute::HasSideEffects)
       .Case("inlinehint", Attribute::InlineHint)
       .Case("jumptable", Attribute::JumpTable)
       .Case("minsize", Attribute::MinSize)

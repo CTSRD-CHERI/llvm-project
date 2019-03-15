@@ -597,6 +597,12 @@ bool Instruction::mayThrow() const {
   return isa<ResumeInst>(this);
 }
 
+bool Instruction::hasSideEffects() const {
+  if (const CallBase *CB = dyn_cast<CallBase>(this))
+    return CB->hasSideEffects();
+  return false;
+}
+
 bool Instruction::isSafeToRemove() const {
   return (!isa<CallInst>(this) || !this->mayHaveSideEffects()) &&
          !this->isTerminator();

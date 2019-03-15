@@ -183,6 +183,7 @@ enum Kind {
   kw_convergent,
   kw_dereferenceable,
   kw_dereferenceable_or_null,
+  kw_hassideeffects,
   kw_inaccessiblememonly,
   kw_inaccessiblemem_or_argmemonly,
   kw_inlinehint,
