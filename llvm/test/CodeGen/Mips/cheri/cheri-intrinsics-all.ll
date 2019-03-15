@@ -67,13 +67,20 @@ define i64 @test(i8 addrspace(200)* %rfoo) #0 {
   %r39 = call i64 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* %r16)
   %r40 = trunc i64 %r39 to i1
   %r41 = zext i1 %r40 to i64
-  %r42 = and i64 %r41, %r38
+  %r42 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
+  %r43 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
+  %r44 = and i64 %r41, %r38
+  ; CHECK: ctestsubset
+  %r45 = call i64 @llvm.cheri.cap.subset.test(i8 addrspace(200)* %r42, i8 addrspace(200)* %r43)
+  %r46 = trunc i64 %r45 to i1
+  %r47 = zext i1 %r46 to i64
+  %r48 = and i64 %r47, %r44
   ; CHECK: ccheckperm
   call void @llvm.cheri.cap.perms.check.i64(i8 addrspace(200)* %r30, i64 12)
   ; CHECK: cchecktype
   call void @llvm.cheri.cap.type.check(i8 addrspace(200)* %r30, i8 addrspace(200)* %r31)
   ; CHECK: jr
-  ret i64 %r42
+  ret i64 %r48
 }
 
 ; Function Attrs: nounwind readnone
@@ -112,6 +119,9 @@ declare void @llvm.cheri.cap.perms.check.i64(i8 addrspace(200)*, i64) #3
 
 ; Function Attrs: hassideeffects nounwind readnone
 declare void @llvm.cheri.cap.type.check(i8 addrspace(200)*, i8 addrspace(200)*) #3
+
+; Function Attrs: nounwind readnone
+declare i64 @llvm.cheri.cap.subset.test(i8 addrspace(200)*, i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind
 declare void @llvm.mips.cap.cause.set(i64) #2
