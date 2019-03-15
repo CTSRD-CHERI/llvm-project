@@ -3283,6 +3283,8 @@ private:
                     PhiNodeSet &PhiNodesToMatch) {
     SmallVector<PHIPair, 8> WorkList;
     Matcher.insert({ PHI, Candidate });
+    SmallSet<PHINode *, 8> MatchedPHIs;
+    MatchedPHIs.insert(PHI);
     WorkList.push_back({ PHI, Candidate });
     SmallSet<PHIPair, 8> Visited;
     while (!WorkList.empty()) {
@@ -3315,8 +3317,10 @@ private:
         if (Matcher.count({ FirstPhi, SecondPhi }))
           continue;
         // So the values are different and does not match. So we need them to
-        // match.
-        Matcher.insert({ FirstPhi, SecondPhi });
+        // match. (But we register no more than one match per PHI node, so that
+        // we won't later try to replace them twice.)
+        if (!MatchedPHIs.insert(FirstPhi).second)
+          Matcher.insert({ FirstPhi, SecondPhi });
         // But me must check it.
         WorkList.push_back({ FirstPhi, SecondPhi });
       }
