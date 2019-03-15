@@ -37,14 +37,14 @@ extern "C" Foo *test_foo_not_aligned_array_nonconst(int n) { return new Foo[n]; 
 extern "C" Foo *test_foo_nonalloc(void* buffer) { return new (buffer) Foo; }
 // CHECK-LABEL: @test_foo_nonalloc(
 // CHECK-NEXT:  entry:
-// AGGRESSIVE-NEXT: [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* [[BUFFER:%.*]], i64 4)
+// AGGRESSIVE-NEXT: [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[BUFFER:%.*]], i64 4)
 // CHECK-NEXT:      [[RESULT:%.*]] = bitcast i8 addrspace(200)* %{{.+}} to [[STRUCT_FOO:%.*]] addrspace(200)*
 // CHECK-NEXT:      ret %struct.Foo addrspace(200)* [[RESULT]]
 
 extern "C" Foo *test_foo_nonalloc_array(void* buffer) { return new (buffer) Foo[2]; }
 // CHECK-LABEL: @test_foo_nonalloc_array(
 // CHECK-NEXT:  entry:
-// AGGRESSIVE-NEXT: [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* [[BUFFER:%.*]], i64 8)
+// AGGRESSIVE-NEXT: [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[BUFFER:%.*]], i64 8)
 // CHECK-NEXT:      [[RESULT:%.*]] = bitcast i8 addrspace(200)* %{{.+}} to [[STRUCT_FOO:%.*]] addrspace(200)*
 // CHECK-NEXT:      ret %struct.Foo addrspace(200)* [[RESULT]]
 
@@ -57,7 +57,7 @@ extern "C" Foo *test_foo_nonalloc_array_nonconst(void* buffer, int n) { return n
 // AGGRESSIVE-NEXT:    [[TMP2:%.*]] = extractvalue { i64, i1 } [[TMP1]], 1
 // AGGRESSIVE-NEXT:    [[TMP3:%.*]] = extractvalue { i64, i1 } [[TMP1]], 0
 // AGGRESSIVE-NEXT:    [[TMP4:%.*]] = select i1 [[TMP2]], i64 -1, i64 [[TMP3]]
-// AGGRESSIVE-NEXT:    [[TMP5:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* [[BUFFER:%.*]], i64 [[TMP4]])
+// AGGRESSIVE-NEXT:    [[TMP5:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[BUFFER:%.*]], i64 [[TMP4]])
 // AGGRESSIVE-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* [[TMP5]] to [[STRUCT_FOO:%.*]] addrspace(200)*
 // AGGRESSIVE-NEXT:    ret %struct.Foo addrspace(200)* [[TMP6]]
 //

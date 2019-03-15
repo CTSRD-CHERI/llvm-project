@@ -11,7 +11,7 @@
 int x(__intcap_t y)
 {
   // CHECK-LABEL: define signext i32 @x(i8 addrspace(200)*
-  // CHECK: [[SWITCH_VAR:%.+]] = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* {{%.+}})
+  // CHECK: [[SWITCH_VAR:%.+]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* {{%.+}})
   // CHECK: switch i64 [[SWITCH_VAR]], label {{%.+}} [
   switch (y)
   {
@@ -36,7 +36,7 @@ int x(__intcap_t y)
 int y(void) {
   // CHECK-LABEL: define signext i32 @y()
   __intcap_t foo = C;
-  // CHECK: [[SWITCH_VAR:%.+]] = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* {{%.+}})
+  // CHECK: [[SWITCH_VAR:%.+]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* {{%.+}})
   // CHECK: switch i64 [[SWITCH_VAR]], label {{%.+}} [
   switch (foo)
   {
@@ -67,7 +67,7 @@ char buf[16];
 
 int z_long(void) {
   // CHECK-OPT-LABEL: define signext i32 @z_long()
-  // CHECK-OPT:      [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
+  // CHECK-OPT:      [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
   // CHECK-OPT-NEXT: switch i64 [[SWITCHVAL]], label {{%.+}} [
 
   const char* switchval = buf;
@@ -85,7 +85,7 @@ int z_intcap(void) {
   // Check that we actually switch on the virtual address and not the offset:
   // CHECK-OPT-LABEL: define signext i32 @z_intcap()
   // CHECK-OPT-NOT: ret i32 4
-  // CHECK-OPT:      [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
+  // CHECK-OPT:      [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0))
   // CHECK-OPT-NEXT: switch i64 [[SWITCHVAL]], label {{%.+}} [
   const char* switchval = buf;
   switch ((__intcap_t)switchval) {
@@ -104,8 +104,8 @@ int z_fixed_offset(void) {
   // This was the previous behaviour when using separate base.get and offset.get intrinsics, but I'm not sure it makes sense to keep it.
   // CHECK-OPT-LABEL: define signext i32 @z_fixed_offset()
   // CHECK-OPT-NOT: ret i32 4
-  // CHECK-OPT: [[CAP:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0), i64 4)
-  // CHECK-OPT-NEXT: [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[CAP]])
+  // CHECK-OPT: [[CAP:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* getelementptr inbounds ([16 x i8], [16 x i8] addrspace(200)* @buf, i64 0, i64 0), i64 4)
+  // CHECK-OPT-NEXT: [[SWITCHVAL:%.+]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP]])
   // CHECK-OPT-NEXT: switch i64 [[SWITCHVAL]], label {{%.+}} [
   // CHECK-OPT-NEXT:   i64 0
   // CHECK-OPT-NEXT:   i64 1

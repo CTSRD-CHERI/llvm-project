@@ -22,7 +22,7 @@ define void @foobar() addrspace(200) nounwind {
 ; DEFAULT-NEXT:    store i32 123, i32 addrspace(200)* [[X]], align 4
 ; DEFAULT-NEXT:    call void @foo()
 ; DEFAULT-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; DEFAULT-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; DEFAULT-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; DEFAULT-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; DEFAULT-NEXT:    call void @bar(i32 addrspace(200)* [[TMP2]])
 ; DEFAULT-NEXT:    ret void
@@ -31,7 +31,7 @@ define void @foobar() addrspace(200) nounwind {
 ; IF-NEEDED-SINGLE-NEXT:  entry:
 ; IF-NEEDED-SINGLE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; IF-NEEDED-SINGLE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; IF-NEEDED-SINGLE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; IF-NEEDED-SINGLE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; IF-NEEDED-SINGLE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; IF-NEEDED-SINGLE-NEXT:    store i32 123, i32 addrspace(200)* [[X]], align 4
 ; IF-NEEDED-SINGLE-NEXT:    call void @foo()
@@ -44,7 +44,7 @@ define void @foobar() addrspace(200) nounwind {
 ; IF-NEEDED-PER-USE-NEXT:    store i32 123, i32 addrspace(200)* [[X]], align 4
 ; IF-NEEDED-PER-USE-NEXT:    call void @foo()
 ; IF-NEEDED-PER-USE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; IF-NEEDED-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; IF-NEEDED-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; IF-NEEDED-PER-USE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; IF-NEEDED-PER-USE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP2]])
 ; IF-NEEDED-PER-USE-NEXT:    ret void
@@ -53,12 +53,12 @@ define void @foobar() addrspace(200) nounwind {
 ; ALL-OR-NONE-PER-USE-NEXT:  entry:
 ; ALL-OR-NONE-PER-USE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; ALL-OR-NONE-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; ALL-OR-NONE-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; ALL-OR-NONE-PER-USE-NEXT:    store i32 123, i32 addrspace(200)* [[TMP2]], align 4
 ; ALL-OR-NONE-PER-USE-NEXT:    call void @foo()
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; ALL-OR-NONE-PER-USE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP3]], i64 4)
+; ALL-OR-NONE-PER-USE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; ALL-OR-NONE-PER-USE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP5]])
 ; ALL-OR-NONE-PER-USE-NEXT:    ret void
@@ -67,11 +67,11 @@ define void @foobar() addrspace(200) nounwind {
 ; FOR-ALL-OR-NONE-NEXT:  entry:
 ; FOR-ALL-OR-NONE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; FOR-ALL-OR-NONE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; FOR-ALL-OR-NONE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; FOR-ALL-OR-NONE-NEXT:    store i32 123, i32 addrspace(200)* [[TMP2]], align 4
 ; FOR-ALL-OR-NONE-NEXT:    call void @foo()
-; FOR-ALL-OR-NONE-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; FOR-ALL-OR-NONE-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i32 addrspace(200)*
 ; FOR-ALL-OR-NONE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP4]])
 ; FOR-ALL-OR-NONE-NEXT:    ret void
@@ -138,7 +138,7 @@ define i32 @load_store_and_call() addrspace(200) nounwind {
 ; DEFAULT-NEXT:    store i32 123, i32 addrspace(200)* [[X]], align 4
 ; DEFAULT-NEXT:    call void @foo()
 ; DEFAULT-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; DEFAULT-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; DEFAULT-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; DEFAULT-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; DEFAULT-NEXT:    call void @bar(i32 addrspace(200)* [[TMP2]])
 ; DEFAULT-NEXT:    call void @foo()
@@ -149,7 +149,7 @@ define i32 @load_store_and_call() addrspace(200) nounwind {
 ; IF-NEEDED-SINGLE-NEXT:  entry:
 ; IF-NEEDED-SINGLE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; IF-NEEDED-SINGLE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; IF-NEEDED-SINGLE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; IF-NEEDED-SINGLE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; IF-NEEDED-SINGLE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; IF-NEEDED-SINGLE-NEXT:    store i32 123, i32 addrspace(200)* [[X]], align 4
 ; IF-NEEDED-SINGLE-NEXT:    call void @foo()
@@ -164,7 +164,7 @@ define i32 @load_store_and_call() addrspace(200) nounwind {
 ; IF-NEEDED-PER-USE-NEXT:    store i32 123, i32 addrspace(200)* [[X]], align 4
 ; IF-NEEDED-PER-USE-NEXT:    call void @foo()
 ; IF-NEEDED-PER-USE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; IF-NEEDED-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; IF-NEEDED-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; IF-NEEDED-PER-USE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; IF-NEEDED-PER-USE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP2]])
 ; IF-NEEDED-PER-USE-NEXT:    call void @foo()
@@ -175,17 +175,17 @@ define i32 @load_store_and_call() addrspace(200) nounwind {
 ; ALL-OR-NONE-PER-USE-NEXT:  entry:
 ; ALL-OR-NONE-PER-USE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; ALL-OR-NONE-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; ALL-OR-NONE-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; ALL-OR-NONE-PER-USE-NEXT:    store i32 123, i32 addrspace(200)* [[TMP2]], align 4
 ; ALL-OR-NONE-PER-USE-NEXT:    call void @foo()
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; ALL-OR-NONE-PER-USE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP3]], i64 4)
+; ALL-OR-NONE-PER-USE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; ALL-OR-NONE-PER-USE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP5]])
 ; ALL-OR-NONE-PER-USE-NEXT:    call void @foo()
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP6:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; ALL-OR-NONE-PER-USE-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP6]], i64 4)
+; ALL-OR-NONE-PER-USE-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP6]], i64 4)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP7]] to i32 addrspace(200)*
 ; ALL-OR-NONE-PER-USE-NEXT:    [[RET:%.*]] = load i32, i32 addrspace(200)* [[TMP8]], align 4
 ; ALL-OR-NONE-PER-USE-NEXT:    ret i32 [[RET]]
@@ -194,15 +194,15 @@ define i32 @load_store_and_call() addrspace(200) nounwind {
 ; FOR-ALL-OR-NONE-NEXT:  entry:
 ; FOR-ALL-OR-NONE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; FOR-ALL-OR-NONE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; FOR-ALL-OR-NONE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; FOR-ALL-OR-NONE-NEXT:    store i32 123, i32 addrspace(200)* [[TMP2]], align 4
 ; FOR-ALL-OR-NONE-NEXT:    call void @foo()
-; FOR-ALL-OR-NONE-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; FOR-ALL-OR-NONE-NEXT:    [[TMP3:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i32 addrspace(200)*
 ; FOR-ALL-OR-NONE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP4]])
 ; FOR-ALL-OR-NONE-NEXT:    call void @foo()
-; FOR-ALL-OR-NONE-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; FOR-ALL-OR-NONE-NEXT:    [[TMP5:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP6:%.*]] = bitcast i8 addrspace(200)* [[TMP5]] to i32 addrspace(200)*
 ; FOR-ALL-OR-NONE-NEXT:    [[RET:%.*]] = load i32, i32 addrspace(200)* [[TMP6]], align 4
 ; FOR-ALL-OR-NONE-NEXT:    ret i32 [[RET]]
@@ -224,11 +224,11 @@ define void @foobar_without_store() addrspace(200) nounwind {
 ; DEFAULT-NEXT:    [[Y:%.*]] = alloca i32, align 4, addrspace(200)
 ; DEFAULT-NEXT:    call void @foo()
 ; DEFAULT-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; DEFAULT-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; DEFAULT-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; DEFAULT-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; DEFAULT-NEXT:    call void @bar(i32 addrspace(200)* [[TMP2]])
 ; DEFAULT-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[Y]] to i8 addrspace(200)*
-; DEFAULT-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP3]], i64 4)
+; DEFAULT-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
 ; DEFAULT-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; DEFAULT-NEXT:    call void @bar(i32 addrspace(200)* [[TMP5]])
 ; DEFAULT-NEXT:    ret void
@@ -237,11 +237,11 @@ define void @foobar_without_store() addrspace(200) nounwind {
 ; IF-NEEDED-SINGLE-NEXT:  entry:
 ; IF-NEEDED-SINGLE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; IF-NEEDED-SINGLE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; IF-NEEDED-SINGLE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; IF-NEEDED-SINGLE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; IF-NEEDED-SINGLE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; IF-NEEDED-SINGLE-NEXT:    [[Y:%.*]] = alloca i32, align 4, addrspace(200)
 ; IF-NEEDED-SINGLE-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[Y]] to i8 addrspace(200)*
-; IF-NEEDED-SINGLE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP3]], i64 4)
+; IF-NEEDED-SINGLE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
 ; IF-NEEDED-SINGLE-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; IF-NEEDED-SINGLE-NEXT:    call void @foo()
 ; IF-NEEDED-SINGLE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP2]])
@@ -254,11 +254,11 @@ define void @foobar_without_store() addrspace(200) nounwind {
 ; IF-NEEDED-PER-USE-NEXT:    [[Y:%.*]] = alloca i32, align 4, addrspace(200)
 ; IF-NEEDED-PER-USE-NEXT:    call void @foo()
 ; IF-NEEDED-PER-USE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; IF-NEEDED-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; IF-NEEDED-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; IF-NEEDED-PER-USE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; IF-NEEDED-PER-USE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP2]])
 ; IF-NEEDED-PER-USE-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[Y]] to i8 addrspace(200)*
-; IF-NEEDED-PER-USE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP3]], i64 4)
+; IF-NEEDED-PER-USE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
 ; IF-NEEDED-PER-USE-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; IF-NEEDED-PER-USE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP5]])
 ; IF-NEEDED-PER-USE-NEXT:    ret void
@@ -269,11 +269,11 @@ define void @foobar_without_store() addrspace(200) nounwind {
 ; ALL-OR-NONE-PER-USE-NEXT:    [[Y:%.*]] = alloca i32, align 4, addrspace(200)
 ; ALL-OR-NONE-PER-USE-NEXT:    call void @foo()
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; ALL-OR-NONE-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; ALL-OR-NONE-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; ALL-OR-NONE-PER-USE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP2]])
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[Y]] to i8 addrspace(200)*
-; ALL-OR-NONE-PER-USE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP3]], i64 4)
+; ALL-OR-NONE-PER-USE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; ALL-OR-NONE-PER-USE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP5]])
 ; ALL-OR-NONE-PER-USE-NEXT:    ret void
@@ -285,10 +285,10 @@ define void @foobar_without_store() addrspace(200) nounwind {
 ; FOR-ALL-OR-NONE-NEXT:    [[Y:%.*]] = alloca i32, align 4, addrspace(200)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP1:%.*]] = bitcast i32 addrspace(200)* [[Y]] to i8 addrspace(200)*
 ; FOR-ALL-OR-NONE-NEXT:    call void @foo()
-; FOR-ALL-OR-NONE-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; FOR-ALL-OR-NONE-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
 ; FOR-ALL-OR-NONE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP3]])
-; FOR-ALL-OR-NONE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP1]], i64 4)
+; FOR-ALL-OR-NONE-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP1]], i64 4)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; FOR-ALL-OR-NONE-NEXT:    call void @bar(i32 addrspace(200)* [[TMP5]])
 ; FOR-ALL-OR-NONE-NEXT:    ret void
@@ -306,7 +306,7 @@ define i8 addrspace(200)* @return_alloca() addrspace(200) nounwind {
 ; DEFAULT-NEXT:  entry:
 ; DEFAULT-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; DEFAULT-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; DEFAULT-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; DEFAULT-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; DEFAULT-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; DEFAULT-NEXT:    [[I8:%.*]] = bitcast i32 addrspace(200)* [[TMP2]] to i8 addrspace(200)*
 ; DEFAULT-NEXT:    ret i8 addrspace(200)* [[I8]]
@@ -315,7 +315,7 @@ define i8 addrspace(200)* @return_alloca() addrspace(200) nounwind {
 ; IF-NEEDED-SINGLE-NEXT:  entry:
 ; IF-NEEDED-SINGLE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; IF-NEEDED-SINGLE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; IF-NEEDED-SINGLE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; IF-NEEDED-SINGLE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; IF-NEEDED-SINGLE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; IF-NEEDED-SINGLE-NEXT:    [[I8:%.*]] = bitcast i32 addrspace(200)* [[TMP2]] to i8 addrspace(200)*
 ; IF-NEEDED-SINGLE-NEXT:    ret i8 addrspace(200)* [[I8]]
@@ -324,7 +324,7 @@ define i8 addrspace(200)* @return_alloca() addrspace(200) nounwind {
 ; IF-NEEDED-PER-USE-NEXT:  entry:
 ; IF-NEEDED-PER-USE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; IF-NEEDED-PER-USE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; IF-NEEDED-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; IF-NEEDED-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; IF-NEEDED-PER-USE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; IF-NEEDED-PER-USE-NEXT:    [[I8:%.*]] = bitcast i32 addrspace(200)* [[TMP2]] to i8 addrspace(200)*
 ; IF-NEEDED-PER-USE-NEXT:    ret i8 addrspace(200)* [[I8]]
@@ -333,7 +333,7 @@ define i8 addrspace(200)* @return_alloca() addrspace(200) nounwind {
 ; ALL-OR-NONE-PER-USE-NEXT:  entry:
 ; ALL-OR-NONE-PER-USE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; ALL-OR-NONE-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; ALL-OR-NONE-PER-USE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; ALL-OR-NONE-PER-USE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; ALL-OR-NONE-PER-USE-NEXT:    [[I8:%.*]] = bitcast i32 addrspace(200)* [[TMP2]] to i8 addrspace(200)*
 ; ALL-OR-NONE-PER-USE-NEXT:    ret i8 addrspace(200)* [[I8]]
@@ -342,7 +342,7 @@ define i8 addrspace(200)* @return_alloca() addrspace(200) nounwind {
 ; FOR-ALL-OR-NONE-NEXT:  entry:
 ; FOR-ALL-OR-NONE-NEXT:    [[X:%.*]] = alloca i32, align 4, addrspace(200)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[X]] to i8 addrspace(200)*
-; FOR-ALL-OR-NONE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; FOR-ALL-OR-NONE-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; FOR-ALL-OR-NONE-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; FOR-ALL-OR-NONE-NEXT:    [[I8:%.*]] = bitcast i32 addrspace(200)* [[TMP2]] to i8 addrspace(200)*
 ; FOR-ALL-OR-NONE-NEXT:    ret i8 addrspace(200)* [[I8]]

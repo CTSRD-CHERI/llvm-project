@@ -51,7 +51,7 @@ int call_local_nonvirt(A* a) {
   MemberPtr local_nonvirt = &A::nonvirt2;
   // FIXME: should we rather memcopy from a global that has been initialized?
   // LEGACY: call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  // LEGACY: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %{{.+}}, i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A8nonvirt2Ev to i64))
+  // LEGACY: call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %{{.+}}, i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A8nonvirt2Ev to i64))
   // For cap-table that should already be true:
   // CAPTABLE: store i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A8nonvirt2Ev to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)*
   return (a->*local_nonvirt)();
@@ -68,7 +68,7 @@ int call_local_fn_ptr(A* a) {
   // CHECK-LABEL: @_Z17call_local_fn_ptrU3capP1A(
   int (*local_fn_ptr)() = &global_fn;
   // LEGACY: call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  // LEGACY: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %{{.+}}, i64 ptrtoint (i32 ()* @_Z9global_fnv to i64))
+  // LEGACY: call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %{{.+}}, i64 ptrtoint (i32 ()* @_Z9global_fnv to i64))
   // CAPTABLE: store i32 () addrspace(200)* @_Z9global_fnv, i32 () addrspace(200)* addrspace(200)*
   return local_fn_ptr();
 }

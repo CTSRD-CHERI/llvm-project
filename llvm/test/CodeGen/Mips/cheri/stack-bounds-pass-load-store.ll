@@ -18,7 +18,7 @@ define void @store_stack_to_global() addrspace(200) nounwind {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[X:%.*]] = alloca [16 x i32], align 4, addrspace(200)
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast [16 x i32] addrspace(200)* [[X]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 64)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 64)
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [16 x i32] addrspace(200)*
 ; CHECK-NEXT:    store [16 x i32] addrspace(200)* [[TMP2]], [16 x i32] addrspace(200)* addrspace(200)* @global_leak, align 16
 ; CHECK-NEXT:    ret void
@@ -41,7 +41,7 @@ define void @store_stack_to_global_with_offset() addrspace(200) nounwind {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[X:%.*]] = alloca [16 x i32], align 4, addrspace(200)
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast [16 x i32] addrspace(200)* [[X]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 64)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 64)
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [16 x i32] addrspace(200)*
 ; CHECK-NEXT:    [[X_I8:%.*]] = bitcast [16 x i32] addrspace(200)* [[TMP2]] to i8 addrspace(200)*
 ; CHECK-NEXT:    [[X_PLUS_4:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[X_I8]], i32 4
@@ -74,7 +74,7 @@ define [16 x i32] addrspace(200)* @store_stack_to_other_slot() addrspace(200) no
 ; CHECK-NEXT:    [[SLOT_SRC:%.*]] = alloca [16 x i32], align 4, addrspace(200)
 ; CHECK-NEXT:    [[SLOT_LEAK:%.*]] = alloca [16 x i32] addrspace(200)*, align 16, addrspace(200)
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast [16 x i32] addrspace(200)* [[SLOT_SRC]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 64)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 64)
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [16 x i32] addrspace(200)*
 ; CHECK-NEXT:    store [16 x i32] addrspace(200)* [[TMP2]], [16 x i32] addrspace(200)* addrspace(200)* [[SLOT_LEAK]], align 16
 ; CHECK-NEXT:    [[LEAKED_VALUE:%.*]] = load [16 x i32] addrspace(200)*, [16 x i32] addrspace(200)* addrspace(200)* [[SLOT_LEAK]], align 16
@@ -108,7 +108,7 @@ define i8 addrspace(200)* @store_stack_to_other_slot_with_offset() addrspace(200
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[X:%.*]] = alloca [16 x i32], align 4, addrspace(200)
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast [16 x i32] addrspace(200)* [[X]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 64)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 64)
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [16 x i32] addrspace(200)*
 ; CHECK-NEXT:    [[X_I8:%.*]] = bitcast [16 x i32] addrspace(200)* [[TMP2]] to i8 addrspace(200)*
 ; CHECK-NEXT:    [[X_PLUS_4:%.*]] = getelementptr inbounds i8, i8 addrspace(200)* [[X_I8]], i32 4

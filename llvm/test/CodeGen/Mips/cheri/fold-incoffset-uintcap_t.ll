@@ -38,18 +38,18 @@ entry:
 define i8 addrspace(200)* @add_uintcap_t() #0 {
 entry:
   %cap = alloca i8 addrspace(200)*, align 16
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 100)
+  %0 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 100)
   store i8 addrspace(200)* %0, i8 addrspace(200)** %cap, align 16
   %1 = load i8 addrspace(200)*, i8 addrspace(200)** %cap, align 16
-  %2 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 924)
-  %3 = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %1)
-  %4 = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %2)
+  %2 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 924)
+  %3 = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %1)
+  %4 = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %2)
   %add = add i64 %3, %4
-  %5 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %1, i64 %add)
+  %5 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %1, i64 %add)
   ret i8 addrspace(200)* %5
   ; This always creates an untagged capability:
   ; IR-LABEL: @add_uintcap_t()
-  ; IR: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1024)
+  ; IR: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 1024)
 
   ; CHECK-LABEL: add_uintcap_t
   ; CHECK: daddiu	$1, $zero, 1024
@@ -58,10 +58,10 @@ entry:
 }
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #1
 
 ; Function Attrs: nounwind readnone
-declare i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)*) #1
+declare i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*) #1
 
 attributes #0 = { nounwind }
 attributes #1 = { nounwind readnone }

@@ -98,7 +98,7 @@ declare void @test(i8 addrspace(200)*) #2
 declare i8 addrspace(200)* @llvm.cheri.pcc.get() #3
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #3
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #3
 
 ; Function Attrs: nounwind
 declare void @llvm.stackrestore.p200i8(i8 addrspace(200)*) #1

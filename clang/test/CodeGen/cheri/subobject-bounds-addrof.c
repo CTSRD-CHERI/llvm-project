@@ -31,15 +31,15 @@ void test_subobject_addrof_basic(struct WithNested* s) {
   // CHECK-LABEL: @test_subobject_addrof_basic(
   do_stuff_with_int(TAKE_ADDRESS(s->n.a)); // expected-remark {{setting sub-object bounds for field 'a' (pointer to 'int') to 4 bytes}}
   // DBG: Found scalar type -> setting bounds for 'int' addrof to 4
-  // CHECK: [[BOUNDED_INT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* {{.+}}, i64 4)
+  // CHECK: [[BOUNDED_INT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* {{.+}}, i64 4)
   // CHECK-NEXT: %addrof.with.bounds = bitcast i8 addrspace(200)* [[BOUNDED_INT]] to i32 addrspace(200)*
   do_stuff_with_nested(TAKE_ADDRESS(s->n)); // expected-remark {{setting sub-object bounds for field 'n' (pointer to 'struct Nested') to 12 bytes}}
   // DBG-NEXT: Found record type 'struct Nested' -> compiling C and no flexible array -> setting bounds for 'struct Nested' addrof to 12
-  // CHECK: [[BOUNDED_STRUCT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* {{.+}}, i64 12)
+  // CHECK: [[BOUNDED_STRUCT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* {{.+}}, i64 12)
   // CHECK-NEXT: %addrof.with.bounds2 = bitcast i8 addrspace(200)* [[BOUNDED_STRUCT]] to %struct.Nested addrspace(200)*
   do_stuff_with_float(TAKE_ADDRESS(s->f1)); // expected-remark {{setting sub-object bounds for field 'f1' (pointer to 'float') to 4 bytes}}
   // DBG-NEXT: Found scalar type -> setting bounds for 'float' addrof to 4
-  // CHECK: [[BOUNDED_FLOAT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* {{.+}}, i64 4)
+  // CHECK: [[BOUNDED_FLOAT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* {{.+}}, i64 4)
   // CHECK-NEXT: %addrof.with.bounds3 = bitcast i8 addrspace(200)* [[BOUNDED_FLOAT]] to float addrspace(200)*
 }
 

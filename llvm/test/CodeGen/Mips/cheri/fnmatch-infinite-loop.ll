@@ -33,7 +33,7 @@ entry:
 declare i8 addrspace(200)* @llvm.cheri.pcc.get() #1
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #1
 
 declare i64 @mbrtowc(i32 addrspace(200)*, i8 addrspace(200)*, i64 zeroext, %union.__mbstate_t.0.8.16.24.32.40.48.56.64 addrspace(200)*) #2
 

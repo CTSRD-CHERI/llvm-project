@@ -13,7 +13,7 @@ target triple = "cheri-unknown-freebsd"
 define void @func() #0 {
 entry:
   %testCap = alloca i8 addrspace(200)*, align 32, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 4096)
+  %0 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 4096)
   %1 = bitcast i8 addrspace(200)* %0 to i8 addrspace(200)* addrspace(200)*
   %2 = load volatile i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %1, align 32
   store i8 addrspace(200)* %2, i8 addrspace(200)* addrspace(200)* %testCap, align 32
@@ -25,7 +25,7 @@ entry:
 }
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #1
 
 attributes #0 = { noinline nounwind optnone "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="cheri" "target-features"="+cheri,-noabicalls" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind readnone }

@@ -9,7 +9,7 @@
 @nocaps = common addrspace(200) global [2 x i64] zeroinitializer, align 16
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)*, i64) addrspace(200) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64) addrspace(200) #1
 
 ; Function Attrs: argmemonly nounwind
 declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1) addrspace(200) #2
@@ -19,7 +19,7 @@ define void @spgFormLeafTuple() addrspace(200) #0 {
 ; SROA-LABEL: @spgFormLeafTuple(
 ; SROA-NEXT:  entry:
 ; SROA-NEXT:    [[C:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 0)
+; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
 ; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C]], align 16
 ; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
 ; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[C]] to i8 addrspace(200)*
@@ -29,7 +29,7 @@ define void @spgFormLeafTuple() addrspace(200) #0 {
 ;
 entry:
   %c = alloca i8 addrspace(200)*, align 16, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 0)
+  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
   store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %c, align 16
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
   %2 = bitcast i8 addrspace(200)* addrspace(200)* %c to i8 addrspace(200)*
@@ -66,7 +66,7 @@ define void @align2_should_call_memcpy() addrspace(200) #0 {
 ; SROA-LABEL: @align2_should_call_memcpy(
 ; SROA-NEXT:  entry:
 ; SROA-NEXT:    [[C:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 0)
+; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
 ; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C]], align 16
 ; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
 ; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[C]] to i8 addrspace(200)*
@@ -76,7 +76,7 @@ define void @align2_should_call_memcpy() addrspace(200) #0 {
 ;
 entry:
   %c = alloca i8 addrspace(200)*, align 16, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 0)
+  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
   store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %c, align 16
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
   %2 = bitcast i8 addrspace(200)* addrspace(200)* %c to i8 addrspace(200)*
@@ -93,7 +93,7 @@ define void @align4_should_call_memcpy() addrspace(200) #0 {
 ; SROA-LABEL: @align4_should_call_memcpy(
 ; SROA-NEXT:  entry:
 ; SROA-NEXT:    [[C:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 0)
+; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
 ; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C]], align 16
 ; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
 ; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[C]] to i8 addrspace(200)*
@@ -103,7 +103,7 @@ define void @align4_should_call_memcpy() addrspace(200) #0 {
 ;
 entry:
   %c = alloca i8 addrspace(200)*, align 16, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 0)
+  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
   store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %c, align 16
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
   %2 = bitcast i8 addrspace(200)* addrspace(200)* %c to i8 addrspace(200)*
@@ -118,7 +118,7 @@ define void @align8_should_call_memcpy() addrspace(200) #0 {
 ; SROA-LABEL: @align8_should_call_memcpy(
 ; SROA-NEXT:  entry:
 ; SROA-NEXT:    [[C:%.*]] = alloca i8 addrspace(200)*, align 16, addrspace(200)
-; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 0)
+; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
 ; SROA-NEXT:    store i8 addrspace(200)* [[TMP0]], i8 addrspace(200)* addrspace(200)* [[C]], align 16
 ; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
 ; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* addrspace(200)* [[C]] to i8 addrspace(200)*
@@ -128,7 +128,7 @@ define void @align8_should_call_memcpy() addrspace(200) #0 {
 ;
 entry:
   %c = alloca i8 addrspace(200)*, align 16, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 0)
+  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
   store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %c, align 16
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
   %2 = bitcast i8 addrspace(200)* addrspace(200)* %c to i8 addrspace(200)*
@@ -144,7 +144,7 @@ entry:
 define void @align16_can_be_inlined() addrspace(200) #0 {
 ; SROA-LABEL: @align16_can_be_inlined(
 ; SROA-NEXT:  entry:
-; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 0)
+; SROA-NEXT:    [[TMP0:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
 ; SROA-NEXT:    [[TMP1:%.*]] = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
 ; SROA-NEXT:    [[C_0__SROA_CAST:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i8 addrspace(200)* addrspace(200)*
 ; The memcpy can be turned into a store by sroa:
@@ -153,7 +153,7 @@ define void @align16_can_be_inlined() addrspace(200) #0 {
 ;
 entry:
   %c = alloca i8 addrspace(200)*, align 16, addrspace(200)
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 0)
+  %0 = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
   store i8 addrspace(200)* %0, i8 addrspace(200)* addrspace(200)* %c, align 16
   %1 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @b, align 16
   %2 = bitcast i8 addrspace(200)* addrspace(200)* %c to i8 addrspace(200)*

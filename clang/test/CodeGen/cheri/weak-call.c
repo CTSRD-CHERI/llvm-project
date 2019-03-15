@@ -8,7 +8,7 @@ void a(void);
 #pragma weak a
 void b(void) {
   // LEGACY: [[VAR0:%.+]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  // LEGACY: [[VAR1:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer(i8 addrspace(200)* [[VAR0]], i64 ptrtoint (void ()* @a to i64))
+  // LEGACY: [[VAR1:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)* [[VAR0]], i64 ptrtoint (void ()* @a to i64))
   // LEGACY: [[VAR2:%.+]] = bitcast i8 addrspace(200)* [[VAR1]] to void () addrspace(200)*
   // LEGACY: call void [[VAR2]]()
   // CHECK: call void @a()

@@ -49,7 +49,7 @@ _Bool is_aligned(TYPE ptr, unsigned align) {
   // TODO: should we allow non-constant values and just say not passing a power-of-two is undefined?
   // CHECK-LABEL: is_aligned(
   // PTR:       [[VAR:%.+]] = ptrtoint i8* %{{.+}} to i64
-  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* {{%.+}})
+  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* {{%.+}})
   // LONG-SLOW: [[VAR:%.+]] = load i64
   // SLOW:      %alignment = zext i32 {{.+}} to i64
   // SLOW-NEXT: %mask = sub i64 %alignment, 1
@@ -62,7 +62,7 @@ _Bool is_aligned(TYPE ptr, unsigned align) {
 _Bool is_p2aligned(TYPE ptr, int p2align) {
   // CHECK-LABEL: is_p2aligned(
   // PTR:       [[VAR:%.+]] = ptrtoint i8* %{{.+}} to i64
-  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* {{%.+}})
+  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* {{%.+}})
   // LONG-SLOW: [[VAR:%.+]] = load i64
   // SLOW-NEXT: [[P2VAL:%.+]] = load i32, i32* %p2align.addr, align 4
   // SLOW-NEXT: %pow2 = zext i32 [[P2VAL]] to i64
@@ -78,7 +78,7 @@ TYPE align_up(TYPE ptr, unsigned align) {
   // TODO: should we allow non-constant values and just say not passing a power-of-two is undefined?
   // CHECK-LABEL: @align_up(
   // align up/align down is different for capabilities and pointers since we can't just mask
-  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[SRC:%.+]])
+  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[SRC:%.+]])
   // CAP:       %alignment = zext i32 %{{.+}} to i64
   // CAP-NEXT:  %mask = {{(sub i64 %alignment, 1)|(add nsw i64 %alignment, -1)}}
   // CAP-NEXT:  %unaligned_bits = and i64 [[VAR]], %mask
@@ -102,7 +102,7 @@ TYPE align_up(TYPE ptr, unsigned align) {
 
 TYPE p2align_up(TYPE ptr, unsigned p2align) {
   // CHECK-LABEL: @p2align_up(
-  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[SRC:%.+]])
+  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[SRC:%.+]])
   // CAP-SLOW:  %alignment = shl i64 1, %pow2
   // CAP:       %mask = {{(sub i64 %alignment, 1)|(add i64 %alignment, -1)}}
   // CAP-NEXT:  %unaligned_bits = and i64 [[VAR]], %mask
@@ -127,7 +127,7 @@ TYPE p2align_up(TYPE ptr, unsigned p2align) {
 TYPE align_down(TYPE ptr, unsigned align) {
   // TODO: should we allow non-constant values and just say not passing a power-of-two is undefined?
   // CHECK-LABEL: @align_down(
-  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[SRC:%.+]])
+  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[SRC:%.+]])
   // CAP:       %alignment = zext i32 %{{.+}} to i64
   // CAP-NEXT:  %mask = {{(sub i64 %alignment, 1)|(add nsw i64 %alignment, -1)}}
   // CAP-NEXT:  %unaligned_bits = and i64 [[VAR]], %mask
@@ -149,7 +149,7 @@ TYPE align_down(TYPE ptr, unsigned align) {
 
 TYPE p2align_down(TYPE ptr, unsigned p2align) {
   // CHECK-LABEL: @p2align_down(
-  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[SRC:%.+]])
+  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[SRC:%.+]])
   // PTR:       [[VAR:%.+]] = ptrtoint i8* %{{.+}} to i64
   // LONG-SLOW: [[VAR:%.+]] = load i64
 
@@ -193,7 +193,7 @@ TYPE inline_align_down(void) {
   // LONG-OPT: ret i64 96
   // PTR-OPT: ret i8* inttoptr (i64 96 to i8*)
   // CAP-OPT: ret i8 addrspace(200)* inttoptr (i64 96 to i8 addrspace(200)*)
-  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 96)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 96)
   return align_down((TYPE)100, 32);
 }
 
@@ -204,7 +204,7 @@ TYPE inline_p2align_down(void) {
   // PTR-OPT: ret i8* null
   // CAP-OPT: ret i8 addrspace(200)* null
   // FIXME: this should be optimized to return null:
-  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 0)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 0)
   return p2align_down((TYPE)100, 10);
 }
 
@@ -214,7 +214,7 @@ TYPE inline_align_up(void) {
   // LONG-OPT: ret i64 128
   // PTR-OPT: ret i8* inttoptr (i64 128 to i8*)
   // CAP-OPT: ret i8 addrspace(200)* inttoptr (i64 128 to i8 addrspace(200)*)
-  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 128)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 128)
   return align_up((TYPE)100, 32);
 }
 
@@ -224,7 +224,7 @@ TYPE inline_p2align_up(void) {
   // LONG-OPT: ret i64 1024
   // PTR-OPT: ret i8* inttoptr (i64 1024 to i8*)
   // CAP-OPT: ret i8 addrspace(200)* inttoptr (i64 1024 to i8 addrspace(200)*)
-  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1024)
+  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 1024)
   return p2align_up((TYPE)100, 10);
 }
 
@@ -247,7 +247,7 @@ _Bool opt_is_aligned(TYPE x) {
   // CHECK-LABEL: @opt_is_aligned(
   // LONG-OPT-SAME: i64 signext [[VAR:%.+]])
   // PTR:        [[VAR:%.+]] = ptrtoint i8* %{{.+}} to i64
-  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[SRC:%.+]])
+  // CAP:       [[VAR:%.+]] = {{(tail )?}}call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[SRC:%.+]])
   // LONG-SLOW:  [[VAR:%.+]] = load i64
   // CHECK:      %set_bits = and i64 [[VAR]], 127
   // CHECK-NEXT: %is_aligned = icmp eq i64 %set_bits, 0

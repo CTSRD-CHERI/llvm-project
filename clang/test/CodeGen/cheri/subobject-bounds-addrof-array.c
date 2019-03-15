@@ -61,7 +61,7 @@ void test_len2_array(struct WithLen2Array *s) {
   do_stuff_untyped(&s->values);
   // common-remark@-1 {{setting sub-object bounds for field 'values' (pointer to 'struct Foo [3]') to 12 bytes}}
   // DBG: Found constant size array type -> setting bounds for 'struct Foo [3]' addrof to 12
-  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}} i64 12)
+  // CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}} i64 12)
 
   marker1(); // for bounding the filecheck tests
   // CHECK-LABEL: call void @marker1()
@@ -75,9 +75,9 @@ void test_len2_array(struct WithLen2Array *s) {
   // aggressive-or-less-remark@-2 {{setting sub-object bounds for pointer to 'struct Foo' to 12 bytes}}
   // very-aggressive-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
 
-  // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 12)
-  // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 12)
-  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
+  // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
+  // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
+  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
 
   // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> &array[0] -> using container size -> setting bounds for 'struct Foo' addrof to 12
@@ -90,9 +90,9 @@ void test_len2_array(struct WithLen2Array *s) {
   // aggressive-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
   // very-aggressive-remark@-4 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
 
-  // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 12)
-  // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
-  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
+  // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
+  // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
+  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
 
   // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   // DBG-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
@@ -104,9 +104,9 @@ void test_len2_array(struct WithLen2Array *s) {
   // aggressive-or-less-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 12 bytes}}
   // very-aggressive-remark@-4 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
 
-  // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 12)
-  // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 12)
-  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
+  // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
+  // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
+  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
 
   // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> bounds on &array[<last index>] -> using container size -> setting bounds for 'struct Foo' addrof to 12
@@ -118,9 +118,9 @@ void test_len2_array(struct WithLen2Array *s) {
   // aggressive-or-less-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 12 bytes}}
   // very-aggressive-remark@-4 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
 
-  // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 12)
-  // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 12)
-  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
+  // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
+  // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
+  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
 
   // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> bounds on &array[<last index>] -> using container size -> setting bounds for 'struct Foo' addrof to 12
@@ -132,9 +132,9 @@ void test_len2_array(struct WithLen2Array *s) {
   // aggressive-or-less-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 12 bytes}}
   // very-aggressive-remark@-4 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
 
-  // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 12)
-  // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 12)
-  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
+  // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
+  // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
+  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
 
   // DBG-VERY-AGGRESSIVE-NEXT: Found array subscript -> Index is a constant -> bounds-mode is very-aggressive -> bounds on array[CONST] are fine -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
   // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> bounds on &array[<last index>] -> using container size -> setting bounds for 'struct Foo' addrof to 12
@@ -152,9 +152,9 @@ void test_len2_array(struct WithLen2Array *s) {
     // aggressive-remark@-3 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
     // very-aggressive-remark@-4 {{setting sub-object bounds for pointer to 'struct Foo' to 4 bytes}}
 
-    // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 12)
-    // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
-    // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
+    // SUBOBJECT-SAFE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 12)
+    // AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
+    // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
 
     // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: Found array subscript -> Index is not a constant (probably in a per-element loop) -> &array[n] -> using container size -> setting bounds for 'struct Foo' addrof to 12
     // DBG-AGGRESSIVE-NEXT: subobj bounds check: Found array subscript -> Index is not a constant (probably in a per-element loop) -> Found record type 'struct Foo' -> compiling C and no flexible array -> setting bounds for 'struct Foo' addrof to 4
@@ -171,9 +171,9 @@ void test2(int *array) {
   // aggressive-or-less-remark@-1{{not setting bounds for 'int' (should set bounds on full array but size is not known)}}
   // very-aggressive-remark@-2{{setting sub-object bounds for pointer to 'int' to 4 bytes}}
 
-  // SUBOBJECT-SAFE-NOT: @llvm.cheri.cap.bounds.set
-  // AGGRESSIVE-SAFE-NOT: @llvm.cheri.cap.bounds.set
-  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}}, i64 4)
+  // SUBOBJECT-SAFE-NOT: @llvm.cheri.cap.bounds.set.i64
+  // AGGRESSIVE-SAFE-NOT: @llvm.cheri.cap.bounds.set.i64
+  // VERY-AGGRESSIVE: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}}, i64 4)
   // CHECK: ret void
 
   // DBG-SUBOBJECT-SAFE-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> should set bounds on full array but size is not known -> not setting bounds

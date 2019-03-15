@@ -27,9 +27,9 @@ define void @call_one_arg_from_many_arg(i8 addrspace(200)* %in_arg1, i8 addrspac
                                         i8 addrspace(200)* %arg9, i8 addrspace(200)* %arg10, i8 addrspace(200)* %arg11, i8 addrspace(200)* %arg12) {
 ; TODO: we should not be saving null to $c18 since that is a waste of time and space
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
   %0 = call i8 addrspace(200)* @one_arg(i8 addrspace(200)* %first_arg)
   ret void
 }
 
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)*, i64)
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)*, i64)

@@ -14,15 +14,15 @@ define void @test_phi(i1 %cond) addrspace(200) nounwind {
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[ALLOCA1:%.*]] = alloca i32, align 4, addrspace(200)
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA1]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 4)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; CHECK-NEXT:    [[ALLOCA2:%.*]] = alloca i32, align 4, addrspace(200)
 ; CHECK-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA2]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP3]], i64 4)
+; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
 ; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; CHECK-NEXT:    [[ALLOCA3:%.*]] = alloca i32, align 4, addrspace(200)
 ; CHECK-NEXT:    [[TMP6:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA3]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP6]], i64 4)
+; CHECK-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP6]], i64 4)
 ; CHECK-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP7]] to i32 addrspace(200)*
 ; CHECK-NEXT:    br i1 [[COND:%.*]], label [[BLOCK1:%.*]], label [[BLOCK2:%.*]]
 ; CHECK:       block1:

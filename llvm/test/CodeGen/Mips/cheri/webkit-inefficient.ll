@@ -801,7 +801,7 @@ declare %"class.JSC::JSObject" addrspace(200)* @_ZN3JSC29createNotEnoughArgument
 declare void @_ZN7WebCore25InternalSettingsGenerated23setCaretBrowsingEnabledEb(%"class.WebCore::InternalSettingsGenerated" addrspace(200)*, i1 zeroext) local_unnamed_addr addrspace(200) #2
 
 ; Function Attrs: nounwind readnone
-declare i64 @llvm.cheri.cap.address.get(i8 addrspace(200)*) addrspace(200) #3
+declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*) addrspace(200) #3
 
 ; Function Attrs: nounwind readnone
 declare i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) addrspace(200) #3
@@ -1033,7 +1033,7 @@ entry:
   br i1 %tobool.i.i78, label %if.then, label %land.rhs.i, !prof !3
 
 land.rhs.i:                                       ; preds = %entry
-  %2 = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %0) #4
+  %2 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %0) #4
   %unaligned_bits.i.i.i.i79 = and i64 %2, 16383
   %sub.i.i.i.i80 = sub nsw i64 0, %unaligned_bits.i.i.i.i79
   %aligned_cap.i.i.i.i81 = getelementptr inbounds i8, i8 addrspace(200)* %0, i64 %sub.i.i.i.i80
@@ -1110,7 +1110,7 @@ if.then15:                                        ; preds = %do.body
   call void @llvm.lifetime.start.p200i8(i64 16, i8 addrspace(200)* nonnull %19)
   %value.i.i.i.i72 = getelementptr inbounds %"class.JSC::ExecState", %"class.JSC::ExecState" addrspace(200)* %state, i64 3, i32 0, i32 0, i32 0
   %20 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %value.i.i.i.i72, align 16
-  %21 = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %20) #4
+  %21 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %20) #4
   %unaligned_bits.i.i.i.i73 = and i64 %21, 16383
   %sub.i.i.i.i74 = sub nsw i64 0, %unaligned_bits.i.i.i.i73
   %aligned_cap.i.i.i.i75 = getelementptr inbounds i8, i8 addrspace(200)* %20, i64 %sub.i.i.i.i74
@@ -1171,7 +1171,7 @@ if.then.i.i:                                      ; preds = %if.then10.i
   br label %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit
 
 if.end.i.i:                                       ; preds = %if.then10.i
-  %37 = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %26) #4
+  %37 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %26) #4
   %unaligned_bits.i.i.i.i.i = and i64 %37, 16383
   %sub.i.i.i.i.i = sub nsw i64 0, %unaligned_bits.i.i.i.i.i
   %aligned_cap.i.i.i.i.i = getelementptr inbounds i8, i8 addrspace(200)* %26, i64 %sub.i.i.i.i.i
@@ -1197,7 +1197,7 @@ if.end.i.i:                                       ; preds = %if.then10.i
   br i1 %tobool.i.i.i.i.i, label %_ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit, label %land.rhs.i.i.i
 
 land.rhs.i.i.i:                                   ; preds = %if.end.i.i
-  %49 = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %46) #4
+  %49 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %46) #4
   %unaligned_bits.i.i.i.i.i.i.i = and i64 %49, 16383
   %sub.i.i.i.i.i.i.i = sub nsw i64 0, %unaligned_bits.i.i.i.i.i.i.i
   %aligned_cap.i.i.i.i.i.i.i = getelementptr inbounds i8, i8 addrspace(200)* %46, i64 %sub.i.i.i.i.i.i.i
@@ -1236,7 +1236,7 @@ _ZNK3JSC7JSValue9toBooleanEU3capPNS_9ExecStateE.exit: ; preds = %if.end13.i, %la
   call void @llvm.lifetime.end.p200i8(i64 16, i8 addrspace(200)* nonnull %ref.tmp.sroa.0.0..sroa_cast89)
   %value.i.i.i.i = getelementptr inbounds %"class.JSC::ExecState", %"class.JSC::ExecState" addrspace(200)* %state, i64 3, i32 0, i32 0, i32 0
   %61 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %value.i.i.i.i, align 16
-  %62 = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %61) #4
+  %62 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %61) #4
   %unaligned_bits.i.i.i.i = and i64 %62, 16383
   %sub.i.i.i.i = sub nsw i64 0, %unaligned_bits.i.i.i.i
   %aligned_cap.i.i.i.i = getelementptr inbounds i8, i8 addrspace(200)* %61, i64 %sub.i.i.i.i

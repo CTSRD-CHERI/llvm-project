@@ -34,7 +34,7 @@ land.lhs.true:                                    ; preds = %while.body
   %2 = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* @c, align 32
   %3 = load i32, i32 addrspace(200)* @b, align 4
   %conv = sext i32 %3 to i64
-  %4 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 %conv)
+  %4 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 %conv)
   %5 = bitcast i8 addrspace(200)* %4 to i32 addrspace(200)*
   %cmp = icmp ne i32 addrspace(200)* %2, %5
   br i1 %cmp, label %if.then, label %if.end7
@@ -69,7 +69,7 @@ while.end:                                        ; preds = %while.cond
 }
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #1
 
 declare i32 @fn2(...) #2
 

@@ -47,25 +47,25 @@
 // PTRS: ret i8* null
 
 // CAPS: define i64 @cheri_length_get(i8 addrspace(200)* readnone
-// CAPS: call i64 @llvm.cheri.cap.length.get(i8 addrspace(200)*
+// CAPS: call i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)*
 // CAPS: define i64 @cheri_base_get(i8 addrspace(200)* readnone
-// CAPS: call i64 @llvm.cheri.cap.base.get(i8 addrspace(200)*
+// CAPS: call i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)*
 // CAPS: define i64 @cheri_offset_get(i8 addrspace(200)* readnone
-// CAPS: call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)*
+// CAPS: call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_offset_set(i8 addrspace(200)* readnone{{( %.+)?}}, i64 zeroext{{( %.+)?}}
-// CAPS: call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*{{( %.+)?}}, i64{{( %.+)?}})
+// CAPS: call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*{{( %.+)?}}, i64{{( %.+)?}})
 // CAPS: define signext i32 @cheri_type_get(i8 addrspace(200)*
-// CAPS: call i64 @llvm.cheri.cap.type.get(i8 addrspace(200)*
+// CAPS: call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)*
 // CAPS: define zeroext i16 @cheri_perms_get(i8 addrspace(200)*
-// CAPS: call i64 @llvm.cheri.cap.perms.get(i8 addrspace(200)*
+// CAPS: call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_perms_and(i8 addrspace(200)* readnone{{( %.+)?}}, i16 zeroext
-// CAPS: call i8 addrspace(200)* @llvm.cheri.cap.perms.and(i8 addrspace(200)*{{( %.+)?}}, i64
+// CAPS: call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)*{{( %.+)?}}, i64
 // CAPS: define zeroext i1 @cheri_tag_get(i8 addrspace(200)* readnone
 // CAPS: call i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)*
 // CAPS: define zeroext i1 @cheri_sealed_get(i8 addrspace(200)* readnone
 // CAPS: call i64 @llvm.cheri.cap.sealed.get(i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_offset_increment(i8 addrspace(200)* readnone{{( %.+)?}}, i64 signext
-// CAPS: call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)*{{( %.+)?}}, i64
+// CAPS: call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)*{{( %.+)?}}, i64
 // CAPS: define i8 addrspace(200)* @cheri_tag_clear(i8 addrspace(200)* readnone
 // CAPS: call i8 addrspace(200)* @llvm.cheri.cap.tag.clear(i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_seal(i8 addrspace(200)* readnone{{( %.+)?}}, i8 addrspace(200)* readnone
@@ -73,12 +73,12 @@
 // CAPS: define i8 addrspace(200)* @cheri_unseal(i8 addrspace(200)* readnone{{( %.+)?}}, i8 addrspace(200)* readnone
 // CAPS: call i8 addrspace(200)* @llvm.cheri.cap.unseal(i8 addrspace(200)*{{( %.+)?}}, i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_cap_from_pointer(i8 addrspace(200)* readnone{{( %.+)?}}, i8*{{( %.+)?}})
-// CAPS: call i8 addrspace(200)* @llvm.cheri.cap.from.pointer(i8 addrspace(200)*{{( %.+)?}}, i64
+// CAPS: call i8 addrspace(200)* @llvm.cheri.cap.from.pointer.i64(i8 addrspace(200)*{{( %.+)?}}, i64
 // CAPS: define i8* @cheri_cap_to_pointer(i8 addrspace(200)*{{( %.+)?}}, i8 addrspace(200)*{{( %.+)?}})
-// CAPS: call i64 @llvm.cheri.cap.to.pointer(i8 addrspace(200)*{{( %.+)?}}, i8 addrspace(200)*
-// CAPS: define void @cheri_perms_check(i8 addrspace(200)*{{( %.+)?}}, i16 zeroext
-// CAPS: call void @llvm.cheri.cap.perms.check(i8 addrspace(200)*{{( %.+)?}}, i64
-// CAPS: define void @cheri_type_check(i8 addrspace(200)*{{( %.+)?}}, i8 addrspace(200)*
+// CAPS: call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)*{{( %.+)?}}, i8 addrspace(200)*
+// CAPS: define void @cheri_perms_check(i8 addrspace(200)* nocapture{{( %.+)?}}, i16 zeroext
+// CAPS: call void @llvm.cheri.cap.perms.check.i64(i8 addrspace(200)*{{( %.+)?}}, i64
+// CAPS: define void @cheri_type_check(i8 addrspace(200)* nocapture{{( %.+)?}}, i8 addrspace(200)* nocapture
 // CAPS: call void @llvm.cheri.cap.type.check(i8 addrspace(200)*{{( %.+)?}}, i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_global_data_get()
 // CAPS: call i8 addrspace(200)* @llvm.cheri.ddc.get()

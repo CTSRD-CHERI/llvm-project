@@ -37,7 +37,7 @@ define void @call_variadic_one_onstack_long(i8 addrspace(200)* %in_arg1) {
 ; CHECK:         candperm $c13, [[VARARG_TMP]], $1
 ; CHECK: .end call_variadic_one_onstack_long
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
   %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic(i8 addrspace(200)* %first_arg, i64 42)
   ret void
 }
@@ -51,8 +51,8 @@ define void @call_variadic_one_onstack_cap(i8 addrspace(200)* %in_arg1) {
 ; CHECK-NEXT:    candperm $c13, [[VARARG_TMP]], $1
 ; CHECK: .end call_variadic_one_onstack_cap
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
-  %second_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 87)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
+  %second_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 87)
   %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic(i8 addrspace(200)* %first_arg, i8 addrspace(200)* %second_arg)
   ret void
 }
@@ -67,7 +67,7 @@ define void @call_variadic_no_onstack(i8 addrspace(200)* %in_arg1) {
 ; CHECK:      .end call_variadic_no_onstack
 entry:
   ; increment by a number the compiler will never emit for anything else (77) to be able to see which registers are used:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
   %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic(i8 addrspace(200)* %first_arg)
   ret void
 }
@@ -81,7 +81,7 @@ define void @call_nonvariadic_one_arg(i8 addrspace(200)* %in_arg1) {
 ; NOOPT:    cgetnull $c13
 ; CHECK: .end call_nonvariadic_one_arg
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
   %0 = call i8 addrspace(200)* @one_arg(i8 addrspace(200)* %first_arg)
   ret void
 }
@@ -94,7 +94,7 @@ define void @call_one_arg_from_two_arg(i8 addrspace(200)* %in_arg1, i8 addrspace
 ; NOOPT:    cgetnull $c13
 ; CHECK: .end call_one_arg_from_two_arg
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
   %0 = call i8 addrspace(200)* @one_arg(i8 addrspace(200)* %first_arg)
   ret void
 }
@@ -131,18 +131,18 @@ define void @call_nonvariadic_many_args(i8 addrspace(200)* %in_arg1) {
 ; CHECK:         .end call_nonvariadic_many_args
 
 entry:
-  %arg1 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 17)
-  %arg2 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 27)
-  %arg3 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 37)
-  %arg4 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 47)
-  %arg5 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 57)
-  %arg6 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 67)
-  %arg7 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
-  %arg8 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 87)
-  %arg9 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 97)
-  %arg10 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 107)
-  %arg11 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 117)
-  %arg12 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 127)
+  %arg1 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 17)
+  %arg2 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 27)
+  %arg3 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 37)
+  %arg4 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 47)
+  %arg5 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 57)
+  %arg6 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 67)
+  %arg7 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
+  %arg8 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 87)
+  %arg9 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 97)
+  %arg10 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 107)
+  %arg11 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 117)
+  %arg12 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 127)
   %0 = call i8 addrspace(200)* @many_cap_args(i8 addrspace(200)* %arg1, i8 addrspace(200)* %arg2, i8 addrspace(200)* %arg3, i8 addrspace(200)* %arg4,
                                               i8 addrspace(200)* %arg5, i8 addrspace(200)* %arg6, i8 addrspace(200)* %arg7, i8 addrspace(200)* %arg8,
                                               i8 addrspace(200)* %arg9, i8 addrspace(200)* %arg10, i8 addrspace(200)* %arg11, i8 addrspace(200)* %arg12)
@@ -163,7 +163,7 @@ define void @call_one_arg_from_many_arg(i8 addrspace(200)* %in_arg1, i8 addrspac
 ; CHECK-NEXT:       cgetnull $c13
 ; CHECK:       .end	call_one_arg_from_many_arg
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
   %0 = call i8 addrspace(200)* @one_arg(i8 addrspace(200)* %first_arg)
   ret void
 }
@@ -186,7 +186,7 @@ entry:
   call void @llvm.va_start.p200i8(i8 addrspace(200)* %ap1)
   ; call void @llvm.va_copy.p200i8.p200i8(i8 addrspace(200)* bitcast (i8 addrspace(200)* addrspace(200)* @va_cpy to i8 addrspace(200)*), i8 addrspace(200)* %0)
 
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
   %0 = call i8 addrspace(200)* @one_arg(i8 addrspace(200)* %first_arg)
 
   call void @llvm.va_end.p200i8(i8 addrspace(200)* %ap1)
@@ -207,7 +207,7 @@ define void @call_one_arg_from_variadic_without_va_start(i8 addrspace(200)* %in_
 ; CHECK-NEXT:       cgetnull $c13
 ; CHECK:       .end	call_one_arg_from_variadic_without_va_start
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
   %0 = call i8 addrspace(200)* @one_arg(i8 addrspace(200)* %first_arg)
   ret void
 }
@@ -226,7 +226,7 @@ define void @call_variadic_no_onstack_from_varargs(i8 addrspace(200)* %in_arg1, 
 ; CHECK-NEXT:       cgetnull $c13
 ; CHECK:       .end	call_variadic_no_onstack_from_varargs
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
   %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic(i8 addrspace(200)* %first_arg)
   ret void
 }
@@ -245,7 +245,7 @@ define void @call_variadic_no_onstack_from_many_args(i8 addrspace(200)* %arg1, i
 ; CHECK-NEXT:       cgetnull $c13
 ; CHECK:       .end	call_variadic_no_onstack_from_many_args
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %arg1, i64 77)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg1, i64 77)
   %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic(i8 addrspace(200)* %first_arg)
   ret void
 }
@@ -262,10 +262,10 @@ define void @call_variadic_onstack_and_no_stack_fn_from_nostack_fn(i8 addrspace(
 ; OPT-NOT:   $c13
 ; CHECK:       .end	call_variadic_onstack_and_no_stack_fn_from_nostack_fn
 entry:
-  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 77)
-  %second_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 87)
+  %first_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 77)
+  %second_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 87)
   %0 = call i8 addrspace(200)* (i8 addrspace(200)*, ...) @variadic(i8 addrspace(200)* %first_arg, i8 addrspace(200)* %second_arg)
-  %third_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in_arg1, i64 97)
+  %third_arg = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in_arg1, i64 97)
   %1 = call i8 addrspace(200)* @one_arg(i8 addrspace(200)* %third_arg)
   ret void
 }
@@ -273,7 +273,7 @@ entry:
 
 
 
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)*, i64)
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)*, i64)
 
 ; Function Attrs: nounwind
 declare void @llvm.lifetime.start.p200i8(i64, i8 addrspace(200)* nocapture) #1

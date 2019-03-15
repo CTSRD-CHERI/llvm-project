@@ -24,7 +24,7 @@ typedef __UINTPTR_TYPE__ uintptr_t;
 // PURECAP-LABEL: @is_aligned_macro(
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[PTR:%.*]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
 // PURECAP-NEXT:    [[CONV:%.*]] = sext i32 [[ALIGN:%.*]] to i64
 // PURECAP-NEXT:    [[SUB:%.*]] = add nsw i64 [[CONV]], -1
 // PURECAP-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], [[SUB]]
@@ -47,7 +47,7 @@ _Bool is_aligned_macro(int* ptr, int align) {
 // PURECAP-LABEL: @is_aligned_builtin(
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[PTR:%.*]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
 // PURECAP-NEXT:    [[ALIGNMENT:%.*]] = zext i32 [[ALIGN:%.*]] to i64
 // PURECAP-NEXT:    [[MASK:%.*]] = add nsw i64 [[ALIGNMENT]], -1
 // PURECAP-NEXT:    [[SET_BITS:%.*]] = and i64 [[TMP1]], [[MASK]]
@@ -71,7 +71,7 @@ _Bool is_aligned_builtin(int* ptr, int align) {
 // PURECAP-LABEL: @align_up_inline(
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[PTR:%.*]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
 // PURECAP-NEXT:    [[SUB:%.*]] = add nsw i64 [[ALIGN:%.*]], -1
 // PURECAP-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], [[SUB]]
 // PURECAP-NEXT:    [[CMP:%.*]] = icmp eq i64 [[AND]], 0
@@ -113,14 +113,14 @@ int* align_up_inline(int* ptr, vaddr_t align) {
 // PURECAP-LABEL: @align_up_macro(
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[PTR:%.*]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
 // PURECAP-NEXT:    [[SUB:%.*]] = add nsw i64 [[ALIGN:%.*]], -1
 // PURECAP-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], [[SUB]]
 // PURECAP-NEXT:    [[CMP:%.*]] = icmp eq i64 [[AND]], 0
 // PURECAP-NEXT:    br i1 [[CMP]], label [[COND_END:%.*]], label [[COND_FALSE:%.*]]
 // PURECAP:       cond.false:
 // PURECAP-NEXT:    [[SUB1:%.*]] = sub nsw i64 [[ALIGN]], [[AND]]
-// PURECAP-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* [[TMP0]], i64 [[SUB1]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* [[TMP0]], i64 [[SUB1]])
 // PURECAP-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to i32 addrspace(200)*
 // PURECAP-NEXT:    br label [[COND_END]]
 // PURECAP:       cond.end:
@@ -146,7 +146,7 @@ int* align_up_macro(int* ptr, vaddr_t align) {
 // PURECAP-LABEL: @align_up_builtin(
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[PTR:%.*]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
 // PURECAP-NEXT:    [[MASK:%.*]] = add i64 [[ALIGN:%.*]], -1
 // PURECAP-NEXT:    [[UNALIGNED_BITS:%.*]] = and i64 [[TMP1]], [[MASK]]
 // PURECAP-NEXT:    [[IS_ALIGNED:%.*]] = icmp eq i64 [[UNALIGNED_BITS]], 0
@@ -247,12 +247,12 @@ int align_up_builtin_const() {
 // PURECAP-LABEL: @align_down_macro(
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[PTR:%.*]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
 // PURECAP-NEXT:    [[SUB:%.*]] = add nsw i64 [[ALIGN:%.*]], -1
 // PURECAP-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], [[SUB]]
-// PURECAP-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP2:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[TMP0]])
 // PURECAP-NEXT:    [[SUB1:%.*]] = sub i64 [[TMP2]], [[AND]]
-// PURECAP-NEXT:    [[TMP3:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[TMP0]], i64 [[SUB1]])
+// PURECAP-NEXT:    [[TMP3:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[TMP0]], i64 [[SUB1]])
 // PURECAP-NEXT:    [[TMP4:%.*]] = bitcast i8 addrspace(200)* [[TMP3]] to i32 addrspace(200)*
 // PURECAP-NEXT:    ret i32 addrspace(200)* [[TMP4]]
 //
@@ -271,7 +271,7 @@ int* align_down_macro(int* ptr, vaddr_t align) {
 // PURECAP-LABEL: @align_down_builtin(
 // PURECAP-NEXT:  entry:
 // PURECAP-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[PTR:%.*]] to i8 addrspace(200)*
-// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[TMP0]])
+// PURECAP-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[TMP0]])
 // PURECAP-NEXT:    [[MASK:%.*]] = add i64 [[ALIGN:%.*]], -1
 // PURECAP-NEXT:    [[UNALIGNED_BITS:%.*]] = and i64 [[TMP1]], [[MASK]]
 // PURECAP-NEXT:    [[SUB:%.*]] = sub i64 0, [[UNALIGNED_BITS]]

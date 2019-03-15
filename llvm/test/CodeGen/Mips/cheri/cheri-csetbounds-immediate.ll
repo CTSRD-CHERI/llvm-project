@@ -1,6 +1,6 @@
 ; RUN: %cheri_llc %s -o - | FileCheck %s
 
-declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)*, i64) nounwind readnone
+declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)*, i64) nounwind readnone
 
 define i8 addrspace(200)* @setBoundsUnknown(i8 addrspace(200)* %c, i64 %bounds) nounwind readnone {
 entry:
@@ -8,7 +8,7 @@ entry:
   ; CHECK:      jr $ra
   ; CHECK-NEXT: csetbounds $c3, $c3, $4
   ; CHECK: .end setBoundsUnknown
-  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %c, i64 %bounds)
+  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %c, i64 %bounds)
   ret i8 addrspace(200)* %0
 }
 
@@ -18,7 +18,7 @@ entry:
   ; CHECK:      jr $ra
   ; CHECK-NEXT: csetbounds $c3, $c3, 1
   ; CHECK: .end setBoundsConstant1
-  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %c, i64 1)
+  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %c, i64 1)
   ret i8 addrspace(200)* %0
 }
 
@@ -28,7 +28,7 @@ entry:
   ; CHECK:      jr $ra
   ; CHECK-NEXT: csetbounds $c3, $c3, 2047
   ; CHECK: .end setBoundsConstantMaxImmediate
-  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %c, i64 2047)
+  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %c, i64 2047)
   ret i8 addrspace(200)* %0
 }
 
@@ -39,7 +39,7 @@ entry:
   ; CHECK-NEXT: jr $ra
   ; CHECK-NEXT: csetbounds $c3, $c3, $1
   ; CHECK: .end setBoundsConstantTooBigForImm
-  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %c, i64 2048)
+  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %c, i64 2048)
   ret i8 addrspace(200)* %0
 }
 
@@ -50,6 +50,6 @@ entry:
   ; CHECK-NEXT: jr $ra
   ; CHECK-NEXT: csetbounds $c3, $c3, $1
   ; CHECK: .end setBoundsNegative
-  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %c, i64 -2)
+  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %c, i64 -2)
   ret i8 addrspace(200)* %0
 }

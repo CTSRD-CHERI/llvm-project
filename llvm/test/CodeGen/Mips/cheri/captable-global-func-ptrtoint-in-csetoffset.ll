@@ -9,12 +9,12 @@
 declare i32 @foo(%class.A addrspace(200)*) addrspace(200)
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) addrspace(200)
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) addrspace(200)
 
 ; Function Attrs: noinline norecurse nounwind
 define void @main(i8 addrspace(200)* %arg) addrspace(200) {
 entry:
-  %0 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %arg, i64 ptrtoint (i32 (%class.A addrspace(200)*) addrspace(200)* @foo to i64))
+  %0 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %arg, i64 ptrtoint (i32 (%class.A addrspace(200)*) addrspace(200)* @foo to i64))
   %1 = bitcast i8 addrspace(200)* %0 to i32 (%class.A addrspace(200)*) addrspace(200)*
   %call3 = call i32 %1(%class.A addrspace(200)* undef)
   ret void

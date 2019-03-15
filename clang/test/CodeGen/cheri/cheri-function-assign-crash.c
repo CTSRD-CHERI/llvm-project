@@ -24,7 +24,7 @@ int *b() {
   return c;
 }
 // LEGACY: %0 = tail call i8 addrspace(200)* @llvm.cheri.pcc.get()
-// LEGACY: %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %0, i64 ptrtoint (i32 (...)* @a to i64))
+// LEGACY: %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %0, i64 ptrtoint (i32 (...)* @a to i64))
 // LEGACY: %2 = bitcast i8 addrspace(200)* %1 to i32 (...) addrspace(200)*
 // LEGACY: [[A_ADDR:%3]] = bitcast i32 (...) addrspace(200)* %2 to i32 addrspace(200)*
 // LEGACY: {{%.+}} = phi i32 addrspace(200)* [ [[A_ADDR]], {{%.+}} ], [ null, {{%.+}}]{{$}}

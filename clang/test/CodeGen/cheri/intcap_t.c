@@ -48,11 +48,11 @@ int c5(void* __capability x, void* __capability y)
 // CHECK-LABEL: i32 @ca1(
 int ca1(void* __capability x, void* __capability y)
 {
-  // OFFSET: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
-  // ADDR: @llvm.cheri.cap.address.get(i8 addrspace(200)*
+  // OFFSET: @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*
+  // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap_t a = (__intcap_t)x;
-  // OFFSET: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
-  // ADDR: @llvm.cheri.cap.address.get(i8 addrspace(200)*
+  // OFFSET: @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*
+  // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap_t b = (__intcap_t)y;
   // CHECK: sub
   return a - b;
@@ -61,11 +61,11 @@ int ca1(void* __capability x, void* __capability y)
 // CHECK-LABEL: i32 @ca2(
 int ca2(void* __capability x, void* __capability y)
 {
-  // OFFSET: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
-  // ADDR: @llvm.cheri.cap.address.get(i8 addrspace(200)*
+  // OFFSET: @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*
+  // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap_t a = (__intcap_t)x;
-  // OFFSET: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
-  // ADDR: @llvm.cheri.cap.address.get(i8 addrspace(200)*
+  // OFFSET: @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*
+  // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap_t b = (__intcap_t)y;
   // CHECK: add
   return a + b;
@@ -74,11 +74,11 @@ int ca2(void* __capability x, void* __capability y)
 // CHECK-LABEL: i32 @ca3(
 int ca3(void* __capability x, void* __capability y)
 {
-  // OFFSET: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
-  // ADDR: @llvm.cheri.cap.address.get(i8 addrspace(200)*
+  // OFFSET: @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*
+  // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap_t a = (__intcap_t)x;
-  // OFFSET: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
-  // ADDR: @llvm.cheri.cap.address.get(i8 addrspace(200)*
+  // OFFSET: @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*
+  // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap_t b = (__intcap_t)y;
   // CHECK: mul
   return a * b;
@@ -87,11 +87,11 @@ int ca3(void* __capability x, void* __capability y)
 // CHECK-LABEL: i32 @ca4(
 int ca4(void* __capability x, void* __capability y)
 {
-  // OFFSET: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
-  // ADDR: @llvm.cheri.cap.address.get(i8 addrspace(200)*
+  // OFFSET: @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*
+  // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap_t a = (__intcap_t)x;
-  // OFFSET: @llvm.cheri.cap.offset.get(i8 addrspace(200)*
-  // ADDR: @llvm.cheri.cap.address.get(i8 addrspace(200)*
+  // OFFSET: @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*
+  // ADDR: @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*
   __intcap_t b = (__intcap_t)y;
   // CHECK: sdiv
   return a / b;
@@ -142,7 +142,7 @@ __uintcap_t xor(__uintcap_t f)
 int capdiff(int * __capability a, int * __capability b)
 {
   // CHECK-LABEL: @capdiff(i32 addrspace(200)*{{.*}}, i32 addrspace(200)*{{.*}})
-  // CHECK: call i64 @llvm.cheri.cap.diff(i8 addrspace(200)*
+  // CHECK: call i64 @llvm.cheri.cap.diff.i64(i8 addrspace(200)*
   // CHECK: %{{.*}} = trunc i64 %{{.*}} to i32
   return a-b;
 }
@@ -150,15 +150,15 @@ int capdiff(int * __capability a, int * __capability b)
 // CHECK-LABEL: @negativeint(
 void negativeint()
 {
-  // OFFSET: @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 -5)
-  // ADDR: @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 -5)
+  // OFFSET: @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 -5)
+  // ADDR: @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 -5)
   __intcap_t minus = -5;
 }
 
 // CHECK-LABEL: @largeint(
 void largeint()
 {
-  // OFFSET: @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 4294967295)
-  // ADDR: @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 4294967295)
+  // OFFSET: @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 4294967295)
+  // ADDR: @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 4294967295)
   __uintcap_t large = 4294967295; // 2^32 - 1
 }

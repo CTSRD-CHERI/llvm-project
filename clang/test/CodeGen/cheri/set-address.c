@@ -10,9 +10,9 @@ cheri_setaddress(const void * __capability dst, vaddr_t addr) {
 
 void* use_sys_cheric_function(void* in, vaddr_t new_addr) {
   // CHECK-LABEL: @use_sys_cheric_function(
-  // CHECK: [[IN_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %in)
+  // CHECK: [[IN_ADDR:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %in)
   // CHECK-NEXT: [[DIFF:%.*]] = sub i64 %new_addr, [[IN_ADDR]]
-  // CHECK-NEXT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in, i64 [[DIFF]])
+  // CHECK-NEXT: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in, i64 [[DIFF]])
   return cheri_setaddress(in, new_addr);
   // ASM-LABEL: .ent use_sys_cheric_function
   // ASM: csetaddr $c3, $c3, $4
@@ -21,7 +21,7 @@ void* use_sys_cheric_function(void* in, vaddr_t new_addr) {
 
 void* use_builtin_function(void* in, vaddr_t new_addr) {
   // CHECK-LABEL: @use_builtin_function(
-  // CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* %in, i64 %new_addr)
+  // CHECK: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %in, i64 %new_addr)
   return __builtin_cheri_address_set(in, new_addr);
   // ASM-LABEL: .ent use_builtin_function
   // ASM: csetaddr $c3, $c3, $4

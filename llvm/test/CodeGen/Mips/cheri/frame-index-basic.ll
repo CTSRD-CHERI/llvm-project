@@ -3,8 +3,8 @@
 ; RUN: %cheri_purecap_llc -o - -O2 -verify-machineinstrs %s -disable-cheri-addressing-mode-folder | %cheri_FileCheck %s
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)*, i64) addrspace(200) #1
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) addrspace(200) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)*, i64) addrspace(200) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) addrspace(200) #1
 declare i8 addrspace(200)* @foo(i8 addrspace(200)*) addrspace(200)
 declare i8 addrspace(200)* @bar(i64 addrspace(200)*) addrspace(200)
 
@@ -13,7 +13,7 @@ declare i8 addrspace(200)* @bar(i64 addrspace(200)*) addrspace(200)
 define i8 addrspace(200)* @setoffset(i64 %arg) addrspace(200) nounwind {
   %stack_var = alloca i8 addrspace(200)*, align 32, addrspace(200)
   %stack_var_i8 = bitcast i8 addrspace(200)* addrspace(200)* %stack_var to i8 addrspace(200)*
-  %with_bounds = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %stack_var_i8, i64 %arg)
+  %with_bounds = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %stack_var_i8, i64 %arg)
   %result = tail call i8 addrspace(200)* @foo(i8 addrspace(200)* %with_bounds)
   ret i8 addrspace(200)* %result
 ; CHECK-LABEL: setoffset:

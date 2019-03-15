@@ -5,7 +5,7 @@ declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeon
 declare void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i1) addrspace(200) #1
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)*, i64) addrspace(200) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64) addrspace(200) #1
 
 define void @dst_align1_should_call_memcpy(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) addrspace(200) #0 {
 entry:

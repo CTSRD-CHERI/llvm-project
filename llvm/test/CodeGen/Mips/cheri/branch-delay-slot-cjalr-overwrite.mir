@@ -23,7 +23,7 @@
 
 
   ; Function Attrs: nounwind readnone
-  declare i64 @llvm.cheri.cap.diff(i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200) #1
+  declare i64 @llvm.cheri.cap.diff.i64(i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200) #1
 
   declare void @l() local_unnamed_addr addrspace(200) #2
 
@@ -31,13 +31,13 @@
   declare void @m() local_unnamed_addr addrspace(200) #3
 
   ; Function Attrs: nounwind readnone
-  declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)*, i64) addrspace(200) #1
+  declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)*, i64) addrspace(200) #1
 
   ; Function Attrs: nounwind readnone
-  declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) addrspace(200) #1
+  declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) addrspace(200) #1
 
   ; Function Attrs: nounwind readnone
-  declare i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)*) addrspace(200) #1
+  declare i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*) addrspace(200) #1
 
   ; Function Attrs: nounwind
   declare void @llvm.stackprotector(i8*, i8**) addrspace(200) #4
@@ -69,12 +69,12 @@
     %4 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* @e, align 16
     %5 = load i8, i8 addrspace(200)* @c, align 1
     %conv3 = sext i8 %5 to i64
-    %6 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 %conv3)
+    %6 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 %conv3)
     %cmp = icmp ugt i8 addrspace(200)* %4, %6
     br i1 %cmp, label %for.cond.preheader, label %if.then
   
   for.cond.preheader:                               ; preds = %sw.bb1
-    %7 = tail call i64 @llvm.cheri.cap.diff(i8 addrspace(200)* nonnull @h, i8 addrspace(200)* %2)
+    %7 = tail call i64 @llvm.cheri.cap.diff.i64(i8 addrspace(200)* nonnull @h, i8 addrspace(200)* %2)
     %conv5 = trunc i64 %7 to i8
     br label %for.cond
   

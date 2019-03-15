@@ -23,7 +23,7 @@ declare void @puts(i8 addrspace(200)* nocapture readonly) #1
 declare i8 addrspace(200)* @llvm.cheri.pcc.get() #2
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #2
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #2
 
 ; Function Attrs: nounwind
 define void @foo(i8 addrspace(200)* %x) local_unnamed_addr #0 {

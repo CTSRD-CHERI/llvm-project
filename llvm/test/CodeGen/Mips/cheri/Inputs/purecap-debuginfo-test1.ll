@@ -28,7 +28,7 @@ if.else:                                          ; preds = %entry
 if.end:                                           ; preds = %if.else, %if.then
   %1 = load i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %i.addr, align 16, !dbg !26
   %2 = bitcast i32 addrspace(200)* %1 to i8 addrspace(200)*, !dbg !27
-  %3 = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %2), !dbg !27
+  %3 = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %2), !dbg !27
   %4 = trunc i64 %3 to i32, !dbg !27
   ret i32 %4, !dbg !28
 }
@@ -37,7 +37,7 @@ if.end:                                           ; preds = %if.else, %if.then
 declare void @llvm.dbg.declare(metadata, metadata, metadata) addrspace(200) #1
 
 ; Function Attrs: nounwind readnone
-declare i64 @llvm.cheri.cap.address.get(i8 addrspace(200)*) addrspace(200) #2
+declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*) addrspace(200) #2
 
 attributes #0 = { noinline nounwind optnone}
 attributes #1 = { nounwind readnone speculatable }

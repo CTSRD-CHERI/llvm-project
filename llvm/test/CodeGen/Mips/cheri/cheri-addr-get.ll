@@ -8,9 +8,9 @@ target triple = "cheri-unknown-freebsd"
 
 declare i64 @check_fold(i64) #0
 declare i64 @check_fold_cap(i8 addrspace(200)*) #0
-declare i64 @llvm.cheri.cap.address.get(i8 addrspace(200)*) #1
-declare i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)*, i64) #1
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #1
+declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64) #1
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #1
 
 define i64 @null_get_vaddr() #1 {
 ; OPT-LABEL: null_get_vaddr:
@@ -23,10 +23,10 @@ define i64 @null_get_vaddr() #1 {
 ; OPT-NEXT:    jr $ra
 ; OPT-NEXT:    daddiu $sp, $sp
 ; IR-LABEL: @null_get_vaddr(
-; IR-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* null)
+; IR-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* null)
 ; IR-NEXT:    [[RET_CHECK:%.*]] = call i64 @check_fold(i64 [[TMP1]])
 ; IR-NEXT:    ret i64 [[RET_CHECK]]
-  %ret = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* null)
+  %ret = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* null)
   %ret_check = call i64 @check_fold(i64 %ret)
   ret i64 %ret_check
 }
@@ -43,10 +43,10 @@ define i64 @null_set_vaddr() #1 {
 ; OPT-NEXT:    jr $ra
 ; OPT-NEXT:    daddiu $sp, $sp
 ; IR-LABEL: @null_set_vaddr(
-; IR-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 12345)
+; IR-NEXT:    [[TMP:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 12345)
 ; IR-NEXT:    [[RET_CHECK:%.*]] = call i64 @check_fold_cap(i8 addrspace(200)* [[TMP]])
 ; IR-NEXT:    ret i64 [[RET_CHECK]]
-  %ret = call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* null, i64 12345)
+  %ret = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 12345)
   %ret_check = call i64 @check_fold_cap(i8 addrspace(200)* %ret)
   ret i64 %ret_check
 }
@@ -62,12 +62,12 @@ define void @infer_values_from_null_set_offset() #1 {
 ; OPT-NEXT:    jr $ra
 ; OPT-NEXT:    daddiu $sp, $sp
 ; IR-LABEL: @infer_values_from_null_set_offset(
-; IR-NEXT:    [[WITH_OFFSET:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 50)
-; IR-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[WITH_OFFSET]])
+; IR-NEXT:    [[WITH_OFFSET:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 50)
+; IR-NEXT:    [[TMP1:%.*]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[WITH_OFFSET]])
 ; IR-NEXT:    [[VADDR_CHECK:%.*]] = call i64 @check_fold(i64 [[TMP1]])
 ; IR-NEXT:    ret void
-  %with_offset = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 50)
-  %vaddr = call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %with_offset)
+  %with_offset = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 50)
+  %vaddr = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %with_offset)
   %vaddr_check = call i64 @check_fold(i64 %vaddr)
   ret void
 }

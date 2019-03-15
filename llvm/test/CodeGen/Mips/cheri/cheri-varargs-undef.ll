@@ -25,10 +25,10 @@ entry:
   %ap1 = addrspacecast i8 addrspace(200)* addrspace(200)* %ap to i8*
   call void @llvm.va_start.p200i8(i8* %ap1)
   %argp.cur = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %ap, align 16
-  %0 = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %argp.cur)
+  %0 = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %argp.cur)
   %1 = add i64 %0, 15
   %2 = and i64 %1, -16
-  %3 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %argp.cur, i64 %2)
+  %3 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %argp.cur, i64 %2)
   %argp.next = getelementptr inbounds i8, i8 addrspace(200)* %3, i64 16
   store i8 addrspace(200)* %argp.next, i8 addrspace(200)* addrspace(200)* %ap, align 16
   %4 = bitcast i8 addrspace(200)* %3 to %union.meh addrspace(200)*
@@ -44,10 +44,10 @@ entry:
 declare void @llvm.va_start.p200i8(i8*) #1
 
 ; Function Attrs: nounwind readnone
-declare i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)*) #2
+declare i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)*) #2
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #2
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #2
 
 ; Function Attrs: argmemonly nounwind
 declare void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* nocapture writeonly, i8 addrspace(200)* nocapture readonly, i64, i32, i1) #3
@@ -67,10 +67,10 @@ entry:
   %ap1 = addrspacecast i8 addrspace(200)* addrspace(200)* %ap to i8*
   call void @llvm.va_start.p200i8(i8* %ap1)
   %argp.cur = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %ap, align 16
-  %0 = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %argp.cur)
+  %0 = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %argp.cur)
   %1 = add i64 %0, 15
   %2 = and i64 %1, -16
-  %3 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %argp.cur, i64 %2)
+  %3 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %argp.cur, i64 %2)
   %argp.next = getelementptr inbounds i8, i8 addrspace(200)* %3, i64 16
   store i8 addrspace(200)* %argp.next, i8 addrspace(200)* addrspace(200)* %ap, align 16
   %4 = bitcast i8 addrspace(200)* %3 to %union.meh addrspace(200)*
@@ -103,10 +103,10 @@ entry:
   %3 = load i32, i32 addrspace(200)* %vaarg.promotion-temp, align 4
   store i32 %3, i32 addrspace(200)* %j, align 4
   %argp.cur2 = load i8 addrspace(200)*, i8 addrspace(200)* addrspace(200)* %ap, align 16
-  %4 = call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %argp.cur2)
+  %4 = call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %argp.cur2)
   %5 = add i64 %4, 15
   %6 = and i64 %5, -16
-  %7 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* %argp.cur2, i64 %6)
+  %7 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* %argp.cur2, i64 %6)
   %argp.next3 = getelementptr inbounds i8, i8 addrspace(200)* %7, i64 16
   store i8 addrspace(200)* %argp.next3, i8 addrspace(200)* addrspace(200)* %ap, align 16
   %8 = bitcast i8 addrspace(200)* %7 to %union.meh addrspace(200)*

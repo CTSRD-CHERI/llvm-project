@@ -30,7 +30,7 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    br label [[USE_ALLOCA_NEED_BOUNDS:%.*]]
 ; CHECK:       use_alloca_need_bounds:
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast [16 x i8] addrspace(200)* [[ALLOCA]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap(i8 addrspace(200)* [[TMP0]], i64 16)
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 16)
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [16 x i8] addrspace(200)*
 ; CHECK-NEXT:    [[DOTSUB_LE:%.*]] = getelementptr inbounds [16 x i8], [16 x i8] addrspace(200)* [[TMP2]], i64 0, i64 0
 ; CHECK-NEXT:    [[CALL:%.*]] = call signext i32 @use_alloca(i8 addrspace(200)* [[DOTSUB_LE]]) #2
@@ -134,8 +134,8 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; CHECK:       do_alloca:
 ; CHECK-NEXT:    [[ALLOCA:%.*]] = alloca [16 x i8], align 16, addrspace(200)
 ; CHECK-NEXT:    [[TMP0:%.*]] = bitcast [16 x i8] addrspace(200)* [[ALLOCA]] to i8 addrspace(200)*
-; CANNOT USE llvm.cheri.bounded.stack.cap here, since that only works for static allocas:
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* [[TMP0]], i64 16)
+; CANNOT USE llvm.cheri.bounded.stack.cap.i64 here, since that only works for static allocas:
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP0]], i64 16)
 ; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to [16 x i8] addrspace(200)*
 ; CHECK-NEXT:    br label [[USE_ALLOCA_NO_BOUNDS:%.*]]
 ; CHECK:       use_alloca_no_bounds:
@@ -271,8 +271,8 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; CHECK:       while.body:
 ; CHECK-NEXT:    [[TMP0:%.*]] = alloca [16 x i8], align 16, addrspace(200)
 ; CHECK-NEXT:    [[TMP1:%.*]] = bitcast [16 x i8] addrspace(200)* [[TMP0]] to i8 addrspace(200)*
-; CANNOT USE llvm.cheri.bounded.stack.cap here, since that only works for static allocas:
-; CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* [[TMP1]], i64 16)
+; CANNOT USE llvm.cheri.bounded.stack.cap.i64 here, since that only works for static allocas:
+; CHECK-NEXT:    [[TMP2:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* [[TMP1]], i64 16)
 ; CHECK-NEXT:    [[TMP3:%.*]] = bitcast i8 addrspace(200)* [[TMP2]] to [16 x i8] addrspace(200)*
 ; CHECK-NEXT:    br label [[WHILE_END_LOOPEXIT:%.*]]
 ; CHECK:       while.end.loopexit:

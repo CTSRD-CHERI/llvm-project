@@ -44,7 +44,7 @@ declare i32 @m(...) local_unnamed_addr #1
 
 ; Function Attrs: nounwind
 define i32 @n() local_unnamed_addr #0 {
-  %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* null, i64 0)
+  %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 0)
   %2 = ptrtoint i8 addrspace(200)* %1 to i64
   %3 = inttoptr i64 %2 to i32*
   %4 = load i32, i32* @l, align 4, !tbaa !1
@@ -63,7 +63,7 @@ define i32 @n() local_unnamed_addr #0 {
 }
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #2
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #2
 
 attributes #0 = { nounwind "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="mips64" "target-features"="+mips64,+noabicalls,+soft-float" "unsafe-fp-math"="false" "use-soft-float"="true" }
 attributes #1 = { "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="mips64" "target-features"="+mips64,+noabicalls,+soft-float" "unsafe-fp-math"="false" "use-soft-float"="true" }

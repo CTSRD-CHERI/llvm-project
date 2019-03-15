@@ -5,8 +5,8 @@
 
 long uintcap_to_long(__uintcap_t cap) {
   // BOTH-LABEL: define i64 @uintcap_to_long(i8 addrspace(200)* readnone
-  // OFFSET: [[RESULT:%.+]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* %{{.+}})
-  // ADDR: [[RESULT:%.+]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %{{.+}})
+  // OFFSET: [[RESULT:%.+]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* %{{.+}})
+  // ADDR: [[RESULT:%.+]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %{{.+}})
   // BOTH-NEXT: ret i64 [[RESULT]]
   return (long)cap;
 }
@@ -14,15 +14,15 @@ long uintcap_to_long(__uintcap_t cap) {
 long cap_to_long(void *__capability cap) {
   // Casting a pointer to long should give the address in both modes:
   // BOTH-LABEL: define i64 @cap_to_long(i8 addrspace(200)* readnone
-  // BOTH: [[RESULT:%.+]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* %{{.+}})
+  // BOTH: [[RESULT:%.+]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %{{.+}})
   // BOTH-NEXT: ret i64 [[RESULT]]
   return (long)cap;
 }
 
 long write_uintcap(__uintcap_t *cap) {
   // BOTH-LABEL: @write_uintcap(
-  // OFFSET: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 5)
-  // ADDR:   [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 5)
+  // OFFSET: [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 5)
+  // ADDR:   [[RESULT:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 5)
   // BOTH-NEXT: store i8 addrspace(200)* [[RESULT]], i8 addrspace(200)* addrspace(200)* %cap
   // BOTH-NEXT: ret i64 5
   *cap = 5;
@@ -30,8 +30,8 @@ long write_uintcap(__uintcap_t *cap) {
 }
 
 // BOTH-LABEL: @get_low_bits(
-// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[CAP:%.*]])
-// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[CAP:%.*]])
+// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
 // BOTH-NEXT:    [[AND:%.*]] = and i64 [[TMP0]], 3
 // BOTH-NEXT:    ret i64 [[AND]]
 long get_low_bits(__uintcap_t cap) {
@@ -39,19 +39,19 @@ long get_low_bits(__uintcap_t cap) {
 }
 
 // BOTH-LABEL: @get_low_bits_uintcap(
-// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[CAP:%.*]])
-// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[CAP:%.*]])
+// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
 // BOTH-NEXT:    [[AND:%.*]] = and i64 [[TMP0]], 3
-// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[CAP]], i64 [[AND]])
-// ADDR-NEXT: [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* [[CAP]], i64 [[AND]])
+// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[CAP]], i64 [[AND]])
+// ADDR-NEXT: [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CAP]], i64 [[AND]])
 // BOTH-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 __uintcap_t get_low_bits_uintcap(__uintcap_t cap) {
   return cap & 3;
 }
 
 // BOTH-LABEL: @xor_self(
-// OFFSET:       [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[CAP:%.*]], i64 0)
-// ADDR:         [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* [[CAP:%.*]], i64 0)
+// OFFSET:       [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[CAP:%.*]], i64 0)
+// ADDR:         [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CAP:%.*]], i64 0)
 // BOTH-NEXT:    ret i8 addrspace(200)* [[TMP0]]
 __uintcap_t xor_self(__uintcap_t cap) {
   return cap ^ cap;
@@ -65,13 +65,13 @@ long xor_self_return_long(__uintcap_t cap) {
 }
 
 // BOTH-LABEL: @xor_uintcap(
-// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[CAP:%.*]])
-// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[CAP2:%.*]])
-// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[CAP:%.*]])
-// ADDR-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[CAP2:%.*]])
+// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP2:%.*]])
+// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// ADDR-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP2:%.*]])
 // BOTH-NEXT:    [[XOR:%.*]] = xor i64 [[TMP1]], [[TMP0]]
-// OFFSET-NEXT:  [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[CAP]], i64 [[XOR]])
-// ADDR-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* [[CAP]], i64 [[XOR]])
+// OFFSET-NEXT:  [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[CAP]], i64 [[XOR]])
+// ADDR-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CAP]], i64 [[XOR]])
 // BOTH-NEXT:    ret i8 addrspace(200)* [[TMP2]]
 //
 __uintcap_t xor_uintcap(__uintcap_t cap, __uintcap_t cap2) {
@@ -79,10 +79,10 @@ __uintcap_t xor_uintcap(__uintcap_t cap, __uintcap_t cap2) {
 }
 
 // BOTH-LABEL: @xor_uintcap_return_long(
-// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[CAP:%.*]])
-// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[CAP2:%.*]])
-// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[CAP:%.*]])
-// ADDR-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[CAP2:%.*]])
+// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP2:%.*]])
+// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// ADDR-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP2:%.*]])
 // BOTH-NEXT:    [[XOR:%.*]] = xor i64 [[TMP1]], [[TMP0]]
 // BOTH-NEXT:    ret i64 [[XOR]]
 //
@@ -91,19 +91,19 @@ long xor_uintcap_return_long(__uintcap_t cap, __uintcap_t cap2) {
 }
 
 // BOTH-LABEL: @modulo_return_uintcap(
-// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[CAP:%.*]])
-// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[CAP:%.*]])
+// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
 // BOTH-NEXT:    [[REM:%.*]] = and i64 [[TMP0]], 31
-// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[CAP]], i64 [[REM]])
-// ADDR-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* [[CAP]], i64 [[REM]])
+// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[CAP]], i64 [[REM]])
+// ADDR-NEXT:    [[TMP1:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[CAP]], i64 [[REM]])
 // BOTH-NEXT:    ret i8 addrspace(200)* [[TMP1]]
 __uintcap_t modulo_return_uintcap(__uintcap_t cap) {
   return cap % 32;
 }
 
 // BOTH-LABEL: @modulo_return_long(
-// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[CAP:%.*]])
-// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[CAP:%.*]])
+// OFFSET:       [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[CAP:%.*]])
+// ADDR:         [[TMP0:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[CAP:%.*]])
 // BOTH-NEXT:    [[REM:%.*]] = and i64 [[TMP0]], 31
 // BOTH-NEXT:    ret i64 [[REM]]
 long modulo_return_long(__uintcap_t cap) {
@@ -126,13 +126,13 @@ long modulo_return_long(__uintcap_t cap) {
 
 void do_unlock(void);
 // BOTH-LABEL: @this_broke_qmutex(
-// OFFSET:       [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1)
-// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get(i8 addrspace(200)* [[MTX:%.*]])
-// ADDR:         [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 1)
-// ADDR-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get(i8 addrspace(200)* [[MTX:%.*]])
+// OFFSET:       [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 1)
+// OFFSET-NEXT:  [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.offset.get.i64(i8 addrspace(200)* [[MTX:%.*]])
+// ADDR:         [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 1)
+// ADDR-NEXT:    [[TMP1:%.*]] = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* [[MTX:%.*]])
 // BOTH-NEXT:    [[AND:%.*]] = and i64 [[TMP1]], 1
-// OFFSET-NEXT:  [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[MTX]], i64 [[AND]])
-// ADDR-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set(i8 addrspace(200)* [[MTX]], i64 [[AND]])
+// OFFSET-NEXT:  [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[MTX]], i64 [[AND]])
+// ADDR-NEXT:    [[TMP2:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* [[MTX]], i64 [[AND]])
 // BOTH-NEXT:    [[CMP:%.*]] = icmp eq i8 addrspace(200)* [[TMP2]], [[TMP0]]
 // BOTH-NEXT:    br i1 [[CMP]], label [[IF_THEN:%.*]], label [[IF_END:%.*]]
 // BOTH:       if.then:

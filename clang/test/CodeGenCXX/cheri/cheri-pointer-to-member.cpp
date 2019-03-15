@@ -68,7 +68,7 @@ int main() {
   AMemberFuncPtr func_ptr = &A::foo;
   // This IR is pretty horrible, maybe we can create something nicer
   // LEGACY: [[PCC:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  // LEGACY: [[NONVIRT_PTR:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A3fooEv to i64))
+  // LEGACY: [[NONVIRT_PTR:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[PCC]], i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A3fooEv to i64))
   // CHECK: [[TMP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[MEMPTR_TMP]], i32 0, i32 0
   // LEGACY: store i8 addrspace(200)* [[NONVIRT_PTR]], i8 addrspace(200)* addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
   // CAPTABLE: store i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3fooEv to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
@@ -79,7 +79,7 @@ int main() {
 
   AMemberFuncPtr func_ptr_2 = &A::bar;
   // LEGACY: [[PCC:%.*]] = call i8 addrspace(200)* @llvm.cheri.pcc.get()
-  // LEGACY: [[NONVIRT_PTR:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* [[PCC]], i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A3barEv to i64))
+  // LEGACY: [[NONVIRT_PTR:%.*]] = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* [[PCC]], i64 ptrtoint (i32 (%class.A addrspace(200)*)* @_ZN1A3barEv to i64))
   // CHECK: [[TMP:%.*]] = getelementptr inbounds { i8 addrspace(200)*, i64 }, { i8 addrspace(200)*, i64 } addrspace(200)* [[MEMPTR_TMP1]], i32 0, i32 0
   // LEGACY: store i8 addrspace(200)* [[NONVIRT_PTR]], i8 addrspace(200)* addrspace(200)* [[TMP]], align [[$CAP_SIZE]]
   // CAPTABLE: store i8 addrspace(200)* bitcast (i32 (%class.A addrspace(200)*) addrspace(200)* @_ZN1A3barEv to i8 addrspace(200)*), i8 addrspace(200)* addrspace(200)* [[TMP]], align [[$CAP_SIZE]]

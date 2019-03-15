@@ -21,7 +21,7 @@ target datalayout = "Emepf200256256i8832i161632i6464n3264S128-A200"
 @d = external addrspace(200) global %struct.a.1
 
 ; Function Attrs: nounwind readnone
-declare i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)*, i64) #0
+declare i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)*, i64) #0
 
 declare void @llvm.e(i8*, i8*)
 
@@ -131,7 +131,7 @@ if.k.b:                                           ; preds = %bn.bm
   br label %bw.bm
 
 bw.bm:                                            ; preds = %if.k.b, %bn.bm
-  %7 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set(i8 addrspace(200)* undef, i64 0)
+  %7 = call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* undef, i64 0)
   %8 = bitcast i8 addrspace(200)* %7 to i32 (i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200)*
   call void @aa(i8 addrspace(200)* bitcast (i32 addrspace(200)* @ad to i8 addrspace(200)*), i8 addrspace(200)* null, i32 0, i32 0, i32 (i8 addrspace(200)*, i8 addrspace(200)*) addrspace(200)* %8)
   %.b = call i8 addrspace(200)* @af(i8 addrspace(200)* bitcast (%struct.ab.0 addrspace(200)* getelementptr inbounds (%struct.a.1, %struct.a.1 addrspace(200)* @d, i64 0, i32 2) to i8 addrspace(200)*), i32 0)

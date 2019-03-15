@@ -21,7 +21,7 @@ IntptrStruct set_int() {
   p.intptr = 0;
   return p;
   // CHECK-LABEL: define inreg { i8 addrspace(200)* } @set_int() local_unnamed_addr
-  // CHECK: [[VAR0:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* null, i64 0)
+  // CHECK: [[VAR0:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 0)
   // CHECK: %.fca.0.insert = insertvalue { i8 addrspace(200)* } undef, i8 addrspace(200)* [[VAR0]], 0
   // CHECK: ret { i8 addrspace(200)* } %.fca.0.insert
   // ASM-LABEL: set_int
@@ -60,7 +60,7 @@ TwoCapsStruct two_caps_struct(TwoCapsStruct in) {
   return t;
   // argument is split up into two cap regs, but return value is indirect
   // CHECK-LABEL: define void @two_caps_struct(%struct.TwoCapsStruct addrspace(200)* noalias nocapture sret %agg.result, {{.*}}, i8 addrspace(200)* inreg %in.coerce0, i8 addrspace(200)* inreg %in.coerce1) local_unnamed_addr
-  // CHECK: [[VAR1:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment(i8 addrspace(200)* %in.coerce0, i64 1)
+  // CHECK: [[VAR1:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %in.coerce0, i64 1)
   // CHECK: [[INTPTR_MEMBER:%.+]] = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 0
   // CHECK: store i8 addrspace(200)* [[VAR1]], i8 addrspace(200)* addrspace(200)* [[INTPTR_MEMBER]], align [[$CAP_SIZE]]
   // CHECK: [[CAP_MEMBER:%.+]] = getelementptr inbounds %struct.TwoCapsStruct, %struct.TwoCapsStruct addrspace(200)* %agg.result, i64 0, i32 1

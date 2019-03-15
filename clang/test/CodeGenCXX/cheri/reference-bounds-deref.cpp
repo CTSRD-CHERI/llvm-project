@@ -75,21 +75,21 @@ void do_stuff_with_ref(T &ref);
 TEST_PTR_TO_REF(int)
 // DEBUG-MSG: Found scalar type -> setting bounds for 'int' reference to 4
 // CHECK-LABEL: define void @_Z10test_derefU3capPi(i32 addrspace(200)*
-// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}},
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // CHECK-SAME: i64 4)
 
 // Same with double
 TEST_PTR_TO_REF(double)
 // DEBUG-MSG-NEXT: Found scalar type -> setting bounds for 'double' reference to 8
 // CHECK-LABEL: define void @_Z10test_derefU3capPd(double addrspace(200)*
-// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}},
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // CHECK-SAME: i64 8)
 
 // Or void*
 TEST_PTR_TO_REF(void *)
 // DEBUG-MSG-NEXT: Found scalar type -> setting bounds for 'void * __capability' reference to [[$CAP_SIZE]]
 // CHECK-LABEL: define void @_Z10test_derefU3capPU3capPv(i8 addrspace(200)* addrspace(200)*
-// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}},
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // CHECK-SAME: i64 [[$CAP_SIZE]])
 
 enum Enum1 { E1 };
@@ -97,7 +97,7 @@ enum Enum1 { E1 };
 TEST_PTR_TO_REF(Enum1)
 // DEBUG-MSG-NEXT: Found scalar type -> setting bounds for 'enum Enum1' reference to 4
 // CHECK-LABEL: define void @_Z10test_derefU3capP5Enum1(i32 addrspace(200)*
-// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}},
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // CHECK-SAME: i64 4)
 
 enum class EnumClass : unsigned short { EC1 };
@@ -105,20 +105,20 @@ enum class EnumClass : unsigned short { EC1 };
 TEST_PTR_TO_REF(EnumClass)
 // DEBUG-MSG-NEXT: Found scalar type -> setting bounds for 'enum EnumClass' reference to 2
 // CHECK-LABEL: define void @_Z10test_derefU3capP9EnumClass(i16 addrspace(200)*
-// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}},
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // CHECK-SAME: i64 2)
 
 // No bounds here since Foo might be subclassed
 TEST_PTR_TO_REF(Foo)
 // DEBUG-MSG-NEXT: Found record type 'class Foo' -> non-final class and using sub-object-safe mode -> not setting bounds
 // CHECK-LABEL: declare void @_Z17do_stuff_with_refI3FooEvU3capRT_(%class.Foo addrspace(200)*
-// CHECK-NOT: @llvm.cheri.cap.bounds.set
+// CHECK-NOT: @llvm.cheri.cap.bounds.set.i64
 
 // Final class without vtable-> bounds
 TEST_PTR_TO_REF(FinalClassNoVTable)
 // DEBUG-MSG-NEXT: Found record type 'class FinalClassNoVTable' -> is literal type and is marked as final -> setting bounds for 'class FinalClassNoVTable' reference to 4
 // CHECK-LABEL: define void @_Z10test_derefU3capP18FinalClassNoVTable(
-// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}},
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // CHECK-SAME: i64 4)
 
 // FIXME: should be able to set bounds here
@@ -126,48 +126,48 @@ TEST_PTR_TO_REF(FinalClassNoVTable)
 TEST_PTR_TO_REF(FinalClassWithVTable)
 // DEBUG-MSG-NEXT: Found record type 'class FinalClassWithVTable' -> final but not a literal type -> size might by dynamic -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP20FinalClassWithVTable(
-// TODO-CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}},
+// TODO-CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // TODO-CHECK-SAME: i64 1234)
 // for now no bounds on classes with vtables
-// CHECK-NOT: @llvm.cheri.cap.bounds.set
+// CHECK-NOT: @llvm.cheri.cap.bounds.set.i64
 
 // Final class (literal) no vtable -> bounds
 TEST_PTR_TO_REF(FinalClassInheritedNoVTable)
 // DEBUG-MSG-NEXT: Found record type 'class FinalClassInheritedNoVTable' -> is literal type and is marked as final -> setting bounds for 'class FinalClassInheritedNoVTable' reference to 12
 // CHECK-LABEL: define void @_Z10test_derefU3capP27FinalClassInheritedNoVTable(
-// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}},
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // CHECK-SAME: i64 12)
 
 // FIXME: should be able to set bounds here
 TEST_PTR_TO_REF(FinalClassInheritedWithVTable)
 // DEBUG-MSG-NEXT: Found record type 'class FinalClassInheritedWithVTable' -> final but not a literal type -> size might by dynamic -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP29FinalClassInheritedWithVTable(
-// TODO-CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}},
+// TODO-CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // TODO-CHECK-SAME: i64 1234)
 // for now no bounds on classes with vtables
-// CHECK-NOT: @llvm.cheri.cap.bounds.set
+// CHECK-NOT: @llvm.cheri.cap.bounds.set.i64
 
 // Shouldn't be able to set bounds here since there is a flexible array member
 TEST_PTR_TO_REF(FlexArrayBase)
 // DEBUG-MSG-NEXT: subobj bounds check: Found record type 'struct FlexArrayBase' -> found real VLA in struct FlexArrayBase -> has flexible array member -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP13FlexArrayBase(
-// CHECK-NOT: @llvm.cheri.cap.bounds.set
+// CHECK-NOT: @llvm.cheri.cap.bounds.set.i64
 TEST_PTR_TO_REF(FlexArrayFinal)
 // DEBUG-MSG-NEXT: subobj bounds check: Found record type 'struct FlexArrayFinal' -> found real VLA in struct FlexArrayFinal -> has flexible array member -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP14FlexArrayFinal(
-// CHECK-NOT: @llvm.cheri.cap.bounds.set
+// CHECK-NOT: @llvm.cheri.cap.bounds.set.i64
 
 // No bounds on this struct (even though it is C-like) since it might have inheritors
 // TODO: add a mode where we do add the bounds and require annotations?
 TEST_PTR_TO_REF(CLike)
 // DEBUG-MSG-NEXT: Found record type 'struct CLike' -> non-final class and using sub-object-safe mode -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP5CLike(
-// CHECK-NOT: @llvm.cheri.cap.bounds.set
+// CHECK-NOT: @llvm.cheri.cap.bounds.set.i64
 // Should have bounds here:
 TEST_PTR_TO_REF(CLikeFinal)
 // DEBUG-MSG-NEXT: Found record type 'struct CLikeFinal' -> is C-like struct type and is marked as final -> setting bounds for 'struct CLikeFinal' reference to 16
 // CHECK-LABEL: define void @_Z10test_derefU3capP10CLikeFinal(
-// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set(i8 addrspace(200)* %{{.+}},
+// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.bounds.set.i64(i8 addrspace(200)* %{{.+}},
 // CHECK-SAME: i64 16)
 
 union IntOrFloat {
@@ -177,7 +177,7 @@ union IntOrFloat {
 TEST_PTR_TO_REF(IntOrFloat)
 // DEBUG-MSG-NEXT: Found record type 'union IntOrFloat' -> not a struct/class -> not setting bounds
 // CHECK-LABEL: define void @_Z10test_derefU3capP10IntOrFloat(
-// CHECK-NOT: @llvm.cheri.cap.bounds.set
+// CHECK-NOT: @llvm.cheri.cap.bounds.set.i64
 
 // finally check the dumped statistics:
 // DEBUG-MSG-LABEL: STATISTICS:
