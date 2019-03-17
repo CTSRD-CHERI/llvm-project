@@ -9,8 +9,8 @@ long long testDeprecated(void * __capability foo)
 	// CHECK: call i64 @llvm.cheri.cap.length.get.i64
 	// CHECK: call i64 @llvm.cheri.cap.perms.get.i64
 	// CHECK: call i64 @llvm.cheri.cap.type.get.i64
-	// CHECK: call i64 @llvm.cheri.cap.tag.get
-	// CHECK: call i64 @llvm.cheri.cap.sealed.get
+	// CHECK: call i1 @llvm.cheri.cap.tag.get
+	// CHECK: call i1 @llvm.cheri.cap.sealed.get
 	// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64
 	// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.seal
 	// CHECK: call i8 addrspace(200)* @llvm.cheri.cap.unseal
@@ -44,7 +44,7 @@ long long test(void* __capability foo)
   // CHECK: call i64 @llvm.cheri.cap.type.get.i64
   // ASM: cgettype ${{[0-9]+}}, $c{{[0-9]+}}
   x &= __builtin_cheri_tag_get(foo);
-  // CHECK: call i64 @llvm.cheri.cap.tag.get
+  // CHECK: call i1 @llvm.cheri.cap.tag.get
   // ASM: cgettag ${{[0-9]+}}, $c{{[0-9]+}}
   x &= __builtin_cheri_offset_get(foo);
   // CHECK: call i64 @llvm.cheri.cap.offset.get.i64
@@ -53,7 +53,7 @@ long long test(void* __capability foo)
   // CHECK: call i64 @llvm.cheri.cap.base.get.i64
   // ASM: cgetbase ${{[0-9]+}}, $c{{[0-9]+}}
   x &= __builtin_cheri_sealed_get(foo);
-  // CHECK: call i64 @llvm.cheri.cap.sealed.get
+  // CHECK: call i1 @llvm.cheri.cap.sealed.get
   // ASM: cgetsealed ${{[0-9]+}}, $c{{[0-9]+}}
   void * bar = __builtin_cheri_cap_to_pointer(foo, foo);
   // CHECK: call i64 @llvm.cheri.cap.to.pointer.i64

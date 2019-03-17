@@ -27,6 +27,19 @@ def SDT_MipsCapThreadPointer : SDTypeProfile<1, 0, [SDTCisVT<0, CapRegType>]>;
 def MipsCapThreadPointer : SDNode<"MipsISD::CapThreadPointer",
                                   SDT_MipsCapThreadPointer>;
 
+def SDT_CheriBoolUnary : SDTypeProfile<1, 1, [
+  SDTCisInt<0>, SDTCisVT<1, CapRegType>
+]>;
+
+def CapTagGet    : SDNode<"MipsISD::CapTagGet",    SDT_CheriBoolUnary>;
+def CapSealedGet : SDNode<"MipsISD::CapSealedGet", SDT_CheriBoolUnary>;
+
+def SDT_CheriBoolBinary : SDTypeProfile<1, 2, [
+  SDTCisInt<0>, SDTCisVT<1, CapRegType>, SDTCisVT<2, CapRegType>
+]>;
+
+def CapSubsetTest : SDNode<"MipsISD::CapSubsetTest", SDT_CheriBoolBinary>;
+
 // Scaled immediate offsets
 
 class SImmScaled<int Width, int Scale> : AsmOperandClass {
@@ -154,10 +167,10 @@ let hasDelaySlot=1, isTerminator=1 in {
 let isBranch=1, Defs = [AT] in {
 def CBTS : CheriFmtCBT<0x0a, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbts\t$cb, $offset",
-                        [(brcond (i32 (setne (int_cheri_cap_tag_get CheriOpnd:$cb), 0)), bb:$offset)]>;
+                        [(brcond (i32 (setne (assertzext (CapTagGet CheriOpnd:$cb)), (i64 0))), bb:$offset)]>;
 def CBTU : CheriFmtCBT<0x09, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbtu\t$cb, $offset",
-                        [(brcond (i32 (seteq (int_cheri_cap_tag_get CheriOpnd:$cb), 0)), bb:$offset)]>;
+                        [(brcond (i32 (seteq (assertzext (CapTagGet CheriOpnd:$cb)), (i64 0))), bb:$offset)]>;
 def CBEZ : CheriFmtCBT<0x11, (outs), (ins CheriOpnd:$cb, brtarget:$offset),
                         "cbez\t$cb, $offset",
                         [(brcond (i32 (seteq CheriOpnd:$cb, (inttoptr (i64 0)))), bb:$offset)]>;
@@ -169,12 +182,6 @@ def CJR : CheriFmt1Op<0x3, (outs), (ins CheriOpnd:$r1),
                               "cjr\t${r1}",
                               []>;
 }
-
-// SelectionDAG doesn't know that int_cheri_cap_tag_get returns 0 or 1.
-def : Pat<(brcond (i32 (seteq (int_cheri_cap_tag_get CheriOpnd:$cb), 1)), bb:$offset),
-          (CBTS CheriOpnd: $cb, bb:$offset)>;
-def : Pat<(brcond (i32 (setne (int_cheri_cap_tag_get CheriOpnd:$cb), 1)), bb:$offset),
-          (CBTU CheriOpnd: $cb, bb:$offset)>;
 
 let isCall=1, hasDelaySlot=1 in {
 def CJALR : CheriFmt2Op<0xc, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
@@ -300,8 +307,12 @@ def CGetPerms  : CheriFmtCGet<0, "perm", "perms">;
 def CGetType   : CheriFmtCGet<1, "type">;
 def CGetBase   : CheriFmtCGet<2, "base">;
 def CGetLength : CheriFmtCGet<3, "len", "length">;
-def CGetTag    : CheriFmtCGet<4, "tag">;
-def CGetSealed : CheriFmtCGet<5, "sealed">;
+def CGetTag    : CheriFmt2Op<4, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2),
+                             "cgettag\t$r1, $r2",
+                             [(set GPR64Opnd:$r1, (CapTagGet CheriOpnd:$r2))]>;
+def CGetSealed : CheriFmt2Op<5, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2),
+                             "cgetsealed\t$r1, $r2",
+                             [(set GPR64Opnd:$r1, (CapSealedGet CheriOpnd:$r2))]>;
 def CGetOffset : CheriFmtCGet<6, "offset">;
 def CGetAddr   : CheriFmtCGet<0xf, "addr", "address">;
 // Versions of property setters that take immediate operands
@@ -419,7 +430,7 @@ def CCopyType : CheriFmt3Op<0x1e, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, Cher
 def CCSeal : CheriFmt3Op<0x1f, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, CheriOpnd:$r3),
   "ccseal\t$r1, $r2, $r3", [(set CheriOpnd: $r1, (int_cheri_cap_conditional_seal CheriOpnd: $r2, CheriOpnd: $r3))]>;
 def CTestSubset : CheriFmt3Op<0x20, (outs GPR64Opnd:$r1), (ins CheriOpnd0IsDDC:$r2, CheriOpnd:$r3),
-  "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (int_cheri_cap_subset_test CheriOpnd0IsDDC: $r2, CheriOpnd: $r3))]>;
+  "ctestsubset\t$r1, $r2, $r3", [(set GPR64Opnd: $r1, (CapSubsetTest CheriOpnd0IsDDC: $r2, CheriOpnd: $r3))]>;
 
 
 // Note: we need to duplicate these patterns for iFATPTR128,256, etc. for some reason

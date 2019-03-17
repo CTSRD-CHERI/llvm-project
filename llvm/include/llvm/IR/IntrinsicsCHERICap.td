@@ -44,13 +44,13 @@ def int_cheri_cap_type_get :
 def int_cheri_cap_tag_get  :
   GCCBuiltinAlias<"__builtin_mips_cheri_get_cap_tag">,
   GCCBuiltin<"__builtin_cheri_tag_get">,
-  Intrinsic<[llvm_i64_ty],
+  Intrinsic<[llvm_i1_ty],
             [llvm_fatptr_ty],
             [IntrNoMem]>;
 def int_cheri_cap_sealed_get  :
   GCCBuiltinAlias<"__builtin_mips_cheri_get_cap_sealed">,
   GCCBuiltin<"__builtin_cheri_sealed_get">,
-  Intrinsic<[llvm_i64_ty],
+  Intrinsic<[llvm_i1_ty],
             [llvm_fatptr_ty],
             [IntrNoMem]>;
 
@@ -88,7 +88,7 @@ def int_cheri_cap_type_check :
             [IntrNoMem, IntrHasSideEffects]>;
 def int_cheri_cap_subset_test:
   GCCBuiltin<"__builtin_cheri_subset_test">,
-  Intrinsic<[llvm_i64_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
+  Intrinsic<[llvm_i1_ty], [llvm_fatptr_ty, llvm_fatptr_ty], [IntrNoMem]>;
 
 def int_cheri_stack_cap_get :
   GCCBuiltin<"__builtin_cheri_stack_get">,

@@ -8,10 +8,9 @@ target triple = "cheri-unknown-freebsd"
 ; CHECK-LABEL: isValid
 define void @isValid(i8 addrspace(200)* %x) nounwind {
 entry:
-  %0 = tail call i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %x)
-  %cmp = icmp eq i64 %0, 0
+  %0 = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %x)
   ; CHECK: cbtu	$c3, .LBB0_2
-  br i1 %cmp, label %if.end, label %if.then
+  br i1 %0, label %if.then, label %if.end
 
 if.then:                                          ; preds = %entry
   tail call void @f1() nounwind
@@ -22,7 +21,7 @@ if.end:                                           ; preds = %entry, %if.then
   ret void
 }
 
-declare i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) nounwind readnone
+declare i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) nounwind readnone
 
 declare void @f1()
 

@@ -33,8 +33,7 @@ define i64 @test(i8 addrspace(200)* %rfoo) #0 {
   store i64 %r15, i64* %rx, align 8
   %r16 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
   ; CHECK: cgettag
-  %r17 = call i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %r16)
-  %r18 = trunc i64 %r17 to i1
+  %r18 = call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %r16)
   %r19 = zext i1 %r18 to i64
   %r20 = load i64, i64* %rx, align 8
   %r21 = and i64 %r20, %r19
@@ -64,15 +63,13 @@ define i64 @test(i8 addrspace(200)* %rfoo) #0 {
   ; This comes later, but the instruction scheduler puts it in here to avoid a
   ; spill
   ; CHECK: cgetsealed
-  %r39 = call i64 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* %r16)
-  %r40 = trunc i64 %r39 to i1
+  %r40 = call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)* %r16)
   %r41 = zext i1 %r40 to i64
   %r42 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
   %r43 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
   %r44 = and i64 %r41, %r38
   ; CHECK: ctestsubset
-  %r45 = call i64 @llvm.cheri.cap.subset.test(i8 addrspace(200)* %r42, i8 addrspace(200)* %r43)
-  %r46 = trunc i64 %r45 to i1
+  %r46 = call i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)* %r42, i8 addrspace(200)* %r43)
   %r47 = zext i1 %r46 to i64
   %r48 = and i64 %r47, %r44
   ; CHECK: ccheckperm
@@ -93,10 +90,10 @@ declare i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)*) #1
 declare i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind readnone
-declare i64 @llvm.cheri.cap.sealed.get(i8 addrspace(200)*) #1
+declare i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind readnone
-declare i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) #1
+declare i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind readnone
 declare i8 addrspace(200)* @llvm.cheri.cap.length.set(i8 addrspace(200)*, i64) #1
@@ -121,7 +118,7 @@ declare void @llvm.cheri.cap.perms.check.i64(i8 addrspace(200)*, i64) #3
 declare void @llvm.cheri.cap.type.check(i8 addrspace(200)*, i8 addrspace(200)*) #3
 
 ; Function Attrs: nounwind readnone
-declare i64 @llvm.cheri.cap.subset.test(i8 addrspace(200)*, i8 addrspace(200)*) #1
+declare i1 @llvm.cheri.cap.subset.test(i8 addrspace(200)*, i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind
 declare void @llvm.mips.cap.cause.set(i64) #2

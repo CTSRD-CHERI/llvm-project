@@ -14,8 +14,6 @@ declare i8 addrspace(200)* @llvm.cheri.cap.length.set(i8 addrspace(200)*, i64) #
 declare i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)*) #1
 declare i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)*, i64) #1
 declare i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)*) #1
-declare i64 @llvm.cheri.cap.sealed.get(i8 addrspace(200)*) #1
-declare i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) #1
 
 
 define i8 addrspace(200)* @fold_offset_get_set(i8 addrspace(200)* %arg) #1 {

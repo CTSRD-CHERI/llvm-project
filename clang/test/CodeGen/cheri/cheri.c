@@ -61,9 +61,9 @@
 // CAPS: define i8 addrspace(200)* @cheri_perms_and(i8 addrspace(200)* readnone{{( %.+)?}}, i16 zeroext
 // CAPS: call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)*{{( %.+)?}}, i64
 // CAPS: define zeroext i1 @cheri_tag_get(i8 addrspace(200)* readnone
-// CAPS: call i64 @llvm.cheri.cap.tag.get(i8 addrspace(200)*
+// CAPS: call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)*
 // CAPS: define zeroext i1 @cheri_sealed_get(i8 addrspace(200)* readnone
-// CAPS: call i64 @llvm.cheri.cap.sealed.get(i8 addrspace(200)*
+// CAPS: call i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_offset_increment(i8 addrspace(200)* readnone{{( %.+)?}}, i64 signext
 // CAPS: call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)*{{( %.+)?}}, i64
 // CAPS: define i8 addrspace(200)* @cheri_tag_clear(i8 addrspace(200)* readnone

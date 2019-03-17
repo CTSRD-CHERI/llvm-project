@@ -338,6 +338,9 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
   case MipsISD::CheriJmpLink:      return "MipsISD::CheriJmpLink";
   case MipsISD::CapJmpLink:        return "MipsISD::CapJmpLink";
   case MipsISD::CapRet:            return "MipsISD::CapRet";
+  case MipsISD::CapTagGet:         return "MipsISD::CapTagGet";
+  case MipsISD::CapSealedGet:      return "MipsISD::CapSealedGet";
+  case MipsISD::CapSubsetTest:     return "MipsISD::CapSubsetTest";
   }
   return nullptr;
 }
@@ -573,6 +576,12 @@ MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
   setTargetDAGCombine(ISD::SUB);
   setTargetDAGCombine(ISD::AssertZext);
   setTargetDAGCombine(ISD::SHL);
+
+  // Some CHERI intrinsics return i1, which isn't legal, so we have to custom
+  // lower them in the DAG combine phase before the first type legalization
+  // pass.
+  if (Subtarget.isCheri())
+    setTargetDAGCombine(ISD::INTRINSIC_WO_CHAIN);
 
   if (ABI.IsO32()) {
     // These libcalls are not available in 32-bit.
@@ -1224,6 +1233,45 @@ static SDValue performSHLCombine(SDNode *N, SelectionDAG &DAG,
                      DAG.getConstant(SMSize, DL, MVT::i32));
 }
 
+static SDValue performINTRINSIC_WO_CHAINCombine(
+    SDNode *N, SelectionDAG &DAG, TargetLowering::DAGCombinerInfo &DCI,
+    const MipsSubtarget &Subtarget) {
+  SDLoc DL(N);
+  unsigned IID = cast<ConstantSDNode>(N->getOperand(0))->getZExtValue();
+  EVT VT = Subtarget.isGP64bit() ? MVT::i64 : MVT::i32;
+
+  // Lower to our custom node, but with a truncate back to i1 so we can
+  // replace its uses.
+  switch (IID) {
+  case Intrinsic::cheri_cap_tag_get: {
+    SDValue IntRes = DAG.getNode(MipsISD::CapTagGet, DL, VT,
+                                 N->getOperand(1));
+    IntRes = DAG.getNode(ISD::AssertZext, DL, VT, IntRes,
+                         DAG.getValueType(MVT::i1));
+    return DAG.getSetCC(DL, MVT::i1, IntRes,
+                        DAG.getConstant(0, DL, VT), ISD::SETNE);
+  }
+  case Intrinsic::cheri_cap_sealed_get: {
+    SDValue IntRes = DAG.getNode(MipsISD::CapSealedGet, DL, VT,
+                                 N->getOperand(1));
+    IntRes = DAG.getNode(ISD::AssertZext, DL, VT, IntRes,
+                         DAG.getValueType(MVT::i1));
+    return DAG.getSetCC(DL, MVT::i1, IntRes,
+                        DAG.getConstant(0, DL, VT), ISD::SETNE);
+  }
+  case Intrinsic::cheri_cap_subset_test: {
+    SDValue IntRes = DAG.getNode(MipsISD::CapSubsetTest, DL, VT,
+                                 N->getOperand(1), N->getOperand(2));
+    IntRes = DAG.getNode(ISD::AssertZext, DL, VT, IntRes,
+                         DAG.getValueType(MVT::i1));
+    return DAG.getSetCC(DL, MVT::i1, IntRes,
+                        DAG.getConstant(0, DL, VT), ISD::SETNE);
+  }
+  }
+
+  return SDValue();
+}
+
 SDValue  MipsTargetLowering::PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI)
   const {
   SelectionDAG &DAG = DCI.DAG;
@@ -1249,6 +1297,8 @@ SDValue  MipsTargetLowering::PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI)
     return performSHLCombine(N, DAG, DCI, Subtarget);
   case ISD::SUB:
     return performSUBCombine(N, DAG, DCI, Subtarget);
+  case ISD::INTRINSIC_WO_CHAIN:
+    return performINTRINSIC_WO_CHAINCombine(N, DAG, DCI, Subtarget);
   }
 
   return SDValue();

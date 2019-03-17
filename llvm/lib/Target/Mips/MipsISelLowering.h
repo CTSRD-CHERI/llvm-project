@@ -219,6 +219,12 @@ extern bool LargeCapTable;
       CapJmpLink,
       /// Return from a call with a capability (rather than an integer address)
       CapRet,
+      /// Legalised int_cheri_cap_tag_get
+      CapTagGet,
+      /// Legalised int_cheri_cap_sealed_get
+      CapSealedGet,
+      /// Legalised int_cheri_cap_subset_test
+      CapSubsetTest,
 
       // DSP shift nodes.
       SHLL_DSP,
