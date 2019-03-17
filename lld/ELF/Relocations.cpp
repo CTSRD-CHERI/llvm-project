@@ -185,7 +185,6 @@ static unsigned handleMipsTlsRelocation(RelType Type, Symbol &Sym,
 // The pair of GOT entries created are of the form
 // GOT[e0] Module Index (Used to find pointer to TLS block at run-time)
 // GOT[e1] Offset of symbol in TLS block
-template <class ELFT>
 static unsigned handleARMTlsRelocation(RelType Type, Symbol &Sym,
                                        InputSectionBase &C, uint64_t Offset,
                                        int64_t Addend, RelExpr Expr) {
@@ -238,7 +237,7 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
     return 0;
 
   if (Config->EMachine == EM_ARM)
-    return handleARMTlsRelocation<ELFT>(Type, Sym, C, Offset, Addend, Expr);
+    return handleARMTlsRelocation(Type, Sym, C, Offset, Addend, Expr);
   if (Config->EMachine == EM_MIPS)
     return handleMipsTlsRelocation(Type, Sym, C, Offset, Addend, Expr);
 
