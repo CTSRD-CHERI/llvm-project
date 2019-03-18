@@ -63,7 +63,6 @@ add_llvm_target(MipsCodeGen
   CheriStackInvalidatePass.cpp
   CheriRangeChecker.cpp
   CheriPureCapABI.cpp
-  CheriExpandIntrinsicsPass.cpp
   MicroMipsSizeReduction.cpp
   )
 

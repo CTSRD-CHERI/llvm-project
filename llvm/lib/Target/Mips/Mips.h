@@ -44,7 +44,6 @@ namespace llvm {
   FunctionPass *createCheriRangeChecker();
   FunctionPass *createCheriLoopPointerDecanonicalize();
 
-  ModulePass *createCheriExpandIntrinsicsPass();
   ModulePass *createCheriPureCapABI();
   MachineFunctionPass *createCheriAddressingModeFolder();
   MachineFunctionPass *createCheri128FailHardPass();

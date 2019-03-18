@@ -1,5 +1,6 @@
 // REQUIRES: asserts
 // RUN: %cheri_purecap_clang -mcpu=cheri128 -cheri=128 -xc -O0 -fsanitize-address-use-after-scope -g0 %s -o %t.ll -c -S -emit-llvm -Xclang -disable-O0-optnone -Wno-array-bounds -Wno-return-stack-address
+// RUN: %cheri_purecap_clang -mcpu=cheri128 -cheri=128 -xc -O2 -fsanitize-address-use-after-scope -g0 %s -o - -c -S -mllvm -stop-before=cheriaddrmodefolder -Xclang -disable-O0-optnone -Wno-array-bounds -Wno-return-stack-address
 // RUN: %cheri128_purecap_opt -cheri-purecap-alloca %t.ll -o /dev/null -S -cheri-stack-bounds-single-intrinsic-threshold=10 \
 // RUN:    -cheri-stack-bounds=if-needed -debug-only="cheri-purecap-alloca" 2>&1 | FileCheck -check-prefix DBG %s
 

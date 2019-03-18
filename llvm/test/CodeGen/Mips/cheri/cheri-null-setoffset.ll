@@ -4,7 +4,7 @@
 
 ; everything should be changed to incoffset instead of setoffset
 ; -cheri-fold-intrisics will turn a setoffset/setaddr on NULL to incoffset:
-; RUN: %cheri_opt -S -cheri-fold-intrisics -cheri-expand-intrinsics %s -o - | FileCheck %s -check-prefix IR -enable-var-scope
+; RUN: %cheri_opt -S -cheri-fold-intrisics %s -o - | FileCheck %s -check-prefix IR -enable-var-scope
 ; RUN: %cheri_llc -O3 %s -filetype=asm -o - | FileCheck %s
 
 declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64) #1

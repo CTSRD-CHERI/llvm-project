@@ -313,7 +313,6 @@ void MipsPassConfig::addIRPasses() {
   if (getMipsSubtarget().inMips16HardFloat())
     addPass(createMips16HardFloatPass());
   if (getMipsSubtarget().isCheri()) {
-    addPass(createCheriExpandIntrinsicsPass());
     if (getOptLevel() != CodeGenOpt::Level::None) {
       addPass(createCHERICapFoldIntrinsicsPass());
     }

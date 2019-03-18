@@ -272,7 +272,6 @@ void initializeMachineTraceMetricsPass(PassRegistry&);
 void initializeMachineVerifierPassPass(PassRegistry&);
 void initializeCHERICapDirectCallsPass(PassRegistry&);
 void initializeCHERICapFoldIntrinsicsPass(PassRegistry&);
-void initializeCHERIExpandCapIntrinsicsPass(PassRegistry&);
 void initializeMemCpyOptLegacyPassPass(PassRegistry&);
 void initializeMemDepPrinterPass(PassRegistry&);
 void initializeMemDerefPrinterPass(PassRegistry&);
