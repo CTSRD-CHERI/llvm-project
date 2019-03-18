@@ -442,6 +442,7 @@ multiclass UseCNullPatterns<PatFrag NullPat> {
   let AddedComplexity = 10 in {
     def : Pat<(int_cheri_cap_offset_increment NullPat, simm11s0Pattern:$imm), (CIncOffsetImm CNULL, simm11s0Pattern:$imm)>;
     def : Pat<(int_cheri_cap_offset_set NullPat, simm11s0Pattern:$imm), (CIncOffsetImm CNULL, simm11s0Pattern:$imm)>;
+    def : Pat<(int_cheri_cap_address_set NullPat, simm11s0Pattern:$imm), (CIncOffsetImm CNULL, simm11s0Pattern:$imm)>;
   }
 }
 defm : UseCNullPatterns<(iFATPTR64 (inttoptr (i64 0)))>;

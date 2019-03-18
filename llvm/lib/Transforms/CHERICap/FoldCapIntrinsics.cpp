@@ -344,18 +344,6 @@ class CHERICapFoldIntrinsics : public ModulePass {
         ToErase.insert(CI);
         Modified = true;
       }
-
-      // Convert all llvm.cheri.cap.address.set(null, FOO) to offset.increment()
-      // since there is not setaddr instruction and a incoffset is the most efficient
-      // operation to set the offset since there is a version with an immediate overload
-      // Also convert a setoffset on null to a incoffset on null since we have
-      // an immediate version of incoffset but not setoffset
-      // FIXME: this should be done in the MIPS backend instead...
-      if (isa<ConstantPointerNull>(CI->getOperand(0))) {
-        assert(IncOffset);
-        CI->setCalledFunction(IncOffset);
-        Modified = true;
-      }
     }
     for (Instruction* I : ToErase)
       RecursivelyDeleteTriviallyDeadInstructions(I);
