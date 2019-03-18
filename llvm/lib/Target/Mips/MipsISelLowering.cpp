@@ -5337,7 +5337,8 @@ EVT MipsTargetLowering::getOptimalMemOpType(uint64_t Size, unsigned DstAlign,
   return MVT::i32;
 }
 
-bool MipsTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT) const {
+bool MipsTargetLowering::isFPImmLegal(const APFloat &Imm, EVT VT,
+                                      bool ForCodeSize) const {
   if (VT != MVT::f32 && VT != MVT::f64)
     return false;
   if (Imm.isNegZero())
