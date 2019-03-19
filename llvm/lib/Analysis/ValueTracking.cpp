@@ -3676,7 +3676,20 @@ const Value *llvm::getArgumentAliasingToReturnedPointer(const CallBase *Call) {
 
 bool llvm::isIntrinsicReturningPointerAliasingArgumentWithoutCapturing(
     const CallBase *Call) {
-  return Call->getIntrinsicID() == Intrinsic::launder_invariant_group ||
+  // A CHERI inc-offset of zero aliases the input argument
+  if (Call->getIntrinsicID() == Intrinsic::cheri_cap_offset_increment) {
+    if (ConstantInt *C = dyn_cast<ConstantInt>(Call->getOperand(1))) {
+      return C->isZeroValue();
+    }
+  }
+  // NOTE: we can't return this for setbounds even though the resulting pointer
+  // aliases with the target, but it might not grant access to the last few
+  // bytes. If we return true here for setbounds, then GVN will remove some
+  // loads that would have trapped at runtime. See cheri-intrinisics.ll test.
+  return /* Call->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set ||
+         Call->getIntrinsicID() == Intrinsic::cheri_cap_bounds_set_exact ||
+         Call->getIntrinsicID() == Intrinsic::cheri_bounded_stack_cap || */
+         Call->getIntrinsicID() == Intrinsic::launder_invariant_group ||
          Call->getIntrinsicID() == Intrinsic::strip_invariant_group;
 }
 
