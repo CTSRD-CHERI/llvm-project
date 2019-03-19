@@ -44,6 +44,7 @@
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Config/llvm-config.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/ConstantFolder.h"
 #include "llvm/IR/Constants.h"
@@ -2920,6 +2921,13 @@ private:
       IsDest ? II.getSourceAlignment() : II.getDestAlignment();
     OtherAlign =  MinAlign(OtherAlign ? OtherAlign : 1,
                            OtherOffset.zextOrTrunc(64).getZExtValue());
+
+    // XXXAR: if we are using a CHERI capability we must emit a memcpy if the
+    // other type is not aligned to the capability size.
+    if (isCheriPointer(NewAI.getAllocatedType(), &DL)) {
+      if (OtherAlign < DL.getABITypeAlignment(NewAI.getAllocatedType()))
+        EmitMemCpy = true;
+    }
 
     if (EmitMemCpy) {
       // Compute the other pointer, folding as much as possible to produce
