@@ -8543,17 +8543,16 @@ public:
            Right < LastPromotedArithmeticType; ++Right) {
         QualType ParamTypes[2];
         ParamTypes[1] = ArithmeticTypes[Right];
-
+        auto LeftBaseTy = AdjustAddressSpaceForBuiltinOperandType(
+            S, ArithmeticTypes[Left], Args[0]);
         // Add this built-in operator as a candidate (VQ is empty).
-        ParamTypes[0] =
-          S.Context.getLValueReferenceType(ArithmeticTypes[Left]);
+        ParamTypes[0] = S.Context.getLValueReferenceType(LeftBaseTy);
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
                               /*IsAssigmentOperator=*/isEqualOp);
 
         // Add this built-in operator as a candidate (VQ is 'volatile').
         if (VisibleTypeConversionsQuals.hasVolatile()) {
-          ParamTypes[0] =
-            S.Context.getVolatileType(ArithmeticTypes[Left]);
+          ParamTypes[0] = S.Context.getVolatileType(LeftBaseTy);
           ParamTypes[0] = S.Context.getLValueReferenceType(ParamTypes[0]);
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
                                 /*IsAssigmentOperator=*/isEqualOp);
@@ -8609,15 +8608,14 @@ public:
            Right < LastPromotedIntegralType; ++Right) {
         QualType ParamTypes[2];
         ParamTypes[1] = ArithmeticTypes[Right];
-
+        auto LeftBaseTy = AdjustAddressSpaceForBuiltinOperandType(
+            S, ArithmeticTypes[Left], Args[0]);
         // Add this built-in operator as a candidate (VQ is empty).
-        ParamTypes[0] = S.Context.getLValueReferenceType(
-            AdjustAddressSpaceForBuiltinOperandType(S, ArithmeticTypes[Left],
-                                                    Args[0]));
+        ParamTypes[0] = S.Context.getLValueReferenceType(LeftBaseTy);
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet);
         if (VisibleTypeConversionsQuals.hasVolatile()) {
           // Add this built-in operator as a candidate (VQ is 'volatile').
-          ParamTypes[0] = ArithmeticTypes[Left];
+          ParamTypes[0] = LeftBaseTy;
           ParamTypes[0] = S.Context.getVolatileType(ParamTypes[0]);
           ParamTypes[0] = S.Context.getLValueReferenceType(ParamTypes[0]);
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet);
