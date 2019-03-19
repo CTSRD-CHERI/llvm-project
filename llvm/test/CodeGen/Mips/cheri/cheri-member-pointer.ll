@@ -1,8 +1,7 @@
-; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O0 | FileCheck %s
-; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O1 | FileCheck %s -check-prefix OPT
-; RUN: %cheri_llc %s -mtriple=cheri-unknown-freebsd -target-abi purecap -o - -asm-verbose -verify-regalloc -O2 | FileCheck %s -check-prefix OPT
+; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O0 | %cheri_FileCheck %s
+; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O1 | %cheri_FileCheck %s -check-prefix OPT
+; RUN: %cheri_llc %s -target-abi purecap -o - -asm-verbose -verify-regalloc -O2 | %cheri_FileCheck %s -check-prefix OPT
 ; ModuleID = '/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGenCXX/cheri-pointer-to-member-simple.cpp'
-; XFAIL: *
 source_filename = "/local/scratch/alr48/cheri/llvm/tools/clang/test/CodeGenCXX/cheri-pointer-to-member-simple.cpp"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
@@ -40,44 +39,44 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   %call = tail call i32 %4(%class.A addrspace(200)* %this.adjusted) #1
   ret i32 %call
 
-  ; CHECK: cincoffset      $c1, $c3, $zero
+  ; CHECK: cmove      $c1, $c3
   ; get adj in $2
   ; CHECK: dsra    $2, $4, 1
   ; adjust this:
   ; CHECK: cincoffset      $c3, $c3, $2
   ; store a copy in c2
-  ; CHECK: cincoffset      $c2, $c3, $zero
+  ; CHECK: cmove      $c2, $c3
   ; CHECK: andi    $2, $4, 1
-  ; CHECK:      csc     $c2, [[STACK_VTABLE_ADDR:\$zero, (([0-9]+|sp))\(\$c11\)]]
-  ; CHECK-NEXT: csc     $c3, [[STACK_THIS_ADJ:\$zero, (([0-9]+|sp))\(\$c11\)]]
+  ; CHECK:      csc     $c4, [[STACK_MEMPTR_PTR:\$zero, (([0-9]+|sp))\(\$c11\)]]
   ; CHECK-NEXT: csc     $c1, $zero, {{([0-9]+|sp)}}($c11)
-  ; CHECK-NEXT: csc     $c4, [[STACK_MEMPTR_PTR:\$zero, (([0-9]+|sp))\(\$c11\)]]
+  ; CHECK-NEXT: csc     $c3, [[STACK_THIS_ADJ:\$zero, (([0-9]+|sp))\(\$c11\)]]
+  ; CHECK-NEXT:      csc     $c2, [[STACK_VTABLE_ADDR:\$zero, (([0-9]+|sp))\(\$c11\)]]
   ; CHECK-NEXT: beqz    $2, .LBB0_3
 
   ; CHECK: .LBB0_2:                                # %memptr.virtual
   ; CHECK: clc     $c1, [[STACK_VTABLE_ADDR]]
   ; CHECK: clc     $c2, $zero, 0($c1)
   ; CHECK: clc     [[MEMPTR:\$c3]], [[STACK_MEMPTR_PTR]]
-  ; CHECK: ctoptr $1, [[MEMPTR]], $ddc
+  ; CHECK: cgetaddr $1, [[MEMPTR]]
   ; CHECK: clc     $c2, $1, 0($c2)
   ; CHECK: csc     $c2, [[STACK_TARGET_FN_PTR:\$zero, (([0-9]+|sp))\(\$c11\)]]
   ; CHECK: j       .LBB0_4
   ; CHECK: nop
 
   ; CHECK: .LBB0_3:                                # %memptr.nonvirtual
-  ; CHECK: clc     $c1, $zero, 32($c11)      # {{16|32}}-byte Folded Reload
+  ; CHECK: clc     $c1, $zero, {{64|160}}($c11)      # {{16|32}}-byte Folded Reload
   ; CHECK: csc     $c1, [[STACK_TARGET_FN_PTR]]
   ; CHECK: j       .LBB0_4
   ; CHECK: nop
   ; CHECK: .LBB0_4:                                # %memptr.end
   ; CHECK: clc     $c1, [[STACK_TARGET_FN_PTR]]
   ; CHECK: clc     $c3, [[STACK_THIS_ADJ]]
-  ; CHECK: cincoffset      $c12, $c1, $zero
+  ; CHECK: cgetnull $c13
+  ; CHECK: cmove   $c12, $c1
   ; CHECK: cjalr   $c12, $c17
   ; CHECK: nop
-  ; CHECK: clc     $c17, $zero, {{112|192}}($c11)    # {{16|32}}-byte Folded Reload
-  ; CHECK: daddiu  $1, $zero, 224
-  ; CHECK: cincoffset      $c11, $c11, $1
+  ; CHECK: clc     $c17, $zero, {{96|224}}($c11)    # {{16|32}}-byte Folded Reload
+  ; CHECK: cincoffset      $c11, $c11, {{112|256}}
   ; CHECK: cjr     $c17
 
 
@@ -88,12 +87,12 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; OPT: cincoffset [[THIS_ADJ:\$c3]], [[THIS_NON_ADJ:\$c3]], [[ADJ]]
   ; virtual case:
   ; OPT: clc     [[VTABLE:\$c[0-9]+]], $zero, 0([[THIS_ADJ]])
-  ; OPT: ctoptr  [[VTABLE_OFFSET:\$1]], $c4, $ddc
+  ; OPT: cgetaddr  [[VTABLE_OFFSET:\$1]], $c4
   ; OPT: clc     $c4, [[VTABLE_OFFSET]], 0([[VTABLE]])
   ; OPT: .LBB0_2:                                # %memptr.end
-  ; OPT: cincoffset      $c12, $c4, $zero
+  ; OPT: cincoffset $c11, $c11, -[[$CAP_SIZE]]
+  ; OPT: cmove   $c12, $c4
   ; OPT: cjalr   $c12, $c17
-  ; OPT: nop
   ; OPT: clc     $c17, $zero, 0($c11)      # {{16|32}}-byte Folded Reload
   ; OPT: cjr     $c17
 }
