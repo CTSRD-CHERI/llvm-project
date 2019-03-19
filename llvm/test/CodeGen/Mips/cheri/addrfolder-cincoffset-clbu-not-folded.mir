@@ -1,6 +1,6 @@
-# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -run-pass=cheriaddrmodefolder  -o - -debug-only=cheriaddrmodefolder
+# RUNNOT: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -run-pass=cheriaddrmodefolder  -o - -debug-only=cheriaddrmodefolder
 # RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -run-pass=cheriaddrmodefolder  -o - | FileCheck %s
-# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -o -
+# RUN: %cheri_purecap_llc -cheri-cap-table-abi=pcrel %s -verify-machineinstrs -start-before=cheriaddrmodefolder -o /dev/null
 
 --- |
   ; ModuleID = '/Users/alex/cheri/llvm/test/CodeGen/Mips/cheri/webkit-cincoffsetimm-not-killed.ll'

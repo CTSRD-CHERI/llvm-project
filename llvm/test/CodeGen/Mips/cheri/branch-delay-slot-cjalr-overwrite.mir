@@ -1,6 +1,7 @@
 # REQUIRES: asserts
 # RUN: %cheri_purecap_llc %s -start-before=mips-delay-slot-filler -stop-after=mips-delay-slot-filler -verify-machineinstrs \
-# RUN:   -o - -debug-only="mips-delay-slot-filler" | FileCheck %s
+# RUN:   -o - | FileCheck %s
+# -debug-only="mips-delay-slot-filler"
 
 # Reduce MIR generated from the following LLVM IR:
 --- |

@@ -5,7 +5,7 @@
 // https://github.com/CTSRD-CHERI/llvm-project/issues/292
 
 // CHECK-LABEL doLoop:
-// CHECK-NEXT: daddiu	$sp, $sp, -16
+// CHECK:      daddiu	$sp, $sp, -16
 // CHECK-NEXT: sd	$fp, 8($sp) # 8-byte Folded Spill
 // CHECK-NEXT: move	$fp, $sp
 // CHECK-NEXT: cfromptr	$1, $c1, $c0
