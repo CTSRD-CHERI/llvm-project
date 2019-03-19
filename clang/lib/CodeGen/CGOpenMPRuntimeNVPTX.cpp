@@ -4750,6 +4750,9 @@ Address CGOpenMPRuntimeNVPTX::getAddressOfLocalVariable(CodeGenFunction &CGF,
         return VDI->second.PrivateAddr;
     }
   }
+  // TODO: replace it with return
+  // CGOpenMPRuntime::getAddressOfLocalVariable(CGF, VD); when NVPTX libomp
+  // supports __kmpc_alloc|__kmpc_free.
   return Address::invalid();
 }
 
