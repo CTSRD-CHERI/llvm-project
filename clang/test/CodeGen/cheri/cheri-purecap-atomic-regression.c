@@ -70,7 +70,7 @@ _Atomic(int *) a;
 //
 // OPT-LABEL: @test_store(
 // OPT-NEXT:  entry:
-// OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 1)
+// OPT-NEXT:    [[TMP0:%.*]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 1)
 // OPT-NEXT:    [[TMP1:%.*]] = bitcast i8 addrspace(200)* [[TMP0]] to i32 addrspace(200)*
 // OPT-NEXT:    store atomic i32 addrspace(200)* [[TMP1]], i32 addrspace(200)* addrspace(200)* @a seq_cst, align [[$CAP_SIZE]], !tbaa !6
 // OPT-NEXT:    ret void

@@ -49,7 +49,7 @@ entry:
   ret i8 addrspace(200)* %5
   ; This always creates an untagged capability:
   ; IR-LABEL: @add_uintcap_t()
-  ; IR: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 1024)
+  ; IR: tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 1024)
 
   ; CHECK-LABEL: add_uintcap_t
   ; CHECK: daddiu	$1, $zero, 1024

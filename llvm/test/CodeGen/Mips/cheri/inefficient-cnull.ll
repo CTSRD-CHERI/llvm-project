@@ -70,7 +70,7 @@ define i8 addrspace(200)* @set_addr(i8 addrspace(200)* %arg, i64 %offset) local_
 ; CHECK-LABEL: set_addr:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cjr $c17
-; CHECK-NEXT:    cincoffset $c3, $cnull, $4
+; CHECK-NEXT:    csetaddr $c3, $cnull, $4
 entry:
   %result = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 %offset)
   ret i8 addrspace(200)* %result

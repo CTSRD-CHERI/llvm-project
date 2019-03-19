@@ -15,6 +15,6 @@ entry:
 
 ; CHECK-LABEL: define i8 addrspace(200)* @test()
 ; CHECK-NEXT:   entry:
-; CHECK-NEXT:    %0 = call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 10)
+; CHECK-NEXT:    %0 = call addrspace(200) i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 10)
 ; CHECK-NEXT:    ret i8 addrspace(200)* %0
 ; CHECK-NEXT: }

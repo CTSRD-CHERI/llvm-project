@@ -479,7 +479,7 @@ entry:
 
   ret i8 addrspace(200)* %inc
   ; CHECK-LABEL: @fold_set_inc_gep_sequence()
-  ; CHECK: %set = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 80)
+  ; CHECK: %set = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 80)
   ; CHECK: ret i8 addrspace(200)* %set
 }
 
@@ -494,7 +494,7 @@ entry:
   ret i8 addrspace(200)* %inc
   ; CHECK-LABEL: @fold_set_addr_inc_gep_sequence()
   ; The %set/getp/inc will be removed later
-  ; CHECK:  %set = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 80)
+  ; CHECK:  %set = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 80)
   ; CHECK:  ret i8 addrspace(200)* %set
 }
 
