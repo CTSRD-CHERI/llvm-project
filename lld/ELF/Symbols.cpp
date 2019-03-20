@@ -38,6 +38,7 @@ Defined *ElfSym::GlobalOffsetTable;
 Defined *ElfSym::MipsGp;
 Defined *ElfSym::MipsGpDisp;
 Defined *ElfSym::MipsLocalGp;
+Defined *ElfSym::CheriCapabilityTable;
 Defined *ElfSym::RelaIpltEnd;
 
 static uint64_t getSymVA(const Symbol &Sym, int64_t &Addend) {
@@ -155,8 +156,21 @@ uint64_t Symbol::getPPC64LongBranchTableVA() const {
 }
 
 uint64_t Symbol::getSize() const {
-  if (const auto *DR = dyn_cast<Defined>(this))
+  if (const auto *DR = dyn_cast<Defined>(this)) {
+    if (Config->isCheriABI() && DR->IsSectionStartSymbol) {
+      assert(DR->Value == 0 && "Bad section start symbol?");
+      if (!DR->Section)
+        return 0; // Section is not included in the output
+      return DR->Section->getOutputSection()->Size;
+    }
     return DR->Size;
+  }
+  // FIXME: assuming it is always shared broke this
+  if (isa<Undefined>(this))
+    return 0;
+  if (isUndefWeak())
+    return 0;
+  // errs() << "Should be a Shared symbol " << toString(*this) << ":" << this->kind() << "\n";
   return cast<SharedSymbol>(this)->Size;
 }
 
@@ -241,8 +255,11 @@ uint8_t Symbol::computeBinding() const {
 bool Symbol::includeInDynsym() const {
   if (!Config->HasDynSymTab)
     return false;
+  // XXXAR: This is a hack to allow R_CHERI_CAPABILITY against local symbols
+  if (ForceExportDynamic)
+    return true;
   if (computeBinding() == STB_LOCAL)
-    return false;
+      return false;
   if (!isDefined())
     return true;
   return ExportDynamic;
@@ -301,4 +318,88 @@ std::string lld::toString(const Symbol &B) {
     if (Optional<std::string> S = demangleItanium(B.getName()))
       return *S;
   return B.getName();
+}
+
+static std::string getLocationNonTemplate(InputSectionBase *IS,
+                                          uint64_t SymOffset) {
+  switch (Config->EKind) {
+  default:
+    llvm_unreachable("Invalid kind");
+  case ELF32LEKind:
+    return IS->getLocation<ELF32LE>(SymOffset);
+  case ELF32BEKind:
+    return IS->getLocation<ELF32BE>(SymOffset);
+  case ELF64LEKind:
+    return IS->getLocation<ELF64LE>(SymOffset);
+  case ELF64BEKind:
+    return IS->getLocation<ELF64BE>(SymOffset);
+  }
+}
+
+std::string lld::verboseToString(Symbol *B, uint64_t SymOffset) {
+  std::string Msg;
+
+  if (B->isLocal())
+    Msg += "local ";
+  if (B->isWeak())
+      Msg += "weak ";
+  if (B->isShared())
+    Msg += "shared ";
+  // else if (B->isDefined())
+  //  Msg += "defined ";
+  if (B->Type == STT_COMMON)
+    Msg += "common ";
+  else if (B->Type == STT_TLS)
+    Msg += "TLS ";
+  if (B->isSection())
+    Msg += "section ";
+  else if (B->isTls())
+    Msg += "tls ";
+  else if (B->isFunc())
+    Msg += "function ";
+  else if (B->isGnuIFunc())
+    Msg += "gnu ifunc ";
+  else if (B->isObject())
+    Msg += "object ";
+  else if (B->isFile())
+    Msg += "file ";
+  else if (B->isUndefined())
+    Msg += "<undefined> ";
+  else
+    Msg += "<unknown kind> ";
+
+  if (B->isInGot())
+    Msg += "(in GOT) ";
+  if (B->isInPlt())
+    Msg += "(in PLT) ";
+
+  Defined* DR = dyn_cast<Defined>(B);
+  InputSectionBase* IS = nullptr;
+  if (DR && DR->Section) {
+    SymOffset = DR->isSection() ? SymOffset : DR->Section->getOffset(DR->Value);
+    IS = dyn_cast<InputSectionBase>(DR->Section);
+  }
+  std::string Name = toString(*B);
+  if (Name.empty()) {
+    if (DR && DR->Section) {
+      if (IS) {
+        Name = getLocationNonTemplate(IS, SymOffset);
+      } else {
+        Name = (DR->Section->Name + "+0x" + utohexstr(SymOffset)).str();
+      }
+    } else if (OutputSection* OS = B->getOutputSection()) {
+      Name = (OS->Name + "+(unknown offset)").str();
+    }
+  }
+  if (Name.empty()) {
+    Name = "<unknown symbol>";
+  }
+  Msg += Name;
+  if (!B->isUndefined()) {
+    std::string Src = IS ? IS->getSrcMsg(*B, SymOffset) : toString(B->File);
+    if (IS)
+      Src += " (" + IS->getObjMsg(SymOffset) + ")";
+    Msg += "\n>>> defined in " + Src;
+  }
+  return Msg;
 }

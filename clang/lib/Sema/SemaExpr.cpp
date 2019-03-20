@@ -551,6 +551,11 @@ static void DiagnoseDirectIsaAccess(Sema &S, const ObjCIvarRefExpr *OIRE,
 }
 
 ExprResult Sema::DefaultLvalueConversion(Expr *E) {
+  if (E->getType().getQualifiers().hasOutput()) {
+    return ExprError(Diag(E->getExprLoc(), diag::err_typecheck_read_output)
+      << E->getSourceRange());
+  }
+
   // Handle any placeholder expressions which made it here.
   if (E->getType()->isPlaceholderType()) {
     ExprResult result = CheckPlaceholderExpr(E);
@@ -848,6 +853,12 @@ void Sema::checkVariadicArgument(const Expr *E, VariadicCallType CT) {
   // Don't allow one to pass an Objective-C interface to a vararg.
   const QualType &Ty = E->getType();
   VarArgKind VAK = isValidVarArgType(Ty);
+
+  if (Ty->isCHERICapabilityType(Context))
+    if (Context.getTargetInfo().getTriple().isMIPS() &&
+        !Context.getTargetInfo().areAllPointersCapabilities())
+      Diag(E->getBeginLoc(), diag::warn_capabilities_broken_in_hybrid_varargs)
+          << E->getSourceRange();
 
   // Complain about passing non-POD types through varargs.
   switch (VAK) {
@@ -5310,6 +5321,22 @@ static FunctionDecl *rewriteBuiltinFunctionDecl(Sema *Sema, ASTContext &Context,
 static void checkDirectCallValidity(Sema &S, const Expr *Fn,
                                     FunctionDecl *Callee,
                                     MultiExprArg ArgExprs) {
+
+  // For purecap CHERI, output a warning if the callee doesn't have a prototype
+  // and we are passing arguments. This would normally lead to using the
+  // variadic calling convention. In the case of MIPS CHERI, this could lead to
+  // runtime stack corruption if the callee function is not actually variadic.
+  if (S.Context.getTargetInfo().SupportsCapabilities()) {
+    bool NoProto = !Callee->getBuiltinID() && Callee->getType()->isFunctionNoProtoType();
+    if (NoProto && ArgExprs.size() > 0) {
+      S.Diag(Fn->getBeginLoc(), diag::warn_mips_cheri_call_no_func_proto)
+          << Callee->getName() << Fn->getSourceRange();
+      S.Diag(Callee->getLocation(), diag::note_mips_cheri_func_decl_add_types);
+      S.Diag(Fn->getBeginLoc(), diag::note_mips_cheri_func_noproto_explanation);
+      return;
+    }
+  }
+
   // `Callee` (when called with ArgExprs) may be ill-formed. enable_if (and
   // similar attributes) really don't like it when functions are called with an
   // invalid number of args.
@@ -5600,6 +5627,14 @@ ExprResult Sema::BuildResolvedCallExpr(Expr *Fn, NamedDecl *NDecl,
                                        bool IsExecConfig, ADLCallKind UsesADL) {
   FunctionDecl *FDecl = dyn_cast_or_null<FunctionDecl>(NDecl);
   unsigned BuiltinID = (FDecl ? FDecl->getBuiltinID() : 0);
+
+  if (!BuiltinID)
+    if (NamedDecl *currentDecl = getCurFunctionOrMethodDecl())
+      if (currentDecl->hasAttr<SensitiveAttr>() &&
+          (!FDecl || !FDecl->hasAttr<SensitiveAttr>()))
+        Diag(RParenLoc, diag::warn_calling_non_sensitive_from_sensitive)
+            << FDecl << currentDecl;
+
 
   // Functions with 'interrupt' attribute cannot be called directly.
   if (FDecl && FDecl->hasAttr<AnyX86InterruptAttr>()) {
@@ -5996,7 +6031,11 @@ CastKind Sema::PrepareScalarCast(ExprResult &Src, QualType DestTy) {
       LangAS DestAS = DestTy->getPointeeType().getAddressSpace();
       if (SrcAS != DestAS)
         return CK_AddressSpaceConversion;
-      if (Context.hasCvrSimilarType(SrcTy, DestTy))
+      else if (!SrcTy->isCHERICapabilityType(Context) && DestTy->isCHERICapabilityType(Context))
+        return CK_PointerToCHERICapability;
+      else if (SrcTy->isCHERICapabilityType(Context) && !DestTy->isCHERICapabilityType(Context))
+        return CK_CHERICapabilityToPointer;
+      else if (Context.hasCvrSimilarType(SrcTy, DestTy))
         return CK_NoOp;
       return CK_BitCast;
     }
@@ -6725,8 +6764,14 @@ static QualType checkConditionalPointerCompatibility(Sema &S, ExprResult &LHS,
   }();
   if (IsBlockPointer)
     ResultTy = S.Context.getBlockPointerType(ResultTy);
-  else
-    ResultTy = S.Context.getPointerType(ResultTy);
+  else {
+    ASTContext::PointerInterpretationKind PIK = ASTContext::PIK_Default;
+    if (LHSTy->isCHERICapabilityType(S.Context)
+        || RHSTy->isCHERICapabilityType(S.Context)) {
+      PIK = ASTContext::PIK_Capability;
+    }
+    ResultTy = S.Context.getPointerType(ResultTy, PIK);
+  }
 
   LHS = S.ImpCastExprToType(LHS.get(), ResultTy, LHSCastKind);
   RHS = S.ImpCastExprToType(RHS.get(), ResultTy, RHSCastKind);
@@ -6771,14 +6816,20 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
   QualType lhptee = LHSTy->getAs<PointerType>()->getPointeeType();
   QualType rhptee = RHSTy->getAs<PointerType>()->getPointeeType();
 
+  // Get the cast kind to use for adding qualifiers
+  // XXXAR: Three should probably be a CK_CHERICapabilityToPointer here?
+  CastKind NopCastKind = (lhptee.getAddressSpace() == rhptee.getAddressSpace())
+    ?  CK_NoOp : CK_AddressSpaceConversion;
+
   // ignore qualifiers on void (C99 6.5.15p3, clause 6)
   if (lhptee->isVoidType() && rhptee->isIncompleteOrObjectType()) {
     // Figure out necessary qualifiers (C99 6.5.15p6)
     QualType destPointee
       = S.Context.getQualifiedType(lhptee, rhptee.getQualifiers());
-    QualType destType = S.Context.getPointerType(destPointee);
+    QualType destType = S.Context.getPointerType(destPointee, 
+      RHSTy->isCHERICapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
     // Add qualifiers if necessary.
-    LHS = S.ImpCastExprToType(LHS.get(), destType, CK_NoOp);
+    LHS = S.ImpCastExprToType(LHS.get(), destType, NopCastKind);
     // Promote to void*.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_BitCast);
     return destType;
@@ -6786,7 +6837,8 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
   if (rhptee->isVoidType() && lhptee->isIncompleteOrObjectType()) {
     QualType destPointee
       = S.Context.getQualifiedType(rhptee, lhptee.getQualifiers());
-    QualType destType = S.Context.getPointerType(destPointee);
+    QualType destType = S.Context.getPointerType(destPointee,
+      LHSTy->isCHERICapabilityType(S.Context) ? ASTContext::PIK_Capability : ASTContext::PIK_Default);
     // Add qualifiers if necessary.
     RHS = S.ImpCastExprToType(RHS.get(), destType, CK_NoOp);
     // Promote to void*.
@@ -7600,8 +7652,12 @@ checkPointerTypesForAssignment(Sema &S, QualType LHSType, QualType RHSType) {
 
   if (!lhq.compatiblyIncludes(rhq)) {
     // Treat address-space mismatches as fatal.  TODO: address subspaces
-    if (!lhq.isAddressSpaceSupersetOf(rhq))
-      ConvTy = Sema::IncompatiblePointerDiscardsQualifiers;
+    if (!lhq.isAddressSpaceSupersetOf(rhq)) {
+      if (RHSType->isFunctionPointerType() && LHSType->isFunctionPointerType())
+        ConvTy = Sema::Compatible;
+      else
+        ConvTy = Sema::IncompatiblePointerDiscardsQualifiers;
+    }
 
     // It's okay to add or remove GC or lifetime qualifiers when converting to
     // and from void*.
@@ -7824,6 +7880,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
                                  CastKind &Kind, bool ConvertRHS) {
   QualType RHSType = RHS.get()->getType();
   QualType OrigLHSType = LHSType;
+  QualType OrigRHSType = RHSType;
 
   // Get canonical types.  We're not formatting these types, just comparing
   // them.
@@ -7934,23 +7991,71 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
     return Compatible;
   }
 
+  // CHERI callbacks may only be cast to other cheri callback types
+  bool RHSIsCallback = false;
+  bool LHSIsCallback = false;
+  if (auto RHSPointer = dyn_cast<PointerType>(RHSType))
+    if (auto RHSFnPTy = RHSPointer->getPointeeType()->getAs<FunctionType>())
+      if (RHSFnPTy->getCallConv() == CC_CHERICCallback)
+        RHSIsCallback = true;
+  if (auto LHSPointer = dyn_cast<PointerType>(LHSType))
+    if (auto LHSFnPTy = LHSPointer->getPointeeType()->getAs<FunctionType>())
+      if (LHSFnPTy->getCallConv() == CC_CHERICCallback)
+        LHSIsCallback = true;
+  if (RHSIsCallback != LHSIsCallback)
+    return Incompatible;
+
   // Conversions to normal pointers.
   if (const PointerType *LHSPointer = dyn_cast<PointerType>(LHSType)) {
     // U* -> T*
-    if (isa<PointerType>(RHSType)) {
+    if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
       LangAS AddrSpaceL = LHSPointer->getPointeeType().getAddressSpace();
-      LangAS AddrSpaceR = RHSType->getPointeeType().getAddressSpace();
+      LangAS AddrSpaceR = RHSPointer->getPointeeType().getAddressSpace();
       if (AddrSpaceL != AddrSpaceR)
         Kind = CK_AddressSpaceConversion;
-      else if (Context.hasCvrSimilarType(RHSType, LHSType))
-        Kind = CK_NoOp;
-      else
-        Kind = CK_BitCast;
+      else if (LHSPointer->isFunctionPointerType() && RHSPointer->isFunctionPointerType()) {
+        // only allow implicit casts to and from function pointer capabilities
+        if (!LHSPointer->isCHERICapability() && RHSPointer->isCHERICapability())
+          Kind = CK_CHERICapabilityToPointer;
+        else if (LHSPointer->isCHERICapability() && !RHSPointer->isCHERICapability())
+          Kind = CK_PointerToCHERICapability;
+        else
+          Kind = CK_BitCast;
+      } else if (LHSPointer->isCHERICapability() != RHSPointer->isCHERICapability()) {
+        // all other implicit casts to and from capabilities are not allowed
+        Kind = RHSPointer->isCHERICapability() ? CK_CHERICapabilityToPointer :
+                                                 CK_PointerToCHERICapability;
+        return RHSPointer->isCHERICapability() ? CHERICapabilityToPointer :
+                                                 PointerToCHERICapability;
+      } else {
+        if (Context.hasCvrSimilarType(RHSType, LHSType))
+          Kind = CK_NoOp;
+        else
+          Kind = CK_BitCast;
+        if (RHSPointer->isCHERICapability() && isa<PointerType>(OrigRHSType) &&
+            RHSPointer->getPointeeType()->isVoidType())
+          if (auto *TT = dyn_cast<TypedefType>(
+                cast<PointerType>(OrigRHSType)->getPointeeType())) {
+            unsigned FromAlign = Context.getTypeAlignInChars(TT).getQuantity();
+            unsigned ToAlign =
+              Context.getTypeAlignInChars(LHSType).getQuantity();
+            if ((FromAlign > 1) && (ToAlign > FromAlign))
+              Diag(RHS.get()->getExprLoc(), diag::err_cheri_ptr_align) <<
+                OrigRHSType << LHSType << FromAlign << ToAlign;
+          }
+      }
       return checkPointerTypesForAssignment(*this, LHSType, RHSType);
     }
 
     // int -> T*
     if (RHSType->isIntegerType()) {
+      // Implicit casts from int -> memory capabilities are not allowed (except for null)
+      const Expr::NullPointerConstantKind RHSNullKind =
+          RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+      bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
+      if (LHSPointer->isCHERICapability() && !RHSIsNull &&
+          !RHSType->isIntCapType())
+        return Incompatible;
       Kind = CK_IntegralToPointer; // FIXME: null?
       return IntToPointer;
     }
@@ -8081,7 +8186,7 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
   }
 
   // Conversions from pointers that are not covered by the above.
-  if (isa<PointerType>(RHSType)) {
+  if (const PointerType *RHSPointer = dyn_cast<PointerType>(RHSType)) {
     // T* -> _Bool
     if (LHSType == Context.BoolTy) {
       Kind = CK_PointerToBoolean;
@@ -8090,6 +8195,13 @@ Sema::CheckAssignmentConstraints(QualType LHSType, ExprResult &RHS,
 
     // T* -> int
     if (LHSType->isIntegerType()) {
+      // Implicit casts from memory capabilities -> int are not allowed (except for null)
+      const Expr::NullPointerConstantKind RHSNullKind =
+          RHS.get()->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+      bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
+      if (RHSPointer->isCHERICapability() && !RHSIsNull &&
+          !LHSType->isIntCapType())
+        return Incompatible;
       Kind = CK_PointerToIntegral;
       return PointerToInt;
     }
@@ -8936,6 +9048,15 @@ QualType Sema::CheckRemainderOperands(
   ExprResult &LHS, ExprResult &RHS, SourceLocation Loc, bool IsCompAssign) {
   checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
 
+  // Remainder in offset mode will not work for alignment checks since it
+  // doesn't take the base into account so we warn then
+  if (getLangOpts().cheriUIntCapUsesOffset() &&
+      (LHS.get()->getType()->isCHERICapabilityType(Context) ||
+       RHS.get()->getType()->isCHERICapabilityType(Context)))
+    Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
+      << 2 /*=modulo*/ << 1 /* used for alignment checks */
+      << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+
   if (LHS.get()->getType()->isVectorType() ||
       RHS.get()->getType()->isVectorType()) {
     if (LHS.get()->getType()->hasIntegerRepresentation() &&
@@ -9088,7 +9209,15 @@ static bool checkArithmeticBinOpPointerOperands(Sema &S, SourceLocation Loc,
   if (S.getLangOpts().OpenCL && isLHSPointer && isRHSPointer) {
     const PointerType *lhsPtr = LHSExpr->getType()->getAs<PointerType>();
     const PointerType *rhsPtr = RHSExpr->getType()->getAs<PointerType>();
-    if (!lhsPtr->isAddressSpaceOverlapping(*rhsPtr)) {
+    ASTContext &Context = S.getASTContext();
+    const Expr::NullPointerConstantKind LHSNullKind =
+        LHSExpr->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+    const Expr::NullPointerConstantKind RHSNullKind =
+        RHSExpr->isNullPointerConstant(Context, Expr::NPC_ValueDependentIsNull);
+    bool LHSIsNull = LHSNullKind != Expr::NPCK_NotNull;
+    bool RHSIsNull = RHSNullKind != Expr::NPCK_NotNull;
+    if (!RHSIsNull && !LHSIsNull &&
+        !lhsPtr->isAddressSpaceOverlapping(*rhsPtr)) {
       S.Diag(Loc,
              diag::err_typecheck_op_on_nonoverlapping_address_space_pointers)
           << LHSExpr->getType() << RHSExpr->getType() << 1 /*arithmetic op*/
@@ -9662,6 +9791,16 @@ QualType Sema::CheckShiftOperands(ExprResult &LHS, ExprResult &RHS,
   }
   // Sanity-check shift operands
   DiagnoseBadShiftValues(*this, LHS, RHS, Loc, Opc, LHSType);
+
+  // In CHERI offset mode shifts only look at the offset and ignore the base.
+  // This is rarely the intended behaviour so warn if that is the case.
+  if (getLangOpts().cheriUIntCapUsesOffset() &&
+      (LHSType->isIntCapType() || RHSType->isIntCapType()) &&
+      (Opc == BO_Shl || Opc == BO_ShlAssign || Opc == BO_Shr ||
+       Opc == BO_ShrAssign))
+    Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
+        << 1 /*=shift*/ << 0 /* usecase is hashing */
+        << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
 
   // "The type of the result is that of the promoted left operand."
   return LHSType;
@@ -10405,6 +10544,21 @@ QualType Sema::CheckCompareOperands(ExprResult &LHS, ExprResult &RHS,
     }
   } else if (LHSType->isPointerType() &&
              RHSType->isPointerType()) { // C99 6.5.8p2
+    bool LHSIsCap = LHSType->isCHERICapabilityType(Context);
+    bool RHSIsCap = RHSType->isCHERICapabilityType(Context);
+
+    // Binary operations between pointers and capabilities are errors
+    if (LHSIsCap != RHSIsCap && !(LHSIsNull || RHSIsNull))
+      Diag(Loc, diag::err_typecheck_comparison_of_pointer_capability)
+        << LHSType << RHSType << LHS.get()->getSourceRange()
+        << RHS.get()->getSourceRange();
+
+    // We only implicitly cast the NULL constant to a memory capability
+    if (LHSIsNull && !LHSIsCap && RHSIsCap)
+        LHS = ImpCastExprToType(LHS.get(), RHSType, CK_PointerToCHERICapability);
+    else if (RHSIsNull && !RHSIsCap && LHSIsCap)
+        RHS = ImpCastExprToType(RHS.get(), LHSType, CK_PointerToCHERICapability);
+
     // All of the following pointer-related warnings are GCC extensions, except
     // when handling null pointer constants.
     QualType LCanPointeeTy =
@@ -10802,6 +10956,9 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
                                            BinaryOperatorKind Opc) {
   checkArithmeticNull(*this, LHS, RHS, Loc, /*isCompare=*/false);
 
+  // For the CHERI checks below we want to look at the unpromoted type
+  QualType OriginalLHSType = LHS.get()->getType();
+
   bool IsCompAssign =
       Opc == BO_AndAssign || Opc == BO_OrAssign || Opc == BO_XorAssign;
 
@@ -10826,8 +10983,36 @@ inline QualType Sema::CheckBitwiseOperands(ExprResult &LHS, ExprResult &RHS,
   LHS = LHSResult.get();
   RHS = RHSResult.get();
 
-  if (!compType.isNull() && compType->isIntegralOrUnscopedEnumerationType())
+  if (!compType.isNull() && compType->isIntegralOrUnscopedEnumerationType()) {
+    bool isLHSCap = OriginalLHSType->isCHERICapabilityType(Context);
+    bool isRHSCap = RHS.get()->getType()->isCHERICapabilityType(Context);
+    bool UsingUIntCapOffset = getLangOpts().cheriUIntCapUsesOffset();
+    if (isLHSCap && (Opc == BO_And || Opc == BO_AndAssign)) {
+      // Bitwise and can cause checking low pointer bits to be compiled to
+      // and always false condition (see CTSRD-CHERI/clang#189) unless we
+      // have CheriDataDependentProvenance enabled. It also gives surprising
+      // behaviour if we are compiling in uintcap=offset mode so warn if either
+      // of conditions are not met:
+      if (UsingUIntCapOffset || !getLangOpts().CheriDataDependentProvenance)
+        Diag(Loc, diag::warn_uintcap_bitwise_and)
+            << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+    } else if (UsingUIntCapOffset && isLHSCap &&
+               (Opc == BO_Xor || Opc == BO_XorAssign)) {
+      // XOR is highly dubious when in offset mode (except when using on plain
+      // integer values, but then the user should be using size_t/vaddr_t and
+      // not uintcap_t. Don't warn in address mode since that works just fine
+      // (only slightly less efficiently)
+      Diag(Loc, diag::warn_uintcap_bad_bitwise_op)
+          << 0 /*=xor*/ << 0 /* usecase is hashing */
+          << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+    } else if ((isLHSCap && !isRHSCap) || (!isLHSCap && isRHSCap)) {
+      // FIXME: this warning is not always useful
+      Diag(Loc, diag::warn_mixed_capability_binop)
+          << OriginalLHSType << RHS.get()->getType()
+          << LHS.get()->getSourceRange() << RHS.get()->getSourceRange();
+    }
     return compType;
+  }
   return InvalidOperands(Loc, LHS, RHS);
 }
 
@@ -11733,6 +11918,29 @@ static void diagnoseAddressOfInvalidType(Sema &S, SourceLocation Loc,
   S.Diag(Loc, diag::err_typecheck_address_of) << Type << E->getSourceRange();
 }
 
+static ASTContext::PointerInterpretationKind
+pointerKindForBaseExpr(const ASTContext &Context, const Expr *Base, bool WasMemberExpr = false) {
+  if (auto *mr = dyn_cast<MemberExpr>(Base))
+    return pointerKindForBaseExpr(Context, mr->getBase(), true);
+  else if (auto *as = dyn_cast<ArraySubscriptExpr>(Base))
+    // We need IgnoreImpCasts() here to strip the ArrayToPointerDecay
+    return pointerKindForBaseExpr(Context, as->getBase()->IgnoreImpCasts(), true);
+
+  // If we are just taking the address of something that happens to be a
+  // capability we should not infer that the result is a capability. This only
+  // applies if there is a least one level of MemberExpr/ArraySubscriptExpr
+  // For example the following should be an error in the hybrid ABI:
+  // void * __capability b;
+  // void *__capability *__capability c = &b;
+  if (!WasMemberExpr)
+    return ASTContext::PIK_Default;
+  // If the basetype is __uintcap_t we don't want to treat the result as a
+  // capability (such as in uintcap_t foo; return &foo;)
+  if (Base->getType()->isCHERICapabilityType(Context, /*IncludeIntCap=*/false))
+    return ASTContext::PIK_Capability;
+  return ASTContext::PIK_Default;
+}
+
 /// CheckAddressOfOperand - The operand of & must be either a function
 /// designator or an lvalue designating an object. If it is an lvalue, the
 /// object cannot be declared with storage class register or be a bit field.
@@ -11953,7 +12161,9 @@ QualType Sema::CheckAddressOfOperand(ExprResult &OrigOp, SourceLocation OpLoc) {
 
   CheckAddressOfPackedMember(op);
 
-  return Context.getPointerType(op->getType());
+  ASTContext::PointerInterpretationKind PIK =
+      pointerKindForBaseExpr(Context, op);
+  return Context.getPointerType(op->getType(), PIK);
 }
 
 static void RecordModifiableNonNullParam(Sema &S, const Expr *Exp) {
@@ -12870,6 +13080,12 @@ static bool isOverflowingIntegerType(ASTContext &Ctx, QualType T) {
 ExprResult Sema::CreateBuiltinUnaryOp(SourceLocation OpLoc,
                                       UnaryOperatorKind Opc,
                                       Expr *InputExpr) {
+  if (InputExpr->getType().getQualifiers().hasOutput()) {
+    return ExprError(Diag(InputExpr->getExprLoc(), diag::err_typecheck_read_output)
+      << InputExpr->getSourceRange());
+  }
+
+
   ExprResult Input = InputExpr;
   ExprValueKind VK = VK_RValue;
   ExprObjectKind OK = OK_Ordinary;
@@ -13918,12 +14134,15 @@ ExprResult Sema::ActOnGNUNullExpr(SourceLocation TokenLoc) {
   // The type of __null will be int or long, depending on the size of
   // pointers on the target.
   QualType Ty;
-  unsigned pw = Context.getTargetInfo().getPointerWidth(0);
-  if (pw == Context.getTargetInfo().getIntWidth())
+  const auto& TI = Context.getTargetInfo();
+  unsigned pw = TI.getPointerWidth(0);
+  if (TI.areAllPointersCapabilities() && pw == TI.getIntCapWidth())
+    Ty = Context.IntCapTy;
+  else if (pw == TI.getIntWidth())
     Ty = Context.IntTy;
-  else if (pw == Context.getTargetInfo().getLongWidth())
+  else if (pw == TI.getLongWidth())
     Ty = Context.LongTy;
-  else if (pw == Context.getTargetInfo().getLongLongWidth())
+  else if (pw == TI.getLongLongWidth())
     Ty = Context.LongLongTy;
   else {
     llvm_unreachable("I don't know size of pointer!");
@@ -13986,6 +14205,78 @@ static bool maybeDiagnoseAssignmentToFunction(Sema &S, QualType DstType,
                                               SrcExpr->getBeginLoc());
 }
 
+static void diagnoseBadVariadicFunctionPointerAssignment(Sema &S,
+                                                         SourceLocation Loc,
+                                                         QualType SrcType,
+                                                         QualType DstType,
+                                                         Expr* SrcExpr) {
+  const FunctionType *DstFnTy =
+      DstType->getPointeeType()->getAs<FunctionType>();
+
+  const FunctionType *SrcFnTy = nullptr;
+  if (SrcType->isFunctionPointerType())
+    SrcFnTy = SrcType->getPointeeType()->getAs<FunctionType>();
+  else
+    SrcFnTy = SrcType->getAs<FunctionType>();
+  // TODO: also diagnose any variadic to non-variadic
+  // TODO: don't warn about zero-arg function
+  if (!SrcFnTy)
+    return; // Should give an invalid pointer to function warning anyway
+
+  FunctionDecl* FuncDecl = nullptr;
+  // Avoid warnings for K&R functions where we actually know the prototype:
+  if (auto *UO = dyn_cast<UnaryOperator>(SrcExpr->IgnoreImplicit())) {
+    // look through &foo to find the actual function
+    if (UO->getOpcode() == UO_AddrOf)
+      SrcExpr = UO->getSubExpr();
+  }
+  if (auto *DRE = dyn_cast<DeclRefExpr>(SrcExpr->IgnoreImplicit())) {
+    FuncDecl = dyn_cast<FunctionDecl>(DRE->getDecl());
+  }
+
+  enum class CCType { NoProto, Variadic, FixedArg, Invalid };
+  CCType SrcCCType = CCType::Invalid;
+  if (SrcFnTy->isFunctionNoProtoType()) {
+    // Type is noproto but we might have a decl with the real prototype:
+    if (FuncDecl)
+      SrcFnTy = FuncDecl->getType()->getAs<FunctionType>();
+    // Now check again to see if it is still a noproto type
+    if (SrcFnTy->isFunctionNoProtoType())
+      SrcCCType = CCType::NoProto;
+  }
+  if (auto *SrcProto = SrcFnTy->getAs<FunctionProtoType>()) {
+    // assigning a function without parameters is fine since there will never be
+    // any confusion between on-stack and in-register arguments
+    if (SrcProto->getNumParams() == 0)
+      return;
+    SrcCCType = SrcProto->isVariadic() ? CCType::Variadic : CCType::FixedArg;
+  }
+  CCType DstCCType = CCType::Invalid;
+  if (DstFnTy->isFunctionNoProtoType())
+    DstCCType = CCType::NoProto;
+  else if (auto *DstProto = DstFnTy->getAs<FunctionProtoType>()) {
+    DstCCType = DstProto->isVariadic() ? CCType::Variadic : CCType::FixedArg;
+  }
+  assert(SrcCCType != CCType::Invalid);
+  assert(DstCCType != CCType::Invalid);
+
+  if (SrcCCType != DstCCType) {
+    // converting variadic to non-variadic is an error by default, the other is
+    // a pedantic warning that is often a false positive
+    unsigned DiagID = diag::warn_mips_cheri_fnptr_proto_noproto_conversion;
+    unsigned ExplainID = diag::note_mips_cheri_func_noproto_explanation;
+    if (SrcCCType == CCType::Variadic || DstCCType == CCType::Variadic) {
+      DiagID = diag::warn_mips_cheri_fnptr_variadic_nonvariadic_conversion;
+      ExplainID = diag::note_mips_cheri_func_variadic_explanation;
+    }
+    S.Diag(Loc, DiagID) << (int)SrcCCType << SrcType << (int)DstCCType
+                        << DstType;
+    S.Diag(Loc, ExplainID);
+    if (FuncDecl)
+      S.Diag(FuncDecl->getBeginLoc(), diag::note_callee_decl) << FuncDecl;
+  }
+}
+
 bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
                                     SourceLocation Loc,
                                     QualType DstType, QualType SrcType,
@@ -14004,6 +14295,15 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
   bool MayHaveFunctionDiff = false;
   const ObjCInterfaceDecl *IFace = nullptr;
   const ObjCProtocolDecl *PDecl = nullptr;
+
+  // Warn when assigning non-variadic functions to variadic function pointers
+  // and the other way around
+  // TODO: this should probably be upstreamed as it is not CHERI specific
+  // TODO: only for Context.getTargetInfo().areAllPointersCapabilities()?
+  // Note: we need to do this even if ConvTy == compatible since pointers without
+  // prototypes can be assigned to from any function pointer type
+  if (DstType->isFunctionPointerType())
+    diagnoseBadVariadicFunctionPointerAssignment(*this, Loc, SrcType, DstType, SrcExpr);
 
   switch (ConvTy) {
   case Compatible:
@@ -14052,7 +14352,9 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
 
     Qualifiers lhq = SrcType->getPointeeType().getQualifiers();
     Qualifiers rhq = DstType->getPointeeType().getQualifiers();
-    if (lhq.getAddressSpace() != rhq.getAddressSpace()) {
+    LangAS LAS = lhq.getAddressSpace();
+    LangAS RAS = rhq.getAddressSpace();
+    if (LAS != RAS) {
       DiagKind = diag::err_typecheck_incompatible_address_space;
       break;
 
@@ -14120,11 +14422,56 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
   case IncompatibleObjCWeakRef:
     DiagKind = diag::err_arc_weak_unavailable_assign;
     break;
+  case CHERICapabilityToPointer:
+  case PointerToCHERICapability: {
+    bool PtrToCap = ConvTy == PointerToCHERICapability;
+
+    if (PtrToCap) {
+      // first perform array|function to pointer decay
+      ExprResult Decayed = DefaultFunctionArrayLvalueConversion(SrcExpr);
+      if (Decayed.isInvalid()) {
+        isInvalid = true;
+        return true;
+        break;
+      }
+      SrcExpr = Decayed.get();
+      SrcType = SrcExpr->getType();
+      if (ImpCastPointerToCHERICapability(SrcType, DstType, SrcExpr, false))
+        return false;
+    }
+
+    // If we reach here, output an error
+    DiagKind = PtrToCap ? diag::err_typecheck_convert_ptr_to_cap
+                        : diag::err_typecheck_convert_cap_to_ptr;
+    MayHaveConvFixit = true;
+    isInvalid = true;
+    Hint = FixItHint::CreateInsertion(SrcExpr->getBeginLoc(), "(__cheri_" +
+                                      std::string(PtrToCap ? "to" : "from") +
+                                      "cap " + DstType.getAsString() + ")");
+    Diag(Loc, DiagKind) << SrcType << DstType << false << Hint;
+    return true;
+    break;
+  }
   case Incompatible:
     if (maybeDiagnoseAssignmentToFunction(*this, DstType, SrcExpr)) {
       if (Complained)
         *Complained = true;
       return true;
+    }
+
+    // CHERI: in the case of implicit conversion of address-of expressions to capabilities,
+    // output error message here if the types are not compatible, so that we
+    // get the same error message for both C and C++.
+    if (SrcType->isPointerType()
+        && !SrcType->isCHERICapabilityType(Context, false)
+        && DstType->isCHERICapabilityType(Context, false)) {
+      if (UnaryOperator *UnOp = dyn_cast<UnaryOperator>(SrcExpr)) {
+        if (UnOp->getOpcode() == UO_AddrOf) {
+          Diag(SrcExpr->getExprLoc(), diag::err_typecheck_convert_ptr_to_cap_unrelated_type)
+            << SrcType << DstType << false;
+          return true;
+        }
+      }
     }
 
     DiagKind = diag::err_typecheck_convert_incompatible;

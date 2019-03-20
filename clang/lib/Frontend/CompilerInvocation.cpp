@@ -739,6 +739,8 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
           Args.getLastArg(OPT_emit_llvm_uselists, OPT_no_emit_llvm_uselists))
     Opts.EmitLLVMUseLists = A->getOption().getID() == OPT_emit_llvm_uselists;
 
+  Opts.CHERILinker = Args.hasFlag(OPT_cheri_linker, OPT_no_cheri_linker, true);
+  Opts.CHERIStatsFile = Args.getLastArgValue(OPT_cheri_stats_file);
   Opts.DisableLLVMPasses = Args.hasArg(OPT_disable_llvm_passes);
   Opts.DisableLifetimeMarkers = Args.hasArg(OPT_disable_lifetimemarkers);
   Opts.DisableO0ImplyOptNone = Args.hasArg(OPT_disable_O0_optnone);
@@ -877,7 +879,18 @@ static bool ParseCodeGenArgs(CodeGenOptions &Opts, ArgList &Args, InputKind IK,
         << Args.getLastArg(OPT_mthread_model)->getAsString(Args)
         << Opts.ThreadModel;
   Opts.TrapFuncName = Args.getLastArgValue(OPT_ftrap_function_EQ);
-  Opts.UseInitArray = Args.hasArg(OPT_fuse_init_array);
+  const bool IsPurecapFreeBSD =
+      Triple.isOSFreeBSD() && TargetOpts.ABI == "purecap";
+  // CheriBSD purecap RTLD does not support .ctors for shared libraries/pie
+  // binaries so we default to .init_array
+  // TODO: we should proabbly do that for MIPS as well (which is what the clang
+  // frontend does but cc1 doesn't yet). Shouldn't really matter since we always
+  // compile with clang and not clang -cc1
+  bool UseInitArrayDefault = IsPurecapFreeBSD;
+  Opts.UseInitArray = Args.hasFlag(OPT_fuse_init_array, OPT_fno_use_init_array,
+                                   UseInitArrayDefault);
+  if (!Opts.UseInitArray && IsPurecapFreeBSD)
+    Diags.Report(diag::warn_cheri_purecap_init_array_required);
 
   Opts.FunctionSections = Args.hasFlag(OPT_ffunction_sections,
                                        OPT_fno_function_sections, false);
@@ -1364,11 +1377,18 @@ static bool parseShowColorsArgs(const ArgList &Args, bool DefaultColor) {
   // but default to off in cc1, needing an explicit OPT_fdiagnostics_color.
   // Support both clang's -f[no-]color-diagnostics and gcc's
   // -f[no-]diagnostics-colors[=never|always|auto].
-  enum {
+  enum ShowColorsEnum {
     Colors_On,
     Colors_Off,
     Colors_Auto
   } ShowColors = DefaultColor ? Colors_Auto : Colors_Off;
+  if (ShowColors == Colors_Auto) {
+    const char* ShowColorsEnv = std::getenv("CLANG_FORCE_COLOR_DIAGNOSTICS");
+    ShowColors = llvm::StringSwitch<ShowColorsEnum>(ShowColorsEnv)
+            .Cases("no", "0", Colors_Off)
+            .Cases("yes", "always", "1", Colors_On)
+            .Default(Colors_Auto);
+  }
   for (auto *A : Args) {
     const Option &O = A->getOption();
     if (O.matches(options::OPT_fcolor_diagnostics) ||
@@ -2507,6 +2527,38 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   else if (Args.hasArg(OPT_fwrapv))
     Opts.setSignedOverflowBehavior(LangOptions::SOB_Defined);
 
+  // uintcap_t mode: vaddr or offset
+  bool UseCheriVaddrMode =
+      Args.hasFlag(OPT_cheri_uintcap_addr, OPT_cheri_uintcap_offset, true);
+  Opts.setCheriUIntCap(UseCheriVaddrMode
+                           ? LangOptions::CheriUIntCapMode::UIntCap_Addr
+                           : LangOptions::CheriUIntCapMode::UIntCap_Offset);
+
+  // Parse the -cheri-bounds= option to determine whether we should set more
+  // bounds on capabilities (e.g. when passing subobject references to
+  // functions)
+  if (const Arg *A = Args.getLastArg(OPT_cheri_bounds_EQ)) {
+    auto BoundsMode =
+        llvm::StringSwitch<LangOptions::CheriBoundsMode>(A->getValue())
+            .Case("conservative", LangOptions::CBM_Conservative)
+            .Case("references-only", LangOptions::CBM_References)
+            .Case("subobject-safe", LangOptions::CBM_SubObjectsSafe)
+            .Case("aggressive", LangOptions::CBM_Aggressive)
+            .Case("very-aggressive", LangOptions::CBM_VeryAggressive)
+            .Case("everywhere-unsafe", LangOptions::CBM_EverywhereUnsafe)
+            .Default((LangOptions::CheriBoundsMode)-1);
+
+    if (BoundsMode == (LangOptions::CheriBoundsMode)-1) {
+      Diags.Report(diag::err_drv_invalid_value)
+          << A->getAsString(Args) << A->getValue();
+    } else {
+      Opts.setCheriBounds(BoundsMode);
+    }
+  }
+
+  Opts.CheriDataDependentProvenance =
+      Args.hasArg(OPT_cheri_data_dependent_provenance);
+
   Opts.MSVCCompat = Args.hasArg(OPT_fms_compatibility);
   Opts.MicrosoftExt = Opts.MSVCCompat || Args.hasArg(OPT_fms_extensions);
   Opts.AsmBlocks = Args.hasArg(OPT_fasm_blocks) || Opts.MicrosoftExt;
@@ -2573,7 +2625,6 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
 
   Opts.ExternCNoUnwind = Args.hasArg(OPT_fexternc_nounwind);
   Opts.TraditionalCPP = Args.hasArg(OPT_traditional_cpp);
-
   Opts.RTTI = Opts.CPlusPlus && !Args.hasArg(OPT_fno_rtti);
   Opts.RTTIData = Opts.RTTI && !Args.hasArg(OPT_fno_rtti_data);
   Opts.Blocks = Args.hasArg(OPT_fblocks) || (Opts.OpenCL
@@ -3203,6 +3254,27 @@ static void ParseTargetArgs(TargetOptions &Opts, ArgList &Args,
     Opts.Triple = llvm::sys::getDefaultTargetTriple();
   Opts.Triple = llvm::Triple::normalize(Opts.Triple);
   Opts.OpenCLExtensionsAsWritten = Args.getAllArgValues(OPT_cl_ext_EQ);
+
+  llvm::Triple T(Opts.Triple);
+  if (T.getArch() == llvm::Triple::cheri && Opts.ABI == "sandbox") {
+    // rename sandbox ABI to purecap ABI and output a deprecated warning
+    Opts.ABI = "purecap";
+    Diags.Report(diag::warn_cheri_sandbox_abi_is_purecap);
+  }
+
+  if (const Arg *A = Args.getLastArg(OPT_cheri_size)) {
+    // NOTE: Opts.Features is cleared after this so we need to add it to FeaturesAsWritten!
+    Opts.FeaturesAsWritten.push_back("+chericap");
+    StringRef CheriCPUName = llvm::StringSwitch<StringRef>(A->getValue())
+      .Case("64", "+cheri64")
+      .Case("128", "+cheri128")
+      .Case("256", "+cheri256")
+      .Default("");
+    if (CheriCPUName.empty())
+      Diags.Report(diag::err_drv_invalid_value) << A->getAsString(Args) << A->getValue();
+    Opts.FeaturesAsWritten.push_back(CheriCPUName);
+    A->claim();
+  }
   Opts.ForceEnableInt128 = Args.hasArg(OPT_fforce_enable_int128);
   Opts.NVPTXUseShortPointers = Args.hasFlag(
       options::OPT_fcuda_short_ptr, options::OPT_fno_cuda_short_ptr, false);

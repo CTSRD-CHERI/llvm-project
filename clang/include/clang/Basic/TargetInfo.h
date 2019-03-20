@@ -61,10 +61,11 @@ protected:
   bool TLSSupported;
   bool VLASupported;
   bool NoAsmVariants;  // True if {|} are normal characters.
+  bool CapabilityABI = false;
   bool HasLegalHalfType; // True if the backend supports operations on the half
                          // LLVM IR type.
   bool HasFloat128;
-  unsigned char PointerWidth, PointerAlign;
+  unsigned short PointerWidth, PointerAlign;
   unsigned char BoolWidth, BoolAlign;
   unsigned char IntWidth, IntAlign;
   unsigned char HalfWidth, HalfAlign;
@@ -101,10 +102,10 @@ protected:
   unsigned char AccumScale;
   unsigned char LongAccumScale;
 
-  unsigned char SuitableAlign;
-  unsigned char DefaultAlignForAttributeAligned;
+  unsigned short SuitableAlign;
+  unsigned short DefaultAlignForAttributeAligned;
   unsigned char MinGlobalAlign;
-  unsigned char MaxAtomicPromoteWidth, MaxAtomicInlineWidth;
+  unsigned short MaxAtomicPromoteWidth, MaxAtomicInlineWidth;
   unsigned short MaxVectorAlign;
   unsigned short MaxTLSAlign;
   unsigned short SimdDefaultAlign;
@@ -165,7 +166,9 @@ public:
     SignedLong,
     UnsignedLong,
     SignedLongLong,
-    UnsignedLongLong
+    UnsignedLongLong,
+    SignedIntCap,
+    UnsignedIntCap,
   };
 
   enum RealType {
@@ -307,6 +310,8 @@ public:
       return UnsignedLong;
     case SignedLongLong:
       return UnsignedLongLong;
+    case SignedIntCap:
+      return UnsignedIntCap;
     default:
       llvm_unreachable("Unexpected signed integer type");
     }
@@ -346,20 +351,45 @@ public:
   /// Return the width of pointers on this target, for the
   /// specified address space.
   uint64_t getPointerWidth(unsigned AddrSpace) const {
-    return AddrSpace == 0 ? PointerWidth : getPointerWidthV(AddrSpace);
+    if (AddrSpace == 0) {
+      if (areAllPointersCapabilities())
+        return getCHERICapabilityWidth();
+      return PointerWidth;
+    }
+    return getPointerWidthV(AddrSpace);
+  }
+  /// \brief Returns the integer range for the pointer.  For architectures
+  /// where pointers are integers, this will be the same as the size.
+  uint64_t getPointerRange(unsigned AddrSpace) const {
+    if (AddrSpace == 0 && areAllPointersCapabilities()) {
+      return getPointerRangeForCHERICapability();
+    }
+    // Eventually we may want to special case AS0.
+    return getPointerRangeV(AddrSpace);
   }
   uint64_t getPointerAlign(unsigned AddrSpace) const {
-    return AddrSpace == 0 ? PointerAlign : getPointerAlignV(AddrSpace);
+    if (AddrSpace == 0) {
+      if (areAllPointersCapabilities())
+        return getCHERICapabilityAlign();
+      return PointerAlign;
+    }
+    return getPointerAlignV(AddrSpace);
   }
 
   /// Return the maximum width of pointers on this target.
-  virtual uint64_t getMaxPointerWidth() const {
+  virtual uint64_t getMaxPointerRange() const {
     return PointerWidth;
   }
 
   /// Get integer value for null pointer.
   /// \param AddrSpace address space of pointee in source language.
   virtual uint64_t getNullPointerValue(LangAS AddrSpace) const { return 0; }
+
+  virtual uint64_t getCHERICapabilityWidth() const { return -1; }
+
+  virtual uint64_t getCHERICapabilityAlign() const { return -1; }
+
+  virtual uint64_t getPointerRangeForCHERICapability() const { return -1; }
 
   /// Return the size of '_Bool' and C++ 'bool' for this target, in bits.
   unsigned getBoolWidth() const { return BoolWidth; }
@@ -382,6 +412,11 @@ public:
   /// this target, in bits.
   unsigned getIntWidth() const { return IntWidth; }
   unsigned getIntAlign() const { return IntAlign; }
+
+  /// getIntWidth/Align - Return the size of '__intcap_t' and '__uintcap_t' for
+  /// this target, in bits.
+  virtual unsigned getIntCapWidth() const { return LongWidth; }
+  virtual unsigned getIntCapAlign() const { return LongAlign; }
 
   /// getLongWidth/Align - Return the size of 'signed long' and 'unsigned long'
   /// for this target, in bits.
@@ -535,7 +570,13 @@ public:
   /// '::operator new(size_t)' is guaranteed to produce a correctly-aligned
   /// pointer.
   unsigned getNewAlign() const {
-    return NewAlign ? NewAlign : std::max(LongDoubleAlign, LongLongAlign);
+    if (NewAlign)
+      return NewAlign;
+    // If CHERI is supported new will return at least capability-aligned memory
+    unsigned Align = std::max(LongDoubleAlign, LongLongAlign);
+    if (SupportsCapabilities())
+      Align = std::max(Align, (unsigned)getCHERICapabilityAlign());
+    return Align;
   }
 
   /// getWCharWidth/Align - Return the size of 'wchar_t' for this target, in
@@ -1213,6 +1254,8 @@ public:
   bool isBigEndian() const { return BigEndian; }
   bool isLittleEndian() const { return !BigEndian; }
 
+  bool areAllPointersCapabilities() const { return CapabilityABI; }
+
   enum CallingConvMethodType {
     CCMT_Unknown,
     CCMT_Member,
@@ -1246,6 +1289,9 @@ public:
         return CCCR_OK;
     }
   }
+
+  /// SupportsCapabilities - Returns true if the target supports capabilities.
+  virtual bool SupportsCapabilities() const { return false; }
 
   enum CallingConvKind {
     CCK_Default,
@@ -1335,6 +1381,9 @@ public:
 protected:
   virtual uint64_t getPointerWidthV(unsigned AddrSpace) const {
     return PointerWidth;
+  }
+  virtual uint64_t getPointerRangeV(unsigned AddrSpace) const {
+    return getPointerWidthV(AddrSpace);
   }
   virtual uint64_t getPointerAlignV(unsigned AddrSpace) const {
     return PointerAlign;

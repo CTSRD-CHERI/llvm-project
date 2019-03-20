@@ -124,7 +124,7 @@ endif()
 add_custom_target(clang-test-depends DEPENDS ${CLANG_TEST_DEPS})
 set_target_properties(clang-test-depends PROPERTIES FOLDER "Clang tests")
 
-add_lit_testsuite(check-clang "Running the Clang regression tests"
+add_lit_testsuite_with_cheri_selectors(check-clang "Running the Clang regression tests"
   ${CMAKE_CURRENT_BINARY_DIR}
   #LIT ${LLVM_LIT}
   PARAMS ${CLANG_TEST_PARAMS}
@@ -155,10 +155,10 @@ if (CLANG_ENABLE_STATIC_ANALYZER)
   set(EXCLUDE_FROM_ALL OFF)
 endif()
 
-add_lit_testsuites(CLANG ${CMAKE_CURRENT_SOURCE_DIR}
-  PARAMS ${CLANG_TEST_PARAMS}
-  DEPENDS ${CLANG_TEST_DEPS}
-)
+#add_lit_testsuites(CLANG ${CMAKE_CURRENT_SOURCE_DIR}
+#  PARAMS ${CLANG_TEST_PARAMS}
+#  DEPENDS ${CLANG_TEST_DEPS}
+#)
 
 # Add a legacy target spelling: clang-test
 add_custom_target(clang-test)

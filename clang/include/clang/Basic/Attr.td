@@ -1099,7 +1099,7 @@ def EmptyBases : InheritableAttr, TargetSpecificAttr<TargetMicrosoftCXXABI> {
 
 def AllocSize : InheritableAttr {
   let Spellings = [GCC<"alloc_size">];
-  let Subjects = SubjectList<[Function]>;
+  let Subjects = SubjectList<[HasFunctionProto]>;
   let Args = [ParamIdxArgument<"ElemSizeParam">,
               ParamIdxArgument<"NumElemsParam", /*opt*/ 1>];
   let TemplateDependent = 1;
@@ -1562,6 +1562,16 @@ def NoEscape : Attr {
   let Documentation = [NoEscapeDocs];
 }
 
+def TemporalSafe : InheritableAttr {
+  let Spellings = [GCC<"temporal_safe">];
+  let Documentation = [Undocumented];
+}
+
+def TemporalUnsafe : InheritableAttr {
+  let Spellings = [GCC<"temporal_unsafe">];
+  let Documentation = [Undocumented];
+}
+
 def AssumeAligned : InheritableAttr {
   let Spellings = [GCC<"assume_aligned">];
   let Subjects = SubjectList<[ObjCMethod, Function]>;
@@ -1799,6 +1809,56 @@ def Packed : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+// CHERI-related attributes
+
+def CHERICapability : TypeAttr {
+  let Spellings = [GNU<"cheri_capability">];
+  let Documentation = [Undocumented];
+}
+def MemoryAddress : TypeAttr {
+  let Spellings = [GNU<"memory_address">, CXX11<"cheri","memory_address">];
+  let Documentation = [Undocumented];
+}
+
+def PointerInterpretationCaps : DeclOrTypeAttr { // InheritableAttr {
+  let Spellings = [GNU<"pointer_interpretation_capabilities">];
+  let Documentation = [Undocumented];
+}
+
+def CHERICCall : DeclOrTypeAttr { // InheritableAttr {
+  let Spellings = [GNU<"cheri_ccall">];
+  let Documentation = [Undocumented];
+}
+
+def CHERICCallee : DeclOrTypeAttr { // InheritableAttr {
+  let Spellings = [GNU<"cheri_ccallee">];
+  let Subjects = SubjectList<[Function], ErrorDiag>;
+  let Documentation = [Undocumented];
+}
+
+def CHERICCallback : DeclOrTypeAttr { // InheritableAttr {
+  let Spellings = [GNU<"cheri_ccallback">];
+  let Documentation = [Undocumented];
+}
+
+def CHERIMethodSuffix : DeclOrTypeAttr { // InheritableAttr {
+  let Spellings = [GNU<"cheri_method_suffix">];
+  let Documentation = [Undocumented];
+  let Args = [StringArgument<"Suffix">];
+}
+def CHERIMethodClass : DeclOrTypeAttr { // InheritableAttr {
+  let Spellings = [GNU<"cheri_method_class">];
+  let Documentation = [Undocumented];
+  let Args = [IdentifierArgument<"DefaultClass">];
+}
+
+def CHERINoSubobjectBounds : DeclOrTypeAttr {
+  let Spellings = [GNU<"cheri_no_subobject_bounds">,
+                   CXX11<"cheri","no_subobject_bounds">,
+                   C2x<"cheri", "no_subobject_bounds">];
+  let Documentation = [Undocumented];
+}
+
 def IntelOclBicc : DeclOrTypeAttr {
   let Spellings = [Clang<"intel_ocl_bicc", 0>];
 //  let Subjects = [Function, ObjCMethod];
@@ -1924,6 +1984,11 @@ def Sentinel : InheritableAttr {
   let Args = [DefaultIntArgument<"Sentinel", 0>,
               DefaultIntArgument<"NullPos", 0>];
 //  let Subjects = SubjectList<[Function, ObjCMethod, Block, Var]>;
+  let Documentation = [Undocumented];
+}
+
+def Sensitive : InheritableAttr {
+  let Spellings = [GNU<"sensitive">];
   let Documentation = [Undocumented];
 }
 

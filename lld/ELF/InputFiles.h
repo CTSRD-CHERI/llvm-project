@@ -47,6 +47,7 @@ namespace elf {
 using llvm::object::Archive;
 
 class Symbol;
+class SymbolTable;
 
 // If -reproduce option is given, all input files are written
 // to this tar archive.
@@ -103,6 +104,7 @@ public:
   // have ELF type (i.e. ELF{32,64}{LE,BE}) and target machine type.
   ELFKind EKind = ELFNoneKind;
   uint16_t EMachine = llvm::ELF::EM_NONE;
+  uint64_t EFlags = 0;
   uint8_t OSABI = 0;
 
   // Cache for toString(). Only toString() should use this member.
@@ -293,10 +295,14 @@ public:
   // function returns a nullptr (so we don't instantiate the same file
   // more than once.)
   InputFile *fetch(const Archive::Symbol &Sym);
+  template <class ELFT> void fetchRemaining(SymbolTable* STab);
 
 private:
   std::unique_ptr<Archive> File;
   llvm::DenseSet<uint64_t> Seen;
+
+public:
+  llvm::MapVector<uint64_t,InputFile*> Children;
 };
 
 class BitcodeFile : public InputFile {

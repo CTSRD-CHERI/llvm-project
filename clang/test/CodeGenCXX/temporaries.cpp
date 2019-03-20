@@ -2,6 +2,15 @@
 // RUN: %clang_cc1 -emit-llvm %s -o - -triple=x86_64-apple-darwin9 -std=c++17 | FileCheck %s -check-prefixes=CHECK,NULL-INVALID,CHECK-CXX17
 // RUN: %clang_cc1 -emit-llvm %s -o - -triple=x86_64-apple-darwin9 -std=c++11 -fno-delete-null-pointer-checks | FileCheck %s -check-prefixes=CHECK,NULL-VALID,CHECK-CXX11
 
+
+// RUN: %cheri_cc1 -mllvm -cheri-cap-table-abi=legacy -fno-rtti -emit-llvm %s -o -  -target-abi purecap -std=c++11 | FileCheck %s -check-prefixes=CHERI,CHERI-LEGACY
+// RUN: %cheri_cc1 -mllvm -cheri-cap-table-abi=pcrel -fno-rtti -emit-llvm %s -o -  -target-abi purecap -std=c++11 | FileCheck %s -check-prefixes=CHERI
+// Check that there are no pointers without addresspace(200)* (other than the first two in the legacy ABI
+// CHERI-NOT: {{[^)]\*}}
+// CHERI-LEGACY: @_ZTVN7PR202271CE {{.*}} i8 addrspace(200)* addrspacecast (i8* bitcast (void (%"struct.PR20227::C" addrspace(200)*)* @_ZN7PR202271CD1Ev to i8*) to i8 addrspace(200)*),
+// CHERI-LEGACY: i8 addrspace(200)* addrspacecast (i8* bitcast (void (%"struct.PR20227::C" addrspace(200)*)* @_ZN7PR202271CD0Ev to i8*) to i8 addrspace(200)*)] }, comdat, align {{16|32}}
+// CHERI-NOT: {{[^)]\*}}
+
 namespace PR16263 {
   const unsigned int n = 1234;
   extern const int &r = (const int&)n;
@@ -37,8 +46,10 @@ namespace PR20227 {
   A &&a = dynamic_cast<A&&>(A{});
   // CHECK: @_ZGRN7PR202271aE_ = internal global
 
+#ifndef __CHERI_PURE_CAPABILITY__
   B &&b = dynamic_cast<C&&>(dynamic_cast<B&&>(C{}));
   // CHECK: @_ZGRN7PR202271bE_ = internal global
+#endif
 
   B &&c = static_cast<C&&>(static_cast<B&&>(C{}));
   // CHECK: @_ZGRN7PR202271cE_ = internal global
@@ -362,6 +373,8 @@ namespace UserConvertToValue {
   }
 }
 
+#ifndef __CHERI_PURE_CAPABILITY__
+// XXXAR: TODO: fix pointers to members so we no longer invoke @llvm.memcpy.p200i8.p0i8.i64
 namespace PR7556 {
   struct A { ~A(); }; 
   struct B { int i; ~B(); }; 
@@ -379,6 +392,7 @@ namespace PR7556 {
     // CHECK-NEXT: ret void
   }
 }
+#endif
 
 namespace Elision {
   struct A {

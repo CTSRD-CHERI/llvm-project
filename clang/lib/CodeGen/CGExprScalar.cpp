@@ -26,6 +26,7 @@
 #include "clang/Basic/CodeGenOptions.h"
 #include "clang/Basic/FixedPoint.h"
 #include "clang/Basic/TargetInfo.h"
+#include "clang/Sema/SemaDiagnostic.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
@@ -90,6 +91,9 @@ struct BinOpInfo {
   BinaryOperator::Opcode Opcode; // Opcode of BinOp to perform
   FPOptions FPFeatures;
   const Expr *E;      // Entire expr, for error unsupported.  May not be binop.
+  // For CHERI we may have to use NULL as the resulting base in a bitiwise-and
+  // instead of the LHS (see https://github.com/CTSRD-CHERI/clang/issues/189)
+  Value *ResultProvenanceOverride = nullptr;
 
   /// Check if the binop can result in integer overflow.
   bool mayHaveIntegerOverflow() const {
@@ -456,6 +460,12 @@ public:
   Value *VisitUnaryExprOrTypeTraitExpr(const UnaryExprOrTypeTraitExpr *E);
   Value *VisitAddrLabelExpr(const AddrLabelExpr *E) {
     llvm::Value *V = CGF.GetAddrOfLabel(E->getLabel());
+    auto &TI = CGF.getContext().getTargetInfo();
+    if (TI.areAllPointersCapabilities()) {
+      unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+      if (V->getType()->getPointerAddressSpace() != CapAS)
+        V = CodeGenFunction::FunctionAddressToCapability(CGF, V);
+    }
     return Builder.CreateBitCast(V, ConvertType(E->getType()));
   }
 
@@ -588,10 +598,24 @@ public:
 
 
   Value *VisitUnaryAddrOf(const UnaryOperator *E) {
-    if (isa<MemberPointerType>(E->getType())) // never sugared
-      return CGF.CGM.getMemberPointerConstant(E);
-
-    return EmitLValue(E->getSubExpr()).getPointer();
+    if (isa<MemberPointerType>(E->getType())) {// never sugared
+      return CGF.EmitCXXMemberPointerAddressOf(E);
+    }
+    llvm::Value *Addr = EmitLValue(E->getSubExpr()).getPointer();
+    auto &TI = CGF.getContext().getTargetInfo();
+    if (TI.areAllPointersCapabilities()) {
+      unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+      if (Addr->getType()->getPointerAddressSpace() != CapAS) {
+        Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
+      }
+    }
+    if (CGF.getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
+      auto BoundedAddr = CGF.setCHERIBoundsOnAddrOf(
+          Addr, E->getSubExpr()->getType(), E->getSubExpr(), E->getExprLoc());
+      assert(BoundedAddr->getType() == Addr->getType());
+      Addr = BoundedAddr;
+    }
+    return Addr;
   }
   Value *VisitUnaryDeref(const UnaryOperator *E) {
     if (E->getType()->isVoidType())
@@ -707,6 +731,53 @@ public:
   // Check for undefined division and modulus behaviors.
   void EmitUndefinedBehaviorIntegerDivAndRemCheck(const BinOpInfo &Ops,
                                                   llvm::Value *Zero,bool isDiv);
+  Value *GetBinOpVal(const BinOpInfo &Op, Value *V, QualType T) {
+    // If this isn't a capability type, do nothing.  If it's not a pointer
+    // type, also do nothing - add operations are handled differently so need
+    // the second case.
+    if (!T->isCHERICapabilityType(CGF.getContext()) ||
+        !V->getType()->isPointerTy())
+      return V;
+    return CGF.getCapabilityIntegerValue(V);
+  }
+  Value *GetBinOpVal(const BinOpInfo &Op, Value *V) {
+    return GetBinOpVal(Op, V, Op.E->getType());
+  }
+  Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V, QualType T) {
+    bool IsCapabilityResult = T->isCHERICapabilityType(CGF.getContext());
+    // TODO: or just check LHS LLVM type?
+    if (!IsCapabilityResult)
+      return V;
+    // Bitwise-and require special handling (due to checking vs clearing low
+    // pointer bits: see https://github.com/CTSRD-CHERI/clang/issues/189
+    // Note: without data-dependent provenance patterns such as
+    // `if (uintptr_t(x) & 1 == 1)` break. This is commonly used is used to
+    // test for data stored in low pointer bits (for mutexes, etc...)
+    if (Op.Opcode == BinaryOperator::Opcode::BO_And ||
+        Op.Opcode == BinaryOperator::Opcode::BO_AndAssign) {
+      // If we are using data-dependent provenance we may need to return either
+      // a NULL-derived or LHS derived capability for bitwise-and
+      // TODO: is this also a problem for xor (should be less common so can
+      // probably ignore?)
+      if (IsCapabilityResult &&
+          CGF.getLangOpts().CheriDataDependentProvenance) {
+        // For now we derive from NULL if the value we are anding with is less
+        // than one page since such values should *almost* never be valid anyway
+        uint64_t NullDeriveLimit = 4096;
+        auto *ShouldDeriveFromNull = CGF.Builder.CreateICmpULE(
+            Op.RHS, llvm::ConstantInt::get(Op.RHS->getType(), NullDeriveLimit),
+            "bitand.should-nullderive");
+        auto CapNull = llvm::ConstantPointerNull::get(
+            cast<llvm::PointerType>(LHS->getType()));
+        LHS = Builder.CreateSelect(ShouldDeriveFromNull, CapNull, LHS,
+                                 "bitand.provenance");
+      }
+    }
+    return CGF.setCapabilityIntegerValue(LHS, V);
+  }
+  Value *GetBinOpResult(const BinOpInfo &Op, Value *LHS, Value *V) {
+    return GetBinOpResult(Op, LHS, V, Op.E->getType());
+  }
   // Common helper for getting how wide LHS of shift is.
   static Value *GetWidthMinusOneValue(Value* LHS,Value* RHS);
   Value *EmitDiv(const BinOpInfo &Ops);
@@ -736,7 +807,12 @@ public:
   // Binary operators and binary compound assignment operators.
 #define HANDLEBINOP(OP) \
   Value *VisitBin ## OP(const BinaryOperator *E) {                         \
-    return Emit ## OP(EmitBinOps(E));                                      \
+    BinOpInfo BOP = EmitBinOps(E);                                         \
+    Value *Base = BOP.LHS;                                                 \
+    BOP.LHS = GetBinOpVal(BOP, BOP.LHS);                                   \
+    BOP.RHS = GetBinOpVal(BOP, BOP.RHS);                                   \
+    Value *V = Emit ## OP(BOP);                                            \
+    return GetBinOpResult(BOP, Base, V);                                   \
   }                                                                        \
   Value *VisitBin ## OP ## Assign(const CompoundAssignOperator *E) {       \
     return EmitCompoundAssign(E, &ScalarExprEmitter::Emit ## OP);          \
@@ -744,8 +820,41 @@ public:
   HANDLEBINOP(Mul)
   HANDLEBINOP(Div)
   HANDLEBINOP(Rem)
-  HANDLEBINOP(Add)
-  HANDLEBINOP(Sub)
+  //HANDLEBINOP(Add)
+  Value *VisitBinAdd(const BinaryOperator *E) {
+    // Adds require special handling.  If we are adding intcap_t values, then we
+    // must do the same trick as other operations.  If not, then we can just use
+    // the normal path.
+    BinOpInfo BOP = EmitBinOps(E);
+    if (!(E->getType()->isCHERICapabilityType(CGF.getContext()) &&
+          !E->getType()->isPointerType()))
+      return EmitAdd(BOP);
+    Value *Base = BOP.LHS;
+    BOP.LHS = GetBinOpVal(BOP, BOP.LHS);
+    BOP.RHS = GetBinOpVal(BOP, BOP.RHS);
+    Value *V = EmitAdd(BOP);
+    return GetBinOpResult(BOP, Base, V);
+  }
+  Value *VisitBinAddAssign(const CompoundAssignOperator *E) {
+    return EmitCompoundAssign(E, &ScalarExprEmitter::EmitAdd);
+  }
+  Value *VisitBinSub(const BinaryOperator *E) {
+    // Subs require special handling.  If we are adding intcap_t values, then we
+    // must do the same trick as other operations.  If not, then we can just use
+    // the normal path.
+    BinOpInfo BOP = EmitBinOps(E);
+    if (!(E->getType()->isCHERICapabilityType(CGF.getContext()) &&
+          !E->getType()->isPointerType()))
+      return EmitSub(BOP);
+    Value *Base = BOP.LHS;
+    BOP.LHS = GetBinOpVal(BOP, BOP.LHS);
+    BOP.RHS = GetBinOpVal(BOP, BOP.RHS);
+    Value *V = EmitSub(BOP);
+    return GetBinOpResult(BOP, Base, V);
+  }
+  Value *VisitBinSubAssign(const CompoundAssignOperator *E) {
+    return EmitCompoundAssign(E, &ScalarExprEmitter::EmitSub);
+  }
   HANDLEBINOP(Shl)
   HANDLEBINOP(Shr)
   HANDLEBINOP(And)
@@ -1275,11 +1384,34 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
     if (isa<llvm::PointerType>(SrcTy))
       return Builder.CreateBitCast(Src, DstTy, "conv");
 
+    // Allow conversions from floating point types -> (u)intcap
+    if (SrcType->isFloatingType()) {
+      assert((DstType->isIntCapType()) &&
+             "Float->cap conversions should only be possible with (u)intcap");
+      unsigned BitWidth =
+          CGF.getContext().getTargetInfo().getPointerRangeForCHERICapability();
+      bool Signed = DstType->isSignedIntegerOrEnumerationType();
+      QualType ConvertedType =
+          CGF.getContext().getIntTypeForBitwidth(BitWidth, Signed);
+      Src = EmitScalarConversion(Src, SrcType, ConvertedType, Loc, Opts);
+      SrcType = ConvertedType;
+    }
     assert(SrcType->isIntegerType() && "Not ptr->ptr or int->ptr conversion?");
+
+    if (DstType->isCHERICapabilityType(CGF.getContext())) {
+      Value *Null = llvm::ConstantPointerNull::get(DstPT);
+      // Builder.CreateIntToPtr(llvm::ConstantInt::get(CGF.IntPtrTy, 0), DstPT);
+      if (SrcType->isBooleanType() && !Opts.TreatBooleanAsSigned)
+        Src = Builder.CreateZExtOrTrunc(Src, CGF.Int64Ty);
+      else
+        Src = Builder.CreateSExtOrTrunc(Src, CGF.Int64Ty);
+      return CGF.setCapabilityIntegerValue(Null, Src);
+    }
     // First, convert to the correct width so that we control the kind of
     // extension.
     llvm::Type *MiddleTy = CGF.CGM.getDataLayout().getIntPtrType(DstPT);
     bool InputSigned = SrcType->isSignedIntegerOrEnumerationType();
+    assert(!SrcType->isCHERICapabilityType(CGF.getContext()));
     llvm::Value* IntResult =
         Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
     // Then, cast to pointer.
@@ -1287,6 +1419,23 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
   }
 
   if (isa<llvm::PointerType>(SrcTy)) {
+    if (!SrcType->isPointerType()) {
+      // If this is not a pointer type in C, but is in LLVM IR, then it must be
+      // a [u]intcap_t or enum type whose underlying integer type is [u]intcap_t
+      assert(SrcType->isIntCapType());
+      Src = CGF.getCapabilityIntegerValue(Src);
+      // Conversions from (u)intcap -> float should not be a bitcast:
+      if (DstType->isFloatingType()) {
+        if (SrcType->isSignedIntegerOrEnumerationType()) {
+          return Builder.CreateSIToFP(Src, DstTy, "conv");
+        } else {
+          assert(SrcType->isSpecificBuiltinType(BuiltinType::UIntCap) ||
+                 SrcType->isUnsignedIntegerOrEnumerationType());
+          return Builder.CreateUIToFP(Src, DstTy, "conv");
+        }
+      }
+      return Builder.CreateTruncOrBitCast(Src, DstTy, "conv");
+    }
     // Must be an ptr to int cast.
     assert(isa<llvm::IntegerType>(DstTy) && "not ptr->int?");
     return Builder.CreatePtrToInt(Src, DstTy, "conv");
@@ -1744,6 +1893,7 @@ Value *ScalarExprEmitter::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
   Value *Idx  = Visit(E->getIdx());
   QualType IdxTy = E->getIdx()->getType();
 
+  // FIXME: should look at this
   if (CGF.SanOpts.has(SanitizerKind::ArrayBounds))
     CGF.EmitBoundsCheck(E, E->getBase(), Idx, IdxTy, /*Accessed*/true);
 
@@ -1946,6 +2096,56 @@ bool CodeGenFunction::ShouldNullCheckClassCastValue(const CastExpr *CE) {
   return true;
 }
 
+llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
+    llvm::PointerType *ToType) {
+  llvm::PointerType *FromTy = cast<llvm::PointerType>(From->getType());
+  unsigned FromAddrSpace = FromTy->getAddressSpace();
+  unsigned ToAddrSpace = ToType->getAddressSpace();
+  if (FromAddrSpace == ToAddrSpace)
+      return Builder.CreateBitCast(From, ToType);
+  else
+    return Builder.CreateAddrSpaceCast(From, ToType);
+}
+
+llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
+                                              QualType FromTy,
+                                              QualType ToTy) {
+  llvm::PointerType *toTy = cast<llvm::PointerType>(ConvertType(ToTy));
+  unsigned ToAddrSpace = toTy->getAddressSpace();
+  llvm::Value *result = EmitPointerCast(From, toTy);
+  if (Target.getTriple().getArch() == llvm::Triple::cheri) {
+    if (ToAddrSpace != (unsigned)CGM.getTargetCodeGenInfo().getCHERICapabilityAS()) return result;
+    unsigned flags = 0xffff;
+    // Clear the store and store-capability flags
+    if (ToTy->getPointeeType().getQualifiers().hasInput() &&
+        !FromTy->getPointeeType().getQualifiers().hasInput())
+      flags &= 0xFFD7;
+    // Clear the load and load-capability flags
+    if (ToTy->getPointeeType().getQualifiers().hasOutput() &&
+        !FromTy->getPointeeType().getQualifiers().hasOutput())
+      flags &= 0xFFEB;
+
+    if (flags != 0xffff) {
+      llvm::Function *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_perms_and);
+      if (F->getFunctionType()->getParamType(0) != result->getType())
+        result = Builder.CreateBitCast(result, F->getFunctionType()->getParamType(0));
+      result = Builder.CreateCall(F, {result,
+          llvm::ConstantInt::get(SizeTy, flags)});
+      if (toTy != result->getType())
+        result = Builder.CreateBitCast(result, toTy);
+    }
+  }
+  return result;
+}
+
+static void warnAboutImplicitCToPtr(CodeGenModule &CGM, CastExpr *CE) {
+  auto Loc = CE->getExprLoc();
+  CGM.getDiags().Report(Loc, diag::warn_cheri_implicit_ctoptr)
+      << CE->getSourceRange();
+  CGM.getDiags().Report(Loc, diag::note_cheri_implicit_ctoptr_suggestion)
+      << CE->getSourceRange();
+}
+
 // VisitCastExpr - Emit code for an explicit or implicit cast.  Implicit casts
 // have to handle a more broad range of conversions than explicit casts, as they
 // handle things like function to ptr-to-function decay etc.
@@ -2012,10 +2212,26 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         Src = Builder.CreateStripInvariantGroup(Src);
       }
     }
+    // Handle CHERI pointers casts (e.g. __input+__output qualifiers, etc)
+    if (E->getType()->isPointerType() && DestTy->isPointerType())
+      return CGF.EmitPointerCast(Src, E->getType(), DestTy);
 
     return Builder.CreateBitCast(Src, DstTy);
   }
-  case CK_AddressSpaceConversion: {
+  case CK_AddressSpaceConversion:
+  // FIXME: these two should probably be moved
+  case CK_CHERICapabilityToPointer:
+  case CK_PointerToCHERICapability: {
+    if (CGF.CGM.PointerCastStats) {
+      if (Kind == CK_PointerToCHERICapability) {
+        CGF.CGM.PointerCastStats->PointerToCap.push_back(
+            {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
+      } else {
+        CGF.CGM.PointerCastStats->CapToPointer.push_back(
+            {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
+      }
+    }
+
     Expr::EvalResult Result;
     if (E->EvaluateAsRValue(Result, CGF.getContext()) &&
         Result.Val.isNullPointer()) {
@@ -2029,10 +2245,53 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     }
     // Since target may map different address spaces in AST to the same address
     // space, an address space conversion may end up as a bitcast.
+    Value *Src = Visit(const_cast<Expr*>(E));
+    llvm::Type *DestType = ConvertType(DestTy);
+    if (Src->getType() == DestType)
+      return Src;
+    auto &TI = CGF.getContext().getTargetInfo();
+    QualType SrcTy = E->getType();
+    QualType SrcPointeeTy = SrcTy->getPointeeType();
+    QualType DstPointeeTy = DestTy->getPointeeType();
+    if (TI.SupportsCapabilities()) {
+      if (SrcPointeeTy->isFunctionType() && DstPointeeTy->isFunctionType()) {
+        // FIXME: Should we handle casts in the other direction by doing a
+        // pcc-relative cfromptr?
+        if (Kind == CK_PointerToCHERICapability)
+          Src = CodeGenFunction::FunctionAddressToCapability(CGF, Src);
+      }
+    }
+
     return CGF.CGM.getTargetCodeGenInfo().performAddrSpaceCast(
-        CGF, Visit(E), E->getType()->getPointeeType().getAddressSpace(),
-        DestTy->getPointeeType().getAddressSpace(), ConvertType(DestTy));
+        CGF, Src, SrcPointeeTy.getAddressSpace(),
+        DstPointeeTy.getAddressSpace(), DestType);
   }
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress: {
+    llvm::Value *Src = nullptr;
+    // Special handling of CHERI C++ capability references. By default, clang
+    // emits a load of the referencee but that can lead to the Verifier being
+    // unhappy if the referencee type is incomplete. What we really want is
+    // just the pointer to the referencee, which is what we do here.
+    if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(E))
+      if (const VarDecl *VD = dyn_cast<VarDecl>(DRE->getDecl()))
+        if (const ReferenceType *RT = dyn_cast<ReferenceType>(VD->getType())) {
+          // RT is guaranteed to be a capability
+          Src = EmitLValue(E).getPointer();
+        }
+
+    if (!Src)
+      Src = Visit(E); // The default case
+    llvm::Type *ResultType = ConvertType(DestTy);
+    Src = Kind == CK_CHERICapabilityToOffset
+            ? CGF.getPointerOffset(Src)
+            : CGF.getPointerAddress(Src);
+    bool DestSigned = DestTy->isSignedIntegerOrEnumerationType();
+    // Insert int cast in case size of result type and capability offset field
+    // are not the same. This will be a no-op if the sizes are the same.
+    return Builder.CreateIntCast(Src, ResultType, DestSigned, "conv");
+  }
+
   case CK_AtomicToNonAtomic:
   case CK_NonAtomicToAtomic:
   case CK_NoOp:
@@ -2078,8 +2337,18 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
   case CK_ArrayToPointerDecay:
     return CGF.EmitArrayToPointerDecay(E).getPointer();
-  case CK_FunctionToPointerDecay:
-    return EmitLValue(E).getPointer();
+  case CK_FunctionToPointerDecay: {
+    llvm::Value *Addr = EmitLValue(E).getPointer();
+    llvm::Type *AddrTy = Addr->getType();
+    auto &TI = CGF.getContext().getTargetInfo();
+    if (TI.areAllPointersCapabilities()) {
+      unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+      if (AddrTy->getPointerAddressSpace() != CapAS) {
+        Addr = CodeGenFunction::FunctionAddressToCapability(CGF, Addr);
+      }
+    }
+    return Addr;
+  }
 
   case CK_NullToPointer:
     if (MustVisitNullValue(E))
@@ -2139,17 +2408,52 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
   case CK_IntegralToPointer: {
     Value *Src = Visit(const_cast<Expr*>(E));
+    if (CGF.CGM.PointerCastStats)
+      CGF.CGM.PointerCastStats->IntToPointer.push_back(
+          {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
 
+    llvm::Type *DestLLVMTy = ConvertType(DestTy);
+    auto &C = CGF.getContext();
+    auto &TI = C.getTargetInfo();
+    bool IsPureCap = TI.areAllPointersCapabilities();
+
+    // For __[u]intcap_t, the underlying LLVM type is actually a pointer.
+    bool SrcIsCheriCap = E->getType()->isCHERICapabilityType(CGF.getContext());
+    if (SrcIsCheriCap) {
+      // If we're casting to a capability pointer, then it's just a bitcast:
+      if (DestTy->isCHERICapabilityType(CGF.getContext()))
+        return Builder.CreateBitCast(Src, DestLLVMTy);
+      // Otherwise, it's some kind of non-capability pointer, so we need to
+      // create an integer value first
+      if (IsPureCap)
+        Src = CGF.getCapabilityIntegerValue(Src);
+      else {
+        warnAboutImplicitCToPtr(CGF.CGM, CE);
+        Src = Builder.CreatePtrToInt(Src, CGF.IntPtrTy);
+      }
+    }
     // First, convert to the correct width so that we control the kind of
     // extension.
-    auto DestLLVMTy = ConvertType(DestTy);
     llvm::Type *MiddleTy = CGF.CGM.getDataLayout().getIntPtrType(DestLLVMTy);
     bool InputSigned = E->getType()->isSignedIntegerOrEnumerationType();
     llvm::Value* IntResult =
       Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
 
-    auto *IntToPtr = Builder.CreateIntToPtr(IntResult, DestLLVMTy);
 
+    llvm::Value* IntToPtr = nullptr;
+
+    if (IsPureCap && DestTy->isCHERICapabilityType(CGF.getContext()))
+      IntToPtr = CGF.setCapabilityIntegerValue(
+          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(DestLLVMTy)),
+          IntResult);
+    else {
+      // assert(!SrcIsCheriCap);
+      // TODO: generate CFromPtr/CFromInt depending on value (for constants use
+      // CFromInt/otherwise CFromPtr)
+      // FIMXE: This should warn!
+
+      IntToPtr = Builder.CreateIntToPtr(IntResult, DestLLVMTy);
+    }
     if (CGF.CGM.getCodeGenOpts().StrictVTablePointers) {
       // Going from integer to pointer that could be dynamic requires reloading
       // dynamic information from invariant.group.
@@ -2161,6 +2465,12 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
   case CK_PointerToIntegral: {
     assert(!DestTy->isBooleanType() && "bool should use PointerToBool");
     auto *PtrExpr = Visit(E);
+    llvm::Type *ResultType = ConvertType(DestTy);
+
+    if (CGF.CGM.PointerCastStats) {
+      CGF.CGM.PointerCastStats->PointerToInt.push_back(
+          {E->getSourceRange(), isa<ImplicitCastExpr>(CE)});
+    }
 
     if (CGF.CGM.getCodeGenOpts().StrictVTablePointers) {
       const QualType SrcType = E->getType();
@@ -2171,7 +2481,36 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         PtrExpr = Builder.CreateStripInvariantGroup(PtrExpr);
     }
 
-    return Builder.CreatePtrToInt(PtrExpr, ConvertType(DestTy));
+    auto &C = CGF.getContext();
+    auto &TI = C.getTargetInfo();
+    bool IsPureCap = TI.areAllPointersCapabilities();
+    // For casts from pointers to intcap_t, we need to turn the pointer into a
+    // capability.
+    if (DestTy->isCHERICapabilityType(C)) {
+      assert(DestTy->isIntCapType());
+      if (E->getType()->isCHERICapabilityType(C))
+        return Builder.CreateBitCast(PtrExpr, ResultType);
+
+      PtrExpr = Builder.CreatePtrToInt(PtrExpr,
+            llvm::IntegerType::get(PtrExpr->getContext(), TI.getPointerWidth(0)));
+      // FIXME: should casts to intcap_t yield a tagged or untagged value?
+      // I believe we should make a cast to __intcap_t yield the integer value
+      // and require a (__cheri_tocap ) cast if you really want the cfromddc behaviour
+      return CGF.setCapabilityIntegerValue(
+          llvm::ConstantPointerNull::get(cast<llvm::PointerType>(ResultType)), PtrExpr);
+#if 0   // This would yield a cfromddc:
+      return Builder.CreateIntToPtr(PtrExpr, ResultType);
+#endif
+    }
+    if (IsPureCap) {
+      PtrExpr = CGF.getPointerAddress(PtrExpr);
+      return Builder.CreateTruncOrBitCast(PtrExpr, ResultType);
+    }
+    // ptrtoint will result in CToPtr in the hybrid ABI -> warn about it
+    if (E->getType()->isCHERICapabilityType(C)) {
+      warnAboutImplicitCToPtr(CGF.CGM, CE);
+    }
+    return Builder.CreatePtrToInt(PtrExpr, ResultType);
   }
   case CK_ToVoid: {
     CGF.EmitIgnoredExpr(E);
@@ -2385,6 +2724,9 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
 
   // Most common case by far: integer increment.
   } else if (type->isIntegerType()) {
+    llvm::Value *Base = value;
+    if (type->isCHERICapabilityType(CGF.getContext()))
+      value = CGF.getCapabilityIntegerValue(Base);
     // Note that signed integer inc/dec with width less than int can't
     // overflow because of promotion rules; we're just eliding a few steps here.
     if (E->canOverflow() && type->isSignedIntegerOrEnumerationType()) {
@@ -2397,7 +2739,8 @@ ScalarExprEmitter::EmitScalarPrePostIncDec(const UnaryOperator *E, LValue LV,
       llvm::Value *amt = llvm::ConstantInt::get(value->getType(), amount, true);
       value = Builder.CreateAdd(value, amt, isInc ? "inc" : "dec");
     }
-
+    if (type->isCHERICapabilityType(CGF.getContext()))
+      value = CGF.setCapabilityIntegerValue(Base, value);
   // Next most common: pointer increment.
   } else if (const PointerType *ptr = type->getAs<PointerType>()) {
     QualType type = ptr->getPointeeType();
@@ -2558,17 +2901,28 @@ Value *ScalarExprEmitter::VisitUnaryMinus(const UnaryOperator *E) {
     BinOp.LHS = llvm::ConstantFP::getZeroValueForNegation(BinOp.RHS->getType());
   else
     BinOp.LHS = llvm::Constant::getNullValue(BinOp.RHS->getType());
+  Value *base = BinOp.LHS;
   BinOp.Ty = E->getType();
   BinOp.Opcode = BO_Sub;
   // FIXME: once UnaryOperator carries FPFeatures, copy it here.
   BinOp.E = E;
-  return EmitSub(BinOp);
+  BinOp.LHS = GetBinOpVal(BinOp, BinOp.LHS);
+  BinOp.RHS = GetBinOpVal(BinOp, BinOp.RHS);
+  Value *result = EmitSub(BinOp);
+  return GetBinOpResult(BinOp, base, result);
 }
 
 Value *ScalarExprEmitter::VisitUnaryNot(const UnaryOperator *E) {
   TestAndClearIgnoreResultAssign();
   Value *Op = Visit(E->getSubExpr());
-  return Builder.CreateNot(Op, "neg");
+  Value *Base = Op;
+  bool IsIntCap = E->getType()->isCHERICapabilityType(CGF.getContext());
+  if (IsIntCap)
+    Op = CGF.getCapabilityIntegerValue(Op);
+  Op = Builder.CreateNot(Op, "neg");
+  if (IsIntCap)
+    Op = CGF.setCapabilityIntegerValue(Base, Op);
+  return Op;
 }
 
 Value *ScalarExprEmitter::VisitUnaryLNot(const UnaryOperator *E) {
@@ -2869,7 +3223,20 @@ LValue ScalarExprEmitter::EmitCompoundAssignLValue(
       EmitScalarConversion(OpInfo.LHS, LHSTy, E->getComputationLHSType(), Loc);
 
   // Expand the binary operator.
-  Result = (this->*Func)(OpInfo);
+  // We need special handling for add operations (pointer + integer)
+  // FIXME: We should be able to emit a GEP for intcap_t add/sub operations,
+  // but we can't because the logic checks lower down assumes that anything
+  // that has an LLVM pointer type also has a C pointer type.
+  if ((OpInfo.Opcode == BO_AddAssign || OpInfo.Opcode == BO_SubAssign) &&
+      E->getType()->isPointerType())
+    Result = (this->*Func)(OpInfo);
+  else {
+    Value *Base = OpInfo.LHS;
+    OpInfo.LHS = GetBinOpVal(OpInfo, OpInfo.LHS, E->getComputationLHSType());
+    OpInfo.RHS = GetBinOpVal(OpInfo, OpInfo.RHS, E->getComputationLHSType());
+    Result = (this->*Func)(OpInfo);
+    Result = GetBinOpResult(OpInfo, Base, Result, E->getComputationResultType());
+  }
 
   // Convert the result back to the LHS type,
   // potentially with Implicit Conversion sanitizer check.
@@ -3120,6 +3487,8 @@ Value *ScalarExprEmitter::EmitOverflowCheckedBinOp(const BinOpInfo &Ops) {
 static Value *emitPointerArithmetic(CodeGenFunction &CGF,
                                     const BinOpInfo &op,
                                     bool isSubtraction) {
+  // FIXME: subobject-bounds
+
   // Must have binary (not unary) expr here.  Unary pointer
   // increment/decrement doesn't use this path.
   const BinaryOperator *expr = cast<BinaryOperator>(op.E);
@@ -3130,10 +3499,13 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
   Expr *indexOperand = expr->getRHS();
 
   // In a subtraction, the LHS is always the pointer.
-  if (!isSubtraction && !pointer->getType()->isPointerTy()) {
+  if (!isSubtraction && !pointerOperand->getType()->isAnyPointerType()) {
     std::swap(pointer, index);
     std::swap(pointerOperand, indexOperand);
   }
+
+  if (index->getType()->isPointerTy())
+    index = CGF.getCapabilityIntegerValue(index);
 
   bool isSigned = indexOperand->getType()->isSignedIntegerOrEnumerationType();
 
@@ -3221,7 +3593,9 @@ static Value *emitPointerArithmetic(CodeGenFunction &CGF,
   // GNU void* casts amount to no-ops since our void* type is i8*, but this is
   // future proof.
   if (elementType->isVoidType() || elementType->isFunctionType()) {
-    Value *result = CGF.Builder.CreateBitCast(pointer, CGF.VoidPtrTy);
+    Value *result = CGF.Builder.CreateBitCast(pointer,
+        llvm::Type::getInt8PtrTy(CGF.getLLVMContext(),
+          pointer->getType()->getPointerAddressSpace()));
     result = CGF.Builder.CreateGEP(result, index, "add.ptr");
     return CGF.Builder.CreateBitCast(result, pointer->getType());
   }
@@ -3301,8 +3675,9 @@ static Value* tryEmitFMulAdd(const BinOpInfo &op,
 }
 
 Value *ScalarExprEmitter::EmitAdd(const BinOpInfo &op) {
-  if (op.LHS->getType()->isPointerTy() ||
-      op.RHS->getType()->isPointerTy())
+  const BinaryOperator *expr = cast<BinaryOperator>(op.E);
+  if (expr->getLHS()->getType()->isAnyPointerType() ||
+      expr->getRHS()->getType()->isAnyPointerType())
     return emitPointerArithmetic(CGF, op, CodeGenFunction::NotSubtraction);
 
   if (op.Ty->isSignedIntegerOrEnumerationType()) {
@@ -3373,20 +3748,30 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
 
   // If the RHS is not a pointer, then we have normal pointer
   // arithmetic.
-  if (!op.RHS->getType()->isPointerTy())
+  if (!cast<BinaryOperator>(op.E)->getRHS()->getType()->isPointerType())
     return emitPointerArithmetic(CGF, op, CodeGenFunction::IsSubtraction);
 
   // Otherwise, this is a pointer subtraction.
 
+  const BinaryOperator *expr = cast<BinaryOperator>(op.E);
   // Do the raw subtraction part.
-  llvm::Value *LHS
-    = Builder.CreatePtrToInt(op.LHS, CGF.PtrDiffTy, "sub.ptr.lhs.cast");
-  llvm::Value *RHS
-    = Builder.CreatePtrToInt(op.RHS, CGF.PtrDiffTy, "sub.ptr.rhs.cast");
-  Value *diffInChars = Builder.CreateSub(LHS, RHS, "sub.ptr.sub");
+  llvm::Value *LHS = op.LHS;
+  llvm::Value *RHS = op.RHS;
+  Value *diffInChars;
+  if (expr->getLHS()->getType()->isCHERICapabilityType(CGF.getContext())) {
+    llvm::Function *CapPtrDiff =
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_diff);
+    llvm::Type *CapTy = CapPtrDiff->getFunctionType()->getParamType(0);
+    LHS = Builder.CreateBitCast(LHS, CapTy);
+    RHS = Builder.CreateBitCast(RHS, CapTy);
+    diffInChars = Builder.CreateCall(CapPtrDiff, { LHS, RHS});
+  } else {
+    LHS = Builder.CreatePtrToInt(op.LHS, CGF.PtrDiffTy, "sub.ptr.lhs.cast");
+    RHS  = Builder.CreatePtrToInt(op.RHS, CGF.PtrDiffTy, "sub.ptr.rhs.cast");
+    diffInChars = Builder.CreateSub(LHS, RHS, "sub.ptr.sub");
+  }
 
   // Okay, figure out the element size.
-  const BinaryOperator *expr = cast<BinaryOperator>(op.E);
   QualType elementType = expr->getLHS()->getType()->getPointeeType();
 
   llvm::Value *divisor = nullptr;
@@ -3441,6 +3826,8 @@ Value *ScalarExprEmitter::EmitShl(const BinOpInfo &Ops) {
   // LLVM requires the LHS and RHS to be the same type: promote or truncate the
   // RHS to the same size as the LHS.
   Value *RHS = Ops.RHS;
+  if (RHS->getType()->isPointerTy())
+    RHS = CGF.getCapabilityIntegerValue(RHS);
   if (Ops.LHS->getType() != RHS->getType())
     RHS = Builder.CreateIntCast(RHS, Ops.LHS->getType(), false, "sh_prom");
 
@@ -3508,6 +3895,8 @@ Value *ScalarExprEmitter::EmitShr(const BinOpInfo &Ops) {
   // LLVM requires the LHS and RHS to be the same type: promote or truncate the
   // RHS to the same size as the LHS.
   Value *RHS = Ops.RHS;
+  if (RHS->getType()->isPointerTy())
+    RHS = CGF.getCapabilityIntegerValue(RHS);
   if (Ops.LHS->getType() != RHS->getType())
     RHS = Builder.CreateIntCast(RHS, Ops.LHS->getType(), false, "sh_prom");
 

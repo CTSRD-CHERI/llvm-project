@@ -342,6 +342,8 @@ TypeSpecifierType BuiltinTypeLoc::getWrittenTypeSpec() const {
   case BuiltinType::Float:
   case BuiltinType::Double:
   case BuiltinType::LongDouble:
+  case BuiltinType::IntCap:
+  case BuiltinType::UIntCap:
   case BuiltinType::Float16:
   case BuiltinType::Float128:
   case BuiltinType::ShortAccum:

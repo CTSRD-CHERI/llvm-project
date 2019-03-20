@@ -118,6 +118,10 @@ private:
 
   // For LTO.
   std::unique_ptr<BitcodeCompiler> LTO;
+
+public:
+  // A vector of archives added to the symbol table
+  std::vector<ArchiveFile *>ArcVector;
 };
 
 extern SymbolTable *Symtab;

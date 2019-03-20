@@ -250,6 +250,8 @@ ArgType ScanfSpecifier::getArgType(ASTContext &Ctx) const {
           return ArgType::PtrTo(ArgType(Ctx.LongLongTy, "__int64"));
         case LengthModifier::AsIntMax:
           return ArgType::PtrTo(ArgType(Ctx.getIntMaxType(), "intmax_t"));
+        case LengthModifier::AsIntPtr:
+          return ArgType::PtrTo(ArgType(Ctx.getIntPtrType(), "intptr_t"));
         case LengthModifier::AsSizeT:
           return ArgType::PtrTo(ArgType(Ctx.getSignedSizeType(), "ssize_t"));
         case LengthModifier::AsPtrDiff:
@@ -288,6 +290,8 @@ ArgType ScanfSpecifier::getArgType(ASTContext &Ctx) const {
           return ArgType::PtrTo(ArgType(Ctx.UnsignedLongLongTy, "unsigned __int64"));
         case LengthModifier::AsIntMax:
           return ArgType::PtrTo(ArgType(Ctx.getUIntMaxType(), "uintmax_t"));
+        case LengthModifier::AsIntPtr:
+          return ArgType::PtrTo(ArgType(Ctx.getUIntPtrType(), "uintptr_t"));
         case LengthModifier::AsSizeT:
           return ArgType::PtrTo(ArgType(Ctx.getSizeType(), "size_t"));
         case LengthModifier::AsPtrDiff:
@@ -384,6 +388,8 @@ ArgType ScanfSpecifier::getArgType(ASTContext &Ctx) const {
           return ArgType::PtrTo(ArgType(Ctx.LongLongTy, "__int64"));
         case LengthModifier::AsIntMax:
           return ArgType::PtrTo(ArgType(Ctx.getIntMaxType(), "intmax_t"));
+        case LengthModifier::AsIntPtr:
+          return ArgType::PtrTo(ArgType(Ctx.getIntPtrType(), "intptr_t"));
         case LengthModifier::AsSizeT:
           return ArgType::PtrTo(ArgType(Ctx.getSignedSizeType(), "ssize_t"));
         case LengthModifier::AsPtrDiff:

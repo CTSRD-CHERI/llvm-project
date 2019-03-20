@@ -58,11 +58,13 @@
 //  I   -> Required to constant fold to an integer constant expression.
 //
 // Types may be postfixed with the following modifiers:
-// * -> pointer (optionally followed by an address space number, if no address
-//               space is specified than any address space will be accepted)
+// * -> pointer (optionally followed by an address space number, or 'm' for 
+//      memory capabilities. If no address space is specified than
+//      any address space will be accepted)
 // & -> reference (optionally followed by an address space number)
 // C -> const
 // D -> volatile
+// m -> memory capability
 
 // The third value provided to the macro specifies information about attributes
 // of the function.  These must be kept in sync with the predicates in the
@@ -447,6 +449,8 @@ BUILTIN(__builtin_va_end, "vA", "n")
 BUILTIN(__builtin_va_copy, "vAA", "n")
 BUILTIN(__builtin_stdarg_start, "vA.", "n")
 BUILTIN(__builtin_assume_aligned, "v*vC*z.", "nc")
+// adding a _cap suffix is easier than supporting overloading
+BUILTIN(__builtin_assume_aligned_cap, "v*mvC*mz.", "nc")
 BUILTIN(__builtin_bcmp, "iv*v*z", "Fn")
 BUILTIN(__builtin_bcopy, "vv*v*z", "n")
 BUILTIN(__builtin_bzero, "vv*z", "nF")
@@ -485,7 +489,7 @@ BUILTIN(__builtin_wmemchr, "w*wC*wz", "nF")
 BUILTIN(__builtin_wmemcmp, "iwC*wC*z", "nF")
 BUILTIN(__builtin_wmemcpy, "w*w*wC*z", "nF")
 BUILTIN(__builtin_wmemmove, "w*w*wC*z", "nF")
-BUILTIN(__builtin_return_address, "v*IUi", "n")
+BUILTIN(__builtin_return_address, "v*IUi", "nt")
 BUILTIN(__builtin_extract_return_addr, "v*v*", "n")
 BUILTIN(__builtin_frame_address, "v*IUi", "n")
 BUILTIN(__builtin___clear_cache, "vc*c*", "n")
@@ -1430,6 +1434,56 @@ BUILTIN(__builtin_operator_new, "v*z", "tc")
 BUILTIN(__builtin_operator_delete, "vv*", "tn")
 BUILTIN(__builtin_char_memchr, "c*cC*iz", "n")
 BUILTIN(__builtin_dump_struct, "ivC*v*", "tn")
+
+
+// Alignment builtins (uses custom parsing to support pointers and capabilities)
+// Builtins to align a value to a specific number of bytes (undefined behaviour/error if the value is not a power of two)
+BUILTIN(__builtin_is_aligned, "bvC*z", "nct")
+BUILTIN(__builtin_align_up, "v*vC*z", "nct")
+BUILTIN(__builtin_align_down, "v*vC*z", "nct")
+// The same builtins but with the second argument as a power of two instead of an integer
+// undefined behaviour if the requested value is greater than the number of bits
+BUILTIN(__builtin_is_p2aligned, "bvC*z", "nct")
+BUILTIN(__builtin_p2align_up, "v*vC*z", "nct")
+BUILTIN(__builtin_p2align_down, "v*vC*z", "nct")
+
+
+// Memory capability builtins
+BUILTIN(__builtin_cheri_length_set, "v*mvC*mz", "nc")
+BUILTIN(__builtin_cheri_bounds_set, "v*mvC*mz", "nc")
+BUILTIN(__builtin_cheri_length_get, "zvC*m", "nc")
+BUILTIN(__builtin_cheri_base_increment, "v*mvC*mz", "nc")
+BUILTIN(__builtin_cheri_base_get, "zvC*m", "nc")
+BUILTIN(__builtin_cheri_perms_and, "v*mvC*mz", "nc")
+BUILTIN(__builtin_cheri_perms_get, "zvC*m", "nc")
+BUILTIN(__builtin_cheri_type_get, "zvC*m", "nc")
+BUILTIN(__builtin_cheri_tag_get, "zvC*m", "nc")
+BUILTIN(__builtin_cheri_sealed_get, "zvC*m", "nc")
+BUILTIN(__builtin_cheri_tag_clear, "v*mvC*m", "nc")
+BUILTIN(__builtin_cheri_seal, "v*mvC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_conditional_seal, "v*mvC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_unseal, "v*mvC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_type_check, "vvC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_perms_check, "vvC*mCz", "nc")
+BUILTIN(__builtin_cheri_subset_test, "zvC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_global_data_get, "v*m", "nc")
+BUILTIN(__builtin_cheri_program_counter_get, "v*m", "nc")
+BUILTIN(__builtin_cheri_offset_increment, "v*mvC*mz", "nc")
+BUILTIN(__builtin_cheri_offset_set, "v*mvC*mz", "nc")
+BUILTIN(__builtin_cheri_offset_get, "zvC*m", "nc")
+BUILTIN(__builtin_cheri_base_only_increment, "v*mvC*mz", "nc")
+BUILTIN(__builtin_cheri_callback_create, "v.", "nct")
+BUILTIN(__builtin_cheri_address_get, "zvC*m", "nc")
+
+BUILTIN(__builtin_cheri_cap_load_tags, "zvC*m", "n")
+
+BUILTIN(__builtin_cheri_stack_get, "v*m", "nc")
+BUILTIN(__builtin_cheri_cap_from_pointer, "v*mvC*mvC*", "nc")
+BUILTIN(__builtin_cheri_cap_to_pointer, "v*vC*mvC*m", "nc")
+
+BUILTIN(__builtin_cheri_cap_build, "v*mvC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_cap_type_copy, "v*mvC*mvC*m", "nc")
+
 
 // Safestack builtins
 BUILTIN(__builtin___get_unsafe_stack_start, "v*", "Fn")

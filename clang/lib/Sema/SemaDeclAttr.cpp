@@ -850,20 +850,20 @@ static void handleAssertExclusiveLockAttr(Sema &S, Decl *D,
 ///
 /// AttrArgNo is used to actually retrieve the argument, so it's base-0.
 template <typename AttrInfo>
-static bool checkParamIsIntegerType(Sema &S, const FunctionDecl *FD,
-                                    const AttrInfo &AI, unsigned AttrArgNo) {
+static bool checkParamIsIntegerType(Sema &S, const Decl *D, const AttrInfo &AI,
+                                    unsigned AttrArgNo) {
   assert(AI.isArgExpr(AttrArgNo) && "Expected expression argument");
   Expr *AttrArg = AI.getArgAsExpr(AttrArgNo);
   ParamIdx Idx;
-  if (!checkFunctionOrMethodParameterIndex(S, FD, AI, AttrArgNo + 1, AttrArg,
+  if (!checkFunctionOrMethodParameterIndex(S, D, AI, AttrArgNo + 1, AttrArg,
                                            Idx))
     return false;
 
-  const ParmVarDecl *Param = FD->getParamDecl(Idx.getASTIndex());
-  if (!Param->getType()->isIntegerType() && !Param->getType()->isCharType()) {
+  QualType ParamTy = getFunctionOrMethodParamType(D, Idx.getASTIndex());
+  if (!ParamTy->isIntegerType() && !ParamTy->isCharType()) {
     SourceLocation SrcLoc = AttrArg->getBeginLoc();
     S.Diag(SrcLoc, diag::err_attribute_integers_only)
-        << AI << Param->getSourceRange();
+        << AI << getFunctionOrMethodParamRange(D, Idx.getASTIndex());
     return false;
   }
   return true;
@@ -874,8 +874,10 @@ static void handleAllocSizeAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
       !checkAttributeAtMostNumArgs(S, AL, 2))
     return;
 
-  const auto *FD = cast<FunctionDecl>(D);
-  if (!FD->getReturnType()->isPointerType()) {
+  assert(isFunctionOrMethod(D) && hasFunctionProto(D));
+
+  QualType RetTy = getFunctionOrMethodResultType(D);
+  if (!RetTy->isPointerType()) {
     S.Diag(AL.getLoc(), diag::warn_attribute_return_pointers_only) << AL;
     return;
   }
@@ -885,7 +887,7 @@ static void handleAllocSizeAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   // Parameter indices are 1-indexed, hence Index=1
   if (!checkPositiveIntArgument(S, AL, SizeExpr, SizeArgNoVal, /*Index=*/1))
     return;
-  if (!checkParamIsIntegerType(S, FD, AL, /*AttrArgNo=*/0))
+  if (!checkParamIsIntegerType(S, D, AL, /*AttrArgNo=*/0))
     return;
   ParamIdx SizeArgNo(SizeArgNoVal, D);
 
@@ -896,7 +898,7 @@ static void handleAllocSizeAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
     // Parameter indices are 1-based, hence Index=2
     if (!checkPositiveIntArgument(S, AL, NumberExpr, Val, /*Index=*/2))
       return;
-    if (!checkParamIsIntegerType(S, FD, AL, /*AttrArgNo=*/1))
+    if (!checkParamIsIntegerType(S, D, AL, /*AttrArgNo=*/1))
       return;
     NumberArgNo = ParamIdx(Val, D);
   }
@@ -2154,6 +2156,60 @@ static void handleUnusedAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
 
   D->addAttr(::new (S.Context) UnusedAttr(
       AL.getRange(), S.Context, AL.getAttributeSpellingListIndex()));
+}
+
+static void handleCHERIMethodClass(Sema &S, Decl *D, const ParsedAttr &Attr) {
+  auto II = Attr.getArgAsIdent(0)->Ident;
+  DeclarationName DN(II);
+  auto *TU = S.Context.getTranslationUnitDecl();
+  auto Lookup = TU->lookup(DN);
+  if (!((Lookup.size() == 1) && isa<VarDecl>(Lookup[0]))) {
+    S.Diag(Attr.getLoc(), diag::err_cheri_method_class_must_exist)
+      << Attr.getName() << Attr.getRange();
+    return;
+  }
+  auto Cls = cast<VarDecl>(Lookup[0]);
+  auto ClsTy = Cls->getType().getDesugaredType(S.Context);
+  bool isValid = false;
+  // Check that this type is a struct containing exactly two capability fields
+  // and no others.
+  if (const RecordType *RT = dyn_cast<RecordType>(ClsTy))
+    if (const RecordDecl *RD = RT->getDecl()) {
+      unsigned Caps = 0;
+      for (const auto &F : RD->fields()) {
+        isValid = false;
+        if (F->getType()->isCHERICapabilityType(S.Context)) {
+          Caps++;
+          // The struct is correct, as long as no further fields are found.
+          if (Caps == 2)
+            isValid = true;
+          else if (Caps > 2)
+            break;
+        } else
+          // Bail out as soon as we hit a non-capability field.
+          break;
+      }
+    }
+  if (!isValid) {
+    S.Diag(Attr.getLoc(), diag::err_cheri_method_class_must_have_correct_type)
+      << Attr.getName() << Attr.getRange();
+    return;
+  }
+
+
+  D->addAttr(::new (S.Context)
+             CHERIMethodClassAttr(Attr.getRange(), S.Context, II,
+                                   Attr.getAttributeSpellingListIndex()));
+}
+
+static void handleCHERIMethodSuffix(Sema &S, Decl *D, const ParsedAttr &Attr) {
+  StringRef Str;
+  SourceLocation LiteralLoc;
+  if (!S.checkStringLiteralArgumentAttr(Attr, 0, Str, &LiteralLoc))
+    return;
+  D->addAttr(::new (S.Context)
+             CHERIMethodSuffixAttr(Attr.getRange(), S.Context, Str,
+                                   Attr.getAttributeSpellingListIndex()));
 }
 
 static void handleConstructorAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
@@ -3751,9 +3807,11 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
   assert(D->hasAttrs() && "no attributes on decl");
 
   QualType UnderlyingTy, DiagTy;
-  if (const auto *VD = dyn_cast<ValueDecl>(D)) {
+  if (const auto *VD = dyn_cast<ValueDecl>(D))
     UnderlyingTy = DiagTy = VD->getType();
-  } else {
+  else if (const auto *TD = dyn_cast<TypedefDecl>(D))
+    UnderlyingTy = DiagTy = Context.getTypeDeclType(TD);
+  else {
     UnderlyingTy = DiagTy = Context.getTagDeclType(cast<TagDecl>(D));
     if (const auto *ED = dyn_cast<EnumDecl>(D))
       UnderlyingTy = ED->getIntegerType();
@@ -3767,12 +3825,55 @@ void Sema::CheckAlignasUnderalignment(Decl *D) {
   //   would otherwise be required for the entity being declared.
   AlignedAttr *AlignasAttr = nullptr;
   unsigned Align = 0;
+  // A decl has an alignment override if it has an aligned or packed attribute
+  bool hasAlignOverride = D->hasAttr<PackedAttr>();
   for (auto *I : D->specific_attrs<AlignedAttr>()) {
     if (I->isAlignmentDependent())
       return;
     if (I->isAlignas())
       AlignasAttr = I;
     Align = std::max(Align, I->getAlignment(Context));
+    hasAlignOverride = true;
+  }
+  // If this target supports capabilities, then warn if we're requesting
+  // less-than-capability alignment for a type containing capabilities.
+  // Only looking at the align attribute value will not give the correct
+  // result since __attribute__((__aligned())) only increases the alignment
+  // when applied to record declarations. However, when it is applied to a
+  // typedef type it sets it instead. According to comments in
+  // ASTContext::getTypeInfoImpl() this is due to GCC compatibility...
+  bool ShouldDiagnoseCheriAlign =
+      Context.getTargetInfo().SupportsCapabilities();
+  if (ShouldDiagnoseCheriAlign && (isa<RecordDecl>(D) || isa<FieldDecl>(D))) {
+    // If the attribute is applied to a record declaration declaration we only
+    // need to warn if it also has the packed attribute
+    ShouldDiagnoseCheriAlign = D->hasAttr<PackedAttr>();
+    // Allow using the annotate attribute instead of a pragma warning silence
+    if (auto *AA = D->getAttr<AnnotateAttr>()) {
+      if (AA->getAnnotation() == "underaligned_capability")
+        ShouldDiagnoseCheriAlign = false;
+    }
+  }
+  if (hasAlignOverride && ShouldDiagnoseCheriAlign) {
+    CharUnits CapAlign = Context.toCharUnitsFromBits(
+        Context.getTargetInfo().getCHERICapabilityAlign());
+    CharUnits MinAlign =
+        Align ? Context.toCharUnitsFromBits(Align) : CharUnits::One();
+    if (const auto *Field = dyn_cast<FieldDecl>(D)) {
+      // Context.getDeclAlign() requires a full definition so for fields we
+      // can usually only look at the aligned attribute
+      if (Field->getParent()->getDefinition())
+        MinAlign = Context.getDeclAlign(D);
+    } else {
+      // Not a field -> we have the full definition and can use it
+      MinAlign = Context.getDeclAlign(D);
+    }
+    if ((MinAlign < CapAlign) && Context.containsCapabilities(UnderlyingTy)) {
+      Diag(D->getLocation(), diag::warn_cheri_underalign)
+          << (unsigned)MinAlign.getQuantity() << DiagTy
+          << (unsigned)CapAlign.getQuantity();
+      Diag(D->getLocation(), diag::note_cheri_underalign_annotate_fixit);
+    }
   }
 
   if (AlignasAttr && Align) {
@@ -4236,6 +4337,22 @@ static void handleGlobalAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
                              AL.getAttributeSpellingListIndex()));
 }
 
+static void handleSensitiveAttr(Sema &S, Decl *D, const ParsedAttr &Attr) {
+  // check the attribute arguments.
+  if (!checkAttributeNumArgs(S, Attr, 0))
+    return;
+
+
+  if (!isa<FunctionDecl>(D)) {
+    S.Diag(Attr.getLoc(), diag::warn_attribute_wrong_decl_type)
+      << Attr.getName() << ExpectedFunction;
+    return;
+  }
+
+  D->addAttr(::new (S.Context) SensitiveAttr(Attr.getRange(), S.Context,
+    Attr.getAttributeSpellingListIndex()));
+}
+
 static void handleGNUInlineAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   const auto *Fn = cast<FunctionDecl>(D);
   if (!Fn->isInlineSpecified()) {
@@ -4331,6 +4448,21 @@ static void handleCallConvAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
                        AL.getAttributeSpellingListIndex()));
     return;
   }
+  case ParsedAttr::AT_CHERICCall:
+    D->addAttr(::new (S.Context)
+               CHERICCallAttr(AL.getRange(), S.Context,
+                             AL.getAttributeSpellingListIndex()));
+    return;
+  case ParsedAttr::AT_CHERICCallee:
+    D->addAttr(::new (S.Context)
+               CHERICCalleeAttr(AL.getRange(), S.Context,
+                             AL.getAttributeSpellingListIndex()));
+    return;
+  case ParsedAttr::AT_CHERICCallback:
+    D->addAttr(::new (S.Context)
+               CHERICCallbackAttr(AL.getRange(), S.Context,
+                             AL.getAttributeSpellingListIndex()));
+    return;
   case ParsedAttr::AT_AArch64VectorPcs:
     D->addAttr(::new(S.Context)
                AArch64VectorPcsAttr(AL.getRange(), S.Context,
@@ -4445,6 +4577,15 @@ bool Sema::CheckCallingConvAttr(const ParsedAttr &Attrs, CallingConv &CC,
     Diag(Attrs.getLoc(), diag::err_invalid_pcs);
     return true;
   }
+  case ParsedAttr::AT_CHERICCall:
+    CC = CC_CHERICCall;
+    break;
+  case ParsedAttr::AT_CHERICCallee:
+    CC = CC_CHERICCallee;
+    break;
+  case ParsedAttr::AT_CHERICCallback:
+    CC = CC_CHERICCallback;
+    break;
   case ParsedAttr::AT_IntelOclBicc:
     CC = CC_IntelOclBicc;
     break;
@@ -6335,6 +6476,12 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case ParsedAttr::AT_NoEscape:
     handleNoEscapeAttr(S, D, AL);
     break;
+  case ParsedAttr::AT_TemporalSafe:
+    handleSimpleAttribute<TemporalSafeAttr>(S, D, AL);
+    break;
+  case ParsedAttr::AT_TemporalUnsafe:
+    handleSimpleAttribute<TemporalUnsafeAttr>(S, D, AL);
+    break;
   case ParsedAttr::AT_AssumeAligned:
     handleAssumeAlignedAttr(S, D, AL);
     break;
@@ -6568,6 +6715,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
   case ParsedAttr::AT_NoInline:
     handleSimpleAttribute<NoInlineAttr>(S, D, AL);
     break;
+  case ParsedAttr::AT_Sensitive:
+    handleSensitiveAttr(S, D, AL);
+    break;
   case ParsedAttr::AT_NoInstrumentFunction: // Interacts with -pg.
     handleSimpleAttribute<NoInstrumentFunctionAttr>(S, D, AL);
     break;
@@ -6575,8 +6725,23 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     // Interacts with -fstack-protector options.
     handleSimpleAttribute<NoStackProtectorAttr>(S, D, AL);
     break;
+  case ParsedAttr::AT_CHERIMethodClass:
+    handleCHERIMethodClass(S, D, AL);
+    break;
+  case ParsedAttr::AT_CHERIMethodSuffix:
+    handleCHERIMethodSuffix(S, D, AL);
+    break;
+  case ParsedAttr::AT_PointerInterpretationCaps:
+    handleSimpleAttribute<PointerInterpretationCapsAttr>(S, D, AL);
+    break;
+  case ParsedAttr::AT_CHERINoSubobjectBounds:
+    handleSimpleAttribute<CHERINoSubobjectBoundsAttr>(S, D, AL);
+    break;
   case ParsedAttr::AT_StdCall:
   case ParsedAttr::AT_CDecl:
+  case ParsedAttr::AT_CHERICCall:
+  case ParsedAttr::AT_CHERICCallee:
+  case ParsedAttr::AT_CHERICCallback:
   case ParsedAttr::AT_FastCall:
   case ParsedAttr::AT_ThisCall:
   case ParsedAttr::AT_Pascal:

@@ -500,6 +500,8 @@ ArgType PrintfSpecifier::getScalarArgType(ASTContext &Ctx,
         return ArgType(Ctx.LongLongTy, "__int64");
       case LengthModifier::AsIntMax:
         return ArgType(Ctx.getIntMaxType(), "intmax_t");
+      case LengthModifier::AsIntPtr:
+        return ArgType(Ctx.getIntPtrType(), "intptr_t");
       case LengthModifier::AsSizeT:
         return ArgType::makeSizeT(ArgType(Ctx.getSignedSizeType(), "ssize_t"));
       case LengthModifier::AsInt3264:
@@ -534,6 +536,8 @@ ArgType PrintfSpecifier::getScalarArgType(ASTContext &Ctx,
         return ArgType(Ctx.UnsignedLongLongTy, "unsigned __int64");
       case LengthModifier::AsIntMax:
         return ArgType(Ctx.getUIntMaxType(), "uintmax_t");
+      case LengthModifier::AsIntPtr:
+        return ArgType(Ctx.getUIntPtrType(), "uintptr_t");
       case LengthModifier::AsSizeT:
         return ArgType::makeSizeT(ArgType(Ctx.getSizeType(), "size_t"));
       case LengthModifier::AsInt3264:
@@ -570,6 +574,8 @@ ArgType PrintfSpecifier::getScalarArgType(ASTContext &Ctx,
         return ArgType::PtrTo(Ctx.LongLongTy);
       case LengthModifier::AsIntMax:
         return ArgType::PtrTo(ArgType(Ctx.getIntMaxType(), "intmax_t"));
+      case LengthModifier::AsIntPtr:
+        return ArgType::PtrTo(ArgType(Ctx.getIntPtrType(), "intptr_t"));
       case LengthModifier::AsSizeT:
         return ArgType::PtrTo(ArgType(Ctx.getSignedSizeType(), "ssize_t"));
       case LengthModifier::AsPtrDiff:
@@ -711,6 +717,8 @@ bool PrintfSpecifier::fixType(QualType QT, const LangOptions &LangOpt,
   case BuiltinType::Char8: // FIXME: Treat like 'char'?
   case BuiltinType::Char16:
   case BuiltinType::Char32:
+  case BuiltinType::UIntCap:
+  case BuiltinType::IntCap:
   case BuiltinType::UInt128:
   case BuiltinType::Int128:
   case BuiltinType::Half:
@@ -928,7 +936,10 @@ bool PrintfSpecifier::hasValidAlternativeForm() const {
   case ConversionSpecifier::GArg:
   case ConversionSpecifier::FreeBSDrArg:
   case ConversionSpecifier::FreeBSDyArg:
+  // Allow alternate form for %p for CHERI
+  case ConversionSpecifier::pArg:
     return true;
+
 
   default:
     return false;

@@ -238,6 +238,14 @@ clang::analyze_format_string::ParseLengthModifier(FormatSpecifier &FS,
       }
       break;
     case 'j': lmKind = LengthModifier::AsIntMax;     ++I; break;
+    case 'P': 
+      if ((I+1) == E)
+        return false;
+      else {
+        ++I;
+        lmKind = LengthModifier::AsIntPtr;
+      }
+      break;
     case 'z': lmKind = LengthModifier::AsSizeT;      ++I; break;
     case 't': lmKind = LengthModifier::AsPtrDiff;    ++I; break;
     case 'L': lmKind = LengthModifier::AsLongDouble; ++I; break;
@@ -410,6 +418,8 @@ ArgType::matchesType(ASTContext &C, QualType argTy) const {
       const PointerType *PT = argTy->getAs<PointerType>();
       if (!PT)
         return NoMatch;
+      if (C.getTargetInfo().areAllPointersCapabilities() != PT->isCHERICapability())
+        return NoMatch;
       QualType pointeeTy = PT->getPointeeType();
       if (const BuiltinType *BT = pointeeTy->getAs<BuiltinType>())
         switch (BT->getKind()) {
@@ -456,6 +466,10 @@ ArgType::matchesType(ASTContext &C, QualType argTy) const {
     }
 
     case CPointerTy:
+      if (const PointerType *PT = argTy->getAs<PointerType>()) {
+        if (C.getTargetInfo().areAllPointersCapabilities() != PT->isCHERICapability())
+          return NoMatch;
+      }
       if (argTy->isVoidPointerType()) {
         return Match;
       } if (argTy->isPointerType() || argTy->isObjCObjectPointerType() ||
@@ -581,6 +595,8 @@ analyze_format_string::LengthModifier::toString() const {
     return "q";
   case AsIntMax:
     return "j";
+  case AsIntPtr:
+    return "P";
   case AsSizeT:
     return "z";
   case AsPtrDiff:
@@ -732,6 +748,7 @@ bool FormatSpecifier::hasValidLengthModifier(const TargetInfo &Target) const {
     case LengthModifier::AsLongLong:
     case LengthModifier::AsQuad:
     case LengthModifier::AsIntMax:
+    case LengthModifier::AsIntPtr:
     case LengthModifier::AsSizeT:
     case LengthModifier::AsPtrDiff:
       switch (CS.getKind()) {
@@ -868,6 +885,7 @@ bool FormatSpecifier::hasStandardLengthModifier() const {
     case LengthModifier::AsLong:
     case LengthModifier::AsLongLong:
     case LengthModifier::AsIntMax:
+    case LengthModifier::AsIntPtr:
     case LengthModifier::AsSizeT:
     case LengthModifier::AsPtrDiff:
     case LengthModifier::AsLongDouble:
@@ -977,6 +995,12 @@ bool FormatSpecifier::namedTypeToLengthModifier(QualType QT,
       return true;
     } else if (Identifier->getName() == "uintmax_t") {
       LM.setKind(LengthModifier::AsIntMax);
+      return true;
+    } else if (Identifier->getName() == "intptr_t") {
+      LM.setKind(LengthModifier::AsIntPtr);
+      return true;
+    } else if (Identifier->getName() == "uintptr_t") {
+      LM.setKind(LengthModifier::AsIntPtr);
       return true;
     } else if (Identifier->getName() == "ptrdiff_t") {
       LM.setKind(LengthModifier::AsPtrDiff);

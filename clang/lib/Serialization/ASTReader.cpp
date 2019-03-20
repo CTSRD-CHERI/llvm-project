@@ -6810,6 +6810,9 @@ QualType ASTReader::GetType(TypeID ID) {
     case PREDEF_TYPE_UINT128_ID:
       T = Context.UnsignedInt128Ty;
       break;
+    case PREDEF_TYPE_UINTCAP_ID:
+      T = Context.UnsignedIntCapTy;
+      break;
     case PREDEF_TYPE_SCHAR_ID:
       T = Context.SignedCharTy;
       break;
@@ -6830,6 +6833,9 @@ QualType ASTReader::GetType(TypeID ID) {
       break;
     case PREDEF_TYPE_INT128_ID:
       T = Context.Int128Ty;
+      break;
+    case PREDEF_TYPE_INTCAP_ID:
+      T = Context.IntCapTy;
       break;
     case PREDEF_TYPE_HALF_ID:
       T = Context.HalfTy;

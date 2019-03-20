@@ -14,6 +14,10 @@
 let Component = "Sema" in {
 let CategoryName = "Semantic Issue" in {
 
+def warn_calling_non_sensitive_from_sensitive : Warning<
+  "Calling non-sensitive function %0 from sensitive function %1 may result in"
+  " sensitive data being leaked to the stack">,
+  InGroup<DiagGroup<"sensitive-function">>;
 def note_previous_decl : Note<"%0 declared here">;
 def note_entity_declared_at : Note<"%0 declared here">;
 def note_callee_decl : Note<"%0 declared here">;
@@ -807,6 +811,11 @@ def err_pragma_loop_compatibility : Error<
 def err_pragma_loop_precedes_nonloop : Error<
   "expected a for, while, or do-while loop to follow '%0'">;
 
+def err_pragma_opaque_invalid_type : Error<
+  "#pragma opaque type must specify a pointer typedef">;
+def err_pragma_opaque_invalid_key : Error<
+  "#pragma opaque key must specify a value of the same size as the opaque type">;
+
 def err_pragma_attribute_matcher_subrule_contradicts_rule : Error<
   "redundant attribute subject matcher sub-rule '%0'; '%1' already matches "
   "those declarations">;
@@ -1019,6 +1028,42 @@ def warn_objc_cdirective_format_string :
           "which is being passed as a formatting argument to the formatting "
           "%select{method|CFfunction}2">,
   InGroup<ObjCCStringFormat>, DefaultIgnore;
+
+def err_cheri_method_class_must_exist: Error<
+  "attributes '%0' requires a valid declaration">;
+def err_cheri_method_class_must_have_correct_type: Error<
+  "the argument to attribute '%0' must be a CHERI class">;
+def err_cheri_invalid_callback_cast: Error<
+  "CHERI callback function pointers may only be cast to other CHERI callback types">;
+def warn_mips_cheri_call_no_func_proto: Warning<
+  "call to function '%0' with no prototype may lead to run-time stack corruption on CHERI.">,
+  InGroup<MIPSCHERIPrototypes>; // , DefaultError;
+def warn_mips_cheri_fnptr_variadic_nonvariadic_conversion: Warning<
+  "converting %select{function type without prototype|variadic function type|function type}0 "
+  "%1 to %select{function pointer without prototype|variadic function pointer|function pointer}2 %3 "
+  "will cause wrong parameters to be passed at run-time.">,
+  InGroup<MIPSCHERIPrototypes>, DefaultError;  // This will almost certainly crash at runtime -> DefaultError
+def warn_mips_cheri_fnptr_proto_noproto_conversion: Warning<
+  "converting %select{function type without prototype|variadic function type|function type}0 "
+  "%1 to %select{function pointer without prototype|variadic function pointer|function pointer}2 %3 "
+  "may cause wrong parameters to be passed at run-time.">,
+  DefaultIgnore, InGroup<MIPSCHERIPrototypesStrict>;  // This is really noisy (at least for CheriBSD so make it opt-in)
+def note_mips_cheri_func_variadic_explanation : Note<
+  "In the CHERI pure-capability ABI parameters to variadic functions must be passed "
+  "on the stack. This means a non-variadic function called with this calling convention "
+  "will read garbage values from the argument registers.">;
+def note_mips_cheri_func_noproto_explanation : Note<
+  "Calling functions without prototypes is dangerous because in the CHERI pure-capability ABI "
+  "integer and pointer arguments are passed in different registers. If the call includes a "
+  "parameter that does not match the function definition, the function will read garbage "
+  "values from the argument registers.">;
+def note_mips_cheri_func_decl_add_types : Note<
+  "candidate function declaration needs parameter types">;
+def err_cheri_capability_attribute_ambiguous : Error<
+  "use of __capability is ambiguous">;
+def err_cheri_capability_attribute_pointers_only : Error<
+  "__capability only applies to pointers; type here is %0">;
+
 def err_objc_var_decl_inclass :
     Error<"cannot declare variable inside @interface or @protocol">;
 def err_missing_method_context : Error<
@@ -1245,8 +1290,8 @@ def warn_multiple_selectors: Warning<
 
 def err_objc_kindof_nonobject : Error<
   "'__kindof' specifier cannot be applied to non-object type %0">;
-def err_objc_kindof_wrong_position : Error<
-  "'__kindof' type specifier must precede the declarator">;
+def err_attr_wrong_position : Error<
+  "'%0' type specifier must precede the declarator">;
 
 def err_objc_method_unsupported_param_ret_type : Error<
   "%0 %select{parameter|return}1 type is unsupported; "
@@ -2544,6 +2589,9 @@ def err_attribute_pointers_only : Error<warn_attribute_pointers_only.Text>;
 def err_attribute_integers_only : Error<
   "%0 attribute argument may only refer to a function parameter of integer "
   "type">;
+def err_attribute_address_integers_only : Error<
+  "%0 attribute only applies to integer types that can store addresses "
+  "(%1 is invalid)">;
 def warn_attribute_return_pointers_only : Warning<
   "%0 attribute only applies to return values that are pointers">,
   InGroup<IgnoredAttributes>;
@@ -2735,6 +2783,13 @@ def err_alignment_not_power_of_two : Error<
   "requested alignment is not a power of 2">;
 def err_alignment_dependent_typedef_name : Error<
   "requested alignment is dependent but declaration is not dependent">;
+
+def err_alignment_power_of_two_out_of_range : Error<
+  "requested power-of-two alignment %0 is not a value between %1 and %2">;
+def warn_alignment_builtin_useless : Warning<
+  "%select{aligning a value|checking whether a value is aligned}0 to 1 byte is"
+   " always %select{a noop|true}0">, InGroup<TautologicalCompare>;
+
 
 def err_attribute_aligned_too_great : Error<
   "requested alignment must be %0 bytes or smaller">;
@@ -3278,6 +3333,12 @@ def warn_impcast_objective_c_literal_to_bool : Warning<
 def warn_cast_align : Warning<
   "cast from %0 to %1 increases required alignment from %2 to %3">,
   InGroup<CastAlign>, DefaultIgnore;
+def err_cheri_ptr_align : Error<
+  "cast from %0 to %1 increases required alignment from %2 to %3">;
+// creating the right fixit replacement string is non-trivial, add a note instead
+def note_cheri_ptr_align_fixit : Note<
+  "use __builtin_assume_aligned(..., sizeof(void* __capability)) if you know "
+  "that the source type is sufficiently aligned">;
 def warn_old_style_cast : Warning<
   "use of old-style cast">, InGroup<OldStyleCast>, DefaultIgnore;
 
@@ -4827,6 +4888,10 @@ def err_vm_func_decl : Error<
 def err_array_too_large : Error<
   "array is too large (%0 elements)">;
 
+def warn_excess_padding : Warning<
+  "%0 contains %1 bytes of padding in a %2 byte structure">,
+  InGroup<ExcessPadding>, DefaultIgnore;
+
 def err_typecheck_negative_array_size : Error<"array size is negative">;
 def warn_typecheck_function_qualifiers_ignored : Warning<
   "'%0' qualifier on function type %1 has no effect">,
@@ -5878,6 +5943,8 @@ def ext_typecheck_comparison_of_pointer_integer : ExtWarn<
   "comparison between pointer and integer (%0 and %1)">;
 def err_typecheck_comparison_of_pointer_integer : Error<
   "comparison between pointer and integer (%0 and %1)">;
+def err_typecheck_comparison_of_pointer_capability : Error<
+  "comparison between integer pointer and capability (%0 and %1)">;
 def ext_typecheck_comparison_of_distinct_pointers : ExtWarn<
   "comparison of distinct pointer types%diff{ ($ and $)|}0,1">,
   InGroup<CompareDistinctPointerType>;
@@ -5894,6 +5961,7 @@ def err_typecheck_op_on_nonoverlapping_address_space_pointers : Error<
   "|conditional operator with the second and third operands of type "
   "%diff{ ($ and $)|}0,1}2"
   " which are pointers to non-overlapping address spaces">;
+def err_typecheck_read_output : Error<"write-only variable is not readable">;
 
 def err_typecheck_assign_const : Error<
   "%select{"
@@ -5926,6 +5994,113 @@ def warn_tautological_constant_compare : Warning<
   "result of comparison %select{%3|%1}0 %2 "
   "%select{%1|%3}0 is always %4">,
   InGroup<TautologicalTypeLimitCompare>, DefaultIgnore;
+
+def warn_typecheck_convert_ptr_to_cap: Warning<"converting non-capability "
+  "type %0 to capability type %1 without an explicit cast; if this is intended use __cheri_tocap">,
+  InGroup<CHERIImplicitConversion>;
+def warn_typecheck_convert_ptr_to_cap_sign_difference: Warning<"implicit conversion "
+  "from non-capability type %0 to capability type %1 converts between integer types with different signs">,
+  InGroup<CHERIImplicitConversionSign>;
+def err_typecheck_convert_cap_to_ptr: Error<"converting capability"
+  "%select{| reference to}2 type %0 to non-capability type %1 without "
+  "an explicit cast; if this is intended use __cheri_fromcap">;
+def err_typecheck_convert_ptr_to_cap: Error<"converting non-capability"
+  "%select{| reference to}2 type %0 to capability type %1 without "
+  "an explicit cast; if this is intended use __cheri_tocap">;
+def err_typecheck_convert_ptr_to_cap_unrelated_type: Error<"cannot implicitly "
+  "or explicitly convert non-capability %select{| reference to}2 type %0 to "
+  "unrelated capability type %1">;
+
+def warn_uintcap_bitwise_and : Warning<
+  "using bitwise and on capability types may give surprising results; "
+  "if this is an alignment check use __builtin_{is_aligned,align_up,align_down}(); "
+  "if you are operating on integer values only consider using size_t/vaddr_t; "
+  "if you are attempting to store data in the low pointer bits use the "
+  "cheri_{get,set,clear}_low_ptr_bits() macros.">,
+  InGroup<CHERIBitwiseOps>;
+def warn_uintcap_bad_bitwise_op : Warning<
+  "using %select{xor|shifts|remainder}0 on a capability type only operates on the offset; "
+  "consider using %select{vaddr_t if this is used for pointer hashing|__builtin_is_aligned() instead}1 "
+  "or explicitly get the offset with __builtin_cheri_offset_get().">,
+  InGroup<CHERIBitwiseOps>;
+
+def warn_mixed_capability_binop : Warning<
+  "binary expression on capability and non-capability types: %0 and %1.  "
+  "Provenance will be inherited from left-hand side">,
+  InGroup<CHERICaps>;
+def warn_packed_capability : Warning<
+  "Under aligned capability field at offset %0 in packed structure will "
+  "trap if accessed">,
+  InGroup<CHERICaps>;
+def warn_packed_struct_capability : Warning<
+  "Under aligned structure field at offset %0 in packed structure containing "
+  "capabilities will trap if capability field is accessed">,
+  InGroup<CHERICaps>;
+def warn_packed_capability_in_array : Warning<
+  "Capability field at offset %0 in packed structure will trap "
+  "if structure is used in an array">,
+  InGroup<CHERICaps>;
+def note_insert_attribute_aligned : Note<
+  "Add __attribute__((aligned(%0))) to ensure sufficient alignment">;
+def warn_capability_no_provenance : Warning<
+  "cast from provenance-free integer type to pointer type will give pointer"
+  " that can not be dereferenced.  ">,
+  InGroup<CHERICaps>;
+def warn_capability_integer_cast : Warning<
+  "cast from capability type %0 to non-capability, non-address type %1 is most likely an error">,
+  // XXXAR: this is currently too noisy when building CHERIBSD, have if off for now
+  // InGroup<CHERICapabilityToIntegerCast>;
+  InGroup<CHERICapabilityToIntegerCast>, DefaultIgnore;
+def warn_cheri_underalign : Warning<
+  "alignment (%0) of %1 is less than the required capability alignment (%2)">,
+  InGroup<CHERICaps>;
+def note_cheri_underalign_annotate_fixit : Note<
+  "If you are certain that this is correct you can silence the warning by "
+  "adding __attribute__((annotate(\"underaligned_capability\")))">;
+def warn_capability_pointer_cast : Warning<
+  "cast from capability type %0 to non-capability type %1 is most likely an "
+   "error; use __cheri_fromcap to convert between pointers and capabilities">,
+  InGroup<CHERICaps>, DefaultError;
+def note_insert_intptr_fixit : Note<
+  "insert cast to intptr_t to silence this warning">;
+def err_cheri_to_from_cap_unrelated_type : Error<
+  "invalid __cheri_%select{from|to}0cap from %1 to unrelated type %2">;
+def err_cheri_to_from_cap_invalid_target_type: Error<
+  "invalid target type %0 for __cheri_%select{from|to}1cap: target must be a "
+  "%select{pointer|capability}1">;
+def err_cheri_to_from_cap_invalid_source_type: Error<
+  "invalid source type %0 for __cheri_%select{from|to}1cap: source must be a "
+  "%select{capability|pointer}1">;
+def warn_cheri_to_from_cap_noop : Warning<
+  "__cheri_%select{from|to}0cap from %1 to %2 is a no-op">,
+  InGroup<CheriPedantic>, DefaultIgnore;
+
+def err_cheri_offset_addr_invalid_source_type: Error<
+  "invalid source type %0 for __cheri_%select{addr|offset}1: source must be a capability">;
+def err_cheri_offset_addr_invalid_target_type: Error<
+  "invalid target type %0 for __cheri_%select{addr|offset}1: target must be an integer type">;
+def err_cheri_addr_ptr_type: Error<
+  "%select{integral pointer|capability}1 type %0 is not a valid target type for __cheri_addr: "
+  "target must be an integer type">;
+def warn_cheri_offset_addr_smaller_target_type: Warning<
+  "target type %0 is smaller than the type '%1' of the "
+  "%select{address|capability offset field}2; truncation may occur">,
+  InGroup<CHERICapabilityToIntegerCast>;
+
+def err_cheri_cast : Error<
+  "using __cheri_cast is no longer valid; use __cheri_tocap or __cheri_fromcap instead">;
+
+def warn_cheri_implicit_ctoptr : Warning<
+  "the following conversion will result in a CToPtr operation; the behaviour of CToPtr can "
+  " be confusing since using CToPtr on an untagged capability will give 0 instead of the "
+  " integer value and should therefore be explicitly annotated">,
+  InGroup<CHERIPointerConversion>, DefaultIgnore;
+  // TODO: add a link to an explanation for this warning?
+def note_cheri_implicit_ctoptr_suggestion : Note<
+  "if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; "
+  "to get the virtual address use __builtin_cheri_address_get() or a __cheri_address cast; "
+  "to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast">;
+
 
 def warn_mixed_sign_comparison : Warning<
   "comparison of integers of different signs: %0 and %1">,
@@ -6235,6 +6410,9 @@ def err_bad_cxx_cast_bitfield : Error<
 def err_bad_cxx_cast_qualifiers_away : Error<
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
   "functional-style cast}0 from %1 to %2 casts away qualifiers">;
+def err_bad_cxx_reference_cast_capability_qualifier : Error<
+"%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
+"functional-style cast}0 to reference type %2 changes __capability qualifier">;
 def ext_bad_cxx_cast_qualifiers_away_incoherent : ExtWarn<
   "ISO C++ does not allow "
   "%select{const_cast|static_cast|reinterpret_cast|dynamic_cast|C-style cast|"
@@ -6254,6 +6432,8 @@ def warn_cxx98_compat_cast_fn_obj : Warning<
   InGroup<CXX98CompatPedantic>, DefaultIgnore;
 def err_bad_reinterpret_cast_small_int : Error<
   "cast from pointer to smaller type %2 loses information">;
+def err_bad_cap_reinterpret_cast_small_int : Error<
+  "cast from capability to smaller type %2 loses information">;
 def err_bad_cxx_cast_vector_to_scalar_different_size : Error<
   "%select{||reinterpret_cast||C-style cast|}0 from vector %1 "
   "to scalar %2 of different size">;
@@ -7067,6 +7247,13 @@ def err_atomic_builtin_must_be_pointer_intfltptr : Error<
 def err_atomic_builtin_pointer_size : Error<
   "address argument to atomic builtin must be a pointer to 1,2,4,8 or 16 byte "
   "type (%0 invalid)">;
+def err_sync_atomic_builtin_with_capability : Error<
+  "the __sync_* atomic builtins only work with integers and not capability "
+  "type %0. Use the __c11_atomic_ builtins instead.">;
+def warn_capabilities_broken_in_hybrid_varargs : Warning<
+  "It is not possible to pass capabilities to variadic functions in the hybrid "
+  "ABI due to limitations in the MIPS ABI (all arguments are expected in integer "
+  "registers)">, InGroup<MIPSCHERIBugs>, DefaultError;
 def err_atomic_exclusive_builtin_pointer_size : Error<
   "address argument to load or store exclusive builtin must be a pointer to"
   " 1,2,4 or 8 byte type (%0 invalid)">;

@@ -229,7 +229,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
 
   llvm::Type *LTy = getTypes().ConvertTypeForMem(Ty);
   LangAS AS = GetGlobalVarAddressSpace(&D);
-  unsigned TargetAS = getContext().getTargetAddressSpace(AS);
+  unsigned TargetAS = getTargetAddressSpace(AS);
 
   // OpenCL variables in local address space and CUDA shared
   // variables cannot have an initializer.
@@ -259,7 +259,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
   if (AS != ExpectedAS) {
     Addr = getTargetCodeGenInfo().performAddrSpaceCast(
         *this, GV, AS, ExpectedAS,
-        LTy->getPointerTo(getContext().getTargetAddressSpace(ExpectedAS)));
+        LTy->getPointerTo(getTargetAddressSpace(ExpectedAS)));
   }
 
   setStaticLocalDeclAddress(&D, Addr);
@@ -315,6 +315,17 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
                                                llvm::GlobalVariable *GV) {
   ConstantEmitter emitter(*this);
   llvm::Constant *Init = emitter.tryEmitForInitializer(D);
+  if (!CGM.getCodeGenOpts().CHERILinker && Init &&
+      Target.SupportsCapabilities()) {
+    const VarDecl *InitDecl;
+    const Expr *InitExpr = D.getAnyInitializer(InitDecl);
+    QualType T = InitExpr->getType();
+    if (getContext().containsCapabilities(T)) {
+      GV->setConstant(false);
+      CGM.EmitCXXGlobalVarDeclInitFunc(&D, GV, true);
+      return GV;
+    }
+  }
 
   // If constant emission failed, then this should be a C++ static
   // initializer.
@@ -343,7 +354,7 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
                                   OldGV->getLinkage(), Init, "",
                                   /*InsertBefore*/ OldGV,
                                   OldGV->getThreadLocalMode(),
-                           CGM.getContext().getTargetAddressSpace(D.getType()));
+                                  CGM.getAddressSpaceForType(D.getType()));
     GV->setVisibility(OldGV->getVisibility());
     GV->setDSOLocal(OldGV->isDSOLocal());
     GV->setComdat(OldGV->getComdat());
@@ -353,7 +364,7 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
 
     // Replace all uses of the old global with the new global
     llvm::Constant *NewPtrForOldDecl =
-    llvm::ConstantExpr::getBitCast(GV, OldGV->getType());
+    llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(GV, OldGV->getType());
     OldGV->replaceAllUsesWith(NewPtrForOldDecl);
 
     // Erase the old global, since it is no longer used.
@@ -535,7 +546,8 @@ namespace {
     CallStackRestore(Address Stack) : Stack(Stack) {}
     void Emit(CodeGenFunction &CGF, Flags flags) override {
       llvm::Value *V = CGF.Builder.CreateLoad(Stack);
-      llvm::Value *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::stackrestore);
+      llvm::Value *F = CGF.CGM.getIntrinsic(llvm::Intrinsic::stackrestore,
+          { CGF.Int8PtrTy });
       CGF.Builder.CreateCall(F, V);
     }
   };
@@ -1088,7 +1100,7 @@ static Address createUnnamedGlobalFrom(CodeGenModule &CGM, const VarDecl &D,
 static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
                                   Address Loc, bool isVolatile,
                                   CGBuilderTy &Builder,
-                                  llvm::Constant *constant) {
+                                  llvm::Constant *constant, bool ContainsCaps) {
   auto *Ty = constant->getType();
   bool isScalar = Ty->isIntOrIntVectorTy() || Ty->isPtrOrPtrVectorTy() ||
                   Ty->isFPOrFPVectorTy();
@@ -1098,13 +1110,15 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
   }
 
   auto *Int8Ty = llvm::IntegerType::getInt8Ty(CGM.getLLVMContext());
-  auto *IntPtrTy = CGM.getDataLayout().getIntPtrType(CGM.getLLVMContext());
+  auto *IntPtrTy = CGM.getDataLayout().getIntPtrType(
+      CGM.getLLVMContext(), CGM.getTargetCodeGenInfo().getDefaultAS());
 
   // If the initializer is all or mostly the same, codegen with bzero / memset
   // then do a few stores afterward.
   uint64_t ConstantSize = CGM.getDataLayout().getTypeAllocSize(Ty);
   auto *SizeVal = llvm::ConstantInt::get(IntPtrTy, ConstantSize);
-  if (shouldUseBZeroPlusStoresToInitialize(constant, ConstantSize)) {
+  // FIXME: is this fine with capabilities?
+  if (!ContainsCaps && shouldUseBZeroPlusStoresToInitialize(constant, ConstantSize)) {
     Builder.CreateMemSet(Loc, llvm::ConstantInt::get(Int8Ty, 0), SizeVal,
                          isVolatile);
 
@@ -1117,8 +1131,9 @@ static void emitStoresForConstant(CodeGenModule &CGM, const VarDecl &D,
     return;
   }
 
+  // FIXME: is this fine with capabilities?
   llvm::Value *Pattern = shouldUseMemSetToInitialize(constant, ConstantSize);
-  if (Pattern) {
+  if (!ContainsCaps && Pattern) {
     uint64_t Value = 0x00;
     if (!isa<llvm::UndefValue>(Pattern)) {
       const llvm::APInt &AP = cast<llvm::ConstantInt>(Pattern)->getValue();
@@ -1141,7 +1156,7 @@ static void emitStoresForZeroInit(CodeGenModule &CGM, const VarDecl &D,
                                   CGBuilderTy &Builder) {
   llvm::Type *ElTy = Loc.getElementType();
   llvm::Constant *constant = llvm::Constant::getNullValue(ElTy);
-  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant);
+  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant, false);
 }
 
 static void emitStoresForPatternInit(CodeGenModule &CGM, const VarDecl &D,
@@ -1150,7 +1165,7 @@ static void emitStoresForPatternInit(CodeGenModule &CGM, const VarDecl &D,
   llvm::Type *ElTy = Loc.getElementType();
   llvm::Constant *constant = patternFor(CGM, ElTy);
   assert(!isa<llvm::UndefValue>(constant));
-  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant);
+  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant, false);
 }
 
 static bool containsUndef(llvm::Constant *constant) {
@@ -1349,6 +1364,10 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
       // Otherwise, tell the initialization code that we're in this case.
       emission.IsConstantAggregate = true;
+      if (!CGM.getCodeGenOpts().CHERILinker && Target.SupportsCapabilities() &&
+          Target.areAllPointersCapabilities() &&
+          (Ty->isCHERICapabilityType(getContext()) || Ty->isCompoundType()))
+        emission.IsConstantAggregate = false;
     }
 
     // A normal fixed sized variable becomes an alloca in the entry block,
@@ -1442,10 +1461,11 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
     if (!DidCallStackSave) {
       // Save the stack.
-      Address Stack =
-        CreateTempAlloca(Int8PtrTy, getPointerAlign(), "saved_stack");
+      Address Stack = CreateTempAlloca(Int8PtrTy,
+          getPointerAlign(), "saved_stack");
 
-      llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::stacksave);
+      llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::stacksave,
+          { Int8PtrTy });
       llvm::Value *V = Builder.CreateCall(F);
       Builder.CreateStore(V, Stack);
 
@@ -1481,6 +1501,20 @@ CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
 
   if (D.hasAttr<AnnotateAttr>())
     EmitVarAnnotations(&D, address.getPointer());
+
+  bool tsafe, tunsafe;
+  tsafe = D.hasAttr<TemporalSafeAttr>();
+  tunsafe = D.hasAttr<TemporalUnsafeAttr>();
+  if (tsafe && tunsafe)
+    CGM.Error(D.getLocation(), "Cannot mark as both temporal safe and unsafe");
+
+  if (tsafe || tunsafe) {
+    llvm::Instruction* value = dyn_cast<llvm::Instruction>(emission.Addr.getPointer());
+    assert(value != NULL && "Expected instruction");
+    llvm::LLVMContext& context = value->getContext();
+    llvm::MDNode* Node = llvm::MDNode::get(context, llvm::MDString::get(context, tsafe ? "safe" : "unsafe"));
+    value->setMetadata("temporal", Node);
+  }
 
   // Make sure we call @llvm.lifetime.end.
   if (emission.useLifetimeMarkers())
@@ -1738,7 +1772,13 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
   if (Loc.getType() != BP)
     Loc = Builder.CreateBitCast(Loc, BP);
 
-  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant);
+  // FIXME: some of these initialization patterns are fine with capabilities...
+  // Just need to be careful that all fields are untagged.
+  // For now just don't do it to avoid errors.
+  bool ContainsCapabilities = Target.SupportsCapabilities() &&
+      getContext().containsCapabilities(type);
+
+  emitStoresForConstant(CGM, D, Loc, isVolatile, Builder, constant, ContainsCapabilities);
 }
 
 /// Emit an expression as an initializer for an object (variable, field, etc.)

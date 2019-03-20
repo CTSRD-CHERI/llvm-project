@@ -162,6 +162,8 @@ const char *TargetInfo::getTypeName(IntType T) {
   case UnsignedLong:     return "long unsigned int";
   case SignedLongLong:   return "long long int";
   case UnsignedLongLong: return "long long unsigned int";
+  case UnsignedIntCap:   return "__uintcap_t";
+  case SignedIntCap:     return "__intcap_t";
   }
 }
 
@@ -186,6 +188,9 @@ const char *TargetInfo::getTypeConstantSuffix(IntType T) const {
   case UnsignedInt:      return "U";
   case UnsignedLong:     return "UL";
   case UnsignedLongLong: return "ULL";
+  // FIXME: We probably should have a suffix for intcap_t literals!
+  case UnsignedIntCap:
+  case SignedIntCap:     return "";
   }
 }
 
@@ -205,6 +210,8 @@ const char *TargetInfo::getTypeFormatModifier(IntType T) {
   case UnsignedLong:     return "l";
   case SignedLongLong:
   case UnsignedLongLong: return "ll";
+  case SignedIntCap:
+  case UnsignedIntCap:   return "P";
   }
 }
 
@@ -223,6 +230,8 @@ unsigned TargetInfo::getTypeWidth(IntType T) const {
   case UnsignedLong:     return getLongWidth();
   case SignedLongLong:
   case UnsignedLongLong: return getLongLongWidth();
+  case SignedIntCap:
+  case UnsignedIntCap: return getIntCapWidth();
   };
 }
 
@@ -294,6 +303,8 @@ unsigned TargetInfo::getTypeAlign(IntType T) const {
   case UnsignedLong:     return getLongAlign();
   case SignedLongLong:
   case UnsignedLongLong: return getLongLongAlign();
+  case SignedIntCap:
+  case UnsignedIntCap: return getIntCapAlign();
   };
 }
 
@@ -307,12 +318,14 @@ bool TargetInfo::isTypeSigned(IntType T) {
   case SignedInt:
   case SignedLong:
   case SignedLongLong:
+  case SignedIntCap:
     return true;
   case UnsignedChar:
   case UnsignedShort:
   case UnsignedInt:
   case UnsignedLong:
   case UnsignedLongLong:
+  case UnsignedIntCap:
     return false;
   };
 }
@@ -358,7 +371,7 @@ void TargetInfo::adjust(LangOptions &Opts) {
     }
     LongDoubleWidth = LongDoubleAlign = 128;
 
-    unsigned MaxPointerWidth = getMaxPointerWidth();
+    unsigned MaxPointerWidth = getMaxPointerRange();
     assert(MaxPointerWidth == 32 || MaxPointerWidth == 64);
     bool Is32BitArch = MaxPointerWidth == 32;
     SizeType = Is32BitArch ? UnsignedInt : UnsignedLong;
@@ -553,6 +566,9 @@ bool TargetInfo::validateOutputConstraint(ConstraintInfo &Info) const {
       Info.setAllowsRegister();
       break;
     case 'm': // memory operand.
+      if (areAllPointersCapabilities())
+        break;
+      LLVM_FALLTHROUGH;
     case 'o': // offsetable memory operand.
     case 'V': // non-offsetable memory operand.
     case '<': // autodecrement memory operand.

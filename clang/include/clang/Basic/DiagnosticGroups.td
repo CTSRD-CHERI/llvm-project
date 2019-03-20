@@ -83,6 +83,26 @@ def ObjCLiteralConversion : DiagGroup<"objc-literal-conversion">;
 def MacroRedefined : DiagGroup<"macro-redefined">;
 def BuiltinMacroRedefined : DiagGroup<"builtin-macro-redefined">;
 def BuiltinRequiresHeader : DiagGroup<"builtin-requires-header">;
+
+
+// Generally useful CHERI warnings
+def CHERICaps : DiagGroup<"cheri-capability-misuse">;
+def CHERIBitwiseOps : DiagGroup<"cheri-bitwise-operations">;
+def CHERIImplicitConversion : DiagGroup<"cheri-implicit-conversion">;
+def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
+def CHERIPointerConversion : DiagGroup<"cheri-pointer-conversion", [CHERIImplicitConversionSign, CHERIImplicitConversion]>;
+def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
+def MIPSCHERIPrototypesStrict: DiagGroup<"mips-cheri-prototypes-strict">;
+
+def CheriAll : DiagGroup<"cheri",
+     [CHERICaps, CHERIBitwiseOps, CHERIImplicitConversion,
+      CHERIImplicitConversionSign, MIPSCHERIPrototypes, MIPSCHERIPrototypesStrict]>;
+// CHERI warnings that are too noisy to turn on by default
+def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
+def CheriPedantic : DiagGroup<"cheri-pedantic", [CHERICapabilityToIntegerCast, MIPSCHERIPrototypesStrict]>;
+// Warnings/Errors for bugs in the MIPS/CHERI backend
+def MIPSCHERIBugs: DiagGroup<"mips-cheri-bugs">;
+
 def C99Compat : DiagGroup<"c99-compat">;
 def CXXCompat: DiagGroup<"c++-compat">;
 def ExternCCompat : DiagGroup<"extern-c-compat">;
@@ -347,6 +367,8 @@ def MismatchedReturnTypes : DiagGroup<"mismatched-return-types">;
 def MismatchedTags : DiagGroup<"mismatched-tags">;
 def MissingFieldInitializers : DiagGroup<"missing-field-initializers">;
 def ModuleBuild : DiagGroup<"module-build">;
+// Remarks about setting/not setting subobject bounds
+def CheriSubobjectBounds : DiagGroup<"cheri-subobject-bounds">;
 def ModuleConflict : DiagGroup<"module-conflict">;
 def ModuleFileExtension : DiagGroup<"module-file-extension">;
 def NewlineEOF : DiagGroup<"newline-eof">;
@@ -400,6 +422,7 @@ def ObjCFlexibleArray : DiagGroup<"objc-flexible-array">;
 def OpenCLUnsupportedRGBA: DiagGroup<"opencl-unsupported-rgba">;
 def DeprecatedObjCIsaUsage : DiagGroup<"deprecated-objc-isa-usage">;
 def ExplicitInitializeCall : DiagGroup<"explicit-initialize-call">;
+def ExcessPadding : DiagGroup<"excess-padding">;
 def Packed : DiagGroup<"packed">;
 def Padded : DiagGroup<"padded">;
 
@@ -764,6 +787,7 @@ def Move : DiagGroup<"move", [
   ]>;
 
 def Extra : DiagGroup<"extra", [
+    MIPSCHERIPrototypesStrict, // this is quite noisy so only on for -Wextra
     MissingFieldInitializers,
     IgnoredQualifiers,
     InitializerOverrides,
@@ -835,7 +859,7 @@ def All : DiagGroup<"all", [Most, Parentheses, Switch, SwitchBool]>;
 def : DiagGroup<"CL4", [All, Extra]>;
 
 // Warnings enabled by -pedantic.  This is magically filled in by TableGen.
-def Pedantic : DiagGroup<"pedantic">;
+def Pedantic : DiagGroup<"pedantic", [CheriPedantic]>;
 
 // Aliases.
 def : DiagGroup<"", [Extra]>;                   // -W = -Wextra

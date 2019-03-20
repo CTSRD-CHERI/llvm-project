@@ -294,6 +294,13 @@ public:
     Mask |= mask;
   }
 
+  bool hasOutput() const { return Mask & OMask; }
+  void addOutput() { Mask |= OMask; }
+  void removeOutput() { Mask &= ~OMask; }
+  bool hasInput() const { return Mask & IMask; }
+  void addInput() { Mask |= IMask; }
+  void removeInput() { Mask &= ~IMask; }
+
   bool hasUnaligned() const { return Mask & UMask; }
   void setUnaligned(bool flag) {
     Mask = (Mask & ~UMask) | (flag ? UMask : 0);
@@ -557,19 +564,21 @@ public:
   }
 
 private:
-  // bits:     |0 1 2|3|4 .. 5|6  ..  8|9   ...   31|
-  //           |C R V|U|GCAttr|Lifetime|AddressSpace|
+  // bits:     |0 1 2|3|4|5|6 .. 7|8  .. 10|11  ...   31|
+  //           |C R V|U|O|I|GCAttr|Lifetime|AddressSpace|
   uint32_t Mask = 0;
 
   static const uint32_t UMask = 0x8;
   static const uint32_t UShift = 3;
-  static const uint32_t GCAttrMask = 0x30;
-  static const uint32_t GCAttrShift = 4;
-  static const uint32_t LifetimeMask = 0x1C0;
-  static const uint32_t LifetimeShift = 6;
+  static const uint32_t OMask = 0x10;
+  static const uint32_t IMask = 0x20;
+  static const uint32_t GCAttrMask = 0xC0;
+  static const uint32_t GCAttrShift = 6;
+  static const uint32_t LifetimeMask = 0x700;
+  static const uint32_t LifetimeShift = 8;
   static const uint32_t AddressSpaceMask =
-      ~(CVRMask | UMask | GCAttrMask | LifetimeMask);
-  static const uint32_t AddressSpaceShift = 9;
+      ~(IMask|OMask|CVRMask|UMask|GCAttrMask|LifetimeMask);
+  static const uint32_t AddressSpaceShift = 11;
 };
 
 /// A std::pair-like structure for storing a qualified type split
@@ -1334,6 +1343,7 @@ public:
   }
 
   bool hasAddressSpace() const { return Quals.hasAddressSpace(); }
+
   LangAS getAddressSpace() const { return Quals.getAddressSpace(); }
 
   const Type *getBaseType() const { return BaseType; }
@@ -1946,6 +1956,14 @@ public:
   bool isFunctionNoProtoType() const { return getAs<FunctionNoProtoType>(); }
   bool isFunctionProtoType() const { return getAs<FunctionProtoType>(); }
   bool isPointerType() const;
+  /// Return struct of this type is a CHERI capability type. If \p IncludeIntCap
+  /// is true this also includes __uintcap_t and __intcap_t, otherwise it will
+  /// return false for these types. This is useful for cases such as checking
+  /// the validity of casts where __uintcap_t is not handled the same way as
+  /// pointers.
+  bool isCHERICapabilityType(const ASTContext &Context,
+                             bool IncludeIntCap = true) const;
+  bool isIntCapType() const;       // __uintcap_t or __intcap_t
   bool isAnyPointerType() const;   // Any C pointer or ObjC object pointer
   bool isBlockPointerType() const;
   bool isVoidPointerType() const;
@@ -2022,6 +2040,7 @@ public:
   bool isObjCBuiltinType() const;               // 'id' or 'Class'
   bool isObjCARCBridgableType() const;
   bool isCARCBridgableType() const;
+  bool isCXXStructureOrClassType() const;       // C++ struct or class
   bool isTemplateTypeParmType() const;          // C++ template type parameter
   bool isNullPtrType() const;                   // C++11 std::nullptr_t
   bool isAlignValT() const;                     // C++17 std::align_val_t
@@ -2538,16 +2557,20 @@ class PointerType : public Type, public llvm::FoldingSetNode {
   friend class ASTContext; // ASTContext creates these.
 
   QualType PointeeType;
+  bool IsCHERICapability : 1;
 
-  PointerType(QualType Pointee, QualType CanonicalPtr)
+  PointerType(QualType Pointee, QualType CanonicalPtr, bool IsCHERICap = false)
       : Type(Pointer, CanonicalPtr, Pointee->isDependentType(),
              Pointee->isInstantiationDependentType(),
              Pointee->isVariablyModifiedType(),
              Pointee->containsUnexpandedParameterPack()),
-        PointeeType(Pointee) {}
+        PointeeType(Pointee), IsCHERICapability(IsCHERICap) {
+  }
 
 public:
   QualType getPointeeType() const { return PointeeType; }
+
+  bool isCHERICapability() const { return IsCHERICapability; }
 
   /// Returns true if address spaces of pointers overlap.
   /// OpenCL v2.0 defines conversion rules for pointers to different
@@ -2569,11 +2592,12 @@ public:
   QualType desugar() const { return QualType(this, 0); }
 
   void Profile(llvm::FoldingSetNodeID &ID) {
-    Profile(ID, getPointeeType());
+    Profile(ID, getPointeeType(), isCHERICapability());
   }
 
-  static void Profile(llvm::FoldingSetNodeID &ID, QualType Pointee) {
+  static void Profile(llvm::FoldingSetNodeID &ID, QualType Pointee, bool IsCHERICap) {
     ID.AddPointer(Pointee.getAsOpaquePtr());
+    ID.AddBoolean(IsCHERICap);
   }
 
   static bool classof(const Type *T) { return T->getTypeClass() == Pointer; }
@@ -2672,15 +2696,16 @@ public:
 /// Base for LValueReferenceType and RValueReferenceType
 class ReferenceType : public Type, public llvm::FoldingSetNode {
   QualType PointeeType;
+  bool IsCHERICapability : 1;
 
 protected:
   ReferenceType(TypeClass tc, QualType Referencee, QualType CanonicalRef,
-                bool SpelledAsLValue)
+                bool SpelledAsLValue, bool IsCHERICap = false)
       : Type(tc, CanonicalRef, Referencee->isDependentType(),
              Referencee->isInstantiationDependentType(),
              Referencee->isVariablyModifiedType(),
              Referencee->containsUnexpandedParameterPack()),
-        PointeeType(Referencee) {
+        PointeeType(Referencee), IsCHERICapability(IsCHERICap) {
     ReferenceTypeBits.SpelledAsLValue = SpelledAsLValue;
     ReferenceTypeBits.InnerRef = Referencee->isReferenceType();
   }
@@ -2699,15 +2724,19 @@ public:
     return T->PointeeType;
   }
 
+  bool isCHERICapability() const { return IsCHERICapability; }
+
   void Profile(llvm::FoldingSetNodeID &ID) {
-    Profile(ID, PointeeType, isSpelledAsLValue());
+    Profile(ID, PointeeType, isSpelledAsLValue(), isCHERICapability());
   }
 
   static void Profile(llvm::FoldingSetNodeID &ID,
                       QualType Referencee,
-                      bool SpelledAsLValue) {
+                      bool SpelledAsLValue,
+                      bool IsCHERICap) {
     ID.AddPointer(Referencee.getAsOpaquePtr());
     ID.AddBoolean(SpelledAsLValue);
+    ID.AddBoolean(IsCHERICap);
   }
 
   static bool classof(const Type *T) {
@@ -2721,9 +2750,9 @@ class LValueReferenceType : public ReferenceType {
   friend class ASTContext; // ASTContext creates these
 
   LValueReferenceType(QualType Referencee, QualType CanonicalRef,
-                      bool SpelledAsLValue)
+                      bool SpelledAsLValue, bool IsCHERICap = false)
       : ReferenceType(LValueReference, Referencee, CanonicalRef,
-                      SpelledAsLValue) {}
+                      SpelledAsLValue, IsCHERICap) {}
 
 public:
   bool isSugared() const { return false; }
@@ -2738,8 +2767,8 @@ public:
 class RValueReferenceType : public ReferenceType {
   friend class ASTContext; // ASTContext creates these
 
-  RValueReferenceType(QualType Referencee, QualType CanonicalRef)
-       : ReferenceType(RValueReference, Referencee, CanonicalRef, false) {}
+  RValueReferenceType(QualType Referencee, QualType CanonicalRef, bool IsCHERICap = false)
+       : ReferenceType(RValueReference, Referencee, CanonicalRef, false, IsCHERICap) {}
 
 public:
   bool isSugared() const { return false; }

@@ -15,6 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "SyntheticSections.h"
+#include "Arch/Cheri.h"
 #include "Bits.h"
 #include "Config.h"
 #include "InputFiles.h"
@@ -37,6 +38,7 @@
 #include "llvm/Support/Compression.h"
 #include "llvm/Support/Endian.h"
 #include "llvm/Support/LEB128.h"
+#include "llvm/Support/MipsABIFlags.h"
 #include "llvm/Support/MD5.h"
 #include "llvm/Support/RandomNumberGenerator.h"
 #include "llvm/Support/SHA1.h"
@@ -98,6 +100,7 @@ MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
   Elf_Mips_ABIFlags Flags = {};
   bool Create = false;
 
+  std::string LastFile = "<internal>";
   for (InputSectionBase *Sec : InputSections) {
     if (Sec->Type != SHT_MIPS_ABIFLAGS)
       continue;
@@ -120,24 +123,54 @@ MipsAbiFlagsSection<ELFT> *MipsAbiFlagsSection<ELFT>::create() {
             Twine(S->version));
       return nullptr;
     }
+    if (Size > sizeof(Elf_Mips_ABIFlags)) {
+      warn(Filename + ": .MIPS.abiflags section has multiple entries: got " +
+          Twine(Size) + " instead of " + Twine(sizeof(Elf_Mips_ABIFlags)) +
+          " bytes");
+    }
 
     // LLD checks ISA compatibility in calcMipsEFlags(). Here we just
     // select the highest number of ISA/Rev/Ext.
     Flags.isa_level = std::max(Flags.isa_level, S->isa_level);
     Flags.isa_rev = std::max(Flags.isa_rev, S->isa_rev);
-    Flags.isa_ext = std::max(Flags.isa_ext, S->isa_ext);
+    Flags.isa_ext =
+        elf::getMipsIsaExt(Flags.isa_ext, LastFile, S->isa_ext, Filename);
     Flags.gpr_size = std::max(Flags.gpr_size, S->gpr_size);
     Flags.cpr1_size = std::max(Flags.cpr1_size, S->cpr1_size);
     Flags.cpr2_size = std::max(Flags.cpr2_size, S->cpr2_size);
     Flags.ases |= S->ases;
     Flags.flags1 |= S->flags1;
     Flags.flags2 |= S->flags2;
-    Flags.fp_abi = elf::getMipsFpAbiFlag(Flags.fp_abi, S->fp_abi, Filename);
+    Flags.fp_abi =
+        elf::getMipsFpAbiFlag(Flags.fp_abi, LastFile, S->fp_abi, Filename);
+    LastFile = std::move(Filename);
   };
 
   if (Create)
     return make<MipsAbiFlagsSection<ELFT>>(Flags);
   return nullptr;
+}
+
+template <class ELFT>
+Optional<unsigned> MipsAbiFlagsSection<ELFT>::getCheriAbiVariant() const {
+  auto CheriAbiVariant = Flags.isa_ext & Mips::AFL_EXT_CHERI_ABI_MASK;
+  if (!CheriAbiVariant) {
+    warn("Linking old object files without CheriABI variant flag.");
+    return None;
+  }
+  switch (CheriAbiVariant) {
+  case Mips::AFL_EXT_CHERI_ABI_LEGACY:
+    return DF_MIPS_CHERI_ABI_LEGACY;
+  case Mips::AFL_EXT_CHERI_ABI_PCREL:
+    return DF_MIPS_CHERI_ABI_PCREL;
+  case Mips::AFL_EXT_CHERI_ABI_PLT:
+    return DF_MIPS_CHERI_ABI_PLT;
+  case Mips::AFL_EXT_CHERI_ABI_FNDESC:
+    return DF_MIPS_CHERI_ABI_FNDESC;
+  default:
+    error("Unknown CHERI ABI variant " + Twine(CheriAbiVariant));
+    return None;
+  }
 }
 
 // .MIPS.options section.
@@ -448,6 +481,10 @@ template <class ELFT> void EhFrameSection::addSection(InputSectionBase *C) {
   Sec->Parent = this;
 
   Alignment = std::max(Alignment, Sec->Alignment);
+  // TODO: ideally we should only make .eh_frame writable if we have any dynamic
+  // relocations against it.
+  if (Sec->Flags & SHF_WRITE)
+    Flags |= SHF_WRITE; // TODO: Or should we just do Flags |= Sec->Flags?
   Sections.push_back(Sec);
 
   for (auto *DS : Sec->DependentSections)
@@ -1427,6 +1464,28 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       // relative to the address of the tag.
       addInSecRelative(DT_MIPS_RLD_MAP_REL, In.MipsRldMap);
     }
+    if (Config->isCheriABI()) {
+      uint32_t CheriFlags = 0;
+      if (InX<ELFT>::MipsAbiFlags)
+        if (auto ABI = InX<ELFT>::MipsAbiFlags->getCheriAbiVariant())
+          CheriFlags |= *ABI;
+      // if (Config->CapTableScope != CapTableScopePolicy::All)
+      // Add the captable scope to the CHERI flags:
+      CheriFlags |= ((unsigned)Config->CapTableScope) << 3;
+      addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
+    }
+    if (In.CheriCapTable && !In.CheriCapTable->empty()) {
+      addInSec(DT_MIPS_CHERI_CAPTABLE, In.CheriCapTable);
+      addSize(DT_MIPS_CHERI_CAPTABLESZ, In.CheriCapTable->getParent());
+    }
+    if (In.CheriCapTableMapping && !In.CheriCapTableMapping->empty()) {
+      addInSec(DT_MIPS_CHERI_CAPTABLE_MAPPING, In.CheriCapTableMapping);
+      addSize(DT_MIPS_CHERI_CAPTABLE_MAPPINGSZ, In.CheriCapTableMapping->getParent());
+    }
+    if (InX<ELFT>::CapRelocs && !InX<ELFT>::CapRelocs->empty()) {
+      addInSec(DT_MIPS_CHERI___CAPRELOCS, InX<ELFT>::CapRelocs);
+      addSize(DT_MIPS_CHERI___CAPRELOCSSZ, InX<ELFT>::CapRelocs->getParent());
+    }
   }
 
   // Glink dynamic tag is required by the V2 abi if the plt section isn't empty.
@@ -1492,7 +1551,12 @@ void RelocationBaseSection::addReloc(RelType DynType,
                                      RelType Type) {
   // Write the addends to the relocated address if required. We skip
   // it if the written value would be zero.
-  if (Config->WriteAddends && (Expr != R_ADDEND || Addend != 0))
+  bool WriteAddend = Config->WriteAddends && (Expr != R_ADDEND || Addend != 0);
+  // If we are adding a dynamic R_CHERI_CAPABILITY relocation we need to write
+  // the added to the output file since it will be initialized to 0xcacacaca
+  if (Expr == R_CHERI_CAPABILITY)
+    Expr = R_ADDEND;
+  if (WriteAddend)
     InputSec->Relocations.push_back({Expr, Type, OffsetInSec, Addend, Sym});
   addReloc({DynType, InputSec, OffsetInSec, Expr != R_ADDEND, Sym, Addend});
 }
@@ -1501,6 +1565,14 @@ void RelocationBaseSection::addReloc(const DynamicReloc &Reloc) {
   if (Reloc.Type == Target->RelativeRel)
     ++NumRelativeRelocs;
   Relocs.push_back(Reloc);
+  auto IS = Reloc.getInputSec();
+  if (!Config->IsRela && IS->AreRelocsRela) {
+    // HACK for FreeBSD mips n64/CHERI: input is RELA, output is REL -> write the addend to the output
+    // But don't do it for R_MIPS_CHERI_CAPABILITY relocations since they are handled differently
+    // TODO: remove this hack
+    if (Reloc.Type != R_MIPS_CHERI_CAPABILITY)
+      const_cast<InputSectionBase*>(IS)->FreeBSDMipsRelocationsHack.push_back(Reloc);
+  }
 }
 
 void RelocationBaseSection::finalizeContents() {
@@ -1513,8 +1585,12 @@ void RelocationBaseSection::finalizeContents() {
   else
     getParent()->Link = 0;
 
-  if (In.RelaIplt == this || In.RelaPlt == this)
+  if (Config->isCheriABI() && In.CheriCapTable) {
+    // For MIPS CheriABI we use the captable as the sh_info value
+    getParent()->Info = In.CheriCapTable->getParent()->SectionIndex;
+  } else if (In.RelaIplt == this || In.RelaPlt == this) {
     getParent()->Info = In.GotPlt->getParent()->SectionIndex;
+  }
 }
 
 RelrBaseSection::RelrBaseSection()

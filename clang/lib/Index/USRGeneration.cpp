@@ -674,6 +674,8 @@ void USRGenerator::VisitType(QualType T) {
           c = 'k'; break;
         case BuiltinType::UInt128:
           c = 'j'; break;
+        case BuiltinType::UIntCap:
+          c = 'z'; break;
         case BuiltinType::Char_U:
         case BuiltinType::Char_S:
           c = 'C'; break;
@@ -692,6 +694,8 @@ void USRGenerator::VisitType(QualType T) {
           c = 'K'; break;
         case BuiltinType::Int128:
           c = 'J'; break;
+        case BuiltinType::IntCap:
+          c = 'Z'; break;
         case BuiltinType::Float16:
         case BuiltinType::Half:
           c = 'h'; break;

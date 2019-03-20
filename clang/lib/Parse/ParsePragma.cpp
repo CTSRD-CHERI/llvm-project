@@ -82,6 +82,18 @@ struct PragmaRedefineExtnameHandler : public PragmaHandler {
                     Token &FirstToken) override;
 };
 
+struct  PragmaOpaqueHandler : public PragmaHandler {
+
+  explicit PragmaOpaqueHandler(Sema &A) : PragmaHandler("opaque"), Actions(A)
+    {}
+
+  void HandlePragma(Preprocessor &PP, PragmaIntroducerKind Introducer,
+                    Token &FirstToken) override;
+  private:
+    Sema &Actions;
+};
+
+
 struct PragmaOpenCLExtensionHandler : public PragmaHandler {
   PragmaOpenCLExtensionHandler() : PragmaHandler("EXTENSION") {}
   void HandlePragma(Preprocessor &PP, PragmaIntroducerKind Introducer,
@@ -221,6 +233,17 @@ struct PragmaUnrollHintHandler : public PragmaHandler {
                     Token &FirstToken) override;
 };
 
+
+struct PragmaPointerInterpretation : public PragmaHandler {
+public:
+  PragmaPointerInterpretation(Sema &Actions)
+    : PragmaHandler("pointer_interpretation"), Actions(Actions) {}
+  void HandlePragma(Preprocessor &PP, PragmaIntroducerKind Introducer,
+                            Token &FirstToken) override;
+private:
+  Sema &Actions;
+};
+
 struct PragmaMSRuntimeChecksHandler : public EmptyPragmaHandler {
   PragmaMSRuntimeChecksHandler() : EmptyPragmaHandler("runtime_checks") {}
 };
@@ -285,6 +308,9 @@ void Parser::initializePragmaHandlers() {
   RedefineExtnameHandler = llvm::make_unique<PragmaRedefineExtnameHandler>();
   PP.AddPragmaHandler(RedefineExtnameHandler.get());
 
+  OpaqueHandler = llvm::make_unique<PragmaOpaqueHandler>(Actions);
+  PP.AddPragmaHandler(OpaqueHandler.get());
+
   FPContractHandler = llvm::make_unique<PragmaFPContractHandler>();
   PP.AddPragmaHandler("STDC", FPContractHandler.get());
 
@@ -311,6 +337,9 @@ void Parser::initializePragmaHandlers() {
   else
     OpenMPHandler = llvm::make_unique<PragmaNoOpenMPHandler>();
   PP.AddPragmaHandler(OpenMPHandler.get());
+
+  PointerInterpretationHandler = llvm::make_unique<PragmaPointerInterpretation>(Actions);
+  PP.AddPragmaHandler(PointerInterpretationHandler.get());
 
   if (getLangOpts().MicrosoftExt ||
       getTargetInfo().getTriple().isOSBinFormatELF()) {
@@ -388,6 +417,8 @@ void Parser::resetPragmaHandlers() {
   GCCVisibilityHandler.reset();
   PP.RemovePragmaHandler(OptionsHandler.get());
   OptionsHandler.reset();
+  PP.RemovePragmaHandler(PointerInterpretationHandler.get());
+  PointerInterpretationHandler.reset();
   PP.RemovePragmaHandler(PackHandler.get());
   PackHandler.reset();
   PP.RemovePragmaHandler(MSStructHandler.get());
@@ -398,6 +429,8 @@ void Parser::resetPragmaHandlers() {
   WeakHandler.reset();
   PP.RemovePragmaHandler(RedefineExtnameHandler.get());
   RedefineExtnameHandler.reset();
+  PP.RemovePragmaHandler(OpaqueHandler.get());
+  OpaqueHandler.reset();
 
   if (getLangOpts().OpenCL) {
     PP.RemovePragmaHandler("OPENCL", OpenCLExtensionHandler.get());
@@ -2042,6 +2075,46 @@ void PragmaWeakHandler::HandlePragma(Preprocessor &PP,
   }
 }
 
+/// Handle #pragma opaque {type} {lock variable}
+void PragmaOpaqueHandler::HandlePragma(Preprocessor &PP, 
+                                       PragmaIntroducerKind Introducer,
+                                       Token &OpaqueToken) {
+  SourceLocation OpaqueLoc = OpaqueToken.getLocation();
+
+  Token Tok;
+  PP.Lex(Tok);
+  if (Tok.isNot(tok::identifier)) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_expected_identifier) <<
+      "opaque";
+    return;
+  }
+
+
+
+  IdentifierInfo *TypeName = Tok.getIdentifierInfo(), *KeyName = 0;
+  SourceLocation TypeNameLoc = Tok.getLocation(), KeyNameLoc;
+
+  PP.Lex(Tok);
+  if (Tok.isNot(tok::identifier)) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_expected_identifier)
+        << "opaque";
+    return;
+  }
+  KeyName = Tok.getIdentifierInfo();
+  KeyNameLoc = Tok.getLocation();
+  PP.Lex(Tok);
+
+  if (Tok.isNot(tok::eod)) {
+    PP.Diag(Tok.getLocation(), diag::warn_pragma_extra_tokens_at_eol) <<
+      "opaque";
+    return;
+  }
+
+  Actions.ActOnPragmaOpaque(TypeName, KeyName, OpaqueLoc,
+      TypeNameLoc, KeyNameLoc);
+}
+
+
 // #pragma redefine_extname identifier identifier
 void PragmaRedefineExtnameHandler::HandlePragma(Preprocessor &PP,
                                                PragmaIntroducerKind Introducer,
@@ -2985,6 +3058,26 @@ void PragmaUnrollHintHandler::HandlePragma(Preprocessor &PP,
   TokenArray[0].setAnnotationValue(static_cast<void *>(Info));
   PP.EnterTokenStream(std::move(TokenArray), 1,
                       /*DisableMacroExpansion=*/false);
+}
+void PragmaPointerInterpretation::HandlePragma(Preprocessor &PP,
+                                           PragmaIntroducerKind Introducer,
+                                           Token &Tok) {
+  PP.Lex(Tok);
+  IdentifierInfo *Interpretation = Tok.getIdentifierInfo();
+  if (Interpretation->getName() == "push")
+    Actions.ActOnPragmaPointerInterpretationPush();
+  else if (Interpretation->getName() == "pop")
+    Actions.ActOnPragmaPointerInterpretationPop();
+  else {
+    ASTContext::PointerInterpretationKind Mode =
+      llvm::StringSwitch<ASTContext::PointerInterpretationKind>(Interpretation->getName())
+        .Case("capability", ASTContext::PointerInterpretationKind::PIK_Capability)
+        .Case("integer", ASTContext::PointerInterpretationKind::PIK_Integer)
+        .Case("default", ASTContext::PointerInterpretationKind::PIK_Default)
+        .Default(ASTContext::PointerInterpretationKind::PIK_Invalid);
+    // FIXME: Error handling!
+    Actions.ActOnPragmaPointerInterpretation(Mode);
+  }
 }
 
 /// Handle the Microsoft \#pragma intrinsic extension.

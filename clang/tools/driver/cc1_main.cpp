@@ -39,6 +39,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/Timer.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include <cstdio>
 
 #ifdef CLANG_HAVE_RLIMITS
@@ -217,6 +218,35 @@ int cc1_main(ArrayRef<const char *> Argv, const char *Argv0, void *MainAddr) {
 
   // Execute the frontend actions.
   Success = ExecuteCompilerInvocation(Clang.get());
+
+  // Dump the CHERI CSetBounds stats now
+  if (llvm::cheri::ShouldCollectCSetBoundsStats) {
+    StringRef StatsOutput = llvm::cheri::CSetBoundsStatistics::outputFile();
+    if (StatsOutput.empty())
+      StatsOutput = Clang->getCodeGenOpts().CHERIStatsFile;
+    auto StatsFile = llvm::cheri::StatsOutputFile::open(
+        StatsOutput,
+        [&Clang](StringRef StatsFile, const std::error_code &EC) {
+          Clang->getDiagnostics().Report(
+              diag::warn_fe_unable_to_open_stats_file)
+              << StatsFile << EC.message();
+        },
+        [&Clang](StringRef StatsFile, const std::error_code &EC) {
+          Clang->getDiagnostics().Report(
+              diag::warn_fe_unable_to_lock_stats_file)
+              << StatsFile << EC.message();
+        });
+    if (StatsFile) {
+      StringRef MainFile = Clang->getCodeGenOpts().MainFileName;
+      if (MainFile.empty()) {
+        const SourceManager &SM = Clang->getSourceManager();
+        SourceLocation MainFileLoc =
+            SM.getLocForStartOfFile(SM.getMainFileID());
+        MainFile = SM.getFilename(MainFileLoc);
+      }
+      llvm::cheri::CSetBoundsStats->print(*StatsFile, MainFile);
+    }
+  }
 
   // If any timers were active but haven't been destroyed yet, print their
   // results now.  This happens in -disable-free mode.

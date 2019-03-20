@@ -54,6 +54,9 @@ serialization::TypeIdxFromBuiltin(const BuiltinType *BT) {
   case BuiltinType::UInt128:
     ID = PREDEF_TYPE_UINT128_ID;
     break;
+  case BuiltinType::UIntCap:
+    ID = PREDEF_TYPE_UINTCAP_ID;
+    break;
   case BuiltinType::Char_S:
     ID = PREDEF_TYPE_CHAR_S_ID;
     break;
@@ -78,6 +81,9 @@ serialization::TypeIdxFromBuiltin(const BuiltinType *BT) {
     break;
   case BuiltinType::Int128:
     ID = PREDEF_TYPE_INT128_ID;
+    break;
+  case BuiltinType::IntCap:
+    ID = PREDEF_TYPE_INTCAP_ID;
     break;
   case BuiltinType::Half:
     ID = PREDEF_TYPE_HALF_ID;

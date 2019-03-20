@@ -240,6 +240,7 @@ ELFFileBase<ELFT>::ELFFileBase(Kind K, MemoryBufferRef MB) : InputFile(K, MB) {
 
   EMachine = getObj().getHeader()->e_machine;
   OSABI = getObj().getHeader()->e_ident[llvm::ELF::EI_OSABI];
+  EFlags = getObj().getHeader()->e_flags;
 }
 
 template <class ELFT>
@@ -697,6 +698,13 @@ InputSectionBase *ObjFile<ELFT>::createInputSection(const Elf_Shdr &Sec) {
   }
   }
 
+  // XXXAR: The mdebug.abi64 section causes errors when linking CheriBSD MIPS
+  // ld.lld: error: ..../cheribsd/lib/libc/gmon/mcount.c:(.mdebug.abi64+0x1C): has non-ABS reloc
+  // For now just discard that section to work around that error
+  // It is probably unused anyway and if not we can try to fix the error properly
+  if (Name.startswith(".mdebug.abi"))
+    return &InputSection::Discarded;
+
   // The GNU linker uses .note.GNU-stack section as a marker indicating
   // that the code in the object file does not expect that the stack is
   // executable (in terms of NX bit). If all input files have the marker,
@@ -833,6 +841,8 @@ ArchiveFile::ArchiveFile(std::unique_ptr<Archive> &&File)
 template <class ELFT> void ArchiveFile::parse() {
   for (const Archive::Symbol &Sym : File->symbols())
     Symtab->addLazyArchive<ELFT>(Sym.getName(), *this, Sym);
+
+  Symtab->ArcVector.push_back(this);
 }
 
 // Returns a buffer pointing to a member file containing a given symbol.
@@ -857,7 +867,47 @@ InputFile *ArchiveFile::fetch(const Archive::Symbol &Sym) {
   InputFile *File = createObjectFile(
       MB, getName(), C.getParent()->isThin() ? 0 : C.getChildOffset());
   File->GroupId = GroupId;
+
+  Children.insert(std::make_pair(C.getChildOffset(),File));
   return File;
+}
+
+// Adds all remaining files to a (potentially) different symbol table.
+// Only call this when all lazy symbols have been resolved.
+template <class ELFT> void ArchiveFile::fetchRemaining(SymbolTable* STab) {
+  Error Err = Error::success();
+
+  for (const ErrorOr<Archive::Child> &COrErr : File->children(Err)) {
+    Archive::Child C =
+        CHECK(COrErr, toString(this) +
+                      ": could not get the child of the archive");
+
+    if (!Seen.insert(C.getChildOffset()).second) continue;
+
+    MemoryBufferRef MB =
+        CHECK(C.getMemoryBufferRef(),
+              toString(this) +
+              ": could not get the buffer for a child of the archive");
+
+    InputFile *File = createObjectFile(
+        MB, getName(), C.getParent()->isThin() ? 0 : C.getChildOffset());
+    File->GroupId = GroupId;
+
+    Children.insert(std::make_pair(C.getChildOffset(),File));
+
+    STab->addFile<ELFT>(File);
+  }
+
+  if(Err) error(toString(this) + ": Error getting all of archives children\n");
+
+  // Now we reorder the Map.
+  llvm::sort(Children.begin(), Children.end(),
+             [](std::pair<uint64_t, InputFile*> a, std::pair<uint64_t, InputFile*> b) -> bool
+    {
+      return a.first < b.first;
+    });
+
+  Children.orderChanged();
 }
 
 template <class ELFT>
@@ -1076,6 +1126,7 @@ static uint8_t getBitcodeMachineKind(StringRef Path, const Triple &T) {
     return EM_ARM;
   case Triple::avr:
     return EM_AVR;
+  case Triple::cheri:
   case Triple::mips:
   case Triple::mipsel:
   case Triple::mips64:
@@ -1318,6 +1369,11 @@ template void ArchiveFile::parse<ELF32LE>();
 template void ArchiveFile::parse<ELF32BE>();
 template void ArchiveFile::parse<ELF64LE>();
 template void ArchiveFile::parse<ELF64BE>();
+
+template void ArchiveFile::fetchRemaining<ELF32LE>(SymbolTable*);
+template void ArchiveFile::fetchRemaining<ELF32BE>(SymbolTable*);
+template void ArchiveFile::fetchRemaining<ELF64LE>(SymbolTable*);
+template void ArchiveFile::fetchRemaining<ELF64BE>(SymbolTable*);
 
 template void BitcodeFile::parse<ELF32LE>(DenseSet<CachedHashStringRef> &);
 template void BitcodeFile::parse<ELF32BE>(DenseSet<CachedHashStringRef> &);

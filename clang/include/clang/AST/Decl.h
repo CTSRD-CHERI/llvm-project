@@ -2923,6 +2923,12 @@ public:
 
 /// Base class for declarations which introduce a typedef-name.
 class TypedefNameDecl : public TypeDecl, public Redeclarable<TypedefNameDecl> {
+  /// CHERICapTypeForDecl - This indicates the Type object that represents the
+  /// memory capability version of this TypedefNameDecl. It is a cache
+  /// maintained by ASTContext::getTypedefType.
+  mutable const Type *CHERICapTypeForDecl = nullptr;
+  friend class ASTContext;
+
   struct alignas(8) ModedTInfo {
     TypeSourceInfo *first;
     QualType second;
@@ -3025,9 +3031,12 @@ private:
 /// Represents the declaration of a typedef-name via the 'typedef'
 /// type specifier.
 class TypedefDecl : public TypedefNameDecl {
+  VarDecl *Key;
+
   TypedefDecl(ASTContext &C, DeclContext *DC, SourceLocation StartLoc,
               SourceLocation IdLoc, IdentifierInfo *Id, TypeSourceInfo *TInfo)
-      : TypedefNameDecl(Typedef, C, DC, StartLoc, IdLoc, Id, TInfo) {}
+      : TypedefNameDecl(Typedef, C, DC, StartLoc, IdLoc, Id, TInfo),
+        Key(nullptr) {}
 
 public:
   static TypedefDecl *Create(ASTContext &C, DeclContext *DC,
@@ -3036,6 +3045,9 @@ public:
   static TypedefDecl *CreateDeserialized(ASTContext &C, unsigned ID);
 
   SourceRange getSourceRange() const override LLVM_READONLY;
+
+  void setOpaqueKey(VarDecl *VD) { Key = VD; }
+  VarDecl *getOpaqueKey() const { return Key; }
 
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) { return classofKind(D->getKind()); }

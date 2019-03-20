@@ -714,6 +714,7 @@ llvm::DIType *CGDebugInfo::CreateType(const BuiltinType *BT) {
   case BuiltinType::UShort:
   case BuiltinType::UInt:
   case BuiltinType::UInt128:
+  case BuiltinType::UIntCap:
   case BuiltinType::ULong:
   case BuiltinType::WChar_U:
   case BuiltinType::ULongLong:
@@ -722,6 +723,7 @@ llvm::DIType *CGDebugInfo::CreateType(const BuiltinType *BT) {
   case BuiltinType::Short:
   case BuiltinType::Int:
   case BuiltinType::Int128:
+  case BuiltinType::IntCap:
   case BuiltinType::Long:
   case BuiltinType::WChar_S:
   case BuiltinType::LongLong:
@@ -975,7 +977,11 @@ llvm::DIType *CGDebugInfo::CreatePointerLikeType(llvm::dwarf::Tag Tag,
   // Bit size, align and offset of the type.
   // Size is always the size of a pointer. We can't use getTypeSize here
   // because that does not return the correct value for references.
-  unsigned AddressSpace = CGM.getContext().getTargetAddressSpace(PointeeTy);
+  unsigned AddressSpace;
+  if (Ty->isCHERICapabilityType(CGM.getContext()))
+    AddressSpace = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+  else
+    AddressSpace = CGM.getAddressSpaceForType(PointeeTy);
   uint64_t Size = CGM.getTarget().getPointerWidth(AddressSpace);
   auto Align = getTypeAlignIfRequired(Ty, CGM.getContext());
   Optional<unsigned> DWARFAddressSpace =
@@ -1148,6 +1154,10 @@ static unsigned getDwarfCC(CallingConv CC) {
     return llvm::dwarf::DW_CC_LLVM_PreserveMost;
   case CC_PreserveAll:
     return llvm::dwarf::DW_CC_LLVM_PreserveAll;
+  case CC_CHERICCall:
+  case CC_CHERICCallee:
+  case CC_CHERICCallback:
+    return 0;
   case CC_X86RegCall:
     return llvm::dwarf::DW_CC_LLVM_X86RegCall;
   }
@@ -1451,7 +1461,7 @@ llvm::DISubroutineType *CGDebugInfo::getOrCreateInstanceMethodType(
     // Create pointer type directly in this case.
     const PointerType *ThisPtrTy = cast<PointerType>(ThisPtr);
     QualType PointeeTy = ThisPtrTy->getPointeeType();
-    unsigned AS = CGM.getContext().getTargetAddressSpace(PointeeTy);
+    unsigned AS = CGM.getAddressSpaceForType(PointeeTy);
     uint64_t Size = CGM.getTarget().getPointerWidth(AS);
     auto Align = getTypeAlignIfRequired(ThisPtrTy, CGM.getContext());
     llvm::DIType *PointeeType = getOrCreateType(PointeeTy, Unit);
@@ -1735,7 +1745,7 @@ CGDebugInfo::CollectTemplateParams(const TemplateParameterList *TPList,
       // Member function pointers have special support for building them, though
       // this is currently unsupported in LLVM CodeGen.
       else if ((MD = dyn_cast<CXXMethodDecl>(D)) && MD->isInstance())
-        V = CGM.getCXXABI().EmitMemberFunctionPointer(MD);
+        V = CGM.getCXXABI().EmitMemberFunctionPointerGlobal(MD);
       else if (const auto *FD = dyn_cast<FunctionDecl>(D))
         V = CGM.GetAddrOfFunction(FD);
       // Member data pointers have special handling too to compute the fixed
@@ -3774,7 +3784,7 @@ llvm::DILocalVariable *CGDebugInfo::EmitDeclare(const VarDecl *VD,
 
   auto Align = getDeclAlignIfRequired(VD, CGM.getContext());
 
-  unsigned AddressSpace = CGM.getContext().getTargetAddressSpace(VD->getType());
+  unsigned AddressSpace = CGM.getAddressSpaceForType(VD->getType());
   AppendAddressSpaceXDeref(AddressSpace, Expr);
 
   // If this is implicit parameter of CXXThis or ObjCSelf kind, then give it an
@@ -4206,8 +4216,7 @@ void CGDebugInfo::EmitGlobalVariable(llvm::GlobalVariable *Var,
     auto Align = getDeclAlignIfRequired(D, CGM.getContext());
 
     SmallVector<int64_t, 4> Expr;
-    unsigned AddressSpace =
-        CGM.getContext().getTargetAddressSpace(D->getType());
+    unsigned AddressSpace = CGM.getAddressSpaceForType(D->getType());
     AppendAddressSpaceXDeref(AddressSpace, Expr);
 
     GVE = DBuilder.createGlobalVariableExpression(

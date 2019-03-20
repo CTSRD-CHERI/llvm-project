@@ -19,6 +19,7 @@
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Thunks.h"
+#include "Arch/Cheri.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
 #include "llvm/Support/Compiler.h"
@@ -77,7 +78,8 @@ InputSectionBase::InputSectionBase(InputFile *File, uint64_t Flags,
   // no alignment constraits.
   uint32_t V = std::max<uint64_t>(Alignment, 1);
   if (!isPowerOf2_64(V))
-    fatal(toString(File) + ": section sh_addralign is not a power of 2");
+    fatal(toString(File) + ": section " + Name +
+          " sh_addralign is not a power of 2");
   this->Alignment = V;
 
   // In ELF, each section can be compressed by zlib, and if compressed,
@@ -275,14 +277,24 @@ InputSection *InputSectionBase::getLinkOrderDep() const {
 }
 
 // Find a function symbol that encloses a given location.
-template <class ELFT>
-Defined *InputSectionBase::getEnclosingFunction(uint64_t Offset) {
+template <class ELFT, unsigned SymbolType>
+Defined *InputSectionBase::getEnclosingSymbol(uint64_t Offset) {
   for (Symbol *B : File->getSymbols())
     if (Defined *D = dyn_cast<Defined>(B))
-      if (D->Section == this && D->Type == STT_FUNC && D->Value <= Offset &&
+      if (D->Section == this && D->Type == SymbolType && D->Value <= Offset &&
           Offset < D->Value + D->Size)
         return D;
   return nullptr;
+}
+
+template <class ELFT>
+Defined *InputSectionBase::getEnclosingFunction(uint64_t Offset) {
+  return getEnclosingSymbol<ELFT, STT_FUNC>(Offset);
+}
+
+template <class ELFT>
+Defined *InputSectionBase::getEnclosingObject(uint64_t Offset) {
+  return getEnclosingSymbol<ELFT, STT_OBJECT>(Offset);
 }
 
 // Returns a source location string. Used to construct an error message.
@@ -305,6 +317,8 @@ std::string InputSectionBase::getLocation(uint64_t Offset) {
 
   if (Defined *D = getEnclosingFunction<ELFT>(Offset))
     return SrcFile + ":(function " + toString(*D) + ")";
+  else if (Defined *D = getEnclosingObject<ELFT>(Offset))
+    return SrcFile + ":(object " + toString(*D) + ")";
 
   // If there's no symbol, print out the offset in the section.
   return (SrcFile + ":(" + Name + "+0x" + utohexstr(Offset) + ")").str();
@@ -317,6 +331,9 @@ std::string InputSectionBase::getLocation(uint64_t Offset) {
 //
 //  Returns an empty string if there's no way to get line info.
 std::string InputSectionBase::getSrcMsg(const Symbol &Sym, uint64_t Offset) {
+  // Synthetic sections don't have input files.
+  if (!File)
+    return "";
   return File->getSrcMsg(Sym, *this, Offset);
 }
 
@@ -330,6 +347,9 @@ std::string InputSectionBase::getSrcMsg(const Symbol &Sym, uint64_t Offset) {
 //
 //   path/to/foo.o:(function bar) in archive path/to/bar.a
 std::string InputSectionBase::getObjMsg(uint64_t Off) {
+  // Synthetic sections don't have input files.
+  if (!File)
+    return ("<internal>:(" + Name + "+0x" + utohexstr(Off) + ")").str();
   std::string Filename = File->getName();
 
   std::string Archive;
@@ -592,7 +612,8 @@ static int64_t getTlsTpOffset() {
 }
 
 static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
-                                 uint64_t P, const Symbol &Sym, RelExpr Expr) {
+                                 uint64_t P, const Symbol &Sym, RelExpr Expr,
+                                 InputSectionBase *IS, uint64_t Offset) {
   switch (Expr) {
   case R_INVALID:
     return 0;
@@ -681,7 +702,7 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
   case R_RISCV_PC_INDIRECT: {
     if (const Relocation *HiRel = getRISCVPCRelHi20(&Sym, A))
       return getRelocTargetVA(File, HiRel->Type, HiRel->Addend, Sym.getVA(),
-                              *HiRel->Sym, HiRel->Expr);
+                              *HiRel->Sym, HiRel->Expr, IS, Offset);
     return 0;
   }
   case R_PC: {
@@ -759,9 +780,32 @@ static uint64_t getRelocTargetVA(const InputFile *File, RelType Type, int64_t A,
     return In.Got->getTlsIndexOff() + A;
   case R_TLSLD_PC:
     return In.Got->getTlsIndexVA() + A - P;
+  case R_CHERI_CAPABILITY:
+    llvm_unreachable("R_CHERI_CAPABILITY should not be handled here!");
+  case R_CHERI_CAPABILITY_TABLE_INDEX:
+  case R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE:
+    assert(A == 0 && "capability table index relocs should not have addends");
+    return Config->CapabilitySize * (Sym.isTls() ? In.CheriCapTableLocal: In.CheriCapTable)->getIndex(Sym, IS, Offset);
+  case R_CHERI_CAPABILITY_TABLE_REL:
+    if (!ElfSym::CheriCapabilityTable) {
+      error("cannot compute difference between non-existent "
+            "CheriCapabilityTable and symbol " + toString(Sym));
+      return Sym.getVA(A);
+    }
+    return Sym.getVA(A) - ElfSym::CheriCapabilityTable->getVA();
+  case R_MIPS_CHERI_CAPTAB_TLSGD:
+    assert(A == 0 && "capability table index relocs should not have addends");
+    return In.CheriCapTable->getDynTlsOffset(Sym);
+  case R_MIPS_CHERI_CAPTAB_TLSLD:
+    assert(A == 0 && "capability table index relocs should not have addends");
+    return In.CheriCapTable->getTlsIndexOffset();
+  case R_MIPS_CHERI_CAPTAB_TPREL:
+    assert(A == 0 && "capability table index relocs should not have addends");
+    return In.CheriCapTable->getTlsOffset(Sym);
   default:
     llvm_unreachable("invalid expression");
   }
+  llvm_unreachable("Invalid expression");
 }
 
 // This function applies relocations to sections without SHF_ALLOC bit.
@@ -874,9 +918,15 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
 
     uint64_t AddrLoc = getOutputSection()->Addr + Offset;
     RelExpr Expr = Rel.Expr;
-    uint64_t TargetVA = SignExtend64(
-        getRelocTargetVA(File, Type, Rel.Addend, AddrLoc, *Rel.Sym, Expr),
-        Bits);
+    // FIXME: this should not be happening
+    if (!Rel.Sym) {
+      error(getErrorLocation(BufLoc) + "cannot create relocation against NULL symbol");
+      continue;
+    }
+    uint64_t TargetVA =
+        SignExtend64(getRelocTargetVA(File, Type, Rel.Addend, AddrLoc, *Rel.Sym,
+                                      Expr, this, Rel.Offset),
+                     Bits);
 
     switch (Expr) {
     case R_RELAX_GOT_PC:
@@ -923,6 +973,76 @@ void InputSectionBase::relocateAlloc(uint8_t *Buf, uint8_t *BufEnd) {
       break;
     }
   }
+  for (const DynamicReloc &Reloc : FreeBSDMipsRelocationsHack) {
+    int64_t Addend = Reloc.computeAddend();
+    // getOffset adds the output section base address here
+    uint64_t Offset = Reloc.getOffset() - getOutputSection()->Addr;
+    if (errorHandler().Verbose) {
+      message("Adding hack: addend=0x" + utohexstr(Addend) +
+              " offset=0x" + utohexstr(Reloc.getOffset()) + " Type: 0x" + utohexstr(Reloc.Type));
+    }
+    uint8_t *BufLoc = Buf + Offset;
+    Target->relocateOne(BufLoc, Reloc.Type, /*TargetVA=*/Addend);
+  }
+
+}
+
+template <class ELFT>
+static void fillGlobalSizesSection(InputSection* IS, uint8_t* Buf, uint8_t* BufEnd) {
+  static std::mutex Mu;
+  std::lock_guard<std::mutex> Lock(Mu);
+  const endianness E = ELFT::TargetEndianness;
+
+#ifdef DEBUG_CAP_RELOCS
+  if (Config->VerboseCapRelocs)
+    message("Write .global_sizes: IS = " + toString(IS));
+#endif
+
+  foreachGlobalSizesSymbol<ELFT>(IS, [&](StringRef RealSymName, Symbol *Target,
+                                        uint64_t Offset) {
+    uint64_t ResolvedSize = Target->getSize();
+    uint8_t *Location = Buf + Offset;
+    assert(Location + 8 <= BufEnd); // Should use a span type instead
+    bool SizeIsUnknown = ResolvedSize == 0;
+    if (SizeIsUnknown || Target->isUndefined()) {
+      // HACK for environ and __progname (both are capabilities):
+      if (Target->IsSectionStartSymbol) {
+        assert(!Target->getOutputSection() ||
+               Target->getOutputSection()->Size == 0);
+        SizeIsUnknown = false; // output section is empty -> size 0 is fine
+      } else if (isSectionEndSymbol(RealSymName) ||
+                 isSectionStartSymbol(RealSymName)) {
+        SizeIsUnknown = false; // zero size is fine for section start/end
+      } else if (Config->Shared &&
+                 (RealSymName == "__progname" || RealSymName == "environ")) {
+        message("Using .global_size for symbol " + RealSymName +
+                " in shared lib (assuming size==sizeof(void* __capability)");
+        ResolvedSize = Config->CapabilitySize;
+        SizeIsUnknown = false;
+      } else {
+        warn("Could not find .global_size for " + verboseToString(Target));
+      }
+    }
+    if (SizeIsUnknown && (IS->getOutputSection()->Flags & SHF_WRITE) == 0) {
+      error("Unknown .global_sizes value for " + RealSymName +
+            " but section was not marked as writable");
+    }
+    uint64_t Existing = read64<E>(Location);
+    if (Existing != 0 && Existing != ResolvedSize) {
+      // The value might not be zero if we are linking against a file built
+      // with -r (e.g. openpam_static_modules.o) In that case we need to check
+      // whether the existing value and the value we want to write matches
+      error("Conflicting values for .size." + RealSymName +
+            "\n>>> was already initialized to 0x" + utohexstr(Existing) +
+            " in " + toString(IS) + "\n>>> expected value is 0x" +
+            utohexstr(ResolvedSize));
+    }
+
+    write64<E>(Location, ResolvedSize);
+    if (Config->VerboseCapRelocs)
+      message("Writing size 0x" + utohexstr(ResolvedSize) + " for " +
+              verboseToString(Target));
+  });
 }
 
 // For each function-defining prologue, find any calls to __morestack,
@@ -1073,6 +1193,11 @@ template <class ELFT> void InputSection::writeTo(uint8_t *Buf) {
   // and then apply relocations.
   memcpy(Buf + OutSecOff, data().data(), data().size());
   uint8_t *BufEnd = Buf + OutSecOff + data().size();
+  if (Config->ProcessCapRelocs && !Config->Relocatable &&
+      Name == ".global_sizes") {
+    fillGlobalSizesSection<ELFT>(this, Buf + OutSecOff, BufEnd);
+  }
+
   relocate<ELFT>(Buf, BufEnd);
 }
 
@@ -1246,6 +1371,11 @@ template std::string InputSectionBase::getLocation<ELF32LE>(uint64_t);
 template std::string InputSectionBase::getLocation<ELF32BE>(uint64_t);
 template std::string InputSectionBase::getLocation<ELF64LE>(uint64_t);
 template std::string InputSectionBase::getLocation<ELF64BE>(uint64_t);
+
+template Defined *InputSectionBase::getEnclosingFunction<ELF32LE>(uint64_t Offset);
+template Defined *InputSectionBase::getEnclosingFunction<ELF32BE>(uint64_t Offset);
+template Defined *InputSectionBase::getEnclosingFunction<ELF64LE>(uint64_t Offset);
+template Defined *InputSectionBase::getEnclosingFunction<ELF64BE>(uint64_t Offset);
 
 template void InputSection::writeTo<ELF32LE>(uint8_t *);
 template void InputSection::writeTo<ELF32BE>(uint8_t *);

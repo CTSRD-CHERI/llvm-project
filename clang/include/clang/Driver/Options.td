@@ -247,6 +247,59 @@ def internal_debug_Group :
   OptionGroup<"<clang debug/development internal options>">,
   Group<internal_Group>, HelpText<"DEBUG/DEVELOPMENT OPTIONS">;
 
+def cheri_Group : OptionGroup<"<CHERI specific options>">, HelpText<"CHERI OPTIONS">;
+
+// HACK for rtems:
+def q_rtems : Flag<["-"], "qrtems">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Hack for RTEMS to use start.o instead of crt0.o">;
+
+def cheri_linker : Flag<["-"], "cheri-linker">, Flags<[CC1Option]>, Group<cheri_Group>,
+  HelpText<"Assume the existence of a CHERI-aware linker">;
+def no_cheri_linker : Flag<["-"], "no-cheri-linker">, Flags<[CC1Option, HelpHidden]>,
+  HelpText<"Do not assume the existence of a CHERI-aware linker">, Group<cheri_Group>;
+def cheri_EQ : Joined<["-"], "cheri=">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Enable CHERI support, specifying the size (in bits) of CHERI capabilities">;
+def cheri : Flag<["-"], "cheri">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Enable CHERI support with the default capability size (128 bits)">;
+
+def cheri_cap_table : Flag<["-"], "cheri-cap-table">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Enable support for loading globals via a capability table">;
+def no_cheri_cap_table : Flag<["-"], "no-cheri-cap-table">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Disable support for the cheri cap table and emit legacy global loads">;
+def cheri_cap_table_abi : Joined<["-"], "cheri-cap-table-abi=">, Group<cheri_Group>,
+  HelpText<"CHERI cap table ABI to use">;
+def cheri_large_cap_table : Flag<["-"], "mxcaptable">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Use large immediates to index the cap table">;
+def no_cheri_large_cap_table : Flag<["-"], "no-mxcaptable">, Flags<[DriverOption]>, Group<cheri_Group>,
+  HelpText<"Do not use large immediates to index the cap table">;
+def cheri_cap_tls_abi : Joined<["-"], "cheri-cap-tls-abi=">, Group<cheri_Group>,
+  HelpText<"CHERI cap TLS ABI to use">;
+
+def cheri_uintcap_offset : Flag<["-"], "cheri-uintcap=offset">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
+  HelpText<"Use the capability offset when performing computations on uintcap_t (more GC-friendly but needs more changes to source code)">;
+def cheri_uintcap_addr : Flag<["-"], "cheri-uintcap=addr">, Flags<[DriverOption,CC1Option]>, Group<cheri_Group>,
+  HelpText<"Use the capability address when performing computations on uintcap_t (more C compatible but may break copying GC)">;
+def cheri_data_dependent_provenance : Flag<["-"], "cheri-data-dependent-provenance">, Flags<[CC1Option]>, Group<cheri_Group>,
+  HelpText<"Use the LHS or NULL provenance of a bitwise-and operation depending on the value of the RHS">;
+
+def cheri_bounds_EQ : Joined<["-"], "cheri-bounds=">, Flags<[CC1Option]>, Group<cheri_Group>,
+  HelpText<"Choose when to tighten bounds on capabilities. Choices are: "
+           "'conservative' (only stack allocations, default), "
+           "'references-only' (also set bounds on C++ references that are definitely fixed size) "
+           "'subobject-safe' (also set bounds when taking a pointer to a subobject) "
+           "'aggressive' (tighten bounds whenever feasible and not annotated as unsafe) "
+           "'very-aggressive' (Same as aggressive but also set bounds for &array[index] expressions) and "
+           "'everywhere-unsafe' (attempt to set bounds everwhere where there isn't an explicit opt-out. "
+           "This is highly unsafe and will almost certainly not work at runtime)">,
+  Values<"conservative,references-only,subobject-safe,aggressive,very-aggressive,everywhere-unsafe">;
+
+def external_capsizefix : Flag<["-"], "external-capsizefix">, Flags<[CC1Option]>,
+  Group<cheri_Group>, HelpText<"Use the external capsizefix tool instead of relying on the linker (deprecated)">;
+def no_capsizefix : Flag<["-"], "no-capsizefix">, Flags<[CC1Option]>,
+  Group<cheri_Group>, HelpText<"Assume that the linker handles capabilities (don't use capsizefix)">;
+def verbose_capsizefix: Flag<["-"], "verbose-capsizefix">, Flags<[CC1Option]>,
+  Group<cheri_Group>, HelpText<"Run capsizefix tool in verbose mode if required">;
+
 class InternalDriverOpt : Group<internal_driver_Group>,
   Flags<[DriverOption, HelpHidden]>;
 def driver_mode : Joined<["--"], "driver-mode=">, Group<internal_driver_Group>,

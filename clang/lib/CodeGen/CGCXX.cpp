@@ -133,7 +133,8 @@ bool CodeGenModule::TryEmitBaseDestructorAsAlias(const CXXDestructorDecl *D) {
 
   // Derive the type for the alias.
   llvm::Type *AliasValueType = getTypes().GetFunctionType(AliasDecl);
-  llvm::PointerType *AliasType = AliasValueType->getPointerTo();
+  llvm::PointerType *AliasType =
+      AliasValueType->getPointerTo(getFunctionAddrSpace());
 
   // Find the referent.  Some aliases might require a bitcast, in
   // which case the caller is responsible for ensuring the soundness
@@ -181,8 +182,9 @@ bool CodeGenModule::TryEmitBaseDestructorAsAlias(const CXXDestructorDecl *D) {
     return true;
 
   // Create the alias with no name.
-  auto *Alias = llvm::GlobalAlias::create(AliasValueType, 0, Linkage, "",
-                                          Aliasee, &getModule());
+  auto *Alias =
+      llvm::GlobalAlias::create(AliasValueType, getFunctionAddrSpace(), Linkage,
+                                "", Aliasee, &getModule());
 
   // Destructors are always unnamed_addr.
   Alias->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
@@ -263,7 +265,8 @@ static CGCallee BuildAppleKextVirtualCall(CodeGenFunction &CGF,
          "No kext in Microsoft ABI");
   CodeGenModule &CGM = CGF.CGM;
   llvm::Value *VTable = CGM.getCXXABI().getAddrOfVTable(RD, CharUnits());
-  Ty = Ty->getPointerTo()->getPointerTo();
+  const unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  Ty = Ty->getPointerTo(DefaultAS)->getPointerTo(DefaultAS);
   VTable = CGF.Builder.CreateBitCast(VTable, Ty);
   assert(VTable && "BuildVirtualCall = kext vtbl pointer is null");
   uint64_t VTableIndex = CGM.getItaniumVTableContext().getMethodVTableIndex(GD);

@@ -849,6 +849,24 @@ bool DeclSpec::SetTypeSpecError() {
   TSTNameLoc = SourceLocation();
   return false;
 }
+bool DeclSpec::SetOutput(const char *&PrevSpec, unsigned &DiagID) {
+  if (TQ_input) {
+    DiagID = diag::err_invalid_decl_spec_combination;
+    PrevSpec = "__input";
+    return true;
+  }
+  TQ_output = true;
+  return false;
+}
+bool DeclSpec::SetInput(const char *&PrevSpec, unsigned &DiagID) {
+  if (TQ_output) {
+    DiagID = diag::err_invalid_decl_spec_combination;
+    PrevSpec = "__output";
+    return true;
+  }
+  TQ_input = true;
+  return false;
+}
 
 bool DeclSpec::SetTypeQual(TQ T, SourceLocation Loc, const char *&PrevSpec,
                            unsigned &DiagID, const LangOptions &Lang) {

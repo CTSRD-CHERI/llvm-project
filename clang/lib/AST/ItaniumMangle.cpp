@@ -2613,6 +2613,12 @@ void CXXNameMangler::mangleType(const BuiltinType *T) {
   case BuiltinType::ObjCSel:
     Out << "13objc_selector";
     break;
+  case BuiltinType::IntCap:
+    Out << "u10__intcap_t";
+    break;
+  case BuiltinType::UIntCap:
+    Out << "u11__uintcap_t";
+    break;
 #define IMAGE_TYPE(ImgType, Id, SingletonId, Access, Suffix) \
   case BuiltinType::Id: \
     type_name = "ocl_" #ImgType "_" #Suffix; \
@@ -2659,6 +2665,9 @@ StringRef CXXNameMangler::getCallingConvQualifierName(CallingConv CC) {
   case CC_OpenCLKernel:
   case CC_PreserveMost:
   case CC_PreserveAll:
+  case CC_CHERICCall:
+  case CC_CHERICCallee:
+  case CC_CHERICCallback:
     // FIXME: we should be mangling all of the above.
     return "";
 
@@ -2935,6 +2944,8 @@ void CXXNameMangler::mangleType(const SubstTemplateTypeParmPackType *T) {
 
 // <type> ::= P <type>   # pointer-to
 void CXXNameMangler::mangleType(const PointerType *T) {
+  if (T->isCHERICapability())
+    Out << "U3cap";
   Out << 'P';
   mangleType(T->getPointeeType());
 }
@@ -2945,12 +2956,16 @@ void CXXNameMangler::mangleType(const ObjCObjectPointerType *T) {
 
 // <type> ::= R <type>   # reference-to
 void CXXNameMangler::mangleType(const LValueReferenceType *T) {
+  if (T->isCHERICapability())
+    Out << "U3cap";
   Out << 'R';
   mangleType(T->getPointeeType());
 }
 
 // <type> ::= O <type>   # rvalue reference-to (C++0x)
 void CXXNameMangler::mangleType(const RValueReferenceType *T) {
+  if (T->isCHERICapability())
+    Out << "U3cap";
   Out << 'O';
   mangleType(T->getPointeeType());
 }

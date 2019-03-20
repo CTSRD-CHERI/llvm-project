@@ -44,11 +44,13 @@
 #include "clang/Basic/Version.h"
 #include "clang/CodeGen/ConstantInitBuilder.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
+#include "llvm/ADT/ScopeExit.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/CallingConv.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
@@ -57,7 +59,10 @@
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MD5.h"
+#include "llvm/Support/YAMLParser.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -65,6 +70,11 @@ using namespace CodeGen;
 static llvm::cl::opt<bool> LimitedCoverage(
     "limited-coverage-experimental", llvm::cl::ZeroOrMore, llvm::cl::Hidden,
     llvm::cl::desc("Emit limited coverage mapping information (experimental)"),
+    llvm::cl::init(false));
+
+static llvm::cl::opt<bool> CollectPointerCastStats(
+    "collect-pointer-cast-stats", llvm::cl::ZeroOrMore, llvm::cl::Hidden,
+    llvm::cl::desc("Collect statistics on numbers of int <-> pointer casts"),
     llvm::cl::init(false));
 
 static const char AnnotationSection[] = "llvm.metadata";
@@ -108,20 +118,34 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   HalfTy = llvm::Type::getHalfTy(LLVMContext);
   FloatTy = llvm::Type::getFloatTy(LLVMContext);
   DoubleTy = llvm::Type::getDoubleTy(LLVMContext);
-  PointerWidthInBits = C.getTargetInfo().getPointerWidth(0);
+  const TargetInfo &Target = C.getTargetInfo();
+  PointerWidthInBits = Target.getPointerWidth(0);
   PointerAlignInBytes =
-    C.toCharUnitsFromBits(C.getTargetInfo().getPointerAlign(0)).getQuantity();
+    C.toCharUnitsFromBits(Target.getPointerAlign(0)).getQuantity();
+  // XXXAR: these are a union why even bother assigning both??
+  // XXXAR: just use the pointer range as the width/align of size_t
+  SizeAlignInBytes =
+    C.toCharUnitsFromBits(Target.getTypeAlign(Target.getSizeType())).getQuantity();
   SizeSizeInBytes =
-    C.toCharUnitsFromBits(C.getTargetInfo().getMaxPointerWidth()).getQuantity();
+    C.toCharUnitsFromBits(Target.getTypeWidth(Target.getSizeType())).getQuantity();
   IntAlignInBytes =
-    C.toCharUnitsFromBits(C.getTargetInfo().getIntAlign()).getQuantity();
-  IntTy = llvm::IntegerType::get(LLVMContext, C.getTargetInfo().getIntWidth());
-  IntPtrTy = llvm::IntegerType::get(LLVMContext,
-    C.getTargetInfo().getMaxPointerWidth());
-  Int8PtrTy = Int8Ty->getPointerTo(0);
-  Int8PtrPtrTy = Int8PtrTy->getPointerTo(0);
-  AllocaInt8PtrTy = Int8Ty->getPointerTo(
-      M.getDataLayout().getAllocaAddrSpace());
+    C.toCharUnitsFromBits(Target.getIntAlign()).getQuantity();
+  IntTy = llvm::IntegerType::get(LLVMContext, Target.getIntWidth());
+  // XXXAR it seems like the codegen uses this type as an integer which can fit
+  // the pointer range and not as an integer with the same width as a pointer
+  IntPtrTy = llvm::IntegerType::get(LLVMContext, Target.getMaxPointerRange());
+  Int8PtrTy = Int8Ty->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
+  if (Target.SupportsCapabilities()) {
+    Int8CheriCapTy =
+        Int8Ty->getPointerTo(getTargetCodeGenInfo().getCHERICapabilityAS());
+  } else {
+    Int8CheriCapTy = nullptr;
+  }
+  Int8PtrPtrTy = Int8PtrTy->getPointerTo(getTargetCodeGenInfo().getDefaultAS());
+  AllocaInt8PtrTy =
+      Int8Ty->getPointerTo(M.getDataLayout().getAllocaAddrSpace());
+  ProgramInt8PtrTy =
+      Int8Ty->getPointerTo(M.getDataLayout().getProgramAddressSpace());
   ASTAllocaAddressSpace = getTargetCodeGenInfo().getASTAllocaAddressSpace();
 
   RuntimeCC = getTargetCodeGenInfo().getABIInfo().getRuntimeCC();
@@ -170,6 +194,9 @@ CodeGenModule::CodeGenModule(ASTContext &C, const HeaderSearchOptions &HSO,
   // CoverageMappingModuleGen object.
   if (CodeGenOpts.CoverageMapping)
     CoverageMapping.reset(new CoverageMappingModuleGen(*this, *CoverageInfo));
+
+  if (CollectPointerCastStats)
+    PointerCastStats.reset(new PointerCastLocations);
 }
 
 CodeGenModule::~CodeGenModule() {}
@@ -290,6 +317,15 @@ static const llvm::GlobalObject *getAliasedGlobal(
   }
 }
 
+unsigned CodeGenModule::getAddressSpaceForType(QualType T) {
+    return getTargetCodeGenInfo().getAddressSpaceForType(T, getContext());
+}
+
+unsigned CodeGenModule::getTargetAddressSpace(LangAS AddrSpace) {
+  unsigned Result = getContext().getTargetAddressSpace(AddrSpace);
+  return Result;
+}
+
 void CodeGenModule::checkAliases() {
   // Check if the constructed aliases are well formed. It is really unfortunate
   // that we have to do this in CodeGen, but we only construct mangled names
@@ -388,6 +424,54 @@ void InstrProfStats::reportDiagnostics(DiagnosticsEngine &Diags,
   }
 }
 
+void CodeGenModule::PointerCastLocations::printStats(llvm::raw_ostream &OS,
+                                                     const CodeGenModule &CGM) {
+  const SourceManager &SM = CGM.getContext().getSourceManager();
+  auto DumpStat = [&](const llvm::SmallVectorImpl<std::pair<SourceRange, bool>> &Vec) {
+    const size_t Total = Vec.size();
+    OS << "\t\t\"count\": " << Total << ",\n\t\t\"locations\": [";
+    unsigned NumImplicitCasts = 0;
+    if (Total == 0) {
+      OS << "]";
+      return;
+    }
+
+    for (size_t i = 0; i < Total;) {
+      OS << "\n\t\t\t\"" << llvm::yaml::escape(Vec[i].first.printToString(SM));
+      if (Vec[i].second) {
+        OS << " (implicit)";
+        NumImplicitCasts++;
+      }
+      OS << '"';
+      i++;
+      if (i < Total)
+        OS << ',';
+    }
+    OS << "\n\t\t]";
+    if (NumImplicitCasts)
+      OS << ",\n\t\t\"implicit_count\": " << NumImplicitCasts << "";
+  };
+
+  OS << "{ \"pointer_cast_stats\": {\n";
+  StringRef MainFile = CGM.getCodeGenOpts().MainFileName;
+  if (MainFile.empty()) {
+    SourceLocation MainFileLoc = SM.getLocForStartOfFile(SM.getMainFileID());
+    MainFile = SM.getFilename(MainFileLoc);
+  }
+  OS << "\t\"main_file\": \"" << llvm::yaml::escape(MainFile) << "\",\n";
+  OS << "\t\"ptrtoint\": {\n";
+
+  DumpStat(PointerToInt);
+  OS << "\n\t}, \"inttoptr\": {\n";
+  DumpStat(IntToPointer);
+  OS << "\n\t}, \"captoptr\": {\n";
+  DumpStat(CapToPointer);
+  OS << "\n\t}, \"ptrtocap\": {\n";
+  DumpStat(PointerToCap);
+  OS << "\n\t}";
+  OS << "\n} }";
+}
+
 void CodeGenModule::Release() {
   EmitDeferred();
   EmitVTablesOpportunistically();
@@ -437,6 +521,21 @@ void CodeGenModule::Release() {
   emitLLVMUsed();
   if (SanStats)
     SanStats->finish();
+
+  if (CollectPointerCastStats) {
+    auto StatsOS = llvm::cheri::StatsOutputFile::open(
+        getCodeGenOpts().CHERIStatsFile,
+        [this](StringRef StatsFile, const std::error_code &EC) {
+          getDiags().Report(diag::warn_fe_unable_to_open_stats_file)
+              << StatsFile << EC.message();
+        },
+        [this](StringRef StatsFile, const std::error_code &EC) {
+          getDiags().Report(diag::warn_fe_unable_to_lock_stats_file)
+              << StatsFile << EC.message();
+        });
+    if (StatsOS)
+      PointerCastStats->printStats(StatsOS->stream(), *this);
+  }
 
   if (CodeGenOpts.Autolink &&
       (Context.getLangOpts().Modules || !LinkerOptionsMetadata.empty())) {
@@ -1102,8 +1201,13 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
 
   // Ctor function type is void()*.
   llvm::FunctionType* CtorFTy = llvm::FunctionType::get(VoidTy, false);
-  llvm::Type *CtorPFTy = llvm::PointerType::get(CtorFTy,
-      TheModule.getDataLayout().getProgramAddressSpace());
+  unsigned CtorPtrAS = TheModule.getDataLayout().getProgramAddressSpace();
+  // And the pointers to the ctors are always AS0 for CHERI. We could
+  // theoretically make them AS200 but right now RTLD/csu expects that
+  // .init_array contains virtual addresses and not capabilities
+  if (getTriple().getArch() == llvm::Triple::cheri)
+    CtorPtrAS = 0;
+  llvm::Type *CtorPFTy = llvm::PointerType::get(CtorFTy, CtorPtrAS);
 
   // Get the type of a ctor entry, { i32, void ()*, i8* }.
   llvm::StructType *CtorStructTy = llvm::StructType::get(
@@ -1115,7 +1219,8 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
   for (const auto &I : Fns) {
     auto ctor = ctors.beginStruct(CtorStructTy);
     ctor.addInt(Int32Ty, I.Priority);
-    ctor.add(llvm::ConstantExpr::getBitCast(I.Initializer, CtorPFTy));
+    ctor.add(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(I.Initializer,
+                                                                  CtorPFTy));
     if (I.AssociatedData)
       ctor.add(llvm::ConstantExpr::getBitCast(I.AssociatedData, VoidPtrTy));
     else
@@ -1619,6 +1724,7 @@ void CodeGenModule::addCompilerUsedGlobal(llvm::GlobalValue *GV) {
 
 static void emitUsed(CodeGenModule &CGM, StringRef Name,
                      std::vector<llvm::WeakTrackingVH> &List) {
+  llvm::PointerType *UsedPtrTy = CGM.Int8Ty->getPointerTo(0);
   // Don't create llvm.used if there is no need.
   if (List.empty())
     return;
@@ -1629,16 +1735,18 @@ static void emitUsed(CodeGenModule &CGM, StringRef Name,
   for (unsigned i = 0, e = List.size(); i != e; ++i) {
     UsedArray[i] =
         llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(
-            cast<llvm::Constant>(&*List[i]), CGM.Int8PtrTy);
+            cast<llvm::Constant>(&*List[i]), UsedPtrTy);
   }
 
   if (UsedArray.empty())
     return;
-  llvm::ArrayType *ATy = llvm::ArrayType::get(CGM.Int8PtrTy, UsedArray.size());
+  llvm::ArrayType *ATy = llvm::ArrayType::get(UsedPtrTy, UsedArray.size());
 
   auto *GV = new llvm::GlobalVariable(
       CGM.getModule(), ATy, false, llvm::GlobalValue::AppendingLinkage,
-      llvm::ConstantArray::get(ATy, UsedArray), Name);
+      llvm::ConstantArray::get(ATy, UsedArray), Name, nullptr,
+      llvm::GlobalValue::NotThreadLocal,
+      CGM.getTargetCodeGenInfo().getDefaultAS());
 
   GV->setSection("llvm.metadata");
 }
@@ -1875,9 +1983,10 @@ void CodeGenModule::EmitGlobalAnnotations() {
   // Create a new global variable for the ConstantStruct in the Module.
   llvm::Constant *Array = llvm::ConstantArray::get(llvm::ArrayType::get(
     Annotations[0]->getType(), Annotations.size()), Annotations);
-  auto *gv = new llvm::GlobalVariable(getModule(), Array->getType(), false,
-                                      llvm::GlobalValue::AppendingLinkage,
-                                      Array, "llvm.global.annotations");
+  auto *gv = new llvm::GlobalVariable(
+      getModule(), Array->getType(), false, llvm::GlobalValue::AppendingLinkage,
+      Array, "llvm.global.annotations", nullptr,
+      llvm::GlobalValue::NotThreadLocal, getTargetCodeGenInfo().getDefaultAS());
   gv->setSection(AnnotationSection);
 }
 
@@ -1888,9 +1997,9 @@ llvm::Constant *CodeGenModule::EmitAnnotationString(StringRef Str) {
 
   // Not found yet, create a new global.
   llvm::Constant *s = llvm::ConstantDataArray::getString(getLLVMContext(), Str);
-  auto *gv =
-      new llvm::GlobalVariable(getModule(), s->getType(), true,
-                               llvm::GlobalValue::PrivateLinkage, s, ".str");
+  auto *gv = new llvm::GlobalVariable(getModule(), s->getType(),
+    true, llvm::GlobalValue::PrivateLinkage, s, ".str", nullptr,
+    llvm::GlobalVariable::NotThreadLocal, getTargetCodeGenInfo().getDefaultAS());
   gv->setSection(AnnotationSection);
   gv->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   AStr = gv;
@@ -2073,7 +2182,9 @@ ConstantAddress CodeGenModule::GetAddrOfUuidDescriptor(
 
   auto *GV = new llvm::GlobalVariable(
       getModule(), Init->getType(),
-      /*isConstant=*/true, llvm::GlobalValue::LinkOnceODRLinkage, Init, Name);
+      /*isConstant=*/true, llvm::GlobalValue::LinkOnceODRLinkage, Init, Name,
+      nullptr, llvm::GlobalValue::NotThreadLocal,
+      getTargetCodeGenInfo().getDefaultAS());
   if (supportsCOMDAT())
     GV->setComdat(TheModule.getOrInsertComdat(GV->getName()));
   setDSOLocal(GV);
@@ -2089,8 +2200,8 @@ ConstantAddress CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
 
   // See if there is already something with the target's name in the module.
   llvm::GlobalValue *Entry = GetGlobalValue(AA->getAliasee());
+  unsigned AS = getAddressSpaceForType(VD->getType());
   if (Entry) {
-    unsigned AS = getContext().getTargetAddressSpace(VD->getType());
     auto Ptr = llvm::ConstantExpr::getBitCast(Entry, DeclTy->getPointerTo(AS));
     return ConstantAddress(Ptr, Alignment);
   }
@@ -2102,7 +2213,7 @@ ConstantAddress CodeGenModule::GetWeakRefReference(const ValueDecl *VD) {
                                       /*ForVTable=*/false);
   else
     Aliasee = GetOrCreateLLVMGlobal(AA->getAliasee(),
-                                    llvm::PointerType::getUnqual(DeclTy),
+                                    llvm::PointerType::get(DeclTy, AS),
                                     nullptr);
 
   auto *F = cast<llvm::GlobalValue>(Aliasee);
@@ -2568,7 +2679,7 @@ void CodeGenModule::emitCPUDispatchDefinition(GlobalDecl GD) {
   if (getTarget().supportsIFunc())
     ResolverType = llvm::FunctionType::get(
         llvm::PointerType::get(DeclTy,
-                               Context.getTargetAddressSpace(FD->getType())),
+                               getAddressSpaceForType(FD->getType())),
         false);
   else {
     ResolverType = DeclTy;
@@ -2671,7 +2782,7 @@ llvm::Constant *CodeGenModule::GetOrCreateMultiVersionResolver(
   if (getTarget().supportsIFunc()) {
     llvm::Type *ResolverType = llvm::FunctionType::get(
         llvm::PointerType::get(
-            DeclTy, getContext().getTargetAddressSpace(FD->getType())),
+            DeclTy, getAddressSpaceForType(FD->getType())),
         false);
     llvm::Constant *Resolver = GetOrCreateLLVMFunction(
         MangledName + ".resolver", ResolverType, GlobalDecl{},
@@ -2704,7 +2815,6 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     bool DontDefer, bool IsThunk, llvm::AttributeList ExtraAttrs,
     ForDefinition_t IsForDefinition) {
   const Decl *D = GD.getDecl();
-
   // Any attempts to use a MultiVersion function should result in retrieving
   // the iFunc instead. Name Mangling will handle the rest of the changes.
   if (const FunctionDecl *FD = cast_or_null<FunctionDecl>(D)) {
@@ -2773,8 +2883,10 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     // Make sure the result is of the correct type.
     // (If function is requested for a definition, we always need to create a new
     // function, not just return a bitcast.)
-    if (!IsForDefinition)
-      return llvm::ConstantExpr::getBitCast(Entry, Ty->getPointerTo());
+    if (!IsForDefinition) {
+      return llvm::ConstantExpr::getBitCast(
+          Entry, Ty->getPointerTo(getFunctionAddrSpace()));
+    }
   }
 
   // This function doesn't have a complete type (for example, the return
@@ -2815,7 +2927,9 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     }
 
     llvm::Constant *BC = llvm::ConstantExpr::getBitCast(
-        F, Entry->getType()->getElementType()->getPointerTo());
+        F, Entry->getType()->getElementType()->getPointerTo(
+               getFunctionAddrSpace()));
+
     addGlobalValReplacement(Entry, BC);
   }
 
@@ -2877,8 +2991,7 @@ llvm::Constant *CodeGenModule::GetOrCreateLLVMFunction(
     assert(F->getType()->getElementType() == Ty);
     return F;
   }
-
-  llvm::Type *PTy = llvm::PointerType::getUnqual(Ty);
+  llvm::Type *PTy = llvm::PointerType::get(Ty, getFunctionAddrSpace());
   return llvm::ConstantExpr::getBitCast(F, PTy);
 }
 
@@ -3074,8 +3187,8 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
       return llvm::ConstantExpr::getBitCast(Entry, Ty);
   }
 
-  auto AddrSpace = GetGlobalVarAddressSpace(D);
-  auto TargetAddrSpace = getContext().getTargetAddressSpace(AddrSpace);
+  LangAS AddrSpace = GetGlobalVarAddressSpace(D);
+  auto TargetAddrSpace = getTargetAddressSpace(AddrSpace);
 
   auto *GV = new llvm::GlobalVariable(
       getModule(), Ty->getElementType(), false,
@@ -3193,8 +3306,10 @@ CodeGenModule::GetOrCreateLLVMGlobal(StringRef MangledName,
   LangAS ExpectedAS =
       D ? D->getType().getAddressSpace()
         : (LangOpts.OpenCL ? LangAS::opencl_global : LangAS::Default);
-  assert(getContext().getTargetAddressSpace(ExpectedAS) ==
-         Ty->getPointerAddressSpace());
+  // XXXAR: not quite sure if this is correct (actually I think it's not needed)
+  if (getContext().getTargetInfo().areAllPointersCapabilities())
+    ExpectedAS = getLangASFromTargetAS(getTargetCodeGenInfo().getCHERICapabilityAS());
+  assert(getTargetAddressSpace(ExpectedAS) == Ty->getPointerAddressSpace());
   if (AddrSpace != ExpectedAS)
     return getTargetCodeGenInfo().performAddrSpaceCast(*this, GV, AddrSpace,
                                                        ExpectedAS, Ty);
@@ -3251,7 +3366,9 @@ llvm::GlobalVariable *CodeGenModule::CreateOrReplaceCXXRuntimeVariable(
 
   // Create a new variable.
   GV = new llvm::GlobalVariable(getModule(), Ty, /*isConstant=*/true,
-                                Linkage, nullptr, Name);
+                                Linkage, nullptr, Name, nullptr,
+                                llvm::GlobalVariable::NotThreadLocal,
+                                getTargetCodeGenInfo().getDefaultAS());
 
   if (OldGV) {
     // Replace occurrences of the old variable if needed.
@@ -3289,8 +3406,13 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
   if (!Ty)
     Ty = getTypes().ConvertTypeForMem(ASTTy);
 
-  llvm::PointerType *PTy =
-    llvm::PointerType::get(Ty, getContext().getTargetAddressSpace(ASTTy));
+  // a pointer to __intcap_t should not be AS200 in hybrid ABI
+  // So This is not quite right: `unsigned AS = getAddressSpaceForType(ASTTy);`
+  unsigned AS =
+      getContext().getTargetInfo().areAllPointersCapabilities()
+          ? getTargetCodeGenInfo().getCHERICapabilityAS()
+          : getTargetAddressSpace(ASTTy.getAddressSpace());
+  llvm::PointerType *PTy = llvm::PointerType::get(Ty, AS);
 
   StringRef MangledName = getMangledName(D);
   return GetOrCreateLLVMGlobal(MangledName, PTy, D, IsForDefinition);
@@ -3300,9 +3422,11 @@ llvm::Constant *CodeGenModule::GetAddrOfGlobalVar(const VarDecl *D,
 /// specified type and name.
 llvm::Constant *
 CodeGenModule::CreateRuntimeVariable(llvm::Type *Ty,
-                                     StringRef Name) {
+                                     StringRef Name,
+                                     unsigned AddressSpace) {
   auto *Ret =
-      GetOrCreateLLVMGlobal(Name, llvm::PointerType::getUnqual(Ty), nullptr);
+      GetOrCreateLLVMGlobal(Name, llvm::PointerType::get(Ty, AddressSpace),
+                            nullptr);
   setDSOLocal(cast<llvm::GlobalValue>(Ret->stripPointerCasts()));
   return Ret;
 }
@@ -3357,6 +3481,25 @@ LangAS CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
       return LangAS::cuda_constant;
     else
       return LangAS::cuda_device;
+  }
+  // FIXME-cheri-qual: May need to handle GetGlobalVarAddressSpace carefully
+  const TargetInfo &Target = getContext().getTargetInfo();
+  if (Target.SupportsCapabilities()) {
+    // In the hybrid ABI, AddrSpace == 200 means that D is a
+    // capability-qualified pointer. 
+    // FIXME-cheri-qual: We currently can't handle thread-local storage
+    unsigned CapAS = getTargetCodeGenInfo().getCHERICapabilityAS();
+    if (Target.areAllPointersCapabilities()) { // Pure ABI
+      if (D && (D->getTLSKind() != VarDecl::TLS_None)) {
+        return getLangASFromTargetAS(
+            getTargetCodeGenInfo().getTlsAddressSpace());
+      }
+      // All non-TLS variables should be in the Cap AS
+      return getLangASFromTargetAS(CapAS);
+    } else if (D && getAddressSpaceForType(D->getType()) == CapAS) {
+      // In the hybrid ABI all globals are in AS 0 (even capabilities)
+      return LangAS::Default; // XXXAR: FIXME: is this really  correct?
+    }
   }
 
   return getTargetCodeGenInfo().getGlobalVarAddressSpace(*this, D);
@@ -3536,6 +3679,16 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
     }
   }
 
+  if (!getCodeGenOpts().CHERILinker &&
+      InitExpr && Target.SupportsCapabilities()) {
+    QualType T = InitExpr->getType();
+    if (getContext().containsCapabilities(T)) {
+      NeedsGlobalCtor = true;
+      Init = EmitNullConstant(D->getType());
+    }
+  }
+
+
   llvm::Type* InitType = Init->getType();
   llvm::Constant *Entry =
       GetAddrOfGlobalVar(D, InitType, ForDefinition_t(!IsTentative));
@@ -3563,7 +3716,7 @@ void CodeGenModule::EmitGlobalVarDefinition(const VarDecl *D,
   // from the type of the global (this happens with unions).
   if (!GV || GV->getType()->getElementType() != InitType ||
       GV->getType()->getAddressSpace() !=
-          getContext().getTargetAddressSpace(GetGlobalVarAddressSpace(D))) {
+          getTargetAddressSpace(GetGlobalVarAddressSpace(D))) {
 
     // Move the old entry aside so that we'll create a new one.
     Entry->setName(StringRef());
@@ -4041,17 +4194,21 @@ void CodeGenModule::EmitAliasDefinition(GlobalDecl GD) {
   // Create a reference to the named value.  This ensures that it is emitted
   // if a deferred decl.
   llvm::Constant *Aliasee;
-  if (isa<llvm::FunctionType>(DeclTy))
+  unsigned AS = 0;
+  if (isa<llvm::FunctionType>(DeclTy)) {
+    AS = getFunctionAddrSpace();
     Aliasee = GetOrCreateLLVMFunction(AA->getAliasee(), DeclTy, GD,
                                       /*ForVTable=*/false);
-  else
+  } else {
+    AS = getTargetCodeGenInfo().getDefaultAS();
     Aliasee = GetOrCreateLLVMGlobal(AA->getAliasee(),
-                                    llvm::PointerType::getUnqual(DeclTy),
+                                    llvm::PointerType::get(DeclTy, AS),
                                     /*D=*/nullptr);
+  }
 
   // Create the new alias itself, but don't set a name yet.
   auto *GA = llvm::GlobalAlias::create(
-      DeclTy, 0, llvm::Function::ExternalLinkage, "", Aliasee, &getModule());
+      DeclTy, AS, llvm::Function::ExternalLinkage, "", Aliasee, &getModule());
 
   if (Entry) {
     if (GA->getAliasee() == Entry) {
@@ -4312,9 +4469,11 @@ CodeGenModule::GetAddrOfConstantCFString(const StringLiteral *Literal) {
 
   // Note: -fwritable-strings doesn't make the backing store strings of
   // CFStrings writable. (See <rdar://problem/10657500>)
-  auto *GV =
-      new llvm::GlobalVariable(getModule(), C->getType(), /*isConstant=*/true,
-                               llvm::GlobalValue::PrivateLinkage, C, ".str");
+  auto GV =
+    new llvm::GlobalVariable(getModule(), C->getType(), /*isConstant=*/true,
+                             llvm::GlobalValue::PrivateLinkage, C, ".str", nullptr,
+                             llvm::GlobalVariable::NotThreadLocal,
+                             getTargetCodeGenInfo().getDefaultAS());
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   // Don't enforce the target's minimum global alignment, since the only use
   // of the string is via this class initializer.
@@ -4649,7 +4808,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
       Linkage = llvm::GlobalVariable::InternalLinkage;
     }
   }
-  auto TargetAS = getContext().getTargetAddressSpace(AddrSpace);
+  auto TargetAS = getTargetAddressSpace(AddrSpace);
   auto *GV = new llvm::GlobalVariable(
       getModule(), Type, Constant, Linkage, InitialValue, Name.c_str(),
       /*InsertBefore=*/nullptr, llvm::GlobalVariable::NotThreadLocal, TargetAS);
@@ -4664,8 +4823,7 @@ ConstantAddress CodeGenModule::GetAddrOfGlobalTemporary(
   if (AddrSpace != LangAS::Default)
     CV = getTargetCodeGenInfo().performAddrSpaceCast(
         *this, GV, AddrSpace, LangAS::Default,
-        Type->getPointerTo(
-            getContext().getTargetAddressSpace(LangAS::Default)));
+        Type->getPointerTo(getTargetAddressSpace(LangAS::Default)));
   MaterializedGlobalTemporaryMap[E] = CV;
   return ConstantAddress(CV, Align);
 }
@@ -5427,6 +5585,142 @@ void CodeGenModule::AddVTableTypeMetadata(llvm::GlobalVariable *VTable,
   }
 }
 
+static llvm::GlobalVariable *
+GenerateAS0StringLiteral(CodeGenModule &CGM, StringRef Str) {
+  StringRef StrWithNull(Str.str().c_str(), Str.str().size() + 1);
+
+  llvm::Constant *C = llvm::ConstantDataArray::getString(CGM.getLLVMContext(),
+          StrWithNull, false);
+
+  unsigned AS = 0;
+  // XXXAR: in the cap-table ABI we want all globals in AS200!
+  // TODO: rename this function
+  if (CGM.getContext().getTargetInfo().areAllPointersCapabilities())
+    if (llvm::MCTargetOptions::cheriUsesCapabilityTable())
+      AS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+
+  auto *GV = new llvm::GlobalVariable( CGM.getModule(), C->getType(), true,
+          llvm::GlobalValue::PrivateLinkage, C,
+          // when using the cap table this needs to be in AS200
+          "", nullptr, llvm::GlobalValue::NotThreadLocal, AS);
+  GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
+
+  return GV;
+}
+
+llvm::Value *CodeGenModule::EmitSandboxRequiredMethod(StringRef Cls,
+    StringRef Fn) {
+  // We're going to emit a structure of the following form:
+  // struct sandbox_required_method {
+  //   int64_t   flags;
+  //   char     *class;
+  //   char     *method;
+  //   int64_t  *method_number_var;
+  //   int64_t   method_number;
+  // };
+  // The class and method fields point to the names of the class and method.
+  // The method_number_var field is temporary and points to the
+  // __cheri_method.{class}.{function} variable that older versions of the
+  // sandbox interface ABI used.
+  // The method number is the new method number variable.
+  // The low 32 bits of the flags field are reserved for the compiler, the high
+  // 32 bits for the runtime.  The runtime uses one of these to indicate a
+  // resolved method.
+  // At some point, the compiler will use the low 1 bit of flags to indicate
+  // that the `method_number_var` field is not present and that the compiled
+  // code uses the method_number field directly.
+
+
+  // Emit a global of the form __cheri_method.{class}.{function}
+  auto GlobalName = (StringRef("__cheri_method.") + Cls + "." + Fn).str();
+
+  auto *MethodNumVar = getModule().getNamedGlobal(GlobalName);
+  auto *Zero64 = llvm::ConstantInt::get(Int64Ty, 0);
+  if (!MethodNumVar) {
+    // FIXME: does using 200 in non-captable purecap mode break anything?
+    unsigned AS = getTargetCodeGenInfo().getDefaultAS();
+    MethodNumVar = new llvm::GlobalVariable(getModule(), Int64Ty,
+        /*isConstant*/false, llvm::GlobalValue::LinkOnceODRLinkage,
+        Zero64, GlobalName, nullptr, llvm::GlobalValue::NotThreadLocal, AS);
+    MethodNumVar->setSection(".CHERI_CALLER");
+    addUsedGlobal(MethodNumVar);
+  }
+
+  auto GlobalStructName = (StringRef(".sandbox_required_method.") + Cls + "." +
+      Fn).str();
+  if (!getModule().getNamedGlobal(GlobalStructName)) {
+    auto *ClsName = GenerateAS0StringLiteral(*this, Cls);
+    auto *MethodName = GenerateAS0StringLiteral(*this, Fn);
+    auto StructTy = llvm::StructType::get(Int64Ty,
+        ClsName->getType(), MethodName->getType(),
+        MethodNumVar->getType(), Int64Ty);
+
+    auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64,
+        ClsName, MethodName, MethodNumVar, Zero64});
+    auto *MetadataGV = new llvm::GlobalVariable(
+        getModule(), StructTy,
+        /*isConstant*/ false, llvm::GlobalValue::ExternalLinkage, StructInit,
+        GlobalStructName, nullptr, llvm::GlobalValue::NotThreadLocal,
+        getTargetCodeGenInfo().getDefaultAS());
+    MetadataGV->setSection("__cheri_sandbox_required_methods");
+    MetadataGV->setComdat(getModule().getOrInsertComdat(GlobalStructName));
+    addUsedGlobal(MetadataGV);
+  }
+
+  return MethodNumVar;
+}
+
+void CodeGenModule::EmitSandboxDefinedMethod(StringRef Cls, StringRef
+    Method, llvm::Function *Fn) {
+  // For each defined method, we emit a structure of the following form:
+  // struct sandbox_provided_method {
+  //   int64_t   flags;
+  //   char     *class;
+  //   char     *method;
+  //   void     *method_ptr;
+  // };
+  // The flags field is always zero.  The class and method give the name of the
+  // class and method.  The method_ptr field includes the sandbox-relative
+  // address of the method.
+
+  // Emit a global of the form __cheri_method_{class}_{function}
+  auto GlobalName = (StringRef("__cheri_callee_method.") + Cls + "." +
+      Method).str();
+  auto *MethodPtrVar = getModule().getNamedGlobal(GlobalName);
+  if (!MethodPtrVar) {
+    MethodPtrVar = new llvm::GlobalVariable(
+        getModule(), Fn->getType(),
+        /*isConstant*/ false, llvm::GlobalValue::ExternalLinkage, Fn,
+        GlobalName, nullptr, llvm::GlobalValue::NotThreadLocal,
+        getTargetCodeGenInfo().getDefaultAS());
+    MethodPtrVar->setSection(".CHERI_CALLEE");
+    addUsedGlobal(MethodPtrVar);
+  }
+
+  auto GlobalStructName = (StringRef(".sandbox_provided_method.") + Cls + "." +
+      Method).str();
+  if (!getModule().getNamedGlobal(GlobalStructName)) {
+    auto *ClsName = GenerateAS0StringLiteral(*this, Cls);
+    auto *MethodName = GenerateAS0StringLiteral(*this, Method);
+    auto *StructTy = llvm::StructType::get(Int64Ty, ClsName->getType(),
+                                           MethodName->getType(),
+                                           MethodPtrVar->getType());
+    auto *Zero64 = llvm::ConstantInt::get(Int64Ty, 0);
+
+    auto *StructInit = llvm::ConstantStruct::get(StructTy, {Zero64,
+        ClsName, MethodName, MethodPtrVar});
+    auto *MetadataGV = new llvm::GlobalVariable(
+        getModule(), StructTy,
+        /*isConstant*/ false, llvm::GlobalValue::ExternalLinkage, StructInit,
+        GlobalStructName, nullptr, llvm::GlobalValue::NotThreadLocal,
+        getTargetCodeGenInfo().getDefaultAS());
+    MetadataGV->setSection("__cheri_sandbox_provided_methods");
+    MetadataGV->setComdat(getModule().getOrInsertComdat(StringRef(GlobalStructName)));
+    addUsedGlobal(MetadataGV);
+  }
+
+}
+
 TargetAttr::ParsedTargetAttr CodeGenModule::filterFunctionTargetAttrs(const TargetAttr *TD) {
   assert(TD != nullptr);
   TargetAttr::ParsedTargetAttr ParsedAttr = TD->parse();
@@ -5440,7 +5734,6 @@ TargetAttr::ParsedTargetAttr CodeGenModule::filterFunctionTargetAttrs(const Targ
       ParsedAttr.Features.end());
   return ParsedAttr;
 }
-
 
 // Fills in the supplied string map with the set of target features for the
 // passed in function.
@@ -5477,6 +5770,10 @@ void CodeGenModule::getFunctionFeatureMap(llvm::StringMap<bool> &FeatureMap,
     Target.initFeatureMap(FeatureMap, getDiags(), TargetCPU,
                           Target.getTargetOpts().Features);
   }
+}
+
+llvm::PointerType* CodeGenModule::getPointerInDefaultAS(llvm::Type* T) {
+  return llvm::PointerType::get(T, getTargetCodeGenInfo().getDefaultAS());
 }
 
 llvm::SanitizerStatReport &CodeGenModule::getSanStats() {

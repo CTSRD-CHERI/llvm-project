@@ -153,6 +153,31 @@ static bool SemaBuiltinAnnotation(Sema &S, CallExpr *TheCall) {
   return false;
 }
 
+static bool SemaBuiltinCHERICapCreate(Sema &S, CallExpr *TheCall) {
+  if (checkArgCount(S, TheCall, 3))
+    return true;
+
+  QualType FnType = TheCall->getArg(2)->getType();
+  auto FnAttrType = FnType->getAs<AttributedType>();
+
+  // FIXME: Proper error
+  if (FnAttrType->getAttrKind() != attr::CHERICCallee) {
+    fprintf(stderr, "Argument must be a cheri_ccallee thingy\n");
+    return true;
+  }
+  // FIXME: Typecheck args 0 and 1
+  ASTContext &C = S.Context;
+  // FIXME: Error on null
+  auto BaseFnTy = cast<FunctionProtoType>(FnAttrType->getModifiedType());
+  auto ReturnFnTy = C.adjustFunctionType(BaseFnTy,
+      BaseFnTy->getExtInfo().withCallingConv(CC_CHERICCallback));
+  auto ReturnTy = C.getPointerType(QualType(ReturnFnTy, 0), ASTContext::PIK_Default);
+
+  TheCall->setType(ReturnTy);
+  return false;
+}
+
+
 static bool SemaBuiltinMSVCAnnotation(Sema &S, CallExpr *TheCall) {
   // We need at least one argument.
   if (TheCall->getNumArgs() < 1) {
@@ -188,6 +213,78 @@ static bool SemaBuiltinAddressof(Sema &S, CallExpr *TheCall) {
 
   TheCall->setArg(0, Arg.get());
   TheCall->setType(ResultType);
+  return false;
+}
+
+static bool SemaBuiltinAlignment(Sema &S, CallExpr *TheCall, unsigned ID,
+                                 bool PowerOfTwo) {
+  if (checkArgCount(S, TheCall, 2))
+    return true;
+
+  clang::Expr *Source = TheCall->getArg(0);
+  clang::Expr *AlignOp = TheCall->getArg(1);
+  bool IsBooleanAlignBuiltin = ID == Builtin::BI__builtin_is_aligned ||
+                               ID == Builtin::BI__builtin_is_p2aligned;
+
+  auto IsValidIntegerType = [](QualType Ty) {
+    return Ty->isIntegerType() && !Ty->isEnumeralType() && !Ty->isBooleanType();
+  };
+  if (!IsValidIntegerType(AlignOp->getType())) {
+    S.Diag(AlignOp->getExprLoc(), diag::err_typecheck_expect_int)
+        << AlignOp->getType();
+    return true;
+  }
+
+  QualType SrcTy = Source->getType();
+
+  if (!SrcTy->isPointerType() && !IsValidIntegerType(SrcTy)) {
+    // TODO: this is not quite the right error message since we don't allow
+    // floating point types, or member pointers
+    S.Diag(AlignOp->getExprLoc(), diag::err_typecheck_expect_scalar_operand)
+        << SrcTy;
+    return true;
+  }
+  // err_argument_invalid_range
+  // TODO: allow zero as an always true result?
+  Expr::EvalResult AlignResult;
+  unsigned MaxAlignmentBits = S.Context.getIntRange(SrcTy) - 1;
+  if (AlignOp->EvaluateAsInt(AlignResult, S.Context, Expr::SE_AllowSideEffects)) {
+    llvm::APSInt AlignValue = AlignResult.Val.getInt();
+    if (PowerOfTwo) {
+     if (AlignValue == 0) {
+        // aligning to 2^0 is always true/a noop -> add the tautological warning
+        S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
+            << IsBooleanAlignBuiltin;
+      } else if (AlignValue < 0 || AlignValue > MaxAlignmentBits) {
+        S.Diag(AlignOp->getExprLoc(),
+               diag::err_alignment_power_of_two_out_of_range)
+            << AlignValue.toString(10) << 0 << MaxAlignmentBits;
+      }
+    } else {
+      llvm::APSInt MaxValue(
+          llvm::APInt::getOneBitSet(MaxAlignmentBits + 1, MaxAlignmentBits));
+      if (AlignValue < 1) {
+        S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_small) << 1;
+        return true;
+      } else if (llvm::APSInt::compareValues(AlignValue, MaxValue) > 0) {
+        S.Diag(AlignOp->getExprLoc(), diag::err_alignment_too_big)
+            << MaxValue.toString(10);
+        return true;
+      } else if (AlignValue == 1) {
+        S.Diag(AlignOp->getExprLoc(), diag::warn_alignment_builtin_useless)
+            << IsBooleanAlignBuiltin;
+      } else if (!AlignValue.isPowerOf2()) {
+        S.Diag(AlignOp->getExprLoc(), diag::err_alignment_not_power_of_two);
+        return true;
+      }
+    }
+  }
+
+  TheCall->setArg(0, Source);
+  TheCall->setArg(1, AlignOp);
+  // __builtin_is_aligned() returns bool instead of the same type as Arg1
+  TheCall->setType(IsBooleanAlignBuiltin ? S.Context.BoolTy
+                                         : Source->getType());
   return false;
 }
 
@@ -978,6 +1075,9 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
   }
 
   switch (BuiltinID) {
+  case Builtin::BI__builtin_return_address:
+    TheCall->setType(Context.VoidPtrTy);
+    break;
   case Builtin::BI__builtin___CFStringMakeConstantString:
     assert(TheCall->getNumArgs() == 1 &&
            "Wrong # arguments to builtin CFStringMakeConstantString");
@@ -1074,6 +1174,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       return ExprError();
     break;
   case Builtin::BI__builtin_assume_aligned:
+  case Builtin::BI__builtin_assume_aligned_cap:
     if (SemaBuiltinAssumeAligned(TheCall))
       return ExprError();
     break;
@@ -1231,6 +1332,18 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
     if (SemaBuiltinAddressof(*this, TheCall))
       return ExprError();
     break;
+  case Builtin::BI__builtin_is_aligned:
+  case Builtin::BI__builtin_align_up:
+  case Builtin::BI__builtin_align_down:
+    if (SemaBuiltinAlignment(*this, TheCall, BuiltinID, false))
+      return ExprError();
+    break;
+  case Builtin::BI__builtin_is_p2aligned:
+  case Builtin::BI__builtin_p2align_up:
+  case Builtin::BI__builtin_p2align_down:
+    if (SemaBuiltinAlignment(*this, TheCall, BuiltinID, true))
+      return ExprError();
+    break;
   case Builtin::BI__builtin_add_overflow:
   case Builtin::BI__builtin_sub_overflow:
   case Builtin::BI__builtin_mul_overflow:
@@ -1366,6 +1479,9 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
 
     TheCall->setType(Context.VoidPtrTy);
     break;
+  // Memory capability functions
+  case Builtin::BI__builtin_cheri_callback_create:
+    return SemaBuiltinCHERICapCreate(*this, TheCall);
   // OpenCL v2.0, s6.13.16 - Pipe functions
   case Builtin::BIread_pipe:
   case Builtin::BIwrite_pipe:
@@ -1457,6 +1573,7 @@ Sema::CheckBuiltinFunctionCall(FunctionDecl *FDecl, unsigned BuiltinID,
       case llvm::Triple::mipsel:
       case llvm::Triple::mips64:
       case llvm::Triple::mips64el:
+      case llvm::Triple::cheri:
         if (CheckMipsBuiltinFunctionCall(BuiltinID, TheCall))
           return ExprError();
         break;
@@ -4837,6 +4954,16 @@ Sema::SemaBuiltinAtomicOverloaded(ExprResult TheCallResult) {
   if (!pointerType) {
     Diag(DRE->getBeginLoc(), diag::err_atomic_builtin_must_be_pointer)
         << FirstArg->getType() << FirstArg->getSourceRange();
+    return ExprError();
+  }
+  // XXXAR: disallow __sync builtins with capabilities for now
+  // It would result in incorrect code generation because we would end up
+  // using the _16 versions and generating i256 in the IR
+  bool IsCapabilityAtomicOp = false;
+  if (pointerType->getPointeeType()->isCHERICapabilityType(Context)) {
+    IsCapabilityAtomicOp = true;
+    Diag(DRE->getBeginLoc(), diag::err_sync_atomic_builtin_with_capability)
+      << pointerType->getPointeeType() << FirstArg->getSourceRange();
     return ExprError();
   }
 
@@ -9672,8 +9799,14 @@ static IntRange GetExprRange(ASTContext &C, const Expr *E, unsigned MaxWidth) {
 
   // Try a full evaluation first.
   Expr::EvalResult result;
-  if (E->EvaluateAsRValue(result, C))
+  if (E->EvaluateAsRValue(result, C)) {
+    // [u]intcap_t values produce LValues that can be used as pointers
+    if (result.Val.isLValue() && result.Val.getLValueBase().isNull()) {
+      result.Val =
+        APValue(llvm::APSInt(result.Val.getLValueOffset().getQuantity()));
+    }
     return GetValueRange(C, result.Val, GetExprType(E), MaxWidth);
+  }
 
   // I think we only want to look through implicit casts here; if the
   // user has an explicit widening cast, we should treat the value as
@@ -9888,7 +10021,14 @@ static IntRange GetExprRange(ASTContext &C, const Expr *E, unsigned MaxWidth) {
 }
 
 static IntRange GetExprRange(ASTContext &C, const Expr *E) {
-  return GetExprRange(C, E, C.getIntWidth(GetExprType(E)));
+  QualType Ty = GetExprType(E);
+  if (auto BT = dyn_cast<BuiltinType>(Ty.getCanonicalType())) {
+    if (BT->getKind() == BuiltinType::IntCap)
+      Ty = C.LongTy;
+    else if (BT->getKind() == BuiltinType::UIntCap)
+      Ty = C.UnsignedLongTy;
+  }
+  return GetExprRange(C, E, C.getIntWidth(Ty));
 }
 
 /// Checks whether the given value, which currently has the given

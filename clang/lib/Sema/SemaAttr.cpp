@@ -213,6 +213,11 @@ void Sema::ActOnPragmaPack(SourceLocation PragmaLoc, PragmaMsStackAction Action,
   PackStack.Act(PragmaLoc, Action, SlotLabel, AlignmentVal);
 }
 
+void Sema::ActOnPragmaPointerInterpretation(ASTContext::PointerInterpretationKind K) {
+  assert(K != ASTContext::PIK_Invalid);
+  PointerInterpretation = K;
+}
+
 void Sema::DiagnoseNonDefaultPragmaPack(PragmaPackDiagnoseKind Kind,
                                         SourceLocation IncludeLoc) {
   if (Kind == PragmaPackDiagnoseKind::NonDefaultStateAtInclude) {

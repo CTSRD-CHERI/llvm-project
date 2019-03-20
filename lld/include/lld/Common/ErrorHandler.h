@@ -86,6 +86,8 @@ public:
   uint64_t ErrorCount = 0;
   uint64_t ErrorLimit = 20;
   StringRef ErrorLimitExceededMsg = "too many errors emitted, stopping now";
+  uint64_t WarningLimit = 20;
+  StringRef WarningLimitExceededMsg = "too many warnings emitted, stopping now";
   StringRef LogName = "lld";
   llvm::raw_ostream *ErrorOS = &llvm::errs();
   bool ColorDiagnostics = llvm::errs().has_colors();

@@ -880,6 +880,7 @@ public:
   MipsAbiFlagsSection(Elf_Mips_ABIFlags Flags);
   size_t getSize() const override { return sizeof(Elf_Mips_ABIFlags); }
   void writeTo(uint8_t *Buf) override;
+  llvm::Optional<unsigned> getCheriAbiVariant() const;
 
 private:
   Elf_Mips_ABIFlags Flags;
@@ -986,6 +987,11 @@ private:
   bool Finalized = false;
 };
 
+// Can only be forward declared here since it depends on SyntheticSection
+template <class ELFT> class CheriCapRelocsSection;
+class CheriCapTableSection;
+class CheriCapTableMappingSection;
+
 InputSection *createInterpSection();
 MergeInputSection *createCommentSection();
 template <class ELFT> void splitSections();
@@ -1000,6 +1006,10 @@ struct InStruct {
   BssSection *Bss;
   BssSection *BssRelRo;
   BuildIdSection *BuildId;
+  CheriCapTableSection *CheriCapTable;
+  CheriCapTableSection *CheriCapTableLocal;
+  // For per-file/per-function tables:
+  CheriCapTableMappingSection *CheriCapTableMapping;
   EhFrameHeader *EhFrameHdr;
   EhFrameSection *EhFrame;
   SyntheticSection *Dynamic;
@@ -1031,12 +1041,18 @@ struct InStruct {
 extern InStruct In;
 
 template <class ELFT> struct InX {
+  // XXXAR: needs to be templated because writing depends on endianess
+  // TODO: use the non-templated version
+  static CheriCapRelocsSection<ELFT> *CapRelocs;
   static VersionTableSection<ELFT> *VerSym;
   static VersionNeedSection<ELFT> *VerNeed;
+  static MipsAbiFlagsSection<ELFT> *MipsAbiFlags;
 };
 
+template <class ELFT> CheriCapRelocsSection<ELFT> *InX<ELFT>::CapRelocs;
 template <class ELFT> VersionTableSection<ELFT> *InX<ELFT>::VerSym;
 template <class ELFT> VersionNeedSection<ELFT> *InX<ELFT>::VerNeed;
+template <class ELFT> MipsAbiFlagsSection<ELFT> *InX<ELFT>::MipsAbiFlags;
 } // namespace elf
 } // namespace lld
 

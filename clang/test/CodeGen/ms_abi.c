@@ -33,9 +33,9 @@ void __attribute__((ms_abi)) f4(int a, ...) {
   __builtin_ms_va_list ap;
   __builtin_ms_va_start(ap, a);
   // FREEBSD: %[[AP:.*]] = alloca i8*
-  // FREEBSD: call void @llvm.va_start
+  // FREEBSD: call void @llvm.va_start.p0i8
   // WIN64: %[[AP:.*]] = alloca i8*
-  // WIN64: call void @llvm.va_start
+  // WIN64: call void @llvm.va_start.p0i8
   int b = __builtin_va_arg(ap, int);
   // FREEBSD: %[[AP_CUR:.*]] = load i8*, i8** %[[AP]]
   // FREEBSD-NEXT: %[[AP_NEXT:.*]] = getelementptr inbounds i8, i8* %[[AP_CUR]], i64 8
@@ -73,8 +73,8 @@ void __attribute__((ms_abi)) f4(int a, ...) {
   // WIN64: %[[AP_VAL:.*]] = load i8*, i8** %[[AP]]
   // WIN64-NEXT: store i8* %[[AP_VAL]], i8** %[[AP2:.*]]
   __builtin_ms_va_end(ap);
-  // FREEBSD: call void @llvm.va_end
-  // WIN64: call void @llvm.va_end
+  // FREEBSD: call void @llvm.va_end.p0i8
+  // WIN64: call void @llvm.va_end.p0i8
 }
 
 // Let's verify that normal va_lists work right on Win64, too.
@@ -83,7 +83,7 @@ void f5(int a, ...) {
   __builtin_va_list ap;
   __builtin_va_start(ap, a);
   // WIN64: %[[AP:.*]] = alloca i8*
-  // WIN64: call void @llvm.va_start
+  // WIN64: call void @llvm.va_start.p0i8
   int b = __builtin_va_arg(ap, int);
   // WIN64: %[[AP_CUR:.*]] = load i8*, i8** %[[AP]]
   // WIN64-NEXT: %[[AP_NEXT:.*]] = getelementptr inbounds i8, i8* %[[AP_CUR]], i64 8
@@ -101,9 +101,9 @@ void f5(int a, ...) {
   // WIN64-NEXT: bitcast i8* %[[AP_CUR3]] to %[[STRUCT_FOO]]*
   __builtin_va_list ap2;
   __builtin_va_copy(ap2, ap);
-  // WIN64: call void @llvm.va_copy
+  // WIN64: call void @llvm.va_copy.p0i8.p0i8
   __builtin_va_end(ap);
-  // WIN64: call void @llvm.va_end
+  // WIN64: call void @llvm.va_end.p0i8
 }
 
 // Verify that using a Win64 va_list from a System V function works.

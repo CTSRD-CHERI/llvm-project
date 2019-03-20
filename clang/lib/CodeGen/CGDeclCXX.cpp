@@ -26,10 +26,11 @@ using namespace CodeGen;
 
 static void EmitDeclInit(CodeGenFunction &CGF, const VarDecl &D,
                          ConstantAddress DeclPtr) {
-  assert(
-      (D.hasGlobalStorage() ||
-       (D.hasLocalStorage() && CGF.getContext().getLangOpts().OpenCLCPlusPlus)) &&
-      "VarDecl must have global or local (in the case of OpenCL) storage!");
+  // TODO: Enable assert for non-CHERI like OpenCL
+  //assert(
+  //    (D.hasGlobalStorage() ||
+  //     (D.hasLocalStorage() && CGF.getContext().getLangOpts().OpenCLCPlusPlus)) &&
+  //    "VarDecl must have global or local (in the case of OpenCL) storage!");
   assert(!D.getType()->isReferenceType() &&
          "Should not call EmitDeclInit on a reference!");
 
@@ -120,7 +121,8 @@ static void EmitDeclDestroy(CodeGenFunction &CGF, const VarDecl &D,
 
     Func = CGM.getAddrOfCXXStructor(Dtor, StructorType::Complete);
     Argument = llvm::ConstantExpr::getBitCast(
-        Addr.getPointer(), CGF.getTypes().ConvertType(Type)->getPointerTo());
+        Addr.getPointer(), CGF.getTypes().ConvertType(Type)->getPointerTo(
+                                 CGM.getTargetCodeGenInfo().getDefaultAS()));
 
   // Otherwise, the standard logic requires a helper function.
   } else {
@@ -142,6 +144,9 @@ static void EmitDeclInvariant(CodeGenFunction &CGF, const VarDecl &D,
 }
 
 void CodeGenFunction::EmitInvariantStart(llvm::Constant *Addr, CharUnits Size) {
+  // If the address space isn't 0, do we can't mark it as invariant
+  if (Addr->getType()->getPointerAddressSpace() != 0)
+    return;
   // Do not emit the intrinsic if we're not optimizing.
   if (!CGM.getCodeGenOpts().OptimizationLevel)
     return;
@@ -181,7 +186,13 @@ void CodeGenFunction::EmitCXXGlobalVarDeclInit(const VarDecl &D,
   // For example, in the above CUDA code, the static local variable s has a
   // "shared" address space qualifier, but the constructor of StructWithCtor
   // expects "this" in the "generic" address space.
-  unsigned ExpectedAddrSpace = getContext().getTargetAddressSpace(T);
+  ASTContext &Context = getContext();
+  // This is not quite right, we don't want an __intcap_t alloca to be AS200
+  // unsigned ExpectedAddrSpace = CGM.getAddressSpaceForType(T);
+  unsigned ExpectedAddrSpace =
+      Context.getTargetInfo().areAllPointersCapabilities()
+          ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
+          : CGM.getTargetAddressSpace(T.getAddressSpace());
   unsigned ActualAddrSpace = DeclPtr->getType()->getPointerAddressSpace();
   if (ActualAddrSpace != ExpectedAddrSpace) {
     llvm::Type *LTy = CGM.getTypes().ConvertTypeForMem(T);
@@ -189,7 +200,7 @@ void CodeGenFunction::EmitCXXGlobalVarDeclInit(const VarDecl &D,
     DeclPtr = llvm::ConstantExpr::getAddrSpaceCast(DeclPtr, PTy);
   }
 
-  ConstantAddress DeclAddr(DeclPtr, getContext().getDeclAlign(&D));
+  ConstantAddress DeclAddr(DeclPtr, Context.getDeclAlign(&D));
 
   if (!T->isReferenceType()) {
     if (getLangOpts().OpenMP && !getLangOpts().OpenMPSimd &&
@@ -404,7 +415,9 @@ void CodeGenModule::EmitPointerToInitFunc(const VarDecl *D,
                                           InitSegAttr *ISA) {
   llvm::GlobalVariable *PtrArray = new llvm::GlobalVariable(
       TheModule, InitFunc->getType(), /*isConstant=*/true,
-      llvm::GlobalValue::PrivateLinkage, InitFunc, "__cxx_init_fn_ptr");
+      llvm::GlobalValue::PrivateLinkage, InitFunc, "__cxx_init_fn_ptr",
+      nullptr, llvm::GlobalValue::NotThreadLocal,
+      getTargetCodeGenInfo().getDefaultAS());
   PtrArray->setSection(ISA->getSection());
   addUsedGlobal(PtrArray);
 

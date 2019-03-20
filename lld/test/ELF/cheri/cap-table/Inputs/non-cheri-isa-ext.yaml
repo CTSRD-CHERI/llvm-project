@@ -1,0 +1,41 @@
+--- !ELF
+FileHeader:
+  Class:           ELFCLASS64
+  Data:            ELFDATA2MSB
+  OSABI:           ELFOSABI_FREEBSD
+  Type:            ET_REL
+  Machine:         EM_MIPS
+  Flags:           [ EF_MIPS_PIC, EF_MIPS_CPIC, EF_MIPS_ABI_CHERIABI, EF_MIPS_MACH_CHERI128, EF_MIPS_ARCH_4 ]
+Sections:
+  - Name:            .text
+    Type:            SHT_PROGBITS
+    Flags:           [ SHF_ALLOC, SHF_EXECINSTR ]
+    AddressAlign:    0x0000000000000010
+    Content:         '00000000'
+  - Name:            .data
+    Type:            SHT_PROGBITS
+    Flags:           [ SHF_WRITE, SHF_ALLOC ]
+    AddressAlign:    0x0000000000000010
+    Content:         ''
+  - Name:            .bss
+    Type:            SHT_NOBITS
+    Flags:           [ SHF_WRITE, SHF_ALLOC ]
+    AddressAlign:    0x0000000000000010
+  - Name:            .MIPS.options
+    Type:            SHT_MIPS_OPTIONS
+    Flags:           [ SHF_ALLOC, SHF_MIPS_NOSTRIP ]
+    AddressAlign:    0x0000000000000008
+    Content:         '01280000000000000000000100000000000000000000000000000000000000000000000000000000'
+  - Name:            .MIPS.abiflags
+    Type:            SHT_MIPS_ABIFLAGS
+    Flags:           [ SHF_ALLOC ]
+    AddressAlign:    0x0000000000000008
+    ISA:             MIPS4
+    ISAExtension:    EXT_OCTEON
+    FpABI:           FP_DOUBLE
+    GPRSize:         REG_64
+    CPR1Size:        REG_64
+    Flags1:          [ ODDSPREG ]
+Symbols:
+DynamicSymbols:
+...

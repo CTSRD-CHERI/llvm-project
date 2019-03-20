@@ -15,6 +15,7 @@
 
 #include "clang/CodeGen/ConstantInitBuilder.h"
 #include "CodeGenModule.h"
+#include "TargetInfo.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -71,6 +72,8 @@ ConstantInitBuilderBase::createGlobal(llvm::Constant *initializer,
                                       bool constant,
                                       llvm::GlobalValue::LinkageTypes linkage,
                                       unsigned addressSpace) {
+  if (addressSpace == static_cast<unsigned>(-1))
+    addressSpace = CGM.getTargetCodeGenInfo().getDefaultAS();
   auto GV = new llvm::GlobalVariable(CGM.getModule(),
                                      initializer->getType(),
                                      constant,
@@ -152,7 +155,9 @@ ConstantAggregateBuilderBase::getAddrOfCurrentPosition(llvm::Type *type) {
   auto dummy =
     new llvm::GlobalVariable(Builder.CGM.getModule(), type, true,
                              llvm::GlobalVariable::PrivateLinkage,
-                             nullptr, "");
+                             nullptr, "",
+                             nullptr, llvm::GlobalValue::NotThreadLocal,
+                             Builder.CGM.getTargetCodeGenInfo().getDefaultAS());
   Builder.SelfReferences.emplace_back(dummy);
   auto &entry = Builder.SelfReferences.back();
   (void) getGEPIndicesToCurrentPosition(entry.Indices);

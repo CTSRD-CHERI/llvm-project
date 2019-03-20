@@ -14,10 +14,17 @@
 #ifndef LLVM_CLANG_LIB_BASIC_TARGETS_MIPS_H
 #define LLVM_CLANG_LIB_BASIC_TARGETS_MIPS_H
 
+#include "llvm/Config/config.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Basic/TargetOptions.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
+#include "llvm/IR/Cheri.h"
+#include "llvm/MC/MCTargetOptions.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
+
+extern llvm::cl::opt<bool> IgnoreProgramASForFunctions;
 
 namespace clang {
 namespace targets {
@@ -25,20 +32,43 @@ namespace targets {
 class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
   void setDataLayout() {
     StringRef Layout;
-
+    // XXXAR: why do we need this here? can't we use the LLVM one?
     if (ABI == "o32")
       Layout = "m:m-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S64";
     else if (ABI == "n32")
       Layout = "m:e-p:32:32-i8:8:32-i16:16:32-i64:64-n32:64-S128";
-    else if (ABI == "n64")
-      Layout = "m:e-i8:8:32-i16:16:32-i64:64-n32:64-S128";
-    else
+    else if (ABI == "n64") {
+      if (IsCHERI) {
+        if (CapSize == 64)
+          Layout = "m:e-pf200:64:64:64:32-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+        else if (CapSize == 128)
+          Layout = "m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+        else
+          Layout = "m:e-pf200:256:256:256:64-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+      } else
+        Layout = "m:e-i8:8:32-i16:16:32-i64:64-n32:64-S128";
+    } else
       llvm_unreachable("Invalid ABI");
 
+    StringRef PurecapOptions = "";
+    // Only set globals address space to 200 for cap-table mode
+    if (CapabilityABI) {
+      if (llvm::MCTargetOptions::cheriUsesCapabilityTable()) {
+        PurecapOptions = "-A200-P200-G200";
+      } else {
+        // We also want program AS 200, but the legacy ABI still needs every
+        // llvm::Function* to be in AS0
+        IgnoreProgramASForFunctions = true;
+        PurecapOptions = "-A200-P200";
+      }
+    }
+
     if (BigEndian)
-      resetDataLayout(("E-" + Layout).str());
+      resetDataLayout(
+          ("E-" + Layout + (CapabilityABI ? PurecapOptions : "")).str());
     else
-      resetDataLayout(("e-" + Layout).str());
+      resetDataLayout(
+          ("e-" + Layout + (CapabilityABI ? PurecapOptions : "")).str());
   }
 
   static const Builtin::Info BuiltinInfo[];
@@ -59,9 +89,11 @@ class LLVM_LIBRARY_VISIBILITY MipsTargetInfo : public TargetInfo {
 protected:
   enum FPModeEnum { FPXX, FP32, FP64 } FPMode;
   std::string ABI;
+  bool IsCHERI = false;
+  int CapSize = -1;
 
 public:
-  MipsTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
+  MipsTargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : TargetInfo(Triple), IsMips16(false), IsMicromips(false),
         IsNan2008(false), IsAbs2008(false), IsSingleFloat(false),
         IsNoABICalls(false), CanUseBSDABICalls(false), FloatABI(HardFloat),
@@ -77,7 +109,29 @@ public:
       setABI("n64");
 
     CPU = ABI == "o32" ? "mips32r2" : "mips64r2";
-
+    // If we have a CHERI triple, or an explicit CHERI128 CPU, then assume
+    // CHERI128.
+    CapSize = llvm::StringSwitch<int>(Opts.CPU)
+      .Cases("cheri", "cheri128", 128) // If we have a CHERI CPU, default to assuming CHERI128.
+      .Case("cheri256", 256)
+      .Case("cheri64", 64)
+      .Default(-1);
+    if (CapSize > 0 || getTriple().getArch() == llvm::Triple::cheri) {
+      IsCHERI = true;
+    }
+    if (IsCHERI) {
+      switch (CapSize) {
+        default:
+        case 128: CPU = "cheri128"; break;
+        case 64: CPU = "cheri64"; break;
+        case 256: CPU = "cheri256"; break;
+      }
+      if (CapSize > 0) {
+        SuitableAlign = CapSize;
+        DefaultAlignForAttributeAligned =
+            std::max(DefaultAlignForAttributeAligned, (unsigned short)CapSize);
+      }
+    }
     CanUseBSDABICalls = Triple.isOSFreeBSD() ||
                         Triple.isOSOpenBSD();
   }
@@ -87,6 +141,7 @@ public:
   }
 
   bool isFP64Default() const {
+    // XXXAR: CHERI?
     return CPU == "mips32r6" || ABI == "n32" || ABI == "n64" || ABI == "64";
   }
 
@@ -113,6 +168,12 @@ public:
       ABI = Name;
       return true;
     }
+    if (Name == "purecap") {
+      setCapabilityABITypes();
+      CapabilityABI = true;
+      ABI = "n64";
+      return true;
+    }
     return false;
   }
 
@@ -137,7 +198,9 @@ public:
       LongDoubleFormat = &llvm::APFloat::IEEEdouble();
     }
     MaxAtomicPromoteWidth = MaxAtomicInlineWidth = 64;
-    SuitableAlign = 128;
+    if (IsCHERI && CapSize > 0)
+      MaxAtomicInlineWidth = std::max(MaxAtomicInlineWidth, (unsigned short)CapSize);
+    SuitableAlign = std::max(CapSize, 128);
   }
 
   void setN64ABITypes() {
@@ -152,6 +215,11 @@ public:
     PointerWidth = PointerAlign = 64;
     PtrDiffType = SignedLong;
     SizeType = UnsignedLong;
+  }
+
+  void setCapabilityABITypes() {
+    setN64ABITypes();
+    IntPtrType = TargetInfo::SignedIntCap;
   }
 
   void setN32ABITypes() {
@@ -179,10 +247,17 @@ public:
                  const std::vector<std::string> &FeaturesVec) const override {
     if (CPU.empty())
       CPU = getCPU();
+
+    assert(CPU != "cheri");
+    // cheri as a CPU type is now an alias for cheri128, so we should never see
+    // a raw cheri here.
     if (CPU == "octeon")
       Features["mips64r2"] = Features["cnmips"] = true;
     else
       Features[CPU] = true;
+
+    if (IsCHERI)
+      Features["chericap"] = true;
     return TargetInfo::initFeatureMap(Features, Diags, CPU, FeaturesVec);
   }
 
@@ -223,7 +298,13 @@ public:
         "$w28", "$w29", "$w30", "$w31",
         // MSA control register names
         "$msair", "$msacsr", "$msaaccess", "$msasave", "$msamodify",
-        "$msarequest", "$msamap", "$msaunmap"
+        "$msarequest", "$msamap", "$msaunmap",
+        // CHERI register names
+        "$cnull", "$c1", "$c2", "$c3", "$c4", "$c5", "$c6", "$c7", "$c8", "$c9",
+        "$c10", "$c11", "$c12", "$c13", "$c14", "$c15", "$c16", "$c17", "$c18",
+        "$c19", "$c20", "$c21", "$c22", "$c23", "$c24", "$c25", "$c26", "$c27",
+        "$c28", "$c29", "$c30", "$c31", "$idc", "$kr1c", "$kr2c", "$kcc", "$kdc",
+        "$epcc", "$ddc"
     };
     return llvm::makeArrayRef(GCCRegNames);
   }
@@ -254,6 +335,9 @@ public:
     case 'R': // An address that can be used in a non-macro load or store
       Info.setAllowsMemory();
       return true;
+    case 'C': // Capability register
+      Info.setAllowsRegister();
+      return IsCHERI;
     case 'Z':
       if (Name[1] == 'C') { // An address usable by ll, and sc.
         Info.setAllowsMemory();
@@ -276,6 +360,12 @@ public:
       break;
     }
     return TargetInfo::convertConstraint(Constraint);
+  }
+
+  CallingConvCheckResult checkCallingConvention(CallingConv CC) const override {
+    return (((CC == CC_CHERICCallee) || (CC == CC_CHERICCallback) ||
+             (CC == CC_CHERICCall)) && IsCHERI) ?
+        CCCR_OK : CCCR_Warning;
   }
 
   const char *getClobbers() const override {
@@ -313,6 +403,7 @@ public:
     FloatABI = HardFloat;
     DspRev = NoDSP;
     FPMode = isFP64Default() ? FP64 : FPXX;
+    bool CapSizeFeatureFound = false;
 
     for (const auto &Feature : Features) {
       if (Feature == "+single-float")
@@ -339,7 +430,21 @@ public:
         FPMode = FPXX;
       else if (Feature == "+nan2008")
         IsNan2008 = true;
-      else if (Feature == "-nan2008")
+      else if (Feature == "+chericap")
+        IsCHERI = true;
+      else if (Feature == "+cheri64") {
+        CapSizeFeatureFound = true;
+        CapSize = 64;
+        IsCHERI = true;
+      } else if (Feature == "+cheri128") {
+        CapSizeFeatureFound = true;
+        CapSize = 128;
+        IsCHERI = true;
+      } else if (Feature == "+cheri256") {
+        CapSizeFeatureFound = true;
+        CapSize = 256;
+        IsCHERI = true;
+      } else if (Feature == "-nan2008")
         IsNan2008 = false;
       else if (Feature == "+abs2008")
         IsAbs2008 = true;
@@ -351,6 +456,18 @@ public:
         UseIndirectJumpHazard = true;
     }
 
+    if (IsCHERI) {
+      // If we have an implicit size, assume cheri128
+      if (!CapSizeFeatureFound) {
+        Features.push_back("+cheri128");
+        CapSize = 128;
+      }
+      assert(CapSize > 0);
+      SuitableAlign = std::max(SuitableAlign, (unsigned short)CapSize);
+      DefaultAlignForAttributeAligned =
+          std::max(DefaultAlignForAttributeAligned, (unsigned short)CapSize);
+    }
+
     setDataLayout();
 
     return true;
@@ -358,7 +475,7 @@ public:
 
   int getEHDataRegisterNumber(unsigned RegNo) const override {
     if (RegNo == 0)
-      return 4;
+      return CapabilityABI ? 88 : 4;
     if (RegNo == 1)
       return 5;
     return -1;
@@ -399,7 +516,46 @@ public:
   }
 
   bool hasInt128Type() const override {
-    return (ABI == "n32" || ABI == "n64") || getTargetOpts().ForceEnableInt128;
+    return (getTriple().getArch() == llvm::Triple::mips64 ||
+           getTriple().getArch() == llvm::Triple::cheri ||
+           getTriple().getArch() == llvm::Triple::mips64el ||
+           ABI == "n32" || ABI == "n64" || ABI == "purecap") ||
+           getTargetOpts().ForceEnableInt128;
+  }
+
+  unsigned getIntCapWidth() const override { return CapSize; }
+  unsigned getIntCapAlign() const override { return CapSize; }
+
+  uint64_t getCHERICapabilityWidth() const override { return CapSize; }
+
+  uint64_t getCHERICapabilityAlign() const override { return CapSize; }
+
+  uint64_t getPointerRangeForCHERICapability() const override { return 64; }
+
+  uint64_t getPointerWidthV(unsigned AddrSpace) const override {
+    return isCheriPointer(AddrSpace, &getDataLayout()) ? CapSize : PointerWidth;
+  }
+
+  uint64_t getPointerRangeV(unsigned AddrSpace) const override {
+    return isCheriPointer(AddrSpace, &getDataLayout()) ? getPointerRangeForCHERICapability() : PointerWidth;
+  }
+
+  uint64_t getPointerAlignV(unsigned AddrSpace) const override {
+    return isCheriPointer(AddrSpace, &getDataLayout()) ? CapSize : PointerAlign;
+  }
+
+  bool SupportsCapabilities() const override { return IsCHERI; }
+
+  bool hasBuiltinAtomic(uint64_t AtomicSizeInBits,
+                        uint64_t AlignmentInBits) const override {
+#if 0
+    if (SupportsCapabilities() &&
+        AtomicSizeInBits == getCHERICapabilityWidth() &&
+        AlignmentInBits == getCHERICapabilityAlign()) {
+      return true;
+    }
+#endif
+    return TargetInfo::hasBuiltinAtomic(AtomicSizeInBits, AlignmentInBits);
   }
 
   bool validateTarget(DiagnosticsEngine &Diags) const override;

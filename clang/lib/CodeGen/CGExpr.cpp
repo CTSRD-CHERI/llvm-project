@@ -27,7 +27,9 @@
 #include "clang/AST/DeclObjC.h"
 #include "clang/AST/NSAPI.h"
 #include "clang/Basic/CodeGenOptions.h"
+#include "clang/Frontend/FrontendDiagnostic.h"
 #include "llvm/ADT/Hashing.h"
+#include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Intrinsics.h"
@@ -55,8 +57,7 @@ llvm::Value *CodeGenFunction::EmitCastToVoidPtr(llvm::Value *value) {
   if (addressSpace)
     destType = llvm::Type::getInt8PtrTy(getLLVMContext(), addressSpace);
 
-  if (value->getType() == destType) return value;
-  return Builder.CreateBitCast(value, destType);
+  return EmitPointerCast(value, destType);
 }
 
 /// CreateTempAlloca - This creates a alloca and inserts it into the entry
@@ -85,7 +86,7 @@ Address CodeGenFunction::CreateTempAlloca(llvm::Type *Ty, CharUnits Align,
   // in C++ the auto variables are in the default address space. Therefore
   // cast alloca to the default address space when necessary.
   if (getASTAllocaAddressSpace() != LangAS::Default) {
-    auto DestAddrSpace = getContext().getTargetAddressSpace(LangAS::Default);
+    auto DestAddrSpace = CGM.getTargetAddressSpace(LangAS::Default);
     llvm::IRBuilderBase::InsertPointGuard IPG(Builder);
     // When ArraySize is nullptr, alloca is inserted at AllocaInsertPt,
     // otherwise alloca is inserted at the current insertion point of the
@@ -390,7 +391,7 @@ static Address createReferenceTemporary(CodeGenFunction &CGF,
               CGF.CGM.getModule(), Init->getType(), /*isConstant=*/true,
               llvm::GlobalValue::PrivateLinkage, Init, ".ref.tmp", nullptr,
               llvm::GlobalValue::NotThreadLocal,
-              CGF.getContext().getTargetAddressSpace(AS));
+              CGF.CGM.getTargetAddressSpace(AS));
           CharUnits alignment = CGF.getContext().getTypeAlignInChars(Ty);
           GV->setAlignment(alignment.getQuantity());
           llvm::Constant *C = GV;
@@ -398,7 +399,7 @@ static Address createReferenceTemporary(CodeGenFunction &CGF,
             C = TCG.performAddrSpaceCast(
                 CGF.CGM, GV, AS, LangAS::Default,
                 GV->getValueType()->getPointerTo(
-                    CGF.getContext().getTargetAddressSpace(LangAS::Default)));
+                    CGF.CGM.getTargetAddressSpace(LangAS::Default)));
           // FIXME: Should we put the new global into a COMDAT?
           return Address(C, alignment);
         }
@@ -484,9 +485,10 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
   Address Object = createReferenceTemporary(*this, M, E, &Alloca);
   if (auto *Var = dyn_cast<llvm::GlobalVariable>(
           Object.getPointer()->stripPointerCasts())) {
-    Object = Address(llvm::ConstantExpr::getBitCast(
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
+    Object = Address(llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(
                          cast<llvm::Constant>(Object.getPointer()),
-                         ConvertTypeForMem(E->getType())->getPointerTo()),
+                         ConvertTypeForMem(E->getType())->getPointerTo(AS)),
                      Object.getAlignment());
     // If the temporary is a global and has a constant initializer or is a
     // constant temporary that we promoted to a global, we may have already
@@ -585,14 +587,524 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
   return MakeAddrLValue(Object, M->getType(), AlignmentSource::Decl);
 }
 
+#define CHERI_BOUNDS_DBG(x) DEBUG_WITH_TYPE("cheri-bounds", llvm::dbgs() x)
+#define DEBUG_TYPE "cheri-bounds"
+STATISTIC(NumReferencesCheckedForBoundsTightening,
+          "Number of references checked for tightening bounds");
+STATISTIC(NumTightBoundsSetOnReferences,
+          "Number of references where bounds were tightend");
+STATISTIC(NumContainerBoundsSetOnReferences,
+          "Number of references operators where container bounds were used");
+STATISTIC(NumAddrOfCheckedForBoundsTightening,
+          "Number of & operators checked for tightening bounds");
+STATISTIC(NumTightBoundsSetOnAddrOf,
+          "Number of & operators where bounds were tightend");
+STATISTIC(NumContainerBoundsSetOnAddrOf,
+          "Number of & operators where container bounds were used");
+#undef DEBUG_TYPE
+
+// If we are setting bounds on the full container size, the csetbounds must
+// be done before the cincoffset!
+static llvm::Value *
+tightenCHERIBounds(CodeGenFunction &CGF, bool IsReference, llvm::Value *Value,
+                   const Expr *E, SourceLocation Loc, QualType Ty,
+                   const CodeGenFunction::TightenBoundsResult &TBR) {
+  llvm::Value *ValueToBound = Value;
+  llvm::GetElementPtrInst *GEP = nullptr;
+  CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
+                   << (IsReference ? "' reference to " : "' addrof to ")
+                   << TBR.Size << "\n");
+  if (TBR.IsContainerSize) {
+    if ((GEP = dyn_cast<llvm::GetElementPtrInst>(Value))) {
+      ValueToBound = GEP->getPointerOperand();
+    } else if (auto CE = dyn_cast<llvm::ConstantExpr>(Value)) {
+      // If the source Value is not a GEP instruction but a GEP constantexp
+      // (e.g. bounds on a global &array[index]) we need to convert it to an
+      // instruction so that it can work with the result of a CSetBounds Inst
+      if (CE->getOpcode() == llvm::Instruction::GetElementPtr) {
+        GEP = cast<llvm::GetElementPtrInst>(CE->getAsInstruction());
+        CGF.Builder.Insert(GEP);
+        ValueToBound = GEP->getPointerOperand();
+        ;
+      } else {
+        assert(CE->isCast() && "expected GEP or cast");
+      }
+    } else if (auto I = dyn_cast<llvm::Instruction>(Value)) {
+      // Other case where we use container size is unions -> must be a cast
+      assert(I->isCast() && "expected GEP or cast");
+    } else {
+      llvm_unreachable("Container type is not GEP or cast");
+    }
+  }
+  llvm::Type *BoundedTy = ValueToBound->getType();
+
+  if (TBR.TargetField) { // TODO: enable this after updating tests
+    assert(TBR.IsSubObject);
+    CGF.CGM.getDiags().Report(E->getExprLoc(),
+                            diag::remark_setting_cheri_subobject_bounds_field)
+      << TBR.TargetField << IsReference << Ty << (unsigned)TBR.Size
+      << E->getSourceRange();
+  } else {
+    CGF.CGM.getDiags().Report(E->getExprLoc(),
+                              diag::remark_setting_cheri_subobject_bounds)
+        << TBR.IsSubObject << IsReference << Ty << (unsigned)TBR.Size
+        << E->getSourceRange();
+  }
+  llvm::Value *Result = CGF.setPointerBounds(
+      ValueToBound, TBR.Size, Loc,
+      (IsReference ? "ref.with.bounds" : "addrof.with.bounds"),
+      "Add subobject bounds", TBR.IsSubObject,
+      (IsReference ? "C++ reference on " : "addrof operator on ") +
+          Ty.getAsString());
+
+  Result = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Result, BoundedTy);
+  if (GEP) {
+    // Replace the GEP source with the new bounded source
+    GEP->setOperand(0, Result);
+    GEP->moveAfter(cast<llvm::Instruction>(Result));
+    Result = GEP;
+  }
+  return Result;
+}
+
+llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
+                                                        QualType Ty,
+                                                        const Expr *E,
+                                                        SourceLocation Loc) {
+  if (getLangOpts().getCheriBounds() < LangOptions::CBM_References)
+    return Value; // Not enabled
+
+  // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on reference ";
+  //                  E->dump(llvm::dbgs()));
+
+  NumReferencesCheckedForBoundsTightening++;
+  constexpr bool IsReference = true;
+  if (auto TBR = canTightenCheriBounds(Value, Ty, E, IsReference)) {
+    if (TBR->IsContainerSize) {
+      NumContainerBoundsSetOnReferences++;
+    } else {
+      NumTightBoundsSetOnReferences++;
+    }
+    return tightenCHERIBounds(*this, IsReference, Value, E, Loc, Ty, *TBR);
+  }
+  return Value;
+}
+
+llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
+                                                     clang::QualType Ty,
+                                                     const Expr *E,
+                                                     SourceLocation Loc) {
+  assert(getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe);
+  // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on addrof operator ";
+  //                  E->dump(llvm::dbgs()));
+
+  NumAddrOfCheckedForBoundsTightening++;
+  constexpr bool IsReference = false;
+  if (auto TBR = canTightenCheriBounds(Value, Ty, E, IsReference)) {
+    if (TBR->IsContainerSize) {
+      NumContainerBoundsSetOnAddrOf++;
+    } else {
+      NumTightBoundsSetOnAddrOf++;
+    }
+    return tightenCHERIBounds(*this, IsReference, Value, E, Loc, Ty, *TBR);
+  }
+  return Value;
+}
+
+template <typename T>
+static Optional<CodeGenFunction::TightenBoundsResult>
+cannotSetBounds(const CodeGenFunction &CGF, const Expr *E, T &&Type,
+                const Twine &Reason) {
+  CGF.CGM.getDiags().Report(E->getExprLoc(),
+                            diag::remark_no_cheri_subobject_bounds)
+      << Type << Reason.str() << E->getSourceRange();
+  CHERI_BOUNDS_DBG(<< Reason << " -> not setting bounds\n");
+  return None;
+}
+
+static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
+                                      QualType Ty, const Twine &Msg) {
+  if (Ty.isNull())
+    return false; // unknown type
+  if (Ty->hasAttr(attr::CHERINoSubobjectBounds)) {
+    CHERI_BOUNDS_DBG(<< "opt-out: ");
+    cannotSetBounds(CGF, E, Ty, Msg + " has opt-out attribute");
+    return true;
+  }
+  if (RecordDecl *RD = Ty->getAsRecordDecl()) {
+    if (RD->hasAttr<CHERINoSubobjectBoundsAttr>()) {
+      CHERI_BOUNDS_DBG(<< "opt-out: ");
+      cannotSetBounds(CGF, E, QualType(RD->getTypeForDecl(), 0),
+                      Msg + " declaration has opt-out attribute");
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
+                                      const Decl *D, const StringRef Msg) {
+  if (D->hasAttr<CHERINoSubobjectBoundsAttr>()) {
+    StringRef Name = "<anonymous>";
+    if (auto ND = dyn_cast<NamedDecl>(D))
+      Name = ND->getName();
+    CHERI_BOUNDS_DBG(<< "opt-out: ");
+    std::string DiagStr = (Msg + " has opt-out attribute").str();
+    if (auto TD = dyn_cast<TypeDecl>(D))
+      cannotSetBounds(CGF, E, QualType(TD->getTypeForDecl(), 0), DiagStr);
+    else
+      cannotSetBounds(CGF, E, Name, DiagStr);
+    return true;
+  }
+  if (auto VD = dyn_cast<ValueDecl>(D)) {
+    return hasBoundsOptOutAnnotation(CGF, E, VD->getType(), Msg + " type");
+  }
+  return false;
+}
+
+// FIXME: should not tighten bounds on addresses of globals!
+
+static void remarkUsingContainerSize(const CodeGenFunction &CGF, const Expr *E,
+                                     QualType BaseTy, QualType Ty,
+                                     const char *Msg) {
+  CHERI_BOUNDS_DBG(<< Msg << " -> using container size -> ");
+  CGF.CGM.getDiags().Report(E->getExprLoc(),
+                            diag::remark_subobject_using_container_size)
+      << BaseTy << Ty << Msg;
+}
+
+enum class ArrayBoundsResult {
+  Never = 0,
+  Always,
+  UseFullArray,
+  DependsOnType,
+};
+
+static ArrayBoundsResult canSetBoundsOnArraySubscript(
+    const Expr *E, const ArraySubscriptExpr *ASE, bool IsReference,
+    LangOptions::CheriBoundsMode BoundsMode, const CodeGenFunction &CGF) {
+  // TODO: should we opt-out even for references?
+  // TODO: I guess cheri_no_bounds should have a argument that identifies
+  // which kinds of narrowing are fine
+  if (hasBoundsOptOutAnnotation(CGF, E, ASE->getType(), "array type"))
+    return ArrayBoundsResult::Never;
+  const Expr *Base = ASE->getBase()->IgnoreParenImpCasts();
+  const QualType BaseTy = Base->getType();
+  if (hasBoundsOptOutAnnotation(CGF, E, BaseTy, "array base type"))
+    return ArrayBoundsResult::Never;
+
+  if (IsReference && BoundsMode >= LangOptions::CBM_References) {
+    CHERI_BOUNDS_DBG(<< "using C++ reference -> ");
+    return ArrayBoundsResult::Always;
+  }
+  const Expr *Index = ASE->getIdx();
+  Expr::EvalResult ConstLengthResult;
+  if (!Index->EvaluateAsInt(ConstLengthResult, CGF.getContext())) {
+    // If the index is not a constant we should be able to set bounds:
+    // This indicates the code is something like
+    // for (int i = 0; i < max; i++) { do_something(array[i]); }
+    // and therefore we should be able to tightly bound.
+    CHERI_BOUNDS_DBG(
+        << "Index is not a constant (probably in a per-element loop) -> ");
+    // Use the full array bounds in safe mode since there is lots of code that
+    // uses &foo[n] to get an unbounded member access instead of foo + n
+    if (BoundsMode <= LangOptions::CBM_SubObjectsSafe) {
+      if (BaseTy->isConstantArrayType())
+        remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(), "&array[n]");
+      return ArrayBoundsResult::UseFullArray;
+    }
+    return ArrayBoundsResult::DependsOnType;
+  }
+  llvm::APSInt ConstLength = ConstLengthResult.Val.getInt();
+  CHERI_BOUNDS_DBG(<< "Index is a constant -> ");
+  if (BoundsMode >= LangOptions::CBM_VeryAggressive) {
+    CHERI_BOUNDS_DBG(<< "bounds-mode is very-aggressive -> bounds on "
+                        "array[CONST] are fine -> ");
+    return ArrayBoundsResult::DependsOnType;
+  }
+  // In aggressive mode we set bounds on everything except &array[0],
+  // &array[last_index] and &array[last_index+1]
+  // since those may be used to pass start and end indices to functions like
+  // `for_each_elem(&array[0], &array[last_index]);
+  if (ConstLength == 0) {
+    if (BaseTy->isConstantArrayType())
+      remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(), "&array[0]");
+    return ArrayBoundsResult::UseFullArray;
+  }
+
+  if (BoundsMode < LangOptions::CBM_Aggressive) {
+    // don't set bounds on array[constant] for subobject-safe
+    if (BaseTy->isConstantArrayType())
+      remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(),
+                               "&array[<CONSTANT>]");
+    return ArrayBoundsResult::UseFullArray;
+  }
+
+  assert(BoundsMode == LangOptions::CBM_Aggressive);
+  // can't use operator<= here since it asserts
+  if (const ConstantArrayType *CAT = dyn_cast<ConstantArrayType>(BaseTy)) {
+    auto ArraySizeMinusOne = llvm::APSInt(CAT->getSize() - 1, false);
+    if (llvm::APSInt::compareValues(ConstLength, ArraySizeMinusOne) >= 0) {
+      remarkUsingContainerSize(CGF, E, BaseTy, ASE->getType(),
+                               "bounds on &array[<last index>]");
+      return ArrayBoundsResult::UseFullArray;
+    }
+  }
+  CHERI_BOUNDS_DBG(
+      << "const array index is not end and bounds==aggressive -> ");
+  return ArrayBoundsResult::DependsOnType;
+}
+
+static FieldDecl* findPossibleVLA(const RecordDecl *RD) {
+  const bool CheckingUnion = RD->isUnion();
+  for (auto i = RD->field_begin(), end = RD->field_end(); i != end; ++i) {
+    // We only check the last field (except for unions!)
+    if (!CheckingUnion) {
+      auto i2 = i;
+      const bool IsLastField = (++i2 == end);
+      if (!IsLastField)
+        continue;
+    }
+
+    auto FieldTy = i->getType();
+    // If a nested struct has a flexible array member, this union/struct also
+    // has one.
+    if (FieldTy->isRecordType()) {
+      FieldDecl* NestedVLA = findPossibleVLA(FieldTy->getAsRecordDecl());
+      if (NestedVLA)
+        return NestedVLA;
+    }
+    if (FieldTy->isVariableArrayType() || FieldTy->isIncompleteArrayType())
+      return *i;
+
+    if (FieldTy->isConstantArrayType()) {
+      if (const ConstantArrayType *CAT =
+              dyn_cast<ConstantArrayType>(FieldTy.getTypePtr())) {
+        // Assume that size 0 and size 1 arrays are meant to be
+        // variable length arrays since that was the only way of
+        // doing it before C99
+        if (CAT->getSize() == 0 || CAT->getSize() == 1) {
+          return *i;
+        }
+      }
+    }
+  }
+
+  return nullptr;
+}
+
+static bool containsVariableLengthArray(LangOptions::CheriBoundsMode BoundsMode,
+                                        QualType Ty) {
+  auto RD = Ty->getAsRecordDecl();
+  if (!RD)
+    return false;
+
+  if (RD->hasFlexibleArrayMember()) {
+    CHERI_BOUNDS_DBG(<< "found real VLA in " << Ty.getAsString() << " -> ");
+    return true;
+  }
+  if (BoundsMode >= LangOptions::CBM_VeryAggressive) {
+    // In very-aggressive mode only accept real VLAs and not size 0 / size 1
+    return false;
+  }
+
+  return findPossibleVLA(RD) != nullptr;
+}
+
+Optional<CodeGenFunction::TightenBoundsResult>
+CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
+                                       const Expr *E, bool IsReference) {
+  const auto BoundsMode = getLangOpts().getCheriBounds();
+  assert(BoundsMode > LangOptions::CBM_Conservative);
+  CHERI_BOUNDS_DBG(<< "subobj bounds check: ");
+  if (!CGM.getDataLayout().isFatPointer(Value->getType())) {
+    CHERI_BOUNDS_DBG(<< "Cannot set bounds on non-capability IR type "; Value->getType()->print(llvm::dbgs(), true); llvm::dbgs() << "\n");
+    return None;
+  }
+
+  if (Ty->isIncompleteType()) {
+    return cannotSetBounds(*this, E, Ty, "incomplete type");
+  }
+  if (Ty->isFunctionType()) {
+    return cannotSetBounds(*this, E, Ty,
+                           IsReference ? "reference to function"
+                                       : "address of function");
+  }
+
+  assert(CGM.getDataLayout().isFatPointer(Value->getType()));
+
+  E = E->IgnoreParenImpCasts(); // ignore array-to-pointer decay, etc
+  // And we also neede to ignore parenexprs since oterwise we get a ParenExpr
+  // instead of ArraySubscriptExpr/MemberExpr!
+
+  // Any expression other than DeclRefExpr (e.g. in the case &x) will be a
+  // sub-object expression (array index, member expression (&x.a)
+  const bool IsSubObject = !isa<DeclRefExpr>(E);
+  // Check if the type of the expression or the container of the member expr
+  // is annotated with no subobject bounds. In this case we must never set
+  // bounds (even in everywhere-unsafe mode!)
+  int64_t TypeSize = getContext().getTypeSizeInChars(Ty).getQuantity();
+
+  const auto BoundsOnContainer = [this, IsSubObject](QualType Container) {
+    CodeGenFunction::TightenBoundsResult Result;
+    Result.IsSubObject = IsSubObject;
+    Result.IsContainerSize = true;
+    Result.Size = getContext().getTypeSizeInChars(Container).getQuantity();
+    return Result;
+  };
+  ValueDecl* TargetField = nullptr;
+  const auto ExactBounds = [IsSubObject, &TargetField](int64_t Size) {
+    CodeGenFunction::TightenBoundsResult Result;
+    Result.IsSubObject = IsSubObject;
+    Result.IsContainerSize = false;
+    Result.TargetField = TargetField;
+    Result.Size = Size;
+    return Result;
+  };
+  if (auto ME = dyn_cast<MemberExpr>(E)) {
+    CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
+    // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is
+    // annotated with no bounds should that apply to d?
+    auto BaseTy = ME->getBase()->getType();
+    if (ME->isArrow() && !BaseTy->getPointeeType().isNull()) {
+      if (hasBoundsOptOutAnnotation(*this, E, BaseTy, "base pointer type"))
+        return None;
+      BaseTy = BaseTy->getPointeeType();
+    }
+    if (hasBoundsOptOutAnnotation(*this, E, BaseTy, "base type"))
+      return None;
+    if (hasBoundsOptOutAnnotation(*this, E, ME->getMemberDecl(), "field"))
+      return None;
+
+    TargetField = ME->getMemberDecl();
+
+    if (BoundsMode < LangOptions::CBM_VeryAggressive &&
+        ME->getMemberDecl() == findPossibleVLA(BaseTy->getAsRecordDecl()))
+      return cannotSetBounds(
+            *this, E, Ty, "member is potential variable length array");
+
+    if (BaseTy->isUnionType() && BoundsMode < LangOptions::CBM_VeryAggressive) {
+      // FIXME: we should set bounds to the whole union rather than not setting bounds at all
+      // FIXME: should we set bounds for references?
+      if (BoundsMode < LangOptions::CBM_References)
+        return cannotSetBounds(*this, E, Ty, "container is union");
+
+      if (containsVariableLengthArray(BoundsMode, BaseTy))
+        return cannotSetBounds(
+            *this, E, Ty, "containing union includes a variable length array");
+
+      remarkUsingContainerSize(*this, E, BaseTy, Ty, "union member");
+      return BoundsOnContainer(BaseTy);
+    }
+  }
+
+  if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
+    // TODO: set bounds on whole array type?
+    CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
+    switch (
+        canSetBoundsOnArraySubscript(E, ASE, IsReference, BoundsMode, *this)) {
+    case ArrayBoundsResult::Never:
+      return None;
+    case ArrayBoundsResult::Always:
+      return ExactBounds(TypeSize);
+    case ArrayBoundsResult::UseFullArray: {
+      const Expr *Base = ASE->getBase()->IgnoreParenImpCasts();
+      if (Base->getType()->isConstantArrayType()) {
+        return BoundsOnContainer(Base->getType());
+      }
+      // Otherwise we have a non-constant array type -> don't set bounds to
+      // avoid crashes at runtime
+      return cannotSetBounds(
+          *this, E, Ty,
+          "should set bounds on full array but size is not known");
+    }
+    case ArrayBoundsResult::DependsOnType:
+      break;
+    }
+  }
+
+  // General opt-out based on the type of the expression
+  if (hasBoundsOptOutAnnotation(*this, E, Ty, "expression"))
+    return None;
+
+  if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
+    CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");
+    return ExactBounds(TypeSize);
+  }
+
+  if (auto AT = Ty->getAs<AtomicType>()) {
+    CHERI_BOUNDS_DBG(<< "unwrapping _Atomic type -> ");
+    Ty = AT->getValueType();
+  }
+
+  // It should be possible to set the size for all scalar types
+  if (Ty->isScalarType()) {
+    CHERI_BOUNDS_DBG(<< "Found scalar type -> ");
+    return ExactBounds(TypeSize);
+  }
+
+  if (Ty->isConstantArrayType()) {
+    CHERI_BOUNDS_DBG(<< "Found constant size array type -> ");
+    // FIXME: what about size 0/size 1 VLA emulation for pre-C99 code
+    if (Ty->getAsArrayTypeUnsafe())
+      return ExactBounds(TypeSize);
+  }
+  // It because a bit more tricky for class types since they might be
+  // downcasted to something with a larger size.
+  // TODO: can we try to set bounds on all classes without a vtable
+  // I guess final classes would work
+  if (Ty->isRecordType()) {
+    CHERI_BOUNDS_DBG(<< "Found record type '" << Ty.getAsString() << "' -> ");
+    if (containsVariableLengthArray(BoundsMode, Ty)) {
+      return cannotSetBounds(*this, E, Ty, "has flexible array member");
+    }
+    if (Ty->isStructureOrClassType() && !getLangOpts().CPlusPlus) {
+      // No inheritance or vtables in C -> we should be able to set bounds on
+      // all structurs that don't have flexible array members and aren't
+      // annotated as opt-out
+      CHERI_BOUNDS_DBG(<< "compiling C and no flexible array -> ");
+      return ExactBounds(TypeSize);
+    } else if (Ty->isCXXStructureOrClassType()) {
+      CXXRecordDecl *CRD = Ty->getAsCXXRecordDecl();
+      const bool IsFinalClass = CRD->hasAttr<FinalAttr>();
+      // TODO: isCLike() -> safe to set bounds? hopefully not inherited from?
+      if (!IsFinalClass && BoundsMode <= LangOptions::CBM_SubObjectsSafe) {
+        return cannotSetBounds(*this, E, Ty, "non-final class and using sub-object-safe mode");
+      }
+      // No bounds on classes with vtables
+      if (CRD->isCLike()) {
+        CHERI_BOUNDS_DBG(<< "is C-like struct type and is marked as final -> ");
+        return ExactBounds(TypeSize);
+      }
+      // Final class: check it doesn't have any virtual bases
+      // TODO: check there are no flexible array members
+      if (!CRD->isLiteral()) {
+        return cannotSetBounds(*this, E, Ty, "final but not a literal type -> size might by dynamic");
+      } else {
+        assert(CRD->getNumVBases() == 0);
+        CHERI_BOUNDS_DBG(<< "is literal type and is marked as final -> ");
+        return ExactBounds(TypeSize);
+      }
+    }
+    return cannotSetBounds(*this, E, Ty, "not a struct/class");
+  }
+  // Otherwise this type is unhandled, let's print a message:
+  CGM.getDiags().Report(E->getExprLoc(),
+                        diag::warn_subobject_bounds_unknown_type)
+      << Ty << E->getSourceRange();
+  // TODO: assert here to find all the cases?
+  // llvm_unreachable("Don't know whether to set bounds on type");
+  return None;
+}
+
 RValue
 CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E) {
   // Emit the expression as an lvalue.
   LValue LV = EmitLValue(E);
   assert(LV.isSimple());
   llvm::Value *Value = LV.getPointer();
-
-  if (sanitizePerformTypeCheck() && !E->getType()->isFunctionType()) {
+  QualType Ty = E->getType();
+  if (sanitizePerformTypeCheck() && !Ty->isFunctionType()) {
     // C++11 [dcl.ref]p5 (as amended by core issue 453):
     //   If a glvalue to which a reference is directly bound designates neither
     //   an existing object or function of an appropriate type nor a region of
@@ -601,7 +1113,12 @@ CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E) {
     QualType Ty = E->getType();
     EmitTypeCheck(TCK_ReferenceBinding, E->getExprLoc(), Value, Ty);
   }
-
+  // For CHERI we want to insert bounds on references (at least for simple
+  // types) unless they are references to functions
+  // TODO: we should probably check if references are capabilities instead since
+  // there could be a mode where references are capabilities but pointers aren't
+  if (CGM.getTarget().areAllPointersCapabilities() && !Ty->isFunctionType())
+    Value = setCHERIBoundsOnReference(Value, Ty, E, E->getExprLoc());
   return RValue::get(Value);
 }
 
@@ -650,6 +1167,8 @@ void CodeGenFunction::EmitTypeCheck(TypeCheckKind TCK, SourceLocation Loc,
                                     llvm::Value *Ptr, QualType Ty,
                                     CharUnits Alignment,
                                     SanitizerSet SkippedChecks) {
+  // TODO: if this was called everywhere we might be able to add CHERI reduced
+  // bounds in a central place instead of having toChecks
   if (!sanitizePerformTypeCheck())
     return;
 
@@ -1086,7 +1605,7 @@ Address CodeGenFunction::EmitPointerWithAlignment(const Expr *E,
       break;
 
     // Array-to-pointer decay.
-    case CK_ArrayToPointerDecay:
+    case CK_ArrayToPointerDecay: // FIXME: bounds on array-to-pointer-decay
       return EmitArrayToPointerDecay(CE->getSubExpr(), BaseInfo, TBAAInfo);
 
     // Derived-to-base conversions.
@@ -1115,6 +1634,7 @@ Address CodeGenFunction::EmitPointerWithAlignment(const Expr *E,
   // Unary &.
   if (const UnaryOperator *UO = dyn_cast<UnaryOperator>(E)) {
     if (UO->getOpcode() == UO_AddrOf) {
+      // FIXME: set bounds here!
       LValue LV = EmitLValue(UO->getSubExpr());
       if (BaseInfo) *BaseInfo = LV.getBaseInfo();
       if (TBAAInfo) *TBAAInfo = LV.getTBAAInfo();
@@ -1165,7 +1685,7 @@ RValue CodeGenFunction::EmitUnsupportedRValue(const Expr *E,
 LValue CodeGenFunction::EmitUnsupportedLValue(const Expr *E,
                                               const char *Name) {
   ErrorUnsupported(E, Name);
-  llvm::Type *Ty = llvm::PointerType::getUnqual(ConvertType(E->getType()));
+  llvm::Type *Ty = CGM.getPointerInDefaultAS(ConvertType(E->getType()));
   return MakeAddrLValue(Address(llvm::UndefValue::get(Ty), CharUnits::One()),
                         E->getType());
 }
@@ -1500,7 +2020,9 @@ llvm::Value *CodeGenFunction::emitScalarConstant(
     return EmitLoadOfLValue(Constant.getReferenceLValue(*this, E),
                             E->getExprLoc())
         .getScalarVal();
-  return Constant.getValue();
+  // XXXAR: For CHERI convert inttoptr instructions to setPointerOffset on
+  // null See https://github.com/CTSRD-CHERI/llvm/issues/268
+  return Constant.getValue(*this);
 }
 
 llvm::Value *CodeGenFunction::EmitLoadOfScalar(LValue lvalue,
@@ -2269,7 +2791,7 @@ EmitBitCastOfLValueToProperType(CodeGenFunction &CGF,
                                 llvm::Value *V, llvm::Type *IRType,
                                 StringRef Name = StringRef()) {
   unsigned AS = cast<llvm::PointerType>(V->getType())->getAddressSpace();
-  return CGF.Builder.CreateBitCast(V, IRType->getPointerTo(AS), Name);
+  return CGF.EmitPointerCast(V, IRType->getPointerTo(AS));
 }
 
 static LValue EmitThreadPrivateVarDeclLValue(
@@ -2369,14 +2891,57 @@ static LValue EmitGlobalVarDeclLValue(CodeGenFunction &CGF,
   return LV;
 }
 
-static llvm::Constant *EmitFunctionDeclPointer(CodeGenModule &CGM,
-                                               const FunctionDecl *FD) {
+llvm::Value *CodeGenFunction::FunctionAddressToCapability(CodeGenFunction &CGF,
+                                                          llvm::Value *Addr,
+                                                          llvm::Type *CapTy,
+                                                          bool IsDirectCall) {
+  auto* VTy = cast<llvm::PointerType>(Addr->getType());
+  unsigned CapAS = CGF.CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+  if (!CapTy)
+    CapTy = VTy->getElementType()->getPointerTo(CapAS);
+  const bool IsFunction = isa<llvm::FunctionType>(VTy->getPointerElementType());
+  if (llvm::MCTargetOptions::cheriUsesCapabilityTable()) {
+    if (IsDirectCall) {
+      assert(IsFunction);
+      return Addr; // Don't add a cast for direct calls
+    }
+    return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Addr, CapTy);
+  }
+
+  // Without a cap table we need to get the function address using $pcc
+  if (!IsFunction && VTy->getPointerAddressSpace() == CapAS)
+    // For data we don't need any special handling:
+    return CGF.Builder.CreateBitCast(Addr, CapTy);
+
+  llvm::Value *V = CGF.Builder.CreatePtrToInt(Addr, CGF.Int64Ty);
+  llvm::Value *PCC = CGF.Builder.CreateCall(
+          CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_pcc_get), {});
+  if (auto *F = dyn_cast<llvm::Function>(Addr->stripPointerCasts())) {
+    if (F->hasWeakLinkage() || F->hasExternalWeakLinkage()) {
+      V = CGF.Builder.CreateCall(
+          CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_from_pointer),
+          {PCC, V});
+      return CGF.Builder.CreateBitCast(V, CapTy);
+    }
+  }
+  return CGF.Builder.CreateBitCast(CGF.setPointerOffset(PCC, V), CapTy);
+}
+
+static llvm::Value *EmitFunctionDeclPointer(CodeGenFunction &CGF,
+                                            const FunctionDecl *FD,
+                                            bool IsDirectCall) {
+  CodeGenModule &CGM = CGF.CGM;
   if (FD->hasAttr<WeakRefAttr>()) {
     ConstantAddress aliasee = CGM.GetWeakRefReference(FD);
     return aliasee.getPointer();
   }
 
-  llvm::Constant *V = CGM.GetAddrOfFunction(FD);
+  llvm::Value *V = CGM.GetAddrOfFunction(FD);
+  auto &TI = CGF.getContext().getTargetInfo();
+  if (TI.areAllPointersCapabilities())
+    V = CodeGenFunction::FunctionAddressToCapability(CGF, V, nullptr,
+                                                     IsDirectCall);
+
   if (!FD->hasPrototype()) {
     if (const FunctionProtoType *Proto =
             FD->getType()->getAs<FunctionProtoType>()) {
@@ -2386,7 +2951,7 @@ static llvm::Constant *EmitFunctionDeclPointer(CodeGenModule &CGM,
       QualType NoProtoType =
           CGM.getContext().getFunctionNoProtoType(Proto->getReturnType());
       NoProtoType = CGM.getContext().getPointerType(NoProtoType);
-      V = llvm::ConstantExpr::getBitCast(V,
+      V = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(V,
                                       CGM.getTypes().ConvertType(NoProtoType));
     }
   }
@@ -2395,7 +2960,7 @@ static llvm::Constant *EmitFunctionDeclPointer(CodeGenModule &CGM,
 
 static LValue EmitFunctionDeclLValue(CodeGenFunction &CGF,
                                      const Expr *E, const FunctionDecl *FD) {
-  llvm::Value *V = EmitFunctionDeclPointer(CGF.CGM, FD);
+  llvm::Value *V = EmitFunctionDeclPointer(CGF, FD, /*IsDirectCall=*/false);
   CharUnits Alignment = CGF.getContext().getDeclAlign(FD);
   return CGF.MakeAddrLValue(V, E->getType(), Alignment,
                             AlignmentSource::Decl);
@@ -2464,7 +3029,28 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
         ConstantEmitter(*this).emitAbstract(E->getLocation(),
                                             *VD->evaluateValue(),
                                             VD->getType());
-      assert(Val && "failed to emit reference constant expression");
+
+      // If this is a CHERI reference to a function then convert the function
+      // address to a capability
+      const ReferenceType *RT = cast<ReferenceType>(VD->getType().getTypePtr());
+      llvm::Value* Result = Val; // use llvm::Value for
+                                 // CodeGenFunction::FunctionAddressToCapability
+      if (RT->isCHERICapability() && RT->getPointeeType()->isFunctionType()) {
+        // First strip the addrspacecast if the ConstantEmitter inserted it
+        if (const auto CE = dyn_cast<llvm::ConstantExpr>(Val)) {
+          if (CE->getOpcode() == llvm::Instruction::AddrSpaceCast) {
+            Result = CE->getOperand(0);
+          }
+        }
+
+        unsigned CapAS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+        llvm::Type *ResTy = Result->getType();
+        if (ResTy->getPointerAddressSpace() != CapAS) {
+          Result = FunctionAddressToCapability(*this, Result);
+        }
+      }
+
+      assert(Result && "failed to emit reference constant expression");
       // FIXME: Eventually we will want to emit vector element references.
 
       // Should we be using the alignment of the constant pointer we emitted?
@@ -2472,7 +3058,7 @@ LValue CodeGenFunction::EmitDeclRefLValue(const DeclRefExpr *E) {
                                                     /* BaseInfo= */ nullptr,
                                                     /* TBAAInfo= */ nullptr,
                                                     /* forPointeeType= */ true);
-      return MakeAddrLValue(Address(Val, Alignment), T, AlignmentSource::Decl);
+      return MakeAddrLValue(Address(Result, Alignment), T, AlignmentSource::Decl);
     }
 
     // Check for captured variables.
@@ -2736,7 +3322,9 @@ llvm::Constant *CodeGenFunction::EmitCheckTypeDescriptor(QualType T) {
 
   auto *GV = new llvm::GlobalVariable(
       CGM.getModule(), Descriptor->getType(),
-      /*isConstant=*/true, llvm::GlobalVariable::PrivateLinkage, Descriptor);
+      /*isConstant=*/true, llvm::GlobalVariable::PrivateLinkage, Descriptor,
+      "", nullptr, llvm::GlobalValue::NotThreadLocal,
+      CGM.getTargetCodeGenInfo().getDefaultAS());
   GV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
   CGM.getSanitizerMetadata()->disableSanitizerForGlobal(GV);
 
@@ -2991,7 +3579,9 @@ void CodeGenFunction::EmitCheck(
       llvm::Constant *Info = llvm::ConstantStruct::getAnon(StaticArgs);
       auto *InfoPtr =
           new llvm::GlobalVariable(CGM.getModule(), Info->getType(), false,
-                                   llvm::GlobalVariable::PrivateLinkage, Info);
+                                   llvm::GlobalVariable::PrivateLinkage, Info,
+                                   "", nullptr, llvm::GlobalValue::NotThreadLocal,
+                                   CGM.getTargetCodeGenInfo().getDefaultAS());
       InfoPtr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
       CGM.getSanitizerMetadata()->disableSanitizerForGlobal(InfoPtr);
       Args.push_back(Builder.CreateBitCast(InfoPtr, Int8PtrTy));
@@ -3052,7 +3642,9 @@ void CodeGenFunction::EmitCfiSlowPathCheck(
     llvm::Constant *Info = llvm::ConstantStruct::getAnon(StaticArgs);
     auto *InfoPtr =
         new llvm::GlobalVariable(CGM.getModule(), Info->getType(), false,
-                                 llvm::GlobalVariable::PrivateLinkage, Info);
+                                 llvm::GlobalVariable::PrivateLinkage, Info, "",
+                                 nullptr, llvm::GlobalValue::NotThreadLocal,
+                                 CGM.getTargetCodeGenInfo().getDefaultAS());
     InfoPtr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
     CGM.getSanitizerMetadata()->disableSanitizerForGlobal(InfoPtr);
 
@@ -3260,7 +3852,25 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
   if (BaseInfo) *BaseInfo = LV.getBaseInfo();
   if (TBAAInfo) *TBAAInfo = CGM.getTBAAAccessInfo(EltType);
 
-  return Builder.CreateElementBitCast(Addr, ConvertTypeForMem(EltType));
+  Addr = Builder.CreateElementBitCast(Addr, ConvertTypeForMem(EltType));
+  // FIXME-cheri-qual: should getTargetAddressSpace return 200? 
+  unsigned AS =
+    CGM.getTargetAddressSpace(E->getType().getAddressSpace());
+  llvm::PointerType *PtrTy = cast<llvm::PointerType>(Addr.getPointer()->getType());
+  if (PtrTy->getPointerAddressSpace() != AS) {
+    if (getContext().getTargetInfo().areAllPointersCapabilities()) {
+      assert(PtrTy->getPointerAddressSpace() == 
+                        CGM.getTargetCodeGenInfo().getCHERICapabilityAS() &&
+             "Expected memory capability address space in pure capability ABI");
+      assert(E->getType().getAddressSpace() == LangAS::Default &&
+             "non-zero address space in pure capability ABI");
+      return Addr;
+    } else
+      Addr = Address(Builder.CreateAddrSpaceCast(Addr.getPointer(),
+            llvm::PointerType::get(PtrTy->getElementType(), AS)),
+          Addr.getAlignment());
+  }
+  return Addr;
 }
 
 /// isSimpleArrayDecayOperand - If the specified expr is a simple decay from an
@@ -3367,6 +3977,9 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
 
     if (SanOpts.has(SanitizerKind::ArrayBounds))
       EmitBoundsCheck(E, E->getBase(), Idx, IdxTy, Accessed);
+
+    if (Idx->getType()->isPointerTy())
+      Idx = getCapabilityIntegerValue(Idx);
 
     // Extend or truncate the index type to 32 or 64-bits.
     if (Promote && Idx->getType() != IntPtrTy)
@@ -4168,6 +4781,10 @@ LValue CodeGenFunction::EmitCastLValue(const CastExpr *E) {
   case CK_ARCReclaimReturnedObject:
   case CK_ARCExtendBlockObject:
   case CK_CopyAndAutoreleaseBlockObject:
+  case CK_CHERICapabilityToPointer:
+  case CK_PointerToCHERICapability:
+  case CK_CHERICapabilityToOffset:
+  case CK_CHERICapabilityToAddress:
   case CK_IntToOCLSampler:
   case CK_FixedPointCast:
   case CK_FixedPointToBoolean:
@@ -4387,8 +5004,8 @@ static CGCallee EmitDirectCallee(CodeGenFunction &CGF, const FunctionDecl *FD) {
     return CGCallee::forBuiltin(builtinID, FD);
   }
 
-  llvm::Constant *calleePtr = EmitFunctionDeclPointer(CGF.CGM, FD);
-  return CGCallee::forDirect(calleePtr, GlobalDecl(FD));
+  llvm::Value *calleePtr = EmitFunctionDeclPointer(CGF, FD, /*IsDirectCall=*/true);
+  return CGCallee(GlobalDecl(FD), calleePtr);
 }
 
 CGCallee CodeGenFunction::EmitCallee(const Expr *E) {
@@ -4661,7 +5278,7 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
       llvm::Value *CalleePtr = Callee.getFunctionPointer();
 
       llvm::Value *CalleePrefixStruct = Builder.CreateBitCast(
-          CalleePtr, llvm::PointerType::getUnqual(PrefixStructTy));
+          CalleePtr, CGM.getPointerInDefaultAS(PrefixStructTy));
       llvm::Value *CalleeSigPtr =
           Builder.CreateConstGEP2_32(PrefixStructTy, CalleePrefixStruct, 0, 0);
       llvm::Value *CalleeSig =
@@ -4763,8 +5380,102 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
   EmitCallArgs(Args, dyn_cast<FunctionProtoType>(FnType), E->arguments(),
                E->getDirectCallee(), /*ParamsToSkip*/ 0, Order);
 
+  bool CallCHERIInvoke = false;
+  // For CHERI callbacks, the function 'pointer' is actually a struct
+  // containing all of the information required for a cross domain call.
+  // Note: It doesn't actually matter what the order of the number and class
+  // are, as they will be in a different category of register.  This is *not*
+  // necessarily the case for implementations that have a merged register file!
+  if (FnType->getCallConv() == CC_CHERICCallback) {
+    CallCHERIInvoke = true;
+    SmallVector<QualType, 16> NewParams;
+    // Add the method number
+    auto *MethodNum = Builder.CreateExtractValue(Callee.getFunctionPointer(), {1});
+    auto NumTy = getContext().UnsignedLongLongTy;
+    CallArg MethodNumArg(RValue::get(MethodNum), NumTy);
+    NewParams.push_back(NumTy);
+    Args.insert(Args.begin(), MethodNumArg);
+    // Add the CHERI object
+    auto *Obj = Builder.CreateExtractValue(Callee.getFunctionPointer(), {0});
+    auto ObjTy = getContext().getCHERIClassType();
+    CallArg ObjArg(RValue::get(Obj), ObjTy);
+    NewParams.push_back(ObjTy);
+    Args.insert(Args.begin(), ObjArg);
+
+    auto *FnPType = cast<FunctionProtoType>(FnType);
+    auto Params = FnPType->getParamTypes();
+    FunctionProtoType::ExtProtoInfo EPI = FnPType->getExtProtoInfo();
+    NewParams.insert(NewParams.end(), Params.begin(), Params.end());
+    FnType = getContext().getFunctionType(FnPType->getReturnType(),
+        NewParams, EPI)->getAs<FunctionType>();
+  } else if (FnType->getCallConv() == CC_CHERICCall &&
+             TargetDecl->hasAttr<CHERIMethodClassAttr>()) {
+    assert(TargetDecl);
+    StringRef Suffix = TargetDecl->hasAttr<CHERIMethodSuffixAttr>() ?
+      TargetDecl->getAttr<CHERIMethodSuffixAttr>()->getSuffix() : "";
+    CallCHERIInvoke = true;
+    SmallVector<QualType, 16> NewParams;
+    auto NumTy = getContext().UnsignedLongLongTy;
+    auto *ClsAttr = TargetDecl->getAttr<CHERIMethodClassAttr>();
+    std::string FunctionBaseName = cast<NamedDecl>(TargetDecl)->getName().str();
+    FunctionBaseName = FunctionBaseName.substr(0, FunctionBaseName.size() -
+        Suffix.size());
+    auto *MethodNumVar =
+        CGM.EmitSandboxRequiredMethod(ClsAttr->getDefaultClass()->getName(),
+                                      FunctionBaseName);
+    // Load the global and use it in the call
+    // FIXME: EmitSandboxRequiredMethod should return an Address so that we
+    // don't have to know the alignment here.
+    auto *MethodNum = Builder.CreateLoad(Address(MethodNumVar, CharUnits::fromQuantity(8)));
+    MethodNum->setMetadata(CGM.getModule().getMDKindID("invariant.load"),
+        llvm::MDNode::get(getLLVMContext(), None));
+    CallArg MethodNumArg(RValue::get(MethodNum), NumTy);
+    NewParams.push_back(NumTy);
+    // If we have a non-empty suffix, then we're not the version of the method
+    // that takes an explicit class, we're the version with the same explicit
+    // parameters and extra implicit ones for the default class, so add the
+    // default class.
+    if (Suffix.size() == 0) {
+      // FIXME: We should silently insert a common-linkage global if the class
+      // isn't declared.
+      DeclarationName DN(ClsAttr->getDefaultClass());
+      auto *TU = CGM.getContext().getTranslationUnitDecl();
+      auto Cls = cast<VarDecl>(TU->lookup(DN)[0]);
+      llvm::Value *V = CGM.GetAddrOfGlobalVar(Cls);
+      auto ClsTy = Cls->getType();
+      llvm::Type *RealVarTy = getTypes().ConvertTypeForMem(ClsTy);
+      V = EmitBitCastOfLValueToProperType(*this, V, RealVarTy);
+      CharUnits Alignment = getContext().getDeclAlign(Cls);
+      LValue LV = MakeAddrLValue(V, ClsTy, Alignment);
+      Address A1 = Builder.CreateStructGEP(LV.getAddress(), 0, CharUnits::Zero(), "arg1");
+      Address A2 = Builder.CreateStructGEP(LV.getAddress(), 1, CharUnits::Zero(), "arg2");
+      auto Fields = ClsTy->getAs<RecordType>()->getDecl()->fields();
+      auto FieldsIt = Fields.begin();
+      assert(std::distance(Fields.begin(), Fields.end()) == 2);
+      QualType Ty1 = FieldsIt->getType();
+      QualType Ty2 = (++FieldsIt)->getType();
+      CallArg Arg1(RValue::get(Builder.CreateLoad(A1)), Ty1);
+      CallArg Arg2(RValue::get(Builder.CreateLoad(A2)), Ty2);
+      Args.insert(Args.begin(), MethodNumArg);
+      Args.insert(Args.begin(), Arg2);
+      Args.insert(Args.begin(), Arg1);
+      NewParams.push_back(ClsTy);
+    } else {
+      Args.insert(Args.begin()+1, MethodNumArg);
+    }
+    auto *FnPType = cast<FunctionProtoType>(FnType);
+    auto Params = FnPType->getParamTypes();
+    FunctionProtoType::ExtProtoInfo EPI = FnPType->getExtProtoInfo();
+    NewParams.insert(NewParams.end(), Params.begin(), Params.end());
+    FnType = getContext().getFunctionType(FnPType->getReturnType(),
+        NewParams, EPI)->getAs<FunctionType>();
+  }
   const CGFunctionInfo &FnInfo = CGM.getTypes().arrangeFreeFunctionCall(
       Args, FnType, /*isChainCall=*/Chain);
+
+  if (CallCHERIInvoke)
+    Callee.setFunctionPointer(CGM.getModule().getOrInsertFunction("cheri_invoke",
+        getTypes().GetFunctionType(FnInfo)));
 
   // C99 6.5.2.2p6:
   //   If the expression that denotes the called function has a type
@@ -4788,14 +5499,47 @@ RValue CodeGenFunction::EmitCall(QualType CalleeType, const CGCallee &OrigCallee
   // to the function type.
   if (isa<FunctionNoProtoType>(FnType) || Chain) {
     llvm::Type *CalleeTy = getTypes().GetFunctionType(FnInfo);
-    CalleeTy = CalleeTy->getPointerTo();
 
     llvm::Value *CalleePtr = Callee.getFunctionPointer();
+    CalleeTy =
+        CalleeTy->getPointerTo(CalleePtr->getType()->getPointerAddressSpace());
     CalleePtr = Builder.CreateBitCast(CalleePtr, CalleeTy, "callee.knr.cast");
     Callee.setFunctionPointer(CalleePtr);
   }
 
-  return EmitCall(FnInfo, Callee, ReturnValue, Args, nullptr, E->getExprLoc());
+  auto ret = EmitCall(FnInfo, Callee, ReturnValue, Args, nullptr, E->getExprLoc());
+  // If we're doing a CHERI ccall in C++ mode and have exceptions enabled, then
+  // translate the CHERI errno value into an exception.
+  if (CallCHERIInvoke && getLangOpts().CPlusPlus && getLangOpts().Exceptions &&
+      TargetDecl && !TargetDecl->hasAttr<NoThrowAttr>()) {
+    auto &M = CGM.getModule();
+    auto *CHERIErrno = M.getNamedGlobal("cheri_errno");
+    if (!CHERIErrno) {
+      CHERIErrno = new llvm::GlobalVariable(M, IntTy,
+          /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
+          nullptr, "cheri_errno", nullptr, llvm::GlobalValue::NotThreadLocal,
+          CGM.getTargetCodeGenInfo().getTlsAddressSpace());
+      CHERIErrno->setThreadLocal(true);
+    }
+    // FIXME: Don't hard code 4-byte alignment for int!
+    auto *ErrVal = Builder.CreateLoad(Address(CHERIErrno, CharUnits::fromQuantity(4)));
+    auto *IsZero = Builder.CreateICmpEQ(ErrVal,
+        llvm::Constant::getNullValue(ErrVal->getType()));
+    auto *Continue = createBasicBlock("cheri_invoke_continue");
+    auto *Error = createBasicBlock("cheri_invoke_fail");
+    Builder.CreateCondBr(IsZero, Continue, Error);
+    llvm::FunctionType *FTy = llvm::FunctionType::get(VoidTy, IntTy, false);
+    llvm::AttrBuilder B;
+    B.addAttribute(llvm::Attribute::NoReturn);
+    auto *ErrorFn = CGM.CreateRuntimeFunction(FTy, "__cxa_cheri_sandbox_invoke_failure",
+        llvm::AttributeList::get(getLLVMContext(),
+          llvm::AttributeList::FunctionIndex, B));
+    EmitBlock(Error);
+    Builder.CreateCall(ErrorFn, ErrVal);
+    Builder.CreateUnreachable();
+    EmitBlock(Continue);
+  }
+  return ret;
 }
 
 LValue CodeGenFunction::

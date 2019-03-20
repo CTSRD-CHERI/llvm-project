@@ -101,7 +101,7 @@ public:
     return getPointerWidthV(AddrSpace);
   }
 
-  uint64_t getMaxPointerWidth() const override {
+  uint64_t getMaxPointerRange() const override {
     return getTriple().getArch() == llvm::Triple::amdgcn ? 64 : 32;
   }
 

@@ -161,6 +161,7 @@ protected:
   /// LLVM type for C size_t.  Used in various runtime data structures.
   llvm::IntegerType *SizeTy;
   /// LLVM type for C intptr_t.
+  /// XXXAR: I think this is actually used for pointer range and not pointer size
   llvm::IntegerType *IntPtrTy;
   /// LLVM type for C ptrdiff_t.  Mainly used in property accessor functions.
   llvm::IntegerType *PtrDiffTy;
@@ -805,10 +806,11 @@ class CGObjCGNUstep : public CGObjCGNU {
         unsigned ClassABI) :
       CGObjCGNU(Mod, ABI, ProtocolABI, ClassABI) {
       const ObjCRuntime &R = CGM.getLangOpts().ObjCRuntime;
+      unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
       llvm::StructType *SlotStructTy =
           llvm::StructType::get(PtrTy, PtrTy, PtrTy, IntTy, IMPTy);
-      SlotTy = llvm::PointerType::getUnqual(SlotStructTy);
+      SlotTy = llvm::PointerType::get(SlotStructTy, AS);
       // Slot_t objc_msg_lookup_sender(id *receiver, SEL selector, id sender);
       SlotLookupFn.init(&CGM, "objc_msg_lookup_sender", SlotTy, PtrToIdTy,
                         SelectorTy, IdTy);
@@ -1959,9 +1961,10 @@ protected:
     std::string SymbolName = "_OBJC_CLASS_" + Name;
     llvm::GlobalVariable *ClassSymbol = TheModule.getGlobalVariable(SymbolName);
     if (!ClassSymbol)
-      ClassSymbol = new llvm::GlobalVariable(TheModule, LongTy, false,
-                                             llvm::GlobalValue::ExternalLinkage,
-                                             nullptr, SymbolName);
+      ClassSymbol = new llvm::GlobalVariable(
+          TheModule, LongTy, false, llvm::GlobalValue::ExternalLinkage, nullptr,
+          SymbolName, nullptr, llvm::GlobalValue::NotThreadLocal,
+          CGM.getTargetCodeGenInfo().getDefaultAS());
     return ClassSymbol;
   }
 
@@ -1990,13 +1993,17 @@ void CGObjCGNU::EmitClassRef(const std::string &className) {
     return;
   std::string symbolName = "__objc_class_name_" + className;
   llvm::GlobalVariable *ClassSymbol = TheModule.getGlobalVariable(symbolName);
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
   if (!ClassSymbol) {
     ClassSymbol = new llvm::GlobalVariable(TheModule, LongTy, false,
                                            llvm::GlobalValue::ExternalLinkage,
-                                           nullptr, symbolName);
+                                           nullptr, symbolName, nullptr,
+                                           llvm::GlobalVariable::NotThreadLocal,
+                                           AS);
   }
   new llvm::GlobalVariable(TheModule, ClassSymbol->getType(), true,
-    llvm::GlobalValue::WeakAnyLinkage, ClassSymbol, symbolRef);
+    llvm::GlobalValue::WeakAnyLinkage, ClassSymbol, symbolRef, nullptr,
+    llvm::GlobalVariable::NotThreadLocal, AS);
 }
 
 CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
@@ -2007,6 +2014,7 @@ CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
     ProtocolVersion(protocolClassVersion), ClassABIVersion(classABI) {
 
   msgSendMDKind = VMContext.getMDKindID("GNUObjCMessageSend");
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
   usesSEHExceptions =
       cgm.getContext().getTargetInfo().getTriple().isWindowsMSVCEnvironment();
 
@@ -2023,9 +2031,9 @@ CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
 
   Int8Ty = llvm::Type::getInt8Ty(VMContext);
   // C string type.  Used in lots of places.
-  PtrToInt8Ty = llvm::PointerType::getUnqual(Int8Ty);
-  ProtocolPtrTy = llvm::PointerType::getUnqual(
-      Types.ConvertType(CGM.getContext().getObjCProtoType()));
+  PtrToInt8Ty = llvm::PointerType::get(Int8Ty, AS);
+  ProtocolPtrTy = llvm::PointerType::get(
+      Types.ConvertType(CGM.getContext().getObjCProtoType()), AS);
 
   Zeros[0] = llvm::ConstantInt::get(LongTy, 0);
   Zeros[1] = Zeros[0];
@@ -2038,14 +2046,21 @@ CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
     SelectorTy = cast<llvm::PointerType>(CGM.getTypes().ConvertType(selTy));
   }
 
-  PtrToIntTy = llvm::PointerType::getUnqual(IntTy);
+  PtrToIntTy = llvm::PointerType::get(IntTy, AS);
   PtrTy = PtrToInt8Ty;
 
   Int32Ty = llvm::Type::getInt32Ty(VMContext);
   Int64Ty = llvm::Type::getInt64Ty(VMContext);
 
-  IntPtrTy =
-      CGM.getDataLayout().getPointerSizeInBits() == 32 ? Int32Ty : Int64Ty;
+  // XXXAR: I think this code want's an integer which has the same range as a
+  // pointer and not the same width:
+  // TODO: rename?
+  IntPtrTy = llvm::IntegerType::get(VMContext,
+     CGM.getTarget().getPointerRange(CGM.getTargetCodeGenInfo().getDefaultAS()));
+
+  // IntPtrTy = llvm::IntegerType::get(VMContext,
+  //   CGM.getDataLayout().getPointerSizeInBits());
+
 
   // Object type
   QualType UnqualIdTy = CGM.getContext().getObjCIdType();
@@ -2056,7 +2071,7 @@ CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
   } else {
     IdTy = PtrToInt8Ty;
   }
-  PtrToIdTy = llvm::PointerType::getUnqual(IdTy);
+  PtrToIdTy = llvm::PointerType::get(IdTy, AS);
   ProtocolTy = llvm::StructType::get(IdTy,
       PtrToInt8Ty, // name
       PtrToInt8Ty, // protocols
@@ -2084,7 +2099,7 @@ CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
       PtrToInt8Ty, PtrToInt8Ty });
 
   ObjCSuperTy = llvm::StructType::get(IdTy, IdTy);
-  PtrToObjCSuperTy = llvm::PointerType::getUnqual(ObjCSuperTy);
+  PtrToObjCSuperTy = llvm::PointerType::get(ObjCSuperTy, AS);
 
   llvm::Type *VoidTy = llvm::Type::getVoidTy(VMContext);
 
@@ -2114,8 +2129,8 @@ CGObjCGNU::CGObjCGNU(CodeGenModule &cgm, unsigned runtimeABIVersion,
 
   // IMP type
   llvm::Type *IMPArgs[] = { IdTy, SelectorTy };
-  IMPTy = llvm::PointerType::getUnqual(llvm::FunctionType::get(IdTy, IMPArgs,
-              true));
+  IMPTy = llvm::PointerType::get(llvm::FunctionType::get(IdTy, IMPArgs,
+              true), AS);
 
   const LangOptions &Opts = CGM.getLangOpts();
   if ((Opts.getGC() != LangOptions::NonGC) || Opts.ObjCAutoRefCount)
@@ -2213,8 +2228,9 @@ llvm::Value *CGObjCGNU::GetTypedSelector(CodeGenFunction &CGF, Selector Sel,
   }
   if (!SelValue) {
     SelValue = llvm::GlobalAlias::create(
-        SelectorTy->getElementType(), 0, llvm::GlobalValue::PrivateLinkage,
-        ".objc_selector_" + Sel.getAsString(), &TheModule);
+        SelectorTy->getElementType(), CGF.CGM.getTargetCodeGenInfo().getDefaultAS(),
+        llvm::GlobalValue::PrivateLinkage, ".objc_selector_" +
+        Sel.getAsString(), &TheModule);
     Types.emplace_back(TypeEncoding, SelValue);
   }
 
@@ -2279,11 +2295,11 @@ llvm::Constant *CGObjCGNUstep::GetEHType(QualType T) {
     llvm::Constant *IDEHType =
       CGM.getModule().getGlobalVariable("__objc_id_type_info");
     if (!IDEHType)
-      IDEHType =
-        new llvm::GlobalVariable(CGM.getModule(), PtrToInt8Ty,
-                                 false,
-                                 llvm::GlobalValue::ExternalLinkage,
-                                 nullptr, "__objc_id_type_info");
+      IDEHType = new llvm::GlobalVariable(
+          CGM.getModule(), PtrToInt8Ty, false,
+          llvm::GlobalValue::ExternalLinkage, nullptr, "__objc_id_type_info",
+          nullptr, llvm::GlobalValue::NotThreadLocal,
+          CGM.getTargetCodeGenInfo().getDefaultAS());
     return llvm::ConstantExpr::getBitCast(IDEHType, PtrToInt8Ty);
   }
 
@@ -2309,9 +2325,12 @@ llvm::Constant *CGObjCGNUstep::GetEHType(QualType T) {
   const char *vtableName = "_ZTVN7gnustep7libobjc22__objc_class_type_infoE";
   auto *Vtable = TheModule.getGlobalVariable(vtableName);
   if (!Vtable) {
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     Vtable = new llvm::GlobalVariable(TheModule, PtrToInt8Ty, true,
                                       llvm::GlobalValue::ExternalLinkage,
-                                      nullptr, vtableName);
+                                      nullptr, vtableName, nullptr,
+                                      llvm::GlobalVariable::NotThreadLocal,
+                                      AS);
   }
   llvm::Constant *Two = llvm::ConstantInt::get(IntTy, 2);
   auto *BVtable = llvm::ConstantExpr::getBitCast(
@@ -2353,10 +2372,12 @@ ConstantAddress CGObjCGNU::GenerateConstantString(const StringLiteral *SL) {
 
   llvm::Constant *isa = TheModule.getNamedGlobal(Sym);
 
-  if (!isa)
+  if (!isa) {
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     isa = new llvm::GlobalVariable(TheModule, IdTy, /* isConstant */false,
-            llvm::GlobalValue::ExternalWeakLinkage, nullptr, Sym);
-  else if (isa->getType() != PtrToIdTy)
+            llvm::GlobalValue::ExternalWeakLinkage, nullptr, Sym, nullptr,
+            llvm::GlobalVariable::NotThreadLocal, AS);
+  } else if (isa->getType() != PtrToIdTy)
     isa = llvm::ConstantExpr::getBitCast(isa, PtrToIdTy);
 
   ConstantInitBuilder Builder(CGM);
@@ -2405,6 +2426,7 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
   ActualArgs.addFrom(CallArgs);
 
   MessageSendInfo MSI = getMessageSendInfo(Method, ResultType, ActualArgs);
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   llvm::Value *ReceiverClass = nullptr;
   bool isV2ABI = isRuntime(ObjCRuntime::GNUstep, 2);
@@ -2413,8 +2435,8 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
         Class->getSuperClass()->getNameAsString(), /*isWeak*/false);
     if (IsClassMessage)  {
       // Load the isa pointer of the superclass is this is a class method.
-      ReceiverClass = Builder.CreateBitCast(ReceiverClass,
-                                            llvm::PointerType::getUnqual(IdTy));
+      ReceiverClass = Builder.CreateBitCast(
+          ReceiverClass, CGF.CGM.getPointerInDefaultAS(IdTy));
       ReceiverClass =
         Builder.CreateAlignedLoad(ReceiverClass, CGF.getPointerAlign());
     }
@@ -2440,14 +2462,14 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
       if (IsClassMessage)  {
         if (!MetaClassPtrAlias) {
           MetaClassPtrAlias = llvm::GlobalAlias::create(
-              IdTy->getElementType(), 0, llvm::GlobalValue::InternalLinkage,
+              IdTy->getElementType(), AS, llvm::GlobalValue::InternalLinkage,
               ".objc_metaclass_ref" + Class->getNameAsString(), &TheModule);
         }
         ReceiverClass = MetaClassPtrAlias;
       } else {
         if (!ClassPtrAlias) {
           ClassPtrAlias = llvm::GlobalAlias::create(
-              IdTy->getElementType(), 0, llvm::GlobalValue::InternalLinkage,
+              IdTy->getElementType(), AS, llvm::GlobalValue::InternalLinkage,
               ".objc_class_ref" + Class->getNameAsString(), &TheModule);
         }
         ReceiverClass = ClassPtrAlias;
@@ -2455,8 +2477,8 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
     }
     // Cast the pointer to a simplified version of the class structure
     llvm::Type *CastTy = llvm::StructType::get(IdTy, IdTy);
-    ReceiverClass = Builder.CreateBitCast(ReceiverClass,
-                                          llvm::PointerType::getUnqual(CastTy));
+    ReceiverClass = Builder.CreateBitCast(
+        ReceiverClass, CGF.CGM.getPointerInDefaultAS(CastTy));
     // Get the superclass pointer
     ReceiverClass = Builder.CreateStructGEP(CastTy, ReceiverClass, 1);
     // Load the superclass pointer
@@ -2479,6 +2501,9 @@ CGObjCGNU::GenerateMessageSendSuper(CodeGenFunction &CGF,
 
   // Get the IMP
   llvm::Value *imp = LookupIMPSuper(CGF, ObjCSuper, cmd, MSI);
+  if (AS != 0)
+    MSI.MessengerType =
+      llvm::PointerType::get(MSI.MessengerType->getElementType(), AS);
   imp = EnforceType(Builder, imp, MSI.MessengerType);
 
   llvm::Metadata *impMD[] = {
@@ -2595,12 +2620,17 @@ CGObjCGNU::GenerateMessageSend(CodeGenFunction &CGF,
         imp = CGM.CreateRuntimeFunction(llvm::FunctionType::get(IdTy, IdTy, true),
                                   "objc_msgSend");
       }
+      // On CHERI, we must make sure that this call is not to an AS200 version
+      // of the pointer, or we will end up deriving a DDC-relative capability,
+      // which won't have the execute permission.
+      MSI.MessengerType =
+        llvm::PointerType::get(MSI.MessengerType->getElementType(), 0);
   }
 
   // Reset the receiver in case the lookup modified it
   ActualArgs[0] = CallArg(RValue::get(Receiver), ASTIdTy);
 
-  imp = EnforceType(Builder, imp, MSI.MessengerType);
+  imp = CGF.Builder.CreateBitCast(imp, MSI.MessengerType);
 
   llvm::Instruction *call;
   CGCallee callee(CGCalleeInfo(), imp);
@@ -2703,7 +2733,9 @@ GenerateMethodList(StringRef ClassName,
     } else {
       Method.add(MakeConstantString(OMD->getSelector().getAsString()));
       Method.add(MakeConstantString(Context.getObjCEncodingForMethodDecl(OMD)));
-      Method.addBitCast(FnPtr, IMPTy);
+      // LLVM requires functions to be in AS 0, but CHERI requires the IMP to be
+      // in AS 200.
+      Method.addPointerdBitCastOrAddrSpaceCast(FnPtr, IMPTy);
     }
     Method.finishAndAddTo(MethodArray);
   }
@@ -2792,8 +2824,8 @@ llvm::Constant *CGObjCGNU::GenerateClassStructure(
       LongTy,                 // abi_version
       IvarOffsets->getType(), // ivar_offsets
       Properties->getType(),  // properties
-      IntPtrTy,               // strong_pointers
-      IntPtrTy                // weak_pointers
+      PtrTy,                  // strong_pointers
+      PtrTy                   // weak_pointers
       );
 
   ConstantInitBuilder Builder(CGM);
@@ -2918,7 +2950,8 @@ llvm::Value *CGObjCGNU::GenerateProtocolRef(CodeGenFunction &CGF,
     GenerateProtocol(PD);
   llvm::Type *T =
     CGM.getTypes().ConvertType(CGM.getContext().getObjCProtoType());
-  return CGF.Builder.CreateBitCast(protocol, llvm::PointerType::getUnqual(T));
+  unsigned AS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
+  return CGF.Builder.CreateBitCast(protocol, llvm::PointerType::get(T, AS));
 }
 
 llvm::Constant *
@@ -3067,13 +3100,14 @@ void CGObjCGNU::GenerateProtocolHolderCategory() {
 /// bitfield / with the 63rd bit set will be 1<<64.
 llvm::Constant *CGObjCGNU::MakeBitField(ArrayRef<bool> bits) {
   int bitCount = bits.size();
-  int ptrBits = CGM.getDataLayout().getPointerSizeInBits();
+  int ptrBits = CGM.getTarget().getPointerRange(
+      CGM.getTargetCodeGenInfo().getDefaultAS());
   if (bitCount < ptrBits) {
     uint64_t val = 1;
     for (int i=0 ; i<bitCount ; ++i) {
       if (bits[i]) val |= 1ULL<<(i+1);
     }
-    return llvm::ConstantInt::get(IntPtrTy, val);
+    return llvm::ConstantExpr::getIntToPtr(llvm::ConstantInt::get(IntPtrTy, val), PtrTy);
   }
   SmallVector<llvm::Constant *, 8> values;
   int v=0;
@@ -3262,6 +3296,7 @@ void CGObjCGNU::GenerateClass(const ObjCImplementationDecl *OID) {
     SuperClassName = SuperClassDecl->getNameAsString();
     EmitClassRef(SuperClassName);
   }
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   // Get the class name
   ObjCInterfaceDecl *ClassDecl =
@@ -3277,7 +3312,8 @@ void CGObjCGNU::GenerateClass(const ObjCImplementationDecl *OID) {
     new llvm::GlobalVariable(TheModule, LongTy, false,
                              llvm::GlobalValue::ExternalLinkage,
                              llvm::ConstantInt::get(LongTy, 0),
-                             classSymbolName);
+                             classSymbolName, nullptr,
+                             llvm::GlobalVariable::NotThreadLocal, AS);
   }
 
   // Get the size of instances.
@@ -3335,7 +3371,7 @@ void CGObjCGNU::GenerateClass(const ObjCImplementationDecl *OID) {
       } else
         OffsetVar = new llvm::GlobalVariable(TheModule, Int32Ty,
           false, llvm::GlobalValue::ExternalLinkage,
-          OffsetValue, OffsetName);
+          OffsetValue, OffsetName, nullptr, llvm::GlobalVariable::NotThreadLocal, AS);
       IvarOffsets.push_back(OffsetValue);
       IvarOffsetValues.add(OffsetVar);
       Qualifiers::ObjCLifetime lt = IVD->getType().getQualifiers().getObjCLifetime();
@@ -3441,10 +3477,11 @@ void CGObjCGNU::GenerateClass(const ObjCImplementationDecl *OID) {
       } else
         // Add a new alias if there isn't one already.
         new llvm::GlobalVariable(TheModule, offsetValue->getType(),
-                false, llvm::GlobalValue::ExternalLinkage, offsetValue, Name);
+                false, llvm::GlobalValue::ExternalLinkage, offsetValue, Name,
+                nullptr, llvm::GlobalVariable::NotThreadLocal, AS);
       ++ivarIndex;
   }
-  llvm::Constant *ZeroPtr = llvm::ConstantInt::get(IntPtrTy, 0);
+  llvm::Constant *ZeroPtr = llvm::ConstantPointerNull::get(PtrTy);
 
   //Generate metaclass for class methods
   llvm::Constant *MetaClassStruct = GenerateClassStructure(
@@ -3490,6 +3527,7 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
 
   // Add all referenced protocols to a category.
   GenerateProtocolHolderCategory();
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
 
   llvm::StructType *selStructTy =
     dyn_cast<llvm::StructType>(SelectorTy->getElementType());
@@ -3497,7 +3535,7 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
   if (!selStructTy) {
     selStructTy = llvm::StructType::get(CGM.getLLVMContext(),
                                         { PtrToInt8Ty, PtrToInt8Ty });
-    selStructPtrTy = llvm::PointerType::getUnqual(selStructTy);
+    selStructPtrTy = llvm::PointerType::get(selStructTy, AS);
   }
 
   // Generate statics list:
@@ -3627,9 +3665,10 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
 
   // The symbol table is contained in a module which has some version-checking
   // constants
+  llvm::PointerType *symtabTy = cast<llvm::PointerType>(symtab->getType());
   llvm::Constant *module = [&] {
     llvm::Type *moduleEltTys[] = {
-      LongTy, LongTy, PtrToInt8Ty, symtab->getType(), IntTy
+      LongTy, LongTy, PtrToInt8Ty, llvm::PointerType::get(symtabTy->getElementType(), AS), IntTy
     };
     llvm::StructType *moduleTy =
       llvm::StructType::get(CGM.getLLVMContext(),
@@ -3681,8 +3720,9 @@ llvm::Function *CGObjCGNU::ModuleInitFunction() {
   CGBuilderTy Builder(CGM, VMContext);
   Builder.SetInsertPoint(EntryBB);
 
+  llvm::PointerType *moduleTy = cast<llvm::PointerType>(module->getType());
   llvm::FunctionType *FT =
-    llvm::FunctionType::get(Builder.getVoidTy(), module->getType(), true);
+    llvm::FunctionType::get(Builder.getVoidTy(), llvm::PointerType::get(moduleTy->getElementType(), AS), true);
   llvm::Value *Register = CGM.CreateRuntimeFunction(FT, "__objc_exec_class");
   Builder.CreateCall(Register, module);
 
@@ -3911,9 +3951,10 @@ llvm::GlobalVariable *CGObjCGNU::ObjCIvarOffsetVariable(
   // is.  This allows code compiled with non-fragile ivars to work correctly
   // when linked against code which isn't (most of the time).
   llvm::GlobalVariable *IvarOffsetPointer = TheModule.getNamedGlobal(Name);
+  unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
   if (!IvarOffsetPointer)
     IvarOffsetPointer = new llvm::GlobalVariable(TheModule,
-            llvm::Type::getInt32PtrTy(VMContext), false,
+            llvm::Type::getInt32PtrTy(VMContext, AS), false,
             llvm::GlobalValue::ExternalLinkage, nullptr, Name);
   return IvarOffsetPointer;
 }
@@ -3967,10 +4008,12 @@ llvm::Value *CGObjCGNU::EmitIvarOffset(CodeGenFunction &CGF,
       Interface->getNameAsString() +"." + Ivar->getNameAsString();
     CharUnits Align = CGM.getIntAlign();
     llvm::Value *Offset = TheModule.getGlobalVariable(name);
+    unsigned AS = CGM.getTargetCodeGenInfo().getDefaultAS();
     if (!Offset) {
       auto GV = new llvm::GlobalVariable(TheModule, IntTy,
           false, llvm::GlobalValue::LinkOnceAnyLinkage,
-          llvm::Constant::getNullValue(IntTy), name);
+          llvm::Constant::getNullValue(IntTy), name, nullptr,
+          llvm::GlobalVariable::NotThreadLocal, AS);
       GV->setAlignment(Align.getQuantity());
       Offset = GV;
     }

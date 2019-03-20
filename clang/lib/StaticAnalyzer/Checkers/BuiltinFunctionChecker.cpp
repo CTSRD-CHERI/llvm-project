@@ -62,6 +62,7 @@ bool BuiltinFunctionChecker::evalCall(const CallExpr *CE,
   case Builtin::BI__builtin_unpredictable:
   case Builtin::BI__builtin_expect:
   case Builtin::BI__builtin_assume_aligned:
+  case Builtin::BI__builtin_assume_aligned_cap:
   case Builtin::BI__builtin_addressof: {
     // For __builtin_unpredictable, __builtin_expect, and
     // __builtin_assume_aligned, just return the value of the subexpression.

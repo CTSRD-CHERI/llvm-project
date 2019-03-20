@@ -68,7 +68,8 @@ LValue CGObjCRuntime::EmitValueForIvarAtOffset(CodeGen::CodeGenFunction &CGF,
   V = CGF.Builder.CreateInBoundsGEP(V, Offset, "add.ptr");
 
   if (!Ivar->isBitField()) {
-    V = CGF.Builder.CreateBitCast(V, llvm::PointerType::getUnqual(LTy));
+    V = CGF.Builder.CreateBitCast(V, llvm::PointerType::get(LTy,
+                CGF.CGM.getTargetCodeGenInfo().getDefaultAS()));
     LValue LV = CGF.MakeNaturalAlignAddrLValue(V, IvarTy);
     return LV;
   }
@@ -184,8 +185,20 @@ void CGObjCRuntime::EmitTryCatchStmt(CodeGenFunction &CGF,
         // Don't consider any other catches.
         break;
       }
-
-      Handler.TypeInfo = GetEHType(CatchDecl->getType());
+      auto EHType = GetEHType(CatchDecl->getType());
+      if (!EHType) {
+        // CGObjCGNU::GetEHType() returns null to indicated a catch-all
+        // only happens if CGM.getLangOpts().ObjCRuntime.isNonFragile()
+        // which probably explains why we were only seeing this test
+        // fail on some systems (Linux without GNUStep?)
+        Handler.TypeInfo = nullptr; // catch-all
+        // Don't consider any other catches.
+        break;
+      }
+      unsigned AS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
+      Handler.TypeInfo =
+          llvm::ConstantExpr::getPointerBitCastOrAddrSpaceCast(EHType,
+                  CGM.Int8Ty->getPointerTo(AS));
     }
 
     EHCatchScope *Catch = CGF.EHStack.pushCatch(Handlers.size());
@@ -369,7 +382,8 @@ CGObjCRuntime::getMessageSendInfo(const ObjCMethodDecl *method,
       CGM.getTypes().arrangeObjCMessageSendSignature(method, callArgs[0].Ty);
 
     llvm::PointerType *signatureType =
-      CGM.getTypes().GetFunctionType(signature)->getPointerTo();
+      CGM.getTypes().GetFunctionType(signature)->getPointerTo(
+        CGM.getTargetCodeGenInfo().getDefaultAS());
 
     const CGFunctionInfo &signatureForCall =
       CGM.getTypes().arrangeCall(signature, callArgs);
@@ -383,6 +397,7 @@ CGObjCRuntime::getMessageSendInfo(const ObjCMethodDecl *method,
 
   // Derive the signature to call from that.
   llvm::PointerType *signatureType =
-    CGM.getTypes().GetFunctionType(argsInfo)->getPointerTo();
+    CGM.getTypes().GetFunctionType(argsInfo)->getPointerTo(
+      CGM.getTargetCodeGenInfo().getDefaultAS());
   return MessageSendInfo(argsInfo, signatureType);
 }

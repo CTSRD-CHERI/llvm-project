@@ -30,6 +30,8 @@ def target_abi : Separate<["-"], "target-abi">,
 def target_sdk_version_EQ : Joined<["-"], "target-sdk-version=">,
   HelpText<"The version of target SDK used for compilation">;
 
+def cheri_size : Separate<["-"], "cheri-size">,
+  HelpText<"CHERI capability size">, Group<cheri_Group>;
 }
 
 def target_linker_version : Separate<["-"], "target-linker-version">,
@@ -607,6 +609,9 @@ def print_stats : Flag<["-"], "print-stats">,
   HelpText<"Print performance metrics and statistics">;
 def stats_file : Joined<["-"], "stats-file=">,
   HelpText<"Filename to write statistics to">;
+def cheri_stats_file : Joined<["-"], "cheri-stats-file=">,
+  HelpText<"Filename to write CHERI statistics to">;
+
 def fdump_record_layouts : Flag<["-"], "fdump-record-layouts">,
   HelpText<"Dump record layout information">;
 def fdump_record_layouts_simple : Flag<["-"], "fdump-record-layouts-simple">,

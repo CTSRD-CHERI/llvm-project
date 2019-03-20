@@ -1023,7 +1023,9 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
     llvm::Constant *SLoc = EmitCheckSourceLocation(S.getBeginLoc());
     auto *SLocPtr =
         new llvm::GlobalVariable(CGM.getModule(), SLoc->getType(), false,
-                                 llvm::GlobalVariable::PrivateLinkage, SLoc);
+                                 llvm::GlobalVariable::PrivateLinkage, SLoc,
+                                 "", nullptr, llvm::GlobalValue::NotThreadLocal,
+                                 CGM.getTargetCodeGenInfo().getDefaultAS());
     SLocPtr->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr::Global);
     CGM.getSanitizerMetadata()->disableSanitizerForGlobal(SLocPtr);
     assert(ReturnLocation.isValid() && "No valid return location");
@@ -1074,6 +1076,39 @@ void CodeGenFunction::EmitReturnStmt(const ReturnStmt &S) {
     // rather than the value.
     RValue Result = EmitReferenceBindingToExpr(RV);
     Builder.CreateStore(Result.getScalarVal(), ReturnValue);
+  } else if (TEK_Scalar == getEvaluationKind(RV->getType())) {
+    llvm::Value *RetV = EmitScalarExpr(RV);
+    QualType Ty = RV->getType();
+    if (Ty->isPointerType()) {
+      if (const TypedefType *TT = dyn_cast<TypedefType>(Ty)) {
+        // TT->getDecl() could be a TypedefDecl or a TypedefNameDecl
+        const TypedefDecl* TD = dyn_cast<TypedefDecl>(TT->getDecl());
+        VarDecl *Key = TD ? TD->getOpaqueKey() : nullptr;
+        if (Key) {
+          llvm::Type *RetTy = RetV->getType();
+          llvm::Value *KeyV = CGM.GetAddrOfGlobalVar(Key);
+          CharUnits Alignment = getContext().getDeclAlign(Key);
+          Address Addr(KeyV, Alignment);
+          KeyV = Builder.CreateLoad(Addr);
+          // If this is CHERI, enforce this in hardware
+          if (Ty->isCHERICapabilityType(getContext())) {
+            unsigned CapAS = CGM.getTargetCodeGenInfo().getCHERICapabilityAS();
+            llvm::Value *F = CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_seal);
+            llvm::Type *CapPtrTy = llvm::PointerType::get(Int8Ty, CapAS);
+            RetV = Builder.CreateCall(F,
+               {Builder.CreateBitCast(RetV, CapPtrTy),
+                Builder.CreateBitCast(KeyV, CapPtrTy)});
+            RetV = Builder.CreateBitCast(RetV, RetTy);
+          } else {
+            KeyV = Builder.CreatePtrToInt(KeyV, IntPtrTy);
+            RetV = Builder.CreatePtrToInt(RetV, IntPtrTy);
+            RetV = Builder.CreateXor(RetV, KeyV);
+            RetV = Builder.CreateIntToPtr(RetV, RetTy);
+          }
+        }
+      }
+    }
+    Builder.CreateStore(RetV, ReturnValue);
   } else {
     switch (getEvaluationKind(RV->getType())) {
     case TEK_Scalar:
@@ -1143,7 +1178,11 @@ void CodeGenFunction::EmitCaseStmtRange(const CaseStmt &S) {
   assert(S.getRHS() && "Expected RHS value in CaseStmt");
 
   llvm::APSInt LHS = S.getLHS()->EvaluateKnownConstInt(getContext());
+  if (S.getLHS()->getType()->isCHERICapabilityType(getContext()))
+    LHS = LHS.extOrTrunc(Target.getPointerRangeForCHERICapability());
   llvm::APSInt RHS = S.getRHS()->EvaluateKnownConstInt(getContext());
+  if (S.getRHS()->getType()->isCHERICapabilityType(getContext()))
+    RHS = RHS.extOrTrunc(Target.getPointerRangeForCHERICapability());
 
   // Emit the code for this case. We do this first to make sure it is
   // properly chained from our predecessor before generating the
@@ -1233,9 +1272,12 @@ void CodeGenFunction::EmitCaseStmt(const CaseStmt &S) {
     EmitCaseStmtRange(S);
     return;
   }
-
-  llvm::ConstantInt *CaseVal =
-    Builder.getInt(S.getLHS()->EvaluateKnownConstInt(getContext()));
+  // SwitchInsn.getCondition()
+  llvm::APSInt CaseIntVal = S.getLHS()->EvaluateKnownConstInt(getContext());
+  if (S.getLHS()->getType()->isCHERICapabilityType(getContext()))
+    if (CaseIntVal.getBitWidth() > 64)
+      CaseIntVal = CaseIntVal.trunc(64);  // XXXAR: will this always be correct???
+  llvm::ConstantInt *CaseVal = Builder.getInt(CaseIntVal);
 
   // If the body of the case is just a 'break', try to not emit an empty block.
   // If we're profiling or we're not optimizing, leave the block in for better
@@ -1282,8 +1324,11 @@ void CodeGenFunction::EmitCaseStmt(const CaseStmt &S) {
   // Otherwise, iteratively add consecutive cases to this switch stmt.
   while (NextCase && NextCase->getRHS() == nullptr) {
     CurCase = NextCase;
-    llvm::ConstantInt *CaseVal =
-      Builder.getInt(CurCase->getLHS()->EvaluateKnownConstInt(getContext()));
+    CaseIntVal = CurCase->getLHS()->EvaluateKnownConstInt(getContext());
+    if (S.getLHS()->getType()->isCHERICapabilityType(getContext()))
+      if (CaseIntVal.getBitWidth() > 64)
+        CaseIntVal = CaseIntVal.trunc(64);
+    llvm::ConstantInt *CaseVal = Builder.getInt(CaseIntVal);
 
     if (SwitchWeights)
       SwitchWeights->push_back(getProfileCount(NextCase));
@@ -1605,7 +1650,12 @@ void CodeGenFunction::EmitSwitchStmt(const SwitchStmt &S) {
   if (S.getConditionVariable())
     EmitDecl(*S.getConditionVariable());
   llvm::Value *CondV = EmitScalarExpr(S.getCond());
-
+  // If we're an intcap_t, then we actually want to switch on the offset.
+  if (S.getCond()->getType()->isCHERICapabilityType(getContext())) {
+    // XXXAR: In switch statements we want to switch on the virtual address and
+    // not the offset: https://github.com/CTSRD-CHERI/clang/issues/132
+    CondV = getPointerAddress(CondV, "intcap.vaddr");
+  }
   // Create basic block to hold stuff that comes after switch
   // statement. We also need to create a default block now so that
   // explicit case ranges tests can have a place to jump to on
@@ -1796,7 +1846,7 @@ CodeGenFunction::EmitAsmInputLValue(const TargetInfo::ConstraintInfo &Info,
       uint64_t Size = CGM.getDataLayout().getTypeSizeInBits(Ty);
       if (Size <= 64 && llvm::isPowerOf2_64(Size)) {
         Ty = llvm::IntegerType::get(getLLVMContext(), Size);
-        Ty = llvm::PointerType::getUnqual(Ty);
+        Ty = CGM.getPointerInDefaultAS(Ty);
 
         Arg = Builder.CreateLoad(Builder.CreateBitCast(InputValue.getAddress(),
                                                        Ty));
@@ -1807,7 +1857,10 @@ CodeGenFunction::EmitAsmInputLValue(const TargetInfo::ConstraintInfo &Info,
     }
   } else {
     Arg = InputValue.getPointer();
-    ConstraintStr += '*';
+    // An 'm' constraint will have been rewritten to 'C' if the input expr is a
+    // CHERI capability type. However, don't make an indirect input.
+    if (!InputType->isCHERICapabilityType(getContext()))
+      ConstraintStr += '*';
   }
 
   return Arg;
@@ -1830,9 +1883,19 @@ llvm::Value* CodeGenFunction::EmitAsmInput(
       return llvm::ConstantInt::get(getLLVMContext(), Result.Val.getInt());
   }
 
-  if (Info.allowsRegister() || !Info.allowsMemory())
-    if (CodeGenFunction::hasScalarEvaluationKind(InputExpr->getType()))
+  if (Info.allowsRegister() || !Info.allowsMemory()) {
+    // CHERI: For references, return a pointer to the referenced value
+    if (const DeclRefExpr *DRE = dyn_cast<DeclRefExpr>(InputExpr->IgnoreParenNoopCasts(getContext()))) {
+      if (const VarDecl *VD = dyn_cast<VarDecl>(DRE->getDecl())) {
+        if (const ReferenceType *RT = dyn_cast<ReferenceType>(VD->getType())) {
+          if (RT->isCHERICapability())
+            return EmitLValue(InputExpr).getPointer();
+        }
+      }
+    }
+    else if (CodeGenFunction::hasScalarEvaluationKind(InputExpr->getType()))
       return EmitScalarExpr(InputExpr);
+  }
   if (InputExpr->getStmtClass() == Expr::CXXThisExprClass)
     return EmitScalarExpr(InputExpr);
   InputExpr = InputExpr->IgnoreParenNoopCasts(getContext());
@@ -2055,6 +2118,21 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
         InputConstraint, *InputExpr->IgnoreParenNoopCasts(getContext()),
         getTarget(), CGM, S, false /* No EarlyClobber */);
 
+    // CHERI: Rewrite 'r' and 'm' constraints to C if the input expr is a capability
+    if (Info.allowsRegister() || Info.allowsMemory()) {
+      if(InputExpr->getType()->isCHERICapabilityType(getContext())) {
+        std::size_t rfound = InputConstraint.find("r");
+        std::size_t mfound = InputConstraint.find("m");
+        if (rfound != std::string::npos && mfound != std::string::npos) {
+          InputConstraint.replace(rfound, 1, "C");
+          InputConstraint.erase(mfound, 1);
+        } else if (rfound != std::string::npos)
+          InputConstraint.replace(rfound, 1, "C");
+        else if (mfound != std::string::npos)
+          InputConstraint.replace(mfound, 1, "C");
+      }
+    }
+
     llvm::Value *Arg = EmitAsmInput(Info, InputExpr, Constraints);
 
     // If this input argument is tied to a larger output result, extend the
@@ -2214,6 +2292,7 @@ void CodeGenFunction::EmitAsmStmt(const AsmStmt &S) {
       if (TruncTy->isFloatingPointTy())
         Tmp = Builder.CreateFPTrunc(Tmp, TruncTy);
       else if (TruncTy->isPointerTy() && Tmp->getType()->isIntegerTy()) {
+        assert(!CGM.getDataLayout().isFatPointer(TruncTy));
         uint64_t ResSize = CGM.getDataLayout().getTypeSizeInBits(TruncTy);
         Tmp = Builder.CreateTrunc(Tmp,
                    llvm::IntegerType::get(getLLVMContext(), (unsigned)ResSize));

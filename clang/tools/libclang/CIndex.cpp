@@ -4170,7 +4170,7 @@ int clang_TargetInfo_getPointerWidth(CXTargetInfo TargetInfo) {
          "Unexpected unusable translation unit in TargetInfo");
 
   ASTUnit *CXXUnit = cxtu::getASTUnit(CTUnit);
-  return CXXUnit->getASTContext().getTargetInfo().getMaxPointerWidth();
+  return CXXUnit->getASTContext().getTargetInfo().getMaxPointerRange();
 }
 
 void clang_TargetInfo_dispose(CXTargetInfo TargetInfo) {

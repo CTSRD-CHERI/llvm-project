@@ -280,6 +280,7 @@ TargetInfo *AllocateTarget(const llvm::Triple &Triple,
       return new MipsTargetInfo(Triple, Opts);
     }
 
+  case llvm::Triple::cheri:
   case llvm::Triple::mips64:
     switch (os) {
     case llvm::Triple::Linux:

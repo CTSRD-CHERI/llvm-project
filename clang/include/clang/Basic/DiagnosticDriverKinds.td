@@ -386,6 +386,16 @@ def warn_drv_msvc_not_found : Warning<
   "try running Clang from a developer command prompt">,
   InGroup<DiagGroup<"msvc-not-found">>;
 
+def warn_cheri_sandbox_abi_is_purecap : Warning<
+  "CHERI ABI 'sandbox' is deprecated; use 'purecap' instead">,
+  InGroup<Deprecated>;
+def warn_cheri_purecap_nopic_broken : Warning<
+  "Using -fno-pic with the purecap ABI will generate completely broken code. ">,
+  InGroup<MIPSCHERIBugs>, DefaultError;
+def warn_cheri_purecap_init_array_required : Warning<
+  "The CHERI RTLD does not support .ctors. Passing -fno-use-init-array will "
+  "probably create broken binaries.">, InGroup<MIPSCHERIBugs>;
+
 def warn_drv_fine_grained_bitfield_accesses_ignored : Warning<
   "option '-ffine-grained-bitfield-accesses' cannot be enabled together with a sanitizer; flag ignored">,
   InGroup<OptionIgnored>;

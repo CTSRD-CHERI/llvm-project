@@ -42,6 +42,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "Relocations.h"
+#include "Arch/Cheri.h"
 #include "Config.h"
 #include "LinkerScript.h"
 #include "OutputSections.h"
@@ -50,11 +51,13 @@
 #include "SyntheticSections.h"
 #include "Target.h"
 #include "Thunks.h"
+#include "Writer.h"
 #include "lld/Common/ErrorHandler.h"
 #include "lld/Common/Memory.h"
 #include "lld/Common/Strings.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/Support/Endian.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 
@@ -110,6 +113,21 @@ static unsigned handleMipsTlsRelocation(RelType Type, Symbol &Sym,
   }
   if (Expr == R_MIPS_TLSGD) {
     In.MipsGot->addDynTlsEntry(*C.File, Sym);
+    C.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
+    return 1;
+  }
+  if (Expr == R_MIPS_CHERI_CAPTAB_TLSLD) {
+    In.CheriCapTable->addTlsIndex();
+    C.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
+    return 1;
+  }
+  if (Expr == R_MIPS_CHERI_CAPTAB_TLSGD) {
+    In.CheriCapTable->addDynTlsEntry(Sym);
+    C.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
+    return 1;
+  }
+  if (Expr == R_MIPS_CHERI_CAPTAB_TPREL) {
+    In.CheriCapTable->addTlsEntry(Sym);
     C.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return 1;
   }
@@ -356,7 +374,7 @@ static bool needsGot(RelExpr Expr) {
 static bool isRelExpr(RelExpr Expr) {
   return isRelExprOneOf<R_PC, R_GOTREL, R_GOTREL_FROM_END, R_MIPS_GOTREL,
                         R_PPC_CALL, R_PPC_CALL_PLT, R_AARCH64_PAGE_PC,
-                        R_RELAX_GOT_PC>(Expr);
+                        R_RELAX_GOT_PC, R_CHERI_CAPABILITY_TABLE_REL>(Expr);
 }
 
 // Returns true if a given relocation can be computed at link-time.
@@ -371,7 +389,10 @@ static bool isRelExpr(RelExpr Expr) {
 static bool isStaticLinkTimeConstant(RelExpr E, RelType Type, const Symbol &Sym,
                                      InputSectionBase &S, uint64_t RelOff) {
   // These expressions always compute a constant
-  if (isRelExprOneOf<R_GOT_FROM_END, R_GOT_OFF, R_HEXAGON_GOT, R_TLSLD_GOT_OFF,
+  if (isRelExprOneOf<R_CHERI_CAPABILITY_TABLE_INDEX,
+                     R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
+                     R_CHERI_CAPABILITY_TABLE_REL,
+                     R_GOT_FROM_END, R_GOT_OFF, R_HEXAGON_GOT, R_TLSLD_GOT_OFF,
                      R_MIPS_GOT_LOCAL_PAGE, R_MIPS_GOTREL, R_MIPS_GOT_OFF,
                      R_MIPS_GOT_OFF32, R_MIPS_GOT_GP_PC, R_MIPS_TLSGD,
                      R_AARCH64_GOT_PAGE_PC, R_GOT_PC, R_GOTONLY_PC,
@@ -380,6 +401,13 @@ static bool isStaticLinkTimeConstant(RelExpr E, RelType Type, const Symbol &Sym,
                      R_TLSDESC_CALL, R_AARCH64_TLSDESC_PAGE, R_HINT,
                      R_TLSLD_HINT, R_TLSIE_HINT>(E))
     return true;
+
+  // Cheri capability relocations are never static link time constants since
+  // even if we know the exact value of the capability we can't write it since
+  // there is no way to store the tag bit
+  // TODO: for undef weak -> 0 (or other untagged values) it actually is okay
+  if (E == R_CHERI_CAPABILITY)
+    return false;
 
   // These never do, except if the entire file is position dependent or if
   // only the low bits are used.
@@ -845,9 +873,43 @@ static void processRelocAux(InputSectionBase &Sec, RelExpr Expr, RelType Type,
     return;
   }
   bool CanWrite = (Sec.Flags & SHF_WRITE) || !Config->ZText;
+  // HACK: clang emits a read-only __cap_relocs, but for PIC code we need to
+  //       emit dynamic relocations for its contents (REL32/64/NONE).
+  if (Config->EMachine == EM_MIPS && Config->Pic && Sec.Name == "__cap_relocs") {
+    if (!Config->ProcessCapRelocs)
+      error("capsizefix will not work with dynamic libraries, please remove "
+              "-no-process-cap-relocs from the linker invocation!");
+    return;
+  }
+
+  if (Expr == R_CHERI_CAPABILITY) {
+    static auto getRelocTargetLocation = [&]() -> std::string {
+      auto RelocTarget = SymbolAndOffset::fromSectionWithOffset(&Sec, Offset);
+      return RelocTarget.Sym
+                 ? ("\n>>> referenced by " + RelocTarget.verboseToString())
+                 : getLocation(Sec, Sym, Offset);
+    };
+    if (!CanWrite) {
+      readOnlyCapRelocsError(Sym, getRelocTargetLocation());
+      return;
+    }
+    addCapabilityRelocation<ELFT>(Sym, Type, &Sec, Offset, Expr, Addend,
+                                  getRelocTargetLocation);
+    // TODO: check if it is a call and needs a plt stub
+    return;
+  }
+
   if (CanWrite) {
     // R_GOT refers to a position in the got, even if the symbol is preemptible.
     bool IsPreemptibleValue = Sym.IsPreemptible && Expr != R_GOT;
+
+    // XXXAR: HACK: the locations of the cap_relocs should not be preemptible
+    // This is only needed for compatibility with capsizefix and RTLD without RELA support
+    if (Sec.Name == "__cap_relocs" && (Offset % 40) == 0) {
+      // The location field should never be marked as preemptible, we want to relocate the local symbol
+      // XXXAR: this is probably wrong in some cases but this is only needed for external capsizefix
+      IsPreemptibleValue = false;
+    }
 
     if (!IsPreemptibleValue) {
       addRelativeReloc(&Sec, Offset, &Sym, Addend, Expr, Type);
@@ -879,6 +941,8 @@ static void processRelocAux(InputSectionBase &Sec, RelExpr Expr, RelType Type,
   // If the relocation is to a weak undef, and we are producing
   // executable, give up on it and produce a non preemptible 0.
   if (!Config->Shared && Sym.isUndefWeak()) {
+    if (Expr == R_CHERI_CAPABILITY)
+      error("Not implemented yet");
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return;
   }
@@ -1009,7 +1073,7 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
   // On the other hand, if we know that a PLT entry will be resolved within
   // the same ELF module, we can skip PLT access and directly jump to the
   // destination function. For example, if we are linking a main exectuable,
-  // all dynamic symbols that can be resolved within the executable will
+  // all dynamic symbols that can be resolved within the executable willC
   // actually be resolved that way at runtime, because the main exectuable
   // is always at the beginning of a search list. We can leverage that fact.
   if (Sym.isGnuIFunc()) {
@@ -1043,6 +1107,17 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
   if (unsigned Processed =
           handleTlsRelocation<ELFT>(Type, Sym, Sec, Offset, Addend, Expr)) {
     I += (Processed - 1);
+    return;
+  }
+
+  if (isRelExprOneOf<R_CHERI_CAPABILITY_TABLE_INDEX,
+                     R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE>(Expr)) {
+    assert(Config->ProcessCapRelocs);
+    bool SmallImmediate =
+        Expr == R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE;
+    (Sym.isTls() ? In.CheriCapTableLocal : In.CheriCapTable)->addEntry(Sym, SmallImmediate, Type, &Sec, Offset);
+    // Write out the index into the instruction
+    Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return;
   }
 

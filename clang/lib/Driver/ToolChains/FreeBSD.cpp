@@ -13,6 +13,7 @@
 #include "Arch/Sparc.h"
 #include "CommonArgs.h"
 #include "clang/Driver/Compilation.h"
+#include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
 #include "clang/Driver/SanitizerArgs.h"
 #include "llvm/Option/ArgList.h"
@@ -46,7 +47,8 @@ void freebsd::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
   case llvm::Triple::mips64:
-  case llvm::Triple::mips64el: {
+  case llvm::Triple::mips64el:
+  case llvm::Triple::cheri: {
     StringRef CPUName;
     StringRef ABIName;
     mips::getMipsCPUAndABI(Args, getToolChain().getTriple(), CPUName, ABIName);
@@ -125,10 +127,37 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       static_cast<const toolchains::FreeBSD &>(getToolChain());
   const Driver &D = ToolChain.getDriver();
   const llvm::Triple::ArchType Arch = ToolChain.getArch();
+  bool IsCHERIPureCapABI = false;
+  if (ToolChain.getTriple().isMIPS())
+    IsCHERIPureCapABI = tools::mips::hasMipsAbiArg(Args, "purecap");
+  // For CheriABI default to -pie unless -static is also passed
+  // TODO: enable static PIE?
+  const bool CheriAbiPIEDefault =
+      IsCHERIPureCapABI && !Args.hasArg(options::OPT_static);
+  const bool IsPIEDefault = ToolChain.isPIEDefault() || CheriAbiPIEDefault;
+  // We can't pass -pie to the linker if any of -shared,-r,-no-pie,-no-pie are
+  // set
+  Arg *ConflictsWithPie = Args.getLastArg(options::OPT_r, options::OPT_shared);
+  // Have to negate here to handle the no-pie and nopie aliases
+  Arg *LastPIEArg = Args.getLastArg(options::OPT_pie, options::OPT_no_pie,
+                                    options::OPT_nopie);
+  const bool ExplicitPIE =
+      LastPIEArg && LastPIEArg->getOption().matches(options::OPT_pie);
+  if (ExplicitPIE && ConflictsWithPie) {
+    getToolChain().getDriver().Diag(diag::err_drv_argument_not_allowed_with)
+        << LastPIEArg->getAsString(Args) << ConflictsWithPie->getAsString(Args);
+  }
   const bool IsPIE =
-      !Args.hasArg(options::OPT_shared) &&
-      (Args.hasArg(options::OPT_pie) || ToolChain.isPIEDefault());
+      (LastPIEArg ? ExplicitPIE : IsPIEDefault) && !ConflictsWithPie;
+
   ArgStringList CmdArgs;
+
+  // Silence warning for -cheri=NNN
+  Args.ClaimAllArgs(options::OPT_cheri_EQ);
+  Args.ClaimAllArgs(options::OPT_cheri);
+  // And -cheri-uintcap=
+  Args.ClaimAllArgs(options::OPT_cheri_uintcap_offset);
+  Args.ClaimAllArgs(options::OPT_cheri_uintcap_addr);
 
   // Silence warning for "clang -g foo.o -o foo"
   Args.ClaimAllArgs(options::OPT_g_Group);
@@ -154,7 +183,10 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-Bshareable");
     } else {
       CmdArgs.push_back("-dynamic-linker");
-      CmdArgs.push_back("/libexec/ld-elf.so.1");
+      if (IsCHERIPureCapABI)
+        CmdArgs.push_back("/libexec/ld-cheri-elf.so.1");
+      else
+        CmdArgs.push_back("/libexec/ld-elf.so.1");
     }
     if (ToolChain.getTriple().getOSMajorVersion() >= 9) {
       if (Arch == llvm::Triple::arm || Arch == llvm::Triple::sparc ||
@@ -185,8 +217,11 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     CmdArgs.push_back("elf32ltsmip_fbsd");
     break;
   case llvm::Triple::mips64:
+  case llvm::Triple::cheri:
     CmdArgs.push_back("-m");
-    if (tools::mips::hasMipsAbiArg(Args, "n32"))
+    if (IsCHERIPureCapABI)
+      CmdArgs.push_back("elf64btsmip_cheri_fbsd");
+    else if (tools::mips::hasMipsAbiArg(Args, "n32"))
       CmdArgs.push_back("elf32btsmipn32_fbsd");
     else
       CmdArgs.push_back("elf64btsmip_fbsd");
@@ -210,6 +245,11 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     }
   }
 
+  // The FreeBSD/MIPS version of GNU ld is horribly buggy and errors out
+  // complaining about linking 32-bit and 64-bit code when linking CHERI code.
+  if (IsCHERIPureCapABI)
+    CmdArgs.push_back(Args.MakeArgString("--no-warn-mismatch"));
+
   if (Output.isFilename()) {
     CmdArgs.push_back("-o");
     CmdArgs.push_back(Output.getFilename());
@@ -230,13 +270,15 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     if (crt1)
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
 
-    CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
+    // Don't support .init and .fini sections for CheriABI.
+    if (Arch != llvm::Triple::cheri || !IsCHERIPureCapABI)
+      CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
 
     const char *crtbegin = nullptr;
-    if (Args.hasArg(options::OPT_static))
-      crtbegin = "crtbeginT.o";
-    else if (Args.hasArg(options::OPT_shared) || IsPIE)
+    if (Args.hasArg(options::OPT_shared) || IsPIE)
       crtbegin = "crtbeginS.o";
+    else if (Args.hasArg(options::OPT_static))
+      crtbegin = "crtbeginT.o";
     else
       crtbegin = "crtbegin.o";
 
@@ -264,6 +306,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     addOpenMPRuntime(CmdArgs, ToolChain, Args);
+    CmdArgs.push_back("--start-group");
     if (D.CCCIsCXX()) {
       if (ToolChain.ShouldLinkCXXStdlib(Args))
         ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
@@ -319,6 +362,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back("-lgcc_s");
       CmdArgs.push_back("--no-as-needed");
     }
+    CmdArgs.push_back("--end-group");
   }
 
   if (!Args.hasArg(options::OPT_nostdlib, options::OPT_nostartfiles)) {
@@ -326,13 +370,28 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtendS.o")));
     else
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtend.o")));
-    CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
+
+    // Don't support .init and .fini sections for CheriABI.
+    if (Arch != llvm::Triple::cheri || !IsCHERIPureCapABI)
+      CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
   }
 
   ToolChain.addProfileRTLibs(Args, CmdArgs);
 
   const char *Exec = Args.MakeArgString(getToolChain().GetLinkerPath());
   C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, CmdArgs, Inputs));
+  if (Args.hasFlag(options::OPT_external_capsizefix, options::OPT_no_capsizefix,
+                   false) &&
+      Args.hasFlag(options::OPT_cheri_linker, options::OPT_no_cheri_linker,
+                   ToolChain.getArch() == llvm::Triple::cheri)) {
+    Exec = Args.MakeArgString(getToolChain().GetProgramPath("capsizefix"));
+    ArgStringList SizeFixArgs;
+    if (Args.hasArg(options::OPT_verbose_capsizefix))
+      SizeFixArgs.push_back("--verbose");
+    SizeFixArgs.push_back(Output.getFilename());
+    InputInfoList In= {InputInfo(types::TY_Object, Output.getFilename(), Output.getBaseInput())};
+    C.addCommand(llvm::make_unique<Command>(JA, *this, Exec, SizeFixArgs, In));
+  }
 }
 
 /// FreeBSD - FreeBSD tool chain which can call as(1) and ld(1) directly.
@@ -347,12 +406,18 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
        Triple.getArch() == llvm::Triple::ppc) &&
       D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
+  else if ((Triple.getArch() == llvm::Triple::cheri ||
+            Triple.getArch() == llvm::Triple::mips64) &&
+           tools::mips::hasMipsAbiArg(Args, "purecap") &&
+           D.getVFS().exists(getDriver().SysRoot + "/usr/libcheri/crt1.o"))
+    getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
   else
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib");
 }
 
 ToolChain::CXXStdlibType FreeBSD::GetDefaultCXXStdlibType() const {
-  if (getTriple().getOSMajorVersion() >= 10)
+  if (getTriple().getOSMajorVersion() >= 10 ||
+      getTriple().getArch() ==llvm::Triple::cheri)
     return ToolChain::CST_Libcxx;
   return ToolChain::CST_Libstdcxx;
 }

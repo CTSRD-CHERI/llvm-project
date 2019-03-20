@@ -21,6 +21,7 @@
 #include "clang/CodeGen/CGFunctionInfo.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 
 using namespace clang;
 using namespace CodeGen;
@@ -533,7 +534,9 @@ static void EmitNullBaseClassInitialization(CodeGenFunction &CGF,
     llvm::GlobalVariable *NullVariable = new llvm::GlobalVariable(
         CGF.CGM.getModule(), NullConstantForBase->getType(),
         /*isConstant=*/true, llvm::GlobalVariable::PrivateLinkage,
-        NullConstantForBase, Twine());
+        NullConstantForBase, Twine(),
+        nullptr, llvm::GlobalValue::NotThreadLocal,
+        CGF.CGM.getTargetCodeGenInfo().getDefaultAS());
 
     CharUnits Align = std::max(Layout.getNonVirtualAlignment(),
                                DestPtr.getAlignment());
@@ -701,8 +704,8 @@ static llvm::Value *EmitCXXNewAllocSize(CodeGenFunction &CGF,
   // Emit the array size expression.
   // We multiply the size of all dimensions for NumElements.
   // e.g for 'int[2][3]', ElemType is 'int' and NumElements is 6.
-  numElements =
-    ConstantEmitter(CGF).tryEmitAbstract(e->getArraySize(), e->getType());
+  numElements = ConstantEmitter(CGF).tryEmitAbstract(
+      e->getArraySize(), e->getArraySize()->getType());
   if (!numElements)
     numElements = CGF.EmitScalarExpr(e->getArraySize());
   assert(isa<llvm::IntegerType>(numElements->getType()));
@@ -1575,12 +1578,31 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
   // operator, just "inline" it directly.
   Address allocation = Address::invalid();
   CallArgList allocatorArgs;
-  if (allocator->isReservedGlobalPlacementOperator()) {
+
+  const bool ReservedGlobalPlacement = allocator->isReservedGlobalPlacementOperator();
+  if (ReservedGlobalPlacement) {
     assert(E->getNumPlacementArgs() == 1);
     const Expr *arg = *E->placement_arguments().begin();
 
     LValueBaseInfo BaseInfo;
     allocation = EmitPointerWithAlignment(arg, &BaseInfo);
+
+    // If we are setting bounds aggressively, also insert a csetbounds
+    // after calls to  new(addr) Foo(); since it seems like clang
+    // ignores the contents of a global declaration
+    // for void* operator new(std::size_t count, void* p)
+    if (getTarget().areAllPointersCapabilities() &&
+        getLangOpts().getCheriBounds() >= LangOptions::CBM_Aggressive) {
+      allocation = Address(
+          setPointerBounds(allocation.getPointer(), allocSize, E->getExprLoc(),
+                           "new.with.bounds",
+                           E->isArray() ? "non-allocating placement new"
+                                        : "non-allocating placement new[]",
+                           /*IsSubObject=*/false,
+                           "for type " + allocType.getAsString(),
+                           allocation.getAlignment().getQuantity()),
+          allocation.getAlignment());
+    }
 
     // The pointer expression will, in many cases, be an opaque void*.
     // In these cases, discard the computed alignment and use the
@@ -1750,6 +1772,36 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
                      nullCheckBB);
 
     resultPtr = PHI;
+  }
+
+  // Don't log the non-allocating placement new since it will probably
+  // not be setting bounds (unless cheri-bounds>=aggresive, but in that case
+  // we will already have logged the bounds)
+  if (llvm::cheri::ShouldCollectCSetBoundsStats && !ReservedGlobalPlacement) {
+    // TODO: placement new with pointer might not be heap!
+    auto Kind = llvm::cheri::SetBoundsPointerSource::Heap;
+    uint64_t KnownAlignment = allocation.getAlignment().getQuantity();
+    llvm::Optional<uint64_t> AllocSizeConstant =
+        llvm::cheri::inferConstantValue(allocSize);
+    llvm::Optional<uint64_t> MultipleOf;
+    std::string BoundsSource;
+    llvm::raw_string_ostream DS(BoundsSource);
+    // allocator->getNameForDiagnostic(DS, getContext().getPrintingPolicy(),
+    // true);
+    DS << "operator new";
+    if (E->isArray()) {
+      DS << "[]";
+      if (!AllocSizeConstant)
+        MultipleOf = getContext().getTypeSizeInChars(allocType).getQuantity();
+    }
+    DS << " for " << E->getType().getAsString(getContext().getPrintingPolicy());
+    DS.flush();
+    // TODO: if it is an array get multiple of
+    llvm::cheri::CSetBoundsStats->add(
+        KnownAlignment, AllocSizeConstant, BoundsSource, Kind,
+        "allocating type " + allocType.getAsString(),
+        E->getSourceRange().printToString(getContext().getSourceManager()),
+        MultipleOf);
   }
 
   return resultPtr;
@@ -2125,7 +2177,8 @@ static llvm::Value *EmitTypeidFromVTable(CodeGenFunction &CGF, const Expr *E,
 
 llvm::Value *CodeGenFunction::EmitCXXTypeidExpr(const CXXTypeidExpr *E) {
   llvm::Type *StdTypeInfoPtrTy =
-    ConvertType(E->getType())->getPointerTo();
+    ConvertType(E->getType())->getPointerTo(
+      CGM.getTargetCodeGenInfo().getDefaultAS());
 
   if (E->isTypeOperand()) {
     llvm::Constant *TypeInfo =
@@ -2269,4 +2322,21 @@ void CodeGenFunction::EmitLambdaExpr(const LambdaExpr *E, AggValueSlot Slot) {
       EmitInitializerForField(*CurField, LV, *i);
     }
   }
+}
+
+llvm::Value *
+CodeGenFunction::EmitCXXMemberPointerAddressOf(const UnaryOperator *uo) {
+  // Member pointer constants always have a very particular form.
+  const MemberPointerType *type = cast<MemberPointerType>(uo->getType());
+  const ValueDecl *decl = cast<DeclRefExpr>(uo->getSubExpr())->getDecl();
+
+  // A member function pointer.
+  // We have to be
+  if (const CXXMethodDecl *method = dyn_cast<CXXMethodDecl>(decl))
+    return CGM.getCXXABI().EmitNonGlobalMemberFunctionPointer(*this, method);
+
+  // Otherwise, a member data pointer.
+  uint64_t fieldOffset = getContext().getFieldOffset(decl);
+  CharUnits chars = getContext().toCharUnitsFromBits((int64_t) fieldOffset);
+  return CGM.getCXXABI().EmitMemberDataPointer(type, chars);
 }

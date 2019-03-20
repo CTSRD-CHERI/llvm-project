@@ -53,6 +53,8 @@ static StringRef getAbiName(uint32_t Flags) {
     return "eabi32";
   case EF_MIPS_ABI_EABI64:
     return "eabi64";
+  case EF_MIPS_ABI_CHERIABI:
+    return "purecap";
   default:
     return "unknown";
   }
@@ -70,6 +72,15 @@ static void checkFlags(ArrayRef<FileFlags> Files) {
   uint32_t ABI = Files[0].Flags & (EF_MIPS_ABI | EF_MIPS_ABI2);
   bool Nan = Files[0].Flags & EF_MIPS_NAN2008;
   bool Fp = Files[0].Flags & EF_MIPS_FP64;
+
+  // Handle explicit ABI selection via -melf64btsmip_cheri_fbsd
+  if ((Config->isCheriABI() && ABI != EF_MIPS_ABI_CHERIABI) ||
+      (!Config->isCheriABI() && ABI == EF_MIPS_ABI_CHERIABI)) {
+    error(toString(Files[0].File) + ": ABI '" + getAbiName(ABI) +
+          "' is incompatible with explicitly selected linker emulation '" +
+          Config->Emulation + "'");
+    ABI = Config->isCheriABI() ? EF_MIPS_ABI_CHERIABI : 0;
+  }
 
   for (const FileFlags &F : Files) {
     if (Config->Is64 && F.Flags & EF_MIPS_MICROMIPS)
@@ -168,12 +179,28 @@ static ArchTreeEdge ArchTree[] = {
 };
 
 static bool isArchMatched(uint32_t New, uint32_t Res) {
+  // llvm::errs() << __func__ << ": new=" << utohexstr(New) << " res=" << utohexstr(Res) << "\n";
   if (New == Res)
     return true;
   if (New == EF_MIPS_ARCH_32 && isArchMatched(EF_MIPS_ARCH_64, Res))
     return true;
   if (New == EF_MIPS_ARCH_32R2 && isArchMatched(EF_MIPS_ARCH_64R2, Res))
     return true;
+
+  // check for cheri128 vs cheri256 and upgrade non-cheri to cheri
+  uint32_t NewMach = (New & EF_MIPS_MACH);
+  uint32_t ResMach = (Res & EF_MIPS_MACH);
+  if (ResMach == EF_MIPS_MACH_CHERI128) {
+    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI128)
+      return false;
+    return isArchMatched(New & ~EF_MIPS_MACH, Res & ~EF_MIPS_MACH);
+  }
+  if (ResMach == EF_MIPS_MACH_CHERI256) {
+    if (NewMach != 0 && NewMach != EF_MIPS_MACH_CHERI256)
+      return false;
+    return isArchMatched(New & ~EF_MIPS_MACH, Res & ~EF_MIPS_MACH);
+  }
+
   for (const auto &Edge : ArchTree) {
     if (Res == Edge.Child) {
       Res = Edge.Parent;
@@ -224,6 +251,10 @@ static StringRef getMachName(uint32_t Flags) {
     return "sb1";
   case EF_MIPS_MACH_XLR:
     return "xlr";
+  case EF_MIPS_MACH_CHERI128:
+    return "cheri128";
+  case EF_MIPS_MACH_CHERI256:
+    return "cheri256";
   default:
     return "unknown machine";
   }
@@ -345,15 +376,83 @@ static StringRef getMipsFpAbiName(uint8_t FpAbi) {
   }
 }
 
-uint8_t elf::getMipsFpAbiFlag(uint8_t OldFlag, uint8_t NewFlag,
-                              StringRef FileName) {
+uint8_t elf::getMipsFpAbiFlag(uint8_t OldFlag, StringRef OldFile,
+                              uint8_t NewFlag, StringRef NewFile) {
   if (compareMipsFpAbi(NewFlag, OldFlag) >= 0)
     return NewFlag;
   if (compareMipsFpAbi(OldFlag, NewFlag) < 0)
-    error(FileName + ": floating point ABI '" + getMipsFpAbiName(NewFlag) +
+    error(NewFile + ": floating point ABI '" + getMipsFpAbiName(NewFlag) +
           "' is incompatible with target floating point ABI '" +
           getMipsFpAbiName(OldFlag) + "'");
   return OldFlag;
+}
+
+static std::string getMipsIsaExtName(Mips::AFL_EXT Ext) {
+  switch (Ext) {
+    // duplicated from ELFYAML.cpp
+#define ECase(X)                                                               \
+  case Mips::AFL_##X:                                                          \
+    return #X
+    ECase(EXT_NONE);
+    ECase(EXT_XLR);
+    ECase(EXT_OCTEON2);
+    ECase(EXT_OCTEONP);
+    ECase(EXT_LOONGSON_3A);
+    ECase(EXT_OCTEON);
+    ECase(EXT_5900);
+    ECase(EXT_4650);
+    ECase(EXT_4010);
+    ECase(EXT_4100);
+    ECase(EXT_3900);
+    ECase(EXT_10000);
+    ECase(EXT_SB1);
+    ECase(EXT_4111);
+    ECase(EXT_4120);
+    ECase(EXT_5400);
+    ECase(EXT_5500);
+    ECase(EXT_LOONGSON_2E);
+    ECase(EXT_LOONGSON_2F);
+    ECase(EXT_OCTEON3);
+    ECase(EXT_CHERI);
+    ECase(EXT_CHERI_ABI_LEGACY);
+    ECase(EXT_CHERI_ABI_PLT);
+    ECase(EXT_CHERI_ABI_PCREL);
+    ECase(EXT_CHERI_ABI_FNDESC);
+  default:
+    return ("<unknown isa_ext (" + Twine(Ext) + ")>").str();
+#undef ECase
+  }
+}
+
+uint8_t elf::getMipsIsaExt(uint64_t OldExt, StringRef OldFile, uint64_t NewExt,
+                           StringRef NewFile) {
+  if (OldExt == NewExt)
+    return NewExt;
+
+  // ISA_EXT is different, now check if we want to allow this
+  // No ext -> any ext is always fine (XXXAR: well at least for now it is)
+  // TODO: require isa_ext to be set for CHERI purecap programs in the future
+  if (OldExt == Mips::AFL_EXT_NONE)
+    return NewExt;
+  if (NewExt == Mips::AFL_EXT_NONE)
+    return OldExt;
+  Mips::AFL_EXT CheriABIs[] = {
+      Mips::AFL_EXT_CHERI_ABI_LEGACY,
+      Mips::AFL_EXT_CHERI_ABI_PLT,
+      Mips::AFL_EXT_CHERI_ABI_PCREL,
+      Mips::AFL_EXT_CHERI_ABI_FNDESC,
+  };
+  if (llvm::is_contained(CheriABIs, OldExt) ||
+      llvm::is_contained(CheriABIs, NewExt)) {
+    // incompatible cheri purecap ABIs:
+    error("incompatible pure-capability ABIs:\n>>> " + OldFile + " uses " +
+          getMipsIsaExtName((Mips::AFL_EXT)OldExt) + "\n>>> " + NewFile +
+          " uses " + getMipsIsaExtName((Mips::AFL_EXT)NewExt));
+    // return NewExt to get sensible error messages with multiple mismatches
+    return NewExt;
+  }
+  // non-cheri isa_ext -> just return the maximum
+  return std::max(OldExt, NewExt);
 }
 
 template <class ELFT> static bool isN32Abi(const InputFile *F) {

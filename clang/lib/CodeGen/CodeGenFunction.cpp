@@ -13,9 +13,9 @@
 
 #include "CodeGenFunction.h"
 #include "CGBlocks.h"
-#include "CGCleanup.h"
 #include "CGCUDARuntime.h"
 #include "CGCXXABI.h"
+#include "CGCleanup.h"
 #include "CGDebugInfo.h"
 #include "CGOpenMPRuntime.h"
 #include "CodeGenModule.h"
@@ -32,12 +32,16 @@
 #include "clang/Basic/TargetInfo.h"
 #include "clang/CodeGen/CGFunctionInfo.h"
 #include "clang/Frontend/FrontendDiagnostic.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/Operator.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
+#include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
+
 using namespace clang;
 using namespace CodeGen;
 
@@ -111,6 +115,22 @@ CharUnits CodeGenFunction::getNaturalPointeeTypeAlignment(QualType T,
                                                     TBAAAccessInfo *TBAAInfo) {
   return getNaturalTypeAlignment(T->getPointeeType(), BaseInfo, TBAAInfo,
                                  /* forPointeeType= */ true);
+}
+
+llvm::Value *CodeGenFunction::setPointerBounds(
+    llvm::Value *V, llvm::Value *Size, SourceLocation Loc,
+    const llvm::Twine &Name, StringRef Pass, bool IsSubObject,
+    const llvm::Twine &Details, Optional<uint64_t> KnownAlignment) {
+  if (llvm::cheri::ShouldCollectCSetBoundsStats) {
+    auto Kind = IsSubObject ? llvm::cheri::SetBoundsPointerSource::SubObject
+                            : llvm::cheri::inferPointerSource(V);
+    uint64_t Align = KnownAlignment ? *KnownAlignment
+                                    : getKnownAlignment(V, CGM.getDataLayout());
+    llvm::cheri::addSetBoundsStats(
+        Align, Size, Pass, Kind, Details,
+        Loc.printToString(CGM.getContext().getSourceManager()));
+  }
+  return getTargetHooks().setPointerBounds(*this, V, Size, Name);
 }
 
 CharUnits CodeGenFunction::getNaturalTypeAlignment(QualType T,
@@ -497,7 +517,9 @@ CodeGenFunction::EncodeAddrForUseInPrologue(llvm::Function *F,
   // won't result in a run-time fixup, even if Addr has linkonce_odr linkage.
   auto *GV = new llvm::GlobalVariable(CGM.getModule(), Addr->getType(),
                                       /*isConstant=*/true,
-                                      llvm::GlobalValue::PrivateLinkage, Addr);
+                                      llvm::GlobalValue::PrivateLinkage, Addr, "",
+                                      nullptr, llvm::GlobalValue::NotThreadLocal,
+                                      CGM.getTargetCodeGenInfo().getDefaultAS());
 
   // Create a PC-relative address.
   auto *GOTAsInt = llvm::ConstantExpr::getPtrToInt(GV, IntPtrTy);
@@ -937,6 +959,14 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
     }
   }
 
+  if (const FunctionDecl *FD = dyn_cast_or_null<FunctionDecl>(D)) {
+    auto *FT =
+      dyn_cast<FunctionType>(FD->getType().getDesugaredType(getContext()));
+    if (FT && (FT->getCallConv() == CC_CHERICCallee))
+      if (auto *ClsAttr = FD->getAttr<CHERIMethodClassAttr>())
+        CGM.EmitSandboxDefinedMethod(ClsAttr->getDefaultClass()->getName(),
+                                     FD->getName(), Fn);
+  }
   // Add no-jump-tables value.
   Fn->addFnAttr("no-jump-tables",
                 llvm::toStringRef(CGM.getCodeGenOpts().NoUseJumpTables));
@@ -973,6 +1003,19 @@ void CodeGenFunction::StartFunction(GlobalDecl GD,
       }
     }
   }
+
+  if (D && D->hasAttr<SensitiveAttr>()) {
+    // Sensitive needs to be a function attribute, not metadata
+#if 0
+    llvm::LLVMContext &Context = getLLVMContext();
+    llvm::Value *attrMDArgs[] = { Fn };
+    llvm::MDNode *FNNode= llvm::MDNode::get(Context, attrMDArgs);
+    llvm::NamedMDNode *OpenCLKernelMetadata =
+      CGM.getModule().getOrInsertNamedMetadata("cheri.sensitive.functions");
+    OpenCLKernelMetadata->addOperand(FNNode);
+#endif
+  }
+
 
   // If we're checking nullability, we need to know whether we can check the
   // return value. Initialize the flag to 'true' and refine it in EmitParmDecl.
@@ -1835,10 +1878,12 @@ CodeGenFunction::EmitNullInitialization(Address DestPtr, QualType Ty) {
       new llvm::GlobalVariable(CGM.getModule(), NullConstant->getType(),
                                /*isConstant=*/true,
                                llvm::GlobalVariable::PrivateLinkage,
-                               NullConstant, Twine());
+                               NullConstant, Twine(),
+                               nullptr, llvm::GlobalValue::NotThreadLocal,
+                               CGM.getTargetCodeGenInfo().getDefaultAS());
     CharUnits NullAlign = DestPtr.getAlignment();
     NullVariable->setAlignment(NullAlign.getQuantity());
-    Address SrcPtr(Builder.CreateBitCast(NullVariable, Builder.getInt8PtrTy()),
+    Address SrcPtr(Builder.CreatePointerBitCastOrAddrSpaceCast(NullVariable, CGM.Int8PtrTy),
                    NullAlign);
 
     if (vla) return emitNonZeroVLAInit(*this, Ty, DestPtr, SrcPtr, SizeVal);
@@ -1863,7 +1908,11 @@ llvm::BlockAddress *CodeGenFunction::GetAddrOfLabel(const LabelDecl *L) {
 
   // Make sure the indirect branch includes all of the address-taken blocks.
   IndirectBranch->addDestination(BB);
-  return llvm::BlockAddress::get(CurFn, BB);
+  auto Result = llvm::BlockAddress::get(CurFn, BB);
+  assert(Result->getType()->getPointerAddressSpace() ==
+             CGM.getDataLayout().getProgramAddressSpace() &&
+         "Blockaddress not in program AS?");
+  return Result;
 }
 
 llvm::BasicBlock *CodeGenFunction::GetIndirectGotoBlock() {

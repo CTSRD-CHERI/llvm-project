@@ -468,6 +468,15 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
                                  static_cast<unsigned>(Context.getTypeSize(T)));
       break;
 
+    // We store these as capabilities (and must use capability instructions for
+    // writing them to memory), and must perform some explicit casts for
+    // arithmetic.
+    case BuiltinType::IntCap:
+    case BuiltinType::UIntCap:
+      ResultType =
+          llvm::PointerType::get(llvm::Type::getInt8Ty(getLLVMContext()),
+              CGM.getTargetCodeGenInfo().getCHERICapabilityAS());
+      break;
     case BuiltinType::Float16:
       ResultType =
           getTypeForFormat(getLLVMContext(), Context.getFloatTypeSemantics(T),
@@ -492,7 +501,8 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
 
     case BuiltinType::NullPtr:
       // Model std::nullptr_t as i8*
-      ResultType = llvm::Type::getInt8PtrTy(getLLVMContext());
+      ResultType = llvm::Type::getInt8PtrTy(getLLVMContext(),
+        CGM.getTargetCodeGenInfo().getDefaultAS());
       break;
 
     case BuiltinType::UInt128:
@@ -536,17 +546,36 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     const ReferenceType *RTy = cast<ReferenceType>(Ty);
     QualType ETy = RTy->getPointeeType();
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
-    unsigned AS = Context.getTargetAddressSpace(ETy);
+    // XXXAR: If Rty is capability, use AS200 otherwise the same as LangAS as
+    // the underlying type
+    unsigned AS = RTy->isCHERICapability()
+                      ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
+                      : CGM.getTargetAddressSpace(ETy.getQualifiers());
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
   case Type::Pointer: {
     const PointerType *PTy = cast<PointerType>(Ty);
     QualType ETy = PTy->getPointeeType();
+    // CHERI CCallback function pointers are not actually pointers, they are
+    // structs containing three pointers.
+    if (ETy->isFunctionProtoType()) {
+      auto FPT = ETy->getAs<FunctionProtoType>();
+      if (FPT->getCallConv() == CC_CHERICCallback) {
+        auto MethNoTy = llvm::Type::getInt64Ty(getLLVMContext());
+        auto ObjTy = ConvertType(Context.getCHERIClassType());
+        ResultType = llvm::StructType::get(ObjTy, MethNoTy);
+        break;
+      }
+    }
     llvm::Type *PointeeType = ConvertTypeForMem(ETy);
     if (PointeeType->isVoidTy())
       PointeeType = llvm::Type::getInt8Ty(getLLVMContext());
-    unsigned AS = Context.getTargetAddressSpace(ETy);
+    // XXXAR: If Pty is capability, use AS200 otherwise the same as LangAS as
+    // the underlying type
+    unsigned AS = PTy->isCHERICapability()
+                      ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
+                      : CGM.getTargetAddressSpace(ETy.getQualifiers());
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }
@@ -620,7 +649,7 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
     // recursive conversion.
     llvm::Type *T =
       ConvertTypeForMem(cast<ObjCObjectPointerType>(Ty)->getPointeeType());
-    ResultType = T->getPointerTo();
+    ResultType = T->getPointerTo(CGM.getTargetCodeGenInfo().getDefaultAS());
     break;
   }
 
@@ -638,7 +667,11 @@ llvm::Type *CodeGenTypes::ConvertType(QualType T) {
   case Type::BlockPointer: {
     const QualType FTy = cast<BlockPointerType>(Ty)->getPointeeType();
     llvm::Type *PointeeType = ConvertTypeForMem(FTy);
-    unsigned AS = Context.getTargetAddressSpace(FTy);
+    // XXXAR: If Ty is capability, use AS200 otherwise the same as LangAS as the
+    // underlying type
+    unsigned AS = Ty->isCHERICapabilityType(CGM.getContext())
+                      ? CGM.getTargetCodeGenInfo().getCHERICapabilityAS()
+                      : CGM.getTargetAddressSpace(FTy.getQualifiers());
     ResultType = llvm::PointerType::get(PointeeType, AS);
     break;
   }

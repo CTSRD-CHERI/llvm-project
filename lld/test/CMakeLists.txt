@@ -32,9 +32,9 @@ configure_lit_site_cfg(
 set(LLD_TEST_DEPS lld)
 if (NOT LLD_BUILT_STANDALONE)
   list(APPEND LLD_TEST_DEPS
-    FileCheck count llc llvm-ar llvm-as llvm-bcanalyzer llvm-config llvm-dis
+    FileCheck capsizefix count llc llvm-ar llvm-as llvm-bcanalyzer llvm-config llvm-dis
     llvm-dwarfdump llvm-lib llvm-mc llvm-nm llvm-objcopy llvm-objdump
-    llvm-pdbutil llvm-readelf llvm-readobj not obj2yaml opt yaml2obj
+    llvm-pdbutil llvm-readelf llvm-readobj llvm-strip not obj2yaml opt yaml2obj
     )
 endif()
 
@@ -46,7 +46,7 @@ set(LLD_TEST_PARAMS
   lld_site_config=${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
   )
 
-add_lit_testsuite(check-lld "Running lld test suite"
+add_lit_testsuite_with_cheri_selectors(check-lld "Running lld test suite"
   ${CMAKE_CURRENT_BINARY_DIR}
   PARAMS lld_site_config=${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
        lld_unit_site_config=${CMAKE_CURRENT_BINARY_DIR}/Unit/lit.site.cfg

@@ -20,6 +20,7 @@
 #include "clang/AST/ExprCXX.h"
 #include "clang/AST/ExprObjC.h"
 #include "clang/AST/RecordLayout.h"
+#include "clang/AST/Attr.h"
 #include "clang/Basic/PartialDiagnostic.h"
 #include "clang/Basic/TargetInfo.h"
 #include "clang/Lex/Preprocessor.h"
@@ -51,6 +52,9 @@ enum CastType {
   CT_CStyle,      ///< (Type)expr
   CT_Functional   ///< Type(expr)
 };
+
+static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
+                                            const Expr *E, QualType DestType);
 
 namespace {
   struct CastOperation {
@@ -100,6 +104,20 @@ namespace {
     /// Complete an apparently-successful cast operation that yields
     /// the given expression.
     ExprResult complete(CastExpr *castExpr) {
+      SourceRange CastRange = OpRange;
+      if (CXXNamedCastExpr* CNC = dyn_cast<CXXNamedCastExpr>(castExpr)) {
+        CastRange = CNC->getAngleBrackets();
+      }
+      if (!isa<CXXConstructExpr>(SrcExpr.get())) {
+        CastKind CK = DiagnoseCapabilityToIntCast(Self, CastRange,
+                                                  SrcExpr.get(), DestType);
+        // Make sure that the types actually match:
+        if (CK == CK_CHERICapabilityToPointer && DestType->isReferenceType()) {
+          // return ExprError();
+        }
+      }
+
+
       // If this is an unbridged cast, wrap the result in an implicit
       // cast that yields the unbridged-cast placeholder type.
       if (IsARCUnbridgedCast) {
@@ -672,6 +690,14 @@ static TryCastResult getCastAwayConstnessCastKind(CastAwayConstnessKind CACK,
   llvm_unreachable("unexpected cast away constness kind");
 }
 
+static bool IsBadCheriReferenceCast(const ReferenceType *Dest, Expr *SrcExpr,
+                                    const ASTContext &Ctx) {
+  bool SrcIsCapRef = Ctx.getTargetInfo().areAllPointersCapabilities();
+  if (auto SrcRef = SrcExpr->getRealReferenceType()->getAs<ReferenceType>())
+    SrcIsCapRef = SrcRef->isCHERICapability();
+  return Dest->isCHERICapability() != SrcIsCapRef;
+}
+
 /// CheckDynamicCast - Check that a dynamic_cast\<DestType\>(SrcExpr) is valid.
 /// Refer to C++ 5.2.7 for details. Dynamic casts are used mostly for runtime-
 /// checked downcasts in class hierarchies.
@@ -698,7 +724,7 @@ void CastOperation::CheckDynamicCast() {
     DestPointee = DestReference->getPointeeType();
   } else {
     Self.Diag(OpRange.getBegin(), diag::err_bad_dynamic_cast_not_ref_or_ptr)
-      << this->DestType << DestRange;
+        << this->DestType << DestRange;
     SrcExpr = ExprError();
     return;
   }
@@ -775,6 +801,15 @@ void CastOperation::CheckDynamicCast() {
   if (!DestPointee.isAtLeastAsQualifiedAs(SrcPointee)) {
     Self.Diag(OpRange.getBegin(), diag::err_bad_cxx_cast_qualifiers_away)
       << CT_Dynamic << OrigSrcType << this->DestType << OpRange;
+    SrcExpr = ExprError();
+    return;
+  }
+
+  // Check that the dynamic cast doesn't change the capability qualifier
+  if (DestReference && IsBadCheriReferenceCast(DestReference, SrcExpr.get(),
+                                               Self.getASTContext())) {
+    Self.Diag(OpRange.getBegin(), diag::err_bad_cxx_reference_cast_capability_qualifier)
+            << CT_Dynamic << 0 << DestType;
     SrcExpr = ExprError();
     return;
   }
@@ -1336,6 +1371,11 @@ TryStaticReferenceDowncast(Sema &Self, Expr *SrcExpr, QualType DestType,
 
   QualType DestPointee = DestReference->getPointeeType();
 
+  if (IsBadCheriReferenceCast(DestReference, SrcExpr, Self.getASTContext())) {
+    msg = diag::err_bad_cxx_reference_cast_capability_qualifier;
+    return TC_Failed;
+  }
+
   // FIXME: If the source is a prvalue, we should issue a warning (because the
   // cast always has undefined behavior), and for AST consistency, we should
   // materialize a temporary.
@@ -1717,6 +1757,12 @@ static TryCastResult TryConstCast(Sema &Self, ExprResult &SrcExpr,
       return TC_NotApplicable;
     }
 
+    if (IsBadCheriReferenceCast(DestTypeTmp, SrcExpr.get(),
+                                Self.getASTContext())) {
+      msg = diag::err_bad_cxx_reference_cast_capability_qualifier;
+      return TC_NotApplicable;
+    }
+
     DestType = Self.Context.getPointerType(DestTypeTmp->getPointeeType());
     SrcType = Self.Context.getPointerType(SrcType);
   }
@@ -1818,6 +1864,99 @@ void Sema::CheckCompatibleReinterpretCast(QualType SrcType, QualType DestType,
   }
 
   Diag(Range.getBegin(), DiagID) << SrcType << DestType << Range;
+}
+
+static void DiagnoseCHERICallback(Sema &Self, SourceLocation Loc,
+                                  QualType SrcType, QualType DestType) {
+  bool SrcIsCallback = false;
+  bool DestIsCallback = false;
+  if (auto SrcPointer = dyn_cast<PointerType>(SrcType))
+    if (auto SrcFnPTy = SrcPointer->getPointeeType()->getAs<FunctionType>())
+      if (SrcFnPTy->getCallConv() == CC_CHERICCallback)
+        SrcIsCallback = true;
+  if (auto DestPointer = dyn_cast<PointerType>(DestType))
+    if (auto DestFnPTy = DestPointer->getPointeeType()->getAs<FunctionType>())
+      if (DestFnPTy->getCallConv() == CC_CHERICCallback)
+        DestIsCallback = true;
+  if (SrcIsCallback != DestIsCallback)
+    Self.Diag(Loc, diag::err_cheri_invalid_callback_cast);
+}
+
+static void DiagnoseCHERIPtr(Sema &Self, Expr *SrcExpr, QualType DestType,
+                              CastKind &Kind, SourceRange &Range) {
+  if (Kind != CK_BitCast)
+    return;
+  
+  const PointerType *SrcPtr = SrcExpr->getType()->getAs<PointerType>();
+  const PointerType *DestPtr = DestType->getAs<PointerType>();
+  if (SrcPtr && DestPtr && !SrcPtr->isCHERICapability() && !DestPtr->isCHERICapability()) {
+    QualType SrcPointee = SrcPtr->getPointeeType();
+    QualType DestPointee = DestPtr->getPointeeType();
+    
+    // casts from char * and void * are implicitly allowed
+    if (SrcPointee->isCharType() || SrcPointee->isVoidType())
+      return;
+
+    if (!SrcPointee->isCHERICapabilityType(Self.Context, true) &&
+        DestPointee->isCHERICapabilityType(Self.Context, true)) {
+      CharUnits SrcAlign = Self.Context.getTypeAlignInChars(SrcPointee);
+      CharUnits DestAlign = Self.Context.getTypeAlignInChars(DestPointee);
+
+      if (SrcAlign >= DestAlign)
+        return;
+
+      Self.Diag(Range.getBegin(), diag::err_cheri_ptr_align)
+        << SrcExpr->getType() << DestType
+        << static_cast<unsigned>(SrcAlign.getQuantity())
+        << static_cast<unsigned>(DestAlign.getQuantity())
+        << Range << SrcExpr->getSourceRange();
+      Self.Diag(Range.getEnd(), diag::note_cheri_ptr_align_fixit);
+    }
+  }
+}
+
+static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
+                                            const Expr *SrcExpr,
+                                            QualType DestType) {
+  QualType SrcType = SrcExpr->getRealReferenceType();
+  if (SrcType->isDependentType() || DestType->isDependentType())
+    return CK_NoOp; // can't diagnose this yet
+  // If the source is not a capability or a __uintcap_t we can ignore it
+  if (!SrcType->isCHERICapabilityType(Self.Context, /*IncludeIntCap=*/false)) {
+    return CK_NoOp; // Not casting from a capability
+  }
+  if (DestType->isCHERICapabilityType(Self.Context, /*IncludeIntCap=*/true)) {
+    return CK_NoOp; // cast from capabilty to capability is fine
+  }
+  if (DestType->isVoidType()) {
+    return CK_NoOp; // casting to void to silence unused variable warnings is fine
+  }
+  if (SrcType->isNullPtrType()) {
+    return CK_NoOp;
+  }
+
+  // auto C = DestType.getCanonicalType();
+  // llvm::errs() << "Checking if " << DestType.getAsString() << " is a memoryAddressType -- canonical=" << C.getAsString() << "\n";
+  // DestType.dump("is memaddr?");
+  // C.dump("canonical");
+  // llvm::errs() << "Is integral: " << DestType->isIntegralOrEnumerationType() << " C " << C->isIntegralOrEnumerationType() << "\n";
+  
+  // check if it is a valid type for memory addresses such as vaddr_t
+  // FIXME: is there something simpler that I can do?
+  // bool IsMemAddressType = DestType->getDecl()->hasAttr<MemoryAddressAttr>();
+  bool IsMemAddressType = DestType->hasAttr(attr::MemoryAddress);
+  if (DestType->isPointerType() || DestType->isReferenceType()) {
+    Self.Diag(OpRange.getBegin(), diag::warn_capability_pointer_cast)
+        << SrcType << DestType << OpRange
+        << FixItHint::CreateReplacement(OpRange, "__cheri_fromcap " +
+                                                     DestType.getAsString());
+    return CK_CHERICapabilityToPointer;
+
+  } else if (!IsMemAddressType) {
+    Self.Diag(OpRange.getBegin(), diag::warn_capability_integer_cast)
+        << SrcType << DestType << OpRange;
+  }
+  return CK_NoOp;
 }
 
 static void DiagnoseCastOfObjCSEL(Sema &Self, const ExprResult &SrcExpr,
@@ -1931,16 +2070,22 @@ static void checkIntToPointerCast(bool CStyle, SourceLocation Loc,
                                   const Expr *SrcExpr, QualType DestType,
                                   Sema &Self) {
   QualType SrcType = SrcExpr->getType();
+  ASTContext &Ctx = Self.getASTContext();
+
+  if (DestType->isCHERICapabilityType(Ctx, true) &&
+      !SrcType->isCHERICapabilityType(Ctx, true) &&
+      !SrcExpr->isIntegerConstantExpr(Ctx)) {
+    Self.Diag(Loc, diag::warn_capability_no_provenance) << DestType;
+    Self.Diag(Loc, diag::note_insert_intptr_fixit);
+  }
 
   // Not warning on reinterpret_cast, boolean, constant expressions, etc
   // are not explicit design choices, but consistent with GCC's behavior.
   // Feel free to modify them if you've reason/evidence for an alternative.
-  if (CStyle && SrcType->isIntegralType(Self.Context)
-      && !SrcType->isBooleanType()
-      && !SrcType->isEnumeralType()
-      && !SrcExpr->isIntegerConstantExpr(Self.Context)
-      && Self.Context.getTypeSize(DestType) >
-         Self.Context.getTypeSize(SrcType)) {
+  if (CStyle && SrcType->isIntegralType(Self.Context) &&
+      !SrcType->isBooleanType() && !SrcType->isEnumeralType() &&
+      !SrcExpr->isIntegerConstantExpr(Self.Context) &&
+      Ctx.getIntRange(DestType) > Ctx.getIntRange(SrcType)) {
     // Separate between casts to void* and non-void* pointers.
     // Some APIs use (abuse) void* for something like a user context,
     // and often that value is an integer even if it isn't a pointer itself.
@@ -2040,6 +2185,11 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
       return TC_NotApplicable;
     }
 
+    if (IsBadCheriReferenceCast(DestTypeTmp, SrcExpr.get(), Self.getASTContext())) {
+      msg = diag::err_bad_cxx_reference_cast_capability_qualifier;
+      return TC_Failed;
+    }
+
     // This code does this transformation for the checked types.
     DestType = Self.Context.getPointerType(DestTypeTmp->getPointeeType());
     SrcType = Self.Context.getPointerType(SrcType);
@@ -2096,12 +2246,18 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     //   type large enough to hold it. A value of std::nullptr_t can be
     //   converted to an integral type; the conversion has the same meaning
     //   and validity as a conversion of (void*)0 to the integral type.
-    if (Self.Context.getTypeSize(SrcType) >
-        Self.Context.getTypeSize(DestType)) {
-      msg = diag::err_bad_reinterpret_cast_small_int;
+    bool SrcIsCap = SrcType->isCHERICapabilityType(Self.Context);
+    // In purecap ABI casting to uint64_t is fine as we want the pointer range
+    uint64_t Size = SrcIsCap
+        ? Self.Context.getTargetInfo().getPointerRangeForCHERICapability()
+        : Self.Context.getTypeSize(SrcType);
+    if (Size > Self.Context.getTypeSize(DestType)) {
+      msg = SrcIsCap ? diag::err_bad_cap_reinterpret_cast_small_int :
+                       diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
-    Kind = CK_PointerToIntegral;
+    Kind = SrcIsCap && !DestType->isIntCapType() ? CK_CHERICapabilityToAddress
+                                                 : CK_PointerToIntegral;
     return TC_Success;
   }
 
@@ -2172,13 +2328,18 @@ static TryCastResult TryReinterpretCast(Sema &Self, ExprResult &SrcExpr,
     //   integral type size doesn't matter (except we don't allow bool).
     bool MicrosoftException = Self.getLangOpts().MicrosoftExt &&
                               !DestType->isBooleanType();
-    if ((Self.Context.getTypeSize(SrcType) >
-         Self.Context.getTypeSize(DestType)) &&
-         !MicrosoftException) {
-      msg = diag::err_bad_reinterpret_cast_small_int;
+    bool SrcIsCap = SrcType->isCHERICapabilityType(Self.Context);
+    // In purecap ABI casting to uint64_t is fine as we want the pointer range
+    uint64_t Size = SrcIsCap
+        ? Self.Context.getTargetInfo().getPointerRangeForCHERICapability()
+        : Self.Context.getTypeSize(SrcType);
+    if ((Size > Self.Context.getTypeSize(DestType)) && !MicrosoftException) {
+      msg = SrcIsCap ? diag::err_bad_cap_reinterpret_cast_small_int :
+                       diag::err_bad_reinterpret_cast_small_int;
       return TC_Failed;
     }
-    Kind = CK_PointerToIntegral;
+    Kind = SrcIsCap && !DestType->isIntCapType() ? CK_CHERICapabilityToAddress
+                                                 : CK_PointerToIntegral;
     return TC_Success;
   }
 
@@ -2684,10 +2845,13 @@ void CastOperation::CheckCStyleCast() {
     }
   }
 
+  DiagnoseCHERICallback(Self, SrcExpr.get()->getBeginLoc(), SrcType, DestType);
   DiagnoseCastOfObjCSEL(Self, SrcExpr, DestType);
   DiagnoseCallingConvCast(Self, SrcExpr, DestType, OpRange);
   DiagnoseBadFunctionCast(Self, SrcExpr, DestType);
   Kind = Self.PrepareScalarCast(SrcExpr, DestType);
+  DiagnoseCHERIPtr(Self, SrcExpr.get(), DestType, Kind, OpRange);
+
   if (SrcExpr.isInvalid())
     return;
 
@@ -2782,4 +2946,228 @@ ExprResult Sema::BuildCXXFunctionalCastExpr(TypeSourceInfo *CastTypeInfo,
   return Op.complete(CXXFunctionalCastExpr::Create(Context, Op.ResultType,
                          Op.ValueKind, CastTypeInfo, Op.Kind,
                          Op.SrcExpr.get(), &Op.BasePath, LPLoc, RPLoc));
+}
+
+ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
+                                       SourceLocation KeywordLoc, bool IsToCap,
+                                       QualType DestTy, TypeSourceInfo *TSInfo,
+                                       SourceLocation RParenLoc, Expr *SubExpr) {
+  // NOTE: __cheri_tocap and __cheri_fromcap are no-ops in both the hybrid and
+  //       purecap ABI if both source and destination types are capabilities
+  //       and the types are compatible.
+
+  // Use getRealReferenceType() because getType() only returns T for T&
+  const QualType SrcTy = SubExpr->getRealReferenceType();
+  // We don't included __uintcap_t here since it should be be allowed to use
+  // a __cheri_{to,from}cap on __uintcap_t
+  const bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, false);
+  const bool DestIsCap = DestTy->isCHERICapabilityType(Context, false);
+  CastKind Kind = CK_NoOp;
+  if (IsToCap) {
+    // __cheri_tocap
+    if (!SrcTy->isPointerType()) {
+      Diag(SubExpr->getBeginLoc(), diag::err_cheri_to_from_cap_invalid_source_type)
+        << SrcTy << IsToCap;
+      return ExprError();
+    }
+    if (!DestIsCap) {
+      Diag(TSInfo->getTypeLoc().getBeginLoc(),
+           diag::err_cheri_to_from_cap_invalid_target_type) << DestTy << IsToCap;
+      return ExprError();
+    }
+    // No-op if SrcTy is a capability
+    if (!SrcIsCap)
+      Kind = CK_PointerToCHERICapability;
+
+  } else {
+    // __cheri_fromcap
+    if (!SrcIsCap) {
+      Diag(SubExpr->getBeginLoc(), diag::err_cheri_to_from_cap_invalid_source_type)
+        << SrcTy << IsToCap;
+      return ExprError();
+    }
+    if (!DestTy->isPointerType()) {
+      Diag(TSInfo->getTypeLoc().getBeginLoc(),
+           diag::err_cheri_to_from_cap_invalid_target_type) << DestTy << IsToCap;
+      return ExprError();
+    }
+    // No-op if DestTy is a capability
+    if (!DestIsCap)
+      Kind = CK_CHERICapabilityToPointer;
+  }
+
+  // C++ checks if the types are exactly the same -> this will fail because
+  // capability and non-capability Type* are different instances
+  //
+  // Types compatible source:
+  //   if (getLangOpts().CPlusPlus)
+  //     return hasSameType(LHS, RHS);
+  //  return !mergeTypes(LHS, RHS, false, CompareUnqualified).isNull();
+
+  if (!CheckCHERIAssignCompatible(DestTy, SrcTy, SubExpr)) {
+    Diag(SubExpr->getBeginLoc(), diag::err_cheri_to_from_cap_unrelated_type)
+         << IsToCap << SrcTy << DestTy;
+    return ExprError();
+  }
+
+  // Warn about no-op cheri casts.
+  if (Kind == CK_NoOp) {
+    Diag(KeywordLoc, diag::warn_cheri_to_from_cap_noop)
+      << IsToCap << SrcTy << DestTy
+      << FixItHint::CreateRemoval(SourceRange(LParenLoc, RParenLoc));
+    // If we are casting to void*
+  }
+
+  return CStyleCastExpr::Create(Context, DestTy, VK_RValue, Kind, SubExpr,
+                                nullptr, TSInfo, LParenLoc, RParenLoc);
+}
+
+// Check if LHS and RHS are assign compatibile for CHERI (ignoring capability
+// qualifiers). Insert an implicit bitcast if necessary (when InsertBitCast is
+// true - the default) and update RHSExpr to point to it.
+//
+// Two types LHS and RHS are assign compatible (ignoring capability qualifiers) if:
+// - LHS == RHS
+// - either of LHS or RHS is void*
+//
+// In the case of LHS being void*, an implicit bitcast from RHSExpr to void*
+// will be inserted and RHSExpr updated to point to this ImplicitCastExpr.
+bool Sema::CheckCHERIAssignCompatible(QualType LHS, QualType RHS, Expr *&RHSExpr, bool InsertBitCast) {
+  // XXXAR: I had to modify mergeTypes() to add a IncludeCapabilityQualifier
+  // flag because here we want to compare everything but the __capability
+  // qualifier
+  // XXXKG: I also extended mergeTypes() with a MergeVoidPtr flag to allow the
+  // <-> void* case (and still get the checking of qualifiers).
+  // XXXKG: Allow non-const to const assignment
+  QualType MergedTy = Context.mergeTypes(
+      LHS, RHS, /*OfBlockPointer=*/false, /*Unqualified=*/false,
+      /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
+      /*MergeVoidPtr=*/false, /*MergeLHSConst=*/false);
+  if (MergedTy.isNull()) {
+    // As a special case we allow changing the types if either:
+    // - LHS or RHS is a pointer to void
+    // - LHS has a const-qualified pointee type and the RHS pointee is not
+    //   const-qualified
+    MergedTy = Context.mergeTypes(
+        LHS, RHS, /*OfBlockPointer=*/false, /*Unqualified=*/false,
+        /*BlockReturnType=*/false, /*IncludeCapabilityQualifier=*/false,
+        /*MergeVoidPtr=*/true, /*MergeLHSConst=*/true);
+    if (!MergedTy.isNull()) {
+      if (InsertBitCast) {
+        // Insert a CK_BitCast to ensure we don't crash during codegen (see
+        // https://github.com/CTSRD-CHERI/clang/issues/178)
+        bool RHSIsCap = RHS->isCHERICapabilityType(Context, false);
+        QualType BitCastTy = Context.getPointerType(
+            LHS->getAs<PointerType>()->getPointeeType(),
+            RHSIsCap ? ASTContext::PIK_Capability : ASTContext::PIK_Integer);
+        RHSExpr = ImplicitCastExpr::Create(Context, BitCastTy, CK_BitCast,
+                                           RHSExpr, nullptr, VK_RValue);
+      }
+      return true;
+    }
+    return false;
+  }
+  return true;
+}
+
+ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
+                                           SourceLocation KeywordLoc,
+                                           bool IsOffsetCast, QualType
+                                           DestTy, TypeSourceInfo *TSInfo,
+                                           SourceLocation RParenLoc, Expr
+                                           *SubExpr) {
+
+  CastKind Kind =
+      IsOffsetCast ? CK_CHERICapabilityToOffset : CK_CHERICapabilityToAddress;
+  // Check the source type
+  // Use getRealReferenceType() because getType() only returns T for T&
+  QualType SrcTy = SubExpr->getRealReferenceType();
+  // __cheri_offset and __cheri_address is valid for __uintcap_t as well
+  bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, true);
+  if (!SrcIsCap) {
+    // Note: __cheri_addr can be used on plain pointers since otherwise it would
+    // be very difficult to write code that compiles both in hybrid and in
+    // purecap mode. However, the offset cast only makes sense for capabilities!
+    if (IsOffsetCast || (!SrcTy->isPointerType() && !SrcTy->isReferenceType())) {
+      // XXXKG: What about functions?
+      Diag(SubExpr->getBeginLoc(),
+           diag::err_cheri_offset_addr_invalid_source_type)
+          << SrcTy << IsOffsetCast;
+      return ExprError();
+    } else {
+      // Casting from pointer to address in hybrid mode
+      assert(!Context.getTargetInfo().areAllPointersCapabilities());
+      Kind = CK_PointerToIntegral;
+    }
+  }
+
+  // Check the destination type:
+  // For __cheri_addr, output a more specific error message if DestTy is an
+  // integral pointer type
+  if (!IsOffsetCast) {
+    if (DestTy->isPointerType()) {
+      Diag(SubExpr->getBeginLoc(), diag::err_cheri_addr_ptr_type)
+        << DestTy << (int)DestTy->getAs<PointerType>()->isCHERICapability();
+      return ExprError();
+    }
+  }
+  // Otherwise just check that it is a non-enum integer type
+  bool DestIsInt = DestTy->isIntegerType() && !DestTy->isEnumeralType();
+  if (!DestIsInt) {
+    Diag(SubExpr->getBeginLoc(), diag::err_cheri_offset_addr_invalid_target_type)
+      << DestTy << IsOffsetCast;
+    return ExprError();
+  }
+
+  // Output warning about truncation if DestTy is smaller than CHERI cap pointer range
+  auto& TI = Context.getTargetInfo();
+  uint64_t PtrRange = TI.getPointerRangeForCHERICapability();
+  uint64_t DestRange = Context.getTypeSize(DestTy);
+  if (DestRange < PtrRange) {
+    bool DestIsSigned = DestTy->isSignedIntegerOrEnumerationType();
+    const char *minTy = TI.getTypeName(
+                          TI.getLeastIntTypeByWidth(PtrRange, DestIsSigned)
+                        );
+    Diag(SubExpr->getBeginLoc(), diag::warn_cheri_offset_addr_smaller_target_type)
+      << DestTy << minTy << IsOffsetCast;
+  }
+
+  return CStyleCastExpr::Create(Context, DestTy, VK_RValue, Kind, SubExpr,
+                                nullptr, TSInfo, LParenLoc, RParenLoc);
+}
+
+ExprResult Sema::ActOnCheriCast(Scope *S, SourceLocation LParenLoc, tok::TokenKind Kind,
+                                SourceLocation KeywordLoc, ParsedType Type,
+                                SourceLocation RParenLoc, Expr *SubExpr) {
+  if (Kind == tok::kw___cheri_cast) {
+    Diag(KeywordLoc, diag::err_cheri_cast);
+    return ExprError();
+  }
+  TypeSourceInfo *TSInfo = nullptr;
+  QualType T = GetTypeFromParser(Type, &TSInfo);
+  if (!TSInfo)
+    TSInfo = Context.getTrivialTypeSourceInfo(T, LParenLoc);
+
+  // Perform the default function/array to pointer decay first:
+  ExprResult Decayed = DefaultFunctionArrayLvalueConversion(SubExpr);
+  if (Decayed.isInvalid())
+    return ExprError();
+  SubExpr = Decayed.get();
+
+  switch (Kind) {
+  case tok::kw___cheri_tocap:
+  case tok::kw___cheri_fromcap:
+    return BuildCheriToOrFromCap(LParenLoc, KeywordLoc,
+                                 Kind == tok::kw___cheri_tocap, T,
+                                 TSInfo, RParenLoc, SubExpr);
+
+  case tok::kw___cheri_offset:
+  case tok::kw___cheri_addr:
+    return BuildCheriOffsetOrAddress(LParenLoc, KeywordLoc,
+                                     Kind == tok::kw___cheri_offset, T,
+                                     TSInfo, RParenLoc, SubExpr);
+
+  default:
+    llvm_unreachable("Unknown CHERI cast!");
+  }
 }
