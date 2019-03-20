@@ -85,18 +85,32 @@
 #define PPC64_HAS_VMX
 #endif
 
+#ifdef __CHERI_PURE_CAPABILITY__
+#define _LIBUNWIND_FMT_PTR "%-#p"
+#else
+#define _LIBUNWIND_FMT_PTR "%p"
+#endif
+
 #if defined(NDEBUG) && defined(_LIBUNWIND_IS_BAREMETAL)
 #define _LIBUNWIND_ABORT(msg)                                                  \
   do {                                                                         \
     abort();                                                                   \
   } while (0)
+#define _LIBUNWIND_ABORT_FMT(fmt, msg, ...) _LIBUNWIND_ABORT(msg)
 #else
 #define _LIBUNWIND_ABORT(msg)                                                  \
   do {                                                                         \
     fprintf(stderr, "libunwind: %s %s:%d - %s\n", __func__, __FILE__,          \
             __LINE__, msg);                                                    \
     fflush(stderr);                                                            \
-    abort();                                                                   \
+    __builtin_trap(); abort();                                                 \
+  } while (0)
+#define _LIBUNWIND_ABORT_FMT(fmt, ...)                                         \
+  do {                                                                         \
+    fprintf(stderr, "libunwind: %s %s:%d - " fmt "\n", __func__, __FILE__,     \
+            __LINE__, __VA_ARGS__);                                            \
+    fflush(stderr);                                                            \
+    __builtin_trap(); abort();                                                 \
   } while (0)
 #endif
 
@@ -121,6 +135,24 @@
     } while (0)
 #endif
 
+#ifdef __CHERI_PURE_CAPABILITY__
+static inline uintptr_t assert_pointer_in_bounds(uintptr_t value) {
+  if (!__builtin_cheri_tag_get((void*)value)) {
+    _LIBUNWIND_ABORT_FMT("Untagged value " _LIBUNWIND_FMT_PTR
+                         " used for dwarf section", (void*)value);
+  } else if (__builtin_cheri_offset_get((void*)value) >=
+             __builtin_cheri_length_get((void*)value)) {
+    _LIBUNWIND_ABORT_FMT("Out-of-bounds value " _LIBUNWIND_FMT_PTR
+                         " used for dwarf section", (void*)value);
+  }
+  return value;
+}
+#else
+static inline uintptr_t assert_pointer_in_bounds(uintptr_t value) {
+  return value;
+}
+#endif
+
 // Macros that define away in non-Debug builds
 #ifdef NDEBUG
   #define _LIBUNWIND_DEBUG_LOG(msg, ...)
@@ -129,7 +161,13 @@
   #define _LIBUNWIND_TRACING_DWARF (0)
   #define _LIBUNWIND_TRACE_UNWINDING(msg, ...)
   #define _LIBUNWIND_TRACE_DWARF(...)
+  #define CHERI_DBG(...) (void)0
 #else
+  #ifndef __CHERI_PURE_CAPABILITY__
+    #define CHERI_DBG(...) (void)0
+  #else
+    #define CHERI_DBG(...) fprintf(stderr, __VA_ARGS__)
+  #endif
   #ifdef __cplusplus
     extern "C" {
   #endif
@@ -179,5 +217,33 @@ struct check_fit {
 };
 #undef COMP_OP
 #endif // __cplusplus
+
+static inline uintptr_t pcc_address(uintptr_t a)
+{
+#ifdef __CHERI_PURE_CAPABILITY__
+  if (__builtin_cheri_tag_get((void*)a))
+    return a;
+  void *pcc = __builtin_cheri_program_counter_get();
+  pcc = __builtin_cheri_offset_set(pcc, __builtin_cheri_address_get((void*)a));
+  return (uintptr_t)pcc;
+#else
+  return a;
+#endif
+}
+
+__attribute__((always_inline))
+static inline uintptr_t ddc_address(uintptr_t a)
+{
+#ifdef __CHERI_PURE_CAPABILITY__
+  if (__builtin_cheri_tag_get((void*)a))
+    return a;
+  //fprintf(stderr, "Converting 0x%llx to ddc-relative pointer\n", (unsigned long long)a);
+  void *ddc = __builtin_cheri_global_data_get();
+  ddc = __builtin_cheri_offset_set(ddc, __builtin_cheri_address_get((void*)a));
+  return (uintptr_t)ddc;
+#else
+  return a;
+#endif
+}
 
 #endif // LIBUNWIND_CONFIG_H

@@ -1,8 +1,15 @@
 #include <assert.h>
 #include <libunwind.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 int main() {
   unw_context_t context;
   int ret = unw_getcontext(&context);
-  assert(ret == UNW_ESUCCESS);
+  if (ret != UNW_ESUCCESS) {
+    fprintf(stderr, "unw_getcontext() failed: %d!\n", ret);
+    abort();
+  }
+  fprintf(stderr, "Success!\n");
+  return 0;
 }

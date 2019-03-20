@@ -7,6 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
+// UNSUPPORTED: libcpp-no-rtti
+
 // <functional>
 
 // class function<R(ArgTypes...)>

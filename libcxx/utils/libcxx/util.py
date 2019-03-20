@@ -163,15 +163,18 @@ def mkdir_p(path):
 
 
 class ExecuteCommandTimeoutException(Exception):
-    def __init__(self, msg, out, err, exitCode):
+    def __init__(self, msg, out, err, exitCode, command=None):
         assert isinstance(msg, str)
         assert isinstance(out, str)
         assert isinstance(err, str)
         assert isinstance(exitCode, int)
+        if command is not None:
+            assert isinstance(command, list) or isinstance(command, str)
         self.msg = msg
         self.out = out
         self.err = err
         self.exitCode = exitCode
+        self.command = command
 
 # Close extra file handles on UNIX (on Windows this cannot be done while
 # also redirecting input).
@@ -207,6 +210,7 @@ def executeCommand(command, cwd=None, env=None, input=None, timeout=0):
     # need to use a reference to a mutable object rather than a plain
     # bool. In Python 3 we could use the "nonlocal" keyword but we need
     # to support Python 2 as well.
+    # FIXME: this seems broken?
     hitTimeOut = [False]
     try:
         if timeout > 0:
@@ -219,7 +223,10 @@ def executeCommand(command, cwd=None, env=None, input=None, timeout=0):
             timerObject = threading.Timer(timeout, killProcess)
             timerObject.start()
 
-        out,err = p.communicate(input=input)
+        kwargs = dict()
+        if sys.version_info > (3, 3) and timeout > 0:
+            kwargs["timeout"] = timeout
+        out, err = p.communicate(input=input, **kwargs)
         exitCode = p.wait()
     finally:
         if timerObject != None:
@@ -234,7 +241,8 @@ def executeCommand(command, cwd=None, env=None, input=None, timeout=0):
             msg='Reached timeout of {} seconds'.format(timeout),
             out=out,
             err=err,
-            exitCode=exitCode
+            exitCode=exitCode,
+            command=command
             )
 
     # Detect Ctrl-C in subprocess.

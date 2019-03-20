@@ -165,14 +165,18 @@ void test_imp() {
     { // Check that the null value is detected
         TestFn tf = nullptr;
         std::function<Fn> f = tf;
+#ifndef _LIBCPP_NO_RTTI
         assert(f.template target<TestFn>() == nullptr);
+#endif
     }
     { // Check that the non-null value is detected.
         TestFn tf = Creator<TestFn>::create();
         assert(tf != nullptr);
         std::function<Fn> f = tf;
+#ifndef _LIBCPP_NO_RTTI
         assert(f.template target<TestFn>() != nullptr);
         assert(*f.template target<TestFn>() == tf);
+#endif
     }
 }
 

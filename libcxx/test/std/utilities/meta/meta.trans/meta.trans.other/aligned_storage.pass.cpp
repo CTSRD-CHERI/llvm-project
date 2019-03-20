@@ -264,8 +264,10 @@ int main()
 #endif
     static_assert(std::is_trivial<T1>::value, "");
     static_assert(std::is_standard_layout<T1>::value, "");
+#ifndef __CHERI_PURE_CAPABILITY__
     static_assert(std::alignment_of<T1>::value == alignof(std::max_align_t),
                   "");
+#endif
     static_assert(sizeof(T1) == 16, "");
     }
     {
@@ -275,9 +277,11 @@ int main()
 #endif
     static_assert(std::is_trivial<T1>::value, "");
     static_assert(std::is_standard_layout<T1>::value, "");
+#ifndef __CHERI_PURE_CAPABILITY__
     static_assert(std::alignment_of<T1>::value == alignof(std::max_align_t),
                   "");
     static_assert(sizeof(T1) == 16 + alignof(std::max_align_t), "");
+#endif
     }
     {
     typedef std::aligned_storage<10>::type T1;

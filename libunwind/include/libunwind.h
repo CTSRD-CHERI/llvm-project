@@ -62,12 +62,12 @@ enum {
 #endif
 };
 
-struct unw_context_t {
+struct __attribute__((aligned(sizeof(void*)))) unw_context_t {
   uint64_t data[_LIBUNWIND_CONTEXT_SIZE];
 };
 typedef struct unw_context_t unw_context_t;
 
-struct unw_cursor_t {
+struct __attribute__((aligned(sizeof(void*)))) unw_cursor_t {
   uint64_t data[_LIBUNWIND_CURSOR_SIZE];
 };
 typedef struct unw_cursor_t unw_cursor_t;
@@ -821,6 +821,39 @@ enum {
   UNW_MIPS_F31 = 63,
   UNW_MIPS_HI = 64,
   UNW_MIPS_LO = 65,
+  // CHERI registers
+  UNW_MIPS_DDC  = 72,
+  UNW_MIPS_C1,
+  UNW_MIPS_C2,
+  UNW_MIPS_C3,
+  UNW_MIPS_C4,
+  UNW_MIPS_C5,
+  UNW_MIPS_C6,
+  UNW_MIPS_C7,
+  UNW_MIPS_C8,
+  UNW_MIPS_C9,
+  UNW_MIPS_C10,
+  UNW_MIPS_C11,
+  UNW_MIPS_C12,
+  UNW_MIPS_C13,
+  UNW_MIPS_C14,
+  UNW_MIPS_C15,
+  UNW_MIPS_C16,
+  UNW_MIPS_C17,
+  UNW_MIPS_C18,
+  UNW_MIPS_C19,
+  UNW_MIPS_C20,
+  UNW_MIPS_C21,
+  UNW_MIPS_C22,
+  UNW_MIPS_C23,
+  UNW_MIPS_C24,
+  UNW_MIPS_C25,
+  UNW_MIPS_C26,
+  UNW_MIPS_C27,
+  UNW_MIPS_C28,
+  UNW_MIPS_C29,
+  UNW_MIPS_C30,
+  UNW_MIPS_C31
 };
 
 #endif

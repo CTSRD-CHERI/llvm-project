@@ -33,6 +33,7 @@ class DwarfInstructions {
 public:
   typedef typename A::pint_t pint_t;
   typedef typename A::sint_t sint_t;
+  typedef typename A::capability_t capability_t;
 
   static int stepWithDwarf(A &addressSpace, pint_t pc, pint_t fdeStart,
                            R &registers);
@@ -55,18 +56,31 @@ private:
   static pint_t evaluateExpression(pint_t expression, A &addressSpace,
                                    const R &registers,
                                    pint_t initialStackValue);
-  static pint_t getSavedRegister(A &addressSpace, const R &registers,
+  static pint_t getSavedRegister(int reg, A &addressSpace, const R &registers,
                                  pint_t cfa, const RegisterLocation &savedReg);
   static double getSavedFloatRegister(A &addressSpace, const R &registers,
                                   pint_t cfa, const RegisterLocation &savedReg);
+  static capability_t
+  getSavedCapabilityRegister(A &addressSpace, const R &registers, pint_t cfa,
+                             const RegisterLocation &savedReg);
   static v128 getSavedVectorRegister(A &addressSpace, const R &registers,
                                   pint_t cfa, const RegisterLocation &savedReg);
 
   static pint_t getCFA(A &addressSpace, const PrologInfo &prolog,
                        const R &registers) {
-    if (prolog.cfaRegister != 0)
+    if (prolog.cfaRegister != 0) {
+#if defined(__mips__) && defined(__CHERI_PURE_CAPABILITY__)
+      // Ugly hack for old binaries that report SP instead of C11
+      if (prolog.cfaRegister == UNW_MIPS_R29) {
+        fprintf(stderr,
+                "LIBUNWIND HACK FOR OLD BINARY with $sp as CFA register!\n");
+        return (pint_t)((sint_t)registers.getRegister(UNW_MIPS_C11) +
+                        prolog.cfaRegisterOffset);
+      }
+#endif
       return (pint_t)((sint_t)registers.getRegister((int)prolog.cfaRegister) +
              prolog.cfaRegisterOffset);
+    }
     if (prolog.cfaExpression != 0)
       return evaluateExpression((pint_t)prolog.cfaExpression, addressSpace, 
                                 registers, 0);
@@ -75,19 +89,22 @@ private:
   }
 };
 
-
 template <typename A, typename R>
-typename A::pint_t DwarfInstructions<A, R>::getSavedRegister(
-    A &addressSpace, const R &registers, pint_t cfa,
-    const RegisterLocation &savedReg) {
+typename A::pint_t
+DwarfInstructions<A, R>::getSavedRegister(int reg, A &addressSpace,
+                                          const R &registers, pint_t cfa,
+                                          const RegisterLocation &savedReg) {
+  if (registers.validCapabilityRegister(reg))
+    return A::to_pint_t(
+        getSavedCapabilityRegister(addressSpace, registers, cfa, savedReg));
   switch (savedReg.location) {
   case CFI_Parser<A>::kRegisterInCFA:
     return addressSpace.getRegister(cfa + (pint_t)savedReg.value);
 
-  case CFI_Parser<A>::kRegisterAtExpression:
-    return addressSpace.getRegister(
-        evaluateExpression((pint_t)savedReg.value, addressSpace,
-                            registers, cfa));
+  case CFI_Parser<A>::kRegisterAtExpression: {
+    return addressSpace.getRegister(evaluateExpression(
+        (pint_t)savedReg.value, addressSpace, registers, cfa));
+  }
 
   case CFI_Parser<A>::kRegisterIsExpression:
     return evaluateExpression((pint_t)savedReg.value, addressSpace,
@@ -95,6 +112,37 @@ typename A::pint_t DwarfInstructions<A, R>::getSavedRegister(
 
   case CFI_Parser<A>::kRegisterInRegister:
     return registers.getRegister((int)savedReg.value);
+
+  case CFI_Parser<A>::kRegisterUnused:
+  case CFI_Parser<A>::kRegisterOffsetFromCFA:
+    // FIX ME
+    break;
+  }
+  _LIBUNWIND_ABORT("unsupported restore location for register");
+}
+
+template <typename A, typename R>
+typename A::capability_t DwarfInstructions<A, R>::getSavedCapabilityRegister(
+    A &addressSpace, const R &registers, pint_t cfa,
+    const RegisterLocation &savedReg) {
+  switch (savedReg.location) {
+  case CFI_Parser<A>::kRegisterInCFA:
+    return addressSpace.getCapability(cfa + (pint_t)savedReg.value);
+
+  case CFI_Parser<A>::kRegisterAtExpression:
+    return addressSpace.getCapability(evaluateExpression(
+        (pint_t)savedReg.value, addressSpace, registers, cfa));
+  case CFI_Parser<A>::kRegisterInRegister:
+    return registers.getCapabilityRegister((int)savedReg.value);
+
+  case CFI_Parser<A>::kRegisterIsExpression:
+#if 0
+    // TODO: should this be supported?
+    return A::to_capability_t(evaluateExpression((pint_t)savedReg.value,
+                                                 addressSpace, registers, cfa));
+#else
+    break;
+#endif
 
   case CFI_Parser<A>::kRegisterUnused:
   case CFI_Parser<A>::kRegisterOffsetFromCFA:
@@ -182,12 +230,21 @@ int DwarfInstructions<A, R>::stepWithDwarf(A &addressSpace, pint_t pc,
             newRegisters.setVectorRegister(
                 i, getSavedVectorRegister(addressSpace, registers, cfa,
                                           prolog.savedRegisters[i]));
-          else if (i == (int)cieInfo.returnAddressRegister)
-            returnAddress = getSavedRegister(addressSpace, registers, cfa,
+          else if (i == (int)cieInfo.returnAddressRegister) {
+            returnAddress = getSavedRegister(i, addressSpace, registers, cfa,
                                              prolog.savedRegisters[i]);
-          else if (registers.validRegister(i))
+            CHERI_DBG("SETTING RETURN REGISTER %d (%s): %#p \n",
+                      i, newRegisters.getRegisterName(i), (void*)returnAddress);
+          } else if (registers.validCapabilityRegister(i)) {
+            newRegisters.setCapabilityRegister(
+                i, getSavedCapabilityRegister(addressSpace, registers, cfa,
+                                              prolog.savedRegisters[i]));
+            CHERI_DBG("SETTING CAPABILITY REGISTER %d (%s): %#p \n",
+                      i, newRegisters.getRegisterName(i),
+                      (void*)A::to_pint_t(newRegisters.getCapabilityRegister(i)));
+          } else if (registers.validRegister(i))
             newRegisters.setRegister(
-                i, getSavedRegister(addressSpace, registers, cfa,
+                i, getSavedRegister(i, addressSpace, registers, cfa,
                                     prolog.savedRegisters[i]));
           else
             return UNW_EBADREG;
@@ -241,7 +298,14 @@ typename A::pint_t
 DwarfInstructions<A, R>::evaluateExpression(pint_t expression, A &addressSpace,
                                             const R &registers,
                                             pint_t initialStackValue) {
-  const bool log = false;
+// XXXAR: I am not entirely sure these operations should work on a uintcap_t
+// but if it's an untagged integer value it is fine
+#pragma clang diagnostic push
+#ifdef __CHERI__
+#pragma clang diagnostic ignored "-Wcheri-bitwise-operations"
+#endif
+  *(volatile char*)expression;
+  const bool log = true;
   pint_t p = expression;
   pint_t expressionEnd = expression + 20; // temp, until len read
   pint_t length = (pint_t)addressSpace.getULEB128(p, expressionEnd);
@@ -677,7 +741,7 @@ DwarfInstructions<A, R>::evaluateExpression(pint_t expression, A &addressSpace,
       reg = static_cast<uint32_t>(addressSpace.getULEB128(p, expressionEnd));
       *(++sp) = registers.getRegister((int)reg);
       if (log)
-        fprintf(stderr, "push reg %d + 0x%" PRIx64 "\n", reg, (uint64_t)svalue);
+        fprintf(stderr, "push reg %d\n", reg);
       break;
 
     case DW_OP_breg0:
@@ -775,6 +839,7 @@ DwarfInstructions<A, R>::evaluateExpression(pint_t expression, A &addressSpace,
   if (log)
     fprintf(stderr, "expression evaluates to 0x%" PRIx64 "\n", (uint64_t)*sp);
   return *sp;
+#pragma clang diagnostic pop
 }
 
 

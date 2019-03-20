@@ -18,8 +18,10 @@
 
 int main()
 {
+#ifndef __CHERI_PURE_CAPABILITY__
     static_assert(sizeof(std::ptrdiff_t) == sizeof(void*),
                   "sizeof(std::ptrdiff_t) == sizeof(void*)");
+#endif
     static_assert(std::is_signed<std::ptrdiff_t>::value,
                   "std::is_signed<std::ptrdiff_t>::value");
     static_assert(std::is_integral<std::ptrdiff_t>::value,

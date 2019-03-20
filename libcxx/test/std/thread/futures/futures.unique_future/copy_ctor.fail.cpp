@@ -28,7 +28,7 @@ int main()
     }
     {
         std::future<int &> f0;
-        std::future<int &> f = f0; // expected-error {{call to deleted constructor of 'std::future<int &>'}}
+        std::future<int &> f = f0; // expected-error-re {{call to deleted constructor of 'std::future<int &{{( __capability)?}}>'}}
     }
     {
         std::future<void> f0;

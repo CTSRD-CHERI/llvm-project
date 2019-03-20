@@ -70,9 +70,9 @@ include(HandleCompilerRT)
 
 # Basic options ---------------------------------------------------------------
 option(LIBCXX_ENABLE_ASSERTIONS "Enable assertions independent of build mode." OFF)
-option(LIBCXX_ENABLE_SHARED "Build libc++ as a shared library." ON)
+option(LIBCXX_ENABLE_SHARED "Build libc++ as a shared library." OFF)
 option(LIBCXX_ENABLE_STATIC "Build libc++ as a static library." ON)
-option(LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY "Build libc++experimental.a" ON)
+option(LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY "Build libc++experimental.a" OFF)
 set(ENABLE_FILESYSTEM_DEFAULT ${LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY})
 if (WIN32)
   set(ENABLE_FILESYSTEM_DEFAULT OFF)
@@ -174,7 +174,7 @@ endif()
 
 # Use a static copy of the ABI library when linking libc++. This option
 # cannot be used with LIBCXX_ENABLE_ABI_LINKER_SCRIPT.
-option(LIBCXX_ENABLE_STATIC_ABI_LIBRARY "Statically link the ABI library" OFF)
+option(LIBCXX_ENABLE_STATIC_ABI_LIBRARY "Statically link the ABI library" ON)
 
 cmake_dependent_option(LIBCXX_STATICALLY_LINK_ABI_IN_STATIC_LIBRARY
   "Statically link the ABI library to static library" ON
@@ -228,12 +228,12 @@ set(LIBCXX_SYSROOT "" CACHE STRING "Use alternate sysroot.")
 set(LIBCXX_GCC_TOOLCHAIN "" CACHE STRING "Use alternate GCC toolchain.")
 
 # Feature options -------------------------------------------------------------
-option(LIBCXX_ENABLE_EXCEPTIONS "Use exceptions." ON)
-option(LIBCXX_ENABLE_RTTI "Use run time type information." ON)
+option(LIBCXX_ENABLE_EXCEPTIONS "Use exceptions." OFF)
+option(LIBCXX_ENABLE_RTTI "Use run time type information." OFF)
 option(LIBCXX_ENABLE_GLOBAL_FILESYSTEM_NAMESPACE "Build libc++ with support for the global filesystem namespace." ON)
 option(LIBCXX_ENABLE_STDIN "Build libc++ with support for stdin/std::cin." ON)
 option(LIBCXX_ENABLE_STDOUT "Build libc++ with support for stdout/std::cout." ON)
-option(LIBCXX_ENABLE_THREADS "Build libc++ with support for threads." ON)
+option(LIBCXX_ENABLE_THREADS "Build libc++ with support for threads." OFF)
 option(LIBCXX_ENABLE_THREAD_UNSAFE_C_FUNCTIONS "Build libc++ with support for thread-unsafe C functions" ON)
 option(LIBCXX_ENABLE_MONOTONIC_CLOCK
   "Build libc++ with support for a monotonic clock.
@@ -606,6 +606,11 @@ else()
   add_definitions(-D_LIBCPP_NO_EXCEPTIONS)
   add_compile_flags_if_supported(-EHs- -EHa-)
   add_compile_flags_if_supported(-fno-exceptions)
+endif()
+
+# Static build flags 
+if (LIBCXX_ENABLE_STATIC)
+  add_definitions(-D_LIBCPP_BUILD_STATIC)
 endif()
 
 # RTTI flags ==================================================================

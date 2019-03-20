@@ -32,6 +32,15 @@ typedef Clock::duration duration;
 typedef std::chrono::milliseconds ms;
 typedef std::chrono::nanoseconds ns;
 
+
+#if !defined(TEST_HAS_SANITIZERS) && !defined(TEST_SLOW_HOST)
+static ms main_thread_sleep_duration = ms(750);
+static ms tolerance = ms(500);
+#else
+static ms main_thread_sleep_duration = ms(250);
+static ms tolerance = ms(200);
+#endif
+
 void f()
 {
     time_point t0 = Clock::now();
@@ -42,8 +51,8 @@ void f()
         ;
     time_point t1 = Clock::now();
     m.unlock_shared();
-    ns d = t1 - t0 - ms(250);
-    assert(d < ms(200));  // within 200ms
+    ns d = t1 - t0 - main_thread_sleep_duration;
+    assert(d < tolerance);  // within 200ms (500ms on slow systems)
 }
 
 
@@ -53,7 +62,7 @@ int main()
     std::vector<std::thread> v;
     for (int i = 0; i < 5; ++i)
         v.push_back(std::thread(f));
-    std::this_thread::sleep_for(ms(250));
+    std::this_thread::sleep_for(main_thread_sleep_duration);
     m.unlock();
     for (auto& t : v)
         t.join();

@@ -24,6 +24,6 @@ struct Deleter {
 };
 
 int main() {
-  // expected-error@+1 {{call to deleted constructor of 'std::unique_ptr<int, const Deleter &>}}
+  // expected-error-re@+1 {{call to deleted constructor of 'std::unique_ptr<int, const Deleter &{{.*}}>}}
   std::unique_ptr<int, const Deleter&> s((int*)nullptr, Deleter());
 }
