@@ -3525,6 +3525,11 @@ LangAS CodeGenModule::GetGlobalVarAddressSpace(const VarDecl *D) {
     }
   }
 
+  if (LangOpts.OpenMP) {
+    LangAS AS;
+    if (OpenMPRuntime->hasAllocateAttributeForGlobalVar(D, AS))
+      return AS;
+  }
   return getTargetCodeGenInfo().getGlobalVarAddressSpace(*this, D);
 }
 
