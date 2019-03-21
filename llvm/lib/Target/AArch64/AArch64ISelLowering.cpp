@@ -3742,7 +3742,7 @@ AArch64TargetLowering::LowerCall(CallLoweringInfo &CLI,
         SDValue Cpy = DAG.getMemcpy(
             Chain, DL, DstAddr, Arg, SizeNode, Outs[i].Flags.getByValAlign(),
             /*isVol = */ false, /*AlwaysInline = */ false,
-            /*isTailCall = */ false, /*ForceLibcall = */ false,
+            /*isTailCall = */ false, /*MustPreserveCheriCapabilities = */ false,
             DstInfo, MachinePointerInfo());
 
         MemOpChains.push_back(Cpy);

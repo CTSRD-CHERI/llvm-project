@@ -7193,13 +7193,14 @@ bool SelectionDAGBuilder::visitMemPCpyCall(const CallInst &I) {
   bool isVol = false;
   SDLoc sdl = getCurSDLoc();
 
+  const bool MustPreserveCheriTags = I.hasFnAttr("must-preserve-cheri-tags");
   // In the mempcpy context we need to pass in a false value for isTailCall
   // because the return pointer needs to be adjusted by the size of
   // the copied memory.
-  SDValue MC = DAG.getMemcpy(
-      getRoot(), sdl, Dst, Src, Size, Align, isVol, false, /*isTailCall=*/false,
-      I.isNoBuiltin(), MachinePointerInfo(I.getArgOperand(0)),
-      MachinePointerInfo(I.getArgOperand(1)));
+  SDValue MC = DAG.getMemcpy(getRoot(), sdl, Dst, Src, Size, Align, isVol,
+                             false, /*isTailCall=*/false, MustPreserveCheriTags,
+                             MachinePointerInfo(I.getArgOperand(0)),
+                             MachinePointerInfo(I.getArgOperand(1)));
   assert(MC.getNode() != nullptr &&
          "** memcpy should not be lowered as TailCall in mempcpy context **");
   DAG.setRoot(MC);

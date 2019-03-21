@@ -1507,9 +1507,8 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
     Chain = DAG.getMemcpy(Chain, DL, FIPtr, Arg, SizeNode, Align,
                           /*IsVolatile=*/false,
                           /*AlwaysInline=*/false,
-                          /*ForceLibcall=*/false,
-                          IsTailCall, MachinePointerInfo(),
-                          MachinePointerInfo());
+                          /*MustPreserveCheriCapabilities=*/false, IsTailCall,
+                          MachinePointerInfo(), MachinePointerInfo());
     ByValArgs.push_back(FIPtr);
   }
 

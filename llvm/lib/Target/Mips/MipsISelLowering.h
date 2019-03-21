@@ -412,10 +412,11 @@ extern bool LargeCapTable;
     // Although we don't currently have a CSetAddr, our CheriExpandIntrinsics
     // pass handles the intrinsic so we want to keep the intrinsic as-is.
     bool hasCapabilitySetAddress() const override { return true; }
+    virtual MVT cheriCapabilityType() const override { return CapType; }
 
-   CCAssignFn *CCAssignFnForCall() const;
+    CCAssignFn *CCAssignFnForCall() const;
 
-   CCAssignFn *CCAssignFnForReturn() const;
+    CCAssignFn *CCAssignFnForReturn() const;
 
   protected:
     SDValue getGlobalReg(SelectionDAG &DAG, EVT Ty, bool IsForTls) const;

@@ -20,11 +20,11 @@ using namespace llvm;
 SDValue BPFSelectionDAGInfo::EmitTargetCodeForMemcpy(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
     SDValue Size, unsigned Align, bool isVolatile, bool AlwaysInline,
-    bool ForceLibcall, MachinePointerInfo DstPtrInfo,
+    bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
     MachinePointerInfo SrcPtrInfo) const {
   // Requires the copy size to be a constant.
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
-  if (!ConstantSize || ForceLibcall)
+  if (!ConstantSize)
     return SDValue();
 
   unsigned CopyLen = ConstantSize->getZExtValue();

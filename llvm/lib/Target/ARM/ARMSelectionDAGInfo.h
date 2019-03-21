@@ -40,16 +40,16 @@ public:
   SDValue EmitTargetCodeForMemcpy(SelectionDAG &DAG, const SDLoc &dl,
                                   SDValue Chain, SDValue Dst, SDValue Src,
                                   SDValue Size, unsigned Align, bool isVolatile,
-                                  bool AlwaysInline, bool ForceLibcall,
+                                  bool AlwaysInline,
+                                  bool MustPreserveCheriCapabilities,
                                   MachinePointerInfo DstPtrInfo,
                                   MachinePointerInfo SrcPtrInfo) const override;
 
-  SDValue
-  EmitTargetCodeForMemmove(SelectionDAG &DAG, const SDLoc &dl, SDValue Chain,
-                           SDValue Dst, SDValue Src, SDValue Size,
-                           unsigned Align, bool isVolatile, bool ForceLibcall,
-                           MachinePointerInfo DstPtrInfo,
-                           MachinePointerInfo SrcPtrInfo) const override;
+  SDValue EmitTargetCodeForMemmove(
+      SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst,
+      SDValue Src, SDValue Size, unsigned Align, bool isVolatile,
+      bool MustPreserveCheriCapabilities, MachinePointerInfo DstPtrInfo,
+      MachinePointerInfo SrcPtrInfo) const override;
 
   // Adjust parameters for memset, see RTABI section 4.3.4
   SDValue EmitTargetCodeForMemset(SelectionDAG &DAG, const SDLoc &dl,

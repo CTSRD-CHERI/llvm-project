@@ -657,7 +657,7 @@ WebAssemblyTargetLowering::LowerCall(CallLoweringInfo &CLI,
       Chain = DAG.getMemcpy(
           Chain, DL, FINode, OutVal, SizeNode, Out.Flags.getByValAlign(),
           /*isVolatile*/ false, /*AlwaysInline=*/false,
-          /*isTailCall*/ false, /*ForceLibcall=*/false,
+          /*isTailCall*/ false, /*MustPreserveCheriCapabilities=*/false,
           MachinePointerInfo(), MachinePointerInfo());
       OutVal = FINode;
     }

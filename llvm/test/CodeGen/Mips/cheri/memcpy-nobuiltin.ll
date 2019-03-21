@@ -29,12 +29,25 @@ entry:
   ; CHECK-NEXT: csc $c1, $zero, 0($c3)
 }
 
-define void @memcpy_aligned_nobuiltin(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) #0 {
+define void @memcpy_aligned_must_preserve_tags(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) #0 {
 entry:
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %dst, i8 addrspace(200)* align 16 %src, i64 16, i1 false) #3
   ret void
-  ; The memcpy could be inlined but was tagged with nobuiltin -> should call memcpy()
-  ; CHECK-LABEL: memcpy_aligned_nobuiltin:
+  ; Correctly aligned -> no need for libcall (even with attribute)
+  ; CHECK-LABEL: memcpy_aligned_must_preserve_tags:
+  ; CHECK: # %bb.0:
+  ; CHECK-NEXT: clc $c1, $zero, 0($c4)
+  ; PURECAP-NEXT: cjr $c17
+  ; HYBRID-NEXT:  jr $ra
+  ; CHECK-NEXT: csc $c1, $zero, 0($c3)
+}
+
+define void @memcpy_underaligned_must_preserve_tags(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) #0 {
+entry:
+  call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %dst, i8 addrspace(200)* align 16 %src, i64 16, i1 false) #3
+  ret void
+  ; The memmove could be inlined but was tagged with nobuiltin -> should call memmove()
+  ; CHECK-LABEL: memcpy_underaligned_must_preserve_tags:
   ; PURECAP: clcbi $c12, %capcall20(memcpy)
   ; HYBRID: jal	memcpy_c
 }
@@ -64,17 +77,30 @@ entry:
   ; CHECK-NEXT: csc $c1, $zero, 0($c3)
 }
 
-define void @memmove_aligned_nobuiltin(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) #0 {
+define void @memmove_underaligned_must_preserve_tags(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) #0 {
+entry:
+  call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 8 %dst, i8 addrspace(200)* align 16 %src, i64 16, i1 false) #3
+  ret void
+  ; The memmove could be inlined but was tagged with nobuiltin -> should call memmove()
+  ; CHECK-LABEL: memmove_underaligned_must_preserve_tags:
+  ; PURECAP: clcbi $c12, %capcall20(memmove)
+  ; HYBRID: jal	memmove_c
+}
+
+define void @memmove_aligned_must_preserve_tags(i8 addrspace(200)* %dst, i8 addrspace(200)* %src) #0 {
 entry:
   call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)* align 16 %dst, i8 addrspace(200)* align 16 %src, i64 16, i1 false) #3
   ret void
-  ; The memmove could be inlined but was tagged with nobuiltin -> should call memmove()
-  ; CHECK-LABEL: memmove_aligned_nobuiltin:
-  ; PURECAP: clcbi $c12, %capcall20(memmove)
-  ; HYBRID: jal	memmove_c
+  ; Correctly aligned -> no need for libcall (even with attribute)
+  ; CHECK-LABEL: memmove_aligned_must_preserve_tags:
+  ; CHECK: # %bb.0:
+  ; CHECK-NEXT: clc $c1, $zero, 0($c4)
+  ; PURECAP-NEXT: cjr $c17
+  ; HYBRID-NEXT:  jr $ra
+  ; CHECK-NEXT: csc $c1, $zero, 0($c3)
 }
 
 attributes #0 = { noinline nounwind }
 attributes #1 = { nounwind readnone }
 attributes #2 = { argmemonly nounwind }
-attributes #3 = { nobuiltin }
+attributes #3 = { "must-preserve-cheri-tags" }

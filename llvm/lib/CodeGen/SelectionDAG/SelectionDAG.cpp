@@ -5578,6 +5578,7 @@ static bool FindOptimalMemOpLowering(std::vector<EVT> &MemOps,
                                      bool ZeroMemset,
                                      bool MemcpyStrSrc,
                                      bool AllowOverlap,
+                                     bool MustPreserveCheriCapabilities,
                                      unsigned DstAS, unsigned SrcAS,
                                      SelectionDAG &DAG,
                                      const TargetLowering &TLI) {
@@ -5678,6 +5679,11 @@ static bool FindOptimalMemOpLowering(std::vector<EVT> &MemOps,
     if (++NumMemOps > Limit)
       return false;
 
+    if (MustPreserveCheriCapabilities && !VT.isFatPointer()) {
+      LLVM_DEBUG(dbgs() << "Cannot expand tag-preserving memcpy using " << VT.getEVTString() << "\n");
+      return false;
+    }
+
     MemOps.push_back(VT);
     Size -= VTSize;
   }
@@ -5722,6 +5728,7 @@ static SDValue getMemcpyLoadsAndStores(SelectionDAG &DAG, const SDLoc &dl,
                                        SDValue Chain, SDValue Dst, SDValue Src,
                                        uint64_t Size, unsigned Align,
                                        bool isVol, bool AlwaysInline,
+                                       bool MustPreserveCheriCapabilities,
                                        MachinePointerInfo DstPtrInfo,
                                        MachinePointerInfo SrcPtrInfo) {
   // Turn a memcpy of undef to nop.
@@ -5755,10 +5762,23 @@ static SDValue getMemcpyLoadsAndStores(SelectionDAG &DAG, const SDLoc &dl,
                                 (DstAlignCanChange ? 0 : Align),
                                 (isZeroConstant ? 0 : SrcAlign),
                                 false, false, CopyFromConstant, true,
+                                MustPreserveCheriCapabilities,
                                 DstPtrInfo.getAddrSpace(),
                                 SrcPtrInfo.getAddrSpace(),
                                 DAG, TLI))
     return SDValue();
+
+  if (MustPreserveCheriCapabilities && !MemOps[0].isFatPointer()) {
+    LLVM_DEBUG(
+        dbgs() << __func__
+               << " memcpy must preserve tags but value is not statically "
+                  "known to be sufficiently aligned -> using memcpy() call\n");
+    if (AlwaysInline) {
+      report_fatal_error("MustPreserveCheriCapabilities and AlwaysInline set "
+                          "but operation cannot be lowered to loads+stores!");
+    }
+    return SDValue();
+  }
 
   if (DstAlignCanChange) {
     Type *Ty = MemOps[0].getTypeForEVT(C);
@@ -5918,6 +5938,7 @@ static SDValue getMemmoveLoadsAndStores(SelectionDAG &DAG, const SDLoc &dl,
                                         SDValue Chain, SDValue Dst, SDValue Src,
                                         uint64_t Size, unsigned Align,
                                         bool isVol, bool AlwaysInline,
+                                        bool MustPreserveCheriCapabilities,
                                         MachinePointerInfo DstPtrInfo,
                                         MachinePointerInfo SrcPtrInfo) {
   // Turn a memmove of undef to nop.
@@ -5945,6 +5966,7 @@ static SDValue getMemmoveLoadsAndStores(SelectionDAG &DAG, const SDLoc &dl,
   if (!FindOptimalMemOpLowering(MemOps, Limit, Size,
                                 (DstAlignCanChange ? 0 : Align), SrcAlign,
                                 false, false, false, false,
+                                MustPreserveCheriCapabilities,
                                 DstPtrInfo.getAddrSpace(),
                                 SrcPtrInfo.getAddrSpace(),
                                 DAG, TLI))
@@ -6048,7 +6070,7 @@ static SDValue getMemsetStores(SelectionDAG &DAG, const SDLoc &dl,
     isa<ConstantSDNode>(Src) && cast<ConstantSDNode>(Src)->isNullValue();
   if (!FindOptimalMemOpLowering(MemOps, TLI.getMaxStoresPerMemset(OptSize),
                                 Size, (DstAlignCanChange ? 0 : Align), 0,
-                                true, IsZeroVal, false, true,
+                                true, IsZeroVal, false, true, false,
                                 DstPtrInfo.getAddrSpace(), ~0u,
                                 DAG, TLI))
     return SDValue();
@@ -6139,7 +6161,7 @@ static void checkAddrSpaceIsValidForLibcall(const TargetLowering *TLI,
 SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                 SDValue Src, SDValue Size, unsigned Align,
                                 bool isVol, bool AlwaysInline, bool isTailCall,
-                                bool ForceLibcall,
+                                bool MustPreserveCheriCapabilities,
                                 MachinePointerInfo DstPtrInfo,
                                 MachinePointerInfo SrcPtrInfo) {
   assert(Align && "The SDAG layer expects explicit alignment and reserves 0");
@@ -6148,16 +6170,17 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
   // Check to see if we should lower the memcpy to loads and stores first.
   // For cases within the target-specified limits, this is the best choice.
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
+  if (MustPreserveCheriCapabilities)
+    assert(TLI->cheriCapabilityType().isValid());
   if (ConstantSize) {
     // Memcpy with size zero? Just return the original chain.
     if (ConstantSize->isNullValue())
       return Chain;
 
     SDValue Result;
-    if (!ForceLibcall)
-      Result = getMemcpyLoadsAndStores(*this, dl, Chain, Dst, Src,
-                                       ConstantSize->getZExtValue(), Align,
-                                       isVol, false, DstPtrInfo, SrcPtrInfo);
+    Result = getMemcpyLoadsAndStores(
+        *this, dl, Chain, Dst, Src, ConstantSize->getZExtValue(), Align, isVol,
+        false, MustPreserveCheriCapabilities, DstPtrInfo, SrcPtrInfo);
     if (Result.getNode())
       return Result;
   }
@@ -6167,7 +6190,7 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
   if (TSI) {
     SDValue Result = TSI->EmitTargetCodeForMemcpy(
         *this, dl, Chain, Dst, Src, Size, Align, isVol, AlwaysInline,
-        ForceLibcall, DstPtrInfo, SrcPtrInfo);
+        MustPreserveCheriCapabilities, DstPtrInfo, SrcPtrInfo);
     if (Result.getNode())
       return Result;
   }
@@ -6175,11 +6198,10 @@ SDValue SelectionDAG::getMemcpy(SDValue Chain, const SDLoc &dl, SDValue Dst,
   // If we really need inline code and the target declined to provide it,
   // use a (potentially long) sequence of loads and stores.
   if (AlwaysInline) {
-    assert(!ForceLibcall && "Both AlwaysInline and ForceLibcall used!");
     assert(ConstantSize && "AlwaysInline requires a constant size!");
-    return getMemcpyLoadsAndStores(*this, dl, Chain, Dst, Src,
-                                   ConstantSize->getZExtValue(), Align, isVol,
-                                   true, DstPtrInfo, SrcPtrInfo);
+    return getMemcpyLoadsAndStores(
+        *this, dl, Chain, Dst, Src, ConstantSize->getZExtValue(), Align, isVol,
+        true, MustPreserveCheriCapabilities, DstPtrInfo, SrcPtrInfo);
   }
 
   checkAddrSpaceIsValidForLibcall(TLI, DstPtrInfo.getAddrSpace());
@@ -6259,7 +6281,8 @@ SDValue SelectionDAG::getAtomicMemcpy(SDValue Chain, const SDLoc &dl,
 
 SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
                                  SDValue Src, SDValue Size, unsigned Align,
-                                 bool isVol, bool isTailCall, bool ForceLibcall,
+                                 bool isVol, bool isTailCall,
+                                 bool MustPreserveCheriCapabilities,
                                  MachinePointerInfo DstPtrInfo,
                                  MachinePointerInfo SrcPtrInfo) {
   assert(Align && "The SDAG layer expects explicit alignment and reserves 0");
@@ -6273,10 +6296,9 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
       return Chain;
 
     SDValue Result;
-    if (!ForceLibcall)
-      Result = getMemmoveLoadsAndStores(*this, dl, Chain, Dst, Src,
-                                        ConstantSize->getZExtValue(), Align,
-                                        isVol, false, DstPtrInfo, SrcPtrInfo);
+    Result = getMemmoveLoadsAndStores(
+        *this, dl, Chain, Dst, Src, ConstantSize->getZExtValue(), Align, isVol,
+        false, MustPreserveCheriCapabilities, DstPtrInfo, SrcPtrInfo);
     if (Result.getNode())
       return Result;
   }
@@ -6285,8 +6307,8 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
   // code. If the target chooses to do this, this is the next best.
   if (TSI) {
     SDValue Result = TSI->EmitTargetCodeForMemmove(
-        *this, dl, Chain, Dst, Src, Size, Align, isVol, ForceLibcall,
-        DstPtrInfo, SrcPtrInfo);
+        *this, dl, Chain, Dst, Src, Size, Align, isVol,
+        MustPreserveCheriCapabilities, DstPtrInfo, SrcPtrInfo);
     if (Result.getNode())
       return Result;
   }

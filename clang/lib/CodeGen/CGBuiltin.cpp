@@ -1585,6 +1585,16 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
       QualType(UnderlyingSrcTy->getPointeeOrArrayElementType(), 0);
   auto &Ctx = CGF.CGM.getContext();
   if (Ctx.containsCapabilities(UnderlyingSrcTy)) {
+    // Add a "must-preserve-cheri-tags" attribute to the memcpy/memmove
+    // intrinsic to ensure that the backend will not lower it to an inlined
+    // sequence of 1/2/4/8 byte loads and stores which would strip the tag bits.
+    // TODO: a clc/csc that works on unaligned data but traps for a csc
+    // with a tagged value and unaligned address could also prevent tags
+    // from being lost.
+    if (MemInst) {
+      MemInst->addAttribute(llvm::AttributeList::FunctionIndex,
+        llvm::Attribute::get(CGF.getLLVMContext(), "must-preserve-cheri-tags"));
+    }
     uint64_t CapSizeBytes =
         Ctx.toCharUnitsFromBits(Ctx.getTargetInfo().getCHERICapabilityAlign())
             .getQuantity();
@@ -1618,6 +1628,7 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
     }
     // TODO: should only really warn if the size is small enough to be inlined.
     if (UnderAligned) {
+      // TODO: this warning should be emitted by the backend instead
       CGF.CGM.getDiags().Report(
           Src->getExprLoc(), diag::warn_cheri_memintrin_misaligned_inefficient)
           << Function << (unsigned)DstAlignBytes << UnderlyingSrcTy;
@@ -1625,16 +1636,6 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
       CGF.CGM.getDiags().Report(Src->getExprLoc(),
                                 diag::note_cheri_memintrin_misaligned_fixit)
           << Function;
-      if (MemInst) {
-        // Add a nobuiltin attribute to the memcpy/memmove intrinsic to ensure
-        // that the backend will not lower it to an inlined sequence of 1/2/4/8
-        // byte loads and stores which would strip the tag bits.
-        // TODO: a clc/csc that works on unaligned data but traps for a csc
-        // with a tagged value and unaligned address could also prevent tags
-        // from being lost.
-        MemInst->addAttribute(llvm::AttributeList::FunctionIndex,
-                              llvm::Attribute::NoBuiltin);
-      }
     }
   }
 }

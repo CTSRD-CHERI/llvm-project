@@ -2901,8 +2901,9 @@ static SDValue CreateCopyOfByValArgument(SDValue Src, SDValue Dst,
   SDValue SizeNode = DAG.getConstant(Flags.getByValSize(), dl, MVT::i32);
 
   return DAG.getMemcpy(Chain, dl, Dst, Src, SizeNode, Flags.getByValAlign(),
-                       /*isVolatile*/false, /*AlwaysInline=*/true,
-                       /*isTailCall*/false, /*ForceLibcall=*/false,
+                       /*isVolatile*/ false, /*AlwaysInline=*/true,
+                       /*isTailCall*/ false,
+                       /*MustPreserveCheriCapabilities=*/false,
                        MachinePointerInfo(), MachinePointerInfo());
 }
 
@@ -21499,9 +21500,9 @@ static SDValue LowerVACOPY(SDValue Op, const X86Subtarget &Subtarget,
   const Value *SrcSV = cast<SrcValueSDNode>(Op.getOperand(4))->getValue();
   SDLoc DL(Op);
 
-  return DAG.getMemcpy(Chain, DL, DstPtr, SrcPtr,
-                       DAG.getIntPtrConstant(24, DL), 8, /*isVolatile*/false,
-                       false, false, /*ForceLibcall=*/false,
+  return DAG.getMemcpy(Chain, DL, DstPtr, SrcPtr, DAG.getIntPtrConstant(24, DL),
+                       8, /*isVolatile*/ false, false, false,
+                       /*MustPreserveCheriCapabilities=*/false,
                        MachinePointerInfo(DstSV), MachinePointerInfo(SrcSV));
 }
 

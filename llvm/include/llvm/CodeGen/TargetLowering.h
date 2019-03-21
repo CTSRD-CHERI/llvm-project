@@ -2496,6 +2496,7 @@ public:
 
   // Return true if the target has a capability set address instruction.
   virtual bool hasCapabilitySetAddress() const { return false; }
+  virtual MVT cheriCapabilityType() const { return MVT(); }
 
   //===--------------------------------------------------------------------===//
   // Runtime Library hooks
