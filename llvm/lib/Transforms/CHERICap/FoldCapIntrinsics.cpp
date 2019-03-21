@@ -42,6 +42,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
   Function *GetOffset;
   Function *SetAddr;
   Function *GetAddr;
+  TargetLibraryInfo *TLI;
 
   Type* I8CapTy;
   Type* CapAddrTy;
@@ -346,7 +347,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
       }
     }
     for (Instruction* I : ToErase)
-      RecursivelyDeleteTriviallyDeadInstructions(I);
+      RecursivelyDeleteTriviallyDeadInstructions(I, TLI);
   }
 
   /// Replace set-offset, inc-offset sequences with a single set-offset
@@ -375,6 +376,11 @@ public:
     return "CHERI fold capability intrinsics";
   }
   bool runOnModule(Module &M) override {
+    if (skipModule(M))
+      return false;
+
+    TLI = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+
     Modified = false;
     DL = &M.getDataLayout();
     LLVMContext &C = M.getContext();
@@ -433,6 +439,7 @@ public:
     return Modified;
   }
   void getAnalysisUsage(AnalysisUsage &AU) const override {
+    AU.addRequired<TargetLibraryInfoWrapperPass>();
     AU.setPreservesCFG();
   }
 };
