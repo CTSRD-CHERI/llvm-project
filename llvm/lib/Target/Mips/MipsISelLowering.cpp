@@ -347,8 +347,10 @@ const char *MipsTargetLowering::getTargetNodeName(unsigned Opcode) const {
 
 MipsTargetLowering::MipsTargetLowering(const MipsTargetMachine &TM,
                                        const MipsSubtarget &STI)
-    : TargetLowering(TM), CapType(STI.typeForCapabilities()), Subtarget(STI),
-      ABI(TM.getABI()) {
+    : TargetLowering(TM), Subtarget(STI), ABI(TM.getABI()) {
+  CapType = STI.typeForCapabilities();
+  assert(cheriCapabilityType().isFatPointer());
+
   // Mips does not have i1 type, so use i32 for
   // setcc operations results (slt, sgt, ...).
   setBooleanContents(ZeroOrOneBooleanContent);

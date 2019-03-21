@@ -2496,7 +2496,10 @@ public:
 
   // Return true if the target has a capability set address instruction.
   virtual bool hasCapabilitySetAddress() const { return false; }
-  virtual MVT cheriCapabilityType() const { return MVT(); }
+  MVT cheriCapabilityType() const { return CapType; }
+  bool supportsUnalignedCapabilityMemOps() const {
+    return SupportsUnalignedCapabilityMemOps;
+  }
 
   //===--------------------------------------------------------------------===//
   // Runtime Library hooks
@@ -2802,6 +2805,15 @@ protected:
 
   /// \see enableExtLdPromotion.
   bool EnableExtLdPromotion;
+
+  /// The type to use for CHERI capabilities (if supported)
+  /// Should be one of iFATPTR64/128/256
+  MVT CapType = MVT();
+
+  /// Whether CHERI Capability loads/stores can be used with unaligned addresses
+  /// This makes it possible to do a tag-preserving copy even if the alignment
+  /// is not statically known to be at least capability aligned.
+  bool SupportsUnalignedCapabilityMemOps = false;
 
   /// Return true if the value types that can be represented by the specified
   /// register class are all legal.

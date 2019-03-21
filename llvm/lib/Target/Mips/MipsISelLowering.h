@@ -289,9 +289,6 @@ extern bool LargeCapTable;
   class MipsTargetLowering : public TargetLowering  {
     bool isMicroMips;
 
-  protected:
-    MVT CapType;
-
   public:
     explicit MipsTargetLowering(const MipsTargetMachine &TM,
                                 const MipsSubtarget &STI);
@@ -412,7 +409,6 @@ extern bool LargeCapTable;
     // Although we don't currently have a CSetAddr, our CheriExpandIntrinsics
     // pass handles the intrinsic so we want to keep the intrinsic as-is.
     bool hasCapabilitySetAddress() const override { return true; }
-    virtual MVT cheriCapabilityType() const override { return CapType; }
 
     CCAssignFn *CCAssignFnForCall() const;
 

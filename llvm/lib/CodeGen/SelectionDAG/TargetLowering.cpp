@@ -23,6 +23,7 @@
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/MC/MCAsmInfo.h"
@@ -4977,9 +4978,32 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
   SDLoc dl(LD);
   auto &MF = DAG.getMachineFunction();
 
-  if (VT.isFatPointer()) {
-    auto Loc = cheri::inferSourceLocation(LD->getDebugLoc(), DAG.getMachineFunction().getName());
-    report_fatal_error("Cannot expand unaligned load of capability type. Created here: " + Loc);
+  if (VT.isFatPointer() && !supportsUnalignedCapabilityMemOps()) {
+    auto CapAlign = VT.getStoreSize();
+    DiagnosticInfoOptimizationFailure Warning(
+        MF.getFunction(), dl.getDebugLoc(),
+        "found underaligned load of capability type (aligned to " +
+            Twine(LD->getAlignment()) + " bytes instead of " + Twine(CapAlign) +
+            "). Will use memcpy() instead of capability load to preserve tags "
+            "if it is aligned correctly at runtime");
+    DAG.getContext()->diagnose(Warning);
+
+    SDValue TmpPtr = DAG.CreateStackTemporary(VT);
+    int SPFI = cast<FrameIndexSDNode>(TmpPtr.getNode())->getIndex();
+    auto TmpPtrInfo =
+        MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), SPFI);
+    // Store the vector.
+    SDValue Ch = DAG.getMemcpy(Chain, dl, TmpPtr, Ptr,
+                               DAG.getConstant(CapAlign, dl, MVT::i64),
+                               LD->getAlignment(),
+                               /*isVolatile=*/false,
+                               /*AlwaysInline=*/false,
+                               /*isTailCall=*/false,
+                               /*MustPreserveCheriCapabilities=*/true,
+                               TmpPtrInfo, LD->getPointerInfo());
+    // Load the updated vector.
+    auto Result = DAG.getLoad(VT, dl, Ch, TmpPtr, TmpPtrInfo);
+    return std::make_pair(Result, Result.getValue(1));
   }
 
   if (VT.isFloatingPoint() || VT.isVector()) {
@@ -5138,9 +5162,32 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
   auto &MF = DAG.getMachineFunction();
   EVT MemVT = ST->getMemoryVT();
 
-  if (MemVT.isFatPointer()) {
-    auto Loc = cheri::inferSourceLocation(ST->getDebugLoc(), DAG.getMachineFunction().getName());
-    report_fatal_error("Cannot expand unaligned store of capability type. Created here: " + Loc);
+  if (VT.isFatPointer() && !supportsUnalignedCapabilityMemOps()) {
+    auto CapAlign = VT.getStoreSize();
+    SDLoc dl(ST);
+    DiagnosticInfoOptimizationFailure Warning(
+        MF.getFunction(), dl.getDebugLoc(),
+        "found underaligned store of capability type (aligned to " +
+            Twine(ST->getAlignment()) + " bytes instead of " + Twine(CapAlign) +
+            "). Will use memcpy() instead of capability load to preserve tags "
+            "if it is aligned correctly at runtime");
+    DAG.getContext()->diagnose(Warning);
+
+    SDValue TmpPtr = DAG.CreateStackTemporary(VT);
+    int SPFI = cast<FrameIndexSDNode>(TmpPtr.getNode())->getIndex();
+    auto TmpPtrInfo =
+        MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), SPFI);
+    // Store the vector.
+    SDValue Ch = DAG.getStore(Chain, dl, Val, TmpPtr, TmpPtrInfo);
+    auto Result = DAG.getMemcpy(Ch, dl, Ptr, TmpPtr,
+                               DAG.getConstant(CapAlign, dl, MVT::i64),
+                               ST->getAlignment(),
+                               /*isVolatile=*/false,
+                               /*AlwaysInline=*/false,
+                               /*isTailCall=*/false,
+                               /*MustPreserveCheriCapabilities=*/true,
+                               ST->getPointerInfo(), TmpPtrInfo);
+    return Result;
   }
 
   SDLoc dl(ST);
