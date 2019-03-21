@@ -2104,13 +2104,8 @@ MipsTargetLowering::emitAtomicCmpSwap(MachineInstr &MI,
   // after fast register allocation, the spills will end up outside of the
   // blocks that their values are defined in, causing livein errors.
 
-  unsigned DestCopy = MRI.createVirtualRegister(MRI.getRegClass(Dest));
   unsigned PtrCopy = MRI.createVirtualRegister(MRI.getRegClass(Ptr));
 
-  // We have different ptr + output registers for csc* -> no need for this copy
-  // FIXME: is this also an error for MIPS (since it is defined by the op below)?
-  if (!IsCheriOp)
-    BuildMI(*BB, II, DL, TII->get(Mips::COPY), DestCopy).addReg(Dest);
   BuildMI(*BB, II, DL, TII->get(Mips::COPY), PtrCopy).addReg(Ptr);
 
   // If one of the operands is NULL it was replaced with $CNULL/ZERO so we don't
