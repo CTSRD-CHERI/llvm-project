@@ -777,6 +777,8 @@ class Reducer(object):
         if "-emit-obj" in generate_ir_cmd:
             generate_ir_cmd.remove("-emit-obj")
         if self._check_crash(generate_ir_cmd, infile):
+            print("Crashed while generating IR -> must be a", blue("frontend crash.", style="bold"),
+                  "Will need to use creduce for test case reduction")
             # Try to remove the flags that were added:
             new_command = generate_ir_cmd
             new_command = self._try_remove_args(
@@ -785,7 +787,6 @@ class Reducer(object):
                 noargs_opts_to_remove_startswith=["-O"],
                 extra_args=["-O0"]
             )
-            print("Must be a", blue("frontend crash.", style="bold"), "Will need to use creduce for test case reduction")
             return self._simplify_frontend_crash_cmd(new_command, infile)
         else:
             print("Must be a ", blue("backend crash", style="bold"), ", ", end="", sep="")
@@ -858,18 +859,28 @@ class Reducer(object):
         print("Generating preprocessed source")
         try:
             preprocessed = infile.with_name(infile.stem + "-pp" + infile.suffix)
-            pp_command = self._filter_args(new_command, one_arg_opts_to_remove=["-o"],
-                                           noargs_opts_to_remove=["-S", "-emit-llvm"])
-            pp_command += ["-E", "-o", str(preprocessed), str(infile)]
-            verbose_print(pp_command)
-            subprocess.check_call(pp_command)
+            base_pp_command = self._filter_args(new_command, one_arg_opts_to_remove=["-o"],
+                                                noargs_opts_to_remove=["-S", "-emit-llvm"])
+            base_pp_command += ["-E", "-o", str(preprocessed), str(infile)]
+            no_line_pp_command = base_pp_command + ["-P"]
+            verbose_print(no_line_pp_command)
+            subprocess.check_call(no_line_pp_command)
             assert preprocessed.exists()
-            print("Checking if preprocessed source", preprocessed, "crashes: ", end="", flush=True)
+            print("Checking if preprocessed source (without line numbers)", preprocessed, "crashes: ", end="", flush=True)
             if self._check_crash(new_command, preprocessed):
                 infile = preprocessed
             else:
-                print(red("Compiling preprocessed source", preprocessed,
-                          "no longer crashes, not using it."))
+                print(red("Compiling preprocessed source (without line numbers)", preprocessed,
+                          "no longer crashes, not using it. Will try with line numbers"))
+                verbose_print(base_pp_command)
+                subprocess.check_call(base_pp_command)
+                assert preprocessed.exists()
+                print("Checking if preprocessed source", preprocessed, "crashes: ", end="", flush=True)
+                if self._check_crash(new_command, preprocessed):
+                    infile = preprocessed
+                else:
+                    print(red("Compiling preprocessed source (with line numbers)", preprocessed,
+                              "no longer crashes, not using it."))
         except Exception as e:
             print("Failed to preprocess", infile, "-> will use the unprocessed source ", e)
 
@@ -899,7 +910,6 @@ class Reducer(object):
                 new_command, infile, "Checking whether emitting ASM instead of object crashes:",
                 noargs_opts_to_remove=["-emit-obj"], extra_args=["-S"])
 
-        print(new_command)
         # check if floating point args are relevant
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without floating point arguments crashes:",
