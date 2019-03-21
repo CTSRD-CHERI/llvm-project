@@ -1868,9 +1868,9 @@ SDValue DAGCombiner::visitTokenFactor(SDNode *N) {
           if (SeenChains.count(Op.getNode()) == 0)
             PrunedOps.push_back(Op);
         }
-        Result = DAG.getNode(ISD::TokenFactor, SDLoc(N), MVT::Other, PrunedOps);
+        Result = DAG.getTokenFactor(SDLoc(N), PrunedOps);
       } else {
-        Result = DAG.getNode(ISD::TokenFactor, SDLoc(N), MVT::Other, Ops);
+        Result = DAG.getTokenFactor(SDLoc(N), Ops);
       }
     }
     return Result;
@@ -14451,7 +14451,7 @@ SDValue DAGCombiner::getMergeStoreChains(SmallVectorImpl<MemOpLink> &StoreNodes,
   }
 
   assert(Chains.size() > 0 && "Chain should have generated a chain");
-  return DAG.getNode(ISD::TokenFactor, StoreDL, MVT::Other, Chains);
+  return DAG.getTokenFactor(StoreDL, Chains);
 }
 
 bool DAGCombiner::MergeStoresOfConstantsOrVecElts(
@@ -19694,7 +19694,7 @@ SDValue DAGCombiner::FindBetterChain(LSBaseSDNode *N, SDValue OldChain) {
     return Aliases[0];
 
   // Construct a custom tailored token factor.
-  return DAG.getNode(ISD::TokenFactor, SDLoc(N), MVT::Other, Aliases);
+  return DAG.getTokenFactor(SDLoc(N), Aliases);
 }
 
 namespace {
