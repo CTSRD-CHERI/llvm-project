@@ -9061,9 +9061,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
     Flags.setNoUnsignedWrap(true);
 
     for (unsigned i = 0; i < NumValues; ++i) {
-      SDValue Add = CLI.DAG.getNode(ISD::ADD, CLI.DL, PtrVT, DemoteStackSlot,
-                                    CLI.DAG.getConstant(Offsets[i], CLI.DL,
-                                                        PtrVT), Flags);
+      SDValue Add = CLI.DAG.getPointerAdd(CLI.DL, DemoteStackSlot, Offsets[i], Flags);
       SDValue L = CLI.DAG.getLoad(
           RetTys[i], CLI.DL, CLI.Chain, Add,
           MachinePointerInfo::getFixedStack(CLI.DAG.getMachineFunction(),
