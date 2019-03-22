@@ -307,8 +307,9 @@ class CHERICapFoldIntrinsics : public ModulePass {
       }
 
       Value *LHS, *RHS;
-      // Replace setoffset(setoffset(C, A), B) with setoffset(C, B). Must come
-      // before the setoffset to incoffset transformation in case C is an add.
+      // Replace set{offset,addr}(set{offset,addr}(C, A), B) with
+      // set{offset,addr}(C, B). Must come before the setoffset to
+      // incoffset transformation in case C is an add.
       while (match(CI->getOperand(0),
                    m_Intrinsic<SetIntrinsic>(m_Value(LHS), m_Value(RHS)))) {
         Instruction *NestedInstr = cast<Instruction>(CI->getOperand(0));
@@ -319,7 +320,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
       }
       Value *BaseCap = CI->getOperand(0);
 
-      // fold chains of set-offset, (inc-offset/GEP)+ into a single set-offset
+      // fold chains of set{offset,addr}, (inc-offset/GEP)+ into a single set-{offset,addr}
       foldIncOffsetSetOffsetSetAddrOnlyUserIncrement(CI, ToErase);
 
       if (match(CI->getOperand(1), m_Add(m_Value(LHS), m_Value(RHS)))) {
@@ -338,13 +339,22 @@ class CHERICapFoldIntrinsics : public ModulePass {
         }
       }
 
-      // Fold setoffset(A, getoffset(A)) -> A
+      // Fold set{offset,addr}(A, get{offset,addr}(A)) -> A
       if (match(CI->getOperand(1),
                 m_Intrinsic<GetIntrinsic>(m_Specific(BaseCap)))) {
         CI->replaceAllUsesWith(BaseCap);
         ToErase.insert(CI);
         Modified = true;
       }
+
+      // Fold set{offset,addr}(NULL, 0) -> NULL
+      if (match(BaseCap, m_Zero()) && match(CI->getOperand(1), m_Zero())) {
+        assert(isa<ConstantPointerNull>(BaseCap));
+        CI->replaceAllUsesWith(BaseCap);
+        ToErase.insert(CI);
+        Modified = true;
+      }
+
     }
     for (Instruction* I : ToErase)
       RecursivelyDeleteTriviallyDeadInstructions(I, TLI);

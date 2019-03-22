@@ -2,8 +2,6 @@
 ; Test that we use the CIncOffset with an immediate to set the offset on null
 ; instead of csetoffset which doesn't have an immediate version
 
-; everything should be changed to incoffset instead of setoffset
-; -cheri-fold-intrisics will turn a setoffset/setaddr on NULL to incoffset:
 ; RUN: %cheri_opt -S -cheri-fold-intrisics %s -o - | FileCheck %s -check-prefix IR -enable-var-scope
 ; RUN: %cheri_llc -O3 %s -filetype=asm -o - | FileCheck %s
 

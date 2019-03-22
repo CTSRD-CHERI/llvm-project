@@ -6,6 +6,7 @@ target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A2
 target triple = "cheri-unknown-freebsd"
 
 declare i64 @check_fold(i64) #1
+declare i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)*) #1
 
 declare i64 @llvm.cheri.cap.base.get.i64(i8 addrspace(200)*) #1
 declare i8 addrspace(200)* @llvm.cheri.cap.base.set(i8 addrspace(200)*, i64) #1
@@ -586,6 +587,23 @@ entry:
   ; DYNAMIC-GEP-ASM-NEXT:  csetoffset      $c3, $c3, $1
 }
 
+define i8 addrspace(200)* @fold_null_setaddr_zero() #1 {
+  %arg = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
+  %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %arg)
+  ret i8 addrspace(200)* %ret
+  ; CHECK-LABEL: @fold_null_setaddr_zero()
+  ; CHECK: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* null)
+  ; CHECK: ret i8 addrspace(200)* %ret
+}
+
+define i8 addrspace(200)* @fold_null_setoffest_zero() #1 {
+  %arg = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.set.i64(i8 addrspace(200)* null, i64 0)
+  %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %arg)
+  ret i8 addrspace(200)* %ret
+  ; CHECK-LABEL: @fold_null_setoffest_zero()
+  ; CHECK: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* null)
+  ; CHECK: ret i8 addrspace(200)* %ret
+}
 
 
 attributes #0 = { nounwind }
