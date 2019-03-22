@@ -98,8 +98,10 @@ def main():
         cmds.append("INVALID")
       (tool_cmd, filecheck_cmd) = tuple(cmds)
 
-      if tool_cmd.startswith("%cheri_"):
+      if tool_cmd.startswith("%cheri"):
         tool_cmd = tool_cmd.replace("%cheri_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+        tool_cmd = tool_cmd.replace("%cheri128_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
+        tool_cmd = tool_cmd.replace("%cheri256_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri256 -mattr=+cheri256")
         tool_cmd = tool_cmd.replace("%cheri_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri128_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri256_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
@@ -192,6 +194,7 @@ def main():
       print('Writing %d lines to %s...' % (len(output_lines), test), file=sys.stderr)
 
     with open(test, 'wb') as f:
+      sys.stderr.writelines(['{}\n'.format(l).encode('utf-8') for l in output_lines])
       f.writelines(['{}\n'.format(l).encode('utf-8') for l in output_lines])
 
 
