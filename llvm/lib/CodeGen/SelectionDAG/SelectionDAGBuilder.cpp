@@ -5512,7 +5512,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     // FIXME: Support passing different dest/src alignments to the memcpy DAG
     // node.
     SDValue MC = DAG.getMemcpy(getRoot(), sdl, Op1, Op2, Op3, Align, isVol,
-                               false, isTC, I.isNoBuiltin(),
+                               false, isTC, I.hasFnAttr("must-preserve-cheri-tags"),
                                MachinePointerInfo(I.getArgOperand(0)),
                                MachinePointerInfo(I.getArgOperand(1)));
     updateDAGForMaybeTailCall(MC);
@@ -5546,7 +5546,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     // FIXME: Support passing different dest/src alignments to the memmove DAG
     // node.
     SDValue MM = DAG.getMemmove(getRoot(), sdl, Op1, Op2, Op3, Align, isVol,
-                                isTC, I.isNoBuiltin(),
+                                isTC, I.hasFnAttr("must-preserve-cheri-tags"),
                                 MachinePointerInfo(I.getArgOperand(0)),
                                 MachinePointerInfo(I.getArgOperand(1)));
     updateDAGForMaybeTailCall(MM);
@@ -9062,6 +9062,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
 
     for (unsigned i = 0; i < NumValues; ++i) {
       SDValue Add = CLI.DAG.getPointerAdd(CLI.DL, DemoteStackSlot, Offsets[i], Flags);
+      assert(DemoteStackSlot.getValueType() == PtrVT);
       SDValue L = CLI.DAG.getLoad(
           RetTys[i], CLI.DL, CLI.Chain, Add,
           MachinePointerInfo::getFixedStack(CLI.DAG.getMachineFunction(),
