@@ -1,4 +1,4 @@
-; Check that llvm.memcpy() and llvm.memmove() intrinisics with nobuiltin
+; Check that llvm.memcpy() and llvm.memmove() intrinisics with "must-preserve-cheri-tags"
 ; attribute are always lowered to libcalls
 ; RUN: %cheri128_purecap_llc %s -o - | FileCheck %s -check-prefixes=CHECK,PURECAP
 ; RUN: %cheri128_llc %s -o - | FileCheck %s -check-prefixes=CHECK,HYBRID

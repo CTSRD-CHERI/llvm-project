@@ -72,4 +72,4 @@ entry:
 attributes #0 = { noinline nounwind }
 attributes #1 = { nounwind readnone }
 attributes #2 = { argmemonly nounwind }
-attributes #3 = { nobuiltin }
+attributes #3 = { "must-preserve-cheri-tags" }
