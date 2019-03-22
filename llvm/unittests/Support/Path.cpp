@@ -1671,6 +1671,13 @@ TEST_F(FileSystemTest, permissions) {
   EXPECT_EQ(fs::setPermissions(TempPath, fs::set_uid_on_exe), NoError);
   EXPECT_TRUE(CheckPermissions(fs::set_uid_on_exe));
 
+  // On FreeBSD the group id for the temporary file is taken from the parent
+  // directory, but setting the setgid bit requires the file group to match the
+  // current effecitive group ID. Otherwise we receive an EPERM error.
+  // This might also affect other operating systems but most will set the group
+  // ID to the current effective group ID so this works just fine.
+  EXPECT_EQ(chown(TempPath.c_str(), geteuid(), getegid()), 0);
+
   EXPECT_NO_ERROR(fs::setPermissions(TempPath, fs::set_gid_on_exe));
   EXPECT_TRUE(CheckPermissions(fs::set_gid_on_exe));
 
