@@ -15329,9 +15329,18 @@ static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
   StoreSDNode *ST = dyn_cast<StoreSDNode>(N);
   if (!ST)
     return SDValue();
-  if (!IsBeforeLegalize || ST->isVolatile() || ST->isIndexed()) {
+  if (!IsBeforeLegalize || ST->isVolatile() || ST->isIndexed() || !ST->getMemoryVT().isSimple()) {
     return SDValue();
   }
+  if (ST->getMemoryVT().isFatPointer()) {
+    if (TLI.supportsUnalignedCapabilityMemOps())
+      return SDValue();
+
+  } else {
+    // XXXAR: for now only perform this conversion for Capabilities
+    return SDValue();
+  }
+
   const unsigned Alignment = ST->getAlignment();
   // Don't bother doing this transformation if the unaligned load/store is fast
   bool Fast = false;
