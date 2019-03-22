@@ -605,6 +605,23 @@ define i8 addrspace(200)* @fold_null_setoffest_zero() #1 {
   ; CHECK: ret i8 addrspace(200)* %ret
 }
 
+define i8 addrspace(200)* @fold_null_incoffest_zero() #1 {
+  %arg = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* null, i64 0)
+  %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %arg)
+  ret i8 addrspace(200)* %ret
+  ; CHECK-LABEL: @fold_null_incoffest_zero()
+  ; CHECK: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* null)
+  ; CHECK: ret i8 addrspace(200)* %ret
+}
+
+define i8 addrspace(200)* @fold_incoffest_zero(i8 addrspace(200)* %arg) #1 {
+  %inc0 = tail call i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %arg, i64 0)
+  %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %inc0)
+  ret i8 addrspace(200)* %ret
+  ; CHECK-LABEL: @fold_incoffest_zero(i8 addrspace(200)* %arg)
+  ; CHECK: %ret = call i8 addrspace(200)* @check_fold_i8ptr(i8 addrspace(200)* %arg)
+  ; CHECK: ret i8 addrspace(200)* %ret
+}
 
 attributes #0 = { nounwind }
 attributes #1 = { nounwind readnone }

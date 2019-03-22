@@ -374,6 +374,14 @@ class CHERICapFoldIntrinsics : public ModulePass {
       }
       // fold chains of inc-offset, (inc-offset/GEP)+ into a single inc-offset
       foldIncOffsetSetOffsetSetAddrOnlyUserIncrement(CI, ToErase);
+
+      // Fold incoffset(A, 0) -> A since incrementing by zero doesn't do anything
+      if (match(CI->getOperand(1), m_Zero())) {
+        CI->replaceAllUsesWith(CI->getOperand(0));
+        ToErase.insert(CI);
+        Modified = true;
+        continue;
+      }
     }
     for (Instruction* I : ToErase)
       RecursivelyDeleteTriviallyDeadInstructions(I);
