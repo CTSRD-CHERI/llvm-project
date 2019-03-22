@@ -4970,6 +4970,10 @@ SDValue TargetLowering::scalarizeVectorStore(StoreSDNode *ST,
 static SDValue unalignedLoadStoreCSetbounds(const char *loadOrStore, SDValue Ptr,
                                             const SDLoc &DL, unsigned CapSize,
                                             SelectionDAG &DAG) {
+  // Only set bounds if the pointer was actually a CHERI capability (i.e. skip
+  // setting bounds in hybrid mode)
+  if (!Ptr->getValueType(0).isFatPointer())
+    return Ptr;
   if (cheri::ShouldCollectCSetBoundsStats) {
     cheri::CSetBoundsStats->add(
         CapSize, CapSize, "expanding unaligned capability load/store",
