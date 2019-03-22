@@ -13925,58 +13925,24 @@ RValue CodeGenFunction::EmitBuiltinAlignTo(const CallExpr *E, bool PowerOfTwo,
                                            bool AlignUp) {
   // FIXME this needs to use minus/plus for CHERI and not masking!!!!
   BuiltinAlignArgs Args(E, *this, PowerOfTwo);
-  if (Args.IsCheri) {
-    // We can't use bitwise and here since we can't create a capability from
-    // a virtual address. We could set the offset but that calculation is more
-    // complex that just adding/subtracting the difference to the next alignment
-    // boundary
-    auto *Unaligned =
-        Builder.CreateAnd(Args.SrcAddr, Args.Mask, "unaligned_bits");
-    Value *Result;
-    // Value *IncOffset =
-    // CGM.getIntrinsic(Intrinsic::cheri_cap_offset_increment);
-    if (AlignUp) {
-      // if it is not aligned we now need to add Align - unaligned_bits
-      // Unfortunately we can't do this unconditionally since otherwise we would
-      // turn a __builtin_align_up(32, 16) into 48.
-      // This is equivalent to the following code:
-      //  if (((unsigned long)p & (align - 1)) == 0)
-      //     return p;
-      //  else
-      //     return (p + (align - ((unsigned long)p & (align - 1))));
-      Value *Zero = llvm::Constant::getNullValue(Args.SrcAddr->getType());
-      Value *IsAligned = Builder.CreateICmpEQ(Unaligned, Zero, "is_aligned");
-      Value *Add = Builder.CreateSub(Args.Alignment, Unaligned, "missing_bits");
-      // TODO: which of the two is optimized better? Seems like both have
-      // drawbacks now
-      Value *AlignedUp = Builder.CreateInBoundsGEP(Int8Ty, Args.SrcAsI8Cap, Add,
-                                                   "aligned_cap");
-      // Value* AlignedUp = Builder.CreateCall(IncOffset, {Args.SrcAsI8Cap,
-      // Add}, "aligned_cap");
-      Result =
-          Builder.CreateSelect(IsAligned, Args.SrcAsI8Cap, AlignedUp, "result");
-    } else {
-      // When aligning down, we can just mask and subtract whatever value is
-      // not aligned: return (p - (((unsigned long)p & (align - 1))));
-      Value *Sub = Builder.CreateNeg(Unaligned, "sub");
-      // TODO: Is inbounds GEP better for other analysis? It won't be folded by
-      // FoldCapIntrinsics.cpp though...
-      Result = Builder.CreateInBoundsGEP(Int8Ty, Args.SrcAsI8Cap, Sub,
-                                         "aligned_cap");
-      // Result = Builder.CreateCall(IncOffset, {Args.SrcAsI8Cap, Sub},
-      // "aligned_cap");
-    }
-    return RValue::get(Builder.CreateBitCast(Result, Args.Src->getType()));
-  }
-  // When not targeting CHERI we can just use bitwise masking and cast the
-  // result back to a pointer
   if (AlignUp) {
     // When aligning up we have to first add the mask to ensure we go over the
-    // next alignment value and then align it correctly
+    // next alignment value and then align down to the next valid multiple
+    // By adding the mask first, we ensure that align_up on an already aligned
+    // value will not be changed.
     Args.SrcAddr = Builder.CreateAdd(Args.SrcAddr, Args.Mask, "over_boundary");
   }
+    // When not targeting CHERI we can just use bitwise masking and cast the
+  // result back to a pointer
   auto *Ret = Builder.CreateAnd(Args.SrcAddr,
                                 Builder.CreateNot(Args.Mask, "negated_mask"));
+  if (Args.IsCheri) {
+    // For CHERI capabilities we need to call CSetAddr to update the target address
+    // If the backend supports an AND instruction on capabilities it should use a
+    // pattern to convert this to AND instead of setaddr.
+    Value *Callee = CGM.getIntrinsic(Intrinsic::cheri_cap_address_set, CGM.PtrDiffTy);
+    Ret = Builder.CreateCall(Callee, {Args.SrcAsI8Cap, Builder.CreateBitCast(Ret, CGM.Int64Ty)});
+  }
   return RValue::get(Builder.CreateBitOrPointerCast(Ret, Args.Src->getType(),
                                                     "aligned_result"));
 }
