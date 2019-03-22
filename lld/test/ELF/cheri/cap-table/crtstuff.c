@@ -46,7 +46,7 @@ __attribute__((noreturn)) void exit(int code) {
 // CHECK-NEXT:            0x12003{{.+}} (handle_static_init@CAPTABLE.7) Base: 0x12001{{.+}} (handle_static_init+0) Length: {{.+}} Perms: Function
 // CHECK-NEXT:            0x12003{{.+}} (main@CAPTABLE) Base: 0x12001{{.+}} (main+0) Length: 8 Perms: Function
 // CHECK-NEXT:            0x12003{{.+}} (exit@CAPTABLE) Base: 0x12001{{.+}} (exit+0) Length: 4 Perms: Function
-// CHECK-NEXT:            0x12003{{.+}} (finalizer@CAPTABLE.10) Base: 0x12001{{.+}} (finalizer+0) Length: 200 Perms: Function
+// CHECK-NEXT:            0x12003{{.+}} (finalizer@CAPTABLE.10) Base: 0x12001{{.+}} (finalizer+0) Length: 184 Perms: Function
 // WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__preinit_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
 // WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__preinit_array_end@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
 // WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__init_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object

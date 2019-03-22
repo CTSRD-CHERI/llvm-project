@@ -21,12 +21,10 @@ IntptrStruct set_int() {
   p.intptr = 0;
   return p;
   // CHECK-LABEL: define inreg { i8 addrspace(200)* } @set_int() local_unnamed_addr
-  // CHECK: [[VAR0:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
-  // CHECK: %.fca.0.insert = insertvalue { i8 addrspace(200)* } undef, i8 addrspace(200)* [[VAR0]], 0
-  // CHECK: ret { i8 addrspace(200)* } %.fca.0.insert
+  // CHECK: ret { i8 addrspace(200)* } zeroinitializer
   // ASM-LABEL: set_int
   // ASM:  cjr     $c17
-  // ASM-NEXT:  cincoffset      $c3, $cnull, 0
+  // ASM-NEXT:  cgetnull $c3
 }
 
 IntptrStruct set_int2(IntptrStruct p) {

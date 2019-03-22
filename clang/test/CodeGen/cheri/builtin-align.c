@@ -178,7 +178,7 @@ TYPE inline_p2align_down(void) {
   // LONG-OPT: ret i64 0
   // PTR-OPT: ret i8* null
   // CAPPTR-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* inttoptr (i64 100 to i8 addrspace(200)*), i64 0)
-  // UINTCAP-OPT: tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 0)
+  // UINTCAP-OPT: ret i8 addrspace(200)* null
   return p2align_down((TYPE)100, 10);
 }
 

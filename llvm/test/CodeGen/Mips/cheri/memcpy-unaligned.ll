@@ -163,9 +163,7 @@ entry:
 ; CHECK: clcbi $c1, %captab20(b)
 ; $c1 <- global void*
 ; CHECK: clc $c1, $zero, 0($c1)
-; TODO: this could be folded:
-; CHECK: cincoffset $c2, $cnull, 0
-; CHECK: csc $c2, $zero, 0($c1)
+; CHECK: csc $cnull, $zero, 0($c1)
 }
 
 attributes #0 = { noinline nounwind }
