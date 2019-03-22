@@ -63,6 +63,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/Transforms/Utils/CheriSetBounds.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -6146,6 +6147,28 @@ SDValue SelectionDAG::getPointerAdd(const SDLoc dl, SDValue Ptr, SDValue Offset,
     return getNode(ISD::PTRADD, dl, BasePtrVT, Ptr, Offset, Flags);
   }
   return getNode(ISD::ADD, dl, BasePtrVT, Ptr, Offset, Flags);
+}
+
+SDValue SelectionDAG::getCSetBounds(SDValue Val, SDValue Length,
+                                    bool CSetBoundsStatsAlreadyLogged) {
+  if (!CSetBoundsStatsAlreadyLogged && cheri::ShouldCollectCSetBoundsStats) {
+    Optional<uint64_t> SizeConst;
+    if (ConstantSDNode *Constant = dyn_cast<ConstantSDNode>(Length.getNode())) {
+      SizeConst = Constant->getZExtValue();
+    }
+    cheri::CSetBoundsStats->add(
+        1, SizeConst, "SelectionDAG::getCSetBounds",
+        cheri::SetBoundsPointerSource::Unknown, "<unnkonwn reason>",
+        cheri::inferSourceLocation(Val.getDebugLoc(),
+                                   getMachineFunction().getName()));
+  }
+  SDLoc DL(Val);
+  Intrinsic::ID SetBounds = Intrinsic::cheri_cap_bounds_set;
+  // Using the bounded stack cap intrinisic allows reuse of the same register:
+  if (isa<FrameIndexSDNode>(Val.getNode()))
+    SetBounds = Intrinsic::cheri_bounded_stack_cap;
+  return getNode(ISD::INTRINSIC_WO_CHAIN, DL, Val.getValueType(),
+                 getConstant(SetBounds, DL, MVT::i64), Val, Length);
 }
 
 static void checkAddrSpaceIsValidForLibcall(const TargetLowering *TLI,

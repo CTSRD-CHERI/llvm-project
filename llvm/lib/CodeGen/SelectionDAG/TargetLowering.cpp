@@ -4967,6 +4967,20 @@ SDValue TargetLowering::scalarizeVectorStore(StoreSDNode *ST,
   return DAG.getNode(ISD::TokenFactor, SL, MVT::Other, Stores);
 }
 
+static SDValue unalignedLoadStoreCSetbounds(const char *loadOrStore, SDValue Ptr,
+                                            const SDLoc &DL, unsigned CapSize,
+                                            SelectionDAG &DAG) {
+  if (cheri::ShouldCollectCSetBoundsStats) {
+    cheri::CSetBoundsStats->add(
+        CapSize, CapSize, "expanding unaligned capability load/store",
+        cheri::SetBoundsPointerSource::Stack,
+        StringRef("expanding unaligned capability ") + loadOrStore,
+        cheri::inferSourceLocation(DL.getDebugLoc(),
+                                   DAG.getMachineFunction().getName()));
+  }
+  return DAG.getCSetBounds(Ptr, CapSize, /*CSetBoundsStatsAlreadyLogged=*/true);
+}
+
 std::pair<SDValue, SDValue>
 TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
   assert(LD->getAddressingMode() == ISD::UNINDEXED &&
@@ -4992,8 +5006,12 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
     int SPFI = cast<FrameIndexSDNode>(TmpPtr.getNode())->getIndex();
     auto TmpPtrInfo =
         MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), SPFI);
-    // Store the vector.
-    SDValue Ch = DAG.getMemcpy(Chain, dl, TmpPtr, Ptr,
+    // Also bound the arguments for the memcpy call
+    SDValue BoundedTmpPtr = unalignedLoadStoreCSetbounds("load stack destination", TmpPtr, dl,
+                                          CapAlign, DAG);
+    SDValue BoundedPtr = unalignedLoadStoreCSetbounds("load memcpy source", Ptr, dl, CapAlign,
+                                       DAG);
+    SDValue Ch = DAG.getMemcpy(Chain, dl, BoundedTmpPtr, BoundedPtr,
                                DAG.getConstant(CapAlign, dl, MVT::i64),
                                LD->getAlignment(),
                                /*isVolatile=*/false,
@@ -5001,7 +5019,7 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
                                /*isTailCall=*/false,
                                /*MustPreserveCheriCapabilities=*/true,
                                TmpPtrInfo, LD->getPointerInfo());
-    // Load the updated vector.
+    // Load the updated value (does not need to be bounded!)
     auto Result = DAG.getLoad(VT, dl, Ch, TmpPtr, TmpPtrInfo);
     return std::make_pair(Result, Result.getValue(1));
   }
@@ -5177,16 +5195,20 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
     int SPFI = cast<FrameIndexSDNode>(TmpPtr.getNode())->getIndex();
     auto TmpPtrInfo =
         MachinePointerInfo::getFixedStack(DAG.getMachineFunction(), SPFI);
-    // Store the vector.
     SDValue Ch = DAG.getStore(Chain, dl, Val, TmpPtr, TmpPtrInfo);
+    // Add bounds on the arguments to memcpy:
+    TmpPtr = unalignedLoadStoreCSetbounds("store stack source", TmpPtr, dl,
+                                          CapAlign, DAG);
+    Ptr = unalignedLoadStoreCSetbounds("store memcpy destination", Ptr, dl,
+                                       CapAlign, DAG);
     auto Result = DAG.getMemcpy(Ch, dl, Ptr, TmpPtr,
-                               DAG.getConstant(CapAlign, dl, MVT::i64),
-                               ST->getAlignment(),
-                               /*isVolatile=*/false,
-                               /*AlwaysInline=*/false,
-                               /*isTailCall=*/false,
-                               /*MustPreserveCheriCapabilities=*/true,
-                               ST->getPointerInfo(), TmpPtrInfo);
+                                DAG.getConstant(CapAlign, dl, MVT::i64),
+                                ST->getAlignment(),
+                                /*isVolatile=*/false,
+                                /*AlwaysInline=*/false,
+                                /*isTailCall=*/false,
+                                /*MustPreserveCheriCapabilities=*/true,
+                                ST->getPointerInfo(), TmpPtrInfo);
     return Result;
   }
 

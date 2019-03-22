@@ -822,6 +822,17 @@ public:
   SDValue getPointerAdd(SDLoc dl, SDValue Ptr, SDValue Offset,
                         const SDNodeFlags Flags = SDNodeFlags());
 
+  /// Generate a CHERI CSetBounds intrinsic.
+  /// Also create a log record if CSetBounds stats are being gathered unless
+  /// CSetBoundsStatsAlreadyLogged is set to true.
+  SDValue getCSetBounds(SDValue Val, SDValue Length,
+                        bool CSetBoundsStatsAlreadyLogged = false);
+  SDValue getCSetBounds(SDValue Val, uint64_t Length,
+                        bool CSetBoundsStatsAlreadyLogged = false) {
+    return getCSetBounds(Val, getIntPtrConstant(Length, SDLoc(Val)),
+                         CSetBoundsStatsAlreadyLogged);
+  }
+
   /// Create an add instruction with appropriate flags when used for
   /// addressing some offset of an object. i.e. if a load is split into multiple
   /// components, create an add nuw from the base pointer to the offset.
