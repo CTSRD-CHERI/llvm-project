@@ -4262,10 +4262,9 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
       if ((S.beginOffset() > AllocaSize || SplittableOffset[S.beginOffset()]) &&
           (S.endOffset() > AllocaSize || SplittableOffset[S.endOffset()]))
         continue;
-      auto User = S.getUse()->getUser();
-      errs() << "USER1: ";
-      User->dump();
-      if (isa<LoadInst>(User) || isa<StoreInst>(User)) {
+
+      if (isa<LoadInst>(S.getUse()->getUser()) ||
+          isa<StoreInst>(S.getUse()->getUser())) {
         S.makeUnsplittable();
         IsSorted = false;
       }
@@ -4281,10 +4280,8 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
       if (S.beginOffset() == 0 && S.endOffset() >= AllocaSize)
         continue;
 
-      auto User = S.getUse()->getUser();
-      errs() << "USER2: ";
-      User->dump();
-      if (isa<LoadInst>(User) || isa<StoreInst>(User)) {
+      if (isa<LoadInst>(S.getUse()->getUser()) ||
+          isa<StoreInst>(S.getUse()->getUser())) {
         S.makeUnsplittable();
         IsSorted = false;
       }
