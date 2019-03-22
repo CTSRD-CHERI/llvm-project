@@ -49,6 +49,7 @@
 #include "llvm/IR/Constant.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
@@ -13278,6 +13279,9 @@ SDValue DAGCombiner::visitLOAD(SDNode *N) {
   SDValue Chain = LD->getChain();
   SDValue Ptr   = LD->getBasePtr();
 
+  // FIXME: combine unaligned stores of loads to memove here (useful for caps)
+
+
   // If load is not volatile and there are no uses of the loaded value (and
   // the updated indexed value in case of indexed loads), change uses of the
   // chain value into uses of the chain input (i.e. delete the dead load).
@@ -15317,6 +15321,66 @@ SDValue DAGCombiner::replaceStoreOfFPConstant(StoreSDNode *ST) {
   }
 }
 
+// Replace unaligned store of unaligned load with memmove.
+static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
+                                                    SelectionDAG &DAG,
+                                                    bool IsBeforeLegalize,
+                                                    const TargetLowering &TLI) {
+  StoreSDNode *ST = dyn_cast<StoreSDNode>(N);
+  if (!ST)
+    return SDValue();
+  if (!IsBeforeLegalize || ST->isVolatile() || ST->isIndexed()) {
+    return SDValue();
+  }
+  const unsigned Alignment = ST->getAlignment();
+  // Don't bother doing this transformation if the unaligned load/store is fast
+  bool Fast = false;
+  if (TLI.allowsMisalignedMemoryAccesses(
+          ST->getMemoryVT(), ST->getAddressSpace(), Alignment, &Fast)) {
+    if (Fast)
+      return SDValue();
+  }
+  SDValue Chain = ST->getChain();
+
+  unsigned StoreBits = ST->getMemoryVT().getStoreSizeInBits();
+  unsigned StoreBytes = StoreBits / 8;
+  assert((StoreBits % 8) == 0 && "Store size in bits must be a multiple of 8");
+  unsigned ABIAlignment = DAG.getDataLayout().getABITypeAlignment(
+      ST->getMemoryVT().getTypeForEVT(*DAG.getContext()));
+  if (Alignment >= ABIAlignment) {
+    return SDValue();
+  }
+
+  if (LoadSDNode *LD = dyn_cast<LoadSDNode>(ST->getValue())) {
+    if (LD->hasNUsesOfValue(1, 0) && ST->getMemoryVT() == LD->getMemoryVT() &&
+        LD->getAlignment() < ABIAlignment && !LD->isVolatile() &&
+        !LD->isIndexed() &&
+        Chain.reachesChainWithoutSideEffects(SDValue(LD, 1))) {
+      SDLoc dl(N);
+      bool isTail = TLI.isInTailCallPosition(DAG, ST, Chain);
+      SDValue Src = TLI.unalignedLoadStoreCSetbounds(
+          "store+load memmove src", LD->getBasePtr(), dl, StoreBytes, DAG);
+      SDValue Dest = TLI.unalignedLoadStoreCSetbounds(
+          "store+load memmove dest", ST->getBasePtr(), dl, StoreBytes, DAG);
+      if (ST->getMemoryVT().isFatPointer()) {
+        DiagnosticInfoOptimizationFailure Warning(
+            DAG.getMachineFunction().getFunction(), dl.getDebugLoc(),
+            "found underaligned store of underaligned load of capability type"
+            " (aligned to " +
+                Twine(Alignment) + " bytes instead of " + Twine(ABIAlignment) +
+                "). Will use memmove() to preserve tags if it is aligned "
+                "correctly at runtime");
+        DAG.getContext()->diagnose(Warning);
+      }
+      return DAG.getMemmove(
+          Chain, dl, Dest, Src, DAG.getConstant(StoreBytes, dl, MVT::i32),
+          Alignment, false, isTail, ST->getMemoryVT().isFatPointer(),
+          ST->getPointerInfo(), LD->getPointerInfo());
+    }
+  }
+  return SDValue();
+}
+
 SDValue DAGCombiner::visitSTORE(SDNode *N) {
   StoreSDNode *ST  = cast<StoreSDNode>(N);
   SDValue Chain = ST->getChain();
@@ -15478,6 +15542,10 @@ SDValue DAGCombiner::visitSTORE(SDNode *N) {
       if (N->getOpcode() == ISD::DELETED_NODE || !isa<StoreSDNode>(N))
         return SDValue(N, 0);
     }
+  }
+
+  if (SDValue Memmove = convertUnalignedStoreOfLoadToMemmove(N, DAG, !LegalTypes, TLI)) {
+    return Memmove;
   }
 
   // Try transforming N to an indexed store.

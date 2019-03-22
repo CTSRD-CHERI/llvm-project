@@ -3901,6 +3901,10 @@ public:
   std::pair<SDValue, SDValue> expandUnalignedLoad(LoadSDNode *LD,
                                                   SelectionDAG &DAG) const;
 
+  SDValue unalignedLoadStoreCSetbounds(const char *loadOrStore, SDValue Ptr,
+                                       const SDLoc &DL, unsigned CapSize,
+                                       SelectionDAG &DAG) const;
+
   /// Expands an unaligned store to 2 half-size stores for integer values, and
   /// possibly more for vectors.
   SDValue expandUnalignedStore(StoreSDNode *ST, SelectionDAG &DAG) const;

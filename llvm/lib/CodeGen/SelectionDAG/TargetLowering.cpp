@@ -4967,9 +4967,11 @@ SDValue TargetLowering::scalarizeVectorStore(StoreSDNode *ST,
   return DAG.getNode(ISD::TokenFactor, SL, MVT::Other, Stores);
 }
 
-static SDValue unalignedLoadStoreCSetbounds(const char *loadOrStore, SDValue Ptr,
-                                            const SDLoc &DL, unsigned CapSize,
-                                            SelectionDAG &DAG) {
+SDValue TargetLowering::unalignedLoadStoreCSetbounds(const char *loadOrStore,
+                                                     SDValue Ptr,
+                                                     const SDLoc &DL,
+                                                     unsigned CapSize,
+                                                     SelectionDAG &DAG) const {
   // Only set bounds if the pointer was actually a CHERI capability (i.e. skip
   // setting bounds in hybrid mode)
   if (!Ptr->getValueType(0).isFatPointer())
