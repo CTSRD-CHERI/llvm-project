@@ -2922,12 +2922,22 @@ private:
     OtherAlign =  MinAlign(OtherAlign ? OtherAlign : 1,
                            OtherOffset.zextOrTrunc(64).getZExtValue());
 
+#if 0
     // XXXAR: if we are using a CHERI capability we must emit a memcpy if the
     // other type is not aligned to the capability size.
+    // XXXAR: This causes errors later on in StackColoring since it seems to
+    // cause lifetime confusion. Emit an unaligned capability load/store instead
+    // and just expanding it to memcpy() in the backend seems like the easier
+    // solution to this problem.
+    // See https://github.com/CTSRD-CHERI/llvm-project/issues/301
     if (isCheriPointer(NewAI.getAllocatedType(), &DL)) {
-      if (OtherAlign < DL.getABITypeAlignment(NewAI.getAllocatedType()))
+      if (OtherAlign < DL.getABITypeAlignment(NewAI.getAllocatedType())) {
         EmitMemCpy = true;
+        llvm_unreachable("SROA created underaligned capability load/store and "
+                         "the workaround causes runtime crashes!");
+      }
     }
+#endif
 
     if (EmitMemCpy) {
       // Compute the other pointer, folding as much as possible to produce
@@ -4252,9 +4262,10 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
       if ((S.beginOffset() > AllocaSize || SplittableOffset[S.beginOffset()]) &&
           (S.endOffset() > AllocaSize || SplittableOffset[S.endOffset()]))
         continue;
-
-      if (isa<LoadInst>(S.getUse()->getUser()) ||
-          isa<StoreInst>(S.getUse()->getUser())) {
+      auto User = S.getUse()->getUser();
+      errs() << "USER1: ";
+      User->dump();
+      if (isa<LoadInst>(User) || isa<StoreInst>(User)) {
         S.makeUnsplittable();
         IsSorted = false;
       }
@@ -4270,8 +4281,10 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
       if (S.beginOffset() == 0 && S.endOffset() >= AllocaSize)
         continue;
 
-      if (isa<LoadInst>(S.getUse()->getUser()) ||
-          isa<StoreInst>(S.getUse()->getUser())) {
+      auto User = S.getUse()->getUser();
+      errs() << "USER2: ";
+      User->dump();
+      if (isa<LoadInst>(User) || isa<StoreInst>(User)) {
         S.makeUnsplittable();
         IsSorted = false;
       }
