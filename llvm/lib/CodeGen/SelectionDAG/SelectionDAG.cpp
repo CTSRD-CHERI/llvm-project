@@ -5734,9 +5734,13 @@ static void diagnoseInefficientCheriMemOp(SelectionDAG &DAG,
                                           const DiagnosticLocation &Loc,
                                           const Twine &MemOp,
                                           CodeGenOpt::Level OptLevel,
-                                          const Twine &Type, unsigned Align) {
+                                          StringRef Type, unsigned Align) {
   if (OptLevel == CodeGenOpt::None)
     return; // Don't bother warning about inefficient code at -O0
+  // Skip the memcpy/memmove diag if we have already diagnosed something else
+  if (Type == "!!<CHERI-NODIAG>!!")
+    return;
+
   DiagnosticInfoCheriInefficient Warning(
       DAG.getMachineFunction().getFunction(), Loc,
       MemOp + " operation with capability argument " + Type +
