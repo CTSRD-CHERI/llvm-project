@@ -623,5 +623,19 @@ define i8 addrspace(200)* @fold_incoffest_zero(i8 addrspace(200)* %arg) #1 {
   ; CHECK: ret i8 addrspace(200)* %ret
 }
 
+; This used to produce a nonnull attribute on a null parameter
+define i8 addrspace(200)* @inline_align_down() local_unnamed_addr #1 {
+entry:
+  %0 = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 100)
+  %1 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* nonnull %0) #3
+  %2 = and i64 %1, -32
+  %3 = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* nonnull %0, i64 %2) #3
+  ret i8 addrspace(200)* %3
+  ; CHECK-LABEL: @inline_align_down()
+  ; CHECK: %0 = and i64 100, -32
+  ; CHECK: %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 %0)
+  ; CHECK: ret i8 addrspace(200)* %1
+}
+
 attributes #0 = { nounwind }
 attributes #1 = { nounwind readnone }

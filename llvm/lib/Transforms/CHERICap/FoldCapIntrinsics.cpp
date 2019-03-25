@@ -326,6 +326,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
           ToErase.insert(NestedInstr);
         LLVM_DEBUG(dbgs() << "CI->setOperand(0) -> "; LHS->dump());
         CI->setOperand(0, LHS);
+        if (isa<ConstantPointerNull>(LHS))
+          CI->removeParamAttr(0, Attribute::NonNull);
         LLVM_DEBUG(dbgs() << "New CI: "; CI->dump());
         Modified = true;
       }
