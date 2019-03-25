@@ -4067,7 +4067,7 @@ MipsTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
       if (getTargetMachine().getOptLevel() < CodeGenOpt::Default)
         ShouldClearC13 = true;
       if (ShouldClearC13)
-        RegsToPass.push_back(std::make_pair(Mips::C13, DAG.getConstant(0, DL, CapType)));
+        RegsToPass.push_back(std::make_pair(Mips::C13, DAG.getNullCapability(DL, CapType)));
     }
   }
   // If we're doing a CCall then any unused arg registers should be zero.
