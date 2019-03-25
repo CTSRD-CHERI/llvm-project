@@ -28,9 +28,12 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/IR/PatternMatch.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/CHERICap.h"
 #include "llvm/Transforms/Utils/Local.h"
+
+#define DEBUG_TYPE "cheri-fold-intrisics"
 
 using namespace llvm;
 using namespace PatternMatch;
@@ -62,6 +65,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
     for (Value *Use : Func->users()) {
       CallInst *CI = cast<CallInst>(Use);
       if (Value *Replacement = infer(CI->getOperand(0), CI, NullValue)) {
+        LLVM_DEBUG(dbgs() << "Replacing all uses: "; CI->dump();
+                   dbgs() << "New replacement: "; Replacement->dump(););
         CI->replaceAllUsesWith(Replacement);
         // CI->eraseFromParent();
         ToErase.push_back(CI);
@@ -253,13 +258,17 @@ class CHERICapFoldIntrinsics : public ModulePass {
         Instruction *ReplacedInstr = cast<Instruction>(OnlyUser);
         IRBuilder<> B(ReplacedInstr);
         Value *NewOffset = B.CreateAdd(CI->getOperand(1), Increment);
+        LLVM_DEBUG(dbgs() << "CI->setOperand(1) -> "; NewOffset->dump());
         CI->setOperand(1, NewOffset);
+        LLVM_DEBUG(dbgs() << "New CI: "; CI->dump());
         // We have to move this instruction after the offset instruction
         // because otherwise we use a value that has not yet been defined
         CI->moveAfter(ReplacedInstr);
         // Keep doing this transformation for incoffset chains with only a
         // single user:
         OnlyUser = ReplacedInstr->hasOneUse() ? *ReplacedInstr->user_begin() : nullptr;
+        LLVM_DEBUG(dbgs() << "Replacing all uses: "; ReplacedInstr->dump();
+                   dbgs() << "New replacement: "; CI->dump(););
         ReplacedInstr->replaceAllUsesWith(CI);
 #if 0
         errs() << "ReplacedInstr (" << ReplacedInstr->getNumUses() << " uses): "; ReplacedInstr->dump();
@@ -315,7 +324,9 @@ class CHERICapFoldIntrinsics : public ModulePass {
         Instruction *NestedInstr = cast<Instruction>(CI->getOperand(0));
         if (NestedInstr->hasOneUse())
           ToErase.insert(NestedInstr);
+        LLVM_DEBUG(dbgs() << "CI->setOperand(0) -> "; LHS->dump());
         CI->setOperand(0, LHS);
+        LLVM_DEBUG(dbgs() << "New CI: "; CI->dump());
         Modified = true;
       }
       Value *BaseCap = CI->getOperand(0);
@@ -333,6 +344,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
           IRBuilder<> B(CI);
           CallInst *Replacement = B.CreateCall(IncOffset, {BaseCap, Add});
           Replacement->setTailCall(true);
+          LLVM_DEBUG(dbgs() << "Replacing all uses: "; CI->dump();
+                     dbgs() << "New replacement: "; Replacement->dump(););
           CI->replaceAllUsesWith(Replacement);
           ToErase.insert(CI);
           Modified = true;
@@ -342,6 +355,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
       // Fold set{offset,addr}(A, get{offset,addr}(A)) -> A
       if (match(CI->getOperand(1),
                 m_Intrinsic<GetIntrinsic>(m_Specific(BaseCap)))) {
+        LLVM_DEBUG(dbgs() << "Replacing all uses: "; CI->dump();
+                  dbgs() << "New replacement: "; BaseCap->dump(););
         CI->replaceAllUsesWith(BaseCap);
         ToErase.insert(CI);
         Modified = true;
@@ -350,6 +365,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
       // Fold set{offset,addr}(NULL, 0) -> NULL
       if (match(BaseCap, m_Zero()) && match(CI->getOperand(1), m_Zero())) {
         assert(isa<ConstantPointerNull>(BaseCap));
+        LLVM_DEBUG(dbgs() << "Replacing all uses: "; CI->dump();
+                   dbgs() << "New replacement: "; BaseCap->dump(););
         CI->replaceAllUsesWith(BaseCap);
         ToErase.insert(CI);
         Modified = true;
@@ -377,6 +394,8 @@ class CHERICapFoldIntrinsics : public ModulePass {
 
       // Fold incoffset(A, 0) -> A since incrementing by zero doesn't do anything
       if (match(CI->getOperand(1), m_Zero())) {
+        LLVM_DEBUG(dbgs() << "Replacing all uses: "; CI->dump();
+                   dbgs() << "New replacement: "; CI->getOperand(0)->dump(););
         CI->replaceAllUsesWith(CI->getOperand(0));
         ToErase.insert(CI);
         Modified = true;
@@ -464,7 +483,7 @@ public:
 } // namespace
 
 char CHERICapFoldIntrinsics::ID = 0;
-INITIALIZE_PASS(CHERICapFoldIntrinsics, "cheri-fold-intrisics",
+INITIALIZE_PASS(CHERICapFoldIntrinsics, DEBUG_TYPE,
                 "Remove redundant capability instructions", false, false)
 
 Pass *llvm::createCHERICapFoldIntrinsicsPass() {
