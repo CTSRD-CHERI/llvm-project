@@ -244,14 +244,14 @@ def warn_cheri_memintrin_misaligned_inefficient : Warning<
   "%0 operation with capability argument %2 and underaligned destination"
   " (aligned to %1 bytes) may be inefficient or result in CHERI tags bits"
   " being stripped">, InGroup<CHERIMisaligned>, DefaultWarnNoWerror;
+def warn_fe_backend_cheri_inefficient : Warning<"%0">, BackendInfo,
+    InGroup<BackendCheriInefficient>, DefaultWarn, DefaultWarnNoWerror;
 def note_cheri_memintrin_misaligned_fixit : Note<
   "use __builtin_assume_aligned() or cast to __intcap_t* if you know that the"
   " pointer is actually aligned to capability size; this will allow the %0"
   " call to be inlined if the size is constant (otherwise a library call must"
   " be used to maintain tag bits). For more information see"
   " https://github.com/CTSRD-CHERI/llvm-project/wiki/Unaligned-capability-copies">;
-
-
 
 def err_missing_vfs_overlay_file : Error<
   "virtual filesystem overlay file '%0' not found">, DefaultFatal;

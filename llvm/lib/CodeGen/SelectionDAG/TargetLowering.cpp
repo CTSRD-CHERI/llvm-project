@@ -5000,7 +5000,7 @@ TargetLowering::expandUnalignedLoad(LoadSDNode *LD, SelectionDAG &DAG) const {
 
   if (VT.isFatPointer() && !supportsUnalignedCapabilityMemOps()) {
     auto CapAlign = VT.getStoreSize();
-    DiagnosticInfoOptimizationFailure Warning(
+    DiagnosticInfoCheriInefficient Warning(
         MF.getFunction(), dl.getDebugLoc(),
         "found underaligned load of capability type (aligned to " +
             Twine(LD->getAlignment()) + " bytes instead of " + Twine(CapAlign) +
@@ -5189,7 +5189,7 @@ SDValue TargetLowering::expandUnalignedStore(StoreSDNode *ST,
   if (VT.isFatPointer() && !supportsUnalignedCapabilityMemOps()) {
     auto CapAlign = VT.getStoreSize();
     SDLoc dl(ST);
-    DiagnosticInfoOptimizationFailure Warning(
+    DiagnosticInfoCheriInefficient Warning(
         MF.getFunction(), dl.getDebugLoc(),
         "found underaligned store of capability type (aligned to " +
             Twine(ST->getAlignment()) + " bytes instead of " + Twine(CapAlign) +

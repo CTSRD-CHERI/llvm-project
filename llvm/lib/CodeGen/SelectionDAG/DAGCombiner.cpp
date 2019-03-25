@@ -15372,7 +15372,7 @@ static SDValue convertUnalignedStoreOfLoadToMemmove(SDNode *N,
       SDValue Dest = TLI.unalignedLoadStoreCSetbounds(
           "store+load memmove dest", ST->getBasePtr(), dl, StoreBytes, DAG);
       if (ST->getMemoryVT().isFatPointer()) {
-        DiagnosticInfoOptimizationFailure Warning(
+        DiagnosticInfoCheriInefficient Warning(
             DAG.getMachineFunction().getFunction(), dl.getDebugLoc(),
             "found underaligned store of underaligned load of capability type"
             " (aligned to " +

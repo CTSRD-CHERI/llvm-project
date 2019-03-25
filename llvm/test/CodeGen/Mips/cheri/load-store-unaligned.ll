@@ -5,9 +5,9 @@
 ; RUN: FileCheck %s -input-file=%t.dbg -check-prefix=DBG
 
 ; Check that expanding unaligned capability loads and stores works (but generates a warning)
-; DBG: warning: <unknown>:0:0: found underaligned load of capability type (aligned to 4 bytes instead of {{16|32}}). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
-; DBG-NEXT: warning: sroa-libunwind.cxx:9:3: found underaligned store of capability type (aligned to 4 bytes instead of {{16|32}}). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
-; DBG-NEXT: warning: <unknown>:0:0: found underaligned store of underaligned load of capability type (aligned to 8 bytes instead of {{16|32}}). Will use memmove() to preserve tags if it is aligned correctly at runtime
+; DBG: warning: <unknown>:0:0: in function load_unaligned i8 addrspace(200)* (i8 addrspace(200)*): found underaligned load of capability type (aligned to 4 bytes instead of {{16|32}}). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
+; DBG-NEXT: warning: sroa-libunwind.cxx:9:3: in function store_unaligned void (i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*): found underaligned store of capability type (aligned to 4 bytes instead of {{16|32}}). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
+; DBG-NEXT: warning: <unknown>:0:0: in function store_of_unaligned_load void (i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*): found underaligned store of underaligned load of capability type (aligned to 8 bytes instead of {{16|32}}). Will use memmove() to preserve tags if it is aligned correctly at runtime
 ; DBG-NEXT: {{4|5}},{{16|32}},s,"<somewhere in load_unaligned>","expanding unaligned capability load/store","expanding unaligned capability load stack destination"
 ; DBG-NEXT: {{4|5}},{{16|32}},s,"<somewhere in load_unaligned>","expanding unaligned capability load/store","expanding unaligned capability load memcpy source"
 ; DBG-NEXT: {{4|5}},{{16|32}},s,"sroa-libunwind.cxx:9:3","expanding unaligned capability load/store","expanding unaligned capability store stack source"

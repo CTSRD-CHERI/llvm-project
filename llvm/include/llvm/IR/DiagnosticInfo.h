@@ -75,6 +75,7 @@ enum DiagnosticKind {
   DK_MIRParser,
   DK_PGOProfile,
   DK_Unsupported,
+  DK_CheriInefficient,
   DK_FirstPluginKind
 };
 
@@ -997,6 +998,33 @@ public:
   }
 
   const Twine &getMessage() const { return Msg; }
+
+  void print(DiagnosticPrinter &DP) const override;
+};
+
+// Diagnostic for inefficient CHERI code generation (e.g. unaligned capability
+// store)
+class DiagnosticInfoCheriInefficient : public DiagnosticInfoWithLocationBase {
+private:
+  std::string Msg;
+
+public:
+  /// \p Fn is the function where the diagnostic is being emitted. \p Loc is
+  /// the location information to use in the diagnostic. If line table
+  /// information is available, the diagnostic will include the source code
+  /// location. \p Msg is the message to show.
+  DiagnosticInfoCheriInefficient(const Function &Fn,
+                                 const DiagnosticLocation &Loc,
+                                 const Twine &Msg)
+      : DiagnosticInfoWithLocationBase(DK_CheriInefficient, DS_Warning, Fn,
+                                       Loc),
+        Msg(Msg.str()) {}
+
+  static bool classof(const DiagnosticInfo *DI) {
+    return DI->getKind() == DK_CheriInefficient;
+  }
+
+  const std::string &getMessage() const { return Msg; }
 
   void print(DiagnosticPrinter &DP) const override;
 };

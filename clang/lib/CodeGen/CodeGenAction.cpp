@@ -773,6 +773,30 @@ void BackendConsumer::DiagnosticHandlerImpl(const DiagnosticInfo &DI) {
   case llvm::DK_Unsupported:
     UnsupportedDiagHandler(cast<DiagnosticInfoUnsupported>(DI));
     return;
+  case llvm::DK_CheriInefficient: {
+    const auto &DICI = cast<DiagnosticInfoCheriInefficient>(DI);
+    // We only support warnings.
+    assert(DICI.getSeverity() == llvm::DS_Warning);
+
+    StringRef Filename;
+    unsigned Line, Column;
+    bool BadDebugInfo = false;
+    FullSourceLoc Loc =
+        getBestLocationFromDebugLoc(DICI, BadDebugInfo, Filename, Line, Column);
+
+    Diags.Report(Loc, diag::warn_fe_backend_cheri_inefficient)
+        << DICI.getMessage();
+    Diags.Report(Loc, diag::note_cheri_memintrin_misaligned_fixit)
+        << "memcpy() or memset()";
+    if (BadDebugInfo)
+      // If we were not able to translate the file:line:col information
+      // back to a SourceLocation, at least emit a note stating that
+      // we could not translate this location. This can happen in the
+      // case of #line directives.
+      Diags.Report(Loc, diag::note_fe_backend_invalid_loc)
+          << Filename << Line << Column;
+    return;
+  }
   default:
     // Plugin IDs are not bound to any value as they are set dynamically.
     ComputeDiagRemarkID(Severity, backend_plugin, DiagID);
