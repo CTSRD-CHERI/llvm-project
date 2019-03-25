@@ -4826,6 +4826,7 @@ static bool IsIdempotent(Intrinsic::ID ID) {
   case Intrinsic::nearbyint:
   case Intrinsic::round:
   case Intrinsic::canonicalize:
+  case Intrinsic::cheri_cap_tag_clear:
     return true;
   }
 }
