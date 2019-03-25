@@ -4991,6 +4991,10 @@ static Value *simplifyBinaryIntrinsic(Function *F, Value *Op0, Value *Op1,
     if (match(Op0, m_Undef()) || match(Op1, m_Undef()))
       return Constant::getNullValue(ReturnType);
     break;
+  case Intrinsic::cheri_cap_diff:
+    if (Constant *Result = computePointerDifference(Q.DL, Op0, Op1))
+      return ConstantExpr::getIntegerCast(Result, ReturnType, true);
+    break;
   case Intrinsic::uadd_sat:
     // sat(MAX + X) -> MAX
     // sat(X + MAX) -> MAX
