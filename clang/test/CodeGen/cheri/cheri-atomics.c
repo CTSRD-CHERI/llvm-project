@@ -17,10 +17,10 @@ int main(void) {
 
   __c11_atomic_fetch_add(&p, 1, __ATOMIC_SEQ_CST); // expected-warning {{misaligned atomic operation may incur significant performance penalty}}
   // CHECK: [[INC:%.+]] = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 4)
-  // CHECK: call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* [[INC]], i32 signext 5)
+  // CHECK: call i8 addrspace(200)* @__atomic_fetch_add_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* nonnull [[INC]], i32 signext 5)
   __c11_atomic_fetch_sub(&p, 2, __ATOMIC_SEQ_CST); // expected-warning {{misaligned atomic operation may incur significant performance penalty}}
   // CHECK: [[INC2:%.+]] = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* null, i64 8)
-  // CHECK: call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* [[INC2]], i32 signext 5)
+  // CHECK: call i8 addrspace(200)* @__atomic_fetch_sub_cap(i8 addrspace(200)* nonnull [[P_AS_I8]], i8 addrspace(200)* nonnull [[INC2]], i32 signext 5)
   int *c = __c11_atomic_load(&p, __ATOMIC_SEQ_CST);
   // CHECK: [[C_VALUE:%.+]] = load atomic i32 addrspace(200)*, i32 addrspace(200)* addrspace(200)* %p seq_cst, align
   __c11_atomic_store(&p, 0, __ATOMIC_SEQ_CST);

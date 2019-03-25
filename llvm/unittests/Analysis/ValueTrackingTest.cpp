@@ -555,6 +555,68 @@ TEST_F(ComputeKnownBitsTest, ComputeKnownBits) {
   expectKnownBits(/*zero*/ 4278190085u, /*one*/ 10u);
 }
 
+TEST_F(ComputeKnownBitsTest, ComputeCheriAddrBits_set_get) {
+  parseAssembly(
+      "target datalayout = \"E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200\"\n"
+      "declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64)\n"
+      "declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*)\n"
+      "define i64 @test(i8 addrspace(200)* %a) {\n"
+      "  %with_addr = call addrspace(200) i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %a, i64 12345)\n"
+      "  %A = call addrspace(200) i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %with_addr)\n"
+      "  ret i64 %A\n"
+      "}\n");
+  // All bits should be known:
+  expectKnownBits(/*zero*/ ~UINT64_C(12345), /*one*/ 12345);
+}
+
+TEST_F(ComputeKnownBitsTest, ComputeCheriAddrBits_set_ptrtoint) {
+  parseAssembly(
+      "target datalayout = \"E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200\"\n"
+      "declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64)\n"
+      "declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*)\n"
+      "define i64 @test(i8 addrspace(200)* %a) {\n"
+      "  %with_addr = call addrspace(200) i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %a, i64 12345)\n"
+      "  %A = ptrtoint i8 addrspace(200)* %with_addr to i64\n"
+      "  ret i64 %A\n"
+      "}\n");
+  // All bits should be known:
+  expectKnownBits(/*zero*/ ~UINT64_C(12345), /*one*/ 12345);
+}
+
+TEST_F(ComputeKnownBitsTest, ComputeCheriAddrBits_plus10) {
+  parseAssembly(
+      "target datalayout = \"E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200\"\n"
+      "declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64)\n"
+      "declare i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)*, i64)\n"
+      "declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*)\n"
+      "define i64 @test(i8 addrspace(200)* %a) {\n"
+      "  %with_addr = call addrspace(200) i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %a, i64 12345)\n"
+      "  %with_addr_plus_10 = call addrspace(200) i8 addrspace(200)* @llvm.cheri.cap.offset.increment.i64(i8 addrspace(200)* %with_addr, i64 98765)\n"
+      "  %A = call addrspace(200) i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %with_addr_plus_10)\n"
+      "  ret i64 %A\n"
+      "}\n");
+  // All bits should be known:
+  uint64_t Result = 12345 + 98765;
+  expectKnownBits(/*zero*/ ~Result, /*one*/ Result);
+}
+
+TEST_F(ComputeKnownBitsTest, ComputeCheriAddrBits_cap_diff) {
+  parseAssembly(
+      "target datalayout = \"E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200\"\n"
+      "declare i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)*, i64)\n"
+      "declare i64 @llvm.cheri.cap.diff.i64(i8 addrspace(200)*, i8 addrspace(200)*)\n"
+      "declare i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)*)\n"
+      "define i64 @test(i8 addrspace(200)* %a) {\n"
+      "  %first = call addrspace(200) i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %a, i64 98765)\n"
+      "  %second = call addrspace(200) i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %a, i64 12345)\n"
+      "  %A = call addrspace(200) i64 @llvm.cheri.cap.diff.i64(i8 addrspace(200)* %first, i8 addrspace(200)* %second)\n"
+      "  ret i64 %A\n"
+      "}\n");
+  // All bits should be known:
+  uint64_t Result = 98765 - 12345;
+  expectKnownBits(/*zero*/ ~Result, /*one*/ Result);
+}
+
 TEST_F(ComputeKnownBitsTest, ComputeKnownMulBits) {
   parseAssembly(
       "define i32 @test(i32 %a, i32 %b) {\n"

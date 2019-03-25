@@ -1488,6 +1488,29 @@ static void computeKnownBitsFromOperator(const Operator *I, KnownBits &Known,
         Known.Zero |= Known2.Zero.byteSwap();
         Known.One |= Known2.One.byteSwap();
         break;
+      case Intrinsic::cheri_cap_address_get: {
+        // This just fetches the virtual address -> treat the same as ptrtoint:
+        computeKnownBits(I->getOperand(0), Known, Depth + 1, Q);
+        break;
+      }
+      case Intrinsic::cheri_cap_address_set: {
+        // We can treat it the same as inttoptr:
+        // The virtual address after csetaddr will be the second argument.
+        computeKnownBits(I->getOperand(1), Known, Depth + 1, Q);
+        break;
+      }
+      case Intrinsic::cheri_cap_offset_increment: {
+        bool NSW = false;
+        computeKnownBitsAddSub(true, I->getOperand(0), I->getOperand(1), NSW,
+                               Known, Known2, Depth, Q);
+        break;
+      }
+      case Intrinsic::cheri_cap_diff: {
+        bool NSW = false;
+        computeKnownBitsAddSub(false, I->getOperand(0), I->getOperand(1), NSW,
+                               Known, Known2, Depth, Q);
+        break;
+      }
       case Intrinsic::ctlz: {
         computeKnownBits(I->getOperand(0), Known2, Depth + 1, Q);
         // If we have a known 1, its position is our upper bound.
