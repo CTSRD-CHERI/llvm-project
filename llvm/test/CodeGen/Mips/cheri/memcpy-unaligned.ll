@@ -6,10 +6,10 @@
 ; RUN: %cheri128_purecap_opt -sroa %s -o - -S -data-layout="E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200" | FileCheck %s -check-prefix SROA
 ; RUN: %cheri128_purecap_opt -sroa %s -o - -S -data-layout="E-m:e-pf200:128:128:128:64-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200-P200-G200" | %cheri128_purecap_llc -O2 - -o - 2>%t.dbg | FileCheck %s
 ; RUN: FileCheck %s -check-prefix=DBG -input-file=%t.dbg
-; DBG:      warning: <unknown>:0:0: found underaligned store of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
-; DBG-NEXT: warning: <unknown>:0:0: found underaligned store of capability type (aligned to 2 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
-; DBG-NEXT: warning: <unknown>:0:0: found underaligned store of capability type (aligned to 4 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
-; DBG-NEXT: warning: <unknown>:0:0: found underaligned store of capability type (aligned to 8 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
+; DBG:      warning: <unknown>:0:0: in function spgFormLeafTuple void (): found underaligned store of capability type (aligned to 1 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
+; DBG-NEXT: warning: <unknown>:0:0: in function align2_should_call_memcpy void (): found underaligned store of capability type (aligned to 2 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
+; DBG-NEXT: warning: <unknown>:0:0: in function align4_should_call_memcpy void (): found underaligned store of capability type (aligned to 4 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
+; DBG-NEXT: warning: <unknown>:0:0: in function align8_should_call_memcpy void (): found underaligned store of capability type (aligned to 8 bytes instead of 16). Will use memcpy() instead of capability load to preserve tags if it is aligned correctly at runtime
 ; DBG-EMPTY:
 
 @b = common addrspace(200) global i8 addrspace(200)* null, align 16
