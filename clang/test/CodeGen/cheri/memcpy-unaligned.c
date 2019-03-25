@@ -1,9 +1,13 @@
-// RUN: %cheri128_purecap_cc1 -O0 -o - -emit-llvm %s -verify | FileCheck %s
-// RUN: %cheri128_purecap_cc1 -DBUILTIN -O0 -o - -emit-llvm %s -verify | FileCheck %s
+// RUN: %cheri128_purecap_cc1 -O0 -o - -emit-llvm %s -w | FileCheck %s
+// RUN: %cheri128_purecap_cc1 -DBUILTIN  -O0 -o - -emit-llvm %s -w | FileCheck %s
+
+// This diagnostic is disabled at -O0 -> must check at -O2
+// RUN: %cheri128_purecap_cc1 -debug-info-kind=standalone -O2 -S -o /dev/null %s -verify
+// RUN: %cheri128_purecap_cc1 -debug-info-kind=standalone -DBUILTIN -O2 -S -o /dev/null %s -verify
 
 // If we are using -Werror this warning should not fail the build, only if it is explicitly added:
-// RUN: %cheri128_purecap_cc1 -O0 -o /dev/null -emit-llvm %s -Werror 2> /dev/null
-// RUN: not %cheri128_purecap_cc1 -O0 -o /dev/null -emit-llvm %s -Werror=cheri-misaligned 2>/dev/null
+// RUN: %cheri128_purecap_cc1 -O2 -o /dev/null -S %s -Werror 2> /dev/null
+// RUN: not %cheri128_purecap_cc1 -O2 -o /dev/null -S %s -Werror=cheri-misaligned 2>/dev/null
 
 #ifdef BUILTIN
 #define memcpy __builtin_memcpy
@@ -18,36 +22,34 @@ void *b;
 
 __uintcap_t get_cap(void);
 
-void test_dst_unliagned_src_cap_memcpy(void* align1, short* align2, int* align4, long* align8, void** align_cap) {
+void test_dst_unliagned_src_cap_memcpy(void* align1, short* align2, int* align4, long* align8, void** align_cap, a* src) {
   // CHECK-LABEL @test_dst_unliagned_src_cap_memcpy(
-  a local_cap = get_cap();
-
-  memcpy(align1, &local_cap, sizeof(local_cap));
+  memcpy(align1, src, sizeof(*src));
   // expected-warning@-1{{memcpy operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB:#[0-9]+]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A:#[0-9]+]]
 
-  memcpy(align2, &local_cap, sizeof(local_cap));
+  memcpy(align2, src, sizeof(*src));
   // expected-warning@-1{{memcpy operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 2 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
-  memcpy(align4, &local_cap, sizeof(local_cap));
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
+  memcpy(align4, src, sizeof(*src));
   // expected-warning@-1{{memcpy operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 4 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 4 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
-  memcpy(align8, &local_cap, sizeof(local_cap));
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
+  memcpy(align8, src, sizeof(*src));
   // expected-warning@-1{{memcpy operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 8 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 8 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
-  memcpy(align_cap, &local_cap, sizeof(local_cap)); // this is fine!
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
+  memcpy(align_cap, src, sizeof(*src)); // this is fine!
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 16 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
 }
@@ -62,7 +64,7 @@ struct with_cap {
   void* cap;
 };
 
-void test_no_warn_for_non_caps(short* align2, int not_a_cap, __uintcap_t cap,
+void test_no_warn_for_non_caps(short* align2, int not_a_cap, __uintcap_t* capptr,
                                struct with_cap* struct_with_cap, struct without_cap* struct_without_cap) {
   // CHECK-LABEL @test_no_warn_for_non_caps(
 
@@ -74,55 +76,53 @@ void test_no_warn_for_non_caps(short* align2, int not_a_cap, __uintcap_t cap,
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 4 %{{.+}}, i64 8, i1 false)
 
-  memcpy(align2, &cap, sizeof(cap));
+  memcpy(align2, capptr, sizeof(*capptr));
   // expected-warning@-1{{memcpy operation with capability argument '__uintcap_t' and underaligned destination (aligned to 2 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP:#[0-9]+]]
 
   memcpy(align2, struct_with_cap, sizeof(*struct_with_cap));
   // expected-warning@-1{{memcpy operation with capability argument 'struct with_cap' and underaligned destination (aligned to 2 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 32, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_STRUCT_WITH_CAP:#[0-9]+]]
 }
 
 
-void test_dst_unliagned_src_cap_memmove(void* align1, short* align2, int* align4, long* align8, void** align_cap) {
+void test_dst_unliagned_src_cap_memmove(void* align1, short* align2, int* align4, long* align8, void** align_cap, a* src) {
   // CHECK-LABEL @test_dst_unliagned_src_cap_memcpy(
-  a local_cap = get_cap();
-
-  memmove(align1, &local_cap, sizeof(local_cap));
+  memmove(align1, src, sizeof(*src));
   // expected-warning@-1{{memmove operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
 
-  memmove(align2, &local_cap, sizeof(local_cap));
+  memmove(align2, src, sizeof(*src));
   // expected-warning@-1{{memmove operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 2 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 2 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
 
-  memmove(align4, &local_cap, sizeof(local_cap));
+  memmove(align4, src, sizeof(*src));
   // expected-warning@-1{{memmove operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 4 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 4 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
 
-  memmove(align8, &local_cap, sizeof(local_cap));
+  memmove(align8, src, sizeof(*src));
   // expected-warning@-1{{memmove operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 8 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 8 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
 
-  memmove(align_cap, &local_cap, sizeof(local_cap)); // this is fine!
+  memmove(align_cap, src, sizeof(*src)); // this is fine!
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 16 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
 }
@@ -132,140 +132,194 @@ void test_dst_unliagned_src_cap_memmove(void* align1, short* align2, int* align4
 #define memmove_chk(x,y,z) __builtin___memmove_chk(x,y,z, __builtin_object_size(x,0))
 #define memmove_chk_inbounds(x,y,z) __builtin___memmove_chk(x,y,z, z)
 
-void test_memcpy_chk(void* align1, long* align8, void** align_cap) {
+void test_memcpy_chk(void* align1, long* align8, void** align_cap, a* src) {
   // CHECK-LABEL @test_memcpy_chk(
-  a local_cap = get_cap();
-  memcpy_chk(align1, &local_cap, sizeof(local_cap));
+  memcpy_chk(align1, src, sizeof(*src));
   // expected-warning@-1{{__memcpy_chk operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call i8 addrspace(200)* @__memcpy_chk(
-  memcpy_chk(align8, &local_cap, sizeof(local_cap));
+  memcpy_chk(align8, src, sizeof(*src));
   // expected-warning@-1{{__memcpy_chk operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 8 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call i8 addrspace(200)* @__memcpy_chk(
 
-  memcpy_chk(align_cap, &local_cap, sizeof(local_cap)); // no warning
+  memcpy_chk(align_cap, src, sizeof(*src)); // no warning
   // CHECK: call i8 addrspace(200)* @__memcpy_chk(
 
   // these are always turned into a memcpy:
-  memcpy_chk_inbounds(align1, &local_cap, sizeof(local_cap));
+  memcpy_chk_inbounds(align1, src, sizeof(*src));
   // expected-warning@-1{{memcpy operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
-  memcpy_chk_inbounds(align8, &local_cap, sizeof(local_cap));
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
+  memcpy_chk_inbounds(align8, src, sizeof(*src));
   // expected-warning@-1{{memcpy operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 8 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 8 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
-  memcpy_chk_inbounds(align_cap, &local_cap, sizeof(local_cap));
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
+  memcpy_chk_inbounds(align_cap, src, sizeof(*src));
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 16 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
 }
 
-void test_memmove_chk(void* align1, long* align8, void** align_cap) {
+void test_memmove_chk(void* align1, long* align8, void** align_cap, a* src) {
   // CHECK-LABEL @test_memmove_chk(
-  a local_cap = get_cap();
-  memmove_chk(align1, &local_cap, sizeof(local_cap));
+  memmove_chk(align1, src, sizeof(*src));
   // expected-warning@-1{{__memmove_chk operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call i8 addrspace(200)* @__memmove_chk(
-  memmove_chk(align8, &local_cap, sizeof(local_cap));
+  memmove_chk(align8, src, sizeof(*src));
   // expected-warning@-1{{__memmove_chk operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 8 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call i8 addrspace(200)* @__memmove_chk(
-  memmove_chk(align_cap, &local_cap, sizeof(local_cap)); // no warning
+  memmove_chk(align_cap, src, sizeof(*src)); // no warning
   // CHECK: call i8 addrspace(200)* @__memmove_chk(
 
 
   // these are always turned into a memmove:
-  memmove_chk_inbounds(align1, &local_cap, sizeof(local_cap));
+  memmove_chk_inbounds(align1, src, sizeof(*src));
   // expected-warning@-1{{memmove operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
 
-  memmove_chk_inbounds(align8, &local_cap, sizeof(local_cap));
+  memmove_chk_inbounds(align8, src, sizeof(*src));
   // expected-warning@-1{{memmove operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 8 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 8 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
 
-  memmove_chk_inbounds(align_cap, &local_cap, sizeof(local_cap)); // no warning
+  memmove_chk_inbounds(align_cap, src, sizeof(*src)); // no warning
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 16 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
 }
 
-void test_builtin_assume_aligned_fix(long *align8, char *align1, char *align1_again) {
-  __uintcap_t local_cap = get_cap();
+void test_builtin_assume_aligned_fix_1(long *align8, long *align8_again, char *align1, char *align1_again, __uintcap_t* src) {
+  // CHECK-LABEL: @test_builtin_assume_aligned_fix_1(
 
-  memcpy(align8, &local_cap, sizeof(local_cap));
+  memcpy(align8, src, sizeof(*src));
   // expected-warning@-1{{memcpy operation with capability argument '__uintcap_t' and underaligned destination (aligned to 8 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 8 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]]
 
-  memmove(align8, &local_cap, sizeof(local_cap));
+  memmove(align8_again, src, sizeof(*src));
   // expected-warning@-1{{memmove operation with capability argument '__uintcap_t' and underaligned destination (aligned to 8 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 8 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]]
 
+
+  memcpy(align1, src, sizeof(*src));
+  // expected-warning@-1{{memcpy operation with capability argument '__uintcap_t' and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
+  // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
+  // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
+  // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]]
+
+  memmove(align1_again, src, sizeof(*src));
+  // expected-warning@-1{{memmove operation with capability argument '__uintcap_t' and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
+  // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
+  // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
+  // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]]
+}
+
+void test_builtin_assume_aligned_fix_2(long *align8, long *align8_again, char *align1, char *align1_again, __uintcap_t* src) {
+  // CHECK-LABEL: @test_builtin_assume_aligned_fix_2(
   // should not warn if we add __builtin_assume_aligned or cast to __intcap_t
-  memcpy(__builtin_assume_aligned(align8, sizeof(void *)), &local_cap, sizeof(local_cap));
+  // But this only works at -O1 or higher:
+  memcpy(__builtin_assume_aligned(align8, sizeof(void *)), src, sizeof(*src));
+  // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
+  // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]]
+  memcpy((__intcap_t *)align8_again, src, sizeof(*src));
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 16 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  memcpy((__intcap_t *)align8, &local_cap, sizeof(local_cap));
-  // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
-  // CHECK-SAME: align 16 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  memmove(__builtin_assume_aligned(align8, sizeof(void *)), &local_cap, sizeof(local_cap));
+  memmove(__builtin_assume_aligned(align1, sizeof(void *)), src, sizeof(*src));
+  // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
+  // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]]
+  memmove((__intcap_t *)align1_again, src, sizeof(*src));
   // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 16 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  memmove((__intcap_t *)align8, &local_cap, sizeof(local_cap));
-  // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
-  // CHECK-SAME: align 16 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
+}
 
+void test_builtin_assume_aligned_fix_3(long *align8, __uintcap_t* src) {
+  // CHECK-LABEL: @test_builtin_assume_aligned_fix_3(
   // Check that we inferred align 8 in the warning here:
-  memcpy(__builtin_assume_aligned(align8, sizeof(long)), &local_cap, sizeof(local_cap));
+  memcpy(__builtin_assume_aligned(align8, sizeof(long)), src, sizeof(*src));
   // expected-warning@-1{{memcpy operation with capability argument '__uintcap_t' and underaligned destination (aligned to 8 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
-  // CHECK-SAME: align 8 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
-
-  void *align4 = __builtin_assume_aligned(align1, 4);
-  memcpy(align4, &local_cap, sizeof(local_cap));
-  // expected-warning@-1{{memcpy operation with capability argument '__uintcap_t' and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
-  // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
-  // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]]
 
-  void *align32 = __builtin_assume_aligned(align1_again, 32);
-  memcpy(align32, &local_cap, sizeof(local_cap)); // this is fine
-  // expected-warning@-1{{memcpy operation with capability argument '__uintcap_t' and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
+  memmove(__builtin_assume_aligned(align8, sizeof(long)), src, sizeof(*src));
+  // expected-warning@-1{{memmove operation with capability argument '__uintcap_t' and underaligned destination (aligned to 8 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
-  // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
+  // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]]
 }
 
 
 extern __uintcap_t foo_array[10][2];
+void do_stuff(char* buf);
 void test_no_crash_with_array(void) {
+  // CHECK-LABEL: @test_no_crash_with_array(
   char buffer[1234];
   memcpy(buffer, foo_array, sizeof(foo_array));
   // expected-warning@-1{{memcpy operation with capability argument '__uintcap_t' and underaligned destination (aligned to 1 bytes) may be inefficient or result in CHERI tags bits being stripped}}
   // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
   // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
   // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 {{.+}}, i64 320, i1 false)
-  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB]]
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]]
+  do_stuff(buffer); // So that buffer is not optimized away
 }
 
-// CHECK: attributes [[PRESERVE_TAGS_ATTRIB]] = { "must-preserve-cheri-tags" }
+void test_builtin_assume_aligned_intermediate_var(char *align1, char *align1_again, a* src) {
+  // CHECK-LABEL: @test_builtin_assume_aligned_intermediate_var(
+  // this should still warn:
+  void *align4 = __builtin_assume_aligned(align1, 4);
+  memcpy(align4, src, sizeof(*src));
+  // expected-warning@-1{{memcpy operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 4 bytes) may be inefficient or result in CHERI tags bits being stripped}}
+  // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
+  // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
+  // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
+
+  void *align32 = __builtin_assume_aligned(align1_again, 32);
+  memcpy(align32, src, sizeof(*src)); // this is fine
+  // CHECK: call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)*
+  // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
+}
+
+void test_builtin_assume_aligned_memmove_intermediate_var(char *align1, char *align1_again, a* src) {
+  // CHECK-LABEL: @test_builtin_assume_aligned_memmove_intermediate_var(
+  // this should still warn:
+  void *align4 = __builtin_assume_aligned(align1, 4);
+  memmove(align4, src, sizeof(*src));
+  // expected-warning@-1{{memmove operation with capability argument 'a' (aka '__uintcap_t') and underaligned destination (aligned to 4 bytes) may be inefficient or result in CHERI tags bits being stripped}}
+  // expected-note@-2{{use __builtin_assume_aligned() or cast to __intcap_t*}}
+  // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
+  // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
+
+  void *align32 = __builtin_assume_aligned(align1_again, 32);
+  memmove(align32, src, sizeof(*src)); // this is fine
+  // CHECK: call void @llvm.memmove.p200i8.p200i8.i64(i8 addrspace(200)*
+  // CHECK-SAME: align 1 %{{.+}}, i8 addrspace(200)* align 16 %{{.+}}, i64 16, i1 false)
+  // CHECK-SAME: [[PRESERVE_TAGS_ATTRIB_TYPE_A]]
+}
+
+// CHECK: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_A]] = { "frontend-memtransfer-type"="'a' (aka '__uintcap_t')" "must-preserve-cheri-tags" }
+// CHECK: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_UINTCAP]] = { "frontend-memtransfer-type"="'__uintcap_t'" "must-preserve-cheri-tags" }
+// CHECK: attributes [[PRESERVE_TAGS_ATTRIB_TYPE_STRUCT_WITH_CAP]] = { "frontend-memtransfer-type"="'struct with_cap'" "must-preserve-cheri-tags" }

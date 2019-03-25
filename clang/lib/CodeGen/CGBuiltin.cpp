@@ -1584,59 +1584,76 @@ diagnoseMisalignedCapabiliyCopyDest(CodeGenFunction &CGF, StringRef Function,
   UnderlyingSrcTy =
       QualType(UnderlyingSrcTy->getPointeeOrArrayElementType(), 0);
   auto &Ctx = CGF.CGM.getContext();
-  if (Ctx.containsCapabilities(UnderlyingSrcTy)) {
-    // Add a "must-preserve-cheri-tags" attribute to the memcpy/memmove
-    // intrinsic to ensure that the backend will not lower it to an inlined
-    // sequence of 1/2/4/8 byte loads and stores which would strip the tag bits.
-    // TODO: a clc/csc that works on unaligned data but traps for a csc
-    // with a tagged value and unaligned address could also prevent tags
-    // from being lost.
-    if (MemInst) {
-      MemInst->addAttribute(llvm::AttributeList::FunctionIndex,
-        llvm::Attribute::get(CGF.getLLVMContext(), "must-preserve-cheri-tags"));
-    }
-    uint64_t CapSizeBytes =
-        Ctx.toCharUnitsFromBits(Ctx.getTargetInfo().getCHERICapabilityAlign())
-            .getQuantity();
-    uint64_t DstAlignBytes = DstAlignCU.getQuantity();
-    bool UnderAligned = DstAlignBytes < CapSizeBytes;
-    if (UnderAligned && MemInst) {
-      // See if __builtin_assume_aligned() was used to increase the alignemnt.
-      // In order to compute this alignment we need to use getKnownAlignment().
-      // This will parse the @llvm.assume() intrinsics and compute the new
-      // alignment but in order to do so it needs an AssumptionCache (and
-      // possibly a DominatorTree, but for now it seems to work without).
-      // We also need to pass the call instruction as the context since the
-      // alignment cannot be computed otherwise.
+  if (!Ctx.containsCapabilities(UnderlyingSrcTy))
+    return;
 
-      assert(MemInst->getDestAlignment() == DstAlignBytes);
-      // We need an assumption cache for getKnownAlignment(). This may be
-      // expensive so we only do it if the alignment check failed.
-      AssumptionCache AC(*CGF.CurFn);
-      DominatorTree DT(*CGF.CurFn);
-      auto KnownAlign = llvm::getKnownAlignment(
-          MemInst->getRawDest(), CGF.CGM.getDataLayout(), MemInst, &AC, &DT);
-      if (KnownAlign > DstAlignBytes) {
-        // Check if we are still underaligned with __builtin_assume_aligned()
-        // and update the memcpy/memmove src alignment. This will be done later
-        // in LLVM anyway but since we have already computed we may as well set
-        // it.
-        DstAlignBytes = KnownAlign;
-        UnderAligned = DstAlignBytes < CapSizeBytes;
-        MemInst->setDestAlignment(DstAlignBytes);
-      }
+  // Add a "must-preserve-cheri-tags" attribute to the memcpy/memmove
+  // intrinsic to ensure that the backend will not lower it to an inlined
+  // sequence of 1/2/4/8 byte loads and stores which would strip the tag bits.
+  // TODO: a clc/csc that works on unaligned data but traps for a csc
+  // with a tagged value and unaligned address could also prevent tags
+  // from being lost.
+  if (MemInst) {
+    // If we have a memory intrinsic let the backend diagnose this issue:
+    // First, tell the backend that this copy must preserve tags
+    MemInst->addAttribute(
+        llvm::AttributeList::FunctionIndex,
+        llvm::Attribute::get(CGF.getLLVMContext(), "must-preserve-cheri-tags"));
+    // And also tell it what the underlying type was for improved diagnostics.
+    std::string TypeName = UnderlyingSrcTy.getAsString();
+    std::string CanonicalStr = UnderlyingSrcTy.getCanonicalType().getAsString();
+    if (CanonicalStr != TypeName)
+      TypeName = "'" + TypeName + "' (aka '" + CanonicalStr + "')";
+    else
+      TypeName = "'" + TypeName + "'";
+    MemInst->addAttribute(llvm::AttributeList::FunctionIndex,
+                          llvm::Attribute::get(CGF.getLLVMContext(),
+                                               "frontend-memtransfer-type",
+                                               TypeName));
+    return;
+  }
+  // Otherwise attempt to diagnose it here (likely to cause false positives)
+  uint64_t CapSizeBytes =
+      Ctx.toCharUnitsFromBits(Ctx.getTargetInfo().getCHERICapabilityAlign())
+          .getQuantity();
+  uint64_t DstAlignBytes = DstAlignCU.getQuantity();
+  bool UnderAligned = DstAlignBytes < CapSizeBytes;
+  if (UnderAligned && MemInst) {
+    // See if __builtin_assume_aligned() was used to increase the alignemnt.
+    // In order to compute this alignment we need to use getKnownAlignment().
+    // This will parse the @llvm.assume() intrinsics and compute the new
+    // alignment but in order to do so it needs an AssumptionCache (and
+    // possibly a DominatorTree, but for now it seems to work without).
+    // We also need to pass the call instruction as the context since the
+    // alignment cannot be computed otherwise.
+
+    assert(MemInst->getDestAlignment() == DstAlignBytes);
+    // We need an assumption cache for getKnownAlignment(). This may be
+    // expensive so we only do it if the alignment check failed.
+    AssumptionCache AC(*CGF.CurFn);
+    DominatorTree DT(*CGF.CurFn);
+    auto KnownAlign = llvm::getKnownAlignment(
+        MemInst->getRawDest(), CGF.CGM.getDataLayout(), MemInst, &AC, &DT);
+    if (KnownAlign > DstAlignBytes) {
+      // Check if we are still underaligned with __builtin_assume_aligned()
+      // and update the memcpy/memmove src alignment. This will be done later
+      // in LLVM anyway but since we have already computed we may as well set
+      // it.
+      DstAlignBytes = KnownAlign;
+      UnderAligned = DstAlignBytes < CapSizeBytes;
+      MemInst->setDestAlignment(DstAlignBytes);
     }
-    // TODO: should only really warn if the size is small enough to be inlined.
-    if (UnderAligned) {
-      // TODO: this warning should be emitted by the backend instead
-      CGF.CGM.getDiags().Report(
-          Src->getExprLoc(), diag::warn_cheri_memintrin_misaligned_inefficient)
-          << Function << (unsigned)DstAlignBytes << UnderlyingSrcTy;
-      // TODO: add a fixit?
-      CGF.CGM.getDiags().Report(Src->getExprLoc(),
-                                diag::note_cheri_memintrin_misaligned_fixit)
-          << Function;
-    }
+  }
+  // TODO: should only really warn if the size is small enough to be inlined.
+  if (UnderAligned) {
+    // TODO: this warning should be emitted by the backend instead
+    CGF.CGM.getDiags().Report(Src->getExprLoc(),
+                              diag::warn_cheri_memintrin_misaligned_inefficient)
+        << Function << (unsigned)DstAlignBytes << UnderlyingSrcTy;
+    // TODO: add a fixit?
+    CGF.CGM.getDiags().Report(Src->getExprLoc(),
+                              diag::note_cheri_memintrin_misaligned_fixit)
+        << Function;
   }
 }
 

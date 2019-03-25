@@ -5511,10 +5511,13 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     bool isTC = I.isTailCall() && isInTailCallPosition(&I, DAG.getTarget());
     // FIXME: Support passing different dest/src alignments to the memcpy DAG
     // node.
-    SDValue MC = DAG.getMemcpy(getRoot(), sdl, Op1, Op2, Op3, Align, isVol,
-                               false, isTC, I.hasFnAttr("must-preserve-cheri-tags"),
-                               MachinePointerInfo(I.getArgOperand(0)),
-                               MachinePointerInfo(I.getArgOperand(1)));
+    Attribute CopyType = I.getAttribute(AttributeList::FunctionIndex,
+                                              "frontend-memtransfer-type");
+    SDValue MC = DAG.getMemcpy(
+        getRoot(), sdl, Op1, Op2, Op3, Align, isVol, false, isTC,
+        I.hasFnAttr("must-preserve-cheri-tags"),
+        MachinePointerInfo(I.getArgOperand(0)),
+        MachinePointerInfo(I.getArgOperand(1)), CopyType.getValueAsString());
     updateDAGForMaybeTailCall(MC);
     return nullptr;
   }
@@ -5543,12 +5546,15 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     unsigned Align = MinAlign(DstAlign, SrcAlign);
     bool isVol = MMI.isVolatile();
     bool isTC = I.isTailCall() && isInTailCallPosition(&I, DAG.getTarget());
+    Attribute MoveType = I.getAttribute(AttributeList::FunctionIndex,
+                                              "frontend-memtransfer-type");
     // FIXME: Support passing different dest/src alignments to the memmove DAG
     // node.
     SDValue MM = DAG.getMemmove(getRoot(), sdl, Op1, Op2, Op3, Align, isVol,
                                 isTC, I.hasFnAttr("must-preserve-cheri-tags"),
                                 MachinePointerInfo(I.getArgOperand(0)),
-                                MachinePointerInfo(I.getArgOperand(1)));
+                                MachinePointerInfo(I.getArgOperand(1)),
+                                MoveType.getValueAsString());
     updateDAGForMaybeTailCall(MM);
     return nullptr;
   }
@@ -6247,9 +6253,7 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
 
     assert(CI && "Non-constant type in __builtin_object_size?");
 
-    SDValue Arg = getValue(I.getCalledValue());
-    EVT Ty = Arg.getValueType();
-
+    EVT Ty = TLI.getValueType(DAG.getDataLayout(), I.getType());
     if (CI->isZero())
       Res = DAG.getConstant(-1ULL, sdl, Ty);
     else
@@ -7194,13 +7198,16 @@ bool SelectionDAGBuilder::visitMemPCpyCall(const CallInst &I) {
   SDLoc sdl = getCurSDLoc();
 
   const bool MustPreserveCheriTags = I.hasFnAttr("must-preserve-cheri-tags");
+  Attribute CopyType =
+      I.getAttribute(AttributeList::FunctionIndex, "frontend-memtransfer-type");
   // In the mempcpy context we need to pass in a false value for isTailCall
   // because the return pointer needs to be adjusted by the size of
   // the copied memory.
   SDValue MC = DAG.getMemcpy(getRoot(), sdl, Dst, Src, Size, Align, isVol,
                              false, /*isTailCall=*/false, MustPreserveCheriTags,
                              MachinePointerInfo(I.getArgOperand(0)),
-                             MachinePointerInfo(I.getArgOperand(1)));
+                             MachinePointerInfo(I.getArgOperand(1)),
+                             CopyType.getValueAsString());
   assert(MC.getNode() != nullptr &&
          "** memcpy should not be lowered as TailCall in mempcpy context **");
   DAG.setRoot(MC);

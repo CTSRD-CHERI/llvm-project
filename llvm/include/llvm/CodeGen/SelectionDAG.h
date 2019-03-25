@@ -937,13 +937,15 @@ public:
                     SDValue Size, unsigned Align, bool isVol, bool AlwaysInline,
                     bool isTailCall, bool MustPreserveCheriCapabilities,
                     MachinePointerInfo DstPtrInfo,
-                    MachinePointerInfo SrcPtrInfo);
+                    MachinePointerInfo SrcPtrInfo,
+                    StringRef CopyType = StringRef());
 
   SDValue getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                      SDValue Size, unsigned Align, bool isVol, bool isTailCall,
                      bool MustPreserveCheriCapabilities,
                      MachinePointerInfo DstPtrInfo,
-                     MachinePointerInfo SrcPtrInfo);
+                     MachinePointerInfo SrcPtrInfo,
+                     StringRef MoveType = StringRef());
 
   SDValue getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst, SDValue Src,
                     SDValue Size, unsigned Align, bool isVol, bool isTailCall,
