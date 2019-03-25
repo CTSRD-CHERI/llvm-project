@@ -51,6 +51,12 @@ inline bool isCheriPointer(Type *Ty, const DataLayout *DL) {
   return Ty->isPointerTy() && isCheriPointer(Ty->getPointerAddressSpace(), DL);
 }
 
+namespace cheri {
+/// Returns true if the value must be untagged (e.g. incoffset on NULL or result
+/// of a tag.clear intrinsic)
+bool isKnownUntaggedCapability(const Value* V, const DataLayout* DL);
+}
+
 #if 0
 /// Same again but try to derive the DataLayout from an llvm::Module
 inline bool isCheriPointer(Type* Ty, const Module* ModForDL) {

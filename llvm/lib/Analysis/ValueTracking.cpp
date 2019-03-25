@@ -284,6 +284,10 @@ bool llvm::isKnownNonEqual(const Value *V1, const Value *V2,
                                  UseInstrInfo, /*ORE=*/nullptr));
 }
 
+bool llvm::cheri::isKnownUntaggedCapability(const Value *V, const DataLayout *DL) {
+  return false;
+}
+
 static bool MaskedValueIsZero(const Value *V, const APInt &Mask, unsigned Depth,
                               const Query &Q);
 

@@ -17,6 +17,7 @@
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/GetElementPtrTypeIterator.h"
@@ -4455,6 +4456,23 @@ Instruction *InstCombiner::foldICmpUsingKnownBits(ICmpInst &I) {
 
   KnownBits Op0Known(BitWidth);
   KnownBits Op1Known(BitWidth);
+
+  // Note: we can't do this for CHERI capabilities since the comparisons also
+  // take the tag bit into account.
+  //
+  // For now just skip this optimization if one of the icmp operands is a CHERI
+  // capability that might have the tag bit set.
+  if (isCheriPointer(Ty, &DL)) {
+    if (cheri::isKnownUntaggedCapability(I.getOperand(0), &DL) &&
+        cheri::isKnownUntaggedCapability(I.getOperand(1), &DL)) {
+      // convert the capability icmp to a vaddr icmp:
+      llvm_unreachable("Not implemented yet");
+      return nullptr;
+    } else {
+      // At least one operand might be tagged -> we can't simplify this yet!
+      return nullptr;
+    }
+  }
 
   if (SimplifyDemandedBits(&I, 0,
                            getDemandedBitsLHSMask(I, BitWidth),
