@@ -284,8 +284,83 @@ bool llvm::isKnownNonEqual(const Value *V1, const Value *V2,
                                  UseInstrInfo, /*ORE=*/nullptr));
 }
 
-bool llvm::cheri::isKnownUntaggedCapability(const Value *V, const DataLayout *DL) {
+#define DEBUG_TAG(...)                                                         \
+  DEBUG_WITH_TYPE("infer-tag", dbgs() << __func__ << "(d=" << Depth            \
+                                      << "): " << __VA_ARGS__;                 \
+                  dbgs() << " -- "; V->dump())
+
+static bool isKnownUntaggedCapability(const Value *V, unsigned Depth,
+                                      const DataLayout *DL) {
+  assert(V && "No Value?");
+  assert(isCheriPointer(V->getType(), DL));
+  if (Depth >= MaxDepth) {
+    DEBUG_TAG("reached max depth -> false");
+    return false;
+  }
+  if (isa<ConstantPointerNull>(V)) {
+    DEBUG_TAG("NULL pointer -> true");
+    return true; // NULL is always untagged
+  } else if (const auto *II = dyn_cast<IntrinsicInst>(V)) {
+    switch (II->getIntrinsicID()) {
+    case Intrinsic::cheri_cap_tag_clear:
+      DEBUG_TAG("ccleartag -> true");
+      return true;
+    case Intrinsic::cheri_cap_offset_increment:
+    case Intrinsic::cheri_cap_offset_set:
+    case Intrinsic::cheri_cap_address_set:
+    case Intrinsic::cheri_cap_perms_and:
+    case Intrinsic::cheri_cap_bounds_set:
+    case Intrinsic::cheri_cap_bounds_set_exact:
+      if (isa<ConstantPointerNull>(II->getOperand(0))) {
+        DEBUG_TAG("modifying NULL cap -> true");
+        return true;
+      }
+      // Otherwise check if the source argument is known to be untagged:
+      return isKnownUntaggedCapability(II->getOperand(0), Depth + 1, DL);
+    case Intrinsic::cheri_cap_from_ddc:
+      if (auto CI = dyn_cast<ConstantInt>(II->getOperand(0))) {
+        DEBUG_TAG("CFromPtr on constant -> " << CI->isZeroValue());
+        return CI->isZeroValue(); // cfromdcc with zero returns NULL
+      }
+      DEBUG_TAG("CFromPtr on nonconst -> false");
+      return false; // We don't know if DDC is NULL -> could be tagged
+    default:
+      DEBUG_TAG("unknown intrinsic -> false");
+      // Any other intrinsic returning a capability could be a tagged value
+      return false;
+    }
+  } else if (const auto *GEPI = dyn_cast<GetElementPtrInst>(V)) {
+    // GEP on NULL has to be untagged
+    DEBUG_TAG("is GEP on NULL? -> "
+              << isa<ConstantPointerNull>(GEPI->getPointerOperand()));
+    return isa<ConstantPointerNull>(GEPI->getPointerOperand());
+  } else if (const auto *ITP = dyn_cast<IntToPtrInst>(V)) {
+    // IntToPtr returns untagged values in the pure capability ABI
+    bool Purecap = DL && isCheriPointer(DL->getAllocaAddrSpace(), DL);
+    DEBUG_TAG("is nonconst inttoptr in" << (Purecap ? "purecap" : "hybrid")
+                                        << " ABI -> " << Purecap);
+    return Purecap;
+  } else if (const auto *CE = dyn_cast<ConstantExpr>(V)) {
+    if (CE->getOpcode() == Instruction::CastOps::IntToPtr) {
+      // IntToPtr returns untagged values in the pure capability ABI
+      bool Purecap = DL && isCheriPointer(DL->getAllocaAddrSpace(), DL);
+      DEBUG_TAG("is constant inttoptr in" << (Purecap ? "purecap" : "hybrid")
+                                          << " ABI -> " << Purecap);
+      return Purecap;
+    }
+    DEBUG_TAG("unknown constantexpr -> false");
+    return false;
+  }
+  DEBUG_TAG("unknown value -> false");
+  // Anything else could be tagged (what about GEP on NULL?)
   return false;
+}
+
+bool llvm::cheri::isKnownUntaggedCapability(const Value *V,
+                                            const DataLayout *DL) {
+  DEBUG_WITH_TYPE("infer-tag", dbgs() << "Checking if value is untagged:";
+                  V->dump());
+  return ::isKnownUntaggedCapability(V, 0, DL);
 }
 
 static bool MaskedValueIsZero(const Value *V, const APInt &Mask, unsigned Depth,
