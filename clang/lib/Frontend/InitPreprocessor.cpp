@@ -865,6 +865,9 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
       // I don't think we have any checks that rely on the value
       Builder.defineMacro("__CHERI_PURE_CAPABILITY__", "2");
     }
+
+    Builder.defineMacro("__capability",
+      Twine("__attribute__((cheri_capability))"));
   }
 
   // Define __BIGGEST_ALIGNMENT__ to be compatible with gcc.

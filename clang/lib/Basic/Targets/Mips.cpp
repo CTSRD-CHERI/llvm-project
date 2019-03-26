@@ -221,10 +221,6 @@ void MipsTargetInfo::getTargetDefines(const LangOptions &Opts,
         Builder.defineMacro("_MIPS_CAP_ALIGN_MASK", "0xfffffffffffffff0");
     else
         Builder.defineMacro("_MIPS_CAP_ALIGN_MASK", "0xffffffffffffffe0");
-
-
-    Builder.defineMacro("__capability",
-      Twine("__attribute__((cheri_capability))"));
   }
   if (DisableMadd4)
     Builder.defineMacro("__mips_no_madd4", Twine(1));
