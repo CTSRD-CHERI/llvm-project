@@ -50,7 +50,6 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
     uint64_t ValueSizeInBits;
     CharUnits AtomicAlign;
     CharUnits ValueAlign;
-    CharUnits LValueAlign;
     TypeEvaluationKind EvaluationKind;
     bool UseLibcall;
     LValue LVal;
@@ -158,7 +157,6 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
     QualType getAtomicType() const { return AtomicTy; }
     QualType getValueType() const { return ValueTy; }
     CharUnits getAtomicAlignment() const { return AtomicAlign; }
-    CharUnits getValueAlignment() const { return ValueAlign; }
     uint64_t getAtomicSizeInBits() const { return AtomicSizeInBits; }
     uint64_t getValueSizeInBits() const { return ValueSizeInBits; }
     TypeEvaluationKind getEvaluationKind() const { return EvaluationKind; }
