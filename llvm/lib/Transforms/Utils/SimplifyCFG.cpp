@@ -3744,8 +3744,17 @@ static bool SimplifyBranchOnICmpChain(BranchInst *BI, IRBuilder<> &Builder,
   Builder.SetInsertPoint(BI);
   // Convert pointer to int before we switch.
   if (CompVal->getType()->isPointerTy()) {
-    CompVal = Builder.CreatePtrToInt(
+    // For CHERI capabilities we want to compare the virtual address ->
+    // call cap_address_get instead of ptrtoint which might be turned into
+    // ctoptr in the hybrid ABI.
+    if (isCheriPointer(CompVal->getType(), &DL)) {
+      assert(cheri::isKnownUntaggedCapability(CompVal, &DL) && "This optimization should only be used with known untagged values");
+      CompVal = Builder.CreateIntrinsic(Intrinsic::cheri_cap_address_get, DL.getIntPtrType(CompVal->getType()),
+        CompVal, nullptr, "magicptr");
+    } else {
+      CompVal = Builder.CreatePtrToInt(
         CompVal, DL.getIntPtrType(CompVal->getType()), "magicptr");
+    }
   }
 
   // Create the new switch instruction now.
