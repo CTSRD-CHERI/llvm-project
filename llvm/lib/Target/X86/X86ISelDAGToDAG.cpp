@@ -4038,8 +4038,6 @@ void X86DAGToDAGISel::Select(SDNode *Node) {
         break;
       }
 
-      // FIXME: We should be able to fold loads here.
-
       SDValue Imm = CurDAG->getTargetConstant(Mask, dl, VT);
       SDValue Reg = N0.getOperand(0);
 
