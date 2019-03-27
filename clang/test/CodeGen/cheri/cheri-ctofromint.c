@@ -1,9 +1,9 @@
-// RUN: %cheri_purecap_cc1 %s -emit-llvm  -o - -verify=expected,purecap | FileCheck --check-prefix=CHECK-PURECAP %s
-// RUN: %cheri_cc1 %s -emit-llvm -o - -verify=expected,hybrid | FileCheck --check-prefix=CHECK-HYBRID %s
-
+// RUN: %cheri_purecap_cc1 %s -emit-llvm -Wall -o - -verify=expected,purecap | FileCheck --check-prefix=CHECK-PURECAP %s
+// RUN: %cheri_cc1 %s -emit-llvm -o - -Wall -verify=expected,hybrid
+// RUN: %cheri_cc1 %s -emit-llvm -o - -Wall -verify=expected,hybrid | FileCheck --check-prefix=CHECK-HYBRID %s
 
 void* __capability foo(void *__capability x){
-  // CHECK-HYBRID: ptrtoint
+  // CHECK-HYBRID:  [[ADDR:%.+]] = call i64 @llvm.cheri.cap.to.pointer.i64(i8 addrspace(200)* %1, i8 addrspace(200)* %0)
   // CHECK-PURECAP: [[ADDR:%.+]] = call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* {{%.+}})
   // CHECK-PURECAP-NEXT: trunc i64 [[ADDR]] to i32
   int pi = (int)x; // pi contains the result of CToPtr x, which is probably null

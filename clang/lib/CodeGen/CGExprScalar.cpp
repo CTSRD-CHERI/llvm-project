@@ -28,6 +28,7 @@
 #include "clang/Sema/SemaDiagnostic.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/IR/CFG.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
@@ -2170,6 +2171,21 @@ static void warnAboutImplicitCToPtr(CodeGenModule &CGM, CastExpr *CE) {
       << CE->getSourceRange();
 }
 
+static llvm::Value *createCToPtr(CodeGenFunction &CGF, llvm::Value *Cap,
+                                 llvm::Type *LLVMTy, QualType Ty) {
+  assert(llvm::isCheriPointer(Cap->getType(), &CGF.CGM.getDataLayout()));
+  auto DDC =
+      CGF.Builder.CreateIntrinsic(llvm::Intrinsic::cheri_ddc_get, {}, {});
+  auto CToPtr = CGF.Builder.CreateIntrinsic(
+      llvm::Intrinsic::cheri_cap_to_pointer, CGF.IntPtrTy, {DDC, Cap});
+  // sign extend if the target is a signed integer type otherwise zext.
+  // This should only happen when assigning the result to a larger type:
+  // i.e. __int128 or int64_t for CHERI64
+  return Ty->isSignedIntegerType()
+             ? CGF.Builder.CreateSExtOrTrunc(CToPtr, LLVMTy)
+             : CGF.Builder.CreateZExtOrTrunc(CToPtr, LLVMTy);
+}
+
 // VisitCastExpr - Emit code for an explicit or implicit cast.  Implicit casts
 // have to handle a more broad range of conversions than explicit casts, as they
 // handle things like function to ptr-to-function decay etc.
@@ -2449,11 +2465,11 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         return Builder.CreateBitCast(Src, DestLLVMTy);
       // Otherwise, it's some kind of non-capability pointer, so we need to
       // create an integer value first
-      if (IsPureCap)
+      if (IsPureCap) {
         Src = CGF.getCapabilityIntegerValue(Src);
-      else {
+      } else {
         warnAboutImplicitCToPtr(CGF.CGM, CE);
-        Src = Builder.CreatePtrToInt(Src, CGF.IntPtrTy);
+        Src = createCToPtr(CGF, Src, DestLLVMTy, DestTy);
       }
     }
     // First, convert to the correct width so that we control the kind of
@@ -2466,11 +2482,11 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
 
     llvm::Value* IntToPtr = nullptr;
 
-    if (IsPureCap && DestTy->isCHERICapabilityType(CGF.getContext()))
+    if (IsPureCap && DestTy->isCHERICapabilityType(CGF.getContext())) {
       IntToPtr = CGF.setCapabilityIntegerValue(
           llvm::ConstantPointerNull::get(cast<llvm::PointerType>(DestLLVMTy)),
           IntResult);
-    else {
+    } else {
       // assert(!SrcIsCheriCap);
       // TODO: generate CFromPtr/CFromInt depending on value (for constants use
       // CFromInt/otherwise CFromPtr)
@@ -2533,6 +2549,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     // ptrtoint will result in CToPtr in the hybrid ABI -> warn about it
     if (E->getType()->isCHERICapabilityType(C)) {
       warnAboutImplicitCToPtr(CGF.CGM, CE);
+      return createCToPtr(CGF, PtrExpr, ResultType, DestTy);
     }
     return Builder.CreatePtrToInt(PtrExpr, ResultType);
   }
