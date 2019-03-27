@@ -2818,12 +2818,14 @@ void Verifier::visitCallBase(CallBase &Call) {
     Assert(Call.getArgOperand(i)->getType() == FTy->getParamType(i),
            "Call parameter type does not match function signature!",
            Call.getArgOperand(i), FTy->getParamType(i), Call);
+#if 0
     if (Call.paramHasAttr(i, Attribute::NonNull)) {
       Assert(!isa<ConstantPointerNull>(Call.getArgOperand(i)),
              "Call parameter " + Twine(i) +
                  " is null constant but marked as nonnull",
              Call.getArgOperand(i), Call);
     }
+#endif
   }
 
   AttributeList Attrs = Call.getAttributes();
