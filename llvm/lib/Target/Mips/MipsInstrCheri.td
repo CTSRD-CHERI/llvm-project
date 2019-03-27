@@ -480,6 +480,8 @@ def : Pat<(ptrtoint CheriOpnd:$rt),
 def : Pat<(i32 (ptrtoint CheriOpnd:$rt)),
           (SLL (EXTRACT_SUBREG (CToPtr DDC, $rt), sub_32), 0)>;
 }
+def : Pat<(int_cheri_cap_to_pointer (CapRegType (int_cheri_ddc_get)), CheriOpnd:$rt),
+          (CToPtr DDC, $rt)>;
 
 
 let Predicates = [IsCHERI], DecoderNamespace="CHERI" in {

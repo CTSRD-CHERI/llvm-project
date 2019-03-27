@@ -61,7 +61,7 @@ int test3a(void *ptr) {
   // Don't warn here, we used an explicit __cheri_fromcap
   return ptr == ((__cheri_fromcap void *)(void *__capability)1);
   // CHECK-LABEL: test3a:
-  // CHECK: ctoptr {{.+}}, $ddc
+  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end test3a
 }
 
@@ -69,13 +69,11 @@ int test4(void *ptr) {
   // Don't warn here, we used an explicit __builtin_cheri_ctoptr
   return ptr == __builtin_cheri_cap_to_pointer(__builtin_cheri_global_data_get(), (void *__capability)(__uintcap_t)1);
   // CHECK-LABEL: test4:
-  // CHECK: creadhwr	[[DDC:\$c[0-9]+]], $chwr_ddc
-  // CHECK: ctoptr {{.+}}, [[DDC]]
+  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end test4
   // This generates a ctoptr even in the purecap ABI (since we explicitly used the builtin):
   // PURECAP-LABEL: test4:
-  // PURECAP: creadhwr	[[DDC:\$c[0-9]+]], $chwr_ddc
-  // PURECAP: ctoptr {{.+}}, [[DDC]]
+  // PURECAP: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // PURECAP .end test4
 }
 
@@ -85,7 +83,7 @@ void *cast_constant_uintcap_to_intptr(void) {
   return (void *)(__uintcap_t)1; // expected-warning{{the following conversion will result in a CToPtr operation;}}
   // expected-note@-1{{if you really intended to use CToPtr}}
   // CHECK-LABEL: cast_constant_uintcap_to_intptr:
-  // CHECK: ctoptr {{.+}}, $ddc
+  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end cast_constant_uintcap_to_intptr
 }
 
@@ -95,7 +93,7 @@ void *cast_constant_uintcap_to_intptr2(void) {
   return (void *)cap; // expected-warning{{the following conversion will result in a CToPtr operation;}}
   // expected-note@-1{{if you really intended to use CToPtr}}
   // CHECK-LABEL: cast_constant_uintcap_to_intptr2:
-  // CHECK: ctoptr {{.+}}, $ddc
+  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end cast_constant_uintcap_to_intptr2
 }
 
@@ -104,7 +102,7 @@ void *cast_uintcap_to_intptr(__uintcap_t cap) {
   return (void *)cap; // expected-warning{{the following conversion will result in a CToPtr operation;}}
   // expected-note@-1{{if you really intended to use CToPtr}}
   // CHECK-LABEL: cast_uintcap_to_intptr:
-  // CHECK: ctoptr {{.+}}, $ddc
+  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end cast_uintcap_to_intptr
 }
 
@@ -119,7 +117,7 @@ int cheribsd_test(void) {
   return SIG_IGN == SIG_DFL; // expected-warning{{the following conversion will result in a CToPtr operation;}}
   // expected-note@-1{{if you really intended to use CToPtr}}
   // CHECK-LABEL: cheribsd_test:
-  // CHECK: ctoptr {{.+}}, $ddc
+  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end cheribsd_test
 }
 
@@ -151,8 +149,8 @@ int test_sig_macros() {
 
   return 0;
   // CHECK-LABEL: test_sig_macros:
-  // CHECK: ctoptr {{.+}}, $ddc
-  // CHECK: ctoptr {{.+}}, $ddc
+  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
+  // CHECK: ctoptr ${{[0-9]+}}, $c{{[0-9]+}}, $ddc
   // CHECK .end test_sig_macros
 }
 
