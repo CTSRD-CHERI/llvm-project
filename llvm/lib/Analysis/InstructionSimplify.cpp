@@ -28,6 +28,7 @@
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Analysis/VectorUtils.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
@@ -4924,6 +4925,10 @@ static Value *simplifyUnaryIntrinsic(Function *F, Value *Op0,
   case Intrinsic::bitreverse:
     // bitreverse(bitreverse(x)) -> x
     if (match(Op0, m_BitReverse(m_Value(X)))) return X;
+    break;
+  case Intrinsic::cheri_cap_tag_get:
+    if (llvm::cheri::isKnownUntaggedCapability(Op0, &Q.DL))
+      return Constant::getNullValue(F->getReturnType());
     break;
   case Intrinsic::exp:
     // exp(log(x)) -> x

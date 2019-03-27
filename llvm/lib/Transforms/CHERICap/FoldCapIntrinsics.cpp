@@ -15,6 +15,7 @@
 
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Function.h"
@@ -94,7 +95,12 @@ class CHERICapFoldIntrinsics : public ModulePass {
     };
     foldGet(M, Intrinsic::cheri_cap_base_get, {CapAddrTy}, inferOther);
     foldGet(M, Intrinsic::cheri_cap_perms_get, {CapSizeTy}, inferOther);
-    foldGet(M, Intrinsic::cheri_cap_tag_get, {}, inferOther);
+    foldGet(M, Intrinsic::cheri_cap_tag_get, {},
+            [this](Value *V, CallInst *CI, int) -> Value * {
+              if (cheri::isKnownUntaggedCapability(V, DL))
+                return Constant::getNullValue(CI->getType());
+              return nullptr;
+            });
     foldGet(M, Intrinsic::cheri_cap_sealed_get, {}, inferOther);
     // CGetType and CGetLen on a null capability now return -1
     foldGet(M, Intrinsic::cheri_cap_length_get, {CapSizeTy}, inferOther, -1);
