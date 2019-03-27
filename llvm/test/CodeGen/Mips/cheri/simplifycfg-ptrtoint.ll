@@ -43,7 +43,7 @@ define void @cannot_fold_tag_unknown(void () addrspace(200)* %fn) local_unnamed_
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    nop
 ; ASM-NEXT:    clc $c17, $zero, 0($c11)
-; ASM-NEXT:    cincoffset $c11, $c11, 16
+; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; ASM-NEXT:  .LBB0_4: # %if.end
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    nop
@@ -161,7 +161,7 @@ define void @can_fold_tag_unset(void () addrspace(200)* %fn_tagged) local_unname
 ; ASM-NEXT:    cjalr $c12, $c17
 ; ASM-NEXT:    nop
 ; ASM-NEXT:    clc $c17, $zero, 0($c11)
-; ASM-NEXT:    cincoffset $c11, $c11, 16
+; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; ASM-NEXT:  .LBB1_2: # %if.end
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    nop
