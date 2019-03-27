@@ -3952,6 +3952,7 @@ static void emitOMPAtomicExpr(CodeGenFunction &CGF, OpenMPClauseKind Kind,
   case OMPC_safelen:
   case OMPC_simdlen:
   case OMPC_allocator:
+  case OMPC_allocate:
   case OMPC_collapse:
   case OMPC_default:
   case OMPC_seq_cst:
@@ -3967,7 +3968,6 @@ static void emitOMPAtomicExpr(CodeGenFunction &CGF, OpenMPClauseKind Kind,
   case OMPC_nowait:
   case OMPC_untied:
   case OMPC_threadprivate:
-  case OMPC_allocate:
   case OMPC_depend:
   case OMPC_mergeable:
   case OMPC_device:
