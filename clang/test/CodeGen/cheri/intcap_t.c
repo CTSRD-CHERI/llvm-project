@@ -1,5 +1,5 @@
-// RUN: %cheri_cc1 %s -O0 -o - -emit-llvm -cheri-uintcap=offset | FileCheck %s -check-prefixes CHECK,OFFSET
-// RUN: %cheri_cc1 %s -O0 -o - -emit-llvm -cheri-uintcap=addr | FileCheck %s  -check-prefixes CHECK,ADDR
+// RUN: %cheri_cc1 %s -O0 -o - -emit-llvm -cheri-uintcap=offset -verify=expected,offset | FileCheck %s -check-prefixes CHECK,OFFSET
+// RUN: %cheri_cc1 %s -O0 -o - -emit-llvm -cheri-uintcap=addr -verify | FileCheck %s  -check-prefixes CHECK,ADDR
 // Check that we can actually compile this file...
 // RUN: %cheri_cc1 -emit-obj %s -O0 -o /dev/null
 
@@ -116,9 +116,10 @@ void * __capability castc(__intcap_t a)
 // CHECK-LABEL: @castp(
 void *castp(__intcap_t a)
 {
-  // CHECK: ptrtoint i8 addrspace(200)* 
-  // CHECK: inttoptr
-  return (void*)a;
+  // CHECK: [[CTOTPR:%.+]] = call i64 @llvm.cheri.cap.to.pointer.i64(
+  // CHECK: inttoptr i64 [[CTOTPR]] to i8*
+  return (void*)a; // expected-warning{{the following conversion will result in a CToPtr operation}}
+  // expected-note@-1{{if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer()}}
 }
 
 // increment and decrement should work
@@ -135,7 +136,7 @@ void incdec(void)
 
 __uintcap_t xor(__uintcap_t f)
 {
-  f ^= 2;
+  f ^= 2; // offset-warning{{using xor on a capability type only operates on the offset}}
   return f;
 }
 

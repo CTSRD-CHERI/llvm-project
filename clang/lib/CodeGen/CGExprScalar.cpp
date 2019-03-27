@@ -2174,16 +2174,15 @@ static void warnAboutImplicitCToPtr(CodeGenModule &CGM, CastExpr *CE) {
 static llvm::Value *createCToPtr(CodeGenFunction &CGF, llvm::Value *Cap,
                                  llvm::Type *LLVMTy, QualType Ty) {
   assert(llvm::isCheriPointer(Cap->getType(), &CGF.CGM.getDataLayout()));
+  assert(LLVMTy->isIntegerTy());
   auto DDC =
       CGF.Builder.CreateIntrinsic(llvm::Intrinsic::cheri_ddc_get, {}, {});
   auto CToPtr = CGF.Builder.CreateIntrinsic(
-      llvm::Intrinsic::cheri_cap_to_pointer, CGF.IntPtrTy, {DDC, Cap});
+      llvm::Intrinsic::cheri_cap_to_pointer, CGF.PtrDiffTy, {DDC, Cap});
   // sign extend if the target is a signed integer type otherwise zext.
   // This should only happen when assigning the result to a larger type:
   // i.e. __int128 or int64_t for CHERI64
-  return Ty->isSignedIntegerType()
-             ? CGF.Builder.CreateSExtOrTrunc(CToPtr, LLVMTy)
-             : CGF.Builder.CreateZExtOrTrunc(CToPtr, LLVMTy);
+  return CGF.Builder.CreateIntCast(CToPtr, LLVMTy, Ty->isSignedIntegerOrEnumerationType());
 }
 
 // VisitCastExpr - Emit code for an explicit or implicit cast.  Implicit casts
@@ -2457,6 +2456,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
     auto &TI = C.getTargetInfo();
     bool IsPureCap = TI.areAllPointersCapabilities();
 
+    // First, convert to the correct width so that we control the kind of
+    // extension.
+    llvm::Type *MiddleTy = CGF.CGM.getDataLayout().getIntPtrType(DestLLVMTy);
+
     // For __[u]intcap_t, the underlying LLVM type is actually a pointer.
     bool SrcIsCheriCap = E->getType()->isCHERICapabilityType(CGF.getContext());
     if (SrcIsCheriCap) {
@@ -2469,12 +2472,10 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
         Src = CGF.getCapabilityIntegerValue(Src);
       } else {
         warnAboutImplicitCToPtr(CGF.CGM, CE);
-        Src = createCToPtr(CGF, Src, DestLLVMTy, DestTy);
+        Src = createCToPtr(CGF, Src, MiddleTy, DestTy);
       }
     }
-    // First, convert to the correct width so that we control the kind of
-    // extension.
-    llvm::Type *MiddleTy = CGF.CGM.getDataLayout().getIntPtrType(DestLLVMTy);
+
     bool InputSigned = E->getType()->isSignedIntegerOrEnumerationType();
     llvm::Value* IntResult =
       Builder.CreateIntCast(Src, MiddleTy, InputSigned, "conv");
@@ -2531,8 +2532,8 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       if (E->getType()->isCHERICapabilityType(C))
         return Builder.CreateBitCast(PtrExpr, ResultType);
 
-      PtrExpr = Builder.CreatePtrToInt(PtrExpr,
-            llvm::IntegerType::get(PtrExpr->getContext(), TI.getPointerWidth(0)));
+      assert(!IsPureCap);
+      PtrExpr = Builder.CreatePtrToInt(PtrExpr, CGF.PtrDiffTy);
       // FIXME: should casts to intcap_t yield a tagged or untagged value?
       // I believe we should make a cast to __intcap_t yield the integer value
       // and require a (__cheri_tocap ) cast if you really want the cfromddc behaviour
