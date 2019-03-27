@@ -247,6 +247,7 @@ private:
       if (!GEPI->accumulateConstantOffset(DL, NewGepOffset)) {
         DBG_INDENTED("Could not accumulate constant GEP Offset -> need bounds: ";
                     I->dump());
+        return true;
       }
       return anyUserNeedsBounds(GEPI, NewGepOffset, Depth);
     }
