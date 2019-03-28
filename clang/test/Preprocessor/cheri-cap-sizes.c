@@ -65,6 +65,12 @@
 
 // CHERI128: #define __INTCAP_WIDTH__ 128
 // CHERI256: #define __INTCAP_WIDTH__ 256
+
+// Using the 128/256-bit integer type for __INTPTR_MAX__ does not make sense
+// See https://github.com/CTSRD-CHERI/llvm-project/issues/316
+// CHECK:     #define __INTPTR_MAX__ 9223372036854775807L
+// CHECK:     #define __INTPTR_TYPE__ __intcap_t
+
 // CHERI128: #define __SIZEOF_CHERI_CAPABILITY__ 16
 // CHERI256: #define __SIZEOF_CHERI_CAPABILITY__ 32
 // CHERI128: #define __SIZEOF_INTCAP__ 16
@@ -81,8 +87,10 @@
 // CHERI256: #define __UINTCAP_WIDTH__ 256
 
 // MIPS:        #define __UINTPTR_MAX__ 18446744073709551615UL
-// PURECAP-128: #define __UINTPTR_MAX__ 340282366920938463463374607431768211455
-// PURECAP-256  #define __UINTPTR_MAX__ 115792089237316195423570985008687907853269984665640564039457584007913129639935
+// Using the 128/256-bit integer type for __UINTPTR_MAX__ does not make sense
+// See https://github.com/CTSRD-CHERI/llvm-project/issues/316
+// CHECK:     #define __UINTPTR_MAX__ 18446744073709551615UL
+
 // MIPS:        #define __UINTPTR_TYPE__ long unsigned int
 // PURECAP:     #define __UINTPTR_TYPE__ __uintcap_t
 // MIPS:        #define __UINTPTR_WIDTH__ 64

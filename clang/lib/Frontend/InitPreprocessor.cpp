@@ -760,6 +760,43 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
     Builder.defineMacro("__ILP32__");
   }
 
+  auto UIntPtrRangeTy = TI.getUIntPtrType();
+  auto IntPtrRangeTy = TI.getIntPtrType();
+
+  // Target-independent CHERI definitions. The MIPS backend still defines the
+  // values for __CHERI_CAP_PERMISSION_* and _MIPS_SZCAP, etc.
+  if (TI.SupportsCapabilities()) {
+    Builder.defineMacro("__capability", "__attribute__((cheri_capability))");
+    const uint64_t CapWidth = TI.getCHERICapabilityWidth();
+    const uint64_t CapRange = TI.getPointerRangeForCHERICapability();
+    Builder.defineMacro("__CHERI__", "1"); // TODO: or define __CHERI__ to 128/256?
+    Builder.defineMacro("__CHERI_CAPABILITY_WIDTH__", Twine(CapWidth));
+    DefineTypeSizeof("__SIZEOF_CHERI_CAPABILITY__", CapWidth, TI, Builder);
+    Builder.defineMacro("__CHERI_ADDRESS_BITS__", Twine(CapRange));
+
+    // For completeness also define UINTCAP/INTCAP sizeof and width macros
+    DefineTypeSizeof("__SIZEOF_UINTCAP__", CapWidth, TI, Builder);
+    DefineTypeSizeof("__SIZEOF_INTCAP__", CapWidth, TI, Builder);
+    Builder.defineMacro("__INTCAP_WIDTH__", Twine(CapWidth));
+    Builder.defineMacro("__UINTCAP_WIDTH__", Twine(CapWidth));
+    // For the range we use the underlying ptrdiff_t/vaddr_t type
+    DefineTypeSize("__INTCAP_MAX__", TI.getIntTypeByWidth(CapRange, true), TI, Builder);
+    DefineTypeSize("__UINTCAP_MAX__", TI.getIntTypeByWidth(CapRange, false), TI, Builder);
+    // DefineTypeSizeof("__SIZEOF_CHERICAP__", CapWidth, TI, Builder);
+    // Builder.defineMacro("__CHERICAP_WIDTH__", Twine(CapWidth));
+
+    if (TI.areAllPointersCapabilities()) {
+      // XXXAR is there a reason we use two instead of just defining it?
+      // I don't think we have any checks that rely on the value
+      Builder.defineMacro("__CHERI_PURE_CAPABILITY__", "2");
+
+      // Ensure that __UINTPTR_MAX__ and __INTPTR_MAX__ have sane values
+      // See https://github.com/CTSRD-CHERI/llvm-project/issues/316
+      IntPtrRangeTy = TI.getIntTypeByWidth(CapRange, true);
+      UIntPtrRangeTy = TI.getIntTypeByWidth(CapRange, false);
+    }
+  }
+
   // Define type sizing macros based on the target properties.
   assert(TI.getCharWidth() == 8 && "Only support 8-bit char so far");
   Builder.defineMacro("__CHAR_BIT__", Twine(TI.getCharWidth()));
@@ -776,8 +813,8 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
 
   DefineTypeSize("__UINTMAX_MAX__", TI.getUIntMaxType(), TI, Builder);
   DefineTypeSize("__PTRDIFF_MAX__", TI.getPtrDiffType(0), TI, Builder);
-  DefineTypeSize("__INTPTR_MAX__", TI.getIntPtrType(), TI, Builder);
-  DefineTypeSize("__UINTPTR_MAX__", TI.getUIntPtrType(), TI, Builder);
+  DefineTypeSize("__INTPTR_MAX__", IntPtrRangeTy, TI, Builder);
+  DefineTypeSize("__UINTPTR_MAX__", UIntPtrRangeTy, TI, Builder);
 
   DefineTypeSizeof("__SIZEOF_DOUBLE__", TI.getDoubleWidth(), TI, Builder);
   DefineTypeSizeof("__SIZEOF_FLOAT__", TI.getFloatWidth(), TI, Builder);
@@ -838,37 +875,6 @@ static void InitializePredefinedMacros(const TargetInfo &TI,
   // Define a __POINTER_WIDTH__ macro for stdint.h.
   Builder.defineMacro("__POINTER_WIDTH__",
                       Twine((int)TI.getPointerWidth(0)));
-
-  // Target-independent CHERI definitions. The MIPS backend still defines the
-  // values for __CHERI_CAP_PERMISSION_* and _MIPS_SZCAP, etc.
-  if (TI.SupportsCapabilities()) {
-    const uint64_t CapWidth = TI.getCHERICapabilityWidth();
-    const uint64_t CapRange = TI.getPointerRangeForCHERICapability();
-    Builder.defineMacro("__CHERI__", "1"); // TODO: or define __CHERI__ to 128/256?
-    Builder.defineMacro("__CHERI_CAPABILITY_WIDTH__", Twine(CapWidth));
-    DefineTypeSizeof("__SIZEOF_CHERI_CAPABILITY__", CapWidth, TI, Builder);
-    Builder.defineMacro("__CHERI_ADDRESS_BITS__", Twine(CapRange));
-
-    // For completeness also define UINTCAP/INTCAP sizeof and width macros
-    DefineTypeSizeof("__SIZEOF_UINTCAP__", CapWidth, TI, Builder);
-    DefineTypeSizeof("__SIZEOF_INTCAP__", CapWidth, TI, Builder);
-    Builder.defineMacro("__INTCAP_WIDTH__", Twine(CapWidth));
-    Builder.defineMacro("__UINTCAP_WIDTH__", Twine(CapWidth));
-    // For the range we use the underlying ptrdiff_t/vaddr_t type
-    DefineTypeSize("__INTCAP_MAX__", TI.getIntTypeByWidth(CapRange, true), TI, Builder);
-    DefineTypeSize("__UINTCAP_MAX__", TI.getIntTypeByWidth(CapRange, false), TI, Builder);
-    // DefineTypeSizeof("__SIZEOF_CHERICAP__", CapWidth, TI, Builder);
-    // Builder.defineMacro("__CHERICAP_WIDTH__", Twine(CapWidth));
-
-    if (TI.areAllPointersCapabilities()) {
-      // XXXAR is there a reason we use two instead of just defining it?
-      // I don't think we have any checks that rely on the value
-      Builder.defineMacro("__CHERI_PURE_CAPABILITY__", "2");
-    }
-
-    Builder.defineMacro("__capability",
-      Twine("__attribute__((cheri_capability))"));
-  }
 
   // Define __BIGGEST_ALIGNMENT__ to be compatible with gcc.
   Builder.defineMacro("__BIGGEST_ALIGNMENT__",
