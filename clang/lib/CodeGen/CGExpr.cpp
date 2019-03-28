@@ -1109,12 +1109,25 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     return ExactBounds(TypeSize);
   }
 
-  if (Ty->isConstantArrayType()) {
-    CHERI_BOUNDS_DBG(<< "Found constant size array type -> ");
-    // FIXME: what about size 0/size 1 VLA emulation for pre-C99 code
-    if (Ty->getAsArrayTypeUnsafe())
+  // if (Ty->isArrayType()) {
+  if (const ArrayType *AT = getContext().getAsArrayType(Ty)) {
+    if (isa<ConstantArrayType>(AT)) {
+      CHERI_BOUNDS_DBG(<< "Found constant size array type -> ");
+      // FIXME: what about size 0/size 1 VLA emulation for pre-C99 code
       return ExactBounds(TypeSize);
+    } else if (auto VAT = dyn_cast<VariableArrayType>(AT)) {
+      return cannotSetBounds(*this, E, Ty, Kind, "variable length array type");
+    } else if (auto IAT = dyn_cast<IncompleteArrayType>(AT)) {
+      // int a[]
+      return cannotSetBounds(*this, E, Ty, Kind, "incomplete array type");
+    } else if (auto DSAT = dyn_cast<DependentSizedArrayType>(AT)) {
+      llvm_unreachable("Should not get dependent types in subobject codegen");
+      return cannotSetBounds(*this, E, Ty, Kind, "dependent size array type");
+    } else {
+      llvm_unreachable("Unhandled array type");
+    }
   }
+  assert(!Ty->isArrayType());
   // It because a bit more tricky for class types since they might be
   // downcasted to something with a larger size.
   // TODO: can we try to set bounds on all classes without a vtable
@@ -1162,6 +1175,12 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   CGM.getDiags().Report(E->getExprLoc(),
                         diag::warn_subobject_bounds_unknown_type)
       << Ty << E->getSourceRange();
+#if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
+  llvm::errs() << "Don't know whether to set bounds:\n";
+  E->dumpColor();
+  llvm::errs() << "\tExpression type:\n";
+  Ty.dump();
+#endif
   // TODO: assert here to find all the cases?
   // llvm_unreachable("Don't know whether to set bounds on type");
   return None;
