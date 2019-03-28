@@ -1909,8 +1909,11 @@ Value *ScalarExprEmitter::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
   // loads the lvalue formed by the subscript expr.  However, we have to be
   // careful, because the base of a vector subscript is occasionally an rvalue,
   // so we can't get it as an lvalue.
-  if (!E->getBase()->getType()->isVectorType())
+  if (!E->getBase()->getType()->isVectorType()) {
+    // Note: this eventually calls EmitArraySubscriptExpression which will set
+    // CHERI sub-object bounds on the array.
     return EmitLoadOfLValue(E);
+  }
 
   // Handle the vector case.  The base must be a vector, the index must be an
   // integer value.
@@ -1918,10 +1921,18 @@ Value *ScalarExprEmitter::VisitArraySubscriptExpr(ArraySubscriptExpr *E) {
   Value *Idx  = Visit(E->getIdx());
   QualType IdxTy = E->getIdx()->getType();
 
-  // FIXME: should look at this
   if (CGF.SanOpts.has(SanitizerKind::ArrayBounds))
     CGF.EmitBoundsCheck(E, E->getBase(), Idx, IdxTy, /*Accessed*/true);
 
+  // Note: don't Add CHERI sub-object bounds for extractvector (it should be
+  // ensured by the backend that this cannot be out of bounds)
+#if 0
+  if (CGF.getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
+    auto BoundedResult = CGF.setCHERIBoundsOnArraySubscript(Base, E);
+    assert(BoundedResult->getType() == Base->getType());
+    Base = BoundedResult;
+  }
+#endif
   return Builder.CreateExtractElement(Base, Idx, "vecext");
 }
 
