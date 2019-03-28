@@ -95,20 +95,22 @@ void test_atomic(atomic_int_t* array, struct WithAtomicInt *s) {
   // DBG-NEXT: subobj bounds check: got MemberExpr -> unwrapping _Atomic type -> Found scalar type -> setting bounds for 'atomic_int_t' address to 4
 }
 
-#if 0
 typedef signed char v4i8 __attribute__ ((vector_size(4)));
 v4i8 global_vector = {1, 2, 3, 4};
 typedef int ext_vector_size_int32_8 __attribute__((ext_vector_type(8)));
 
-
 int test_vector(v4i8 v4, ext_vector_size_int32_8 v8) {
-  do_stuff_with_void_ptr(&v4);
-  do_stuff_with_void_ptr(&v8);
+  do_stuff_with_void_ptr(&v4); // expected-remark{{setting bounds for pointer to 'v4i8' (vector of 4 'signed char' values) to 4 bytes}}
+  // DBG-NEXT: address 'v4i8' subobj bounds check: Found vector type -> setting bounds for 'v4i8' address to 4
+  do_stuff_with_void_ptr(&v8); // expected-remark{{setting bounds for pointer to 'ext_vector_size_int32_8' (vector of 8 'int' values) to 32 bytes}}
+  // DBG-NEXT: address 'ext_vector_size_int32_8' subobj bounds check: Found vector type -> setting bounds for 'ext_vector_size_int32_8' address to 32
+  return 0;
 }
-#endif
 
-// DBG-LABEL: ... Statistics Collected ...
-// DBG: 12 cheri-bounds - Number of & operators checked for tightening bounds
+// DBG-NEXT: ===-------------------------------------------------------------------------===
+// DBG-NEXT: ... Statistics Collected ...
+// DBG-NEXT: ===-------------------------------------------------------------------------===
+// DBG: 14 cheri-bounds - Number of & operators checked for tightening bounds
 // DBG:  3 cheri-bounds - Number of [] operators checked for tightening bounds
-// DBG: 10 cheri-bounds - Number of & operators where bounds were tightend
+// DBG: 12 cheri-bounds - Number of & operators where bounds were tightend
 // DBG:  1 cheri-bounds - Number of [] operators where bounds were tightend

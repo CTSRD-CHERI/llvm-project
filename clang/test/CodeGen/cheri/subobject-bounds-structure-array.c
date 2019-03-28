@@ -122,3 +122,21 @@ int test_vla_c(int len, long index) {
   return buf[index]; // expected-remark{{not setting bounds for array subscript on 'int [len]' (array subscript on variable size type)}}
 }
 
+typedef signed char v4i8 __attribute__ ((vector_size(4)));
+v4i8 global_vector = {1, 2, 3, 4};
+typedef int ext_vector_size_int32_8 __attribute__((ext_vector_type(8)));
+
+
+// No bounds on vector indexing:
+int test_vector(v4i8 v4, ext_vector_size_int32_8 v8) {
+  char c = v4[3];
+  int i = v8[7];
+  return c + i;
+}
+
+// Even with an arbitraty index (backend should guarantee that it is never out of bounds)
+int test_vector2(long index, v4i8 v4, ext_vector_size_int32_8 v8) {
+  char c = v4[index];
+  int i = v8[index];
+  return c + i;
+}

@@ -1132,6 +1132,11 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     CHERI_BOUNDS_DBG(<< "Found scalar type -> ");
     return ExactBounds(TypeSize);
   }
+  // Same for vector types (they are fixed size)
+  if (Ty->isVectorType()) {
+    CHERI_BOUNDS_DBG(<< "Found vector type -> ");
+    return ExactBounds(TypeSize);
+  }
 
   assert(!Ty->isArrayType());
   // It because a bit more tricky for class types since they might be
