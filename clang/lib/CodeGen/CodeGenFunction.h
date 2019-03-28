@@ -3899,11 +3899,17 @@ public:
 
   /// Emits a reference binding to the passed in expression.
   RValue EmitReferenceBindingToExpr(const Expr *E);
-  llvm::Value *setCHERIBoundsOnReference(llvm::Value *Ptr, QualType Ty,
-                                         const Expr *E, SourceLocation Loc);
-  llvm::Value *setCHERIBoundsOnAddrOf(llvm::Value *Ptr, QualType Ty,
-                                      const Expr *E, SourceLocation Loc);
 
+  llvm::Value *setCHERIBoundsOnReference(llvm::Value *Ptr, QualType Ty,
+                                         const Expr *E);
+  /// LocExpr is the expression being bounded (i.e. __builtin_addressof() or
+  // '&') and E is the expression that should have bounds set, i.e. the argument
+  llvm::Value *setCHERIBoundsOnAddrOf(llvm::Value *Ptr, QualType Ty,
+                                      const Expr *E, const Expr *LocExpr);
+  llvm::Value *setCHERIBoundsOnArraySubscript(llvm::Value *Ptr,
+                                              const ArraySubscriptExpr *E);
+
+  enum class SubObjectBoundsKind { AddrOf, Reference, ArraySubscript };
   struct TightenBoundsResult {
     uint64_t Size;
     bool IsSubObject = false;
@@ -3913,7 +3919,7 @@ public:
   Optional<TightenBoundsResult> canTightenCheriBounds(llvm::Value *Ptr,
                                                       QualType Ty,
                                                       const Expr *E,
-                                                      bool IsReference = false);
+                                                      SubObjectBoundsKind Kind);
 
   //===--------------------------------------------------------------------===//
   //                           Expression Emission

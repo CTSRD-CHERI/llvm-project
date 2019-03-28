@@ -93,6 +93,14 @@ void test2(void* ptr) {
   do_stuff_untyped(&v2->buf.data); // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [2]') to 2 bytes}}
 }
 
+#if 0
+int test_local_vla(int len, int index) {
+  int buf[len];
+  do_stuff_untyped(&buf); // prevent buf from being optimzed out
+  return buf[index];
+}
+#endif
+
 #ifdef __cplusplus
 template<int SIZE>
 struct MaybeVLA {

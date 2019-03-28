@@ -604,19 +604,38 @@ STATISTIC(NumTightBoundsSetOnAddrOf,
           "Number of & operators where bounds were tightend");
 STATISTIC(NumContainerBoundsSetOnAddrOf,
           "Number of & operators where container bounds were used");
+STATISTIC(NumArraySubscriptCheckedForBoundsTightening,
+          "Number of [] operators checked for tightening bounds");
+STATISTIC(NumTightBoundsSetOnArraySubscript,
+          "Number of [] operators where bounds were tightend");
+STATISTIC(NumContainerBoundsSetOnArraySubscript,
+          "Number of [] operators where container bounds were used");
 #undef DEBUG_TYPE
+
+static StringRef boundsKindStr(CodeGenFunction::SubObjectBoundsKind Kind) {
+  switch (Kind) {
+  case CodeGenFunction::SubObjectBoundsKind::Reference:
+    return "reference";
+  case CodeGenFunction::SubObjectBoundsKind::AddrOf:
+    return "address";
+  case CodeGenFunction::SubObjectBoundsKind::ArraySubscript:
+    return "subscript";
+  }
+  llvm_unreachable("Invalid kind");
+}
 
 // If we are setting bounds on the full container size, the csetbounds must
 // be done before the cincoffset!
 static llvm::Value *
-tightenCHERIBounds(CodeGenFunction &CGF, bool IsReference, llvm::Value *Value,
-                   const Expr *E, SourceLocation Loc, QualType Ty,
+tightenCHERIBounds(CodeGenFunction &CGF,
+                   CodeGenFunction::SubObjectBoundsKind Kind,
+                   llvm::Value *Value, const Expr *LocExpr, QualType Ty,
                    const CodeGenFunction::TightenBoundsResult &TBR) {
   llvm::Value *ValueToBound = Value;
   llvm::GetElementPtrInst *GEP = nullptr;
-  CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString()
-                   << (IsReference ? "' reference to " : "' addrof to ")
-                   << TBR.Size << "\n");
+  StringRef KindStr = boundsKindStr(Kind);
+  CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString() << "' "
+                   << KindStr << " to " << TBR.Size << "\n");
   if (TBR.IsContainerSize) {
     if ((GEP = dyn_cast<llvm::GetElementPtrInst>(Value))) {
       ValueToBound = GEP->getPointerOperand();
@@ -641,24 +660,21 @@ tightenCHERIBounds(CodeGenFunction &CGF, bool IsReference, llvm::Value *Value,
   }
   llvm::Type *BoundedTy = ValueToBound->getType();
 
+  SourceLocation Loc = LocExpr->getExprLoc();
+  SourceRange Range = LocExpr->getSourceRange();
   if (TBR.TargetField) { // TODO: enable this after updating tests
     assert(TBR.IsSubObject);
-    CGF.CGM.getDiags().Report(E->getExprLoc(),
-                            diag::remark_setting_cheri_subobject_bounds_field)
-      << TBR.TargetField << IsReference << Ty << (unsigned)TBR.Size
-      << E->getSourceRange();
+    CGF.CGM.getDiags().Report(Loc,
+                              diag::remark_setting_cheri_subobject_bounds_field)
+        << TBR.TargetField << (int)Kind << Ty << (unsigned)TBR.Size << Range;
   } else {
-    CGF.CGM.getDiags().Report(E->getExprLoc(),
-                              diag::remark_setting_cheri_subobject_bounds)
-        << TBR.IsSubObject << IsReference << Ty << (unsigned)TBR.Size
-        << E->getSourceRange();
+    CGF.CGM.getDiags().Report(Loc, diag::remark_setting_cheri_subobject_bounds)
+        << TBR.IsSubObject << (int)Kind << Ty << (unsigned)TBR.Size << Range;
   }
   llvm::Value *Result = CGF.setPointerBounds(
-      ValueToBound, TBR.Size, Loc,
-      (IsReference ? "ref.with.bounds" : "addrof.with.bounds"),
+      ValueToBound, TBR.Size, Loc, KindStr + ".with.bounds",
       "Add subobject bounds", TBR.IsSubObject,
-      (IsReference ? "C++ reference on " : "addrof operator on ") +
-          Ty.getAsString());
+      KindStr + " on " + Ty.getAsString());
 
   Result = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Result, BoundedTy);
   if (GEP) {
@@ -672,8 +688,7 @@ tightenCHERIBounds(CodeGenFunction &CGF, bool IsReference, llvm::Value *Value,
 
 llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
                                                         QualType Ty,
-                                                        const Expr *E,
-                                                        SourceLocation Loc) {
+                                                        const Expr *E) {
   if (getLangOpts().getCheriBounds() < LangOptions::CBM_References)
     return Value; // Not enabled
 
@@ -681,14 +696,14 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
   //                  E->dump(llvm::dbgs()));
 
   NumReferencesCheckedForBoundsTightening++;
-  constexpr bool IsReference = true;
-  if (auto TBR = canTightenCheriBounds(Value, Ty, E, IsReference)) {
+  constexpr auto Kind = SubObjectBoundsKind::Reference;
+  if (auto TBR = canTightenCheriBounds(Value, Ty, E, Kind)) {
     if (TBR->IsContainerSize) {
       NumContainerBoundsSetOnReferences++;
     } else {
       NumTightBoundsSetOnReferences++;
     }
-    return tightenCHERIBounds(*this, IsReference, Value, E, Loc, Ty, *TBR);
+    return tightenCHERIBounds(*this, Kind, Value, E, Ty, *TBR);
   }
   return Value;
 }
@@ -696,20 +711,43 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
 llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
                                                      clang::QualType Ty,
                                                      const Expr *E,
-                                                     SourceLocation Loc) {
+                                                     const Expr *LocExpr) {
   assert(getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe);
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on addrof operator ";
   //                  E->dump(llvm::dbgs()));
 
   NumAddrOfCheckedForBoundsTightening++;
-  constexpr bool IsReference = false;
-  if (auto TBR = canTightenCheriBounds(Value, Ty, E, IsReference)) {
+  constexpr auto Kind = SubObjectBoundsKind::AddrOf;
+  if (auto TBR = canTightenCheriBounds(Value, Ty, E, Kind)) {
     if (TBR->IsContainerSize) {
       NumContainerBoundsSetOnAddrOf++;
     } else {
       NumTightBoundsSetOnAddrOf++;
     }
-    return tightenCHERIBounds(*this, IsReference, Value, E, Loc, Ty, *TBR);
+    return tightenCHERIBounds(*this, Kind, Value, LocExpr, Ty, *TBR);
+  }
+  return Value;
+}
+
+llvm::Value *
+CodeGenFunction::setCHERIBoundsOnArraySubscript(llvm::Value *Value,
+                                                const ArraySubscriptExpr *ASE) {
+  assert(getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe);
+  // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on [] operator ";
+  //                  E->dump(llvm::dbgs()));
+  // We want to set the bounds on the subscript base type (NOT the result of
+  // the ASE which will be char for a char[10] subscript!)
+  const Expr *Base = ASE->getBase()->IgnoreParenImpCasts();
+  QualType Ty = Base->getType();
+  NumArraySubscriptCheckedForBoundsTightening++;
+  constexpr auto Kind = SubObjectBoundsKind::ArraySubscript;
+  if (auto TBR = canTightenCheriBounds(Value, Ty, Base, Kind)) {
+    if (TBR->IsContainerSize) {
+      NumContainerBoundsSetOnArraySubscript++;
+    } else {
+      NumTightBoundsSetOnArraySubscript++;
+    }
+    return tightenCHERIBounds(*this, Kind, Value, Base, Ty, *TBR);
   }
   return Value;
 }
@@ -783,9 +821,11 @@ enum class ArrayBoundsResult {
   DependsOnType,
 };
 
-static ArrayBoundsResult canSetBoundsOnArraySubscript(
-    const Expr *E, const ArraySubscriptExpr *ASE, bool IsReference,
-    LangOptions::CheriBoundsMode BoundsMode, const CodeGenFunction &CGF) {
+static ArrayBoundsResult
+canSetBoundsOnArraySubscript(const Expr *E, const ArraySubscriptExpr *ASE,
+                             CodeGenFunction::SubObjectBoundsKind Kind,
+                             LangOptions::CheriBoundsMode BoundsMode,
+                             const CodeGenFunction &CGF) {
   // TODO: should we opt-out even for references?
   // TODO: I guess cheri_no_bounds should have a argument that identifies
   // which kinds of narrowing are fine
@@ -796,7 +836,8 @@ static ArrayBoundsResult canSetBoundsOnArraySubscript(
   if (hasBoundsOptOutAnnotation(CGF, E, BaseTy, "array base type"))
     return ArrayBoundsResult::Never;
 
-  if (IsReference && BoundsMode >= LangOptions::CBM_References) {
+  if (Kind == CodeGenFunction::SubObjectBoundsKind::Reference &&
+      BoundsMode >= LangOptions::CBM_References) {
     CHERI_BOUNDS_DBG(<< "using C++ reference -> ");
     return ArrayBoundsResult::Always;
   }
@@ -916,13 +957,29 @@ static bool containsVariableLengthArray(LangOptions::CheriBoundsMode BoundsMode,
 
 Optional<CodeGenFunction::TightenBoundsResult>
 CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
-                                       const Expr *E, bool IsReference) {
+                                       const Expr *E,
+                                       SubObjectBoundsKind Kind) {
   const auto BoundsMode = getLangOpts().getCheriBounds();
   assert(BoundsMode > LangOptions::CBM_Conservative);
-  CHERI_BOUNDS_DBG(<< "subobj bounds check: ");
+  CHERI_BOUNDS_DBG(<< boundsKindStr(Kind) << " '" << Ty.getAsString()
+                   << "' subobj bounds check: ");
   if (!CGM.getDataLayout().isFatPointer(Value->getType())) {
-    CHERI_BOUNDS_DBG(<< "Cannot set bounds on non-capability IR type "; Value->getType()->print(llvm::dbgs(), true); llvm::dbgs() << "\n");
+    CHERI_BOUNDS_DBG(<< "Cannot set bounds on non-capability IR type ";
+                     Value->getType()->print(llvm::dbgs(), true);
+                     llvm::dbgs() << "\n");
     return None;
+  }
+
+  if (Kind == SubObjectBoundsKind::ArraySubscript) {
+    // For array subscripts we can only set bounds for array types, and not
+    // pointers since those have an unknown size
+    // TODO: we could ignore all casts and check the underlying type
+    // i.e. ((char*)buf)[10] if buf is an array of different type
+    if (!Ty->isArrayType()) {
+      return cannotSetBounds(*this, E, Ty, "array subscript on non-array type");
+    }
+    // TODO:
+    assert(!Ty->isVectorType() && "vectors not implemented");
   }
 
   if (Ty->isIncompleteType()) {
@@ -930,8 +987,9 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   }
   if (Ty->isFunctionType()) {
     return cannotSetBounds(*this, E, Ty,
-                           IsReference ? "reference to function"
-                                       : "address of function");
+                           Kind == SubObjectBoundsKind::Reference
+                               ? "reference to function"
+                               : "address of function");
   }
 
   assert(CGM.getDataLayout().isFatPointer(Value->getType()));
@@ -1004,8 +1062,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
     // TODO: set bounds on whole array type?
     CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
-    switch (
-        canSetBoundsOnArraySubscript(E, ASE, IsReference, BoundsMode, *this)) {
+    switch (canSetBoundsOnArraySubscript(E, ASE, Kind, BoundsMode, *this)) {
     case ArrayBoundsResult::Never:
       return None;
     case ArrayBoundsResult::Always:
@@ -1121,7 +1178,7 @@ CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E) {
   // TODO: we should probably check if references are capabilities instead since
   // there could be a mode where references are capabilities but pointers aren't
   if (CGM.getTarget().areAllPointersCapabilities() && !Ty->isFunctionType())
-    Value = setCHERIBoundsOnReference(Value, Ty, E, E->getExprLoc());
+    Value = setCHERIBoundsOnReference(Value, Ty, E);
   return RValue::get(Value);
 }
 
@@ -3893,17 +3950,28 @@ static const Expr *isSimpleArrayDecayOperand(const Expr *E) {
   return SubExpr;
 }
 
-static llvm::Value *emitArraySubscriptGEP(CodeGenFunction &CGF,
-                                          llvm::Value *ptr,
-                                          ArrayRef<llvm::Value*> indices,
-                                          bool inbounds,
-                                          bool signedIndices,
-                                          SourceLocation loc,
-                                    const llvm::Twine &name = "arrayidx") {
+static llvm::Value *
+emitArraySubscriptGEP(CodeGenFunction &CGF, llvm::Value *ptr,
+                      ArrayRef<llvm::Value *> indices, bool inbounds,
+                      bool signedIndices, const Expr *E,
+                      const llvm::Twine &name = "arrayidx") {
+
+  if (auto *ASE = dyn_cast<ArraySubscriptExpr>(E)) {
+    if (CGF.getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
+      // CSetBounds must be done before the GEP otherwise we set the base before
+      // adding the index!
+      auto BoundedResult = CGF.setCHERIBoundsOnArraySubscript(ptr, ASE);
+      assert(BoundedResult->getType() == ptr->getType());
+      ptr = BoundedResult;
+    }
+  } else {
+    // For now don't setbounds for OMPArraySectionExpr
+    assert(isa<OMPArraySectionExpr>(E) && "Called with wrong expr type");
+  }
   if (inbounds) {
     return CGF.EmitCheckedInBoundsGEP(ptr, indices, signedIndices,
-                                      CodeGenFunction::NotSubtraction, loc,
-                                      name);
+                                      CodeGenFunction::NotSubtraction,
+                                      E->getExprLoc(), name);
   } else {
     return CGF.Builder.CreateGEP(ptr, indices, name);
   }
@@ -3936,7 +4004,7 @@ static QualType getFixedSizeElementType(const ASTContext &ctx,
 static Address emitArraySubscriptGEP(CodeGenFunction &CGF, Address addr,
                                      ArrayRef<llvm::Value *> indices,
                                      QualType eltType, bool inbounds,
-                                     bool signedIndices, SourceLocation loc,
+                                     bool signedIndices, const Expr *E,
                                      const llvm::Twine &name = "arrayidx") {
   // All the indices except that last must be zero.
 #ifndef NDEBUG
@@ -3956,8 +4024,8 @@ static Address emitArraySubscriptGEP(CodeGenFunction &CGF, Address addr,
   CharUnits eltAlign =
     getArrayElementAlign(addr.getAlignment(), indices.back(), eltSize);
 
-  llvm::Value *eltPtr = emitArraySubscriptGEP(
-      CGF, addr.getPointer(), indices, inbounds, signedIndices, loc, name);
+  llvm::Value *eltPtr = emitArraySubscriptGEP(CGF, addr.getPointer(), indices,
+                                              inbounds, signedIndices, E, name);
   return Address(eltPtr, eltAlign);
 }
 
@@ -4001,6 +4069,8 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
     LValue LHS = EmitLValue(E->getBase());
     auto *Idx = EmitIdxAfterBase(/*Promote*/false);
     assert(LHS.isSimple() && "Can only subscript lvalue vectors here!");
+    assert(getLangOpts().getCheriBounds() < LangOptions::CBM_SubObjectsSafe &&
+           "vector subobject bounds not implemented yet");
     return LValue::MakeVectorElt(LHS.getAddress(), Idx, E->getBase()->getType(),
                                  LHS.getBaseInfo(), TBAAAccessInfo());
   }
@@ -4015,7 +4085,9 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
 
     QualType EltType = LV.getType()->castAs<VectorType>()->getElementType();
     Addr = emitArraySubscriptGEP(*this, Addr, Idx, EltType, /*inbounds*/ true,
-                                 SignedIndices, E->getExprLoc());
+                                 SignedIndices, E);
+    assert(getLangOpts().getCheriBounds() < LangOptions::CBM_SubObjectsSafe &&
+           "ExtVectorElementExpr subobject bounds not implemented yet");
     return MakeAddrLValue(Addr, EltType, LV.getBaseInfo(),
                           CGM.getTBAAInfoForSubobject(LV, EltType));
   }
@@ -4046,7 +4118,7 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
 
     Addr = emitArraySubscriptGEP(*this, Addr, Idx, vla->getElementType(),
                                  !getLangOpts().isSignedOverflowDefined(),
-                                 SignedIndices, E->getExprLoc());
+                                 SignedIndices, E);
 
   } else if (const ObjCObjectType *OIT = E->getType()->getAs<ObjCObjectType>()){
     // Indexing over an interface, as in "NSString *P; P[4];"
@@ -4071,9 +4143,8 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
     // Do the GEP.
     CharUnits EltAlign =
       getArrayElementAlign(Addr.getAlignment(), Idx, InterfaceSize);
-    llvm::Value *EltPtr =
-        emitArraySubscriptGEP(*this, Addr.getPointer(), ScaledIdx, false,
-                              SignedIndices, E->getExprLoc());
+    llvm::Value *EltPtr = emitArraySubscriptGEP(
+        *this, Addr.getPointer(), ScaledIdx, false, SignedIndices, E);
     Addr = Address(EltPtr, EltAlign);
 
     // Cast back.
@@ -4098,7 +4169,7 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
     Addr = emitArraySubscriptGEP(
         *this, ArrayLV.getAddress(), {CGM.getSize(CharUnits::Zero()), Idx},
         E->getType(), !getLangOpts().isSignedOverflowDefined(), SignedIndices,
-        E->getExprLoc());
+        E);
     EltBaseInfo = ArrayLV.getBaseInfo();
     EltTBAAInfo = CGM.getTBAAInfoForSubobject(ArrayLV, E->getType());
   } else {
@@ -4107,7 +4178,7 @@ LValue CodeGenFunction::EmitArraySubscriptExpr(const ArraySubscriptExpr *E,
     auto *Idx = EmitIdxAfterBase(/*Promote*/true);
     Addr = emitArraySubscriptGEP(*this, Addr, Idx, E->getType(),
                                  !getLangOpts().isSignedOverflowDefined(),
-                                 SignedIndices, E->getExprLoc());
+                                 SignedIndices, E);
   }
 
   LValue LV = MakeAddrLValue(Addr, E->getType(), EltBaseInfo, EltTBAAInfo);
@@ -4277,7 +4348,7 @@ LValue CodeGenFunction::EmitOMPArraySectionExpr(const OMPArraySectionExpr *E,
       Idx = Builder.CreateNSWMul(Idx, NumElements);
     EltPtr = emitArraySubscriptGEP(*this, Base, Idx, VLA->getElementType(),
                                    !getLangOpts().isSignedOverflowDefined(),
-                                   /*SignedIndices=*/false, E->getExprLoc());
+                                   /*SignedIndices=*/false, E);
   } else if (const Expr *Array = isSimpleArrayDecayOperand(E->getBase())) {
     // If this is A[i] where A is an array, the frontend will have decayed the
     // base to be a ArrayToPointerDecay implicit cast.  While correct, it is
@@ -4297,7 +4368,7 @@ LValue CodeGenFunction::EmitOMPArraySectionExpr(const OMPArraySectionExpr *E,
     EltPtr = emitArraySubscriptGEP(
         *this, ArrayLV.getAddress(), {CGM.getSize(CharUnits::Zero()), Idx},
         ResultExprTy, !getLangOpts().isSignedOverflowDefined(),
-        /*SignedIndices=*/false, E->getExprLoc());
+        /*SignedIndices=*/false, E);
     BaseInfo = ArrayLV.getBaseInfo();
     TBAAInfo = CGM.getTBAAInfoForSubobject(ArrayLV, ResultExprTy);
   } else {
@@ -4306,7 +4377,7 @@ LValue CodeGenFunction::EmitOMPArraySectionExpr(const OMPArraySectionExpr *E,
                                            IsLowerBound);
     EltPtr = emitArraySubscriptGEP(*this, Base, Idx, ResultExprTy,
                                    !getLangOpts().isSignedOverflowDefined(),
-                                   /*SignedIndices=*/false, E->getExprLoc());
+                                   /*SignedIndices=*/false, E);
   }
 
   return MakeAddrLValue(EltPtr, ResultExprTy, BaseInfo, TBAAInfo);

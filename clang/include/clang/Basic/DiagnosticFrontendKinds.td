@@ -223,11 +223,11 @@ def err_test_module_file_extension_version : Error<
 
 def remark_setting_cheri_subobject_bounds :
   Remark<"setting %select{|sub-object }0bounds for "
-         "%select{pointer to|reference to}1 %2 to %3 bytes">,
+         "%select{pointer to|reference to|array subscript on}1 %2 to %3 bytes">,
   InGroup<CheriSubobjectBounds>;
 def remark_setting_cheri_subobject_bounds_field :
   Remark<"setting sub-object bounds for field %0 "
-         "(%select{pointer to|reference to}1 %2) to %3 bytes">,
+         "(%select{pointer to|reference to|array subscript on}1 %2) to %3 bytes">,
   InGroup<CheriSubobjectBounds>;
 def remark_subobject_using_container_size :
   Remark<"using size of containing type %0 instead of object type %1 for "
@@ -237,7 +237,7 @@ def remark_no_cheri_subobject_bounds :
   InGroup<CheriSubobjectBounds>;
 
 def warn_subobject_bounds_unknown_type :
-  Warning<"unhandled type '%0' in CHERI bounds setting">,
+  Warning<"unhandled type %0 in CHERI bounds setting">,
   InGroup<CheriSubobjectBounds>, DefaultWarnNoWerror;
 
 def warn_cheri_memintrin_misaligned_inefficient : Warning<

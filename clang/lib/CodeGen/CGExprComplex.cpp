@@ -148,7 +148,12 @@ public:
   ComplexPairTy VisitObjCMessageExpr(ObjCMessageExpr *E) {
     return CGF.EmitObjCMessageExpr(E).getComplexVal();
   }
-  ComplexPairTy VisitArraySubscriptExpr(Expr *E) { return EmitLoadOfLValue(E); }
+  ComplexPairTy VisitArraySubscriptExpr(Expr *E) {
+    assert(CGF.getLangOpts().getCheriBounds() <
+               LangOptions::CBM_SubObjectsSafe &&
+           "complex array subscript subobject bounds not implemented yet");
+    return EmitLoadOfLValue(E);
+  }
   ComplexPairTy VisitMemberExpr(MemberExpr *ME) {
     if (CodeGenFunction::ConstantEmission Constant =
             CGF.tryEmitAsConstant(ME)) {

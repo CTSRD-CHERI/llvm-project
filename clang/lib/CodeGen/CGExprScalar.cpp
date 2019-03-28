@@ -625,7 +625,7 @@ public:
     }
     if (CGF.getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
       auto BoundedAddr = CGF.setCHERIBoundsOnAddrOf(
-          Addr, E->getSubExpr()->getType(), E->getSubExpr(), E->getExprLoc());
+          Addr, E->getSubExpr()->getType(), E->getSubExpr(), E);
       assert(BoundedAddr->getType() == Addr->getType());
       Addr = BoundedAddr;
     }
