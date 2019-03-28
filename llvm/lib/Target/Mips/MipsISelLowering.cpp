@@ -3178,12 +3178,20 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
 
   // We don't handle capability-releative loads here, so make sure that we
   // don't encounter them!
-  assert(MemVT != CapType);
+  LD->dump();
+  LD->getBasePtr()->dump();
+  assert(!MemVT.isFatPointer());
 
   // Return if load is aligned or if MemVT is neither i32 nor i64.
-  if ((LD->getAlignment() >= MemVT.getSizeInBits() / 8) ||
-      ((MemVT != MVT::i32) && (MemVT != MVT::i64)))
+  if ((LD->getAlignment() >= MemVT.getSizeInBits() / 8)) {
     return SDValue();
+  } else if (Subtarget.isABI_CheriPureCap()) {
+    // Can't use LWL/LWR in pure capability ABI -> fall back to generic code
+    std::pair<SDValue, SDValue> P = expandUnalignedLoad(LD, DAG);
+    return DAG.getMergeValues({P.first, P.second}, SDLoc(LD));
+  } else if (((MemVT != MVT::i32) && (MemVT != MVT::i64))) {
+    return SDValue();
+  }
 
   bool IsLittle = Subtarget.isLittle();
   EVT VT = Op.getValueType();
@@ -3191,6 +3199,8 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
   SDValue Chain = LD->getChain(), Undef = DAG.getUNDEF(VT);
 
   assert((VT == MVT::i32) || (VT == MVT::i64));
+
+  assert(!Subtarget.isABI_CheriPureCap() && "LWL/LWR not supported in purecap");
 
   // Expand
   //  (set dst, (i64 (load baseptr)))
