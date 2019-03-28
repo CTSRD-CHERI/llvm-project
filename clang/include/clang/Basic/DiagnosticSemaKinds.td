@@ -6134,7 +6134,7 @@ def warn_cheri_implicit_ctoptr : Warning<
   // TODO: add a link to an explanation for this warning?
 def note_cheri_implicit_ctoptr_suggestion : Note<
   "if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; "
-  "to get the virtual address use __builtin_cheri_address_get() or a __cheri_address cast; "
+  "to get the virtual address use __builtin_cheri_address_get() or a __cheri_addr cast; "
   "to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast">;
 
 

@@ -28,9 +28,9 @@ static void *GLOBAL_SIG_IGN = SIG_IGN;
 int test(void *__capability cap) {
   // This causes two ctoptrs to be generated
   return (uintptr_t)cap == (uintptr_t)SIG_IGN; // expected-warning{{the following conversion will result in a CToPtr operation;}}
-  // expected-note@-1{{if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; to get the virtual address use __builtin_cheri_address_get() or a __cheri_address cast; to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast}}
+  // expected-note@-1{{if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; to get the virtual address use __builtin_cheri_address_get() or a __cheri_addr cast; to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast}}
   // expected-warning@-2{{the following conversion will result in a CToPtr operation;}}
-  // expected-note@-3{{if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; to get the virtual address use __builtin_cheri_address_get() or a __cheri_address cast; to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast}}
+  // expected-note@-3{{if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; to get the virtual address use __builtin_cheri_address_get() or a __cheri_addr cast; to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast}}
   // CHECK-LABEL: test:
   // CHECK: ctoptr {{.+}}, $ddc
   // CHECK: ctoptr {{.+}}, $ddc
@@ -39,7 +39,7 @@ int test(void *__capability cap) {
 
 uintptr_t test2a(void *__capability cap) {
   return (uintptr_t)cap; // expected-warning{{the following conversion will result in a CToPtr operation;}}
-  // expected-note@-1{{if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; to get the virtual address use __builtin_cheri_address_get() or a __cheri_address cast; to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast}}
+  // expected-note@-1{{if you really intended to use CToPtr use __builtin_cheri_cap_to_pointer() or a __cheri_fromcap cast to silence this warning; to get the virtual address use __builtin_cheri_address_get() or a __cheri_addr cast; to get the capability offset use __builtin_cheri_offset_get() or a __cheri_offset cast}}
   // CHECK-LABEL: test2a:
   // CHECK: ctoptr {{.+}}, $ddc
   // CHECK .end test2a

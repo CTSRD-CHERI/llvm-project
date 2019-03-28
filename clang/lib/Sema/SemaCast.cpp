@@ -3081,7 +3081,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
   // Check the source type
   // Use getRealReferenceType() because getType() only returns T for T&
   QualType SrcTy = SubExpr->getRealReferenceType();
-  // __cheri_offset and __cheri_address is valid for __uintcap_t as well
+  // __cheri_offset and __cheri_addr is valid for __uintcap_t as well
   bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, true);
   if (!SrcIsCap) {
     // Note: __cheri_addr can be used on plain pointers since otherwise it would
