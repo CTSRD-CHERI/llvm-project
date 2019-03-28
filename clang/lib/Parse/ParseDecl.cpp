@@ -4798,7 +4798,6 @@ bool Parser::isTypeSpecifierQualifier() {
 
   case tok::kw___kindof:
 
-  case tok::kw_private:
   case tok::kw___private:
   case tok::kw___local:
   case tok::kw___global:
@@ -4807,8 +4806,10 @@ bool Parser::isTypeSpecifierQualifier() {
   case tok::kw___read_only:
   case tok::kw___read_write:
   case tok::kw___write_only:
-
     return true;
+
+  case tok::kw_private:
+    return getLangOpts().OpenCL;
 
   // C11 _Atomic
   case tok::kw__Atomic:
@@ -4990,7 +4991,6 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
 
   case tok::kw___kindof:
 
-  case tok::kw_private:
   case tok::kw___private:
   case tok::kw___local:
   case tok::kw___global:
@@ -5003,6 +5003,9 @@ bool Parser::isDeclarationSpecifier(bool DisambiguatingWithExpression) {
 #include "clang/Basic/OpenCLImageTypes.def"
 
     return true;
+
+  case tok::kw_private:
+    return getLangOpts().OpenCL;
   }
 }
 
@@ -5210,6 +5213,9 @@ void Parser::ParseTypeQualifierListOpt(
 
     // OpenCL qualifiers:
     case tok::kw_private:
+      if (!getLangOpts().OpenCL)
+        goto DoneWithTypeQuals;
+      LLVM_FALLTHROUGH;
     case tok::kw___private:
     case tok::kw___global:
     case tok::kw___local:
