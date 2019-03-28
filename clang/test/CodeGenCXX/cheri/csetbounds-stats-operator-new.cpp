@@ -26,7 +26,7 @@ struct Foo {
 void *test_foo_not_aligned() { return new Foo; }
 // CSV-NEXT: 2,4,h,"<{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-1]]:39, col:43>","operator new for Foo * __capability","allocating type struct Foo"
 void *test_foo_not_aligned_nothrow() { return new (nothrow) Foo; }
-// CSV-NEXT: 0,1,?,"{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-1]]:52","Add subobject bounds","C++ reference on const std::nothrow_t"
+// CSV-NEXT: 0,1,?,"{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-1]]:52","Add subobject bounds","C++ reference to const std::nothrow_t"
 // CSV-NEXT: 2,4,h,"<{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-2]]:47, col:61>","operator new for Foo * __capability","allocating type struct Foo"
 void *test_foo_not_aligned_array() { return new Foo[2]; }
 // CSV-NEXT: 2,8,h,"<{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-1]]:45, col:54>","operator new[] for Foo * __capability","allocating type struct Foo"
@@ -46,7 +46,7 @@ struct alignas(256) FooAligned {
 void *test_foo_aligned() { return new FooAligned; }
 // CSV-NEXT: 8,256,h,"<{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-1]]:35, col:39>","operator new for FooAligned * __capability","allocating type struct FooAligned"
 void *test_foo_aligned_nothrow() { return new (nothrow) FooAligned; }
-// CSV-NEXT: 0,1,?,"{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-1]]:48","Add subobject bounds","C++ reference on const std::nothrow_t"
+// CSV-NEXT: 0,1,?,"{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-1]]:48","Add subobject bounds","C++ reference to const std::nothrow_t"
 // CSV-NEXT: 8,256,h,"<{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-2]]:43, col:57>","operator new for FooAligned * __capability","allocating type struct FooAligned"
 void *test_foo_aligned_array() { return new FooAligned[3]; }
 // CSV-NEXT: 8,768,h,"<{{.+}}csetbounds-stats-operator-new.cpp:[[@LINE-1]]:41, col:57>","operator new[] for FooAligned * __capability","allocating type struct FooAligned"

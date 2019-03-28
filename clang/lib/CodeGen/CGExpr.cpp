@@ -646,7 +646,6 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
         GEP = cast<llvm::GetElementPtrInst>(CE->getAsInstruction());
         CGF.Builder.Insert(GEP);
         ValueToBound = GEP->getPointerOperand();
-        ;
       } else {
         assert(CE->isCast() && "expected GEP or cast");
       }
@@ -670,10 +669,19 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
     CGF.CGM.getDiags().Report(Loc, diag::remark_setting_cheri_subobject_bounds)
         << TBR.IsSubObject << (int)Kind << Ty << (unsigned)TBR.Size << Range;
   }
+  StringRef StatsPrefix;
+  if (Kind == SubObjectBoundsKind::AddrOf) {
+    StatsPrefix = "addrof operator on ";
+  } else if (Kind == SubObjectBoundsKind::Reference) {
+    StatsPrefix = "C++ reference to ";
+  } else if (Kind == SubObjectBoundsKind::ArraySubscript) {
+    StatsPrefix = "array subscript for ";
+  } else {
+    llvm_unreachable("Invalid kind");
+  }
   llvm::Value *Result = CGF.setPointerBounds(
       ValueToBound, TBR.Size, Loc, KindStr + ".with.bounds",
-      "Add subobject bounds", TBR.IsSubObject,
-      KindStr + " on " + Ty.getAsString());
+      "Add subobject bounds", TBR.IsSubObject, StatsPrefix + Ty.getAsString());
 
   Result = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Result, BoundedTy);
   if (GEP) {

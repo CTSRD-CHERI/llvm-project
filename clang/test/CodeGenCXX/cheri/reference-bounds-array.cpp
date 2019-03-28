@@ -34,9 +34,9 @@ void test_foo_array() {
 void test_foo_array_deref_pointer() {
   // We can't set bounds here since we don't know whether it is actually a Foo* or a subclass
   Foo* foo_array[2];
-  do_stuff_with_ref(*foo_array[0]); // expected-remark {{not setting bounds for 'Foo' (non-final class and using sub-object-safe mode)}}
-  do_stuff_with_ref(*foo_array[1]); // expected-remark {{not setting bounds for 'Foo' (non-final class and using sub-object-safe mode)}}
-  do_stuff_with_ref(*foo_array[2]); // expected-remark {{not setting bounds for 'Foo' (non-final class and using sub-object-safe mode)}}
+  do_stuff_with_ref(*foo_array[0]); // expected-remark {{not setting bounds for reference to 'Foo' (non-final class and using sub-object-safe mode)}}
+  do_stuff_with_ref(*foo_array[1]); // expected-remark {{not setting bounds for reference to 'Foo' (non-final class and using sub-object-safe mode)}}
+  do_stuff_with_ref(*foo_array[2]); // expected-remark {{not setting bounds for reference to 'Foo' (non-final class and using sub-object-safe mode)}}
 }
 
 struct Foo_final final {
