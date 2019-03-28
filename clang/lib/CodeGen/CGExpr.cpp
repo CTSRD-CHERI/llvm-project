@@ -973,6 +973,10 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     return None;
   }
 
+  if (Ty->isIncompleteType()) {
+    return cannotSetBounds(*this, E, Ty, Kind, "incomplete type");
+  }
+
   if (Kind == SubObjectBoundsKind::ArraySubscript) {
     // For array subscripts we can only set bounds for array types, and not
     // pointers since those have an unknown size
@@ -981,13 +985,12 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     if (!Ty->isArrayType()) {
       return cannotSetBounds(*this, E, Ty, Kind,
                              "array subscript on non-array type");
+    } else if (!Ty->isConstantSizeType()) {
+      return cannotSetBounds(*this, E, Ty, Kind,
+                             "array subscript on variable size type");
     }
     // TODO:
     assert(!Ty->isVectorType() && "vectors not implemented");
-  }
-
-  if (Ty->isIncompleteType()) {
-    return cannotSetBounds(*this, E, Ty, Kind, "incomplete type");
   }
   if (Ty->isFunctionType()) {
     return cannotSetBounds(*this, E, Ty, Kind,
@@ -995,7 +998,6 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
                                ? "reference to function"
                                : "address of function");
   }
-
   assert(CGM.getDataLayout().isFatPointer(Value->getType()));
 
   E = E->IgnoreParenImpCasts(); // ignore array-to-pointer decay, etc
@@ -1093,22 +1095,6 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   if (hasBoundsOptOutAnnotation(*this, E, Ty, Kind, "expression"))
     return None;
 
-  if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
-    CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");
-    return ExactBounds(TypeSize);
-  }
-
-  if (auto AT = Ty->getAs<AtomicType>()) {
-    CHERI_BOUNDS_DBG(<< "unwrapping _Atomic type -> ");
-    Ty = AT->getValueType();
-  }
-
-  // It should be possible to set the size for all scalar types
-  if (Ty->isScalarType()) {
-    CHERI_BOUNDS_DBG(<< "Found scalar type -> ");
-    return ExactBounds(TypeSize);
-  }
-
   // if (Ty->isArrayType()) {
   if (const ArrayType *AT = getContext().getAsArrayType(Ty)) {
     if (isa<ConstantArrayType>(AT)) {
@@ -1127,6 +1113,26 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       llvm_unreachable("Unhandled array type");
     }
   }
+
+  assert(Ty->isConstantSizeType() && "unexpected variable size type.");
+  assert(TypeSize != 0 && "Unknown size should already have been handled.");
+
+  if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
+    CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");
+    return ExactBounds(TypeSize);
+  }
+
+  if (auto AT = Ty->getAs<AtomicType>()) {
+    CHERI_BOUNDS_DBG(<< "unwrapping _Atomic type -> ");
+    Ty = AT->getValueType();
+  }
+
+  // It should be possible to set the size for all scalar types
+  if (Ty->isScalarType()) {
+    CHERI_BOUNDS_DBG(<< "Found scalar type -> ");
+    return ExactBounds(TypeSize);
+  }
+
   assert(!Ty->isArrayType());
   // It because a bit more tricky for class types since they might be
   // downcasted to something with a larger size.
