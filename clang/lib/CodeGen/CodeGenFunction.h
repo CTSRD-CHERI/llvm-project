@@ -221,6 +221,8 @@ template <> struct DominatingValue<RValue> {
   }
 };
 
+enum class SubObjectBoundsKind { AddrOf, Reference, ArraySubscript };
+
 /// CodeGenFunction - This class organizes the per-function state that is used
 /// while generating LLVM code.
 class CodeGenFunction : public CodeGenTypeCache {
@@ -3909,7 +3911,6 @@ public:
   llvm::Value *setCHERIBoundsOnArraySubscript(llvm::Value *Ptr,
                                               const ArraySubscriptExpr *E);
 
-  enum class SubObjectBoundsKind { AddrOf, Reference, ArraySubscript };
   struct TightenBoundsResult {
     uint64_t Size;
     bool IsSubObject = false;

@@ -56,7 +56,7 @@ void foo(void);
 
 
 void test_fnptr(struct ContainsFnPtr *s) {
-  do_stuff_with_fn_ptr(&foo); // expected-remark {{not setting bounds for 'void (void)' (address of function)}}
+  do_stuff_with_fn_ptr(&foo); // expected-remark {{not setting bounds for pointer to 'void (void)' (address of function)}}
   // DBG-NEXT: subobj bounds check: address of function -> not setting bounds
   do_stuff_with_fn_ptr_ptr(&s->fn_ptr); // expected-remark-re {{setting sub-object bounds for field 'fn_ptr' (pointer to 'fn_ptr_ty' (aka 'void (* __capability)(void)')) to {{16|32}} bytes}}
   // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[$CAP_SIZE]]
@@ -78,12 +78,12 @@ struct WithAtomicInt {
 };
 
 void test_atomic(atomic_int_t* array, struct WithAtomicInt *s) {
-  do_stuff_with_void_ptr(&array[0]); // expected-remark {{not setting bounds for 'atomic_int_t' (aka '_Atomic(int)') (should set bounds on full array but size is not known)}}
-  // expected-remark@-1{{not setting bounds for 'atomic_int_t * __capability' (aka '_Atomic(int) * __capability') (array subscript on non-array type)}}
+  do_stuff_with_void_ptr(&array[0]); // expected-remark {{not setting bounds for pointer to 'atomic_int_t' (aka '_Atomic(int)') (should set bounds on full array but size is not known)}}
+  // expected-remark@-1{{not setting bounds for array subscript on 'atomic_int_t * __capability' (aka '_Atomic(int) * __capability') (array subscript on non-array type)}}
   // DBG-NEXT: subscript 'atomic_int_t * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
   // DBG-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> should set bounds on full array but size is not known -> not setting bounds
   do_stuff_with_void_ptr(&array[2]); // expected-remark {{setting sub-object bounds for pointer to 'atomic_int_t' (aka '_Atomic(int)') to 4 bytes}}
-  // expected-remark@-1{{not setting bounds for 'atomic_int_t * __capability' (aka '_Atomic(int) * __capability') (array subscript on non-array type)}}
+  // expected-remark@-1{{not setting bounds for array subscript on 'atomic_int_t * __capability' (aka '_Atomic(int) * __capability') (array subscript on non-array type)}}
   // DBG-NEXT: subscript 'atomic_int_t * __capability' subobj bounds check: array subscript on non-array type -> not setting bounds
   // DBG-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> unwrapping _Atomic type -> Found scalar type -> setting bounds for 'atomic_int_t' address to 4
   do_stuff_with_void_ptr(&at_int); // expected-remark {{setting bounds for pointer to 'atomic_int_t' (aka '_Atomic(int)') to 4 bytes}}

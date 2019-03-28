@@ -612,13 +612,13 @@ STATISTIC(NumContainerBoundsSetOnArraySubscript,
           "Number of [] operators where container bounds were used");
 #undef DEBUG_TYPE
 
-static StringRef boundsKindStr(CodeGenFunction::SubObjectBoundsKind Kind) {
+static StringRef boundsKindStr(SubObjectBoundsKind Kind) {
   switch (Kind) {
-  case CodeGenFunction::SubObjectBoundsKind::Reference:
+  case SubObjectBoundsKind::Reference:
     return "reference";
-  case CodeGenFunction::SubObjectBoundsKind::AddrOf:
+  case SubObjectBoundsKind::AddrOf:
     return "address";
-  case CodeGenFunction::SubObjectBoundsKind::ArraySubscript:
+  case SubObjectBoundsKind::ArraySubscript:
     return "subscript";
   }
   llvm_unreachable("Invalid kind");
@@ -627,8 +627,7 @@ static StringRef boundsKindStr(CodeGenFunction::SubObjectBoundsKind Kind) {
 // If we are setting bounds on the full container size, the csetbounds must
 // be done before the cincoffset!
 static llvm::Value *
-tightenCHERIBounds(CodeGenFunction &CGF,
-                   CodeGenFunction::SubObjectBoundsKind Kind,
+tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
                    llvm::Value *Value, const Expr *LocExpr, QualType Ty,
                    const CodeGenFunction::TightenBoundsResult &TBR) {
   llvm::Value *ValueToBound = Value;
@@ -752,30 +751,30 @@ CodeGenFunction::setCHERIBoundsOnArraySubscript(llvm::Value *Value,
   return Value;
 }
 
-template <typename T>
 static Optional<CodeGenFunction::TightenBoundsResult>
-cannotSetBounds(const CodeGenFunction &CGF, const Expr *E, T &&Type,
-                const Twine &Reason) {
+cannotSetBounds(const CodeGenFunction &CGF, const Expr *E, QualType Type,
+                SubObjectBoundsKind Kind, const Twine &Reason) {
   CGF.CGM.getDiags().Report(E->getExprLoc(),
                             diag::remark_no_cheri_subobject_bounds)
-      << Type << Reason.str() << E->getSourceRange();
+      << (int)Kind << Type << Reason.str() << E->getSourceRange();
   CHERI_BOUNDS_DBG(<< Reason << " -> not setting bounds\n");
   return None;
 }
 
 static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
-                                      QualType Ty, const Twine &Msg) {
+                                      QualType Ty, SubObjectBoundsKind Kind,
+                                      const Twine &Msg) {
   if (Ty.isNull())
     return false; // unknown type
   if (Ty->hasAttr(attr::CHERINoSubobjectBounds)) {
     CHERI_BOUNDS_DBG(<< "opt-out: ");
-    cannotSetBounds(CGF, E, Ty, Msg + " has opt-out attribute");
+    cannotSetBounds(CGF, E, Ty, Kind, Msg + " has opt-out attribute");
     return true;
   }
   if (RecordDecl *RD = Ty->getAsRecordDecl()) {
     if (RD->hasAttr<CHERINoSubobjectBoundsAttr>()) {
       CHERI_BOUNDS_DBG(<< "opt-out: ");
-      cannotSetBounds(CGF, E, QualType(RD->getTypeForDecl(), 0),
+      cannotSetBounds(CGF, E, QualType(RD->getTypeForDecl(), 0), Kind,
                       Msg + " declaration has opt-out attribute");
       return true;
     }
@@ -784,21 +783,28 @@ static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
 }
 
 static bool hasBoundsOptOutAnnotation(const CodeGenFunction &CGF, const Expr *E,
-                                      const Decl *D, const StringRef Msg) {
+                                      const Decl *D, SubObjectBoundsKind Kind,
+                                      const StringRef Msg) {
   if (D->hasAttr<CHERINoSubobjectBoundsAttr>()) {
     StringRef Name = "<anonymous>";
     if (auto ND = dyn_cast<NamedDecl>(D))
       Name = ND->getName();
     CHERI_BOUNDS_DBG(<< "opt-out: ");
     std::string DiagStr = (Msg + " has opt-out attribute").str();
-    if (auto TD = dyn_cast<TypeDecl>(D))
-      cannotSetBounds(CGF, E, QualType(TD->getTypeForDecl(), 0), DiagStr);
-    else
-      cannotSetBounds(CGF, E, Name, DiagStr);
+    if (auto TD = dyn_cast<TypeDecl>(D)) {
+      cannotSetBounds(CGF, E, QualType(TD->getTypeForDecl(), 0), Kind, DiagStr);
+    } else {
+      CGF.CGM.getDiags().Report(E->getExprLoc(),
+                                diag::remark_no_cheri_subobject_bounds)
+          << (int)Kind << ("field '" + Name + "'").str() << DiagStr
+          << E->getSourceRange();
+      CHERI_BOUNDS_DBG(<< DiagStr << " -> not setting bounds\n");
+    }
     return true;
   }
   if (auto VD = dyn_cast<ValueDecl>(D)) {
-    return hasBoundsOptOutAnnotation(CGF, E, VD->getType(), Msg + " type");
+    return hasBoundsOptOutAnnotation(CGF, E, VD->getType(), Kind,
+                                     Msg + " type");
   }
   return false;
 }
@@ -821,22 +827,20 @@ enum class ArrayBoundsResult {
   DependsOnType,
 };
 
-static ArrayBoundsResult
-canSetBoundsOnArraySubscript(const Expr *E, const ArraySubscriptExpr *ASE,
-                             CodeGenFunction::SubObjectBoundsKind Kind,
-                             LangOptions::CheriBoundsMode BoundsMode,
-                             const CodeGenFunction &CGF) {
+static ArrayBoundsResult canSetBoundsOnArraySubscript(
+    const Expr *E, const ArraySubscriptExpr *ASE, SubObjectBoundsKind Kind,
+    LangOptions::CheriBoundsMode BoundsMode, const CodeGenFunction &CGF) {
   // TODO: should we opt-out even for references?
   // TODO: I guess cheri_no_bounds should have a argument that identifies
   // which kinds of narrowing are fine
-  if (hasBoundsOptOutAnnotation(CGF, E, ASE->getType(), "array type"))
+  if (hasBoundsOptOutAnnotation(CGF, E, ASE->getType(), Kind, "array type"))
     return ArrayBoundsResult::Never;
   const Expr *Base = ASE->getBase()->IgnoreParenImpCasts();
   const QualType BaseTy = Base->getType();
-  if (hasBoundsOptOutAnnotation(CGF, E, BaseTy, "array base type"))
+  if (hasBoundsOptOutAnnotation(CGF, E, BaseTy, Kind, "array base type"))
     return ArrayBoundsResult::Never;
 
-  if (Kind == CodeGenFunction::SubObjectBoundsKind::Reference &&
+  if (Kind == SubObjectBoundsKind::Reference &&
       BoundsMode >= LangOptions::CBM_References) {
     CHERI_BOUNDS_DBG(<< "using C++ reference -> ");
     return ArrayBoundsResult::Always;
@@ -933,7 +937,6 @@ static FieldDecl* findPossibleVLA(const RecordDecl *RD) {
       }
     }
   }
-
   return nullptr;
 }
 
@@ -976,17 +979,18 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     // TODO: we could ignore all casts and check the underlying type
     // i.e. ((char*)buf)[10] if buf is an array of different type
     if (!Ty->isArrayType()) {
-      return cannotSetBounds(*this, E, Ty, "array subscript on non-array type");
+      return cannotSetBounds(*this, E, Ty, Kind,
+                             "array subscript on non-array type");
     }
     // TODO:
     assert(!Ty->isVectorType() && "vectors not implemented");
   }
 
   if (Ty->isIncompleteType()) {
-    return cannotSetBounds(*this, E, Ty, "incomplete type");
+    return cannotSetBounds(*this, E, Ty, Kind, "incomplete type");
   }
   if (Ty->isFunctionType()) {
-    return cannotSetBounds(*this, E, Ty,
+    return cannotSetBounds(*this, E, Ty, Kind,
                            Kind == SubObjectBoundsKind::Reference
                                ? "reference to function"
                                : "address of function");
@@ -1028,31 +1032,33 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     // annotated with no bounds should that apply to d?
     auto BaseTy = ME->getBase()->getType();
     if (ME->isArrow() && !BaseTy->getPointeeType().isNull()) {
-      if (hasBoundsOptOutAnnotation(*this, E, BaseTy, "base pointer type"))
+      if (hasBoundsOptOutAnnotation(*this, E, BaseTy, Kind,
+                                    "base pointer type"))
         return None;
       BaseTy = BaseTy->getPointeeType();
     }
-    if (hasBoundsOptOutAnnotation(*this, E, BaseTy, "base type"))
+    if (hasBoundsOptOutAnnotation(*this, E, BaseTy, Kind, "base type"))
       return None;
-    if (hasBoundsOptOutAnnotation(*this, E, ME->getMemberDecl(), "field"))
+    if (hasBoundsOptOutAnnotation(*this, E, ME->getMemberDecl(), Kind, "field"))
       return None;
 
     TargetField = ME->getMemberDecl();
 
     if (BoundsMode < LangOptions::CBM_VeryAggressive &&
         ME->getMemberDecl() == findPossibleVLA(BaseTy->getAsRecordDecl()))
-      return cannotSetBounds(
-            *this, E, Ty, "member is potential variable length array");
+      return cannotSetBounds(*this, E, Ty, Kind,
+                             "member is potential variable length array");
 
     if (BaseTy->isUnionType() && BoundsMode < LangOptions::CBM_VeryAggressive) {
       // FIXME: we should set bounds to the whole union rather than not setting bounds at all
       // FIXME: should we set bounds for references?
       if (BoundsMode < LangOptions::CBM_References)
-        return cannotSetBounds(*this, E, Ty, "container is union");
+        return cannotSetBounds(*this, E, Ty, Kind, "container is union");
 
       if (containsVariableLengthArray(BoundsMode, BaseTy))
         return cannotSetBounds(
-            *this, E, Ty, "containing union includes a variable length array");
+            *this, E, Ty, Kind,
+            "containing union includes a variable length array");
 
       remarkUsingContainerSize(*this, E, BaseTy, Ty, "union member");
       return BoundsOnContainer(BaseTy);
@@ -1075,7 +1081,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       // Otherwise we have a non-constant array type -> don't set bounds to
       // avoid crashes at runtime
       return cannotSetBounds(
-          *this, E, Ty,
+          *this, E, Ty, Kind,
           "should set bounds on full array but size is not known");
     }
     case ArrayBoundsResult::DependsOnType:
@@ -1084,7 +1090,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   }
 
   // General opt-out based on the type of the expression
-  if (hasBoundsOptOutAnnotation(*this, E, Ty, "expression"))
+  if (hasBoundsOptOutAnnotation(*this, E, Ty, Kind, "expression"))
     return None;
 
   if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
@@ -1116,7 +1122,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   if (Ty->isRecordType()) {
     CHERI_BOUNDS_DBG(<< "Found record type '" << Ty.getAsString() << "' -> ");
     if (containsVariableLengthArray(BoundsMode, Ty)) {
-      return cannotSetBounds(*this, E, Ty, "has flexible array member");
+      return cannotSetBounds(*this, E, Ty, Kind, "has flexible array member");
     }
     if (Ty->isStructureOrClassType() && !getLangOpts().CPlusPlus) {
       // No inheritance or vtables in C -> we should be able to set bounds on
@@ -1129,7 +1135,9 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       const bool IsFinalClass = CRD->hasAttr<FinalAttr>();
       // TODO: isCLike() -> safe to set bounds? hopefully not inherited from?
       if (!IsFinalClass && BoundsMode <= LangOptions::CBM_SubObjectsSafe) {
-        return cannotSetBounds(*this, E, Ty, "non-final class and using sub-object-safe mode");
+        return cannotSetBounds(
+            *this, E, Ty, Kind,
+            "non-final class and using sub-object-safe mode");
       }
       // No bounds on classes with vtables
       if (CRD->isCLike()) {
@@ -1139,14 +1147,16 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       // Final class: check it doesn't have any virtual bases
       // TODO: check there are no flexible array members
       if (!CRD->isLiteral()) {
-        return cannotSetBounds(*this, E, Ty, "final but not a literal type -> size might by dynamic");
+        return cannotSetBounds(
+            *this, E, Ty, Kind,
+            "final but not a literal type -> size might by dynamic");
       } else {
         assert(CRD->getNumVBases() == 0);
         CHERI_BOUNDS_DBG(<< "is literal type and is marked as final -> ");
         return ExactBounds(TypeSize);
       }
     }
-    return cannotSetBounds(*this, E, Ty, "not a struct/class");
+    return cannotSetBounds(*this, E, Ty, Kind, "not a struct/class");
   }
   // Otherwise this type is unhandled, let's print a message:
   CGM.getDiags().Report(E->getExprLoc(),

@@ -233,7 +233,7 @@ def remark_subobject_using_container_size :
   Remark<"using size of containing type %0 instead of object type %1 for "
          "subobject bounds on %2">, InGroup<CheriSubobjectBounds>;
 def remark_no_cheri_subobject_bounds :
-  Remark<"not setting bounds for %0 (%1)">,
+  Remark<"not setting bounds for %select{pointer to|reference to|array subscript on}0 %1 (%2)">,
   InGroup<CheriSubobjectBounds>;
 
 def warn_subobject_bounds_unknown_type :

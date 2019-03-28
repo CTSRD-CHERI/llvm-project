@@ -19,7 +19,7 @@ int test_struct_with_array1(struct_with_array *s, int index) {
 
 struct_with_array test_struct_with_array2(struct_with_array *s, int index) {
   // can't set bounds here, have to trust the caller's bounds
-  return s[index]; // expected-remark{{not setting bounds for 'struct_with_array * __capability' (array subscript on non-array type)}}
+  return s[index]; // expected-remark{{not setting bounds for array subscript on 'struct_with_array * __capability' (array subscript on non-array type)}}
 }
 
 typedef struct {
@@ -29,11 +29,11 @@ typedef struct {
 } struct_with_ptr;
 
 int test_struct_with_ptr1(struct_with_ptr *s, int index) {
-  return s->buf[index]; // expected-remark{{not setting bounds for 'int * __capability' (array subscript on non-array type)}}
+  return s->buf[index]; // expected-remark{{not setting bounds for array subscript on 'int * __capability' (array subscript on non-array type)}}
 }
 
 struct_with_ptr test_struct_with_ptr2(struct_with_ptr *s, int index) {
-  return s[index]; // expected-remark{{not setting bounds for 'struct_with_ptr * __capability' (array subscript on non-array type)}}
+  return s[index]; // expected-remark{{not setting bounds for array subscript on 'struct_with_ptr * __capability' (array subscript on non-array type)}}
 }
 
 typedef struct {
@@ -42,11 +42,11 @@ typedef struct {
 } struct_vla;
 int test_vla_a(struct_vla *s, int index) {
   // can't set bounds here, have to trust the caller's bounds
-  s->buf[index] = 'A'; // expected-remark{{not setting bounds for 'char []' (incomplete type)}}
+  s->buf[index] = 'A'; // expected-remark{{not setting bounds for array subscript on 'char []' (incomplete type)}}
   return 0;
 }
 struct_vla test_vla_b(int index) {
   struct_vla s2;
-  s2.buf[index] = 'A'; // expected-remark{{not setting bounds for 'char []' (incomplete type)}}
+  s2.buf[index] = 'A'; // expected-remark{{not setting bounds for array subscript on 'char []' (incomplete type)}}
   return s2;           // prevent s2 from being optimzed out
 }
