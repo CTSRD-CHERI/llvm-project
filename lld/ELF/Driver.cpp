@@ -1697,7 +1697,6 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &Args) {
   Target = getTarget();
 
   Config->EFlags = Target->calcEFlags();
-  Config->EFlags = Target->calcEFlags();
   Config->MaxPageSize = getMaxPageSize(Args);
   Config->ImageBase = getImageBase(Args);
 
