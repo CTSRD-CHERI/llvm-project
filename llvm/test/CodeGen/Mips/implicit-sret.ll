@@ -11,22 +11,32 @@ declare dso_local { i32, i128, i64 } @implicit_sret_decl() unnamed_addr
 define internal void @test() unnamed_addr nounwind {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:48]]
+; CHECK-NEXT:    daddiu $sp, $sp, -48
 ; CHECK-NEXT:    sd $ra, 40($sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    daddiu $4, $sp, 8
 ; CHECK-NEXT:    jal implicit_sret_decl
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    ld $6, 24($sp)
-; CHECK-NEXT:    ld $5, 16($sp)
-; CHECK-NEXT:    ld $7, 32($sp)
-; CHECK-NEXT:    lw $1, 8($sp)
+; CHECK-NEXT:    # implicit-def: $at_64
+; CHECK-NEXT:    ldl $1, 24($sp)
+; CHECK-NEXT:    ldr $1, 31($sp)
 ; CHECK-NEXT:    # implicit-def: $v0_64
-; CHECK-NEXT:    move $2, $1
-; CHECK-NEXT:    move $4, $2
+; CHECK-NEXT:    ldl $2, 16($sp)
+; CHECK-NEXT:    ldr $2, 23($sp)
+; CHECK-NEXT:    # implicit-def: $v1_64
+; CHECK-NEXT:    ldl $3, 32($sp)
+; CHECK-NEXT:    ldr $3, 39($sp)
+; CHECK-NEXT:    # implicit-def: $a1
+; CHECK-NEXT:    lwl $5, 8($sp)
+; CHECK-NEXT:    lwr $5, 11($sp)
+; CHECK-NEXT:    # implicit-def: $a0_64
+; CHECK-NEXT:    move $4, $5
+; CHECK-NEXT:    move $5, $2
+; CHECK-NEXT:    move $6, $1
+; CHECK-NEXT:    move $7, $3
 ; CHECK-NEXT:    jal use_sret
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    ld $ra, 40($sp) # 8-byte Folded Reload
-; CHECK-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    daddiu $sp, $sp, 48
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    nop
 start:
@@ -60,14 +70,20 @@ declare dso_local void @use_sret2(i32, i32, i32) unnamed_addr
 define internal void @test2() unnamed_addr nounwind {
 ; CHECK-LABEL: test2:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:32]]
+; CHECK-NEXT:    daddiu $sp, $sp, -32
 ; CHECK-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    daddiu $4, $sp, 0
 ; CHECK-NEXT:    jal implicit_sret_decl2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    lw $1, 20($sp)
-; CHECK-NEXT:    lw $2, 12($sp)
-; CHECK-NEXT:    lw $3, 4($sp)
+; CHECK-NEXT:    # implicit-def: $at
+; CHECK-NEXT:    lwl $1, 20($sp)
+; CHECK-NEXT:    lwr $1, 23($sp)
+; CHECK-NEXT:    # implicit-def: $v0
+; CHECK-NEXT:    lwl $2, 12($sp)
+; CHECK-NEXT:    lwr $2, 15($sp)
+; CHECK-NEXT:    # implicit-def: $v1
+; CHECK-NEXT:    lwl $3, 4($sp)
+; CHECK-NEXT:    lwr $3, 7($sp)
 ; CHECK-NEXT:    # implicit-def: $a0_64
 ; CHECK-NEXT:    move $4, $3
 ; CHECK-NEXT:    # implicit-def: $a1_64
@@ -77,7 +93,7 @@ define internal void @test2() unnamed_addr nounwind {
 ; CHECK-NEXT:    jal use_sret2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
-; CHECK-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
+; CHECK-NEXT:    daddiu $sp, $sp, 32
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    nop
 start:
