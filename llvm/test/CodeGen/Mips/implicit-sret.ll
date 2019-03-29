@@ -16,25 +16,12 @@ define internal void @test() unnamed_addr nounwind {
 ; CHECK-NEXT:    daddiu $4, $sp, 8
 ; CHECK-NEXT:    jal implicit_sret_decl
 ; CHECK-NEXT:    nop
+; CHECK-NEXT:    ld $6, 24($sp)
+; CHECK-NEXT:    ld $5, 16($sp)
+; CHECK-NEXT:    ld $7, 32($sp)
+; CHECK-NEXT:    lw $ra, 8($sp)
 ; CHECK-NEXT:    # implicit-def: $a0_64
-; CHECK-NEXT:    ldl $4, 24($sp)
-; CHECK-NEXT:    ldr $4, 31($sp)
-; CHECK-NEXT:    # implicit-def: $at_64
-; CHECK-NEXT:    ldl $1, 16($sp)
-; CHECK-NEXT:    ldr $1, 23($sp)
-; CHECK-NEXT:    # implicit-def: $v0_64
-; CHECK-NEXT:    ldl $2, 32($sp)
-; CHECK-NEXT:    ldr $2, 39($sp)
-; CHECK-NEXT:    # implicit-def: $ra
-; CHECK-NEXT:    lwl $ra, 8($sp)
-; CHECK-NEXT:    lwr $ra, 11($sp)
-; CHECK-NEXT:    # implicit-def: $v1_64
-; CHECK-NEXT:    move $3, $ra
-; CHECK-NEXT:    sd $4, 0($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    move $4, $3
-; CHECK-NEXT:    move $5, $1
-; CHECK-NEXT:    ld $6, 0($sp) # 8-byte Folded Reload
-; CHECK-NEXT:    move $7, $2
+; CHECK-NEXT:    move $4, $ra
 ; CHECK-NEXT:    jal use_sret
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    ld $ra, 40($sp) # 8-byte Folded Reload
@@ -81,15 +68,9 @@ define internal void @test2() unnamed_addr nounwind {
 ; CHECK-NEXT:    daddiu $4, $sp, 16
 ; CHECK-NEXT:    jal implicit_sret_decl2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    # implicit-def: $ra
-; CHECK-NEXT:    lwl $ra, 36($sp)
-; CHECK-NEXT:    lwr $ra, 39($sp)
-; CHECK-NEXT:    # implicit-def: $at
-; CHECK-NEXT:    lwl $1, 28($sp)
-; CHECK-NEXT:    lwr $1, 31($sp)
-; CHECK-NEXT:    # implicit-def: $v0
-; CHECK-NEXT:    lwl $2, 20($sp)
-; CHECK-NEXT:    lwr $2, 23($sp)
+; CHECK-NEXT:    lw $ra, 36($sp)
+; CHECK-NEXT:    lw $1, 28($sp)
+; CHECK-NEXT:    lw $2, 20($sp)
 ; CHECK-NEXT:    # implicit-def: $a0_64
 ; CHECK-NEXT:    move $4, $2
 ; CHECK-NEXT:    # implicit-def: $v1_64

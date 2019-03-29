@@ -1794,6 +1794,7 @@ void SelectionDAGBuilder::visitRet(const ReturnInst &I) {
     unsigned NumValues = ValueVTs.size();
 
     SmallVector<SDValue, 4> Chains(NumValues);
+    unsigned BaseAlign = DL.getABITypeAlignment(I.getOperand(0)->getType());
     for (unsigned i = 0; i != NumValues; ++i) {
       // An aggregate return value cannot wrap around the address space, so
       // offsets to its parts don't wrap either.
@@ -1801,7 +1802,8 @@ void SelectionDAGBuilder::visitRet(const ReturnInst &I) {
       Chains[i] = DAG.getStore(
           Chain, getCurSDLoc(), SDValue(RetOp.getNode(), RetOp.getResNo() + i),
           // FIXME: better loc info would be nice.
-          Ptr, MachinePointerInfo::getUnknownStack(DAG.getMachineFunction()));
+          Ptr, MachinePointerInfo::getUnknownStack(DAG.getMachineFunction()),
+          MinAlign(BaseAlign, Offsets[i]));
     }
 
     Chain = DAG.getNode(ISD::TokenFactor, getCurSDLoc(),
@@ -9067,6 +9069,8 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
     SDNodeFlags Flags;
     Flags.setNoUnsignedWrap(true);
 
+    MachineFunction &MF = CLI.DAG.getMachineFunction();
+    unsigned HiddenSRetAlign = MF.getFrameInfo().getObjectAlignment(DemoteStackIdx);
     for (unsigned i = 0; i < NumValues; ++i) {
       SDValue Add = CLI.DAG.getPointerAdd(CLI.DL, DemoteStackSlot, Offsets[i], Flags);
       assert(DemoteStackSlot.getValueType() == PtrVT);
@@ -9074,7 +9078,7 @@ TargetLowering::LowerCallTo(TargetLowering::CallLoweringInfo &CLI) const {
           RetTys[i], CLI.DL, CLI.Chain, Add,
           MachinePointerInfo::getFixedStack(CLI.DAG.getMachineFunction(),
                                             DemoteStackIdx, Offsets[i]),
-          /* Alignment = */ 1);
+          /* Alignment = */ MinAlign(HiddenSRetAlign, Offsets[i]));
       ReturnValues[i] = L;
       Chains[i] = L.getValue(1);
     }
