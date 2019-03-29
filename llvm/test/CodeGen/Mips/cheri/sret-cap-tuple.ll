@@ -16,9 +16,9 @@ declare dso_local i1024 @get_huge_type(i8 addrspace(200)*) unnamed_addr addrspac
 define internal void @test(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:160|320]]
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:128|256]]
 ; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 9 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 7 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    .cfi_offset 89, -[[@EXPR 1 * $CAP_SIZE]]
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(test)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test)))
@@ -26,36 +26,24 @@ define internal void @test(i8 addrspace(200)* align 16 dereferenceable(16) %ctr)
 ; CHECK-NEXT:    cmove $c12, $c26
 ; CHECK-NEXT:    cmove $c1, $c3
 ; CHECK-NEXT:    clcbi $c2, %capcall20(get_tuple_cap)($c12)
-; CHECK-NEXT:    cincoffset $c4, $c11, 80
-; CHECK-NEXT:    csc $c3, $zero, [[@EXPR 3 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c4, $c11, 48
+; CHECK-NEXT:    csc $c3, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cmove $c3, $c4
-; CHECK-NEXT:    clc $c4, $zero, [[@EXPR 3 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c4, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    csc $c12, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c12, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cmove $c12, $c2
-; CHECK-NEXT:    csc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c1, $zero, 0($c11)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    cincoffset $c1, $c11, 128
-; CHECK-NEXT:    csetbounds $c4, $c1, 16
-; CHECK-NEXT:    cincoffset $c3, $c11, 64
-; CHECK-NEXT:    csetbounds $c3, $c3, 16
-; CHECK-NEXT:    daddiu $4, $zero, 16
-; CHECK-NEXT:    clc $c1, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    clcbi $c12, %capcall20(memcpy)($c1)
+; CHECK-NEXT:    clc $c3, $zero, 96($c11)
+; CHECK-NEXT:    clc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    clcbi $c12, %capcall20(use_tuple_cap)($c1)
 ; CHECK-NEXT:    cgetnull $c13
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    clc $c1, $zero, 64($c11)
-; CHECK-NEXT:    clc $c2, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    clcbi $c12, %capcall20(use_tuple_cap)($c2)
-; CHECK-NEXT:    csc $c3, $zero, 0($c11)
-; CHECK-NEXT:    cmove $c3, $c1
-; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    cjalr $c12, $c17
-; CHECK-NEXT:    nop
-; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 9 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, 160
+; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 7 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, 128
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:
@@ -88,28 +76,7 @@ define internal void @test2(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-NEXT:    csc $c1, $zero, 0($c11)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    clbu $1, $zero, 79($c11)
-; CHECK-NEXT:    clbu $2, $zero, 78($c11)
-; CHECK-NEXT:    dsll $2, $2, 8
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    clbu $2, $zero, 77($c11)
-; CHECK-NEXT:    clbu $3, $zero, 76($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 16
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    clbu $2, $zero, 75($c11)
-; CHECK-NEXT:    clbu $3, $zero, 74($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    clbu $3, $zero, 73($c11)
-; CHECK-NEXT:    clbu $4, $zero, 72($c11)
-; CHECK-NEXT:    dsll $4, $4, 8
-; CHECK-NEXT:    or $3, $4, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 32
-; CHECK-NEXT:    or $4, $2, $1
+; CHECK-NEXT:    cld $4, $zero, 72($c11)
 ; CHECK-NEXT:    clc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(use_tuple_i64)($c1)
 ; CHECK-NEXT:    cgetnull $c13
@@ -129,12 +96,10 @@ start:
 define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) #0 {
 ; CHECK-LABEL: test3:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:288|576]]
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:272|544]]
 ; CHECK-NEXT:    .cfi_def_cfa_offset [[STACKFRAME_SIZE]]
-; CHECK-NEXT:    csd $16, $zero, [[@EXPR STACKFRAME_SIZE - 8]]($c11)
 ; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 16 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    .cfi_offset 16, -[[@EXPR 0 * $CAP_SIZE + 8]]
-; CHECK-NEXT:    .cfi_offset 89, -[[@EXPR 2 * $CAP_SIZE]]
+; CHECK-NEXT:    .cfi_offset 89, -[[@EXPR 1 * $CAP_SIZE]]
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(test3)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test3)))
 ; CHECK-NEXT:    cincoffset $c26, $c12, $1
@@ -151,492 +116,28 @@ define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-NEXT:    csc $c1, $zero, [[@EXPR 5 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    daddiu $1, $zero, 135
-; CHECK-NEXT:    clbu $1, $1, 0($c11)
-; CHECK-NEXT:    daddiu $2, $zero, 134
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    dsll $2, $2, 8
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 133
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 132
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 16
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 131
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 130
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 129
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $4, $zero, 128
-; CHECK-NEXT:    clbu $4, $4, 0($c11)
-; CHECK-NEXT:    dsll $4, $4, 8
-; CHECK-NEXT:    or $3, $4, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 32
-; CHECK-NEXT:    or $4, $2, $1
-; CHECK-NEXT:    daddiu $1, $zero, 143
-; CHECK-NEXT:    clbu $1, $1, 0($c11)
-; CHECK-NEXT:    daddiu $2, $zero, 142
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    dsll $2, $2, 8
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 141
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 140
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 16
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 139
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 138
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 137
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $5, $zero, 136
-; CHECK-NEXT:    clbu $5, $5, 0($c11)
-; CHECK-NEXT:    dsll $5, $5, 8
-; CHECK-NEXT:    or $3, $5, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 32
-; CHECK-NEXT:    or $5, $2, $1
-; CHECK-NEXT:    daddiu $1, $zero, 151
-; CHECK-NEXT:    clbu $1, $1, 0($c11)
-; CHECK-NEXT:    daddiu $2, $zero, 150
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    dsll $2, $2, 8
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 149
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 148
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 16
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 147
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 146
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 145
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $6, $zero, 144
-; CHECK-NEXT:    clbu $6, $6, 0($c11)
-; CHECK-NEXT:    dsll $6, $6, 8
-; CHECK-NEXT:    or $3, $6, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 32
-; CHECK-NEXT:    or $6, $2, $1
-; CHECK-NEXT:    daddiu $1, $zero, 159
-; CHECK-NEXT:    clbu $1, $1, 0($c11)
-; CHECK-NEXT:    daddiu $2, $zero, 158
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    dsll $2, $2, 8
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 157
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 156
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 16
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 155
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 154
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 153
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $7, $zero, 152
-; CHECK-NEXT:    clbu $7, $7, 0($c11)
-; CHECK-NEXT:    dsll $7, $7, 8
-; CHECK-NEXT:    or $3, $7, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 32
-; CHECK-NEXT:    or $7, $2, $1
-; CHECK-NEXT:    daddiu $1, $zero, 167
-; CHECK-NEXT:    clbu $1, $1, 0($c11)
-; CHECK-NEXT:    daddiu $2, $zero, 166
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    dsll $2, $2, 8
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 165
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 164
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 16
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 163
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 162
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 161
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $8, $zero, 160
-; CHECK-NEXT:    clbu $8, $8, 0($c11)
-; CHECK-NEXT:    dsll $8, $8, 8
-; CHECK-NEXT:    or $3, $8, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 32
-; CHECK-NEXT:    or $8, $2, $1
-; CHECK-NEXT:    daddiu $1, $zero, 175
-; CHECK-NEXT:    clbu $1, $1, 0($c11)
-; CHECK-NEXT:    daddiu $2, $zero, 174
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    dsll $2, $2, 8
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 173
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 172
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 16
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 171
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 170
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 169
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $9, $zero, 168
-; CHECK-NEXT:    clbu $9, $9, 0($c11)
-; CHECK-NEXT:    dsll $9, $9, 8
-; CHECK-NEXT:    or $3, $9, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 32
-; CHECK-NEXT:    or $9, $2, $1
-; CHECK-NEXT:    daddiu $1, $zero, 183
-; CHECK-NEXT:    clbu $1, $1, 0($c11)
-; CHECK-NEXT:    daddiu $2, $zero, 182
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    dsll $2, $2, 8
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 181
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 180
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 16
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 179
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 178
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 177
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $10, $zero, 176
-; CHECK-NEXT:    clbu $10, $10, 0($c11)
-; CHECK-NEXT:    dsll $10, $10, 8
-; CHECK-NEXT:    or $3, $10, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 32
-; CHECK-NEXT:    or $10, $2, $1
-; CHECK-NEXT:    daddiu $1, $zero, 191
-; CHECK-NEXT:    clbu $1, $1, 0($c11)
-; CHECK-NEXT:    daddiu $2, $zero, 190
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    dsll $2, $2, 8
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 189
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 188
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 16
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 187
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 186
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 185
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $11, $zero, 184
-; CHECK-NEXT:    clbu $11, $11, 0($c11)
-; CHECK-NEXT:    dsll $11, $11, 8
-; CHECK-NEXT:    or $3, $11, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 32
-; CHECK-NEXT:    or $11, $2, $1
-; CHECK-NEXT:    daddiu $1, $zero, 207
-; CHECK-NEXT:    clbu $1, $1, 0($c11)
-; CHECK-NEXT:    daddiu $2, $zero, 206
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    dsll $2, $2, 8
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 205
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 204
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 16
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 203
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 202
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 201
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $12, $zero, 200
-; CHECK-NEXT:    clbu $12, $12, 0($c11)
-; CHECK-NEXT:    dsll $12, $12, 8
-; CHECK-NEXT:    or $3, $12, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    dsll $2, $2, 32
-; CHECK-NEXT:    or $1, $2, $1
-; CHECK-NEXT:    daddiu $2, $zero, 215
-; CHECK-NEXT:    clbu $2, $2, 0($c11)
-; CHECK-NEXT:    daddiu $3, $zero, 214
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    dsll $3, $3, 8
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 213
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $12, $zero, 212
-; CHECK-NEXT:    clbu $12, $12, 0($c11)
-; CHECK-NEXT:    dsll $12, $12, 8
-; CHECK-NEXT:    or $3, $12, $3
-; CHECK-NEXT:    dsll $3, $3, 16
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 211
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $12, $zero, 210
-; CHECK-NEXT:    clbu $12, $12, 0($c11)
-; CHECK-NEXT:    dsll $12, $12, 8
-; CHECK-NEXT:    or $3, $12, $3
-; CHECK-NEXT:    daddiu $12, $zero, 209
-; CHECK-NEXT:    clbu $12, $12, 0($c11)
-; CHECK-NEXT:    daddiu $13, $zero, 208
-; CHECK-NEXT:    clbu $13, $13, 0($c11)
-; CHECK-NEXT:    dsll $13, $13, 8
-; CHECK-NEXT:    or $12, $13, $12
-; CHECK-NEXT:    dsll $12, $12, 16
-; CHECK-NEXT:    or $3, $12, $3
-; CHECK-NEXT:    dsll $3, $3, 32
-; CHECK-NEXT:    or $2, $3, $2
-; CHECK-NEXT:    daddiu $3, $zero, 223
-; CHECK-NEXT:    clbu $3, $3, 0($c11)
-; CHECK-NEXT:    daddiu $12, $zero, 222
-; CHECK-NEXT:    clbu $12, $12, 0($c11)
-; CHECK-NEXT:    dsll $12, $12, 8
-; CHECK-NEXT:    or $3, $12, $3
-; CHECK-NEXT:    daddiu $12, $zero, 221
-; CHECK-NEXT:    clbu $12, $12, 0($c11)
-; CHECK-NEXT:    daddiu $13, $zero, 220
-; CHECK-NEXT:    clbu $13, $13, 0($c11)
-; CHECK-NEXT:    dsll $13, $13, 8
-; CHECK-NEXT:    or $12, $13, $12
-; CHECK-NEXT:    dsll $12, $12, 16
-; CHECK-NEXT:    or $3, $12, $3
-; CHECK-NEXT:    daddiu $12, $zero, 219
-; CHECK-NEXT:    clbu $12, $12, 0($c11)
-; CHECK-NEXT:    daddiu $13, $zero, 218
-; CHECK-NEXT:    clbu $13, $13, 0($c11)
-; CHECK-NEXT:    dsll $13, $13, 8
-; CHECK-NEXT:    or $12, $13, $12
-; CHECK-NEXT:    daddiu $13, $zero, 217
-; CHECK-NEXT:    clbu $13, $13, 0($c11)
-; CHECK-NEXT:    daddiu $14, $zero, 216
-; CHECK-NEXT:    clbu $14, $14, 0($c11)
-; CHECK-NEXT:    dsll $14, $14, 8
-; CHECK-NEXT:    or $13, $14, $13
-; CHECK-NEXT:    dsll $13, $13, 16
-; CHECK-NEXT:    or $12, $13, $12
-; CHECK-NEXT:    dsll $12, $12, 32
-; CHECK-NEXT:    or $3, $12, $3
-; CHECK-NEXT:    daddiu $12, $zero, 231
-; CHECK-NEXT:    clbu $12, $12, 0($c11)
-; CHECK-NEXT:    daddiu $13, $zero, 230
-; CHECK-NEXT:    clbu $13, $13, 0($c11)
-; CHECK-NEXT:    dsll $13, $13, 8
-; CHECK-NEXT:    or $12, $13, $12
-; CHECK-NEXT:    daddiu $13, $zero, 229
-; CHECK-NEXT:    clbu $13, $13, 0($c11)
-; CHECK-NEXT:    daddiu $14, $zero, 228
-; CHECK-NEXT:    clbu $14, $14, 0($c11)
-; CHECK-NEXT:    dsll $14, $14, 8
-; CHECK-NEXT:    or $13, $14, $13
-; CHECK-NEXT:    dsll $13, $13, 16
-; CHECK-NEXT:    or $12, $13, $12
-; CHECK-NEXT:    daddiu $13, $zero, 227
-; CHECK-NEXT:    clbu $13, $13, 0($c11)
-; CHECK-NEXT:    daddiu $14, $zero, 226
-; CHECK-NEXT:    clbu $14, $14, 0($c11)
-; CHECK-NEXT:    dsll $14, $14, 8
-; CHECK-NEXT:    or $13, $14, $13
-; CHECK-NEXT:    daddiu $14, $zero, 225
-; CHECK-NEXT:    clbu $14, $14, 0($c11)
-; CHECK-NEXT:    daddiu $15, $zero, 224
-; CHECK-NEXT:    clbu $15, $15, 0($c11)
-; CHECK-NEXT:    dsll $15, $15, 8
-; CHECK-NEXT:    or $14, $15, $14
-; CHECK-NEXT:    dsll $14, $14, 16
-; CHECK-NEXT:    or $13, $14, $13
-; CHECK-NEXT:    dsll $13, $13, 32
-; CHECK-NEXT:    or $12, $13, $12
-; CHECK-NEXT:    daddiu $13, $zero, 239
-; CHECK-NEXT:    clbu $13, $13, 0($c11)
-; CHECK-NEXT:    daddiu $14, $zero, 238
-; CHECK-NEXT:    clbu $14, $14, 0($c11)
-; CHECK-NEXT:    dsll $14, $14, 8
-; CHECK-NEXT:    or $13, $14, $13
-; CHECK-NEXT:    daddiu $14, $zero, 237
-; CHECK-NEXT:    clbu $14, $14, 0($c11)
-; CHECK-NEXT:    daddiu $15, $zero, 236
-; CHECK-NEXT:    clbu $15, $15, 0($c11)
-; CHECK-NEXT:    dsll $15, $15, 8
-; CHECK-NEXT:    or $14, $15, $14
-; CHECK-NEXT:    dsll $14, $14, 16
-; CHECK-NEXT:    or $13, $14, $13
-; CHECK-NEXT:    daddiu $14, $zero, 235
-; CHECK-NEXT:    clbu $14, $14, 0($c11)
-; CHECK-NEXT:    daddiu $15, $zero, 234
-; CHECK-NEXT:    clbu $15, $15, 0($c11)
-; CHECK-NEXT:    dsll $15, $15, 8
-; CHECK-NEXT:    or $14, $15, $14
-; CHECK-NEXT:    daddiu $15, $zero, 233
-; CHECK-NEXT:    clbu $15, $15, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 232
-; CHECK-NEXT:    clbu $24, $16, 0($c11)
-; CHECK-NEXT:    dsll $24, $24, 8
-; CHECK-NEXT:    or $15, $24, $15
-; CHECK-NEXT:    dsll $15, $15, 16
-; CHECK-NEXT:    or $14, $15, $14
-; CHECK-NEXT:    dsll $14, $14, 32
-; CHECK-NEXT:    or $13, $14, $13
-; CHECK-NEXT:    daddiu $14, $zero, 247
-; CHECK-NEXT:    clbu $14, $14, 0($c11)
-; CHECK-NEXT:    daddiu $15, $zero, 246
-; CHECK-NEXT:    clbu $15, $15, 0($c11)
-; CHECK-NEXT:    dsll $15, $15, 8
-; CHECK-NEXT:    or $14, $15, $14
-; CHECK-NEXT:    daddiu $15, $zero, 245
-; CHECK-NEXT:    clbu $15, $15, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 244
-; CHECK-NEXT:    clbu $24, $16, 0($c11)
-; CHECK-NEXT:    dsll $24, $24, 8
-; CHECK-NEXT:    or $15, $24, $15
-; CHECK-NEXT:    dsll $15, $15, 16
-; CHECK-NEXT:    or $14, $15, $14
-; CHECK-NEXT:    daddiu $15, $zero, 243
-; CHECK-NEXT:    clbu $15, $15, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 242
-; CHECK-NEXT:    clbu $24, $16, 0($c11)
-; CHECK-NEXT:    dsll $24, $24, 8
-; CHECK-NEXT:    or $15, $24, $15
-; CHECK-NEXT:    daddiu $16, $zero, 241
-; CHECK-NEXT:    clbu $24, $16, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 240
-; CHECK-NEXT:    clbu $25, $16, 0($c11)
-; CHECK-NEXT:    dsll $25, $25, 8
-; CHECK-NEXT:    or $24, $25, $24
-; CHECK-NEXT:    dsll $24, $24, 16
-; CHECK-NEXT:    or $15, $24, $15
-; CHECK-NEXT:    dsll $15, $15, 32
-; CHECK-NEXT:    or $14, $15, $14
-; CHECK-NEXT:    daddiu $15, $zero, 255
-; CHECK-NEXT:    clbu $15, $15, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 254
-; CHECK-NEXT:    clbu $24, $16, 0($c11)
-; CHECK-NEXT:    dsll $24, $24, 8
-; CHECK-NEXT:    or $15, $24, $15
-; CHECK-NEXT:    daddiu $16, $zero, 253
-; CHECK-NEXT:    clbu $24, $16, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 252
-; CHECK-NEXT:    clbu $25, $16, 0($c11)
-; CHECK-NEXT:    dsll $25, $25, 8
-; CHECK-NEXT:    or $24, $25, $24
-; CHECK-NEXT:    dsll $24, $24, 16
-; CHECK-NEXT:    or $15, $24, $15
-; CHECK-NEXT:    daddiu $16, $zero, 251
-; CHECK-NEXT:    clbu $24, $16, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 250
-; CHECK-NEXT:    clbu $25, $16, 0($c11)
-; CHECK-NEXT:    dsll $25, $25, 8
-; CHECK-NEXT:    or $24, $25, $24
-; CHECK-NEXT:    daddiu $16, $zero, 249
-; CHECK-NEXT:    clbu $25, $16, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 248
-; CHECK-NEXT:    clbu $sp, $16, 0($c11)
-; CHECK-NEXT:    dsll $sp, $sp, 8
-; CHECK-NEXT:    or $25, $sp, $25
-; CHECK-NEXT:    dsll $25, $25, 16
-; CHECK-NEXT:    or $24, $25, $24
-; CHECK-NEXT:    dsll $24, $24, 32
-; CHECK-NEXT:    or $15, $24, $15
-; CHECK-NEXT:    daddiu $16, $zero, 199
-; CHECK-NEXT:    clbu $24, $16, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 198
-; CHECK-NEXT:    clbu $25, $16, 0($c11)
-; CHECK-NEXT:    dsll $25, $25, 8
-; CHECK-NEXT:    or $24, $25, $24
-; CHECK-NEXT:    daddiu $16, $zero, 197
-; CHECK-NEXT:    clbu $25, $16, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 196
-; CHECK-NEXT:    clbu $sp, $16, 0($c11)
-; CHECK-NEXT:    dsll $sp, $sp, 8
-; CHECK-NEXT:    or $25, $sp, $25
-; CHECK-NEXT:    dsll $25, $25, 16
-; CHECK-NEXT:    or $24, $25, $24
-; CHECK-NEXT:    daddiu $16, $zero, 195
-; CHECK-NEXT:    clbu $25, $16, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 194
-; CHECK-NEXT:    clbu $sp, $16, 0($c11)
-; CHECK-NEXT:    dsll $sp, $sp, 8
-; CHECK-NEXT:    or $25, $sp, $25
-; CHECK-NEXT:    daddiu $16, $zero, 193
-; CHECK-NEXT:    clbu $sp, $16, 0($c11)
-; CHECK-NEXT:    daddiu $16, $zero, 192
-; CHECK-NEXT:    clbu $16, $16, 0($c11)
-; CHECK-NEXT:    dsll $16, $16, 8
-; CHECK-NEXT:    or $sp, $16, $sp
-; CHECK-NEXT:    dsll $sp, $sp, 16
-; CHECK-NEXT:    or $25, $sp, $25
-; CHECK-NEXT:    dsll $25, $25, 32
-; CHECK-NEXT:    or $24, $25, $24
+; CHECK-NEXT:    cld $11, $zero, 184($c11)
+; CHECK-NEXT:    cld $10, $zero, 176($c11)
+; CHECK-NEXT:    cld $9, $zero, 168($c11)
+; CHECK-NEXT:    cld $8, $zero, 160($c11)
+; CHECK-NEXT:    cld $7, $zero, 152($c11)
+; CHECK-NEXT:    cld $6, $zero, 144($c11)
+; CHECK-NEXT:    cld $5, $zero, 136($c11)
+; CHECK-NEXT:    cld $1, $zero, 200($c11)
+; CHECK-NEXT:    cld $2, $zero, 208($c11)
+; CHECK-NEXT:    cld $3, $zero, 216($c11)
+; CHECK-NEXT:    cld $4, $zero, 224($c11)
+; CHECK-NEXT:    cld $12, $zero, 232($c11)
+; CHECK-NEXT:    cld $13, $zero, 240($c11)
+; CHECK-NEXT:    cld $14, $zero, 248($c11)
+; CHECK-NEXT:    cld $15, $zero, 192($c11)
+; CHECK-NEXT:    cld $24, $zero, 128($c11)
 ; CHECK-NEXT:    cmove $c1, $c11
-; CHECK-NEXT:    csd $24, $zero, 0($c1)
-; CHECK-NEXT:    csd $15, $zero, 56($c1)
-; CHECK-NEXT:    csd $14, $zero, 48($c1)
-; CHECK-NEXT:    csd $13, $zero, 40($c1)
-; CHECK-NEXT:    csd $12, $zero, 32($c1)
+; CHECK-NEXT:    csd $15, $zero, 0($c1)
+; CHECK-NEXT:    csd $14, $zero, 56($c1)
+; CHECK-NEXT:    csd $13, $zero, 48($c1)
+; CHECK-NEXT:    csd $12, $zero, 40($c1)
+; CHECK-NEXT:    csd $4, $zero, 32($c1)
 ; CHECK-NEXT:    csd $3, $zero, 24($c1)
 ; CHECK-NEXT:    csd $2, $zero, 16($c1)
 ; CHECK-NEXT:    csd $1, $zero, 8($c1)
@@ -645,11 +146,11 @@ define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-NEXT:    candperm $c13, $c1, $1
 ; CHECK-NEXT:    clc $c1, $zero, [[@EXPR 6 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    clcbi $c12, %capcall20(use_huge_value)($c1)
+; CHECK-NEXT:    move $4, $24
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 16 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    cld $16, $zero, [[@EXPR STACKFRAME_SIZE - 8]]($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, 288
+; CHECK-NEXT:    cincoffset $c11, $c11, 272
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:

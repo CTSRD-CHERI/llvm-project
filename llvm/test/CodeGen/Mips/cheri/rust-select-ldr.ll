@@ -17,22 +17,13 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; MIPS-NEXT:    daddiu $5, $sp, 48
 ; MIPS-NEXT:    jal _ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E
 ; MIPS-NEXT:    nop
-; MIPS-NEXT:    # implicit-def: $a0_64
-; MIPS-NEXT:    ldl $4, 40($sp)
-; MIPS-NEXT:    ldr $4, 47($sp)
-; MIPS-NEXT:    # implicit-def: $a1_64
-; MIPS-NEXT:    ldl $5, 32($sp)
-; MIPS-NEXT:    ldr $5, 39($sp)
-; MIPS-NEXT:    # implicit-def: $at_64
-; MIPS-NEXT:    ldl $1, 24($sp)
-; MIPS-NEXT:    ldr $1, 31($sp)
-; MIPS-NEXT:    sd $4, 16($sp) # 8-byte Folded Spill
-; MIPS-NEXT:    move $4, $1
-; MIPS-NEXT:    ld $6, 16($sp) # 8-byte Folded Reload
+; MIPS-NEXT:    ld $6, 40($sp)
+; MIPS-NEXT:    ld $5, 32($sp)
+; MIPS-NEXT:    ld $4, 24($sp)
 ; MIPS-NEXT:    jal _ZN3lib6option15Option$LT$T$GT$6unwrap17h50e7a820126dcfe5E
 ; MIPS-NEXT:    nop
-; MIPS-NEXT:    sd $2, 8($sp) # 8-byte Folded Spill
-; MIPS-NEXT:    sd $3, 0($sp) # 8-byte Folded Spill
+; MIPS-NEXT:    sd $2, 16($sp) # 8-byte Folded Spill
+; MIPS-NEXT:    sd $3, 8($sp) # 8-byte Folded Spill
 ; MIPS-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
 ; MIPS-NEXT:    daddiu $sp, $sp, 80
 ; MIPS-NEXT:    jr $ra
@@ -40,7 +31,7 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ;
 ; PURECAP-LABEL: _ZN4main4main17hfe98083a4c87500fE:
 ; PURECAP:       # %bb.0: # %start
-; PURECAP-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:96|160]]
+; PURECAP-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:96|192]]
 ; PURECAP-NEXT:    csc $c17, $zero, [[@EXPR 5 * $CAP_SIZE]]($c11)
 ; PURECAP-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN4main4main17hfe98083a4c87500fE)))
 ; PURECAP-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN4main4main17hfe98083a4c87500fE)))
@@ -55,72 +46,9 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; PURECAP-NEXT:    cmove $c12, $c1
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
-; PURECAP-NEXT:    clbu $1, $zero, 47($c11)
-; PURECAP-NEXT:    clbu $2, $zero, 46($c11)
-; PURECAP-NEXT:    dsll $2, $2, 8
-; PURECAP-NEXT:    or $1, $2, $1
-; PURECAP-NEXT:    clbu $2, $zero, 45($c11)
-; PURECAP-NEXT:    clbu $3, $zero, 44($c11)
-; PURECAP-NEXT:    dsll $3, $3, 8
-; PURECAP-NEXT:    or $2, $3, $2
-; PURECAP-NEXT:    dsll $2, $2, 16
-; PURECAP-NEXT:    or $1, $2, $1
-; PURECAP-NEXT:    clbu $2, $zero, 43($c11)
-; PURECAP-NEXT:    clbu $3, $zero, 42($c11)
-; PURECAP-NEXT:    dsll $3, $3, 8
-; PURECAP-NEXT:    or $2, $3, $2
-; PURECAP-NEXT:    clbu $3, $zero, 41($c11)
-; PURECAP-NEXT:    clbu $4, $zero, 40($c11)
-; PURECAP-NEXT:    dsll $4, $4, 8
-; PURECAP-NEXT:    or $3, $4, $3
-; PURECAP-NEXT:    dsll $3, $3, 16
-; PURECAP-NEXT:    or $2, $3, $2
-; PURECAP-NEXT:    dsll $2, $2, 32
-; PURECAP-NEXT:    or $4, $2, $1
-; PURECAP-NEXT:    clbu $1, $zero, 55($c11)
-; PURECAP-NEXT:    clbu $2, $zero, 54($c11)
-; PURECAP-NEXT:    dsll $2, $2, 8
-; PURECAP-NEXT:    or $1, $2, $1
-; PURECAP-NEXT:    clbu $2, $zero, 53($c11)
-; PURECAP-NEXT:    clbu $3, $zero, 52($c11)
-; PURECAP-NEXT:    dsll $3, $3, 8
-; PURECAP-NEXT:    or $2, $3, $2
-; PURECAP-NEXT:    dsll $2, $2, 16
-; PURECAP-NEXT:    or $1, $2, $1
-; PURECAP-NEXT:    clbu $2, $zero, 51($c11)
-; PURECAP-NEXT:    clbu $3, $zero, 50($c11)
-; PURECAP-NEXT:    dsll $3, $3, 8
-; PURECAP-NEXT:    or $2, $3, $2
-; PURECAP-NEXT:    clbu $3, $zero, 49($c11)
-; PURECAP-NEXT:    clbu $5, $zero, 48($c11)
-; PURECAP-NEXT:    dsll $5, $5, 8
-; PURECAP-NEXT:    or $3, $5, $3
-; PURECAP-NEXT:    dsll $3, $3, 16
-; PURECAP-NEXT:    or $2, $3, $2
-; PURECAP-NEXT:    dsll $2, $2, 32
-; PURECAP-NEXT:    or $5, $2, $1
-; PURECAP-NEXT:    clbu $1, $zero, 63($c11)
-; PURECAP-NEXT:    clbu $2, $zero, 62($c11)
-; PURECAP-NEXT:    dsll $2, $2, 8
-; PURECAP-NEXT:    or $1, $2, $1
-; PURECAP-NEXT:    clbu $2, $zero, 61($c11)
-; PURECAP-NEXT:    clbu $3, $zero, 60($c11)
-; PURECAP-NEXT:    dsll $3, $3, 8
-; PURECAP-NEXT:    or $2, $3, $2
-; PURECAP-NEXT:    dsll $2, $2, 16
-; PURECAP-NEXT:    or $1, $2, $1
-; PURECAP-NEXT:    clbu $2, $zero, 59($c11)
-; PURECAP-NEXT:    clbu $3, $zero, 58($c11)
-; PURECAP-NEXT:    dsll $3, $3, 8
-; PURECAP-NEXT:    or $2, $3, $2
-; PURECAP-NEXT:    clbu $3, $zero, 57($c11)
-; PURECAP-NEXT:    clbu $6, $zero, 56($c11)
-; PURECAP-NEXT:    dsll $6, $6, 8
-; PURECAP-NEXT:    or $3, $6, $3
-; PURECAP-NEXT:    dsll $3, $3, 16
-; PURECAP-NEXT:    or $2, $3, $2
-; PURECAP-NEXT:    dsll $2, $2, 32
-; PURECAP-NEXT:    or $6, $2, $1
+; PURECAP-NEXT:    cld $6, $zero, 56($c11)
+; PURECAP-NEXT:    cld $5, $zero, 48($c11)
+; PURECAP-NEXT:    cld $4, $zero, 40($c11)
 ; PURECAP-NEXT:    clc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; PURECAP-NEXT:    clcbi $c12, %capcall20(_ZN3lib6option15Option$LT$T$GT$6unwrap17h50e7a820126dcfe5E)($c1)
 ; PURECAP-NEXT:    cgetnull $c13
