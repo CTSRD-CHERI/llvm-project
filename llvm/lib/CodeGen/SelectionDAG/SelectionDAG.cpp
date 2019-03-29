@@ -4136,10 +4136,6 @@ SDValue SelectionDAG::getNode(unsigned Opcode, const SDLoc &DL, EVT VT,
     const APInt &Val = C->getAPIntValue();
     switch (Opcode) {
     default: break;
-    case ISD::INTTOPTR:
-      if (VT.isFatPointer())
-        assert(!Val.isAllOnesValue());
-      break;
     case ISD::SIGN_EXTEND:
       return getConstant(Val.sextOrTrunc(VT.getSizeInBits()), DL, VT,
                          C->isTargetOpcode(), C->isOpaque());
