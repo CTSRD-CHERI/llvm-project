@@ -3178,8 +3178,6 @@ SDValue MipsTargetLowering::lowerLOAD(SDValue Op, SelectionDAG &DAG) const {
 
   // We don't handle capability-releative loads here, so make sure that we
   // don't encounter them!
-  LD->dump();
-  LD->getBasePtr()->dump();
   assert(!MemVT.isFatPointer());
 
   // Return if load is aligned or if MemVT is neither i32 nor i64.
