@@ -13,9 +13,8 @@
 //
 _Bool is_aligned(void *__capability ptr, long align) {
   // ASM-LABEL: is_aligned:
-  // ASM:      cgetaddr	$1, $c3
-  // ASM-NEXT: daddiu	$2, $4, -1
-  // ASM-NEXT: and	$1, $1, $2
+  // ASM:      daddiu	$1, $4, -1
+  // ASM-NEXT: cgetandaddr	$1, $c3, $1
   // ASM-NEXT: cjr	$c17
   // ASM-NEXT: sltiu	$2, $1, 1
   return __builtin_is_aligned(ptr, align);
@@ -53,11 +52,9 @@ void *__capability align_up(void *__capability ptr, long align) {
 //
 void *__capability align_down(void *__capability ptr, long align) {
   // ASM-LABEL: align_down:
-  // ASM:      cgetaddr	$1, $c3
-  // ASM-NEXT: dnegu	$2, $4
-  // ASM-NEXT: and	$1, $1, $2
+  // ASM:      dnegu	$1, $4
   // ASM-NEXT: cjr	$c17
-  // ASM-NEXT: csetaddr	$c3, $c3, $1
+  // ASM-NEXT: candaddr	$c3, $c3, $1
   return __builtin_align_down(ptr, align);
 }
 
@@ -74,11 +71,10 @@ void *__capability align_down(void *__capability ptr, long align) {
 //
 _Bool is_p2aligned(void *__capability ptr, long p2align) {
   // ASM-LABEL: is_p2aligned:
-  // ASM:      cgetaddr	$1, $c3
-  // ASM-NEXT: daddiu	$2, $zero, -1
-  // ASM-NEXT: dsllv	$3, $2, $4
-  // ASM-NEXT: xor	$2, $3, $2
-  // ASM-NEXT: and	$1, $1, $2
+  // ASM:      daddiu	$1, $zero, -1
+  // ASM-NEXT: dsllv	$2, $1, $4
+  // ASM-NEXT: xor	$1, $2, $1
+  // ASM-NEXT: cgetandaddr	$1, $c3, $1
   // ASM-NEXT: cjr	$c17
   // ASM-NEXT: sltiu	$2, $1, 1
   return __builtin_is_p2aligned(ptr, p2align);
@@ -117,11 +113,9 @@ void *__capability p2align_up(void *__capability ptr, long p2align) {
 //
 void *__capability p2align_down(void *__capability ptr, long p2align) {
   // ASM-LABEL: p2align_down:
-  // ASM:      cgetaddr	$1, $c3
-  // ASM-NEXT: daddiu	$2, $zero, -1
-  // ASM-NEXT: dsllv	$2, $2, $4
-  // ASM-NEXT: and	$1, $1, $2
+  // ASM:      daddiu	$1, $zero, -1
+  // ASM-NEXT: dsllv	$1, $1, $4
   // ASM-NEXT: cjr	$c17
-  // ASM-NEXT: csetaddr	$c3, $c3, $1
+  // ASM-NEXT: candaddr	$c3, $c3, $1
   return __builtin_p2align_down(ptr, p2align);
 }
