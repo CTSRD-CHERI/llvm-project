@@ -125,7 +125,7 @@ struct a c(void) {
   do_stuff(&d->b); // expected-remark{{setting sub-object bounds for field 'b' (pointer to 'int') to 4 bytes}}
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
   return d[0]; // expected-remark{{setting bounds for array subscript on 'struct a [1]' to 4 bytes}}
-  // CHECK-NEXT: subscript 'struct a [1]' subobj bounds check: Found constant size array type -> setting bounds for 'struct a [1]' subscript to 4
+  // CHECK-NEXT: subscript 'struct a [1]' subobj bounds check: subscript on constant size array -> setting bounds for 'struct a [1]' subscript to 4
 }
 
 typedef struct WithBoundsPls NoBoundsTypedef __attribute__((cheri_no_subobject_bounds));

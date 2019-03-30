@@ -1081,6 +1081,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       return cannotSetBounds(*this, E, Ty, Kind,
                              "array subscript on variable size type");
     }
+    CHERI_BOUNDS_DBG(<< "subscript on constant size array -> ");
     return ExactBounds(TypeSize);
   }
 

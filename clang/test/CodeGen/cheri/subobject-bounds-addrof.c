@@ -66,7 +66,7 @@ void test_fnptr(struct ContainsFnPtr *s) {
   // DBG-NEXT: subobj bounds check: got MemberExpr -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[$CAP_SIZE]]
   do_stuff_with_fn_ptr_ptr(&fnptr_array[2]); // expected-remark-re {{setting sub-object bounds for pointer to 'fn_ptr_ty' (aka 'void (* __capability)(void)') to {{16|32}} bytes}}
   //  expected-remark-re@-1{{setting bounds for array subscript on 'fn_ptr_ty [4]' to {{64|128}} bytes}}
-  // DBG-NEXT: subscript 'fn_ptr_ty [4]' subobj bounds check: Found constant size array type -> setting bounds for 'fn_ptr_ty [4]' subscript to {{64|128}}
+  // DBG-NEXT: subscript 'fn_ptr_ty [4]' subobj bounds check: subscript on constant size array -> setting bounds for 'fn_ptr_ty [4]' subscript to {{64|128}}
   // DBG-NEXT: subobj bounds check: Found array subscript -> Index is a constant -> const array index is not end and bounds==aggressive -> Found scalar type -> setting bounds for 'fn_ptr_ty' address to [[$CAP_SIZE]]
 }
 
