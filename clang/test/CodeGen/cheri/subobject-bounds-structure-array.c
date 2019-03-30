@@ -3,7 +3,7 @@
 // RUN: %cheri_purecap_cc1 -cheri-bounds=subobject-safe  -O0 -emit-llvm %s -o /dev/null \
 // RUN:    -w -mllvm -debug-only="cheri-bounds" -mllvm -stats 2>&1 | FileCheck %s -check-prefix DBG
 // DBG:  3 cheri-bounds     - Number of & operators checked for tightening bounds
-// DBG: 34 cheri-bounds     - Number of [] operators checked for tightening bounds
+// DBG: 36 cheri-bounds     - Number of [] operators checked for tightening bounds
 // DBG:  2 cheri-bounds     - Number of & operators where bounds were tightend
 // DBG: 22 cheri-bounds     - Number of [] operators where bounds were tightend
 // REQUIRES: asserts
@@ -104,6 +104,38 @@ struct_vla test_vla_b(long index) {
   struct_vla s2;
   s2.buf[index] = 'A'; // expected-remark{{not setting bounds for array subscript on 'char []' (incomplete type)}}
   return s2;           // prevent s2 from being optimzed out
+}
+
+typedef struct {
+  int x;
+  char buf[0];
+} struct_fake_vla1;
+// CHECK-LABEL: @test_fake_vla1(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_VLA:%.*]], [[STRUCT_STRUCT_VLA]] addrspace(200)* [[S:%.*]], i64 0, i32 1, i64 [[INDEX:%.*]]
+// CHECK-NEXT:    store i8 65, i8 addrspace(200)* [[ARRAYIDX]], align 1, !tbaa !9
+// CHECK-NEXT:    ret i32 0
+//
+int test_fake_vla1(struct_fake_vla1 *s, long index) {
+  // can't set bounds here, have to trust the caller's bounds
+  s->buf[index] = 'A'; // expected-remark{{not setting bounds for array subscript on 'char [0]' (member is potential variable length array)}}
+  return 0;
+}
+
+typedef struct {
+  int x;
+  char buf[1];
+} struct_fake_vla2;
+// CHECK-LABEL: @test_fake_vla2(
+// CHECK-NEXT:  entry:
+// CHECK-NEXT:    [[ARRAYIDX:%.*]] = getelementptr inbounds [[STRUCT_STRUCT_VLA:%.*]], [[STRUCT_STRUCT_VLA]] addrspace(200)* [[S:%.*]], i64 0, i32 1, i64 [[INDEX:%.*]]
+// CHECK-NEXT:    store i8 65, i8 addrspace(200)* [[ARRAYIDX]], align 1, !tbaa !9
+// CHECK-NEXT:    ret i32 0
+//
+int test_fake_vla2(struct_fake_vla2 *s, long index) {
+  // can't set bounds here, have to trust the caller's bounds
+  s->buf[index] = 'A'; // expected-remark{{not setting bounds for array subscript on 'char [1]' (member is potential variable length array)}}
+  return 0;
 }
 
 // CHECK-LABEL: @test_vla_c(
