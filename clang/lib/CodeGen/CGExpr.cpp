@@ -608,8 +608,6 @@ STATISTIC(NumArraySubscriptCheckedForBoundsTightening,
           "Number of [] operators checked for tightening bounds");
 STATISTIC(NumTightBoundsSetOnArraySubscript,
           "Number of [] operators where bounds were tightend");
-STATISTIC(NumContainerBoundsSetOnArraySubscript,
-          "Number of [] operators where container bounds were used");
 #undef DEBUG_TYPE
 
 static StringRef boundsKindStr(SubObjectBoundsKind Kind) {
@@ -749,11 +747,8 @@ CodeGenFunction::setCHERIBoundsOnArraySubscript(llvm::Value *Value,
   NumArraySubscriptCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::ArraySubscript;
   if (auto TBR = canTightenCheriBounds(Value, Ty, Base, Kind)) {
-    if (TBR->IsContainerSize) {
-      NumContainerBoundsSetOnArraySubscript++;
-    } else {
-      NumTightBoundsSetOnArraySubscript++;
-    }
+    assert(!TBR->IsContainerSize && "Container size should not be use for array subscript bounds");
+    NumTightBoundsSetOnArraySubscript++;
     return tightenCHERIBounds(*this, Kind, Value, Base, Ty, *TBR);
   }
   return Value;
@@ -985,21 +980,6 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     return cannotSetBounds(*this, E, Ty, Kind, "incomplete type");
   }
 
-  if (Kind == SubObjectBoundsKind::ArraySubscript) {
-    // For array subscripts we can only set bounds for array types, and not
-    // pointers since those have an unknown size
-    // TODO: we could ignore all casts and check the underlying type
-    // i.e. ((char*)buf)[10] if buf is an array of different type
-    if (!Ty->isArrayType()) {
-      return cannotSetBounds(*this, E, Ty, Kind,
-                             "array subscript on non-array type");
-    } else if (!Ty->isConstantSizeType()) {
-      return cannotSetBounds(*this, E, Ty, Kind,
-                             "array subscript on variable size type");
-    }
-    // TODO:
-    assert(!Ty->isVectorType() && "vectors not implemented");
-  }
   if (Ty->isFunctionType()) {
     return cannotSetBounds(*this, E, Ty, Kind,
                            Kind == SubObjectBoundsKind::Reference
@@ -1036,6 +1016,33 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     Result.Size = Size;
     return Result;
   };
+
+  // Array subscripts are the easiest case to handle:
+  // We always set bounds if it is a constant size array, otherwise never set
+  // them since we can't known the actual size. This is very similar to
+  // -fsanitize=array-size and is equivalent to having a trap if index greater
+  // constant size (but with a CHERI bounds violation instead)
+  if (Kind == SubObjectBoundsKind::ArraySubscript) {
+    // E->dumpColor();
+    // E->dumpPretty(getContext());
+    // For array subscripts we can only set bounds for array types, and not
+    // pointers since those have an unknown size
+    // TODO: we could ignore all casts and check the underlying type
+    // i.e. ((char*)buf)[10] if buf is an array of different type
+    if (!Ty->isArrayType()) {
+      return cannotSetBounds(*this, E, Ty, Kind,
+                             "array subscript on non-array type");
+    } else if (!Ty->isConstantSizeType()) {
+      return cannotSetBounds(*this, E, Ty, Kind,
+                             "array subscript on variable size type");
+    }
+    if (auto ME = dyn_cast<MemberExpr>(E)) {
+      TargetField = ME->getMemberDecl();
+    }
+    return ExactBounds(TypeSize);
+  }
+
+  assert(Kind != SubObjectBoundsKind::ArraySubscript);
   if (auto ME = dyn_cast<MemberExpr>(E)) {
     CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
     // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is
