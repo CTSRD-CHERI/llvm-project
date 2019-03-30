@@ -333,7 +333,11 @@ def : InstAlias<"csetboundsimm $dst, $imm",
                 (CSetBoundsImm CheriOpnd:$dst, CheriOpnd:$dst, uimm11s0:$imm), 0>;
 def : InstAlias<"cincoffsetimm $dst, $imm",
                 (CIncOffsetImm CheriOpnd:$dst, CheriOpnd:$dst, simm11s0:$imm), 0>;
-
+// CAssertInBounds pseudo
+def : InstAlias<"cassertinbounds $dst, $imm",
+                (CSetBoundsImm CNULL, CheriOpnd:$dst, uimm11s0:$imm), 1>;
+def : InstAlias<"cassertinbounds $dst",
+                (CSetBoundsImm CNULL, CheriOpnd:$dst, 1), 0>;
 
 // Property setters
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {

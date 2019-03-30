@@ -23,6 +23,15 @@
 # CHECK: csetbounds	$c1, $c2, 65
 # CHECK-SAME: encoding: [0x4a,0x81,0x10,0x41]
 	csetboundsimm	$c1, $c2, 65
+
+# Test the CAssertInBounds pseudo
+# CHECK: cassertinbounds $c3, 15
+# CHECK-SAME: encoding: [0x4a,0x80,0x18,0x0f]
+	CAssertInBounds	$c3, 15
+# CHECK: cassertinbounds $c3, 1
+# CHECK-SAME: encoding: [0x4a,0x80,0x18,0x01]
+	CAssertInBounds	$c3
+
 # CHECK: csetboundsexact	$c1, $c2, $12
 # CHECK-SAME: encoding: [0x48,0x01,0x13,0x09]
 	csetboundsexact	$c1, $c2, $t0
