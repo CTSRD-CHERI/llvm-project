@@ -1,11 +1,9 @@
-// REQUIRES: mips-registered-target
-
+// REQUIRES: mips-registered-target, asserts
 // RUN: rm -f %t.json
 // RUN: %cheri_cc1 -S -o /dev/null %s -mllvm -collect-pointer-cast-stats -cheri-stats-file=%t.json
 // RUNNOT: cat %t.json
 // RUNNOT: jsonlint %t.json
 // RUN: cat %t.json && FileCheck -input-file %t.json %s
-
 
 int ptrtoint(void *value) {
   return (int)value;
