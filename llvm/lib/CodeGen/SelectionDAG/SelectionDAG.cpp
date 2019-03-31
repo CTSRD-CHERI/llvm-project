@@ -5680,7 +5680,8 @@ FindOptimalMemOpLowering(std::vector<EVT> &MemOps, unsigned Limit,
       return false;
     }
 
-    if (MustPreserveCheriCapabilities && !VT.isFatPointer()) {
+    // If we are preserving capabilities, the first VT must be a capability
+    if (MustPreserveCheriCapabilities && MemOps.empty() && !VT.isFatPointer()) {
       LLVM_DEBUG(dbgs() << "Cannot expand tag-preserving memcpy using " << VT.getEVTString() << "\n");
       return false;
     }
