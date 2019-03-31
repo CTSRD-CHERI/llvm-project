@@ -1004,7 +1004,8 @@ def CheriBoundedStackPseudo : CheriPseudo<(outs CheriOpnd: $cd), (ins CheriOpnd:
   // Actually two instructions but for now pretend that it is only one since otherwise
   // the regalloc passes will not attempt to rematerialize this which results in
   // stack spills and more saved registers.
-  let isAsCheapAsAMove = 1;  // TODO: this should be false
+  // let isAsCheapAsAMove = 1;  // TODO: this should be false
+  let isAsCheapAsAMove = 0; // Otherwise it will be moved into loops even if we don't need to rematerialize it
   let usesCustomInserter = 0;
 }
 
