@@ -121,10 +121,12 @@ public:
     for (const Use &U : AI->uses()) {
       if (BoundAllUses || check(U)) {
         UsesThatNeedBounds->push_back(&U);
+#if 0  // This should now be fixed
         // See comment further down as to why we must reuse a single intrinsic
         // if one of the bounded users is a phi node.
         if (isa<PHINode>(U.getUser()))
           *MustUseSingleIntrinsic = true;
+#endif
       }
     }
   }
@@ -533,13 +535,20 @@ public:
         if (ReuseSingleIntrinsicCall) {
           const_cast<Use *>(U)->set(SingleBoundedAlloc);
         } else {
-          assert(!isa<PHINode>(I) && "Should reuse single intrinsic for PHIs");
-          // insert a new intrinsic call before every use. This can avoid
-          // stack spills but will result in additional instructions.
-          // This should avoid spilling registers when using an alloca in a
-          // different basic block.
-          // TODO: there should be a MIR pass to merge unncessary calls
-          B.SetInsertPoint(I);
+          if (auto PHI = dyn_cast<PHINode>(I)) {
+            // For PHI nodes we can't insert just before the PHI, instead we
+            // must insert it just before
+            auto BB = PHI->getIncomingBlock(*U);
+            LLVM_DEBUG(dbgs() << "PHI use coming from"; BB->dump());
+            B.SetInsertPoint(BB->getTerminator());
+          } else {
+            // insert a new intrinsic call before every use. This can avoid
+            // stack spills but will result in additional instructions.
+            // This should avoid spilling registers when using an alloca in a
+            // different basic block.
+            // TODO: there should be a MIR pass to merge unncessary calls
+            B.SetInsertPoint(I);
+          }
           // We need to convert it to an i8* for the intrinisic. Note: we must
           // not reuse a bitcast since otherwise that results in spilling the
           // register that was incremented and doing a setbounds in a different

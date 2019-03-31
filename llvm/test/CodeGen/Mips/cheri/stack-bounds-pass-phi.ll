@@ -14,31 +14,31 @@ define void @test_phi(i1 %cond) addrspace(200) nounwind {
 ; CHECK-LABEL: @test_phi(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[ALLOCA1:%.*]] = alloca i32, align 4, addrspace(200)
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA1]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
-; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; CHECK-NEXT:    [[ALLOCA2:%.*]] = alloca i32, align 4, addrspace(200)
-; CHECK-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA2]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
-; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; CHECK-NEXT:    [[ALLOCA3:%.*]] = alloca i32, align 4, addrspace(200)
-; CHECK-NEXT:    [[TMP6:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA3]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP6]], i64 4)
-; CHECK-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP7]] to i32 addrspace(200)*
 ; CHECK-NEXT:    br i1 [[COND:%.*]], label [[BLOCK1:%.*]], label [[BLOCK2:%.*]]
 ; CHECK:       block1:
 ; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[ALLOCA1]], align 4
 ; CHECK-NEXT:    store i32 2, i32 addrspace(200)* [[ALLOCA2]], align 4
 ; CHECK-NEXT:    store i32 3, i32 addrspace(200)* [[ALLOCA3]], align 4
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA2]] to i8 addrspace(200)*
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
+; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; CHECK-NEXT:    br label [[PHI_BLOCK:%.*]]
 ; CHECK:       block2:
 ; CHECK-NEXT:    store i32 4, i32 addrspace(200)* [[ALLOCA1]], align 4
 ; CHECK-NEXT:    store i32 5, i32 addrspace(200)* [[ALLOCA2]], align 4
 ; CHECK-NEXT:    store i32 6, i32 addrspace(200)* [[ALLOCA3]], align 4
+; CHECK-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA1]] to i8 addrspace(200)*
+; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
+; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
+; CHECK-NEXT:    [[TMP6:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA3]] to i8 addrspace(200)*
+; CHECK-NEXT:    [[TMP7:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP6]], i64 4)
+; CHECK-NEXT:    [[TMP8:%.*]] = bitcast i8 addrspace(200)* [[TMP7]] to i32 addrspace(200)*
 ; CHECK-NEXT:    br label [[PHI_BLOCK]]
 ; CHECK:       phi_block:
-; CHECK-NEXT:    [[VAL1:%.*]] = phi i32 addrspace(200)* [ null, [[BLOCK1]] ], [ [[TMP2]], [[BLOCK2]] ]
-; CHECK-NEXT:    [[VAL2:%.*]] = phi i32 addrspace(200)* [ [[TMP5]], [[BLOCK1]] ], [ [[TMP8]], [[BLOCK2]] ]
+; CHECK-NEXT:    [[VAL1:%.*]] = phi i32 addrspace(200)* [ null, [[BLOCK1]] ], [ [[TMP5]], [[BLOCK2]] ]
+; CHECK-NEXT:    [[VAL2:%.*]] = phi i32 addrspace(200)* [ [[TMP2]], [[BLOCK1]] ], [ [[TMP8]], [[BLOCK2]] ]
 ; CHECK-NEXT:    call void @foo(i32 addrspace(200)* [[VAL1]])
 ; CHECK-NEXT:    call void @foo(i32 addrspace(200)* [[VAL2]])
 ; CHECK-NEXT:    ret void
@@ -56,27 +56,27 @@ define void @test_phi(i1 %cond) addrspace(200) nounwind {
 ; ASM-NEXT:    beqz $2, .LBB0_2
 ; ASM-NEXT:    cincoffset $c19, $c12, $1
 ; ASM-NEXT:  # %bb.1: # %block1
-; ASM-NEXT:    cincoffset $c18, $c11, {{24|8}}
-; ASM-NEXT:    csetbounds $c18, $c18, 4
 ; ASM-NEXT:    addiu $1, $zero, 1
 ; ASM-NEXT:    csw $1, $zero, {{12|28}}($c11)
 ; ASM-NEXT:    addiu $1, $zero, 2
-; ASM-NEXT:    csw $1, $zero, {{24|8}}($c11)
+; ASM-NEXT:    csw $1, $zero, {{8|24}}($c11)
 ; ASM-NEXT:    addiu $1, $zero, 3
 ; ASM-NEXT:    csw $1, $zero, {{4|20}}($c11)
+; ASM-NEXT:    cincoffset $c18, $c11, {{8|24}}
+; ASM-NEXT:    csetbounds $c18, $c18, 4
 ; ASM-NEXT:    b .LBB0_3
 ; ASM-NEXT:    cgetnull $c3
 ; ASM-NEXT:  .LBB0_2: # %block2
+; ASM-NEXT:    addiu $1, $zero, 4
+; ASM-NEXT:    csw $1, $zero, {{12|28}}($c11)
+; ASM-NEXT:    addiu $1, $zero, 5
+; ASM-NEXT:    csw $1, $zero, {{8|24}}($c11)
+; ASM-NEXT:    addiu $1, $zero, 6
+; ASM-NEXT:    csw $1, $zero, {{4|20}}($c11)
 ; ASM-NEXT:    cincoffset $c3, $c11, {{12|28}}
 ; ASM-NEXT:    csetbounds $c3, $c3, 4
 ; ASM-NEXT:    cincoffset $c18, $c11, {{4|20}}
 ; ASM-NEXT:    csetbounds $c18, $c18, 4
-; ASM-NEXT:    addiu $1, $zero, 4
-; ASM-NEXT:    csw $1, $zero, {{12|28}}($c11)
-; ASM-NEXT:    addiu $1, $zero, 5
-; ASM-NEXT:    csw $1, $zero, {{24|8}}($c11)
-; ASM-NEXT:    addiu $1, $zero, 6
-; ASM-NEXT:    csw $1, $zero, {{4|20}}($c11)
 ; ASM-NEXT:  .LBB0_3: # %phi_block
 ; ASM-NEXT:    clcbi $c12, %capcall20(foo)($c19)
 ; ASM-NEXT:    cjalr $c12, $c17
@@ -120,19 +120,19 @@ define void @test_only_created_in_predecessor_block(i1 %cond) addrspace(200) nou
 ; CHECK-LABEL: @test_only_created_in_predecessor_block(
 ; CHECK-NEXT:  entry:
 ; CHECK-NEXT:    [[ALLOCA1:%.*]] = alloca i32, align 4, addrspace(200)
-; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA1]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
-; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; CHECK-NEXT:    [[ALLOCA2:%.*]] = alloca i32, align 4, addrspace(200)
-; CHECK-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA2]] to i8 addrspace(200)*
-; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
-; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; CHECK-NEXT:    br i1 [[COND:%.*]], label [[BLOCK1:%.*]], label [[BLOCK2:%.*]]
 ; CHECK:       block1:
 ; CHECK-NEXT:    store i32 1, i32 addrspace(200)* [[ALLOCA1]], align 4
+; CHECK-NEXT:    [[TMP0:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA1]] to i8 addrspace(200)*
+; CHECK-NEXT:    [[TMP1:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP0]], i64 4)
+; CHECK-NEXT:    [[TMP2:%.*]] = bitcast i8 addrspace(200)* [[TMP1]] to i32 addrspace(200)*
 ; CHECK-NEXT:    br label [[PHI_BLOCK:%.*]]
 ; CHECK:       block2:
 ; CHECK-NEXT:    store i32 5, i32 addrspace(200)* [[ALLOCA2]], align 4
+; CHECK-NEXT:    [[TMP3:%.*]] = bitcast i32 addrspace(200)* [[ALLOCA2]] to i8 addrspace(200)*
+; CHECK-NEXT:    [[TMP4:%.*]] = call i8 addrspace(200)* @llvm.cheri.bounded.stack.cap.i64(i8 addrspace(200)* [[TMP3]], i64 4)
+; CHECK-NEXT:    [[TMP5:%.*]] = bitcast i8 addrspace(200)* [[TMP4]] to i32 addrspace(200)*
 ; CHECK-NEXT:    br label [[PHI_BLOCK]]
 ; CHECK:       phi_block:
 ; CHECK-NEXT:    [[VAL1:%.*]] = phi i32 addrspace(200)* [ [[TMP2]], [[BLOCK1]] ], [ [[TMP5]], [[BLOCK2]] ]
@@ -150,16 +150,16 @@ define void @test_only_created_in_predecessor_block(i1 %cond) addrspace(200) nou
 ; ASM-NEXT:    beqz $2, .LBB1_2
 ; ASM-NEXT:    cincoffset $c1, $c12, $1
 ; ASM-NEXT:  # %bb.1: # %block1
-; ASM-NEXT:    cincoffset $c3, $c11, {{12|28}}
-; ASM-NEXT:    csetbounds $c3, $c3, 4
 ; ASM-NEXT:    addiu $1, $zero, 1
-; ASM-NEXT:    b .LBB1_3
 ; ASM-NEXT:    csw $1, $zero, {{12|28}}($c11)
-; ASM-NEXT:  .LBB1_2: # %block2
-; ASM-NEXT:    cincoffset $c3, $c11, {{8|24}}
+; ASM-NEXT:    cincoffset $c3, $c11, {{12|28}}
+; ASM-NEXT:    b .LBB1_3
 ; ASM-NEXT:    csetbounds $c3, $c3, 4
+; ASM-NEXT:  .LBB1_2: # %block2
 ; ASM-NEXT:    addiu $1, $zero, 5
 ; ASM-NEXT:    csw $1, $zero, {{8|24}}($c11)
+; ASM-NEXT:    cincoffset $c3, $c11, {{8|24}}
+; ASM-NEXT:    csetbounds $c3, $c3, 4
 ; ASM-NEXT:  .LBB1_3: # %phi_block
 ; ASM-NEXT:    clcbi $c12, %capcall20(foo)($c1)
 ; ASM-NEXT:    cjalr $c12, $c17
