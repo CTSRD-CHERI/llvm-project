@@ -1,6 +1,4 @@
-// REQUIRES: mips-registered-target
-
-// REQUIRES: asserts
+// REQUIRES: asserts, mips-registered-target
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-llvm -O0 -o - %s | FileCheck %s -check-prefix CHECK-IR
 // RUN: %cheri_cc1 -mrelocation-model pic "-dwarf-column-info" "-debug-info-kind=standalone" "-dwarf-version=2" "-debugger-tuning=gdb"  -emit-llvm -O0 -o - %s | FileCheck %s -check-prefix CHECK-IR
 

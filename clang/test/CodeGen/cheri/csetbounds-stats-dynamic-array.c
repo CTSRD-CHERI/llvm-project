@@ -1,4 +1,4 @@
-// REQUIRES: mips-registered-target
+// REQUIRES: mips-registered-target, asserts
 
 // RUN: rm -fv %t.csv
 // RUN: %cheri128_purecap_cc1 %s -mllvm -cheri-cap-table-abi=pcrel -cheri-bounds=conservative -debug-info-kind=standalone \
@@ -8,8 +8,8 @@
 
 // CSV: alignment_bits,size,kind,source_loc,compiler_pass,details
 
-// CSV-NEXT: 7,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:15","CHERI sandbox ABI setup","set bounds on local variable buf"
-// CSV-NEXT: 7,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:21","CHERI sandbox ABI setup","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
+// CSV-NEXT: 7,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:17","CHERI sandbox ABI setup","set bounds on local variable buf"
+// CSV-NEXT: 7,<unknown>,s,"{{.+}}/csetbounds-stats-dynamic-array.c:23","CHERI sandbox ABI setup","set bounds on anonymous AllocaInst of type i8 addrspace(200)*"
 
 extern int do_stuff(char* buf, int n);
 

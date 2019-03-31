@@ -1,4 +1,4 @@
-// REQUIRES: mips-registered-target
+// REQUIRES: asserts, mips-registered-target
 
 // RUN: rm -f %t.json %t.csv
 // RUN: %cheri_clang -g %s -mllvm -collect-csetbounds-stats -Xclang -cheri-stats-file=%t.json -c -o - -###
@@ -50,19 +50,19 @@ void* __capability csetbounds_malloc(void) {
 // JSON-NEXT: 	{
 // JSON-NEXT: 		"alignment": 1,
 // JSON-NEXT: 		"size": 4096,
-// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:17:28",
+// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:19:28",
 // JSON-NEXT: 		"pass": "CHERI range checker"
 // JSON-NEXT: 	},
 // JSON-NEXT: 	{
 // JSON-NEXT: 		"alignment": 4,
 // JSON-NEXT: 		"size": 4,
-// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:22:28",
+// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:24:28",
 // JSON-NEXT: 		"pass": "CHERI range checker"
 // JSON-NEXT: 	},
 // JSON-NEXT: 	{
 // JSON-NEXT: 		"alignment": 1,
 // JSON-NEXT: 		"size": 16,
-// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:41:26",
+// JSON-NEXT: 		"location": "{{.+}}/CodeGen/cheri/csetbounds-stats-basic.c:43:26",
 // JSON-NEXT: 		"pass": "CHERI range checker"
 // JSON-NEXT: 	}
 // JSON-NEXT: 	]

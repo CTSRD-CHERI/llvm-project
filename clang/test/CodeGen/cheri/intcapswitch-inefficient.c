@@ -1,6 +1,6 @@
-// RUN: %clang %s -mabi=purecap -cheri-linker -target cheri-unknown-freebsd -o - -emit-llvm | FileCheck %s
-// RUN: %clang %s -mabi=purecap -cheri-linker -target cheri-unknown-freebsd -o - -emit-llvm -O2 | FileCheck %s -check-prefix CHECK-OPT
-// RUN: %clang %s -mabi=purecap -cheri-linker -target cheri-unknown-freebsd -o - -emit-llvm -O3 | FileCheck %s -check-prefix CHECK-OPT
+// RUN: %cheri_purecap_cc1 %s -o - -emit-llvm | FileCheck %s
+// RUN: %cheri_purecap_cc1 %s -o - -emit-llvm -O2 | FileCheck %s -check-prefix CHECK-OPT
+// RUN: %cheri_purecap_cc1 %s -o - -emit-llvm -O3 | FileCheck %s -check-prefix CHECK-OPT
 
 #define A (__intcap_t)1
 #define B (__intcap_t)(void*)2
