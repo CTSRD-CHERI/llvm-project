@@ -5791,7 +5791,8 @@ static SDValue getMemcpyLoadsAndStores(
   // Also don't warn about copies of less than CapSize
   // TODO: the frontend probably shouldn't emit must-preserve-tags for such
   // small memcpys
-  const uint64_t CapSize = TLI.cheriCapabilityType().getStoreSize();
+  auto CapTy = TLI.cheriCapabilityType();
+  const uint64_t CapSize = CapTy.isValid() ? CapTy.getStoreSize() : 0;
   if (MustPreserveCheriCapabilities && !ReachedLimit && Size >= CapSize &&
       (!FoundLowering || !MemOps[0].isFatPointer())) {
     LLVM_DEBUG(
@@ -6002,7 +6003,8 @@ static SDValue getMemmoveLoadsAndStores(
   // Also don't warn about copies of less than CapSize
   // TODO: the frontend probably shouldn't emit must-preserve-tags for such
   // small memcpys
-  const uint64_t CapSize = TLI.cheriCapabilityType().getStoreSize();
+  auto CapTy = TLI.cheriCapabilityType();
+  const uint64_t CapSize = CapTy.isValid() ? CapTy.getStoreSize() : 0;
   if (MustPreserveCheriCapabilities && !ReachedLimit && Size >= CapSize &&
       (!FoundLowering || !MemOps[0].isFatPointer())) {
     LLVM_DEBUG(
