@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // REQUIRES: asserts
 // RUN: %cheri_cc1 -emit-llvm -no-struct-path-tbaa -target-abi n64 -O2 -o - %s | FileCheck %s -check-prefixes NO-STRUCT-PATH
 // RUN: %cheri_cc1 -emit-llvm -new-struct-path-tbaa -target-abi n64 -O2 -o - %s | FileCheck %s -check-prefixes STRUCT-PATH

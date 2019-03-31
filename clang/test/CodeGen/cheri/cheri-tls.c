@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_purecap_cc1 -emit-llvm -mrelocation-model pic -pic-level 1 -mthread-model posix -target-feature -noabicalls -O2 -std=gnu99 -ftls-model=local-exec -mllvm -cheri-cap-table-abi=pcrel -mllvm -cheri-cap-tls-abi=cap-equiv -x c -o - %s | FileCheck %s -check-prefix IR-CAP-EQUIV
 // RUN: %cheri_purecap_cc1 -emit-llvm -mrelocation-model pic -pic-level 1 -mthread-model posix -target-feature -noabicalls -O2 -std=gnu99 -ftls-model=local-exec -mllvm -cheri-cap-table-abi=legacy -x c -o - %s | FileCheck %s -check-prefix IR-LEGACY
 // RUN: %cheri_cc1 -emit-llvm -mrelocation-model pic -pic-level 1 -mthread-model posix -target-feature -noabicalls -O2 -std=gnu99 -ftls-model=local-exec -x c -o - %s | FileCheck %s -check-prefix IR-LEGACY

@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: rm -f %t.json
 // RUN: %cheri_cc1 -S -o /dev/null %s -mllvm -collect-pointer-cast-stats -cheri-stats-file=%t.json
 // RUNNOT: cat %t.json

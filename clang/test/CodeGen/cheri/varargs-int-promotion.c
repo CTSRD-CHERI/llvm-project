@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // Check that all variadic arguments are promoted to i64
 // RUN: %cheri_purecap_cc1 -S -o - %s -O2 | FileCheck %s
 

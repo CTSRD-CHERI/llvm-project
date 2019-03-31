@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_purecap_cc1 -emit-llvm -o - %s | FileCheck %s
 // RUN: %cheri_purecap_cc1 -S -o /dev/null %s -verify
 void f(char *p) {

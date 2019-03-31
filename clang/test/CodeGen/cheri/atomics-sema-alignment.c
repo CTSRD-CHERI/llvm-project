@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_cc1 %s -emit-llvm -o - -verify=hybrid | %cheri_FileCheck %s -check-prefixes CHECK,N64
 // RUN: %cheri_cc1 -w -DCODEGEN %s -S -o - -O2 | FileCheck %s -check-prefixes ASM,N64-ASM
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=plt %s -emit-llvm -o - -verify | %cheri_FileCheck %s -check-prefixes CHECK,PURECAP

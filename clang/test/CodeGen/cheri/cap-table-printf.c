@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_purecap_cc1 -emit-llvm -mrelocation-model pic -pic-level 1 -O0 -std=gnu99 -mllvm -cheri-cap-table-abi=plt -x c -o - %s | FileCheck %s
 // RUN: %cheri_purecap_cc1 -emit-llvm -mrelocation-model pic -pic-level 1 -O3 -std=gnu99 -mllvm -cheri-cap-table-abi=plt -x c -o - %s | FileCheck %s -check-prefix OPT
 // Check that it doesn't crash when compiling:

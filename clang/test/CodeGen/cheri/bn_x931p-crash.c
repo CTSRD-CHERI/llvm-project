@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_purecap_cc1 -O2 -std=gnu89 -ftls-model=local-exec -fcolor-diagnostics -vectorize-loops -vectorize-slp -o /dev/null  -S %s
 // This previously caused clang to crash
 struct a {

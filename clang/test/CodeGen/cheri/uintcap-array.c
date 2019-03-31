@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_purecap_cc1 -emit-llvm %s -O2 -o - | %cheri_FileCheck %s
 // RUN: %cheri_purecap_cc1 -S %s -O2 -o - | %cheri_FileCheck %s -check-prefix ASM
 

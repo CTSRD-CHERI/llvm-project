@@ -1,4 +1,4 @@
-// RUN: %cheri_cc1 -S  %s  -emit-llvm -o - | FileCheck %s
+// RUN: %cheri_cc1 %s -emit-llvm -o - | FileCheck %s
 
 struct astruct {
         int     member1;

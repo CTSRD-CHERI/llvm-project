@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_purecap_cc1 %s -O0 -emit-llvm -o - | %cheri_FileCheck %s
 // RUN: %cheri_purecap_cc1 %s -O2 -S -o - -mllvm -cheri-cap-table-abi=plt -mllvm -cheri-stack-bounds=if-needed | %cheri_FileCheck %s -check-prefixes ASM,%cheri_type
 

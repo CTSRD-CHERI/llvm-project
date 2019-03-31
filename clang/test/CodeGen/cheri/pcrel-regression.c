@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=legacy -o - -O0 -emit-llvm -disable-O0-optnone  %s | FileCheck %s -check-prefix LEGACY
 // RUN: %cheri_purecap_cc1 -mllvm -cheri-cap-table-abi=pcrel -o - -O0 -emit-llvm -disable-O0-optnone  %s | FileCheck %s -check-prefix CAPTABLE
 // Also check that we can emit asm without crashing:

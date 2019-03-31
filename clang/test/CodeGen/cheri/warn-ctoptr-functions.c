@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_cc1 -Wcheri-pointer-conversion -S %s -o - -O0 -verify | FileCheck %s -implicit-check-not ctoptr
 // don't match the ctoptr in the .file directive
 // CHECK: .file "{{.+}}"

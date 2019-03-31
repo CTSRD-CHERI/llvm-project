@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_purecap_cc1 -emit-obj -fno-jump-tables -O2 -std=gnu99 -mllvm -cheri-cap-table-abi=plt -x c -o - %s -emit-llvm | FileCheck %s
 // RUN: %cheri_purecap_cc1 -S -fno-jump-tables -O2 -std=gnu99 -mllvm -cheri-cap-table-abi=plt -x c -o - %s | FileCheck %s -check-prefix ASM
 

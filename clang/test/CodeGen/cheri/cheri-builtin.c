@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_cc1 -o - -O0 -emit-llvm %s | FileCheck %s
 // FIXME: we shouldn't really be testing ASM output in clang
 // RUN: %cheri_cc1 -o - -O0 -S %s | FileCheck %s -check-prefix=ASM

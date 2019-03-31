@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %clang_cc1 -triple cheri-none--elf -target-cpu mips64 -target-abi n64 -o - -O0 -emit-llvm  %s | FileCheck %s -check-prefixes CHECK,N64
 // RUN: %clang_cc1 -triple cheri-none--elf -target-cpu mips64 -target-abi purecap -o - -O0 -emit-llvm  %s | FileCheck %s -check-prefixes CHECK,PURECAP
 

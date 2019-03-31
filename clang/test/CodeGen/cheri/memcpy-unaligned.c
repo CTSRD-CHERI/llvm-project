@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri128_purecap_cc1 -O0 -o - -emit-llvm %s -w | FileCheck %s
 // RUN: %cheri128_purecap_cc1 -DBUILTIN  -O0 -o - -emit-llvm %s -w | FileCheck %s
 

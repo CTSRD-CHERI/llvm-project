@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri128_purecap_cc1 "-emit-obj" "-O2" "-x" "c" %s -o /dev/null -emit-llvm -verify
 // RUN: %cheri256_purecap_cc1 "-emit-obj" "-O2" "-x" "c" %s -o /dev/null -emit-llvm -verify
 // RUN: %cheri128_purecap_cc1 "-emit-obj" "-O2" "-x" "c" %s -o /dev/null -S -verify

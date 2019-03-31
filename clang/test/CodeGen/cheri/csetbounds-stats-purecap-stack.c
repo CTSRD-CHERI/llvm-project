@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: rm -fv %t-debug.csv %t-nodebug.csv
 // RUN: %cheri_purecap_cc1 %s -mllvm -cheri-cap-table-abi=legacy -cheri-bounds=conservative \
 // RUN:    -mllvm -collect-csetbounds-stats=csv -cheri-stats-file=%t-nodebug.csv -S -o /dev/null

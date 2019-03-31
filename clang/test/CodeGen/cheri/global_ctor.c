@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // Check that we don't emit .ctors and .dtors but use .init_array/.fini_array instead
 // llc already defaulted to .init_array, but clang didn't
 

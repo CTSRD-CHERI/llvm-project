@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: %cheri_purecap_cc1 -fuse-init-array -mllvm -cheri-cap-table-abi=legacy -std=gnu99 -o - -O0 -emit-llvm %s | FileCheck %s -check-prefixes CHECK,LEGACY
 // RUN: %cheri_purecap_cc1 -fuse-init-array -mllvm -cheri-cap-table-abi=pcrel -std=gnu99 -o - -O0 -emit-llvm %s | FileCheck %s -check-prefixes CHECK,NEWABI
 

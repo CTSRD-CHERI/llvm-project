@@ -1,3 +1,5 @@
+// REQUIRES: mips-registered-target
+
 // RUN: rm -f %t.json %t.csv
 // RUN: %cheri_clang -g %s -mllvm -collect-csetbounds-stats -Xclang -cheri-stats-file=%t.json -c -o - -###
 // RUN: %cheri_cc1 %s -mllvm -collect-csetbounds-stats=json -cheri-stats-file=%t.json -S -o /dev/null "-dwarf-column-info" "-debug-info-kind=standalone"
