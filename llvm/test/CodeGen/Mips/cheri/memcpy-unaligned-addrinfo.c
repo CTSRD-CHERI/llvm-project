@@ -85,4 +85,11 @@ void copy_group2(const char* a, char* buffer) {
   do_stuff(g);
 }
 
+void copy_group3(char *buffer, struct group a, long size) {
+  // derived from the unaligned memcpy used in getgrent
+  __builtin_memcpy(buffer, &a, size);
+  struct group *g = (struct group *)buffer;
+  do_stuff(g);
+}
+
 // OPTNONE: attributes #3 = { "frontend-memtransfer-type"="'const char * __capability'" "must-preserve-cheri-tags" }

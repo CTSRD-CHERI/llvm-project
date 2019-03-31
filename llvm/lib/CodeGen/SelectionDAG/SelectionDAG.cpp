@@ -5573,17 +5573,13 @@ static bool isMemSrcFromConstant(SDValue Src, ConstantDataArraySlice &Slice) {
 /// Return true if the number of memory ops is below the threshold (Limit).
 /// It returns the types of the sequence of memory ops to perform
 /// memset / memcpy by reference.
-static bool FindOptimalMemOpLowering(std::vector<EVT> &MemOps,
-                                     unsigned Limit, uint64_t Size,
-                                     unsigned DstAlign, unsigned SrcAlign,
-                                     bool IsMemset,
-                                     bool ZeroMemset,
-                                     bool MemcpyStrSrc,
-                                     bool AllowOverlap,
-                                     bool MustPreserveCheriCapabilities,
-                                     unsigned DstAS, unsigned SrcAS,
-                                     SelectionDAG &DAG,
-                                     const TargetLowering &TLI) {
+static bool
+FindOptimalMemOpLowering(std::vector<EVT> &MemOps, unsigned Limit,
+                         uint64_t Size, unsigned DstAlign, unsigned SrcAlign,
+                         bool IsMemset, bool ZeroMemset, bool MemcpyStrSrc,
+                         bool AllowOverlap, bool MustPreserveCheriCapabilities,
+                         unsigned DstAS, unsigned SrcAS, SelectionDAG &DAG,
+                         const TargetLowering &TLI, bool *ReachedLimit) {
   assert((SrcAlign == 0 || SrcAlign >= DstAlign) &&
          "Expecting memcpy / memset source to meet alignment requirement!");
   // If 'SrcAlign' is zero, that means the memory operation does not need to
@@ -5678,8 +5674,11 @@ static bool FindOptimalMemOpLowering(std::vector<EVT> &MemOps,
       }
     }
 
-    if (++NumMemOps > Limit)
+    if (++NumMemOps > Limit) {
+      if (ReachedLimit)
+        *ReachedLimit = true;
       return false;
+    }
 
     if (MustPreserveCheriCapabilities && !VT.isFatPointer()) {
       LLVM_DEBUG(dbgs() << "Cannot expand tag-preserving memcpy using " << VT.getEVTString() << "\n");
@@ -5726,11 +5725,13 @@ static void chainLoadsAndStoresForMemcpy(SelectionDAG &DAG, const SDLoc &dl,
   }
 }
 
-static void diagnoseInefficientCheriMemOp(SelectionDAG &DAG,
-                                          const DiagnosticLocation &Loc,
-                                          const Twine &MemOp,
-                                          CodeGenOpt::Level OptLevel,
-                                          StringRef Type, unsigned Align) {
+static void
+diagnoseInefficientCheriMemOp(SelectionDAG &DAG, const DiagnosticLocation &Loc,
+                              const Twine &MemOp, CodeGenOpt::Level OptLevel,
+                              StringRef Type, unsigned Align, uint64_t Size,
+                              uint64_t CapSize) {
+  assert(Align < CapSize);
+  assert(Size >= CapSize);
   if (OptLevel == CodeGenOpt::None)
     return; // Don't bother warning about inefficient code at -O0
   // Skip the memcpy/memmove diag if we have already diagnosed something else
@@ -5778,18 +5779,22 @@ static SDValue getMemcpyLoadsAndStores(
   bool CopyFromConstant = isMemSrcFromConstant(Src, Slice);
   bool isZeroConstant = CopyFromConstant && Slice.Array == nullptr;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemcpy(OptSize);
-
+  bool ReachedLimit = false;
   const bool FoundLowering = FindOptimalMemOpLowering(
       MemOps, Limit, Size, (DstAlignCanChange ? 0 : Align),
       (isZeroConstant ? 0 : SrcAlign), false, false, CopyFromConstant, true,
       MustPreserveCheriCapabilities, DstPtrInfo.getAddrSpace(),
-      SrcPtrInfo.getAddrSpace(), DAG, TLI);
+      SrcPtrInfo.getAddrSpace(), DAG, TLI, &ReachedLimit);
 
-  if (MustPreserveCheriCapabilities &&
+  // Don't warn about inefficient memcpy if we reached the inline memcpy limit
+  // Also don't warn about copies of less than CapSize
+  // TODO: the frontend probably shouldn't emit must-preserve-tags for such
+  // small memcpys
+  const uint64_t CapSize = TLI.cheriCapabilityType().getStoreSize();
+  if (MustPreserveCheriCapabilities && !ReachedLimit && Size >= CapSize &&
       (!FoundLowering || !MemOps[0].isFatPointer())) {
     LLVM_DEBUG(
-        dbgs() << __func__
-               << " memcpy must preserve tags but value is not statically "
+        dbgs() << " memcpy must preserve tags but value is not statically "
                   "known to be sufficiently aligned -> using memcpy() call\n");
     if (AlwaysInline) {
       report_fatal_error("MustPreserveCheriCapabilities and AlwaysInline set "
@@ -5797,7 +5802,8 @@ static SDValue getMemcpyLoadsAndStores(
     }
     diagnoseInefficientCheriMemOp(DAG, dl.getDebugLoc(), "memcpy", OptLevel,
                                   CopyTy.empty() ? "<unknown type>" : CopyTy,
-                                  std::max(1u, std::min(Align, SrcAlign)));
+                                  std::max(1u, std::min(Align, SrcAlign)),
+                                  Size, CapSize);
     return SDValue();
   }
   if (!FoundLowering)
@@ -5984,13 +5990,19 @@ static SDValue getMemmoveLoadsAndStores(
   if (Align > SrcAlign)
     SrcAlign = Align;
   unsigned Limit = AlwaysInline ? ~0U : TLI.getMaxStoresPerMemmove(OptSize);
-
+  bool ReachedLimit = false;
   const bool FoundLowering = FindOptimalMemOpLowering(
       MemOps, Limit, Size, (DstAlignCanChange ? 0 : Align), SrcAlign, false,
       false, false, false, MustPreserveCheriCapabilities,
-      DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(), DAG, TLI);
+      DstPtrInfo.getAddrSpace(), SrcPtrInfo.getAddrSpace(), DAG, TLI,
+      &ReachedLimit);
 
-  if (MustPreserveCheriCapabilities &&
+  // Don't warn about inefficient memcpy if we reached the inline memmove limit
+  // Also don't warn about copies of less than CapSize
+  // TODO: the frontend probably shouldn't emit must-preserve-tags for such
+  // small memcpys
+  const uint64_t CapSize = TLI.cheriCapabilityType().getStoreSize();
+  if (MustPreserveCheriCapabilities && !ReachedLimit && Size >= CapSize &&
       (!FoundLowering || !MemOps[0].isFatPointer())) {
     LLVM_DEBUG(
         dbgs() << __func__
@@ -6002,7 +6014,8 @@ static SDValue getMemmoveLoadsAndStores(
     }
     diagnoseInefficientCheriMemOp(DAG, dl.getDebugLoc(), "memmove", OptLevel,
                                   MoveTy.empty() ? "<unknown type>" : MoveTy,
-                                  std::max(1u, std::min(Align, SrcAlign)));
+                                  std::max(1u, std::min(Align, SrcAlign)),
+                                  Size, CapSize);
     return SDValue();
   }
   if (!FoundLowering)
@@ -6108,7 +6121,7 @@ static SDValue getMemsetStores(SelectionDAG &DAG, const SDLoc &dl,
                                 Size, (DstAlignCanChange ? 0 : Align), 0,
                                 true, IsZeroVal, false, true, false,
                                 DstPtrInfo.getAddrSpace(), ~0u,
-                                DAG, TLI))
+                                DAG, TLI, nullptr))
     return SDValue();
 
   if (DstAlignCanChange) {
