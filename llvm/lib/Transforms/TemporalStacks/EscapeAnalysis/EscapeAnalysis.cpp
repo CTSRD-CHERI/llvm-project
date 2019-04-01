@@ -418,7 +418,9 @@ bool cheri::EscapeAnalyser::DecreaseSafety(StaticFuncionAnalysis *FA, const Valu
   } else if(!isRoot && (AsArg = dyn_cast<Argument>(V))) {
     unsigned ndx = AsArg->getArgNo();
     ImmutableCallSite CS(fromCall);
-    DecreaseSafety(CallerFA, CS.getArgument(ndx),safetyDerivedFrom);
+    const Value* callersArg = CS.getArgument(ndx);
+    if(isUnsafeTrackable(callersArg))
+        DecreaseSafety(CallerFA, callersArg, safetyDerivedFrom);
   }
 
   // This might be different from newConstraint if a subsequent recursive call made it stronger.
