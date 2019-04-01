@@ -37,8 +37,8 @@
 ;}
 
 ; Function Attrs: nounwind readnone
-define signext i32 @cap_covers_pages(i8 addrspace(200)* %cap, i64 zeroext %size) local_unnamed_addr #0 {
-; OPTNONE-LABEL: cap_covers_pages:
+define signext i32 @cap_covers_pages_regression(i8 addrspace(200)* %cap, i64 zeroext %size) local_unnamed_addr #0 {
+; OPTNONE-LABEL: cap_covers_pages_regression:
 ; OPTNONE:       # %bb.0: # %entry
 ; OPTNONE-NEXT:    daddiu $1, $zero, 4095
 ; OPTNONE-NEXT:    cgetandaddr $1, $c3, $1
@@ -60,7 +60,7 @@ define signext i32 @cap_covers_pages(i8 addrspace(200)* %cap, i64 zeroext %size)
 ; OPTNONE-NEXT:    cjr $c17
 ; OPTNONE-NEXT:    dsrl $2, $1, 32
 ;
-; OPT-LABEL: cap_covers_pages:
+; OPT-LABEL: cap_covers_pages_regression:
 ; OPT:       # %bb.0: # %entry
 ; OPT-NEXT:    daddiu $1, $zero, 4095
 ; OPT-NEXT:    cgetandaddr $1, $c3, $1
@@ -97,6 +97,73 @@ entry:
   %not.or.cond = and i1 %cmp3, %cmp5
   %ret.0 = zext i1 %not.or.cond to i32
   ret i32 %ret.0
+}
+
+define i8 addrspace(200)* @test_basic_andaddr_combine_ptradd(i8 addrspace(200)* %cap, i64 zeroext %size) #0 {
+; OPTNONE-LABEL: test_basic_andaddr_combine_ptradd:
+; OPTNONE:       # %bb.0: # %entry
+; OPTNONE-NEXT:    daddiu $1, $zero, 4095
+; OPTNONE-NEXT:    cgetandaddr $1, $c3, $1
+; OPTNONE-NEXT:    dnegu $1, $1
+; OPTNONE-NEXT:    cjr $c17
+; OPTNONE-NEXT:    csetaddr $c3, $c3, $1
+;
+; OPT-LABEL: test_basic_andaddr_combine_ptradd:
+; OPT:       # %bb.0: # %entry
+; OPT-NEXT:    daddiu $1, $zero, 4095
+; OPT-NEXT:    cgetandaddr $1, $c3, $1
+; OPT-NEXT:    dnegu $1, $1
+; OPT-NEXT:    cjr $c17
+; OPT-NEXT:    csetaddr $c3, $c3, $1
+entry:
+  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %cap)
+  %and = and i64 %0, 4095
+  %idx.neg = sub nsw i64 0, %and
+  %add.ptr = call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %cap, i64 %idx.neg)
+  ret i8 addrspace(200)* %add.ptr
+}
+
+define i8 addrspace(200)* @test_basic_andaddr_combine_incoffset(i8 addrspace(200)* %cap, i64 zeroext %size) #0 {
+; OPTNONE-LABEL: test_basic_andaddr_combine_incoffset:
+; OPTNONE:       # %bb.0: # %entry
+; OPTNONE-NEXT:    daddiu $1, $zero, 4095
+; OPTNONE-NEXT:    cgetandaddr $1, $c3, $1
+; OPTNONE-NEXT:    dnegu $1, $1
+; OPTNONE-NEXT:    cjr $c17
+; OPTNONE-NEXT:    cincoffset $c3, $c3, $1
+;
+; OPT-LABEL: test_basic_andaddr_combine_incoffset:
+; OPT:       # %bb.0: # %entry
+; OPT-NEXT:    daddiu $1, $zero, 4095
+; OPT-NEXT:    cgetandaddr $1, $c3, $1
+; OPT-NEXT:    dnegu $1, $1
+; OPT-NEXT:    cjr $c17
+; OPT-NEXT:    cincoffset $c3, $c3, $1
+entry:
+  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %cap)
+  %and = and i64 %0, 4095
+  %idx.neg = sub nsw i64 0, %and
+  %add.ptr = getelementptr inbounds i8, i8 addrspace(200)* %cap, i64 %idx.neg
+  ret i8 addrspace(200)* %add.ptr
+}
+
+define i8 addrspace(200)* @fold_setaddr(i8 addrspace(200)* %cap, i64 zeroext %size) #0 {
+; OPTNONE-LABEL: fold_setaddr:
+; OPTNONE:       # %bb.0: # %entry
+; OPTNONE-NEXT:    daddiu $1, $zero, 4095
+; OPTNONE-NEXT:    cjr $c17
+; OPTNONE-NEXT:    candaddr $c3, $c3, $1
+;
+; OPT-LABEL: fold_setaddr:
+; OPT:       # %bb.0: # %entry
+; OPT-NEXT:    daddiu $1, $zero, 4095
+; OPT-NEXT:    cjr $c17
+; OPT-NEXT:    candaddr $c3, $c3, $1
+entry:
+  %0 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %cap)
+  %and = and i64 %0, 4095
+  %ret = tail call i8 addrspace(200)* @llvm.cheri.cap.address.set.i64(i8 addrspace(200)* %cap, i64 %and)
+  ret i8 addrspace(200)* %ret
 }
 
 ; Function Attrs: nounwind readnone
