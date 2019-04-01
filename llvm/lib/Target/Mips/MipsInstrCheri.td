@@ -440,17 +440,6 @@ def CGetAndAddr : CheriFmt3Op<0x23, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2, GP
 def CAndAddr : CheriFmt3Op<0x24, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2, GPR64Opnd:$r3),
   "candaddr\t$r1, $r2, $r3", [(set CheriOpnd: $r1, (int_cheri_cap_address_set CheriOpnd:$r2, (and (int_cheri_cap_address_get CheriOpnd:$r2), GPR64Opnd:$r3)))]>;
 
-// Old pattern for __builtin_align() and C code that does the same thing:
-//  t4: iFATPTR128,ch = load<(load 16 from %ir.ptr1, !tbaa !2, addrspace 200)> t0, t2, undef:iFATPTR128
-//          t6: i64 = llvm.cheri.cap.address.get TargetConstant:i64<9>, t4
-//        t8: i64 = and t6, Constant:i64<16383>
-//      t10: i64 = sub nsw Constant:i64<0>, t8
-//    t11: iFATPTR128 = PTRADD t4, t10
-def : Pat<(ptradd CheriOpnd: $r1, (sub (i64 0), (and (int_cheri_cap_address_get CheriOpnd: $r1), GPR64Opnd: $mask))),
-          (CAndAddr $r1, GPR64Opnd:$mask)>;
-// TODO: for __builtin_align_up() we could do a cincoffset and then candaddr (or will that cause representability issues for values close to the end?)
-
-
 // Note: we need to duplicate these patterns for iFATPTR128,256, etc. for some reason
 multiclass UseCNullPatterns<PatFrag NullPat> {
   def : Pat<(ptradd NullPat, GPR64Opnd:$addr), (CIncOffset CNULL, $addr)>;
