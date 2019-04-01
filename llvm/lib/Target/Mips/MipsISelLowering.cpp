@@ -1239,10 +1239,19 @@ static SDValue performSHLCombine(SDNode *N, SelectionDAG &DAG,
                      DAG.getConstant(SMSize, DL, MVT::i32));
 }
 
+static inline bool isOptNone(const MachineFunction &MF) {
+    return MF.getFunction().hasFnAttribute(Attribute::OptimizeNone) ||
+           MF.getTarget().getOptLevel() == CodeGenOpt::None;
+}
+
 static SDValue
 performCIncOffsetToCandAddrCombine(SDNode *N, SelectionDAG &DAG,
                                    TargetLowering::DAGCombinerInfo &DCI,
                                    const MipsSubtarget &Subtarget) {
+  // Don't do this combine for optnone functions
+  if (isOptNone(DAG.getMachineFunction()))
+    return SDValue();
+
   //  We could do this in tablegen too, but doing it here might enable
   // reuse of constants instead of always emitting the DNEGU. It also means
   // we don't have to duplicate the pattern for ptraddr and the incoffset intrinsic
