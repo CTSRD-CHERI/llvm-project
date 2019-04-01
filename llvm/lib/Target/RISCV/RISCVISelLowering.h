@@ -48,7 +48,13 @@ enum NodeType : unsigned {
   // This is a more convenient semantic for producing dagcombines that remove
   // unnecessary GPR->FPR->GPR moves.
   FMV_W_X_RV64,
-  FMV_X_ANYEXTW_RV64
+  FMV_X_ANYEXTW_RV64,
+  /// Legalised int_cheri_cap_tag_get
+  CAP_TAG_GET,
+  /// Legalised int_cheri_cap_sealed_get
+  CAP_SEALED_GET,
+  /// Legalised int_cheri_cap_subset_test
+  CAP_SUBSET_TEST,
 };
 }
 

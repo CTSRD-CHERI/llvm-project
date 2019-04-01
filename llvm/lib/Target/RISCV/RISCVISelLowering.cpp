@@ -84,7 +84,10 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   // Compute derived properties from the register classes.
   computeRegisterProperties(STI.getRegisterInfo());
 
-  setStackPointerRegisterToSaveRestore(RISCV::X2);
+  if (RISCVABI::isCheriPureCapABI(ABI))
+    setStackPointerRegisterToSaveRestore(RISCV::C2);
+  else
+    setStackPointerRegisterToSaveRestore(RISCV::X2);
 
   for (auto N : {ISD::EXTLOAD, ISD::SEXTLOAD, ISD::ZEXTLOAD})
     setLoadExtAction(N, XLenVT, MVT::i1, Promote);
@@ -186,6 +189,12 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::GlobalAddress, XLenVT, Custom);
   setOperationAction(ISD::BlockAddress, XLenVT, Custom);
   setOperationAction(ISD::ConstantPool, XLenVT, Custom);
+
+  // Some CHERI intrinsics return i1, which isn't legal, so we have to custom
+  // lower them in the DAG combine phase before the first type legalization
+  // pass.
+  if (Subtarget.hasCheri())
+    setTargetDAGCombine(ISD::INTRINSIC_WO_CHAIN);
 
   if (Subtarget.hasStdExtA()) {
     setMaxAtomicSizeInBitsSupported(Subtarget.getXLen());
@@ -516,9 +525,9 @@ SDValue RISCVTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) const {
   RISCVMachineFunctionInfo *FuncInfo = MF.getInfo<RISCVMachineFunctionInfo>();
 
   SDLoc DL(Op);
-  // TODO-CHERI: Stack address space
+  unsigned AllocaAS = MF.getDataLayout().getAllocaAddrSpace();
   SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
-                                 getPointerTy(MF.getDataLayout(), 0));
+                                 getPointerTy(MF.getDataLayout(), AllocaAS));
 
   // vastart just stores the address of the VarArgsFrameIndex slot into the
   // memory location argument.
@@ -664,6 +673,42 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
   switch (N->getOpcode()) {
   default:
     break;
+  case ISD::INTRINSIC_WO_CHAIN: {
+    SDLoc DL(N);
+    unsigned IID = cast<ConstantSDNode>(N->getOperand(0))->getZExtValue();
+    EVT XLenVT = Subtarget.getXLenVT();
+
+    // Lower to our custom node, but with a truncate back to i1 so we can
+    // replace its uses.
+    switch (IID) {
+    case Intrinsic::cheri_cap_tag_get: {
+      SDValue IntRes = DAG.getNode(RISCVISD::CAP_TAG_GET, DL, XLenVT,
+                                   N->getOperand(1));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes,
+                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
+    }
+    case Intrinsic::cheri_cap_sealed_get: {
+      SDValue IntRes = DAG.getNode(RISCVISD::CAP_SEALED_GET, DL, XLenVT,
+                                   N->getOperand(1));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes,
+                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
+    }
+    case Intrinsic::cheri_cap_subset_test: {
+      SDValue IntRes = DAG.getNode(RISCVISD::CAP_SUBSET_TEST, DL, XLenVT,
+                                   N->getOperand(1), N->getOperand(2));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes,
+                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
+    }
+    }
+
+    break;
+  }
   case RISCVISD::SplitF64: {
     SDValue Op0 = N->getOperand(0);
     // If the input to SplitF64 is just BuildPairF64 then the operation is
@@ -1081,7 +1126,8 @@ static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
   unsigned XLen = DL.getLargestLegalIntTypeSizeInBits();
   assert(XLen == 32 || XLen == 64);
   MVT XLenVT = XLen == 32 ? MVT::i32 : MVT::i64;
-  MVT CLenVT = Subtarget.typeForCapabilities();
+  MVT CLenVT = Subtarget.hasCheri() ? Subtarget.typeForCapabilities()
+                                    : MVT();
 
   // Any return value split in to more than two values can't be returned
   // directly.
@@ -1383,12 +1429,12 @@ static SDValue convertValVTToLocVT(SelectionDAG &DAG, SDValue Val,
 // The caller is responsible for loading the full value if the argument is
 // passed with CCValAssign::Indirect.
 static SDValue unpackFromMemLoc(SelectionDAG &DAG, SDValue Chain,
-                                const CCValAssign &VA, const SDLoc &DL) {
+                                const CCValAssign &VA, const SDLoc &DL,
+                                EVT PtrVT) {
   MachineFunction &MF = DAG.getMachineFunction();
   MachineFrameInfo &MFI = MF.getFrameInfo();
   EVT LocVT = VA.getLocVT();
   EVT ValVT = VA.getValVT();
-  EVT PtrVT = MVT::getIntegerVT(DAG.getDataLayout().getPointerSizeInBits(0));
   int FI = MFI.CreateFixedObject(ValVT.getSizeInBits() / 8,
                                  VA.getLocMemOffset(), /*Immutable=*/true);
   SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
@@ -1477,10 +1523,9 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
         "Function interrupt attribute argument not supported!");
   }
 
-  // TODO-CHERI: Stack address space (and uses)
-  EVT PtrVT = getPointerTy(DAG.getDataLayout(), 0);
+  EVT PtrVT = getPointerTy(DAG.getDataLayout(),
+                           DAG.getDataLayout().getAllocaAddrSpace());
   MVT XLenVT = Subtarget.getXLenVT();
-  unsigned XLenInBytes = Subtarget.getXLen() / 8;
   // Used with vargs to acumulate store chains.
   std::vector<SDValue> OutChains;
 
@@ -1499,7 +1544,7 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
     else if (VA.isRegLoc())
       ArgValue = unpackFromRegLoc(DAG, Chain, VA, DL);
     else
-      ArgValue = unpackFromMemLoc(DAG, Chain, VA, DL);
+      ArgValue = unpackFromMemLoc(DAG, Chain, VA, DL, PtrVT);
 
     if (VA.getLocInfo() == CCValAssign::Indirect) {
       // If the original argument was split and passed by reference (e.g. i128
@@ -1524,9 +1569,20 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
   }
 
   if (IsVarArg) {
-    ArrayRef<MCPhysReg> ArgRegs = makeArrayRef(ArgGPRs);
+    MVT ArgVT;
+    ArrayRef<MCPhysReg> ArgRegs;
+    const TargetRegisterClass *RC;
+    if (RISCVABI::isCheriPureCapABI(Subtarget.getTargetABI())) {
+      ArgVT = Subtarget.typeForCapabilities();
+      ArgRegs = makeArrayRef(ArgGPCRs);
+      RC = &RISCV::GPCRRegClass;
+    } else {
+      ArgVT = XLenVT;
+      ArgRegs = makeArrayRef(ArgGPRs);
+      RC = &RISCV::GPRRegClass;
+    }
+    unsigned ArgBytes = ArgVT.getSizeInBits() / 8;
     unsigned Idx = CCInfo.getFirstUnallocated(ArgRegs);
-    const TargetRegisterClass *RC = &RISCV::GPRRegClass;
     MachineFrameInfo &MFI = MF.getFrameInfo();
     MachineRegisterInfo &RegInfo = MF.getRegInfo();
     RISCVMachineFunctionInfo *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
@@ -1542,32 +1598,32 @@ SDValue RISCVTargetLowering::LowerFormalArguments(
       VaArgOffset = CCInfo.getNextStackOffset();
       VarArgsSaveSize = 0;
     } else {
-      VarArgsSaveSize = XLenInBytes * (ArgRegs.size() - Idx);
+      VarArgsSaveSize = ArgBytes * (ArgRegs.size() - Idx);
       VaArgOffset = -VarArgsSaveSize;
     }
 
     // Record the frame index of the first variable argument
     // which is a value necessary to VASTART.
-    int FI = MFI.CreateFixedObject(XLenInBytes, VaArgOffset, true);
+    int FI = MFI.CreateFixedObject(ArgBytes, VaArgOffset, true);
     RVFI->setVarArgsFrameIndex(FI);
 
     // If saving an odd number of registers then create an extra stack slot to
     // ensure that the frame pointer is 2*XLEN-aligned, which in turn ensures
     // offsets to even-numbered registered remain 2*XLEN-aligned.
     if (Idx % 2) {
-      FI = MFI.CreateFixedObject(XLenInBytes, VaArgOffset - (int)XLenInBytes,
+      FI = MFI.CreateFixedObject(ArgBytes, VaArgOffset - (int)ArgBytes,
                                  true);
-      VarArgsSaveSize += XLenInBytes;
+      VarArgsSaveSize += ArgBytes;
     }
 
     // Copy the integer registers that may have been used for passing varargs
     // to the vararg save area.
     for (unsigned I = Idx; I < ArgRegs.size();
-         ++I, VaArgOffset += XLenInBytes) {
+         ++I, VaArgOffset += ArgBytes) {
       const unsigned Reg = RegInfo.createVirtualRegister(RC);
       RegInfo.addLiveIn(ArgRegs[I], Reg);
-      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, XLenVT);
-      FI = MFI.CreateFixedObject(XLenInBytes, VaArgOffset, true);
+      SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, ArgVT);
+      FI = MFI.CreateFixedObject(ArgBytes, VaArgOffset, true);
       SDValue PtrOff = DAG.getFrameIndex(FI, PtrVT);
       SDValue Store = DAG.getStore(Chain, DL, ArgValue, PtrOff,
                                    MachinePointerInfo::getFixedStack(MF, FI));
@@ -2059,6 +2115,12 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "RISCVISD::FMV_W_X_RV64";
   case RISCVISD::FMV_X_ANYEXTW_RV64:
     return "RISCVISD::FMV_X_ANYEXTW_RV64";
+  case RISCVISD::CAP_TAG_GET:
+    return "RISCVISD::CAP_TAG_GET";
+  case RISCVISD::CAP_SEALED_GET:
+    return "RISCVISD::CAP_SEALED_GET";
+  case RISCVISD::CAP_SUBSET_TEST:
+    return "RISCVISD::CAP_SUBSET_TEST";
   }
   return nullptr;
 }

@@ -9,6 +9,27 @@
 include "RISCVInstrFormatsXCheri.td"
 
 //===----------------------------------------------------------------------===//
+// RISC-V specific DAG Nodes.
+//===----------------------------------------------------------------------===//
+
+// Target-dependent type requirements.
+def SDT_RISCVCheriBoolUnary : SDTypeProfile<1, 1, [
+  SDTCisInt<0>, SDTCisVT<1, CLenVT>
+]>;
+
+def SDT_RISCVCheriBoolBinary : SDTypeProfile<1, 2, [
+  SDTCisInt<0>, SDTCisVT<1, CLenVT>, SDTCisVT<2, CLenVT>
+]>;
+
+// Target-dependent nodes.
+def riscv_cap_tag_get     : SDNode<"RISCVISD::CAP_TAG_GET",
+                                   SDT_RISCVCheriBoolUnary>;
+def riscv_cap_sealed_get  : SDNode<"RISCVISD::CAP_SEALED_GET",
+                                   SDT_RISCVCheriBoolUnary>;
+def riscv_cap_subset_test : SDNode<"RISCVISD::CAP_SUBSET_TEST",
+                                   SDT_RISCVCheriBoolBinary>;
+
+//===----------------------------------------------------------------------===//
 // Capability-Inspection Instructions
 //===----------------------------------------------------------------------===//
 
@@ -227,21 +248,74 @@ def : InstAlias<"sc $rs2, (${rs1})",
 // Pseudo-instructions and codegen patterns
 //===----------------------------------------------------------------------===//
 
+class PatGpcr<SDPatternOperator OpNode, RVInstCheriRR Inst>
+    : Pat<(OpNode GPCR:$rs1), (Inst GPCR:$rs1)>;
+
+class PatGpcrGpcr<SDPatternOperator OpNode, RVInstR Inst>
+    : Pat<(OpNode GPCR:$rs1, GPCR:$rs2), (Inst GPCR:$rs1, GPCR:$rs2)>;
+
 class PatGpcrGpr<SDPatternOperator OpNode, RVInstR Inst>
     : Pat<(OpNode GPCR:$rs1, GPR:$rs2), (Inst GPCR:$rs1, GPR:$rs2)>;
 
 class PatGpcrSimm12<SDPatternOperator OpNode, RVInstI Inst>
     : Pat<(OpNode GPCR:$rs1, simm12:$imm12), (Inst GPCR:$rs1, simm12:$imm12)>;
 
+class PatGpcrUimm12<SDPatternOperator OpNode, RVInstI Inst>
+    : Pat<(OpNode GPCR:$rs1, uimm12:$imm12), (Inst GPCR:$rs1, uimm12:$imm12)>;
+
+/// Capability-Inspection Instructions
+
+def : PatGpcr<int_cheri_cap_perms_get, CGetPerm>;
+def : PatGpcr<int_cheri_cap_type_get, CGetType>;
+def : PatGpcr<int_cheri_cap_base_get, CGetBase>;
+def : PatGpcr<int_cheri_cap_length_get, CGetLen>;
+def : PatGpcr<riscv_cap_tag_get, CGetTag>;
+def : PatGpcr<riscv_cap_sealed_get, CGetSealed>;
+def : PatGpcr<int_cheri_cap_offset_get, CGetOffset>;
+def : PatGpcr<int_cheri_cap_flags_get, CGetFlags>;
+def : PatGpcr<int_cheri_cap_address_get, CGetAddr>;
+
 /// Capability-Modification Instructions
+
+def : PatGpcrGpcr<int_cheri_cap_seal, CSeal>;
+def : PatGpcrGpcr<int_cheri_cap_unseal, CUnseal>;
+def : PatGpcrGpr<int_cheri_cap_perms_and, CAndPerm>;
+def : PatGpcrGpr<int_cheri_cap_flags_set, CSetFlags>;
+def : PatGpcrGpr<int_cheri_cap_offset_set, CSetOffset>;
+def : PatGpcrGpr<int_cheri_cap_offset_increment, CIncOffset>;
+def : PatGpcrSimm12<int_cheri_cap_offset_increment, CIncOffsetImm>;
+def : PatGpcrGpr<int_cheri_cap_bounds_set, CSetBounds>;
+def : PatGpcrGpr<int_cheri_cap_bounds_set_exact, CSetBoundsExact>;
+def : PatGpcrUimm12<int_cheri_cap_bounds_set, CSetBoundsImm>;
+def : PatGpcr<int_cheri_cap_tag_clear, CClearTag>;
+def : PatGpcrGpcr<int_cheri_cap_build, CBuildCap>;
+def : PatGpcrGpcr<int_cheri_cap_type_copy, CCopyType>;
+def : PatGpcrGpcr<int_cheri_cap_conditional_seal, CCSeal>;
 
 def : PatGpcrGpr<ptradd, CIncOffset>;
 def : PatGpcrSimm12<ptradd, CIncOffsetImm>;
 
 /// Pointer-Arithmetic Instructions
 
+def : Pat<(int_cheri_cap_to_pointer GPCR:$rs1, GPCRC0IsDDC:$rs2),
+          (CToPtr GPCR:$rs1, GPCRC0IsDDC:$rs2)>;
+def : Pat<(int_cheri_cap_from_pointer GPCRC0IsDDC:$rs1, GPR:$rs2),
+          (CFromPtr GPCRC0IsDDC:$rs1, GPR:$rs2)>;
+def : Pat<(int_cheri_cap_from_ddc GPR:$rs2), (CFromPtr DDC, $rs2)>;
+def : PatGpcrGpcr<int_cheri_cap_diff, CSub>;
+
+// TODO: Only for hybrid; use CIncOffset C0 etc for CheriABI
 def : Pat<(inttoptr GPR:$rs2), (CFromPtr DDC, $rs2)>;
 def : Pat<(ptrtoint GPCR:$rs1), (CToPtr $rs1, DDC)>;
+
+/// Control-Flow Instructions
+
+/// Assertion Instructions
+
+def : PatGpcrGpcr<riscv_cap_subset_test, CTestSubset>;
+
+// TODO: int_cheri_cap_load_tags, int_cheri_bounded_stack_cap
+// No int_cheri_cap_perms_check/int_cheri_cap_type_check
 
 /// Memory-Access with Explicit Address Type Instructions
 

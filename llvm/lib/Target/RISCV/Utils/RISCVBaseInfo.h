@@ -189,6 +189,28 @@ enum ABI {
 ABI computeTargetABI(const Triple &TT, FeatureBitset FeatureBits,
                      StringRef ABIName);
 
+inline static bool isCheriPureCapABI(ABI TargetABI) {
+  switch (TargetABI) {
+  case ABI_ILP32:
+  case ABI_ILP32F:
+  case ABI_ILP32D:
+  case ABI_ILP32E:
+  case ABI_LP64:
+  case ABI_LP64F:
+  case ABI_LP64D:
+    return false;
+  case ABI_IL32PC64:
+  case ABI_IL32PC64F:
+  case ABI_IL32PC64D:
+  case ABI_IL32PC64E:
+  case ABI_L64PC128:
+  case ABI_L64PC128F:
+  case ABI_L64PC128D:
+    return true;
+  default:
+    llvm_unreachable("Improperly initialised target ABI");
+  }
+}
 } // namespace RISCVABI
 
 namespace RISCVFeatures {

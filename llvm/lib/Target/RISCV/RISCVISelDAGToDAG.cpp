@@ -130,7 +130,8 @@ void RISCVDAGToDAGISel::Select(SDNode *Node) {
     SDValue Imm = CurDAG->getTargetConstant(0, DL, XLenVT);
     int FI = cast<FrameIndexSDNode>(Node)->getIndex();
     SDValue TFI = CurDAG->getTargetFrameIndex(FI, VT);
-    ReplaceNode(Node, CurDAG->getMachineNode(RISCV::ADDI, DL, VT, TFI, Imm));
+    unsigned Opc = VT.isFatPointer() ? RISCV::CIncOffsetImm : RISCV::ADDI;
+    ReplaceNode(Node, CurDAG->getMachineNode(Opc, DL, VT, TFI, Imm));
     return;
   }
   case ISD::SRL: {
@@ -181,8 +182,10 @@ bool RISCVDAGToDAGISel::SelectInlineAsmMemoryOperand(
 
 bool RISCVDAGToDAGISel::SelectAddrFI(SDValue Addr, SDValue &Base) {
   if (auto FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
-    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), Subtarget->getXLenVT());
-    return true;
+    if (Addr.getValueType().isScalarInteger()) {
+      Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), Subtarget->getXLenVT());
+      return true;
+    }
   }
   return false;
 }

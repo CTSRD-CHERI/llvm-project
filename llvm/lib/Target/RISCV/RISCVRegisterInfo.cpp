@@ -146,8 +146,8 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 }
 
 unsigned RISCVRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  const TargetFrameLowering *TFI = getFrameLowering(MF);
-  return TFI->hasFP(MF) ? RISCV::X8 : RISCV::X2;
+  const RISCVFrameLowering *TFI = getFrameLowering(MF);
+  return TFI->hasFP(MF) ? TFI->getFPReg() : TFI->getSPReg();
 }
 
 const uint32_t *

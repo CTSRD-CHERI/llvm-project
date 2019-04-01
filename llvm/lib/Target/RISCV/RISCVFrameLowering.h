@@ -45,6 +45,9 @@ public:
   eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator MI) const override;
 
+  unsigned getFPReg() const;
+  unsigned getSPReg() const;
+
 protected:
   const RISCVSubtarget &STI;
 
