@@ -1815,9 +1815,11 @@ SDValue RISCVTargetLowering::LowerCall(CallLoweringInfo &CLI,
   // TargetGlobalAddress/TargetExternalSymbol node so that legalize won't
   // split it and then direct call can be matched by PseudoCALL.
   if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    Callee = DAG.getTargetGlobalAddress(S->getGlobal(), DL, PtrVT, 0, 0);
+    Callee = DAG.getTargetGlobalAddress(S->getGlobal(), DL, PtrVT, 0,
+                                        RISCVII::MO_CALL);
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    Callee = DAG.getTargetExternalFunctionSymbol(S->getSymbol(), 0);
+    Callee =
+        DAG.getTargetExternalFunctionSymbol(S->getSymbol(), RISCVII::MO_CALL);
   }
 
   // The first call operand is the chain and the second is the target address.
