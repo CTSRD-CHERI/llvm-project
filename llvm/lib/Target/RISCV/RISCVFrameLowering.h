@@ -42,6 +42,9 @@ public:
 
   bool hasBP(const MachineFunction &MF) const;
 
+  Register getFPReg() const;
+  Register getSPReg() const;
+
   bool hasReservedCallFrame(const MachineFunction &MF) const override;
   MachineBasicBlock::iterator
   eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,

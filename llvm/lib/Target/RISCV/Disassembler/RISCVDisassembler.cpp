@@ -356,9 +356,30 @@ DecodeStatus RISCVDisassembler::getInstruction(MCInst &MI, uint64_t &Size,
     }
     Insn = support::endian::read32le(Bytes.data());
 
+    if (!STI.getFeatureBits()[RISCV::Feature64Bit] &&
+        STI.getFeatureBits()[RISCV::FeatureCapMode]) {
+      LLVM_DEBUG(dbgs() << "Trying RISCV32CapModeOnly_32 table:\n");
+      Result = decodeInstruction(DecoderTableRISCV32CapModeOnly_32, MI, Insn,
+                                 Address, this, STI);
+      if (Result != MCDisassembler::Fail) {
+        Size = 4;
+        return Result;
+      }
+    }
+
     if (!STI.getFeatureBits()[RISCV::Feature64Bit]) {
       LLVM_DEBUG(dbgs() << "Trying RISCV32Only_32 table:\n");
       Result = decodeInstruction(DecoderTableRISCV32Only_32, MI, Insn, Address,
+                                 this, STI);
+      if (Result != MCDisassembler::Fail) {
+        Size = 4;
+        return Result;
+      }
+    }
+
+    if (STI.getFeatureBits()[RISCV::FeatureCapMode]) {
+      LLVM_DEBUG(dbgs() << "Trying CapModeOnly_32 table:\n");
+      Result = decodeInstruction(DecoderTableCapModeOnly_32, MI, Insn, Address,
                                  this, STI);
       if (Result != MCDisassembler::Fail) {
         Size = 4;

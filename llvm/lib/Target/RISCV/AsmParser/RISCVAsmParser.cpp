@@ -128,6 +128,28 @@ class RISCVAsmParser : public MCTargetAsmParser {
   // 'add' is an overloaded mnemonic.
   bool checkPseudoAddTPRel(MCInst &Inst, OperandVector &Operands);
 
+  // Helper to emit a combination of AUIPC and SecondOpcode. Used to implement
+  // helpers such as emitCapLoadGlobalCap.
+  void emitAuipccInstPair(MCOperand DestReg, MCOperand TmpReg,
+                          const MCExpr *Symbol, RISCVMCExpr::VariantKind VKHi,
+                          unsigned SecondOpcode, SMLoc IDLoc, MCStreamer &Out);
+
+  // Helper to emit pseudo instruction "clgc" used in captable addressing with
+  // the PC-relative ABI.
+  void emitCapLoadGlobalCap(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
+
+  // Helper to emit pseudo instruction "cla.tls.ie" used in initial-exec TLS
+  // addressing.
+  void emitCapLoadTLSIEAddress(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
+
+  // Helper to emit pseudo instruction "clc.tls.gd" used in global-dynamic TLS
+  // addressing.
+  void emitCapLoadTLSGDCap(MCInst &Inst, SMLoc IDLoc, MCStreamer &Out);
+
+  // Checks that a PseudoCIncOffsetTPRel is using c4/ctp in its first input
+  // operand. See checkPseudoAddTPRel for why it is done this way.
+  bool checkPseudoCIncOffsetTPRel(MCInst &Inst, OperandVector &Operands);
+
   /// Helper for processing MC instructions that have been successfully matched
   /// by MatchAndEmitInstruction. Modifications to the emitted instructions,
   /// like the expansion of pseudo instructions (e.g., "li"), can be performed
@@ -360,6 +382,16 @@ public:
       return false;
     return RISCVAsmParser::classifySymbolRef(getImm(), VK, Imm) &&
            VK == RISCVMCExpr::VK_RISCV_TPREL_ADD;
+  }
+
+  bool isTPRelCIncOffsetSymbol() const {
+    int64_t Imm;
+    RISCVMCExpr::VariantKind VK = RISCVMCExpr::VK_RISCV_None;
+    // Must be of 'immediate' type but not a constant.
+    if (!isImm() || evaluateConstantImm(getImm(), Imm, VK))
+      return false;
+    return RISCVAsmParser::classifySymbolRef(getImm(), VK, Imm) &&
+           VK == RISCVMCExpr::VK_RISCV_TPREL_CINCOFFSET;
   }
 
   bool isCSRSystemRegister() const { return isSystemRegister(); }
@@ -631,13 +663,15 @@ public:
       return IsValid && (VK == RISCVMCExpr::VK_RISCV_PCREL_HI ||
                          VK == RISCVMCExpr::VK_RISCV_GOT_HI ||
                          VK == RISCVMCExpr::VK_RISCV_TLS_GOT_HI ||
-                         VK == RISCVMCExpr::VK_RISCV_TLS_GD_HI);
+                         VK == RISCVMCExpr::VK_RISCV_TLS_GD_HI ||
+                         VK == RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI);
     } else {
       return isUInt<20>(Imm) && (VK == RISCVMCExpr::VK_RISCV_None ||
                                  VK == RISCVMCExpr::VK_RISCV_PCREL_HI ||
                                  VK == RISCVMCExpr::VK_RISCV_GOT_HI ||
                                  VK == RISCVMCExpr::VK_RISCV_TLS_GOT_HI ||
-                                 VK == RISCVMCExpr::VK_RISCV_TLS_GD_HI);
+                                 VK == RISCVMCExpr::VK_RISCV_TLS_GD_HI ||
+                                 VK == RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI);
     }
   }
 
@@ -1061,6 +1095,10 @@ bool RISCVAsmParser::MatchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
   case Match_InvalidTPRelAddSymbol: {
     SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
     return Error(ErrorLoc, "operand must be a symbol with %tprel_add modifier");
+  }
+  case Match_InvalidTPRelCIncOffsetSymbol: {
+    SMLoc ErrorLoc = ((RISCVOperand &)*Operands[ErrorInfo]).getStartLoc();
+    return Error(ErrorLoc, "operand must be a symbol with %tprel_cincoffset modifier");
   }
   }
 
@@ -1762,10 +1800,42 @@ bool RISCVAsmParser::parseDirectiveOption() {
     return false;
   }
 
+  if (Option == "capmode") {
+    if (!getSTI().getFeatureBits()[RISCV::FeatureCheri])
+      return Error(Parser.getTok().getLoc(),
+                   "option requires 'xcheri' extension");
+
+    getTargetStreamer().emitDirectiveOptionCapMode();
+
+    Parser.Lex();
+    if (Parser.getTok().isNot(AsmToken::EndOfStatement))
+      return Error(Parser.getTok().getLoc(),
+                   "unexpected token, expected end of statement");
+
+    setFeatureBits(RISCV::FeatureCapMode, "cap-mode");
+    return false;
+  }
+
+  if (Option == "nocapmode") {
+    if (!getSTI().getFeatureBits()[RISCV::FeatureCheri])
+      return Error(Parser.getTok().getLoc(),
+                   "option requires 'xcheri' extension");
+
+    getTargetStreamer().emitDirectiveOptionNoCapMode();
+
+    Parser.Lex();
+    if (Parser.getTok().isNot(AsmToken::EndOfStatement))
+      return Error(Parser.getTok().getLoc(),
+                   "unexpected token, expected end of statement");
+
+    clearFeatureBits(RISCV::FeatureCapMode, "cap-mode");
+    return false;
+  }
+
   // Unknown option.
   Warning(Parser.getTok().getLoc(),
-          "unknown option, expected 'push', 'pop', 'rvc', 'norvc', 'relax' or "
-          "'norelax'");
+          "unknown option, expected 'push', 'pop', 'rvc', 'norvc', 'relax', "
+          "'norelax', 'capmode' or 'nocapmode'");
   Parser.eatToEndOfStatement();
   return false;
 }
@@ -1928,6 +1998,96 @@ bool RISCVAsmParser::checkPseudoAddTPRel(MCInst &Inst,
   return false;
 }
 
+void RISCVAsmParser::emitAuipccInstPair(MCOperand DestReg, MCOperand TmpReg,
+                                        const MCExpr *Symbol,
+                                        RISCVMCExpr::VariantKind VKHi,
+                                        unsigned SecondOpcode, SMLoc IDLoc,
+                                        MCStreamer &Out) {
+  // A pair of instructions for PC-relative addressing; expands to
+  //   TmpLabel: AUIPCC TmpReg, VKHi(symbol)
+  //             OP DestReg, TmpReg, %pcrel_lo(TmpLabel)
+  MCContext &Ctx = getContext();
+
+  MCSymbol *TmpLabel = Ctx.createTempSymbol(
+      "pcrel_hi", /* AlwaysAddSuffix */ true, /* CanBeUnnamed */ false);
+  Out.EmitLabel(TmpLabel);
+
+  const RISCVMCExpr *SymbolHi = RISCVMCExpr::create(Symbol, VKHi, Ctx);
+  emitToStreamer(
+      Out, MCInstBuilder(RISCV::AUIPCC).addOperand(TmpReg).addExpr(SymbolHi));
+
+  const MCExpr *RefToLinkTmpLabel =
+      RISCVMCExpr::create(MCSymbolRefExpr::create(TmpLabel, Ctx),
+                          RISCVMCExpr::VK_RISCV_PCREL_LO, Ctx);
+
+  emitToStreamer(Out, MCInstBuilder(SecondOpcode)
+                          .addOperand(DestReg)
+                          .addOperand(TmpReg)
+                          .addExpr(RefToLinkTmpLabel));
+}
+
+void RISCVAsmParser::emitCapLoadGlobalCap(MCInst &Inst, SMLoc IDLoc,
+                                          MCStreamer &Out) {
+  // The capability load global capability pseudo-instruction "clgc" is used in
+  // captable-indirect addressing of global symbols in the PC-relative ABI:
+  //   clgc rdest, symbol
+  // expands to
+  //   TmpLabel: AUIPCC cdest, %captab_pcrel_hi(symbol)
+  //             CLC cdest, %pcrel_lo(TmpLabel)(cdest)
+  MCOperand DestReg = Inst.getOperand(0);
+  const MCExpr *Symbol = Inst.getOperand(1).getExpr();
+  unsigned SecondOpcode = isRV64() ? RISCV::CLC_128 : RISCV::CLC_64;
+  emitAuipccInstPair(DestReg, DestReg, Symbol,
+                     RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI, SecondOpcode,
+                     IDLoc, Out);
+}
+
+void RISCVAsmParser::emitCapLoadTLSIEAddress(MCInst &Inst, SMLoc IDLoc,
+                                             MCStreamer &Out) {
+  // The capability load TLS IE address pseudo-instruction "cla.tls.ie" is used
+  // in initial-exec TLS model addressing of global symbols:
+  //   cla.tls.ie rdest, symbol, tmp
+  // expands to
+  //   TmpLabel: AUIPCC tmp, %tls_ie_captab_pcrel_hi(symbol)
+  //             CLx rdest, %pcrel_lo(TmpLabel)(tmp)
+  MCOperand DestReg = Inst.getOperand(0);
+  MCOperand TmpReg = Inst.getOperand(1);
+  const MCExpr *Symbol = Inst.getOperand(2).getExpr();
+  unsigned SecondOpcode = isRV64() ? RISCV::CLD : RISCV::CLW;
+  emitAuipcInstPair(DestReg, TmpReg, Symbol,
+                    RISCVMCExpr::VK_RISCV_TLS_IE_CAPTAB_PCREL_HI,
+                    SecondOpcode, IDLoc, Out);
+}
+
+void RISCVAsmParser::emitCapLoadTLSGDCap(MCInst &Inst, SMLoc IDLoc,
+                                         MCStreamer &Out) {
+  // The capability load TLS GD capability pseudo-instruction "clc.tls.gd" is
+  // used in global-dynamic TLS model addressing of global symbols:
+  //   clc.tls.gd cdest, symbol
+  // expands to
+  //   TmpLabel: AUIPCC rdest, %tls_gd_pcrel_hi(symbol)
+  //             CINCOFFSET rdest, rdest, %pcrel_lo(TmpLabel)
+  MCOperand DestReg = Inst.getOperand(0);
+  const MCExpr *Symbol = Inst.getOperand(1).getExpr();
+  emitAuipcInstPair(DestReg, DestReg, Symbol,
+                    RISCVMCExpr::VK_RISCV_TLS_GD_CAPTAB_PCREL_HI,
+                    RISCV::CIncOffsetImm, IDLoc, Out);
+}
+
+bool RISCVAsmParser::checkPseudoCIncOffsetTPRel(MCInst &Inst,
+                                                OperandVector &Operands) {
+  assert(Inst.getOpcode() == RISCV::PseudoCIncOffsetTPRel &&
+         "Invalid instruction");
+  assert(Inst.getOperand(1).isReg() && "Unexpected first operand kind");
+  if (Inst.getOperand(1).getReg() != RISCV::C4) {
+    SMLoc ErrorLoc = ((RISCVOperand &)*Operands[2]).getStartLoc();
+    return Error(ErrorLoc, "the first input operand must be ctp/c4 when using "
+                           "%tprel_cincoffset modifier");
+  }
+
+  return false;
+}
+
 bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
                                         OperandVector &Operands,
                                         MCStreamer &Out) {
@@ -2016,6 +2176,19 @@ bool RISCVAsmParser::processInstruction(MCInst &Inst, SMLoc IDLoc,
     return false;
   case RISCV::PseudoAddTPRel:
     if (checkPseudoAddTPRel(Inst, Operands))
+      return true;
+    break;
+  case RISCV::PseudoCLGC:
+    emitCapLoadGlobalCap(Inst, IDLoc, Out);
+    return false;
+  case RISCV::PseudoCLA_TLS_IE:
+    emitCapLoadTLSIEAddress(Inst, IDLoc, Out);
+    return false;
+  case RISCV::PseudoCLC_TLS_GD:
+    emitCapLoadTLSGDCap(Inst, IDLoc, Out);
+    return false;
+  case RISCV::PseudoCIncOffsetTPRel:
+    if (checkPseudoCIncOffsetTPRel(Inst, Operands))
       return true;
     break;
   }

@@ -13,7 +13,7 @@
 # CHECK: error: unexpected token, expected end of statement
 .option rvc foo
 
-# CHECK: warning: unknown option, expected 'push', 'pop', 'rvc', 'norvc', 'relax' or 'norelax'
+# CHECK: warning: unknown option, expected 'push', 'pop', 'rvc', 'norvc', 'relax', 'norelax', 'capmode' or 'nocapmode'
 .option bar
 
 # CHECK: error: .option pop with no .option push

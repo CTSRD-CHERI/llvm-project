@@ -143,16 +143,10 @@ bool isAtomicStoreOp(AtomicExpr::AtomicOp Op) {
       }
       UseLibcall = !C.getTargetInfo().hasBuiltinAtomic(
           AtomicSizeInBits, C.toBits(lvalue.getAlignment()));
-      if (AtomicTy->isCHERICapabilityType(CGF.CGM.getContext())) {
-        if (CGF.getTarget().areAllPointersCapabilities())
-          UseLibcall =
-              CGF.CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
-                  Op);
-        else
-          // XXXAR: currently always use libcalls in hybrid since we generate
-          // invalid code and assert otherwise.
-          UseLibcall = true;
-      }
+      if (AtomicTy->isCHERICapabilityType(CGF.CGM.getContext()))
+        UseLibcall =
+            CGF.CGM.getTargetCodeGenInfo().cheriCapabilityAtomicNeedsLibcall(
+                Op);
     }
 
     QualType getAtomicType() const { return AtomicTy; }

@@ -44,6 +44,8 @@ SUBST = {
     '%cheri256_purecap_cc1': ['-cc1', "-triple=cheri-unknown-freebsd", "-target-abi", "purecap", "-target-cpu", "cheri256", "-cheri-size", "256"],
     '%riscv32_cheri_cc1': ['-cc1', "-triple=riscv32-unknown-freebsd", "-target-feature", "+xcheri"],
     '%riscv64_cheri_cc1': ['-cc1', "-triple=riscv64-unknown-freebsd", "-target-feature", "+xcheri"],
+    '%riscv32_cheri_purecap_cc1': ['-cc1', "-triple=riscv32-unknown-freebsd", "-target-feature", "+xcheri", "-target-abi", "il32pc64", '-target-feature', '+cap-mode'],
+    '%riscv64_cheri_purecap_cc1': ['-cc1', "-triple=riscv64-unknown-freebsd", "-target-feature", "+xcheri", "-target-abi", "l64pc128", '-target-feature', '+cap-mode'],
 }
 
 def get_line2spell_and_mangled(args, clang_args):

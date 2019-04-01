@@ -1265,7 +1265,9 @@ void CodeGenModule::EmitCtorList(CtorList &Fns, const char *GlobalName) {
   // And the pointers to the ctors are always AS0 for CHERI. We could
   // theoretically make them AS200 but right now RTLD/csu expects that
   // .init_array contains virtual addresses and not capabilities
-  if (getTriple().isMIPS())
+  if (getTriple().isMIPS() ||
+      getTriple().getArch() == llvm::Triple::riscv32 ||
+      getTriple().getArch() == llvm::Triple::riscv64)
     CtorPtrAS = 0;
   llvm::Type *CtorPFTy = llvm::PointerType::get(CtorFTy, CtorPtrAS);
 

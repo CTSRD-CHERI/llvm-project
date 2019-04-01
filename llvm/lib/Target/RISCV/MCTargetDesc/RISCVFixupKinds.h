@@ -82,8 +82,21 @@ enum Fixups {
   // relaxation.
   fixup_riscv_align,
 
+  // fixup_riscv_captab_pcrel_hi20 - 20-bit fixup corresponding to
+  // captab_pcrel_hi(foo) for instructions like auipcc
+  fixup_riscv_captab_pcrel_hi20,
   // fixup_riscv_capability - CLen-bit fixup corresponding to .chericap
   fixup_riscv_capability,
+  // fixup_riscv_tprel_cincoffset - A fixup corresponding to
+  // %tprel_cincoffset(foo) for the cincoffset_tls instruction. Used to provide
+  // a hint to the linker.
+  fixup_riscv_tprel_cincoffset,
+  // fixup_riscv_tls_ie_captab_pcrel_hi20 - 20-bit fixup corresponding to
+  // tls_ie_captab_pcrel_hi(foo) for instructions like auipcc
+  fixup_riscv_tls_ie_captab_pcrel_hi20,
+  // fixup_riscv_tls_gd_captab_pcrel_hi20 - 20-bit fixup corresponding to
+  // tls_gd_captab_pcrel_hi(foo) for instructions like auipcc
+  fixup_riscv_tls_gd_captab_pcrel_hi20,
 
   // fixup_riscv_invalid - used as a sentinel and a marker, must be last fixup
   fixup_riscv_invalid,

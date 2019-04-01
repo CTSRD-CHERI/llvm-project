@@ -23,6 +23,8 @@ public:
   virtual void emitDirectiveOptionNoRVC() = 0;
   virtual void emitDirectiveOptionRelax() = 0;
   virtual void emitDirectiveOptionNoRelax() = 0;
+  virtual void emitDirectiveOptionCapMode() = 0;
+  virtual void emitDirectiveOptionNoCapMode() = 0;
 };
 
 // This part is for ascii assembly output
@@ -38,6 +40,8 @@ public:
   void emitDirectiveOptionNoRVC() override;
   void emitDirectiveOptionRelax() override;
   void emitDirectiveOptionNoRelax() override;
+  void emitDirectiveOptionCapMode() override;
+  void emitDirectiveOptionNoCapMode() override;
 };
 
 }

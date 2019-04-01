@@ -99,7 +99,7 @@ class FPCmpS_rr<bits<3> funct3, string opcodestr>
 // Instructions
 //===----------------------------------------------------------------------===//
 
-let Predicates = [HasStdExtF] in {
+let Predicates = [HasStdExtF, NotCapMode] in {
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
 def FLW : RVInstI<0b010, OPC_LOAD_FP, (outs FPR32:$rd),
                   (ins GPR:$rs1, simm12:$imm12),
@@ -112,7 +112,9 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def FSW : RVInstS<0b010, OPC_STORE_FP, (outs),
                   (ins FPR32:$rs2, GPR:$rs1, simm12:$imm12),
                    "fsw", "$rs2, ${imm12}(${rs1})">;
+} // Predicates = [HasStdExtF, NotCapMode]
 
+let Predicates = [HasStdExtF] in {
 def FMADD_S  : FPFMAS_rrr_frm<OPC_MADD, "fmadd.s">;
 def          : FPFMASDynFrmAlias<FMADD_S, "fmadd.s">;
 def FMSUB_S  : FPFMAS_rrr_frm<OPC_MSUB, "fmsub.s">;
@@ -205,10 +207,12 @@ def           : FPUnaryOpDynFrmAlias<FCVT_S_LU, "fcvt.s.lu", FPR32, GPR>;
 // Assembler Pseudo Instructions (User-Level ISA, Version 2.2, Chapter 20)
 //===----------------------------------------------------------------------===//
 
-let Predicates = [HasStdExtF] in {
+let Predicates = [HasStdExtF, NotCapMode] in {
 def : InstAlias<"flw $rd, (${rs1})",  (FLW FPR32:$rd,  GPR:$rs1, 0), 0>;
 def : InstAlias<"fsw $rs2, (${rs1})", (FSW FPR32:$rs2, GPR:$rs1, 0), 0>;
+} // Predicates = [HasStdExtF, NotCapMode]
 
+let Predicates = [HasStdExtF] in {
 def : InstAlias<"fmv.s $rd, $rs",  (FSGNJ_S  FPR32:$rd, FPR32:$rs, FPR32:$rs)>;
 def : InstAlias<"fabs.s $rd, $rs", (FSGNJX_S FPR32:$rd, FPR32:$rs, FPR32:$rs)>;
 def : InstAlias<"fneg.s $rd, $rs", (FSGNJN_S FPR32:$rd, FPR32:$rs, FPR32:$rs)>;
@@ -249,10 +253,12 @@ def : InstAlias<"fsflagsi $imm",      (CSRRWI      X0, FFLAGS.Encoding, uimm5:$i
 // spellings should be supported by standard tools.
 def : MnemonicAlias<"fmv.s.x", "fmv.w.x">;
 def : MnemonicAlias<"fmv.x.s", "fmv.x.w">;
+} // Predicates = [HasStdExtF]
 
+let Predicates = [HasStdExtF, NotCapMode] in {
 def PseudoFLW  : PseudoFloatLoad<"flw", FPR32>;
 def PseudoFSW  : PseudoStore<"fsw", FPR32>;
-} // Predicates = [HasStdExtF]
+} // Predicates = [HasStdExtF, NotCapMode]
 
 //===----------------------------------------------------------------------===//
 // Pseudo-instructions and codegen patterns
@@ -340,6 +346,10 @@ def : Pat<(setuo FPR32:$rs1, FPR32:$rs2),
 
 def Select_FPR32_Using_CC_GPR : SelectCC_rrirr<FPR32, GPR>;
 
+} // Predicates = [HasStdExtF]
+
+let Predicates = [HasStdExtF, NotCapMode] in {
+
 /// Loads
 
 defm : LdPat<load, FLW>;
@@ -348,7 +358,7 @@ defm : LdPat<load, FLW>;
 
 defm : StPat<store, FSW, FPR32>;
 
-} // Predicates = [HasStdExtF]
+} // Predicates = [HasStdExtF, NotCapMode]
 
 let Predicates = [HasStdExtF, IsRV32] in {
 // float->[u]int. Round-to-zero must be used.

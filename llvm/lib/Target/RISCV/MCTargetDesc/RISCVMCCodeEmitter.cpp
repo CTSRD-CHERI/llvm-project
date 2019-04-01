@@ -61,6 +61,10 @@ public:
                       SmallVectorImpl<MCFixup> &Fixups,
                       const MCSubtargetInfo &STI) const;
 
+  void expandCIncOffsetTPRel(const MCInst &MI, raw_ostream &OS,
+                             SmallVectorImpl<MCFixup> &Fixups,
+                             const MCSubtargetInfo &STI) const;
+
   /// TableGen'erated function for getting the binary encoding for an
   /// instruction.
   uint64_t getBinaryCodeForInstr(const MCInst &MI,
@@ -173,6 +177,45 @@ void RISCVMCCodeEmitter::expandAddTPRel(const MCInst &MI, raw_ostream &OS,
   support::endian::write(OS, Binary, support::little);
 }
 
+// Expand PseudoCIncOffsetTPRel to a simple CIncOffset with the correct
+// relocation.
+void RISCVMCCodeEmitter::expandCIncOffsetTPRel(
+    const MCInst &MI, raw_ostream &OS, SmallVectorImpl<MCFixup> &Fixups,
+    const MCSubtargetInfo &STI) const {
+  MCOperand DestReg = MI.getOperand(0);
+  MCOperand TPReg = MI.getOperand(1);
+  MCOperand SrcReg = MI.getOperand(2);
+  assert(TPReg.isReg() && TPReg.getReg() == RISCV::C4 &&
+         "Expected thread pointer as first input to CTP-relative cincoffset");
+
+  MCOperand SrcSymbol = MI.getOperand(3);
+  assert(SrcSymbol.isExpr() &&
+         "Expected expression as third input to CTP-relative cincoffset");
+
+  const RISCVMCExpr *Expr = dyn_cast<RISCVMCExpr>(SrcSymbol.getExpr());
+  assert(Expr && Expr->getKind() == RISCVMCExpr::VK_RISCV_TPREL_CINCOFFSET &&
+         "Expected tprel_cincoffset relocation on CTP-relative symbol");
+
+  // Emit the correct tprel_cincoffset relocation for the symbol.
+  Fixups.push_back(MCFixup::create(
+      0, Expr, MCFixupKind(RISCV::fixup_riscv_tprel_cincoffset), MI.getLoc()));
+
+  // Emit fixup_riscv_relax for tprel_cincoffset where the relax feature is enabled.
+  if (STI.getFeatureBits()[RISCV::FeatureRelax]) {
+    const MCConstantExpr *Dummy = MCConstantExpr::create(0, Ctx);
+    Fixups.push_back(MCFixup::create(
+        0, Dummy, MCFixupKind(RISCV::fixup_riscv_relax), MI.getLoc()));
+  }
+
+  // Emit a normal CIncOffset instruction with the given operands.
+  MCInst TmpInst = MCInstBuilder(RISCV::CIncOffset)
+                       .addOperand(DestReg)
+                       .addOperand(TPReg)
+                       .addOperand(SrcReg);
+  uint32_t Binary = getBinaryCodeForInstr(TmpInst, Fixups, STI);
+  support::endian::write(OS, Binary, support::little);
+}
+
 void RISCVMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
                                            SmallVectorImpl<MCFixup> &Fixups,
                                            const MCSubtargetInfo &STI) const {
@@ -190,6 +233,12 @@ void RISCVMCCodeEmitter::encodeInstruction(const MCInst &MI, raw_ostream &OS,
 
   if (MI.getOpcode() == RISCV::PseudoAddTPRel) {
     expandAddTPRel(MI, OS, Fixups, STI);
+    MCNumEmitted += 1;
+    return;
+  }
+
+  if (MI.getOpcode() == RISCV::PseudoCIncOffsetTPRel) {
+    expandCIncOffsetTPRel(MI, OS, Fixups, STI);
     MCNumEmitted += 1;
     return;
   }
@@ -333,6 +382,19 @@ unsigned RISCVMCCodeEmitter::getImmOpValue(const MCInst &MI, unsigned OpNo,
     case RISCVMCExpr::VK_RISCV_CALL_PLT:
       FixupKind = RISCV::fixup_riscv_call_plt;
       RelaxCandidate = true;
+      break;
+    case RISCVMCExpr::VK_RISCV_CAPTAB_PCREL_HI:
+      FixupKind = RISCV::fixup_riscv_captab_pcrel_hi20;
+      break;
+    case RISCVMCExpr::VK_RISCV_TPREL_CINCOFFSET:
+      // See VK_RISCV_TPREL_ADD.
+      llvm_unreachable(
+          "VK_RISCV_TPREL_CINCOFFSET should not represent an instruction operand");
+    case RISCVMCExpr::VK_RISCV_TLS_IE_CAPTAB_PCREL_HI:
+      FixupKind = RISCV::fixup_riscv_tls_ie_captab_pcrel_hi20;
+      break;
+    case RISCVMCExpr::VK_RISCV_TLS_GD_CAPTAB_PCREL_HI:
+      FixupKind = RISCV::fixup_riscv_tls_gd_captab_pcrel_hi20;
       break;
     }
   } else if (Kind == MCExpr::SymbolRef &&

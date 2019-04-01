@@ -24,6 +24,18 @@ def CSR_ILP32D_LP64D
     : CalleeSavedRegs<(add CSR_ILP32_LP64,
                        F8_D, F9_D, (sequence "F%u_D", 18, 27))>;
 
+def CSR_IL32PC64_L64PC128
+    : CalleeSavedRegs<(add X1, X3, X4, X8, X9, (sequence "X%u", 18, 27),
+                           C1, C3, C4, C8, C9, (sequence "C%u", 18, 27))>;
+
+def CSR_IL32PC64F_L64PC128F
+    : CalleeSavedRegs<(add CSR_IL32PC64_L64PC128,
+                       F8_F, F9_F, (sequence "F%u_F", 18, 27))>;
+
+def CSR_IL32PC64D_L64PC128D
+    : CalleeSavedRegs<(add CSR_IL32PC64_L64PC128,
+                       F8_D, F9_D, (sequence "F%u_D", 18, 27))>;
+
 // Needed for implementation of RISCVRegisterInfo::getNoPreservedMask()
 def CSR_NoRegs : CalleeSavedRegs<(add)>;
 

@@ -71,9 +71,9 @@
 # RUN: llvm-mc -triple=riscv32 -mattr=+e,+d -target-abi ilp32d < %s 2>&1 \
 # RUN:   | FileCheck -check-prefix=RV32EFD-ILP32D %s
 
-# RV32E-ILP32: Only the ilp32e ABI is supported for RV32E (ignoring target-abi)
-# RV32EF-ILP32F: Only the ilp32e ABI is supported for RV32E (ignoring target-abi)
-# RV32EFD-ILP32F: Only the ilp32e ABI is supported for RV32E (ignoring target-abi)
-# RV32EFD-ILP32D: Only the ilp32e ABI is supported for RV32E (ignoring target-abi)
+# RV32E-ILP32: Only the ilp32e and il32pc64e ABIs are supported for RV32E (ignoring target-abi)
+# RV32EF-ILP32F: Only the ilp32e and il32pc64e ABIs are supported for RV32E (ignoring target-abi)
+# RV32EFD-ILP32F: Only the ilp32e and il32pc64e ABIs are supported for RV32E (ignoring target-abi)
+# RV32EFD-ILP32D: Only the ilp32e and il32pc64e ABIs are supported for RV32E (ignoring target-abi)
 
 nop

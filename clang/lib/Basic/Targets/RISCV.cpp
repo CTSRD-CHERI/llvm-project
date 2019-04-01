@@ -11,6 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "RISCV.h"
+#include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/MacroBuilder.h"
 #include "llvm/ADT/StringSwitch.h"
 
@@ -116,14 +117,16 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__riscv_cmodel_medany");
 
   StringRef ABIName = getABI();
-  if (ABIName == "ilp32f" || ABIName == "lp64f")
+  if (ABIName == "ilp32f" || ABIName == "lp64f" ||
+      ABIName == "il32pc64f" || ABIName == "l64pc128f")
     Builder.defineMacro("__riscv_float_abi_single");
-  else if (ABIName == "ilp32d" || ABIName == "lp64d")
+  else if (ABIName == "ilp32d" || ABIName == "lp64d" ||
+           ABIName == "il32pc64d" || ABIName == "l64pc128d")
     Builder.defineMacro("__riscv_float_abi_double");
   else
     Builder.defineMacro("__riscv_float_abi_soft");
 
-  if (ABIName == "ilp32e")
+  if (ABIName == "ilp32e" || ABIName == "il32pc64e")
     Builder.defineMacro("__riscv_abi_rve");
 
   if (HasM) {
@@ -145,6 +148,15 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
     Builder.defineMacro("__riscv_compressed");
 
   if (HasCheri) {
+    // XXX-JC: Do we really want the same ABI constants as CHERI-MIPS?
+    if (CapabilityABI) {
+      auto CapTableABI = llvm::MCTargetOptions::cheriCapabilityTableABI();
+      if (CapTableABI != llvm::CheriCapabilityTableABI::Legacy) {
+        Builder.defineMacro("__CHERI_CAPABILITY_TABLE__",
+                            Twine(((int)CapTableABI) + 1));
+      }
+    }
+
     // Macros for use with the set and get permissions builtins.
     Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1<<0));
     Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__",
@@ -204,6 +216,16 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
   }
 
   setDataLayout();
+
+  return true;
+}
+
+bool RISCVTargetInfo::validateTarget(DiagnosticsEngine &Diags) const {
+  if (CapabilityABI && !HasCheri) {
+    Diags.Report(diag::err_riscv_invalid_abi) << ABI
+      << "pure capability ABI requires xcheri extension to be specified";
+    return false;
+  }
 
   return true;
 }

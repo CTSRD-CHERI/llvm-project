@@ -59,22 +59,32 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   case RISCVABI::ABI_ILP32:
   case RISCVABI::ABI_LP64:
     return CSR_ILP32_LP64_SaveList;
+  case RISCVABI::ABI_IL32PC64:
+  case RISCVABI::ABI_L64PC128:
+    return CSR_IL32PC64_L64PC128_SaveList;
   case RISCVABI::ABI_ILP32F:
   case RISCVABI::ABI_LP64F:
     return CSR_ILP32F_LP64F_SaveList;
+  case RISCVABI::ABI_IL32PC64F:
+  case RISCVABI::ABI_L64PC128F:
+    return CSR_IL32PC64F_L64PC128F_SaveList;
   case RISCVABI::ABI_ILP32D:
   case RISCVABI::ABI_LP64D:
     return CSR_ILP32D_LP64D_SaveList;
+  case RISCVABI::ABI_IL32PC64D:
+  case RISCVABI::ABI_L64PC128D:
+    return CSR_IL32PC64D_L64PC128D_SaveList;
   }
 }
 
 BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   const RISCVFrameLowering *TFI = getFrameLowering(MF);
+  const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
   BitVector Reserved(getNumRegs());
 
   // Mark any registers requested to be reserved as such
   for (size_t Reg = 0; Reg < getNumRegs(); Reg++) {
-    if (MF.getSubtarget<RISCVSubtarget>().isRegisterReservedByUser(Reg))
+    if (STI.isRegisterReservedByUser(Reg))
       markSuperRegs(Reserved, Reg);
   }
 
@@ -98,7 +108,7 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   // Reserve the base register if we need to realign the stack and allocate
   // variable-sized objects at runtime.
   if (TFI->hasBP(MF))
-    markSuperRegs(Reserved, RISCVABI::getBPReg()); // bp
+    markSuperRegs(Reserved, RISCVABI::getBPReg(STI.getTargetABI())); // (c)bp
   assert(checkAllSuperRegsMarked(Reserved));
   return Reserved;
 }
@@ -124,7 +134,8 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   MachineInstr &MI = *II;
   MachineFunction &MF = *MI.getParent()->getParent();
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  const RISCVInstrInfo *TII = MF.getSubtarget<RISCVSubtarget>().getInstrInfo();
+  const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
+  const RISCVInstrInfo *TII = STI.getInstrInfo();
   DebugLoc DL = MI.getDebugLoc();
 
   int FrameIndex = MI.getOperand(FIOperandNum).getIndex();
@@ -145,13 +156,23 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     assert(isInt<32>(Offset) && "Int32 expected");
     // The offset won't fit in an immediate, so use a scratch register instead
     // Modify Offset and FrameReg appropriately
+    unsigned Opc;
     Register ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+    Register DestReg;
+    if (RISCVABI::isCheriPureCapABI(STI.getTargetABI())) {
+      Opc = RISCV::CIncOffset;
+      DestReg = MRI.createVirtualRegister(&RISCV::GPCRRegClass);
+    } else {
+      Opc = RISCV::ADD;
+      DestReg = ScratchReg;
+    }
+
     TII->movImm(MBB, II, DL, ScratchReg, Offset);
-    BuildMI(MBB, II, DL, TII->get(RISCV::ADD), ScratchReg)
+    BuildMI(MBB, II, DL, TII->get(Opc), DestReg)
         .addReg(FrameReg)
         .addReg(ScratchReg, RegState::Kill);
     Offset = 0;
-    FrameReg = ScratchReg;
+    FrameReg = DestReg;
     FrameRegIsKill = true;
   }
 
@@ -161,8 +182,8 @@ void RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 }
 
 Register RISCVRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
-  const TargetFrameLowering *TFI = getFrameLowering(MF);
-  return TFI->hasFP(MF) ? RISCV::X8 : RISCV::X2;
+  const RISCVFrameLowering *TFI = getFrameLowering(MF);
+  return TFI->hasFP(MF) ? TFI->getFPReg() : TFI->getSPReg();
 }
 
 const uint32_t *
@@ -186,11 +207,20 @@ RISCVRegisterInfo::getCallPreservedMask(const MachineFunction & MF,
   case RISCVABI::ABI_ILP32:
   case RISCVABI::ABI_LP64:
     return CSR_ILP32_LP64_RegMask;
+  case RISCVABI::ABI_IL32PC64:
+  case RISCVABI::ABI_L64PC128:
+    return CSR_IL32PC64_L64PC128_RegMask;
   case RISCVABI::ABI_ILP32F:
   case RISCVABI::ABI_LP64F:
     return CSR_ILP32F_LP64F_RegMask;
+  case RISCVABI::ABI_IL32PC64F:
+  case RISCVABI::ABI_L64PC128F:
+    return CSR_IL32PC64F_L64PC128F_RegMask;
   case RISCVABI::ABI_ILP32D:
   case RISCVABI::ABI_LP64D:
     return CSR_ILP32D_LP64D_RegMask;
+  case RISCVABI::ABI_IL32PC64D:
+  case RISCVABI::ABI_L64PC128D:
+    return CSR_IL32PC64D_L64PC128D_RegMask;
   }
 }

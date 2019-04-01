@@ -247,6 +247,16 @@ def GPRTC : RegisterClass<"RISCV", [XLenVT], 32, (add
       [RegInfo<32,32,32>, RegInfo<64,64,64>, RegInfo<32,32,32>]>;
 }
 
+def GPCRTC : RegisterClass<"RISCV", [CLenVT], 32, (add
+    (sequence "C%u", 5, 7),
+    (sequence "C%u", 10, 17),
+    (sequence "C%u", 28, 31)
+  )> {
+  let RegInfos = RegInfoByHwMode<
+      [RV32,              RV64,                 DefaultMode],
+      [RegInfo<64,64,64>, RegInfo<128,128,128>, RegInfo<64,64,64>]>;
+}
+
 def SP : RegisterClass<"RISCV", [XLenVT], 32, (add X2)> {
   let RegInfos = RegInfoByHwMode<
       [RV32,              RV64,              DefaultMode],

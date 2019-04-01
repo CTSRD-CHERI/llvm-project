@@ -35,20 +35,41 @@ RISCVTargetELFStreamer::RISCVTargetELFStreamer(MCStreamer &S,
   if (Features[RISCV::FeatureStdExtC])
     EFlags |= ELF::EF_RISCV_RVC;
 
+  if (Features[RISCV::FeatureCapMode])
+    EFlags |= ELF::EF_RISCV_CAP_MODE;
+
   switch (ABI) {
   case RISCVABI::ABI_ILP32:
   case RISCVABI::ABI_LP64:
+    break;
+  case RISCVABI::ABI_IL32PC64:
+  case RISCVABI::ABI_L64PC128:
+    EFlags |= ELF::EF_RISCV_CHERIABI;
     break;
   case RISCVABI::ABI_ILP32F:
   case RISCVABI::ABI_LP64F:
     EFlags |= ELF::EF_RISCV_FLOAT_ABI_SINGLE;
     break;
+  case RISCVABI::ABI_IL32PC64F:
+  case RISCVABI::ABI_L64PC128F:
+    EFlags |= ELF::EF_RISCV_FLOAT_ABI_SINGLE;
+    EFlags |= ELF::EF_RISCV_CHERIABI;
+    break;
   case RISCVABI::ABI_ILP32D:
   case RISCVABI::ABI_LP64D:
     EFlags |= ELF::EF_RISCV_FLOAT_ABI_DOUBLE;
     break;
+  case RISCVABI::ABI_IL32PC64D:
+  case RISCVABI::ABI_L64PC128D:
+    EFlags |= ELF::EF_RISCV_FLOAT_ABI_DOUBLE;
+    EFlags |= ELF::EF_RISCV_CHERIABI;
+    break;
   case RISCVABI::ABI_ILP32E:
     EFlags |= ELF::EF_RISCV_RVE;
+    break;
+  case RISCVABI::ABI_IL32PC64E:
+    EFlags |= ELF::EF_RISCV_RVE;
+    EFlags |= ELF::EF_RISCV_CHERIABI;
     break;
   case RISCVABI::ABI_Unknown:
     llvm_unreachable("Improperly initialised target ABI");
@@ -67,6 +88,8 @@ void RISCVTargetELFStreamer::emitDirectiveOptionRVC() {}
 void RISCVTargetELFStreamer::emitDirectiveOptionNoRVC() {}
 void RISCVTargetELFStreamer::emitDirectiveOptionRelax() {}
 void RISCVTargetELFStreamer::emitDirectiveOptionNoRelax() {}
+void RISCVTargetELFStreamer::emitDirectiveOptionCapMode() {}
+void RISCVTargetELFStreamer::emitDirectiveOptionNoCapMode() {}
 
 void RISCVELFStreamer::EmitCheriIntcap(int64_t Value, unsigned CapSize, SMLoc) {
   unsigned XLenInBytes = Is64Bit ? 8 : 4;

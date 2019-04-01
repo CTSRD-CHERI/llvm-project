@@ -63,11 +63,15 @@ enum {
   MO_TPREL_ADD = 10,
   MO_TLS_GOT_HI = 11,
   MO_TLS_GD_HI = 12,
+  MO_CAPTAB_PCREL_HI = 13,
+  MO_TPREL_CINCOFFSET = 14,
+  MO_TLS_IE_CAPTAB_PCREL_HI = 15,
+  MO_TLS_GD_CAPTAB_PCREL_HI = 16,
 
   // Used to differentiate between target-specific "direct" flags and "bitmask"
   // flags. A machine operand can only have one "direct" flag, but can have
   // multiple "bitmask" flags.
-  MO_DIRECT_FLAG_MASK = 15
+  MO_DIRECT_FLAG_MASK = 31
 };
 } // namespace RISCVII
 
@@ -201,9 +205,16 @@ enum ABI {
   ABI_ILP32F,
   ABI_ILP32D,
   ABI_ILP32E,
+  ABI_IL32PC64,
+  ABI_IL32PC64F,
+  ABI_IL32PC64D,
+  ABI_IL32PC64E,
   ABI_LP64,
   ABI_LP64F,
   ABI_LP64D,
+  ABI_L64PC128,
+  ABI_L64PC128F,
+  ABI_L64PC128D,
   ABI_Unknown
 };
 
@@ -213,8 +224,30 @@ ABI computeTargetABI(const Triple &TT, FeatureBitset FeatureBits,
                      StringRef ABIName);
 
 // Returns the register used to hold the stack pointer after realignment.
-Register getBPReg();
+Register getBPReg(ABI TargetABI);
 
+inline static bool isCheriPureCapABI(ABI TargetABI) {
+  switch (TargetABI) {
+  case ABI_ILP32:
+  case ABI_ILP32F:
+  case ABI_ILP32D:
+  case ABI_ILP32E:
+  case ABI_LP64:
+  case ABI_LP64F:
+  case ABI_LP64D:
+    return false;
+  case ABI_IL32PC64:
+  case ABI_IL32PC64F:
+  case ABI_IL32PC64D:
+  case ABI_IL32PC64E:
+  case ABI_L64PC128:
+  case ABI_L64PC128F:
+  case ABI_L64PC128D:
+    return true;
+  default:
+    llvm_unreachable("Improperly initialised target ABI");
+  }
+}
 } // namespace RISCVABI
 
 namespace RISCVFeatures {

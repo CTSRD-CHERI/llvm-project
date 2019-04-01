@@ -80,6 +80,21 @@ def HasCheri : Predicate<"Subtarget->hasCheri()">,
                          AssemblerPredicate<"FeatureCheri",
                          "CHERI Extension">;
 
+def FeatureCapMode
+    : SubtargetFeature<"cap-mode", "IsCapMode", "true",
+                       "Capability mode">;
+def IsCapMode  : Predicate<"Subtarget->isCapMode()">,
+                           AssemblerPredicate<"FeatureCapMode",
+                           "Capability Mode">;
+def NotCapMode : Predicate<"!Subtarget->isCapMode()">,
+                           AssemblerPredicate<"!FeatureCapMode",
+                           "Not Capability Mode">;
+
+def IsPureCapABI
+    : Predicate<"RISCVABI::isCheriPureCapABI(Subtarget->getTargetABI())">;
+def NotPureCapABI
+    : Predicate<"!RISCVABI::isCheriPureCapABI(Subtarget->getTargetABI())">;
+
 def FeatureRelax
     : SubtargetFeature<"relax", "EnableLinkerRelax", "true",
                        "Enable Linker relaxation.">;

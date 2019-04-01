@@ -52,6 +52,17 @@ unsigned RISCVInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
   case RISCV::FLD:
   case RISCV::LC_64:
   case RISCV::LC_128:
+  case RISCV::CLB:
+  case RISCV::CLBU:
+  case RISCV::CLH:
+  case RISCV::CLHU:
+  case RISCV::CLW:
+  case RISCV::CFLW:
+  case RISCV::CLWU:
+  case RISCV::CLD:
+  case RISCV::CFLD:
+  case RISCV::CLC_64:
+  case RISCV::CLC_128:
     break;
   }
 
@@ -77,6 +88,14 @@ unsigned RISCVInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
   case RISCV::FSD:
   case RISCV::SC_64:
   case RISCV::SC_128:
+  case RISCV::CSB:
+  case RISCV::CSH:
+  case RISCV::CSW:
+  case RISCV::CFSW:
+  case RISCV::CSD:
+  case RISCV::CFSD:
+  case RISCV::CSC_64:
+  case RISCV::CSC_128:
     break;
   }
 
@@ -123,24 +142,40 @@ void RISCVInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
                                          unsigned SrcReg, bool IsKill, int FI,
                                          const TargetRegisterClass *RC,
                                          const TargetRegisterInfo *TRI) const {
+  const RISCVSubtarget &ST = MBB.getParent()->getSubtarget<RISCVSubtarget>();
   DebugLoc DL;
   if (I != MBB.end())
     DL = I->getDebugLoc();
 
   unsigned Opcode;
 
-  if (RISCV::GPRRegClass.hasSubClassEq(RC))
-    Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
-             RISCV::SW : RISCV::SD;
-  else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
-    Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
-             RISCV::SC_64 : RISCV::SC_128;
-  else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
-    Opcode = RISCV::FSW;
-  else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
-    Opcode = RISCV::FSD;
-  else
-    llvm_unreachable("Can't store this register to stack slot");
+  if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
+    if (RISCV::GPRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
+               RISCV::CSW : RISCV::CSD;
+    else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
+               RISCV::CSC_64 : RISCV::CSC_128;
+    else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::CFSW;
+    else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::CFSD;
+    else
+      llvm_unreachable("Can't store this register to stack slot");
+  } else {
+    if (RISCV::GPRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
+               RISCV::SW : RISCV::SD;
+    else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
+               RISCV::SC_64 : RISCV::SC_128;
+    else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::FSW;
+    else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::FSD;
+    else
+      llvm_unreachable("Can't store this register to stack slot");
+  }
 
   BuildMI(MBB, I, DL, get(Opcode))
       .addReg(SrcReg, getKillRegState(IsKill))
@@ -153,24 +188,40 @@ void RISCVInstrInfo::loadRegFromStackSlot(MachineBasicBlock &MBB,
                                           unsigned DstReg, int FI,
                                           const TargetRegisterClass *RC,
                                           const TargetRegisterInfo *TRI) const {
+  const RISCVSubtarget &ST = MBB.getParent()->getSubtarget<RISCVSubtarget>();
   DebugLoc DL;
   if (I != MBB.end())
     DL = I->getDebugLoc();
 
   unsigned Opcode;
 
-  if (RISCV::GPRRegClass.hasSubClassEq(RC))
-    Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
-             RISCV::LW : RISCV::LD;
-  else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
-    Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
-             RISCV::LC_64 : RISCV::LC_128;
-  else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
-    Opcode = RISCV::FLW;
-  else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
-    Opcode = RISCV::FLD;
-  else
-    llvm_unreachable("Can't load this register from stack slot");
+  if (RISCVABI::isCheriPureCapABI(ST.getTargetABI())) {
+    if (RISCV::GPRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
+               RISCV::CLW : RISCV::CLD;
+    else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
+               RISCV::CLC_64 : RISCV::CLC_128;
+    else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::CFLW;
+    else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::CFLD;
+    else
+      llvm_unreachable("Can't load this register from stack slot");
+  } else {
+    if (RISCV::GPRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPRRegClass) == 32 ?
+               RISCV::LW : RISCV::LD;
+    else if (RISCV::GPCRRegClass.hasSubClassEq(RC))
+      Opcode = TRI->getRegSizeInBits(RISCV::GPCRRegClass) == 64 ?
+               RISCV::LC_64 : RISCV::LC_128;
+    else if (RISCV::FPR32RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::FLW;
+    else if (RISCV::FPR64RegClass.hasSubClassEq(RC))
+      Opcode = RISCV::FLD;
+    else
+      llvm_unreachable("Can't load this register from stack slot");
+  }
 
   BuildMI(MBB, I, DL, get(Opcode), DstReg).addFrameIndex(FI).addImm(0);
 }
@@ -492,6 +543,7 @@ unsigned RISCVInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
   case RISCV::PseudoLA:
   case RISCV::PseudoLA_TLS_IE:
   case RISCV::PseudoLA_TLS_GD:
+  case RISCV::PseudoCLGC:
     return 8;
   case TargetOpcode::INLINEASM:
   case TargetOpcode::INLINEASM_BR: {
@@ -648,7 +700,11 @@ RISCVInstrInfo::getSerializableDirectMachineOperandTargetFlags() const {
       {MO_TPREL_HI, "riscv-tprel-hi"},
       {MO_TPREL_ADD, "riscv-tprel-add"},
       {MO_TLS_GOT_HI, "riscv-tls-got-hi"},
-      {MO_TLS_GD_HI, "riscv-tls-gd-hi"}};
+      {MO_TLS_GD_HI, "riscv-tls-gd-hi"},
+      {MO_CAPTAB_PCREL_HI, "riscv-captab-pcrel-hi"},
+      {MO_TPREL_CINCOFFSET, "riscv-tprel-cincoffset"},
+      {MO_TLS_IE_CAPTAB_PCREL_HI, "riscv-tls-ie-captab-pcrel-hi"},
+      {MO_TLS_GD_CAPTAB_PCREL_HI, "riscv-tls-gd-captab-pcrel-hi"}};
   return makeArrayRef(TargetFlags);
 }
 bool RISCVInstrInfo::isFunctionSafeToOutlineFrom(
