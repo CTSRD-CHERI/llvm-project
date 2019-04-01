@@ -48,7 +48,7 @@ public:
   // If the section has the SHF_ALLOC flag and the size may be changed if
   // thunks are added, update the section size.
   virtual bool updateAllocSize() { return false; }
-  virtual bool empty() const { return false; }
+  virtual bool isNeeded() const { return true; }
 
   static bool classof(const SectionBase *D) {
     return D->kind() == InputSectionBase::Synthetic;
@@ -66,7 +66,7 @@ public:
   EhFrameSection();
   void writeTo(uint8_t *Buf) override;
   void finalizeContents() override;
-  bool empty() const override { return Sections.empty(); }
+  bool isNeeded() const override { return !Sections.empty(); }
   size_t getSize() const override { return Size; }
 
   template <class ELFT> void addSection(InputSectionBase *S);
@@ -111,7 +111,7 @@ public:
   GotSection();
   size_t getSize() const override { return Size; }
   void finalizeContents() override;
-  bool empty() const override;
+  bool isNeeded() const override;
   void writeTo(uint8_t *Buf) override;
 
   void addEntry(Symbol &Sym);
@@ -171,7 +171,7 @@ public:
   void writeTo(uint8_t *) override {
     llvm_unreachable("unexpected writeTo() call for SHT_NOBITS section");
   }
-  bool empty() const override { return getSize() == 0; }
+  bool isNeeded() const override { return Size != 0; }
   size_t getSize() const override { return Size; }
 
   static bool classof(const SectionBase *S) { return S->Bss; }
@@ -185,7 +185,7 @@ public:
   size_t getSize() const override { return Size; }
   bool updateAllocSize() override;
   void finalizeContents() override;
-  bool empty() const override;
+  bool isNeeded() const override;
 
   // Join separate GOTs built for each input file to generate
   // primary and optional multiple secondary GOTs.
@@ -361,7 +361,7 @@ public:
   void addEntry(Symbol &Sym);
   size_t getSize() const override;
   void writeTo(uint8_t *Buf) override;
-  bool empty() const override;
+  bool isNeeded() const override;
 
   // Flag to force GotPlt to be in output if we have relocations
   // that relies on its address.
@@ -381,7 +381,7 @@ public:
   void addEntry(Symbol &Sym);
   size_t getSize() const override;
   void writeTo(uint8_t *Buf) override;
-  bool empty() const override { return Entries.empty(); }
+  bool isNeeded() const override { return !Entries.empty(); }
 
 private:
   std::vector<const Symbol *> Entries;
@@ -484,7 +484,7 @@ public:
                 uint64_t OffsetInSec, Symbol *Sym, int64_t Addend, RelExpr Expr,
                 RelType Type);
   void addReloc(const DynamicReloc &Reloc);
-  bool empty() const override { return Relocs.empty(); }
+  bool isNeeded() const override { return !Relocs.empty(); }
   size_t getSize() const override { return Relocs.size() * this->Entsize; }
   size_t getRelativeRelocCount() const { return NumRelativeRelocs; }
   void finalizeContents() override;
@@ -536,7 +536,7 @@ struct RelativeReloc {
 class RelrBaseSection : public SyntheticSection {
 public:
   RelrBaseSection();
-  bool empty() const override { return Relocs.empty(); }
+  bool isNeeded() const override { return !Relocs.empty(); }
   std::vector<RelativeReloc> Relocs;
 };
 
@@ -603,7 +603,7 @@ public:
 
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override;
-  bool empty() const override;
+  bool isNeeded() const override;
   void finalizeContents() override;
 };
 
@@ -660,7 +660,7 @@ public:
   PltSection(bool IsIplt);
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override;
-  bool empty() const override { return Entries.empty(); }
+  bool isNeeded() const override { return !Entries.empty(); }
   void addSymbols();
   template <class ELFT> void addEntry(Symbol &Sym);
 
@@ -707,7 +707,7 @@ public:
   template <typename ELFT> static GdbIndexSection *create();
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override { return Size; }
-  bool empty() const override;
+  bool isNeeded() const override;
 
 private:
   struct GdbIndexHeader {
@@ -747,7 +747,7 @@ public:
   void write();
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override;
-  bool empty() const override;
+  bool isNeeded() const override;
 };
 
 // For more information about .gnu.version and .gnu.version_r see:
@@ -784,7 +784,7 @@ public:
   void finalizeContents() override;
   size_t getSize() const override;
   void writeTo(uint8_t *Buf) override;
-  bool empty() const override;
+  bool isNeeded() const override;
 };
 
 class VersionNeedBaseSection : public SyntheticSection {
@@ -818,7 +818,7 @@ public:
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override;
   size_t getNeedNum() const override { return Needed.size(); }
-  bool empty() const override;
+  bool isNeeded() const override;
 };
 
 // MergeSyntheticSection is a class that allows us to put mergeable sections
@@ -979,7 +979,7 @@ public:
   ARMExidxSyntheticSection();
   size_t getSize() const override { return Size; }
   void writeTo(uint8_t *Buf) override;
-  bool empty() const override { return Empty; }
+  bool isNeeded() const override { return !Empty; }
   // Sort and remove duplicate entries.
   void finalizeContents() override;
   InputSection *getLinkOrderDep() const;
@@ -1045,7 +1045,7 @@ public:
   void addEntry(Symbol &Sym);
   size_t getSize() const override;
   void writeTo(uint8_t *Buf) override;
-  bool empty() const override;
+  bool isNeeded() const override;
   void finalizeContents() override { Finalized = true; }
 
 private:
