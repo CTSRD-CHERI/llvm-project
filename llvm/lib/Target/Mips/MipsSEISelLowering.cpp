@@ -33,6 +33,7 @@
 #include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/DebugLoc.h"
+#include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -1556,6 +1557,13 @@ SDValue MipsSETargetLowering::lowerINTRINSIC_WO_CHAIN(SDValue Op,
   switch (Intrinsic) {
   default:
     return SDValue();
+  case Intrinsic::mips_captable_get:
+    if (ABI.UsesCapabilityTable())
+      return getCapGlobalReg(DAG, CapType);
+    DAG.getContext()->diagnose(DiagnosticInfoUnsupported(
+        DAG.getMachineFunction().getFunction(),
+        "the current ABI does not use a captable", DL.getDebugLoc()));
+    return DAG.getNullCapability(DL, CapType);
   case Intrinsic::mips_shilo:
     return lowerDSPIntr(Op, DAG, MipsISD::SHILO);
   case Intrinsic::mips_dpau_h_qbl:

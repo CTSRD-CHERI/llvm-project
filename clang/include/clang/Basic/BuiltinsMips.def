@@ -913,6 +913,7 @@ BUILTIN(__builtin_mips_cheri_check_perms, "vvC*mz", "nc")
 BUILTIN(__builtin_mips_cheri_check_type, "vvC*mvC*m", "nc")
 
 BUILTIN(__builtin_mips_cheri_get_global_data_cap, "v*m", "nc")
+BUILTIN(__builtin_mips_cheri_get_captable, "v*m", "nc")
 BUILTIN(__builtin_mips_cheri_get_invoke_data_cap, "v*m", "nc")
 BUILTIN(__builtin_mips_cheri_get_kernel_cap1, "v*m", "nc")
 BUILTIN(__builtin_mips_cheri_get_kernel_cap2, "v*m", "nc")

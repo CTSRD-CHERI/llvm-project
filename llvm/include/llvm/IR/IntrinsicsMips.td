@@ -1776,6 +1776,9 @@ def int_mips_cap_cause_set :
   GCCBuiltinAlias<"__builtin_mips_cheri_set_cause">,
   GCCBuiltin<"__builtin_mips_cheri_cause_set">,
   Intrinsic<[], [llvm_i64_ty], []>;
+def int_mips_captable_get :
+  GCCBuiltin<"__builtin_mips_cheri_get_captable">,
+  Intrinsic<[llvm_fatptr_ty], [], [IntrNoMem]>;
 def int_mips_idc_get :
   GCCBuiltinAlias<"__builtin_mips_cheri_get_invoke_data_cap">,
   GCCBuiltin<"__builtin_mips_cheri_invoke_data_cap_get">,

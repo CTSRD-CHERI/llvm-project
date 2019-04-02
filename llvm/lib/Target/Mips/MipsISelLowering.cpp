@@ -180,6 +180,7 @@ SDValue MipsTargetLowering::getGlobalReg(SelectionDAG &DAG, EVT Ty,
 
 SDValue MipsTargetLowering::getCapGlobalReg(SelectionDAG &DAG, EVT Ty) const {
   assert(Ty.isFatPointer());
+  assert(ABI.UsesCapabilityTable());
   MipsFunctionInfo *FI = DAG.getMachineFunction().getInfo<MipsFunctionInfo>();
   return DAG.getRegister(FI->getCapGlobalBaseReg(), Ty);
 }
