@@ -260,8 +260,9 @@ InputArgList Driver::ParseArgStrings(ArrayRef<const char *> ArgStrings,
                           : diag::err_drv_unknown_argument;
       Diags.Report(DiagID) << ArgString;
     } else {
-      DiagID = IsCLMode() ? diag::warn_drv_unknown_argument_clang_cl_with_suggestion
-                          : diag::err_drv_unknown_argument_with_suggestion;
+      DiagID = IsCLMode()
+                   ? diag::warn_drv_unknown_argument_clang_cl_with_suggestion
+                   : diag::err_drv_unknown_argument_with_suggestion;
       Diags.Report(DiagID) << ArgString << Nearest;
     }
     ContainsError |= Diags.getDiagnosticLevel(DiagID, SourceLocation()) >
@@ -1433,11 +1434,13 @@ void Driver::generateCompilationDiagnostics(
 }
 
 void Driver::setUpResponseFiles(Compilation &C, Command &Cmd) {
-  // Since commandLineFitsWithinSystemLimits() may underestimate system's capacity
-  // if the tool does not support response files, there is a chance/ that things
-  // will just work without a response file, so we silently just skip it.
+  // Since commandLineFitsWithinSystemLimits() may underestimate system's
+  // capacity if the tool does not support response files, there is a chance/
+  // that things will just work without a response file, so we silently just
+  // skip it.
   if (Cmd.getCreator().getResponseFilesSupport() == Tool::RF_None ||
-      llvm::sys::commandLineFitsWithinSystemLimits(Cmd.getExecutable(), Cmd.getArguments()))
+      llvm::sys::commandLineFitsWithinSystemLimits(Cmd.getExecutable(),
+                                                   Cmd.getArguments()))
     return;
 
   std::string TmpName = GetTemporaryPath("response", "txt");
@@ -2046,7 +2049,8 @@ void Driver::BuildInputs(const ToolChain &TC, DerivedArgList &Args,
 
     Arg *Previous = nullptr;
     bool ShowNote = false;
-    for (Arg *A : Args.filtered(options::OPT__SLASH_TC, options::OPT__SLASH_TP)) {
+    for (Arg *A :
+         Args.filtered(options::OPT__SLASH_TC, options::OPT__SLASH_TP)) {
       if (Previous) {
         Diag(clang::diag::warn_drv_overriding_flag_option)
           << Previous->getSpelling() << A->getSpelling();
@@ -4276,8 +4280,8 @@ const char *Driver::GetNamedOutputPath(Compilation &C, const JobAction &JA,
       SmallString<128> CrashDirectory(A->getValue());
       llvm::sys::path::append(CrashDirectory, Split.first);
       const char *Middle = Suffix ? "-%%%%%%." : "-%%%%%%";
-      std::error_code EC =
-          llvm::sys::fs::createUniqueFile(CrashDirectory + Middle + Suffix, TmpName);
+      std::error_code EC = llvm::sys::fs::createUniqueFile(
+          CrashDirectory + Middle + Suffix, TmpName);
       if (EC) {
         Diag(clang::diag::err_unable_to_make_temp) << EC.message();
         return "";
@@ -4788,7 +4792,8 @@ bool Driver::GetReleaseVersion(StringRef Str,
   return false;
 }
 
-std::pair<unsigned, unsigned> Driver::getIncludeExcludeOptionFlagMasks(bool IsClCompatMode) const {
+std::pair<unsigned, unsigned>
+Driver::getIncludeExcludeOptionFlagMasks(bool IsClCompatMode) const {
   unsigned IncludedFlagsBitmask = 0;
   unsigned ExcludedFlagsBitmask = options::NoDriverOption;
 
