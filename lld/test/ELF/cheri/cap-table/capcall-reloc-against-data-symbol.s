@@ -36,9 +36,11 @@
 # Check that we get a warning both when linking static and dynamic:
 # Static:
 # RUN: ld.lld -o %t.exe %t.o %t-libcheri.o 2>&1 | FileCheck %s -check-prefixes CHECK,STATIC -implicit-check-not=warning:
+# RUN: ld.lld -pie -o %t2.exe %t-libcheri.o %t.o  2>&1 | FileCheck %s -check-prefixes CHECK,STATIC -implicit-check-not=warning:
 # in a separate DSO:
 # RUN: ld.lld -shared -o %t-libcheri.so %t-libcheri.o
 # RUN: ld.lld -o %t2.exe %t-libcheri.so %t.o  2>&1 | FileCheck %s -check-prefixes CHECK,DYNAMIC -implicit-check-not=warning:
+# RUN: ld.lld -pie -o %t2.exe %t-libcheri.so %t.o  2>&1 | FileCheck %s -check-prefixes CHECK,DYNAMIC -implicit-check-not=warning:
 
 .ifdef BUILD_LIBCHERI
 	.text
@@ -75,28 +77,28 @@ __start:
 
 	# This should give an error
 	clcbi $c1, %capcall20(cheri_invoke)($cgp)
-# CHECK: ld.lld: warning: call relocation aginst non-function symbol {{(shared )?}}<unknown kind> cheri_invoke
+# CHECK: ld.lld: warning: call relocation against non-function symbol {{(shared )?}}<unknown kind> cheri_invoke
 # DYNAMIC-NEXT: >>> defined in {{.+}}capcall-reloc-against-data-symbol.s.tmp-libcheri.so
 # STATIC-NEXT: >>> defined in ({{.+}}capcall-reloc-against-data-symbol.s.tmp-libcheri.o:(cheri_invoke))
 # CHECK-NEXT: >>> referenced by function __start
 # CHECK-NEXT: >>> defined in  ({{.+}}capcall-reloc-against-data-symbol.s.tmp.o:(__start))
 # CHECK-EMPTY:
 	clc $c1, $zero, %capcall(cheri_invoke)($cgp)
-# CHECK-NEXT: ld.lld: warning: call relocation aginst non-function symbol {{(shared )?}}<unknown kind> cheri_invoke
+# CHECK-NEXT: ld.lld: warning: call relocation against non-function symbol {{(shared )?}}<unknown kind> cheri_invoke
 # DYNAMIC-NEXT: >>> defined in {{.+}}capcall-reloc-against-data-symbol.s.tmp-libcheri.so
 # STATIC-NEXT: >>> defined in  ({{.+}}capcall-reloc-against-data-symbol.s.tmp-libcheri.o:(cheri_invoke))
 # CHECK-NEXT: >>> referenced by function __start
 # CHECK-NEXT: >>> defined in  ({{.+}}capcall-reloc-against-data-symbol.s.tmp.o:(__start))
 # CHECK-EMPTY:
 	lui $at, %capcall_hi(cheri_invoke)
-# CHECK-NEXT: ld.lld: warning: call relocation aginst non-function symbol {{(shared )?}}<unknown kind> cheri_invoke
+# CHECK-NEXT: ld.lld: warning: call relocation against non-function symbol {{(shared )?}}<unknown kind> cheri_invoke
 # DYNAMIC-NEXT: >>> defined in {{.+}}capcall-reloc-against-data-symbol.s.tmp-libcheri.so
 # STATIC-NEXT: >>> defined in  ({{.+}}capcall-reloc-against-data-symbol.s.tmp-libcheri.o:(cheri_invoke))
 # CHECK-NEXT: >>> referenced by function __start
 # CHECK-NEXT: >>> defined in  ({{.+}}capcall-reloc-against-data-symbol.s.tmp.o:(__start))
 # CHECK-EMPTY:
 	daddiu $at, $at, %capcall_lo(cheri_invoke)
-# CHECK-NEXT: ld.lld: warning: call relocation aginst non-function symbol {{(shared )?}}<unknown kind> cheri_invoke
+# CHECK-NEXT: ld.lld: warning: call relocation against non-function symbol {{(shared )?}}<unknown kind> cheri_invoke
 # DYNAMIC-NEXT: >>> defined in {{.+}}capcall-reloc-against-data-symbol.s.tmp-libcheri.so
 # STATIC-NEXT: >>> defined in  ({{.+}}capcall-reloc-against-data-symbol.s.tmp-libcheri.o:(cheri_invoke))
 # CHECK-NEXT: >>> referenced by function __start

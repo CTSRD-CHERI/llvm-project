@@ -628,7 +628,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
   case R_MIPS_CHERI_CAPCALL_LO16:
     if (!Sym.isFunc() && !Sym.isUndefWeak()) {
       CheriCapRelocLocation Loc{IS, Offset, false};
-      std::string Msg = "call relocation aginst non-function symbol " + verboseToString(&Sym, 0) +
+      std::string Msg = "call relocation against non-function symbol " + verboseToString(&Sym, 0) +
       "\n>>> referenced by " + Loc.toString();
       if (Sym.isUndefined() && Config->AllowShlibUndefined) {
         // Don't fail the build for shared libraries unless
