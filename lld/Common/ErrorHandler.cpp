@@ -115,11 +115,14 @@ void ErrorHandler::warn(const Twine &Msg) {
   }
   static uint64_t WarningCount = 0;
   std::lock_guard<std::mutex> Lock(Mu);
-  newline(ErrorOS, Msg);
   if (WarningLimit == 0 || WarningCount < WarningLimit) {
+    newline(ErrorOS, Msg);
     print("warning: ", raw_ostream::MAGENTA);
     *ErrorOS << Msg << "\n";
   } else if (WarningCount == WarningLimit) {
+    // Set newline flag based on limit exceeded flag and not the message that
+    // wasn't printed:
+    newline(ErrorOS, WarningLimitExceededMsg);
     print("warning: ", raw_ostream::MAGENTA);
     *ErrorOS << WarningLimitExceededMsg << "\n";
   }
@@ -128,12 +131,15 @@ void ErrorHandler::warn(const Twine &Msg) {
 
 void ErrorHandler::error(const Twine &Msg) {
   std::lock_guard<std::mutex> Lock(Mu);
-  newline(ErrorOS, Msg);
 
   if (ErrorLimit == 0 || ErrorCount < ErrorLimit) {
+    newline(ErrorOS, Msg);
     print("error: ", raw_ostream::RED);
     *ErrorOS << Msg << "\n";
   } else if (ErrorCount == ErrorLimit) {
+    // Set newline flag based on limit exceeded flag and not the message that
+    // wasn't printed:
+    newline(ErrorOS, ErrorLimitExceededMsg);
     print("error: ", raw_ostream::RED);
     *ErrorOS << ErrorLimitExceededMsg << "\n";
     if (ExitEarly)
