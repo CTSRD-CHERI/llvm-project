@@ -606,7 +606,7 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
   case R_MIPS_CHERI_CAPCALL_CLC11:
   case R_MIPS_CHERI_CAPCALL_HI16:
   case R_MIPS_CHERI_CAPCALL_LO16:
-    if (!Sym.isFunc()) {
+    if (!Sym.isFunc() && !Sym.isUndefWeak()) {
       CheriCapRelocLocation Loc{IS, Offset, false};
       warn("call relocation aginst non-function symbol " + verboseToString(&Sym, 0) +
       "\n>>> referenced by " + Loc.toString());

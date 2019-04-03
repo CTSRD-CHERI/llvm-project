@@ -30,14 +30,15 @@
 # RELOCS-NEXT:     0x34 R_MIPS_CHERI_CAPTAB_CLC11/R_MIPS_NONE/R_MIPS_NONE cheri_invoke 0x0
 # RELOCS-NEXT:     0x38 R_MIPS_CHERI_CAPTAB_HI16/R_MIPS_NONE/R_MIPS_NONE cheri_invoke 0x0
 # RELOCS-NEXT:     0x3C R_MIPS_CHERI_CAPTAB_LO16/R_MIPS_NONE/R_MIPS_NONE cheri_invoke 0x0
+# RELOCS-NEXT:     0x40 R_MIPS_CHERI_CAPCALL_CLC11/R_MIPS_NONE/R_MIPS_NONE weak_sym 0x0
 # RELOCS-NEXT:   }
 
 # Check that we get a warning both when linking static and dynamic:
 # Static:
-# RUN: ld.lld -o %t.exe %t.o %t-libcheri.o 2>&1 | FileCheck %s -check-prefixes CHECK,STATIC
+# RUN: ld.lld -o %t.exe %t.o %t-libcheri.o 2>&1 | FileCheck %s -check-prefixes CHECK,STATIC -implicit-check-not=warning:
 # in a separate DSO:
 # RUN: ld.lld -shared -o %t-libcheri.so %t-libcheri.o
-# RUN: ld.lld -o %t2.exe %t-libcheri.so %t.o  2>&1 | FileCheck %s -check-prefixes CHECK,DYNAMIC
+# RUN: ld.lld -o %t2.exe %t-libcheri.so %t.o  2>&1 | FileCheck %s -check-prefixes CHECK,DYNAMIC -implicit-check-not=warning:
 
 .ifdef BUILD_LIBCHERI
 	.text
@@ -61,6 +62,8 @@ cheri_invoke:
 .global cheri_invoke
 .global libcheri_invoke
 .global __start
+.global weak_sym
+.weak weak_sym
 .ent __start
 .set noat
 __start:
@@ -112,5 +115,9 @@ __start:
 	clc $c1, $zero, %captab(cheri_invoke)($cgp)
 	lui $at, %captab_hi(cheri_invoke)
 	daddiu $at, $at, %captab_lo(cheri_invoke)
+
+	# No warning against a weak symbol:
+	clc $c1, $zero, %capcall(weak_sym)($cgp)
+
 .end __start
 .endif
