@@ -121,7 +121,6 @@ SymbolAndOffset SymbolAndOffset::findRealSymbol() const {
   return *this;
 }
 
-template<typename ELFT>
 std::string CheriCapRelocLocation::toString() const {
   SymbolAndOffset Resolved =
       SymbolAndOffset::fromSectionWithOffset(Section, Offset);
@@ -248,7 +247,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   uint64_t CurrentEntryOffset = RelocsMap.size() * RelocSize;
 
   std::string SourceMsg =
-      SourceSymbol ? verboseToString(SourceSymbol) : Loc.toString<ELFT>();
+      SourceSymbol ? verboseToString(SourceSymbol) : Loc.toString();
   if (Target.Sym->isUndefined() && !Target.Sym->isUndefWeak()) {
     std::string Msg =
         "cap_reloc against undefined symbol: " + toString(*Target.Sym) +
@@ -262,7 +261,7 @@ void CheriCapRelocsSection<ELFT>::addCapReloc(CheriCapRelocLocation Loc,
   // assert(CapabilityOffset >= 0 && "Negative offsets not supported");
   if (errorHandler().Verbose && CapabilityOffset < 0)
     message("global capability offset " + Twine(CapabilityOffset) +
-            " is less than 0:\n>>> Location: " + Loc.toString<ELFT>() +
+            " is less than 0:\n>>> Location: " + Loc.toString() +
             "\n>>> Target: " + Target.verboseToString());
 
   bool CanWriteLoc = (Loc.Section->Flags & SHF_WRITE) || !Config->ZText;
@@ -353,7 +352,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
   uint64_t TargetSize = Reloc.Target.Sym->getSize();
   if (TargetSize > INT_MAX) {
     error("Insanely large symbol size for " + Reloc.Target.verboseToString() +
-          "for cap_reloc at" + Location.toString<ELFT>());
+          "for cap_reloc at" + Location.toString());
     return 0;
   }
   auto TargetSym = Reloc.Target.Sym;
@@ -399,7 +398,7 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
     if (WarnAboutUnknownSize || errorHandler().Verbose) {
       std::string Msg = "could not determine size of cap reloc against " +
                         Reloc.Target.verboseToString() +
-                        "\n>>> referenced by " + Location.toString<ELFT>();
+                        "\n>>> referenced by " + Location.toString();
       if (Strict)
         warn(Msg);
       else
@@ -607,6 +606,11 @@ void CheriCapTableSection::addEntry(Symbol &Sym, bool SmallImm, RelType Type,
   case R_MIPS_CHERI_CAPCALL_CLC11:
   case R_MIPS_CHERI_CAPCALL_HI16:
   case R_MIPS_CHERI_CAPCALL_LO16:
+    if (!Sym.isFunc()) {
+      CheriCapRelocLocation Loc{IS, Offset, false};
+      warn("call relocation aginst non-function symbol " + verboseToString(&Sym, 0) +
+      "\n>>> referenced by " + Loc.toString());
+    }
     Idx.UsedAsFunctionPointer = false;
     break;
   default:
