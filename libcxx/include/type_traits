@@ -792,11 +792,6 @@ template <class _Tp> struct __libcpp_is_pointer<_Tp*> : public true_type {};
 // XXXKG: Should is_pointer<_Tp*> work for capabilities as well? We should
 // probably have a is_capability trait as well
 //template <class _Tp> struct __libcpp_is_pointer<_Tp* __capability> : public true_type {};
-#if defined(_LIBCPP_HAS_OBJC_ARC)
-template <class _Tp> struct __libcpp_is_pointer<_Tp* __weak> : public true_type {};
-template <class _Tp> struct __libcpp_is_pointer<_Tp* __autoreleasing> : public true_type {};
-template <class _Tp> struct __libcpp_is_pointer<_Tp* __unsafe_unretained> : public true_type {};
-#endif
 
 template <class _Tp> struct _LIBCPP_TEMPLATE_VIS is_pointer
     : public __libcpp_is_pointer<typename remove_cv<_Tp>::type> {};
