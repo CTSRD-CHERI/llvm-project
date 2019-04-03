@@ -429,6 +429,11 @@ static uint64_t getTargetSize(const CheriCapRelocLocation &Location,
   return TargetSize;
 }
 
+enum CaptablePermissions : uint64_t {
+  Function = UINT64_C(1) << 63,
+  ReadOnly = UINT64_C(1) << 62,
+};
+
 template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
   constexpr endianness E = ELFT::TargetEndianness;
   static_assert(RelocSize == sizeof(InMemoryCapRelocEntry<E>),
@@ -472,7 +477,22 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
                                        /*Strict=*/!containsLegacyCapRelocs());
     }
     uint64_t TargetOffset = Reloc.CapabilityOffset;
-    uint64_t Permissions = Reloc.Target.Sym->isFunc() ? 1ULL << 63 : 0;
+    uint64_t Permissions = 0;
+    // Fow now Function implies ReadOnly so don't add the flag
+    if (Reloc.Target.Sym->isFunc()) {
+      Permissions |= CaptablePermissions::Function;
+    } else if (auto OS = Reloc.Target.Sym->getOutputSection()) {
+      assert(!Reloc.Target.Sym->isTls());
+      assert((OS->Flags & SHF_TLS) == 0);
+      // if ((OS->getPhdrFlags() & PF_W) == 0) {
+      if (((OS->Flags & SHF_WRITE) == 0) || isRelroSection(OS)) {
+        Permissions |= CaptablePermissions::ReadOnly;
+      } else if (OS->Flags & SHF_EXECINSTR) {
+        warn("Non-function __cap_reloc against symbol in section with "
+             "SHF_EXECINSTR (" + toString(OS->Name) + ") for symbol " +
+             Reloc.Target.verboseToString());
+      }
+    }
 
     // TODO: should we warn about symbols that are out-of-bounds?
     // mandoc seems to do it so I guess we need it

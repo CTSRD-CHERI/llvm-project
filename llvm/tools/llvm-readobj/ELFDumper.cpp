@@ -2527,8 +2527,10 @@ template <class ELFT> void ELFDumper<ELFT>::printCheriCapRelocs() {
         support::endian::read<uint64_t, support::big, 1>(entry + 24);
     uint64_t Perms =
         support::endian::read<uint64_t, support::big, 1>(entry + 32);
-    bool isFunction = Perms & (1ULL << 63);
-    const char *PermStr = isFunction ? "Function" : "Object";
+    bool isFunction = Perms & (UINT64_C(1) << 63);
+    bool isReadOnly = Perms & (UINT64_C(1) << 62);
+    const char *PermStr =
+        isFunction ? "Function" : (isReadOnly ? "Constant" : "Object");
     // Perms &= 0xffffffff;
     StringRef BaseSymbol = "<unknown symbol>";
     if (Base == 0) {

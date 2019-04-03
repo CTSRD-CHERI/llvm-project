@@ -75,11 +75,11 @@ struct option options_table[] = {
 // STATIC-NEXT: Address: [[$RODATA:0x120000198]]
 
 // STATIC-LABEL: CHERI __cap_relocs [
-// STATIC-NEXT:    0x120010020 Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 6 Perms: Object
-// STATIC-NEXT:    0x120010060 Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7 Perms: Object
-// STATIC-NEXT:    0x1200100a0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Object
-// STATIC-NEXT:    0x1200100e0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Object
-// STATIC-NEXT:    0x120010120 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 10 Perms: Object
+// STATIC-NEXT:    0x120010020 Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 6 Perms: Constant
+// STATIC-NEXT:    0x120010060 Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7 Perms: Constant
+// STATIC-NEXT:    0x1200100a0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Constant
+// STATIC-NEXT:    0x1200100e0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Constant
+// STATIC-NEXT:    0x120010120 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 10 Perms: Constant
 // STATIC-NEXT: ]
 
 
@@ -96,11 +96,11 @@ struct option options_table[] = {
 
 // PIE exe amd shlib should have a dynamic relocations and only have the offset+length values filled in:
 // DYNAMIC-LABEL: CHERI __cap_relocs [
-// DYNAMIC-NEXT:    0x010020 Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 6 Perms: Object
-// DYNAMIC-NEXT:    0x010060 Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7 Perms: Object
-// DYNAMIC-NEXT:    0x0100a0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Object
-// DYNAMIC-NEXT:    0x0100e0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Object
-// DYNAMIC-NEXT:    0x010120 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 10 Perms: Object
+// DYNAMIC-NEXT:    0x010020 Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 6 Perms: Constant
+// DYNAMIC-NEXT:    0x010060 Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7 Perms: Constant
+// DYNAMIC-NEXT:    0x0100a0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Constant
+// DYNAMIC-NEXT:    0x0100e0 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 10 Perms: Constant
+// DYNAMIC-NEXT:    0x010120 Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 10 Perms: Constant
 // DYNAMIC-NEXT: ]
 
 

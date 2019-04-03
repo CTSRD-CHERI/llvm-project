@@ -1,7 +1,7 @@
 // REQUIRES: clang
 
-// RUN: llvm-readobj -r %S/../Inputs/kvm_pcpu.pico | FileCheck -check-prefix READOBJ %s
-// RUN: ld.lld -process-cap-relocs %S/../Inputs/kvm_pcpu.pico -shared --no-fatal-warnings -o %t.so 2>&1 | FileCheck %s -check-prefix WARN
+// RUN: llvm-readobj -r %S/Inputs/kvm_pcpu.pico | FileCheck -check-prefix READOBJ %s
+// RUN: ld.lld -process-cap-relocs %S/Inputs/kvm_pcpu.pico -shared --no-fatal-warnings -o %t.so 2>&1 | FileCheck %s -check-prefix WARN
 // WARN-NOT: Could not find a real symbol for __cap_reloc against .data.rel.ro+0x0
 // WARN: Could not find a real symbol for __cap_reloc against .data.rel.ro+0x20
 // WARN: Could not find a real symbol for __cap_reloc against .data.rel.ro+0x40
@@ -53,12 +53,12 @@
 
 
 // CHECK-LABEL: CHERI __cap_relocs [
-// CHECK-NEXT:    0x020000 (kvm_pcpu_nl)   Base: 0x7b2 (<unknown symbol>+0) Length: 189 Perms: Object
-// CHECK-NEXT:    0x020020 Base: 0x77c (<unknown symbol>+0) Length: 243 Perms: Object
-// CHECK-NEXT:    0x020040 Base: 0x865 (<unknown symbol>+0) Length: 10 Perms: Object
-// CHECK-NEXT:    0x030000 Base: 0x833 (<unknown symbol>+0) Length: 60 Perms: Object
-// CHECK-NEXT:    0x030020 Base: 0x7a1 (<unknown symbol>+0) Length: 206 Perms: Object
-// CHECK-NEXT:    0x030040 Base: 0x788 (<unknown symbol>+0) Length: 231 Perms: Object
-// CHECK-NEXT:    0x030060 Base: 0x77c (<unknown symbol>+0) Length: 243 Perms: Object
+// CHECK-NEXT:    0x020000 (kvm_pcpu_nl)   Base: 0x7b2 (<unknown symbol>+0) Length: 189 Perms: Constant
+// CHECK-NEXT:    0x020020 Base: 0x77c (<unknown symbol>+0) Length: 243 Perms: Constant
+// CHECK-NEXT:    0x020040 Base: 0x865 (<unknown symbol>+0) Length: 10 Perms: Constant
+// CHECK-NEXT:    0x030000 Base: 0x833 (<unknown symbol>+0) Length: 60 Perms: Constant
+// CHECK-NEXT:    0x030020 Base: 0x7a1 (<unknown symbol>+0) Length: 206 Perms: Constant
+// CHECK-NEXT:    0x030040 Base: 0x788 (<unknown symbol>+0) Length: 231 Perms: Constant
+// CHECK-NEXT:    0x030060 Base: 0x77c (<unknown symbol>+0) Length: 243 Perms: Constant
 // CHECK-NEXT: ]
 

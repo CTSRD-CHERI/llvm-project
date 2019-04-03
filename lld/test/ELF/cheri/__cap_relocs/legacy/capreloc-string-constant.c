@@ -6,22 +6,22 @@
 
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe -verbose 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH_VERBOSE %s
 // RUN: ld.lld -process-cap-relocs %t.o -static -o %t-static.exe 2>&1 | FileCheck -check-prefixes UNKNOWN_LENGTH %s
-// RUN: llvm-readobj -s --cap-relocs %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s
+// RUN: llvm-readobj -s --cap-relocs %t-static.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC %s '-D$CONSTANT_FLAG=Constant'
 
 // same again for statically dynamically linked exe:
 // RUN: %cheri_purecap_clang %legacy_caprelocs_flag %S/../Inputs/dummy_shlib.c -c -o %T/integrated_dummy_shlib.o
 // RUN: ld.lld -process-cap-relocs -pie -Bdynamic %t.o -o %t-dynamic.exe
-// RUN: llvm-readobj --cap-relocs -s %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
+// RUN: llvm-readobj --cap-relocs -s %t-dynamic.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s '-D$CONSTANT_FLAG=Constant'
 // RUN: llvm-readobj -r -s %t-dynamic.exe | FileCheck -check-prefixes DYNAMIC-RELOCS %s
 
 // Look at shared libraries:
 // RUN: ld.lld -process-cap-relocs %t.o -shared -o %t.so
 // RUN: llvm-readobj -r -s %t.so | FileCheck -check-prefixes DYNAMIC-RELOCS %s
-// RUN: llvm-readobj --cap-relocs -s %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s
+// RUN: llvm-readobj --cap-relocs -s %t.so | FileCheck -check-prefixes DUMP-CAPRELOCS,DYNAMIC %s '-D$CONSTANT_FLAG=Constant'
 
 // RUN: ld.lld -no-process-cap-relocs %t.o -static -o %t-static-external-capsizefix.exe
 // RUN: %capsizefix %t-static-external-capsizefix.exe
-// RUN: llvm-readobj --cap-relocs -s %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s
+// RUN: llvm-readobj --cap-relocs -s %t-static-external-capsizefix.exe | FileCheck -check-prefixes DUMP-CAPRELOCS,STATIC-EXTERNAL-CAPSIZEFIX %s '-D$CONSTANT_FLAG=Object'
 
 
 // FIXME: it would be good if we could set bounds here instead of having it as -1
@@ -103,11 +103,11 @@ struct option options_table[] = {
 // STATIC-NEXT: Address: [[$RODATA:0x120000198]]
 
 // STATIC-LABEL: CHERI __cap_relocs [
-// STATIC-NEXT: 0x1200100{{20|10}}  Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 23 Perms: Object
-// STATIC-NEXT: 0x1200100{{60|30}}  Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7  Perms: Object
-// STATIC-NEXT: 0x1200100{{a0|50}}  Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: Object
-// STATIC-NEXT: 0x1200100{{e0|70}}  Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: Object
-// STATIC-NEXT: 0x120010{{120|090}} Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 17 Perms: Object
+// STATIC-NEXT: 0x1200100{{20|10}}  Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 23 Perms: [[$CONSTANT_FLAG]]
+// STATIC-NEXT: 0x1200100{{60|30}}  Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7  Perms: [[$CONSTANT_FLAG]]
+// STATIC-NEXT: 0x1200100{{a0|50}}  Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
+// STATIC-NEXT: 0x1200100{{e0|70}}  Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
+// STATIC-NEXT: 0x120010{{120|090}} Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 17 Perms: [[$CONSTANT_FLAG]]
 // STATIC-NEXT: ]
 
 // DYNAMIC: Section {
@@ -122,11 +122,11 @@ struct option options_table[] = {
 
 // PIE exe and shlib should have dynamic relocations and only the offset values
 // DYNAMIC-LABEL: CHERI __cap_relocs [
-// DYNAMIC-NEXT: 0x0100{{20|10}}       Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 23 Perms: Object
-// DYNAMIC-NEXT: 0x0100{{60|30}}       Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7  Perms: Object
-// DYNAMIC-NEXT: 0x0100{{a0|50}}       Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: Object
-// DYNAMIC-NEXT: 0x0100{{e0|70}}       Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: Object
-// DYNAMIC-NEXT: 0x010{{120|090}}      Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 17 Perms: Object
+// DYNAMIC-NEXT: 0x0100{{20|10}}       Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 23 Perms: [[$CONSTANT_FLAG]]
+// DYNAMIC-NEXT: 0x0100{{60|30}}       Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7  Perms: [[$CONSTANT_FLAG]]
+// DYNAMIC-NEXT: 0x0100{{a0|50}}       Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
+// DYNAMIC-NEXT: 0x0100{{e0|70}}       Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
+// DYNAMIC-NEXT: 0x010{{120|090}}      Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 17 Perms: [[$CONSTANT_FLAG]]
 // DYNAMIC-NEXT: ]
 
 

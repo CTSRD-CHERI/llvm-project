@@ -1511,7 +1511,8 @@ void llvm::printCapRelocations(const ObjectFile *Obj) {
         support::endian::read<uint64_t, support::big, 1>(entry + 24);
     uint64_t Perms =
         support::endian::read<uint64_t, support::big, 1>(entry + 32);
-    bool isFunction = Perms & (1ULL << 63);
+    bool isFunction = Perms & (UINT64_C(1) << 63);
+    bool isConstant = Perms & (UINT64_C(1) << 62);
     //Perms &= 0xffffffff;
     StringRef Symbol = "<Unnamed symbol>";
     if (SymbolNames.find(Base) != SymbolNames.end())
@@ -1521,7 +1522,8 @@ void llvm::printCapRelocations(const ObjectFile *Obj) {
            << ")\tOffset: " << format("0x%016" PRIx64, Offset)
            << "\tLength: " << format("0x%016" PRIx64, Length)
            << "\tPermissions: " << format("0x%08" PRIx64, Perms)
-           << (isFunction ? " (Function)\n" : "\n");
+           << (isFunction ? " (Function)\n"
+                          : (isConstant ? " (Constant)\n" : "\n"));
   }
   outs() << "\n";
 }

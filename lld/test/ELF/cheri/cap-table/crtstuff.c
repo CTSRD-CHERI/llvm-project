@@ -35,7 +35,7 @@ __attribute__((noreturn)) void exit(int code) {
 }
 
 // CHECK-LABEL: CHERI __cap_relocs [
-// CHECK-NEXT:            0x12002{{.+}} (__progname)    Base: 0x120000220 (<unknown symbol>+0) Length: 1 Perms: Object
+// CHECK-NEXT:            0x12002{{.+}} (__progname)    Base: 0x120000220 (<unknown symbol>+0) Length: 1 Perms: Constant
 // CHECK-NEXT:            0x12003{{.+}} (__auxargs@CAPTABLE) Base: 0x120040000 (__auxargs+0) Length: 16 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (environ@CAPTABLE) Base: 0x120040020 (environ+0) Length: 16 Perms: Object
 // CHECK-NEXT:            0x12003{{.+}} (__progname@CAPTABLE) Base: 0x120020000 (__progname+0) Length: 16 Perms: Object
@@ -47,22 +47,22 @@ __attribute__((noreturn)) void exit(int code) {
 // CHECK-NEXT:            0x12003{{.+}} (main@CAPTABLE) Base: 0x12001{{.+}} (main+0) Length: 8 Perms: Function
 // CHECK-NEXT:            0x12003{{.+}} (exit@CAPTABLE) Base: 0x12001{{.+}} (exit+0) Length: 4 Perms: Function
 // CHECK-NEXT:            0x12003{{.+}} (finalizer@CAPTABLE.10) Base: 0x12001{{.+}} (finalizer+0) Length: 184 Perms: Function
-// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__preinit_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
-// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__preinit_array_end@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
-// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__init_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
-// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__init_array_end@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
-// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__fini_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
-// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__fini_array_end@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Object
-// WITH_CTORS-NEXT:       0x12003{{.+}} (__preinit_array_start@CAPTABLE) Base: 0x120010000 (__preinit_array_end+0) Length: 0 Perms: Object
-// WITH_CTORS-NEXT:       0x12003{{.+}} (__preinit_array_end@CAPTABLE) Base: 0x120010000 (__preinit_array_end+0) Length: 0 Perms: Object
-// WITH_CTORS-NEXT:       0x12003{{.+}} (__init_array_start@CAPTABLE) Base: 0x120030020 (__init_array_start+0) Length: 8 Perms: Object
-// WITH_CTORS-NEXT:       0x12003{{.+}} (__init_array_end@CAPTABLE) Base:  0x120030028 (__fini_array_start+0) Length: 0 Perms: Object
-// WITH_CTORS-NEXT:       0x12003{{.+}} (__fini_array_start@CAPTABLE) Base: 0x120030028 (__fini_array_start+0)  Length: 8 Perms: Object
-// WITH_CTORS-NEXT:       0x12003{{.+}} (__fini_array_end@CAPTABLE) Base: 0x120030030 (__auxargs@CAPTABLE+0) Length: 0 Perms: Object
-// CHECK-NEXT:            0x12003{{.+}} (__CTOR_LIST__@CAPTABLE.17) Base: 0x120030000 (__CTOR_LIST__+0) Length: 8 Perms: Object
-// CHECK-NEXT:            0x12003{{.+}} (__CTOR_END__@CAPTABLE) Base: 0x120030008 (__CTOR_END__+0) Length: 8 Perms: Object
-// CHECK-NEXT:            0x12003{{.+}} (__start___cap_relocs@CAPTABLE) Base: 0x120000228 (__start___cap_relocs+0) Length: 920 Perms: Object
-// CHECK-NEXT:            0x12003{{.+}} (__stop___cap_relocs@CAPTABLE) Base: 0x1200005c0 (__stop___cap_relocs+0) Length: 0 Perms: Object
+// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__preinit_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Constant
+// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__preinit_array_end@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Constant
+// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__init_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Constant
+// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__init_array_end@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Constant
+// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__fini_array_start@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Constant
+// WITHOUT_CTORS-NEXT:    0x12003{{.+}} (__fini_array_end@CAPTABLE) Base: 0x120010000 (__fini_array_end+0) Length: 0 Perms: Constant
+// WITH_CTORS-NEXT:       0x12003{{.+}} (__preinit_array_start@CAPTABLE) Base: 0x120010000 (__preinit_array_end+0) Length: 0 Perms: Constant
+// WITH_CTORS-NEXT:       0x12003{{.+}} (__preinit_array_end@CAPTABLE) Base: 0x120010000 (__preinit_array_end+0) Length: 0 Perms: Constant
+// WITH_CTORS-NEXT:       0x12003{{.+}} (__init_array_start@CAPTABLE) Base: 0x120030020 (__init_array_start+0) Length: 8 Perms: Constant
+// WITH_CTORS-NEXT:       0x12003{{.+}} (__init_array_end@CAPTABLE) Base:  0x120030028 (__fini_array_start+0) Length: 0 Perms: Constant
+// WITH_CTORS-NEXT:       0x12003{{.+}} (__fini_array_start@CAPTABLE) Base: 0x120030028 (__fini_array_start+0)  Length: 8 Perms: Constant
+// WITH_CTORS-NEXT:       0x12003{{.+}} (__fini_array_end@CAPTABLE) Base: 0x120030030 (__auxargs@CAPTABLE+0) Length: 0 Perms: Constant
+// CHECK-NEXT:            0x12003{{.+}} (__CTOR_LIST__@CAPTABLE.17) Base: 0x120030000 (__CTOR_LIST__+0) Length: 8 Perms: Constant
+// CHECK-NEXT:            0x12003{{.+}} (__CTOR_END__@CAPTABLE) Base: 0x120030008 (__CTOR_END__+0) Length: 8 Perms: Constant
+// CHECK-NEXT:            0x12003{{.+}} (__start___cap_relocs@CAPTABLE) Base: 0x120000228 (__start___cap_relocs+0) Length: 920 Perms: Constant
+// CHECK-NEXT:            0x12003{{.+}} (__stop___cap_relocs@CAPTABLE) Base: 0x1200005c0 (__stop___cap_relocs+0) Length: 0 Perms: Constant
 // CHECK-NEXT:            0x12003{{.+}} (_int@CAPTABLE) Base: 0x120040010 (_int+0) Length: 4 Perms: Object
 // CHECK-NEXT: ]
 

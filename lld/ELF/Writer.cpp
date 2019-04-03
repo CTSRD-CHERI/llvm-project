@@ -699,7 +699,7 @@ template <class ELFT> void Writer<ELFT>::addSectionSymbols() {
 //
 // This function returns true if a section needs to be put into a
 // PT_GNU_RELRO segment.
-static bool isRelroSection(const OutputSection *Sec) {
+bool lld::elf::isRelroSection(const OutputSection *Sec) {
   if (!Config->ZRelro)
     return false;
 
