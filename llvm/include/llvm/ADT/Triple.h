@@ -190,7 +190,8 @@ public:
     HermitCore, // HermitCore Unikernel/Multikernel
     Hurd,       // GNU/Hurd
     WASI,       // Experimental WebAssembly OS
-    LastOSType = WASI
+    Emscripten,
+    LastOSType = Emscripten
   };
   enum EnvironmentType {
     UnknownEnvironment,
@@ -596,6 +597,11 @@ public:
   /// Tests whether the OS is WASI.
   bool isOSWASI() const {
     return getOS() == Triple::WASI;
+  }
+
+  /// Tests whether the OS is Emscripten.
+  bool isOSEmscripten() const {
+    return getOS() == Triple::Emscripten;
   }
 
   /// Tests whether the OS uses glibc.
