@@ -28420,8 +28420,8 @@ X86TargetLowering::EmitVAARG64WithCustomInserter(MachineInstr &MI,
 
     // Branch to "overflowMBB" if offset >= max
     // Fall through to "offsetMBB" otherwise
-    BuildMI(thisMBB, DL, TII->get(X86::GetCondBranchFromCond(X86::COND_AE)))
-      .addMBB(overflowMBB);
+    BuildMI(thisMBB, DL, TII->get(X86::JCC_1))
+      .addMBB(overflowMBB).addImm(X86::COND_AE);
   }
 
   // In offsetMBB, emit code to use the reg_save_area.
@@ -28578,7 +28578,7 @@ MachineBasicBlock *X86TargetLowering::EmitVAStartSaveXMMRegsWithCustomInserter(
   if (!Subtarget.isCallingConvWin64(F->getFunction().getCallingConv())) {
     // If %al is 0, branch around the XMM save block.
     BuildMI(MBB, DL, TII->get(X86::TEST8rr)).addReg(CountReg).addReg(CountReg);
-    BuildMI(MBB, DL, TII->get(X86::JE_1)).addMBB(EndMBB);
+    BuildMI(MBB, DL, TII->get(X86::JCC_1)).addMBB(EndMBB).addImm(X86::COND_E);
     MBB->addSuccessor(EndMBB);
   }
 
@@ -28858,13 +28858,11 @@ X86TargetLowering::EmitLoweredCascadedSelect(MachineInstr &FirstCMOV,
 
   // Create the conditional branch instructions.
   X86::CondCode FirstCC = X86::CondCode(FirstCMOV.getOperand(3).getImm());
-  unsigned Opc = X86::GetCondBranchFromCond(FirstCC);
-  BuildMI(ThisMBB, DL, TII->get(Opc)).addMBB(SinkMBB);
+  BuildMI(ThisMBB, DL, TII->get(X86::JCC_1)).addMBB(SinkMBB).addImm(FirstCC);
 
   X86::CondCode SecondCC =
       X86::CondCode(SecondCascadedCMOV.getOperand(3).getImm());
-  unsigned Opc2 = X86::GetCondBranchFromCond(SecondCC);
-  BuildMI(FirstInsertedMBB, DL, TII->get(Opc2)).addMBB(SinkMBB);
+  BuildMI(FirstInsertedMBB, DL, TII->get(X86::JCC_1)).addMBB(SinkMBB).addImm(SecondCC);
 
   //  SinkMBB:
   //   %Result = phi [ %FalseValue, SecondInsertedMBB ], [ %TrueValue, ThisMBB ]
@@ -29020,8 +29018,7 @@ X86TargetLowering::EmitLoweredSelect(MachineInstr &MI,
   FalseMBB->addSuccessor(SinkMBB);
 
   // Create the conditional branch instruction.
-  unsigned Opc = X86::GetCondBranchFromCond(CC);
-  BuildMI(ThisMBB, DL, TII->get(Opc)).addMBB(SinkMBB);
+  BuildMI(ThisMBB, DL, TII->get(X86::JCC_1)).addMBB(SinkMBB).addImm(CC);
 
   //  SinkMBB:
   //   %Result = phi [ %FalseValue, FalseMBB ], [ %TrueValue, ThisMBB ]
@@ -29150,7 +29147,7 @@ X86TargetLowering::EmitLoweredSegAlloca(MachineInstr &MI,
   BuildMI(BB, DL, TII->get(IsLP64 ? X86::CMP64mr:X86::CMP32mr))
     .addReg(0).addImm(1).addReg(0).addImm(TlsOffset).addReg(TlsReg)
     .addReg(SPLimitVReg);
-  BuildMI(BB, DL, TII->get(X86::JG_1)).addMBB(mallocMBB);
+  BuildMI(BB, DL, TII->get(X86::JCC_1)).addMBB(mallocMBB).addImm(X86::COND_G);
 
   // bumpMBB simply decreases the stack pointer, since we know the current
   // stacklet has enough space.
@@ -29777,7 +29774,7 @@ X86TargetLowering::emitLongJmpShadowStackFix(MachineInstr &MI,
   BuildMI(checkSspMBB, DL, TII->get(TestRROpc))
       .addReg(SSPCopyReg)
       .addReg(SSPCopyReg);
-  BuildMI(checkSspMBB, DL, TII->get(X86::JE_1)).addMBB(sinkMBB);
+  BuildMI(checkSspMBB, DL, TII->get(X86::JCC_1)).addMBB(sinkMBB).addImm(X86::COND_E);
   checkSspMBB->addSuccessor(sinkMBB);
   checkSspMBB->addSuccessor(fallMBB);
 
@@ -29807,7 +29804,7 @@ X86TargetLowering::emitLongJmpShadowStackFix(MachineInstr &MI,
       .addReg(SSPCopyReg);
 
   // Jump to sink in case PrevSSPReg <= SSPCopyReg.
-  BuildMI(fallMBB, DL, TII->get(X86::JBE_1)).addMBB(sinkMBB);
+  BuildMI(fallMBB, DL, TII->get(X86::JCC_1)).addMBB(sinkMBB).addImm(X86::COND_BE);
   fallMBB->addSuccessor(sinkMBB);
   fallMBB->addSuccessor(fixShadowMBB);
 
@@ -29830,7 +29827,7 @@ X86TargetLowering::emitLongJmpShadowStackFix(MachineInstr &MI,
       .addImm(8);
 
   // Jump if the result of the shift is zero.
-  BuildMI(fixShadowMBB, DL, TII->get(X86::JE_1)).addMBB(sinkMBB);
+  BuildMI(fixShadowMBB, DL, TII->get(X86::JCC_1)).addMBB(sinkMBB).addImm(X86::COND_E);
   fixShadowMBB->addSuccessor(sinkMBB);
   fixShadowMBB->addSuccessor(fixShadowLoopPrepareMBB);
 
@@ -29865,7 +29862,7 @@ X86TargetLowering::emitLongJmpShadowStackFix(MachineInstr &MI,
   BuildMI(fixShadowLoopMBB, DL, TII->get(DecROpc), DecReg).addReg(CounterReg);
 
   // Jump if the counter is not zero yet.
-  BuildMI(fixShadowLoopMBB, DL, TII->get(X86::JNE_1)).addMBB(fixShadowLoopMBB);
+  BuildMI(fixShadowLoopMBB, DL, TII->get(X86::JCC_1)).addMBB(fixShadowLoopMBB).addImm(X86::COND_NE);
   fixShadowLoopMBB->addSuccessor(sinkMBB);
   fixShadowLoopMBB->addSuccessor(fixShadowLoopMBB);
 
@@ -30111,7 +30108,7 @@ X86TargetLowering::EmitSjLjDispatchBlock(MachineInstr &MI,
   BuildMI(DispatchBB, DL, TII->get(X86::CMP32ri))
       .addReg(IReg)
       .addImm(LPadList.size());
-  BuildMI(DispatchBB, DL, TII->get(X86::JAE_1)).addMBB(TrapBB);
+  BuildMI(DispatchBB, DL, TII->get(X86::JCC_1)).addMBB(TrapBB).addImm(X86::COND_AE);
 
   if (Subtarget.is64Bit()) {
     unsigned BReg = MRI->createVirtualRegister(&X86::GR64RegClass);
