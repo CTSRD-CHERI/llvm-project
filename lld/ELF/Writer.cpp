@@ -1697,7 +1697,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // Ensure that we always have a _CHERI_CAPABILITY_TABLE_ symbol if the
     // cap table exists. This makes llvm-objdump more useful since it can now
     // print the target of a cap table load
-    if (!ElfSym::CheriCapabilityTable && !In.CheriCapTable->isNeeded()) {
+    if (!ElfSym::CheriCapabilityTable && In.CheriCapTable->isNeeded()) {
       ElfSym::CheriCapabilityTable = cast<Defined>(
           Symtab->addDefined(CaptableSym, STV_HIDDEN, STT_NOTYPE, 0, 0,
                              STB_LOCAL, In.CheriCapTable, nullptr));

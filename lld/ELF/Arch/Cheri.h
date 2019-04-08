@@ -77,7 +77,7 @@ public:
   static constexpr size_t RelocSize = 40;
   // Add a __cap_relocs section from in input object file
   void addSection(InputSectionBase *S);
-  bool empty() const override { return RelocsMap.empty() && LegacyInputs.empty(); }
+  bool isNeeded() const override { return !RelocsMap.empty() || !LegacyInputs.empty(); }
   size_t getSize() const override { return RelocsMap.size() * Entsize; }
   void finalizeContents() override;
   void writeTo(uint8_t *Buf) override;
@@ -199,9 +199,9 @@ public:
   uint32_t getDynTlsOffset(const Symbol &Sym) const;
   uint32_t getTlsIndexOffset() const;
   uint32_t getTlsOffset(const Symbol &Sym) const;
-  bool empty() const override {
-    return nonTlsEntryCount() == 0 && DynTlsEntries.empty() &&
-           TlsEntries.empty();
+  bool isNeeded() const override {
+    return nonTlsEntryCount() != 0 || !DynTlsEntries.empty() ||
+           !TlsEntries.empty();
   }
   void writeTo(uint8_t *Buf) override;
   template <class ELFT> void assignValuesAndAddCapTableSymbols();
@@ -285,10 +285,10 @@ struct CaptableMappingEntry {
 class CheriCapTableMappingSection : public SyntheticSection {
 public:
   CheriCapTableMappingSection();
-  bool empty() const override {
+  bool isNeeded() const override {
     if (Config->CapTableScope == CapTableScopePolicy::All)
-      return true;
-    return !In.CheriCapTable || In.CheriCapTable->empty();
+      return false;
+    return In.CheriCapTable && In.CheriCapTable->isNeeded();
   }
   void writeTo(uint8_t *Buf) override;
   size_t getSize() const override;

@@ -1478,15 +1478,15 @@ template <class ELFT> void DynamicSection<ELFT>::finalizeContents() {
       CheriFlags |= ((unsigned)Config->CapTableScope) << 3;
       addInt(DT_MIPS_CHERI_FLAGS, CheriFlags);
     }
-    if (In.CheriCapTable && !In.CheriCapTable->empty()) {
+    if (In.CheriCapTable && In.CheriCapTable->isNeeded()) {
       addInSec(DT_MIPS_CHERI_CAPTABLE, In.CheriCapTable);
       addSize(DT_MIPS_CHERI_CAPTABLESZ, In.CheriCapTable->getParent());
     }
-    if (In.CheriCapTableMapping && !In.CheriCapTableMapping->empty()) {
+    if (In.CheriCapTableMapping && In.CheriCapTableMapping->isNeeded()) {
       addInSec(DT_MIPS_CHERI_CAPTABLE_MAPPING, In.CheriCapTableMapping);
       addSize(DT_MIPS_CHERI_CAPTABLE_MAPPINGSZ, In.CheriCapTableMapping->getParent());
     }
-    if (InX<ELFT>::CapRelocs && !InX<ELFT>::CapRelocs->empty()) {
+    if (InX<ELFT>::CapRelocs && InX<ELFT>::CapRelocs->isNeeded()) {
       addInSec(DT_MIPS_CHERI___CAPRELOCS, InX<ELFT>::CapRelocs);
       addSize(DT_MIPS_CHERI___CAPRELOCSSZ, InX<ELFT>::CapRelocs->getParent());
     }
