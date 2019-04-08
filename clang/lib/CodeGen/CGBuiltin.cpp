@@ -310,7 +310,7 @@ static Value *EmitISOVolatileLoad(CodeGenFunction &CGF, const CallExpr *E) {
   CharUnits LoadSize = CGF.getContext().getTypeSizeInChars(ElTy);
   llvm::Type *ITy =
       llvm::IntegerType::get(CGF.getLLVMContext(), LoadSize.getQuantity() * 8);
-  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  unsigned DefaultAS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
   Ptr = CGF.Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
   llvm::LoadInst *Load = CGF.Builder.CreateAlignedLoad(Ptr, LoadSize);
   Load->setVolatile(true);
@@ -325,7 +325,7 @@ static Value *EmitISOVolatileStore(CodeGenFunction &CGF, const CallExpr *E) {
   CharUnits StoreSize = CGF.getContext().getTypeSizeInChars(ElTy);
   llvm::Type *ITy =
       llvm::IntegerType::get(CGF.getLLVMContext(), StoreSize.getQuantity() * 8);
-  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
+  unsigned DefaultAS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
   Ptr = CGF.Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
   llvm::StoreInst *Store =
       CGF.Builder.CreateAlignedStore(Value, Ptr, StoreSize);
