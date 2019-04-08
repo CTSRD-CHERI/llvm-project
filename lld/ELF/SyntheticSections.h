@@ -436,6 +436,7 @@ private:
   bool UseSymVA;
   int64_t Addend;
   const OutputSection *OutputSec;
+  friend class RelocationBaseSection;
 };
 
 template <class ELFT> class DynamicSection final : public SyntheticSection {

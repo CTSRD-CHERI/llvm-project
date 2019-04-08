@@ -1573,7 +1573,7 @@ void RelocationBaseSection::addReloc(const DynamicReloc &Reloc) {
   if (Reloc.Type == Target->RelativeRel)
     ++NumRelativeRelocs;
   Relocs.push_back(Reloc);
-  auto IS = Reloc.getInputSec();
+  auto IS = Reloc.InputSec;
   if (!Config->IsRela && IS->AreRelocsRela) {
     // HACK for FreeBSD mips n64/CHERI: input is RELA, output is REL -> write the addend to the output
     // But don't do it for R_MIPS_CHERI_CAPABILITY relocations since they are handled differently

@@ -2719,7 +2719,7 @@ void SelectionDAGBuilder::visitInvoke(const InvokeInst &I) {
       const TargetLowering &TLI = DAG.getTargetLoweringInfo();
       Ops.push_back(
           DAG.getTargetConstant(Intrinsic::wasm_rethrow_in_catch, getCurSDLoc(),
-                                TLI.getPointerTy(DAG.getDataLayout())));
+                                TLI.getPointerTy(DAG.getDataLayout(), TLI.getExceptionPointerAS())));
       SDVTList VTs = DAG.getVTList(ArrayRef<EVT>({MVT::Other})); // outchain
       DAG.setRoot(DAG.getNode(ISD::INTRINSIC_VOID, getCurSDLoc(), VTs, Ops));
       break;
