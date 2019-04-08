@@ -88,6 +88,9 @@ protected:
   /// True if the processor supports X87 instructions.
   bool HasX87 = false;
 
+  /// True if the processor supports CMPXCHG8B.
+  bool HasCmpxchg8b = false;
+
   /// True if this processor has NOPL instruction
   /// (generally pentium pro+).
   bool HasNOPL = false;
@@ -293,6 +296,9 @@ protected:
 
   /// True if the processor supports macrofusion.
   bool HasMacroFusion = false;
+
+  /// True if the processor supports branch fusion.
+  bool HasBranchFusion = false;
 
   /// True if the processor has enhanced REP MOVSB/STOSB.
   bool HasERMSB = false;
@@ -546,6 +552,7 @@ public:
   void setPICStyle(PICStyles::Style Style)  { PICStyle = Style; }
 
   bool hasX87() const { return HasX87; }
+  bool hasCmpxchg8b() const { return HasCmpxchg8b; }
   bool hasNOPL() const { return HasNOPL; }
   // SSE codegen depends on cmovs, and all SSE1+ processors support them.
   // All 64-bit processors support cmov.
@@ -620,7 +627,7 @@ public:
   int getGatherOverhead() const { return GatherOverhead; }
   int getScatterOverhead() const { return ScatterOverhead; }
   bool hasSSEUnalignedMem() const { return HasSSEUnalignedMem; }
-  bool hasCmpxchg16b() const { return HasCmpxchg16b; }
+  bool hasCmpxchg16b() const { return HasCmpxchg16b && is64Bit(); }
   bool useLeaForSP() const { return UseLeaForSP; }
   bool hasPOPCNTFalseDeps() const { return HasPOPCNTFalseDeps; }
   bool hasLZCNTFalseDeps() const { return HasLZCNTFalseDeps; }
@@ -638,6 +645,7 @@ public:
   bool hasFastBEXTR() const { return HasFastBEXTR; }
   bool hasFastHorizontalOps() const { return HasFastHorizontalOps; }
   bool hasMacroFusion() const { return HasMacroFusion; }
+  bool hasBranchFusion() const { return HasBranchFusion; }
   bool hasERMSB() const { return HasERMSB; }
   bool hasSlowDivide32() const { return HasSlowDivide32; }
   bool hasSlowDivide64() const { return HasSlowDivide64; }
@@ -834,6 +842,9 @@ public:
   bool enableMachineScheduler() const override { return true; }
 
   bool enableEarlyIfConversion() const override;
+
+  void getPostRAMutations(std::vector<std::unique_ptr<ScheduleDAGMutation>>
+                              &Mutations) const override;
 
   AntiDepBreakMode getAntiDepBreakMode() const override {
     return TargetSubtargetInfo::ANTIDEP_CRITICAL;

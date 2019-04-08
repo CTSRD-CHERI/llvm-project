@@ -459,15 +459,6 @@ CallInst *CallInst::Create(CallInst *CI, ArrayRef<OperandBundleDef> OpB,
   return NewCI;
 }
 
-
-
-
-
-
-
-
-
-
 /// IsConstantOne - Return true only if val is constant int 1
 static bool IsConstantOne(Value *val) {
   assert(val && "IsConstantOne does not work with nullptr val");
@@ -1758,6 +1749,25 @@ ShuffleVectorInst::ShuffleVectorInst(Value *V1, Value *V2, Value *Mask,
   Op<1>() = V2;
   Op<2>() = Mask;
   setName(Name);
+}
+
+void ShuffleVectorInst::commute() {
+  int NumOpElts = Op<0>()->getType()->getVectorNumElements();
+  int NumMaskElts = getMask()->getType()->getVectorNumElements();
+  SmallVector<Constant*, 16> NewMask(NumMaskElts);
+  Type *Int32Ty = Type::getInt32Ty(getContext());
+  for (int i = 0; i != NumMaskElts; ++i) {
+    int MaskElt = getMaskValue(i);
+    if (MaskElt == -1) {
+      NewMask[i] = UndefValue::get(Int32Ty);
+      continue;
+    }
+    assert(MaskElt >= 0 && MaskElt < 2 * NumOpElts && "Out-of-range mask");
+    MaskElt = (MaskElt < NumOpElts) ? MaskElt + NumOpElts : MaskElt - NumOpElts;
+    NewMask[i] = ConstantInt::get(Int32Ty, MaskElt);
+  }
+  Op<2>() = ConstantVector::get(NewMask);
+  Op<0>().swap(Op<1>());
 }
 
 bool ShuffleVectorInst::isValidOperands(const Value *V1, const Value *V2,

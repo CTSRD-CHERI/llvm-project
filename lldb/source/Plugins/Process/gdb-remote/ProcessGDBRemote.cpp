@@ -41,7 +41,6 @@
 #include "lldb/Host/PosixApi.h"
 #include "lldb/Host/PseudoTerminal.h"
 #include "lldb/Host/StringConvert.h"
-#include "lldb/Host/Symbols.h"
 #include "lldb/Host/ThreadLauncher.h"
 #include "lldb/Host/XML.h"
 #include "lldb/Interpreter/CommandInterpreter.h"
@@ -54,6 +53,7 @@
 #include "lldb/Interpreter/OptionValueProperties.h"
 #include "lldb/Interpreter/Options.h"
 #include "lldb/Interpreter/Property.h"
+#include "lldb/Symbol/LocateSymbolFile.h"
 #include "lldb/Symbol/ObjectFile.h"
 #include "lldb/Target/ABI.h"
 #include "lldb/Target/DynamicLoader.h"
@@ -111,7 +111,13 @@ void DumpProcessGDBRemotePacketHistory(void *p, const char *path) {
 namespace {
 
 static constexpr PropertyDefinition g_properties[] = {
-    {"packet-timeout", OptionValue::eTypeUInt64, true, 1, NULL, {},
+    {"packet-timeout", OptionValue::eTypeUInt64, true, 1
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+      + 4
+#endif
+#endif
+      , NULL, {},
      "Specify the default packet timeout in seconds."},
     {"target-definition-file", OptionValue::eTypeFileSpec, true, 0, NULL, {},
      "The file that provides the description for remote target registers."}};
@@ -178,7 +184,7 @@ public:
 
     std::error_code EC;
     m_stream_up = llvm::make_unique<raw_fd_ostream>(history_file.GetPath(), EC,
-                                                    sys::fs::OpenFlags::F_None);
+                                                    sys::fs::OpenFlags::F_Text);
     return m_stream_up.get();
   }
 
@@ -4213,7 +4219,7 @@ StructuredData::ObjectSP ProcessGDBRemote::GetSharedCacheInfo() {
 }
 
 Status ProcessGDBRemote::ConfigureStructuredData(
-    const ConstString &type_name, const StructuredData::ObjectSP &config_sp) {
+    ConstString type_name, const StructuredData::ObjectSP &config_sp) {
   return m_gdb_comm.ConfigureRemoteStructuredData(type_name, config_sp);
 }
 

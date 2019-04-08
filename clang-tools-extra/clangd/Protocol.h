@@ -25,8 +25,10 @@
 
 #include "URI.h"
 #include "index/SymbolID.h"
+#include "clang/Index/IndexSymbol.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/Support/JSON.h"
+#include "llvm/Support/raw_ostream.h"
 #include <bitset>
 #include <string>
 #include <vector>
@@ -331,6 +333,27 @@ bool fromJSON(const llvm::json::Value &, SymbolKindBitset &);
 SymbolKind adjustKindToCapability(SymbolKind Kind,
                                   SymbolKindBitset &supportedSymbolKinds);
 
+// Convert a index::SymbolKind to clangd::SymbolKind (LSP)
+// Note, some are not perfect matches and should be improved when this LSP
+// issue is addressed:
+// https://github.com/Microsoft/language-server-protocol/issues/344
+SymbolKind indexSymbolKindToSymbolKind(index::SymbolKind Kind);
+
+// Determines the encoding used to measure offsets and lengths of source in LSP.
+enum class OffsetEncoding {
+  // Any string is legal on the wire. Unrecognized encodings parse as this.
+  UnsupportedEncoding,
+  // Length counts code units of UTF-16 encoded text. (Standard LSP behavior).
+  UTF16,
+  // Length counts bytes of UTF-8 encoded text. (Clangd extension).
+  UTF8,
+  // Length counts codepoints in unicode text. (Clangd extension).
+  UTF32,
+};
+llvm::json::Value toJSON(const OffsetEncoding &);
+bool fromJSON(const llvm::json::Value &, OffsetEncoding &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, OffsetEncoding OS);
+
 // This struct doesn't mirror LSP!
 // The protocol defines deeply nested structures for client capabilities.
 // Instead of mapping them all, this just parses out the bits we care about.
@@ -362,6 +385,9 @@ struct ClientCapabilities {
   /// Client supports CodeAction return value for textDocument/codeAction.
   /// textDocument.codeAction.codeActionLiteralSupport.
   bool CodeActionStructure = false;
+
+  /// Supported encodings for LSP character offsets. (clangd extension).
+  llvm::Optional<std::vector<OffsetEncoding>> offsetEncoding;
 };
 bool fromJSON(const llvm::json::Value &, ClientCapabilities &);
 
@@ -1013,6 +1039,67 @@ struct DocumentHighlight {
 };
 llvm::json::Value toJSON(const DocumentHighlight &DH);
 llvm::raw_ostream &operator<<(llvm::raw_ostream &, const DocumentHighlight &);
+
+enum class TypeHierarchyDirection { Children = 0, Parents = 1, Both = 2 };
+bool fromJSON(const llvm::json::Value &E, TypeHierarchyDirection &Out);
+
+/// The type hierarchy params is an extension of the
+/// `TextDocumentPositionsParams` with optional properties which can be used to
+/// eagerly resolve the item when requesting from the server.
+struct TypeHierarchyParams : public TextDocumentPositionParams {
+  /// The hierarchy levels to resolve. `0` indicates no level.
+  int resolve = 0;
+
+  /// The direction of the hierarchy levels to resolve.
+  TypeHierarchyDirection direction = TypeHierarchyDirection::Parents;
+};
+bool fromJSON(const llvm::json::Value &, TypeHierarchyParams &);
+
+struct TypeHierarchyItem {
+  /// The human readable name of the hierarchy item.
+  std::string name;
+
+  /// Optional detail for the hierarchy item. It can be, for instance, the
+  /// signature of a function or method.
+  llvm::Optional<std::string> detail;
+
+  /// The kind of the hierarchy item. For instance, class or interface.
+  SymbolKind kind;
+
+  /// `true` if the hierarchy item is deprecated. Otherwise, `false`.
+  bool deprecated;
+
+  /// The URI of the text document where this type hierarchy item belongs to.
+  URIForFile uri;
+
+  /// The range enclosing this type hierarchy item not including
+  /// leading/trailing whitespace but everything else like comments. This
+  /// information is typically used to determine if the client's cursor is
+  /// inside the type hierarch item to reveal in the symbol in the UI.
+  Range range;
+
+  /// The range that should be selected and revealed when this type hierarchy
+  /// item is being picked, e.g. the name of a function. Must be contained by
+  /// the `range`.
+  Range selectionRange;
+
+  /// If this type hierarchy item is resolved, it contains the direct parents.
+  /// Could be empty if the item does not have direct parents. If not defined,
+  /// the parents have not been resolved yet.
+  llvm::Optional<std::vector<TypeHierarchyItem>> parents;
+
+  /// If this type hierarchy item is resolved, it contains the direct children
+  /// of the current item. Could be empty if the item does not have any
+  /// descendants. If not defined, the children have not been resolved.
+  llvm::Optional<std::vector<TypeHierarchyItem>> children;
+
+  /// The protocol has a slot here for an optional 'data' filed, which can
+  /// be used to identify a type hierarchy item in a resolve request. We don't
+  /// need this (the item itself is sufficient to identify what to resolve)
+  /// so don't declare it.
+};
+llvm::json::Value toJSON(const TypeHierarchyItem &);
+llvm::raw_ostream &operator<<(llvm::raw_ostream &, const TypeHierarchyItem &);
 
 struct ReferenceParams : public TextDocumentPositionParams {
   // For now, no options like context.includeDeclaration are supported.

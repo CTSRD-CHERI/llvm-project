@@ -286,7 +286,6 @@ protected:
 
   // Dynamially set bits that enable features.
   bool FP64FP16Denormals;
-  bool DX10Clamp;
   bool FlatForGlobal;
   bool AutoWaitcntBeforeBarrier;
   bool CodeObjectV3;
@@ -295,8 +294,6 @@ protected:
   bool HasApertureRegs;
   bool EnableXNACK;
   bool TrapHandler;
-  bool DebuggerInsertNops;
-  bool DebuggerEmitPrologue;
 
   // Used as options.
   bool EnableHugePrivateBuffer;
@@ -314,8 +311,9 @@ protected:
   bool IsGCN;
   bool GCN3Encoding;
   bool CIInsts;
-  bool VIInsts;
+  bool GFX8Insts;
   bool GFX9Insts;
+  bool GFX7GFX8GFX9Insts;
   bool SGPRInitBug;
   bool HasSMemRealTime;
   bool HasIntClamp;
@@ -335,6 +333,7 @@ protected:
   bool HasDot1Insts;
   bool HasDot2Insts;
   bool EnableSRAMECC;
+  bool DoesNotSupportSRAMECC;
   bool FlatAddressSpace;
   bool FlatInstOffsets;
   bool FlatGlobalInsts;
@@ -533,14 +532,6 @@ public:
     return getGeneration() >= AMDGPUSubtarget::GFX9;
   }
 
-  bool enableDX10Clamp() const {
-    return DX10Clamp;
-  }
-
-  bool enableIEEEBit(const MachineFunction &MF) const {
-    return AMDGPU::isCompute(MF.getFunction().getCallingConv());
-  }
-
   bool useFlatForGlobal() const {
     return FlatForGlobal;
   }
@@ -614,6 +605,10 @@ public:
 
   bool hasD16LoadStore() const {
     return getGeneration() >= GFX9;
+  }
+
+  bool d16PreservesUnusedBits() const {
+    return hasD16LoadStore() && !isSRAMECCEnabled();
   }
 
   /// Return if most LDS instructions have an m0 use that require m0 to be
@@ -776,7 +771,7 @@ public:
   }
 
   bool hasLDSFPAtomics() const {
-    return VIInsts;
+    return GFX8Insts;
   }
 
   bool hasDPP() const {
@@ -789,18 +784,6 @@ public:
 
   bool enableSIScheduler() const {
     return EnableSIScheduler;
-  }
-
-  bool debuggerSupported() const {
-    return debuggerInsertNops() && debuggerEmitPrologue();
-  }
-
-  bool debuggerInsertNops() const {
-    return DebuggerInsertNops;
-  }
-
-  bool debuggerEmitPrologue() const {
-    return DebuggerEmitPrologue;
   }
 
   bool loadStoreOptEnabled() const {
@@ -821,15 +804,16 @@ public:
   }
 
   bool hasSMovFedHazard() const {
-    return getGeneration() >= AMDGPUSubtarget::GFX9;
+    return getGeneration() == AMDGPUSubtarget::GFX9;
   }
 
   bool hasReadM0MovRelInterpHazard() const {
-    return getGeneration() >= AMDGPUSubtarget::GFX9;
+    return getGeneration() == AMDGPUSubtarget::GFX9;
   }
 
   bool hasReadM0SendMsgHazard() const {
-    return getGeneration() >= AMDGPUSubtarget::VOLCANIC_ISLANDS;
+    return getGeneration() >= AMDGPUSubtarget::VOLCANIC_ISLANDS &&
+           getGeneration() <= AMDGPUSubtarget::GFX9;
   }
 
   /// Return the maximum number of waves per SIMD for kernels using \p SGPRs
@@ -980,7 +964,6 @@ private:
   bool FMA;
   bool CaymanISA;
   bool CFALUBug;
-  bool DX10Clamp;
   bool HasVertexCache;
   bool R600ALUInst;
   bool FP64;

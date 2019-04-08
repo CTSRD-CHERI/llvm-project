@@ -12,6 +12,8 @@
 #include "clang/Driver/Driver.h"
 #include "clang/Driver/DriverDiagnostic.h"
 #include "clang/Driver/Options.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Option/ArgList.h"
 
 using namespace clang::driver;
@@ -19,27 +21,6 @@ using namespace clang::driver::tools;
 using namespace clang::driver::toolchains;
 using namespace clang;
 using namespace llvm::opt;
-
-void parseThreadArgs(const Driver &Driver, const ArgList &DriverArgs,
-                     bool &Pthread, StringRef &ThreadModel,
-                     bool CheckForErrors = true) {
-  // Default value for -pthread / -mthread-model options, each being false /
-  // "single".
-  Pthread =
-      DriverArgs.hasFlag(options::OPT_pthread, options::OPT_no_pthread, false);
-  ThreadModel =
-      DriverArgs.getLastArgValue(options::OPT_mthread_model, "single");
-  if (!CheckForErrors)
-    return;
-
-  // Did user explicitly specify -mthread-model / -pthread?
-  bool HasThreadModel = DriverArgs.hasArg(options::OPT_mthread_model);
-  bool HasPthread = Pthread && DriverArgs.hasArg(options::OPT_pthread);
-  // '-pthread' cannot be used with '-mthread-model single'
-  if (HasPthread && HasThreadModel && ThreadModel == "single")
-    Driver.Diag(diag::err_drv_argument_not_allowed_with)
-        << "-pthread" << "-mthread-model single";
-}
 
 wasm::Linker::Linker(const ToolChain &TC)
     : GnuTool("wasm::Linker", "lld", TC) {}
@@ -57,6 +38,25 @@ bool wasm::Linker::isLinkJob() const { return true; }
 
 bool wasm::Linker::hasIntegratedCPP() const { return false; }
 
+std::string wasm::Linker::getLinkerPath(const ArgList &Args) const {
+  const ToolChain &ToolChain = getToolChain();
+  if (const Arg* A = Args.getLastArg(options::OPT_fuse_ld_EQ)) {
+    StringRef UseLinker = A->getValue();
+    if (!UseLinker.empty()) {
+      if (llvm::sys::path::is_absolute(UseLinker) &&
+          llvm::sys::fs::can_execute(UseLinker))
+        return UseLinker;
+
+      // Accept 'lld', and 'ld' as aliases for the default linker
+      if (UseLinker != "lld" && UseLinker != "ld")
+        ToolChain.getDriver().Diag(diag::err_drv_invalid_linker_name)
+            << A->getAsString(Args);
+    }
+  }
+
+  return ToolChain.GetProgramPath(ToolChain.getDefaultLinker());
+}
+
 void wasm::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                 const InputInfo &Output,
                                 const InputInfoList &Inputs,
@@ -64,7 +64,7 @@ void wasm::Linker::ConstructJob(Compilation &C, const JobAction &JA,
                                 const char *LinkingOutput) const {
 
   const ToolChain &ToolChain = getToolChain();
-  const char *Linker = Args.MakeArgString(ToolChain.GetLinkerPath());
+  const char *Linker = Args.MakeArgString(getLinkerPath(Args));
   ArgStringList CmdArgs;
 
   if (Args.hasArg(options::OPT_s))
@@ -83,8 +83,10 @@ void wasm::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     if (ToolChain.ShouldLinkCXXStdlib(Args))
       ToolChain.AddCXXStdlibLibArgs(Args, CmdArgs);
 
-    if (Args.hasArg(options::OPT_pthread))
+    if (Args.hasArg(options::OPT_pthread)) {
       CmdArgs.push_back("-lpthread");
+      CmdArgs.push_back("--shared-memory");
+    }
 
     CmdArgs.push_back("-lc");
     AddRunTimeLibs(ToolChain, ToolChain.getDriver(), CmdArgs, Args);
@@ -145,13 +147,14 @@ void WebAssembly::addClangTargetOptions(const ArgList &DriverArgs,
                          options::OPT_fno_use_init_array, true))
     CC1Args.push_back("-fuse-init-array");
 
-  // Either '-mthread-model posix' or '-pthread' sets '-target-feature
-  // +atomics'. We intentionally didn't create '-matomics' and set the atomics
-  // target feature here depending on the other two options.
-  bool Pthread = false;
-  StringRef ThreadModel = "";
-  parseThreadArgs(getDriver(), DriverArgs, Pthread, ThreadModel);
-  if (Pthread || ThreadModel != "single") {
+  // '-pthread' implies '-target-feature +atomics'
+  if (DriverArgs.hasFlag(options::OPT_pthread, options::OPT_no_pthread,
+                         false)) {
+    if (DriverArgs.hasFlag(options::OPT_mno_atomics, options::OPT_matomics,
+                           false))
+      getDriver().Diag(diag::err_drv_argument_not_allowed_with)
+          << "-pthread"
+          << "-mno-atomics";
     CC1Args.push_back("-target-feature");
     CC1Args.push_back("+atomics");
   }
@@ -210,17 +213,6 @@ void WebAssembly::AddCXXStdlibLibArgs(const llvm::opt::ArgList &Args,
   case ToolChain::CST_Libstdcxx:
     llvm_unreachable("invalid stdlib name");
   }
-}
-
-std::string WebAssembly::getThreadModel(const ArgList &DriverArgs) const {
-  // The WebAssembly MVP does not yet support threads. We set this to "posix"
-  // when '-pthread' is set.
-  bool Pthread = false;
-  StringRef ThreadModel = "";
-  parseThreadArgs(getDriver(), DriverArgs, Pthread, ThreadModel, false);
-  if (Pthread)
-    return "posix";
-  return ThreadModel;
 }
 
 Tool *WebAssembly::buildLinker() const {

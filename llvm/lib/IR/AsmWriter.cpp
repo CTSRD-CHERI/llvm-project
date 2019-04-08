@@ -2126,8 +2126,13 @@ static void writeDIExpression(raw_ostream &Out, const DIExpression *N,
       assert(!OpStr.empty() && "Expected valid opcode");
 
       Out << FS << OpStr;
-      for (unsigned A = 0, AE = I->getNumArgs(); A != AE; ++A)
-        Out << FS << I->getArg(A);
+      if (I->getOp() == dwarf::DW_OP_LLVM_convert) {
+        Out << FS << I->getArg(0);
+        Out << FS << dwarf::AttributeEncodingString(I->getArg(1));
+      } else {
+        for (unsigned A = 0, AE = I->getNumArgs(); A != AE; ++A)
+          Out << FS << I->getArg(A);
+      }
     }
   } else {
     for (const auto &I : N->getElements())
@@ -3480,23 +3485,24 @@ void AssemblyWriter::printArgument(const Argument *Arg, AttributeSet Attrs) {
 
 /// printBasicBlock - This member is called for each basic block in a method.
 void AssemblyWriter::printBasicBlock(const BasicBlock *BB) {
+  bool IsEntryBlock = BB == &BB->getParent()->getEntryBlock();
   if (BB->hasName()) {              // Print out the label if it exists...
     Out << "\n";
     PrintLLVMName(Out, BB->getName(), LabelPrefix);
     Out << ':';
-  } else if (!BB->use_empty()) {      // Don't print block # of no uses...
-    Out << "\n; <label>:";
+  } else if (!IsEntryBlock) {
+    Out << "\n";
     int Slot = Machine.getLocalSlot(BB);
     if (Slot != -1)
       Out << Slot << ":";
     else
-      Out << "<badref>";
+      Out << "<badref>:";
   }
 
   if (!BB->getParent()) {
     Out.PadToColumn(50);
     Out << "; Error: Block without parent!";
-  } else if (BB != &BB->getParent()->getEntryBlock()) {  // Not the entry block?
+  } else if (!IsEntryBlock) {
     // Output predecessors for the block.
     Out.PadToColumn(50);
     Out << ";";

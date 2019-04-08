@@ -49,6 +49,16 @@ static bool hasSinCosPiStret(const Triple &T) {
   return true;
 }
 
+static bool hasBcmp(const Triple &TT) {
+  // Posix removed support from bcmp() in 2001, but the glibc and several
+  // implementations of the libc still have it.
+  if (TT.isOSLinux())
+    return TT.isGNUEnvironment() || TT.isMusl();
+  // Both NetBSD and OpenBSD are planning to remove the function. Windows does
+  // not have it.
+  return TT.isOSFreeBSD() || TT.isOSSolaris() || TT.isOSDarwin();
+}
+
 /// Initialize the set of available library functions based on the specified
 /// target triple. This should be carefully written so that a missing target
 /// triple gets a sane set of defaults.
@@ -141,6 +151,9 @@ static void initialize(TargetLibraryInfoImpl &TLI, const Triple &T,
     TLI.setUnavailable(LibFunc_sincospif_stret);
   }
 
+  if (!hasBcmp(T))
+    TLI.setUnavailable(LibFunc_bcmp);
+
   if (T.isMacOSX() && T.getArch() == Triple::x86 &&
       !T.isMacOSXVersionLT(10, 7)) {
     // x86-32 OSX has a scheme where fwrite and fputs (and some other functions
@@ -152,11 +165,19 @@ static void initialize(TargetLibraryInfoImpl &TLI, const Triple &T,
     TLI.setAvailableWithName(LibFunc_fputs, "fputs$UNIX2003");
   }
 
-  // iprintf and friends are only available on XCore and TCE.
-  if (T.getArch() != Triple::xcore && T.getArch() != Triple::tce) {
+  // iprintf and friends are only available on XCore, TCE, and Emscripten.
+  if (T.getArch() != Triple::xcore && T.getArch() != Triple::tce &&
+      T.getOS() != Triple::Emscripten) {
     TLI.setUnavailable(LibFunc_iprintf);
     TLI.setUnavailable(LibFunc_siprintf);
     TLI.setUnavailable(LibFunc_fiprintf);
+  }
+
+  // __small_printf and friends are only available on Emscripten.
+  if (T.getOS() != Triple::Emscripten) {
+    TLI.setUnavailable(LibFunc_small_printf);
+    TLI.setUnavailable(LibFunc_small_sprintf);
+    TLI.setUnavailable(LibFunc_small_fprintf);
   }
 
   if (T.isOSWindows() && !T.isOSCygMing()) {
@@ -758,6 +779,7 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
   case LibFunc_stat:
   case LibFunc_statvfs:
   case LibFunc_siprintf:
+  case LibFunc_small_sprintf:
   case LibFunc_sprintf:
     return (NumParams >= 2 && FTy.getParamType(0)->isPointerTy() &&
             FTy.getParamType(1)->isPointerTy() &&
@@ -855,6 +877,7 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
   case LibFunc_getenv:
   case LibFunc_getpwnam:
   case LibFunc_iprintf:
+  case LibFunc_small_printf:
   case LibFunc_pclose:
   case LibFunc_perror:
   case LibFunc_printf:
@@ -934,6 +957,7 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
             FTy.getParamType(1)->isPointerTy());
   case LibFunc_fscanf:
   case LibFunc_fiprintf:
+  case LibFunc_small_fprintf:
   case LibFunc_fprintf:
     return (NumParams >= 2 && FTy.getReturnType()->isIntegerTy() &&
             FTy.getParamType(0)->isPointerTy() &&

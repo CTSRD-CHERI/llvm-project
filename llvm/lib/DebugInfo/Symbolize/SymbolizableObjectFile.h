@@ -33,12 +33,13 @@ public:
   static ErrorOr<std::unique_ptr<SymbolizableObjectFile>>
   create(object::ObjectFile *Obj, std::unique_ptr<DIContext> DICtx);
 
-  DILineInfo symbolizeCode(uint64_t ModuleOffset, FunctionNameKind FNKind,
+  DILineInfo symbolizeCode(object::SectionedAddress ModuleOffset,
+                           FunctionNameKind FNKind,
                            bool UseSymbolTable) const override;
-  DIInliningInfo symbolizeInlinedCode(uint64_t ModuleOffset,
+  DIInliningInfo symbolizeInlinedCode(object::SectionedAddress ModuleOffset,
                                       FunctionNameKind FNKind,
                                       bool UseSymbolTable) const override;
-  DIGlobal symbolizeData(uint64_t ModuleOffset) const override;
+  DIGlobal symbolizeData(object::SectionedAddress ModuleOffset) const override;
 
   // Return true if this is a 32-bit x86 PE COFF module.
   bool isWin32Module() const override;
@@ -62,6 +63,9 @@ private:
                             uint64_t OpdAddress = 0);
   std::error_code addCoffExportSymbols(const object::COFFObjectFile *CoffObj);
 
+  /// Search for the first occurence of specified Address in ObjectFile.
+  uint64_t getModuleSectionIndexForAddress(uint64_t Address) const;
+
   object::ObjectFile *Module;
   std::unique_ptr<DIContext> DebugInfoContext;
 
@@ -71,12 +75,12 @@ private:
     // the following symbol.
     uint64_t Size;
 
-    friend bool operator<(const SymbolDesc &s1, const SymbolDesc &s2) {
-      return s1.Addr < s2.Addr;
+    bool operator<(const SymbolDesc &RHS) const {
+      return Addr != RHS.Addr ? Addr < RHS.Addr : Size < RHS.Size;
     }
   };
-  std::map<SymbolDesc, StringRef> Functions;
-  std::map<SymbolDesc, StringRef> Objects;
+  std::vector<std::pair<SymbolDesc, StringRef>> Functions;
+  std::vector<std::pair<SymbolDesc, StringRef>> Objects;
 
   SymbolizableObjectFile(object::ObjectFile *Obj,
                          std::unique_ptr<DIContext> DICtx);

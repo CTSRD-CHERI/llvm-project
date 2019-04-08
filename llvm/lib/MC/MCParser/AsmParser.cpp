@@ -710,6 +710,9 @@ AsmParser::AsmParser(SourceMgr &SM, MCContext &Ctx, MCStreamer &Out,
   case MCObjectFileInfo::IsWasm:
     PlatformParser.reset(createWasmAsmParser());
     break;
+  case MCObjectFileInfo::IsXCOFF:
+    // TODO: Need to implement createXCOFFAsmParser for XCOFF format.
+    break;
   }
 
   PlatformParser->Initialize(*this);
@@ -845,9 +848,13 @@ bool AsmParser::enabledGenDwarfForAssembly() {
   // If we haven't encountered any .file directives (which would imply that
   // the assembler source was produced with debug info already) then emit one
   // describing the assembler source file itself.
-  if (getContext().getGenDwarfFileNumber() == 0)
+  if (getContext().getGenDwarfFileNumber() == 0) {
+    const MCDwarfFile &RootFile =
+        getContext().getMCDwarfLineTable(/*CUID=*/0).getRootFile();
     getContext().setGenDwarfFileNumber(getStreamer().EmitDwarfFileDirective(
-        0, StringRef(), getContext().getMainFileName()));
+        /*CUID=*/0, getContext().getCompilationDir(), RootFile.Name,
+        RootFile.Checksum, RootFile.Source));
+  }
   return true;
 }
 
@@ -899,9 +906,6 @@ bool AsmParser::Run(bool NoInitialTextSection, bool NoFinalize) {
     if (!getLexer().isAtStartOfStatement())
       eatToEndOfStatement();
   }
-
-  // Make sure we get proper DWARF even for empty files.
-  (void)enabledGenDwarfForAssembly();
 
   getTargetParser().onEndOfFile();
   printPendingErrors();
@@ -3400,13 +3404,14 @@ bool AsmParser::parseDirectiveFile(SMLoc DirectiveLoc) {
       Ctx.setGenDwarfForAssembly(false);
     }
 
-    MD5::MD5Result *CKMem = nullptr;
+    Optional<MD5::MD5Result> CKMem;
     if (HasMD5) {
-      CKMem = (MD5::MD5Result *)Ctx.allocate(sizeof(MD5::MD5Result), 1);
+      MD5::MD5Result Sum;
       for (unsigned i = 0; i != 8; ++i) {
-        CKMem->Bytes[i] = uint8_t(MD5Hi >> ((7 - i) * 8));
-        CKMem->Bytes[i + 8] = uint8_t(MD5Lo >> ((7 - i) * 8));
+        Sum.Bytes[i] = uint8_t(MD5Hi >> ((7 - i) * 8));
+        Sum.Bytes[i + 8] = uint8_t(MD5Lo >> ((7 - i) * 8));
       }
+      CKMem = Sum;
     }
     if (HasSource) {
       char *SourceBuf = static_cast<char *>(Ctx.allocate(SourceString.size()));

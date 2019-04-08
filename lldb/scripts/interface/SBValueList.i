@@ -77,6 +77,8 @@ public:
 
     bool
     IsValid() const;
+
+    explicit operator bool() const;
     
     void 
     Clear();
@@ -100,6 +102,10 @@ public:
     GetFirstValueByName (const char* name) const;
     
     %pythoncode %{
+        def __iter__(self):
+            '''Iterate over all values in a lldb.SBValueList object.'''
+            return lldb_iter(self, 'GetSize', 'GetValueAtIndex')
+
         def __len__(self):
             return int(self.GetSize())
 

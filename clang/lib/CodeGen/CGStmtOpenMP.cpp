@@ -725,6 +725,9 @@ bool CodeGenFunction::EmitOMPFirstprivateClause(const OMPExecutableDirective &D,
                                                 OMPPrivateScope &PrivateScope) {
   if (!HaveInsertPoint())
     return false;
+  bool DeviceConstTarget =
+      getLangOpts().OpenMPIsDevice &&
+      isOpenMPTargetExecutionDirective(D.getDirectiveKind());
   bool FirstprivateIsLastprivate = false;
   llvm::DenseSet<const VarDecl *> Lastprivates;
   for (const auto *C : D.getClausesOfKind<OMPLastprivateClause>()) {
@@ -747,9 +750,22 @@ bool CodeGenFunction::EmitOMPFirstprivateClause(const OMPExecutableDirective &D,
       bool ThisFirstprivateIsLastprivate =
           Lastprivates.count(OrigVD->getCanonicalDecl()) > 0;
       const FieldDecl *FD = CapturedStmtInfo->lookup(OrigVD);
+      const auto *VD = cast<VarDecl>(cast<DeclRefExpr>(IInit)->getDecl());
       if (!MustEmitFirstprivateCopy && !ThisFirstprivateIsLastprivate && FD &&
-          !FD->getType()->isReferenceType()) {
+          !FD->getType()->isReferenceType() &&
+          (!VD || !VD->hasAttr<OMPAllocateDeclAttr>())) {
         EmittedAsFirstprivate.insert(OrigVD->getCanonicalDecl());
+        ++IRef;
+        ++InitsRef;
+        continue;
+      }
+      // Do not emit copy for firstprivate constant variables in target regions,
+      // captured by reference.
+      if (DeviceConstTarget && OrigVD->getType().isConstant(getContext()) &&
+          FD && FD->getType()->isReferenceType() &&
+          (!VD || !VD->hasAttr<OMPAllocateDeclAttr>())) {
+        (void)CGM.getOpenMPRuntime().registerTargetFirstprivateCopy(*this,
+                                                                    OrigVD);
         ++IRef;
         ++InitsRef;
         continue;
@@ -757,7 +773,6 @@ bool CodeGenFunction::EmitOMPFirstprivateClause(const OMPExecutableDirective &D,
       FirstprivateIsLastprivate =
           FirstprivateIsLastprivate || ThisFirstprivateIsLastprivate;
       if (EmittedAsFirstprivate.insert(OrigVD->getCanonicalDecl()).second) {
-        const auto *VD = cast<VarDecl>(cast<DeclRefExpr>(IInit)->getDecl());
         const auto *VDInit =
             cast<VarDecl>(cast<DeclRefExpr>(*InitsRef)->getDecl());
         bool IsRegistered;
@@ -1516,8 +1531,9 @@ void CodeGenFunction::EmitOMPPrivateLoopCounters(
          I < E; ++I) {
       const auto *DRE = cast<DeclRefExpr>(C->getLoopCounter(I));
       const auto *VD = cast<VarDecl>(DRE->getDecl());
-      // Override only those variables that are really emitted already.
-      if (LocalDeclMap.count(VD)) {
+      // Override only those variables that can be captured to avoid re-emission
+      // of the variables declared within the loops.
+      if (DRE->refersToEnclosingVariableOrCapture()) {
         (void)LoopScope.addPrivate(VD, [this, DRE, VD]() {
           return CreateMemTemp(DRE->getType(), VD->getName());
         });
@@ -3937,6 +3953,8 @@ static void emitOMPAtomicExpr(CodeGenFunction &CGF, OpenMPClauseKind Kind,
   case OMPC_in_reduction:
   case OMPC_safelen:
   case OMPC_simdlen:
+  case OMPC_allocator:
+  case OMPC_allocate:
   case OMPC_collapse:
   case OMPC_default:
   case OMPC_seq_cst:

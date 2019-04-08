@@ -935,7 +935,7 @@ CheriCapTableMappingSection::CheriCapTableMappingSection()
 
 size_t CheriCapTableMappingSection::getSize() const {
   assert(Config->CapTableScope != CapTableScopePolicy::All);
-  if (empty())
+  if (!isNeeded())
     return 0;
   size_t Count = 0;
   if (!In.SymTab) {

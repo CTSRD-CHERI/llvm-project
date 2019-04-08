@@ -1415,6 +1415,30 @@ Instruction *InstCombiner::foldVectorBinop(BinaryOperator &Inst) {
     return createBinOpShuffle(V1, V2, Mask);
   }
 
+  // If both arguments of a commutative binop are select-shuffles that use the
+  // same mask with commuted operands, the shuffles are unnecessary.
+  if (Inst.isCommutative() &&
+      match(LHS, m_ShuffleVector(m_Value(V1), m_Value(V2), m_Constant(Mask))) &&
+      match(RHS, m_ShuffleVector(m_Specific(V2), m_Specific(V1),
+                                 m_Specific(Mask)))) {
+    auto *LShuf = cast<ShuffleVectorInst>(LHS);
+    auto *RShuf = cast<ShuffleVectorInst>(RHS);
+    // TODO: Allow shuffles that contain undefs in the mask?
+    //       That is legal, but it reduces undef knowledge.
+    // TODO: Allow arbitrary shuffles by shuffling after binop?
+    //       That might be legal, but we have to deal with poison.
+    if (LShuf->isSelect() && !LShuf->getMask()->containsUndefElement() &&
+        RShuf->isSelect() && !RShuf->getMask()->containsUndefElement()) {
+      // Example:
+      // LHS = shuffle V1, V2, <0, 5, 6, 3>
+      // RHS = shuffle V2, V1, <0, 5, 6, 3>
+      // LHS + RHS --> (V10+V20, V21+V11, V22+V12, V13+V23) --> V1 + V2
+      Instruction *NewBO = BinaryOperator::Create(Opcode, V1, V2);
+      NewBO->copyIRFlags(&Inst);
+      return NewBO;
+    }
+  }
+
   // If one argument is a shuffle within one vector and the other is a constant,
   // try moving the shuffle after the binary operation. This canonicalization
   // intends to move shuffles closer to other shuffles and binops closer to
@@ -1556,6 +1580,23 @@ Instruction *InstCombiner::visitGetElementPtrInst(GetElementPtrInst &GEP) {
   Type *GEPEltType = GEP.getSourceElementType();
   if (Value *V = SimplifyGEPInst(GEPEltType, Ops, SQ.getWithInstruction(&GEP)))
     return replaceInstUsesWith(GEP, V);
+
+  // For vector geps, use the generic demanded vector support.
+  if (GEP.getType()->isVectorTy()) {
+    auto VWidth = GEP.getType()->getVectorNumElements();
+    APInt UndefElts(VWidth, 0);
+    APInt AllOnesEltMask(APInt::getAllOnesValue(VWidth));
+    if (Value *V = SimplifyDemandedVectorElts(&GEP, AllOnesEltMask,
+                                              UndefElts)) {
+      if (V != &GEP)
+        return replaceInstUsesWith(GEP, V);
+      return &GEP;
+    }
+
+    // TODO: 1) Scalarize splat operands, 2) scalarize entire instruction if
+    // possible (decide on canonical form for pointer broadcast), 3) exploit
+    // undef elements to decrease demanded bits  
+  }
 
   Value *PtrOp = GEP.getOperand(0);
 
@@ -3332,7 +3373,8 @@ static bool AddReachableCodeToWorklist(BasicBlock *BB, const DataLayout &DL,
       if (isInstructionTriviallyDead(Inst, TLI)) {
         ++NumDeadInst;
         LLVM_DEBUG(dbgs() << "IC: DCE: " << *Inst << '\n');
-        salvageDebugInfo(*Inst);
+        if (!salvageDebugInfo(*Inst))
+          replaceDbgUsesWithUndef(Inst);
         Inst->eraseFromParent();
         MadeIRChange = true;
         continue;
@@ -3475,7 +3517,7 @@ static bool combineInstructionsOverFunction(
 
     MadeIRChange |= prepareICWorklistFromFunction(F, DL, &TLI, Worklist);
 
-    InstCombiner IC(Worklist, Builder, F.optForMinSize(), ExpensiveCombines, AA,
+    InstCombiner IC(Worklist, Builder, F.hasMinSize(), ExpensiveCombines, AA,
                     AC, TLI, DT, ORE, DL, LI);
     IC.MaxArraySizeForCombine = MaxArraySize;
 

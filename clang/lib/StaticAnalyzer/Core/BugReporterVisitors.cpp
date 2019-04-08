@@ -161,8 +161,8 @@ const Expr *bugreporter::getDerefExpr(const Stmt *S) {
 /// are the immediate snapshots of the tracked region's bindings within the
 /// node's respective states but not really checking that these snapshots
 /// actually contain the same set of bindings.
-bool hasVisibleUpdate(const ExplodedNode *LeftNode, SVal LeftVal,
-                      const ExplodedNode *RightNode, SVal RightVal) {
+static bool hasVisibleUpdate(const ExplodedNode *LeftNode, SVal LeftVal,
+                             const ExplodedNode *RightNode, SVal RightVal) {
   if (LeftVal == RightVal)
     return true;
 
@@ -306,9 +306,14 @@ public:
     ID.AddPointer(RegionOfInterest);
   }
 
+  void *getTag() const {
+    static int Tag = 0;
+    return static_cast<void *>(&Tag);
+  }
+
   std::shared_ptr<PathDiagnosticPiece> VisitNode(const ExplodedNode *N,
                                                  BugReporterContext &BR,
-                                                 BugReport &) override {
+                                                 BugReport &R) override {
 
     const LocationContext *Ctx = N->getLocationContext();
     const StackFrameContext *SCtx = Ctx->getStackFrame();
@@ -322,9 +327,6 @@ public:
     CallEventRef<> Call =
         BR.getStateManager().getCallEventManager().getCaller(SCtx, State);
 
-    if (SM.isInSystemHeader(Call->getDecl()->getSourceRange().getBegin()))
-      return nullptr;
-
     // Region of interest corresponds to an IVar, exiting a method
     // which could have written into that IVar, but did not.
     if (const auto *MC = dyn_cast<ObjCMethodCall>(Call)) {
@@ -333,8 +335,8 @@ public:
         if (RegionOfInterest->isSubRegionOf(SelfRegion) &&
             potentiallyWritesIntoIvar(Call->getRuntimeDefinition().getDecl(),
                                       IvarR->getDecl()))
-          return notModifiedDiagnostics(N, {}, SelfRegion, "self",
-                                        /*FirstIsReferenceType=*/false, 1);
+          return maybeEmitNode(R, *Call, N, {}, SelfRegion, "self",
+                               /*FirstIsReferenceType=*/false, 1);
       }
     }
 
@@ -342,8 +344,8 @@ public:
       const MemRegion *ThisR = CCall->getCXXThisVal().getAsRegion();
       if (RegionOfInterest->isSubRegionOf(ThisR)
           && !CCall->getDecl()->isImplicit())
-        return notModifiedDiagnostics(N, {}, ThisR, "this",
-                                      /*FirstIsReferenceType=*/false, 1);
+        return maybeEmitNode(R, *Call, N, {}, ThisR, "this",
+                             /*FirstIsReferenceType=*/false, 1);
 
       // Do not generate diagnostics for not modified parameters in
       // constructors.
@@ -353,27 +355,26 @@ public:
     ArrayRef<ParmVarDecl *> parameters = getCallParameters(Call);
     for (unsigned I = 0; I < Call->getNumArgs() && I < parameters.size(); ++I) {
       const ParmVarDecl *PVD = parameters[I];
-      SVal S = Call->getArgSVal(I);
+      SVal V = Call->getArgSVal(I);
       bool ParamIsReferenceType = PVD->getType()->isReferenceType();
       std::string ParamName = PVD->getNameAsString();
 
       int IndirectionLevel = 1;
       QualType T = PVD->getType();
-      while (const MemRegion *R = S.getAsRegion()) {
-        if (RegionOfInterest->isSubRegionOf(R) && !isPointerToConst(T))
-          return notModifiedDiagnostics(N, {}, R, ParamName,
-                                        ParamIsReferenceType, IndirectionLevel);
+      while (const MemRegion *MR = V.getAsRegion()) {
+        if (RegionOfInterest->isSubRegionOf(MR) && !isPointerToConst(T))
+          return maybeEmitNode(R, *Call, N, {}, MR, ParamName,
+                               ParamIsReferenceType, IndirectionLevel);
 
         QualType PT = T->getPointeeType();
         if (PT.isNull() || PT->isVoidType()) break;
 
         if (const RecordDecl *RD = PT->getAsRecordDecl())
-          if (auto P = findRegionOfInterestInRecord(RD, State, R))
-            return notModifiedDiagnostics(N, *P, RegionOfInterest, ParamName,
-                                          ParamIsReferenceType,
-                                          IndirectionLevel);
+          if (auto P = findRegionOfInterestInRecord(RD, State, MR))
+            return maybeEmitNode(R, *Call, N, *P, RegionOfInterest, ParamName,
+                                 ParamIsReferenceType, IndirectionLevel);
 
-        S = State->getSVal(R, PT);
+        V = State->getSVal(MR, PT);
         T = PT;
         IndirectionLevel++;
       }
@@ -543,11 +544,37 @@ private:
            Ty->getPointeeType().getCanonicalType().isConstQualified();
   }
 
-  /// \return Diagnostics piece for region not modified in the current function.
+  /// Consume the information on the no-store stack frame in order to
+  /// either emit a note or suppress the report enirely.
+  /// \return Diagnostics piece for region not modified in the current function,
+  /// if it decides to emit one.
   std::shared_ptr<PathDiagnosticPiece>
-  notModifiedDiagnostics(const ExplodedNode *N, const RegionVector &FieldChain,
-                         const MemRegion *MatchedRegion, StringRef FirstElement,
-                         bool FirstIsReferenceType, unsigned IndirectionLevel) {
+  maybeEmitNode(BugReport &R, const CallEvent &Call, const ExplodedNode *N,
+                const RegionVector &FieldChain, const MemRegion *MatchedRegion,
+                StringRef FirstElement, bool FirstIsReferenceType,
+                unsigned IndirectionLevel) {
+    // Optimistically suppress uninitialized value bugs that result
+    // from system headers having a chance to initialize the value
+    // but failing to do so. It's too unlikely a system header's fault.
+    // It's much more likely a situation in which the function has a failure
+    // mode that the user decided not to check. If we want to hunt such
+    // omitted checks, we should provide an explicit function-specific note
+    // describing the precondition under which the function isn't supposed to
+    // initialize its out-parameter, and additionally check that such
+    // precondition can actually be fulfilled on the current path.
+    if (Call.isInSystemHeader()) {
+      // We make an exception for system header functions that have no branches,
+      // i.e. have exactly 3 CFG blocks: begin, all its code, end. Such
+      // functions unconditionally fail to initialize the variable.
+      // If they call other functions that have more paths within them,
+      // this suppression would still apply when we visit these inner functions.
+      // One common example of a standard function that doesn't ever initialize
+      // its out parameter is operator placement new; it's up to the follow-up
+      // constructor (if any) to initialize the memory.
+      if (N->getStackFrame()->getCFG()->size() > 3)
+        R.markInvalid(getTag(), nullptr);
+      return nullptr;
+    }
 
     PathDiagnosticLocation L =
         PathDiagnosticLocation::create(N->getLocation(), SM);
@@ -1815,15 +1842,6 @@ std::shared_ptr<PathDiagnosticPiece>
 ConditionBRVisitor::VisitNodeImpl(const ExplodedNode *N,
                                   BugReporterContext &BRC, BugReport &BR) {
   ProgramPoint progPoint = N->getLocation();
-  ProgramStateRef CurrentState = N->getState();
-  ProgramStateRef PrevState = N->getFirstPred()->getState();
-
-  // Compare the GDMs of the state, because that is where constraints
-  // are managed.  Note that ensure that we only look at nodes that
-  // were generated by the analyzer engine proper, not checkers.
-  if (CurrentState->getGDM().getRoot() ==
-      PrevState->getGDM().getRoot())
-    return nullptr;
 
   // If an assumption was made on a branch, it should be caught
   // here by looking at the state transition.
@@ -1892,6 +1910,8 @@ std::shared_ptr<PathDiagnosticPiece> ConditionBRVisitor::VisitTerminator(
     break;
   }
 
+  Cond = Cond->IgnoreParens();
+
   // However, when we encounter a logical operator as a branch condition,
   // then the condition is actually its RHS, because LHS would be
   // the condition for the logical operator terminator.
@@ -1911,6 +1931,18 @@ std::shared_ptr<PathDiagnosticPiece>
 ConditionBRVisitor::VisitTrueTest(const Expr *Cond, bool tookTrue,
                                   BugReporterContext &BRC, BugReport &R,
                                   const ExplodedNode *N) {
+  ProgramStateRef CurrentState = N->getState();
+  ProgramStateRef PreviousState = N->getFirstPred()->getState();
+  const LocationContext *LCtx = N->getLocationContext();
+
+  // If the constraint information is changed between the current and the
+  // previous program state we assuming the newly seen constraint information.
+  // If we cannot evaluate the condition (and the constraints are the same)
+  // the analyzer has no information about the value and just assuming it.
+  if (BRC.getStateManager().haveEqualConstraints(CurrentState, PreviousState) &&
+      CurrentState->getSVal(Cond, LCtx).isValid())
+    return nullptr;
+
   // These will be modified in code below, but we need to preserve the original
   //  values in case we want to throw the generic message.
   const Expr *CondTmp = Cond;
@@ -1946,7 +1978,6 @@ ConditionBRVisitor::VisitTrueTest(const Expr *Cond, bool tookTrue,
 
   // Condition too complex to explain? Just say something so that the user
   // knew we've made some path decision at this point.
-  const LocationContext *LCtx = N->getLocationContext();
   PathDiagnosticLocation Loc(Cond, BRC.getSourceManager(), LCtx);
   if (!Loc.isValid() || !Loc.asLocation().isValid())
     return nullptr;
@@ -2408,26 +2439,6 @@ CXXSelfAssignmentBRVisitor::VisitNode(const ExplodedNode *Succ,
   return std::move(Piece);
 }
 
-std::shared_ptr<PathDiagnosticPiece>
-TaintBugVisitor::VisitNode(const ExplodedNode *N,
-                           BugReporterContext &BRC, BugReport &) {
-
-  // Find the ExplodedNode where the taint was first introduced
-  if (!N->getState()->isTainted(V) || N->getFirstPred()->getState()->isTainted(V))
-    return nullptr;
-
-  const Stmt *S = PathDiagnosticLocation::getStmt(N);
-  if (!S)
-    return nullptr;
-
-  const LocationContext *NCtx = N->getLocationContext();
-  PathDiagnosticLocation L =
-      PathDiagnosticLocation::createBegin(S, BRC.getSourceManager(), NCtx);
-  if (!L.isValid() || !L.asLocation().isValid())
-    return nullptr;
-
-  return std::make_shared<PathDiagnosticEventPiece>(L, "Taint originated here");
-}
 
 FalsePositiveRefutationBRVisitor::FalsePositiveRefutationBRVisitor()
     : Constraints(ConstraintRangeTy::Factory().getEmptyMap()) {}
@@ -2438,7 +2449,7 @@ void FalsePositiveRefutationBRVisitor::finalizeVisitor(
   VisitNode(EndPathNode, BRC, BR);
 
   // Create a refutation manager
-  SMTSolverRef RefutationSolver = CreateZ3Solver();
+  llvm::SMTSolverRef RefutationSolver = llvm::CreateZ3Solver();
   ASTContext &Ctx = BRC.getASTContext();
 
   // Add constraints to the solver
@@ -2446,7 +2457,7 @@ void FalsePositiveRefutationBRVisitor::finalizeVisitor(
     const SymbolRef Sym = I.first;
     auto RangeIt = I.second.begin();
 
-    SMTExprRef Constraints = SMTConv::getRangeExpr(
+    llvm::SMTExprRef Constraints = SMTConv::getRangeExpr(
         RefutationSolver, Ctx, Sym, RangeIt->From(), RangeIt->To(),
         /*InRange=*/true);
     while ((++RangeIt) != I.second.end()) {

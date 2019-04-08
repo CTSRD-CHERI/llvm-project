@@ -1,4 +1,5 @@
 include(CheckCXXSymbolExists)
+include(CheckTypeSize)
 
 set(LLDB_PROJECT_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 set(LLDB_SOURCE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/source")
@@ -91,6 +92,29 @@ if (LLDB_DISABLE_CURSES)
   add_definitions( -DLLDB_DISABLE_CURSES )
 endif()
 
+if (LLDB_DISABLE_LIBEDIT)
+  add_definitions( -DLLDB_DISABLE_LIBEDIT )
+else()
+  find_package(LibEdit REQUIRED)
+
+  # Check if we libedit capable of handling wide characters (built with
+  # '--enable-widec').
+  set(CMAKE_REQUIRED_LIBRARIES ${libedit_LIBRARIES})
+  set(CMAKE_REQUIRED_INCLUDES ${libedit_INCLUDE_DIRS})
+  check_symbol_exists(el_winsertstr histedit.h LLDB_EDITLINE_USE_WCHAR)
+  set(CMAKE_EXTRA_INCLUDE_FILES histedit.h)
+  check_type_size(el_rfunc_t LLDB_EL_RFUNC_T_SIZE)
+  if (LLDB_EL_RFUNC_T_SIZE STREQUAL "")
+    set(LLDB_HAVE_EL_RFUNC_T 0)
+  else()
+    set(LLDB_HAVE_EL_RFUNC_T 1)
+  endif()
+  set(CMAKE_REQUIRED_LIBRARIES)
+  set(CMAKE_REQUIRED_INCLUDES)
+  set(CMAKE_EXTRA_INCLUDE_FILES)
+endif()
+
+
 # On Windows, we can't use the normal FindPythonLibs module that comes with CMake,
 # for a number of reasons.
 # 1) Prior to MSVC 2015, it is only possible to embed Python if python itself was
@@ -111,10 +135,10 @@ function(find_python_libs_windows)
     return()
   endif()
 
-  file(TO_CMAKE_PATH "${PYTHON_HOME}/Include" PYTHON_INCLUDE_DIRS)
+  file(TO_CMAKE_PATH "${PYTHON_HOME}/Include" PYTHON_INCLUDE_DIR)
 
-  if(EXISTS "${PYTHON_INCLUDE_DIRS}/patchlevel.h")
-    file(STRINGS "${PYTHON_INCLUDE_DIRS}/patchlevel.h" python_version_str
+  if(EXISTS "${PYTHON_INCLUDE_DIR}/patchlevel.h")
+    file(STRINGS "${PYTHON_INCLUDE_DIR}/patchlevel.h" python_version_str
          REGEX "^#define[ \t]+PY_VERSION[ \t]+\"[^\"]+\"")
     string(REGEX REPLACE "^#define[ \t]+PY_VERSION[ \t]+\"([^\"+]+)[+]?\".*" "\\1"
          PYTHONLIBS_VERSION_STRING "${python_version_str}")
@@ -122,7 +146,7 @@ function(find_python_libs_windows)
     string(REGEX REPLACE "([0-9]+)[.]([0-9]+)[.][0-9]+" "python\\1\\2" PYTHONLIBS_BASE_NAME "${PYTHONLIBS_VERSION_STRING}")
     unset(python_version_str)
   else()
-    message("Unable to find ${PYTHON_INCLUDE_DIRS}/patchlevel.h, Python installation is corrupt.")
+    message("Unable to find ${PYTHON_INCLUDE_DIR}/patchlevel.h, Python installation is corrupt.")
     message("Python support will be disabled for this build.")
     set(LLDB_DISABLE_PYTHON 1 PARENT_SCOPE)
     return()
@@ -201,12 +225,12 @@ function(find_python_libs_windows)
   set (PYTHON_EXECUTABLE ${PYTHON_EXECUTABLE} PARENT_SCOPE)
   set (PYTHON_LIBRARY ${PYTHON_LIBRARY} PARENT_SCOPE)
   set (PYTHON_DLL ${PYTHON_DLL} PARENT_SCOPE)
-  set (PYTHON_INCLUDE_DIRS ${PYTHON_INCLUDE_DIRS} PARENT_SCOPE)
+  set (PYTHON_INCLUDE_DIR ${PYTHON_INCLUDE_DIR} PARENT_SCOPE)
 
   message("-- LLDB Found PythonExecutable: ${PYTHON_RELEASE_EXE} and ${PYTHON_DEBUG_EXE}")
   message("-- LLDB Found PythonLibs: ${PYTHON_RELEASE_LIB} and ${PYTHON_DEBUG_LIB}")
   message("-- LLDB Found PythonDLL: ${PYTHON_RELEASE_DLL} and ${PYTHON_DEBUG_DLL}")
-  message("-- LLDB Found PythonIncludeDirs: ${PYTHON_INCLUDE_DIRS}")
+  message("-- LLDB Found PythonIncludeDirs: ${PYTHON_INCLUDE_DIR}")
 endfunction(find_python_libs_windows)
 
 if (NOT LLDB_DISABLE_PYTHON)
@@ -219,17 +243,19 @@ if (NOT LLDB_DISABLE_PYTHON)
       add_definitions( -DLLDB_PYTHON_HOME="${LLDB_PYTHON_HOME}" )
     endif()
   else()
-    find_package(PythonLibs REQUIRED)
+    find_package(PythonInterp)
+    find_package(PythonLibs)
   endif()
-  
-  if (PYTHON_INCLUDE_DIRS)
-    include_directories(${PYTHON_INCLUDE_DIRS})
+
+  if (PYTHON_INCLUDE_DIR)
+    include_directories(${PYTHON_INCLUDE_DIR})
   endif()
 endif()
 
 if (LLDB_DISABLE_PYTHON)
-  unset(PYTHON_INCLUDE_DIRS)
+  unset(PYTHON_INCLUDE_DIR)
   unset(PYTHON_LIBRARY)
+  unset(PYTHON_EXECUTABLE)
   add_definitions( -DLLDB_DISABLE_PYTHON )
 endif()
 

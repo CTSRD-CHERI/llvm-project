@@ -53,7 +53,7 @@ void tools::MinGW::Assembler::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (Args.hasArg(options::OPT_gsplit_dwarf))
     SplitDebugInfo(getToolChain(), C, *this, JA, Args, Output,
-                   SplitDebugName(Args, Output));
+                   SplitDebugName(Args, Inputs[0], Output));
 }
 
 void tools::MinGW::Linker::AddLibGCC(const ArgList &Args,
@@ -248,8 +248,8 @@ void tools::MinGW::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
       if (Sanitize.needsAsanRt()) {
         // MinGW always links against a shared MSVCRT.
-        CmdArgs.push_back(
-            TC.getCompilerRTArgString(Args, "asan_dynamic", true));
+        CmdArgs.push_back(TC.getCompilerRTArgString(Args, "asan_dynamic",
+                                                    ToolChain::FT_Shared));
         CmdArgs.push_back(
             TC.getCompilerRTArgString(Args, "asan_dynamic_runtime_thunk"));
         CmdArgs.push_back(Args.MakeArgString("--require-defined"));

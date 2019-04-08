@@ -16,7 +16,6 @@
 #include "lldb/Core/Module.h"
 #include "lldb/Core/ModuleSpec.h"
 #include "lldb/Core/PluginManager.h"
-#include "lldb/Core/RangeMap.h"
 #include "lldb/Core/Section.h"
 #include "lldb/Host/FileSystem.h"
 #include "lldb/Symbol/DWARFCallFrameInfo.h"
@@ -26,6 +25,7 @@
 #include "lldb/Utility/ArchSpec.h"
 #include "lldb/Utility/DataBufferHeap.h"
 #include "lldb/Utility/Log.h"
+#include "lldb/Utility/RangeMap.h"
 #include "lldb/Utility/Status.h"
 #include "lldb/Utility/Stream.h"
 #include "lldb/Utility/Timer.h"
@@ -55,8 +55,8 @@ namespace {
 const char *const LLDB_NT_OWNER_FREEBSD = "FreeBSD";
 const char *const LLDB_NT_OWNER_GNU = "GNU";
 const char *const LLDB_NT_OWNER_NETBSD = "NetBSD";
+const char *const LLDB_NT_OWNER_NETBSDCORE = "NetBSD-CORE";
 const char *const LLDB_NT_OWNER_OPENBSD = "OpenBSD";
-const char *const LLDB_NT_OWNER_CSR = "csr";
 const char *const LLDB_NT_OWNER_ANDROID = "Android";
 const char *const LLDB_NT_OWNER_CORE = "CORE";
 const char *const LLDB_NT_OWNER_LINUX = "LINUX";
@@ -70,8 +70,10 @@ const elf_word LLDB_NT_GNU_ABI_SIZE = 16;
 
 const elf_word LLDB_NT_GNU_BUILD_ID_TAG = 0x03;
 
-const elf_word LLDB_NT_NETBSD_ABI_TAG = 0x01;
-const elf_word LLDB_NT_NETBSD_ABI_SIZE = 4;
+const elf_word LLDB_NT_NETBSD_IDENT_TAG = 1;
+const elf_word LLDB_NT_NETBSD_IDENT_DESCSZ = 4;
+const elf_word LLDB_NT_NETBSD_IDENT_NAMESZ = 7;
+const elf_word LLDB_NT_NETBSD_PROCINFO = 1;
 
 // GNU ABI note OS constants
 const elf_word LLDB_NT_GNU_ABI_OS_LINUX = 0x00;
@@ -114,7 +116,7 @@ const elf_word LLDB_NT_GNU_ABI_OS_SOLARIS = 0x02;
 #define NT_METAG_TLS 0x502
 
 //===----------------------------------------------------------------------===//
-/// @class ELFRelocation
+/// \class ELFRelocation
 /// Generic wrapper for ELFRel and ELFRela.
 ///
 /// This helper class allows us to parse both ELFRel and ELFRela relocation
@@ -124,7 +126,7 @@ public:
   /// Constructs an ELFRelocation entry with a personality as given by @p
   /// type.
   ///
-  /// @param type Either DT_REL or DT_RELA.  Any other value is invalid.
+  /// \param type Either DT_REL or DT_RELA.  Any other value is invalid.
   ELFRelocation(unsigned type);
 
   ~ELFRelocation();
@@ -271,27 +273,6 @@ bool ELFNote::Parse(const DataExtractor &data, lldb::offset_t *offset) {
   return true;
 }
 
-static uint32_t kalimbaVariantFromElfFlags(const elf::elf_word e_flags) {
-  const uint32_t dsp_rev = e_flags & 0xFF;
-  uint32_t kal_arch_variant = LLDB_INVALID_CPUTYPE;
-  switch (dsp_rev) {
-  // TODO(mg11) Support more variants
-  case 10:
-    kal_arch_variant = llvm::Triple::KalimbaSubArch_v3;
-    break;
-  case 14:
-    kal_arch_variant = llvm::Triple::KalimbaSubArch_v4;
-    break;
-  case 17:
-  case 20:
-    kal_arch_variant = llvm::Triple::KalimbaSubArch_v5;
-    break;
-  default:
-    break;
-  }
-  return kal_arch_variant;
-}
-
 static uint32_t mipsVariantFromElfFlags (const elf::ELFHeader &header) {
   const uint32_t mips_arch = header.e_flags & llvm::ELF::EF_MIPS_ARCH;
   uint32_t endian = header.e_ident[EI_DATA];
@@ -349,32 +330,7 @@ static uint32_t subTypeFromElfHeader(const elf::ELFHeader &header) {
   if (header.e_machine == llvm::ELF::EM_MIPS)
     return mipsVariantFromElfFlags(header);
 
-  return llvm::ELF::EM_CSR_KALIMBA == header.e_machine
-             ? kalimbaVariantFromElfFlags(header.e_flags)
-             : LLDB_INVALID_CPUTYPE;
-}
-
-//! The kalimba toolchain identifies a code section as being
-//! one with the SHT_PROGBITS set in the section sh_type and the top
-//! bit in the 32-bit address field set.
-static lldb::SectionType
-kalimbaSectionType(const elf::ELFHeader &header,
-                   const elf::ELFSectionHeader &sect_hdr) {
-  if (llvm::ELF::EM_CSR_KALIMBA != header.e_machine) {
-    return eSectionTypeOther;
-  }
-
-  if (llvm::ELF::SHT_NOBITS == sect_hdr.sh_type) {
-    return eSectionTypeZeroFill;
-  }
-
-  if (llvm::ELF::SHT_PROGBITS == sect_hdr.sh_type) {
-    const lldb::addr_t KAL_CODE_BIT = 1 << 31;
-    return KAL_CODE_BIT & sect_hdr.sh_addr ? eSectionTypeCode
-                                           : eSectionTypeData;
-  }
-
-  return eSectionTypeOther;
+  return LLDB_INVALID_CPUTYPE;
 }
 
 // Arbitrary constant used as UUID prefix for core files.
@@ -1294,46 +1250,45 @@ ObjectFileELF::RefineModuleDetailsFromNote(lldb_private::DataExtractor &data,
         // The note.n_name == LLDB_NT_OWNER_GNU is valid for Linux platform
         arch_spec.GetTriple().setOS(llvm::Triple::OSType::Linux);
     }
-    // Process NetBSD ELF notes.
+    // Process NetBSD ELF executables and shared libraries
     else if ((note.n_name == LLDB_NT_OWNER_NETBSD) &&
-             (note.n_type == LLDB_NT_NETBSD_ABI_TAG) &&
-             (note.n_descsz == LLDB_NT_NETBSD_ABI_SIZE)) {
-      // Pull out the min version info.
+             (note.n_type == LLDB_NT_NETBSD_IDENT_TAG) &&
+             (note.n_descsz == LLDB_NT_NETBSD_IDENT_DESCSZ) &&
+             (note.n_namesz == LLDB_NT_NETBSD_IDENT_NAMESZ)) {
+      // Pull out the version info.
       uint32_t version_info;
       if (data.GetU32(&offset, &version_info, 1) == nullptr) {
         error.SetErrorString("failed to read NetBSD ABI note payload");
         return error;
       }
-
+      // Convert the version info into a major/minor/patch number.
+      //     #define __NetBSD_Version__ MMmmrrpp00
+      //
+      //     M = major version
+      //     m = minor version; a minor number of 99 indicates current.
+      //     r = 0 (since NetBSD 3.0 not used)
+      //     p = patchlevel
+      const uint32_t version_major = version_info / 100000000;
+      const uint32_t version_minor = (version_info % 100000000) / 1000000;
+      const uint32_t version_patch = (version_info % 10000) / 100;
+      // Set the elf OS version to NetBSD.  Also clear the vendor.
+      arch_spec.GetTriple().setOSName(
+          llvm::formatv("netbsd{0}.{1}.{2}", version_major, version_minor,
+                        version_patch).str());
+      arch_spec.GetTriple().setVendor(llvm::Triple::VendorType::UnknownVendor);
+    }
+    // Process NetBSD ELF core(5) notes
+    else if ((note.n_name == LLDB_NT_OWNER_NETBSDCORE) &&
+             (note.n_type == LLDB_NT_NETBSD_PROCINFO)) {
       // Set the elf OS version to NetBSD.  Also clear the vendor.
       arch_spec.GetTriple().setOS(llvm::Triple::OSType::NetBSD);
       arch_spec.GetTriple().setVendor(llvm::Triple::VendorType::UnknownVendor);
-
-      if (log)
-        log->Printf(
-            "ObjectFileELF::%s detected NetBSD, min version constant %" PRIu32,
-            __FUNCTION__, version_info);
     }
     // Process OpenBSD ELF notes.
     else if (note.n_name == LLDB_NT_OWNER_OPENBSD) {
       // Set the elf OS version to OpenBSD.  Also clear the vendor.
       arch_spec.GetTriple().setOS(llvm::Triple::OSType::OpenBSD);
       arch_spec.GetTriple().setVendor(llvm::Triple::VendorType::UnknownVendor);
-    }
-    // Process CSR kalimba notes
-    else if ((note.n_type == LLDB_NT_GNU_ABI_TAG) &&
-             (note.n_name == LLDB_NT_OWNER_CSR)) {
-      arch_spec.GetTriple().setOS(llvm::Triple::OSType::UnknownOS);
-      arch_spec.GetTriple().setVendor(llvm::Triple::VendorType::CSR);
-
-      // TODO At some point the description string could be processed.
-      // It could provide a steer towards the kalimba variant which this ELF
-      // targets.
-      if (note.n_descsz) {
-        const char *cstr =
-            data.GetCStr(&offset, llvm::alignTo(note.n_descsz, 4));
-        (void)cstr;
-      }
     } else if (note.n_name == LLDB_NT_OWNER_ANDROID) {
       arch_spec.GetTriple().setOS(llvm::Triple::OSType::Linux);
       arch_spec.GetTriple().setEnvironment(
@@ -1791,14 +1746,7 @@ SectionType ObjectFileELF::GetSectionType(const ELFSectionHeaderInfo &H) const {
   case SHT_DYNAMIC:
     return eSectionTypeELFDynamicLinkInfo;
   }
-  SectionType Type = GetSectionTypeFromName(H.section_name.GetStringRef());
-  if (Type == eSectionTypeOther) {
-    // the kalimba toolchain assumes that ELF section names are free-form.
-    // It does support linkscripts which (can) give rise to various
-    // arbitrarily named sections being "Code" or "Data".
-    Type = kalimbaSectionType(m_header, H);
-  }
-  return Type;
+  return GetSectionTypeFromName(H.section_name.GetStringRef());
 }
 
 static uint32_t GetTargetByteSize(SectionType Type, const ArchSpec &arch) {
@@ -2159,7 +2107,7 @@ unsigned ObjectFileELF::ParseSymbols(Symtab *symtab, user_id_t start_id,
 
     if (symbol_type == eSymbolTypeInvalid && symbol.getType() != STT_SECTION) {
       if (symbol_section_sp) {
-        const ConstString &sect_name = symbol_section_sp->GetName();
+        ConstString sect_name = symbol_section_sp->GetName();
         if (sect_name == text_section_name || sect_name == init_section_name ||
             sect_name == fini_section_name || sect_name == ctors_section_name ||
             sect_name == dtors_section_name) {
@@ -2303,7 +2251,7 @@ unsigned ObjectFileELF::ParseSymbols(Symtab *symtab, user_id_t start_id,
 
     if (symbol_section_sp && module_section_list &&
         module_section_list != section_list) {
-      const ConstString &sect_name = symbol_section_sp->GetName();
+      ConstString sect_name = symbol_section_sp->GetName();
       auto section_it = section_name_to_section.find(sect_name.GetCString());
       if (section_it == section_name_to_section.end())
         section_it =
@@ -3292,7 +3240,7 @@ ArchSpec ObjectFileELF::GetArchitecture() {
   }
 
   if (CalculateType() == eTypeCoreFile &&
-      m_arch_spec.TripleOSIsUnspecifiedUnknown()) {
+      !m_arch_spec.TripleOSWasSpecified()) {
     // Core files don't have section headers yet they have PT_NOTE program
     // headers that might shed more light on the architecture
     for (const elf::ELFProgramHeader &H : ProgramHeaders()) {

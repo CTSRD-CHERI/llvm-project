@@ -319,11 +319,14 @@ static unsigned getReciprocalPredBlockProb() { return 2; }
 
 /// A helper function that adds a 'fast' flag to floating-point operations.
 static Value *addFastMathFlag(Value *V) {
-  if (isa<FPMathOperator>(V)) {
-    FastMathFlags Flags;
-    Flags.setFast();
-    cast<Instruction>(V)->setFastMathFlags(Flags);
-  }
+  if (isa<FPMathOperator>(V))
+    cast<Instruction>(V)->setFastMathFlags(FastMathFlags::getFast());
+  return V;
+}
+
+static Value *addFastMathFlag(Value *V, FastMathFlags FMF) {
+  if (isa<FPMathOperator>(V))
+    cast<Instruction>(V)->setFastMathFlags(FMF);
   return V;
 }
 
@@ -1377,12 +1380,6 @@ static bool isExplicitVecOuterLoop(Loop *OuterLp,
   if (!Hints.allowVectorization(Fn, OuterLp,
                                 true /*VectorizeOnlyWhenForced*/)) {
     LLVM_DEBUG(dbgs() << "LV: Loop hints prevent outer loop vectorization.\n");
-    return false;
-  }
-
-  if (!Hints.getWidth()) {
-    LLVM_DEBUG(dbgs() << "LV: Not vectorizing: No user vector width.\n");
-    Hints.emitRemarkWithHints();
     return false;
   }
 
@@ -2867,17 +2864,35 @@ BasicBlock *InnerLoopVectorizer::createVectorizedLoopSkeleton() {
     OrigPhi->setIncomingValue(BlockIdx, BCResumeVal);
   }
 
+  // We need the OrigLoop (scalar loop part) latch terminator to help
+  // produce correct debug info for the middle block BB instructions.
+  // The legality check stage guarantees that the loop will have a single
+  // latch.
+  assert(isa<BranchInst>(OrigLoop->getLoopLatch()->getTerminator()) &&
+         "Scalar loop latch terminator isn't a branch");
+  BranchInst *ScalarLatchBr =
+      cast<BranchInst>(OrigLoop->getLoopLatch()->getTerminator());
+
   // Add a check in the middle block to see if we have completed
   // all of the iterations in the first vector loop.
   // If (N - N%VF) == N, then we *don't* need to run the remainder.
   // If tail is to be folded, we know we don't need to run the remainder.
   Value *CmpN = Builder.getTrue();
-  if (!Cost->foldTailByMasking())
+  if (!Cost->foldTailByMasking()) {
     CmpN =
         CmpInst::Create(Instruction::ICmp, CmpInst::ICMP_EQ, Count,
                         CountRoundDown, "cmp.n", MiddleBlock->getTerminator());
-  ReplaceInstWithInst(MiddleBlock->getTerminator(),
-                      BranchInst::Create(ExitBlock, ScalarPH, CmpN));
+
+    // Provide correct stepping behaviour by using the same DebugLoc as the
+    // scalar loop latch branch cmp if it exists.
+    if (CmpInst *ScalarLatchCmp =
+            dyn_cast_or_null<CmpInst>(ScalarLatchBr->getCondition()))
+      cast<Instruction>(CmpN)->setDebugLoc(ScalarLatchCmp->getDebugLoc());
+  }
+
+  BranchInst *BrInst = BranchInst::Create(ExitBlock, ScalarPH, CmpN);
+  BrInst->setDebugLoc(ScalarLatchBr->getDebugLoc());
+  ReplaceInstWithInst(MiddleBlock->getTerminator(), BrInst);
 
   // Get ready to start creating new instructions into the vectorized body.
   Builder.SetInsertPoint(&*VecBody->getFirstInsertionPt());
@@ -3612,7 +3627,8 @@ void InnerLoopVectorizer::fixReduction(PHINode *Phi) {
       // Floating point operations had to be 'fast' to enable the reduction.
       ReducedPartRdx = addFastMathFlag(
           Builder.CreateBinOp((Instruction::BinaryOps)Op, RdxPart,
-                              ReducedPartRdx, "bin.rdx"));
+                              ReducedPartRdx, "bin.rdx"),
+          RdxDesc.getFastMathFlags());
     else
       ReducedPartRdx = createMinMaxOp(Builder, MinMaxKind, ReducedPartRdx,
                                       RdxPart);
@@ -6077,31 +6093,48 @@ void LoopVectorizationCostModel::collectValuesToIgnore() {
   }
 }
 
+// TODO: we could return a pair of values that specify the max VF and
+// min VF, to be used in `buildVPlans(MinVF, MaxVF)` instead of
+// `buildVPlans(VF, VF)`. We cannot do it because VPLAN at the moment
+// doesn't have a cost model that can choose which plan to execute if
+// more than one is generated.
+static unsigned determineVPlanVF(const unsigned WidestVectorRegBits,
+                                 LoopVectorizationCostModel &CM) {
+  unsigned WidestType;
+  std::tie(std::ignore, WidestType) = CM.getSmallestAndWidestTypes();
+  return WidestVectorRegBits / WidestType;
+}
+
 VectorizationFactor
 LoopVectorizationPlanner::planInVPlanNativePath(bool OptForSize,
                                                 unsigned UserVF) {
+  unsigned VF = UserVF;
   // Outer loop handling: They may require CFG and instruction level
   // transformations before even evaluating whether vectorization is profitable.
   // Since we cannot modify the incoming IR, we need to build VPlan upfront in
   // the vectorization pipeline.
   if (!OrigLoop->empty()) {
-    // TODO: If UserVF is not provided, we set UserVF to 4 for stress testing.
-    // This won't be necessary when UserVF is not required in the VPlan-native
-    // path.
-    if (VPlanBuildStressTest && !UserVF)
-      UserVF = 4;
+    // If the user doesn't provide a vectorization factor, determine a
+    // reasonable one.
+    if (!UserVF) {
+      // We set VF to 4 for stress testing.
+      if (VPlanBuildStressTest)
+        VF = 4;
+      else
+        VF = determineVPlanVF(TTI->getRegisterBitWidth(true /* Vector*/), CM);
+    }
 
     assert(EnableVPlanNativePath && "VPlan-native path is not enabled.");
-    assert(UserVF && "Expected UserVF for outer loop vectorization.");
-    assert(isPowerOf2_32(UserVF) && "VF needs to be a power of two");
-    LLVM_DEBUG(dbgs() << "LV: Using user VF " << UserVF << ".\n");
-    buildVPlans(UserVF, UserVF);
+    assert(isPowerOf2_32(VF) && "VF needs to be a power of two");
+    LLVM_DEBUG(dbgs() << "LV: Using " << (UserVF ? "user VF " : "computed VF ")
+                      << VF << " to build VPlans.\n");
+    buildVPlans(VF, VF);
 
     // For VPlan build stress testing, we bail out after VPlan construction.
     if (VPlanBuildStressTest)
       return VectorizationFactor::Disabled();
 
-    return {UserVF, 0};
+    return {VF, 0};
   }
 
   LLVM_DEBUG(
@@ -7124,24 +7157,26 @@ static bool processLoopInVPlanNativePath(
   LoopVectorizationPlanner LVP(L, LI, TLI, TTI, LVL, CM);
 
   // Get user vectorization factor.
-  unsigned UserVF = Hints.getWidth();
+  const unsigned UserVF = Hints.getWidth();
 
   // Check the function attributes to find out if this function should be
   // optimized for size.
   bool OptForSize =
-      Hints.getForce() != LoopVectorizeHints::FK_Enabled && F->optForSize();
+      Hints.getForce() != LoopVectorizeHints::FK_Enabled && F->hasOptSize();
 
   // Plan how to best vectorize, return the best VF and its cost.
-  VectorizationFactor VF = LVP.planInVPlanNativePath(OptForSize, UserVF);
+  const VectorizationFactor VF = LVP.planInVPlanNativePath(OptForSize, UserVF);
 
   // If we are stress testing VPlan builds, do not attempt to generate vector
   // code. Masked vector code generation support will follow soon.
-  if (VPlanBuildStressTest || EnableVPlanPredication)
+  // Also, do not attempt to vectorize if no vector code will be produced.
+  if (VPlanBuildStressTest || EnableVPlanPredication ||
+      VectorizationFactor::Disabled() == VF)
     return false;
 
   LVP.setBestPlan(VF.Width, 1);
 
-  InnerLoopVectorizer LB(L, PSE, LI, DT, TLI, TTI, AC, ORE, UserVF, 1, LVL,
+  InnerLoopVectorizer LB(L, PSE, LI, DT, TLI, TTI, AC, ORE, VF.Width, 1, LVL,
                          &CM);
   LLVM_DEBUG(dbgs() << "Vectorizing outer loop in \""
                     << L->getHeader()->getParent()->getName() << "\"\n");
@@ -7210,7 +7245,7 @@ bool LoopVectorizePass::processLoop(Loop *L) {
   // Check the function attributes to find out if this function should be
   // optimized for size.
   bool OptForSize =
-      Hints.getForce() != LoopVectorizeHints::FK_Enabled && F->optForSize();
+      Hints.getForce() != LoopVectorizeHints::FK_Enabled && F->hasOptSize();
 
   // Entrance to the VPlan-native vectorization path. Outer loops are processed
   // here. They may require CFG and instruction level transformations before

@@ -802,9 +802,11 @@ unsigned getRegBitWidth(unsigned RCID) {
   switch (RCID) {
   case AMDGPU::SGPR_32RegClassID:
   case AMDGPU::VGPR_32RegClassID:
+  case AMDGPU::VRegOrLds_32RegClassID:
   case AMDGPU::VS_32RegClassID:
   case AMDGPU::SReg_32RegClassID:
   case AMDGPU::SReg_32_XM0RegClassID:
+  case AMDGPU::SRegOrLds_32RegClassID:
     return 32;
   case AMDGPU::SGPR_64RegClassID:
   case AMDGPU::VS_64RegClassID:
@@ -812,12 +814,18 @@ unsigned getRegBitWidth(unsigned RCID) {
   case AMDGPU::VReg_64RegClassID:
   case AMDGPU::SReg_64_XEXECRegClassID:
     return 64;
+  case AMDGPU::SGPR_96RegClassID:
+  case AMDGPU::SReg_96RegClassID:
   case AMDGPU::VReg_96RegClassID:
     return 96;
   case AMDGPU::SGPR_128RegClassID:
   case AMDGPU::SReg_128RegClassID:
   case AMDGPU::VReg_128RegClassID:
     return 128;
+  case AMDGPU::SGPR_160RegClassID:
+  case AMDGPU::SReg_160RegClassID:
+  case AMDGPU::VReg_160RegClassID:
+    return 160;
   case AMDGPU::SReg_256RegClassID:
   case AMDGPU::VReg_256RegClassID:
     return 256;
@@ -992,6 +1000,19 @@ bool splitMUBUFOffset(uint32_t Imm, uint32_t &SOffset, uint32_t &ImmOffset,
   ImmOffset = Imm;
   SOffset = Overflow;
   return true;
+}
+
+SIModeRegisterDefaults::SIModeRegisterDefaults(const Function &F) {
+  *this = getDefaultForCallingConv(F.getCallingConv());
+
+  StringRef IEEEAttr = F.getFnAttribute("amdgpu-ieee").getValueAsString();
+  if (!IEEEAttr.empty())
+    IEEE = IEEEAttr == "true";
+
+  StringRef DX10ClampAttr
+    = F.getFnAttribute("amdgpu-dx10-clamp").getValueAsString();
+  if (!DX10ClampAttr.empty())
+    DX10Clamp = DX10ClampAttr == "true";
 }
 
 namespace {

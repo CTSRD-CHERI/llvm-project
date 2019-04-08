@@ -219,6 +219,7 @@ std::string CGNVCUDARuntime::getDeviceSideName(const Decl *D) {
 void CGNVCUDARuntime::emitDeviceStub(CodeGenFunction &CGF,
                                      FunctionArgList &Args) {
   assert(getDeviceSideName(CGF.CurFuncDecl) == CGF.CurFn->getName() ||
+         getDeviceSideName(CGF.CurFuncDecl) + ".stub" == CGF.CurFn->getName() ||
          CGF.CGM.getContext().getTargetInfo().getCXXABI() !=
              CGF.CGM.getContext().getAuxTargetInfo()->getCXXABI());
 
@@ -469,9 +470,13 @@ llvm::Function *CGNVCUDARuntime::makeRegisterGlobalsFn() {
 /// \endcode
 llvm::Function *CGNVCUDARuntime::makeModuleCtorFunction() {
   bool IsHIP = CGM.getLangOpts().HIP;
+  bool IsCUDA = CGM.getLangOpts().CUDA;
   // No need to generate ctors/dtors if there is no GPU binary.
   StringRef CudaGpuBinaryFileName = CGM.getCodeGenOpts().CudaGpuBinaryFileName;
   if (CudaGpuBinaryFileName.empty() && !IsHIP)
+    return nullptr;
+  if ((IsHIP || (IsCUDA && !RelocatableDeviceCode)) && EmittedKernels.empty() &&
+      DeviceVars.empty())
     return nullptr;
 
   // void __{cuda|hip}_register_globals(void* handle);

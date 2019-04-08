@@ -29,7 +29,7 @@
 #include "lldb/Utility/LLDBAssert.h"
 #include "lldb/Utility/Log.h"
 #include "lldb/Utility/State.h"
-
+#include "llvm/BinaryFormat/Magic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/Threading.h"
 
@@ -41,51 +41,81 @@ using namespace lldb;
 using namespace lldb_private;
 using namespace minidump;
 
-//------------------------------------------------------------------
-/// A placeholder module used for minidumps, where the original
-/// object files may not be available (so we can't parse the object
-/// files to extract the set of sections/segments)
-///
-/// This placeholder module has a single synthetic section (.module_image)
-/// which represents the module memory range covering the whole module.
-//------------------------------------------------------------------
-class PlaceholderModule : public Module {
+namespace {
+
+/// A minimal ObjectFile implementation providing a dummy object file for the
+/// cases when the real module binary is not available. This allows the module
+/// to show up in "image list" and symbols to be added to it.
+class PlaceholderObjectFile : public ObjectFile {
 public:
-  PlaceholderModule(const ModuleSpec &module_spec) :
-    Module(module_spec.GetFileSpec(), module_spec.GetArchitecture()) {
-    if (module_spec.GetUUID().IsValid())
-      SetUUID(module_spec.GetUUID());
+  PlaceholderObjectFile(const lldb::ModuleSP &module_sp,
+                        const ModuleSpec &module_spec, lldb::offset_t base,
+                        lldb::offset_t size)
+      : ObjectFile(module_sp, &module_spec.GetFileSpec(), /*file_offset*/ 0,
+                   /*length*/ 0, /*data_sp*/ nullptr, /*data_offset*/ 0),
+        m_arch(module_spec.GetArchitecture()), m_uuid(module_spec.GetUUID()),
+        m_base(base), m_size(size) {
+    m_symtab_up = llvm::make_unique<Symtab>(this);
   }
 
-  // Creates a synthetic module section covering the whole module image (and
-  // sets the section load address as well)
-  void CreateImageSection(const MinidumpModule *module, Target& target) {
-    const ConstString section_name(".module_image");
-    lldb::SectionSP section_sp(new Section(
-        shared_from_this(),     // Module to which this section belongs.
-        nullptr,                // ObjectFile
-        0,                      // Section ID.
-        section_name,           // Section name.
-        eSectionTypeContainer,  // Section type.
-        module->base_of_image,  // VM address.
-        module->size_of_image,  // VM size in bytes of this section.
-        0,                      // Offset of this section in the file.
-        module->size_of_image,  // Size of the section as found in the file.
-        12,                     // Alignment of the section (log2)
-        0,                      // Flags for this section.
-        1));                    // Number of host bytes per target byte
-    section_sp->SetPermissions(ePermissionsExecutable | ePermissionsReadable);
-    GetSectionList()->AddSection(section_sp);
+  ConstString GetPluginName() override { return ConstString("placeholder"); }
+  uint32_t GetPluginVersion() override { return 1; }
+  bool ParseHeader() override { return true; }
+  Type CalculateType() override { return eTypeUnknown; }
+  Strata CalculateStrata() override { return eStrataUnknown; }
+  uint32_t GetDependentModules(FileSpecList &file_list) override { return 0; }
+  bool IsExecutable() const override { return false; }
+  ArchSpec GetArchitecture() override { return m_arch; }
+  UUID GetUUID() override { return m_uuid; }
+  Symtab *GetSymtab() override { return m_symtab_up.get(); }
+  bool IsStripped() override { return true; }
+  ByteOrder GetByteOrder() const override { return m_arch.GetByteOrder(); }
+
+  uint32_t GetAddressByteSize() const override {
+    return m_arch.GetAddressByteSize();
+  }
+
+  Address GetBaseAddress() override {
+    return Address(m_sections_up->GetSectionAtIndex(0), 0);
+  }
+
+  void CreateSections(SectionList &unified_section_list) override {
+    m_sections_up = llvm::make_unique<SectionList>();
+    auto section_sp = std::make_shared<Section>(
+        GetModule(), this, /*sect_id*/ 0, ConstString(".module_image"),
+        eSectionTypeOther, m_base, m_size, /*file_offset*/ 0, /*file_size*/ 0,
+        /*log2align*/ 0, /*flags*/ 0);
+    section_sp->SetPermissions(ePermissionsReadable | ePermissionsExecutable);
+    m_sections_up->AddSection(section_sp);
+    unified_section_list.AddSection(std::move(section_sp));
+  }
+
+  bool SetLoadAddress(Target &target, addr_t value,
+                      bool value_is_offset) override {
+    assert(!value_is_offset);
+    assert(value == m_base);
+
+    // Create sections if they haven't been created already.
+    GetModule()->GetSectionList();
+    assert(m_sections_up->GetNumSections(0) == 1);
+
     target.GetSectionLoadList().SetSectionLoadAddress(
-        section_sp, module->base_of_image);
+        m_sections_up->GetSectionAtIndex(0), m_base);
+    return true;
   }
 
-ObjectFile *GetObjectFile() override { return nullptr; }
-
-  SectionList *GetSectionList() override {
-    return Module::GetUnifiedSectionList();
+  void Dump(Stream *s) override {
+    s->Format("Placeholder object file for {0} loaded at [{1:x}-{2:x})\n",
+              GetFileSpec(), m_base, m_base + m_size);
   }
+
+private:
+  ArchSpec m_arch;
+  UUID m_uuid;
+  lldb::offset_t m_base;
+  lldb::offset_t m_size;
 };
+} // namespace
 
 ConstString ProcessMinidump::GetPluginNameStatic() {
   static ConstString g_name("minidump");
@@ -104,18 +134,14 @@ lldb::ProcessSP ProcessMinidump::CreateInstance(lldb::TargetSP target_sp,
 
   lldb::ProcessSP process_sp;
   // Read enough data for the Minidump header
-  constexpr size_t header_size = sizeof(MinidumpHeader);
+  constexpr size_t header_size = sizeof(Header);
   auto DataPtr = FileSystem::Instance().CreateDataBuffer(crash_file->GetPath(),
                                                          header_size, 0);
   if (!DataPtr)
     return nullptr;
 
   lldbassert(DataPtr->GetByteSize() == header_size);
-
-  // first, only try to parse the header, beacuse we need to be fast
-  llvm::ArrayRef<uint8_t> HeaderBytes = DataPtr->GetData();
-  const MinidumpHeader *header = MinidumpHeader::Parse(HeaderBytes);
-  if (header == nullptr)
+  if (identify_magic(toStringRef(DataPtr->GetData())) != llvm::file_magic::minidump)
     return nullptr;
 
   auto AllData =
@@ -123,13 +149,8 @@ lldb::ProcessSP ProcessMinidump::CreateInstance(lldb::TargetSP target_sp,
   if (!AllData)
     return nullptr;
 
-  auto minidump_parser = MinidumpParser::Create(AllData);
-  // check if the parser object is valid
-  if (!minidump_parser)
-    return nullptr;
-
   return std::make_shared<ProcessMinidump>(target_sp, listener_sp, *crash_file,
-                                           minidump_parser.getValue());
+                                           std::move(AllData));
 }
 
 bool ProcessMinidump::CanDebug(lldb::TargetSP target_sp,
@@ -140,9 +161,9 @@ bool ProcessMinidump::CanDebug(lldb::TargetSP target_sp,
 ProcessMinidump::ProcessMinidump(lldb::TargetSP target_sp,
                                  lldb::ListenerSP listener_sp,
                                  const FileSpec &core_file,
-                                 MinidumpParser minidump_parser)
-    : Process(target_sp, listener_sp), m_minidump_parser(minidump_parser),
-      m_core_file(core_file), m_is_wow64(false) {}
+                                 DataBufferSP core_data)
+    : Process(target_sp, listener_sp), m_core_file(core_file),
+      m_core_data(std::move(core_data)), m_is_wow64(false) {}
 
 ProcessMinidump::~ProcessMinidump() {
   Clear();
@@ -168,12 +189,12 @@ void ProcessMinidump::Terminate() {
 }
 
 Status ProcessMinidump::DoLoadCore() {
-  Status error;
+  auto expected_parser = MinidumpParser::Create(m_core_data);
+  if (!expected_parser)
+    return Status(expected_parser.takeError());
+  m_minidump_parser = std::move(*expected_parser);
 
-  // Minidump parser initialization & consistency checks
-  error = m_minidump_parser.Initialize();
-  if (error.Fail())
-    return error;
+  Status error;
 
   // Do we support the minidump's architecture?
   ArchSpec arch = GetArchitecture();
@@ -192,11 +213,11 @@ Status ProcessMinidump::DoLoadCore() {
   }
   GetTarget().SetArchitecture(arch, true /*set_platform*/);
 
-  m_thread_list = m_minidump_parser.GetThreads();
-  m_active_exception = m_minidump_parser.GetExceptionStream();
+  m_thread_list = m_minidump_parser->GetThreads();
+  m_active_exception = m_minidump_parser->GetExceptionStream();
   ReadModuleList();
 
-  llvm::Optional<lldb::pid_t> pid = m_minidump_parser.GetPid();
+  llvm::Optional<lldb::pid_t> pid = m_minidump_parser->GetPid();
   if (!pid) {
     error.SetErrorString("failed to parse PID");
     return error;
@@ -267,7 +288,7 @@ size_t ProcessMinidump::ReadMemory(lldb::addr_t addr, void *buf, size_t size,
 size_t ProcessMinidump::DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
                                      Status &error) {
 
-  llvm::ArrayRef<uint8_t> mem = m_minidump_parser.GetMemory(addr, size);
+  llvm::ArrayRef<uint8_t> mem = m_minidump_parser->GetMemory(addr, size);
   if (mem.empty()) {
     error.SetErrorString("could not parse memory info");
     return 0;
@@ -279,7 +300,7 @@ size_t ProcessMinidump::DoReadMemory(lldb::addr_t addr, void *buf, size_t size,
 
 ArchSpec ProcessMinidump::GetArchitecture() {
   if (!m_is_wow64) {
-    return m_minidump_parser.GetArchitecture();
+    return m_minidump_parser->GetArchitecture();
   }
 
   llvm::Triple triple;
@@ -291,13 +312,13 @@ ArchSpec ProcessMinidump::GetArchitecture() {
 
 Status ProcessMinidump::GetMemoryRegionInfo(lldb::addr_t load_addr,
                                             MemoryRegionInfo &range_info) {
-  range_info = m_minidump_parser.GetMemoryRegionInfo(load_addr);
+  range_info = m_minidump_parser->GetMemoryRegionInfo(load_addr);
   return Status();
 }
 
 Status ProcessMinidump::GetMemoryRegions(
     lldb_private::MemoryRegionInfos &region_list) {
-  region_list = m_minidump_parser.GetMemoryRegions();
+  region_list = m_minidump_parser->GetMemoryRegions();
   return Status();
 }
 
@@ -306,7 +327,7 @@ void ProcessMinidump::Clear() { Process::m_thread_list.Clear(); }
 bool ProcessMinidump::UpdateThreadList(ThreadList &old_thread_list,
                                        ThreadList &new_thread_list) {
   for (const MinidumpThread& thread : m_thread_list) {
-    MinidumpLocationDescriptor context_location = thread.thread_context;
+    LocationDescriptor context_location = thread.thread_context;
 
     // If the minidump contains an exception context, use it
     if (m_active_exception != nullptr &&
@@ -316,9 +337,9 @@ bool ProcessMinidump::UpdateThreadList(ThreadList &old_thread_list,
 
     llvm::ArrayRef<uint8_t> context;
     if (!m_is_wow64)
-      context = m_minidump_parser.GetThreadContext(context_location);
+      context = m_minidump_parser->GetThreadContext(context_location);
     else
-      context = m_minidump_parser.GetThreadContextWow64(thread);
+      context = m_minidump_parser->GetThreadContextWow64(thread);
 
     lldb::ThreadSP thread_sp(new ThreadMinidump(*this, thread, context));
     new_thread_list.AddThread(thread_sp);
@@ -328,16 +349,17 @@ bool ProcessMinidump::UpdateThreadList(ThreadList &old_thread_list,
 
 void ProcessMinidump::ReadModuleList() {
   std::vector<const MinidumpModule *> filtered_modules =
-      m_minidump_parser.GetFilteredModuleList();
+      m_minidump_parser->GetFilteredModuleList();
+
+  Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_MODULES));
 
   for (auto module : filtered_modules) {
     llvm::Optional<std::string> name =
-        m_minidump_parser.GetMinidumpString(module->module_name_rva);
+        m_minidump_parser->GetMinidumpString(module->module_name_rva);
 
     if (!name)
       continue;
 
-    Log *log(GetLogIfAllCategoriesSet(LIBLLDB_LOG_MODULES));
     if (log) {
       log->Printf("ProcessMinidump::%s found module: name: %s %#010" PRIx64
                   "-%#010" PRIx64 " size: %" PRIu32,
@@ -353,13 +375,46 @@ void ProcessMinidump::ReadModuleList() {
       m_is_wow64 = true;
     }
 
-    const auto uuid = m_minidump_parser.GetModuleUUID(module);
+    if (log) {
+      log->Printf("ProcessMinidump::%s load module: name: %s", __FUNCTION__,
+                  name.getValue().c_str());
+    }
+
+    const auto uuid = m_minidump_parser->GetModuleUUID(module);
     auto file_spec = FileSpec(name.getValue(), GetArchitecture().GetTriple());
     FileSystem::Instance().Resolve(file_spec);
     ModuleSpec module_spec(file_spec, uuid);
+    module_spec.GetArchitecture() = GetArchitecture();
     Status error;
+    // Try and find a module with a full UUID that matches. This function will
+    // add the module to the target if it finds one.
     lldb::ModuleSP module_sp = GetTarget().GetSharedModule(module_spec, &error);
-    if (!module_sp || error.Fail()) {
+    if (!module_sp) {
+      // Try and find a module without specifying the UUID and only looking for
+      // the file given a basename. We then will look for a partial UUID match
+      // if we find any matches. This function will add the module to the
+      // target if it finds one, so we need to remove the module from the target
+      // if the UUID doesn't match during our manual UUID verification. This
+      // allows the "target.exec-search-paths" setting to specify one or more
+      // directories that contain executables that can be searched for matches.
+      ModuleSpec basename_module_spec(module_spec);
+      basename_module_spec.GetUUID().Clear();
+      basename_module_spec.GetFileSpec().GetDirectory().Clear();
+      module_sp = GetTarget().GetSharedModule(basename_module_spec, &error);
+      if (module_sp) {
+        // We consider the module to be a match if the minidump UUID is a
+        // prefix of the actual UUID, or if either of the UUIDs are empty.
+        const auto dmp_bytes = uuid.GetBytes();
+        const auto mod_bytes = module_sp->GetUUID().GetBytes();
+        const bool match = dmp_bytes.empty() || mod_bytes.empty() ||
+            mod_bytes.take_front(dmp_bytes.size()) == dmp_bytes;
+        if (!match) {
+            GetTarget().GetImages().Remove(module_sp);
+            module_sp.reset();
+        }
+      }
+    }
+    if (!module_sp) {
       // We failed to locate a matching local object file. Fortunately, the
       // minidump format encodes enough information about each module's memory
       // range to allow us to create placeholder modules.
@@ -373,16 +428,9 @@ void ProcessMinidump::ReadModuleList() {
                     name.getValue().c_str());
       }
 
-      auto placeholder_module =
-          std::make_shared<PlaceholderModule>(module_spec);
-      placeholder_module->CreateImageSection(module, GetTarget());
-      module_sp = placeholder_module;
+      module_sp = Module::CreateModuleFromObjectFile<PlaceholderObjectFile>(
+          module_spec, module->base_of_image, module->size_of_image);
       GetTarget().GetImages().Append(module_sp);
-    }
-
-    if (log) {
-      log->Printf("ProcessMinidump::%s load module: name: %s", __FUNCTION__,
-                  name.getValue().c_str());
     }
 
     bool load_addr_changed = false;
@@ -666,31 +714,33 @@ public:
         m_interpreter.GetExecutionContext().GetProcessPtr());
     result.SetStatus(eReturnStatusSuccessFinishResult);
     Stream &s = result.GetOutputStream();
-    MinidumpParser &minidump = process->m_minidump_parser;
+    MinidumpParser &minidump = *process->m_minidump_parser;
     if (DumpDirectory()) {
-      s.Printf("RVA        SIZE       TYPE       MinidumpStreamType\n");
+      s.Printf("RVA        SIZE       TYPE       StreamType\n");
       s.Printf("---------- ---------- ---------- --------------------------\n");
-      for (const auto &pair: minidump.GetDirectoryMap())
-        s.Printf("0x%8.8x 0x%8.8x 0x%8.8x %s\n", (uint32_t)pair.second.rva,
-                 (uint32_t)pair.second.data_size, pair.first,
-                 MinidumpParser::GetStreamTypeAsString(pair.first).data());
+      for (const auto &stream_desc : minidump.GetMinidumpFile().streams())
+        s.Printf(
+            "0x%8.8x 0x%8.8x 0x%8.8x %s\n", (uint32_t)stream_desc.Location.RVA,
+            (uint32_t)stream_desc.Location.DataSize,
+            (unsigned)(StreamType)stream_desc.Type,
+            MinidumpParser::GetStreamTypeAsString(stream_desc.Type).data());
       s.Printf("\n");
     }
-    auto DumpTextStream = [&](MinidumpStreamType stream_type,
+    auto DumpTextStream = [&](StreamType stream_type,
                               llvm::StringRef label) -> void {
       auto bytes = minidump.GetStream(stream_type);
       if (!bytes.empty()) {
         if (label.empty())
-          label = MinidumpParser::GetStreamTypeAsString((uint32_t)stream_type);
+          label = MinidumpParser::GetStreamTypeAsString(stream_type);
         s.Printf("%s:\n%s\n\n", label.data(), bytes.data());
       }
     };
-    auto DumpBinaryStream = [&](MinidumpStreamType stream_type,
+    auto DumpBinaryStream = [&](StreamType stream_type,
                                 llvm::StringRef label) -> void {
       auto bytes = minidump.GetStream(stream_type);
       if (!bytes.empty()) {
         if (label.empty())
-          label = MinidumpParser::GetStreamTypeAsString((uint32_t)stream_type);
+          label = MinidumpParser::GetStreamTypeAsString(stream_type);
         s.Printf("%s:\n", label.data());
         DataExtractor data(bytes.data(), bytes.size(), eByteOrderLittle,
                            process->GetAddressByteSize());
@@ -701,30 +751,30 @@ public:
     };
 
     if (DumpLinuxCPUInfo())
-      DumpTextStream(MinidumpStreamType::LinuxCPUInfo, "/proc/cpuinfo");
+      DumpTextStream(StreamType::LinuxCPUInfo, "/proc/cpuinfo");
     if (DumpLinuxProcStatus())
-      DumpTextStream(MinidumpStreamType::LinuxProcStatus, "/proc/PID/status");
+      DumpTextStream(StreamType::LinuxProcStatus, "/proc/PID/status");
     if (DumpLinuxLSBRelease())
-      DumpTextStream(MinidumpStreamType::LinuxLSBRelease, "/etc/lsb-release");
+      DumpTextStream(StreamType::LinuxLSBRelease, "/etc/lsb-release");
     if (DumpLinuxCMDLine())
-      DumpTextStream(MinidumpStreamType::LinuxCMDLine, "/proc/PID/cmdline");
+      DumpTextStream(StreamType::LinuxCMDLine, "/proc/PID/cmdline");
     if (DumpLinuxEnviron())
-      DumpTextStream(MinidumpStreamType::LinuxEnviron, "/proc/PID/environ");
+      DumpTextStream(StreamType::LinuxEnviron, "/proc/PID/environ");
     if (DumpLinuxAuxv())
-      DumpBinaryStream(MinidumpStreamType::LinuxAuxv, "/proc/PID/auxv");
+      DumpBinaryStream(StreamType::LinuxAuxv, "/proc/PID/auxv");
     if (DumpLinuxMaps())
-      DumpTextStream(MinidumpStreamType::LinuxMaps, "/proc/PID/maps");
+      DumpTextStream(StreamType::LinuxMaps, "/proc/PID/maps");
     if (DumpLinuxProcStat())
-      DumpTextStream(MinidumpStreamType::LinuxProcStat, "/proc/PID/stat");
+      DumpTextStream(StreamType::LinuxProcStat, "/proc/PID/stat");
     if (DumpLinuxProcUptime())
-      DumpTextStream(MinidumpStreamType::LinuxProcUptime, "uptime");
+      DumpTextStream(StreamType::LinuxProcUptime, "uptime");
     if (DumpLinuxProcFD())
-      DumpTextStream(MinidumpStreamType::LinuxProcFD, "/proc/PID/fd");
+      DumpTextStream(StreamType::LinuxProcFD, "/proc/PID/fd");
     if (DumpFacebookAppData())
-      DumpTextStream(MinidumpStreamType::FacebookAppCustomData,
+      DumpTextStream(StreamType::FacebookAppCustomData,
                      "Facebook App Data");
     if (DumpFacebookBuildID()) {
-      auto bytes = minidump.GetStream(MinidumpStreamType::FacebookBuildID);
+      auto bytes = minidump.GetStream(StreamType::FacebookBuildID);
       if (bytes.size() >= 4) {
         DataExtractor data(bytes.data(), bytes.size(), eByteOrderLittle,
                            process->GetAddressByteSize());
@@ -736,31 +786,31 @@ public:
       }
     }
     if (DumpFacebookVersionName())
-      DumpTextStream(MinidumpStreamType::FacebookAppVersionName,
+      DumpTextStream(StreamType::FacebookAppVersionName,
                      "Facebook Version String");
     if (DumpFacebookJavaStack())
-      DumpTextStream(MinidumpStreamType::FacebookJavaStack,
+      DumpTextStream(StreamType::FacebookJavaStack,
                      "Facebook Java Stack");
     if (DumpFacebookDalvikInfo())
-      DumpTextStream(MinidumpStreamType::FacebookDalvikInfo,
+      DumpTextStream(StreamType::FacebookDalvikInfo,
                      "Facebook Dalvik Info");
     if (DumpFacebookUnwindSymbols())
-      DumpBinaryStream(MinidumpStreamType::FacebookUnwindSymbols,
+      DumpBinaryStream(StreamType::FacebookUnwindSymbols,
                        "Facebook Unwind Symbols Bytes");
     if (DumpFacebookErrorLog())
-      DumpTextStream(MinidumpStreamType::FacebookDumpErrorLog,
+      DumpTextStream(StreamType::FacebookDumpErrorLog,
                      "Facebook Error Log");
     if (DumpFacebookAppStateLog())
-      DumpTextStream(MinidumpStreamType::FacebookAppStateLog,
+      DumpTextStream(StreamType::FacebookAppStateLog,
                      "Faceook Application State Log");
     if (DumpFacebookAbortReason())
-      DumpTextStream(MinidumpStreamType::FacebookAbortReason,
+      DumpTextStream(StreamType::FacebookAbortReason,
                      "Facebook Abort Reason");
     if (DumpFacebookThreadName())
-      DumpTextStream(MinidumpStreamType::FacebookThreadName,
+      DumpTextStream(StreamType::FacebookThreadName,
                      "Facebook Thread Name");
     if (DumpFacebookLogcat())
-      DumpTextStream(MinidumpStreamType::FacebookLogcat,
+      DumpTextStream(StreamType::FacebookLogcat,
                      "Facebook Logcat");
     return true;
   }

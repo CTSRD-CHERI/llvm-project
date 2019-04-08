@@ -444,6 +444,35 @@ void tools::AddGoldPlugin(const ToolChain &ToolChain, const ArgList &Args,
           Args.MakeArgString(Twine("-plugin-opt=sample-profile=") + FName));
   }
 
+  auto *CSPGOGenerateArg = Args.getLastArg(options::OPT_fcs_profile_generate,
+                                           options::OPT_fcs_profile_generate_EQ,
+                                           options::OPT_fno_profile_generate);
+  if (CSPGOGenerateArg &&
+      CSPGOGenerateArg->getOption().matches(options::OPT_fno_profile_generate))
+    CSPGOGenerateArg = nullptr;
+
+  auto *ProfileUseArg = getLastProfileUseArg(Args);
+
+  if (CSPGOGenerateArg) {
+    CmdArgs.push_back(Args.MakeArgString("-plugin-opt=cs-profile-generate"));
+    if (CSPGOGenerateArg->getOption().matches(
+            options::OPT_fcs_profile_generate_EQ)) {
+      SmallString<128> Path(CSPGOGenerateArg->getValue());
+      llvm::sys::path::append(Path, "default_%m.profraw");
+      CmdArgs.push_back(
+          Args.MakeArgString(Twine("-plugin-opt=cs-profile-path=") + Path));
+    } else
+      CmdArgs.push_back(
+          Args.MakeArgString("-plugin-opt=cs-profile-path=default_%m.profraw"));
+  } else if (ProfileUseArg) {
+    SmallString<128> Path(
+        ProfileUseArg->getNumValues() == 0 ? "" : ProfileUseArg->getValue());
+    if (Path.empty() || llvm::sys::fs::is_directory(Path))
+      llvm::sys::path::append(Path, "default.profdata");
+    CmdArgs.push_back(Args.MakeArgString(Twine("-plugin-opt=cs-profile-path=") +
+                                         Path));
+  }
+
   // Need this flag to turn on new pass manager via Gold plugin.
   if (Args.hasFlag(options::OPT_fexperimental_new_pass_manager,
                    options::OPT_fno_experimental_new_pass_manager,
@@ -511,7 +540,8 @@ static void addSanitizerRuntime(const ToolChain &TC, const ArgList &Args,
   // Wrap any static runtimes that must be forced into executable in
   // whole-archive.
   if (IsWhole) CmdArgs.push_back("--whole-archive");
-  CmdArgs.push_back(TC.getCompilerRTArgString(Args, Sanitizer, IsShared));
+  CmdArgs.push_back(TC.getCompilerRTArgString(
+      Args, Sanitizer, IsShared ? ToolChain::FT_Shared : ToolChain::FT_Static));
   if (IsWhole) CmdArgs.push_back("--no-whole-archive");
 
   if (IsShared) {
@@ -689,8 +719,6 @@ collectSanitizerRuntimes(const ToolChain &TC, const ArgList &Args,
     NonWholeStaticRuntimes.push_back("stats");
     RequiredSymbols.push_back("__sanitizer_stats_register");
   }
-  if (SanArgs.needsEsanRt())
-    StaticRuntimes.push_back("esan");
   if (SanArgs.needsScudoRt()) {
     if (SanArgs.requiresMinimalRuntime()) {
       StaticRuntimes.push_back("scudo_minimal");
@@ -789,18 +817,26 @@ bool tools::areOptimizationsEnabled(const ArgList &Args) {
   return false;
 }
 
-const char *tools::SplitDebugName(const ArgList &Args,
+const char *tools::SplitDebugName(const ArgList &Args, const InputInfo &Input,
                                   const InputInfo &Output) {
-  SmallString<128> F(Output.isFilename()
-                         ? Output.getFilename()
-                         : llvm::sys::path::stem(Output.getBaseInput()));
-
   if (Arg *A = Args.getLastArg(options::OPT_gsplit_dwarf_EQ))
     if (StringRef(A->getValue()) == "single")
-      return Args.MakeArgString(F);
+      return Args.MakeArgString(Output.getFilename());
 
-  llvm::sys::path::replace_extension(F, "dwo");
-  return Args.MakeArgString(F);
+  Arg *FinalOutput = Args.getLastArg(options::OPT_o);
+  if (FinalOutput && Args.hasArg(options::OPT_c)) {
+    SmallString<128> T(FinalOutput->getValue());
+    llvm::sys::path::replace_extension(T, "dwo");
+    return Args.MakeArgString(T);
+  } else {
+    // Use the compilation dir.
+    SmallString<128> T(
+        Args.getLastArgValue(options::OPT_fdebug_compilation_dir));
+    SmallString<128> F(llvm::sys::path::stem(Input.getBaseInput()));
+    llvm::sys::path::replace_extension(F, "dwo");
+    T += F;
+    return Args.MakeArgString(F);
+  }
 }
 
 void tools::SplitDebugInfo(const ToolChain &TC, Compilation &C, const Tool &T,
@@ -1133,44 +1169,80 @@ bool tools::isObjCAutoRefCount(const ArgList &Args) {
   return Args.hasFlag(options::OPT_fobjc_arc, options::OPT_fno_objc_arc, false);
 }
 
-static void AddLibgcc(const llvm::Triple &Triple, const Driver &D,
-                      ArgStringList &CmdArgs, const ArgList &Args) {
-  bool isAndroid = Triple.isAndroid();
-  bool isCygMing = Triple.isOSCygMing();
-  bool IsIAMCU = Triple.isOSIAMCU();
-  bool StaticLibgcc = Args.hasArg(options::OPT_static_libgcc) ||
-                      Args.hasArg(options::OPT_static);
+enum class LibGccType { UnspecifiedLibGcc, StaticLibGcc, SharedLibGcc };
 
-  bool SharedLibgcc = Args.hasArg(options::OPT_shared_libgcc);
-  bool UnspecifiedLibgcc = !StaticLibgcc && !SharedLibgcc;
+static LibGccType getLibGccType(const ArgList &Args) {
+  bool Static = Args.hasArg(options::OPT_static_libgcc) ||
+                Args.hasArg(options::OPT_static) ||
+                Args.hasArg(options::OPT_static_pie);
 
-  // Gcc adds libgcc arguments in various ways:
-  //
-  // gcc <none>: -lgcc --as-needed -lgcc_s --no-as-needed
-  // g++ <none>:                   -lgcc_s               -lgcc
-  // gcc shared:                   -lgcc_s               -lgcc
-  // g++ shared:                   -lgcc_s               -lgcc
-  // gcc static: -lgcc             -lgcc_eh
-  // g++ static: -lgcc             -lgcc_eh
-  //
-  // Also, certain targets need additional adjustments.
+  bool Shared = Args.hasArg(options::OPT_shared_libgcc);
+  if (Shared)
+    return LibGccType::SharedLibGcc;
+  if (Static)
+    return LibGccType::StaticLibGcc;
+  return LibGccType::UnspecifiedLibGcc;
+}
 
-  bool LibGccFirst = (D.CCCIsCC() && UnspecifiedLibgcc) || StaticLibgcc;
-  if (LibGccFirst)
-    CmdArgs.push_back("-lgcc");
+// Gcc adds libgcc arguments in various ways:
+//
+// gcc <none>:     -lgcc --as-needed -lgcc_s --no-as-needed
+// g++ <none>:                       -lgcc_s               -lgcc
+// gcc shared:                       -lgcc_s               -lgcc
+// g++ shared:                       -lgcc_s               -lgcc
+// gcc static:     -lgcc             -lgcc_eh
+// g++ static:     -lgcc             -lgcc_eh
+// gcc static-pie: -lgcc             -lgcc_eh
+// g++ static-pie: -lgcc             -lgcc_eh
+//
+// Also, certain targets need additional adjustments.
 
-  bool AsNeeded = D.CCCIsCC() && UnspecifiedLibgcc && !isAndroid && !isCygMing;
+static void AddUnwindLibrary(const ToolChain &TC, const Driver &D,
+                             ArgStringList &CmdArgs, const ArgList &Args) {
+  ToolChain::UnwindLibType UNW = TC.GetUnwindLibType(Args);
+  // Targets that don't use unwind libraries.
+  if (TC.getTriple().isAndroid() || TC.getTriple().isOSIAMCU() ||
+      TC.getTriple().isOSBinFormatWasm() ||
+      UNW == ToolChain::UNW_None)
+    return;
+
+  LibGccType LGT = getLibGccType(Args);
+  bool AsNeeded = D.CCCIsCC() && LGT == LibGccType::UnspecifiedLibGcc &&
+                  !TC.getTriple().isAndroid() && !TC.getTriple().isOSCygMing();
   if (AsNeeded)
     CmdArgs.push_back("--as-needed");
 
-  if ((UnspecifiedLibgcc || SharedLibgcc) && !isAndroid)
-    CmdArgs.push_back("-lgcc_s");
-
-  else if (StaticLibgcc && !isAndroid && !IsIAMCU)
-    CmdArgs.push_back("-lgcc_eh");
+  switch (UNW) {
+  case ToolChain::UNW_None:
+    return;
+  case ToolChain::UNW_Libgcc: {
+    LibGccType LGT = getLibGccType(Args);
+    if (LGT == LibGccType::UnspecifiedLibGcc || LGT == LibGccType::SharedLibGcc)
+      CmdArgs.push_back("-lgcc_s");
+    else if (LGT == LibGccType::StaticLibGcc)
+      CmdArgs.push_back("-lgcc_eh");
+    break;
+  }
+  case ToolChain::UNW_CompilerRT:
+    CmdArgs.push_back("-lunwind");
+    break;
+  }
 
   if (AsNeeded)
     CmdArgs.push_back("--no-as-needed");
+}
+
+static void AddLibgcc(const ToolChain &TC, const Driver &D,
+                      ArgStringList &CmdArgs, const ArgList &Args) {
+  bool isAndroid = TC.getTriple().isAndroid();
+
+  LibGccType LGT = getLibGccType(Args);
+  bool LibGccFirst = (D.CCCIsCC() && LGT == LibGccType::UnspecifiedLibGcc) ||
+                     LGT == LibGccType::StaticLibGcc;
+  if (LibGccFirst)
+    CmdArgs.push_back("-lgcc");
+
+  AddUnwindLibrary(TC, D, CmdArgs, Args);
 
   if (!LibGccFirst)
     CmdArgs.push_back("-lgcc");
@@ -1180,7 +1252,7 @@ static void AddLibgcc(const llvm::Triple &Triple, const Driver &D,
   //
   // NOTE: This fixes a link error on Android MIPS as well.  The non-static
   // libgcc for MIPS relies on _Unwind_Find_FDE and dl_iterate_phdr from libdl.
-  if (isAndroid && !StaticLibgcc)
+  if (isAndroid && getLibGccType(Args) != LibGccType::StaticLibGcc)
     CmdArgs.push_back("-ldl");
 }
 
@@ -1192,6 +1264,7 @@ void tools::AddRunTimeLibs(const ToolChain &TC, const Driver &D,
   switch (RLT) {
   case ToolChain::RLT_CompilerRT:
     CmdArgs.push_back(TC.getCompilerRTArgString(Args, "builtins"));
+    AddUnwindLibrary(TC, D, CmdArgs, Args);
     break;
   case ToolChain::RLT_Libgcc:
     // Make sure libgcc is not used under MSVC environment by default
@@ -1203,7 +1276,7 @@ void tools::AddRunTimeLibs(const ToolChain &TC, const Driver &D,
             << Args.getLastArg(options::OPT_rtlib_EQ)->getValue() << "MSVC";
       }
     } else
-      AddLibgcc(TC.getTriple(), D, CmdArgs, Args);
+      AddLibgcc(TC, D, CmdArgs, Args);
     break;
   }
 }

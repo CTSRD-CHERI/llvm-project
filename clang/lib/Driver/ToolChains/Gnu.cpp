@@ -333,6 +333,7 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   const bool isAndroid = ToolChain.getTriple().isAndroid();
   const bool IsIAMCU = ToolChain.getTriple().isOSIAMCU();
   const bool IsPIE = getPIE(Args, ToolChain);
+  const bool IsStaticPIE = Args.hasArg(options::OPT_static_pie);
   const bool HasCRTBeginEndFiles =
       ToolChain.getTriple().hasEnvironment() ||
       (ToolChain.getTriple().getVendor() != llvm::Triple::MipsTechnologies);
@@ -352,6 +353,17 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (IsPIE)
     CmdArgs.push_back("-pie");
+
+  if (IsStaticPIE) {
+    CmdArgs.push_back("-static");
+    CmdArgs.push_back("-pie");
+    CmdArgs.push_back("--no-dynamic-linker");
+  }
+
+  if (ToolChain.isNoExecStackDefault()) {
+    CmdArgs.push_back("-z");
+    CmdArgs.push_back("noexecstack");
+  }
 
   if (Args.hasArg(options::OPT_rdynamic))
     CmdArgs.push_back("-export-dynamic");
@@ -374,6 +386,11 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     if (CPU.empty() || CPU == "generic" || CPU == "cortex-a53")
       CmdArgs.push_back("--fix-cortex-a53-843419");
   }
+
+  // Android does not allow shared text relocations. Emit a warning if the
+  // user's code contains any.
+  if (isAndroid)
+      CmdArgs.push_back("--warn-shared-textrel");
 
   for (const auto &Opt : ToolChain.ExtraOpts)
     CmdArgs.push_back(Opt.c_str());
@@ -402,7 +419,7 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
     if (Args.hasArg(options::OPT_rdynamic))
       CmdArgs.push_back("-export-dynamic");
 
-    if (!Args.hasArg(options::OPT_shared)) {
+    if (!Args.hasArg(options::OPT_shared) && !IsStaticPIE) {
       const std::string Loader =
           D.DyldPrefix + ToolChain.getDynamicLinker(Args);
       CmdArgs.push_back("-dynamic-linker");
@@ -421,6 +438,8 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
           crt1 = "gcrt1.o";
         else if (IsPIE)
           crt1 = "Scrt1.o";
+        else if (IsStaticPIE)
+          crt1 = "rcrt1.o";
         else
           crt1 = "crt1.o";
       }
@@ -438,7 +457,7 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
         crtbegin = isAndroid ? "crtbegin_static.o" : "crtbeginT.o";
       else if (Args.hasArg(options::OPT_shared))
         crtbegin = isAndroid ? "crtbegin_so.o" : "crtbeginS.o";
-      else if (IsPIE)
+      else if (IsPIE || IsStaticPIE)
         crtbegin = isAndroid ? "crtbegin_dynamic.o" : "crtbeginS.o";
       else
         crtbegin = isAndroid ? "crtbegin_dynamic.o" : "crtbegin.o";
@@ -489,7 +508,7 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
 
   if (!Args.hasArg(options::OPT_nostdlib)) {
     if (!Args.hasArg(options::OPT_nodefaultlibs)) {
-      if (Args.hasArg(options::OPT_static))
+      if (Args.hasArg(options::OPT_static) || IsStaticPIE)
         CmdArgs.push_back("--start-group");
 
       if (NeedsSanitizerDeps)
@@ -525,7 +544,7 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       if (IsIAMCU)
         CmdArgs.push_back("-lgloss");
 
-      if (Args.hasArg(options::OPT_static))
+      if (Args.hasArg(options::OPT_static) || IsStaticPIE)
         CmdArgs.push_back("--end-group");
       else
         AddRunTimeLibs(ToolChain, D, CmdArgs, Args);
@@ -542,7 +561,7 @@ void tools::gnutools::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       const char *crtend;
       if (Args.hasArg(options::OPT_shared))
         crtend = isAndroid ? "crtend_so.o" : "crtendS.o";
-      else if (IsPIE)
+      else if (IsPIE || IsStaticPIE)
         crtend = isAndroid ? "crtend_android.o" : "crtendS.o";
       else
         crtend = isAndroid ? "crtend_android.o" : "crtend.o";
@@ -600,6 +619,10 @@ void tools::gnutools::Assembler::ConstructJob(Compilation &C,
     }
   }
 
+  if (getToolChain().isNoExecStackDefault()) {
+      CmdArgs.push_back("--noexecstack");
+  }
+
   switch (getToolChain().getArch()) {
   default:
     break;
@@ -652,14 +675,16 @@ void tools::gnutools::Assembler::ConstructJob(Compilation &C,
   case llvm::Triple::sparcel: {
     CmdArgs.push_back("-32");
     std::string CPU = getCPUName(Args, getToolChain().getTriple());
-    CmdArgs.push_back(sparc::getSparcAsmModeForCPU(CPU, getToolChain().getTriple()));
+    CmdArgs.push_back(
+        sparc::getSparcAsmModeForCPU(CPU, getToolChain().getTriple()));
     AddAssemblerKPIC(getToolChain(), Args, CmdArgs);
     break;
   }
   case llvm::Triple::sparcv9: {
     CmdArgs.push_back("-64");
     std::string CPU = getCPUName(Args, getToolChain().getTriple());
-    CmdArgs.push_back(sparc::getSparcAsmModeForCPU(CPU, getToolChain().getTriple()));
+    CmdArgs.push_back(
+        sparc::getSparcAsmModeForCPU(CPU, getToolChain().getTriple()));
     AddAssemblerKPIC(getToolChain(), Args, CmdArgs);
     break;
   }
@@ -817,7 +842,7 @@ void tools::gnutools::Assembler::ConstructJob(Compilation &C,
   if (Args.hasArg(options::OPT_gsplit_dwarf) &&
       getToolChain().getTriple().isOSLinux())
     SplitDebugInfo(getToolChain(), C, *this, JA, Args, Output,
-                   SplitDebugName(Args, Output));
+                   SplitDebugName(Args, Inputs[0], Output));
 }
 
 namespace {
@@ -1951,10 +1976,14 @@ void Generic_GCC::GCCInstallationDetector::AddDefaultGCCPrefixes(
       "powerpc64le-linux-gnu", "powerpc64le-unknown-linux-gnu",
       "powerpc64le-suse-linux", "ppc64le-redhat-linux"};
 
-  static const char *const RISCV32LibDirs[] = {"/lib", "/lib32"};
-  static const char *const RISCVTriples[] = {"riscv32-unknown-linux-gnu",
-                                             "riscv64-unknown-linux-gnu",
-                                             "riscv32-unknown-elf"};
+  static const char *const RISCV32LibDirs[] = {"/lib32", "/lib"};
+  static const char *const RISCV32Triples[] = {"riscv32-unknown-linux-gnu",
+                                               "riscv32-linux-gnu",
+                                               "riscv32-unknown-elf"};
+  static const char *const RISCV64LibDirs[] = {"/lib64", "/lib"};
+  static const char *const RISCV64Triples[] = {"riscv64-unknown-linux-gnu",
+                                               "riscv64-linux-gnu",
+                                               "riscv64-unknown-elf"};
 
   static const char *const SPARCv8LibDirs[] = {"/lib32", "/lib"};
   static const char *const SPARCv8Triples[] = {"sparc-linux-gnu",
@@ -2184,9 +2213,15 @@ void Generic_GCC::GCCInstallationDetector::AddDefaultGCCPrefixes(
     break;
   case llvm::Triple::riscv32:
     LibDirs.append(begin(RISCV32LibDirs), end(RISCV32LibDirs));
+    TripleAliases.append(begin(RISCV32Triples), end(RISCV32Triples));
+    BiarchLibDirs.append(begin(RISCV64LibDirs), end(RISCV64LibDirs));
+    BiarchTripleAliases.append(begin(RISCV64Triples), end(RISCV64Triples));
+    break;
+  case llvm::Triple::riscv64:
+    LibDirs.append(begin(RISCV64LibDirs), end(RISCV64LibDirs));
+    TripleAliases.append(begin(RISCV64Triples), end(RISCV64Triples));
     BiarchLibDirs.append(begin(RISCV32LibDirs), end(RISCV32LibDirs));
-    TripleAliases.append(begin(RISCVTriples), end(RISCVTriples));
-    BiarchTripleAliases.append(begin(RISCVTriples), end(RISCVTriples));
+    BiarchTripleAliases.append(begin(RISCV32Triples), end(RISCV32Triples));
     break;
   case llvm::Triple::sparc:
   case llvm::Triple::sparcel:

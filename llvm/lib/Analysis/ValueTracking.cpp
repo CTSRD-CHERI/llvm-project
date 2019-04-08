@@ -697,9 +697,7 @@ static void computeKnownBitsFromAssume(const Value *V, KnownBits &Known,
       continue;
 
     Value *A, *B;
-    auto m_V = m_CombineOr(m_Specific(V),
-                           m_CombineOr(m_PtrToInt(m_Specific(V)),
-                           m_BitCast(m_Specific(V))));
+    auto m_V = m_CombineOr(m_Specific(V), m_PtrToInt(m_Specific(V)));
 
     CmpInst::Predicate Pred;
     uint64_t C;
@@ -1208,12 +1206,9 @@ static void computeKnownBitsFromOperator(const Operator *I, KnownBits &Known,
       Q.DL.getTypeSizeInBits(ScalarTy);
 
     assert(SrcBitWidth && "SrcBitWidth can't be zero");
-    Known = Known.zextOrTrunc(SrcBitWidth);
+    Known = Known.zextOrTrunc(SrcBitWidth, false);
     computeKnownBits(I->getOperand(0), Known, Depth + 1, Q);
-    Known = Known.zextOrTrunc(BitWidth);
-    // Any top bits are known to be zero.
-    if (BitWidth > SrcBitWidth)
-      Known.Zero.setBitsFrom(SrcBitWidth);
+    Known = Known.zextOrTrunc(BitWidth, true /* ExtendedBitsAreKnownZero */);
     break;
   }
   case Instruction::BitCast: {
@@ -1638,6 +1633,37 @@ static void computeKnownBitsFromOperator(const Operator *I, KnownBits &Known,
             Known2.Zero.shl(ShiftAmt) | Known3.Zero.lshr(BitWidth - ShiftAmt);
         Known.One =
             Known2.One.shl(ShiftAmt) | Known3.One.lshr(BitWidth - ShiftAmt);
+        break;
+      }
+      case Intrinsic::uadd_sat:
+      case Intrinsic::usub_sat: {
+        bool IsAdd = II->getIntrinsicID() == Intrinsic::uadd_sat;
+        computeKnownBits(I->getOperand(0), Known, Depth + 1, Q);
+        computeKnownBits(I->getOperand(1), Known2, Depth + 1, Q);
+
+        // Add: Leading ones of either operand are preserved.
+        // Sub: Leading zeros of LHS and leading ones of RHS are preserved
+        // as leading zeros in the result.
+        unsigned LeadingKnown;
+        if (IsAdd)
+          LeadingKnown = std::max(Known.countMinLeadingOnes(),
+                                  Known2.countMinLeadingOnes());
+        else
+          LeadingKnown = std::max(Known.countMinLeadingZeros(),
+                                  Known2.countMinLeadingOnes());
+
+        Known = KnownBits::computeForAddSub(
+            IsAdd, /* NSW */ false, Known, Known2);
+
+        // We select between the operation result and all-ones/zero
+        // respectively, so we can preserve known ones/zeros.
+        if (IsAdd) {
+          Known.One.setHighBits(LeadingKnown);
+          Known.Zero.clearAllBits();
+        } else {
+          Known.Zero.setHighBits(LeadingKnown);
+          Known.One.clearAllBits();
+        }
         break;
       }
       case Intrinsic::x86_sse42_crc32_64_64:
@@ -4171,73 +4197,41 @@ llvm::computeOverflowForSignedMul(const Value *LHS, const Value *RHS,
   return OverflowResult::MayOverflow;
 }
 
+/// Convert ConstantRange OverflowResult into ValueTracking OverflowResult.
+static OverflowResult mapOverflowResult(ConstantRange::OverflowResult OR) {
+  switch (OR) {
+    case ConstantRange::OverflowResult::MayOverflow:
+      return OverflowResult::MayOverflow;
+    case ConstantRange::OverflowResult::AlwaysOverflows:
+      return OverflowResult::AlwaysOverflows;
+    case ConstantRange::OverflowResult::NeverOverflows:
+      return OverflowResult::NeverOverflows;
+  }
+  llvm_unreachable("Unknown OverflowResult");
+}
+
+/// Combine constant ranges from computeConstantRange() and computeKnownBits().
+static ConstantRange computeConstantRangeIncludingKnownBits(
+    const Value *V, bool ForSigned, const DataLayout &DL, unsigned Depth,
+    AssumptionCache *AC, const Instruction *CxtI, const DominatorTree *DT,
+    OptimizationRemarkEmitter *ORE = nullptr, bool UseInstrInfo = true) {
+  KnownBits Known = computeKnownBits(
+      V, DL, Depth, AC, CxtI, DT, ORE, UseInstrInfo);
+  ConstantRange CR = computeConstantRange(V, UseInstrInfo);
+  return ConstantRange::fromKnownBits(Known, ForSigned).intersectWith(CR);
+}
+
 OverflowResult llvm::computeOverflowForUnsignedAdd(
     const Value *LHS, const Value *RHS, const DataLayout &DL,
     AssumptionCache *AC, const Instruction *CxtI, const DominatorTree *DT,
     bool UseInstrInfo) {
-  KnownBits LHSKnown = computeKnownBits(LHS, DL, /*Depth=*/0, AC, CxtI, DT,
-                                        nullptr, UseInstrInfo);
-  if (LHSKnown.isNonNegative() || LHSKnown.isNegative()) {
-    KnownBits RHSKnown = computeKnownBits(RHS, DL, /*Depth=*/0, AC, CxtI, DT,
-                                          nullptr, UseInstrInfo);
-
-    if (LHSKnown.isNegative() && RHSKnown.isNegative()) {
-      // The sign bit is set in both cases: this MUST overflow.
-      return OverflowResult::AlwaysOverflows;
-    }
-
-    if (LHSKnown.isNonNegative() && RHSKnown.isNonNegative()) {
-      // The sign bit is clear in both cases: this CANNOT overflow.
-      return OverflowResult::NeverOverflows;
-    }
-  }
-
-  return OverflowResult::MayOverflow;
-}
-
-/// Return true if we can prove that adding the two values of the
-/// knownbits will not overflow.
-/// Otherwise return false.
-static bool checkRippleForSignedAdd(const KnownBits &LHSKnown,
-                                    const KnownBits &RHSKnown) {
-  // Addition of two 2's complement numbers having opposite signs will never
-  // overflow.
-  if ((LHSKnown.isNegative() && RHSKnown.isNonNegative()) ||
-      (LHSKnown.isNonNegative() && RHSKnown.isNegative()))
-    return true;
-
-  // If either of the values is known to be non-negative, adding them can only
-  // overflow if the second is also non-negative, so we can assume that.
-  // Two non-negative numbers will only overflow if there is a carry to the
-  // sign bit, so we can check if even when the values are as big as possible
-  // there is no overflow to the sign bit.
-  if (LHSKnown.isNonNegative() || RHSKnown.isNonNegative()) {
-    APInt MaxLHS = ~LHSKnown.Zero;
-    MaxLHS.clearSignBit();
-    APInt MaxRHS = ~RHSKnown.Zero;
-    MaxRHS.clearSignBit();
-    APInt Result = std::move(MaxLHS) + std::move(MaxRHS);
-    return Result.isSignBitClear();
-  }
-
-  // If either of the values is known to be negative, adding them can only
-  // overflow if the second is also negative, so we can assume that.
-  // Two negative number will only overflow if there is no carry to the sign
-  // bit, so we can check if even when the values are as small as possible
-  // there is overflow to the sign bit.
-  if (LHSKnown.isNegative() || RHSKnown.isNegative()) {
-    APInt MinLHS = LHSKnown.One;
-    MinLHS.clearSignBit();
-    APInt MinRHS = RHSKnown.One;
-    MinRHS.clearSignBit();
-    APInt Result = std::move(MinLHS) + std::move(MinRHS);
-    return Result.isSignBitSet();
-  }
-
-  // If we reached here it means that we know nothing about the sign bits.
-  // In this case we can't know if there will be an overflow, since by
-  // changing the sign bits any two values can be made to overflow.
-  return false;
+  ConstantRange LHSRange = computeConstantRangeIncludingKnownBits(
+      LHS, /*ForSigned=*/false, DL, /*Depth=*/0, AC, CxtI, DT,
+      nullptr, UseInstrInfo);
+  ConstantRange RHSRange = computeConstantRangeIncludingKnownBits(
+      RHS, /*ForSigned=*/false, DL, /*Depth=*/0, AC, CxtI, DT,
+      nullptr, UseInstrInfo);
+  return mapOverflowResult(LHSRange.unsignedAddMayOverflow(RHSRange));
 }
 
 static OverflowResult computeOverflowForSignedAdd(const Value *LHS,
@@ -4271,28 +4265,35 @@ static OverflowResult computeOverflowForSignedAdd(const Value *LHS,
 
   KnownBits LHSKnown = computeKnownBits(LHS, DL, /*Depth=*/0, AC, CxtI, DT);
   KnownBits RHSKnown = computeKnownBits(RHS, DL, /*Depth=*/0, AC, CxtI, DT);
-
-  if (checkRippleForSignedAdd(LHSKnown, RHSKnown))
-    return OverflowResult::NeverOverflows;
+  ConstantRange LHSRange =
+      ConstantRange::fromKnownBits(LHSKnown, /*signed*/ true);
+  ConstantRange RHSRange =
+      ConstantRange::fromKnownBits(RHSKnown, /*signed*/ true);
+  OverflowResult OR =
+      mapOverflowResult(LHSRange.signedAddMayOverflow(RHSRange));
+  if (OR != OverflowResult::MayOverflow)
+    return OR;
 
   // The remaining code needs Add to be available. Early returns if not so.
   if (!Add)
     return OverflowResult::MayOverflow;
 
   // If the sign of Add is the same as at least one of the operands, this add
-  // CANNOT overflow. This is particularly useful when the sum is
-  // @llvm.assume'ed non-negative rather than proved so from analyzing its
-  // operands.
+  // CANNOT overflow. If this can be determined from the known bits of the
+  // operands the above signedAddMayOverflow() check will have already done so.
+  // The only other way to improve on the known bits is from an assumption, so
+  // call computeKnownBitsFromAssume() directly.
   bool LHSOrRHSKnownNonNegative =
       (LHSKnown.isNonNegative() || RHSKnown.isNonNegative());
   bool LHSOrRHSKnownNegative =
       (LHSKnown.isNegative() || RHSKnown.isNegative());
   if (LHSOrRHSKnownNonNegative || LHSOrRHSKnownNegative) {
-    KnownBits AddKnown = computeKnownBits(Add, DL, /*Depth=*/0, AC, CxtI, DT);
+    KnownBits AddKnown(LHSKnown.getBitWidth());
+    computeKnownBitsFromAssume(
+        Add, AddKnown, /*Depth=*/0, Query(DL, AC, CxtI, DT, true));
     if ((AddKnown.isNonNegative() && LHSOrRHSKnownNonNegative) ||
-        (AddKnown.isNegative() && LHSOrRHSKnownNegative)) {
+        (AddKnown.isNegative() && LHSOrRHSKnownNegative))
       return OverflowResult::NeverOverflows;
-    }
   }
 
   return OverflowResult::MayOverflow;
@@ -4304,20 +4305,11 @@ OverflowResult llvm::computeOverflowForUnsignedSub(const Value *LHS,
                                                    AssumptionCache *AC,
                                                    const Instruction *CxtI,
                                                    const DominatorTree *DT) {
-  KnownBits LHSKnown = computeKnownBits(LHS, DL, /*Depth=*/0, AC, CxtI, DT);
-  if (LHSKnown.isNonNegative() || LHSKnown.isNegative()) {
-    KnownBits RHSKnown = computeKnownBits(RHS, DL, /*Depth=*/0, AC, CxtI, DT);
-
-    // If the LHS is negative and the RHS is non-negative, no unsigned wrap.
-    if (LHSKnown.isNegative() && RHSKnown.isNonNegative())
-      return OverflowResult::NeverOverflows;
-
-    // If the LHS is non-negative and the RHS negative, we always wrap.
-    if (LHSKnown.isNonNegative() && RHSKnown.isNegative())
-      return OverflowResult::AlwaysOverflows;
-  }
-
-  return OverflowResult::MayOverflow;
+  ConstantRange LHSRange = computeConstantRangeIncludingKnownBits(
+      LHS, /*ForSigned=*/false, DL, /*Depth=*/0, AC, CxtI, DT);
+  ConstantRange RHSRange = computeConstantRangeIncludingKnownBits(
+      RHS, /*ForSigned=*/false, DL, /*Depth=*/0, AC, CxtI, DT);
+  return mapOverflowResult(LHSRange.unsignedSubMayOverflow(RHSRange));
 }
 
 OverflowResult llvm::computeOverflowForSignedSub(const Value *LHS,
@@ -4333,17 +4325,12 @@ OverflowResult llvm::computeOverflowForSignedSub(const Value *LHS,
     return OverflowResult::NeverOverflows;
 
   KnownBits LHSKnown = computeKnownBits(LHS, DL, 0, AC, CxtI, DT);
-
   KnownBits RHSKnown = computeKnownBits(RHS, DL, 0, AC, CxtI, DT);
-
-  // Subtraction of two 2's complement numbers having identical signs will
-  // never overflow.
-  if ((LHSKnown.isNegative() && RHSKnown.isNegative()) ||
-      (LHSKnown.isNonNegative() && RHSKnown.isNonNegative()))
-    return OverflowResult::NeverOverflows;
-
-  // TODO: implement logic similar to checkRippleForAdd
-  return OverflowResult::MayOverflow;
+  ConstantRange LHSRange =
+      ConstantRange::fromKnownBits(LHSKnown, /*signed*/ true);
+  ConstantRange RHSRange =
+      ConstantRange::fromKnownBits(RHSKnown, /*signed*/ true);
+  return mapOverflowResult(LHSRange.signedSubMayOverflow(RHSRange));
 }
 
 bool llvm::isOverflowIntrinsicNoWrap(const IntrinsicInst *II,
@@ -5082,6 +5069,10 @@ static SelectPatternResult matchSelectPattern(CmpInst::Predicate Pred,
       if (Pred == ICmpInst::ICMP_SGT && match(CmpRHS, ZeroOrAllOnes))
         return {SPF_ABS, SPNB_NA, false};
 
+      // (X >=s 0) ? X : -X or (X >=s 1) ? X : -X --> ABS(X)
+      if (Pred == ICmpInst::ICMP_SGE && match(CmpRHS, ZeroOrOne))
+        return {SPF_ABS, SPNB_NA, false};
+
       // (X <s 0) ? X : -X or (X <s 1) ? X : -X --> NABS(X)
       // (-X <s 0) ? -X : X or (-X <s 1) ? -X : X --> NABS(X)
       if (Pred == ICmpInst::ICMP_SLT && match(CmpRHS, ZeroOrOne))
@@ -5585,4 +5576,300 @@ Optional<bool> llvm::isImpliedByDomCondition(const Value *Cond,
   // Is this condition implied by the predecessor condition?
   bool CondIsTrue = TrueBB == ContextBB;
   return isImpliedCondition(PredCond, Cond, DL, CondIsTrue);
+}
+
+static void setLimitsForBinOp(const BinaryOperator &BO, APInt &Lower,
+                              APInt &Upper, const InstrInfoQuery &IIQ) {
+  unsigned Width = Lower.getBitWidth();
+  const APInt *C;
+  switch (BO.getOpcode()) {
+  case Instruction::Add:
+    if (match(BO.getOperand(1), m_APInt(C)) && !C->isNullValue()) {
+      // FIXME: If we have both nuw and nsw, we should reduce the range further.
+      if (IIQ.hasNoUnsignedWrap(cast<OverflowingBinaryOperator>(&BO))) {
+        // 'add nuw x, C' produces [C, UINT_MAX].
+        Lower = *C;
+      } else if (IIQ.hasNoSignedWrap(cast<OverflowingBinaryOperator>(&BO))) {
+        if (C->isNegative()) {
+          // 'add nsw x, -C' produces [SINT_MIN, SINT_MAX - C].
+          Lower = APInt::getSignedMinValue(Width);
+          Upper = APInt::getSignedMaxValue(Width) + *C + 1;
+        } else {
+          // 'add nsw x, +C' produces [SINT_MIN + C, SINT_MAX].
+          Lower = APInt::getSignedMinValue(Width) + *C;
+          Upper = APInt::getSignedMaxValue(Width) + 1;
+        }
+      }
+    }
+    break;
+
+  case Instruction::And:
+    if (match(BO.getOperand(1), m_APInt(C)))
+      // 'and x, C' produces [0, C].
+      Upper = *C + 1;
+    break;
+
+  case Instruction::Or:
+    if (match(BO.getOperand(1), m_APInt(C)))
+      // 'or x, C' produces [C, UINT_MAX].
+      Lower = *C;
+    break;
+
+  case Instruction::AShr:
+    if (match(BO.getOperand(1), m_APInt(C)) && C->ult(Width)) {
+      // 'ashr x, C' produces [INT_MIN >> C, INT_MAX >> C].
+      Lower = APInt::getSignedMinValue(Width).ashr(*C);
+      Upper = APInt::getSignedMaxValue(Width).ashr(*C) + 1;
+    } else if (match(BO.getOperand(0), m_APInt(C))) {
+      unsigned ShiftAmount = Width - 1;
+      if (!C->isNullValue() && IIQ.isExact(&BO))
+        ShiftAmount = C->countTrailingZeros();
+      if (C->isNegative()) {
+        // 'ashr C, x' produces [C, C >> (Width-1)]
+        Lower = *C;
+        Upper = C->ashr(ShiftAmount) + 1;
+      } else {
+        // 'ashr C, x' produces [C >> (Width-1), C]
+        Lower = C->ashr(ShiftAmount);
+        Upper = *C + 1;
+      }
+    }
+    break;
+
+  case Instruction::LShr:
+    if (match(BO.getOperand(1), m_APInt(C)) && C->ult(Width)) {
+      // 'lshr x, C' produces [0, UINT_MAX >> C].
+      Upper = APInt::getAllOnesValue(Width).lshr(*C) + 1;
+    } else if (match(BO.getOperand(0), m_APInt(C))) {
+      // 'lshr C, x' produces [C >> (Width-1), C].
+      unsigned ShiftAmount = Width - 1;
+      if (!C->isNullValue() && IIQ.isExact(&BO))
+        ShiftAmount = C->countTrailingZeros();
+      Lower = C->lshr(ShiftAmount);
+      Upper = *C + 1;
+    }
+    break;
+
+  case Instruction::Shl:
+    if (match(BO.getOperand(0), m_APInt(C))) {
+      if (IIQ.hasNoUnsignedWrap(&BO)) {
+        // 'shl nuw C, x' produces [C, C << CLZ(C)]
+        Lower = *C;
+        Upper = Lower.shl(Lower.countLeadingZeros()) + 1;
+      } else if (BO.hasNoSignedWrap()) { // TODO: What if both nuw+nsw?
+        if (C->isNegative()) {
+          // 'shl nsw C, x' produces [C << CLO(C)-1, C]
+          unsigned ShiftAmount = C->countLeadingOnes() - 1;
+          Lower = C->shl(ShiftAmount);
+          Upper = *C + 1;
+        } else {
+          // 'shl nsw C, x' produces [C, C << CLZ(C)-1]
+          unsigned ShiftAmount = C->countLeadingZeros() - 1;
+          Lower = *C;
+          Upper = C->shl(ShiftAmount) + 1;
+        }
+      }
+    }
+    break;
+
+  case Instruction::SDiv:
+    if (match(BO.getOperand(1), m_APInt(C))) {
+      APInt IntMin = APInt::getSignedMinValue(Width);
+      APInt IntMax = APInt::getSignedMaxValue(Width);
+      if (C->isAllOnesValue()) {
+        // 'sdiv x, -1' produces [INT_MIN + 1, INT_MAX]
+        //    where C != -1 and C != 0 and C != 1
+        Lower = IntMin + 1;
+        Upper = IntMax + 1;
+      } else if (C->countLeadingZeros() < Width - 1) {
+        // 'sdiv x, C' produces [INT_MIN / C, INT_MAX / C]
+        //    where C != -1 and C != 0 and C != 1
+        Lower = IntMin.sdiv(*C);
+        Upper = IntMax.sdiv(*C);
+        if (Lower.sgt(Upper))
+          std::swap(Lower, Upper);
+        Upper = Upper + 1;
+        assert(Upper != Lower && "Upper part of range has wrapped!");
+      }
+    } else if (match(BO.getOperand(0), m_APInt(C))) {
+      if (C->isMinSignedValue()) {
+        // 'sdiv INT_MIN, x' produces [INT_MIN, INT_MIN / -2].
+        Lower = *C;
+        Upper = Lower.lshr(1) + 1;
+      } else {
+        // 'sdiv C, x' produces [-|C|, |C|].
+        Upper = C->abs() + 1;
+        Lower = (-Upper) + 1;
+      }
+    }
+    break;
+
+  case Instruction::UDiv:
+    if (match(BO.getOperand(1), m_APInt(C)) && !C->isNullValue()) {
+      // 'udiv x, C' produces [0, UINT_MAX / C].
+      Upper = APInt::getMaxValue(Width).udiv(*C) + 1;
+    } else if (match(BO.getOperand(0), m_APInt(C))) {
+      // 'udiv C, x' produces [0, C].
+      Upper = *C + 1;
+    }
+    break;
+
+  case Instruction::SRem:
+    if (match(BO.getOperand(1), m_APInt(C))) {
+      // 'srem x, C' produces (-|C|, |C|).
+      Upper = C->abs();
+      Lower = (-Upper) + 1;
+    }
+    break;
+
+  case Instruction::URem:
+    if (match(BO.getOperand(1), m_APInt(C)))
+      // 'urem x, C' produces [0, C).
+      Upper = *C;
+    break;
+
+  default:
+    break;
+  }
+}
+
+static void setLimitsForIntrinsic(const IntrinsicInst &II, APInt &Lower,
+                                  APInt &Upper) {
+  unsigned Width = Lower.getBitWidth();
+  const APInt *C;
+  switch (II.getIntrinsicID()) {
+  case Intrinsic::uadd_sat:
+    // uadd.sat(x, C) produces [C, UINT_MAX].
+    if (match(II.getOperand(0), m_APInt(C)) ||
+        match(II.getOperand(1), m_APInt(C)))
+      Lower = *C;
+    break;
+  case Intrinsic::sadd_sat:
+    if (match(II.getOperand(0), m_APInt(C)) ||
+        match(II.getOperand(1), m_APInt(C))) {
+      if (C->isNegative()) {
+        // sadd.sat(x, -C) produces [SINT_MIN, SINT_MAX + (-C)].
+        Lower = APInt::getSignedMinValue(Width);
+        Upper = APInt::getSignedMaxValue(Width) + *C + 1;
+      } else {
+        // sadd.sat(x, +C) produces [SINT_MIN + C, SINT_MAX].
+        Lower = APInt::getSignedMinValue(Width) + *C;
+        Upper = APInt::getSignedMaxValue(Width) + 1;
+      }
+    }
+    break;
+  case Intrinsic::usub_sat:
+    // usub.sat(C, x) produces [0, C].
+    if (match(II.getOperand(0), m_APInt(C)))
+      Upper = *C + 1;
+    // usub.sat(x, C) produces [0, UINT_MAX - C].
+    else if (match(II.getOperand(1), m_APInt(C)))
+      Upper = APInt::getMaxValue(Width) - *C + 1;
+    break;
+  case Intrinsic::ssub_sat:
+    if (match(II.getOperand(0), m_APInt(C))) {
+      if (C->isNegative()) {
+        // ssub.sat(-C, x) produces [SINT_MIN, -SINT_MIN + (-C)].
+        Lower = APInt::getSignedMinValue(Width);
+        Upper = *C - APInt::getSignedMinValue(Width) + 1;
+      } else {
+        // ssub.sat(+C, x) produces [-SINT_MAX + C, SINT_MAX].
+        Lower = *C - APInt::getSignedMaxValue(Width);
+        Upper = APInt::getSignedMaxValue(Width) + 1;
+      }
+    } else if (match(II.getOperand(1), m_APInt(C))) {
+      if (C->isNegative()) {
+        // ssub.sat(x, -C) produces [SINT_MIN - (-C), SINT_MAX]:
+        Lower = APInt::getSignedMinValue(Width) - *C;
+        Upper = APInt::getSignedMaxValue(Width) + 1;
+      } else {
+        // ssub.sat(x, +C) produces [SINT_MIN, SINT_MAX - C].
+        Lower = APInt::getSignedMinValue(Width);
+        Upper = APInt::getSignedMaxValue(Width) - *C + 1;
+      }
+    }
+    break;
+  default:
+    break;
+  }
+}
+
+static void setLimitsForSelectPattern(const SelectInst &SI, APInt &Lower,
+                                      APInt &Upper) {
+  const Value *LHS, *RHS;
+  SelectPatternResult R = matchSelectPattern(&SI, LHS, RHS);
+  if (R.Flavor == SPF_UNKNOWN)
+    return;
+
+  unsigned BitWidth = SI.getType()->getScalarSizeInBits();
+
+  if (R.Flavor == SelectPatternFlavor::SPF_ABS) {
+    // If the negation part of the abs (in RHS) has the NSW flag,
+    // then the result of abs(X) is [0..SIGNED_MAX],
+    // otherwise it is [0..SIGNED_MIN], as -SIGNED_MIN == SIGNED_MIN.
+    Lower = APInt::getNullValue(BitWidth);
+    if (cast<Instruction>(RHS)->hasNoSignedWrap())
+      Upper = APInt::getSignedMaxValue(BitWidth) + 1;
+    else
+      Upper = APInt::getSignedMinValue(BitWidth) + 1;
+    return;
+  }
+
+  if (R.Flavor == SelectPatternFlavor::SPF_NABS) {
+    // The result of -abs(X) is <= 0.
+    Lower = APInt::getSignedMinValue(BitWidth);
+    Upper = APInt(BitWidth, 1);
+    return;
+  }
+
+  const APInt *C;
+  if (!match(LHS, m_APInt(C)) && !match(RHS, m_APInt(C)))
+    return;
+
+  switch (R.Flavor) {
+    case SPF_UMIN:
+      Upper = *C + 1;
+      break;
+    case SPF_UMAX:
+      Lower = *C;
+      break;
+    case SPF_SMIN:
+      Lower = APInt::getSignedMinValue(BitWidth);
+      Upper = *C + 1;
+      break;
+    case SPF_SMAX:
+      Lower = *C;
+      Upper = APInt::getSignedMaxValue(BitWidth) + 1;
+      break;
+    default:
+      break;
+  }
+}
+
+ConstantRange llvm::computeConstantRange(const Value *V, bool UseInstrInfo) {
+  assert(V->getType()->isIntOrIntVectorTy() && "Expected integer instruction");
+
+  const APInt *C;
+  if (match(V, m_APInt(C)))
+    return ConstantRange(*C);
+
+  InstrInfoQuery IIQ(UseInstrInfo);
+  unsigned BitWidth = V->getType()->getScalarSizeInBits();
+  APInt Lower = APInt(BitWidth, 0);
+  APInt Upper = APInt(BitWidth, 0);
+  if (auto *BO = dyn_cast<BinaryOperator>(V))
+    setLimitsForBinOp(*BO, Lower, Upper, IIQ);
+  else if (auto *II = dyn_cast<IntrinsicInst>(V))
+    setLimitsForIntrinsic(*II, Lower, Upper);
+  else if (auto *SI = dyn_cast<SelectInst>(V))
+    setLimitsForSelectPattern(*SI, Lower, Upper);
+
+  ConstantRange CR = Lower != Upper ? ConstantRange(Lower, Upper)
+                                    : ConstantRange::getFull(BitWidth);
+
+  if (auto *I = dyn_cast<Instruction>(V))
+    if (auto *Range = IIQ.getMetadata(I, LLVMContext::MD_range))
+      CR = CR.intersectWith(getConstantRangeFromMetadata(*Range));
+
+  return CR;
 }

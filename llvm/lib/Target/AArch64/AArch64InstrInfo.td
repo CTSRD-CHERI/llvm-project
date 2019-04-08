@@ -407,10 +407,10 @@ def AArch64umaxv    : SDNode<"AArch64ISD::UMAXV", SDT_AArch64UnaryVec>;
 // the Function object through the <Target>Subtarget and objections were raised
 // to that (see post-commit review comments for r301750).
 let RecomputePerFunction = 1 in {
-  def ForCodeSize   : Predicate<"MF->getFunction().optForSize()">;
-  def NotForCodeSize   : Predicate<"!MF->getFunction().optForSize()">;
+  def ForCodeSize   : Predicate<"MF->getFunction().hasOptSize()">;
+  def NotForCodeSize   : Predicate<"!MF->getFunction().hasOptSize()">;
   // Avoid generating STRQro if it is slow, unless we're optimizing for code size.
-  def UseSTRQro : Predicate<"!Subtarget->isSTRQroSlow() || MF->getFunction().optForSize()">;
+  def UseSTRQro : Predicate<"!Subtarget->isSTRQroSlow() || MF->getFunction().hasOptSize()">;
 
   def UseBTI : Predicate<[{ MF->getFunction().hasFnAttribute("branch-target-enforcement") }]>;
   def NotUseBTI : Predicate<[{ !MF->getFunction().hasFnAttribute("branch-target-enforcement") }]>;
@@ -1256,12 +1256,15 @@ def : InstAlias<"cmpp $lhs, $rhs", (SUBPS XZR, GPR64sp:$lhs, GPR64sp:$rhs), 0>;
 def LDG : MemTagLoad<"ldg", "\t$Rt, [$Rn, $offset]">;
 def : InstAlias<"ldg $Rt, [$Rn]", (LDG GPR64:$Rt, GPR64sp:$Rn, 0), 1>;
 
-def LDGV : MemTagVector<1, "ldgv", "\t$Rt, [$Rn]!",
-                   (outs GPR64sp:$wback, GPR64:$Rt), (ins GPR64sp:$Rn)> {
-  let DecoderMethod = "DecodeLoadAllocTagArrayInstruction";
+def LDGM : MemTagVector<1, "ldgm", "\t$Rt, [$Rn]",
+                   (outs GPR64:$Rt), (ins GPR64sp:$Rn)>;
+def STGM : MemTagVector<0, "stgm", "\t$Rt, [$Rn]",
+                   (outs), (ins GPR64:$Rt, GPR64sp:$Rn)>;
+
+def STZGM : MemTagVector<0, "stzgm", "\t$Rt, [$Rn]",
+                   (outs), (ins GPR64:$Rt, GPR64sp:$Rn)> {
+  let Inst{23} = 0;
 }
-def STGV : MemTagVector<0, "stgv", "\t$Rt, [$Rn]!",
-                   (outs GPR64sp:$wback), (ins GPR64:$Rt, GPR64sp:$Rn)>;
 
 defm STG   : MemTagStore<0b00, "stg">;
 defm STZG  : MemTagStore<0b01, "stzg">;
@@ -3499,7 +3502,7 @@ def : Pat<(fabs (fsub VT:$Rn, VT:$Rm)), (!cast<Instruction>("FABD"#VT) VT:$Rn, V
 }
 defm FACGE   : SIMDThreeSameVectorFPCmp<1,0,0b101,"facge",int_aarch64_neon_facge>;
 defm FACGT   : SIMDThreeSameVectorFPCmp<1,1,0b101,"facgt",int_aarch64_neon_facgt>;
-defm FADDP   : SIMDThreeSameVectorFP<1,0,0b010,"faddp",int_aarch64_neon_addp>;
+defm FADDP   : SIMDThreeSameVectorFP<1,0,0b010,"faddp",int_aarch64_neon_faddp>;
 defm FADD    : SIMDThreeSameVectorFP<0,0,0b010,"fadd", fadd>;
 defm FCMEQ   : SIMDThreeSameVectorFPCmp<0, 0, 0b100, "fcmeq", AArch64fcmeq>;
 defm FCMGE   : SIMDThreeSameVectorFPCmp<1, 0, 0b100, "fcmge", AArch64fcmge>;

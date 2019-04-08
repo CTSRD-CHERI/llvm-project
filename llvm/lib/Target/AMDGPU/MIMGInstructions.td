@@ -178,8 +178,8 @@ multiclass MIMG_NoSampler <bits<7> op, string asm, bit has_d16, bit mip = 0,
     defm _V3 : MIMG_NoSampler_Src_Helper <op, asm, VReg_96, 0>;
     let VDataDwords = 4 in
     defm _V4 : MIMG_NoSampler_Src_Helper <op, asm, VReg_128, 0>;
-    let VDataDwords = 8 in
-    defm _V8 : MIMG_NoSampler_Src_Helper <op, asm, VReg_256, 0>;
+    let VDataDwords = 5 in
+    defm _V5 : MIMG_NoSampler_Src_Helper <op, asm, VReg_160, 0>;
   }
 }
 
@@ -260,17 +260,17 @@ class MIMG_Atomic_Helper <string asm, RegisterClass data_rc,
 multiclass MIMG_Atomic_Helper_m <mimg op, string asm, RegisterClass data_rc,
                                  RegisterClass addr_rc, bit enableDasm = 0> {
   let ssamp = 0, d16 = 0 in {
-    def _si : MIMG_Atomic_Helper<asm, data_rc, addr_rc, "SICI", enableDasm>,
+    def _si : MIMG_Atomic_Helper<asm, data_rc, addr_rc, "GFX6GFX7", enableDasm>,
               SIMCInstr<NAME, SIEncodingFamily.SI>,
               MIMGe<op.SI> {
-      let AssemblerPredicates = [isSICI];
+      let AssemblerPredicates = [isGFX6GFX7];
       let DisableDecoder = DisableSIDecoder;
     }
 
-    def _vi : MIMG_Atomic_Helper<asm, data_rc, addr_rc, "VI", enableDasm>,
+    def _vi : MIMG_Atomic_Helper<asm, data_rc, addr_rc, "GFX8", enableDasm>,
               SIMCInstr<NAME, SIEncodingFamily.VI>,
               MIMGe<op.VI> {
-      let AssemblerPredicates = [isVI];
+      let AssemblerPredicates = [isGFX8GFX9];
       let DisableDecoder = DisableVIDecoder;
       let MIMGEncoding = MIMGEncGfx8;
     }
@@ -412,8 +412,8 @@ multiclass MIMG_Sampler <bits<7> op, AMDGPUSampleVariant sample, bit wqm = 0,
     defm _V3 : MIMG_Sampler_Src_Helper<op, asm, sample, VReg_96>;
     let VDataDwords = 4 in
     defm _V4 : MIMG_Sampler_Src_Helper<op, asm, sample, VReg_128>;
-    let VDataDwords = 8 in
-    defm _V8 : MIMG_Sampler_Src_Helper<op, asm, sample, VReg_256>;
+    let VDataDwords = 5 in
+    defm _V5 : MIMG_Sampler_Src_Helper<op, asm, sample, VReg_160>;
   }
 }
 
@@ -433,8 +433,8 @@ multiclass MIMG_Gather <bits<7> op, AMDGPUSampleVariant sample, bit wqm = 0,
     defm _V2 : MIMG_Sampler_Src_Helper<op, asm, sample, VReg_64>; /* for packed D16 only */
     let VDataDwords = 4 in
     defm _V4 : MIMG_Sampler_Src_Helper<op, asm, sample, VReg_128, 1>;
-    let VDataDwords = 8 in
-    defm _V8 : MIMG_Sampler_Src_Helper<op, asm, sample, VReg_256>;
+    let VDataDwords = 5 in
+    defm _V5 : MIMG_Sampler_Src_Helper<op, asm, sample, VReg_160>;
   }
 }
 

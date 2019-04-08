@@ -339,7 +339,9 @@ bool CMICmdCmdListThreadGroups::Acknowledge() {
       const char *pDir = sbTrgt.GetExecutable().GetDirectory();
       const char *pFileName = sbTrgt.GetExecutable().GetFilename();
       const CMIUtilString strFile(
-          CMIUtilString::Format("%s/%s", pDir, pFileName));
+          CMIUtilString::Format("%s/%s",
+                                CMIUtilString::WithNullAsEmpty(pDir),
+                                CMIUtilString::WithNullAsEmpty(pFileName)));
       const CMICmnMIValueConst miValueConst4(strFile);
       const CMICmnMIValueResult miValueResult4("executable", miValueConst4);
       miTuple.Add(miValueResult4);
@@ -466,8 +468,7 @@ bool CMICmdCmdInterpreterExec::Execute() {
   CMICMDBASE_GETOPTION(pArgCommand, String, m_constStrArgNamedCommand);
 
   // Handle the interpreter parameter by do nothing on purpose (set to 'handled'
-  // in
-  // the arg definition above)
+  // in the arg definition above)
   const CMIUtilString &rStrInterpreter(pArgInterpreter->GetValue());
   MIunused(rStrInterpreter);
 

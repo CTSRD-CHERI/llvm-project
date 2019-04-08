@@ -69,9 +69,9 @@ extern "C" void LLVMInitializeX86Target() {
   initializeFixupBWInstPassPass(PR);
   initializeEvexToVexInstPassPass(PR);
   initializeFixupLEAPassPass(PR);
-  initializeShadowCallStackPass(PR);
   initializeX86CallFrameOptimizationPass(PR);
   initializeX86CmovConverterPassPass(PR);
+  initializeX86ExpandPseudoPass(PR);
   initializeX86ExecutionDomainFixPass(PR);
   initializeX86DomainReassignmentPass(PR);
   initializeX86AvoidSFBPassPass(PR);
@@ -356,6 +356,13 @@ public:
     return DAG;
   }
 
+  ScheduleDAGInstrs *
+  createPostMachineScheduler(MachineSchedContext *C) const override {
+    ScheduleDAGMI *DAG = createGenericSchedPostRA(C);
+    DAG->addMutation(createX86MacroFusionDAGMutation());
+    return DAG;
+  }
+
   void addIRPasses() override;
   bool addInstSelector() override;
   bool addIRTranslator() override;
@@ -489,7 +496,6 @@ void X86PassConfig::addPreEmitPass() {
     addPass(createBreakFalseDeps());
   }
 
-  addPass(createShadowCallStackPass());
   addPass(createX86IndirectBranchTrackingPass());
 
   if (UseVZeroUpper)

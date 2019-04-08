@@ -17,16 +17,20 @@ string(REPLACE ${CMAKE_CFG_INTDIR} ${LLVM_BUILD_MODE} CLANG_TOOLS_DIR ${LLVM_RUN
 
 llvm_canonicalize_cmake_booleans(
   CLANG_ENABLE_STATIC_ANALYZER
-  CLANGD_BUILD_XPC_SUPPORT)
+  CLANGD_BUILD_XPC)
 
 configure_lit_site_cfg(
-  ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.in
-  ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg
+  ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.py.in
+  ${CMAKE_CURRENT_BINARY_DIR}/lit.site.cfg.py
+  MAIN_CONFIG
+  ${CMAKE_CURRENT_SOURCE_DIR}/lit.cfg.py
   )
 
 configure_lit_site_cfg(
-  ${CMAKE_CURRENT_SOURCE_DIR}/Unit/lit.site.cfg.in
-  ${CMAKE_CURRENT_BINARY_DIR}/Unit/lit.site.cfg
+  ${CMAKE_CURRENT_SOURCE_DIR}/Unit/lit.site.cfg.py.in
+  ${CMAKE_CURRENT_BINARY_DIR}/Unit/lit.site.cfg.py
+  MAIN_CONFIG
+  ${CMAKE_CURRENT_SOURCE_DIR}/Unit/lit.cfg.py
   )
 
 option(CLANG_TOOLS_TEST_USE_VG "Run Clang tools' tests under Valgrind" OFF)
@@ -59,12 +63,14 @@ set(CLANG_TOOLS_TEST_DEPS
   # For the clang-tidy libclang integration test.
   c-index-test
   # clang-tidy tests require it.
-  clang-headers
+  clang-resource-headers
 
   clang-tidy
+  # Clang-tidy tests need clang for building modules.
+  clang
 )
 
-if(CLANGD_BUILD_XPC_SUPPORT)
+if(CLANGD_BUILD_XPC)
   list(APPEND CLANG_TOOLS_TEST_DEPS clangd-xpc-test-client)
 endif()
 

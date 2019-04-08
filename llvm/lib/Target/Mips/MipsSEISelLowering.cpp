@@ -1431,9 +1431,10 @@ static SDValue lowerMSASplatZExt(SDValue Op, unsigned OpNr, SelectionDAG &DAG) {
 
 static SDValue lowerMSASplatImm(SDValue Op, unsigned ImmOp, SelectionDAG &DAG,
                                 bool IsSigned = false) {
+  auto *CImm = cast<ConstantSDNode>(Op->getOperand(ImmOp));
   return DAG.getConstant(
       APInt(Op->getValueType(0).getScalarType().getSizeInBits(),
-            Op->getConstantOperandVal(ImmOp), IsSigned),
+            IsSigned ? CImm->getSExtValue() : CImm->getZExtValue(), IsSigned),
       SDLoc(Op), Op->getValueType(0));
 }
 

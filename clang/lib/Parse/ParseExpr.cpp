@@ -543,7 +543,7 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
 }
 
 namespace {
-class CastExpressionIdValidator : public CorrectionCandidateCallback {
+class CastExpressionIdValidator final : public CorrectionCandidateCallback {
  public:
   CastExpressionIdValidator(Token Next, bool AllowTypes, bool AllowNonTypes)
       : NextToken(Next), AllowNonTypes(AllowNonTypes) {
@@ -570,6 +570,10 @@ class CastExpressionIdValidator : public CorrectionCandidateCallback {
         return true;
     }
     return false;
+  }
+
+  std::unique_ptr<CorrectionCandidateCallback> clone() override {
+    return llvm::make_unique<CastExpressionIdValidator>(*this);
   }
 
  private:
@@ -1041,19 +1045,21 @@ ExprResult Parser::ParseCastExpression(bool isUnaryExpression,
     CXXScopeSpec ScopeSpec;
     SourceLocation TemplateKWLoc;
     Token Replacement;
-    auto Validator = llvm::make_unique<CastExpressionIdValidator>(
-        Tok, isTypeCast != NotTypeCast, isTypeCast != IsTypeCast);
-    Validator->IsAddressOfOperand = isAddressOfOperand;
+    CastExpressionIdValidator Validator(
+        /*Next=*/Tok,
+        /*AllowTypes=*/isTypeCast != NotTypeCast,
+        /*AllowNonTypes=*/isTypeCast != IsTypeCast);
+    Validator.IsAddressOfOperand = isAddressOfOperand;
     if (Tok.isOneOf(tok::periodstar, tok::arrowstar)) {
-      Validator->WantExpressionKeywords = false;
-      Validator->WantRemainingKeywords = false;
+      Validator.WantExpressionKeywords = false;
+      Validator.WantRemainingKeywords = false;
     } else {
-      Validator->WantRemainingKeywords = Tok.isNot(tok::r_paren);
+      Validator.WantRemainingKeywords = Tok.isNot(tok::r_paren);
     }
     Name.setIdentifier(&II, ILoc);
     Res = Actions.ActOnIdExpression(
         getCurScope(), ScopeSpec, TemplateKWLoc, Name, Tok.is(tok::l_paren),
-        isAddressOfOperand, std::move(Validator),
+        isAddressOfOperand, &Validator,
         /*IsInlineAsmIdentifier=*/false,
         Tok.is(tok::r_paren) ? nullptr : &Replacement);
     if (!Res.isInvalid() && Res.isUnset()) {
@@ -1658,34 +1664,25 @@ Parser::ParsePostfixExpressionSuffix(ExprResult LHS) {
 
       ExprVector ArgExprs;
       CommaLocsTy CommaLocs;
-
-      if (Tok.is(tok::code_completion)) {
+      auto RunSignatureHelp = [&]() -> QualType {
         QualType PreferredType = Actions.ProduceCallSignatureHelp(
-            getCurScope(), LHS.get(), None, PT.getOpenLocation());
+            getCurScope(), LHS.get(), ArgExprs, PT.getOpenLocation());
         CalledSignatureHelp = true;
-        Actions.CodeCompleteExpression(getCurScope(), PreferredType);
-        cutOffParsing();
-        return ExprError();
-      }
-
+        return PreferredType;
+      };
       if (OpKind == tok::l_paren || !LHS.isInvalid()) {
         if (Tok.isNot(tok::r_paren)) {
           if (ParseExpressionList(ArgExprs, CommaLocs, [&] {
-                QualType PreferredType = Actions.ProduceCallSignatureHelp(
-                    getCurScope(), LHS.get(), ArgExprs, PT.getOpenLocation());
-                CalledSignatureHelp = true;
-                Actions.CodeCompleteExpression(getCurScope(), PreferredType);
+                PreferredType.enterFunctionArgument(Tok.getLocation(),
+                                                    RunSignatureHelp);
               })) {
             (void)Actions.CorrectDelayedTyposInExpr(LHS);
             // If we got an error when parsing expression list, we don't call
             // the CodeCompleteCall handler inside the parser. So call it here
             // to make sure we get overload suggestions even when we are in the
             // middle of a parameter.
-            if (PP.isCodeCompletionReached() && !CalledSignatureHelp) {
-              Actions.ProduceCallSignatureHelp(getCurScope(), LHS.get(),
-                                               ArgExprs, PT.getOpenLocation());
-              CalledSignatureHelp = true;
-            }
+            if (PP.isCodeCompletionReached() && !CalledSignatureHelp)
+              RunSignatureHelp();
             LHS = ExprError();
           } else if (LHS.isInvalid()) {
             for (auto &E : ArgExprs)
@@ -2876,18 +2873,11 @@ ExprResult Parser::ParseFoldExpression(ExprResult LHS,
 /// \endverbatim
 bool Parser::ParseExpressionList(SmallVectorImpl<Expr *> &Exprs,
                                  SmallVectorImpl<SourceLocation> &CommaLocs,
-                                 llvm::function_ref<void()> Completer) {
+                                 llvm::function_ref<void()> ExpressionStarts) {
   bool SawError = false;
   while (1) {
-    if (Tok.is(tok::code_completion)) {
-      if (Completer)
-        Completer();
-      else
-        Actions.CodeCompleteExpression(getCurScope(),
-                                       PreferredType.get(Tok.getLocation()));
-      cutOffParsing();
-      return true;
-    }
+    if (ExpressionStarts)
+      ExpressionStarts();
 
     ExprResult Expr;
     if (getLangOpts().CPlusPlus11 && Tok.is(tok::l_brace)) {

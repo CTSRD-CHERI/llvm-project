@@ -303,6 +303,36 @@ static Value *EmitAtomicDecrementValue(CodeGenFunction &CGF, const CallExpr *E,
   return CGF.Builder.CreateSub(Result, ConstantInt::get(IntTy, 1));
 }
 
+// Build a plain volatile load.
+static Value *EmitISOVolatileLoad(CodeGenFunction &CGF, const CallExpr *E) {
+  Value *Ptr = CGF.EmitScalarExpr(E->getArg(0));
+  QualType ElTy = E->getArg(0)->getType()->getPointeeType();
+  CharUnits LoadSize = CGF.getContext().getTypeSizeInChars(ElTy);
+  llvm::Type *ITy =
+      llvm::IntegerType::get(CGF.getLLVMContext(), LoadSize.getQuantity() * 8);
+  unsigned DefaultAS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
+  Ptr = CGF.Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
+  llvm::LoadInst *Load = CGF.Builder.CreateAlignedLoad(Ptr, LoadSize);
+  Load->setVolatile(true);
+  return Load;
+}
+
+// Build a plain volatile store.
+static Value *EmitISOVolatileStore(CodeGenFunction &CGF, const CallExpr *E) {
+  Value *Ptr = CGF.EmitScalarExpr(E->getArg(0));
+  Value *Value = CGF.EmitScalarExpr(E->getArg(1));
+  QualType ElTy = E->getArg(0)->getType()->getPointeeType();
+  CharUnits StoreSize = CGF.getContext().getTypeSizeInChars(ElTy);
+  llvm::Type *ITy =
+      llvm::IntegerType::get(CGF.getLLVMContext(), StoreSize.getQuantity() * 8);
+  unsigned DefaultAS = CGF.CGM.getTargetCodeGenInfo().getDefaultAS();
+  Ptr = CGF.Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
+  llvm::StoreInst *Store =
+      CGF.Builder.CreateAlignedStore(Value, Ptr, StoreSize);
+  Store->setVolatile(true);
+  return Store;
+}
+
 // Emit a simple mangled intrinsic that has 1 argument and a return type
 // matching the argument type.
 static Value *emitUnaryBuiltin(CodeGenFunction &CGF,
@@ -1118,6 +1148,7 @@ llvm::Function *CodeGenFunction::generateBuiltinOSLogHelperFunction(
   Fn->setVisibility(llvm::GlobalValue::HiddenVisibility);
   CGM.SetLLVMFunctionAttributes(GlobalDecl(), FI, Fn);
   CGM.SetLLVMFunctionAttributesForDefinition(nullptr, Fn);
+  Fn->setDoesNotThrow();
 
   // Attach 'noinline' at -Oz.
   if (CGM.getCodeGenOpts().OptimizeSize == 2)
@@ -1483,86 +1514,6 @@ RValue CodeGenFunction::emitRotate(const CallExpr *E, bool IsRotateRight) {
   return RValue::get(Builder.CreateCall(F, { Src, Src, ShiftAmt }));
 }
 
-/// For a call to a builtin C standard library function, emit a call to a
-/// fortified variant using __builtin_object_size. For instance, instead of
-/// emitting `sprintf(buf, "%d", 32)`, this function would emit
-/// `__sprintf_chk(buf, Flag, __builtin_object_size(buf, 0), "%d", 32)`.
-RValue CodeGenFunction::emitFortifiedStdLibCall(CodeGenFunction &CGF,
-                                                const CallExpr *CE,
-                                                unsigned BuiltinID,
-                                                unsigned BOSType,
-                                                unsigned Flag) {
-  SmallVector<llvm::Value *, 8> ArgVals;
-  for (const Expr *Arg : CE->arguments())
-    ArgVals.push_back(EmitScalarExpr(Arg));
-
-  llvm::Value *FlagVal = llvm::ConstantInt::get(IntTy, Flag);
-  auto emitObjSize = [&]() {
-    return evaluateOrEmitBuiltinObjectSize(CE->getArg(0), BOSType, SizeTy,
-                                           ArgVals[0], false);
-  };
-
-  unsigned FortifiedVariantID = Builtin::getFortifiedVariantFunction(BuiltinID);
-  assert(FortifiedVariantID != 0 && "Should be diagnosed in Sema");
-
-  // Adjust ArgVals to include a __builtin_object_size(n) or flag argument at
-  // the right position. Variadic printf-like functions take a flag and object
-  // size (if they're printing to a string) before the format string, and all
-  // other functions just take the object size as their last argument. The
-  // object size, if present, always corresponds to the first argument.
-  switch (BuiltinID) {
-  case Builtin::BImemcpy:
-  case Builtin::BImemmove:
-  case Builtin::BImemset:
-  case Builtin::BIstpcpy:
-  case Builtin::BIstrcat:
-  case Builtin::BIstrcpy:
-  case Builtin::BIstrlcat:
-  case Builtin::BIstrlcpy:
-  case Builtin::BIstrncat:
-  case Builtin::BIstrncpy:
-  case Builtin::BIstpncpy:
-    ArgVals.push_back(emitObjSize());
-    break;
-
-  case Builtin::BIsnprintf:
-  case Builtin::BIvsnprintf:
-    ArgVals.insert(ArgVals.begin() + 2, FlagVal);
-    ArgVals.insert(ArgVals.begin() + 3, emitObjSize());
-    break;
-
-  case Builtin::BIsprintf:
-  case Builtin::BIvsprintf:
-    ArgVals.insert(ArgVals.begin() + 1, FlagVal);
-    ArgVals.insert(ArgVals.begin() + 2, emitObjSize());
-    break;
-
-  case Builtin::BIfprintf:
-  case Builtin::BIvfprintf:
-    ArgVals.insert(ArgVals.begin() + 1, FlagVal);
-    break;
-
-  case Builtin::BIprintf:
-  case Builtin::BIvprintf:
-    ArgVals.insert(ArgVals.begin(), FlagVal);
-    break;
-
-  default:
-    llvm_unreachable("Unknown fortified builtin?");
-  }
-
-  ASTContext::GetBuiltinTypeError Err;
-  QualType VariantTy = getContext().GetBuiltinType(FortifiedVariantID, Err);
-  assert(Err == ASTContext::GE_None && "Should not codegen an error");
-  auto *LLVMVariantTy = cast<llvm::FunctionType>(ConvertType(VariantTy));
-  StringRef VariantName = getContext().BuiltinInfo.getName(FortifiedVariantID) +
-                          strlen("__builtin_");
-
-  llvm::Value *V = Builder.CreateCall(
-      CGM.CreateRuntimeFunction(LLVMVariantTy, VariantName), ArgVals);
-  return RValue::get(V);
-}
-
 // Diagnose misaligned copies (memmove/memcpy) of source types that contain
 // capabilities to a dst buffer that is less than capability aligned.
 // This can result in tags being lost at runtime if the buffer is not actually
@@ -1692,10 +1643,6 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                                                Result.Val.getFloat()));
   }
   unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
-
-  if (const auto *FortifyAttr = FD->getAttr<FortifyStdLibAttr>())
-    return emitFortifiedStdLibCall(*this, E, BuiltinID, FortifyAttr->getType(),
-                                   FortifyAttr->getFlag());
 
   // There are LLVM math intrinsics/instructions corresponding to math library
   // functions except the LLVM op will never set errno while the math library
@@ -2133,7 +2080,8 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     ConstantInt *AlignmentCI = cast<ConstantInt>(AlignmentValue);
     unsigned Alignment = (unsigned)AlignmentCI->getZExtValue();
 
-    EmitAlignmentAssumption(PtrValue, Ptr, /*The expr loc is sufficient.*/ SourceLocation(),
+    EmitAlignmentAssumption(PtrValue, Ptr,
+                            /*The expr loc is sufficient.*/ SourceLocation(),
                             Alignment, OffsetValue);
     return RValue::get(PtrValue);
   }
@@ -3603,6 +3551,19 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
   case Builtin::BI_interlockedbittestandreset_rel:
   case Builtin::BI_interlockedbittestandreset_nf:
     return RValue::get(EmitBitTestIntrinsic(*this, BuiltinID, E));
+
+    // These builtins exist to emit regular volatile loads and stores not
+    // affected by the -fms-volatile setting.
+  case Builtin::BI__iso_volatile_load8:
+  case Builtin::BI__iso_volatile_load16:
+  case Builtin::BI__iso_volatile_load32:
+  case Builtin::BI__iso_volatile_load64:
+    return RValue::get(EmitISOVolatileLoad(*this, E));
+  case Builtin::BI__iso_volatile_store8:
+  case Builtin::BI__iso_volatile_store16:
+  case Builtin::BI__iso_volatile_store32:
+  case Builtin::BI__iso_volatile_store64:
+    return RValue::get(EmitISOVolatileStore(*this, E));
 
   case Builtin::BI__exception_code:
   case Builtin::BI_exception_code:
@@ -5459,6 +5420,13 @@ Value *CodeGenFunction::EmitCommonNeonBuiltinExpr(
 
   switch (BuiltinID) {
   default: break;
+  case NEON::BI__builtin_neon_vpadd_v:
+  case NEON::BI__builtin_neon_vpaddq_v:
+    // We don't allow fp/int overloading of intrinsics.
+    if (VTy->getElementType()->isFloatingPointTy() &&
+        Int == Intrinsic::aarch64_neon_addp)
+      Int = Intrinsic::aarch64_neon_faddp;
+    break;
   case NEON::BI__builtin_neon_vabs_v:
   case NEON::BI__builtin_neon_vabsq_v:
     if (VTy->getElementType()->isFloatingPointTy())
@@ -6192,36 +6160,6 @@ static bool HasExtraNeonArgument(unsigned BuiltinID) {
   return true;
 }
 
-Value *CodeGenFunction::EmitISOVolatileLoad(const CallExpr *E) {
-  Value *Ptr = EmitScalarExpr(E->getArg(0));
-  QualType ElTy = E->getArg(0)->getType()->getPointeeType();
-  CharUnits LoadSize = getContext().getTypeSizeInChars(ElTy);
-  llvm::Type *ITy = llvm::IntegerType::get(getLLVMContext(),
-                                           LoadSize.getQuantity() * 8);
-  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
-  Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
-  llvm::LoadInst *Load =
-    Builder.CreateAlignedLoad(Ptr, LoadSize);
-  Load->setVolatile(true);
-  return Load;
-}
-
-Value *CodeGenFunction::EmitISOVolatileStore(const CallExpr *E) {
-  Value *Ptr = EmitScalarExpr(E->getArg(0));
-  Value *Value = EmitScalarExpr(E->getArg(1));
-  QualType ElTy = E->getArg(0)->getType()->getPointeeType();
-  CharUnits StoreSize = getContext().getTypeSizeInChars(ElTy);
-  llvm::Type *ITy = llvm::IntegerType::get(getLLVMContext(),
-                                           StoreSize.getQuantity() * 8);
-  unsigned DefaultAS = CGM.getTargetCodeGenInfo().getDefaultAS();
-  Ptr = Builder.CreateBitCast(Ptr, ITy->getPointerTo(DefaultAS));
-  llvm::StoreInst *Store =
-    Builder.CreateAlignedStore(Value, Ptr,
-                               StoreSize);
-  Store->setVolatile(true);
-  return Store;
-}
-
 Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
                                            const CallExpr *E,
                                            llvm::Triple::ArchType Arch) {
@@ -6461,19 +6399,6 @@ Value *CodeGenFunction::EmitARMBuiltinExpr(unsigned BuiltinID,
                                        : Intrinsic::arm_strex,
                                    StoreAddr->getType());
     return Builder.CreateCall(F, {StoreVal, StoreAddr}, "strex");
-  }
-
-  switch (BuiltinID) {
-  case ARM::BI__iso_volatile_load8:
-  case ARM::BI__iso_volatile_load16:
-  case ARM::BI__iso_volatile_load32:
-  case ARM::BI__iso_volatile_load64:
-    return EmitISOVolatileLoad(E);
-  case ARM::BI__iso_volatile_store8:
-  case ARM::BI__iso_volatile_store16:
-  case ARM::BI__iso_volatile_store32:
-  case ARM::BI__iso_volatile_store64:
-    return EmitISOVolatileStore(E);
   }
 
   if (BuiltinID == ARM::BI__builtin_arm_clrex) {
@@ -9290,16 +9215,6 @@ Value *CodeGenFunction::EmitAArch64BuiltinExpr(unsigned BuiltinID,
     Int = Intrinsic::aarch64_neon_suqadd;
     return EmitNeonCall(CGM.getIntrinsic(Int, Ty), Ops, "vuqadd");
   }
-  case AArch64::BI__iso_volatile_load8:
-  case AArch64::BI__iso_volatile_load16:
-  case AArch64::BI__iso_volatile_load32:
-  case AArch64::BI__iso_volatile_load64:
-    return EmitISOVolatileLoad(E);
-  case AArch64::BI__iso_volatile_store8:
-  case AArch64::BI__iso_volatile_store16:
-  case AArch64::BI__iso_volatile_store32:
-  case AArch64::BI__iso_volatile_store64:
-    return EmitISOVolatileStore(E);
   case AArch64::BI_BitScanForward:
   case AArch64::BI_BitScanForward64:
     return EmitMSVCBuiltinExpr(MSVCIntrin::_BitScanForward, E);
@@ -14012,8 +13927,8 @@ Value *CodeGenFunction::EmitWebAssemblyBuiltinExpr(unsigned BuiltinID,
     Function *Callee = CGM.getIntrinsic(Intrinsic::wasm_throw);
     return Builder.CreateCall(Callee, {Tag, Obj});
   }
-  case WebAssembly::BI__builtin_wasm_rethrow: {
-    Function *Callee = CGM.getIntrinsic(Intrinsic::wasm_rethrow);
+  case WebAssembly::BI__builtin_wasm_rethrow_in_catch: {
+    Function *Callee = CGM.getIntrinsic(Intrinsic::wasm_rethrow_in_catch);
     return Builder.CreateCall(Callee);
   }
   case WebAssembly::BI__builtin_wasm_atomic_wait_i32: {

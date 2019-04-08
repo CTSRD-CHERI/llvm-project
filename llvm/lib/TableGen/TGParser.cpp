@@ -536,8 +536,14 @@ Record *TGParser::ParseClassID() {
   }
 
   Record *Result = Records.getClass(Lex.getCurStrVal());
-  if (!Result)
-    TokError("Couldn't find class '" + Lex.getCurStrVal() + "'");
+  if (!Result) {
+    std::string Msg("Couldn't find class '" + Lex.getCurStrVal() + "'");
+    if (MultiClasses[Lex.getCurStrVal()].get())
+      TokError(Msg + ". Use 'defm' if you meant to use multiclass '" +
+               Lex.getCurStrVal() + "'");
+    else
+      TokError(Msg);
+  }
 
   Lex.Lex();
   return Result;
@@ -1023,6 +1029,7 @@ Init *TGParser::ParseOperation(Record *CurRec, RecTy *ItemType) {
 
   case tgtok::XConcat:
   case tgtok::XADD:
+  case tgtok::XMUL:
   case tgtok::XAND:
   case tgtok::XOR:
   case tgtok::XSRA:
@@ -1045,6 +1052,7 @@ Init *TGParser::ParseOperation(Record *CurRec, RecTy *ItemType) {
     default: llvm_unreachable("Unhandled code!");
     case tgtok::XConcat: Code = BinOpInit::CONCAT; break;
     case tgtok::XADD:    Code = BinOpInit::ADD; break;
+    case tgtok::XMUL:    Code = BinOpInit::MUL; break;
     case tgtok::XAND:    Code = BinOpInit::AND; break;
     case tgtok::XOR:     Code = BinOpInit::OR; break;
     case tgtok::XSRA:    Code = BinOpInit::SRA; break;
@@ -1075,6 +1083,7 @@ Init *TGParser::ParseOperation(Record *CurRec, RecTy *ItemType) {
     case tgtok::XSRL:
     case tgtok::XSHL:
     case tgtok::XADD:
+    case tgtok::XMUL:
       Type = IntRecTy::get();
       ArgType = IntRecTy::get();
       break;
@@ -1154,7 +1163,8 @@ Init *TGParser::ParseOperation(Record *CurRec, RecTy *ItemType) {
         }
         if (Code != BinOpInit::ADD && Code != BinOpInit::AND &&
             Code != BinOpInit::OR && Code != BinOpInit::SRA &&
-            Code != BinOpInit::SRL && Code != BinOpInit::SHL)
+            Code != BinOpInit::SRL && Code != BinOpInit::SHL &&
+            Code != BinOpInit::MUL)
           ArgType = Resolved;
       }
 
@@ -1176,7 +1186,8 @@ Init *TGParser::ParseOperation(Record *CurRec, RecTy *ItemType) {
     // shorthand for nesting them.
     if (Code == BinOpInit::STRCONCAT || Code == BinOpInit::LISTCONCAT ||
         Code == BinOpInit::CONCAT || Code == BinOpInit::ADD ||
-        Code == BinOpInit::AND || Code == BinOpInit::OR) {
+        Code == BinOpInit::AND || Code == BinOpInit::OR ||
+        Code == BinOpInit::MUL) {
       while (InitList.size() > 2) {
         Init *RHS = InitList.pop_back_val();
         RHS = (BinOpInit::get(Code, InitList.back(), RHS, Type))->Fold(CurRec);
@@ -1744,7 +1755,7 @@ Init *TGParser::ParseSimpleValue(Record *CurRec, RecTy *ItemType,
     break;
   }
   case tgtok::CodeFragment:
-    R = CodeInit::get(Lex.getCurStrVal());
+    R = CodeInit::get(Lex.getCurStrVal(), Lex.getLoc());
     Lex.Lex();
     break;
   case tgtok::question:
@@ -2007,6 +2018,7 @@ Init *TGParser::ParseSimpleValue(Record *CurRec, RecTy *ItemType,
   case tgtok::XConcat:
   case tgtok::XDag:
   case tgtok::XADD:
+  case tgtok::XMUL:
   case tgtok::XAND:
   case tgtok::XOR:
   case tgtok::XSRA:
@@ -2113,16 +2125,31 @@ Init *TGParser::ParseValue(Record *CurRec, RecTy *ItemType, IDParseMode Mode) {
 
     case tgtok::paste:
       SMLoc PasteLoc = Lex.getLoc();
-
-      // Create a !strconcat() operation, first casting each operand to
-      // a string if necessary.
-
       TypedInit *LHS = dyn_cast<TypedInit>(Result);
       if (!LHS) {
         Error(PasteLoc, "LHS of paste is not typed!");
         return nullptr;
       }
 
+      // Check if it's a 'listA # listB'
+      if (isa<ListRecTy>(LHS->getType())) {
+        Lex.Lex();  // Eat the '#'.
+
+        switch (Lex.getCode()) {
+        case tgtok::colon:
+        case tgtok::semi:
+        case tgtok::l_brace:
+          Result = LHS; // trailing paste, ignore.
+          break;
+        default:
+          Init *RHSResult = ParseValue(CurRec, ItemType, ParseNameMode);
+          Result = BinOpInit::getListConcat(LHS, RHSResult);
+        }
+        break;
+      }
+
+      // Create a !strconcat() operation, first casting each operand to
+      // a string if necessary.
       if (LHS->getType() != StringRecTy::get()) {
         LHS = dyn_cast<TypedInit>(
             UnOpInit::get(UnOpInit::CAST, LHS, StringRecTy::get())
@@ -2255,6 +2282,10 @@ void TGParser::ParseValueList(SmallVectorImpl<Init*> &Result, Record *CurRec,
 
   while (Lex.getCode() == tgtok::comma) {
     Lex.Lex();  // Eat the comma
+
+    // ignore trailing comma for lists
+    if (Lex.getCode() == tgtok::r_square)
+      return;
 
     if (ArgsRec && !EltTy) {
       ArrayRef<Init *> TArgs = ArgsRec->getTemplateArgs();

@@ -94,10 +94,9 @@ ClBinaryName("obj", cl::init(""),
 static cl::alias
 ClBinaryNameAliasExe("exe", cl::desc("Alias for -obj"),
                      cl::NotHidden, cl::aliasopt(ClBinaryName));
-static cl::alias
-ClBinaryNameAliasE("e", cl::desc("Alias for -obj"),
-                   cl::NotHidden, cl::aliasopt(ClBinaryName));
-
+static cl::alias ClBinaryNameAliasE("e", cl::desc("Alias for -obj"),
+                                    cl::NotHidden, cl::Grouping, cl::Prefix,
+                                    cl::aliasopt(ClBinaryName));
 
 static cl::opt<std::string>
     ClDwpName("dwp", cl::init(""),
@@ -146,6 +145,14 @@ static cl::list<std::string> ClInputAddresses(cl::Positional,
 static cl::opt<std::string>
     ClFallbackDebugPath("fallback-debug-path", cl::init(""),
                         cl::desc("Fallback path for debug binaries."));
+
+static cl::opt<DIPrinter::OutputStyle>
+    ClOutputStyle("output-style", cl::init(DIPrinter::OutputStyle::LLVM),
+                  cl::desc("Specify print style"), cl::Hidden,
+                  cl::values(clEnumValN(DIPrinter::OutputStyle::LLVM, "LLVM",
+                                        "LLVM default style"),
+                             clEnumValN(DIPrinter::OutputStyle::GNU, "GNU",
+                                        "GNU addr2line style")));
 
 template<typename T>
 static bool error(Expected<T> &ResOrErr) {
@@ -198,29 +205,32 @@ static void symbolizeInput(StringRef InputString, LLVMSymbolizer &Symbolizer,
                            DIPrinter &Printer) {
   bool IsData = false;
   std::string ModuleName;
-  uint64_t ModuleOffset = 0;
-  if (!parseCommand(StringRef(InputString), IsData, ModuleName, ModuleOffset)) {
+  uint64_t Offset = 0;
+  if (!parseCommand(StringRef(InputString), IsData, ModuleName, Offset)) {
     outs() << InputString;
     return;
   }
 
   if (ClPrintAddress) {
     outs() << "0x";
-    outs().write_hex(ModuleOffset);
+    outs().write_hex(Offset);
     StringRef Delimiter = ClPrettyPrint ? ": " : "\n";
     outs() << Delimiter;
   }
-  ModuleOffset -= ClAdjustVMA;
+  Offset -= ClAdjustVMA;
   if (IsData) {
-    auto ResOrErr = Symbolizer.symbolizeData(ModuleName, ModuleOffset);
+    auto ResOrErr = Symbolizer.symbolizeData(
+        ModuleName, {Offset, object::SectionedAddress::UndefSection});
     Printer << (error(ResOrErr) ? DIGlobal() : ResOrErr.get());
   } else if (ClPrintInlining) {
-    auto ResOrErr =
-        Symbolizer.symbolizeInlinedCode(ModuleName, ModuleOffset, ClDwpName);
+    auto ResOrErr = Symbolizer.symbolizeInlinedCode(
+        ModuleName, {Offset, object::SectionedAddress::UndefSection},
+        ClDwpName);
     Printer << (error(ResOrErr) ? DIInliningInfo() : ResOrErr.get());
   } else {
-    auto ResOrErr =
-        Symbolizer.symbolizeCode(ModuleName, ModuleOffset, ClDwpName);
+    auto ResOrErr = Symbolizer.symbolizeCode(
+        ModuleName, {Offset, object::SectionedAddress::UndefSection},
+        ClDwpName);
     Printer << (error(ResOrErr) ? DILineInfo() : ResOrErr.get());
   }
   outs() << "\n";
@@ -253,7 +263,7 @@ int main(int argc, char **argv) {
 
   DIPrinter Printer(outs(), ClPrintFunctions != FunctionNameKind::None,
                     ClPrettyPrint, ClPrintSourceContextLines, ClVerbose,
-                    ClBasenames);
+                    ClBasenames, ClOutputStyle);
 
   if (ClInputAddresses.empty()) {
     const int kMaxInputStringLength = 1024;

@@ -601,12 +601,15 @@ public:
     addAttribute(AttributeList::ReturnIndex, Attribute::NoAlias);
   }
 
+  /// Do not optimize this function (-O0).
+  bool hasOptNone() const { return hasFnAttribute(Attribute::OptimizeNone); }
+
   /// Optimize this function for minimum size (-Oz).
-  bool optForMinSize() const { return hasFnAttribute(Attribute::MinSize); }
+  bool hasMinSize() const { return hasFnAttribute(Attribute::MinSize); }
 
   /// Optimize this function for size (-Os) or minimum size (-Oz).
-  bool optForSize() const {
-    return hasFnAttribute(Attribute::OptimizeForSize) || optForMinSize();
+  bool hasOptSize() const {
+    return hasFnAttribute(Attribute::OptimizeForSize) || hasMinSize();
   }
 
   /// copyAttributesFrom - copy all additional attributes (those not needed to

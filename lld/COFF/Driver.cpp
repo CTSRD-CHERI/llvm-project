@@ -18,7 +18,9 @@
 #include "lld/Common/Args.h"
 #include "lld/Common/Driver.h"
 #include "lld/Common/ErrorHandler.h"
+#include "lld/Common/Filesystem.h"
 #include "lld/Common/Memory.h"
+#include "lld/Common/Threads.h"
 #include "lld/Common/Timer.h"
 #include "lld/Common/Version.h"
 #include "llvm/ADT/Optional.h"
@@ -94,7 +96,7 @@ static std::string getOutputPath(StringRef Path) {
 // FIXME: We could open the file in createFutureForFile and avoid needing to
 // return an error here, but for the moment that would cost us a file descriptor
 // (a limited resource on Windows) for the duration that the future is pending.
-typedef std::pair<std::unique_ptr<MemoryBuffer>, std::error_code> MBErrPair;
+using MBErrPair = std::pair<std::unique_ptr<MemoryBuffer>, std::error_code>;
 
 // Create a std::future that opens and maps a file using the best strategy for
 // the host platform.
@@ -202,7 +204,9 @@ void LinkerDriver::addArchiveBuffer(MemoryBufferRef MB, StringRef SymName,
                                     StringRef ParentName) {
   file_magic Magic = identify_magic(MB.getBuffer());
   if (Magic == file_magic::coff_import_library) {
-    Symtab->addFile(make<ImportFile>(MB));
+    InputFile *Imp = make<ImportFile>(MB);
+    Imp->ParentName = ParentName;
+    Symtab->addFile(Imp);
     return;
   }
 
@@ -263,7 +267,13 @@ static bool isDecorated(StringRef Sym) {
 
 // Parses .drectve section contents and returns a list of files
 // specified by /defaultlib.
-void LinkerDriver::parseDirectives(StringRef S) {
+void LinkerDriver::parseDirectives(InputFile *File) {
+  StringRef S = File->getDirectives();
+  if (S.empty())
+    return;
+
+  log("Directives: " + toString(File) + ": " + S);
+
   ArgParser Parser;
   // .drectve is always tokenized using Windows shell rules.
   // /EXPORT: option can appear too many times, processing in fastpath.
@@ -306,7 +316,7 @@ void LinkerDriver::parseDirectives(StringRef S) {
       Config->Entry = addUndefined(mangle(Arg->getValue()));
       break;
     case OPT_failifmismatch:
-      checkFailIfMismatch(Arg->getValue());
+      checkFailIfMismatch(Arg->getValue(), File);
       break;
     case OPT_incl:
       addUndefined(Arg->getValue());
@@ -987,8 +997,12 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     return;
   }
 
+  lld::ThreadsEnabled = Args.hasFlag(OPT_threads, OPT_threads_no, true);
+
   if (Args.hasArg(OPT_show_timing))
     Config->ShowTiming = true;
+
+  Config->ShowSummary = Args.hasArg(OPT_summary);
 
   ScopedTimer T(Timer::root());
   // Handle --version, which is an lld extension. This option is a bit odd
@@ -1070,6 +1084,9 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
     Config->Debug = true;
     Config->Incremental = true;
   }
+
+  // Handle /demangle
+  Config->Demangle = Args.hasFlag(OPT_demangle, OPT_demangle_no);
 
   // Handle /debugtype
   Config->DebugTypes = parseDebugTypes(Args);
@@ -1268,7 +1285,7 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
 
   // Handle /failifmismatch
   for (auto *Arg : Args.filtered(OPT_failifmismatch))
-    checkFailIfMismatch(Arg->getValue());
+    checkFailIfMismatch(Arg->getValue(), nullptr);
 
   // Handle /merge
   for (auto *Arg : Args.filtered(OPT_merge))
@@ -1418,6 +1435,10 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   }
   Config->Wordsize = Config->is64() ? 8 : 4;
 
+  // Handle /functionpadmin
+  for (auto *Arg : Args.filtered(OPT_functionpadmin, OPT_functionpadmin_opt))
+    parseFunctionPadMin(Arg, Config->Machine);
+
   // Input files can be Windows resource files (.res files). We use
   // WindowsResource to convert resource files to a regular COFF file,
   // then link the resulting file normally.
@@ -1510,6 +1531,12 @@ void LinkerDriver::link(ArrayRef<const char *> ArgsArr) {
   if (Config->OutputFile.empty()) {
     Config->OutputFile =
         getOutputPath((*Args.filtered(OPT_INPUT).begin())->getValue());
+  }
+
+  // Fail early if an output file is not writable.
+  if (auto E = tryCreateFile(Config->OutputFile)) {
+    error("cannot open output file " + Config->OutputFile + ": " + E.message());
+    return;
   }
 
   if (ShouldCreatePDB) {

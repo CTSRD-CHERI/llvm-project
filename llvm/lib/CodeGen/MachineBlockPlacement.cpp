@@ -453,6 +453,8 @@ class MachineBlockPlacement : public MachineFunctionPass {
                   BlockFilterSet *BlockFilter = nullptr);
   bool canMoveBottomBlockToTop(const MachineBasicBlock *BottomBlock,
                                const MachineBasicBlock *OldTop);
+  bool hasViableTopFallthrough(const MachineBasicBlock *Top,
+                               const BlockFilterSet &LoopBlockSet);
   MachineBasicBlock *findBestLoopTop(
       const MachineLoop &L, const BlockFilterSet &LoopBlockSet);
   MachineBasicBlock *findBestLoopExit(
@@ -1811,7 +1813,7 @@ MachineBlockPlacement::findBestLoopTop(const MachineLoop &L,
   // i.e. when the layout predecessor does not fallthrough to the loop header.
   // In practice this never happens though: there always seems to be a preheader
   // that can fallthrough and that is also placed before the header.
-  if (F->getFunction().optForSize())
+  if (F->getFunction().hasOptSize())
     return L.getHeader();
 
   // Check that the header hasn't been fused with a preheader block due to
@@ -1984,6 +1986,39 @@ MachineBlockPlacement::findBestLoopExit(const MachineLoop &L,
   return ExitingBB;
 }
 
+/// Check if there is a fallthrough to loop header Top.
+///
+///   1. Look for a Pred that can be layout before Top.
+///   2. Check if Top is the most possible successor of Pred.
+bool
+MachineBlockPlacement::hasViableTopFallthrough(
+    const MachineBasicBlock *Top,
+    const BlockFilterSet &LoopBlockSet) {
+  for (MachineBasicBlock *Pred : Top->predecessors()) {
+    BlockChain *PredChain = BlockToChain[Pred];
+    if (!LoopBlockSet.count(Pred) &&
+        (!PredChain || Pred == *std::prev(PredChain->end()))) {
+      // Found a Pred block can be placed before Top.
+      // Check if Top is the best successor of Pred.
+      auto TopProb = MBPI->getEdgeProbability(Pred, Top);
+      bool TopOK = true;
+      for (MachineBasicBlock *Succ : Pred->successors()) {
+        auto SuccProb = MBPI->getEdgeProbability(Pred, Succ);
+        BlockChain *SuccChain = BlockToChain[Succ];
+        // Check if Succ can be placed after Pred.
+        // Succ should not be in any chain, or it is the head of some chain.
+        if ((!SuccChain || Succ == *SuccChain->begin()) && SuccProb > TopProb) {
+          TopOK = false;
+          break;
+        }
+      }
+      if (TopOK)
+        return true;
+    }
+  }
+  return false;
+}
+
 /// Attempt to rotate an exiting block to the bottom of the loop.
 ///
 /// Once we have built a chain, try to rotate it to line up the hot exit block
@@ -2003,15 +2038,7 @@ void MachineBlockPlacement::rotateLoop(BlockChain &LoopChain,
   if (Bottom == ExitingBB)
     return;
 
-  bool ViableTopFallthrough = false;
-  for (MachineBasicBlock *Pred : Top->predecessors()) {
-    BlockChain *PredChain = BlockToChain[Pred];
-    if (!LoopBlockSet.count(Pred) &&
-        (!PredChain || Pred == *std::prev(PredChain->end()))) {
-      ViableTopFallthrough = true;
-      break;
-    }
-  }
+  bool ViableTopFallthrough = hasViableTopFallthrough(Top, LoopBlockSet);
 
   // If the header has viable fallthrough, check whether the current loop
   // bottom is a viable exiting block. If so, bail out as rotating will
@@ -2534,8 +2561,8 @@ void MachineBlockPlacement::alignBlocks() {
   // exclusively on the loop info here so that we can align backedges in
   // unnatural CFGs and backedges that were introduced purely because of the
   // loop rotations done during this layout pass.
-  if (F->getFunction().optForMinSize() ||
-      (F->getFunction().optForSize() && !TLI->alignLoopsWithOptSize()))
+  if (F->getFunction().hasMinSize() ||
+      (F->getFunction().hasOptSize() && !TLI->alignLoopsWithOptSize()))
     return;
   BlockChain &FunctionChain = *BlockToChain[&F->front()];
   if (FunctionChain.begin() == FunctionChain.end())
@@ -2810,7 +2837,7 @@ bool MachineBlockPlacement::runOnMachineFunction(MachineFunction &MF) {
 
   if (allowTailDupPlacement()) {
     MPDT = &getAnalysis<MachinePostDominatorTree>();
-    if (MF.getFunction().optForSize())
+    if (MF.getFunction().hasOptSize())
       TailDupSize = 1;
     bool PreRegAlloc = false;
     TailDup.initMF(MF, PreRegAlloc, MBPI, /* LayoutMode */ true, TailDupSize);

@@ -1752,7 +1752,8 @@ void SelectionDAGISel::SelectAllBasicBlocks(const Function &Fn) {
         // to keep track of gc-relocates for a particular gc-statepoint. This is
         // done by SelectionDAGBuilder::LowerAsSTATEPOINT, called before
         // visitGCRelocate.
-        if (isa<CallInst>(Inst) && !isStatepoint(Inst) && !isGCRelocate(Inst)) {
+        if (isa<CallInst>(Inst) && !isStatepoint(Inst) && !isGCRelocate(Inst) &&
+            !isGCResult(Inst)) {
           OptimizationRemarkMissed R("sdagisel", "FastISelFailure",
                                      Inst->getDebugLoc(), LLVMBB);
 
@@ -2788,6 +2789,14 @@ CheckCondCode(const unsigned char *MatcherTable, unsigned &MatcherIndex,
 }
 
 LLVM_ATTRIBUTE_ALWAYS_INLINE static inline bool
+CheckChild2CondCode(const unsigned char *MatcherTable, unsigned &MatcherIndex,
+                    SDValue N) {
+  if (2 >= N.getNumOperands())
+    return false;
+  return ::CheckCondCode(MatcherTable, MatcherIndex, N.getOperand(2));
+}
+
+LLVM_ATTRIBUTE_ALWAYS_INLINE static inline bool
 CheckValueType(const unsigned char *MatcherTable, unsigned &MatcherIndex,
                SDValue N, const TargetLowering *TLI, const DataLayout &DL) {
   MVT::SimpleValueType VT = (MVT::SimpleValueType)MatcherTable[MatcherIndex++];
@@ -2902,6 +2911,9 @@ static unsigned IsPredicateKnownToFail(const unsigned char *Table,
     return Index;
   case SelectionDAGISel::OPC_CheckCondCode:
     Result = !::CheckCondCode(Table, Index, N);
+    return Index;
+  case SelectionDAGISel::OPC_CheckChild2CondCode:
+    Result = !::CheckChild2CondCode(Table, Index, N);
     return Index;
   case SelectionDAGISel::OPC_CheckValueType:
     Result = !::CheckValueType(Table, Index, N, SDISel.TLI,
@@ -3392,6 +3404,9 @@ void SelectionDAGISel::SelectCodeCommon(SDNode *NodeToMatch,
     case OPC_CheckCondCode:
       if (!::CheckCondCode(MatcherTable, MatcherIndex, N)) break;
       continue;
+    case OPC_CheckChild2CondCode:
+      if (!::CheckChild2CondCode(MatcherTable, MatcherIndex, N)) break;
+      continue;
     case OPC_CheckValueType:
       if (!::CheckValueType(MatcherTable, MatcherIndex, N, TLI,
                             CurDAG->getDataLayout()))
@@ -3411,6 +3426,12 @@ void SelectionDAGISel::SelectCodeCommon(SDNode *NodeToMatch,
       continue;
     case OPC_CheckOrImm:
       if (!::CheckOrImm(MatcherTable, MatcherIndex, N, *this)) break;
+      continue;
+    case OPC_CheckImmAllOnesV:
+      if (!ISD::isBuildVectorAllOnes(N.getNode())) break;
+      continue;
+    case OPC_CheckImmAllZerosV:
+      if (!ISD::isBuildVectorAllZeros(N.getNode())) break;
       continue;
 
     case OPC_CheckFoldableChainNode: {

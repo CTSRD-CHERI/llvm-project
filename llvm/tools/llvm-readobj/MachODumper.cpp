@@ -1,4 +1,4 @@
-//===-- MachODump.cpp - Object file dumping utility for llvm --------------===//
+//===- MachODumper.cpp - Object file dumping utility for llvm -------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -661,9 +661,8 @@ void MachODumper::printStackMap() const {
 
   StringRef StackMapContents;
   StackMapSection.getContents(StackMapContents);
-  ArrayRef<uint8_t> StackMapContentsArray(
-      reinterpret_cast<const uint8_t*>(StackMapContents.data()),
-      StackMapContents.size());
+  ArrayRef<uint8_t> StackMapContentsArray =
+      arrayRefFromStringRef(StackMapContents);
 
   if (Obj->isLittleEndian())
     prettyPrintStackMap(

@@ -11,6 +11,7 @@
 #include "Compiler.h"
 #include "Logger.h"
 #include "SourceCode.h"
+#include "Symbol.h"
 #include "Threading.h"
 #include "Trace.h"
 #include "URI.h"
@@ -120,6 +121,7 @@ llvm::SmallString<128> getAbsolutePath(const tooling::CompileCommand &Cmd) {
   } else {
     AbsolutePath = Cmd.Directory;
     llvm::sys::path::append(AbsolutePath, Cmd.Filename);
+    llvm::sys::path::remove_dots(AbsolutePath, true);
   }
   return AbsolutePath;
 }
@@ -372,7 +374,9 @@ void BackgroundIndex::buildIndex() {
     // extra index build.
     reset(
         IndexedSymbols.buildIndex(IndexType::Heavy, DuplicateHandling::Merge));
-    log("BackgroundIndex: rebuilt symbol index.");
+    log("BackgroundIndex: rebuilt symbol index with estimated memory {0} "
+        "bytes.",
+        estimateMemoryUsage());
   }
 }
 
@@ -405,9 +409,8 @@ llvm::Error BackgroundIndex::index(tooling::CompileCommand Cmd,
     return llvm::createStringError(llvm::inconvertibleErrorCode(),
                                    "Couldn't build compiler invocation");
   IgnoreDiagnostics IgnoreDiags;
-  auto Clang = prepareCompilerInstance(
-      std::move(CI), /*Preamble=*/nullptr, std::move(*Buf),
-      std::make_shared<PCHContainerOperations>(), Inputs.FS, IgnoreDiags);
+  auto Clang = prepareCompilerInstance(std::move(CI), /*Preamble=*/nullptr,
+                                       std::move(*Buf), Inputs.FS, IgnoreDiags);
   if (!Clang)
     return llvm::createStringError(llvm::inconvertibleErrorCode(),
                                    "Couldn't build compiler instance");
@@ -601,8 +604,10 @@ BackgroundIndex::loadShards(std::vector<std::string> ChangedFiles) {
     }
   }
   vlog("Loaded all shards");
-  reset(IndexedSymbols.buildIndex(IndexType::Light, DuplicateHandling::Merge));
-
+  reset(IndexedSymbols.buildIndex(IndexType::Heavy, DuplicateHandling::Merge));
+  vlog("BackgroundIndex: built symbol index with estimated memory {0} "
+       "bytes.",
+       estimateMemoryUsage());
   return NeedsReIndexing;
 }
 

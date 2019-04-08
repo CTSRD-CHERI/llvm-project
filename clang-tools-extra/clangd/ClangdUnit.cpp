@@ -32,6 +32,7 @@
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Sema/Sema.h"
 #include "clang/Serialization/ASTWriter.h"
+#include "clang/Serialization/PCHContainerOperations.h"
 #include "clang/Tooling/CompilationDatabase.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
@@ -246,7 +247,6 @@ llvm::Optional<ParsedAST>
 ParsedAST::build(std::unique_ptr<CompilerInvocation> CI,
                  std::shared_ptr<const PreambleData> Preamble,
                  std::unique_ptr<llvm::MemoryBuffer> Buffer,
-                 std::shared_ptr<PCHContainerOperations> PCHs,
                  llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> VFS,
                  const SymbolIndex *Index, const ParseOptions &Opts) {
   assert(CI);
@@ -259,9 +259,8 @@ ParsedAST::build(std::unique_ptr<CompilerInvocation> CI,
   StoreDiags ASTDiags;
   std::string Content = Buffer->getBuffer();
 
-  auto Clang =
-      prepareCompilerInstance(std::move(CI), PreamblePCH, std::move(Buffer),
-                              std::move(PCHs), VFS, ASTDiags);
+  auto Clang = prepareCompilerInstance(std::move(CI), PreamblePCH,
+                                       std::move(Buffer), VFS, ASTDiags);
   if (!Clang)
     return None;
 
@@ -295,10 +294,11 @@ ParsedAST::build(std::unique_ptr<CompilerInvocation> CI,
     CTContext->setASTContext(&Clang->getASTContext());
     CTContext->setCurrentFile(MainInput.getFile());
     CTFactories.createChecks(CTContext.getPointer(), CTChecks);
+    Preprocessor *PP = &Clang->getPreprocessor();
     for (const auto &Check : CTChecks) {
       // FIXME: the PP callbacks skip the entire preamble.
       // Checks that want to see #includes in the main file do not see them.
-      Check->registerPPCallbacks(*Clang);
+      Check->registerPPCallbacks(Clang->getSourceManager(), PP, PP);
       Check->registerMatchers(&CTFinder);
     }
   }
@@ -372,6 +372,10 @@ ParsedAST::build(std::unique_ptr<CompilerInvocation> CI,
   Clang->getPreprocessor().EndSourceFile();
 
   std::vector<Diag> Diags = ASTDiags.take();
+  // Populate diagnostic source.
+  for (auto &D : Diags)
+    D.S =
+        !CTContext->getCheckName(D.ID).empty() ? Diag::ClangTidy : Diag::Clang;
   // Add diagnostics from the preamble, if any.
   if (Preamble)
     Diags.insert(Diags.begin(), Preamble->Diags.begin(), Preamble->Diags.end());
@@ -483,8 +487,7 @@ std::shared_ptr<const PreambleData>
 buildPreamble(PathRef FileName, CompilerInvocation &CI,
               std::shared_ptr<const PreambleData> OldPreamble,
               const tooling::CompileCommand &OldCompileCommand,
-              const ParseInputs &Inputs,
-              std::shared_ptr<PCHContainerOperations> PCHs, bool StoreInMemory,
+              const ParseInputs &Inputs, bool StoreInMemory,
               PreambleParsedCallback PreambleCallback) {
   // Note that we don't need to copy the input contents, preamble can live
   // without those.
@@ -529,7 +532,8 @@ buildPreamble(PathRef FileName, CompilerInvocation &CI,
   auto StatCache = llvm::make_unique<PreambleFileStatusCache>(AbsFileName);
   auto BuiltPreamble = PrecompiledPreamble::Build(
       CI, ContentsBuffer.get(), Bounds, *PreambleDiagsEngine,
-      StatCache->getProducingFS(Inputs.FS), PCHs, StoreInMemory,
+      StatCache->getProducingFS(Inputs.FS),
+      std::make_shared<PCHContainerOperations>(), StoreInMemory,
       SerializedDeclsCollector);
 
   // When building the AST for the main file, we do want the function
@@ -539,8 +543,11 @@ buildPreamble(PathRef FileName, CompilerInvocation &CI,
   if (BuiltPreamble) {
     vlog("Built preamble of size {0} for file {1}", BuiltPreamble->getSize(),
          FileName);
+    std::vector<Diag> Diags = PreambleDiagnostics.take();
+    for (auto &Diag : Diags)
+      Diag.S = Diag::Clang;
     return std::make_shared<PreambleData>(
-        std::move(*BuiltPreamble), PreambleDiagnostics.take(),
+        std::move(*BuiltPreamble), std::move(Diags),
         SerializedDeclsCollector.takeIncludes(), std::move(StatCache),
         SerializedDeclsCollector.takeCanonicalIncludes());
   } else {
@@ -552,8 +559,7 @@ buildPreamble(PathRef FileName, CompilerInvocation &CI,
 llvm::Optional<ParsedAST>
 buildAST(PathRef FileName, std::unique_ptr<CompilerInvocation> Invocation,
          const ParseInputs &Inputs,
-         std::shared_ptr<const PreambleData> Preamble,
-         std::shared_ptr<PCHContainerOperations> PCHs) {
+         std::shared_ptr<const PreambleData> Preamble) {
   trace::Span Tracer("BuildAST");
   SPAN_ATTACH(Tracer, "File", FileName);
 
@@ -569,7 +575,7 @@ buildAST(PathRef FileName, std::unique_ptr<CompilerInvocation> Invocation,
   return ParsedAST::build(llvm::make_unique<CompilerInvocation>(*Invocation),
                           Preamble,
                           llvm::MemoryBuffer::getMemBufferCopy(Inputs.Contents),
-                          PCHs, std::move(VFS), Inputs.Index, Inputs.Opts);
+                          std::move(VFS), Inputs.Index, Inputs.Opts);
 }
 
 SourceLocation getBeginningOfIdentifier(ParsedAST &Unit, const Position &Pos,

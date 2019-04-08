@@ -1176,7 +1176,8 @@ unsigned ARMBaseInstrInfo::isStoreToStackSlot(const MachineInstr &MI,
 unsigned ARMBaseInstrInfo::isStoreToStackSlotPostFE(const MachineInstr &MI,
                                                     int &FrameIndex) const {
   SmallVector<const MachineMemOperand *, 1> Accesses;
-  if (MI.mayStore() && hasStoreToStackSlot(MI, Accesses)) {
+  if (MI.mayStore() && hasStoreToStackSlot(MI, Accesses) &&
+      Accesses.size() == 1) {
     FrameIndex =
         cast<FixedStackPseudoSourceValue>(Accesses.front()->getPseudoValue())
             ->getFrameIndex();
@@ -1396,7 +1397,8 @@ unsigned ARMBaseInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
 unsigned ARMBaseInstrInfo::isLoadFromStackSlotPostFE(const MachineInstr &MI,
                                                      int &FrameIndex) const {
   SmallVector<const MachineMemOperand *, 1> Accesses;
-  if (MI.mayLoad() && hasLoadFromStackSlot(MI, Accesses)) {
+  if (MI.mayLoad() && hasLoadFromStackSlot(MI, Accesses) &&
+      Accesses.size() == 1) {
     FrameIndex =
         cast<FixedStackPseudoSourceValue>(Accesses.front()->getPseudoValue())
             ->getFrameIndex();
@@ -1897,7 +1899,7 @@ isProfitableToIfCvt(MachineBasicBlock &MBB,
   // If we are optimizing for size, see if the branch in the predecessor can be
   // lowered to cbn?z by the constant island lowering pass, and return false if
   // so. This results in a shorter instruction sequence.
-  if (MBB.getParent()->getFunction().optForSize()) {
+  if (MBB.getParent()->getFunction().hasOptSize()) {
     MachineBasicBlock *Pred = *MBB.pred_begin();
     if (!Pred->empty()) {
       MachineInstr *LastMI = &*Pred->rbegin();
@@ -2265,7 +2267,7 @@ bool llvm::tryFoldSPUpdateIntoPushPop(const ARMSubtarget &Subtarget,
                                       unsigned NumBytes) {
   // This optimisation potentially adds lots of load and store
   // micro-operations, it's only really a great benefit to code-size.
-  if (!Subtarget.optForMinSize())
+  if (!Subtarget.hasMinSize())
     return false;
 
   // If only one register is pushed/popped, LLVM can use an LDR/STR
@@ -2331,6 +2333,8 @@ bool llvm::tryFoldSPUpdateIntoPushPop(const ARMSubtarget &Subtarget,
   for (int CurRegEnc = FirstRegEnc - 1; CurRegEnc >= 0 && RegsNeeded;
        --CurRegEnc) {
     unsigned CurReg = RegClass->getRegister(CurRegEnc);
+    if (IsT1PushPop && CurReg > ARM::R7)
+      continue;
     if (!IsPop) {
       // Pushing any register is completely harmless, mark the register involved
       // as undef since we don't care about its value and must not restore it
@@ -2542,6 +2546,7 @@ bool ARMBaseInstrInfo::analyzeCompare(const MachineInstr &MI, unsigned &SrcReg,
     return true;
   case ARM::CMPrr:
   case ARM::t2CMPrr:
+  case ARM::tCMPr:
     SrcReg = MI.getOperand(0).getReg();
     SrcReg2 = MI.getOperand(1).getReg();
     CmpMask = ~0;
@@ -2618,28 +2623,62 @@ inline static ARMCC::CondCodes getCmpToAddCondition(ARMCC::CondCodes CC) {
 /// This function can be extended later on.
 inline static bool isRedundantFlagInstr(const MachineInstr *CmpI,
                                         unsigned SrcReg, unsigned SrcReg2,
-                                        int ImmValue, const MachineInstr *OI) {
+                                        int ImmValue, const MachineInstr *OI,
+                                        bool &IsThumb1) {
   if ((CmpI->getOpcode() == ARM::CMPrr || CmpI->getOpcode() == ARM::t2CMPrr) &&
       (OI->getOpcode() == ARM::SUBrr || OI->getOpcode() == ARM::t2SUBrr) &&
       ((OI->getOperand(1).getReg() == SrcReg &&
         OI->getOperand(2).getReg() == SrcReg2) ||
        (OI->getOperand(1).getReg() == SrcReg2 &&
-        OI->getOperand(2).getReg() == SrcReg)))
+        OI->getOperand(2).getReg() == SrcReg))) {
+    IsThumb1 = false;
     return true;
+  }
+
+  if (CmpI->getOpcode() == ARM::tCMPr && OI->getOpcode() == ARM::tSUBrr &&
+      ((OI->getOperand(2).getReg() == SrcReg &&
+        OI->getOperand(3).getReg() == SrcReg2) ||
+       (OI->getOperand(2).getReg() == SrcReg2 &&
+        OI->getOperand(3).getReg() == SrcReg))) {
+    IsThumb1 = true;
+    return true;
+  }
 
   if ((CmpI->getOpcode() == ARM::CMPri || CmpI->getOpcode() == ARM::t2CMPri) &&
       (OI->getOpcode() == ARM::SUBri || OI->getOpcode() == ARM::t2SUBri) &&
       OI->getOperand(1).getReg() == SrcReg &&
-      OI->getOperand(2).getImm() == ImmValue)
+      OI->getOperand(2).getImm() == ImmValue) {
+    IsThumb1 = false;
     return true;
+  }
+
+  if (CmpI->getOpcode() == ARM::tCMPi8 &&
+      (OI->getOpcode() == ARM::tSUBi8 || OI->getOpcode() == ARM::tSUBi3) &&
+      OI->getOperand(2).getReg() == SrcReg &&
+      OI->getOperand(3).getImm() == ImmValue) {
+    IsThumb1 = true;
+    return true;
+  }
 
   if ((CmpI->getOpcode() == ARM::CMPrr || CmpI->getOpcode() == ARM::t2CMPrr) &&
       (OI->getOpcode() == ARM::ADDrr || OI->getOpcode() == ARM::t2ADDrr ||
        OI->getOpcode() == ARM::ADDri || OI->getOpcode() == ARM::t2ADDri) &&
       OI->getOperand(0).isReg() && OI->getOperand(1).isReg() &&
       OI->getOperand(0).getReg() == SrcReg &&
-      OI->getOperand(1).getReg() == SrcReg2)
+      OI->getOperand(1).getReg() == SrcReg2) {
+    IsThumb1 = false;
     return true;
+  }
+
+  if (CmpI->getOpcode() == ARM::tCMPr &&
+      (OI->getOpcode() == ARM::tADDi3 || OI->getOpcode() == ARM::tADDi8 ||
+       OI->getOpcode() == ARM::tADDrr) &&
+      OI->getOperand(0).getReg() == SrcReg &&
+      OI->getOperand(2).getReg() == SrcReg2) {
+    IsThumb1 = true;
+    return true;
+  }
+
   return false;
 }
 
@@ -2657,6 +2696,17 @@ static bool isOptimizeCompareCandidate(MachineInstr *MI, bool &IsThumb1) {
   case ARM::tSUBi3:
   case ARM::tSUBi8:
   case ARM::tMUL:
+  case ARM::tADC:
+  case ARM::tSBC:
+  case ARM::tRSB:
+  case ARM::tAND:
+  case ARM::tORR:
+  case ARM::tEOR:
+  case ARM::tBIC:
+  case ARM::tMVN:
+  case ARM::tASRri:
+  case ARM::tASRrr:
+  case ARM::tROR:
     IsThumb1 = true;
     LLVM_FALLTHROUGH;
   case ARM::RSBrr:
@@ -2756,7 +2806,8 @@ bool ARMBaseInstrInfo::optimizeCompareInstr(
     // For CMPri w/ CmpValue != 0, a SubAdd may still be a candidate.
     // Thus we cannot return here.
     if (CmpInstr.getOpcode() == ARM::CMPri ||
-        CmpInstr.getOpcode() == ARM::t2CMPri)
+        CmpInstr.getOpcode() == ARM::t2CMPri ||
+        CmpInstr.getOpcode() == ARM::tCMPi8)
       MI = nullptr;
     else
       return false;
@@ -2778,20 +2829,22 @@ bool ARMBaseInstrInfo::optimizeCompareInstr(
   // CMP. This peephole works on the vregs, so is still in SSA form. As a
   // consequence, the movs won't redefine/kill the MUL operands which would
   // make this reordering illegal.
+  const TargetRegisterInfo *TRI = &getRegisterInfo();
   if (MI && IsThumb1) {
     --I;
-    bool CanReorder = true;
-    const bool HasStmts = I != E;
-    for (; I != E; --I) {
-      if (I->getOpcode() != ARM::tMOVi8) {
-        CanReorder = false;
-        break;
+    if (I != E && !MI->readsRegister(ARM::CPSR, TRI)) {
+      bool CanReorder = true;
+      for (; I != E; --I) {
+        if (I->getOpcode() != ARM::tMOVi8) {
+          CanReorder = false;
+          break;
+        }
       }
-    }
-    if (HasStmts && CanReorder) {
-      MI = MI->removeFromParent();
-      E = CmpInstr;
-      CmpInstr.getParent()->insert(E, MI);
+      if (CanReorder) {
+        MI = MI->removeFromParent();
+        E = CmpInstr;
+        CmpInstr.getParent()->insert(E, MI);
+      }
     }
     I = CmpInstr;
     E = MI;
@@ -2799,12 +2852,13 @@ bool ARMBaseInstrInfo::optimizeCompareInstr(
 
   // Check that CPSR isn't set between the comparison instruction and the one we
   // want to change. At the same time, search for SubAdd.
-  const TargetRegisterInfo *TRI = &getRegisterInfo();
+  bool SubAddIsThumb1 = false;
   do {
     const MachineInstr &Instr = *--I;
 
     // Check whether CmpInstr can be made redundant by the current instruction.
-    if (isRedundantFlagInstr(&CmpInstr, SrcReg, SrcReg2, CmpValue, &Instr)) {
+    if (isRedundantFlagInstr(&CmpInstr, SrcReg, SrcReg2, CmpValue, &Instr,
+                             SubAddIsThumb1)) {
       SubAdd = &*I;
       break;
     }
@@ -2819,7 +2873,15 @@ bool ARMBaseInstrInfo::optimizeCompareInstr(
       // change. We can't do this transformation.
       return false;
 
-  } while (I != B);
+    if (I == B) {
+      // In some cases, we scan the use-list of an instruction for an AND;
+      // that AND is in the same BB, but may not be scheduled before the
+      // corresponding TST.  In that case, bail out.
+      //
+      // FIXME: We could try to reschedule the AND.
+      return false;
+    }
+  } while (true);
 
   // Return false if no candidates exist.
   if (!MI && !SubAdd)
@@ -2828,7 +2890,7 @@ bool ARMBaseInstrInfo::optimizeCompareInstr(
   // If we found a SubAdd, use it as it will be closer to the CMP
   if (SubAdd) {
     MI = SubAdd;
-    IsThumb1 = false;
+    IsThumb1 = SubAddIsThumb1;
   }
 
   // We can't use a predicated instruction - it doesn't always write the flags.
@@ -2897,9 +2959,13 @@ bool ARMBaseInstrInfo::optimizeCompareInstr(
         // operands will be modified.
         unsigned Opc = SubAdd->getOpcode();
         bool IsSub = Opc == ARM::SUBrr || Opc == ARM::t2SUBrr ||
-                     Opc == ARM::SUBri || Opc == ARM::t2SUBri;
-        if (!IsSub || (SrcReg2 != 0 && SubAdd->getOperand(1).getReg() == SrcReg2 &&
-                       SubAdd->getOperand(2).getReg() == SrcReg)) {
+                     Opc == ARM::SUBri || Opc == ARM::t2SUBri ||
+                     Opc == ARM::tSUBrr || Opc == ARM::tSUBi3 ||
+                     Opc == ARM::tSUBi8;
+        unsigned OpI = Opc != ARM::tSUBrr ? 1 : 2;
+        if (!IsSub ||
+            (SrcReg2 != 0 && SubAdd->getOperand(OpI).getReg() == SrcReg2 &&
+             SubAdd->getOperand(OpI + 1).getReg() == SrcReg)) {
           // VSel doesn't support condition code update.
           if (IsInstrVSel)
             return false;
@@ -2977,9 +3043,10 @@ bool ARMBaseInstrInfo::shouldSink(const MachineInstr &MI) const {
   ++Next;
   unsigned SrcReg, SrcReg2;
   int CmpMask, CmpValue;
+  bool IsThumb1;
   if (Next != MI.getParent()->end() &&
       analyzeCompare(*Next, SrcReg, SrcReg2, CmpMask, CmpValue) &&
-      isRedundantFlagInstr(&*Next, SrcReg, SrcReg2, CmpValue, &MI))
+      isRedundantFlagInstr(&*Next, SrcReg, SrcReg2, CmpValue, &MI, IsThumb1))
     return false;
   return true;
 }
@@ -3370,7 +3437,12 @@ unsigned ARMBaseInstrInfo::getNumLDMAddresses(const MachineInstr &MI) const {
        I != E; ++I) {
     Size += (*I)->getSize();
   }
-  return Size / 4;
+  // FIXME: The scheduler currently can't handle values larger than 16. But
+  // the values can actually go up to 32 for floating-point load/store
+  // multiple (VLDMIA etc.). Also, the way this code is reasoning about memory
+  // operations isn't right; we could end up with "extra" memory operands for
+  // various reasons, like tail merge merging two memory operations.
+  return std::min(Size / 4, 16U);
 }
 
 static unsigned getNumMicroOpsSingleIssuePlusExtras(unsigned Opc,
@@ -4091,7 +4163,7 @@ int ARMBaseInstrInfo::getOperandLatencyImpl(
     // instructions).
     if (Latency > 0 && Subtarget.isThumb2()) {
       const MachineFunction *MF = DefMI.getParent()->getParent();
-      // FIXME: Use Function::optForSize().
+      // FIXME: Use Function::hasOptSize().
       if (MF->getFunction().hasFnAttribute(Attribute::OptimizeForSize))
         --Latency;
     }
@@ -4514,6 +4586,31 @@ bool ARMBaseInstrInfo::verifyInstruction(const MachineInstr &MI,
   if (convertAddSubFlagsOpcode(MI.getOpcode())) {
     ErrInfo = "Pseudo flag setting opcodes only exist in Selection DAG";
     return false;
+  }
+  if (MI.getOpcode() == ARM::tMOVr && !Subtarget.hasV6Ops()) {
+    // Make sure we don't generate a lo-lo mov that isn't supported.
+    if (!ARM::hGPRRegClass.contains(MI.getOperand(0).getReg()) &&
+        !ARM::hGPRRegClass.contains(MI.getOperand(1).getReg())) {
+      ErrInfo = "Non-flag-setting Thumb1 mov is v6-only";
+      return false;
+    }
+  }
+  if (MI.getOpcode() == ARM::tPUSH ||
+      MI.getOpcode() == ARM::tPOP ||
+      MI.getOpcode() == ARM::tPOP_RET) {
+    for (int i = 2, e = MI.getNumOperands(); i < e; ++i) {
+      if (MI.getOperand(i).isImplicit() ||
+          !MI.getOperand(i).isReg())
+        continue;
+      unsigned Reg = MI.getOperand(i).getReg();
+      if (Reg < ARM::R0 || Reg > ARM::R7) {
+        if (!(MI.getOpcode() == ARM::tPUSH && Reg == ARM::LR) &&
+            !(MI.getOpcode() == ARM::tPOP_RET && Reg == ARM::PC)) {
+          ErrInfo = "Unsupported register in Thumb1 push/pop";
+          return false;
+        }
+      }
+    }
   }
   return true;
 }

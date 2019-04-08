@@ -59,11 +59,11 @@ public:
 
   void EmitEndOfAsmFile(Module &M) override;
   void EmitProducerInfo(Module &M);
+  void EmitTargetFeatures(Module &M);
   void EmitJumpTableInfo() override;
   void EmitConstantPool() override;
   void EmitFunctionBodyStart() override;
   void EmitInstruction(const MachineInstr *MI) override;
-  const MCExpr *lowerConstant(const Constant *CV) override;
   bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
                        unsigned AsmVariant, const char *ExtraCode,
                        raw_ostream &OS) override;

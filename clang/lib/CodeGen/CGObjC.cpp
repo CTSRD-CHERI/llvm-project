@@ -14,6 +14,7 @@
 #include "CGObjCRuntime.h"
 #include "CodeGenFunction.h"
 #include "CodeGenModule.h"
+#include "ConstantEmitter.h"
 #include "TargetInfo.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/DeclObjC.h"
@@ -60,7 +61,12 @@ CodeGenFunction::EmitObjCBoxedExpr(const ObjCBoxedExpr *E) {
   // Get the method.
   const ObjCMethodDecl *BoxingMethod = E->getBoxingMethod();
   const Expr *SubExpr = E->getSubExpr();
-  assert(BoxingMethod && "BoxingMethod is null");
+
+  if (E->isExpressibleAsConstantInitializer()) {
+    ConstantEmitter ConstEmitter(CGM);
+    return ConstEmitter.tryEmitAbstract(E, E->getType());
+  }
+
   assert(BoxingMethod->isClassMethod() && "BoxingMethod must be a class method");
   Selector Sel = BoxingMethod->getSelector();
 
@@ -433,8 +439,9 @@ tryEmitSpecializedAllocInit(CodeGenFunction &CGF, const ObjCMessageExpr *OME) {
 
   // Match the exact pattern '[[MyClass alloc] init]'.
   Selector Sel = OME->getSelector();
-  if (!OME->isInstanceMessage() || !OME->getType()->isObjCObjectPointerType() ||
-      !Sel.isUnarySelector() || Sel.getNameForSlot(0) != "init")
+  if (OME->getReceiverKind() != ObjCMessageExpr::Instance ||
+      !OME->getType()->isObjCObjectPointerType() || !Sel.isUnarySelector() ||
+      Sel.getNameForSlot(0) != "init")
     return None;
 
   // Okay, this is '[receiver init]', check if 'receiver' is '[cls alloc]'.
@@ -1955,10 +1962,10 @@ static void setARCRuntimeFunctionLinkage(CodeGenModule &CGM,
 /// Perform an operation having the signature
 ///   i8* (i8*)
 /// where a null input causes a no-op and returns null.
-static llvm::Value *
-emitARCValueOperation(CodeGenFunction &CGF, llvm::Value *value,
-                      llvm::Type *returnType, llvm::Function *&fn,
-                      llvm::Intrinsic::ID IntID, bool isTailCall = false) {
+static llvm::Value *emitARCValueOperation(
+    CodeGenFunction &CGF, llvm::Value *value, llvm::Type *returnType,
+    llvm::Function *&fn, llvm::Intrinsic::ID IntID,
+    llvm::CallInst::TailCallKind tailKind = llvm::CallInst::TCK_None) {
   if (isa<llvm::ConstantPointerNull>(value))
     return value;
 
@@ -1973,8 +1980,7 @@ emitARCValueOperation(CodeGenFunction &CGF, llvm::Value *value,
 
   // Call the function.
   llvm::CallInst *call = CGF.EmitNounwindRuntimeCall(fn, value);
-  if (isTailCall)
-    call->setTailCall();
+  call->setTailCallKind(tailKind);
 
   // Cast the result back to the original type.
   return CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(call, origType);
@@ -2184,9 +2190,15 @@ static void emitAutoreleasedReturnValueMarker(CodeGenFunction &CGF) {
 llvm::Value *
 CodeGenFunction::EmitARCRetainAutoreleasedReturnValue(llvm::Value *value) {
   emitAutoreleasedReturnValueMarker(*this);
-  return emitARCValueOperation(*this, value, nullptr,
-              CGM.getObjCEntrypoints().objc_retainAutoreleasedReturnValue,
-                           llvm::Intrinsic::objc_retainAutoreleasedReturnValue);
+  llvm::CallInst::TailCallKind tailKind =
+      CGM.getTargetCodeGenInfo()
+              .shouldSuppressTailCallsOfRetainAutoreleasedReturnValue()
+          ? llvm::CallInst::TCK_NoTail
+          : llvm::CallInst::TCK_None;
+  return emitARCValueOperation(
+      *this, value, nullptr,
+      CGM.getObjCEntrypoints().objc_retainAutoreleasedReturnValue,
+      llvm::Intrinsic::objc_retainAutoreleasedReturnValue, tailKind);
 }
 
 /// Claim a possibly-autoreleased return value at +0.  This is only
@@ -2323,7 +2335,7 @@ CodeGenFunction::EmitARCAutoreleaseReturnValue(llvm::Value *value) {
   return emitARCValueOperation(*this, value, nullptr,
                             CGM.getObjCEntrypoints().objc_autoreleaseReturnValue,
                                llvm::Intrinsic::objc_autoreleaseReturnValue,
-                               /*isTailCall*/ true);
+                               llvm::CallInst::TCK_Tail);
 }
 
 /// Do a fused retain/autorelease of the given object.
@@ -2333,7 +2345,7 @@ CodeGenFunction::EmitARCRetainAutoreleaseReturnValue(llvm::Value *value) {
   return emitARCValueOperation(*this, value, nullptr,
                      CGM.getObjCEntrypoints().objc_retainAutoreleaseReturnValue,
                              llvm::Intrinsic::objc_retainAutoreleaseReturnValue,
-                               /*isTailCall*/ true);
+                               llvm::CallInst::TCK_Tail);
 }
 
 /// Do a fused retain/autorelease of the given object.
@@ -2874,6 +2886,7 @@ public:
   Result visit(const Expr *e);
   Result visitCastExpr(const CastExpr *e);
   Result visitPseudoObjectExpr(const PseudoObjectExpr *e);
+  Result visitBlockExpr(const BlockExpr *e);
   Result visitBinaryOperator(const BinaryOperator *e);
   Result visitBinAssign(const BinaryOperator *e);
   Result visitBinAssignUnsafeUnretained(const BinaryOperator *e);
@@ -2947,6 +2960,12 @@ ARCExprEmitter<Impl,Result>::visitPseudoObjectExpr(const PseudoObjectExpr *E) {
     opaques[i].unbind(CGF);
 
   return result;
+}
+
+template <typename Impl, typename Result>
+Result ARCExprEmitter<Impl, Result>::visitBlockExpr(const BlockExpr *e) {
+  // The default implementation just forwards the expression to visitExpr.
+  return asImpl().visitExpr(e);
 }
 
 template <typename Impl, typename Result>
@@ -3092,7 +3111,8 @@ Result ARCExprEmitter<Impl,Result>::visit(const Expr *e) {
   // Look through pseudo-object expressions.
   } else if (const PseudoObjectExpr *pseudo = dyn_cast<PseudoObjectExpr>(e)) {
     return asImpl().visitPseudoObjectExpr(pseudo);
-  }
+  } else if (auto *be = dyn_cast<BlockExpr>(e))
+    return asImpl().visitBlockExpr(be);
 
   return asImpl().visitExpr(e);
 }
@@ -3125,6 +3145,15 @@ struct ARCRetainExprEmitter :
   TryEmitResult visitConsumeObject(const Expr *e) {
     llvm::Value *result = CGF.EmitScalarExpr(e);
     return TryEmitResult(result, true);
+  }
+
+  TryEmitResult visitBlockExpr(const BlockExpr *e) {
+    TryEmitResult result = visitExpr(e);
+    // Avoid the block-retain if this is a block literal that doesn't need to be
+    // copied to the heap.
+    if (e->getBlockDecl()->canAvoidCopyToHeap())
+      result.setInt(true);
+    return result;
   }
 
   /// Block extends are net +0.  Naively, we could just recurse on

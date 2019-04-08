@@ -403,8 +403,7 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
       // FIXME: We should find a more generic solution to this problem.
       !(State.Column <= NewLineColumn &&
         Style.Language == FormatStyle::LK_JavaScript) &&
-      !(Previous.closesScopeAfterBlock() &&
-        State.Column <= NewLineColumn))
+      !(Previous.closesScopeAfterBlock() && State.Column <= NewLineColumn))
     return true;
 
   // If the template declaration spans multiple lines, force wrap before the
@@ -419,7 +418,8 @@ bool ContinuationIndenter::mustBreak(const LineState &State) {
   if (Style.AlwaysBreakBeforeMultilineStrings &&
       (NewLineColumn == State.FirstIndent + Style.ContinuationIndentWidth ||
        Previous.is(tok::comma) || Current.NestingLevel < 2) &&
-      !Previous.isOneOf(tok::kw_return, tok::lessless, tok::at) &&
+      !Previous.isOneOf(tok::kw_return, tok::lessless, tok::at,
+                        Keywords.kw_dollar) &&
       !Previous.isOneOf(TT_InlineASMColon, TT_ConditionalExpr) &&
       nextIsMultilineString(State))
     return true;
@@ -835,8 +835,8 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
       // about removing empty lines on closing blocks. Special case them here.
       MaxEmptyLinesToKeep = 1;
     }
-    unsigned Newlines = std::max(
-        1u, std::min(Current.NewlinesBefore, MaxEmptyLinesToKeep));
+    unsigned Newlines =
+        std::max(1u, std::min(Current.NewlinesBefore, MaxEmptyLinesToKeep));
     bool ContinuePPDirective =
         State.Line->InPPDirective && State.Line->Type != LT_ImportStatement;
     Whitespaces.replaceWhitespace(Current, Newlines, State.Column, State.Column,
@@ -881,14 +881,30 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
     State.Stack.back().BreakBeforeClosingBrace = true;
 
   if (State.Stack.back().AvoidBinPacking) {
-    // If we are breaking after '(', '{', '<', this is not bin packing
-    // unless AllowAllParametersOfDeclarationOnNextLine is false or this is a
-    // dict/object literal.
-    if (!Previous.isOneOf(tok::l_paren, tok::l_brace, TT_BinaryOperator) ||
+    // If we are breaking after '(', '{', '<', or this is the break after a ':'
+    // to start a member initializater list in a constructor, this should not
+    // be considered bin packing unless the relevant AllowAll option is false or
+    // this is a dict/object literal.
+    bool PreviousIsBreakingCtorInitializerColon =
+        Previous.is(TT_CtorInitializerColon) &&
+        Style.BreakConstructorInitializers == FormatStyle::BCIS_AfterColon;
+    if (!(Previous.isOneOf(tok::l_paren, tok::l_brace, TT_BinaryOperator) ||
+          PreviousIsBreakingCtorInitializerColon) ||
         (!Style.AllowAllParametersOfDeclarationOnNextLine &&
          State.Line->MustBeDeclaration) ||
+        (!Style.AllowAllArgumentsOnNextLine &&
+         !State.Line->MustBeDeclaration) ||
+        (!Style.AllowAllConstructorInitializersOnNextLine &&
+         PreviousIsBreakingCtorInitializerColon) ||
         Previous.is(TT_DictLiteral))
       State.Stack.back().BreakBeforeParameter = true;
+
+    // If we are breaking after a ':' to start a member initializer list,
+    // and we allow all arguments on the next line, we should not break
+    // before the next parameter.
+    if (PreviousIsBreakingCtorInitializerColon &&
+        Style.AllowAllConstructorInitializersOnNextLine)
+      State.Stack.back().BreakBeforeParameter = false;
   }
 
   return Penalty;
@@ -1041,7 +1057,7 @@ unsigned ContinuationIndenter::getNewLineColumn(const LineState &State) {
   if (Current.is(TT_ProtoExtensionLSquare))
     return State.Stack.back().Indent;
   if (State.Stack.back().Indent == State.FirstIndent && PreviousNonComment &&
-      PreviousNonComment->isNot(tok::r_brace))
+      !PreviousNonComment->isOneOf(tok::r_brace, TT_CtorInitializerComma))
     // Ensure that we fall back to the continuation indent width instead of
     // just flushing continuations left.
     return State.Stack.back().Indent + Style.ContinuationIndentWidth;
@@ -1102,9 +1118,13 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
              ? 0
              : 2);
     State.Stack.back().NestedBlockIndent = State.Stack.back().Indent;
-    if (Style.ConstructorInitializerAllOnOneLineOrOnePerLine)
+    if (Style.ConstructorInitializerAllOnOneLineOrOnePerLine) {
       State.Stack.back().AvoidBinPacking = true;
-    State.Stack.back().BreakBeforeParameter = false;
+      State.Stack.back().BreakBeforeParameter =
+          !Style.AllowAllConstructorInitializersOnNextLine;
+    } else {
+      State.Stack.back().BreakBeforeParameter = false;
+    }
   }
   if (Current.is(TT_CtorInitializerColon) &&
       Style.BreakConstructorInitializers == FormatStyle::BCIS_AfterColon) {
@@ -1159,6 +1179,8 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
 
   if (Current.is(TT_ObjCStringLiteral) && State.StartOfStringLiteral == 0)
     State.StartOfStringLiteral = State.Column + 1;
+  if (Current.is(TT_CSharpStringLiteral) && State.StartOfStringLiteral == 0)
+    State.StartOfStringLiteral = State.Column + 1;
   else if (Current.isStringLiteral() && State.StartOfStringLiteral == 0)
     State.StartOfStringLiteral = State.Column;
   else if (!Current.isOneOf(tok::comment, tok::identifier, tok::hash) &&
@@ -1168,8 +1190,7 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
   State.Column += Current.ColumnWidth;
   State.NextToken = State.NextToken->Next;
 
-  unsigned Penalty =
-      handleEndOfLine(Current, State, DryRun, AllowBreak);
+  unsigned Penalty = handleEndOfLine(Current, State, DryRun, AllowBreak);
 
   if (Current.Role)
     Current.Role->formatFromToken(State, this, DryRun);
@@ -1530,9 +1551,8 @@ unsigned ContinuationIndenter::reformatRawStringLiteral(
   //     that raw string prefix starts, and
   //   - if the raw string prefix does not start on a newline, it is the current
   //     indent.
-  unsigned LastStartColumn = Current.NewlinesBefore
-                                 ? FirstStartColumn - NewPrefixSize
-                                 : CurrentIndent;
+  unsigned LastStartColumn =
+      Current.NewlinesBefore ? FirstStartColumn - NewPrefixSize : CurrentIndent;
 
   std::pair<tooling::Replacements, unsigned> Fixes = internal::reformat(
       RawStringStyle, RawText, {tooling::Range(0, RawText.size())},
@@ -1589,8 +1609,9 @@ unsigned ContinuationIndenter::reformatRawStringLiteral(
   // have to manually add the penalty for the prefix R"delim( over the column
   // limit.
   unsigned PrefixExcessCharacters =
-      StartColumn + NewPrefixSize > Style.ColumnLimit ?
-      StartColumn + NewPrefixSize - Style.ColumnLimit : 0;
+      StartColumn + NewPrefixSize > Style.ColumnLimit
+          ? StartColumn + NewPrefixSize - Style.ColumnLimit
+          : 0;
   bool IsMultiline =
       ContentStartsOnNewline || (NewCode->find('\n') != std::string::npos);
   if (IsMultiline) {
@@ -1708,16 +1729,17 @@ ContinuationIndenter::getRawStringStyle(const FormatToken &Current,
   return RawStringStyle;
 }
 
-std::unique_ptr<BreakableToken> ContinuationIndenter::createBreakableToken(
-    const FormatToken &Current, LineState &State, bool AllowBreak) {
+std::unique_ptr<BreakableToken>
+ContinuationIndenter::createBreakableToken(const FormatToken &Current,
+                                           LineState &State, bool AllowBreak) {
   unsigned StartColumn = State.Column - Current.ColumnWidth;
   if (Current.isStringLiteral()) {
-    // FIXME: String literal breaking is currently disabled for Java and JS, as
-    // it requires strings to be merged using "+" which we don't support.
+    // FIXME: String literal breaking is currently disabled for C#,Java and
+    // JavaScript, as it requires strings to be merged using "+" which we
+    // don't support.
     if (Style.Language == FormatStyle::LK_Java ||
-        Style.Language == FormatStyle::LK_JavaScript ||
-        !Style.BreakStringLiterals ||
-        !AllowBreak)
+        Style.Language == FormatStyle::LK_JavaScript || Style.isCSharp() ||
+        !Style.BreakStringLiterals || !AllowBreak)
       return nullptr;
 
     // Don't break string literals inside preprocessor directives (except for

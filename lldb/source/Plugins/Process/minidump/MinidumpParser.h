@@ -21,6 +21,7 @@
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Object/Minidump.h"
 
 // C includes
 
@@ -44,12 +45,12 @@ struct Range {
 
 class MinidumpParser {
 public:
-  static llvm::Optional<MinidumpParser>
+  static llvm::Expected<MinidumpParser>
   Create(const lldb::DataBufferSP &data_buf_sp);
 
   llvm::ArrayRef<uint8_t> GetData();
 
-  llvm::ArrayRef<uint8_t> GetStream(MinidumpStreamType stream_type);
+  llvm::ArrayRef<uint8_t> GetStream(StreamType stream_type);
 
   llvm::Optional<std::string> GetMinidumpString(uint32_t rva);
 
@@ -57,14 +58,13 @@ public:
 
   llvm::ArrayRef<MinidumpThread> GetThreads();
 
-  llvm::ArrayRef<uint8_t>
-  GetThreadContext(const MinidumpLocationDescriptor &location);
+  llvm::ArrayRef<uint8_t> GetThreadContext(const LocationDescriptor &location);
 
   llvm::ArrayRef<uint8_t> GetThreadContext(const MinidumpThread &td);
 
   llvm::ArrayRef<uint8_t> GetThreadContextWow64(const MinidumpThread &td);
 
-  const MinidumpSystemInfo *GetSystemInfo();
+  const SystemInfo *GetSystemInfo();
 
   ArchSpec GetArchitecture();
 
@@ -92,24 +92,19 @@ public:
 
   const MemoryRegionInfos &GetMemoryRegions();
 
-  // Perform consistency checks and initialize internal data structures
-  Status Initialize();
+  static llvm::StringRef GetStreamTypeAsString(StreamType stream_type);
 
-  static llvm::StringRef GetStreamTypeAsString(uint32_t stream_type);
-
-  const llvm::DenseMap<uint32_t, MinidumpLocationDescriptor> &
-  GetDirectoryMap() const {
-    return m_directory_map;
-  }
+  llvm::object::MinidumpFile &GetMinidumpFile() { return *m_file; }
 
 private:
-  MinidumpParser(const lldb::DataBufferSP &data_buf_sp);
+  MinidumpParser(lldb::DataBufferSP data_sp,
+                 std::unique_ptr<llvm::object::MinidumpFile> file);
 
   MemoryRegionInfo FindMemoryRegion(lldb::addr_t load_addr) const;
 
 private:
   lldb::DataBufferSP m_data_sp;
-  llvm::DenseMap<uint32_t, MinidumpLocationDescriptor> m_directory_map;
+  std::unique_ptr<llvm::object::MinidumpFile> m_file;
   ArchSpec m_arch;
   MemoryRegionInfos m_regions;
   bool m_parsed_regions = false;

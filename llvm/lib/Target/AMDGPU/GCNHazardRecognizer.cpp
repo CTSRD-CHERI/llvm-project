@@ -241,9 +241,8 @@ void GCNHazardRecognizer::AdvanceCycle() {
   // Do not track non-instructions which do not affect the wait states.
   // If included, these instructions can lead to buffer overflow such that
   // detectable hazards are missed.
-  if (CurrCycleInstr->isImplicitDef())
-    return;
-  else if (CurrCycleInstr->isDebugInstr())
+  if (CurrCycleInstr->isImplicitDef() || CurrCycleInstr->isDebugInstr() ||
+      CurrCycleInstr->isKill())
     return;
 
   unsigned NumWaitStates = TII.getNumWaitStates(*CurrCycleInstr);
@@ -454,7 +453,6 @@ int GCNHazardRecognizer::checkSoftClauseHazards(MachineInstr *MEM) {
 }
 
 int GCNHazardRecognizer::checkSMRDHazards(MachineInstr *SMRD) {
-  const GCNSubtarget &ST = MF.getSubtarget<GCNSubtarget>();
   int WaitStatesNeeded = 0;
 
   WaitStatesNeeded = checkSoftClauseHazards(SMRD);

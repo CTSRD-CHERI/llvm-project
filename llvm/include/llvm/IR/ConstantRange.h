@@ -41,14 +41,25 @@ namespace llvm {
 
 class MDNode;
 class raw_ostream;
+struct KnownBits;
 
 /// This class represents a range of values.
 class LLVM_NODISCARD ConstantRange {
   APInt Lower, Upper;
 
+  /// Create empty constant range with same bitwidth.
+  ConstantRange getEmpty() const {
+    return ConstantRange(getBitWidth(), false);
+  }
+
+  /// Create full constant range with same bitwidth.
+  ConstantRange getFull() const {
+    return ConstantRange(getBitWidth(), true);
+  }
+
 public:
-  /// Initialize a full (the default) or empty set for the specified bit width.
-  explicit ConstantRange(uint32_t BitWidth, bool isFullSet = true);
+  /// Initialize a full or empty set for the specified bit width.
+  explicit ConstantRange(uint32_t BitWidth, bool isFullSet);
 
   /// Initialize a range to hold the single specified value.
   ConstantRange(APInt Value);
@@ -57,6 +68,21 @@ public:
   /// Lower==Upper and Lower != Min or Max value for its type. It will also
   /// assert out if the two APInt's are not the same bit width.
   ConstantRange(APInt Lower, APInt Upper);
+
+  /// Create empty constant range with the given bit width.
+  static ConstantRange getEmpty(uint32_t BitWidth) {
+    return ConstantRange(BitWidth, false);
+  }
+
+  /// Create full constant range with the given bit width.
+  static ConstantRange getFull(uint32_t BitWidth) {
+    return ConstantRange(BitWidth, true);
+  }
+
+  /// Initialize a range based on a known bits constraint. The IsSigned flag
+  /// indicates whether the constant range should not wrap in the signed or
+  /// unsigned domain.
+  static ConstantRange fromKnownBits(const KnownBits &Known, bool IsSigned);
 
   /// Produce the smallest range such that all values that may satisfy the given
   /// predicate with any value contained within Other is contained in the
@@ -137,13 +163,31 @@ public:
   /// Return true if this set contains no members.
   bool isEmptySet() const;
 
-  /// Return true if this set wraps around the top of the range.
-  /// For example: [100, 8).
+  /// Return true if this set wraps around the unsigned domain. Special cases:
+  ///  * Empty set: Not wrapped.
+  ///  * Full set: Not wrapped.
+  ///  * [X, 0) == [X, Max]: Not wrapped.
   bool isWrappedSet() const;
 
-  /// Return true if this set wraps around the INT_MIN of
-  /// its bitwidth. For example: i8 [120, 140).
+  /// Return true if the exclusive upper bound wraps around the unsigned
+  /// domain. Special cases:
+  ///  * Empty set: Not wrapped.
+  ///  * Full set: Not wrapped.
+  ///  * [X, 0): Wrapped.
+  bool isUpperWrapped() const;
+
+  /// Return true if this set wraps around the signed domain. Special cases:
+  ///  * Empty set: Not wrapped.
+  ///  * Full set: Not wrapped.
+  ///  * [X, SignedMin) == [X, SignedMax]: Not wrapped.
   bool isSignWrappedSet() const;
+
+  /// Return true if the (exclusive) upper bound wraps around the signed
+  /// domain. Special cases:
+  ///  * Empty set: Not wrapped.
+  ///  * Full set: Not wrapped.
+  ///  * [X, SignedMin): Wrapped.
+  bool isUpperSignWrapped() const;
 
   /// Return true if the specified value is in the set.
   bool contains(const APInt &Val) const;
@@ -175,8 +219,14 @@ public:
   /// Compare set size of this range with the range CR.
   bool isSizeStrictlySmallerThan(const ConstantRange &CR) const;
 
-  // Compare set size of this range with Value.
+  /// Compare set size of this range with Value.
   bool isSizeLargerThan(uint64_t MaxSize) const;
+
+  /// Return true if all values in this range are negative.
+  bool isAllNegative() const;
+
+  /// Return true if all values in this range are non-negative.
+  bool isAllNonNegative() const;
 
   /// Return the largest unsigned value contained in the ConstantRange.
   APInt getUnsignedMax() const;
@@ -205,20 +255,30 @@ public:
   /// the sets).
   ConstantRange difference(const ConstantRange &CR) const;
 
-  /// Return the range that results from the intersection of
-  /// this range with another range.  The resultant range is guaranteed to
-  /// include all elements contained in both input ranges, and to have the
-  /// smallest possible set size that does so.  Because there may be two
-  /// intersections with the same set size, A.intersectWith(B) might not
-  /// be equal to B.intersectWith(A).
-  ConstantRange intersectWith(const ConstantRange &CR) const;
+  /// If represented precisely, the result of some range operations may consist
+  /// of multiple disjoint ranges. As only a single range may be returned, any
+  /// range covering these disjoint ranges constitutes a valid result, but some
+  /// may be more useful than others depending on context. The preferred range
+  /// type specifies whether a range that is non-wrapping in the unsigned or
+  /// signed domain, or has the smallest size, is preferred. If a signedness is
+  /// preferred but all ranges are non-wrapping or all wrapping, then the
+  /// smallest set size is preferred. If there are multiple smallest sets, any
+  /// one of them may be returned.
+  enum PreferredRangeType { Smallest, Unsigned, Signed };
+
+  /// Return the range that results from the intersection of this range with
+  /// another range. If the intersection is disjoint, such that two results
+  /// are possible, the preferred range is determined by the PreferredRangeType.
+  ConstantRange intersectWith(const ConstantRange &CR,
+                              PreferredRangeType Type = Smallest) const;
 
   /// Return the range that results from the union of this range
   /// with another range.  The resultant range is guaranteed to include the
   /// elements of both sets, but may contain more.  For example, [3, 9) union
   /// [12,15) is [3, 15), which includes 9, 10, and 11, which were not included
   /// in either set before.
-  ConstantRange unionWith(const ConstantRange &CR) const;
+  ConstantRange unionWith(const ConstantRange &CR,
+                          PreferredRangeType Type = Smallest) const;
 
   /// Return a new range representing the possible values resulting
   /// from an application of the specified cast operator to this range. \p
@@ -322,6 +382,22 @@ public:
 
   /// Return a new range that is the logical not of the current set.
   ConstantRange inverse() const;
+
+  /// Represents whether an operation on the given constant range is known to
+  /// always or never overflow.
+  enum class OverflowResult { AlwaysOverflows, MayOverflow, NeverOverflows };
+
+  /// Return whether unsigned add of the two ranges always/never overflows.
+  OverflowResult unsignedAddMayOverflow(const ConstantRange &Other) const;
+
+  /// Return whether signed add of the two ranges always/never overflows.
+  OverflowResult signedAddMayOverflow(const ConstantRange &Other) const;
+
+  /// Return whether unsigned sub of the two ranges always/never overflows.
+  OverflowResult unsignedSubMayOverflow(const ConstantRange &Other) const;
+
+  /// Return whether signed sub of the two ranges always/never overflows.
+  OverflowResult signedSubMayOverflow(const ConstantRange &Other) const;
 
   /// Print out the bounds to a stream.
   void print(raw_ostream &OS) const;

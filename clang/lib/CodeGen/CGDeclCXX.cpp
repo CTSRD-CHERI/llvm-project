@@ -118,7 +118,7 @@ static void EmitDeclDestroy(CodeGenFunction &CGF, const VarDecl &D,
     assert(!Record->hasTrivialDestructor());
     CXXDestructorDecl *Dtor = Record->getDestructor();
 
-    Func = CGM.getAddrAndTypeOfCXXStructor(Dtor, StructorType::Complete);
+    Func = CGM.getAddrAndTypeOfCXXStructor(GlobalDecl(Dtor, Dtor_Complete));
     Argument = llvm::ConstantExpr::getBitCast(
         Addr.getPointer(), CGF.getTypes().ConvertType(Type)->getPointerTo(
                                  CGM.getTargetCodeGenInfo().getDefaultAS()));
@@ -492,6 +492,12 @@ CodeGenModule::EmitCXXGlobalVarDeclInitFunc(const VarDecl *D,
     // minor startup time optimization.  In the MS C++ ABI, there are no guard
     // variables, so this COMDAT key is required for correctness.
     AddGlobalCtor(Fn, 65535, COMDATKey);
+    if (getTarget().getCXXABI().isMicrosoft()) {
+      // In The MS C++, MS add template static data member in the linker
+      // drective.
+      assert(COMDATKey);
+      addUsedGlobal(COMDATKey);
+    }
   } else if (D->hasAttr<SelectAnyAttr>()) {
     // SelectAny globals will be comdat-folded. Put the initializer into a
     // COMDAT group associated with the global, so the initializers get folded

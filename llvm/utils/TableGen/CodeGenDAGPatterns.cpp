@@ -67,8 +67,10 @@ static bool berase_if(MachineValueTypeSet &S, Predicate P) {
 // inference will apply to each mode separately.
 
 TypeSetByHwMode::TypeSetByHwMode(ArrayRef<ValueTypeByHwMode> VTList) {
-  for (const ValueTypeByHwMode &VVT : VTList)
+  for (const ValueTypeByHwMode &VVT : VTList) {
     insert(VVT);
+    AddrSpaces.push_back(VVT.PtrAddrSpace);
+  }
 }
 
 bool TypeSetByHwMode::isValueTypeByHwMode(bool AllowEmpty) const {
@@ -85,9 +87,13 @@ ValueTypeByHwMode TypeSetByHwMode::getValueTypeByHwMode() const {
   assert(isValueTypeByHwMode(true) &&
          "The type set has multiple types for at least one HW mode");
   ValueTypeByHwMode VVT;
+  auto ASI = AddrSpaces.begin();
+
   for (const auto &I : *this) {
     MVT T = I.second.empty() ? MVT::Other : *I.second.begin();
     VVT.getOrCreateTypeForMode(I.first, T);
+    if (ASI != AddrSpaces.end())
+      VVT.PtrAddrSpace = *ASI++;
   }
   return VVT;
 }
@@ -1281,6 +1287,17 @@ std::string TreePredicateFn::getCodeToRunOnSDNode() const {
 // PatternToMatch implementation
 //
 
+static bool isImmAllOnesAllZerosMatch(const TreePatternNode *P) {
+  if (!P->isLeaf())
+    return false;
+  DefInit *DI = dyn_cast<DefInit>(P->getLeafValue());
+  if (!DI)
+    return false;
+
+  Record *R = DI->getDef();
+  return R->getName() == "immAllOnesV" || R->getName() == "immAllZerosV";
+}
+
 /// getPatternSize - Return the 'size' of this pattern.  We want to match large
 /// patterns before small ones.  This is used to determine the size of a
 /// pattern.
@@ -1320,6 +1337,8 @@ static unsigned getPatternSize(const TreePatternNode *P,
         Size += 5;  // Matches a ConstantSDNode (+3) and a specific value (+2).
       else if (Child->getComplexPatternInfo(CGP))
         Size += getPatternSize(Child, CGP);
+      else if (isImmAllOnesAllZerosMatch(Child))
+        Size += 4; // Matches a build_vector(+3) and a predicate (+1).
       else if (!Child->getPredicateCalls().empty())
         ++Size;
     }
@@ -2137,7 +2156,8 @@ static TypeSetByHwMode getImplicitType(Record *R, unsigned ResNo,
   }
 
   if (R->getName() == "node" || R->getName() == "srcvalue" ||
-      R->getName() == "zero_reg") {
+      R->getName() == "zero_reg" || R->getName() == "immAllOnesV" ||
+      R->getName() == "immAllZerosV") {
     // Placeholder.
     return TypeSetByHwMode(); // Unknown.
   }

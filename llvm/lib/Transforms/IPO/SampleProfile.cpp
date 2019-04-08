@@ -834,6 +834,9 @@ bool SampleProfileLoader::inlineHotFunctions(
           if (CalleeFunctionName == F.getName())
             continue;
 
+          if (!callsiteIsHot(FS, PSI))
+            continue;
+
           const char *Reason = "Callee function not available";
           auto R = SymbolMap.find(CalleeFunctionName);
           if (R != SymbolMap.end() && R->getValue() &&
@@ -1326,7 +1329,7 @@ void SampleProfileLoader::propagateWeights(Function &F) {
           annotateValueSite(*I.getParent()->getParent()->getParent(), I,
                             SortedCallTargets, Sum, IPVK_IndirectCallTarget,
                             SortedCallTargets.size());
-        } else if (!dyn_cast<IntrinsicInst>(&I)) {
+        } else if (!isa<IntrinsicInst>(&I)) {
           I.setMetadata(LLVMContext::MD_prof,
                         MDB.createBranchWeights(
                             {static_cast<uint32_t>(BlockWeights[BB])}));
@@ -1595,8 +1598,9 @@ bool SampleProfileLoader::runOnModule(Module &M, ModuleAnalysisManager *AM,
     return false;
 
   PSI = _PSI;
-  if (M.getProfileSummary() == nullptr)
-    M.setProfileSummary(Reader->getSummary().getMD(M.getContext()));
+  if (M.getProfileSummary(/* IsCS */ false) == nullptr)
+    M.setProfileSummary(Reader->getSummary().getMD(M.getContext()),
+                        ProfileSummary::PSK_Sample);
 
   // Compute the total number of samples collected in this profile.
   for (const auto &I : Reader->getProfiles())

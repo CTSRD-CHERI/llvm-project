@@ -1,5 +1,5 @@
 # RUN: yaml2obj %s -o %t
-# RUN: llvm-readelf -V %t | FileCheck %s
+# RUN: llvm-readobj -V %t | FileCheck %s
 
 ## Check we are able to produce a valid SHT_GNU_versym
 ## section from its description.
@@ -82,7 +82,8 @@ Sections:
             Flags:           0
             Other:           4
 DynamicSymbols:
-  Global:
-    - Name:            f1
-    - Name:            f2
+  - Name:    f1
+    Binding: STB_GLOBAL
+  - Name:    f2
+    Binding: STB_GLOBAL
 ...

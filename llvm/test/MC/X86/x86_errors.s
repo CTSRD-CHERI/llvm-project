@@ -158,3 +158,12 @@ mov v_ecx(%eax), %ecx
 // 32: 7: error: invalid operand for instruction
 // 64: 7: error: invalid operand for instruction
 addb (%dx), %al
+
+// 32: error: instruction requires: 64-bit mode
+cqto
+
+// 32: error: instruction requires: 64-bit mode
+cltq
+
+// 32: error: instruction requires: 64-bit mode
+cmpxchg16b (%eax)

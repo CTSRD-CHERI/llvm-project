@@ -22,12 +22,6 @@ else()
   add_definitions( -DLLDB_CONFIGURATION_RELEASE )
 endif()
 
-if (LLDB_DISABLE_LIBEDIT)
-  add_definitions( -DLLDB_DISABLE_LIBEDIT )
-else()
-  find_package(LibEdit REQUIRED)
-endif()
-
 if(APPLE)
   add_definitions(-DLLDB_USE_OS_LOG)
 endif()
@@ -95,6 +89,10 @@ if(LLDB_INCLUDE_TESTS)
 
   if(TARGET lldb-mi)
     list(APPEND LLDB_TEST_DEPS lldb-mi)
+  endif()
+
+  if(TARGET lldb-vscode)
+    list(APPEND LLDB_TEST_DEPS lldb-vscode)
   endif()
 
   if(TARGET lldb-instr)

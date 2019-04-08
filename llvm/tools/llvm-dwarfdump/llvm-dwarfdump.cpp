@@ -159,7 +159,7 @@ static opt<unsigned long long> Lookup("lookup",
                 "available file, function, block and line table details."),
            value_desc("address"), cat(DwarfDumpCategory));
 static opt<std::string>
-    OutputFilename("out-file", cl::init(""),
+    OutputFilename("out-file", cl::init("-"),
                    cl::desc("Redirect output to the specified file."),
                    cl::value_desc("filename"));
 static alias OutputFilenameAlias("o", desc("Alias for -out-file."),
@@ -258,19 +258,16 @@ static bool filterArch(ObjectFile &Obj) {
     return true;
 
   if (auto *MachO = dyn_cast<MachOObjectFile>(&Obj)) {
-    std::string ObjArch =
-        Triple::getArchTypeName(MachO->getArchTriple().getArch());
-
     for (auto Arch : ArchFilters) {
-      // Match name.
-      if (Arch == ObjArch)
-        return true;
-
       // Match architecture number.
       unsigned Value;
       if (!StringRef(Arch).getAsInteger(0, Value))
         if (Value == getCPUType(*MachO))
           return true;
+
+      // Match as name.
+      if (MachO->getArchTriple().getArch() == Triple(Arch).getArch())
+        return true;
     }
   }
   return false;
@@ -379,7 +376,12 @@ static void filterByAccelName(ArrayRef<std::string> Names, DWARFContext &DICtx,
 
 /// Handle the --lookup option and dump the DIEs and line info for the given
 /// address.
-static bool lookup(DWARFContext &DICtx, uint64_t Address, raw_ostream &OS) {
+/// TODO: specified Address for --lookup option could relate for several
+/// different sections(in case not-linked object file). llvm-dwarfdump
+/// need to do something with this: extend lookup option with section
+/// information or probably display all matched entries, or something else...
+static bool lookup(ObjectFile &Obj, DWARFContext &DICtx, uint64_t Address,
+                   raw_ostream &OS) {
   auto DIEsForAddr = DICtx.getDIEsForAddress(Lookup);
 
   if (!DIEsForAddr)
@@ -394,7 +396,10 @@ static bool lookup(DWARFContext &DICtx, uint64_t Address, raw_ostream &OS) {
       DIEsForAddr.BlockDIE.dump(OS, 4, DumpOpts);
   }
 
-  if (DILineInfo LineInfo = DICtx.getLineInfoForAddress(Lookup))
+  // TODO: it is neccessary to set proper SectionIndex here.
+  // object::SectionedAddress::UndefSection works for only absolute addresses.
+  if (DILineInfo LineInfo = DICtx.getLineInfoForAddress(
+          {Lookup, object::SectionedAddress::UndefSection}))
     LineInfo.dump(OS);
 
   return true;
@@ -413,7 +418,7 @@ static bool dumpObjectFile(ObjectFile &Obj, DWARFContext &DICtx, Twine Filename,
 
   // Handle the --lookup option.
   if (Lookup)
-    return lookup(DICtx, Lookup, OS);
+    return lookup(Obj, DICtx, Lookup, OS);
 
   // Handle the --name option.
   if (!Name.empty()) {
@@ -578,17 +583,12 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  std::unique_ptr<ToolOutputFile> OutputFile;
-  if (!OutputFilename.empty()) {
-    std::error_code EC;
-    OutputFile = llvm::make_unique<ToolOutputFile>(OutputFilename, EC,
-                                                     sys::fs::F_None);
-    error("Unable to open output file" + OutputFilename, EC);
-    // Don't remove output file if we exit with an error.
-    OutputFile->keep();
-  }
+  std::error_code EC;
+  ToolOutputFile OutputFile(OutputFilename, EC, sys::fs::OF_None);
+  error("Unable to open output file" + OutputFilename, EC);
+  // Don't remove output file if we exit with an error.
+  OutputFile.keep();
 
-  raw_ostream &OS = OutputFile ? OutputFile->os() : outs();
   bool OffsetRequested = false;
 
   // Defaults to dumping all sections, unless brief mode is specified in which
@@ -632,15 +632,15 @@ int main(int argc, char **argv) {
   if (Verify) {
     // If we encountered errors during verify, exit with a non-zero exit status.
     if (!all_of(Objects, [&](std::string Object) {
-          return handleFile(Object, verifyObjectFile, OS);
+          return handleFile(Object, verifyObjectFile, OutputFile.os());
         }))
-      exit(1);
+      return 1;
   } else if (Statistics)
     for (auto Object : Objects)
-      handleFile(Object, collectStatsForObjectFile, OS);
+      handleFile(Object, collectStatsForObjectFile, OutputFile.os());
   else
     for (auto Object : Objects)
-      handleFile(Object, dumpObjectFile, OS);
+      handleFile(Object, dumpObjectFile, OutputFile.os());
 
   return EXIT_SUCCESS;
 }

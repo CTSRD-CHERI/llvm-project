@@ -10,6 +10,7 @@
 
 #include "CanonicalIncludes.h"
 #include "Index.h"
+#include "SymbolOrigin.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/Decl.h"
 #include "clang/Basic/SourceLocation.h"
@@ -75,6 +76,10 @@ public:
     /// Collect symbols local to main-files, such as static functions
     /// and symbols inside an anonymous namespace.
     bool CollectMainFileSymbols = true;
+    /// If set to true, SymbolCollector will collect doc for all symbols.
+    /// Note that documents of symbols being indexed for completion will always
+    /// be collected regardless of this option.
+    bool StoreAllDocumentation = false;
     /// If this is set, only collect symbols/references from a file if
     /// `FileFilter(SM, FID)` is true. If not set, all files are indexed.
     std::function<bool(const SourceManager &, FileID)> FileFilter = nullptr;
@@ -108,7 +113,8 @@ public:
   void finish() override;
 
 private:
-  const Symbol *addDeclaration(const NamedDecl &, SymbolID, bool IsMainFileSymbol);
+  const Symbol *addDeclaration(const NamedDecl &, SymbolID,
+                               bool IsMainFileSymbol);
   void addDefinition(const NamedDecl &, const Symbol &DeclSymbol);
 
   // All Symbols collected from the AST.
@@ -139,4 +145,5 @@ private:
 
 } // namespace clangd
 } // namespace clang
+
 #endif

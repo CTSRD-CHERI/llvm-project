@@ -434,9 +434,8 @@ Error collectPGOFuncNameStrings(ArrayRef<GlobalVariable *> NameVars,
 }
 
 Error readPGOFuncNameStrings(StringRef NameStrings, InstrProfSymtab &Symtab) {
-  const uint8_t *P = reinterpret_cast<const uint8_t *>(NameStrings.data());
-  const uint8_t *EndP = reinterpret_cast<const uint8_t *>(NameStrings.data() +
-                                                          NameStrings.size());
+  const uint8_t *P = NameStrings.bytes_begin();
+  const uint8_t *EndP = NameStrings.bytes_end();
   while (P < EndP) {
     uint32_t N;
     uint64_t UncompressedSize = decodeULEB128(P, &N);
@@ -1009,6 +1008,25 @@ void getMemOPSizeRangeFromOption(StringRef MemOPSizeRange, int64_t &RangeStart,
       MemOPSizeRange.getAsInteger(10, RangeLast);
   }
   assert(RangeLast >= RangeStart);
+}
+
+// Create a COMDAT variable INSTR_PROF_RAW_VERSION_VAR to make the runtime
+// aware this is an ir_level profile so it can set the version flag.
+void createIRLevelProfileFlagVar(Module &M, bool IsCS) {
+  const StringRef VarName(INSTR_PROF_QUOTE(INSTR_PROF_RAW_VERSION_VAR));
+  Type *IntTy64 = Type::getInt64Ty(M.getContext());
+  uint64_t ProfileVersion = (INSTR_PROF_RAW_VERSION | VARIANT_MASK_IR_PROF);
+  if (IsCS)
+    ProfileVersion |= VARIANT_MASK_CSIR_PROF;
+  auto IRLevelVersionVariable = new GlobalVariable(
+      M, IntTy64, true, GlobalValue::WeakAnyLinkage,
+      Constant::getIntegerValue(IntTy64, APInt(64, ProfileVersion)), VarName);
+  IRLevelVersionVariable->setVisibility(GlobalValue::DefaultVisibility);
+  Triple TT(M.getTargetTriple());
+  if (TT.supportsCOMDAT()) {
+    IRLevelVersionVariable->setLinkage(GlobalValue::ExternalLinkage);
+    IRLevelVersionVariable->setComdat(M.getOrInsertComdat(VarName));
+  }
 }
 
 // Create the variable for the profile file name.

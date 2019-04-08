@@ -21,6 +21,8 @@ public:
     bool
     IsValid() const;
 
+    explicit operator bool() const;
+
     void
     AppendString (const char *str);
 
@@ -38,6 +40,16 @@ public:
 
     void
     Clear ();
+
+    %pythoncode%{
+    def __iter__(self):
+        '''Iterate over all strings in a lldb.SBStringList object.'''
+        return lldb_iter(self, 'GetSize', 'GetStringAtIndex')
+
+    def __len__(self):
+        '''Return the number of strings in a lldb.SBStringList object.'''
+        return self.GetSize()
+    %}
 };
 
 } // namespace lldb

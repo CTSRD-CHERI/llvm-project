@@ -268,12 +268,14 @@ def err_pp_hash_error : Error<"%0">;
 }
 
 def pp_include_next_in_primary : Warning<
-  "#include_next in primary source file">,
+  "#include_next in primary source file; "
+  "will search from start of include path">,
   InGroup<DiagGroup<"include-next-outside-header">>;
 def pp_include_macros_out_of_predefines : Error<
   "the #__include_macros directive is only for internal use by -imacros">;
 def pp_include_next_absolute_path : Warning<
-  "#include_next with absolute path">,
+  "#include_next in file found relative to primary source file or found by "
+  "absolute path; will search from start of include path">,
   InGroup<DiagGroup<"include-next-absolute-path">>;
 def ext_c99_whitespace_required_after_macro_name : ExtWarn<
   "ISO C99 requires whitespace after the macro name">, InGroup<C99>;
@@ -393,8 +395,8 @@ def warn_cxx98_compat_empty_fnmacro_arg : Warning<
 def note_macro_here : Note<"macro %0 defined here">;
 def note_macro_expansion_here : Note<"expansion of macro %0 requested here">;
 
-def err_pp_opencl_variadic_macros :
-  Error<"variadic macros not supported in OpenCL">;
+def ext_pp_opencl_variadic_macros : Extension<
+  "variadic macros are a Clang extension in OpenCL">;
 
 def err_pp_invalid_directive : Error<"invalid preprocessing directive">;
 def err_pp_directive_required : Error<
@@ -505,6 +507,17 @@ def warn_pragma_warning_push_level :
 def warn_pragma_warning_expected_number :
   ExtWarn<"#pragma warning expected a warning number">,
   InGroup<UnknownPragmas>;
+
+// - #pragma execution_character_set(...)
+def warn_pragma_exec_charset_expected :
+  ExtWarn<"#pragma execution_character_set expected '%0'">,
+  InGroup<UnknownPragmas>;
+def warn_pragma_exec_charset_spec_invalid :
+  ExtWarn<"#pragma execution_character_set expected 'push' or 'pop'">,
+  InGroup<UnknownPragmas>;
+def warn_pragma_exec_charset_push_invalid :
+   ExtWarn<"#pragma execution_character_set invalid value '%0', only 'UTF-8' is supported">,
+   InGroup<UnknownPragmas>;
 
 def err__Pragma_malformed : Error<
   "_Pragma takes a parenthesized string literal">;

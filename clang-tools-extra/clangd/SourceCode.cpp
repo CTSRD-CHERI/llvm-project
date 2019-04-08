@@ -7,7 +7,9 @@
 //===----------------------------------------------------------------------===//
 #include "SourceCode.h"
 
+#include "Context.h"
 #include "Logger.h"
+#include "Protocol.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Lex/Lexer.h"
@@ -15,6 +17,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/Error.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Path.h"
 
 namespace clang {
@@ -28,6 +31,8 @@ namespace clangd {
 // Returns true if CB returned true, false if we hit the end of string.
 template <typename Callback>
 static bool iterateCodepoints(llvm::StringRef U8, const Callback &CB) {
+  // A codepoint takes two UTF-16 code unit if it's astral (outside BMP).
+  // Astral codepoints are encoded as 4 bytes in UTF-8, starting with 11110xxx.
   for (size_t I = 0; I < U8.size();) {
     unsigned char C = static_cast<unsigned char>(U8[I]);
     if (LLVM_LIKELY(!(C & 0x80))) { // ASCII character.
@@ -51,31 +56,75 @@ static bool iterateCodepoints(llvm::StringRef U8, const Callback &CB) {
   return false;
 }
 
-// Returns the offset into the string that matches \p Units UTF-16 code units.
-// Conceptually, this converts to UTF-16, truncates to CodeUnits, converts back
-// to UTF-8, and returns the length in bytes.
-static size_t measureUTF16(llvm::StringRef U8, int U16Units, bool &Valid) {
+// Returns the byte offset into the string that is an offset of \p Units in
+// the specified encoding.
+// Conceptually, this converts to the encoding, truncates to CodeUnits,
+// converts back to UTF-8, and returns the length in bytes.
+static size_t measureUnits(llvm::StringRef U8, int Units, OffsetEncoding Enc,
+                           bool &Valid) {
+  Valid = Units >= 0;
+  if (Units <= 0)
+    return 0;
   size_t Result = 0;
-  Valid = U16Units == 0 || iterateCodepoints(U8, [&](int U8Len, int U16Len) {
-            Result += U8Len;
-            U16Units -= U16Len;
-            return U16Units <= 0;
-          });
-  if (U16Units < 0) // Offset was into the middle of a surrogate pair.
-    Valid = false;
+  switch (Enc) {
+  case OffsetEncoding::UTF8:
+    Result = Units;
+    break;
+  case OffsetEncoding::UTF16:
+    Valid = iterateCodepoints(U8, [&](int U8Len, int U16Len) {
+      Result += U8Len;
+      Units -= U16Len;
+      return Units <= 0;
+    });
+    if (Units < 0) // Offset in the middle of a surrogate pair.
+      Valid = false;
+    break;
+  case OffsetEncoding::UTF32:
+    Valid = iterateCodepoints(U8, [&](int U8Len, int U16Len) {
+      Result += U8Len;
+      Units--;
+      return Units <= 0;
+    });
+    break;
+  case OffsetEncoding::UnsupportedEncoding:
+    llvm_unreachable("unsupported encoding");
+  }
   // Don't return an out-of-range index if we overran.
-  return std::min(Result, U8.size());
+  if (Result > U8.size()) {
+    Valid = false;
+    return U8.size();
+  }
+  return Result;
+}
+
+Key<OffsetEncoding> kCurrentOffsetEncoding;
+static OffsetEncoding lspEncoding() {
+  auto *Enc = Context::current().get(kCurrentOffsetEncoding);
+  return Enc ? *Enc : OffsetEncoding::UTF16;
 }
 
 // Like most strings in clangd, the input is UTF-8 encoded.
 size_t lspLength(llvm::StringRef Code) {
-  // A codepoint takes two UTF-16 code unit if it's astral (outside BMP).
-  // Astral codepoints are encoded as 4 bytes in UTF-8, starting with 11110xxx.
   size_t Count = 0;
-  iterateCodepoints(Code, [&](int U8Len, int U16Len) {
-    Count += U16Len;
-    return false;
-  });
+  switch (lspEncoding()) {
+  case OffsetEncoding::UTF8:
+    Count = Code.size();
+    break;
+  case OffsetEncoding::UTF16:
+    iterateCodepoints(Code, [&](int U8Len, int U16Len) {
+      Count += U16Len;
+      return false;
+    });
+    break;
+  case OffsetEncoding::UTF32:
+    iterateCodepoints(Code, [&](int U8Len, int U16Len) {
+      ++Count;
+      return false;
+    });
+    break;
+  case OffsetEncoding::UnsupportedEncoding:
+    llvm_unreachable("unsupported encoding");
+  }
   return Count;
 }
 
@@ -98,20 +147,18 @@ llvm::Expected<size_t> positionToOffset(llvm::StringRef Code, Position P,
           llvm::errc::invalid_argument);
     StartOfLine = NextNL + 1;
   }
+  StringRef Line =
+      Code.substr(StartOfLine).take_until([](char C) { return C == '\n'; });
 
-  size_t NextNL = Code.find('\n', StartOfLine);
-  if (NextNL == llvm::StringRef::npos)
-    NextNL = Code.size();
-
+  // P.character may be in UTF-16, transcode if necessary.
   bool Valid;
-  size_t ByteOffsetInLine = measureUTF16(
-      Code.substr(StartOfLine, NextNL - StartOfLine), P.character, Valid);
+  size_t ByteInLine = measureUnits(Line, P.character, lspEncoding(), Valid);
   if (!Valid && !AllowColumnsBeyondLineLength)
     return llvm::make_error<llvm::StringError>(
-        llvm::formatv("UTF-16 offset {0} is invalid for line {1}", P.character,
-                      P.line),
+        llvm::formatv("{0} offset {1} is invalid for line {2}", lspEncoding(),
+                      P.character, P.line),
         llvm::errc::invalid_argument);
-  return StartOfLine + ByteOffsetInLine;
+  return StartOfLine + ByteInLine;
 }
 
 Position offsetToPosition(llvm::StringRef Code, size_t Offset) {
@@ -265,7 +312,7 @@ llvm::Optional<std::string> getCanonicalPath(const FileEntry *F,
   llvm::SmallString<128> FilePath = F->getName();
   if (!llvm::sys::path::is_absolute(FilePath)) {
     if (auto EC =
-            SourceMgr.getFileManager().getVirtualFileSystem()->makeAbsolute(
+            SourceMgr.getFileManager().getVirtualFileSystem().makeAbsolute(
                 FilePath)) {
       elog("Could not turn relative path '{0}' to absolute: {1}", FilePath,
            EC.message());

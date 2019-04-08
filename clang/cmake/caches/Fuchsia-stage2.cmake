@@ -37,6 +37,18 @@ if(APPLE)
 
   set(COMPILER_RT_ENABLE_TVOS OFF CACHE BOOL "")
   set(COMPILER_RT_ENABLE_WATCHOS OFF CACHE BOOL "")
+
+  set(LIBUNWIND_ENABLE_SHARED OFF CACHE BOOL "")
+  set(LIBUNWIND_INSTALL_LIBRARY OFF CACHE BOOL "")
+  set(LIBUNWIND_USE_COMPILER_RT ON CACHE BOOL "")
+  set(LIBCXXABI_ENABLE_SHARED OFF CACHE BOOL "")
+  set(LIBCXXABI_ENABLE_STATIC_UNWINDER ON CACHE BOOL "")
+  set(LIBCXXABI_INSTALL_LIBRARY OFF CACHE BOOL "")
+  set(LIBCXXABI_USE_COMPILER_RT ON CACHE BOOL "")
+  set(LIBCXXABI_USE_LLVM_UNWINDER ON CACHE BOOL "")
+  set(LIBCXX_USE_COMPILER_RT ON CACHE BOOL "")
+  set(LIBCXX_ENABLE_SHARED OFF CACHE BOOL "")
+  set(LIBCXX_ENABLE_STATIC_ABI_LIBRARY ON CACHE BOOL "")
 endif()
 
 foreach(target aarch64-linux-gnu;armv7-linux-gnueabihf;i386-linux-gnu;x86_64-linux-gnu)
@@ -74,6 +86,9 @@ foreach(target aarch64-linux-gnu;armv7-linux-gnueabihf;i386-linux-gnu;x86_64-lin
     set(RUNTIMES_${target}_SANITIZER_CXX_ABI "libc++" CACHE STRING "")
     set(RUNTIMES_${target}_SANITIZER_CXX_ABI_INTREE ON CACHE BOOL "")
     set(RUNTIMES_${target}_COMPILER_RT_USE_BUILTINS_LIBRARY ON CACHE BOOL "")
+
+    # Use .build-id link.
+    list(APPEND RUNTIME_BUILD_ID_LINK "${target}")
   endif()
 endforeach()
 
@@ -126,6 +141,9 @@ if(FUCHSIA_SDK)
     set(RUNTIMES_${target}-fuchsia_LIBCXX_HERMETIC_STATIC_LIBRARY ON CACHE BOOL "")
     set(RUNTIMES_${target}-fuchsia_LIBCXX_STATICALLY_LINK_ABI_IN_SHARED_LIBRARY OFF CACHE BOOL "")
     set(RUNTIMES_${target}-fuchsia_LIBCXX_ABI_VERSION 2 CACHE STRING "")
+
+    # Use .build-id link.
+    list(APPEND RUNTIME_BUILD_ID_LINK "${target}-fuchsia")
   endforeach()
 
   set(LLVM_RUNTIME_SANITIZERS "Address" CACHE STRING "")
@@ -134,6 +152,7 @@ endif()
 
 set(LLVM_BUILTIN_TARGETS "${BUILTIN_TARGETS}" CACHE STRING "")
 set(LLVM_RUNTIME_TARGETS "${RUNTIME_TARGETS}" CACHE STRING "")
+set(LLVM_RUNTIME_BUILD_ID_LINK_TARGETS "${RUNTIME_BUILD_ID_LINK}" CACHE STRING "")
 
 # Setup toolchain.
 set(LLVM_INSTALL_TOOLCHAIN_ONLY ON CACHE BOOL "")
@@ -166,8 +185,9 @@ set(LLVM_DISTRIBUTION_COMPONENTS
   lld
   LTO
   clang-apply-replacements
+  clang-doc
   clang-format
-  clang-headers
+  clang-resource-headers
   clang-include-fixer
   clang-refactor
   clang-tidy

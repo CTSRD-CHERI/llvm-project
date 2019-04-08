@@ -583,10 +583,6 @@ bool Parser::ParseTopLevelDecl(DeclGroupPtrTy &Result) {
     ConsumeAnnotationToken();
     return false;
 
-  case tok::annot_pragma_attribute:
-    HandlePragmaAttribute();
-    return false;
-
   case tok::eof:
     // Late template parsing can begin.
     if (getLangOpts().DelayedTemplateParsing)
@@ -697,6 +693,9 @@ Parser::ParseExternalDeclaration(ParsedAttributesWithRange &attrs,
     return nullptr;
   case tok::annot_pragma_dump:
     HandlePragmaDump();
+    return nullptr;
+  case tok::annot_pragma_attribute:
+    HandlePragmaAttribute();
     return nullptr;
   case tok::semi:
     // Either a C++11 empty-declaration or attribute-declaration.
@@ -913,7 +912,8 @@ bool Parser::isStartOfFunctionDefinition(const ParsingDeclarator &Declarator) {
 ///       declaration: [C99 6.7]
 ///         declaration-specifiers init-declarator-list[opt] ';'
 /// [!C99]  init-declarator-list ';'                   [TODO: warn in c99 mode]
-/// [OMP]   threadprivate-directive                              [TODO]
+/// [OMP]   threadprivate-directive
+/// [OMP]   allocate-directive                         [TODO]
 ///
 Parser::DeclGroupPtrTy
 Parser::ParseDeclOrFunctionDefInternal(ParsedAttributesWithRange &attrs,
@@ -1487,7 +1487,7 @@ void Parser::AnnotateScopeToken(CXXScopeSpec &SS, bool IsNewAnnotation) {
 ///        no typo correction will be performed.
 Parser::AnnotatedNameKind
 Parser::TryAnnotateName(bool IsAddressOfOperand,
-                        std::unique_ptr<CorrectionCandidateCallback> CCC) {
+                        CorrectionCandidateCallback *CCC) {
   assert(Tok.is(tok::identifier) || Tok.is(tok::annot_cxxscope));
 
   const bool EnteringContext = false;
@@ -1523,9 +1523,9 @@ Parser::TryAnnotateName(bool IsAddressOfOperand,
   // after a scope specifier, because in general we can't recover from typos
   // there (eg, after correcting 'A::template B<X>::C' [sic], we would need to
   // jump back into scope specifier parsing).
-  Sema::NameClassification Classification = Actions.ClassifyName(
-      getCurScope(), SS, Name, NameLoc, Next, IsAddressOfOperand,
-      SS.isEmpty() ? std::move(CCC) : nullptr);
+  Sema::NameClassification Classification =
+      Actions.ClassifyName(getCurScope(), SS, Name, NameLoc, Next,
+                           IsAddressOfOperand, SS.isEmpty() ? CCC : nullptr);
 
   switch (Classification.getKind()) {
   case Sema::NC_Error:

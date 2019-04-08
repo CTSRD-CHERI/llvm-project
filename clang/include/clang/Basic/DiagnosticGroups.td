@@ -16,6 +16,7 @@ def Implicit : DiagGroup<"implicit", [
 ]>;
 
 // Empty DiagGroups are recognized by clang but ignored.
+def ODR : DiagGroup<"odr">;
 def : DiagGroup<"abi">;
 def AbsoluteValue : DiagGroup<"absolute-value">;
 def AddressOfTemporary : DiagGroup<"address-of-temporary">;
@@ -94,6 +95,8 @@ def CHERIImplicitConversionSign : DiagGroup<"cheri-implicit-conversion-sign">;
 def CHERIPointerConversion : DiagGroup<"cheri-pointer-conversion", [CHERIImplicitConversionSign, CHERIImplicitConversion]>;
 def MIPSCHERIPrototypes: DiagGroup<"mips-cheri-prototypes">;
 def MIPSCHERIPrototypesStrict: DiagGroup<"mips-cheri-prototypes-strict">;
+// Remarks about setting/not setting subobject bounds
+def CheriSubobjectBounds : DiagGroup<"cheri-subobject-bounds">;
 
 def CheriAll : DiagGroup<"cheri",
      [CHERICaps, CHERIBitwiseOps, CHERIMisaligned, CHERIImplicitConversion,
@@ -372,8 +375,7 @@ def MismatchedReturnTypes : DiagGroup<"mismatched-return-types">;
 def MismatchedTags : DiagGroup<"mismatched-tags">;
 def MissingFieldInitializers : DiagGroup<"missing-field-initializers">;
 def ModuleBuild : DiagGroup<"module-build">;
-// Remarks about setting/not setting subobject bounds
-def CheriSubobjectBounds : DiagGroup<"cheri-subobject-bounds">;
+def ModuleImport : DiagGroup<"module-import">;
 def ModuleConflict : DiagGroup<"module-conflict">;
 def ModuleFileExtension : DiagGroup<"module-file-extension">;
 def NewlineEOF : DiagGroup<"newline-eof">;
@@ -426,6 +428,7 @@ def ObjCPointerIntrospectPerformSelector : DiagGroup<"deprecated-objc-pointer-in
 def ObjCPointerIntrospect : DiagGroup<"deprecated-objc-pointer-introspection", [ObjCPointerIntrospectPerformSelector]>;
 def ObjCMultipleMethodNames : DiagGroup<"objc-multiple-method-names">;
 def ObjCFlexibleArray : DiagGroup<"objc-flexible-array">;
+def ObjCBoxing : DiagGroup<"objc-boxing">;
 def OpenCLUnsupportedRGBA: DiagGroup<"opencl-unsupported-rgba">;
 def DeprecatedObjCIsaUsage : DiagGroup<"deprecated-objc-isa-usage">;
 def ExplicitInitializeCall : DiagGroup<"explicit-initialize-call">;
@@ -1078,3 +1081,5 @@ def NoDeref : DiagGroup<"noderef">;
 def CrossTU : DiagGroup<"ctu">;
 
 def CTADMaybeUnsupported : DiagGroup<"ctad-maybe-unsupported">;
+
+def FortifySource : DiagGroup<"fortify-source">;

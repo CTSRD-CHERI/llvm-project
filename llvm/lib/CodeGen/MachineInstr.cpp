@@ -1291,10 +1291,8 @@ bool MachineInstr::hasOrderedMemoryRef() const {
     return true;
 
   // Check if any of our memory operands are ordered.
-  // TODO: This should probably be be isUnordered (see D57601), but the callers
-  // need audited and test cases written to be sure.
   return llvm::any_of(memoperands(), [](const MachineMemOperand *MMO) {
-    return MMO->isVolatile() || MMO->isAtomic();
+    return !MMO->isUnordered();
   });
 }
 
@@ -1314,9 +1312,11 @@ bool MachineInstr::isDereferenceableInvariantLoad(AliasAnalysis *AA) const {
   const MachineFrameInfo &MFI = getParent()->getParent()->getFrameInfo();
 
   for (MachineMemOperand *MMO : memoperands()) {
-    if (MMO->isVolatile()) return false;
-    // TODO: Figure out whether isAtomic is really necessary (see D57601).
-    if (MMO->isAtomic()) return false;
+    if (!MMO->isUnordered())
+      // If the memory operand has ordering side effects, we can't move the
+      // instruction.  Such an instruction is technically an invariant load,
+      // but the caller code would need updated to expect that.
+      return false;
     if (MMO->isStore()) return false;
     if (MMO->isInvariant() && MMO->isDereferenceable())
       continue;
@@ -1917,7 +1917,7 @@ void MachineInstr::setRegisterDefReadUndef(unsigned Reg, bool IsUndef) {
 void MachineInstr::addRegisterDefined(unsigned Reg,
                                       const TargetRegisterInfo *RegInfo) {
   if (TargetRegisterInfo::isPhysicalRegister(Reg)) {
-    MachineOperand *MO = findRegisterDefOperand(Reg, false, RegInfo);
+    MachineOperand *MO = findRegisterDefOperand(Reg, false, false, RegInfo);
     if (MO)
       return;
   } else {

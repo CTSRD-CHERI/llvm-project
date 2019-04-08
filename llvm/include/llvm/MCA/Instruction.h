@@ -420,6 +420,7 @@ public:
   // Returns true if this instruction is a candidate for move elimination.
   bool isOptimizableMove() const { return IsOptimizableMove; }
   void setOptimizableMove() { IsOptimizableMove = true; }
+  bool isMemOp() const { return Desc.MayLoad || Desc.MayStore; }
 };
 
 /// An instruction propagated through the simulated instruction pipeline.
@@ -447,10 +448,19 @@ class Instruction : public InstructionBase {
   // Retire Unit token ID for this instruction.
   unsigned RCUTokenID;
 
+  // A bitmask of busy processor resource units.
+  // This field is set to zero only if execution is not delayed during this
+  // cycle because of unavailable pipeline resources.
+  uint64_t CriticalResourceMask;
+
+  // An instruction identifier. This field is only set if execution is delayed
+  // by a memory dependency.
+  unsigned CriticalMemDep;
+
 public:
   Instruction(const InstrDesc &D)
       : InstructionBase(D), Stage(IS_INVALID), CyclesLeft(UNKNOWN_CYCLES),
-        RCUTokenID(0) {}
+        RCUTokenID(0), CriticalResourceMask(0), CriticalMemDep(0) {}
 
   unsigned getRCUTokenID() const { return RCUTokenID; }
   int getCyclesLeft() const { return CyclesLeft; }
@@ -494,6 +504,13 @@ public:
     assert(isExecuted() && "Instruction is in an invalid state!");
     Stage = IS_RETIRED;
   }
+
+  uint64_t getCriticalResourceMask() const { return CriticalResourceMask; }
+  unsigned getCriticalMemDep() const { return CriticalMemDep; }
+  void setCriticalResourceMask(uint64_t ResourceMask) {
+    CriticalResourceMask = ResourceMask;
+  }
+  void setCriticalMemDep(unsigned IID) { CriticalMemDep = IID; }
 
   void cycleEvent();
 };

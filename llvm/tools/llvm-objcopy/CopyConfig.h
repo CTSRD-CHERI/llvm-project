@@ -10,11 +10,14 @@
 #define LLVM_TOOLS_LLVM_OBJCOPY_COPY_CONFIG_H
 
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/BitmaskEnum.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Object/ELFTypes.h"
 #include "llvm/Support/Allocator.h"
+#include "llvm/Support/Error.h"
 #include "llvm/Support/Regex.h"
 // Necessary for llvm::DebugCompressionType::None
 #include "llvm/Target/TargetOptions.h"
@@ -28,19 +31,40 @@ namespace objcopy {
 // ELF file.
 struct MachineInfo {
   uint16_t EMachine;
+  uint8_t OSABI;
   bool Is64Bit;
   bool IsLittleEndian;
+};
+
+// Flags set by --set-section-flags or --rename-section. Interpretation of these
+// is format-specific and not all flags are meaningful for all object file
+// formats. This is a bitmask; many section flags may be set.
+enum SectionFlag {
+  SecNone = 0,
+  SecAlloc = 1 << 0,
+  SecLoad = 1 << 1,
+  SecNoload = 1 << 2,
+  SecReadonly = 1 << 3,
+  SecDebug = 1 << 4,
+  SecCode = 1 << 5,
+  SecData = 1 << 6,
+  SecRom = 1 << 7,
+  SecMerge = 1 << 8,
+  SecStrings = 1 << 9,
+  SecContents = 1 << 10,
+  SecShare = 1 << 11,
+  LLVM_MARK_AS_BITMASK_ENUM(/* LargestValue = */ SecShare)
 };
 
 struct SectionRename {
   StringRef OriginalName;
   StringRef NewName;
-  Optional<uint64_t> NewFlags;
+  Optional<SectionFlag> NewFlags;
 };
 
 struct SectionFlagsUpdate {
   StringRef Name;
-  uint64_t NewFlags;
+  SectionFlag NewFlags;
 };
 
 enum class DiscardType {
@@ -58,6 +82,15 @@ public:
   NameOrRegex(StringRef Pattern, bool IsRegex);
   bool operator==(StringRef S) const { return R ? R->match(S) : Name == S; }
   bool operator!=(StringRef S) const { return !operator==(S); }
+};
+
+struct NewSymbolInfo {
+  StringRef SymbolName;
+  StringRef SectionName;
+  uint64_t Value = 0;
+  uint8_t Type = ELF::STT_NOTYPE;
+  uint8_t Bind = ELF::STB_GLOBAL;
+  uint8_t Visibility = ELF::STV_DEFAULT;
 };
 
 // Configuration for copying/stripping a single file.
@@ -85,6 +118,7 @@ struct CopyConfig {
   // Repeated options
   std::vector<StringRef> AddSection;
   std::vector<StringRef> DumpSection;
+  std::vector<NewSymbolInfo> SymbolsToAdd;
   std::vector<NameOrRegex> KeepSection;
   std::vector<NameOrRegex> OnlySection;
   std::vector<NameOrRegex> SymbolsToGlobalize;
@@ -100,6 +134,12 @@ struct CopyConfig {
   StringMap<SectionRename> SectionsToRename;
   StringMap<SectionFlagsUpdate> SetSectionFlags;
   StringMap<StringRef> SymbolsToRename;
+
+  // ELF entry point address expression. The input parameter is an entry point
+  // address in the input ELF file. The entry address in the output file is
+  // calculated with EntryExpr(input_address), when either --set-start or
+  // --change-start is used.
+  std::function<uint64_t(uint64_t)> EntryExpr;
 
   // Boolean options
   bool DeterministicArchives = true;
@@ -131,12 +171,12 @@ struct DriverConfig {
 // ParseObjcopyOptions returns the config and sets the input arguments. If a
 // help flag is set then ParseObjcopyOptions will print the help messege and
 // exit.
-DriverConfig parseObjcopyOptions(ArrayRef<const char *> ArgsArr);
+Expected<DriverConfig> parseObjcopyOptions(ArrayRef<const char *> ArgsArr);
 
 // ParseStripOptions returns the config and sets the input arguments. If a
 // help flag is set then ParseStripOptions will print the help messege and
 // exit.
-DriverConfig parseStripOptions(ArrayRef<const char *> ArgsArr);
+Expected<DriverConfig> parseStripOptions(ArrayRef<const char *> ArgsArr);
 
 } // namespace objcopy
 } // namespace llvm

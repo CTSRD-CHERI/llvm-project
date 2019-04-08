@@ -455,8 +455,8 @@ uint8_t elf::getMipsIsaExt(uint64_t OldExt, StringRef OldFile, uint64_t NewExt,
 }
 
 template <class ELFT> static bool isN32Abi(const InputFile *F) {
-  if (auto *EF = dyn_cast<ELFFileBase<ELFT>>(F))
-    return EF->getObj().getHeader()->e_flags & EF_MIPS_ABI2;
+  if (auto *EF = dyn_cast<ELFFileBase>(F))
+    return EF->template getObj<ELFT>().getHeader()->e_flags & EF_MIPS_ABI2;
   return false;
 }
 

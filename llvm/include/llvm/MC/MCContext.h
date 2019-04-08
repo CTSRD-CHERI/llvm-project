@@ -511,7 +511,7 @@ namespace llvm {
     /// Creates an entry in the dwarf file and directory tables.
     Expected<unsigned> getDwarfFile(StringRef Directory, StringRef FileName,
                                     unsigned FileNumber,
-                                    MD5::MD5Result *Checksum,
+                                    Optional<MD5::MD5Result> Checksum,
                                     Optional<StringRef> Source, unsigned CUID);
 
     bool isValidDwarfFileNumber(unsigned FileNumber, unsigned CUID = 0);
@@ -554,7 +554,8 @@ namespace llvm {
     /// Specifies the "root" file and directory of the compilation unit.
     /// These are "file 0" and "directory 0" in DWARF v5.
     void setMCLineTableRootFile(unsigned CUID, StringRef CompilationDir,
-                                StringRef Filename, MD5::MD5Result *Checksum,
+                                StringRef Filename,
+                                Optional<MD5::MD5Result> Checksum,
                                 Optional<StringRef> Source) {
       getMCDwarfLineTable(CUID).setRootFile(CompilationDir, Filename, Checksum,
                                             Source);
@@ -593,6 +594,10 @@ namespace llvm {
     void setGenDwarfFileNumber(unsigned FileNumber) {
       GenDwarfFileNumber = FileNumber;
     }
+
+    /// Specifies information about the "root file" for assembler clients
+    /// (e.g., llvm-mc). Assumes compilation dir etc. have been set up.
+    void setGenDwarfRootFile(StringRef FileName, StringRef Buffer);
 
     const SetVector<MCSection *> &getGenDwarfSectionSyms() {
       return SectionsForRanges;

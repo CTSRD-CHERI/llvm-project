@@ -187,7 +187,7 @@ public:
     virtual ~MapCompleter();
 
     virtual void CompleteNamespaceMap(NamespaceMapSP &namespace_map,
-                                      const ConstString &name,
+                                      ConstString name,
                                       NamespaceMapSP &parent_map) const = 0;
   };
 
@@ -262,7 +262,7 @@ private:
 
     void ImportDefinitionTo(clang::Decl *to, clang::Decl *from);
 
-    clang::Decl *Imported(clang::Decl *from, clang::Decl *to) override;
+    void Imported(clang::Decl *from, clang::Decl *to) override;
 
     clang::Decl *GetOriginalDecl(clang::Decl *To) override;
 

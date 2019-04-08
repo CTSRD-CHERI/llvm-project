@@ -24,6 +24,8 @@ public:
     bool
     IsValid() const;
 
+    explicit operator bool() const;
+
     const char *
     GetName ();
     
@@ -78,6 +80,8 @@ public:
     
     bool
     IsValid() const;
+
+    explicit operator bool() const;
     
     const char *
     GetName ();
@@ -195,6 +199,8 @@ public:
 
     bool
     IsValid();
+
+    explicit operator bool() const;
 
     uint64_t
     GetByteSize();
@@ -315,6 +321,10 @@ public:
     
     uint32_t
     GetTypeFlags ();
+
+    bool operator==(lldb::SBType &rhs);
+
+    bool operator!=(lldb::SBType &rhs);
 
     %pythoncode %{
         def template_arg_array(self):
@@ -487,6 +497,8 @@ public:
     bool
     IsValid();
 
+    explicit operator bool() const;
+
     void
     Append (lldb::SBType type);
 
@@ -497,6 +509,16 @@ public:
     GetSize();
 
     ~SBTypeList();
+
+    %pythoncode%{
+    def __iter__(self):
+        '''Iterate over all types in a lldb.SBTypeList object.'''
+        return lldb_iter(self, 'GetSize', 'GetTypeAtIndex')
+
+    def __len__(self):
+        '''Return the number of types in a lldb.SBTypeList object.'''
+        return self.GetSize()
+    %}
 };
 
 } // namespace lldb

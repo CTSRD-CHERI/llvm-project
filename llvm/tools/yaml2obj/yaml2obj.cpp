@@ -56,6 +56,8 @@ static int convertYAML(yaml::Input &YIn, raw_ostream &Out) {
         return yaml2coff(*Doc.Coff, Out);
       if (Doc.MachO || Doc.FatMachO)
         return yaml2macho(Doc, Out);
+      if (Doc.Minidump)
+        return yaml2minidump(*Doc.Minidump, Out);
       if (Doc.Wasm)
         return yaml2wasm(*Doc.Wasm, Out);
       error("yaml2obj: Unknown document type!");
@@ -84,7 +86,10 @@ int main(int argc, char **argv) {
   if (!Buf)
     return 1;
 
-  yaml::Input YIn(Buf.get()->getBuffer());
+  StringRef Buffer = Buf.get()->getBuffer();
+  if (Buffer.trim().size() == 0)
+    error("yaml2obj: Error opening '" + Input + "': Empty File.");
+  yaml::Input YIn(Buffer);
 
   int Res = convertYAML(YIn, Out->os());
   if (Res == 0)

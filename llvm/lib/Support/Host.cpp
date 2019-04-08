@@ -916,7 +916,14 @@ static void getAMDProcessorTypeAndSubtype(unsigned Family, unsigned Model,
     break; // "btver2"
   case 23:
     *Type = X86::AMDFAM17H;
-    *Subtype = X86::AMDFAM17H_ZNVER1;
+    if (Model >= 0x30 && Model <= 0x3f) {
+      *Subtype = X86::AMDFAM17H_ZNVER2;
+      break; // "znver2"; 30h-3fh: Zen2
+    }
+    if (Model <= 0x0f) {
+      *Subtype = X86::AMDFAM17H_ZNVER1;
+      break; // "znver1"; 00h-0Fh: Zen1
+    }
     break;
   default:
     break; // "generic"
@@ -1257,6 +1264,7 @@ bool sys::getHostCPUFeatures(StringMap<bool> &Features) {
 
   getX86CpuIDAndInfo(1, &EAX, &EBX, &ECX, &EDX);
 
+  Features["cx8"]    = (EDX >>  8) & 1;
   Features["cmov"]   = (EDX >> 15) & 1;
   Features["mmx"]    = (EDX >> 23) & 1;
   Features["fxsr"]   = (EDX >> 24) & 1;

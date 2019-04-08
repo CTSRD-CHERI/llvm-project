@@ -21,6 +21,8 @@
 #include "Path.h"
 #include "Protocol.h"
 #include "index/Index.h"
+#include "index/Symbol.h"
+#include "index/SymbolOrigin.h"
 #include "clang/Frontend/PrecompiledPreamble.h"
 #include "clang/Sema/CodeCompleteConsumer.h"
 #include "clang/Sema/CodeCompleteOptions.h"
@@ -33,7 +35,6 @@
 
 namespace clang {
 class NamedDecl;
-class PCHContainerOperations;
 namespace clangd {
 
 struct CodeCompleteOptions {
@@ -224,7 +225,6 @@ CodeCompleteResult codeComplete(PathRef FileName,
                                 const PreambleData *Preamble,
                                 StringRef Contents, Position Pos,
                                 IntrusiveRefCntPtr<llvm::vfs::FileSystem> VFS,
-                                std::shared_ptr<PCHContainerOperations> PCHs,
                                 CodeCompleteOptions Opts,
                                 SpeculativeFuzzyFind *SpecFuzzyFind = nullptr);
 
@@ -234,7 +234,6 @@ SignatureHelp signatureHelp(PathRef FileName,
                             const PreambleData *Preamble, StringRef Contents,
                             Position Pos,
                             IntrusiveRefCntPtr<llvm::vfs::FileSystem> VFS,
-                            std::shared_ptr<PCHContainerOperations> PCHs,
                             const SymbolIndex *Index);
 
 // For index-based completion, we only consider:

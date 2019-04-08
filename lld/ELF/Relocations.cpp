@@ -185,7 +185,6 @@ static unsigned handleMipsTlsRelocation(RelType Type, Symbol &Sym,
 // The pair of GOT entries created are of the form
 // GOT[e0] Module Index (Used to find pointer to TLS block at run-time)
 // GOT[e1] Offset of symbol in TLS block
-template <class ELFT>
 static unsigned handleARMTlsRelocation(RelType Type, Symbol &Sym,
                                        InputSectionBase &C, uint64_t Offset,
                                        int64_t Addend, RelExpr Expr) {
@@ -238,7 +237,7 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
     return 0;
 
   if (Config->EMachine == EM_ARM)
-    return handleARMTlsRelocation<ELFT>(Type, Sym, C, Offset, Addend, Expr);
+    return handleARMTlsRelocation(Type, Sym, C, Offset, Addend, Expr);
   if (Config->EMachine == EM_MIPS)
     return handleMipsTlsRelocation(Type, Sym, C, Offset, Addend, Expr);
 
@@ -254,7 +253,7 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
     return 1;
   }
 
-  if (oneof<R_TLSLD_GOT, R_TLSLD_GOT_FROM_END, R_TLSLD_PC, R_TLSLD_HINT>(
+  if (oneof<R_TLSLD_GOT, R_TLSLD_GOTPLT, R_TLSLD_PC, R_TLSLD_HINT>(
           Expr)) {
     // Local-Dynamic relocs can be relaxed to Local-Exec.
     if (!Config->Shared) {
@@ -299,7 +298,7 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
   }
 
   if (oneof<R_TLSDESC, R_AARCH64_TLSDESC_PAGE, R_TLSDESC_CALL, R_TLSGD_GOT,
-            R_TLSGD_GOT_FROM_END, R_TLSGD_PC>(Expr)) {
+            R_TLSGD_GOTPLT, R_TLSGD_PC>(Expr)) {
     if (Config->Shared) {
       if (In.Got->addDynTlsEntry(Sym)) {
         uint64_t Off = In.Got->getGlobalDynOffset(Sym);
@@ -339,7 +338,7 @@ handleTlsRelocation(RelType Type, Symbol &Sym, InputSectionBase &C,
 
   // Initial-Exec relocs can be relaxed to Local-Exec if the symbol is locally
   // defined.
-  if (oneof<R_GOT, R_GOT_FROM_END, R_GOT_PC, R_AARCH64_GOT_PAGE_PC, R_GOT_OFF,
+  if (oneof<R_GOT, R_GOTPLT, R_GOT_PC, R_AARCH64_GOT_PAGE_PC, R_GOT_OFF,
             R_TLSIE_HINT>(Expr) &&
       !Config->Shared && !Sym.IsPreemptible) {
     C.Relocations.push_back({R_RELAX_TLS_IE_TO_LE, Type, Offset, Addend, &Sym});
@@ -401,13 +400,13 @@ static bool needsPlt(RelExpr Expr) {
 static bool needsGot(RelExpr Expr) {
   return oneof<R_GOT, R_GOT_OFF, R_HEXAGON_GOT, R_MIPS_GOT_LOCAL_PAGE,
                R_MIPS_GOT_OFF, R_MIPS_GOT_OFF32, R_AARCH64_GOT_PAGE_PC,
-               R_GOT_PC, R_GOT_FROM_END>(Expr);
+               R_GOT_PC, R_GOTPLT>(Expr);
 }
 
 // True if this expression is of the form Sym - X, where X is a position in the
 // file (PC, or GOT for example).
 static bool isRelExpr(RelExpr Expr) {
-  return oneof<R_PC, R_GOTREL, R_GOTREL_FROM_END, R_MIPS_GOTREL, R_PPC_CALL,
+  return oneof<R_PC, R_GOTREL, R_GOTPLTREL, R_MIPS_GOTREL, R_PPC_CALL,
                R_PPC_CALL_PLT, R_AARCH64_PAGE_PC, R_RELAX_GOT_PC,
                R_CHERI_CAPABILITY_TABLE_REL>(Expr);
 }
@@ -427,11 +426,11 @@ static bool isStaticLinkTimeConstant(RelExpr E, RelType Type, const Symbol &Sym,
   if (oneof<R_CHERI_CAPABILITY_TABLE_INDEX,
             R_CHERI_CAPABILITY_TABLE_INDEX_SMALL_IMMEDIATE,
             R_CHERI_CAPABILITY_TABLE_REL,
-            R_GOT_FROM_END, R_GOT_OFF, R_HEXAGON_GOT, R_TLSLD_GOT_OFF,
+            R_GOTPLT, R_GOT_OFF, R_HEXAGON_GOT, R_TLSLD_GOT_OFF,
             R_MIPS_GOT_LOCAL_PAGE, R_MIPS_GOTREL, R_MIPS_GOT_OFF,
             R_MIPS_GOT_OFF32, R_MIPS_GOT_GP_PC, R_MIPS_TLSGD,
             R_AARCH64_GOT_PAGE_PC, R_GOT_PC, R_GOTONLY_PC,
-            R_GOTONLY_PC_FROM_END, R_PLT_PC, R_TLSGD_GOT, R_TLSGD_GOT_FROM_END,
+            R_GOTPLTONLY_PC, R_PLT_PC, R_TLSGD_GOT, R_TLSGD_GOTPLT,
             R_TLSGD_PC, R_PPC_CALL_PLT, R_TLSDESC_CALL, R_AARCH64_TLSDESC_PAGE,
             R_HINT, R_TLSLD_HINT, R_TLSIE_HINT>(E))
     return true;
@@ -515,11 +514,12 @@ static RelExpr fromPlt(RelExpr Expr) {
 
 // Returns true if a given shared symbol is in a read-only segment in a DSO.
 template <class ELFT> static bool isReadOnly(SharedSymbol &SS) {
-  typedef typename ELFT::Phdr Elf_Phdr;
+  using Elf_Phdr = typename ELFT::Phdr;
 
   // Determine if the symbol is read-only by scanning the DSO's program headers.
   const SharedFile<ELFT> &File = SS.getFile<ELFT>();
-  for (const Elf_Phdr &Phdr : check(File.getObj().program_headers()))
+  for (const Elf_Phdr &Phdr :
+       check(File.template getObj<ELFT>().program_headers()))
     if ((Phdr.p_type == ELF::PT_LOAD || Phdr.p_type == ELF::PT_GNU_RELRO) &&
         !(Phdr.p_flags & ELF::PF_W) && SS.Value >= Phdr.p_vaddr &&
         SS.Value < Phdr.p_vaddr + Phdr.p_memsz)
@@ -534,12 +534,12 @@ template <class ELFT> static bool isReadOnly(SharedSymbol &SS) {
 // Otherwise, they would refer to different places at runtime.
 template <class ELFT>
 static SmallSet<SharedSymbol *, 4> getSymbolsAt(SharedSymbol &SS) {
-  typedef typename ELFT::Sym Elf_Sym;
+  using Elf_Sym = typename ELFT::Sym;
 
   SharedFile<ELFT> &File = SS.getFile<ELFT>();
 
   SmallSet<SharedSymbol *, 4> Ret;
-  for (const Elf_Sym &S : File.getGlobalELFSyms()) {
+  for (const Elf_Sym &S : File.template getGlobalELFSyms<ELFT>()) {
     if (S.st_shndx == SHN_UNDEF || S.st_shndx == SHN_ABS ||
         S.getType() == STT_TLS || S.st_value != SS.Value)
       continue;
@@ -711,8 +711,14 @@ static bool maybeReportUndefined(Symbol &Sym, InputSectionBase &Sec,
   if (Config->UnresolvedSymbols == UnresolvedPolicy::Ignore && CanBeExternal)
     return false;
 
-  std::string Msg =
-      "undefined symbol: " + toString(Sym) + "\n>>> referenced by ";
+  std::string Msg = "undefined ";
+  if (Sym.Visibility == STV_INTERNAL)
+    Msg += "internal ";
+  else if (Sym.Visibility == STV_HIDDEN)
+    Msg += "hidden ";
+  else if (Sym.Visibility == STV_PROTECTED)
+    Msg += "protected ";
+  Msg += "symbol: " + toString(Sym) + "\n>>> referenced by ";
 
   std::string Src = Sec.getSrcMsg(Sym, Offset);
   if (!Src.empty())
@@ -821,7 +827,7 @@ static void addPltEntry(PltSection *Plt, GotPltSection *GotPlt,
       {Type, GotPlt, Sym.getGotPltOffset(), !Sym.IsPreemptible, &Sym, 0});
 }
 
-template <class ELFT> static void addGotEntry(Symbol &Sym) {
+static void addGotEntry(Symbol &Sym) {
   In.Got->addEntry(Sym);
 
   RelExpr Expr = Sym.isTls() ? R_TLS : R_ABS;
@@ -1045,7 +1051,9 @@ static void processRelocAux(InputSectionBase &Sec, RelExpr Expr, RelType Type,
     if (!Sym.isInPlt())
       addPltEntry<ELFT>(In.Plt, In.GotPlt, In.RelaPlt, Target->PltRel, Sym);
     if (!Sym.isDefined())
-      replaceWithDefined(Sym, In.Plt, getPltEntryOffset(Sym.PltIndex), 0);
+      replaceWithDefined(
+          Sym, In.Plt,
+          Target->PltHeaderSize + Target->PltEntrySize * Sym.PltIndex, 0);
     Sym.NeedsPltAddr = true;
     Sec.Relocations.push_back({Expr, Type, Offset, Addend, &Sym});
     return;
@@ -1131,11 +1139,15 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
       Expr = fromPlt(Expr);
   }
 
-  // This relocation does not require got entry, but it is relative to got and
-  // needs it to be created. Here we request for that.
-  if (oneof<R_GOTONLY_PC, R_GOTONLY_PC_FROM_END, R_GOTREL, R_GOTREL_FROM_END,
-            R_PPC_TOC>(Expr))
+  // If the relocation does not emit a GOT or GOTPLT entry but its computation
+  // uses their addresses, we need GOT or GOTPLT to be created.
+  //
+  // The 4 types that relative GOTPLT are all x86 and x86-64 specific.
+  if (oneof<R_GOTPLTONLY_PC, R_GOTPLTREL, R_GOTPLT, R_TLSGD_GOTPLT>(Expr)) {
+    In.GotPlt->HasGotPltOffRel = true;
+  } else if (oneof<R_GOTONLY_PC, R_GOTREL, R_PPC_TOC>(Expr)) {
     In.Got->HasGotOffRel = true;
+  }
 
   // Read an addend.
   int64_t Addend = computeAddend<ELFT>(Rel, End, Sec, Expr, Sym.isLocal());
@@ -1178,7 +1190,7 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
         // ftp://www.linux-mips.org/pub/linux/mips/doc/ABI/mipsabi.pdf
         In.MipsGot->addEntry(*Sec.File, Sym, Addend, Expr);
       } else if (!Sym.isInGot()) {
-        addGotEntry<ELFT>(Sym);
+        addGotEntry(Sym);
       }
     }
   } else {
@@ -1287,7 +1299,7 @@ static void scanReloc(InputSectionBase &Sec, OffsetGetter &GetOffset, RelTy *&I,
         // We don't need to worry about creating a MIPS GOT here because ifuncs
         // aren't a thing on MIPS.
         Sym.GotInIgot = false;
-        addGotEntry<ELFT>(Sym);
+        addGotEntry(Sym);
       }
     }
   }

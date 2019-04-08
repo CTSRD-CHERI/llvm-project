@@ -25,6 +25,7 @@
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Analysis/ValueTracking.h"
+#include "llvm/Analysis/VectorUtils.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constant.h"
@@ -1189,6 +1190,23 @@ static bool maskIsAllOneOrUndef(Value *Mask) {
   return true;
 }
 
+/// Given a mask vector <Y x i1>, return an APInt (of bitwidth Y) for each lane
+/// which may be active.  TODO: This is a lot like known bits, but for
+/// vectors.  Is there something we can common this with?
+static APInt possiblyDemandedEltsInMask(Value *Mask) {
+
+  const unsigned VWidth = cast<VectorType>(Mask->getType())->getNumElements();
+  APInt DemandedElts = APInt::getAllOnesValue(VWidth);
+  if (auto *CV = dyn_cast<ConstantVector>(Mask))
+    for (unsigned i = 0; i < VWidth; i++)
+      if (CV->getAggregateElement(i)->isNullValue())
+        DemandedElts.clearBit(i);
+  return DemandedElts;
+}
+
+// TODO, Obvious Missing Transforms:
+// * Dereferenceable address -> speculative load/select
+// * Narrow width by halfs excluding zero/undef lanes
 static Value *simplifyMaskedLoad(const IntrinsicInst &II,
                                  InstCombiner::BuilderTy &Builder) {
   // If the mask is all ones or undefs, this is a plain vector load of the 1st
@@ -1203,14 +1221,17 @@ static Value *simplifyMaskedLoad(const IntrinsicInst &II,
   return nullptr;
 }
 
-static Instruction *simplifyMaskedStore(IntrinsicInst &II, InstCombiner &IC) {
+// TODO, Obvious Missing Transforms:
+// * Single constant active lane -> store
+// * Narrow width by halfs excluding zero/undef lanes
+Instruction *InstCombiner::simplifyMaskedStore(IntrinsicInst &II) {
   auto *ConstMask = dyn_cast<Constant>(II.getArgOperand(3));
   if (!ConstMask)
     return nullptr;
 
   // If the mask is all zeros, this instruction does nothing.
   if (ConstMask->isNullValue())
-    return IC.eraseInstFromFunction(II);
+    return eraseInstFromFunction(II);
 
   // If the mask is all ones, this is a plain vector store of the 1st argument.
   if (ConstMask->isAllOnesValue()) {
@@ -1219,14 +1240,62 @@ static Instruction *simplifyMaskedStore(IntrinsicInst &II, InstCombiner &IC) {
     return new StoreInst(II.getArgOperand(0), StorePtr, false, Alignment);
   }
 
+  // Use masked off lanes to simplify operands via SimplifyDemandedVectorElts
+  APInt DemandedElts = possiblyDemandedEltsInMask(ConstMask);
+  APInt UndefElts(DemandedElts.getBitWidth(), 0);
+  if (Value *V = SimplifyDemandedVectorElts(II.getOperand(0),
+                                            DemandedElts, UndefElts)) {
+    II.setOperand(0, V);
+    return &II;
+  }
+
   return nullptr;
 }
 
+// TODO, Obvious Missing Transforms:
+// * Single constant active lane load -> load
+// * Dereferenceable address & few lanes -> scalarize speculative load/selects
+// * Adjacent vector addresses -> masked.load
+// * Narrow width by halfs excluding zero/undef lanes
+// * Vector splat address w/known mask -> scalar load
+// * Vector incrementing address -> vector masked load
 static Instruction *simplifyMaskedGather(IntrinsicInst &II, InstCombiner &IC) {
   // If the mask is all zeros, return the "passthru" argument of the gather.
   auto *ConstMask = dyn_cast<Constant>(II.getArgOperand(2));
   if (ConstMask && ConstMask->isNullValue())
     return IC.replaceInstUsesWith(II, II.getArgOperand(3));
+
+  return nullptr;
+}
+
+// TODO, Obvious Missing Transforms:
+// * Single constant active lane -> store
+// * Adjacent vector addresses -> masked.store
+// * Narrow store width by halfs excluding zero/undef lanes
+// * Vector splat address w/known mask -> scalar store
+// * Vector incrementing address -> vector masked store
+Instruction *InstCombiner::simplifyMaskedScatter(IntrinsicInst &II) {
+  auto *ConstMask = dyn_cast<Constant>(II.getArgOperand(3));
+  if (!ConstMask)
+    return nullptr;
+
+  // If the mask is all zeros, a scatter does nothing.
+  if (ConstMask->isNullValue())
+    return eraseInstFromFunction(II);
+
+  // Use masked off lanes to simplify operands via SimplifyDemandedVectorElts
+  APInt DemandedElts = possiblyDemandedEltsInMask(ConstMask);
+  APInt UndefElts(DemandedElts.getBitWidth(), 0);
+  if (Value *V = SimplifyDemandedVectorElts(II.getOperand(0),
+                                            DemandedElts, UndefElts)) {
+    II.setOperand(0, V);
+    return &II;
+  }
+  if (Value *V = SimplifyDemandedVectorElts(II.getOperand(1),
+                                            DemandedElts, UndefElts)) {
+    II.setOperand(1, V);
+    return &II;
+  }
 
   return nullptr;
 }
@@ -1265,25 +1334,24 @@ static Instruction *simplifyInvariantGroupIntrinsic(IntrinsicInst &II,
   return cast<Instruction>(Result);
 }
 
-static Instruction *simplifyMaskedScatter(IntrinsicInst &II, InstCombiner &IC) {
-  // If the mask is all zeros, a scatter does nothing.
-  auto *ConstMask = dyn_cast<Constant>(II.getArgOperand(3));
-  if (ConstMask && ConstMask->isNullValue())
-    return IC.eraseInstFromFunction(II);
-
-  return nullptr;
-}
-
 static Instruction *foldCttzCtlz(IntrinsicInst &II, InstCombiner &IC) {
   assert((II.getIntrinsicID() == Intrinsic::cttz ||
           II.getIntrinsicID() == Intrinsic::ctlz) &&
          "Expected cttz or ctlz intrinsic");
+  bool IsTZ = II.getIntrinsicID() == Intrinsic::cttz;
   Value *Op0 = II.getArgOperand(0);
+  Value *X;
+  // ctlz(bitreverse(x)) -> cttz(x)
+  // cttz(bitreverse(x)) -> ctlz(x)
+  if (match(Op0, m_BitReverse(m_Value(X)))) {
+    Intrinsic::ID ID = IsTZ ? Intrinsic::ctlz : Intrinsic::cttz;
+    Function *F = Intrinsic::getDeclaration(II.getModule(), ID, II.getType());
+    return CallInst::Create(F, {X, II.getArgOperand(1)});
+  }
 
   KnownBits Known = IC.computeKnownBits(Op0, 0, &II);
 
   // Create a mask for bits above (ctlz) or below (cttz) the first known one.
-  bool IsTZ = II.getIntrinsicID() == Intrinsic::cttz;
   unsigned PossibleZeros = IsTZ ? Known.countMaxTrailingZeros()
                                 : Known.countMaxLeadingZeros();
   unsigned DefiniteZeros = IsTZ ? Known.countMinTrailingZeros()
@@ -1329,6 +1397,14 @@ static Instruction *foldCtpop(IntrinsicInst &II, InstCombiner &IC) {
   assert(II.getIntrinsicID() == Intrinsic::ctpop &&
          "Expected ctpop intrinsic");
   Value *Op0 = II.getArgOperand(0);
+  Value *X;
+  // ctpop(bitreverse(x)) -> ctpop(x)
+  // ctpop(bswap(x)) -> ctpop(x)
+  if (match(Op0, m_BitReverse(m_Value(X))) || match(Op0, m_BSwap(m_Value(X)))) {
+    II.setOperand(0, X);
+    return &II;
+  }
+
   // FIXME: Try to simplify vectors of integers.
   auto *IT = dyn_cast<IntegerType>(Op0->getType());
   if (!IT)
@@ -1828,6 +1904,19 @@ static Instruction *canonicalizeConstantArg0ToArg1(CallInst &Call) {
   return nullptr;
 }
 
+Instruction *InstCombiner::foldIntrinsicWithOverflowCommon(IntrinsicInst *II) {
+  OverflowCheckFlavor OCF =
+      IntrinsicIDToOverflowCheckFlavor(II->getIntrinsicID());
+  assert(OCF != OCF_INVALID && "unexpected!");
+
+  Value *OperationResult = nullptr;
+  Constant *OverflowResult = nullptr;
+  if (OptimizeOverflowCheck(OCF, II->getArgOperand(0), II->getArgOperand(1),
+                            *II, OperationResult, OverflowResult))
+    return CreateOverflowTuple(II, OperationResult, OverflowResult);
+  return nullptr;
+}
+
 /// CallInst simplification. This mostly only handles folding of intrinsic
 /// instructions. For normal calls, it allows visitCallBase to do the heavy
 /// lifting.
@@ -1909,8 +1998,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     if (Changed) return II;
   }
 
-  // For vector result intrinsics, use the generic demanded vector support to
-  // simplify any operands before moving on to the per-intrinsic rules.    
+  // For vector result intrinsics, use the generic demanded vector support.
   if (II->getType()->isVectorTy()) {
     auto VWidth = II->getType()->getVectorNumElements();
     APInt UndefElts(VWidth, 0);
@@ -1957,11 +2045,11 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
       return replaceInstUsesWith(CI, SimplifiedMaskedOp);
     break;
   case Intrinsic::masked_store:
-    return simplifyMaskedStore(*II, *this);
+    return simplifyMaskedStore(*II);
   case Intrinsic::masked_gather:
     return simplifyMaskedGather(*II, *this);
   case Intrinsic::masked_scatter:
-    return simplifyMaskedScatter(*II, *this);
+    return simplifyMaskedScatter(*II);
   case Intrinsic::launder_invariant_group:
   case Intrinsic::strip_invariant_group:
     if (auto *SkippedBarrier = simplifyInvariantGroupIntrinsic(*II, *this))
@@ -1995,33 +2083,51 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
 
   case Intrinsic::fshl:
   case Intrinsic::fshr: {
-    const APInt *SA;
-    if (match(II->getArgOperand(2), m_APInt(SA))) {
-      Value *Op0 = II->getArgOperand(0), *Op1 = II->getArgOperand(1);
-      unsigned BitWidth = SA->getBitWidth();
-      uint64_t ShiftAmt = SA->urem(BitWidth);
-      assert(ShiftAmt != 0 && "SimplifyCall should have handled zero shift");
-      // Normalize to funnel shift left.
-      if (II->getIntrinsicID() == Intrinsic::fshr)
-        ShiftAmt = BitWidth - ShiftAmt;
+    Value *Op0 = II->getArgOperand(0), *Op1 = II->getArgOperand(1);
+    Type *Ty = II->getType();
+    unsigned BitWidth = Ty->getScalarSizeInBits();
+    Constant *ShAmtC;
+    if (match(II->getArgOperand(2), m_Constant(ShAmtC)) &&
+        !isa<ConstantExpr>(ShAmtC) && !ShAmtC->containsConstantExpression()) {
+      // Canonicalize a shift amount constant operand to modulo the bit-width.
+      Constant *WidthC = ConstantInt::get(Ty, BitWidth);
+      Constant *ModuloC = ConstantExpr::getURem(ShAmtC, WidthC);
+      if (ModuloC != ShAmtC) {
+        II->setArgOperand(2, ModuloC);
+        return II;
+      }
+      assert(ConstantExpr::getICmp(ICmpInst::ICMP_UGT, WidthC, ShAmtC) ==
+                 ConstantInt::getTrue(CmpInst::makeCmpResultType(Ty)) &&
+             "Shift amount expected to be modulo bitwidth");
 
-      // fshl(X, 0, C) -> shl X, C
-      // fshl(X, undef, C) -> shl X, C
-      if (match(Op1, m_Zero()) || match(Op1, m_Undef()))
-        return BinaryOperator::CreateShl(
-            Op0, ConstantInt::get(II->getType(), ShiftAmt));
+      // Canonicalize funnel shift right by constant to funnel shift left. This
+      // is not entirely arbitrary. For historical reasons, the backend may
+      // recognize rotate left patterns but miss rotate right patterns.
+      if (II->getIntrinsicID() == Intrinsic::fshr) {
+        // fshr X, Y, C --> fshl X, Y, (BitWidth - C)
+        Constant *LeftShiftC = ConstantExpr::getSub(WidthC, ShAmtC);
+        Module *Mod = II->getModule();
+        Function *Fshl = Intrinsic::getDeclaration(Mod, Intrinsic::fshl, Ty);
+        return CallInst::Create(Fshl, { Op0, Op1, LeftShiftC });
+      }
+      assert(II->getIntrinsicID() == Intrinsic::fshl &&
+             "All funnel shifts by simple constants should go left");
 
-      // fshl(0, X, C) -> lshr X, (BW-C)
-      // fshl(undef, X, C) -> lshr X, (BW-C)
-      if (match(Op0, m_Zero()) || match(Op0, m_Undef()))
-        return BinaryOperator::CreateLShr(
-            Op1, ConstantInt::get(II->getType(), BitWidth - ShiftAmt));
+      // fshl(X, 0, C) --> shl X, C
+      // fshl(X, undef, C) --> shl X, C
+      if (match(Op1, m_ZeroInt()) || match(Op1, m_Undef()))
+        return BinaryOperator::CreateShl(Op0, ShAmtC);
+
+      // fshl(0, X, C) --> lshr X, (BW-C)
+      // fshl(undef, X, C) --> lshr X, (BW-C)
+      if (match(Op0, m_ZeroInt()) || match(Op0, m_Undef()))
+        return BinaryOperator::CreateLShr(Op1,
+                                          ConstantExpr::getSub(WidthC, ShAmtC));
     }
 
     // The shift amount (operand 2) of a funnel shift is modulo the bitwidth,
     // so only the low bits of the shift amount are demanded if the bitwidth is
     // a power-of-2.
-    unsigned BitWidth = II->getType()->getScalarSizeInBits();
     if (!isPowerOf2_32(BitWidth))
       break;
     APInt Op2Demanded = APInt::getLowBitsSet(BitWidth, Log2_32_Ceil(BitWidth));
@@ -2031,7 +2137,34 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
     break;
   }
   case Intrinsic::uadd_with_overflow:
-  case Intrinsic::sadd_with_overflow:
+  case Intrinsic::sadd_with_overflow: {
+    if (Instruction *I = canonicalizeConstantArg0ToArg1(CI))
+      return I;
+    if (Instruction *I = foldIntrinsicWithOverflowCommon(II))
+      return I;
+
+    // Given 2 constant operands whose sum does not overflow:
+    // uaddo (X +nuw C0), C1 -> uaddo X, C0 + C1
+    // saddo (X +nsw C0), C1 -> saddo X, C0 + C1
+    Value *X;
+    const APInt *C0, *C1;
+    Value *Arg0 = II->getArgOperand(0);
+    Value *Arg1 = II->getArgOperand(1);
+    bool IsSigned = II->getIntrinsicID() == Intrinsic::sadd_with_overflow;
+    bool HasNWAdd = IsSigned ? match(Arg0, m_NSWAdd(m_Value(X), m_APInt(C0)))
+                             : match(Arg0, m_NUWAdd(m_Value(X), m_APInt(C0)));
+    if (HasNWAdd && match(Arg1, m_APInt(C1))) {
+      bool Overflow;
+      APInt NewC =
+          IsSigned ? C1->sadd_ov(*C0, Overflow) : C1->uadd_ov(*C0, Overflow);
+      if (!Overflow)
+        return replaceInstUsesWith(
+            *II, Builder.CreateBinaryIntrinsic(
+                     II->getIntrinsicID(), X,
+                     ConstantInt::get(Arg1->getType(), NewC)));
+    }
+    break;
+  }
   case Intrinsic::umul_with_overflow:
   case Intrinsic::smul_with_overflow:
     if (Instruction *I = canonicalizeConstantArg0ToArg1(CI))
@@ -2040,15 +2173,8 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
 
   case Intrinsic::usub_with_overflow:
   case Intrinsic::ssub_with_overflow: {
-    OverflowCheckFlavor OCF =
-        IntrinsicIDToOverflowCheckFlavor(II->getIntrinsicID());
-    assert(OCF != OCF_INVALID && "unexpected!");
-
-    Value *OperationResult = nullptr;
-    Constant *OverflowResult = nullptr;
-    if (OptimizeOverflowCheck(OCF, II->getArgOperand(0), II->getArgOperand(1),
-                              *II, OperationResult, OverflowResult))
-      return CreateOverflowTuple(II, OperationResult, OverflowResult);
+    if (Instruction *I = foldIntrinsicWithOverflowCommon(II))
+      return I;
 
     break;
   }
@@ -3560,10 +3686,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
   }
   case Intrinsic::amdgcn_exp:
   case Intrinsic::amdgcn_exp_compr: {
-    ConstantInt *En = dyn_cast<ConstantInt>(II->getArgOperand(1));
-    if (!En) // Illegal.
-      break;
-
+    ConstantInt *En = cast<ConstantInt>(II->getArgOperand(1));
     unsigned EnBits = En->getZExtValue();
     if (EnBits == 0xf)
       break; // All inputs enabled.
@@ -3653,10 +3776,7 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
   }
   case Intrinsic::amdgcn_icmp:
   case Intrinsic::amdgcn_fcmp: {
-    const ConstantInt *CC = dyn_cast<ConstantInt>(II->getArgOperand(2));
-    if (!CC)
-      break;
-
+    const ConstantInt *CC = cast<ConstantInt>(II->getArgOperand(2));
     // Guard against invalid arguments.
     int64_t CCVal = CC->getZExtValue();
     bool IsInteger = II->getIntrinsicID() == Intrinsic::amdgcn_icmp;
@@ -3806,11 +3926,10 @@ Instruction *InstCombiner::visitCallInst(CallInst &CI) {
   case Intrinsic::amdgcn_update_dpp: {
     Value *Old = II->getArgOperand(0);
 
-    auto BC = dyn_cast<ConstantInt>(II->getArgOperand(5));
-    auto RM = dyn_cast<ConstantInt>(II->getArgOperand(3));
-    auto BM = dyn_cast<ConstantInt>(II->getArgOperand(4));
-    if (!BC || !RM || !BM ||
-        BC->isZeroValue() ||
+    auto BC = cast<ConstantInt>(II->getArgOperand(5));
+    auto RM = cast<ConstantInt>(II->getArgOperand(3));
+    auto BM = cast<ConstantInt>(II->getArgOperand(4));
+    if (BC->isZeroValue() ||
         RM->getZExtValue() != 0xF ||
         BM->getZExtValue() != 0xF ||
         isa<UndefValue>(Old))

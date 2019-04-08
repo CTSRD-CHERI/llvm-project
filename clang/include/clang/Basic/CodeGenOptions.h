@@ -100,6 +100,7 @@ public:
     ProfileClangInstr, // Clang instrumentation to generate execution counts
                        // to use with PGO.
     ProfileIRInstr,    // IR level PGO instrumentation in LLVM.
+    ProfileCSIRInstr, // IR level PGO context sensitive instrumentation in LLVM.
   };
 
   enum EmbedBitcodeKind {
@@ -203,8 +204,8 @@ public:
   /// A list of linker options to embed in the object file.
   std::vector<std::string> LinkerOptions;
 
-  /// Name of the profile file to use as output for -fprofile-instr-generate
-  /// and -fprofile-generate.
+  /// Name of the profile file to use as output for -fprofile-instr-generate,
+  /// -fprofile-generate, and -fcs-profile-generate.
   std::string InstrProfileOutput;
 
   /// Name of the profile file to use with -fprofile-sample-use.
@@ -229,6 +230,12 @@ public:
   /// Prefix to use for -save-temps output.
   std::string SaveTempsFilePrefix;
 
+  /// The name of the file to which the backend should save CHERI-related
+  /// statistics (number of ptr->int casts, csetbounds info, etc..) as JSON.
+  /// Note: This file can be a shared between multiple compiler instances
+  /// since we will use a lock file global
+  std::string CHERIStatsFile;
+
   /// Name of file passed with -fcuda-include-gpubinary option to forward to
   /// CUDA runtime back-end for incorporating them into host-side object file.
   std::string CudaGpuBinaryFileName;
@@ -237,11 +244,9 @@ public:
   /// records.
   std::string OptRecordFile;
 
-  /// The name of the file to whcih the backend should save CHERI-related
-  /// statistics (number of ptr->int casts, csetbounds info, etc..) as JSON
-  /// Note: This file can be a shared between multiple compiler instances
-  /// since we will use a lock file global
-  std::string CHERIStatsFile;
+  /// The regex that filters the passes that should be saved to the optimization
+  /// records.
+  std::string OptRecordPasses;
 
   /// Regular expression to select optimizations for which we should enable
   /// optimization remarks. Transformation passes whose name matches this
@@ -324,6 +329,11 @@ public:
     return getProfileInstr() == ProfileIRInstr;
   }
 
+  /// Check if CS IR level profile instrumentation is on.
+  bool hasProfileCSIRInstr() const {
+    return getProfileInstr() == ProfileCSIRInstr;
+  }
+
   /// Check if Clang profile use is on.
   bool hasProfileClangUse() const {
     return getProfileUse() == ProfileClangInstr;
@@ -331,9 +341,12 @@ public:
 
   /// Check if IR level profile use is on.
   bool hasProfileIRUse() const {
-    return getProfileUse() == ProfileIRInstr;
+    return getProfileUse() == ProfileIRInstr ||
+           getProfileUse() == ProfileCSIRInstr;
   }
 
+  /// Check if CSIR profile use is on.
+  bool hasProfileCSIRUse() const { return getProfileUse() == ProfileCSIRInstr; }
 };
 
 }  // end namespace clang

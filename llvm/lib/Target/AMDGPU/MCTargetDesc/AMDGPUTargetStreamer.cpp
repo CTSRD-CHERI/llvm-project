@@ -18,7 +18,6 @@
 #include "llvm/ADT/Twine.h"
 #include "llvm/BinaryFormat/AMDGPUMetadataVerifier.h"
 #include "llvm/BinaryFormat/ELF.h"
-#include "llvm/BinaryFormat/MsgPackTypes.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Metadata.h"
@@ -51,12 +50,10 @@ bool AMDGPUTargetStreamer::EmitHSAMetadataV2(StringRef HSAMetadataString) {
 }
 
 bool AMDGPUTargetStreamer::EmitHSAMetadataV3(StringRef HSAMetadataString) {
-  std::shared_ptr<msgpack::Node> HSAMetadataRoot;
-  yaml::Input YIn(HSAMetadataString);
-  YIn >> HSAMetadataRoot;
-  if (YIn.error())
+  msgpack::Document HSAMetadataDoc;
+  if (!HSAMetadataDoc.fromYAML(HSAMetadataString))
     return false;
-  return EmitHSAMetadata(HSAMetadataRoot, false);
+  return EmitHSAMetadata(HSAMetadataDoc, false);
 }
 
 StringRef AMDGPUTargetStreamer::getArchNameFromElfMach(unsigned ElfMach) {
@@ -156,6 +153,14 @@ AMDGPUTargetAsmStreamer::AMDGPUTargetAsmStreamer(MCStreamer &S,
                                                  formatted_raw_ostream &OS)
     : AMDGPUTargetStreamer(S), OS(OS) { }
 
+// A hook for emitting stuff at the end.
+// We use it for emitting the accumulated PAL metadata as directives.
+void AMDGPUTargetAsmStreamer::finish() {
+  std::string S;
+  getPALMetadata()->toString(S);
+  OS << S;
+}
+
 void AMDGPUTargetAsmStreamer::EmitDirectiveAMDGCNTarget(StringRef Target) {
   OS << "\t.amdgcn_target \"" << Target << "\"\n";
 }
@@ -213,29 +218,18 @@ bool AMDGPUTargetAsmStreamer::EmitHSAMetadata(
 }
 
 bool AMDGPUTargetAsmStreamer::EmitHSAMetadata(
-    std::shared_ptr<msgpack::Node> &HSAMetadataRoot, bool Strict) {
+    msgpack::Document &HSAMetadataDoc, bool Strict) {
   V3::MetadataVerifier Verifier(Strict);
-  if (!Verifier.verify(*HSAMetadataRoot))
+  if (!Verifier.verify(HSAMetadataDoc.getRoot()))
     return false;
 
   std::string HSAMetadataString;
   raw_string_ostream StrOS(HSAMetadataString);
-  yaml::Output YOut(StrOS);
-  YOut << HSAMetadataRoot;
+  HSAMetadataDoc.toYAML(StrOS);
 
   OS << '\t' << V3::AssemblerDirectiveBegin << '\n';
   OS << StrOS.str() << '\n';
   OS << '\t' << V3::AssemblerDirectiveEnd << '\n';
-  return true;
-}
-
-bool AMDGPUTargetAsmStreamer::EmitPALMetadata(
-    const PALMD::Metadata &PALMetadata) {
-  std::string PALMetadataString;
-  if (PALMD::toString(PALMetadata, PALMetadataString))
-    return false;
-
-  OS << '\t' << PALMD::AssemblerDirective << PALMetadataString << '\n';
   return true;
 }
 
@@ -386,6 +380,19 @@ MCELFStreamer &AMDGPUTargetELFStreamer::getStreamer() {
   return static_cast<MCELFStreamer &>(Streamer);
 }
 
+// A hook for emitting stuff at the end.
+// We use it for emitting the accumulated PAL metadata as a .note record.
+void AMDGPUTargetELFStreamer::finish() {
+  std::string Blob;
+  const char *Vendor = getPALMetadata()->getVendor();
+  unsigned Type = getPALMetadata()->getType();
+  getPALMetadata()->toBlob(Type, Blob);
+  if (Blob.empty())
+    return;
+  EmitNote(Vendor, MCConstantExpr::create(Blob.size(), getContext()), Type,
+           [&](MCELFStreamer &OS) { OS.EmitBytes(Blob); });
+}
+
 void AMDGPUTargetELFStreamer::EmitNote(
     StringRef Name, const MCExpr *DescSZ, unsigned NoteType,
     function_ref<void(MCELFStreamer &)> EmitDesc) {
@@ -481,16 +488,14 @@ bool AMDGPUTargetELFStreamer::EmitISAVersion(StringRef IsaVersionString) {
   return true;
 }
 
-bool AMDGPUTargetELFStreamer::EmitHSAMetadata(
-    std::shared_ptr<msgpack::Node> &HSAMetadataRoot, bool Strict) {
+bool AMDGPUTargetELFStreamer::EmitHSAMetadata(msgpack::Document &HSAMetadataDoc,
+                                              bool Strict) {
   V3::MetadataVerifier Verifier(Strict);
-  if (!Verifier.verify(*HSAMetadataRoot))
+  if (!Verifier.verify(HSAMetadataDoc.getRoot()))
     return false;
 
   std::string HSAMetadataString;
-  raw_string_ostream StrOS(HSAMetadataString);
-  msgpack::Writer MPWriter(StrOS);
-  HSAMetadataRoot->write(MPWriter);
+  HSAMetadataDoc.writeToBlob(HSAMetadataString);
 
   // Create two labels to mark the beginning and end of the desc field
   // and a MCExpr to calculate the size of the desc field.
@@ -504,7 +509,7 @@ bool AMDGPUTargetELFStreamer::EmitHSAMetadata(
   EmitNote(ElfNote::NoteNameV3, DescSZ, ELF::NT_AMDGPU_METADATA,
            [&](MCELFStreamer &OS) {
              OS.EmitLabel(DescBegin);
-             OS.EmitBytes(StrOS.str());
+             OS.EmitBytes(HSAMetadataString);
              OS.EmitLabel(DescEnd);
            });
   return true;
@@ -534,18 +539,6 @@ bool AMDGPUTargetELFStreamer::EmitHSAMetadata(
   return true;
 }
 
-bool AMDGPUTargetELFStreamer::EmitPALMetadata(
-    const PALMD::Metadata &PALMetadata) {
-  EmitNote(ElfNote::NoteNameV2,
-           MCConstantExpr::create(PALMetadata.size() * sizeof(uint32_t),
-                                  getContext()),
-           ELF::NT_AMD_AMDGPU_PAL_METADATA, [&](MCELFStreamer &OS) {
-             for (auto I : PALMetadata)
-               OS.EmitIntValue(I, sizeof(uint32_t));
-           });
-  return true;
-}
-
 void AMDGPUTargetELFStreamer::EmitAmdhsaKernelDescriptor(
     const MCSubtargetInfo &STI, StringRef KernelName,
     const amdhsa::kernel_descriptor_t &KernelDescriptor, uint64_t NextVGPR,
@@ -554,16 +547,25 @@ void AMDGPUTargetELFStreamer::EmitAmdhsaKernelDescriptor(
   auto &Streamer = getStreamer();
   auto &Context = Streamer.getContext();
 
+  MCSymbolELF *KernelCodeSymbol = cast<MCSymbolELF>(
+      Context.getOrCreateSymbol(Twine(KernelName)));
   MCSymbolELF *KernelDescriptorSymbol = cast<MCSymbolELF>(
       Context.getOrCreateSymbol(Twine(KernelName) + Twine(".kd")));
-  KernelDescriptorSymbol->setBinding(ELF::STB_GLOBAL);
+
+  // Copy kernel descriptor symbol's binding, other and visibility from the
+  // kernel code symbol.
+  KernelDescriptorSymbol->setBinding(KernelCodeSymbol->getBinding());
+  KernelDescriptorSymbol->setOther(KernelCodeSymbol->getOther());
+  KernelDescriptorSymbol->setVisibility(KernelCodeSymbol->getVisibility());
+  // Kernel descriptor symbol's type and size are fixed.
   KernelDescriptorSymbol->setType(ELF::STT_OBJECT);
   KernelDescriptorSymbol->setSize(
       MCConstantExpr::create(sizeof(KernelDescriptor), Context));
 
-  MCSymbolELF *KernelCodeSymbol = cast<MCSymbolELF>(
-      Context.getOrCreateSymbol(Twine(KernelName)));
-  KernelCodeSymbol->setBinding(ELF::STB_LOCAL);
+  // The visibility of the kernel code symbol must be protected or less to allow
+  // static relocations from the kernel descriptor to be used.
+  if (KernelCodeSymbol->getVisibility() == ELF::STV_DEFAULT)
+    KernelCodeSymbol->setVisibility(ELF::STV_PROTECTED);
 
   Streamer.EmitLabel(KernelDescriptorSymbol);
   Streamer.EmitBytes(StringRef(

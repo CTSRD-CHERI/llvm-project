@@ -324,6 +324,11 @@ public:
     qs.removeObjCLifetime();
     return qs;
   }
+  Qualifiers withoutAddressSpace() const {
+    Qualifiers qs = *this;
+    qs.removeAddressSpace();
+    return qs;
+  }
 
   bool hasObjCLifetime() const { return Mask & LifetimeMask; }
   ObjCLifetime getObjCLifetime() const {

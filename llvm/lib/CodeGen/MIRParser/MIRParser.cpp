@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/MIRParser/MIRParser.h"
-#include "MIParser.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/StringMap.h"
@@ -21,6 +20,7 @@
 #include "llvm/AsmParser/SlotMapping.h"
 #include "llvm/CodeGen/GlobalISel/RegisterBank.h"
 #include "llvm/CodeGen/GlobalISel/RegisterBankInfo.h"
+#include "llvm/CodeGen/MIRParser/MIParser.h"
 #include "llvm/CodeGen/MIRYamlMapping.h"
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
@@ -39,6 +39,7 @@
 #include "llvm/Support/SMLoc.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/YAMLTraits.h"
+#include "llvm/Target/TargetMachine.h"
 #include <memory>
 
 using namespace llvm;
@@ -266,6 +267,11 @@ bool MIRParserImpl::parseMachineFunction(Module &M, MachineModuleInfo &MMI) {
   // Parse the yaml.
   yaml::MachineFunction YamlMF;
   yaml::EmptyContext Ctx;
+
+  const LLVMTargetMachine &TM = MMI.getTarget();
+  YamlMF.MachineFuncInfo = std::unique_ptr<yaml::MachineFunctionInfo>(
+      TM.createDefaultFuncInfoYAML());
+
   yaml::yamlize(In, YamlMF, false, Ctx);
   if (In.error())
     return true;
@@ -407,6 +413,27 @@ MIRParserImpl::initializeMachineFunction(const yaml::MachineFunction &YamlMF,
   if (setupRegisterInfo(PFS, YamlMF))
     return true;
 
+  if (YamlMF.MachineFuncInfo) {
+    const LLVMTargetMachine &TM = MF.getTarget();
+    // Note this is called after the initial constructor of the
+    // MachineFunctionInfo based on the MachineFunction, which may depend on the
+    // IR.
+
+    SMRange SrcRange;
+    if (TM.parseMachineFunctionInfo(*YamlMF.MachineFuncInfo, PFS, Error,
+                                    SrcRange)) {
+      return error(Error, SrcRange);
+    }
+  }
+
+  // Set the reserved registers after parsing MachineFuncInfo. The target may
+  // have been recording information used to select the reserved registers
+  // there.
+  // FIXME: This is a temporary workaround until the reserved registers can be
+  // serialized.
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+  MRI.freezeReservedRegs(MF);
+
   computeFunctionProperties(MF);
 
   MF.getSubtarget().mirFileLoaded(MF);
@@ -545,9 +572,6 @@ bool MIRParserImpl::setupRegisterInfo(const PerFunctionMIParsingState &PFS,
     }
   }
 
-  // FIXME: This is a temporary workaround until the reserved registers can be
-  // serialized.
-  MRI.freezeReservedRegs(MF);
   return Error;
 }
 
@@ -596,8 +620,8 @@ bool MIRParserImpl::initializeFrameInfo(PerFunctionMIParsingState &PFS,
                                         Object.IsImmutable, Object.IsAliased);
     else
       ObjectIdx = MFI.CreateFixedSpillStackObject(Object.Size, Object.Offset);
-    MFI.setObjectAlignment(ObjectIdx, Object.Alignment);
     MFI.setStackID(ObjectIdx, Object.StackID);
+    MFI.setObjectAlignment(ObjectIdx, Object.Alignment);
     if (!PFS.FixedStackObjectSlots.insert(std::make_pair(Object.ID.Value,
                                                          ObjectIdx))
              .second)
@@ -630,9 +654,9 @@ bool MIRParserImpl::initializeFrameInfo(PerFunctionMIParsingState &PFS,
     else
       ObjectIdx = MFI.CreateStackObject(
           Object.Size, Object.Alignment,
-          Object.Type == yaml::MachineStackObject::SpillSlot, Alloca);
+          Object.Type == yaml::MachineStackObject::SpillSlot, Alloca,
+          Object.StackID);
     MFI.setObjectOffset(ObjectIdx, Object.Offset);
-    MFI.setStackID(ObjectIdx, Object.StackID);
 
     if (!PFS.StackObjectSlots.insert(std::make_pair(Object.ID.Value, ObjectIdx))
              .second)

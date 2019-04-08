@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -49,7 +50,8 @@ template <class ELFT> void ELFWriter<ELFT>::writePhdr(const Segment &Seg) {
   Phdr.p_align = Seg.Align;
 }
 
-Error SectionBase::removeSectionReferences(const SectionBase *Sec) {
+Error SectionBase::removeSectionReferences(
+    function_ref<bool(const SectionBase *)> ToRemove) {
   return Error::success();
 }
 
@@ -60,6 +62,8 @@ Error SectionBase::removeSymbols(function_ref<bool(const Symbol &)> ToRemove) {
 void SectionBase::initialize(SectionTableRef SecTable) {}
 void SectionBase::finalize() {}
 void SectionBase::markSymbols() {}
+void SectionBase::replaceSectionReferences(
+    const DenseMap<SectionBase *, SectionBase *> &) {}
 
 template <class ELFT> void ELFWriter<ELFT>::writeShdr(const SectionBase &Sec) {
   uint8_t *B = Buf.getBufferStart();
@@ -167,8 +171,7 @@ getDecompressedSizeAndAlignment(ArrayRef<uint8_t> Data) {
   const bool IsGnuDebug = isDataGnuCompressed(Data);
   const uint64_t DecompressedSize =
       IsGnuDebug
-          ? support::endian::read64be(reinterpret_cast<const uint64_t *>(
-                Data.data() + ZlibGnuMagic.size()))
+          ? support::endian::read64be(Data.data() + ZlibGnuMagic.size())
           : reinterpret_cast<const Elf_Chdr_Impl<ELFT> *>(Data.data())->ch_size;
   const uint64_t DecompressedAlign =
       IsGnuDebug ? 1
@@ -180,13 +183,6 @@ getDecompressedSizeAndAlignment(ArrayRef<uint8_t> Data) {
 
 template <class ELFT>
 void ELFSectionWriter<ELFT>::visit(const DecompressedSection &Sec) {
-  uint8_t *Buf = Out.getBufferStart() + Sec.Offset;
-
-  if (!zlib::isAvailable()) {
-    std::copy(Sec.OriginalData.begin(), Sec.OriginalData.end(), Buf);
-    return;
-  }
-
   const size_t DataOffset = isDataGnuCompressed(Sec.OriginalData)
                                 ? (ZlibGnuMagic.size() + sizeof(Sec.Size))
                                 : sizeof(Elf_Chdr_Impl<ELFT>);
@@ -200,6 +196,7 @@ void ELFSectionWriter<ELFT>::visit(const DecompressedSection &Sec) {
                                  static_cast<size_t>(Sec.Size)))
     reportError(Sec.Name, std::move(E));
 
+  uint8_t *Buf = Out.getBufferStart() + Sec.Offset;
   std::copy(DecompressedContent.begin(), DecompressedContent.end(), Buf);
 }
 
@@ -261,12 +258,6 @@ CompressedSection::CompressedSection(const SectionBase &Sec,
                                      DebugCompressionType CompressionType)
     : SectionBase(Sec), CompressionType(CompressionType),
       DecompressedSize(Sec.OriginalData.size()), DecompressedAlign(Sec.Align) {
-
-  if (!zlib::isAvailable()) {
-    CompressionType = DebugCompressionType::None;
-    return;
-  }
-
   if (Error E = zlib::compress(
           StringRef(reinterpret_cast<const char *>(OriginalData.data()),
                     OriginalData.size()),
@@ -305,16 +296,16 @@ void CompressedSection::accept(MutableSectionVisitor &Visitor) {
   Visitor.visit(*this);
 }
 
-void StringTableSection::addString(StringRef Name) {
-  StrTabBuilder.add(Name);
-  Size = StrTabBuilder.getSize();
-}
+void StringTableSection::addString(StringRef Name) { StrTabBuilder.add(Name); }
 
 uint32_t StringTableSection::findIndex(StringRef Name) const {
   return StrTabBuilder.getOffset(Name);
 }
 
-void StringTableSection::finalize() { StrTabBuilder.finalize(); }
+void StringTableSection::prepareForLayout() {
+  StrTabBuilder.finalize();
+  Size = StrTabBuilder.getSize();
+}
 
 void SectionWriter::visit(const StringTableSection &Sec) {
   Sec.StrTabBuilder.write(Out.getBufferStart() + Sec.Offset);
@@ -432,17 +423,17 @@ void SymbolTableSection::addSymbol(Twine Name, uint8_t Bind, uint8_t Type,
   Size += this->EntrySize;
 }
 
-Error SymbolTableSection::removeSectionReferences(const SectionBase *Sec) {
-  if (SectionIndexTable == Sec)
+Error SymbolTableSection::removeSectionReferences(
+    function_ref<bool(const SectionBase *)> ToRemove) {
+  if (ToRemove(SectionIndexTable))
     SectionIndexTable = nullptr;
-  if (SymbolNames == Sec) {
+  if (ToRemove(SymbolNames))
     return createStringError(llvm::errc::invalid_argument,
                              "String table %s cannot be removed because it is "
                              "referenced by the symbol table %s",
                              SymbolNames->Name.data(), this->Name.data());
-  }
   return removeSymbols(
-      [Sec](const Symbol &Sym) { return Sym.DefinedIn == Sec; });
+      [ToRemove](const Symbol &Sym) { return ToRemove(Sym.DefinedIn); });
 }
 
 void SymbolTableSection::updateSymbols(function_ref<void(Symbol &)> Callable) {
@@ -465,6 +456,13 @@ Error SymbolTableSection::removeSymbols(
   return Error::success();
 }
 
+void SymbolTableSection::replaceSectionReferences(
+    const DenseMap<SectionBase *, SectionBase *> &FromTo) {
+  for (std::unique_ptr<Symbol> &Sym : Symbols)
+    if (SectionBase *To = FromTo.lookup(Sym->DefinedIn))
+      Sym->DefinedIn = To;
+}
+
 void SymbolTableSection::initialize(SectionTableRef SecTable) {
   Size = 0;
   setStrTab(SecTable.getSectionOfType<StringTableSection>(
@@ -476,9 +474,6 @@ void SymbolTableSection::initialize(SectionTableRef SecTable) {
 }
 
 void SymbolTableSection::finalize() {
-  // Make sure SymbolNames is finalized before getting name indexes.
-  SymbolNames->finalize();
-
   uint32_t MaxLocalIndex = 0;
   for (auto &Sym : Symbols) {
     Sym->NameIndex = SymbolNames->findIndex(Sym->Name);
@@ -544,14 +539,25 @@ void SymbolTableSection::accept(MutableSectionVisitor &Visitor) {
   Visitor.visit(*this);
 }
 
-template <class SymTabType>
-Error RelocSectionWithSymtabBase<SymTabType>::removeSectionReferences(
-    const SectionBase *Sec) {
-  if (Symbols == Sec)
+Error RelocationSection::removeSectionReferences(
+    function_ref<bool(const SectionBase *)> ToRemove) {
+  if (ToRemove(Symbols))
     return createStringError(llvm::errc::invalid_argument,
                              "Symbol table %s cannot be removed because it is "
                              "referenced by the relocation section %s.",
                              Symbols->Name.data(), this->Name.data());
+
+  for (const Relocation &R : Relocations) {
+    if (!R.RelocSymbol->DefinedIn || !ToRemove(R.RelocSymbol->DefinedIn))
+      continue;
+    return createStringError(llvm::errc::invalid_argument,
+                             "Section %s can't be removed: (%s+0x%" PRIx64
+                             ") has relocation against symbol '%s'",
+                             R.RelocSymbol->DefinedIn->Name.data(),
+                             SecToApplyRel->Name.data(), R.Offset,
+                             R.RelocSymbol->Name.c_str());
+  }
+
   return Error::success();
 }
 
@@ -633,6 +639,13 @@ void RelocationSection::markSymbols() {
     Reloc.RelocSymbol->Referenced = true;
 }
 
+void RelocationSection::replaceSectionReferences(
+    const DenseMap<SectionBase *, SectionBase *> &FromTo) {
+  // Update the target section if it was replaced.
+  if (SectionBase *To = FromTo.lookup(SecToApplyRel))
+    SecToApplyRel = To;
+}
+
 void SectionWriter::visit(const DynamicRelocationSection &Sec) {
   llvm::copy(Sec.Contents,
             Out.getBufferStart() + Sec.Offset);
@@ -646,8 +659,9 @@ void DynamicRelocationSection::accept(MutableSectionVisitor &Visitor) {
   Visitor.visit(*this);
 }
 
-Error Section::removeSectionReferences(const SectionBase *Sec) {
-  if (LinkSection == Sec)
+Error Section::removeSectionReferences(
+    function_ref<bool(const SectionBase *)> ToRemove) {
+  if (ToRemove(LinkSection))
     return createStringError(llvm::errc::invalid_argument,
                              "Section %s cannot be removed because it is "
                              "referenced by the section %s",
@@ -672,6 +686,13 @@ Error GroupSection::removeSymbols(function_ref<bool(const Symbol &)> ToRemove) {
 void GroupSection::markSymbols() {
   if (Sym)
     Sym->Referenced = true;
+}
+
+void GroupSection::replaceSectionReferences(
+    const DenseMap<SectionBase *, SectionBase *> &FromTo) {
+  for (SectionBase *&Sec : GroupMembers)
+    if (SectionBase *To = FromTo.lookup(Sec))
+      Sec = To;
 }
 
 void Section::initialize(SectionTableRef SecTable) {
@@ -720,12 +741,11 @@ GnuDebugLinkSection::GnuDebugLinkSection(StringRef File) : FileName(File) {
 
 template <class ELFT>
 void ELFSectionWriter<ELFT>::visit(const GnuDebugLinkSection &Sec) {
-  auto Buf = Out.getBufferStart() + Sec.Offset;
-  char *File = reinterpret_cast<char *>(Buf);
+  unsigned char *Buf = Out.getBufferStart() + Sec.Offset;
   Elf_Word *CRC =
       reinterpret_cast<Elf_Word *>(Buf + Sec.Size - sizeof(Elf_Word));
   *CRC = Sec.CRC32;
-  llvm::copy(Sec.FileName, File);
+  llvm::copy(Sec.FileName, Buf);
 }
 
 void GnuDebugLinkSection::accept(SectionVisitor &Visitor) const {
@@ -936,6 +956,9 @@ template <class ELFT> void ELFBuilder<ELFT>::readProgramHeaders() {
 
 template <class ELFT>
 void ELFBuilder<ELFT>::initGroupSection(GroupSection *GroupSec) {
+  if (GroupSec->Align % sizeof(ELF::Elf32_Word) != 0)
+    error("Invalid alignment " + Twine(GroupSec->Align) + " of group section " +
+          GroupSec->Name);
   auto SecTable = Obj.sections();
   auto SymTab = SecTable.template getSectionOfType<SymbolTableSection>(
       GroupSec->Link,
@@ -1097,7 +1120,8 @@ SectionBase &ELFBuilder<ELFT>::makeSection(const Elf_Shdr &Shdr) {
   default: {
     Data = unwrapOrError(ElfFile.getSectionContents(&Shdr));
 
-    if (isDataGnuCompressed(Data) || (Shdr.sh_flags & ELF::SHF_COMPRESSED)) {
+    StringRef Name = unwrapOrError(ElfFile.getSectionName(&Shdr));
+    if (Name.startswith(".zdebug") || (Shdr.sh_flags & ELF::SHF_COMPRESSED)) {
       uint64_t DecompressedSize, DecompressedAlign;
       std::tie(DecompressedSize, DecompressedAlign) =
           getDecompressedSizeAndAlignment<ELFT>(Data);
@@ -1188,18 +1212,16 @@ template <class ELFT> void ELFBuilder<ELFT>::build() {
   if (ShstrIndex == SHN_XINDEX)
     ShstrIndex = unwrapOrError(ElfFile.getSection(0))->sh_link;
 
-  Obj.SectionNames =
-      Obj.sections().template getSectionOfType<StringTableSection>(
-          ShstrIndex,
-          "e_shstrndx field value " + Twine(Ehdr.e_shstrndx) +
-              " in elf header " + " is invalid",
-          "e_shstrndx field value " + Twine(Ehdr.e_shstrndx) +
-              " in elf header " + " is not a string table");
-}
-
-// A generic size function which computes sizes of any random access range.
-template <class R> size_t size(R &&Range) {
-  return static_cast<size_t>(std::end(Range) - std::begin(Range));
+  if (ShstrIndex == SHN_UNDEF)
+    Obj.HadShdrs = false;
+  else
+    Obj.SectionNames =
+        Obj.sections().template getSectionOfType<StringTableSection>(
+            ShstrIndex,
+            "e_shstrndx field value " + Twine(Ehdr.e_shstrndx) +
+                " in elf header is invalid",
+            "e_shstrndx field value " + Twine(Ehdr.e_shstrndx) +
+                " in elf header is not a string table");
 }
 
 Writer::~Writer() {}
@@ -1258,7 +1280,7 @@ template <class ELFT> void ELFWriter<ELFT>::writeEhdr() {
   Ehdr.e_phentsize = (Ehdr.e_phnum != 0) ? sizeof(Elf_Phdr) : 0;
   Ehdr.e_flags = Obj.Flags;
   Ehdr.e_ehsize = sizeof(Elf_Ehdr);
-  if (WriteSectionHeaders && size(Obj.sections()) != 0) {
+  if (WriteSectionHeaders && Obj.sections().size() != 0) {
     Ehdr.e_shentsize = sizeof(Elf_Shdr);
     Ehdr.e_shoff = Obj.SHOffset;
     // """
@@ -1267,7 +1289,7 @@ template <class ELFT> void ELFWriter<ELFT>::writeEhdr() {
     // number of section header table entries is contained in the sh_size field
     // of the section header at index 0.
     // """
-    auto Shnum = size(Obj.sections()) + 1;
+    auto Shnum = Obj.sections().size() + 1;
     if (Shnum >= SHN_LORESERVE)
       Ehdr.e_shnum = 0;
     else
@@ -1306,7 +1328,7 @@ template <class ELFT> void ELFWriter<ELFT>::writeShdrs() {
   Shdr.sh_addr = 0;
   Shdr.sh_offset = 0;
   // See writeEhdr for why we do this.
-  uint64_t Shnum = size(Obj.sections()) + 1;
+  uint64_t Shnum = Obj.sections().size() + 1;
   if (Shnum >= SHN_LORESERVE)
     Shdr.sh_size = Shnum;
   else
@@ -1326,8 +1348,36 @@ template <class ELFT> void ELFWriter<ELFT>::writeShdrs() {
 
 template <class ELFT> void ELFWriter<ELFT>::writeSectionData() {
   for (auto &Sec : Obj.sections())
-    Sec.accept(*SecWriter);
+    // Segments are responsible for writing their contents, so only write the
+    // section data if the section is not in a segment. Note that this renders
+    // sections in segments effectively immutable.
+    if (Sec.ParentSegment == nullptr)
+      Sec.accept(*SecWriter);
 }
+
+template <class ELFT> void ELFWriter<ELFT>::writeSegmentData() {
+  for (Segment &Seg : Obj.segments()) {
+    uint8_t *B = Buf.getBufferStart() + Seg.Offset;
+    assert(Seg.FileSize == Seg.getContents().size() &&
+           "Segment size must match contents size");
+    std::memcpy(B, Seg.getContents().data(), Seg.FileSize);
+  }
+
+  // Iterate over removed sections and overwrite their old data with zeroes.
+  for (auto &Sec : Obj.removedSections()) {
+    Segment *Parent = Sec.ParentSegment;
+    if (Parent == nullptr || Sec.Type == SHT_NOBITS || Sec.Size == 0)
+      continue;
+    uint64_t Offset =
+        Sec.OriginalOffset - Parent->OriginalOffset + Parent->Offset;
+    uint8_t *B = Buf.getBufferStart();
+    std::memset(B + Offset, 0, Sec.Size);
+  }
+}
+
+template <class ELFT>
+ELFWriter<ELFT>::ELFWriter(Object &Obj, Buffer &Buf, bool WSH)
+    : Writer(Obj, Buf), WriteSectionHeaders(WSH && Obj.HadShdrs) {}
 
 Error Object::removeSections(
     std::function<bool(const SectionBase &)> ToRemove) {
@@ -1351,14 +1401,31 @@ Error Object::removeSections(
   // Now make sure there are no remaining references to the sections that will
   // be removed. Sometimes it is impossible to remove a reference so we emit
   // an error here instead.
+  std::unordered_set<const SectionBase *> RemoveSections;
+  RemoveSections.reserve(std::distance(Iter, std::end(Sections)));
   for (auto &RemoveSec : make_range(Iter, std::end(Sections))) {
     for (auto &Segment : Segments)
       Segment->removeSection(RemoveSec.get());
-    for (auto &KeepSec : make_range(std::begin(Sections), Iter))
-      if (Error E = KeepSec->removeSectionReferences(RemoveSec.get()))
-        return E;
+    RemoveSections.insert(RemoveSec.get());
   }
-  // Now finally get rid of them all togethor.
+
+  // For each section that remains alive, we want to remove the dead references.
+  // This either might update the content of the section (e.g. remove symbols
+  // from symbol table that belongs to removed section) or trigger an error if
+  // a live section critically depends on a section being removed somehow
+  // (e.g. the removed section is referenced by a relocation).
+  for (auto &KeepSec : make_range(std::begin(Sections), Iter)) {
+    if (Error E = KeepSec->removeSectionReferences(
+            [&RemoveSections](const SectionBase *Sec) {
+              return RemoveSections.find(Sec) != RemoveSections.end();
+            }))
+      return E;
+  }
+
+  // Transfer removed sections into the Object RemovedSections container for use
+  // later.
+  std::move(Iter, Sections.end(), std::back_inserter(RemovedSections));
+  // Now finally get rid of them all together.
   Sections.erase(Iter, std::end(Sections));
   return Error::success();
 }
@@ -1403,7 +1470,7 @@ static void orderSegments(std::vector<Segment *> &Segments) {
 // This function finds a consistent layout for a list of segments starting from
 // an Offset. It assumes that Segments have been sorted by OrderSegments and
 // returns an Offset one past the end of the last segment.
-static uint64_t LayoutSegments(std::vector<Segment *> &Segments,
+static uint64_t layoutSegments(std::vector<Segment *> &Segments,
                                uint64_t Offset) {
   assert(std::is_sorted(std::begin(Segments), std::end(Segments),
                         compareSegmentsByOffset));
@@ -1486,7 +1553,7 @@ template <class ELFT> void ELFWriter<ELFT>::assignOffsets() {
   // Since the ELF Header (ElfHdrSegment) must be at the start of the file,
   // we start at offset 0.
   uint64_t Offset = 0;
-  Offset = LayoutSegments(OrderedSegments, Offset);
+  Offset = layoutSegments(OrderedSegments, Offset);
   Offset = layoutSections(Obj.sections(), Offset);
   // If we need to write the section header table out then we need to align the
   // Offset so that SHOffset is valid.
@@ -1498,12 +1565,16 @@ template <class ELFT> void ELFWriter<ELFT>::assignOffsets() {
 template <class ELFT> size_t ELFWriter<ELFT>::totalSize() const {
   // We already have the section header offset so we can calculate the total
   // size by just adding up the size of each section header.
-  auto NullSectionSize = WriteSectionHeaders ? sizeof(Elf_Shdr) : 0;
-  return Obj.SHOffset + size(Obj.sections()) * sizeof(Elf_Shdr) +
-         NullSectionSize;
+  if (!WriteSectionHeaders)
+    return Obj.SHOffset;
+  size_t ShdrCount = Obj.sections().size() + 1; // Includes null shdr.
+  return Obj.SHOffset + ShdrCount * sizeof(Elf_Shdr);
 }
 
 template <class ELFT> Error ELFWriter<ELFT>::write() {
+  // Segment data must be written first, so that the ELF header and program
+  // header tables can overwrite it, if covered by a segment.
+  writeSegmentData();
   writeEhdr();
   writePhdrs();
   writeSectionData();
@@ -1527,7 +1598,7 @@ template <class ELFT> Error ELFWriter<ELFT>::finalize() {
   // if we need large indexes or not. We can assign indexes first and check as
   // we go to see if we will actully need large indexes.
   bool NeedsLargeIndexes = false;
-  if (size(Obj.sections()) >= SHN_LORESERVE) {
+  if (Obj.sections().size() >= SHN_LORESERVE) {
     auto Sections = Obj.sections();
     NeedsLargeIndexes =
         std::any_of(Sections.begin() + SHN_LORESERVE, Sections.end(),
@@ -1582,11 +1653,14 @@ template <class ELFT> Error ELFWriter<ELFT>::finalize() {
   if (Obj.SymbolTable != nullptr)
     Obj.SymbolTable->prepareForLayout();
 
+  // Now that all strings are added we want to finalize string table builders,
+  // because that affects section sizes which in turn affects section offsets.
+  for (auto &Sec : Obj.sections())
+    if (auto StrTab = dyn_cast<StringTableSection>(&Sec))
+      StrTab->prepareForLayout();
+
   assignOffsets();
 
-  // Finalize SectionNames first so that we can assign name indexes.
-  if (Obj.SectionNames != nullptr)
-    Obj.SectionNames->finalize();
   // Finally now that all offsets and indexes have been set we can finalize any
   // remaining issues.
   uint64_t Offset = Obj.SHOffset + sizeof(Elf_Shdr);

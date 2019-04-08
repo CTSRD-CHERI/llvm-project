@@ -329,7 +329,7 @@ bool CodeExtractor::isLegalToShrinkwrapLifetimeMarkers(
         if (dyn_cast<Constant>(MemAddr))
           break;
         Value *Base = MemAddr->stripInBoundsConstantOffsets();
-        if (!dyn_cast<AllocaInst>(Base) || Base == AI)
+        if (!isa<AllocaInst>(Base) || Base == AI)
           return false;
         break;
       }
@@ -799,6 +799,7 @@ Function *CodeExtractor::constructFunction(const ValueSet &inputs,
       case Attribute::SwiftSelf:
       case Attribute::WriteOnly:
       case Attribute::ZExt:
+      case Attribute::ImmArg:
       case Attribute::EndAttrKinds:
         continue;
       // Those attributes should be safe to propagate to the extracted function.

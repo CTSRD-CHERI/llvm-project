@@ -939,28 +939,41 @@ Value *llvm::emitMemChr(Value *Ptr, Value *Val, Value *Len, IRBuilder<> &B,
   return CI;
 }
 
-Value *llvm::emitMemCmp(Value *Ptr1, Value *Ptr2, Value *Len, IRBuilder<> &B,
-                        const DataLayout &DL, const TargetLibraryInfo *TLI) {
-  if (!TLI->has(LibFunc_memcmp))
+// Common code for memcmp() and bcmp(), which have the exact same properties,
+// just a slight difference in semantics.
+static Value *emitMemCmpOrBcmp(llvm::LibFunc libfunc, Value *Ptr1, Value *Ptr2,
+                               Value *Len, IRBuilder<> &B, const DataLayout &DL,
+                               const TargetLibraryInfo *TLI) {
+  if (!TLI->has(libfunc))
     return nullptr;
 
   Module *M = B.GetInsertBlock()->getModule();
-  StringRef MemCmpName = TLI->getName(LibFunc_memcmp);
+  StringRef CmpFnName = TLI->getName(libfunc);
   LLVMContext &Context = B.GetInsertBlock()->getContext();
   Ptr1 = castToCStr(Ptr1, B);
   Type *I8Ptr = Ptr1->getType();
-  FunctionCallee MemCmp =
-      M->getOrInsertFunction(MemCmpName, B.getInt32Ty(), I8Ptr,
+  FunctionCallee CmpFn =
+      M->getOrInsertFunction(CmpFnName, B.getInt32Ty(), I8Ptr,
                              I8Ptr, DL.getIntPtrType(Context));
-  inferLibFuncAttributes(M, MemCmpName, *TLI);
+  inferLibFuncAttributes(M, CmpFnName, *TLI);
   CallInst *CI = B.CreateCall(
-      MemCmp, {Ptr1, castToCStr(Ptr2, B), Len}, "memcmp");
+      CmpFn, {Ptr1, castToCStr(Ptr2, B), Len}, CmpFnName);
 
   if (const Function *F =
-          dyn_cast<Function>(MemCmp.getCallee()->stripPointerCasts()))
+          dyn_cast<Function>(CmpFn.getCallee()->stripPointerCasts()))
     CI->setCallingConv(F->getCallingConv());
 
   return CI;
+}
+
+Value *llvm::emitMemCmp(Value *Ptr1, Value *Ptr2, Value *Len, IRBuilder<> &B,
+                        const DataLayout &DL, const TargetLibraryInfo *TLI) {
+  return emitMemCmpOrBcmp(LibFunc_memcmp, Ptr1, Ptr2, Len, B, DL, TLI);
+}
+
+Value *llvm::emitBCmp(Value *Ptr1, Value *Ptr2, Value *Len, IRBuilder<> &B,
+                      const DataLayout &DL, const TargetLibraryInfo *TLI) {
+  return emitMemCmpOrBcmp(LibFunc_bcmp, Ptr1, Ptr2, Len, B, DL, TLI);
 }
 
 /// Append a suffix to the function name according to the type of 'Op'.

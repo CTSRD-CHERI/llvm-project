@@ -70,9 +70,6 @@
 using namespace lldb;
 using namespace lldb_private;
 
-// 2 second timeout when running utility functions
-static constexpr std::chrono::seconds g_utility_function_timeout(2);
-
 static const char *g_get_dynamic_class_info_name =
     "__lldb_apple_objc_v2_get_dynamic_class_info";
 // Testing using the new C++11 raw string literals. If this breaks GCC then we
@@ -1410,7 +1407,7 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapDynamic(
     options.SetTryAllThreads(false);
     options.SetStopOthers(true);
     options.SetIgnoreBreakpoints(true);
-    options.SetTimeout(g_utility_function_timeout);
+    options.SetTimeout(process->GetUtilityExpressionTimeout());
     options.SetIsForUtilityExpr(true);
 
     Value return_value;
@@ -1661,7 +1658,7 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapSharedCache() {
     options.SetTryAllThreads(false);
     options.SetStopOthers(true);
     options.SetIgnoreBreakpoints(true);
-    options.SetTimeout(g_utility_function_timeout);
+    options.SetTimeout(process->GetUtilityExpressionTimeout());
     options.SetIsForUtilityExpr(true);
 
     Value return_value;
@@ -1685,9 +1682,7 @@ AppleObjCRuntimeV2::UpdateISAToDescriptorMapSharedCache() {
       if (log)
         log->Printf("Discovered %u ObjC classes in shared cache\n",
                     num_class_infos);
-#ifdef LLDB_CONFIGURATION_DEBUG
       assert(num_class_infos <= num_classes);
-#endif
       if (num_class_infos > 0) {
         if (num_class_infos > num_classes) {
           num_class_infos = num_classes;
@@ -1951,7 +1946,7 @@ DeclVendor *AppleObjCRuntimeV2::GetDeclVendor() {
   return m_decl_vendor_up.get();
 }
 
-lldb::addr_t AppleObjCRuntimeV2::LookupRuntimeSymbol(const ConstString &name) {
+lldb::addr_t AppleObjCRuntimeV2::LookupRuntimeSymbol(ConstString name) {
   lldb::addr_t ret = LLDB_INVALID_ADDRESS;
 
   const char *name_cstr = name.AsCString();

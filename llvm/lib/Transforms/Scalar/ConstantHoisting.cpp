@@ -114,8 +114,6 @@ public:
     AU.addRequired<TargetTransformInfoWrapperPass>();
   }
 
-  void releaseMemory() override { Impl.releaseMemory(); }
-
 private:
   ConstantHoistingPass Impl;
 };
@@ -210,6 +208,9 @@ static void findBestInsertionSet(DominatorTree &DT, BlockFrequencyInfo &BFI,
   // in the dominator tree from Entry to 'BB'.
   SmallPtrSet<BasicBlock *, 16> Candidates;
   for (auto BB : BBs) {
+    // Ignore unreachable basic blocks.
+    if (!DT.isReachableFromEntry(BB))
+      continue;
     Path.clear();
     // Walk up the dominator tree until Entry or another BB in BBs
     // is reached. Insert the nodes on the way to the Path.
@@ -547,7 +548,7 @@ ConstantHoistingPass::maximizeConstantsInRange(ConstCandVecType::iterator S,
                                            ConstCandVecType::iterator &MaxCostItr) {
   unsigned NumUses = 0;
 
-  if(!Entry->getParent()->optForSize() || std::distance(S,E) > 100) {
+  if(!Entry->getParent()->hasOptSize() || std::distance(S,E) > 100) {
     for (auto ConstCand = S; ConstCand != E; ++ConstCand) {
       NumUses += ConstCand->Uses.size();
       if (ConstCand->CumulativeCost > MaxCostItr->CumulativeCost)
@@ -823,7 +824,9 @@ bool ConstantHoistingPass::emitBaseConstants(GlobalVariable *BaseGV) {
       BaseGV ? ConstGEPInfoMap[BaseGV] : ConstIntInfoVec;
   for (auto const &ConstInfo : ConstInfoVec) {
     SmallPtrSet<Instruction *, 8> IPSet = findConstantInsertionPoint(ConstInfo);
-    assert(!IPSet.empty() && "IPSet is empty");
+    // We can have an empty set if the function contains unreachable blocks.
+    if (IPSet.empty())
+      continue;
 
     unsigned UsesNum = 0;
     unsigned ReBasesNum = 0;
@@ -946,6 +949,8 @@ bool ConstantHoistingPass::runImpl(Function &Fn, TargetTransformInfo &TTI,
 
   // Cleanup dead instructions.
   deleteDeadCastInst();
+
+  cleanup();
 
   return MadeChange;
 }

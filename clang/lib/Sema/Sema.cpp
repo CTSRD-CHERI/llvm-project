@@ -39,6 +39,8 @@
 #include "clang/Sema/TemplateInstCallback.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallSet.h"
+#include "llvm/Support/TimeProfiler.h"
+
 using namespace clang;
 using namespace sema;
 
@@ -92,6 +94,12 @@ public:
       SourceManager &SM = S->getSourceManager();
       SourceLocation IncludeLoc = SM.getIncludeLoc(SM.getFileID(Loc));
       if (IncludeLoc.isValid()) {
+        if (llvm::timeTraceProfilerEnabled()) {
+          const FileEntry *FE = SM.getFileEntryForID(SM.getFileID(Loc));
+          llvm::timeTraceProfilerBegin(
+              "Source", FE != nullptr ? FE->getName() : StringRef("<unknown>"));
+        }
+
         IncludeStack.push_back(IncludeLoc);
         S->DiagnoseNonDefaultPragmaPack(
             Sema::PragmaPackDiagnoseKind::NonDefaultStateAtInclude, IncludeLoc);
@@ -99,10 +107,14 @@ public:
       break;
     }
     case ExitFile:
-      if (!IncludeStack.empty())
+      if (!IncludeStack.empty()) {
+        if (llvm::timeTraceProfilerEnabled())
+          llvm::timeTraceProfilerEnd();
+
         S->DiagnoseNonDefaultPragmaPack(
             Sema::PragmaPackDiagnoseKind::ChangedStateAtExit,
             IncludeStack.pop_back_val());
+      }
       break;
     default:
       break;
@@ -1021,7 +1033,11 @@ void Sema::ActOnEndOfTranslationUnit() {
                                    Pending.begin(), Pending.end());
     }
 
-    PerformPendingInstantiations();
+    {
+      llvm::TimeTraceScope TimeScope("PerformPendingInstantiations",
+                                     StringRef(""));
+      PerformPendingInstantiations();
+    }
 
     assert(LateParsedInstantiations.empty() &&
            "end of TU template instantiation should not create more "
@@ -1509,9 +1525,21 @@ Sema::DeviceDiagBuilder::DeviceDiagBuilder(Kind K, SourceLocation Loc,
     break;
   case K_Deferred:
     assert(Fn && "Must have a function to attach the deferred diag to.");
-    PartialDiag.emplace(S.PDiag(DiagID));
+    auto &Diags = S.DeviceDeferredDiags[Fn];
+    PartialDiagId.emplace(Diags.size());
+    Diags.emplace_back(Loc, S.PDiag(DiagID));
     break;
   }
+}
+
+Sema::DeviceDiagBuilder::DeviceDiagBuilder(DeviceDiagBuilder &&D)
+    : S(D.S), Loc(D.Loc), DiagID(D.DiagID), Fn(D.Fn),
+      ShowCallStack(D.ShowCallStack), ImmediateDiag(D.ImmediateDiag),
+      PartialDiagId(D.PartialDiagId) {
+  // Clean the previous diagnostics.
+  D.ShowCallStack = false;
+  D.ImmediateDiag.reset();
+  D.PartialDiagId.reset();
 }
 
 Sema::DeviceDiagBuilder::~DeviceDiagBuilder() {
@@ -1523,9 +1551,9 @@ Sema::DeviceDiagBuilder::~DeviceDiagBuilder() {
     ImmediateDiag.reset(); // Emit the immediate diag.
     if (IsWarningOrError && ShowCallStack)
       emitCallStackNotes(S, Fn);
-  } else if (PartialDiag) {
-    assert(ShowCallStack && "Must always show call stack for deferred diags.");
-    S.DeviceDeferredDiags[Fn].push_back({Loc, std::move(*PartialDiag)});
+  } else {
+    assert((!PartialDiagId || ShowCallStack) &&
+           "Must always show call stack for deferred diags.");
   }
 }
 
@@ -1592,6 +1620,16 @@ void Sema::markKnownEmitted(
     // of callees in DeviceCallGraph.
     S.DeviceCallGraph.erase(CGIt);
   }
+}
+
+Sema::DeviceDiagBuilder Sema::targetDiag(SourceLocation Loc, unsigned DiagID) {
+  if (LangOpts.OpenMP && LangOpts.OpenMPIsDevice)
+    return diagIfOpenMPDeviceCode(Loc, DiagID);
+  if (getLangOpts().CUDA)
+    return getLangOpts().CUDAIsDevice ? CUDADiagIfDeviceCode(Loc, DiagID)
+                                      : CUDADiagIfHostCode(Loc, DiagID);
+  return DeviceDiagBuilder(DeviceDiagBuilder::K_Immediate, Loc, DiagID,
+                           getCurFunctionDecl(), *this);
 }
 
 /// Looks through the macro-expansion chain for the given

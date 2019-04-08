@@ -973,7 +973,7 @@ PreservedAnalyses InlinerPass::run(LazyCallGraph::SCC &InitialC,
     LazyCallGraph::Node &N = *CG.lookup(F);
     if (CG.lookupSCC(N) != C)
       continue;
-    if (F.hasFnAttribute(Attribute::OptimizeNone)) {
+    if (F.hasOptNone()) {
       setInlineRemark(Calls[i].first, "optnone attribute");
       continue;
     }
@@ -1005,8 +1005,11 @@ PreservedAnalyses InlinerPass::run(LazyCallGraph::SCC &InitialC,
     auto GetInlineCost = [&](CallSite CS) {
       Function &Callee = *CS.getCalledFunction();
       auto &CalleeTTI = FAM.getResult<TargetIRAnalysis>(Callee);
+      bool RemarksEnabled =
+          Callee.getContext().getDiagHandlerPtr()->isMissedOptRemarkEnabled(
+              DEBUG_TYPE);
       return getInlineCost(CS, Params, CalleeTTI, GetAssumptionCache, {GetBFI},
-                           PSI, &ORE);
+                           PSI, RemarksEnabled ? &ORE : nullptr);
     };
 
     // Now process as many calls as we have within this caller in the sequnece.

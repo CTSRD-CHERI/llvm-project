@@ -104,7 +104,7 @@ endif()
 # LLVM_EXTERNAL_${project}_SOURCE_DIR using LLVM_ALL_PROJECTS
 # This allows an easy way of setting up a build directory for llvm and another
 # one for llvm+clang+... using the same sources.
-set(LLVM_ALL_PROJECTS "clang;clang-tools-extra;compiler-rt;debuginfo-tests;libclc;libcxx;libcxxabi;libunwind;lld;lldb;llgo;llvm;openmp;parallel-libs;polly;pstl")
+set(LLVM_ALL_PROJECTS "clang;clang-tools-extra;compiler-rt;debuginfo-tests;libclc;libcxx;libcxxabi;libunwind;lld;lldb;llgo;openmp;parallel-libs;polly;pstl")
 set(LLVM_ENABLE_PROJECTS "" CACHE STRING
 	"Semicolon-separated list of projects to build (${LLVM_ALL_PROJECTS}), or \"all\".")
 if( LLVM_ENABLE_PROJECTS STREQUAL "all" )
@@ -140,7 +140,7 @@ if (LLVM_ENABLE_PROJECTS_USED OR NOT LLVM_ENABLE_PROJECTS STREQUAL "")
       if(NOT EXISTS "${PROJ_DIR}" OR NOT IS_DIRECTORY "${PROJ_DIR}")
         message(FATAL_ERROR "LLVM_ENABLE_PROJECTS requests ${proj} but directory not found: ${PROJ_DIR}")
       endif()
-      set(LLVM_EXTERNAL_${upper_proj}_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../${proj}")
+      set(LLVM_EXTERNAL_${upper_proj}_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../${proj}" CACHE STRING "")
     else()
       message(STATUS "${proj} project is disabled")
       set(SHOULD_ENABLE_PROJECT FALSE)
@@ -377,6 +377,31 @@ option(LLVM_ENABLE_THREADS "Use threads if available." ON)
 
 option(LLVM_ENABLE_ZLIB "Use zlib for compression/decompression if available." ON)
 
+set(LLVM_Z3_INSTALL_DIR "" CACHE STRING "Install directory of the Z3 solver.")
+
+find_package(Z3 4.7.1)
+
+if (LLVM_Z3_INSTALL_DIR)
+  if (NOT Z3_FOUND)
+    message(FATAL_ERROR "Z3 >= 4.7.1 has not been found in LLVM_Z3_INSTALL_DIR: ${LLVM_Z3_INSTALL_DIR}.")
+  endif()
+endif()
+
+set(LLVM_ENABLE_Z3_SOLVER_DEFAULT "${Z3_FOUND}")
+
+option(LLVM_ENABLE_Z3_SOLVER
+  "Enable Support for the Z3 constraint solver in LLVM."
+  ${LLVM_ENABLE_Z3_SOLVER_DEFAULT}
+)
+
+if (LLVM_ENABLE_Z3_SOLVER)
+  if (NOT Z3_FOUND)
+    message(FATAL_ERROR "LLVM_ENABLE_Z3_SOLVER cannot be enabled when Z3 is not available.")
+  endif()
+
+  set(LLVM_WITH_Z3 1)
+endif()
+
 if( LLVM_TARGETS_TO_BUILD STREQUAL "all" )
   set( LLVM_TARGETS_TO_BUILD ${LLVM_ALL_TARGETS} )
 endif()
@@ -571,7 +596,7 @@ if(NOT DEFINED LLVM_DYLIB_COMPONENTS)
 endif()
 option(LLVM_LINK_LLVM_DYLIB "Link tools against the libllvm dynamic library" OFF)
 if(MSVC)
-  option(LLVM_BUILD_LLVM_C_DYLIB "Build LLVM-C.dll (Windows only)" OFF)
+  option(LLVM_BUILD_LLVM_C_DYLIB "Build LLVM-C.dll (Windows only)" ON)
 else()
   option(LLVM_BUILD_LLVM_C_DYLIB "Build libllvm-c re-export library (Darwin only)" OFF)
 endif()
@@ -604,6 +629,12 @@ if (LLVM_BUILD_INSTRUMENTED OR LLVM_BUILD_INSTRUMENTED_COVERAGE OR
       file(TO_NATIVE_PATH "${LLVM_BINARY_DIR}/profiles" LLVM_PROFILE_DATA_DIR)
     endif()
 		file(TO_NATIVE_PATH "${LLVM_PROFILE_DATA_DIR}/%${LLVM_PROFILE_MERGE_POOL_SIZE}m.profraw" LLVM_PROFILE_FILE_PATTERN)
+  endif()
+  if(NOT LLVM_CSPROFILE_FILE_PATTERN)
+    if(NOT LLVM_CSPROFILE_DATA_DIR)
+      file(TO_NATIVE_PATH "${LLVM_BINARY_DIR}/csprofiles" LLVM_CSPROFILE_DATA_DIR)
+    endif()
+    file(TO_NATIVE_PATH "${LLVM_CSPROFILE_DATA_DIR}/%${LLVM_PROFILE_MERGE_POOL_SIZE}m.profraw" LLVM_CSPROFILE_FILE_PATTERN)
   endif()
 endif()
 

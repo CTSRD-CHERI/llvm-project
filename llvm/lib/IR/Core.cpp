@@ -2329,6 +2329,10 @@ const char *LLVMIntrinsicCopyOverloadedName(unsigned ID,
   return strdup(Str.c_str());
 }
 
+unsigned LLVMLookupIntrinsicID(const char *Name, size_t NameLen) {
+  return Function::lookupIntrinsicID({Name, NameLen});
+}
+
 LLVMBool LLVMIntrinsicIsOverloaded(unsigned ID) {
   auto IID = llvm_map_to_intrinsic_id(ID);
   return llvm::Intrinsic::isOverloaded(IID);
@@ -2603,6 +2607,20 @@ LLVMBasicBlockRef LLVMGetPreviousBasicBlock(LLVMBasicBlockRef BB) {
 LLVMBasicBlockRef LLVMCreateBasicBlockInContext(LLVMContextRef C,
                                                 const char *Name) {
   return wrap(llvm::BasicBlock::Create(*unwrap(C), Name));
+}
+
+void LLVMInsertExistingBasicBlockAfterInsertBlock(LLVMBuilderRef Builder,
+                                                  LLVMBasicBlockRef BB) {
+  BasicBlock *ToInsert = unwrap(BB);
+  BasicBlock *CurBB = unwrap(Builder)->GetInsertBlock();
+  assert(CurBB && "current insertion point is invalid!");
+  CurBB->getParent()->getBasicBlockList().insertAfter(CurBB->getIterator(),
+                                                      ToInsert);
+}
+
+void LLVMAppendExistingBasicBlock(LLVMValueRef Fn,
+                                  LLVMBasicBlockRef BB) {
+  unwrap<Function>(Fn)->getBasicBlockList().push_back(unwrap(BB));
 }
 
 LLVMBasicBlockRef LLVMAppendBasicBlockInContext(LLVMContextRef C,
