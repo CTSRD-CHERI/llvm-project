@@ -30,6 +30,9 @@
 #error "This header requires CHERI capability support"
 #endif
 
+/* Bump this on every incompatible change */
+#define CHERI_INIT_GLOBALS_VERSION 2
+#define CHERI_INIT_GLOBALS_NUM_ARGS 7
 #define CHERI_INIT_GLOBALS_SUPPORTS_CONSTANT_FLAG 1
 
 struct capreloc {
@@ -107,7 +110,7 @@ static __attribute__((always_inline)) void
 cheri_init_globals_impl(const struct capreloc *start_relocs,
                         const struct capreloc *stop_relocs, void *data_cap,
                         const void *code_cap, const void *rodata_cap,
-                        __UINT64_TYPE__ relocbase) {
+                        _Bool tight_code_bounds, __UINT64_TYPE__ relocbase) {
   data_cap =
       __builtin_cheri_perms_and(data_cap, global_pointer_permissions_mask);
   code_cap =
@@ -128,11 +131,7 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
     if ((reloc->permissions & function_reloc_flag) == function_reloc_flag) {
       /* Do not set tight bounds for functions (unless we are in the plt/fndesc
        * ABI */
-#if !defined(__CHERI_CAPABILITY_TABLE__)
-      can_set_bounds = 0; /* legacy ABI -> need large bounds on $pcc */
-#elif __CHERI_CAPABILITY_TABLE__ == 3
-      can_set_bounds = 0; /* pc-relative ABI -> need large bounds on $pcc */
-#endif
+      can_set_bounds = tight_code_bounds; /* pc-relative ABI -> need large bounds on $pcc */
       base_cap = code_cap; /* code pointer */
     } else if ((reloc->permissions & constant_reloc_flag) ==
                constant_reloc_flag) {
@@ -182,13 +181,21 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
    */
   stop_relocs = __builtin_cheri_address_set(start_relocs, end_addr);
 #endif
+
+#if !defined(__CHERI_CAPABILITY_TABLE__)
+  _Bool can_set_code_bounds = 0; /* legacy ABI -> need large bounds on $pcc */
+#elif __CHERI_CAPABILITY_TABLE__ == 3
+  _Bool can_set_code_bounds = 0; /* pc-relative ABI -> need large bounds on $pcc */
+#else
+  _Bool can_set_code_bounds = 1; /* fn-desc/plt ABI -> tight bounds okay */
+#endif
   /*
    * We can assume that all relocations in the __cap_relocs section have already
    * been processed so we don't need to add a relocation base address to the
    * location of the capreloc.
    */
   cheri_init_globals_impl(start_relocs, stop_relocs, data_cap, code_cap,
-                          rodata_cap, /*relocbase=*/0);
+                          rodata_cap, /*relocbase=*/0, can_set_code_bounds);
 }
 
 static __attribute__((always_inline, unused)) void
