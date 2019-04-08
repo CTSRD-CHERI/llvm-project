@@ -41,16 +41,19 @@ struct capreloc {
 };
 static const __UINT64_TYPE__ function_reloc_flag = 1ULL << 63;
 static const __UINT64_TYPE__ function_pointer_permissions_mask =
-    ~(__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
+    ~(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
+      __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
       __CHERI_CAP_PERMISSION_PERMIT_STORE__);
 static const __UINT64_TYPE__ constant_reloc_flag = 1ULL << 62;
 static const __UINT64_TYPE__ constant_pointer_permissions_mask =
-    ~(__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
+    ~(__CHERI_CAP_PERMISSION_PERMIT_SEAL__ |
+      __CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ |
       __CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__ |
       __CHERI_CAP_PERMISSION_PERMIT_STORE__ |
       __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__);
 static const __UINT64_TYPE__ global_pointer_permissions_mask =
-    ~__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__;
+    ~(__CHERI_CAP_PERMISSION_PERMIT_SEAL__|
+      __CHERI_CAP_PERMISSION_PERMIT_EXECUTE__);
 
 __attribute__((weak))
 extern struct capreloc __start___cap_relocs;
