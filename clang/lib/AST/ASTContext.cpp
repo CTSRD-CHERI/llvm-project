@@ -9816,7 +9816,7 @@ static QualType DecodeFunctionTypeFromStr(const char *&TypeStr, bool IsNested,
   bool Variadic = (TypeStr[0] == '.');
 
   FunctionType::ExtInfo EI(
-      getDefaultCallingConvention(Variadic, /*IsCXXMethod=*/false));
+      Context.getDefaultCallingConvention(Variadic, /*IsCXXMethod=*/false));
   if (IsNoReturn) EI = EI.withNoReturn(true);
 
   // We really shouldn't be making a no-proto type here.
