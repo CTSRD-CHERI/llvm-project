@@ -70,9 +70,9 @@ void __start(void) {
 #endif
 
 // DUMP-EXE-LABEL: Sections:
-// DUMP-EXE: .global_sizes 00000030 0000000120000198 DATA
+// DUMP-EXE: .global_sizes 00000030 0000000120000208 DATA
 // DUMP-SHLIB-LABEL: Sections:
-// DUMP-SHLIB: .global_sizes 00000030 0000000000000548 DATA
+// DUMP-SHLIB: .global_sizes 00000030 00000000000005b8 DATA
 
 // GLOBAL_SIZES-LABEL: Contents of section .global_sizes:
 // .size.external_cap then .size.external_buffer (0x10 or 0x20)
@@ -97,11 +97,11 @@ void __start(void) {
 // DUMP-RELOCATABLE: 0000000000000028 gw    O .global_sizes           00000008 .size.other_var
 
 // DUMP-EXE-LABEL: SYMBOL TABLE:
-// DUMP-EXE: 00000001200001a8 gw    O .global_sizes           00000008 .size.bar
-// DUMP-EXE: 00000001200001a0 gw    O .global_sizes           00000008 .size.external_buffer
-// DUMP-EXE: 0000000120000198 gw    O .global_sizes           00000008 .size.external_cap
-// DUMP-EXE: 00000001200001b0 gw    O .global_sizes           00000008 .size.foo
-// DUMP-EXE: 00000001200001c0 gw    O .global_sizes           00000008 .size.other_var
+// DUMP-EXE: 0000000120000218 gw    O .global_sizes           00000008 .size.bar
+// DUMP-EXE: 0000000120000210 gw    O .global_sizes           00000008 .size.external_buffer
+// DUMP-EXE: 0000000120000208 gw    O .global_sizes           00000008 .size.external_cap
+// DUMP-EXE: 0000000120000220 gw    O .global_sizes           00000008 .size.foo
+// DUMP-EXE: 0000000120000230 gw    O .global_sizes           00000008 .size.other_var
 
 // DUMP-SHLIB-LABEL: SYMBOL TABLE:
 // DUMP-SHLIB: 0000000000000{{.+}} gw    O .global_sizes           00000008 .size.bar

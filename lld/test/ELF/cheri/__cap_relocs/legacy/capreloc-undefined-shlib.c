@@ -11,33 +11,33 @@
 // Second is the target, which is foo
 // SHLIB-RELOCS:      Relocations [
 // SHLIB-RELOCS-NEXT:  Section (7) .rel.dyn {
-// SHLIB-RELOCS-NEXT:     0x20000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x10000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 //                           ^--- Location for foo_ptr
-// SHLIB-RELOCS-NEXT:     0x20028 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x10028 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 //                           ^--- Location for bar_ptr
-// SHLIB-RELOCS-NEXT:     0x20030 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x10030 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 //                           ^--- Target for bar_ptr (since it is not preemptible this is resolved against the load address)
-// SHLIB-RELOCS-NEXT:     0x20008 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x10008 R_MIPS_CHERI_ABSPTR/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 //                           ^--- Target for foo_ptr
-// SHLIB-RELOCS-NEXT:     0x20018 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
+// SHLIB-RELOCS-NEXT:     0x10018 R_MIPS_CHERI_SIZE/R_MIPS_64/R_MIPS_NONE foo 0x0 (real addend unknown)
 //                           ^--- Size for foo_ptr
 // SHLIB-RELOCS-NEXT:  }
 // SHLIB-RELOCS-NEXT:]
 // RUN: llvm-objdump --cap-relocs -r -s -t -h %t.so | FileCheck %s -check-prefixes CHECK,%cheri_type
 // CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
 // 10000 is the address of foo_ptr
-// CHECK-NEXT: 0x0000000000010000 Base:  (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
-// CHECK-NEXT: 0x00000000000100{{2|4}}0 Base: bar (0x00000000000100{{1|2}}0)  Offset: 0x0000000000000000      Length: 0x0000000000000004      Permissions: 0x00000000
+// CHECK-NEXT: 0x0000000000020000 Base:  (0x0000000000000000)     Offset: 0x0000000000000000      Length: 0x0000000000000000      Permissions: 0x00000000
+// CHECK-NEXT: 0x00000000000200{{2|4}}0 Base: bar (0x00000000000200{{1|2}}0)  Offset: 0x0000000000000000      Length: 0x0000000000000004      Permissions: 0x00000000
 // CHECK-LABEL: Sections:
-// CHERI128:  .data         00000030 0000000000010000 DATA
-// CHERI256:  .data         00000060 0000000000010000 DATA
+// CHECK:  __cap_relocs  00000050 0000000000010000 DATA
+// CHERI128:  .data         00000030 0000000000020000 DATA
+// CHERI256:  .data         00000060 0000000000020000 DATA
 // 20000 is the address in rel.dyn -> correct
-// CHECK:  __cap_relocs  00000050 0000000000020000 DATA
 // CHECK-LABEL: SYMBOL TABLE:
-// CHECK: 00000000000100{{1|2}}0 l     O .data  00000004 bar
-// CHECK: 00000000000100{{2|4}}0 g     O .data  000000{{1|2}}0 bar_ptr
+// CHECK: 00000000000200{{1|2}}0 l     O .data  00000004 bar
+// CHECK: 00000000000200{{2|4}}0 g     O .data  000000{{1|2}}0 bar_ptr
 // CHECK: 0000000000000000               *UND*  00000000 foo
-// CHECK: 0000000000010000       g     O .data  000000{{1|2}}0 foo_ptr
+// CHECK: 0000000000020000       g     O .data  000000{{1|2}}0 foo_ptr
 
 // But it should with --unresolved-symbols=report-all
 // RUN: not ld.lld -shared --unresolved-symbols=report-all -o %t.so %t.o 2>&1 | FileCheck %s -check-prefix ERR

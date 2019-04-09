@@ -34,31 +34,31 @@
 // dynamic should have 14 relocations against the load address
 // DYNAMIC-RELOCS-LABEL: Relocations [
 // DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// DYNAMIC-RELOCS-NEXT:     0x300A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x300A8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x300C8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x300D0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x300F0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x300F8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x30118 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x30120 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x30140 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x30148 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x30168 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x30170 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x30190 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x30198 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x200A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x200A8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x200C8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x200D0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x200F0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x200F8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20118 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20120 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20140 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20148 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20168 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20170 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20190 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20198 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:   }
 // DYNAMIC-RELOCS-NEXT: ]
 
 
 // CHECK-LABEL: CHERI __cap_relocs [
-// CHECK-NEXT:    0x020000 (kvm_pcpu_nl)   Base: 0x7b2 (<unknown symbol>+0) Length: 189 Perms: Constant
-// CHECK-NEXT:    0x020020 Base: 0x77c (<unknown symbol>+0) Length: 243 Perms: Constant
-// CHECK-NEXT:    0x020040 Base: 0x865 (<unknown symbol>+0) Length: 10 Perms: Constant
-// CHECK-NEXT:    0x030000 Base: 0x833 (<unknown symbol>+0) Length: 60 Perms: Constant
-// CHECK-NEXT:    0x030020 Base: 0x7a1 (<unknown symbol>+0) Length: 206 Perms: Constant
-// CHECK-NEXT:    0x030040 Base: 0x788 (<unknown symbol>+0) Length: 231 Perms: Constant
-// CHECK-NEXT:    0x030060 Base: 0x77c (<unknown symbol>+0) Length: 243 Perms: Constant
+// CHECK-NEXT:    0x030000 (kvm_pcpu_nl)   Base: 0x85a (<unknown symbol>+0) Length: 189 Perms: Constant
+// CHECK-NEXT:    0x030020 Base: 0x{{.+}} (<unknown symbol>+0) Length: 243 Perms: Constant
+// CHECK-NEXT:    0x030040 Base: 0x{{.+}} (<unknown symbol>+0) Length: 10 Perms: Constant
+// CHECK-NEXT:    0x020000 Base: 0x{{.+}} (<unknown symbol>+0) Length: 60 Perms: Constant
+// CHECK-NEXT:    0x020020 Base: 0x{{.+}} (<unknown symbol>+0) Length: 206 Perms: Constant
+// CHECK-NEXT:    0x020040 Base: 0x{{.+}} (<unknown symbol>+0) Length: 231 Perms: Constant
+// CHECK-NEXT:    0x020060 Base: 0x{{.+}} (<unknown symbol>+0) Length: 243 Perms: Constant
 // CHECK-NEXT: ]
 

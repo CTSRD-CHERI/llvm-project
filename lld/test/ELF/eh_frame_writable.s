@@ -36,7 +36,7 @@ lui	$11, 1
 # CHECK: [12] .eh_frame         PROGBITS        0000000000030000 030000 00003c 00  WA  0   0  8
 
 
-# CHECK-LABEL: Relocation section '.rel.dyn' at offset 0x390 contains 1 entries:
+# CHECK-LABEL: Relocation section '.rel.dyn' at offset 0x{{.+}} contains 1 entries:
 # CHECK-NEXT:    Offset             Info             Type               Symbol's Value  Symbol's Name
 # CHECK-NEXT: 0000000000030020  0000000000001203 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE
 

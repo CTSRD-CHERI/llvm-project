@@ -140,48 +140,61 @@ Sections:
     Info:            .eh_frame
     Relocations:
       - Offset:          0x000000000000001C
-        Symbol:          ''
+        Symbol:          '.Lfoo'
         Type:            R_MIPS_PC32
       - Offset:          0x0000000000000047
         Symbol:          __gxx_personality_v0
         Type:            R_MIPS_64
       - Offset:          0x000000000000005C
-        Symbol:          ''
+        Symbol:          '.Lfoo2'
         Type:            R_MIPS_PC32
       - Offset:          0x0000000000000065
-        Symbol:          ''
+        Symbol:          '.Lfoo3'
         Type:            R_MIPS_64
 Symbols:
-  Local:
     - Name:            /local/scratch/alr48/cheri/llvm-master/tools/lld/test/ELF/cheri/libcxxrt-crash.test
       Type:            STT_FILE
+      Binding:         STB_LOCAL
     - Section:         .text
+      Binding:         STB_LOCAL
+      Name:            .Lfoo
     - Section:         .text
+      Name:            .Lfoo2
+      Binding:         STB_LOCAL
       Value:           0x0000000000000068
     - Name:            GCC_except_table1
+      Binding:         STB_LOCAL
       Section:         .gcc_except_table
     - Type:            STT_SECTION
+      Binding:         STB_LOCAL
+      Name:            .Lfoo3
       Section:         .gcc_except_table
-  Global:
     - Name:            _Z1ai
+      Binding:         STB_GLOBAL
     - Name:            _Z1bv
+      Binding:         STB_GLOBAL
     - Name:            _Z1dv
+      Binding:         STB_GLOBAL
       Type:            STT_FUNC
       Section:         .text
       Size:            0x0000000000000064
     - Name:            _Z1ev
+      Binding:         STB_GLOBAL
       Type:            STT_FUNC
       Section:         .text
       Value:           0x0000000000000068
       Size:            0x00000000000000D0
     - Name:            __cxa_call_unexpected
+      Binding:         STB_GLOBAL
     - Name:            __gxx_personality_v0
+      Binding:         STB_GLOBAL
     - Name:            c
+      Binding:         STB_GLOBAL
       Type:            STT_OBJECT
       Section:         .bss
       Size:            0x0000000000000008
-  Weak:
     - Name:            .size.c
+      Binding:         STB_WEAK
       Type:            STT_OBJECT
       Section:         .global_sizes
       Size:            0x0000000000000008

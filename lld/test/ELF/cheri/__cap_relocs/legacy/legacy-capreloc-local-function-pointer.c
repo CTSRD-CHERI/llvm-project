@@ -62,8 +62,8 @@ void __start(void) {}
 // dynamic should have 10 relocations against the load address
 // DYNAMIC-RELOCS-LABEL: Relocations [
 // DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// DYNAMIC-RELOCS-NEXT:     0x30000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x30008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x20008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:   }
 // DYNAMIC-RELOCS-NEXT: ]
 
@@ -71,7 +71,7 @@ void __start(void) {}
 // DUMP-CAPRELOCS-LABEL: CAPABILITY RELOCATION RECORDS:
 // STATIC-NEXT: 0x0000000120020000 Base: __error_unthreaded (0x000000012001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
 // PIE exe amd shlib should have dynamic relocations and only the offset values
-// DYNAMIC-NEXT:0x0000000000020000 Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
+// DYNAMIC-NEXT:0x0000000000030000 Base: __error_unthreaded (0x000000000001{{[a-z0-9]+}}) Offset: 0x0000000000000000 Length: 0x0000000000000044 Permissions: 0x8000000000000000 (Function){{$}}
 
 
 // The external capsizefix does okay for both cases:

@@ -14,43 +14,43 @@
 
 // CHECK:       Relocations [
 // CHECK-NEXT:   Section ({{.+}}) .rel.dyn {
-// CHECK-NEXT:     0x300{{9|5}}0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// CHECK-NEXT:     0x300{{9|5}}8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// CHECK-NEXT:     0x300{{4|3}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
+// CHECK-NEXT:     0x200{{9|5}}0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// CHECK-NEXT:     0x200{{9|5}}8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// CHECK-NEXT:     0x200{{4|3}}0 R_MIPS_CHERI_CAPABILITY/R_MIPS_NONE/R_MIPS_NONE global_int 0x0 (real addend unknown)
 // CHECK-NEXT:   }
 // CHECK-NEXT:   Section ({{.+}}) .rel.plt {
-// PER-FUNCTION-NEXT:     0x30000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
-// PER-FUNCTION-NEXT:     0x30010 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
-// PER-FUNCTION-NEXT:     0x30020 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
-// PER-FUNCTION-NEXT:     0x30030 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
-// PER-FUNCTION-NEXT:     0x30050 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
-// PER-FUNCTION-NEXT:     0x30070 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
-// PER-FUNCTION-NEXT:     0x30080 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
+// PER-FUNCTION-NEXT:     0x20000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
+// PER-FUNCTION-NEXT:     0x20010 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
+// PER-FUNCTION-NEXT:     0x20020 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
+// PER-FUNCTION-NEXT:     0x20030 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
+// PER-FUNCTION-NEXT:     0x20050 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
+// PER-FUNCTION-NEXT:     0x20070 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
+// PER-FUNCTION-NEXT:     0x20080 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
 
-// PER-FILE-NEXT:    0x30000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
-// PER-FILE-NEXT:    0x30010 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
-// PER-FILE-NEXT:    0x30020 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
+// PER-FILE-NEXT:    0x20000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
+// PER-FILE-NEXT:    0x20010 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
+// PER-FILE-NEXT:    0x20020 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
 
-// GLOBAL-NEXT:    0x30000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
-// GLOBAL-NEXT:    0x30010 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
-// GLOBAL-NEXT:    0x30020 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
+// GLOBAL-NEXT:    0x20000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_void_ptr 0x0 (real addend unknown)
+// GLOBAL-NEXT:    0x20010 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_char_ptr 0x0 (real addend unknown)
+// GLOBAL-NEXT:    0x20020 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_int 0x0 (real addend unknown)
 
 // CHECK-NEXT:   }
 // CHECK-NEXT: ]
 // CHECK-LABEL: DynamicSection [
 // CHECK-NEXT:    Tag                Type                 Name/Value
 // PER-FUNCTION:  0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FUNC
-// PER-FUNCTION:  0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING0x640
+// PER-FUNCTION:  0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING0x6E8
 // PER-FUNCTION:  0x000000007000C006 MIPS_CHERI_CAPTABLE_MAPPINGSZ0xA8
 // PER-FILE:      0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT CAPTABLE_PER_FILE
-// PER-FILE:      0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING0x600
+// PER-FILE:      0x000000007000C005 MIPS_CHERI_CAPTABLE_MAPPING0x6A8
 // PER-FILE:      0x000000007000C006 MIPS_CHERI_CAPTABLE_MAPPINGSZ0xA8
 // GLOBAL:        0x000000007000C002 MIPS_CHERI_FLAGS     ABI_PLT{{$}}
 // CHECK:      ]
 // CHECK-NEXT: CHERI __cap_relocs [
-// PER-FUNCTION-NEXT:    0x030060 (function3@CAPTABLE@x.6) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
-// PER-FILE-NEXT:        0x030040 (function3@CAPTABLE@per-function-table.c.tmp.o.4) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
-// GLOBAL-NEXT:          0x030040 (function3@CAPTABLE.4) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
+// PER-FUNCTION-NEXT:    0x020060 (function3@CAPTABLE@x.6) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
+// PER-FILE-NEXT:        0x020040 (function3@CAPTABLE@per-function-table.c.tmp.o.4) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
+// GLOBAL-NEXT:          0x020040 (function3@CAPTABLE.4) Base: 0x10{{.+}} (function3+0) Length: {{.+}} Perms: Function
 // CHECK-NEXT: ]
 // CHECK-NEXT:        CHERI .captable [
 // PER-FUNCTION-NEXT:   0x0      extern_void_ptr@CAPTABLE@function1   R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE against extern_void_ptr
@@ -151,16 +151,16 @@ __attribute__((noinline)) static void *function3(void) {
 
 
 // SYMBOLS-LABEL: SYMBOL TABLE:
-// SYMBOLS: 0000000000030000 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function1
-// SYMBOLS: 0000000000030010 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function2
-// SYMBOLS: 0000000000030020 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function4
-// SYMBOLS: 0000000000030030 l     O .captable		 00000010 extern_int@CAPTABLE@function4
-// SYMBOLS: 0000000000030040 l     O .captable		 00000010 global_int@CAPTABLE@function5
-// SYMBOLS: 0000000000030050 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@same_globals_as_function1
-// SYMBOLS: 0000000000030060 l     O .captable		 00000010 function3@CAPTABLE@x.6
-// SYMBOLS: 0000000000030070 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function3
-// SYMBOLS: 0000000000030080 l     O .captable		 00000010 extern_int@CAPTABLE@function3
-// SYMBOLS: 0000000000030000         .captable		 00000090 _CHERI_CAPABILITY_TABLE_
+// SYMBOLS: 0000000000020000 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function1
+// SYMBOLS: 0000000000020010 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function2
+// SYMBOLS: 0000000000020020 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@function4
+// SYMBOLS: 0000000000020030 l     O .captable		 00000010 extern_int@CAPTABLE@function4
+// SYMBOLS: 0000000000020040 l     O .captable		 00000010 global_int@CAPTABLE@function5
+// SYMBOLS: 0000000000020050 l     O .captable		 00000010 extern_void_ptr@CAPTABLE@same_globals_as_function1
+// SYMBOLS: 0000000000020060 l     O .captable		 00000010 function3@CAPTABLE@x.6
+// SYMBOLS: 0000000000020070 l     O .captable		 00000010 extern_char_ptr@CAPTABLE@function3
+// SYMBOLS: 0000000000020080 l     O .captable		 00000010 extern_int@CAPTABLE@function3
+// SYMBOLS: 0000000000020000         .captable		 00000090 _CHERI_CAPABILITY_TABLE_
 
 // RUN: llvm-readobj --cap-table-mapping %t.so | FileCheck %s -check-prefix READOBJ-MAPPING
 // Check that the mapping between functions + captable subsets is sensible:
@@ -179,36 +179,36 @@ __attribute__((noinline)) static void *function3(void) {
 // Also check that the raw bytes are correct in addition to the llvm-readobj output
 // RUN: llvm-objdump --full-contents ---section-headers --syms --section=.captable_mapping %t.so | FileCheck %s -check-prefix MAPPING
 // MAPPING: Idx Name          Size      VMA          Type
-// MAPPING:   9 .captable_mapping 000000a8 0000000000000640 DATA
+// MAPPING:   9 .captable_mapping 000000a8 00000000000006e8 DATA
 // MAPPING-EMPTY:
 // MAPPING: Contents of section .captable_mapping:
-// MAPPING-NEXT:  0640 00000000 [[FUNCTION1_ADDR:00010000]]
+// MAPPING-NEXT:  06e8 00000000 [[FUNCTION1_ADDR:00010000]]
 // MAPPING-SAME:       00000000 00010020
-// MAPPING-NEXT:  0650 00000000 00000010
+// MAPPING-NEXT:  06f8 00000000 00000010
 // Start addr  00010000, size 0x20, captable index 0, size 1
 // MAPPING-SAME:       00000000 [[FUNCTION2_ADDR:00010020]]
-// MAPPING-NEXT:  0660 00000000 00010040
+// MAPPING-NEXT:  0708 00000000 00010040
 // MAPPING-SAME:       00000010 00000010
 // Start addr  00010020, size 0x20, captable index 1, size 1
-// MAPPING-NEXT:  0670 00000000 [[FUNCTION4_ADDR:00010040]]
+// MAPPING-NEXT:  0718 00000000 [[FUNCTION4_ADDR:00010040]]
 // MAPPING-SAME:       00000000 0001008c
-// MAPPING-NEXT:  0680 00000020 00000020
+// MAPPING-NEXT:  0728 00000020 00000020
 // Start addr  00010040, size 0x48, captable index 2, size 2
 // MAPPING-SAME:       00000000 [[FUNCTION5_ADDR:00010090]]
-// MAPPING-NEXT:  0690 00000000 0001009c
+// MAPPING-NEXT:  0738 00000000 0001009c
 // MAPPING-SAME:       00000040 00000010
 // Start addr  00010088, size 0xc, captable index 4, size 1
-// MAPPING-NEXT:  06a0 00000000 [[SAME_GLOBALS_ADDR:000100a0]]
+// MAPPING-NEXT:  0748 00000000 [[SAME_GLOBALS_ADDR:000100a0]]
 // MAPPING-SAME:       00000000 000100c0
-// MAPPING-NEXT:  06b0 00000050 00000010
+// MAPPING-NEXT:  0758 00000050 00000010
 // Start addr  00010098, size 0x20, captable index 5, size 1
 // MAPPING-SAME:       00000000 [[X_ADDR:000100c0]]
-// MAPPING-NEXT:  06c0 00000000 000100e0
+// MAPPING-NEXT:  0768 00000000 000100e0
 // MAPPING-SAME:       00000060 00000010
 // Start addr  000100b8, size 0x20, captable index 6, size 1
-// MAPPING-NEXT:  06d0 00000000 [[FUNCTION3_ADDR:000100e0]]
+// MAPPING-NEXT:  0778 00000000 [[FUNCTION3_ADDR:000100e0]]
 // MAPPING-SAME:       00000000 0001012c
-// MAPPING-NEXT:  06e0 00000070 00000020
+// MAPPING-NEXT:  0788 00000070 00000020
 // Start addr  000100d8, size 0x48, captable index 7, size 2
 // MAPPING-NEXT: SYMBOL TABLE:
 // MAPPING: 00000000[[FUNCTION3_ADDR]] l     F .text		 0000004c function3

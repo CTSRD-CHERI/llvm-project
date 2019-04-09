@@ -25,7 +25,7 @@ lui        $1, %lo(_CHERI_CAPABILITY_TABLE_)
 # Address is 0x40000:
 # CHECK:      lui $4, 0
 # CHECK-NEXT: lui $3, 0
-# CHECK-NEXT: lui $2, 4
+# CHECK-NEXT: lui $2, 3
 # CHECK-NEXT: lui $1, 0
 
 # EMPTY-TABLE:      lui $4, 0
@@ -40,11 +40,11 @@ nop
 lui        $1, %hi(%neg(%captab_rel(__start)))
 daddiu     $1, $1, %lo(%neg(%captab_rel(__start)))
 cincoffset $c1, $c12, $1
-# Address of __start is 0x20000 so the difference should be 0x20000:
-# CHECK:   lui $1, 2
+# Address of __start is 0x10000 so the difference should be 0x10000:
+# CHECK:   lui $1, 1
 # CHECK:   daddiu  $1, $1, 0
 
-# with an empty table this loads -addrof(__start) -> -0x20000
+# with an empty table this loads -addrof(__start) -> -0x10000
 # EMPTY-TABLE: lui $1, 65534
 # EMPTY-TABLE: daddiu  $1, $1, 0
 
@@ -76,9 +76,9 @@ fn_2:
 .set noat
 lui        $1, %hi(%neg(%captab_rel(fn_2)))
 daddiu     $1, $1, %lo(%neg(%captab_rel(fn_2)))
-# address of fn2 = 0x2002c -> ﻿hex(0x40000 − 0x2002c) = 1ffd4
+# address of fn2 = 0x2002c -> ﻿hex(0x30000 − 0x2002c) = ffd4
 # -> lui 0x20000 and subtract 44
-# CHECK: lui $1, 2
+# CHECK: lui $1, 1
 # CHECK: daddiu $1, $1, -44
 
 # with an empty table this loads -addrof(fn_2) -> -0x2002c
@@ -90,12 +90,12 @@ nop
 
 lui        $1, %hi(%neg(%captab_rel(foo)))
 daddiu     $1, $1, %lo(%neg(%captab_rel(foo)))
-# address of foo = 0x30020 -> ﻿hex(0x40000 − 0x30020) = 0ffd0
+# address of foo = 0x30020 -> ﻿hex(0x30000 − 0x40020) = -0ffd0
 # -> lui 0x10000 and subtract 32
-# CHECK: lui $1, 1
+# CHECK: lui $1, 65535
 # CHECK: daddiu $1, $1, -32
 
-# with an empty table this loads -addrof(foo) -> -0x30020
+# with an empty table this loads -addrof(foo) -> -0x40020
 # EMPTY-TABLE: lui $1, 65533
 # EMPTY-TABLE: daddiu  $1, $1, -32
 
@@ -112,21 +112,21 @@ bar:
 
 
 # CHECK-LABEL: CAPABILITY RELOCATION RECORDS:
-# CHECK: 0x0000000000040000      Base: bar (0x0000000000030028)  Offset: 0x0000000000000000      Length: 0x0000000000000008     Permissions: 0x00000000
+# CHECK: 0x0000000000030000      Base: bar (0x0000000000040028)  Offset: 0x0000000000000000      Length: 0x0000000000000008     Permissions: 0x00000000
 
 
 # CHECK-LABEL: Sections:
 # CHECK: .text         00000040 0000000000020000 TEXT
-# CHECK: .data         00000030 0000000000030000 DATA
-# CHECK: .captable    00000010 0000000000040000 DATA
+# CHECK: .captable     00000010 0000000000030000 DATA
+# CHECK: .data         00000030 0000000000040000 DATA
 
 # CHECK-LABEL: SYMBOL TABLE:
-# CHECK-NEXT:  0000000000030028         .data           00000008 bar
+# CHECK-NEXT:  0000000000040028         .data           00000008 bar
 # CHECK-NEXT:  000000000002002c l     F .text           00000014 fn_2
-# CHECK-NEXT:  0000000000030020         .data           00000008 foo
-# CHECK-NEXT:  0000000000040000 l     O .captable       00000010 bar@CAPTABLE
-# CHECK-NEXT:  0000000000040000         .captable       00000000 _CHERI_CAPABILITY_TABLE_
-# CHECK-NEXT:  0000000000038020         .got            00000000 .hidden _gp
+# CHECK-NEXT:  0000000000040020         .data           00000008 foo
+# CHECK-NEXT:  0000000000030000 l     O .captable       00000010 bar@CAPTABLE
+# CHECK-NEXT:  0000000000030000         .captable       00000000 _CHERI_CAPABILITY_TABLE_
+# CHECK-NEXT:  0000000000048020         .got            00000000 .hidden _gp
 # CHECK-NEXT:  0000000000020000 g     F .text           0000002c __start
 
 

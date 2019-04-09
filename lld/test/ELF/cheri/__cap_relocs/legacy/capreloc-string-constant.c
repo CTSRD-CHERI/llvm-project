@@ -78,16 +78,16 @@ struct option options_table[] = {
 // dynamic should have 10 relocations against the load address
 // DYNAMIC-RELOCS-LABEL: Relocations [
 // DYNAMIC-RELOCS-NEXT:   Section ({{.+}}) .rel.dyn {
-// DYNAMIC-RELOCS-NEXT:     0x20000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20028 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20030 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20050 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20058 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20078 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x20080 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x200A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
-// DYNAMIC-RELOCS-NEXT:     0x200A8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x10000 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x10008 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x10028 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x10030 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x10050 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x10058 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x10078 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x10080 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x100A0 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
+// DYNAMIC-RELOCS-NEXT:     0x100A8 R_MIPS_REL32/R_MIPS_64/R_MIPS_NONE - 0x0 (real addend unknown)
 // DYNAMIC-RELOCS-NEXT:   }
 // DYNAMIC-RELOCS-NEXT: ]
 
@@ -100,7 +100,7 @@ struct option options_table[] = {
 // STATIC-NEXT:   SHF_MERGE (0x10)
 // STATIC-NEXT:   SHF_STRINGS (0x20)
 // STATIC-NEXT: ]
-// STATIC-NEXT: Address: [[$RODATA:0x120000198]]
+// STATIC-NEXT: Address: [[$RODATA:0x120000208]]
 
 // STATIC-LABEL: CHERI __cap_relocs [
 // STATIC-NEXT: 0x1200100{{20|10}}  Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 23 Perms: [[$CONSTANT_FLAG]]
@@ -118,15 +118,15 @@ struct option options_table[] = {
 // DYNAMIC-NEXT:   SHF_MERGE (0x10)
 // DYNAMIC-NEXT:   SHF_STRINGS (0x20)
 // DYNAMIC-NEXT: ]
-// DYNAMIC-NEXT: Address: [[$RODATA:0x(428|430)]]
+// DYNAMIC-NEXT: Address: [[$RODATA:0x(4D0|4D8)]]
 
 // PIE exe and shlib should have dynamic relocations and only the offset values
 // DYNAMIC-LABEL: CHERI __cap_relocs [
-// DYNAMIC-NEXT: 0x0100{{20|10}}       Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 23 Perms: [[$CONSTANT_FLAG]]
-// DYNAMIC-NEXT: 0x0100{{60|30}}       Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7  Perms: [[$CONSTANT_FLAG]]
-// DYNAMIC-NEXT: 0x0100{{a0|50}}       Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
-// DYNAMIC-NEXT: 0x0100{{e0|70}}       Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
-// DYNAMIC-NEXT: 0x010{{120|090}}      Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 17 Perms: [[$CONSTANT_FLAG]]
+// DYNAMIC-NEXT: 0x0200{{20|10}}       Base: 0x[[@EXPR tolower(hex($RODATA))]]      (<unknown symbol>+0) Length: 23 Perms: [[$CONSTANT_FLAG]]
+// DYNAMIC-NEXT: 0x0200{{60|30}}       Base: 0x[[@EXPR tolower(hex($RODATA + 16))]] (<unknown symbol>+4) Length: 7  Perms: [[$CONSTANT_FLAG]]
+// DYNAMIC-NEXT: 0x0200{{a0|50}}       Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
+// DYNAMIC-NEXT: 0x0200{{e0|70}}       Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+0) Length: 17 Perms: [[$CONSTANT_FLAG]]
+// DYNAMIC-NEXT: 0x020{{120|090}}      Base: 0x[[@EXPR tolower(hex($RODATA + 6))]]  (<unknown symbol>+1) Length: 17 Perms: [[$CONSTANT_FLAG]]
 // DYNAMIC-NEXT: ]
 
 
@@ -138,7 +138,7 @@ struct option options_table[] = {
 // STATIC-EXTERNAL-CAPSIZEFIX-NEXT:   SHF_MERGE (0x10)
 // STATIC-EXTERNAL-CAPSIZEFIX-NEXT:   SHF_STRINGS (0x20)
 // STATIC-EXTERNAL-CAPSIZEFIX-NEXT: ]
-// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: Address: [[$RODATA:0x120000198]]
+// STATIC-EXTERNAL-CAPSIZEFIX-NEXT: Address: [[$RODATA:0x120000208]]
 
 // The external capsizefix doesn;t set the length correctly:
 // STATIC-EXTERNAL-CAPSIZEFIX-LABEL: CHERI __cap_relocs [

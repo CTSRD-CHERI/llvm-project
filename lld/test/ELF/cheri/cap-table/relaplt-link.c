@@ -1,4 +1,3 @@
-
 // REQUIRES: clang
 
 // Check x86_64 since MIPS n64 doesn't seem to use .rel.plt:
@@ -28,7 +27,7 @@
 // AMD64-SHLIB-NEXT:    Size: 24
 // This links to .dynsym
 // AMD64-SHLIB-NEXT:    Link: [[DYNSYM_INDEX]]
-// AMD64-SHLIB-NEXT:    Info: [[GOTPLT_INDEX:8]]
+// AMD64-SHLIB-NEXT:    Info: [[GOTPLT_INDEX:9]]
 // AMD64-SHLIB-NEXT:    AddressAlignment: 8
 // AMD64-SHLIB-NEXT:    EntrySize: 24
 // AMD64-SHLIB-NEXT:  }
@@ -39,13 +38,13 @@
 
 // AMD64-SHLIB-LABEL: Relocations [
 // AMD64-SHLIB-NEXT: Section ({{.+}}) .rela.plt {
-// AMD64-SHLIB-NEXT:    0x2018 R_X86_64_JUMP_SLOT extern_function 0x0
+// AMD64-SHLIB-NEXT:    0x3018 R_X86_64_JUMP_SLOT extern_function 0x0
 // AMD64-SHLIB-NEXT:  }
 // AMD64-SHLIB-LABEL: DynamicSection [
 // AMD64-SHLIB-NEXT: Tag                Type                 Name/Value
 // AMD64-SHLIB-NEXT: 0x0000000000000017 JMPREL               [[PLT_REL_ADDR]]
 // AMD64-SHLIB-NEXT: 0x0000000000000002 PLTRELSZ             24 (bytes)
-// AMD64-SHLIB-NEXT: 0x0000000000000003 PLTGOT               0x2000
+// AMD64-SHLIB-NEXT: 0x0000000000000003 PLTGOT               0x3000
 // AMD64-SHLIB-NEXT: 0x0000000000000014 PLTREL               RELA
 
 // RUN: llvm-strip -o /dev/stdout %t-amd64.so | llvm-readobj -file-headers - | FileCheck %s -check-prefix AMD64-STRIPPED
@@ -61,7 +60,6 @@
 // PURECAP-OBJ-NEXT:    0x8 R_MIPS_CHERI_CAPCALL20/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0
 // PURECAP-OBJ-NEXT:  }
 // RUN: ld.lld -shared -o %t.so %t.o
-// RUN: llvm-readobj -dynamic-table -r -file-headers -sections %t.so
 // RUN: llvm-readobj -dynamic-table -file-headers -r -sections %t.so | FileCheck -check-prefix PURECAP-SHLIB %s
 // PURECAP-SHLIB:      SectionHeaderCount: 18
 // PURECAP-SHLIB:  Section {
@@ -79,7 +77,7 @@
 // PURECAP-SHLIB-NEXT:    Offset: [[PLT_REL_ADDR]]
 // PURECAP-SHLIB-NEXT:    Size: 16
 // PURECAP-SHLIB-NEXT:    Link: [[DYNSYM_INDEX]]
-// PURECAP-SHLIB-NEXT:    Info: [[CAPTABLE_INDEX:11]]
+// PURECAP-SHLIB-NEXT:    Info: [[CAPTABLE_INDEX:9]]
 // PURECAP-SHLIB-NEXT:    AddressAlignment: 8
 // PURECAP-SHLIB-NEXT:    EntrySize: 16
 // PURECAP-SHLIB-NEXT:  }
@@ -90,7 +88,7 @@
 
 // PURECAP-SHLIB: Relocations [
 // PURECAP-SHLIB-NEXT: Section ({{.+}}) .rel.plt {
-// PURECAP-SHLIB-NEXT:    0x30000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0 (real addend unknown)
+// PURECAP-SHLIB-NEXT:    0x20000 R_MIPS_CHERI_CAPABILITY_CALL/R_MIPS_NONE/R_MIPS_NONE extern_function 0x0 (real addend unknown)
 // PURECAP-SHLIB-NEXT:  }
 // PURECAP-SHLIB-LABEL: DynamicSection [
 // PURECAP-SHLIB-NEXT: Tag                Type                 Name/Value
