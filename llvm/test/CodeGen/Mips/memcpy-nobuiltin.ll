@@ -53,11 +53,11 @@ entry:
   ; This can be inlined;
   ; CHECK-LABEL: memmove_aligned:
   ; CHECK: # %bb.0:
-  ; CHECK-NEXT: ld $1, 8($5)
-  ; CHECK-NEXT: sd $1, 8($4)
   ; CHECK-NEXT: ld $1, 0($5)
-  ; CHECK-NEXT: jr $ra
   ; CHECK-NEXT: sd $1, 0($4)
+  ; CHECK-NEXT: ld $1, 8($5)
+  ; CHECK-NEXT: jr $ra
+  ; CHECK-NEXT: sd $1, 8($4)
 }
 
 define void @memmove_aligned_nobuiltin(i8* %dst, i8* %src) #0 {

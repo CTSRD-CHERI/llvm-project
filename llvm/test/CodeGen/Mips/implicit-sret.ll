@@ -11,7 +11,7 @@ declare dso_local { i32, i128, i64 } @implicit_sret_decl() unnamed_addr
 define internal void @test() unnamed_addr nounwind {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    daddiu $sp, $sp, -48
+; CHECK-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:48]]
 ; CHECK-NEXT:    sd $ra, 40($sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    daddiu $4, $sp, 8
 ; CHECK-NEXT:    jal implicit_sret_decl
@@ -19,13 +19,14 @@ define internal void @test() unnamed_addr nounwind {
 ; CHECK-NEXT:    ld $6, 24($sp)
 ; CHECK-NEXT:    ld $5, 16($sp)
 ; CHECK-NEXT:    ld $7, 32($sp)
-; CHECK-NEXT:    lw $ra, 8($sp)
-; CHECK-NEXT:    # implicit-def: $a0_64
-; CHECK-NEXT:    move $4, $ra
+; CHECK-NEXT:    lw $1, 8($sp)
+; CHECK-NEXT:    # implicit-def: $v0_64
+; CHECK-NEXT:    move $2, $1
+; CHECK-NEXT:    move $4, $2
 ; CHECK-NEXT:    jal use_sret
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    ld $ra, 40($sp) # 8-byte Folded Reload
-; CHECK-NEXT:    daddiu $sp, $sp, 48
+; CHECK-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    nop
 start:
@@ -40,7 +41,7 @@ start:
 define internal { i32, i128, i64 } @implicit_sret_impl() unnamed_addr nounwind {
 ; CHECK-LABEL: implicit_sret_impl:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    daddiu $sp, $sp, -16
+; CHECK-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:16]]
 ; CHECK-NEXT:    move $1, $4
 ; CHECK-NEXT:    daddiu $2, $zero, 20
 ; CHECK-NEXT:    sd $2, 16($4)
@@ -52,7 +53,7 @@ define internal { i32, i128, i64 } @implicit_sret_impl() unnamed_addr nounwind {
 ; CHECK-NEXT:    sw $5, 0($4)
 ; CHECK-NEXT:    sd $1, 8($sp) # 8-byte Folded Spill
 ; CHECK-NEXT:    sd $2, 0($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    daddiu $sp, $sp, 16
+; CHECK-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    nop
   ret { i32, i128, i64 } { i32 10, i128 20, i64 30 }
@@ -63,27 +64,24 @@ declare dso_local void @use_sret2(i32, i32, i32) unnamed_addr
 define internal void @test2() unnamed_addr nounwind {
 ; CHECK-LABEL: test2:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    daddiu $sp, $sp, -48
-; CHECK-NEXT:    sd $ra, 40($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    daddiu $4, $sp, 16
+; CHECK-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:32]]
+; CHECK-NEXT:    sd $ra, 24($sp) # 8-byte Folded Spill
+; CHECK-NEXT:    daddiu $4, $sp, 0
 ; CHECK-NEXT:    jal implicit_sret_decl2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    lw $ra, 36($sp)
-; CHECK-NEXT:    lw $1, 28($sp)
-; CHECK-NEXT:    lw $2, 20($sp)
+; CHECK-NEXT:    lw $1, 20($sp)
+; CHECK-NEXT:    lw $2, 12($sp)
+; CHECK-NEXT:    lw $3, 4($sp)
 ; CHECK-NEXT:    # implicit-def: $a0_64
-; CHECK-NEXT:    move $4, $2
-; CHECK-NEXT:    # implicit-def: $v1_64
-; CHECK-NEXT:    move $3, $1
+; CHECK-NEXT:    move $4, $3
 ; CHECK-NEXT:    # implicit-def: $a1_64
-; CHECK-NEXT:    move $5, $ra
-; CHECK-NEXT:    sd $5, 8($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    move $5, $3
-; CHECK-NEXT:    ld $6, 8($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    move $5, $2
+; CHECK-NEXT:    # implicit-def: $a2_64
+; CHECK-NEXT:    move $6, $1
 ; CHECK-NEXT:    jal use_sret2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    ld $ra, 40($sp) # 8-byte Folded Reload
-; CHECK-NEXT:    daddiu $sp, $sp, 48
+; CHECK-NEXT:    ld $ra, 24($sp) # 8-byte Folded Reload
+; CHECK-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    nop
 start:
@@ -99,7 +97,7 @@ start:
 define internal { i32, i32, i32, i32, i32, i32 } @implicit_sret_impl2() unnamed_addr nounwind {
 ; CHECK-LABEL: implicit_sret_impl2:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:    daddiu $sp, $sp, -16
+; CHECK-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:16]]
 ; CHECK-NEXT:    move $1, $4
 ; CHECK-NEXT:    addiu $2, $zero, 6
 ; CHECK-NEXT:    sw $2, 20($4)
@@ -114,7 +112,7 @@ define internal { i32, i32, i32, i32, i32, i32 } @implicit_sret_impl2() unnamed_
 ; CHECK-NEXT:    addiu $2, $zero, 1
 ; CHECK-NEXT:    sw $2, 0($4)
 ; CHECK-NEXT:    sd $1, 8($sp) # 8-byte Folded Spill
-; CHECK-NEXT:    daddiu $sp, $sp, 16
+; CHECK-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    jr $ra
 ; CHECK-NEXT:    nop
   ret { i32, i32, i32, i32, i32, i32 } { i32 1, i32 2, i32 3, i32 4, i32 5, i32 6 }

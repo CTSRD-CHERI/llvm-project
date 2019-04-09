@@ -54,8 +54,8 @@ body:             |
     ; MIPS32: [[SLTu:%[0-9]+]]:gpr32 = SLTu $zero, [[XOR]]
     ; MIPS32: [[ORi1:%[0-9]+]]:gpr32 = ORi $zero, 1
     ; MIPS32: [[AND:%[0-9]+]]:gpr32 = AND [[SLTu]], [[ORi1]]
-    ; MIPS32: SB [[AND]], [[COPY3]], 0 :: (store 1 into %ir.pcarry_flag)
-    ; MIPS32: SW [[MUL]], [[COPY2]], 0 :: (store 4 into %ir.pmul)
+    ; MIPS32: SB [[AND]], [[COPY3]], 0, implicit $ddc :: (store 1 into %ir.pcarry_flag)
+    ; MIPS32: SW [[MUL]], [[COPY2]], 0, implicit $ddc :: (store 4 into %ir.pmul)
     ; MIPS32: RetRA
     %0:gprb(s32) = COPY $a0
     %1:gprb(s32) = COPY $a1
