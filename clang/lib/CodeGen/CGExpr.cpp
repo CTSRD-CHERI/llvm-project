@@ -595,19 +595,19 @@ EmitMaterializeTemporaryExpr(const MaterializeTemporaryExpr *M) {
 STATISTIC(NumReferencesCheckedForBoundsTightening,
           "Number of references checked for tightening bounds");
 STATISTIC(NumTightBoundsSetOnReferences,
-          "Number of references where bounds were tightend");
+          "Number of references where bounds were tightened");
 STATISTIC(NumContainerBoundsSetOnReferences,
           "Number of references operators where container bounds were used");
 STATISTIC(NumAddrOfCheckedForBoundsTightening,
           "Number of & operators checked for tightening bounds");
 STATISTIC(NumTightBoundsSetOnAddrOf,
-          "Number of & operators where bounds were tightend");
+          "Number of & operators where bounds were tightened");
 STATISTIC(NumContainerBoundsSetOnAddrOf,
           "Number of & operators where container bounds were used");
 STATISTIC(NumArraySubscriptCheckedForBoundsTightening,
           "Number of [] operators checked for tightening bounds");
 STATISTIC(NumTightBoundsSetOnArraySubscript,
-          "Number of [] operators where bounds were tightend");
+          "Number of [] operators where bounds were tightened");
 STATISTIC(NumArrayDecayCheckedForBoundsTightening,
           "Number of array-to-pointer-decays checked for tightening bounds");
 STATISTIC(NumTightBoundsSetOnArrayDecay,

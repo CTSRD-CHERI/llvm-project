@@ -4,8 +4,8 @@
 // RUN:    -w -mllvm -debug-only="cheri-bounds" -mllvm -stats 2>&1 | FileCheck %s -check-prefix DBG
 // DBG:  3 cheri-bounds     - Number of & operators checked for tightening bounds
 // DBG: 36 cheri-bounds     - Number of [] operators checked for tightening bounds
-// DBG:  2 cheri-bounds     - Number of & operators where bounds were tightend
-// DBG: 22 cheri-bounds     - Number of [] operators where bounds were tightend
+// DBG:  2 cheri-bounds     - Number of & operators where bounds were tightened
+// DBG: 22 cheri-bounds     - Number of [] operators where bounds were tightened
 // REQUIRES: asserts
 
 void use_buf(void *);

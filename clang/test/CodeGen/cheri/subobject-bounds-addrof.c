@@ -112,5 +112,5 @@ int test_vector(v4i8 v4, ext_vector_size_int32_8 v8) {
 // DBG-NEXT: ===-------------------------------------------------------------------------===
 // DBG: 14 cheri-bounds - Number of & operators checked for tightening bounds
 // DBG:  3 cheri-bounds - Number of [] operators checked for tightening bounds
-// DBG: 12 cheri-bounds - Number of & operators where bounds were tightend
-// DBG:  1 cheri-bounds - Number of [] operators where bounds were tightend
+// DBG: 12 cheri-bounds - Number of & operators where bounds were tightened
+// DBG:  1 cheri-bounds - Number of [] operators where bounds were tightened
