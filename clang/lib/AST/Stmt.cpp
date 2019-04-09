@@ -44,6 +44,9 @@
 
 using namespace clang;
 
+static_assert((int)CK_IntToOCLSampler < ((1 << CAST_KIND_BITS) - 1),
+              "Need more cast kind bits");
+
 static struct StmtClassNameTable {
   const char *Name;
   unsigned Counter;

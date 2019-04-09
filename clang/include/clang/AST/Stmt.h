@@ -486,7 +486,8 @@ protected:
 
     unsigned : NumExprBits;
 
-    unsigned Kind : 6;
+#define CAST_KIND_BITS 7
+    unsigned Kind : CAST_KIND_BITS;
     unsigned PartOfExplicitCast : 1; // Only set for ImplicitCastExpr.
 
     /// The number of CXXBaseSpecifiers in the cast. 14 bits would be enough
