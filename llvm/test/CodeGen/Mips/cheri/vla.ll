@@ -51,12 +51,11 @@ define void @foo(i8 addrspace(200)* %arg) {
 ; LEGACY-NEXT:    lui $1, %hi(%neg(%gp_rel(foo)))
 ; LEGACY-NEXT:    daddu $1, $1, $25
 ; LEGACY-NEXT:    daddiu $1, $1, %lo(%neg(%gp_rel(foo)))
-; LEGACY-NEXT:    cmove $c12, $c3
+; LEGACY-NEXT:    cmove $c1, $c3
 ; LEGACY-NEXT:    ld $1, %call16(test)($1)
-; LEGACY-NEXT:    cgetpccsetoffset $c1, $1
+; LEGACY-NEXT:    cgetpccsetoffset $c12, $1
 ; LEGACY-NEXT:    cgetnull $c13
-; LEGACY-NEXT:    csc $c12, $zero, 0($c11)
-; LEGACY-NEXT:    cmove $c12, $c1
+; LEGACY-NEXT:    csc $c1, $zero, 0($c11)
 ; LEGACY-NEXT:    cjalr $c12, $c17
 ; LEGACY-NEXT:    nop
 ; LEGACY-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
@@ -73,11 +72,11 @@ define void @foo(i8 addrspace(200)* %arg) {
 ; CAPTABLE-NEXT:    lui $1, %hi(%neg(%captab_rel(foo)))
 ; CAPTABLE-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(foo)))
 ; CAPTABLE-NEXT:    cincoffset $c26, $c12, $1
-; CAPTABLE-NEXT:    cmove $c12, $c26
-; CAPTABLE-NEXT:    cmove $c1, $c3
-; CAPTABLE-NEXT:    clcbi $c12, %capcall20(test)($c12)
+; CAPTABLE-NEXT:    cmove $c1, $c26
+; CAPTABLE-NEXT:    cmove $c2, $c3
+; CAPTABLE-NEXT:    clcbi $c12, %capcall20(test)($c1)
 ; CAPTABLE-NEXT:    cgetnull $c13
-; CAPTABLE-NEXT:    csc $c1, $zero, 0($c11)
+; CAPTABLE-NEXT:    csc $c2, $zero, 0($c11)
 ; CAPTABLE-NEXT:    cjalr $c12, $c17
 ; CAPTABLE-NEXT:    nop
 ; CAPTABLE-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
