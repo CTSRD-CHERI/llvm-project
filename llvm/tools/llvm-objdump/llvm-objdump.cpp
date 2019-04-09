@@ -1019,7 +1019,7 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
     else
       AbsoluteSymbols.emplace_back(Address, Name, SymbolType);
 
-    if (*Name == "_CHERI_CAPABILITY_TABLE_") {
+    if (Name == "_CHERI_CAPABILITY_TABLE_") {
       // errs() << "FOUND CHERI CAP TABLE @" << utohexstr(Address);
       CheriCapTableAddress = Address;
     }
