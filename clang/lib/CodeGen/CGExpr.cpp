@@ -608,6 +608,10 @@ STATISTIC(NumArraySubscriptCheckedForBoundsTightening,
           "Number of [] operators checked for tightening bounds");
 STATISTIC(NumTightBoundsSetOnArraySubscript,
           "Number of [] operators where bounds were tightend");
+STATISTIC(NumArrayDecayCheckedForBoundsTightening,
+          "Number of array-to-pointer-decays checked for tightening bounds");
+STATISTIC(NumTightBoundsSetOnArrayDecay,
+          "Number of array-to-pointer-decays where bounds were tightened");
 #undef DEBUG_TYPE
 
 static StringRef boundsKindStr(SubObjectBoundsKind Kind) {
@@ -618,6 +622,8 @@ static StringRef boundsKindStr(SubObjectBoundsKind Kind) {
     return "address";
   case SubObjectBoundsKind::ArraySubscript:
     return "subscript";
+  case SubObjectBoundsKind::ArrayDecay:
+    return "array decay";
   }
   llvm_unreachable("Invalid kind");
 }
@@ -674,6 +680,8 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
     StatsPrefix = "C++ reference to ";
   } else if (Kind == SubObjectBoundsKind::ArraySubscript) {
     StatsPrefix = "array subscript for ";
+  } else if (Kind == SubObjectBoundsKind::ArrayDecay) {
+    StatsPrefix = "array decay for ";
   } else {
     llvm_unreachable("Invalid kind");
   }
@@ -749,6 +757,28 @@ CodeGenFunction::setCHERIBoundsOnArraySubscript(llvm::Value *Value,
   if (auto TBR = canTightenCheriBounds(Value, Ty, Base, Kind)) {
     assert(!TBR->IsContainerSize && "Container size should not be use for array subscript bounds");
     NumTightBoundsSetOnArraySubscript++;
+    return tightenCHERIBounds(*this, Kind, Value, Base, Ty, *TBR);
+  }
+  return Value;
+}
+
+llvm::Value *
+CodeGenFunction::setCHERIBoundsOnArrayDecay(llvm::Value *Value, const Expr *E) {
+  // TODO: only do this for MemberExprs? Stack variables and globals should
+  // already be bounded by the backend.
+
+  assert(getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe);
+  // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on array decay ";
+  //                  E->dump(llvm::dbgs()));
+
+  const Expr *Base = E->IgnoreParenImpCasts();
+  QualType Ty = Base->getType();
+  assert(Ty->isArrayType());
+  NumArrayDecayCheckedForBoundsTightening++;
+  constexpr auto Kind = SubObjectBoundsKind::ArrayDecay;
+  if (auto TBR = canTightenCheriBounds(Value, Ty, Base, Kind)) {
+    assert(!TBR->IsContainerSize && "Container size should not be use for array deacy bounds");
+    NumTightBoundsSetOnArrayDecay++;
     return tightenCHERIBounds(*this, Kind, Value, Base, Ty, *TBR);
   }
   return Value;
@@ -1045,7 +1075,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     // interchangably with a pointer to the main union. Use the containing type
     // unless we are doing an array subcript operation or are in aggressive
     // mode.
-    if (Kind != SubObjectBoundsKind::ArraySubscript && BaseTy->isUnionType() &&
+    if (Kind != SubObjectBoundsKind::ArraySubscript && Kind != SubObjectBoundsKind::ArrayDecay && BaseTy->isUnionType() &&
         BoundsMode < LangOptions::CBM_VeryAggressive) {
       // FIXME: we should set bounds to the whole union rather than not setting bounds at all
       // FIXME: should we set bounds for references?
@@ -1067,21 +1097,22 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   // them since we can't known the actual size. This is very similar to
   // -fsanitize=array-size and is equivalent to having a trap if index greater
   // constant size (but with a CHERI bounds violation instead)
-  if (Kind == SubObjectBoundsKind::ArraySubscript) {
+  if (Kind == SubObjectBoundsKind::ArraySubscript || Kind == SubObjectBoundsKind::ArrayDecay) {
     // E->dumpColor();
     // E->dumpPretty(getContext());
     // For array subscripts we can only set bounds for array types, and not
     // pointers since those have an unknown size
     // TODO: we could ignore all casts and check the underlying type
     // i.e. ((char*)buf)[10] if buf is an array of different type
+    StringRef KindStr = boundsKindStr(Kind);
     if (!Ty->isArrayType()) {
       return cannotSetBounds(*this, E, Ty, Kind,
-                             "array subscript on non-array type");
+                             "array " + KindStr + " on non-array type");
     } else if (!Ty->isConstantSizeType()) {
       return cannotSetBounds(*this, E, Ty, Kind,
-                             "array subscript on variable size type");
+                             "array " + KindStr + " on variable size type");
     }
-    CHERI_BOUNDS_DBG(<< "subscript on constant size array -> ");
+    CHERI_BOUNDS_DBG(<< KindStr << " on constant size array -> ");
     return ExactBounds(TypeSize);
   }
 
@@ -1731,7 +1762,7 @@ Address CodeGenFunction::EmitPointerWithAlignment(const Expr *E,
       break;
 
     // Array-to-pointer decay.
-    case CK_ArrayToPointerDecay: // FIXME: bounds on array-to-pointer-decay
+    case CK_ArrayToPointerDecay:
       return EmitArrayToPointerDecay(CE->getSubExpr(), BaseInfo, TBAAInfo);
 
     // Derived-to-base conversions.
@@ -3987,6 +4018,11 @@ Address CodeGenFunction::EmitArrayToPointerDecay(const Expr *E,
       Addr = Address(Builder.CreateAddrSpaceCast(Addr.getPointer(),
             llvm::PointerType::get(PtrTy->getElementType(), AS)),
           Addr.getAlignment());
+  }
+  if (getLangOpts().getCheriBounds() >= LangOptions::CBM_SubObjectsSafe) {
+    auto BoundedResult = setCHERIBoundsOnArrayDecay(Addr.getPointer(), E);
+    assert(BoundedResult->getType() == Addr.getType());
+    Addr = Address(BoundedResult, Addr.getAlignment());
   }
   return Addr;
 }

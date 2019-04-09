@@ -221,7 +221,7 @@ template <> struct DominatingValue<RValue> {
   }
 };
 
-enum class SubObjectBoundsKind { AddrOf, Reference, ArraySubscript };
+enum class SubObjectBoundsKind { AddrOf, Reference, ArraySubscript, ArrayDecay };
 
 /// CodeGenFunction - This class organizes the per-function state that is used
 /// while generating LLVM code.
@@ -3899,6 +3899,7 @@ public:
                                       const Expr *E, const Expr *LocExpr);
   llvm::Value *setCHERIBoundsOnArraySubscript(llvm::Value *Ptr,
                                               const ArraySubscriptExpr *E);
+  llvm::Value *setCHERIBoundsOnArrayDecay(llvm::Value *Ptr, const Expr *E);
 
   struct TightenBoundsResult {
     uint64_t Size;

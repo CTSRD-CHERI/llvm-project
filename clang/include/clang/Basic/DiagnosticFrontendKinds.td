@@ -220,20 +220,20 @@ def err_test_module_file_extension_version : Error<
   "test module file extension '%0' has different version (%1.%2) than expected "
   "(%3.%4)">;
 
+def select_subobject_bounds_kind : TextSubstitution<
+  "%select{pointer to|reference to|array subscript on|array decay on}0">;
 
 def remark_setting_cheri_subobject_bounds :
-  Remark<"setting %select{|sub-object }0bounds for "
-         "%select{pointer to|reference to|array subscript on}1 %2 to %3 bytes">,
+  Remark<"setting %select{|sub-object }0bounds for %sub{select_subobject_bounds_kind}1 %2 to %3 bytes">,
   InGroup<CheriSubobjectBounds>;
 def remark_setting_cheri_subobject_bounds_field :
-  Remark<"setting sub-object bounds for field %0 "
-         "(%select{pointer to|reference to|array subscript on}1 %2) to %3 bytes">,
+  Remark<"setting sub-object bounds for field %0 (%sub{select_subobject_bounds_kind}1 %2) to %3 bytes">,
   InGroup<CheriSubobjectBounds>;
 def remark_subobject_using_container_size :
   Remark<"using size of containing type %0 instead of object type %1 for "
          "subobject bounds on %2">, InGroup<CheriSubobjectBounds>;
 def remark_no_cheri_subobject_bounds :
-  Remark<"not setting bounds for %select{pointer to|reference to|array subscript on}0 %1 (%2)">,
+  Remark<"not setting bounds for %sub{select_subobject_bounds_kind}0 %1 (%2)">,
   InGroup<CheriSubobjectBounds>;
 
 def warn_subobject_bounds_unknown_type :
