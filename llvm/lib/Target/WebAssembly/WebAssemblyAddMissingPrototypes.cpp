@@ -120,7 +120,7 @@ bool WebAssemblyAddMissingPrototypes::runOnModule(Module &M) {
     }
 
     Function *NewF =
-        Function::Create(NewType, F.getLinkage(), F.getName() + ".fixed_sig");
+        Function::Create(NewType, F.getLinkage(), F.getAddressSpace(), F.getName() + ".fixed_sig");
     NewF->setAttributes(F.getAttributes());
     NewF->removeFnAttr("no-prototype");
     Replacements.emplace_back(&F, NewF);
