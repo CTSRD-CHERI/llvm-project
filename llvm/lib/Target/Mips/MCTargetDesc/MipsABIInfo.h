@@ -39,7 +39,7 @@ public:
     int64_t GetStackPointerOffset_Next() const {return CapSize * -1;}
     int64_t GetStackPointerOffset_Prev() const {return CapSize * -2;}
 
-    int64_t GetMinStack_Size() const {return 0x2000;}
+    int64_t GetMinStack_Size() const {return 0x4000;}
     TemporalABILayout(uint32_t capSize) : CapSize(capSize) {}
   };
 
