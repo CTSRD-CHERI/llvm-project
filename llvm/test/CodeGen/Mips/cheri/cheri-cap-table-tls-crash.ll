@@ -17,11 +17,11 @@ define dso_local void @check_tls_item() addrspace(200) #1 {
 entry:
   call void (i8 addrspace(200)*, ...) @printf(i8 addrspace(200)* getelementptr inbounds ([15 x i8], [15 x i8] addrspace(200)* @.str.6, i32 0, i32 0), i32 signext undef)
   %0 = load volatile i8, i8 addrspace(200)* @tls_item, align 1
-  unreachable
+  ret void
 
   ; CHECK:      lui	$1, %captab_tprel_hi(tls_item)
   ; CHECk-NEXT: daddiu	$1, $1, %captab_tprel_lo(tls_item)
-  ; CHECK:      creadhwr	$c3, $chwr_userlocal
+  ; CHECK:      creadhwr	$c2, $chwr_userlocal
 }
 
 attributes #0 = { "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="cheri128" "target-features"="+cheri128,+chericap,+soft-float,-noabicalls" "unsafe-fp-math"="false" "use-soft-float"="true" }
