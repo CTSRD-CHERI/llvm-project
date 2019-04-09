@@ -233,6 +233,7 @@ def do_cfi_offset_sub(match):
 def do_stackframe_size_sub_impl(match, with_cfa):
   size = match.group("size")
   cfa_offset = match.group("size")
+  instr = match.group("instr")
   if size != cfa_offset:
     print("WARNING: Could not match stackframe size")
     return unchanged_match(match)
@@ -240,7 +241,7 @@ def do_stackframe_size_sub_impl(match, with_cfa):
   last_frame_size = int(size)
   # assume double the size for CHERI256 stackframe:
   size_str = size + "|" + str(int(size) * 2)
-  result = "cincoffset $c11, $c11, -[[STACKFRAME_SIZE:" + size_str + "]]\n"
+  result = instr + ", -[[STACKFRAME_SIZE:" + size_str + "]]\n"
   if with_cfa:
     result += "  .cfi_def_cfa_offset [[STACKFRAME_SIZE]]"
   return result
@@ -248,7 +249,6 @@ def do_stackframe_size_sub_impl(match, with_cfa):
 
 def do_stackframe_size_sub(match):
     return do_stackframe_size_sub_impl(match, with_cfa=True)
-
 
 def do_stackframe_size_fallback_sub(match):
     return do_stackframe_size_sub_impl(match, with_cfa=False)
@@ -261,16 +261,23 @@ def scrub_asm_mips(asm, args):
   asm = string.expandtabs(asm, 2)
   # Strip trailing whitespace.
   asm = common.SCRUB_TRAILING_WHITESPACE_RE.sub(r'', asm)
+  global last_frame_size
   last_frame_size = None
 
   # Expand .cfi offsets and clc offset to @EXPR for CHERI128/256
   stack_store_cap_re = re.compile(r'(?P<insn>csc|clc) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# (?P<cap_size>16|32)\-byte Folded (Spill|Reload)')
   asm = stack_store_cap_re.sub(do_clc_csc_sub, asm)
-  stackframe_size_regex = re.compile(r'cincoffset \$c11, \$c11, -(?P<size>\d+)\n *.cfi_def_cfa_offset (?P<cfa>\d+)')
+  stackframe_size_regex = re.compile(r'(?P<instr>cincoffset \$c11, \$c11), -(?P<size>\d+)\n *.cfi_def_cfa_offset (?P<cfa>\d+)')
   asm = stackframe_size_regex.sub(do_stackframe_size_sub, asm, count=1)
   if not last_frame_size:
-    stackframe_size_fallback_regex = re.compile(r'cincoffset \$c11, \$c11, -(?P<size>\d+)\n')
+    mips_stackframe_size_regex = re.compile(r'(?P<instr>daddiu \$sp, \$sp), -(?P<size>\d+)\n *.cfi_def_cfa_offset (?P<cfa>\d+)')
+    asm = mips_stackframe_size_regex.sub(do_stackframe_size_sub, asm, count=1)
+  if not last_frame_size:
+    stackframe_size_fallback_regex = re.compile(r'(?P<instr>cincoffset \$c11, \$c11), -(?P<size>\d+)\n')
     asm = stackframe_size_fallback_regex.sub(do_stackframe_size_fallback_sub, asm, count=1)
+  if not last_frame_size:
+    mips_stackframe_size_fallback_regex = re.compile(r'(?P<instr>daddiu \$sp, \$sp), -(?P<size>\d+)\n')
+    asm = mips_stackframe_size_fallback_regex.sub(do_stackframe_size_fallback_sub, asm, count=1)
 
   stack_store_dword_re = re.compile(r'(?P<insn>csd|cld) (?P<reg>\$\w+), \$zero, (?P<offset_sign>\-)?(?P<offset>\d+)\(\$c11\) *# 8\-byte Folded (Spill|Reload)')
   asm = stack_store_dword_re.sub(do_save_load_dword_sub, asm)
@@ -278,6 +285,10 @@ def scrub_asm_mips(asm, args):
   asm = cfi_offset_regex.sub(do_cfi_offset_sub, asm)
   stackframe_inc_return_regex = re.compile(r'cjr \$c17\n *cincoffset \$c11, \$c11, \d+')
   asm = stackframe_inc_return_regex.sub('cjr $c17\n  cincoffset $c11, $c11, [[STACKFRAME_SIZE]]', asm)
+  # Finally try to replace all other stack cincoffsets
+  if last_frame_size:
+    asm = re.sub("cincoffset\s+\$c11,\s+\$c11, " + str(last_frame_size), "cincoffset $c11, $c11, [[STACKFRAME_SIZE]]", asm)
+    asm = re.sub("daddiu\s+\$sp,\s+\$sp, " + str(last_frame_size), "daddiu $sp, $sp, [[STACKFRAME_SIZE]]", asm)
   return asm
 
 def scrub_asm_riscv(asm, args):
