@@ -17,13 +17,13 @@ define void @r() #0 {
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(r)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(r)))
 ; CHECK-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c12, $c26
-; CHECK-NEXT:    clcbi $c1, %captab20(q)($c12)
-; CHECK-NEXT:    clcbi $c12, %captab20(p)($c12)
-; CHECK-NEXT:    clc $c2, $zero, 16($c12)
-; CHECK-NEXT:    csc $c2, $zero, 16($c1)
-; CHECK-NEXT:    cld $1, $zero, 32($c12)
-; CHECK-NEXT:    csd $1, $zero, 32($c1)
+; CHECK-NEXT:    cmove $c1, $c26
+; CHECK-NEXT:    clcbi $c2, %captab20(q)($c1)
+; CHECK-NEXT:    clcbi $c1, %captab20(p)($c1)
+; CHECK-NEXT:    clc $c3, $zero, 16($c1)
+; CHECK-NEXT:    csc $c3, $zero, 16($c2)
+; CHECK-NEXT:    cld $1, $zero, 32($c1)
+; CHECK-NEXT:    csd $1, $zero, 32($c2)
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 ;
@@ -32,15 +32,15 @@ define void @r() #0 {
 ; CHERI256-NEXT:    lui $1, %hi(%neg(%captab_rel(r)))
 ; CHERI256-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(r)))
 ; CHERI256-NEXT:    cincoffset $c26, $c12, $1
-; CHERI256-NEXT:    cmove $c12, $c26
-; CHERI256-NEXT:    clcbi $c1, %captab20(q)($c12)
-; CHERI256-NEXT:    clcbi $c12, %captab20(p)($c12)
-; CHERI256-NEXT:    cld $1, $zero, 32($c12)
-; CHERI256-NEXT:    csd $1, $zero, 32($c1)
-; CHERI256-NEXT:    cld $1, $zero, 48($c12)
-; CHERI256-NEXT:    csd $1, $zero, 48($c1)
-; CHERI256-NEXT:    cld $1, $zero, 40($c12)
-; CHERI256-NEXT:    csd $1, $zero, 40($c1)
+; CHERI256-NEXT:    cmove $c1, $c26
+; CHERI256-NEXT:    clcbi $c2, %captab20(q)($c1)
+; CHERI256-NEXT:    clcbi $c1, %captab20(p)($c1)
+; CHERI256-NEXT:    cld $1, $zero, 32($c1)
+; CHERI256-NEXT:    csd $1, $zero, 32($c2)
+; CHERI256-NEXT:    cld $1, $zero, 48($c1)
+; CHERI256-NEXT:    csd $1, $zero, 48($c2)
+; CHERI256-NEXT:    cld $1, $zero, 40($c1)
+; CHERI256-NEXT:    csd $1, $zero, 40($c2)
 ; CHERI256-NEXT:    cjr $c17
 ; CHERI256-NEXT:    nop
   call void @llvm.memcpy.p200i8.p200i8.i64(i8 addrspace(200)* align 16 bitcast (%struct.m addrspace(200)* getelementptr inbounds (%struct.am, %struct.am addrspace(200)* @q, i32 0, i32 1) to i8 addrspace(200)*), i8 addrspace(200)* align 16 bitcast (%struct.m addrspace(200)* getelementptr inbounds (%struct.am, %struct.am addrspace(200)* @p, i32 0, i32 1) to i8 addrspace(200)*), i64 24, i1 false)

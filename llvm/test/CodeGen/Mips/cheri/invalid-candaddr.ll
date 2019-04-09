@@ -69,13 +69,13 @@ define signext i32 @cap_covers_pages_regression(i8 addrspace(200)* %cap, i64 zer
 ; OPTNONE-NEXT:    cgetandaddr $2, $c3, $2
 ; OPTNONE-NEXT:    daddiu $3, $zero, 0
 ; OPTNONE-NEXT:    dnegu $5, $2
-; OPTNONE-NEXT:    cincoffset $c3, $c3, $5
+; OPTNONE-NEXT:    cincoffset $c2, $c3, $5
 ; OPTNONE-NEXT:    daddu $2, $4, $2
 ; OPTNONE-NEXT:    daddiu $2, $2, 4095
 ; OPTNONE-NEXT:    daddiu $4, $zero, -4096
 ; OPTNONE-NEXT:    and $2, $2, $4
-; OPTNONE-NEXT:    cgetlen $4, $c3
-; OPTNONE-NEXT:    cgetoffset $5, $c3
+; OPTNONE-NEXT:    cgetlen $4, $c2
+; OPTNONE-NEXT:    cgetoffset $5, $c2
 ; OPTNONE-NEXT:    sltu $6, $4, $5
 ; OPTNONE-NEXT:    xori $6, $6, 1
 ; OPTNONE-NEXT:    dsubu $4, $4, $5

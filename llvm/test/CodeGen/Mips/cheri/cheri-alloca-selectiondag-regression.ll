@@ -28,22 +28,22 @@ define i32 @d(i64 %i) {
 ; C128-NEXT:    lui $1, %hi(%neg(%captab_rel(d)))
 ; C128-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(d)))
 ; C128-NEXT:    cincoffset $c26, $c12, $1
-; C128-NEXT:    cmove $c12, $c26
+; C128-NEXT:    cmove $c1, $c26
 ; C128-NEXT:    move $1, $4
-; C128-NEXT:    dsll $4, $4, 2
-; C128-NEXT:    daddiu $2, $4, 15
-; C128-NEXT:    daddiu $3, $zero, -16
-; C128-NEXT:    and $2, $2, $3
-; C128-NEXT:    cmove $c1, $c11
-; C128-NEXT:    cgetoffset $3, $c1
-; C128-NEXT:    dsubu $3, $3, $2
+; C128-NEXT:    dsll $2, $4, 2
+; C128-NEXT:    daddiu $3, $2, 15
+; C128-NEXT:    daddiu $4, $zero, -16
+; C128-NEXT:    and $3, $3, $4
+; C128-NEXT:    cmove $c2, $c11
+; C128-NEXT:    cgetoffset $4, $c2
+; C128-NEXT:    dsubu $4, $4, $3
 ; C128-NEXT:    daddiu $5, $zero, -512
-; C128-NEXT:    and $3, $3, $5
-; C128-NEXT:    csetoffset $c1, $c1, $3
-; C128-NEXT:    csetbounds $c2, $c1, $2
-; C128-NEXT:    cmove $c11, $c1
-; C128-NEXT:    csetbounds $c3, $c2, $4
-; C128-NEXT:    clcbi $c12, %capcall20(a)($c12)
+; C128-NEXT:    and $4, $4, $5
+; C128-NEXT:    csetoffset $c2, $c2, $4
+; C128-NEXT:    csetbounds $c3, $c2, $3
+; C128-NEXT:    cmove $c11, $c2
+; C128-NEXT:    csetbounds $c3, $c3, $2
+; C128-NEXT:    clcbi $c12, %capcall20(a)($c1)
 ; C128-NEXT:    cgetnull $c13
 ; C128-NEXT:    csd $1, $zero, 504($c25) # 8-byte Folded Spill
 ; C128-NEXT:    cjalr $c12, $c17
@@ -70,20 +70,20 @@ define i32 @d(i64 %i) {
 ; C256-NEXT:    lui $1, %hi(%neg(%captab_rel(d)))
 ; C256-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(d)))
 ; C256-NEXT:    cincoffset $c26, $c12, $1
-; C256-NEXT:    cmove $c12, $c26
+; C256-NEXT:    cmove $c1, $c26
 ; C256-NEXT:    move $1, $4
-; C256-NEXT:    dsll $4, $4, 2
-; C256-NEXT:    daddiu $2, $4, 31
-; C256-NEXT:    daddiu $3, $zero, -32
-; C256-NEXT:    and $2, $2, $3
-; C256-NEXT:    cmove $c1, $c11
-; C256-NEXT:    cgetoffset $3, $c1
-; C256-NEXT:    dsubu $3, $3, $2
-; C256-NEXT:    csetoffset $c1, $c1, $3
-; C256-NEXT:    csetbounds $c2, $c1, $2
-; C256-NEXT:    cmove $c11, $c1
-; C256-NEXT:    csetbounds $c3, $c2, $4
-; C256-NEXT:    clcbi $c12, %capcall20(a)($c12)
+; C256-NEXT:    dsll $2, $4, 2
+; C256-NEXT:    daddiu $3, $2, 31
+; C256-NEXT:    daddiu $4, $zero, -32
+; C256-NEXT:    and $3, $3, $4
+; C256-NEXT:    cmove $c2, $c11
+; C256-NEXT:    cgetoffset $4, $c2
+; C256-NEXT:    dsubu $4, $4, $3
+; C256-NEXT:    csetoffset $c2, $c2, $4
+; C256-NEXT:    csetbounds $c3, $c2, $3
+; C256-NEXT:    cmove $c11, $c2
+; C256-NEXT:    csetbounds $c3, $c3, $2
+; C256-NEXT:    clcbi $c12, %capcall20(a)($c1)
 ; C256-NEXT:    cgetnull $c13
 ; C256-NEXT:    csd $1, $zero, 24($c24) # 8-byte Folded Spill
 ; C256-NEXT:    cjalr $c12, $c17
@@ -91,7 +91,7 @@ define i32 @d(i64 %i) {
 ; C256-NEXT:    cincoffset $c11, $c24, $zero
 ; C256-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; C256-NEXT:    clc $c24, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
-; C256-NEXT:    cincoffset $c11, $c11, 96
+; C256-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; C256-NEXT:    cjr $c17
 ; C256-NEXT:    nop
 entry:

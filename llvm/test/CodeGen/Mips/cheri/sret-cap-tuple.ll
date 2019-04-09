@@ -17,22 +17,21 @@ declare dso_local i1024 @get_huge_type(i8 addrspace(200)*) unnamed_addr addrspac
 define internal void @test(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind #0 {
 ; CHECK-LABEL: test:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:128|288]]
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:128|256]]
+; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 7 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(test)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test)))
 ; CHECK-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c12, $c26
-; CHECK-NEXT:    cmove $c1, $c3
-; CHECK-NEXT:    clcbi $c2, %capcall20(get_tuple_cap)($c12)
-; CHECK-NEXT:    cincoffset $c4, $c11, {{48|128}}
-; CHECK-NEXT:    csc $c3, $zero, {{32|96}}($c11)
+; CHECK-NEXT:    cmove $c1, $c26
+; CHECK-NEXT:    cmove $c2, $c3
+; CHECK-NEXT:    clcbi $c12, %capcall20(get_tuple_cap)($c1)
+; CHECK-NEXT:    cincoffset $c4, $c11, 48
+; CHECK-NEXT:    csc $c3, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cmove $c3, $c4
-; CHECK-NEXT:    clc $c4, $zero, {{32|96}}($c11)
+; CHECK-NEXT:    clc $c4, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    csc $c12, $zero, {{16|64}}($c11)
-; CHECK-NEXT:    cmove $c12, $c2
-; CHECK-NEXT:    csc $c1, $zero, {{0|32}}($c11)
+; CHECK-NEXT:    csc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c2, $zero, 0($c11)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clc $c3, $zero, 96($c11)
@@ -42,7 +41,7 @@ define internal void @test(i8 addrspace(200)* align 16 dereferenceable(16) %ctr)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 7 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, 128
+; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
 start:
@@ -56,21 +55,20 @@ define internal void @test2(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-LABEL: test2:
 ; CHECK:       # %bb.0: # %start
 ; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:96|192]]
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 5 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(test2)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test2)))
 ; CHECK-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c12, $c26
-; CHECK-NEXT:    cmove $c1, $c3
-; CHECK-NEXT:    clcbi $c2, %capcall20(get_tuple_i64)($c12)
-; CHECK-NEXT:    cincoffset $c4, $c11, [[@EXPR 3 * $CAP_SIZE]]
+; CHECK-NEXT:    cmove $c1, $c26
+; CHECK-NEXT:    cmove $c2, $c3
+; CHECK-NEXT:    clcbi $c12, %capcall20(get_tuple_i64)($c1)
+; CHECK-NEXT:    cincoffset $c4, $c11, 48
 ; CHECK-NEXT:    csc $c3, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cmove $c3, $c4
 ; CHECK-NEXT:    clc $c4, $zero, [[@EXPR 2 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    csc $c12, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    cmove $c12, $c2
-; CHECK-NEXT:    csc $c1, $zero, 0($c11)
+; CHECK-NEXT:    csc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c2, $zero, 0($c11)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    cld $4, $zero, 72($c11)
@@ -93,22 +91,21 @@ start:
 define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr) unnamed_addr addrspace(200) nounwind {
 ; CHECK-LABEL: test3:
 ; CHECK:       # %bb.0: # %start
-; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:272|352]]
-; CHECK-NEXT:    csc $c17, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
+; CHECK-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:272|544]]
+; CHECK-NEXT:    csc $c17, $zero, [[@EXPR 16 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(test3)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(test3)))
 ; CHECK-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c12, $c26
-; CHECK-NEXT:    cmove $c1, $c3
-; CHECK-NEXT:    clcbi $c2, %capcall20(get_huge_type)($c12)
+; CHECK-NEXT:    cmove $c1, $c26
+; CHECK-NEXT:    cmove $c2, $c3
+; CHECK-NEXT:    clcbi $c12, %capcall20(get_huge_type)($c1)
 ; CHECK-NEXT:    cincoffset $c4, $c11, 128
 ; CHECK-NEXT:    csc $c3, $zero, [[@EXPR 7 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cmove $c3, $c4
 ; CHECK-NEXT:    clc $c4, $zero, [[@EXPR 7 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cgetnull $c13
-; CHECK-NEXT:    csc $c12, $zero, [[@EXPR 6 * $CAP_SIZE]]($c11)
-; CHECK-NEXT:    cmove $c12, $c2
-; CHECK-NEXT:    csc $c1, $zero, [[@EXPR 5 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c1, $zero, [[@EXPR 6 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c2, $zero, [[@EXPR 5 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    cld $11, $zero, 184($c11)
@@ -144,7 +141,7 @@ define internal void @test3(i8 addrspace(200)* align 16 dereferenceable(16) %ctr
 ; CHECK-NEXT:    move $4, $24
 ; CHECK-NEXT:    cjalr $c12, $c17
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:    clc $c17, $zero, [[@EXPR STACKFRAME_SIZE - $CAP_SIZE]]($c11)
+; CHECK-NEXT:    clc $c17, $zero, [[@EXPR 16 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
@@ -188,7 +185,7 @@ define internal { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i8
 ; CHECK-NEXT:    cincoffset $c2, $cnull, 10
 ; CHECK-NEXT:    csc $c2, $zero, 0($c3)
 ; CHECK-NEXT:    csc $c1, $zero, 0($c11)
-; CHECK-NEXT:    cincoffset $c11, $c11, 16
+; CHECK-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; CHECK-NEXT:    cjr $c17
 ; CHECK-NEXT:    nop
   ret { i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)*, i8 addrspace(200)* } {

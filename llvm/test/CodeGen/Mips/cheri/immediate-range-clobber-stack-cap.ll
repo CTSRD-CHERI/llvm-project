@@ -18,12 +18,12 @@ define hidden void @_ZN19QWebSettingsPrivate5applyEv() local_unnamed_addr addrsp
 ; CHECK-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN19QWebSettingsPrivate5applyEv)))
 ; CHECK-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN19QWebSettingsPrivate5applyEv)))
 ; CHECK-NEXT:    cincoffset $c26, $c12, $1
-; CHECK-NEXT:    cmove $c12, $c26
+; CHECK-NEXT:    cmove $c1, $c26
 ; CHECK-NEXT:    daddiu $1, $zero, 0
 ; CHECK-NEXT:    daddiu $2, $zero, {{396|444}}
 ; CHECK-NEXT:    csb $zero, $2, 0($c11)
 ; CHECK-NEXT:    csd $1, $zero, {{40|88}}($c11)
-; CHECK-NEXT:    csc $c12, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; CHECK-NEXT:    csc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; CHECK-NEXT:    b .LBB0_1
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  .LBB0_1: # %_FOOOO.exit

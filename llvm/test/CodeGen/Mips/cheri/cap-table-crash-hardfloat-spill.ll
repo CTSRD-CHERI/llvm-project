@@ -33,9 +33,9 @@ define float @return_constant_pool() nounwind readnone {
 ; PURECAP-NEXT:    lui $1, %hi(%neg(%captab_rel(return_constant_pool)))
 ; PURECAP-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(return_constant_pool)))
 ; PURECAP-NEXT:    cincoffset $c26, $c12, $1
-; PURECAP-NEXT:    cmove $c12, $c26
-; PURECAP-NEXT:    clcbi $c12, %captab20(.LCPI0_0)($c12)
-; PURECAP-NEXT:    clw $2, $zero, 0($c12)
+; PURECAP-NEXT:    cmove $c1, $c26
+; PURECAP-NEXT:    clcbi $c1, %captab20(.LCPI0_0)($c1)
+; PURECAP-NEXT:    clw $2, $zero, 0($c1)
 ; PURECAP-NEXT:    mtc1 $2, $f0
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
@@ -70,9 +70,9 @@ define double @return_constant_pool2() nounwind readnone {
 ; PURECAP-NEXT:    lui $1, %hi(%neg(%captab_rel(return_constant_pool2)))
 ; PURECAP-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(return_constant_pool2)))
 ; PURECAP-NEXT:    cincoffset $c26, $c12, $1
-; PURECAP-NEXT:    cmove $c12, $c26
-; PURECAP-NEXT:    clcbi $c12, %captab20(.LCPI1_0)($c12)
-; PURECAP-NEXT:    cld $1, $zero, 0($c12)
+; PURECAP-NEXT:    cmove $c1, $c26
+; PURECAP-NEXT:    clcbi $c1, %captab20(.LCPI1_0)($c1)
+; PURECAP-NEXT:    cld $1, $zero, 0($c1)
 ; PURECAP-NEXT:    dmtc1 $1, $f0
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop

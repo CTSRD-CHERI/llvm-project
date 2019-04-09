@@ -43,14 +43,14 @@ memptr.end:                                       ; preds = %memptr.nonvirtual, 
   ; get adj in $2
   ; CHECK: dsra    $2, $4, 1
   ; adjust this:
-  ; CHECK: cincoffset      $c3, $c3, $2
+  ; CHECK: cincoffset      $c2, $c3, $2
   ; store a copy in c2
-  ; CHECK: cmove      $c2, $c3
+  ; CHECK: cmove      $c3, $c2
   ; CHECK: andi    $2, $4, 1
   ; CHECK:      csc     $c4, [[STACK_MEMPTR_PTR:\$zero, (([0-9]+|sp))\(\$c11\)]]
   ; CHECK-NEXT: csc     $c1, $zero, {{([0-9]+|sp)}}($c11)
-  ; CHECK-NEXT: csc     $c3, [[STACK_THIS_ADJ:\$zero, (([0-9]+|sp))\(\$c11\)]]
-  ; CHECK-NEXT:      csc     $c2, [[STACK_VTABLE_ADDR:\$zero, (([0-9]+|sp))\(\$c11\)]]
+  ; CHECK-NEXT: csc     $c2, [[STACK_THIS_ADJ:\$zero, (([0-9]+|sp))\(\$c11\)]]
+  ; CHECK-NEXT:      csc     $c3, [[STACK_VTABLE_ADDR:\$zero, (([0-9]+|sp))\(\$c11\)]]
   ; CHECK-NEXT: beqz    $2, .LBB0_3
 
   ; CHECK: .LBB0_2:                                # %memptr.virtual

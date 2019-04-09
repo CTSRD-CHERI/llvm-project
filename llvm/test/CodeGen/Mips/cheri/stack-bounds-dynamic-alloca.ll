@@ -37,8 +37,6 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; CHECK-NEXT:    br label [[EXIT]]
 ; CHECK:       exit:
 ; CHECK-NEXT:    ret i32 123
-
-
 ; ASM-LABEL: alloca_in_entry:
 ; ASM:       # %bb.0: # %entry
 ; ASM-NEXT:    cincoffset $c11, $c11, -[[STACKFRAME_SIZE:64|128]]
@@ -46,11 +44,11 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(alloca_in_entry)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(alloca_in_entry)))
 ; ASM-NEXT:    cincoffset $c26, $c12, $1
-; ASM-NEXT:    cmove $c12, $c26
+; ASM-NEXT:    cmove $c1, $c26
 ; ASM-NEXT:    move $2, $4
 ; ASM-NEXT:    sll $2, $2, 0
 ; ASM-NEXT:    andi $2, $2, 1
-; ASM-NEXT:    csc $c12, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
+; ASM-NEXT:    csc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; ASM-NEXT:    beqz $2, .LBB0_5
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %entry
@@ -78,11 +76,10 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:  .LBB0_5: # %exit
 ; ASM-NEXT:    addiu $2, $zero, 123
 ; ASM-NEXT:    clc $c17, $zero, [[@EXPR 3 * $CAP_SIZE]]($c11)
-; ASM-NEXT:    cincoffset $c11, $c11, 64
+; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    nop
-
-
+;
 ; ASM-OPT-LABEL: alloca_in_entry:
 ; ASM-OPT:       # %bb.0: # %entry
 ; ASM-OPT-NEXT:    lui $1, %hi(%neg(%captab_rel(alloca_in_entry)))
@@ -100,10 +97,12 @@ define i32 @alloca_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    cjalr $c12, $c17
 ; ASM-OPT-NEXT:    csetbounds $c3, $c11, 16
 ; ASM-OPT-NEXT:    clc $c17, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; ASM-OPT-NEXT:    cincoffset $c11, $c11, 32
+; ASM-OPT-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; ASM-OPT-NEXT:  .LBB0_2: # %exit
 ; ASM-OPT-NEXT:    cjr $c17
 ; ASM-OPT-NEXT:    addiu $2, $zero, 123
+
+
 entry:                                       ; preds = %entry
   %alloca = alloca [16 x i8], align 16, addrspace(200)
   br i1 %arg, label %do_alloca, label %exit
@@ -159,11 +158,11 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(alloca_not_in_entry)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(alloca_not_in_entry)))
 ; ASM-NEXT:    cincoffset $c26, $c12, $1
-; ASM-NEXT:    cmove $c12, $c26
+; ASM-NEXT:    cmove $c1, $c26
 ; ASM-NEXT:    move $2, $4
 ; ASM-NEXT:    sll $2, $2, 0
 ; ASM-NEXT:    andi $2, $2, 1
-; ASM-NEXT:    csc $c12, $zero, 48($c24) # 16-byte Folded Spill
+; ASM-NEXT:    csc $c1, $zero, 48($c24) # 16-byte Folded Spill
 ; ASM-NEXT:    beqz $2, .LBB1_5
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %entry
@@ -176,7 +175,6 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    csetoffset $c1, $c1, $1
 ; ASM-NEXT:    csetbounds $c2, $c1, 16
 ; ASM-NEXT:    cmove $c11, $c1
-; TODO: could omit this setbounds since expandDYNAMIC_STACKALLOC already adds it.
 ; ASM-NEXT:    csetbounds $c3, $c2, 16
 ; ASM-NEXT:    csc $c2, $zero, 32($c24) # 16-byte Folded Spill
 ; ASM-NEXT:    csc $c3, $zero, 16($c24) # 16-byte Folded Spill
@@ -203,11 +201,10 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    cincoffset $c11, $c24, $zero
 ; ASM-NEXT:    clc $c17, $zero, [[@EXPR 4 * $CAP_SIZE]]($c11)
 ; ASM-NEXT:    clc $c24, $zero, [[@EXPR 5 * $CAP_SIZE]]($c11)
-; ASM-NEXT:    cincoffset $c11, $c11, 96
+; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    nop
-
-
+;
 ; ASM-OPT-LABEL: alloca_not_in_entry:
 ; ASM-OPT:       # %bb.0: # %entry
 ; ASM-OPT-NEXT:    lui $1, %hi(%neg(%captab_rel(alloca_not_in_entry)))
@@ -234,10 +231,13 @@ define i32 @alloca_not_in_entry(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    cincoffset $c11, $c24, $zero
 ; ASM-OPT-NEXT:    clc $c17, $zero, 0($c11)
 ; ASM-OPT-NEXT:    clc $c24, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; ASM-OPT-NEXT:    cincoffset $c11, $c11, 32
+; ASM-OPT-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; ASM-OPT-NEXT:  .LBB1_2: # %exit
 ; ASM-OPT-NEXT:    cjr $c17
 ; ASM-OPT-NEXT:    addiu $2, $zero, 123
+; TODO: could omit this setbounds since expandDYNAMIC_STACKALLOC already adds it.
+
+
 entry:                                       ; preds = %entry
   br i1 %arg, label %do_alloca, label %exit
 
@@ -292,11 +292,11 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    lui $1, %hi(%neg(%captab_rel(crash_reproducer)))
 ; ASM-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(crash_reproducer)))
 ; ASM-NEXT:    cincoffset $c26, $c12, $1
-; ASM-NEXT:    cmove $c12, $c26
+; ASM-NEXT:    cmove $c1, $c26
 ; ASM-NEXT:    move $2, $4
 ; ASM-NEXT:    sll $2, $2, 0
 ; ASM-NEXT:    andi $2, $2, 1
-; ASM-NEXT:    csc $c12, $zero, 32($c24) # 16-byte Folded Spill
+; ASM-NEXT:    csc $c1, $zero, 32($c24) # 16-byte Folded Spill
 ; ASM-NEXT:    beqz $2, .LBB2_3
 ; ASM-NEXT:    nop
 ; ASM-NEXT:  # %bb.1: # %entry
@@ -331,12 +331,10 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-NEXT:    cincoffset $c11, $c24, $zero
 ; ASM-NEXT:    clc $c17, $zero, [[@EXPR 3 * $CAP_SIZE]]($c11)
 ; ASM-NEXT:    clc $c24, $zero, [[@EXPR 4 * $CAP_SIZE]]($c11)
-; ASM-NEXT:    cincoffset $c11, $c11, 80
+; ASM-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; ASM-NEXT:    cjr $c17
 ; ASM-NEXT:    nop
-
-
-
+;
 ; ASM-OPT-LABEL: crash_reproducer:
 ; ASM-OPT:       # %bb.0: # %entry
 ; ASM-OPT-NEXT:    lui $1, %hi(%neg(%captab_rel(crash_reproducer)))
@@ -366,6 +364,9 @@ define i32 @crash_reproducer(i1 %arg) local_unnamed_addr addrspace(200) #0 {
 ; ASM-OPT-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; ASM-OPT-NEXT:  .LBB2_2: # %entry.while.end_crit_edge
 ; ASM-OPT-NEXT:    .insn
+
+
+
 entry:
   br i1 %arg, label %entry.while.end_crit_edge, label %while.body
 

@@ -41,15 +41,11 @@ entry:
 
   ; The capability argument should be loaded from the stack:
   ; CHECK: daddiu	$2, $sp, 24
-  ; CHECK: sd	$2, 8($sp)
-  ; CHECK: daddiu	$3, $2, 8
-  ; CHECK: sd	$3, 8($sp)
-  ; CHECK: lw	$6, 28($sp)
-  ; CHECK: daddiu	$2, $2, 23
-  ; CHECK: daddiu	$3, $zero, -16
-  ; CHECK: and	$2, $2, $3
+  ; CHECK-NEXT: daddiu	$2, $2, 23
+  ; CHECK-NEXT: daddiu	$3, $zero, -16
+  ; CHECK-NEXT: and	$2, $2, $3
   ; load from stack:
-  ; CHECK: clc	$c1, $2, 0($ddc)
+  ; CHECK-NEXT: clc	$c1, $2, 0($ddc)
 }
 
 declare i32 @test_non_variadic(i8* %i1, i32 %i2, i8 addrspace(200)* nonnull %cap1, i32 %i3) local_unnamed_addr #0

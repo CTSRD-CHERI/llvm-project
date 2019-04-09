@@ -1,7 +1,6 @@
 ; RUN: %cheri128_purecap_llc -O0 %s -o - | FileCheck --enable-var-scope %s -check-prefixes CHECK,CHERI128 '-D$CAP_SIZE=16'
 ; RUN: %cheri256_purecap_llc -O0 %s -o - | FileCheck --enable-var-scope %s -check-prefixes CHECK,CHERI256 '-D$CAP_SIZE=32'
 ; ModuleID = 'cheri-stack.c'
-; The code generated for CHERI256 is quite different here, XFAIL it for now
 source_filename = "cheri-stack.c"
 target datalayout = "E-m:e-pf200:256:256-i8:8:32-i16:16:32-i64:64-n32:64-S128-A200"
 target triple = "cheri-unknown-freebsd"
@@ -74,7 +73,7 @@ entry:
 ; Again, because we're at -O0, we get a load of redundant copies
 ; CHECK-LABEL: dynamic_alloca
 ; CHECK: cincoffset	$c24, $c11, $zero
-; CHECK:      dsll $4, $4, 2
+; CHECK:      dsll $2, $4, 2
 ; CHECK:      cmove $c[[TEMPCAP:[0-9]+]], $c11
 ; CHECK-NEXT: cgetoffset	$[[OFFSET:([0-9]+|sp)]], $c[[TEMPCAP]]
 ; CHECK-NEXT: dsubu	$[[OFFSET]], $[[OFFSET]], ${{([0-9]+|sp)}}
@@ -86,7 +85,7 @@ entry:
 ; CHECK-NEXT: csetbounds $c[[TEMPCAP2:([0-9]+)]], $c[[TEMPCAP1]], ${{([0-9]+|sp)}}
 ; CHECK-NEXT: cmove $c11, $c[[TEMPCAP1]]
 ; CHECK-NEXT: csetbounds $c{{[0-9]+}}, $c[[TEMPCAP2]], ${{([0-9]+)}}
-; CHECK: clcbi	$c12, %capcall20(use_arg)($c12)
+; CHECK: clcbi	$c12, %capcall20(use_arg)($c1)
   %vla = alloca i32, i64 %x, align 4, addrspace(200)
   %call = call i32 @use_arg(i32 addrspace(200)* nonnull %vla) #4
   ret i32 %call

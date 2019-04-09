@@ -11,7 +11,7 @@ declare dso_local { i64, i128 } @"_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..
 define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace(200) nounwind {
 ; MIPS-LABEL: _ZN4main4main17hfe98083a4c87500fE:
 ; MIPS:       # %bb.0: # %start
-; MIPS-NEXT:    daddiu $sp, $sp, -80
+; MIPS-NEXT:    daddiu $sp, $sp, -[[STACKFRAME_SIZE:80|160]]
 ; MIPS-NEXT:    sd $ra, 72($sp) # 8-byte Folded Spill
 ; MIPS-NEXT:    daddiu $4, $sp, 24
 ; MIPS-NEXT:    daddiu $5, $sp, 48
@@ -25,7 +25,7 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; MIPS-NEXT:    sd $2, 16($sp) # 8-byte Folded Spill
 ; MIPS-NEXT:    sd $3, 8($sp) # 8-byte Folded Spill
 ; MIPS-NEXT:    ld $ra, 72($sp) # 8-byte Folded Reload
-; MIPS-NEXT:    daddiu $sp, $sp, 80
+; MIPS-NEXT:    daddiu $sp, $sp, [[STACKFRAME_SIZE]]
 ; MIPS-NEXT:    jr $ra
 ; MIPS-NEXT:    nop
 ;
@@ -36,14 +36,13 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; PURECAP-NEXT:    lui $1, %hi(%neg(%captab_rel(_ZN4main4main17hfe98083a4c87500fE)))
 ; PURECAP-NEXT:    daddiu $1, $1, %lo(%neg(%captab_rel(_ZN4main4main17hfe98083a4c87500fE)))
 ; PURECAP-NEXT:    cincoffset $c26, $c12, $1
-; PURECAP-NEXT:    cmove $c12, $c26
+; PURECAP-NEXT:    cmove $c1, $c26
 ; PURECAP-NEXT:    cincoffset $c4, $c11, 64
 ; PURECAP-NEXT:    csetbounds $c4, $c4, 16
-; PURECAP-NEXT:    clcbi $c1, %capcall20(_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E)($c12)
+; PURECAP-NEXT:    clcbi $c12, %capcall20(_ZN63_$LT$main..Counter$u20$as$u20$lib..iter..iterator..Iterator$GT$4next17h229c875ab7438d23E)($c1)
 ; PURECAP-NEXT:    cincoffset $c3, $c11, 40
 ; PURECAP-NEXT:    cgetnull $c13
-; PURECAP-NEXT:    csc $c12, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
-; PURECAP-NEXT:    cmove $c12, $c1
+; PURECAP-NEXT:    csc $c1, $zero, [[@EXPR 1 * $CAP_SIZE]]($c11)
 ; PURECAP-NEXT:    cjalr $c12, $c17
 ; PURECAP-NEXT:    nop
 ; PURECAP-NEXT:    cld $6, $zero, 56($c11)
@@ -57,7 +56,7 @@ define internal void @_ZN4main4main17hfe98083a4c87500fE() unnamed_addr addrspace
 ; PURECAP-NEXT:    csd $2, $zero, [[@EXPR STACKFRAME_SIZE - 88]]($c11)
 ; PURECAP-NEXT:    csd $3, $zero, [[@EXPR STACKFRAME_SIZE - 96]]($c11)
 ; PURECAP-NEXT:    clc $c17, $zero, [[@EXPR 5 * $CAP_SIZE]]($c11)
-; PURECAP-NEXT:    cincoffset $c11, $c11, 96
+; PURECAP-NEXT:    cincoffset $c11, $c11, [[STACKFRAME_SIZE]]
 ; PURECAP-NEXT:    cjr $c17
 ; PURECAP-NEXT:    nop
 
