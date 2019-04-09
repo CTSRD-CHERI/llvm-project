@@ -4800,8 +4800,6 @@
 // CHERI-COMMON-NEXT: #define __DECIMAL_DIG__ __LDBL_DECIMAL_DIG__
 // CHERI-COMMON-NEXT: #define __ELF__ 1
 // CHERI-COMMON-NEXT: #define __FINITE_MATH_ONLY__ 0
-// CHERI-COMMON-NEXT: #define __FLT16_DECIMAL_DIG__  5
-// No need to test all the other FLT16 defines
 // CHERI-COMMON:      #define __FLT_DECIMAL_DIG__ 9
 // CHERI-COMMON-NEXT: #define __FLT_DENORM_MIN__ 1.40129846e-45F
 // CHERI-COMMON-NEXT: #define __FLT_DIG__ 6
