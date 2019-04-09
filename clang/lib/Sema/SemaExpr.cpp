@@ -6937,7 +6937,7 @@ checkConditionalObjectPointersCompatibility(Sema &S, ExprResult &LHS,
   QualType rhptee = RHSTy->getAs<PointerType>()->getPointeeType();
 
   // Get the cast kind to use for adding qualifiers
-  // XXXAR: Three should probably be a CK_CHERICapabilityToPointer here?
+  // XXXAR: There should probably be a CK_CHERICapabilityToPointer here?
   CastKind NopCastKind = (lhptee.getAddressSpace() == rhptee.getAddressSpace())
     ?  CK_NoOp : CK_AddressSpaceConversion;
 
@@ -7772,12 +7772,8 @@ checkPointerTypesForAssignment(Sema &S, QualType LHSType, QualType RHSType) {
 
   if (!lhq.compatiblyIncludes(rhq)) {
     // Treat address-space mismatches as fatal.  TODO: address subspaces
-    if (!lhq.isAddressSpaceSupersetOf(rhq)) {
-      if (RHSType->isFunctionPointerType() && LHSType->isFunctionPointerType())
-        ConvTy = Sema::Compatible;
-      else
+    if (!lhq.isAddressSpaceSupersetOf(rhq))
         ConvTy = Sema::IncompatiblePointerDiscardsQualifiers;
-    }
 
     // It's okay to add or remove GC or lifetime qualifiers when converting to
     // and from void*.
@@ -14478,9 +14474,7 @@ bool Sema::DiagnoseAssignmentResult(AssignConvertType ConvTy,
 
     Qualifiers lhq = SrcType->getPointeeType().getQualifiers();
     Qualifiers rhq = DstType->getPointeeType().getQualifiers();
-    LangAS LAS = lhq.getAddressSpace();
-    LangAS RAS = rhq.getAddressSpace();
-    if (LAS != RAS) {
+    if (lhq.getAddressSpace() != rhq.getAddressSpace()) {
       DiagKind = diag::err_typecheck_incompatible_address_space;
       break;
 
