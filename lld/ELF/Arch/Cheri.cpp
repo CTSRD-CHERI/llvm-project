@@ -456,7 +456,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
     bool targetsTLS = Reloc.Target.Sym->isTls();
     bool targetNoOutput = Reloc.Target.Sym->getOutputSection() == nullptr;
 
-    OutputSection *LocOutputSec = Location.Section->getOutputSection();
+    OutputSection *LocOutputSec = Location.Section->getOutputSection(); // FIXME this assert gets hit if you delete the captable in your linker script but then define symbols that go there.
 
     assert(LocOutputSec != nullptr);
 
@@ -466,10 +466,7 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
                             (targetsTLS ?  Reloc.Target.Sym->getOutputSection()->PtTLS :
                             Reloc.Target.Sym->getOutputSection()->PtLoad);
 
-    assert(LocationPHDR != nullptr);
-
-    // This is allowed to happen. Sometimes symbols VAs are used as a way to communicate between a
-    // linker script and a program. We try to preserve behaviour here.
+    assert(LocationPHDR != nullptr && "Could not find a program header for relocation location");
 
     uint64_t OutSecOffset = Location.Section->getOffset(Location.Offset);
     uint64_t OutSegOffset = LocationPHDR->p_vaddr;
@@ -505,7 +502,11 @@ template <class ELFT> void CheriCapRelocsSection<ELFT>::writeTo(uint8_t *Buf) {
 
     if(!targetsTLS && !targetNoOutput) {
 
-      assert(TargetPHDR != nullptr);
+      assert(TargetPHDR != nullptr && "COuld not find a program header for relocation target");
+
+      // This is allowed to happen. Sometimes symbols VAs are used as a way to communicate between a
+      // linker script and a program. We try to preserve behaviour here.
+
       TargetVA -= TargetPHDR->p_vaddr;
     }
 
@@ -762,8 +763,12 @@ uint64_t CheriCapTableSection::assignIndices(uint64_t StartIndex,
 
   Defined *CheriCapabilityTable = this->CheriCapabilityTable;
 
-  if (CheriCapabilityTable && !Config->Relocatable)
-    CheriCapabilityTable->Size = getSize();
+  /*
+  if (CheriCapabilityTable && !Config->Relocatable) {
+    size_t sz = getSize();
+    CheriCapabilityTable->Size = getSize(); // FIXME: This assignment segfaults. Does it do anything?
+  }
+   */
 
   uint64_t total_entries = unfixed_entries + fixed_entries;
 
