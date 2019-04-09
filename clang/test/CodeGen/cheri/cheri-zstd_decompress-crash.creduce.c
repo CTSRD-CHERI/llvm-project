@@ -17,7 +17,7 @@ void prefetch(void* arg) {
 // PURECAP-SAME: i8* addrspacecast (i8 addrspace(200)* null to i8*),
 // CHECK-SAME: i32 0, i32 3, i32 1)
 
-// CHECK-LABEL: declare void @llvm.prefetch(i8* nocapture readonly, i32, i32, i32)
+// CHECK-LABEL: declare void @llvm.prefetch(i8* nocapture readonly, i32 immarg, i32 immarg, i32)
 
 
 // CHECK-LABEL: define void @prefetch

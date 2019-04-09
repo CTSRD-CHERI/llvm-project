@@ -1,6 +1,6 @@
 // RUN: %cheri_cc1 -emit-pch -o %t.1.ast %S/Inputs/var1.c
 // RUN: %cheri_cc1 -emit-pch -o %t.2.ast %S/Inputs/var2.c
-// RUN: not %cheri_cc1 -ast-merge %t.1.ast -ast-merge %t.2.ast -fsyntax-only -fdiagnostics-show-note-include-stack %s -ast-dump 2>%t.err | FileCheck %s -check-prefix AST
+// RUN: not %cheri_cc1 -ast-merge %t.1.ast -ast-merge %t.2.ast -fsyntax-only -fdiagnostics-show-note-include-stack %s -ast-dump -Werror=odr 2>%t.err | FileCheck %s -check-prefix AST
 // RUN: FileCheck %s -input-file=%t.err
 
 // CHECK: var2.c:5:21: error: external variable 'should_not_match' declared with incompatible types in different translation units ('char * __capability' vs. 'char *')
