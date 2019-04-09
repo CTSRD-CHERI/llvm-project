@@ -1278,7 +1278,7 @@ static void disassembleObject(const Target *TheTarget, const ObjectFile *Obj,
 
         // Disassemble a real instruction or a data when disassemble all is
         // provided
-        Inst.clear();
+        Inst = MCInst{};
         bool Disassembled = DisAsm->getInstruction(
             Inst, Size, Bytes.slice(Index), SectionAddr + Index, DebugOut,
             CommentStream);
