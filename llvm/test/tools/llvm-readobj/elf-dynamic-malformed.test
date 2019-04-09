@@ -109,7 +109,7 @@ ProgramHeaders:
 # RUN: not llvm-readobj --dynamic-table %t.bad-strtab 2>&1 | FileCheck %s --check-prefix BAD-STRTAB
 # RUN: not llvm-readelf --dynamic-table %t.bad-strtab 2>&1 | FileCheck %s --check-prefix BAD-STRTAB
 
-# BAD-STRTAB: LLVM ERROR: Virtual address is not in any segment
+# BAD-STRTAB: LLVM ERROR: Virtual address 33554432 is not in any segment
 
 --- !ELF
 FileHeader:
@@ -145,7 +145,7 @@ ProgramHeaders:
 # RUN: not llvm-readobj --dynamic-table %t.bad-rela 2>&1 | FileCheck %s --check-prefix BAD-RELA
 # RUN: not llvm-readelf --dynamic-table %t.bad-rela 2>&1 | FileCheck %s --check-prefix BAD-RELA
 
-# BAD-RELA: LLVM ERROR: Virtual address is not in any segment
+# BAD-RELA: LLVM ERROR: Virtual address 16777216 is not in any segment
 
 --- !ELF
 FileHeader:

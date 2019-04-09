@@ -4,7 +4,7 @@ declare i8* @llvm.returnaddress(i32)
 define void @return_address(i32 %var) {
   ; CHECK: immarg operand has non-immediate parameter
   ; CHECK-NEXT: i32 %var
-  ; CHECK-NEXT: %result = call i8* @llvm.returnaddress(i32 %var)
+  ; CHECK-NEXT: %result = call i8* @llvm.returnaddress.p0i8(i32 %var)
   %result = call i8* @llvm.returnaddress(i32 %var)
   ret void
 }
@@ -13,7 +13,7 @@ declare i8* @llvm.frameaddress(i32)
 define void @frame_address(i32 %var) {
   ; CHECK: immarg operand has non-immediate parameter
   ; CHECK-NEXT: i32 %var
-  ; CHECK-NEXT: %result = call i8* @llvm.frameaddress(i32 %var)
+  ; CHECK-NEXT: %result = call i8* @llvm.frameaddress.p0i8(i32 %var)
   %result = call i8* @llvm.frameaddress(i32 %var)
   ret void
 }
