@@ -42,7 +42,7 @@ void test_onstack_int_overaligned(struct Foo *s) {
 
 void test__stack_array(void) {
   char buf[333];
-  do_stuff_with_buf(buf); // CSV-NEXT: 0,333,?,"/Users/alex/cheri/llvm-project/clang/test/CodeGenCXX/cheri/csetbounds-stats-all.cpp:45:21","Add subobject bounds","array decay for char [333]"
+  do_stuff_with_buf(buf); // CSV-NEXT: 0,333,?,"{{.+}}/csetbounds-stats-all.cpp:45:21","Add subobject bounds","array decay for char [333]"
 }
 
 void test_alloca(int n) {
