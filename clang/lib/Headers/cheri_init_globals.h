@@ -68,6 +68,20 @@ __cap_table_start;
 __attribute__((weak)) extern void *__capability
 __cap_table_end;
 
+/*
+ * Sandbox data segments are relocated by moving DDC, since they're compiled as
+ * position-dependent executables.
+ */
+#ifdef CHERI_INIT_GLOBALS_USE_OFFSET
+#define csetaddr_or_offset "csetoffset"
+#define cheri_address_or_offset_set(_cap, _val)                                \
+  __builtin_cheri_offset_set((_cap), (_val))
+#else
+#define csetaddr_or_offset "csetaddr"
+#define cheri_address_or_offset_set(_cap, _val)                                \
+  __builtin_cheri_address_set((_cap), (_val))
+#endif
+
 #define INIT_CGP_REGISTER_ASM                                                  \
   ".option pic0\n\t"                                                           \
   "dla $2, __cap_table_start\n\t"                                              \
@@ -77,7 +91,7 @@ __cap_table_end;
   /* If we are running without a DDC we should have a valid $cgp already */    \
   "cbtu $c14, .Lskip_cgp_setup\n\t"                                            \
   "dla $3, __cap_table_end\n\t"                                                \
-  "csetaddr $cgp, $c14, $2\n\t"                                                \
+  csetaddr_or_offset " $cgp, $c14, $2\n\t"                                     \
   "dsubu $1, $3, $2\n\t"                                                       \
   /* Avoid leaking original DDC in $c14 */                                     \
   "cgetnull $c14\n\t"                                                          \
@@ -118,7 +132,7 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
   rodata_cap =
       __builtin_cheri_perms_and(rodata_cap, constant_pointer_permissions_mask);
   for (const struct capreloc *reloc = start_relocs; reloc < stop_relocs; reloc++) {
-    void **dest = __builtin_cheri_address_set(
+    void **dest = cheri_address_or_offset_set(
         data_cap, reloc->capability_location + relocbase);
     if (reloc->object == 0) {
       /* XXXAR: clang fills uninitialized capabilities with 0xcacaca..., so we
@@ -139,7 +153,7 @@ cheri_init_globals_impl(const struct capreloc *start_relocs,
     } else {
       base_cap = data_cap; /* read-write data */
     }
-    void *src = __builtin_cheri_address_set(base_cap, reloc->object);
+    void *src = cheri_address_or_offset_set(base_cap, reloc->object);
     if (can_set_bounds && (reloc->size != 0)) {
       src = __builtin_cheri_bounds_set(src, reloc->size);
     }
@@ -171,7 +185,7 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
    * rodata and rw data, too so we can access __cap_relocs, no matter where it
    * was placed.
    */
-  start_relocs = __builtin_cheri_address_set(
+  start_relocs = cheri_address_or_offset_set(
       __builtin_cheri_program_counter_get(), start_addr);
   start_relocs = __builtin_cheri_bounds_set(start_relocs, relocs_size);
   /*
@@ -179,7 +193,8 @@ cheri_init_globals_3(void *data_cap, const void *code_cap,
    * so we must not use setoffset!
    * TODO: use csetboundsexact and teach the linker to align __cap_relocs.
    */
-  stop_relocs = __builtin_cheri_address_set(start_relocs, end_addr);
+  stop_relocs =
+      (struct capreloc *)((__UINTPTR_TYPE__)start_relocs + relocs_size);
 #endif
 
 #if !defined(__CHERI_CAPABILITY_TABLE__)
