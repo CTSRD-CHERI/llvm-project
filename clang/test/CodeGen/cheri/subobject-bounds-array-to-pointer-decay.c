@@ -94,7 +94,7 @@ void test_global_struct_array_decay(struct_with_array *s, long index) {
 //
 void test_local_vla_decay(struct_with_array *s, long size) {
   int vla[size];
-  overflow_buffer(vla); // expected-remark{{not setting bounds for array decay on 'int [size]' (array array decay on variable size type)}}
+  overflow_buffer(vla); // expected-remark{{not setting bounds for array decay on 'int [size]' (array decay on variable size type)}}
 }
 
 struct vla_struct {

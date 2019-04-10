@@ -123,6 +123,8 @@ struct a {
 struct a c(void) {
   struct a d[1];
   do_stuff(&d->b); // expected-remark{{setting sub-object bounds for field 'b' (pointer to 'int') to 4 bytes}}
+  // expected-remark@-1{{setting bounds for array decay on 'struct a [1]' to 4 bytes}}
+  // CHECK-NEXT: decay 'struct a [1]' subobj bounds check: decay on constant size array -> setting bounds for 'struct a [1]' decay to 4
   // CHECK-NEXT: subobj bounds check: got MemberExpr -> Bounds mode is everywhere-unsafe -> setting bounds for 'int' address to 4
   return d[0]; // expected-remark{{setting bounds for array subscript on 'struct a [1]' to 4 bytes}}
   // CHECK-NEXT: subscript 'struct a [1]' subobj bounds check: subscript on constant size array -> setting bounds for 'struct a [1]' subscript to 4

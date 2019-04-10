@@ -97,6 +97,7 @@ int test_local_vla(int len, int index) {
   int buf[len];
   do_stuff_untyped(&buf); // expected-remark{{not setting bounds for pointer to 'int [len]' (variable length array type)}}
   return buf[index];      // expected-remark{{not setting bounds for array subscript on 'int [len]' (array subscript on variable size type)}}
+  // expected-remark@-1{{not setting bounds for array decay on 'int [len]' (array decay on variable size type)}}
 }
 
 #ifdef __cplusplus

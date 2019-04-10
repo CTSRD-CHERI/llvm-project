@@ -623,7 +623,7 @@ static StringRef boundsKindStr(SubObjectBoundsKind Kind) {
   case SubObjectBoundsKind::ArraySubscript:
     return "subscript";
   case SubObjectBoundsKind::ArrayDecay:
-    return "array decay";
+    return "decay";
   }
   llvm_unreachable("Invalid kind");
 }
