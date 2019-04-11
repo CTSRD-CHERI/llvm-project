@@ -99,7 +99,7 @@ def MIPSCHERIPrototypesStrict: DiagGroup<"mips-cheri-prototypes-strict">;
 def CheriSubobjectBounds : DiagGroup<"cheri-subobject-bounds">;
 
 def CheriAll : DiagGroup<"cheri",
-     [CHERICaps, CHERIBitwiseOps, CHERIMisaligned, CHERIImplicitConversion,
+     [CHERICaps, CHERIBitwiseOps, CHERIMisaligned, CHERIImplicitConversion, CheriSubobjectBounds,
       CHERIImplicitConversionSign, MIPSCHERIPrototypes, MIPSCHERIPrototypesStrict]>;
 // CHERI warnings that are too noisy to turn on by default
 def CHERICapabilityToIntegerCast : DiagGroup<"capability-to-integer-cast">;
