@@ -5718,15 +5718,23 @@ void CodeGenModule::EmitSandboxDefinedMethod(StringRef Cls, StringRef
   // class and method.  The method_ptr field includes the sandbox-relative
   // address of the method.
 
-  // Emit a global of the form __cheri_method_{class}_{function}
+  // Emit a global of the form __cheri_callee_method.{class}.{function}
+  // containing the sandbox-relative address of the function.
   auto GlobalName = (StringRef("__cheri_callee_method.") + Cls + "." +
       Method).str();
   auto *MethodPtrVar = getModule().getNamedGlobal(GlobalName);
   if (!MethodPtrVar) {
+    llvm::Constant *FnAS0;
+    if (Fn->getType()->getAddressSpace() != 0)
+      FnAS0 = llvm::ConstantExpr::getAddrSpaceCast(Fn,
+          llvm::PointerType::get(Fn->getType(), 0));
+    else
+      FnAS0 = Fn;
+
     MethodPtrVar = new llvm::GlobalVariable(getModule(),
-        Fn->getType(),
+        FnAS0->getType(),
         /*isConstant*/false, llvm::GlobalValue::ExternalLinkage,
-        Fn, GlobalName);
+        FnAS0, GlobalName);
     MethodPtrVar->setSection(".CHERI_CALLEE");
     addUsedGlobal(MethodPtrVar);
   }
