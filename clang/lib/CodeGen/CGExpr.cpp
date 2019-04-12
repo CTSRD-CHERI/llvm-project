@@ -1048,6 +1048,22 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     return Result;
   };
 
+  if (auto DRE = dyn_cast<DeclRefExpr>(E)) {
+    // Don't set bounds on weak symbols since they might be NULL
+    // See https://github.com/CTSRD-CHERI/llvm-project/issues/317
+    // TODO: we could add a branch and only do the csetbounds if non-null.
+    // However, these symbols will be global symbols so there is really no need
+    // to set bounds (since the linker should initialize them correctly).
+    // The only advantage of setting bounds here would be to detect mismatch
+    // between the extern type declaration and the real declaration.
+    // FIXME: should this be getDecl or getFoundDecl?
+    if (DRE->getFoundDecl()->hasAttr<WeakAttr>()) {
+      return cannotSetBounds(
+          *this, E, Ty, Kind,
+          "referenced value is a weak and could therefore be NULL");
+    }
+  }
+
   if (auto ME = dyn_cast<MemberExpr>(E)) {
     CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
     // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is
