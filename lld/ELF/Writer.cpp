@@ -2216,14 +2216,16 @@ template <class ELFT> void Writer<ELFT>::fixSectionAlignments() {
 // same with its virtual address modulo the page size, so that the loader can
 // load executables without any address adjustment.
 static uint64_t computeFileOffset(OutputSection *OS, uint64_t Off) {
-  // File offsets are not significant for .bss sections. By convention, we keep
-  // section offsets monotonically increasing rather than setting to zero.
-  if (OS->Type == SHT_NOBITS)
-    return Off;
-
   // If the section is not in a PT_LOAD, we just have to align it.
-  if (!OS->PtLoad)
+  if (!OS->PtLoad) {
+    // File offsets are not significant for .bss sections when not the first
+    // section in a PT_LOAD. By convention, we keep section offsets
+    // monotonically increasing rather than setting to zero.
+    if (OS->Type == SHT_NOBITS)
+      return Off;
+
     return alignTo(Off, OS->Alignment);
+  }
 
   // The first section in a PT_LOAD has to have congruent offset and address
   // module the page size.
@@ -2232,6 +2234,10 @@ static uint64_t computeFileOffset(OutputSection *OS, uint64_t Off) {
     uint64_t Alignment = std::max<uint64_t>(OS->Alignment, Config->MaxPageSize);
     return alignTo(Off, Alignment, OS->Addr);
   }
+
+  // This is a .bss section that isn't first in its PT_LOAD; see above.
+  if (OS->Type == SHT_NOBITS)
+    return Off;
 
   // If two sections share the same PT_LOAD the file offset is calculated
   // using this formula: Off2 = Off1 + (VA2 - VA1).

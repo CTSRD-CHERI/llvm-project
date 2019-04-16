@@ -1,0 +1,19 @@
+# REQUIRES: x86
+# RUN: llvm-mc -filetype=obj -triple=x86_64-unknown-linux %p/Inputs/bss-first-align.s -o %t.o
+# RUN: ld.lld -o %t.exe --script %s %t.o
+# RUN: llvm-readelf -program-headers %t.exe | FileCheck %s
+
+SECTIONS {
+  .text : {
+    *(.text)
+  }
+  .bss ALIGN(0x20): {
+    *(.bss)
+  }
+}
+
+# CHECK: Program Headers:
+# CHECK-NEXT: Type  Offset   VirtAddr           PhysAddr           FileSiz  MemSiz   Flg Align
+# CHECK-NEXT: LOAD  0x001000 0x0000000000000000 0x0000000000000000 0x000001 0x000001 R E 0x1000
+# CHECK-NEXT: LOAD  0x001020 0x0000000000000020 0x0000000000000020 0x000000 0x000002 RW  0x1000
+# CHECK-NOT: LOAD

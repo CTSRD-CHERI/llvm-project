@@ -28,7 +28,7 @@
 // CHECK-NEXT:  Version: 1
 // CHECK-NEXT:  Entry: 0x10000
 // CHECK-NEXT:  ProgramHeaderOffset: 0x40
-// CHECK-NEXT:  SectionHeaderOffset: 0x200F8
+// CHECK-NEXT:  SectionHeaderOffset: 0x30098
 // CHECK-NEXT:  Flags [ (0x2)
 // CHECK-NEXT:    0x2
 // CHECK-NEXT:  ]
@@ -163,7 +163,7 @@
 // CHECK-NEXT:      SHF_WRITE (0x1)
 // CHECK-NEXT:    ]
 // CHECK-NEXT:    Address: 0x30000
-// CHECK-NEXT:    Offset: 0x20060
+// CHECK-NEXT:    Offset: 0x30000
 // CHECK-NEXT:    Size: 0
 // CHECK-NEXT:    Link: 0
 // CHECK-NEXT:    Info: 0
@@ -179,7 +179,7 @@
 // CHECK-NEXT:      SHF_STRINGS (0x20)
 // CHECK-NEXT:    ]
 // CHECK-NEXT:    Address: 0x0
-// CHECK-NEXT:    Offset: 0x20060
+// CHECK-NEXT:    Offset: 0x30000
 // CHECK-NEXT:    Size: 8
 // CHECK-NEXT:    Link: 0
 // CHECK-NEXT:    Info: 0
@@ -196,7 +196,7 @@
 // CHECK-NEXT:    Flags [ (0x0)
 // CHECK-NEXT:    ]
 // CHECK-NEXT:    Address: 0x0
-// CHECK-NEXT:    Offset: 0x20068
+// CHECK-NEXT:    Offset: 0x30008
 // CHECK-NEXT:    Size: 48
 // CHECK-NEXT:    Link: 10
 // CHECK-NEXT:    Info: 2
@@ -215,7 +215,7 @@
 // CHECK-NEXT:    Flags [ (0x0)
 // CHECK-NEXT:    ]
 // CHECK-NEXT:    Address: 0x0
-// CHECK-NEXT:    Offset: 0x20098
+// CHECK-NEXT:    Offset: 0x30038
 // CHECK-NEXT:    Size: 84
 // CHECK-NEXT:    Link: 0
 // CHECK-NEXT:    Info: 0
@@ -237,7 +237,7 @@
 // CHECK-NEXT:    Flags [ (0x0)
 // CHECK-NEXT:    ]
 // CHECK-NEXT:    Address: 0x0
-// CHECK-NEXT:    Offset: 0x200EC
+// CHECK-NEXT:    Offset: 0x3008C
 // CHECK-NEXT:    Size: 10
 // CHECK-NEXT:    Link: 0
 // CHECK-NEXT:    Info: 0
