@@ -578,6 +578,11 @@ inline bool LocalAddressSpace::findUnwindSections(pint_t targetAddr,
 #ifdef __CHERI_PURE_CAPABILITY__
         check_same_type<__uintcap_t, decltype(pinfo->dlpi_addr)>();
         check_same_type<const Elf_Phdr *, decltype(pinfo->dlpi_phdr)>();
+
+        // Cannot use CTestSubset here because the dpli_addr perms are a strict
+        // subset that never includes execute and so won't match targetAddr
+        // which is always executable.
+        //
         // TODO: __builtin_cheri_top_get_would be nice
         if (__builtin_cheri_length_get((void *)pinfo->dlpi_addr) +
                 __builtin_cheri_base_get((void *)pinfo->dlpi_addr) <
