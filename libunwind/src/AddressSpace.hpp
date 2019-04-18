@@ -348,8 +348,8 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
   // first get value
   switch (encoding & 0x0F) {
   case DW_EH_PE_ptr:
-    result = getAddr(addr);
-    p += sizeof(addr_t);
+    result = assert_pointer_in_bounds(getP(addr));
+    p += sizeof(pint_t);
     addr = (pint_t) p;
     break;
   case DW_EH_PE_uleb128:
