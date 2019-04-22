@@ -238,10 +238,6 @@ public:
     return get<v128>(addr);
   }
   capability_t     getCapability(pint_t addr) { return get<capability_t>(addr); }
-  addr_t           getAddr(pint_t addr) {
-    // FIXME: for CHERI the actually address is the second 8 byte sequence
-    return get<addr_t>(addr);
-  }
   __attribute__((always_inline))
   uintptr_t       getP(pint_t addr);
   uint64_t        getRegister(pint_t addr);
