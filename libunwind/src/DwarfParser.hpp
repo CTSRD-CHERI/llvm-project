@@ -264,8 +264,13 @@ bool CFI_Parser<A>::findFDE(A &addressSpace, pint_t pc, pint_t ehSectionStart,
             fdeInfo->fdeStart = currentCFI;
             fdeInfo->fdeLength = (size_t)(nextCFI - currentCFI);
             fdeInfo->fdeInstructions = p;
+#ifdef __CHERI_PURE_CAPABILITY__
+            fdeInfo->pcStart = assert_pointer_in_bounds(pc - (pcAddr - pcStart));
+            fdeInfo->pcEnd = assert_pointer_in_bounds(fdeInfo->pcStart + pcRange);
+#else
             fdeInfo->pcStart = pcStart;
             fdeInfo->pcEnd = pcStart + pcRange;
+#endif
             return true;
           } else {
             // pc is not in begin/range, skip this FDE
