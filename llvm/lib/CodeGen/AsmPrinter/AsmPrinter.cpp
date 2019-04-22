@@ -1419,12 +1419,16 @@ bool AsmPrinter::doFinalization(Module &M) {
     if (!Stubs.empty()) {
       OutStreamer->SwitchSection(TLOF.getDataSection());
       const DataLayout &DL = M.getDataLayout();
+      unsigned AS = DL.getProgramAddressSpace();
+      unsigned Size = DL.getPointerSize(AS);
 
-      EmitAlignment(Log2_32(DL.getPointerSize()));
+      EmitAlignment(Log2_32(Size));
       for (const auto &Stub : Stubs) {
         OutStreamer->EmitLabel(Stub.first);
-        OutStreamer->EmitSymbolValue(Stub.second.getPointer(),
-                                     DL.getPointerSize());
+        if (DL.isFatPointer(AS))
+          OutStreamer->EmitCheriCapability(Stub.second.getPointer(), 0, Size);
+        else
+          OutStreamer->EmitSymbolValue(Stub.second.getPointer(), Size);
       }
     }
   }
