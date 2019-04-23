@@ -41,7 +41,7 @@ config.test_exec_root = os.path.join(config.clang_obj_root, 'test')
 
 llvm_config.use_default_substitutions()
 # Not really required but makes debugging tests easier
-llvm_config.add_cheri_tool_substitutions(["llc", "opt"])
+llvm_config.add_cheri_tool_substitutions(["llc", "opt", "llvm-mc"])
 llvm_config.use_clang()
 
 config.substitutions.append(

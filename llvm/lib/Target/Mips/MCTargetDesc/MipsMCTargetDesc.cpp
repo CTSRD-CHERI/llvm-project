@@ -73,7 +73,10 @@ static MCInstrInfo *createMipsMCInstrInfo() {
 
 static MCRegisterInfo *createMipsMCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitMipsMCRegisterInfo(X, Mips::RA);
+  // FIXME: would be nice if we had a MCTargetOptions instance here instead of
+  // just the triple.
+  InitMipsMCRegisterInfo(
+      X, TT.getEnvironment() == Triple::CheriPurecap ? Mips::C17 : Mips::RA);
   return X;
 }
 
@@ -86,7 +89,8 @@ static MCSubtargetInfo *createMipsMCSubtargetInfo(const Triple &TT,
 static MCAsmInfo *createMipsMCAsmInfo(const MCRegisterInfo &MRI,
                                       const Triple &TT) {
   MCAsmInfo *MAI = new MipsMCAsmInfo(TT);
-
+  // FIXME: would be nice if we had a MCTargetOptions instance here instead of
+  // just the triple.
   unsigned SP = MRI.getDwarfRegNum(
       TT.getEnvironment() == Triple::CheriPurecap ? Mips::C11 : Mips::SP, true);
   MCCFIInstruction Inst = MCCFIInstruction::createDefCfa(nullptr, SP, 0);

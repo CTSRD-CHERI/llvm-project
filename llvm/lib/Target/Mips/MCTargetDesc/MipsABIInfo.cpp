@@ -114,8 +114,25 @@ void MipsABIInfo::updateCheriInitialFrameStateHack(const MCAsmInfo &MAI,
   if (!IsCheriPureCap())
     return;
 
+
+  // Some general sanity checks
+  auto ReturnReg = GetReturnAddress();
+  assert(ReturnReg == Mips::C17 && "Wrong RA register");
+  auto StackReg = GetStackPtr();
+  assert(StackReg == Mips::C11 && "Wrong SP register");
+  assert(GetFramePtr() == Mips::C24 && "Wrong FP register");
+
+  // Update the value of the return register
+  if (MRI.getRARegister() != ReturnReg) {
+    const_cast<MCRegisterInfo&>(MRI).RAReg = ReturnReg;
+  }
+  assert(MRI.getRARegister() == ReturnReg && "Wrong RA register");
+  // Check that we didn't set the PC register:
+  assert(MRI.getProgramCounter() == 0 && "Wrong PC register");
+
+  // Update the value of the initial frame state (since C11 is set too late)
   auto &InitialState = MAI.getInitialFrameState();
-  unsigned C11Dwarf = MRI.getDwarfRegNum(Mips::C11, true);
+  unsigned C11Dwarf = MRI.getDwarfRegNum(StackReg, true);
   for (const MCCFIInstruction &Inst : InitialState) {
     if (Inst.getOperation() == MCCFIInstruction::OpDefCfaRegister) {
       if (Inst.getRegister() != C11Dwarf) {
