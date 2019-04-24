@@ -129,7 +129,7 @@ DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind16Registers_x86_646jumptoEv)
 #elif defined(__CHERI_PURE_CAPABILITY__)
 .set noreorder
 
-DEFINE_LIBUNWIND_PRIVATE_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
+DEFINE_LIBUNWIND_FUNCTION(_ZN9libunwind20Registers_mips_cheri6jumptoEv)
 #
 # void libunwind::Registers_mips_cheri::jumpto()
 #

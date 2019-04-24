@@ -224,7 +224,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   # return UNW_ESUCCESS
   or    $2, $0, $0
   .set pop
-END_LIBUNWIND_FUNCTION(unw_getcontext)
+END_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 #elif defined(__mips__) && defined(__CHERI_PURE_CAPABILITY__)
 
@@ -234,7 +234,7 @@ END_LIBUNWIND_FUNCTION(unw_getcontext)
 
 .set noreorder
 #
-# extern int unw_getcontext(unw_context_t* thread_state)
+# extern int __unw_getcontext(unw_context_t* thread_state)
 #
 # On entry:
 #  thread_state pointer is in $c3
@@ -242,7 +242,7 @@ END_LIBUNWIND_FUNCTION(unw_getcontext)
 # This is always called from ABI C code, so we only need to initialise the
 # registers that are preserved across calls
 
-DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
+DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
 #define SAVE_GPR(x) csd $x, $zero, (8*x)($c3)
   SAVE_GPR(1) # $at
   SAVE_GPR(2) # $v0
@@ -327,7 +327,7 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   SAVE_CAP_REG(null, 31)
 
   // Use $c12 as a temp register in order to save it $ddc since $c12 will hold
-  // the cap for unw_getcontext and it doesn't make sense to save it
+  // the cap for __unw_getcontext and it doesn't make sense to save it
   cgetdefault $c12
   SAVE_CAP_REG(12, 0)
 
@@ -337,7 +337,7 @@ DEFINE_LIBUNWIND_FUNCTION(unw_getcontext)
   daddiu $1, $1, 32*_MIPS_SZCAP/8
   cjr $c17
   csc $c17, $1, 0($c3)
-END_LIBUNWIND_FUNCTION(unw_getcontext)
+END_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 #elif defined(__mips64)
 
@@ -428,7 +428,7 @@ DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   # return UNW_ESUCCESS
   or    $2, $0, $0
   .set pop
-END_LIBUNWIND_FUNCTION(unw_getcontext)
+END_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 # elif defined(__mips__)
 
@@ -438,7 +438,7 @@ END_LIBUNWIND_FUNCTION(unw_getcontext)
 # Just trap for the time being.
 DEFINE_LIBUNWIND_FUNCTION(__unw_getcontext)
   teq $0, $0
-END_LIBUNWIND_FUNCTION(unw_getcontext)
+END_LIBUNWIND_FUNCTION(__unw_getcontext)
 
 #elif defined(__powerpc64__)
 
