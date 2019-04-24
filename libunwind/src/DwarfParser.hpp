@@ -171,7 +171,7 @@ const char *CFI_Parser<A>::decodeFDE(A &addressSpace, pint_t fdeStart,
     p = endOfAug;
   }
   fdeInfo->fdeStart = fdeStart;
-  fdeInfo->fdeLength = nextCFI - fdeStart;
+  fdeInfo->fdeLength = (size_t)(nextCFI - fdeStart);
   fdeInfo->fdeInstructions = p;
   fdeInfo->pcStart = pcStart;
   fdeInfo->pcEnd = pcStart + pcRange;
@@ -262,7 +262,7 @@ bool CFI_Parser<A>::findFDE(A &addressSpace, pint_t pc, pint_t ehSectionStart,
               p = endOfAug;
             }
             fdeInfo->fdeStart = currentCFI;
-            fdeInfo->fdeLength = nextCFI - currentCFI;
+            fdeInfo->fdeLength = (size_t)(nextCFI - currentCFI);
             fdeInfo->fdeInstructions = p;
             fdeInfo->pcStart = pcStart;
             fdeInfo->pcEnd = pcStart + pcRange;
@@ -300,12 +300,12 @@ const char *CFI_Parser<A>::parseCIE(A &addressSpace, pint_t cie,
 #endif
   cieInfo->cieStart = cie;
   pint_t p = cie;
-  uint32_t cieLength = addressSpace.get32(p);
+  uint64_t cieLength = addressSpace.get32(p);
   p += 4;
   pint_t cieContentEnd = p + cieLength;
-  if (cieLength == 0xffffffffu) {
+  if (cieLength == 0xffffffff) {
     // 0xffffffff means length is really next 8 bytes
-    cieLength = (pint_t)addressSpace.get64(p);
+    cieLength = (uint64_t)addressSpace.get64(p);
     p += 8;
     cieContentEnd = p + cieLength;
   }
@@ -377,7 +377,7 @@ const char *CFI_Parser<A>::parseCIE(A &addressSpace, pint_t cie,
       }
     }
   }
-  cieInfo->cieLength = cieContentEnd - cieInfo->cieStart;
+  cieInfo->cieLength = (size_t)(cieContentEnd - cieInfo->cieStart);
   cieInfo->cieInstructions = p;
   return result;
 }
@@ -396,11 +396,11 @@ bool CFI_Parser<A>::parseFDEInstructions(A &addressSpace,
   // parse CIE then FDE instructions
   return parseInstructions(addressSpace, cieInfo.cieInstructions,
                            cieInfo.cieStart + cieInfo.cieLength, cieInfo,
-                           (pint_t)(-1), rememberStack, arch, results) &&
+                           (ptrdiff_t)(-1), rememberStack, arch, results) &&
          parseInstructions(addressSpace, fdeInfo.fdeInstructions,
                            fdeInfo.fdeStart + fdeInfo.fdeLength, cieInfo,
-                           upToPC - fdeInfo.pcStart, rememberStack, arch,
-                           results);
+                           (ptrdiff_t)(upToPC - fdeInfo.pcStart), rememberStack,
+                           arch, results);
 }
 
 /// "run" the DWARF instructions
@@ -434,8 +434,8 @@ bool CFI_Parser<A>::parseInstructions(A &addressSpace, pint_t instructions,
       _LIBUNWIND_TRACE_DWARF("DW_CFA_nop\n");
       break;
     case DW_CFA_set_loc:
-      codeOffset =
-          addressSpace.getEncodedP(p, instructionsEnd, cieInfo.pointerEncoding);
+      codeOffset = (ptrdiff_t)addressSpace.getEncodedP(p, instructionsEnd,
+                                                       cieInfo.pointerEncoding);
       _LIBUNWIND_TRACE_DWARF("DW_CFA_set_loc\n");
       break;
     case DW_CFA_advance_loc1:
