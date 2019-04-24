@@ -1057,10 +1057,13 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     // The only advantage of setting bounds here would be to detect mismatch
     // between the extern type declaration and the real declaration.
     // FIXME: should this be getDecl or getFoundDecl?
-    if (DRE->getFoundDecl()->hasAttr<WeakAttr>()) {
+    auto Found = DRE->getFoundDecl();
+    auto ValDecl = dyn_cast<ValueDecl>(Found);
+    if ((ValDecl && ValDecl->isWeak()) || Found->hasAttr<WeakAttr>()) {
       return cannotSetBounds(
           *this, E, Ty, Kind,
-          "referenced value is a weak and could therefore be NULL");
+          "referenced value is a weak symbol and could therefore be NULL");
+    }
     }
   }
 

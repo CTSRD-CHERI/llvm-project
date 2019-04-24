@@ -8,7 +8,7 @@ extern int _DYNAMIC1 __attribute__((weak));
 
 _Bool is_static_attribute_weak(void) {
   return &_DYNAMIC1 == 0;
-  // expected-remark@-1{{not setting bounds for pointer to 'int' (referenced value is a weak and could therefore be NULL)}}
+  // expected-remark@-1{{not setting bounds for pointer to 'int' (referenced value is a weak symbol and could therefore be NULL)}}
 }
 
 extern int _DYNAMIC2;
@@ -16,7 +16,7 @@ extern int _DYNAMIC2;
 
 _Bool is_static_pragma_weak(void) {
   return &_DYNAMIC2 == 0;
-  // expected-remark@-1{{not setting bounds for pointer to 'int' (referenced value is a weak and could therefore be NULL)}}
+  // expected-remark@-1{{not setting bounds for pointer to 'int' (referenced value is a weak symbol and could therefore be NULL)}}
 }
 
 extern int _DYNAMIC3;
@@ -32,9 +32,9 @@ extern int weak_array[5];
 
 int test_weak_array(void) {
   if (weak_array) {
-    // expected-remark@-1{{not setting bounds for array decay on 'int [5]' (referenced value is a weak and could therefore be NULL)}}
+    // expected-remark@-1{{not setting bounds for array decay on 'int [5]' (referenced value is a weak symbol and could therefore be NULL)}}
     return weak_array[0];
-    // expected-remark@-1{{not setting bounds for array subscript on 'int [5]' (referenced value is a weak and could therefore be NULL)}}
+    // expected-remark@-1{{not setting bounds for array subscript on 'int [5]' (referenced value is a weak symbol and could therefore be NULL)}}
   }
   return 0;
 }
