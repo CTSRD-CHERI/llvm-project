@@ -38,7 +38,7 @@ public:
   /// Information encoded in a CIE (Common Information Entry)
   struct CIE_Info {
     pint_t    cieStart;
-    pint_t    cieLength;
+    size_t    cieLength; // XXXAR: or uint32_t?
     pint_t    cieInstructions;
     uint8_t   pointerEncoding;
     uint8_t   lsdaEncoding;
@@ -58,7 +58,7 @@ public:
   /// Information about an FDE (Frame Description Entry)
   struct FDE_Info {
     pint_t  fdeStart;
-    pint_t  fdeLength;
+    size_t  fdeLength; // XXXAR: or uint32_t?
     pint_t  fdeInstructions;
     pint_t  pcStart;
     pint_t  pcEnd;
@@ -118,7 +118,7 @@ public:
 private:
   static bool parseInstructions(A &addressSpace, pint_t instructions,
                                 pint_t instructionsEnd, const CIE_Info &cieInfo,
-                                pint_t pcoffset,
+                                ptrdiff_t pcoffset,
                                 PrologInfoStackEntry *&rememberStack, int arch,
                                 PrologInfo *results);
 };
@@ -300,10 +300,10 @@ const char *CFI_Parser<A>::parseCIE(A &addressSpace, pint_t cie,
 #endif
   cieInfo->cieStart = cie;
   pint_t p = cie;
-  pint_t cieLength = (pint_t)addressSpace.get32(p);
+  uint32_t cieLength = addressSpace.get32(p);
   p += 4;
   pint_t cieContentEnd = p + cieLength;
-  if (cieLength == 0xffffffff) {
+  if (cieLength == 0xffffffffu) {
     // 0xffffffff means length is really next 8 bytes
     cieLength = (pint_t)addressSpace.get64(p);
     p += 8;
@@ -407,11 +407,11 @@ bool CFI_Parser<A>::parseFDEInstructions(A &addressSpace,
 template <typename A>
 bool CFI_Parser<A>::parseInstructions(A &addressSpace, pint_t instructions,
                                       pint_t instructionsEnd,
-                                      const CIE_Info &cieInfo, pint_t pcoffset,
+                                      const CIE_Info &cieInfo, ptrdiff_t pcoffset,
                                       PrologInfoStackEntry *&rememberStack,
                                       int arch, PrologInfo *results) {
   pint_t p = instructions;
-  pint_t codeOffset = 0;
+  ptrdiff_t codeOffset = 0;
   PrologInfo initialState = *results;
 
   _LIBUNWIND_TRACE_DWARF("parseInstructions(instructions=0x%0" PRIx64 ")\n",
