@@ -729,6 +729,8 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on addrof operator ";
   //                  E->dump(llvm::dbgs()));
 
+  E->getRealReferenceType();
+
   NumAddrOfCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::AddrOf;
   if (auto TBR = canTightenCheriBounds(Value, Ty, E, Kind)) {
@@ -1064,6 +1066,20 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
           *this, E, Ty, Kind,
           "referenced value is a weak symbol and could therefore be NULL");
     }
+    // Do not set bounds on &foo if foo is already a reference (we can just
+    // trust the original reference size. If that size is wrong, it means that
+    // the calling code was compiled without sub-object bounds and therefore
+    // tightening the bounds might not be safe!
+    //
+    // Note: the same also applies for C++ references (there is no need to add
+    // another csetbounds if we are just forwarding a reference to another call)
+    if (ValDecl &&
+        (Kind == SubObjectBoundsKind::AddrOf ||
+         Kind == SubObjectBoundsKind::Reference) &&
+        ValDecl->getType()->isReferenceType()) {
+      return cannotSetBounds(*this, E, Ty, Kind,
+                             "source is a C++ reference and therefore should "
+                             "already have sub-object bounds");
     }
   }
 
