@@ -55,5 +55,7 @@ main()
 		printf("d = %g\n", d);
 	}
 
+	fprintf(stderr, "Success!\n");
+
 	return (0);
 }
