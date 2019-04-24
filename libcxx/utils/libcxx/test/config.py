@@ -97,6 +97,8 @@ class Configuration(object):
             val = getattr(self.config, name, None)
             if val is None:
                 val = default
+        if val == "" and default is not None:
+            val = default
         return val
 
     def get_lit_bool(self, name, default=None, env_var=None):
