@@ -22,7 +22,10 @@ foreach(_opt "" -O0 -O1 -O2 -O3)
       target_compile_options(test-${_test}-shared${_suffix} PUBLIC ${LIBUNWIND_CXX_FLAGS})
       list(APPEND _LIBUNWIND_TEST_BINARIES test-${_test}-shared${_suffix})
       # Add all symbols to dynsymtab to improve test debugging
-      set_target_properties(test-${_test}-shared${_suffix} PROPERTIES ENABLE_EXPORTS ON)
+      set_target_properties(test-${_test}-shared${_suffix} PROPERTIES
+          ENABLE_EXPORTS ON
+          INSTALL_RPATH "$ORIGIN/../lib"
+          BUILD_WITH_INSTALL_RPATH ON)
     endif()
     if (LIBUNWIND_ENABLE_STATIC)
       add_executable(test-${_test}-static${_suffix} EXCLUDE_FROM_ALL ${_test}.pass.cpp)
