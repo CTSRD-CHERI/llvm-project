@@ -333,6 +333,11 @@ def main_with_tmp(builtinParameters):
     debug_group.add_argument("--show-tests", dest="showTests",
                       help="Show all discovered tests",
                       action="store_true", default=False)
+    # TODO: should rename this to --run-with-debugger to allow lldb/gdb
+    debug_group.add_argument("--gdb", dest="run_with_debugger",
+                      help="Run tests with gdb and print a backtrace on crash. "
+                           "This is currently only supported for libc++/libunwind.",
+                      action="store_true", default=False)
 
     opts = parser.parse_args()
     args = opts.test_paths
@@ -395,6 +400,7 @@ def main_with_tmp(builtinParameters):
         echo_all_commands = opts.echoAllCommands)
 
     litConfig.cheri_test_mode = opts.cheri_tests_filter
+    litConfig.run_with_debugger = opts.run_with_debugger
 
     # Perform test discovery.
     run = lit.run.Run(litConfig,
