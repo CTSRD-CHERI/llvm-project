@@ -28,16 +28,16 @@ struct WithIntVLA {
 void do_stuff_untyped(void *);
 
 void test_subobject_addrof_vla(struct WithVLA *s1, struct WithIntVLA *s2, struct NestedVLA *n) {
-  do_stuff_untyped(&s1->buf);      // expected-remark{{not setting bounds for pointer to 'struct CharVLA' (has flexible array member)}}
+  do_stuff_untyped(&s1->buf);      // expected-remark{{setting sub-object bounds for field 'buf' (pointer to 'struct CharVLA') to remaining bytes (record has flexible array member)}}
   do_stuff_untyped(&s1->buf.size); // expected-remark{{setting sub-object bounds for field 'size' (pointer to 'int') to 4 bytes}}
   // TODO: I guess this should be a slightly different remark message (VLA instead of incomplete type)
   do_stuff_untyped(&s1->buf.data); // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char []') to remaining bytes (member is potential variable length array)}}
-  do_stuff_untyped(&s2->buf);      // expected-remark{{not setting bounds for pointer to 'struct IntVLA' (has flexible array member)}}
+  do_stuff_untyped(&s2->buf);      // expected-remark{{setting sub-object bounds for field 'buf' (pointer to 'struct IntVLA') to remaining bytes (record has flexible array member)}}
   do_stuff_untyped(&s2->buf.size); // expected-remark{{setting sub-object bounds for field 'size' (pointer to 'int') to 4 bytes}}
   do_stuff_untyped(&s2->buf.data); // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'int []') to remaining bytes (member is potential variable length array)}}
-  do_stuff_untyped(&n->vla_struct);   // expected-remark{{not setting bounds for pointer to 'struct WithVLA' (has flexible array member)}}
+  do_stuff_untyped(&n->vla_struct);   // expected-remark{{setting sub-object bounds for field 'vla_struct' (pointer to 'struct WithVLA') to remaining bytes (record has flexible array member)}}
   do_stuff_untyped(&n->vla_struct.x); // expected-remark{{setting sub-object bounds for field 'x' (pointer to 'float') to 4 bytes}}
-  do_stuff_untyped(&n->vla_struct.buf);      // expected-remark{{not setting bounds for pointer to 'struct CharVLA' (has flexible array member)}}
+  do_stuff_untyped(&n->vla_struct.buf);      // expected-remark{{setting sub-object bounds for field 'buf' (pointer to 'struct CharVLA') to remaining bytes (record has flexible array member)}}
   do_stuff_untyped(&n->vla_struct.buf.size); // expected-remark{{setting sub-object bounds for field 'size' (pointer to 'int') to 4 bytes}}
   do_stuff_untyped(&n->vla_struct.buf.data); // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char []') to remaining bytes (member is potential variable length array)}}
 }
@@ -76,16 +76,16 @@ struct NotVLAContainerLen2 {
 
 void test2(void* ptr) {
   struct VLAContainerNoLength* vn = (struct VLAContainerNoLength*)ptr;
-  do_stuff_untyped(&global_vn);    // expected-remark{{not setting bounds for pointer to 'struct VLAContainerNoLength' (has flexible array member)}}
-  do_stuff_untyped(&vn->buf);      // expected-remark{{not setting bounds for pointer to 'struct ArbitraryLengthCharArray' (has flexible array member)}}
+  do_stuff_untyped(&global_vn);    // expected-remark{{setting bounds for pointer to 'struct VLAContainerNoLength' to remaining bytes (record has flexible array member)}}
+  do_stuff_untyped(&vn->buf);      // expected-remark{{setting sub-object bounds for field 'buf' (pointer to 'struct ArbitraryLengthCharArray') to remaining bytes (record has flexible array member)}}
   do_stuff_untyped(&vn->buf.data); // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char []') to remaining bytes (member is potential variable length array)}}
   struct VLAContainerLen0* v0 = (struct VLAContainerLen0*)ptr;
-  do_stuff_untyped(&global_v0);    // expected-remark{{not setting bounds for pointer to 'struct VLAContainerLen0' (has flexible array member)}}
-  do_stuff_untyped(&v0->buf);      // expected-remark{{not setting bounds for pointer to 'struct ZeroLengthCharArray' (has flexible array member)}}
+  do_stuff_untyped(&global_v0);    // expected-remark{{setting bounds for pointer to 'struct VLAContainerLen0' to remaining bytes (record has flexible array member)}}
+  do_stuff_untyped(&v0->buf);      // expected-remark{{setting sub-object bounds for field 'buf' (pointer to 'struct ZeroLengthCharArray') to remaining bytes (record has flexible array member)}}
   do_stuff_untyped(&v0->buf.data); // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [0]') to remaining bytes (member is potential variable length array)}}
   struct VLAContainerLen1* v1 = (struct VLAContainerLen1*)ptr;
-  do_stuff_untyped(&global_v1);    // expected-remark{{not setting bounds for pointer to 'struct VLAContainerLen1' (has flexible array member)}}
-  do_stuff_untyped(&v1->buf);      // expected-remark{{not setting bounds for pointer to 'struct LengthOneCharArray' (has flexible array member)}}
+  do_stuff_untyped(&global_v1);    // expected-remark{{setting bounds for pointer to 'struct VLAContainerLen1' to remaining bytes (record has flexible array member)}}
+  do_stuff_untyped(&v1->buf);      // expected-remark{{setting sub-object bounds for field 'buf' (pointer to 'struct LengthOneCharArray') to remaining bytes (record has flexible array member)}}
   do_stuff_untyped(&v1->buf.data); // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [1]') to remaining bytes (member is potential variable length array)}}
   struct NotVLAContainerLen2* v2 = (struct NotVLAContainerLen2*)ptr;
   do_stuff_untyped(&global_v2); // expected-remark{{setting bounds for pointer to 'struct NotVLAContainerLen2' to 12 bytes}}
@@ -111,14 +111,14 @@ template<typename T> void do_stuff_reference(T&);
 
 void test_maybe_vla(void) {
   MaybeVLA<0> mvla0;
-  do_stuff_reference(mvla0);      // expected-remark{{not setting bounds for reference to 'MaybeVLA<0>' (has flexible array member)}}
-  do_stuff_untyped(&mvla0);       // expected-remark{{not setting bounds for pointer to 'MaybeVLA<0>' (has flexible array member)}}
+  do_stuff_reference(mvla0);      // expected-remark{{setting bounds for reference to 'MaybeVLA<0>' to remaining bytes (record has flexible array member)}}
+  do_stuff_untyped(&mvla0);       // expected-remark{{setting bounds for pointer to 'MaybeVLA<0>' to remaining bytes (record has flexible array member)}}
   do_stuff_reference(mvla0.data); // expected-remark{{setting sub-object bounds for field 'data' (reference to 'char [0]') to remaining bytes (member is potential variable length array)}}
   do_stuff_untyped(&mvla0.data);  // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [0]') to remaining bytes (member is potential variable length array)}}
 
   MaybeVLA<1> mvla1;
-  do_stuff_reference(mvla1);      // expected-remark{{not setting bounds for reference to 'MaybeVLA<1>' (has flexible array member)}}
-  do_stuff_untyped(&mvla1);       // expected-remark{{not setting bounds for pointer to 'MaybeVLA<1>' (has flexible array member)}}
+  do_stuff_reference(mvla1);      // expected-remark{{setting bounds for reference to 'MaybeVLA<1>' to remaining bytes (record has flexible array member)}}
+  do_stuff_untyped(&mvla1);       // expected-remark{{setting bounds for pointer to 'MaybeVLA<1>' to remaining bytes (record has flexible array member)}}
   do_stuff_reference(mvla1.data); // expected-remark{{setting sub-object bounds for field 'data' (reference to 'char [1]') to remaining bytes (member is potential variable length array)}}
   do_stuff_untyped(&mvla1.data);  // expected-remark{{setting sub-object bounds for field 'data' (pointer to 'char [1]') to remaining bytes (member is potential variable length array)}}
 

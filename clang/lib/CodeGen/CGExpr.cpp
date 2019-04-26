@@ -825,7 +825,7 @@ CodeGenFunction::setCHERIBoundsOnArrayDecay(llvm::Value *Value, const Expr *E) {
   NumArrayDecayCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::ArrayDecay;
   if (auto TBR = canTightenCheriBounds(Value, Ty, Base, Kind)) {
-    assert(!TBR->IsContainerSize && "Container size should not be use for array deacy bounds");
+    assert(!TBR->IsContainerSize && "Container size should not be use for array decay bounds");
     if (TBR->UseRemainingSize) {
       NumRemainingSizeBoundsSetOnArrayDecay++;
     } else {
@@ -1296,8 +1296,9 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   if (Ty->isRecordType()) {
     CHERI_BOUNDS_DBG(<< "Found record type '" << Ty.getAsString() << "' -> ");
     if (containsVariableLengthArray(BoundsMode, Ty)) {
-      return cannotSetBounds(*this, E, Ty, Kind, "has flexible array member");
+      return UseRemainingSize("record has flexible array member");
     }
+    // FIXME: some of this is too conservative and we could actually set bounds
     if (Ty->isStructureOrClassType() && !getLangOpts().CPlusPlus) {
       // No inheritance or vtables in C -> we should be able to set bounds on
       // all structurs that don't have flexible array members and aren't
