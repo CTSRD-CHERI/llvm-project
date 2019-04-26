@@ -1241,6 +1241,12 @@ _LIBCPP_FUNC_VIS extern "C" void __sanitizer_annotate_contiguous_container(
 #  endif
 #endif
 
+#if __has_attribute(cheri_no_subobject_bounds)
+#define _LIBCPP_NO_SUBOBJECT_BOUNDS __attribute__((__cheri_no_subobject_bounds__))
+#else
+#define _LIBCPP_NO_SUBOBJECT_BOUNDS
+#endif
+
 #if __has_attribute(require_constant_initialization)
 #  define _LIBCPP_SAFE_STATIC __attribute__((__require_constant_initialization__))
 #else

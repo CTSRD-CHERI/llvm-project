@@ -11,6 +11,19 @@
 #define _LIBCPP_STRING
 
 /*
+ * CHERI CHANGES START
+ * {
+ *   "updated": 20190426,
+ *   "target_type": "header"
+ *   "changes": [
+ *     "subobject_bounds",
+ *   ],
+ *   "change_comment": "std::string: short-string optimization references to __data_ should span the full array since they are passed to std::addressof()",
+ * }
+ * CHERI CHANGES END
+ */
+
+/*
     string synopsis
 
 namespace std
@@ -722,7 +735,9 @@ private:
 
     struct __short
     {
-        value_type __data_[__min_cap];
+        // XXXAR: Don't set set 1 char bounds for the references to __data_[0]
+        // that is then passed to std::addressof()
+        value_type __data_[__min_cap] _LIBCPP_NO_SUBOBJECT_BOUNDS;
         struct
             : __padding<value_type>
         {
@@ -757,7 +772,9 @@ private:
             unsigned char __size_;
             value_type __lx;
         };
-        value_type __data_[__min_cap];
+        // XXXAR: Don't set set 1 char bounds for the references to __data_[0]
+        // that is then passed to std::addressof()
+        value_type __data_[__min_cap] _LIBCPP_NO_SUBOBJECT_BOUNDS;
     };
 
 #endif  // _LIBCPP_ABI_ALTERNATE_STRING_LAYOUT
