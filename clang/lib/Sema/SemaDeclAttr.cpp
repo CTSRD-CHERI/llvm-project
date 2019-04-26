@@ -2237,6 +2237,18 @@ static void handleCHERIMethodSuffix(Sema &S, Decl *D, const ParsedAttr &Attr) {
                                    Attr.getAttributeSpellingListIndex()));
 }
 
+static void
+handleCHERISubobjectBoundsUseRemainingSizeAttr(Sema &S, Decl *D,
+                                               const ParsedAttr &AL) {
+  int maxSize = 0;
+  if (AL.getNumArgs() &&
+      !checkPositiveIntArgument(S, AL, AL.getArgAsExpr(0), maxSize))
+    return;
+
+  D->addAttr(::new (S.Context) CHERISubobjectBoundsUseRemainingSizeAttr(
+      AL.getRange(), S.Context, maxSize, AL.getAttributeSpellingListIndex()));
+}
+
 static void handleConstructorAttr(Sema &S, Decl *D, const ParsedAttr &AL) {
   uint32_t priority = ConstructorAttr::DefaultPriority;
   if (AL.getNumArgs() &&
@@ -7229,6 +7241,9 @@ static void ProcessDeclAttribute(Sema &S, Scope *scope, Decl *D,
     break;
   case ParsedAttr::AT_CHERINoSubobjectBounds:
     handleSimpleAttribute<CHERINoSubobjectBoundsAttr>(S, D, AL);
+    break;
+  case ParsedAttr::AT_CHERISubobjectBoundsUseRemainingSize:
+    handleCHERISubobjectBoundsUseRemainingSizeAttr(S, D, AL);
     break;
   case ParsedAttr::AT_StdCall:
   case ParsedAttr::AT_CDecl:

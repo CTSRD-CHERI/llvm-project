@@ -1899,6 +1899,18 @@ def CHERINoSubobjectBounds : DeclOrTypeAttr {
   let Documentation = [Undocumented];
 }
 
+// For pre-C99 variable length arrays or variable legnth arrays that have a
+// maximum size.
+def CHERISubobjectBoundsUseRemainingSize : InheritableAttr {
+  let Spellings = [GNU<"cheri_subobject_bounds_use_remaining_size">,
+                   CXX11<"cheri","subobject_bounds_use_remaining_size">,
+                   C2x<"cheri", "subobject_bounds_use_remaining_size">];
+  // TODO: allow this to be a reference to another field in the structure
+  let Args = [UnsignedArgument<"MaxSize", /*Optional=*/1>];
+  let Subjects = SubjectList<[Field, Record /* TODO:, TypedefName*/]>;
+  let Documentation = [Undocumented];
+}
+
 def IntelOclBicc : DeclOrTypeAttr {
   let Spellings = [Clang<"intel_ocl_bicc", 0>];
 //  let Subjects = [Function, ObjCMethod];

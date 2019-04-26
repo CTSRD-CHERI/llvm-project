@@ -1147,7 +1147,6 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
                              "already have sub-object bounds");
     }
   }
-
   if (auto ME = dyn_cast<MemberExpr>(E)) {
     CHERI_BOUNDS_DBG(<< "got MemberExpr -> ");
     // TODO: should we do this recusively? E.g. for &foo.a.b.c.d if type a is
@@ -1164,7 +1163,24 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     if (hasBoundsOptOutAnnotation(*this, E, ME->getMemberDecl(), Kind, "field"))
       return None;
 
+    // Check whether the field or the field type has a "use-remaining-size" attr
+    // TODO: also allow this attribute on typedefs?
     TargetField = ME->getMemberDecl();
+    auto RSA = TargetField->getAttr<CHERISubobjectBoundsUseRemainingSizeAttr>();
+    StringRef AttrSource;
+    if (RSA) {
+      AttrSource = "member";
+    } else {
+      AttrSource = "member type";
+      if (auto TypeDecl = TargetField->getType()->getAsRecordDecl())
+        RSA = TypeDecl->getAttr<CHERISubobjectBoundsUseRemainingSizeAttr>();
+    }
+    if (RSA) {
+      CHERI_BOUNDS_DBG(<< "got RemainingSize(" << RSA->getMaxSize()
+                       << ") attribute on " << AttrSource << " -> ");
+      return UseRemainingSize(AttrSource + " has use-remaining-size attribute",
+                              RSA->getMaxSize());
+    }
 
     if (BoundsMode < LangOptions::CBM_VeryAggressive &&
         ME->getMemberDecl() == findPossibleVLA(BaseTy->getAsRecordDecl()))
@@ -1214,7 +1230,6 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   }
 
   if (auto ASE = dyn_cast<ArraySubscriptExpr>(E)) {
-    // TODO: set bounds on whole array type?
     CHERI_BOUNDS_DBG(<< "Found array subscript -> ");
     switch (canSetBoundsOnArraySubscript(E, ASE, Kind, BoundsMode, *this)) {
     case ArrayBoundsResult::Never:
