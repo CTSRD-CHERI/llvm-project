@@ -856,7 +856,7 @@ class Configuration(object):
         if self.default_cxx_abi_library is None:
             self.default_cxx_abi_library = self.target_info.default_cxx_abi_library()
         cxx_abi = self.get_lit_conf('cxx_abi', self.default_cxx_abi_library)
-        print("self.default_cxx_abi_library:", self.default_cxx_abi_library)
+        # print("self.default_cxx_abi_library:", self.default_cxx_abi_library)
         link_flags = []
         if cxx_abi == 'libstdc++':
             link_flags += ['-lstdc++']
