@@ -3902,9 +3902,12 @@ public:
   llvm::Value *setCHERIBoundsOnArrayDecay(llvm::Value *Ptr, const Expr *E);
 
   struct TightenBoundsResult {
-    uint64_t Size;
+    // either a fixed size or when UseRemainingSize is set the maximum size
+    Optional<uint64_t> Size;
     bool IsSubObject = false;
     bool IsContainerSize = false;
+    bool UseRemainingSize = false;
+    std::string DiagMessage;
     ValueDecl* TargetField = nullptr;
   };
   Optional<TightenBoundsResult> canTightenCheriBounds(llvm::Value *Ptr,

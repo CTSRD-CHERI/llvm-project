@@ -224,10 +224,10 @@ def select_subobject_bounds_kind : TextSubstitution<
   "%select{pointer to|reference to|array subscript on|array decay on}0">;
 
 def remark_setting_cheri_subobject_bounds :
-  Remark<"setting %select{|sub-object }0bounds for %sub{select_subobject_bounds_kind}1 %2 to %3 bytes">,
+  Remark<"setting %select{|sub-object }0bounds for %sub{select_subobject_bounds_kind}1 %2 to %3 bytes%4">,
   InGroup<CheriSubobjectBounds>;
 def remark_setting_cheri_subobject_bounds_field :
-  Remark<"setting sub-object bounds for field %0 (%sub{select_subobject_bounds_kind}1 %2) to %3 bytes">,
+  Remark<"setting sub-object bounds for field %0 (%sub{select_subobject_bounds_kind}1 %2) to %3 bytes%4">,
   InGroup<CheriSubobjectBounds>;
 def remark_subobject_using_container_size :
   Remark<"using size of containing type %0 instead of object type %1 for "

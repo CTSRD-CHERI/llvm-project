@@ -598,20 +598,32 @@ STATISTIC(NumTightBoundsSetOnReferences,
           "Number of references where bounds were tightened");
 STATISTIC(NumContainerBoundsSetOnReferences,
           "Number of references operators where container bounds were used");
+STATISTIC(NumRemainingSizeBoundsSetOnReferences,
+          "Number of references where remaining allocation size was used");
+
 STATISTIC(NumAddrOfCheckedForBoundsTightening,
           "Number of & operators checked for tightening bounds");
 STATISTIC(NumTightBoundsSetOnAddrOf,
           "Number of & operators where bounds were tightened");
 STATISTIC(NumContainerBoundsSetOnAddrOf,
           "Number of & operators where container bounds were used");
+STATISTIC(NumRemainingSizeBoundsSetOnAddrOf,
+          "Number of & operators where remaining allocation size was used");
+
 STATISTIC(NumArraySubscriptCheckedForBoundsTightening,
           "Number of [] operators checked for tightening bounds");
 STATISTIC(NumTightBoundsSetOnArraySubscript,
           "Number of [] operators where bounds were tightened");
+STATISTIC(NumRemainingSizeBoundsSetOnArraySubscript,
+          "Number of [] operators where remaining allocation size was used");
+
 STATISTIC(NumArrayDecayCheckedForBoundsTightening,
           "Number of array-to-pointer-decays checked for tightening bounds");
 STATISTIC(NumTightBoundsSetOnArrayDecay,
           "Number of array-to-pointer-decays where bounds were tightened");
+STATISTIC(NumRemainingSizeBoundsSetOnArrayDecay,
+          "Number of array-to-pointer-decays where remaining allocation size "
+          "was used");
 #undef DEBUG_TYPE
 
 static StringRef boundsKindStr(SubObjectBoundsKind Kind) {
@@ -637,8 +649,6 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
   llvm::Value *ValueToBound = Value;
   llvm::GetElementPtrInst *GEP = nullptr;
   StringRef KindStr = boundsKindStr(Kind);
-  CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString() << "' "
-                   << KindStr << " to " << TBR.Size << "\n");
   if (TBR.IsContainerSize) {
     if ((GEP = dyn_cast<llvm::GetElementPtrInst>(Value))) {
       ValueToBound = GEP->getPointerOperand();
@@ -664,15 +674,6 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
 
   SourceLocation Loc = LocExpr->getExprLoc();
   SourceRange Range = LocExpr->getSourceRange();
-  if (TBR.TargetField) { // TODO: enable this after updating tests
-    assert(TBR.IsSubObject);
-    CGF.CGM.getDiags().Report(Loc,
-                              diag::remark_setting_cheri_subobject_bounds_field)
-        << TBR.TargetField << (int)Kind << Ty << (unsigned)TBR.Size << Range;
-  } else {
-    CGF.CGM.getDiags().Report(Loc, diag::remark_setting_cheri_subobject_bounds)
-        << TBR.IsSubObject << (int)Kind << Ty << (unsigned)TBR.Size << Range;
-  }
   StringRef StatsPrefix;
   if (Kind == SubObjectBoundsKind::AddrOf) {
     StatsPrefix = "addrof operator on ";
@@ -685,8 +686,45 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
   } else {
     llvm_unreachable("Invalid kind");
   }
+  llvm::Value *SetBoundsSize = nullptr;
+  std::string SizeStr;
+  if (TBR.UseRemainingSize) {
+    SizeStr = TBR.Size ? ("min(" + Twine(*TBR.Size) + ", remaining)").str()
+                       : "remaining";
+    auto SrcAsI8 = CGF.Builder.CreateBitCast(ValueToBound, CGF.Int8CheriCapTy);
+    auto Offset = CGF.Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_offset_get, CGF.PtrDiffTy, SrcAsI8, nullptr,
+        "cur_offset");
+    auto Length =
+        CGF.Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_length_get,
+                                    CGF.PtrDiffTy, SrcAsI8, nullptr, "cur_len");
+    SetBoundsSize = CGF.Builder.CreateSub(Length, Offset, "remaining_bytes");
+    if (TBR.Size) {
+      auto MaxConst = llvm::ConstantInt::get(CGF.PtrDiffTy, *TBR.Size);
+      auto LessThanMax = CGF.Builder.CreateICmpULT(SetBoundsSize, MaxConst,
+                                                   "less_than_max_size");
+      SetBoundsSize = CGF.Builder.CreateSelect(
+          LessThanMax, SetBoundsSize, MaxConst, "bounded_remaining_size");
+    }
+  } else {
+    SizeStr = llvm::utostr(*TBR.Size);
+    SetBoundsSize = llvm::ConstantInt::get(CGF.PtrDiffTy, *TBR.Size);
+  }
+  CHERI_BOUNDS_DBG(<< "setting bounds for '" << Ty.getAsString() << "' "
+                   << KindStr << " to " << SizeStr << "\n");
+  if (TBR.TargetField) {
+    assert(TBR.IsSubObject);
+    CGF.CGM.getDiags().Report(Loc,
+                              diag::remark_setting_cheri_subobject_bounds_field)
+        << TBR.TargetField << (int)Kind << Ty << SizeStr << TBR.DiagMessage
+        << Range;
+  } else {
+    CGF.CGM.getDiags().Report(Loc, diag::remark_setting_cheri_subobject_bounds)
+        << TBR.IsSubObject << (int)Kind << Ty << SizeStr << TBR.DiagMessage
+        << Range;
+  }
   llvm::Value *Result = CGF.setPointerBounds(
-      ValueToBound, TBR.Size, Loc, KindStr + ".with.bounds",
+      ValueToBound, SetBoundsSize, Loc, KindStr + ".with.bounds",
       "Add subobject bounds", TBR.IsSubObject, StatsPrefix + Ty.getAsString());
 
   Result = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Result, BoundedTy);
@@ -713,6 +751,8 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnReference(llvm::Value *Value,
   if (auto TBR = canTightenCheriBounds(Value, Ty, E, Kind)) {
     if (TBR->IsContainerSize) {
       NumContainerBoundsSetOnReferences++;
+    } else if (TBR->UseRemainingSize) {
+      NumRemainingSizeBoundsSetOnReferences++;
     } else {
       NumTightBoundsSetOnReferences++;
     }
@@ -736,6 +776,8 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
   if (auto TBR = canTightenCheriBounds(Value, Ty, E, Kind)) {
     if (TBR->IsContainerSize) {
       NumContainerBoundsSetOnAddrOf++;
+    } else if (TBR->UseRemainingSize) {
+      NumRemainingSizeBoundsSetOnAddrOf++;
     } else {
       NumTightBoundsSetOnAddrOf++;
     }
@@ -758,7 +800,11 @@ CodeGenFunction::setCHERIBoundsOnArraySubscript(llvm::Value *Value,
   constexpr auto Kind = SubObjectBoundsKind::ArraySubscript;
   if (auto TBR = canTightenCheriBounds(Value, Ty, Base, Kind)) {
     assert(!TBR->IsContainerSize && "Container size should not be use for array subscript bounds");
-    NumTightBoundsSetOnArraySubscript++;
+    if (TBR->UseRemainingSize) {
+      NumRemainingSizeBoundsSetOnArraySubscript++;
+    } else {
+      NumTightBoundsSetOnArraySubscript++;
+    }
     return tightenCHERIBounds(*this, Kind, Value, Base, Ty, *TBR);
   }
   return Value;
@@ -780,7 +826,11 @@ CodeGenFunction::setCHERIBoundsOnArrayDecay(llvm::Value *Value, const Expr *E) {
   constexpr auto Kind = SubObjectBoundsKind::ArrayDecay;
   if (auto TBR = canTightenCheriBounds(Value, Ty, Base, Kind)) {
     assert(!TBR->IsContainerSize && "Container size should not be use for array deacy bounds");
-    NumTightBoundsSetOnArrayDecay++;
+    if (TBR->UseRemainingSize) {
+      NumRemainingSizeBoundsSetOnArrayDecay++;
+    } else {
+      NumTightBoundsSetOnArrayDecay++;
+    }
     return tightenCHERIBounds(*this, Kind, Value, Base, Ty, *TBR);
   }
   return Value;
@@ -1008,7 +1058,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     return None;
   }
 
-  if (Ty->isIncompleteType()) {
+  if (Ty->isIncompleteType() && !Ty->isIncompleteArrayType()) {
     return cannotSetBounds(*this, E, Ty, Kind, "incomplete type");
   }
 
@@ -1047,6 +1097,21 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     Result.IsContainerSize = false;
     Result.TargetField = TargetField;
     Result.Size = Size;
+    return Result;
+  };
+  const auto UseRemainingSize = [IsSubObject,
+                                 &TargetField](Twine Msg, uint64_t MaxSize = 0,
+                                               bool IsContainerSize = false) {
+    CodeGenFunction::TightenBoundsResult Result;
+    Result.IsSubObject = IsSubObject;
+    Result.IsContainerSize = IsContainerSize;
+    Result.UseRemainingSize = true;
+    if (MaxSize != 0) {
+      Result.Size = MaxSize;
+    }
+    Result.TargetField = TargetField;
+    if (!Msg.isTriviallyEmpty())
+      Result.DiagMessage = (" (" + Msg + ")").str();
     return Result;
   };
 
@@ -1103,8 +1168,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
 
     if (BoundsMode < LangOptions::CBM_VeryAggressive &&
         ME->getMemberDecl() == findPossibleVLA(BaseTy->getAsRecordDecl()))
-      return cannotSetBounds(*this, E, Ty, Kind,
-                             "member is potential variable length array");
+      return UseRemainingSize("member is potential variable length array");
 
     // For unions we have to be careful since some code uses pointers to members
     // interchangably with a pointer to the main union. Use the containing type
@@ -1118,8 +1182,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
         return cannotSetBounds(*this, E, Ty, Kind, "container is union");
 
       if (containsVariableLengthArray(BoundsMode, BaseTy))
-        return cannotSetBounds(
-            *this, E, Ty, Kind,
+        return UseRemainingSize(
             "containing union includes a variable length array");
 
       remarkUsingContainerSize(*this, E, BaseTy, Ty, "union member");
@@ -1144,8 +1207,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       return cannotSetBounds(*this, E, Ty, Kind,
                              "array " + KindStr + " on non-array type");
     } else if (!Ty->isConstantSizeType()) {
-      return cannotSetBounds(*this, E, Ty, Kind,
-                             "array " + KindStr + " on variable size type");
+      return UseRemainingSize("array " + KindStr + " on variable size type");
     }
     CHERI_BOUNDS_DBG(<< KindStr << " on constant size array -> ");
     return ExactBounds(TypeSize);
@@ -1163,6 +1225,8 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       const Expr *Base = ASE->getBase()->IgnoreParenImpCasts();
       if (Base->getType()->isConstantArrayType()) {
         return BoundsOnContainer(Base->getType());
+      } else if (Base->getType()->isArrayType()) {
+        UseRemainingSize("bounds on full array but size not known", 0, true);
       }
       // Otherwise we have a non-constant array type -> don't set bounds to
       // avoid crashes at runtime
@@ -1186,10 +1250,10 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       // FIXME: what about size 0/size 1 VLA emulation for pre-C99 code
       return ExactBounds(TypeSize);
     } else if (auto VAT = dyn_cast<VariableArrayType>(AT)) {
-      return cannotSetBounds(*this, E, Ty, Kind, "variable length array type");
+      return UseRemainingSize("variable length array type");
     } else if (auto IAT = dyn_cast<IncompleteArrayType>(AT)) {
       // int a[]
-      return cannotSetBounds(*this, E, Ty, Kind, "incomplete array type");
+      return UseRemainingSize("incomplete array type");
     } else if (auto DSAT = dyn_cast<DependentSizedArrayType>(AT)) {
       llvm_unreachable("Should not get dependent types in subobject codegen");
       return cannotSetBounds(*this, E, Ty, Kind, "dependent size array type");

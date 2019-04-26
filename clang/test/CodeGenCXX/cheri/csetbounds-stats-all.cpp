@@ -53,6 +53,7 @@ void test_alloca(int n) {
 void test_varlen_stack_array(int n) {
   char varlenbuf[n];
   do_stuff_with_buf(varlenbuf);
+  // CSV-NEXT: 0,<unknown>,?,"{{.+}}/csetbounds-stats-all.cpp:55:21","Add subobject bounds","array decay for char [n]"
 }
 
 struct Foo global_foo;
