@@ -31,10 +31,10 @@ typedef std::chrono::nanoseconds ns;
 
 #if !defined(TEST_SLOW_HOST)
 ms WaitTime = ms(250);
-ms Tolerance = ms(50)
+ms Tolerance = ms(50);
 #else
 ms WaitTime = ms(750);
-ms Tolerance = ms(200)
+ms Tolerance = ms(200);
 #endif
 
 void f()

@@ -66,7 +66,7 @@ int main(int, char**)
 {
 
     ms delay = ms(10);
-    ms Tolerance = ms(5)
+    ms Tolerance = ms(5);
 #if defined(TEST_HAS_SANITIZERS) || defined(TEST_SLOW_HOST)
     delay *= 4;
     Tolerance *= 4;

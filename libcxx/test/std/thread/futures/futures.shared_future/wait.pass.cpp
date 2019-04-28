@@ -43,7 +43,7 @@ int main(int, char**)
 {
     typedef std::chrono::high_resolution_clock Clock;
     typedef std::chrono::duration<double, std::milli> ms;
-    ms Tolerance = ms(5)
+    ms Tolerance = ms(5);
 #if defined(TEST_HAS_SANITIZERS) || defined(TEST_SLOW_HOST)
     Tolerance *= 4;
 #endif
