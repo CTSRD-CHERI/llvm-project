@@ -22,6 +22,7 @@
 // CHECK-NEXT: CFConsumed (SubjectMatchRule_variable_is_parameter)
 // CHECK-NEXT: CFUnknownTransfer (SubjectMatchRule_function)
 // CHECK-NEXT: CHERICCallee (SubjectMatchRule_function)
+// CHECK-NEXT: CHERISubobjectBoundsUseRemainingSize (SubjectMatchRule_field, SubjectMatchRule_record)
 // CHECK-NEXT: CPUDispatch (SubjectMatchRule_function)
 // CHECK-NEXT: CPUSpecific (SubjectMatchRule_function)
 // CHECK-NEXT: CUDAConstant (SubjectMatchRule_variable)
