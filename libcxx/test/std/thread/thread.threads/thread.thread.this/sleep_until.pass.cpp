@@ -30,8 +30,8 @@ int main(int, char**)
     std::chrono::nanoseconds err = 5 * ms / 100;
 #ifdef TEST_SLOW_HOST
     // 25ms is sometimes not enough tolerance on a busy jenkins slave running
-    // multiple QEMU instances. 100ms should hopefully be enough
-    err *= 4;
+    // multiple QEMU instances. 150ms should hopefully be enough
+    err *= 6;
 #endif
     // The time slept is within 5% of 500ms
     assert(std::abs(ns.count()) < err.count());
