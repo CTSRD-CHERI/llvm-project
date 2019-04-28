@@ -1115,6 +1115,30 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     return Result;
   };
 
+  // Do not set bounds on &foo if foo is already a reference (we can just
+  // trust the original reference size. If that size is wrong, it means that
+  // the calling code was compiled without sub-object bounds and therefore
+  // tightening the bounds might not be safe!
+  //
+  // Note: the same also applies for C++ references (there is no need to add
+  // another csetbounds if we are just forwarding a reference to another call)
+  if (getLangOpts().CPlusPlus && (Kind == SubObjectBoundsKind::AddrOf ||
+                                  Kind == SubObjectBoundsKind::Reference)) {
+    // TODO: fix getRealReferenceType() to take ASTContext&
+    bool IsReference = false;
+    if (const auto *CE = dyn_cast<const CallExpr>(E)) {
+      IsReference = CE->getCallReturnType(getContext())->isReferenceType();
+      // if (auto FD = CE->getDirectCallee())
+      //   FD->dumpColor();
+    } else {
+      IsReference = E->getRealReferenceType()->isReferenceType();
+    }
+    if (IsReference)
+      return cannotSetBounds(*this, E, Ty, Kind,
+                             "source is a C++ reference and therefore should "
+                             "already have sub-object bounds");
+  }
+
   if (auto DRE = dyn_cast<DeclRefExpr>(E)) {
     // Don't set bounds on weak symbols since they might be NULL
     // See https://github.com/CTSRD-CHERI/llvm-project/issues/317
@@ -1130,21 +1154,6 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
       return cannotSetBounds(
           *this, E, Ty, Kind,
           "referenced value is a weak symbol and could therefore be NULL");
-    }
-    // Do not set bounds on &foo if foo is already a reference (we can just
-    // trust the original reference size. If that size is wrong, it means that
-    // the calling code was compiled without sub-object bounds and therefore
-    // tightening the bounds might not be safe!
-    //
-    // Note: the same also applies for C++ references (there is no need to add
-    // another csetbounds if we are just forwarding a reference to another call)
-    if (ValDecl &&
-        (Kind == SubObjectBoundsKind::AddrOf ||
-         Kind == SubObjectBoundsKind::Reference) &&
-        ValDecl->getType()->isReferenceType()) {
-      return cannotSetBounds(*this, E, Ty, Kind,
-                             "source is a C++ reference and therefore should "
-                             "already have sub-object bounds");
     }
   }
   if (auto ME = dyn_cast<MemberExpr>(E)) {

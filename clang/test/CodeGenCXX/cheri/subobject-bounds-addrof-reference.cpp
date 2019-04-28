@@ -19,6 +19,11 @@ char *pointer_from_value(char ref) {
   // expected-warning@-1{{address of stack memory associated with parameter 'ref' returned}}
 }
 
+char& get_reference();
+char* pointer_from_ref_call() {
+  return &get_reference(); // expected-remark{{not setting bounds for reference to 'char' (source is a C++ reference and therefore should already have sub-object bounds)}}
+}
+
 char &ref_from_ptr(char *ptr) {
   return *ptr;  // expected-remark{{setting sub-object bounds for reference to 'char' to 1 bytes}}
 }
