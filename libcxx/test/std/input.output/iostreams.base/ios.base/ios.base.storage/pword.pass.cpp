@@ -35,7 +35,7 @@ int main(int, char**)
     test t;
     std::ios_base& b = t;
 #ifdef TEST_SLOW_HOST
-    for (std::intptr_t i = 0; i < 400; ++i)
+    for (std::intptr_t i = 0; i < 300; ++i)
 #else
     for (std::intptr_t i = 0; i < 10000; ++i)
 #endif
