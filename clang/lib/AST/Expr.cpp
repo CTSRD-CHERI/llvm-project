@@ -4363,5 +4363,8 @@ QualType Expr::getRealReferenceType() const {
       }
     }
   }
+  if (const auto *ECE = dyn_cast<const ExplicitCastExpr>(E)) {
+    return ECE->getTypeAsWritten();
+  }
   return E->getType();
 }
