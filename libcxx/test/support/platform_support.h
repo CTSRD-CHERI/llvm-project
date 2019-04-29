@@ -15,7 +15,7 @@
  *   "changes": [
  *     "subobject_bounds",
  *   ],
- *   "change_comment": "address of std::string::operator[]: `&str[0] -> buf.c_str()`",
+ *   "change_comment": "address of std::string::operator[]: `&str[0] -> buf.data()`",
  * }
  * CHERI CHANGES END
  */
@@ -104,7 +104,7 @@ std::string get_temp_file_name()
         Name = "libcxx.XXXXXX";
         // XXXAR: this is wrong:
         // FD = mkstemp(&Name[0]);
-        FD = mkstemp(Name.c_str());
+        FD = mkstemp(Name.data());
         if (FD == -1 && errno == EINVAL) {
             perror("mkstemp");
             abort();
