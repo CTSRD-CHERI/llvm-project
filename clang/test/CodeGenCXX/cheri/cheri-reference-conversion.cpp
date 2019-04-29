@@ -80,3 +80,16 @@ int &__capability fun17(int &x, int y) {
 int &__capability fun18(bool cond, int &x, int &__capability y) {
   return cond ? x : y; // expected-error {{converting non-capability type 'int &' to capability type 'int & __capability' without an explicit cast; if this is intended use __cheri_tocap}}
 }
+
+template <class T>
+T get(T a) {
+ return a;
+}
+
+int & __capability fun19(int *__capability x) {
+  return get<int &__capability>(*x);
+}
+
+int & fun20(int *__capability x) {
+  return get<int &__capability>(*x); // expected-error {{converting capability type 'int & __capability' to non-capability type 'int &' without an explicit cast; if this is intended use __cheri_fromcap}}
+}

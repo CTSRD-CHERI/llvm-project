@@ -4465,6 +4465,28 @@ bool Expr::hasUnderlyingCapability() const {
     return false;
   }
 
+  if (const CallExpr *CE = dyn_cast<const CallExpr>(E)) {
+    auto *Callee = CE->getCallee();
+    auto CalleeType = Callee->getType();
+    if (const auto *FnTypePtr = CalleeType->getAs<PointerType>()) {
+      CalleeType = FnTypePtr->getPointeeType();
+    } else if (const auto *BPT = CalleeType->getAs<BlockPointerType>()) {
+      CalleeType = BPT->getPointeeType();
+    } else if (CalleeType->isSpecificPlaceholderType(BuiltinType::BoundMember)) {
+      if (isa<CXXPseudoDestructorExpr>(Callee->IgnoreParens()))
+        return false;
+
+      // This should never be overloaded and so should never return null.
+      CalleeType = Expr::findBoundMemberType(Callee);
+    }
+
+    const FunctionType *FnType = CalleeType->castAs<FunctionType>();
+    if (auto *Ret = FnType->getReturnType()->getAs<ReferenceType>()) {
+      return Ret->isCHERICapability();
+    }
+    return false;
+  }
+
   return false;
 }
 
@@ -4481,7 +4503,7 @@ QualType Expr::getRealReferenceType(ASTContext &Ctx,
   if (!Ctx.getLangOpts().CPlusPlus)
     return E->getType();
 
-  // DeclRefExpr and ExplicitCastExpr can be of reference type, but
+  // DeclRefExpr, CallExpr and ExplicitCastExpr can be of reference type, but
   // in the AST E->getType() will always return the non-reference type.
   if (const DeclRefExpr* DRE = dyn_cast<const DeclRefExpr>(E)) {
     // XXXAR: or should this be getFoundDecl instead of getDecl?
@@ -4491,6 +4513,8 @@ QualType Expr::getRealReferenceType(ASTContext &Ctx,
         return TargetType;
       }
     }
+  } else if (const auto *CE = dyn_cast<const CallExpr>(E)) {
+    return CE->getCallReturnType(Ctx);
   } else if (const auto *ECE = dyn_cast<const ExplicitCastExpr>(E)) {
     return ECE->getTypeAsWritten();
   }
