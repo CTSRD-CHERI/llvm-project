@@ -690,9 +690,11 @@ static TryCastResult getCastAwayConstnessCastKind(CastAwayConstnessKind CACK,
 }
 
 static bool IsBadCheriReferenceCast(const ReferenceType *Dest, Expr *SrcExpr,
-                                    const ASTContext &Ctx) {
+                                    ASTContext &Ctx) {
+  if (Ctx.getLangOpts().getCheriCapConversion() == LangOptions::CapConv_Ignore)
+    return false;
   bool SrcIsCapRef = Ctx.getTargetInfo().areAllPointersCapabilities();
-  if (auto SrcRef = SrcExpr->getRealReferenceType()->getAs<ReferenceType>())
+  if (auto SrcRef = SrcExpr->getRealReferenceType(Ctx)->getAs<ReferenceType>())
     SrcIsCapRef = SrcRef->isCHERICapability();
   return Dest->isCHERICapability() != SrcIsCapRef;
 }
@@ -1917,7 +1919,11 @@ static void DiagnoseCHERIPtr(Sema &Self, Expr *SrcExpr, QualType DestType,
 static CastKind DiagnoseCapabilityToIntCast(Sema &Self, SourceRange OpRange,
                                             const Expr *SrcExpr,
                                             QualType DestType) {
-  QualType SrcType = SrcExpr->getRealReferenceType();
+  if (Self.Context.getLangOpts().getCheriCapConversion() ==
+      LangOptions::CapConv_Ignore)
+    return CK_NoOp;
+
+  QualType SrcType = SrcExpr->getRealReferenceType(Self.Context);
   if (SrcType->isDependentType() || DestType->isDependentType())
     return CK_NoOp; // can't diagnose this yet
   // If the source is not a capability or a __uintcap_t we can ignore it
@@ -3000,7 +3006,7 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
   //       and the types are compatible.
 
   // Use getRealReferenceType() because getType() only returns T for T&
-  const QualType SrcTy = SubExpr->getRealReferenceType();
+  const QualType SrcTy = SubExpr->getRealReferenceType(Context);
   // We don't included __uintcap_t here since it should be be allowed to use
   // a __cheri_{to,from}cap on __uintcap_t
   const bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, false);
@@ -3124,7 +3130,7 @@ ExprResult Sema::BuildCheriOffsetOrAddress(SourceLocation LParenLoc,
       IsOffsetCast ? CK_CHERICapabilityToOffset : CK_CHERICapabilityToAddress;
   // Check the source type
   // Use getRealReferenceType() because getType() only returns T for T&
-  QualType SrcTy = SubExpr->getRealReferenceType();
+  QualType SrcTy = SubExpr->getRealReferenceType(Context);
   // __cheri_offset and __cheri_addr is valid for __uintcap_t as well
   bool SrcIsCap = SrcTy->isCHERICapabilityType(Context, true);
   if (!SrcIsCap) {

@@ -34,17 +34,26 @@ void test_capptr_to_int(void* __capability a) {
 }
 
 void test_uintcap_to_int(__uintcap_t a) {
-  vaddr_t v{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'vaddr_t'}}
-  v = vaddr_t{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'vaddr_t'}}
-  vaddr_t v2 = 0; v2 = {a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'vaddr_t'}}
+  vaddr_t v{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'vaddr_t'}} \
+                // expected-note {{insert an explicit cast to silence this issue}}
+  v = vaddr_t{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'vaddr_t'}} \
+                  // expected-note {{insert an explicit cast to silence this issue}}
+  vaddr_t v2 = 0; v2 = {a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'vaddr_t'}} \
+                            // expected-note {{insert an explicit cast to silence this issue}}
 
-  long l{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'long'}}
-  l = long{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'long'}}
-  long l2 = 0; l2 = {a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'long'}}
+  long l{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'long'}} \
+             // expected-note {{insert an explicit cast to silence this issue}}
+  l = long{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'long'}} \
+               // expected-note {{insert an explicit cast to silence this issue}}
+  long l2 = 0; l2 = {a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'long'}} \
+                         // expected-note {{insert an explicit cast to silence this issue}}
 
-  int i{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'int'}}
-  i = int{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'int'}}
-  int i2 = 0; i2 = {a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'int'}}
+  int i{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'int'}} \
+            // expected-note {{insert an explicit cast to silence this issue}}
+  i = int{a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'int'}} \
+              // expected-note {{insert an explicit cast to silence this issue}}
+  int i2 = 0; i2 = {a}; // expected-error {{'__uintcap_t' cannot be narrowed to 'int'}} \
+                        // expected-note {{insert an explicit cast to silence this issue}}
 
   __uintcap_t uc{a};
   uc = __uintcap_t{a};

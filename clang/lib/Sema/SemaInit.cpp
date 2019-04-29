@@ -1433,10 +1433,20 @@ void InitListChecker::CheckComplexType(const InitializedEntity &Entity,
 
 bool InitListChecker::isCapNarrowing(Expr* expr, QualType DeclType,
                                      unsigned *Index, unsigned *StructuredIndex) {
+  if (SemaRef.Context.getLangOpts().getCheriCapConversion() ==
+      LangOptions::CapConv_Ignore)
+    return false;
+
   // XXXAR: expr->getType() will return int for int&!
-  QualType ExprType = expr->getRealReferenceType();
+  QualType ExprType = expr->getRealReferenceType(SemaRef.Context);
   if (ExprType->isCHERICapabilityType(SemaRef.Context) &&
      !DeclType->isCHERICapabilityType(SemaRef.Context)) {
+    // Initializing a T with a T& should be fine.
+    if (ExprType->isReferenceType() && !DeclType->isReferenceType())
+      return false;
+    // For uintcap_t -> integer conversion fall back to the default diagnostics
+    if (ExprType->isIntCapType() && DeclType->isIntegerType())
+      return false;
     // TODO: allow for nullptr, etc.
     if (!VerifyOnly) {
       SemaRef.Diag(expr->getBeginLoc(), diag::ext_init_list_type_narrowing)
@@ -4582,11 +4592,20 @@ static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
   if (!Sequence)
     return; // already failed so no need to diagnose
 
+  if (S.getASTContext().getLangOpts().getCheriCapConversion() ==
+      LangOptions::CapConv_Ignore)
+    return;
+
+  // FIXME: don't error on rvalue references.
+
   // Check that we aren't converting between capability and non-capability references
   const bool PureCapABI = S.getASTContext().getTargetInfo().areAllPointersCapabilities();
   // If we are in the purecap ABI we can't create non-capabality references so no need to check
   if (!PureCapABI) {
     bool DestIsCapRef = PureCapABI;
+    // Allow rvalue references.
+    if (Entity.getType()->isRValueReferenceType())
+      return;
     if (auto DestRef = Entity.getType()->getAs<ReferenceType>())
       DestIsCapRef = DestRef->isCHERICapability();
     bool SrcIsCapRef = false;
@@ -4602,7 +4621,8 @@ static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
       }
     }
     if (!SrcIsCapRef) {
-      QualType RealSrcType = Initializer->getRealReferenceType();
+      QualType RealSrcType =
+          Initializer->getRealReferenceType(S.getASTContext());
       if (auto SrcRef = RealSrcType->getAs<ReferenceType>())
         SrcIsCapRef = SrcRef->isCHERICapability();
     }
@@ -8603,7 +8623,7 @@ bool InitializationSequence::Diagnose(Sema &S,
   case FK_ReferenceInitChangesCapabilityQualifier:
   case FK_ConversionFromCapabilityFailed:
   case FK_ConversionToCapabilityFailed: {
-    QualType FromType = Args[0]->getRealReferenceType();
+    QualType FromType = Args[0]->getRealReferenceType(S.getASTContext());
     bool PrintRefInMessage = false;
     // Failure == FK_ConversionFromCapabilityFailed
     bool PtrToCap = DestType->isCHERICapabilityType(S.getASTContext());

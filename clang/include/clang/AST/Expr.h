@@ -896,11 +896,16 @@ public:
     return skipRValueSubobjectAdjustments(CommaLHSs, Adjustments);
   }
 
+  /// Returns true if the underlying memory of this expression is
+  /// accessed through a capability.
+  bool hasUnderlyingCapability() const;
+
   /// XXXAR: Expr->getType() returns int for the initializers expression in
   /// `void x(int& __capability arg) { int& a = arg }`
   /// DeclRefExpr 0x7ffb54000590 'int' lvalue ParmVar 0x7ffb53873eb8 'arg' 'int & __capability'
   /// We need to also check the underlying type and return that
-  QualType getRealReferenceType() const;
+  QualType getRealReferenceType(ASTContext &C,
+                                bool LValuesAsReferences = true) const;
 
   static bool classof(const Stmt *T) {
     return T->getStmtClass() >= firstExprConstant &&

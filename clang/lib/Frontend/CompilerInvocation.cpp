@@ -2542,6 +2542,20 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
                            ? LangOptions::CheriUIntCapMode::UIntCap_Addr
                            : LangOptions::CheriUIntCapMode::UIntCap_Offset);
 
+  // Error or not on capability to pointer conversions.
+  if (const Arg *A = Args.getLastArg(OPT_cheri_conversion_error)) {
+    auto ConvErrMode =
+        llvm::StringSwitch<LangOptions::CheriCapConversionMode>(A->getValue())
+            .Case("error", LangOptions::CapConv_Err)
+            .Case("ignore", LangOptions::CapConv_Ignore)
+            .Default((LangOptions::CheriCapConversionMode)-1);
+    if (ConvErrMode == (LangOptions::CheriCapConversionMode)-1) {
+      Diags.Report(diag::err_drv_invalid_value)
+          << A->getAsString(Args) << A->getValue();
+    } else
+      Opts.setCheriCapConversion(ConvErrMode);
+  }
+
   // Parse the -cheri-bounds= option to determine whether we should set more
   // bounds on capabilities (e.g. when passing subobject references to
   // functions)

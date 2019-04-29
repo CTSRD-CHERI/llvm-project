@@ -1,7 +1,3 @@
-// XFAIL: *
-// For now this test will always fail because dereferencing a capability does not
-// give a capability reference
-
 // RUN: %cheri128_cc1 --std=c++11 -emit-llvm -debug-info-kind=limited -o - %s \
 // RUN:   | FileCheck %s --check-prefix=CHECK-HYBRID --check-prefix=CHECK-128
 // RUN: %cheri256_cc1 --std=c++11 -emit-llvm -debug-info-kind=limited -o - %s \

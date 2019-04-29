@@ -1739,12 +1739,13 @@ bool CastExpr::CastConsistency() const {
 
   case CK_CHERICapabilityToOffset:
   case CK_CHERICapabilityToAddress: {
-    QualType SubType = getSubExpr()->getRealReferenceType();
-    assert(SubType->isIntCapType() ||
-           (SubType->isPointerType() &&
-            SubType->getAs<PointerType>()->isCHERICapability()) ||
-           (SubType->isReferenceType() &&
-            SubType->getAs<ReferenceType>()->isCHERICapability()) ||
+    QualType SubType = getSubExpr()->getType();
+    bool IsCapabilityTy = getSubExpr()->hasUnderlyingCapability();
+    if (const PointerType *PTy =
+            getSubExpr()->getType()->getAs<PointerType>()) {
+      IsCapabilityTy |= PTy->isCHERICapability();
+    }
+    assert(IsCapabilityTy || SubType->isIntCapType() ||
            SubType->isNullPtrType());
     assert(getType()->isIntegerType());
     assert(!getType()->isEnumeralType());
@@ -4345,15 +4346,143 @@ QualType OMPArraySectionExpr::getBaseOriginalType(const Expr *Base) {
   return OriginalTy;
 }
 
+bool Expr::hasUnderlyingCapability() const {
+  // This is heavy and the information should instead be recorded on the AST
+  // itself. However this would require large changes and might not be easy to
+  // maintain downstream. We should also try to pass at some point an AST
+  // context object in order to be able to get the language options, but
+  // at the moment this gets called from the cast consistency checks where we
+  // don't have one available.
+  const Expr *E = this->IgnoreParens();
 
-QualType Expr::getRealReferenceType() const {
-  const Expr* E = this;
-  // The type of an InitListExpr is void -> if it is a single element one get
-  // the type of that element
   if (const InitListExpr* ILE = dyn_cast<const InitListExpr>(E)) {
     if (ILE->getNumInits() == 1)
-      E = ILE->getInit(0);
+      E = ILE->getInit(0)->IgnoreParens();
   }
+
+  if (E->getValueKind() == VK_RValue)
+    return false;
+
+  if (const DeclRefExpr *DRE = dyn_cast<const DeclRefExpr>(E)) {
+    // XXXAR: or should this be getFoundDecl instead of getDecl?
+    if (const ValueDecl *V =
+            dyn_cast_or_null<const ValueDecl>(DRE->getDecl())) {
+      if (const ReferenceType *RTy = V->getType()->getAs<ReferenceType>()) {
+        return RTy->isCHERICapability();
+      }
+    }
+  }
+
+  // This only applies if the subexpr is an LValue
+  if (auto SrcMemb = dyn_cast<MemberExpr>(E)) {
+    NamedDecl *Member = SrcMemb->getMemberDecl();
+    if (const auto *Value = dyn_cast<ValueDecl>(Member))
+      if (auto *Ty = Value->getType()->getAs<ReferenceType>())
+        return Ty->isCHERICapability();
+
+    if (isa<VarDecl>(Member) && Member->getDeclContext()->isRecord())
+      return false;
+
+    if (isa<FieldDecl>(Member)) {
+      if (SrcMemb->isArrow()) {
+        auto *Base = SrcMemb->getBase()->IgnoreParens();
+        if (auto *Ty = Base->getType()->getAs<PointerType>())
+          return Ty->isCHERICapability();
+        return false;
+      }
+      return SrcMemb->getBase()->hasUnderlyingCapability();
+    }
+    return false;
+  }
+
+  // Handle unary operator.
+  if (const UnaryOperator *UO = dyn_cast<const UnaryOperator>(E)) {
+    if (UO->getOpcode() == UO_Deref) {
+      auto *SubExpr = UO->getSubExpr()->IgnoreParens();
+      if (auto *Ty = SubExpr->getType()->getAs<PointerType>())
+        return Ty->isCHERICapability();
+      return false;
+    }
+    if (UO->getOpcode() == UO_AddrOf || UO->getOpcode() == UO_PreInc ||
+        UO->getOpcode() == UO_PreDec) {
+      return UO->getSubExpr()->hasUnderlyingCapability();
+    }
+    return false;
+  }
+
+  // Handle array subscript.
+  if (auto SE = dyn_cast<ArraySubscriptExpr>(E)) {
+    auto *Base = SE->getBase()->IgnoreParens();
+    if (auto *Ty = Base->getType()->getAs<PointerType>())
+      return Ty->isCHERICapability();
+    return Base->hasUnderlyingCapability();
+  }
+
+  // Handle casts.
+  if (auto CE = dyn_cast<CastExpr>(E)) {
+    if (CE->getCastKind() == CK_LValueBitCast)
+      return CE->getSubExpr()->hasUnderlyingCapability();
+    return false;
+  }
+
+  // Handle binary operators.
+  if (const BinaryOperator *BO = dyn_cast<const BinaryOperator>(E)) {
+    if (BO->isAssignmentOp())
+      return BO->getLHS()->hasUnderlyingCapability();
+
+    if (BO->getOpcode() == BO_Comma)
+      return BO->getRHS()->hasUnderlyingCapability();
+
+    if (BO->getOpcode() == BO_PtrMemD) {
+      if (BO->getType()->isFunctionType() ||
+          BO->hasPlaceholderType(BuiltinType::BoundMember))
+        return false;
+      return BO->getLHS()->hasUnderlyingCapability();
+    }
+
+    if (BO->getOpcode() == BO_PtrMemI) {
+      if (BO->getType()->isFunctionType() ||
+          BO->hasPlaceholderType(BuiltinType::BoundMember))
+        return false;
+      auto *LHS = BO->getLHS()->IgnoreParens();
+      if (auto *Ty = LHS->getType()->getAs<PointerType>())
+        return Ty->isCHERICapability();
+    }
+
+    return false;
+  }
+
+  // Handle conditional operators.
+  if (const ConditionalOperator *CO = dyn_cast<const ConditionalOperator>(E)) {
+    auto *True = CO->getTrueExpr()->IgnoreParens();
+    auto *False = CO->getFalseExpr()->IgnoreParens();
+    if (True->getType()->isVoidType() || False->getType()->isVoidType())
+      return false;
+    bool CTrue = True->hasUnderlyingCapability();
+    bool CFalse = False->hasUnderlyingCapability();
+    if (CTrue == CFalse)
+      return CTrue;
+    return false;
+  }
+
+  return false;
+}
+
+QualType Expr::getRealReferenceType(ASTContext &Ctx,
+                                    bool LValuesAsReferences) const {
+  const Expr *E = this->IgnoreParens();
+
+  // Make an exception for initializer lists with one element.
+  if (const InitListExpr *ILE = dyn_cast<const InitListExpr>(E)) {
+    if (ILE->getNumInits() == 1)
+      E = ILE->getInit(0)->IgnoreParens();
+  }
+
+  if (!Ctx.getLangOpts().CPlusPlus)
+    return E->getType();
+
+  // DeclRefExpr and ExplicitCastExpr can be of reference type, but
+  // in the AST E->getType() will always return the non-reference type.
   if (const DeclRefExpr* DRE = dyn_cast<const DeclRefExpr>(E)) {
     // XXXAR: or should this be getFoundDecl instead of getDecl?
     if (const ValueDecl* V = dyn_cast_or_null<const ValueDecl>(DRE->getDecl())) {
@@ -4362,9 +4491,22 @@ QualType Expr::getRealReferenceType() const {
         return TargetType;
       }
     }
-  }
-  if (const auto *ECE = dyn_cast<const ExplicitCastExpr>(E)) {
+  } else if (const auto *ECE = dyn_cast<const ExplicitCastExpr>(E)) {
     return ECE->getTypeAsWritten();
+  }
+
+  // For LValues infer whether they should be capability references or not:
+  if (LValuesAsReferences && E->isLValue() && !E->getType()->isPointerType()) {
+#if 0
+      && (isa<MemberExpr>(E) || isa<AbstractConditionalOperator>(E) ||
+       isa<UnaryOperator>(E) || isa<BinaryOperator>(E) || isa<DeclRefExpr>(E) ||
+       isa<ArraySubscriptExpr>(E) || isa<ArraySubscriptExpr>(E))) {
+#endif
+    bool HasCap = Ctx.getTargetInfo().areAllPointersCapabilities() ||
+                  E->hasUnderlyingCapability();
+    return Ctx.getLValueReferenceType(E->getType(), true,
+                                      HasCap ? ASTContext::PIK_Capability
+                                             : ASTContext::PIK_Integer);
   }
   return E->getType();
 }

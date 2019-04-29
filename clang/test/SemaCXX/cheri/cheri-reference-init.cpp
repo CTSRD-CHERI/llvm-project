@@ -22,7 +22,7 @@ void test_assignment(int& ptrref, int& __capability capref) {
 
   // can only bind a non-capability ref to i:
   int &ptrref2 = i;
-  int &__capability capref2 = i; //expected-error{{converting non-capability reference to type 'int' to capability type 'int & __capability' without an explicit cast}}
+  int &__capability capref2 = i; //expected-error{{converting non-capability type 'int &' to capability type 'int & __capability' without an explicit cast}}
 
   // check intializer lists:
   ref_struct sp1 = {ptrref};
@@ -31,7 +31,7 @@ void test_assignment(int& ptrref, int& __capability capref) {
 
   cap_struct sc1 = {ptrref}; // expected-error{{converting non-capability type 'int &' to capability type 'int & __capability' without an explicit cast}}
   cap_struct sc2 = {capref};
-  cap_struct sc3 = {i}; // expected-error{{converting non-capability reference to type 'int' to capability type 'int & __capability' without an explicit cast}}
+  cap_struct sc3 = {i}; // expected-error{{converting non-capability type 'int &' to capability type 'int & __capability' without an explicit cast}}
 }
 
 void init(int& ptrref, int& __capability capref) {
@@ -45,21 +45,22 @@ void init(int& ptrref, int& __capability capref) {
   PtrRef pc3(i);
   CapRef cc1(ptrref); // expected-error{{converting non-capability type 'int &' to capability type 'CapRef' (aka 'int & __capability') without an explicit cast}}
   CapRef cc2(capref);
-  CapRef cc3(i); // expected-error{{converting non-capability reference to type 'int' to capability type 'CapRef' (aka 'int & __capability') without an explicit cast}}
+  CapRef cc3(i); // expected-error{{converting non-capability type 'int &' to capability type 'CapRef' (aka 'int & __capability') without an explicit cast}}
   // brace init:
   PtrRef pi1{ptrref};
   PtrRef pi2{capref}; // expected-error{{converting capability type 'int & __capability' to non-capability type 'PtrRef' (aka 'int &') without an explicit cast}}
   PtrRef pi3{i};
   CapRef ci1{ptrref}; // expected-error{{converting non-capability type 'int &' to capability type 'CapRef' (aka 'int & __capability') without an explicit cast}}
   CapRef ci2{capref};
-  CapRef ci3{i}; // expected-error{{converting non-capability reference to type 'int' to capability type 'CapRef' (aka 'int & __capability') without an explicit cast}}
+  CapRef ci3{i}; // expected-error{{converting non-capability type 'int &' to capability type 'CapRef' (aka 'int & __capability') without an explicit cast}}
   // assign init list:
   PtrRef pai1 = {ptrref};
   PtrRef pai2 = {capref}; // expected-error{{converting capability type 'int & __capability' to non-capability type 'PtrRef' (aka 'int &') without an explicit cast}}
   PtrRef pai3 = {i};
   CapRef cai1 = {ptrref}; // expected-error{{converting non-capability type 'int &' to capability type 'CapRef' (aka 'int & __capability') without an explicit cast}}
   CapRef cai2 = {capref};
-  CapRef cai3 = {i}; // expected-error{{converting non-capability reference to type 'int' to capability type 'CapRef' (aka 'int & __capability') without an explicit cast}}
+  CapRef cai3 = {i}; // expected-error{{converting non-capability type 'int &' to capability type 'CapRef' (aka 'int & __capability') without an explicit cast}}
+  int Foo = capref;  // ok
 }
 
 struct foo2 {
@@ -87,7 +88,7 @@ void test_struct_with_ctor(int& ptrref, int& __capability capref, int i) {
 
   struct_with_ctor_cap c1 = ptrref; // expected-error{{converting non-capability type 'int &' to capability type 'int & __capability' without an explicit cast}}
   struct_with_ctor_cap c2 = capref;
-  struct_with_ctor_cap c3 = i; // expected-error{{converting non-capability reference to type 'int' to capability type 'int & __capability' without an explicit cast}}
+  struct_with_ctor_cap c3 = i; // expected-error{{converting non-capability type 'int &' to capability type 'int & __capability' without an explicit cast}}
 }
 
 __intcap_t get_intcap();

@@ -769,8 +769,6 @@ llvm::Value *CodeGenFunction::setCHERIBoundsOnAddrOf(llvm::Value *Value,
   // CHERI_BOUNDS_DBG(<< "Trying to set CHERI bounds on addrof operator ";
   //                  E->dump(llvm::dbgs()));
 
-  E->getRealReferenceType();
-
   NumAddrOfCheckedForBoundsTightening++;
   constexpr auto Kind = SubObjectBoundsKind::AddrOf;
   if (auto TBR = canTightenCheriBounds(Value, Ty, E, Kind)) {
@@ -1152,7 +1150,13 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
         }
       }
     } else {
-      IsReference = E->getRealReferenceType()->isReferenceType();
+      // We really only want a reference type for DeclRefExprs here.
+      // getRealReferenceType() returns a reference type for all non-pointer
+      // LValue expressions that have an underlying capability by default so
+      // pass false for LValuesAsReferences.
+      IsReference =
+          E->getRealReferenceType(getContext(), /*LValuesAsReferences=*/false)
+              ->isReferenceType();
     }
     if (IsReference)
       return cannotSetBounds(*this, E, Ty, Kind,

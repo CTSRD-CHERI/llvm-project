@@ -177,6 +177,14 @@ public:
                   /// (More C compatible than offset)
   };
 
+  // Work around for bugs in the expression classification which can cause
+  // us to reject valid code even if there is no capability to pointer
+  // conversion.
+  enum CheriCapConversionMode {
+    CapConv_Err,
+    CapConv_Ignore,
+  };
+
   // TODO: this should probably be flags
 #if 0
     CBM_ReferencesAggressive, /// (unused for now, might set more bounds)

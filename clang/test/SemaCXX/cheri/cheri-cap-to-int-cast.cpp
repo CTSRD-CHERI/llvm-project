@@ -119,12 +119,14 @@ void check_uintcap_to_int() {
   int i = cap;
   i = (int)cap;
   i = int(cap);
-  i = int{cap};  // expected-error {{type '__uintcap_t' cannot be narrowed to 'int' in initializer list}}
+  i = int{cap}; // expected-error {{type '__uintcap_t' cannot be narrowed to 'int' in initializer list}} \
+                 // expected-note {{insert an explicit cast to silence this issue}}
   i = static_cast<int>(cap);
   long l = cap;
   l = (long)cap;
   l = long(cap);
-  l = long{cap}; // expected-error {{type '__uintcap_t' cannot be narrowed to 'long' in initializer list}}
+  l = long{cap}; // expected-error {{type '__uintcap_t' cannot be narrowed to 'long' in initializer list}} \
+                 // expected-note {{insert an explicit cast to silence this issue}}
   l = static_cast<long>(cap);
 
   i = reinterpret_cast<int>(cap);  // expected-error {{reinterpret_cast from '__uintcap_t' to 'int' is not allowed}}
