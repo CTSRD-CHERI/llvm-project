@@ -1127,9 +1127,30 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     // TODO: fix getRealReferenceType() to take ASTContext&
     bool IsReference = false;
     if (const auto *CE = dyn_cast<const CallExpr>(E)) {
+      QualType CallTy = CE->getCallReturnType(getContext());
+      IsReference = CallTy->isReferenceType();
       IsReference = CE->getCallReturnType(getContext())->isReferenceType();
-      // if (auto FD = CE->getDirectCallee())
-      //   FD->dumpColor();
+      if (IsReference && Kind == SubObjectBoundsKind::AddrOf) {
+        // diagnose address-of std::string/vector operator[]/.at();
+        // This would set bounds to one element but most uses seem to be &buf[0]
+        // which clearly wants the full buffer as a pointer.
+        if (auto FD = CE->getDirectCallee()) {
+          if (auto CXXMD = dyn_cast<CXXMethodDecl>(FD)) {
+            // NumParams == 1 due to implicit this not being counted
+            if (CXXMD->getOverloadedOperator() == OO_Subscript ||
+                (CXXMD->getName() == "at" && CXXMD->getNumParams() == 1)) {
+              CGM.getDiags().Report(
+                  E->getExprLoc(),
+                  diag::warn_subobject_bounds_addressof_subscript)
+                  << FD << E->getSourceRange();
+              CGM.getDiags().Report(
+                  E->getExprLoc(),
+                  diag::note_subobject_bounds_addressof_subscript_fixit)
+                  << CallTy << E->getSourceRange();
+            }
+          }
+        }
+      }
     } else {
       IsReference = E->getRealReferenceType()->isReferenceType();
     }
