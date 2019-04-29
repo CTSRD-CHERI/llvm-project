@@ -4592,6 +4592,11 @@ static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
   if (!Sequence)
     return; // already failed so no need to diagnose
 
+  auto& TI = S.getASTContext().getTargetInfo();
+  // XXXAR: keep runnign this code for non-CHERI for now to catch bugs in getRealReferenceType()
+  // if (!TI.SupportsCapabilities())
+  //  return; // no capability support -> don't attempt to diagnose
+
   if (S.getASTContext().getLangOpts().getCheriCapConversion() ==
       LangOptions::CapConv_Ignore)
     return;
@@ -4599,7 +4604,7 @@ static void CheckReferenceInitCHERI(Sema& S, const InitializedEntity &Entity,
   // FIXME: don't error on rvalue references.
 
   // Check that we aren't converting between capability and non-capability references
-  const bool PureCapABI = S.getASTContext().getTargetInfo().areAllPointersCapabilities();
+  const bool PureCapABI = TI.areAllPointersCapabilities();
   // If we are in the purecap ABI we can't create non-capabality references so no need to check
   if (!PureCapABI) {
     bool DestIsCapRef = PureCapABI;

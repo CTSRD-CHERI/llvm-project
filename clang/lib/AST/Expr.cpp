@@ -4524,6 +4524,9 @@ QualType Expr::getRealReferenceType(ASTContext &Ctx,
   } else if (const auto *ECE = dyn_cast<const ExplicitCastExpr>(E)) {
     return ECE->getTypeAsWritten();
   }
+  if (E->getType()->isPlaceholderType()) {
+    return E->getType();
+  }
 
   // For LValues infer whether they should be capability references or not:
   if (LValuesAsReferences && E->isLValue() && !E->getType()->isPointerType()) {
