@@ -3071,7 +3071,7 @@ ExprResult Sema::BuildCheriToOrFromCap(SourceLocation LParenLoc,
                                 nullptr, TSInfo, LParenLoc, RParenLoc);
 }
 
-// Check if LHS and RHS are assign compatibile for CHERI (ignoring capability
+// Check if LHS and RHS are assign compatible for CHERI (ignoring capability
 // qualifiers). Insert an implicit bitcast if necessary (when InsertBitCast is
 // true - the default) and update RHSExpr to point to it.
 //
