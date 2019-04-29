@@ -1134,9 +1134,19 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
         // which clearly wants the full buffer as a pointer.
         if (auto FD = CE->getDirectCallee()) {
           if (auto CXXMD = dyn_cast<CXXMethodDecl>(FD)) {
-            // NumParams == 1 due to implicit this not being counted
-            if (CXXMD->getOverloadedOperator() == OO_Subscript ||
-                (CXXMD->getName() == "at" && CXXMD->getNumParams() == 1)) {
+            bool KnownBad = CXXMD->getOverloadedOperator() == OO_Subscript;
+            if (!KnownBad) {
+              // Handle taking the address of .at(N)/.front()/.back()
+              // NumParams == 1 for .at() due to implicit this not being counted
+              auto ExpectedParams =
+                  llvm::StringSwitch<Optional<unsigned>>(CXXMD->getName())
+                      .Case("at", 1)
+                      .Cases("front", "back", 0)
+                      .Default(None);
+              if (ExpectedParams && CXXMD->getNumParams() == *ExpectedParams)
+                KnownBad = true;
+            }
+            if (KnownBad) {
               CGM.getDiags().Report(
                   E->getExprLoc(),
                   diag::warn_subobject_bounds_addressof_subscript)

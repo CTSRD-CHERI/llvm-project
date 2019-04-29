@@ -61,6 +61,11 @@ public:
 
   T *data();
   const T *data() const;
+
+  T& front();
+  const T& front() const;
+  T& back();
+  const T& back() const;
 };
 
 template<typename T>
@@ -84,11 +89,31 @@ void test_vector(const vector<T> &const_vec, vector<T> &mutable_vec) {
   do_stuff(const_vec.data());
   do_stuff(mutable_vec.data());
 
+  // Check that we also warn for front() and back()
+  do_stuff(&const_vec.front());  // expected-warning{{pointer created from reference returned by 'front' will be bounded to a single element}}
+  // expected-remark@-1{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}
+  // expected-note@-2{{add an explicit cast to 'const int & __capability'}}
+  do_stuff(&mutable_vec.front());  // expected-warning{{pointer created from reference returned by 'front' will be bounded to a single element}}
+  // expected-remark@-1{{not setting bounds for pointer to 'int' (source is a C++ reference and therefore should already have sub-object bounds)}}
+  // expected-note@-2{{add an explicit cast to 'int & __capability'}}
+  do_stuff(&const_vec.back());  // expected-warning{{pointer created from reference returned by 'back' will be bounded to a single element}}
+  // expected-remark@-1{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}
+  // expected-note@-2{{add an explicit cast to 'const int & __capability'}}
+  do_stuff(&mutable_vec.back());  // expected-warning{{pointer created from reference returned by 'back' will be bounded to a single element}}
+  // expected-remark@-1{{not setting bounds for pointer to 'int' (source is a C++ reference and therefore should already have sub-object bounds)}}
+  // expected-note@-2{{add an explicit cast to 'int & __capability'}}
+
   // Explicit cast to reference should not warn:
   do_stuff(&(const T&)const_vec.at(0)); // expected-remark{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}
+  do_stuff(&(const T&)const_vec.front()); // expected-remark{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}
+  do_stuff(&(const T&)const_vec.back()); // expected-remark{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}
   do_stuff(&(const T&)const_vec[0]); // expected-remark{{not setting bounds for pointer to 'const int' (source is a C++ reference and therefore should already have sub-object bounds)}}
   do_stuff(&(T&)mutable_vec.at(0)); // expected-remark{{not setting bounds for pointer to 'int' (source is a C++ reference and therefore should already have sub-object bounds)}}
+  do_stuff(&(T&)mutable_vec.front()); // expected-remark{{not setting bounds for pointer to 'int' (source is a C++ reference and therefore should already have sub-object bounds)}}
+  do_stuff(&(T&)mutable_vec.back()); // expected-remark{{not setting bounds for pointer to 'int' (source is a C++ reference and therefore should already have sub-object bounds)}}
   do_stuff(&(T&)mutable_vec[0]); // expected-remark{{not setting bounds for pointer to 'int' (source is a C++ reference and therefore should already have sub-object bounds)}}
+
+
 }
 
 void test_vector_impl(const vector<int> &const_vec, vector<int> &mutable_vec) {
