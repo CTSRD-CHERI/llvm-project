@@ -199,6 +199,8 @@ private:
       case Intrinsic::cheri_cap_perms_and:
       case Intrinsic::cheri_cap_perms_check:
       case Intrinsic::cheri_cap_perms_get:
+      case Intrinsic::cheri_cap_flags_set:
+      case Intrinsic::cheri_cap_flags_get:
       case Intrinsic::cheri_cap_seal:
       case Intrinsic::cheri_cap_sealed_get:
       case Intrinsic::cheri_cap_subset_test:

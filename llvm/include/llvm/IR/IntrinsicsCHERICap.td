@@ -29,6 +29,14 @@ def int_cheri_cap_perms_get :
   Intrinsic<[llvm_anyint_ty],
             [llvm_fatptr_ty],
             [IntrNoMem]>;
+def int_cheri_cap_flags_set :
+  Intrinsic<[llvm_fatptr_ty],
+            [llvm_fatptr_ty, llvm_anyint_ty],
+            [IntrNoMem]>;
+def int_cheri_cap_flags_get :
+  Intrinsic<[llvm_anyint_ty],
+            [llvm_fatptr_ty],
+            [IntrNoMem]>;
 def int_cheri_cap_bounds_set :
   Intrinsic<[llvm_fatptr_ty],
             [llvm_fatptr_ty, llvm_anyint_ty],

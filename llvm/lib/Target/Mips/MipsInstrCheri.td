@@ -320,6 +320,7 @@ def CGetSealed : CheriFmt2Op<5, (outs GPR64Opnd:$r1), (ins CheriOpnd:$r2),
                              [(set GPR64Opnd:$r1, (CapSealedGet CheriOpnd:$r2))]>;
 def CGetOffset : CheriFmtCGet<6, "offset">;
 def CGetAddr   : CheriFmtCGet<0xf, "addr", "address">;
+def CGetFlags  : CheriFmtCGet<0x12, "flags">;
 // Versions of property setters that take immediate operands
 // We allow CIncOffset $c1, 10 as an alias for CIncOffset $c1, $c1, 10, and the same for CSetBounds
 let TwoOperandAliasConstraint = "$cd = $cb" in {
@@ -347,6 +348,7 @@ def : InstAlias<"cassertinbounds $dst",
 // Property setters
 let isReMaterializable = 1, isAsCheapAsAMove = 1 in {
 def CAndPerms  : CheriFmtCSet<0xd, "perm", "perms", "and">;
+def CSetFlags  : CheriFmtCSet<0xe, "flags">;
 def CSetOffset : CheriFmtCSet<0xf, "offset">;
 def CSetBounds : CheriFmtCSet<0x8, "bounds">;
 def CSetBoundsExact : CheriFmtCSet<0x9, "boundsexact", "bounds", "set", "set_exact">;

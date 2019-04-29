@@ -95,6 +95,7 @@ class CHERICapFoldIntrinsics : public ModulePass {
     };
     foldGet(M, Intrinsic::cheri_cap_base_get, {CapAddrTy}, inferOther);
     foldGet(M, Intrinsic::cheri_cap_perms_get, {CapSizeTy}, inferOther);
+    foldGet(M, Intrinsic::cheri_cap_flags_get, {CapSizeTy}, inferOther);
     foldGet(M, Intrinsic::cheri_cap_tag_get, {},
             [this](Value *V, CallInst *CI, int) -> Value * {
               if (cheri::isKnownUntaggedCapability(V, DL))

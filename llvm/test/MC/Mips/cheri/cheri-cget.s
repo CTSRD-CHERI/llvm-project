@@ -63,6 +63,11 @@
 # CHECK-SAME: encoding: [0x48,0x01,0x01,0xff]
 	cgetpccsetoffset		$c1, $zero
 
+# CHECK: cgetflags	$12, $c1
+# CHECK-SAME: encoding: [0x48,0x0c,0x0c,0xbf]
+# DUMP-NEXT: 48 0c 0c bf 	cgetflags	$12, $c1
+	cgetflags	$t0, $c1
+
 # CHECK: cgetcause	$12
 # CHECK-SAME: encoding: [0x48,0x0c,0x0f,0xff]
 # DUMP-NEXT: 48 0c 0f ff 	cgetcause	$12

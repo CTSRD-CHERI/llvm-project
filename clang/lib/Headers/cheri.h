@@ -26,6 +26,7 @@
 #pragma once
 
 typedef unsigned short cheri_perms_t;
+typedef unsigned short cheri_flags_t;
 typedef unsigned __INT32_TYPE__ cheri_type_t;
 #ifdef __cplusplus
 #define __cheri_bool bool
@@ -78,6 +79,7 @@ __CHERI_GET(base, __SIZE_TYPE__, _get, __SIZE_MAX__)
 __CHERI_ACCESSOR(offset, __SIZE_TYPE__, _set, _get, __SIZE_MAX__)
 __CHERI_GET(type, cheri_type_t, _get, 0)
 __CHERI_ACCESSOR(perms, cheri_perms_t, _and, _get, 0)
+__CHERI_ACCESSOR(flags, cheri_flags_t, _set, _get, 0)
 __CHERI_GET(tag, __cheri_bool, _get, 0)
 __CHERI_GET(sealed, __cheri_bool, _get, 0)
 

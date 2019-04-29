@@ -309,6 +309,7 @@ static bool isKnownUntaggedCapability(const Value *V, unsigned Depth,
     case Intrinsic::cheri_cap_offset_set:
     case Intrinsic::cheri_cap_address_set:
     case Intrinsic::cheri_cap_perms_and:
+    case Intrinsic::cheri_cap_flags_set:
     case Intrinsic::cheri_cap_bounds_set:
     case Intrinsic::cheri_cap_bounds_set_exact:
       if (isa<ConstantPointerNull>(II->getOperand(0))) {

@@ -3635,6 +3635,14 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     return RValue::get(Builder.CreateCall(
         CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_perms_get, SizeTy),
         {EmitScalarExpr(E->getArg(0))}));
+  case Builtin::BI__builtin_cheri_flags_set:
+    return RValue::get(Builder.CreateCall(
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_flags_set, SizeTy),
+        {EmitScalarExpr(E->getArg(0)), EmitScalarExpr(E->getArg(1))}));
+  case Builtin::BI__builtin_cheri_flags_get:
+    return RValue::get(Builder.CreateCall(
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_flags_get, SizeTy),
+        {EmitScalarExpr(E->getArg(0))}));
   case Builtin::BI__builtin_cheri_type_get:
     return RValue::get(Builder.CreateCall(
         CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_type_get, IntPtrTy),

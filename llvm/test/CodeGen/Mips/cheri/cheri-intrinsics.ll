@@ -82,6 +82,29 @@ entry:
 
 declare i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)*, i64) nounwind readnone
 
+; CHECK-LABEL: getFlags
+define signext i64 @getFlags(i8 addrspace(200)* %c) nounwind readnone {
+entry:
+  ; CHECK: cgetflags       $2, $c3
+  ; CHECK: .end getFlags
+  %0 = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %c)
+  ret i64 %0
+}
+
+declare i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)*) nounwind readnone
+
+; CHECK-LABEL: setFlags
+define i8 addrspace(200)* @setFlags(i8 addrspace(200)* %c, i16 signext %flags) nounwind readnone {
+entry:
+  ; CHECK: csetflags       $c3, $c3, $1
+  ; CHECK: .end setFlags
+  %0 = zext i16 %flags to i64
+  %1 = tail call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* %c, i64 %0)
+  ret i8 addrspace(200)* %1
+}
+
+declare i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)*, i64) nounwind readnone
+
 ; CHECK-LABEL: gettype
 define i64 @gettype(i8 addrspace(200)* %c) nounwind readnone {
 entry:

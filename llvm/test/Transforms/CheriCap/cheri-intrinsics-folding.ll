@@ -19,6 +19,7 @@ declare i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)*) #1
 declare i8 addrspace(200)* @llvm.cheri.cap.length.set(i8 addrspace(200)*, i64) #1
 declare i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)*) #1
 declare i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)*, i64) #1
+declare i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)*) #1
 declare i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)*) #1
 declare i1 @llvm.cheri.cap.sealed.get(i8 addrspace(200)*) #1
 declare i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)*) #1
@@ -55,6 +56,13 @@ define i64 @null_get_perms() #1 {
   %ret = tail call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* null)
   ret i64 %ret
   ; CHECK-LABEL: @null_get_perms()
+  ; CHECK-NEXT: ret i64 0
+}
+
+define i64 @null_get_flags() #1 {
+  %ret = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* null)
+  ret i64 %ret
+  ; CHECK-LABEL: @null_get_flags()
   ; CHECK-NEXT: ret i64 0
 }
 
@@ -117,6 +125,10 @@ define void @infer_values_from_null_set_offset() #1 {
   %perms_check = tail call i64 @check_fold(i64 %perms)
   ; CHECK:  %perms_check = tail call i64 @check_fold(i64 0)
 
+  %flags = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %with_offset)
+  %flags_check = tail call i64 @check_fold(i64 %flags)
+  ; CHECK:  %flags_check = tail call i64 @check_fold(i64 0)
+
   %tag = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %with_offset)
   %tag.ext = zext i1 %tag to i64
   %tag_check = tail call i64 @check_fold(i64 %tag.ext)
@@ -160,6 +172,10 @@ define void @infer_values_from_null_set_address() #1 {
   %perms = tail call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* %with_offset)
   %perms_check = tail call i64 @check_fold(i64 %perms)
   ; CHECK:  %perms_check = tail call i64 @check_fold(i64 0)
+
+  %flags = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %with_offset)
+  %flags_check = tail call i64 @check_fold(i64 %flags)
+  ; CHECK:  %flags_check = tail call i64 @check_fold(i64 0)
 
   %tag = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %with_offset)
   %tag.ext = zext i1 %tag to i64
@@ -213,6 +229,11 @@ define void @infer_values_from_arg_set_address(i8 addrspace(200)* %arg) #1 {
   ; CHECK: %perms = tail call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* %with_offset)
   ; CHECK: %perms_check = tail call i64 @check_fold(i64 %perms)
 
+  %flags = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %with_offset)
+  %flags_check = tail call i64 @check_fold(i64 %flags)
+  ; CHECK: %flags = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %with_offset)
+  ; CHECK: %flags_check = tail call i64 @check_fold(i64 %flags)
+
   %tag = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %with_offset)
   %tag.ext = zext i1 %tag to i64
   %tag_check = tail call i64 @check_fold(i64 %tag.ext)
@@ -265,6 +286,11 @@ define void @infer_values_from_arg_set_offset(i8 addrspace(200)* %arg) #1 {
   %perms_check = tail call i64 @check_fold(i64 %perms)
   ; CHECK: %perms = tail call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)* %with_offset)
   ; CHECK: %perms_check = tail call i64 @check_fold(i64 %perms)
+
+  %flags = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %with_offset)
+  %flags_check = tail call i64 @check_fold(i64 %flags)
+  ; CHECK: %flags = tail call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %with_offset)
+  ; CHECK: %flags_check = tail call i64 @check_fold(i64 %flags)
 
   %tag = tail call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)* %with_offset)
   %tag.ext = zext i1 %tag to i64

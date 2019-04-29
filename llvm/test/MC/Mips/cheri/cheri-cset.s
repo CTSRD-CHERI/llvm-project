@@ -14,6 +14,9 @@
 # CHECK: candperm	$c1, $c2, $12
 # CHECK-SAME: encoding: [0x48,0x01,0x13,0x0d]
 	candperm	$c1, $c2, $t0
+# CHECK: csetflags	$c1, $c2, $12
+# CHECK-SAME: encoding: [0x48,0x01,0x13,0x0e]
+	csetflags	$c1, $c2, $t0
 # CHECK: csetbounds	$c1, $c2, $12
 # CHECK-SAME: encoding: [0x48,0x01,0x13,0x08]
 	csetbounds	$c1, $c2, $t0

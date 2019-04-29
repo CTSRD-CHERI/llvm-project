@@ -25,6 +25,12 @@ define i64 @test(i8 addrspace(200)* %rfoo) #0 {
   %r10 = load i64, i64* %rx, align 8
   %r11 = and i64 %r10, %r9
   store i64 %r11, i64* %rx, align 8
+  %rgetflags1 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
+  ; CHECK: cgetflags
+  %rgetflags2 = call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)* %rgetflags1)
+  %rgetflags3 = load i64, i64* %rx, align 8
+  %rgetflags4 = and i64 %rgetflags3, %rgetflags2
+  store i64 %rgetflags4, i64* %rx, align 8
   %r12 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
   ; CHECK: cgettype
   %r13 = call i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)* %r12)
@@ -44,6 +50,9 @@ define i64 @test(i8 addrspace(200)* %rfoo) #0 {
   %r25 = call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)* %r24, i64 12)
   store i8 addrspace(200)* %r25, i8 addrspace(200)** getelementptr inbounds ([12 x i8 addrspace(200)*], [12 x i8 addrspace(200)*]* @results, i32 0, i64 1), align 32
   %r26 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
+  ; CHECK: csetflags
+  %r27 = call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)* %r26, i64 0)
+  store i8 addrspace(200)* %r27, i8 addrspace(200)** getelementptr inbounds ([12 x i8 addrspace(200)*], [12 x i8 addrspace(200)*]* @results, i32 0, i64 2), align 32
   %r30 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
   %r31 = load i8 addrspace(200)*, i8 addrspace(200)** %r1, align 32
   ; CHECK: cseal
@@ -87,6 +96,9 @@ declare i64 @llvm.cheri.cap.length.get.i64(i8 addrspace(200)*) #1
 declare i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind readnone
+declare i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)*) #1
+
+; Function Attrs: nounwind readnone
 declare i64 @llvm.cheri.cap.type.get.i64(i8 addrspace(200)*) #1
 
 ; Function Attrs: nounwind readnone
@@ -100,6 +112,9 @@ declare i8 addrspace(200)* @llvm.cheri.cap.length.set(i8 addrspace(200)*, i64) #
 
 ; Function Attrs: nounwind readnone
 declare i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)*, i64) #1
+
+; Function Attrs: nounwind readnone
+declare i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)*, i64) #1
 
 ; Function Attrs: nounwind readnone
 declare i8 addrspace(200)* @llvm.cheri.cap.type.set(i8 addrspace(200)*, i64) #1

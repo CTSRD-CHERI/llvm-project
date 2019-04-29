@@ -20,6 +20,10 @@
 // PTRS: ret i16 0
 // PTRS: define i8* @cheri_perms_and(i8* readnone returned{{( %.+)?}}, i16 zeroext
 // PTRS: ret i8*
+// PTRS: define zeroext i16 @cheri_flags_get(i8* nocapture readnone
+// PTRS: ret i16 0
+// PTRS: define i8* @cheri_flags_set(i8* readnone returned{{( %.+)?}}, i16 zeroext
+// PTRS: ret i8*
 // PTRS: define zeroext i1 @cheri_tag_get(i8* nocapture readnone
 // PTRS: ret i1 false
 // PTRS: define zeroext i1 @cheri_sealed_get(i8* nocapture readnone
@@ -60,6 +64,10 @@
 // CAPS: call i64 @llvm.cheri.cap.perms.get.i64(i8 addrspace(200)*
 // CAPS: define i8 addrspace(200)* @cheri_perms_and(i8 addrspace(200)* readnone{{( %.+)?}}, i16 zeroext
 // CAPS: call i8 addrspace(200)* @llvm.cheri.cap.perms.and.i64(i8 addrspace(200)*{{( %.+)?}}, i64
+// CAPS: define zeroext i16 @cheri_flags_get(i8 addrspace(200)*
+// CAPS: call i64 @llvm.cheri.cap.flags.get.i64(i8 addrspace(200)*
+// CAPS: define i8 addrspace(200)* @cheri_flags_set(i8 addrspace(200)* readnone{{( %.+)?}}, i16 zeroext
+// CAPS: call i8 addrspace(200)* @llvm.cheri.cap.flags.set.i64(i8 addrspace(200)*{{( %.+)?}}, i64
 // CAPS: define zeroext i1 @cheri_tag_get(i8 addrspace(200)* readnone
 // CAPS: call i1 @llvm.cheri.cap.tag.get(i8 addrspace(200)*
 // CAPS: define zeroext i1 @cheri_sealed_get(i8 addrspace(200)* readnone
