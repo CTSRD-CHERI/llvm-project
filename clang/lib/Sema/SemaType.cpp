@@ -2227,6 +2227,14 @@ QualType Sema::BuildArrayType(QualType T, ArrayType::ArraySizeModifier ASM,
     return QualType();
   }
 
+  // The array size type can be an intcap/uintcap. In this case we will perform
+  // an implicit conversion to an integer type.
+  if (ArraySize)
+    if (ArraySize->getType()->isSpecificBuiltinType(BuiltinType::UIntCap) ||
+        ArraySize->getType()->isSpecificBuiltinType(BuiltinType::IntCap))
+      ArraySize = ImpCastExprToType(ArraySize, Context.UnsignedLongTy,
+                                    CK_IntegralCast).get();
+
   llvm::APSInt ConstVal(Context.getTypeSize(Context.getSizeType()));
   if (!ArraySize) {
     if (ASM == ArrayType::Star)
