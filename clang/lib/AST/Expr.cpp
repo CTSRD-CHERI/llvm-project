@@ -1628,6 +1628,11 @@ bool CastExpr::CastConsistency() const {
   case CK_DerivedToBaseMemberPointer:
   case CK_BaseToDerived:
   case CK_BaseToDerivedMemberPointer:
+    if (auto PT = getType()->getAs<PointerType>()) {
+      assert(
+          PT->isCHERICapability() ==
+          getSubExpr()->getType()->getAs<PointerType>()->isCHERICapability());
+    }
     assert(!path_empty() && "Cast kind should have a base path!");
     break;
 

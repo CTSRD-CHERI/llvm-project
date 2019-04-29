@@ -2668,7 +2668,10 @@ Sema::PerformObjectMemberConversion(Expr *From,
                             : FromType.getAddressSpace());
 
     if (FromPtrType) {
-      DestType = Context.getPointerType(DestRecordType);
+      DestType = Context.getPointerType(DestRecordType,
+                                        FromPtrType->isCHERICapability()
+                                            ? ASTContext::PIK_Capability
+                                            : ASTContext::PIK_Integer);
       FromRecordType = FromPtrType->getPointeeType();
       PointerConversions = true;
     } else {
@@ -2740,7 +2743,10 @@ Sema::PerformObjectMemberConversion(Expr *From,
         return ExprError();
 
       if (PointerConversions)
-        QType = Context.getPointerType(QType);
+        QType = Context.getPointerType(QType,
+                                       FromType->isCHERICapabilityType(Context)
+                                           ? ASTContext::PIK_Capability
+                                           : ASTContext::PIK_Integer);
       From = ImpCastExprToType(From, QType, CK_UncheckedDerivedToBase,
                                VK, &BasePath).get();
 
@@ -2777,7 +2783,10 @@ Sema::PerformObjectMemberConversion(Expr *From,
 
       QualType UType = URecordType;
       if (PointerConversions)
-        UType = Context.getPointerType(UType);
+        UType = Context.getPointerType(UType,
+                                       FromType->isCHERICapabilityType(Context)
+                                           ? ASTContext::PIK_Capability
+                                           : ASTContext::PIK_Integer);
       From = ImpCastExprToType(From, UType, CK_UncheckedDerivedToBase,
                                VK, &BasePath).get();
       FromType = UType;
