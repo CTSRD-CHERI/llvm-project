@@ -752,7 +752,8 @@ class Configuration(object):
 
         if 'libcpp-no-dynamic-test-helper' in self.config.available_features:
             self.cxx.compile_flags += ['-DLIBCXX_FILESYSTEM_DYNAMIC_TEST_HELPER=this should not compile']
-            self.cxx.compile_flags += ['-DLIBCXX_FILESYSTEM_DYNAMIC_TEST_ROOT=do no use this']
+            self.cxx.compile_flags += ['-DLIBCXX_SKIP_DYNAMIC_FILESYSTEM_TESTS=1']
+            self.cxx.compile_flags += ['-ULIBCXX_FILESYSTEM_DYNAMIC_TEST_ROOT']
             return
 
         dynamic_env = os.path.join(self.config.test_exec_root,
