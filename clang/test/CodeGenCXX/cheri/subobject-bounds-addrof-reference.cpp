@@ -21,7 +21,7 @@ char *pointer_from_value(char ref) {
 
 char& get_reference();
 char* pointer_from_ref_call() {
-  return &get_reference(); // expected-remark{{not setting bounds for reference to 'char' (source is a C++ reference and therefore should already have sub-object bounds)}}
+  return &get_reference(); // expected-remark{{not setting bounds for pointer to 'char' (source is a C++ reference and therefore should already have sub-object bounds)}}
 }
 
 char &ref_from_ptr(char *ptr) {
