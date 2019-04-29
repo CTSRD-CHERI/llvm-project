@@ -1060,6 +1060,10 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     return cannotSetBounds(*this, E, Ty, Kind, "incomplete type");
   }
 
+  if (Ty->isDependentType()) {
+    return cannotSetBounds(*this, E, Ty, Kind, "dependent type");
+  }
+
   if (Ty->isFunctionType()) {
     return cannotSetBounds(*this, E, Ty, Kind,
                            Kind == SubObjectBoundsKind::Reference

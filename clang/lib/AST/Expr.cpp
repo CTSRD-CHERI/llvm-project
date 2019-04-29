@@ -4514,7 +4514,8 @@ QualType Expr::getRealReferenceType(ASTContext &Ctx,
       }
     }
   } else if (const auto *CE = dyn_cast<const CallExpr>(E)) {
-    return CE->getCallReturnType(Ctx);
+    if (!CE->isTypeDependent() && !CE->isValueDependent())
+      return CE->getCallReturnType(Ctx);
   } else if (const auto *ECE = dyn_cast<const ExplicitCastExpr>(E)) {
     return ECE->getTypeAsWritten();
   }
