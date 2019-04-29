@@ -121,3 +121,16 @@ void test_vector_impl(const vector<int> &const_vec, vector<int> &mutable_vec) {
   // expected-remark@-1{{not setting bounds for reference to 'const vector<int>' (source is a C++ reference and therefore should already have sub-object bounds)}}
   // expected-remark@-2{{not setting bounds for reference to 'vector<int>' (source is a C++ reference and therefore should already have sub-object bounds)}}
 }
+
+
+// This previously caused crashes
+class c {
+public:
+  c &operator*();
+  c *operator->() { return &**this; } // expected-remark{{not setting bounds for pointer to 'c' (source is a C++ reference and therefore should already have sub-object bounds)}}
+  void func();
+};
+
+void d(c e) {
+  e->func();
+}

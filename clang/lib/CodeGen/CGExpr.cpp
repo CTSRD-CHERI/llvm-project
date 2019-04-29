@@ -1139,7 +1139,8 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
         if (auto FD = CE->getDirectCallee()) {
           if (auto CXXMD = dyn_cast<CXXMethodDecl>(FD)) {
             bool KnownBad = CXXMD->getOverloadedOperator() == OO_Subscript;
-            if (!KnownBad) {
+            auto Name = CXXMD->getDeclName();
+            if (!KnownBad && Name.isIdentifier()) {
               // Handle taking the address of .at(N)/.front()/.back()
               // NumParams == 1 for .at() due to implicit this not being counted
               auto ExpectedParams =
