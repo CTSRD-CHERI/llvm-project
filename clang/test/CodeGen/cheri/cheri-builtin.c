@@ -2,6 +2,7 @@
 
 // RUN: %cheri_cc1 -o - -O0 -emit-llvm %s | FileCheck %s
 // FIXME: we shouldn't really be testing ASM output in clang
+// RUN: %cheri_cc1 -o - -O0 -S %s
 // RUN: %cheri_cc1 -o - -O0 -S %s | FileCheck %s -check-prefix=ASM
 void * __capability results[12];
 
@@ -106,4 +107,14 @@ void buildcap(void * __capability auth, __intcap_t bits) {
   // ASM: ccopytype $c{{[0-9]+}}, $c{{[0-9]+}}, $c{{[0-9]+}}
   void * __capability condseal = __builtin_cheri_conditional_seal(auth, tagged);
   // ASM: ccseal $c{{[0-9]+}}, $c{{[0-9]+}}, $c{{[0-9]+}}
+}
+
+
+int crap_cram(int len) {
+  return __builtin_cheri_round_architectural_precision(len) & __builtin_cheri_representable_alignment_mask(len);
+  // CHECK-LABEL: @crap_cram(
+  // CHECK: call i64 @llvm.cheri.round.architectural.precision.i64.i64(
+  // CHECK: call i64 @llvm.cheri.representable.alignment.mask.i64.i64(
+  // ASM: croundarchitecturalprecision	${{[0-9]+}}, ${{[0-9]+}}
+  // ASM: crepresentablealignmentmask	${{[0-9]+}}, ${{[0-9]+}}
 }

@@ -3665,6 +3665,18 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
         CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_get, SizeTy),
         {EmitScalarExpr(E->getArg(0))}));
 
+  // Round to capability precision:
+  // TODO: should we handle targets that don't have any precision constraints
+  // here or in the backend?
+  case Builtin::BI__builtin_cheri_round_architectural_precision:
+    return RValue::get(Builder.CreateCall(
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_round_architectural_precision, {SizeTy, SizeTy}),
+        {EmitScalarExpr(E->getArg(0))}));
+  case Builtin::BI__builtin_cheri_representable_alignment_mask:
+    return RValue::get(Builder.CreateCall(
+        CGM.getIntrinsic(llvm::Intrinsic::cheri_representable_alignment_mask, {SizeTy, SizeTy}),
+        {EmitScalarExpr(E->getArg(0))}));
+
   case Builtin::BI__builtin_cheri_callback_create: {
     StringRef ClassName = cast<StringLiteral>(E->getArg(0))->getString();
     auto Fn = cast<DeclRefExpr>(E->getArg(2));

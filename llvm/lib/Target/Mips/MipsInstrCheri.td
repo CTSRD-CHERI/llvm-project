@@ -357,7 +357,19 @@ def CClearTag  : CheriFmt2Op<0xb, (outs CheriOpnd:$r1), (ins CheriOpnd:$r2),
                               "ccleartag\t$r1, $r2",
                               [(set CheriOpnd:$r1, (int_cheri_cap_tag_clear CheriOpnd:$r2))]>;
 def CSetAddr : CheriFmtCSet<0x22, "addr", "address">;
+
+// CRoundArchitecturalPrecision
+def CRAP : CheriFmt2Op<0x10, (outs GPR64Opnd:$r1), (ins GPR64Opnd:$r2),
+                       "croundarchitecturalprecision\t$r1, $r2",
+                       [(set GPR64Opnd:$r1, (int_cheri_round_architectural_precision GPR64Opnd:$r2))]>;
+// CRepresentableAlignmentMask
+def CRAM : CheriFmt2Op<0x11, (outs GPR64Opnd:$r1), (ins GPR64Opnd:$r2),
+                       "crepresentablealignmentmask\t$r1, $r2",
+                       [(set GPR64Opnd:$r1, (int_cheri_representable_alignment_mask GPR64Opnd:$r2))]>;
 }
+// CRAM/CRAP aliases
+def : InstAlias<"crap $dst, $len", (CRAP GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
+def : InstAlias<"cram $dst, $len", (CRAM GPR64Opnd:$dst, GPR64Opnd:$len), 0>;
 
 // Convert CIncOffsets of the difference to csetaddr
 def : Pat<(CapRegType (int_cheri_cap_offset_increment CheriOpnd:$src, (sub GPR64Opnd:$addr, (int_cheri_cap_address_get CheriOpnd:$src)))),

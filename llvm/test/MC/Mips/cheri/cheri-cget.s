@@ -221,3 +221,21 @@ old_cset_c4 28
 # CHECK-SAME: encoding: [0x48,0x04,0x00,0x13]
 # DUMP-NEXT: 48 04 00 13 cgetnull_old $c4
 	cfromddc	$c4, $zero
+
+# crap+cram:
+    CRepresentableAlignmentMask $6, $7
+    cram $5, $6
+    # CHECK: crepresentablealignmentmask	$6, $7 # encoding: [0x48,0x06,0x3c,0x7f]
+    # DUMP-NEXT: 48 06 3c 7f crepresentablealignmentmask $6, $7
+    # CHECK-NEXT: crepresentablealignmentmask	$5, $6 # encoding: [0x48,0x05,0x34,0x7f]
+    # DUMP-NEXT: 48 05 34 7f crepresentablealignmentmask $5, $6
+    CRoundArchitecturalPrecision $6, $7
+    crap $5, $6
+    # CHECK-NEXT: croundarchitecturalprecision	$6, $7 # encoding: [0x48,0x06,0x3c,0x3f]
+    # DUMP-NEXT: 48 06 3c 3f croundarchitecturalprecision $6, $7
+    # CHECK-NEXT: croundarchitecturalprecision	$5, $6 # encoding: [0x48,0x05,0x34,0x3f]
+    # DUMP-NEXT: 48 05 34 3f croundarchitecturalprecision $5, $6
+
+    teq $zero, $zero
+    # Check that we didn't forget to add a check line for some instruction:
+    # DUMP-NEXT: 00 00 00 34 teq $zero, $zero
