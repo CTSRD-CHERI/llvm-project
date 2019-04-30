@@ -2353,6 +2353,7 @@ Value *ScalarExprEmitter::VisitCastExpr(CastExpr *CE) {
       if (const VarDecl *VD = dyn_cast<VarDecl>(DRE->getDecl()))
         if (const ReferenceType *RT = dyn_cast<ReferenceType>(VD->getType())) {
           // RT is guaranteed to be a capability
+          assert(RT->isCHERICapability());
           Src = EmitLValue(E).getPointer();
         }
 

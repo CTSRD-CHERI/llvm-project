@@ -1329,7 +1329,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
   assert(Ty->isConstantSizeType() && "unexpected variable size type.");
   // Zero-size structs are okay, but any other zero-size type should already
   // have benn handled:
-  assert(Ty->isRecordType() || TypeSize != 0 && "Unknown size should already have been handled.");
+  assert((Ty->isRecordType() || TypeSize != 0) && "Unknown size should already have been handled.");
 
   if (BoundsMode >= LangOptions::CBM_EverywhereUnsafe) {
     CHERI_BOUNDS_DBG(<< "Bounds mode is everywhere-unsafe -> ");

@@ -340,7 +340,10 @@ static bool isKnownUntaggedCapability(const Value *V, unsigned Depth,
     bool Purecap = DL && isCheriPointer(DL->getAllocaAddrSpace(), DL);
     DEBUG_TAG("is nonconst inttoptr in" << (Purecap ? "purecap" : "hybrid")
                                         << " ABI -> " << Purecap);
-    return Purecap;
+    bool IsZero = false;
+    if (auto Constant = dyn_cast<ConstantInt>(ITP->getOperand(0)))
+      IsZero = Constant->isNullValue();
+    return Purecap || IsZero;
   } else if (const auto *CE = dyn_cast<ConstantExpr>(V)) {
     if (CE->getOpcode() == Instruction::CastOps::IntToPtr) {
       // IntToPtr returns untagged values in the pure capability ABI
