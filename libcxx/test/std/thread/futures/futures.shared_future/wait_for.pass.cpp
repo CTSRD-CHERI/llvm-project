@@ -20,6 +20,8 @@
 #include <future>
 #include <cassert>
 
+#include "test_macros.h"
+
 typedef std::chrono::milliseconds ms;
 
 void func1(std::promise<int> p)
@@ -46,7 +48,7 @@ void func5(std::promise<void> p)
 int main(int, char**)
 {
     ms Tolerance = ms(5);
-#if defined(TEST_HAS_SANITIZERS) || defined(TEST_SLOW_HOST)
+#if defined(TEST_HAS_SANITIZERS) || TEST_SLOW_HOST()
     Tolerance *= 4;
 #endif
     typedef std::chrono::high_resolution_clock Clock;

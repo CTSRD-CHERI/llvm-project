@@ -23,7 +23,7 @@
 
 typedef std::chrono::milliseconds ms;
 
-#if !defined(TEST_SLOW_HOST)
+#if !TEST_SLOW_HOST()
 static ms WaitTime = ms(250);
 #else
 static ms WaitTime = ms(750);
