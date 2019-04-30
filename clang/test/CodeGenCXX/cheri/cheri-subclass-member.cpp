@@ -1,5 +1,5 @@
-// RUN: %cheri_cc1 -ast-dump -o /dev/null %s 2>&1 | %cheri_FileCheck %s -check-prefix AST
-// RUN: %cheri_cc1 -emit-llvm -o - %s | FileCheck %s
+// RUN: %cheri_cc1 -ast-dump -o /dev/null %s 2>&1 | FileCheck %s -check-prefix AST
+// RUN: %cheri_cc1 -emit-llvm -o - %s | %cheri_FileCheck %s
 
 // Check that a UncheckedDerivedToBase cast does not remove the __capability qualifier
 
