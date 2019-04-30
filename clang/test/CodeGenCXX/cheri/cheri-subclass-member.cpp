@@ -3,7 +3,7 @@
 
 // Check that a UncheckedDerivedToBase cast does not remove the __capability qualifier
 
-// AST:      `-FunctionDecl {{.+}} line:25:27 func 'const long & __capability ()'
+// AST:      `-FunctionDecl {{.+}} func 'const long & __capability ()'
 // AST-NEXT:  `-CompoundStmt
 // AST-NEXT:   `-ReturnStmt
 // AST-NEXT:    `-MemberExpr {{.+}} 'const long' lvalue ->size

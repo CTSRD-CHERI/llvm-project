@@ -304,7 +304,6 @@ Address CodeGenFunction::GetAddressOfBaseClass(
   llvm::Type *BasePtrTy =
       ConvertType((PathEnd[-1])->getType())
           ->getPointerTo(Value.getType()->getPointerAddressSpace());
-  // XXAR: or should this be CGM.getTargetCodeGenInfo().getDefaultAS()?
 
   QualType DerivedTy = getContext().getRecordType(Derived);
   CharUnits DerivedAlign = CGM.getClassPointerAlignment(Derived);
