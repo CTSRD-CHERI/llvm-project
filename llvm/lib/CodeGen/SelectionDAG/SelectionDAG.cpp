@@ -1210,6 +1210,8 @@ SDValue SelectionDAG::getConstant(const ConstantInt &Val, const SDLoc &DL,
   if (VT.isFatPointer()) {
     const ConstantInt *V = ConstantInt::get(*Context, Val.getValue().trunc(64));
     SDValue IntVal = getConstant(*V, DL, MVT::i64, isT);
+    assert(!isT && "Cannot create INTTOPTR targetconstant");
+    // TODO: For MIPS we could copy from CNULL for value 0
     return getNode(ISD::INTTOPTR, SDLoc(), VT, IntVal);
   }
   assert(VT.isInteger() && "Cannot create FP integer constant!");

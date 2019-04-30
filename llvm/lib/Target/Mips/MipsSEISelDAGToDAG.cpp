@@ -577,7 +577,7 @@ bool MipsSEDAGToDAGISel::selectAddrFrameIndex(SDValue Addr, SDValue &Base,
     EVT ValTy = Addr.getValueType();
 
     Base   = CurDAG->getTargetFrameIndex(FIN->getIndex(), ValTy);
-    Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), ValTy);
+    Offset = CurDAG->getIntPtrConstant(0, SDLoc(Addr), true);
     return true;
   }
   return false;
@@ -613,9 +613,7 @@ bool MipsSEDAGToDAGISel::selectAddrFrameIndexOffset(
         if (OffsetToAlignment(CN->getZExtValue(), 1ull << ShiftAmount) != 0)
           return false;
       }
-
-      Offset = CurDAG->getTargetConstant(CN->getZExtValue(), SDLoc(Addr),
-                                         ValTy);
+      Offset = CurDAG->getIntPtrConstant(CN->getZExtValue(), SDLoc(Addr), true);
       return true;
     }
   }
@@ -677,7 +675,7 @@ bool MipsSEDAGToDAGISel::selectAddrRegImm(SDValue Addr, SDValue &Base,
 bool MipsSEDAGToDAGISel::selectAddrDefault(SDValue Addr, SDValue &Base,
                                            SDValue &Offset) const {
   Base = Addr;
-  Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), Addr.getValueType());
+  Offset = CurDAG->getIntPtrConstant(0, SDLoc(Addr), true);
   return true;
 }
 

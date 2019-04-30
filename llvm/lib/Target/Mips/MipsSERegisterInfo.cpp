@@ -294,6 +294,8 @@ void MipsSERegisterInfo::eliminateFI(MachineBasicBlock::iterator II,
       break;
     case Mips::CIncOffset:
       break;
+    case Mips::INLINEASM:
+      break;
     default:
       llvm_unreachable("Unsupported instruction in eliminateFI!");
     }
