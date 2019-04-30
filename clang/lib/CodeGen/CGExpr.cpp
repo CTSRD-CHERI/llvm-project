@@ -1434,7 +1434,7 @@ CodeGenFunction::EmitReferenceBindingToExpr(const Expr *E) {
   // there could be a mode where references are capabilities but pointers aren't
   if (CGM.getTarget().areAllPointersCapabilities() && !Ty->isFunctionType())
     Value = setCHERIBoundsOnReference(Value, Ty, E);
-  return RValue::get(Value);
+  return RValue::get(Value, LV.getAlignment().getQuantity());
 }
 
 

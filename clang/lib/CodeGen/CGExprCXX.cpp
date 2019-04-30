@@ -276,10 +276,12 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorMemberCallExpr(
         LValue RHS = isa<CXXOperatorCallExpr>(CE)
                          ? MakeNaturalAlignAddrLValue(
                                (*RtlArgs)[0].getRValue(*this).getScalarVal(),
-                               (*(CE->arg_begin() + 1))->getType())
+                               (*(CE->arg_begin() + 1))->getType(),
+                               (*RtlArgs)[0].getRValue(*this).getAlignment())
                          : EmitLValue(*CE->arg_begin());
         EmitAggregateAssign(This, RHS, CE->getType());
-        return RValue::get(This.getPointer());
+        return RValue::get(This.getPointer(),
+                           This.getAlignment().getQuantity());
       }
       llvm_unreachable("unknown trivial member function");
     }

@@ -60,6 +60,12 @@ public:
     return V1.getPointer();
   }
 
+  unsigned getAlignment() {
+    assert(isScalar() && "Not a scalar!");
+    auto align = reinterpret_cast<uintptr_t>(V2.getPointer());
+    return align >> AggAlignShift;
+  }
+
   /// getComplexVal - Return the real/imag components of this complex value.
   ///
   std::pair<llvm::Value *, llvm::Value *> getComplexVal() const {
@@ -82,10 +88,12 @@ public:
     return get(nullptr);
   }
 
-  static RValue get(llvm::Value *V) {
+  static RValue get(llvm::Value *V, unsigned Alignment = 0) {
     RValue ER;
     ER.V1.setPointer(V);
     ER.V1.setInt(Scalar);
+    ER.V2.setPointer(
+        reinterpret_cast<llvm::Value *>(Alignment << AggAlignShift));
     ER.V2.setInt(false);
     return ER;
   }

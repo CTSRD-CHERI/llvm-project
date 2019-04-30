@@ -180,10 +180,14 @@ CharUnits CodeGenFunction::getNaturalTypeAlignment(QualType T,
   return Alignment;
 }
 
-LValue CodeGenFunction::MakeNaturalAlignAddrLValue(llvm::Value *V, QualType T) {
+LValue CodeGenFunction::MakeNaturalAlignAddrLValue(llvm::Value *V, QualType T,
+                                                   unsigned MinAlign) {
   LValueBaseInfo BaseInfo;
   TBAAAccessInfo TBAAInfo;
-  CharUnits Alignment = getNaturalTypeAlignment(T, &BaseInfo, &TBAAInfo);
+  unsigned NaturalAlign =
+      getNaturalTypeAlignment(T, &BaseInfo, &TBAAInfo).getQuantity();
+  CharUnits Alignment =
+      CharUnits::fromQuantity(std::max(MinAlign, NaturalAlign));
   return LValue::MakeAddr(Address(V, Alignment), T, getContext(), BaseInfo,
                           TBAAInfo);
 }
