@@ -819,7 +819,7 @@ public:
       if (Offset == 0)
         return Ptr;
       // Assume that address space 0 has the range of any pointer.
-      OffsetVT = MVT::getIntegerVT(getDataLayout().getIndexSize(0));
+      OffsetVT = MVT::getIntegerVT(getDataLayout().getIndexSizeInBits(0));
     }
     return getPointerAdd(dl, Ptr, getConstant(Offset, dl, OffsetVT), Flags);
   }
