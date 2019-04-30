@@ -5272,7 +5272,8 @@ RValue CodeGenFunction::EmitRValueForField(LValue LV,
     // This routine is used to load fields one-by-one to perform a copy, so
     // don't load reference fields.
     if (FD->getType()->isReferenceType())
-      return RValue::get(FieldLV.getPointer());
+      return RValue::get(FieldLV.getPointer(),
+                         FieldLV.getAlignment().getQuantity());
     return EmitLoadOfLValue(FieldLV, Loc);
   }
   llvm_unreachable("bad evaluation kind");

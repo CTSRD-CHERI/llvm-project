@@ -1490,7 +1490,9 @@ static void EnterNewDeleteCleanup(CodeGenFunction &CGF,
 
   // Otherwise, we need to save all this stuff.
   DominatingValue<RValue>::saved_type SavedNewPtr =
-    DominatingValue<RValue>::save(CGF, RValue::get(NewPtr.getPointer()));
+      DominatingValue<RValue>::save(
+          CGF, RValue::get(NewPtr.getPointer(),
+                           NewPtr.getAlignment().getQuantity()));
   DominatingValue<RValue>::saved_type SavedAllocSize =
     DominatingValue<RValue>::save(CGF, RValue::get(AllocSize));
 
@@ -1587,7 +1589,9 @@ llvm::Value *CodeGenFunction::EmitCXXNewExpr(const CXXNewExpr *E) {
     if (E->getOperatorDelete() &&
         !E->getOperatorDelete()->isReservedGlobalPlacementOperator()) {
       allocatorArgs.add(RValue::get(allocSize), getContext().getSizeType());
-      allocatorArgs.add(RValue::get(allocation.getPointer()), arg->getType());
+      allocatorArgs.add(RValue::get(allocation.getPointer(),
+                                    allocation.getAlignment().getQuantity()),
+                        arg->getType());
     }
 
   } else {
