@@ -618,6 +618,7 @@ static bool UpgradeIntrinsicFunction1(Function *F, Function *&NewFn) {
                                         F->getReturnType());
       return true;
     }
+    break;
   case 'i':
   case 'l': {
     bool IsLifetimeStart = Name.startswith("lifetime.start");
