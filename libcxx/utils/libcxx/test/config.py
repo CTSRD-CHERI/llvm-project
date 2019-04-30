@@ -751,7 +751,7 @@ class Configuration(object):
         self.cxx.compile_flags += ['-DLIBCXX_FILESYSTEM_STATIC_TEST_ROOT="%s"' % static_env]
 
         if 'libcpp-no-dynamic-test-helper' in self.config.available_features:
-            self.cxx.compile_flags += ['-DLIBCXX_FILESYSTEM_DYNAMIC_TEST_HELPER=this should not compile']
+            self.cxx.compile_flags += ['-DLIBCXX_FILESYSTEM_DYNAMIC_TEST_HELPER=this_should_not_compile']
             self.cxx.compile_flags += ['-DLIBCXX_SKIP_DYNAMIC_FILESYSTEM_TESTS=1']
             self.cxx.compile_flags += ['-ULIBCXX_FILESYSTEM_DYNAMIC_TEST_ROOT']
             return
