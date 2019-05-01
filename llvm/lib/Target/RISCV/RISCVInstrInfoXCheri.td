@@ -222,3 +222,128 @@ def : InstAlias<"sc $rs2, (${rs1})",
                 (SC_128  GPCR:$rs2, GPR:$rs1, 0)>;
 }
 }
+
+//===----------------------------------------------------------------------===//
+// Pseudo-instructions and codegen patterns
+//===----------------------------------------------------------------------===//
+
+class PatGpcrGpr<SDPatternOperator OpNode, RVInstR Inst>
+    : Pat<(OpNode GPCR:$rs1, GPR:$rs2), (Inst GPCR:$rs1, GPR:$rs2)>;
+
+class PatGpcrSimm12<SDPatternOperator OpNode, RVInstI Inst>
+    : Pat<(OpNode GPCR:$rs1, simm12:$imm12), (Inst GPCR:$rs1, simm12:$imm12)>;
+
+/// Capability-Modification Instructions
+
+def : PatGpcrGpr<ptradd, CIncOffset>;
+def : PatGpcrSimm12<ptradd, CIncOffsetImm>;
+
+/// Pointer-Arithmetic Instructions
+
+def : Pat<(inttoptr GPR:$rs2), (CFromPtr DDC, $rs2)>;
+def : Pat<(ptrtoint GPCR:$rs1), (CToPtr $rs1, DDC)>;
+
+/// Memory-Access with Explicit Address Type Instructions
+
+multiclass CheriLdPat<PatFrag LoadOp, RVInst Inst, RegisterClass AddrTy> {
+  def : Pat<(LoadOp AddrTy:$rs1), (Inst AddrTy:$rs1)>;
+}
+
+multiclass CheriStPat<PatFrag StoreOp, RVInst Inst, RegisterClass StTy,
+                      RegisterClass AddrTy> {
+  def : Pat<(StoreOp StTy:$rs2, AddrTy:$rs1), (Inst StTy:$rs2, AddrTy:$rs1)>;
+}
+
+/// DDC-relative loads
+
+let Predicates = [HasCheri] in {
+defm : CheriLdPat<sextloadi8, LBddc, GPR>;
+defm : CheriLdPat<extloadi8, LBddc, GPR>;
+defm : CheriLdPat<sextloadi16, LHddc, GPR>;
+defm : CheriLdPat<extloadi16, LHddc, GPR>;
+defm : CheriLdPat<zextloadi8, LBUddc, GPR>;
+defm : CheriLdPat<zextloadi16, LHUddc, GPR>;
+}
+
+let Predicates = [HasCheri, IsRV32] in {
+defm : CheriLdPat<load, LWddc, GPR>;
+defm : CheriLdPat<load, LCddc_64, GPR>;
+}
+
+let Predicates = [HasCheri, IsRV64] in {
+defm : CheriLdPat<sextloadi32, LWddc, GPR>;
+defm : CheriLdPat<extloadi32, LWddc, GPR>;
+defm : CheriLdPat<load, LDddc, GPR>;
+defm : CheriLdPat<zextloadi32, LWUddc, GPR>;
+defm : CheriLdPat<load, LCddc_128, GPR>;
+}
+
+/// DDC-relative stores
+
+let Predicates = [HasCheri] in {
+defm : CheriStPat<truncstorei8, SBddc, GPR, GPR>;
+defm : CheriStPat<truncstorei16, SHddc, GPR, GPR>;
+}
+
+let Predicates = [HasCheri, IsRV32] in {
+defm : CheriStPat<store, SWddc, GPR, GPR>;
+defm : CheriStPat<store, SCddc_64, GPCR, GPR>;
+}
+
+let Predicates = [HasCheri, IsRV64] in {
+defm : CheriStPat<truncstorei32, SWddc, GPR, GPR>;
+defm : CheriStPat<store, SDddc, GPR, GPR>;
+defm : CheriStPat<store, SCddc_128, GPCR, GPR>;
+}
+
+/// Capability loads
+
+let Predicates = [HasCheri] in {
+defm : CheriLdPat<sextloadi8, LBcap, GPCR>;
+defm : CheriLdPat<extloadi8, LBcap, GPCR>;
+defm : CheriLdPat<sextloadi16, LHcap, GPCR>;
+defm : CheriLdPat<extloadi16, LHcap, GPCR>;
+defm : CheriLdPat<zextloadi8, LBUcap, GPCR>;
+defm : CheriLdPat<zextloadi16, LHUcap, GPCR>;
+}
+
+let Predicates = [HasCheri, IsRV32] in {
+defm : CheriLdPat<load, LWcap, GPCR>;
+defm : CheriLdPat<load, LCcap_64, GPCR>;
+}
+
+let Predicates = [HasCheri, IsRV64] in {
+defm : CheriLdPat<sextloadi32, LWcap, GPCR>;
+defm : CheriLdPat<extloadi32, LWcap, GPCR>;
+defm : CheriLdPat<load, LDcap, GPCR>;
+defm : CheriLdPat<zextloadi32, LWUcap, GPCR>;
+defm : CheriLdPat<load, LCcap_128, GPCR>;
+}
+
+/// Capability stores
+
+let Predicates = [HasCheri] in {
+defm : CheriStPat<truncstorei8, SBcap, GPR, GPCR>;
+defm : CheriStPat<truncstorei16, SHcap, GPR, GPCR>;
+}
+
+let Predicates = [HasCheri, IsRV32] in {
+defm : CheriStPat<store, SWcap, GPR, GPCR>;
+defm : CheriStPat<store, SCcap_64, GPCR, GPCR>;
+}
+
+let Predicates = [HasCheri, IsRV64] in {
+defm : CheriStPat<truncstorei32, SWcap, GPR, GPCR>;
+defm : CheriStPat<store, SDcap, GPR, GPCR>;
+defm : CheriStPat<store, SCcap_128, GPCR, GPCR>;
+}
+
+let Predicates = [HasCheri, IsRV32] in {
+defm : LdPat<load, LC_64>;
+defm : StPat<store, SC_64, GPCR>;
+} // Predicates = [HasCheri, IsRV32]
+
+let Predicates = [HasCheri, IsRV64] in {
+defm : LdPat<load, LC_128>;
+defm : StPat<store, SC_128, GPCR>;
+} // Predicates = [HasCheri, IsRV64]
