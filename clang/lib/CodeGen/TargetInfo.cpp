@@ -9970,15 +9970,25 @@ ABIArgInfo RISCVABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
     }
   }
 
+  // Structs with a single capability will be passed unpacked.
+  // TODO: Pairs involving capabilities should be passed in registers too like
+  // int/fp pairs (requires thought for fp+cap when out of FPRs).
+  bool IsSingleCapStruct = false;
+  if (auto *RT = Ty->getAs<RecordType>())
+    IsSingleCapStruct = Size == getTarget().getCHERICapabilityWidth() &&
+                        getContext().containsCapabilities(RT->getDecl());
+
   uint64_t NeededAlign = getContext().getTypeAlign(Ty);
   bool MustUseStack = false;
   // Determine the number of GPRs needed to pass the current argument
   // according to the ABI. 2*XLen-aligned varargs are passed in "aligned"
   // register pairs, so may consume 3 registers.
   int NeededArgGPRs = 1;
-  if (!IsFixed && NeededAlign == 2 * XLen)
+  bool IsCapability = Ty->isCHERICapabilityType(getContext()) ||
+                      IsSingleCapStruct;
+  if (!IsCapability && !IsFixed && NeededAlign == 2 * XLen)
     NeededArgGPRs = 2 + (ArgGPRsLeft % 2);
-  else if (Size > XLen && Size <= 2 * XLen)
+  else if (!IsCapability && Size > XLen && Size <= 2 * XLen)
     NeededArgGPRs = 2;
 
   if (NeededArgGPRs > ArgGPRsLeft) {
@@ -10001,6 +10011,9 @@ ABIArgInfo RISCVABIInfo::classifyArgumentType(QualType Ty, bool IsFixed,
 
     return ABIArgInfo::getDirect();
   }
+
+  if (IsSingleCapStruct)
+    return ABIArgInfo::getDirect();
 
   // Aggregates which are <= 2*XLen will be passed in registers if possible,
   // so coerce to integers.
@@ -10067,6 +10080,18 @@ ABIArgInfo RISCVABIInfo::extendType(QualType Ty) const {
 
 namespace {
 class RISCVTargetCodeGenInfo : public TargetCodeGenInfo {
+  mutable llvm::Function *GetOffset = nullptr;
+  mutable llvm::Function *SetOffset = nullptr;
+  mutable llvm::Function *SetAddr = nullptr;
+  mutable llvm::Function *GetBase = nullptr;
+  mutable llvm::Function *GetAddress = nullptr;
+  mutable llvm::Function *SetBounds = nullptr;
+  mutable llvm::PointerType *I8Cap = nullptr;
+  llvm::PointerType *getI8CapTy(CodeGen::CodeGenFunction &CGF) const {
+    if (!I8Cap)
+      I8Cap = llvm::PointerType::get(CGF.Int8Ty, getCHERICapabilityAS());
+    return I8Cap;
+  }
 public:
   RISCVTargetCodeGenInfo(CodeGen::CodeGenTypes &CGT, unsigned XLen,
                          unsigned FLen)
@@ -10091,6 +10116,103 @@ public:
     auto *Fn = cast<llvm::Function>(GV);
 
     Fn->addFnAttr("interrupt", Kind);
+  }
+
+  unsigned getCHERICapabilityAS() const override {
+    return 200;
+  }
+
+  llvm::Value *getPointerOffset(CodeGen::CodeGenFunction &CGF,
+                                        llvm::Value *V) const override {
+    if (!GetOffset)
+      GetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_get,
+                                       CGF.SizeTy);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
+    return CGF.Builder.CreateCall(GetOffset, V);
+  }
+
+  llvm::Value *setPointerOffset(CodeGen::CodeGenFunction &CGF,
+          llvm::Value *Ptr, llvm::Value *Offset) const override {
+    if (!SetOffset)
+      SetOffset = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_offset_set,
+                                       CGF.SizeTy);
+    llvm::Type *DstTy = Ptr->getType();
+    auto &B = CGF.Builder;
+    Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    return B.CreateBitCast(B.CreateCall(SetOffset, {Ptr, Offset}), DstTy);
+  }
+
+  llvm::Value *setPointerAddress(CodeGen::CodeGenFunction &CGF,
+                                 llvm::Value *Ptr,
+                                 llvm::Value *Offset) const override {
+    if (!SetAddr)
+      SetAddr = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_set,
+                                     CGF.IntPtrTy);
+    llvm::Type *DstTy = Ptr->getType();
+    auto &B = CGF.Builder;
+    Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    return B.CreateBitCast(B.CreateCall(SetAddr, {Ptr, Offset}), DstTy);
+  }
+
+  llvm::Value *setPointerBounds(CodeGen::CodeGenFunction &CGF, llvm::Value *Ptr,
+                                llvm::Value *Size,
+                                const llvm::Twine &Name) const override {
+    if (!SetBounds)
+      SetBounds = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_bounds_set,
+                                       CGF.SizeTy);
+    llvm::Type *DstTy = Ptr->getType();
+    auto &B = CGF.Builder;
+    Ptr = B.CreateBitCast(Ptr, getI8CapTy(CGF));
+    return B.CreateBitCast(B.CreateCall(SetBounds, {Ptr, Size}), DstTy, Name);
+  }
+
+  llvm::Value *getPointerBase(CodeGen::CodeGenFunction &CGF,
+                              llvm::Value *V) const override {
+    if (!GetBase)
+      GetBase = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_base_get,
+                                     CGF.IntPtrTy);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
+    return CGF.Builder.CreateCall(GetBase, V);
+  }
+
+  llvm::Value *getPointerAddress(CodeGen::CodeGenFunction &CGF, llvm::Value *V,
+                              const llvm::Twine &Name) const override {
+    if (!GetAddress)
+      GetAddress = CGF.CGM.getIntrinsic(llvm::Intrinsic::cheri_cap_address_get,
+                                        CGF.IntPtrTy);
+    V = CGF.Builder.CreateBitCast(V, getI8CapTy(CGF));
+    return CGF.Builder.CreateCall(GetAddress, V, Name);
+  }
+
+  bool cheriCapabilityAtomicNeedsLibcall(AtomicExpr::AtomicOp Op) const override {
+    switch (Op) {
+    case AtomicExpr::AO__c11_atomic_init:
+    case AtomicExpr::AO__atomic_load:
+    case AtomicExpr::AO__atomic_load_n:
+    case AtomicExpr::AO__c11_atomic_load:
+    case AtomicExpr::AO__c11_atomic_store:
+    case AtomicExpr::AO__atomic_store:
+    case AtomicExpr::AO__atomic_store_n:
+    case AtomicExpr::AO__c11_atomic_exchange:
+    case AtomicExpr::AO__atomic_exchange:
+    case AtomicExpr::AO__atomic_exchange_n:
+    case AtomicExpr::AO__c11_atomic_compare_exchange_strong:
+    case AtomicExpr::AO__c11_atomic_compare_exchange_weak:
+    case AtomicExpr::AO__atomic_compare_exchange:
+    case AtomicExpr::AO__atomic_compare_exchange_n:
+      return false;
+    case AtomicExpr::AO__atomic_fetch_add:
+    case AtomicExpr::AO__atomic_fetch_sub:
+    case AtomicExpr::AO__atomic_add_fetch:
+    case AtomicExpr::AO__atomic_sub_fetch:
+    case AtomicExpr::AO__c11_atomic_fetch_add:
+    case AtomicExpr::AO__c11_atomic_fetch_sub:
+      return true; // TODO: allow emitting this without a libcall
+
+    default:
+      llvm_unreachable("Atomic op should not be supported for capabilities");
+      return true;
+    }
   }
 };
 } // namespace

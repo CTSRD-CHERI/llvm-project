@@ -23,6 +23,26 @@ namespace targets {
 
 // RISC-V Target
 class RISCVTargetInfo : public TargetInfo {
+  void setDataLayout() {
+    StringRef Layout;
+
+    if (ABI == "ilp32" || ABI == "ilp32f" || ABI == "ilp32d" ||
+        ABI == "ilp32e") {
+      if (HasCheri)
+        Layout = "e-m:e-pf200:64:64:64:32-p:32:32-i64:64-n32-S128";
+      else
+        Layout = "e-m:e-p:32:32-i64:64-n32-S128";
+    } else if (ABI == "lp64" || ABI == "lp64f" || ABI == "lp64d") {
+      if (HasCheri)
+        Layout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n64-S128";
+      else
+        Layout = "e-m:e-p:64:64-i64:64-i128:128-n64-S128";
+    } else
+      llvm_unreachable("Invalid ABI");
+
+    resetDataLayout(Layout);
+  }
+
 protected:
   std::string ABI;
   bool HasM;
@@ -30,6 +50,8 @@ protected:
   bool HasF;
   bool HasD;
   bool HasC;
+  bool HasCheri = false;
+  int CapSize = -1;
 
 public:
   RISCVTargetInfo(const llvm::Triple &Triple, const TargetOptions &)
@@ -75,15 +97,36 @@ public:
 
   bool handleTargetFeatures(std::vector<std::string> &Features,
                             DiagnosticsEngine &Diags) override;
+
+  unsigned getIntCapWidth() const override { return CapSize; }
+  unsigned getIntCapAlign() const override { return CapSize; }
+
+  uint64_t getCHERICapabilityWidth() const override { return CapSize; }
+
+  uint64_t getCHERICapabilityAlign() const override { return CapSize; }
+
+  uint64_t getPointerWidthV(unsigned AddrSpace) const override {
+    return (AddrSpace == 200) ? CapSize : PointerWidth;
+  }
+
+  uint64_t getPointerRangeV(unsigned AddrSpace) const override {
+    return (AddrSpace == 200) ? getPointerRangeForCHERICapability() : PointerWidth;
+  }
+
+  uint64_t getPointerAlignV(unsigned AddrSpace) const override {
+    return (AddrSpace == 200) ? CapSize : PointerAlign;
+  }
+
+  bool SupportsCapabilities() const override { return HasCheri; }
 };
 class LLVM_LIBRARY_VISIBILITY RISCV32TargetInfo : public RISCVTargetInfo {
 public:
   RISCV32TargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : RISCVTargetInfo(Triple, Opts) {
+    ABI = "ilp32";
     IntPtrType = SignedInt;
     PtrDiffType = SignedInt;
     SizeType = UnsignedInt;
-    resetDataLayout("e-m:e-p:32:32-i64:64-n32-S128");
   }
 
   bool setABI(const std::string &Name) override {
@@ -100,14 +143,16 @@ public:
     if (HasA)
       MaxAtomicInlineWidth = 32;
   }
+
+  uint64_t getPointerRangeForCHERICapability() const override { return 32; }
 };
 class LLVM_LIBRARY_VISIBILITY RISCV64TargetInfo : public RISCVTargetInfo {
 public:
   RISCV64TargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : RISCVTargetInfo(Triple, Opts) {
+    ABI = "lp64";
     LongWidth = LongAlign = PointerWidth = PointerAlign = 64;
     IntMaxType = Int64Type = SignedLong;
-    resetDataLayout("e-m:e-p:64:64-i64:64-i128:128-n64-S128");
   }
 
   bool setABI(const std::string &Name) override {
@@ -124,6 +169,8 @@ public:
     if (HasA)
       MaxAtomicInlineWidth = 64;
   }
+
+  uint64_t getPointerRangeForCHERICapability() const override { return 64; }
 };
 } // namespace targets
 } // namespace clang

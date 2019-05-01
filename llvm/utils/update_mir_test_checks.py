@@ -109,13 +109,15 @@ def build_run_list(test, run_lines, verbose=False):
         filecheck_cmd = commands[1] if len(commands) > 1 else ''
         common.verify_filecheck_prefixes(filecheck_cmd)
 
-        if llc_cmd.startswith("%cheri"):
+        if llc_cmd.startswith("%"):
             llc_cmd = llc_cmd.replace("%cheri_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
             llc_cmd = llc_cmd.replace("%cheri128_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
             llc_cmd = llc_cmd.replace("%cheri256_purecap_llc", "llc -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri256 -mattr=+cheri256")
             llc_cmd = llc_cmd.replace("%cheri_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
             llc_cmd = llc_cmd.replace("%cheri128_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
             llc_cmd = llc_cmd.replace("%cheri256_llc", "llc -mtriple=cheri-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
+            llc_cmd = llc_cmd.replace("%riscv32_cheri_llc", "llc -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
+            llc_cmd = llc_cmd.replace("%riscv64_cheri_llc", "llc -mtriple=riscv64-unknown-freebsd -mattr=+xcheri")
 
         if not llc_cmd.startswith('llc '):
             common.warn('Skipping non-llc RUN line: {}'.format(l), test_file=test)

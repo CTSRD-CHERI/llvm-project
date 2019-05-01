@@ -100,6 +100,10 @@ public:
     assert(i < RISCV::NUM_TARGET_REGS && "Register out of range");
     return UserReservedRegister[i];
   }
+  MVT typeForCapabilities() const {
+    assert(HasCheri && "Cannot get capability type for non-CHERI");
+    return is64Bit() ? MVT::iFATPTR128 : MVT::iFATPTR64;
+  }
 
 protected:
   // GlobalISel related APIs.

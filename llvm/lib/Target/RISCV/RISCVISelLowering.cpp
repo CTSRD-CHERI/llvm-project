@@ -73,6 +73,11 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   if (Subtarget.hasStdExtD())
     addRegisterClass(MVT::f64, &RISCV::FPR64RegClass);
 
+  if (Subtarget.hasCheri()) {
+    CapType = Subtarget.typeForCapabilities();
+    addRegisterClass(CapType, &RISCV::GPCRRegClass);
+  }
+
   // Compute derived properties from the register classes.
   computeRegisterProperties(STI.getRegisterInfo());
 
@@ -189,6 +194,15 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::GlobalTLSAddress, XLenVT, Custom);
 
+  if (Subtarget.hasCheri()) {
+    MVT CLenVT = Subtarget.typeForCapabilities();
+    setOperationAction(ISD::BR_CC, CLenVT, Expand);
+    setOperationAction(ISD::SELECT, CLenVT, Custom);
+    setOperationAction(ISD::SELECT_CC, CLenVT, Expand);
+    setOperationAction(ISD::ADDRSPACECAST, CLenVT, Custom);
+    setOperationAction(ISD::ADDRSPACECAST, XLenVT, Custom);
+  }
+
   // TODO: On M-mode only targets, the cycle[h] CSR may not be present.
   // Unfortunately this can't be determined just from the ISA naming string.
   setOperationAction(ISD::READCYCLECOUNTER, MVT::i64,
@@ -197,9 +211,17 @@ RISCVTargetLowering::RISCVTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::TRAP, MVT::Other, Legal);
   setOperationAction(ISD::DEBUGTRAP, MVT::Other, Legal);
 
+  // Some CHERI intrinsics return i1, which isn't legal, so we have to custom
+  // lower them in the DAG combine phase before the first type legalization
+  // pass.
+  if (Subtarget.hasCheri())
+    setTargetDAGCombine(ISD::INTRINSIC_WO_CHAIN);
+
   if (Subtarget.hasStdExtA()) {
     setMaxAtomicSizeInBitsSupported(Subtarget.getXLen());
     setMinCmpXchgSizeInBits(32);
+    if (Subtarget.hasCheri())
+      SupportsAtomicCapabilityOperations = true;
   } else {
     setMaxAtomicSizeInBitsSupported(0);
   }
@@ -404,6 +426,16 @@ SDValue RISCVTargetLowering::LowerOperation(SDValue Op,
     SDValue FPConv = DAG.getNode(RISCVISD::FMV_W_X_RV64, DL, MVT::f32, NewOp0);
     return FPConv;
   }
+  case ISD::ADDRSPACECAST: {
+    SDLoc DL(Op);
+    SDValue Op0 = Op.getOperand(0);
+    bool ToCap = Op.getValueType().isFatPointer();
+    bool FromCap = Op0.getValueType().isFatPointer();
+    if (ToCap == FromCap)
+      return Op0;
+    unsigned NewOp = ToCap ? ISD::INTTOPTR : ISD::PTRTOINT;
+    return DAG.getNode(NewOp, DL, Op.getValueType(), Op0);
+  }
   }
 }
 
@@ -428,7 +460,6 @@ template <class NodeTy>
 SDValue RISCVTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
                                      bool IsLocal) const {
   SDLoc DL(N);
-  // TODO: Purecap globals
   EVT Ty = getPointerTy(DAG.getDataLayout(), 0);
 
   if (isPositionIndependent()) {
@@ -929,6 +960,42 @@ SDValue RISCVTargetLowering::PerformDAGCombine(SDNode *N,
   switch (N->getOpcode()) {
   default:
     break;
+  case ISD::INTRINSIC_WO_CHAIN: {
+    SDLoc DL(N);
+    unsigned IID = cast<ConstantSDNode>(N->getOperand(0))->getZExtValue();
+    EVT XLenVT = Subtarget.getXLenVT();
+
+    // Lower to our custom node, but with a truncate back to i1 so we can
+    // replace its uses.
+    switch (IID) {
+    case Intrinsic::cheri_cap_tag_get: {
+      SDValue IntRes = DAG.getNode(RISCVISD::CAP_TAG_GET, DL, XLenVT,
+                                   N->getOperand(1));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes,
+                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
+    }
+    case Intrinsic::cheri_cap_sealed_get: {
+      SDValue IntRes = DAG.getNode(RISCVISD::CAP_SEALED_GET, DL, XLenVT,
+                                   N->getOperand(1));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes,
+                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
+    }
+    case Intrinsic::cheri_cap_subset_test: {
+      SDValue IntRes = DAG.getNode(RISCVISD::CAP_SUBSET_TEST, DL, XLenVT,
+                                   N->getOperand(1), N->getOperand(2));
+      IntRes = DAG.getNode(ISD::AssertZext, DL, XLenVT, IntRes,
+                           DAG.getValueType(MVT::i1));
+      return DAG.getSetCC(DL, MVT::i1, IntRes,
+                          DAG.getConstant(0, DL, XLenVT), ISD::SETNE);
+    }
+    }
+
+    break;
+  }
   case RISCVISD::SplitF64: {
     SDValue Op0 = N->getOperand(0);
     // If the input to SplitF64 is just BuildPairF64 then the operation is
@@ -1219,6 +1286,7 @@ static bool isSelectPseudo(MachineInstr &MI) {
   default:
     return false;
   case RISCV::Select_GPR_Using_CC_GPR:
+  case RISCV::Select_GPCR_Using_CC_GPR:
   case RISCV::Select_FPR32_Using_CC_GPR:
   case RISCV::Select_FPR64_Using_CC_GPR:
     return true;
@@ -1359,6 +1427,7 @@ RISCVTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
            "ReadCycleWrite is only to be used on riscv32");
     return emitReadCycleWidePseudo(MI, BB);
   case RISCV::Select_GPR_Using_CC_GPR:
+  case RISCV::Select_GPCR_Using_CC_GPR:
   case RISCV::Select_FPR32_Using_CC_GPR:
   case RISCV::Select_FPR64_Using_CC_GPR:
     return emitSelectPseudo(MI, BB);
@@ -1407,6 +1476,11 @@ static const MCPhysReg ArgFPR64s[] = {
   RISCV::F14_D, RISCV::F15_D, RISCV::F16_D, RISCV::F17_D
 };
 
+static const MCPhysReg ArgGPCRs[] = {
+  RISCV::C10, RISCV::C11, RISCV::C12, RISCV::C13,
+  RISCV::C14, RISCV::C15, RISCV::C16, RISCV::C17
+};
+
 // Pass a 2*XLEN argument that has been split into two XLEN values through
 // registers or the stack as necessary.
 static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State, CCValAssign VA1,
@@ -1446,13 +1520,16 @@ static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State, CCValAssign VA1,
 }
 
 // Implements the RISC-V calling convention. Returns true upon failure.
-static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
-                     MVT ValVT, MVT LocVT, CCValAssign::LocInfo LocInfo,
-                     ISD::ArgFlagsTy ArgFlags, CCState &State, bool IsFixed,
-                     bool IsRet, Type *OrigTy) {
+static bool CC_RISCV(const DataLayout &DL, unsigned ValNo, MVT ValVT, MVT LocVT,
+                     CCValAssign::LocInfo LocInfo, ISD::ArgFlagsTy ArgFlags,
+                     CCState &State, bool IsFixed, bool IsRet, Type *OrigTy,
+                     const RISCVSubtarget &Subtarget) {
+  RISCVABI::ABI ABI = Subtarget.getTargetABI();
   unsigned XLen = DL.getLargestLegalIntTypeSizeInBits();
   assert(XLen == 32 || XLen == 64);
   MVT XLenVT = XLen == 32 ? MVT::i32 : MVT::i64;
+  MVT CLenVT = Subtarget.hasCheri() ? Subtarget.typeForCapabilities()
+                                    : MVT();
 
   // Any return value split in to more than two values can't be returned
   // directly.
@@ -1574,13 +1651,17 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
 
   // Allocate to a register if possible, or else a stack slot.
   Register Reg;
+  unsigned ArgBytes = XLen / 8;
   if (ValVT == MVT::f32 && !UseGPRForF32)
     Reg = State.AllocateReg(ArgFPR32s, ArgFPR64s);
   else if (ValVT == MVT::f64 && !UseGPRForF64)
     Reg = State.AllocateReg(ArgFPR64s, ArgFPR32s);
-  else
+  else if (ValVT == CLenVT) {
+    Reg = State.AllocateReg(ArgGPCRs);
+    ArgBytes = DL.getPointerSize(200);
+  } else
     Reg = State.AllocateReg(ArgGPRs);
-  unsigned StackOffset = Reg ? 0 : State.AllocateStack(XLen / 8, XLen / 8);
+  unsigned StackOffset = Reg ? 0 : State.AllocateStack(ArgBytes, ArgBytes);
 
   // If we reach this point and PendingLocs is non-empty, we must be at the
   // end of a split argument that must be passed indirectly.
@@ -1600,8 +1681,8 @@ static bool CC_RISCV(const DataLayout &DL, RISCVABI::ABI ABI, unsigned ValNo,
     return false;
   }
 
-  assert((!UseGPRForF32 || !UseGPRForF64 || LocVT == XLenVT) &&
-         "Expected an XLenVT at this stage");
+  assert((!UseGPRForF32 || !UseGPRForF64 || LocVT == XLenVT || LocVT == CLenVT) &&
+         "Expected an XLenVT or CLenVT at this stage");
 
   if (Reg) {
     State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
@@ -1633,9 +1714,8 @@ void RISCVTargetLowering::analyzeInputArgs(
     else if (Ins[i].isOrigArg())
       ArgTy = FType->getParamType(Ins[i].getOrigArgIndex());
 
-    RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
-    if (CC_RISCV(MF.getDataLayout(), ABI, i, ArgVT, ArgVT, CCValAssign::Full,
-                 ArgFlags, CCInfo, /*IsRet=*/true, IsRet, ArgTy)) {
+    if (CC_RISCV(MF.getDataLayout(), i, ArgVT, ArgVT, CCValAssign::Full,
+                 ArgFlags, CCInfo, /*IsRet=*/true, IsRet, ArgTy, Subtarget)) {
       LLVM_DEBUG(dbgs() << "InputArg #" << i << " has unhandled type "
                         << EVT(ArgVT).getEVTString() << '\n');
       llvm_unreachable(nullptr);
@@ -1654,9 +1734,8 @@ void RISCVTargetLowering::analyzeOutputArgs(
     ISD::ArgFlagsTy ArgFlags = Outs[i].Flags;
     Type *OrigTy = CLI ? CLI->getArgs()[Outs[i].OrigArgIndex].Ty : nullptr;
 
-    RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
-    if (CC_RISCV(MF.getDataLayout(), ABI, i, ArgVT, ArgVT, CCValAssign::Full,
-                 ArgFlags, CCInfo, Outs[i].IsFixed, IsRet, OrigTy)) {
+    if (CC_RISCV(MF.getDataLayout(), i, ArgVT, ArgVT, CCValAssign::Full,
+                 ArgFlags, CCInfo, Outs[i].IsFixed, IsRet, OrigTy, Subtarget)) {
       LLVM_DEBUG(dbgs() << "OutputArg #" << i << " has unhandled type "
                         << EVT(ArgVT).getEVTString() << "\n");
       llvm_unreachable(nullptr);
@@ -1694,20 +1773,23 @@ static SDValue unpackFromRegLoc(SelectionDAG &DAG, SDValue Chain,
   SDValue Val;
   const TargetRegisterClass *RC;
 
-  switch (LocVT.getSimpleVT().SimpleTy) {
-  default:
-    llvm_unreachable("Unexpected register type");
-  case MVT::i32:
-  case MVT::i64:
-    RC = &RISCV::GPRRegClass;
-    break;
-  case MVT::f32:
-    RC = &RISCV::FPR32RegClass;
-    break;
-  case MVT::f64:
-    RC = &RISCV::FPR64RegClass;
-    break;
-  }
+  if (LocVT.isFatPointer())
+    RC = &RISCV::GPCRRegClass;
+  else
+    switch (LocVT.getSimpleVT().SimpleTy) {
+    default:
+      llvm_unreachable("Unexpected register type");
+    case MVT::i32:
+    case MVT::i64:
+      RC = &RISCV::GPRRegClass;
+      break;
+    case MVT::f32:
+      RC = &RISCV::FPR32RegClass;
+      break;
+    case MVT::f64:
+      RC = &RISCV::FPR64RegClass;
+      break;
+    }
 
   Register VReg = RegInfo.createVirtualRegister(RC);
   RegInfo.addLiveIn(VA.getLocReg(), VReg);
@@ -1824,6 +1906,18 @@ static bool CC_RISCV_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
     }
   }
 
+  if (LocVT.isFatPointer()) {
+    // C5 and C6 might be used for save-restore libcall.
+    static const MCPhysReg GPCRList[] = {
+        RISCV::C10, RISCV::C11, RISCV::C12, RISCV::C13, RISCV::C14,
+        RISCV::C15, RISCV::C16, RISCV::C17, RISCV::C7,  RISCV::C28,
+        RISCV::C29, RISCV::C30, RISCV::C31};
+    if (unsigned Reg = State.AllocateReg(GPCRList)) {
+      State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
+      return false;
+    }
+  }
+
   if (LocVT == MVT::f32) {
     static const MCPhysReg FPR32List[] = {
         RISCV::F10_F, RISCV::F11_F, RISCV::F12_F, RISCV::F13_F, RISCV::F14_F,
@@ -1857,6 +1951,13 @@ static bool CC_RISCV_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
   if (LocVT == MVT::i64 || LocVT == MVT::f64) {
     unsigned Offset5 = State.AllocateStack(8, 8);
     State.addLoc(CCValAssign::getMem(ValNo, ValVT, Offset5, LocVT, LocInfo));
+    return false;
+  }
+
+  if (LocVT.isFatPointer()) {
+    unsigned CLen = LocVT.getSizeInBits();
+    unsigned Offset6 = State.AllocateStack(CLen / 8, CLen / 8);
+    State.addLoc(CCValAssign::getMem(ValNo, ValVT, Offset6, LocVT, LocInfo));
     return false;
   }
 
@@ -2366,9 +2467,8 @@ bool RISCVTargetLowering::CanLowerReturn(
   for (unsigned i = 0, e = Outs.size(); i != e; ++i) {
     MVT VT = Outs[i].VT;
     ISD::ArgFlagsTy ArgFlags = Outs[i].Flags;
-    RISCVABI::ABI ABI = MF.getSubtarget<RISCVSubtarget>().getTargetABI();
-    if (CC_RISCV(MF.getDataLayout(), ABI, i, VT, VT, CCValAssign::Full,
-                 ArgFlags, CCInfo, /*IsFixed=*/true, /*IsRet=*/true, nullptr))
+    if (CC_RISCV(MF.getDataLayout(), i, VT, VT, CCValAssign::Full, ArgFlags,
+                 CCInfo, /*IsFixed=*/true, /*IsRet=*/true, nullptr, Subtarget))
       return false;
   }
   return true;
@@ -2526,6 +2626,12 @@ const char *RISCVTargetLowering::getTargetNodeName(unsigned Opcode) const {
     return "RISCVISD::FMV_X_ANYEXTW_RV64";
   case RISCVISD::READ_CYCLE_WIDE:
     return "RISCVISD::READ_CYCLE_WIDE";
+  case RISCVISD::CAP_TAG_GET:
+    return "RISCVISD::CAP_TAG_GET";
+  case RISCVISD::CAP_SEALED_GET:
+    return "RISCVISD::CAP_SEALED_GET";
+  case RISCVISD::CAP_SUBSET_TEST:
+    return "RISCVISD::CAP_SUBSET_TEST";
   }
   return nullptr;
 }
@@ -2538,6 +2644,7 @@ RISCVTargetLowering::getConstraintType(StringRef Constraint) const {
     switch (Constraint[0]) {
     default:
       break;
+    case 'C':
     case 'f':
       return C_RegisterClass;
     case 'I':
@@ -2560,7 +2667,15 @@ RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
   if (Constraint.size() == 1) {
     switch (Constraint[0]) {
     case 'r':
+      // Don't try to split/combine capabilities in order to use a GPR; give a
+      // friendlier error message instead.
+      if (Subtarget.hasCheri() && VT == Subtarget.typeForCapabilities())
+        break;
       return std::make_pair(0U, &RISCV::GPRRegClass);
+    case 'C':
+      if (Subtarget.hasCheri() && VT == Subtarget.typeForCapabilities())
+        return std::make_pair(0U, &RISCV::GPCRRegClass);
+      break;
     case 'f':
       if (Subtarget.hasStdExtF() && VT == MVT::f32)
         return std::make_pair(0U, &RISCV::FPR32RegClass);
@@ -2612,6 +2727,46 @@ RISCVTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
                                .Default(RISCV::NoRegister);
   if (XRegFromAlias != RISCV::NoRegister)
     return std::make_pair(XRegFromAlias, &RISCV::GPRRegClass);
+
+  // Similarly, allow capability register ABI names to be used in constraint.
+  if (Subtarget.hasCheri()) {
+    Register CRegFromAlias = StringSwitch<Register>(Constraint.lower())
+                                 .Case("{cnull}", RISCV::C0)
+                                 .Case("{cra}", RISCV::C1)
+                                 .Case("{csp}", RISCV::C2)
+                                 .Case("{cgp}", RISCV::C3)
+                                 .Case("{ctp}", RISCV::C4)
+                                 .Case("{ct0}", RISCV::C5)
+                                 .Case("{ct1}", RISCV::C6)
+                                 .Case("{ct2}", RISCV::C7)
+                                 .Cases("{cs0}", "{cfp}", RISCV::C8)
+                                 .Case("{cs1}", RISCV::C9)
+                                 .Case("{ca0}", RISCV::C10)
+                                 .Case("{ca1}", RISCV::C11)
+                                 .Case("{ca2}", RISCV::C12)
+                                 .Case("{ca3}", RISCV::C13)
+                                 .Case("{ca4}", RISCV::C14)
+                                 .Case("{ca5}", RISCV::C15)
+                                 .Case("{ca6}", RISCV::C16)
+                                 .Case("{ca7}", RISCV::C17)
+                                 .Case("{cs2}", RISCV::C18)
+                                 .Case("{cs3}", RISCV::C19)
+                                 .Case("{cs4}", RISCV::C20)
+                                 .Case("{cs5}", RISCV::C21)
+                                 .Case("{cs6}", RISCV::C22)
+                                 .Case("{cs7}", RISCV::C23)
+                                 .Case("{cs8}", RISCV::C24)
+                                 .Case("{cs9}", RISCV::C25)
+                                 .Case("{cs10}", RISCV::C26)
+                                 .Case("{cs11}", RISCV::C27)
+                                 .Case("{ct3}", RISCV::C28)
+                                 .Case("{ct4}", RISCV::C29)
+                                 .Case("{ct5}", RISCV::C30)
+                                 .Case("{ct6}", RISCV::C31)
+                                 .Default(RISCV::NoRegister);
+    if (CRegFromAlias != RISCV::NoRegister)
+      return std::make_pair(CRegFromAlias, &RISCV::GPCRRegClass);
+  }
 
   // Since TargetLowering::getRegForInlineAsmConstraint uses the name of the
   // TableGen record rather than the AsmName to choose registers for InlineAsm
@@ -2873,6 +3028,14 @@ Value *RISCVTargetLowering::emitMaskedAtomicCmpXchgIntrinsic(
   if (XLen == 64)
     Result = Builder.CreateTrunc(Result, Builder.getInt32Ty());
   return Result;
+}
+
+bool RISCVTargetLowering::canLowerPointerTypeCmpXchg(
+    const llvm::DataLayout &DL, llvm::AtomicCmpXchgInst *AI) const {
+  if (Subtarget.hasStdExtA() && Subtarget.hasCheri() &&
+      DL.isFatPointer(AI->getCompareOperand()->getType()))
+    return true;
+  return TargetLowering::canLowerPointerTypeCmpXchg(DL, AI);
 }
 
 unsigned RISCVTargetLowering::getExceptionPointerRegister(

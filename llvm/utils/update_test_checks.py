@@ -115,13 +115,15 @@ def main():
 
       (tool_cmd, filecheck_cmd) = tuple([cmd.strip() for cmd in l.split('|', 1)])
 
-      if tool_cmd.startswith("%cheri"):
+      if tool_cmd.startswith("%"):
         tool_cmd = tool_cmd.replace("%cheri_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri128_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri256_purecap_opt", "opt -mtriple=cheri-unknown-freebsd -target-abi purecap -relocation-model pic -mcpu=cheri256 -mattr=+cheri256")
         tool_cmd = tool_cmd.replace("%cheri_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri128_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri128 -mattr=+cheri128")
         tool_cmd = tool_cmd.replace("%cheri256_opt", "opt -mtriple=cheri-unknown-freebsd -mcpu=cheri256 -mattr=+cheri256")
+        tool_cmd = tool_cmd.replace("%riscv32_cheri_opt", "opt -mtriple=riscv32-unknown-freebsd -mattr=+xcheri")
+        tool_cmd = tool_cmd.replace("%riscv64_cheri_opt", "opt -mtriple=riscv64-unknown-freebsd -mattr=+xcheri")
 
       common.verify_filecheck_prefixes(filecheck_cmd)
       if not tool_cmd.startswith(opt_basename + ' '):

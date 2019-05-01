@@ -39,13 +39,25 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
   initializeRISCVExpandPseudoPass(*PR);
 }
 
-static StringRef computeDataLayout(const Triple &TT) {
-  if (TT.isArch64Bit()) {
-    return "e-m:e-p:64:64-i64:64-i128:128-n64-S128";
-  } else {
-    assert(TT.isArch32Bit() && "only RV32 and RV64 are currently supported");
-    return "e-m:e-p:32:32-i64:64-n32-S128";
+static std::string computeDataLayout(const Triple &TT, StringRef FS) {
+  assert((TT.isArch32Bit() || TT.isArch64Bit()) &&
+         "only RV32 and RV64 are currently supported");
+
+  StringRef IntegerTypes;
+  if (TT.isArch64Bit())
+    IntegerTypes = "-p:64:64-i64:64-i128:128-n64";
+  else
+    IntegerTypes = "-p:32:32-i64:64-n32";
+
+  StringRef CapTypes = "";
+  if (FS.contains("+xcheri")) {
+    if (TT.isArch64Bit())
+      CapTypes = "-pf200:128:128:128:64";
+    else
+      CapTypes = "-pf200:64:64:64:32";
   }
+
+  return ("e-m:e" + CapTypes + IntegerTypes + "-S128").str();
 }
 
 static Reloc::Model getEffectiveRelocModel(const Triple &TT,
@@ -61,7 +73,7 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
                                        Optional<Reloc::Model> RM,
                                        Optional<CodeModel::Model> CM,
                                        CodeGenOpt::Level OL, bool JIT)
-    : LLVMTargetMachine(T, computeDataLayout(TT), TT, CPU, FS, Options,
+    : LLVMTargetMachine(T, computeDataLayout(TT, FS), TT, CPU, FS, Options,
                         getEffectiveRelocModel(TT, RM),
                         getEffectiveCodeModel(CM, CodeModel::Small), OL),
       TLOF(std::make_unique<RISCVELFTargetObjectFile>()) {

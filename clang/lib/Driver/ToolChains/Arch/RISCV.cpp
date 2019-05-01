@@ -43,8 +43,8 @@ static StringRef getExtensionType(StringRef Ext) {
 }
 
 static bool isSupportedExtension(StringRef Ext) {
-  // LLVM does not support "sx", "s" nor "x" extensions.
-  return false;
+  // LLVM does not support "sx", "s" nor "x" extensions, except for xcheri.
+  return Ext == "xcheri";
 }
 
 // Extensions may have a version number, and may be separated by

@@ -25,6 +25,12 @@ ArrayRef<const char *> RISCVTargetInfo::getGCCRegNames() const {
       "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23",
       "x24", "x25", "x26", "x27", "x28", "x29", "x30", "x31",
 
+      // Capability registers
+      "c0",  "c1",  "c2",  "c3",  "c4",  "c5",  "c6",  "c7",
+      "c8",  "c9",  "c10", "c11", "c12", "c13", "c14", "c15",
+      "c16", "c17", "c18", "c19", "c20", "c21", "c22", "c23",
+      "c24", "c25", "c26", "c27", "c28", "c29", "c30", "c31",
+
       // Floating point registers
       "f0",  "f1",  "f2",  "f3",  "f4",  "f5",  "f6",  "f7",
       "f8",  "f9",  "f10", "f11", "f12", "f13", "f14", "f15",
@@ -43,6 +49,14 @@ ArrayRef<TargetInfo::GCCRegAlias> RISCVTargetInfo::getGCCRegAliases() const {
       {{"s4"}, "x20"},  {{"s5"}, "x21"},  {{"s6"}, "x22"},   {{"s7"}, "x23"},
       {{"s8"}, "x24"},  {{"s9"}, "x25"},  {{"s10"}, "x26"},  {{"s11"}, "x27"},
       {{"t3"}, "x28"},  {{"t4"}, "x29"},  {{"t5"}, "x30"},   {{"t6"}, "x31"},
+      {{"cnull"}, "c0"},{{"cra"}, "c1"},  {{"csp"}, "c2"},   {{"cgp"}, "c3"},
+      {{"ctp"}, "c4"},  {{"ct0"}, "c5"},  {{"ct1"}, "c6"},   {{"ct2"}, "c7"},
+      {{"cs0"}, "c8"},  {{"cs1"}, "c9"},  {{"ca0"}, "c10"},  {{"ca1"}, "c11"},
+      {{"ca2"}, "c12"}, {{"ca3"}, "c13"}, {{"ca4"}, "c15"},  {{"ca5"}, "c15"},
+      {{"ca6"}, "c16"}, {{"ca7"}, "c17"}, {{"cs2"}, "c18"},  {{"cs3"}, "c19"},
+      {{"cs4"}, "c20"}, {{"cs5"}, "c21"}, {{"cs6"}, "c22"},  {{"cs7"}, "c23"},
+      {{"cs8"}, "c24"}, {{"cs9"}, "c25"}, {{"cs10"}, "c26"}, {{"cs11"}, "c27"},
+      {{"ct3"}, "c28"}, {{"ct4"}, "c29"}, {{"ct5"}, "c30"},  {{"ct6"}, "c31"},
       {{"ft0"}, "f0"},  {{"ft1"}, "f1"},  {{"ft2"}, "f2"},   {{"ft3"}, "f3"},
       {{"ft4"}, "f4"},  {{"ft5"}, "f5"},  {{"ft6"}, "f6"},   {{"ft7"}, "f7"},
       {{"fs0"}, "f8"},  {{"fs1"}, "f9"},  {{"fa0"}, "f10"},  {{"fa1"}, "f11"},
@@ -79,6 +93,10 @@ bool RISCVTargetInfo::validateAsmConstraint(
     // An address that is held in a general-purpose register.
     Info.setAllowsMemory();
     return true;
+  case 'C':
+    // A capability register.
+    Info.setAllowsRegister();
+    return HasCheri;
   }
 }
 
@@ -125,6 +143,28 @@ void RISCVTargetInfo::getTargetDefines(const LangOptions &Opts,
 
   if (HasC)
     Builder.defineMacro("__riscv_compressed");
+
+  if (HasCheri) {
+    // Macros for use with the set and get permissions builtins.
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_GLOBAL__", Twine(1<<0));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__",
+            Twine(1<<1));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD__", Twine(1<<2));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE__", Twine(1<<3));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_LOAD_CAPABILITY__",
+            Twine(1<<4));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__",
+            Twine(1<<5));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_STORE_LOCAL__",
+            Twine(1<<6));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_SEAL__", Twine(1<<7));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_CCALL__", Twine(1<<8));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_PERMIT_UNSEAL__", Twine(1<<9));
+    Builder.defineMacro("__CHERI_CAP_PERMISSION_ACCESS_SYSTEM_REGISTERS__", Twine(1<<10));
+
+    Builder.defineMacro("__riscv_clen", Twine(getCHERICapabilityWidth()));
+    // TODO: _MIPS_CAP_ALIGN_MASK equivalent?
+  }
 }
 
 /// Return true if has this feature, need to sync with handleTargetFeatures.
@@ -139,6 +179,7 @@ bool RISCVTargetInfo::hasFeature(StringRef Feature) const {
       .Case("f", HasF)
       .Case("d", HasD)
       .Case("c", HasC)
+      .Case("xcheri", HasCheri)
       .Default(false);
 }
 
@@ -156,7 +197,13 @@ bool RISCVTargetInfo::handleTargetFeatures(std::vector<std::string> &Features,
       HasD = true;
     else if (Feature == "+c")
       HasC = true;
+    else if (Feature == "+xcheri") {
+      HasCheri = true;
+      CapSize = PointerWidth * 2;
+    }
   }
+
+  setDataLayout();
 
   return true;
 }

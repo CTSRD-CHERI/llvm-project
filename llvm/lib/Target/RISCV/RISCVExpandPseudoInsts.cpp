@@ -54,6 +54,9 @@ private:
   bool expandAtomicCmpXchg(MachineBasicBlock &MBB,
                            MachineBasicBlock::iterator MBBI, bool IsMasked,
                            int Width, MachineBasicBlock::iterator &NextMBBI);
+  bool expandAtomicCmpXchgCap(MachineBasicBlock &MBB,
+                              MachineBasicBlock::iterator MBBI,
+                              MachineBasicBlock::iterator &NextMBBI);
   bool expandAuipcInstPair(MachineBasicBlock &MBB,
                            MachineBasicBlock::iterator MBBI,
                            MachineBasicBlock::iterator &NextMBBI,
@@ -141,6 +144,8 @@ bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
     return expandLoadTLSIEAddress(MBB, MBBI, NextMBBI);
   case RISCV::PseudoLA_TLS_GD:
     return expandLoadTLSGDAddress(MBB, MBBI, NextMBBI);
+  case RISCV::PseudoCmpXchgCap:
+    return expandAtomicCmpXchgCap(MBB, MBBI, NextMBBI);
   }
 
   return false;
@@ -228,6 +233,40 @@ static unsigned getSCForRMW(AtomicOrdering Ordering, int Width) {
   if (Width == 64)
     return getSCForRMW64(Ordering);
   llvm_unreachable("Unexpected SC width\n");
+}
+
+static unsigned getLRForRMWCap(AtomicOrdering Ordering, int CLen) {
+  switch (Ordering) {
+  default:
+    llvm_unreachable("Unexpected AtomicOrdering");
+  case AtomicOrdering::Monotonic:
+    return CLen == 64 ? RISCV::LR_C_64 : RISCV::LR_C_128;
+  case AtomicOrdering::Acquire:
+    return CLen == 64 ? RISCV::LR_C_AQ_64 : RISCV::LR_C_AQ_128;
+  case AtomicOrdering::Release:
+    return CLen == 64 ? RISCV::LR_C_64 : RISCV::LR_C_128;
+  case AtomicOrdering::AcquireRelease:
+    return CLen == 64 ? RISCV::LR_C_AQ_64 : RISCV::LR_C_AQ_128;
+  case AtomicOrdering::SequentiallyConsistent:
+    return CLen == 64 ? RISCV::LR_C_AQ_RL_64 : RISCV::LR_C_AQ_RL_128;
+  }
+}
+
+static unsigned getSCForRMWCap(AtomicOrdering Ordering, int CLen) {
+  switch (Ordering) {
+  default:
+    llvm_unreachable("Unexpected AtomicOrdering");
+  case AtomicOrdering::Monotonic:
+    return CLen == 64 ? RISCV::SC_C_64 : RISCV::SC_C_128;
+  case AtomicOrdering::Acquire:
+    return CLen == 64 ? RISCV::SC_C_AQ_64 : RISCV::SC_C_AQ_128;
+  case AtomicOrdering::Release:
+    return CLen == 64 ? RISCV::SC_C_64 : RISCV::SC_C_128;
+  case AtomicOrdering::AcquireRelease:
+    return CLen == 64 ? RISCV::SC_C_AQ_64 : RISCV::SC_C_AQ_128;
+  case AtomicOrdering::SequentiallyConsistent:
+    return CLen == 64 ? RISCV::SC_C_AQ_RL_64 : RISCV::SC_C_AQ_RL_128;
+  }
 }
 
 static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
@@ -609,6 +648,71 @@ bool RISCVExpandPseudo::expandAtomicCmpXchg(
         .addReg(RISCV::X0)
         .addMBB(LoopHeadMBB);
   }
+
+  NextMBBI = MBB.end();
+  MI.eraseFromParent();
+
+  LivePhysRegs LiveRegs;
+  computeAndAddLiveIns(LiveRegs, *LoopHeadMBB);
+  computeAndAddLiveIns(LiveRegs, *LoopTailMBB);
+  computeAndAddLiveIns(LiveRegs, *DoneMBB);
+
+  return true;
+}
+
+bool RISCVExpandPseudo::expandAtomicCmpXchgCap(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
+    MachineBasicBlock::iterator &NextMBBI) {
+  MachineInstr &MI = *MBBI;
+  DebugLoc DL = MI.getDebugLoc();
+  MachineFunction *MF = MBB.getParent();
+  const TargetRegisterInfo *TRI = MF->getSubtarget().getRegisterInfo();
+  int CLen = TRI->getRegSizeInBits(RISCV::GPCRRegClass);
+  auto LoopHeadMBB = MF->CreateMachineBasicBlock(MBB.getBasicBlock());
+  auto LoopTailMBB = MF->CreateMachineBasicBlock(MBB.getBasicBlock());
+  auto DoneMBB = MF->CreateMachineBasicBlock(MBB.getBasicBlock());
+
+  // Insert new MBBs.
+  MF->insert(++MBB.getIterator(), LoopHeadMBB);
+  MF->insert(++LoopHeadMBB->getIterator(), LoopTailMBB);
+  MF->insert(++LoopTailMBB->getIterator(), DoneMBB);
+
+  // Set up successors and transfer remaining instructions to DoneMBB.
+  LoopHeadMBB->addSuccessor(LoopTailMBB);
+  LoopHeadMBB->addSuccessor(DoneMBB);
+  LoopTailMBB->addSuccessor(DoneMBB);
+  LoopTailMBB->addSuccessor(LoopHeadMBB);
+  DoneMBB->splice(DoneMBB->end(), &MBB, MI, MBB.end());
+  DoneMBB->transferSuccessors(&MBB);
+  MBB.addSuccessor(LoopHeadMBB);
+
+  Register DestReg = MI.getOperand(0).getReg();
+  Register ScratchReg = MI.getOperand(1).getReg();
+  Register AddrReg = MI.getOperand(2).getReg();
+  Register CmpValReg = MI.getOperand(3).getReg();
+  Register NewValReg = MI.getOperand(4).getReg();
+  AtomicOrdering Ordering =
+      static_cast<AtomicOrdering>(MI.getOperand(5).getImm());
+
+  // .loophead:
+  //   lr.c dest, (addr)
+  //   bne dest:sub_cap_addr, cmpval:sub_cap_addr, done
+  BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMWCap(Ordering, CLen)), DestReg)
+      .addReg(AddrReg);
+  BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BNE))
+      .addReg(TRI->getSubReg(DestReg, RISCV::sub_cap_addr))
+      .addReg(TRI->getSubReg(CmpValReg, RISCV::sub_cap_addr))
+      .addMBB(DoneMBB);
+  // .looptail:
+  //   sc.c scratch, newval, (addr)
+  //   bnez scratch, loophead
+  BuildMI(LoopTailMBB, DL, TII->get(getSCForRMWCap(Ordering, CLen)), ScratchReg)
+      .addReg(AddrReg)
+      .addReg(NewValReg);
+  BuildMI(LoopTailMBB, DL, TII->get(RISCV::BNE))
+      .addReg(ScratchReg)
+      .addReg(RISCV::X0)
+      .addMBB(LoopHeadMBB);
 
   NextMBBI = MBB.end();
   MI.eraseFromParent();

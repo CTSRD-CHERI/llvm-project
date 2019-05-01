@@ -7,6 +7,27 @@
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
+// RISC-V specific DAG Nodes.
+//===----------------------------------------------------------------------===//
+
+// Target-dependent type requirements.
+def SDT_RISCVCheriBoolUnary : SDTypeProfile<1, 1, [
+  SDTCisInt<0>, SDTCisVT<1, CLenVT>
+]>;
+
+def SDT_RISCVCheriBoolBinary : SDTypeProfile<1, 2, [
+  SDTCisInt<0>, SDTCisVT<1, CLenVT>, SDTCisVT<2, CLenVT>
+]>;
+
+// Target-dependent nodes.
+def riscv_cap_tag_get     : SDNode<"RISCVISD::CAP_TAG_GET",
+                                   SDT_RISCVCheriBoolUnary>;
+def riscv_cap_sealed_get  : SDNode<"RISCVISD::CAP_SEALED_GET",
+                                   SDT_RISCVCheriBoolUnary>;
+def riscv_cap_subset_test : SDNode<"RISCVISD::CAP_SUBSET_TEST",
+                                   SDT_RISCVCheriBoolBinary>;
+
+//===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
 //===----------------------------------------------------------------------===//
 
@@ -425,3 +446,361 @@ defm LR_C       : LR_C_r_aq_rl<"128", 0b100, "lr.c">;
 defm SC_C       : AMO_C_rr_aq_rl<"128", 0b00011, 0b100, "sc.c", GPR>;
 defm AMOSWAP_C  : AMO_C_rr_aq_rl<"128", 0b00001, 0b100, "amoswap.c", GPCR>;
 }
+
+//===----------------------------------------------------------------------===//
+// Pseudo-instructions and codegen patterns
+//===----------------------------------------------------------------------===//
+
+class PatGpcr<SDPatternOperator OpNode, RVInstCheriSrcDst Inst>
+    : Pat<(OpNode GPCR:$rs1), (Inst GPCR:$rs1)>;
+
+class PatGpr<SDPatternOperator OpNode, RVInstCheriSrcDst Inst>
+    : Pat<(OpNode GPR:$rs1), (Inst GPR:$rs1)>;
+
+class PatGpcrGpcr<SDPatternOperator OpNode, RVInstR Inst>
+    : Pat<(OpNode GPCR:$rs1, GPCR:$rs2), (Inst GPCR:$rs1, GPCR:$rs2)>;
+
+class PatGpcrGpr<SDPatternOperator OpNode, RVInstR Inst>
+    : Pat<(OpNode GPCR:$rs1, GPR:$rs2), (Inst GPCR:$rs1, GPR:$rs2)>;
+
+class PatGpcrSimm12<SDPatternOperator OpNode, RVInstI Inst>
+    : Pat<(OpNode GPCR:$rs1, simm12:$imm12), (Inst GPCR:$rs1, simm12:$imm12)>;
+
+class PatGpcrUimm12<SDPatternOperator OpNode, RVInstI Inst>
+    : Pat<(OpNode GPCR:$rs1, uimm12:$imm12), (Inst GPCR:$rs1, uimm12:$imm12)>;
+
+class PatGprGpcr<SDPatternOperator OpNode, RVInst Inst>
+    : Pat<(OpNode GPR:$rs1, GPCR:$rs2), (Inst GPR:$rs1, GPCR:$rs2)>;
+
+/// Capability-Inspection Instructions
+
+def : PatGpcr<int_cheri_cap_perms_get, CGetPerm>;
+def : PatGpcr<int_cheri_cap_type_get, CGetType>;
+def : PatGpcr<int_cheri_cap_base_get, CGetBase>;
+def : PatGpcr<int_cheri_cap_length_get, CGetLen>;
+def : PatGpcr<riscv_cap_tag_get, CGetTag>;
+def : PatGpcr<riscv_cap_sealed_get, CGetSealed>;
+def : PatGpcr<int_cheri_cap_offset_get, CGetOffset>;
+def : PatGpcr<int_cheri_cap_flags_get, CGetFlags>;
+def : PatGpcr<int_cheri_cap_address_get, CGetAddr>;
+
+/// Capability-Modification Instructions
+
+def : PatGpcrGpcr<int_cheri_cap_seal, CSeal>;
+def : PatGpcrGpcr<int_cheri_cap_unseal, CUnseal>;
+def : PatGpcrGpr<int_cheri_cap_perms_and, CAndPerm>;
+def : PatGpcrGpr<int_cheri_cap_flags_set, CSetFlags>;
+def : PatGpcrGpr<int_cheri_cap_offset_set, CSetOffset>;
+def : PatGpcrGpr<int_cheri_cap_address_set, CSetAddr>;
+def : PatGpcrGpr<ptradd, CIncOffset>;
+def : PatGpcrSimm12<ptradd, CIncOffsetImm>;
+def : PatGpcrGpr<int_cheri_cap_bounds_set, CSetBounds>;
+def : PatGpcrGpr<int_cheri_cap_bounds_set_exact, CSetBoundsExact>;
+def : PatGpcrUimm12<int_cheri_cap_bounds_set, CSetBoundsImm>;
+def : PatGpcr<int_cheri_cap_tag_clear, CClearTag>;
+def : PatGpcrGpcr<int_cheri_cap_build, CBuildCap>;
+def : PatGpcrGpcr<int_cheri_cap_type_copy, CCopyType>;
+def : PatGpcrGpcr<int_cheri_cap_conditional_seal, CCSeal>;
+
+/// Pointer-Arithmetic Instructions
+
+def : Pat<(int_cheri_cap_to_pointer GPCR:$rs1, GPCRC0IsDDC:$rs2),
+          (CToPtr GPCR:$rs1, GPCRC0IsDDC:$rs2)>;
+def : Pat<(int_cheri_cap_from_pointer GPCRC0IsDDC:$rs1, GPR:$rs2),
+          (CFromPtr GPCRC0IsDDC:$rs1, GPR:$rs2)>;
+def : Pat<(int_cheri_cap_from_ddc GPR:$rs2), (CFromPtr DDC, $rs2)>;
+def : PatGpcrGpcr<int_cheri_cap_diff, CSub>;
+
+// TODO: Only for hybrid; use CIncOffset C0 etc for CheriABI
+def : Pat<(inttoptr GPR:$rs2), (CFromPtr DDC, $rs2)>;
+def : Pat<(ptrtoint GPCR:$rs1), (CToPtr $rs1, DDC)>;
+
+/// Null Capability Patterns
+
+def : Pat<(int_cheri_cap_from_pointer DDC, (XLenVT 0)), (CLenVT (COPY C0))>;
+def : Pat<(int_cheri_cap_from_ddc (XLenVT 0)), (CLenVT (COPY C0))>;
+def : Pat<(inttoptr (XLenVT 0)), (CLenVT (COPY C0))>;
+
+/// Pointer-Comparison Instructions
+
+// Currently no dedicated instructions, so we:
+// * Rely on a merged register file
+// * Break untagged < tagged semantics
+// * Can't implement exact equality
+class CheriSetCCPatGpcrGpcr<PatFrag CondOp, dag GprGprDag>
+    : Pat<(CondOp GPCR:$cs1, GPCR:$cs2),
+          (OutPatFrag<(ops node:$rs1, node:$rs2), GprGprDag>
+            (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr),
+            (EXTRACT_SUBREG GPCR:$cs2, sub_cap_addr))>;
+
+multiclass CheriSetCCPatGpcrSimm12<PatFrag CondOp, dag GprSimm12Dag> {
+  def : Pat<(CondOp GPCR:$cs1, (inttoptr simm12:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+  def : Pat<(CondOp GPCR:$cs1,
+              (ptradd (inttoptr (XLenVT 0)), simm12:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+  def : Pat<(CondOp GPCR:$cs1,
+              (int_cheri_cap_offset_set
+                (iFATPTR64 (inttoptr (XLenVT 0))), simm12:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+  def : Pat<(CondOp GPCR:$cs1,
+              (int_cheri_cap_offset_set
+                (iFATPTR64 (inttoptr (XLenVT 0))), simm12:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+  def : Pat<(CondOp GPCR:$cs1,
+              (int_cheri_cap_address_set
+                (iFATPTR64 (inttoptr (XLenVT 0))), simm12:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+  def : Pat<(CondOp GPCR:$cs1,
+              (int_cheri_cap_address_set
+                (iFATPTR128 (inttoptr (XLenVT 0))), simm12:$imm12)),
+            (OutPatFrag<(ops node:$rs1, node:$imm12), GprSimm12Dag>
+              (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr), simm12:$imm12)>;
+}
+
+class CheriSetCCPatGpcrNull<PatFrag CondOp, dag GprDag>
+    : Pat<(CondOp GPCR:$cs1, (inttoptr (XLenVT 0))),
+          (OutPatFrag<(ops node:$rs1), GprDag>
+            (EXTRACT_SUBREG GPCR:$cs1, sub_cap_addr))>;
+
+class Swap<PatFrag BinFrag>
+    : PatFrag<(ops node:$a, node:$b), (BinFrag $b, $a)>;
+
+def  : CheriSetCCPatGpcrNull<seteq, (SLTIU node:$rs1, 1)>;
+def  : CheriSetCCPatGpcrGpcr<seteq, (SLTIU (XOR node:$rs1, node:$rs2), 1)>;
+defm : CheriSetCCPatGpcrSimm12<seteq, (SLTIU (XORI node:$rs1, node:$imm12), 1)>;
+defm : CheriSetCCPatGpcrSimm12<Swap<seteq>, (SLTIU (XORI node:$rs1, node:$imm12), 1)>;
+def  : CheriSetCCPatGpcrNull<setne, (SLTU X0, node:$rs1)>;
+def  : CheriSetCCPatGpcrGpcr<setne, (SLTU X0, (XOR node:$rs1, node:$rs2))>;
+defm : CheriSetCCPatGpcrSimm12<setne, (SLTU X0, (XORI node:$rs1, node:$imm12))>;
+defm : CheriSetCCPatGpcrSimm12<Swap<setne>, (SLTU X0, (XORI node:$rs1, node:$imm12))>;
+def  : CheriSetCCPatGpcrGpcr<setugt, (SLTU node:$rs2, node:$rs1)>;
+defm : CheriSetCCPatGpcrSimm12<Swap<setugt>, (SLTIU node:$rs1, node:$imm12)>;
+def  : CheriSetCCPatGpcrGpcr<setuge, (XORI (SLTU node:$rs1, node:$rs2), 1)>;
+def  : CheriSetCCPatGpcrGpcr<setule, (XORI (SLTU node:$rs2, node:$rs1), 1)>;
+def  : CheriSetCCPatGpcrGpcr<setult, (SLTU node:$rs1, node:$rs2)>;
+defm : CheriSetCCPatGpcrSimm12<setult, (SLTIU node:$rs1, node:$imm12)>;
+def  : CheriSetCCPatGpcrGpcr<setgt, (SLT node:$rs2, node:$rs1)>;
+defm : CheriSetCCPatGpcrSimm12<Swap<setgt>, (SLTI node:$rs1, node:$imm12)>;
+def  : CheriSetCCPatGpcrGpcr<setge, (XORI (SLT node:$rs1, node:$rs2), 1)>;
+def  : CheriSetCCPatGpcrGpcr<setle, (XORI (SLT node:$rs2, node:$rs1), 1)>;
+def  : CheriSetCCPatGpcrGpcr<setlt, (SLT node:$rs1, node:$rs2)>;
+defm : CheriSetCCPatGpcrSimm12<setlt, (SLTI node:$rs1, node:$imm12)>;
+
+def Select_GPCR_Using_CC_GPR : SelectCC_rrirr<GPCR, GPR>;
+
+/// Control-Flow Instructions
+
+// No dedicated instructions; see above
+
+class CheriBccPat<PatFrag CondOp, RVInstB Inst>
+    : Pat<(brcond (XLenVT (CondOp GPCR:$rs1, GPCR:$rs2)), bb:$imm12),
+          (Inst
+            (EXTRACT_SUBREG GPCR:$rs1, sub_cap_addr),
+            (EXTRACT_SUBREG GPCR:$rs2, sub_cap_addr),
+            simm13_lsb0:$imm12)>;
+
+def : CheriBccPat<seteq, BEQ>;
+def : CheriBccPat<setne, BNE>;
+def : CheriBccPat<setlt, BLT>;
+def : CheriBccPat<setge, BGE>;
+def : CheriBccPat<setult, BLTU>;
+def : CheriBccPat<setuge, BGEU>;
+
+class CheriBccSwapPat<PatFrag CondOp, RVInst InstBcc>
+    : Pat<(brcond (XLenVT (CondOp GPCR:$rs1, GPCR:$rs2)), bb:$imm12),
+          (InstBcc
+            (EXTRACT_SUBREG GPCR:$rs2, sub_cap_addr),
+            (EXTRACT_SUBREG GPCR:$rs1, sub_cap_addr),
+            simm13_lsb0:$imm12)>;
+
+def : CheriBccSwapPat<setgt, BLT>;
+def : CheriBccSwapPat<setle, BGE>;
+def : CheriBccSwapPat<setugt, BLTU>;
+def : CheriBccSwapPat<setule, BGEU>;
+
+/// Assertion Instructions
+
+def : PatGpcrGpcr<riscv_cap_subset_test, CTestSubset>;
+
+/// Special Capability Register Access Instructions
+
+def : Pat<(int_cheri_ddc_get), (CSpecialRW SCR_DDC.Encoding, C0)>;
+
+let Predicates = [HasCheri] in
+def : Pat<(int_cheri_pcc_get), (CSpecialRW SCR_PCC.Encoding, C0)>;
+
+/// Fast Register-Clearing Instructions
+
+/// Adjusting to Compressed Capability Precision Instructions
+
+def : PatGpr<int_cheri_round_representable_length, CRRL>;
+def : PatGpr<int_cheri_representable_alignment_mask, CRAM>;
+
+// TODO: int_cheri_cap_load_tags, int_cheri_bounded_stack_cap
+
+/// Memory-Access with Explicit Address Type Instructions
+
+// TODO: Need int<->float patterns for pointers in capabilty mode and
+// capabilities without capability mode (which requires BuildPairF64 and
+// SplitF64 for doubles on RV32I).
+
+multiclass CheriExplicitLdPat<PatFrag LoadOp, RVInst Inst,
+                              RegisterClass AddrTy> {
+  let AddedComplexity = -10 in
+  def : Pat<(LoadOp AddrTy:$rs1), (Inst AddrTy:$rs1)>;
+}
+
+multiclass CheriExplicitStPat<PatFrag StoreOp, RVInst Inst,
+                              RegisterClass StTy, RegisterClass AddrTy> {
+  let AddedComplexity = -10 in
+  def : Pat<(StoreOp StTy:$rs2, AddrTy:$rs1), (Inst StTy:$rs2, AddrTy:$rs1)>;
+}
+
+/// DDC-relative loads
+
+let Predicates = [HasCheri] in {
+defm : CheriExplicitLdPat<sextloadi8, LB_DDC, GPR>;
+defm : CheriExplicitLdPat<extloadi8, LB_DDC, GPR>;
+defm : CheriExplicitLdPat<sextloadi16, LH_DDC, GPR>;
+defm : CheriExplicitLdPat<extloadi16, LH_DDC, GPR>;
+defm : CheriExplicitLdPat<zextloadi8, LBU_DDC, GPR>;
+defm : CheriExplicitLdPat<zextloadi16, LHU_DDC, GPR>;
+}
+
+let Predicates = [HasCheri, IsRV32] in {
+defm : CheriExplicitLdPat<load, LW_DDC, GPR>;
+defm : CheriExplicitLdPat<load, LC_DDC_64, GPR>;
+}
+
+let Predicates = [HasCheri, IsRV64] in {
+defm : CheriExplicitLdPat<sextloadi32, LW_DDC, GPR>;
+defm : CheriExplicitLdPat<extloadi32, LW_DDC, GPR>;
+defm : CheriExplicitLdPat<load, LD_DDC, GPR>;
+defm : CheriExplicitLdPat<zextloadi32, LWU_DDC, GPR>;
+defm : CheriExplicitLdPat<load, LC_DDC_128, GPR>;
+}
+
+/// DDC-relative stores
+
+let Predicates = [HasCheri] in {
+defm : CheriExplicitStPat<truncstorei8, SB_DDC, GPR, GPR>;
+defm : CheriExplicitStPat<truncstorei16, SH_DDC, GPR, GPR>;
+}
+
+let Predicates = [HasCheri, IsRV32] in {
+defm : CheriExplicitStPat<store, SW_DDC, GPR, GPR>;
+defm : CheriExplicitStPat<store, SC_DDC_64, GPCR, GPR>;
+}
+
+let Predicates = [HasCheri, IsRV64] in {
+defm : CheriExplicitStPat<truncstorei32, SW_DDC, GPR, GPR>;
+defm : CheriExplicitStPat<store, SD_DDC, GPR, GPR>;
+defm : CheriExplicitStPat<store, SC_DDC_128, GPCR, GPR>;
+}
+
+/// Capability loads
+
+let Predicates = [HasCheri] in {
+defm : CheriExplicitLdPat<sextloadi8, LB_CAP, GPCR>;
+defm : CheriExplicitLdPat<extloadi8, LB_CAP, GPCR>;
+defm : CheriExplicitLdPat<sextloadi16, LH_CAP, GPCR>;
+defm : CheriExplicitLdPat<extloadi16, LH_CAP, GPCR>;
+defm : CheriExplicitLdPat<zextloadi8, LBU_CAP, GPCR>;
+defm : CheriExplicitLdPat<zextloadi16, LHU_CAP, GPCR>;
+}
+
+let Predicates = [HasCheri, IsRV32] in {
+defm : CheriExplicitLdPat<load, LW_CAP, GPCR>;
+defm : CheriExplicitLdPat<load, LC_CAP_64, GPCR>;
+}
+
+let Predicates = [HasCheri, IsRV64] in {
+defm : CheriExplicitLdPat<sextloadi32, LW_CAP, GPCR>;
+defm : CheriExplicitLdPat<extloadi32, LW_CAP, GPCR>;
+defm : CheriExplicitLdPat<load, LD_CAP, GPCR>;
+defm : CheriExplicitLdPat<zextloadi32, LWU_CAP, GPCR>;
+defm : CheriExplicitLdPat<load, LC_CAP_128, GPCR>;
+}
+
+/// Capability stores
+
+let Predicates = [HasCheri] in {
+defm : CheriExplicitStPat<truncstorei8, SB_CAP, GPR, GPCR>;
+defm : CheriExplicitStPat<truncstorei16, SH_CAP, GPR, GPCR>;
+}
+
+let Predicates = [HasCheri, IsRV32] in {
+defm : CheriExplicitStPat<store, SW_CAP, GPR, GPCR>;
+defm : CheriExplicitStPat<store, SC_CAP_64, GPCR, GPCR>;
+}
+
+let Predicates = [HasCheri, IsRV64] in {
+defm : CheriExplicitStPat<truncstorei32, SW_CAP, GPR, GPCR>;
+defm : CheriExplicitStPat<store, SD_CAP, GPR, GPCR>;
+defm : CheriExplicitStPat<store, SC_CAP_128, GPCR, GPCR>;
+}
+
+/// Memory-Access Instructions
+
+multiclass AMOCapPat<string CLenStr, string AtomicOp, string BaseInst> {
+  def : PatGprGpcr<!cast<PatFrag>(AtomicOp#"_monotonic"),
+                   !cast<RVInst>(BaseInst#"_"#CLenStr)>;
+  def : PatGprGpcr<!cast<PatFrag>(AtomicOp#"_acquire"),
+                   !cast<RVInst>(BaseInst#"_AQ_"#CLenStr)>;
+  def : PatGprGpcr<!cast<PatFrag>(AtomicOp#"_release"),
+                   !cast<RVInst>(BaseInst#"_RL_"#CLenStr)>;
+  def : PatGprGpcr<!cast<PatFrag>(AtomicOp#"_acq_rel"),
+                   !cast<RVInst>(BaseInst#"_AQ_RL_"#CLenStr)>;
+  def : PatGprGpcr<!cast<PatFrag>(AtomicOp#"_seq_cst"),
+                   !cast<RVInst>(BaseInst#"_AQ_RL_"#CLenStr)>;
+}
+
+let Predicates = [HasCheri, IsRV32] in {
+defm : LdPat<load, LC_64>;
+defm : StPat<store, SC_64, GPCR>;
+} // Predicates = [HasCheri, IsRV32]
+
+let Predicates = [HasCheri, IsRV64] in {
+defm : LdPat<load, LC_128>;
+defm : StPat<store, SC_128, GPCR>;
+} // Predicates = [HasCheri, IsRV64]
+
+let Predicates = [HasCheri, HasStdExtA, IsRV32] in {
+defm : LdPat<atomic_load_cap, LC_64>;
+defm : AtomicStPat<atomic_store_cap, SC_64, GPCR>;
+defm : AMOCapPat<"64", "atomic_swap_cap", "AMOSWAP_C">;
+} // Predicates = [HasCheri, HasStdExtA, IsRV32]
+
+let Predicates = [HasCheri, HasStdExtA, IsRV64] in {
+defm : LdPat<atomic_load_cap, LC_128>;
+defm : AtomicStPat<atomic_store_cap, SC_128, GPCR>;
+defm : AMOCapPat<"128", "atomic_swap_cap", "AMOSWAP_C">;
+} // Predicates = [HasCheri, HasStdExtA, IsRV64]
+
+let Predicates = [HasCheri, HasStdExtA] in {
+def PseudoCmpXchgCap
+    : Pseudo<(outs GPCR:$res, GPR:$scratch),
+             (ins GPR:$addr, GPCR:$cmpval, GPCR:$newval, ixlenimm:$ordering), []> {
+  let Constraints = "@earlyclobber $res,@earlyclobber $scratch";
+  let mayLoad = 1;
+  let mayStore = 1;
+  let hasSideEffects = 0;
+}
+
+def : Pat<(atomic_cmp_swap_cap_monotonic GPR:$addr, GPCR:$cmp, GPCR:$new),
+          (PseudoCmpXchgCap GPR:$addr, GPCR:$cmp, GPCR:$new, 2)>;
+def : Pat<(atomic_cmp_swap_cap_acquire GPR:$addr, GPCR:$cmp, GPCR:$new),
+          (PseudoCmpXchgCap GPR:$addr, GPCR:$cmp, GPCR:$new, 4)>;
+def : Pat<(atomic_cmp_swap_cap_release GPR:$addr, GPCR:$cmp, GPCR:$new),
+          (PseudoCmpXchgCap GPR:$addr, GPCR:$cmp, GPCR:$new, 5)>;
+def : Pat<(atomic_cmp_swap_cap_acq_rel GPR:$addr, GPCR:$cmp, GPCR:$new),
+          (PseudoCmpXchgCap GPR:$addr, GPCR:$cmp, GPCR:$new, 6)>;
+def : Pat<(atomic_cmp_swap_cap_seq_cst GPR:$addr, GPCR:$cmp, GPCR:$new),
+          (PseudoCmpXchgCap GPR:$addr, GPCR:$cmp, GPCR:$new, 7)>;
+} // Predicates = [HasCheri, HasStdExtA]

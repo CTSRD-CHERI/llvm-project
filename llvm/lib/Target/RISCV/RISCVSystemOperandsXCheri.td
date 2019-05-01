@@ -55,8 +55,8 @@ def lookupSpecialCapRegByName : SearchIndex {
 //===------------------------------
 // Execution Environment
 //===------------------------------
-def : SpecialCapReg<"pcc", 0x00>;
-def : SpecialCapReg<"ddc", 0x01>;
+def SCR_PCC : SpecialCapReg<"pcc", 0x00>;
+def SCR_DDC : SpecialCapReg<"ddc", 0x01>;
 
 //===------------------------------
 // User Trap Setup/Handling

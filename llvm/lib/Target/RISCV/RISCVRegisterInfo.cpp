@@ -44,10 +44,13 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   auto &Subtarget = MF->getSubtarget<RISCVSubtarget>();
   if (MF->getFunction().hasFnAttribute("interrupt")) {
     if (Subtarget.hasStdExtD())
-      return CSR_XLEN_F64_Interrupt_SaveList;
+      return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F64_Interrupt_SaveList
+                                  : CSR_XLEN_F64_Interrupt_SaveList;
     if (Subtarget.hasStdExtF())
-      return CSR_XLEN_F32_Interrupt_SaveList;
-    return CSR_Interrupt_SaveList;
+      return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F32_Interrupt_SaveList
+                                  : CSR_XLEN_F32_Interrupt_SaveList;
+    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_Interrupt_SaveList
+                                : CSR_Interrupt_SaveList;
   }
 
   switch (Subtarget.getTargetABI()) {
@@ -82,6 +85,16 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   markSuperRegs(Reserved, RISCV::X4); // tp
   if (TFI->hasFP(MF))
     markSuperRegs(Reserved, RISCV::X8); // fp
+
+  markSuperRegs(Reserved, RISCV::C0); // cnull
+  markSuperRegs(Reserved, RISCV::C2); // csp
+  markSuperRegs(Reserved, RISCV::C3); // cgp
+  markSuperRegs(Reserved, RISCV::C4); // ctp
+  if (TFI->hasFP(MF))
+    markSuperRegs(Reserved, RISCV::C8); // cfp
+
+  markSuperRegs(Reserved, RISCV::DDC);
+
   // Reserve the base register if we need to realign the stack and allocate
   // variable-sized objects at runtime.
   if (TFI->hasBP(MF))
@@ -158,10 +171,13 @@ RISCVRegisterInfo::getCallPreservedMask(const MachineFunction & MF,
   auto &Subtarget = MF.getSubtarget<RISCVSubtarget>();
   if (MF.getFunction().hasFnAttribute("interrupt")) {
     if (Subtarget.hasStdExtD())
-      return CSR_XLEN_F64_Interrupt_RegMask;
+      return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F64_Interrupt_RegMask
+                                  : CSR_XLEN_F64_Interrupt_RegMask;
     if (Subtarget.hasStdExtF())
-      return CSR_XLEN_F32_Interrupt_RegMask;
-    return CSR_Interrupt_RegMask;
+      return Subtarget.hasCheri() ? CSR_XLEN_CLEN_F32_Interrupt_RegMask
+                                  : CSR_XLEN_F32_Interrupt_RegMask;
+    return Subtarget.hasCheri() ? CSR_XLEN_CLEN_Interrupt_RegMask
+                                : CSR_Interrupt_RegMask;
   }
 
   switch (Subtarget.getTargetABI()) {

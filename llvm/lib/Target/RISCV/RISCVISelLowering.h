@@ -51,7 +51,13 @@ enum NodeType : unsigned {
   FMV_X_ANYEXTW_RV64,
   // READ_CYCLE_WIDE - A read of the 64-bit cycle CSR on a 32-bit target
   // (returns (Lo, Hi)). It takes a chain operand.
-  READ_CYCLE_WIDE
+  READ_CYCLE_WIDE,
+  /// Legalised int_cheri_cap_tag_get
+  CAP_TAG_GET,
+  /// Legalised int_cheri_cap_sealed_get
+  CAP_SEALED_GET,
+  /// Legalised int_cheri_cap_subset_test
+  CAP_SUBSET_TEST,
 };
 }
 
@@ -201,6 +207,8 @@ private:
   SDValue lowerShiftLeftParts(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerShiftRightParts(SDValue Op, SelectionDAG &DAG, bool IsSRA) const;
 
+  bool hasCapabilitySetAddress() const override { return true; }
+
   bool isEligibleForTailCallOptimization(
       CCState &CCInfo, CallLoweringInfo &CLI, MachineFunction &MF,
       const SmallVector<CCValAssign, 16> &ArgLocs) const;
@@ -217,6 +225,8 @@ private:
                                    Value *AlignedAddr, Value *CmpVal,
                                    Value *NewVal, Value *Mask,
                                    AtomicOrdering Ord) const override;
+  virtual bool canLowerPointerTypeCmpXchg(
+      const DataLayout &DL, AtomicCmpXchgInst *AI) const override;
 
   /// Generate error diagnostics if any register used by CC has been marked
   /// reserved.
