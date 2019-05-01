@@ -6929,7 +6929,10 @@ Sema::BuildExpressionFromIntegralTemplateArgument(const TemplateArgument &Arg,
   } else if (T->isNullPtrType()) {
     E = new (Context) CXXNullPtrLiteralExpr(Context.NullPtrTy, Loc);
   } else {
-    E = IntegerLiteral::Create(Context, Arg.getAsIntegral(), T, Loc);
+    auto IntValue = Arg.getAsIntegral();
+    if (T->isIntCapType())
+      IntValue = IntValue.extOrTrunc(Context.getIntWidth(T));
+    E = IntegerLiteral::Create(Context, IntValue, T, Loc);
   }
 
   if (OrigT->isEnumeralType()) {
