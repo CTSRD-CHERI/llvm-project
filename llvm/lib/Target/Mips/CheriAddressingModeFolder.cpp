@@ -407,9 +407,9 @@ struct CheriAddressingModeFolder : public MachineFunctionPass {
         modified = true;
       }
 
-    assert(!UseCapTable ||
-           DDCOps.empty() && "This optimization is sometimes wrong -> should "
-                             "skip (at least for captable)!");
+    assert((!UseCapTable || DDCOps.empty()) &&
+           "This optimization is sometimes wrong -> should "
+           "skip (at least for captable)!");
     for (auto &I : DDCOps) {
       IncOffsets.insert(I.second);
       MachineOperand *BaseOperand = &I.second->getOperand(2);
