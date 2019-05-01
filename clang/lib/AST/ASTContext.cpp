@@ -2926,6 +2926,7 @@ bool ASTContext::shouldUseCHERICap(PointerInterpretationKind PIK) const {
     case PIK_Default:
       return getTargetInfo().areAllPointersCapabilities();
     case PIK_Invalid:
+    default:
       llvm_unreachable("Invalid pointer interpretation!");
   }
 }

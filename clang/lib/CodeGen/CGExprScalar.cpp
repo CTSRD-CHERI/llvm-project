@@ -2175,7 +2175,7 @@ llvm::Value* CodeGenFunction::EmitPointerCast(llvm::Value *From,
   llvm::PointerType *toTy = cast<llvm::PointerType>(ConvertType(ToTy));
   unsigned ToAddrSpace = toTy->getAddressSpace();
   llvm::Value *result = EmitPointerCast(From, toTy);
-  if (Target.getTriple().getArch() == llvm::Triple::cheri) {
+  if (Target.getTriple().isMIPS()) {
     if (ToAddrSpace != (unsigned)CGM.getTargetCodeGenInfo().getCHERICapabilityAS()) return result;
     unsigned flags = 0xffff;
     // Clear the store and store-capability flags

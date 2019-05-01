@@ -270,7 +270,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath(crt1)));
 
     // Don't support .init and .fini sections for CheriABI.
-    if (Arch != llvm::Triple::cheri || !IsCHERIPureCapABI)
+    if (!IsCHERIPureCapABI)
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crti.o")));
 
     const char *crtbegin = nullptr;
@@ -371,7 +371,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtend.o")));
 
     // Don't support .init and .fini sections for CheriABI.
-    if (Arch != llvm::Triple::cheri || !IsCHERIPureCapABI)
+    if (!IsCHERIPureCapABI)
       CmdArgs.push_back(Args.MakeArgString(ToolChain.GetFilePath("crtn.o")));
   }
 
@@ -382,7 +382,7 @@ void freebsd::Linker::ConstructJob(Compilation &C, const JobAction &JA,
   if (Args.hasFlag(options::OPT_external_capsizefix, options::OPT_no_capsizefix,
                    false) &&
       Args.hasFlag(options::OPT_cheri_linker, options::OPT_no_cheri_linker,
-                   ToolChain.getArch() == llvm::Triple::cheri)) {
+                   true)) {
     Exec = Args.MakeArgString(getToolChain().GetProgramPath("capsizefix"));
     ArgStringList SizeFixArgs;
     if (Args.hasArg(options::OPT_verbose_capsizefix))
@@ -405,9 +405,7 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
        Triple.getArch() == llvm::Triple::ppc) &&
       D.getVFS().exists(getDriver().SysRoot + "/usr/lib32/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/lib32");
-  else if ((Triple.getArch() == llvm::Triple::cheri ||
-            Triple.getArch() == llvm::Triple::mips64) &&
-           tools::mips::hasMipsAbiArg(Args, "purecap") &&
+  else if (Triple.isMIPS() && tools::mips::hasMipsAbiArg(Args, "purecap") &&
            D.getVFS().exists(getDriver().SysRoot + "/usr/libcheri/crt1.o"))
     getFilePaths().push_back(getDriver().SysRoot + "/usr/libcheri");
   else
@@ -416,7 +414,7 @@ FreeBSD::FreeBSD(const Driver &D, const llvm::Triple &Triple,
 
 ToolChain::CXXStdlibType FreeBSD::GetDefaultCXXStdlibType() const {
   if (getTriple().getOSMajorVersion() >= 10 ||
-      getTriple().getArch() ==llvm::Triple::cheri)
+      getTriple().getArch() == llvm::Triple::cheri)
     return ToolChain::CST_Libcxx;
   return ToolChain::CST_Libstdcxx;
 }

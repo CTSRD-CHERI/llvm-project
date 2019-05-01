@@ -125,7 +125,8 @@ public:
       .Case("cheri256", 256)
       .Case("cheri64", 64)
       .Default(-1);
-    if (CapSize > 0 || getTriple().getArch() == llvm::Triple::cheri) {
+    if (CapSize > 0 || getTriple().getArch() == llvm::Triple::cheri ||
+        getTriple().getEnvironment() == llvm::Triple::CheriPurecap) {
       IsCHERI = true;
     }
     if (IsCHERI) {

@@ -1669,9 +1669,7 @@ void Clang::AddMIPSTargetArgs(const ArgList &Args,
   CmdArgs.push_back(ABIName.data());
 
   // Add warning about calling functions without prototypes in MIPS CHERI
-  if ((Triple.getArch() == llvm::Triple::cheri ||
-       Triple.getArch() == llvm::Triple::mips64) &&
-      ABIName == "purecap")
+  if (Triple.isMIPS() && ABIName == "purecap")
     CmdArgs.push_back("-Wmips-cheri-prototypes");
 
   mips::FloatABI ABI = mips::getMipsFloatABI(D, Args);
