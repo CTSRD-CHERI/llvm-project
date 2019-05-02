@@ -1,6 +1,7 @@
-// RUN: %cheri_purecap_cc1 -O2 -std=c++11 -o /dev/null -emit-llvm %s
+// RUN: %cheri_purecap_cc1 -O2 -std=c++11 -o - -emit-llvm %s -w | FileCheck %s
 // https://github.com/CTSRD-CHERI/clang/issues/145
-// XFAIL: *
+// This used to crash due to the __uintcap_t template argument
+//
 // From WebKit:
 
 typedef __uintcap_t uintptr_t;
@@ -33,3 +34,11 @@ bool isAlignedToMachineWord(const void* pointer)
 {
     return isAlignedTo<machineWordAlignmentMask>(pointer);
 }
+
+// CHECK:      define zeroext i1 @_Z22isAlignedToMachineWord
+// CHECK-NEXT:   entry:
+// CHECK-NEXT:   %0 = tail call i64 @llvm.cheri.cap.address.get.i64(i8 addrspace(200)* %pointer) #2
+// CHECK-NEXT:   %and.i = and i64 %0, 7
+// CHECK-NEXT:   %tobool.i = icmp eq i64 %and.i, 0
+// CHECK-NEXT:   ret i1 %tobool.i
+// CHECK-NEXT: }
