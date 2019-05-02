@@ -82,7 +82,15 @@ class HWR<bits<16> Enc, string n> : MipsReg<Enc, n>;
 class CheriHWR<bits<16> Enc, string n> : MipsReg<Enc, n>;
 
 // CHERI capability registers
-class CAP<bits<16> Enc, string n> : MipsReg<Enc, n>;
+// Uncomment the subregs lines to pretend we are super-registers of the MIPS
+// integer registers. This is not true but could simulate a merged register file
+class CAP<bits<16> Enc, string n, list<Register> subregs = []>
+  // : MipsRegWithSubRegs<Enc, n, subregs> {
+  : MipsRegWithSubRegs<Enc, n, []> {
+  // Pretend that we have sub-registers for the purpose of register allocation
+  // let SubRegIndices = [sub_64];
+  let SubRegIndices = [];
+}
 
 //===----------------------------------------------------------------------===//
 //  Registers
@@ -267,44 +275,46 @@ let Namespace = "Mips" in {
 
   // Capability registers
 
-  def DDC : CAP<0, "DDC">, DwarfRegNum<[72]>; // TODO: this == CAPHWR0
+  def DDC : CAP<0, "DDC">, DwarfRegNum<[72]> { // TODO: this == CAPHWR0
+    let SubRegIndices = [];
+  }
   // CNULL and DDC share the same encoding register number since some instructions
   // use reg = 0 to mean $ddc (loads/stores/cfromptr/ctoptr/cbuildcap)
   // For compatibility with GDB keep the DwarfRegNum for DDC as 72 and assign
   // the next one to cnull (not very useful in GDB anyway since it will always
   // be null).
-  def CNULL : CAP<0, "CNULL">, DwarfRegNum<[104]>;
-  def C1  : CAP<1, "C1">, DwarfRegNum<[73]>;
-  def C2  : CAP<2, "C2">, DwarfRegNum<[74]>;
-  def C3  : CAP<3, "C3">, DwarfRegNum<[75]>;
-  def C4  : CAP<4, "C4">, DwarfRegNum<[76]>;
-  def C5  : CAP<5, "C5">, DwarfRegNum<[77]>;
-  def C6  : CAP<6, "C6">, DwarfRegNum<[78]>;
-  def C7  : CAP<7, "C7">, DwarfRegNum<[79]>;
-  def C8  : CAP<8, "C8">, DwarfRegNum<[80]>;
-  def C9  : CAP<9, "C9">, DwarfRegNum<[81]>;
-  def C10 : CAP<10, "C10">, DwarfRegNum<[82]>;
-  def C11 : CAP<11, "C11">, DwarfRegNum<[83]>;
-  def C12 : CAP<12, "C12">, DwarfRegNum<[84]>;
-  def C13 : CAP<13, "C13">, DwarfRegNum<[85]>;
-  def C14 : CAP<14, "C14">, DwarfRegNum<[86]>;
-  def C15 : CAP<15, "C15">, DwarfRegNum<[87]>;
-  def C16 : CAP<16, "C16">, DwarfRegNum<[88]>;
-  def C17 : CAP<17, "C17">, DwarfRegNum<[89]>;
-  def C18 : CAP<18, "C18">, DwarfRegNum<[90]>;
-  def C19 : CAP<19, "C19">, DwarfRegNum<[91]>;
-  def C20 : CAP<20, "C20">, DwarfRegNum<[92]>;
-  def C21 : CAP<21, "C21">, DwarfRegNum<[93]>;
-  def C22 : CAP<22, "C22">, DwarfRegNum<[94]>;
-  def C23 : CAP<23, "C23">, DwarfRegNum<[95]>;
-  def C24 : CAP<24, "C24">, DwarfRegNum<[96]>;
-  def C25 : CAP<25, "C25">, DwarfRegNum<[97]>;
-  def C26 : CAP<26, "C26">, DwarfRegNum<[98]>;
-  def C27 : CAP<27, "C27">, DwarfRegNum<[99]>;
-  def C28 : CAP<28, "C28">, DwarfRegNum<[100]>;
-  def C29 : CAP<29, "C29">, DwarfRegNum<[101]>;
-  def C30 : CAP<30, "C30">, DwarfRegNum<[102]>;
-  def C31 : CAP<31, "C31">, DwarfRegNum<[103]>;
+  def CNULL : CAP<0, "CNULL", [ZERO_64]>, DwarfRegNum<[104]>;
+  def C1  : CAP<1, "C1", [V0_64]>, DwarfRegNum<[73]>;
+  def C2  : CAP<2, "C2", [V1_64]>, DwarfRegNum<[74]>;
+  def C3  : CAP<3, "C3", [S0_64]>, DwarfRegNum<[75]>;
+  def C4  : CAP<4, "C4", [S1_64]>, DwarfRegNum<[76]>;
+  def C5  : CAP<5, "C5", [S2_64]>, DwarfRegNum<[77]>;
+  def C6  : CAP<6, "C6", [S3_64]>, DwarfRegNum<[78]>;
+  def C7  : CAP<7, "C7", [S4_64]>, DwarfRegNum<[79]>;
+  def C8  : CAP<8, "C8", [S5_64]>, DwarfRegNum<[80]>;
+  def C9  : CAP<9, "C9", [S6_64]>, DwarfRegNum<[81]>;
+  def C10 : CAP<10, "C10", [S7_64]>, DwarfRegNum<[82]>;
+  def C11 : CAP<11, "C11", [SP_64]>, DwarfRegNum<[83]>;
+  def C12 : CAP<12, "C12", [T9_64]>, DwarfRegNum<[84]>;
+  def C13 : CAP<13, "C13", [T8_64]>, DwarfRegNum<[85]>;
+  def C14 : CAP<14, "C14", [A0_64]>, DwarfRegNum<[86]>;
+  def C15 : CAP<15, "C15", [A1_64]>, DwarfRegNum<[87]>;
+  def C16 : CAP<16, "C16", [A2_64]>, DwarfRegNum<[88]>;
+  def C17 : CAP<17, "C17", [RA_64]>, DwarfRegNum<[89]>;
+  def C18 : CAP<18, "C18", [A3_64]>, DwarfRegNum<[90]>;
+  def C19 : CAP<19, "C19", [T0_64]>, DwarfRegNum<[91]>;
+  def C20 : CAP<20, "C20", [T1_64]>, DwarfRegNum<[92]>;
+  def C21 : CAP<21, "C21", [T2_64]>, DwarfRegNum<[93]>;
+  def C22 : CAP<22, "C22", [T3_64]>, DwarfRegNum<[94]>;
+  def C23 : CAP<23, "C23", [T4_64]>, DwarfRegNum<[95]>;
+  def C24 : CAP<24, "C24", [FP_64]>, DwarfRegNum<[96]>;
+  def C25 : CAP<25, "C25", [T5_64]>, DwarfRegNum<[97]>;
+  def C26 : CAP<26, "C26", [GP_64]>, DwarfRegNum<[98]>;
+  def C27 : CAP<27, "C27", [K0_64]>, DwarfRegNum<[99]>;
+  def C28 : CAP<28, "C28", [K1_64]>, DwarfRegNum<[100]>;
+  def C29 : CAP<29, "C29", [T6_64]>, DwarfRegNum<[101]>;
+  def C30 : CAP<30, "C30", [T7_64]>, DwarfRegNum<[102]>;
+  def C31 : CAP<31, "C31", [AT_64]>, DwarfRegNum<[103]>;
 
 
   // TODO: assign DWARF register numbers to the special hwregs
