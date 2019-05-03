@@ -66,6 +66,14 @@ def FeatureCheri
 def HasCheri : Predicate<"Subtarget->hasCheri()">,
                          AssemblerPredicate<"FeatureCheri">;
 
+def FeatureCapMode
+    : SubtargetFeature<"cap-mode", "IsCapMode", "true",
+                       "Capability mode">;
+def IsCapMode  : Predicate<"Subtarget->isCapMode()">,
+                           AssemblerPredicate<"FeatureCapMode">;
+def NotCapMode : Predicate<"!Subtarget->isCapMode()">,
+                           AssemblerPredicate<"!FeatureCapMode">;
+
 def FeatureRelax
     : SubtargetFeature<"relax", "EnableLinkerRelax", "true",
                        "Enable Linker relaxation.">;

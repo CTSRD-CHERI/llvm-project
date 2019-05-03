@@ -188,3 +188,14 @@ class CheriStore_explicit<bits<5> op, string opcodestr, RegisterClass srcClass,
     : RVInstCheriZRR<0x7c, op, 0, OPC_CHERI, (outs),
                      (ins srcClass:$rs2, addrClass:$rs1),
                      opcodestr, "$rs2, $rs1">;
+
+let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
+class CapModeLoad_ri<bits<3> funct3, string opcodestr>
+    : RVInstI<funct3, OPC_LOAD, (outs GPR:$rd), (ins GPCR:$rs1, simm12:$imm12),
+              opcodestr, "$rd, ${imm12}(${rs1})">;
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
+class CapModeStore_rri<bits<3> funct3, string opcodestr>
+    : RVInstS<funct3, OPC_STORE, (outs),
+              (ins GPR:$rs2, GPCR:$rs1, simm12:$imm12),
+              opcodestr, "$rs2, ${imm12}(${rs1})">;
