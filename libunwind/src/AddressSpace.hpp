@@ -432,9 +432,7 @@ LocalAddressSpace::getEncodedP(pint_t &addr, pint_t end, uint8_t encoding,
     // values to be indirect to avoid RODATA relocations.
     result = getP(assert_pointer_in_bounds(result));
 #ifdef __CHERI_PURE_CAPABILITY__
-    fprintf(stderr, "Warning: DW_EH_PE_indirect is not implemented "
-            "correctly! Result was %#p\n", (void*)result);
-    result = assert_pointer_in_bounds(result);
+    assert_pointer_in_bounds(result);
 #endif
   }
 
