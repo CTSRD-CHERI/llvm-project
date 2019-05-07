@@ -55,6 +55,9 @@ namespace cheri {
 /// Returns true if the value must be untagged (e.g. incoffset on NULL or result
 /// of a tag.clear intrinsic)
 bool isKnownUntaggedCapability(const Value* V, const DataLayout* DL);
+
+// User-permissions are shifted by 15 in CAndPerm/CGetPerm
+constexpr unsigned MIPS_UPERMS_SHIFT = 15;
 }
 
 #if 0

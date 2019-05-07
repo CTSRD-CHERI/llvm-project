@@ -30,6 +30,7 @@
 #include "llvm/ADT/Hashing.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/IR/Cheri.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
@@ -640,6 +641,12 @@ static StringRef boundsKindStr(SubObjectBoundsKind Kind) {
   llvm_unreachable("Invalid kind");
 }
 
+static llvm::cl::opt<unsigned> SubobjectBoundsSWPerm(
+    "cheri-subobject-bounds-clear-swperm", llvm::cl::ZeroOrMore,
+    llvm::cl::Hidden,
+    llvm::cl::desc("Clear the given software permission whenever "
+                   "subobject-bounds narrowed the bounds"));
+
 // If we are setting bounds on the full container size, the csetbounds must
 // be done before the cincoffset!
 static llvm::Value *
@@ -687,6 +694,7 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
     llvm_unreachable("Invalid kind");
   }
   llvm::Value *SetBoundsSize = nullptr;
+  llvm::Value *SrcLength = nullptr;
   std::string SizeStr;
   if (TBR.UseRemainingSize) {
     SizeStr = TBR.Size ? ("min(" + Twine(*TBR.Size) + ", remaining)").str()
@@ -695,10 +703,10 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
     auto Offset = CGF.Builder.CreateIntrinsic(
         llvm::Intrinsic::cheri_cap_offset_get, CGF.PtrDiffTy, SrcAsI8, nullptr,
         "cur_offset");
-    auto Length =
+    SrcLength =
         CGF.Builder.CreateIntrinsic(llvm::Intrinsic::cheri_cap_length_get,
                                     CGF.PtrDiffTy, SrcAsI8, nullptr, "cur_len");
-    SetBoundsSize = CGF.Builder.CreateSub(Length, Offset, "remaining_bytes");
+    SetBoundsSize = CGF.Builder.CreateSub(SrcLength, Offset, "remaining_bytes");
     if (TBR.Size) {
       auto MaxConst = llvm::ConstantInt::get(CGF.PtrDiffTy, *TBR.Size);
       auto LessThanMax = CGF.Builder.CreateICmpULT(SetBoundsSize, MaxConst,
@@ -726,6 +734,33 @@ tightenCHERIBounds(CodeGenFunction &CGF, SubObjectBoundsKind Kind,
   llvm::Value *Result = CGF.setPointerBounds(
       ValueToBound, SetBoundsSize, Loc, KindStr + ".with.bounds",
       "Add subobject bounds", TBR.IsSubObject, StatsPrefix + Ty.getAsString());
+
+  if (SubobjectBoundsSWPerm.getNumOccurrences() > 0) {
+    // Clear the given software permission bit to differentiate subobject-bounds
+    // violations from normal CHERI traps
+    if (!SrcLength) {
+      auto SrcAsI8 =
+          CGF.Builder.CreateBitCast(ValueToBound, CGF.Int8CheriCapTy);
+      SrcLength = CGF.Builder.CreateIntrinsic(
+          llvm::Intrinsic::cheri_cap_length_get, CGF.PtrDiffTy, SrcAsI8,
+          nullptr, "cur_len");
+    }
+    auto ResultAsI8 =
+        CGF.Builder.CreateBitCast(Result, CGF.Int8CheriCapTy);
+    auto ResultLength = CGF.Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_length_get, CGF.PtrDiffTy, ResultAsI8,
+        nullptr, "new_len");
+    auto NewPermsMask = llvm::ConstantInt::get(
+        CGF.PtrDiffTy, ~((UINT64_C(1) << SubobjectBoundsSWPerm)
+                         << llvm::cheri::MIPS_UPERMS_SHIFT));
+    auto WithClearedPerms = CGF.Builder.CreateIntrinsic(
+        llvm::Intrinsic::cheri_cap_perms_and, CGF.PtrDiffTy,
+        {ResultAsI8, NewPermsMask}, nullptr, "new_len");
+    auto BoundsSmaller =
+        CGF.Builder.CreateICmpULT(ResultLength, SrcLength, "new_bounds_less");
+    Result = CGF.Builder.CreateSelect(BoundsSmaller, WithClearedPerms,
+                                      ResultAsI8, "result");
+  }
 
   Result = CGF.Builder.CreatePointerBitCastOrAddrSpaceCast(Result, BoundedTy);
   if (GEP) {
