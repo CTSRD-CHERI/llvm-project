@@ -1271,7 +1271,7 @@ CodeGenFunction::canTightenCheriBounds(llvm::Value *Value, QualType Ty,
     if (!Ty->isArrayType()) {
       return cannotSetBounds(*this, E, Ty, Kind,
                              "array " + KindStr + " on non-array type");
-    } else if (!Ty->isConstantSizeType()) {
+    } else if (Ty->isIncompleteArrayType() || !Ty->isConstantSizeType()) {
       return UseRemainingSize("array " + KindStr + " on variable size type");
     }
     CHERI_BOUNDS_DBG(<< KindStr << " on constant size array -> ");
