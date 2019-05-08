@@ -389,6 +389,18 @@ static void **ThreadSelfSegbase() {
 # elif defined(__x86_64__)
   // sysarch(AMD64_GET_FSBASE, segbase);
   __asm __volatile("movq %%fs:0, %0" : "=r" (segbase));
+# elif defined(__mips64__)
+  // MIPS uses TLS variant I. The thread pointer (in hardware register $29)
+  // points to the end of the TCB + 0x7000.  The TCB contains two pointers,
+  // one to the dtv and the second to the struct pthread.
+  const uptr kTlsTcbOffset = 0x7000;
+  const uptr kTlsTcbSize = sizeof(void *) * 2;
+  uptr thread_pointer;
+  asm volatile(".set push;\
+                .set mips64r2;\
+                rdhwr %0,$29;\
+                .set pop" : "=r" (thread_pointer));
+  segbase = (void **)(thread_pointer - kTlsTcbOffset - kTlsTcbSize);
 # else
 #  error "unsupported CPU arch"
 # endif
@@ -396,7 +408,11 @@ static void **ThreadSelfSegbase() {
 }
 
 uptr ThreadSelf() {
+#if defined(__mips__)
+  return (uptr)ThreadSelfSegbase()[1];
+#else
   return (uptr)ThreadSelfSegbase()[2];
+#endif
 }
 #endif  // SANITIZER_FREEBSD
 
@@ -414,7 +430,9 @@ static struct tls_tcb * ThreadSelfTlsTcb() {
 uptr ThreadSelf() {
   return (uptr)ThreadSelfTlsTcb()->tcb_pthread;
 }
+#endif  // SANITIZER_NETBSD
 
+#if SANITIZER_NETBSD || (SANITIZER_FREEBSD && defined(__mips__))
 int GetSizeFromHdr(struct dl_phdr_info *info, size_t size, void *data) {
   const Elf_Phdr *hdr = info->dlpi_phdr;
   const Elf_Phdr *last_hdr = hdr + info->dlpi_phnum;
@@ -427,7 +445,7 @@ int GetSizeFromHdr(struct dl_phdr_info *info, size_t size, void *data) {
   }
   return 0;
 }
-#endif  // SANITIZER_NETBSD
+#endif  // SANITIZER_NETBSD || (SANITIZER_FREEBSD && defined(__mips__))
 
 #if !SANITIZER_GO
 static void GetTls(uptr *addr, uptr *size) {
@@ -450,6 +468,22 @@ static void GetTls(uptr *addr, uptr *size) {
   *addr = 0;
   *size = 0;
   if (segbase != 0) {
+# if defined(__mips__)
+    // Variant I
+    //
+    // dtv = segbase[0];
+    // dtv[2] = base of TLS block of the main program
+    void **dtv = (void**) segbase[0];
+    if ((uptr) dtv[1] >= 2) {
+      // Find size (p_memsz) of TLS block of the main program.
+      dl_iterate_phdr(GetSizeFromHdr, size);
+
+      if (*size != 0)
+        *addr = (uptr) dtv[2];
+    }
+# else
+    // Variant II
+    //
     // tcbalign = 16
     // tls_size = round(tls_static_space, tcbalign);
     // dtv = segbase[1];
@@ -457,6 +491,7 @@ static void GetTls(uptr *addr, uptr *size) {
     void **dtv = (void**) segbase[1];
     *addr = (uptr) dtv[2];
     *size = (*addr == 0) ? 0 : ((uptr) segbase[0] - (uptr) dtv[2]);
+# endif
   }
 #elif SANITIZER_NETBSD
   struct tls_tcb * const tcb = ThreadSelfTlsTcb();

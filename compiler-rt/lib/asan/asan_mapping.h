@@ -224,7 +224,7 @@ static const u64 kMyriadCacheBitMask32 = 0x40000000ULL;
 #    define SHADOW_OFFSET kPPC64_ShadowOffset64
 #  elif defined(__s390x__)
 #    define SHADOW_OFFSET kSystemZ_ShadowOffset64
-#  elif SANITIZER_FREEBSD
+#  elif SANITIZER_FREEBSD && !defined(__mips64)
 #    define SHADOW_OFFSET kFreeBSD_ShadowOffset64
 #  elif SANITIZER_NETBSD
 #    define SHADOW_OFFSET kNetBSD_ShadowOffset64
