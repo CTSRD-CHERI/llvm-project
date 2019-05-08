@@ -37,9 +37,9 @@ bool IsASCII(const uint8_t *Data, size_t Size);
 
 std::string Base64(const Unit &U);
 
-void PrintPC(const char *SymbolizedFMT, const char *FallbackFMT, uintptr_t PC);
+void PrintPC(const char *SymbolizedFMT, const char *FallbackFMT, VirtAddr PC);
 
-std::string DescribePC(const char *SymbolizedFMT, uintptr_t PC);
+std::string DescribePC(const char *SymbolizedFMT, VirtAddr PC);
 
 void PrintStackTrace();
 
@@ -91,16 +91,24 @@ inline uint32_t Log(uint32_t X) { return 32 - Clz(X) - 1; }
 
 inline size_t PageSize() { return 4096; }
 inline uint8_t *RoundUpByPage(uint8_t *P) {
+#if __has_builtin(__builtin_align_up)
+  return __builtin_align_up(P, PageSize());
+#else
   uintptr_t X = reinterpret_cast<uintptr_t>(P);
   size_t Mask = PageSize() - 1;
   X = (X + Mask) & ~Mask;
   return reinterpret_cast<uint8_t *>(X);
+#endif
 }
 inline uint8_t *RoundDownByPage(uint8_t *P) {
+#if __has_builtin(__builtin_align_down)
+  return __builtin_align_down(P, PageSize());
+#else
   uintptr_t X = reinterpret_cast<uintptr_t>(P);
   size_t Mask = PageSize() - 1;
   X = X & ~Mask;
   return reinterpret_cast<uint8_t *>(X);
+#endif
 }
 
 }  // namespace fuzzer

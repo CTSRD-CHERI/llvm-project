@@ -181,18 +181,18 @@ std::string Base64(const Unit &U) {
 
 static std::mutex SymbolizeMutex;
 
-std::string DescribePC(const char *SymbolizedFMT, uintptr_t PC) {
+std::string DescribePC(const char *SymbolizedFMT, VirtAddr PC) {
   std::unique_lock<std::mutex> l(SymbolizeMutex, std::try_to_lock);
   if (!EF->__sanitizer_symbolize_pc || !l.owns_lock())
     return "<can not symbolize>";
   char PcDescr[1024] = {};
-  EF->__sanitizer_symbolize_pc(reinterpret_cast<void*>(PC),
+  EF->__sanitizer_symbolize_pc(reinterpret_cast<void *>(static_cast<uintptr_t>(PC)),
                                SymbolizedFMT, PcDescr, sizeof(PcDescr));
   PcDescr[sizeof(PcDescr) - 1] = 0;  // Just in case.
   return PcDescr;
 }
 
-void PrintPC(const char *SymbolizedFMT, const char *FallbackFMT, uintptr_t PC) {
+void PrintPC(const char *SymbolizedFMT, const char *FallbackFMT, VirtAddr PC) {
   if (EF->__sanitizer_symbolize_pc)
     Printf("%s", DescribePC(SymbolizedFMT, PC).c_str());
   else

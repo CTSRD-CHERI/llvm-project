@@ -64,7 +64,7 @@ __attribute__((weak)) extern int LLVMFuzzerInitialize(int *argc, char ***argv);
 
 static size_t InputLen;
 static size_t NumFuncs;
-static const uintptr_t *FuncsBeg;
+static const VirtAddr *FuncsBeg;
 static __thread size_t CurrentFunc;
 static dfsan_label *FuncLabels;  // Array of NumFuncs elements.
 static char *PrintableStringForLabel;  // InputLen + 2 bytes.
@@ -81,7 +81,7 @@ static int PrintFunctions() {
                      "| grep 'dfs\\$' "
                      "| sed 's/dfs\\$//g'", "w");
   for (size_t I = 0; I < NumFuncs; I++) {
-    uintptr_t PC = FuncsBeg[I * 2];
+    VirtAddr PC = FuncsBeg[I * 2];
     void *const Buf[1] = {(void*)PC};
     backtrace_symbols_fd(Buf, 1, fileno(Pipe));
   }
@@ -177,8 +177,8 @@ void __sanitizer_cov_trace_pc_guard_init(uint32_t *start,
   fprintf(stderr, "INFO: %zd instrumented function(s) observed\n", NumFuncs);
 }
 
-void __sanitizer_cov_pcs_init(const uintptr_t *pcs_beg,
-                              const uintptr_t *pcs_end) {
+void __sanitizer_cov_pcs_init(const VirtAddr *pcs_beg,
+                              const VirtAddr *pcs_end) {
   assert(NumFuncs == (pcs_end - pcs_beg) / 2);
   FuncsBeg = pcs_beg;
 }

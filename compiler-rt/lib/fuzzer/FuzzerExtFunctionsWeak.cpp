@@ -39,6 +39,7 @@ static void CheckFnPtr(void *FnPtr, const char *FnName, bool WarnIfMissing) {
 namespace fuzzer {
 
 ExternalFunctions::ExternalFunctions() {
+// FIXME: void* or VirtAddr?
 #define EXT_FUNC(NAME, RETURN_TYPE, FUNC_SIG, WARN)                            \
   this->NAME = ::NAME;                                                         \
   CheckFnPtr(reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(::NAME)),    \

@@ -256,17 +256,17 @@ void CrashHandler(zx_handle_t *Event) {
   // onto the stack and jump into a trampoline with CFI instructions on how
   // to restore it.
 #if defined(__x86_64__)
-  uintptr_t StackPtr =
+  VirtAddr StackPtr =
       (GeneralRegisters.rsp - (128 + sizeof(GeneralRegisters))) &
-      -(uintptr_t)16;
+      -(VirtAddr)16;
   __unsanitized_memcpy(reinterpret_cast<void *>(StackPtr), &GeneralRegisters,
          sizeof(GeneralRegisters));
   GeneralRegisters.rsp = StackPtr;
   GeneralRegisters.rip = reinterpret_cast<zx_vaddr_t>(CrashTrampolineAsm);
 
 #elif defined(__aarch64__)
-  uintptr_t StackPtr =
-      (GeneralRegisters.sp - sizeof(GeneralRegisters)) & -(uintptr_t)16;
+  VirtAddr StackPtr =
+      (GeneralRegisters.sp - sizeof(GeneralRegisters)) & -(VirtAddr)16;
   __unsanitized_memcpy(reinterpret_cast<void *>(StackPtr), &GeneralRegisters,
                        sizeof(GeneralRegisters));
   GeneralRegisters.sp = StackPtr;

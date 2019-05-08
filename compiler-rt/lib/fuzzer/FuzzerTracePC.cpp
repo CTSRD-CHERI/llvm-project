@@ -24,7 +24,7 @@
 #include <set>
 
 // Used by -fsanitize-coverage=stack-depth to track stack depth
-ATTRIBUTES_INTERFACE_TLS_INITIAL_EXEC uintptr_t __sancov_lowest_stack;
+ATTRIBUTES_INTERFACE_TLS_INITIAL_EXEC VirtAddr __sancov_lowest_stack;
 
 namespace fuzzer {
 
@@ -106,7 +106,7 @@ bool TracePC::UnprotectLazyCounters(void *CounterPtr) {
   return Done;
 }
 
-void TracePC::HandlePCsInit(const uintptr_t *Start, const uintptr_t *Stop) {
+void TracePC::HandlePCsInit(const VirtAddr *Start, const VirtAddr *Stop) {
   const PCTableEntry *B = reinterpret_cast<const PCTableEntry *>(Start);
   const PCTableEntry *E = reinterpret_cast<const PCTableEntry *>(Stop);
   if (NumPCTables && ModulePCTable[NumPCTables - 1].Start == B) return;
@@ -147,16 +147,16 @@ void TracePC::PrintModuleInfo() {
 }
 
 ATTRIBUTE_NO_SANITIZE_ALL
-void TracePC::HandleCallerCallee(uintptr_t Caller, uintptr_t Callee) {
-  const uintptr_t kBits = 12;
-  const uintptr_t kMask = (1 << kBits) - 1;
-  uintptr_t Idx = (Caller & kMask) | ((Callee & kMask) << kBits);
+void TracePC::HandleCallerCallee(VirtAddr Caller, VirtAddr Callee) {
+  const VirtAddr kBits = 12;
+  const VirtAddr kMask = (1 << kBits) - 1;
+  size_t Idx = (Caller & kMask) | ((Callee & kMask) << kBits);
   ValueProfileMap.AddValueModPrime(Idx);
 }
 
 /// \return the address of the previous instruction.
 /// Note: the logic is copied from `sanitizer_common/sanitizer_stacktrace.h`
-inline ALWAYS_INLINE uintptr_t GetPreviousInstructionPc(uintptr_t PC) {
+inline ALWAYS_INLINE VirtAddr GetPreviousInstructionPc(VirtAddr PC) {
 #if defined(__arm__)
   // T32 (Thumb) branch instructions might be 16 or 32 bit long,
   // so we return (pc-2) in that case in order to be safe.
@@ -174,7 +174,7 @@ inline ALWAYS_INLINE uintptr_t GetPreviousInstructionPc(uintptr_t PC) {
 
 /// \return the address of the next instruction.
 /// Note: the logic is copied from `sanitizer_common/sanitizer_stacktrace.cc`
-ALWAYS_INLINE uintptr_t TracePC::GetNextInstructionPc(uintptr_t PC) {
+ALWAYS_INLINE VirtAddr TracePC::GetNextInstructionPc(VirtAddr PC) {
 #if defined(__mips__)
   return PC + 8;
 #elif defined(__powerpc__) || defined(__sparc__) || defined(__arm__) || \
@@ -186,7 +186,7 @@ ALWAYS_INLINE uintptr_t TracePC::GetNextInstructionPc(uintptr_t PC) {
 }
 
 void TracePC::UpdateObservedPCs() {
-  Vector<uintptr_t> CoveredFuncs;
+  Vector<VirtAddr> CoveredFuncs;
   auto ObservePC = [&](const PCTableEntry *TE) {
     if (ObservedPCs.insert(TE).second && DoPrintNewPCs) {
       PrintPC("\tNEW_PC: %p %F %L", "\tNEW_PC: %p",
@@ -227,7 +227,7 @@ void TracePC::UpdateObservedPCs() {
   }
 }
 
-uintptr_t TracePC::PCTableEntryIdx(const PCTableEntry *TE) {
+VirtAddr TracePC::PCTableEntryIdx(const PCTableEntry *TE) {
   size_t TotalTEs = 0;
   for (size_t i = 0; i < NumPCTables; i++) {
     auto &M = ModulePCTable[i];
@@ -239,7 +239,7 @@ uintptr_t TracePC::PCTableEntryIdx(const PCTableEntry *TE) {
   return 0;
 }
 
-const TracePC::PCTableEntry *TracePC::PCTableEntryByIdx(uintptr_t Idx) {
+const TracePC::PCTableEntry *TracePC::PCTableEntryByIdx(size_t Idx) {
   for (size_t i = 0; i < NumPCTables; i++) {
     auto &M = ModulePCTable[i];
     size_t Size = M.Stop - M.Start;
@@ -249,11 +249,11 @@ const TracePC::PCTableEntry *TracePC::PCTableEntryByIdx(uintptr_t Idx) {
   return nullptr;
 }
 
-static std::string GetModuleName(uintptr_t PC) {
+static std::string GetModuleName(VirtAddr PC) {
   char ModulePathRaw[4096] = "";  // What's PATH_MAX in portable C++?
   void *OffsetRaw = nullptr;
   if (!EF->__sanitizer_get_module_and_offset_for_pc(
-      reinterpret_cast<void *>(PC), ModulePathRaw,
+      reinterpret_cast<void *>(static_cast<uintptr_t>(PC)), ModulePathRaw,
       sizeof(ModulePathRaw), &OffsetRaw))
     return "";
   return ModulePathRaw;
@@ -312,7 +312,7 @@ void TracePC::PrintCoverage() {
   Printf("COVERAGE:\n");
   auto CoveredFunctionCallback = [&](const PCTableEntry *First,
                                      const PCTableEntry *Last,
-                                     uintptr_t Counter) {
+                                     size_t Counter) {
     assert(First < Last);
     auto VisualizePC = GetNextInstructionPc(First->PC);
     std::string FileStr = DescribePC("%s", VisualizePC);
@@ -323,7 +323,7 @@ void TracePC::PrintCoverage() {
       FunctionStr = FunctionStr.substr(3);
     std::string LineStr = DescribePC("%l", VisualizePC);
     size_t NumEdges = Last - First;
-    Vector<uintptr_t> UncoveredPCs;
+    Vector<VirtAddr> UncoveredPCs;
     for (auto TE = First; TE < Last; TE++)
       if (!ObservedPCs.count(TE))
         UncoveredPCs.push_back(TE->PC);
@@ -381,7 +381,7 @@ void TracePC::AddValueForMemcmp(void *caller_pc, const void *s1, const void *s2,
 template <class T>
 ATTRIBUTE_TARGET_POPCNT ALWAYS_INLINE
 ATTRIBUTE_NO_SANITIZE_ALL
-void TracePC::HandleCmp(uintptr_t PC, T Arg1, T Arg2) {
+void TracePC::HandleCmp(VirtAddr PC, T Arg1, T Arg2) {
   uint64_t ArgXor = Arg1 ^ Arg2;
   if (sizeof(T) == 4)
       TORC4.Insert(ArgXor, Arg1, Arg2);
@@ -417,10 +417,10 @@ void TracePC::ClearInlineCounters() {
 ATTRIBUTE_NO_SANITIZE_ALL
 void TracePC::RecordInitialStack() {
   int stack;
-  __sancov_lowest_stack = InitialStack = reinterpret_cast<uintptr_t>(&stack);
+  __sancov_lowest_stack = InitialStack = reinterpret_cast<VirtAddr>(&stack);
 }
 
-uintptr_t TracePC::GetMaxStackOffset() const {
+VirtAddr TracePC::GetMaxStackOffset() const {
   return InitialStack - __sancov_lowest_stack;  // Stack grows down
 }
 
@@ -465,15 +465,15 @@ void __sanitizer_cov_8bit_counters_init(uint8_t *Start, uint8_t *Stop) {
 }
 
 ATTRIBUTE_INTERFACE
-void __sanitizer_cov_pcs_init(const uintptr_t *pcs_beg,
-                              const uintptr_t *pcs_end) {
+void __sanitizer_cov_pcs_init(const VirtAddr *pcs_beg,
+                              const VirtAddr *pcs_end) {
   fuzzer::TPC.HandlePCsInit(pcs_beg, pcs_end);
 }
 
 ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
-void __sanitizer_cov_trace_pc_indir(uintptr_t Callee) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+void __sanitizer_cov_trace_pc_indir(VirtAddr Callee) {
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCallerCallee(PC, Callee);
 }
 
@@ -481,7 +481,7 @@ ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
 ATTRIBUTE_TARGET_POPCNT
 void __sanitizer_cov_trace_cmp8(uint64_t Arg1, uint64_t Arg2) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCmp(PC, Arg1, Arg2);
 }
 
@@ -492,7 +492,7 @@ ATTRIBUTE_TARGET_POPCNT
 // the behaviour of __sanitizer_cov_trace_cmp[1248] ones. This, however,
 // should be changed later to make full use of instrumentation.
 void __sanitizer_cov_trace_const_cmp8(uint64_t Arg1, uint64_t Arg2) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCmp(PC, Arg1, Arg2);
 }
 
@@ -500,7 +500,7 @@ ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
 ATTRIBUTE_TARGET_POPCNT
 void __sanitizer_cov_trace_cmp4(uint32_t Arg1, uint32_t Arg2) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCmp(PC, Arg1, Arg2);
 }
 
@@ -508,7 +508,7 @@ ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
 ATTRIBUTE_TARGET_POPCNT
 void __sanitizer_cov_trace_const_cmp4(uint32_t Arg1, uint32_t Arg2) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCmp(PC, Arg1, Arg2);
 }
 
@@ -516,7 +516,7 @@ ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
 ATTRIBUTE_TARGET_POPCNT
 void __sanitizer_cov_trace_cmp2(uint16_t Arg1, uint16_t Arg2) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCmp(PC, Arg1, Arg2);
 }
 
@@ -524,7 +524,7 @@ ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
 ATTRIBUTE_TARGET_POPCNT
 void __sanitizer_cov_trace_const_cmp2(uint16_t Arg1, uint16_t Arg2) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCmp(PC, Arg1, Arg2);
 }
 
@@ -532,7 +532,7 @@ ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
 ATTRIBUTE_TARGET_POPCNT
 void __sanitizer_cov_trace_cmp1(uint8_t Arg1, uint8_t Arg2) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCmp(PC, Arg1, Arg2);
 }
 
@@ -540,7 +540,7 @@ ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
 ATTRIBUTE_TARGET_POPCNT
 void __sanitizer_cov_trace_const_cmp1(uint8_t Arg1, uint8_t Arg2) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCmp(PC, Arg1, Arg2);
 }
 
@@ -559,7 +559,7 @@ void __sanitizer_cov_trace_switch(uint64_t Val, uint64_t *Cases) {
   // Also skip small inputs values, they won't give good signal.
   if (Val < 256)
     return;
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   size_t i;
   uint64_t Smaller = 0;
   uint64_t Larger = ~(uint64_t)0;
@@ -595,7 +595,7 @@ ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
 ATTRIBUTE_TARGET_POPCNT
 void __sanitizer_cov_trace_div4(uint32_t Val) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCmp(PC, Val, (uint32_t)0);
 }
 
@@ -603,16 +603,16 @@ ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
 ATTRIBUTE_TARGET_POPCNT
 void __sanitizer_cov_trace_div8(uint64_t Val) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
   fuzzer::TPC.HandleCmp(PC, Val, (uint64_t)0);
 }
 
 ATTRIBUTE_INTERFACE
 ATTRIBUTE_NO_SANITIZE_ALL
 ATTRIBUTE_TARGET_POPCNT
-void __sanitizer_cov_trace_gep(uintptr_t Idx) {
-  uintptr_t PC = reinterpret_cast<uintptr_t>(GET_CALLER_PC());
-  fuzzer::TPC.HandleCmp(PC, Idx, (uintptr_t)0);
+void __sanitizer_cov_trace_gep(uint64_t Idx) {
+  VirtAddr PC = reinterpret_cast<VirtAddr>(GET_CALLER_PC());
+  fuzzer::TPC.HandleCmp(PC, Idx, (uint64_t)0);
 }
 
 ATTRIBUTE_INTERFACE ATTRIBUTE_NO_SANITIZE_MEMORY

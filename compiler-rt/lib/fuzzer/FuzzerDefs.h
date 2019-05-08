@@ -154,6 +154,12 @@
 #  define ATTRIBUTE_NO_SANITIZE_ALL
 #endif
 
+#ifdef __CHERI_PURE_CAPABILITY__
+using VirtAddr = vaddr_t;
+#else
+using VirtAddr = uintptr_t;
+#endif
+
 namespace fuzzer {
 
 template <class T> T Min(T a, T b) { return a < b ? a : b; }
