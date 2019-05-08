@@ -139,7 +139,7 @@ public:
     }(getTriple().getSubArch());
     if (CapSize == -1) {
       CapSize = TripleCapSize;
-    } else if (CapSize != TripleCapSize) {
+    } else if (TripleCapSize != -1 && CapSize != TripleCapSize) {
       llvm::report_fatal_error("CPU flag " + Opts.CPU +
                                " is incompatible with triple " +
                                getTriple().str());
