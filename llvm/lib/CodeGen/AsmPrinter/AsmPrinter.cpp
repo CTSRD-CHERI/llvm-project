@@ -2671,7 +2671,9 @@ static void emitGlobalConstantCHERICap(const DataLayout &DL, const Constant *CV,
     // emit capability for label whose address is stored in a global variable
     // FIXME: this is wrong
     if (SRE->getSymbol().isTemporary()) {
-      assert(false && "This is wrong and needs a different fix!");
+      report_fatal_error(
+          "Cannot emit a global .chericap referring to a temporary since this "
+          "will result in the wrong value at runtime!");
       AP.OutStreamer->EmitCheriCapability(&SRE->getSymbol(), 0, CapWidth);
       return;
     }
