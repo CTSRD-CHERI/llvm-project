@@ -125,6 +125,25 @@ public:
       .Case("cheri256", 256)
       .Case("cheri64", 64)
       .Default(-1);
+    const int TripleCapSize = [](llvm::Triple::SubArchType SubArch) {
+      switch (SubArch) {
+      case llvm::Triple::MipsSubArch_cheri64:
+        return 64;
+      case llvm::Triple::MipsSubArch_cheri128:
+        return 128;
+      case llvm::Triple::MipsSubArch_cheri256:
+        return 256;
+      default:
+        return -1;
+      }
+    }(getTriple().getSubArch());
+    if (CapSize == -1) {
+      CapSize = TripleCapSize;
+    } else if (CapSize != TripleCapSize) {
+      llvm::report_fatal_error("CPU flag " + Opts.CPU +
+                               " is incompatible with triple " +
+                               getTriple().str());
+    }
     if (CapSize > 0 || getTriple().getArch() == llvm::Triple::cheri ||
         getTriple().getEnvironment() == llvm::Triple::CheriPurecap) {
       IsCHERI = true;

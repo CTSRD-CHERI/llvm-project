@@ -10,10 +10,26 @@
 // RUN:   -target cheri-pc-freebsd11 -mabi=purecap %s        \
 // RUN:   --sysroot=%S/Inputs/basic_cheribsd_libcheri_tree -### 2>&1 \
 // RUN:   | FileCheck --check-prefix=CHECK-CHERI-SANDBOX %s
-// CHECK-CHERI-SANDBOX: "-cc1" "-triple" "cheri-pc-freebsd11-purecap"
+// CHECK-CHERI-SANDBOX: "-cc1" "-triple" "mips64c128-pc-freebsd11-purecap"
 // CHECK-CHERI-SANDBOX: ld{{.*}}" "--sysroot=[[SYSROOT:[^"]+]]"
 // CHECK-CHERI-SANDBOX: "-dynamic-linker" "{{.*}}/libexec/ld-cheri-elf.so.1"
 // CHECK-CHERI-SANDBOX: "-L[[SYSROOT]]/usr/libcheri"
 // CHECK-CHERI-SANDBOX-NOT: "-L[[SYSROOT]]/usr/lib"
 // CHECK-CHERI-SANDBOX-NOT: "{{.*}}crti.o"
 // CHECK-CHERI-SANDBOX-NOT: "{{.*}}crtn.o"
+
+
+// RUN: %plain_clang_cheri_triple_allowed -no-canonical-prefixes \
+// RUN:   -target cheri-unknown-freebsd11 -mabi=purecap %s -cheri -### 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-CHERI-PURECAP128 %s
+// CHECK-CHERI-PURECAP128: "-cc1" "-triple" "mips64c128-unknown-freebsd11-purecap"
+
+// RUN: %plain_clang_cheri_triple_allowed -no-canonical-prefixes \
+// RUN:   -target cheri-unknown-freebsd11 -mabi=purecap %s -cheri=256 -### 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-CHERI-PURECAP256 %s
+// CHECK-CHERI-PURECAP256: "-cc1" "-triple" "mips64c256-unknown-freebsd11-purecap"
+
+// RUN: %plain_clang_cheri_triple_allowed -no-canonical-prefixes \
+// RUN:   -target cheri-unknown-freebsd11 -mabi=purecap %s -cheri=64 -### 2>&1 \
+// RUN:   | FileCheck --check-prefix=CHECK-CHERI-PURECAP64 %s
+// CHECK-CHERI-PURECAP64: "-cc1" "-triple" "mips64c64-unknown-freebsd11-purecap"

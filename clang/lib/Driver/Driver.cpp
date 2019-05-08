@@ -547,6 +547,21 @@ static llvm::Triple computeTargetTriple(const Driver &D,
         Target.setEnvironment(llvm::Triple::GNUABI64);
     } else if (ABIName == "purecap") {
       Target.setEnvironment(llvm::Triple::CheriPurecap);
+      if (Target.getSubArch() == llvm::Triple::NoSubArch) {
+        const char *ArchName = "mips64c128";
+        if (Arg *A = Args.getLastArg(options::OPT_cheri, options::OPT_cheri_EQ)) {
+          if (A->getOption().matches(options::OPT_cheri))
+            ArchName = "mips64c128";
+          else
+            ArchName = llvm::StringSwitch<const char *>(A->getValue())
+                           .Case("64", "mips64c64")
+                           .Case("128", "mips64c128")
+                           .Case("256", "mips64c256")
+                           .Default("mips64c128");
+        }
+        // TODO: there is no Triple::setSubArch();
+        Target.setArchName(ArchName);
+      }
     }
   }
 

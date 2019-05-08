@@ -569,6 +569,16 @@ static Triple::SubArchType parseSubArch(StringRef SubArchName) {
         .EndsWith("c64hybrid", Triple::MipsSubArch_cheri64)
         .Default(Triple::NoSubArch);
   }
+#ifdef NOTYET
+  if (SubArchName.startswith("cheri")) {
+    // Support encoding the CHERI abi and size in the triple name
+    return StringSwitch<Triple::SubArchType>(SubArchName)
+        .StartsWith("cheri128", Triple::MipsSubArch_cheri128)
+        .StartsWith("cheri256", Triple::MipsSubArch_cheri256)
+        .StartsWith("cheri64", Triple::MipsSubArch_cheri64)
+        .Default(Triple::MipsSubArch_cheri128);
+  }
+#endif
 
   StringRef ARMSubArch = ARM::getCanonicalArchName(SubArchName);
 
