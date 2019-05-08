@@ -63,8 +63,12 @@ static __inline void *emutls_memalign_alloc(size_t align, size_t size) {
     char* object;
     if ((object = (char*)malloc(EXTRA_ALIGN_PTR_BYTES + size)) == NULL)
         abort();
+#if __has_builtin(__builtin_align_down)
+    base = __builtin_align_down(object + EXTRA_ALIGN_PTR_BYTES, align);
+#else
     base = (void*)(((uintptr_t)(object + EXTRA_ALIGN_PTR_BYTES))
                     & ~(uintptr_t)(align - 1));
+#endif
 
     ((void**)base)[-1] = object;
 #endif
@@ -348,7 +352,11 @@ static __inline uintptr_t emutls_new_data_array_size(uintptr_t index) {
     * Round up the emutls_address_array size to multiple of 16.
     */
     uintptr_t header_words = sizeof(emutls_address_array) / sizeof(void *);
+#if __has_builtin(__builtin_align_down)
+    return __builtin_align_up(index + header_words, 16) - header_words;
+#else
     return ((index + header_words + 15) & ~((uintptr_t)15)) - header_words;
+#endif
 }
 
 /* Returns the size in bytes required for an emutls_address_array with

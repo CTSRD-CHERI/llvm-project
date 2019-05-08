@@ -61,10 +61,15 @@ __enable_execute_stack(void* addr)
         const uintptr_t pageSize = sysconf(_SC_PAGESIZE);
 #endif /* __APPLE__ */
 
-	const uintptr_t pageAlignMask = ~(pageSize-1);
 	uintptr_t p = (uintptr_t)addr;
+#if __has_builtin(__builtin_align_down)
+	unsigned char* startPage = (unsigned char*)__builtin_align_down(p, pageSize);
+	unsigned char* endPage = (unsigned char*)__builtin_align_up(p+TRAMPOLINE_SIZE, pageSize);
+#else
+	const uintptr_t pageAlignMask = ~(pageSize-1);
 	unsigned char* startPage = (unsigned char*)(p & pageAlignMask);
 	unsigned char* endPage = (unsigned char*)((p+TRAMPOLINE_SIZE+pageSize) & pageAlignMask);
+#endif
 	size_t length = endPage - startPage;
 	(void) mprotect((void *)startPage, length, PROT_READ | PROT_WRITE | PROT_EXEC);
 #endif
