@@ -338,6 +338,11 @@ static StringRef getArchNameForCompilerRTLib(const ToolChain &TC,
   if (TC.getArch() == llvm::Triple::x86 && Triple.isAndroid())
     return "i686";
 
+  if (Triple.getEnvironment() == llvm::Triple::CheriPurecap) {
+    assert(Triple.getSubArch() != llvm::Triple::NoSubArch && "purecap triple should have subarch");
+    return Triple.getArchName();
+  }
+
   return llvm::Triple::getArchTypeName(TC.getArch());
 }
 

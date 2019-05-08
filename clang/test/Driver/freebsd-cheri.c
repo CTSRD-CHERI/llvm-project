@@ -33,3 +33,11 @@
 // RUN:   -target cheri-unknown-freebsd11 -mabi=purecap %s -cheri=64 -### 2>&1 \
 // RUN:   | FileCheck --check-prefix=CHECK-CHERI-PURECAP64 %s
 // CHECK-CHERI-PURECAP64: "-cc1" "-triple" "mips64c64-unknown-freebsd11-purecap"
+
+// RUN: %plain_clang_cheri_triple_allowed -no-canonical-prefixes \
+// RUN:   -target cheri-pc-freebsd11 -mabi=purecap %s -fsanitize=fuzzer -cheri=64 \
+// RUN:   --sysroot=%S/Inputs/basic_cheribsd_libcheri_tree -### 2>&1 | FileCheck --check-prefix=CHECK-FUZZER-PURECAP64 %s
+
+// CHECK-FUZZER-PURECAP64: "/usr/bin/ld"
+// CHECK-FUZZER-PURECAP64: "--whole-archive" "{{.+}}/lib/freebsd/libclang_rt.fuzzer-mips64c64.a" "--no-whole-archive"
+// CHECK-FUZZER-PURECAP64: "--whole-archive" "{{.+}}/lib/freebsd/libclang_rt.ubsan_standalone-mips64c64.a" "--no-whole-archive"
