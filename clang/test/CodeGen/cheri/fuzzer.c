@@ -5,8 +5,8 @@
 // RUN: %cheri_purecap_clang -O2 %s -S -emit-llvm -o - -fsanitize=fuzzer | FileCheck %s -check-prefix PURECAP
 
 // Check that we can emit assembly:
-// RUNNOT: %cheri_clang -O2 %s -S -o - -fsanitize=fuzzer
-// RUNNOT: %cheri_purecap_clang -O2 %s -S -o /dev/null -fsanitize=fuzzer
+// RUN: %cheri_clang -O2 %s -S -o /dev/null -fsanitize=fuzzer
+// RUN: %cheri_purecap_clang -O2 %s -S -o /dev/null -fsanitize=fuzzer
 
 extern char *gets(char *);
 extern int puts(const char *);
@@ -17,28 +17,33 @@ extern int fail2(void);
 
 // MIPS: @__sancov_lowest_stack = external thread_local(initialexec) global i64
 // MIPS: @__sancov_gen_ = private global [1 x i8] zeroinitializer, section "__sancov_cntrs", comdat($main), align 1, !associated !0
-// MIPS: @__sancov_gen_.1 = private constant [2 x i64*] [i64* bitcast (i32 ()* @main to i64*), i64* inttoptr (i64 1 to i64*)], section "__sancov_pcs", comdat($main), align 8, !associated !0
+// MIPS: @__sancov_gen_.1 = private constant [2 x i64] [i64 ptrtoint (i32 ()* @main to i64), i64 1], section "__sancov_pcs", comdat($main), align 8, !associated !0
 // MIPS: @__sancov_gen_.2 = private global [4 x i8] zeroinitializer, section "__sancov_cntrs", comdat($func2), align 1, !associated !1
-// MIPS: @__sancov_gen_.3 = private constant [8 x i64*] [i64* bitcast (i32 (i32)* @func2 to i64*), i64* inttoptr (i64 1 to i64*), i64* bitcast (i8* blockaddress(@func2, %if.then) to i64*), i64* null, i64* bitcast (i8* blockaddress(@func2, %if.then2) to i64*), i64* null, i64* bitcast (i8* blockaddress(@func2, %if.end4) to i64*), i64* null], section "__sancov_pcs", comdat($func2), align 8, !associated !1
+// MIPS: @__sancov_gen_.3 = private constant [8 x i64] [i64 ptrtoint (i32 (i32)* @func2 to i64), i64 1, i64 ptrtoint (i8* blockaddress(@func2, %if.then) to i64), i64 0, i64 ptrtoint (i8* blockaddress(@func2, %if.then2) to i64), i64 0, i64 ptrtoint (i8* blockaddress(@func2, %if.end4) to i64), i64 0], section "__sancov_pcs", comdat($func2), align 8, !associated !1
 // MIPS: @__start___sancov_cntrs = external hidden global i8*
 // MIPS: @__stop___sancov_cntrs = external hidden global i8*
 // MIPS: @llvm.global_ctors = appending global [1 x { i32, void ()*, i8* }] [{ i32, void ()*, i8* } { i32 2, void ()* @sancov.module_ctor, i8* bitcast (void ()* @sancov.module_ctor to i8*) }]
 // MIPS: @__start___sancov_pcs = external hidden global i64*
 // MIPS: @__stop___sancov_pcs = external hidden global i64*
-// MIPS: @llvm.compiler.used = appending global [4 x i8*] [i8* getelementptr inbounds ([1 x i8], [1 x i8]* @__sancov_gen_, i32 0, i32 0), i8* bitcast ([2 x i64*]* @__sancov_gen_.1 to i8*), i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i32 0, i32 0), i8* bitcast ([8 x i64*]* @__sancov_gen_.3 to i8*)], section "llvm.metadata"
+// MIPS: @llvm.compiler.used = appending global [4 x i8*] [i8* getelementptr inbounds ([1 x i8], [1 x i8]* @__sancov_gen_, i32 0, i32 0), i8* bitcast ([2 x i64]* @__sancov_gen_.1 to i8*), i8* getelementptr inbounds ([4 x i8], [4 x i8]* @__sancov_gen_.2, i32 0, i32 0), i8* bitcast ([8 x i64]* @__sancov_gen_.3 to i8*)], section "llvm.metadata"
 
 // These should all be in AS200:
 // PURECAP: @__sancov_lowest_stack = external thread_local(initialexec) addrspace(200) global i64
 // PURECAP: @__sancov_gen_ = private addrspace(200) global [1 x i8] zeroinitializer, section "__sancov_cntrs", comdat($main), align 1, !associated !0
-// PURECAP: @__sancov_gen_.1 = private addrspace(200) constant [2 x i64 addrspace(200)*] [i64 addrspace(200)* bitcast (i32 () addrspace(200)* @main to i64 addrspace(200)*), i64 addrspace(200)* inttoptr (i64 1 to i64 addrspace(200)*)], section "__sancov_pcs", comdat($main), align 16, !associated !0
+// PURECAP: @__sancov_gen_.1 = private addrspace(200) constant [2 x i64] [i64 ptrtoint (i32 () addrspace(200)* @main to i64), i64 1], section "__sancov_pcs", comdat($main), align 8, !associated !0
 // PURECAP: @__sancov_gen_.2 = private addrspace(200) global [4 x i8] zeroinitializer, section "__sancov_cntrs", comdat($func2), align 1, !associated !1
-// PURECAP: @__sancov_gen_.3 = private addrspace(200) constant [8 x i64 addrspace(200)*] [i64 addrspace(200)* bitcast (i32 (i32) addrspace(200)* @func2 to i64 addrspace(200)*), i64 addrspace(200)* inttoptr (i64 1 to i64 addrspace(200)*), i64 addrspace(200)* bitcast (i8 addrspace(200)* blockaddress(@func2, %if.then) to i64 addrspace(200)*), i64 addrspace(200)* null, i64 addrspace(200)* bitcast (i8 addrspace(200)* blockaddress(@func2, %if.then2) to i64 addrspace(200)*), i64 addrspace(200)* null, i64 addrspace(200)* bitcast (i8 addrspace(200)* blockaddress(@func2, %if.end4) to i64 addrspace(200)*), i64 addrspace(200)* null], section "__sancov_pcs", comdat($func2), align 16, !associated !1
+// PURECAP: @__sancov_gen_.3 = private addrspace(200) constant [8 x i64] [
+// PURECAP-SAME:   i64 ptrtoint (i32 (i32) addrspace(200)* @func2 to i64), i64 1,
+// PURECAP-SAME:   i64 ptrtoint (i8 addrspace(200)* blockaddress(@func2, %if.then) to i64), i64 0,
+// PURECAP-SAME:   i64 ptrtoint (i8 addrspace(200)* blockaddress(@func2, %if.then2) to i64), i64 0,
+// PURECAP-SAME:   i64 ptrtoint (i8 addrspace(200)* blockaddress(@func2, %if.end4) to i64), i64 0],
+// PURECAP-SAME: section "__sancov_pcs", comdat($func2), align 8, !associated !1
 // PURECAP: @__start___sancov_cntrs = external hidden addrspace(200) global i8 addrspace(200)*
 // PURECAP: @__stop___sancov_cntrs = external hidden addrspace(200) global i8 addrspace(200)*
 // PURECAP: @llvm.global_ctors = appending addrspace(200) global [1 x { i32, void ()*, i8 addrspace(200)* }] [{ i32, void ()*, i8 addrspace(200)* } { i32 2, void ()* addrspacecast (void () addrspace(200)* @sancov.module_ctor to void ()*), i8 addrspace(200)* bitcast (void () addrspace(200)* @sancov.module_ctor to i8 addrspace(200)*) }]
 // PURECAP: @__start___sancov_pcs = external hidden addrspace(200) global i64 addrspace(200)*
 // PURECAP: @__stop___sancov_pcs = external hidden addrspace(200) global i64 addrspace(200)*
-// PURECAP: @llvm.compiler.used = appending addrspace(200) global [4 x i8*] [i8* addrspacecast (i8 addrspace(200)* getelementptr inbounds ([1 x i8], [1 x i8] addrspace(200)* @__sancov_gen_, i32 0, i32 0) to i8*), i8* addrspacecast (i8 addrspace(200)* bitcast ([2 x i64 addrspace(200)*] addrspace(200)* @__sancov_gen_.1 to i8 addrspace(200)*) to i8*), i8* addrspacecast (i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @__sancov_gen_.2, i32 0, i32 0) to i8*), i8* addrspacecast (i8 addrspace(200)* bitcast ([8 x i64 addrspace(200)*] addrspace(200)* @__sancov_gen_.3 to i8 addrspace(200)*) to i8*)], section "llvm.metadata"
+// PURECAP: @llvm.compiler.used = appending addrspace(200) global [4 x i8*] [i8* addrspacecast (i8 addrspace(200)* getelementptr inbounds ([1 x i8], [1 x i8] addrspace(200)* @__sancov_gen_, i32 0, i32 0) to i8*), i8* addrspacecast (i8 addrspace(200)* bitcast ([2 x i64] addrspace(200)* @__sancov_gen_.1 to i8 addrspace(200)*) to i8*), i8* addrspacecast (i8 addrspace(200)* getelementptr inbounds ([4 x i8], [4 x i8] addrspace(200)* @__sancov_gen_.2, i32 0, i32 0) to i8*), i8* addrspacecast (i8 addrspace(200)* bitcast ([8 x i64] addrspace(200)* @__sancov_gen_.3 to i8 addrspace(200)*) to i8*)], section "llvm.metadata"
 
 
 // MIPS-LABEL: @main(

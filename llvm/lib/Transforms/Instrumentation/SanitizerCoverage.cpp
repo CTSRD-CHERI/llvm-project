@@ -233,7 +233,7 @@ private:
   FunctionCallee SanCovTraceSwitchFunction;
   GlobalVariable *SanCovLowestStack;
   InlineAsm *EmptyAsm;
-  Type *IntptrTy, *IntptrPtrTy, *Int64Ty, *GlobalsInt64PtrTy, *Int32Ty,
+  Type *IntptrTy, *PcAddrTy, *PcAddrPtrTy, *Int64Ty, *GlobalsInt64PtrTy, *Int32Ty,
       *GlobalsInt32PtrTy, *Int16Ty, *Int8Ty, *GlobalsInt8PtrTy;
   Module *CurModule;
   std::string CurModuleUniqueId;
@@ -321,8 +321,8 @@ bool SanitizerCoverageModule::runOnModule(Module &M) {
   // XXXAR: assuming Address space zero pointer -> range of any pointer
   IntptrTy = Type::getIntNTy(*C, DL->getPointerSizeInBits(0));
 
-  // Assume all these pointers should be in the program address space
-  IntptrPtrTy = PointerType::get(IntptrTy, DL->getProgramAddressSpace());
+  PcAddrTy = Type::getIntNTy(*C, DL->getIndexSizeInBits(DL->getProgramAddressSpace()));
+  PcAddrPtrTy = PcAddrTy->getPointerTo(DL->getGlobalsAddressSpace());
   Type *VoidTy = Type::getVoidTy(*C);
   IRBuilder<> IRB(*C);
   GlobalsInt64PtrTy =
@@ -419,9 +419,9 @@ bool SanitizerCoverageModule::runOnModule(Module &M) {
         CreateInitCallsForSections(M, SanCov8bitCountersInitName,
                                    GlobalsInt8PtrTy, SanCovCountersSectionName);
   if (Ctor && Options.PCTable) {
-    auto SecStartEnd = CreateSecStartEnd(M, SanCovPCsSectionName, IntptrPtrTy);
+    auto SecStartEnd = CreateSecStartEnd(M, SanCovPCsSectionName, PcAddrPtrTy);
     FunctionCallee InitFunction = declareSanitizerInitFunction(
-        M, SanCovPCsInitName, {IntptrPtrTy, IntptrPtrTy});
+        M, SanCovPCsInitName, {PcAddrPtrTy, PcAddrPtrTy});
     IRBuilder<> IRBCtor(Ctor->getEntryBlock().getTerminator());
     IRBCtor.CreateCall(InitFunction, {SecStartEnd.first, SecStartEnd.second});
   }
@@ -631,20 +631,18 @@ SanitizerCoverageModule::CreatePCArray(Function &F,
   IRBuilder<> IRB(&*F.getEntryBlock().getFirstInsertionPt());
   for (size_t i = 0; i < N; i++) {
     if (&F.getEntryBlock() == AllBlocks[i]) {
-      PCs.push_back((Constant *)IRB.CreatePointerCast(&F, IntptrPtrTy));
-      PCs.push_back((Constant *)IRB.CreateIntToPtr(
-          ConstantInt::get(IntptrTy, 1), IntptrPtrTy));
+      PCs.push_back(cast<Constant>(IRB.CreatePtrToInt(&F, PcAddrTy)));
+      PCs.push_back(ConstantInt::get(PcAddrTy, 1));
     } else {
-      PCs.push_back((Constant *)IRB.CreatePointerCast(
-          BlockAddress::get(AllBlocks[i]), IntptrPtrTy));
-      PCs.push_back((Constant *)IRB.CreateIntToPtr(
-          ConstantInt::get(IntptrTy, 0), IntptrPtrTy));
+      PCs.push_back(cast<Constant>(IRB.CreatePtrToInt(
+          BlockAddress::get(AllBlocks[i]), PcAddrTy)));
+      PCs.push_back(ConstantInt::get(PcAddrTy, 0));
     }
   }
-  auto *PCArray = CreateFunctionLocalArrayInSection(N * 2, F, IntptrPtrTy,
+  auto *PCArray = CreateFunctionLocalArrayInSection(N * 2, F, PcAddrTy,
                                                     SanCovPCsSectionName);
   PCArray->setInitializer(
-      ConstantArray::get(ArrayType::get(IntptrPtrTy, N * 2), PCs));
+      ConstantArray::get(ArrayType::get(PcAddrTy, N * 2), PCs));
   PCArray->setConstant(true);
 
   return PCArray;
