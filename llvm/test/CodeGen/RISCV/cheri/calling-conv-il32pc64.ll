@@ -5,39 +5,31 @@ define i8 addrspace(200)* @get_ith_cap(i32 signext %i, ...) {
 ; CHECK-LABEL: get_ith_cap:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -80
-; CHECK-NEXT:    cincoffset ct0, csp, 72
-; CHECK-NEXT:    sc.cap ca7, ct0
-; CHECK-NEXT:    cincoffset ca7, csp, 64
-; CHECK-NEXT:    sc.cap ca6, ca7
-; CHECK-NEXT:    cincoffset ca6, csp, 56
-; CHECK-NEXT:    sc.cap ca5, ca6
-; CHECK-NEXT:    cincoffset ca5, csp, 48
-; CHECK-NEXT:    sc.cap ca4, ca5
-; CHECK-NEXT:    cincoffset ca4, csp, 40
-; CHECK-NEXT:    sc.cap ca3, ca4
-; CHECK-NEXT:    cincoffset ca3, csp, 32
-; CHECK-NEXT:    sc.cap ca2, ca3
-; CHECK-NEXT:    cincoffset ca2, csp, 24
-; CHECK-NEXT:    sc.cap ca1, ca2
-; CHECK-NEXT:    cincoffset ca1, csp, 8
-; CHECK-NEXT:    cincoffset ca2, csp, 24
-; CHECK-NEXT:    sc.cap ca2, ca1
+; CHECK-NEXT:    csc ca7, 72(csp)
+; CHECK-NEXT:    csc ca6, 64(csp)
+; CHECK-NEXT:    csc ca5, 56(csp)
+; CHECK-NEXT:    csc ca4, 48(csp)
+; CHECK-NEXT:    csc ca3, 40(csp)
+; CHECK-NEXT:    csc ca2, 32(csp)
+; CHECK-NEXT:    csc ca1, 24(csp)
+; CHECK-NEXT:    cincoffset ca1, csp, 24
+; CHECK-NEXT:    csc ca1, 8(csp)
 ; CHECK-NEXT:    addi a0, a0, 1
 ; CHECK-NEXT:  .LBB0_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    cgetaddr a3, ca2
-; CHECK-NEXT:    addi a4, a3, 7
-; CHECK-NEXT:    andi a4, a4, -8
-; CHECK-NEXT:    sub a3, a4, a3
-; CHECK-NEXT:    cincoffset ca3, ca2, a3
-; CHECK-NEXT:    cincoffset ca2, ca3, 8
+; CHECK-NEXT:    cgetaddr a2, ca1
+; CHECK-NEXT:    addi a3, a2, 7
+; CHECK-NEXT:    andi a3, a3, -8
+; CHECK-NEXT:    sub a2, a3, a2
+; CHECK-NEXT:    cincoffset ca2, ca1, a2
+; CHECK-NEXT:    cincoffset ca1, ca2, 8
 ; CHECK-NEXT:    addi a0, a0, -1
 ; CHECK-NEXT:    bgtz a0, .LBB0_1
 ; CHECK-NEXT:  # %bb.2: # %while.end
-; CHECK-NEXT:    sc.cap ca2, ca1
-; CHECK-NEXT:    lc.cap ca0, ca3
+; CHECK-NEXT:    csc ca1, 8(csp)
+; CHECK-NEXT:    clc ca0, 0(ca2)
 ; CHECK-NEXT:    cincoffset csp, csp, 80
-; CHECK-NEXT:    ret
+; CHECK-NEXT:    cret
 entry:
   %ap = alloca i8 addrspace(200)*, align 8, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %ap to i8 addrspace(200)*

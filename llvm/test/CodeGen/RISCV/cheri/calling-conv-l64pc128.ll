@@ -5,40 +5,32 @@ define i8 addrspace(200)* @get_ith_cap(i32 signext %i, ...) {
 ; CHECK-LABEL: get_ith_cap:
 ; CHECK:       # %bb.0: # %entry
 ; CHECK-NEXT:    cincoffset csp, csp, -144
-; CHECK-NEXT:    cincoffset ct0, csp, 128
-; CHECK-NEXT:    sc.cap ca7, ct0
-; CHECK-NEXT:    cincoffset ca7, csp, 112
-; CHECK-NEXT:    sc.cap ca6, ca7
-; CHECK-NEXT:    cincoffset ca6, csp, 96
-; CHECK-NEXT:    sc.cap ca5, ca6
-; CHECK-NEXT:    cincoffset ca5, csp, 80
-; CHECK-NEXT:    sc.cap ca4, ca5
-; CHECK-NEXT:    cincoffset ca4, csp, 64
-; CHECK-NEXT:    sc.cap ca3, ca4
-; CHECK-NEXT:    cincoffset ca3, csp, 48
-; CHECK-NEXT:    sc.cap ca2, ca3
-; CHECK-NEXT:    cincoffset ca2, csp, 32
-; CHECK-NEXT:    sc.cap ca1, ca2
-; CHECK-NEXT:    cincoffset ca1, csp, 0
-; CHECK-NEXT:    cincoffset ca2, csp, 32
-; CHECK-NEXT:    sc.cap ca2, ca1
+; CHECK-NEXT:    csc ca7, 128(csp)
+; CHECK-NEXT:    csc ca6, 112(csp)
+; CHECK-NEXT:    csc ca5, 96(csp)
+; CHECK-NEXT:    csc ca4, 80(csp)
+; CHECK-NEXT:    csc ca3, 64(csp)
+; CHECK-NEXT:    csc ca2, 48(csp)
+; CHECK-NEXT:    csc ca1, 32(csp)
+; CHECK-NEXT:    cincoffset ca1, csp, 32
+; CHECK-NEXT:    csc ca1, 0(csp)
 ; CHECK-NEXT:  .LBB0_1: # %while.cond
 ; CHECK-NEXT:    # =>This Inner Loop Header: Depth=1
-; CHECK-NEXT:    cgetaddr a3, ca2
-; CHECK-NEXT:    addi a4, a3, 15
-; CHECK-NEXT:    andi a4, a4, -16
-; CHECK-NEXT:    sub a3, a4, a3
-; CHECK-NEXT:    cincoffset ca3, ca2, a3
-; CHECK-NEXT:    addi a4, a0, -1
-; CHECK-NEXT:    cincoffset ca2, ca3, 16
-; CHECK-NEXT:    sext.w a5, a0
-; CHECK-NEXT:    mv a0, a4
-; CHECK-NEXT:    bgtz a5, .LBB0_1
+; CHECK-NEXT:    cgetaddr a2, ca1
+; CHECK-NEXT:    addi a3, a2, 15
+; CHECK-NEXT:    andi a3, a3, -16
+; CHECK-NEXT:    sub a2, a3, a2
+; CHECK-NEXT:    cincoffset ca2, ca1, a2
+; CHECK-NEXT:    addi a3, a0, -1
+; CHECK-NEXT:    cincoffset ca1, ca2, 16
+; CHECK-NEXT:    sext.w a4, a0
+; CHECK-NEXT:    mv a0, a3
+; CHECK-NEXT:    bgtz a4, .LBB0_1
 ; CHECK-NEXT:  # %bb.2: # %while.end
-; CHECK-NEXT:    sc.cap ca2, ca1
-; CHECK-NEXT:    lc.cap ca0, ca3
+; CHECK-NEXT:    csc ca1, 0(csp)
+; CHECK-NEXT:    clc ca0, 0(ca2)
 ; CHECK-NEXT:    cincoffset csp, csp, 144
-; CHECK-NEXT:    ret
+; CHECK-NEXT:    cret
 entry:
   %ap = alloca i8 addrspace(200)*, align 16, addrspace(200)
   %0 = bitcast i8 addrspace(200)* addrspace(200)* %ap to i8 addrspace(200)*
