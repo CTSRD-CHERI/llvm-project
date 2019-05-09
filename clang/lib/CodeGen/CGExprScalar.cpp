@@ -1479,7 +1479,8 @@ Value *ScalarExprEmitter::EmitScalarConversion(Value *Src, QualType SrcType,
           return Builder.CreateUIToFP(Src, DstTy, "conv");
         }
       }
-      return Builder.CreateTruncOrBitCast(Src, DstTy, "conv");
+      return Builder.CreateIntCast(Src, DstTy,
+          SrcType->isSignedIntegerOrEnumerationType(), "conv");
     }
     // Must be an ptr to int cast.
     assert(isa<llvm::IntegerType>(DstTy) && "not ptr->int?");
