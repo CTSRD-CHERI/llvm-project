@@ -111,9 +111,10 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
     run_line = run_line.replace("-Werror=implicit-int", "")  # important for creduce but not for the test
     if "%clang_cc1" in run_line:
         target_cpu_re = r"-target-cpu\s+cheri[^\s]*\s*"
-        triple_cheri_freebsd_re = re.compile(r"-triple\s+(cheri-unknown-freebsd\d*(-purecap)?)*\s+")
+        triple_cheri_freebsd_re = re.compile(r"-triple\s+((?:cheri|mips64c128|mips64c256)-unknown-freebsd\d*(-purecap)?)*\s+")
         found_cheri_triple = None
         triple_match = re.search(triple_cheri_freebsd_re, run_line)
+        print(triple_match)
         if triple_match:
             found_cheri_triple = triple_match.group(1)
         if re.search(target_cpu_re, run_line) or found_cheri_triple:
@@ -130,7 +131,7 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
                 run_line = run_line.replace("%cheri_cc1", "%cheri_purecap_cc1")
     if "llc " in run_line:
         # TODO: convert the 128/256 variants?
-        triple_cheri_freebsd_re = re.compile(r"-mtriple=+(cheri-unknown-freebsd\d*(-purecap)?)*\s+")
+        triple_cheri_freebsd_re = re.compile(r"-mtriple=+((?:cheri|mips64c128|mips64c256)-unknown-freebsd\d*(-purecap)?)*\s+")
         found_cheri_triple = None
         triple_match = re.search(triple_cheri_freebsd_re, run_line)
         if triple_match:
@@ -158,13 +159,15 @@ def add_lit_substitutions(args: "Options", run_line: str) -> str:
 
 
 # to test the lit substitutions
-#class fake_args:
-#    clang_cmd = "/path/to/clang"
-#    llc_cmd = "/path/to/llc"
-#    opt_cmd = "/path/to/opt"
+# class fake_args:
+#     clang_cmd = "/path/to/clang"
+#     llc_cmd = "/path/to/llc"
+#     opt_cmd = "/path/to/opt"
 #
-#print(add_lit_substitutions(fake_args(), "llc -o /dev/null -mtriple=cheri-unknown-freebsd-purecap -relocation-model=pic -thread-model=posix -mattr=-noabicalls -mattr=+soft-float -mattr=+chericap -mattr=+cheri128 -target-abi purecap -float-abi=soft -vectorize-loops -vectorize-slp -mcpu=mips4 -O2 -mxcaptable=false -mips-ssection-threshold=0 -cheri-cap-table-abi=pcrel -verify-machineinstrs %s"))
-#sys.exit()
+# print(add_lit_substitutions(fake_args(), "llc -o /dev/null -mtriple=cheri-unknown-freebsd-purecap -relocation-model=pic -thread-model=posix -mattr=-noabicalls -mattr=+soft-float -mattr=+chericap -mattr=+cheri128 -target-abi purecap -float-abi=soft -vectorize-loops -vectorize-slp -mcpu=mips4 -O2 -mxcaptable=false -mips-ssection-threshold=0 -cheri-cap-table-abi=pcrel -verify-machineinstrs %s"))
+# print(add_lit_substitutions(fake_args(), "%clang_cc1 -triple mips64c128-unknown-freebsd13-purecap -munwind-tables -fuse-init-array -target-cpu mips4 -target-abi purecap -cheri-size 128 -mllvm -cheri-cap-table-abi=pcrel -target-linker-version 450.3 -std=c++11 -fno-builtin -faddrsig -o - -emit-llvm -O0 -Wimplicit-int  -Wfatal-errors %s"))
+#
+# sys.exit()
 
 class ReduceTool(metaclass=ABCMeta):
     def __init__(self, args: "Options", name: str, tool: Path) -> None:
@@ -765,7 +768,7 @@ class Reducer(object):
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without debug info crashes:",
-            noargs_opts_to_remove=["-dwarf-column-info"],
+            noargs_opts_to_remove=["-dwarf-column-info", "-munwind-tables"],
             noargs_opts_to_remove_startswith=["-debug-info-kind=", "-dwarf-version=", "-debugger-tuning="],
         )
         # try emitting llvm-ir (i.e. frontend bug):
@@ -934,7 +937,12 @@ class Reducer(object):
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without various MIPS flags crashes:",
             noargs_opts_to_remove=["-cheri-linker"],
-            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot" or a.startswith("-mxcaptable")}
+            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-mips-ssection-threshold=") or a == "-mxgot"}
+        )
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether compiling without various CHERI flags crashes:",
+            noargs_opts_to_remove=["-cheri-linker"],
+            one_arg_opts_to_remove_if={"-mllvm": lambda a: a.startswith("-cheri-cap-table-abi=") or a.startswith("-mxcaptable")}
         )
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether compiling without -mrelax-all crashes:",
@@ -970,13 +978,19 @@ class Reducer(object):
             noargs_opts_to_remove=["-vectorize-loops", "-vectorize-slp"],
             noargs_opts_to_remove_startswith=["-ftls-model="])
 
+
+        new_command = self._try_remove_args(
+            new_command, infile, "Checking whether addrsig/init-array options can be removed:",
+            noargs_opts_to_remove=["-fuse-init-array", "-faddrsig"],
+            noargs_opts_to_remove_startswith=["-ftls-model="])
+
         # try to remove some arguments that should not be needed
         new_command = self._try_remove_args(
             new_command, infile, "Checking whether misc diagnostic options can be removed:",
             noargs_opts_to_remove=["-disable-free", "-discard-value-names", "-masm-verbose",
                                    "-fdeprecated-macro", "-fcolor-diagnostics"],
             noargs_opts_to_remove_startswith=["-fdiagnostics-", "-fobjc-runtime="],
-            one_arg_opts_to_remove=["-main-file-name", "-ferror-limit", "-fmessage-length", "-fvisibility"]
+            one_arg_opts_to_remove=["-main-file-name", "-ferror-limit", "-fmessage-length", "-fvisibility", "-target-linker-version"]
         )
         return new_command, infile
 
